@@ -147,6 +147,18 @@ Packages/packages-lock.json linguist-generated
 *.rns                   lfs
 # Spine export file for Unity
 *.skel.bytes            lfs
-# Exceptions for .asset files such as lightning pre-baking
-LightingData.asset     binary
+# Exceptions for .asset files that are ALWAYS binary-serialized
+# (they must not get the unity-yaml text/eol treatment above)
+LightingData.asset      binary
+NavMesh*.asset          binary
+OcclusionCullingData.asset binary
+*TerrainData*.asset     binary
+# ---------------------------------------------------------------------------
+# UnityYAMLMerge (Smart Merge) driver setup — run ONCE per clone:
+#   git config merge.unityyamlmerge.name "Unity SmartMerge"
+#   git config merge.unityyamlmerge.driver "'C:/Program Files/Unity/Hub/Editor/6000.3.18f1/Editor/Data/Tools/UnityYAMLMerge.exe' merge -h -p --force %O %B %A %A"
+#   git config merge.unityyamlmerge.recursive binary
+# (Adjust the editor path/version to your local Unity installation.)
+# Without this config the unity-yaml merge attribute silently falls back to
+# git's default text merge.
 *.unity filter=lfs diff=lfs merge=lfs -text
