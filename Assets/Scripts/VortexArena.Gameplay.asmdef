@@ -1,0 +1,18 @@
+{
+    "name": "VortexArena.Gameplay",
+    "rootNamespace": "",
+    "references": [
+        "Oculus.VR",
+        "Oculus.Interaction",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
