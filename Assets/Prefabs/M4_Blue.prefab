@@ -465,10 +465,10 @@ GameObject:
   - component: {fileID: 3953035008937087540}
   - component: {fileID: 4435689371416304525}
   - component: {fileID: 3726553215152743767}
-  - component: {fileID: 8781388116799705010}
   - component: {fileID: 5293182690921156569}
-  - component: {fileID: 60416295348200389}
   - component: {fileID: 711466831033122242}
+  - component: {fileID: 8627273821023794492}
+  - component: {fileID: 8195499154007513600}
   m_Layer: 0
   m_Name: M4_Blue
   m_TagString: Untagged
@@ -664,28 +664,6 @@ MonoBehaviour:
   _kinematicWhileSelected: 1
   _throwWhenUnselected: 1
   _forceKinematicDisabled: 0
---- !u!114 &8781388116799705010
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3106827168037788355}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5a1bc992571301d4a9602ac95ef4c71a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.GrabInteractable
-  _interactorFilters: []
-  _maxInteractors: -1
-  _maxSelectingInteractors: -1
-  _data: {fileID: 0}
-  _pointableElement: {fileID: 3726553215152743767}
-  _rigidbody: {fileID: 1973779974360960776}
-  _grabSource: {fileID: 0}
-  _useClosestPointAsGrabSource: 0
-  _releaseDistance: 0
-  _resetGrabOnGrabsUpdated: 1
 --- !u!114 &5293182690921156569
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -725,7 +703,48 @@ MonoBehaviour:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
---- !u!114 &60416295348200389
+--- !u!114 &711466831033122242
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3106827168037788355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0f5d350126ba97c43b88f6e2b13491bf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponAudio
+  source: {fileID: 7882375542716201}
+  fireClips:
+  - {fileID: 8300000, guid: 82eb40cda1f46ea4ca416b11fc8802a5, type: 3}
+  - {fileID: 8300000, guid: 4c7a82e5724da5347a8d94d2726f001b, type: 3}
+  reloadClip: {fileID: 8300000, guid: 954a03517c1263e41b40a5b4c774bf22, type: 3}
+  emptyClip: {fileID: 8300000, guid: 7fbfbee7bc76c5b4fb06ce4c43418ef8, type: 3}
+  firePitchJitter: 0.05
+--- !u!114 &8627273821023794492
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3106827168037788355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5a1bc992571301d4a9602ac95ef4c71a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.GrabInteractable
+  _interactorFilters: []
+  _maxInteractors: -1
+  _maxSelectingInteractors: -1
+  _data: {fileID: 0}
+  _pointableElement: {fileID: 3726553215152743767}
+  _rigidbody: {fileID: 1973779974360960776}
+  _grabSource: {fileID: 0}
+  _useClosestPointAsGrabSource: 0
+  _releaseDistance: 0
+  _resetGrabOnGrabsUpdated: 1
+--- !u!114 &8195499154007513600
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -746,25 +765,6 @@ MonoBehaviour:
   _grabSource: {fileID: 0}
   _resetGrabOnGrabsUpdated: 1
   _movementProvider: {fileID: 5293182690921156569}
---- !u!114 &711466831033122242
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3106827168037788355}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0f5d350126ba97c43b88f6e2b13491bf, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::WeaponAudio
-  source: {fileID: 7882375542716201}
-  fireClips:
-  - {fileID: 8300000, guid: 82eb40cda1f46ea4ca416b11fc8802a5, type: 3}
-  - {fileID: 8300000, guid: 4c7a82e5724da5347a8d94d2726f001b, type: 3}
-  reloadClip: {fileID: 8300000, guid: 954a03517c1263e41b40a5b4c774bf22, type: 3}
-  emptyClip: {fileID: 8300000, guid: 7fbfbee7bc76c5b4fb06ce4c43418ef8, type: 3}
-  firePitchJitter: 0.05
 --- !u!1 &3544575526364858016
 GameObject:
   m_ObjectHideFlags: 0
