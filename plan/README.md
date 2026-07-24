@@ -9,7 +9,7 @@
 |---|---|---|
 | `README.md` | Genel mimari, kararlar, kurallar (önce bunu oku) | — |
 | `protokol-v1.md` | Ağ protokolü tam referansı (Faz 0'da `Docs/`'a kopyalanır, Faz 1-3'te implement edilir) | — |
-| `faz0-dosya-sistemi.md` | Klasör/asmdef göçü, paket trimi, CLAUDE.md + kurallar + doküman | ☐ |
+| `faz0-dosya-sistemi.md` | Klasör/asmdef göçü, paket trimi, CLAUDE.md + kurallar + doküman | ✅ (2026-07-24) |
 | `faz1-server-ve-lobi.md` | .NET server iskeleti + Unity istemci + Lobi E2E | ☐ |
 | `faz2-poz-senkronu.md` | UDP poz akışı, uzak avatarlar, admin taktik görünüm, kalibrasyon | ☐ |
 | `faz3-mac-ve-savas.md` | Maç akışı, TDM modu, silah/can senkronu, respawn | ☐ |
