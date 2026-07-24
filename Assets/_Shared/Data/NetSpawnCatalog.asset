@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b5ab8c80607dd34e90141cf698beb6a, type: 3}
+  m_Name: NetSpawnCatalog
+  m_EditorClassIdentifier: VortexArena.Net::VortexArena.Net.NetSpawnCatalog
+  entries:
+  - id: remote_avatar
+    prefab: {fileID: 3639760030289724950, guid: 55e1e0129703b2b4bb455d5fba84e3b9, type: 3}
+  - id: fx_hit_spark
+    prefab: {fileID: 7889201435730507071, guid: 192901f7cf7b43246bbe48fd22c3ccbe, type: 3}

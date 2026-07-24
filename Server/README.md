@@ -11,11 +11,12 @@ Server/
   VortexArena.Server.sln
   VortexArena.Server.Core/    # Kestrel WS host, beacon, PlayerRegistry, LobbyService,
                               # StateHost (UDP), MatchDirector (faz makinesi + vuruş hattı),
-                              # WeaponTable, Modes/ (IGameMode, TdmMode)
+                              # WeaponTable, MapTable, Modes/ (IGameMode, TdmMode)
   VortexArena.Server.App/     # konsol exe (UI YOK — yönetim UI'ı Unity admin build'i)
   VortexArena.PoseBot/        # sentetik oyuncu test istemcisi (poz senkronunu Quest'siz test eder)
-  config/server.json          # portlar + mekan adı + tickHz
-  config/weapons.json         # sunucu-otoriter silah tablosu (weaponId + damage + rpm)
+  config/server.json          # portlar + mekan adı + tickHz (ELLE)
+  config/weapons.json         # sunucu-otoriter silah tablosu (weaponId + damage + rpm) — Unity export
+  config/maps.json            # harita tablosu (sceneName + boyut + slot + modes) — Unity export
   config/devices.json         # deviceId -> dostane ad ("Gözlük NN"); otomatik doldurulur
   firewall-kur.cmd            # Windows Firewall kuralları (yönetici olarak çalıştırın)
 ```
@@ -38,11 +39,11 @@ Açılışta:
   saniyede bir `[state] oyuncu N, pozlu N, snapshot N B, hedef N` özeti görünür.
 - Maç tick döngüsü (10 Hz) çalışır: faz makinesi, geri sayım, süre, zorla canlandırma.
 - `config/` bulunamazsa exe yanında oluşturulur ve varsayılanlarla doldurulur
-  (`server.json` + `weapons.json`).
+  (`server.json` + `weapons.json`; `maps.json` **üretilmez** — o Unity export'undan gelir).
 - Konsolda bağlanan/kopan cihazlar ve çevrimiçi sayısı akar; **Ctrl+C** temiz kapatır.
 
-Açılış başlığında `Modlar : tdm` ve `Silahlar : ak47, m4` satırları kayıtlı mod/silah
-tablosunu özetler.
+Açılış başlığında `Modlar : tdm`, `Silahlar : ak47, m4` ve `Haritalar : Arena10x10` satırları
+kayıtlı mod/silah/harita tablosunu özetler (`maps.json` yoksa `Haritalar : yok (doğrulama kapalı)`).
 
 ## Portlar
 
@@ -82,15 +83,32 @@ kurulumda genelde yalnız `venueName` değişir:
 { "controlPort": 47821, "beaconPort": 47820, "statePort": 47822, "venueName": "Dev", "tickHz": 20 }
 ```
 
-**weapons.json** — sunucu-otoriter silah tablosu (§10.3). Unity'deki `WeaponDefinition` SO'larıyla
-**elle senkron** tutulur (Faz 4'te export otomasyonu gelecek); iki taraf sapınca hasar HER ZAMAN
-buradan uygulanır ve uyumsuzluk konsola yazılır. `rpm`, `hit_report` hız denetiminde kullanılır
-(iki kabul edilen vuruş arası ≥ `60/rpm × 0.8` sn). Dosya yoksa varsayılanlarla oluşturulur:
+> **`weapons.json` ve `maps.json` Unity'den export edilir** — Unity'de
+> `Tools > VortexArena > Export Server Config` menüsü bu iki dosyayı `WeaponDefinition` /
+> `MapDefinition` SO'larından üretir. **Elle düzenlemeyin: bir sonraki export değişikliğinizi
+> ezer.** Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir (alfabetik, LF,
+> UTF-8 BOM'suz) → git diff'leri temiz kalır.
+
+**weapons.json** — sunucu-otoriter silah tablosu (§10.3). Hasar HER ZAMAN buradan uygulanır;
+istemcinin bildirdiği değer saparsa uyumsuzluk konsola yazılır ve tablo kazanır (export unutulmuşsa
+bu satır yakalar). `rpm`, `hit_report` hız denetiminde kullanılır (iki kabul edilen vuruş arası
+≥ `60/rpm × 0.8` sn). Dosya yoksa varsayılanlarla oluşturulur:
 ```json
 { "weapons": [ { "weaponId": "ak47", "damage": 34, "rpm": 600 },
                { "weaponId": "m4", "damage": 22, "rpm": 800 } ] }
 ```
-Yeni silah eklerken: prefab + `WeaponDefinition` SO (Unity) **ve** buraya aynı `weaponId`.
+Yeni silah eklerken: prefab + `WeaponDefinition` SO (Unity) → **export'u çalıştırın**.
+
+**maps.json** — harita tablosu (§10.1): `start_match`'te `sceneName`'in bilinen bir harita olup
+olmadığı ve o haritanın modu destekleyip desteklemediği buradan doğrulanır; `spawnSlotsPerTeam`
+ile `load_match.spawnSlot` sahnede gerçekten var olan slot aralığına sarılır (modulo).
+```json
+{ "maps": [ { "sceneName": "Arena10x10", "sizeX": 10, "sizeZ": 10,
+              "spawnSlotsPerTeam": 4, "modes": ["tdm"] } ] }
+```
+`modes` boş bırakılırsa harita tüm modları kabul eder. **Dosya yoksa oluşturulmaz** (sunucunun
+uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması ve slot sınırı devre dışı
+kalır (Faz 3 davranışı) ve açılış özetinde `Haritalar : yok (doğrulama kapalı)` görünür.
 
 **devices.json** — `{ "<deviceId>": "Gözlük 07" }`. Bilinmeyen player cihazı bağlanınca ilk boş
 `Gözlük NN` atanır ve dosyaya yazılır; `set_name` ile değişen ad da buraya kalıcı yazılır.
@@ -102,19 +120,21 @@ Kural otoritesi tamamen sunucudadır (`MatchDirector` + `Modes/<X>Mode.cs`): ist
 uygulamaz, skor tutmaz, faz değiştirmez. Faz makinesi
 `Lobby → Loading → Countdown(5) → Live → End(10 sn) → Lobby` (detay: `../Docs/ArenaNet-Protokol.md` §10).
 
-Admin `start_match` yolladığında sunucu şunları doğrular: mod kayıtlı mı, en az 1 çevrimiçi
-oyuncu var mı, `sceneName` TÜM çevrimiçi oyuncuların `hello.scenes` listesinde mi. Geçerse
-takımlar dengelenir (2+ oyuncuda boş takım kalmaz; tek oyuncuda uyarıyla izin verilir) ve
-herkese KİŞİSEL `load_match` (`yourTeam` + takım içi 0 tabanlı `spawnSlot`) gider — `load_match`
-yalnız `role=player`'a; admin fazı `match_state`'ten öğrenir.
+Admin `start_match` yolladığında sunucu şunları doğrular: mod kayıtlı mı, `sceneName`
+`config/maps.json`'da var mı ve o harita bu modu destekliyor mu (tablo boşsa bu adım atlanır),
+en az 1 çevrimiçi oyuncu var mı, `sceneName` TÜM çevrimiçi oyuncuların `hello.scenes` listesinde
+mi. Geçerse takımlar dengelenir (2+ oyuncuda boş takım kalmaz; tek oyuncuda uyarıyla izin verilir)
+ve herkese KİŞİSEL `load_match` (`yourTeam` + takım içi 0 tabanlı `spawnSlot`, harita biliniyorsa
+`spawnSlotsPerTeam` ile modulo) gider — `load_match` yalnız `role=player`'a; admin fazı
+`match_state`'ten öğrenir.
 
 `[match]` önekli konsol satırları:
 
 | Satır | Anlamı |
 |---|---|
 | `faz Lobby → Loading` | her faz değişiminde (ayrıca herkese `match_state` yayınlanır) |
-| `start_match: mod 'tdm', sahne 'Arena10x10', 2 oyuncu (kırmızı 1 / mavi 1)` | maç kuruldu |
-| `start_match reddedildi: …` | doğrulama düştü, faz değişmedi |
+| `start_match: mod 'tdm', sahne 'Arena10x10' (10×10, 4 slot/takım), 2 oyuncu (kırmızı 1 / mavi 1)` | maç kuruldu (parantez içi yalnız harita tablodaysa) |
+| `start_match reddedildi: …` | doğrulama düştü, faz değişmedi (ör. `'Arena12x12' harita tablosunda yok`) |
 | `takım dengeleme: 1 oyuncu 'blue' takımına taşındı` | boş takım kalmasın diye |
 | `loading zaman aşımı (20 sn) — hazır olmayanlar: Gözlük 03` | sahne yükleme beklenmedi |
 | `hit_report reddedildi (Gözlük 03 → 5): dost ateşi yok` | §10.3 doğrulamalarından biri düştü |

@@ -3,5 +3,7 @@
   <Project Path="VortexArena.Net.csproj" />
   <Project Path="VortexArena.Protocol.csproj" />
   <Project Path="VortexArena.App.csproj" />
+  <Project Path="VortexArena.Net.Editor.csproj" />
   <Project Path="VortexArena.Modes.Tdm.csproj" />
+  <Project Path="VortexArena.Core.Editor.csproj" />
 </Solution>

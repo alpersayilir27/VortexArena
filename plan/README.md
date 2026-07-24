@@ -13,7 +13,7 @@
 | `faz1-server-ve-lobi.md` | .NET server iskeleti + Unity istemci + Lobi E2E | ✅ (2026-07-24 — loopback E2E geçti; Quest cihaz E2E kullanıcıda) |
 | `faz2-poz-senkronu.md` | UDP poz akışı, uzak avatarlar, admin taktik görünüm, kalibrasyon | ✅ (2026-07-24 — loopback E2E: 2 PoseBot + editor admin/player geçti; 2-Quest fiziksel örtüşme testi kullanıcıda) |
 | `faz3-mac-ve-savas.md` | Maç akışı, TDM modu, silah/can senkronu, respawn | ✅ (2026-07-25 — loopback TDM E2E geçti: faz makinesi, vuruş doğrulama/ret yolları, free-roam canlanma; 2-Quest saha raundu kullanıcıda) |
-| `faz4-editor-sdk.md` | Editor araçları (Network Parent, arena şablonu), A12x12, işletme piloti | ☐ |
+| `faz4-editor-sdk.md` | Editor araçları (Network Parent, arena şablonu), A12x12, işletme piloti | ✅ (2026-07-25 — sihirbazla A12x12 + DemoVenue 11×8 üretildi, loopback TDM raundu geçti; MJPEG izleme ertelendi, saha kurulum provası kullanıcıda) |
 
 ## Proje nedir?
 

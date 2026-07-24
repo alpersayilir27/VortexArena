@@ -63,14 +63,23 @@ Arena sahneleri kendine yeten (kendi BB rig'i taşır).
 
 ## Yeni içerik ekleme reçeteleri
 
-**Yeni arena:** `Assets/Arenas/Standard/<AdXxX>/{Scenes,Data,Prefabs}` → sahneyi mevcut arenadan
-kopyala (Faz 4 sonrası: Tools > VortexArena > Create Arena From Template) → MapDefinition boyut/
-spawn güncelle → Build Settings'e ekle (sahne adı = katalog anahtarı).
+**Yeni arena:** `Tools > VortexArena > Create Arena From Template` → arenaId + sahne adı + boyut +
+takım başına spawn + hedef (Standard / Venue). Sihirbaz: klasörleri (`{Scenes,Data,Prefabs}`) ve
+sahne kopyasını üretir, duvar/zemin/taban/spawn'ları yeni boyuta göre ölçekler, MapDefinition
+asset'ini yazar, GameCatalog + uyumlu ModeDefinition'lara ekler, Build Settings'e koyar
+(sahne adı = katalog anahtarı). Duvar/cover sanat rötuşu ELDE; sonrasında
+`Tools > VortexArena > Export Server Config` çalıştır (sunucu `maps.json` tazelensin).
 **Yeni mod:** `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol;
 mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafında `Modes/<Ad>Mode.cs`
 (IGameMode) + `Docs/ArenaNet-Protokol.md`'ye modId ekle.
 **Yeni silah:** prefab `_Shared/Arsenal/Prefabs/` + WeaponDefinition SO `_Shared/Arsenal/Data/`
-(weaponId protokolde string — iki tarafta da aynı) + **`Server/config/weapons.json`'a aynı
-`weaponId/damage/rpm` satırı** (hasarı sunucu bu tablodan uygular; sapmada sunucu kazanır) +
-gerekiyorsa `ModeDefinition.loadout`. İçerik kataloğu: `_Shared/Data/GameCatalog.asset`
+(weaponId protokolde string — iki tarafta da aynı) + gerekiyorsa `ModeDefinition.loadout` →
+**`Tools > VortexArena > Export Server Config`** (hasarı sunucu `Server/config/weapons.json`'dan
+uygular; sapmada sunucu kazanır). İçerik kataloğu: `_Shared/Data/GameCatalog.asset`
 (ModeDefinition + MapDefinition listesi) — AdminConsole mod/harita seçicisi bunu okur.
+
+**Editor araçları** (`VortexArena.Core.Editor`, `VortexArena.Net.Editor` — yalnız Editor):
+`Tools > VortexArena > Export Server Config` (SO'lardan `Server/config/weapons.json` + `maps.json`;
+deterministik, LF, BOM'suz — **JSON'ları elle düzenleme, export ezer**), `… > Create Arena From
+Template`, `GameObject > VortexArena > Network Parent` (sahne objesine `NetIdentity` + benzersiz
+`sceneId`; sahne kaydında SceneIdGuard 0/çakışan id'leri onarır — dinamik obje senkronu altyapısı).

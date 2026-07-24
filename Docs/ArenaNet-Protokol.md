@@ -200,8 +200,8 @@ Lobby ──start_match──► Loading ──herkes set_ready | LOADING_TIMEOU
    └──── return_to_lobby ◄── End (MATCH_END_SECONDS) ◄── match sonu ◄──── Live
 ```
 
-- **`start_match` doğrulaması:** en az 1 çevrimiçi `role=player`; `modeId` sunucudaki `IGameMode` kayıtlarında var; `sceneName` tüm çevrimiçi oyuncuların `hello.scenes` listesinde var. Geçmezse komut reddedilir ve konsola sebep yazılır (faz değişmez). İki oyuncu+ varken takımlar dengelenir (boş takım kalmaz); tek oyuncuyla başlatmaya **test amaçlı** izin verilir (konsolda uyarı).
-- **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam` + `spawnSlot`'u (takım içi 0 tabanlı sıra) gider. Faz Loading'e geçerken tüm `ready` bayrakları sıfırlanır.
+- **`start_match` doğrulaması** (sırayla): `modeId` sunucudaki `IGameMode` kayıtlarında var; `sceneName` boş değil; **`sceneName` `config/maps.json` harita tablosunda var ve o harita `modeId`'yi destekliyor** (harita girdisindeki `modes` boşsa kısıt yok; **tablo boşsa — maps.json yoksa — bu adım tümüyle atlanır**); en az 1 çevrimiçi `role=player`; `sceneName` tüm çevrimiçi oyuncuların `hello.scenes` listesinde var. Geçmezse komut reddedilir ve konsola sebep yazılır (faz değişmez). İki oyuncu+ varken takımlar dengelenir (boş takım kalmaz); tek oyuncuyla başlatmaya **test amaçlı** izin verilir (konsolda uyarı).
+- **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam` + `spawnSlot`'u (takım içi 0 tabanlı sıra) gider. Harita tablosunda `spawnSlotsPerTeam` biliniyorsa slot bu sayıya göre **modulo** alınır (sahnede olmayan slota atama yapılmaz; kalabalık takımda slotlar paylaşılır). Faz Loading'e geçerken tüm `ready` bayrakları sıfırlanır.
 - **Loading:** istemci sahneyi yükleyince `set_ready{ready:true}` gönderir ("sahne yüklendi" anlamında). Tüm çevrimiçi oyuncular hazır olunca (veya `LOADING_TIMEOUT` dolunca) Countdown başlar.
 - **Countdown:** saniyede bir `countdown{seconds}` (5→1); 0'da faz Live.
 - **Live:** `match_state` 1 Hz; `timeRemaining` sunucuda azalır; `IGameMode.OnTick` çağrılır.
@@ -228,7 +228,7 @@ Geçerse: `hp -= damage` → `health_update{playerId, hp, attackerId}` **herkese
 
 `shot_fired` sunucuda **doğrulanmaz**, yalnız relay edilir (atan hariç herkese, `playerId` eklenerek) — ölü/maç dışı oyuncunun `shot_fired`'ı relay EDİLMEZ.
 
-> `config/weapons.json` (`{ "weapons":[{ "weaponId":"ak47","damage":34,"rpm":600 }, …] }`) Unity'deki `WeaponDefinition` SO'larıyla **elle senkron tutulur**; iki taraf sapınca hasar sunucu tablosundan uygulanır. Faz 4'te export otomasyonu gelecek.
+> `config/weapons.json` (`{ "weapons":[{ "weaponId":"ak47","damage":34,"rpm":600 }, …] }`) **Unity'den üretilir** (`Tools > VortexArena > Export Server Config`, Faz 4) — tek doğruluk kaynağı `WeaponDefinition` SO'larıdır, dosya elle düzenlenmez (export ezer). Buna rağmen hasar **her zaman sunucu tablosundan** uygulanır: istemci farklı bildirirse uyumsuzluk loglanır ve tablo kazanır (export unutulduğunda sapmayı bu satır yakalar).
 
 ### 10.4 Free-roam respawn (canlanma)
 
@@ -239,4 +239,17 @@ Fiziksel oyuncu ışınlanamaz → **respawn = konum değil durum değişimi**:
 3. Sunucu doğrular (faz Live, oyuncu ölü, gecikme dolmuş) → `hp=PLAYER_MAX_HP`, `alive=1` → `health_update{hp:100, attackerId:0}`.
 4. Ölümden `REVIVE_GRACE` geçtiği hâlde talep gelmediyse sunucu **zorla** canlandırır (istemci takılmışsa maç kilitlenmesin).
 
-`spawnSlot` yalnızca "hangi tabana/slota gideceğin" göstergesidir; slot çözümü istemcide sahnedeki `SpawnPoint(team, slot)` marker'larından yapılır — sunucuya harita dosyası gerekmez.
+`spawnSlot` yalnızca "hangi tabana/slota gideceğin" göstergesidir; slot çözümü istemcide sahnedeki `SpawnPoint(team, slot)` marker'larından yapılır — sunucu sahne geometrisini bilmez, `maps.json`'dan yalnızca `spawnSlotsPerTeam`'i okuyup slot numarasını geçerli aralığa sarar.
+
+## 11. Sunucu config dosyaları
+
+`Server/config/` altındaki dört dosya; kaynakları FARKLIDIR:
+
+| Dosya | Kaynağı | Not |
+|---|---|---|
+| `server.json` | **Elle** | Portlar + `venueName` + `tickHz`; yoksa varsayılanlarla oluşturulur (§1 sabitleri). |
+| `devices.json` | **Sunucu üretir** | `deviceId → "Gözlük NN"`; ilk bağlantıda ve `set_name`'de yazılır (§2). UTF-8, BOM'suz. |
+| `weapons.json` | **Unity export** | `WeaponDefinition` SO'larından (§10.3). |
+| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `sizeX`/`sizeZ`, `spawnSlotsPerTeam`, `modes` (§10.1). |
+
+> **`weapons.json` ve `maps.json` ELLE DÜZENLENMEZ** — `Tools > VortexArena > Export Server Config` üretir ve bir sonraki export elle yapılan değişikliği **ezer**. Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir (alfabetik, LF, UTF-8 BOM'suz) → git diff'i temiz kalır. Silah/harita ekleyip export'u çalıştırmayı unutursanız: bilinmeyen `weaponId` → `hit_report` reddedilir, bilinmeyen `sceneName` → `start_match` reddedilir. `maps.json` hiç yoksa sunucu harita doğrulamasını **atlar** (geriye dönük uyumlu davranış), `weapons.json` yoksa varsayılan v1 silah tablosuyla oluşturulur.

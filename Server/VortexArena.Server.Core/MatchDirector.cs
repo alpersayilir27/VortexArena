@@ -38,6 +38,11 @@ public sealed class MatchDirector
     private readonly object _gate = new();
     private readonly PlayerRegistry _registry;
     private readonly WeaponTable _weapons;
+
+    /// <summary>Harita kataloğu (config/maps.json — Unity export'u). BOŞ olabilir: o zaman
+    /// harita doğrulaması ve spawn slot sınırı devre dışıdır (§10.1).</summary>
+    private readonly MapTable _maps;
+
     private readonly Dictionary<string, IGameMode> _modes = new(StringComparer.Ordinal);
 
     /// <summary>Kilit altında toplanan "ready bayrağını sıfırla" işleri; registry.SetReady event
@@ -76,10 +81,11 @@ public sealed class MatchDirector
     private CancellationTokenSource? _cts;
     private Task? _loop;
 
-    public MatchDirector(PlayerRegistry registry, WeaponTable weapons)
+    public MatchDirector(PlayerRegistry registry, WeaponTable weapons, MapTable maps)
     {
         _registry = registry;
         _weapons = weapons;
+        _maps = maps;
         Register(new TdmMode());
     }
 
@@ -314,6 +320,24 @@ public sealed class MatchDirector
             return;
         }
 
+        // Harita tablosu (config/maps.json — Unity export'u) doluysa sahne + mod uyumu doğrulanır.
+        // Tablo boşsa (dosya yok) bu adım tümüyle atlanır → Faz 3 davranışı korunur.
+        MapEntry? map = null;
+        if (!_maps.IsEmpty)
+        {
+            if (!_maps.TryGet(sceneName, out var known))
+            {
+                Console.WriteLine($"[match] start_match reddedildi: '{sceneName}' harita tablosunda yok (bilinen: {string.Join(", ", _maps.SceneNames)}).");
+                return;
+            }
+            if (!MapTable.SupportsMode(known, modeId))
+            {
+                Console.WriteLine($"[match] start_match reddedildi: '{sceneName}' haritası '{modeId}' modunu desteklemiyor (desteklenen: {string.Join(", ", known.modes)}).");
+                return;
+            }
+            map = known;
+        }
+
         var players = _registry.Snapshot()
             .Where(p => p.Online && p.Role == "player")
             .OrderBy(p => p.PlayerId)
@@ -344,6 +368,8 @@ public sealed class MatchDirector
 
         var outbox = new List<Outgoing>();
         int red = 0, blue = 0;
+        // Harita biliniyorsa takım başına slot sayısı sahnedeki SpawnPoint sayısıdır; 0 = sınır yok.
+        var slotsPerTeam = map?.spawnSlotsPerTeam ?? 0;
         lock (_gate)
         {
             if (_phase != Phase.Lobby)
@@ -362,7 +388,10 @@ public sealed class MatchDirector
             foreach (var player in players)
             {
                 ResetMatchStateLocked(player);
-                player.SpawnSlot = player.Team == "blue" ? blue++ : red++;
+                // Takım içi 0 tabanlı sıra; harita slot sayısını biliyorsak modulo ile sarılır —
+                // sahnede olmayan bir slota atama yapılmasın (kalabalık takımda slotlar paylaşılır).
+                var slot = player.Team == "blue" ? blue++ : red++;
+                player.SpawnSlot = slotsPerTeam > 0 ? slot % slotsPerTeam : slot;
 
                 var connection = player.Connection;
                 if (connection == null) continue;
@@ -383,7 +412,8 @@ public sealed class MatchDirector
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         }
 
-        Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}', {players.Count} oyuncu (kırmızı {red} / mavi {blue}).");
+        var mapInfo = map == null ? "" : $" ({map.sizeX:0.#}×{map.sizeZ:0.#}, {map.spawnSlotsPerTeam} slot/takım)";
+        Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}'{mapInfo}, {players.Count} oyuncu (kırmızı {red} / mavi {blue}).");
         await FlushAsync(outbox);
     }
 

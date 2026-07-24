@@ -17,6 +17,12 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Arenas/Standard/A10x10/Scenes/Arena10x10.unity
     guid: 629f3342b038beb4d975f35ba6e2dbd6
+  - enabled: 1
+    path: Assets/Arenas/Standard/A12x12/Scenes/Arena12x12.unity
+    guid: 4a43674b9cafa3c41836aa27188b6efc
+  - enabled: 1
+    path: Assets/Arenas/Venues/DemoVenue/Scenes/ArenaDemoVenue.unity
+    guid: bc63e3f842dc1434185e669a8ffa141f
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
