@@ -1,0 +1,7 @@
+{
+  "controlPort": 47821,
+  "beaconPort": 47820,
+  "statePort": 47822,
+  "venueName": "Dev",
+  "tickHz": 20
+}

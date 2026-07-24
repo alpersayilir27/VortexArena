@@ -1,3 +1,6 @@
 ﻿<Solution>
+  <Project Path="VortexArena.Protocol.csproj" />
   <Project Path="VortexArena.Core.csproj" />
+  <Project Path="VortexArena.App.csproj" />
+  <Project Path="VortexArena.Net.csproj" />
 </Solution>

@@ -1,0 +1,45 @@
+using System;
+using VortexArena.Protocol;
+
+namespace VortexArena.Net
+{
+    /// <summary>
+    /// Statik olay merkezi: ArenaClient sunucu mesajlarını buradan yayınlar
+    /// (hepsi ANA thread'de tetiklenir), App/Core dinler. Net katmanı sahne
+    /// yüklemez ve oyun bilgisi içermez — olayları kim nasıl işler bilmez.
+    /// </summary>
+    public static class NetEvents
+    {
+        public static event Action<WelcomeMsg> OnConnected;
+        public static event Action OnDisconnected;
+        public static event Action<ArenaConnectionState> OnConnectionStateChanged;
+        public static event Action<LobbyStateMsg> OnLobbyState;
+        public static event Action<LoadMatchMsg> OnLoadMatch;
+        public static event Action<MatchStateMsg> OnMatchState;
+        public static event Action<CountdownMsg> OnCountdown;
+        public static event Action<HealthUpdateMsg> OnHealthUpdate;
+        public static event Action<KillEventMsg> OnKillEvent;
+        public static event Action<RespawnMsg> OnRespawn;
+        public static event Action<MatchEndMsg> OnMatchEnd;
+        public static event Action OnReturnToLobby;
+        public static event Action<ShotFiredMsg> OnShotFired;
+        public static event Action<IdentifyMsg> OnIdentify;
+        public static event Action<KickedMsg> OnKicked;
+
+        internal static void RaiseConnected(WelcomeMsg msg) { OnConnected?.Invoke(msg); }
+        internal static void RaiseDisconnected() { OnDisconnected?.Invoke(); }
+        internal static void RaiseConnectionStateChanged(ArenaConnectionState state) { OnConnectionStateChanged?.Invoke(state); }
+        internal static void RaiseLobbyState(LobbyStateMsg msg) { OnLobbyState?.Invoke(msg); }
+        internal static void RaiseLoadMatch(LoadMatchMsg msg) { OnLoadMatch?.Invoke(msg); }
+        internal static void RaiseMatchState(MatchStateMsg msg) { OnMatchState?.Invoke(msg); }
+        internal static void RaiseCountdown(CountdownMsg msg) { OnCountdown?.Invoke(msg); }
+        internal static void RaiseHealthUpdate(HealthUpdateMsg msg) { OnHealthUpdate?.Invoke(msg); }
+        internal static void RaiseKillEvent(KillEventMsg msg) { OnKillEvent?.Invoke(msg); }
+        internal static void RaiseRespawn(RespawnMsg msg) { OnRespawn?.Invoke(msg); }
+        internal static void RaiseMatchEnd(MatchEndMsg msg) { OnMatchEnd?.Invoke(msg); }
+        internal static void RaiseReturnToLobby() { OnReturnToLobby?.Invoke(); }
+        internal static void RaiseShotFired(ShotFiredMsg msg) { OnShotFired?.Invoke(msg); }
+        internal static void RaiseIdentify(IdentifyMsg msg) { OnIdentify?.Invoke(msg); }
+        internal static void RaiseKicked(KickedMsg msg) { OnKicked?.Invoke(msg); }
+    }
+}

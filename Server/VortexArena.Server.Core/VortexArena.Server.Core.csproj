@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Nullable proje genelinde AÇILMAZ: link'lenen Protocol dosyaları Unity ile paylaşılır ve
+         nullable bilmez (CS8618 uyarı seli olur). Sunucu dosyaları başında #nullable enable kullanır. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- Paylaşılan protokol kaynağı: Unity'deki VortexArena.Protocol asmdef'i ile AYNI dosyalar.
+       Bu dosyalara Unity API'si girerse bu derleme kırılır (bilinçli bekçi — CLAUDE.md). -->
+  <ItemGroup>
+    <Compile Include="..\..\Assets\_Shared\Net\Protocol\**\*.cs"
+             Exclude="..\..\Assets\_Shared\Net\Protocol\**\*.meta"
+             LinkBase="Protocol" />
+  </ItemGroup>
+
+</Project>
