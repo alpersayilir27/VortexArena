@@ -1,0 +1,4 @@
+<linker>
+  <assembly fullname="VortexArena.Protocol" preserve="all"/>
+  <assembly fullname="VortexArena.Net" preserve="all"/>
+</linker>

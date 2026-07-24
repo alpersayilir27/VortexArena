@@ -105,3 +105,15 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Server/ Unity'nin üstteki jenerik desenlerinden muaftır (*.sln, *.csproj, *.app
+# klasör adı VortexArena.Server.App'i yakalıyor) — yalnız bin/obj ignore edilir.
+!/[Ss]erver/**
+
+# .NET server derleme çıktıları
+/[Ss]erver/**/bin/
+/[Ss]erver/**/obj/
+
+# Unity'nin otomatik yeniden ürettiği performans test dosyaları
+/[Aa]ssets/[Rr]esources/PerformanceTestRun*.json
+/[Aa]ssets/[Rr]esources/PerformanceTestRun*.json.meta

@@ -61,6 +61,8 @@ Hem `255.255.255.255` hem her arayüzün subnet-broadcast adresine gönderilir:
 
 **`set_name`** `{ "type":"set_name", "name":"Oyuncu 3" }`
 **`set_ready`** `{ "type":"set_ready", "ready":true }` (yalnız player)
+**`set_team`** `{ "type":"set_team", "playerId":5, "team":"blue" }` (`"red"|"blue"`) — oyuncu yalnız
+KENDİ `playerId`'si için gönderebilir (lobide takım seçimi); admin herkes için. Aksi loglanıp yok sayılır.
 
 **`shot_fired`** — atış anında (uzak VFX/SFX + sayım için; vuruş AYRI rapor edilir):
 ```json
@@ -79,7 +81,6 @@ Sunucu doğrular: hedef hayatta mı, atıcı hayatta mı, farklı takım mı, si
 
 - **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"Arena10x10" }`
 - **`abort_match`** `{ "type":"abort_match" }`
-- **`set_team`** `{ "type":"set_team", "playerId":5, "team":"blue" }` (`"red"|"blue"`)
 - **`kick`** `{ "type":"kick", "playerId":5 }`
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`

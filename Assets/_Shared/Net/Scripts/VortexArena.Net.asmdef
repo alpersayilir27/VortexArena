@@ -1,0 +1,16 @@
+{
+    "name": "VortexArena.Net",
+    "rootNamespace": "VortexArena.Net",
+    "references": [
+        "VortexArena.Protocol"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

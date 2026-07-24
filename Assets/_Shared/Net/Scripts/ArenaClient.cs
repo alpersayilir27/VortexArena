@@ -1,0 +1,676 @@
+using System;
+using System.Collections;
+using System.Collections.Concurrent;
+using System.IO;
+using System.Net.WebSockets;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using UnityEngine;
+using VortexArena.Protocol;
+using EngineScenes = UnityEngine.SceneManagement.SceneManager;
+
+namespace VortexArena.Net
+{
+    /// <summary>Bağlantı durumu (NetEvents.OnConnectionStateChanged ile yayınlanır).</summary>
+    public enum ArenaConnectionState
+    {
+        Disconnected,
+        Connecting,
+        Connected
+    }
+
+    /// <summary>
+    /// Kalıcı WS kontrol istemcisi tekili: Connect(ip, port, role) ile bağlanır,
+    /// hello gönderir, welcome bekler, 5 sn'de bir status kalp atışı atar; kopuşta
+    /// 1→2→5 sn backoff ile aynı adrese sonsuz yeniden dener (Disconnect çağrılmadıysa).
+    ///
+    /// Ağ işleri arka plan Task'larında koşar; Unity API'si gereken her iş
+    /// ConcurrentQueue üzerinden ana thread'e (Update) taşınır. Sunucu mesajları
+    /// NetEvents üzerinden yayınlanır — bu sınıf SAHNE YÜKLEMEZ, oyun bilgisi içermez.
+    /// </summary>
+    public class ArenaClient : MonoBehaviour
+    {
+        private const int ReceiveBufferSize = 64 * 1024;
+
+        public static ArenaClient Instance { get; private set; }
+
+        public ArenaConnectionState State { get; private set; } = ArenaConnectionState.Disconnected;
+
+        /// <summary>welcome'da atanan 1..MAX_PLAYERS kimliği (0 = henüz yok).</summary>
+        public int PlayerId { get; private set; }
+        public uint UdpToken { get; private set; }
+        public string ServerIp { get; private set; }
+        public int ServerPort { get; private set; }
+
+        /// <summary>Aynı kalıcı objede yaşayan UDP poz kanalı (Faz 1: yalnız kayıt).</summary>
+        public UdpStateChannel UdpChannel { get; private set; }
+
+        /// <summary>Soket açık mı — her thread'den güvenli.</summary>
+        public bool IsConnected => IsSocketOpen;
+
+        private readonly ConcurrentQueue<Action> _mainThreadActions = new ConcurrentQueue<Action>();
+        private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
+
+        private CancellationTokenSource _cts;
+        private volatile ClientWebSocket _socket;
+        private volatile string _role = "player";
+        private volatile string _currentSceneName = "";
+        private volatile bool _userDisconnect = true; // Connect çağrılana dek reconnect yok
+        private bool _shutdown;
+
+        // hello için ana thread'de önbelleğe alınan cihaz bilgileri
+        // (ağ thread'i Unity API'sine dokunamaz).
+        private string _deviceId;
+        private string _deviceName;
+        private string _appVersion;
+        private string[] _buildScenes;
+
+        // fps ölçümü: Update'te birikir, StatusLoop her aralıkta okuyup sıfırlar.
+        private int _frameCount;
+        private float _fpsElapsed;
+        private float _lastFps;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (Instance != null)
+            {
+                return;
+            }
+
+            var go = new GameObject("[ArenaClient]");
+            DontDestroyOnLoad(go);
+            Instance = go.AddComponent<ArenaClient>();
+        }
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            Instance = this;
+
+            UdpChannel = gameObject.AddComponent<UdpStateChannel>();
+
+            _deviceId = SystemInfo.deviceUniqueIdentifier;
+            _deviceName = SystemInfo.deviceName;
+            _appVersion = Application.version;
+
+            int sceneCount = EngineScenes.sceneCountInBuildSettings;
+            _buildScenes = new string[sceneCount];
+            for (int i = 0; i < sceneCount; i++)
+            {
+                _buildScenes[i] = Path.GetFileNameWithoutExtension(
+                    UnityEngine.SceneManagement.SceneUtility.GetScenePathByBuildIndex(i));
+            }
+
+            _currentSceneName = EngineScenes.GetActiveScene().name;
+            EngineScenes.activeSceneChanged += OnActiveSceneChanged;
+        }
+
+        private void Start()
+        {
+            if (Instance != this)
+            {
+                return;
+            }
+
+            StartCoroutine(StatusLoop());
+        }
+
+        private void Update()
+        {
+            if (Instance != this)
+            {
+                return;
+            }
+
+            while (_mainThreadActions.TryDequeue(out Action action))
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[ArenaClient] Ana thread aksiyonu hata verdi: {e}");
+                }
+            }
+
+            _frameCount++;
+            _fpsElapsed += Time.unscaledDeltaTime;
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance != this)
+            {
+                return;
+            }
+
+            EngineScenes.activeSceneChanged -= OnActiveSceneChanged;
+            Shutdown();
+        }
+
+        private void OnApplicationQuit()
+        {
+            Shutdown();
+        }
+
+        // ------------------------------------------------------------- genel API
+
+        /// <summary>Verilen adrese bağlanır; önceki bağlantı/döngü varsa kapatır.</summary>
+        public void Connect(string ip, int port, string role)
+        {
+            if (string.IsNullOrWhiteSpace(ip) || port <= 0)
+            {
+                Debug.LogWarning($"[ArenaClient] Geçersiz adres: '{ip}:{port}'; bağlanılmadı.");
+                return;
+            }
+
+            StopConnectionLoop();
+
+            ServerIp = ip.Trim();
+            ServerPort = port;
+            _role = string.IsNullOrWhiteSpace(role) ? "player" : role.Trim();
+            _userDisconnect = false;
+
+            _cts = new CancellationTokenSource();
+            CancellationToken token = _cts.Token;
+            string loopIp = ServerIp;
+            int loopPort = ServerPort;
+
+            _ = Task.Run(() => RunConnectionLoopAsync(loopIp, loopPort, token)).ContinueWith(
+                t => Debug.LogError($"[ArenaClient] Bağlantı döngüsü beklenmedik biçimde sonlandı: {t.Exception}"),
+                TaskContinuationOptions.OnlyOnFaulted);
+        }
+
+        /// <summary>Bağlantıyı kapatır ve otomatik yeniden denemeyi durdurur.</summary>
+        public void Disconnect()
+        {
+            _userDisconnect = true;
+            StopConnectionLoop();
+            SetState(ArenaConnectionState.Disconnected);
+        }
+
+        /// <summary>Protokol DTO'sunu JSON'a çevirip gönderir (soket kapalıysa no-op).</summary>
+        public void Send<T>(T msg) where T : class
+        {
+            if (msg == null)
+            {
+                return;
+            }
+
+            TrySendText(JsonUtility.ToJson(msg));
+        }
+
+        /// <summary>
+        /// Fire-and-forget text gönderimi: soket açık değilse no-op, hata loglanıp
+        /// yutulur (reconnect döngüsü zaten kurtarır). Her thread'den çağrılabilir.
+        /// </summary>
+        public void TrySendText(string json)
+        {
+            if (string.IsNullOrEmpty(json))
+            {
+                return;
+            }
+
+            ClientWebSocket socket = _socket;
+            if (socket == null || socket.State != WebSocketState.Open)
+            {
+                return;
+            }
+
+            _ = SendGuardedAsync(json);
+        }
+
+        // ------------------------------------------------------- bağlantı döngüsü
+
+        private void StopConnectionLoop()
+        {
+            try
+            {
+                _cts?.Cancel();
+            }
+            catch (Exception)
+            {
+                // CTS zaten dispose olduysa yut.
+            }
+
+            _cts = null;
+
+            ClientWebSocket socket = _socket;
+            _socket = null;
+            if (socket != null)
+            {
+                try
+                {
+                    socket.Abort();
+                }
+                catch (Exception)
+                {
+                    // Soket zaten kapalıysa yut.
+                }
+            }
+        }
+
+        private async Task RunConnectionLoopAsync(string ip, int port, CancellationToken ct)
+        {
+            int backoffIndex = 0;
+
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    SetState(ArenaConnectionState.Connecting);
+                    var uri = new Uri($"ws://{ip}:{port}{ArenaProtocol.WS_PATH}");
+                    Debug.Log($"[ArenaClient] Bağlanılıyor: {uri}");
+
+                    using (var socket = new ClientWebSocket())
+                    {
+                        await socket.ConnectAsync(uri, ct);
+
+                        _socket = socket;
+                        backoffIndex = 0;
+                        SetState(ArenaConnectionState.Connected);
+                        Debug.Log("[ArenaClient] Bağlandı; hello gönderiliyor.");
+
+                        await SendTextAsync(BuildHelloJson(), ct);
+                        await ReceiveLoopAsync(socket, ct);
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[ArenaClient] Bağlantı koptu/başarısız: {e.Message}");
+                }
+                finally
+                {
+                    _socket = null;
+                }
+
+                if (ct.IsCancellationRequested || _userDisconnect)
+                {
+                    break;
+                }
+
+                SetState(ArenaConnectionState.Disconnected);
+
+                // 1 → 2 → 5 sn (tavan son eleman), sonsuz.
+                float[] steps = ArenaProtocol.RECONNECT_BACKOFF;
+                float delay = steps[Math.Min(backoffIndex, steps.Length - 1)];
+                if (backoffIndex < steps.Length - 1)
+                {
+                    backoffIndex++;
+                }
+
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(delay), ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+
+            SetState(ArenaConnectionState.Disconnected);
+        }
+
+        private async Task ReceiveLoopAsync(ClientWebSocket socket, CancellationToken ct)
+        {
+            byte[] buffer = new byte[ReceiveBufferSize];
+            using (var message = new MemoryStream())
+            {
+                while (!ct.IsCancellationRequested && socket.State == WebSocketState.Open)
+                {
+                    WebSocketReceiveResult result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
+
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        Debug.Log("[ArenaClient] Sunucu bağlantıyı kapattı.");
+                        try
+                        {
+                            await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, ct);
+                        }
+                        catch (Exception)
+                        {
+                            // Kapanış el sıkışması başarısız olabilir; reconnect zaten devreye girer.
+                        }
+
+                        return;
+                    }
+
+                    // Mesaj birden çok segment hâlinde gelebilir — EndOfMessage'a dek biriktir.
+                    message.Write(buffer, 0, result.Count);
+                    if (!result.EndOfMessage)
+                    {
+                        continue;
+                    }
+
+                    if (result.MessageType == WebSocketMessageType.Text)
+                    {
+                        string json = Encoding.UTF8.GetString(message.GetBuffer(), 0, (int)message.Length);
+                        HandleTextMessage(json);
+                    }
+                    // Binary WS mesajı beklenmez (v1) → yok say.
+
+                    message.SetLength(0);
+                }
+            }
+        }
+
+        // ------------------------------------------------------- mesaj işleyiciler
+
+        /// <summary>Ağ thread'inde koşar; olaylar kuyruk üzerinden ana thread'de yayınlanır.</summary>
+        private void HandleTextMessage(string json)
+        {
+            MsgEnvelope envelope;
+            try
+            {
+                envelope = JsonUtility.FromJson<MsgEnvelope>(json);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ArenaClient] Geçersiz JSON mesajı yok sayıldı: {e.Message}");
+                return;
+            }
+
+            if (envelope == null || string.IsNullOrEmpty(envelope.type))
+            {
+                Debug.LogWarning("[ArenaClient] 'type' alanı olmayan mesaj yok sayıldı.");
+                return;
+            }
+
+            try
+            {
+                switch (envelope.type)
+                {
+                    case MessageTypes.Welcome:
+                        HandleWelcome(JsonUtility.FromJson<WelcomeMsg>(json));
+                        break;
+
+                    case MessageTypes.LobbyState:
+                    {
+                        LobbyStateMsg msg = JsonUtility.FromJson<LobbyStateMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseLobbyState(msg));
+                        break;
+                    }
+
+                    case MessageTypes.LoadMatch:
+                    {
+                        LoadMatchMsg msg = JsonUtility.FromJson<LoadMatchMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseLoadMatch(msg));
+                        break;
+                    }
+
+                    case MessageTypes.Countdown:
+                    {
+                        CountdownMsg msg = JsonUtility.FromJson<CountdownMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseCountdown(msg));
+                        break;
+                    }
+
+                    case MessageTypes.MatchState:
+                    {
+                        MatchStateMsg msg = JsonUtility.FromJson<MatchStateMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseMatchState(msg));
+                        break;
+                    }
+
+                    case MessageTypes.HealthUpdate:
+                    {
+                        HealthUpdateMsg msg = JsonUtility.FromJson<HealthUpdateMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseHealthUpdate(msg));
+                        break;
+                    }
+
+                    case MessageTypes.KillEvent:
+                    {
+                        KillEventMsg msg = JsonUtility.FromJson<KillEventMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseKillEvent(msg));
+                        break;
+                    }
+
+                    case MessageTypes.Respawn:
+                    {
+                        RespawnMsg msg = JsonUtility.FromJson<RespawnMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseRespawn(msg));
+                        break;
+                    }
+
+                    case MessageTypes.MatchEnd:
+                    {
+                        MatchEndMsg msg = JsonUtility.FromJson<MatchEndMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseMatchEnd(msg));
+                        break;
+                    }
+
+                    case MessageTypes.ReturnToLobby:
+                        _mainThreadActions.Enqueue(NetEvents.RaiseReturnToLobby);
+                        break;
+
+                    case MessageTypes.ShotFired:
+                    {
+                        ShotFiredMsg msg = JsonUtility.FromJson<ShotFiredMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseShotFired(msg));
+                        break;
+                    }
+
+                    case MessageTypes.Identify:
+                    {
+                        IdentifyMsg msg = JsonUtility.FromJson<IdentifyMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseIdentify(msg));
+                        break;
+                    }
+
+                    case MessageTypes.Ping:
+                        // ping → status ile yanıtlanır (ayrı pong yok); status Unity API'si ister → ana thread.
+                        _mainThreadActions.Enqueue(() => TrySendText(BuildStatusJson()));
+                        break;
+
+                    case MessageTypes.Kicked:
+                    {
+                        KickedMsg msg = JsonUtility.FromJson<KickedMsg>(json);
+                        _mainThreadActions.Enqueue(() =>
+                        {
+                            NetEvents.RaiseKicked(msg);
+                            // Protokol: istemci bağlantıyı kapatır; oto-reconnect yapılmaz.
+                            Disconnect();
+                        });
+                        break;
+                    }
+
+                    default:
+                        // Bilinmeyen tip → logla ve yok say (ileri sürüm uyumluluğu).
+                        Debug.Log($"[ArenaClient] Bilinmeyen mesaj tipi '{envelope.type}' yok sayıldı.");
+                        break;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ArenaClient] '{envelope.type}' mesajı işlenemedi: {e.Message}");
+            }
+        }
+
+        private void HandleWelcome(WelcomeMsg msg)
+        {
+            if (msg == null)
+            {
+                return;
+            }
+
+            if (msg.protocolVersion != ArenaProtocol.PROTOCOL_VERSION)
+            {
+                // Protokol gereği uyumsuzluk bağlantıyı KESMEZ, yalnız loglanır.
+                Debug.LogWarning($"[ArenaClient] Protokol sürümü uyuşmuyor (sunucu {msg.protocolVersion}, istemci {ArenaProtocol.PROTOCOL_VERSION}); bağlantı sürdürülüyor.");
+            }
+
+            _mainThreadActions.Enqueue(() =>
+            {
+                PlayerId = msg.playerId;
+                UdpToken = msg.udpToken;
+
+                // §8: welcome sonrası UDP kaydı (0x00, ack'e dek tekrar).
+                if (UdpChannel != null && msg.playerId > 0)
+                {
+                    UdpChannel.StartRegistration(ServerIp, ArenaProtocol.STATE_PORT, (byte)msg.playerId, msg.udpToken);
+                }
+
+                NetEvents.RaiseConnected(msg);
+
+                // Batarya/sahne bilgisi ilk kalp atışını beklemeden sunucuya gitsin.
+                TrySendText(BuildStatusJson());
+            });
+        }
+
+        // --------------------------------------------------------- durum & status
+
+        private IEnumerator StatusLoop()
+        {
+            while (true)
+            {
+                yield return new WaitForSecondsRealtime(ArenaProtocol.STATUS_INTERVAL);
+
+                if (_fpsElapsed > 0f)
+                {
+                    _lastFps = _frameCount / _fpsElapsed;
+                }
+
+                _frameCount = 0;
+                _fpsElapsed = 0f;
+
+                if (IsSocketOpen)
+                {
+                    TrySendText(BuildStatusJson());
+                }
+            }
+        }
+
+        /// <summary>Ağ thread'inden çağrılır; yalnız önbellek + JsonUtility (thread-safe) kullanır.</summary>
+        private string BuildHelloJson()
+        {
+            var hello = new HelloMsg
+            {
+                protocolVersion = ArenaProtocol.PROTOCOL_VERSION,
+                role = _role,
+                deviceId = _deviceId,
+                deviceName = _deviceName,
+                appVersion = _appVersion,
+                currentScene = _currentSceneName,
+                scenes = _buildScenes
+            };
+            return JsonUtility.ToJson(hello);
+        }
+
+        /// <summary>YALNIZ ana thread'de çağrılır (SystemInfo/sahne API'si).</summary>
+        private string BuildStatusJson()
+        {
+            var status = new StatusMsg
+            {
+                scene = EngineScenes.GetActiveScene().name,
+                battery = SystemInfo.batteryLevel,
+                fps = _lastFps
+            };
+            return JsonUtility.ToJson(status);
+        }
+
+        private bool IsSocketOpen
+        {
+            get
+            {
+                ClientWebSocket socket = _socket;
+                return socket != null && socket.State == WebSocketState.Open;
+            }
+        }
+
+        /// <summary>Herhangi bir thread'den güvenli; olaylar ana thread'de, yalnız değişimde tetiklenir.</summary>
+        private void SetState(ArenaConnectionState newState)
+        {
+            _mainThreadActions.Enqueue(() =>
+            {
+                if (State == newState)
+                {
+                    return;
+                }
+
+                ArenaConnectionState oldState = State;
+                State = newState;
+
+                if (newState != ArenaConnectionState.Connected && UdpChannel != null)
+                {
+                    UdpChannel.Stop();
+                }
+
+                NetEvents.RaiseConnectionStateChanged(newState);
+
+                if (oldState == ArenaConnectionState.Connected)
+                {
+                    NetEvents.RaiseDisconnected();
+                }
+            });
+        }
+
+        private void OnActiveSceneChanged(UnityEngine.SceneManagement.Scene previous, UnityEngine.SceneManagement.Scene current)
+        {
+            _currentSceneName = current.name;
+        }
+
+        // -------------------------------------------------------------- gönderim
+
+        private async Task SendGuardedAsync(string json)
+        {
+            try
+            {
+                await SendTextAsync(json, CancellationToken.None);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ArenaClient] Gönderim başarısız: {e.Message}");
+            }
+        }
+
+        /// <summary>Tüm gönderimler tek SemaphoreSlim'den geçer (WebSocket'te eşzamanlı Send yasak).</summary>
+        private async Task SendTextAsync(string json, CancellationToken ct)
+        {
+            byte[] payload = Encoding.UTF8.GetBytes(json);
+            await _sendLock.WaitAsync(ct);
+            try
+            {
+                ClientWebSocket socket = _socket;
+                if (socket == null || socket.State != WebSocketState.Open)
+                {
+                    return;
+                }
+
+                await socket.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, ct);
+            }
+            finally
+            {
+                _sendLock.Release();
+            }
+        }
+
+        // --------------------------------------------------------------- kapanış
+
+        private void Shutdown()
+        {
+            if (_shutdown)
+            {
+                return;
+            }
+
+            _shutdown = true;
+            _userDisconnect = true;
+            StopConnectionLoop();
+            Debug.Log("[ArenaClient] Kapatıldı.");
+        }
+    }
+}

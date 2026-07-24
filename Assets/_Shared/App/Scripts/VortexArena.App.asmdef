@@ -1,0 +1,21 @@
+{
+    "name": "VortexArena.App",
+    "rootNamespace": "VortexArena.App",
+    "references": [
+        "VortexArena.Core",
+        "VortexArena.Net",
+        "VortexArena.Protocol",
+        "Oculus.VR",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
