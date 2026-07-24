@@ -15,9 +15,12 @@ internal static class Program
         var configDir = ResolveConfigDir();
         var config = ServerConfig.Load(Path.Combine(configDir, "server.json"));
         var weapons = WeaponTable.Load(Path.Combine(configDir, "weapons.json"));
+        // maps.json Unity'den export edilir (Tools > VortexArena > Export Server Config);
+        // yoksa tablo boş kalır ve start_match harita doğrulaması atlanır.
+        var maps = MapTable.Load(Path.Combine(configDir, "maps.json"));
 
         using var registry = new PlayerRegistry(Path.Combine(configDir, "devices.json"));
-        var director = new MatchDirector(registry, weapons);
+        var director = new MatchDirector(registry, weapons, maps);
         var lobby = new LobbyService(registry, director);
         var control = new ControlHost(registry, lobby, director, config.controlPort);
         var beacon = new BeaconService(config.beaconPort, config.controlPort, config.statePort);
@@ -30,6 +33,7 @@ internal static class Program
         Console.WriteLine($"  UDP state  : {config.statePort}");
         Console.WriteLine($"  Modlar     : {string.Join(", ", director.ModeIds)}");
         Console.WriteLine($"  Silahlar   : {string.Join(", ", weapons.WeaponIds)}");
+        Console.WriteLine($"  Haritalar  : {(maps.IsEmpty ? "yok (doğrulama kapalı)" : string.Join(", ", maps.SceneNames))}");
         Console.WriteLine($"  Config     : {configDir}");
 
         registry.Changed += (player, kind) =>

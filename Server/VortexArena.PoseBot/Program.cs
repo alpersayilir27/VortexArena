@@ -26,7 +26,8 @@ internal static class Program
     /// <summary>Gerçek istemcinin Build Settings sahne listesi. Sunucu <c>start_match</c>'te
     /// istenen sahnenin TÜM çevrimiçi oyuncuların hello.scenes'inde olmasını arar (§10.1) —
     /// bot burayı eksik bildirirse maç hiç başlamaz. Yeni arena eklendiğinde buraya da ekleyin.</summary>
-    private static readonly string[] BuildScenes = { "Boot", "Lobby", "AdminConsole", "Arena10x10" };
+    private static readonly string[] BuildScenes =
+        { "Boot", "Lobby", "AdminConsole", "Arena10x10", "Arena12x12", "ArenaDemoVenue" };
 
     // ---- Savaş ayarları (§10.3) — sunucunun config/weapons.json tablosuyla AYNI olmalı ----
     private const string WeaponId = "ak47";
@@ -36,10 +37,11 @@ internal static class Program
     private const int ReviveAttempts = 5;    // revive_request tekrar sayısı
 
     // ---- --admin ayarları ----
-    /// <summary>--admin'in başlattığı maçın modu/sahnesi. v1'de tek arena + tek mod olduğu için
-    /// SABİT tutuluyor (CLI'dan sahne almıyoruz); başka arena/mod denemek için burayı değiştirin.</summary>
-    private const string AdminModeId = "tdm";
-    private const string AdminSceneName = "Arena10x10";
+    /// <summary>--admin'in başlattığı maçın modu/sahnesi. Varsayılan tdm/Arena10x10; başka arena
+    /// veya mod denemek için <c>--map &lt;sahneAdı&gt;</c> / <c>--mode &lt;modId&gt;</c> (Faz 4: birden
+    /// çok arena var). Sahne adı hem BuildScenes'te hem sunucunun maps.json'ında olmalı.</summary>
+    private static string AdminModeId = "tdm";
+    private static string AdminSceneName = "Arena10x10";
     /// <summary>Roster'da 2+ çevrimiçi oyuncu bu kadar kararlı kaldıktan sonra start_match.</summary>
     private const double AdminStartDelay = 2.0;
     private const int AdminMinPlayers = 2;
@@ -88,10 +90,25 @@ internal static class Program
         admin = false;
 
         var positional = 0;
-        foreach (var arg in args)
+        for (var i = 0; i < args.Length; i++)
         {
+            var arg = args[i];
             if (arg.Equals("--fight", StringComparison.OrdinalIgnoreCase)) { fight = true; continue; }
             if (arg.Equals("--admin", StringComparison.OrdinalIgnoreCase)) { admin = true; continue; }
+            if (arg.Equals("--map", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= args.Length) { Console.WriteLine("--map bir sahne adı bekler."); return false; }
+                AdminSceneName = args[++i];
+                if (!BuildScenes.Contains(AdminSceneName, StringComparer.Ordinal))
+                    Console.WriteLine($"UYARI: '{AdminSceneName}' bot'un BuildScenes listesinde yok — sunucu start_match'i reddeder.");
+                continue;
+            }
+            if (arg.Equals("--mode", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= args.Length) { Console.WriteLine("--mode bir modId bekler."); return false; }
+                AdminModeId = args[++i];
+                continue;
+            }
             if (arg.StartsWith('-')) { Console.WriteLine($"Bilinmeyen bayrak: {arg}"); return false; }
 
             switch (positional++)
@@ -113,13 +130,16 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.WriteLine("Kullanım: PoseBot [ip] [botSayısı] [--fight] [--admin]");
+        Console.WriteLine("Kullanım: PoseBot [ip] [botSayısı] [--fight] [--admin] [--map <sahne>] [--mode <modId>]");
         Console.WriteLine("  ip          sunucu IP'si (varsayılan 127.0.0.1)");
         Console.WriteLine($"  botSayısı   1..{ArenaProtocol.MAX_PLAYERS} (varsayılan 1)");
         Console.WriteLine("  --fight     maça katıl: sahne yüklendi (set_ready), ateş (shot_fired+hit_report),");
         Console.WriteLine("              ölüm/canlanma (revive_request). Yalnız ÇİFT indeksli botlar ateş eder.");
         Console.WriteLine("  --admin     ek bir admin bağlantısı aç: 2+ oyuncu görününce start_match");
         Console.WriteLine($"              ({AdminModeId} / {AdminSceneName}); konsolda q + Enter → abort_match.");
+        Console.WriteLine($"  --map       --admin'in başlatacağı arena sahnesi (varsayılan {AdminSceneName});");
+        Console.WriteLine($"              geçerli: {string.Join(", ", BuildScenes.Skip(3))}");
+        Console.WriteLine($"  --mode      --admin'in başlatacağı mod (varsayılan {AdminModeId})");
         Console.WriteLine("  --help      bu yardım");
         Console.WriteLine("Bayrak sırası serbest: \"PoseBot --fight 192.168.1.10 4 --admin\" da geçerlidir.");
     }

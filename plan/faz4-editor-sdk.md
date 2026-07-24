@@ -55,12 +55,36 @@ Admin, oyuncu başına canlı göz görüntüsü (taktik görünüme ek "gözün
 
 ## Çıktı kontrol listesi
 
-- [ ] Net.Editor asmdef + Network Parent menüsü + sceneId bekçisi + NetSpawnCatalog
-- [ ] Export Server Config (weapons/maps.json otomasyonu)
-- [ ] Arena sihirbazı çalışıyor; A12x12 sihirbazla üretildi ve oynanabilir
-- [ ] DemoVenue + Docs/Isletme-Kurulum.md
-- [ ] (Ops.) MJPEG izleme
-- [ ] Commit atılmış
+- [x] Net.Editor asmdef + Network Parent menüsü + sceneId bekçisi + NetSpawnCatalog
+- [x] Export Server Config (weapons/maps.json otomasyonu) + sunucu `MapTable` doğrulaması
+- [x] Arena sihirbazı çalışıyor; A12x12 sihirbazla üretildi ve oynanabilir (loopback TDM raundu)
+- [x] DemoVenue (11×8, sihirbazla) + `Docs/Isletme-Kurulum.md`
+- [ ] (Ops.) MJPEG izleme — **ERTELENDİ** (gerekçe aşağıda)
+- [ ] DemoVenue kurulum kontrol listesinin sahada bir kez yürütülmesi (kullanıcıda — fiziksel alan gerekir)
+- [x] Commit atılmış
+
+## Uygulama notları (planından sapan/eklenen kararlar)
+
+- **Şablon sahnesinde tek yapısal düzeltme:** `PlayArea/Ground` artık saf konteyner; zemin mesh'i
+  `Ground/GroundMesh` alt objesine taşındı. Sebep: zemini ölçeklemek çocuk prop'ları (Covers,
+  anchor'lar) da ölçekliyor; döndürülmüş çocuklarda non-uniform ölçek KAYMA (shear) üretir.
+  Ayrı mesh objesi sayesinde sihirbaz zemini serbestçe ölçekler, prop'lar yalnız KONUM olarak
+  oranlanır (biçimleri bozulmaz).
+- **Sihirbaz spawn'ları sıfırdan yerleştirir** (oranlamaz): `z_i = -halfZ + (i+1)·2·halfZ/(n+1)`;
+  istenen slot sayısı şablondakinden farklıysa klonlar/siler, `slot` alanlarını 0..n-1 yazar,
+  yönlerini arena merkezine çevirir. BaseZone'lar duvara YASLANIR (`x = ±(sizeX/2 − halfExtentX)`),
+  `halfExtentZ` arena derinliğiyle ölçeklenir.
+- **`maps.json` sunucuda opsiyonel:** dosya yoksa `MapTable` boş kalır ve harita doğrulaması
+  ATLANIR (Faz 3 davranışı) — sunucu içerik projesi olmadan da koşabilsin. Doluysa `start_match`
+  bilinmeyen sahneyi/modu reddeder ve spawn slotu `% spawnSlotsPerTeam` ile sınırlanır.
+- **weapons.json export'u mevcut dosyayla bayt-bayt aynı çıktı** (git diff boş) — biçim disiplini
+  (alfabetik, LF, BOM'suz, 2 boşluk) tutuyor demektir.
+- **PoseBot `--map` / `--mode` bayrakları eklendi** ve `BuildScenes` listesine yeni arenalar girdi;
+  aksi hâlde bot'un `hello.scenes`'i eksik kalıp `start_match`'i engelliyordu.
+- **MJPEG izleme (Adım 5) ertelendi.** Gerekçe: protokole yeni binary kare tipi + sunucu relay +
+  admin video paneli getiriyor ve varsayılan KAPALI olması için önce Quest'te fps etkisinin
+  ölçülmesi gerekiyor (cihaz elde). Faz 4'ün asıl hedefi (içerik üretimini araçlaştırmak) bundan
+  bağımsız tamamlandı; iş "Faz 4 sonrası ufuk" listesinde duruyor.
 
 ---
 
