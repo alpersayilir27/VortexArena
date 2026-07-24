@@ -41,6 +41,22 @@ public sealed class PlayerState
     /// <summary>0x00 UdpHello ile doğrulanmış UDP endpoint'i; kayıt öncesi null.</summary>
     public IPEndPoint? UdpEndpoint { get; set; }
 
+    /// <summary>Poz yaz/oku kilidi — UDP recv thread'i ile snapshot timer'ı farklı thread'ler;
+    /// ~90 B'lik PoseUpdate struct'ında tearing olmasın.</summary>
+    public object PoseGate { get; } = new();
+
+    /// <summary>En az bir geçerli PoseUpdate alındı mı (LastPose ancak o zaman okunur).</summary>
+    public bool HasPose { get; set; }
+
+    /// <summary>Son kabul edilen poz (arena uzayında; PoseGate altında oku/yaz).</summary>
+    public PoseUpdate LastPose { get; set; }
+
+    /// <summary>Son kabul edilen pozun sıra numarası (u16 sarmalamalı eskilik kontrolü için).</summary>
+    public ushort LastSeq { get; set; }
+
+    /// <summary>Son kabul edilen pozun UTC zamanı.</summary>
+    public DateTime LastPoseAt { get; set; }
+
     public ClientConnection? Connection { get; set; }
 
     /// <summary>lobby_state için tel formatı anlık görüntüsü.</summary>

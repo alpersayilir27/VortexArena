@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Nullable kapalı: link'lenen Protocol dosyaları nullable bilmez (Core csproj ile aynı gerekçe). -->
+  </PropertyGroup>
+
+  <!-- Paylaşılan protokol kaynağı: Unity'deki VortexArena.Protocol asmdef'i ile AYNI dosyalar. -->
+  <ItemGroup>
+    <Compile Include="..\..\Assets\_Shared\Net\Protocol\**\*.cs"
+             Exclude="..\..\Assets\_Shared\Net\Protocol\**\*.meta"
+             LinkBase="Protocol" />
+  </ItemGroup>
+
+</Project>

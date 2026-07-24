@@ -46,6 +46,9 @@ namespace VortexArena.Net
         /// <summary>Aynı kalıcı objede yaşayan UDP poz kanalı (Faz 1: yalnız kayıt).</summary>
         public UdpStateChannel UdpChannel { get; private set; }
 
+        /// <summary>Uzak oyuncu poz kayıtçısı: snapshot'ları biriktirir, interpolasyonlu okutur.</summary>
+        public RemotePlayerRegistry Remotes { get; private set; }
+
         /// <summary>Soket açık mı — her thread'den güvenli.</summary>
         public bool IsConnected => IsSocketOpen;
 
@@ -95,6 +98,7 @@ namespace VortexArena.Net
             Instance = this;
 
             UdpChannel = gameObject.AddComponent<UdpStateChannel>();
+            Remotes = gameObject.AddComponent<RemotePlayerRegistry>();
 
             _deviceId = SystemInfo.deviceUniqueIdentifier;
             _deviceName = SystemInfo.deviceName;

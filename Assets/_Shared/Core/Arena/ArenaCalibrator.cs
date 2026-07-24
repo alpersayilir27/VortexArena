@@ -41,6 +41,12 @@ namespace VortexArena.Core.Arena
         /// <summary>True once the arena has been aligned, manually or from a saved anchor.</summary>
         public bool IsCalibrated => capturedCount >= 2;
 
+        /// <summary>
+        /// Kalibrasyon tamamlanınca (elle iki nokta ya da kayıtlı anchor'dan yüklenince)
+        /// ana thread'de tetiklenir; Net poz gönderimine bundan sonra başlanır.
+        /// </summary>
+        public static event Action Calibrated;
+
         private OVRCameraRig cameraRig;
         private OVRSpatialAnchor worldAnchor;
         private Vector3 capturedA;
@@ -149,6 +155,7 @@ namespace VortexArena.Core.Arena
             StartCoroutine(Pulse(2));
             Debug.Log($"ArenaCalibrator: point B captured at {point}.");
             AlignRig(capturedA, point);
+            Calibrated?.Invoke();
             _ = CreateAndSaveAnchorAsync();
         }
 
@@ -310,6 +317,7 @@ namespace VortexArena.Core.Arena
                 capturedCount = 2;
                 if (anchorA != null) anchorA.SetActive(true);
                 if (anchorB != null) anchorB.SetActive(true);
+                Calibrated?.Invoke();
             }
             catch (Exception e)
             {

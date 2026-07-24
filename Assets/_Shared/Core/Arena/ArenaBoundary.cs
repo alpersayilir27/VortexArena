@@ -49,6 +49,17 @@ namespace VortexArena.Core.Arena
                 warningText.gameObject.SetActive(false);
         }
 
+        private void OnEnable()
+        {
+            // Arena origin kaydı: ağ pozları bu transforma göre arena uzayına çevrilir.
+            ArenaSpace.SetOrigin(transform);
+        }
+
+        private void OnDisable()
+        {
+            ArenaSpace.ClearOrigin(transform);
+        }
+
         private void Update()
         {
             if (head == null)

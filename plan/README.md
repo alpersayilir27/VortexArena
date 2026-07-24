@@ -11,7 +11,7 @@
 | `protokol-v1.md` | Ağ protokolü tam referansı (Faz 0'da `Docs/`'a kopyalanır, Faz 1-3'te implement edilir) | — |
 | `faz0-dosya-sistemi.md` | Klasör/asmdef göçü, paket trimi, CLAUDE.md + kurallar + doküman | ✅ (2026-07-24) |
 | `faz1-server-ve-lobi.md` | .NET server iskeleti + Unity istemci + Lobi E2E | ✅ (2026-07-24 — loopback E2E geçti; Quest cihaz E2E kullanıcıda) |
-| `faz2-poz-senkronu.md` | UDP poz akışı, uzak avatarlar, admin taktik görünüm, kalibrasyon | ☐ |
+| `faz2-poz-senkronu.md` | UDP poz akışı, uzak avatarlar, admin taktik görünüm, kalibrasyon | ✅ (2026-07-24 — loopback E2E: 2 PoseBot + editor admin/player geçti; 2-Quest fiziksel örtüşme testi kullanıcıda) |
 | `faz3-mac-ve-savas.md` | Maç akışı, TDM modu, silah/can senkronu, respawn | ☐ |
 | `faz4-editor-sdk.md` | Editor araçları (Network Parent, arena şablonu), A12x12, işletme piloti | ☐ |
 

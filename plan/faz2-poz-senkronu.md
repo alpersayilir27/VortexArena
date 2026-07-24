@@ -50,9 +50,9 @@
 
 ## Çıktı kontrol listesi
 
-- [ ] `ArenaSpace` dönüşümü + `ArenaCalibrator.Calibrated` olayı
-- [ ] PoseUpdate 20 Hz gidiyor (yalnız player, kalibrasyon sonrası); Snapshot 20 Hz dönüyor (admin dahil herkese)
-- [ ] `RemotePlayerRegistry` interpolasyonu (100 ms tampon) + `RemoteAvatar` prefabı + spawner
-- [ ] Admin taktik görünüm canlı
-- [ ] 2-Quest fiziksel örtüşme testi geçti
-- [ ] Commit atılmış
+- [x] `ArenaSpace` dönüşümü + `ArenaCalibrator.Calibrated` olayı
+- [x] PoseUpdate 20 Hz gidiyor (yalnız player, kalibrasyon sonrası); Snapshot 20 Hz dönüyor (admin dahil herkese)
+- [x] `RemotePlayerRegistry` interpolasyonu (100 ms tampon) + `RemoteAvatar` prefabı + spawner
+- [x] Admin taktik görünüm canlı (2 PoseBot ile loopback doğrulandı; ayrıca `Server/VortexArena.PoseBot` test istemcisi eklendi)
+- [ ] 2-Quest fiziksel örtüşme testi geçti (kullanıcıda — `Builds/vortexarena-faz2.apk`)
+- [x] Commit atılmış
