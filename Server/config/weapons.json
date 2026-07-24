@@ -1,0 +1,6 @@
+{
+  "weapons": [
+    { "weaponId": "ak47", "damage": 34, "rpm": 600 },
+    { "weaponId": "m4", "damage": 22, "rpm": 800 }
+  ]
+}

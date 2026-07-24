@@ -10,10 +10,12 @@ Free-roam VR PvP arenasını LAN'da yöneten bağımsız **.NET 8 konsol** sunuc
 Server/
   VortexArena.Server.sln
   VortexArena.Server.Core/    # Kestrel WS host, beacon, PlayerRegistry, LobbyService,
-                              # StateHost (UDP), MatchDirector iskeleti, Modes/ (IGameMode)
+                              # StateHost (UDP), MatchDirector (faz makinesi + vuruş hattı),
+                              # WeaponTable, Modes/ (IGameMode, TdmMode)
   VortexArena.Server.App/     # konsol exe (UI YOK — yönetim UI'ı Unity admin build'i)
   VortexArena.PoseBot/        # sentetik oyuncu test istemcisi (poz senkronunu Quest'siz test eder)
   config/server.json          # portlar + mekan adı + tickHz
+  config/weapons.json         # sunucu-otoriter silah tablosu (weaponId + damage + rpm)
   config/devices.json         # deviceId -> dostane ad ("Gözlük NN"); otomatik doldurulur
   firewall-kur.cmd            # Windows Firewall kuralları (yönetici olarak çalıştırın)
 ```
@@ -34,8 +36,13 @@ Açılışta:
 - UDP `47822` state kanalını dinler: `0x00 UdpHello` kayıt + ack, `0x01 PoseUpdate` alımı,
   `0x02 Snapshot` yayını (20 Hz, kayıtlı tüm endpoint'lere — admin dahil). Poz akarken konsolda
   saniyede bir `[state] oyuncu N, pozlu N, snapshot N B, hedef N` özeti görünür.
-- `config/` bulunamazsa exe yanında oluşturulur ve varsayılanlarla doldurulur.
+- Maç tick döngüsü (10 Hz) çalışır: faz makinesi, geri sayım, süre, zorla canlandırma.
+- `config/` bulunamazsa exe yanında oluşturulur ve varsayılanlarla doldurulur
+  (`server.json` + `weapons.json`).
 - Konsolda bağlanan/kopan cihazlar ve çevrimiçi sayısı akar; **Ctrl+C** temiz kapatır.
+
+Açılış başlığında `Modlar : tdm` ve `Silahlar : ak47, m4` satırları kayıtlı mod/silah
+tablosunu özetler.
 
 ## Portlar
 
@@ -75,22 +82,95 @@ kurulumda genelde yalnız `venueName` değişir:
 { "controlPort": 47821, "beaconPort": 47820, "statePort": 47822, "venueName": "Dev", "tickHz": 20 }
 ```
 
+**weapons.json** — sunucu-otoriter silah tablosu (§10.3). Unity'deki `WeaponDefinition` SO'larıyla
+**elle senkron** tutulur (Faz 4'te export otomasyonu gelecek); iki taraf sapınca hasar HER ZAMAN
+buradan uygulanır ve uyumsuzluk konsola yazılır. `rpm`, `hit_report` hız denetiminde kullanılır
+(iki kabul edilen vuruş arası ≥ `60/rpm × 0.8` sn). Dosya yoksa varsayılanlarla oluşturulur:
+```json
+{ "weapons": [ { "weaponId": "ak47", "damage": 34, "rpm": 600 },
+               { "weaponId": "m4", "damage": 22, "rpm": 800 } ] }
+```
+Yeni silah eklerken: prefab + `WeaponDefinition` SO (Unity) **ve** buraya aynı `weaponId`.
+
 **devices.json** — `{ "<deviceId>": "Gözlük 07" }`. Bilinmeyen player cihazı bağlanınca ilk boş
 `Gözlük NN` atanır ve dosyaya yazılır; `set_name` ile değişen ad da buraya kalıcı yazılır.
 UTF-8, BOM'suz.
+
+## Maç akışı (Faz 3) — konsolda ne görünür
+
+Kural otoritesi tamamen sunucudadır (`MatchDirector` + `Modes/<X>Mode.cs`): istemci hasar
+uygulamaz, skor tutmaz, faz değiştirmez. Faz makinesi
+`Lobby → Loading → Countdown(5) → Live → End(10 sn) → Lobby` (detay: `../Docs/ArenaNet-Protokol.md` §10).
+
+Admin `start_match` yolladığında sunucu şunları doğrular: mod kayıtlı mı, en az 1 çevrimiçi
+oyuncu var mı, `sceneName` TÜM çevrimiçi oyuncuların `hello.scenes` listesinde mi. Geçerse
+takımlar dengelenir (2+ oyuncuda boş takım kalmaz; tek oyuncuda uyarıyla izin verilir) ve
+herkese KİŞİSEL `load_match` (`yourTeam` + takım içi 0 tabanlı `spawnSlot`) gider — `load_match`
+yalnız `role=player`'a; admin fazı `match_state`'ten öğrenir.
+
+`[match]` önekli konsol satırları:
+
+| Satır | Anlamı |
+|---|---|
+| `faz Lobby → Loading` | her faz değişiminde (ayrıca herkese `match_state` yayınlanır) |
+| `start_match: mod 'tdm', sahne 'Arena10x10', 2 oyuncu (kırmızı 1 / mavi 1)` | maç kuruldu |
+| `start_match reddedildi: …` | doğrulama düştü, faz değişmedi |
+| `takım dengeleme: 1 oyuncu 'blue' takımına taşındı` | boş takım kalmasın diye |
+| `loading zaman aşımı (20 sn) — hazır olmayanlar: Gözlük 03` | sahne yükleme beklenmedi |
+| `hit_report reddedildi (Gözlük 03 → 5): dost ateşi yok` | §10.3 doğrulamalarından biri düştü |
+| `hasar uyumsuz: … tablo uygulandı` | istemci `damage`'ı weapons.json ile uyuşmuyor |
+| `öldürme: Gözlük 03 → Gözlük 05 (ak47) — skor kırmızı 4 : mavi 2` | doğrulanmış öldürme |
+| `canlandı: Gözlük 05` / `zorla canlandırma: Gözlük 05` | `revive_request` / `REVIVE_GRACE` |
+| `maç sonu — kazanan: blue (kırmızı 12 : mavi 30)` | `match_end` yayınlandı |
+
+Kabul edilen vuruşların hasar satırı **yazılmaz** (saniyede onlarca satır olurdu); yalnız
+öldürme + ret satırları loglanır. Ret satırları da atıcı başına **2 sn'de bir** yazılır (istemciler
+ölü hedefe ateş etmeyi sürdürür); aradaki bastırılan retler yutulmaz, sayıları bir sonraki satırın
+sonuna `(+N bastırıldı)` olarak eklenir. `revive_request` reddi tamamen sessizdir (istemci ~1 sn'de
+bir tekrarlar; takılan istemciyi `REVIVE_GRACE` zorla canlandırma satırı yakalar).
+
+**Free-roam respawn:** oyuncu ışınlanamaz → canlanma konum değil DURUM değişimidir. Ölünce
+kurbana `respawn{spawnSlot, delaySeconds:5}` gider; oyuncu süre dolduktan sonra kendi tabanına
+fiziken girip `revive_request` yollar; sunucu doğrulayıp `health_update{hp:100, attackerId:0}`
+yayınlar. Talep 20 sn (`REVIVE_GRACE`) gelmezse sunucu zorla canlandırır (maç kilitlenmesin).
+
+**Yeni mod eklemek:** `Modes/<Ad>Mode.cs` içinde `IGameMode` uygula → `MatchDirector` ctor'undaki
+`Register(new <Ad>Mode())` satırına ekle → `../Docs/ArenaNet-Protokol.md`'ye modId işle →
+Unity tarafında `Assets/Modes/<Ad>/` kutusunu aç (CLAUDE.md reçetesi).
 
 ## PoseBot — sentetik oyuncu (test)
 
 Quest olmadan poz senkronunu uçtan uca denemek için:
 
 ```powershell
-dotnet run --project Server/VortexArena.PoseBot -- 127.0.0.1 2   # 2 bot, yerel sunucuya
+dotnet run --project Server/VortexArena.PoseBot -- 127.0.0.1 2                  # 2 bot, yalnız poz
+dotnet run --project Server/VortexArena.PoseBot -- 127.0.0.1 4 --fight          # 4 bot, savaşarak
+dotnet run --project Server/VortexArena.PoseBot -- 127.0.0.1 2 --fight --admin  # + maçı başlatan admin
 ```
 
 Her bot player rolüyle WS'e bağlanır, UDP kaydını yapar ve 20 Hz'de dairesel yürüyüş pozu
 gönderir (bot başına farklı yarıçap/faz). Editor'de admin bağlanınca taktik görünümde,
 player bağlanınca lobide hayalet avatar olarak görünürler. Botların yazdığı `devices.json`
-girdilerini commit'lemeyin (test kirliliği).
+girdilerini commit'lemeyin (test kirliliği). Kullanım: `PoseBot [ip] [botSayısı] [--fight] [--admin]`
+(bayrak sırası serbest, `--help` kısa kullanım basar).
+
+**`--fight`** botları maça da katar: `load_match` gelince 0.5–1.5 sn "sahne yükleniyor"
+simülasyonundan sonra `set_ready` gönderir, faz `Live` olunca saniyede 2 kez `shot_fired` +
+`hit_report` (ak47, 34 hasar — `config/weapons.json` ile aynı olmalı) yollar, ölünce
+`respawn.delaySeconds` + 1 sn sonra `revive_request` ile canlanır (free-roam "tabana dön"
+akışının bot karşılığı). **Yalnız çift indeksli botlar ateş eder** (bot0, bot2…), tekler kurbandır;
+böylece skor tek yönlü ve okunur ilerler. Konsolu boğmamak için maç akışı satırlarını yalnız
+bot0 yazar. `--fight` verilmezse bot `set_ready` göndermez → maç Loading fazında `LOADING_TIMEOUT`
+(20 sn) bekler; savaş testlerinde bayrağı hep verin.
+
+**`--admin`** botlara ek olarak tek bir `role=admin` bağlantısı açar: roster'da 2+ çevrimiçi
+oyuncu 2 sn kararlı kalınca kendiliğinden `start_match{tdm, Arena10x10}` gönderir, maç akışını
+`[admin]` önekiyle yazar, konsolda `q` + Enter ile `abort_match` gönderir. Unity editörü **oyuncu**
+rolündeyken ortamda admin kalmadığı için E2E'nin bu ayağında şarttır.
+
+> Botun bildirdiği `hello.scenes`, Build Settings listesidir (`Boot, Lobby, AdminConsole,
+> Arena10x10`) — sunucu `start_match`'te sahneyi tüm oyuncuların listesinde aradığı için yeni
+> arena eklendiğinde PoseBot'taki `BuildScenes` sabiti de güncellenmelidir.
 
 ## Faz durumu
 
@@ -98,5 +178,6 @@ girdilerini commit'lemeyin (test kirliliği).
   UDP kayıt. Loopback E2E: sunucuyu başlat → Editor'de admin bağlan → roster'da görün.
 - **Faz 2 (tamam):** `0x01 PoseUpdate` alımı (kayıtlı endpoint + u16 seq sarmalama kontrolü) +
   `0x02 Snapshot` yayını (20 Hz, tek pakette 16 oyuncu ≈ 1382 B) + PoseBot test istemcisi.
-- **Faz 3:** MatchDirector maç akışı (`load_match` → countdown → Live → End) + `Modes/` altında
-  `IGameMode` uygulamaları (ör. `TdmMode.cs`) + vuruş doğrulama/skor.
+- **Faz 3:** MatchDirector faz makinesi (`load_match` → countdown → Live → End → lobi) +
+  `Modes/TdmMode.cs` (`IGameMode`) + `config/weapons.json` ile sunucu-otoriter vuruş doğrulama,
+  can/skor yayını ve free-roam canlanma. Snapshot `flags` bit0 artık gerçek `alive` durumunu taşır.

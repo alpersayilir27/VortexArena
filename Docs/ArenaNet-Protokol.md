@@ -21,6 +21,13 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `SNAPSHOT_RATE_HZ` | `20` | Sunucu snapshot yayın frekansı |
 | `INTERP_DELAY_MS` | `100` | Uzak avatar interpolasyon tamponu |
 | `MAX_PLAYERS` | `16` | Snapshot tek UDP paketine sığar (aşağıda hesap) |
+| `PLAYER_MAX_HP` | `100` | Oyuncu tam canı (sunucu-otoriter; §10) |
+| `COUNTDOWN_SECONDS` | `5` | Countdown fazının uzunluğu |
+| `MATCH_END_SECONDS` | `10` | End fazı → otomatik `return_to_lobby` |
+| `LOADING_TIMEOUT` | 20 sn | Loading'de tüm `set_ready` beklenmezse yine de Countdown'a geçilir |
+| `RESPAWN_DELAY` | 5 sn | Ölüm → en erken canlanma (`respawn.delaySeconds`) |
+| `REVIVE_GRACE` | 20 sn | `revive_request` gelmezse sunucu ölümden bu kadar sonra zorla canlandırır |
+| `FIRE_RATE_TOLERANCE` | `0.8` | `hit_report` hız denetimi: iki vuruş arası ≥ `60/rpm × 0.8` sn |
 
 ## 2. Roller ve kimlik
 
@@ -69,13 +76,16 @@ KENDİ `playerId`'si için gönderebilir (lobide takım seçimi); admin herkes i
 { "type":"shot_fired", "seq":123, "weaponId":"ak47",
   "muzzlePos":[1.2,1.4,-3.0], "muzzleDir":[0.1,0.0,0.99] }
 ```
+`muzzlePos`/`muzzleDir` **arena uzayındadır** (§3) — alıcı istemci kendi dünyasına çevirir.
 
 **`hit_report`** — atıcının raycast'i bir oyuncuya değdiğinde:
 ```json
 { "type":"hit_report", "seq":124, "targetPlayerId":5, "weaponId":"ak47",
   "damage":25.0, "hitPos":[0.4,1.5,2.2] }
 ```
-Sunucu doğrular: hedef hayatta mı, atıcı hayatta mı, farklı takım mı, silahın atış hızına göre makul mü (rate-limit). Geçerse hasar uygular ve `health_update` yayınlar. **İstemci hasarı yerel uygulamaz** — `health_update` bekler.
+`hitPos` arena uzayında. Sunucu doğrular: hedef hayatta mı, atıcı hayatta mı, farklı takım mı, silahın atış hızına göre makul mü (rate-limit), `damage` `weapons.json`'daki değerle uyuşuyor mu (§10.3). Geçerse hasar uygular ve `health_update` yayınlar. **İstemci hasarı yerel uygulamaz** — `health_update` bekler.
+
+**`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** fiziksel olarak kendi taban bölgesine (`BaseZone`) girdikten sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da oyuncu ışınlanamadığı için canlanma bir **konum değişimi değil, durum değişimidir**.
 
 ### 5.2 Yalnız admin → Sunucu
 
@@ -177,3 +187,56 @@ Sunucu : hello'suz bağlantıyı 10 sn içinde kapat; deviceId çakışmasında 
 ## 9. Güvenlik (v1)
 
 LAN-içi, auth YOK. `hello`'ya ileride `token` alanı eklenebilir (rezerve). Sunucu yalnız özel ağda; Windows Firewall kuralları `Server/firewall-kur.cmd` ile (TCP 47821 + UDP 47820/47822).
+
+## 10. Maç akışı + savaş kuralları (sunucu-otoriter)
+
+Tüm kural otoritesi sunucudadır (`MatchDirector` + `Modes/<X>Mode.cs : IGameMode`). İstemci **sunum + girdi**dir: hasar uygulamaz, skor tutmaz, faz değiştirmez.
+
+### 10.1 Faz makinesi
+
+```
+Lobby ──start_match──► Loading ──herkes set_ready | LOADING_TIMEOUT──► Countdown(5 sn)
+   ▲                                                                       │
+   └──── return_to_lobby ◄── End (MATCH_END_SECONDS) ◄── match sonu ◄──── Live
+```
+
+- **`start_match` doğrulaması:** en az 1 çevrimiçi `role=player`; `modeId` sunucudaki `IGameMode` kayıtlarında var; `sceneName` tüm çevrimiçi oyuncuların `hello.scenes` listesinde var. Geçmezse komut reddedilir ve konsola sebep yazılır (faz değişmez). İki oyuncu+ varken takımlar dengelenir (boş takım kalmaz); tek oyuncuyla başlatmaya **test amaçlı** izin verilir (konsolda uyarı).
+- **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam` + `spawnSlot`'u (takım içi 0 tabanlı sıra) gider. Faz Loading'e geçerken tüm `ready` bayrakları sıfırlanır.
+- **Loading:** istemci sahneyi yükleyince `set_ready{ready:true}` gönderir ("sahne yüklendi" anlamında). Tüm çevrimiçi oyuncular hazır olunca (veya `LOADING_TIMEOUT` dolunca) Countdown başlar.
+- **Countdown:** saniyede bir `countdown{seconds}` (5→1); 0'da faz Live.
+- **Live:** `match_state` 1 Hz; `timeRemaining` sunucuda azalır; `IGameMode.OnTick` çağrılır.
+- **End:** `match_end` yayınlanır, `MATCH_END_SECONDS` sonra `return_to_lobby` + faz Lobby (skorlar/canlar sıfırlanır, oyuncular Lobby sahnesine döner).
+- **`abort_match`** her fazda Lobby'ye düşürür (`return_to_lobby` yayınlanır); `return_to_lobby` doğrudan aynı işi yapar.
+
+### 10.2 Oyuncu maç durumu (sunucuda)
+
+Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `spawnSlot`, `kills`, `deaths`, son vuruş zamanı (rate-limit), ölüm zamanı. Live'a girerken herkes `hp=PLAYER_MAX_HP`, `alive=1`. Snapshot'taki `SnapshotEntry.flags` bit0 (`FLAG_ALIVE`) bu `alive` alanından beslenir — Lobby fazında herkes canlı sayılır.
+
+### 10.3 Vuruş hattı
+
+`hit_report` şu sırayla doğrulanır; **herhangi biri düşerse paket sessizce reddedilir** (konsola tek satır log, istemciye yanıt yok):
+
+1. Faz `Live` mi?
+2. Atıcı çevrimiçi + `role=player` + `alive` mi?
+3. Hedef var, çevrimiçi, `alive` mi?
+4. Takımlar farklı mı? (aynı takım = dost ateşi YOK)
+5. `weaponId` `config/weapons.json`'da var mı?
+6. Atış hızı: aynı atıcının son kabul edilen vuruşundan bu yana ≥ `60/rpm × FIRE_RATE_TOLERANCE` sn geçmiş mi?
+7. `damage`, `weapons.json`'daki değere eşit mi (±%1)? Değilse tablodaki değer kullanılır ve uyumsuzluk loglanır.
+
+Geçerse: `hp -= damage` → `health_update{playerId, hp, attackerId}` **herkese** yayınlanır. `hp ≤ 0` ise `alive=0`, `kill_event{killerId, victimId, weaponId}` + `IGameMode.OnKill` (skor) + kurbana `respawn{spawnSlot, delaySeconds:RESPAWN_DELAY}`.
+
+`shot_fired` sunucuda **doğrulanmaz**, yalnız relay edilir (atan hariç herkese, `playerId` eklenerek) — ölü/maç dışı oyuncunun `shot_fired`'ı relay EDİLMEZ.
+
+> `config/weapons.json` (`{ "weapons":[{ "weaponId":"ak47","damage":34,"rpm":600 }, …] }`) Unity'deki `WeaponDefinition` SO'larıyla **elle senkron tutulur**; iki taraf sapınca hasar sunucu tablosundan uygulanır. Faz 4'te export otomasyonu gelecek.
+
+### 10.4 Free-roam respawn (canlanma)
+
+Fiziksel oyuncu ışınlanamaz → **respawn = konum değil durum değişimi**:
+
+1. Ölünce sunucu `respawn{playerId, spawnSlot, delaySeconds}` gönderir; istemci ölüm ekranı gösterir ("tabanına dön"), silah ateşlemez, avatar yarı saydam.
+2. `delaySeconds` dolduktan **ve** oyuncu kendi `BaseZone`'una fiziken girdikten sonra istemci `revive_request` gönderir (canlanana dek ~1 sn'de bir tekrarlar).
+3. Sunucu doğrular (faz Live, oyuncu ölü, gecikme dolmuş) → `hp=PLAYER_MAX_HP`, `alive=1` → `health_update{hp:100, attackerId:0}`.
+4. Ölümden `REVIVE_GRACE` geçtiği hâlde talep gelmediyse sunucu **zorla** canlandırır (istemci takılmışsa maç kilitlenmesin).
+
+`spawnSlot` yalnızca "hangi tabana/slota gideceğin" göstergesidir; slot çözümü istemcide sahnedeki `SpawnPoint(team, slot)` marker'larından yapılır — sunucuya harita dosyası gerekmez.

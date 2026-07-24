@@ -105,11 +105,11 @@ public sealed class LobbyService
         await SendSafeAsync(target.Connection, JsonUtil.Serialize(new IdentifyMsg { playerId = target.PlayerId }), target.Name);
     }
 
-    // ---- Maç komutları: Faz 3'te MatchDirector doldurulunca gerçek akışa bağlanır. ----
+    // ---- Maç komutları (yalnız admin; doğrulama + yayınlar MatchDirector'da, §10.1). ----
 
-    public void HandleStartMatch(StartMatchMsg msg) => _director.StartMatch(msg.modeId, msg.sceneName);
-    public void HandleAbortMatch() => _director.AbortMatch();
-    public void HandleReturnToLobby() => _director.ReturnToLobby();
+    public Task HandleStartMatchAsync(StartMatchMsg msg) => _director.StartMatchAsync(msg.modeId, msg.sceneName);
+    public Task HandleAbortMatchAsync() => _director.AbortMatchAsync();
+    public Task HandleReturnToLobbyAsync() => _director.ReturnToLobbyAsync();
 
     /// <summary>Roster'ın TAM anlık görüntüsünü tüm çevrimiçi bağlantılara yollar (§5.3 lobby_state).</summary>
     public async Task BroadcastLobbyStateAsync()

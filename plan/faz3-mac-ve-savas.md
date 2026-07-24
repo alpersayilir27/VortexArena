@@ -54,9 +54,30 @@
 
 ## Çıktı kontrol listesi
 
-- [ ] SO veri modeli (Weapon/Map/Mode/GameCatalog) + SpawnPoint'ler sahnede
-- [ ] Server: MatchDirector faz makinesi + TdmMode + hit doğrulama hattı + weapons.json
-- [ ] Unity: Modes/TeamDeathmatch modülü + Weapon/Health ağ bağlama + free-roam respawn (taban bölgesi koşullu)
-- [ ] AdminConsole: mod/harita seç + start + canlı skor/kill-feed
-- [ ] E2E TDM raundu (loopback + 2 Quest) geçti
-- [ ] Commit atılmış
+- [x] SO veri modeli (Weapon/Map/Mode/GameCatalog) + SpawnPoint'ler sahnede (4+4, taban şeritlerinde)
+- [x] Server: MatchDirector faz makinesi + TdmMode + hit doğrulama hattı + weapons.json
+- [x] Unity: Modes/TeamDeathmatch modülü + Weapon/Health ağ bağlama + free-roam respawn (taban bölgesi koşullu)
+- [x] AdminConsole: mod/harita seç + start + canlı skor/kill-feed
+- [x] E2E TDM raundu **loopback** geçti (PoseBot `--fight`/`--admin` + editor admin/player)
+- [ ] 2-Quest gerçek alan TDM raundu (kullanıcıda — `Builds/vortexarena-faz3.apk`)
+- [x] Commit atılmış
+
+## Uygulama notları (planından sapan/eklenen kararlar)
+
+- **`revive_request` protokole eklendi** (§5.1 + §10.4). Gerekçe: canlanma hem süre hem taban
+  bölgesi koşuluna bağlı; bölge koşulunu yalnız istemci bilebilir, otorite ise sunucuda. İstemci
+  koşullar sağlanınca talep eder, sunucu doğrular; talep hiç gelmezse `REVIVE_GRACE` (20 sn) ile
+  zorla canlandırma maçın kilitlenmesini önler.
+- **HUD kafaya kilitlenmedi.** Meta tasarım kılavuzu head-locked HUD'ı önermiyor
+  ("loosely follow the user using smoothing animation" — `design/mr-design-guideline`), free-roam
+  PvP'de de nişanı kapatırdı. `VortexArena.Core.UI.HudFollow`: ~1.1 m mesafe, göz hizasının biraz
+  altında, 18° ölü bölge + yumuşatma. Dünya-kilitli duvar skorbordu Faz 4 iyileştirmesi.
+- **`Weapon` yerel hasar yolu dummy'ler için korundu:** raycast `RemoteHitBox`'a değerse yalnız
+  `hit_report` gider (yerel hasar YOK); ağa bağlı olmayan hedeflerde (pratik dummy'si) eski
+  `Health.TakeDamage` yolu çalışır.
+- **Loading fazında `Ready` yeniden kullanıldı** ("sahne yüklendi" anlamında); lobi hazır
+  bayrakları Loading'e girmeden sıfırlanır.
+- **PoseBot test istemcisi genişledi:** `--fight` (maça katılır, ateş eder, canlanır) ve `--admin`
+  (maçı başlatan admin bağlantısı) — editor oyuncu rolündeyken E2E'yi Quest'siz kapatır.
+- Vuruş reddi logları atıcı başına 2 sn'de bir yazılır (`(+N bastırıldı)` sayaçlı) — ölüye ateş
+  eden istemciler konsolu boğmasın.

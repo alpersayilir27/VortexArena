@@ -10,6 +10,7 @@ namespace VortexArena.Protocol
         public const string SetReady = "set_ready";
         public const string ShotFired = "shot_fired"; // sunucu relay'i de aynı type
         public const string HitReport = "hit_report";
+        public const string ReviveRequest = "revive_request"; // free-roam canlanma talebi (§10.4)
 
         // Yalnız admin → Sunucu
         public const string StartMatch = "start_match";

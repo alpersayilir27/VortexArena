@@ -48,7 +48,9 @@ dosyasında (`Team.cs` gibi). Sahne adı = katalog anahtarı (`load_match` strin
 Portlar: UDP beacon 47820 · WS kontrol 47821 `/ws` · UDP state 47822 (cosmos 47800/1 ile çakışmaz).
 Pozlar istemci-otoriter (kalibrasyon sonrası ARENA UZAYINDA, 20 Hz UDP); can/skor/kurallar/maç
 fazları SUNUCU-otoriter (.NET `Server/`, mod kuralları `IGameMode`). Vuruş: atıcı raycast →
-hit_report → server doğrular → health_update. Keşif: beacon + lobide elle IP:port (PlayerPrefs) +
+hit_report → server doğrular → health_update. **Free-roam respawn = konum değil DURUM değişimi**
+(fiziksel oyuncu ışınlanamaz): ölüm → `RESPAWN_DELAY` → oyuncu kendi `BaseZone`'una fiziken girince
+`revive_request` → sunucu canlandırır (istemci takılırsa `REVIVE_GRACE` ile zorla). Rig'i ASLA taşıma. Keşif: beacon + lobide elle IP:port (PlayerPrefs) +
 StreamingAssets/arena.json fallback. DTO'lar `_Shared/Net/Protocol/` — saf C#, server csproj
 aynı dosyaları derler; Unity API'si girerse server derlemesi kırılır (bilinçli bekçi).
 
@@ -68,4 +70,7 @@ spawn güncelle → Build Settings'e ekle (sahne adı = katalog anahtarı).
 mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafında `Modes/<Ad>Mode.cs`
 (IGameMode) + `Docs/ArenaNet-Protokol.md`'ye modId ekle.
 **Yeni silah:** prefab `_Shared/Arsenal/Prefabs/` + WeaponDefinition SO `_Shared/Arsenal/Data/`
-(weaponId protokolde string — iki tarafta da aynı).
+(weaponId protokolde string — iki tarafta da aynı) + **`Server/config/weapons.json`'a aynı
+`weaponId/damage/rpm` satırı** (hasarı sunucu bu tablodan uygular; sapmada sunucu kazanır) +
+gerekiyorsa `ModeDefinition.loadout`. İçerik kataloğu: `_Shared/Data/GameCatalog.asset`
+(ModeDefinition + MapDefinition listesi) — AdminConsole mod/harita seçicisi bunu okur.

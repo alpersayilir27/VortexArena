@@ -3,6 +3,7 @@
     "rootNamespace": "VortexArena.Core",
     "references": [
         "VortexArena.Net",
+        "VortexArena.Protocol",
         "Oculus.VR",
         "Oculus.Interaction",
         "Unity.InputSystem",

@@ -35,6 +35,28 @@ public sealed class PlayerState
     /// <summary>Son hello/status'un UTC zamanı (OFFLINE_TIMEOUT süpürmesi buna bakar).</summary>
     public DateTime LastSeen { get; set; }
 
+    // ---- Maç durumu (§10.2) ----
+    // Bu alanların TEK yazarı MatchDirector'dır ve hepsi onun _gate kilidi altında okunur/yazılır.
+    // (StateHost yalnız Alive'ı kilitsiz okur — bool okuması atomik, bir tik gecikme önemsiz.)
+
+    /// <summary>0..PLAYER_MAX_HP; Live'a girerken ve canlanmada tam cana çekilir.</summary>
+    public float Hp { get; set; } = ArenaProtocol.PLAYER_MAX_HP;
+
+    /// <summary>Snapshot flags bit0 (FLAG_ALIVE) bunu besler; Lobby fazında herkes canlıdır.</summary>
+    public bool Alive { get; set; } = true;
+
+    /// <summary>load_match ile bildirilen, takım içi 0 tabanlı spawn sırası.</summary>
+    public int SpawnSlot { get; set; }
+
+    public int Kills { get; set; }
+    public int Deaths { get; set; }
+
+    /// <summary>Son KABUL EDİLEN hit_report'un UTC zamanı (atış hızı denetimi, §10.3/6).</summary>
+    public DateTime LastHitAcceptedAt { get; set; }
+
+    /// <summary>Son ölümün UTC zamanı (RESPAWN_DELAY + REVIVE_GRACE hesabı, §10.4).</summary>
+    public DateTime DiedAt { get; set; }
+
     /// <summary>welcome'da verilen UDP kayıt jetonu; her yeni hello'da yenilenir.</summary>
     public uint UdpToken { get; set; }
 
