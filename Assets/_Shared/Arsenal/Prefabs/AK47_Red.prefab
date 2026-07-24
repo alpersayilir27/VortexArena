@@ -146,6 +146,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Weapon
   weaponName: AK-47
   team: 0
+  definition: {fileID: 11400000, guid: addd6bbeff1ebdc43966f00b59ff26c5, type: 2}
+  weaponId: 
   damage: 34
   fireRateRpm: 600
   range: 60

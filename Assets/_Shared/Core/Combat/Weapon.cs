@@ -2,6 +2,10 @@ using System.Collections;
 using Oculus.Interaction;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using VortexArena.Core.Arena;
+using VortexArena.Core.Player;
+using VortexArena.Net;
+using VortexArena.Protocol;
 
 namespace VortexArena.Core.Combat
 {
@@ -19,6 +23,11 @@ namespace VortexArena.Core.Combat
         [Header("Identity")]
         [SerializeField] private string weaponName = "Rifle";
         [SerializeField] private Team team = Team.Red;
+        // Tanım atanırsa istatistikler Awake'te SO'dan okunur; Inspector değerleri yedektir.
+        [Tooltip("Silah tanımı SO'su (_Shared/Arsenal/Data). Atanırsa istatistikler buradan okunur.")]
+        [SerializeField] private WeaponDefinition definition;
+        [Tooltip("Protokol silah anahtarı ('ak47'/'m4'); tanım atanırsa oradan okunur.")]
+        [SerializeField] private string weaponId = "";
 
         [Header("Stats")]
         [SerializeField] private float damage = 25f;
@@ -57,6 +66,11 @@ namespace VortexArena.Core.Combat
         [SerializeField] private float hapticAmplitude = 0.6f;
 
         public string WeaponName => weaponName;
+
+        /// <summary>Protokol silah anahtarı: tanım varsa ondan, yoksa Inspector alanından.</summary>
+        public string WeaponId => definition != null ? definition.WeaponId : weaponId;
+
+        /// <summary>Silahın durduğu taban takımı (ateş YETKİSİ PlayerCombatState'ten gelir).</summary>
         public Team Team => team;
         public bool IsHeld => grabbable != null && grabbable.SelectingPointsCount > 0;
         public bool IsTwoHanded => grabbable != null && grabbable.SelectingPointsCount > 1;
@@ -73,8 +87,38 @@ namespace VortexArena.Core.Combat
         private Quaternion modelBaseRotation;
         private Coroutine hapticRoutine;
 
+        // --- Ağ (Faz 3) ---
+        // Her atışta yeni DTO ayırmamak için tek örnek yeniden kullanılır; dizi
+        // alanları da bir kez ayrılır (JsonUtility içerikleri her gönderimde okur).
+        private readonly ShotFiredMsg netShot = new ShotFiredMsg { muzzlePos = new float[3], muzzleDir = new float[3] };
+        private readonly HitReportMsg netHit = new HitReportMsg { hitPos = new float[3] };
+        private int netSeq;
+        private bool weaponIdWarned;
+
         protected virtual void Awake()
         {
+            // Tanım atanmışsa istatistikler SO'dan gelir (iki taraf aynı değeri kullansın diye
+            // tek doğruluk kaynağı SO'dur; sunucu tablosuyla elle senkron — protokol §10.3).
+            if (definition != null)
+            {
+                if (!string.IsNullOrEmpty(definition.DisplayName))
+                {
+                    weaponName = definition.DisplayName;
+                }
+
+                damage = definition.Damage;
+                fireRateRpm = definition.FireRateRpm;
+                range = definition.Range;
+                spreadDegrees = definition.SpreadDegrees;
+                magazineSize = definition.MagazineSize;
+                reloadTime = definition.ReloadTime;
+            }
+
+            if (string.IsNullOrEmpty(WeaponId))
+            {
+                Debug.LogWarning($"[Weapon] '{name}' için weaponId boş; sunucu vuruşları reddeder (WeaponDefinition ata).", this);
+            }
+
             if (inputActions == null)
                 inputActions = InputSystem.actions;
             if (inputActions != null)
@@ -118,10 +162,13 @@ namespace VortexArena.Core.Combat
 
             if (attackAction != null && muzzle != null && IsHeld)
             {
-                bool canFire = !IsReloading && CurrentAmmo > 0;
+                // Ateş yetkisi sunucu durumundan gelir (ölüyken / Loading-Countdown-End
+                // fazlarında tetik BOŞA basılır: boş şarjör sesi bile çalmaz).
+                bool combatAllows = PlayerCombatState.Instance == null || PlayerCombatState.Instance.CanFire;
+                bool canFire = !IsReloading && CurrentAmmo > 0 && combatAllows;
                 if (canFire && attackAction.IsPressed() && Time.time >= nextFireTime)
                     Fire();
-                else if (!canFire && attackAction.WasPressedThisFrame())
+                else if (!canFire && combatAllows && attackAction.WasPressedThisFrame())
                     weaponAudio?.PlayEmpty();
             }
 
@@ -154,6 +201,10 @@ namespace VortexArena.Core.Combat
                                 Quaternion.AngleAxis(scatter.y, muzzle.right) *
                                 muzzle.forward;
 
+            // Ağ: her atış relay edilir (uzak namlu alevi/sesi + sayım). Poz/yön ARENA
+            // UZAYINDA gider — alıcı kendi dünyasına çevirir (protokol §3).
+            SendShotFired(muzzle.position, direction);
+
             if (Physics.Raycast(muzzle.position, direction, out RaycastHit hit, range))
             {
                 if (hitEffectPrefab != null)
@@ -163,9 +214,21 @@ namespace VortexArena.Core.Combat
                     Destroy(fx, 2f);
                 }
 
-                Health target = hit.collider.GetComponentInParent<Health>();
-                if (target != null)
-                    target.TakeDamage(damage, this);
+                RemoteHitBox hitBox = hit.collider.GetComponentInParent<RemoteHitBox>();
+                if (hitBox != null && hitBox.PlayerId > 0)
+                {
+                    // AĞ OYUNCUSU: hasar YEREL UYGULANMAZ — sunucu doğrular ve
+                    // health_update yayınlar (protokol §10.3).
+                    SendHitReport(hitBox.PlayerId, hit.point);
+                }
+                else
+                {
+                    // Ağ oyuncusu değil (pratik dummy'si, kırılabilir hedef): eski
+                    // yerel hasar yolu korunur — bunların canı sunucuda tutulmaz.
+                    Health target = hit.collider.GetComponentInParent<Health>();
+                    if (target != null)
+                        target.TakeDamage(damage, this);
+                }
             }
 
             currentKick = Mathf.Min(currentKick + recoilKickDegrees * recoilScale, recoilKickDegrees * 4f);
@@ -187,6 +250,74 @@ namespace VortexArena.Core.Combat
             IsReloading = true;
             reloadEndTime = Time.time + reloadTime;
             weaponAudio?.PlayReload();
+        }
+
+        // ------------------------------------------------------------------- ağ
+
+        /// <summary>
+        /// shot_fired gönderir (sunucu doğrulamaz, yalnız relay eder). Bağlantı yoksa
+        /// ArenaClient.Send zaten no-op'tur — yerel sunum etkilenmez.
+        /// </summary>
+        private void SendShotFired(Vector3 worldMuzzlePosition, Vector3 worldDirection)
+        {
+            ArenaClient client = ArenaClient.Instance;
+            if (client == null || !client.IsConnected)
+                return;
+
+            if (string.IsNullOrEmpty(WeaponId))
+            {
+                WarnMissingWeaponId();
+                return;
+            }
+
+            Vector3 arenaPos = ArenaSpace.WorldToArena(worldMuzzlePosition);
+            // Yön bir NOKTA değildir: origin farkı düşülür (yalnız dönüş uygulanır).
+            Vector3 arenaDir = (ArenaSpace.WorldToArena(worldMuzzlePosition + worldDirection) - arenaPos).normalized;
+
+            netShot.seq = ++netSeq;
+            netShot.weaponId = WeaponId;
+            Write(netShot.muzzlePos, arenaPos);
+            Write(netShot.muzzleDir, arenaDir);
+            client.Send(netShot);
+        }
+
+        /// <summary>
+        /// hit_report gönderir (hedef bir ağ oyuncusu). Sunucu faz/takım/rate-limit/hasar
+        /// doğrulamasını yapar; geçerse health_update yayınlar (protokol §10.3).
+        /// </summary>
+        private void SendHitReport(int targetPlayerId, Vector3 worldHitPosition)
+        {
+            ArenaClient client = ArenaClient.Instance;
+            if (client == null || !client.IsConnected)
+                return;
+
+            if (string.IsNullOrEmpty(WeaponId))
+            {
+                WarnMissingWeaponId();
+                return;
+            }
+
+            netHit.seq = ++netSeq;
+            netHit.targetPlayerId = targetPlayerId;
+            netHit.weaponId = WeaponId;
+            netHit.damage = damage;
+            Write(netHit.hitPos, ArenaSpace.WorldToArena(worldHitPosition));
+            client.Send(netHit);
+        }
+
+        private void WarnMissingWeaponId()
+        {
+            if (weaponIdWarned)
+                return;
+            weaponIdWarned = true;
+            Debug.LogError($"[Weapon] '{name}' weaponId olmadan ateş etti; ağ mesajı gönderilmedi.", this);
+        }
+
+        private static void Write(float[] target, in Vector3 value)
+        {
+            target[0] = value.x;
+            target[1] = value.y;
+            target[2] = value.z;
         }
 
         private IEnumerator HapticPulse()

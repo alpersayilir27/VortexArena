@@ -13,13 +13,15 @@ public sealed class ControlHost
 {
     private readonly PlayerRegistry _registry;
     private readonly LobbyService _lobby;
+    private readonly MatchDirector _director;
     private readonly int _port;
     private WebApplication? _app;
 
-    public ControlHost(PlayerRegistry registry, LobbyService lobby, int port)
+    public ControlHost(PlayerRegistry registry, LobbyService lobby, MatchDirector director, int port)
     {
         _registry = registry;
         _lobby = lobby;
+        _director = director;
         _port = port;
     }
 
@@ -39,7 +41,7 @@ public sealed class ControlHost
                 return;
             }
             using var socket = await context.WebSockets.AcceptWebSocketAsync();
-            var connection = new ClientConnection(socket, _registry, _lobby);
+            var connection = new ClientConnection(socket, _registry, _lobby, _director);
             await connection.RunAsync(context.RequestAborted);
         });
 

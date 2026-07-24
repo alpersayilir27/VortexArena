@@ -171,6 +171,9 @@ public sealed class StateHost
                 if (state.UdpEndpoint != null) targets.Add(state.UdpEndpoint);
                 if (state.Role != "player") continue;
                 onlinePlayers++;
+                // flags bit0 = alive (§10.2): MatchDirector kilidi altında yazılır, burada kilitsiz
+                // okunur (bool okuması atomik; bir tik gecikme snapshot için önemsiz).
+                var alive = state.Alive;
                 lock (state.PoseGate)
                 {
                     if (!state.HasPose) continue;
@@ -178,7 +181,7 @@ public sealed class StateHost
                     entries.Add(new SnapshotEntry
                     {
                         playerId = (byte)state.PlayerId,
-                        flags = SnapshotEntry.FLAG_ALIVE,
+                        flags = alive ? SnapshotEntry.FLAG_ALIVE : (byte)0,
                         head = pose.head,
                         handL = pose.handL,
                         handR = pose.handR

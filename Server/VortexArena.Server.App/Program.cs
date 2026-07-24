@@ -14,20 +14,23 @@ internal static class Program
 
         var configDir = ResolveConfigDir();
         var config = ServerConfig.Load(Path.Combine(configDir, "server.json"));
+        var weapons = WeaponTable.Load(Path.Combine(configDir, "weapons.json"));
+
+        using var registry = new PlayerRegistry(Path.Combine(configDir, "devices.json"));
+        var director = new MatchDirector(registry, weapons);
+        var lobby = new LobbyService(registry, director);
+        var control = new ControlHost(registry, lobby, director, config.controlPort);
+        var beacon = new BeaconService(config.beaconPort, config.controlPort, config.statePort);
+        var stateHost = new StateHost(registry, config.statePort);
 
         Console.WriteLine("VortexArena Sunucusu");
         Console.WriteLine($"  Mekan      : {config.venueName}");
         Console.WriteLine($"  WS kontrol : http://0.0.0.0:{config.controlPort}{ArenaProtocol.WS_PATH}");
         Console.WriteLine($"  UDP beacon : {config.beaconPort} (her {ArenaProtocol.BEACON_INTERVAL:0} sn)");
         Console.WriteLine($"  UDP state  : {config.statePort}");
+        Console.WriteLine($"  Modlar     : {string.Join(", ", director.ModeIds)}");
+        Console.WriteLine($"  Silahlar   : {string.Join(", ", weapons.WeaponIds)}");
         Console.WriteLine($"  Config     : {configDir}");
-
-        using var registry = new PlayerRegistry(Path.Combine(configDir, "devices.json"));
-        var director = new MatchDirector();
-        var lobby = new LobbyService(registry, director);
-        var control = new ControlHost(registry, lobby, config.controlPort);
-        var beacon = new BeaconService(config.beaconPort, config.controlPort, config.statePort);
-        var stateHost = new StateHost(registry, config.statePort);
 
         registry.Changed += (player, kind) =>
         {
@@ -52,6 +55,7 @@ internal static class Program
         await control.StartAsync();
         beacon.Start();
         stateHost.Start();
+        director.Start(); // maç tick döngüsü (faz makinesi, 10 Hz)
         Console.WriteLine("Sunucu hazır. Çıkmak için Ctrl+C.");
 
         var quit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -63,6 +67,7 @@ internal static class Program
         await quit.Task;
 
         Console.WriteLine("Kapatılıyor...");
+        director.Stop();
         beacon.Stop();
         stateHost.Stop();
         await control.StopAsync();

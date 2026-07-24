@@ -10,10 +10,21 @@ namespace VortexArena.App
     /// senkronu) sahne yüklemeye çevirir; Net katmanı sahne yüklemediği için köprü
     /// budur. UnityEngine.SceneManagement.SceneManager'ı gölgelememek için adı
     /// SceneRouter'dır. Kalıcı singleton — kendini önyükler.
+    /// Ayrıca §10.1 Loading adımını kapatır: maç sahnesi yüklenince sunucuya
+    /// set_ready{true} ("sahne yüklendi") gönderir.
     /// </summary>
     public class SceneRouter : MonoBehaviour
     {
         public static SceneRouter Instance { get; private set; }
+
+        /// <summary>Sunucunun en son istediği maç sahnesi (load_match / welcome.match); lobide boş.</summary>
+        public string LastMatchScene { get; private set; } = "";
+
+        /// <summary>Sunucunun en son istediği mod (HUD seçimi için ModeHudSpawner okur).</summary>
+        public string LastModeId { get; private set; } = "";
+
+        /// <summary>Aynı maç sahnesi için set_ready bir kez gönderilir.</summary>
+        private string _readyReportedScene = "";
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -44,6 +55,7 @@ namespace VortexArena.App
             NetEvents.OnConnected += HandleConnected;
             NetEvents.OnLoadMatch += HandleLoadMatch;
             NetEvents.OnReturnToLobby += HandleReturnToLobby;
+            SceneManager.sceneLoaded += HandleSceneLoaded;
         }
 
         private void OnDisable()
@@ -51,6 +63,7 @@ namespace VortexArena.App
             NetEvents.OnConnected -= HandleConnected;
             NetEvents.OnLoadMatch -= HandleLoadMatch;
             NetEvents.OnReturnToLobby -= HandleReturnToLobby;
+            SceneManager.sceneLoaded -= HandleSceneLoaded;
         }
 
         /// <summary>Geç katılım senkronu: welcome'daki match fazı Lobby dışındaysa maç sahnesine yetiş.</summary>
@@ -68,6 +81,7 @@ namespace VortexArena.App
                 return;
             }
 
+            RememberMatch(msg.match.modeId, msg.match.sceneName);
             LoadChecked(msg.match.sceneName);
         }
 
@@ -86,11 +100,16 @@ namespace VortexArena.App
                 return;
             }
 
+            RememberMatch(msg.modeId, msg.sceneName);
             LoadChecked(msg.sceneName);
         }
 
         private void HandleReturnToLobby()
         {
+            LastMatchScene = "";
+            LastModeId = "";
+            _readyReportedScene = "";
+
             if (AppSession.Role != AppSession.RolePlayer)
             {
                 return; // admin zaten AdminConsole'da
@@ -99,7 +118,15 @@ namespace VortexArena.App
             LoadChecked(AppSession.SceneLobby);
         }
 
-        private static void LoadChecked(string sceneName)
+        /// <summary>Sunucudan gelen maç hedefini saklar (ModeHudSpawner + loading bildirimi okur).</summary>
+        private void RememberMatch(string modeId, string sceneName)
+        {
+            LastMatchScene = sceneName ?? "";
+            LastModeId = modeId ?? "";
+            _readyReportedScene = "";
+        }
+
+        private void LoadChecked(string sceneName)
         {
             if (!Application.CanStreamedLevelBeLoaded(sceneName))
             {
@@ -109,11 +136,52 @@ namespace VortexArena.App
 
             if (SceneManager.GetActiveScene().name == sceneName)
             {
+                // Zaten bu sahnedeyiz: sceneLoaded tetiklenmeyecek → hazır bildirimini elden ver.
+                ReportSceneLoaded(sceneName);
                 return;
             }
 
             Debug.Log($"[SceneRouter] Sahne yükleniyor → '{sceneName}'.");
             SceneManager.LoadScene(sceneName);
+        }
+
+        // ------------------------------------------------- §10.1 Loading bildirimi
+
+        private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            ReportSceneLoaded(scene.name);
+        }
+
+        /// <summary>
+        /// Yüklenen sahne, sunucunun istediği maç sahnesiyse "sahne yüklendi" anlamında
+        /// set_ready{true} gönderir (§10.1 Loading). Lobi sahnesi ve admin rolü es geçilir.
+        /// </summary>
+        private void ReportSceneLoaded(string sceneName)
+        {
+            if (AppSession.Role != AppSession.RolePlayer)
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(sceneName) || sceneName != LastMatchScene)
+            {
+                return;
+            }
+
+            if (_readyReportedScene == sceneName)
+            {
+                return; // aynı maç sahnesi için bir kez
+            }
+
+            ArenaClient client = ArenaClient.Instance;
+            if (client == null || !client.IsConnected)
+            {
+                return;
+            }
+
+            _readyReportedScene = sceneName;
+            client.Send(new SetReadyMsg { ready = true });
+            Debug.Log($"[SceneRouter] '{sceneName}' yüklendi → set_ready gönderildi.");
         }
     }
 }

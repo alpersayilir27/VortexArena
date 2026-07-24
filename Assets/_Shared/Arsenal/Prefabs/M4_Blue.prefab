@@ -506,6 +506,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Weapon
   weaponName: M4
   team: 1
+  definition: {fileID: 11400000, guid: 1edcc0bf1677a854887b7aaa5a11a0fb, type: 2}
+  weaponId: 
   damage: 22
   fireRateRpm: 800
   range: 60

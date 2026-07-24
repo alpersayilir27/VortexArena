@@ -15,6 +15,7 @@ public sealed class ClientConnection
     private readonly WebSocket _socket;
     private readonly PlayerRegistry _registry;
     private readonly LobbyService _lobby;
+    private readonly MatchDirector _director;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly CancellationTokenSource _cts = new();
 
@@ -24,11 +25,12 @@ public sealed class ClientConnection
     public string? DeviceId => State?.DeviceId;
     public bool IsAdmin => State?.Role == "admin";
 
-    public ClientConnection(WebSocket socket, PlayerRegistry registry, LobbyService lobby)
+    public ClientConnection(WebSocket socket, PlayerRegistry registry, LobbyService lobby, MatchDirector director)
     {
         _socket = socket;
         _registry = registry;
         _lobby = lobby;
+        _director = director;
     }
 
     public async Task RunAsync(CancellationToken hostToken)
@@ -152,25 +154,47 @@ public sealed class ClientConnection
             {
                 if (!RequireAdmin(type)) return;
                 var msg = JsonUtil.Deserialize<StartMatchMsg>(json);
-                if (msg != null) _lobby.HandleStartMatch(msg);
+                if (msg != null) await _lobby.HandleStartMatchAsync(msg);
                 return;
             }
             case MessageTypes.AbortMatch:
             {
                 if (!RequireAdmin(type)) return;
-                _lobby.HandleAbortMatch();
+                await _lobby.HandleAbortMatchAsync();
                 return;
             }
             case MessageTypes.ReturnToLobby:
             {
                 if (!RequireAdmin(type)) return;
-                _lobby.HandleReturnToLobby();
+                await _lobby.HandleReturnToLobbyAsync();
                 return;
             }
             case MessageTypes.ShotFired:
-            case MessageTypes.HitReport:
-                // Faz 3: maç kanalı (relay + vuruş doğrulama) — şimdilik yok sayılır.
+            {
+                if (State == null) return; // hello öncesi — yok sayılır
+                var msg = JsonUtil.Deserialize<ShotFiredMsg>(json);
+                // Faz/rol/hayatta olma denetimi MatchDirector'da (§10.3).
+                if (msg != null) await _director.HandleShotFiredAsync(State, msg);
                 return;
+            }
+            case MessageTypes.HitReport:
+            {
+                if (State == null) return;
+                var msg = JsonUtil.Deserialize<HitReportMsg>(json);
+                if (msg != null) await _director.HandleHitReportAsync(State, msg);
+                return;
+            }
+            case MessageTypes.ReviveRequest:
+            {
+                if (State == null) return;
+                if (State.Role != "player")
+                {
+                    Console.WriteLine($"[ClientConnection] revive_request yalnız player içindir ({State.Name}) — yok sayıldı.");
+                    return;
+                }
+                await _director.HandleReviveRequestAsync(State);
+                return;
+            }
             default:
                 Console.WriteLine($"[ClientConnection] bilinmeyen mesaj tipi '{type}' yok sayıldı.");
                 return;

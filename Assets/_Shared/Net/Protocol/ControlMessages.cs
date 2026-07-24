@@ -74,6 +74,14 @@ namespace VortexArena.Protocol
         public float[] hitPos;
     }
 
+    /// Ölü oyuncunun canlanma talebi (§10.4): respawn.delaySeconds dolmuş VE oyuncu kendi
+    /// tabanındayken gönderilir; sunucu koşulları doğrulayıp canlandırır. Alan taşımaz.
+    [Serializable]
+    public class ReviveRequestMsg
+    {
+        public string type = MessageTypes.ReviveRequest;
+    }
+
     // ---- Yalnız admin → Sunucu ----
 
     [Serializable]

@@ -28,6 +28,9 @@ namespace VortexArena.App
         private static readonly Color TeamBlueColor = new Color(0.20f, 0.40f, 0.90f);
         private static readonly Color NeutralColor = new Color(0.6f, 0.6f, 0.6f);
 
+        /// <summary>Ölü oyuncu noktasının solma oranı (alpha + parlaklık).</summary>
+        private const float DeadFade = 0.35f;
+
         /// <summary>Oyuncu başına runtime'da kurulan harita işareti.</summary>
         private class Marker
         {
@@ -36,6 +39,9 @@ namespace VortexArena.App
             public Image heading;
             public RectTransform headingRect;
             public TMP_Text label;
+            public Color baseColor;   // takım rengi (canlı hâli)
+            public bool alive = true; // son uygulanan yaşam durumu
+            public bool aliveKnown;   // ilk kez uygulanana dek false
         }
 
         private readonly Dictionary<int, Marker> _markers = new Dictionary<int, Marker>();
@@ -119,6 +125,15 @@ namespace VortexArena.App
                 if (!marker.root.gameObject.activeSelf)
                 {
                     marker.root.gameObject.SetActive(true);
+                }
+
+                // Ölü oyuncunun noktası solar, bakış çubuğu gizlenir.
+                bool alive = registry.IsAlive(kv.Key);
+                if (!marker.aliveKnown || marker.alive != alive)
+                {
+                    marker.alive = alive;
+                    marker.aliveKnown = true;
+                    ApplyAliveVisual(marker);
                 }
 
                 // Taktik harita zaten arena uzayında — dünya dönüşümü YOK.
@@ -264,7 +279,19 @@ namespace VortexArena.App
                 marker.label.text = displayName;
             }
 
-            Color color = team == "red" ? TeamRedColor : team == "blue" ? TeamBlueColor : NeutralColor;
+            marker.baseColor = team == "red" ? TeamRedColor : team == "blue" ? TeamBlueColor : NeutralColor;
+            ApplyAliveVisual(marker);
+        }
+
+        /// <summary>Canlı: tam takım rengi + bakış çubuğu. Ölü: soluk nokta, çubuk gizli.</summary>
+        private static void ApplyAliveVisual(Marker marker)
+        {
+            Color color = marker.baseColor;
+            if (!marker.alive)
+            {
+                color = new Color(color.r * DeadFade, color.g * DeadFade, color.b * DeadFade, DeadFade);
+            }
+
             if (marker.dot != null)
             {
                 marker.dot.color = color;
@@ -273,6 +300,34 @@ namespace VortexArena.App
             if (marker.heading != null)
             {
                 marker.heading.color = color;
+                if (marker.heading.gameObject.activeSelf != marker.alive)
+                {
+                    marker.heading.gameObject.SetActive(marker.alive);
+                }
+            }
+
+            if (marker.label != null)
+            {
+                Color labelColor = marker.label.color;
+                labelColor.a = marker.alive ? 1f : DeadFade;
+                marker.label.color = labelColor;
+            }
+        }
+
+        /// <summary>
+        /// Taktik haritanın metre ölçeğini seçili arenaya eşitler (MapDefinition.Size).
+        /// Noktalar bir sonraki Update'te yeni ölçekle yeniden konumlanır.
+        /// </summary>
+        public void SetArenaSize(float width, float length)
+        {
+            if (width > 0.01f)
+            {
+                arenaWidth = width;
+            }
+
+            if (length > 0.01f)
+            {
+                arenaLength = length;
             }
         }
 

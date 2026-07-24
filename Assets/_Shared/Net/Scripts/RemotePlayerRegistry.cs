@@ -263,6 +263,30 @@ namespace VortexArena.Net
             return false;
         }
 
+        /// <summary>
+        /// Oyuncunun son snapshot'taki canlılık bayrağı (SnapshotEntry.FLAG_ALIVE).
+        /// Kaydı/örneği olmayan id için true döner (bilinmiyorsa canlı say).
+        /// </summary>
+        public bool IsAlive(int playerId)
+        {
+            lock (_gate)
+            {
+                if (!_entries.TryGetValue(playerId, out RemoteEntry entry) || entry.count == 0)
+                {
+                    return true;
+                }
+
+                // Halkaya en son yazılan örnek: nextIndex bir sonraki BOŞ yuvayı gösterir.
+                int last = entry.nextIndex - 1;
+                if (last < 0)
+                {
+                    last += RING_SIZE;
+                }
+
+                return (entry.ring[last].flags & SnapshotEntry.FLAG_ALIVE) != 0;
+            }
+        }
+
         /// <summary>ANA THREAD: duyurulmuş (announced) uzak oyuncu id'lerini doldurur.</summary>
         public void GetActivePlayerIds(List<int> buffer)
         {
