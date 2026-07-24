@@ -17,44 +17,16 @@
       },
       "hash": "c14de1e6dc01ab42d2bb358730cff954bce0ce6b"
     },
-    "com.meta.xr.mrutilitykit": {
-      "version": "203.0.0",
-      "depth": 1,
-      "source": "registry",
-      "dependencies": {
-        "com.meta.xr.sdk.core": "203.0.0",
-        "com.unity.textmeshpro": "3.0.6",
-        "com.unity.ai.navigation": "1.1.4",
-        "com.unity.nuget.newtonsoft-json": "3.0.2"
-      },
-      "url": "https://packages.unity.com"
-    },
-    "com.meta.xr.sdk.all": {
-      "version": "203.0.2",
-      "depth": 0,
-      "source": "registry",
-      "dependencies": {
-        "com.meta.xr.sdk.core": "203.0.0",
-        "com.meta.xr.sdk.audio": "85.0.0",
-        "com.meta.xr.sdk.voice": "85.0.1",
-        "com.meta.xr.sdk.haptics": "203.0.0",
-        "com.meta.xr.mrutilitykit": "203.0.0",
-        "com.meta.xr.sdk.platform": "203.0.1",
-        "com.meta.xr.sdk.interaction": "203.0.0",
-        "com.meta.xr.sdk.interaction.ovr": "203.0.0"
-      },
-      "url": "https://packages.unity.com"
-    },
     "com.meta.xr.sdk.audio": {
       "version": "85.0.0",
-      "depth": 1,
+      "depth": 0,
       "source": "registry",
       "dependencies": {},
       "url": "https://packages.unity.com"
     },
     "com.meta.xr.sdk.core": {
       "version": "203.0.0",
-      "depth": 1,
+      "depth": 0,
       "source": "registry",
       "dependencies": {
         "com.unity.xr.hands": "1.7.2",
@@ -67,18 +39,9 @@
       },
       "url": "https://packages.unity.com"
     },
-    "com.meta.xr.sdk.haptics": {
-      "version": "203.0.0",
-      "depth": 1,
-      "source": "registry",
-      "dependencies": {
-        "com.meta.xr.sdk.core": "203.0.0"
-      },
-      "url": "https://packages.unity.com"
-    },
     "com.meta.xr.sdk.interaction": {
       "version": "203.0.0",
-      "depth": 1,
+      "depth": 0,
       "source": "registry",
       "dependencies": {
         "com.unity.ugui": "1.0.0",
@@ -88,30 +51,12 @@
     },
     "com.meta.xr.sdk.interaction.ovr": {
       "version": "203.0.0",
-      "depth": 1,
+      "depth": 0,
       "source": "registry",
       "dependencies": {
         "com.meta.xr.sdk.core": "203.0.0",
         "com.meta.xr.sdk.interaction": "203.0.0"
       },
-      "url": "https://packages.unity.com"
-    },
-    "com.meta.xr.sdk.platform": {
-      "version": "203.0.1",
-      "depth": 1,
-      "source": "registry",
-      "dependencies": {
-        "com.unity.ugui": "1.0.0",
-        "com.unity.inputsystem": "1.7.0",
-        "com.unity.nuget.newtonsoft-json": "3.2.1"
-      },
-      "url": "https://packages.unity.com"
-    },
-    "com.meta.xr.sdk.voice": {
-      "version": "85.0.1",
-      "depth": 1,
-      "source": "registry",
-      "dependencies": {},
       "url": "https://packages.unity.com"
     },
     "com.unity.ai.inference": {
@@ -241,14 +186,6 @@
       "dependencies": {},
       "url": "https://packages.unity.com"
     },
-    "com.unity.multiplayer.center": {
-      "version": "1.0.1",
-      "depth": 0,
-      "source": "builtin",
-      "dependencies": {
-        "com.unity.modules.uielements": "1.0.0"
-      }
-    },
     "com.unity.nuget.mono-cecil": {
       "version": "1.11.6",
       "depth": 2,
@@ -373,7 +310,7 @@
     },
     "com.unity.textmeshpro": {
       "version": "5.0.0",
-      "depth": 2,
+      "depth": 1,
       "source": "builtin",
       "dependencies": {
         "com.unity.ugui": "2.0.0"
@@ -430,7 +367,7 @@
     },
     "com.unity.xr.hands": {
       "version": "1.7.3",
-      "depth": 2,
+      "depth": 1,
       "source": "registry",
       "dependencies": {
         "com.unity.modules.xr": "1.0.0",
