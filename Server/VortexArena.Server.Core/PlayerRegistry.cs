@@ -102,6 +102,13 @@ public sealed class PlayerRegistry : IDisposable
             // (istemci 0x00 UdpHello ile yeniden kaydolur).
             state.UdpToken = NextUdpToken();
             state.UdpEndpoint = null;
+            // Bayat poz yeni oturuma taşınmasın; snapshot okuyucusu HasPose'a PoseGate altında
+            // baktığı için sıfırlama da aynı kilit altında (PoseGate içinden asla _gate alınmaz).
+            lock (state.PoseGate)
+            {
+                state.HasPose = false;
+                state.LastSeq = 0;
+            }
         }
 
         stale?.Abort();
@@ -153,7 +160,7 @@ public sealed class PlayerRegistry : IDisposable
     }
 
     /// <summary>0x00 UdpHello doğrulaması: playerId↔udpToken eşleşirse endpoint kaydedilir (§6.1).
-    /// Pozlar yalnız kayıtlı endpoint'ten kabul edilecek (Faz 2).</summary>
+    /// Pozlar yalnız kayıtlı endpoint'ten kabul edilir (StateHost 0x01 alımı).</summary>
     public bool TryRegisterUdpEndpoint(byte playerId, uint udpToken, IPEndPoint endpoint)
     {
         if (!TryGetByPlayerId(playerId, out var state)) return false;
