@@ -6,6 +6,7 @@ farklı oyun modları/haritalar/silahlar. VR build = player, Windows build = adm
 Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN) — Mirror/NGO YOK.
 
 > Kurallar `.claude/rules/` altındadır. Uygulama planı: `plan/` (faz faz). Protokol: `Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı).
+> Sistemin tek sayfalık haritası (ne var, ağ nasıl çalışır, nasıl kullanılır): `Docs/Sistem-Ozeti.md`.
 
 ## Asset mimarisi (feature-first + asmdef)
 
