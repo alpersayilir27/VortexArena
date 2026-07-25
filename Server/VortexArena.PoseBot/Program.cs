@@ -27,7 +27,7 @@ internal static class Program
     /// istenen sahnenin TÜM çevrimiçi oyuncuların hello.scenes'inde olmasını arar (§10.1) —
     /// bot burayı eksik bildirirse maç hiç başlamaz. Yeni arena eklendiğinde buraya da ekleyin.</summary>
     private static readonly string[] BuildScenes =
-        { "Boot", "Lobby", "AdminConsole", "Arena10x10", "Arena12x12", "ArenaDemoVenue" };
+        { "Boot", "Lobby", "AdminConsole", "Arena10x10", "Arena12x12", "ArenaDemoVenue", "IceWorld" };
 
     // ---- Savaş ayarları (§10.3) — sunucunun config/weapons.json tablosuyla AYNI olmalı ----
     private const string WeaponId = "ak47";

@@ -59,6 +59,7 @@ D:\Games\vortexarena\
       Arsenal\ FX\ Environments\ Data\ Scenes\       (kod-dışı ortak içerik + Boot/Lobby/AdminConsole)
     Arenas\Standard\A10x10\  arena kutusu: {Scenes, Data, Prefabs} — arena-özel KOD yazılmaz
     Arenas\Standard\A12x12\  (sihirbazla üretildi)
+    Arenas\Standard\IceWorld\ (elle modellenmiş 12×12 tematik arena + Art/{Materials,Textures})
     Arenas\Venues\DemoVenue\ (sihirbazla üretildi — 11×8 asimetrik)
     Modes\TeamDeathmatch\    mod kutusu: {Scripts → VortexArena.Modes.Tdm, Data, UI}
   Server\                    .NET 8 çözümü (Core kütüphanesi + App konsolu + PoseBot test istemcisi)
@@ -385,6 +386,27 @@ kalmadığı için PoseBot'a `--admin` vermek şarttır.
 | **Yeni arena** | `Tools > VortexArena > Create Arena From Template` → arenaId, sahne adı, boyut, slot, hedef (Standard/Venue). Sihirbaz klasörleri + sahne kopyasını üretir, duvar/zemin/taban/spawn'ları ölçekler, `MapDefinition` yazar, `GameCatalog` + uyumlu `ModeDefinition` + Build Settings'e ekler. Sanat rötuşu elde. **Sonra `Export Server Config`.** |
 | **Yeni silah** | Prefab `_Shared/Arsenal/Prefabs/` + `WeaponDefinition` SO `_Shared/Arsenal/Data/` (weaponId iki tarafta aynı string) → gerekiyorsa `ModeDefinition.loadout` → **`Export Server Config`** |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
+| **Elle modellenmiş sahneyi arenaya çevirmek** | Aşağıdaki 6 adım (IceWorld böyle bağlandı) |
+
+**Elle modellenmiş bir sahneyi ağa bağlama** (sihirbaz kullanılmadıysa — ör. `IceWorld`):
+
+1. Sahneyi arena kutusuna taşı: `Assets/Arenas/Standard/<Ad>/Scenes/<Ad>.unity` (+ `Data`, `Prefabs`,
+   arenaya özel sanat için `Art/`). **Sahne adı = katalog anahtarı** — sonradan değiştirme.
+2. Arena çerçevesini kur: arena merkezinde, duvarlara hizalı bir objeye **`ArenaBoundary`**
+   (halfExtentX/Z = iç ölçünün yarısı, `wallRenderers` = duvarlar, `head` = `CenterEyeAnchor`,
+   `fadeRenderer`/`warningText` = rig altındaki `OutOfBoundsFade`/`BoundaryWarningText`).
+   Bu transform arena origin'idir: **tüm ağ pozları buna göre çevrilir.**
+3. Taban ve spawn'lar: iki `BaseZone` (Red/Blue, karşı kenarlarda) + takım başına `SpawnPoint`
+   (`slot` 0..n-1). Canlanma bu marker'lardan çözülür — rig ASLA taşınmaz.
+4. Ağ objeleri: `CalibrationManager` (`ArenaCalibrator` + iki anchor marker), `PoseSync`
+   (`PlayerPoseTracker` + `RemotePlayerSpawner`), `[ModeHud]` (`ModeHudSpawner`), BB Camera Rig.
+   En kolayı mevcut bir arenadan kopyalamak; **kopyaladıktan sonra sahneler-arası referansları
+   (ör. `BaseZone.head`) yeni sahnenin `CenterEyeAnchor`'ına yeniden bağla** — Unity kopuk
+   sahneler-arası referansı sessizce null yapar.
+5. `MapDefinition` asset'i (`Data/`): sceneName + boyut + `spawnSlotsPerTeam` + desteklenen modlar →
+   `GameCatalog.maps` + ilgili `ModeDefinition.maps` + **Build Settings**.
+6. **`Tools > VortexArena > Export Server Config`** (maps.json) ve `Server/VortexArena.PoseBot`
+   içindeki `BuildScenes` listesine sahne adını ekle.
 
 ### 6.5 `Tools > VortexArena > Export Server Config` — ne zaman?
 
