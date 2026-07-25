@@ -2,6 +2,7 @@
   "maps": [
     { "sceneName": "Arena10x10", "sizeX": 10, "sizeZ": 10, "spawnSlotsPerTeam": 4, "modes": ["tdm"] },
     { "sceneName": "Arena12x12", "sizeX": 12, "sizeZ": 12, "spawnSlotsPerTeam": 4, "modes": ["tdm"] },
-    { "sceneName": "ArenaDemoVenue", "sizeX": 11, "sizeZ": 8, "spawnSlotsPerTeam": 3, "modes": ["tdm"] }
+    { "sceneName": "ArenaDemoVenue", "sizeX": 11, "sizeZ": 8, "spawnSlotsPerTeam": 3, "modes": ["tdm"] },
+    { "sceneName": "IceWorld", "sizeX": 12, "sizeZ": 12, "spawnSlotsPerTeam": 4, "modes": ["tdm"] }
   ]
 }

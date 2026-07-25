@@ -189,8 +189,9 @@ oyuncu 2 sn kararlı kalınca kendiliğinden `start_match{tdm, Arena10x10}` gön
 rolündeyken ortamda admin kalmadığı için E2E'nin bu ayağında şarttır.
 
 > Botun bildirdiği `hello.scenes`, Build Settings listesidir (`Boot, Lobby, AdminConsole,
-> Arena10x10`) — sunucu `start_match`'te sahneyi tüm oyuncuların listesinde aradığı için yeni
-> arena eklendiğinde PoseBot'taki `BuildScenes` sabiti de güncellenmelidir.
+> Arena10x10, Arena12x12, ArenaDemoVenue, IceWorld`) — sunucu `start_match`'te sahneyi tüm
+> oyuncuların listesinde aradığı için yeni arena eklendiğinde PoseBot'taki `BuildScenes` sabiti de
+> güncellenmelidir.
 
 ## Faz durumu
 

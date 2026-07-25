@@ -15,9 +15,11 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
   (VortexArena.Net), `App/Scripts` (VortexArena.App). Kod-dışı: `Arsenal/` (silah prefab+SO),
   `FX/`, `Environments/`, `Data/`, `Scenes/` (Boot, Lobby, AdminConsole).
   ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
-- `Assets/Arenas/Standard/<AXxX>/` ve `Assets/Arenas/Venues/<İşletme>/` — arena kutuları:
-  `{Scenes, Data, Prefabs}`. Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ
-  (marker bileşenleri Core'dan gelir).
+- `Assets/Arenas/Standard/<AXxX veya TemaAdı>/` ve `Assets/Arenas/Venues/<İşletme>/` — arena kutuları:
+  `{Scenes, Data, Prefabs}` (+ arenaya özel sanat varsa `Art/{Materials,Textures}`; ör. `Standard/IceWorld`).
+  Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ (marker bileşenleri Core'dan gelir).
+  Bir arenanın ağa bağlanması için sahnede şunlar olmalı: `ArenaBoundary` (arena origin + halfExtent),
+  `BaseZone`×2, `SpawnPoint`×(2×slot), `CalibrationManager`, `PoseSync`, `[ModeHud]`, BB Camera Rig.
 - `Assets/Modes/<Mod>/` — mod kutuları: `{Scripts (VortexArena.Modes.<Ad>.asmdef), Data, UI}`.
   Modlar birbirini REFERANSLAMAZ.
 - Üçüncü parti: `Assets/ThirdPartyPackages/`.
