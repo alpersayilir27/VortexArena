@@ -7385,7 +7385,7 @@ Transform:
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 1
+  m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 614905138}
   - {fileID: 806925830}
@@ -28795,24 +28795,14 @@ Mesh:
   m_SubMeshes:
   - serializedVersion: 2
     firstByte: 0
-    indexCount: 57
+    indexCount: 72
     topology: 0
     baseVertex: 0
     firstVertex: 0
-    vertexCount: 35
+    vertexCount: 42
     localAABB:
       m_Center: {x: 0, y: 0, z: 0}
       m_Extent: {x: 1.375, y: 0.9, z: 1.375}
-  - serializedVersion: 2
-    firstByte: 114
-    indexCount: 15
-    topology: 0
-    baseVertex: 0
-    firstVertex: 35
-    vertexCount: 7
-    localAABB:
-      m_Center: {x: 0, y: 0.9, z: 0}
-      m_Extent: {x: 1.375, y: 0, z: 1.375}
   m_Shapes:
     vertices: []
     shapes: []
@@ -28967,11 +28957,6 @@ Mesh:
       m_LodBias: 0
     m_NumLevels: 1
     m_SubMeshes:
-    - serializedVersion: 2
-      m_Levels:
-      - serializedVersion: 1
-        m_IndexStart: 0
-        m_IndexCount: 0
     - serializedVersion: 2
       m_Levels:
       - serializedVersion: 1
@@ -33696,7 +33681,7 @@ ParticleSystem:
     startSize:
       serializedVersion: 2
       minMaxState: 3
-      scalar: 0.2
+      scalar: 0.1
       minScalar: 0.05
       maxCurve:
         serializedVersion: 2
@@ -34279,7 +34264,7 @@ ParticleSystem:
     rateOverTime:
       serializedVersion: 2
       minMaxState: 3
-      scalar: 40
+      scalar: 200
       minScalar: 20
       maxCurve:
         serializedVersion: 2
@@ -38998,7 +38983,6 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 5d58792e7a7d927458f6a5db6a905443, type: 2}
   - {fileID: 2100000, guid: 5d58792e7a7d927458f6a5db6a905443, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
