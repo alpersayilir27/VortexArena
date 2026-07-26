@@ -156,7 +156,7 @@ OcclusionCullingData.asset binary
 # ---------------------------------------------------------------------------
 # UnityYAMLMerge (Smart Merge) driver setup — run ONCE per clone:
 #   git config merge.unityyamlmerge.name "Unity SmartMerge"
-#   git config merge.unityyamlmerge.driver "'C:/Program Files/Unity/Hub/Editor/6000.3.18f1/Editor/Data/Tools/UnityYAMLMerge.exe' merge -h -p --force %O %B %A %A"
+#   git config merge.unityyamlmerge.driver "'C:/Program Files/Unity/Hub/Editor/6000.3.20f1/Editor/Data/Tools/UnityYAMLMerge.exe' merge -h -p --force %O %B %A %A"
 #   git config merge.unityyamlmerge.recursive binary
 # (Adjust the editor path/version to your local Unity installation.)
 # Without this config the unity-yaml merge attribute silently falls back to
