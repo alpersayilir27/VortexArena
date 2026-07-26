@@ -60,8 +60,9 @@ aynı dosyaları derler; Unity API'si girerse server derlemesi kırılır (bilin
 ## Akış
 
 Boot(index 0) → Android: Lobby / Windows: AdminConsole (editor testi için override).
-Lobby (VR): IP paneli, roster, ready/takım. AdminConsole: launcher ekranı (server exe başlat
-veya bağlan) → dashboard (roster, mod+harita seç, start, taktik üstten görünüm).
+Lobby (VR): IP paneli, roster, ready/takım. AdminConsole: launcher ekranı (yalnız IP'ye bağlan;
+sunucu bu ekrandan BAŞLATILMAZ, her zaman elle çalıştırılır) → dashboard (roster, mod+harita seç,
+start, taktik üstten görünüm).
 Arena sahneleri kendine yeten (kendi BB rig'i taşır).
 
 ## Yeni içerik ekleme reçeteleri

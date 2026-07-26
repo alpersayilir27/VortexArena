@@ -1,16 +1,26 @@
 {
   "mcpServers": {
-    "unity-mcp": {
-      "type": "stdio",
-      "command": "${USERPROFILE}/.unity/relay/relay_win.exe",
-      "args": ["--mcp"],
-      "env": {}
-    },
     "unity-editor-mcp": {
       "type": "stdio",
       "command": "unity",
-      "args": ["mcp"],
+      "args": [
+        "mcp"
+      ],
       "env": {}
+    },
+    "auggie": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "auggie",
+        "--mcp"
+      ],
+      "env": {}
+    },
+    "UnityMCP": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp"
     }
   }
 }

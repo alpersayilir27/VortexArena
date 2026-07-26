@@ -27,21 +27,39 @@ unity shell                        # warm REPL (çok komut tek process)
 
 ## MCP sunucuları — **proje scope**, repo'daki `.mcp.json`'da
 
-İkisi de resmi Unity ürünü; user scope'a kayıt YAPMA, `.mcp.json` tek kaynak.
+User scope'a kayıt YAPMA, `.mcp.json` tek kaynak.
 
 | Kayıt | Komut | Tool seti | Kaynak |
 |---|---|---|---|
 | `unity-editor-mcp` | `unity mcp` | 140 komut — `unity list` ile birebir aynı | Unity CLI + `com.unity.pipeline` |
-| `unity-mcp` | `${USERPROFILE}/.unity/relay/relay_win.exe --mcp` | 52 tool (sahne/prefab/asset/script düzenleme, asset generation, profiler, camera capture) | `com.unity.ai.assistant` → `Modules/Unity.AI.MCP.Editor/Tools/` |
+| `auggie` | `cmd /c auggie --mcp` | 1 tool: `codebase-retrieval` (Augment indeksinden doğal dille kod bağlamı) | Augment CLI (`npm i -g @augmentcode/auggie`) |
+| `UnityMCP` | HTTP `http://127.0.0.1:8080/mcp` | ~55 tool: `manage_*` ailesi + `mcpforunity://` resource'ları (custom-tools, instances, editor/state) | `com.coplaydev.unity-mcp` (MCP for Unity) |
 
-- Relay binary'sini **Unity Editor açılışta kendisi kurar** (`~/.unity/relay/`) — repoya girmez,
-  elle indirilmez. Editör kapalıyken relay bağlanır ama tool listesi zaman aşımına uğrar; normaldir.
-- macOS/Linux'ta relay dosya adı farklı (`relay_mac_arm64…`); `.mcp.json`'daki Windows yolunu
-  o makinede güncellemek gerekir.
+- `auggie` Windows'ta **`cmd /c` ile** çağrılır: npm shim `.cmd` olduğu için doğrudan
+  `spawn("auggie")` ENOENT, `spawn("auggie.cmd")` ise Node'un CVE-2024-27980 kısıtıyla EINVAL verir.
+  macOS/Linux'ta `command: "auggie", args: ["--mcp"]` yeterli. Banner satırları stderr'e gidiyor,
+  stdout temiz JSON-RPC (protokolü kirletmiyor). İlk çağrıda workspace'i indeksler.
+- **`unity-mcp` (AI Assistant relay) kaydı KALDIRILDI** (26 Tem 2026). Sebep: `com.unity.ai.assistant`
+  içindeki bridge, onayı **canlı bağlantı başına** tutuyor (`TransportStore.ApprovalState`);
+  bir kez `Denied` olan transport, Project Settings > AI > Unity MCP'den Accept'lense bile geri
+  dönmüyor (`ConnectionItemControl.OnAccept` yalnız *bekleyen* onayı tamamlıyor + kalıcı kaydı
+  günceller) → her çağrı "Connection revoked" veriyordu. Geri eklenecekse: `.mcp.json`'a
+  `${USERPROFILE}/.unity/relay/relay_win.exe --mcp` olarak yaz, editörde onayla ve **onaydan
+  sonra bağlantıyı yenile** (`/mcp` → Reconnect).
+- Kapsam farkı (52 tool'luk `unity-mcp` seti vs 140 komutluk CLI seti): editör/asset/sahne/script/
+  paket/konsol/capture işlerinin tamamı CLI'da var (çoğu daha ince taneli). CLI'da **karşılığı
+  OLMAYANLAR**: (1) `AssetGeneration_*` — Unity AI üretken asset servisleri (metin→texture/sprite/
+  material/ses/animasyon, puan harcar), (2) `Profiler_*` 12 tool — frame/sample bazlı süre ve GC
+  analizi (CLI'da yalnız toplu `get_performance_stats` var), (3) `FindProjectAssets`'in semantik/
+  görsel arama kipi, (4) `AudioClip_Edit`, (5) `SceneView_CaptureMultiAngleSceneView` (CLI'da
+  `capture_scene_view` tek açı; döngüyle taklit edilir). Bunlara ihtiyaç doğarsa relay'i yukarıdaki
+  reçeteyle geçici olarak geri ekle.
 - `Assets/…` içindeki Meta XR core'un kendi `Meta.MCPBridge`'i ayrı bir köprüdür, MCP kaydı değil.
-- `com.coplaydev.unity-mcp` (manifest'te, üçüncü parti) hiçbir MCP kaydı tarafından
-  kullanılmıyor — sunucusu Python/uv tabanlı ve kayıtlı değil. Silinirse UPM'in git ile
-  GitHub'dan paket çekme ihtiyacı da ortadan kalkar.
+- `UnityMCP` **local scope'tan proje scope'a taşındı** (26 Tem 2026): kayıt artık `.mcp.json`'da,
+  `~/.claude.json` içindeki `projects["D:/games/vortexarena"].mcpServers` girdisi silindi.
+  HTTP transport olduğu için köprü (`com.coplaydev.unity-mcp`, Python/uv tabanlı) 8080'de
+  ayakta olmalı; editör kapalıyken tool'lar bağlanamaz. Birden çok Unity örneği açıksa
+  `set_active_instance` ile hedefi sabitle.
 
 ## Yeni PC'de kurulum (repo klonlandıktan sonra)
 
@@ -51,7 +69,7 @@ unity shell                        # warm REPL (çok komut tek process)
 2. **Unity CLI** (PowerShell): `$env:UNITY_CLI_CHANNEL='beta'; irm https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.ps1 | iex`
    → `%LOCALAPPDATA%\Unity\bin` PATH'e eklenir; `unity --version` ile doğrula, `unity auth login`.
 3. **Git + Git LFS** (repo LFS kullanıyor, manifest'te git URL'li paket var): `git lfs install`.
-4. Projeyi bir kez Unity'de aç → UPM paketleri (`com.unity.pipeline` dahil) manifest'ten otomatik
-   iner, AI Assistant relay'i kurulur.
-5. Claude Code projede ilk açıldığında `.mcp.json`'daki iki sunucu için **tek seferlik onay** ister.
+4. Projeyi bir kez Unity'de aç → UPM paketleri (`com.unity.pipeline` dahil) manifest'ten otomatik iner.
+5. Claude Code projede ilk açıldığında `.mcp.json`'daki sunucular (`unity-editor-mcp`, `auggie`,
+   `UnityMCP`) için **tek seferlik onay** ister.
 

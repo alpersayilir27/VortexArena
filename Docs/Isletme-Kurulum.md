@@ -87,16 +87,24 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 
 **Sunucu PC**
 
-- [ ] Tercihen **kablolu (GbE)** bağlantı + **statik IP**; IP'yi teslim paketine yaz.
-- [ ] Windows ağ profili **Özel (Private)**.
-- [ ] `Server/firewall-kur.cmd` dosyasına **sağ tık → "Yönetici olarak çalıştır"**. Betik, Windows'un otomatik eklediği **ENGELLE** kurallarını siler ve şu portlara **İZİN** verir:
-  - **TCP 47821** — WebSocket kontrol kanalı (`/ws`)
-  - **UDP 47820** — keşif beacon'ı
-  - **UDP 47822** — poz/state kanalı
+- [ ] Tercihen **kablolu (GbE)** bağlantı + **statik IP** (router'da DHCP rezervasyonu tercih edilir); IP'yi teslim paketine yaz. IP değişirse `arena.json` / başlıklardaki kayıtlı adres bozulur.
+- [ ] `Server/firewall-kur.cmd` dosyasına **sağ tık → "Yönetici olarak çalıştır"**. Betik:
+  - ağ profilini **Özel (Private)** yapar (Public profilde Defender gelen broadcast'i keser),
+  - Windows'un otomatik eklediği **ENGELLE** kurallarını siler,
+  - **UDP 47820** (beacon) + **TCP 47821** (WS kontrol) + **UDP 47822** (poz/state) için **İZİN** kuralı ekler (Private + Domain) — exe derlenmişse programa özel kural da ekler,
+  - teşhis basar: aktif adaptörler, IPv4 adresleri, dinlenen portlar.
+- [ ] **Tek aktif arayüz bırak.** Betiğin "birden fazla aktif adaptör" uyarısı çıkarsa: Ethernet + Wi-Fi aynı anda bağlı ya da VPN / Hyper-V / VMware / WSL sanal adaptörü var demektir → **beacon yanlış arayüzden yayılır ve başlıklar sunucuyu bulamaz.** Kullanılmayanları `Disable-NetAdapter -Name "<Ad>"` ile kapat.
 - [ ] Sunucu ilk açılışta Windows "izin ver?" sorusu gösterirse **"İzin ver"e** bas. İptal edilirse kalıcı engelle kuralı oluşur → `firewall-kur.cmd`'yi tekrar çalıştır.
+
+**Admin console çalıştıran diğer PC'ler**
+
+- [ ] Sunucu PC ile **aynı subnet**te (aynı router, aynı `192.168.x.*` bloğu).
+- [ ] Bu PC'lerde de `Server/firewall-kur.cmd` **yönetici olarak** çalıştırıldı — beacon *broadcast* paketi olduğu için stateful UDP eşleşmesine takılmaz; istemcide inbound izin yoksa Windows onu düşürür ve sunucu bulunamaz.
+- [ ] Ağ profili bu PC'lerde de **Özel (Private)** (betik zaten yapar).
 
 **Ağ doğrulaması**
 
+- [ ] Sunucu çalışırken `netstat -ano | findstr 4782` → **`0.0.0.0:47821` görülmeli**. `127.0.0.1:47821` görülüyorsa sunucu yalnız loopback'e bind olmuştur, dışarıdan kimse bağlanamaz.
 - [ ] Sunucu açıkken bir başlığı lobiye al: adres alanı **beacon ile kendiliğinden dolmalı**.
 - [ ] Dolmuyorsa lobideki numpad ile **IP:port** (ör. `192.168.1.10:47821`) elle gir → elle girilen adres beacon'ı **ezer** ve başlıkta kalıcı olarak saklanır.
 - [ ] Beacon hiç gelmiyorsa kalıcı çözüm: `Assets/StreamingAssets/arena.json` içine sunucunun statik IP'sini yaz (`{"serverIp":"192.168.x.y","serverPort":47821}`) — **bu dosya APK'nın içindedir, değişiklik yeni APK gerektirir**. Sahada hızlı çözüm her zaman lobide elle IP girmektir.
@@ -113,7 +121,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 - [ ] Sunucuyu başlat:
   - Geliştirme/kurulum: `dotnet run --project Server/VortexArena.Server.App`
   - Derlenmiş exe: `Server/VortexArena.Server.App/bin/Debug/net10.0/VortexArena.Server.App.exe`
-  - Admin uygulamasının launcher ekranı da bu exe'yi başlatır (varsayılan yol `Server/VortexArena.Server.App/bin/Release/net10.0/VortexArena.Server.App.exe` — kurulumdaki gerçek yola göre düzelt).
+  - Sunucu **her zaman elle** başlatılır; admin uygulaması sunucuyu başlatmaz, yalnız çalışan sunucuya bağlanır. İşletmede kolaylık için exe'ye masaüstü kısayolu koyun.
 - [ ] Açılış özetinde şunları gör ve doğrula:
   ```
   Mekan      : <İşletme Adı>
