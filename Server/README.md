@@ -29,8 +29,12 @@ dotnet run --project Server/VortexArena.Server.App
 
 veya derlenmiş exe: `Server/VortexArena.Server.App/bin/Debug/net10.0/VortexArena.Server.App.exe`
 
-> Sunucu **her zaman elle** başlatılır. Admin uygulamasının launcher ekranı sunucuyu başlatmaz —
-> yalnız çalışan bir sunucunun IP:port'una bağlanır.
+İşletme dağıtımı için: `scripts\deploy-server.bat` → `deploy\server\VortexArena.Server.App.exe`
+(self-contained, .NET kurulumu gerekmez; `config/` yanında gider).
+
+> Sunucu **her zaman elle** başlatılır. Ne Unity admin uygulaması ne Flutter launcher sunucuyu
+> başlatır — ikisi de yalnız çalışan bir sunucuya bağlanır. Sebep: sunucu maçın tek otoritesidir,
+> ömrü operatör uygulamasının ömrüne bağlanmamalıdır.
 
 Açılışta:
 - Kestrel `http://0.0.0.0:47821/ws` (WebSocket kontrol) dinler.
@@ -99,7 +103,8 @@ olmuştur ve dışarıdan hiçbir cihaz bağlanamaz.
   tercihen Wi-Fi 6, arenaya özel SSID; tüm gözlükler bu SSID'de.
 - Beacon kesen/izole eden ağlarda: her gözlükte `Assets/StreamingAssets/arena.json` içine
   sunucunun statik IP'si yazılır (`{"serverIp":"192.168.x.y","serverPort":47821}`) —
-  beacon yoksa istemci buna düşer; lobide elle IP:port girişi her zaman mümkündür.
+  beacon yoksa istemci buna düşer; son kurtarma yolu lobide sağ kumandada **A×2** ile açılan
+  gizli IP panelidir. (Admin istemcisi beacon kullanmaz — adresi launcher `--server-ip` ile geçer.)
 
 ## Config dosyaları
 

@@ -8,21 +8,42 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Lobby (VR) world-space panelini sürer: numpad ile IP kurma, bağlan/kes,
-    /// canlı roster, ready/takım. Tüm sahne bağları [SerializeField] ve null
-    /// olabilir (sahne kurulumu sonra Unity MCP ile yapılacak). Buton onClick'leri
-    /// public metotlara bağlanır. Başlangıç IP: PlayerPrefs > arena.json;
-    /// beacon gelirse alanı otomatik doldurur ama elle giriş her zaman ezer.
+    /// Lobby (VR) world-space panelini sürer: canlı roster, ready/takım ve
+    /// **gizli** IP paneli (numpad ile elle adres girme).
+    ///
+    /// <para>
+    /// <b>Normal akış oyuncuya hiçbir şey sormaz:</b> adres öncelik zinciriyle
+    /// (PlayerPrefs &gt; beacon &gt; StreamingAssets/arena.json) bulunur ve
+    /// <b>otomatik bağlanılır</b>. IP paneli başlangıçta KAPALIDIR.
+    /// </para>
+    /// <para>
+    /// <b>Kurtarma yolu:</b> beacon'ı kesen/izole eden ağlarda sunucu bulunamazsa
+    /// sağ kumandada <b>A tuşuna iki kez</b> basılarak IP paneli açılır ve adres elle
+    /// girilir (girilen adres <c>PlayerPrefs</c>'e kalıcı yazılır, beacon'ı ezer).
+    /// Aynı kombinasyon paneli tekrar kapatır. Kalibrasyondaki A+B basılı tutma
+    /// kombinasyonu yalnız arena sahnelerinde olduğu için çakışma yoktur.
+    /// </para>
+    /// Tüm sahne bağları [SerializeField] ve null olabilir; buton onClick'leri public
+    /// metotlara bağlanır.
     /// </summary>
     public class LobbyController : MonoBehaviour
     {
         private const int MaxIpTextLength = 21; // "255.255.255.255:65535"
 
+        /// <summary>İki A basışı arası bu süreden kısaysa kombinasyon sayılır.</summary>
+        private const float DoubleTapWindow = 0.6f;
+
+        /// <summary>Bu süre boyunca hiç adres bulunamazsa kurtarma ipucu gösterilir.</summary>
+        private const float DiscoveryHintDelay = 8f;
+
+        private static readonly OVRInput.Controller Hand = OVRInput.Controller.RTouch;
+
         [Header("Durum")]
         [SerializeField] private TMP_Text statusText;
         [SerializeField] private TMP_Text rosterText;
 
-        [Header("IP paneli")]
+        [Header("IP paneli (gizli — sağ kumandada A×2 ile açılır)")]
+        [SerializeField] private GameObject ipPanel;
         [SerializeField] private TMP_Text ipText;
         [SerializeField] private Button connectButton;
         [SerializeField] private Button disconnectButton;
@@ -34,6 +55,12 @@ namespace VortexArena.App
         private bool _manualEntry; // elle giriş (veya kayıtlı IP) beacon'ı ezer
         private bool _ready;
         private bool _beaconSubscribed;
+
+        private bool _ipPanelVisible;
+        private float _lastATapTime = float.NegativeInfinity;
+        private float _discoveryTimer;
+        private bool _autoConnectDone;
+        private bool _hintShown;
 
         private void Awake()
         {
@@ -74,6 +101,8 @@ namespace VortexArena.App
             // Kalıcı singleton'lar sahne objelerinden sonra önyüklenebilir — burada tekrar dene.
             TrySubscribeBeacon();
 
+            SetIpPanelVisible(false); // oyuncuya adres sorulmaz; kurtarma A×2 ile açılır
+
             if (ServerDiscovery.TryGetSavedEndpoint(out string ip, out int port))
             {
                 _ipBuffer = FormatEndpoint(ip, port);
@@ -87,8 +116,103 @@ namespace VortexArena.App
 
             RefreshIpText();
             RefreshReadyLabel();
-            RefreshStatus();
             RedrawRoster(null);
+
+            TryAutoConnect(); // adres varsa hemen bağlan; yoksa beacon'ı bekle
+            RefreshStatus();
+        }
+
+        private void Update()
+        {
+            DetectIpPanelCombo();
+
+            // `ArenaClient`/`ServerDiscovery` kalıcı tekilleri AfterSceneLoad'da doğar ve
+            // Start()'ta henüz var olmayabilir. Kayıtlı adres (PlayerPrefs) varken hiç beacon
+            // gelmezse tek deneme kaçardı — hazır olan ilk karede yakalıyoruz.
+            TryAutoConnect();
+            TrySubscribeBeacon();
+
+            // Adres hâlâ yoksa bir süre sonra kurtarma yolunu yaz (beacon dinlemeye devam).
+            if (_autoConnectDone || _hintShown || _ipPanelVisible)
+            {
+                return;
+            }
+
+            _discoveryTimer += Time.unscaledDeltaTime;
+            if (_discoveryTimer >= DiscoveryHintDelay)
+            {
+                _hintShown = true;
+                SetStatus("Sunucu bulunamadı. Adresi elle girmek için sağ kumandada A'ya İKİ KEZ bas.");
+            }
+        }
+
+        /// <summary>Sağ kumandada A×2 → IP panelini aç/kapat (gizli kurtarma yolu).</summary>
+        private void DetectIpPanelCombo()
+        {
+            if (!OVRInput.GetDown(OVRInput.Button.One, Hand))
+            {
+                return;
+            }
+
+            float now = Time.unscaledTime;
+            if (now - _lastATapTime <= DoubleTapWindow)
+            {
+                _lastATapTime = float.NegativeInfinity; // üçüncü basış yeni çift saymasın
+                SetIpPanelVisible(!_ipPanelVisible);
+                OVRInput.SetControllerVibration(0.5f, 0.3f, Hand);
+            }
+            else
+            {
+                _lastATapTime = now;
+            }
+        }
+
+        private void SetIpPanelVisible(bool visible)
+        {
+            _ipPanelVisible = visible;
+
+            if (ipPanel != null)
+            {
+                ipPanel.SetActive(visible);
+            }
+
+            if (visible)
+            {
+                _hintShown = true; // panel açıkken ipucu metnini tekrar yazma
+                RefreshIpText();
+                RefreshStatus();
+            }
+        }
+
+        /// <summary>
+        /// Bilinen adrese bir kez otomatik bağlanır. Tekrar çağrılması zararsızdır:
+        /// bağlantı koparsa yeniden denemeyi <c>ArenaClient</c>'ın backoff döngüsü yapar,
+        /// bu yüzden beacon her geldiğinde Connect çağırıp döngüyü baştan kurmayız.
+        /// </summary>
+        private void TryAutoConnect()
+        {
+            if (_autoConnectDone || ArenaClient.Instance == null)
+            {
+                return;
+            }
+
+            // Adres henüz yoksa öncelik zincirini tekrar dene: `ServerDiscovery` tekili
+            // Start()'ta null olabilir ve o durumda arena.json fallback'i kaçardı
+            // (PlayerPrefs statik okunduğu için hiç kaçmaz).
+            if (string.IsNullOrEmpty(_ipBuffer) && ServerDiscovery.Instance != null &&
+                ServerDiscovery.Instance.TryGetPreferredEndpoint(out string chainIp, out int chainPort))
+            {
+                _ipBuffer = FormatEndpoint(chainIp, chainPort);
+                RefreshIpText();
+            }
+
+            if (!ServerDiscovery.TryParseEndpoint(_ipBuffer, out string ip, out int port))
+            {
+                return;
+            }
+
+            _autoConnectDone = true;
+            ArenaClient.Instance.Connect(ip, port, AppSession.Role);
         }
 
         private void TrySubscribeBeacon()
@@ -158,6 +282,7 @@ namespace VortexArena.App
                 return;
             }
 
+            _autoConnectDone = true; // elle bağlandık; beacon artık devralmasın
             ArenaClient.Instance.Connect(ip, port, AppSession.Role);
         }
 
@@ -245,6 +370,7 @@ namespace VortexArena.App
             int port = beacon != null && beacon.controlPort > 0 ? beacon.controlPort : ArenaProtocol.CONTROL_PORT;
             _ipBuffer = FormatEndpoint(ip, port);
             RefreshIpText();
+            TryAutoConnect(); // beacon'la bulunan sunucuya kendiliğinden bağlan
         }
 
         // ---------------------------------------------------------------- çizim
@@ -277,10 +403,12 @@ namespace VortexArena.App
                     SetStatus($"Bağlı — oyuncu {ArenaClient.Instance.PlayerId} ({ArenaClient.Instance.ServerIp}:{ArenaClient.Instance.ServerPort})");
                     break;
                 case ArenaConnectionState.Connecting:
-                    SetStatus("Bağlanılıyor...");
+                    SetStatus($"Bağlanılıyor... ({_ipBuffer})");
                     break;
                 default:
-                    SetStatus("Bağlı değil");
+                    SetStatus(string.IsNullOrEmpty(_ipBuffer)
+                        ? "Sunucu aranıyor..."
+                        : $"Bağlı değil ({_ipBuffer})");
                     break;
             }
 

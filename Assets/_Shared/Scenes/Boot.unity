@@ -149,6 +149,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.App::VortexArena.App.AppBoot
   editorRoleOverride: 
+  editorServerIp: 127.0.0.1
 --- !u!4 &450336223
 Transform:
   m_ObjectHideFlags: 0
