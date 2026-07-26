@@ -28,7 +28,9 @@ dotnet run --project Server/VortexArena.Server.App
 ```
 
 veya derlenmiş exe: `Server/VortexArena.Server.App/bin/Debug/net10.0/VortexArena.Server.App.exe`
-(Admin build'in launcher ekranı da bu exe'yi başlatır.)
+
+> Sunucu **her zaman elle** başlatılır. Admin uygulamasının launcher ekranı sunucuyu başlatmaz —
+> yalnız çalışan bir sunucunun IP:port'una bağlanır.
 
 Açılışta:
 - Kestrel `http://0.0.0.0:47821/ws` (WebSocket kontrol) dinler.
@@ -55,12 +57,36 @@ kayıtlı mod/silah/harita tablosunu özetler (`maps.json` yoksa `Haritalar : yo
 
 (cosmos'un 47800/47801'i ile bilerek çakışmaz.)
 
-## Windows Firewall (ŞART — bir kez)
+## Ağ kurulumu + Windows Firewall (ŞART — bir kez)
 
 `Server/firewall-kur.cmd` dosyasına **sağ tık → "Yönetici olarak çalıştır"**. Bu betik:
-1. Uygulama ilk açıldığında Windows'un otomatik eklediği **ENGELLE (Block)** kurallarını siler
-   (bunlar gözlüklerin bağlanmasını engeller),
-2. **TCP 47821** + **UDP 47820/47822** için **İZİN** kuralları ekler (Özel + Genel profil).
+
+1. **Ağ profilini Private yapar** (`Public` olan bağlantıları çevirir). Public profilde Defender
+   gelen broadcast'i ve çoğu inbound'u keser → beacon hiç ulaşmaz.
+2. Windows'un uygulama için otomatik eklediği **ENGELLE (Block)** kurallarını siler.
+3. **UDP 47820** + **TCP 47821** + **UDP 47822** için **İZİN** kuralları ekler (Private + Domain).
+   Sunucu exe'si derlenmişse ayrıca **programa özel** izin kuralı ekler (Windows'un yeniden Block
+   kuralı üretmesini önler). Outbound Windows'ta zaten varsayılan serbesttir.
+4. **Teşhis basar:** aktif adaptörler (birden fazlaysa uyarır), IPv4 adresleri, dinlenen portlar.
+
+> **Bu betiği admin console çalıştıran DİĞER PC'lerde de çalıştırın.** Beacon bir *broadcast*
+> paketidir; stateful UDP eşleşmesine takılmaz, istemcide inbound izin yoksa Windows onu sessizce
+> düşürür ve sunucu listede görünmez.
+
+Betiğin **yapamadıkları** (elle):
+- **IP sabitleme** — router'da DHCP rezervasyonu (tercih) veya statik IP. IP değişirse
+  `StreamingAssets/arena.json` ve gözlüklerdeki kayıtlı adres bozulur.
+- **Tek aktif arayüz** — Ethernet + Wi-Fi aynı anda bağlıysa (veya VPN / Hyper-V / VMware / WSL
+  sanal adaptörü varsa) beacon yanlış arayüzden yayılır ve gözlükler sunucuyu bulamaz.
+  Kullanılmayanları `Disable-NetAdapter -Name "<Ad>"` ile kapatın.
+- **AP ayarları** — 5 GHz, sabit kanal, client/AP isolation KAPALI.
+
+**Bind doğrulaması** (sunucu çalışırken):
+```powershell
+netstat -ano | findstr 4782
+```
+`0.0.0.0:47821` **görmelisiniz**. `127.0.0.1:47821` görürseniz sunucu yalnız loopback'e bind
+olmuştur ve dışarıdan hiçbir cihaz bağlanamaz.
 
 > Sunucuyu ilk kez firewall kuralları OLMADAN açarsanız Windows bir "izin ver?" sorusu gösterir.
 > **"İzin ver"e** basın. İptal ederseniz Windows kalıcı bir engelle kuralı ekler → sonra
