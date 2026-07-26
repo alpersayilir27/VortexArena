@@ -169,7 +169,7 @@ Aşağıdaki içerikle oluştur (gerekirse dil/akıcılık rötuşu serbest, **t
 ```markdown
 # VortexArena — Proje Talimatları (CLAUDE.md)
 
-Free-roam VR PvP arena ürünü (işletmelere kurulum / LBE; Meta Quest 3 & 3S, Unity 6000.3.18f1, URP).
+Free-roam VR PvP arena ürünü (işletmelere kurulum / LBE; Meta Quest 3 & 3S, Unity 6000.3.20f1, URP).
 Oyuncular fiziksel alanda 1:1 yürür; farklı boyutlarda arenalar (10x10, 12x12, işletmeye özel),
 farklı oyun modları/haritalar/silahlar. VR build = player, Windows build = admin (yönetim + izleme).
 Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN) — Mirror/NGO YOK.

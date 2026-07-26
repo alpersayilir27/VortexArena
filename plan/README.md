@@ -116,7 +116,7 @@ VortexArena.Modes.<X>   → Core, Net, Protocol
 
 ## Mevcut durum anlık görüntüsü (Faz 0 öncesi — 2026-07-24)
 
-- Unity **6000.3.18f1**, URP 17.3.0, OpenXR loader (`Assets/XR/Loaders/OpenXRLoader.asset`) + XRI 3.3.2 (yedek olarak KALIR).
+- Unity **6000.3.20f1** (snapshot alındığında 6000.3.18f1'di; 2026-07-26'da yükseltildi), URP 17.3.0, OpenXR loader (`Assets/XR/Loaders/OpenXRLoader.asset`) + XRI 3.3.2 (yedek olarak KALIR).
 - Tek sahne: `Assets/Scenes/VortexArena.unity` (GUID `629f3342b038beb4d975f35ba6e2dbd6`, EditorBuildSettings'te index 0). Meta **Building Blocks** rig'li.
 - 6 script `Assets/Scripts/` düzünde, tek asmdef `VortexArena.Gameplay` (refs: Oculus.VR, Oculus.Interaction, Unity.InputSystem). Hepsi **global namespace'te**; `Team` enum'u `Weapon.cs` içinde.
 - 3 prefab: `Assets/Prefabs/{AK47_Red, M4_Blue, FX_HitSpark}.prefab`.

@@ -117,3 +117,6 @@ InitTestScene*.unity*
 # Unity'nin otomatik yeniden ürettiği performans test dosyaları
 /[Aa]ssets/[Rr]esources/PerformanceTestRun*.json
 /[Aa]ssets/[Rr]esources/PerformanceTestRun*.json.meta
+
+# Burst debug çıktısı (her build'de yeniden üretilir, editör sürümü yollarını gömer)
+/*_BurstDebugInformation_DoNotShip/
