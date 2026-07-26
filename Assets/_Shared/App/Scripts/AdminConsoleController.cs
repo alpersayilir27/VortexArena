@@ -23,7 +23,7 @@ namespace VortexArena.App
     {
         private const string PrefKeyServerExePath = "arena.serverExePath";
         private const string DefaultServerExeRelativePath =
-            "Server/VortexArena.Server.App/bin/Release/net8.0/VortexArena.Server.App.exe";
+            "Server/VortexArena.Server.App/bin/Release/net10.0/VortexArena.Server.App.exe";
 
         [Header("Paneller")]
         [SerializeField] private GameObject launcherPanel;
