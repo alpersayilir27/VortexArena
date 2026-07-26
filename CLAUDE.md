@@ -21,6 +21,21 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
   (`unity-cli.md`), ağır uygulama işi alt-ajanlara devredilir (`delegate-to-subagents.md`),
   hafıza yalnız proje scope'unda tutulur (`ai-memory-scope.md`).
 
+## Repo üst düzey yerleşim
+
+`Assets/` (Unity) · `Server/` (.NET 10 sunucu kaynağı) · **`launcher/`** (Flutter Windows
+launcher — operatör buradan admin oyununu başlatır) · **`scripts/`** (`deploy-admin-game.bat`,
+`deploy-server.bat`, `deploy-launcher.bat`) · **`deploy/`** (üretilen çalıştırılabilirler:
+`admin/`, `server/`, `launcher/` — **git'e girmez**) · `Docs/` · `plan/` · `.claude/rules/`.
+
+**`.gitignore` proje tipi başına ayrıdır** — her biri kendi klasörünü yönetir:
+kök = Unity (+ repo geneli OS/IDE) · `Server/` = .NET 10 · `launcher/` = Flutter (Windows-only;
+`launcher/windows/.gitignore` Flutter'ın kendi dosyası) · `deploy/` = beyaz liste (`*` + yalnız
+README). ⚠️ Köke Unity deseni eklerken **`/` ile sabitle**: `*.sln`/`*.csproj` sabitlenmezse
+Server'ın gerçek kaynaklarını, `*.app` ise Windows'ta (`core.ignorecase=true`)
+`Server/VortexArena.Server.App/` klasörünü yutar. Alt proje çıktısı (bin/obj, build/, .dart_tool)
+kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
+
 ## Asset mimarisi (feature-first + asmdef)
 
 - `Assets/_Shared/` — ortak. Ortak KOD yalnız bir asmdef altında: `Core/` (VortexArena.Core),
@@ -66,16 +81,20 @@ Pozlar istemci-otoriter (kalibrasyon sonrası ARENA UZAYINDA, 20 Hz UDP); can/sk
 fazları SUNUCU-otoriter (.NET `Server/`, mod kuralları `IGameMode`). Vuruş: atıcı raycast →
 hit_report → server doğrular → health_update. **Free-roam respawn = konum değil DURUM değişimi**
 (fiziksel oyuncu ışınlanamaz): ölüm → `RESPAWN_DELAY` → oyuncu kendi `BaseZone`'una fiziken girince
-`revive_request` → sunucu canlandırır (istemci takılırsa `REVIVE_GRACE` ile zorla). Rig'i ASLA taşıma. Keşif: beacon + lobide elle IP:port (PlayerPrefs) +
-StreamingAssets/arena.json fallback. DTO'lar `_Shared/Net/Protocol/` — saf C#, server csproj
+`revive_request` → sunucu canlandırır (istemci takılırsa `REVIVE_GRACE` ile zorla). Rig'i ASLA taşıma. Keşif: **VR = beacon ile otomatik** (PlayerPrefs > beacon >
+StreamingAssets/arena.json; bulamazsa sağ kumandada **A×2** ile gizli IP paneli) · **admin =
+launcher'ın geçtiği `--server-ip`** (oyun içinde IP sorulmaz). DTO'lar `_Shared/Net/Protocol/` — saf C#, server csproj
 aynı dosyaları derler; Unity API'si girerse server derlemesi kırılır (bilinçli bekçi).
 
 ## Akış
 
 Boot(index 0) → Android: Lobby / Windows: AdminConsole (editor testi için override).
-Lobby (VR): IP paneli, roster, ready/takım. AdminConsole: launcher ekranı (yalnız IP'ye bağlan;
-sunucu bu ekrandan BAŞLATILMAZ, her zaman elle çalıştırılır) → dashboard (roster, mod+harita seç,
-start, taktik üstten görünüm).
+Lobby (VR): roster, ready/takım + **gizli** IP paneli (varsayılan KAPALI; beacon bulamazsa sağ
+kumandada **A×2** ile açılır). AdminConsole: IP SORMAZ — adres `--server-ip`'ten gelir, sahne
+açılır açılmaz otomatik bağlanıp dashboard'a düşer (roster, mod+harita seç, start, taktik üstten
+görünüm); bağlantı yoksa yalnız durum + "Yeniden Bağlan".
+Masaüstü zinciri: **`launcher/` (Flutter) → admin exe'yi `--server-ip` ile başlatır**. Sunucu
+hiçbir yerden otomatik başlatılmaz, her zaman elle çalıştırılır.
 Arena sahneleri kendine yeten (kendi BB rig'i taşır).
 
 ## Yeni içerik ekleme reçeteleri
@@ -99,4 +118,15 @@ uygular; sapmada sunucu kazanır). İçerik kataloğu: `_Shared/Data/GameCatalog
 `Tools > VortexArena > Export Server Config` (SO'lardan `Server/config/weapons.json` + `maps.json`;
 deterministik, LF, BOM'suz — **JSON'ları elle düzenleme, export ezer**), `… > Create Arena From
 Template`, `GameObject > VortexArena > Network Parent` (sahne objesine `NetIdentity` + benzersiz
-`sceneId`; sahne kaydında SceneIdGuard 0/çakışan id'leri onarır — dinamik obje senkronu altyapısı).
+`sceneId`; sahne kaydında SceneIdGuard 0/çakışan id'leri onarır — dinamik obje senkronu altyapısı),
+`PlayerBuildTool.BuildWindowsAdmin` (menü değil — batch-mode `-executeMethod` girişi; sahne listesi
+Build Settings'ten gelir, çıktı `-buildOutput` ile verilir; `scripts/deploy-admin-game.bat` çağırır).
+
+**Dağıtım:** `scripts\deploy-admin-game.bat` (Unity → `deploy\admin\`; **editör kapalı olmalı** —
+batch-mode proje kilidine takılır, ama betik bunu zorlamaz: arka planda kalan `Unity.exe`'ler
+yanlış alarm veriyordu, takılırsa elle iptal et) · `scripts\deploy-server.bat` (`dotnet publish` self-contained →
+`deploy\server\` + `config/`) · `scripts\deploy-launcher.bat` (Flutter → `deploy\launcher\`;
+Windows **Developer Mode** açık olmalı — plugin symlink'leri, betik build öncesi kontrol eder).
+Üçü de çift tıklanabilir (sonda `pause`); otomasyonda `--no-pause` / `VORTEX_NO_PAUSE=1`.
+Betik yazım tuzakları (`call flutter` çağıranı öldürür, değişkenler `VA_` önekli):
+`scripts/README.md`. Detay: `deploy/README.md`.

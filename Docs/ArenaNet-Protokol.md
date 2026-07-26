@@ -48,7 +48,14 @@ Hem `255.255.255.255` hem her arayüzün subnet-broadcast adresine gönderilir:
 { "app": "VortexArena", "ver": 1, "ip": "192.168.1.10", "controlPort": 47821, "statePort": 47822, "serverId": "GUID-string" }
 ```
 
-İstemci `app == "VortexArena"` doğrular. Beacon **yalnızca otomatik doldurma kolaylığıdır** — kullanıcı akışı gereği lobide elle IP:port girişi her zaman mümkündür ve elle girilen değer beacon'ı ezer (PlayerPrefs'e kalıcı yazılır). Android'de beacon dinlemek için **MulticastLock** gerekir (cosmos `ServerLocator.cs` çözümü port edilir).
+İstemci `app == "VortexArena"` doğrular. Android'de beacon dinlemek için **MulticastLock** gerekir (cosmos `ServerLocator.cs` çözümü port edilir).
+
+**Rol başına keşif akışı (istemci davranışı):**
+
+| Rol | Adres nereden gelir |
+|---|---|
+| `player` (Quest) | PlayerPrefs (elle girilmiş) > **beacon** > `StreamingAssets/arena.json`. Bulunan adrese **otomatik bağlanılır**; oyuncuya sorulmaz. Hiçbiri yoksa lobide sağ kumandada **A×2** ile gizli IP paneli açılır ve elle girilen değer beacon'ı ezer (PlayerPrefs'e kalıcı yazılır). |
+| `admin` (Windows) | **Yalnız komut satırı:** `--server-ip <ip> [--server-port <port>]` — Flutter launcher geçer. Beacon/PlayerPrefs kullanılmaz, kullanıcıya IP sorulmaz. Argüman yoksa bağlanmaz ve ekranda sebebini yazar (Editor'de `AppBoot.editorServerIp` fallback'i vardır). |
 
 ## 5. WS kontrol mesajları (JSON, text)
 

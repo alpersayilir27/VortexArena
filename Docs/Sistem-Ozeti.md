@@ -26,7 +26,8 @@ build çıkar:
 | Build | Rol | Ne yapar |
 |---|---|---|
 | **Android (Quest)** | `player` | Lobi → maç; oynar, poz gönderir, ateş eder |
-| **Windows** | `admin` | Launcher (sunucunun IP'sine bağlan) → dashboard: roster, mod+harita seçimi, start/abort, canlı taktik üstten görünüm |
+| **Windows** | `admin` | `--server-ip` ile açılır → doğrudan dashboard: roster, mod+harita seçimi, start/abort, canlı taktik üstten görünüm |
+| **Windows** | launcher | `launcher/` — Flutter operatör uygulaması: admin exe yolu + sunucu IP'sini tutar, oyunu `--server-ip` ile başlatır |
 
 Üçüncü bileşen: **`Server/` — kendi .NET 10 konsol sunucumuz** (standalone exe, tamamen offline
 LAN). Mirror/NGO gibi hazır netcode **kullanılmıyor**; hem oyun kurallarının sunucuda koşması hem
@@ -63,6 +64,12 @@ D:\Games\vortexarena\
     Arenas\Venues\DemoVenue\ (sihirbazla üretildi — 11×8 asimetrik)
     Modes\TeamDeathmatch\    mod kutusu: {Scripts → VortexArena.Modes.Tdm, Data, UI}
   Server\                    .NET 10 çözümü (Core kütüphanesi + App konsolu + PoseBot test istemcisi)
+  launcher\                  Flutter Windows launcher (vortex_launcher) — operatör giriş noktası
+    lib\main.dart            uygulama kabuğu
+    lib\launcher_config.dart kalıcı ayarlar (admin exe yolu + IP:port) + doğrulama
+    lib\launcher_page.dart   tek ekran: Sunucu / Ayarlar / Yönetimi Başlat
+  scripts\                   deploy-admin-game.bat · deploy-server.bat · deploy-launcher.bat
+  deploy\                    ÜRETİLEN çalıştırılabilirler: admin\ server\ launcher\ (git'e girmez)
   Docs\  plan\  .claude\rules\  CLAUDE.md
 ```
 
@@ -133,7 +140,10 @@ Quest'in kendi dünya uzayı ──(ArenaCalibrator: 2 nokta + OVRSpatialAnchor)
 
 ```
 İstemci açılır
-  └─ keşif:  elle girilen IP (PlayerPrefs)  >  beacon (5 sn dinle)  >  StreamingAssets/arena.json
+  └─ keşif (VR): elle girilen IP (PlayerPrefs) > beacon (5 sn dinle) > StreamingAssets/arena.json
+                 → bulunan adrese OTOMATİK bağlanır; oyuncuya sorulmaz
+                 → hiç bulunamazsa 8 sn sonra "sağ kumandada A×2" ipucu (gizli IP paneli)
+  └─ keşif (admin): keşif YOK — adres launcher'ın geçtiği `--server-ip` argümanından gelir
   └─ ws://ip:47821/ws  →  hello{role, deviceId, scenes}  →  welcome{playerId, udpToken, match}
   └─ UDP kaydı: 0x00 UdpHello (ack gelene dek 1 sn'de bir tekrar)
   └─ status kalp atışı 5 sn  +  (player ise) poz döngüsü 20 Hz
@@ -230,10 +240,11 @@ sahne TÜM oyuncuların `hello.scenes` listesinde. Geçerse takımlar dengelenir
 
 | Sınıf | Görevi |
 |---|---|
-| `AppBoot` | Rol çözümü: Android → player/Lobby; masaüstü → `--role` > `VORTEX_ROLE` > admin/AdminConsole (Editor'de `editorRoleOverride` alanı) |
+| `AppBoot` | Rol çözümü: Android → player/Lobby; masaüstü → `--role` > `VORTEX_ROLE` > admin/AdminConsole (Editor'de `editorRoleOverride`). **Adres çözümü:** admin rolünde `--server-ip` / `--server-port` argümanlarını okuyup `AppSession`'a yazar (Editor'de `editorServerIp` fallback'i) |
 | `SceneRouter` | `load_match` / `return_to_lobby` / geç katılım → sahne yükleme; sahne yüklenince `set_ready` |
-| `LobbyController` | VR lobi: IP:port paneli, roster, ready/takım |
-| `AdminConsoleController` | Launcher (IP:port'a bağlan — sunucuyu başlatmaz) + dashboard: roster, mod/harita seçimi, start/abort/kick/identify |
+| `LobbyController` | VR lobi: roster, ready/takım + otomatik bağlanma; **gizli IP paneli** (varsayılan kapalı, sağ kumandada `OVRInput.Button.One`×2 ile açılır — beacon'ı kesen ağlar için kurtarma yolu) |
+| `AdminConsoleController` | Bağlanma ekranı (yalnız durum + "Yeniden Bağlan" — **IP sormaz**) + dashboard: roster, mod/harita seçimi, start/abort/kick/identify. Adresi `AppSession`'dan alır |
+| `AppSession` | Oturum: rol + sunucu adresi (`ServerIp`/`ServerPort`/`HasServerEndpoint`) — `AppBoot` yazar, controller'lar okur |
 | `PlayerPoseTracker` | BB rig anchor'larını bulur, kalibrasyonu bekler, **dünya→arena** çevirip `IPoseSource` olarak kaydolur |
 | `RemotePlayerSpawner` | Katılan/ayrılan uzak oyuncular için `RemoteAvatar` yaratır/yok eder |
 | `TacticalView` | Admin'in üstten taktik görünümü (snapshot'lardan çizilir) |
@@ -374,15 +385,36 @@ dotnet run --project Server/VortexArena.PoseBot -- 127.0.0.1 4 --fight --admin -
 Unity Editor'de rolü seçmek için Boot sahnesindeki `AppBoot.editorRoleOverride` alanına
 `player` veya `admin` yaz (boş = normal çözüm). Editor **player** rolündeyken ortamda admin
 kalmadığı için PoseBot'a `--admin` vermek şarttır.
+Editor'de admin oynatırken launcher yoktur → adres `AppBoot.editorServerIp` alanından gelir
+(varsayılan `127.0.0.1`).
 
 > Botların `devices.json`'a yazdığı test girdilerini **commit'leme**.
 
-### 6.3 Build
+### 6.3 Build ve dağıtım
 
-- **VR (player):** Android build → `Builds/*.apk` → `install_game.bat` (adb) ile başlıklara kurulur.
-- **Admin:** Windows build; açılışta launcher ekranı gelir.
+Üç bileşenin her biri kendi script'iyle `deploy/` altına üretilir:
+
+| Komut | Ne yapar | Çıktı |
+|---|---|---|
+| `scripts\deploy-admin-game.bat` | Unity batch-mode Windows build (`PlayerBuildTool.BuildWindowsAdmin`) | `deploy\admin\VortexArena.exe` |
+| `scripts\deploy-server.bat` | `dotnet publish -r win-x64 --self-contained` + `config/` kopyası | `deploy\server\VortexArena.Server.App.exe` |
+| `scripts\deploy-launcher.bat` | `flutter build windows --release` | `deploy\launcher\vortex_launcher.exe` |
+
+- **Admin build'i editör AÇIKKEN alınamaz** — batch-mode Unity proje kilidine takılır. Script
+  bunu **kontrol etmez** (bilinçli: editör kapatıldıktan sonra bile AI motoru gibi alt süreçlerin
+  `Unity.exe`'si arka planda yaşıyor, `tasklist` kontrolü yanlış alarm veriyordu). Build
+  ilerlemiyorsa Ctrl+C ile iptal edip süreçleri kapat. Önceki `deploy\admin-build.log` silinemezse
+  script uyarır — o dosyayı hâlâ bir Unity süreci tutuyor demektir.
+- **Launcher build'i Windows Developer Mode ister** (Flutter plugin symlink'leri):
+  `start ms-settings:developers`; script build'e girmeden kayıt defterinden kontrol eder.
+- **VR (player):** Android build → `Builds/*.apk` → `install_game.bat` (adb) ile başlıklara kurulur
+  (bu akış değişmedi; deploy script'i yok).
 - Boot sahnesi build listesinde **index 0** olmalı; tüm arena sahneleri listede olmalı
   (sihirbaz bunu otomatik yapar).
+
+**Operatör akışı (işletmede):** sunucuyu elle başlat → launcher'ı aç → Ayarlar'dan admin exe'yi
+bir kez seç → Sunucu IP'sini yaz → **Yönetimi Başlat**. Oyun `--server-ip` ile açılır, IP sormaz,
+doğrudan dashboard'a düşer. Ayrıntı: `deploy/README.md`.
 
 ### 6.4 İçerik eklemek (özet — tam reçeteler `CLAUDE.md`'de)
 
@@ -442,6 +474,21 @@ tek satır sebep yazar.
    "referenced script missing" üretebiliyor.
 8. **Protokol dosyalarına `UnityEngine` sokma** — sunucu derlemesi kırılır (bilinçli bekçi).
 9. **Doğrulamayı batch'le:** derleme/build/play testini işin sonunda tek geçişte yap.
+10. **Kök `.gitignore`'a sabitlenmemiş Unity deseni ekleme.** Repo üç proje tipi barındırıyor
+    (Unity + `Server/` .NET + `launcher/` Flutter) ve her birinin kendi `.gitignore`'u var.
+    Windows'ta `core.ignorecase=true` olduğu için `*.app` deseni `Server/VortexArena.Server.App/`
+    klasörünü, `*.sln`/`*.csproj` de sunucunun gerçek proje dosyalarını sessizce yutar — bunlar
+    `/*.app`, `/*.sln`, `/*.csproj` diye köke sabitlenmiştir. Yeni desen eklendikten sonra
+    `git ls-files -c -i --exclude-standard` (izlenen ama artık ignore'lu dosyalar) **boş dönmeli**.
+11. **Dağıtım betiklerinde `call flutter …` KULLANMA** — `flutter.bat`'ın sonundaki
+    `& exit_with_errorlevel.bat` zinciri çağıran batch bağlamını da sonlandırıyor: betik hiçbir
+    şey yazmadan ölür, çift tıklanmışsa pencere anında kapanır. Doğrusu ayrı çocuk süreç:
+    `cmd /c call "<tam yol>\flutter.bat" …`. Ayrıca `flutter.bat` PATH'ten tırnaklı çağrılırsa
+    `FLUTTER_ROOT`'u yanlış çözer → önce `where` ile tam yola çöz.
+12. **Batch değişkenlerine kısa genel ad verme (`RC`, `CC`, `SRC` …)** — çocuk süreçlere miras
+    kalıyor: `set "RC=0"` CMake'in resource compiler değişkeniyle çakışıp Flutter build'ini
+    kırdı; MSBuild de ortam değişkenlerini global property olarak okur (Unity → IL2CPP → MSVC
+    dahil). `scripts/*.bat` içinde tüm betik-içi değişkenler `VA_` öneklidir.
 
 ---
 

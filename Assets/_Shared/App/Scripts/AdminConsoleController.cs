@@ -11,9 +11,11 @@ namespace VortexArena.App
 {
     /// <summary>
     /// AdminConsole (masaüstü, screen-space UGUI) controller'ı. İki panel:
-    /// (1) launcher — sunucunun IP:port'una bağlan;
+    /// (1) connecting — yalnız durum metni + "Yeniden Bağlan"; **IP SORULMAZ**;
     /// (2) dashboard — canlı roster + oyuncu başına set_team / kick / identify +
     ///     maç paneli (mod/harita seçimi, start/abort/lobiye dön, canlı skor, kill-feed).
+    /// Adres `AppSession.ServerIp/ServerPort`'tan gelir; onu Flutter launcher'ın geçtiği
+    /// `--server-ip` argümanından `AppBoot` doldurur → sahne açılır açılmaz otomatik bağlanılır.
     /// Sunucu bu ekrandan BAŞLATILMAZ — `Server/VortexArena.Server.App` her zaman elle
     /// çalıştırılır (bkz. Server/README.md). Tüm UI bağları null olabilir.
     /// Maç otoritesi SUNUCUDADIR — buradaki panel yalnız komut yollar ve gösterir.
@@ -21,12 +23,11 @@ namespace VortexArena.App
     public class AdminConsoleController : MonoBehaviour
     {
         [Header("Paneller")]
-        [SerializeField] private GameObject launcherPanel;
+        [SerializeField] private GameObject connectingPanel;
         [SerializeField] private GameObject dashboardPanel;
 
-        [Header("Launcher")]
-        [SerializeField] private TMP_InputField ipField;
-        [SerializeField] private TMP_Text launcherStatusText;
+        [Header("Bağlanma ekranı")]
+        [SerializeField] private TMP_Text connectingStatusText;
 
         [Header("Dashboard")]
         [SerializeField] private TMP_Text rosterText;
@@ -48,6 +49,9 @@ namespace VortexArena.App
         private readonly List<string> _dropdownScratch = new List<string>();
         private readonly Dictionary<int, string> _playerNames = new Dictionary<int, string>();
         private readonly List<string> _killFeed = new List<string>();
+
+        /// <summary>Bağlanma bir kez istendi mi? (Update'in sonsuz Connect çağırmasını keser.)</summary>
+        private bool _connectRequested;
 
         private void Awake()
         {
@@ -83,33 +87,36 @@ namespace VortexArena.App
 
         private void Start()
         {
-            if (ipField != null && string.IsNullOrEmpty(ipField.text))
-            {
-                ipField.text = ServerDiscovery.TryGetSavedEndpoint(out string ip, out int port)
-                    ? (port == ArenaProtocol.CONTROL_PORT ? ip : $"{ip}:{port}")
-                    : "127.0.0.1";
-            }
-
             BuildModeDropdown();
 
             bool connected = ArenaClient.Instance != null && ArenaClient.Instance.State == ArenaConnectionState.Connected;
             ApplyPanels(connected);
             RefreshStatusTexts();
+            _connectRequested = connected;
         }
 
-        // ------------------------------------------------------------- launcher
-
-        public void ConnectPressed()
+        /// <summary>
+        /// Otomatik bağlanmayı Start() DEĞİL burası yapar: `ArenaClient` kalıcı tekili
+        /// `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` ile doğuyor ve bu sahnenin
+        /// `Start()`'ında henüz var olmayabilir. Hazır olduğu ilk karede bağlanırız.
+        /// </summary>
+        private void Update()
         {
-            string text = ipField != null ? ipField.text : "";
-            if (!ServerDiscovery.TryParseEndpoint(text, out string ip, out int port))
+            if (_connectRequested || ArenaClient.Instance == null)
             {
-                SetLauncherStatus($"Geçersiz adres: '{text}'");
                 return;
             }
 
-            ServerDiscovery.SaveManualEndpoint(ip, port);
-            Connect(ip, port);
+            Connect(); // adres launcher'dan geldi — kullanıcıya sorulmaz
+        }
+
+        // -------------------------------------------------------- bağlanma ekranı
+
+        /// <summary>"Yeniden Bağlan" — elle Disconnect sonrası tek geri dönüş yolu.</summary>
+        public void ReconnectPressed()
+        {
+            _connectRequested = false;
+            Connect();
         }
 
         public void DisconnectPressed()
@@ -120,15 +127,32 @@ namespace VortexArena.App
             }
         }
 
-        private void Connect(string ip, int port)
+        /// <summary>
+        /// `AppSession`'daki adrese bağlanır. Adres yoksa (build launcher'sız açıldı)
+        /// ekranda sebebi yazar — burada IP sorulmaz, çözüm launcher'dan başlatmaktır.
+        /// </summary>
+        private void Connect()
         {
             if (ArenaClient.Instance == null)
             {
-                SetLauncherStatus("İstemci hazır değil.");
+                // Geçici: tekil henüz doğmadı → _connectRequested set EDİLMEZ, Update tekrar dener.
+                SetConnectingStatus("İstemci hazır değil.");
                 return;
             }
 
-            ArenaClient.Instance.Connect(ip, port, AppSession.RoleAdmin);
+            if (!AppSession.HasServerEndpoint)
+            {
+                // Kalıcı: argüman gelmemiş. Tekrar denemek durumu değiştirmez.
+                _connectRequested = true;
+                SetConnectingStatus(
+                    $"Sunucu adresi yok. Bu uygulama launcher'dan başlatılmalı " +
+                    $"({AppBoot.ArgServerIp} <ip>).");
+                return;
+            }
+
+            _connectRequested = true;
+            SetConnectingStatus($"Bağlanılıyor: {AppSession.ServerIp}:{AppSession.ServerPort}");
+            ArenaClient.Instance.Connect(AppSession.ServerIp, AppSession.ServerPort, AppSession.RoleAdmin);
         }
 
         // ------------------------------------------------------------ dashboard
@@ -540,9 +564,9 @@ namespace VortexArena.App
 
         private void ApplyPanels(bool connected)
         {
-            if (launcherPanel != null)
+            if (connectingPanel != null)
             {
-                launcherPanel.SetActive(!connected);
+                connectingPanel.SetActive(!connected);
             }
 
             if (dashboardPanel != null)
@@ -563,19 +587,23 @@ namespace VortexArena.App
                     SetDashboardStatus($"Bağlı — {ArenaClient.Instance.ServerIp}:{ArenaClient.Instance.ServerPort}");
                     break;
                 case ArenaConnectionState.Connecting:
-                    SetLauncherStatus("Bağlanılıyor...");
+                    SetConnectingStatus(AppSession.HasServerEndpoint
+                        ? $"Bağlanılıyor: {AppSession.ServerIp}:{AppSession.ServerPort}"
+                        : "Bağlanılıyor...");
                     break;
                 default:
-                    SetLauncherStatus("Bağlı değil");
+                    SetConnectingStatus(AppSession.HasServerEndpoint
+                        ? $"Bağlı değil — {AppSession.ServerIp}:{AppSession.ServerPort}"
+                        : "Bağlı değil (sunucu adresi yok)");
                     break;
             }
         }
 
-        private void SetLauncherStatus(string text)
+        private void SetConnectingStatus(string text)
         {
-            if (launcherStatusText != null)
+            if (connectingStatusText != null)
             {
-                launcherStatusText.text = text;
+                connectingStatusText.text = text;
             }
         }
 

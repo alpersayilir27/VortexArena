@@ -1,0 +1,11 @@
+# VortexArena — deploy/ .gitignore
+#
+# Bu klasör TAMAMEN üretilmiş çıktıdır (scripts/deploy-*.bat yazar):
+#   deploy/admin/  · deploy/server/  · deploy/launcher/
+# Beyaz liste yaklaşımı: her şey ignore, yalnız dokümantasyon commit'lenir.
+# Böylece yeni bir deploy hedefi eklendiğinde kök .gitignore'a satır eklemek
+# gerekmez (eskiden /deploy/admin/, /deploy/server/, … tek tek yazılıyordu).
+
+*
+!.gitignore
+!README.md

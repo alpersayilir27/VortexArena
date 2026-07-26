@@ -1,0 +1,79 @@
+# VortexArena — Server/ (.NET 10) .gitignore
+#
+# Kök .gitignore'daki Unity desenleri köke sabitlenmiştir; bu klasördeki
+# derleme çıktılarını YALNIZ bu dosya yönetir.
+# ⚠️ `Server/config/*.json` (server, maps, weapons, devices) COMMIT'lidir —
+# maps/weapons Unity'deki `Tools > VortexArena > Export Server Config` ile
+# üretilir ama repo'ya girer; buradaki hiçbir desen onları yakalamamalıdır.
+
+# ═══════════════════════════════════════════════════ derleme çıktıları ═══════
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+
+# Publish / yayın çıktıları (deploy-server.bat çıktısı deploy/ altına gider)
+[Pp]ublish/
+PublishScripts/
+*.publishsettings
+*.pubxml.user
+*.azurePubxml
+
+# ═════════════════════════════════════════════════════════════ NuGet ═════════
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+project.lock.json
+project.fragment.lock.json
+.nuget/
+
+# ═══════════════════════════════════════════════════════ MSBuild / araçlar ═══
+# (C++ desenleri BİLEREK yok: bu klasör saf .NET; `*.meta`/`*.obj` gibi geniş
+#  desenler ileride bir asset klasörü eklenirse sessizce dosya yutar.)
+*.binlog
+msbuild.log
+msbuild.err
+msbuild.wrn
+*.tlog
+*.tmp_proj
+*.vspscc
+*.vssscc
+.builds
+BenchmarkDotNet.Artifacts/
+
+# ═══════════════════════════════════════════════════════ IDE / kullanıcı ═════
+# (.vs/, .idea/, *.user, *.suo kökte zaten ignore'lu — burada tekrar edilmez)
+*.sln.iml
+*.dbmdl
+*.jfm
+
+# ═══════════════════════════════════════════════════════════ çalışma zamanı ══
+# Test/kaplama sonuçları
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+*.coveragexml
+TestResults/
+
+# Çökme dökümleri
+*.dmp
+*.mdmp
+
+# Sunucunun ürettiği çalışma zamanı durumu (config/*.json COMMIT'lidir)
+/[Dd]ata/
+/[Ss]tate/

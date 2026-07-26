@@ -56,7 +56,9 @@ netsh advfirewall firewall add rule name="VortexArena Control (TCP 47821)" dir=i
 netsh advfirewall firewall add rule name="VortexArena State (UDP 47822)" dir=in action=allow protocol=UDP localport=47822 profile=private,domain
 
 rem Programa ozel izin: Windows'un exe icin yeniden Block kurali uretmesini onler.
-set "EXE=%~dp0VortexArena.Server.App\bin\Release\net10.0\VortexArena.Server.App.exe"
+rem Once deploy yerlesimi (exe betigin yaninda), sonra repo bin\ yollari.
+set "EXE=%~dp0VortexArena.Server.App.exe"
+if not exist "%EXE%" set "EXE=%~dp0VortexArena.Server.App\bin\Release\net10.0\VortexArena.Server.App.exe"
 if not exist "%EXE%" set "EXE=%~dp0VortexArena.Server.App\bin\Debug\net10.0\VortexArena.Server.App.exe"
 if exist "%EXE%" (
   netsh advfirewall firewall add rule name="VortexArena Server (Program)" dir=in action=allow program="%EXE%" enable=yes profile=private,domain
