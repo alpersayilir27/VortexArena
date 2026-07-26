@@ -170,9 +170,11 @@ namespace VortexArena.Modes.Tdm
             }
 
             string victim = NameOf(msg.victimId);
+            // Kill feed metni yalnız TMP fontunda BULUNAN karakterleri kullanır: LiberationSans SDF
+            // (+ fallback) ok/kuru kafa gibi sembolleri içermez, eksik glif ekranda □ olarak çizilir.
             string line = msg.killerId > 0 && msg.killerId != msg.victimId
-                ? $"{NameOf(msg.killerId)} ⇒ {victim}"
-                : $"☠ {victim}";
+                ? $"{NameOf(msg.killerId)} -> {victim}"
+                : $"{victim} öldü";
 
             _killFeed.Add(new KillFeedLine
             {
