@@ -496,9 +496,10 @@ namespace VortexArena.App
 
             string weapon = string.IsNullOrEmpty(msg.weaponId) ? "" : $" [{msg.weaponId}]";
             string victim = NameOf(msg.victimId);
+            // TMP fontunda olmayan sembol kullanılmaz (eksik glif □ olarak çizilir) — bkz. TdmClientController.
             string line = msg.killerId > 0 && msg.killerId != msg.victimId
-                ? $"{NameOf(msg.killerId)} ⇒ {victim}{weapon}"
-                : $"☠ {victim}{weapon}";
+                ? $"{NameOf(msg.killerId)} -> {victim}{weapon}"
+                : $"{victim} öldü{weapon}";
 
             _killFeed.Add(line);
             while (_killFeed.Count > AdminKillFeedMaxLines)
