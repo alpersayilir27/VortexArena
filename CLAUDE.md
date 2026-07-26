@@ -8,6 +8,19 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 > Kurallar `.claude/rules/` altındadır. Uygulama planı: `plan/` (faz faz). Protokol: `Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı).
 > Sistemin tek sayfalık haritası (ne var, ağ nasıl çalışır, nasıl kullanılır): `Docs/Sistem-Ozeti.md`.
 
+## Çalışma tarzı (detay `.claude/rules/`)
+
+- **Arama = önce auggie.** `mcp__auggie__codebase-retrieval` birincil bağlam aracıdır: "X nerede /
+  bu nasıl çalışıyor / neyi etkiler" sorularında ilk durak; dönen sonuç Read/Grep ile teyit edilir
+  (indeks bayat olabilir). Tam simge/string biliniyorsa doğrudan Grep. → `auggie-first-search.md`
+- **Kod değişti = doküman değişti.** Temel kodda (protokol, ağ akışı, maç kuralı, mimari, editor
+  tool'u, sunucu config'i) değişiklik AYNI commit'te dokümana yazılır; ağ davranışında sıra
+  **önce `Docs/ArenaNet-Protokol.md`, sonra kod**. Hangi değişiklik hangi dokümana gider tablosu →
+  `docs-sync.md`
+- Doğrulama batch'lenir (`batch-build-verification.md`), editör doğrulaması Unity CLI ile yapılır
+  (`unity-cli.md`), ağır uygulama işi alt-ajanlara devredilir (`delegate-to-subagents.md`),
+  hafıza yalnız proje scope'unda tutulur (`ai-memory-scope.md`).
+
 ## Asset mimarisi (feature-first + asmdef)
 
 - `Assets/_Shared/` — ortak. Ortak KOD yalnız bir asmdef altında: `Core/` (VortexArena.Core),
