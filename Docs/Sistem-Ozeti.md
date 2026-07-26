@@ -26,7 +26,7 @@ build çıkar:
 | Build | Rol | Ne yapar |
 |---|---|---|
 | **Android (Quest)** | `player` | Lobi → maç; oynar, poz gönderir, ateş eder |
-| **Windows** | `admin` | Launcher (sunucu exe'sini başlat/bağlan) → dashboard: roster, mod+harita seçimi, start/abort, canlı taktik üstten görünüm |
+| **Windows** | `admin` | Launcher (sunucunun IP'sine bağlan) → dashboard: roster, mod+harita seçimi, start/abort, canlı taktik üstten görünüm |
 
 Üçüncü bileşen: **`Server/` — kendi .NET 10 konsol sunucumuz** (standalone exe, tamamen offline
 LAN). Mirror/NGO gibi hazır netcode **kullanılmıyor**; hem oyun kurallarının sunucuda koşması hem
@@ -233,7 +233,7 @@ sahne TÜM oyuncuların `hello.scenes` listesinde. Geçerse takımlar dengelenir
 | `AppBoot` | Rol çözümü: Android → player/Lobby; masaüstü → `--role` > `VORTEX_ROLE` > admin/AdminConsole (Editor'de `editorRoleOverride` alanı) |
 | `SceneRouter` | `load_match` / `return_to_lobby` / geç katılım → sahne yükleme; sahne yüklenince `set_ready` |
 | `LobbyController` | VR lobi: IP:port paneli, roster, ready/takım |
-| `AdminConsoleController` | Launcher (sunucu exe'sini `Process.Start`) + dashboard: roster, mod/harita seçimi, start/abort/kick/identify |
+| `AdminConsoleController` | Launcher (IP:port'a bağlan — sunucuyu başlatmaz) + dashboard: roster, mod/harita seçimi, start/abort/kick/identify |
 | `PlayerPoseTracker` | BB rig anchor'larını bulur, kalibrasyonu bekler, **dünya→arena** çevirip `IPoseSource` olarak kaydolur |
 | `RemotePlayerSpawner` | Katılan/ayrılan uzak oyuncular için `RemoteAvatar` yaratır/yok eder |
 | `TacticalView` | Admin'in üstten taktik görünümü (snapshot'lardan çizilir) |
@@ -353,9 +353,14 @@ oyuncular `playerId` ile senkronlanır, `NetIdentity` gerekmez.
 dotnet run --project Server/VortexArena.Server.App
 ```
 
-İlk kurulumda **bir kez**: `Server/firewall-kur.cmd` → sağ tık → yönetici olarak çalıştır
-(TCP 47821 + UDP 47820/47822 izinleri; Windows'un otomatik eklediği engelle kurallarını da siler).
-Admin build'in launcher ekranı da aynı exe'yi başlatabilir.
+İlk kurulumda **bir kez**: `Server/firewall-kur.cmd` → sağ tık → yönetici olarak çalıştır.
+Ağ profilini Private yapar, otomatik ENGELLE kurallarını siler, UDP 47820 / TCP 47821 / UDP 47822
+izinlerini ekler ve teşhis basar (adaptörler, IP'ler, dinlenen portlar). **Admin console çalıştıran
+diğer PC'lerde de çalıştırılır** — beacon broadcast olduğu için istemcide de inbound izin gerekir.
+Detay: `Server/README.md`.
+
+Sunucu **her zaman elle** başlatılır — admin uygulamasının launcher ekranı sunucuyu başlatmaz,
+yalnız çalışan bir sunucunun IP:port'una bağlanır.
 
 ### 6.2 Quest olmadan test (loopback)
 

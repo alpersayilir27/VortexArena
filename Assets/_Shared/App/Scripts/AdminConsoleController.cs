@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using TMPro;
 using UnityEngine;
@@ -12,25 +11,20 @@ namespace VortexArena.App
 {
     /// <summary>
     /// AdminConsole (masaüstü, screen-space UGUI) controller'ı. İki panel:
-    /// (1) launcher — sunucu exe'sini başlat (yalnız Windows) veya IP'ye bağlan;
+    /// (1) launcher — sunucunun IP:port'una bağlan;
     /// (2) dashboard — canlı roster + oyuncu başına set_team / kick / identify +
     ///     maç paneli (mod/harita seçimi, start/abort/lobiye dön, canlı skor, kill-feed).
-    /// Başlatılan server Process'i bağımsız yaşar: kapanışta ÖLDÜRÜLMEZ, yalnız
-    /// "Sunucuyu Durdur" butonu sonlandırır. Tüm UI bağları null olabilir.
+    /// Sunucu bu ekrandan BAŞLATILMAZ — `Server/VortexArena.Server.App` her zaman elle
+    /// çalıştırılır (bkz. Server/README.md). Tüm UI bağları null olabilir.
     /// Maç otoritesi SUNUCUDADIR — buradaki panel yalnız komut yollar ve gösterir.
     /// </summary>
     public class AdminConsoleController : MonoBehaviour
     {
-        private const string PrefKeyServerExePath = "arena.serverExePath";
-        private const string DefaultServerExeRelativePath =
-            "Server/VortexArena.Server.App/bin/Release/net10.0/VortexArena.Server.App.exe";
-
         [Header("Paneller")]
         [SerializeField] private GameObject launcherPanel;
         [SerializeField] private GameObject dashboardPanel;
 
         [Header("Launcher")]
-        [SerializeField] private TMP_InputField serverExePathField;
         [SerializeField] private TMP_InputField ipField;
         [SerializeField] private TMP_Text launcherStatusText;
 
@@ -54,8 +48,6 @@ namespace VortexArena.App
         private readonly List<string> _dropdownScratch = new List<string>();
         private readonly Dictionary<int, string> _playerNames = new Dictionary<int, string>();
         private readonly List<string> _killFeed = new List<string>();
-
-        private System.Diagnostics.Process _serverProcess;
 
         private void Awake()
         {
@@ -91,11 +83,6 @@ namespace VortexArena.App
 
         private void Start()
         {
-            if (serverExePathField != null && string.IsNullOrEmpty(serverExePathField.text))
-            {
-                serverExePathField.text = PlayerPrefs.GetString(PrefKeyServerExePath, DefaultServerExeRelativePath);
-            }
-
             if (ipField != null && string.IsNullOrEmpty(ipField.text))
             {
                 ipField.text = ServerDiscovery.TryGetSavedEndpoint(out string ip, out int port)
@@ -111,74 +98,6 @@ namespace VortexArena.App
         }
 
         // ------------------------------------------------------------- launcher
-
-        public void StartServerPressed()
-        {
-#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-            string path = ResolveServerExePath();
-            if (!File.Exists(path))
-            {
-                SetLauncherStatus($"Sunucu exe bulunamadı: {path}");
-                return;
-            }
-
-            try
-            {
-                var startInfo = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = path,
-                    WorkingDirectory = Path.GetDirectoryName(path),
-                    UseShellExecute = true // ayrı konsol penceresi — server logları görünür
-                };
-                _serverProcess = System.Diagnostics.Process.Start(startInfo);
-            }
-            catch (System.Exception e)
-            {
-                SetLauncherStatus($"Sunucu başlatılamadı: {e.Message}");
-                return;
-            }
-
-            if (serverExePathField != null && !string.IsNullOrWhiteSpace(serverExePathField.text))
-            {
-                PlayerPrefs.SetString(PrefKeyServerExePath, serverExePathField.text.Trim());
-                PlayerPrefs.Save();
-            }
-
-            SetLauncherStatus("Sunucu başlatıldı; 127.0.0.1'e bağlanılıyor...");
-            Connect("127.0.0.1", ArenaProtocol.CONTROL_PORT); // backoff bağlanana dek dener
-#else
-            SetLauncherStatus("Sunucu başlatma yalnız Windows'ta desteklenir.");
-#endif
-        }
-
-        /// <summary>Yalnız bu konsoldan başlatılan server process'ini sonlandırır.</summary>
-        public void StopServerPressed()
-        {
-            if (_serverProcess == null)
-            {
-                SetLauncherStatus("Bu konsoldan başlatılmış bir sunucu yok.");
-                return;
-            }
-
-            try
-            {
-                if (!_serverProcess.HasExited)
-                {
-                    _serverProcess.Kill();
-                }
-
-                SetLauncherStatus("Sunucu durduruldu.");
-            }
-            catch (System.Exception e)
-            {
-                SetLauncherStatus($"Sunucu durdurulamadı: {e.Message}");
-            }
-            finally
-            {
-                _serverProcess.Dispose();
-                _serverProcess = null;
-            }
-        }
 
         public void ConnectPressed()
         {
@@ -210,26 +129,6 @@ namespace VortexArena.App
             }
 
             ArenaClient.Instance.Connect(ip, port, AppSession.RoleAdmin);
-        }
-
-        private string ResolveServerExePath()
-        {
-            string path = serverExePathField != null && !string.IsNullOrWhiteSpace(serverExePathField.text)
-                ? serverExePathField.text.Trim()
-                : PlayerPrefs.GetString(PrefKeyServerExePath, DefaultServerExeRelativePath);
-
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                path = DefaultServerExeRelativePath;
-            }
-
-            if (!Path.IsPathRooted(path))
-            {
-                // Göreli yol proje/build köküne göredir (Editor: proje kökü; build: exe klasörü).
-                path = Path.GetFullPath(Path.Combine(Application.dataPath, "..", path));
-            }
-
-            return path;
         }
 
         // ------------------------------------------------------------ dashboard
