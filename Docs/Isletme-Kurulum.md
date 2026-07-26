@@ -22,7 +22,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 **Donanım**
 
-- [ ] 1 adet **Sunucu PC** (Windows, **.NET 8** kurulu), tercihen kablolu Gigabit Ethernet ile AP'ye bağlı.
+- [ ] 1 adet **Sunucu PC** (Windows, **.NET 10 ASP.NET Core Runtime** kurulu — sunucu Kestrel kullandığı için düz .NET Runtime yetmez), tercihen kablolu Gigabit Ethernet ile AP'ye bağlı.
 - [ ] 1 adet **5 GHz AP/router** (tercihen Wi-Fi 6), arenaya özel SSID.
 - [ ] Oyuncu sayısı kadar **Quest 3 / 3S** başlık + kumandalar (protokol üst sınırı **16 oyuncu**) + şarj istasyonu/powerbank.
 - [ ] USB-C kablo + `adb` (Meta Quest Developer Hub kuruluysa birlikte gelir).
@@ -112,8 +112,8 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 - [ ] `Server/config/weapons.json` ve `Server/config/maps.json` dosyalarının Bölüm 2'deki export'tan geldiğini doğrula (hasar **her zaman** sunucudaki tablodan uygulanır).
 - [ ] Sunucuyu başlat:
   - Geliştirme/kurulum: `dotnet run --project Server/VortexArena.Server.App`
-  - Derlenmiş exe: `Server/VortexArena.Server.App/bin/Debug/net8.0/VortexArena.Server.App.exe`
-  - Admin uygulamasının launcher ekranı da bu exe'yi başlatır (varsayılan yol `Server/VortexArena.Server.App/bin/Release/net8.0/VortexArena.Server.App.exe` — kurulumdaki gerçek yola göre düzelt).
+  - Derlenmiş exe: `Server/VortexArena.Server.App/bin/Debug/net10.0/VortexArena.Server.App.exe`
+  - Admin uygulamasının launcher ekranı da bu exe'yi başlatır (varsayılan yol `Server/VortexArena.Server.App/bin/Release/net10.0/VortexArena.Server.App.exe` — kurulumdaki gerçek yola göre düzelt).
 - [ ] Açılış özetinde şunları gör ve doğrula:
   ```
   Mekan      : <İşletme Adı>

@@ -28,7 +28,7 @@ build çıkar:
 | **Android (Quest)** | `player` | Lobi → maç; oynar, poz gönderir, ateş eder |
 | **Windows** | `admin` | Launcher (sunucu exe'sini başlat/bağlan) → dashboard: roster, mod+harita seçimi, start/abort, canlı taktik üstten görünüm |
 
-Üçüncü bileşen: **`Server/` — kendi .NET 8 konsol sunucumuz** (standalone exe, tamamen offline
+Üçüncü bileşen: **`Server/` — kendi .NET 10 konsol sunucumuz** (standalone exe, tamamen offline
 LAN). Mirror/NGO gibi hazır netcode **kullanılmıyor**; hem oyun kurallarının sunucuda koşması hem
 de işletmede internetsiz çalışma şartı bunu gerektiriyor.
 
@@ -62,7 +62,7 @@ D:\Games\vortexarena\
     Arenas\Standard\IceWorld\ (elle modellenmiş 12×12 tematik arena + Art/{Materials,Textures})
     Arenas\Venues\DemoVenue\ (sihirbazla üretildi — 11×8 asimetrik)
     Modes\TeamDeathmatch\    mod kutusu: {Scripts → VortexArena.Modes.Tdm, Data, UI}
-  Server\                    .NET 8 çözümü (Core kütüphanesi + App konsolu + PoseBot test istemcisi)
+  Server\                    .NET 10 çözümü (Core kütüphanesi + App konsolu + PoseBot test istemcisi)
   Docs\  plan\  .claude\rules\  CLAUDE.md
 ```
 

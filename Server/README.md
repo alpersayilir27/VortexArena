@@ -1,6 +1,6 @@
 # VortexArena Sunucusu
 
-Free-roam VR PvP arenasını LAN'da yöneten bağımsız **.NET 8 konsol** sunucusu (offline/LAN, Mirror/NGO yok). VR (Quest) oyuncuları ve Windows admin istemcisi buna bağlanır. Pozlar istemci-otoriter (UDP 20 Hz, arena uzayında); can/skor/kurallar/maç fazları **sunucu-otoriter**dir.
+Free-roam VR PvP arenasını LAN'da yöneten bağımsız **.NET 10 konsol** sunucusu (offline/LAN, Mirror/NGO yok). VR (Quest) oyuncuları ve Windows admin istemcisi buna bağlanır. Pozlar istemci-otoriter (UDP 20 Hz, arena uzayında); can/skor/kurallar/maç fazları **sunucu-otoriter**dir.
 
 > **Protokol tanımı:** `../Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı). DTO'lar ve sabitler `../Assets/_Shared/Net/Protocol/` altındadır — `VortexArena.Server.Core.csproj` **aynı dosyaları** `<Compile Include>` ile derler. O dosyalara Unity API'si girerse bu build kırılır (bilinçli bekçi).
 
@@ -27,7 +27,7 @@ Server/
 dotnet run --project Server/VortexArena.Server.App
 ```
 
-veya derlenmiş exe: `Server/VortexArena.Server.App/bin/Debug/net8.0/VortexArena.Server.App.exe`
+veya derlenmiş exe: `Server/VortexArena.Server.App/bin/Debug/net10.0/VortexArena.Server.App.exe`
 (Admin build'in launcher ekranı da bu exe'yi başlatır.)
 
 Açılışta:
