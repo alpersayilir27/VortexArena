@@ -54,13 +54,29 @@ namespace VortexArena.Protocol
         /// beklenir; bu süre dolunca eksik olsa da Countdown'a geçilir.</summary>
         public const float LOADING_TIMEOUT = 20f;
 
-        /// <summary>Ölüm → en erken canlanma süresi (respawn.delaySeconds).</summary>
+        /// <summary>Ölüm → en erken canlanma süresinin VARSAYILANI (respawn.delaySeconds).
+        /// Mod bunu ModeRules.RespawnDelay ile ezebilir (§10.5).</summary>
         public const float RESPAWN_DELAY = 5f;
 
-        /// <summary>Free-roam canlanma: süre dolduktan sonra oyuncu kendi tabanına girip
-        /// revive_request gönderir. Bu süre (ölümden itibaren) dolduğunda sunucu yine de
+        /// <summary>Free-roam canlanma: süre dolduktan sonra oyuncu modun canlanma şartını
+        /// sağlayıp revive_request gönderir. Bu süre (ölümden itibaren) dolduğunda sunucu yine de
         /// canlandırır — takılan/bildirim gönderemeyen istemci kalıcı ölü kalmasın.</summary>
         public const float REVIVE_GRACE = 20f;
+
+        /// <summary>reviveAnchor="standstill" (§10.5): ölü oyuncunun canlanmak için kesintisiz
+        /// sabit durması gereken süre.</summary>
+        public const float REVIVE_HOLD_SECONDS = 3f;
+
+        /// <summary>reviveAnchor="standstill": ölüm anındaki çapadan bu yarıçapı (metre) aşan
+        /// hareket sayacı ve çapayı sıfırlar.</summary>
+        public const float REVIVE_HOLD_RADIUS = 1f;
+
+        /// <summary>
+        /// Admin arayüzünün maç süresi seçenekleri (saniye): 2.5 · 5 · 10 · 15 · 20 · 30 dk · 1 saat.
+        /// <para><b>Protokol kısıtı DEĞİL, arayüz listesidir</b> — sunucu start_match.roundSeconds
+        /// alanında her pozitif değeri kabul eder (§5.2).</para>
+        /// </summary>
+        public static readonly int[] ROUND_SECONDS_OPTIONS = { 150, 300, 600, 900, 1200, 1800, 3600 };
 
         // NOT: FIRE_RATE_TOLERANCE kaldırıldı (§10.3). Sunucuda atış hızı denetimi ve silah
         // tablosu yoktur — hasarı istemci hesaplar, sunucu aynen uygular. Ürün gözetimli özel

@@ -3,10 +3,14 @@ namespace VortexArena.Server.Core.Modes;
 
 /// <summary>Team Deathmatch: her doğrulanmış öldürme, ÖLDÜRENİN takımına +1 puan yazar.
 /// Maç, bir takım skor limitine ulaşınca ya da süre bitince biter; süre bitiminde yüksek skor
-/// kazanır, eşitlikte berabere (winnerTeam = "").</summary>
+/// kazanır, eşitlikte berabere (<see cref="MatchOutcome.Draw"/>).
+/// <para>Kurallar tümüyle varsayılandır (<see cref="ModeRules.TeamDefault"/>): iki takım, takım
+/// skoru, dost ateşi kapalı, kendi tabanında canlanma, raf silahı.</para></summary>
 public sealed class TdmMode : IGameMode
 {
     public string ModeId => "tdm";
+
+    public ModeRules Rules => ModeRules.TeamDefault;
 
     public int DefaultRoundSeconds => 300;
 
@@ -14,12 +18,6 @@ public sealed class TdmMode : IGameMode
 
     public void OnMatchStart(MatchDirector director) =>
         Console.WriteLine($"[tdm] maç başladı — {director.RoundSeconds} sn, skor limiti {director.ScoreLimit}.");
-
-    /// <summary>TDM'de zamana bağlı kural yok; süreyi MatchDirector işletir.</summary>
-    public void OnTick(MatchDirector director, float deltaSeconds) { }
-
-    /// <summary>TDM hasarı ayrıca puanlamaz (yalnız öldürme sayılır).</summary>
-    public void OnHitApplied(MatchDirector director, int attackerId, int targetId, float damage, bool killed) { }
 
     public void OnKill(MatchDirector director, int killerId, int victimId, string weaponId)
     {
@@ -35,7 +33,7 @@ public sealed class TdmMode : IGameMode
         director.AddScore(team, 1);
     }
 
-    public bool IsMatchOver(MatchDirector director, out string winnerTeam)
+    public bool IsMatchOver(MatchDirector director, out MatchOutcome outcome)
     {
         var red = director.ScoreRed;
         var blue = director.ScoreBlue;
@@ -43,21 +41,23 @@ public sealed class TdmMode : IGameMode
 
         if (limit > 0 && red >= limit)
         {
-            winnerTeam = "red";
+            outcome = MatchOutcome.Team("red");
             return true;
         }
         if (limit > 0 && blue >= limit)
         {
-            winnerTeam = "blue";
+            outcome = MatchOutcome.Team("blue");
             return true;
         }
         if (director.TimeRemaining <= 0f)
         {
-            winnerTeam = red > blue ? "red" : blue > red ? "blue" : "";
+            outcome = red > blue ? MatchOutcome.Team("red")
+                : blue > red ? MatchOutcome.Team("blue")
+                : MatchOutcome.Draw;
             return true;
         }
 
-        winnerTeam = "";
+        outcome = MatchOutcome.Draw;
         return false;
     }
 }

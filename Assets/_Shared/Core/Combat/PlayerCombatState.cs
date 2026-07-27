@@ -49,8 +49,10 @@ namespace VortexArena.Core.Combat
         /// <summary>welcome'da atanan kimlik (0 = henüz bağlanılmadı).</summary>
         public int PlayerId { get; private set; }
 
-        /// <summary>Takım: load_match.yourTeam (lobide lobby_state'ten de güncellenir).</summary>
-        public Team Team { get; private set; } = CoreTeam.Red;
+        /// <summary>Takım: load_match.yourTeam (lobide lobby_state'ten de güncellenir).
+        /// Başlangıç <see cref="CoreTeam.Neutral"/>'dır: takımsız modda oyuncu kendini kırmızı
+        /// sanıp yanlış tabana yönlendirilmesin (§10.5).</summary>
+        public Team Team { get; private set; } = CoreTeam.Neutral;
 
         /// <summary>Takım içi 0 tabanlı spawn slot'u (yalnız gösterge — ışınlanma YOK).</summary>
         public int SpawnSlot { get; private set; }
@@ -117,6 +119,13 @@ namespace VortexArena.Core.Combat
 
         private BaseZone[] _zones = Array.Empty<BaseZone>();
         private float _nextZoneScanAt;
+
+        // StandStill canlanma çapası (§10.4/2). _hasHoldAnchor aynı zamanda "kafa izlenebiliyor mu"
+        // demektir: kamera yoksa çapa kurulamaz ve sabit durma şartı hiç aranmaz.
+        private Vector3 _holdAnchor;
+        private bool _hasHoldAnchor;
+        private float _holdSince;
+        private Transform _head;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -189,6 +198,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            TickHoldAnchor();
             TickRevive();
             RefreshStatusText();
         }
@@ -196,10 +206,10 @@ namespace VortexArena.Core.Combat
         // ------------------------------------------------------- free-roam canlanma
 
         /// <summary>
-        /// §10.4: gecikme dolduktan VE oyuncu kendi <see cref="BaseZone"/>'una fiziken
-        /// girdikten sonra <c>revive_request</c> gönderir; sunucu canlandırana
-        /// (hp &gt; 0 health_update) dek saniyede bir tekrarlar. Sahnede kendi takımının
-        /// tabanı yoksa (lobi/test sahnesi) bölge koşulu aranmaz.
+        /// §10.4: gecikme dolduktan VE modun canlanma şartı sağlandıktan sonra
+        /// <c>revive_request</c> gönderir; sunucu canlandırana (hp &gt; 0 health_update) dek
+        /// saniyede bir tekrarlar. Şart <see cref="ModeRuntime.Revive"/>'dan gelir — bu sınıfta
+        /// mod adına bakan hiçbir dal YOKTUR.
         /// </summary>
         private void TickRevive()
         {
@@ -208,8 +218,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            BaseZone zone = FindOwnBaseZone();
-            if (zone != null && !zone.IsPlayerInside)
+            if (!IsReviveConditionMet())
             {
                 return;
             }
@@ -223,6 +232,73 @@ namespace VortexArena.Core.Combat
             ArenaClient.Instance?.Send(_reviveMsg);
         }
 
+        /// <summary>
+        /// StandStill kipinde ölüm anındaki HMD konumunu çapa alır ve
+        /// <see cref="ArenaProtocol.REVIVE_HOLD_RADIUS"/>'u aşan her harekette çapayı da sayacı da
+        /// sıfırlar. <b>Ölüm gecikmesi dolmadan da işler</b>: oyuncu beklerken sabit durduysa
+        /// gecikme biter bitmez canlanır, ikinci bir bekleme dayatılmaz.
+        /// </summary>
+        private void TickHoldAnchor()
+        {
+            if (IsAlive || ModeRuntime.Revive != ModeReviveAnchor.StandStill)
+            {
+                _hasHoldAnchor = false;
+                return;
+            }
+
+            Transform head = ResolveHead();
+            if (head == null)
+            {
+                _hasHoldAnchor = false; // izlenemiyor → şart aranmayacak (bkz. IsReviveConditionMet)
+                return;
+            }
+
+            Vector3 position = head.position;
+            if (_hasHoldAnchor &&
+                Vector3.Distance(position, _holdAnchor) <= ArenaProtocol.REVIVE_HOLD_RADIUS)
+            {
+                return;
+            }
+
+            _holdAnchor = position;
+            _holdSince = Time.time;
+            _hasHoldAnchor = true;
+        }
+
+        /// <summary>Modun canlanma şartı sağlandı mı (§10.5 <c>reviveAnchor</c>).
+        /// <b>Şart ölçülemiyorsa sağlanmış sayılır</b> — sahnede kendi tabanı yok, kamera yok gibi
+        /// durumlarda bu sınıf oyuncuyu kalıcı ölü bırakmaz; güvenlik ağı zaten sunucunun
+        /// <c>REVIVE_GRACE</c>'idir.</summary>
+        private bool IsReviveConditionMet()
+        {
+            if (ModeRuntime.Revive == ModeReviveAnchor.StandStill)
+            {
+                return !_hasHoldAnchor || HoldRemaining <= 0f;
+            }
+
+            BaseZone zone = FindOwnBaseZone();
+            return zone == null || zone.IsPlayerInside;
+        }
+
+        /// <summary>Sabit durma sayacında kalan saniye (0 = şart sağlandı).</summary>
+        private float HoldRemaining =>
+            !_hasHoldAnchor
+                ? 0f
+                : Mathf.Max(0f, ArenaProtocol.REVIVE_HOLD_SECONDS - (Time.time - _holdSince));
+
+        /// <summary>HMD transformu (sahne değişiminde tazelenir); yoksa null.</summary>
+        private Transform ResolveHead()
+        {
+            if (_head != null)
+            {
+                return _head;
+            }
+
+            Camera cam = Camera.main;
+            _head = cam != null ? cam.transform : null;
+            return _head;
+        }
+
         private void RefreshStatusText()
         {
             string text = "";
@@ -233,6 +309,13 @@ namespace VortexArena.Core.Combat
                 if (remaining > 0f)
                 {
                     text = $"Öldün — canlanmaya {Mathf.CeilToInt(remaining)} sn";
+                }
+                else if (ModeRuntime.Revive == ModeReviveAnchor.StandStill)
+                {
+                    float hold = HoldRemaining;
+                    text = hold > 0f
+                        ? $"Canlanmak için sabit dur — {Mathf.CeilToInt(hold)} sn"
+                        : "Canlanılıyor...";
                 }
                 else
                 {
@@ -253,6 +336,7 @@ namespace VortexArena.Core.Combat
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             ScanZones();
+            _head = null; // yeni sahnenin kendi BB rig'i var; kamerayı yeniden çöz
         }
 
         private void ScanZones()
@@ -339,11 +423,9 @@ namespace VortexArena.Core.Combat
                     continue;
                 }
 
-                if (!string.IsNullOrEmpty(info.team))
-                {
-                    Team = ParseTeam(info.team, this.Team);
-                }
-
+                // Boş takım da uygulanır: takımsız modda sunucu takımları TEMİZLER (§10.5),
+                // eski değeri korumak oyuncuyu yanlış tabana yönlendirirdi.
+                Team = ParseTeam(info.team);
                 return;
             }
         }
@@ -355,7 +437,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            Team = ParseTeam(msg.yourTeam, this.Team);
+            Team = ParseTeam(msg.yourTeam);
             SpawnSlot = msg.spawnSlot;
             ModeId = msg.modeId ?? "";
 
@@ -399,8 +481,9 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // hp ≤ 0: respawn mesajı henüz gelmediyse varsayılan gecikmeyle ölüm durumu başlat.
-            BeginDeath(ArenaProtocol.RESPAWN_DELAY, false);
+            // hp ≤ 0: respawn mesajı henüz gelmediyse modun gecikmesiyle ölüm durumu başlat
+            // (sunucu respawn.delaySeconds'ta aynı değeri yolladığı için ikisi çakışmaz).
+            BeginDeath(ModeRuntime.RespawnDelay, false);
         }
 
         private void HandleRespawn(RespawnMsg msg)
@@ -436,6 +519,7 @@ namespace VortexArena.Core.Combat
                 _reviveAt = Time.time + delay;
                 _nextReviveSendAt = 0f;
                 _awaitingRevive = true;
+                _hasHoldAnchor = false; // StandStill sayacı ölümden itibaren başlar
                 SetAlive(false);
                 return;
             }
@@ -454,6 +538,7 @@ namespace VortexArena.Core.Combat
             Phase = string.IsNullOrEmpty(phase) ? PhaseLobby : phase;
             _awaitingRevive = false;
             _nextReviveSendAt = 0f;
+            _hasHoldAnchor = false;
             SetHp(ArenaProtocol.PLAYER_MAX_HP);
             SetAlive(true);
             RefreshStatusText();
@@ -482,8 +567,10 @@ namespace VortexArena.Core.Combat
             AliveChanged?.Invoke(alive);
         }
 
-        /// <summary>Protokoldeki "red"/"blue" değerini enum'a çevirir; tanımsızsa mevcut takım korunur.</summary>
-        private static Team ParseTeam(string team, Team fallback)
+        /// <summary>Protokoldeki "red"/"blue" değerini enum'a çevirir; <b>boş/tanımsız girdi
+        /// <see cref="CoreTeam.Neutral"/> döner</b> — takımsız modda (§10.5) oyuncu kendini
+        /// kırmızı sanmasın.</summary>
+        private static Team ParseTeam(string team)
         {
             if (string.Equals(team, "red", StringComparison.OrdinalIgnoreCase))
             {
@@ -495,7 +582,7 @@ namespace VortexArena.Core.Combat
                 return CoreTeam.Blue;
             }
 
-            return fallback;
+            return CoreTeam.Neutral;
         }
     }
 }

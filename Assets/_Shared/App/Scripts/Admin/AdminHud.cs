@@ -49,6 +49,7 @@ namespace VortexArena.App.Admin
         // Üst bant
         private TextMeshProUGUI _scoreRedText;
         private TextMeshProUGUI _scoreBlueText;
+        private TextMeshProUGUI _leaderboardText;
         private TextMeshProUGUI _chipText;
         private TextMeshProUGUI _matchInfoText;
         private TextMeshProUGUI _connectionText;
@@ -64,6 +65,9 @@ namespace VortexArena.App.Admin
         private TextMeshProUGUI _blueOverflow;
         private readonly List<AdminPlayerRow> _redRows = new List<AdminPlayerRow>();
         private readonly List<AdminPlayerRow> _blueRows = new List<AdminPlayerRow>();
+
+        /// <summary>FFA lider tablosu sıralama tamponu (her tazelemede liste ayırmamak için).</summary>
+        private readonly List<AdminPlayerView> _ranked = new List<AdminPlayerView>();
 
         // Alt şerit
         private readonly Image[] _modeButtons = new Image[3];
@@ -194,6 +198,16 @@ namespace VortexArena.App.Admin
             UiKit.Corner((RectTransform)chip.transform, new Vector2(0.5f, 1f), new Vector2(0f, 0f),
                 new Vector2(260f, 76f));
             _chipText.alignment = TextAlignmentOptions.Center;
+
+            // Bandın hemen altı: FFA lider tablosu (takım skoru olmayan modlarda üst bandın tek
+            // anlamlı içeriği). Takımlı modda boş kalır, yer kaplamaz. Chip'in ALTINDA durur —
+            // band içine koyulsa 56 punto skorlarla ve chip'le çakışırdı.
+            _leaderboardText = UiKit.Text(parent, "Leaderboard", 22f, UiKit.Title, FontStyles.Bold,
+                TextAlignmentOptions.Top);
+            UiKit.Corner(_leaderboardText.rectTransform, new Vector2(0.5f, 1f),
+                new Vector2(0f, -(Margin + 100f)), new Vector2(760f, 28f));
+            _leaderboardText.textWrappingMode = TextWrappingModes.NoWrap;
+            _leaderboardText.overflowMode = TextOverflowModes.Ellipsis;
 
             // Sağ üst: maç kimliği + bağlantı.
             _matchInfoText = UiKit.Text(parent, "MatchInfo", 20f, UiKit.Muted, FontStyles.Normal,
@@ -379,6 +393,7 @@ namespace VortexArena.App.Admin
 
             _scoreRedText.text = ffa ? "" : roster.ScoreRed.ToString();
             _scoreBlueText.text = ffa ? "" : roster.ScoreBlue.ToString();
+            _leaderboardText.text = ffa ? LeaderboardLine(roster) : "";
 
             if (roster.Phase == "Countdown" && roster.CountdownSeconds > 0)
             {
@@ -386,8 +401,7 @@ namespace VortexArena.App.Admin
             }
             else if (roster.Phase == "End")
             {
-                _chipText.text = roster.WinnerTeam == "red" ? "KIRMIZI KAZANDI"
-                    : roster.WinnerTeam == "blue" ? "MAVİ KAZANDI" : "BERABERE";
+                _chipText.text = WinnerLabel(roster);
             }
             else if (roster.Phase == "Live")
             {
@@ -428,6 +442,61 @@ namespace VortexArena.App.Admin
             }
 
             RefreshAdminNotice(connected);
+        }
+
+        /// <summary>
+        /// FFA lider tablosu: skora göre azalan ilk 3 (<c>ad · skor</c>). Takım skoru olmayan
+        /// modda üst bandın tek anlamlı içeriği budur. Kimse puan almadıysa boş döner — sıfırlar
+        /// dizisi bilgi taşımaz, yalnız yer kaplar.
+        /// </summary>
+        private string LeaderboardLine(AdminRoster roster)
+        {
+            _ranked.Clear();
+            for (int i = 0; i < roster.Players.Count; i++)
+            {
+                _ranked.Add(roster.Players[i]);
+            }
+
+            if (_ranked.Count == 0)
+            {
+                return "";
+            }
+
+            _ranked.Sort(CompareByScoreDescending);
+            if (_ranked[0].score <= 0)
+            {
+                return "";
+            }
+
+            _sb.Clear();
+            int shown = Mathf.Min(3, _ranked.Count);
+            for (int i = 0; i < shown; i++)
+            {
+                if (i > 0)
+                {
+                    _sb.Append("   ");
+                }
+
+                _sb.Append($"{i + 1}. {_ranked[i].name} {_ranked[i].score}");
+            }
+
+            return _sb.ToString();
+        }
+
+        private static int CompareByScoreDescending(AdminPlayerView a, AdminPlayerView b)
+        {
+            int byScore = b.score.CompareTo(a.score);
+            return byScore != 0 ? byScore : a.playerId.CompareTo(b.playerId);
+        }
+
+        /// <summary>Maç sonu başlığı: takım skorlu modda kazanan takım, bireysel skorlu modda
+        /// kazanan oyuncu (§5.3 <c>match_end</c> iki kanalı).</summary>
+        private static string WinnerLabel(AdminRoster roster)
+        {
+            if (roster.WinnerTeam == "red") return "KIRMIZI KAZANDI";
+            if (roster.WinnerTeam == "blue") return "MAVİ KAZANDI";
+            if (roster.WinnerPlayerId > 0) return $"{roster.NameOf(roster.WinnerPlayerId)} KAZANDI";
+            return "BERABERE";
         }
 
         /// <summary>
