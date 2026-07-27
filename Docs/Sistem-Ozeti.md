@@ -324,6 +324,12 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 `Weapon` + `WeaponDefinition` + `WeaponAudio`, `Health` (sunucudan set edilir), `PlayerCombatState`
 (yerel oyuncunun takım/can/ateş yetkisi/canlanma akışı), `RemoteAvatar` + `RemoteHitBox`
 (uzak oyuncu gövdesi ve isabet kutusu),
+`ProximityWarning` (`Core/Player` — free-roam çarpışma önleme: `RemotePlayerRegistry` pozlarını
+yerel HMD ile karşılaştırır; 1.2 m'de uzak oyuncunun konumunda **duvar arkasından da görünen**
+halka (`VortexArena/ProximityHalo`, ZTest Always), 0.8 m'de tehlikenin geldiği **taraftaki**
+kumandada haptik. Ölü oyuncular ELENMEZ — respawn durum değişimi olduğu için ölünün bedeni sahada
+durmaya devam eder, çarpışma riski aynıdır. **Henüz hiçbir sahnede bağlı değil**: bileşen elle
+eklenir, `head` ve `haloMaterial` (`_Shared/FX/M_ProximityHalo`) alanları Inspector'dan verilir),
 `WeatherVolumeFollow` (`Core/FX` — ambiyans parçacık hacmini yerel kameranın üstünde tutar; bağlı
 sistemler **World** simülasyon uzayında olmalı, `Start` sapmayı uyarır. Yalnız kendi transform'unu
 taşır, rig'e dokunmaz), `WeatherWindDriver` (`Core/FX` — kök objeye takılır, altındaki tüm
@@ -636,8 +642,14 @@ konsoluna tek satır sebep yazar.
     hangisini döndüreceği garanti değil ve `RemoteAvatar` ad etiketleri yanlış kameraya döner.
     Sahnede kendi kamerasını kuran her şey (admin gözlemci) rig kökünü kapatmalı ve
     **kendi `AudioListener`'ını** eklemelidir (rig kapanınca sahnede dinleyici kalmaz).
-    Masaüstünde XR hiç başlatılmaz (Standalone `Initialize XR on Startup` KAPALI) — bu bilinçli,
-    "düzeltme" niyetiyle açılmamalı.
+    Masaüstü XR ayarı: Standalone `Initialize XR on Startup` **AÇIK** (27 Tem 2026'da geri açıldı).
+    Sebep: **editör Play modu Android sekmesini değil PC/Standalone ayarını okur** (editörün kendisi
+    bir PC uygulamasıdır) → kapalıyken Quest Link ile Play'e basmak gözlüğe hiçbir şey göndermez,
+    `XRSettings.enabled` false kalır. Kapatılırsa VR'ı denemenin tek yolu her seferinde APK almaktır.
+    Bedeli: Windows admin build'i de açılışta XR başlatmaya çalışır (başlıksız PC'de başlatma
+    sessizce düşer); admin gözlemcinin rig kökünü kapatıp kendi `AudioListener`'ını kurması bu
+    yüzden şarttır. Admin dağıtımında sorun çıkarsa çözüm ayarı topluca kapatmak değil, XR'ı
+    role göre kod tarafında başlatmaktır (player rolünde `InitializeLoader`).
 18. **`Shader.Find` build'de null dönebilir** — hiçbir materyalin referanslamadığı shader
     (`Universal Render Pipeline/Unlit` gibi) strip edilir. Runtime'da üretilen görseller bu yüzden
     UI/TMP shader'ları üzerinden çizilir (`UiKit.RingSprite` + world-space canvas), mesh + Unlit
