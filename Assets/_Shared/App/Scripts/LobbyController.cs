@@ -13,8 +13,11 @@ namespace VortexArena.App
     ///
     /// <para>
     /// <b>Normal akış oyuncuya hiçbir şey sormaz:</b> adres öncelik zinciriyle
-    /// (PlayerPrefs &gt; beacon &gt; StreamingAssets/arena.json) bulunur ve
-    /// <b>otomatik bağlanılır</b>. IP paneli başlangıçta KAPALIDIR.
+    /// (komut satırı <c>--server-ip</c> &gt; PlayerPrefs &gt; beacon &gt;
+    /// StreamingAssets/arena.json) bulunur ve <b>otomatik bağlanılır</b>. IP paneli
+    /// başlangıçta KAPALIDIR. Zincirin başındaki komut satırı adresini
+    /// <see cref="AppBoot"/> yazar (editörde <c>Tools &gt; VortexArena &gt; Dev</c>
+    /// penceresinin seçtiği hedef de bu yoldan gelir) — açıkça verilen adres kazanır.
     /// </para>
     /// <para>
     /// <b>Kurtarma yolu:</b> beacon'ı kesen/izole eden ağlarda sunucu bulunamazsa
@@ -103,7 +106,14 @@ namespace VortexArena.App
 
             SetIpPanelVisible(false); // oyuncuya adres sorulmaz; kurtarma A×2 ile açılır
 
-            if (ServerDiscovery.TryGetSavedEndpoint(out string ip, out int port))
+            if (AppSession.HasServerEndpoint)
+            {
+                // Komut satırından (veya dev penceresinden) açıkça verilmiş adres: zincirin
+                // en üstü. _manualEntry ile işaretlenir ki beacon bunu EZMESİN.
+                _ipBuffer = FormatEndpoint(AppSession.ServerIp, AppSession.ServerPort);
+                _manualEntry = true;
+            }
+            else if (ServerDiscovery.TryGetSavedEndpoint(out string ip, out int port))
             {
                 _ipBuffer = FormatEndpoint(ip, port);
                 _manualEntry = true;

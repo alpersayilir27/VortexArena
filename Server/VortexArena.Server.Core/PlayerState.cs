@@ -91,6 +91,11 @@ public sealed class PlayerState
         ready = Ready,
         online = Online,
         battery = Battery,
-        scene = Scene
+        scene = Scene,
+        // §10.2 sayaçları: admin istatistik tablosu bunları okur (§5.3 lobby_state).
+        kills = Kills,
+        deaths = Deaths,
+        hp = Hp,
+        alive = Alive
     };
 }

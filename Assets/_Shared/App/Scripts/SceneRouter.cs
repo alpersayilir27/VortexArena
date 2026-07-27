@@ -12,6 +12,13 @@ namespace VortexArena.App
     /// SceneRouter'dır. Kalıcı singleton — kendini önyükler.
     /// Ayrıca §10.1 Loading adımını kapatır: maç sahnesi yüklenince sunucuya
     /// set_ready{true} ("sahne yüklendi") gönderir.
+    /// <para>
+    /// <b>Rolden bağımsız (Faz 6):</b> admin de aynı sahneyi yükler — "her zaman sunucudaki
+    /// aktif sahne" kuralı gözlemci görünümünün temelidir (§2). Rol yalnız <b>tek</b> yerde
+    /// ayrışır: <see cref="ReportSceneLoaded"/> içindeki <c>set_ready</c> yalnız player'dan
+    /// gider. Admin "hazır" görünürse operatör yanılır, ayrıca Loading kapısı zaten yalnız
+    /// <c>role=player</c> bağlantılarını sayar (sunucu <c>OnlinePlayersLocked</c>).
+    /// </para>
     /// </summary>
     public class SceneRouter : MonoBehaviour
     {
@@ -66,14 +73,12 @@ namespace VortexArena.App
             SceneManager.sceneLoaded -= HandleSceneLoaded;
         }
 
-        /// <summary>Geç katılım senkronu: welcome'daki match fazı Lobby dışındaysa maç sahnesine yetiş.</summary>
+        /// <summary>
+        /// Geç katılım senkronu: welcome'daki match fazı Lobby dışındaysa maç sahnesine yetiş.
+        /// Admin için de geçerli — maç koşarken açılan admin doğrudan arena sahnesine düşer.
+        /// </summary>
         private void HandleConnected(WelcomeMsg msg)
         {
-            if (AppSession.Role != AppSession.RolePlayer)
-            {
-                return;
-            }
-
             if (msg == null || msg.match == null ||
                 string.IsNullOrEmpty(msg.match.phase) || msg.match.phase == "Lobby" ||
                 string.IsNullOrEmpty(msg.match.sceneName))
@@ -93,13 +98,6 @@ namespace VortexArena.App
                 return;
             }
 
-            if (AppSession.Role != AppSession.RolePlayer)
-            {
-                // Admin AdminConsole'da kalır (taktik üstten görünüm Faz 3+).
-                Debug.Log($"[SceneRouter] Admin rolünde load_match ('{msg.sceneName}') sahne yüklemez.");
-                return;
-            }
-
             RememberMatch(msg.modeId, msg.sceneName);
             LoadChecked(msg.sceneName);
         }
@@ -110,12 +108,35 @@ namespace VortexArena.App
             LastModeId = "";
             _readyReportedScene = "";
 
-            if (AppSession.Role != AppSession.RolePlayer)
+            LoadChecked(AppSession.SceneLobby);
+        }
+
+        /// <summary>
+        /// **Admin harita önizlemesi:** seçili arenayı YEREL olarak yükler (sunucuya hiçbir şey
+        /// gönderilmez). Operatör tercihler panelinde haritayı değiştirdiğinde, maç başlamamışsa
+        /// o arenayı hemen görebilsin diye vardır.
+        /// <para>
+        /// Kasıtlı olarak <see cref="LastMatchScene"/>/<see cref="LastModeId"/>'ye DOKUNMAZ:
+        /// onlar sunucunun söylediği gerçektir. Böylece sunucu maçı başlattığında
+        /// <c>load_match</c> normal yolundan gelir ve önizleme durumu hiçbir şeyi bozmaz
+        /// (aynı sahnedeyse yükleme atlanır).
+        /// </para>
+        /// Yalnız admin rolünde iş yapar — oyuncu istemcisinde sahne yükleme kararı SUNUCUNUNDUR.
+        /// </summary>
+        public void LoadPreview(string sceneName)
+        {
+            if (AppSession.Role != AppSession.RoleAdmin)
             {
-                return; // admin zaten AdminConsole'da
+                Debug.LogWarning("[SceneRouter] Harita önizlemesi yalnız admin rolünde kullanılır.");
+                return;
             }
 
-            LoadChecked(AppSession.SceneLobby);
+            if (string.IsNullOrEmpty(sceneName))
+            {
+                return;
+            }
+
+            LoadChecked(sceneName);
         }
 
         /// <summary>Sunucudan gelen maç hedefini saklar (ModeHudSpawner + loading bildirimi okur).</summary>

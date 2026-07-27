@@ -24,6 +24,45 @@ deploy-launcher.bat --no-pause
 set VORTEX_NO_PAUSE=1 && deploy-launcher.bat
 ```
 
+## Admin build'inde canlı ilerleme (`lib\watch-unity-build.ps1`)
+
+Batch-mode Unity konsola **hiçbir şey yazmaz**; 20 dakika boş ekrana bakılıyor ve build takıldı mı
+ilerliyor mu anlaşılmıyordu. Bu yüzden `deploy-admin-game.bat` Unity'yi doğrudan değil
+`scripts\lib\watch-unity-build.ps1` üzerinden çalıştırır. İzleyici aynı komut satırını kurar,
+`deploy\admin-build.log`'u Unity yazarken paylaşımlı kipte okur ve tek satırlık durum gösterir:
+
+```
+  [04:12 / ~12:30] Scriptler derleniyor | %53 (1450/2714) | Csc Meta.XR.Editor.dll | log 2.4 MB | cpu +9.8 sn -
+```
+
+- **Aşama** log işaretlerinden çıkarılır (lisans → paketler → asset refresh → import → platform
+  geçişi → script derleme → domain reload → player build → shader → IL2CPP → bitiriyor). Aşama
+  değişince o anki satır sabitlenir, geçmiş kalır. Aşamalar geri gitmez: build aşamasına
+  girildikten sonra hazırlığa dönülmez (yoksa geç gelen `[Licensing::]`/shader satırları durumu
+  başa atıyordu).
+- **Yüzde** Bee/Tundra sayacından gelir (`[1450/2714 …]`); 30 sn tazelenmezse gizlenir — biten
+  DAG'ın `2714/2714`'ü sonraki aşamada yalan olur.
+- **Hareketsizlik uyarısı:** log 3 dakika (`-StallSeconds`) büyümez **ve** build zinciri
+  (`Unity`, `bee_backend`, `il2cpp`, `cl`, `link`…) CPU harcamazsa uyarı + son log satırı basılır.
+  Genel `Unity` adı CPU toplamına bilerek katılmaz: başka bir editör açıkken onun CPU'su takılmış
+  bir build'i çalışıyor gösterirdi.
+- **Hata satırları anında ekrana düşer** (proje kilidi, `error CS…`, `Aborting batchmode`) —
+  log'da aramaya gerek yok. `[PlayerBuildTool]` satırları da olduğu gibi basılır.
+- **Süre referansı:** başarılı koşunun süresi `deploy\admin-build.last`'a yazılır, sonraki koşuda
+  başlıkta `~mm:ss` olarak gösterilir ("normalde bu kadar sürüyordu").
+- **Ctrl+C** iptalinde izleyici Unity sürecini de öldürür (yoksa proje kilidi arkada kalırdı).
+- Çıkış kodu Unity'ninkidir; `.bat` başarısızlık dalını aynen çalıştırır. İzleyici dosyası yoksa
+  betik eski davranışa (sessiz build) düşer, sadece uyarı basar.
+
+**Bitmiş bir log'u incelemek** (hangi aşamada ne kadar satır harcanmış, hata var mıydı):
+
+```bat
+powershell -NoProfile -File scripts\lib\watch-unity-build.ps1 -ReplayLog deploy\admin-build.log
+```
+
+> Çıktı **ASCII**'dir (konsol kod sayfası Türkçe karakterleri bozuyor). İzleyiciye yeni metin
+> eklerken şapkasız/noktasız harf kullan.
+
 ## Neden bu ön koşullar?
 
 - **Editör kapalı olmalı:** `deploy-admin-game.bat` batch-mode Unity başlatır

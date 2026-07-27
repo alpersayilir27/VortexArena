@@ -148,8 +148,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0a81005453ac836418c6f1cfbf535f69, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.App::VortexArena.App.AppBoot
-  editorRoleOverride: 
-  editorServerIp: 127.0.0.1
 --- !u!4 &450336223
 Transform:
   m_ObjectHideFlags: 0

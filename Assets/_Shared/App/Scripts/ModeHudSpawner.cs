@@ -71,7 +71,7 @@ namespace VortexArena.App
 
             if (AppSession.Role != AppSession.RolePlayer)
             {
-                return; // admin AdminConsole kabuğunda; VR HUD'ı yok
+                return; // admin gözlemci: mod HUD'ı oyuncuya aittir, AdminHud ayrı çizilir
             }
 
             if (catalog == null)

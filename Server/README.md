@@ -153,11 +153,22 @@ uygulamaz, skor tutmaz, faz değiştirmez. Faz makinesi
 
 Admin `start_match` yolladığında sunucu şunları doğrular: mod kayıtlı mı, `sceneName`
 `config/maps.json`'da var mı ve o harita bu modu destekliyor mu (tablo boşsa bu adım atlanır),
-en az 1 çevrimiçi oyuncu var mı, `sceneName` TÜM çevrimiçi oyuncuların `hello.scenes` listesinde
-mi. Geçerse takımlar dengelenir (2+ oyuncuda boş takım kalmaz; tek oyuncuda uyarıyla izin verilir)
-ve herkese KİŞİSEL `load_match` (`yourTeam` + takım içi 0 tabanlı `spawnSlot`, harita biliniyorsa
-`spawnSlotsPerTeam` ile modulo) gider — `load_match` yalnız `role=player`'a; admin fazı
-`match_state`'ten öğrenir.
+`sceneName` TÜM çevrimiçi oyuncuların `hello.scenes` listesinde mi. **Oyuncu sayısı şart
+DEĞİLDİR:** hiç oyuncu yokken de başlatılabilir (konsolda uyarı) — admin gözlemcinin haritayı boş
+arenada açması için. Geçerse takımlar dengelenir (2+ oyuncuda boş takım kalmaz; 0/1 oyuncuda
+uyarıyla izin verilir)
+ve her oyuncuya KİŞİSEL `load_match` (`yourTeam` + takım içi 0 tabanlı `spawnSlot`, harita
+biliniyorsa `spawnSlotsPerTeam` ile modulo) gider. **Çevrimiçi adminlere de bir kopya gider**
+(`yourTeam:""`, `spawnSlot:-1`) — admin gözlemci aynı sahneyi yükler; admin `set_ready`
+GÖNDERMEDİĞİ için Loading kapısı etkilenmez (kapı yalnız `role=player` sayar).
+
+**Oyuncusuz maç:** `load_match` yalnız adminlere gider, Loading'de beklenecek `set_ready`
+olmadığı için faz doğrudan Countdown'a geçer. Oyuncularla BAŞLAMIŞ bir maçta Loading sırasında son
+oyuncu da düşerse sunucu lobiye döner; oyuncusuz BAŞLATILMIŞ maçta dönmez — çıkış `abort_match` /
+`return_to_lobby`.
+
+Ölüm ve canlanmadan sonra sunucu `lobby_state`'i bir kez tazeler: `kills`/`deaths`/`hp`/`alive`
+alanları roster ile taşınıyor ve admin istatistik tablosunun sağlama noktası bu (§5.3).
 
 `[match]` önekli konsol satırları:
 
@@ -219,7 +230,7 @@ oyuncu 2 sn kararlı kalınca kendiliğinden `start_match{tdm, Arena10x10}` gön
 `[admin]` önekiyle yazar, konsolda `q` + Enter ile `abort_match` gönderir. Unity editörü **oyuncu**
 rolündeyken ortamda admin kalmadığı için E2E'nin bu ayağında şarttır.
 
-> Botun bildirdiği `hello.scenes`, Build Settings listesidir (`Boot, Lobby, AdminConsole,
+> Botun bildirdiği `hello.scenes`, Build Settings listesidir (`Boot, Lobby,
 > Arena10x10, Arena12x12, ArenaDemoVenue, IceWorld`) — sunucu `start_match`'te sahneyi tüm
 > oyuncuların listesinde aradığı için yeni arena eklendiğinde PoseBot'taki `BuildScenes` sabiti de
 > güncellenmelidir.

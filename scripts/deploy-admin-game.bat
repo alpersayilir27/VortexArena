@@ -94,8 +94,9 @@ rem  NOT: proje aktif platformu Android ise Unity once Standalone'a gecer ->
 rem  ilk calistirma tam reimport yuzunden cok uzun surer (sonrakiler hizli).
 echo.
 echo   Build basliyor (ilk calistirma platform gecisi yuzunden uzun surebilir)...
-echo   Ilerlemiyor gibiyse: editor/arka plan Unity.exe proje kilidini tutuyor
-echo   olabilir - Ctrl+C ile iptal edip surecleri kapattiktan sonra tekrar deneyin.
+echo   Asagidaki durum satiri canli guncellenir; hicbir sey ilerlemiyorsa
+echo   izleyici uyari basar (editor/arka plan Unity.exe proje kilidini tutuyor
+echo   olabilir - Ctrl+C ile iptal edip surecleri kapattiktan sonra tekrar deneyin).
 echo   Log   : %VA_LOG%
 rem  Eski log'u sil: Unity hic baslayamazsa hata dalinda BAYAT log basilir,
 rem  yanlis teshise goturur. Silinemiyorsa dosyayi tutan bir Unity sureci
@@ -106,12 +107,25 @@ if exist "%VA_LOG%" (
   echo           Build takilirsa o sureci kapatip tekrar deneyin;
   echo           asagida basilan log satirlari da bayat olabilir.
 )
-"!VA_UNITY!" -batchmode -quit ^
-  -projectPath "%VA_REPO%" ^
-  -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin ^
-  -buildOutput "%VA_OUT%" ^
-  -logFile "%VA_LOG%"
-set "VA_RC=%ERRORLEVEL%"
+rem  Unity'yi DOGRUDAN degil, izleyici uzerinden calistiriyoruz: batch-mode Unity
+rem  konsola hicbir sey yazmadigi icin "takildi mi ilerliyor mu" sorusu baska
+rem  turlu cevaplanamiyordu. lib\watch-unity-build.ps1 ayni komut satirini kurar,
+rem  log'u canli okur, asama + yuzde + hareketsizlik uyarisi basar ve Unity'nin
+rem  cikis kodunu aynen dondurur. Izleyici yoksa eski davranisa duseriz.
+set "VA_WATCH=%~dp0lib\watch-unity-build.ps1"
+if exist "%VA_WATCH%" (
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%VA_WATCH%" ^
+    -Unity "!VA_UNITY!" -Project "%VA_REPO%" -OutDir "%VA_OUT%" -Log "%VA_LOG%"
+  set "VA_RC=!ERRORLEVEL!"
+) else (
+  echo   [UYARI] Izleyici yok, ilerleme basilamayacak: "%VA_WATCH%"
+  "!VA_UNITY!" -batchmode -quit ^
+    -projectPath "%VA_REPO%" ^
+    -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin ^
+    -buildOutput "%VA_OUT%" ^
+    -logFile "%VA_LOG%"
+  set "VA_RC=!ERRORLEVEL!"
+)
 
 if not "%VA_RC%"=="0" (
   echo.

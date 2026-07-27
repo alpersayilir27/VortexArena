@@ -14,6 +14,8 @@
 | `faz2-poz-senkronu.md` | UDP poz akışı, uzak avatarlar, admin taktik görünüm, kalibrasyon | ✅ (2026-07-24 — loopback E2E: 2 PoseBot + editor admin/player geçti; 2-Quest fiziksel örtüşme testi kullanıcıda) |
 | `faz3-mac-ve-savas.md` | Maç akışı, TDM modu, silah/can senkronu, respawn | ✅ (2026-07-25 — loopback TDM E2E geçti: faz makinesi, vuruş doğrulama/ret yolları, free-roam canlanma; 2-Quest saha raundu kullanıcıda) |
 | `faz4-editor-sdk.md` | Editor araçları (Network Parent, arena şablonu), A12x12, işletme piloti | ✅ (2026-07-25 — sihirbazla A12x12 + DemoVenue 11×8 üretildi, loopback TDM raundu geçti; MJPEG izleme ertelendi, saha kurulum provası kullanıcıda) |
+| `faz5-gelistirici-araclari.md` | Geliştirici araç seti (`Tools > VortexArena > Dev`, iki katmanlı config, tek tıkla sunucu+bot) + oyun içi bağlantı hata ekranı | ✅ (2026-07-27 — batch-mode derleme 0 hata; editör içi doğrulama kullanıcıda) |
+| `faz6-admin-gozlemci.md` | Admin sahne-içi gözlemci: dashboard tasfiye, admin sunucudaki aktif sahneye girer, 3 kamera kipi (POV/serbest/kuş bakışı), sahne üstü yönetim HUD'ı | ✅ (2026-07-27 — Unity + sunucu derlemesi 0 hata/0 uyarı; oynanış doğrulaması kullanıcıda) |
 
 ## Proje nedir?
 
@@ -24,13 +26,18 @@
 - Farklı **oyun modları**; mod başına farklı **haritalar** ve **silahlar** olabilir.
 - **İki rol:** VR build = **player** (oynar), Windows masaüstü build = **admin** (yönetim + izleme). İkisi de aynı Unity projesinden çıkar.
 - **Kendi .NET sunucumuz** (standalone exe, aynı repo `Server/` klasöründe) — tamamen **offline LAN**. Mirror/NGO gibi hazır netcode KULLANILMAZ; ama Unity tarafında Mirror-vari editor kolaylıkları (hiyerarşi sağ-tık "Network Parent" vb.) zamanla eklenecek.
-- **Akış:** VR açılır → doğrudan **Lobi** → ayar panelinden sunucu **IP:port** girilir → diğer oyuncular ve admin ile aynı lobiye bağlanır → admin maçı başlatır.
+- **Akış:** VR açılır → doğrudan **Lobi** → sunucu **beacon ile kendiliğinden** bulunur ve otomatik bağlanılır (bulunamazsa sağ kumandada **A×2** ile gizli IP paneli) → diğer oyuncular ve admin ile aynı lobiye bağlanır → admin maçı başlatır. *(Faz 1'de bu adım elle IP girme olarak planlanmıştı; Faz 4'te keşif otomatikleşti.)*
 
 ## Kesinleşmiş kullanıcı kararları
 
 1. **Oyun kuralları sunucuda (.NET) koşar** — server otoriter: skor/round/can/respawn/kazanma koşulu sunucuda, mod başına kural sınıfı .NET'te (`IGameMode`). Unity istemcileri sunum + girdi.
-2. **Launcher = admin uygulamasının giriş ekranı** — ayrı launcher programı YOK. Masaüstü build'in açılış ekranı sunucu exe'sini başlatır (`Process.Start`) veya mevcut sunucuya bağlanır, config seçer, sonra yönetim paneline geçer.
-3. **Meta umbrella paketi Faz 0'da alt paketlere çevrilir** (aşağıda "Paket politikası").
+2. **Meta umbrella paketi Faz 0'da alt paketlere çevrilir** (aşağıda "Paket politikası").
+
+> Masaüstü zinciri hakkındaki eski karar (*"Launcher = admin uygulamasının giriş ekranı, sunucu
+> exe'sini `Process.Start` ile başlatır"*) **geçersiz kaldı ve silindi.** Faz 4 sonrası gerçek:
+> ayrı bir **Flutter launcher** (`launcher/`) var, admin exe'yi `--server-ip` ile başlatıyor ve
+> **sunucu hiçbir yerden otomatik başlatılmaz** (her zaman elle). Güncel akış: `CLAUDE.md` +
+> `Docs/Sistem-Ozeti.md`.
 
 ## Referans proje: `D:\games\vortexcosmos`
 
@@ -69,7 +76,7 @@ D:\Games\vortexarena\
       Arsenal\Prefabs\           AK47_Red, M4_Blue    Arsenal\Data\ (Faz 3: silah SO'ları)
       FX\                        FX_HitSpark
       Environments\  Data\       (paylaşımlı prefab/SO — ihtiyaç oldukça)
-      Scenes\                    Boot, Lobby, AdminConsole (Faz 1)
+      Scenes\                    Boot, Lobby, AdminConsole (Faz 1; AdminConsole Faz 6'da kaldırıldı)
     Arenas\
       Standard\A10x10\Scenes\Arena10x10.unity   (Faz 0'da mevcut sahne buraya taşınır)
       Standard\A10x10\{Data,Prefabs}\

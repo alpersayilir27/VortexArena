@@ -41,5 +41,20 @@ namespace VortexArena.Net
         internal static void RaiseShotFired(ShotFiredMsg msg) { OnShotFired?.Invoke(msg); }
         internal static void RaiseIdentify(IdentifyMsg msg) { OnIdentify?.Invoke(msg); }
         internal static void RaiseKicked(KickedMsg msg) { OnKicked?.Invoke(msg); }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// YALNIZ EDITOR — dev enjeksiyonu. Sunucudan gelmiş gibi load_match yayınlar.
+        /// <para>
+        /// Neden var: tek bir arena sahnesine doğrudan Play'e basıldığında takım ve spawn
+        /// slot bilgisi <c>PlayerCombatState</c>/<c>ModeHudSpawner</c>/<c>SceneRouter</c>'a
+        /// bu olaydan gider. Dev'e özel ikinci bir API açmak yerine <b>gerçek kod yolunu</b>
+        /// kullanırız — böylece editörde denenen akış sahada koşan akışla aynı kalır.
+        /// </para>
+        /// Çağıran: <c>VortexArena.App.DevSession</c>. <c>#if UNITY_EDITOR</c> olduğu için
+        /// hiçbir build'e girmez.
+        /// </summary>
+        public static void InjectLoadMatch(LoadMatchMsg msg) { OnLoadMatch?.Invoke(msg); }
+#endif
     }
 }

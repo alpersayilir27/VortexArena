@@ -40,6 +40,13 @@ namespace VortexArena.Core.Arena
         /// <summary>True while the HMD is outside the allowed area.</summary>
         public bool IsOutOfBounds { get; private set; }
 
+        /// <summary>Arena yarı ölçüleri (metre, X/Z) — admin kuş bakışı kadrajı bunu okur.</summary>
+        public Vector2 HalfExtents => new Vector2(halfExtentX, halfExtentZ);
+
+        // Gözlemci (admin) kipi: görsel muhafaza susar, ArenaSpace origin kaydı YERİNDE kalır.
+        private bool spectatorMode;
+        private float spectatorWallAlpha = 0.25f;
+
         private void Awake()
         {
             propertyBlock = new MaterialPropertyBlock();
@@ -60,8 +67,43 @@ namespace VortexArena.Core.Arena
             ArenaSpace.ClearOrigin(transform);
         }
 
+        /// <summary>
+        /// Gözlemci (admin) kipi. Görsel muhafazayı susturur: karartma quad'ı ve alan-dışı
+        /// uyarısı kapanır, duvarlar <paramref name="wallAlpha"/>'da sabitlenir,
+        /// <see cref="IsOutOfBounds"/> false'a kilitlenir.
+        /// <para>
+        /// ⚠ <b>Bileşeni DEVRE DIŞI BIRAKMAYIN:</b> <c>OnDisable</c> →
+        /// <c>ArenaSpace.ClearOrigin</c> arena uzayı origin'ini siler ve ağdan gelen TÜM uzak
+        /// avatarlar dünya origin'ine yığılır. Admin gözlemci bu yüzden bileşeni açık bırakıp
+        /// bu anahtarı kullanır (bkz. <c>VortexArena.App.Admin.AdminSpectator</c>).
+        /// </para>
+        /// Gerekçe: admin masaüstündedir, HMD'si yoktur; kafası (kapatılmış rig'in
+        /// CenterEyeAnchor'ı) sabit durduğu için muhafaza mantığı anlamsız veri üretir.
+        /// </summary>
+        public void SetSpectatorMode(bool on, float wallAlpha = 0.25f)
+        {
+            spectatorMode = on;
+            spectatorWallAlpha = Mathf.Clamp01(wallAlpha);
+            if (!on)
+                return; // bir sonraki Update gerçek duruma göre yeniden çizer
+
+            propertyBlock ??= new MaterialPropertyBlock();
+            IsOutOfBounds = false;
+            SetWallsAlpha(spectatorWallAlpha);
+            if (fadeRenderer != null)
+                SetAlpha(fadeRenderer, 0f);
+            if (warningText != null && warningText.gameObject.activeSelf)
+                warningText.gameObject.SetActive(false);
+        }
+
         private void Update()
         {
+            if (spectatorMode)
+            {
+                // Muhafaza susuyor; duvar alfası tercihten gelip sabit kaldığı için iş yok.
+                return;
+            }
+
             if (head == null)
                 return;
 

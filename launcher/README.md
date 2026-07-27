@@ -6,7 +6,7 @@ adresiyle başlatmak.** İşletmede operatörün açtığı tek program budur.
 ```
 launcher'da IP yaz  ──►  VortexArena.exe --server-ip <ip> --server-port <port>
                               │
-                              └─ AppBoot argümanı okur → AppSession → AdminConsole
+                              └─ AppBoot argümanı okur → AppSession → Lobby (admin gözlemci)
                                  doğrudan bağlı dashboard (IP SORULMAZ)
 ```
 
