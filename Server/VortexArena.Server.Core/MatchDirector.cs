@@ -78,6 +78,11 @@ public sealed class MatchDirector
     private int _roundSeconds;
     private int _scoreLimit;
     private IGameMode? _mode;
+
+    /// <summary>Koşan maçın kural şekli (§10.5). Maç yokken TDM varsayılanıdır — bu sayede
+    /// lobide de anlamlı bir cevap vardır ve her okuyucunun null kontrolü yapması gerekmez.</summary>
+    private ModeRules _rules = ModeRules.TeamDefault;
+
     private DateTime _phaseEnteredAt = DateTime.UtcNow;
 
     /// <summary>1 Hz işler (countdown geri sayımı + Live'da match_state) için sonraki eşik.</summary>
@@ -95,6 +100,13 @@ public sealed class MatchDirector
     {
         _registry = registry;
         _maps = maps;
+        RegisterModes();
+    }
+
+    /// <summary>Sunucunun tanıdığı modların TEK kayıt yeri — yeni mod buraya bir satır eklenir
+    /// (CLAUDE.md "Yeni mod" reçetesi). Kayıtlı olmayan modId'li start_match reddedilir.</summary>
+    private void RegisterModes()
+    {
         Register(new TdmMode());
     }
 
@@ -135,6 +147,18 @@ public sealed class MatchDirector
         get { lock (_gate) return _scoreLimit; }
     }
 
+    /// <summary>Koşan maçın kural şekli (§10.5); maç yokken TDM varsayılanı.</summary>
+    public ModeRules Rules
+    {
+        get { lock (_gate) return _rules; }
+    }
+
+    // ---- Skor defteri (§10.2) ----
+    // Modlar skoru YALNIZ buradan yazar/okur; iki kanal var ve hangisinin kullanılacağını
+    // ModeRules.Scoring söyler: takım skoru (match_state) veya bireysel skor (lobby_state).
+    // Tek bölümde toplanmalarının sebebi ileride ayrı bir Scoreboard sınıfına çıkarmanın
+    // mekanik bir taşıma olması — faz makinesi bu yüzden büyütülmedi.
+
     /// <summary>Takım skoruna ekleme (kill/objektif kuralları modlardan gelir).</summary>
     public void AddScore(string team, int amount)
     {
@@ -143,6 +167,63 @@ public sealed class MatchDirector
             if (team == "red") _scoreRed += amount;
             else if (team == "blue") _scoreBlue += amount;
         }
+    }
+
+    /// <summary>Bireysel skora ekleme (§10.2 <c>score</c>). Yalnız "roster tazelensin" bayrağını
+    /// koyar, yayını KENDİ yapmaz: bu metod mod kancasından (kilit dışı) çağrılıyor ve yayın
+    /// registry olayı tetikliyor. Bayrak bir sonraki tik'te (≤100 ms) boşaltılır — skorun
+    /// lobby_state'e ulaşması için ayrı bir mesaj tipi ya da yayın döngüsü gerekmez.</summary>
+    public void AddPlayerScore(int playerId, int amount)
+    {
+        if (playerId <= 0 || amount == 0) return;
+        lock (_gate)
+        {
+            if (!_registry.TryGetByPlayerId(playerId, out var player)) return;
+            if (player.Role != "player") return;
+            player.Score += amount;
+            _rosterRefreshFor = player;
+        }
+    }
+
+    /// <summary>Bir oyuncunun bireysel skoru; oyuncu yoksa 0.</summary>
+    public int ScoreOf(int playerId)
+    {
+        lock (_gate)
+        {
+            return _registry.TryGetByPlayerId(playerId, out var player) ? player.Score : 0;
+        }
+    }
+
+    /// <summary>Bireysel skorun lideri. <b>Eşitlikte false döner</b> (tek kazanan yok) — çağıran
+    /// mod bunu "berabere" olarak yorumlar; sessizce ilk oyuncuyu seçmek yanlış kazanan ilan
+    /// ederdi. Hiç çevrimiçi oyuncu yoksa da false.</summary>
+    public bool TryGetLeader(out int playerId, out int score)
+    {
+        playerId = 0;
+        score = 0;
+
+        lock (_gate)
+        {
+            var tied = false;
+            foreach (var player in OnlinePlayersLocked())
+            {
+                if (playerId == 0 || player.Score > score)
+                {
+                    playerId = player.PlayerId;
+                    score = player.Score;
+                    tied = false;
+                    continue;
+                }
+
+                if (player.Score == score) tied = true;
+            }
+
+            if (playerId != 0 && !tied) return true;
+        }
+
+        playerId = 0;
+        score = 0;
+        return false;
     }
 
     /// <summary>Çevrimiçi oyuncuların (role=player) anlık kopyası — mod bunu kilit dışında
@@ -237,8 +318,8 @@ public sealed class MatchDirector
         modeToStart?.OnMatchStart(this);
         if (modeToTick == null) return;
         modeToTick.OnTick(this, deltaSeconds);
-        if (modeToTick.IsMatchOver(this, out var winnerTeam))
-            await EnterEndAsync(winnerTeam);
+        if (modeToTick.IsMatchOver(this, out var outcome))
+            await EnterEndAsync(outcome);
     }
 
     /// <summary>Tüm çevrimiçi oyuncular "sahne yüklendi" (set_ready) dediğinde veya
@@ -323,8 +404,11 @@ public sealed class MatchDirector
     // ---- Admin komutları ----
 
     /// <summary>start_match doğrulaması + kişisel load_match yayını (§10.1). Doğrulama geçmezse
-    /// faz DEĞİŞMEZ, konsola sebep yazılır.</summary>
-    public async Task StartMatchAsync(string? modeId, string? sceneName)
+    /// faz DEĞİŞMEZ, konsola sebep yazılır.
+    /// <para><paramref name="roundSeconds"/>/<paramref name="scoreLimit"/> O MAÇA özeldir:
+    /// <c>≤ 0</c> ise modun varsayılanı kullanılır (§5.2). Operatör raundu kısaltıp uzatabilsin
+    /// diye <see cref="IGameMode"/> üzerindeki sayılar kilit değil varsayılandır.</para></summary>
+    public async Task StartMatchAsync(string? modeId, string? sceneName, int roundSeconds = 0, int scoreLimit = 0)
     {
         modeId ??= "";
         sceneName ??= "";
@@ -371,13 +455,18 @@ public sealed class MatchDirector
         }
 
         // Oyuncusuz başlatmaya İZİN VERİLİR: admin gözlemci haritayı boş arenada açabilsin (§10.1).
-        // Dengeleme yalnız 2+ oyuncuda anlamlı; 0/1 oyuncuda uyarı yeterli.
         if (players.Count == 0)
             Console.WriteLine("[match] uyarı: hiç oyuncu yok — maç yalnız admin gözlemci için başlatılıyor (harita önizleme).");
         else if (players.Count == 1)
             Console.WriteLine("[match] uyarı: tek oyuncuyla maç başlatılıyor (yalnız test amaçlı).");
-        else
-            BalanceTeams(players); // registry.SetTeam event tetikler → kilit DIŞINDA
+
+        // Takım kurulumu modun şeklinden gelir (§10.5). registry.SetTeam event tetiklediği için
+        // ikisi de kilit DIŞINDA çağrılır. Dengeleme yalnız 2+ oyuncuda anlamlıdır.
+        var rules = mode.Rules;
+        if (rules.Teams == TeamMode.None)
+            ClearTeams(players);
+        else if (players.Count > 1)
+            BalanceTeams(players);
 
         // Lobi ready bayrakları Loading'e GİRMEDEN sıfırlanır: Loading'de aynı bayrak "sahne
         // yüklendi" anlamına geliyor, bayat true kalsaydı countdown anında başlardı (§10.1).
@@ -385,32 +474,43 @@ public sealed class MatchDirector
             _registry.SetReady(player.DeviceId, false);
 
         var outbox = new List<Outgoing>();
-        int red = 0, blue = 0;
+        int red = 0, blue = 0, pool = 0;
         // Harita biliniyorsa takım başına slot sayısı sahnedeki SpawnPoint sayısıdır; 0 = sınır yok.
         var slotsPerTeam = map?.spawnSlotsPerTeam ?? 0;
+        var teamless = rules.Teams == TeamMode.None;
+        // Takımsız modda sahnedeki İKİ tabanın slotları tek havuzda birleşir (§10.4).
+        var slotCeiling = slotsPerTeam > 0 ? (teamless ? slotsPerTeam * 2 : slotsPerTeam) : 0;
+        // Admin verdiyse o maça özel değer, vermediyse modun varsayılanı (§5.2).
+        var appliedRound = roundSeconds > 0 ? roundSeconds : mode.DefaultRoundSeconds;
+        var appliedLimit = scoreLimit > 0 ? scoreLimit : mode.DefaultScoreLimit;
+
         lock (_gate)
         {
             if (_phase != Phase.Lobby)
                 Console.WriteLine($"[match] start_match: faz {_phase} — mevcut maç iptal edilip yenisi kuruluyor.");
 
             _mode = mode;
+            _rules = rules;
             _modeId = mode.ModeId;
             _sceneName = sceneName;
-            _roundSeconds = mode.DefaultRoundSeconds;
-            _scoreLimit = mode.DefaultScoreLimit;
+            _roundSeconds = appliedRound;
+            _scoreLimit = appliedLimit;
             _scoreRed = 0;
             _scoreBlue = 0;
             _timeRemaining = _roundSeconds;
             _matchStartPending = false;
             _startedWithPlayers = players.Count > 0;
 
+            var rulesInfo = _rules.ToInfo();
+
             foreach (var player in players)
             {
                 ResetMatchStateLocked(player);
-                // Takım içi 0 tabanlı sıra; harita slot sayısını biliyorsak modulo ile sarılır —
-                // sahnede olmayan bir slota atama yapılmasın (kalabalık takımda slotlar paylaşılır).
-                var slot = player.Team == "blue" ? blue++ : red++;
-                player.SpawnSlot = slotsPerTeam > 0 ? slot % slotsPerTeam : slot;
+                // Takımlıda takım içi, takımsızda tek havuzda 0 tabanlı sıra; harita slot sayısını
+                // biliyorsak modulo ile sarılır — sahnede olmayan bir slota atama yapılmasın
+                // (kalabalık takımda slotlar paylaşılır).
+                var slot = teamless ? pool++ : player.Team == "blue" ? blue++ : red++;
+                player.SpawnSlot = slotCeiling > 0 ? slot % slotCeiling : slot;
 
                 var connection = player.Connection;
                 if (connection == null) continue;
@@ -422,14 +522,16 @@ public sealed class MatchDirector
                     roundSeconds = _roundSeconds,
                     scoreLimit = _scoreLimit,
                     yourTeam = player.Team,
-                    spawnSlot = player.SpawnSlot
+                    spawnSlot = player.SpawnSlot,
+                    rules = rulesInfo
                 };
                 outbox.Add(new Outgoing(connection, JsonUtil.Serialize(load), player.Name));
             }
 
             // Adminler de aynı sahneyi yükler (gözlemci görünümü, §2): takım/slot anlamsız
             // olduğu için boş/-1 gider ve admin karşılığında set_ready GÖNDERMEZ — Loading
-            // kapısı yalnız role=player bağlantılarını sayar (OnlinePlayersLocked).
+            // kapısı yalnız role=player bağlantılarını sayar (OnlinePlayersLocked). Kurallar
+            // admin'e de gider: takım kipi admin arayüzünün tek/çift kolon kararını besler.
             var adminLoad = JsonUtil.Serialize(new LoadMatchMsg
             {
                 modeId = _modeId,
@@ -437,7 +539,8 @@ public sealed class MatchDirector
                 roundSeconds = _roundSeconds,
                 scoreLimit = _scoreLimit,
                 yourTeam = "",
-                spawnSlot = -1
+                spawnSlot = -1,
+                rules = rulesInfo
             });
             foreach (var admin in _registry.Snapshot())
             {
@@ -452,7 +555,9 @@ public sealed class MatchDirector
         }
 
         var mapInfo = map == null ? "" : $" ({map.sizeX:0.#}×{map.sizeZ:0.#}, {map.spawnSlotsPerTeam} slot/takım)";
-        Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}'{mapInfo}, {players.Count} oyuncu (kırmızı {red} / mavi {blue}).");
+        var teamInfo = teamless ? "takımsız" : $"kırmızı {red} / mavi {blue}";
+        Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}'{mapInfo}, " +
+                          $"{appliedRound} sn / limit {appliedLimit}, {players.Count} oyuncu ({teamInfo}).");
         await FlushAsync(outbox);
     }
 
@@ -542,7 +647,7 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, "hedef ölü/çevrimdışı");
                 return;
             }
-            if (target.Team == shooter.Team)
+            if (!_rules.FriendlyFire && AreTeammates(shooter, target))
             {
                 RejectHit(shooter, msg.targetPlayerId, "dost ateşi yok");
                 return;
@@ -591,7 +696,7 @@ public sealed class MatchDirector
                     {
                         playerId = target.PlayerId,
                         spawnSlot = target.SpawnSlot,
-                        delaySeconds = ArenaProtocol.RESPAWN_DELAY
+                        delaySeconds = _rules.RespawnDelay
                     };
                     outbox.Add(new Outgoing(victimConnection, JsonUtil.Serialize(respawn), target.Name));
                 }
@@ -612,16 +717,20 @@ public sealed class MatchDirector
         // Maç sonu kontrolü tick döngüsünde (≤100 ms) yapılır; burada faz değiştirmiyoruz.
     }
 
-    /// <summary>revive_request (§10.4): faz Live + oyuncu ölü + RESPAWN_DELAY dolmuş ise canlandırır.
+    /// <summary>revive_request (§10.4): faz Live + oyuncu ölü + gecikme dolmuş ise canlandırır.
     /// Koşul tutmazsa SESSİZ yok sayılır — istemci canlanana dek ~1 sn'de bir tekrarlar, loglasak
-    /// konsolu doldururdu.</summary>
+    /// konsolu doldururdu.
+    /// <para><b><see cref="ReviveAnchor"/> burada DOĞRULANMAZ</b> (§10.4 notu): "tabanda mı / sabit
+    /// mi durdu" kararı istemcinindir — sunucu hakemlik değil defter tutar (§10.3 felsefesi).
+    /// <see cref="ArenaProtocol.REVIVE_GRACE"/> zorla canlandırma güvenlik ağı her iki şartta da
+    /// aynen işler.</para></summary>
     public async Task HandleReviveRequestAsync(PlayerState player)
     {
         var outbox = new List<Outgoing>();
         lock (_gate)
         {
             if (_phase != Phase.Live || player.Role != "player" || player.Alive) return;
-            if ((DateTime.UtcNow - player.DiedAt).TotalSeconds < ArenaProtocol.RESPAWN_DELAY) return;
+            if ((DateTime.UtcNow - player.DiedAt).TotalSeconds < _rules.RespawnDelay) return;
             RevivePlayerLocked(outbox, player);
             Console.WriteLine($"[match] canlandı: {player.Name}");
         }
@@ -658,24 +767,37 @@ public sealed class MatchDirector
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
     }
 
-    private void EnterEndLocked(List<Outgoing> outbox, DateTime now, string winnerTeam)
+    private void EnterEndLocked(List<Outgoing> outbox, DateTime now, MatchOutcome outcome)
     {
         SetPhaseLocked(Phase.End, now);
-        Console.WriteLine($"[match] maç sonu — kazanan: {(string.IsNullOrEmpty(winnerTeam) ? "berabere" : winnerTeam)} " +
+        Console.WriteLine($"[match] maç sonu — kazanan: {DescribeOutcomeLocked(outcome)} " +
                           $"(kırmızı {_scoreRed} : mavi {_scoreBlue})");
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(new MatchEndMsg
         {
-            winnerTeam = winnerTeam,
+            winnerTeam = outcome.WinnerTeam,
+            winnerPlayerId = outcome.WinnerPlayerId,
             scoreRed = _scoreRed,
             scoreBlue = _scoreBlue
         }));
+    }
+
+    /// <summary>Konsol satırı için kazananın okunabilir hâli (takım adı / oyuncu adı / berabere).</summary>
+    private string DescribeOutcomeLocked(MatchOutcome outcome)
+    {
+        if (!string.IsNullOrEmpty(outcome.WinnerTeam)) return outcome.WinnerTeam;
+        if (outcome.WinnerPlayerId <= 0) return "berabere";
+        return _registry.TryGetByPlayerId(outcome.WinnerPlayerId, out var winner)
+            ? $"{winner.Name} (#{winner.PlayerId}, {winner.Score} puan)"
+            : $"oyuncu {outcome.WinnerPlayerId}";
     }
 
     private void EnterLobbyLocked(List<Outgoing> outbox, DateTime now)
     {
         SetPhaseLocked(Phase.Lobby, now);
         _mode = null;
+        // Kurallar TDM varsayılanına döner: lobide de anlamlı bir cevap olsun (welcome.match.rules).
+        _rules = ModeRules.TeamDefault;
         _modeId = "";
         _sceneName = "";
         _timeRemaining = 0f;
@@ -699,13 +821,13 @@ public sealed class MatchDirector
     }
 
     /// <summary>Tick dışından (mod IsMatchOver) çağrılır; araya abort girmişse no-op.</summary>
-    private async Task EnterEndAsync(string? winnerTeam)
+    private async Task EnterEndAsync(MatchOutcome outcome)
     {
         var outbox = new List<Outgoing>();
         lock (_gate)
         {
             if (_phase != Phase.Live) return;
-            EnterEndLocked(outbox, DateTime.UtcNow, winnerTeam ?? "");
+            EnterEndLocked(outbox, DateTime.UtcNow, outcome);
         }
         await FlushAsync(outbox);
         FlushRosterRefresh();
@@ -722,7 +844,14 @@ public sealed class MatchDirector
         if (keepScore) return;
         player.Kills = 0;
         player.Deaths = 0;
+        player.Score = 0;
     }
+
+    /// <summary>Dost ateşi kararının TEK yeri. <b>Boş takım asla takım arkadaşı sayılmaz:</b>
+    /// takımsız modda herkesin takımı <c>""</c> olduğu için düz <c>a.Team == b.Team</c>
+    /// karşılaştırması "" == "" ile TÜM vuruşları reddederdi (§10.3/4).</summary>
+    private static bool AreTeammates(PlayerState a, PlayerState b) =>
+        !string.IsNullOrEmpty(a.Team) && a.Team == b.Team;
 
     private void RevivePlayerLocked(List<Outgoing> outbox, PlayerState player)
     {
@@ -767,6 +896,23 @@ public sealed class MatchDirector
         Console.WriteLine($"[match] takım dengeleme: {moveCount} oyuncu '{emptyTeam}' takımına taşındı.");
     }
 
+    /// <summary>Takımsız mod (§10.5 <c>teamMode:"none"</c>): lobide atanmış takımlar temizlenir,
+    /// kimse kırmızı/maviye bölünmez. <see cref="BalanceTeams"/> gibi registry.SetTeam event
+    /// tetiklediği için YALNIZ kilit dışından çağrılır.</summary>
+    private void ClearTeams(List<PlayerState> players)
+    {
+        var cleared = 0;
+        foreach (var player in players)
+        {
+            if (string.IsNullOrEmpty(player.Team)) continue;
+            _registry.SetTeam(player.PlayerId, "");
+            cleared++;
+        }
+
+        if (cleared > 0)
+            Console.WriteLine($"[match] takımsız mod: {cleared} oyuncunun takımı temizlendi.");
+    }
+
     private List<PlayerState> OnlinePlayersLocked() =>
         _registry.Snapshot().Where(p => p.Online && p.Role == "player").OrderBy(p => p.PlayerId).ToList();
 
@@ -777,7 +923,8 @@ public sealed class MatchDirector
         sceneName = _sceneName,
         timeRemaining = _timeRemaining,
         scoreRed = _scoreRed,
-        scoreBlue = _scoreBlue
+        scoreBlue = _scoreBlue,
+        rules = _rules.ToInfo()
     };
 
     private MatchStateMsg BuildMatchStateLocked() => new()

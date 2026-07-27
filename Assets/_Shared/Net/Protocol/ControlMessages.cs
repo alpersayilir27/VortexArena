@@ -84,12 +84,16 @@ namespace VortexArena.Protocol
 
     // ---- Yalnız admin → Sunucu ----
 
+    /// start_match (§5.2). roundSeconds/scoreLimit O MAÇA özeldir: ≤0 ya da eksikse modun
+    /// varsayılanı (IGameMode.DefaultRoundSeconds/DefaultScoreLimit) kullanılır.
     [Serializable]
     public class StartMatchMsg
     {
         public string type = MessageTypes.StartMatch;
         public string modeId;
         public string sceneName;
+        public int roundSeconds;
+        public int scoreLimit;
     }
 
     [Serializable]
@@ -121,17 +125,48 @@ namespace VortexArena.Protocol
         public int playerId;
     }
 
-    /// Bir sonraki maçın ORTAK mod/harita seçimi (§5.2). Maçı başlatmaz; sunucudaki seçimi
-    /// günceller ve sunucu onu admin_state ile tüm adminlere yayar. Boş alan mevcut değeri korur.
+    /// Bir sonraki maçın ORTAK mod/harita/süre/limit seçimi (§5.2). Maçı başlatmaz; sunucudaki
+    /// seçimi günceller ve sunucu onu admin_state ile tüm adminlere yayar.
+    /// Boş string veya 0 bırakılan alan mevcut değeri korur.
     [Serializable]
     public class SetSelectionMsg
     {
         public string type = MessageTypes.SetSelection;
         public string modeId;
         public string sceneName;
+        public int roundSeconds;
+        public int scoreLimit;
     }
 
     // ---- Sunucu → İstemci ----
+
+    /// <summary>
+    /// Modun ŞEKLİ (§10.5) — SUNUCU-OTORİTER. İstemci modun ne olduğunu tahmin etmesin diye
+    /// telden gelir: kural buradan okunursa istemcide "if (modeId == …)" zinciri hiç doğmaz.
+    /// <para>Değerler bilerek string: <b>bilinmeyen/boş değer varsayılana (takımlı TDM) düşer</b>,
+    /// bu yüzden yeni bir kural değeri eklemek PROTOCOL_VERSION'ı artırmaz.</para>
+    /// </summary>
+    [Serializable]
+    public class ModeRulesInfo
+    {
+        /// <summary>"two" (kırmızı/mavi) | "none" (takımsız).</summary>
+        public string teamMode = "two";
+
+        /// <summary>"team" (match_state.scoreRed/scoreBlue) | "player" (PlayerInfo.score).</summary>
+        public string scoring = "team";
+
+        /// <summary>true = takım arkadaşı vurulabilir (§10.3/4).</summary>
+        public bool friendlyFire;
+
+        /// <summary>"base" (kendi BaseZone'una gir) | "standstill" (sabit dur), §10.4.</summary>
+        public string reviveAnchor = "base";
+
+        /// <summary>"rack" (sahnedeki raf) | "random" (mod dağıtır) — tümüyle istemci sunumu.</summary>
+        public string weaponSource = "rack";
+
+        /// <summary>respawn.delaySeconds; ArenaProtocol.RESPAWN_DELAY varsayılanı.</summary>
+        public float respawnDelay = ArenaProtocol.RESPAWN_DELAY;
+    }
 
     [Serializable]
     public class MatchInfo
@@ -142,6 +177,9 @@ namespace VortexArena.Protocol
         public float timeRemaining;
         public int scoreRed;
         public int scoreBlue;
+
+        /// <summary>Koşan maçın kural şekli (§10.5) — geç katılım aynı kurallarla bağlanır.</summary>
+        public ModeRulesInfo rules;
     }
 
     [Serializable]
@@ -173,6 +211,11 @@ namespace VortexArena.Protocol
         public int deaths;
         public float hp;
         public bool alive;
+
+        /// <summary>BİREYSEL maç skoru (§10.2) — kills ile aynı şey DEĞİLDİR: yazarı IGameMode'dur
+        /// ve mod başına anlamı değişir (FFA puanı, Silah Yarışı'nda seviye…). rules.scoring ==
+        /// "player" olan modlarda anlamlıdır; takım skoru match_state'te kalır.</summary>
+        public int score;
     }
 
     [Serializable]
@@ -192,6 +235,9 @@ namespace VortexArena.Protocol
         public int scoreLimit;
         public string yourTeam;
         public int spawnSlot;
+
+        /// <summary>Bu maçın kural şekli (§10.5); istemci kendini BUNA göre kurar.</summary>
+        public ModeRulesInfo rules;
     }
 
     [Serializable]
@@ -238,11 +284,15 @@ namespace VortexArena.Protocol
         public float delaySeconds;
     }
 
+    /// Kazanan İKİ kanaldan biriyle ifade edilir (rules.scoring, §10.5): takım skorlu modlarda
+    /// winnerTeam ("red"|"blue"|""), bireysel skorlu modlarda winnerPlayerId (0 = yok/berabere).
+    /// Bir mod ikisini de doldurmaz; okuyan istemci dolu olana bakar.
     [Serializable]
     public class MatchEndMsg
     {
         public string type = MessageTypes.MatchEnd;
         public string winnerTeam;
+        public int winnerPlayerId;
         public int scoreRed;
         public int scoreBlue;
     }
@@ -276,6 +326,11 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.AdminState;
         public string modeId;
         public string sceneName;
+
+        /// <summary>Bir sonraki maçın ortak parametreleri; 0 = hiç seçilmedi (mod varsayılanı).</summary>
+        public int roundSeconds;
+        public int scoreLimit;
+
         public string notice;
         public int adminCount;
     }

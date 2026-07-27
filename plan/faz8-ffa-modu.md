@@ -1,9 +1,8 @@
 # Faz 8 — Herkes Tek (Free For All / FFA) modu
 
 > **Durum:** 📋 planlandı (2026-07-27) — uygulanmadı.
-> **Önkoşul:** **Faz 7 ✅** (mod altyapısı). Faz 7 olmadan bu faz yazılamaz — takımsız modda
+> **Önkoşul:** **Faz 7** (mod altyapısı). Faz 7 olmadan bu faz yazılamaz — takımsız modda
 > `hit_report` dost ateşi kapısı **tüm vuruşları reddeder** (Faz 7 / S1).
-> **Doğrulama Faz 7 + Faz 8 için TEK geçiştir** (`.claude/rules/batch-build-verification.md`).
 >
 > ✅ **Faz 8 protokole hiçbir yeni alan eklemez.** Tamamı içerik + iki yeni dosya + bir bileşen.
 > Bu, Faz 7'nin doğru kesildiğinin kanıtıdır: üçüncü mod da aynı ucuzlukta gelmeli.
@@ -152,7 +151,7 @@ Yeni bileşen, **Core**'da (ikinci bir mod da kullanacak: Silah Yarışı `Weapo
 
 **Yerleşim:** kendini önyükleyen kalıcı tekil (`RuntimeInitializeOnLoadMethod` +
 `DontDestroyOnLoad`) — `PlayerCombatState.cs:121-132` deseni. Sahneye bileşen konmaz; aksi hâlde
-**her yeni arenaya elle ek adım** doğardı (Faz 6 / K2'de bilinçle kaçınılan tuzak) ve CLAUDE.md'deki
+**her yeni arenaya elle ek adım** doğardı (admin gözlemcide bilinçle kaçınılan tuzak) ve CLAUDE.md'deki
 arena kurulum listesi büyürdü.
 
 ### Davranış
@@ -208,7 +207,7 @@ Ayrıca **reload kapatılır**: `GrantedHold` iken şarjör değiştirme yolu ç
 | 4.1 | `FFA.asset` kataloğa eklenir | `_Shared/Data/Resources/GameCatalog.asset` → `modes[]` |
 | 4.2 | Mevcut `MapDefinition`'ların `supportedModeIds`'ine **`ffa`** eklenir | A10x10, A12x12, IceWorld, DemoVenue |
 | 4.3 | **`Tools > VortexArena > Export Server Config`** çalıştırılır | `Server/config/maps.json` tazelenir — atlanırsa `start_match` "harita bu modu desteklemiyor" der (`MatchDirector.cs:353-357`) |
-| 4.4 | `ArenaTemplateWizard` yeni arenayı **uyumlu tüm modlara** ekliyor → FFA otomatik gelir | Kod değişikliği gerekmez; doğrulanır |
+| 4.4 | `ArenaTemplateWizard` yeni arenayı **uyumlu tüm modlara** ekliyor → FFA otomatik gelir | Kod değişikliği gerekmez |
 
 > ⚠️ **`maps.json` elle düzenlenmez** — export ezer (§11).
 
@@ -220,12 +219,12 @@ Ayrıca **reload kapatılır**: `GrantedHold` iken şarjör değiştirme yolu ç
 |---|---|---|
 | T1 | `BaseZone`'un **GameObject**'ini kapatmak | `SpawnPoint`'ler onun çocuğu → kayıttan düşer, spawn göstergesi çöker. Bileşeni kapat + şerit görselini ayrıca gizle (K5) |
 | T1b | Yalnız `zone.enabled = false` deyip bitirmek | Taban şeridi **görünür kalır**; "raf da taban da gizlensin" kararı yarım uygulanmış olur (K5) |
-| T2 | `ArenaBoundary`'yi kapatmak | `ArenaSpace.ClearOrigin` → tüm uzak avatarlar yanlış yere düşer (Faz 6 / K3). FFA'da **dokunulmaz** |
+| T2 | `ArenaBoundary`'yi kapatmak | `ArenaSpace.ClearOrigin` → tüm uzak avatarlar yanlış yere düşer (`Docs/Sistem-Ozeti.md` §7). FFA'da **dokunulmaz** |
 | T3 | Verilen silahın ateş etmemesi | `IsHeld` yalnız `grabbable`'a bakıyor → `GrantedHold` eklenmeden hiçbir atış çıkmaz (K3) |
 | T4 | Sahne süpürmesinin verilen silahı yok etmesi | `GrantedHold` işaretlilerini atla (K6) |
 | T5 | `.meta` kopyalayarak asmdef üretmek | GUID çakışması; JSON'u kopyala, `.meta`'yı Unity üretsin |
 | T6 | Export'u unutmak | 4.3 — `start_match` sessizce reddedilir, konsolda tek satır |
-| T7 | FFA'da takımın `""` yerine `Red` kalması | Faz 7 / S8 (`PlayerCombatState.Team` varsayılanı `Neutral`'a çekildi) — regresyon testi D4 |
+| T7 | FFA'da takımın `""` yerine `Red` kalması | Faz 7 / S8 — `PlayerCombatState.Team` varsayılanı `Neutral`'a çekilmiş olmalı |
 
 ---
 
@@ -245,25 +244,14 @@ Ayrıca **reload kapatılır**: `GrantedHold` iken şarjör değiştirme yolu ç
 
 ---
 
-## Doğrulama (Faz 7 + Faz 8 tek geçiş)
+## Derleme kapısı
+
+Uygulama bitince tek geçiş (`.claude/rules/batch-build-verification.md`):
 
 | # | Kontrol | Beklenen |
 |---|---|---|
 | D1 | `dotnet build Server/` | 0 hata / 0 uyarı |
 | D2 | `unity cmd recompile` + `get_console_logs` | 0 hata / 0 uyarı |
-| D3 | Sunucu açılış özeti | Kayıtlı modlar: `tdm, ffa`; `maps.json` 4 harita, hepsi `ffa` destekli |
-| D4 | **TDM regresyonu** (Faz 7 / D3) | Faz 7'deki davranış birebir — FFA hiçbir şeyi bozmadı |
-| D5 | Admin: mod `Herkes Tek`, süre `5 dk`, limit `20` → başlat | `load_match.rules.teamMode == "none"`, `scoring == "player"`, `respawnDelay == 0` |
-| D6 | Lobide takım kolonları | FFA'da **tek kolon**; karar sezgiselden değil `ModeRuntime`'dan gelir (Faz 7 / S6) |
-| D7 | 2 bot + admin, karşılıklı vuruş | **Vuruşlar kabul edilir** (S1 çözüldü); `health_update` + `kill_event` akar |
-| D8 | Öldürme sonrası | Öldürenin `PlayerInfo.score` +1; admin `SKOR` kolonu ve lider tablosu güncellenir |
-| D9 | Ölüm → yerinde 3 sn sabit dur | `revive_request` gider, `health_update{hp:100}` gelir (~3 sn) |
-| D10 | Ölüm → sürekli hareket et | Canlanma **olmaz**; `REVIVE_GRACE` (20 sn) dolunca sunucu zorla canlandırır |
-| D11 | Arena sahnesi FFA'da açılır | Raf silahları **görünmez**, taban şeritleri **görünmez** ve işlevsiz, ama `SpawnPoint` kayıtları **duruyor** (T1/T1b) — `SpawnPoint.All.Count` maçtaki slot sayısına eşit |
-| D12 | Sağ el grip basılı | Elde rastgele silah belirir; **tetik ateş eder** (T3); bırakınca yok olur; tekrar basınca yeni silah |
-| D13 | Skor limitine ulaşılır | `match_end.winnerPlayerId` = lider; kazanan HUD'ında `KAZANDIN`, diğerlerinde `<ad> KAZANDI` |
-| D14 | Süre bitiminde tepede eşitlik | `winnerPlayerId == 0`, `BERABERE` |
-| D15 | Maç sonu → lobi → yeni TDM maçı | Raf silahları **geri gelir**, taban bölgeleri çalışır (süpürme kalıcı iz bırakmadı) |
 
 ## Dokümana yansıyacaklar (aynı commit — `.claude/rules/docs-sync.md`)
 
@@ -274,4 +262,4 @@ Ayrıca **reload kapatılır**: `GrantedHold` iken şarjör değiştirme yolu ç
 | `CLAUDE.md` | Mod listesine FFA; `WeaponGranter` + "silah rafsız mod" notu |
 | `Server/README.md` | Kayıtlı modlar: `tdm`, `ffa` |
 | `Docs/Kullanim-Kilavuzu.md` | Operatör dili: "Herkes Tek" modu, süre/limit seçimi, silahın hold ile gelmesi |
-| `plan/README.md` | Faz 8 satırı |
+| `plan/` | Faz 8 dosyası silinir, `plan/README.md`'den satırı çıkarılır |

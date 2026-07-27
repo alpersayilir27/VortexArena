@@ -43,7 +43,7 @@ namespace VortexArena.Core.Editor
     /// bakış yönü arena merkezine (yalnız Y ekseni) çevrilir.</item>
     /// <item><b>ArenaBoundary:</b> <c>halfExtentX = sizeX/2</c>, <c>halfExtentZ = sizeZ/2</c>.</item>
     /// </list>
-    /// Duvar/cover yerleşimi KABA kalır — sanat geçişi insanda (plan/faz4-editor-sdk.md Adım 3).
+    /// Duvar/cover yerleşimi KABA kalır — sanat geçişi elde yapılır.
     /// </para>
     /// <para>
     /// <b>⚠️ Katalog tuzağı:</b> <c>GameCatalog.MapsForMode</c>, bir <c>ModeDefinition</c>'ın

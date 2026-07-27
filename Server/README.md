@@ -59,7 +59,7 @@ bildirir` satırı sunucuda silah tablosu ve hile denetimi olmadığını hatır
 |---|---|---|
 | 47820 | UDP | Keşif beacon'ı (sunucu → broadcast, 2 sn'de bir) |
 | 47821 | TCP | WebSocket kontrol kanalı (`/ws`) |
-| 47822 | UDP | State kanalı (UdpHello kaydı; Faz 2'de pozlar + snapshot) |
+| 47822 | UDP | State kanalı (UdpHello kaydı + pozlar/snapshot) |
 
 (cosmos'un 47800/47801'i ile bilerek çakışmaz.)
 
@@ -136,7 +136,7 @@ ile `load_match.spawnSlot` sahnede gerçekten var olan slot aralığına sarıl�
 ```
 `modes` boş bırakılırsa harita tüm modları kabul eder. **Dosya yoksa oluşturulmaz** (sunucunun
 uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması ve slot sınırı devre dışı
-kalır (Faz 3 davranışı) ve açılış özetinde `Haritalar : yok (doğrulama kapalı)` görünür.
+kalır ve açılış özetinde `Haritalar : yok (doğrulama kapalı)` görünür.
 
 **devices.json** — `{ "<deviceId>": "Gözlük 07" }`. Bilinmeyen player cihazı bağlanınca ilk boş
 `Gözlük NN` atanır ve dosyaya yazılır; `set_name` ile değişen ad da buraya kalıcı yazılır.
@@ -163,7 +163,7 @@ komut uygulanır.
 - **Yerel kalanlar:** kamera kipi, seçili oyuncu, halkalar/ad etiketleri, kamera hızı, duvar ve
   çatı saydamlığı, mini harita — bunlar protokole girmez, her operatörün kendi ekranına aittir.
 
-## Maç akışı (Faz 3) — konsolda ne görünür
+## Maç akışı — konsolda ne görünür
 
 Kural otoritesi tamamen sunucudadır (`MatchDirector` + `Modes/<X>Mode.cs`): istemci hasar
 uygulamaz, skor tutmaz, faz değiştirmez. Faz makinesi
@@ -209,13 +209,36 @@ sonuna `(+N bastırıldı)` olarak eklenir. `revive_request` reddi tamamen sessi
 bir tekrarlar; takılan istemciyi `REVIVE_GRACE` zorla canlandırma satırı yakalar).
 
 **Free-roam respawn:** oyuncu ışınlanamaz → canlanma konum değil DURUM değişimidir. Ölünce
-kurbana `respawn{spawnSlot, delaySeconds:5}` gider; oyuncu süre dolduktan sonra kendi tabanına
-fiziken girip `revive_request` yollar; sunucu doğrulayıp `health_update{hp:100, attackerId:0}`
-yayınlar. Talep 20 sn (`REVIVE_GRACE`) gelmezse sunucu zorla canlandırır (maç kilitlenmesin).
+kurbana `respawn{spawnSlot, delaySeconds}` gider (`delaySeconds` = modun `Rules.RespawnDelay`'i);
+oyuncu süre dolduktan sonra **modun canlanma şartını** sağlayıp `revive_request` yollar; sunucu
+doğrulayıp `health_update{hp:100, attackerId:0}` yayınlar. Talep 20 sn (`REVIVE_GRACE`) gelmezse
+sunucu zorla canlandırır (maç kilitlenmesin).
+⚠️ Şartın kendisi (**tabanda mı / sabit mi durdu**) sunucuda **doğrulanmaz** — sunucu hakemlik
+değil defter tutar (§10.3 felsefesi); faz + ölü + gecikme kontrolüyle yetinir.
 
-**Yeni mod eklemek:** `Modes/<Ad>Mode.cs` içinde `IGameMode` uygula → `MatchDirector` ctor'undaki
-`Register(new <Ad>Mode())` satırına ekle → `../Docs/ArenaNet-Protokol.md`'ye modId işle →
-Unity tarafında `Assets/Modes/<Ad>/` kutusunu aç (CLAUDE.md reçetesi).
+**Maç parametreleri:** `start_match.roundSeconds`/`scoreLimit` doluysa o maç bu değerlerle koşar,
+boş/`0` ise modun varsayılanı (`DefaultRoundSeconds`/`DefaultScoreLimit`) kullanılır. Yani modun
+sayıları **kilit değil varsayılandır** — operatör raundu kısaltıp uzatabilir. Seçim mod/harita ile
+aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki operatör sapmaz.
+
+**Yeni mod eklemek:**
+1. `Modes/<Ad>Mode.cs` içinde `IGameMode` uygula.
+2. **`Rules`** döndür — modun şekli (`ModeRules`): `Teams` (takımlı/takımsız), `Scoring` (takım
+   skoru / bireysel), `FriendlyFire`, `Revive` (kendi tabanı / sabit dur), `Weapons`,
+   `RespawnDelay`. Bugünkü TDM davranışı için `ModeRules.TeamDefault` tek satırdır; yalnız FARKLI
+   olan alanı yaz. Bu kural `load_match.rules` ile istemciye gider (§10.5).
+3. **`IsMatchOver(d, out MatchOutcome outcome)`** — kazanan takım (`MatchOutcome.Team("red")`)
+   **veya** kazanan oyuncu (`MatchOutcome.Player(id)`), berabere için `MatchOutcome.Draw`.
+   Hangisinin dolacağını `Rules.Scoring` belirler; ikisi birden doldurulmaz.
+4. Skoru **yalnız director'ın skor defterinden** yaz: `AddScore(team, n)` (takım) /
+   `AddPlayerScore(playerId, n)` (bireysel); okuma `ScoreRed`/`ScoreBlue`/`ScoreOf`/`TryGetLeader`.
+5. `MatchDirector.RegisterModes()` içine `Register(new <Ad>Mode())` satırını ekle.
+6. `../Docs/ArenaNet-Protokol.md`'ye modId işle → Unity tarafında `Assets/Modes/<Ad>/` kutusunu aç
+   (CLAUDE.md reçetesi).
+
+`OnTick`/`OnHitApplied`/`OnKill` **varsayılan gövdelidir** — ilgilenmeyen mod hiç yazmaz. Yeni bir
+kanca eklerken de varsayılan gövde kullan (mevcut modların hiçbiri değişmesin) ve **tüketicisi
+olmayan kancayı hiç ekleme**.
 
 ## PoseBot — sentetik oyuncu (test)
 
@@ -245,22 +268,22 @@ bot0 yazar. `--fight` verilmezse bot `set_ready` göndermez → maç Loading faz
 **`--admin`** botlara ek olarak tek bir `role=admin` bağlantısı açar: roster'da 2+ çevrimiçi
 oyuncu 2 sn kararlı kalınca kendiliğinden `start_match{tdm, Arena10x10}` gönderir, maç akışını
 `[admin]` önekiyle yazar, konsolda `q` + Enter ile `abort_match` gönderir. Unity editörü **oyuncu**
-rolündeyken ortamda admin kalmadığı için E2E'nin bu ayağında şarttır.
+rolündeyken ortamda başka admin kalmadığı için loopback denemelerinde bu bayrak şarttır.
 
 > Botun bildirdiği `hello.scenes`, Build Settings listesidir (`Boot, Lobby,
 > Arena10x10, Arena12x12, ArenaDemoVenue, IceWorld`) — sunucu `start_match`'te sahneyi tüm
 > oyuncuların listesinde aradığı için yeni arena eklendiğinde PoseBot'taki `BuildScenes` sabiti de
 > güncellenmelidir.
 
-## Faz durumu
+## Sunucu bugün ne yapıyor
 
-- **Faz 1:** beacon + WS kontrol + lobi (roster/ready/takım/kick/identify) +
-  UDP kayıt. Loopback E2E: sunucuyu başlat → Editor'de admin bağlan → roster'da görün.
-- **Faz 2 (tamam):** `0x01 PoseUpdate` alımı (kayıtlı endpoint + u16 seq sarmalama kontrolü) +
+- **Keşif + kontrol:** UDP beacon yayını, WS kontrol kanalı, lobi (roster / ready / takım /
+  kick / identify), cihaz adı kalıcılığı.
+- **Poz kanalı:** `0x01 PoseUpdate` alımı (kayıtlı endpoint + u16 seq sarmalama kontrolü) +
   `0x02 Snapshot` yayını (20 Hz; oyuncu sayısı sınırsız, datagram başına en fazla
   `SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16` girdi ≈ 1382 B, fazlası aynı tik içinde ek datagramlara
-  bölünür) + PoseBot test istemcisi.
-- **Faz 3:** MatchDirector faz makinesi (`load_match` → countdown → Live → End → lobi) +
-  `Modes/TdmMode.cs` (`IGameMode`) + vuruş hattı, can/skor yayını ve free-roam canlanma.
-  Snapshot `flags` bit0 artık gerçek `alive` durumunu taşır. (Bu fazda gelen sunucu-otoriter
-  silah tablosu ve atış hızı denetimi sonradan KALDIRILDI — §10.3 genel hasar modeli.)
+  bölünür). Snapshot `flags` bit0 gerçek `alive` durumunu taşır.
+- **Maç:** `MatchDirector` faz makinesi (`load_match` → Countdown → Live → End → lobi) +
+  `Modes/TdmMode.cs` (`IGameMode`) + vuruş hattı, can/skor yayını, free-roam canlanma.
+- **Hasar modeli:** sunucuda silah tablosu YOKTUR; hasarı istemci hesaplar, sunucu aynen uygular
+  (`weaponId` yalnız etiket) — `../Docs/ArenaNet-Protokol.md` §10.3.
