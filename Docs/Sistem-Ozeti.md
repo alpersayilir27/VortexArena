@@ -189,25 +189,36 @@ UdpStateChannel ──0x01 PoseUpdate (92 B)──► StateHost ──0x02 Snaps
 - Kendi pozunu snapshot'tan **çizmezsin** (yerelden çizersin) — gecikme sıfır kalır.
 - Uzak oyuncular `INTERP_DELAY_MS = 100` tamponuyla yumuşatılır; paket kaybı tolere edilir
   (son gelen kazanır, eski `seq` atılır).
-- `MAX_PLAYERS = 16` keyfi değil: 16 oyuncu tek UDP paketine (1382 B < MTU) sığsın diye.
+- **Eşzamanlı oyuncu/admin sınırı YOKTUR** (kota ileride lisanslamayla gelecek). Tek tavan
+  `PLAYER_ID_MAX = 255` ve o bir ürün kotası değil, `playerId`'nin UDP'de `u8` olmasıdır.
+  16'dan fazla pozlu oyuncu olduğunda snapshot MTU'ya sığan parçalara bölünür
+  (`SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16` → 1382 B); **istemcide birleştirme yoktur ve
+  gerekmez** — her paket taşıdığı girdileri bağımsız uygular, düşürme kararı zaman aşımıdır.
 - Bir `playerId` ~1.5 sn snapshot'larda görünmezse avatarı kaldırılır (sunucunun 15 sn'lik
   offline eşiğini beklemez).
 
 ### 3.6 Vuruş hattı
 
 ```
-Weapon.Fire()  ─raycast→ RemoteHitBox
+Weapon.Fire() / balta savurma / ok isabeti / bomba patlaması
    │
    ├─ shot_fired  → sunucu DOĞRULAMAZ, sadece relay eder (uzak namlu alevi/sesi)
-   └─ hit_report  → sunucu 7 adımda doğrular:
-        faz Live? · atıcı canlı? · hedef canlı? · takımlar farklı? (dost ateşi YOK) ·
-        weaponId tabloda? · atış hızı makul? (60/rpm × 0.8) · damage tabloyla uyuşuyor?
+   └─ hit_report  → sunucu 5 tutarlılık kontrolü yapar:
+        faz Live? · atıcı canlı? · hedef canlı? (çift ölüm olmasın) ·
+        hedef başkası + takımlar farklı? (dost ateşi YOK) · damage sonlu ve pozitif mi?
                             ↓ geçerse
         hp -= damage → health_update (herkese) → hp ≤ 0 ise kill_event + IGameMode.OnKill + respawn
 ```
 
-**Hasar her zaman sunucunun `weapons.json` tablosundan uygulanır.** İstemci farklı bildirirse
-konsola uyumsuzluk yazılır ve tablo kazanır — bu satır "export'u çalıştırmayı unuttum"u yakalar.
+**Hasarı istemci hesaplar, sunucu aynen uygular.** Sunucuda silah tablosu, `weaponId` beyaz listesi
+ve atış hızı denetimi **yoktur** — ürün gözetimli özel alanda (işletme, turnuva) çalıştığı için
+hile koruması bilinçli olarak eklenmez; v1'deki denetimler meşru saçma/patlama/yaylım vuruşlarını
+düşürdüğü için kaldırıldı. Yukarıdaki beş kontrol hile denetimi değil **durum tutarlılığı**dır.
+
+Pratik sonucu: **yeni bir hasar kaynağı eklemek sıfır sunucu işidir.** Bomba = etkilenen her hedef
+için bir `hit_report` (mesafeye göre düşen hasarı istemci hesaplar); yay çekiş gücü, kafa vuruşu
+çarpanı, düşme/tuzak hasarı da aynı şekilde `damage` alanına yazılır. `weaponId` yalnız kill feed
+etiketidir, doğrulanmaz.
 
 ### 3.7 Free-roam canlanma (respawn) — ürünün en özel kuralı
 
@@ -274,18 +285,25 @@ sahne TÜM oyuncuların `hello.scenes` listesinde. Geçerse takımlar dengelenir
 
 Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder); Quest build'inde ölü koddur.
 
+> **Çoklu admin desteklenir ve sınırsızdır** (aynı PC'de birden çok pencere dahil — admin `deviceId`'si
+> oturumluktur, §5.2 protokol). Hepsi **eş yetkilidir**; ayrım şudur: **operasyonel durum ortaktır**
+> (mod/harita seçimi sunucuda yaşar, `set_selection`/`admin_state` ile senkronlanır → `AdminSelection`),
+> **görünüm tercihleri yereldir** (kamera kipi, seçili oyuncu, halkalar, saydamlıklar → `AdminSession`,
+> `PlayerPrefs`). Her admin eylemi diğerlerinin HUD'ında "kim ne yaptı" satırı olarak belirir.
+
 | Sınıf | Görevi |
 |---|---|
 | `AdminSpectator` | Gözlemcinin kökü: kendini önyükler (`AfterSceneLoad` + `DontDestroyOnLoad`), rol çözülünce etkinleşir, kamerayı/HUD'ı/işaretçileri yaratır ve **her `sceneLoaded`'da sahneyi devralır**: BB Camera Rig kökünü kapatır (üç kamerası da `MainCamera` etiketli → `Camera.main` belirsiz kalırdı), `ArenaCalibrator` + `BaseZone`'ları kapatır, **`ArenaBoundary`'yi KAPATMADAN** `SetSpectatorMode(true)` ile susturur, world-space canvas'ları gizler, EventSystem'i devralır. Kısayollar: `1/2/3` kip · `Tab` sonraki oyuncu · `F` POV · `P`/`I` panel · `Esc` kapat |
-| `AdminSpectatorCamera` | Üç kip: **POV** (seçili oyuncunun baş pozu; poz yoksa son konumda kalır) · **Serbest** (WASD + Q/E + **sağ tuş basılı** fare bakışı, Shift ×3, tekerlek hız; imleç KİLİTLENMEZ → HUD tıklanabilir kalır) · **Kuş bakışı** (ortografik, arena yaw'ına hizalı; kadraj `ArenaBoundary` → `MapDefinition.Size` → 10×10 varsayılanı, tekerlek zoom) |
+| `AdminSpectatorCamera` | Üç kip: **POV** (seçili oyuncunun baş pozu; poz yoksa son konumda kalır) · **Serbest** (WASD + Q/E + **sağ tuş basılı** fare bakışı, Shift ×3, tekerlek hız; imleç KİLİTLENMEZ → HUD tıklanabilir kalır) · **Kuş bakışı** (ortografik, arena yaw'ına hizalı; kadraj `ArenaBoundary` → `MapDefinition.Size` → 10×10 varsayılanı, tekerlek zoom). Kip değişiminde `AdminSpectator.RefreshRoof()` çağrılır → sahnede `ArenaRoof` varsa çatı kuş bakışında kalkar |
 | `AdminPlayerMarkers` | Oyuncu başına **zeminde halka + altında ad etiketi** (kuş bakışı isteği). Halka baş pozunun x/z'sinden arena zeminine indirilir; etiket kameraya döner ve kameranın yukarı vektörünün tersine kaydırılarak her kipte "dairenin altında" okunur. `RemoteAvatar`'a dokunmaz |
-| `AdminHud` | **Kalıcı** ekran-uzayı HUD'ı (`sortingOrder = 4000`; hata ekranı 5000'de üstte kalır): üst orta takım skorları + **ortada istatistik chip'i** (faz/süre de gösterir), sol üst tercihler, sağ üst mod·harita + bağlantı/poz yaşı, yanlarda takım kolonları (**FFA'da tek kolon** — karar veriden gelir), alt orta kamera şeridi + seçili oyuncu, alt sağ ölüm akışı + mini harita |
+| `AdminHud` | **Kalıcı** ekran-uzayı HUD'ı (`sortingOrder = 4000`; hata ekranı 5000'de üstte kalır): üst orta takım skorları + **ortada istatistik chip'i** (faz/süre de gösterir), sol üst tercihler, sağ üst mod·harita + bağlantı/poz yaşı + **çoklu admin satırı** (kaç admin bağlı · son admin eylemi; tek admin varken boş kalır), yanlarda takım kolonları (**FFA'da tek kolon** — karar veriden gelir), alt orta kamera şeridi + seçili oyuncu, alt sağ ölüm akışı + mini harita |
 | `AdminPlayerRow` | Oyuncu satırı: takım şeridi, ad + `#id`, HP barı, `K/D · batarya · durum`, eylemler POV/TAKIM/KİMLİK/**AT (iki adımlı onay)**. Satıra tıklamak seçer (MonoBehaviour değil, havuzlanan görünüm nesnesi) |
-| `AdminPreferencesPanel` | Eski dashboard'un işi: mod/harita seçimi + BAŞLAT/İPTAL/LOBİYE DÖN. **Harita seçimi değişince (faz Lobby ise) o arena YEREL olarak hemen açılır** — önizleme; sunucuya komut gitmez, oyuncular etkilenmez (`SceneRouter.LoadPreview`), görünüm tercihleri (halkalar, ad etiketleri, kamera hızı, duvar saydamlığı, mini harita), bağlantı (yeniden bağlan/kes). Yarı saydam, **scrim YOK** — arkadaki sahne izlenmeye devam eder. Dropdown/slider yerine `[<] değer [>]` döngüleyici (prosedürel şablon kırılganlığı yok) |
+| `AdminPreferencesPanel` | Eski dashboard'un işi. **MAÇ bölümü ORTAK** (başlıkta yazar): mod/harita seçicileri yerel alana değil `set_selection` ile sunucudaki ortak seçime yazar → tüm adminlerde aynı anda değişir; tıklamada yerel imleç de iyimser ilerletilir, sunucudan gelen değer son sözü söyler. **Harita değişince (faz Lobby ise) o arena YEREL olarak hemen açılır** — önizleme; sunucuya maç komutu gitmez, oyuncular etkilenmez (`SceneRouter.LoadPreview`). Bu bileşen panel **kapalıyken de etkin** olduğu için başka bir operatörün harita değişikliği panel açılmadan da önizlemeye yansır. **GÖRÜNÜM bölümü YEREL** (halkalar, ad etiketleri, kamera hızı, duvar saydamlığı, **çatı**, mini harita) + bağlantı (yeniden bağlan/kes, bağlı admin sayısı). Yarı saydam, **scrim YOK**. Dropdown/slider yerine `[<] değer [>]` döngüleyici |
 | `AdminStatsPanel` | Takım toplamları + oyuncu tablosu (ad/takım/K/D/K-D/HP/batarya/durum/sahne) + maç bilgisi. Tablo **kolon kolon** çizilir (TMP fontu eşit genişlikli değil, boşlukla hizalama kayar). Protokolde olmayan metrik (hasar/isabet/ping) **gösterilmez** |
 | `AdminRoster` | Admin arayüzünün veri katmanı: `lobby_state` (otoriter tam görüntü + `kills/deaths/hp/alive`) + `health_update`/`kill_event` (anlık) + `match_state`/`countdown`/`match_end` birleşimi; takım listeleri, FFA kararı, ölüm akışı, snapshot yaşı. ⚠️ `respawn` admin'e GELMEZ (yalnız ölen oyuncuya gider) → geri sayım `kill_event` + `RESPAWN_DELAY` ile yerel hesaplanır |
-| `AdminSession` | Seçimler (kamera kipi, seçili oyuncu, açık panel) + görünüm tercihleri (`PlayerPrefs`'te kalıcı, admin PC'sine özel). Tek doğruluk noktası; `Changed` ile HUD/kamera/işaretçiler senkron kalır |
-| `AdminCommands` | Admin komutlarının tek çıkış kapısı (§5.2) + son işlemin durum metni. "Gönderildi" der, "oldu" demez — kabul/ret sunucuda |
+| `AdminSession` | **YEREL** seçimler (kamera kipi, seçili oyuncu, açık panel) + görünüm tercihleri (`PlayerPrefs`'te kalıcı, admin PC'sine özel — halkalar, ad etiketleri, kamera hızı, duvar saydamlığı, **çatı kipi**, mini harita). Tek doğruluk noktası; `Changed` ile HUD/kamera/işaretçiler senkron kalır. `RoofAlphaNow()` tercih + kamera kipinden çatı alfasını türetir |
+| `AdminSelection` | **ORTAK** durumun aynası (`admin_state`, §5.3): mod/harita seçimi, çevrimiçi admin sayısı, son admin eyleminin duyurusu. Statik durum + statik `Changed` (bileşen kurulum sırası dinleyiciyi ilgilendirmesin); bileşenin kendisi yalnız ağ olayı pompasıdır. Otorite sunucudadır — buraya yerelden yazılmaz |
+| `AdminCommands` | Admin komutlarının tek çıkış kapısı (§5.2) + son işlemin durum metni. "Gönderildi" der, "oldu" demez — kabul/ret sunucuda. `SetSelection` ortak seçimi değiştirir (maçı başlatmaz) |
 | `AdminContent` | `Resources.Load<GameCatalog>("GameCatalog")` (asset: `_Shared/Data/Resources/`) → mod/harita listeleri. Prosedürel arayüzün `[SerializeField]`'i olamaz, tek meşru yol bu |
 
 ### Editör: `VortexArena.App.Editor` (dev araç seti — yalnız Editor)
@@ -294,7 +312,7 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 |---|---|
 | `DevWindow` | `Tools > VortexArena > Dev` penceresi: rol · hedef · Play başlangıcı · sentetik maç parametreleri (mod/takım/slot/raund sn/skor limiti) + ortam düğmeleri + canlı durum satırı. Mod listesi `GameCatalog`'dan okunur. **Modal dialog kullanmaz** (Unity CLI doğrulamasını kilitliyor); geri bildirim konsol + `HelpBox` |
 | `DevTargets` | Repo kökündeki `dev-targets.json` okuyucusu (`defaultTarget`/`defaultRole` + adlandırılmış hedefler). Dosya yok/bozuksa bellekte `Local` + `Kesif (beacon)` varsayılanına düşer ve **dosyayı OLUŞTURMAZ** (commit kirletmemek için). Bir hedefin `ip`'si boşsa adres yazılmaz → keşif zinciri devralır |
-| `DevProcesses` | Sunucu + PoseBot süreçlerini başlatır/durdurur, `dotnet build -c Release` tetikler. PID'ler `SessionState`'te (domain reload'ı aşar) **ad doğrulamasıyla** tutulur; "Hepsini Durdur" ayrıca ad bazlı süpürme yapar. Exe arama sırası: sunucu `deploy\server\` → `bin\Release\net10.0\` → `bin\Debug\net10.0\`; **PoseBot yalnız `bin\{Release,Debug}\net10.0\`** (dev/test aracı, `deploy/`'a publish EDİLMEZ) |
+| `DevProcesses` | **Yalnız PoseBot** süreçlerini başlatır/durdurur, `dotnet build -c Release` tetikler. **Sunucuya dokunmaz** — sunucu elle yönetilir (§6.1), editör onu ne başlatır ne öldürür. PID'ler `SessionState`'te (domain reload'ı aşar) **ad doğrulamasıyla** tutulur; "Sahipsiz botları temizle" ad bazlı süpürme yapar (yalnız `VortexArena.PoseBot`). Exe arama sırası: **PoseBot yalnız `bin\{Release,Debug}\net10.0\`** (dev/test aracı, `deploy/`'a publish EDİLMEZ) |
 | `DevBootstrap` | Editör kancaları: "Boot'tan" kipinde `EditorSceneManager.playModeStartScene`'i Boot sahnesine ayarlar (sahne **Build Settings'ten** bulunur, sabit yol gömülmez); Play çıkışında **yalnız botları** öldürür (**sunucu kasıtlı olarak yaşar** — üretimde de ayrı makinede sürekli açık); editör kapanışında hepsini öldürür; `Ctrl+Alt+R` kısayolunu kurar (rol player↔admin) |
 
 ### İstemci: `VortexArena.Core` (oyun kodu)
@@ -306,17 +324,27 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 (yerel oyuncunun takım/can/ateş yetkisi/canlanma akışı), `RemoteAvatar` + `RemoteHitBox`
 (uzak oyuncu gövdesi ve isabet kutusu).
 
+**`ArenaRoof`** (çatılı arenalar için, **isteğe bağlı**): çatı hiyerarşisinin köküne konur
+(`GameObject > VortexArena > Arena Roof`), altındaki **tüm** Renderer'lar çatı sayılır ve
+`ArenaRoof` katmanı (user layer 8) damgalanır — hangi geometrinin gizleneceği sahne görünümündeki
+Layers süzgecinden görülsün. Katman yalnız ayıklama içindir; davranış Renderer listesinden gelir,
+damga unutulsa da çalışır. Gizleme `_BaseColor` alfasıyla (duvar saydamlığıyla aynı desen);
+tam gizlemede Renderer **kapatılmaz**, `ShadowsOnly`'ye alınır → çatı çizilmez ama gölgesini atar
+(kapatılsaydı iç mekân aydınlanıp kuş bakışı okunmaz olurdu). Son uygulanan alfa statik tutulur,
+yeni sahnedeki çatı `OnEnable`'da devralır → kuş bakışındayken arena değiştirilince çatı bir kare
+bile görünmez. Oyuncu tarafında etkisi YOKTUR — yalnız `AdminSpectator.RefreshRoof()` tetikler.
+
 ### Sunucu: `Server/VortexArena.Server.Core`
 
 | Sınıf | Görevi |
 |---|---|
 | `ControlHost` | Kestrel WebSocket host (`/ws`), bağlantı başına `ClientConnection` |
 | `BeaconService` | 2 sn'de bir broadcast |
-| `StateHost` | UDP kaydı, poz alımı, 20 Hz snapshot yayını |
-| `PlayerRegistry` | Oyuncu listesi, `devices.json` ile kalıcı adlandırma, çevrimiçi/çevrimdışı |
-| `LobbyService` | Roster yayını (`lobby_state`), ready/takım/kick |
-| `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş doğrulama, can/skor, canlanma, zorla canlandırma** |
-| `WeaponTable` / `MapTable` | `weapons.json` / `maps.json` (Unity export'undan) |
+| `StateHost` | UDP kaydı, poz alımı, 20 Hz snapshot yayını (16 girdiden fazlası MTU'ya sığan parçalara bölünür) |
+| `PlayerRegistry` | Oyuncu listesi, `playerId` tahsisi (1..255), `devices.json` ile kalıcı adlandırma, çevrimiçi/çevrimdışı. **Rol başına kalıcılık farkı:** oyuncu kaydı kopunca Offline işaretlenir ama DURUR (deviceId kalıcı); **admin kaydı tümüyle SİLİNİR** (deviceId oturumluk — yoksa her açıp kapatma roster'da hayalet satır ve tükenen playerId bırakırdı) ve admin adı diske yazılmaz. Aynı PC'de iki admin varsa ad " (2)" ile ayrıştırılır |
+| `LobbyService` | Roster yayını (`lobby_state`), ready/takım/kick + **adminler arası ortak durumun sahibi**: mod/harita seçimi burada yaşar, `set_selection` ile değişir, `admin_state` ile yalnız adminlere yayılır. Her admin komutu "kim ne yaptı" duyurusu üretir |
+| `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş hattı, can/skor, canlanma, zorla canlandırma** |
+| `MapTable` | `maps.json` (Unity export'undan) — sunucunun okuduğu tek içerik tablosu |
 | `Modes/IGameMode` + `TdmMode` | Mod kuralları: skor, kazanma koşulu, tur süresi |
 
 ---
@@ -419,10 +447,11 @@ Detay: `Server/README.md`.
 Sunucu **her zaman elle** başlatılır — admin uygulamasının launcher ekranı sunucuyu başlatmaz,
 yalnız çalışan bir sunucunun IP:port'una bağlanır.
 
-Geliştirirken tek tıkla: `Tools > VortexArena > Dev` → **"Sunucuyu Başlat"**. Pencere `dotnet run`
-KULLANMAZ, **derlenmiş exe'yi doğrudan** başlatır (`deploy\server\` → `bin\Release\net10.0\` →
-`bin\Debug\net10.0\`) — sebebi §7'deki yetim süreç tuzağı. Release çıktısı yoksa aynı penceredeki
-"Derle (dotnet build)" düğmesini kullan.
+Bu **geliştirirken de geçerlidir**: dev penceresinde (`Tools > VortexArena > Dev`) sunucu başlat/
+durdur düğmesi **yoktur** — editör sunucuyu ne başlatır ne öldürür (elle başlatılmış bir sunucunun
+Play çıkışında ya da editör kapanışında ölme riski kalmasın diye). Penceredeki
+"Derle (dotnet build)" yalnız çözümü derler; çalıştırmak yine elle:
+`deploy\server\VortexArena.Server.App.exe` (ya da yukarıdaki `dotnet run`).
 
 ### 6.2 Quest olmadan test (loopback) — `Tools > VortexArena > Dev`
 
@@ -440,7 +469,7 @@ kirletmez, `git status` temiz kalır. Bir hedefin `ip`'si **boşsa** adres yazı
 | **Hedef** + "Tazele" / "Özel…" | Adres; `Özel…` seçilirse IP/Port elle girilir (IP'yi boş bırakmak = keşif zinciri) |
 | **Başlangıç: Boot'tan** | `playModeStartScene` = Boot sahnesi → hangi sahne açık olursa olsun Play gerçek akıştan başlar (sahne Build Settings'ten bulunur) |
 | **Başlangıç: Açık sahneden** | Arena sahnesine doğrudan Play. Bir kare sonra `DevSession` (a) **seçili hedefe bağlanır** — arena sahnesinde `LobbyController` olmadığı için bunu başka kimse yapmaz; bağlanmazsa can/skor/faz gelmez ve `CanFire` hiç açılmaz — ve (b) player rolünde **sentetik `load_match`** yayınlar → **takım / spawn slot / mod** gerçek kod yolundan (`PlayerCombatState`, `ModeHudSpawner`, `SceneRouter`) uygulanır. Aşağıdaki mod/takım/slot/raund sn/skor limiti alanları bu mesajı doldurur. Sunucuda maç koşuyorsa `welcome.match` geç-katılım senkronu **gerçek takım atamasıyla sentetiği ezer**. Hedef "keşif" kipindeyse (ip boş) bağlanılmaz ve sebebi loglanır — arena sahnesinde adres girecek arayüz yok |
-| **Ortam düğmeleri** | Sunucuyu Başlat/Durdur · N Bot · N Bot + Admin · Botları Durdur · Hepsini Durdur · Sahipsiz süreçleri temizle · Derle (dotnet build) + canlı durum satırı (PID / bot süreç sayısı) |
+| **Ortam düğmeleri** (yalnız test botları) | N Bot · N Bot + Admin · Botları Durdur · Sahipsiz botları temizle · Derle (dotnet build) + canlı durum satırı (bot süreç sayısı). **Sunucu düğmesi yok** — sunucu elle başlatılır/durdurulur (§6.1) |
 | **"Dev enjeksiyonu" onayı** | Kapatılırsa üretim yolu **birebir** koşar (rol `AppBoot`'tan, adres keşif zincirinden, sentetik mesaj yok) — beacon keşfini editörde denemenin yolu |
 
 Botları elle çalıştırmak hâlâ geçerlidir (pencere de aynı PoseBot'u başlatır, yalnız `dotnet run`
@@ -456,8 +485,9 @@ dotnet run --project Server/VortexArena.PoseBot -- 127.0.0.1 4 --fight --admin -
 Editor **player** rolündeyken ortamda admin kalmadığı için maçı başlatacak bir admin gerekir:
 PoseBot'a `--admin` ver (pencerede **"N Bot + Admin"** düğmesi; açık sahne bir arena sahnesiyse
 `--map <sahne>`, seçili moddan `--mode <modId>` de eklenir).
-Play'den çıkışta **yalnız botlar** ölür; **sunucu bilinçli olarak yaşar** (üretimde de ayrı makinede
-sürekli açıktır, her Play çıkışında öldürmek geliştiriciyi yorar). Editör kapanışında hepsi ölür.
+Play'den çıkışta **yalnız botlar** ölür; **sunucuya hiç dokunulmaz** (üretimde de ayrı makinede
+sürekli açıktır). Editör kapanışında da yalnız botlar toplanır — sunucuyu sen başlattın, sen
+kapatırsın.
 
 > Botların `devices.json`'a yazdığı test girdilerini **commit'leme**.
 
@@ -524,23 +554,29 @@ doğrudan dashboard'a düşer. Ayrıntı: `deploy/README.md`.
    `GameCatalog.maps` + ilgili `ModeDefinition.maps` + **Build Settings**.
 6. **`Tools > VortexArena > Export Server Config`** (maps.json) ve `Server/VortexArena.PoseBot`
    içindeki `BuildScenes` listesine sahne adını ekle.
+7. **Arenanın çatısı/tavanı varsa** (isteğe bağlı, açık tavanlı arenalarda atlanır): çatı
+   hiyerarşisinin kökünü seç → `GameObject > VortexArena > Arena Roof`. Bileşen eklenir ve
+   altındaki tüm Renderer'lara `ArenaRoof` katmanı damgalanır → admin kuş bakışına geçince çatı
+   kalkar, gölgesi kalır. Sonradan mesh eklersen bileşene sağ tık → *Çatı katmanını uygula*.
 
 ### 6.5 `Tools > VortexArena > Export Server Config` — ne zaman?
 
-**Silah veya harita SO'su ekledin/değiştirdin mi → çalıştır.** Menü, `WeaponDefinition` ve
-`MapDefinition` SO'larından `Server/config/weapons.json` + `maps.json` üretir; çıktı deterministiktir
-(alfabetik, LF, UTF-8 BOM'suz) → git diff temiz kalır.
+**Harita (`MapDefinition`) SO'su ekledin/değiştirdin mi → çalıştır.** Menü, `MapDefinition`
+SO'larından `Server/config/maps.json` üretir; çıktı deterministiktir (alfabetik, LF, UTF-8
+BOM'suz) → git diff temiz kalır.
 
-Unutursan ne olur: bilinmeyen `weaponId` → **`hit_report` reddedilir** (mermi işe yaramaz),
-bilinmeyen `sceneName` → **`start_match` reddedilir** (maç başlamaz). İkisi de sunucu konsoluna
-tek satır sebep yazar.
+**Silah için GEREKMEZ:** sunucu silah tablosu tutmaz (§3.6), hasarı istemci bildirir. Yeni silah
+eklerken export çalıştırmaya gerek yoktur.
+
+Unutursan ne olur: bilinmeyen `sceneName` → **`start_match` reddedilir** (maç başlamaz), sunucu
+konsoluna tek satır sebep yazar.
 
 ---
 
 ## 7. Tuzaklar (pahalıya öğrenilmiş kurallar)
 
-1. **`weapons.json` / `maps.json` ELLE DÜZENLENMEZ** — bir sonraki export ezer. Tek doğruluk
-   kaynağı Unity SO'larıdır. (`server.json` elle, `devices.json` sunucu üretir.)
+1. **`maps.json` ELLE DÜZENLENMEZ** — bir sonraki export ezer. Tek doğruluk kaynağı Unity
+   SO'larıdır. (`server.json` elle, `devices.json` sunucu üretir; `weapons.json` artık yok.)
 2. **Meta umbrella paketi (`com.meta.xr.sdk.all`) ASLA eklenmez** — Meta Project Setup Tool önerse
    bile. Çektiği `voice` paketi Android namespace çakışmasıyla build'i kırıyor. Bireysel paketler:
    core + interaction + interaction.ovr @203.0.0, audio @85.0.0 (spatializer, pinli).

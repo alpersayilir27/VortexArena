@@ -11,11 +11,10 @@ Server/
   VortexArena.Server.sln
   VortexArena.Server.Core/    # Kestrel WS host, beacon, PlayerRegistry, LobbyService,
                               # StateHost (UDP), MatchDirector (faz makinesi + vuruş hattı),
-                              # WeaponTable, MapTable, Modes/ (IGameMode, TdmMode)
+                              # MapTable, Modes/ (IGameMode, TdmMode)
   VortexArena.Server.App/     # konsol exe (UI YOK — yönetim UI'ı Unity admin build'i)
   VortexArena.PoseBot/        # sentetik oyuncu test istemcisi (poz senkronunu Quest'siz test eder)
   config/server.json          # portlar + mekan adı + tickHz (ELLE)
-  config/weapons.json         # sunucu-otoriter silah tablosu (weaponId + damage + rpm) — Unity export
   config/maps.json            # harita tablosu (sceneName + boyut + slot + modes) — Unity export
   config/devices.json         # deviceId -> dostane ad ("Gözlük NN"); otomatik doldurulur
   firewall-kur.cmd            # Windows Firewall kuralları (yönetici olarak çalıştırın)
@@ -41,15 +40,18 @@ Açılışta:
 - UDP `47820`'ye her 2 sn beacon yayınlar → istemciler sunucuyu **kendiliğinden** bulur
   (elle girilen IP her zaman beacon'ı ezer).
 - UDP `47822` state kanalını dinler: `0x00 UdpHello` kayıt + ack, `0x01 PoseUpdate` alımı,
-  `0x02 Snapshot` yayını (20 Hz, kayıtlı tüm endpoint'lere — admin dahil). Poz akarken konsolda
-  saniyede bir `[state] oyuncu N, pozlu N, snapshot N B, hedef N` özeti görünür.
+  `0x02 Snapshot` yayını (20 Hz, kayıtlı tüm endpoint'lere — **her admin ayrı hedeftir**).
+  16'dan fazla pozlu oyuncu varsa aynı tik MTU'ya sığan parçalara bölünür (istemcide birleştirme
+  gerekmez). Poz akarken konsolda saniyede bir
+  `[state] oyuncu N, pozlu N, snapshot N B [(K parça)], hedef N` özeti görünür.
 - Maç tick döngüsü (10 Hz) çalışır: faz makinesi, geri sayım, süre, zorla canlandırma.
 - `config/` bulunamazsa exe yanında oluşturulur ve varsayılanlarla doldurulur
-  (`server.json` + `weapons.json`; `maps.json` **üretilmez** — o Unity export'undan gelir).
+  (`server.json`; `maps.json` **üretilmez** — o Unity export'undan gelir).
 - Konsolda bağlanan/kopan cihazlar ve çevrimiçi sayısı akar; **Ctrl+C** temiz kapatır.
 
-Açılış başlığında `Modlar : tdm`, `Silahlar : ak47, m4` ve `Haritalar : Arena10x10` satırları
-kayıtlı mod/silah/harita tablosunu özetler (`maps.json` yoksa `Haritalar : yok (doğrulama kapalı)`).
+Açılış başlığında `Modlar : tdm` ve `Haritalar : Arena10x10` satırları kayıtlı mod/harita
+tablosunu özetler (`maps.json` yoksa `Haritalar : yok (doğrulama kapalı)`); `Hasar : istemci
+bildirir` satırı sunucuda silah tablosu ve hile denetimi olmadığını hatırlatır (§10.3).
 
 ## Portlar
 
@@ -114,21 +116,16 @@ kurulumda genelde yalnız `venueName` değişir:
 { "controlPort": 47821, "beaconPort": 47820, "statePort": 47822, "venueName": "Dev", "tickHz": 20 }
 ```
 
-> **`weapons.json` ve `maps.json` Unity'den export edilir** — Unity'de
-> `Tools > VortexArena > Export Server Config` menüsü bu iki dosyayı `WeaponDefinition` /
-> `MapDefinition` SO'larından üretir. **Elle düzenlemeyin: bir sonraki export değişikliğinizi
-> ezer.** Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir (alfabetik, LF,
-> UTF-8 BOM'suz) → git diff'leri temiz kalır.
+> **`maps.json` Unity'den export edilir** — Unity'de `Tools > VortexArena > Export Server Config`
+> menüsü onu `MapDefinition` SO'larından üretir. **Elle düzenlemeyin: bir sonraki export
+> değişikliğinizi ezer.** Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir
+> (alfabetik, LF, UTF-8 BOM'suz) → git diff'leri temiz kalır.
 
-**weapons.json** — sunucu-otoriter silah tablosu (§10.3). Hasar HER ZAMAN buradan uygulanır;
-istemcinin bildirdiği değer saparsa uyumsuzluk konsola yazılır ve tablo kazanır (export unutulmuşsa
-bu satır yakalar). `rpm`, `hit_report` hız denetiminde kullanılır (iki kabul edilen vuruş arası
-≥ `60/rpm × 0.8` sn). Dosya yoksa varsayılanlarla oluşturulur:
-```json
-{ "weapons": [ { "weaponId": "ak47", "damage": 34, "rpm": 600 },
-               { "weaponId": "m4", "damage": 22, "rpm": 800 } ] }
-```
-Yeni silah eklerken: prefab + `WeaponDefinition` SO (Unity) → **export'u çalıştırın**.
+> **`weapons.json` YOK** (v1'de vardı, kaldırıldı — §10.3). Sunucu silah tanımı tutmaz: hasarı
+> istemci hesaplar, `hit_report.damage` ile bildirir ve sunucu aynen uygular. Denge sayıları
+> yalnız Unity'deki `WeaponDefinition` SO'larında yaşar → **yeni silah eklerken sunucuya hiçbir
+> şey tanıtılmaz ve export gerekmez** (balta, yay, bomba, tuzak, düşme hasarı… hepsi aynı yolu
+> kullanır). Bedeli: denge değişikliği istemci build'i ister.
 
 **maps.json** — harita tablosu (§10.1): `start_match`'te `sceneName`'in bilinen bir harita olup
 olmadığı ve o haritanın modu destekleyip desteklemediği buradan doğrulanır; `spawnSlotsPerTeam`
@@ -143,7 +140,28 @@ kalır (Faz 3 davranışı) ve açılış özetinde `Haritalar : yok (doğrulama
 
 **devices.json** — `{ "<deviceId>": "Gözlük 07" }`. Bilinmeyen player cihazı bağlanınca ilk boş
 `Gözlük NN` atanır ve dosyaya yazılır; `set_name` ile değişen ad da buraya kalıcı yazılır.
-UTF-8, BOM'suz.
+UTF-8, BOM'suz. ⚠️ **Admin adları buraya YAZILMAZ** — admin `deviceId`'si oturumlukttur (aşağı),
+her açılış dosyaya çöp bir satır eklerdi.
+
+## Çoklu admin
+
+Eşzamanlı admin sayısında **sınır yoktur** ve hepsi eş yetkilidir (birincil/ikincil admin
+kavramı yok): `role=="admin"` olan her bağlantı §5.2'deki tüm komutları gönderebilir, son gelen
+komut uygulanır.
+
+- **Kimlik:** admin `deviceId`'si `<donanım>:admin:<oturum GUID'i>` — oturum başına benzersizdir.
+  Aynı fiziksel PC'de iki admin penceresi açılabilsin diye: ortak kimlikle ikisi aynı kaydı
+  paylaşır ve her `hello` diğerinin soketini kapatırdı (sonsuz kick döngüsü).
+- **Kayıt kalıcılığı:** admin bağlantısı kopunca (ya da `OFFLINE_TIMEOUT` dolunca) kaydı
+  **tümüyle silinir**, `playerId`'si havuza döner (konsolda `[-] … kaydı silindi`). Oyuncu kayıtları
+  eskisi gibi çevrimdışı işaretlenir ama durur. Aynı PC'de iki admin varsa roster adları
+  `Ofis-PC`, `Ofis-PC (2)` diye ayrıştırılır.
+- **Ortak durum:** bir sonraki maçın mod/harita seçimi **sunucuda** yaşar. Admin arayüzü onu
+  `set_selection` ile değiştirir, sunucu `admin_state` ile TÜM adminlere yayar → bir operatör
+  haritayı değiştirdiğinde diğerinin paneli ve yerel önizlemesi de değişir. `start_match` de
+  seçimi günceller. Her admin komutu `admin_state.notice` ile "kim ne yaptı" satırı üretir.
+- **Yerel kalanlar:** kamera kipi, seçili oyuncu, halkalar/ad etiketleri, kamera hızı, duvar ve
+  çatı saydamlığı, mini harita — bunlar protokole girmez, her operatörün kendi ekranına aittir.
 
 ## Maç akışı (Faz 3) — konsolda ne görünür
 
@@ -179,8 +197,7 @@ alanları roster ile taşınıyor ve admin istatistik tablosunun sağlama noktas
 | `start_match reddedildi: …` | doğrulama düştü, faz değişmedi (ör. `'Arena12x12' harita tablosunda yok`) |
 | `takım dengeleme: 1 oyuncu 'blue' takımına taşındı` | boş takım kalmasın diye |
 | `loading zaman aşımı (20 sn) — hazır olmayanlar: Gözlük 03` | sahne yükleme beklenmedi |
-| `hit_report reddedildi (Gözlük 03 → 5): dost ateşi yok` | §10.3 doğrulamalarından biri düştü |
-| `hasar uyumsuz: … tablo uygulandı` | istemci `damage`'ı weapons.json ile uyuşmuyor |
+| `hit_report reddedildi (Gözlük 03 → 5): dost ateşi yok` | §10.3 tutarlılık kontrollerinden biri düştü |
 | `öldürme: Gözlük 03 → Gözlük 05 (ak47) — skor kırmızı 4 : mavi 2` | doğrulanmış öldürme |
 | `canlandı: Gözlük 05` / `zorla canlandırma: Gözlük 05` | `revive_request` / `REVIVE_GRACE` |
 | `maç sonu — kazanan: blue (kırmızı 12 : mavi 30)` | `match_end` yayınlandı |
@@ -218,7 +235,7 @@ girdilerini commit'lemeyin (test kirliliği). Kullanım: `PoseBot [ip] [botSayı
 
 **`--fight`** botları maça da katar: `load_match` gelince 0.5–1.5 sn "sahne yükleniyor"
 simülasyonundan sonra `set_ready` gönderir, faz `Live` olunca saniyede 2 kez `shot_fired` +
-`hit_report` (ak47, 34 hasar — `config/weapons.json` ile aynı olmalı) yollar, ölünce
+`hit_report` (ak47 etiketi, 34 hasar — sunucu doğrulamaz, bildirileni uygular) yollar, ölünce
 `respawn.delaySeconds` + 1 sn sonra `revive_request` ile canlanır (free-roam "tabana dön"
 akışının bot karşılığı). **Yalnız çift indeksli botlar ateş eder** (bot0, bot2…), tekler kurbandır;
 böylece skor tek yönlü ve okunur ilerler. Konsolu boğmamak için maç akışı satırlarını yalnız
@@ -240,7 +257,8 @@ rolündeyken ortamda admin kalmadığı için E2E'nin bu ayağında şarttır.
 - **Faz 1:** beacon + WS kontrol + lobi (roster/ready/takım/kick/identify) +
   UDP kayıt. Loopback E2E: sunucuyu başlat → Editor'de admin bağlan → roster'da görün.
 - **Faz 2 (tamam):** `0x01 PoseUpdate` alımı (kayıtlı endpoint + u16 seq sarmalama kontrolü) +
-  `0x02 Snapshot` yayını (20 Hz, tek pakette 16 oyuncu ≈ 1382 B) + PoseBot test istemcisi.
+  `0x02 Snapshot` yayını (20 Hz, paket başına 16 oyuncu ≈ 1382 B) + PoseBot test istemcisi.
 - **Faz 3:** MatchDirector faz makinesi (`load_match` → countdown → Live → End → lobi) +
-  `Modes/TdmMode.cs` (`IGameMode`) + `config/weapons.json` ile sunucu-otoriter vuruş doğrulama,
-  can/skor yayını ve free-roam canlanma. Snapshot `flags` bit0 artık gerçek `alive` durumunu taşır.
+  `Modes/TdmMode.cs` (`IGameMode`) + vuruş hattı, can/skor yayını ve free-roam canlanma.
+  Snapshot `flags` bit0 artık gerçek `alive` durumunu taşır. (Bu fazda gelen sunucu-otoriter
+  silah tablosu ve atış hızı denetimi sonradan KALDIRILDI — §10.3 genel hasar modeli.)

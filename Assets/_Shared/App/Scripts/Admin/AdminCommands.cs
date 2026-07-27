@@ -35,6 +35,23 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>
+        /// Bir sonraki maçın <b>ortak</b> mod/harita seçimi (§5.2 <c>set_selection</c>). Maçı
+        /// başlatmaz: sunucudaki seçimi değiştirir, sunucu da onu <c>admin_state</c> ile tüm
+        /// adminlere yayar. Bu yüzden arayüz seçimi yerel bir alana YAZMAZ — sunucudan geri
+        /// gelen değeri gösterir (tek doğruluk kaynağı, iki operatör sapmaz).
+        /// <para>Durum satırı burada yazılmaz; sunucunun yayınladığı duyuru zaten gelecek.</para>
+        /// </summary>
+        public static void SetSelection(string modeId, string sceneName)
+        {
+            if (string.IsNullOrEmpty(modeId) && string.IsNullOrEmpty(sceneName))
+            {
+                return;
+            }
+
+            Send(new SetSelectionMsg { modeId = modeId ?? "", sceneName = sceneName ?? "" });
+        }
+
         public static void AbortMatch()
         {
             if (Send(new AbortMatchMsg()))

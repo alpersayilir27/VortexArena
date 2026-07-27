@@ -19,6 +19,7 @@ namespace VortexArena.Protocol
         public const string Kick = "kick";
         public const string Identify = "identify"; // sunucu → istemci yönü de aynı type
         public const string ReturnToLobby = "return_to_lobby"; // sunucu → istemci yönü de aynı type
+        public const string SetSelection = "set_selection"; // ortak mod/harita seçimi (maçı başlatmaz)
 
         // Sunucu → İstemci
         public const string Welcome = "welcome";
@@ -32,5 +33,6 @@ namespace VortexArena.Protocol
         public const string MatchEnd = "match_end";
         public const string Ping = "ping";
         public const string Kicked = "kicked";
+        public const string AdminState = "admin_state"; // yalnız adminlere: ortak seçim + duyuru
     }
 }

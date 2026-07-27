@@ -9,7 +9,7 @@ public sealed class PlayerState
 {
     public string DeviceId { get; init; } = "";
 
-    /// <summary>Sunucunun welcome'da atadığı 1..MAX_PLAYERS kimliği (UDP paketlerinde 1 bayt).</summary>
+    /// <summary>Sunucunun welcome'da atadığı 1..PLAYER_ID_MAX kimliği (UDP paketlerinde 1 bayt).</summary>
     public int PlayerId { get; init; }
 
     public string Name { get; set; } = "";
@@ -50,9 +50,6 @@ public sealed class PlayerState
 
     public int Kills { get; set; }
     public int Deaths { get; set; }
-
-    /// <summary>Son KABUL EDİLEN hit_report'un UTC zamanı (atış hızı denetimi, §10.3/6).</summary>
-    public DateTime LastHitAcceptedAt { get; set; }
 
     /// <summary>Son ölümün UTC zamanı (RESPAWN_DELAY + REVIVE_GRACE hesabı, §10.4).</summary>
     public DateTime DiedAt { get; set; }

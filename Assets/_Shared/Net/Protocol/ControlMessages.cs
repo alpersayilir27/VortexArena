@@ -121,6 +121,16 @@ namespace VortexArena.Protocol
         public int playerId;
     }
 
+    /// Bir sonraki maçın ORTAK mod/harita seçimi (§5.2). Maçı başlatmaz; sunucudaki seçimi
+    /// günceller ve sunucu onu admin_state ile tüm adminlere yayar. Boş alan mevcut değeri korur.
+    [Serializable]
+    public class SetSelectionMsg
+    {
+        public string type = MessageTypes.SetSelection;
+        public string modeId;
+        public string sceneName;
+    }
+
     // ---- Sunucu → İstemci ----
 
     [Serializable]
@@ -254,6 +264,20 @@ namespace VortexArena.Protocol
     {
         public string type = MessageTypes.Kicked;
         public string reason;
+    }
+
+    /// Yalnız role=admin bağlantılara (§5.3): adminler arası ORTAK durumun tek doğruluk kaynağı.
+    /// modeId/sceneName ortak seçimdir (arayüz kendi yerelini değil bunu gösterir); notice son
+    /// admin eyleminin "<ad>: <eylem>" özetidir; adminCount çevrimiçi admin sayısıdır.
+    /// Görünüm tercihleri (kamera, halka, saydamlık…) BURAYA GİRMEZ — her admin'in kendi ekranı.
+    [Serializable]
+    public class AdminStateMsg
+    {
+        public string type = MessageTypes.AdminState;
+        public string modeId;
+        public string sceneName;
+        public string notice;
+        public int adminCount;
     }
 
     // ---- UDP beacon (§4; WS mesajı değildir, alıcı app alanını doğrular) ----

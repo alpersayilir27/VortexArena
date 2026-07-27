@@ -12,28 +12,27 @@ namespace VortexArena.Core.Editor
 {
     /// <summary>
     /// <c>Tools &gt; VortexArena &gt; Export Server Config</c> — projedeki
-    /// <see cref="WeaponDefinition"/> ve <see cref="MapDefinition"/> ScriptableObject'lerinden
-    /// sunucunun okuduğu <c>Server/config/weapons.json</c> + <c>Server/config/maps.json</c>
-    /// dosyalarını üretir.
+    /// <see cref="MapDefinition"/> ScriptableObject'lerinden sunucunun okuduğu
+    /// <c>Server/config/maps.json</c> dosyasını üretir.
     /// <para>
-    /// <b>Tek doğruluk kaynağı Unity SO'larıdır; sunucu hasarı bu tablodan uygular
-    /// (Docs/ArenaNet-Protokol.md §10.3).</b> İstemcinin bildirdiği hasar tablodan saparsa
-    /// sunucu kendi değerini uygular — bu yüzden export'u silah eklendikten/değiştirildikten
-    /// sonra çalıştırmak ZORUNLUDUR (Faz 3'teki elle senkron burada otomatikleşir).
+    /// <b>SİLAH EXPORT'U YOKTUR</b> (Docs/ArenaNet-Protokol.md §10.3): sunucu silah tablosu
+    /// tutmaz, hasarı istemci hesaplayıp <c>hit_report.damage</c> ile bildirir ve sunucu aynen
+    /// uygular. <see cref="WeaponDefinition"/> SO'ları yalnız istemcide yaşar; silah ekleyip
+    /// değiştirdikten sonra export çalıştırmak GEREKMEZ. Bu araç yalnız harita kataloğu içindir
+    /// (sunucu <c>start_match</c>'te <c>sceneName</c>'i ve spawn slot sayısını buradan doğrular).
     /// </para>
     /// <para>
-    /// <b>Determinizm (git diff'i temiz kalsın):</b> silahlar <c>weaponId</c>, haritalar
-    /// <c>sceneName</c> ve mod listeleri Ordinal alfabetik sıralanır; satır sonu LF,
-    /// kodlama UTF-8 BOM'suz, dosya sonunda tek <c>\n</c>. Aynı içerik → aynı bayt.
+    /// <b>Determinizm (git diff'i temiz kalsın):</b> haritalar <c>sceneName</c> ve mod listeleri
+    /// Ordinal alfabetik sıralanır; satır sonu LF, kodlama UTF-8 BOM'suz, dosya sonunda tek
+    /// <c>\n</c>. Aynı içerik → aynı bayt.
     /// </para>
     /// <para>
-    /// <b>Güvenlik freni:</b> hiç SO bulunamazsa ilgili dosya YAZILMAZ (mevcut sunucu
-    /// yapılandırması boş bir tabloyla ezilmesin) — bunun yerine uyarı döner.
+    /// <b>Güvenlik freni:</b> hiç SO bulunamazsa dosya YAZILMAZ (mevcut sunucu yapılandırması
+    /// boş bir tabloyla ezilmesin) — bunun yerine uyarı döner.
     /// </para>
     /// </summary>
     public static class ServerConfigExporter
     {
-        private const string WeaponsFileName = "weapons.json";
         private const string MapsFileName = "maps.json";
 
         /// <summary>Menü girişi — dialoglu (elle) export.</summary>
@@ -44,37 +43,25 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// weapons.json + maps.json üretir ve sonucu döner.
+        /// maps.json üretir ve sonucu döner.
         /// <paramref name="showDialog"/> <c>false</c> iken HİÇBİR dialog açılmaz
         /// (MCP / batch otomasyonundan başlıksız çağrılabilir); özet her hâlükârda
         /// <see cref="Debug.Log"/> ile konsola yazılır.
         /// </summary>
         /// <param name="showDialog">Bitişte özet dialogu gösterilsin mi.</param>
-        /// <returns>Yazılan yollar, satır sayıları ve doğrulama uyarıları.</returns>
+        /// <returns>Yazılan yol, satır sayısı ve doğrulama uyarıları.</returns>
         public static ServerConfigExportResult Export(bool showDialog)
         {
             var result = new ServerConfigExportResult();
 
             string configDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Server", "config"));
-            result.WeaponsPath = Path.Combine(configDir, WeaponsFileName);
             result.MapsPath = Path.Combine(configDir, MapsFileName);
 
-            List<WeaponDefinition> weapons = CollectWeapons(result);
             List<MapDefinition> maps = CollectMaps(result);
 
-            result.WeaponCount = weapons.Count;
             result.MapCount = maps.Count;
 
             Directory.CreateDirectory(configDir);
-
-            if (weapons.Count > 0)
-            {
-                WriteFile(result.WeaponsPath, BuildWeaponsJson(weapons));
-            }
-            else
-            {
-                result.Warnings.Add($"Hiç WeaponDefinition bulunamadı — {WeaponsFileName} YAZILMADI (mevcut sunucu tablosu korundu).");
-            }
 
             if (maps.Count > 0)
             {
@@ -86,7 +73,7 @@ namespace VortexArena.Core.Editor
             }
 
             result.Summary =
-                $"Export Server Config: {result.WeaponCount} silah + {result.MapCount} harita → {configDir} ({result.Warnings.Count} uyarı)";
+                $"Export Server Config: {result.MapCount} harita → {configDir} ({result.Warnings.Count} uyarı)";
 
             for (int i = 0; i < result.Warnings.Count; i++)
             {
@@ -104,69 +91,6 @@ namespace VortexArena.Core.Editor
         }
 
         // -------------------------------------------------------------- toplama
-
-        /// <summary>Tüm projedeki silah tanımlarını toplar, doğrular ve weaponId'ye göre sıralar.</summary>
-        private static List<WeaponDefinition> CollectWeapons(ServerConfigExportResult result)
-        {
-            var loaded = new List<WeaponDefinition>();
-            var paths = new Dictionary<WeaponDefinition, string>();
-
-            string[] guids = AssetDatabase.FindAssets("t:WeaponDefinition");
-            for (int i = 0; i < guids.Length; i++)
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-                var asset = AssetDatabase.LoadAssetAtPath<WeaponDefinition>(path);
-                if (asset == null)
-                {
-                    continue;
-                }
-
-                loaded.Add(asset);
-                paths[asset] = path;
-            }
-
-            loaded.Sort((a, b) =>
-            {
-                int byId = string.CompareOrdinal(a.WeaponId ?? string.Empty, b.WeaponId ?? string.Empty);
-                return byId != 0 ? byId : string.CompareOrdinal(paths[a], paths[b]);
-            });
-
-            var accepted = new List<WeaponDefinition>();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            for (int i = 0; i < loaded.Count; i++)
-            {
-                WeaponDefinition weapon = loaded[i];
-                string path = paths[weapon];
-                string id = weapon.WeaponId;
-
-                if (string.IsNullOrWhiteSpace(id))
-                {
-                    result.Warnings.Add($"Boş weaponId: '{path}' — atlandı (protokol anahtarı zorunlu).");
-                    continue;
-                }
-
-                if (!seen.Add(id))
-                {
-                    result.Warnings.Add($"Yinelenen weaponId '{id}': '{path}' — atlandı (ilk eşleşme yazıldı).");
-                    continue;
-                }
-
-                if (weapon.Damage <= 0f)
-                {
-                    result.Warnings.Add($"weaponId '{id}' damage <= 0 ({weapon.Damage}) — '{path}'.");
-                }
-
-                if (weapon.FireRateRpm <= 0f)
-                {
-                    result.Warnings.Add($"weaponId '{id}' rpm <= 0 ({weapon.FireRateRpm}) — '{path}'.");
-                }
-
-                accepted.Add(weapon);
-            }
-
-            return accepted;
-        }
 
         /// <summary>Tüm projedeki harita tanımlarını toplar, doğrular ve sceneName'e göre sıralar.</summary>
         private static List<MapDefinition> CollectMaps(ServerConfigExportResult result)
@@ -265,40 +189,6 @@ namespace VortexArena.Core.Editor
         }
 
         // ----------------------------------------------------------------- json
-
-        /// <summary>
-        /// <c>{ "weapons": [ { "weaponId": "ak47", "damage": 34, "rpm": 600 } ] }</c> —
-        /// mevcut elle yazılmış dosyanın biçimi birebir korunur (2 boşluk girinti, satır başına
-        /// bir silah, aynı alan sırası).
-        /// </summary>
-        private static string BuildWeaponsJson(List<WeaponDefinition> weapons)
-        {
-            var sb = new StringBuilder();
-            sb.Append("{\n");
-
-            if (weapons.Count == 0)
-            {
-                sb.Append("  \"weapons\": []\n");
-            }
-            else
-            {
-                sb.Append("  \"weapons\": [\n");
-                for (int i = 0; i < weapons.Count; i++)
-                {
-                    WeaponDefinition weapon = weapons[i];
-                    sb.Append("    { \"weaponId\": \"").Append(EscapeJson(weapon.WeaponId))
-                        .Append("\", \"damage\": ").Append(Number(weapon.Damage))
-                        .Append(", \"rpm\": ").Append(Mathf.RoundToInt(weapon.FireRateRpm).ToString(CultureInfo.InvariantCulture))
-                        .Append(" }")
-                        .Append(i < weapons.Count - 1 ? ",\n" : "\n");
-                }
-
-                sb.Append("  ]\n");
-            }
-
-            sb.Append("}\n");
-            return sb.ToString();
-        }
 
         /// <summary>
         /// <c>{ "maps": [ { "sceneName": "Arena10x10", "sizeX": 10, "sizeZ": 10,

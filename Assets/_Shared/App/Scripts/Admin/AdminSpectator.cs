@@ -125,6 +125,8 @@ namespace VortexArena.App.Admin
             _active = true;
 
             gameObject.AddComponent<AdminRoster>();
+            // Adminler arası ortak seçim (mod/harita) — birden çok operatör aynı ekranı görsün.
+            gameObject.AddComponent<AdminSelection>();
 
             var cameraGo = new GameObject("[AdminSpectatorCamera]");
             cameraGo.transform.SetParent(transform, false);
@@ -202,6 +204,11 @@ namespace VortexArena.App.Admin
                 }
             }
 
+            // 5) Çatı: kuş bakışında tepeden içerisi görülsün (tercihe göre; §çatı ArenaRoof).
+            //    ArenaRoof.OnEnable son alfayı kendine uyguladığı için burada yalnız tazeleriz —
+            //    tercih sahne yüklenmeden değişmişse de doğru değere oturur.
+            RefreshRoof();
+
             if (_cameraDriver != null)
             {
                 _cameraDriver.OnSceneAdopted();
@@ -215,6 +222,16 @@ namespace VortexArena.App.Admin
             {
                 Boundary.SetSpectatorMode(true, AdminSession.WallAlpha);
             }
+        }
+
+        /// <summary>
+        /// Çatı görünürlüğünü o anki tercih + kamera kipine göre uygular. Çağıranlar: sahne
+        /// devralma, kamera kipi değişimi (<see cref="AdminSpectatorCamera"/>) ve tercih paneli.
+        /// Sahnede çatı yoksa hiçbir şey yapmaz (arenaların çoğu açık tavanlıdır).
+        /// </summary>
+        public static void RefreshRoof()
+        {
+            ArenaRoof.ApplyAll(AdminSession.RoofAlphaNow());
         }
 
         // ------------------------------------------------------------- kısayollar

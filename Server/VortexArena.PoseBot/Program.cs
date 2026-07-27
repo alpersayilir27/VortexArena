@@ -29,10 +29,14 @@ internal static class Program
     private static readonly string[] BuildScenes =
         { "Boot", "Lobby", "Arena10x10", "Arena12x12", "ArenaDemoVenue", "IceWorld" };
 
-    // ---- Savaş ayarları (§10.3) — sunucunun config/weapons.json tablosuyla AYNI olmalı ----
-    private const string WeaponId = "ak47";
-    private const float WeaponDamage = 34f; // weapons.json: ak47 damage
-    private const float WeaponRpm = 600f;   // weapons.json: ak47 rpm
+    /// <summary>Tek çağrıda açılabilecek bot sayısı üst sınırı. <b>Protokol kotası değildir</b> —
+    /// protokolde eşzamanlı oyuncu sınırı yok (§2), bu yalnız yazım hatasına karşı dev aracı
+    /// emniyeti (127 yerine 12 yazılması makine boğmasın).</summary>
+    private const int MaxDevBots = 32;
+
+    // ---- Savaş ayarları (§10.3) — sunucu hasarı doğrulamaz, bildirdiğimizi uygular ----
+    private const string WeaponId = "ak47";  // yalnız etiket (kill feed); sunucu doğrulamaz
+    private const float WeaponDamage = 34f;  // botun uyguladığı hasar — serbest seçilir
     private const float MuzzleHeight = 1.3f; // namlu yüksekliği (arena uzayı, y)
     private const int ReviveAttempts = 5;    // revive_request tekrar sayısı
 
@@ -42,14 +46,18 @@ internal static class Program
     /// çok arena var). Sahne adı hem BuildScenes'te hem sunucunun maps.json'ında olmalı.</summary>
     private static string AdminModeId = "tdm";
     private static string AdminSceneName = "Arena10x10";
+
+    /// <summary>Admin kimliği OTURUMLUKtur (§2, gerçek admin istemcisiyle aynı kural): birden
+    /// çok PoseBot --admin ya da PoseBot + gerçek admin aynı anda koşabilsin. Süreç ömrü boyunca
+    /// sabittir ki yeniden bağlanma aynı kaydı bulsun.</summary>
+    private static readonly string AdminDeviceId = $"posebot-admin-{Guid.NewGuid():N}";
     /// <summary>Roster'da 2+ çevrimiçi oyuncu bu kadar kararlı kaldıktan sonra start_match.</summary>
     private const double AdminStartDelay = 2.0;
     private const int AdminMinPlayers = 2;
 
-    /// <summary>Sunucunun kabul ettiği en kısa vuruş aralığı: 60/rpm × FIRE_RATE_TOLERANCE
-    /// (ak47 → 0.08 sn). Bot bunun çok üstünde, saniyede ~2 atışla ilerler (okunur skor).</summary>
-    private static readonly double MinShotInterval = 60.0 / WeaponRpm * ArenaProtocol.FIRE_RATE_TOLERANCE;
-    private static readonly double FireInterval = Math.Max(0.5, MinShotInterval);
+    /// <summary>Bot atış aralığı (sn). Sunucuda atış hızı denetimi YOK (§10.3) — bu değer yalnız
+    /// skorun okunabilir hızda ilerlemesi için: saniyede ~2 atış.</summary>
+    private static readonly double FireInterval = 0.5;
 
     private static async Task<int> Main(string[] args)
     {
@@ -118,7 +126,7 @@ internal static class Program
                     break;
                 case 1:
                     if (!int.TryParse(arg, out var n)) { Console.WriteLine($"Bot sayısı sayı olmalı: {arg}"); return false; }
-                    count = Math.Clamp(n, 1, ArenaProtocol.MAX_PLAYERS);
+                    count = Math.Clamp(n, 1, MaxDevBots);
                     break;
                 default:
                     Console.WriteLine($"Fazladan argüman: {arg}");
@@ -132,7 +140,7 @@ internal static class Program
     {
         Console.WriteLine("Kullanım: PoseBot [ip] [botSayısı] [--fight] [--admin] [--map <sahne>] [--mode <modId>]");
         Console.WriteLine("  ip          sunucu IP'si (varsayılan 127.0.0.1)");
-        Console.WriteLine($"  botSayısı   1..{ArenaProtocol.MAX_PLAYERS} (varsayılan 1)");
+        Console.WriteLine($"  botSayısı   1..{MaxDevBots} (varsayılan 1)");
         Console.WriteLine("  --fight     maça katıl: sahne yüklendi (set_ready), ateş (shot_fired+hit_report),");
         Console.WriteLine("              ölüm/canlanma (revive_request). Yalnız ÇİFT indeksli botlar ateş eder.");
         Console.WriteLine("  --admin     ek bir admin bağlantısı aç: 2+ oyuncu görününce start_match");
@@ -270,7 +278,7 @@ internal static class Program
         {
             protocolVersion = ArenaProtocol.PROTOCOL_VERSION,
             role = "admin",
-            deviceId = "posebot-admin",
+            deviceId = AdminDeviceId,
             deviceName = "PoseBot Admin",
             appVersion = "posebot",
             currentScene = "Lobby",

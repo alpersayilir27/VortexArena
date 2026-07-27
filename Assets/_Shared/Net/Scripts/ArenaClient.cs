@@ -37,7 +37,7 @@ namespace VortexArena.Net
 
         public ArenaConnectionState State { get; private set; } = ArenaConnectionState.Disconnected;
 
-        /// <summary>welcome'da atanan 1..MAX_PLAYERS kimliği (0 = henüz yok).</summary>
+        /// <summary>welcome'da atanan 1..PLAYER_ID_MAX kimliği (0 = henüz yok).</summary>
         public int PlayerId { get; private set; }
         public uint UdpToken { get; private set; }
         public string ServerIp { get; private set; }
@@ -77,7 +77,8 @@ namespace VortexArena.Net
 
         // hello için ana thread'de önbelleğe alınan cihaz bilgileri
         // (ağ thread'i Unity API'sine dokunamaz).
-        private string _deviceId;
+        private string _hardwareId;
+        private string _adminSessionId;
         private string _deviceName;
         private string _appVersion;
         private string[] _buildScenes;
@@ -113,7 +114,10 @@ namespace VortexArena.Net
             UdpChannel = gameObject.AddComponent<UdpStateChannel>();
             Remotes = gameObject.AddComponent<RemotePlayerRegistry>();
 
-            _deviceId = SystemInfo.deviceUniqueIdentifier;
+            _hardwareId = SystemInfo.deviceUniqueIdentifier;
+            // Aynı PC'de iki admin penceresi açılabilsin diye admin kimliği OTURUMLUK olur (§2);
+            // GUID Awake'te bir kez üretilir, yeniden bağlanmalarda aynı kalır (aynı kaydı bulsun).
+            _adminSessionId = Guid.NewGuid().ToString("N");
             _deviceName = SystemInfo.deviceName;
             _appVersion = Application.version;
 
@@ -492,6 +496,14 @@ namespace VortexArena.Net
                         break;
                     }
 
+                    case MessageTypes.AdminState:
+                    {
+                        // Sunucu yalnız admin bağlantılarına yollar; player'a gelirse zaten dinleyen yok.
+                        AdminStateMsg msg = JsonUtility.FromJson<AdminStateMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseAdminState(msg));
+                        break;
+                    }
+
                     case MessageTypes.Ping:
                         // ping → status ile yanıtlanır (ayrı pong yok); status Unity API'si ister → ana thread.
                         _mainThreadActions.Enqueue(() => TrySendText(BuildStatusJson()));
@@ -582,13 +594,30 @@ namespace VortexArena.Net
             {
                 protocolVersion = ArenaProtocol.PROTOCOL_VERSION,
                 role = _role,
-                deviceId = _deviceId,
+                deviceId = ResolveDeviceId(),
                 deviceName = _deviceName,
                 appVersion = _appVersion,
                 currentScene = _currentSceneName,
                 scenes = _buildScenes
             };
             return JsonUtility.ToJson(hello);
+        }
+
+        /// <summary>
+        /// Rol başına <c>deviceId</c> semantiği (Docs/ArenaNet-Protokol.md §2):
+        /// <list type="bullet">
+        /// <item><b>player:</b> düz donanım kimliği — KALICI. Sunucu adı <c>devices.json</c>'da
+        /// buna bağlar, gözlük yeniden bağlandığında playerId'sini ve adını korur.</item>
+        /// <item><b>admin:</b> <c>&lt;donanım&gt;:admin:&lt;oturum GUID'i&gt;</c> — OTURUMLUK.
+        /// Aynı fiziksel PC'de iki admin penceresi açılabilsin diye: ortak kimlikle ikisi aynı
+        /// sunucu kaydını paylaşır ve her <c>hello</c> diğerinin soketini kapatırdı (sonsuz kick
+        /// döngüsü). GUID süreç ömrü boyunca sabittir — yeniden bağlanma aynı kaydı bulur.</item>
+        /// </list>
+        /// Rol bağlantı başına verildiği için burada okunur, Awake'te değil.
+        /// </summary>
+        private string ResolveDeviceId()
+        {
+            return _role == "admin" ? $"{_hardwareId}:admin:{_adminSessionId}" : _hardwareId;
         }
 
         /// <summary>YALNIZ ana thread'de çağrılır (SystemInfo/sahne API'si).</summary>

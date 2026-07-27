@@ -9,7 +9,11 @@ namespace VortexArena.App.Editor
 {
     /// <summary>
     /// <c>Tools &gt; VortexArena &gt; Dev</c> — geliştirici kontrol paneli: rol, sunucu hedefi,
-    /// Play başlangıcı, sentetik maç parametreleri ve yerel ortam (sunucu + bot süreçleri).
+    /// Play başlangıcı, sentetik maç parametreleri ve test botları.
+    ///
+    /// <para><b>Sunucu bu pencereden başlatılmaz/durdurulmaz</b> — her zaman elle çalıştırılır
+    /// (gerekçe: <see cref="DevProcesses"/> sınıf dokümanı). Buradaki "Derle (dotnet build)"
+    /// yalnız derler.</para>
     ///
     /// <para><b>Hiçbir şey commit'lenmez:</b> tüm seçim <see cref="DevSession"/> üzerinden
     /// <c>EditorPrefs</c>'e yazılır (kişisel), hedef listesi ise repo'daki
@@ -325,34 +329,24 @@ namespace VortexArena.App.Editor
             }
         }
 
+        /// <summary>
+        /// Ortam bölümü — <b>yalnız test botları</b>. Sunucu bilinçli olarak buradan
+        /// yönetilmez: elle başlatılır/durdurulur (bkz. <see cref="DevProcesses"/> sınıf dokümanı).
+        /// </summary>
         private void DrawEnvironment()
         {
-            EditorGUILayout.LabelField("Ortam (yerel süreçler)", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Ortam (test botları)", EditorStyles.boldLabel);
 
-            bool serverRunning = DevProcesses.IsServerRunning;
+            EditorGUILayout.HelpBox(
+                "Sunucu editörden başlatılmaz/durdurulmaz — elle çalıştırın:\n" +
+                "deploy\\server\\VortexArena.Server.App.exe  (ya da: " +
+                "dotnet run --project Server/VortexArena.Server.App)",
+                MessageType.Info);
+
             bool botsRunning = DevProcesses.AreBotsRunning;
 
-            botCount = EditorGUILayout.IntSlider("Bot sayısı", Mathf.Clamp(botCount, 1, ArenaProtocol.MAX_PLAYERS),
-                1, ArenaProtocol.MAX_PLAYERS);
-
-            EditorGUILayout.BeginHorizontal();
-            using (new EditorGUI.DisabledScope(serverRunning))
-            {
-                if (GUILayout.Button("Sunucuyu Başlat"))
-                {
-                    DevProcesses.StartServer();
-                }
-            }
-
-            using (new EditorGUI.DisabledScope(!serverRunning))
-            {
-                if (GUILayout.Button("Durdur", GUILayout.Width(90f)))
-                {
-                    DevProcesses.StopServer();
-                }
-            }
-
-            EditorGUILayout.EndHorizontal();
+            botCount = EditorGUILayout.IntSlider("Bot sayısı", Mathf.Clamp(botCount, 1, DevProcesses.MaxDevBots),
+                1, DevProcesses.MaxDevBots);
 
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button($"{botCount} Bot"))
@@ -376,12 +370,7 @@ namespace VortexArena.App.Editor
             EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Hepsini Durdur"))
-            {
-                DevProcesses.StopAll();
-            }
-
-            if (GUILayout.Button("Sahipsiz süreçleri temizle"))
+            if (GUILayout.Button("Sahipsiz botları temizle"))
             {
                 DevProcesses.SweepOrphans();
             }
@@ -393,14 +382,11 @@ namespace VortexArena.App.Editor
 
             EditorGUILayout.EndHorizontal();
 
-            string serverStatus = serverRunning
-                ? $"sunucu ● çalışıyor (PID {DevProcesses.ServerPid})"
-                : "sunucu ○ kapalı";
             string botStatus = botsRunning
                 ? $"{DevProcesses.BotCount} bot süreci ● çalışıyor"
                 : "bot süreci ○ yok";
 
-            EditorGUILayout.LabelField($"Durum: {serverStatus} · {botStatus}");
+            EditorGUILayout.LabelField($"Durum: {botStatus}");
         }
 
         // ---------------------------------------------------------------- yardımcı

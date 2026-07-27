@@ -63,6 +63,11 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `BaseZone`×2, `SpawnPoint`×(2×slot), `ArenaCalibrator`, `PlayerPoseTracker`, `RemotePlayerSpawner`,
   `ModeHudSpawner`, BB Camera Rig. **Admin gözlemci için ek adım YOKTUR** — `AdminSpectator`
   kendini önyükler ve sahneyi devralır (rig'i kapatır, `ArenaBoundary`'yi susturur).
+  **Çatılı arenada tek isteğe bağlı adım:** çatı kökünde `ArenaRoof`
+  (`GameObject > VortexArena > Arena Roof`) — altındaki tüm Renderer'lar çatı sayılır, `ArenaRoof`
+  katmanı (user layer 8) damgalanır ve admin kuş bakışına geçince çatı çizilmez (gölgesi kalır).
+  Katman yalnız "hangi geometri gizlenecek" sorusunu sahnede görünür kılar; davranış Renderer
+  listesinden gelir. Açık tavanlı arenalarda bu adım hiç yapılmaz.
 - `Assets/Modes/<Mod>/` — mod kutuları: `{Scripts (VortexArena.Modes.<Ad>.asmdef), Data, UI}`.
   Modlar birbirini REFERANSLAMAZ.
 - Üçüncü parti: `Assets/ThirdPartyPackages/`.
@@ -105,6 +110,11 @@ paneli) · **admin'e adres launcher'ın geçtiği `--server-ip`'ten gelir** (oyu
 Adres hiç yoksa/erişilemezse ~3 sn sonra `ConnectionOverlay` hata ekranı (VR + masaüstü, her
 sahnede kendini önyükler). DTO'lar `_Shared/Net/Protocol/` — saf C#, server csproj
 aynı dosyaları derler; Unity API'si girerse server derlemesi kırılır (bilinçli bekçi).
+⚠️ **Eşzamanlı oyuncu/admin KOTASI YOKTUR** (lisanslama geldiğinde eklenecek). Tek tavan
+`PLAYER_ID_MAX = 255` ve o ürün kararı değil, `playerId`'nin UDP'de `u8` olması; 16'dan fazla
+pozlu oyuncuda snapshot MTU'ya sığan parçalara bölünür (istemcide birleştirme gerekmez).
+Yeni bir sayısal sınır eklemek istersen bunu protokol sabiti gibi yazma — `MAX_PLAYERS` tam bu
+yüzden kaldırıldı; dev aracı emniyeti gerekiyorsa `DevProcesses.MaxDevBots` gibi yerel bir sabit kullan.
 
 ## Akış
 
@@ -117,12 +127,21 @@ sahne yükler (`SceneRouter` rolden bağımsız; yalnız `set_ready` player'a ö
 `AdminSpectator` devralır: BB rig kapanır, `ArenaCalibrator`/`BaseZone` kapanır, `ArenaBoundary`
 **kapatılmaz** `SetSpectatorMode(true)` ile susturulur (kapatmak arena origin'ini siler!), kendi
 kamerası + `AudioListener`'ı gelir. Üç kamera kipi: POV · serbest (WASD/QE + sağ tuş bakış) · kuş
-bakışı (halka + ad etiketi). Yönetim sahne üstü HUD'dan: skorlar + ortada istatistik chip'i, takım
-kolonları (FFA'da tek kolon), tercihler paneli (mod/harita + başlat/iptal/lobiye dön + görünüm +
-bağlantı) — paneller **yarı saydam**, arkadaki sahne izlenmeye devam eder.
+bakışı (halka + ad etiketi; sahnede `ArenaRoof` varsa çatı bu kipte kalkar). Yönetim sahne üstü
+HUD'dan: skorlar + ortada istatistik chip'i, takım kolonları (FFA'da tek kolon), tercihler paneli
+(mod/harita + başlat/iptal/lobiye dön + görünüm + bağlantı) — paneller **yarı saydam**, arkadaki
+sahne izlenmeye devam eder.
 Harita seçimi değişince, maç başlamamışsa (faz Lobby) o arena admin'de **yerel olarak hemen
-açılır** (önizleme; sunucuya komut gitmez). Sunucu **oyuncusuz da maç başlatır** — boş arenayı
+açılır** (önizleme; sunucuya maç komutu gitmez). Sunucu **oyuncusuz da maç başlatır** — boş arenayı
 gezmek için (konsolda uyarı; §10.1).
+**Çoklu admin sınırsızdır** (aynı PC'de birden çok pencere dahil — admin `deviceId`'si oturumluk
+GUID taşır, aksi hâlde ikisi birbirini sonsuz kick ederdi) ve hepsi eş yetkilidir. Ayrım net:
+**operasyonel durum ORTAK** (mod/harita seçimi sunucuda yaşar → `set_selection` gider, `admin_state`
+herkese döner; biri haritayı değiştirince diğerinin paneli ve yerel önizlemesi de değişir),
+**görünüm tercihleri YEREL** (kamera kipi, seçili oyuncu, halkalar, duvar/çatı saydamlığı —
+`PlayerPrefs`). Her admin eylemi diğerlerinin HUD'ında "kim ne yaptı" satırı olur. ⚠️ Yeni bir
+admin ayarı eklerken önce şunu sor: **operatörler arasında ortak mı, ekrana mı ait?** — ortaksa
+`AdminSelection`/protokol, ekrana aitse `AdminSession`.
 Masaüstü zinciri: **`launcher/` (Flutter) → admin exe'yi `--server-ip` ile başlatır**. Sunucu
 hiçbir yerden otomatik başlatılmaz, her zaman elle çalıştırılır.
 Arena sahneleri kendine yeten (kendi BB rig'i taşır).
@@ -138,30 +157,38 @@ asset'ini yazar, GameCatalog + uyumlu ModeDefinition'lara ekler, Build Settings'
 **Yeni mod:** `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol;
 mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafında `Modes/<Ad>Mode.cs`
 (IGameMode) + `Docs/ArenaNet-Protokol.md`'ye modId ekle.
-**Yeni silah:** prefab `_Shared/Arsenal/Prefabs/` + WeaponDefinition SO `_Shared/Arsenal/Data/`
-(weaponId protokolde string — iki tarafta da aynı) + gerekiyorsa `ModeDefinition.loadout` →
-**`Tools > VortexArena > Export Server Config`** (hasarı sunucu `Server/config/weapons.json`'dan
-uygular; sapmada sunucu kazanır). İçerik kataloğu: **`_Shared/Data/Resources/GameCatalog.asset`**
+**Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): prefab
+`_Shared/Arsenal/Prefabs/` + WeaponDefinition SO `_Shared/Arsenal/Data/` + gerekiyorsa
+`ModeDefinition.loadout`. **Sunucu tarafında iş YOKTUR** ve export gerekmez — sunucuda silah
+tablosu yok, hasarı istemci hesaplayıp `hit_report.damage` ile bildirir, sunucu aynen uygular
+(§10.3); `weaponId` yalnız kill feed etiketi, doğrulanmaz. Alan etkisi için etkilenen her hedefe
+bir `hit_report` yollanır. Denge sayıları istemcide yaşadığı için değişiklik APK build'i ister.
+İçerik kataloğu: **`_Shared/Data/Resources/GameCatalog.asset`**
 (ModeDefinition + MapDefinition listesi) — admin tercihler panelinin mod/harita seçicisi bunu
 `Resources.Load<GameCatalog>("GameCatalog")` ile okur, bu yüzden `Resources/` altında kalmalı.
 
 **Editor araçları** (`VortexArena.Core.Editor`, `VortexArena.Net.Editor`, `VortexArena.App.Editor`
 — yalnız Editor):
-`Tools > VortexArena > Export Server Config` (SO'lardan `Server/config/weapons.json` + `maps.json`;
-deterministik, LF, BOM'suz — **JSON'ları elle düzenleme, export ezer**), `… > Create Arena From
+`Tools > VortexArena > Export Server Config` (MapDefinition SO'larından `Server/config/maps.json`;
+deterministik, LF, BOM'suz — **JSON'u elle düzenleme, export ezer**. Silah için gerekmez —
+sunucuda silah tablosu yok), `… > Create Arena From
 Template`, **`… > Dev`** (`_Shared/App/Scripts/Editor/`: rol · hedef · Play başlangıcı (Boot'tan /
-açık sahneden) · sentetik maç parametreleri (mod, takım, spawn slot, raund sn, skor limiti) + yerel
-ortam düğmeleri: Sunucuyu Başlat/Durdur · N Bot · N Bot + Admin · Botları Durdur · Hepsini Durdur ·
-Sahipsiz süreçleri temizle · Derle (dotnet build) + canlı durum satırı. **Kısayol `Ctrl+Alt+R`**
+açık sahneden) · sentetik maç parametreleri (mod, takım, spawn slot, raund sn, skor limiti) + test
+botu düğmeleri: N Bot · N Bot + Admin · Botları Durdur · Sahipsiz botları temizle ·
+Derle (dotnet build) + canlı durum satırı. **Kısayol `Ctrl+Alt+R`**
 rolü player↔admin çevirir, pencere açık olmasa da. Seçim `EditorPrefs`'te, hedefler
 `dev-targets.json`'da → sahne/asset kirlenmez), `GameObject > VortexArena > Network Parent` (sahne
 objesine `NetIdentity` + benzersiz
 `sceneId`; sahne kaydında SceneIdGuard 0/çakışan id'leri onarır — dinamik obje senkronu altyapısı),
+`GameObject > VortexArena > Arena Roof` (seçime `ArenaRoof` ekler + altındaki Renderer'lara
+`ArenaRoof` katmanını damgalar — admin kuş bakışında gizlenecek çatı geometrisi),
 `PlayerBuildTool.BuildWindowsAdmin` (menü değil — batch-mode `-executeMethod` girişi; sahne listesi
 Build Settings'ten gelir, çıktı `-buildOutput` ile verilir; `scripts/deploy-admin-game.bat` çağırır).
-⚠️ Dev penceresi süreçleri **doğrudan exe** ile başlatır (asla `dotnet run` — yetim süreç 47821'i
-tutar) ve çıktıyı **borulamaz** (okunmayan boru süreci kilitler); Play çıkışında yalnız botlar ölür,
-sunucu bilinçli olarak yaşar.
+⚠️ **Sunucu editörden YÖNETİLMEZ** — dev penceresinde başlat/durdur düğmesi yoktur, sunucu her
+zaman elle çalıştırılıp elle kapatılır (editör onu ne başlatır ne öldürür; ad bazlı süpürme de
+yalnız PoseBot'a bakar). Pencere yalnız test botlarını **doğrudan exe** ile başlatır (asla
+`dotnet run` — yetim süreç 47821'i tutar) ve çıktıyı **borulamaz** (okunmayan boru süreci
+kilitler); Play çıkışında botlar ölür.
 
 **Dağıtım:** `scripts\deploy-admin-game.bat` (Unity → `deploy\admin\`; **editör kapalı olmalı** —
 batch-mode proje kilidine takılır, ama betik bunu zorlamaz: arka planda kalan `Unity.exe`'ler

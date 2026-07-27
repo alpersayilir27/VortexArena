@@ -3,12 +3,17 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Silah tanımı (ScriptableObject): silahın protokol kimliği + istatistikleri.
+    /// Silah tanımı (ScriptableObject): silahın kimliği + istatistikleri.
     /// <para>
-    /// <see cref="WeaponId"/> PROTOKOL ANAHTARIDIR ("ak47" / "m4") — shot_fired ve
-    /// hit_report mesajlarında bu string taşınır. Sunucudaki <c>config/weapons.json</c>
-    /// ile ELLE senkron tutulur (Docs/ArenaNet-Protokol.md §10.3): iki taraf sapınca
-    /// hasar sunucu tablosundan uygulanır ve uyumsuzluk loglanır.
+    /// <b>Denge sayılarının TEK doğruluk kaynağı burasıdır</b> (Docs/ArenaNet-Protokol.md §10.3):
+    /// sunucuda silah tablosu yoktur, hasarı istemci hesaplayıp <c>hit_report.damage</c> ile
+    /// bildirir ve sunucu aynen uygular. Bu yüzden buradaki değerleri değiştirmek için sunucuya
+    /// export GEREKMEZ — ama değişiklik istemci build'i ister.
+    /// </para>
+    /// <para>
+    /// <see cref="WeaponId"/> yalnız bir ETİKETTİR ("ak47" / "m4"): shot_fired ve hit_report
+    /// mesajlarında taşınır, kill feed ve istatistikte görünür. Sunucu doğrulamaz, dolayısıyla
+    /// yeni bir silah eklemek için sunucu tarafında hiçbir tanıtım yapılmaz.
     /// </para>
     /// <see cref="Weapon"/> bileşeni, kendisine bir tanım atanmışsa istatistiklerini
     /// Awake'te buradan okur (Inspector değerleri yedek kalır).
@@ -17,7 +22,7 @@ namespace VortexArena.Core.Combat
     public class WeaponDefinition : ScriptableObject
     {
         [Header("Kimlik")]
-        [Tooltip("Protokol anahtarı — sunucudaki weapons.json ile birebir aynı olmalı.")]
+        [Tooltip("Kill feed / istatistik etiketi. Sunucu doğrulamaz, serbestçe seçilebilir.")]
         [SerializeField] private string weaponId = "";
         [SerializeField] private string displayName = "";
 
@@ -38,7 +43,7 @@ namespace VortexArena.Core.Combat
         [Tooltip("Silah prefabı (opsiyonel; loadout kurulumları için).")]
         [SerializeField] private GameObject prefab;
 
-        /// <summary>Protokol anahtarı ("ak47" / "m4").</summary>
+        /// <summary>Kill feed / istatistik etiketi ("ak47" / "m4") — sunucu doğrulamaz.</summary>
         public string WeaponId => weaponId;
 
         /// <summary>Arayüzde gösterilen ad.</summary>

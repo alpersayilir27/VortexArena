@@ -9,9 +9,15 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>deviceId → PlayerState kaydı: playerId tahsisi (1..MAX_PLAYERS), devices.json ad
+/// <summary>deviceId → PlayerState kaydı: playerId tahsisi (1..PLAYER_ID_MAX), devices.json ad
 /// kalıcılığı ("Gözlük NN" otomatik), takım dengeleme ve OFFLINE_TIMEOUT süpürmesi.
-/// (Cosmos DeviceRegistry + DeviceNameStore desenlerinin birleşimi.)</summary>
+/// (Cosmos DeviceRegistry + DeviceNameStore desenlerinin birleşimi.)
+/// <para>
+/// <b>Rol başına kalıcılık farkı (§2):</b> oyuncu kaydı kalıcıdır (deviceId sabit, kopunca
+/// Offline işaretlenir ama durur, adı devices.json'a yazılır). Admin kaydı OTURUMLUKtur —
+/// deviceId'si her oturumda benzersizdir, kopunca kayıt tümüyle silinir ve adı diske yazılmaz;
+/// aksi hâlde admin'i her açıp kapatma roster'a hayalet satır ve tükenen playerId bırakırdı.
+/// </para></summary>
 public sealed class PlayerRegistry : IDisposable
 {
     private static readonly JsonSerializerOptions NamesJsonOptions = new()
@@ -59,8 +65,31 @@ public sealed class PlayerRegistry : IDisposable
         return false;
     }
 
-    /// <summary>false = sunucu dolu (MAX_PLAYERS aşıldı). Aynı deviceId yeniden bağlanırsa
-    /// eski soket kapatılır, playerId korunur (Docs/ArenaNet-Protokol.md §2).</summary>
+    /// <summary>Çevrimiçi admin sayısı (admin_state.adminCount).</summary>
+    public int OnlineAdminCount()
+    {
+        var count = 0;
+        foreach (var state in _players.Values)
+            if (state.Online && state.Role == "admin") count++;
+        return count;
+    }
+
+    /// <summary>Çevrimiçi adminlerin bağlantıları (admin_state yayını için anlık kopya).</summary>
+    public List<ClientConnection> OnlineAdminConnections()
+    {
+        var result = new List<ClientConnection>();
+        foreach (var state in _players.Values)
+        {
+            if (!state.Online || state.Role != "admin") continue;
+            var connection = state.Connection;
+            if (connection != null) result.Add(connection);
+        }
+        return result;
+    }
+
+    /// <summary>false = playerId havuzu tükendi (1..PLAYER_ID_MAX). Bu bir ürün kotası değil,
+    /// u8 tel formatının tavanıdır. Aynı deviceId yeniden bağlanırsa eski soket kapatılır,
+    /// playerId korunur (Docs/ArenaNet-Protokol.md §2).</summary>
     public bool TryRegisterHello(HelloMsg hello, ClientConnection connection, out PlayerState state, out PlayerChangeKind kind)
     {
         ClientConnection? stale = null;
@@ -138,8 +167,12 @@ public sealed class PlayerRegistry : IDisposable
         lock (_gate)
         {
             state.Name = name;
-            _names[deviceId] = name;
-            SaveNamesLocked();
+            // Admin deviceId'si oturumluk (§2) — diske yazmak devices.json'ı çöple doldururdu.
+            if (state.Role != "admin")
+            {
+                _names[deviceId] = name;
+                SaveNamesLocked();
+            }
         }
         Changed?.Invoke(state, PlayerChangeKind.Updated);
     }
@@ -177,6 +210,7 @@ public sealed class PlayerRegistry : IDisposable
     public void NotifyDisconnected(ClientConnection connection)
     {
         PlayerState? affected = null;
+        var removed = false;
         lock (_gate)
         {
             foreach (var state in _players.Values)
@@ -187,20 +221,22 @@ public sealed class PlayerRegistry : IDisposable
                     state.Online = false;
                     state.Ready = false;
                     affected = state;
+                    removed = RetireLocked(state);
                     break;
                 }
             }
         }
-        if (affected != null) Changed?.Invoke(affected, PlayerChangeKind.Offline);
+        if (affected != null)
+            Changed?.Invoke(affected, removed ? PlayerChangeKind.Removed : PlayerChangeKind.Offline);
     }
 
     /// <summary>OFFLINE_TIMEOUT boyunca status gelmeyen cihazları çevrimdışına düşürür,
-    /// bağlantılarını kapatır (§8).</summary>
+    /// bağlantılarını kapatır (§8). Admin kayıtları burada da silinir (§2).</summary>
     private void CheckOfflinePlayers()
     {
         var now = DateTime.UtcNow;
         var timeout = TimeSpan.FromSeconds(ArenaProtocol.OFFLINE_TIMEOUT);
-        var timedOut = new List<(PlayerState State, ClientConnection? Connection)>();
+        var timedOut = new List<(PlayerState State, ClientConnection? Connection, bool Removed)>();
         lock (_gate)
         {
             foreach (var state in _players.Values)
@@ -209,16 +245,31 @@ public sealed class PlayerRegistry : IDisposable
                 {
                     state.Online = false;
                     state.Ready = false;
-                    timedOut.Add((state, state.Connection));
+                    var connection = state.Connection;
                     state.Connection = null;
+                    timedOut.Add((state, connection, RetireLocked(state)));
                 }
             }
         }
-        foreach (var (state, connection) in timedOut)
+        foreach (var (state, connection, removed) in timedOut)
         {
             connection?.Abort();
-            Changed?.Invoke(state, PlayerChangeKind.Offline);
+            Changed?.Invoke(state, removed ? PlayerChangeKind.Removed : PlayerChangeKind.Offline);
         }
+    }
+
+    /// <summary>
+    /// Çevrimdışına düşmüş kaydı emekliye ayırır. <b>Admin kaydı tümüyle silinir</b> (deviceId'si
+    /// zaten oturumluk — §2: geri gelen admin yeni bir kimlikle gelir, eski satır roster'da
+    /// hayalet olarak kalırdı ve playerId'si havuza dönmezdi). Oyuncu kaydı DURUR: deviceId'si
+    /// kalıcıdır, aynı gözlük geri geldiğinde playerId'sini ve adını korumalıdır.
+    /// <para>true = silindi. Çağıran <c>_gate</c> kilidini tutuyor olmalıdır.</para>
+    /// </summary>
+    private bool RetireLocked(PlayerState state)
+    {
+        if (state.Role != "admin") return false;
+        _players.TryRemove(state.DeviceId, out _);
+        return true;
     }
 
     public void Dispose() => _offlineTimer.Dispose();
@@ -229,9 +280,9 @@ public sealed class PlayerRegistry : IDisposable
     {
         var used = new HashSet<int>();
         foreach (var state in _players.Values) used.Add(state.PlayerId);
-        for (var id = 1; id <= ArenaProtocol.MAX_PLAYERS; id++)
+        for (var id = 1; id <= ArenaProtocol.PLAYER_ID_MAX; id++)
             if (!used.Contains(id)) return id;
-        return 0; // dolu
+        return 0; // u8 havuzu tükendi (ürün kotası değil, tel formatı tavanı)
     }
 
     /// <summary>Yeni oyuncuyu az kişili takıma koyar (eşitlikte red); admin set_team ile değiştirir.</summary>
@@ -276,22 +327,52 @@ public sealed class PlayerRegistry : IDisposable
         }
     }
 
-    /// <summary>Kayıtlı ad varsa onu döndürür; yoksa player'a ilk boş "Gözlük NN"yi atar ve dosyaya
-    /// yazar. Admin'de hello.deviceName (boşsa "Admin") kullanılır.</summary>
+    /// <summary>
+    /// <b>Oyuncu:</b> devices.json'daki kayıtlı ad varsa o, yoksa ilk boş "Gözlük NN" atanır ve
+    /// dosyaya yazılır (kalıcı kimlik).
+    /// <para>
+    /// <b>Admin:</b> `hello.deviceName` (PC adı; boşsa "Admin") kullanılır ve <b>diske YAZILMAZ</b> —
+    /// admin deviceId'si oturumluk olduğu için her açılış devices.json'a çöp bir satır eklerdi.
+    /// Aynı ad başka bir çevrimiçi admin'de kullanılıyorsa sonuna " (2)", " (3)"… eklenir:
+    /// aynı PC'de iki admin penceresi açıkken roster'da hangisinin hangisi olduğu ayırt edilebilsin.
+    /// </para>
+    /// </summary>
     private string ResolveNameLocked(string deviceId, string role, string? fallbackDeviceName)
     {
+        if (role == "admin")
+            return UniqueAdminNameLocked(deviceId, fallbackDeviceName);
+
         if (_names.TryGetValue(deviceId, out var existing) && !string.IsNullOrWhiteSpace(existing))
             return existing;
 
-        var assigned = role == "player"
-            ? NextFreeAutoNameLocked()
-            : (!string.IsNullOrWhiteSpace(fallbackDeviceName) ? fallbackDeviceName! : "Admin");
+        var assigned = NextFreeAutoNameLocked();
         if (string.IsNullOrWhiteSpace(assigned))
             assigned = string.IsNullOrWhiteSpace(fallbackDeviceName) ? deviceId : fallbackDeviceName!;
 
         _names[deviceId] = assigned;
         SaveNamesLocked();
         return assigned;
+    }
+
+    /// <summary>Başka bir admin kaydının kullanmadığı ilk ad ("Ofis-PC", "Ofis-PC (2)", …).</summary>
+    private string UniqueAdminNameLocked(string deviceId, string? fallbackDeviceName)
+    {
+        var baseName = string.IsNullOrWhiteSpace(fallbackDeviceName) ? "Admin" : fallbackDeviceName!.Trim();
+
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var state in _players.Values)
+        {
+            // Kendi kaydımız (yeniden bağlanma) adı serbest bırakır; oyuncu adları da çakışmasın.
+            if (state.DeviceId == deviceId) continue;
+            if (!string.IsNullOrEmpty(state.Name)) taken.Add(state.Name);
+        }
+
+        if (!taken.Contains(baseName)) return baseName;
+        for (var n = 2; ; n++)
+        {
+            var candidate = $"{baseName} ({n})";
+            if (!taken.Contains(candidate)) return candidate;
+        }
     }
 
     private string NextFreeAutoNameLocked()

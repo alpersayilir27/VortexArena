@@ -26,6 +26,10 @@ namespace VortexArena.Net
         public static event Action<IdentifyMsg> OnIdentify;
         public static event Action<KickedMsg> OnKicked;
 
+        /// <summary>Yalnız admin bağlantılarına gelir (§5.3): adminler arası ortak mod/harita
+        /// seçimi + son eylem duyurusu. App katmanında <c>AdminSelection</c> dinler.</summary>
+        public static event Action<AdminStateMsg> OnAdminState;
+
         internal static void RaiseConnected(WelcomeMsg msg) { OnConnected?.Invoke(msg); }
         internal static void RaiseDisconnected() { OnDisconnected?.Invoke(); }
         internal static void RaiseConnectionStateChanged(ArenaConnectionState state) { OnConnectionStateChanged?.Invoke(state); }
@@ -41,6 +45,7 @@ namespace VortexArena.Net
         internal static void RaiseShotFired(ShotFiredMsg msg) { OnShotFired?.Invoke(msg); }
         internal static void RaiseIdentify(IdentifyMsg msg) { OnIdentify?.Invoke(msg); }
         internal static void RaiseKicked(KickedMsg msg) { OnKicked?.Invoke(msg); }
+        internal static void RaiseAdminState(AdminStateMsg msg) { OnAdminState?.Invoke(msg); }
 
 #if UNITY_EDITOR
         /// <summary>
