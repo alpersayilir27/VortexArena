@@ -6,8 +6,11 @@ using VortexArena.Core.Arena;
 namespace VortexArena.Core
 {
     /// <summary>
-    /// Tüm mod + harita tanımlarının kataloğu (asset: <c>_Shared/Data/GameCatalog.asset</c>).
-    /// AdminConsole mod/harita seçim arayüzü ve mod HUD eşlemesi bunu okur.
+    /// Tüm mod + harita tanımlarının kataloğu.
+    /// Admin tercihler panelindeki mod/harita seçicisi ve mod HUD eşlemesi bunu okur.
+    /// ⚠ Asset'in yeri `Assets/_Shared/Data/Resources/GameCatalog.asset` — prosedürel admin
+    /// arayüzünün `[SerializeField]`'i olmadığı için `Resources.Load<GameCatalog>("GameCatalog")`
+    /// ile yükleniyor. Klasörden çıkarılırsa admin mod/harita seçicisi boş kalır.
     /// <para>
     /// SUNUCUYA KATALOG GEREKMEZ: admin yalnız <c>start_match{modeId, sceneName}</c> gönderir;
     /// sunucu modId'yi kendi IGameMode kayıtlarıyla eşler, bilinmeyeni reddedip loglar.

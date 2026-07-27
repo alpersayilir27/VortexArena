@@ -6,6 +6,7 @@
         "VortexArena.Net",
         "VortexArena.Protocol",
         "Oculus.VR",
+        "Unity.InputSystem",
         "Unity.TextMeshPro",
         "UnityEngine.UI"
     ],

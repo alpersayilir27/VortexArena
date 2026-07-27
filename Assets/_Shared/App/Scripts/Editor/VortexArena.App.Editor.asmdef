@@ -1,0 +1,21 @@
+{
+    "name": "VortexArena.App.Editor",
+    "rootNamespace": "VortexArena.App.Editor",
+    "references": [
+        "VortexArena.App",
+        "VortexArena.Core",
+        "VortexArena.Net",
+        "VortexArena.Protocol"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

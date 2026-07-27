@@ -155,6 +155,14 @@ namespace VortexArena.Protocol
         public bool online;
         public float battery;
         public string scene;
+
+        // Maç sayaçları (§10.2) — SUNUCU-OTORİTER, admin gözlemci arayüzünün doğruluk kaynağı.
+        // Yalnız kill_event/health_update sayılsa admin yeniden bağlandığında tablo sıfırlanırdı.
+        // Lobby fazında: hp=PLAYER_MAX_HP, alive=true, sayaçlar 0. Oyuncu istemcisi yok sayar.
+        public int kills;
+        public int deaths;
+        public float hp;
+        public bool alive;
     }
 
     [Serializable]

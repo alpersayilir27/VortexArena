@@ -4,6 +4,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 > Kısaltmalar: **Sunucu PC** = arenayı yöneten Windows bilgisayar · **Başlık** = Meta Quest 3 / 3S gözlük · **Admin** = Windows masaüstü uygulaması (yönetim + izleme) · **Player** = başlıktaki VR uygulaması.
 > Teknik referanslar: `Server/README.md` (sunucu), `Docs/ArenaNet-Protokol.md` (portlar/sabitler), `CLAUDE.md` (proje mimarisi).
+> Kurulum bittikten sonra **işletme personelinin günlük kullanacağı** kılavuz: `Docs/Kullanim-Kilavuzu.md` (teknik olmayan dille açılış sırası, 2×A IP paneli, kalibrasyon, dashboard, sorun giderme).
 
 ---
 
@@ -171,15 +172,16 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 
 - [ ] **1.** Sunucu PC'de sunucu **elle** çalıştırıldı, açılış özeti doğru (Bölüm 5).
 - [ ] **2.** **Launcher** (`deploy\launcher\vortex_launcher.exe`) açıldı; Ayarlar'da `deploy\admin\VortexArena.exe` seçili, **Sunucu IP** sunucunun statik IP'si.
-- [ ] **3.** Launcher'da **Yönetimi Başlat** → admin uygulaması açıldı ve **IP sormadan doğrudan dashboard**'a düştü (bağlanma ekranında takılı kalmıyor).
+- [ ] **3.** Launcher'da **Yönetimi Başlat** → admin uygulaması açıldı ve **IP sormadan** doğrudan **oyuncuların bulunduğu sahneye** düştü (bağlanma ekranında takılı kalmıyor); ortada skor bandı, yanlarda oyuncu listeleri, altta kamera şeridi görünüyor.
 - [ ] **4.** İki başlık açıldı → uygulama doğrudan **Lobi**'ye düştü → ikisi de **kendiliğinden** bağlandı (IP girilmedi).
 - [ ] **5.** Admin **roster**'ında iki oyuncu da çevrimiçi görünüyor; sunucu konsolunda `[+] Gözlük NN bağlandı` ve `[u] UDP kayıt` satırları var.
-- [ ] **6.** Admin **taktik (üstten) görünümde** iki oyuncu da hareket ediyor (lobide henüz hizalı değiller — normal).
-- [ ] **7.** Admin panelinden **mod (tdm) + harita (işletme arenası)** seçildi → **Maçı Başlat**. Sunucu konsolunda `start_match: mod 'tdm', sahne '<Arena>'` satırı görünüyor; iki başlık da arena sahnesini yükledi.
+- [ ] **6.** Admin **kuş bakışı** kipinde (`3`) iki oyuncu da hareket ediyor; her birinin etrafında **halka**, altında **adı** var (lobide henüz hizalı değiller — normal).
+- [ ] **6b.** Kamera kipleri çalışıyor: `1` POV (bir oyuncu seçilip onun gözünden), `2` serbest (WASD/QE + sağ tuş bakış), `3` kuş bakışı. `P` tercihler / `I` istatistik panelleri açılıyor ve **arkada sahne görünmeye devam ediyor**.
+- [ ] **7.** Admin **Tercihler** panelinden **mod (tdm) + harita (işletme arenası)** seçildi → **BAŞLAT**. Admin de aynı arena sahnesini yükledi (gözlemci). Sunucu konsolunda `start_match: mod 'tdm', sahne '<Arena>'` satırı görünüyor; iki başlık da arena sahnesini yükledi.
 - [ ] **8.** **Her iki başlıkta da kalibrasyon yapıldı** (Bölüm 3 prosedürü, A ve B işaretleri üzerinde).
-- [ ] **9.** İki oyuncu fiziksel olarak **yan yana / aynı noktada** durdu → birbirlerinin avatarını doğru yerde görüyor; admin taktik görünümünde de iki nokta üst üste geliyor. (Örtüşme yoksa Bölüm 8'e bak.)
+- [ ] **9.** İki oyuncu fiziksel olarak **yan yana / aynı noktada** durdu → birbirlerinin avatarını doğru yerde görüyor; admin kuş bakışında da iki halka üst üste geliyor. (Örtüşme yoksa Bölüm 8'e bak.)
 - [ ] **10.** Maç `Countdown (5 sn)` → `Live` geçişini yaptı; iki başlıkta da skor/can HUD'ı görünüyor.
-- [ ] **11.** Bir oyuncu diğerine ateş etti → **can azaldı**, admin panelinde **skor + kill-feed** güncellendi; sunucu konsolunda `öldürme: … — skor kırmızı N : mavi N` satırı var.
+- [ ] **11.** Bir oyuncu diğerine ateş etti → **can azaldı**, admin HUD'ında **skor + HP barı + ölüm akışı** ve istatistik tablosundaki **K/D** güncellendi; sunucu konsolunda `öldürme: … — skor kırmızı N : mavi N` satırı var.
 - [ ] **12.** Ölen oyuncu ölüm ekranını gördü → **5 sn** sonra kendi takım tabanına (`BaseZone`) fiziken girdi → **canlandı** (`canlandı: Gözlük NN`). Zorla canlandırma satırı (`zorla canlandırma`) görünüyorsa taban/ölüm akışını gözden geçir.
 - [ ] **13.** Maç süresi/skor limiti dolunca `maç sonu — kazanan: …` yayınlandı; 10 sn sonra tüm başlıklar **lobiye döndü**.
 - [ ] **14.** Bir başlığı kapat-aç → kendiliğinden yeniden bağlandı ve roster'da göründü.
@@ -197,14 +199,17 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 - [ ] Bilgi kartı: SSID + Wi-Fi parolası, sunucu statik **IP:port** (`…:47821`), arena **sahne adı**, A–B zemin işaretleri arası **mesafe**, APK sürümü + kurulum tarihi.
 - [ ] Başlık etiketleri ↔ `devices.json` adları eşleşme listesi.
 - [ ] Tek sayfalık operatör kartı: **sunucu exe'sini başlat → launcher'ı aç → Yönetimi Başlat → başlıkları aç (kendiliğinden bağlanır) → maç başlat → kalibrasyon → maç sonu.**
+- [ ] **`Docs/Kullanim-Kilavuzu.md`** (operatörün günlük kullanım kılavuzu — teknik olmayan dille: açılış sırası, 2×A gizli IP paneli, kalibrasyon, dashboard kontrolleri, sorun giderme) yazdırılıp işletmede bırakıldı; sondaki kumanda hatırlatma kartı ayrıca yönetim masasına asıldı.
 
 **Sorun giderme**
 
 | Belirti | Olası sebep | Çözüm |
 |---|---|---|
+| Ekranda **"SUNUCUYA BAĞLANILAMIYOR"** yazıyor (altında adres + `N sn · M. deneme`) | Adres **biliniyor** ama sunucuya erişilemiyor: sunucu exe'si kapalı/çökmüş; firewall engelliyor; cihaz farklı SSID/subnet'te; sunucunun IP'si değişmiş (DHCP) — ekrandaki adres artık yanlış | Ekranda yazan **adresi oku** (sahada ilk teşhis budur): sunucu PC'sinin gerçek IP'siyle aynı mı? 1) sunucuyu başlat, 2) `Server/firewall-kur.cmd`'yi **yönetici** olarak çalıştır, 3) sunucu PC'sinde `netstat -ano` çıktısında **`0.0.0.0:47821`** görün. Bağlantı kurulunca ekran kendiliğinden kaybolur; masaüstünde beklemek istemezsen **"Yeniden Bağlan"**a bas. Ekranın alt satırındaki **"Son hata"** mesajı (ör. bağlantı reddedildi / zaman aşımı) firewall ile kapalı sunucuyu ayırt ettirir |
+| Ekranda **"SUNUCU BULUNAMADI"** yazıyor ("adres yok") | Cihazın elinde **hiç adres yok**. Gözlük: beacon gelmiyor ve kayıtlı IP de `arena.json` da yok. Admin: oyun **launcher'sız** (exe'ye çift tıklanarak) açılmış → `--server-ip` gelmemiş | Gözlük: lobide sağ kumandada **A×2** → gizli IP paneli → `IP:port` gir (kalıcı saklanır). Admin: uygulamayı **launcher'dan** başlat (Ayarlar→admin exe + Sunucu IP dolu olmalı). Bu ekranda **"Yeniden Bağlan" devre dışıdır** — denenecek adres olmadığı için bilinçlidir |
 | Başlık sunucuyu bulamıyor / bağlanamıyor | Firewall'da engelle kuralı; AP'de **client isolation açık**; başlık farklı SSID/subnet'te; PC ağ profili "Genel" | `firewall-kur.cmd`'yi **yönetici** olarak çalıştır; AP'de isolation'ı kapat; SSID'yi kontrol et; ağ profilini **Özel** yap |
 | Başlık kendiliğinden bağlanmıyor, "sunucu aranıyor" | AP broadcast'i kesiyor / VLAN ayrımı → beacon gelmiyor | Lobide sağ kumandada **A×2** → gizli IP paneli → **IP:port** elle gir (beacon'ı ezer, kalıcı saklanır); kalıcı çözüm için `StreamingAssets/arena.json` + yeni APK |
-| Admin uygulaması "Sunucu adresi yok" diyor | Oyun launcher'sız (elle) açılmış — `--server-ip` gelmemiş | Oyunu **launcher'dan** başlat; launcher'da Ayarlar→admin exe ve Sunucu IP dolu olmalı |
+| Admin uygulaması "Sunucu adresi yok" diyor (3 sn sonra tam ekran **"SUNUCU BULUNAMADI"**) | Oyun launcher'sız (elle) açılmış — `--server-ip` gelmemiş | Oyunu **launcher'dan** başlat; launcher'da Ayarlar→admin exe ve Sunucu IP dolu olmalı |
 | Launcher "Admin exe bulunamadı" diyor | `deploy\admin\` silinmiş/taşınmış veya build alınmamış | `scripts\deploy-admin-game.bat` (editör kapalıyken) çalıştır, launcher'da exe'yi yeniden seç |
 | Bağlanıyor ama roster'da "çevrimdışı" düşüyor | 15 sn boyunca status gelmedi (Wi-Fi zayıf, başlık uykuya geçti) | AP kapsamasını/kanalı kontrol et; başlıkta uyku süresini uzat |
 | Avatarlar fiziksel olarak örtüşmüyor | Bir başlıkta kalibrasyon yapılmadı; A ile B karışmış (arena 180° ters); zemin işaretleri kaymış; işaret mesafesi sahnedeki `anchor_a`/`anchor_b` mesafesiyle uyuşmuyor | Her başlıkta A+B ile **yeniden kalibre et** (tamamlanmış kalibrasyonda A+B tutmak sıfırlar); bant ölçüsünü sahnedeki değerle karşılaştır. **Lobide örtüşme beklenmez** — kontrolü arena sahnesinde yap |

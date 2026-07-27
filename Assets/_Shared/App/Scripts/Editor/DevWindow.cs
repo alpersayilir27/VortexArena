@@ -1,0 +1,484 @@
+using System;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+using VortexArena.Core;
+using VortexArena.Protocol;
+
+namespace VortexArena.App.Editor
+{
+    /// <summary>
+    /// <c>Tools &gt; VortexArena &gt; Dev</c> — geliştirici kontrol paneli: rol, sunucu hedefi,
+    /// Play başlangıcı, sentetik maç parametreleri ve yerel ortam (sunucu + bot süreçleri).
+    ///
+    /// <para><b>Hiçbir şey commit'lenmez:</b> tüm seçim <see cref="DevSession"/> üzerinden
+    /// <c>EditorPrefs</c>'e yazılır (kişisel), hedef listesi ise repo'daki
+    /// <c>dev-targets.json</c>'dan OKUNUR (paylaşılan) — <see cref="DevTargets"/>. Bu pencerede
+    /// yapılan hiçbir değişiklik sahne/asset kirletmez.</para>
+    ///
+    /// <para><b>Modal dialog YOK:</b> bu projede <c>EditorUtility.DisplayDialog</c> Unity ana
+    /// thread'ini kilitleyip Unity CLI doğrulamasını ("Main thread operation timed out") bozuyor.
+    /// Geri bildirim yalnız konsol logu + pencere içi <c>HelpBox</c> ile verilir.</para>
+    /// </summary>
+    public class DevWindow : EditorWindow
+    {
+        /// <summary>"Özel" seçildiğinde <see cref="DevSession.TargetName"/>'e yazılan ASCII sentinel.
+        /// Kayıtlı hiçbir hedefe uymadığı için pencere yeniden açıldığında da "Özel"de kalır.</summary>
+        private const string CustomTargetName = "Ozel";
+
+        private const string CustomTargetLabel = "Özel…";
+
+        private static readonly string[] RoleLabels = { "Player", "Admin" };
+        private static readonly string[] StartLabels = { "Boot'tan", "Açık sahneden" };
+        private static readonly string[] TeamLabels = { "Kırmızı", "Mavi" };
+
+        [SerializeField] private Vector2 scroll;
+        [SerializeField] private int botCount = 2;
+
+        // Önbellekler — her OnGUI'de asset taraması yapmamak için OnEnable/"Tazele"de kurulur.
+        [NonSerialized] private DevTarget[] targetList = Array.Empty<DevTarget>();
+        [NonSerialized] private string[] targetLabels = Array.Empty<string>();
+        [NonSerialized] private string[] modeIds = Array.Empty<string>();
+        [NonSerialized] private double lastRepaintTime;
+
+        [MenuItem("Tools/VortexArena/Dev")]
+        private static void Open()
+        {
+            var window = GetWindow<DevWindow>(false, "Dev", true);
+            window.minSize = new Vector2(430f, 400f);
+            window.Show();
+        }
+
+        private void OnEnable()
+        {
+            titleContent = new GUIContent("Dev");
+            RefreshCaches();
+            BootstrapSelection();
+        }
+
+        /// <summary>Durum satırı canlı kalsın diye saniyede ~2 kez yeniden çiz (her karede süreç yoklamıyoruz).</summary>
+        private void Update()
+        {
+            double now = EditorApplication.timeSinceStartup;
+            if (now - lastRepaintTime < 0.5)
+            {
+                return;
+            }
+
+            lastRepaintTime = now;
+            Repaint();
+        }
+
+        // ------------------------------------------------------------------ önbellek
+
+        private void RefreshCaches()
+        {
+            IReadOnlyList<DevTarget> targets = DevTargets.Targets;
+
+            targetList = new DevTarget[targets.Count];
+            targetLabels = new string[targets.Count + 1];
+            for (int i = 0; i < targets.Count; i++)
+            {
+                targetList[i] = targets[i];
+                targetLabels[i] = targets[i].Label;
+            }
+
+            targetLabels[targets.Count] = CustomTargetLabel;
+            modeIds = CollectModeIds();
+        }
+
+        /// <summary>Katalogdaki tüm modId'ler (Ordinal sıralı). Katalog yoksa boş dizi.</summary>
+        private static string[] CollectModeIds()
+        {
+            var ids = new List<string>();
+            string[] guids = AssetDatabase.FindAssets("t:GameCatalog");
+
+            for (int i = 0; i < guids.Length; i++)
+            {
+                var catalog = AssetDatabase.LoadAssetAtPath<GameCatalog>(AssetDatabase.GUIDToAssetPath(guids[i]));
+                if (catalog == null || catalog.Modes == null)
+                {
+                    continue;
+                }
+
+                for (int m = 0; m < catalog.Modes.Length; m++)
+                {
+                    ModeDefinition mode = catalog.Modes[m];
+                    if (mode == null || string.IsNullOrWhiteSpace(mode.ModeId) || ids.Contains(mode.ModeId))
+                    {
+                        continue;
+                    }
+
+                    ids.Add(mode.ModeId);
+                }
+            }
+
+            ids.Sort(StringComparer.Ordinal);
+            return ids.ToArray();
+        }
+
+        /// <summary>
+        /// İlk açılışta (hiç hedef seçilmemişken) <c>dev-targets.json</c>'daki varsayılanları
+        /// uygular. Sonraki açılışlarda kişisel seçim korunur — "Özel" bile
+        /// (<see cref="CustomTargetName"/> sentinel'i sayesinde) sıfırlanmaz.
+        /// </summary>
+        private void BootstrapSelection()
+        {
+            if (!string.IsNullOrEmpty(DevSession.TargetName))
+            {
+                return;
+            }
+
+            if (DevTargets.TryFind(DevTargets.DefaultTargetName, out DevTarget target))
+            {
+                ApplyTarget(target);
+            }
+
+            if (!EditorPrefs.HasKey(DevSession.KeyRole))
+            {
+                DevSession.Role = DevTargets.DefaultRole;
+            }
+        }
+
+        // -------------------------------------------------------------------- çizim
+
+        private void OnGUI()
+        {
+            scroll = EditorGUILayout.BeginScrollView(scroll);
+
+            EditorGUI.BeginChangeCheck();
+            bool injectionEnabled = EditorGUILayout.ToggleLeft("Dev enjeksiyonu açık", DevSession.Enabled);
+            if (EditorGUI.EndChangeCheck())
+            {
+                DevSession.Enabled = injectionEnabled;
+            }
+
+            if (!injectionEnabled)
+            {
+                EditorGUILayout.HelpBox(
+                    "Dev enjeksiyonu KAPALI: üretim yolu birebir koşar (rol AppBoot'tan, adres " +
+                    "keşif zincirinden gelir, sentetik load_match gönderilmez). Aşağıdaki seçim " +
+                    "alanları devre dışı; ortam düğmeleri çalışmaya devam eder.",
+                    MessageType.Warning);
+            }
+
+            using (new EditorGUI.DisabledScope(!injectionEnabled))
+            {
+                DrawSelection();
+            }
+
+            EditorGUILayout.Space();
+            DrawEnvironment();
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Seçim: " + DevSession.Summary, EditorStyles.miniLabel);
+
+            EditorGUILayout.EndScrollView();
+        }
+
+        private void DrawSelection()
+        {
+            EditorGUILayout.Space();
+
+            // ---- rol
+            EditorGUI.BeginChangeCheck();
+            int roleIndex = RadioRow("Rol", RoleLabels,
+                DevSession.Role == AppSession.RolePlayer ? 0 : 1, "kısayol: Ctrl+Alt+R");
+            if (EditorGUI.EndChangeCheck())
+            {
+                DevSession.Role = roleIndex == 0 ? AppSession.RolePlayer : AppSession.RoleAdmin;
+            }
+
+            // ---- hedef
+            int customIndex = targetList.Length;
+            int currentIndex = CurrentTargetIndex();
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUI.BeginChangeCheck();
+            int pickedIndex = EditorGUILayout.Popup(
+                new GUIContent("Hedef", "dev-targets.json'dan gelir (commit'li); seçim EditorPrefs'te kişisel kalır"),
+                currentIndex, targetLabels);
+            if (EditorGUI.EndChangeCheck())
+            {
+                ApplyTargetIndex(pickedIndex);
+            }
+
+            if (GUILayout.Button("Tazele", GUILayout.Width(60f)))
+            {
+                DevTargets.Reload();
+                RefreshCaches();
+                customIndex = targetList.Length;
+                pickedIndex = CurrentTargetIndex();
+            }
+
+            EditorGUILayout.EndHorizontal();
+
+            if (!DevTargets.FileFound)
+            {
+                EditorGUILayout.HelpBox(
+                    $"'{DevTargets.FilePath}' bulunamadı — gömülü varsayılan hedefler kullanılıyor. " +
+                    "Kalıcı hedef listesi için dosyayı repo köküne ekleyip \"Tazele\"ye basın.",
+                    MessageType.Info);
+            }
+
+            if (pickedIndex >= customIndex)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUI.BeginChangeCheck();
+                string ip = EditorGUILayout.TextField(
+                    new GUIContent("IP", "Boş bırakılırsa adres YAZILMAZ; keşif zinciri (PlayerPrefs > beacon > arena.json) devralır"),
+                    DevSession.Ip);
+                int port = EditorGUILayout.IntField("Port", DevSession.Port);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    DevSession.Ip = ip;
+                    DevSession.Port = port > 0 ? port : ArenaProtocol.CONTROL_PORT;
+                }
+
+                EditorGUI.indentLevel--;
+            }
+
+            // ---- Play başlangıcı
+            EditorGUI.BeginChangeCheck();
+            int startIndex = RadioRow("Başlangıç", StartLabels, DevSession.StartFromBoot ? 0 : 1, null);
+            if (EditorGUI.EndChangeCheck())
+            {
+                DevSession.StartFromBoot = startIndex == 0;
+            }
+
+            // ---- sentetik maç (yalnız "Açık sahneden" iken anlamlı)
+            bool matchBlockEnabled = !DevSession.StartFromBoot;
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Sentetik maç (yalnız \"Açık sahneden\")", EditorStyles.boldLabel);
+
+            using (new EditorGUI.DisabledScope(!matchBlockEnabled))
+            {
+                DrawModeField();
+
+                if (matchBlockEnabled && DevProcesses.ActiveArenaSceneName() == null)
+                {
+                    EditorGUILayout.HelpBox(
+                        "Aktif sahne kabuk sahnesi — takım/slot yalnız arena sahnelerinde uygulanır.",
+                        MessageType.Info);
+                }
+
+                EditorGUI.BeginChangeCheck();
+                int teamIndex = RadioRow("Takım", TeamLabels, DevSession.Team == "blue" ? 1 : 0, null);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    DevSession.Team = teamIndex == 1 ? "blue" : "red";
+                }
+
+                EditorGUI.BeginChangeCheck();
+                int spawnSlot = EditorGUILayout.IntField("Spawn slot", DevSession.SpawnSlot);
+                int roundSeconds = EditorGUILayout.IntField("Raund sn", DevSession.RoundSeconds);
+                int scoreLimit = EditorGUILayout.IntField("Skor limiti", DevSession.ScoreLimit);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    DevSession.SpawnSlot = spawnSlot;
+                    DevSession.RoundSeconds = roundSeconds;
+                    DevSession.ScoreLimit = scoreLimit;
+                }
+            }
+        }
+
+        /// <summary>Mod seçimi: katalog varsa popup, yoksa serbest metin (pencere kırılmasın).</summary>
+        private void DrawModeField()
+        {
+            if (modeIds.Length == 0)
+            {
+                EditorGUI.BeginChangeCheck();
+                string typedMode = EditorGUILayout.TextField(
+                    new GUIContent("Mod (modId)", "GameCatalog bulunamadı — modId elle yazılıyor"),
+                    DevSession.ModeId);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    DevSession.ModeId = typedMode;
+                }
+
+                EditorGUILayout.HelpBox(
+                    "GameCatalog bulunamadı (t:GameCatalog) — mod listesi çıkarılamadı, modId elle yazılıyor.",
+                    MessageType.None);
+                return;
+            }
+
+            string current = DevSession.ModeId ?? string.Empty;
+            int index = Array.IndexOf(modeIds, current);
+
+            // Katalogda olmayan bir modId seçiliyse onu SESSİZCE değiştirmiyoruz: listenin
+            // sonuna ekleyip görünür kılıyoruz.
+            string[] options = modeIds;
+            if (index < 0)
+            {
+                options = new string[modeIds.Length + 1];
+                Array.Copy(modeIds, options, modeIds.Length);
+                options[modeIds.Length] = string.IsNullOrEmpty(current) ? "(boş)" : current + " (katalogda yok)";
+                index = modeIds.Length;
+            }
+
+            EditorGUI.BeginChangeCheck();
+            int picked = EditorGUILayout.Popup(new GUIContent("Mod", "GameCatalog'daki ModeDefinition'lar"),
+                index, options);
+            if (EditorGUI.EndChangeCheck() && picked < modeIds.Length)
+            {
+                DevSession.ModeId = modeIds[picked];
+            }
+        }
+
+        private void DrawEnvironment()
+        {
+            EditorGUILayout.LabelField("Ortam (yerel süreçler)", EditorStyles.boldLabel);
+
+            bool serverRunning = DevProcesses.IsServerRunning;
+            bool botsRunning = DevProcesses.AreBotsRunning;
+
+            botCount = EditorGUILayout.IntSlider("Bot sayısı", Mathf.Clamp(botCount, 1, ArenaProtocol.MAX_PLAYERS),
+                1, ArenaProtocol.MAX_PLAYERS);
+
+            EditorGUILayout.BeginHorizontal();
+            using (new EditorGUI.DisabledScope(serverRunning))
+            {
+                if (GUILayout.Button("Sunucuyu Başlat"))
+                {
+                    DevProcesses.StartServer();
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(!serverRunning))
+            {
+                if (GUILayout.Button("Durdur", GUILayout.Width(90f)))
+                {
+                    DevProcesses.StopServer();
+                }
+            }
+
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button($"{botCount} Bot"))
+            {
+                DevProcesses.StartBots(botCount, false);
+            }
+
+            if (GUILayout.Button($"{botCount} Bot + Admin"))
+            {
+                DevProcesses.StartBots(botCount, true);
+            }
+
+            using (new EditorGUI.DisabledScope(!botsRunning))
+            {
+                if (GUILayout.Button("Botları Durdur"))
+                {
+                    DevProcesses.StopBots();
+                }
+            }
+
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Hepsini Durdur"))
+            {
+                DevProcesses.StopAll();
+            }
+
+            if (GUILayout.Button("Sahipsiz süreçleri temizle"))
+            {
+                DevProcesses.SweepOrphans();
+            }
+
+            if (GUILayout.Button("Derle (dotnet build)"))
+            {
+                DevProcesses.BuildSolution();
+            }
+
+            EditorGUILayout.EndHorizontal();
+
+            string serverStatus = serverRunning
+                ? $"sunucu ● çalışıyor (PID {DevProcesses.ServerPid})"
+                : "sunucu ○ kapalı";
+            string botStatus = botsRunning
+                ? $"{DevProcesses.BotCount} bot süreci ● çalışıyor"
+                : "bot süreci ○ yok";
+
+            EditorGUILayout.LabelField($"Durum: {serverStatus} · {botStatus}");
+        }
+
+        // ---------------------------------------------------------------- yardımcı
+
+        /// <summary>
+        /// Etiket + yatay radyo düğmesi satırı. Seçili olmayan bir düğmeye basıldığında yeni
+        /// indeks döner (aynı karede iki toggle'ın da true dönmesi tuzağına karşı
+        /// <c>index != i</c> koşulu şart).
+        /// </summary>
+        private static int RadioRow(string label, string[] options, int index, string suffix)
+        {
+            int result = index;
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(label, GUILayout.Width(EditorGUIUtility.labelWidth - 4f));
+
+            for (int i = 0; i < options.Length; i++)
+            {
+                if (GUILayout.Toggle(index == i, options[i], EditorStyles.radioButton, GUILayout.Width(110f)) &&
+                    index != i)
+                {
+                    result = i;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(suffix))
+            {
+                EditorGUILayout.LabelField(suffix, EditorStyles.miniLabel);
+            }
+            else
+            {
+                GUILayout.FlexibleSpace();
+            }
+
+            EditorGUILayout.EndHorizontal();
+            return result;
+        }
+
+        /// <summary>Kayıtlı hedef adına karşılık gelen popup indeksi; uymuyorsa "Özel" indeksi.</summary>
+        private int CurrentTargetIndex()
+        {
+            string name = DevSession.TargetName;
+            if (!string.IsNullOrEmpty(name))
+            {
+                for (int i = 0; i < targetList.Length; i++)
+                {
+                    if (string.Equals(targetList[i].name, name, StringComparison.Ordinal))
+                    {
+                        return i;
+                    }
+                }
+            }
+
+            return targetList.Length; // "Özel…"
+        }
+
+        private void ApplyTargetIndex(int index)
+        {
+            if (index < 0 || index >= targetList.Length)
+            {
+                // "Özel": IP/Port kullanıcıya bırakılır, mevcut değerler korunur.
+                DevSession.TargetName = CustomTargetName;
+                return;
+            }
+
+            ApplyTarget(targetList[index]);
+        }
+
+        private static void ApplyTarget(DevTarget target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            DevSession.TargetName = target.name;
+            DevSession.Ip = target.ip ?? string.Empty;
+            DevSession.Port = target.port > 0 ? target.port : ArenaProtocol.CONTROL_PORT;
+        }
+    }
+}

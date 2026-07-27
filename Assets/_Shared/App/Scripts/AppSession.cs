@@ -4,6 +4,11 @@ namespace VortexArena.App
     /// Uygulama geneli oturum bilgisi: AppBoot rolü ve sunucu adresini yazar, controller'lar okur.
     /// Sahne bir kabuk controller'ıyla doğrudan oynatılırsa (Editor testi) rol
     /// çözülmemiş olabilir — controller'lar Awake'te kendi varsayılanını yazar.
+    /// <para>
+    /// Faz 6'dan beri **tek kabuk sahnesi `Lobby`'dir**: admin de oyuncularla aynı sahnede
+    /// durur ve sunucunun `load_match`/`return_to_lobby`'siyle onları takip eder (gözlemci
+    /// görünümü). Eski `AdminConsole` dashboard sahnesi kaldırıldı.
+    /// </para>
     /// </summary>
     public static class AppSession
     {
@@ -12,7 +17,6 @@ namespace VortexArena.App
 
         public const string SceneBoot = "Boot";
         public const string SceneLobby = "Lobby";
-        public const string SceneAdminConsole = "AdminConsole";
 
         public static string Role = RolePlayer;
         public static bool RoleResolved;

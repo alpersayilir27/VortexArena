@@ -6,14 +6,26 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Boot sahnesi (index 0): rolü ve sunucu adresini belirler, ilgili kabuk sahnesine geçer.
-    /// Android → player/Lobby; masaüstü/Editor → `--role player|admin` >
-    /// VORTEX_ROLE ortam değişkeni > varsayılan admin/AdminConsole.
+    /// Boot sahnesi (index 0): rolü ve sunucu adresini belirler, **her rolde `Lobby`** sahnesine
+    /// geçer. Android → player; masaüstü/Editor → `--role player|admin` > VORTEX_ROLE ortam
+    /// değişkeni > varsayılan admin.
+    ///
+    /// <para>
+    /// Faz 6: admin'in ayrı bir kabuk sahnesi (`AdminConsole` dashboard'u) YOK. Admin de
+    /// oyuncularla aynı sahnede durur ve sunucunun `load_match`/`return_to_lobby`'siyle onları
+    /// takip eder (<c>SceneRouter</c>); sahne üstü yönetim arayüzünü <c>AdminHud</c> çizer.
+    /// </para>
     ///
     /// Adres: masaüstü admin build'i **Flutter launcher tarafından** başlatılır ve adres
     /// komut satırından gelir (`--server-ip 192.168.1.10 [--server-port 47821]`). Bu yüzden
-    /// AdminConsole'da IP soran bir ekran YOKTUR. Editor'den elle oynatma için
-    /// `editorServerIp` alanı fallback'tir.
+    /// oyun içinde IP soran bir ekran YOKTUR. Komut satırı adresi rolden bağımsız
+    /// okunur: verilmişse VR oyuncusunda da keşif zincirinin ÜSTÜNDE yer alır
+    /// (bkz. LobbyController) — açıkça verilen adres her zaman kazanır.
+    ///
+    /// Editörde rol/adres seçimi Inspector'dan DEĞİL `Tools > VortexArena > Dev`
+    /// penceresinden yapılır (`DevSession` bu değerleri Boot koşmadan önce yazar; burada
+    /// yalnız "zaten çözülmüşse dokunma" kuralı vardır). Sebep: [SerializeField] override
+    /// her değişiklikte Boot.unity'yi kirletiyordu ve ekipte birbirinin ayarını eziyordu.
     /// </summary>
     public class AppBoot : MonoBehaviour
     {
@@ -21,23 +33,18 @@ namespace VortexArena.App
         public const string ArgServerPort = "--server-port";
         public const string ArgRole = "--role";
 
-#if UNITY_EDITOR
-        [Tooltip("Editor testi için rol override: 'player' | 'admin' (boş = normal çözüm).")]
-        [SerializeField] private string editorRoleOverride = "";
-
-        [Tooltip("Editor testi için sunucu adresi (launcher yok). Boş = 127.0.0.1.")]
-        [SerializeField] private string editorServerIp = "127.0.0.1";
-#endif
-
         private void Start()
         {
-            AppSession.Role = ResolveRole();
-            AppSession.RoleResolved = true;
-            ResolveServerEndpoint();
+            // DevSession (yalnız editör) rolü/adresi Boot'tan önce yazmış olabilir — ezme.
+            if (!AppSession.RoleResolved)
+            {
+                AppSession.Role = ResolveRole();
+                AppSession.RoleResolved = true;
+                ResolveServerEndpoint();
+            }
 
-            string sceneName = AppSession.Role == AppSession.RoleAdmin
-                ? AppSession.SceneAdminConsole
-                : AppSession.SceneLobby;
+            // Rol ne olursa olsun tek kabuk: Lobby. Admin gözlemci oradan sunucuyu takip eder.
+            string sceneName = AppSession.SceneLobby;
 
             string endpoint = AppSession.HasServerEndpoint
                 ? $"{AppSession.ServerIp}:{AppSession.ServerPort}"
@@ -52,14 +59,6 @@ namespace VortexArena.App
             {
                 return AppSession.RolePlayer;
             }
-
-#if UNITY_EDITOR
-            string fromOverride = NormalizeRole(editorRoleOverride);
-            if (fromOverride != null)
-            {
-                return fromOverride;
-            }
-#endif
 
             string fromArgs = NormalizeRole(FindArgValue(ArgRole));
             if (fromArgs != null)
@@ -76,32 +75,27 @@ namespace VortexArena.App
             return AppSession.RoleAdmin;
         }
 
-        /// <summary>Komut satırı adresini AppSession'a yazar; player rolü keşif zincirini kullanır.</summary>
+        /// <summary>
+        /// Komut satırı adresini AppSession'a yazar. Rolden BAĞIMSIZ: admin bunu tek adres
+        /// kaynağı olarak kullanır, player rolünde ise keşif zincirinin en üstüne oturur
+        /// (verilmemişse zincir bugünkü gibi PlayerPrefs > beacon > arena.json ile sürer).
+        /// </summary>
         private void ResolveServerEndpoint()
         {
             AppSession.ServerIp = "";
             AppSession.ServerPort = 0;
 
-            if (AppSession.Role != AppSession.RoleAdmin)
-            {
-                return; // VR oyuncusu beacon / arena.json / lobide elle giriş ile bulur.
-            }
-
             string ip = FindArgValue(ArgServerIp);
 
-#if UNITY_EDITOR
-            // Launcher yok: Editor'de elle oynatmak için Inspector alanına düş.
             if (string.IsNullOrWhiteSpace(ip))
             {
-                ip = string.IsNullOrWhiteSpace(editorServerIp) ? "127.0.0.1" : editorServerIp;
-            }
-#endif
+                if (AppSession.Role == AppSession.RoleAdmin)
+                {
+                    Debug.LogWarning(
+                        $"[AppBoot] Admin rolünde '{ArgServerIp}' verilmedi. Bu build launcher'dan " +
+                        "başlatılmalıdır; adres olmadan bağlanılamaz.");
+                }
 
-            if (string.IsNullOrWhiteSpace(ip))
-            {
-                Debug.LogWarning(
-                    $"[AppBoot] Admin rolünde '{ArgServerIp}' verilmedi. Bu build launcher'dan " +
-                    "başlatılmalıdır; adres olmadan bağlanılamaz.");
                 return;
             }
 

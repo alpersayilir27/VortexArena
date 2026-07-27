@@ -49,6 +49,17 @@ public sealed class MatchDirector
     /// tetiklediği için (lobby_state yayını) kilit DIŞINDA uygulanır.</summary>
     private readonly List<string> _readyClearQueue = new();
 
+    /// <summary>Bu maç en az bir oyuncuyla mı başladı? Loading'de "oyuncu kalmadı" durumunun
+    /// nasıl yorumlanacağını belirler (§10.1): oyuncusuz başlatılan maç admin harita
+    /// önizlemesidir ve kendiliğinden lobiye DÖNMEZ.</summary>
+    private bool _startedWithPlayers;
+
+    /// <summary>Kilit altında işaretlenen "roster tazelensin" isteği. hp/alive/kills/deaths
+    /// lobby_state ile taşınıyor (§5.3) ve admin istatistik tablosunun sağlama noktası bu.
+    /// registry.Announce olay tetiklediği için kilit DIŞINDA (FlushRosterRefresh) uygulanır;
+    /// Announce imzası bir PlayerState istediği için bayrak yerine son değişen oyuncu tutulur.</summary>
+    private PlayerState? _rosterRefreshFor;
+
     /// <summary>Vuruş reddi logu için atıcı başına kısıtlama aralığı: ölü hedefe ateş sürerken
     /// (gerçek oyuncuda da olur) konsol boğulmasın.</summary>
     private const double RejectLogIntervalSeconds = 2.0;
@@ -222,6 +233,7 @@ public sealed class MatchDirector
 
         await FlushAsync(outbox);
         FlushReadyClear();
+        FlushRosterRefresh();
 
         // Mod kancaları kilit DIŞINDA (yukarıdaki kilit sözleşmesi).
         modeToStart?.OnMatchStart(this);
@@ -238,8 +250,18 @@ public sealed class MatchDirector
         var players = OnlinePlayersLocked();
         if (players.Count == 0)
         {
-            Console.WriteLine("[match] loading: çevrimiçi oyuncu kalmadı — lobiye dönülüyor.");
-            EnterLobbyLocked(outbox, now);
+            // Ayrım önemli (§10.1): oyuncularla BAŞLAMIŞ maçta son oyuncu da düştüyse maçı
+            // bırakıp lobiye dönmek doğru. Oyuncusuz BAŞLATILMIŞ maç (admin harita önizlemesi)
+            // ise beklenecek kimse olmadığı için doğrudan Countdown'a geçer; çıkış operatörün
+            // abort_match/return_to_lobby komutudur.
+            if (_startedWithPlayers)
+            {
+                Console.WriteLine("[match] loading: çevrimiçi oyuncu kalmadı — lobiye dönülüyor.");
+                EnterLobbyLocked(outbox, now);
+                return;
+            }
+
+            EnterCountdownLocked(outbox, now);
             return;
         }
 
@@ -343,12 +365,6 @@ public sealed class MatchDirector
             .OrderBy(p => p.PlayerId)
             .ToList();
 
-        if (players.Count == 0)
-        {
-            Console.WriteLine("[match] start_match reddedildi: çevrimiçi oyuncu yok.");
-            return;
-        }
-
         var missing = players.Where(p => !p.Scenes.Contains(sceneName)).Select(p => p.Name).ToList();
         if (missing.Count > 0)
         {
@@ -356,7 +372,11 @@ public sealed class MatchDirector
             return;
         }
 
-        if (players.Count == 1)
+        // Oyuncusuz başlatmaya İZİN VERİLİR: admin gözlemci haritayı boş arenada açabilsin (§10.1).
+        // Dengeleme yalnız 2+ oyuncuda anlamlı; 0/1 oyuncuda uyarı yeterli.
+        if (players.Count == 0)
+            Console.WriteLine("[match] uyarı: hiç oyuncu yok — maç yalnız admin gözlemci için başlatılıyor (harita önizleme).");
+        else if (players.Count == 1)
             Console.WriteLine("[match] uyarı: tek oyuncuyla maç başlatılıyor (yalnız test amaçlı).");
         else
             BalanceTeams(players); // registry.SetTeam event tetikler → kilit DIŞINDA
@@ -384,6 +404,7 @@ public sealed class MatchDirector
             _scoreBlue = 0;
             _timeRemaining = _roundSeconds;
             _matchStartPending = false;
+            _startedWithPlayers = players.Count > 0;
 
             foreach (var player in players)
             {
@@ -395,7 +416,7 @@ public sealed class MatchDirector
 
                 var connection = player.Connection;
                 if (connection == null) continue;
-                // load_match YALNIZ oyunculara gider; admin fazı match_state'ten öğrenir (§10.1).
+                // load_match kişiselleştirilir: her oyuncuya kendi takımı + slotu (§10.1).
                 var load = new LoadMatchMsg
                 {
                     modeId = _modeId,
@@ -406,6 +427,26 @@ public sealed class MatchDirector
                     spawnSlot = player.SpawnSlot
                 };
                 outbox.Add(new Outgoing(connection, JsonUtil.Serialize(load), player.Name));
+            }
+
+            // Adminler de aynı sahneyi yükler (gözlemci görünümü, §2): takım/slot anlamsız
+            // olduğu için boş/-1 gider ve admin karşılığında set_ready GÖNDERMEZ — Loading
+            // kapısı yalnız role=player bağlantılarını sayar (OnlinePlayersLocked).
+            var adminLoad = JsonUtil.Serialize(new LoadMatchMsg
+            {
+                modeId = _modeId,
+                sceneName = _sceneName,
+                roundSeconds = _roundSeconds,
+                scoreLimit = _scoreLimit,
+                yourTeam = "",
+                spawnSlot = -1
+            });
+            foreach (var admin in _registry.Snapshot())
+            {
+                if (!admin.Online || admin.Role != "admin") continue;
+                var adminConnection = admin.Connection;
+                if (adminConnection == null) continue;
+                outbox.Add(new Outgoing(adminConnection, adminLoad, admin.Name));
             }
 
             SetPhaseLocked(Phase.Loading, DateTime.UtcNow);
@@ -433,6 +474,7 @@ public sealed class MatchDirector
         }
         await FlushAsync(outbox);
         FlushReadyClear();
+        FlushRosterRefresh();
     }
 
     // ---- Savaş hattı (§10.3) ----
@@ -538,6 +580,7 @@ public sealed class MatchDirector
                 target.DiedAt = now;
                 target.Deaths++;
                 shooter.Kills++;
+                _rosterRefreshFor = target; // K/D + alive değişti → lobby_state tazelenir (§5.3)
 
                 QueueBroadcastLocked(outbox, JsonUtil.Serialize(new KillEventMsg
                 {
@@ -564,6 +607,7 @@ public sealed class MatchDirector
         }
 
         await FlushAsync(outbox);
+        FlushRosterRefresh(); // ölüm olduysa K/D + alive'ı roster'a yansıtır (düz hasarda no-op)
 
         // Kabul edilen hasar konsola YAZILMAZ (saniyede onlarca satır olur) — yalnız öldürme + ret.
         mode?.OnHitApplied(this, shooter.PlayerId, target.PlayerId, appliedDamage, killed);
@@ -588,6 +632,7 @@ public sealed class MatchDirector
             Console.WriteLine($"[match] canlandı: {player.Name}");
         }
         await FlushAsync(outbox);
+        FlushRosterRefresh(); // hp/alive değişti → admin tablosu için roster tazelenir (§5.3)
     }
 
     // ---- Faz geçişleri (hepsi _gate altında çağrılır) ----
@@ -669,16 +714,18 @@ public sealed class MatchDirector
             EnterEndLocked(outbox, DateTime.UtcNow, winnerTeam ?? "");
         }
         await FlushAsync(outbox);
+        FlushRosterRefresh();
     }
 
     // ---- Yardımcılar ----
 
-    private static void ResetMatchStateLocked(PlayerState player, bool keepScore = false)
+    private void ResetMatchStateLocked(PlayerState player, bool keepScore = false)
     {
         player.Hp = ArenaProtocol.PLAYER_MAX_HP;
         player.Alive = true;
         player.LastHitAcceptedAt = DateTime.MinValue;
         player.DiedAt = DateTime.MinValue;
+        _rosterRefreshFor = player;
         if (keepScore) return;
         player.Kills = 0;
         player.Deaths = 0;
@@ -688,6 +735,7 @@ public sealed class MatchDirector
     {
         player.Hp = ArenaProtocol.PLAYER_MAX_HP;
         player.Alive = true;
+        _rosterRefreshFor = player;
         // attackerId=0: canlanma bir saldırı sonucu değildir (§10.4/3).
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(new HealthUpdateMsg
         {
@@ -767,6 +815,20 @@ public sealed class MatchDirector
     }
 
     /// <summary>Kilit dışında: registry.SetReady → Changed → lobby_state yayını.</summary>
+    /// <summary>Kilit dışında: registry.Announce → Changed → lobby_state yayını. `Updated` türü
+    /// konsola satır BASMAZ (Program.cs), yalnız roster'ı tazeler.</summary>
+    private void FlushRosterRefresh()
+    {
+        PlayerState? player;
+        lock (_gate)
+        {
+            player = _rosterRefreshFor;
+            _rosterRefreshFor = null;
+        }
+
+        if (player != null) _registry.Announce(player, PlayerChangeKind.Updated);
+    }
+
     private void FlushReadyClear()
     {
         string[] devices;

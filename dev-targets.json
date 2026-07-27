@@ -1,0 +1,9 @@
+{
+  "defaultTarget": "Local",
+  "defaultRole": "admin",
+  "targets": [
+    { "name": "Local", "ip": "127.0.0.1", "port": 47821 },
+    { "name": "Kesif (beacon)", "ip": "", "port": 47821 },
+    { "name": "Ornek-PC", "ip": "192.168.1.50", "port": 47821 }
+  ]
+}

@@ -1,7 +1,10 @@
 # Faz 5 — Geliştirici araç seti + bağlantı hata ekranı
 
-> **Durum:** planlandı, uygulanmadı. Uygulayıcı: sırayla adımları uygula, sondaki
-> **Doğrulama** bölümünü geçmeden fazı bitmiş sayma.
+> **Durum:** ✅ uygulandı (2026-07-27). Batch-mode derleme **0 hata**. Editör/VR içi doğrulama
+> maddeleri (aşağıdaki listede ⏳ ile işaretli) kullanıcıda.
+>
+> Planın yazıldığı hâli tarihsel kayıt olarak bırakıldı; **uygulamada verilen kararlar ve plandan
+> sapmalar** en sonda "Uygulama kararları" bölümündedir. Sapma varsa **o bölüm doğrudur.**
 
 ## Bağlam — neden
 
@@ -104,6 +107,10 @@ ortamı ile sahada koşan yol sapmaz.
 > sahneyi yeniden yükler ve döngüye girer. Bu koruma dev-only bir yama değil, **üretimde de
 > doğru davranış**: sunucudan mükerrer `load_match` gelirse sahne boşuna yeniden yüklenmemeli.
 > Uygulama sırasında `SceneRouter.cs` okunup guard eklenecek.
+>
+> ✅ **Sonuç: guard HÂLİHAZIRDA VARDI** — `SceneRouter.LoadChecked` içinde
+> `if (SceneManager.GetActiveScene().name == sceneName)` kontrolü mevcut (aktif sahneyse yeniden
+> yüklemez, yalnız hazır bildirimini elden verir). `SceneRouter.cs` **değiştirilmedi.**
 
 ## Adım 3 — Dev penceresi + kısayol
 
@@ -187,20 +194,27 @@ Karar: **Resources**, gerekçesi yorumda yazılır.
 
 ## Dokunulacak dosyalar
 
+*(Aşağıdaki tablo **gerçekleşen hâle güncellendi**; planlanandan farklı satırlar işaretli.)*
+
 | Dosya | Değişiklik |
 |---|---|
 | `dev-targets.json` | **yeni** — hedef kataloğu (commit'li) |
-| `Assets/_Shared/Core/Editor/DevTargets.cs` | **yeni** — katalog okuyucu |
-| `Assets/_Shared/Core/Editor/DevPrefs.cs` | **yeni** — EditorPrefs sarmalayıcı |
-| `Assets/_Shared/Core/Editor/DevBootstrap.cs` | **yeni** — play mode kancası + enjeksiyon |
-| `Assets/_Shared/Core/Editor/DevWindow.cs` | **yeni** — pencere + kısayol + süreç yönetimi |
-| `Assets/_Shared/Core/UI/ConnectionOverlay.cs` + prefab | **yeni** — hata ekranı |
-| `Assets/_Shared/App/Scripts/AppBoot.cs` | `editorRoleOverride`/`editorServerIp` **kaldırılır** (artık EditorPrefs); Boot.unity sadeleşir |
-| `Assets/_Shared/App/Scripts/SceneRouter.cs` | `load_match` idempotanlık koruması (aktif sahneyse yeniden yükleme yok) |
-| `Assets/_Shared/App/Scripts/AdminConsoleController.cs` | `ConnectingPanel` → overlay ile birleşme |
-| `Assets/_Shared/Scenes/Boot.unity` | kaldırılan alanların temizliği |
-| `Assets/_Shared/Scenes/AdminConsole.unity` | overlay entegrasyonu |
-| `scripts/deploy-server.bat` | PoseBot'u da publish et (`deploy\posebot\`) |
+| `Assets/_Shared/App/Scripts/Editor/VortexArena.App.Editor.asmdef` | **yeni** — dev araçları assembly'si (⚠ planda `Core.Editor` deniyordu; `AppSession`/`DevSession` gerektiği için App altında) |
+| `Assets/_Shared/App/Scripts/Editor/DevTargets.cs` | **yeni** — katalog okuyucu |
+| `Assets/_Shared/App/Scripts/Editor/DevProcesses.cs` | **yeni** ⚠ planda yoktu — sunucu/bot süreç kaydı (`SessionState` + ad doğrulaması + yetim süpürme) |
+| `Assets/_Shared/App/Scripts/Editor/DevBootstrap.cs` | **yeni** — `playModeStartScene`, Play çıkışında bot temizliği, `Ctrl+Alt+R` |
+| `Assets/_Shared/App/Scripts/Editor/DevWindow.cs` | **yeni** — pencere |
+| `Assets/_Shared/App/Scripts/DevSession.cs` | **yeni** ⚠ planda `DevPrefs.cs` (editör) idi — runtime + `#if UNITY_EDITOR`: anahtarlar, rol/adres uygulama, sentetik `load_match` |
+| `Assets/_Shared/App/Scripts/ConnectionOverlay.cs` | **yeni** ⚠ planda `Core/UI` + prefab idi — App altında, prosedürel, prefab/Resources yok |
+| `Assets/_Shared/App/Scripts/AppBoot.cs` | `editorRoleOverride`/`editorServerIp` **kaldırıldı**; adres çözümü **rolden bağımsız** hâle geldi; rol zaten çözülmüşse ezmiyor |
+| `Assets/_Shared/App/Scripts/LobbyController.cs` | ⚠ planda yoktu — keşif zincirinin başına `AppSession.HasServerEndpoint` |
+| `Assets/_Shared/Net/Scripts/NetEvents.cs` | ⚠ planda yoktu — `InjectLoadMatch` (`#if UNITY_EDITOR`) |
+| `Assets/_Shared/Net/Scripts/ArenaClient.cs` | ⚠ planda yoktu — `ConnectAttempts`, `LastError` |
+| `Assets/_Shared/App/Scripts/AdminConsoleController.cs` | yalnız sınıf dokümanı (overlay ile sıralı iş bölümü) — panel alanları **kaldırılmadı** |
+| `Assets/_Shared/Scenes/Boot.unity` | kaldırılan iki alanın temizliği ✅ |
+| ~~`Assets/_Shared/App/Scripts/SceneRouter.cs`~~ | **değişmedi** — guard zaten vardı |
+| ~~`Assets/_Shared/Scenes/AdminConsole.unity`~~ | **değişmedi** — gerekçe "Uygulama kararları"nda |
+| ~~`scripts/deploy-server.bat`~~ | **değişmedi** — PoseBot publish edilmiyor |
 
 ## Doküman güncellemeleri (aynı commit — `docs-sync` kuralı)
 
@@ -208,41 +222,72 @@ Karar: **Resources**, gerekçesi yorumda yazılır.
 - `Docs/Sistem-Ozeti.md` — §4 bileşen sözlüğü (`ConnectionOverlay`), §6.2 geliştirme akışı
   (`editorRoleOverride` yerine dev penceresi)
 - `Docs/Isletme-Kurulum.md` — sorun giderme tablosuna "bağlantı hata ekranı ne diyor" satırı
-- `plan/README.md` — Faz 5 satırı **+ kararı #2'nin düzeltilmesi**: "Launcher = admin
-  uygulamasının giriş ekranı, sunucuyu `Process.Start` ile başlatır" artık **yanlış** (ayrı
-  Flutter launcher var, sunucu hiçbir yerden otomatik başlatılmaz)
-- Protokol dokümanı: **değişmiyor** — yeni mesaj/alan/sabit yok
+- `plan/README.md` — Faz 5 satırı ✅ **+ karar #2 DÜZELTİLMEDİ, SİLİNDİ** (kullanıcı kararı):
+  "Launcher = admin uygulamasının giriş ekranı, sunucuyu `Process.Start` ile başlatır" tümden
+  geçersiz; yerine neden geçersiz olduğunu söyleyen bir not bırakıldı ve karar #3 → #2 oldu.
+  Ayrıca "Akış" satırındaki "ayar panelinden IP girilir" ifadesi beacon keşfine göre düzeltildi.
+- Protokol dokümanı: **mesaj yüzeyi değişmedi** (yeni mesaj/alan/sabit/port yok) — ama §4 keşif
+  tablosu zincir rolden bağımsız hâle geldiği için güncellendi ✅
 
 ## Doğrulama
 
-1. **Katalog:** `dev-targets.json` silinmişken editör açılır, hata vermez, `Local` görünür.
-2. **Seçim kişisel:** rol/hedef değiştirilir → `git status` **temiz kalır** (hiçbir sahne veya
-   asset kirlenmez).
-3. **Boot'tan mod:** bir arena sahnesi açıkken Play → Boot'tan koşar, rol doğru sahneye gider,
-   Play bitince açık sahneye dönülür.
-4. **Açık sahneden mod:** arena sahnesi açıkken Play → sahne yeniden **yüklenmez**, seçili
-   takım/slot `PlayerCombatState`'e düşer, HUD gelir, `CanFire` sunucu `Live` deyince açılır.
-5. **Tek tıkla ortam:** "Sunucuyu Başlat" + "2 Bot + Admin" → roster'da 2 bot + admin görünür,
-   TDM raundu koşar.
-6. **Süreç sızıntısı yok:** Play'den çıkılır ve editör kapatılır → `netstat -ano | findstr 4782`
-   **boş** (yetim süreç yok). Bu maddenin kanıtı zorunlu, tuzak yaşanmış.
-7. **Hata ekranı (admin):** sunucu kapalıyken admin açılır → ~3 sn sonra tasarımlı ekran,
-   adres + deneme sayacı doğru; sunucu açılınca ekran kendiliğinden kaybolur.
-8. **Hata ekranı (VR):** Quest'te sunucu kapalıyken lobi → aynı ekran okunur biçimde, lazy-follow
-   rahat; A×2 ile IP paneli hâlâ açılabiliyor.
-9. **Maç ortası kopma:** maç `Live` iken sunucu kapatılır → overlay gelir; geri açılınca kaybolur.
-10. **Alan-dışı önceliği:** overlay açıkken arena sınırının dışına çıkılır → `ArenaBoundary`
-    karartması/uyarısı **görünür kalır** (güvenlik maddesi).
-11. Toplu geçiş: `unity cmd recompile` + `get_console_logs` temiz; Windows admin build'i alınır ve
-    launcher'dan başlatılır (dev kodu build'e sızmadı — `#if UNITY_EDITOR` doğrulaması).
+| # | Madde | Durum |
+|---|---|---|
+| 1 | **Katalog:** `dev-targets.json` silinmişken editör açılır, hata vermez, `Local` görünür | ⏳ editörde |
+| 2 | **Seçim kişisel:** rol/hedef değiştirilir → `git status` **temiz kalır** | ✅ tasarımca (`EditorPrefs`; `Boot.unity`'deki override alanları silindi, `git status` doğrulandı) |
+| 3 | **Boot'tan kip:** arena sahnesi açıkken Play → Boot'tan koşar, rol doğru sahneye gider, Play bitince açık sahneye dönülür | ⏳ editörde |
+| 4 | **Açık sahneden kip:** arena sahnesi açıkken Play → sahne yeniden **yüklenmez**, seçili takım/slot `PlayerCombatState`'e düşer, HUD gelir, `CanFire` sunucu `Live` deyince açılır | ⏳ editörde |
+| 5 | **Tek tıkla ortam:** "Sunucuyu Başlat" + "2 Bot + Admin" → roster'da 2 bot + admin, TDM raundu koşar | ⏳ editörde |
+| 6 | **Süreç sızıntısı yok:** Play'den çıkılır + editör kapatılır → `netstat -ano \| findstr 4782` **boş** | ⏳ editörde — **kanıtı zorunlu, tuzak yaşanmış** |
+| 7 | **Hata ekranı (admin):** sunucu kapalıyken admin → ~3 sn sonra tasarımlı ekran, adres + deneme sayacı doğru; sunucu açılınca kaybolur | ⏳ editörde |
+| 8 | **Hata ekranı (VR):** Quest'te sunucu kapalıyken lobi → aynı ekran okunur, lazy-follow rahat; A×2 ile IP paneli hâlâ açılıyor | ⏳ cihazda |
+| 9 | **Maç ortası kopma:** maç `Live` iken sunucu kapatılır → overlay gelir; geri açılınca kaybolur | ⏳ editörde |
+| 10 | **Alan-dışı önceliği:** overlay açıkken arena sınırı dışına çıkılır → `ArenaBoundary` karartması/uyarısı **görünür kalır** | ⏳ cihazda (güvenlik maddesi) |
+| 11 | **Derleme:** tüm assembly'ler hatasız | ✅ batch-mode Unity 6000.3.20f1 → **0 `error CS`**; `VortexArena.App.dll` + yeni `VortexArena.App.Editor.dll` üretildi |
+| 12 | **Dev kodu build'e sızmıyor:** `#if UNITY_EDITOR` doğrulaması | ✅ tasarımca (`DevSession.cs` tamamı `#if UNITY_EDITOR`; dev araçları `includePlatforms:["Editor"]` asmdef'te; `NetEvents.InjectLoadMatch` de guard'lı) — Windows admin build'i ile son teyit ⏳ |
 
-## Açık kalan / uygulama sırasında karar verilecek
+## Uygulama kararları (plandan sapmalar — çelişki hâlinde BU bölüm doğrudur)
 
-- **Ana toolbar'a yerleştirme:** Play düğmesinin yanına rol/hedef açılır listesi koymak en az
-  yorucu olurdu; Unity 6000.3'te bunun **resmi API'si var mı doğrulanmalı**. Yoksa garanti yol:
-  dockable pencere + `[Shortcut]` (+ isteğe bağlı Scene View overlay — o API resmi).
-- **PoseBot publish mi, process-tree kill mi:** plan publish'i tercih ediyor; `deploy-server.bat`
-  şişerse ayrı `deploy-posebot.bat` ayrılır.
-- **Overlay prefab'ı `Resources`'ta mı:** Resources kullanımı Unity'de genel olarak önerilmez
-  (build'e her zaman girer); alternatif Addressables ya da katalog SO'su. Tek küçük prefab için
-  Resources kabul edilebilir görülüyor, uygulamada tekrar bakılacak.
+**Plandaki üç açık soru kapandı:**
+
+| Açık soru | Karar | Gerekçe |
+|---|---|---|
+| Ana toolbar'a rol/hedef seçici | **Kullanılmadı.** Dockable pencere + `Ctrl+Alt+R` + kısayolda `SceneView.ShowNotification` + Play'de konsola konfig satırı | Unity 6000.3'te ana toolbar API'si hâlâ internal; dev aracını resmi olmayan API'ye bağlamak her editör yükseltmesinde kırılır |
+| PoseBot publish mi | **Publish YOK.** `Server\VortexArena.PoseBot\bin\{Release,Debug}\net10.0\` doğrudan başlatılır; `scripts\deploy-server.bat` **değiştirilmedi** | `deploy/` işletmeye giden klasör; PoseBot dev/test aracı — sahaya sentetik oyuncu üreten exe gitmemeli. Exe zaten orada, ek adım gereksiz. Yoksa pencerede "Derle (dotnet build)" düğmesi var |
+| Overlay prefab'ı `Resources`'ta mı | **Prefab da Resources da YOK** — UI tamamen koddan kurulur (yuvarlak köşe sprite'ı dahil runtime'da üretilir) | `IdentifyOverlay` bu deseni zaten kuruyor; sahne bağı olmadığı için yeni arena eklerken unutulacak adım kalmıyor ve Resources build şişmesi olmuyor |
+
+**Dosya/yapı sapmaları:**
+
+- **`DevPrefs.cs` yazılmadı.** `EditorPrefs` anahtarları + accessor'lar `DevSession.cs` içinde
+  (runtime, tamamı `#if UNITY_EDITOR`). Sebep: enjeksiyonu **runtime** yapmak zorunlu
+  (`RuntimeInitializeOnLoadMethod`), anahtarlar iki dosyaya bölünürse editör ile runtime arasında
+  **anahtar adı sapması** riski doğar. Tek dosya = tek sözleşme.
+- **`ConnectionOverlay` `Core/UI` değil `App/Scripts` altında.** Rol'e göre ipucu metni için
+  `AppSession.Role` gerekiyor; `Core` → `App` referansı assembly grafiğini ters çevirirdi
+  (`App → Core`). Overlay bir uygulama-kabuğu sorumluluğu, `AppBoot`/`SceneRouter` ile aynı yerde.
+- **`DevProcesses.cs` eklendi** (planda yoktu): süreç kaydı pencereden ayrıldı, çünkü
+  `DevBootstrap` de (Play çıkışı / editör kapanışı) aynı kaydı kullanıyor.
+- **`SceneRouter.cs` değiştirilmedi** — idempotanlık guard'ı zaten vardı (yukarıda).
+- **`AdminConsole.unity` değiştirilmedi**, `ConnectingPanel` sahnede kaldı. İş bölümü **sıralı,
+  mükerrer değil**: ilk ~3 sn hafif "Bağlanılıyor: …" satırı, sonra overlay (`sortingOrder = 5000`)
+  üstünü kaplar. İkisi aynı anda görünmez, ikisi de `ArenaClient.Connect`'i çağırır.
+  *(Editör kapalıydı; sahne YAML'ını elle kesmek `m_Children` listesi ve bileşen blokları yüzünden
+  gereksiz risk. Panel gerçekten istenmiyorsa editör açıkken 2 dakikalık bir temizlik.)*
+- **Overlay kendi `EventSystem`'ini kurmuyor.** Buton yalnız masaüstünde var, masaüstü admin akışı
+  Boot → AdminConsole'dan çıkmıyor ve o sahnede (Lobby'de de) `InputSystemUIInputModule`'lü
+  EventSystem zaten duruyor. Proje **Input System-only** (`activeInputHandler: 1`) olduğu için eski
+  `StandaloneInputModule`'ü örneklemek çalışmazdı. Yoksa bir kez uyarı loglanır.
+
+**Plan dışı ama gereken üretim değişikliği (bilinçli):**
+
+- **Adres zinciri rolden bağımsız hâle geldi.** `AppBoot` artık `--server-ip`/`--server-port`'u
+  **her rolde** okuyor; `LobbyController.Start()` zincirin başına `AppSession.HasServerEndpoint`
+  kontrolünü aldı (`_manualEntry` ile işaretli → beacon ezmiyor). Yeni sıra:
+  **komut satırı > PlayerPrefs > beacon > `arena.json`**.
+  Sebep: dev'de player rolüne hedef seçtirmek için `PlayerPrefs`'e yazan bir dev-hack'i koymak
+  yerine zinciri düzeltmek doğru olan — açıkça verilen adres her rolde kazanmalı. VR build'ine
+  argüman geçilmediği için **Quest davranışı pratikte değişmedi**.
+- **`NetEvents.InjectLoadMatch`** (`#if UNITY_EDITOR`) — `RaiseLoadMatch` internal olduğu için
+  enjeksiyonun tek temiz yolu. Protokol mesajı DEĞİL, test kancası.
+- **`ArenaClient.ConnectAttempts` + `LastError`** — overlay'in "N sn · M. deneme" ve "Son hata"
+  satırları için; başka tüketicisi yok.

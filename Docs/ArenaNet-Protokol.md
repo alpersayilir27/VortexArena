@@ -13,7 +13,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
 | `BEACON_INTERVAL` | 2 sn | Beacon yayın aralığı |
-| `DISCOVERY_TIMEOUT` | 5 sn | Beacon gelmezse statik IP fallback (`StreamingAssets/arena.json` → elle girilen IP her zaman öncelikli) |
+| `DISCOVERY_TIMEOUT` | 5 sn | Beacon gelmezse statik IP fallback (`StreamingAssets/arena.json`); komut satırı adresi ve elle girilen IP beacon'ın **üstündedir** (zincirin tamamı §4) |
 | `STATUS_INTERVAL` | 5 sn | İstemci status kalp atışı |
 | `OFFLINE_TIMEOUT` | 15 sn | Status gelmezse cihaz çevrimdışı sayılır, bağlantı kapatılır |
 | `RECONNECT_BACKOFF` | 1 → 2 → 5 sn (tavan 5) | Kopunca sonsuz yeniden deneme; her denemede discovery baştan |
@@ -32,6 +32,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 ## 2. Roller ve kimlik
 
 - `role`: `"player"` (VR/Quest) veya `"admin"` (Windows masaüstü). Admin oynamaz; lobi rosterinde görünür, komut yetkisi vardır.
+- **Admin sahne olarak oyuncuları takip eder:** `load_match` / `welcome.match` / `return_to_lobby` admin istemcisinde de sahne yükler (gözlemci görünümü). İki fark: admin `set_ready` **göndermez** (Loading kapısını yalnız `role=player` besler) ve poz **göndermez** (`0x01 PoseUpdate` yok), ama `0x00` ile UDP kaydı yapıp snapshot'ları alır.
 - `deviceId` = `SystemInfo.deviceUniqueIdentifier` — kalıcı kimlik (sunucu `devices.json`'da ada eşler, "Gözlük NN" otomatik adlandırma).
 - `playerId` = sunucunun `welcome`'da atadığı **1..MAX_PLAYERS** arası küçük tamsayı (UDP paketlerinde 1 bayt). Admin'e de atanır (poz göndermez).
 - Aynı `deviceId` ikinci kez bağlanırsa eski bağlantı kapatılır, yenisi kabul edilir (cihaz yeniden bağlanmıştır).
@@ -54,8 +55,12 @@ Hem `255.255.255.255` hem her arayüzün subnet-broadcast adresine gönderilir:
 
 | Rol | Adres nereden gelir |
 |---|---|
-| `player` (Quest) | PlayerPrefs (elle girilmiş) > **beacon** > `StreamingAssets/arena.json`. Bulunan adrese **otomatik bağlanılır**; oyuncuya sorulmaz. Hiçbiri yoksa lobide sağ kumandada **A×2** ile gizli IP paneli açılır ve elle girilen değer beacon'ı ezer (PlayerPrefs'e kalıcı yazılır). |
-| `admin` (Windows) | **Yalnız komut satırı:** `--server-ip <ip> [--server-port <port>]` — Flutter launcher geçer. Beacon/PlayerPrefs kullanılmaz, kullanıcıya IP sorulmaz. Argüman yoksa bağlanmaz ve ekranda sebebini yazar (Editor'de `AppBoot.editorServerIp` fallback'i vardır). |
+| `player` (Quest) | **komut satırı `--server-ip <ip> [--server-port <port>]`** > PlayerPrefs (elle girilmiş) > **beacon** > `StreamingAssets/arena.json`. Bulunan adrese **otomatik bağlanılır**; oyuncuya sorulmaz. VR build'ine argüman geçilmediği için pratikte beacon kazanır. Hiçbiri yoksa lobide sağ kumandada **A×2** ile gizli IP paneli açılır ve elle girilen değer beacon'ı ezer (PlayerPrefs'e kalıcı yazılır). |
+| `admin` (Windows) | **Yalnız komut satırı:** `--server-ip <ip> [--server-port <port>]` — Flutter launcher geçer. Beacon/PlayerPrefs kullanılmaz, kullanıcıya IP sorulmaz. Argüman yoksa bağlanmaz ve ekranda sebebini yazar. |
+
+> **Zincir rolden bağımsızdır:** `AppBoot` komut satırı adresini **her rolde** okur; verilmişse keşfin en üstünde yer alır (açıkça verilen adres kazanır, gelen beacon onu ezmez). **Editörde** rol ve adres komut satırı yerine `Tools > VortexArena > Dev` penceresinden gelir (`EditorPrefs` — sahnede rol/IP override alanı YOKTUR); aynı pencere yalnız-editör bir **sentetik `load_match` enjeksiyonu** da yapabilir (bir arena sahnesinden doğrudan Play). Bu bir test kancasıdır (`NetEvents.InjectLoadMatch`, `#if UNITY_EDITOR`) — **yeni mesaj/alan değildir**, mevcut `load_match` (§5.3) kullanılır ve protokol yüzeyi değişmez.
+
+> **Bağlantı kurulamazsa:** istemci bağlantısızlık ~3 sn sürdüğünde tasarımlı bir hata ekranı gösterir (`ConnectionOverlay`, VR + masaüstü): adres biliniyorsa "SUNUCUYA BAĞLANILAMIYOR" + adres + deneme sayacı + son hata, adres hiç yoksa "SUNUCU BULUNAMADI". Sunum katmanıdır, protokolü etkilemez; yeniden deneme kuralı `RECONNECT_BACKOFF`'tur (§1).
 
 ## 5. WS kontrol mesajları (JSON, text)
 
@@ -67,7 +72,7 @@ Hem `255.255.255.255` hem her arayüzün subnet-broadcast adresine gönderilir:
 ```json
 { "type": "hello", "protocolVersion": 1, "role": "player",
   "deviceId": "...", "deviceName": "...", "appVersion": "0.1.0",
-  "currentScene": "Lobby", "scenes": ["Boot","Lobby","AdminConsole","Arena10x10"] }
+  "currentScene": "Lobby", "scenes": ["Boot","Lobby","Arena10x10","IceWorld"] }
 ```
 `scenes` = build listesinden runtime'da toplanır (`SceneUtility.GetScenePathByBuildIndex`) → admin katalog doğrulaması bunu kullanır.
 
@@ -114,15 +119,21 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
 ```
 `match.phase` boş/`"Lobby"` değilse **geç katılım senkronu**: istemci `sceneName`'i yükleyip maça katılır.
 
-**`lobby_state`** — roster her değiştiğinde TAM anlık görüntü:
+**`lobby_state`** — roster her değiştiğinde **ve maç sayaçları değiştiğinde** (ölüm/canlanma) TAM anlık görüntü:
 ```json
 { "type":"lobby_state", "players":[
   { "playerId":3, "name":"Gözlük 03", "role":"player", "team":"red",
-    "ready":true, "online":true, "battery":0.87, "scene":"Lobby" } ] }
+    "ready":true, "online":true, "battery":0.87, "scene":"Arena10x10",
+    "kills":4, "deaths":2, "hp":72.0, "alive":true } ] }
 ```
+`kills`/`deaths`/`hp`/`alive` **sunucu-otoriter** maç sayaçlarıdır (§10.2) ve admin gözlemci
+arayüzünün tek doğruluk kaynağıdır: yalnız `kill_event`/`health_update` sayılsa admin yeniden
+bağlandığında tablo sıfırlanırdı. Lobby fazında `hp=PLAYER_MAX_HP`, `alive=true`, sayaçlar 0.
+Admin olmayan istemciler bu alanları yok sayabilir.
 
 **`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "spawnSlot":2 }`
 → istemci sahneyi yükler, kendi takım tarafındaki `spawnSlot` numaralı `SpawnPoint`'te başlar, `status`'ta yeni sahne görünür. Sahne yüklenince istemci `set_ready` (loading tamam anlamında) gönderir; herkes hazır olunca sunucu `countdown` başlatır.
+**Adminlere de gönderilir** (gözlemci sahneyi yüklesin diye) ama `yourTeam:""` ve `spawnSlot:-1` ile — admin oynamadığı için takım/slot anlamsızdır ve admin `set_ready` göndermez.
 
 **`countdown`** `{ "type":"countdown", "seconds":5 }` — 0'a inince faz Live.
 **`match_state`** — faz değişimlerinde + Live'da saniyede 1:
@@ -181,12 +192,13 @@ oyuncu başına: [u8 playerId][u8 flags][92B'lik PoseUpdate'in poz kısmı = 84 
 ## 8. Bağlantı yaşam döngüsü
 
 ```
-İstemci: aç → discovery (elle girilmiş IP varsa onu kullan; yoksa beacon dinle 5 sn;
-         yoksa StreamingAssets/arena.json statik IP)
+İstemci: aç → discovery (komut satırı --server-ip verildiyse onu kullan; yoksa elle girilmiş IP
+         (PlayerPrefs); yoksa beacon dinle 5 sn; yoksa StreamingAssets/arena.json statik IP)
        → ws://ip:47821/ws bağlan → hello → welcome (playerId + udpToken + match durumu)
        → UDP kayıt (0x00, ack'e dek tekrar) → geç katılımsa sahne senkronu
        → StatusLoop (5 sn) + (player ise, Live/Lobby fark etmez) PoseLoop (20 Hz)
 Kopma  → 1→2→5 sn backoff ile discovery'den itibaren baştan (sonsuz)
+       → bağlantısızlık ~3 sn sürerse istemci hata ekranı gösterir (sunum; §4 notu)
 Sunucu : hello'suz bağlantıyı 10 sn içinde kapat; deviceId çakışmasında eskisini kapat
        → 15 sn status yoksa Offline işaretle + bağlantıyı kapat + lobby_state yayınla
 ```
@@ -207,9 +219,10 @@ Lobby ──start_match──► Loading ──herkes set_ready | LOADING_TIMEOU
    └──── return_to_lobby ◄── End (MATCH_END_SECONDS) ◄── match sonu ◄──── Live
 ```
 
-- **`start_match` doğrulaması** (sırayla): `modeId` sunucudaki `IGameMode` kayıtlarında var; `sceneName` boş değil; **`sceneName` `config/maps.json` harita tablosunda var ve o harita `modeId`'yi destekliyor** (harita girdisindeki `modes` boşsa kısıt yok; **tablo boşsa — maps.json yoksa — bu adım tümüyle atlanır**); en az 1 çevrimiçi `role=player`; `sceneName` tüm çevrimiçi oyuncuların `hello.scenes` listesinde var. Geçmezse komut reddedilir ve konsola sebep yazılır (faz değişmez). İki oyuncu+ varken takımlar dengelenir (boş takım kalmaz); tek oyuncuyla başlatmaya **test amaçlı** izin verilir (konsolda uyarı).
-- **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam` + `spawnSlot`'u (takım içi 0 tabanlı sıra) gider. Harita tablosunda `spawnSlotsPerTeam` biliniyorsa slot bu sayıya göre **modulo** alınır (sahnede olmayan slota atama yapılmaz; kalabalık takımda slotlar paylaşılır). Faz Loading'e geçerken tüm `ready` bayrakları sıfırlanır.
-- **Loading:** istemci sahneyi yükleyince `set_ready{ready:true}` gönderir ("sahne yüklendi" anlamında). Tüm çevrimiçi oyuncular hazır olunca (veya `LOADING_TIMEOUT` dolunca) Countdown başlar.
+- **`start_match` doğrulaması** (sırayla): `modeId` sunucudaki `IGameMode` kayıtlarında var; `sceneName` boş değil; **`sceneName` `config/maps.json` harita tablosunda var ve o harita `modeId`'yi destekliyor** (harita girdisindeki `modes` boşsa kısıt yok; **tablo boşsa — maps.json yoksa — bu adım tümüyle atlanır**); `sceneName` tüm çevrimiçi oyuncuların `hello.scenes` listesinde var. Geçmezse komut reddedilir ve konsola sebep yazılır (faz değişmez). İki oyuncu+ varken takımlar dengelenir (boş takım kalmaz); tek oyuncuyla ve **hiç oyuncu yokken** başlatmaya izin verilir (konsolda uyarı) — ikincisi admin gözlemcinin haritayı boş arenada açması için vardır.
+- **Oyuncusuz maç (yalnız admin):** `load_match` yalnız adminlere gider, Loading'de beklenecek `set_ready` olmadığı için faz doğrudan Countdown'a geçer ve maç normal işler (skor 0, süre akar). Ayrım şu: **oyuncularla başlamış** bir maçta Loading sırasında son oyuncu da düşerse sunucu maçı bırakıp Lobby'ye döner; oyuncusuz **başlatılmış** maçta dönmez — çıkış operatörün `abort_match`/`return_to_lobby` komutudur.
+- **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam` + `spawnSlot`'u (takım içi 0 tabanlı sıra) gider. Harita tablosunda `spawnSlotsPerTeam` biliniyorsa slot bu sayıya göre **modulo** alınır (sahnede olmayan slota atama yapılmaz; kalabalık takımda slotlar paylaşılır). Faz Loading'e geçerken tüm `ready` bayrakları sıfırlanır. **Çevrimiçi adminlere de bir kopya gider** (`yourTeam:""`, `spawnSlot:-1`) — admin gözlemci aynı sahneyi yükler.
+- **Loading:** istemci sahneyi yükleyince `set_ready{ready:true}` gönderir ("sahne yüklendi" anlamında). Tüm çevrimiçi **oyuncular** hazır olunca (veya `LOADING_TIMEOUT` dolunca) Countdown başlar. Kapı yalnız `role=player` bağlantılarını sayar: admin sahneyi yüklese de `set_ready` göndermez, geri sayımı ne hızlandırır ne geciktirir.
 - **Countdown:** saniyede bir `countdown{seconds}` (5→1); 0'da faz Live.
 - **Live:** `match_state` 1 Hz; `timeRemaining` sunucuda azalır; `IGameMode.OnTick` çağrılır.
 - **End:** `match_end` yayınlanır, `MATCH_END_SECONDS` sonra `return_to_lobby` + faz Lobby (skorlar/canlar sıfırlanır, oyuncular Lobby sahnesine döner).
@@ -218,6 +231,8 @@ Lobby ──start_match──► Loading ──herkes set_ready | LOADING_TIMEOU
 ### 10.2 Oyuncu maç durumu (sunucuda)
 
 Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `spawnSlot`, `kills`, `deaths`, son vuruş zamanı (rate-limit), ölüm zamanı. Live'a girerken herkes `hp=PLAYER_MAX_HP`, `alive=1`. Snapshot'taki `SnapshotEntry.flags` bit0 (`FLAG_ALIVE`) bu `alive` alanından beslenir — Lobby fazında herkes canlı sayılır.
+
+`hp`/`alive`/`kills`/`deaths` **`lobby_state` ile de yayınlanır** (§5.3): ölüm işlendikten sonra roster bir kez tazelenir, böylece admin istatistik tablosu sunucudaki sayaçla birebir kalır ve admin yeniden bağlandığında geçmişi kaybetmez. Anlık akış (her vuruş) yine `health_update`/`kill_event` üzerinden gider — `lobby_state` sağlama noktasıdır, sıcak yol değil.
 
 ### 10.3 Vuruş hattı
 

@@ -52,6 +52,15 @@ namespace VortexArena.Net
         /// <summary>Soket açık mı — her thread'den güvenli.</summary>
         public bool IsConnected => IsSocketOpen;
 
+        /// <summary>
+        /// Son başarılı bağlantıdan beri kaçıncı bağlanma denemesindeyiz (bağlanınca 0).
+        /// Bağlantı hata ekranı (ConnectionOverlay) bunu gösterir.
+        /// </summary>
+        public int ConnectAttempts => _connectAttempts;
+
+        /// <summary>Son bağlanma hatasının mesajı (bağlanınca temizlenir); boş olabilir.</summary>
+        public string LastError => _lastError;
+
         private readonly ConcurrentQueue<Action> _mainThreadActions = new ConcurrentQueue<Action>();
         private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
 
@@ -61,6 +70,10 @@ namespace VortexArena.Net
         private volatile string _currentSceneName = "";
         private volatile bool _userDisconnect = true; // Connect çağrılana dek reconnect yok
         private bool _shutdown;
+
+        // Yalnız bağlantı döngüsü thread'i yazar, ana thread okur (int/string atomik atama).
+        private volatile int _connectAttempts;
+        private volatile string _lastError = "";
 
         // hello için ana thread'de önbelleğe alınan cihaz bilgileri
         // (ağ thread'i Unity API'sine dokunamaz).
@@ -271,6 +284,7 @@ namespace VortexArena.Net
                 try
                 {
                     SetState(ArenaConnectionState.Connecting);
+                    _connectAttempts++;
                     var uri = new Uri($"ws://{ip}:{port}{ArenaProtocol.WS_PATH}");
                     Debug.Log($"[ArenaClient] Bağlanılıyor: {uri}");
 
@@ -280,6 +294,8 @@ namespace VortexArena.Net
 
                         _socket = socket;
                         backoffIndex = 0;
+                        _connectAttempts = 0;
+                        _lastError = "";
                         SetState(ArenaConnectionState.Connected);
                         Debug.Log("[ArenaClient] Bağlandı; hello gönderiliyor.");
 
@@ -293,6 +309,7 @@ namespace VortexArena.Net
                 }
                 catch (Exception e)
                 {
+                    _lastError = e.Message;
                     Debug.LogWarning($"[ArenaClient] Bağlantı koptu/başarısız: {e.Message}");
                 }
                 finally

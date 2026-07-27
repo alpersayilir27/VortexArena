@@ -7,6 +7,7 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 
 > Kurallar `.claude/rules/` altındadır. Uygulama planı: `plan/` (faz faz). Protokol: `Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı).
 > Sistemin tek sayfalık haritası (ne var, ağ nasıl çalışır, nasıl kullanılır): `Docs/Sistem-Ozeti.md`.
+> Sahadaki operatörün günlük kullanım kılavuzu (teknik olmayan dille): `Docs/Kullanim-Kilavuzu.md`.
 
 ## Çalışma tarzı (detay `.claude/rules/`)
 
@@ -17,6 +18,11 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
   tool'u, sunucu config'i) değişiklik AYNI commit'te dokümana yazılır; ağ davranışında sıra
   **önce `Docs/ArenaNet-Protokol.md`, sonra kod**. Hangi değişiklik hangi dokümana gider tablosu →
   `docs-sync.md`
+- **Editörde rol/adres dev penceresinden seçilir.** `Tools > VortexArena > Dev` (rolü çevirmek için
+  `Ctrl+Alt+R`): hedef listesi `dev-targets.json`'dan gelir (commit'li), seçimin kendisi
+  `EditorPrefs`'te kişisel kalır → rol/IP değiştirmek hiçbir sahne/asset kirletmez.
+  ⚠️ Boot.unity'ye (ya da başka bir sahneye) rol/IP için **[SerializeField] override KOYULMAZ** —
+  `AppBoot.editorRoleOverride`/`editorServerIp` tam bu yüzden kaldırıldı.
 - Doğrulama batch'lenir (`batch-build-verification.md`), editör doğrulaması Unity CLI ile yapılır
   (`unity-cli.md`), ağır uygulama işi alt-ajanlara devredilir (`delegate-to-subagents.md`),
   hafıza yalnız proje scope'unda tutulur (`ai-memory-scope.md`).
@@ -26,7 +32,10 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 `Assets/` (Unity) · `Server/` (.NET 10 sunucu kaynağı) · **`launcher/`** (Flutter Windows
 launcher — operatör buradan admin oyununu başlatır) · **`scripts/`** (`deploy-admin-game.bat`,
 `deploy-server.bat`, `deploy-launcher.bat`) · **`deploy/`** (üretilen çalıştırılabilirler:
-`admin/`, `server/`, `launcher/` — **git'e girmez**) · `Docs/` · `plan/` · `.claude/rules/`.
+`admin/`, `server/`, `launcher/` — **git'e girmez**) · **`dev-targets.json`** (repo kökü,
+**commit'li**: dev penceresinin adlandırılmış sunucu hedefi kataloğu — `Local`, `Kesif (beacon)`,
+`Ornek-PC` + `defaultTarget`/`defaultRole`; bir hedefin `ip`'si **boşsa** adres yazılmaz,
+keşif zinciri devralır) · `Docs/` · `plan/` · `.claude/rules/`.
 
 **`.gitignore` proje tipi başına ayrıdır** — her biri kendi klasörünü yönetir:
 kök = Unity (+ repo geneli OS/IDE) · `Server/` = .NET 10 · `launcher/` = Flutter (Windows-only;
@@ -40,14 +49,20 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
 
 - `Assets/_Shared/` — ortak. Ortak KOD yalnız bir asmdef altında: `Core/` (VortexArena.Core),
   `Net/Protocol` (VortexArena.Protocol — saf C#, server aynı dosyaları derler), `Net/Scripts`
-  (VortexArena.Net), `App/Scripts` (VortexArena.App). Kod-dışı: `Arsenal/` (silah prefab+SO),
-  `FX/`, `Environments/`, `Data/`, `Scenes/` (Boot, Lobby, AdminConsole).
+  (VortexArena.Net), `App/Scripts` (VortexArena.App — `Admin/` alt klasörü aynı asmdef'te:
+  admin gözlemci; `UiKit.cs` prosedürel arayüz kiti). Kod-dışı: `Arsenal/` (silah prefab+SO),
+  `FX/`, `Environments/`, `Data/` (**`Data/Resources/GameCatalog.asset`** — prosedürel admin
+  arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ), `Scenes/` (Boot, Lobby).
+  ⚠️ Admin dashboard sahnesi (`AdminConsole.unity`) Faz 6'da KALDIRILDI — admin oyuncularla
+  aynı sahnede duran bir gözlemcidir.
   ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
 - `Assets/Arenas/Standard/<AXxX veya TemaAdı>/` ve `Assets/Arenas/Venues/<İşletme>/` — arena kutuları:
   `{Scenes, Data, Prefabs}` (+ arenaya özel sanat varsa `Art/{Materials,Textures}`; ör. `Standard/IceWorld`).
   Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ (marker bileşenleri Core'dan gelir).
   Bir arenanın ağa bağlanması için sahnede şunlar olmalı: `ArenaBoundary` (arena origin + halfExtent),
-  `BaseZone`×2, `SpawnPoint`×(2×slot), `CalibrationManager`, `PoseSync`, `[ModeHud]`, BB Camera Rig.
+  `BaseZone`×2, `SpawnPoint`×(2×slot), `ArenaCalibrator`, `PlayerPoseTracker`, `RemotePlayerSpawner`,
+  `ModeHudSpawner`, BB Camera Rig. **Admin gözlemci için ek adım YOKTUR** — `AdminSpectator`
+  kendini önyükler ve sahneyi devralır (rig'i kapatır, `ArenaBoundary`'yi susturur).
 - `Assets/Modes/<Mod>/` — mod kutuları: `{Scripts (VortexArena.Modes.<Ad>.asmdef), Data, UI}`.
   Modlar birbirini REFERANSLAMAZ.
 - Üçüncü parti: `Assets/ThirdPartyPackages/`.
@@ -56,6 +71,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
 Protocol (saf C#, noEngineReferences) ← Net ← Core ← App, Modes.<X>
 Net oyun/sahne bilgisi içermez; olay yayınlar, App dinler. Editor asmdef'leri
 `includePlatforms:["Editor"]` + kendi runtime'ını referanslar.
+App ayrıca `Unity.InputSystem` referanslar (gözlemci kamerası klavye/fare + `InputSystemUIInputModule`);
+proje **Input System-only** — `StandaloneInputModule` runtime'da patlar, kullanılmaz.
 
 **İsimlendirme:** asmdef = `VortexArena.<Katman>`; namespace = asmdef adıyla birebir
 (rootNamespace dolu); global namespace'te tip YOK; serialize edilen ikincil tipler kendi
@@ -81,18 +98,31 @@ Pozlar istemci-otoriter (kalibrasyon sonrası ARENA UZAYINDA, 20 Hz UDP); can/sk
 fazları SUNUCU-otoriter (.NET `Server/`, mod kuralları `IGameMode`). Vuruş: atıcı raycast →
 hit_report → server doğrular → health_update. **Free-roam respawn = konum değil DURUM değişimi**
 (fiziksel oyuncu ışınlanamaz): ölüm → `RESPAWN_DELAY` → oyuncu kendi `BaseZone`'una fiziken girince
-`revive_request` → sunucu canlandırır (istemci takılırsa `REVIVE_GRACE` ile zorla). Rig'i ASLA taşıma. Keşif: **VR = beacon ile otomatik** (PlayerPrefs > beacon >
-StreamingAssets/arena.json; bulamazsa sağ kumandada **A×2** ile gizli IP paneli) · **admin =
-launcher'ın geçtiği `--server-ip`** (oyun içinde IP sorulmaz). DTO'lar `_Shared/Net/Protocol/` — saf C#, server csproj
+`revive_request` → sunucu canlandırır (istemci takılırsa `REVIVE_GRACE` ile zorla). Rig'i ASLA taşıma. Keşif zinciri **rolden bağımsız**: komut satırı
+`--server-ip` > PlayerPrefs (elle girilmiş) > beacon > StreamingAssets/arena.json — **VR'a adres
+verilmediği için pratikte beacon ile otomatik** (bulamazsa sağ kumandada **A×2** ile gizli IP
+paneli) · **admin'e adres launcher'ın geçtiği `--server-ip`'ten gelir** (oyun içinde IP sorulmaz).
+Adres hiç yoksa/erişilemezse ~3 sn sonra `ConnectionOverlay` hata ekranı (VR + masaüstü, her
+sahnede kendini önyükler). DTO'lar `_Shared/Net/Protocol/` — saf C#, server csproj
 aynı dosyaları derler; Unity API'si girerse server derlemesi kırılır (bilinçli bekçi).
 
 ## Akış
 
-Boot(index 0) → Android: Lobby / Windows: AdminConsole (editor testi için override).
+Boot(index 0) → **her rolde Lobby** (rol editörde dev penceresinden gelir).
 Lobby (VR): roster, ready/takım + **gizli** IP paneli (varsayılan KAPALI; beacon bulamazsa sağ
-kumandada **A×2** ile açılır). AdminConsole: IP SORMAZ — adres `--server-ip`'ten gelir, sahne
-açılır açılmaz otomatik bağlanıp dashboard'a düşer (roster, mod+harita seç, start, taktik üstten
-görünüm); bağlantı yoksa yalnız durum + "Yeniden Bağlan".
+kumandada **A×2** ile açılır).
+**Admin = sahne-içi gözlemci:** IP SORMAZ (adres `--server-ip`'ten gelir), Lobby'den bağlanır ve
+**her zaman sunucudaki aktif sahnededir** — `load_match`/`return_to_lobby`/geç katılım admin'de de
+sahne yükler (`SceneRouter` rolden bağımsız; yalnız `set_ready` player'a özel). Sahneyi
+`AdminSpectator` devralır: BB rig kapanır, `ArenaCalibrator`/`BaseZone` kapanır, `ArenaBoundary`
+**kapatılmaz** `SetSpectatorMode(true)` ile susturulur (kapatmak arena origin'ini siler!), kendi
+kamerası + `AudioListener`'ı gelir. Üç kamera kipi: POV · serbest (WASD/QE + sağ tuş bakış) · kuş
+bakışı (halka + ad etiketi). Yönetim sahne üstü HUD'dan: skorlar + ortada istatistik chip'i, takım
+kolonları (FFA'da tek kolon), tercihler paneli (mod/harita + başlat/iptal/lobiye dön + görünüm +
+bağlantı) — paneller **yarı saydam**, arkadaki sahne izlenmeye devam eder.
+Harita seçimi değişince, maç başlamamışsa (faz Lobby) o arena admin'de **yerel olarak hemen
+açılır** (önizleme; sunucuya komut gitmez). Sunucu **oyuncusuz da maç başlatır** — boş arenayı
+gezmek için (konsolda uyarı; §10.1).
 Masaüstü zinciri: **`launcher/` (Flutter) → admin exe'yi `--server-ip` ile başlatır**. Sunucu
 hiçbir yerden otomatik başlatılmaz, her zaman elle çalıştırılır.
 Arena sahneleri kendine yeten (kendi BB rig'i taşır).
@@ -111,16 +141,27 @@ mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafınd
 **Yeni silah:** prefab `_Shared/Arsenal/Prefabs/` + WeaponDefinition SO `_Shared/Arsenal/Data/`
 (weaponId protokolde string — iki tarafta da aynı) + gerekiyorsa `ModeDefinition.loadout` →
 **`Tools > VortexArena > Export Server Config`** (hasarı sunucu `Server/config/weapons.json`'dan
-uygular; sapmada sunucu kazanır). İçerik kataloğu: `_Shared/Data/GameCatalog.asset`
-(ModeDefinition + MapDefinition listesi) — AdminConsole mod/harita seçicisi bunu okur.
+uygular; sapmada sunucu kazanır). İçerik kataloğu: **`_Shared/Data/Resources/GameCatalog.asset`**
+(ModeDefinition + MapDefinition listesi) — admin tercihler panelinin mod/harita seçicisi bunu
+`Resources.Load<GameCatalog>("GameCatalog")` ile okur, bu yüzden `Resources/` altında kalmalı.
 
-**Editor araçları** (`VortexArena.Core.Editor`, `VortexArena.Net.Editor` — yalnız Editor):
+**Editor araçları** (`VortexArena.Core.Editor`, `VortexArena.Net.Editor`, `VortexArena.App.Editor`
+— yalnız Editor):
 `Tools > VortexArena > Export Server Config` (SO'lardan `Server/config/weapons.json` + `maps.json`;
 deterministik, LF, BOM'suz — **JSON'ları elle düzenleme, export ezer**), `… > Create Arena From
-Template`, `GameObject > VortexArena > Network Parent` (sahne objesine `NetIdentity` + benzersiz
+Template`, **`… > Dev`** (`_Shared/App/Scripts/Editor/`: rol · hedef · Play başlangıcı (Boot'tan /
+açık sahneden) · sentetik maç parametreleri (mod, takım, spawn slot, raund sn, skor limiti) + yerel
+ortam düğmeleri: Sunucuyu Başlat/Durdur · N Bot · N Bot + Admin · Botları Durdur · Hepsini Durdur ·
+Sahipsiz süreçleri temizle · Derle (dotnet build) + canlı durum satırı. **Kısayol `Ctrl+Alt+R`**
+rolü player↔admin çevirir, pencere açık olmasa da. Seçim `EditorPrefs`'te, hedefler
+`dev-targets.json`'da → sahne/asset kirlenmez), `GameObject > VortexArena > Network Parent` (sahne
+objesine `NetIdentity` + benzersiz
 `sceneId`; sahne kaydında SceneIdGuard 0/çakışan id'leri onarır — dinamik obje senkronu altyapısı),
 `PlayerBuildTool.BuildWindowsAdmin` (menü değil — batch-mode `-executeMethod` girişi; sahne listesi
 Build Settings'ten gelir, çıktı `-buildOutput` ile verilir; `scripts/deploy-admin-game.bat` çağırır).
+⚠️ Dev penceresi süreçleri **doğrudan exe** ile başlatır (asla `dotnet run` — yetim süreç 47821'i
+tutar) ve çıktıyı **borulamaz** (okunmayan boru süreci kilitler); Play çıkışında yalnız botlar ölür,
+sunucu bilinçli olarak yaşar.
 
 **Dağıtım:** `scripts\deploy-admin-game.bat` (Unity → `deploy\admin\`; **editör kapalı olmalı** —
 batch-mode proje kilidine takılır, ama betik bunu zorlamaz: arka planda kalan `Unity.exe`'ler
@@ -128,5 +169,8 @@ yanlış alarm veriyordu, takılırsa elle iptal et) · `scripts\deploy-server.b
 `deploy\server\` + `config/`) · `scripts\deploy-launcher.bat` (Flutter → `deploy\launcher\`;
 Windows **Developer Mode** açık olmalı — plugin symlink'leri, betik build öncesi kontrol eder).
 Üçü de çift tıklanabilir (sonda `pause`); otomasyonda `--no-pause` / `VORTEX_NO_PAUSE=1`.
+Admin build'i Unity'yi **`scripts\lib\watch-unity-build.ps1`** üzerinden çalıştırır: log'u canlı
+okuyup aşama/yüzde/hareketsizlik uyarısı basar (batch-mode Unity konsola hiçbir şey yazmaz);
+`-ReplayLog <log>` ile bitmiş bir build'in aşama haritası çıkarılır. Çıktısı **ASCII** olmalı.
 Betik yazım tuzakları (`call flutter` çağıranı öldürür, değişkenler `VA_` önekli):
 `scripts/README.md`. Detay: `deploy/README.md`.

@@ -318,6 +318,19 @@ namespace VortexArena.App
         /// Taktik haritanın metre ölçeğini seçili arenaya eşitler (MapDefinition.Size).
         /// Noktalar bir sonraki Update'te yeni ölçekle yeniden konumlanır.
         /// </summary>
+        /// <summary>
+        /// Prosedürel kurulum: harita alanını koddan verir (admin HUD'ının mini haritası).
+        /// Sahne bağı olmadığı için <c>mapArea</c> [SerializeField]'i boş kalır — bu metot
+        /// <c>Start()</c>'tan ÖNCE çağrılmalıdır (AddComponent'in ardından aynı karede).
+        /// </summary>
+        public void Initialize(RectTransform area)
+        {
+            if (area != null)
+            {
+                mapArea = area;
+            }
+        }
+
         public void SetArenaSize(float width, float length)
         {
             if (width > 0.01f)

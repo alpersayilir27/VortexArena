@@ -10,7 +10,7 @@ import 'launcher_config.dart';
 /// Tek ekranlık operatör konsolu: sunucu adresi + admin exe yolu + Başlat.
 ///
 /// Oyunu `--server-ip/--server-port` argümanlarıyla başlatır; Unity tarafında
-/// `AppBoot` bu argümanları okuyup AdminConsole sahnesini doğrudan bağlı açar.
+/// `AppBoot` bu argümanları okur; admin gözlemci Lobby'den bağlanıp sunucunun sahnesini izler.
 class LauncherPage extends StatefulWidget {
   const LauncherPage({super.key});
 

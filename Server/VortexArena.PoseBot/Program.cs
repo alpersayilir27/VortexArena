@@ -27,7 +27,7 @@ internal static class Program
     /// istenen sahnenin TÜM çevrimiçi oyuncuların hello.scenes'inde olmasını arar (§10.1) —
     /// bot burayı eksik bildirirse maç hiç başlamaz. Yeni arena eklendiğinde buraya da ekleyin.</summary>
     private static readonly string[] BuildScenes =
-        { "Boot", "Lobby", "AdminConsole", "Arena10x10", "Arena12x12", "ArenaDemoVenue", "IceWorld" };
+        { "Boot", "Lobby", "Arena10x10", "Arena12x12", "ArenaDemoVenue", "IceWorld" };
 
     // ---- Savaş ayarları (§10.3) — sunucunun config/weapons.json tablosuyla AYNI olmalı ----
     private const string WeaponId = "ak47";
@@ -262,7 +262,8 @@ internal static class Program
         using var ws = new ClientWebSocket();
         await ws.ConnectAsync(new Uri($"ws://{ip}:{ArenaProtocol.CONTROL_PORT}{ArenaProtocol.WS_PATH}"), ct);
 
-        var admin = new BotSession(ws, 0, "[admin]", fight: false, verbose: true) { Scene = "AdminConsole" };
+        // Admin de Lobby'de başlar ve sunucunun load_match'iyle arena sahnesine geçer (§2).
+        var admin = new BotSession(ws, 0, "[admin]", fight: false, verbose: true) { Scene = "Lobby" };
         _adminSession = admin;
 
         var hello = new HelloMsg
@@ -272,7 +273,7 @@ internal static class Program
             deviceId = "posebot-admin",
             deviceName = "PoseBot Admin",
             appVersion = "posebot",
-            currentScene = "AdminConsole",
+            currentScene = "Lobby",
             scenes = BuildScenes
         };
         await admin.SendAsync(hello, ct);
