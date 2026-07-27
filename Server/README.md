@@ -257,7 +257,9 @@ rolündeyken ortamda admin kalmadığı için E2E'nin bu ayağında şarttır.
 - **Faz 1:** beacon + WS kontrol + lobi (roster/ready/takım/kick/identify) +
   UDP kayıt. Loopback E2E: sunucuyu başlat → Editor'de admin bağlan → roster'da görün.
 - **Faz 2 (tamam):** `0x01 PoseUpdate` alımı (kayıtlı endpoint + u16 seq sarmalama kontrolü) +
-  `0x02 Snapshot` yayını (20 Hz, paket başına 16 oyuncu ≈ 1382 B) + PoseBot test istemcisi.
+  `0x02 Snapshot` yayını (20 Hz; oyuncu sayısı sınırsız, datagram başına en fazla
+  `SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16` girdi ≈ 1382 B, fazlası aynı tik içinde ek datagramlara
+  bölünür) + PoseBot test istemcisi.
 - **Faz 3:** MatchDirector faz makinesi (`load_match` → countdown → Live → End → lobi) +
   `Modes/TdmMode.cs` (`IGameMode`) + vuruş hattı, can/skor yayını ve free-roam canlanma.
   Snapshot `flags` bit0 artık gerçek `alive` durumunu taşır. (Bu fazda gelen sunucu-otoriter

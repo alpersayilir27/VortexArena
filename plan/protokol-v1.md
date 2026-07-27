@@ -1,4 +1,9 @@
-# ArenaNet Protokol Referansı (v1) — TEK DOĞRULUK KAYNAĞI
+# ArenaNet Protokol Referansı (v1) — *tarihsel kayıt*
+
+> ⚠️ **BU DOSYA ARTIK DOĞRULUK KAYNAĞI DEĞİLDİR** — Faz 0'da `Docs/ArenaNet-Protokol.md`'ye
+> kopyalandı ve o günden beri yalnız oradaki sürüm güncelleniyor. Buradaki metin Faz 0 öncesinin
+> anlık görüntüsüdür; çelişki görürsen **`Docs/ArenaNet-Protokol.md` kazanır**. (Kritik sapmalar
+> yerinde düzeltilmiştir: oyuncu sayısı sınırı kaldırıldı, sunucu-otoriter silah tablosu kaldırıldı.)
 
 > Faz 0'da bu dosya `Docs/ArenaNet-Protokol.md` olarak projeye kopyalanır (başlıktaki plan notları çıkarılarak). Unity `VortexArena.Protocol` asmdef'i ile .NET sunucu **aynı C# kaynak dosyalarını derlediği** için yapısal sapma imkânsızdır; bu doküman **semantiğin** (kim ne zaman ne gönderir) tek doğruluk kaynağıdır.
 
@@ -20,13 +25,14 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `POSE_RATE_HZ` | `20` | İstemci poz gönderim frekansı |
 | `SNAPSHOT_RATE_HZ` | `20` | Sunucu snapshot yayın frekansı |
 | `INTERP_DELAY_MS` | `100` | Uzak avatar interpolasyon tamponu |
-| `MAX_PLAYERS` | `16` | Snapshot tek UDP paketine sığar (aşağıda hesap) |
+| `PLAYER_ID_MAX` | `255` | `playerId` tahsis tavanı — **ürün kotası değil**, `playerId`'nin UDP'de `u8` olması. Eşzamanlı oyuncu sınırı YOKTUR *(v1'de `MAX_PLAYERS = 16` yazıyordu, kaldırıldı)* |
+| `SNAPSHOT_MAX_ENTRIES_PER_PACKET` | `16` | Tek snapshot datagramına yazılan en fazla girdi; fazlası ek datagramlara taşar (oyuncu sınırı değil, MTU sınırı) |
 
 ## 2. Roller ve kimlik
 
 - `role`: `"player"` (VR/Quest) veya `"admin"` (Windows masaüstü). Admin oynamaz; lobi rosterinde görünür, komut yetkisi vardır.
 - `deviceId` = `SystemInfo.deviceUniqueIdentifier` — kalıcı kimlik (sunucu `devices.json`'da ada eşler, "Gözlük NN" otomatik adlandırma).
-- `playerId` = sunucunun `welcome`'da atadığı **1..MAX_PLAYERS** arası küçük tamsayı (UDP paketlerinde 1 bayt). Admin'e de atanır (poz göndermez).
+- `playerId` = sunucunun `welcome`'da atadığı **1..`PLAYER_ID_MAX`** arası küçük tamsayı (UDP paketlerinde 1 bayt). Admin'e de atanır (poz göndermez).
 - Aynı `deviceId` ikinci kez bağlanırsa eski bağlantı kapatılır, yenisi kabul edilir (cihaz yeniden bağlanmıştır).
 
 ## 3. Koordinat çerçevesi — ARENA UZAYI
@@ -149,7 +155,7 @@ Pozlar **arena uzayında**. `seq` sarmalanır (u16); eski `seq` gelirse paket at
 [u8 0x02][u8 playerCount][u32 serverTick]
 oyuncu başına: [u8 playerId][u8 flags][92B'lik PoseUpdate'in poz kısmı = 84 B]
 ```
-`flags` bit0 = alive. 16 oyuncu: 6 + 16×86 = **1382 B** → tek UDP paketi (MTU 1500 altı; MAX_PLAYERS=16 bu yüzden). İstemci kendi pozunu snapshot'tan ÇİZMEZ (yerelden çizer); uzak oyuncuları `INTERP_DELAY_MS` tamponuyla interpole eder. Admin'e de aynı snapshot gider (taktik görünüm bundan beslenir).
+`flags` bit0 = alive. 16 girdi: 6 + 16×86 = **1382 B** → tek UDP paketi (MTU 1500 altı); daha fazla pozlu oyuncu varsa aynı tik ek datagramlara bölünür (istemcide birleştirme gerekmez). İstemci kendi pozunu snapshot'tan ÇİZMEZ (yerelden çizer); uzak oyuncuları `INTERP_DELAY_MS` tamponuyla interpole eder. Admin'e de aynı snapshot gider (taktik görünüm bundan beslenir).
 
 ## 7. DTO tasarım kuralları
 

@@ -25,7 +25,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 - [ ] 1 adet **Sunucu PC** (Windows, **.NET 10 ASP.NET Core Runtime** kurulu — sunucu Kestrel kullandığı için düz .NET Runtime yetmez), tercihen kablolu Gigabit Ethernet ile AP'ye bağlı.
 - [ ] 1 adet **5 GHz AP/router** (tercihen Wi-Fi 6), arenaya özel SSID.
-- [ ] Oyuncu sayısı kadar **Quest 3 / 3S** başlık + kumandalar (protokol üst sınırı **16 oyuncu**) + şarj istasyonu/powerbank.
+- [ ] Oyuncu sayısı kadar **Quest 3 / 3S** başlık + kumandalar + şarj istasyonu/powerbank. **Yazılımda eşzamanlı oyuncu sınırı yoktur** — pratik sınırı fiziksel alan (kişi başına güvenli hareket payı) ve AP kapasitesi belirler.
 - [ ] USB-C kablo + `adb` (Meta Quest Developer Hub kuruluysa birlikte gelir).
 - [ ] **Zemin bandı** (kalibrasyon işaretleri için, kalıcı ve renkli), şerit metre, işaretleme kalemi.
 

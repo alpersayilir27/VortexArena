@@ -30,7 +30,7 @@ Klasör: `Assets/_Shared/Net/Protocol/`
 
 Dosyalar (hepsi `namespace VortexArena.Protocol`, **UnityEngine KULLANMA** — System.* serbest):
 
-- **`ArenaProtocol.cs`** — tüm sabitler (protokol dokümanındaki tablo: sürüm, 3 port, aralıklar, timeout'lar, POSE_RATE_HZ, SNAPSHOT_RATE_HZ, INTERP_DELAY_MS, MAX_PLAYERS, `WS_PATH="/ws"`, `APP_ID="VortexArena"`).
+- **`ArenaProtocol.cs`** — tüm sabitler (protokol dokümanındaki tablo: sürüm, 3 port, aralıklar, timeout'lar, POSE_RATE_HZ, SNAPSHOT_RATE_HZ, INTERP_DELAY_MS, `WS_PATH="/ws"`, `APP_ID="VortexArena"`). *(Faz 1'de burada `MAX_PLAYERS = 16` da vardı; 2026-07-27'de kaldırıldı — oyuncu sayısı sınırı yok, yerini `PLAYER_ID_MAX = 255` + `SNAPSHOT_MAX_ENTRIES_PER_PACKET` aldı.)*
 - **`ControlMessages.cs`** — tüm JSON DTO'ları: `MsgEnvelope {string type}`, `HelloMsg`, `WelcomeMsg` (+iç `MatchInfo`), `LobbyStateMsg` (+`PlayerInfo`), `StatusMsg`, `SetNameMsg`, `SetReadyMsg`, `SetTeamMsg`, `ShotFiredMsg`, `HitReportMsg`, `StartMatchMsg`, `AbortMatchMsg`, `KickMsg`, `IdentifyMsg`, `LoadMatchMsg`, `CountdownMsg`, `MatchStateMsg`, `HealthUpdateMsg`, `KillEventMsg`, `RespawnMsg`, `MatchEndMsg`, `ReturnToLobbyMsg`, `PingMsg`, `KickedMsg`. Kurallar: `[Serializable]`, **public alan** (property değil), Dictionary/polimorfizm yok, alan adları protokol dokümanındaki camelCase ile birebir. `[Serializable]` attribute'u `System.SerializableAttribute`'tır — Unity gerektirmez, serbest.
 - **`StateMessages.cs`** — binary yaz/oku: `PoseData {float px,py,pz,qx,qy,qz,qw}` struct; `UdpHello (0x00)`, `PoseUpdate (0x01)`, `Snapshot (0x02)` için `Write(BinaryWriter)` / `Read(BinaryReader)` statik metotları. Format protokol dokümanı §6 ile birebir.
 - **`MessageTypes.cs`** — `type` string sabitleri (`"hello"`, `"welcome"`, …) tek yerde.
