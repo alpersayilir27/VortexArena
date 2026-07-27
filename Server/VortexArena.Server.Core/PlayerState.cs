@@ -51,6 +51,10 @@ public sealed class PlayerState
     public int Kills { get; set; }
     public int Deaths { get; set; }
 
+    /// <summary>Bireysel maç skoru (§10.2). Kills ile aynı şey DEĞİLDİR: yazarı IGameMode'dur
+    /// (MatchDirector'ın skor defteri üzerinden, _gate altında) ve anlamı mod başına değişir.</summary>
+    public int Score { get; set; }
+
     /// <summary>Son ölümün UTC zamanı (RESPAWN_DELAY + REVIVE_GRACE hesabı, §10.4).</summary>
     public DateTime DiedAt { get; set; }
 
@@ -93,6 +97,7 @@ public sealed class PlayerState
         kills = Kills,
         deaths = Deaths,
         hp = Hp,
-        alive = Alive
+        alive = Alive,
+        score = Score
     };
 }

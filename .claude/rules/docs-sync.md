@@ -11,7 +11,7 @@ güncellenir. Doküman ile kod arasında sapma = tuzak; bu projede tek doğruluk
 | Klasör/asmdef mimarisi, içerik ekleme reçetesi, editor tool'u, XR/paket politikası | `CLAUDE.md` |
 | Sunucu çalıştırma, CLI argümanı, config dosyası/alanı | `Server/README.md` |
 | İşletme kurulumu: donanım, ağ/firewall, kalibrasyon, smoke test adımı | `Docs/Isletme-Kurulum.md` |
-| Faz kapsamı veya durumu | `plan/<faz>.md` + `plan/README.md` |
+| Planlanmış bir işin kapsamı veya bitmesi | `plan/<faz>.md` (biten dosya **silinir**) + `plan/README.md` |
 | Yeni kalıcı çalışma kuralı | `.claude/rules/<ad>.md` + `CLAUDE.md`'de tek satır işaret |
 
 - **Sıra: doküman → kod.** Ağ davranışı değişecekse ÖNCE `ArenaNet-Protokol.md` güncellenir,

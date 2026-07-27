@@ -42,6 +42,7 @@ namespace VortexArena.App.Editor
         // Önbellekler — her OnGUI'de asset taraması yapmamak için OnEnable/"Tazele"de kurulur.
         [NonSerialized] private DevTarget[] targetList = Array.Empty<DevTarget>();
         [NonSerialized] private string[] targetLabels = Array.Empty<string>();
+        [NonSerialized] private ModeDefinition[] modeDefs = Array.Empty<ModeDefinition>();
         [NonSerialized] private string[] modeIds = Array.Empty<string>();
         [NonSerialized] private double lastRepaintTime;
 
@@ -88,13 +89,19 @@ namespace VortexArena.App.Editor
             }
 
             targetLabels[targets.Count] = CustomTargetLabel;
-            modeIds = CollectModeIds();
+
+            modeDefs = CollectModes();
+            modeIds = new string[modeDefs.Length];
+            for (int i = 0; i < modeDefs.Length; i++)
+            {
+                modeIds[i] = modeDefs[i].ModeId;
+            }
         }
 
-        /// <summary>Katalogdaki tüm modId'ler (Ordinal sıralı). Katalog yoksa boş dizi.</summary>
-        private static string[] CollectModeIds()
+        /// <summary>Katalogdaki tüm modlar (modId'ye göre Ordinal sıralı). Katalog yoksa boş dizi.</summary>
+        private static ModeDefinition[] CollectModes()
         {
-            var ids = new List<string>();
+            var found = new List<ModeDefinition>();
             string[] guids = AssetDatabase.FindAssets("t:GameCatalog");
 
             for (int i = 0; i < guids.Length; i++)
@@ -108,17 +115,33 @@ namespace VortexArena.App.Editor
                 for (int m = 0; m < catalog.Modes.Length; m++)
                 {
                     ModeDefinition mode = catalog.Modes[m];
-                    if (mode == null || string.IsNullOrWhiteSpace(mode.ModeId) || ids.Contains(mode.ModeId))
+                    if (mode == null || string.IsNullOrWhiteSpace(mode.ModeId) ||
+                        found.Exists(existing => existing.ModeId == mode.ModeId))
                     {
                         continue;
                     }
 
-                    ids.Add(mode.ModeId);
+                    found.Add(mode);
                 }
             }
 
-            ids.Sort(StringComparer.Ordinal);
-            return ids.ToArray();
+            found.Sort((a, b) => string.CompareOrdinal(a.ModeId, b.ModeId));
+            return found.ToArray();
+        }
+
+        /// <summary>Seçili modun katalog tanımı; katalogda yoksa null.</summary>
+        private ModeDefinition SelectedModeDefinition()
+        {
+            string current = DevSession.ModeId ?? string.Empty;
+            for (int i = 0; i < modeDefs.Length; i++)
+            {
+                if (modeDefs[i].ModeId == current)
+                {
+                    return modeDefs[i];
+                }
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -258,6 +281,7 @@ namespace VortexArena.App.Editor
             using (new EditorGUI.DisabledScope(!matchBlockEnabled))
             {
                 DrawModeField();
+                bool teamless = DrawModeRulesPreview();
 
                 if (matchBlockEnabled && DevProcesses.ActiveArenaSceneName() == null)
                 {
@@ -266,11 +290,17 @@ namespace VortexArena.App.Editor
                         MessageType.Info);
                 }
 
-                EditorGUI.BeginChangeCheck();
-                int teamIndex = RadioRow("Takım", TeamLabels, DevSession.Team == "blue" ? 1 : 0, null);
-                if (EditorGUI.EndChangeCheck())
+                // Takımsız modda takım seçimi anlamsız: sentetik load_match zaten boş takım
+                // gönderir (DevSession), radyo düğmesi yanıltıcı olmasın.
+                using (new EditorGUI.DisabledScope(teamless))
                 {
-                    DevSession.Team = teamIndex == 1 ? "blue" : "red";
+                    EditorGUI.BeginChangeCheck();
+                    int teamIndex = RadioRow("Takım", TeamLabels, DevSession.Team == "blue" ? 1 : 0,
+                        teamless ? "takımsız mod — yok sayılır" : null);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        DevSession.Team = teamIndex == 1 ? "blue" : "red";
+                    }
                 }
 
                 EditorGUI.BeginChangeCheck();
@@ -284,6 +314,39 @@ namespace VortexArena.App.Editor
                     DevSession.ScoreLimit = scoreLimit;
                 }
             }
+        }
+
+        /// <summary>
+        /// Seçili modun ŞEKLİNİ (§10.5) salt okunur gösterir: sentetik maçta kuralları sunucu
+        /// göndermediği için <c>ModeRuntime</c> bunları <see cref="ModeDefinition"/>'dan okur ve
+        /// editörde koşan davranış budur. <b>Sapmada sunucu kazanır</b> — sunucuda gerçek bir maç
+        /// varsa onun <c>load_match.rules</c>'u bu değerleri ezer.
+        /// </summary>
+        /// <returns>Seçili mod takımsız mı (takım alanı gizlensin mi).</returns>
+        private bool DrawModeRulesPreview()
+        {
+            ModeDefinition mode = SelectedModeDefinition();
+            if (mode == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "Mod kuralları katalogda bulunamadı — sentetik maç varsayılan (takımlı TDM) " +
+                    "kurallarıyla koşar.",
+                    MessageType.None);
+                return false;
+            }
+
+            bool teamless = mode.TeamMode == ModeTeamMode.None;
+            EditorGUILayout.HelpBox(
+                "Mod şekli (önizleme — otorite SUNUCUDADIR):\n" +
+                $"Takım: {(teamless ? "yok" : "kırmızı/mavi")}   ·   " +
+                $"Skor: {(mode.Scoring == ModeScoreKind.Player ? "bireysel" : "takım")}   ·   " +
+                $"Dost ateşi: {(mode.FriendlyFire ? "açık" : "kapalı")}\n" +
+                $"Canlanma: {(mode.Revive == ModeReviveAnchor.StandStill ? "sabit dur" : "kendi tabanı")}" +
+                $" ({mode.RespawnDelay:0.#} sn)   ·   " +
+                $"Silah: {(mode.Weapons == ModeWeaponSource.RandomGrant ? "rastgele" : "raf")}",
+                MessageType.None);
+
+            return teamless;
         }
 
         /// <summary>Mod seçimi: katalog varsa popup, yoksa serbest metin (pencere kırılmasın).</summary>

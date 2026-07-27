@@ -5,7 +5,7 @@ Oyuncular fiziksel alanda 1:1 yürür; farklı boyutlarda arenalar (10x10, 12x12
 farklı oyun modları/haritalar/silahlar. VR build = player, Windows build = admin (yönetim + izleme).
 Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN) — Mirror/NGO YOK.
 
-> Kurallar `.claude/rules/` altındadır. Uygulama planı: `plan/` (faz faz). Protokol: `Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı).
+> Kurallar `.claude/rules/` altındadır. Sıradaki planlanmış işler: `plan/` (biten iş dokümanı silinir). Protokol: `Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı).
 > Sistemin tek sayfalık haritası (ne var, ağ nasıl çalışır, nasıl kullanılır): `Docs/Sistem-Ozeti.md`.
 > Sahadaki operatörün günlük kullanım kılavuzu (teknik olmayan dille): `Docs/Kullanim-Kilavuzu.md`.
 > Çatılı arena yapan geliştiriciye tek parça teknik not (bileşen + katman + editör aracı + tuzaklar):
@@ -55,8 +55,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   admin gözlemci; `UiKit.cs` prosedürel arayüz kiti). Kod-dışı: `Arsenal/` (silah prefab+SO),
   `FX/`, `Environments/`, `Data/` (**`Data/Resources/GameCatalog.asset`** — prosedürel admin
   arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ), `Scenes/` (Boot, Lobby).
-  ⚠️ Admin dashboard sahnesi (`AdminConsole.unity`) Faz 6'da KALDIRILDI — admin oyuncularla
-  aynı sahnede duran bir gözlemcidir.
+  ⚠️ Ayrı bir admin dashboard sahnesi YOKTUR (`AdminConsole.unity` kaldırıldı) — admin
+  oyuncularla aynı sahnede duran bir gözlemcidir.
   ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
 - `Assets/Arenas/Standard/<AXxX veya TemaAdı>/` ve `Assets/Arenas/Venues/<İşletme>/` — arena kutuları:
   `{Scenes, Data, Prefabs}` (+ arenaya özel sanat varsa `Art/{Materials,Textures}`; ör. `Standard/IceWorld`).
@@ -85,6 +85,10 @@ proje **Input System-only** — `StandaloneInputModule` runtime'da patlar, kulla
 **İsimlendirme:** asmdef = `VortexArena.<Katman>`; namespace = asmdef adıyla birebir
 (rootNamespace dolu); global namespace'te tip YOK; serialize edilen ikincil tipler kendi
 dosyasında (`Team.cs` gibi). Sahne adı = katalog anahtarı (`load_match` string'i) → birebir eşleşme.
+⚠️ **Serialize edilen enum'a yeni değer SONA eklenir** — Unity sayısal indeks saklar, başa/ortaya
+ekleme sahnelerdeki değerleri kaydırır. `Team = { Red, Blue, Neutral }`: `Neutral` bu yüzden sonda
+(`BaseZone`/`SpawnPoint`/`Weapon` bu enum'u serialize ediyor). Aynısı `ModeTeamMode`/`ModeScoreKind`/
+`ModeReviveAnchor`/`ModeWeaponSource` için de geçerli.
 
 **Paylaşımlı-mı-modül-mü:** "İkinci bir mod/arena bunu aynen kullanır mı?" → evet=_Shared, hayır=kutu.
 
@@ -159,7 +163,21 @@ asset'ini yazar, GameCatalog + uyumlu ModeDefinition'lara ekler, Build Settings'
 `Tools > VortexArena > Export Server Config` çalıştır (sunucu `maps.json` tazelensin).
 **Yeni mod:** `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol;
 mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafında `Modes/<Ad>Mode.cs`
-(IGameMode) + `Docs/ArenaNet-Protokol.md`'ye modId ekle.
+(IGameMode) + `MatchDirector.RegisterModes()`'a bir satır + `Docs/ArenaNet-Protokol.md`'ye modId ekle.
+Üç ek adım:
+1. **`IGameMode.Rules`** — modun şekli (`ModeRules`: takım kipi, skor kanalı, dost ateşi, canlanma
+   şartı, silah kaynağı, canlanma gecikmesi). Bugünkü TDM davranışı için `ModeRules.TeamDefault`
+   tek satırdır; yalnız FARKLI olan alanı yaz. Bu kural `load_match.rules` ile istemciye gider ve
+   `ModeRuntime` üzerinden okunur → **istemcide `if (modeId == …)` zinciri YAZILMAZ**
+   (Docs/ArenaNet-Protokol.md §10.5).
+2. **HUD = `ModeHudBase` alt sınıfı** (`_Shared/Core/UI/`). Faz/süre, geri sayım, can, ölüm ekranı,
+   kill-feed, kendi sayaçların tabandan gelir; alt sınıf yalnız `ScoreLine`/`WinnerLine` (+ istersen
+   `EndScoreLine`/`OnLobbyStateApplied`) yazar. Takıma ait hiçbir şey tabana koyulmaz.
+3. **Kural önizlemesi** `ModeDefinition` SO'suna girilir (dev penceresi + sunucusuz editör oturumu
+   için) — **otorite sunucudadır, sapmada sunucu kazanır.**
+`IGameMode`'a yeni kanca eklerken **varsayılan gövde** kullan (default interface method) ve
+**tüketicisi olmayan kancayı hiç ekleme**; skor yalnız `MatchDirector` skor defterinden yazılır
+(`AddScore` takım / `AddPlayerScore` bireysel).
 **Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): prefab
 `_Shared/Arsenal/Prefabs/` + WeaponDefinition SO `_Shared/Arsenal/Data/` + gerekiyorsa
 `ModeDefinition.loadout`. **Sunucu tarafında iş YOKTUR** ve export gerekmez — sunucuda silah
