@@ -22,6 +22,10 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 890c6f2eeb2bdfd4aa97a55879a4eea3, type: 2}
   - {fileID: 11400000, guid: bceb09007c055e248973177e91f29578, type: 2}
   loadout:
-  - {fileID: 11400000, guid: addd6bbeff1ebdc43966f00b59ff26c5, type: 2}
-  - {fileID: 11400000, guid: 1edcc0bf1677a854887b7aaa5a11a0fb, type: 2}
+  - {fileID: 11400000, guid: d42e84326e961f542ba86d57e9a71d20, type: 2}
+  - {fileID: 11400000, guid: 3e86e22f37503ba4fafb3d09d30dffb2, type: 2}
+  - {fileID: 11400000, guid: dc384828f17138049a24328b7e07b1ff, type: 2}
+  - {fileID: 11400000, guid: 1518aa11b38b11c4c9ab387c384b2e28, type: 2}
+  - {fileID: 11400000, guid: 3fac3cc2036001d40a6c64c3f00632d2, type: 2}
+  - {fileID: 11400000, guid: 379b9af2cf125564a940fa2e72d865c6, type: 2}
   hudPrefab: {fileID: 2488338122132002829, guid: a01112a625f715e4798eab3506e1008e, type: 3}

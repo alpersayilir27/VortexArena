@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55accdfacbb64ab428182bb5c93442d3, type: 3}
+  m_Name: WD_AK47
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
+  weaponId: ak47
+  displayName: AK-47
+  damage: 36
+  headshotMultiplier: 4
+  fireRateRpm: 600
+  range: 60
+  baseSpreadDegrees: 1.1
+  bloomPerShotDegrees: 0.3
+  maxBloomDegrees: 2.5
+  bloomRecoveryPerSecond: 4
+  kickDegrees: 2.4
+  kickBackMeters: 0.02
+  recoilRecoverSpeed: 10
+  magazineSize: 30
+  spareMagazines: 2
+  reserveMode: 0
+  reloadTime: 2.43
+  fireClips:
+  - {fileID: 8300000, guid: 957e1de72b1bcb9439dd45fbb67829ef, type: 3}
+  - {fileID: 8300000, guid: 2545763209f6cc5499df8408ec5485d6, type: 3}
+  magOutClip: {fileID: 8300000, guid: 2d73420ae73bc974eba8612701c89070, type: 3}
+  magInClip: {fileID: 0}
+  dryFireClip: {fileID: 8300000, guid: 7fbfbee7bc76c5b4fb06ce4c43418ef8, type: 3}
+  pickupClip: {fileID: 0}
+  firePitchBase: 1
+  firePitchJitter: 0.05
+  fireVolume: 1
+  prefab: {fileID: 1554324386449819339, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
