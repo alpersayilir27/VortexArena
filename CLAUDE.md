@@ -73,7 +73,10 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   → tam reçete, editör aracının davranışı, tuzaklar ve sorun giderme: **`Docs/Cati-Gizleme.md`**
 - `Assets/Modes/<Mod>/` — mod kutuları: `{Scripts (VortexArena.Modes.<Ad>.asmdef), Data, UI}`.
   Modlar birbirini REFERANSLAMAZ.
-- Üçüncü parti: `Assets/ThirdPartyPackages/`.
+- Üçüncü parti: `Assets/ThirdPartyPackages/`. ⚠️ İstisna: `Assets/Low Poly AR Weapon Pack 1/`
+  kökte duruyor (editör açıkken taşıma OS dosya kilidine takılıyor — dört denemede de
+  "Moving file failed"). Editör KAPALIYKEN `git mv` ile taşınabilir; sonrasında
+  `WeaponKitBuilder.PackRoot` sabitini güncelle (tek satır).
 
 **Assembly grafiği** (bağımlılık hep aşağı):
 Protocol (saf C#, noEngineReferences) ← Net ← Core ← App, Modes.<X>
@@ -160,12 +163,20 @@ asset'ini yazar, GameCatalog + uyumlu ModeDefinition'lara ekler, Build Settings'
 **Yeni mod:** `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol;
 mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafında `Modes/<Ad>Mode.cs`
 (IGameMode) + `Docs/ArenaNet-Protokol.md`'ye modId ekle.
-**Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): prefab
-`_Shared/Arsenal/Prefabs/` + WeaponDefinition SO `_Shared/Arsenal/Data/` + gerekiyorsa
-`ModeDefinition.loadout`. **Sunucu tarafında iş YOKTUR** ve export gerekmez — sunucuda silah
-tablosu yok, hasarı istemci hesaplayıp `hit_report.damage` ile bildirir, sunucu aynen uygular
-(§10.3); `weaponId` yalnız kill feed etiketi, doğrulanmaz. Alan etkisi için etkilenen her hedefe
-bir `hit_report` yollanır. Denge sayıları istemcide yaşadığı için değişiklik APK build'i ister.
+**Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfekler
+`Tools > VortexArena > Build Weapon Prefabs` ile üretilir — `WeaponKitBuilder` tablosuna satır
+ekle (CS2 istatistikleri + ses profili + "Low Poly AR Weapon Pack 1" prefabı), araç
+`_Shared/Arsenal/Data/WD_*.asset` + `_Shared/Arsenal/Prefabs/WPN_*.prefab` üretip
+**`_Shared/Data/Resources/WeaponCatalog.asset`**'i tazeler (RemoteShotFx `weaponId`→profil
+aramasını `Resources.Load` ile yapar — GameCatalog gibi klasöründen ÇIKARILMAZ). Gerekiyorsa
+`ModeDefinition.loadout` + sahneye yerleştirme elle. **Sunucu tarafında iş YOKTUR** ve export
+gerekmez — sunucuda silah tablosu yok, hasarı (headshot çarpanı dahil) istemci hesaplayıp
+`hit_report.damage` ile bildirir, sunucu aynen uygular (§10.3); `weaponId` yalnız kill feed
+etiketi, doğrulanmaz. Alan etkisi için etkilenen her hedefe bir `hit_report` yollanır. Denge
+sayıları istemcide (WeaponDefinition SO) yaşadığı için değişiklik APK build'i ister.
+Şarjör kuralı: boş şarjörde otomatik reload YOK; reload silahı **bel altına indirme jestiyle**
+başlar; `reserveMode=DiscardMagazine` (varsayılan) erken reload'da şarjörde kalan mermiyi YAKAR
+(`PoolRounds` = CS2 havuz alternatifi SO'dan seçilir).
 İçerik kataloğu: **`_Shared/Data/Resources/GameCatalog.asset`**
 (ModeDefinition + MapDefinition listesi) — admin tercihler panelinin mod/harita seçicisi bunu
 `Resources.Load<GameCatalog>("GameCatalog")` ile okur, bu yüzden `Resources/` altında kalmalı.
@@ -178,7 +189,10 @@ shape scale'lerini arena boyutu + ~3 m payla ölçekle — geniş kutu bütçeyi
 — yalnız Editor):
 `Tools > VortexArena > Export Server Config` (MapDefinition SO'larından `Server/config/maps.json`;
 deterministik, LF, BOM'suz — **JSON'u elle düzenleme, export ezer**. Silah için gerekmez —
-sunucuda silah tablosu yok), `… > Create Arena From
+sunucuda silah tablosu yok), **`… > Build Weapon Prefabs`** (`WeaponKitBuilder`: tablodaki 6 silah
+için WD_*.asset + WPN_*.prefab + FX_RemoteShot + WeaponCatalog üretir/günceller; idempotent,
+dialog açmaz; *…(Yalnız Kataloğu Tazele)* varyantı yalnız katalog+prefab bağlarını yeniler),
+`… > Create Arena From
 Template`, **`… > Dev`** (`_Shared/App/Scripts/Editor/`: rol · hedef · Play başlangıcı (Boot'tan /
 açık sahneden) · sentetik maç parametreleri (mod, takım, spawn slot, raund sn, skor limiti) + test
 botu düğmeleri: N Bot · N Bot + Admin · Botları Durdur · Sahipsiz botları temizle ·
