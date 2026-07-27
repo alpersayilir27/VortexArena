@@ -17,7 +17,8 @@ namespace VortexArena.App.Admin
     /// düğmelerine erişmesi gerekir.</item>
     /// <item><b>Kuş bakışı:</b> ortografik, arena merkezinin üstünde, arena yaw'ına hizalı.
     /// Kadraj sırayla <see cref="ArenaBoundary"/> → <c>MapDefinition.Size</c> → 10x10
-    /// varsayılanından gelir; tekerlek zoom.</item>
+    /// varsayılanından gelir; tekerlek zoom. Sahnede <see cref="ArenaRoof"/> varsa bu kipe
+    /// girerken çatı gizlenir (tercih <c>AdminSession.Roof</c>), çıkarken geri gelir.</item>
     /// </list>
     /// <para>Poz okuması <c>LateUpdate</c>'te yapılır: <c>RemoteAvatar</c> de aynı karede aynı
     /// kayıtçıdan okuyor, kamera bir kare geriden gitmesin.</para>
@@ -91,10 +92,13 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Kipe girişte bir kez: projeksiyon ve başlangıç açıları.</summary>
+        /// <summary>Kipe girişte bir kez: projeksiyon, çatı görünürlüğü ve başlangıç açıları.</summary>
         private void EnterMode(AdminCameraMode mode)
         {
             _camera.orthographic = mode == AdminCameraMode.TopDown;
+
+            // Kuş bakışına girerken çatı kalkar, çıkarken geri gelir (tercih: AdminSession.Roof).
+            AdminSpectator.RefreshRoof();
 
             if (mode == AdminCameraMode.Free)
             {

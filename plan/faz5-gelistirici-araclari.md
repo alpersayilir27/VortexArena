@@ -122,9 +122,12 @@ Hedef      [ Local (127.0.0.1:47821) ▾ ]   [ özel: ________ : ____ ]
 Başlangıç  (•) Boot'tan     ( ) Açık sahneden
 Takım      (•) Kırmızı  ( ) Mavi        Spawn slot [ 0 ]
 
-[ Sunucuyu Başlat ]  [ 2 Bot ]  [ 2 Bot + Admin ]  [ Hepsini Durdur ]
-Durum: sunucu ● çalışıyor (PID 1234) · 2 bot ● çalışıyor
+[ 2 Bot ]  [ 2 Bot + Admin ]  [ Botları Durdur ]
+Durum: 2 bot süreci ● çalışıyor
 ```
+
+> ⚠️ **Sonradan değişti (27 Tem 2026):** "Sunucuyu Başlat / Durdur / Hepsini Durdur" düğmeleri
+> **kaldırıldı** — sunucu artık tamamen elle yönetilir. Gerekçe aşağıda ("Uygulama kararları").
 
 - **Kısayol:** `[Shortcut]` ile `Ctrl+Alt+R` → rolü Player/Admin arasında çevirir (pencere açmaya
   gerek kalmadan, Play'den hemen önce).
@@ -137,15 +140,16 @@ doğuruyor; parent öldürülünce `VortexArena.Server.App.exe` **yetim kalıp 4
 etti** ve öldürülemedi → sonraki sunucu porta bind olamaz.
 
 Bu yüzden:
-- Sunucu **doğrudan exe** olarak başlatılır: önce `deploy\server\VortexArena.Server.App.exe`,
-  yoksa `Server\VortexArena.Server.App\bin\Release\net10.0\...exe`. İkisi de yoksa
-  "önce `scripts\deploy-server.bat` çalıştır" diye anlamlı hata.
+- ~~Sunucu **doğrudan exe** olarak başlatılır…~~ **geçersiz (27 Tem 2026):** sunucu editörden hiç
+  başlatılmıyor, elle çalıştırılıyor. Tuzağın kendisi hâlâ geçerli — programatik başlatılan her
+  süreç (PoseBot) doğrudan exe ile başlar.
 - PoseBot için de aynı kural geçerli → PoseBot'un da publish edilmiş exe'si gerekir. Bunun için
   `scripts/deploy-server.bat`'e **PoseBot'u da publish eden** bir adım eklenir
   (`deploy\posebot\`), ya da dev penceresi `dotnet run` yerine `taskkill /T /PID` ile ağaç
   öldürür. **Tercih: PoseBot'u da publish etmek** — tek süreç, temiz öldürme.
-- Pencere PID'leri tutar; **Play modundan çıkışta ve editör kapanışta otomatik öldürür**
-  (`EditorApplication.quitting` + `playModeStateChanged`), ayrıca "Hepsini Durdur" düğmesi.
+- Pencere **bot** PID'lerini tutar; **Play modundan çıkışta ve editör kapanışta otomatik öldürür**
+  (`EditorApplication.quitting` + `playModeStateChanged`), ayrıca "Botları Durdur" /
+  "Sahipsiz botları temizle" düğmeleri. Sunucu bu otomatizmin dışındadır.
 
 ## Adım 4 — Bağlantı hata ekranı (`ConnectionOverlay`)
 
@@ -201,7 +205,7 @@ Karar: **Resources**, gerekçesi yorumda yazılır.
 | `dev-targets.json` | **yeni** — hedef kataloğu (commit'li) |
 | `Assets/_Shared/App/Scripts/Editor/VortexArena.App.Editor.asmdef` | **yeni** — dev araçları assembly'si (⚠ planda `Core.Editor` deniyordu; `AppSession`/`DevSession` gerektiği için App altında) |
 | `Assets/_Shared/App/Scripts/Editor/DevTargets.cs` | **yeni** — katalog okuyucu |
-| `Assets/_Shared/App/Scripts/Editor/DevProcesses.cs` | **yeni** ⚠ planda yoktu — sunucu/bot süreç kaydı (`SessionState` + ad doğrulaması + yetim süpürme) |
+| `Assets/_Shared/App/Scripts/Editor/DevProcesses.cs` | **yeni** ⚠ planda yoktu — bot süreç kaydı (`SessionState` + ad doğrulaması + yetim süpürme). *27 Tem 2026: sunucu başlat/durdur kaldırıldı* |
 | `Assets/_Shared/App/Scripts/Editor/DevBootstrap.cs` | **yeni** — `playModeStartScene`, Play çıkışında bot temizliği, `Ctrl+Alt+R` |
 | `Assets/_Shared/App/Scripts/Editor/DevWindow.cs` | **yeni** — pencere |
 | `Assets/_Shared/App/Scripts/DevSession.cs` | **yeni** ⚠ planda `DevPrefs.cs` (editör) idi — runtime + `#if UNITY_EDITOR`: anahtarlar, rol/adres uygulama, sentetik `load_match` |
@@ -237,8 +241,8 @@ Karar: **Resources**, gerekçesi yorumda yazılır.
 | 2 | **Seçim kişisel:** rol/hedef değiştirilir → `git status` **temiz kalır** | ✅ tasarımca (`EditorPrefs`; `Boot.unity`'deki override alanları silindi, `git status` doğrulandı) |
 | 3 | **Boot'tan kip:** arena sahnesi açıkken Play → Boot'tan koşar, rol doğru sahneye gider, Play bitince açık sahneye dönülür | ⏳ editörde |
 | 4 | **Açık sahneden kip:** arena sahnesi açıkken Play → sahne yeniden **yüklenmez**, seçili takım/slot `PlayerCombatState`'e düşer, HUD gelir, `CanFire` sunucu `Live` deyince açılır | ⏳ editörde |
-| 5 | **Tek tıkla ortam:** "Sunucuyu Başlat" + "2 Bot + Admin" → roster'da 2 bot + admin, TDM raundu koşar | ⏳ editörde |
-| 6 | **Süreç sızıntısı yok:** Play'den çıkılır + editör kapatılır → `netstat -ano \| findstr 4782` **boş** | ⏳ editörde — **kanıtı zorunlu, tuzak yaşanmış** |
+| 5 | **Tek tıkla ortam:** sunucu **elle** başlatılır + "2 Bot + Admin" → roster'da 2 bot + admin, TDM raundu koşar | ⏳ editörde |
+| 6 | **Bot sızıntısı yok:** Play'den çıkılır + editör kapatılır → geride `VortexArena.PoseBot` süreci kalmaz (`tasklist \| findstr PoseBot` boş). Sunucu **kasten yaşar** — onu elle kapatırsın | ⏳ editörde — **kanıtı zorunlu, tuzak yaşanmış** |
 | 7 | **Hata ekranı (admin):** sunucu kapalıyken admin → ~3 sn sonra tasarımlı ekran, adres + deneme sayacı doğru; sunucu açılınca kaybolur | ⏳ editörde |
 | 8 | **Hata ekranı (VR):** Quest'te sunucu kapalıyken lobi → aynı ekran okunur, lazy-follow rahat; A×2 ile IP paneli hâlâ açılıyor | ⏳ cihazda |
 | 9 | **Maç ortası kopma:** maç `Live` iken sunucu kapatılır → overlay gelir; geri açılınca kaybolur | ⏳ editörde |
@@ -291,3 +295,13 @@ Karar: **Resources**, gerekçesi yorumda yazılır.
   enjeksiyonun tek temiz yolu. Protokol mesajı DEĞİL, test kancası.
 - **`ArenaClient.ConnectAttempts` + `LastError`** — overlay'in "N sn · M. deneme" ve "Son hata"
   satırları için; başka tüketicisi yok.
+
+**Faz sonrası değişiklik — 27 Tem 2026: sunucu süreç yönetimi editörden çıkarıldı**
+
+Kullanıcı kararı: **sunucu işleri tamamen elle.** Dev penceresindeki "Sunucuyu Başlat" / "Durdur" /
+"Hepsini Durdur" düğmeleri ve `DevProcesses`'teki sunucu tarafı (`StartServer`, `StopServer`,
+`ServerPid`, `IsServerRunning`, `StopAll`, sunucu exe arama listesi, `ServerProcessName`)
+**silindi**; ad bazlı süpürme yalnız `VortexArena.PoseBot`'a bakıyor, editör kapanışı da sunucuya
+dokunmuyor. Gerekçe: sunucu üretimde ayrı makinede uzun ömürlü — editörün onu başlatması/öldürmesi
+o topolojiden uzaklaştırıyor ve elle başlatılmış bir sunucuyu beklenmedik anda öldürme riski
+taşıyordu. Kalanlar: bot düğmeleri + "Derle (dotnet build)" (yalnız derler, çalıştırmaz).

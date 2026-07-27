@@ -142,17 +142,25 @@ public sealed class StateHost
         }
     }
 
-    /// <summary>20 Hz snapshot yayını: pozlu çevrimiçi oyuncular tek pakete yazılır, UDP kayıtlı
-    /// ve çevrimiçi HERKESE (admin dahil) aynı buffer yollanır. Girdi yokken hedef varsa count=0
-    /// snapshot gider (istemci uzak avatar kalmadığını böyle anlar); ikisi de yoksa gönderilmez
-    /// ve serverTick artmaz. Saniyede bir konsola özet basılır.</summary>
+    /// <summary>20 Hz snapshot yayını: pozlu çevrimiçi oyuncular pakete yazılır, UDP kayıtlı
+    /// ve çevrimiçi HERKESE (admin dahil — birden çok admin varsa her biri ayrı hedef) aynı
+    /// buffer yollanır. Girdi yokken hedef varsa count=0 snapshot gider (istemci uzak avatar
+    /// kalmadığını böyle anlar); ikisi de yoksa gönderilmez ve serverTick artmaz.
+    /// <para>
+    /// <b>MTU parçalama (§6.3):</b> girdi sayısı <see cref="ArenaProtocol.SNAPSHOT_MAX_ENTRIES_PER_PACKET"/>'i
+    /// aşarsa aynı tik birden çok datagrama bölünür (hepsi aynı serverTick'i taşır, hepsi aynı
+    /// hedeflere gider). İstemcide birleştirme YOKTUR ve gerekmez: her paket taşıdığı girdileri
+    /// bağımsız uygular, oyuncu düşürme kararı zaman aşımıdır. Bu yüzden tel formatı değişmedi.
+    /// </para>
+    /// Saniyede bir konsola özet basılır.</summary>
     private async Task SnapshotLoopAsync(UdpClient udp, CancellationToken token)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1.0 / ArenaProtocol.SNAPSHOT_RATE_HZ));
         uint serverTick = 0;
         var summaryDue = DateTime.UtcNow.AddSeconds(1);
-        var entries = new List<SnapshotEntry>(ArenaProtocol.MAX_PLAYERS);
+        var entries = new List<SnapshotEntry>(ArenaProtocol.SNAPSHOT_MAX_ENTRIES_PER_PACKET);
         var targets = new List<IPEndPoint>();
+        var packets = new List<byte[]>(1);
 
         while (!token.IsCancellationRequested)
         {
@@ -191,25 +199,22 @@ public sealed class StateHost
 
             if (entries.Count == 0 && targets.Count == 0) continue; // boş döngü — gönderme, tik ilerletme
 
-            var snapshot = new Snapshot { serverTick = ++serverTick, players = entries.ToArray() };
-            byte[] packet;
-            using (var ms = new MemoryStream(6 + entries.Count * SnapshotEntry.SIZE))
-            using (var writer = new BinaryWriter(ms))
-            {
-                snapshot.Write(writer);
-                packet = ms.ToArray();
-            }
+            serverTick++;
+            BuildPackets(entries, serverTick, packets);
 
-            foreach (var target in targets)
+            foreach (var packet in packets)
             {
-                try
+                foreach (var target in targets)
                 {
-                    await udp.SendAsync(packet, target, token);
-                }
-                catch (OperationCanceledException) { return; }
-                catch (Exception)
-                {
-                    // Windows'ta ulaşılamayan hedef 10054 vb. fırlatabilir — yayın döngüsü ölmesin.
+                    try
+                    {
+                        await udp.SendAsync(packet, target, token);
+                    }
+                    catch (OperationCanceledException) { return; }
+                    catch (Exception)
+                    {
+                        // Windows'ta ulaşılamayan hedef 10054 vb. fırlatabilir — yayın döngüsü ölmesin.
+                    }
                 }
             }
 
@@ -217,8 +222,35 @@ public sealed class StateHost
             if (now >= summaryDue)
             {
                 summaryDue = now.AddSeconds(1);
-                Console.WriteLine($"[state] oyuncu {onlinePlayers}, pozlu {entries.Count}, snapshot {packet.Length} B, hedef {targets.Count}");
+                var bytes = 0;
+                foreach (var packet in packets) bytes += packet.Length;
+                var split = packets.Count > 1 ? $" ({packets.Count} parça)" : "";
+                Console.WriteLine($"[state] oyuncu {onlinePlayers}, pozlu {entries.Count}, snapshot {bytes} B{split}, hedef {targets.Count}");
             }
+        }
+    }
+
+    /// <summary>
+    /// Girdileri MTU'ya sığan datagramlara böler (§6.3). Girdi yoksa tek bir count=0 paketi
+    /// üretir — istemciler bayat avatarı bununla da temizleyebilsin. Tüm parçalar aynı
+    /// <paramref name="serverTick"/>'i taşır.
+    /// </summary>
+    private static void BuildPackets(List<SnapshotEntry> entries, uint serverTick, List<byte[]> output)
+    {
+        output.Clear();
+        var perPacket = ArenaProtocol.SNAPSHOT_MAX_ENTRIES_PER_PACKET;
+
+        for (var offset = 0; offset == 0 || offset < entries.Count; offset += perPacket)
+        {
+            var count = Math.Min(perPacket, entries.Count - offset);
+            var chunk = new SnapshotEntry[count];
+            entries.CopyTo(offset, chunk, 0, count);
+
+            var snapshot = new Snapshot { serverTick = serverTick, players = chunk };
+            using var ms = new MemoryStream(6 + count * SnapshotEntry.SIZE);
+            using var writer = new BinaryWriter(ms);
+            snapshot.Write(writer);
+            output.Add(ms.ToArray());
         }
     }
 }

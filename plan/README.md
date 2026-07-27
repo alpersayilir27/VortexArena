@@ -39,6 +39,14 @@
 > **sunucu hiçbir yerden otomatik başlatılmaz** (her zaman elle). Güncel akış: `CLAUDE.md` +
 > `Docs/Sistem-Ozeti.md`.
 
+> Savaş hattı hakkındaki eski karar (*"sunucu-otoriter silah tablosu `config/weapons.json` +
+> `hit_report` atış hızı denetimi"*, Faz 3'te yapıldı, Faz 4'te export'a bağlandı) **geçersiz
+> kaldı** (2026-07-27). Ürün gözetimli özel alanda (işletme, turnuva) çalıştığı için **hile
+> koruması bilinçli olarak yoktur**; denetimler meşru saçma/patlama/yaylım vuruşlarını
+> düşürüyordu. Güncel model: hasarı istemci hesaplar, sunucu aynen uygular; `weaponId` yalnız
+> etiket, `weapons.json` ve `WeaponTable` **silindi**. Yeni silah/hasar kaynağı (balta, yay,
+> bomba, tuzak) eklemek sıfır sunucu işi. Güncel kural: `Docs/ArenaNet-Protokol.md` §10.3.
+
 ## Referans proje: `D:\games\vortexcosmos`
 
 Mimari model. Oradan **desen** alınır (kod bire bir kopyalanmaz, uyarlanır):

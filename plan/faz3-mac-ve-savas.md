@@ -25,6 +25,9 @@
   - Loading: tüm player'lar `set_ready` (sahne yüklendi anlamında) gönderince → Countdown → `countdown` yayını → Live.
   - Live: `match_state` 1 Hz; süre sayar; `IGameMode.OnTick`.
   - **Vuruş hattı:** `hit_report` → doğrulamalar (atıcı+hedef hayatta, farklı takım, silah rate-limit: son atıştan bu yana ≥ `60/rpm×0.8` sn, damage=WeaponDefinition'la uyumlu — server tarafında silah tablosu: v1'de `config/weapons.json` — **Unity SO'larından elle senkron, weaponId+damage+rpm**; Faz 4'te export otomasyonu) → hp düş → `health_update`; hp≤0 → `kill_event` + skor + `respawn{spawnSlot, delay:5}` planla; respawn zamanı gelince hp=100 + flags.alive=1.
+    > ⚠️ **GEÇERSİZ (2026-07-27):** silah tablosu, `weaponId` beyaz listesi ve atış hızı denetimi
+    > kaldırıldı — hile koruması bilinçli olarak yok. Hasarı istemci bildirir, sunucu aynen
+    > uygular. Güncel kural: `Docs/ArenaNet-Protokol.md` §10.3.
   - `abort_match`/`return_to_lobby` → herkese `return_to_lobby`, faz Lobby.
 
 ## Adım 3 — Unity: mod modülü + savaş bağlama

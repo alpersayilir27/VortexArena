@@ -7,14 +7,21 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using VortexArena.Protocol;
 using Debug = UnityEngine.Debug;
 
 namespace VortexArena.App.Editor
 {
     /// <summary>
-    /// Dev penceresinin ortam düğmelerinin arkasındaki süreç yönetimi: .NET sunucusunu ve
-    /// PoseBot'u editörden başlatır/durdurur.
+    /// Dev penceresinin ortam düğmelerinin arkasındaki süreç yönetimi: test botlarını (PoseBot)
+    /// editörden başlatır/durdurur ve sunucu çözümünü derler.
+    ///
+    /// <para><b>⚠️ SUNUCU BURADAN YÖNETİLMEZ.</b> <c>.NET</c> sunucusu her zaman ELLE başlatılır
+    /// ve ELLE durdurulur (<c>deploy\server\VortexArena.Server.App.exe</c> ya da
+    /// <c>dotnet run --project Server/VortexArena.Server.App</c>). Editör sunucuyu ne başlatır ne
+    /// öldürür; ad bazlı süpürme de sunucuya DOKUNMAZ. Gerekçe: sunucu üretimde ayrı bir makinede
+    /// uzun ömürlüdür — editörün onu yönetmesi hem bu topolojiden uzaklaştırıyor hem de elle
+    /// başlatılmış bir sunucuyu beklenmedik anda öldürme riski taşıyordu. Buradaki
+    /// <see cref="BuildSolution"/> yalnız DERLER, çalıştırmaz.</para>
     ///
     /// <para><b>⚠️ TUZAK 1 — <c>dotnet run</c> ASLA KULLANILMAZ.</b> <c>dotnet run</c> derleyip
     /// asıl exe'yi ÇOCUK süreç olarak doğurur. Parent (dotnet) öldürüldüğünde çocuk hayatta
@@ -38,35 +45,27 @@ namespace VortexArena.App.Editor
     /// yeniden kullanılabilir, yanlış süreci öldürmek felaket olur.</para>
     ///
     /// <para><b>Yetim süreç güvenliği:</b> editör çökerse PID kaydı kaybolur. Bu yüzden
-    /// <see cref="StopAll"/> ve <see cref="SweepOrphans"/> ayrıca AD BAZLI süpürme yapar —
-    /// yetim süreç tuzağının kesin çözümü bu.</para>
+    /// <see cref="SweepOrphans"/> ayrıca AD BAZLI süpürme yapar (yalnız PoseBot) — yetim süreç
+    /// tuzağının kesin çözümü bu.</para>
     ///
     /// Tüm hatalar yakalanır ve anlamlı <see cref="Debug.LogError"/> mesajına çevrilir; bu sınıf
     /// editörü kırmamalıdır.
     /// </summary>
     public static class DevProcesses
     {
-        /// <summary>Sunucu exe'sinin adı (uzantısız = <see cref="Process.ProcessName"/> ile aynı).</summary>
-        public const string ServerProcessName = "VortexArena.Server.App";
-
         /// <summary>PoseBot exe'sinin adı (uzantısız = <see cref="Process.ProcessName"/> ile aynı).</summary>
         public const string BotProcessName = "VortexArena.PoseBot";
 
-        private const string ServerPidKey = "VortexArena.Dev.ServerPid";
+        /// <summary>
+        /// Tek seferde açılabilecek test botu sayısı üst sınırı. <b>Protokol kotası DEĞİLDİR</b> —
+        /// protokolde eşzamanlı oyuncu sınırı yoktur (§2), bu yalnız dev aracı emniyeti:
+        /// yazım hatasıyla 120 bot açılıp makine boğulmasın.
+        /// </summary>
+        public const int MaxDevBots = 32;
+
         private const string BotPidsKey = "VortexArena.Dev.BotPids";
 
         private const string SolutionRelativePath = @"Server\VortexArena.Server.sln";
-
-        /// <summary>
-        /// Sunucu exe'sinin arama sırası (ilk bulunan kazanır): yayınlanmış <c>deploy\server\</c>
-        /// → Release çıktısı → Debug çıktısı.
-        /// </summary>
-        private static readonly string[] ServerExeCandidates =
-        {
-            @"deploy\server\VortexArena.Server.App.exe",
-            @"Server\VortexArena.Server.App\bin\Release\net10.0\VortexArena.Server.App.exe",
-            @"Server\VortexArena.Server.App\bin\Debug\net10.0\VortexArena.Server.App.exe"
-        };
 
         /// <summary>
         /// PoseBot exe'sinin arama sırası. <b>PoseBot bilinçli olarak <c>deploy/</c>'a publish
@@ -92,74 +91,11 @@ namespace VortexArena.App.Editor
 
         // ------------------------------------------------------------------ durum
 
-        /// <summary>
-        /// Kayıtlı sunucu PID'i, yoksa 0. Süreç ölmüşse ya da o PID artık başka bir sürece
-        /// aitse kayıt SİLİNİR (bu yüzden getter'ın yan etkisi var).
-        /// </summary>
-        public static int ServerPid => ResolveTrackedPid(ServerPidKey, ServerProcessName);
-
-        /// <summary>Sunucu süreci koşuyor mu?</summary>
-        public static bool IsServerRunning => ServerPid > 0;
-
         /// <summary>Kayıtlı ve HÂLÂ YAŞAYAN PoseBot süreçlerinin sayısı (süreç sayısı, bot sayısı değil).</summary>
         public static int BotCount => GetLiveBotPids().Count;
 
         /// <summary>En az bir PoseBot süreci koşuyor mu?</summary>
         public static bool AreBotsRunning => BotCount > 0;
-
-        // ------------------------------------------------------------------ sunucu
-
-        /// <summary>Sunucuyu kendi konsol penceresinde başlatır (zaten koşuyorsa uyarı loglar).</summary>
-        public static void StartServer()
-        {
-            int existing = ServerPid;
-            if (existing > 0)
-            {
-                Debug.LogWarning(
-                    $"[DevProcesses] Sunucu zaten çalışıyor (PID {existing}) — yeni süreç " +
-                    "başlatılmadı (ikinci süreç 47821'e bind olamaz).");
-                return;
-            }
-
-            string exe = ResolveExe(ServerExeCandidates);
-            if (exe == null)
-            {
-                Debug.LogError(
-                    "[DevProcesses] Sunucu exe'si bulunamadı. Önce `scripts\\deploy-server.bat` " +
-                    "çalıştırın ya da bu penceredeki \"Derle (dotnet build)\" düğmesine basın. " +
-                    "Aranan yollar: " + DescribeCandidates(ServerExeCandidates));
-                return;
-            }
-
-            Process process = StartConsoleProcess(exe, "", Path.GetDirectoryName(exe));
-            if (process == null)
-            {
-                return;
-            }
-
-            SessionState.SetString(ServerPidKey, process.Id.ToString(CultureInfo.InvariantCulture));
-            Debug.Log($"[DevProcesses] Sunucu başlatıldı (PID {process.Id}): {exe}");
-            process.Dispose();
-        }
-
-        /// <summary>Kayıtlı sunucu sürecini öldürür.</summary>
-        public static void StopServer()
-        {
-            int pid = ServerPid;
-            SessionState.EraseString(ServerPidKey);
-
-            if (pid <= 0)
-            {
-                Debug.Log("[DevProcesses] Kayıtlı sunucu süreci yok — durdurulacak bir şey bulunamadı. " +
-                          "(Yetim süreç şüphesi varsa \"Sahipsiz süreçleri temizle\".)");
-                return;
-            }
-
-            if (KillPid(pid, ServerProcessName))
-            {
-                Debug.Log($"[DevProcesses] Sunucu durduruldu (PID {pid}).");
-            }
-        }
 
         // -------------------------------------------------------------------- bot
 
@@ -188,7 +124,7 @@ namespace VortexArena.App.Editor
                 return;
             }
 
-            int clamped = Mathf.Clamp(count, 1, ArenaProtocol.MAX_PLAYERS);
+            int clamped = Mathf.Clamp(count, 1, MaxDevBots);
             string ip = DevSession.HasAddress ? DevSession.Ip.Trim() : "127.0.0.1";
 
             var args = new StringBuilder();
@@ -256,39 +192,9 @@ namespace VortexArena.App.Editor
         // ------------------------------------------------------------------- toplu
 
         /// <summary>
-        /// Kayıtlı sunucu + bot süreçlerini öldürür VE ardından ad bazlı süpürme yapar
-        /// (editör çöktüyse PID kaydı kaybolmuş olabilir; yetim süreç tuzağının kesin çözümü bu).
-        /// </summary>
-        public static void StopAll()
-        {
-            int killed = 0;
-
-            int serverPid = ServerPid;
-            SessionState.EraseString(ServerPidKey);
-            if (serverPid > 0 && KillPid(serverPid, ServerProcessName))
-            {
-                killed++;
-            }
-
-            List<int> botPids = GetLiveBotPids();
-            SessionState.EraseString(BotPidsKey);
-            for (int i = 0; i < botPids.Count; i++)
-            {
-                if (KillPid(botPids[i], BotProcessName))
-                {
-                    killed++;
-                }
-            }
-
-            killed += SweepByName();
-
-            Debug.Log($"[DevProcesses] Hepsini durdur: {killed} süreç kapatıldı " +
-                      "(kayıtlı + ad bazlı süpürme).");
-        }
-
-        /// <summary>
-        /// Yalnız AD BAZLI süpürme: <c>VortexArena.Server.App</c> ve <c>VortexArena.PoseBot</c>
-        /// adlı TÜM süreçleri öldürür. Kaç süreç kapatıldığını döndürür.
+        /// AD BAZLI süpürme: <c>VortexArena.PoseBot</c> adlı TÜM süreçleri öldürür (editör
+        /// çöktüyse PID kaydı kaybolmuş olabilir). Kaç süreç kapatıldığını döndürür.
+        /// <b>Sunucuya dokunmaz</b> — sunucu elle yönetilir, editörün öldürme yetkisi yok.
         /// </summary>
         public static int SweepOrphans()
         {
@@ -296,12 +202,11 @@ namespace VortexArena.App.Editor
 
             if (killed > 0)
             {
-                Debug.Log($"[DevProcesses] Sahipsiz süreç temizliği: {killed} süreç kapatıldı.");
+                Debug.Log($"[DevProcesses] Sahipsiz bot temizliği: {killed} süreç kapatıldı.");
             }
             else
             {
-                Debug.Log("[DevProcesses] Sahipsiz süreç bulunamadı " +
-                          $"(aranan adlar: {ServerProcessName}, {BotProcessName}).");
+                Debug.Log($"[DevProcesses] Sahipsiz bot süreci bulunamadı (aranan ad: {BotProcessName}).");
             }
 
             return killed;
@@ -311,6 +216,7 @@ namespace VortexArena.App.Editor
         /// <c>dotnet build Server\VortexArena.Server.sln -c Release</c> — kendi konsol
         /// penceresinde koşar ve <b>sonucu BEKLEMEZ</b>; geliştirici derleme çıktısını pencereden
         /// okur (bu yüzden pencere <c>cmd /k</c> ile açık bırakılır, hata satırları kaybolmasın).
+        /// Yalnız DERLER — sunucuyu çalıştırmaz (sunucu elle başlatılır).
         /// </summary>
         public static void BuildSolution()
         {
@@ -340,8 +246,8 @@ namespace VortexArena.App.Editor
             }
 
             Debug.Log("[DevProcesses] `dotnet build -c Release` başlatıldı (kendi penceresinde; " +
-                      "bitince pencere açık kalır). Bittikten sonra Sunucu/Bot düğmeleri Release " +
-                      "çıktısını bulacaktır.");
+                      "bitince pencere açık kalır). Bittikten sonra bot düğmeleri Release " +
+                      "çıktısını bulacaktır; sunucuyu elle başlatın.");
             process.Dispose();
         }
 
@@ -435,27 +341,6 @@ namespace VortexArena.App.Editor
             }
         }
 
-        /// <summary>
-        /// Kayıtlı PID'i doğrular: süreç yaşıyor VE adı beklenenle aynı mı? Değilse kaydı siler
-        /// ve 0 döner (PID yeniden kullanılmış olabilir — yanlış süreci öldürmemek için).
-        /// </summary>
-        private static int ResolveTrackedPid(string sessionKey, string expectedProcessName)
-        {
-            int pid = ParsePid(SessionState.GetString(sessionKey, ""));
-            if (pid <= 0)
-            {
-                return 0;
-            }
-
-            if (IsProcessAlive(pid, expectedProcessName))
-            {
-                return pid;
-            }
-
-            SessionState.EraseString(sessionKey);
-            return 0;
-        }
-
         /// <summary>PID yaşıyor ve süreç adı <paramref name="expectedProcessName"/> mi?</summary>
         private static bool IsProcessAlive(int pid, string expectedProcessName)
         {
@@ -524,14 +409,13 @@ namespace VortexArena.App.Editor
             }
         }
 
-        /// <summary>Ad bazlı süpürme (log YAZMAZ) — kapatılan süreç sayısını döndürür.</summary>
+        /// <summary>Ad bazlı bot süpürmesi (log YAZMAZ) — kapatılan süreç sayısını döndürür.</summary>
         private static int SweepByName()
         {
-            int killed = KillAllNamed(ServerProcessName) + KillAllNamed(BotProcessName);
+            int killed = KillAllNamed(BotProcessName);
 
             if (killed > 0)
             {
-                SessionState.EraseString(ServerPidKey);
                 SessionState.EraseString(BotPidsKey);
             }
 

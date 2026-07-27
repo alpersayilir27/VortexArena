@@ -19,6 +19,8 @@ Klasör: `Assets/_Shared/Net/Scripts/Editor/` — asmdef: `includePlatforms:["Ed
 
 Menü: `Tools > VortexArena > Export Server Config`:
 - Tüm `WeaponDefinition` SO'larından `Server/config/weapons.json` üretir (Faz 3'teki elle senkron OTOMATİĞE bağlanır — tek doğruluk kaynağı Unity SO'ları olur).
+  > ⚠️ **GEÇERSİZ (2026-07-27):** silah export'u kaldırıldı; sunucu silah tablosu tutmuyor,
+  > hasarı istemci bildiriyor (§10.3). Export artık yalnız `maps.json` üretir.
 - Tüm `MapDefinition`'lardan `Server/config/maps.json` (sceneName, boyut, takım başına slot sayısı) — server start_match doğrulaması + ileriki bölge-tabanlı modlar için.
 - Çıktı deterministik (alfabetik sıralı, LF) → git diff'leri temiz.
 

@@ -282,8 +282,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// hit_report gönderir (hedef bir ağ oyuncusu). Sunucu faz/takım/rate-limit/hasar
-        /// doğrulamasını yapar; geçerse health_update yayınlar (protokol §10.3).
+        /// hit_report gönderir (hedef bir ağ oyuncusu). <b>Hasarı biz belirleriz</b>: sunucuda
+        /// silah tablosu yoktur, buradaki <c>damage</c> aynen uygulanır (protokol §10.3). Sunucu
+        /// yalnız durum tutarlılığına bakar (faz, atıcı/hedef canlı mı, dost ateşi).
         /// </summary>
         private void SendHitReport(int targetPlayerId, Vector3 worldHitPosition)
         {
@@ -291,11 +292,10 @@ namespace VortexArena.Core.Combat
             if (client == null || !client.IsConnected)
                 return;
 
+            // weaponId artık yalnız kill feed etiketi (sunucu doğrulamaz) — eksikse uyarırız ama
+            // vuruşu YİNE göndeririz: kozmetik bir alan yüzünden meşru hasar kaybolmasın.
             if (string.IsNullOrEmpty(WeaponId))
-            {
                 WarnMissingWeaponId();
-                return;
-            }
 
             netHit.seq = ++netSeq;
             netHit.targetPlayerId = targetPlayerId;
@@ -310,7 +310,8 @@ namespace VortexArena.Core.Combat
             if (weaponIdWarned)
                 return;
             weaponIdWarned = true;
-            Debug.LogError($"[Weapon] '{name}' weaponId olmadan ateş etti; ağ mesajı gönderilmedi.", this);
+            Debug.LogWarning($"[Weapon] '{name}' weaponId olmadan ateş etti; vuruş gönderildi ama " +
+                             "kill feed etiketi boş kalacak.", this);
         }
 
         private static void Write(float[] target, in Vector3 value)

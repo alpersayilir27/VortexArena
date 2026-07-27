@@ -43,7 +43,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
   - **GameCatalog:** `Assets/_Shared/Data/GameCatalog.asset`
 - [ ] "Oluştur" → sihirbaz `{Scenes, Data, Prefabs}` kutusunu üretir, sahneyi yeni boyuta ölçekler, `MapDefinition` yazar, `GameCatalog`'a ve **Build Settings**'e ekler.
 - [ ] Sihirbazın uyarılarını uygula: **duvar/cover yerleşimi kabadır** → sanat geçişini elle yap; **NavMesh ve ışık verisi kaynak sahneden miras kalır** → yeni boyutta yeniden bake et.
-- [ ] `Tools > VortexArena > Export Server Config` çalıştır → `Server/config/weapons.json` + `Server/config/maps.json` üretilir. Çıkan uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
+- [ ] `Tools > VortexArena > Export Server Config` çalıştır → `Server/config/maps.json` üretilir. Çıkan uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
 - [ ] Build Settings'te yeni sahnenin **listede ve işaretli (enabled)** olduğunu doğrula. Sahne adı = `start_match` katalog anahtarı; boşluk/typo dahil birebir eşleşmeli.
 - [ ] Android APK'yı **yeniden al** ve repo kökünde `game.apk` adıyla kaydet (`install_game.bat` bu adı bekler).
 - [ ] (Test edilecekse) `Server/VortexArena.PoseBot` içindeki `BuildScenes` sabitine yeni sahne adını ekle — yoksa PoseBot ile `start_match` reddedilir.
@@ -118,7 +118,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   ```json
   { "controlPort": 47821, "beaconPort": 47820, "statePort": 47822, "venueName": "<İşletme Adı>", "tickHz": 20 }
   ```
-- [ ] `Server/config/weapons.json` ve `Server/config/maps.json` dosyalarının Bölüm 2'deki export'tan geldiğini doğrula (hasar **her zaman** sunucudaki tablodan uygulanır).
+- [ ] `Server/config/maps.json` dosyasının Bölüm 2'deki export'tan geldiğini doğrula (silah tablosu yoktur — hasarı istemci bildirir).
 - [ ] **Dağıtım paketlerini üret** (ofiste, geliştirme makinesinde):
   - `scripts\deploy-server.bat` → `deploy\server\` (self-contained; işletme PC'sine .NET kurmak gerekmez)
   - `scripts\deploy-admin-game.bat` → `deploy\admin\` (**Unity editörü kapalı olmalı**)
@@ -193,7 +193,7 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 
 **Teslim paketi (işletmede kalacaklar)**
 
-- [ ] Sunucu PC'de: `deploy\server\` klasörü (exe + `config/server.json`, `weapons.json`, `maps.json`, `devices.json` + `firewall-kur.cmd`) ve masaüstünde **sunucu exe** kısayolu.
+- [ ] Sunucu PC'de: `deploy\server\` klasörü (exe + `config/server.json`, `maps.json`, `devices.json` + `firewall-kur.cmd`) ve masaüstünde **sunucu exe** kısayolu.
 - [ ] Yönetim PC'sinde: `deploy\admin\` + `deploy\launcher\` klasörleri ve masaüstünde **launcher** kısayolu. Operatör yalnız launcher'ı açar — admin exe'sine doğrudan tıklanmaz (adres gelmez).
 - [ ] Launcher'da Ayarlar (admin exe yolu) ve Sunucu IP bir kez doldurulup **Yönetimi Başlat** ile doğrulandı; ayarlar kalıcı saklanır.
 - [ ] Bilgi kartı: SSID + Wi-Fi parolası, sunucu statik **IP:port** (`…:47821`), arena **sahne adı**, A–B zemin işaretleri arası **mesafe**, APK sürümü + kurulum tarihi.
@@ -213,8 +213,8 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 | Launcher "Admin exe bulunamadı" diyor | `deploy\admin\` silinmiş/taşınmış veya build alınmamış | `scripts\deploy-admin-game.bat` (editör kapalıyken) çalıştır, launcher'da exe'yi yeniden seç |
 | Bağlanıyor ama roster'da "çevrimdışı" düşüyor | 15 sn boyunca status gelmedi (Wi-Fi zayıf, başlık uykuya geçti) | AP kapsamasını/kanalı kontrol et; başlıkta uyku süresini uzat |
 | Avatarlar fiziksel olarak örtüşmüyor | Bir başlıkta kalibrasyon yapılmadı; A ile B karışmış (arena 180° ters); zemin işaretleri kaymış; işaret mesafesi sahnedeki `anchor_a`/`anchor_b` mesafesiyle uyuşmuyor | Her başlıkta A+B ile **yeniden kalibre et** (tamamlanmış kalibrasyonda A+B tutmak sıfırlar); bant ölçüsünü sahnedeki değerle karşılaştır. **Lobide örtüşme beklenmez** — kontrolü arena sahnesinde yap |
-| Vuruş kaydolmuyor | Sunucu reddediyor: dost ateşi, hedef zaten ölü, faz `Live` değil, atış hızı denetimi (`60/rpm × 0.8` sn), `weaponId` sunucu tablosunda yok | Sunucu konsolundaki `hit_report reddedildi (…): <sebep>` satırını oku; silah eklendiyse Unity'de `Export Server Config` çalıştır ve sunucuyu yeniden başlat |
-| Hasar beklenenden farklı | İstemci silah SO'su ile `weapons.json` sapmış (`hasar uyumsuz: … tablo uygulandı`) | `Export Server Config` → sunucuyu yeniden başlat (hasarı **her zaman** sunucu tablosu belirler) |
+| Vuruş kaydolmuyor | Sunucu reddediyor: dost ateşi, hedef zaten ölü, faz `Live` değil | Sunucu konsolundaki `hit_report reddedildi (…): <sebep>` satırını oku. Atış hızı / silah tablosu denetimi YOKTUR, sebep bunlardan biri olamaz |
+| Hasar beklenenden farklı | Başlıklarda farklı APK sürümü var: denge sayıları istemcide yaşar (sunucuda silah tablosu yok) | Tüm başlıklara **aynı APK**'yı kur; denge değişikliği yeni bir istemci build'i gerektirir |
 | Maç başlamıyor: "sahne build listesinde yok" / `start_match reddedildi` | Sahne bazı başlıkların APK'sında yok (eski sürüm); sahne Build Settings'te yok/kapalı; sahne adı ≠ katalog anahtarı (typo) | Tüm başlıklara **aynı APK**'yı kur; Build Settings'te sahneyi ekle+işaretle; `MapDefinition.sceneName` ile sahne dosya adını birebir eşitle, `Export Server Config`'i tekrarla |
 | Maç `Loading`'de takılıyor | Bir başlık `set_ready` göndermedi (sahne yüklenemedi) | 20 sn sonra sunucu yine de devam eder; konsoldaki `loading zaman aşımı — hazır olmayanlar: …` satırındaki başlığı kontrol et |
 | Ölen oyuncu canlanmıyor | 5 sn gecikme dolmadı; oyuncu **kendi takımının** tabanına fiziken girmedi | Oyuncuya doğru tabana (takım rengi) yürümesi söylenir; 20 sn sonunda sunucu zaten zorla canlandırır (`zorla canlandırma` satırı) |

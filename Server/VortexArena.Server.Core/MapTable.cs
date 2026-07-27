@@ -26,9 +26,12 @@ public sealed class MapTableFile
 /// projesinden gelir: Unity <c>Tools &gt; VortexArena &gt; Export Server Config</c> menüsü
 /// MapDefinition SO'larından üretir — dosya ELLE DÜZENLENMEZ (export ezer).
 ///
-/// <para><b>WeaponTable'dan farkı:</b> dosya yoksa varsayılan ÜRETİLMEZ ve dosya YAZILMAZ —
-/// sunucunun uyduracağı bir harita listesi yoktur. Boş tablo = doğrulama kapalı, yani Faz 3
-/// davranışı (geriye dönük uyumlu). Yükleme sonrası salt-okunurdur → kilit gerekmez.</para></summary>
+/// <para>Dosya yoksa varsayılan ÜRETİLMEZ ve dosya YAZILMAZ — sunucunun uyduracağı bir harita
+/// listesi yoktur. Boş tablo = doğrulama kapalı, yani Faz 3 davranışı (geriye dönük uyumlu).
+/// Yükleme sonrası salt-okunurdur → kilit gerekmez.</para>
+///
+/// <para>Sunucunun okuduğu TEK içerik tablosu budur; silah tablosu (weapons.json) §10.3 ile
+/// kaldırıldı — hasarı istemci bildirir.</para></summary>
 public sealed class MapTable
 {
     private readonly Dictionary<string, MapEntry> _byScene = new(StringComparer.Ordinal);

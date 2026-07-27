@@ -52,6 +52,7 @@ namespace VortexArena.App.Admin
         private TextMeshProUGUI _chipText;
         private TextMeshProUGUI _matchInfoText;
         private TextMeshProUGUI _connectionText;
+        private TextMeshProUGUI _adminNoticeText;
         private Image _connectionDot;
 
         // Kolonlar
@@ -93,6 +94,7 @@ namespace VortexArena.App.Admin
         private void OnEnable()
         {
             AdminSession.Changed += MarkDirty;
+            AdminSelection.Changed += MarkDirty; // başka bir admin'in eylemi/seçimi
             NetEvents.OnConnectionStateChanged += HandleConnectionState;
 
             if (AdminRoster.Instance != null)
@@ -104,6 +106,7 @@ namespace VortexArena.App.Admin
         private void OnDisable()
         {
             AdminSession.Changed -= MarkDirty;
+            AdminSelection.Changed -= MarkDirty;
             NetEvents.OnConnectionStateChanged -= HandleConnectionState;
 
             if (AdminRoster.Instance != null)
@@ -208,6 +211,16 @@ namespace VortexArena.App.Admin
             _connectionText = UiKit.Text(connection, "Text", 18f, UiKit.Faint, FontStyles.Normal,
                 TextAlignmentOptions.TopRight);
             UiKit.Block(_connectionText.rectTransform, 0f, 0f, 20f, 24f);
+
+            // Sağ üst, bağlantının altı: BAŞKA bir admin ne yaptı (§5.3 admin_state.notice).
+            // Tercihler paneli kapalıyken de görünmeli — çoklu operatörde "harita neden değişti?"
+            // sorusunun cevabı burada durur. Tek admin varken satır boş kalır, yer kaplamaz.
+            _adminNoticeText = UiKit.Text(parent, "AdminNotice", 18f, UiKit.Accent, FontStyles.Normal,
+                TextAlignmentOptions.TopRight);
+            UiKit.Corner(_adminNoticeText.rectTransform, new Vector2(1f, 1f),
+                new Vector2(-Margin, -(Margin + 58f)), new Vector2(520f, 24f));
+            _adminNoticeText.textWrappingMode = TextWrappingModes.NoWrap;
+            _adminNoticeText.overflowMode = TextOverflowModes.Ellipsis;
         }
 
         private void BuildColumns(RectTransform parent)
@@ -413,6 +426,32 @@ namespace VortexArena.App.Admin
                 _connectionText.text = $"{client.ServerIp}:{client.ServerPort}" +
                                        (age >= 0f ? $" · poz {age:0.0} sn" : " · poz yok");
             }
+
+            RefreshAdminNotice(connected);
+        }
+
+        /// <summary>
+        /// Çoklu operatör satırı: kaç admin bağlı + son admin eylemi (§5.3 <c>admin_state</c>).
+        /// Tek admin varken ve duyuru yokken boş kalır — normal kullanımda hiç görünmez.
+        /// </summary>
+        private void RefreshAdminNotice(bool connected)
+        {
+            if (_adminNoticeText == null)
+            {
+                return;
+            }
+
+            if (!connected || (AdminSelection.AdminCount <= 1 && string.IsNullOrEmpty(AdminSelection.LastNotice)))
+            {
+                _adminNoticeText.text = "";
+                return;
+            }
+
+            string peers = AdminSelection.AdminCount > 1 ? $"{AdminSelection.AdminCount} admin" : "";
+            string notice = AdminSelection.LastNotice;
+            _adminNoticeText.text = string.IsNullOrEmpty(notice)
+                ? peers
+                : string.IsNullOrEmpty(peers) ? notice : $"{peers} · {notice}";
         }
 
         private void RefreshColumns(AdminRoster roster)

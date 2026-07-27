@@ -28,6 +28,22 @@ namespace VortexArena.App.Admin
         Always = 2
     }
 
+    /// <summary>
+    /// Arena çatısının (<c>VortexArena.Core.Arena.ArenaRoof</c>) gözlemcide ne zaman gizleneceği.
+    /// Çatı gizlense de gölgesini atmaya devam eder — bkz. bileşen dokümanı.
+    /// </summary>
+    public enum AdminRoofMode
+    {
+        /// <summary>Çatı hep görünür (oyuncunun gördüğü hâli).</summary>
+        Visible = 0,
+
+        /// <summary>Yalnız kuş bakışında gizlenir (varsayılan) — tepeden içerisi görülsün.</summary>
+        HideInTopDown = 1,
+
+        /// <summary>Her kipte gizli; POV/serbest kipte de tavan kapatmaz.</summary>
+        Hidden = 2
+    }
+
     /// <summary>Açık olan tam ekran panel (aynı anda en fazla biri).</summary>
     public enum AdminPanelKind
     {
@@ -54,6 +70,7 @@ namespace VortexArena.App.Admin
         private const string KeyFreeSpeed = Prefix + "FreeSpeed";
         private const string KeyWallAlpha = Prefix + "WallAlpha";
         private const string KeyMiniMap = Prefix + "MiniMap";
+        private const string KeyRoof = Prefix + "Roof";
 
         /// <summary>Serbest kip taban hızı sınırları (m/sn) — tercih slider'ı bu aralıkta.</summary>
         public const float FreeSpeedMin = 1f;
@@ -71,6 +88,7 @@ namespace VortexArena.App.Admin
         private static float _freeSpeed = 4f;
         private static float _wallAlpha = 0.25f;
         private static bool _miniMap = true;
+        private static AdminRoofMode _roof = AdminRoofMode.HideInTopDown;
         private static bool _loaded;
 
         /// <summary>
@@ -213,6 +231,41 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>Arena çatısı gözlemcide ne zaman gizlensin (varsayılan: kuş bakışında).</summary>
+        public static AdminRoofMode Roof
+        {
+            get { Load(); return _roof; }
+            set
+            {
+                Load();
+                if (_roof == value)
+                {
+                    return;
+                }
+
+                _roof = value;
+                PlayerPrefs.SetInt(KeyRoof, (int)value);
+                Raise();
+            }
+        }
+
+        /// <summary>
+        /// Çatıya uygulanacak alfa (1 = normal, 0 = çizilmez, gölge kalır). Tercih + o anki
+        /// kamera kipinden türetilir; <c>ArenaRoof.ApplyAll</c> bunu alır.
+        /// </summary>
+        public static float RoofAlphaNow()
+        {
+            switch (Roof)
+            {
+                case AdminRoofMode.Hidden:
+                    return 0f;
+                case AdminRoofMode.HideInTopDown:
+                    return CameraMode == AdminCameraMode.TopDown ? 0f : 1f;
+                default:
+                    return 1f;
+            }
+        }
+
         /// <summary>Halkalar/ad etiketleri şu anki kipte çizilmeli mi?</summary>
         public static bool MarkersVisibleNow()
         {
@@ -262,6 +315,7 @@ namespace VortexArena.App.Admin
             _freeSpeed = Mathf.Clamp(PlayerPrefs.GetFloat(KeyFreeSpeed, 4f), FreeSpeedMin, FreeSpeedMax);
             _wallAlpha = Mathf.Clamp01(PlayerPrefs.GetFloat(KeyWallAlpha, 0.25f));
             _miniMap = PlayerPrefs.GetInt(KeyMiniMap, 1) != 0;
+            _roof = (AdminRoofMode)PlayerPrefs.GetInt(KeyRoof, (int)AdminRoofMode.HideInTopDown);
         }
 
         private static void Raise()

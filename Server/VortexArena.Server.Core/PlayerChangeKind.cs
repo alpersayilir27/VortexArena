@@ -14,5 +14,9 @@ public enum PlayerChangeKind
     Updated,
 
     /// <summary>Bağlantı koptu veya 15 sn status gelmedi.</summary>
-    Offline
+    Offline,
+
+    /// <summary>Kayıt tümüyle silindi (yalnız admin: oturumluk kimlik, hayalet satır bırakmaz —
+    /// Docs/ArenaNet-Protokol.md §2). Oyuncu kayıtları silinmez, Offline işaretlenir.</summary>
+    Removed
 }

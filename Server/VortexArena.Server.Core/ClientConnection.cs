@@ -133,40 +133,47 @@ public sealed class ClientConnection
                     Console.WriteLine($"[ClientConnection] set_team: {State.Name} başka oyuncunun takımını değiştiremez — yok sayıldı.");
                     return;
                 }
-                _lobby.HandleSetTeam(msg);
+                _lobby.HandleSetTeam(this, msg);
                 return;
             }
             case MessageTypes.Kick:
             {
                 if (!RequireAdmin(type)) return;
                 var msg = JsonUtil.Deserialize<KickMsg>(json);
-                if (msg != null) await _lobby.HandleKickAsync(msg);
+                if (msg != null) await _lobby.HandleKickAsync(this, msg);
                 return;
             }
             case MessageTypes.Identify:
             {
                 if (!RequireAdmin(type)) return;
                 var msg = JsonUtil.Deserialize<IdentifyMsg>(json);
-                if (msg != null) await _lobby.HandleIdentifyAsync(msg);
+                if (msg != null) await _lobby.HandleIdentifyAsync(this, msg);
                 return;
             }
             case MessageTypes.StartMatch:
             {
                 if (!RequireAdmin(type)) return;
                 var msg = JsonUtil.Deserialize<StartMatchMsg>(json);
-                if (msg != null) await _lobby.HandleStartMatchAsync(msg);
+                if (msg != null) await _lobby.HandleStartMatchAsync(this, msg);
                 return;
             }
             case MessageTypes.AbortMatch:
             {
                 if (!RequireAdmin(type)) return;
-                await _lobby.HandleAbortMatchAsync();
+                await _lobby.HandleAbortMatchAsync(this);
                 return;
             }
             case MessageTypes.ReturnToLobby:
             {
                 if (!RequireAdmin(type)) return;
-                await _lobby.HandleReturnToLobbyAsync();
+                await _lobby.HandleReturnToLobbyAsync(this);
+                return;
+            }
+            case MessageTypes.SetSelection:
+            {
+                if (!RequireAdmin(type)) return;
+                var msg = JsonUtil.Deserialize<SetSelectionMsg>(json);
+                if (msg != null) await _lobby.HandleSetSelectionAsync(this, msg);
                 return;
             }
             case MessageTypes.ShotFired:

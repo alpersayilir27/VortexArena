@@ -8,8 +8,8 @@ namespace VortexArena.App.Editor
 {
     /// <summary>
     /// Dev araç setinin editör kancaları: Play'e basıldığında doğru sahneden başlatır, Play
-    /// çıkışında test botlarını toplar, editör kapanırken her şeyi öldürür ve rol değiştirmek
-    /// için <c>Ctrl+Alt+R</c> kısayolunu kurar.
+    /// çıkışında ve editör kapanışında test botlarını toplar ve rol değiştirmek için
+    /// <c>Ctrl+Alt+R</c> kısayolunu kurar.
     ///
     /// <para><b>Play başlangıç sahnesi:</b> "Boot'tan başla" seçiliyken
     /// <see cref="EditorSceneManager.playModeStartScene"/> Boot sahnesine ayarlanır — böylece
@@ -17,12 +17,11 @@ namespace VortexArena.App.Editor
     /// Sahne asset'i <b>Build Settings'ten</b> aranır (dosya adı <c>Boot</c>); sabit yol gömmüyoruz
     /// ki sahne taşındığında araç kırılmasın.</para>
     ///
-    /// <para><b>Play çıkışında yalnız BOTLAR ölür, sunucu KASITLI olarak yaşamaya devam eder.</b>
-    /// Botlar teste özgüdür (her Play kendi sentetik oyuncularını doğurur), oysa sunucu üretimde
-    /// de ayrı bir makinede sürekli açık durur. Her Play çıkışında sunucuyu öldürmek geliştiriciyi
-    /// yorar (yeniden başlat + yeniden bağlan + roster'ı bekle) ve sunucunun uzun ömürlü olduğu
-    /// gerçek topolojiden uzaklaşır. Sunucuyu bilinçli kapatmak için pencerede "Durdur" /
-    /// "Hepsini Durdur" var; editör kapanırken de <see cref="DevProcesses.StopAll"/> çağrılır.</para>
+    /// <para><b>Yalnız BOTLAR öldürülür — sunucuya HİÇ dokunulmaz.</b> Botlar teste özgüdür (her
+    /// Play kendi sentetik oyuncularını doğurur), oysa sunucu üretimde de ayrı bir makinede sürekli
+    /// açık durur ve bu projede <b>tamamen elle</b> yönetilir: editör sunucuyu ne başlatır ne
+    /// durdurur, editör kapanırken de öldürmez. Aksi hâlde elle başlatılmış bir sunucu beklenmedik
+    /// anda ölürdü.</para>
     /// </summary>
     [InitializeOnLoad]
     public static class DevBootstrap
@@ -48,16 +47,21 @@ namespace VortexArena.App.Editor
                     break;
 
                 case PlayModeStateChange.ExitingPlayMode:
-                    // Botlar teste özgü: her Play sonunda ölürler. Sunucu bilinçli olarak yaşar
+                    // Botlar teste özgü: her Play sonunda ölürler. Sunucuya dokunulmaz
                     // (sınıf dokümanındaki gerekçe).
                     DevProcesses.StopBots();
                     break;
             }
         }
 
+        /// <summary>
+        /// Editör kapanırken kayıtlı botlar öldürülür, ardından ad bazlı süpürme yapılır (önceki
+        /// oturumdan kalmış yetim botlar için). Sunucu elle yönetildiği için burada da yaşar.
+        /// </summary>
         private static void OnEditorQuitting()
         {
-            DevProcesses.StopAll();
+            DevProcesses.StopBots();
+            DevProcesses.SweepOrphans();
         }
 
         /// <summary>

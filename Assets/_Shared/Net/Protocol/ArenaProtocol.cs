@@ -25,7 +25,19 @@ namespace VortexArena.Protocol
         public const int SNAPSHOT_RATE_HZ = 20;
         public const int INTERP_DELAY_MS = 100;
 
-        public const int MAX_PLAYERS = 16;
+        /// <summary>
+        /// <c>playerId</c> tahsis tavanı. <b>Ürün kotası DEĞİL, tel formatı tavanıdır</b> —
+        /// playerId UDP paketlerinde <c>u8</c> taşınır (0 ayrılmıştır). Eşzamanlı oyuncu/admin
+        /// sayısına başka bir sınır yoktur; kota ileride lisanslama katmanıyla gelecek.
+        /// </summary>
+        public const int PLAYER_ID_MAX = 255;
+
+        /// <summary>
+        /// Tek snapshot datagramına yazılan en fazla oyuncu girdisi. Fazlası aynı tik içinde
+        /// ek datagramlara taşar (§6.3) — 6 + 16×86 = 1382 B, MTU 1500'ün altında kalır.
+        /// İstemcide birleştirme mantığı gerekmez: her paket kendi girdilerini bağımsız uygular.
+        /// </summary>
+        public const int SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16;
 
         // ---- Maç akışı + savaş (Docs/ArenaNet-Protokol.md §10) ----
 
@@ -50,8 +62,8 @@ namespace VortexArena.Protocol
         /// canlandırır — takılan/bildirim gönderemeyen istemci kalıcı ölü kalmasın.</summary>
         public const float REVIVE_GRACE = 20f;
 
-        /// <summary>hit_report atış hızı denetimi: iki vuruş arası en az 60/rpm × bu kadar
-        /// saniye olmalı (ağ jitter'ı için tolerans).</summary>
-        public const float FIRE_RATE_TOLERANCE = 0.8f;
+        // NOT: FIRE_RATE_TOLERANCE kaldırıldı (§10.3). Sunucuda atış hızı denetimi ve silah
+        // tablosu yoktur — hasarı istemci hesaplar, sunucu aynen uygular. Ürün gözetimli özel
+        // alanda çalıştığı için hile koruması bilinçli olarak eklenmez.
     }
 }

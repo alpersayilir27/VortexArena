@@ -20,21 +20,25 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `POSE_RATE_HZ` | `20` | İstemci poz gönderim frekansı |
 | `SNAPSHOT_RATE_HZ` | `20` | Sunucu snapshot yayın frekansı |
 | `INTERP_DELAY_MS` | `100` | Uzak avatar interpolasyon tamponu |
-| `MAX_PLAYERS` | `16` | Snapshot tek UDP paketine sığar (aşağıda hesap) |
+| `PLAYER_ID_MAX` | `255` | `playerId` tahsis tavanı. **Ürün kotası değil, tel formatı tavanıdır** — `playerId` UDP paketlerinde `u8`. Eşzamanlı oyuncu/admin sayısına başka sınır YOKTUR (kota ileride lisanslamayla gelecek) |
+| `SNAPSHOT_MAX_ENTRIES_PER_PACKET` | `16` | Tek snapshot datagramına yazılan en fazla oyuncu; fazlası ek pakete taşar (§6.3). 6 + 16×86 = 1382 B < MTU |
 | `PLAYER_MAX_HP` | `100` | Oyuncu tam canı (sunucu-otoriter; §10) |
 | `COUNTDOWN_SECONDS` | `5` | Countdown fazının uzunluğu |
 | `MATCH_END_SECONDS` | `10` | End fazı → otomatik `return_to_lobby` |
 | `LOADING_TIMEOUT` | 20 sn | Loading'de tüm `set_ready` beklenmezse yine de Countdown'a geçilir |
 | `RESPAWN_DELAY` | 5 sn | Ölüm → en erken canlanma (`respawn.delaySeconds`) |
 | `REVIVE_GRACE` | 20 sn | `revive_request` gelmezse sunucu ölümden bu kadar sonra zorla canlandırır |
-| `FIRE_RATE_TOLERANCE` | `0.8` | `hit_report` hız denetimi: iki vuruş arası ≥ `60/rpm × 0.8` sn |
 
 ## 2. Roller ve kimlik
 
 - `role`: `"player"` (VR/Quest) veya `"admin"` (Windows masaüstü). Admin oynamaz; lobi rosterinde görünür, komut yetkisi vardır.
 - **Admin sahne olarak oyuncuları takip eder:** `load_match` / `welcome.match` / `return_to_lobby` admin istemcisinde de sahne yükler (gözlemci görünümü). İki fark: admin `set_ready` **göndermez** (Loading kapısını yalnız `role=player` besler) ve poz **göndermez** (`0x01 PoseUpdate` yok), ama `0x00` ile UDP kaydı yapıp snapshot'ları alır.
-- `deviceId` = `SystemInfo.deviceUniqueIdentifier` — kalıcı kimlik (sunucu `devices.json`'da ada eşler, "Gözlük NN" otomatik adlandırma).
-- `playerId` = sunucunun `welcome`'da atadığı **1..MAX_PLAYERS** arası küçük tamsayı (UDP paketlerinde 1 bayt). Admin'e de atanır (poz göndermez).
+- `deviceId` — **role göre iki ayrı semantik:**
+  - `player`: `SystemInfo.deviceUniqueIdentifier`, **kalıcı** kimlik. Sunucu `devices.json`'da ada eşler ("Gözlük NN" otomatik adlandırma), kayıt bağlantı kopsa da durur (aynı gözlük geri gelince adı/kimliği korunur).
+  - `admin`: `<deviceUniqueIdentifier>:admin:<oturum GUID'i>` — **oturum başına benzersiz**. Sebep: aynı fiziksel PC'de iki admin penceresi açılabilsin. Ortak deviceId ile ikisi aynı kaydı paylaşır, her `hello` diğerinin soketini kapatır ve sonsuz kick döngüsü olurdu. GUID süreç ömrü boyunca sabittir (yeniden bağlanma aynı kaydı bulur), uygulama kapanınca ölür.
+- **Admin kayıtları kalıcı DEĞİLDİR:** admin bağlantısı koptuğunda (veya `OFFLINE_TIMEOUT` dolduğunda) kaydı registry'den **tümüyle silinir** ve `playerId`'si havuza döner; adı `devices.json`'a **yazılmaz**. Oyuncu kayıtları eskisi gibi çevrimdışı işaretlenir ama durur. Böylece admin'i her açıp kapatma roster'da hayalet satır bırakmaz.
+- **Admin sayısı sınırsız ve hepsi eş yetkilidir.** Birincil/ikincil admin kavramı yoktur: `role=="admin"` olan her bağlantı §5.2'deki tüm komutları gönderebilir, son gelen komut uygulanır. Operatörlerin birbirini ezmemesi için ortak seçim `admin_state` ile senkronlanır (§5.3) ve her komut `admin_state.notice` ile diğerlerine duyurulur.
+- `playerId` = sunucunun `welcome`'da atadığı **1..`PLAYER_ID_MAX`** arası küçük tamsayı (UDP paketlerinde 1 bayt). Admin'e de atanır (poz göndermez). Havuz dolarsa `kicked{reason:"Sunucu dolu"}` ile reddedilir — bu bir ürün kotası değil, `u8` tel formatının tavanıdır.
 - Aynı `deviceId` ikinci kez bağlanırsa eski bağlantı kapatılır, yenisi kabul edilir (cihaz yeniden bağlanmıştır).
 
 ## 3. Koordinat çerçevesi — ARENA UZAYI
@@ -90,12 +94,14 @@ KENDİ `playerId`'si için gönderebilir (lobide takım seçimi); admin herkes i
 ```
 `muzzlePos`/`muzzleDir` **arena uzayındadır** (§3) — alıcı istemci kendi dünyasına çevirir.
 
-**`hit_report`** — atıcının raycast'i bir oyuncuya değdiğinde:
+**`hit_report`** — istemci bir oyuncuya hasar verdiğinde (mermi, balta, ok, patlama, çevre — kaynağı fark etmez):
 ```json
 { "type":"hit_report", "seq":124, "targetPlayerId":5, "weaponId":"ak47",
   "damage":25.0, "hitPos":[0.4,1.5,2.2] }
 ```
-`hitPos` arena uzayında. Sunucu doğrular: hedef hayatta mı, atıcı hayatta mı, farklı takım mı, silahın atış hızına göre makul mü (rate-limit), `damage` `weapons.json`'daki değerle uyuşuyor mu (§10.3). Geçerse hasar uygular ve `health_update` yayınlar. **İstemci hasarı yerel uygulamaz** — `health_update` bekler.
+`hitPos` arena uzayında. **`damage` istemcinin hesapladığı değerdir ve sunucu onu aynen uygular** — sunucuda silah tablosu YOKTUR (§10.3). `weaponId` yalnız bir etikettir (kill feed / istatistik), doğrulanmaz: yeni bir silah/hasar kaynağı eklemek için sunucuya hiçbir şey tanıtmak gerekmez. Sunucu yalnız durum tutarlılığını kontrol eder (faz, atıcı/hedef canlı mı, dost ateşi). Geçerse hasarı uygular ve `health_update` yayınlar. **İstemci hasarı yerel uygulamaz** — `health_update` bekler.
+
+Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı gören istemci **etkilenen her hedef için bir `hit_report`** yollar, mesafeye göre düşen hasarı kendisi hesaplar. Aynı şekilde yaydaki çekiş gücü, kafa vuruşu çarpanı veya düşme hasarı da istemci tarafında hesaplanıp `damage` alanına yazılır.
 
 **`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** fiziksel olarak kendi taban bölgesine (`BaseZone`) girdikten sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da oyuncu ışınlanamadığı için canlanma bir **konum değişimi değil, durum değişimidir**.
 
@@ -106,6 +112,7 @@ KENDİ `playerId`'si için gönderebilir (lobide takım seçimi); admin herkes i
 - **`kick`** `{ "type":"kick", "playerId":5 }`
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
+- **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena10x10" }` — bir sonraki maçın **ortak** mod/harita seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş bırakılan alan mevcut değerini korur. Seçim sunucuda faz Lobby'ye dönerken sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
 
 Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar.
 
@@ -152,6 +159,17 @@ Fazlar: `Lobby → Loading → Countdown → Live → End → Lobby`.
 **`identify`** `{ "type":"identify" }` — istemci büyük kimlik overlay'i gösterir (playerId + ad).
 **`kicked`** `{ "type":"kicked", "reason":"" }` — istemci bağlantıyı kapatır, lobi bağlantı ekranına döner.
 
+**`admin_state`** — **yalnız `role=admin` bağlantılara**; adminler arası ortak durumun tek doğruluk kaynağı:
+```json
+{ "type":"admin_state", "modeId":"tdm", "sceneName":"Arena10x10",
+  "notice":"Ofis-PC: harita -> Arena10x10", "adminCount":2 }
+```
+- Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`return_to_lobby`/`kick`/`identify`/`set_team`) ve admin bağlanıp ayrıldığında.
+- `modeId`/`sceneName` = ortak seçim. Admin arayüzü **kendi yerel seçimini değil bunu gösterir**; gelen değer arayüzdeki mod/harita seçicisini ve yerel harita önizlemesini günceller. Yani bir operatör haritayı değiştirdiğinde diğerinin ekranı da (paneli açık olmasa bile) o haritaya döner.
+- `notice` = son admin eyleminin insan okuyabilir özeti (`"<admin adı>: <eylem>"`), tüm adminlerin durum satırında görünür. Boş olabilir.
+- `adminCount` = o an çevrimiçi admin sayısı.
+- **Yalnız operasyonel durum senkronlanır.** Görünüm tercihleri (kamera kipi, seçili oyuncu, halka/ad etiketi, kamera hızı, duvar/çatı saydamlığı, mini harita) her admin'in **kendi ekranına** aittir, protokole girmez ve `PlayerPrefs`'te yerel kalır.
+
 ## 6. UDP state mesajları (binary, little-endian)
 
 ### 6.1 Kayıt: `0x00 UdpHello` (istemci → sunucu, welcome'dan sonra)
@@ -178,9 +196,11 @@ Pozlar **arena uzayında**. `seq` sarmalanır (u16); eski `seq` gelirse paket at
 [u8 0x02][u8 playerCount][u32 serverTick]
 oyuncu başına: [u8 playerId][u8 flags][92B'lik PoseUpdate'in poz kısmı = 84 B]
 ```
-`flags` bit0 = alive. 16 oyuncu: 6 + 16×86 = **1382 B** → tek UDP paketi (MTU 1500 altı; MAX_PLAYERS=16 bu yüzden). İstemci kendi pozunu snapshot'tan ÇİZMEZ (yerelden çizer); uzak oyuncuları `INTERP_DELAY_MS` tamponuyla interpole eder. Admin'e de aynı snapshot gider (taktik görünüm bundan beslenir).
+`flags` bit0 = alive. İstemci kendi pozunu snapshot'tan ÇİZMEZ (yerelden çizer); uzak oyuncuları `INTERP_DELAY_MS` tamponuyla interpole eder. Admin'e de aynı snapshot gider (taktik görünüm bundan beslenir).
 
-**İçerik kuralı:** snapshot'a yalnız *online* olup en az bir `PoseUpdate`'i alınmış `role=player` girişleri konur (admin hiç girmez — poz göndermez). Kopan oyuncu (WS kapanışı/OFFLINE_TIMEOUT) bir sonraki tikten itibaren düşer; `playerCount=0` snapshot yine yayınlanır (istemciler bayat avatarı böyle temizler). **Yayın hedefi:** UDP kaydı yapılmış tüm online endpoint'ler (admin dahil). **İstemci düşürme kuralı:** bir `playerId` snapshot'larda ~1.5 sn görünmezse uzak avatarı kaldırılır (paket kaybı toleransı; sunucunun 15 sn'lik OFFLINE_TIMEOUT'unu beklemez).
+**Parçalama (MTU):** pozlu oyuncu sayısı `SNAPSHOT_MAX_ENTRIES_PER_PACKET`'i aşarsa sunucu aynı tik'i **birden çok datagrama böler**; her datagram kendi `playerCount`'unu taşır, hepsi aynı `serverTick`'i taşır ve aynı hedeflere yollanır. 16 girdi = 6 + 16×86 = **1382 B** (MTU 1500 altı). **İstemcide birleştirme mantığı YOKTUR ve gerekmez:** her paket taşıdığı girdileri bağımsız olarak uygular, oyuncu düşürme kararı "bu pakette yok" değil ~1.5 sn'lik zaman aşımıdır. Bu yüzden parçalama tel formatını değiştirmez — ek başlık alanı yoktur, eski okuyucu da doğru çalışır.
+
+**İçerik kuralı:** snapshot'a yalnız *online* olup en az bir `PoseUpdate`'i alınmış `role=player` girişleri konur (admin hiç girmez — poz göndermez; ama UDP kaydı yaptığı için snapshot ALIR, ve birden çok admin varsa her biri ayrı hedeftir). Kopan oyuncu (WS kapanışı/OFFLINE_TIMEOUT) bir sonraki tikten itibaren düşer; `playerCount=0` snapshot yine yayınlanır (istemciler bayat avatarı böyle temizler). **Yayın hedefi:** UDP kaydı yapılmış tüm online endpoint'ler (admin dahil). **İstemci düşürme kuralı:** bir `playerId` snapshot'larda ~1.5 sn görünmezse uzak avatarı kaldırılır (paket kaybı toleransı; sunucunun 15 sn'lik OFFLINE_TIMEOUT'unu beklemez).
 
 ## 7. DTO tasarım kuralları
 
@@ -221,6 +241,7 @@ Lobby ──start_match──► Loading ──herkes set_ready | LOADING_TIMEOU
 
 - **`start_match` doğrulaması** (sırayla): `modeId` sunucudaki `IGameMode` kayıtlarında var; `sceneName` boş değil; **`sceneName` `config/maps.json` harita tablosunda var ve o harita `modeId`'yi destekliyor** (harita girdisindeki `modes` boşsa kısıt yok; **tablo boşsa — maps.json yoksa — bu adım tümüyle atlanır**); `sceneName` tüm çevrimiçi oyuncuların `hello.scenes` listesinde var. Geçmezse komut reddedilir ve konsola sebep yazılır (faz değişmez). İki oyuncu+ varken takımlar dengelenir (boş takım kalmaz); tek oyuncuyla ve **hiç oyuncu yokken** başlatmaya izin verilir (konsolda uyarı) — ikincisi admin gözlemcinin haritayı boş arenada açması için vardır.
 - **Oyuncusuz maç (yalnız admin):** `load_match` yalnız adminlere gider, Loading'de beklenecek `set_ready` olmadığı için faz doğrudan Countdown'a geçer ve maç normal işler (skor 0, süre akar). Ayrım şu: **oyuncularla başlamış** bir maçta Loading sırasında son oyuncu da düşerse sunucu maçı bırakıp Lobby'ye döner; oyuncusuz **başlatılmış** maçta dönmez — çıkış operatörün `abort_match`/`return_to_lobby` komutudur.
+- **Mod/harita seçimi sunucuda yaşar (çoklu admin):** admin arayüzündeki seçiciler yerel bir değişkeni değil, `set_selection` ile sunucudaki ortak seçimi değiştirir; sunucu `admin_state` ile hepsine geri yayar. `start_match` kendi `modeId`/`sceneName`'i ile gelmeye devam eder (protokol yüzeyi değişmedi) ama sunucu onu aynı zamanda ortak seçime yazar — böylece maç başladığında tüm admin panelleri aynı değeri gösterir. Seçim yalnız bir niyet beyanıdır: doğrulama `start_match` anında yapılır.
 - **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam` + `spawnSlot`'u (takım içi 0 tabanlı sıra) gider. Harita tablosunda `spawnSlotsPerTeam` biliniyorsa slot bu sayıya göre **modulo** alınır (sahnede olmayan slota atama yapılmaz; kalabalık takımda slotlar paylaşılır). Faz Loading'e geçerken tüm `ready` bayrakları sıfırlanır. **Çevrimiçi adminlere de bir kopya gider** (`yourTeam:""`, `spawnSlot:-1`) — admin gözlemci aynı sahneyi yükler.
 - **Loading:** istemci sahneyi yükleyince `set_ready{ready:true}` gönderir ("sahne yüklendi" anlamında). Tüm çevrimiçi **oyuncular** hazır olunca (veya `LOADING_TIMEOUT` dolunca) Countdown başlar. Kapı yalnız `role=player` bağlantılarını sayar: admin sahneyi yüklese de `set_ready` göndermez, geri sayımı ne hızlandırır ne geciktirir.
 - **Countdown:** saniyede bir `countdown{seconds}` (5→1); 0'da faz Live.
@@ -234,23 +255,38 @@ Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `spawnSlot`, `kills
 
 `hp`/`alive`/`kills`/`deaths` **`lobby_state` ile de yayınlanır** (§5.3): ölüm işlendikten sonra roster bir kez tazelenir, böylece admin istatistik tablosu sunucudaki sayaçla birebir kalır ve admin yeniden bağlandığında geçmişi kaybetmez. Anlık akış (her vuruş) yine `health_update`/`kill_event` üzerinden gider — `lobby_state` sağlama noktasıdır, sıcak yol değil.
 
-### 10.3 Vuruş hattı
+### 10.3 Vuruş hattı — genel hasar modeli
 
-`hit_report` şu sırayla doğrulanır; **herhangi biri düşerse paket sessizce reddedilir** (konsola tek satır log, istemciye yanıt yok):
+**Hile koruması yoktur ve bilinçli olarak eklenmez.** Ürün, gözetim altındaki özel alanlarda
+(işletme kurulumu, turnuva) çalışır; hile yapmanın kimseye faydası olmadığı bir ortamda hile
+denetimi yalnız meşru vuruşları yiyen bir tuzaktır. Bu yüzden hasar hesabı **tamamen istemcide**
+yapılır, sunucu hakemlik değil **defter tutar**: canı düşürür, ölümü ilan eder, skoru işler.
+
+`hit_report` şu sırayla kontrol edilir; **herhangi biri düşerse paket sessizce reddedilir**
+(konsola tek satır log, istemciye yanıt yok). Bunlar hile denetimi değil, **durum tutarlılığı**
+kontrolleridir — kaldırılırlarsa çift ölüm / maç dışı hasar gibi hatalar üretilir:
 
 1. Faz `Live` mi?
 2. Atıcı çevrimiçi + `role=player` + `alive` mi?
-3. Hedef var, çevrimiçi, `alive` mi?
-4. Takımlar farklı mı? (aynı takım = dost ateşi YOK)
-5. `weaponId` `config/weapons.json`'da var mı?
-6. Atış hızı: aynı atıcının son kabul edilen vuruşundan bu yana ≥ `60/rpm × FIRE_RATE_TOLERANCE` sn geçmiş mi?
-7. `damage`, `weapons.json`'daki değere eşit mi (±%1)? Değilse tablodaki değer kullanılır ve uyumsuzluk loglanır.
+3. Hedef var, çevrimiçi, `alive` mi? (aynı karede gelen iki ölümcül vuruş çift `kill_event` yazmasın)
+4. Hedef atıcının kendisi değil ve takımlar farklı mı? (aynı takım = dost ateşi YOK — oyun kuralı)
+5. `damage` sonlu ve pozitif bir sayı mı? (NaN/∞ canı kalıcı bozar; sayı denetimi, hile denetimi değil)
 
-Geçerse: `hp -= damage` → `health_update{playerId, hp, attackerId}` **herkese** yayınlanır. `hp ≤ 0` ise `alive=0`, `kill_event{killerId, victimId, weaponId}` + `IGameMode.OnKill` (skor) + kurbana `respawn{spawnSlot, delaySeconds:RESPAWN_DELAY}`.
+Geçerse: `hp -= damage` (istemcinin bildirdiği değer) → `health_update{playerId, hp, attackerId}`
+**herkese** yayınlanır. `hp ≤ 0` ise `alive=0`, `kill_event{killerId, victimId, weaponId}` +
+`IGameMode.OnKill` (skor) + kurbana `respawn{spawnSlot, delaySeconds:RESPAWN_DELAY}`.
 
-`shot_fired` sunucuda **doğrulanmaz**, yalnız relay edilir (atan hariç herkese, `playerId` eklenerek) — ölü/maç dışı oyuncunun `shot_fired`'ı relay EDİLMEZ.
+Atış hızı denetimi, `weaponId` beyaz listesi ve sunucu-otoriter silah tablosu **YOKTUR**
+(v1'de vardı, kaldırıldı): pompalı saçması, bomba parçası ve ok yaylımı gibi meşru "hızlı
+art arda vuruş" örüntülerini sessizce düşürüyordu.
 
-> `config/weapons.json` (`{ "weapons":[{ "weaponId":"ak47","damage":34,"rpm":600 }, …] }`) **Unity'den üretilir** (`Tools > VortexArena > Export Server Config`, Faz 4) — tek doğruluk kaynağı `WeaponDefinition` SO'larıdır, dosya elle düzenlenmez (export ezer). Buna rağmen hasar **her zaman sunucu tablosundan** uygulanır: istemci farklı bildirirse uyumsuzluk loglanır ve tablo kazanır (export unutulduğunda sapmayı bu satır yakalar).
+`shot_fired` sunucuda **doğrulanmaz**, yalnız relay edilir (atan hariç herkese, `playerId`
+eklenerek) — ölü/maç dışı oyuncunun `shot_fired`'ı relay EDİLMEZ.
+
+> **Denge sayıları istemcide yaşar.** Hasar/atış hızı/menzil tek kaynak olarak Unity'deki
+> `WeaponDefinition` SO'larındadır; sunucuya export edilmez, `config/weapons.json` diye bir dosya
+> yoktur. Bedeli bilinçlidir: denge değişikliği istemci build'i gerektirir. Karşılığında yeni bir
+> silah/hasar kaynağı (balta, yay, bomba, tuzak, düşme hasarı) eklemek **sıfır sunucu işi**dir.
 
 ### 10.4 Free-roam respawn (canlanma)
 
@@ -265,13 +301,15 @@ Fiziksel oyuncu ışınlanamaz → **respawn = konum değil durum değişimi**:
 
 ## 11. Sunucu config dosyaları
 
-`Server/config/` altındaki dört dosya; kaynakları FARKLIDIR:
+`Server/config/` altındaki üç dosya; kaynakları FARKLIDIR:
 
 | Dosya | Kaynağı | Not |
 |---|---|---|
 | `server.json` | **Elle** | Portlar + `venueName` + `tickHz`; yoksa varsayılanlarla oluşturulur (§1 sabitleri). |
 | `devices.json` | **Sunucu üretir** | `deviceId → "Gözlük NN"`; ilk bağlantıda ve `set_name`'de yazılır (§2). UTF-8, BOM'suz. |
-| `weapons.json` | **Unity export** | `WeaponDefinition` SO'larından (§10.3). |
 | `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `sizeX`/`sizeZ`, `spawnSlotsPerTeam`, `modes` (§10.1). |
 
-> **`weapons.json` ve `maps.json` ELLE DÜZENLENMEZ** — `Tools > VortexArena > Export Server Config` üretir ve bir sonraki export elle yapılan değişikliği **ezer**. Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir (alfabetik, LF, UTF-8 BOM'suz) → git diff'i temiz kalır. Silah/harita ekleyip export'u çalıştırmayı unutursanız: bilinmeyen `weaponId` → `hit_report` reddedilir, bilinmeyen `sceneName` → `start_match` reddedilir. `maps.json` hiç yoksa sunucu harita doğrulamasını **atlar** (geriye dönük uyumlu davranış), `weapons.json` yoksa varsayılan v1 silah tablosuyla oluşturulur.
+> **`weapons.json` KALDIRILDI** (v1'de vardı): sunucu artık silah tanımı tutmaz, hasarı istemci
+> bildirir (§10.3). Silah istatistikleri yalnız Unity'deki `WeaponDefinition` SO'larındadır.
+>
+> **`maps.json` ELLE DÜZENLENMEZ** — `Tools > VortexArena > Export Server Config` üretir ve bir sonraki export elle yapılan değişikliği **ezer**. Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir (alfabetik, LF, UTF-8 BOM'suz) → git diff'i temiz kalır. Harita ekleyip export'u çalıştırmayı unutursanız bilinmeyen `sceneName` → `start_match` reddedilir. `maps.json` hiç yoksa sunucu harita doğrulamasını **atlar** (geriye dönük uyumlu davranış).

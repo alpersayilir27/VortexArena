@@ -16,6 +16,15 @@ namespace VortexArena.App.Admin
     /// izlenmeye devam eder (kullanıcının açık isteği). Maç/oyun DURMAZ; otorite sunucudadır.
     /// </para>
     /// <para>
+    /// <b>MAÇ bölümü ORTAKtır (çoklu admin).</b> Mod/harita seçicileri yerel bir alana yazmaz:
+    /// <c>set_selection</c> ile sunucudaki ortak seçimi değiştirir, sunucu da onu tüm adminlere
+    /// <c>admin_state</c> ile geri yayar (<see cref="AdminSelection"/>). Bu yüzden bir operatör
+    /// haritayı değiştirdiğinde diğerinin paneli — <b>kapalı olsa bile</b>, bu bileşen HUD kökünde
+    /// hep etkin olduğu için — yeni değere döner ve yerel önizlemesi o arenayı açar. Tıklama
+    /// anında yerel imleç de ilerletilir (iyimser güncelleme); sunucudan gelen değer son sözü söyler.
+    /// <br/><b>GÖRÜNÜM bölümü YERELdir</b> — her operatörün kendi ekranı (bkz. <see cref="AdminSession"/>).
+    /// </para>
+    /// <para>
     /// <b>Neden dropdown/slider yok:</b> <c>TMP_Dropdown</c> ve <c>Slider</c> serialize edilmiş
     /// şablon hiyerarşisi ister (viewport, item template, handle); prosedürel kurulumda bu hem
     /// uzun hem kırılgandır. Yerine <c>[&lt;] değer [&gt;]</c> döngüleyicileri ve
@@ -26,7 +35,7 @@ namespace VortexArena.App.Admin
     public class AdminPreferencesPanel : MonoBehaviour
     {
         private const float PanelWidth = 760f;
-        private const float PanelHeight = 700f;
+        private const float PanelHeight = 740f;
         private const float RowHeight = 40f;
 
         private GameObject _root;
@@ -39,6 +48,7 @@ namespace VortexArena.App.Admin
         private TextMeshProUGUI _nameplatesValue;
         private TextMeshProUGUI _speedValue;
         private TextMeshProUGUI _wallValue;
+        private TextMeshProUGUI _roofValue;
         private TextMeshProUGUI _miniMapValue;
 
         private readonly List<ModeDefinition> _modes = new List<ModeDefinition>();
@@ -61,6 +71,11 @@ namespace VortexArena.App.Admin
             AdminSession.Changed += MarkDirty;
             AdminCommands.StatusChanged += MarkDirty;
             NetEvents.OnConnectionStateChanged += HandleConnectionState;
+
+            // Ortak seçim başka bir admin'den değişmiş olabilir. Bu bileşen panel KAPALIYKEN de
+            // etkindir (HUD kökünde durur, yalnız kartı gizlenir) — bu yüzden diğer operatörün
+            // harita değişikliği panel açılmasa da yerel önizlemeye yansır.
+            AdminSelection.Changed += HandleSharedSelectionChanged;
         }
 
         private void OnDisable()
@@ -68,6 +83,7 @@ namespace VortexArena.App.Admin
             AdminSession.Changed -= MarkDirty;
             AdminCommands.StatusChanged -= MarkDirty;
             NetEvents.OnConnectionStateChanged -= HandleConnectionState;
+            AdminSelection.Changed -= HandleSharedSelectionChanged;
         }
 
         private void Update()
@@ -113,7 +129,8 @@ namespace VortexArena.App.Admin
 
             float y = 78f;
 
-            y = Section(body, "MAÇ", y);
+            // "ortak" etiketi bilinçli: bu iki seçici tüm adminlerde aynı anda değişir (§5.3).
+            y = Section(body, "MAÇ (TÜM ADMİNLERDE ORTAK)", y);
             y = Cycler(body, "Mod", y, CycleModePrev, CycleModeNext, out _modeValue);
             y = Cycler(body, "Harita", y, CycleMapPrev, CycleMapNext, out _mapValue);
             y = MatchButtons(body, y);
@@ -123,11 +140,12 @@ namespace VortexArena.App.Admin
             UiKit.Block(_statusText.rectTransform, 28f, y, 28f, 24f);
             y += 34f;
 
-            y = Section(body, "GÖRÜNÜM", y);
+            y = Section(body, "GÖRÜNÜM (YALNIZ BU EKRAN)", y);
             y = Cycler(body, "Halkalar", y, PrevMarkers, NextMarkers, out _markersValue);
             y = Cycler(body, "Ad etiketleri", y, ToggleNameplates, ToggleNameplates, out _nameplatesValue);
             y = Cycler(body, "Kamera hızı", y, SpeedDown, SpeedUp, out _speedValue);
             y = Cycler(body, "Duvar saydamlığı", y, WallDown, WallUp, out _wallValue);
+            y = Cycler(body, "Çatı", y, PrevRoof, NextRoof, out _roofValue);
             y = Cycler(body, "Mini harita", y, ToggleMiniMap, ToggleMiniMap, out _miniMapValue);
 
             y = Section(body, "BAĞLANTI", y);
@@ -228,10 +246,14 @@ namespace VortexArena.App.Admin
 
         private void StartMatch()
         {
-            ModeDefinition mode = _modeIndex >= 0 && _modeIndex < _modes.Count ? _modes[_modeIndex] : null;
-            MapDefinition map = _mapIndex >= 0 && _mapIndex < _maps.Count ? _maps[_mapIndex] : null;
-            AdminCommands.StartMatch(mode != null ? mode.ModeId : "", map != null ? map.SceneName : "");
+            AdminCommands.StartMatch(SelectedModeId, SelectedSceneName);
         }
+
+        private string SelectedModeId =>
+            _modeIndex >= 0 && _modeIndex < _modes.Count ? _modes[_modeIndex].ModeId : "";
+
+        private string SelectedSceneName =>
+            _mapIndex >= 0 && _mapIndex < _maps.Count ? _maps[_mapIndex].SceneName : "";
 
         private void CycleModePrev() { StepMode(-1); }
         private void CycleModeNext() { StepMode(1); }
@@ -245,8 +267,7 @@ namespace VortexArena.App.Admin
 
             _modeIndex = (_modeIndex + delta + _modes.Count) % _modes.Count;
             RefreshMapList();
-            PreviewSelectedMap(); // mod değişti → harita listesi başa döndü, seçili harita da değişti
-            Apply();
+            PublishSelection(); // mod değişti → harita listesi başa döndü, seçili harita da değişti
         }
 
         private void CycleMapPrev() { StepMap(-1); }
@@ -260,8 +281,93 @@ namespace VortexArena.App.Admin
             }
 
             _mapIndex = (_mapIndex + delta + _maps.Count) % _maps.Count;
+            PublishSelection();
+        }
+
+        /// <summary>
+        /// Yerel imleci sunucuya bildirir (<c>set_selection</c>) ve iyimser olarak hemen uygular:
+        /// önizleme + arayüz beklemeden tepki versin. Sunucu değişikliği tüm adminlere yayınca
+        /// <see cref="HandleSharedSelectionChanged"/> aynı değeri görür ve iş yapmaz — döngü olmaz.
+        /// Bağlantı yoksa komut sessizce düşer, yerel önizleme yine de çalışır.
+        /// </summary>
+        private void PublishSelection()
+        {
+            AdminCommands.SetSelection(SelectedModeId, SelectedSceneName);
             PreviewSelectedMap();
             Apply();
+        }
+
+        /// <summary>
+        /// Sunucudan gelen ortak seçim (başka bir admin değiştirmiş olabilir): imleçleri ona
+        /// taşır ve yerel önizlemeyi açar. Zaten aynıysa hiçbir şey yapmaz — kendi gönderdiğimiz
+        /// <c>set_selection</c>'ın echo'su bu yüzden önizlemeyi tekrar tetiklemez.
+        /// Katalogda olmayan bir seçim gelirse (sürüm farkı) imleç yerinde bırakılır.
+        /// </summary>
+        private void HandleSharedSelectionChanged()
+        {
+            _dirty = true;
+
+            string sharedMode = AdminSelection.ModeId;
+            string sharedScene = AdminSelection.SceneName;
+            if (string.IsNullOrEmpty(sharedMode) && string.IsNullOrEmpty(sharedScene))
+            {
+                return; // sunucuda henüz seçim yok: yerel varsayılanı bozma
+            }
+
+            bool changed = false;
+
+            if (!string.IsNullOrEmpty(sharedMode) && sharedMode != SelectedModeId)
+            {
+                int index = IndexOfMode(sharedMode);
+                if (index >= 0)
+                {
+                    _modeIndex = index;
+                    RefreshMapList(); // mod değişti → uyumlu harita listesi de değişti
+                    changed = true;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(sharedScene) && sharedScene != SelectedSceneName)
+            {
+                int index = IndexOfMap(sharedScene);
+                if (index >= 0)
+                {
+                    _mapIndex = index;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                PreviewSelectedMap();
+                Apply();
+            }
+        }
+
+        private int IndexOfMode(string modeId)
+        {
+            for (int i = 0; i < _modes.Count; i++)
+            {
+                if (_modes[i] != null && _modes[i].ModeId == modeId)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private int IndexOfMap(string sceneName)
+        {
+            for (int i = 0; i < _maps.Count; i++)
+            {
+                if (_maps[i] != null && _maps[i].SceneName == sceneName)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         private void RefreshMapList()
@@ -335,6 +441,19 @@ namespace VortexArena.App.Admin
             }
         }
 
+        private static void PrevRoof() { StepRoof(-1); }
+        private static void NextRoof() { StepRoof(1); }
+
+        /// <summary>Çatı kipi: görünür → kuş bakışında gizli → hep gizli (halkalarla aynı desen).</summary>
+        private static void StepRoof(int delta)
+        {
+            var next = (int)AdminSession.Roof + delta;
+            if (next < 0) next = 2;
+            if (next > 2) next = 0;
+            AdminSession.Roof = (AdminRoofMode)next;
+            AdminSpectator.RefreshRoof(); // tercih anında görünsün, kip değişimini bekleme
+        }
+
         // ------------------------------------------------------------------ tazeleme
 
         private void Apply()
@@ -370,6 +489,8 @@ namespace VortexArena.App.Admin
             _nameplatesValue.text = AdminSession.Nameplates ? "açık" : "kapalı";
             _speedValue.text = $"{AdminSession.FreeSpeed:0.0} m/sn";
             _wallValue.text = $"%{Mathf.RoundToInt(AdminSession.WallAlpha * 100f)}";
+            _roofValue.text = AdminSession.Roof == AdminRoofMode.Visible ? "görünür"
+                : AdminSession.Roof == AdminRoofMode.HideInTopDown ? "kuş bakışında gizli" : "hep gizli";
             _miniMapValue.text = AdminSession.MiniMap ? "açık" : "kapalı";
 
             ArenaClient client = ArenaClient.Instance;
@@ -379,7 +500,12 @@ namespace VortexArena.App.Admin
             string state = client == null ? "istemci yok"
                 : client.IsConnected ? "bağlı"
                 : client.State == ArenaConnectionState.Connecting ? "bağlanılıyor" : "bağlı değil";
-            _connectionText.text = $"{state} — {endpoint}";
+
+            // Bağlı admin sayısı: operatör yalnız olmadığını bilmeli (komutlar eş yetkilidir).
+            string peers = AdminSelection.AdminCount > 1
+                ? $" — {AdminSelection.AdminCount} admin bağlı"
+                : "";
+            _connectionText.text = $"{state} — {endpoint}{peers}";
         }
 
         private static string DisplayOf(string displayName, string fallback)

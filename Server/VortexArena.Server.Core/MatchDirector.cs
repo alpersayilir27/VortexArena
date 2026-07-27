@@ -37,7 +37,6 @@ public sealed class MatchDirector
 
     private readonly object _gate = new();
     private readonly PlayerRegistry _registry;
-    private readonly WeaponTable _weapons;
 
     /// <summary>Harita kataloğu (config/maps.json — Unity export'u). BOŞ olabilir: o zaman
     /// harita doğrulaması ve spawn slot sınırı devre dışıdır (§10.1).</summary>
@@ -92,10 +91,9 @@ public sealed class MatchDirector
     private CancellationTokenSource? _cts;
     private Task? _loop;
 
-    public MatchDirector(PlayerRegistry registry, WeaponTable weapons, MapTable maps)
+    public MatchDirector(PlayerRegistry registry, MapTable maps)
     {
         _registry = registry;
-        _weapons = weapons;
         _maps = maps;
         Register(new TdmMode());
     }
@@ -501,8 +499,12 @@ public sealed class MatchDirector
         await FlushAsync(outbox);
     }
 
-    /// <summary>hit_report doğrulama hattı (§10.3, sırayla): faz → atıcı → hedef → takım → silah →
-    /// atış hızı → hasar. Herhangi biri düşerse tek satır log + sessiz ret (istemciye yanıt yok).</summary>
+    /// <summary>hit_report hattı (§10.3, sırayla): faz → atıcı → hedef → takım → hasar sayısı.
+    /// Herhangi biri düşerse tek satır log + sessiz ret (istemciye yanıt yok).
+    /// <para>Bunlar HİLE denetimi değil, durum tutarlılığı kontrolleridir — ürün gözetimli özel
+    /// alanda çalıştığı için hile koruması bilinçli olarak yoktur (§10.3). Hasarı istemci hesaplar
+    /// ve sunucu aynen uygular; silah tablosu, weaponId beyaz listesi ve atış hızı denetimi
+    /// KALDIRILDI (meşru saçma/patlama/yaylım vuruşlarını düşürüyordu).</para></summary>
     public async Task HandleHitReportAsync(PlayerState shooter, HitReportMsg msg)
     {
         // Registry araması kilitsiz (ConcurrentDictionary) — kilit almadan önce hallediyoruz.
@@ -545,26 +547,19 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, "dost ateşi yok");
                 return;
             }
-            if (!_weapons.TryGet(msg.weaponId, out var weapon))
+            // Hasarı İSTEMCİ hesaplar (mesafeye göre düşen patlama, yay çekiş gücü, kafa vuruşu…)
+            // ve sunucu aynen uygular. Tek kontrol sayının kullanılabilir olması: NaN/∞ canı kalıcı
+            // bozar (NaN'a düşen hp bir daha 0'ın altına inemez → oyuncu ölümsüz kalır), negatif
+            // hasar da can doldurur. Bu bir hile denetimi değil, sayı denetimidir.
+            if (!float.IsFinite(msg.damage) || msg.damage <= 0f)
             {
-                RejectHit(shooter, msg.targetPlayerId, $"bilinmeyen silah '{msg.weaponId}'");
+                RejectHit(shooter, msg.targetPlayerId, $"geçersiz hasar {msg.damage}");
                 return;
             }
 
             var now = DateTime.UtcNow;
-            var minInterval = WeaponTable.MinShotInterval(weapon);
-            if ((now - shooter.LastHitAcceptedAt).TotalSeconds < minInterval)
-            {
-                RejectHit(shooter, msg.targetPlayerId, $"atış hızı ihlali (< {minInterval:0.000} sn)");
-                return;
-            }
-
-            // Hasar HER ZAMAN tablodan; istemci farklı bildirmişse uyumsuzluk loglanır (§10.3/7).
-            appliedDamage = weapon.damage;
-            if (MathF.Abs(msg.damage - weapon.damage) > weapon.damage * 0.01f)
-                Console.WriteLine($"[match] hasar uyumsuz: {shooter.Name} '{weapon.weaponId}' için {msg.damage:0.#} bildirdi, tablo {weapon.damage:0.#} — tablo uygulandı.");
-
-            shooter.LastHitAcceptedAt = now;
+            weaponId = msg.weaponId ?? "";
+            appliedDamage = msg.damage;
             target.Hp = MathF.Max(0f, target.Hp - appliedDamage);
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(new HealthUpdateMsg
             {
@@ -586,7 +581,7 @@ public sealed class MatchDirector
                 {
                     killerId = shooter.PlayerId,
                     victimId = target.PlayerId,
-                    weaponId = weapon.weaponId
+                    weaponId = weaponId // doğrulanmayan serbest etiket (kill feed / istatistik)
                 }));
 
                 var victimConnection = target.Connection;
@@ -602,7 +597,6 @@ public sealed class MatchDirector
                 }
             }
 
-            weaponId = weapon.weaponId;
             mode = _mode;
         }
 
@@ -723,7 +717,6 @@ public sealed class MatchDirector
     {
         player.Hp = ArenaProtocol.PLAYER_MAX_HP;
         player.Alive = true;
-        player.LastHitAcceptedAt = DateTime.MinValue;
         player.DiedAt = DateTime.MinValue;
         _rosterRefreshFor = player;
         if (keepScore) return;

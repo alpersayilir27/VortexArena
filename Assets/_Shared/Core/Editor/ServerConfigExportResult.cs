@@ -14,16 +14,11 @@ namespace VortexArena.Core.Editor
     [Serializable]
     public class ServerConfigExportResult
     {
-        /// <summary>Yazılan <c>Server/config/weapons.json</c> dosyasının mutlak yolu.</summary>
-        public string WeaponsPath;
-
         /// <summary>Yazılan <c>Server/config/maps.json</c> dosyasının mutlak yolu.</summary>
         public string MapsPath;
 
-        /// <summary>weapons.json'a yazılan silah satırı sayısı (atlanan/yinelenen hariç).</summary>
-        public int WeaponCount;
-
-        /// <summary>maps.json'a yazılan harita satırı sayısı (atlanan/yinelenen hariç).</summary>
+        /// <summary>maps.json'a yazılan harita satırı sayısı (atlanan/yinelenen hariç).
+        /// <para>Silah alanı YOK: sunucu silah tablosu tutmaz (§10.3).</para></summary>
         public int MapCount;
 
         /// <summary>Doğrulama uyarıları; boş liste = temiz export. Konsola da yazılır.</summary>

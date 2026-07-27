@@ -4,11 +4,23 @@ using VortexArena.Protocol;
 namespace VortexArena.Server.Core;
 
 /// <summary>Lobi semantiği: hello→welcome yanıtı, roster her değiştiğinde herkese lobby_state
-/// TAM anlık görüntüsü, set_name/set_ready/set_team/kick/identify işleme (§5).</summary>
+/// TAM anlık görüntüsü, set_name/set_ready/set_team/kick/identify işleme (§5).
+/// <para>
+/// Ayrıca <b>adminler arası ortak durumun</b> sahibidir (§5.3 <c>admin_state</c>): bir sonraki
+/// maçın mod/harita seçimi burada yaşar — admin arayüzündeki seçiciler yerel bir değişkeni değil
+/// bunu değiştirir (<c>set_selection</c>), sunucu da değişikliği TÜM adminlere geri yayar.
+/// Böylece iki operatör aynı ekranı görür. Görünüm tercihleri (kamera, halka, saydamlık) buraya
+/// GİRMEZ — onlar her admin'in kendi makinesinde kalır.
+/// </para></summary>
 public sealed class LobbyService
 {
     private readonly PlayerRegistry _registry;
     private readonly MatchDirector _director;
+
+    /// <summary>Ortak seçimi koruyan kilit; WS işleyicileri farklı thread'lerden gelebilir.</summary>
+    private readonly object _selectionGate = new();
+    private string _selectedModeId = "";
+    private string _selectedSceneName = "";
 
     public LobbyService(PlayerRegistry registry, MatchDirector director)
     {
@@ -17,7 +29,22 @@ public sealed class LobbyService
         _registry.Changed += OnRegistryChanged;
     }
 
-    private void OnRegistryChanged(PlayerState state, PlayerChangeKind kind) => _ = BroadcastLobbyStateAsync();
+    private void OnRegistryChanged(PlayerState state, PlayerChangeKind kind)
+    {
+        _ = BroadcastLobbyStateAsync();
+
+        // Admin geldi/gitti → adminCount değişti, kalan adminler tazelensin.
+        if (state.Role == "admin" && kind != PlayerChangeKind.Updated)
+        {
+            var verb = kind switch
+            {
+                PlayerChangeKind.Added => "bağlandı",
+                PlayerChangeKind.Reconnected => "yeniden bağlandı",
+                _ => "ayrıldı"
+            };
+            _ = BroadcastAdminStateAsync($"{state.Name} {verb}");
+        }
+    }
 
     /// <summary>hello → kayıt + welcome (mevcut maç durumu ile; geç katılım senkronu §5.3).
     /// welcome gönderildikten SONRA Announce ile lobby_state yayını tetiklenir.</summary>
@@ -28,7 +55,7 @@ public sealed class LobbyService
 
         if (!_registry.TryRegisterHello(hello, connection, out var state, out var kind))
         {
-            Console.WriteLine($"[Lobby] sunucu dolu ({ArenaProtocol.MAX_PLAYERS}) — {hello.deviceName} reddedildi.");
+            Console.WriteLine($"[Lobby] playerId havuzu tükendi ({ArenaProtocol.PLAYER_ID_MAX}) — {hello.deviceName} reddedildi.");
             await SendSafeAsync(connection, JsonUtil.Serialize(new KickedMsg { reason = "Sunucu dolu" }), "(dolu)");
             connection.Abort();
             return;
@@ -43,6 +70,11 @@ public sealed class LobbyService
             match = _director.CurrentMatchInfo()
         };
         await SendSafeAsync(connection, JsonUtil.Serialize(welcome), state.Name);
+
+        // Geç katılan admin ortak seçimi welcome'dan hemen sonra alır (§5.3): paneli açtığında
+        // diğer operatörün seçtiği mod/harita yazıyor olmalı, kendi varsayılanı değil.
+        if (state.Role == "admin")
+            await SendSafeAsync(connection, BuildAdminStateJson(""), state.Name);
 
         _registry.Announce(state, kind); // konsol satırı + lobby_state yayını
     }
@@ -60,7 +92,7 @@ public sealed class LobbyService
         _registry.SetReady(connection.State.DeviceId, msg.ready);
     }
 
-    public void HandleSetTeam(SetTeamMsg msg)
+    public void HandleSetTeam(ClientConnection connection, SetTeamMsg msg)
     {
         if (msg.team != "red" && msg.team != "blue")
         {
@@ -78,9 +110,11 @@ public sealed class LobbyService
             return;
         }
         _registry.SetTeam(msg.playerId, msg.team);
+        if (connection.IsAdmin)
+            _ = BroadcastAdminStateAsync(Notice(connection, $"{target.Name} -> {msg.team}"));
     }
 
-    public async Task HandleKickAsync(KickMsg msg)
+    public async Task HandleKickAsync(ClientConnection connection, KickMsg msg)
     {
         if (!_registry.TryGetByPlayerId(msg.playerId, out var target))
         {
@@ -88,13 +122,14 @@ public sealed class LobbyService
             return;
         }
         Console.WriteLine($"[Lobby] kick: {target.Name} (playerId {target.PlayerId}).");
-        var connection = target.Connection;
-        if (connection == null) return;
-        await SendSafeAsync(connection, JsonUtil.Serialize(new KickedMsg { reason = "" }), target.Name);
-        connection.Abort(); // recv döngüsü kapanınca Offline + lobby_state yayını gelir
+        await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} atıldı"));
+        var targetConnection = target.Connection;
+        if (targetConnection == null) return;
+        await SendSafeAsync(targetConnection, JsonUtil.Serialize(new KickedMsg { reason = "" }), target.Name);
+        targetConnection.Abort(); // recv döngüsü kapanınca Offline + lobby_state yayını gelir
     }
 
-    public async Task HandleIdentifyAsync(IdentifyMsg msg)
+    public async Task HandleIdentifyAsync(ClientConnection connection, IdentifyMsg msg)
     {
         if (!_registry.TryGetByPlayerId(msg.playerId, out var target) || target.Connection == null)
         {
@@ -103,13 +138,105 @@ public sealed class LobbyService
         }
         // Sunucu→istemci yönünde istemci kendi kimlik overlay'ini gösterir (§5.3).
         await SendSafeAsync(target.Connection, JsonUtil.Serialize(new IdentifyMsg { playerId = target.PlayerId }), target.Name);
+        await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kimlik gösterdi"));
+    }
+
+    // ---- Ortak seçim (§5.2 set_selection / §5.3 admin_state) ----
+
+    /// <summary>Bir sonraki maçın ortak mod/harita seçimi. Maçı BAŞLATMAZ; boş alan mevcut
+    /// değerini korur. Değişiklik tüm adminlere yayılır — çoklu operatör aynı ekranı görsün.</summary>
+    public Task HandleSetSelectionAsync(ClientConnection connection, SetSelectionMsg msg)
+    {
+        if (!ApplySelection(msg.modeId, msg.sceneName))
+            return Task.CompletedTask; // değişmedi: gereksiz yayın yapma
+
+        string modeId, sceneName;
+        lock (_selectionGate)
+        {
+            modeId = _selectedModeId;
+            sceneName = _selectedSceneName;
+        }
+        Console.WriteLine($"[Lobby] set_selection: mod '{modeId}', harita '{sceneName}' ({connection.State?.Name}).");
+        return BroadcastAdminStateAsync(Notice(connection, $"seçim -> {sceneName} / {modeId}"));
+    }
+
+    /// <summary>true = seçim gerçekten değişti. Boş/null alan mevcut değeri korur (§5.2).</summary>
+    private bool ApplySelection(string? modeId, string? sceneName)
+    {
+        lock (_selectionGate)
+        {
+            var changed = false;
+            if (!string.IsNullOrEmpty(modeId) && _selectedModeId != modeId)
+            {
+                _selectedModeId = modeId;
+                changed = true;
+            }
+            if (!string.IsNullOrEmpty(sceneName) && _selectedSceneName != sceneName)
+            {
+                _selectedSceneName = sceneName;
+                changed = true;
+            }
+            return changed;
+        }
     }
 
     // ---- Maç komutları (yalnız admin; doğrulama + yayınlar MatchDirector'da, §10.1). ----
 
-    public Task HandleStartMatchAsync(StartMatchMsg msg) => _director.StartMatchAsync(msg.modeId, msg.sceneName);
-    public Task HandleAbortMatchAsync() => _director.AbortMatchAsync();
-    public Task HandleReturnToLobbyAsync() => _director.ReturnToLobbyAsync();
+    /// <summary>start_match ortak seçimi de günceller: maç başladığında tüm admin panelleri
+    /// aynı mod/haritayı göstersin (komutu kim gönderdiyse gönderdi).</summary>
+    public async Task HandleStartMatchAsync(ClientConnection connection, StartMatchMsg msg)
+    {
+        ApplySelection(msg.modeId, msg.sceneName);
+        await BroadcastAdminStateAsync(Notice(connection, $"maç başlatılıyor: {msg.sceneName} / {msg.modeId}"));
+        await _director.StartMatchAsync(msg.modeId, msg.sceneName);
+    }
+
+    public async Task HandleAbortMatchAsync(ClientConnection connection)
+    {
+        await BroadcastAdminStateAsync(Notice(connection, "maç iptal edildi"));
+        await _director.AbortMatchAsync();
+    }
+
+    public async Task HandleReturnToLobbyAsync(ClientConnection connection)
+    {
+        await BroadcastAdminStateAsync(Notice(connection, "lobiye dönülüyor"));
+        await _director.ReturnToLobbyAsync();
+    }
+
+    /// <summary>Duyuru satırı: "<admin adı>: <eylem>" — tüm adminlerin durum satırında görünür.</summary>
+    private static string Notice(ClientConnection connection, string action) =>
+        $"{connection.State?.Name ?? "Admin"}: {action}";
+
+    /// <summary>Ortak durumu YALNIZ çevrimiçi adminlere yollar (§5.3).</summary>
+    public async Task BroadcastAdminStateAsync(string notice)
+    {
+        try
+        {
+            var admins = _registry.OnlineAdminConnections();
+            if (admins.Count == 0) return;
+            var json = BuildAdminStateJson(notice);
+            foreach (var connection in admins)
+                await SendSafeAsync(connection, json, "(admin)");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Lobby] admin_state yayını hatası: {ex.Message}");
+        }
+    }
+
+    private string BuildAdminStateJson(string notice)
+    {
+        lock (_selectionGate)
+        {
+            return JsonUtil.Serialize(new AdminStateMsg
+            {
+                modeId = _selectedModeId,
+                sceneName = _selectedSceneName,
+                notice = notice,
+                adminCount = _registry.OnlineAdminCount()
+            });
+        }
+    }
 
     /// <summary>Roster'ın TAM anlık görüntüsünü tüm çevrimiçi bağlantılara yollar (§5.3 lobby_state).</summary>
     public async Task BroadcastLobbyStateAsync()
