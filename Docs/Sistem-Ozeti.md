@@ -42,7 +42,7 @@ de işletmede internetsiz çalışma şartı bunu gerektiriyor.
 D:\Games\vortexarena\
   Assets\
     _Shared\                 ← "ikinci bir mod/arena bunu aynen kullanır mı?" → EVET olan her şey
-      Core\                  VortexArena.Core        (arena, savaş, oyuncu, UI, katalog SO'ları)
+      Core\                  VortexArena.Core        (arena, savaş, oyuncu, UI, katalog SO'ları, FX)
         Editor\              VortexArena.Core.Editor (Export Server Config, Arena şablon sihirbazı)
       Net\Protocol\          VortexArena.Protocol    (SAF C# — sunucu aynı dosyaları derler)
       Net\Scripts\           VortexArena.Net         (bağlantı/keşif/senkron; oyun bilgisi YOK)
@@ -54,7 +54,8 @@ D:\Games\vortexarena\
       Data\Resources\        GameCatalog.asset — prosedürel admin arayüzü Resources.Load ile okur
     Arenas\Standard\A10x10\  arena kutusu: {Scenes, Data, Prefabs} — arena-özel KOD yazılmaz
     Arenas\Standard\A12x12\  (sihirbazla üretildi)
-    Arenas\Standard\IceWorld\ (elle modellenmiş 12×12 tematik arena + Art/{Materials,Textures})
+    Arenas\Standard\IceWorld\ (elle modellenmiş 12×12 tematik arena + Art/{Materials,Textures}
+                               + Prefabs\FX_SnowStorm — 7 katmanlı kar fırtınası)
     Arenas\Venues\DemoVenue\ (sihirbazla üretildi — 11×8 asimetrik)
     Modes\TeamDeathmatch\    mod kutusu: {Scripts → VortexArena.Modes.Tdm, Data, UI}
   Server\                    .NET 10 çözümü (Core kütüphanesi + App konsolu + PoseBot test istemcisi)
@@ -367,7 +368,19 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 `MapDefinition` / `ModeDefinition` / `GameCatalog` (içerik SO'ları),
 `Weapon` + `WeaponDefinition` + `WeaponAudio`, `Health` (sunucudan set edilir), `PlayerCombatState`
 (yerel oyuncunun takım/can/ateş yetkisi/canlanma akışı), `RemoteAvatar` + `RemoteHitBox`
-(uzak oyuncu gövdesi ve isabet kutusu).
+(uzak oyuncu gövdesi ve isabet kutusu),
+`ProximityWarning` (`Core/Player` — free-roam çarpışma önleme: `RemotePlayerRegistry` pozlarını
+yerel HMD ile karşılaştırır; 1.2 m'de uzak oyuncunun konumunda **duvar arkasından da görünen**
+halka (`VortexArena/ProximityHalo`, ZTest Always), 0.8 m'de tehlikenin geldiği **taraftaki**
+kumandada haptik. Ölü oyuncular ELENMEZ — respawn durum değişimi olduğu için ölünün bedeni sahada
+durmaya devam eder, çarpışma riski aynıdır. **Henüz hiçbir sahnede bağlı değil**: bileşen elle
+eklenir, `head` ve `haloMaterial` (`_Shared/FX/M_ProximityHalo`) alanları Inspector'dan verilir),
+`WeatherVolumeFollow` (`Core/FX` — ambiyans parçacık hacmini yerel kameranın üstünde tutar; bağlı
+sistemler **World** simülasyon uzayında olmalı, `Start` sapmayı uyarır. Yalnız kendi transform'unu
+taşır, rig'e dokunmaz), `WeatherWindDriver` (`Core/FX` — kök objeye takılır, altındaki tüm
+sistemlerin `Velocity over Lifetime` XZ'sini ve Noise şiddetini tek Perlin kanalından salındırır:
+rüzgar şiddeti + yönü + türbülans birlikte nefes alır. Temel değerler `Awake`'te alınır,
+katmanların göreli hız farkı korunur).
 
 | Sınıf | Görevi |
 |---|---|
@@ -682,8 +695,14 @@ konsoluna tek satır sebep yazar.
     hangisini döndüreceği garanti değil ve `RemoteAvatar` ad etiketleri yanlış kameraya döner.
     Sahnede kendi kamerasını kuran her şey (admin gözlemci) rig kökünü kapatmalı ve
     **kendi `AudioListener`'ını** eklemelidir (rig kapanınca sahnede dinleyici kalmaz).
-    Masaüstünde XR hiç başlatılmaz (Standalone `Initialize XR on Startup` KAPALI) — bu bilinçli,
-    "düzeltme" niyetiyle açılmamalı.
+    Masaüstü XR ayarı: Standalone `Initialize XR on Startup` **AÇIK** (27 Tem 2026'da geri açıldı).
+    Sebep: **editör Play modu Android sekmesini değil PC/Standalone ayarını okur** (editörün kendisi
+    bir PC uygulamasıdır) → kapalıyken Quest Link ile Play'e basmak gözlüğe hiçbir şey göndermez,
+    `XRSettings.enabled` false kalır. Kapatılırsa VR'ı denemenin tek yolu her seferinde APK almaktır.
+    Bedeli: Windows admin build'i de açılışta XR başlatmaya çalışır (başlıksız PC'de başlatma
+    sessizce düşer); admin gözlemcinin rig kökünü kapatıp kendi `AudioListener`'ını kurması bu
+    yüzden şarttır. Admin dağıtımında sorun çıkarsa çözüm ayarı topluca kapatmak değil, XR'ı
+    role göre kod tarafında başlatmaktır (player rolünde `InitializeLoader`).
 18. **`Shader.Find` build'de null dönebilir** — hiçbir materyalin referanslamadığı shader
     (`Universal Render Pipeline/Unlit` gibi) strip edilir. Runtime'da üretilen görseller bu yüzden
     UI/TMP shader'ları üzerinden çizilir (`UiKit.RingSprite` + world-space canvas), mesh + Unlit
@@ -701,6 +720,27 @@ konsoluna tek satır sebep yazar.
 22. **Yeni `IGameMode` kancası varsayılan gövdeyle eklenir** (default interface method) ve
     **tüketicisi yoksa hiç eklenmez.** Ölü kanca, her modun boş uygulamak zorunda kaldığı bir
     vergidir; varsayılan gövde sayesinde sonradan eklemek ücretsizdir.
+23. **Quest'te "Soft Particles" YOK** — `Mobile_RPAsset.supportsCameraDepthTexture = false`
+    (PC asset'te açık, bu yüzden editörde çalışıp cihazda çalışmaz). Parçacığın geometriyi
+    kesmesini yumuşatmak için derinlik dokusu gerekmeyen iki araç kullanılır: materyalde
+    **Camera Fading** (`_FADING_ON`, ekran uzayı w'sinden hesaplar) ve Collision modülünde
+    **tek düzlem + `lifetimeLoss = 1`** (zemine değince öl). Ayrıca `renderScale = 1.6` +
+    `MSAA 4` yüzünden darboğaz parçacık SAYISI değil **saydam overdraw**'dur: büyük yakın
+    quad'ları `ParticleSystemRenderer.maxParticleSize` ile kırp.
+24. **Ambiyans parçacığını arenadan çok geniş hacme yayma.** IceWorld'ün ilk kar sistemi
+    12×12 m arenanın üstünde **50×50 m** kutuya 1500 parçacık saçıyordu → görünür alana
+    ~%6'sı düşüyor, kalan bütçe boşa gidiyordu. Emisyon kutusu arena boyutu + ~3 m pay
+    olmalı; derinlik hissi kutuyu büyütmekle değil, farklı boyut/hız/yoğunlukta
+    **katmanlarla** kurulur.
+25. **Beyaz parçacık beyaz sahnede görünmez.** Yumuşak gradyan sprite'lar 6 px'te arka plana
+    karışır, büyütülünce renkli bulanıklığa döner. Çözüm: **opak çekirdek + ince smoothstep
+    kenar** dokusu ve parçacığı arka plandan PARLAK tutmak (mermer duvar ~0.85 → parçacık
+    1.0). Beyaz zeminde okunan tek şey **additive** katmandır (alpha katman kaybolur).
+26. **Kar/pus katmanı kalibrasyonu iki farklı arka plana göre yapılır.** Gökyüzü (koyu) ve
+    mermer duvar/zemin (parlak) zıt yönde çalışır: gökyüzünde iyi görünen alpha değeri
+    duvarda kaybolur, duvarda iyi görünen değer gökyüzünde bulanık perde olur. Her ayardan
+    sonra **hem yukarı hem duvara** bakan iki kare al. `Snow_G_Haze` yalnız gökyüzüne karşı
+    okunur — bu bilinçli.
 
 ---
 
