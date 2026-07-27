@@ -37,6 +37,13 @@ namespace VortexArena.App.Admin
         /// <summary>Ortak seçim: harita sahne adı (sunucudan gelir, hiç seçilmediyse boş).</summary>
         public static string SceneName { get; private set; } = "";
 
+        /// <summary>Ortak seçim: bir sonraki maçın raund süresi (sn); <c>0</c> = seçilmedi,
+        /// modun varsayılanı kullanılacak (§5.2).</summary>
+        public static int RoundSeconds { get; private set; }
+
+        /// <summary>Ortak seçim: bir sonraki maçın skor limiti; <c>0</c> = modun varsayılanı.</summary>
+        public static int ScoreLimit { get; private set; }
+
         /// <summary>Sunucunun bildirdiği çevrimiçi admin sayısı (kendimiz dahil).</summary>
         public static int AdminCount { get; private set; }
 
@@ -64,10 +71,14 @@ namespace VortexArena.App.Admin
 
             string modeId = msg.modeId ?? "";
             string sceneName = msg.sceneName ?? "";
-            bool changed = modeId != ModeId || sceneName != SceneName || msg.adminCount != AdminCount;
+            bool changed = modeId != ModeId || sceneName != SceneName ||
+                           msg.roundSeconds != RoundSeconds || msg.scoreLimit != ScoreLimit ||
+                           msg.adminCount != AdminCount;
 
             ModeId = modeId;
             SceneName = sceneName;
+            RoundSeconds = msg.roundSeconds;
+            ScoreLimit = msg.scoreLimit;
             AdminCount = msg.adminCount;
 
             // Duyuru komutu GÖNDEREN admin'de de görünür: "kim ne yaptı" tek satırda toplansın

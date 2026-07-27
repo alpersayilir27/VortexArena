@@ -26,8 +26,11 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `COUNTDOWN_SECONDS` | `5` | Countdown fazının uzunluğu |
 | `MATCH_END_SECONDS` | `10` | End fazı → otomatik `return_to_lobby` |
 | `LOADING_TIMEOUT` | 20 sn | Loading'de tüm `set_ready` beklenmezse yine de Countdown'a geçilir |
-| `RESPAWN_DELAY` | 5 sn | Ölüm → en erken canlanma (`respawn.delaySeconds`) |
+| `RESPAWN_DELAY` | 5 sn | Ölüm → en erken canlanma (`respawn.delaySeconds`) **varsayılanı**; mod `rules.respawnDelay` ile ezebilir (§10.5) |
 | `REVIVE_GRACE` | 20 sn | `revive_request` gelmezse sunucu ölümden bu kadar sonra zorla canlandırır |
+| `REVIVE_HOLD_SECONDS` | 3 sn | `reviveAnchor:"standstill"` (§10.5): ölü oyuncunun canlanmak için kesintisiz sabit durması gereken süre |
+| `REVIVE_HOLD_RADIUS` | 1 m | `reviveAnchor:"standstill"`: ölüm anındaki çapadan bu yarıçapı aşan hareket sayacı sıfırlar |
+| `ROUND_SECONDS_OPTIONS` | `150, 300, 600, 900, 1200, 1800, 3600` | Admin arayüzünün maç süresi seçenekleri (2.5 · 5 · 10 · 15 · 20 · 30 dk · 1 saat). **Protokol kısıtı değil, arayüz listesidir** — sunucu `start_match.roundSeconds`'ta her pozitif değeri kabul eder |
 
 ## 2. Roller ve kimlik
 
@@ -107,12 +110,14 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 
 ### 5.2 Yalnız admin → Sunucu
 
-- **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"Arena10x10" }`
+- **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":600, "scoreLimit":30 }`
+  `roundSeconds`/`scoreLimit` **o maça özeldir**: `≤ 0` ya da eksikse modun kendi varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`) kullanılır. Operatörün arayüzde seçtiği süre/limit buradan geçer; `ROUND_SECONDS_OPTIONS` yalnız arayüz listesidir, sunucu her pozitif değeri kabul eder.
 - **`abort_match`** `{ "type":"abort_match" }`
 - **`kick`** `{ "type":"kick", "playerId":5 }`
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
-- **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena10x10" }` — bir sonraki maçın **ortak** mod/harita seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş bırakılan alan mevcut değerini korur. Seçim sunucuda faz Lobby'ye dönerken sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
+- **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":600, "scoreLimit":30 }` — bir sonraki maçın **ortak** mod/harita/süre/limit seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim sunucuda faz Lobby'ye dönerken sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
+  **Neden maç parametreleri de ortak:** iki operatör aynı ekranı görmezse biri 5 dk sandığı maçı 30 dk başlatır. Süre/limit *operasyonel* durumdur, görünüm tercihi değil (§5.3 son madde).
 
 Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar.
 
@@ -122,25 +127,33 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
 ```json
 { "type":"welcome", "protocolVersion":1, "playerId":3, "udpToken":123456789,
   "match": { "phase":"Lobby", "modeId":"", "sceneName":"", "timeRemaining":0,
-             "scoreRed":0, "scoreBlue":0 } }
+             "scoreRed":0, "scoreBlue":0,
+             "rules": { "teamMode":"two", "scoring":"team", "friendlyFire":false,
+                        "reviveAnchor":"base", "weaponSource":"rack", "respawnDelay":5.0 } } }
 ```
 `match.phase` boş/`"Lobby"` değilse **geç katılım senkronu**: istemci `sceneName`'i yükleyip maça katılır.
+`match.rules` = koşan maçın kural şekli (§10.5) — geç katılan istemci/admin kendini aynı kurallara göre kurar.
 
 **`lobby_state`** — roster her değiştiğinde **ve maç sayaçları değiştiğinde** (ölüm/canlanma) TAM anlık görüntü:
 ```json
 { "type":"lobby_state", "players":[
   { "playerId":3, "name":"Gözlük 03", "role":"player", "team":"red",
     "ready":true, "online":true, "battery":0.87, "scene":"Arena10x10",
-    "kills":4, "deaths":2, "hp":72.0, "alive":true } ] }
+    "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7 } ] }
 ```
-`kills`/`deaths`/`hp`/`alive` **sunucu-otoriter** maç sayaçlarıdır (§10.2) ve admin gözlemci
+`kills`/`deaths`/`hp`/`alive`/`score` **sunucu-otoriter** maç sayaçlarıdır (§10.2) ve admin gözlemci
 arayüzünün tek doğruluk kaynağıdır: yalnız `kill_event`/`health_update` sayılsa admin yeniden
 bağlandığında tablo sıfırlanırdı. Lobby fazında `hp=PLAYER_MAX_HP`, `alive=true`, sayaçlar 0.
 Admin olmayan istemciler bu alanları yok sayabilir.
 
-**`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "spawnSlot":2 }`
+`score` = **bireysel** maç skoru (`rules.scoring == "player"` olan modlarda anlamlı; takım
+skoru `match_state.scoreRed`/`scoreBlue`'da kalır — §10.5). Bireysel skorun değiştiği an =
+öldürmenin olduğu an = roster'ın zaten tazelendiği an, bu yüzden ayrı bir mesaj tipi yoktur.
+
+**`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "spawnSlot":2, "rules":{ … } }`
 → istemci sahneyi yükler, kendi takım tarafındaki `spawnSlot` numaralı `SpawnPoint`'te başlar, `status`'ta yeni sahne görünür. Sahne yüklenince istemci `set_ready` (loading tamam anlamında) gönderir; herkes hazır olunca sunucu `countdown` başlatır.
 **Adminlere de gönderilir** (gözlemci sahneyi yüklesin diye) ama `yourTeam:""` ve `spawnSlot:-1` ile — admin oynamadığı için takım/slot anlamsızdır ve admin `set_ready` göndermez.
+`rules` = bu maçın kural şekli (§10.5). İstemci kendini **buna** göre kurar: takımsız modda `yourTeam` boş gelir, canlanma şartı `reviveAnchor`'dan okunur. İstemcide `if (modeId == "...")` zinciri YOKTUR — mod eklemek istemci kodunu değiştirmez.
 
 **`countdown`** `{ "type":"countdown", "seconds":5 }` — 0'a inince faz Live.
 **`match_state`** — faz değişimlerinde + Live'da saniyede 1:
@@ -153,7 +166,8 @@ Fazlar: `Lobby → Loading → Countdown → Live → End → Lobby`.
 **`health_update`** `{ "type":"health_update", "playerId":5, "hp":75.0, "attackerId":3 }`
 **`kill_event`** `{ "type":"kill_event", "killerId":3, "victimId":5, "weaponId":"ak47" }`
 **`respawn`** `{ "type":"respawn", "playerId":5, "spawnSlot":1, "delaySeconds":5.0 }` — istemci `delaySeconds` sonra kendi takım tarafındaki slotta canlanır (slot çözümü yerel `SpawnPoint` marker'larından; v1'de sunucuya harita dosyası gerekmez).
-**`match_end`** `{ "type":"match_end", "winnerTeam":"blue", "scoreRed":12, "scoreBlue":30 }`
+**`match_end`** `{ "type":"match_end", "winnerTeam":"blue", "winnerPlayerId":0, "scoreRed":12, "scoreBlue":30 }`
+Kazanan **iki kanaldan biriyle** ifade edilir (`rules.scoring`, §10.5): takım skorlu modlarda `winnerTeam` (`"red"|"blue"|""`), bireysel skorlu modlarda `winnerPlayerId` (`0` = yok/berabere). Bir mod ikisini de doldurmaz; okuyan istemci dolu olana bakar.
 **`return_to_lobby`** `{ "type":"return_to_lobby" }` — herkes Lobby sahnesine döner.
 **`ping`** `{ "type":"ping" }` — istemci `status` ile yanıtlar (ayrı pong yok).
 **`identify`** `{ "type":"identify" }` — istemci büyük kimlik overlay'i gösterir (playerId + ad).
@@ -162,10 +176,12 @@ Fazlar: `Lobby → Loading → Countdown → Live → End → Lobby`.
 **`admin_state`** — **yalnız `role=admin` bağlantılara**; adminler arası ortak durumun tek doğruluk kaynağı:
 ```json
 { "type":"admin_state", "modeId":"tdm", "sceneName":"Arena10x10",
+  "roundSeconds":600, "scoreLimit":30,
   "notice":"Ofis-PC: harita -> Arena10x10", "adminCount":2 }
 ```
 - Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`return_to_lobby`/`kick`/`identify`/`set_team`) ve admin bağlanıp ayrıldığında.
 - `modeId`/`sceneName` = ortak seçim. Admin arayüzü **kendi yerel seçimini değil bunu gösterir**; gelen değer arayüzdeki mod/harita seçicisini ve yerel harita önizlemesini günceller. Yani bir operatör haritayı değiştirdiğinde diğerinin ekranı da (paneli açık olmasa bile) o haritaya döner.
+- `roundSeconds`/`scoreLimit` = bir sonraki maçın ortak parametreleri (`0` = hiç seçilmedi, modun varsayılanı kullanılacak). Mod/harita ile aynı kanaldan gider — sebebi §5.2 `set_selection` notunda.
 - `notice` = son admin eyleminin insan okuyabilir özeti (`"<admin adı>: <eylem>"`), tüm adminlerin durum satırında görünür. Boş olabilir.
 - `adminCount` = o an çevrimiçi admin sayısı.
 - **Yalnız operasyonel durum senkronlanır.** Görünüm tercihleri (kamera kipi, seçili oyuncu, halka/ad etiketi, kamera hızı, duvar/çatı saydamlığı, mini harita) her admin'in **kendi ekranına** aittir, protokole girmez ve `PlayerPrefs`'te yerel kalır.
@@ -206,7 +222,7 @@ oyuncu başına: [u8 playerId][u8 flags][92B'lik PoseUpdate'in poz kısmı = 84 
 
 - **Paylaşılan kaynak:** tüm DTO'lar + `ArenaProtocol` sabitleri + binary yazıcı/okuyucular `Assets/_Shared/Net/Protocol/` altında **saf C#** (`UnityEngine`'e referans YASAK — asmdef `noEngineReferences:true`; server csproj aynı dosyaları `<Compile Include>` ile derler, Unity API kullanılırsa server derlemesi kırılır = otomatik bekçi).
 - **JsonUtility kısıtları** (Unity tarafı bunları kullanır): Dictionary YOK, polimorfizm YOK, property değil **public alan**, sınıflar `[Serializable]`. Binary tarafında `BinaryWriter/BinaryReader` yerine elle offset'li `Span<byte>`/`BitConverter` KULLANMA tartışması yok — v1'de basit `BinaryWriter/BinaryReader` (little-endian garanti: `BinaryWriter` zaten LE).
-- Unity DTO'larında `[UnityEngine.Scripting.Preserve]` KULLANILMAZ (saf C# dosyaları Unity attribute'u içeremez); IL2CPP stripping'e karşı **`Assets/link.xml`**'de `VortexArena.Protocol` ve `VortexArena.Net` assembly'leri preserve edilir (Faz 1'de eklenir).
+- Unity DTO'larında `[UnityEngine.Scripting.Preserve]` KULLANILMAZ (saf C# dosyaları Unity attribute'u içeremez); IL2CPP stripping'e karşı **`Assets/link.xml`**'de `VortexArena.Protocol` ve `VortexArena.Net` assembly'leri preserve edilir.
 - .NET sunucu JSON için `System.Text.Json` + `JsonSerializerOptions { IncludeFields = true }` (DTO'lar public ALAN olduğu için şart) kullanır; alan adları camelCase birebir aynı.
 
 ## 8. Bağlantı yaşam döngüsü
@@ -241,8 +257,9 @@ Lobby ──start_match──► Loading ──herkes set_ready | LOADING_TIMEOU
 
 - **`start_match` doğrulaması** (sırayla): `modeId` sunucudaki `IGameMode` kayıtlarında var; `sceneName` boş değil; **`sceneName` `config/maps.json` harita tablosunda var ve o harita `modeId`'yi destekliyor** (harita girdisindeki `modes` boşsa kısıt yok; **tablo boşsa — maps.json yoksa — bu adım tümüyle atlanır**); `sceneName` tüm çevrimiçi oyuncuların `hello.scenes` listesinde var. Geçmezse komut reddedilir ve konsola sebep yazılır (faz değişmez). İki oyuncu+ varken takımlar dengelenir (boş takım kalmaz); tek oyuncuyla ve **hiç oyuncu yokken** başlatmaya izin verilir (konsolda uyarı) — ikincisi admin gözlemcinin haritayı boş arenada açması için vardır.
 - **Oyuncusuz maç (yalnız admin):** `load_match` yalnız adminlere gider, Loading'de beklenecek `set_ready` olmadığı için faz doğrudan Countdown'a geçer ve maç normal işler (skor 0, süre akar). Ayrım şu: **oyuncularla başlamış** bir maçta Loading sırasında son oyuncu da düşerse sunucu maçı bırakıp Lobby'ye döner; oyuncusuz **başlatılmış** maçta dönmez — çıkış operatörün `abort_match`/`return_to_lobby` komutudur.
-- **Mod/harita seçimi sunucuda yaşar (çoklu admin):** admin arayüzündeki seçiciler yerel bir değişkeni değil, `set_selection` ile sunucudaki ortak seçimi değiştirir; sunucu `admin_state` ile hepsine geri yayar. `start_match` kendi `modeId`/`sceneName`'i ile gelmeye devam eder (protokol yüzeyi değişmedi) ama sunucu onu aynı zamanda ortak seçime yazar — böylece maç başladığında tüm admin panelleri aynı değeri gösterir. Seçim yalnız bir niyet beyanıdır: doğrulama `start_match` anında yapılır.
-- **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam` + `spawnSlot`'u (takım içi 0 tabanlı sıra) gider. Harita tablosunda `spawnSlotsPerTeam` biliniyorsa slot bu sayıya göre **modulo** alınır (sahnede olmayan slota atama yapılmaz; kalabalık takımda slotlar paylaşılır). Faz Loading'e geçerken tüm `ready` bayrakları sıfırlanır. **Çevrimiçi adminlere de bir kopya gider** (`yourTeam:""`, `spawnSlot:-1`) — admin gözlemci aynı sahneyi yükler.
+- **Mod/harita/parametre seçimi sunucuda yaşar (çoklu admin):** admin arayüzündeki seçiciler yerel bir değişkeni değil, `set_selection` ile sunucudaki ortak seçimi değiştirir; sunucu `admin_state` ile hepsine geri yayar. `start_match` kendi `modeId`/`sceneName`'i ile gelmeye devam eder (protokol yüzeyi genişledi ama kırılmadı) ama sunucu onu aynı zamanda ortak seçime yazar — böylece maç başladığında tüm admin panelleri aynı değeri gösterir. Seçim yalnız bir niyet beyanıdır: doğrulama `start_match` anında yapılır.
+- **Maç parametreleri admin'den gelebilir:** `start_match.roundSeconds`/`scoreLimit` doluysa (`> 0`) o maç bu değerlerle koşar; boş/`0` ise modun varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`) kullanılır. Yani `ModeDefinition`/`IGameMode` üzerindeki sayılar **varsayılandır, kilit değil** — operatör raundu kısaltıp uzatabilir. Değer `load_match`/`match_state` üzerinden istemcilere zaten gidiyor, ek bir kanal doğmaz.
+- **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam` + `spawnSlot`'u gider. Takımlı modda slot **takım içi** 0 tabanlı sıradır ve `spawnSlotsPerTeam` biliniyorsa ona göre modulo alınır. **Takımsız modda** (`rules.teamMode == "none"`, §10.5) takım boş gider ve slot **tek havuzdan** dağıtılır: sahnedeki iki tabanın slotları birleşir, modulo `spawnSlotsPerTeam × 2` alınır. Faz Loading'e geçerken tüm `ready` bayrakları sıfırlanır. **Çevrimiçi adminlere de bir kopya gider** (`yourTeam:""`, `spawnSlot:-1`) — admin gözlemci aynı sahneyi yükler.
 - **Loading:** istemci sahneyi yükleyince `set_ready{ready:true}` gönderir ("sahne yüklendi" anlamında). Tüm çevrimiçi **oyuncular** hazır olunca (veya `LOADING_TIMEOUT` dolunca) Countdown başlar. Kapı yalnız `role=player` bağlantılarını sayar: admin sahneyi yüklese de `set_ready` göndermez, geri sayımı ne hızlandırır ne geciktirir.
 - **Countdown:** saniyede bir `countdown{seconds}` (5→1); 0'da faz Live.
 - **Live:** `match_state` 1 Hz; `timeRemaining` sunucuda azalır; `IGameMode.OnTick` çağrılır.
@@ -251,9 +268,11 @@ Lobby ──start_match──► Loading ──herkes set_ready | LOADING_TIMEOU
 
 ### 10.2 Oyuncu maç durumu (sunucuda)
 
-Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `spawnSlot`, `kills`, `deaths`, son vuruş zamanı (rate-limit), ölüm zamanı. Live'a girerken herkes `hp=PLAYER_MAX_HP`, `alive=1`. Snapshot'taki `SnapshotEntry.flags` bit0 (`FLAG_ALIVE`) bu `alive` alanından beslenir — Lobby fazında herkes canlı sayılır.
+Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `spawnSlot`, `kills`, `deaths`, `score`, ölüm zamanı. Live'a girerken herkes `hp=PLAYER_MAX_HP`, `alive=1`. Snapshot'taki `SnapshotEntry.flags` bit0 (`FLAG_ALIVE`) bu `alive` alanından beslenir — Lobby fazında herkes canlı sayılır.
 
-`hp`/`alive`/`kills`/`deaths` **`lobby_state` ile de yayınlanır** (§5.3): ölüm işlendikten sonra roster bir kez tazelenir, böylece admin istatistik tablosu sunucudaki sayaçla birebir kalır ve admin yeniden bağlandığında geçmişi kaybetmez. Anlık akış (her vuruş) yine `health_update`/`kill_event` üzerinden gider — `lobby_state` sağlama noktasıdır, sıcak yol değil.
+`score` = **bireysel maç skoru**. Yazarı yalnız `IGameMode`'dur (`MatchDirector`'ın skor defteri üzerinden); `kills` ile aynı şey DEĞİLDİR — bir mod öldürme başına 1, bir başkası objektif başına 5 yazabilir, Silah Yarışı'nda aynı alan "seviye" anlamına gelir. Maç kurulurken ve Lobby'ye dönerken 0'lanır.
+
+`hp`/`alive`/`kills`/`deaths`/`score` **`lobby_state` ile de yayınlanır** (§5.3): ölüm işlendikten sonra roster bir kez tazelenir, böylece admin istatistik tablosu sunucudaki sayaçla birebir kalır ve admin yeniden bağlandığında geçmişi kaybetmez. Anlık akış (her vuruş) yine `health_update`/`kill_event` üzerinden gider — `lobby_state` sağlama noktasıdır, sıcak yol değil.
 
 ### 10.3 Vuruş hattı — genel hasar modeli
 
@@ -269,7 +288,7 @@ kontrolleridir — kaldırılırlarsa çift ölüm / maç dışı hasar gibi hat
 1. Faz `Live` mi?
 2. Atıcı çevrimiçi + `role=player` + `alive` mi?
 3. Hedef var, çevrimiçi, `alive` mi? (aynı karede gelen iki ölümcül vuruş çift `kill_event` yazmasın)
-4. Hedef atıcının kendisi değil ve takımlar farklı mı? (aynı takım = dost ateşi YOK — oyun kuralı)
+4. Hedef atıcının kendisi değil ve **takım arkadaşı değil** mi? Kural: `rules.friendlyFire == false` iken *takım arkadaşı* vurulamaz, ve **boş takım asla takım arkadaşı sayılmaz** — takımsız modda (§10.5 `teamMode:"none"`) herkesin takımı `""` olduğu için `"" == ""` karşılaştırması tüm vuruşları reddederdi. `friendlyFire == true` ise bu adım hiç uygulanmaz.
 5. `damage` sonlu ve pozitif bir sayı mı? (NaN/∞ canı kalıcı bozar; sayı denetimi, hile denetimi değil)
 
 Geçerse: `hp -= damage` (istemcinin bildirdiği değer) → `health_update{playerId, hp, attackerId}`
@@ -292,12 +311,55 @@ eklenerek) — ölü/maç dışı oyuncunun `shot_fired`'ı relay EDİLMEZ.
 
 Fiziksel oyuncu ışınlanamaz → **respawn = konum değil durum değişimi**:
 
-1. Ölünce sunucu `respawn{playerId, spawnSlot, delaySeconds}` gönderir; istemci ölüm ekranı gösterir ("tabanına dön"), silah ateşlemez, avatar yarı saydam.
-2. `delaySeconds` dolduktan **ve** oyuncu kendi `BaseZone`'una fiziken girdikten sonra istemci `revive_request` gönderir (canlanana dek ~1 sn'de bir tekrarlar).
+1. Ölünce sunucu `respawn{playerId, spawnSlot, delaySeconds}` gönderir (`delaySeconds` = `rules.respawnDelay`, §10.5); istemci ölüm ekranı gösterir, silah ateşlemez, avatar yarı saydam.
+2. `delaySeconds` dolduktan **ve modun canlanma şartı sağlandıktan** sonra istemci `revive_request` gönderir (canlanana dek ~1 sn'de bir tekrarlar). Şart `rules.reviveAnchor` ile seçilir:
+   - **`"base"`** (varsayılan, TDM): oyuncu kendi `BaseZone`'una fiziken girer. Ölüm ekranı "Tabanına dön ve canlan" der.
+   - **`"standstill"`**: oyuncu ölüm anındaki HMD konumunu çapa alır ve `REVIVE_HOLD_RADIUS` içinde `REVIVE_HOLD_SECONDS` boyunca kesintisiz sabit durur; çapadan çıkınca sayaç ve çapa sıfırlanır. Takım tabanı olmayan modlar (FFA) bunu kullanır.
 3. Sunucu doğrular (faz Live, oyuncu ölü, gecikme dolmuş) → `hp=PLAYER_MAX_HP`, `alive=1` → `health_update{hp:100, attackerId:0}`.
 4. Ölümden `REVIVE_GRACE` geçtiği hâlde talep gelmediyse sunucu **zorla** canlandırır (istemci takılmışsa maç kilitlenmesin).
 
-`spawnSlot` yalnızca "hangi tabana/slota gideceğin" göstergesidir; slot çözümü istemcide sahnedeki `SpawnPoint(team, slot)` marker'larından yapılır — sunucu sahne geometrisini bilmez, `maps.json`'dan yalnızca `spawnSlotsPerTeam`'i okuyup slot numarasını geçerli aralığa sarar.
+> **`reviveAnchor` sunucuda DOĞRULANMAZ.** §10.3 felsefesinin aynısı: sunucu hakemlik değil defter tutar. "Tabanda mı / sabit mi durdu" kararı istemcinindir; sunucu faz + ölü + gecikme kontrolüyle yetinir. `REVIVE_GRACE` güvenlik ağı her iki şartta da aynen işler.
+
+`spawnSlot` yalnızca "hangi tabana/slota gideceğin" göstergesidir; slot çözümü istemcide sahnedeki `SpawnPoint` marker'larından yapılır — takımlı modda `(team, slot)`, takımsız modda tüm noktalar **tek havuz** olarak `(team, slot)` sırasına dizilip indeks alınır. Sunucu sahne geometrisini bilmez, `maps.json`'dan yalnızca `spawnSlotsPerTeam`'i okuyup slot numarasını geçerli aralığa sarar.
+
+### 10.5 Mod kuralları (`ModeRules` / `rules`)
+
+Bir modun **ne tür bir oyun olduğunu** anlatan, **sunucu-otoriter** şekil tanımı. Her `IGameMode`
+kendi `Rules`'ünü döner; sunucu bunu `load_match.rules` ve `welcome.match.rules` ile istemciye
+yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden gelirse istemcide
+`if (modeId == "ffa")` zinciri hiç doğmaz — yeni mod eklemek istemci kodunu değiştirmez.
+
+```json
+"rules": { "teamMode":"two", "scoring":"team", "friendlyFire":false,
+           "reviveAnchor":"base", "weaponSource":"rack", "respawnDelay":5.0 }
+```
+
+| Alan | Değerler | Varsayılan | Anlamı |
+|---|---|---|---|
+| `teamMode` | `"two"` \| `"none"` | `"two"` | `"two"`: kırmızı/mavi, sunucu takımları dengeler, slot takım içi. `"none"`: takım yok (`team:""`), slot tek havuzdan |
+| `scoring` | `"team"` \| `"player"` | `"team"` | Skor kime yazılır: `match_state.scoreRed/scoreBlue` mi, `lobby_state → PlayerInfo.score` mü (§10.2) |
+| `friendlyFire` | `true` \| `false` | `false` | `false` = takım arkadaşı vurulamaz (§10.3/4). Boş takım asla takım arkadaşı sayılmaz |
+| `reviveAnchor` | `"base"` \| `"standstill"` | `"base"` | Canlanma şartı (§10.4/2) |
+| `weaponSource` | `"rack"` \| `"random"` | `"rack"` | Silah nereden gelir: sahnedeki raf mı, mod mu dağıtır. **Tümüyle istemci sunumu** — sunucuda karşılığı yok (§10.3: silah tablosu yoktur) |
+| `respawnDelay` | saniye | `RESPAWN_DELAY` (5) | `respawn.delaySeconds` ve sunucudaki `revive_request` gecikme eşiği. **`0` geçerli bir değerdir** (anında canlanma) ve varsayılana çekilmez — alan hiç gönderilmezse DTO'nun kendi başlangıcı geçerli olduğu için "yazılmadı" ile "sıfır yazıldı" karışmaz |
+
+- **Varsayılan = bugünkü TDM.** Bir mod hiçbir alan yazmazsa bugünkü davranışı alır; yani yeni mod
+  yalnız *farklı* olduğu alanları belirtir.
+- **Bilinmeyen/boş değer varsayılana düşer.** Değerler bilerek string: eski istemci yeni sunucudan
+  tanımadığı bir `teamMode` görürse takımlı TDM gibi davranır, bağlantı kopmaz. Bu yüzden yeni bir
+  kural değeri eklemek `PROTOCOL_VERSION`'ı **artırmaz**.
+- **Kazanan ifadesi `scoring`'e bağlıdır:** `"team"` → `match_end.winnerTeam`, `"player"` →
+  `match_end.winnerPlayerId`.
+- **3+ takım bugün YOK.** Geldiğinde yol açık: `PlayerInfo.team` zaten serbest string
+  (`"green"`/`"yellow"` bugün de geçer) ve `match_state`'e `teamScores:[{team,score}]` eklenir;
+  `scoreRed`/`scoreBlue` iki takımlı modlar için kısayol olarak kalır. Karar **o mod gelince**
+  verilir — şimdi yapılırsa tüketicisi olmayan bir soyutlama için TDM ve admin arayüzü baştan yazılır.
+
+**İstemcide tek okuma noktası:** `VortexArena.Core.ModeRuntime` (statik). `load_match`/`welcome`
+onu besler; canlanma (`PlayerCombatState`), skor satırı (`ModeHudBase`) ve admin takım kipi
+(`AdminRoster`) yalnız oradan okur. Dördü ayrı ayrı `load_match` dinlerse dördü ayrı ayrı bayatlar.
+Sunucusuz editör oturumunda (dev penceresi sentetik maç) kurallar `ModeDefinition`'dan okunur;
+**sapmada sunucu kazanır** — `ModeDefinition`'daki kural alanları yalnız önizleme/editör içindir.
 
 ## 11. Sunucu config dosyaları
 

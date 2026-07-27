@@ -26,6 +26,10 @@ namespace VortexArena.Core.Arena
 
         private static readonly List<SpawnPoint> Registry = new List<SpawnPoint>();
 
+        /// <summary><see cref="FindGlobal"/>'in sıralama tamponu — her çağrıda yeni liste
+        /// ayırmamak için (canlanma akışında saniyede birkaç kez çağrılabilir).</summary>
+        private static readonly List<SpawnPoint> Ordered = new List<SpawnPoint>();
+
         /// <summary>Bu noktanın takımı.</summary>
         public Team Team => team;
 
@@ -78,14 +82,56 @@ namespace VortexArena.Core.Arena
             return fallback;
         }
 
+        /// <summary>
+        /// Takımsız modlar (§10.5 <c>teamMode:"none"</c>): sahnedeki TÜM noktalar tek havuzdur.
+        /// <para>
+        /// Kayıt listesi <c>(team, slot)</c> sırasına dizilip verilen indeks alınır — böylece
+        /// sıralama <see cref="OnEnable"/> çağrı sırasından (yani sahne hiyerarşisinden)
+        /// bağımsızdır ve aynı slot numarası her istemcide aynı noktayı gösterir. Sunucu da
+        /// slotu <c>spawnSlotsPerTeam × 2</c> ile sardığı için indeks aralık dışına düşmez;
+        /// yine de modulo ile güvenceye alınır. Liste boşsa <c>null</c>.
+        /// </para>
+        /// </summary>
+        public static SpawnPoint FindGlobal(int slot)
+        {
+            Ordered.Clear();
+            for (int i = 0; i < Registry.Count; i++)
+            {
+                if (Registry[i] != null)
+                {
+                    Ordered.Add(Registry[i]);
+                }
+            }
+
+            if (Ordered.Count == 0)
+            {
+                return null;
+            }
+
+            Ordered.Sort(CompareTeamThenSlot);
+            int index = slot % Ordered.Count;
+            if (index < 0)
+            {
+                index += Ordered.Count;
+            }
+
+            return Ordered[index];
+        }
+
+        private static int CompareTeamThenSlot(SpawnPoint a, SpawnPoint b)
+        {
+            int byTeam = ((int)a.team).CompareTo((int)b.team);
+            return byTeam != 0 ? byTeam : a.slot.CompareTo(b.slot);
+        }
+
         // ------------------------------------------------------------------ gizmo
 
         /// <summary>Editörde yerleştirmeyi kolaylaştırır: takım renginde küre + bakış oku.</summary>
         private void OnDrawGizmos()
         {
-            Gizmos.color = team == CoreTeam.Red
-                ? new Color(0.85f, 0.20f, 0.20f, 0.9f)
-                : new Color(0.20f, 0.40f, 0.90f, 0.9f);
+            Gizmos.color = team == CoreTeam.Red ? new Color(0.85f, 0.20f, 0.20f, 0.9f)
+                : team == CoreTeam.Blue ? new Color(0.20f, 0.40f, 0.90f, 0.9f)
+                : new Color(0.80f, 0.80f, 0.80f, 0.9f); // Neutral
 
             Vector3 origin = transform.position + Vector3.up * 0.05f;
             Gizmos.DrawSphere(origin, 0.12f);

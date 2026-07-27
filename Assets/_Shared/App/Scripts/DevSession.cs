@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using VortexArena.Core;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -270,20 +271,25 @@ namespace VortexArena.App
                 return;
             }
 
+            // Kurallar telde YOK (rules = null): sunucusuz oturumda ModeRuntime onları katalogdan
+            // okur (§10.5 K7). Takımı burada kendimiz belirlemek için önce kuralı çözeriz —
+            // takımsız modda "red" göndermek oyuncuyu var olmayan bir tabana yönlendirirdi.
+            ModeRuntime.ApplyFromCatalog(ModeId);
+
             var msg = new LoadMatchMsg
             {
                 modeId = ModeId,
                 sceneName = SceneManager.GetActiveScene().name,
                 roundSeconds = RoundSeconds,
                 scoreLimit = ScoreLimit,
-                yourTeam = Team,
+                yourTeam = ModeRuntime.IsTeamless ? "" : Team,
                 spawnSlot = SpawnSlot
             };
 
             Debug.Log($"[DevSession] Sentetik load_match → sahne '{msg.sceneName}', mod " +
-                      $"'{msg.modeId}', takım {msg.yourTeam}, slot {msg.spawnSlot}. " +
-                      "(Sunucudan gelmedi; yalnız editör. Sunucuda maç varsa gerçek load_match " +
-                      "bunu ezer.)");
+                      $"'{msg.modeId}', takım {(string.IsNullOrEmpty(msg.yourTeam) ? "yok" : msg.yourTeam)}, " +
+                      $"slot {msg.spawnSlot}. (Sunucudan gelmedi; yalnız editör. Sunucuda maç varsa " +
+                      "gerçek load_match bunu ezer.)");
 
             NetEvents.InjectLoadMatch(msg);
         }

@@ -26,12 +26,17 @@ namespace VortexArena.App.Admin
         private const float TableTop = 190f;
         private const float RefreshInterval = 0.5f;
 
-        /// <summary>Kolon başlıkları ve genişlikleri (px) — sırayla soldan sağa.</summary>
+        /// <summary>Kolon başlıkları ve genişlikleri (px) — sırayla soldan sağa.
+        /// <c>SKOR</c> bireysel maç skorudur (§10.2) ve <c>K</c> ile aynı şey DEĞİLDİR: skoru mod
+        /// yazar, öldürme başına 1 olmak zorunda değil.</summary>
         private static readonly string[] ColumnTitles =
-            { "OYUNCU", "TAKIM", "K", "D", "K/D", "HP", "BATARYA", "DURUM", "SAHNE" };
+            { "OYUNCU", "TAKIM", "SKOR", "K", "D", "K/D", "HP", "BATARYA", "DURUM", "SAHNE" };
 
         private static readonly float[] ColumnWidths =
-            { 280f, 90f, 60f, 60f, 80f, 80f, 100f, 170f, 180f };
+            { 260f, 80f, 70f, 55f, 55f, 75f, 70f, 95f, 160f, 160f };
+
+        /// <summary>FFA sıralaması için tampon — her tazelemede yeni liste ayırmamak adına.</summary>
+        private readonly List<AdminPlayerView> _sorted = new List<AdminPlayerView>();
 
         private GameObject _root;
         private TextMeshProUGUI _headline;
@@ -175,15 +180,48 @@ namespace VortexArena.App.Admin
             }
 
             RefreshSummary(roster);
-            RefreshTable(roster.Players);
+            RefreshTable(OrderedPlayers(roster));
             RefreshMatchInfo(roster);
+        }
+
+        /// <summary>
+        /// Tablo sırası: takımlı modda roster sırası (playerId) korunur — operatör oyuncuyu hep
+        /// aynı satırda arar. FFA'da tek sıralama ölçütü skordur, bu yüzden tablo skora göre
+        /// AZALAN dizilir (eşitlikte playerId ile kararlı kalır).
+        /// </summary>
+        private IReadOnlyList<AdminPlayerView> OrderedPlayers(AdminRoster roster)
+        {
+            if (!roster.IsFfa)
+            {
+                return roster.Players;
+            }
+
+            _sorted.Clear();
+            for (int i = 0; i < roster.Players.Count; i++)
+            {
+                _sorted.Add(roster.Players[i]);
+            }
+
+            _sorted.Sort(CompareByScoreDescending);
+            return _sorted;
+        }
+
+        private static int CompareByScoreDescending(AdminPlayerView a, AdminPlayerView b)
+        {
+            int byScore = b.score.CompareTo(a.score);
+            return byScore != 0 ? byScore : a.playerId.CompareTo(b.playerId);
         }
 
         private void RefreshSummary(AdminRoster roster)
         {
             if (roster.IsFfa)
             {
-                _headline.text = "HERKES TEK";
+                // Takım yok → tek anlamlı başlık lider. Skor hiç yazılmadıysa (maç başlamadı)
+                // uydurma yapmayız, "herkes tek" der geçeriz.
+                IReadOnlyList<AdminPlayerView> ranked = OrderedPlayers(roster);
+                _headline.text = ranked.Count > 0 && ranked[0].score > 0
+                    ? $"LİDER: {ranked[0].name} {ranked[0].score}"
+                    : "HERKES TEK";
                 _teamSummary.text = $"{roster.Players.Count} oyuncu · {AliveCount(roster.Players)} canlı";
                 return;
             }
@@ -225,16 +263,17 @@ namespace VortexArena.App.Admin
             {
                 case 0: return $"{view.name} #{view.playerId}";
                 case 1: return view.team == "red" ? "kırmızı" : view.team == "blue" ? "mavi" : "-";
-                case 2: return view.kills.ToString();
-                case 3: return view.deaths.ToString();
-                case 4: return view.deaths > 0
+                case 2: return view.score.ToString();
+                case 3: return view.kills.ToString();
+                case 4: return view.deaths.ToString();
+                case 5: return view.deaths > 0
                     ? (view.kills / (float)view.deaths).ToString("0.00")
                     : view.kills.ToString("0.00");
-                case 5: return Mathf.RoundToInt(view.hp).ToString();
-                case 6: return view.battery < 0f
+                case 6: return Mathf.RoundToInt(view.hp).ToString();
+                case 7: return view.battery < 0f
                     ? "-"
                     : $"%{Mathf.RoundToInt(Mathf.Clamp01(view.battery) * 100f)}";
-                case 7: return StateText(view);
+                case 8: return StateText(view);
                 default: return string.IsNullOrEmpty(view.scene) ? "-" : view.scene;
             }
         }
@@ -268,6 +307,9 @@ namespace VortexArena.App.Admin
             _sb.Clear();
             _sb.AppendLine($"Faz: {roster.Phase} · kalan {FormatTime(roster.TimeRemaining)} · " +
                            $"mod {mode} · harita {map}" +
+                           // Süre/limit o maça özel olabildiği için (§5.2) operatör seçtiği
+                           // değerin gerçekten uygulandığını buradan doğrular.
+                           (roster.RoundSeconds > 0 ? $" · raund {AdminCommands.FormatDuration(roster.RoundSeconds)}" : "") +
                            (roster.ScoreLimit > 0 ? $" · skor limiti {roster.ScoreLimit}" : ""));
             _sb.Append($"Sunucu: {endpoint} · poz akışı " +
                        (age >= 0f ? $"{age:0.0} sn önce" : "yok") +

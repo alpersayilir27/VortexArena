@@ -22,6 +22,12 @@ public sealed class LobbyService
     private string _selectedModeId = "";
     private string _selectedSceneName = "";
 
+    /// <summary>Bir sonraki maçın ortak parametreleri (§5.2); <c>0</c> = seçilmedi, modun
+    /// varsayılanı kullanılacak. Mod/harita ile AYNI kanaldan gider: parametreler yerel kalsaydı
+    /// bir operatörün 5 dk sandığı maç diğerinin seçtiği 30 dk ile başlardı.</summary>
+    private int _selectedRoundSeconds;
+    private int _selectedScoreLimit;
+
     public LobbyService(PlayerRegistry registry, MatchDirector director)
     {
         _registry = registry;
@@ -147,21 +153,30 @@ public sealed class LobbyService
     /// değerini korur. Değişiklik tüm adminlere yayılır — çoklu operatör aynı ekranı görsün.</summary>
     public Task HandleSetSelectionAsync(ClientConnection connection, SetSelectionMsg msg)
     {
-        if (!ApplySelection(msg.modeId, msg.sceneName))
+        if (!ApplySelection(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit))
             return Task.CompletedTask; // değişmedi: gereksiz yayın yapma
 
         string modeId, sceneName;
+        int roundSeconds, scoreLimit;
         lock (_selectionGate)
         {
             modeId = _selectedModeId;
             sceneName = _selectedSceneName;
+            roundSeconds = _selectedRoundSeconds;
+            scoreLimit = _selectedScoreLimit;
         }
-        Console.WriteLine($"[Lobby] set_selection: mod '{modeId}', harita '{sceneName}' ({connection.State?.Name}).");
-        return BroadcastAdminStateAsync(Notice(connection, $"seçim -> {sceneName} / {modeId}"));
+
+        var parameters = roundSeconds > 0 || scoreLimit > 0
+            ? $", {(roundSeconds > 0 ? roundSeconds + " sn" : "mod süresi")} / " +
+              $"{(scoreLimit > 0 ? "limit " + scoreLimit : "mod limiti")}"
+            : "";
+        Console.WriteLine($"[Lobby] set_selection: mod '{modeId}', harita '{sceneName}'{parameters} ({connection.State?.Name}).");
+        return BroadcastAdminStateAsync(Notice(connection, $"seçim -> {sceneName} / {modeId}{parameters}"));
     }
 
-    /// <summary>true = seçim gerçekten değişti. Boş/null alan mevcut değeri korur (§5.2).</summary>
-    private bool ApplySelection(string? modeId, string? sceneName)
+    /// <summary>true = seçim gerçekten değişti. Boş/null string ve <c>0</c> sayı mevcut değeri
+    /// korur (§5.2) — arayüz yalnız değiştirdiği alanı doldurabilsin.</summary>
+    private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit)
     {
         lock (_selectionGate)
         {
@@ -176,6 +191,16 @@ public sealed class LobbyService
                 _selectedSceneName = sceneName;
                 changed = true;
             }
+            if (roundSeconds > 0 && _selectedRoundSeconds != roundSeconds)
+            {
+                _selectedRoundSeconds = roundSeconds;
+                changed = true;
+            }
+            if (scoreLimit > 0 && _selectedScoreLimit != scoreLimit)
+            {
+                _selectedScoreLimit = scoreLimit;
+                changed = true;
+            }
             return changed;
         }
     }
@@ -186,9 +211,9 @@ public sealed class LobbyService
     /// aynı mod/haritayı göstersin (komutu kim gönderdiyse gönderdi).</summary>
     public async Task HandleStartMatchAsync(ClientConnection connection, StartMatchMsg msg)
     {
-        ApplySelection(msg.modeId, msg.sceneName);
+        ApplySelection(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit);
         await BroadcastAdminStateAsync(Notice(connection, $"maç başlatılıyor: {msg.sceneName} / {msg.modeId}"));
-        await _director.StartMatchAsync(msg.modeId, msg.sceneName);
+        await _director.StartMatchAsync(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit);
     }
 
     public async Task HandleAbortMatchAsync(ClientConnection connection)
@@ -232,6 +257,8 @@ public sealed class LobbyService
             {
                 modeId = _selectedModeId,
                 sceneName = _selectedSceneName,
+                roundSeconds = _selectedRoundSeconds,
+                scoreLimit = _selectedScoreLimit,
                 notice = notice,
                 adminCount = _registry.OnlineAdminCount()
             });

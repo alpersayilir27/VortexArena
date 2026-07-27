@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using VortexArena.Core;
 using VortexArena.Core.Arena;
 using VortexArena.Net;
+using VortexArena.Protocol;
 
 namespace VortexArena.App.Admin
 {
@@ -35,12 +36,22 @@ namespace VortexArena.App.Admin
     public class AdminPreferencesPanel : MonoBehaviour
     {
         private const float PanelWidth = 760f;
-        private const float PanelHeight = 740f;
+        private const float PanelHeight = 820f;
         private const float RowHeight = 40f;
+
+        /// <summary>Skor limiti adımlayıcısının eşiği: bu değerin altında ±1, üstünde ±5 adımlar.
+        /// İki düğmeli döngüleyiciyle hem düşük limitlerde hassasiyet hem yüksek limitlerde
+        /// makul hız verir (ayrı bir dört düğmeli widget'a gerek kalmaz).</summary>
+        private const int ScoreLimitFineThreshold = 20;
+
+        private const int ScoreLimitMin = 1;
+        private const int ScoreLimitMax = 999;
 
         private GameObject _root;
         private TextMeshProUGUI _modeValue;
         private TextMeshProUGUI _mapValue;
+        private TextMeshProUGUI _durationValue;
+        private TextMeshProUGUI _scoreLimitValue;
         private TextMeshProUGUI _statusText;
         private TextMeshProUGUI _connectionText;
 
@@ -56,6 +67,11 @@ namespace VortexArena.App.Admin
         private int _modeIndex;
         private int _mapIndex;
 
+        /// <summary>Bir sonraki maçın süresi/limiti (ORTAK — set_selection ile gider).
+        /// Mod değişince o modun <see cref="ModeDefinition"/> varsayılanına döner.</summary>
+        private int _roundSeconds;
+        private int _scoreLimit;
+
         private bool _dirty = true;
 
         public void Initialize(RectTransform parent)
@@ -63,6 +79,7 @@ namespace VortexArena.App.Admin
             Build(parent);
             AdminContent.CollectModes(_modes);
             RefreshMapList();
+            ResetMatchParametersToModeDefaults();
             Apply();
         }
 
@@ -133,6 +150,8 @@ namespace VortexArena.App.Admin
             y = Section(body, "MAÇ (TÜM ADMİNLERDE ORTAK)", y);
             y = Cycler(body, "Mod", y, CycleModePrev, CycleModeNext, out _modeValue);
             y = Cycler(body, "Harita", y, CycleMapPrev, CycleMapNext, out _mapValue);
+            y = Cycler(body, "Süre", y, DurationPrev, DurationNext, out _durationValue);
+            y = Cycler(body, "Skor limiti", y, ScoreLimitDown, ScoreLimitUp, out _scoreLimitValue);
             y = MatchButtons(body, y);
 
             _statusText = UiKit.Text(body, "Status", 18f, UiKit.Accent, FontStyles.Normal,
@@ -246,7 +265,7 @@ namespace VortexArena.App.Admin
 
         private void StartMatch()
         {
-            AdminCommands.StartMatch(SelectedModeId, SelectedSceneName);
+            AdminCommands.StartMatch(SelectedModeId, SelectedSceneName, _roundSeconds, _scoreLimit);
         }
 
         private string SelectedModeId =>
@@ -254,6 +273,9 @@ namespace VortexArena.App.Admin
 
         private string SelectedSceneName =>
             _mapIndex >= 0 && _mapIndex < _maps.Count ? _maps[_mapIndex].SceneName : "";
+
+        private ModeDefinition SelectedMode =>
+            _modeIndex >= 0 && _modeIndex < _modes.Count ? _modes[_modeIndex] : null;
 
         private void CycleModePrev() { StepMode(-1); }
         private void CycleModeNext() { StepMode(1); }
@@ -267,7 +289,78 @@ namespace VortexArena.App.Admin
 
             _modeIndex = (_modeIndex + delta + _modes.Count) % _modes.Count;
             RefreshMapList();
+            // Süre/limit her modun kendi varsayılanına döner: 10 dakikalık bir TDM ayarı,
+            // 3 dakikalık olması gereken bir moda sessizce taşınmasın.
+            ResetMatchParametersToModeDefaults();
             PublishSelection(); // mod değişti → harita listesi başa döndü, seçili harita da değişti
+        }
+
+        // ---- maç parametreleri (ORTAK) ----
+
+        /// <summary>Seçili modun <see cref="ModeDefinition"/> varsayılanlarına döner. Katalog
+        /// yoksa protokol/mod tarafındaki değerler zaten sunucuda geçerlidir; burada yalnız
+        /// arayüzün gösterdiği sayı sıfırlanır.</summary>
+        private void ResetMatchParametersToModeDefaults()
+        {
+            ModeDefinition mode = SelectedMode;
+            _roundSeconds = mode != null && mode.RoundSeconds > 0 ? mode.RoundSeconds : 0;
+            _scoreLimit = mode != null ? Mathf.Clamp(mode.ScoreLimit, ScoreLimitMin, ScoreLimitMax) : 0;
+        }
+
+        private void DurationPrev() { StepDuration(-1); }
+        private void DurationNext() { StepDuration(1); }
+
+        /// <summary>Süre seçenekleri arasında döner (§1 <c>ROUND_SECONDS_OPTIONS</c>). Mevcut
+        /// değer listede yoksa (modun kendi varsayılanı listede olmayabilir) en yakın seçenekten
+        /// devam eder — operatör iki tıkta kaybolmaz.</summary>
+        private void StepDuration(int delta)
+        {
+            int[] options = ArenaProtocol.ROUND_SECONDS_OPTIONS;
+            if (options == null || options.Length == 0)
+            {
+                return;
+            }
+
+            int index = (NearestDurationIndex(options, _roundSeconds) + delta + options.Length) % options.Length;
+            _roundSeconds = options[index];
+            PublishSelection();
+        }
+
+        private static int NearestDurationIndex(int[] options, int seconds)
+        {
+            int best = 0;
+            int bestDistance = int.MaxValue;
+
+            for (int i = 0; i < options.Length; i++)
+            {
+                int distance = Mathf.Abs(options[i] - seconds);
+                if (distance >= bestDistance)
+                {
+                    continue;
+                }
+
+                best = i;
+                bestDistance = distance;
+            }
+
+            return best;
+        }
+
+        private void ScoreLimitDown() { StepScoreLimit(-1); }
+        private void ScoreLimitUp() { StepScoreLimit(1); }
+
+        /// <summary>Skor limiti adımlayıcısı: düşük değerlerde ±1, eşiğin üstünde ±5.</summary>
+        private void StepScoreLimit(int direction)
+        {
+            int step = _scoreLimit >= ScoreLimitFineThreshold ? 5 : 1;
+            // Aşağı inerken eşiğin ALTINA düşmemek için adımı da eşiğe göre yeniden hesapla.
+            if (direction < 0 && _scoreLimit - step < ScoreLimitFineThreshold)
+            {
+                step = _scoreLimit > ScoreLimitFineThreshold ? _scoreLimit - ScoreLimitFineThreshold : 1;
+            }
+
+            _scoreLimit = Mathf.Clamp(_scoreLimit + direction * step, ScoreLimitMin, ScoreLimitMax);
+            PublishSelection();
         }
 
         private void CycleMapPrev() { StepMap(-1); }
@@ -292,7 +385,7 @@ namespace VortexArena.App.Admin
         /// </summary>
         private void PublishSelection()
         {
-            AdminCommands.SetSelection(SelectedModeId, SelectedSceneName);
+            AdminCommands.SetSelection(SelectedModeId, SelectedSceneName, _roundSeconds, _scoreLimit);
             PreviewSelectedMap();
             Apply();
         }
@@ -315,6 +408,7 @@ namespace VortexArena.App.Admin
             }
 
             bool changed = false;
+            bool sceneChanged = false; // önizleme YALNIZ mod/harita değişince tazelenir
 
             if (!string.IsNullOrEmpty(sharedMode) && sharedMode != SelectedModeId)
             {
@@ -323,7 +417,9 @@ namespace VortexArena.App.Admin
                 {
                     _modeIndex = index;
                     RefreshMapList(); // mod değişti → uyumlu harita listesi de değişti
+                    ResetMatchParametersToModeDefaults();
                     changed = true;
+                    sceneChanged = true;
                 }
             }
 
@@ -334,14 +430,35 @@ namespace VortexArena.App.Admin
                 {
                     _mapIndex = index;
                     changed = true;
+                    sceneChanged = true;
                 }
             }
 
-            if (changed)
+            // Parametreler moddan SONRA uygulanır: mod değişimi yerel varsayılana çekiyor, son
+            // sözü sunucunun bildirdiği ortak değer söylemeli (0 = sunucuda hiç seçilmemiş).
+            if (AdminSelection.RoundSeconds > 0 && AdminSelection.RoundSeconds != _roundSeconds)
+            {
+                _roundSeconds = AdminSelection.RoundSeconds;
+                changed = true;
+            }
+
+            if (AdminSelection.ScoreLimit > 0 && AdminSelection.ScoreLimit != _scoreLimit)
+            {
+                _scoreLimit = Mathf.Clamp(AdminSelection.ScoreLimit, ScoreLimitMin, ScoreLimitMax);
+                changed = true;
+            }
+
+            if (!changed)
+            {
+                return;
+            }
+
+            if (sceneChanged)
             {
                 PreviewSelectedMap();
-                Apply();
             }
+
+            Apply();
         }
 
         private int IndexOfMode(string modeId)
@@ -481,6 +598,12 @@ namespace VortexArena.App.Admin
             _mapValue.text = _maps.Count == 0
                 ? "harita yok"
                 : DisplayOf(_maps[_mapIndex].DisplayName, _maps[_mapIndex].SceneName);
+
+            // 0 = arayüz bir değer bilmiyor → sunucu modun varsayılanını kullanacak.
+            _durationValue.text = _roundSeconds > 0
+                ? AdminCommands.FormatDuration(_roundSeconds)
+                : "mod varsayılanı";
+            _scoreLimitValue.text = _scoreLimit > 0 ? _scoreLimit.ToString() : "mod varsayılanı";
 
             _statusText.text = AdminCommands.Status;
 

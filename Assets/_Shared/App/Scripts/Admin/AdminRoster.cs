@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using VortexArena.Core;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -20,6 +21,10 @@ namespace VortexArena.App.Admin
         public float hp = ArenaProtocol.PLAYER_MAX_HP;
         public int kills;
         public int deaths;
+
+        /// <summary>Bireysel maç skoru (§10.2) — kills DEĞİLDİR; anlamı moda göre değişir.</summary>
+        public int score;
+
         public string scene = "";
 
         /// <summary>Ölüm anı (<c>Time.unscaledTime</c>); -1 = ölmedi/bilinmiyor.</summary>
@@ -85,8 +90,26 @@ namespace VortexArena.App.Admin
         /// <summary>Bağlı admin sayısı (kendimiz dahil) — istatistik panelinde gösterilir.</summary>
         public int AdminCount { get; private set; }
 
-        /// <summary>Hiçbir çevrimiçi oyuncunun takımı yoksa arayüz tek kolona düşer.</summary>
-        public bool IsFfa { get; private set; } = true;
+        /// <summary>
+        /// Arayüz tek kolona mı düşsün (takımsız mod)? <b>Otorite sunucudadır:</b> karar
+        /// <see cref="ModeRuntime.Teams"/>'den, yani <c>load_match.rules</c>'tan gelir (§10.5).
+        /// <para>
+        /// Maç yokken (faz Lobby) henüz kural yayınlanmamıştır; o zaman ortak seçimin modu
+        /// katalogdan okunur (<see cref="AdminSelection.ModeId"/>). Katalog da yoksa
+        /// <b>sezgisel</b> yedeğe düşülür ("hiçbir çevrimiçi oyuncunun takımı yok") — bu eskiden
+        /// TEK karar yoluydu ve lobide takımı henüz atanmamış TDM maçını da FFA gösteriyordu;
+        /// artık yalnız arayüz boş kalmasın diye duruyor.
+        /// </para>
+        /// <para>
+        /// Alan değil <b>hesaplanan özelliktir</b>: girdileri (faz, sunucu kuralı, ortak seçim)
+        /// roster'dan bağımsız değişiyor — önbelleklenseydi mod değişince bayat kalırdı.
+        /// </para>
+        /// </summary>
+        public bool IsFfa => ResolveIsFfa();
+
+        /// <summary>Sezgisel yedeğin girdisi: çevrimiçi oyunculardan en az birinin takımı var mı
+        /// (<see cref="Rebuild"/> hesaplar).</summary>
+        private bool _anyOnlineTeam;
 
         public string Phase { get; private set; } = "Lobby";
         public float TimeRemaining { get; private set; }
@@ -96,8 +119,12 @@ namespace VortexArena.App.Admin
         /// <summary>Geri sayım saniyesi (Countdown fazı dışında 0).</summary>
         public int CountdownSeconds { get; private set; }
 
-        /// <summary>Maç bitti mesajının kazananı ("red"/"blue"/"" = berabere); faz End'de anlamlı.</summary>
+        /// <summary>Maç bitti mesajının kazanan TAKIMI ("red"/"blue"/"" = yok); faz End'de anlamlı.</summary>
         public string WinnerTeam { get; private set; } = "";
+
+        /// <summary>Maç bitti mesajının kazanan OYUNCUSU (bireysel skorlu modlar); 0 = yok.
+        /// İkisi birden dolu olmaz — arayüz dolu olana bakar (§5.3 <c>match_end</c>).</summary>
+        public int WinnerPlayerId { get; private set; }
 
         public string ModeId { get; private set; } = "";
         public string SceneName { get; private set; } = "";
@@ -305,6 +332,7 @@ namespace VortexArena.App.Admin
                 // Sunucu sayaçları yereli EZER (§5.3) — sapma burada kapanır.
                 view.kills = info.kills;
                 view.deaths = info.deaths;
+                view.score = info.score;
                 view.hp = info.hp;
 
                 if (view.alive != info.alive)
@@ -339,6 +367,7 @@ namespace VortexArena.App.Admin
             RoundSeconds = msg.roundSeconds;
             ScoreLimit = msg.scoreLimit;
             WinnerTeam = "";
+            WinnerPlayerId = 0;
             Raise();
         }
 
@@ -381,6 +410,7 @@ namespace VortexArena.App.Admin
             }
 
             WinnerTeam = msg.winnerTeam ?? "";
+            WinnerPlayerId = msg.winnerPlayerId;
             ScoreRed = msg.scoreRed;
             ScoreBlue = msg.scoreBlue;
             Phase = "End";
@@ -392,6 +422,7 @@ namespace VortexArena.App.Admin
             Phase = "Lobby";
             CountdownSeconds = 0;
             WinnerTeam = "";
+            WinnerPlayerId = 0;
             TimeRemaining = 0f;
             _killFeed.Clear();
 
@@ -400,6 +431,7 @@ namespace VortexArena.App.Admin
                 kv.Value.hp = ArenaProtocol.PLAYER_MAX_HP;
                 kv.Value.alive = true;
                 kv.Value.diedAt = -1f;
+                kv.Value.score = 0; // sunucu da lobiye dönerken sıfırlıyor (§10.2)
             }
 
             Raise();
@@ -453,6 +485,14 @@ namespace VortexArena.App.Admin
                 if (killer != null)
                 {
                     killer.kills++;
+
+                    // Bireysel skorlu modda tablo anında tepki versin. Bu bir TAHMİN'dir
+                    // (skoru mod yazar, öldürme başına 1 olmak zorunda değil) — bir sonraki
+                    // lobby_state sunucunun dediğini yazar, `kills` deseninin aynısı.
+                    if (ModeRuntime.Scoring == ModeScoreKind.Player)
+                    {
+                        killer.score++;
+                    }
                 }
             }
 
@@ -509,7 +549,7 @@ namespace VortexArena.App.Admin
                 }
             }
 
-            IsFfa = !anyTeam;
+            _anyOnlineTeam = anyTeam;
 
             // Seçili oyuncu ayrıldıysa seçimi ilk uygun oyuncuya taşı (POV boşta kalmasın).
             if (AdminSession.SelectedPlayerId != 0 && Find(AdminSession.SelectedPlayerId) == null)
@@ -522,6 +562,32 @@ namespace VortexArena.App.Admin
             }
 
             Raise();
+        }
+
+        /// <summary>
+        /// Takım kipi kararı — sırayla üç kaynak (bkz. <see cref="IsFfa"/>):
+        /// (1) koşan maçın sunucudan gelen kuralı, (2) lobide ortak seçimin katalogdaki modu,
+        /// (3) sezgisel yedek.
+        /// </summary>
+        private bool ResolveIsFfa()
+        {
+            // (1) Maç yüklendiyse kural sunucudan gelmiştir (load_match.rules / welcome.match.rules).
+            if (Phase != "Lobby")
+            {
+                return ModeRuntime.Teams == ModeTeamMode.None;
+            }
+
+            // (2) Lobide henüz kural yok: operatörün seçtiği mod ne diyor?
+            ModeDefinition selected = AdminContent.Catalog != null
+                ? AdminContent.Catalog.FindMode(AdminSelection.ModeId)
+                : null;
+            if (selected != null)
+            {
+                return selected.TeamMode == ModeTeamMode.None;
+            }
+
+            // (3) Katalog/seçim yok — arayüz boş kalmasın.
+            return !_anyOnlineTeam;
         }
 
         private static int ComparePlayerId(AdminPlayerView a, AdminPlayerView b)
