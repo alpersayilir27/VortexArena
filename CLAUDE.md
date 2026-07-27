@@ -187,6 +187,10 @@ bir `hit_report` yollanır. Denge sayıları istemcide yaşadığı için deği�
 İçerik kataloğu: **`_Shared/Data/Resources/GameCatalog.asset`**
 (ModeDefinition + MapDefinition listesi) — admin tercihler panelinin mod/harita seçicisi bunu
 `Resources.Load<GameCatalog>("GameCatalog")` ile okur, bu yüzden `Resources/` altında kalmalı.
+**Kar/hava efekti (başka arenaya):** `Arenas/Standard/IceWorld/Prefabs/FX_SnowStorm.prefab`'ı
+sahneye arena origin'ine (0,0,0) bırak; kendine yeter (`Snow_C_NearField` üstündeki
+`WeatherVolumeFollow` hedefi boşsa `Camera.main`'i bulur). Arena 12×12 değilse `Snow_A/B/E`
+shape scale'lerini arena boyutu + ~3 m payla ölçekle — geniş kutu bütçeyi görünmeyen alana harcar.
 
 **Editor araçları** (`VortexArena.Core.Editor`, `VortexArena.Net.Editor`, `VortexArena.App.Editor`
 — yalnız Editor):
