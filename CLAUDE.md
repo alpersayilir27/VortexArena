@@ -8,6 +8,8 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 > Kurallar `.claude/rules/` altındadır. Uygulama planı: `plan/` (faz faz). Protokol: `Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı).
 > Sistemin tek sayfalık haritası (ne var, ağ nasıl çalışır, nasıl kullanılır): `Docs/Sistem-Ozeti.md`.
 > Sahadaki operatörün günlük kullanım kılavuzu (teknik olmayan dille): `Docs/Kullanim-Kilavuzu.md`.
+> Çatılı arena yapan geliştiriciye tek parça teknik not (bileşen + katman + editör aracı + tuzaklar):
+> `Docs/Cati-Gizleme.md`.
 
 ## Çalışma tarzı (detay `.claude/rules/`)
 
@@ -68,6 +70,7 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   katmanı (user layer 8) damgalanır ve admin kuş bakışına geçince çatı çizilmez (gölgesi kalır).
   Katman yalnız "hangi geometri gizlenecek" sorusunu sahnede görünür kılar; davranış Renderer
   listesinden gelir. Açık tavanlı arenalarda bu adım hiç yapılmaz.
+  → tam reçete, editör aracının davranışı, tuzaklar ve sorun giderme: **`Docs/Cati-Gizleme.md`**
 - `Assets/Modes/<Mod>/` — mod kutuları: `{Scripts (VortexArena.Modes.<Ad>.asmdef), Data, UI}`.
   Modlar birbirini REFERANSLAMAZ.
 - Üçüncü parti: `Assets/ThirdPartyPackages/`.
@@ -181,7 +184,8 @@ rolü player↔admin çevirir, pencere açık olmasa da. Seçim `EditorPrefs`'te
 objesine `NetIdentity` + benzersiz
 `sceneId`; sahne kaydında SceneIdGuard 0/çakışan id'leri onarır — dinamik obje senkronu altyapısı),
 `GameObject > VortexArena > Arena Roof` (seçime `ArenaRoof` ekler + altındaki Renderer'lara
-`ArenaRoof` katmanını damgalar — admin kuş bakışında gizlenecek çatı geometrisi),
+`ArenaRoof` katmanını damgalar — admin kuş bakışında gizlenecek çatı geometrisi;
+çoklu seçim + tek adımda Undo + prefab asset'leri atlar, ayrıntı `Docs/Cati-Gizleme.md` §4),
 `PlayerBuildTool.BuildWindowsAdmin` (menü değil — batch-mode `-executeMethod` girişi; sahne listesi
 Build Settings'ten gelir, çıktı `-buildOutput` ile verilir; `scripts/deploy-admin-game.bat` çağırır).
 ⚠️ **Sunucu editörden YÖNETİLMEZ** — dev penceresinde başlat/durdur düğmesi yoktur, sunucu her

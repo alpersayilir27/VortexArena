@@ -58,7 +58,7 @@ ve `RemotePlayerSpawner` + `RemoteAvatar` admin'de olduğu gibi çalışır. Eks
 | K6 | K/D için protokole **`kills`/`deaths`/`hp`/`alive`** eklenir (`PlayerInfo`) | Sunucu bu sayaçları zaten tutuyor (`PlayerState.Kills/Deaths`) ama **hiçbir mesajda taşımıyor**. Yalnız `kill_event`'ten sayarsak admin yeniden bağlandığında istatistik sıfırlanır → otorite sunucuda kalsın. |
 | K7 | Serbest kipte fareyle bakış **sağ tuş basılı tutularak** yapılır | İmleci kilitlemek HUD'ı kullanılamaz hâle getirir; operatörün tek ekranı var. |
 | K8 | `TacticalView` **silinmez**, opsiyonel mini haritaya dönüşür (son adım) | Çalışan kod; kuş bakışı kamerası onun yerini alsa da POV/serbest kipte konum farkındalığı için değerli. Mini harita yapılmazsa dosya silinir — ölü kod bırakılmaz. |
-| K9 | Bu fazda **MJPEG/video akışı yok** | Faz 4'te ertelendi; admin artık sahneyi doğrudan render ediyor, ihtiyaç zayıfladı. |
+| K9 | **MJPEG/video akışı YOK — ve olmayacak** | Faz 4 Adım 5 iptal edildi (2026-07-27): admin sahneyi zaten kendi render ediyor, "gözünden izleme" aktarılan oyun datasından (poz kilidi) üretilecek. Video akışı protokole/Quest'e maliyet getirir, gereksiz. |
 
 ## Görsel dil
 
@@ -399,7 +399,8 @@ sahne açıkken bu şekilde görülecek" isteği birebir bu).
 
 ## Kapsam dışı (bilinçli)
 
-- **MJPEG/video akışı** (K9) — admin sahneyi kendi render ediyor.
+- **MJPEG/video akışı** (K9) — kalıcı olarak iptal; admin sahneyi kendi render ediyor, oyuncunun
+  gözünden izleme oyun datasıyla yapılacak (ayrıca planlanacak).
 - **Kayıt/replay, ısı haritası, hasar istatistiği** — protokolde veri yok, ayrı iş.
 - **Admin'in oyuncu HUD'ını görmesi** (POV'da mod HUD'ı) — mod HUD'ı player-only kalıyor;
   istenirse `ModeHudSpawner`'a "gözlemci kipi" eklenir.

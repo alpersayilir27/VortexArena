@@ -13,9 +13,14 @@
 | `faz1-server-ve-lobi.md` | .NET server iskeleti + Unity istemci + Lobi E2E | ✅ (2026-07-24 — loopback E2E geçti; Quest cihaz E2E kullanıcıda) |
 | `faz2-poz-senkronu.md` | UDP poz akışı, uzak avatarlar, admin taktik görünüm, kalibrasyon | ✅ (2026-07-24 — loopback E2E: 2 PoseBot + editor admin/player geçti; 2-Quest fiziksel örtüşme testi kullanıcıda) |
 | `faz3-mac-ve-savas.md` | Maç akışı, TDM modu, silah/can senkronu, respawn | ✅ (2026-07-25 — loopback TDM E2E geçti: faz makinesi, vuruş doğrulama/ret yolları, free-roam canlanma; 2-Quest saha raundu kullanıcıda) |
-| `faz4-editor-sdk.md` | Editor araçları (Network Parent, arena şablonu), A12x12, işletme piloti | ✅ (2026-07-25 — sihirbazla A12x12 + DemoVenue 11×8 üretildi, loopback TDM raundu geçti; MJPEG izleme ertelendi, saha kurulum provası kullanıcıda) |
+| `faz4-editor-sdk.md` | Editor araçları (Network Parent, arena şablonu), A12x12, işletme piloti | ✅ (2026-07-25 — sihirbazla A12x12 + DemoVenue 11×8 üretildi, loopback TDM raundu geçti; MJPEG izleme İPTAL, saha kurulum provası kullanıcıda) |
 | `faz5-gelistirici-araclari.md` | Geliştirici araç seti (`Tools > VortexArena > Dev`, iki katmanlı config, tek tıkla sunucu+bot) + oyun içi bağlantı hata ekranı | ✅ (2026-07-27 — batch-mode derleme 0 hata; editör içi doğrulama kullanıcıda) |
 | `faz6-admin-gozlemci.md` | Admin sahne-içi gözlemci: dashboard tasfiye, admin sunucudaki aktif sahneye girer, 3 kamera kipi (POV/serbest/kuş bakışı), sahne üstü yönetim HUD'ı | ✅ (2026-07-27 — Unity + sunucu derlemesi 0 hata/0 uyarı; oynanış doğrulaması kullanıcıda) |
+| `faz7-mod-altyapisi.md` | **Çok modlu altyapı:** `ModeRules` (takım kipi/skor türü/canlanma/silah kaynağı), bireysel skor, `MatchOutcome`, ortak `ModeHudBase`, admin'den maç süresi/skor limiti. Davranış değiştirmez — TDM birebir korunur | 📋 planlandı |
+| `faz8-ffa-modu.md` | **Herkes Tek (FFA)** modu: bireysel skor, "sabit dur" canlanması, raf yerine hold ile rastgele silah. Protokole yeni alan EKLEMEZ | 📋 planlandı |
+
+> **Faz 7 + Faz 8 tek doğrulama geçişidir:** Faz 7'nin tüketicisi Faz 8'dir, altyapı tek başına
+> sınanamaz. İki ayrı doküman, iki ayrı commit — ama arada kırık durum bırakılmaz.
 
 ## Proje nedir?
 
@@ -54,7 +59,7 @@ Mimari model. Oradan **desen** alınır (kod bire bir kopyalanmaz, uyarlanır):
 - Feature-first + asmdef katmanlaması (`Assets/_Shared/` + modül kutuları; tüm bağımlılıklar Core'a doğru).
 - `Server/` klasörü repo kökünde, .NET çözümü.
 - `Docs/<Protokol>.md` = **tek doğruluk kaynağı** deseni.
-- Kanıtlanmış ağ istemci desenleri: `Assets/_Shared/Network/Scripts/ClassroomClient.cs` (ClientWebSocket + ConcurrentQueue ana-thread köprüsü, kalıcı singleton), `ServerLocator.cs` (UDP beacon dinleme + Android MulticastLock + statik IP fallback), `CameraStreamer.cs` (Faz 4 opsiyonel MJPEG için).
+- Kanıtlanmış ağ istemci desenleri: `Assets/_Shared/Network/Scripts/ClassroomClient.cs` (ClientWebSocket + ConcurrentQueue ana-thread köprüsü, kalıcı singleton), `ServerLocator.cs` (UDP beacon dinleme + Android MulticastLock + statik IP fallback). *(Cosmos'taki `CameraStreamer.cs` MJPEG deseni bu projeye ALINMAYACAK — bkz. Faz 4 Adım 5 iptali.)*
 - `.claude/rules/` çalışma kuralları.
 
 ## Hedef mimari (özet)

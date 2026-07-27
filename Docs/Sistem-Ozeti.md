@@ -333,6 +333,7 @@ tam gizlemede Renderer **kapatılmaz**, `ShadowsOnly`'ye alınır → çatı çi
 (kapatılsaydı iç mekân aydınlanıp kuş bakışı okunmaz olurdu). Son uygulanan alfa statik tutulur,
 yeni sahnedeki çatı `OnEnable`'da devralır → kuş bakışındayken arena değiştirilince çatı bir kare
 bile görünmez. Oyuncu tarafında etkisi YOKTUR — yalnız `AdminSpectator.RefreshRoof()` tetikler.
+**Yapımcıya verilecek tek parça teknik not: [`Cati-Gizleme.md`](Cati-Gizleme.md).**
 
 ### Sunucu: `Server/VortexArena.Server.Core`
 
@@ -558,6 +559,7 @@ doğrudan dashboard'a düşer. Ayrıntı: `deploy/README.md`.
    hiyerarşisinin kökünü seç → `GameObject > VortexArena > Arena Roof`. Bileşen eklenir ve
    altındaki tüm Renderer'lara `ArenaRoof` katmanı damgalanır → admin kuş bakışına geçince çatı
    kalkar, gölgesi kalır. Sonradan mesh eklersen bileşene sağ tık → *Çatı katmanını uygula*.
+   **Tam not (davranış, tuzaklar, test, sorun giderme): [`Cati-Gizleme.md`](Cati-Gizleme.md).**
 
 ### 6.5 `Tools > VortexArena > Export Server Config` — ne zaman?
 
@@ -673,7 +675,15 @@ adminlere de gidiyor — yeni mesaj tipi/port/sabit YOK.
 - Faz 6: admin gözlemcinin editörde/masaüstü build'inde doğrulanması (3 kip, halkalar, paneller,
   maç kontrolü) — derleme geçti, oynanış doğrulaması `plan/faz6-admin-gozlemci.md` §Doğrulama.
 
-**Planlanmamış ufuk:** MJPEG canlı izleme (ertelendi — Quest'te fps etkisi ölçülmeli), quaternion
-sıkıştırma + delta snapshot (>16 oyuncu gerekirse), yeni modlar (FFA — admin HUD yerleşimi hazır, bölge kontrolü), dinamik obje
+**"Oyuncunun gözünden izleme" — video akışıyla DEĞİL, oyun datasıyla.** MJPEG/video akışı
+(cosmos `CameraStreamer` portu) **iptal edildi**: admin zaten sahneyi kendi makinesinde render
+ediyor ve poz/can/skor/olay verisi ağdan geliyor. İstenen görüntü bu mevcut datadan üretilecek
+(admin kamerasını hedef oyuncunun poz'una kilitlemek); protokole yeni binary kare tipi, sunucuya
+kare relay'i ve Quest'te encode maliyeti **girmeyecek**. Ayrıntılı tasarım sonraki bir fazda
+planlanacak.
+
+**Planlanmamış ufuk:** quaternion sıkıştırma + delta snapshot (kalabalık maçta bant genişliği
+gerektirirse), yeni modlar (FFA — admin HUD yerleşimi hazır, bölge kontrolü), dinamik obje
 senkronu (`NetIdentity` + `NetSpawnCatalog` üzerinden), Meta colocation/paylaşımlı anchor
-araştırması (offline çalışma şartıyla), launcher ekranından APK dağıtımı.
+araştırması (offline çalışma şartıyla), launcher ekranından APK dağıtımı, eşzamanlı oyuncu
+kotası (lisanslama katmanı geldiğinde).

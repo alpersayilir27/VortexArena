@@ -39,12 +39,18 @@ Menü: `Tools > VortexArena > Create Arena From Template`:
 - İşletmeye özel görsel kimlik: logo/duvar materyali `Venues/DemoVenue/Art/`.
 - Kontrol listesi çıkar (`Docs/Isletme-Kurulum.md`): fiziksel alan ölçüsü → sihirbaz → kalibrasyon işaretleri (2 nokta zemin bandı) → sunucu PC kurulumu (statik IP, firewall-kur.cmd, AP: 5GHz, client isolation KAPALI — cosmos Server/README kontrol listesi uyarlanır) → APK kurulumu (`install_game.bat`) → smoke test.
 
-## Adım 5 — Opsiyonel: MJPEG izleme (cosmos portu)
+## Adım 5 — ~~Opsiyonel: MJPEG izleme (cosmos portu)~~ **İPTAL (2026-07-27)**
 
-Admin, oyuncu başına canlı göz görüntüsü (taktik görünüme ek "gözünden bak"):
-- Cosmos `Assets/_Shared/Network/Scripts/CameraStreamer.cs` (URP `SingleCameraRequest` + `AsyncGPUReadback` + JPEG binary frame) → `VortexArena.Net`'e uyarla; protokole binary `0x03 VideoFrame` eklenir (**önce `Docs/ArenaNet-Protokol.md` güncellenir** — tek doğruluk kaynağı kuralı) ve WS üzerinden gider (cosmos'taki gibi; UDP değil).
-- Server: kare relay + admin'e iletim; AdminConsole: seçili oyuncu için video paneli.
-- Quest performans etkisi ölçülmeden varsayılan KAPALI (`set_stream` cosmos deseni).
+> ⚠️ **GEÇERSİZ — bu adım yapılmayacak.** "Oyuncunun gözünden izleme" ihtiyacı **video akışıyla
+> değil, zaten aktarılan oyun datasıyla** karşılanacak: admin sahneyi kendi makinesinde render
+> ediyor, poz/can/skor/olay ağdan geliyor → admin kamerası hedef oyuncunun poz'una kilitlenir.
+> Bu sayede protokole yeni binary kare tipi, sunucuya kare relay'i ve Quest'te encode maliyeti
+> girmez. Ayrıntılı tasarım sonraki bir fazda planlanacak (`Docs/Sistem-Ozeti.md` §8).
+>
+> Aşağıdaki özgün plan yalnız tarihsel kayıt olarak duruyor:
+> ~~cosmos `CameraStreamer.cs` (URP `SingleCameraRequest` + `AsyncGPUReadback` + JPEG binary frame)
+> → `VortexArena.Net`; protokole binary `0x03 VideoFrame`; sunucuda kare relay; admin'de video
+> paneli; varsayılan KAPALI (`set_stream` deseni).~~
 
 ## Adım 6 — Doğrulama
 
@@ -52,7 +58,7 @@ Admin, oyuncu başına canlı göz görüntüsü (taktik görünüme ek "gözün
 2. `Export Server Config` → weapons.json/maps.json server'la uyumlu (TDM raundu değerleri SO'dan geliyor).
 3. Sihirbazla A12x12 üretildi → Build Settings'te → admin harita seçiminde görünüyor → TDM raundu A12x12'de oynanabiliyor.
 4. DemoVenue piloti: kurulum kontrol listesi baştan sona bir kez yürütüldü.
-5. (Yapıldıysa) MJPEG: 1 oyuncu akışı açıkken Quest fps kaybı ölçülüp not edildi.
+5. ~~(Yapıldıysa) MJPEG: 1 oyuncu akışı açıkken Quest fps kaybı ölçülüp not edildi.~~ — Adım 5 iptal edildi, doğrulama konusu yok.
 6. Commit: `Faz 4: editor SDK araçları + arena şablon sihirbazı + A12x12 + işletme piloti`
 
 ## Çıktı kontrol listesi
@@ -61,7 +67,7 @@ Admin, oyuncu başına canlı göz görüntüsü (taktik görünüme ek "gözün
 - [x] Export Server Config (weapons/maps.json otomasyonu) + sunucu `MapTable` doğrulaması
 - [x] Arena sihirbazı çalışıyor; A12x12 sihirbazla üretildi ve oynanabilir (loopback TDM raundu)
 - [x] DemoVenue (11×8, sihirbazla) + `Docs/Isletme-Kurulum.md`
-- [ ] (Ops.) MJPEG izleme — **ERTELENDİ** (gerekçe aşağıda)
+- [x] (Ops.) MJPEG izleme — **İPTAL EDİLDİ** (video akışı yerine oyun datasıyla izleme; gerekçe aşağıda)
 - [ ] DemoVenue kurulum kontrol listesinin sahada bir kez yürütülmesi (kullanıcıda — fiziksel alan gerekir)
 - [x] Commit atılmış
 
@@ -83,10 +89,13 @@ Admin, oyuncu başına canlı göz görüntüsü (taktik görünüme ek "gözün
   (alfabetik, LF, BOM'suz, 2 boşluk) tutuyor demektir.
 - **PoseBot `--map` / `--mode` bayrakları eklendi** ve `BuildScenes` listesine yeni arenalar girdi;
   aksi hâlde bot'un `hello.scenes`'i eksik kalıp `start_match`'i engelliyordu.
-- **MJPEG izleme (Adım 5) ertelendi.** Gerekçe: protokole yeni binary kare tipi + sunucu relay +
-  admin video paneli getiriyor ve varsayılan KAPALI olması için önce Quest'te fps etkisinin
-  ölçülmesi gerekiyor (cihaz elde). Faz 4'ün asıl hedefi (içerik üretimini araçlaştırmak) bundan
-  bağımsız tamamlandı; iş "Faz 4 sonrası ufuk" listesinde duruyor.
+- **MJPEG izleme (Adım 5) İPTAL EDİLDİ** (2026-07-27; önce ertelenmişti). Gerekçe: video akışı
+  protokole yeni binary kare tipi, sunucuya kare relay'i ve Quest'te encode/GPU readback maliyeti
+  getiriyor — oysa admin sahneyi **zaten kendi makinesinde render ediyor** ve ihtiyaç duyduğu her
+  şey (poz, can, skor, olaylar) ağdan **oyun datası olarak** geliyor. "Oyuncunun gözünden izleme"
+  bu datadan üretilecek: admin kamerası hedef oyuncunun poz'una kilitlenir. Tasarımı sonraki bir
+  fazda planlanacak. Faz 4'ün asıl hedefi (içerik üretimini araçlaştırmak) bundan bağımsız
+  tamamlandı.
 
 ---
 
