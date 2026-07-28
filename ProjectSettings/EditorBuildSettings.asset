@@ -23,6 +23,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Arenas/Standard/IceWorld/Scenes/IceWorld.unity
     guid: d028955a3ff573c46b2423eb95b213fb
+  - enabled: 1
+    path: Assets/Arenas/Venues/VortexAntep/Scenes/ArenaVortexAntep.unity
+    guid: 3610ca08987c76748b6a88774d11e3b2
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

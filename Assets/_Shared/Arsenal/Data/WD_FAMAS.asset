@@ -40,3 +40,5 @@ MonoBehaviour:
   firePitchJitter: 0.05
   fireVolume: 1
   prefab: {fileID: 6511540988315402901, guid: 135285a2988f2dd459c81b87ac254f34, type: 3}
+  grantedHoldPosition: {x: 0, y: 0, z: 0}
+  grantedHoldEuler: {x: 0, y: 0, z: 0}
