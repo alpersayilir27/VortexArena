@@ -383,6 +383,12 @@ public sealed class MatchDirector
         foreach (var player in OnlinePlayersLocked())
         {
             if (player.Alive) continue;
+            // ⚠️ REVIVE_GRACE'in TEK istisnası (§10.6): kalibresiz oyuncu ZORLA da canlandırılmaz.
+            // Bu satır olmadan "kalibresiz oyuncu canlanamaz" kuralı işlevsizdir — HandleRevive-
+            // RequestAsync reddetse bile oyuncu birkaç saniye sonra buradan canlanırdı.
+            // Sonucu: kalibresiz ölü oyuncu kalibre olana dek ölü kalır; kalibrasyon gelince
+            // grace zaten dolmuş olduğu için ilk tik'te kendiliğinden canlanır.
+            if (!player.Calibrated) continue;
             if ((now - player.DiedAt).TotalSeconds < ArenaProtocol.REVIVE_GRACE) continue;
             RevivePlayerLocked(outbox, player);
             Console.WriteLine($"[match] zorla canlandırma: {player.Name}");
@@ -426,7 +432,7 @@ public sealed class MatchDirector
         }
 
         // Harita tablosu (config/maps.json — Unity export'u) doluysa sahne + mod uyumu doğrulanır.
-        // Tablo boşsa (dosya yok) bu adım tümüyle atlanır → Faz 3 davranışı korunur.
+        // Tablo boşsa (dosya yok) bu adım tümüyle atlanır.
         if (!_maps.IsEmpty)
         {
             if (!_maps.TryGet(sceneName, out var known))
@@ -580,7 +586,9 @@ public sealed class MatchDirector
         lock (_gate)
         {
             if (_phase != Phase.Live) return;
-            if (shooter.Role != "player" || !shooter.Alive) return;
+            // Kalibresizin atışı relay EDİLMEZ (§10.6): ateş edemediği hâlde başkalarının
+            // ekranında namlu alevi çakması yanıltıcı olurdu.
+            if (shooter.Role != "player" || !shooter.Alive || !shooter.Calibrated) return;
 
             var relay = new ShotFiredMsg
             {
@@ -599,7 +607,7 @@ public sealed class MatchDirector
     /// <para>Bunlar HİLE denetimi değil, durum tutarlılığı kontrolleridir — ürün gözetimli özel
     /// alanda çalıştığı için hile koruması bilinçli olarak yoktur (§10.3). Hasarı istemci hesaplar
     /// ve sunucu aynen uygular; silah tablosu, weaponId beyaz listesi ve atış hızı denetimi
-    /// KALDIRILDI (meşru saçma/patlama/yaylım vuruşlarını düşürüyordu).</para></summary>
+    /// YOKTUR ve eklenmez (meşru saçma/patlama/yaylım vuruşlarını sessizce düşürürler).</para></summary>
     public async Task HandleHitReportAsync(PlayerState shooter, HitReportMsg msg)
     {
         // Registry araması kilitsiz (ConcurrentDictionary) — kilit almadan önce hallediyoruz.
@@ -627,6 +635,13 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, "atıcı ölü/oyuncu değil");
                 return;
             }
+            // §10.6: kalibresiz oyuncu ateş edemez. Hizalaması bozuk olduğu için nişan aldığı yer
+            // ile gerçekte gösterdiği yer farklıdır — vuruşu saymak haksız ölüm üretirdi.
+            if (!shooter.Calibrated)
+            {
+                RejectHit(shooter, msg.targetPlayerId, "atıcı kalibresiz");
+                return;
+            }
             if (target.PlayerId == shooter.PlayerId)
             {
                 RejectHit(shooter, msg.targetPlayerId, "kendini hedefledi");
@@ -635,6 +650,13 @@ public sealed class MatchDirector
             if (!target.Online || target.Role != "player" || !target.Alive)
             {
                 RejectHit(shooter, msg.targetPlayerId, "hedef ölü/çevrimdışı");
+                return;
+            }
+            // §10.6: kalibresiz oyuncu hasar YEMEZ. Avatarı fiziksel konumundan kaymış durumda
+            // olduğu için ona nişan almak da vurmak da anlamlı değildir.
+            if (!target.Calibrated)
+            {
+                RejectHit(shooter, msg.targetPlayerId, "hedef kalibresiz");
                 return;
             }
             if (!_rules.FriendlyFire && AreTeammates(shooter, target))
@@ -712,13 +734,14 @@ public sealed class MatchDirector
     /// <para><b><see cref="ReviveAnchor"/> burada DOĞRULANMAZ</b> (§10.4 notu): "tabanda mı / sabit
     /// mi durdu" kararı istemcinindir — sunucu hakemlik değil defter tutar (§10.3 felsefesi).
     /// <see cref="ArenaProtocol.REVIVE_GRACE"/> zorla canlandırma güvenlik ağı her iki şartta da
-    /// aynen işler.</para></summary>
+    /// aynen işler — <b>tek istisnası kalibrasyondur</b> (§10.6, bkz. TickLiveLocked).</para></summary>
     public async Task HandleReviveRequestAsync(PlayerState player)
     {
         var outbox = new List<Outgoing>();
         lock (_gate)
         {
             if (_phase != Phase.Live || player.Role != "player" || player.Alive) return;
+            if (!player.Calibrated) return; // §10.6: kalibresiz oyuncu canlanamaz
             if ((DateTime.UtcNow - player.DiedAt).TotalSeconds < _rules.RespawnDelay) return;
             RevivePlayerLocked(outbox, player);
             Console.WriteLine($"[match] canlandı: {player.Name}");

@@ -55,6 +55,21 @@ public sealed class PlayerState
     /// <summary>Son ölümün UTC zamanı (RESPAWN_DELAY + REVIVE_GRACE hesabı, §10.4).</summary>
     public DateTime DiedAt { get; set; }
 
+    // ---- Kalibrasyon durumu (§10.6) ----
+    // MAÇ DURUMU DEĞİL cihaz durumudur: yazarı MatchDirector değil PlayerRegistry'dir
+    // (SetCalibration, registry'nin kendi _gate'i altında) ve maç sıfırlamalarında KORUNUR.
+    // MatchDirector bunları kendi _gate'i altında yalnız OKUR — Team ile birebir aynı desen;
+    // bool okuması atomik olduğu için iki kilidi birbirine bağlamaya gerek yoktur (bağlamak
+    // kilitlenme riski üretir, kazancı sıfırdır).
+
+    /// <summary>Başlığın arena ile hizalı olduğunu bildirip bildirmediği. hello'da false'a
+    /// çekilir (§10.6): sunucu yeniden bağlanan bir başlığın hizalamasını bilemez.
+    /// false iken oyuncu ateş edemez, hasar yemez ve canlanamaz.</summary>
+    public bool Calibrated { get; set; }
+
+    /// <summary>"manual" | "anchor" | "cloud" | "" — doğrulanmayan serbest etiket (§5.1).</summary>
+    public string CalibrationSource { get; set; } = "";
+
     /// <summary>welcome'da verilen UDP kayıt jetonu; her yeni hello'da yenilenir.</summary>
     public uint UdpToken { get; set; }
 
@@ -95,6 +110,9 @@ public sealed class PlayerState
         deaths = Deaths,
         hp = Hp,
         alive = Alive,
-        score = Score
+        score = Score,
+        // §10.6 — admin gözlemci arayüzündeki kalibrasyon tik'i bunu okur.
+        calibrated = Calibrated,
+        calibrationSource = CalibrationSource
     };
 }

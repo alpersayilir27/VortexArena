@@ -342,8 +342,8 @@ namespace VortexArena.Core.Editor
             result.Warnings.Add("Başlangıç noktası ÜRETİLMEZ: 'GameObject > VortexArena > Spawn Point' ile tek SpawnPoint'i elle koy.");
             result.Warnings.Add("NavMesh ve ışık verisi kaynak sahneden MİRAS kalır — yeni plana göre yeniden bake edilmeli.");
             result.Warnings.Add(
-                "'Tools > VortexArena > Export Server Config' çalıştır — yeni sceneName maps.json'a girmezse " +
-                "start_match reddedilir. (Ölçü için gerekmez: maps.json'a arena boyutu yazılmaz.)");
+                "'Tools > VortexArena > Export Server Config' çalıştır — yeni sceneName maps.json'a " +
+                "girmezse start_match reddedilir.");
 
             result.Success = true;
             result.Summary = $"Arena '{arenaId}' üretildi: {sceneName} → {targetFolder}";

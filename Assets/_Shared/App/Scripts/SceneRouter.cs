@@ -13,7 +13,7 @@ namespace VortexArena.App
     /// Ayrıca §10.1 Loading adımını kapatır: maç sahnesi yüklenince sunucuya
     /// set_ready{true} ("sahne yüklendi") gönderir.
     /// <para>
-    /// <b>Rolden bağımsız (Faz 6):</b> admin de aynı sahneyi yükler — "her zaman sunucudaki
+    /// <b>Rolden bağımsızdır:</b> admin de aynı sahneyi yükler — "her zaman sunucudaki
     /// aktif sahne" kuralı gözlemci görünümünün temelidir (§2). Rol yalnız <b>tek</b> yerde
     /// ayrışır: <see cref="ReportSceneLoaded"/> içindeki <c>set_ready</c> yalnız player'dan
     /// gider. Admin "hazır" görünürse operatör yanılır, ayrıca Loading kapısı zaten yalnız

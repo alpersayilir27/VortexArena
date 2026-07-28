@@ -5,9 +5,9 @@ namespace VortexArena.App
     /// Sahne bir kabuk controller'ıyla doğrudan oynatılırsa (Editor testi) rol
     /// çözülmemiş olabilir — controller'lar Awake'te kendi varsayılanını yazar.
     /// <para>
-    /// Faz 6'dan beri **tek kabuk sahnesi `Lobby`'dir**: admin de oyuncularla aynı sahnede
-    /// durur ve sunucunun `load_match`/`return_to_lobby`'siyle onları takip eder (gözlemci
-    /// görünümü). Eski `AdminConsole` dashboard sahnesi kaldırıldı.
+    /// **Tek kabuk sahnesi `Lobby`'dir**: admin de oyuncularla aynı sahnede durur ve sunucunun
+    /// `load_match`/`return_to_lobby`'siyle onları takip eder (gözlemci görünümü). Admin'e ait
+    /// ayrı bir dashboard sahnesi YOKTUR.
     /// </para>
     /// </summary>
     public static class AppSession

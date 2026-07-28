@@ -108,6 +108,8 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 
 **`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** modun canlanma şartını sağladıktan (taban bölgesine girme ya da sabit durma) sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da oyuncu ışınlanamadığı için canlanma bir **konum değişimi değil, durum değişimidir**.
 
+**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada A+B) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
+
 ### 5.2 Yalnız admin → Sunucu
 
 - **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":600, "scoreLimit":30 }`
@@ -115,6 +117,7 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 - **`abort_match`** `{ "type":"abort_match" }`
 - **`kick`** `{ "type":"kick", "playerId":5 }`
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
+- **`clear_calibration`** `{ "type":"clear_calibration", "playerId":5 }` — o oyuncunun kalibrasyonunu **sıfırlar** (§10.6). **`playerId:0` = TÜM oyuncular** (toplu sıfırlama). Admin kalibrasyonu yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez — hizalamanın gerçekten oturduğunu yalnız başlık bilir (§10.6).
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
 - **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":600, "scoreLimit":30 }` — bir sonraki maçın **ortak** mod/harita/süre/limit seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim sunucuda faz Lobby'ye dönerken sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
   **Neden maç parametreleri de ortak:** iki operatör aynı ekranı görmezse biri 5 dk sandığı maçı 30 dk başlatır. Süre/limit *operasyonel* durumdur, görünüm tercihi değil (§5.3 son madde).
@@ -139,7 +142,8 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
 { "type":"lobby_state", "players":[
   { "playerId":3, "name":"Gözlük 03", "role":"player", "team":"red",
     "ready":true, "online":true, "battery":0.87, "scene":"Arena10x10",
-    "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7 } ] }
+    "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7,
+    "calibrated":true, "calibrationSource":"anchor" } ] }
 ```
 `kills`/`deaths`/`hp`/`alive`/`score` **sunucu-otoriter** maç sayaçlarıdır (§10.2) ve admin gözlemci
 arayüzünün tek doğruluk kaynağıdır: yalnız `kill_event`/`health_update` sayılsa admin yeniden
@@ -149,6 +153,11 @@ Admin olmayan istemciler bu alanları yok sayabilir.
 `score` = **bireysel** maç skoru (`rules.scoring == "player"` olan modlarda anlamlı; takım
 skoru `match_state.scoreRed`/`scoreBlue`'da kalır — §10.5). Bireysel skorun değiştiği an =
 öldürmenin olduğu an = roster'ın zaten tazelendiği an, bu yüzden ayrı bir mesaj tipi yoktur.
+
+`calibrated`/`calibrationSource` = başlığın hizalama durumu (§10.6). **Aynı gerekçeyle ayrı bir
+`calibration_changed` mesajı YOKTUR:** durumun değiştiği an roster'ın zaten tazelendiği andır
+(hem `set_calibration` hem `clear_calibration` registry'yi değiştirir → `lobby_state` yayınlanır).
+Admin'de her ikisi de `false`/`""` kalır — admin kalibre olmaz, arayüzde "kalibresiz" sayılmaz.
 
 **`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "rules":{ … } }`
 → istemci sahneyi yükler, `status`'ta yeni sahne görünür. Sahne yüklenince istemci `set_ready` (loading tamam anlamında) gönderir; herkes hazır olunca sunucu `countdown` başlatır.
@@ -275,6 +284,8 @@ Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `kills`, `deaths`, 
 
 `hp`/`alive`/`kills`/`deaths`/`score` **`lobby_state` ile de yayınlanır** (§5.3): ölüm işlendikten sonra roster bir kez tazelenir, böylece admin istatistik tablosu sunucudaki sayaçla birebir kalır ve admin yeniden bağlandığında geçmişi kaybetmez. Anlık akış (her vuruş) yine `health_update`/`kill_event` üzerinden gider — `lobby_state` sağlama noktasıdır, sıcak yol değil.
 
+⚠️ `calibrated`/`calibrationSource` (§10.6) bu listeye **dahil değildir**: maç durumu değil cihaz durumudur, yazarı `MatchDirector` değil `PlayerRegistry`'dir (`Team` ile aynı desen — registry kilidinde yazılır, director kilidinde okunur; `bool` okuması atomik olduğu için iki kilidi birbirine bağlamaya gerek yoktur) ve maç sıfırlamalarında **korunur**.
+
 ### 10.3 Vuruş hattı — genel hasar modeli
 
 **Hile koruması yoktur ve bilinçli olarak eklenmez.** Ürün, gözetim altındaki özel alanlarda
@@ -287,8 +298,8 @@ yapılır, sunucu hakemlik değil **defter tutar**: canı düşürür, ölümü 
 kontrolleridir — kaldırılırlarsa çift ölüm / maç dışı hasar gibi hatalar üretilir:
 
 1. Faz `Live` mi?
-2. Atıcı çevrimiçi + `role=player` + `alive` mi?
-3. Hedef var, çevrimiçi, `alive` mi? (aynı karede gelen iki ölümcül vuruş çift `kill_event` yazmasın)
+2. Atıcı çevrimiçi + `role=player` + `alive` + **`calibrated`** mi? (§10.6: kalibresiz oyuncu ateş edemez)
+3. Hedef var, çevrimiçi, `alive` + **`calibrated`** mi? (aynı karede gelen iki ölümcül vuruş çift `kill_event` yazmasın; kalibresiz oyuncu hasar YEMEZ — §10.6)
 4. Hedef atıcının kendisi değil ve **takım arkadaşı değil** mi? Kural: `rules.friendlyFire == false` iken *takım arkadaşı* vurulamaz, ve **boş takım asla takım arkadaşı sayılmaz** — takımsız modda (§10.5 `teamMode:"none"`) herkesin takımı `""` olduğu için `"" == ""` karşılaştırması tüm vuruşları reddederdi. `friendlyFire == true` ise bu adım hiç uygulanmaz.
 5. `damage` sonlu ve pozitif bir sayı mı? (NaN/∞ canı kalıcı bozar; sayı denetimi, hile denetimi değil)
 
@@ -296,12 +307,12 @@ Geçerse: `hp -= damage` (istemcinin bildirdiği değer) → `health_update{play
 **herkese** yayınlanır. `hp ≤ 0` ise `alive=0`, `kill_event{killerId, victimId, weaponId}` +
 `IGameMode.OnKill` (skor) + kurbana `respawn{delaySeconds:RESPAWN_DELAY}`.
 
-Atış hızı denetimi, `weaponId` beyaz listesi ve sunucu-otoriter silah tablosu **YOKTUR**
-(v1'de vardı, kaldırıldı): pompalı saçması, bomba parçası ve ok yaylımı gibi meşru "hızlı
-art arda vuruş" örüntülerini sessizce düşürüyordu.
+Atış hızı denetimi, `weaponId` beyaz listesi ve sunucu-otoriter silah tablosu **YOKTUR** ve
+eklenmez: pompalı saçması, bomba parçası ve ok yaylımı gibi meşru "hızlı art arda vuruş"
+örüntülerini sessizce düşürürler.
 
 `shot_fired` sunucuda **doğrulanmaz**, yalnız relay edilir (atan hariç herkese, `playerId`
-eklenerek) — ölü/maç dışı oyuncunun `shot_fired`'ı relay EDİLMEZ.
+eklenerek) — ölü/maç dışı/**kalibresiz** oyuncunun `shot_fired`'ı relay EDİLMEZ.
 
 > **Denge sayıları istemcide yaşar.** Hasar/atış hızı/menzil tek kaynak olarak Unity'deki
 > `WeaponDefinition` SO'larındadır; sunucuya export edilmez, `config/weapons.json` diye bir dosya
@@ -316,16 +327,22 @@ Fiziksel oyuncu ışınlanamaz → **respawn = konum değil durum değişimi**:
 2. `delaySeconds` dolduktan **ve modun canlanma şartı sağlandıktan** sonra istemci `revive_request` gönderir (canlanana dek ~1 sn'de bir tekrarlar). Şart `rules.reviveAnchor` ile seçilir:
    - **`"base"`** (varsayılan, TDM): oyuncu bir **taban bölgesine** (`BaseZone` — arenadaki kırmızı/mavi şerit) fiziken girer. Ölüm ekranı "Tabanına dön ve canlan" der.
    - **`"standstill"`**: oyuncu ölüm anındaki HMD konumunu çapa alır ve `REVIVE_HOLD_RADIUS` içinde `REVIVE_HOLD_SECONDS` boyunca kesintisiz sabit durur; çapadan çıkınca sayaç ve çapa sıfırlanır. Taban bölgesi olmayan modlar (FFA) bunu kullanır.
-3. Sunucu doğrular (faz Live, oyuncu ölü, gecikme dolmuş) → `hp=PLAYER_MAX_HP`, `alive=1` → `health_update{hp:100, attackerId:0}`.
+3. Sunucu doğrular (faz Live, oyuncu ölü, gecikme dolmuş, **kalibreli**) → `hp=PLAYER_MAX_HP`, `alive=1` → `health_update{hp:100, attackerId:0}`.
 4. Ölümden `REVIVE_GRACE` geçtiği hâlde talep gelmediyse sunucu **zorla** canlandırır (istemci takılmışsa maç kilitlenmesin).
 
 > **`reviveAnchor` sunucuda DOĞRULANMAZ.** §10.3 felsefesinin aynısı: sunucu hakemlik değil defter tutar. "Tabanda mı / sabit mi durdu" kararı istemcinindir; sunucu faz + ölü + gecikme kontrolüyle yetinir. `REVIVE_GRACE` güvenlik ağı her iki şartta da aynen işler.
+
+> ⚠️ **`REVIVE_GRACE`'in TEK istisnası kalibrasyondur** (§10.6): kalibresiz oyuncu ne talep üzerine
+> ne de zorla canlandırılır — grace döngüsü onu atlar. Aksi hâlde "kalibresiz oyuncu canlanamaz"
+> kuralı işlevsiz olurdu (birkaç saniye sonra kendiliğinden canlanırdı). Kalibresiz ölü oyuncu
+> **kalibre olana dek ölü kalır**; kalibrasyon gelince grace zaten dolmuş olduğu için ilk tik'te
+> kendiliğinden canlanır.
 
 **Taban bölgesi eşleşmesi (istemci):** bir `BaseZone` oyuncuya açıktır eğer takımı oyuncunun takımıyla aynıysa, **ya da** bölge `Neutral` işaretliyse, **ya da** oyuncunun takımı boşsa (takımsız mod). Aynı takıma ait birden çok bölge varsa **herhangi birine** girmek yeter. Sahnede hiç açık bölge yoksa şart aranmaz — oyuncu kalıcı ölü kalmasın (güvenlik ağı yine `REVIVE_GRACE`).
 
 **Konum diye bir alan protokolde YOKTUR.** Ne `load_match` ne `respawn` bir spawn noktası/slotu taşır; sunucu sahne geometrisini bilmez. Arena başına sahnedeki tek `SpawnPoint` marker'ı yalnız **yerleşim göstergesidir** (maç öncesi operatörün oyuncuyu yönlendirdiği fiziksel nokta) ve hiçbir kod tarafından okunmaz — rig'i taşıyan bir mekanizma yoktur.
 
-**Harita değişimi kalibrasyonu sıfırlamaz.** `load_match` oyuncu için yalnız bir sahne değişimidir: kimse "yeniden doğmaz", rig taşınmaz. Yeni sahnenin `ArenaCalibrator`'ı `Start`'ta kayıtlı `OVRSpatialAnchor`'dan hizalamayı geri yükler, oyuncu fiziksel olarak nerede duruyorsa orada kalır. Hizalama geri gelene kadar `PlayerPoseTracker` poz göndermez (yanlış uzayda poz göndermektense kısa bir boşluk yeğdir).
+**Harita değişimi kalibrasyonu sıfırlamaz.** `load_match` oyuncu için yalnız bir sahne değişimidir: kimse "yeniden doğmaz", rig taşınmaz. Yeni sahnenin `ArenaCalibrator`'ı `Start`'ta kayıtlı `OVRSpatialAnchor`'dan hizalamayı geri yükler, oyuncu fiziksel olarak nerede duruyorsa orada kalır. **Poz gönderimi hizalamayı beklemez:** `PlayerPoseTracker` baştan kaydolur, hizalama gelene dek gönderilen pozlar arena ile örtüşmez (rig ofsetli) ama akar — oyuncunun bağlı ve hareket hâlinde olduğu ağdan görülebilsin diye. Sunucu bu ayrımı bilmez; pozlar her hâlde `PoseUpdate` olarak kabul edilir ve snapshot'a girer.
 
 ### 10.5 Mod kuralları (`ModeRules` / `rules`)
 
@@ -382,6 +399,54 @@ onu besler; canlanma (`PlayerCombatState`), skor satırı (`ModeHudBase`) ve adm
 Sunucusuz editör oturumunda (dev penceresi sentetik maç) kurallar `ModeDefinition`'dan okunur;
 **sapmada sunucu kazanır** — `ModeDefinition`'daki kural alanları yalnız önizleme/editör içindir.
 
+### 10.6 Kalibrasyon durumu (sunucu-otoriter)
+
+Oyuncu başına `calibrated` (bool) + `calibrationSource` (string) sunucuda tutulur ve `lobby_state`
+ile yayılır (§5.3). Amaç operasyoneldir: sahada bir başlığın hizalaması kayar, o oyuncunun avatarı
+fiziksel konumundan sapar — operatörün onu **maçtan çıkarmadan** savaş dışı bırakıp yeniden
+kalibre ettirebilmesi gerekir.
+
+**İki yazar, ama asimetrik:**
+
+| Yazar | Mesaj | Ne yapabilir |
+|---|---|---|
+| Başlık | `set_calibration` (§5.1) | `true` **ve** `false` |
+| Admin | `clear_calibration` (§5.2) | **yalnız `false`** |
+
+**Admin neden "kalibre oldu" diyemez:** hizalamanın gerçekten oturduğunu yalnız başlık bilir.
+Admin elle işaretleyebilseydi, sunucunun hizalı sandığı ama fiilen kaymış bir oyuncuya ateş ve
+hasar açılırdı — bu sistemin önlemek için var olduğu durumun ta kendisi.
+
+**Kalibresiz oyuncunun durumu:**
+
+1. `hit_report`'u **reddedilir** (ateş edemez) — §10.3/2
+2. Ona gelen `hit_report` **reddedilir** (hasar yemez) — §10.3/3
+3. `shot_fired`'ı **relay edilmez** — §10.3
+4. `revive_request`'i reddedilir **ve `REVIVE_GRACE` zorla canlandırması onu atlar** — §10.4
+5. Maç sayaçları (`hp`/`kills`/`deaths`/`score`) **korunur** — kalibrasyon geri gelince oyuncu
+   kaldığı yerden devam eder; bu bir cezalandırma değil, geçici bir dondurmadır.
+
+**İstemci tarafı** (protokolün zorunlu kıldığı değil, beklenen davranış): kalibresizken tetik
+kilitlenir, uzak avatar **parlar** ve vuruş kutuları kapanır, kumandada A+B ile elle kalibrasyon
+**açılır**. Kalibreli durumdayken A+B **kilitlidir** — oyuncu kendi hizalamasını kazara bozamaz,
+kapıyı yalnız operatör açar.
+
+**`hello`'da `calibrated` sıfırlanır.** Sunucu yeniden bağlanan bir başlığın hizalama durumunu
+bilemez (uygulama yeniden başlamış olabilir); başlık kayıtlı anchor'dan geri yükleyince zaten
+`set_calibration{source:"anchor"}` ile yeniden bildirir.
+
+⚠️ **`load_match` kalibrasyonu SIFIRLAMAZ** (§10.4). Harita değişimi oyuncu için yalnız bir sahne
+değişimidir; sunucu `calibrated`'i korur. Yanlışlıkla sıfırlanırsa her harita değişimi tüm
+oyuncuları savaş dışı bırakır.
+
+⚠️ **Poz gönderimi kalibrasyona BAĞLI DEĞİLDİR.** Kalibresiz oyuncu `PoseUpdate` göndermeye devam
+eder (pozları arena ile örtüşmez ama akar). Bu bilinçlidir: operatörün "avatar kaymış" teşhisini
+koyabilmesi ve parlayan avatarın hareket ettiğini görebilmesi için pozun akıyor olması gerekir.
+
+**Bulut kalibrasyonu (ileride).** Paylaşılan uzamsal anchor ile toplu hizalama geldiğinde protokol
+değişmez: `source:"cloud"` zaten geçerli bir değer, `clear_calibration{playerId:0}` zaten toplu
+sıfırlama yapıyor. Grup/oturum kimliği taşıyan alanlar **o iş gelene kadar eklenmez**.
+
 ## 11. Sunucu config dosyaları
 
 `Server/config/` altındaki üç dosya; kaynakları FARKLIDIR:
@@ -392,7 +457,7 @@ Sunucusuz editör oturumunda (dev penceresi sentetik maç) kurallar `ModeDefinit
 | `devices.json` | **Sunucu üretir** | `deviceId → "Gözlük NN"`; ilk bağlantıda ve `set_name`'de yazılır (§2). UTF-8, BOM'suz. |
 | `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `modes` (§10.1). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide `MapDefinition.size`'da kalır. |
 
-> **`weapons.json` KALDIRILDI** (v1'de vardı): sunucu artık silah tanımı tutmaz, hasarı istemci
-> bildirir (§10.3). Silah istatistikleri yalnız Unity'deki `WeaponDefinition` SO'larındadır.
+> **`weapons.json` YOKTUR:** sunucu silah tanımı tutmaz, hasarı istemci bildirir (§10.3). Silah
+> istatistikleri yalnız Unity'deki `WeaponDefinition` SO'larındadır.
 >
 > **`maps.json` ELLE DÜZENLENMEZ** — `Tools > VortexArena > Export Server Config` üretir ve bir sonraki export elle yapılan değişikliği **ezer**. Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir (alfabetik, LF, UTF-8 BOM'suz) → git diff'i temiz kalır. Harita ekleyip export'u çalıştırmayı unutursanız bilinmeyen `sceneName` → `start_match` reddedilir. `maps.json` hiç yoksa sunucu harita doğrulamasını **atlar** (geriye dönük uyumlu davranış).

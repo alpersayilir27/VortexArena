@@ -7,7 +7,7 @@ namespace VortexArena.Core.Combat
     /// Simple hit-point pool for anything that can be shot (players, dummies).
     /// Weapons call TakeDamage on raycast hits.
     /// <para>
-    /// Faz 3: OYUNCU CANI SUNUCU-OTORİTERDİR. Ağa bağlı oyuncuların canı
+    /// OYUNCU CANI SUNUCU-OTORİTERDİR. Ağa bağlı oyuncuların canı
     /// <see cref="ApplyServerHealth"/> ile <c>health_update</c>'ten set edilir;
     /// <see cref="TakeDamage"/> yalnız yerel hedefler (dummy) içindir.
     /// </para>

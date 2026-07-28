@@ -82,6 +82,21 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.ReviveRequest;
     }
 
+    /// Başlığın KENDİ hizalama durumunu bildirmesi (§10.6). Yalnız player gönderir.
+    /// <para>
+    /// <c>source</c> ∈ "manual" (kumandada A+B) | "anchor" (kayıtlı OVRSpatialAnchor'dan geri
+    /// yükleme) | "cloud" (ileride: paylaşılan uzamsal anchor). Sunucu DOĞRULAMAZ, yalnız
+    /// kaydedip roster'da yayar — weaponId gibi serbest etiket, yeni kaynak sunucuda iş çıkarmaz.
+    /// Bu yüzden bilinçli olarak <b>string</b>, enum değil.
+    /// </para>
+    [Serializable]
+    public class SetCalibrationMsg
+    {
+        public string type = MessageTypes.SetCalibration;
+        public bool calibrated;
+        public string source = "";
+    }
+
     // ---- Yalnız admin → Sunucu ----
 
     /// start_match (§5.2). roundSeconds/scoreLimit O MAÇA özeldir: ≤0 ya da eksikse modun
@@ -114,6 +129,16 @@ namespace VortexArena.Protocol
     public class KickMsg
     {
         public string type = MessageTypes.Kick;
+        public int playerId;
+    }
+
+    /// Admin bir oyuncunun kalibrasyonunu SIFIRLAR (§10.6). Admin yalnız sıfırlayabilir,
+    /// "kalibre oldu" diye işaretleyemez — onu yalnız başlık bilir (SetCalibrationMsg).
+    /// <para><c>playerId == 0</c> = TÜM oyuncular (toplu sıfırlama).</para>
+    [Serializable]
+    public class ClearCalibrationMsg
+    {
+        public string type = MessageTypes.ClearCalibration;
         public int playerId;
     }
 
@@ -216,6 +241,12 @@ namespace VortexArena.Protocol
         /// ve mod başına anlamı değişir (FFA puanı, Silah Yarışı'nda seviye…). rules.scoring ==
         /// "player" olan modlarda anlamlıdır; takım skoru match_state'te kalır.</summary>
         public int score;
+
+        // Kalibrasyon durumu (§10.6) — maç sayacı DEĞİL cihaz durumudur: yazarı MatchDirector
+        // değil PlayerRegistry'dir ve maç sıfırlamalarında korunur. Kalibresiz oyuncu ateş edemez,
+        // hasar yemez, canlanamaz; uzak avatarı parlar. Admin'de daima false/"" kalır.
+        public bool calibrated;
+        public string calibrationSource;
     }
 
     [Serializable]

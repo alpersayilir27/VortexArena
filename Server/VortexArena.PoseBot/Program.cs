@@ -42,8 +42,8 @@ internal static class Program
 
     // ---- --admin ayarları ----
     /// <summary>--admin'in başlattığı maçın modu/sahnesi. Varsayılan tdm/Arena10x10; başka arena
-    /// veya mod denemek için <c>--map &lt;sahneAdı&gt;</c> / <c>--mode &lt;modId&gt;</c> (Faz 4: birden
-    /// çok arena var). Sahne adı hem BuildScenes'te hem sunucunun maps.json'ında olmalı.</summary>
+    /// veya mod denemek için <c>--map &lt;sahneAdı&gt;</c> / <c>--mode &lt;modId&gt;</c>.
+    /// Sahne adı hem BuildScenes'te hem sunucunun maps.json'ında olmalı.</summary>
     private static string AdminModeId = "tdm";
     private static string AdminSceneName = "Arena10x10";
 
@@ -187,7 +187,13 @@ internal static class Program
             scenes = BuildScenes
         };
         await bot.SendAsync(hello, ct);
-        Console.WriteLine($"{tag} bağlandı, hello gönderildi.");
+
+        // ⚠️ ZORUNLU: sunucu hello'da kalibrasyonu sıfırlar (§10.6) ve kalibresiz oyuncu ateş
+        // edemez, hasar yemez, canlanamaz. Bu satır olmadan --fight botlarının TÜM hit_report'ları
+        // "kalibresiz" diye reddedilir ve bot vurulamaz — dev penceresindeki bot düğmeleri sessizce
+        // işe yaramaz hâle gelir. Bot'un fiziksel bir başlığı yok, hep hizalı sayılır.
+        await bot.SendAsync(new SetCalibrationMsg { calibrated = true, source = "manual" }, ct);
+        Console.WriteLine($"{tag} bağlandı, hello + set_calibration gönderildi.");
 
         using var udp = new UdpClient(0);
         using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
