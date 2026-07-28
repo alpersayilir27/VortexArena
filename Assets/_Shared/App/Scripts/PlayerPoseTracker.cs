@@ -6,16 +6,23 @@ namespace VortexArena.App
 {
     /// <summary>
     /// Yerel oyuncunun poz kaynağı (Lobby + arena sahnelerine konur): BB rig
-    /// anchor'larını bulur, kalibrasyon kapısını bekler ve kendini UdpStateChannel'a
-    /// IPoseSource olarak kaydeder. Dünya→arena dönüşümü BURADA yapılır (ArenaSpace);
-    /// Net katmanı yalnız hazır arena-uzayı pozları alır. Admin rolü poz göndermez.
+    /// anchor'larını bulur ve kendini UdpStateChannel'a IPoseSource olarak kaydeder.
+    /// Dünya→arena dönüşümü BURADA yapılır (ArenaSpace); Net katmanı yalnız hazır
+    /// arena-uzayı pozları alır. Admin rolü poz göndermez.
+    /// <para>
+    /// <b>Kalibrasyon kapısı YOKTUR:</b> kayıt anchor'lar bulunur bulunmaz yapılır,
+    /// hizalama beklenmez. Kalibrasyondan önceki pozlar arena ile ÖRTÜŞMEZ (rig henüz
+    /// hizalanmadığı için ofsetlidir) ama gönderilir — oyuncunun bağlı ve hareket
+    /// hâlinde olduğu ağdan görülebilsin diye. Kalibrasyon bitince rig hizalanır ve
+    /// aynı kaynak kendiliğinden doğru uzayda poz vermeye başlar; yeniden kaydolmak
+    /// gerekmez.
+    /// </para>
     /// </summary>
     public class PlayerPoseTracker : MonoBehaviour, IPoseSource
     {
         private Transform _head;
         private Transform _handL;
         private Transform _handR;
-        private bool _calibrationSubscribed;
 
         private void Start()
         {
@@ -37,40 +44,14 @@ namespace VortexArena.App
             _handL = rig.leftHandAnchor;
             _handR = rig.rightHandAnchor;
 
-            // Kalibrasyon kapısı: kalibratör yoksa (Lobby — origin yok, dünya=arena)
-            // hemen kaydol; varsa hizalama tamamlanana dek bekle.
-            ArenaCalibrator calibrator = FindFirstObjectByType<ArenaCalibrator>();
-            if (calibrator == null || calibrator.IsCalibrated)
-            {
-                RegisterPoseSource();
-                return;
-            }
-
-            ArenaCalibrator.Calibrated += HandleCalibrated;
-            _calibrationSubscribed = true;
+            // Kalibrasyon beklenmez: kaynak burada kaydolur, hizalama sonradan gelince
+            // aynı kaynağın verdiği pozlar kendiliğinden doğru uzaya oturur.
+            ArenaClient.Instance?.UdpChannel?.SetPoseSource(this);
         }
 
         private void OnDestroy()
         {
-            if (_calibrationSubscribed)
-            {
-                ArenaCalibrator.Calibrated -= HandleCalibrated;
-                _calibrationSubscribed = false;
-            }
-
             ArenaClient.Instance?.UdpChannel?.ClearPoseSource(this);
-        }
-
-        private void HandleCalibrated()
-        {
-            ArenaCalibrator.Calibrated -= HandleCalibrated;
-            _calibrationSubscribed = false;
-            RegisterPoseSource();
-        }
-
-        private void RegisterPoseSource()
-        {
-            ArenaClient.Instance?.UdpChannel?.SetPoseSource(this);
         }
 
         /// <summary>Anchor'ların dünya pozlarını ArenaSpace ile arena uzayına çevirip verir.</summary>

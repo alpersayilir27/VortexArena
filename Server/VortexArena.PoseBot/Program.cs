@@ -187,7 +187,13 @@ internal static class Program
             scenes = BuildScenes
         };
         await bot.SendAsync(hello, ct);
-        Console.WriteLine($"{tag} bağlandı, hello gönderildi.");
+
+        // ⚠️ ZORUNLU: sunucu hello'da kalibrasyonu sıfırlar (§10.6) ve kalibresiz oyuncu ateş
+        // edemez, hasar yemez, canlanamaz. Bu satır olmadan --fight botlarının TÜM hit_report'ları
+        // "kalibresiz" diye reddedilir ve bot vurulamaz — dev penceresindeki bot düğmeleri sessizce
+        // işe yaramaz hâle gelir. Bot'un fiziksel bir başlığı yok, hep hizalı sayılır.
+        await bot.SendAsync(new SetCalibrationMsg { calibrated = true, source = "manual" }, ct);
+        Console.WriteLine($"{tag} bağlandı, hello + set_calibration gönderildi.");
 
         using var udp = new UdpClient(0);
         using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);

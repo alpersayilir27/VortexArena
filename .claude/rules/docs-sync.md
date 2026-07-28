@@ -17,6 +17,19 @@ güncellenir. Doküman ile kod arasında sapma = tuzak; bu projede tek doğruluk
 - **Sıra: doküman → kod.** Ağ davranışı değişecekse ÖNCE `ArenaNet-Protokol.md` güncellenir,
   sonra iki taraf (Unity `_Shared/Net/Protocol` + `Server/`) ona uydurulur. Kod-önce gidilirse
   iki uçlu sapma başlar.
+- ⚠️ **`CLAUDE.md` TALİMAT dosyasıdır, anlatım değil.** Yukarıdaki tabloda ona ayrılan dört satırın
+  dışına çıkma. Somut test: yazacağın cümle *"şunu şöyle yap / şunu yapma"* mı, yoksa
+  *"sistem şöyle çalışıyor"* mu? İkincisi ise yeri `Docs/`'tur ve CLAUDE.md'ye en fazla tek satırlık
+  işaret girer. Sebep: bu dosya **her oturumda bağlama yükleniyor**, yani oradaki her satır kalıcı
+  bir maliyet; ayrıca `Docs/` ile çakışan anlatım ikinci bir doğruluk kaynağı üretir
+  (protokol için bu doğrudan "TEK doğruluk kaynağı" kuralını çiğner).
+- **Sayı ve liste tutma.** "Bugün iki mod var", "tablodaki 6 silah", `dev-targets.json`'un
+  içeriğini satır satır yazmak gibi şeyler kaçınılmaz olarak bayatlar ve kimse fark etmez.
+  Sayılabilir olanı sayma, **nerede olduğunu göster**. Aynı sebeple `§7.29` gibi **numara
+  referansı verme** — araya madde eklenince sessizce yanlış yeri gösterir; bölümü adıyla an.
+- **Olay kaydı doküman değildir.** "Dört denemede de şu hatayı verdi", "şu tarihte yaşandı" gibi
+  anlatılar tutulmaz; tutulacak olan **kuraldır** ("bunu şu yüzden yapma"). Gerekçe bir cümleyi
+  aşıyorsa yeri `Docs/Sistem-Ozeti.md` §7'dir, CLAUDE.md değil.
 - Pahalıya öğrenilen bir tuzak çıktıysa `Docs/Sistem-Ozeti.md` §7 "Tuzaklar" listesine bir madde
   ekle; tekrarlanabilir bir çalışma kuralıysa `.claude/rules/` altına taşı.
 - Salt iç refactor (davranış aynı, dışa açık isim/yol değişmedi) doküman gerektirmez. Ama

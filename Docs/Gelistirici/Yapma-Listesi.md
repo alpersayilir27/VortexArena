@@ -29,6 +29,19 @@ hizalamayı geri yükler, oyuncu fiziksel olarak nerede duruyorsa orada kalır.
 Ön koşul: aynı işletmede oynanan arenaların **zemin işaretleri aynı yerde** olmalı — anchor
 fiziksel dünyada sabittir, sanal işaretler sahneden gelir.
 
+⚠️ Sunucu tarafında da `calibrated` **korunur** (§10.6). Harita değişiminde sıfırlarsan her
+`load_match` tüm oyuncuları savaş dışı bırakır (ateş edemez, hasar yemez, canlanamaz).
+
+### ⛔ Kalibrasyon durumunu istemcide "doğru kabul etme"
+
+"Kalibreli miyim" sorusunun cevabı sahnedeki `ArenaCalibrator`'ın kendi sayacı DEĞİL,
+`CalibrationState.IsCalibrated`'tır (sunucudan, `lobby_state` ile gelir). Operatör admin
+ekranından kalibrasyonu sıfırlayabilir ve o an başlık hâlâ kendini hizalı sanıyor olabilir.
+
+Aynı sebeple: bir oyuncu durumuna savaş kapısı eklerken **o durumu değiştiren tüm yolları ara**.
+Kalibrasyonda bu `revive_request` ile birlikte `REVIVE_GRACE` zorla canlandırmasıydı; yalnız
+birincisini kapatmak kuralı işlevsiz bırakıyordu.
+
 ### ⛔ `ArenaBoundary`'yi devre dışı bırakma
 
 `OnDisable` → arena orijin kaydı silinir → **bütün uzak oyuncular dünya orijinine yığılır**

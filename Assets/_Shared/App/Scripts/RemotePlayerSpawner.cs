@@ -134,7 +134,7 @@ namespace VortexArena.App
 
         // ---------------------------------------------------------------- yardımcı
 
-        /// <summary>Son lobby_state'ten ad/takım bilgisini uygular; bulunamazsa varsayılan.</summary>
+        /// <summary>Son lobby_state'ten ad/takım/kalibrasyon bilgisini uygular; bulunamazsa varsayılan.</summary>
         private void ApplyLobbyInfo(RemoteAvatar avatar)
         {
             if (avatar == null)
@@ -144,6 +144,9 @@ namespace VortexArena.App
 
             string displayName = $"Oyuncu {avatar.PlayerId}";
             string team = "";
+            // Roster'da bulunamayan oyuncu KALİBRELİ sayılır (§10.6): bilinmeyen durumu alarm gibi
+            // göstermek — henüz roster'ı gelmemiş yeni oyuncuyu parlatmak — gürültü üretir.
+            bool calibrated = true;
 
             if (_lastLobbyState != null && _lastLobbyState.players != null)
             {
@@ -161,11 +164,13 @@ namespace VortexArena.App
                     }
 
                     team = info.team ?? "";
+                    calibrated = info.calibrated;
                     break;
                 }
             }
 
             avatar.SetInfo(displayName, team);
+            avatar.SetCalibrated(calibrated);
         }
     }
 }

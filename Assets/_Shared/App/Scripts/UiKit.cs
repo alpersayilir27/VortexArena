@@ -192,6 +192,14 @@ namespace VortexArena.App
             // NoWrap + Ellipsis: uzun etiket düğmeyi bozmaz. (`enableWordWrapping` obsolete.)
             labelText.textWrappingMode = TextWrappingModes.NoWrap;
             labelText.overflowMode = TextOverflowModes.Ellipsis;
+            // Emniyet ağı: sığmayan etiket kırpılmak (KIRMIZ…) yerine ÖNCE küçülür. Yalnız aşağı
+            // ölçekler (max = istenen punto), yani sığan etiket hiç etkilenmez ve tasarım bozulmaz.
+            // Neden var: düğme genişlikleri sabit anchor'la veriliyor (Layout Group yok) ve etiket
+            // uzunluğu dile/duruma göre değişiyor — "kaç px sığar" hesabını her çağrı yerinde elle
+            // yapmak hataya açık. Sınır %70: altına inince okunaksızlaşır, orada ellipsis yeğdir.
+            labelText.enableAutoSizing = true;
+            labelText.fontSizeMax = fontSize;
+            labelText.fontSizeMin = Mathf.Max(8f, fontSize * 0.7f);
 
             var button = image.gameObject.AddComponent<UiButton>();
             button.targetGraphic = image;

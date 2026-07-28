@@ -124,6 +124,10 @@ public sealed class PlayerRegistry : IDisposable
             state.Scene = hello.currentScene ?? "";
             state.Scenes = hello.scenes != null ? new List<string>(hello.scenes) : new List<string>();
             state.Ready = false;
+            // §10.6: sunucu yeniden bağlanan başlığın hizalamasını bilemez (uygulama yeniden
+            // başlamış olabilir). Başlık kayıtlı anchor'dan geri yükleyince yeniden bildirir.
+            state.Calibrated = false;
+            state.CalibrationSource = "";
             state.Online = true;
             state.LastSeen = DateTime.UtcNow;
             state.Connection = connection;
@@ -190,6 +194,43 @@ public sealed class PlayerRegistry : IDisposable
         lock (_gate) state.Team = team;
         Changed?.Invoke(state, PlayerChangeKind.Updated);
         return true;
+    }
+
+    /// <summary>Kalibrasyon durumunu yazar (§10.6). Changed → lobby_state yayını; ayrı bir
+    /// calibration mesajı YOKTUR, durum roster ile taşınır (§5.3).
+    /// <para>Admin kalibre olmaz: <c>role != "player"</c> sessizce reddedilir, aksi hâlde admin
+    /// arayüzünde kendisi "kalibresiz" diye sayılırdı.</para></summary>
+    public bool SetCalibration(int playerId, bool calibrated, string? source)
+    {
+        if (!TryGetByPlayerId(playerId, out var state)) return false;
+        if (state.Role != "player") return false;
+
+        var nextSource = calibrated ? source ?? "" : "";
+        lock (_gate)
+        {
+            // Değişmediyse yayın YAPMA. Harita değişiminde her başlık kayıtlı anchor'dan geri
+            // yükleyip aynı değeri yeniden bildirir; guard olmasa N oyuncu × N alıcı = N² gereksiz
+            // lobby_state giderdi (16 oyuncuda 256 mesaj).
+            if (state.Calibrated == calibrated && state.CalibrationSource == nextSource) return false;
+            state.Calibrated = calibrated;
+            state.CalibrationSource = nextSource;
+        }
+        Changed?.Invoke(state, PlayerChangeKind.Updated);
+        return true;
+    }
+
+    /// <summary>Tüm oyuncuların kalibrasyonunu sıfırlar (clear_calibration playerId:0).
+    /// Dönüş: etkilenen oyuncu sayısı. Zaten kalibresiz olan atlanır — gereksiz lobby_state
+    /// yayını üretmesin.</summary>
+    public int ClearAllCalibration()
+    {
+        var affected = 0;
+        foreach (var state in Snapshot())
+        {
+            if (state.Role != "player" || !state.Calibrated) continue;
+            if (SetCalibration(state.PlayerId, false, null)) affected++;
+        }
+        return affected;
     }
 
     /// <summary>0x00 UdpHello doğrulaması: playerId↔udpToken eşleşirse endpoint kaydedilir (§6.1).

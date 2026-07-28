@@ -246,6 +246,7 @@ namespace VortexArena.App.Admin
             _redHeader = UiKit.Text(_redColumn, "Header", 22f, UiKit.TeamRed, FontStyles.Bold,
                 TextAlignmentOptions.TopLeft);
             UiKit.Block(_redHeader.rectTransform, 4f, 0f, 4f, HeaderHeight);
+            FitHeader(_redHeader);
 
             _redOverflow = UiKit.Text(_redColumn, "Overflow", 18f, UiKit.Faint, FontStyles.Normal,
                 TextAlignmentOptions.TopLeft);
@@ -257,9 +258,28 @@ namespace VortexArena.App.Admin
             _blueHeader = UiKit.Text(_blueColumn, "Header", 22f, UiKit.TeamBlue, FontStyles.Bold,
                 TextAlignmentOptions.TopRight);
             UiKit.Block(_blueHeader.rectTransform, 4f, 0f, 4f, HeaderHeight);
+            FitHeader(_blueHeader);
 
             _blueOverflow = UiKit.Text(_blueColumn, "Overflow", 18f, UiKit.Faint, FontStyles.Normal,
                 TextAlignmentOptions.TopRight);
+        }
+
+        /// <summary>
+        /// Kolon başlığı tek satırda kalsın: "KIRMIZI (3)" kısa, ama sonuna kalibrasyon sayacı
+        /// eklenince ("· 2 KALİBRESİZ") satır uzuyor. Sarmaya izin verilse ikinci satır
+        /// <see cref="HeaderHeight"/> kutusunun dışında kalıp kırpılırdı; onun yerine punto
+        /// küçülür, o da yetmezse kırpılır.
+        /// </summary>
+        private static void FitHeader(TextMeshProUGUI header)
+        {
+            // ⚠️ Tavan punto autosize AÇILMADAN ÖNCE okunur: açıldıktan sonra `fontSize` artık
+            // istenen değil TMP'nin HESAPLADIĞI puntodur, oradan okumak tavanı kaydırır.
+            float requested = header.fontSize;
+            header.textWrappingMode = TextWrappingModes.NoWrap;
+            header.overflowMode = TextOverflowModes.Ellipsis;
+            header.enableAutoSizing = true;
+            header.fontSizeMax = requested;
+            header.fontSizeMin = Mathf.Max(8f, requested * 0.7f);
         }
 
         private void BuildBottomBar(RectTransform parent)
@@ -527,7 +547,7 @@ namespace VortexArena.App.Admin
         {
             if (roster.IsFfa)
             {
-                _redHeader.text = $"OYUNCULAR ({roster.Players.Count})";
+                _redHeader.text = $"OYUNCULAR ({roster.Players.Count}){CalibrationSuffix(roster.Players)}";
                 _redHeader.color = UiKit.Title;
                 BindColumn(_redRows, _redColumn, _redOverflow, roster.Players, false);
 
@@ -537,11 +557,35 @@ namespace VortexArena.App.Admin
             }
 
             _redHeader.color = UiKit.TeamRed;
-            _redHeader.text = $"KIRMIZI ({roster.Red.Count})";
+            _redHeader.text = $"KIRMIZI ({roster.Red.Count}){CalibrationSuffix(roster.Red)}";
             BindColumn(_redRows, _redColumn, _redOverflow, roster.Red, false);
 
-            _blueHeader.text = $"MAVİ ({roster.Blue.Count})";
+            _blueHeader.text = $"MAVİ ({roster.Blue.Count}){CalibrationSuffix(roster.Blue)}";
             BindColumn(_blueRows, _blueColumn, _blueOverflow, roster.Blue, true);
+        }
+
+        /// <summary>
+        /// Kolon başlığına "· N KALİBRESİZ" ekler (§10.6) — operatör tercihler panelini açmadan,
+        /// hangi kolona bakması gerektiğini görsün. Kimse kalibresiz değilse hiçbir şey eklenmez:
+        /// sürekli duran bir "0 kalibresiz" yazısı gürültüdür.
+        /// </summary>
+        private static string CalibrationSuffix(IReadOnlyList<AdminPlayerView> players)
+        {
+            if (players == null)
+            {
+                return "";
+            }
+
+            int count = 0;
+            for (int i = 0; i < players.Count; i++)
+            {
+                if (players[i] != null && players[i].NeedsCalibration)
+                {
+                    count++;
+                }
+            }
+
+            return count > 0 ? $"  ·  {count} KALİBRESİZ" : "";
         }
 
         private void BindColumn(List<AdminPlayerRow> rows, RectTransform column,
