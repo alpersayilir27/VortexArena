@@ -53,8 +53,11 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `Net/Protocol` (VortexArena.Protocol — saf C#, server aynı dosyaları derler), `Net/Scripts`
   (VortexArena.Net), `App/Scripts` (VortexArena.App — `Admin/` alt klasörü aynı asmdef'te:
   admin gözlemci; `UiKit.cs` prosedürel arayüz kiti). Kod-dışı: `Arsenal/` (silah prefab+SO),
-  `FX/`, `Environments/`, `Data/` (**`Data/Resources/GameCatalog.asset`** — prosedürel admin
-  arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ), `Scenes/` (Boot, Lobby).
+  `FX/`, `Environments/`, `Avatars/` (**`PlayerBodyAvatar.prefab`** — Mixamo Ch15 + Movement SDK
+  CharacterRetargeter'lı yerel gövde avatarı; retarget config JSON'u FBX'in yanında,
+  `ThirdPartyPackages/MixamoCharacters/`), `Data/` (**`Data/Resources/GameCatalog.asset`** —
+  prosedürel admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ),
+  `Scenes/` (Boot, Lobby).
   ⚠️ Ayrı bir admin dashboard sahnesi YOKTUR (`AdminConsole.unity` kaldırıldı) — admin
   oyuncularla aynı sahnede duran bir gözlemcidir.
   ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).

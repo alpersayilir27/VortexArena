@@ -21,6 +21,9 @@ namespace VortexArena.Core.Player
         {
             if (headBone == null)
             {
+                // Önce tam ad ("Head"), yoksa sonek eşleşmesi ("mixamorig:Head" gibi).
+                // "HeadTop_End" benzeri kemikler "End" ile bittiği için sonek araması güvenli.
+                Transform suffixMatch = null;
                 foreach (Transform t in GetComponentsInChildren<Transform>(true))
                 {
                     if (t.name == "Head")
@@ -28,6 +31,16 @@ namespace VortexArena.Core.Player
                         headBone = t;
                         break;
                     }
+
+                    if (suffixMatch == null && t.name.EndsWith("Head", System.StringComparison.Ordinal))
+                    {
+                        suffixMatch = t;
+                    }
+                }
+
+                if (headBone == null)
+                {
+                    headBone = suffixMatch;
                 }
             }
 

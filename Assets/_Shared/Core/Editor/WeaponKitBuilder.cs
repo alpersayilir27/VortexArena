@@ -26,7 +26,7 @@ namespace VortexArena.Core.Editor
     /// <para>
     /// <b>Tip çözümü:</b> Bu asmdef yalnız VortexArena.Core'u referanslar. Weapon /
     /// WeaponAudio / WeaponDefinition derleme zamanında bağlanır (Core/Combat'ta yaşıyorlar);
-    /// WeaponAnimator, WeaponReloadGesture, WeaponAmmoDisplay, WeaponCatalog,
+    /// WeaponAnimator, WeaponReloadGesture, WeaponCatalog,
     /// TMPro.TextMeshPro, Oculus Grabbable ve MetaXRAudioSource ise TİP ADIYLA çalışma
     /// zamanında bulunur — tip/alan bulunamazsa uyarı basılır ve devam edilir
     /// (sözleşme kayması teşhisi için).
@@ -426,10 +426,10 @@ namespace VortexArena.Core.Editor
 
             Component animator = EnsureComponentByTypeName(inst, "WeaponAnimator", ctx);
             Component reloadGesture = EnsureComponentByTypeName(inst, "WeaponReloadGesture", ctx);
-            Component ammoDisplay = EnsureComponentByTypeName(inst, "WeaponAmmoDisplay", ctx);
 
-            // AmmoDisplay child + world-space TMP etiketi.
-            Component ammoLabel = EnsureAmmoDisplayChild(rootT, bounds, ctx);
+            // Cephane göstergesi artık silah üstünde DEĞİL (AmmoHud, ekran-köşesi paneli) —
+            // eski kurulumdan kalan AmmoDisplay child'ı/bileşeni varsa temizle.
+            RemoveLegacyAmmoDisplay(inst);
 
             // ---- Referans bağları (alan adları sözleşmeden BİREBİR).
             Component grabbable = FindComponentByTypeFullName(inst, "Oculus.Interaction.Grabbable");
@@ -473,7 +473,6 @@ namespace VortexArena.Core.Editor
 
             BindFields(animator, ctx, ("weapon", weapon), ("weaponAudio", weaponAudio), ("modelRoot", modelT));
             BindFields(reloadGesture, ctx, ("weapon", weapon));
-            BindFields(ammoDisplay, ctx, ("weapon", weapon), ("label", ammoLabel));
 
             // NOT: eski Weapon alan kalıntıları (team, damage vs.) yeni script'te alan olmadığı
             // için kayıt sırasında kendiliğinden düşer — ek işlem gerekmez.
@@ -539,53 +538,27 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>AmmoDisplay child'ını (yoksa) yaratır, TMP etiketini döner (tip adıyla — TMPro'ya derleme referansı yok).</summary>
-        private static Component EnsureAmmoDisplayChild(Transform rootT, Bounds bounds, string ctx)
+        /// <summary>
+        /// Eski kurulumdan kalan silah-üstü göstergesini söker: "AmmoDisplay" child'ı ve
+        /// (varsa) WeaponAmmoDisplay bileşeni. Gösterge artık AmmoHud'dadır (ekran köşesi).
+        /// </summary>
+        private static void RemoveLegacyAmmoDisplay(GameObject inst)
         {
-            Transform ammoT = rootT.Find("AmmoDisplay");
+            Transform ammoT = inst.transform.Find("AmmoDisplay");
             if (ammoT != null)
             {
-                Component existingLabel = FindTmpText(ammoT.gameObject);
-                if (existingLabel == null)
-                {
-                    Warn(ctx + ": mevcut AmmoDisplay üzerinde TMP metni yok.");
-                }
-
-                return existingLabel;
+                UnityEngine.Object.DestroyImmediate(ammoT.gameObject);
             }
 
-            var go = new GameObject("AmmoDisplay");
-            go.transform.SetParent(rootT, false);
-
-            Component tmp = null;
-            Type tmpType = ResolveType("TMPro.TextMeshPro");
-            if (tmpType == null || !typeof(Component).IsAssignableFrom(tmpType))
+            Type displayType = ResolveType("VortexArena.Core.Combat.WeaponAmmoDisplay");
+            if (displayType != null && typeof(Component).IsAssignableFrom(displayType))
             {
-                Warn(ctx + ": TMPro.TextMeshPro tipi bulunamadı — AmmoDisplay metinsiz kaldı.");
-            }
-            else
-            {
-                // Dikkat: TMP eklenince Transform, RectTransform ile DEĞİŞİR — TRS ayarı sonradan yapılır.
-                tmp = go.AddComponent(tmpType);
-                SetReflectedProperty(tmp, "text", "30 ||", ctx); // '▮' LiberationSans SDF'te yok (TMP uyarısı)
-                SetReflectedProperty(tmp, "fontSize", 0.9f, ctx);
-                SetReflectedEnumProperty(tmp, "alignment", "Center", ctx);
-                SetReflectedProperty(tmp, "color", Color.white, ctx);
-
-                var rt = go.GetComponent<RectTransform>();
-                if (rt != null)
+                var legacy = inst.GetComponent(displayType);
+                if (legacy != null)
                 {
-                    rt.sizeDelta = new Vector2(0.4f, 0.12f);
+                    UnityEngine.Object.DestroyImmediate(legacy);
                 }
             }
-
-            // Atıcı silahın arkasından (-Z tarafından) bakar; TMP'nin okunur yüzü yaw 0'da
-            // -Z tarafına düşer (yaw 180 ekran testinde aynalı çıktı), hafif yukarı eğik (X 25).
-            Transform t = go.transform;
-            t.localPosition = new Vector3(0f, bounds.max.y + 0.03f, bounds.center.z - 0.04f);
-            t.localEulerAngles = new Vector3(25f, 0f, 0f);
-
-            return tmp;
         }
 
         // ------------------------------------------------ ADIM 3: FX_RemoteShot
@@ -995,29 +968,6 @@ namespace VortexArena.Core.Editor
                 if (comps[i] != null && comps[i].GetType().FullName == fullName)
                 {
                     return comps[i];
-                }
-            }
-
-            return null;
-        }
-
-        /// <summary>GO üzerinde TMP metin bileşeni arar (TextMeshPro ya da TMP_Text türevi — tip adıyla).</summary>
-        private static Component FindTmpText(GameObject go)
-        {
-            Component[] comps = go.GetComponents<Component>();
-            for (int i = 0; i < comps.Length; i++)
-            {
-                if (comps[i] == null)
-                {
-                    continue;
-                }
-
-                for (Type t = comps[i].GetType(); t != null; t = t.BaseType)
-                {
-                    if (t.Name == "TMP_Text" || t.FullName == "TMPro.TextMeshPro")
-                    {
-                        return comps[i];
-                    }
                 }
             }
 
