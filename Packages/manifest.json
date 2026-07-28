@@ -5,6 +5,7 @@
     "com.meta.xr.sdk.core": "203.0.0",
     "com.meta.xr.sdk.interaction": "203.0.0",
     "com.meta.xr.sdk.interaction.ovr": "203.0.0",
+    "com.meta.xr.sdk.movement": "https://github.com/oculus-samples/Unity-Movement.git",
     "com.unity.ai.assistant": "2.9.0-pre.2",
     "com.unity.ai.inference": "2.6.1",
     "com.unity.ai.navigation": "2.0.13",

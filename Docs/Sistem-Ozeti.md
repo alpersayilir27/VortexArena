@@ -200,7 +200,8 @@ UdpStateChannel ──0x01 PoseUpdate (92 B)──► StateHost ──0x02 Snaps
 ```
 Weapon.Fire() / balta savurma / ok isabeti / bomba patlaması
    │
-   ├─ shot_fired  → sunucu DOĞRULAMAZ, sadece relay eder (uzak namlu alevi/sesi)
+   ├─ shot_fired  → sunucu DOĞRULAMAZ, sadece relay eder; istemcide `RemoteShotFx`
+   │                tüketir (uzak namlu alevi + konumsal atış sesi, weaponId profiliyle)
    └─ hit_report  → sunucu 5 tutarlılık kontrolü yapar:
         faz Live? · atıcı canlı? · hedef canlı? (çift ölüm olmasın) ·
         hedef başkası + takım arkadaşı DEĞİL mi? · damage sonlu ve pozitif mi?
@@ -214,9 +215,10 @@ hile koruması bilinçli olarak eklenmez; v1'deki denetimler meşru saçma/patla
 düşürdüğü için kaldırıldı. Yukarıdaki beş kontrol hile denetimi değil **durum tutarlılığı**dır.
 
 Pratik sonucu: **yeni bir hasar kaynağı eklemek sıfır sunucu işidir.** Bomba = etkilenen her hedef
-için bir `hit_report` (mesafeye göre düşen hasarı istemci hesaplar); yay çekiş gücü, kafa vuruşu
-çarpanı, düşme/tuzak hasarı da aynı şekilde `damage` alanına yazılır. `weaponId` yalnız kill feed
-etiketidir, doğrulanmaz.
+için bir `hit_report` (mesafeye göre düşen hasarı istemci hesaplar); yay çekiş gücü, düşme/tuzak
+hasarı da aynı şekilde `damage` alanına yazılır. **Kafa vuruşu çarpanı bugün uygulanır:** `Weapon`,
+isabet `RemoteHitBox.IsHead` ise hasarı `WeaponDefinition.headshotMultiplier` (vars. 4×) ile çarpıp
+öyle bildirir. `weaponId` yalnız kill feed etiketidir, doğrulanmaz.
 
 ⚠️ **Dost ateşi kapısı tek bir yardımcıdan geçer** (`MatchDirector.AreTeammates`) ve **boş takım
 asla takım arkadaşı sayılmaz**: takımsız modda herkesin takımı `""` olduğu için düz
@@ -388,8 +390,29 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 `ArenaSpace` (dünya↔arena dönüşümü), `BaseZone` (taban bölgesi — canlanma kapısı), `SpawnPoint`
 (takım + slot marker'ı; takımsız modlar için `FindGlobal(slot)` tek havuz araması),
 `MapDefinition` / `ModeDefinition` / `GameCatalog` (içerik SO'ları),
-`Weapon` + `WeaponDefinition` + `WeaponAudio` (+ `WeaponGranter`, aşağıdaki tabloda),
-`Health` (sunucudan set edilir), `PlayerCombatState`
+`Weapon` (ISDK ile tutulan hitscan tüfek; tetik **silahı tutan elin** kumandasından okunur — çift
+silahta tetikler bağımsız; şarjör+yedek şarjör durumu taşır, boş şarjörde **otomatik reload YOK**
+(kuru tetik sesi), reload **bel-altı jestiyle** başlar; `reserveMode=DiscardMagazine`'de erken
+reload'da şarjörde kalan mermi **yanar** (ürün kuralı; `PoolRounds` = CS2 havuzu SO'dan seçilebilir);
+spread atış sürdükçe açılır (bloom) ve boşta toparlar; yerel canlanmada tutulan silah tam dolar;
+vuruş/atış bildirimi `ArenaCombat` üzerinden gider — protokol DTO'su bu sınıfta YOK. **İkinci tutuş
+yolu:** `WeaponGranter` silahı doğrudan ele verir (`GrantTo` — §3.9 `weaponSource:"random"`); verilen
+silah tanım gereği tutuluyordur, her zaman tek ellidir, rezervi yoktur ve reload'u KAPALIDIR) +
+`WeaponDefinition` (SO — hasar/HS çarpanı/RPM/şarjör/reload/spread/recoil/ses profili + verilen
+silahın el duruşu `grantedHold*`; **tek denge kaynağı**, sunucuya export edilmez) + `WeaponAudio` (Meta XR spatializer'lı namlu AudioSource:
+ateş/şarjör çıkar-tak/kuru tetik/alma) + `WeaponAnimator` (Animator'sız kod-güdümlü parça
+animasyonu: atışta bolt tepmesi, reload'da `*_Mag` child'ı çıkar-takılır; şarjör seslerini de bu
+zaman çizgisi çalar — görüntü/ses tek kaynaktan) + `WeaponReloadGesture` (silah bel hizasının
+altına inince `TryStartReload`; bel çizgisi = kafa − `waistDropMeters` (0.62 m vars.) — ORAN DEĞİL:
+fark matematiği zemin/kalibrasyon ofsetlerinden etkilenmez; kavradıktan sonra bir kez bel üstüne
+çıkmadan devreye girmez — yerden alırken yanlış tetiklemeyi önler) + `WeaponCatalog` (SO, `_Shared/Data/Resources/` — `weaponId`→tanım araması;
+`Resources.Load` ile okunduğu için klasöründen çıkarılmaz) + `RemoteShotFx` (kendini önyükler,
+sahne kurulumu istemez; `shot_fired`'ı tüketip uzak oyuncunun namlu alevi + konumsal atış sesini
+havuzlu çalar) + `AmmoHud` (`Core/UI` — kendini önyükler; tutulan silah(lar)ın adı/mermisi/yedek
+şarjörleri görüş alanının sağ altına düşen `HudFollow`'lu tembel-takip panelinde; silah
+tutulmuyorken gizli, yalnız `Weapon.Active`/`ActiveChanged` + silah olaylarıyla yenilenir —
+silah-üstü eski `WeaponAmmoDisplay` KALDIRILDI) + `ArenaCombat` / `WeaponGranter` (aşağıdaki
+tabloda), `Health` (sunucudan set edilir), `PlayerCombatState`
 (yerel oyuncunun takım/can/ateş yetkisi/canlanma akışı), `RemoteAvatar` + `RemoteHitBox`
 (uzak oyuncu gövdesi ve isabet kutusu),
 `ProximityWarning` (`Core/Player` — free-roam çarpışma önleme: `RemotePlayerRegistry` pozlarını
@@ -398,6 +421,12 @@ halka (`VortexArena/ProximityHalo`, ZTest Always), 0.8 m'de tehlikenin geldiği 
 kumandada haptik. Ölü oyuncular ELENMEZ — respawn durum değişimi olduğu için ölünün bedeni sahada
 durmaya devam eder, çarpışma riski aynıdır. **Henüz hiçbir sahnede bağlı değil**: bileşen elle
 eklenir, `head` ve `haloMaterial` (`_Shared/FX/M_ProximityHalo`) alanları Inspector'dan verilir),
+`LocalAvatarHeadHider` (`Core/Player` — birinci şahıs gövde avatarında (Movement SDK retarget
+karakteri) kafa kemiğini her kare sıfıra yakın ölçekleyip gizler: kamera kafanın tam içinde
+durduğu için mesh'in içi görünmesin; yüksek execution order ile retargeter'dan SONRA yazar;
+kemik araması "Head" tam adı → ":Head" soneki (Mixamo). Şu an IceWorld'deki
+`_Shared/Avatars/PlayerBodyAvatar.prefab`'a (Mixamo Ch15 + CharacterRetargeter FullBody) bağlı —
+gövde takibi ürünleşirse rig kalıbına taşınacak),
 `WeatherVolumeFollow` (`Core/FX` — ambiyans parçacık hacmini yerel kameranın üstünde tutar; bağlı
 sistemler **World** simülasyon uzayında olmalı, `Start` sapmayı uyarır. Yalnız kendi transform'unu
 taşır, rig'e dokunmaz), `WeatherWindDriver` (`Core/FX` — kök objeye takılır, altındaki tüm
@@ -623,7 +652,7 @@ doğrudan dashboard'a düşer. Ayrıntı: `deploy/README.md`.
 | İstek | Yol |
 |---|---|
 | **Yeni arena** | `Tools > VortexArena > Create Arena From Template` → arenaId, sahne adı, boyut, slot, hedef (Standard/Venue). Sihirbaz klasörleri + sahne kopyasını üretir, duvar/zemin/taban/spawn'ları ölçekler, `MapDefinition` yazar, `GameCatalog` + uyumlu `ModeDefinition` + Build Settings'e ekler. Sanat rötuşu elde. **Sonra `Export Server Config`.** |
-| **Yeni silah** | Prefab `_Shared/Arsenal/Prefabs/` + `WeaponDefinition` SO `_Shared/Arsenal/Data/` (weaponId iki tarafta aynı string) → gerekiyorsa `ModeDefinition.loadout` → **`Export Server Config`** |
+| **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack prefabı) → `Tools > VortexArena > Build Weapon Prefabs` → `WD_*.asset` + `WPN_*.prefab` üretir, `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). Şablon (eski AK47_Red) silindi: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
 | **Elle modellenmiş sahneyi arenaya çevirmek** | Aşağıdaki 6 adım (IceWorld böyle bağlandı) |
 

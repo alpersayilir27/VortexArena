@@ -60,8 +60,11 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `Net/Protocol` (VortexArena.Protocol — saf C#, server aynı dosyaları derler), `Net/Scripts`
   (VortexArena.Net), `App/Scripts` (VortexArena.App — `Admin/` alt klasörü aynı asmdef'te:
   admin gözlemci; `UiKit.cs` prosedürel arayüz kiti). Kod-dışı: `Arsenal/` (silah prefab+SO),
-  `FX/`, `Environments/`, `Data/` (**`Data/Resources/GameCatalog.asset`** — prosedürel admin
-  arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ), `Scenes/` (Boot, Lobby).
+  `FX/`, `Environments/`, `Avatars/` (**`PlayerBodyAvatar.prefab`** — Mixamo Ch15 + Movement SDK
+  CharacterRetargeter'lı yerel gövde avatarı; retarget config JSON'u FBX'in yanında,
+  `ThirdPartyPackages/MixamoCharacters/`), `Data/` (**`Data/Resources/GameCatalog.asset`** —
+  prosedürel admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ),
+  `Scenes/` (Boot, Lobby).
   ⚠️ Ayrı bir admin dashboard sahnesi YOKTUR (`AdminConsole.unity` kaldırıldı) — admin
   oyuncularla aynı sahnede duran bir gözlemcidir.
   ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
@@ -83,7 +86,10 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `FreeForAll` (`ffa` — takımsız "Herkes Tek"). Ortak HUD/silah kodu mod kutusunda DEĞİL Core'da
   durur (`ModeHudBase`, `WeaponGranter`) — modlar birbirini göremediği için ikinci mod aksi hâlde
   aynı kodu baştan yazardı.
-- Üçüncü parti: `Assets/ThirdPartyPackages/`.
+- Üçüncü parti: `Assets/ThirdPartyPackages/`. ⚠️ İstisna: `Assets/Low Poly AR Weapon Pack 1/`
+  kökte duruyor (editör açıkken taşıma OS dosya kilidine takılıyor — dört denemede de
+  "Moving file failed"). Editör KAPALIYKEN `git mv` ile taşınabilir; sonrasında
+  `WeaponKitBuilder.PackRoot` sabitini güncelle (tek satır).
 
 **Assembly grafiği** (bağımlılık hep aşağı):
 Protocol (saf C#, noEngineReferences) ← Net ← Core ← App, Modes.<X>
@@ -200,12 +206,20 @@ basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki duru�
 `WeaponDefinition.grantedHoldPosition/Euler`'dan gelir — VR'da ince ayar buradan yapılır.
 ⚠️ Sahneye bileşen KOYMA: tekil olmasının sebebi her yeni arenaya elle bir kurulum adımı
 eklememektir.
-**Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): prefab
-`_Shared/Arsenal/Prefabs/` + WeaponDefinition SO `_Shared/Arsenal/Data/` + gerekiyorsa
-`ModeDefinition.loadout`. **Sunucu tarafında iş YOKTUR** ve export gerekmez — sunucuda silah
-tablosu yok, hasarı istemci hesaplayıp `hit_report.damage` ile bildirir, sunucu aynen uygular
-(§10.3); `weaponId` yalnız kill feed etiketi, doğrulanmaz. Denge sayıları istemcide yaşadığı için
-değişiklik APK build'i ister.
+**Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfekler
+`Tools > VortexArena > Build Weapon Prefabs` ile üretilir — `WeaponKitBuilder` tablosuna satır
+ekle (CS2 istatistikleri + ses profili + "Low Poly AR Weapon Pack 1" prefabı), araç
+`_Shared/Arsenal/Data/WD_*.asset` + `_Shared/Arsenal/Prefabs/WPN_*.prefab` üretip
+**`_Shared/Data/Resources/WeaponCatalog.asset`**'i tazeler (RemoteShotFx `weaponId`→profil
+aramasını `Resources.Load` ile yapar — GameCatalog gibi klasöründen ÇIKARILMAZ). Gerekiyorsa
+`ModeDefinition.loadout` + sahneye yerleştirme elle. **Sunucu tarafında iş YOKTUR** ve export
+gerekmez — sunucuda silah tablosu yok, hasarı (headshot çarpanı dahil) istemci hesaplayıp
+`hit_report.damage` ile bildirir, sunucu aynen uygular (§10.3); `weaponId` yalnız kill feed
+etiketi, doğrulanmaz. Alan etkisi için etkilenen her hedefe bir `hit_report` yollanır. Denge
+sayıları istemcide (WeaponDefinition SO) yaşadığı için değişiklik APK build'i ister.
+Şarjör kuralı: boş şarjörde otomatik reload YOK; reload silahı **bel altına indirme jestiyle**
+başlar; `reserveMode=DiscardMagazine` (varsayılan) erken reload'da şarjörde kalan mermiyi YAKAR
+(`PoolRounds` = CS2 havuz alternatifi SO'dan seçilir). Verilen silahta (`random`) reload kapalıdır.
 ⚠️ **Ağa bildirim TEK kapıdan yapılır: `ArenaCombat`** (`_Shared/Core/Combat/`, statik) —
 `ReportShot` · `ReportHit` · `ReportRaycastHit` · `ReportAreaHit` (alan etkisi = hedef başına bir
 `hit_report`) + `TryGetTargetPlayerId` · `IsHeadshot` · `CanFire`. Protokol DTO'su kurma, arena
@@ -225,7 +239,10 @@ shape scale'lerini arena boyutu + ~3 m payla ölçekle — geniş kutu bütçeyi
 — yalnız Editor):
 `Tools > VortexArena > Export Server Config` (MapDefinition SO'larından `Server/config/maps.json`;
 deterministik, LF, BOM'suz — **JSON'u elle düzenleme, export ezer**. Silah için gerekmez —
-sunucuda silah tablosu yok), `… > Create Arena From
+sunucuda silah tablosu yok), **`… > Build Weapon Prefabs`** (`WeaponKitBuilder`: tablodaki 6 silah
+için WD_*.asset + WPN_*.prefab + FX_RemoteShot + WeaponCatalog üretir/günceller; idempotent,
+dialog açmaz; *…(Yalnız Kataloğu Tazele)* varyantı yalnız katalog+prefab bağlarını yeniler),
+`… > Create Arena From
 Template`, **`… > Dev`** (`_Shared/App/Scripts/Editor/`: rol · hedef · Play başlangıcı (Boot'tan /
 açık sahneden) · sentetik maç parametreleri (mod, takım, spawn slot, raund sn, skor limiti) + test
 botu düğmeleri: N Bot · N Bot + Admin · Botları Durdur · Sahipsiz botları temizle ·
