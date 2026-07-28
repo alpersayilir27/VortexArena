@@ -20,8 +20,9 @@ rem
 rem  NOT: betik-ici degiskenler VA_ onekli (scripts\README.md).
 rem =====================================================================
 
-set "VA_REPO=%~dp0.."
-set "VA_SITE=%~dp0..\..\vortexarena-docs-site"
+rem  %%~fi = yolu normalize eder ("...\scripts\.." yerine "D:\games\vortexarena")
+for %%i in ("%~dp0..") do set "VA_REPO=%%~fi"
+for %%i in ("%~dp0..\..\vortexarena-docs-site") do set "VA_SITE=%%~fi"
 set "VA_QUARTZ_URL=https://github.com/jackyzha0/quartz.git"
 
 title VortexArena Docs - Kurulum
@@ -69,7 +70,7 @@ call npm install --no-audit --no-fund
 set "VA_RESULT=%ERRORLEVEL%"
 popd
 if not "%VA_RESULT%"=="0" (
-  echo [HATA] npm install basarisiz (%VA_RESULT%).
+  echo [HATA] npm install basarisiz ^(%VA_RESULT%^).
   pause & exit /b 1
 )
 
@@ -90,7 +91,7 @@ if exist "%VA_SITE%\content\index.md" (
 rem --- 4) config -------------------------------------------------------
 echo [4/4] quartz.config.yaml yaziliyor...
 if exist "%VA_SITE%\quartz.config.yaml" (
-  echo       zaten var - korundu (elle duzenlenmis olabilir).
+  echo       zaten var - korundu ^(elle duzenlenmis olabilir^).
 ) else (
   copy /Y "%VA_SITE%\quartz.config.default.yaml" "%VA_SITE%\quartz.config.yaml" >nul
   powershell -NoProfile -Command ^

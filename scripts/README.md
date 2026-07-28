@@ -92,8 +92,14 @@ powershell -NoProfile -File scripts\lib\watch-unity-build.ps1 -ReplayLog deploy\
   kontrol eder (`HKLM\...\AppModelUnlock\AllowDevelopmentWithoutDevLicense` = `0x1`), böylece
   dakikalarca süren `pub get` + build boşa gitmez.
 
-## Betik yazarken iki tuzak (kanıtlanmış)
+## Betik yazarken üç tuzak (kanıtlanmış)
 
+- **Blok içindeki `echo`'da parantez kaçırılmadan yazılamaz.** `if … ( … )` bloğunun içinde
+  `echo … (%VA_RESULT%).` yazılırsa `)` bloğu erkenden kapatır, geriye kalan `.` ayrı bir komut
+  sanılır → betik `. was unexpected at this time.` deyip **o satıra hiç girilmese bile** ölür
+  (cmd bloğu çalıştırmadan önce tümüyle ayrıştırır). Blok içinde her zaman `^(` / `^)` kullan.
+  Yaşanmış örnek: `docs-setup.bat` npm adımından sonra sessizce sonlanıyor, junction ve
+  `quartz.config.yaml` hiç kurulmuyordu.
 - **`call flutter …` çağıran betiği de öldürür.** `flutter.bat` sonunda
   `… & bin\internal\exit_with_errorlevel.bat` zinciri var; bu zincir `call` ile girilen batch
   bağlamını komple sonlandırıyor → betik hiçbir şey yazmadan ölür, çift tıklanmışsa pencere
