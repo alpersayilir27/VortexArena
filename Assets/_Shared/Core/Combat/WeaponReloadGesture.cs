@@ -1,5 +1,4 @@
 using UnityEngine;
-using VortexArena.Core.Arena;
 
 namespace VortexArena.Core.Combat
 {
@@ -9,10 +8,16 @@ namespace VortexArena.Core.Combat
     /// başlayıp başlamayacağı (dolu şarjör, yedek yok, ölü oyuncu...) tamamen
     /// Weapon.TryStartReload'un kuralıdır — bu bileşen yalnız jesti TANIR.
     /// <para>
-    /// Yükseklikler ARENA UZAYINDA karşılaştırılır (<c>ArenaSpace.WorldToArena(...).y</c>):
-    /// zemin referanslı olduğu için kalibrasyon sonrası dünya origin'i nerede olursa
-    /// olsun doğru kalır. Silah kavrandıktan sonra bir kez bel ÜSTÜNE çıkmadan jest
-    /// kurulmaz (armed) — yerden/kılıftan almada yanlış tetikleme böyle önlenir.
+    /// Bel çizgisi KAFADAN SABİT DÜŞÜŞLE bulunur: <c>waistY = headY − waistDropMeters</c>.
+    /// Karşılaştırma kafa−silah FARKI üzerinden yapıldığı için zemin/kalibrasyon ofsetleri
+    /// (Quest zemin yüksekliği yanlış kurulmuş olsa bile) iki değere aynı biner ve jesti
+    /// ETKİLEMEZ — oran (headY×k) yaklaşımı bu yüzden terk edildi: zemin ofseti oranı
+    /// bozup jesti ayak seviyesine indiriyordu. Arena uzayına çevirmeye de gerek yoktur
+    /// (fark uzay-bağımsızdır); dünya Y'leri doğrudan kullanılır.
+    /// </para>
+    /// <para>
+    /// Silah kavrandıktan sonra bir kez bel ÜSTÜNE çıkmadan jest kurulmaz (armed) —
+    /// yerden/kılıftan almada yanlış tetikleme böyle önlenir.
     /// </para>
     /// </summary>
     public class WeaponReloadGesture : MonoBehaviour
@@ -23,8 +28,8 @@ namespace VortexArena.Core.Combat
         [SerializeField] private Weapon weapon;
         [Tooltip("Baş referansı; boşsa Camera.main kullanılır.")]
         [SerializeField] private Transform head;
-        [Tooltip("Bel yüksekliği = baş yüksekliği × bu oran.")]
-        [SerializeField] private float waistHeightRatio = 0.55f;
+        [Tooltip("Bel çizgisi = kafa yüksekliği − bu değer (metre). Büyüt = bel aşağı iner.")]
+        [SerializeField] private float waistDropMeters = 0.62f;
         [Tooltip("Jest için silahın bel çizgisinin ne kadar ALTINA inmesi gerektiği (metre).")]
         [SerializeField] private float belowOffsetMeters = 0.05f;
         [Tooltip("Jestin yeniden kurulması için bel çizgisinin ne kadar ÜSTÜNE çıkılacağı (metre).")]
@@ -54,14 +59,13 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            float headArenaY = ArenaSpace.WorldToArena(headRef.position).y;
-            float weaponArenaY = ArenaSpace.WorldToArena(transform.position).y;
-            float waistY = headArenaY * waistHeightRatio;
+            float waistY = headRef.position.y - waistDropMeters;
+            float weaponY = transform.position.y;
 
             if (!_armed)
             {
                 // Jest ancak silah bir kez bel üstüne çıktıktan sonra kurulur.
-                if (weaponArenaY > waistY + rearmOffsetMeters)
+                if (weaponY > waistY + rearmOffsetMeters)
                 {
                     _armed = true;
                 }
@@ -69,7 +73,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            if (weaponArenaY < waistY - belowOffsetMeters)
+            if (weaponY < waistY - belowOffsetMeters)
             {
                 _dwell += Time.deltaTime;
                 if (_dwell >= dwellSeconds)

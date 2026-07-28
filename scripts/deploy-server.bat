@@ -7,9 +7,11 @@ rem
 rem  Kendine yeten (self-contained) TEK klasor uretir: isletme PC'sine
 rem  .NET kurmak gerekmez. config\ dosyalari yaninda gider.
 rem
-rem  weapons.json / maps.json Unity'den export edilir
+rem  maps.json Unity'den export edilir
 rem  (Tools > VortexArena > Export Server Config) - burada URETILMEZ,
 rem  yalnizca kopyalanir. Yoksa uyarilir.
+rem  NOT: weapons.json diye bir dosya YOKTUR - sunucuda silah tablosu yok,
+rem  hasari istemci hesaplar (Docs/ArenaNet-Protokol.md 10.3).
 rem
 rem  Kullanim:
 rem    deploy-server.bat             cift tiklanabilir; sonda bekler
@@ -106,7 +108,7 @@ rem diye config'i exe'nin YANINA koyuyoruz.
 echo.
 echo   config\ kopyalaniyor...
 mkdir "%VA_OUT%\config" 2>nul
-for %%F in (server.json weapons.json maps.json) do (
+for %%F in (server.json maps.json) do (
   if exist "%VA_REPO%\Server\config\%%F" (
     copy /y "%VA_REPO%\Server\config\%%F" "%VA_OUT%\config\%%F" >nul
     echo     + %%F
@@ -115,10 +117,6 @@ for %%F in (server.json weapons.json maps.json) do (
     if /i "%%F"=="maps.json" (
       echo       ^-^> Unity'de: Tools ^> VortexArena ^> Export Server Config
       echo          Yoksa start_match harita dogrulamasi devre disi kalir.
-    )
-    if /i "%%F"=="weapons.json" (
-      echo       ^-^> Unity'de: Tools ^> VortexArena ^> Export Server Config
-      echo          Yoksa sunucu varsayilan silah tablosunu uretir.
     )
   )
 )

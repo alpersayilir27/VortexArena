@@ -378,12 +378,15 @@ kaynağı**, sunucuya export edilmez) + `WeaponAudio` (Meta XR spatializer'lı n
 ateş/şarjör çıkar-tak/kuru tetik/alma) + `WeaponAnimator` (Animator'sız kod-güdümlü parça
 animasyonu: atışta bolt tepmesi, reload'da `*_Mag` child'ı çıkar-takılır; şarjör seslerini de bu
 zaman çizgisi çalar — görüntü/ses tek kaynaktan) + `WeaponReloadGesture` (silah bel hizasının
-altına inince `TryStartReload`; kavradıktan sonra bir kez bel üstüne çıkmadan devreye girmez —
-yerden alırken yanlış tetiklemeyi önler) + `WeaponAmmoDisplay` (silah üstü TMP cephane etiketi,
-olay-güdümlü) + `WeaponCatalog` (SO, `_Shared/Data/Resources/` — `weaponId`→tanım araması;
+altına inince `TryStartReload`; bel çizgisi = kafa − `waistDropMeters` (0.62 m vars.) — ORAN DEĞİL:
+fark matematiği zemin/kalibrasyon ofsetlerinden etkilenmez; kavradıktan sonra bir kez bel üstüne
+çıkmadan devreye girmez — yerden alırken yanlış tetiklemeyi önler) + `WeaponCatalog` (SO, `_Shared/Data/Resources/` — `weaponId`→tanım araması;
 `Resources.Load` ile okunduğu için klasöründen çıkarılmaz) + `RemoteShotFx` (kendini önyükler,
 sahne kurulumu istemez; `shot_fired`'ı tüketip uzak oyuncunun namlu alevi + konumsal atış sesini
-havuzlu çalar), `Health` (sunucudan set edilir), `PlayerCombatState`
+havuzlu çalar) + `AmmoHud` (`Core/UI` — kendini önyükler; tutulan silah(lar)ın adı/mermisi/yedek
+şarjörleri görüş alanının sağ altına düşen `HudFollow`'lu tembel-takip panelinde; silah
+tutulmuyorken gizli, yalnız `Weapon.Active`/`ActiveChanged` + silah olaylarıyla yenilenir —
+silah-üstü eski `WeaponAmmoDisplay` KALDIRILDI), `Health` (sunucudan set edilir), `PlayerCombatState`
 (yerel oyuncunun takım/can/ateş yetkisi/canlanma akışı), `RemoteAvatar` + `RemoteHitBox`
 (uzak oyuncu gövdesi ve isabet kutusu),
 `ProximityWarning` (`Core/Player` — free-roam çarpışma önleme: `RemotePlayerRegistry` pozlarını
@@ -394,9 +397,10 @@ durmaya devam eder, çarpışma riski aynıdır. **Henüz hiçbir sahnede bağl�
 eklenir, `head` ve `haloMaterial` (`_Shared/FX/M_ProximityHalo`) alanları Inspector'dan verilir),
 `LocalAvatarHeadHider` (`Core/Player` — birinci şahıs gövde avatarında (Movement SDK retarget
 karakteri) kafa kemiğini her kare sıfıra yakın ölçekleyip gizler: kamera kafanın tam içinde
-durduğu için mesh'in içi görünmesin; yüksek execution order ile retargeter'dan SONRA yazar.
-Şu an yalnız IceWorld'deki deneysel `StylizedCharacter`'a bağlı — gövde takibi ürünleşirse
-rig kalıbına taşınacak),
+durduğu için mesh'in içi görünmesin; yüksek execution order ile retargeter'dan SONRA yazar;
+kemik araması "Head" tam adı → ":Head" soneki (Mixamo). Şu an IceWorld'deki
+`_Shared/Avatars/PlayerBodyAvatar.prefab`'a (Mixamo Ch15 + CharacterRetargeter FullBody) bağlı —
+gövde takibi ürünleşirse rig kalıbına taşınacak),
 `WeatherVolumeFollow` (`Core/FX` — ambiyans parçacık hacmini yerel kameranın üstünde tutar; bağlı
 sistemler **World** simülasyon uzayında olmalı, `Start` sapmayı uyarır. Yalnız kendi transform'unu
 taşır, rig'e dokunmaz), `WeatherWindDriver` (`Core/FX` — kök objeye takılır, altındaki tüm

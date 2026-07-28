@@ -110,6 +110,15 @@ namespace VortexArena.Core.Combat
         /// <summary>Tutuluyor durumu 0↔&gt;0 geçişi yaptı.</summary>
         public event Action<bool> HeldChanged;
 
+        /// <summary>
+        /// Sahnedeki etkin silahlar — silah objesine referansı olmayan dinleyiciler
+        /// (ör. AmmoHud) için. OnEnable/OnDisable'da güncellenir; sıranın anlamı yok.
+        /// </summary>
+        public static readonly List<Weapon> Active = new List<Weapon>();
+
+        /// <summary>Active listesi değişti VEYA bir silahın tutulma durumu değişti.</summary>
+        public static event Action ActiveChanged;
+
         // Tutan eller SIRALI tutulur: İLK eleman tetik/ana eldir. id = PointerEvent.Identifier
         // (Unselect/Cancel'da eşleştirme anahtarı), ctl = ele çözülen OVR kontrolcüsü
         // (None = çözülemedi → tetik Input System fallback'inden okunur).
@@ -184,6 +193,9 @@ namespace VortexArena.Core.Combat
                 grabbable.WhenPointerEventRaised += HandlePointerEvent;
 
             TrySubscribeAlive();
+
+            Active.Add(this);
+            ActiveChanged?.Invoke();
         }
 
         protected virtual void OnDisable()
@@ -197,6 +209,9 @@ namespace VortexArena.Core.Combat
             triggerHeld = false;
             if (wasHeld)
                 HeldChanged?.Invoke(false);
+
+            Active.Remove(this);
+            ActiveChanged?.Invoke();
 
             if (aliveSubscribed)
             {
@@ -469,6 +484,7 @@ namespace VortexArena.Core.Combat
             {
                 HeldChanged?.Invoke(true);
                 weaponAudio?.PlayPickup();
+                ActiveChanged?.Invoke();
             }
         }
 
@@ -487,7 +503,10 @@ namespace VortexArena.Core.Combat
                     triggerHeld = false;
 
                 if (heldPoints.Count == 0)
+                {
                     HeldChanged?.Invoke(false);
+                    ActiveChanged?.Invoke();
+                }
 
                 return;
             }
