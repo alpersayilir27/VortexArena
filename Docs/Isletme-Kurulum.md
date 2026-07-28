@@ -42,7 +42,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
   - **Kutu:** `Venue` · **İşletme adı (klasör):** işletme adı → hedef `Assets/Arenas/Venues/<İşletme>/`
   - **GameCatalog:** `Assets/_Shared/Data/GameCatalog.asset`
 - [ ] "Oluştur" → sihirbaz `{Scenes, Data, Prefabs}` kutusunu üretir, sahneyi **bire bir kopyalar**, `MapDefinition` yazar, `GameCatalog`'a ve **Build Settings**'e ekler.
-  > ⚠️ **Sihirbaz boyut sormaz ve geometriyi ölçeklemez.** Sahne 10×10 şablonundan olduğu gibi gelir; arena planını sen çizersin. Sebebi: her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak üretmiyordu. Sihirbazın işi, sahnenin ağ bileşenlerini (kalibratör, poz senkronu, sınır, taban bölgeleri, rig) eksiksiz getirmesi.
+  > ⚠️ **Sihirbaz boyut sormaz ve geometriyi ölçeklemez.** Sahne 10×10 şablonundan olduğu gibi gelir; arena planını sen çizersin. Sebebi: her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak üretmez. Sihirbazın işi, sahnenin ağ bileşenlerini (kalibratör, poz senkronu, sınır, taban bölgeleri, rig) eksiksiz getirmesi.
 - [ ] **Arena planını çiz** (duvar/cover yerleşimi, ölçüler) ve şu üçünü gerçek ölçüye getir: sahnedeki **`ArenaBoundary.halfExtentX/Z`** · **`MapDefinition.size`** · **kalibrasyon işaretçilerinin konumu** (Bölüm 3).
 - [ ] Sihirbazın kalan uyarılarını uygula: **NavMesh ve ışık verisi kaynak sahneden miras kalır** → yeni plana göre yeniden bake et; **tek `SpawnPoint`** elle konur.
 - [ ] `Tools > VortexArena > Export Server Config` çalıştır → `Server/config/maps.json` üretilir. Çıkan uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
@@ -79,7 +79,9 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 
 > **Kumanda tutuşu neden önemli:** başlığın takip ettiği nokta kumandanın **ucu değil gövdesinin içindeki pivottur**. Yazılım bu farkı `ArenaCalibrator.tipLocalOffset` ile telafi eder; değer kumanda modeline özgüdür ve **bir kez ölçülür**: alan kurulumu YAPILMIŞ bir gözlükte kumandayı dik tutup yere değdir, `rightControllerAnchor.position.y` değerini oku ve alanın Y'sine (eksi işaretle) gir. Ölçülene kadar varsayılan **-0.08 m** bir tahmindir. Doğrulaması: kalibrasyondan sonra sanal işaretçi küpleri görünür olur — kumandanın ucu küpün tabanıyla aynı hizada olmalı.
 
-> Kalibrasyon **arena sahnesinde** yapılır; lobide kalibratör yoktur, bu yüzden lobide uzak avatarların fiziksel olarak örtüşmesi beklenmez (normaldir). Bir başlık kalibre olana kadar arena sahnesinde poz göndermez.
+> Kalibrasyon **arena sahnesinde** yapılır; lobide kalibratör yoktur, bu yüzden lobide uzak avatarların fiziksel olarak örtüşmesi beklenmez (normaldir). Bir başlık kalibre olmadan da poz gönderir — ama o pozlar arena ile örtüşmez: avatar kaymış görünür, hareket ettiği yine de izlenir. Örtüşme kalibrasyondan sonra oturur.
+
+> **Kalibrasyon durumu sunucuda tutulur ve operatör tarafından sıfırlanabilir** (`Docs/ArenaNet-Protokol.md` §10.6). Bir başlığın hizalaması sahada kayarsa operatör admin ekranındaki **KAL** düğmesiyle o oyuncuyu savaş dışı bırakır (ateş edemez, hasar yemez, canlanamaz; avatarı diğerlerinin ekranında parlar), oyuncu yeniden kalibre olunca kaldığı yerden devam eder. **Kalibre durumdayken A+B kilitlidir** — oyuncu kendi hizalamasını kazara bozamaz. Operatör yönergesi: `Docs/Kullanim-Kilavuzu.md` §4.1.
 
 ---
 

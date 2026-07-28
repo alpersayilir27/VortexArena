@@ -4,7 +4,7 @@
 #   deploy/admin/  · deploy/server/  · deploy/launcher/
 # Beyaz liste yaklaşımı: her şey ignore, yalnız dokümantasyon commit'lenir.
 # Böylece yeni bir deploy hedefi eklendiğinde kök .gitignore'a satır eklemek
-# gerekmez (eskiden /deploy/admin/, /deploy/server/, … tek tek yazılıyordu).
+# gerekmez — hedefleri tek tek listelemeyin, beyaz liste zaten kapsıyor.
 
 *
 !.gitignore

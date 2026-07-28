@@ -81,7 +81,7 @@ namespace VortexArena.Core.Combat
         /// <para>
         /// Bağlantı koşulu: bir kez bağlandıysak bağlantı kopukken ateş kilitlenir
         /// (mesajlar zaten sunucuya ulaşmaz). Hiç bağlanılmamışsa (sunucusuz Editor
-        /// testi) silah çalışmaya devam eder — Faz 0-2 yerel test akışı bozulmasın.
+        /// testi) silah çalışmaya devam eder — sunucusuz yerel test akışı bozulmasın.
         /// </para>
         /// </summary>
         public bool CanFire
@@ -89,6 +89,13 @@ namespace VortexArena.Core.Combat
             get
             {
                 if (!IsAlive)
+                {
+                    return false;
+                }
+
+                // §10.6: kalibresiz oyuncu ateş edemez. Sunucu zaten hit_report'u reddediyor;
+                // burada da kapatmak "tetiği çektim ama hiçbir şey olmadı" hissini engeller.
+                if (!CalibrationState.IsCalibrated)
                 {
                     return false;
                 }
@@ -306,7 +313,13 @@ namespace VortexArena.Core.Combat
         {
             string text = "";
 
-            if (!IsAlive)
+            // §10.6 — ölüm metninden ÖNCE gelir: kalibresiz oyuncu zaten canlanamayacağı için
+            // "Tabanına dön ve canlan" yazmak onu boşuna koşturmak olurdu.
+            if (!CalibrationState.IsCalibrated)
+            {
+                text = "Kalibrasyon gerekli — sağ kumandada A+B";
+            }
+            else if (!IsAlive)
             {
                 float remaining = _reviveAt - Time.time;
                 if (remaining > 0f)

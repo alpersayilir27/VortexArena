@@ -121,7 +121,7 @@ kurulumda genelde yalnız `venueName` değişir:
 > değişikliğinizi ezer.** Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir
 > (alfabetik, LF, UTF-8 BOM'suz) → git diff'leri temiz kalır.
 
-> **`weapons.json` YOK** (v1'de vardı, kaldırıldı — §10.3). Sunucu silah tanımı tutmaz: hasarı
+> **`weapons.json` YOKTUR** (§10.3). Sunucu silah tanımı tutmaz: hasarı
 > istemci hesaplar, `hit_report.damage` ile bildirir ve sunucu aynen uygular. Denge sayıları
 > yalnız Unity'deki `WeaponDefinition` SO'larında yaşar → **yeni silah eklerken sunucuya hiçbir
 > şey tanıtılmaz ve export gerekmez** (balta, yay, bomba, tuzak, düşme hasarı… hepsi aynı yolu
@@ -137,12 +137,10 @@ uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması dev
 özetinde `Haritalar : yok (doğrulama kapalı)` görünür.
 
 > Sunucu sahne GEOMETRİSİNİ bilmez: konum/spawn noktası taşıyan bir alan ne bu tabloda ne de
-> protokolde vardır. Oyuncular fiziksel olarak yürür (§10.4). **Arena ÖLÇÜSÜ de yoktur** —
-> `sizeX`/`sizeZ` alanları kaldırıldı (28 Tem 2026): sunucu metre kullanmıyordu (tek tüketici
-> bir konsol log satırıydı) ve her işletmenin alanı farklı, çoğu kare/dikdörtgen bile değil, yani
-> tek bir ölçü çifti arenayı tarif etmiyor. Ölçü yalnız istemcide `MapDefinition.size`'da yaşar
-> (admin mini haritasının metre ölçeği + `ArenaBoundary` yoksa gözlemci kamerasının kadraj
-> yedeği). Eski `maps.json` dosyaları yine okunur; bilinmeyen alan sessizce yok sayılır.
+> protokolde vardır. Oyuncular fiziksel olarak yürür (§10.4). **Arena ÖLÇÜSÜ de yoktur:** sunucu
+> metre kullanmaz ve her işletmenin alanı farklı, çoğu kare/dikdörtgen bile değil — tek bir ölçü
+> çifti arenayı tarif etmez. Ölçü yalnız istemcide `MapDefinition.size`'da yaşar (admin mini
+> haritasının metre ölçeği + `ArenaBoundary` yoksa gözlemci kamerasının kadraj yedeği).
 
 **devices.json** — `{ "<deviceId>": "Gözlük 07" }`. Bilinmeyen player cihazı bağlanınca ilk boş
 `Gözlük NN` atanır ve dosyaya yazılır; `set_name` ile değişen ad da buraya kalıcı yazılır.

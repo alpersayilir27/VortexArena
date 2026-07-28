@@ -11,6 +11,7 @@ namespace VortexArena.Protocol
         public const string ShotFired = "shot_fired"; // sunucu relay'i de aynı type
         public const string HitReport = "hit_report";
         public const string ReviveRequest = "revive_request"; // free-roam canlanma talebi (§10.4)
+        public const string SetCalibration = "set_calibration"; // başlık kendi hizalamasını bildirir (§10.6)
 
         // Yalnız admin → Sunucu
         public const string StartMatch = "start_match";
@@ -20,6 +21,7 @@ namespace VortexArena.Protocol
         public const string Identify = "identify"; // sunucu → istemci yönü de aynı type
         public const string ReturnToLobby = "return_to_lobby"; // sunucu → istemci yönü de aynı type
         public const string SetSelection = "set_selection"; // ortak mod/harita seçimi (maçı başlatmaz)
+        public const string ClearCalibration = "clear_calibration"; // kalibrasyonu sıfırla; playerId 0 = herkes (§10.6)
 
         // Sunucu → İstemci
         public const string Welcome = "welcome";

@@ -59,7 +59,7 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// Poz kaynağını atar (App'teki PlayerPoseTracker kalibrasyon sonrası çağırır).
+        /// Poz kaynağını atar (App'teki PlayerPoseTracker Start'ta çağırır; kalibrasyon beklenmez).
         /// Kaynak Stop()'ta SİLİNMEZ: reconnect sonrası kayıt tamamlanınca gönderim
         /// kendiliğinden sürer.
         /// </summary>

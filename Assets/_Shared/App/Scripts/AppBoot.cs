@@ -11,7 +11,7 @@ namespace VortexArena.App
     /// değişkeni > varsayılan admin.
     ///
     /// <para>
-    /// Faz 6: admin'in ayrı bir kabuk sahnesi (`AdminConsole` dashboard'u) YOK. Admin de
+    /// Admin'in ayrı bir kabuk/dashboard sahnesi YOKTUR. Admin de
     /// oyuncularla aynı sahnede durur ve sunucunun `load_match`/`return_to_lobby`'siyle onları
     /// takip eder (<c>SceneRouter</c>); sahne üstü yönetim arayüzünü <c>AdminHud</c> çizer.
     /// </para>
