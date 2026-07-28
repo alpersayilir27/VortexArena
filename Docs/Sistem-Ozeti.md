@@ -425,7 +425,11 @@ fark matematiği zemin/kalibrasyon ofsetlerinden etkilenmez; kavradıktan sonra 
 çıkmadan devreye girmez — yerden alırken yanlış tetiklemeyi önler) + `WeaponCatalog` (SO, `_Shared/Data/Resources/` — `weaponId`→tanım araması;
 `Resources.Load` ile okunduğu için klasöründen çıkarılmaz) + `RemoteShotFx` (kendini önyükler,
 sahne kurulumu istemez; `shot_fired`'ı tüketip uzak oyuncunun namlu alevi + konumsal atış sesini
-havuzlu çalar) + `AmmoHud` (`Core/UI` — kendini önyükler; tutulan silah(lar)ın adı/mermisi/yedek
+havuzlu çalar) + `ShellEjector` (`Weapon.Fired` olayına abone; ateşte namlunun yanındaki `Eject`
+noktasından kalibreye göre (`Casing_762x39`/`Casing_556x45`) bir kovan fırlatır — 10'luk round-robin
+havuz, süre kontrolü coroutine değil `Update`'te `Time.time` ile; havuz+`MuzzleFlash` altındaki
+"Smoke" sub-emitter'ı da dahil tüm bu kit `WeaponKitBuilder` tarafından üretilir/güncellenir) +
+`AmmoHud` (`Core/UI` — kendini önyükler; tutulan silah(lar)ın adı/mermisi/yedek
 şarjörleri görüş alanının sağ altına düşen `HudFollow`'lu tembel-takip panelinde; silah
 tutulmuyorken gizli, yalnız `Weapon.Active`/`ActiveChanged` + silah olaylarıyla yenilenir —
 silah-üstü eski `WeaponAmmoDisplay` KALDIRILDI) + `ArenaCombat` / `WeaponGranter` (aşağıdaki
@@ -443,7 +447,20 @@ karakteri) kafa kemiğini her kare sıfıra yakın ölçekleyip gizler: kamera k
 durduğu için mesh'in içi görünmesin; yüksek execution order ile retargeter'dan SONRA yazar;
 kemik araması "Head" tam adı → ":Head" soneki (Mixamo). Şu an IceWorld'deki
 `_Shared/Avatars/PlayerBodyAvatar.prefab`'a (Mixamo Ch15 + CharacterRetargeter FullBody) bağlı —
-gövde takibi ürünleşirse rig kalıbına taşınacak),
+gövde takibi ürünleşirse rig kalıbına taşınacak), `LocalBodyOverlayCamera` (`Core/Player` —
+aynı prefab'da; kafa dışındaki gövde clipping'i için: kendi altındaki tüm Renderer'ları
+"LocalBody" katmanına alır, ana kameradan bu katmanı çıkarır ve daha büyük near-clip'li bir
+overlay kamerayı URP kamera yığınına (camera stack) ekler — aşağı bakınca ana kameranın
+near-clip'i (tipik 0.1 m) göğüs/omuz geometrisine girmez. "LocalBody" Layer'ı gerektirir;
+`VortexArena.Core.asmdef` bu yüzden `Unity.RenderPipelines.Universal.Runtime` referanslar),
+`ControllerModelHider` (`Core/Player` — aynı prefab'da; Meta Building Blocks kamera rigine
+BİRDEN FAZLA yerde (`Controller Tracking Left/Right` VE ayrıca `OVRComprehensiveInteractionRig`
+altında) fiziksel Touch controller modeli + "controller-driven" sentetik el overlay'i koyuyor —
+bu yüzden `[BuildingBlock] Camera Rig` kökünden TÜM alt ağacı isim eşleşmesiyle
+(`questController_animrig` / `HandVisual`) her karede tarar ve gizler; kontrolcü
+bırakılıp-tutulduğunda Meta bunları yeniden aktifleştirdiği için tek seferlik değil, sürekli
+çalışır. RAY/RETİKÜL gibi etkileşim görsellerine dokunmaz; kozmetik, `OVRInput` girdisini
+etkilemez),
 `WeatherVolumeFollow` (`Core/FX` — ambiyans parçacık hacmini yerel kameranın üstünde tutar; bağlı
 sistemler **World** simülasyon uzayında olmalı, `Start` sapmayı uyarır. Yalnız kendi transform'unu
 taşır, rig'e dokunmaz), `WeatherWindDriver` (`Core/FX` — kök objeye takılır, altındaki tüm
