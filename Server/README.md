@@ -15,7 +15,7 @@ Server/
   VortexArena.Server.App/     # konsol exe (UI YOK — yönetim UI'ı Unity admin build'i)
   VortexArena.PoseBot/        # sentetik oyuncu test istemcisi (poz senkronunu Quest'siz test eder)
   config/server.json          # portlar + mekan adı + tickHz (ELLE)
-  config/maps.json            # harita tablosu (sceneName + boyut + modes) — Unity export
+  config/maps.json            # harita tablosu (sceneName + modes) — Unity export
   config/devices.json         # deviceId -> dostane ad ("Gözlük NN"); otomatik doldurulur
   firewall-kur.cmd            # Windows Firewall kuralları (yönetici olarak çalıştırın)
 ```
@@ -130,15 +130,19 @@ kurulumda genelde yalnız `venueName` değişir:
 **maps.json** — harita tablosu (§10.1): `start_match`'te `sceneName`'in bilinen bir harita olup
 olmadığı ve o haritanın modu destekleyip desteklemediği buradan doğrulanır.
 ```json
-{ "maps": [ { "sceneName": "Arena10x10", "sizeX": 10, "sizeZ": 10,
-              "modes": ["ffa", "tdm"] } ] }
+{ "maps": [ { "sceneName": "Arena10x10", "modes": ["ffa", "tdm"] } ] }
 ```
 `modes` boş bırakılırsa harita tüm modları kabul eder. **Dosya yoksa oluşturulmaz** (sunucunun
 uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması devre dışı kalır ve açılış
 özetinde `Haritalar : yok (doğrulama kapalı)` görünür.
 
 > Sunucu sahne GEOMETRİSİNİ bilmez: konum/spawn noktası taşıyan bir alan ne bu tabloda ne de
-> protokolde vardır. Oyuncular fiziksel olarak yürür (§10.4).
+> protokolde vardır. Oyuncular fiziksel olarak yürür (§10.4). **Arena ÖLÇÜSÜ de yoktur** —
+> `sizeX`/`sizeZ` alanları kaldırıldı (28 Tem 2026): sunucu metre kullanmıyordu (tek tüketici
+> bir konsol log satırıydı) ve her işletmenin alanı farklı, çoğu kare/dikdörtgen bile değil, yani
+> tek bir ölçü çifti arenayı tarif etmiyor. Ölçü yalnız istemcide `MapDefinition.size`'da yaşar
+> (admin mini haritasının metre ölçeği + `ArenaBoundary` yoksa gözlemci kamerasının kadraj
+> yedeği). Eski `maps.json` dosyaları yine okunur; bilinmeyen alan sessizce yok sayılır.
 
 **devices.json** — `{ "<deviceId>": "Gözlük 07" }`. Bilinmeyen player cihazı bağlanınca ilk boş
 `Gözlük NN` atanır ve dosyaya yazılır; `set_name` ile değişen ad da buraya kalıcı yazılır.

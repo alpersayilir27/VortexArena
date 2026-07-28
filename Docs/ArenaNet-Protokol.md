@@ -390,7 +390,7 @@ Sunucusuz editör oturumunda (dev penceresi sentetik maç) kurallar `ModeDefinit
 |---|---|---|
 | `server.json` | **Elle** | Portlar + `venueName` + `tickHz`; yoksa varsayılanlarla oluşturulur (§1 sabitleri). |
 | `devices.json` | **Sunucu üretir** | `deviceId → "Gözlük NN"`; ilk bağlantıda ve `set_name`'de yazılır (§2). UTF-8, BOM'suz. |
-| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `sizeX`/`sizeZ`, `modes` (§10.1). |
+| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `modes` (§10.1). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide `MapDefinition.size`'da kalır. |
 
 > **`weapons.json` KALDIRILDI** (v1'de vardı): sunucu artık silah tanımı tutmaz, hasarı istemci
 > bildirir (§10.3). Silah istatistikleri yalnız Unity'deki `WeaponDefinition` SO'larındadır.

@@ -480,7 +480,7 @@ bile görünmez. Oyuncu tarafında etkisi YOKTUR — yalnız `AdminSpectator.Ref
 | `PlayerRegistry` | Oyuncu listesi, `playerId` tahsisi (1..255), `devices.json` ile kalıcı adlandırma, çevrimiçi/çevrimdışı. **Rol başına kalıcılık farkı:** oyuncu kaydı kopunca Offline işaretlenir ama DURUR (deviceId kalıcı); **admin kaydı tümüyle SİLİNİR** (deviceId oturumluk — yoksa her açıp kapatma roster'da hayalet satır ve tükenen playerId bırakırdı) ve admin adı diske yazılmaz. Aynı PC'de iki admin varsa ad " (2)" ile ayrıştırılır |
 | `LobbyService` | Roster yayını (`lobby_state`), ready/takım/kick + **adminler arası ortak durumun sahibi**: mod/harita seçimi burada yaşar, `set_selection` ile değişir, `admin_state` ile yalnız adminlere yayılır. Her admin komutu "kim ne yaptı" duyurusu üretir |
 | `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş hattı, can/skor, canlanma, zorla canlandırma.** Mod kaydı tek yerde (`RegisterModes()` — yeni mod buraya bir satır). **Skor defteri:** `AddScore(team,…)` (takım) + `AddPlayerScore/ScoreOf/TryGetLeader` (bireysel); modlar skoru YALNIZ buradan yazar |
-| `MapTable` | `maps.json` (Unity export'undan) — sunucunun okuduğu tek içerik tablosu |
+| `MapTable` | `maps.json` (Unity export'undan) — sunucunun okuduğu tek içerik tablosu. Girdi başına yalnız `sceneName` + `modes`; **arena ÖLÇÜSÜ yoktur** (sunucu metre kullanmaz, §7.31) |
 | `Modes/IGameMode` + `TdmMode` + `FfaMode` | Mod kuralları: skor, kazanma koşulu, tur süresi. Yeni kancalar **varsayılan gövdeyle** eklenir (default interface method) → mevcut modların hiçbiri değişmez; **tüketicisi olmayan kanca EKLENMEZ**. `FfaMode` yüzeyin ilk tüketicisidir: takımsız + bireysel skor + sabit durma canlanması, `MatchDirector`'a tek satır kayıt dışında hiçbir dokunuş yok |
 | `Modes/ModeRules` | Modun ŞEKLİ (§3.9): takım kipi, skor kanalı, dost ateşi, canlanma, silah kaynağı, canlanma gecikmesi. `ToInfo()` ile tele çıkar. Varsayılanı (`TeamDefault`) bugünkü TDM'dir |
 | `Modes/MatchOutcome` | Maç sonucunun tek tipi: kazanan takım **veya** kazanan oyuncu (`match_end`'in iki kanalı) |
@@ -668,7 +668,7 @@ doğrudan dashboard'a düşer. Ayrıntı: `deploy/README.md`.
 
 | İstek | Yol |
 |---|---|
-| **Yeni arena** | `Tools > VortexArena > Create Arena From Template` → arenaId, sahne adı, boyut, hedef (Standard/Venue). Sihirbaz klasörleri + sahnenin **bire bir kopyasını** üretir, `MapDefinition` yazar, `GameCatalog` + uyumlu `ModeDefinition` + Build Settings'e ekler. ⚠️ **Geometri ölçeklenmez** (boyut bile sorulmaz): arena planı, `ArenaBoundary` + `MapDefinition.size`, kalibrasyon işaretçileri, tek `SpawnPoint` ve bake işleri ELDE. Sihirbazın değeri sahnenin ağ bileşenlerini eksiksiz taşıması. **Sonra `Export Server Config`.** |
+| **Yeni arena** | `Tools > VortexArena > Create Arena From Template` → arenaId, sahne adı, hedef (Standard/Venue). Sihirbaz klasörleri + sahnenin **bire bir kopyasını** üretir, `MapDefinition` yazar, `GameCatalog` + uyumlu `ModeDefinition` + Build Settings'e ekler. ⚠️ **Geometri ölçeklenmez** (boyut bile sorulmaz): arena planı, `ArenaBoundary` + `MapDefinition.size`, kalibrasyon işaretçileri, tek `SpawnPoint` ve bake işleri ELDE. Sihirbazın değeri sahnenin ağ bileşenlerini eksiksiz taşıması. **Sonra `Export Server Config`.** |
 | **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack prefabı) → `Tools > VortexArena > Build Weapon Prefabs` → `WD_*.asset` + `WPN_*.prefab` üretir, `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). Şablon (eski AK47_Red) silindi: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
 | **Elle modellenmiş sahneyi arenaya çevirmek** | Aşağıdaki 6 adım (IceWorld böyle bağlandı) |
@@ -705,6 +705,11 @@ doğrudan dashboard'a düşer. Ayrıntı: `deploy/README.md`.
 **Harita (`MapDefinition`) SO'su ekledin/değiştirdin mi → çalıştır.** Menü, `MapDefinition`
 SO'larından `Server/config/maps.json` üretir; çıktı deterministiktir (alfabetik, LF, UTF-8
 BOM'suz) → git diff temiz kalır.
+
+Dışa aktarılan tek şey **`sceneName` + `supportedModeIds`** — yani sunucunun `start_match`'te
+gerçekten sorduğu iki soru. **Arena ölçüsü gitmez** (§7.31): `MapDefinition.size` yalnız
+istemcide kullanılır. Pratik sonuç: bir arenanın boyutunu değiştirdiysen ama mod listesine
+dokunmadıysan **export'a gerek yoktur** (çıktı zaten aynı).
 
 **Silah için GEREKMEZ:** sunucu silah tablosu tutmaz (§3.6), hasarı istemci bildirir. Yeni silah
 eklerken export çalıştırmaya gerek yoktur.
@@ -843,6 +848,16 @@ konsoluna tek satır sebep yazar.
     bir düzlem tanımlamaz (roll bilinemez) ve sanal dünyayı eğmek görsel "yukarı" ile
     yerçekimini ayrıştırıp VR'da mide bulantısı yapar. Ayrıca ölçülebilecek eğim (~5–10 mm),
     operatörün kumanda tutuş farkının (±10–20 mm) altında kalır.
+31. **Sunucu metre bilmez — `maps.json`'a arena ölçüsü koyulmaz.** `sizeX`/`sizeZ` alanları
+    kaldırıldı (28 Tem 2026); tek tüketicileri `start_match`'in konsol log satırıydı, hiçbir
+    doğrulamaya girmiyorlardı. Kaldırma kararının asıl gerekçesi ölçünün **ölçülemez** oluşu:
+    her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil, yani tek bir ölçü çifti o
+    arenayı tarif etmiyor — sunucuya gönderilen sayı, doğru sandığın yanlış bir sayı olurdu.
+    `MapDefinition.size` **istemcide kalır** (admin mini haritasının metre ölçeği +
+    `ArenaBoundary` yoksa gözlemci kamerasının kadraj yedeği); arenanın gerçek sınırı zaten
+    `ArenaBoundary.halfExtentX/Z`'dir. Genel kural: **sunucuya yalnız sunucunun karar vermek
+    için okuduğu alan gider** — "ileride lazım olur" diye alan taşımak, iki uçta sessizce
+    sapan ikinci bir doğruluk kaynağı üretir.
 
 ---
 

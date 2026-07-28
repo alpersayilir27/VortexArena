@@ -3,12 +3,16 @@ namespace VortexArena.Server.Core;
 
 /// <summary>config/maps.json'daki tek harita girdisi. Public ALAN — JsonUtil (IncludeFields)
 /// ile okunur; adlar Unity'deki MapDefinition SO alanlarıyla birebir aynıdır (export bu adlarla
-/// yazar: Tools &gt; VortexArena &gt; Export Server Config).</summary>
+/// yazar: Tools &gt; VortexArena &gt; Export Server Config).
+///
+/// <para><b>Arena ÖLÇÜSÜ burada YOKTUR</b> ve eklenmemelidir: sunucu metre bilmez (pozlar
+/// istemci-otoriter, arena uzayında gelir) ve her işletmenin alanı farklı — çoğu kare/dikdörtgen
+/// bile olmadığı için tek bir <c>sizeX/sizeZ</c> çifti arenayı tarif etmiyor. Ölçü yalnız
+/// istemcide, <c>MapDefinition.size</c>'da yaşar. Bilinmeyen alanlar JsonUtil'de sessizce
+/// yok sayıldığı için eski <c>maps.json</c> dosyaları da sorunsuz okunur.</para></summary>
 public sealed class MapEntry
 {
     public string sceneName = "";
-    public float sizeX;
-    public float sizeZ;
 
     /// <summary>Bu haritanın desteklediği modId'ler; BOŞ = kısıt yok (MapDefinition.SupportsMode
     /// ile aynı semantik — yeni haritada unutulan alan modu gizlemesin).</summary>
