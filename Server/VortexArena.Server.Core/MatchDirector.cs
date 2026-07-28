@@ -427,7 +427,6 @@ public sealed class MatchDirector
 
         // Harita tablosu (config/maps.json — Unity export'u) doluysa sahne + mod uyumu doğrulanır.
         // Tablo boşsa (dosya yok) bu adım tümüyle atlanır → Faz 3 davranışı korunur.
-        MapEntry? map = null;
         if (!_maps.IsEmpty)
         {
             if (!_maps.TryGet(sceneName, out var known))
@@ -440,7 +439,6 @@ public sealed class MatchDirector
                 Console.WriteLine($"[match] start_match reddedildi: '{sceneName}' haritası '{modeId}' modunu desteklemiyor (desteklenen: {string.Join(", ", known.modes)}).");
                 return;
             }
-            map = known;
         }
 
         var players = _registry.Snapshot()
@@ -544,12 +542,11 @@ public sealed class MatchDirector
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         }
 
-        var mapInfo = map == null ? "" : $" ({map.sizeX:0.#}×{map.sizeZ:0.#})";
         // Takım dağılımı BalanceTeams/ClearTeams sonrasındaki GERÇEK durumdan sayılır
         // (players listesi PlayerState referansları tutuyor, SetTeam onları yerinde günceller).
         var blueCount = players.Count(p => p.Team == "blue");
         var teamInfo = teamless ? "takımsız" : $"kırmızı {players.Count - blueCount} / mavi {blueCount}";
-        Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}'{mapInfo}, " +
+        Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}', " +
                           $"{appliedRound} sn / limit {appliedLimit}, {players.Count} oyuncu ({teamInfo}).");
         await FlushAsync(outbox);
     }

@@ -309,7 +309,7 @@ kill-feed, kendi öldürme/ölüm sayacın.
 |---|---|
 | `Tools > VortexArena > Dev` | Rol · sunucu hedefi · Play başlangıcı · sentetik maç · test botları · derle. Kısayol **Ctrl+Alt+R** (rol çevirir) |
 | `Tools > VortexArena > Create Arena From Template` | Yeni arena sihirbazı |
-| `Tools > VortexArena > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json`. ⚠️ JSON'u elle düzenleme, export ezer |
+| `Tools > VortexArena > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` — girdi başına yalnız `sceneName` + `modes` (arena ölçüsü sunucuya gitmez). ⚠️ JSON'u elle düzenleme, export ezer |
 | `GameObject > VortexArena > Spawn Point` | Arenanın **tek** başlangıç noktasını üretir (yerleştirme elle) |
 | `GameObject > VortexArena > Arena Roof` | Çatı geometrisini işaretler (admin kuş bakışında gizlenir) |
 | `GameObject > VortexArena > Network Parent` | Sahne objesine `NetIdentity` + benzersiz `sceneId` |

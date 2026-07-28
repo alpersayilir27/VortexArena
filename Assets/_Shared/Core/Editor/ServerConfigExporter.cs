@@ -19,7 +19,8 @@ namespace VortexArena.Core.Editor
     /// tutmaz, hasarı istemci hesaplayıp <c>hit_report.damage</c> ile bildirir ve sunucu aynen
     /// uygular. <see cref="WeaponDefinition"/> SO'ları yalnız istemcide yaşar; silah ekleyip
     /// değiştirdikten sonra export çalıştırmak GEREKMEZ. Bu araç yalnız harita kataloğu içindir
-    /// (sunucu <c>start_match</c>'te <c>sceneName</c>'i ve spawn slot sayısını buradan doğrular).
+    /// (sunucu <c>start_match</c>'te <c>sceneName</c>'in var olduğunu ve modu desteklediğini
+    /// buradan doğrular — başka bir şey okumaz).
     /// </para>
     /// <para>
     /// <b>Determinizm (git diff'i temiz kalsın):</b> haritalar <c>sceneName</c> ve mod listeleri
@@ -186,9 +187,15 @@ namespace VortexArena.Core.Editor
         // ----------------------------------------------------------------- json
 
         /// <summary>
-        /// <c>{ "maps": [ { "sceneName": "Arena10x10", "sizeX": 10, "sizeZ": 10,
-        /// "modes": ["tdm"] } ] }</c> — sunucunun start_match doğrulaması ve ileriki bölge
-        /// tabanlı modlar için.
+        /// <c>{ "maps": [ { "sceneName": "Arena10x10", "modes": ["tdm"] } ] }</c> — sunucunun
+        /// <c>start_match</c> doğrulaması için.
+        /// <para>
+        /// <b>Arena ÖLÇÜSÜ yazılmaz.</b> Sunucu metre bilmez (pozlar istemci-otoriter, arena
+        /// uzayında gelir); ayrıca her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile
+        /// değil, yani tek bir <c>sizeX/sizeZ</c> çifti o arenayı tarif etmiyor.
+        /// <c>MapDefinition.size</c> yalnız İSTEMCİDE yaşar (admin mini haritasının metre ölçeği
+        /// + <c>ArenaBoundary</c> yoksa gözlemci kamerasının kadraj yedeği).
+        /// </para>
         /// </summary>
         private static string BuildMapsJson(List<MapDefinition> maps)
         {
@@ -206,9 +213,7 @@ namespace VortexArena.Core.Editor
                 {
                     MapDefinition map = maps[i];
                     sb.Append("    { \"sceneName\": \"").Append(EscapeJson(map.SceneName))
-                        .Append("\", \"sizeX\": ").Append(Number(map.Size.x))
-                        .Append(", \"sizeZ\": ").Append(Number(map.Size.y))
-                        .Append(", \"modes\": ").Append(BuildModesArray(map.SupportedModeIds))
+                        .Append("\", \"modes\": ").Append(BuildModesArray(map.SupportedModeIds))
                         .Append(" }")
                         .Append(i < maps.Count - 1 ? ",\n" : "\n");
                 }
@@ -256,12 +261,6 @@ namespace VortexArena.Core.Editor
             }
 
             return sb.Append(']').ToString();
-        }
-
-        /// <summary>Ondalık sayıyı kültürden bağımsız, gereksiz ondalık basamak olmadan yazar.</summary>
-        private static string Number(float value)
-        {
-            return value.ToString("0.###", CultureInfo.InvariantCulture);
         }
 
         /// <summary>Minimal JSON string kaçışı (protokol anahtarları ASCII olsa da güvenli taraf).</summary>

@@ -263,8 +263,9 @@ shape scale'lerini arena boyutu + ~3 m payla ölçekle — geniş kutu bütçeyi
 **Editor araçları** (`VortexArena.Core.Editor`, `VortexArena.Net.Editor`, `VortexArena.App.Editor`
 — yalnız Editor):
 `Tools > VortexArena > Export Server Config` (MapDefinition SO'larından `Server/config/maps.json`;
-deterministik, LF, BOM'suz — **JSON'u elle düzenleme, export ezer**. Silah için gerekmez —
-sunucuda silah tablosu yok), **`… > Build Weapon Prefabs`** (`WeaponKitBuilder`: tablodaki 6 silah
+girdi başına yalnız `sceneName` + `modes` — **arena ÖLÇÜSÜ yazılmaz**, sunucu metre kullanmaz ve
+`MapDefinition.size` istemcide kalır; deterministik, LF, BOM'suz — **JSON'u elle düzenleme, export
+ezer**. Silah için gerekmez — sunucuda silah tablosu yok), **`… > Build Weapon Prefabs`** (`WeaponKitBuilder`: tablodaki 6 silah
 için WD_*.asset + WPN_*.prefab + FX_RemoteShot + WeaponCatalog üretir/günceller; idempotent,
 dialog açmaz; *…(Yalnız Kataloğu Tazele)* varyantı yalnız katalog+prefab bağlarını yeniler),
 `… > Create Arena From

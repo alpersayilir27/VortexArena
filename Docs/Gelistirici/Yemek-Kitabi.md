@@ -493,6 +493,11 @@ Sonra **elde**: arena planını çiz · `ArenaBoundary.halfExtentX/Z` + `MapDefi
 ölçüye getir · kalibrasyon işaretçilerini yerleştir · `GameObject > VortexArena > Spawn Point` ile
 arenanın **tek** başlangıç noktasını koy · NavMesh/ışık bake et · **`Export Server Config`**.
 
+> `MapDefinition.size` **sunucuya gitmez** (maps.json'a yalnız `sceneName` + `modes` yazılır) —
+> yalnız admin mini haritasının metre ölçeği ve `ArenaBoundary` bulunamazsa gözlemci kamerasının
+> kadraj yedeği için okunur. Arenanın gerçek sınırı `ArenaBoundary.halfExtentX/Z`'dir; export'u
+> ise ölçü için değil, **yeni `sceneName` tabloya girsin** diye çalıştırıyorsun.
+
 Sahnede bulunması gerekenler → [Sahne Kurulumu](Sahne-Kurulumu.md).
 
 > **Başlangıç noktası nedir, ne değildir?** Maçtan önce operatörün oyuncuyu yönlendirdiği fiziksel

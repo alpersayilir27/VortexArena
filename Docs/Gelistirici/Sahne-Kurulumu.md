@@ -50,11 +50,13 @@ BB rig'i kapatır, `ArenaCalibrator`/`BaseZone`'u kapatır, `ArenaBoundary`'yi *
 
 Sahne dosyası tek başına yetmez — üç kayıt daha gerekir:
 
-1. **`MapDefinition` SO'su** (`Arenas/<...>/Data/`): `sceneName`, `displayName`, `size` (metre),
+1. **`MapDefinition` SO'su** (`Arenas/<...>/Data/`): `sceneName`, `displayName`, `size` (metre —
+   **yalnız istemcide**: admin mini haritasının ölçeği + gözlemci kamerası kadraj yedeği),
    `supportedModeIds`.
 2. **`GameCatalog.asset`** → `maps[]` listesine ekle.
 3. **Build Settings** → sahneyi ekle ve **enabled** bırak.
-4. **`Tools > VortexArena > Export Server Config`** → `Server/config/maps.json` tazelenir.
+4. **`Tools > VortexArena > Export Server Config`** → `Server/config/maps.json` tazelenir
+   (dosyaya `sceneName` + `modes` yazılır; arena ölçüsü sunucuya gitmez).
 
 > ⚠️ **Sahne adı = katalog anahtarıdır.** `load_match` bu string'i taşır; Build Settings'teki adla
 > boşluk/harf farkı dahil birebir eşleşmeli. Sonradan değiştirme — değiştirirsen dokümanlarda da
