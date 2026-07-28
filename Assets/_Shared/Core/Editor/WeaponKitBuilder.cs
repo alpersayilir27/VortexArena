@@ -31,6 +31,13 @@ namespace VortexArena.Core.Editor
     /// zamanında bulunur — tip/alan bulunamazsa uyarı basılır ve devam edilir
     /// (sözleşme kayması teşhisi için).
     /// </para>
+    /// <para>
+    /// <b>Silaha özgü his:</b> her silahın kendi ateş/reload/dry-fire klipleri (Assets/Audio/Weapons),
+    /// silaha özgü namlu alevi (renk/boyut/koni açısı) ve namlu dumanı (MuzzleFlash altında
+    /// "Smoke" alt-parçacık sistemi, sub-emitter ile tetiklenir) üretilir. Ayrıca her WPN'e bir
+    /// <c>Eject</c> noktası + <see cref="ShellEjector"/> bileşeni eklenir ve kalibreye göre
+    /// (762x39/556x45) paylaşılan <c>Casing_*.prefab</c>'a bağlanır — ateşte kovan fırlar.
+    /// </para>
     /// </summary>
     public static class WeaponKitBuilder
     {
@@ -46,8 +53,15 @@ namespace VortexArena.Core.Editor
         private const string PrefabDir = "Assets/_Shared/Arsenal/Prefabs";
         private const string FxDir = "Assets/_Shared/FX";
         private const string FxPrefabPath = FxDir + "/FX_RemoteShot.prefab";
+        private const string SmokeMaterialPath = FxDir + "/M_MuzzleSmoke.mat";
         private const string CatalogDir = "Assets/_Shared/Data/Resources";
         private const string CatalogPath = CatalogDir + "/WeaponCatalog.asset";
+
+        private const string Casing762Path = PrefabDir + "/Casing_762x39.prefab";
+        private const string Casing556Path = PrefabDir + "/Casing_556x45.prefab";
+        private const string BulletPack762Path = PackRoot + "/Prefabs/Bullets/Bullet_A.prefab";
+        private const string BulletPack556Path = PackRoot + "/Prefabs/Bullets/Bullet_B.prefab";
+        private const float CasingMassKg = 0.01f;
 
         private const string Log = "[BuildWeaponPrefabs] ";
 
@@ -59,12 +73,6 @@ namespace VortexArena.Core.Editor
         private const float Range = 60f;
         private const float PitchJitter = 0.05f;
         private const string ReserveModeName = "DiscardMagazine";
-        private const string DryFireClipName = "SFX_DryFire.wav";
-
-        private static readonly string[] AkFireClips = { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" };
-        private static readonly string[] M4FireClips = { "SFX_M4_Shot_01.wav", "SFX_M4_Shot_02.wav" };
-        private const string AkMagOutClip = "SFX_AK47_Reload_HQ.wav";
-        private const string M4MagOutClip = "SFX_M4_Reload_HQ2.wav";
 
         // ---------------------------------------------------------- silah tablosu
 
@@ -87,16 +95,96 @@ namespace VortexArena.Core.Editor
             public string MagOutClip;
             public float PitchBase;
             public float Volume;
+
+            public string DryFireClip;   // artık silaha özel (eskiden paylaşılan DryFireClipName sabiti vardı)
+            public Color FlashColorMin;
+            public Color FlashColorMax;
+            public float FlashSizeMin;
+            public float FlashSizeMax;
+            public float FlashLifetime;
+            public float FlashConeAngle;
+            public float SmokeSizeMin;
+            public float SmokeSizeMax;
+            public float SmokeLifetime;
+            public float SmokeAlpha;
+            public string CasingFamily; // "762x39" | "556x45"
         }
 
         private static readonly WeaponSpec[] Specs =
         {
-            new WeaponSpec { Name = "AK47",  PackPrefab = "AR_A_1", WeaponId = "ak47",  DisplayName = "AK-47",    Damage = 36, Rpm = 600, Magazine = 30, Reload = 2.43f, BaseSpread = 1.10f, BloomPerShot = 0.30f, MaxBloom = 2.5f, BloomRecovery = 4.0f, Kick = 2.4f, FireClips = AkFireClips, MagOutClip = AkMagOutClip, PitchBase = 1.00f, Volume = 1.0f },
-            new WeaponSpec { Name = "M4A4",  PackPrefab = "AR_B",   WeaponId = "m4a4",  DisplayName = "M4A4",     Damage = 33, Rpm = 666, Magazine = 30, Reload = 3.07f, BaseSpread = 0.90f, BloomPerShot = 0.25f, MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 2.0f, FireClips = M4FireClips, MagOutClip = M4MagOutClip, PitchBase = 1.00f, Volume = 1.0f },
-            new WeaponSpec { Name = "M4A1S", PackPrefab = "AR_C",   WeaponId = "m4a1s", DisplayName = "M4A1-S",   Damage = 38, Rpm = 600, Magazine = 25, Reload = 3.07f, BaseSpread = 0.80f, BloomPerShot = 0.22f, MaxBloom = 2.0f, BloomRecovery = 4.5f, Kick = 1.8f, FireClips = M4FireClips, MagOutClip = M4MagOutClip, PitchBase = 0.92f, Volume = 0.80f },
-            new WeaponSpec { Name = "Galil", PackPrefab = "AR_D",   WeaponId = "galil", DisplayName = "Galil AR", Damage = 30, Rpm = 666, Magazine = 35, Reload = 3.03f, BaseSpread = 1.20f, BloomPerShot = 0.30f, MaxBloom = 2.6f, BloomRecovery = 4.0f, Kick = 2.2f, FireClips = AkFireClips, MagOutClip = AkMagOutClip, PitchBase = 1.06f, Volume = 1.0f },
-            new WeaponSpec { Name = "FAMAS", PackPrefab = "AR_E",   WeaponId = "famas", DisplayName = "FAMAS",    Damage = 30, Rpm = 666, Magazine = 25, Reload = 3.30f, BaseSpread = 1.10f, BloomPerShot = 0.28f, MaxBloom = 2.4f, BloomRecovery = 4.2f, Kick = 1.9f, FireClips = M4FireClips, MagOutClip = M4MagOutClip, PitchBase = 1.05f, Volume = 1.0f },
-            new WeaponSpec { Name = "AUG",   PackPrefab = "AR_A_2", WeaponId = "aug",   DisplayName = "AUG",      Damage = 28, Rpm = 666, Magazine = 30, Reload = 3.80f, BaseSpread = 0.90f, BloomPerShot = 0.25f, MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 1.9f, FireClips = M4FireClips, MagOutClip = M4MagOutClip, PitchBase = 0.97f, Volume = 1.0f },
+            new WeaponSpec
+            {
+                Name = "AK47", PackPrefab = "AR_A_1", WeaponId = "ak47", DisplayName = "AK-47",
+                Damage = 36, Rpm = 600, Magazine = 30, Reload = 2.43f, BaseSpread = 1.10f, BloomPerShot = 0.30f,
+                MaxBloom = 2.5f, BloomRecovery = 4.0f, Kick = 2.4f, PitchBase = 1.00f, Volume = 1.0f,
+                FireClips = new[] { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" },
+                MagOutClip = "SFX_AK47_Reload.wav", DryFireClip = "SFX_AK47_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.55f, 0.15f), FlashColorMax = new Color(1f, 0.22f, 0.05f),
+                FlashSizeMin = 0.05f, FlashSizeMax = 0.09f, FlashLifetime = 0.09f, FlashConeAngle = 34f,
+                SmokeSizeMin = 0.05f, SmokeSizeMax = 0.09f, SmokeLifetime = 1.4f, SmokeAlpha = 0.35f,
+                CasingFamily = "762x39",
+            },
+            new WeaponSpec
+            {
+                Name = "M4A4", PackPrefab = "AR_B", WeaponId = "m4a4", DisplayName = "M4A4",
+                Damage = 33, Rpm = 666, Magazine = 30, Reload = 3.07f, BaseSpread = 0.90f, BloomPerShot = 0.25f,
+                MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 2.0f, PitchBase = 1.00f, Volume = 1.0f,
+                FireClips = new[] { "SFX_M4A4_Shot_01.wav", "SFX_M4A4_Shot_02.wav" },
+                MagOutClip = "SFX_M4A4_Reload.wav", DryFireClip = "SFX_M4A4_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.92f, 0.72f), FlashColorMax = new Color(1f, 0.65f, 0.32f),
+                FlashSizeMin = 0.035f, FlashSizeMax = 0.065f, FlashLifetime = 0.06f, FlashConeAngle = 24f,
+                SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.25f,
+                CasingFamily = "556x45",
+            },
+            new WeaponSpec
+            {
+                Name = "M4A1S", PackPrefab = "AR_C", WeaponId = "m4a1s", DisplayName = "M4A1-S",
+                Damage = 38, Rpm = 600, Magazine = 25, Reload = 3.07f, BaseSpread = 0.80f, BloomPerShot = 0.22f,
+                MaxBloom = 2.0f, BloomRecovery = 4.5f, Kick = 1.8f, PitchBase = 0.92f, Volume = 0.80f,
+                FireClips = new[] { "SFX_M4A1S_Shot_01.wav", "SFX_M4A1S_Shot_02.wav" },
+                MagOutClip = "SFX_M4A1S_Reload.wav", DryFireClip = "SFX_M4A1S_DryFire.wav",
+                // Susturuculu: alev KÜÇÜK ama gaz kaçağı dumanı diğerlerinden BÜYÜK/UZUN — bilinçli, hata değil.
+                FlashColorMin = new Color(0.85f, 0.82f, 0.78f), FlashColorMax = new Color(0.55f, 0.52f, 0.48f),
+                FlashSizeMin = 0.018f, FlashSizeMax = 0.032f, FlashLifetime = 0.045f, FlashConeAngle = 12f,
+                SmokeSizeMin = 0.05f, SmokeSizeMax = 0.09f, SmokeLifetime = 1.6f, SmokeAlpha = 0.40f,
+                CasingFamily = "556x45",
+            },
+            new WeaponSpec
+            {
+                Name = "Galil", PackPrefab = "AR_D", WeaponId = "galil", DisplayName = "Galil AR",
+                Damage = 30, Rpm = 666, Magazine = 35, Reload = 3.03f, BaseSpread = 1.20f, BloomPerShot = 0.30f,
+                MaxBloom = 2.6f, BloomRecovery = 4.0f, Kick = 2.2f, PitchBase = 1.06f, Volume = 1.0f,
+                FireClips = new[] { "SFX_GALIL_Shot_01.wav", "SFX_GALIL_Shot_02.wav" },
+                MagOutClip = "SFX_GALIL_Reload.wav", DryFireClip = "SFX_GALIL_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.68f, 0.28f), FlashColorMax = new Color(1f, 0.38f, 0.10f),
+                FlashSizeMin = 0.045f, FlashSizeMax = 0.08f, FlashLifetime = 0.08f, FlashConeAngle = 30f,
+                SmokeSizeMin = 0.045f, SmokeSizeMax = 0.08f, SmokeLifetime = 1.2f, SmokeAlpha = 0.30f,
+                CasingFamily = "556x45",
+            },
+            new WeaponSpec
+            {
+                Name = "FAMAS", PackPrefab = "AR_E", WeaponId = "famas", DisplayName = "FAMAS",
+                Damage = 30, Rpm = 666, Magazine = 25, Reload = 3.30f, BaseSpread = 1.10f, BloomPerShot = 0.28f,
+                MaxBloom = 2.4f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.05f, Volume = 1.0f,
+                FireClips = new[] { "SFX_FAMAS_Shot_01.wav", "SFX_FAMAS_Shot_02.wav" },
+                MagOutClip = "SFX_FAMAS_Reload.wav", DryFireClip = "SFX_FAMAS_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.88f, 0.58f), FlashColorMax = new Color(1f, 0.52f, 0.18f),
+                FlashSizeMin = 0.03f, FlashSizeMax = 0.055f, FlashLifetime = 0.06f, FlashConeAngle = 20f,
+                SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.28f,
+                CasingFamily = "556x45",
+            },
+            new WeaponSpec
+            {
+                Name = "AUG", PackPrefab = "AR_A_2", WeaponId = "aug", DisplayName = "AUG",
+                Damage = 28, Rpm = 666, Magazine = 30, Reload = 3.80f, BaseSpread = 0.90f, BloomPerShot = 0.25f,
+                MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 1.9f, PitchBase = 0.97f, Volume = 1.0f,
+                FireClips = new[] { "SFX_AUG_Shot_01.wav", "SFX_AUG_Shot_02.wav" },
+                MagOutClip = "SFX_AUG_Reload.wav", DryFireClip = "SFX_AUG_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.90f, 0.74f), FlashColorMax = new Color(0.82f, 0.58f, 0.38f),
+                FlashSizeMin = 0.028f, FlashSizeMax = 0.048f, FlashLifetime = 0.055f, FlashConeAngle = 17f,
+                SmokeSizeMin = 0.03f, SmokeSizeMax = 0.05f, SmokeLifetime = 0.9f, SmokeAlpha = 0.25f,
+                CasingFamily = "556x45",
+            },
         };
 
         private enum BuildOutcome { FromTemplate, Rebound, Failed }
@@ -141,7 +229,11 @@ namespace VortexArena.Core.Editor
 
                 AssetDatabase.SaveAssets();
 
-                // ---- ADIM 2: WPN prefabları.
+                // ---- ADIM 2: WPN prefabları (kovan/duman kaynak asset'leri önce, WPN'ler onlara muhtaç).
+                GameObject casing762 = EnsureCasingPrefab(Casing762Path, BulletPack762Path, live);
+                GameObject casing556 = EnsureCasingPrefab(Casing556Path, BulletPack556Path, live);
+                Material smokeMaterial = EnsureMuzzleSmokeMaterial();
+
                 for (int i = 0; i < Specs.Length; i++)
                 {
                     if (defs[i] == null)
@@ -152,7 +244,7 @@ namespace VortexArena.Core.Editor
 
                     try
                     {
-                        switch (BuildWeaponPrefab(Specs[i], defs[i], template, live))
+                        switch (BuildWeaponPrefab(Specs[i], defs[i], template, casing762, casing556, smokeMaterial, live))
                         {
                             case BuildOutcome.FromTemplate: wpnTemplate++; break;
                             case BuildOutcome.Rebound: wpnRebound++; break;
@@ -254,11 +346,14 @@ namespace VortexArena.Core.Editor
             SetNumber(so, "spareMagazines", SpareMagazines, ctx);
             SetEnumByName(so, "reserveMode", ReserveModeName, ctx);
             SetNumber(so, "reloadTime", spec.Reload, ctx);
-            SetClipArray(so, "fireClips", spec.FireClips, ctx);
-            SetObjectRef(so, "magOutClip", LoadClip(spec.MagOutClip, ctx), ctx, true);
-            SetObjectRef(so, "magInClip", null, ctx, true);
-            SetObjectRef(so, "dryFireClip", LoadClip(DryFireClipName, ctx), ctx, true);
-            SetObjectRef(so, "pickupClip", null, ctx, true);
+            // Ses klipleri YALNIZ boşsa doldurulur — WD_<Ad>.asset'te Inspector'dan elle
+            // sürüklenen bir klip varsa bu araç bir daha çalıştırılsa da SİLİNMEZ/EZİLMEZ.
+            // Sesi değiştirmek için: Assets/_Shared/Arsenal/Data/WD_<Ad>.asset'i seç, ilgili
+            // alana (Fire Clips / Mag Out Clip / Dry Fire Clip) yeni bir AudioClip sürükle.
+            SetClipArrayIfEmpty(so, "fireClips", spec.FireClips, ctx);
+            SetObjectRefIfEmpty(so, "magOutClip", LoadClip(spec.MagOutClip, ctx), ctx);
+            SetObjectRefIfEmpty(so, "dryFireClip", LoadClip(spec.DryFireClip, ctx), ctx);
+            // magInClip / pickupClip: spec'te karşılığı yok — hiç dokunulmaz (elle atanmışsa kalır).
             SetNumber(so, "firePitchBase", spec.PitchBase, ctx);
             SetNumber(so, "firePitchJitter", PitchJitter, ctx);
             SetNumber(so, "fireVolume", spec.Volume, ctx);
@@ -276,7 +371,8 @@ namespace VortexArena.Core.Editor
         /// bağları kurulur ve WPN_&lt;Ad&gt;.prefab'a kaydedilir. Şablon yoksa mevcut WPN yerinde
         /// yalnız definition bağlarıyla güncellenir.
         /// </summary>
-        private static BuildOutcome BuildWeaponPrefab(WeaponSpec spec, WeaponDefinition def, GameObject template, List<GameObject> live)
+        private static BuildOutcome BuildWeaponPrefab(WeaponSpec spec, WeaponDefinition def, GameObject template,
+            GameObject casing762, GameObject casing556, Material smokeMaterial, List<GameObject> live)
         {
             string wpnPath = PrefabDir + "/WPN_" + spec.Name + ".prefab";
             string ctx = "WPN_" + spec.Name;
@@ -299,7 +395,7 @@ namespace VortexArena.Core.Editor
                 // Güncelleme modu: şablon (veya pack modeli) yok ama WPN varsa yalnız bağları tazele.
                 if (existingWpn != null)
                 {
-                    RebindExistingPrefab(wpnPath, def, ctx);
+                    RebindExistingPrefab(wpnPath, spec, def, casing762, casing556, smokeMaterial, ctx);
                     return BuildOutcome.Rebound;
                 }
 
@@ -474,6 +570,8 @@ namespace VortexArena.Core.Editor
             BindFields(animator, ctx, ("weapon", weapon), ("weaponAudio", weaponAudio), ("modelRoot", modelT));
             BindFields(reloadGesture, ctx, ("weapon", weapon));
 
+            ApplyVfxAndShellKit(inst, spec, casing762, casing556, smokeMaterial, ctx);
+
             // NOT: eski Weapon alan kalıntıları (team, damage vs.) yeni script'te alan olmadığı
             // için kayıt sırasında kendiliğinden düşer — ek işlem gerekmez.
 
@@ -489,8 +587,14 @@ namespace VortexArena.Core.Editor
             return BuildOutcome.FromTemplate;
         }
 
-        /// <summary>Güncelleme modu: WPN içeriğini açıp yalnız definition bağlarını tazeler.</summary>
-        private static void RebindExistingPrefab(string wpnPath, WeaponDefinition def, string ctx)
+        /// <summary>
+        /// Güncelleme modu: WPN içeriğini açıp definition bağlarını tazeler VE silaha özgü namlu
+        /// alevi/duman/kovan kitini (<see cref="ApplyVfxAndShellKit"/>) uygular — şablon
+        /// (AK47_Red.prefab) artık yok, bu yüzden asıl çalışan yol budur; model/Muzzle konumuna
+        /// DOKUNULMAZ (elle ayarlanmış olabilir).
+        /// </summary>
+        private static void RebindExistingPrefab(string wpnPath, WeaponSpec spec, WeaponDefinition def,
+            GameObject casing762, GameObject casing556, Material smokeMaterial, string ctx)
         {
             GameObject contents = PrefabUtility.LoadPrefabContents(wpnPath);
             try
@@ -528,6 +632,11 @@ namespace VortexArena.Core.Editor
                     }
 
                     so.ApplyModifiedPropertiesWithoutUndo();
+                }
+
+                if (weapon != null)
+                {
+                    ApplyVfxAndShellKit(contents, spec, casing762, casing556, smokeMaterial, ctx);
                 }
 
                 PrefabUtility.SaveAsPrefabAsset(contents, wpnPath);
@@ -650,6 +759,80 @@ namespace VortexArena.Core.Editor
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Kovan prefabı yoksa üretir (varsa dokunmaz): pack'teki mermi modelini
+        /// unpack eder, küçük bir Rigidbody + bounds'a göre BoxCollider ekler.
+        /// Fiziksel doğruluk hedeflenmez — kısa ömürlü, havuzlanan bir FX objesidir.
+        /// </summary>
+        private static GameObject EnsureCasingPrefab(string path, string sourcePackPath, List<GameObject> live)
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePackPath);
+            if (sourcePrefab == null)
+            {
+                Warn("Kovan kaynağı yok: " + sourcePackPath + " — '" + path + "' üretilemedi.");
+                return null;
+            }
+
+            var inst = (GameObject)PrefabUtility.InstantiatePrefab(sourcePrefab);
+            live.Add(inst);
+            PrefabUtility.UnpackPrefabInstance(inst, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            inst.name = System.IO.Path.GetFileNameWithoutExtension(path);
+
+            var rb = inst.AddComponent<Rigidbody>();
+            rb.mass = CasingMassKg;
+
+            Bounds b = ComputeLocalBounds(inst.transform, inst, "Casing:" + inst.name);
+            var box = inst.AddComponent<BoxCollider>();
+            box.center = b.center;
+            box.size = new Vector3(Mathf.Max(b.size.x, 0.006f), Mathf.Max(b.size.y, 0.006f), Mathf.Max(b.size.z, 0.006f));
+
+            PrefabUtility.SaveAsPrefabAsset(inst, path, out bool saved);
+            Object.DestroyImmediate(inst);
+
+            if (!saved)
+            {
+                Debug.LogError(Log + "Kovan prefabı kaydedilemedi: " + path);
+                return null;
+            }
+
+            return AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        }
+
+        /// <summary>
+        /// M_MuzzleFlash.mat'ın kopyası ama Additive yerine Alpha blend — namlu dumanı
+        /// için (parlayan ışık değil, gri/soluk duman görünsün). Yoksa üretir, varsa dokunmaz.
+        /// </summary>
+        private static Material EnsureMuzzleSmokeMaterial()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(SmokeMaterialPath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var flashMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/M_MuzzleFlash.mat");
+            if (flashMat == null)
+            {
+                Warn("M_MuzzleFlash.mat bulunamadı — M_MuzzleSmoke üretilemedi.");
+                return null;
+            }
+
+            var smokeMat = new Material(flashMat) { name = "M_MuzzleSmoke" };
+            smokeMat.SetFloat("_Blend", 0f); // Alpha (flash'ta 2 = Additive)
+            smokeMat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            smokeMat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            smokeMat.SetColor("_BaseColor", new Color(0.6f, 0.6f, 0.6f, 1f));
+
+            AssetDatabase.CreateAsset(smokeMat, SmokeMaterialPath);
+            return smokeMat;
         }
 
         // ------------------------------------------------ ADIM 4: WeaponCatalog
@@ -1087,8 +1270,38 @@ namespace VortexArena.Core.Editor
             p.enumValueIndex = index;
         }
 
-        /// <summary>AudioClip dizisini dosya adlarından doldurur.</summary>
-        private static void SetClipArray(SerializedObject so, string field, string[] clipNames, string ctx)
+        /// <summary>
+        /// <see cref="SetObjectRef"/> gibi ama HÂLÂ BOŞSA yazar — alanda zaten bir değer varsa
+        /// (Inspector'dan elle sürüklenmiş olabilir) dokunmaz. Ses klibi alanları için: bu araç
+        /// tekrar çalıştırıldığında kullanıcının seçtiği klip SİLİNMESİN diye.
+        /// </summary>
+        private static void SetObjectRefIfEmpty(SerializedObject so, string field, Object value, string ctx)
+        {
+            SerializedProperty p = FindProp(so, field, ctx);
+            if (p == null)
+            {
+                return;
+            }
+
+            if (p.propertyType != SerializedPropertyType.ObjectReference)
+            {
+                Warn(ctx + ": '" + field + "' obje referansı değil (" + p.propertyType + ").");
+                return;
+            }
+
+            if (p.objectReferenceValue != null)
+            {
+                return; // elle atanmış — dokunma
+            }
+
+            p.objectReferenceValue = value;
+        }
+
+        /// <summary>
+        /// <see cref="SetClipArray"/> gibi ama dizi zaten AYNI UZUNLUKTA ve TAMAMEN DOLUYSA
+        /// dokunmaz — kullanıcının Inspector'dan elle seçtiği klipler korunur.
+        /// </summary>
+        private static void SetClipArrayIfEmpty(SerializedObject so, string field, string[] clipNames, string ctx)
         {
             SerializedProperty p = FindProp(so, field, ctx);
             if (p == null)
@@ -1100,6 +1313,20 @@ namespace VortexArena.Core.Editor
             {
                 Warn(ctx + ": '" + field + "' dizi değil.");
                 return;
+            }
+
+            bool alreadyFilled = p.arraySize == clipNames.Length;
+            for (int i = 0; alreadyFilled && i < p.arraySize; i++)
+            {
+                if (p.GetArrayElementAtIndex(i).objectReferenceValue == null)
+                {
+                    alreadyFilled = false;
+                }
+            }
+
+            if (alreadyFilled)
+            {
+                return; // elle atanmış — dokunma
             }
 
             p.arraySize = clipNames.Length;
@@ -1174,6 +1401,133 @@ namespace VortexArena.Core.Editor
             catch (Exception e)
             {
                 Warn(ctx + ": " + target.GetType().Name + "." + propertyName + "=" + memberName + " ataması başarısız — " + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// Namlu alevi/duman/kovan kitini bir WPN kökü üzerinde kurar — hem şablondan taze üretilen
+        /// (<see cref="BuildWeaponPrefab"/>) hem yerinde güncellenen (<see cref="RebindExistingPrefab"/>)
+        /// WPN'lerde AYNI mantık çalışsın diye ortak metod. Muzzle/MuzzleFlash'ı OLDUĞU YERDE bulur,
+        /// TAŞIMAZ — yerinde güncellemede model konumu elle ayarlanmış olabilir.
+        /// </summary>
+        private static void ApplyVfxAndShellKit(GameObject root, WeaponSpec spec,
+            GameObject casing762, GameObject casing556, Material smokeMaterial, string ctx)
+        {
+            Transform rootT = root.transform;
+            Transform flashT = FindDeepChild(rootT, "MuzzleFlash");
+            ParticleSystem flashPs = flashT != null ? flashT.GetComponent<ParticleSystem>() : null;
+            if (flashPs != null)
+            {
+                ConfigureMuzzleFlash(flashPs, spec);
+                ConfigureMuzzleSmoke(flashPs, spec, smokeMaterial);
+            }
+            else
+            {
+                Warn(ctx + ": MuzzleFlash/ParticleSystem bulunamadı — namlu alevi/dumanı ayarlanamadı.");
+            }
+
+            // ---- Kovan çıkış noktası: gövdenin yan tarafı, namludan geriye yakın.
+            Bounds bounds = ComputeLocalBounds(rootT, root, ctx);
+            Transform ejectT = rootT.Find("Eject");
+            if (ejectT == null)
+            {
+                var ejectGo = new GameObject("Eject");
+                ejectT = ejectGo.transform;
+                ejectT.SetParent(rootT, false);
+            }
+
+            ejectT.localPosition = new Vector3(
+                bounds.extents.x * 0.9f,
+                bounds.center.y + bounds.extents.y * 0.25f,
+                bounds.center.z - bounds.extents.z * 0.2f);
+            ejectT.localRotation = Quaternion.identity;
+
+            Component shellEjector = EnsureComponentByTypeName(root, "ShellEjector", ctx);
+            GameObject casingForSpec = spec.CasingFamily == "762x39" ? casing762 : casing556;
+            BindFields(shellEjector, ctx, ("casingPrefab", casingForSpec), ("ejectPoint", ejectT));
+        }
+
+        /// <summary>Namlu alevi particle modüllerini (renk/boyut/ömür/koni açısı) silaha göre ayarlar.</summary>
+        private static void ConfigureMuzzleFlash(ParticleSystem ps, WeaponSpec spec)
+        {
+            var main = ps.main;
+            main.startColor = new ParticleSystem.MinMaxGradient(spec.FlashColorMin, spec.FlashColorMax);
+            main.startSize = new ParticleSystem.MinMaxCurve(spec.FlashSizeMin, spec.FlashSizeMax);
+            main.startLifetime = spec.FlashLifetime;
+
+            var shape = ps.shape;
+            if (shape.enabled)
+            {
+                shape.angle = spec.FlashConeAngle;
+            }
+        }
+
+        /// <summary>
+        /// MuzzleFlash'ın altında "Smoke" adlı bir child particle sistemi kurar/günceller ve
+        /// flash'ın Sub Emitters modülüne "Birth" tetikleyicisiyle bağlar — Weapon.Fire()'daki
+        /// tek bir muzzleFlash.Emit() çağrısı hem alevi hem dumanı otomatik tetikler.
+        /// </summary>
+        private static void ConfigureMuzzleSmoke(ParticleSystem flashPs, WeaponSpec spec, Material smokeMaterial)
+        {
+            Transform flashT = flashPs.transform;
+            Transform smokeT = flashT.Find("Smoke");
+            GameObject smokeGo = smokeT != null ? smokeT.gameObject : new GameObject("Smoke");
+            if (smokeT == null)
+            {
+                smokeGo.transform.SetParent(flashT, false);
+            }
+
+            ParticleSystem smokePs = smokeGo.GetComponent<ParticleSystem>();
+            if (smokePs == null)
+            {
+                smokePs = smokeGo.AddComponent<ParticleSystem>();
+            }
+
+            var main = smokePs.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.duration = 0.3f;
+            main.startLifetime = spec.SmokeLifetime;
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.15f, 0.35f);
+            main.startSize = new ParticleSystem.MinMaxCurve(spec.SmokeSizeMin, spec.SmokeSizeMax);
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.6f, 0.6f, 0.6f, spec.SmokeAlpha));
+            main.gravityModifier = -0.05f;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+            var emission = smokePs.emission;
+            emission.enabled = true;
+            emission.rateOverTime = 22f;
+
+            var shape = smokePs.shape;
+            shape.enabled = true;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 18f;
+            shape.radius = 0.01f;
+
+            var renderer = smokeGo.GetComponent<ParticleSystemRenderer>();
+            if (renderer == null)
+            {
+                renderer = smokeGo.AddComponent<ParticleSystemRenderer>();
+            }
+            if (smokeMaterial != null)
+            {
+                renderer.sharedMaterial = smokeMaterial;
+            }
+
+            var subEmitters = flashPs.subEmitters;
+            subEmitters.enabled = true;
+            bool alreadyLinked = false;
+            for (int i = 0; i < subEmitters.subEmittersCount; i++)
+            {
+                if (subEmitters.GetSubEmitterSystem(i) == smokePs)
+                {
+                    alreadyLinked = true;
+                    break;
+                }
+            }
+            if (!alreadyLinked)
+            {
+                subEmitters.AddSubEmitter(smokePs, ParticleSystemSubEmitterType.Birth, ParticleSystemSubEmitterProperties.InheritNothing, 1f);
             }
         }
     }
