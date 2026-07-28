@@ -192,7 +192,7 @@ namespace VortexArena.Core.Editor
         /// <para>
         /// <b>Arena ÖLÇÜSÜ yazılmaz.</b> Sunucu metre bilmez (pozlar istemci-otoriter, arena
         /// uzayında gelir); ayrıca her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile
-        /// değil, yani tek bir <c>sizeX/sizeZ</c> çifti o arenayı tarif etmiyor.
+        /// değil, yani tek bir ölçü çifti o arenayı tarif etmez.
         /// <c>MapDefinition.size</c> yalnız İSTEMCİDE yaşar (admin mini haritasının metre ölçeği
         /// + <c>ArenaBoundary</c> yoksa gözlemci kamerasının kadraj yedeği).
         /// </para>

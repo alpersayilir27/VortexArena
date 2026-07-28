@@ -42,8 +42,8 @@ internal static class Program
 
     // ---- --admin ayarları ----
     /// <summary>--admin'in başlattığı maçın modu/sahnesi. Varsayılan tdm/Arena10x10; başka arena
-    /// veya mod denemek için <c>--map &lt;sahneAdı&gt;</c> / <c>--mode &lt;modId&gt;</c> (Faz 4: birden
-    /// çok arena var). Sahne adı hem BuildScenes'te hem sunucunun maps.json'ında olmalı.</summary>
+    /// veya mod denemek için <c>--map &lt;sahneAdı&gt;</c> / <c>--mode &lt;modId&gt;</c>.
+    /// Sahne adı hem BuildScenes'te hem sunucunun maps.json'ında olmalı.</summary>
     private static string AdminModeId = "tdm";
     private static string AdminSceneName = "Arena10x10";
 

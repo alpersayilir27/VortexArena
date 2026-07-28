@@ -7,9 +7,8 @@ namespace VortexArena.Server.Core;
 ///
 /// <para><b>Arena ÖLÇÜSÜ burada YOKTUR</b> ve eklenmemelidir: sunucu metre bilmez (pozlar
 /// istemci-otoriter, arena uzayında gelir) ve her işletmenin alanı farklı — çoğu kare/dikdörtgen
-/// bile olmadığı için tek bir <c>sizeX/sizeZ</c> çifti arenayı tarif etmiyor. Ölçü yalnız
-/// istemcide, <c>MapDefinition.size</c>'da yaşar. Bilinmeyen alanlar JsonUtil'de sessizce
-/// yok sayıldığı için eski <c>maps.json</c> dosyaları da sorunsuz okunur.</para></summary>
+/// bile olmadığı için tek bir ölçü çifti arenayı tarif etmez. Ölçü yalnız istemcide,
+/// <c>MapDefinition.size</c>'da yaşar.</para></summary>
 public sealed class MapEntry
 {
     public string sceneName = "";
@@ -30,11 +29,11 @@ public sealed class MapTableFile
 /// MapDefinition SO'larından üretir — dosya ELLE DÜZENLENMEZ (export ezer).
 ///
 /// <para>Dosya yoksa varsayılan ÜRETİLMEZ ve dosya YAZILMAZ — sunucunun uyduracağı bir harita
-/// listesi yoktur. Boş tablo = doğrulama kapalı, yani Faz 3 davranışı (geriye dönük uyumlu).
+/// listesi yoktur. Boş tablo = harita doğrulaması kapalı.
 /// Yükleme sonrası salt-okunurdur → kilit gerekmez.</para>
 ///
-/// <para>Sunucunun okuduğu TEK içerik tablosu budur; silah tablosu (weapons.json) §10.3 ile
-/// kaldırıldı — hasarı istemci bildirir.</para></summary>
+/// <para>Sunucunun okuduğu TEK içerik tablosu budur; silah tablosu (weapons.json) YOKTUR
+/// (§10.3) — hasarı istemci bildirir.</para></summary>
 public sealed class MapTable
 {
     private readonly Dictionary<string, MapEntry> _byScene = new(StringComparer.Ordinal);

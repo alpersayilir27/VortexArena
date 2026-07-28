@@ -43,7 +43,7 @@ namespace VortexArena.Net
         public string ServerIp { get; private set; }
         public int ServerPort { get; private set; }
 
-        /// <summary>Aynı kalıcı objede yaşayan UDP poz kanalı (Faz 1: yalnız kayıt).</summary>
+        /// <summary>Aynı kalıcı objede yaşayan UDP poz kanalı.</summary>
         public UdpStateChannel UdpChannel { get; private set; }
 
         /// <summary>Uzak oyuncu poz kayıtçısı: snapshot'ları biriktirir, interpolasyonlu okutur.</summary>

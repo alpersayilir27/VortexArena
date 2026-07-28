@@ -216,8 +216,8 @@ Weapon.Fire() / balta savurma / ok isabeti / bomba patlaması
 
 **Hasarı istemci hesaplar, sunucu aynen uygular.** Sunucuda silah tablosu, `weaponId` beyaz listesi
 ve atış hızı denetimi **yoktur** — ürün gözetimli özel alanda (işletme, turnuva) çalıştığı için
-hile koruması bilinçli olarak eklenmez; v1'deki denetimler meşru saçma/patlama/yaylım vuruşlarını
-düşürdüğü için kaldırıldı. Yukarıdaki beş kontrol hile denetimi değil **durum tutarlılığı**dır.
+hile koruması bilinçli olarak eklenmez; böyle bir denetim meşru saçma/patlama/yaylım vuruşlarını
+sessizce düşürür. Yukarıdaki beş kontrol hile denetimi değil **durum tutarlılığı**dır.
 
 Pratik sonucu: **yeni bir hasar kaynağı eklemek sıfır sunucu işidir.** Bomba = etkilenen her hedef
 için bir `hit_report` (mesafeye göre düşen hasarı istemci hesaplar); yay çekiş gücü, düşme/tuzak
@@ -428,7 +428,7 @@ sahne kurulumu istemez; `shot_fired`'ı tüketip uzak oyuncunun namlu alevi + ko
 havuzlu çalar) + `AmmoHud` (`Core/UI` — kendini önyükler; tutulan silah(lar)ın adı/mermisi/yedek
 şarjörleri görüş alanının sağ altına düşen `HudFollow`'lu tembel-takip panelinde; silah
 tutulmuyorken gizli, yalnız `Weapon.Active`/`ActiveChanged` + silah olaylarıyla yenilenir —
-silah-üstü eski `WeaponAmmoDisplay` KALDIRILDI) + `ArenaCombat` / `WeaponGranter` (aşağıdaki
+mermi göstergesi silahın ÜSTÜNE koyulmaz) + `ArenaCombat` / `WeaponGranter` (aşağıdaki
 tabloda), `Health` (sunucudan set edilir), `PlayerCombatState`
 (yerel oyuncunun takım/can/ateş yetkisi/canlanma akışı), `RemoteAvatar` + `RemoteHitBox`
 (uzak oyuncu gövdesi ve isabet kutusu),
@@ -722,7 +722,7 @@ konsoluna tek satır sebep yazar.
 ## 7. Tuzaklar (pahalıya öğrenilmiş kurallar)
 
 1. **`maps.json` ELLE DÜZENLENMEZ** — bir sonraki export ezer. Tek doğruluk kaynağı Unity
-   SO'larıdır. (`server.json` elle, `devices.json` sunucu üretir; `weapons.json` artık yok.)
+   SO'larıdır. (`server.json` elle, `devices.json` sunucu üretir; `weapons.json` diye bir dosya yoktur.)
 2. **Meta umbrella paketi (`com.meta.xr.sdk.all`) ASLA eklenmez** — Meta Project Setup Tool önerse
    bile. Çektiği `voice` paketi Android namespace çakışmasıyla build'i kırıyor. Bireysel paketler:
    core + interaction + interaction.ovr @203.0.0, audio @85.0.0 (spatializer, pinli).
@@ -773,7 +773,7 @@ konsoluna tek satır sebep yazar.
     hangisini döndüreceği garanti değil ve `RemoteAvatar` ad etiketleri yanlış kameraya döner.
     Sahnede kendi kamerasını kuran her şey (admin gözlemci) rig kökünü kapatmalı ve
     **kendi `AudioListener`'ını** eklemelidir (rig kapanınca sahnede dinleyici kalmaz).
-    Masaüstü XR ayarı: Standalone `Initialize XR on Startup` **AÇIK** (27 Tem 2026'da geri açıldı).
+    Masaüstü XR ayarı: Standalone `Initialize XR on Startup` **AÇIK kalmalı**.
     Sebep: **editör Play modu Android sekmesini değil PC/Standalone ayarını okur** (editörün kendisi
     bir PC uygulamasıdır) → kapalıyken Quest Link ile Play'e basmak gözlüğe hiçbir şey göndermez,
     `XRSettings.enabled` false kalır. Kapatılırsa VR'ı denemenin tek yolu her seferinde APK almaktır.
@@ -848,16 +848,14 @@ konsoluna tek satır sebep yazar.
     bir düzlem tanımlamaz (roll bilinemez) ve sanal dünyayı eğmek görsel "yukarı" ile
     yerçekimini ayrıştırıp VR'da mide bulantısı yapar. Ayrıca ölçülebilecek eğim (~5–10 mm),
     operatörün kumanda tutuş farkının (±10–20 mm) altında kalır.
-31. **Sunucu metre bilmez — `maps.json`'a arena ölçüsü koyulmaz.** `sizeX`/`sizeZ` alanları
-    kaldırıldı (28 Tem 2026); tek tüketicileri `start_match`'in konsol log satırıydı, hiçbir
-    doğrulamaya girmiyorlardı. Kaldırma kararının asıl gerekçesi ölçünün **ölçülemez** oluşu:
-    her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil, yani tek bir ölçü çifti o
-    arenayı tarif etmiyor — sunucuya gönderilen sayı, doğru sandığın yanlış bir sayı olurdu.
-    `MapDefinition.size` **istemcide kalır** (admin mini haritasının metre ölçeği +
-    `ArenaBoundary` yoksa gözlemci kamerasının kadraj yedeği); arenanın gerçek sınırı zaten
-    `ArenaBoundary.halfExtentX/Z`'dir. Genel kural: **sunucuya yalnız sunucunun karar vermek
-    için okuduğu alan gider** — "ileride lazım olur" diye alan taşımak, iki uçta sessizce
-    sapan ikinci bir doğruluk kaynağı üretir.
+31. **Sunucu metre bilmez — `maps.json`'a arena ölçüsü koyulmaz.** Sebep ölçünün kullanılmaması
+    değil, **ölçülemez** olması: her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil,
+    yani tek bir ölçü çifti o arenayı tarif etmez — sunucuya gönderilen sayı, doğru sandığın
+    yanlış bir sayı olurdu. `MapDefinition.size` **istemcide kalır** (admin mini haritasının
+    metre ölçeği + `ArenaBoundary` yoksa gözlemci kamerasının kadraj yedeği); arenanın gerçek
+    sınırı zaten `ArenaBoundary.halfExtentX/Z`'dir. Genel kural: **sunucuya yalnız sunucunun
+    karar vermek için okuduğu alan gider** — "ileride lazım olur" diye alan taşımak, iki uçta
+    sessizce sapan ikinci bir doğruluk kaynağı üretir.
 
 ---
 
@@ -875,18 +873,18 @@ destekler) + arena şablon sihirbazı ve
 `Ctrl+Alt+R`) · rolden bağımsız adres zinciri + `ConnectionOverlay` bağlantı hata ekranı ·
 Flutter launcher + üç dağıtım betiği.
 
-> **Mod altyapısının değeri FFA ile kanıtlandı:** ikinci mod protokole **tek bir alan bile
-> eklemedi** ve TDM'in tek satırını değiştirmedi — sunucuda bir `IGameMode` dosyası + tek satır
-> kayıt, istemcide bir mod kutusu + bir paylaşımlı bileşen (`WeaponGranter`). Sonraki modlar
-> (turnuva, silah yarışı, bölge kontrolü, zombi) aynı ucuzlukta gelmeli; gelmiyorsa eksik olan
-> `ModeRules`'te bir kuraldır, istemcide bir `if` değil.
+> **Yeni bir modun maliyeti ne olmalı:** `ffa` bugün protokolde **tek bir alan bile tutmuyor** ve
+> TDM ile hiçbir kod paylaşmıyor — sunucuda bir `IGameMode` dosyası + tek satır kayıt, istemcide
+> bir mod kutusu + bir paylaşımlı bileşen (`WeaponGranter`). Sonraki modlar (turnuva, silah
+> yarışı, bölge kontrolü, zombi) aynı ucuzlukta gelmeli; gelmiyorsa eksik olan `ModeRules`'te bir
+> kuraldır, istemcide bir `if` değil.
 
 **`plan/` şu an boş** — sıradaki planlanmış iş yok.
 
 **Kapsam dışı — bilinçli kararlar** (yeniden gündeme gelirse bu gerekçeler tartışılmalı):
 
 - **"Oyuncunun gözünden izleme" video akışıyla DEĞİL, oyun datasıyla.** MJPEG/video akışı (cosmos
-  `CameraStreamer` portu) **iptal edildi**: admin zaten sahneyi kendi makinesinde render ediyor ve
+  `CameraStreamer` portu) **kapsam dışıdır**: admin zaten sahneyi kendi makinesinde render ediyor ve
   poz/can/skor/olay verisi ağdan geliyor. İstenen görüntü bu mevcut datadan üretilecek (admin
   kamerasını hedef oyuncunun poz'una kilitlemek); protokole yeni binary kare tipi, sunucuya kare
   relay'i ve Quest'te encode maliyeti **girmeyecek**.

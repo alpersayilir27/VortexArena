@@ -29,7 +29,7 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
   `Ctrl+Alt+R`): hedef listesi `dev-targets.json`'dan gelir (commit'li), seçimin kendisi
   `EditorPrefs`'te kişisel kalır → rol/IP değiştirmek hiçbir sahne/asset kirletmez.
   ⚠️ Boot.unity'ye (ya da başka bir sahneye) rol/IP için **[SerializeField] override KOYULMAZ** —
-  `AppBoot.editorRoleOverride`/`editorServerIp` tam bu yüzden kaldırıldı.
+  `AppBoot`'ta böyle bir alan yoktur ve eklenmez: her rol değişimi sahneyi kirletir.
 - Doğrulama batch'lenir (`batch-build-verification.md`), editör doğrulaması Unity CLI ile yapılır
   (`unity-cli.md`), ağır uygulama işi alt-ajanlara devredilir (`delegate-to-subagents.md`),
   hafıza yalnız proje scope'unda tutulur (`ai-memory-scope.md`).
@@ -65,7 +65,7 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `ThirdPartyPackages/MixamoCharacters/`), `Data/` (**`Data/Resources/GameCatalog.asset`** —
   prosedürel admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ),
   `Scenes/` (Boot, Lobby).
-  ⚠️ Ayrı bir admin dashboard sahnesi YOKTUR (`AdminConsole.unity` kaldırıldı) — admin
+  ⚠️ Ayrı bir admin dashboard sahnesi YOKTUR ve açılmaz — admin
   oyuncularla aynı sahnede duran bir gözlemcidir.
   ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
 - `Assets/Arenas/Standard/<AXxX veya TemaAdı>/` ve `Assets/Arenas/Venues/<İşletme>/` — arena kutuları:
@@ -153,8 +153,9 @@ aynı dosyaları derler; Unity API'si girerse server derlemesi kırılır (bilin
 ⚠️ **Eşzamanlı oyuncu/admin KOTASI YOKTUR** (lisanslama geldiğinde eklenecek). Tek tavan
 `PLAYER_ID_MAX = 255` ve o ürün kararı değil, `playerId`'nin UDP'de `u8` olması; 16'dan fazla
 pozlu oyuncuda snapshot MTU'ya sığan parçalara bölünür (istemcide birleştirme gerekmez).
-Yeni bir sayısal sınır eklemek istersen bunu protokol sabiti gibi yazma — `MAX_PLAYERS` tam bu
-yüzden kaldırıldı; dev aracı emniyeti gerekiyorsa `DevProcesses.MaxDevBots` gibi yerel bir sabit kullan.
+Yeni bir sayısal sınır eklemek istersen bunu protokol sabiti gibi yazma (`MAX_PLAYERS` gibi bir
+sabit YOKTUR ve eklenmez); dev aracı emniyeti gerekiyorsa `DevProcesses.MaxDevBots` gibi yerel bir
+sabit kullan.
 
 ## Akış
 
@@ -195,13 +196,14 @@ yapmaz.** Yaptığı iş: klasörleri (`{Scenes,Data,Prefabs}`) + kaynak sahneni
 ModeDefinition'lara ekler, Build Settings'e koyar (sahne adı = katalog anahtarı). Değeri
 **bileşen bütünlüğü**: kopyalanan sahne ağa bağlanmak için gereken her şeyi hazır taşır
 (`ArenaBoundary`, `ArenaCalibrator` + işaretçiler, `PlayerPoseTracker`, `RemotePlayerSpawner`,
-`ModeHudSpawner`, `BaseZone`'lar, BB rig). Ölçekleme bilinçli olarak KALDIRILDI (28 Tem 2026):
+`ModeHudSpawner`, `BaseZone`'lar, BB rig). **Ölçekleme bilinçli olarak yoktur ve eklenmez:**
 her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen bile değil, plan zaten baştan
-çiziliyor — orantılı ölçekleme işe yarar taslak değil, elle düzeltilecek yalancı-doğru
-üretiyordu. ELDE: geometri çizimi · `ArenaBoundary.halfExtentX/Z` + `MapDefinition.size` ·
-kalibrasyon işaretçilerinin yerleşimi (yerleri zemin bandından gelir) · tek `SpawnPoint` ·
-NavMesh/ışık bake. Sonrasında
-`Tools > VortexArena > Export Server Config` çalıştır (sunucu `maps.json` tazelensin).
+çiziliyor — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek bir yalancı-doğru
+üretir. ELDE: geometri çizimi · `ArenaBoundary.halfExtentX/Z` + `MapDefinition.size` (**yalnız
+istemci** — admin mini haritası + gözlemci kamerası kadraj yedeği) · kalibrasyon işaretçilerinin
+yerleşimi (yerleri zemin bandından gelir) · tek `SpawnPoint` · NavMesh/ışık bake. Sonrasında
+`Tools > VortexArena > Export Server Config` çalıştır — **yeni `sceneName` `maps.json`'a girsin
+diye** (ölçü için değil, oraya arena boyutu yazılmaz).
 **Yeni mod:** `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol;
 mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafında `Modes/<Ad>Mode.cs`
 (IGameMode) + `MatchDirector.RegisterModes()`'a bir satır + `Docs/ArenaNet-Protokol.md`'ye modId ekle.

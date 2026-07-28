@@ -426,7 +426,7 @@ public sealed class MatchDirector
         }
 
         // Harita tablosu (config/maps.json — Unity export'u) doluysa sahne + mod uyumu doğrulanır.
-        // Tablo boşsa (dosya yok) bu adım tümüyle atlanır → Faz 3 davranışı korunur.
+        // Tablo boşsa (dosya yok) bu adım tümüyle atlanır.
         if (!_maps.IsEmpty)
         {
             if (!_maps.TryGet(sceneName, out var known))
@@ -599,7 +599,7 @@ public sealed class MatchDirector
     /// <para>Bunlar HİLE denetimi değil, durum tutarlılığı kontrolleridir — ürün gözetimli özel
     /// alanda çalıştığı için hile koruması bilinçli olarak yoktur (§10.3). Hasarı istemci hesaplar
     /// ve sunucu aynen uygular; silah tablosu, weaponId beyaz listesi ve atış hızı denetimi
-    /// KALDIRILDI (meşru saçma/patlama/yaylım vuruşlarını düşürüyordu).</para></summary>
+    /// YOKTUR ve eklenmez (meşru saçma/patlama/yaylım vuruşlarını sessizce düşürürler).</para></summary>
     public async Task HandleHitReportAsync(PlayerState shooter, HitReportMsg msg)
     {
         // Registry araması kilitsiz (ConcurrentDictionary) — kilit almadan önce hallediyoruz.

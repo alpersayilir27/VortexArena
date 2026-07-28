@@ -18,8 +18,8 @@ namespace VortexArena.App
     /// hedefin seçili olduğu kişiseldir ve `EditorPrefs`'te durur. Sebep: anlık IP seçimi
     /// commit'lenirse ekip sürekli birbirinin ayarını ezer ve `git status` hep kirli kalır
     /// (klasik "checked-in user settings" tuzağı). Bu yüzden rol/hedef değiştirmek HİÇBİR
-    /// dosyayı kirletmez — eskiden `AppBoot`'ta [SerializeField] olduğu için Boot.unity
-    /// kirleniyordu.</para>
+    /// dosyayı kirletmez ve bu ayarlar `AppBoot`'a [SerializeField] olarak KOYULMAZ — koyulursa
+    /// her rol değişimi Boot.unity'yi kirletir.</para>
     ///
     /// <para><b>İki iş yapar:</b></para>
     /// <list type="number">

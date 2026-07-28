@@ -81,7 +81,7 @@ namespace VortexArena.Core.Combat
         /// <para>
         /// Bağlantı koşulu: bir kez bağlandıysak bağlantı kopukken ateş kilitlenir
         /// (mesajlar zaten sunucuya ulaşmaz). Hiç bağlanılmamışsa (sunucusuz Editor
-        /// testi) silah çalışmaya devam eder — Faz 0-2 yerel test akışı bozulmasın.
+        /// testi) silah çalışmaya devam eder — sunucusuz yerel test akışı bozulmasın.
         /// </para>
         /// </summary>
         public bool CanFire

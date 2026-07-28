@@ -78,8 +78,8 @@ namespace VortexArena.Protocol
         /// </summary>
         public static readonly int[] ROUND_SECONDS_OPTIONS = { 150, 300, 600, 900, 1200, 1800, 3600 };
 
-        // NOT: FIRE_RATE_TOLERANCE kaldırıldı (§10.3). Sunucuda atış hızı denetimi ve silah
-        // tablosu yoktur — hasarı istemci hesaplar, sunucu aynen uygular. Ürün gözetimli özel
-        // alanda çalıştığı için hile koruması bilinçli olarak eklenmez.
+        // NOT: atış hızı toleransı gibi bir sabit YOKTUR ve eklenmez (§10.3). Sunucuda atış hızı
+        // denetimi ve silah tablosu yoktur — hasarı istemci hesaplar, sunucu aynen uygular. Ürün
+        // gözetimli özel alanda çalıştığı için hile koruması bilinçli olarak eklenmez.
     }
 }

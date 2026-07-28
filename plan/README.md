@@ -1,17 +1,9 @@
 # VortexArena — Uygulama Planı (sıradaki işler)
 
-> Bu klasör **yalnız henüz yapılmamış işleri** tutar. Tamamlanan fazların dokümanları silindi;
-> kalıcı bilgileri `CLAUDE.md` + `Docs/` altına işlendi (eski metinler git geçmişinde durur).
+> Bu klasör **yalnız henüz yapılmamış işleri** tutar: biten işin dokümanı silinir, kalıcı bilgisi
+> `CLAUDE.md` + `Docs/` altına işlenir (eski metin git geçmişinde kalır).
 
 **Şu an planlanmış iş yok** — klasör boş (yalnız bu README).
-
-> **Faz 7 (mod altyapısı) ve Faz 8 (Herkes Tek / FFA modu) bitti**, dosyaları silindi.
-> Faz 7: `ModeRules` şekil tanımı, bireysel skor, `MatchOutcome`, takım-agnostik `ModeHudBase`,
-> admin'den maç süresi/skor limiti. Faz 8: `ffa` modu — takımsız, bireysel skor, sabit durarak
-> canlanma, raf yerine grip ile rastgele silah (`WeaponGranter`). **Faz 8 protokole tek bir alan
-> bile eklemedi** ve TDM'in davranışını değiştirmedi — Faz 7'nin doğru kesildiğinin kanıtı.
-> Kalıcı bilgi: `Docs/ArenaNet-Protokol.md` §10.5 (kayıtlı modlar tablosu) +
-> `Docs/Sistem-Ozeti.md` §3.9/§4/§7 + `CLAUDE.md` (silah rafsız mod reçetesi).
 
 ## Nereye bakmalı
 

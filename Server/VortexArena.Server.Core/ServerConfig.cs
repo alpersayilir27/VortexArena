@@ -12,7 +12,7 @@ public sealed class ServerConfig
     public int beaconPort = ArenaProtocol.UDP_BEACON_PORT;
     public int statePort = ArenaProtocol.STATE_PORT;
     public string venueName = "Dev";
-    public int tickHz = ArenaProtocol.SNAPSHOT_RATE_HZ; // Faz 2/3: MatchDirector/StateHost tick'i
+    public int tickHz = ArenaProtocol.SNAPSHOT_RATE_HZ; // MatchDirector/StateHost tick'i
 
     private static readonly JsonSerializerOptions WriteOptions = new()
     {

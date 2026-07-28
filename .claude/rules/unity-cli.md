@@ -39,11 +39,11 @@ User scope'a kayıt YAPMA, `.mcp.json` tek kaynak.
   `spawn("auggie")` ENOENT, `spawn("auggie.cmd")` ise Node'un CVE-2024-27980 kısıtıyla EINVAL verir.
   macOS/Linux'ta `command: "auggie", args: ["--mcp"]` yeterli. Banner satırları stderr'e gidiyor,
   stdout temiz JSON-RPC (protokolü kirletmiyor). İlk çağrıda workspace'i indeksler.
-- **`unity-mcp` (AI Assistant relay) kaydı KALDIRILDI** (26 Tem 2026). Sebep: `com.unity.ai.assistant`
+- **`unity-mcp` (AI Assistant relay) kaydı YOKTUR.** Sebep: `com.unity.ai.assistant`
   içindeki bridge, onayı **canlı bağlantı başına** tutuyor (`TransportStore.ApprovalState`);
   bir kez `Denied` olan transport, Project Settings > AI > Unity MCP'den Accept'lense bile geri
   dönmüyor (`ConnectionItemControl.OnAccept` yalnız *bekleyen* onayı tamamlıyor + kalıcı kaydı
-  günceller) → her çağrı "Connection revoked" veriyordu. Geri eklenecekse: `.mcp.json`'a
+  günceller) → her çağrı "Connection revoked" veriyor. Eklenecekse: `.mcp.json`'a
   `${USERPROFILE}/.unity/relay/relay_win.exe --mcp` olarak yaz, editörde onayla ve **onaydan
   sonra bağlantıyı yenile** (`/mcp` → Reconnect).
 - Kapsam farkı (52 tool'luk `unity-mcp` seti vs 140 komutluk CLI seti): editör/asset/sahne/script/
@@ -55,8 +55,8 @@ User scope'a kayıt YAPMA, `.mcp.json` tek kaynak.
   `capture_scene_view` tek açı; döngüyle taklit edilir). Bunlara ihtiyaç doğarsa relay'i yukarıdaki
   reçeteyle geçici olarak geri ekle.
 - `Assets/…` içindeki Meta XR core'un kendi `Meta.MCPBridge`'i ayrı bir köprüdür, MCP kaydı değil.
-- `UnityMCP` **local scope'tan proje scope'a taşındı** (26 Tem 2026): kayıt artık `.mcp.json`'da,
-  `~/.claude.json` içindeki `projects["D:/games/vortexarena"].mcpServers` girdisi silindi.
+- `UnityMCP` kaydı **proje scope'undadır** — `.mcp.json`'da; `~/.claude.json` içindeki
+  `projects[...].mcpServers` altına local scope kaydı açılmaz (tek kaynak `.mcp.json`).
   HTTP transport olduğu için köprü (`com.coplaydev.unity-mcp`, Python/uv tabanlı) 8080'de
   ayakta olmalı; editör kapalıyken tool'lar bağlanamaz. Birden çok Unity örneği açıksa
   `set_active_instance` ile hedefi sabitle.

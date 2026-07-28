@@ -599,10 +599,10 @@ namespace VortexArena.App
 
         /// <summary>
         /// "Yeniden Bağlan" tıklanabilir olsun diye EventSystem garantisi (yalnız masaüstü).
-        /// Faz 6'dan beri admin `Lobby`'de kalmıyor, arena sahnelerine giriyor ve
-        /// <b>arena sahnelerinde EventSystem YOK</b> — eskiden buton orada sessizce ölürdü.
+        /// Admin `Lobby`'de kalmaz, arena sahnelerine girer ve <b>arena sahnelerinde EventSystem
+        /// YOK</b> — garanti edilmezse buton orada sessizce ölür.
         /// <see cref="UiKit.EnsureEventSystem"/> kalıcı bir tane kurar (Input System paketiyle
-        /// derlendiğimiz için modül `InputSystemUIInputModule`'dür; eski `StandaloneInputModule`
+        /// derlendiğimiz için modül `InputSystemUIInputModule`'dür; `StandaloneInputModule`
         /// runtime'da `UnityEngine.Input`'a dokunup patlar).
         /// </summary>
         private void EnsureClickableOnDesktop()
