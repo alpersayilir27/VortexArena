@@ -107,6 +107,8 @@ Net oyun/sahne bilgisi içermez; olay yayınlar, App dinler. Editor asmdef'leri
 `includePlatforms:["Editor"]` + kendi runtime'ını referanslar.
 App ayrıca `Unity.InputSystem` referanslar (gözlemci kamerası klavye/fare + `InputSystemUIInputModule`);
 proje **Input System-only** — `StandaloneInputModule` runtime'da patlar, kullanılmaz.
+Core ayrıca `Unity.RenderPipelines.Universal.Runtime` referanslar (`LocalBodyOverlayCamera` —
+yerel oyuncunun gövdesini ayrı bir kamerayla, farklı near-clip ile çizen URP camera stack kurulumu).
 
 **İsimlendirme:** asmdef = `VortexArena.<Katman>`; namespace = asmdef adıyla birebir
 (rootNamespace dolu); global namespace'te tip YOK; serialize edilen ikincil tipler kendi
@@ -219,7 +221,12 @@ eklememektir.
 ekle (CS2 istatistikleri + ses profili + "Low Poly AR Weapon Pack 1" prefabı), araç
 `_Shared/Arsenal/Data/WD_*.asset` + `_Shared/Arsenal/Prefabs/WPN_*.prefab` üretip
 **`_Shared/Data/Resources/WeaponCatalog.asset`**'i tazeler (RemoteShotFx `weaponId`→profil
-aramasını `Resources.Load` ile yapar — GameCatalog gibi klasöründen ÇIKARILMAZ). Gerekiyorsa
+aramasını `Resources.Load` ile yapar — GameCatalog gibi klasöründen ÇIKARILMAZ). Ses/VFX/kovan
+kiti de aynı tablodan (`WeaponSpec`) gelir: silaha özgü ateş/reload/dry-fire klipleri
+(`Assets/Audio/Weapons/SFX_<Ad>_*.wav`), namlu alevi (renk/boyut/ömür/koni açısı) + `MuzzleFlash`
+altında sub-emitter'lı namlu dumanı (`Smoke`), ve kalibreye göre (762x39/556x45) paylaşılan
+`Casing_*.prefab`'a bağlı `ShellEjector` (ateşte kovan fırlatan, `Weapon.Fired`'a abone bileşen —
+`Docs/Sistem-Ozeti.md` §4). Gerekiyorsa
 `ModeDefinition.loadout` + sahneye yerleştirme elle. **Sunucu tarafında iş YOKTUR** ve export
 gerekmez — sunucuda silah tablosu yok, hasarı (headshot çarpanı dahil) istemci hesaplayıp
 `hit_report.damage` ile bildirir, sunucu aynen uygular (§10.3); `weaponId` yalnız kill feed

@@ -65,6 +65,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
       insertIndex: -1
       addedObject: {fileID: 604565230385438713}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 9148134563882807229}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1394218242175387678}
   m_SourcePrefab: {fileID: 100100000, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
 --- !u!4 &6056437335852257 stripped
 Transform:
@@ -336,6 +342,36 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.LocalAvatarHeadHider
   headBone: {fileID: 5207853369457217089}
   hiddenScale: 0.0001
+--- !u!114 &9148134563882807229
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1540584392028898936}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0fcff900fc6c83b4889c378d9319c9cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.LocalBodyOverlayCamera
+  baseCamera: {fileID: 0}
+  bodyLayerName: LocalBody
+  overlayNearClip: 0.15
+--- !u!114 &1394218242175387678
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1540584392028898936}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65908d0f388ec9549bec2f0843ab3f46, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.ControllerModelHider
+  leftAnchorName: LeftControllerAnchor
+  rightAnchorName: RightControllerAnchor
+  modelNameContains: questController_animrig
 --- !u!4 &1583342072899493815 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8333627713332763490, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}

@@ -458,7 +458,11 @@ fark matematiği zemin/kalibrasyon ofsetlerinden etkilenmez; kavradıktan sonra 
 çıkmadan devreye girmez — yerden alırken yanlış tetiklemeyi önler) + `WeaponCatalog` (SO, `_Shared/Data/Resources/` — `weaponId`→tanım araması;
 `Resources.Load` ile okunduğu için klasöründen çıkarılmaz) + `RemoteShotFx` (kendini önyükler,
 sahne kurulumu istemez; `shot_fired`'ı tüketip uzak oyuncunun namlu alevi + konumsal atış sesini
-havuzlu çalar) + `AmmoHud` (`Core/UI` — kendini önyükler; tutulan silah(lar)ın adı/mermisi/yedek
+havuzlu çalar) + `ShellEjector` (`Weapon.Fired` olayına abone; ateşte namlunun yanındaki `Eject`
+noktasından kalibreye göre (`Casing_762x39`/`Casing_556x45`) bir kovan fırlatır — 10'luk round-robin
+havuz, süre kontrolü coroutine değil `Update`'te `Time.time` ile; havuz+`MuzzleFlash` altındaki
+"Smoke" sub-emitter'ı da dahil tüm bu kit `WeaponKitBuilder` tarafından üretilir/güncellenir) +
+`AmmoHud` (`Core/UI` — kendini önyükler; tutulan silah(lar)ın adı/mermisi/yedek
 şarjörleri görüş alanının sağ altına düşen `HudFollow`'lu tembel-takip panelinde; silah
 tutulmuyorken gizli, yalnız `Weapon.Active`/`ActiveChanged` + silah olaylarıyla yenilenir —
 mermi göstergesi silahın ÜSTÜNE koyulmaz) + `ArenaCombat` / `WeaponGranter` (aşağıdaki
@@ -476,7 +480,20 @@ karakteri) kafa kemiğini her kare sıfıra yakın ölçekleyip gizler: kamera k
 durduğu için mesh'in içi görünmesin; yüksek execution order ile retargeter'dan SONRA yazar;
 kemik araması "Head" tam adı → ":Head" soneki (Mixamo). Şu an IceWorld'deki
 `_Shared/Avatars/PlayerBodyAvatar.prefab`'a (Mixamo Ch15 + CharacterRetargeter FullBody) bağlı —
-gövde takibi ürünleşirse rig kalıbına taşınacak),
+gövde takibi ürünleşirse rig kalıbına taşınacak), `LocalBodyOverlayCamera` (`Core/Player` —
+aynı prefab'da; kafa dışındaki gövde clipping'i için: kendi altındaki tüm Renderer'ları
+"LocalBody" katmanına alır, ana kameradan bu katmanı çıkarır ve daha büyük near-clip'li bir
+overlay kamerayı URP kamera yığınına (camera stack) ekler — aşağı bakınca ana kameranın
+near-clip'i (tipik 0.1 m) göğüs/omuz geometrisine girmez. "LocalBody" Layer'ı gerektirir;
+`VortexArena.Core.asmdef` bu yüzden `Unity.RenderPipelines.Universal.Runtime` referanslar),
+`ControllerModelHider` (`Core/Player` — aynı prefab'da; Meta Building Blocks kamera rigine
+BİRDEN FAZLA yerde (`Controller Tracking Left/Right` VE ayrıca `OVRComprehensiveInteractionRig`
+altında) fiziksel Touch controller modeli + "controller-driven" sentetik el overlay'i koyuyor —
+bu yüzden `[BuildingBlock] Camera Rig` kökünden TÜM alt ağacı isim eşleşmesiyle
+(`questController_animrig` / `HandVisual`) her karede tarar ve gizler; kontrolcü
+bırakılıp-tutulduğunda Meta bunları yeniden aktifleştirdiği için tek seferlik değil, sürekli
+çalışır. RAY/RETİKÜL gibi etkileşim görsellerine dokunmaz; kozmetik, `OVRInput` girdisini
+etkilemez),
 `WeatherVolumeFollow` (`Core/FX` — ambiyans parçacık hacmini yerel kameranın üstünde tutar; bağlı
 sistemler **World** simülasyon uzayında olmalı, `Start` sapmayı uyarır. Yalnız kendi transform'unu
 taşır, rig'e dokunmaz), `WeatherWindDriver` (`Core/FX` — kök objeye takılır, altındaki tüm
@@ -702,7 +719,7 @@ doğrudan dashboard'a düşer. Ayrıntı: `deploy/README.md`.
 | İstek | Yol |
 |---|---|
 | **Yeni arena** | `Tools > VortexArena > Create Arena From Template` → arenaId, sahne adı, hedef (Standard/Venue). Sihirbaz klasörleri + sahnenin **bire bir kopyasını** üretir, `MapDefinition` yazar, `GameCatalog` + uyumlu `ModeDefinition` + Build Settings'e ekler. ⚠️ **Geometri ölçeklenmez** (boyut bile sorulmaz): arena planı, `ArenaBoundary` + `MapDefinition.size`, kalibrasyon işaretçileri, tek `SpawnPoint` ve bake işleri ELDE. Sihirbazın değeri sahnenin ağ bileşenlerini eksiksiz taşıması. **Sonra `Export Server Config`.** |
-| **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack prefabı) → `Tools > VortexArena > Build Weapon Prefabs` → `WD_*.asset` + `WPN_*.prefab` üretir, `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). Şablon (eski AK47_Red) silindi: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır |
+| **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack prefabı) → `Tools > VortexArena > Build Weapon Prefabs` → `WD_*.asset` + `WPN_*.prefab` üretir (ses + namlu alevi/dumanı + kovan kiti dahil), `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). ⚠️ Araç **mevcut prefabların `Muzzle`/`Model` yerleşimine DOKUNMAZ**, yalnız definition bağlarını + ses/VFX/kovan kitini tazeler — VR'da elle ayarlanmış tutuş/namlu konumu tekrar çalıştırmakla bozulmaz. Paylaşılan şablon yoktur: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
 | **Elle modellenmiş sahneyi arenaya çevirmek** | Aşağıdaki 6 adım (IceWorld böyle bağlandı) |
 
