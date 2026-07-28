@@ -9,8 +9,9 @@ namespace VortexArena.Core.Player
     /// hasar YEREL uygulanmaz, sunucuya <c>hit_report</c> gönderilir ve
     /// <c>health_update</c> beklenir (Docs/ArenaNet-Protokol.md §10.3).
     /// </para>
-    /// <see cref="IsHead"/> v1'de hasar çarpanı ÜRETMEZ (hasar tablosu sunucuda sabit);
-    /// yalnız bilgi/efekt amaçlıdır.
+    /// Headshot çarpanı istemcide <see cref="VortexArena.Core.Combat.Weapon"/> tarafından
+    /// uygulanır (hasar istemci-otoriter, <c>hit_report.damage</c>; §10.3) —
+    /// <see cref="IsHead"/> o çarpanın kaynağıdır.
     /// </summary>
     public class RemoteHitBox : MonoBehaviour
     {
