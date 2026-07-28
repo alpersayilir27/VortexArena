@@ -45,9 +45,6 @@ public sealed class PlayerState
     /// <summary>Snapshot flags bit0 (FLAG_ALIVE) bunu besler; Lobby fazında herkes canlıdır.</summary>
     public bool Alive { get; set; } = true;
 
-    /// <summary>load_match ile bildirilen, takım içi 0 tabanlı spawn sırası.</summary>
-    public int SpawnSlot { get; set; }
-
     public int Kills { get; set; }
     public int Deaths { get; set; }
 

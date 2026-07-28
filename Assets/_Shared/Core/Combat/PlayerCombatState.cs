@@ -12,8 +12,8 @@ using CoreTeam = VortexArena.Core.Team;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// YEREL oyuncunun maç/savaş durumu (kalıcı tekil): takım, spawn slot'u, can,
-    /// hayatta mı, ateş yetkisi ve free-roam canlanma akışı.
+    /// YEREL oyuncunun maç/savaş durumu (kalıcı tekil): takım, can, hayatta mı, ateş yetkisi
+    /// ve free-roam canlanma akışı.
     /// <para>
     /// Sunucu-otoriter: can yalnız <c>health_update</c>'ten, faz yalnız
     /// <c>match_state</c>/<c>countdown</c>/<c>load_match</c>'ten gelir. Bu sınıf hasar
@@ -21,8 +21,10 @@ namespace VortexArena.Core.Combat
     /// </para>
     /// <para>
     /// ⚠️ FREE-ROAM KURALI: fiziksel oyuncu IŞINLANAMAZ. Canlanma bir konum değil
-    /// DURUM değişimidir — bu sınıf hiçbir koşulda rig'i/kamerayı taşımaz.
-    /// <see cref="SpawnPoint"/> yalnız "hangi tabana dön" göstergesidir (§10.4).
+    /// DURUM değişimidir — bu sınıf hiçbir koşulda rig'i/kamerayı taşımaz. Aynısı harita
+    /// değişimi için de geçerli: <c>load_match</c> kimseyi "yeniden doğurmaz" ve kalibrasyonu
+    /// sıfırlamaz (§10.4). Ölünce dönülecek yer <see cref="BaseZone"/> (taban bölgesi);
+    /// <see cref="SpawnPoint"/> yalnız maç öncesi yerleşim göstergesidir.
     /// </para>
     /// <para>
     /// Sahnede DURMAZ: <c>load_match</c> sahne yüklenmeden ÖNCE gelir, bu yüzden
@@ -53,9 +55,6 @@ namespace VortexArena.Core.Combat
         /// Başlangıç <see cref="CoreTeam.Neutral"/>'dır: takımsız modda oyuncu kendini kırmızı
         /// sanıp yanlış tabana yönlendirilmesin (§10.5).</summary>
         public Team Team { get; private set; } = CoreTeam.Neutral;
-
-        /// <summary>Takım içi 0 tabanlı spawn slot'u (yalnız gösterge — ışınlanma YOK).</summary>
-        public int SpawnSlot { get; private set; }
 
         /// <summary>Aktif maçın modId'si (load_match'ten).</summary>
         public string ModeId { get; private set; } = "";
@@ -119,6 +118,10 @@ namespace VortexArena.Core.Combat
 
         private BaseZone[] _zones = Array.Empty<BaseZone>();
         private float _nextZoneScanAt;
+
+        // Taban bölgesi durumu (kare başına RefreshZoneState tazeler).
+        private bool _hasOpenZone;
+        private bool _insideOpenZone;
 
         // StandStill canlanma çapası (§10.4/2). _hasHoldAnchor aynı zamanda "kafa izlenebiliyor mu"
         // demektir: kamera yoksa çapa kurulamaz ve sabit durma şartı hiç aranmaz.
@@ -199,6 +202,7 @@ namespace VortexArena.Core.Combat
             }
 
             TickHoldAnchor();
+            RefreshZoneState();
             TickRevive();
             RefreshStatusText();
         }
@@ -266,8 +270,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>Modun canlanma şartı sağlandı mı (§10.5 <c>reviveAnchor</c>).
-        /// <b>Şart ölçülemiyorsa sağlanmış sayılır</b> — sahnede kendi tabanı yok, kamera yok gibi
-        /// durumlarda bu sınıf oyuncuyu kalıcı ölü bırakmaz; güvenlik ağı zaten sunucunun
+        /// <b>Şart ölçülemiyorsa sağlanmış sayılır</b> — sahnede açık taban bölgesi yok, kamera yok
+        /// gibi durumlarda bu sınıf oyuncuyu kalıcı ölü bırakmaz; güvenlik ağı zaten sunucunun
         /// <c>REVIVE_GRACE</c>'idir.</summary>
         private bool IsReviveConditionMet()
         {
@@ -276,8 +280,7 @@ namespace VortexArena.Core.Combat
                 return !_hasHoldAnchor || HoldRemaining <= 0f;
             }
 
-            BaseZone zone = FindOwnBaseZone();
-            return zone == null || zone.IsPlayerInside;
+            return !_hasOpenZone || _insideOpenZone;
         }
 
         /// <summary>Sabit durma sayacında kalan saniye (0 = şart sağlandı).</summary>
@@ -319,8 +322,7 @@ namespace VortexArena.Core.Combat
                 }
                 else
                 {
-                    BaseZone zone = FindOwnBaseZone();
-                    text = zone == null || zone.IsPlayerInside ? "Canlanılıyor..." : "Tabanına dön ve canlan";
+                    text = !_hasOpenZone || _insideOpenZone ? "Canlanılıyor..." : "Tabanına dön ve canlan";
                 }
             }
 
@@ -345,37 +347,67 @@ namespace VortexArena.Core.Combat
             _nextZoneScanAt = Time.time + ZoneRescanSeconds;
         }
 
-        /// <summary>Kendi takımının taban bölgesi; sahnede yoksa null (bölge koşulu aranmaz).</summary>
-        private BaseZone FindOwnBaseZone()
+        /// <summary>
+        /// Taban bölgesi durumunu kare başına bir kez tazeler (yalnız ölüyken ve
+        /// <see cref="ModeReviveAnchor.OwnBase"/> kipinde — başka hâllerde bayraklar temizlenir).
+        /// Açık bölge bulunamazsa sahne saniyede bir yeniden taranır: bölge sonradan eklenmiş
+        /// ya da takımımız <c>load_match</c> ile yeni gelmiş olabilir.
+        /// </summary>
+        private void RefreshZoneState()
         {
-            BaseZone found = MatchZone();
-            if (found != null)
+            if (IsAlive || ModeRuntime.Revive != ModeReviveAnchor.OwnBase)
             {
-                return found;
+                _hasOpenZone = false;
+                _insideOpenZone = false;
+                return;
             }
 
-            // Bölge sahneye sonradan gelmiş olabilir — saniyede bir yeniden tara.
-            if (Time.time >= _nextZoneScanAt)
+            EvaluateZones();
+            if (_hasOpenZone || Time.time < _nextZoneScanAt)
             {
-                ScanZones();
-                found = MatchZone();
+                return;
             }
 
-            return found;
+            ScanZones();
+            EvaluateZones();
         }
 
-        private BaseZone MatchZone()
+        /// <summary>
+        /// Bir taban bölgesi oyuncuya AÇIKTIR eğer takımı oyuncunun takımıyla aynıysa, bölge
+        /// <see cref="CoreTeam.Neutral"/> ise (herkese açık joker) ya da oyuncunun takımı boşsa
+        /// (takımsız mod, §10.5). Aynı takımdan birden çok bölge varsa <b>herhangi birine</b>
+        /// girmek yeter.
+        /// <para>
+        /// Kapalı bileşen açık sayılmaz: <c>BaseZone.Update</c> koşmadığı için
+        /// <c>IsPlayerInside</c> donar; açık saysaydık oyuncu bölgeye girse de canlanamaz,
+        /// yalnız sunucunun <c>REVIVE_GRACE</c>'ini beklerdi.
+        /// </para>
+        /// </summary>
+        private void EvaluateZones()
         {
+            _hasOpenZone = false;
+            _insideOpenZone = false;
+
             for (int i = 0; i < _zones.Length; i++)
             {
                 BaseZone zone = _zones[i];
-                if (zone != null && zone.Team == this.Team)
+                if (zone == null || !zone.isActiveAndEnabled)
                 {
-                    return zone;
+                    continue;
+                }
+
+                if (zone.Team != this.Team && zone.Team != CoreTeam.Neutral && this.Team != CoreTeam.Neutral)
+                {
+                    continue;
+                }
+
+                _hasOpenZone = true;
+                if (zone.IsPlayerInside)
+                {
+                    _insideOpenZone = true;
+                    return;
                 }
             }
-
-            return null;
         }
 
         // -------------------------------------------------------- olay işleyicileri
@@ -438,7 +470,6 @@ namespace VortexArena.Core.Combat
             }
 
             Team = ParseTeam(msg.yourTeam);
-            SpawnSlot = msg.spawnSlot;
             ModeId = msg.modeId ?? "";
 
             // Sahne yükleniyor: ateş kapalı, can tam, ölüm durumu temiz.
@@ -493,8 +524,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // spawnSlot yalnız "hangi slota dön" göstergesidir — rig TAŞINMAZ.
-            SpawnSlot = msg.spawnSlot;
+            // Konum taşınmaz: respawn yalnız bir DURUM + gecikme bildirimidir (§10.4).
             BeginDeath(msg.delaySeconds, true);
         }
 

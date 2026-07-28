@@ -141,6 +141,11 @@ Quest'in kendi dünya uzayı ──(ArenaCalibrator: 2 nokta + OVRSpatialAnchor)
 - Dönüşüm **istemcide** yapılır (`PlayerPoseTracker`); sunucu ve admin ham arena koordinatı görür.
 - Bütün başlıklar aynı fiziksel alana kalibre olduğu için, arena uzayı **tüm cihazlarda aynı fiziksel
   noktayı** gösterir — çakışan avatar / yanlış yerde görünen rakip sorununun çözümü budur.
+- Hizalama **6DOF**'tur: yaw + yatay konum A→B çiftinden, **zemin yüksekliği B noktasında yakalanan
+  kumanda ucundan**. Zemin tracking origin'den alınmaz çünkü başlıklar **guardian/alan kurulumu
+  olmadan** çalışır (§7.30). Yakalanan nokta kumandanın pivotu değil ucudur
+  (`ArenaCalibrator.tipLocalOffset`); iki noktanın Y farkı **eğim telafisi için kullanılmaz**, ölçüm
+  sağlığı olarak denetlenir (>10 cm → yakalama reddedilir).
 
 ### 3.4 Bağlantı yaşam döngüsü
 
@@ -160,7 +165,7 @@ Quest'in kendi dünya uzayı ──(ArenaCalibrator: 2 nokta + OVRSpatialAnchor)
   └─ status kalp atışı 5 sn  +  (player ise) poz döngüsü 20 Hz
   └─ welcome.match.phase ≠ Lobby ise → GEÇ KATILIM: maç sahnesine yetiş (admin dahil)
   └─ maç başlarken load_match → oyuncular + ADMİNLER aynı sahneyi yükler
-       (admin'de yourTeam="" / spawnSlot=-1; admin set_ready GÖNDERMEZ)
+       (admin'de yourTeam=""; admin set_ready GÖNDERMEZ)
 
 Kopma → 1 → 2 → 5 sn backoff ile keşiften itibaren baştan (sonsuz, otomatik)
       → bağlantısızlık ~3 sn sürerse ConnectionOverlay hata ekranı (§4)
@@ -230,7 +235,7 @@ moda bağlıdır — `ModeRules.FriendlyFire` açıksa hiç uygulanmaz.
 Fiziksel oyuncu **ışınlanamaz**. Bu yüzden respawn bir **konum değil, DURUM değişimidir**:
 
 ```
-ölüm → respawn{spawnSlot, delaySeconds} → ölüm ekranı, ateş yok, avatar yarı saydam
+ölüm → respawn{delaySeconds} → ölüm ekranı, ateş yok, avatar yarı saydam
      → süre dolar VE MODUN CANLANMA ŞARTI sağlanır → revive_request (~1 sn'de bir tekrar)
      → sunucu doğrular → health_update{hp:100} → canlı
      → talep 20 sn (REVIVE_GRACE) gelmezse sunucu ZORLA canlandırır (maç kilitlenmesin)
@@ -241,17 +246,29 @@ Fiziksel oyuncu **ışınlanamaz**. Bu yüzden respawn bir **konum değil, DURUM
 
 | `reviveAnchor` | Şart | Ölüm ekranı |
 |---|---|---|
-| `base` (varsayılan, TDM) | Oyuncu kendi `BaseZone`'una fiziken girer | "Tabanına dön ve canlan" |
+| `base` (varsayılan, TDM) | Oyuncu bir **taban bölgesine** (`BaseZone` — arenadaki kırmızı/mavi şerit) fiziken girer | "Tabanına dön ve canlan" |
 | `standstill` | Ölüm anındaki HMD çapasından `REVIVE_HOLD_RADIUS` (1 m) içinde `REVIVE_HOLD_SECONDS` (3 sn) kesintisiz durur | "Canlanmak için sabit dur — N sn" |
 
+**Taban bölgesi eşleşmesi:** bölge oyuncuya açıktır eğer takımı aynıysa, bölge `Neutral` ise
+(herkese açık joker) ya da oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge
+varsa **herhangi birine** girmek yeter. Kapalı bileşen açık sayılmaz — `BaseZone.Update` koşmadığı
+için `IsPlayerInside` donar, açık sayılsaydı oyuncu bölgeye girse de yalnız `REVIVE_GRACE`'i
+beklerdi.
+
 ⚠️ **Şartı SUNUCU doğrulamaz** (§10.3 felsefesi: hakemlik değil defter tutar) — karar istemcinindir,
-sunucu faz + ölü + gecikme kontrolüyle yetinir. Şart ölçülemiyorsa (sahnede kendi tabanı yok,
+sunucu faz + ölü + gecikme kontrolüyle yetinir. Şart ölçülemiyorsa (sahnede açık taban bölgesi yok,
 kamera yok) istemci onu sağlanmış sayar: bu sınıf hiçbir koşulda oyuncuyu kalıcı ölü bırakmaz.
 
-⚠️ **Kod kuralı:** hiçbir bileşen rig'i/kamerayı taşımaz. `SpawnPoint` yalnız "hangi tabana dön"
-göstergesidir; slot çözümü istemcide sahnedeki marker'lardan yapılır (takımlıda
-`SpawnPoint.Find(team, slot)`, takımsızda tek havuzdan `SpawnPoint.FindGlobal(slot)`), sunucu sahne
-geometrisini bilmez (yalnız `maps.json`'dan `spawnSlotsPerTeam` okuyup slotu geçerli aralığa sarar).
+⚠️ **Kod kuralı:** hiçbir bileşen rig'i/kamerayı taşımaz — ne canlanmada, ne harita değişiminde.
+Protokolde konum/slot taşıyan bir alan **yoktur**; sunucu sahne geometrisini bilmez. Arena başına
+sahnedeki tek `SpawnPoint` yalnız maç öncesi yerleşim göstergesidir ve hiçbir kod tarafından
+okunmaz (`GameObject > VortexArena > Spawn Point` ile eklenir, elle yerleştirilir).
+
+⚠️ **Harita değişimi kalibrasyonu sıfırlamaz.** `load_match` oyuncu için yalnız bir sahne
+değişimidir: kimse "yeniden doğmaz". Yeni sahnenin `ArenaCalibrator`'ı `Start`'ta kayıtlı
+`OVRSpatialAnchor`'dan hizalamayı geri yükler (yükleme geçici düşerse 3 kez denenir); hizalama
+gelene dek `PlayerPoseTracker` poz göndermez. Ön koşul: **aynı işletmede oynanan arenaların zemin
+işaretleri aynı yerde olmalı** — anchor fiziksel dünyada sabittir, sanal işaretler sahneden gelir.
 
 ### 3.8 Maç faz makinesi (sunucuda)
 
@@ -264,8 +281,7 @@ Lobby ──start_match──► Loading ──herkes set_ready | 20 sn timeout�
 `start_match` doğrulaması (sırayla): mod kayıtlı mı → sahne adı boş değil → sahne `maps.json`'da
 var ve modu destekliyor mu (**tablo boşsa bu adım atlanır**) → sahne TÜM oyuncuların
 `hello.scenes` listesinde. Geçerse takımlar **modun şekline göre** kurulur (takımlıda dengelenir,
-takımsızda temizlenir) ve herkese **kişisel** `load_match` (kendi `yourTeam` + `spawnSlot` + maçın
-`rules`'ü) gider.
+takımsızda temizlenir) ve herkese **kişisel** `load_match` (kendi `yourTeam` + maçın `rules`'ü) gider.
 
 **Süre ve skor limiti o maça özel olabilir:** `start_match.roundSeconds`/`scoreLimit` doluysa onlar
 koşar, boş/`0` ise modun varsayılanı. Yani `ModeDefinition`/`IGameMode` sayıları **kilit değil
@@ -288,7 +304,7 @@ IGameMode.Rules  →  MatchDirector  →  load_match.rules / welcome.match.rules
 
 | Kural | Değerler | Varsayılan | Ne değişir |
 |---|---|---|---|
-| `Teams` | `TwoTeams` / `None` | `TwoTeams` | Sunucu: dengele mi temizle mi, spawn slotu takım içi mi tek havuz mu. İstemci: avatar rengi, admin kolonu |
+| `Teams` | `TwoTeams` / `None` | `TwoTeams` | Sunucu: takımları dengele mi temizle mi. İstemci: avatar rengi, admin kolonu, taban bölgesi eşleşmesi |
 | `Scoring` | `Team` / `Player` | `Team` | Skor `match_state.scoreRed/Blue`'ya mı `PlayerInfo.score`'a mı yazılır |
 | `FriendlyFire` | bool | `false` | `hit_report` dost ateşi kapısı |
 | `Revive` | `OwnBase` / `StandStill` | `OwnBase` | Canlanma şartı (§3.7) |
@@ -386,10 +402,11 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 
 ### İstemci: `VortexArena.Core` (oyun kodu)
 
-`ArenaBoundary` (arena origin + sınır), `ArenaCalibrator` (2 nokta + OVRSpatialAnchor kalıcılığı),
-`ArenaSpace` (dünya↔arena dönüşümü), `BaseZone` (taban bölgesi — canlanma kapısı), `SpawnPoint`
-(takım + slot marker'ı; takımsız modlar için `FindGlobal(slot)` tek havuz araması),
-`MapDefinition` / `ModeDefinition` / `GameCatalog` (içerik SO'ları),
+`ArenaBoundary` (arena origin + sınır), `ArenaCalibrator` (2 nokta → 6DOF hizalama + OVRSpatialAnchor
+kalıcılığı + recenter onarımı),
+`ArenaSpace` (dünya↔arena dönüşümü), `BaseZone` (**taban bölgesi** — kırmızı/mavi şerit, canlanma
+kapısı; `Neutral` = herkese açık), `SpawnPoint` (arena başına **tek** başlangıç göstergesi —
+takımsız, slotsuz, hiçbir kod okumaz), `MapDefinition` / `ModeDefinition` / `GameCatalog` (içerik SO'ları),
 `Weapon` (ISDK ile tutulan hitscan tüfek; tetik **silahı tutan elin** kumandasından okunur — çift
 silahta tetikler bağımsız; şarjör+yedek şarjör durumu taşır, boş şarjörde **otomatik reload YOK**
 (kuru tetik sesi), reload **bel-altı jestiyle** başlar; `reserveMode=DiscardMagazine`'de erken
@@ -440,7 +457,7 @@ katmanların göreli hız farkı korunur).
 | `UI/ModeHudBase` | Mod HUD'larının **takım-agnostik** tabanı: faz/süre, geri sayım, can barı, ölüm ekranı + durum metni, kill-feed (ad çözümü `lobby_state`'ten), kendi öldürme/ölüm sayacın, maç sonu satırı. **Takıma ait hiçbir şey burada değil** — skor satırı (`ScoreLine`) ve kazanan metni (`WinnerLine`) alt sınıfın işi. Core'da durur çünkü modlar birbirini referanslamaz |
 | `Combat/ArenaCombat` | **Oyun kodunun ağa açılan tek kapısı** (statik). `ReportShot` / `ReportHit` / `ReportRaycastHit` / `ReportAreaHit` + `TryGetTargetPlayerId` / `IsHeadshot` / `CanFire` / `LocalPlayerId`. Bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektiriyor (arena uzayı, yön≠nokta, `RemoteHitBox` ile hedef çözme, hasarı istemcinin belirlemesi) — bunlar `Weapon` içinde gömülü kalsaydı ikinci bir hasar kaynağı yazan herkes aynı dördünü yeniden keşfederdi. `Weapon` de bu kapıyı kullanır (tek doğruluk kaynağı). Bağlantı yokken sessizce no-op. Reçeteler: `Gelistirici/Yemek-Kitabi.md` |
 | `Combat/WeaponGranter` | `weaponSource:"random"` modlarının (§3.9) silah kaynağı. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz, bu yüzden yeni arenaya ek kurulum adımı doğurmaz. İki iş: (1) sahne süpürmesi — raf silahları gizlenir, `BaseZone` **bileşeni** kapatılır + görsel taban şeridi gizlenir; (2) grip basılıyken o elde rastgele silah durur, bırakılınca yok olur, tekrar basınca **yenisi** gelir. TDM'de (kural `rack`) tümüyle pasiftir; kural değişince süpürme geri alınır. Admin'de rig kapalı olduğu için silah verme yolu kendiliğinden kapalı, süpürme ise çalışır |
-| `Team` | `Red` / `Blue` / **`Neutral`**. ⚠️ Yeni değer SONA eklenir: `BaseZone`/`SpawnPoint`/`Weapon` bu enum'u serialize ediyor, başa ekleme her arenanın taban/spawn takımlarını kaydırır |
+| `Team` | `Red` / `Blue` / **`Neutral`**. `BaseZone`'da `Neutral` = herkese açık joker. ⚠️ Yeni değer SONA eklenir: `BaseZone`/`Weapon` bu enum'u serialize ediyor, başa ekleme her arenanın taban takımlarını kaydırır |
 
 **`ArenaRoof`** (çatılı arenalar için, **isteğe bağlı**): çatı hiyerarşisinin köküne konur
 (`GameObject > VortexArena > Arena Roof`), altındaki **tüm** Renderer'lar çatı sayılır ve
@@ -589,7 +606,7 @@ kirletmez, `git status` temiz kalır. Bir hedefin `ip`'si **boşsa** adres yazı
 | **Rol** (Player / Admin) | `AppSession.Role`'ü Boot koşmadan önce yazar. **Kısayol `Ctrl+Alt+R`** — pencere kapalıyken de çalışır (sahne görünümünde bildirim + konsol satırı) |
 | **Hedef** + "Tazele" / "Özel…" | Adres; `Özel…` seçilirse IP/Port elle girilir (IP'yi boş bırakmak = keşif zinciri) |
 | **Başlangıç: Boot'tan** | `playModeStartScene` = Boot sahnesi → hangi sahne açık olursa olsun Play gerçek akıştan başlar (sahne Build Settings'ten bulunur) |
-| **Başlangıç: Açık sahneden** | Arena sahnesine doğrudan Play. Bir kare sonra `DevSession` (a) **seçili hedefe bağlanır** — arena sahnesinde `LobbyController` olmadığı için bunu başka kimse yapmaz; bağlanmazsa can/skor/faz gelmez ve `CanFire` hiç açılmaz — ve (b) player rolünde **sentetik `load_match`** yayınlar → **takım / spawn slot / mod** gerçek kod yolundan (`PlayerCombatState`, `ModeHudSpawner`, `SceneRouter`) uygulanır. Aşağıdaki mod/takım/slot/raund sn/skor limiti alanları bu mesajı doldurur. Sunucuda maç koşuyorsa `welcome.match` geç-katılım senkronu **gerçek takım atamasıyla sentetiği ezer**. Hedef "keşif" kipindeyse (ip boş) bağlanılmaz ve sebebi loglanır — arena sahnesinde adres girecek arayüz yok |
+| **Başlangıç: Açık sahneden** | Arena sahnesine doğrudan Play. Bir kare sonra `DevSession` (a) **seçili hedefe bağlanır** — arena sahnesinde `LobbyController` olmadığı için bunu başka kimse yapmaz; bağlanmazsa can/skor/faz gelmez ve `CanFire` hiç açılmaz — ve (b) player rolünde **sentetik `load_match`** yayınlar → **takım / mod** gerçek kod yolundan (`PlayerCombatState`, `ModeHudSpawner`, `SceneRouter`) uygulanır. Aşağıdaki mod/takım/raund sn/skor limiti alanları bu mesajı doldurur. Sunucuda maç koşuyorsa `welcome.match` geç-katılım senkronu **gerçek takım atamasıyla sentetiği ezer**. Hedef "keşif" kipindeyse (ip boş) bağlanılmaz ve sebebi loglanır — arena sahnesinde adres girecek arayüz yok |
 | **Ortam düğmeleri** (yalnız test botları) | N Bot · N Bot + Admin · Botları Durdur · Sahipsiz botları temizle · Derle (dotnet build) + canlı durum satırı (bot süreç sayısı). **Sunucu düğmesi yok** — sunucu elle başlatılır/durdurulur (§6.1) |
 | **"Dev enjeksiyonu" onayı** | Kapatılırsa üretim yolu **birebir** koşar (rol `AppBoot`'tan, adres keşif zincirinden, sentetik mesaj yok) — beacon keşfini editörde denemenin yolu |
 
@@ -651,7 +668,7 @@ doğrudan dashboard'a düşer. Ayrıntı: `deploy/README.md`.
 
 | İstek | Yol |
 |---|---|
-| **Yeni arena** | `Tools > VortexArena > Create Arena From Template` → arenaId, sahne adı, boyut, slot, hedef (Standard/Venue). Sihirbaz klasörleri + sahne kopyasını üretir, duvar/zemin/taban/spawn'ları ölçekler, `MapDefinition` yazar, `GameCatalog` + uyumlu `ModeDefinition` + Build Settings'e ekler. Sanat rötuşu elde. **Sonra `Export Server Config`.** |
+| **Yeni arena** | `Tools > VortexArena > Create Arena From Template` → arenaId, sahne adı, boyut, hedef (Standard/Venue). Sihirbaz klasörleri + sahnenin **bire bir kopyasını** üretir, `MapDefinition` yazar, `GameCatalog` + uyumlu `ModeDefinition` + Build Settings'e ekler. ⚠️ **Geometri ölçeklenmez** (boyut bile sorulmaz): arena planı, `ArenaBoundary` + `MapDefinition.size`, kalibrasyon işaretçileri, tek `SpawnPoint` ve bake işleri ELDE. Sihirbazın değeri sahnenin ağ bileşenlerini eksiksiz taşıması. **Sonra `Export Server Config`.** |
 | **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack prefabı) → `Tools > VortexArena > Build Weapon Prefabs` → `WD_*.asset` + `WPN_*.prefab` üretir, `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). Şablon (eski AK47_Red) silindi: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
 | **Elle modellenmiş sahneyi arenaya çevirmek** | Aşağıdaki 6 adım (IceWorld böyle bağlandı) |
@@ -664,14 +681,16 @@ doğrudan dashboard'a düşer. Ayrıntı: `deploy/README.md`.
    (halfExtentX/Z = iç ölçünün yarısı, `wallRenderers` = duvarlar, `head` = `CenterEyeAnchor`,
    `fadeRenderer`/`warningText` = rig altındaki `OutOfBoundsFade`/`BoundaryWarningText`).
    Bu transform arena origin'idir: **tüm ağ pozları buna göre çevrilir.**
-3. Taban ve spawn'lar: iki `BaseZone` (Red/Blue, karşı kenarlarda) + takım başına `SpawnPoint`
-   (`slot` 0..n-1). Canlanma bu marker'lardan çözülür — rig ASLA taşınmaz.
+3. Taban bölgeleri: iki `BaseZone` (Red/Blue, karşı kenarlarda; `Neutral` = herkese açık).
+   Ölen oyuncu bunlardan birine fiziken girince canlanır — rig ASLA taşınmaz.
+   Ayrıca **tek** başlangıç noktası: `GameObject > VortexArena > Spawn Point` ile ekle ve elle
+   yerleştir (yalnız gösterge, kod okumaz).
 4. Ağ objeleri: `CalibrationManager` (`ArenaCalibrator` + iki anchor marker), `PoseSync`
    (`PlayerPoseTracker` + `RemotePlayerSpawner`), `[ModeHud]` (`ModeHudSpawner`), BB Camera Rig.
    En kolayı mevcut bir arenadan kopyalamak; **kopyaladıktan sonra sahneler-arası referansları
    (ör. `BaseZone.head`) yeni sahnenin `CenterEyeAnchor`'ına yeniden bağla** — Unity kopuk
    sahneler-arası referansı sessizce null yapar.
-5. `MapDefinition` asset'i (`Data/`): sceneName + boyut + `spawnSlotsPerTeam` + desteklenen modlar →
+5. `MapDefinition` asset'i (`Data/`): sceneName + boyut + desteklenen modlar →
    `GameCatalog.maps` + ilgili `ModeDefinition.maps` + **Build Settings**.
 6. **`Tools > VortexArena > Export Server Config`** (maps.json) ve `Server/VortexArena.PoseBot`
    içindeki `BuildScenes` listesine sahne adını ekle.
@@ -762,7 +781,7 @@ konsoluna tek satır sebep yazar.
     UI/TMP shader'ları üzerinden çizilir (`UiKit.RingSprite` + world-space canvas), mesh + Unlit
     materyal ile değil.
 19. **Serialize edilen enum'a yeni değer SONA eklenir.** Unity enum'ları sayısal indeksle saklar:
-    `Team`'e başa/ortaya bir değer eklemek sahnelerdeki tüm `BaseZone`/`SpawnPoint`/`Weapon`
+    `Team`'e başa/ortaya bir değer eklemek sahnelerdeki tüm `BaseZone`/`Weapon`
     takımlarını kaydırır (`Neutral` bu yüzden `= 2`). Aynısı `ModeTeamMode`/`ModeScoreKind`/
     `ModeReviveAnchor`/`ModeWeaponSource` için de geçerli — hepsi `ModeDefinition`'da serialize.
 20. **Boş takım takım arkadaşı DEĞİLDİR.** Dost ateşi kontrolünü düz `a.Team == b.Team` yazma:
@@ -795,18 +814,35 @@ konsoluna tek satır sebep yazar.
     duvarda kaybolur, duvarda iyi görünen değer gökyüzünde bulanık perde olur. Her ayardan
     sonra **hem yukarı hem duvara** bakan iki kare al. `Snow_G_Haze` yalnız gökyüzüne karşı
     okunur — bu bilinçli.
-27. **`BaseZone`'un GameObject'ini kapatma — bileşenini kapat.** Altındaki `SpawnPoint` marker'ları
-    `OnDisable`'da statik kayıttan düşer, maç başı spawn göstergesi çöker. Ama YALNIZ bileşeni
-    kapatmak da yarım çözümdür: görsel taban şeridi (Renderer'lı doğrudan çocuk) ekranda kalır.
+27. **`BaseZone`'un GameObject'ini kapatma — bileşenini kapat.** Altına konmuş
+    marker'lar (`SpawnPoint`) `OnDisable`'da statik kayıttan düşer. Ama YALNIZ bileşeni kapatmak
+    da yarım çözümdür: görsel taban şeridi (Renderer'lı doğrudan çocuk) ekranda kalır.
     Doğrusu ikisi birlikte — `zone.enabled = false` + `SpawnPoint` taşımayan Renderer'lı çocukları
     `SetActive(false)` (`WeaponGranter.SweepScene`). Kontrol `GetComponent` değil
     **`GetComponentInChildren`** olmalı: marker şeridin torunu olabilir.
+    İkinci yüzü: **kapalı bir `BaseZone` canlanma için AÇIK SAYILMAZ** — `Update` koşmadığı
+    için `IsPlayerInside` donar (`PlayerCombatState.EvaluateZones`).
 28. **Verilen silah kavrama sistemine SOKULMAZ ve tetiği ayrı okunur.** `Weapon.IsHeld` yalnız
     `grabbable.SelectingPointsCount`'a bakarsa el anchor'ının altına örneklenen silah **hiç ateş
     edemez** (`GrantedHand` bu yüzden var). İkinci tuzak tetikte: `Player/Attack` tek bir Button
     action'dır ve `<XRController>/{PrimaryAction}` ile İKİ kumandayı da toplar → iki elde iki
     silahla tek tetiğe basmak ikisini birden ateşlerdi. Verilen silah bu yüzden kendi elinin
     tetiğini `OVRInput` ile okur; raf silahının yolu değişmedi.
+29. **Free-roam'da tracking origin `Stage`'dir, `FloorLevel` değil.** İkisi de aynı zemin
+    seviyesini verir (`TrackingOriginModeFlags.Floor`) ama OpenXR loader'da `FloorLevel`
+    **recentering'i zorla açar** (`OVRManager.cs`: `SetAllowRecentering(true)`), `Stage` kapatır.
+    OVRManager'daki `AllowRecenter` alanı bunu ezmez — o yalnız OVR'ın kendi manuel recenter
+    çağrısını keser. Recenter olursa origin kayar, rig'in hizalama transform'u eski kalır ve
+    **arena kayar**; operatöre "sebepsiz bozuldu" gibi görünür. İkinci savunma: `ArenaCalibrator`
+    `RecenteredPose` + `TrackingAcquired` olaylarında kayıtlı anchor'dan yeniden hizalar.
+30. **Guardian kurulu olmadığı için sistemin zemin seviyesi güvenilmez.** İşletme başlıklarında
+    alan kurulumu bilinçli olarak yapılmaz (serbest dolaşım) → "floor level" ölçülmüş değil
+    tahmindir: gözlük havadayken açılırsa yanlış başlar. Bu yüzden kalibrasyon zemini de ölçer
+    (§3.3) ve yakalanan nokta kumandanın **ucudur**, pivotu değil — pivot gövdenin içindedir,
+    fark doğrudan dikey hataya dönüşürdü. **Eğim telafisi yoktur ve eklenmemelidir:** iki nokta
+    bir düzlem tanımlamaz (roll bilinemez) ve sanal dünyayı eğmek görsel "yukarı" ile
+    yerçekimini ayrıştırıp VR'da mide bulantısı yapar. Ayrıca ölçülebilecek eğim (~5–10 mm),
+    operatörün kumanda tutuş farkının (±10–20 mm) altında kalır.
 
 ---
 

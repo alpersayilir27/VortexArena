@@ -226,6 +226,11 @@ Kullanabileceğin olayların tamamı → [API Referansı → NetEvents](API-Refe
 > **Canlanmayı nasıl anlarım?** `OnHealthUpdate` içinde `hp > 0` gelmesi ve `attackerId == 0`
 > olması canlanmadır — canlanma bir saldırı sonucu değildir.
 
+> ⛔ **Canlanan oyuncuyu bir yere taşıma.** `respawn` mesajında konum/slot alanı **yoktur**:
+> oyuncu öldüğü yerde durur, taban bölgesine (`BaseZone`) kendi ayaklarıyla yürür ve orada
+> canlanır. Aynısı harita değişiminde de geçerli — `load_match` kimseyi yeniden doğurmaz ve
+> kalibrasyonu sıfırlamaz.
+
 ---
 
 ## 7. Yerel oyuncunun canı ve durumu
@@ -265,7 +270,7 @@ public class CanTitresimi : MonoBehaviour
 ```
 
 Anlık okuma da yapabilirsin: `PlayerCombatState.Instance.Hp / .IsAlive / .Team / .Phase /
-.PlayerId / .SpawnSlot / .StatusText`.
+.PlayerId / .StatusText`.
 
 > ⚠️ **`Instance` null olabilir.** Tekil `AfterSceneLoad`'da önyüklenir; `Awake` içinde okursan
 > henüz yok olabilir. `Start`'ta bağlan ya da null kontrolü yaz.
@@ -476,13 +481,24 @@ Ayrıntı: `ModeRules` alanlarının tamamı → [Sistem Özeti §3.9](../Sistem
 ## 14. Yeni arena eklemek
 
 `Tools > VortexArena > Create Arena From Template` sihirbazını çalıştır: arenaId, sahne adı,
-boyut, takım başına spawn sayısı, hedef (Standard / Venue). Sihirbaz klasörleri, sahne kopyasını,
-duvar/zemin/spawn ölçeklemesini, `MapDefinition` asset'ini, katalog kaydını ve Build Settings
-girdisini üretir.
+hedef (Standard / Venue). Sihirbaz klasörleri, **sahnenin bire bir kopyasını**, `MapDefinition`
+asset'ini, katalog kaydını ve Build Settings girdisini üretir.
 
-Sonra: sanat rötuşu **elde**, ardından **`Export Server Config`**.
+⚠️ **Sihirbaz boyut sormaz, geometriyi ölçeklemez.** Kazandırdığı şey sahnenin ağ bileşenlerini
+eksiksiz taşıması (`ArenaBoundary`, `ArenaCalibrator` + işaretçiler, `PlayerPoseTracker`,
+`RemotePlayerSpawner`, `ModeHudSpawner`, `BaseZone`, BB rig) — arena planı zaten her kurulumda
+baştan çiziliyor, orantılı ölçekleme elle düzeltilecek bir yalancı-doğru üretiyordu.
+
+Sonra **elde**: arena planını çiz · `ArenaBoundary.halfExtentX/Z` + `MapDefinition.size`'ı gerçek
+ölçüye getir · kalibrasyon işaretçilerini yerleştir · `GameObject > VortexArena > Spawn Point` ile
+arenanın **tek** başlangıç noktasını koy · NavMesh/ışık bake et · **`Export Server Config`**.
 
 Sahnede bulunması gerekenler → [Sahne Kurulumu](Sahne-Kurulumu.md).
+
+> **Başlangıç noktası nedir, ne değildir?** Maçtan önce operatörün oyuncuyu yönlendirdiği fiziksel
+> yer. Takımı ve slotu yoktur, arena başına bir tanedir ve **hiçbir kod onu okumaz** — oyuncuyu
+> oraya taşıyan bir mekanizma yok (free-roam). Ölünce dönülecek yer bu değil, **taban bölgesi**dir
+> (`BaseZone` — kırmızı/mavi şerit).
 
 > ⚠️ **Sahne adı = katalog anahtarıdır.** `load_match` bu string'i taşır ve Build Settings'teki
 > adla boşluk/harf farkı dahil birebir eşleşmelidir. Sonradan değiştirme.
@@ -498,7 +514,7 @@ Sahnede bulunması gerekenler → [Sahne Kurulumu](Sahne-Kurulumu.md).
 | **Rol** | player / admin — sahne kirletmeden, `EditorPrefs`'te kişisel kalır |
 | **Hedef** | Sunucu adresi (`dev-targets.json`'dan gelir: Local, Keşif, örnek PC) |
 | **Play başlangıcı** | Boot'tan mı, açık sahneden mi |
-| **Sentetik maç** | Mod, takım, spawn slot, raund süresi, skor limiti — **sunucu olmadan** `load_match` enjekte eder |
+| **Sentetik maç** | Mod, takım, raund süresi, skor limiti — **sunucu olmadan** `load_match` enjekte eder |
 | **N Bot / N Bot + Admin** | Sentetik oyuncu süreçleri başlatır (poz + atış) |
 | **Derle** | `dotnet build` |
 

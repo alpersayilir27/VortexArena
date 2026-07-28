@@ -172,13 +172,13 @@ namespace VortexArena.Core.Combat
         // --------------------------------------------------------------- süpürme
 
         /// <summary>
-        /// Raf silahlarını ve taban bölgelerini gizler.
+        /// Raf silahlarını ve taban bölgelerini (<see cref="BaseZone"/>) gizler — bu modlarda
+        /// canlanma şartı sabit durmaktır, şeritlerin ekranda kalması yanıltıcı olurdu.
         /// <para>
-        /// ⚠️ <b><see cref="BaseZone"/>'un GameObject'i KAPATILMAZ:</b> altındaki
-        /// <see cref="SpawnPoint"/>'ler <c>OnDisable</c>'da kayıttan düşer ve maç başı spawn
-        /// göstergesi çöker. Doğrusu bileşeni kapatmak + <b>görsel taban şeridini</b> (SpawnPoint
-        /// taşımayan, Renderer'lı doğrudan çocuk) ayrıca gizlemek: yalnız bileşen kapatılsaydı
-        /// şerit ekranda kalırdı.
+        /// ⚠️ <b>Bölgenin GameObject'i KAPATILMAZ, bileşeni kapatılır</b> + görsel şerit ayrıca
+        /// gizlenir: yalnız bileşen kapatılsaydı şerit ekranda kalırdı, GameObject kapatılsaydı
+        /// altına konmuş marker'lar (ör. <see cref="SpawnPoint"/>) <c>OnDisable</c>'da statik
+        /// kayıttan düşerdi.
         /// </para>
         /// <para>
         /// Verilen silahlar süpürmeden MUAFTIR (<see cref="Weapon.IsGranted"/>) — süpürme
@@ -221,11 +221,11 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>Tabanın görsel şeridi: Renderer'lı doğrudan çocuklar.
-        /// <para>⚠️ Alt ağacında <see cref="SpawnPoint"/> BULUNAN çocuğa dokunulmaz — marker'lar
-        /// şeridin torunu olabilir ve kapatılırsa <c>OnDisable</c> ile kayıttan düşerler
-        /// (spawn göstergesi çöker). Kontrol bu yüzden <c>GetComponent</c> değil
-        /// <c>GetComponentInChildren</c>'dır.</para></summary>
+        /// <summary>Taban bölgesinin görsel şeridi: Renderer'lı doğrudan çocuklar.
+        /// <para>⚠️ Alt ağacında <see cref="SpawnPoint"/> BULUNAN çocuğa dokunulmaz — arenanın
+        /// tek başlangıç noktası şeridin torunu olarak konmuş olabilir ve kapatılırsa
+        /// <c>OnDisable</c> ile statik kayıttan düşer. Kontrol bu yüzden <c>GetComponent</c>
+        /// değil <c>GetComponentInChildren</c>'dır.</para></summary>
         private void HideBaseStrip(BaseZone zone)
         {
             Transform root = zone.transform;

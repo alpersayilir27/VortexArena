@@ -12,38 +12,29 @@ namespace VortexArena.Core.Editor
     /// <summary>
     /// <c>Tools &gt; VortexArena &gt; Create Arena From Template</c> — mevcut bir arenayı
     /// şablon alarak yeni bir arena kutusu (<c>{Scenes, Data, Prefabs}</c>) üretir:
-    /// sahneyi kopyalar, YENİ BOYUTA ÖLÇEKLER, <c>MapDefinition</c> asset'i yazar,
-    /// <c>GameCatalog</c>'a ve Build Settings'e ekler.
+    /// sahneyi kopyalar, <c>MapDefinition</c> asset'i yazar, <c>GameCatalog</c>'a ve Build
+    /// Settings'e ekler.
     /// <para>
-    /// <b>Ölçekleme özeti</b> (bakımcı için — sihirbazın sahnede yaptığı TAM liste):
-    /// <list type="number">
-    /// <item><b>Çerçeve:</b> <c>ArenaBoundary</c> taşıyan transform ARENA ÇERÇEVESİDİR
-    /// (arena merkezi + Y rotasyonu); onun parent'ı arena köküdür. Tüm hesaplar bu çerçevenin
-    /// yerel uzayında yapılır.</item>
-    /// <item><b>Konum geçişi (shear'sız):</b> arena kökünün altındaki her transform için
-    /// hedef dünya konumu ÖNCE hesaplanır
-    /// (<c>p = frame.InverseTransformPoint(pos)</c> → <c>(p.x*rx, p.y, p.z*rz)</c> → dünyaya geri),
-    /// SONRA hiyerarşi sırasıyla (üstten alta) uygulanır. Rotasyon/ölçek dokunulmaz.
-    /// Arena kökünün KENDİSİ oynatılmaz (çocukların dünya konumu zaten yeniden yazıldığı için
-    /// kökü kaydırmak yalnız yerel offsetleri bozardı); çerçeve ve grup kökleri arena
-    /// merkezinde olduğu için formül onları zaten yerinde bırakır.</item>
-    /// <item><b>Duvarlar:</b> adı "Wall" ile başlayan ve <c>Renderer</c> taşıyan objelerde
-    /// yerel Y rotasyonu 0/180'e yakınsa <c>localScale.x *= rx</c>, 90/270'e yakınsa
-    /// <c>localScale.x *= rz</c> (şablonda duvar meshleri X ekseninde uzanır).</item>
-    /// <item><b>Zemin:</b> <c>Ground</c> grubunun altındaki <c>GroundMesh</c> objesi
-    /// <c>x*=rx, z*=rz</c> ölçeklenir; yoksa <c>Ground</c> grubunun kendisi ölçeklenir ve
-    /// "zemin çocukları eğrilebilir" uyarısı döner.</item>
-    /// <item><b>BaseZone:</b> <c>halfExtentZ *= rz</c> (<c>halfExtentX</c> = şerit genişliği,
-    /// DEĞİŞMEZ); zone arena-yerel X'i duvara yaslanır
-    /// (<c>x = sign(eskiX) * (sizeX/2 - halfExtentX)</c>); görsel şerit çocuğu
-    /// <c>localScale.z *= rz</c>.</item>
-    /// <item><b>SpawnPoint'ler:</b> SIFIRDAN yerleştirilir — eksikse sonuncusu klonlanır,
-    /// fazlaysa silinir; i. nokta arena-yerel <c>z = -halfZ + (i+1) * (2*halfZ/(n+1))</c>,
-    /// X = zone'un yeni X'i; <c>slot = i</c>, <c>team</c> = BaseZone'un takımı,
-    /// bakış yönü arena merkezine (yalnız Y ekseni) çevrilir.</item>
-    /// <item><b>ArenaBoundary:</b> <c>halfExtentX = sizeX/2</c>, <c>halfExtentZ = sizeZ/2</c>.</item>
-    /// </list>
-    /// Duvar/cover yerleşimi KABA kalır — sanat geçişi elde yapılır.
+    /// <b>Sihirbaz arena GEOMETRİSİNE DOKUNMAZ — ölçekleme yoktur.</b> Sahne kaynak arenadan
+    /// (varsayılan 10×10) bire bir kopyalanır ve duvar/zemin/taban/işaretçi yerleşimi olduğu
+    /// gibi gelir. Sebebi ürün gerçeği: her işletmenin alanı farklı ölçüde ve çoğu kare ya da
+    /// dikdörtgen bile değil, yani arena planı her kurulumda zaten baştan çiziliyor. Orantılı
+    /// ölçekleme bu durumda işe yarar bir taslak üretmiyor, yalnız elle düzeltilmesi gereken
+    /// bir yalancı-doğru üretiyordu (ve zemin/işaretçi hiyerarşisine bağımlı kırılgan bir kod
+    /// yığınıydı).
+    /// </para>
+    /// <para>
+    /// Sihirbazın kattığı değer <b>bileşen bütünlüğü</b>: kopyalanan sahne ağa bağlanmak için
+    /// gereken her şeyi hazır taşır (<c>ArenaBoundary</c>, <c>ArenaCalibrator</c> + işaretçiler,
+    /// <c>PlayerPoseTracker</c>, <c>RemotePlayerSpawner</c>, <c>ModeHudSpawner</c>,
+    /// <c>BaseZone</c>'lar, BB Camera Rig) — hiçbiri elle kurulmaz.
+    /// </para>
+    /// <para>
+    /// <b>ELDE kalan işler</b> (sonuç uyarıları hatırlatır): arena geometrisini kendi planına
+    /// göre çiz · <c>ArenaBoundary.halfExtentX/Z</c> + <c>MapDefinition.size</c> değerlerini
+    /// gerçek ölçüye getir · kalibrasyon işaretçilerini zemin bandına göre yerleştir ·
+    /// tek <see cref="SpawnPoint"/>'i <c>GameObject &gt; VortexArena &gt; Spawn Point</c> ile
+    /// koy (sihirbaz ÜRETMEZ) · NavMesh/ışık bake et.
     /// </para>
     /// <para>
     /// <b>⚠️ Katalog tuzağı:</b> <c>GameCatalog.MapsForMode</c>, bir <c>ModeDefinition</c>'ın
@@ -129,10 +120,11 @@ namespace VortexArena.Core.Editor
             options.displayName = EditorGUILayout.TextField("Gösterim adı", options.displayName);
 
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Fiziksel alan", EditorStyles.boldLabel);
-            options.sizeX = EditorGUILayout.FloatField("Genişlik X (m)", options.sizeX);
-            options.sizeZ = EditorGUILayout.FloatField("Derinlik Z (m)", options.sizeZ);
-            options.spawnSlotsPerTeam = EditorGUILayout.IntField("Takım başına spawn", options.spawnSlotsPerTeam);
+            EditorGUILayout.HelpBox(
+                "Sihirbaz arena geometrisini ÖLÇEKLEMEZ — sahne kaynak arenadan bire bir kopyalanır. " +
+                "Planı kendin çizip ArenaBoundary ve MapDefinition.size değerlerini gerçek ölçüye " +
+                "getireceksin.",
+                MessageType.Info);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Hedef", EditorStyles.boldLabel);
@@ -261,18 +253,6 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            if (options.sizeX <= 0f || options.sizeZ <= 0f)
-            {
-                Fail(result, $"Arena boyutu pozitif olmalı (sizeX={options.sizeX}, sizeZ={options.sizeZ}).");
-                return;
-            }
-
-            if (options.spawnSlotsPerTeam < 1)
-            {
-                Fail(result, $"spawnSlotsPerTeam en az 1 olmalı (verilen: {options.spawnSlotsPerTeam}).");
-                return;
-            }
-
             if (options.target == ArenaTemplateTarget.Venue && !IsValidFileName(options.venueName))
             {
                 Fail(result, $"Venue hedefi için geçerli bir işletme adı gerekli (verilen: '{options.venueName}').");
@@ -324,25 +304,14 @@ namespace VortexArena.Core.Editor
 
             result.ScenePath = scenePath;
 
-            // ------------------------------------------------ 4) aç + ölçekle
+            // ------------------------------------------------------- 4) sahneyi aç
+            // Geometriye dokunulmaz (ölçekleme yok); sahne yalnız üzerinde çalışılsın diye açılır.
             Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
             if (!scene.IsValid())
             {
                 Fail(result, $"Kopyalanan sahne açılamadı: '{scenePath}'.");
                 return;
             }
-
-            if (!ScaleArena(options.sizeX, options.sizeZ, options.spawnSlotsPerTeam, result))
-            {
-                // Klasör + sahne kopyası oluşmuş durumda; tekrar denemeden önce elle temizlensin
-                // (açık sahnenin asset'ini kod içinden silmek güvenli değil).
-                result.Error += $" — yarım kalan kutu elle silinmeli: '{targetFolder}'.";
-                return;
-            }
-
-            // ------------------------------------------- 5) sahneyi kaydet
-            EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene);
 
             // ------------------------------------------- 6) MapDefinition asset
             string mapAssetPath = $"{targetFolder}/Data/{arenaId}.asset";
@@ -363,13 +332,19 @@ namespace VortexArena.Core.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            result.Warnings.Add("Duvar/cover yerleşimi KABA — sanat geçişi (kapak objeleri, materyaller, ölçek rötuşu) elle yapılmalı.");
-            result.Warnings.Add("NavMesh ve ışık verisi kaynak sahneden MİRAS kalır — yeni boyutta yeniden bake edilmeli.");
+            result.Warnings.Add(
+                "Arena geometrisi ÖLÇEKLENMEDİ — duvar/zemin/taban yerleşimi kaynak arenadan bire bir geldi. " +
+                "Planı kendi alanına göre çiz; sonra ArenaBoundary.halfExtentX/Z ve MapDefinition.size " +
+                "değerlerini gerçek ölçüye getir.");
+            result.Warnings.Add(
+                "Kalibrasyon işaretçilerini (anchor_a/anchor_b) zemin bandına göre yerleştir ve aralarındaki " +
+                "mesafeyi not et (Docs/Isletme-Kurulum.md §3).");
+            result.Warnings.Add("Başlangıç noktası ÜRETİLMEZ: 'GameObject > VortexArena > Spawn Point' ile tek SpawnPoint'i elle koy.");
+            result.Warnings.Add("NavMesh ve ışık verisi kaynak sahneden MİRAS kalır — yeni plana göre yeniden bake edilmeli.");
+            result.Warnings.Add("Ölçü değiştiyse 'Tools > VortexArena > Export Server Config' çalıştır (maps.json tazelensin).");
 
             result.Success = true;
-            result.Summary =
-                $"Arena '{arenaId}' üretildi: {sceneName} ({options.sizeX:0.###}×{options.sizeZ:0.###} m, " +
-                $"takım başına {options.spawnSlotsPerTeam} spawn) → {targetFolder}";
+            result.Summary = $"Arena '{arenaId}' üretildi: {sceneName} → {targetFolder}";
         }
 
         /// <summary>Hedef kutu klasörü: Standard/&lt;arenaId&gt; veya Venues/&lt;venueName&gt;.</summary>
@@ -383,296 +358,6 @@ namespace VortexArena.Core.Editor
             return options.target == ArenaTemplateTarget.Venue
                 ? $"{VenuesRoot}/{(options.venueName ?? string.Empty).Trim()}"
                 : $"{StandardRoot}/{(options.arenaId ?? string.Empty).Trim()}";
-        }
-
-        // ------------------------------------------------------------ ölçekleme
-
-        /// <summary>
-        /// Açık sahnedeki arenayı yeni boyuta ölçekler (sınıf başlığındaki adım listesi).
-        /// Başarısızsa <paramref name="result"/> hata ile doldurulur ve <c>false</c> döner.
-        /// </summary>
-        private static bool ScaleArena(float sizeX, float sizeZ, int spawnSlotsPerTeam, ArenaTemplateResult result)
-        {
-            var boundary = UnityEngine.Object.FindFirstObjectByType<ArenaBoundary>(FindObjectsInactive.Include);
-            if (boundary == null)
-            {
-                Fail(result, "Sahnede ArenaBoundary yok — arena çerçevesi bulunamadı.");
-                return false;
-            }
-
-            Transform frame = boundary.transform;
-            Transform arenaRoot = frame.parent;
-            if (arenaRoot == null)
-            {
-                Fail(result, "ArenaBoundary'nin parent'ı yok — arena kökü (PlayArea) bekleniyordu.");
-                return false;
-            }
-
-            var boundaryObject = new SerializedObject(boundary);
-            SerializedProperty halfXProp = boundaryObject.FindProperty("halfExtentX");
-            SerializedProperty halfZProp = boundaryObject.FindProperty("halfExtentZ");
-            if (halfXProp == null || halfZProp == null)
-            {
-                Fail(result, "ArenaBoundary.halfExtentX/halfExtentZ alanları okunamadı.");
-                return false;
-            }
-
-            float oldSizeX = halfXProp.floatValue * 2f;
-            float oldSizeZ = halfZProp.floatValue * 2f;
-            if (oldSizeX <= 0.0001f || oldSizeZ <= 0.0001f)
-            {
-                Fail(result, $"Kaynak arena boyutu geçersiz ({oldSizeX}×{oldSizeZ}).");
-                return false;
-            }
-
-            float rx = sizeX / oldSizeX;
-            float rz = sizeZ / oldSizeZ;
-
-            RepositionSubtree(arenaRoot, frame, rx, rz);
-            ScaleWalls(arenaRoot, frame, rx, rz);
-            ScaleGround(arenaRoot, rx, rz, result);
-            ScaleBases(arenaRoot, frame, sizeX, sizeZ, rz, spawnSlotsPerTeam, result);
-
-            halfXProp.floatValue = sizeX * 0.5f;
-            halfZProp.floatValue = sizeZ * 0.5f;
-            boundaryObject.ApplyModifiedPropertiesWithoutUndo();
-            EditorUtility.SetDirty(boundary);
-
-            return true;
-        }
-
-        /// <summary>
-        /// Shear'sız konum geçişi: hedef dünya konumları ÖNCE hesaplanır, sonra hiyerarşi
-        /// sırasıyla uygulanır. Arena kökünün kendisi yerinde bırakılır.
-        /// </summary>
-        private static void RepositionSubtree(Transform arenaRoot, Transform frame, float rx, float rz)
-        {
-            Transform[] all = arenaRoot.GetComponentsInChildren<Transform>(true);
-            var targets = new Vector3[all.Length];
-
-            for (int i = 0; i < all.Length; i++)
-            {
-                Vector3 local = frame.InverseTransformPoint(all[i].position);
-                targets[i] = frame.TransformPoint(new Vector3(local.x * rx, local.y, local.z * rz));
-            }
-
-            // GetComponentsInChildren hiyerarşi sırası döner (kök → çocuk): üstten alta uygula.
-            for (int i = 0; i < all.Length; i++)
-            {
-                if (all[i] == arenaRoot)
-                {
-                    continue;
-                }
-
-                all[i].position = targets[i];
-                EditorUtility.SetDirty(all[i]);
-            }
-        }
-
-        /// <summary>Duvar meshlerini uzandıkları eksene göre genişletir.</summary>
-        private static void ScaleWalls(Transform arenaRoot, Transform frame, float rx, float rz)
-        {
-            Transform[] all = arenaRoot.GetComponentsInChildren<Transform>(true);
-            for (int i = 0; i < all.Length; i++)
-            {
-                Transform wall = all[i];
-                if (wall == frame || wall == arenaRoot)
-                {
-                    continue;
-                }
-
-                if (!wall.name.StartsWith("Wall", StringComparison.Ordinal) || wall.GetComponent<Renderer>() == null)
-                {
-                    continue;
-                }
-
-                Vector3 scale = wall.localScale;
-                scale.x *= IsAlongArenaX(wall.localEulerAngles.y) ? rx : rz;
-                wall.localScale = scale;
-                EditorUtility.SetDirty(wall);
-            }
-        }
-
-        /// <summary>Y rotasyonu 0/180'e yakın mı (duvar arena X ekseni boyunca mı uzanıyor).</summary>
-        private static bool IsAlongArenaX(float yawDegrees)
-        {
-            float folded = Mathf.Repeat(yawDegrees, 180f);
-            return folded < 45f || folded > 135f;
-        }
-
-        /// <summary>Zemini ölçekler: önce <c>GroundMesh</c>, yoksa <c>Ground</c> grubunun kendisi.</summary>
-        private static void ScaleGround(Transform arenaRoot, float rx, float rz, ArenaTemplateResult result)
-        {
-            Transform ground = arenaRoot.Find("Ground");
-            if (ground == null)
-            {
-                result.Warnings.Add("Sahnede 'Ground' grubu bulunamadı — zemin ölçeklenmedi.");
-                return;
-            }
-
-            Transform groundMesh = FindDescendant(ground, "GroundMesh");
-            if (groundMesh != null)
-            {
-                Vector3 scale = groundMesh.localScale;
-                scale.x *= rx;
-                scale.z *= rz;
-                groundMesh.localScale = scale;
-                EditorUtility.SetDirty(groundMesh);
-                return;
-            }
-
-            if (ground.GetComponent<MeshRenderer>() != null)
-            {
-                Vector3 scale = ground.localScale;
-                scale.x *= rx;
-                scale.z *= rz;
-                ground.localScale = scale;
-                EditorUtility.SetDirty(ground);
-                result.Warnings.Add("Zemin çocukları eğrilebilir (GroundMesh alt objesi yok, 'Ground' grubunun kendisi ölçeklendi).");
-                return;
-            }
-
-            result.Warnings.Add("'Ground' grubunda MeshRenderer yok ve GroundMesh alt objesi bulunamadı — zemin ölçeklenmedi.");
-        }
-
-        /// <summary>Tüm BaseZone'ları duvara yaslar, şeritleri ve spawn noktalarını yeniden kurar.</summary>
-        private static void ScaleBases(
-            Transform arenaRoot,
-            Transform frame,
-            float sizeX,
-            float sizeZ,
-            float rz,
-            int spawnSlotsPerTeam,
-            ArenaTemplateResult result)
-        {
-            BaseZone[] zones = arenaRoot.GetComponentsInChildren<BaseZone>(true);
-            if (zones.Length == 0)
-            {
-                result.Warnings.Add("Sahnede BaseZone bulunamadı — taban/spawn yerleşimi atlandı.");
-                return;
-            }
-
-            for (int i = 0; i < zones.Length; i++)
-            {
-                BaseZone zone = zones[i];
-                var zoneObject = new SerializedObject(zone);
-                SerializedProperty halfXProp = zoneObject.FindProperty("halfExtentX");
-                SerializedProperty halfZProp = zoneObject.FindProperty("halfExtentZ");
-                SerializedProperty teamProp = zoneObject.FindProperty("team");
-
-                float halfExtentX = halfXProp != null ? halfXProp.floatValue : 0.5f;
-                if (halfZProp != null)
-                {
-                    halfZProp.floatValue *= rz;
-                }
-
-                zoneObject.ApplyModifiedPropertiesWithoutUndo();
-                EditorUtility.SetDirty(zone);
-
-                Team team = teamProp != null ? (Team)teamProp.enumValueIndex : Team.Red;
-
-                // Zone'u yeni duvara yasla (şerit genişliği kadar içeride).
-                Vector3 zoneLocal = frame.InverseTransformPoint(zone.transform.position);
-                zoneLocal.x = Mathf.Sign(zoneLocal.x) * (sizeX * 0.5f - halfExtentX);
-                zone.transform.position = frame.TransformPoint(zoneLocal);
-                EditorUtility.SetDirty(zone.transform);
-
-                ScaleBaseStrip(zone, rz);
-                RebuildSpawnPoints(frame, zone, team, zoneLocal.x, spawnSlotsPerTeam, sizeZ, result);
-            }
-        }
-
-        /// <summary>BaseZone'un görsel şeridini (Renderer taşıyan doğrudan çocuk) derinlemesine uzatır.</summary>
-        private static void ScaleBaseStrip(BaseZone zone, float rz)
-        {
-            for (int i = 0; i < zone.transform.childCount; i++)
-            {
-                Transform child = zone.transform.GetChild(i);
-                if (child.GetComponent<SpawnPoint>() != null || child.GetComponent<Renderer>() == null)
-                {
-                    continue;
-                }
-
-                Vector3 scale = child.localScale;
-                scale.z *= rz;
-                child.localScale = scale;
-                EditorUtility.SetDirty(child);
-            }
-        }
-
-        /// <summary>
-        /// Takımın spawn noktalarını SIFIRDAN yerleştirir: sayıyı <paramref name="count"/>'a
-        /// getirir (klonla/sil), kenar boyunca eşit aralıklarla dizer, <c>slot</c>/<c>team</c>
-        /// alanlarını yazar ve arena merkezine baktırır.
-        /// </summary>
-        private static void RebuildSpawnPoints(
-            Transform frame,
-            BaseZone zone,
-            Team team,
-            float zoneLocalX,
-            int count,
-            float sizeZ,
-            ArenaTemplateResult result)
-        {
-            var points = new List<SpawnPoint>(zone.GetComponentsInChildren<SpawnPoint>(true));
-            if (points.Count == 0)
-            {
-                result.Warnings.Add($"{team} tabanında hiç SpawnPoint yok — klonlanacak şablon bulunamadı, spawn yerleşimi atlandı.");
-                return;
-            }
-
-            while (points.Count > count)
-            {
-                SpawnPoint extra = points[points.Count - 1];
-                points.RemoveAt(points.Count - 1);
-                UnityEngine.Object.DestroyImmediate(extra.gameObject);
-            }
-
-            while (points.Count < count)
-            {
-                SpawnPoint template = points[points.Count - 1];
-                var clone = UnityEngine.Object.Instantiate(template.gameObject, template.transform.parent);
-                points.Add(clone.GetComponent<SpawnPoint>());
-            }
-
-            float halfZ = sizeZ * 0.5f;
-            float step = 2f * halfZ / (count + 1);
-
-            for (int i = 0; i < points.Count; i++)
-            {
-                SpawnPoint point = points[i];
-                point.gameObject.name = $"Spawn_{team}_{i}";
-
-                Vector3 local = frame.InverseTransformPoint(point.transform.position);
-                local.x = zoneLocalX;
-                local.z = -halfZ + (i + 1) * step;
-                point.transform.position = frame.TransformPoint(local);
-
-                // Bakış yönü arena merkezine (yalnız Y ekseni).
-                Vector3 toCenter = frame.position - point.transform.position;
-                toCenter.y = 0f;
-                if (toCenter.sqrMagnitude > 0.0001f)
-                {
-                    point.transform.rotation = Quaternion.LookRotation(toCenter.normalized, Vector3.up);
-                }
-
-                var pointObject = new SerializedObject(point);
-                SerializedProperty slotProp = pointObject.FindProperty("slot");
-                SerializedProperty teamProp = pointObject.FindProperty("team");
-                if (slotProp != null)
-                {
-                    slotProp.intValue = i;
-                }
-
-                if (teamProp != null)
-                {
-                    teamProp.enumValueIndex = (int)team;
-                }
-
-                pointObject.ApplyModifiedPropertiesWithoutUndo();
-                EditorUtility.SetDirty(point);
-                EditorUtility.SetDirty(point.transform);
-            }
         }
 
         // ----------------------------------------------------- asset + katalog
@@ -689,16 +374,26 @@ namespace VortexArena.Core.Editor
             ArenaTemplateResult result)
         {
             string[] supportedModeIds = Array.Empty<string>();
+            // Boyut da kaynaktan gelir: sahne geometrisi ölçeklenmediği için MapDefinition'ın
+            // kaynak arenayla aynı ölçüyü göstermesi tutarlıdır. Plan çizilince ikisi birlikte
+            // elle güncellenir (sonuç uyarısı hatırlatır).
+            Vector2 size = new Vector2(10f, 10f);
             if (!string.IsNullOrEmpty(options.sourceMapPath))
             {
                 var sourceMap = AssetDatabase.LoadAssetAtPath<MapDefinition>(options.sourceMapPath);
-                if (sourceMap != null && sourceMap.SupportedModeIds != null)
+                if (sourceMap != null)
                 {
-                    supportedModeIds = (string[])sourceMap.SupportedModeIds.Clone();
+                    size = sourceMap.Size;
+                    if (sourceMap.SupportedModeIds != null)
+                    {
+                        supportedModeIds = (string[])sourceMap.SupportedModeIds.Clone();
+                    }
                 }
-                else if (sourceMap == null)
+                else
                 {
-                    result.Warnings.Add($"Kaynak MapDefinition bulunamadı ('{options.sourceMapPath}') — supportedModeIds boş bırakıldı (kısıtsız).");
+                    result.Warnings.Add(
+                        $"Kaynak MapDefinition bulunamadı ('{options.sourceMapPath}') — supportedModeIds boş " +
+                        "bırakıldı (kısıtsız), boyut 10×10 yazıldı.");
                 }
             }
 
@@ -710,8 +405,7 @@ namespace VortexArena.Core.Editor
             mapObject.FindProperty("displayName").stringValue = string.IsNullOrWhiteSpace(options.displayName)
                 ? sceneName
                 : options.displayName.Trim();
-            mapObject.FindProperty("size").vector2Value = new Vector2(options.sizeX, options.sizeZ);
-            mapObject.FindProperty("spawnSlotsPerTeam").intValue = options.spawnSlotsPerTeam;
+            mapObject.FindProperty("size").vector2Value = size;
 
             SerializedProperty modesProp = mapObject.FindProperty("supportedModeIds");
             modesProp.arraySize = supportedModeIds.Length;

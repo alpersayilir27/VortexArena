@@ -15,7 +15,7 @@ Server/
   VortexArena.Server.App/     # konsol exe (UI YOK — yönetim UI'ı Unity admin build'i)
   VortexArena.PoseBot/        # sentetik oyuncu test istemcisi (poz senkronunu Quest'siz test eder)
   config/server.json          # portlar + mekan adı + tickHz (ELLE)
-  config/maps.json            # harita tablosu (sceneName + boyut + slot + modes) — Unity export
+  config/maps.json            # harita tablosu (sceneName + boyut + modes) — Unity export
   config/devices.json         # deviceId -> dostane ad ("Gözlük NN"); otomatik doldurulur
   firewall-kur.cmd            # Windows Firewall kuralları (yönetici olarak çalıştırın)
 ```
@@ -128,15 +128,17 @@ kurulumda genelde yalnız `venueName` değişir:
 > kullanır). Bedeli: denge değişikliği istemci build'i ister.
 
 **maps.json** — harita tablosu (§10.1): `start_match`'te `sceneName`'in bilinen bir harita olup
-olmadığı ve o haritanın modu destekleyip desteklemediği buradan doğrulanır; `spawnSlotsPerTeam`
-ile `load_match.spawnSlot` sahnede gerçekten var olan slot aralığına sarılır (modulo).
+olmadığı ve o haritanın modu destekleyip desteklemediği buradan doğrulanır.
 ```json
 { "maps": [ { "sceneName": "Arena10x10", "sizeX": 10, "sizeZ": 10,
-              "spawnSlotsPerTeam": 4, "modes": ["ffa", "tdm"] } ] }
+              "modes": ["ffa", "tdm"] } ] }
 ```
 `modes` boş bırakılırsa harita tüm modları kabul eder. **Dosya yoksa oluşturulmaz** (sunucunun
-uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması ve slot sınırı devre dışı
-kalır ve açılış özetinde `Haritalar : yok (doğrulama kapalı)` görünür.
+uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması devre dışı kalır ve açılış
+özetinde `Haritalar : yok (doğrulama kapalı)` görünür.
+
+> Sunucu sahne GEOMETRİSİNİ bilmez: konum/spawn noktası taşıyan bir alan ne bu tabloda ne de
+> protokolde vardır. Oyuncular fiziksel olarak yürür (§10.4).
 
 **devices.json** — `{ "<deviceId>": "Gözlük 07" }`. Bilinmeyen player cihazı bağlanınca ilk boş
 `Gözlük NN` atanır ve dosyaya yazılır; `set_name` ile değişen ad da buraya kalıcı yazılır.
@@ -175,9 +177,8 @@ Admin `start_match` yolladığında sunucu şunları doğrular: mod kayıtlı m�
 DEĞİLDİR:** hiç oyuncu yokken de başlatılabilir (konsolda uyarı) — admin gözlemcinin haritayı boş
 arenada açması için. Geçerse takımlar dengelenir (2+ oyuncuda boş takım kalmaz; 0/1 oyuncuda
 uyarıyla izin verilir)
-ve her oyuncuya KİŞİSEL `load_match` (`yourTeam` + takım içi 0 tabanlı `spawnSlot`, harita
-biliniyorsa `spawnSlotsPerTeam` ile modulo) gider. **Çevrimiçi adminlere de bir kopya gider**
-(`yourTeam:""`, `spawnSlot:-1`) — admin gözlemci aynı sahneyi yükler; admin `set_ready`
+ve her oyuncuya KİŞİSEL `load_match` (`yourTeam` + maçın `rules`'ü) gider.
+**Çevrimiçi adminlere de bir kopya gider** (`yourTeam:""`) — admin gözlemci aynı sahneyi yükler; admin `set_ready`
 GÖNDERMEDİĞİ için Loading kapısı etkilenmez (kapı yalnız `role=player` sayar).
 
 **Oyuncusuz maç:** `load_match` yalnız adminlere gider, Loading'de beklenecek `set_ready`
@@ -193,7 +194,7 @@ alanları roster ile taşınıyor ve admin istatistik tablosunun sağlama noktas
 | Satır | Anlamı |
 |---|---|
 | `faz Lobby → Loading` | her faz değişiminde (ayrıca herkese `match_state` yayınlanır) |
-| `start_match: mod 'tdm', sahne 'Arena10x10' (10×10, 4 slot/takım), 2 oyuncu (kırmızı 1 / mavi 1)` | maç kuruldu (parantez içi yalnız harita tablodaysa) |
+| `start_match: mod 'tdm', sahne 'Arena10x10' (10×10), 2 oyuncu (kırmızı 1 / mavi 1)` | maç kuruldu (boyut yalnız harita tablodaysa) |
 | `start_match reddedildi: …` | doğrulama düştü, faz değişmedi (ör. `'Arena12x12' harita tablosunda yok`) |
 | `takım dengeleme: 1 oyuncu 'blue' takımına taşındı` | boş takım kalmasın diye |
 | `loading zaman aşımı (20 sn) — hazır olmayanlar: Gözlük 03` | sahne yükleme beklenmedi |
@@ -209,7 +210,7 @@ sonuna `(+N bastırıldı)` olarak eklenir. `revive_request` reddi tamamen sessi
 bir tekrarlar; takılan istemciyi `REVIVE_GRACE` zorla canlandırma satırı yakalar).
 
 **Free-roam respawn:** oyuncu ışınlanamaz → canlanma konum değil DURUM değişimidir. Ölünce
-kurbana `respawn{spawnSlot, delaySeconds}` gider (`delaySeconds` = modun `Rules.RespawnDelay`'i);
+kurbana `respawn{delaySeconds}` gider (`delaySeconds` = modun `Rules.RespawnDelay`'i);
 oyuncu süre dolduktan sonra **modun canlanma şartını** sağlayıp `revive_request` yollar; sunucu
 doğrulayıp `health_update{hp:100, attackerId:0}` yayınlar. Talep 20 sn (`REVIVE_GRACE`) gelmezse
 sunucu zorla canlandırır (maç kilitlenmesin).

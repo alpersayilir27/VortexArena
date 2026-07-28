@@ -1,49 +1,55 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Takım enum'u için takma ad: sınıfta aynı adlı bir ÖZELLİK (Team) olduğu için
-// enum üyelerine bu alias üzerinden erişilir (isim belirsizliği kalmasın).
-using CoreTeam = VortexArena.Core.Team;
-
 namespace VortexArena.Core.Arena
 {
     /// <summary>
-    /// Sahne marker'ı: bir takımın <c>slot</c> numaralı başlangıç/canlanma noktası.
+    /// Sahne marker'ı: arenanın <b>tek</b> başlangıç noktası — maç öncesi operatörün oyuncuyu
+    /// yönlendirdiği fiziksel yer. Takımı ve slotu YOKTUR (arena başına bir tane).
     /// <para>
-    /// ⚠️ FREE-ROAM: oyuncu fiziksel olarak yürür, IŞINLANMAZ. Bu marker yalnız
-    /// GÖSTERGE amaçlıdır ("tabanının şu slotuna dön") — hiçbir kod rig'i buraya taşımaz.
-    /// Sunucu <c>load_match.spawnSlot</c> / <c>respawn.spawnSlot</c> gönderir, slot çözümü
-    /// istemcide bu marker'lardan yapılır (Docs/ArenaNet-Protokol.md §10.4).
+    /// ⚠️ FREE-ROAM: oyuncu fiziksel olarak yürür, IŞINLANMAZ. Bu marker yalnız GÖSTERGEDİR;
+    /// hiçbir kod rig'i, kamerayı ya da oyuncuyu buraya taşımaz — ne maç başında, ne canlanmada,
+    /// ne de harita değişiminde. <b>Harita değişimi kalibrasyonu da sıfırlamaz</b>: yeni sahnenin
+    /// <see cref="ArenaCalibrator"/>'ı kayıtlı spatial anchor'dan hizalamayı geri yükler
+    /// (Docs/ArenaNet-Protokol.md §10.4).
     /// </para>
-    /// Kayıt <see cref="OnEnable"/>/<see cref="OnDisable"/> ile yapılır; sahne değişiminde
-    /// statik liste kendiliğinden boşalır (sızıntı yok).
+    /// <para>
+    /// Ölünce dönülecek yer bu DEĞİLDİR — o <see cref="BaseZone"/>'dur (taban bölgesi).
+    /// </para>
+    /// <para>
+    /// Sahneye <c>GameObject &gt; VortexArena &gt; Spawn Point</c> ile eklenir ve ELLE
+    /// yerleştirilir. Kayıt <see cref="OnEnable"/>/<see cref="OnDisable"/> ile yapılır; sahne
+    /// değişiminde statik liste kendiliğinden boşalır (sızıntı yok).
+    /// </para>
     /// </summary>
     public class SpawnPoint : MonoBehaviour
     {
-        [SerializeField] private Team team = CoreTeam.Red;
-        [Tooltip("Takım içi 0 tabanlı slot numarası (load_match.spawnSlot ile eşleşir).")]
-        [SerializeField] private int slot;
-
         private static readonly List<SpawnPoint> Registry = new List<SpawnPoint>();
 
-        /// <summary><see cref="FindGlobal"/>'in sıralama tamponu — her çağrıda yeni liste
-        /// ayırmamak için (canlanma akışında saniyede birkaç kez çağrılabilir).</summary>
-        private static readonly List<SpawnPoint> Ordered = new List<SpawnPoint>();
+        /// <summary>Sahnedeki başlangıç noktası; hiç yoksa <c>null</c>. Birden çok varsa ilk
+        /// kaydolan döner (fazlalık <see cref="OnEnable"/>'da uyarı basar).
+        /// <para>⚠️ Kayıt <c>OnEnable</c>'da dolar, yani <b>yalnız Play kipinde</b> geçerlidir —
+        /// editör aracı yazarken sahneyi <c>FindObjectsByType</c> ile tara.</para></summary>
+        public static SpawnPoint Current => Registry.Count > 0 ? Registry[0] : null;
 
-        /// <summary>Bu noktanın takımı.</summary>
-        public Team Team => team;
-
-        /// <summary>Takım içi 0 tabanlı slot numarası.</summary>
-        public int Slot => slot;
-
-        /// <summary>Sahnede aktif olan tüm spawn noktaları (salt okunur).</summary>
+        /// <summary>Play kipinde aktif olan tüm noktalar (salt okunur). Normalde 0 ya da 1 öğe.</summary>
         public static IReadOnlyList<SpawnPoint> All => Registry;
 
         private void OnEnable()
         {
-            if (!Registry.Contains(this))
+            if (Registry.Contains(this))
             {
-                Registry.Add(this);
+                return;
+            }
+
+            Registry.Add(this);
+
+            // Sessizce ikinci nokta kabul edilmez: "hangisi geçerli" sorusu sahnede görünür olsun.
+            if (Registry.Count > 1)
+            {
+                Debug.LogWarning(
+                    $"[SpawnPoint] Sahnede {Registry.Count} başlangıç noktası var — arena başına " +
+                    "TEK nokta beklenir. Fazlalıkları sil.", this);
             }
         }
 
@@ -52,86 +58,12 @@ namespace VortexArena.Core.Arena
             Registry.Remove(this);
         }
 
-        /// <summary>
-        /// Takım + slot ile nokta bulur. Tam eşleşme yoksa aynı takımın EN KÜÇÜK slot'u,
-        /// o da yoksa null döner (sahnede o takımın noktası hiç yoksa).
-        /// </summary>
-        public static SpawnPoint Find(Team team, int slot)
-        {
-            SpawnPoint fallback = null;
-
-            for (int i = 0; i < Registry.Count; i++)
-            {
-                SpawnPoint point = Registry[i];
-                if (point == null || point.team != team)
-                {
-                    continue;
-                }
-
-                if (point.slot == slot)
-                {
-                    return point;
-                }
-
-                if (fallback == null || point.slot < fallback.slot)
-                {
-                    fallback = point;
-                }
-            }
-
-            return fallback;
-        }
-
-        /// <summary>
-        /// Takımsız modlar (§10.5 <c>teamMode:"none"</c>): sahnedeki TÜM noktalar tek havuzdur.
-        /// <para>
-        /// Kayıt listesi <c>(team, slot)</c> sırasına dizilip verilen indeks alınır — böylece
-        /// sıralama <see cref="OnEnable"/> çağrı sırasından (yani sahne hiyerarşisinden)
-        /// bağımsızdır ve aynı slot numarası her istemcide aynı noktayı gösterir. Sunucu da
-        /// slotu <c>spawnSlotsPerTeam × 2</c> ile sardığı için indeks aralık dışına düşmez;
-        /// yine de modulo ile güvenceye alınır. Liste boşsa <c>null</c>.
-        /// </para>
-        /// </summary>
-        public static SpawnPoint FindGlobal(int slot)
-        {
-            Ordered.Clear();
-            for (int i = 0; i < Registry.Count; i++)
-            {
-                if (Registry[i] != null)
-                {
-                    Ordered.Add(Registry[i]);
-                }
-            }
-
-            if (Ordered.Count == 0)
-            {
-                return null;
-            }
-
-            Ordered.Sort(CompareTeamThenSlot);
-            int index = slot % Ordered.Count;
-            if (index < 0)
-            {
-                index += Ordered.Count;
-            }
-
-            return Ordered[index];
-        }
-
-        private static int CompareTeamThenSlot(SpawnPoint a, SpawnPoint b)
-        {
-            int byTeam = ((int)a.team).CompareTo((int)b.team);
-            return byTeam != 0 ? byTeam : a.slot.CompareTo(b.slot);
-        }
-
         // ------------------------------------------------------------------ gizmo
 
-        /// <summary>Editörde yerleştirmeyi kolaylaştırır: takım renginde küre + bakış oku.</summary>
+        /// <summary>Editörde yerleştirmeyi kolaylaştırır: küre + bakış oku.</summary>
         private void OnDrawGizmos()
         {
-            Gizmos.color = team == CoreTeam.Red ? new Color(0.85f, 0.20f, 0.20f, 0.9f)
-                : team == CoreTeam.Blue ? new Color(0.20f, 0.40f, 0.90f, 0.9f)
-                : new Color(0.80f, 0.80f, 0.80f, 0.9f); // Neutral
+            Gizmos.color = new Color(0.25f, 0.85f, 0.35f, 0.9f);
 
             Vector3 origin = transform.position + Vector3.up * 0.05f;
             Gizmos.DrawSphere(origin, 0.12f);

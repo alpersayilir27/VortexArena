@@ -286,7 +286,7 @@ namespace VortexArena.App.Editor
                 if (matchBlockEnabled && DevProcesses.ActiveArenaSceneName() == null)
                 {
                     EditorGUILayout.HelpBox(
-                        "Aktif sahne kabuk sahnesi — takım/slot yalnız arena sahnelerinde uygulanır.",
+                        "Aktif sahne kabuk sahnesi — takım yalnız arena sahnelerinde uygulanır.",
                         MessageType.Info);
                 }
 
@@ -304,12 +304,10 @@ namespace VortexArena.App.Editor
                 }
 
                 EditorGUI.BeginChangeCheck();
-                int spawnSlot = EditorGUILayout.IntField("Spawn slot", DevSession.SpawnSlot);
                 int roundSeconds = EditorGUILayout.IntField("Raund sn", DevSession.RoundSeconds);
                 int scoreLimit = EditorGUILayout.IntField("Skor limiti", DevSession.ScoreLimit);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    DevSession.SpawnSlot = spawnSlot;
                     DevSession.RoundSeconds = roundSeconds;
                     DevSession.ScoreLimit = scoreLimit;
                 }

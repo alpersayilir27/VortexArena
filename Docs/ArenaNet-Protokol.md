@@ -106,7 +106,7 @@ KENDİ `playerId`'si için gönderebilir (lobide takım seçimi); admin herkes i
 
 Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı gören istemci **etkilenen her hedef için bir `hit_report`** yollar, mesafeye göre düşen hasarı kendisi hesaplar. Aynı şekilde yaydaki çekiş gücü, kafa vuruşu çarpanı veya düşme hasarı da istemci tarafında hesaplanıp `damage` alanına yazılır.
 
-**`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** fiziksel olarak kendi taban bölgesine (`BaseZone`) girdikten sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da oyuncu ışınlanamadığı için canlanma bir **konum değişimi değil, durum değişimidir**.
+**`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** modun canlanma şartını sağladıktan (taban bölgesine girme ya da sabit durma) sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da oyuncu ışınlanamadığı için canlanma bir **konum değişimi değil, durum değişimidir**.
 
 ### 5.2 Yalnız admin → Sunucu
 
@@ -150,9 +150,10 @@ Admin olmayan istemciler bu alanları yok sayabilir.
 skoru `match_state.scoreRed`/`scoreBlue`'da kalır — §10.5). Bireysel skorun değiştiği an =
 öldürmenin olduğu an = roster'ın zaten tazelendiği an, bu yüzden ayrı bir mesaj tipi yoktur.
 
-**`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "spawnSlot":2, "rules":{ … } }`
-→ istemci sahneyi yükler, kendi takım tarafındaki `spawnSlot` numaralı `SpawnPoint`'te başlar, `status`'ta yeni sahne görünür. Sahne yüklenince istemci `set_ready` (loading tamam anlamında) gönderir; herkes hazır olunca sunucu `countdown` başlatır.
-**Adminlere de gönderilir** (gözlemci sahneyi yüklesin diye) ama `yourTeam:""` ve `spawnSlot:-1` ile — admin oynamadığı için takım/slot anlamsızdır ve admin `set_ready` göndermez.
+**`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "rules":{ … } }`
+→ istemci sahneyi yükler, `status`'ta yeni sahne görünür. Sahne yüklenince istemci `set_ready` (loading tamam anlamında) gönderir; herkes hazır olunca sunucu `countdown` başlatır.
+**Oyuncu ışınlanmaz ve kalibrasyon SIFIRLANMAZ** — harita değişimi oyuncu için yalnız bir sahne değişimidir, fiziksel duruşu ve hizalaması kaldığı yerden devam eder (§10.4).
+**Adminlere de gönderilir** (gözlemci sahneyi yüklesin diye) ama `yourTeam:""` ile — admin oynamadığı için takım anlamsızdır ve admin `set_ready` göndermez.
 `rules` = bu maçın kural şekli (§10.5). İstemci kendini **buna** göre kurar: takımsız modda `yourTeam` boş gelir, canlanma şartı `reviveAnchor`'dan okunur. İstemcide `if (modeId == "...")` zinciri YOKTUR — mod eklemek istemci kodunu değiştirmez.
 
 **`countdown`** `{ "type":"countdown", "seconds":5 }` — 0'a inince faz Live.
@@ -165,7 +166,7 @@ Fazlar: `Lobby → Loading → Countdown → Live → End → Lobby`.
 **`shot_fired`** (relay) `{ "type":"shot_fired", "playerId":4, "weaponId":"ak47", "muzzlePos":[...], "muzzleDir":[...] }` — diğer istemciler uzak namlu alevi/ses oynatır (atan hariç herkese).
 **`health_update`** `{ "type":"health_update", "playerId":5, "hp":75.0, "attackerId":3 }`
 **`kill_event`** `{ "type":"kill_event", "killerId":3, "victimId":5, "weaponId":"ak47" }`
-**`respawn`** `{ "type":"respawn", "playerId":5, "spawnSlot":1, "delaySeconds":5.0 }` — istemci `delaySeconds` sonra kendi takım tarafındaki slotta canlanır (slot çözümü yerel `SpawnPoint` marker'larından; v1'de sunucuya harita dosyası gerekmez).
+**`respawn`** `{ "type":"respawn", "playerId":5, "delaySeconds":5.0 }` — istemci `delaySeconds` sonra, modun canlanma şartını sağlayınca canlanır (§10.4). Sunucu sahne geometrisini bilmez; canlanma yeri diye bir alan taşınmaz.
 **`match_end`** `{ "type":"match_end", "winnerTeam":"blue", "winnerPlayerId":0, "scoreRed":12, "scoreBlue":30 }`
 Kazanan **iki kanaldan biriyle** ifade edilir (`rules.scoring`, §10.5): takım skorlu modlarda `winnerTeam` (`"red"|"blue"|""`), bireysel skorlu modlarda `winnerPlayerId` (`0` = yok/berabere). Bir mod ikisini de doldurmaz; okuyan istemci dolu olana bakar.
 **`return_to_lobby`** `{ "type":"return_to_lobby" }` — herkes Lobby sahnesine döner.
@@ -259,7 +260,7 @@ Lobby ──start_match──► Loading ──herkes set_ready | LOADING_TIMEOU
 - **Oyuncusuz maç (yalnız admin):** `load_match` yalnız adminlere gider, Loading'de beklenecek `set_ready` olmadığı için faz doğrudan Countdown'a geçer ve maç normal işler (skor 0, süre akar). Ayrım şu: **oyuncularla başlamış** bir maçta Loading sırasında son oyuncu da düşerse sunucu maçı bırakıp Lobby'ye döner; oyuncusuz **başlatılmış** maçta dönmez — çıkış operatörün `abort_match`/`return_to_lobby` komutudur.
 - **Mod/harita/parametre seçimi sunucuda yaşar (çoklu admin):** admin arayüzündeki seçiciler yerel bir değişkeni değil, `set_selection` ile sunucudaki ortak seçimi değiştirir; sunucu `admin_state` ile hepsine geri yayar. `start_match` kendi `modeId`/`sceneName`'i ile gelmeye devam eder (protokol yüzeyi genişledi ama kırılmadı) ama sunucu onu aynı zamanda ortak seçime yazar — böylece maç başladığında tüm admin panelleri aynı değeri gösterir. Seçim yalnız bir niyet beyanıdır: doğrulama `start_match` anında yapılır.
 - **Maç parametreleri admin'den gelebilir:** `start_match.roundSeconds`/`scoreLimit` doluysa (`> 0`) o maç bu değerlerle koşar; boş/`0` ise modun varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`) kullanılır. Yani `ModeDefinition`/`IGameMode` üzerindeki sayılar **varsayılandır, kilit değil** — operatör raundu kısaltıp uzatabilir. Değer `load_match`/`match_state` üzerinden istemcilere zaten gidiyor, ek bir kanal doğmaz.
-- **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam` + `spawnSlot`'u gider. Takımlı modda slot **takım içi** 0 tabanlı sıradır ve `spawnSlotsPerTeam` biliniyorsa ona göre modulo alınır. **Takımsız modda** (`rules.teamMode == "none"`, §10.5) takım boş gider ve slot **tek havuzdan** dağıtılır: sahnedeki iki tabanın slotları birleşir, modulo `spawnSlotsPerTeam × 2` alınır. Faz Loading'e geçerken tüm `ready` bayrakları sıfırlanır. **Çevrimiçi adminlere de bir kopya gider** (`yourTeam:""`, `spawnSlot:-1`) — admin gözlemci aynı sahneyi yükler.
+- **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam`'i gider; **takımsız modda** (`rules.teamMode == "none"`, §10.5) takım boş gider. Faz Loading'e geçerken tüm `ready` bayrakları sıfırlanır. **Çevrimiçi adminlere de bir kopya gider** (`yourTeam:""`) — admin gözlemci aynı sahneyi yükler.
 - **Loading:** istemci sahneyi yükleyince `set_ready{ready:true}` gönderir ("sahne yüklendi" anlamında). Tüm çevrimiçi **oyuncular** hazır olunca (veya `LOADING_TIMEOUT` dolunca) Countdown başlar. Kapı yalnız `role=player` bağlantılarını sayar: admin sahneyi yüklese de `set_ready` göndermez, geri sayımı ne hızlandırır ne geciktirir.
 - **Countdown:** saniyede bir `countdown{seconds}` (5→1); 0'da faz Live.
 - **Live:** `match_state` 1 Hz; `timeRemaining` sunucuda azalır; `IGameMode.OnTick` çağrılır.
@@ -268,7 +269,7 @@ Lobby ──start_match──► Loading ──herkes set_ready | LOADING_TIMEOU
 
 ### 10.2 Oyuncu maç durumu (sunucuda)
 
-Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `spawnSlot`, `kills`, `deaths`, `score`, ölüm zamanı. Live'a girerken herkes `hp=PLAYER_MAX_HP`, `alive=1`. Snapshot'taki `SnapshotEntry.flags` bit0 (`FLAG_ALIVE`) bu `alive` alanından beslenir — Lobby fazında herkes canlı sayılır.
+Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `kills`, `deaths`, `score`, ölüm zamanı. Live'a girerken herkes `hp=PLAYER_MAX_HP`, `alive=1`. Snapshot'taki `SnapshotEntry.flags` bit0 (`FLAG_ALIVE`) bu `alive` alanından beslenir — Lobby fazında herkes canlı sayılır.
 
 `score` = **bireysel maç skoru**. Yazarı yalnız `IGameMode`'dur (`MatchDirector`'ın skor defteri üzerinden); `kills` ile aynı şey DEĞİLDİR — bir mod öldürme başına 1, bir başkası objektif başına 5 yazabilir, Silah Yarışı'nda aynı alan "seviye" anlamına gelir. Maç kurulurken ve Lobby'ye dönerken 0'lanır.
 
@@ -293,7 +294,7 @@ kontrolleridir — kaldırılırlarsa çift ölüm / maç dışı hasar gibi hat
 
 Geçerse: `hp -= damage` (istemcinin bildirdiği değer) → `health_update{playerId, hp, attackerId}`
 **herkese** yayınlanır. `hp ≤ 0` ise `alive=0`, `kill_event{killerId, victimId, weaponId}` +
-`IGameMode.OnKill` (skor) + kurbana `respawn{spawnSlot, delaySeconds:RESPAWN_DELAY}`.
+`IGameMode.OnKill` (skor) + kurbana `respawn{delaySeconds:RESPAWN_DELAY}`.
 
 Atış hızı denetimi, `weaponId` beyaz listesi ve sunucu-otoriter silah tablosu **YOKTUR**
 (v1'de vardı, kaldırıldı): pompalı saçması, bomba parçası ve ok yaylımı gibi meşru "hızlı
@@ -311,16 +312,20 @@ eklenerek) — ölü/maç dışı oyuncunun `shot_fired`'ı relay EDİLMEZ.
 
 Fiziksel oyuncu ışınlanamaz → **respawn = konum değil durum değişimi**:
 
-1. Ölünce sunucu `respawn{playerId, spawnSlot, delaySeconds}` gönderir (`delaySeconds` = `rules.respawnDelay`, §10.5); istemci ölüm ekranı gösterir, silah ateşlemez, avatar yarı saydam.
+1. Ölünce sunucu `respawn{playerId, delaySeconds}` gönderir (`delaySeconds` = `rules.respawnDelay`, §10.5); istemci ölüm ekranı gösterir, silah ateşlemez, avatar yarı saydam.
 2. `delaySeconds` dolduktan **ve modun canlanma şartı sağlandıktan** sonra istemci `revive_request` gönderir (canlanana dek ~1 sn'de bir tekrarlar). Şart `rules.reviveAnchor` ile seçilir:
-   - **`"base"`** (varsayılan, TDM): oyuncu kendi `BaseZone`'una fiziken girer. Ölüm ekranı "Tabanına dön ve canlan" der.
-   - **`"standstill"`**: oyuncu ölüm anındaki HMD konumunu çapa alır ve `REVIVE_HOLD_RADIUS` içinde `REVIVE_HOLD_SECONDS` boyunca kesintisiz sabit durur; çapadan çıkınca sayaç ve çapa sıfırlanır. Takım tabanı olmayan modlar (FFA) bunu kullanır.
+   - **`"base"`** (varsayılan, TDM): oyuncu bir **taban bölgesine** (`BaseZone` — arenadaki kırmızı/mavi şerit) fiziken girer. Ölüm ekranı "Tabanına dön ve canlan" der.
+   - **`"standstill"`**: oyuncu ölüm anındaki HMD konumunu çapa alır ve `REVIVE_HOLD_RADIUS` içinde `REVIVE_HOLD_SECONDS` boyunca kesintisiz sabit durur; çapadan çıkınca sayaç ve çapa sıfırlanır. Taban bölgesi olmayan modlar (FFA) bunu kullanır.
 3. Sunucu doğrular (faz Live, oyuncu ölü, gecikme dolmuş) → `hp=PLAYER_MAX_HP`, `alive=1` → `health_update{hp:100, attackerId:0}`.
 4. Ölümden `REVIVE_GRACE` geçtiği hâlde talep gelmediyse sunucu **zorla** canlandırır (istemci takılmışsa maç kilitlenmesin).
 
 > **`reviveAnchor` sunucuda DOĞRULANMAZ.** §10.3 felsefesinin aynısı: sunucu hakemlik değil defter tutar. "Tabanda mı / sabit mi durdu" kararı istemcinindir; sunucu faz + ölü + gecikme kontrolüyle yetinir. `REVIVE_GRACE` güvenlik ağı her iki şartta da aynen işler.
 
-`spawnSlot` yalnızca "hangi tabana/slota gideceğin" göstergesidir; slot çözümü istemcide sahnedeki `SpawnPoint` marker'larından yapılır — takımlı modda `(team, slot)`, takımsız modda tüm noktalar **tek havuz** olarak `(team, slot)` sırasına dizilip indeks alınır. Sunucu sahne geometrisini bilmez, `maps.json`'dan yalnızca `spawnSlotsPerTeam`'i okuyup slot numarasını geçerli aralığa sarar.
+**Taban bölgesi eşleşmesi (istemci):** bir `BaseZone` oyuncuya açıktır eğer takımı oyuncunun takımıyla aynıysa, **ya da** bölge `Neutral` işaretliyse, **ya da** oyuncunun takımı boşsa (takımsız mod). Aynı takıma ait birden çok bölge varsa **herhangi birine** girmek yeter. Sahnede hiç açık bölge yoksa şart aranmaz — oyuncu kalıcı ölü kalmasın (güvenlik ağı yine `REVIVE_GRACE`).
+
+**Konum diye bir alan protokolde YOKTUR.** Ne `load_match` ne `respawn` bir spawn noktası/slotu taşır; sunucu sahne geometrisini bilmez. Arena başına sahnedeki tek `SpawnPoint` marker'ı yalnız **yerleşim göstergesidir** (maç öncesi operatörün oyuncuyu yönlendirdiği fiziksel nokta) ve hiçbir kod tarafından okunmaz — rig'i taşıyan bir mekanizma yoktur.
+
+**Harita değişimi kalibrasyonu sıfırlamaz.** `load_match` oyuncu için yalnız bir sahne değişimidir: kimse "yeniden doğmaz", rig taşınmaz. Yeni sahnenin `ArenaCalibrator`'ı `Start`'ta kayıtlı `OVRSpatialAnchor`'dan hizalamayı geri yükler, oyuncu fiziksel olarak nerede duruyorsa orada kalır. Hizalama geri gelene kadar `PlayerPoseTracker` poz göndermez (yanlış uzayda poz göndermektense kısa bir boşluk yeğdir).
 
 ### 10.5 Mod kuralları (`ModeRules` / `rules`)
 
@@ -385,7 +390,7 @@ Sunucusuz editör oturumunda (dev penceresi sentetik maç) kurallar `ModeDefinit
 |---|---|---|
 | `server.json` | **Elle** | Portlar + `venueName` + `tickHz`; yoksa varsayılanlarla oluşturulur (§1 sabitleri). |
 | `devices.json` | **Sunucu üretir** | `deviceId → "Gözlük NN"`; ilk bağlantıda ve `set_name`'de yazılır (§2). UTF-8, BOM'suz. |
-| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `sizeX`/`sizeZ`, `spawnSlotsPerTeam`, `modes` (§10.1). |
+| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `sizeX`/`sizeZ`, `modes` (§10.1). |
 
 > **`weapons.json` KALDIRILDI** (v1'de vardı): sunucu artık silah tanımı tutmaz, hasarı istemci
 > bildirir (§10.3). Silah istatistikleri yalnız Unity'deki `WeaponDefinition` SO'larındadır.

@@ -22,8 +22,6 @@ namespace VortexArena.Core.Arena
         [Header("Fiziksel alan")]
         [Tooltip("Arena zemin ölçüsü (metre): X × Z.")]
         [SerializeField] private Vector2 size = new Vector2(10f, 10f);
-        [Tooltip("Takım başına sahnedeki SpawnPoint sayısı.")]
-        [SerializeField] private int spawnSlotsPerTeam = 4;
 
         [Header("Uyumluluk")]
         [Tooltip("Bu haritanın desteklediği modId'ler; boş bırakılırsa tüm modlar sayılır.")]
@@ -37,9 +35,6 @@ namespace VortexArena.Core.Arena
 
         /// <summary>Arena zemin ölçüsü (metre, X × Z).</summary>
         public Vector2 Size => size;
-
-        /// <summary>Takım başına spawn slot sayısı.</summary>
-        public int SpawnSlotsPerTeam => spawnSlotsPerTeam;
 
         /// <summary>Desteklenen modId listesi (boş = kısıt yok).</summary>
         public string[] SupportedModeIds => supportedModeIds;

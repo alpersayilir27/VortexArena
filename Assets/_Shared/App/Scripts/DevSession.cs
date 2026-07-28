@@ -65,7 +65,6 @@ namespace VortexArena.App
         public const string KeyPort = Prefix + "Port";
         public const string KeyStartFromBoot = Prefix + "StartFromBoot";
         public const string KeyTeam = Prefix + "Team";
-        public const string KeySpawnSlot = Prefix + "SpawnSlot";
         public const string KeyModeId = Prefix + "ModeId";
         public const string KeyRoundSeconds = Prefix + "RoundSeconds";
         public const string KeyScoreLimit = Prefix + "ScoreLimit";
@@ -120,12 +119,6 @@ namespace VortexArena.App
         {
             get => EditorPrefs.GetString(KeyTeam, "red") == "blue" ? "blue" : "red";
             set => EditorPrefs.SetString(KeyTeam, value);
-        }
-
-        public static int SpawnSlot
-        {
-            get => Mathf.Max(0, EditorPrefs.GetInt(KeySpawnSlot, 0));
-            set => EditorPrefs.SetInt(KeySpawnSlot, Mathf.Max(0, value));
         }
 
         /// <summary>Sentetik load_match'in modu (ModeHudSpawner HUD'ı buna göre seçer).</summary>
@@ -261,7 +254,7 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Takım/spawn slot/mod bilgisini gerçek kod yolundan geçirir. Yalnız player rolünde:
+        /// Takım/mod bilgisini gerçek kod yolundan geçirir. Yalnız player rolünde:
         /// `SceneRouter` admin rolünde `load_match`'i zaten yok sayar.
         /// </summary>
         private void InjectSyntheticLoadMatch()
@@ -282,14 +275,12 @@ namespace VortexArena.App
                 sceneName = SceneManager.GetActiveScene().name,
                 roundSeconds = RoundSeconds,
                 scoreLimit = ScoreLimit,
-                yourTeam = ModeRuntime.IsTeamless ? "" : Team,
-                spawnSlot = SpawnSlot
+                yourTeam = ModeRuntime.IsTeamless ? "" : Team
             };
 
             Debug.Log($"[DevSession] Sentetik load_match → sahne '{msg.sceneName}', mod " +
-                      $"'{msg.modeId}', takım {(string.IsNullOrEmpty(msg.yourTeam) ? "yok" : msg.yourTeam)}, " +
-                      $"slot {msg.spawnSlot}. (Sunucudan gelmedi; yalnız editör. Sunucuda maç varsa " +
-                      "gerçek load_match bunu ezer.)");
+                      $"'{msg.modeId}', takım {(string.IsNullOrEmpty(msg.yourTeam) ? "yok" : msg.yourTeam)}. " +
+                      "(Sunucudan gelmedi; yalnız editör. Sunucuda maç varsa gerçek load_match bunu ezer.)");
 
             NetEvents.InjectLoadMatch(msg);
         }

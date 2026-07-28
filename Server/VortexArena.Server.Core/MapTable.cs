@@ -9,7 +9,6 @@ public sealed class MapEntry
     public string sceneName = "";
     public float sizeX;
     public float sizeZ;
-    public int spawnSlotsPerTeam;
 
     /// <summary>Bu haritanın desteklediği modId'ler; BOŞ = kısıt yok (MapDefinition.SupportsMode
     /// ile aynı semantik — yeni haritada unutulan alan modu gizlemesin).</summary>
@@ -22,7 +21,7 @@ public sealed class MapTableFile
     public MapEntry[] maps = Array.Empty<MapEntry>();
 }
 
-/// <summary>Harita kataloğu (§10.1 start_match doğrulaması + spawn slot sınırı). İçerik
+/// <summary>Harita kataloğu (§10.1 start_match doğrulaması). İçerik
 /// projesinden gelir: Unity <c>Tools &gt; VortexArena &gt; Export Server Config</c> menüsü
 /// MapDefinition SO'larından üretir — dosya ELLE DÜZENLENMEZ (export ezer).
 ///
@@ -50,11 +49,6 @@ public sealed class MapTable
             if (entry == null || string.IsNullOrWhiteSpace(entry.sceneName))
             {
                 Console.WriteLine("[MapTable] sceneName'i boş girdi — atlandı.");
-                continue;
-            }
-            if (entry.spawnSlotsPerTeam <= 0)
-            {
-                Console.WriteLine($"[MapTable] '{entry.sceneName}' geçersiz (spawnSlotsPerTeam {entry.spawnSlotsPerTeam}) — atlandı.");
                 continue;
             }
             entry.modes ??= Array.Empty<string>();
