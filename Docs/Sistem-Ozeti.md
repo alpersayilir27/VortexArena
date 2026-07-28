@@ -266,9 +266,16 @@ okunmaz (`GameObject > VortexArena > Spawn Point` ile eklenir, elle yerleştiril
 
 ⚠️ **Harita değişimi kalibrasyonu sıfırlamaz.** `load_match` oyuncu için yalnız bir sahne
 değişimidir: kimse "yeniden doğmaz". Yeni sahnenin `ArenaCalibrator`'ı `Start`'ta kayıtlı
-`OVRSpatialAnchor`'dan hizalamayı geri yükler (yükleme geçici düşerse 3 kez denenir); hizalama
-gelene dek `PlayerPoseTracker` poz göndermez. Ön koşul: **aynı işletmede oynanan arenaların zemin
-işaretleri aynı yerde olmalı** — anchor fiziksel dünyada sabittir, sanal işaretler sahneden gelir.
+`OVRSpatialAnchor`'dan hizalamayı geri yükler (yükleme geçici düşerse 3 kez denenir). Ön koşul:
+**aynı işletmede oynanan arenaların zemin işaretleri aynı yerde olmalı** — anchor fiziksel dünyada
+sabittir, sanal işaretler sahneden gelir.
+
+⚠️ **Poz gönderimi kalibrasyonu BEKLEMEZ.** `PlayerPoseTracker` rig anchor'larını bulur bulmaz
+`IPoseSource` olarak kaydolur; hizalama gelmeden gönderilen pozlar arena ile örtüşmez (rig henüz
+hizalanmadığı için ofsetlidir) ama gönderilir — oyuncunun bağlı ve hareket hâlinde olduğu ağdan
+görülebilsin diye. Hizalama oturunca aynı kaynak kendiliğinden doğru uzayda poz verir; yeniden
+kaydolma yoktur. Sonucu: admin taktik haritasında/uzak avatarlarda kalibrasyon öncesi konum
+**kaymış görünür**, bu bir hata değildir.
 
 ### 3.8 Maç faz makinesi (sunucuda)
 
@@ -333,6 +340,30 @@ farklı yazar):
   önizleme alanlarından okunur; **sapmada sunucu kazanır** — gerçek `load_match` bunları ezer.
 - Tam semantik: `Docs/ArenaNet-Protokol.md` §10.5.
 
+### 3.11 Kalibrasyon durumu — operatörün kaldıracı
+
+Bir başlığın hizalı olup olmadığı **sunucuda** tutulur (`lobby_state.calibrated`) ve sahadaki en
+sık sorunu çözer: bir oyuncunun kalibrasyonu kayar, avatarı fiziksel konumundan sapar.
+
+**Akış:** operatör admin ekranında o satırın **KAL** düğmesiyle kalibrasyonu sıfırlar → oyuncu
+**ateş edemez, hasar yemez, canlanamaz**, diğer herkesin ekranında **avatarı parlar** ve vuruş
+kutuları kapanır → oyuncu A+B ile (ya da kayıtlı anchor'dan) yeniden kalibre olur → gözlük
+`set_calibration` yollar → tik geri yanar ve oyuncu **kaldığı yerden devam eder** (can/K-D/skor
+korunur, bu bir ceza değil geçici dondurmadır).
+
+**Asimetri kasıtlıdır:** admin yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez —
+hizalamanın gerçekten oturduğunu yalnız başlık bilir. Admin elle işaretleyebilseydi, sunucunun
+hizalı sandığı ama fiilen kaymış bir oyuncuya ateş ve hasar açılırdı.
+
+**Kalibreliyken A+B kilitlidir:** oyuncu kendi hizalamasını kazara bozamaz, kapıyı yalnız operatör
+açar. Hiç bağlanılmamışsa (sunucusuz editör testi) kapı açıktır ve silah çalışır.
+
+⚠️ **Poz gönderimi buna bağlı DEĞİLDİR** — kalibresiz oyuncu poz göndermeye devam eder (§3.5).
+Bilinçlidir: operatörün "avatar kaymış" teşhisini koyabilmesi ve parlayan avatarın hareket ettiğini
+görebilmesi için pozun akıyor olması gerekir.
+
+Tam semantik: `Docs/ArenaNet-Protokol.md` §10.6.
+
 ---
 
 ## 4. Bileşen sözlüğü — kim ne yapıyor
@@ -360,8 +391,8 @@ farklı yazar):
 | `ConnectionOverlay` | **Bağlantı hata ekranı** — kalıcı tekil, `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` ile kendini önyükler, tüm UI prosedürel (prefab/Resources/sahne bağı YOK → yeni arena eklerken unutulacak adım yok). ~3 sn **grace** (anlık kopmada yanıp sönmesin; açılışı da maç ortasındaki kopmayı da kapsar). İki durum: adres biliniyor → "SUNUCUYA BAĞLANILAMIYOR" + adres + `N sn · M. deneme` + son hata; adres yok → "SUNUCU BULUNAMADI". Rol'e göre ipucu (player: A×2 / admin: launcher). Masaüstü: screen-space + scrim + **"Yeniden Bağlan"** (adres yoksa devre dışı; `Disconnect()` otomatik denemeyi durdurduğu için tek kurtarma yolu). VR: world-space kart + `HudFollow`, scrim YOK. ⚠️ `ArenaBoundary.IsOutOfBounds` iken **tamamen gizlenir** — alan-dışı uyarısı her zaman baskın |
 | `DevSession` | **Yalnız editör** (dosyanın tamamı `#if UNITY_EDITOR`): dev penceresinin `EditorPrefs` seçimini Play'e uygular. (a) `BeforeSceneLoad` → rol + adres `AppSession`'a, `RoleResolved = true`; (b) `AfterSceneLoad` → "Açık sahneden" kipinde ve aktif sahne bir ARENA sahnesiyse, bir kare sonra **sunucuya bağlanır** ve (player rolünde) **sentetik `load_match`** yayınlar (`NetEvents.InjectLoadMatch`) → takım/slot/mod gerçek kod yolundan geçer. **Bağlanmayı neden o üstleniyor:** `Connect` normalde kabuk controller'larından gelir, arena sahnelerinde onlar YOKTUR — bağlanmazsa can/skor/faz gelmez ve `CanFire` hiç açılmaz. Sunucuda maç koşuyorsa `welcome.match` geç-katılım senkronu devreye girip **gerçek takım ataması sentetiği ezer**. Pencerede "Dev enjeksiyonu" kapatılırsa üretim yolu birebir koşar |
 | `AppSession` | Oturum: rol + sunucu adresi (`ServerIp`/`ServerPort`/`HasServerEndpoint`) — `AppBoot` yazar, controller'lar okur |
-| `PlayerPoseTracker` | BB rig anchor'larını bulur, kalibrasyonu bekler, **dünya→arena** çevirip `IPoseSource` olarak kaydolur |
-| `RemotePlayerSpawner` | Katılan/ayrılan uzak oyuncular için `RemoteAvatar` yaratır/yok eder |
+| `PlayerPoseTracker` | BB rig anchor'larını bulur, **dünya→arena** çevirip `IPoseSource` olarak kaydolur (kalibrasyon BEKLENMEZ; hizalanana dek pozlar ofsetli gider) |
+| `RemotePlayerSpawner` | Katılan/ayrılan uzak oyuncular için `RemoteAvatar` yaratır/yok eder; her `lobby_state`'te ad/takım/**kalibrasyon** bilgisini besler |
 | `TacticalView` | Üstten 2B nokta haritası (snapshot'lardan çizilir). Admin HUD'ının **sağ alt mini haritası**; `Initialize(RectTransform)` ile prosedürel kurulur, kuş bakışı kipinde gizlenir |
 | `ModeHudSpawner` | Aktif modun HUD prefabını katalogdan örnekler — **App, mod assembly'lerini referanslamaz** (prefab yalnız `GameObject` olarak taşınır) |
 | `IdentifyOverlay` | Admin `identify` yollayınca o başlıkta büyük kimlik overlay'i |
@@ -382,7 +413,7 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 | `AdminSpectatorCamera` | Üç kip: **POV** (seçili oyuncunun baş pozu; poz yoksa son konumda kalır) · **Serbest** (WASD + Q/E + **sağ tuş basılı** fare bakışı, Shift ×3, tekerlek hız; imleç KİLİTLENMEZ → HUD tıklanabilir kalır) · **Kuş bakışı** (ortografik, arena yaw'ına hizalı; kadraj `ArenaBoundary` → `MapDefinition.Size` → 10×10 varsayılanı, tekerlek zoom). Kip değişiminde `AdminSpectator.RefreshRoof()` çağrılır → sahnede `ArenaRoof` varsa çatı kuş bakışında kalkar |
 | `AdminPlayerMarkers` | Oyuncu başına **zeminde halka + altında ad etiketi** (kuş bakışı isteği). Halka baş pozunun x/z'sinden arena zeminine indirilir; etiket kameraya döner ve kameranın yukarı vektörünün tersine kaydırılarak her kipte "dairenin altında" okunur. `RemoteAvatar`'a dokunmaz |
 | `AdminHud` | **Kalıcı** ekran-uzayı HUD'ı (`sortingOrder = 4000`; hata ekranı 5000'de üstte kalır): üst orta takım skorları + **ortada istatistik chip'i** (faz/süre de gösterir), sol üst tercihler, sağ üst mod·harita + bağlantı/poz yaşı + **çoklu admin satırı** (kaç admin bağlı · son admin eylemi; tek admin varken boş kalır), yanlarda takım kolonları (**FFA'da tek kolon** — karar veriden gelir), alt orta kamera şeridi + seçili oyuncu, alt sağ ölüm akışı + mini harita |
-| `AdminPlayerRow` | Oyuncu satırı: takım şeridi, ad + `#id`, HP barı, `K/D · batarya · durum`, eylemler POV/TAKIM/KİMLİK/**AT (iki adımlı onay)**. Satıra tıklamak seçer (MonoBehaviour değil, havuzlanan görünüm nesnesi) |
+| `AdminPlayerRow` | Oyuncu satırı: takım şeridi, ad + `#id`, HP barı, `K/D · batarya · durum`, eylemler POV/**KAL**/TAKIM/KİMLİK/**AT**. `KAL` ve `AT` **iki adımlı onay** ister (oyuncuyu savaş dışı bırakan/atan eylem tek tıkla olmamalı). `KAL` hem gösterge hem düğmedir (`KAL` yeşil / `KAL !` kırmızı — sembol değil renk+ünlem, çünkü TMP varsayılan fontunda ✓/✗ garantisi yok) ve **yalnız sıfırlar** — geri açmayı gözlük yapar (§3.11); kalibresiz satırın kenarlığı kırmızıya döner. Satıra tıklamak seçer (MonoBehaviour değil, havuzlanan görünüm nesnesi) |
 | `AdminPreferencesPanel` | Eski dashboard'un işi. **MAÇ bölümü ORTAK** (başlıkta yazar): mod/harita seçicileri yerel alana değil `set_selection` ile sunucudaki ortak seçime yazar → tüm adminlerde aynı anda değişir; tıklamada yerel imleç de iyimser ilerletilir, sunucudan gelen değer son sözü söyler. **Harita değişince (faz Lobby ise) o arena YEREL olarak hemen açılır** — önizleme; sunucuya maç komutu gitmez, oyuncular etkilenmez (`SceneRouter.LoadPreview`). Bu bileşen panel **kapalıyken de etkin** olduğu için başka bir operatörün harita değişikliği panel açılmadan da önizlemeye yansır. **GÖRÜNÜM bölümü YEREL** (halkalar, ad etiketleri, kamera hızı, duvar saydamlığı, **çatı**, mini harita) + bağlantı (yeniden bağlan/kes, bağlı admin sayısı). MAÇ bölümünde ayrıca **Süre** (`ROUND_SECONDS_OPTIONS`: 2.5/5/10/15/20/30 dk · 1 saat) ve **Skor limiti** (eşiğin altında ±1, üstünde ±5) seçicileri vardır — ikisi de ORTAK; **mod değişince o modun `ModeDefinition` varsayılanına dönerler**. Yarı saydam, **scrim YOK**. Dropdown/slider yerine `[<] değer [>]` döngüleyici |
 | `AdminStatsPanel` | Takım toplamları + oyuncu tablosu (ad/takım/**SKOR**/K/D/K-D/HP/batarya/durum/sahne) + maç bilgisi. **FFA'da tablo skora göre azalan sıralanır**, başlık lideri yazar. Tablo **kolon kolon** çizilir (TMP fontu eşit genişlikli değil, boşlukla hizalama kayar). Protokolde olmayan metrik (hasar/isabet/ping) **gösterilmez** |
 | `AdminRoster` | Admin arayüzünün veri katmanı: `lobby_state` (otoriter tam görüntü + `kills/deaths/hp/alive/score`) + `health_update`/`kill_event` (anlık) + `match_state`/`countdown`/`match_end` birleşimi; takım listeleri, takım kipi kararı, ölüm akışı, snapshot yaşı. **`IsFfa` OTORİTER:** maç yüklüyse `ModeRuntime.Teams`, lobide ortak seçimin katalogdaki modu, ikisi de yoksa eski sezgisel yedek ("kimsenin takımı yok"). ⚠️ `respawn` admin'e GELMEZ (yalnız ölen oyuncuya gider) → geri sayım `kill_event` + `RESPAWN_DELAY` ile yerel hesaplanır |
@@ -403,7 +434,9 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 ### İstemci: `VortexArena.Core` (oyun kodu)
 
 `ArenaBoundary` (arena origin + sınır), `ArenaCalibrator` (2 nokta → 6DOF hizalama + OVRSpatialAnchor
-kalıcılığı + recenter onarımı),
+kalıcılığı + recenter onarımı; **A+B yalnız sunucu "kalibresiz" derken açılır**, §3.11),
+`CalibrationState` (kalıcı tekil — kalibrasyon durumunun sunucu ile iki yönlü köprüsü: hizalanınca
+`set_calibration` yollar, operatör sıfırlayınca `ArenaCalibrator.Invalidate()` çağırır),
 `ArenaSpace` (dünya↔arena dönüşümü), `BaseZone` (**taban bölgesi** — kırmızı/mavi şerit, canlanma
 kapısı; `Neutral` = herkese açık), `SpawnPoint` (arena başına **tek** başlangıç göstergesi —
 takımsız, slotsuz, hiçbir kod okumaz), `MapDefinition` / `ModeDefinition` / `GameCatalog` (içerik SO'ları),
@@ -856,6 +889,38 @@ konsoluna tek satır sebep yazar.
     sınırı zaten `ArenaBoundary.halfExtentX/Z`'dir. Genel kural: **sunucuya yalnız sunucunun
     karar vermek için okuduğu alan gider** — "ileride lazım olur" diye alan taşımak, iki uçta
     sessizce sapan ikinci bir doğruluk kaynağı üretir.
+32. **Kalibrasyon kapısı `REVIVE_GRACE` zorla canlandırmasını da kapsamalı.** "Kalibresiz oyuncu
+    canlanamaz" kuralını yalnız `HandleReviveRequestAsync`'e koymak işe yaramaz:
+    `MatchDirector.TickLiveLocked` talep gelmese de grace süresi dolunca herkesi canlandırıyor,
+    yani oyuncu birkaç saniye sonra kendiliğinden geri gelirdi. İki yer de kapatılmalı. Genel
+    kural: **bir oyuncu durumuna kapı koyarken o durumu değiştiren TÜM yolları ara** — talep
+    tabanlı olan ile zamanlayıcı tabanlı olan ayrı kod yollarıdır.
+33. **Yeni bir oyuncu kapısı eklerken `PoseBot`'u güncelle.** Botlar `hello` sonrası
+    `set_calibration{true}` yollamasaydı Faz B'den itibaren tüm `hit_report`'ları "kalibresiz"
+    diye reddedilir, `--fight` sessizce çalışmaz hâle gelirdi (konsolda yalnız ret satırları).
+    Dev penceresindeki bot düğmelerinin tamamı buna bağlı — sunucuya oyuncu için yeni bir ön
+    koşul eklendiğinde botun da onu sağlaması gerekir.
+34. **Prosedürel arayüzde "kaç px sığar" hesabı elle YAPILMAZ.** `UiKit` Layout Group kullanmıyor
+    (sabit anchor = öngörülebilir yerleşim) — bedeli: bir satıra düğme eklemek kalanların
+    genişliğini sessizce daraltır. Oyuncu satırına `KAL` eklenince düğme başına 94 px'ten ~70 px'e
+    düşüldü ve `KIRMIZIYA` etiketi `KIRMIZ…` diye kırpılır oldu. Çözüm iki katmanlı:
+    (a) `UiKit.Button` etiketleri artık **aşağı yönlü autosize** yapar (tavan = istenen punto,
+    taban %70) → sığmayan etiket kırpılmadan önce küçülür; (b) etiketler kısaltıldı
+    (`MAVİ`/`KIRMIZI`). ⚠️ Autosize tavanı **açmadan önce** okunmalı: `enableAutoSizing = true`
+    sonrası `fontSize` artık istenen değil TMP'nin hesapladığı puntodur.
+    Aynı sebeple **panel yüksekliği de elle yığılan `y`'ye bağlıdır** —
+    `AdminPreferencesPanel`'e bölüm eklerken `PanelHeight` de büyütülür (taşma hata vermez,
+    alt kısmı ekran dışına atar).
+35. **Arayüz metninde ✓ ✗ gibi sembol kullanma** (`UiKit` sınıf dokümanı zaten söylüyor): TMP
+    varsayılan fontunda glif garantisi yok, eksik glif **□** çizilir — çalışmayan ama hata da
+    vermeyen bir görsel. Kalibrasyon düğmesi bu yüzden `KAL` / `KAL !` + renk kullanıyor.
+    Türkçe harfler ve `·` / `—` güvenlidir (mevcut kodda kullanılıyor).
+36. **`MaterialPropertyBlock` shader keyword'ü AÇAMAZ.** `RemoteAvatar`'daki kalibresiz parlaması
+    `_EmissionColor` ile yazılsaydı, paylaşılan materyalde `_EMISSION` önceden açık olmadığı için
+    **sessizce hiçbir şey yapmazdı** — çalışmayan ama hata da vermeyen bir görsel. Bu yüzden
+    parlama `_BaseColor` nabzıyla yapılıyor (mevcut takım rengi yolunun aynısı). Emission gerekirse
+    materyalde keyword'ü açmak ayrı bir adımdır; ikinci bir materyal örneği yaratmak da Quest'te
+    SRP batch'ini bozar.
 
 ---
 
@@ -871,7 +936,13 @@ destekler) + arena şablon sihirbazı ve
 `Export Server Config` · admin **sahne-içi gözlemci** (üç kamera kipi + sahne üstü yönetim HUD'ı,
 çoklu admin) · geliştirici araç seti (`Tools > VortexArena > Dev`, `dev-targets.json`,
 `Ctrl+Alt+R`) · rolden bağımsız adres zinciri + `ConnectionOverlay` bağlantı hata ekranı ·
-Flutter launcher + üç dağıtım betiği.
+**sunucu-otoriter kalibrasyon durumu** (§3.11: admin sıfırlar → oyuncu savaş dışı + avatarı parlar;
+geri açmayı gözlük yapar) · Flutter launcher + üç dağıtım betiği.
+
+> **Sıradaki büyük iş: bulut kalibrasyonu** (Meta grup / paylaşılan uzamsal anchor ile toplu
+> hizalama). Altyapısı hazır bırakıldı — `set_calibration.source` `"cloud"`'u kabul ediyor,
+> `clear_calibration{playerId:0}` toplu sıfırlıyor, `ArenaCalibrator.AlignRigToAnchorPose`
+> `internal` seam olarak açık. Protokol değişikliği gerekmiyor.
 
 > **Yeni bir modun maliyeti ne olmalı:** `ffa` bugün protokolde **tek bir alan bile tutmuyor** ve
 > TDM ile hiçbir kod paylaşmıyor — sunucuda bir `IGameMode` dosyası + tek satır kayıt, istemcide

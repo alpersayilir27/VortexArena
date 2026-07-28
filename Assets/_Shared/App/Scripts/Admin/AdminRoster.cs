@@ -25,6 +25,17 @@ namespace VortexArena.App.Admin
         /// <summary>Bireysel maç skoru (§10.2) — kills DEĞİLDİR; anlamı moda göre değişir.</summary>
         public int score;
 
+        /// <summary>Başlık arena ile hizalı mı (§10.6). Varsayılan <b>true</b>: bilinmeyen durumu
+        /// alarm gibi göstermek gürültü üretir, ayrıca admin'in kendi satırı asla "kalibresiz"
+        /// sayılmamalıdır (sunucu admin için daima false gönderir).</summary>
+        public bool calibrated = true;
+
+        /// <summary>"manual" | "anchor" | "cloud" | "" — doğrulanmayan serbest etiket.</summary>
+        public string calibrationSource = "";
+
+        /// <summary>Operatörün ilgilenmesi gereken satır mı: yalnız OYUNCU ve kalibresiz.</summary>
+        public bool NeedsCalibration => IsPlayer && !calibrated;
+
         public string scene = "";
 
         /// <summary>Ölüm anı (<c>Time.unscaledTime</c>); -1 = ölmedi/bilinmiyor.</summary>
@@ -334,6 +345,11 @@ namespace VortexArena.App.Admin
                 view.deaths = info.deaths;
                 view.score = info.score;
                 view.hp = info.hp;
+
+                // §10.6 kalibrasyon durumu. Admin kaydında sunucu daima false gönderir; onu
+                // "kalibresiz" saymamak için burada true'ya sabitlenir (bkz. NeedsCalibration).
+                view.calibrated = view.IsPlayer ? info.calibrated : true;
+                view.calibrationSource = info.calibrationSource ?? "";
 
                 if (view.alive != info.alive)
                 {

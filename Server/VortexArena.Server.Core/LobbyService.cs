@@ -147,6 +147,49 @@ public sealed class LobbyService
         await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kimlik gösterdi"));
     }
 
+    // ---- Kalibrasyon durumu (§10.6) ----
+
+    /// <summary>set_calibration: başlık KENDİ hizalamasını bildirir (§5.1). Yalnız kendi kaydını
+    /// yazabilir — playerId taşımaz, bağlantıdan çözülür.</summary>
+    public void HandleSetCalibration(ClientConnection connection, SetCalibrationMsg msg)
+    {
+        var state = connection.State;
+        if (state == null) return;
+        if (!_registry.SetCalibration(state.PlayerId, msg.calibrated, msg.source)) return;
+        var what = msg.calibrated ? $"kalibre oldu ({msg.source})" : "kalibrasyonunu bıraktı";
+        Console.WriteLine($"[Lobby] set_calibration: {state.Name} {what}.");
+    }
+
+    /// <summary>clear_calibration: admin bir oyuncunun (playerId 0 = HERKES) kalibrasyonunu
+    /// sıfırlar (§5.2). Admin yalnız SIFIRLAYABİLİR — "kalibre oldu" işaretini yalnız başlık
+    /// koyar (§10.6), çünkü hizalamanın oturduğunu yalnız o bilir.</summary>
+    public async Task HandleClearCalibrationAsync(ClientConnection connection, ClearCalibrationMsg msg)
+    {
+        if (msg.playerId == 0)
+        {
+            var affected = _registry.ClearAllCalibration();
+            Console.WriteLine($"[Lobby] clear_calibration: TÜM oyuncular ({affected}) — {connection.State?.Name}.");
+            await BroadcastAdminStateAsync(Notice(connection, $"tüm kalibrasyonlar sıfırlandı ({affected} oyuncu)"));
+            return;
+        }
+
+        if (!_registry.TryGetByPlayerId(msg.playerId, out var target))
+        {
+            Console.WriteLine($"[Lobby] clear_calibration: playerId {msg.playerId} bulunamadı.");
+            return;
+        }
+        if (target.Role != "player")
+        {
+            Console.WriteLine($"[Lobby] clear_calibration: {target.Name} admin — kalibrasyon yok, yok sayıldı.");
+            return;
+        }
+        // false = zaten kalibresizdi (SetCalibration değişmediyse yayın yapmaz) → sessizce çık:
+        // operatöre "sıfırlandı" duyurusu göndermek olmamış bir şeyi olmuş göstermek olurdu.
+        if (!_registry.SetCalibration(target.PlayerId, false, null)) return;
+        Console.WriteLine($"[Lobby] clear_calibration: {target.Name} (playerId {target.PlayerId}) — {connection.State?.Name}.");
+        await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kalibrasyonu sıfırlandı"));
+    }
+
     // ---- Ortak seçim (§5.2 set_selection / §5.3 admin_state) ----
 
     /// <summary>Bir sonraki maçın ortak mod/harita seçimi. Maçı BAŞLATMAZ; boş alan mevcut

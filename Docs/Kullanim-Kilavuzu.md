@@ -185,7 +185,11 @@ Kalibrasyon **arena içindeyken** (maç başladıktan sonra) yapılır — lobid
 **Bilmen gerekenler**
 
 - Kalibrasyon gözlükte **saklanır**; aynı gözlük ertesi gün açıldığında genelde kendiliğinden
-  geri gelir. Baştan yapmak istersen A+B'yi tekrar 3 saniye tut, sıfırdan başlar.
+  geri gelir.
+- ⚠️ **Kalibrasyon bir kez alındıktan sonra oyuncu A+B ile onu değiştiremez.** Kumandaya bassa da
+  bir uzun titreşim alır ve hiçbir şey olmaz. Bu bilerek böyledir: oyuncunun maç ortasında
+  kazara kendi hizalamasını bozmasını engeller. **Yeniden kalibre ettirmek senin işin** →
+  aşağıdaki §4.1.
 - **Harita değiştirmek kalibrasyonu bozmaz.** Yeni arenaya geçince oyuncular yeniden kalibre
   etmez, bir yere de "ışınlanmaz" — oldukları yerde kalırlar, yeni arena üzerlerine hizalanır.
   Yeni harita yüklenirken birkaç saniye halkalar kaybolabilir; hizalama oturunca geri gelir.
@@ -195,6 +199,31 @@ Kalibrasyon **arena içindeyken** (maç başladıktan sonra) yapılır — lobid
   ters tarafta görür.
 - **Lobide** oyuncuların birbirinin üstünde/yanlış yerde görünmesi **normaldir** — kontrolü
   arena içinde yap.
+
+### 4.1 Bir oyuncunun kalibrasyonu kaydıysa — **KAL** düğmesi
+
+Maç sırasında bir oyuncunun ekrandaki yeri fiziksel yerinden kaymış görünüyorsa (arkadaşları onu
+duvarın içinde/yanlış yerde görüyor, kendisi "ben oraya nişan almadım" diyor), o oyuncunun
+kalibrasyonu bozulmuştur. **Maçı durdurmana gerek yok:**
+
+- [ ] **1.** Yönetim ekranında o oyuncunun satırındaki **KAL** düğmesine bas.
+      Düğme **yeşil KAL** ise kalibrasyonu iyidir; basınca **EMİN?** yazar.
+- [ ] **2.** Tekrar bas → oyuncunun kalibrasyonu sıfırlanır. Satırın çerçevesi kırmızı olur,
+      düğme **kırmızı KAL !** olur ve kolon başlığında "1 KALİBRESİZ" yazar.
+- [ ] **3.** O andan itibaren oyuncu **ateş edemez, vurulamaz ve ölürse canlanmaz**;
+      diğer oyuncuların ekranında **avatarı yanıp söner** (kimin sorunlu olduğu belli olsun).
+      Kendi ekranında "Kalibrasyon gerekli — sağ kumandada A+B" yazar.
+- [ ] **4.** Oyuncu §4'teki adımlarla **yeniden kalibre olur** (artık A+B açıktır).
+      Bitince tik kendiliğinden yeşile döner.
+- [ ] **5.** Oyuncu **kaldığı yerden devam eder** — canı, öldürme sayısı ve skoru sıfırlanmaz.
+
+**Maç öncesi hepsini birden aldırmak için:** TERCİHLER > KALİBRASYON >
+**"TÜM KALİBRASYONLARI SIFIRLA"** (iki kez basılır). Herkes aynı anda kalibresiz olur ve
+sırayla A+B yapar.
+
+> **Neden tik'i elle geri açamıyorsun:** hizalamanın gerçekten düzeldiğini yalnız gözlüğün
+> kendisi bilir. Sen "tamam" diyebilseydin, aslında hâlâ kaymış bir oyuncu ateş etmeye ve
+> vurulmaya devam ederdi — yani düzeltmeye çalıştığın sorunun ta kendisi sürerdi.
 
 ---
 
@@ -321,6 +350,10 @@ ilet.
 | Maç başlamıyor | Bağlı oyuncu yok ya da bir gözlükte eski sürüm var | Listede oyuncu var mı bak; varsa sunucu penceresindeki son satırı teknik ekibe ilet |
 | Ses gelmiyor | Gözlüğün sesi kısık | Gözlüğün ses seviyesini aç |
 | Oyuncunun ekranı karardı, uyarı çıktı | Oyun alanının dışına çıkmış | Oyuncuya geri içeri girmesini söyle |
+| Bir oyuncu yanlış yerde görünüyor / "nişan aldığım yere gitmiyor" diyor | O gözlüğün kalibrasyonu kaymış | Satırındaki **KAL** düğmesiyle sıfırla, yeniden A+B yaptır (§4.1) |
+| Bir avatar yanıp sönüyor | O oyuncu kalibresiz — ateş edemez, vurulamaz | Yeniden kalibre olmasını söyle (§4.1); bitince kendiliğinden düzelir |
+| Oyuncu "silahım çalışmıyor" diyor, ekranında kalibrasyon yazısı var | Kalibrasyonu sıfırlanmış | A+B ile yeniden kalibre olsun (§4.1/4) |
+| Oyuncu öldü ama canlanmıyor | Kalibresiz oyuncu canlanmaz | Önce kalibre olsun; hemen ardından kendiliğinden canlanır |
 
 ---
 

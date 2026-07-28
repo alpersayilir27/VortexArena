@@ -5,6 +5,12 @@
 
 **Şu an planlanmış iş yok** — klasör boş (yalnız bu README).
 
+> Sıradaki büyük iş **bulut kalibrasyonu** (Meta grup / paylaşılan uzamsal anchor ile toplu
+> hizalama). Henüz planlanmadı; altyapısı hazır: `set_calibration.source` `"cloud"` değerini
+> kabul ediyor, `clear_calibration{playerId:0}` toplu sıfırlama yapıyor ve
+> `ArenaCalibrator.AlignRigToAnchorPose` `internal` seam olarak açık
+> (`Docs/ArenaNet-Protokol.md` §10.6).
+
 ## Nereye bakmalı
 
 | Konu | Dosya |

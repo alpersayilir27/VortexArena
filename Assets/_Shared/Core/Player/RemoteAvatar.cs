@@ -46,12 +46,22 @@ namespace VortexArena.Core.Player
         private const float DeadColorScale = 0.35f;
 
         private const string DeadLabelSuffix = " (ölü)";
+        private const string UncalibratedLabelSuffix = " (KALİBRESİZ)";
+
+        /// <summary>Kalibresiz avatarın nabız hızı (saniyedeki tam gidiş-dönüş).</summary>
+        private const float UncalibratedPulseHz = 1.6f;
+
+        /// <summary>Nabzın takım rengiyle beyaz arasındaki en yüksek karışım oranı.</summary>
+        private const float UncalibratedPulseAmount = 0.85f;
 
         /// <summary>Bu avatarın temsil ettiği uzak oyuncunun id'si.</summary>
         public int PlayerId { get; private set; }
 
         /// <summary>Son snapshot'taki canlılık bayrağı (kayıt yoksa true).</summary>
         public bool IsAlive { get; private set; } = true;
+
+        /// <summary>Sunucuya göre bu oyuncunun hizalaması geçerli mi (§10.6; roster'dan gelir).</summary>
+        public bool IsCalibrated { get; private set; } = true;
 
         // GC üretmemek için alan olarak tutulur (SetInfo her lobby_state'te çağrılabilir).
         private MaterialPropertyBlock _propertyBlock;
@@ -91,16 +101,44 @@ namespace VortexArena.Core.Player
             ApplyTeamColor();
         }
 
-        /// <summary>Ad etiketi; ölüyken " (ölü)" eki taşır.</summary>
+        /// <summary>
+        /// Kalibrasyon durumunu uygular (§10.6; <c>lobby_state</c>'ten gelir). Kalibresiz avatar
+        /// <b>parlar</b>, etiketine " (KALİBRESİZ)" eklenir ve <b>vuruş kutuları kapanır</b> —
+        /// sunucu zaten hasarı reddediyor, istemcide de kapatmak atıcının "vurdum ama olmadı"
+        /// hissini yaşamasını engeller.
+        /// </summary>
+        public void SetCalibrated(bool calibrated)
+        {
+            if (IsCalibrated == calibrated)
+            {
+                return;
+            }
+
+            IsCalibrated = calibrated;
+            ApplyLabelText();
+            ApplyTeamColor();
+            RefreshColliders();
+        }
+
+        /// <summary>Ad etiketi; ölüyken " (ölü)", kalibresizken " (KALİBRESİZ)" eki taşır.</summary>
         private void ApplyLabelText()
         {
             if (nameLabel != null)
             {
-                nameLabel.text = IsAlive ? _displayName : _displayName + DeadLabelSuffix;
+                string suffix = !IsCalibrated ? UncalibratedLabelSuffix : IsAlive ? "" : DeadLabelSuffix;
+                nameLabel.text = _displayName + suffix;
             }
         }
 
-        /// <summary>Takım rengini MaterialPropertyBlock ile yazar; ölüyken karartır.</summary>
+        /// <summary>
+        /// Takım rengini MaterialPropertyBlock ile yazar; ölüyken karartır, kalibresizken parlatır.
+        /// <para>
+        /// ⚠️ Parlama <c>_BaseColor</c> nabzıyla yapılır, emission ile DEĞİL:
+        /// <see cref="MaterialPropertyBlock"/> shader keyword'ü açamaz, bu yüzden paylaşılan
+        /// materyalde <c>_EMISSION</c> önceden açık olmadıkça <c>_EmissionColor</c> yazmak sessizce
+        /// hiçbir şey yapmazdı. İkinci bir materyal örneği yaratmak da Quest'te SRP batch'ini bozar.
+        /// </para>
+        /// </summary>
         private void ApplyTeamColor()
         {
             if (teamRenderers == null)
@@ -113,9 +151,22 @@ namespace VortexArena.Core.Player
                 _propertyBlock = new MaterialPropertyBlock();
             }
 
-            Color color = IsAlive
-                ? _teamColor
-                : new Color(_teamColor.r * DeadColorScale, _teamColor.g * DeadColorScale, _teamColor.b * DeadColorScale, _teamColor.a);
+            Color color;
+            if (!IsCalibrated)
+            {
+                // Kalibresiz durum ölümü EZER: operatörün ve diğer oyuncuların görmesi gereken
+                // şey "bu adamın hizalaması bozuk", ölü olup olmadığı değil.
+                float pulse = Mathf.PingPong(Time.time * UncalibratedPulseHz, 1f) * UncalibratedPulseAmount;
+                color = Color.Lerp(_teamColor, Color.white, pulse);
+            }
+            else if (IsAlive)
+            {
+                color = _teamColor;
+            }
+            else
+            {
+                color = new Color(_teamColor.r * DeadColorScale, _teamColor.g * DeadColorScale, _teamColor.b * DeadColorScale, _teamColor.a);
+            }
 
             for (int i = 0; i < teamRenderers.Length; i++)
             {
@@ -131,7 +182,7 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Ölü/görünmez avatara ateş edilemez: vuruş kutuları kapatılır.</summary>
+        /// <summary>Ölü/görünmez/kalibresiz avatara ateş edilemez: vuruş kutuları kapatılır.</summary>
         private void RefreshColliders()
         {
             if (hitColliders == null)
@@ -139,7 +190,7 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            bool enable = _visible && IsAlive;
+            bool enable = _visible && IsAlive && IsCalibrated;
             for (int i = 0; i < hitColliders.Length; i++)
             {
                 if (hitColliders[i] != null)
@@ -161,6 +212,13 @@ namespace VortexArena.Core.Player
 
             SetVisible(true);
             UpdateAlive(registry);
+
+            // Nabız yalnız KALİBRESİZKEN sürülür — kalibreli avatarda her kare MPB yazmak
+            // boşuna iş olurdu (renk değişmiyor, durum olay tabanlı tazeleniyor).
+            if (!IsCalibrated)
+            {
+                ApplyTeamColor();
+            }
 
             // Pozlar arena uzayında — sahnedeki origin'e göre dünyaya çevir.
             Pose headWorld = ArenaSpace.ArenaToWorld(headPose);

@@ -136,11 +136,30 @@ public sealed class ClientConnection
                 _lobby.HandleSetTeam(this, msg);
                 return;
             }
+            case MessageTypes.SetCalibration:
+            {
+                if (State == null) return;
+                if (State.Role != "player")
+                {
+                    Console.WriteLine($"[ClientConnection] set_calibration yalnız player içindir ({State.Name}) — yok sayıldı.");
+                    return;
+                }
+                var msg = JsonUtil.Deserialize<SetCalibrationMsg>(json);
+                if (msg != null) _lobby.HandleSetCalibration(this, msg);
+                return;
+            }
             case MessageTypes.Kick:
             {
                 if (!RequireAdmin(type)) return;
                 var msg = JsonUtil.Deserialize<KickMsg>(json);
                 if (msg != null) await _lobby.HandleKickAsync(this, msg);
+                return;
+            }
+            case MessageTypes.ClearCalibration:
+            {
+                if (!RequireAdmin(type)) return;
+                var msg = JsonUtil.Deserialize<ClearCalibrationMsg>(json);
+                if (msg != null) await _lobby.HandleClearCalibrationAsync(this, msg);
                 return;
             }
             case MessageTypes.Identify:

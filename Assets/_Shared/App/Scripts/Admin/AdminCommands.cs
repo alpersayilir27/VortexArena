@@ -152,6 +152,26 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>
+        /// Bir oyuncunun kalibrasyonunu sıfırlar; <paramref name="playerId"/> <b>0 = HERKES</b>
+        /// (§10.6). Sıfırlanan oyuncu ateş edemez, hasar yemez, canlanamaz ve diğer oyuncuların
+        /// ekranında avatarı parlar — kalibrasyonu geri açmayı YALNIZ başlığın kendisi yapabilir.
+        /// </summary>
+        public static void ClearCalibration(int playerId)
+        {
+            if (playerId < 0)
+            {
+                return;
+            }
+
+            if (Send(new ClearCalibrationMsg { playerId = playerId }))
+            {
+                SetStatus(playerId == 0
+                    ? "Tüm kalibrasyonların sıfırlanması gönderildi."
+                    : $"Kalibrasyon sıfırlama gönderildi: oyuncu {playerId}");
+            }
+        }
+
         /// <summary>Elle yeniden bağlanma (bağlantı kesildikten sonra tek geri dönüş yolu).</summary>
         public static void Reconnect()
         {

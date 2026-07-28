@@ -93,6 +93,13 @@ namespace VortexArena.Core.Combat
                     return false;
                 }
 
+                // §10.6: kalibresiz oyuncu ateş edemez. Sunucu zaten hit_report'u reddediyor;
+                // burada da kapatmak "tetiği çektim ama hiçbir şey olmadı" hissini engeller.
+                if (!CalibrationState.IsCalibrated)
+                {
+                    return false;
+                }
+
                 if (Phase != PhaseLobby && Phase != PhaseLive)
                 {
                     return false;
@@ -306,7 +313,13 @@ namespace VortexArena.Core.Combat
         {
             string text = "";
 
-            if (!IsAlive)
+            // §10.6 — ölüm metninden ÖNCE gelir: kalibresiz oyuncu zaten canlanamayacağı için
+            // "Tabanına dön ve canlan" yazmak onu boşuna koşturmak olurdu.
+            if (!CalibrationState.IsCalibrated)
+            {
+                text = "Kalibrasyon gerekli — sağ kumandada A+B";
+            }
+            else if (!IsAlive)
             {
                 float remaining = _reviveAt - Time.time;
                 if (remaining > 0f)

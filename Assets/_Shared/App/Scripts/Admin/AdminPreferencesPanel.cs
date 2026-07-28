@@ -36,7 +36,13 @@ namespace VortexArena.App.Admin
     public class AdminPreferencesPanel : MonoBehaviour
     {
         private const float PanelWidth = 760f;
-        private const float PanelHeight = 820f;
+
+        /// <summary>Panel yüksekliği. ⚠️ İçerik <b>elle yığılan</b> bir <c>y</c> ile diziliyor
+        /// (Layout Group yok, UiKit kararı) — yani yeni bir satır eklemek burayı da ilgilendirir.
+        /// KALİBRASYON bölümü eklenince içerik 810 px'e çıkmıştı, yani paneli 10 px'e kadar
+        /// doldurmuştu; bu değer 880'e çekildi ki bir sonraki satır sessizce taşmasın.
+        /// Kabaca hesap: başlangıç 78 + her Section 34 + her Cycler 40 + maç düğmeleri 50.</summary>
+        private const float PanelHeight = 880f;
         private const float RowHeight = 40f;
 
         /// <summary>Skor limiti adımlayıcısının eşiği: bu değerin altında ±1, üstünde ±5 adımlar.
@@ -53,6 +59,12 @@ namespace VortexArena.App.Admin
         private TextMeshProUGUI _durationValue;
         private TextMeshProUGUI _scoreLimitValue;
         private TextMeshProUGUI _statusText;
+        private TextMeshProUGUI _clearAllLabel;
+
+        /// <summary>Toplu kalibrasyon sıfırlamanın onay penceresi (sn) — AdminPlayerRow ile aynı
+        /// gerekçe: herkesi savaş dışı bırakan bir eylem tek yanlış tıklamayla olmamalı.</summary>
+        private const float ClearAllConfirmSeconds = 3f;
+        private float _clearAllArmedAt = -1f;
         private TextMeshProUGUI _connectionText;
 
         private TextMeshProUGUI _markersValue;
@@ -105,11 +117,33 @@ namespace VortexArena.App.Admin
 
         private void Update()
         {
+            // Onay penceresi kendiliğinden kapanır (AdminPlayerRow.Tick deseni).
+            if (_clearAllArmedAt >= 0f && Time.unscaledTime - _clearAllArmedAt > ClearAllConfirmSeconds)
+            {
+                _clearAllArmedAt = -1f;
+                _dirty = true;
+            }
+
             if (_dirty)
             {
                 _dirty = false;
                 Apply();
             }
+        }
+
+        /// <summary>Tüm oyuncuların kalibrasyonunu sıfırlar — iki adımlı onay (§10.6).</summary>
+        private void ArmClearAllCalibration()
+        {
+            if (_clearAllArmedAt < 0f)
+            {
+                _clearAllArmedAt = Time.unscaledTime;
+                _dirty = true;
+                return;
+            }
+
+            _clearAllArmedAt = -1f;
+            AdminCommands.ClearCalibration(0);
+            _dirty = true;
         }
 
         private void MarkDirty()
@@ -158,6 +192,16 @@ namespace VortexArena.App.Admin
                 TextAlignmentOptions.TopLeft);
             UiKit.Block(_statusText.rectTransform, 28f, y, 28f, 24f);
             y += 34f;
+
+            // §10.6 — toplu sıfırlama. Tek oyuncunun kalibrasyonu kendi satırındaki KAL
+            // düğmesinden sıfırlanır; buradaki düğme maç öncesi "hepsini yeniden aldır" içindir.
+            y = Section(body, "KALİBRASYON (TÜM ADMİNLERDE ORTAK)", y);
+
+            Button clearAll = UiKit.Button(body, "ClearAllCalibration", "TÜM KALİBRASYONLARI SIFIRLA",
+                18f, UiKit.Hex(0x2A303B, 0xFF), UiKit.Bad, ArmClearAllCalibration, out _clearAllLabel);
+            UiKit.Corner((RectTransform)clearAll.transform, new Vector2(0f, 1f),
+                new Vector2(28f, -y), new Vector2(340f, 36f));
+            y += 46f;
 
             y = Section(body, "GÖRÜNÜM (YALNIZ BU EKRAN)", y);
             y = Cycler(body, "Halkalar", y, PrevMarkers, NextMarkers, out _markersValue);
@@ -606,6 +650,13 @@ namespace VortexArena.App.Admin
             _scoreLimitValue.text = _scoreLimit > 0 ? _scoreLimit.ToString() : "mod varsayılanı";
 
             _statusText.text = AdminCommands.Status;
+
+            if (_clearAllLabel != null)
+            {
+                bool armed = _clearAllArmedAt >= 0f;
+                _clearAllLabel.text = armed ? "EMİN? HERKESİ SIFIRLA" : "TÜM KALİBRASYONLARI SIFIRLA";
+                _clearAllLabel.color = armed ? UiKit.OnAccent : UiKit.Bad;
+            }
 
             _markersValue.text = AdminSession.Markers == AdminMarkerVisibility.Off ? "kapalı"
                 : AdminSession.Markers == AdminMarkerVisibility.TopDownOnly ? "kuş bakışı" : "her zaman";

@@ -36,10 +36,11 @@ namespace VortexArena.Core.Arena
     /// örtüşmez; işletme başına tek arena ölçüsü kuralı bu yüzden vardır.
     /// </para>
     /// <para>
-    /// Hizalama geri gelene dek <c>PlayerPoseTracker</c> poz GÖNDERMEZ (yanlış uzayda poz
-    /// yayınlamaktansa kısa bir boşluk yeğdir). Yükleme geçici olarak başarısız olabildiği için
-    /// <see cref="RestoreAttempts"/> kez denenir; hepsi düşerse oyuncu A+B ile elle
-    /// kalibre etmelidir ve konsola bunu söyleyen bir uyarı düşer.
+    /// <c>PlayerPoseTracker</c> hizalamayı BEKLEMEZ: kalibrasyondan önce de poz gönderir, ama o
+    /// pozlar arena ile örtüşmez (rig henüz hizalanmadığı için ofsetlidir) — oyuncunun bağlı ve
+    /// hareket hâlinde olduğu ağdan görülebilsin diye bilinçli bir tercihtir. Yükleme geçici
+    /// olarak başarısız olabildiği için <see cref="RestoreAttempts"/> kez denenir; hepsi düşerse
+    /// oyuncu A+B ile elle kalibre etmelidir ve konsola bunu söyleyen bir uyarı düşer.
     /// </para>
     /// </summary>
     public class ArenaCalibrator : MonoBehaviour
@@ -89,11 +90,22 @@ namespace VortexArena.Core.Arena
         /// <summary>True once the arena has been aligned, manually or from a saved anchor.</summary>
         public bool IsCalibrated => capturedCount >= 2;
 
+        /// <summary>Kalibrasyon kaynağı etiketi (protokolde <c>set_calibration.source</c>, §5.1).
+        /// Bilinçli olarak string: sunucu doğrulamaz, yeni kaynak eklemek hiçbir yerde sayısal
+        /// indeks kaydırmaz.</summary>
+        public const string SourceManual = "manual";
+        public const string SourceAnchor = "anchor";
+
         /// <summary>
         /// Kalibrasyon tamamlanınca (elle iki nokta ya da kayıtlı anchor'dan yüklenince)
-        /// ana thread'de tetiklenir; Net poz gönderimine bundan sonra başlanır.
+        /// ana thread'de tetiklenir; argüman kalibrasyonun KAYNAĞIdır (<see cref="SourceManual"/>
+        /// / <see cref="SourceAnchor"/>). <c>CalibrationState</c> dinler ve sunucuya
+        /// <c>set_calibration</c> yollar (§10.6).
+        /// <para>
+        /// Poz gönderimi buna BAĞLI DEĞİLDİR — <c>PlayerPoseTracker</c> baştan kaydolur.
+        /// </para>
         /// </summary>
-        public static event Action Calibrated;
+        public static event Action<string> Calibrated;
 
         private OVRCameraRig cameraRig;
         private OVRSpatialAnchor worldAnchor;
@@ -159,6 +171,19 @@ namespace VortexArena.Core.Arena
             {
                 if (!held)
                     waitingForRelease = false;
+                return;
+            }
+
+            // §10.6: KALİBRE durumdayken elle kalibrasyon KAPALIDIR — oyuncu kendi hizalamasını
+            // kazara bozamasın; kapıyı yalnız operatör açar (admin ekranından sıfırlama).
+            // Sessizce yutulmaz: tek uzun titreşim + log, yoksa oyuncu kumandayı bozuk sanır.
+            if (held && !CalibrationState.ManualAllowed)
+            {
+                waitingForRelease = true;
+                holdTimer = 0f;
+                OVRInput.SetControllerVibration(0f, 0f, Hand);
+                StartCoroutine(Pulse(1, LongPulseSeconds));
+                Debug.Log("ArenaCalibrator: kalibrasyon zaten alınmış — yeniden almak için operatörün admin ekranından sıfırlaması gerekir (§10.6).");
                 return;
             }
 
@@ -274,7 +299,7 @@ namespace VortexArena.Core.Arena
             StartCoroutine(Pulse(2));
             Debug.Log($"ArenaCalibrator: point B captured at {point}.");
             AlignRig(capturedA, point);
-            Calibrated?.Invoke();
+            Calibrated?.Invoke(SourceManual);
             _ = CreateAndSaveAnchorAsync();
         }
 
@@ -350,7 +375,7 @@ namespace VortexArena.Core.Arena
         /// full calibration — floor height included, since the offset is applied as
         /// a full vector.
         /// </summary>
-        private void AlignRigToAnchorPose(Vector3 anchorPos, Quaternion anchorRot)
+        internal void AlignRigToAnchorPose(Vector3 anchorPos, Quaternion anchorRot)
         {
             Transform rig = RigRoot;
             if (rig == null || anchorA == null || anchorB == null)
@@ -425,6 +450,21 @@ namespace VortexArena.Core.Arena
 
             Debug.Log("ArenaCalibrator: tracking origin changed, realigning from the saved anchor.");
             AlignRigToAnchorPose(worldAnchor.transform.position, worldAnchor.transform.rotation);
+        }
+
+        /// <summary>
+        /// Hizalamayı geçersiz kılar (§10.6): işaretçiler gizlenir, kayıtlı <c>OVRSpatialAnchor</c>
+        /// SİLİNİR ve A+B kapısı yeniden açılır. Çağıran <c>CalibrationState</c>'tir — operatör
+        /// admin ekranından kalibrasyonu sıfırladığında.
+        /// <para>
+        /// Anchor'ı bırakmak olmazdı: bir sonraki <c>load_match</c> bozuk hizalamayı sessizce geri
+        /// yüklerdi (§10.4 geri yükleme yolu). ⚠️ <b>Rig TAŞINMAZ</b> — free-roam kuralı gereği
+        /// oyuncu fiziksel olarak neredeyse orada kalır, yalnız hizalama geçersiz sayılır.
+        /// </para>
+        /// </summary>
+        public void Invalidate()
+        {
+            ResetCalibration();
         }
 
         private void ResetCalibration()
@@ -510,7 +550,8 @@ namespace VortexArena.Core.Arena
 
             Debug.LogWarning(
                 $"ArenaCalibrator: kayıtlı kalibrasyon {RestoreAttempts} denemede geri " +
-                "yüklenemedi — sağ kumandada A+B ile ELLE kalibre edin (o ana dek poz gönderilmez).",
+                "yüklenemedi — sağ kumandada A+B ile ELLE kalibre edin (o ana dek gönderilen " +
+                "pozlar arena ile örtüşmez).",
                 this);
         }
 
@@ -557,7 +598,7 @@ namespace VortexArena.Core.Arena
                 capturedCount = 2;
                 if (anchorA != null) anchorA.SetActive(true);
                 if (anchorB != null) anchorB.SetActive(true);
-                Calibrated?.Invoke();
+                Calibrated?.Invoke(SourceAnchor);
                 return true;
             }
             catch (Exception e)
