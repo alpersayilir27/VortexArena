@@ -1,4 +1,4 @@
-# scripts/ — dağıtım betikleri
+# scripts/ — dağıtım ve doküman betikleri
 
 Üç bileşenin her biri kendi betiğiyle `deploy/` altına üretilir. Betikler **idempotent**:
 hedef klasörü silip yeniden yazarlar.
@@ -8,6 +8,19 @@ hedef klasörü silip yeniden yazarlar.
 | `deploy-admin-game.bat` | Unity projesi (`Assets/`) | `deploy\admin\VortexArena.exe` | Unity Editor kapalı (betik zorlamaz) |
 | `deploy-server.bat` | `Server/VortexArena.Server.App` | `deploy\server\VortexArena.Server.App.exe` | .NET 10 SDK |
 | `deploy-launcher.bat` | `launcher/` (Flutter) | `deploy\launcher\vortex_launcher.exe` | Flutter + VS C++ + **Developer Mode** |
+| `docs-setup.bat` | — | `..\vortexarena-docs-site\` (repo DIŞI) | Node 22+, git, internet (yalnız kurulumda) |
+
+## Dokümantasyon sitesi
+
+`docs-setup.bat` **yeni bilgisayarda bir kez** çalıştırılır: Quartz'ı klonlar, npm bağımlılıklarını
+kurar, `site\content → repo\Docs` junction'ını kurar ve VortexArena'ya özel `quartz.config.yaml`'i
+yazar. Günlük kullanım repo kökündeki **`docs-serve.bat`** (→ http://localhost:1111).
+
+- **İçerik repodadır** (`Docs/`), motor değildir. `node_modules` (~365 paket) repoya girseydi Unity
+  onu import etmeye çalışır ve git geçmişi şişerdi — bu yüzden motor `..\vortexarena-docs-site`.
+- Junction sayesinde `Docs/` altında bir `.md` kaydedildiği anda tarayıcı kendini yeniler.
+- Yazı tipleri **local** (`fontOrigin: local`): internetsiz makinede de doğru görünür.
+- `quartz.config.yaml` kuruluysa **korunur** — elle ayar yaptıysan `docs-setup.bat` ezmez.
 
 ## Çalıştırma ve pencerenin kapanması
 

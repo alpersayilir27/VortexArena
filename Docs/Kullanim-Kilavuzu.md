@@ -198,7 +198,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Kırmızı / Mavi** | Seçili oyuncunun takımını değiştirir | Takımları elle dengelemek için (boş bırakırsan sistem otomatik dengeler) |
 | **Bu cihazı tanıt** | O gözlüğün ekranında büyük bir işaret gösterir | "Bu listedeki isim hangi gözlük?" sorusuna cevap |
 | **Çıkar (kick)** | Oyuncuyu bağlantıdan atar | Yanlışlıkla bağlanan/oyunda olmaması gereken cihaz |
-| **Mod seçimi** | Oyun türü (ör. `tdm` = takım savaşı) | Her maç öncesi |
+| **Mod seçimi** | Oyun türü: **Takım Ölüm Maçı** (kırmızı-mavi) veya **Herkes Tek** (takım yok, herkes herkese karşı) | Her maç öncesi — aşağıdaki "İki oyun modu" kutusuna bak |
 | **Harita seçimi** | Hangi arenada oynanacağı | Her maç öncesi — sadece seçili modla uyumlu haritalar listelenir |
 | **Maçı Başlat** | Herkesi arenaya alır, geri sayımı başlatır | Herkes bağlı ve hazır olduğunda |
 | **Maçı İptal / Lobiye Dön** | Maçı erken bitirir, herkesi lobiye döndürür | Acil durum, oyuncu değişimi, yanlış harita |
@@ -217,6 +217,25 @@ düğme "EMİN?" olur).
 
 **Panel açıkken oyun durmaz:** Tercihler/İstatistik panelleri yarı saydamdır, arkada sahneyi
 görmeye devam edersin. `Esc` ile kapatırsın.
+
+### İki oyun modu — hangisini seçmeli?
+
+| | **Takım Ölüm Maçı** | **Herkes Tek** |
+|---|---|---|
+| Takım | Kırmızı ve mavi (sistem otomatik dengeler) | **Yok** — herkes herkesi vurabilir |
+| Skor | Takım puanı | **Kişi başına puan**; her öldürme öldürene +1 |
+| Kazanan | Puan limitine ilk ulaşan takım; süre biterse önde olan | Puan limitine ilk ulaşan **oyuncu**; süre biterse en yüksek puanlı. Tepede eşitlik varsa berabere |
+| Silah | Arenadaki **taban raflarından** alınır | **Raf yok.** Oyuncu kumandanın **yan tuşunu (grip) basılı tutunca** eline rastgele bir silah gelir; bıraktığında silah kaybolur, tekrar bastığında **başka** bir silah gelir |
+| Şarjör | Boşalınca kendiliğinden dolar | **Dolmaz** — oyuncu silahı bırakıp yenisini çeker |
+| Ölünce | 5 saniye bekle, sonra **kendi renkli tabanına yürü** | Tabana gitmek yok: **3 saniye boyunca olduğun yerde kıpırdamadan dur** (1 metreden fazla yürürsen sayaç başa döner) |
+| Varsayılan süre / puan | 300 sn (5 dk) / 30 | 300 sn (5 dk) / 20 |
+
+**Herkes Tek'te oyunculara söylenecek iki cümle:**
+1. *"Silah almak için kumandanın yan tuşunu basılı tut — bıraktığında silah kaybolur."*
+2. *"Öldüğünde bir yere yürüme; olduğun yerde 3 saniye kıpırdamadan dur, kendiliğinden canlanacaksın."*
+
+> Herkes Tek'te arenadaki silah rafları ve renkli taban şeritleri **kendiliğinden gizlenir** —
+> ayrıca bir şey yapman gerekmez. Aynı arenalar iki modda da oynanır; harita listesi değişmez.
 
 **Maç başlatma sırası**
 
@@ -237,10 +256,15 @@ ilet.
 
 - Oyuncular arenada serbest yürür; **kimse ışınlanmaz**, ekranda "hareket" tuşu yoktur.
 - Vurulan oyuncunun canı azalır; canı bitince **ölüm ekranı** görür ve ateş edemez.
-- **Canlanma fiziksel bir iştir:** ölen oyuncu **5 saniye** bekler, sonra **kendi takımının
-  renkli taban bölgesine yürüyerek girer** → orada canlanır.
-  - Oyuncuya söylenecek cümle: **"Kendi renginin olduğu köşeye yürü, orada canlanacaksın."**
-  - Oyuncu tabana gitmezse sistem bir süre sonra onu zaten canlandırır (maç kilitlenmesin diye).
+- **Canlanma fiziksel bir iştir** ve moda göre değişir:
+  - **Takım Ölüm Maçı:** ölen oyuncu **5 saniye** bekler, sonra **kendi takımının renkli taban
+    bölgesine yürüyerek girer** → orada canlanır.
+    Oyuncuya söylenecek cümle: **"Kendi renginin olduğu köşeye yürü, orada canlanacaksın."**
+  - **Herkes Tek:** taban yok — oyuncu **öldüğü yerde 3 saniye kıpırdamadan durur** → canlanır.
+    Bir metreden fazla yürürse sayaç sıfırlanır. Ekranında kalan saniye yazar.
+    Oyuncuya söylenecek cümle: **"Öldüğünde yürüme, olduğun yerde bekle."**
+  - Her iki modda da oyuncu şartı yerine getirmezse sistem bir süre sonra onu zaten canlandırır
+    (maç kilitlenmesin diye).
 - Oyuncu arena sınırına yaklaşırsa duvarlar belirginleşir; dışarı çıkarsa ekranı kararır ve
   uyarı çıkar → geri içeri girmesi yeterli.
 - Maç, süre dolunca veya skor limitine ulaşılınca biter; kazanan duyurulur ve **~10 saniye
@@ -325,5 +349,15 @@ Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten
 │                              2 titreşim = B alındı, tamam│
 │                              3 titreşim = çok yakın,     │
 │                                           B'yi tekrar al │
+├──────────────────────────────────────────────────────────┤
+│  OYUNCUYA — "HERKES TEK" MODUNDA                         │
+│                                                          │
+│  Yan tuş (grip) basılı    →  Elinde rastgele silah       │
+│                              belirir; BIRAKINCA kaybolur │
+│                              tekrar bas = başka silah    │
+│  Şarjör bitti             →  Bırak, yenisini çek         │
+│                              (şarjör dolmaz)             │
+│  Öldün                    →  YÜRÜME. Olduğun yerde       │
+│                              3 saniye kıpırdamadan dur   │
 └──────────────────────────────────────────────────────────┘
 ```

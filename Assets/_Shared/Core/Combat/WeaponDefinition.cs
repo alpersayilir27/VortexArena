@@ -43,6 +43,13 @@ namespace VortexArena.Core.Combat
         [Tooltip("Silah prefabı (opsiyonel; loadout kurulumları için).")]
         [SerializeField] private GameObject prefab;
 
+        [Header("Elde tutuş — yalnız weaponSource:\"random\" modlarında")]
+        [Tooltip("Silahın el anchor'ına göre konumu (m). Prefabın kökü zaten kabza hizasındaysa " +
+                 "sıfır bırakılır; VR'da rahat duruş için burada ince ayar yapılır.")]
+        [SerializeField] private Vector3 grantedHoldPosition = Vector3.zero;
+        [Tooltip("Silahın el anchor'ına göre dönüşü (derece, Euler).")]
+        [SerializeField] private Vector3 grantedHoldEuler = Vector3.zero;
+
         /// <summary>Kill feed / istatistik etiketi ("ak47" / "m4") — sunucu doğrulamaz.</summary>
         public string WeaponId => weaponId;
 
@@ -69,6 +76,21 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Silah prefabı (atanmamış olabilir).</summary>
         public GameObject Prefab => prefab;
+
+        /// <summary>
+        /// Verilen silahın el anchor'ına göre yerel duruşu (§10.5 <c>weaponSource:"random"</c>).
+        /// <para>
+        /// <b>Neden burada:</b> kavrama hizası silahın SANATINA aittir (kabza nerede, namlu nereye
+        /// bakıyor) — silah başına değişir ve Inspector'dan ayarlanabilmelidir.
+        /// <see cref="WeaponGranter"/> kendini önyükleyen bir tekil olduğu için onun üzerinde
+        /// ayarlanabilir bir alan olamazdı; sahneye bileşen koymak ise her arenaya elle bir adım
+        /// eklerdi. Raf silahlarını (<c>weaponSource:"rack"</c>) hiç ilgilendirmez.
+        /// </para>
+        /// </summary>
+        public Vector3 GrantedHoldPosition => grantedHoldPosition;
+
+        /// <summary>Verilen silahın el anchor'ına göre yerel dönüşü (bkz. <see cref="GrantedHoldPosition"/>).</summary>
+        public Quaternion GrantedHoldRotation => Quaternion.Euler(grantedHoldEuler);
 
         /// <summary>İki atış arası en kısa süre (saniye) — sunucudaki rate-limit formülüyle aynı.</summary>
         public float SecondsPerShot => 60f / Mathf.Max(1f, fireRateRpm);

@@ -108,6 +108,7 @@ public sealed class MatchDirector
     private void RegisterModes()
     {
         Register(new TdmMode());
+        Register(new FfaMode());
     }
 
     private void Register(IGameMode mode) => _modes[mode.ModeId] = mode;

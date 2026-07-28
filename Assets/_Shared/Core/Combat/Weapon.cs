@@ -2,10 +2,6 @@ using System.Collections;
 using Oculus.Interaction;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using VortexArena.Core.Arena;
-using VortexArena.Core.Player;
-using VortexArena.Net;
-using VortexArena.Protocol;
 
 namespace VortexArena.Core.Combat
 {
@@ -72,8 +68,29 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Silahın durduğu taban takımı (ateş YETKİSİ PlayerCombatState'ten gelir).</summary>
         public Team Team => team;
-        public bool IsHeld => grabbable != null && grabbable.SelectingPointsCount > 0;
-        public bool IsTwoHanded => grabbable != null && grabbable.SelectingPointsCount > 1;
+
+        /// <summary>
+        /// <c>weaponSource:"random"</c> modlarında (§10.5) silah doğrudan kumandaya VERİLİR:
+        /// el anchor'ının altına örneklenir, ISDK kavraması hiç işletilmez. <c>None</c> = normal
+        /// raf silahı (kavranarak tutulur).
+        /// <para>
+        /// Neden ayrı bir yol: <see cref="Grabbable"/>'ı programla "seçili" hâle getirmek ISDK'nın
+        /// iç durumuna girmek demektir — kırılgan ve sürüm bağımlı. Verilen silah zaten tanım
+        /// gereği tutuluyor, kavrama sistemine hiç sokulmaz.
+        /// </para>
+        /// </summary>
+        public OVRInput.Controller GrantedHand { get; private set; } = OVRInput.Controller.None;
+
+        /// <summary>Silah verilerek mi tutuluyor (raf silahında her zaman false).</summary>
+        public bool IsGranted => GrantedHand != OVRInput.Controller.None;
+
+        /// <summary>Tutuluyor mu: verilen silah TANIM GEREĞİ tutuluyordur, raf silahı ISDK'ya sorulur.
+        /// Bu <c>||</c> olmadan verilen silah hiç ateş edemezdi.</summary>
+        public bool IsHeld => IsGranted || (grabbable != null && grabbable.SelectingPointsCount > 0);
+
+        /// <summary>İki elle sabitleme YALNIZ ISDK kavramasıyla gelir; verilen silah her zaman tek
+        /// ellidir (iki el iki AYRI silah tutabilir — çapraz-el durumu tutulmaz).</summary>
+        public bool IsTwoHanded => !IsGranted && grabbable != null && grabbable.SelectingPointsCount > 1;
         public int CurrentAmmo { get; private set; }
         public int MagazineSize => magazineSize;
         public bool IsReloading { get; private set; }
@@ -87,12 +104,6 @@ namespace VortexArena.Core.Combat
         private Quaternion modelBaseRotation;
         private Coroutine hapticRoutine;
 
-        // --- Ağ (Faz 3) ---
-        // Her atışta yeni DTO ayırmamak için tek örnek yeniden kullanılır; dizi
-        // alanları da bir kez ayrılır (JsonUtility içerikleri her gönderimde okur).
-        private readonly ShotFiredMsg netShot = new ShotFiredMsg { muzzlePos = new float[3], muzzleDir = new float[3] };
-        private readonly HitReportMsg netHit = new HitReportMsg { hitPos = new float[3] };
-        private int netSeq;
         private bool weaponIdWarned;
 
         protected virtual void Awake()
@@ -128,7 +139,8 @@ namespace VortexArena.Core.Combat
             if (muzzle == null)
                 Debug.LogError("Weapon: muzzle transform is not assigned.", this);
             if (grabbable == null)
-                Debug.LogWarning("Weapon: no Grabbable assigned; the weapon can never be held or fired.", this);
+                Debug.LogWarning("Weapon: no Grabbable assigned; this weapon can only be used as a " +
+                                 "granted weapon (weaponSource:\"random\"), never picked up from a rack.", this);
 
             if (modelPivot != null)
             {
@@ -160,15 +172,15 @@ namespace VortexArena.Core.Combat
                 CurrentAmmo = magazineSize;
             }
 
-            if (attackAction != null && muzzle != null && IsHeld)
+            if (muzzle != null && IsHeld && TryReadTrigger(out bool held, out bool pressedThisFrame))
             {
                 // Ateş yetkisi sunucu durumundan gelir (ölüyken / Loading-Countdown-End
                 // fazlarında tetik BOŞA basılır: boş şarjör sesi bile çalmaz).
                 bool combatAllows = PlayerCombatState.Instance == null || PlayerCombatState.Instance.CanFire;
                 bool canFire = !IsReloading && CurrentAmmo > 0 && combatAllows;
-                if (canFire && attackAction.IsPressed() && Time.time >= nextFireTime)
+                if (canFire && held && Time.time >= nextFireTime)
                     Fire();
-                else if (!canFire && combatAllows && attackAction.WasPressedThisFrame())
+                else if (!canFire && combatAllows && pressedThisFrame)
                     weaponAudio?.PlayEmpty();
             }
 
@@ -201,9 +213,12 @@ namespace VortexArena.Core.Combat
                                 Quaternion.AngleAxis(scatter.y, muzzle.right) *
                                 muzzle.forward;
 
-            // Ağ: her atış relay edilir (uzak namlu alevi/sesi + sayım). Poz/yön ARENA
-            // UZAYINDA gider — alıcı kendi dünyasına çevirir (protokol §3).
-            SendShotFired(muzzle.position, direction);
+            // Ağ: her atış relay edilir (uzak namlu alevi/sesi + sayım). Arena uzayı dönüşümü
+            // ve DTO yönetimi ArenaCombat'ın işi — kendi hasar kaynağını yazan da aynı kapıyı
+            // kullanır (Docs/Gelistirici/Yemek-Kitabi.md).
+            if (string.IsNullOrEmpty(WeaponId))
+                WarnMissingWeaponId();
+            ArenaCombat.ReportShot(muzzle.position, direction, WeaponId);
 
             if (Physics.Raycast(muzzle.position, direction, out RaycastHit hit, range))
             {
@@ -214,17 +229,11 @@ namespace VortexArena.Core.Combat
                     Destroy(fx, 2f);
                 }
 
-                RemoteHitBox hitBox = hit.collider.GetComponentInParent<RemoteHitBox>();
-                if (hitBox != null && hitBox.PlayerId > 0)
+                // AĞ OYUNCUSU: hasar YEREL UYGULANMAZ — sunucu doğrular ve health_update
+                // yayınlar (protokol §10.3). false = hedef ağ oyuncusu değil (pratik dummy'si,
+                // kırılabilir hedef): eski yerel hasar yolu korunur, canları sunucuda tutulmaz.
+                if (!ArenaCombat.ReportRaycastHit(hit, damage, WeaponId))
                 {
-                    // AĞ OYUNCUSU: hasar YEREL UYGULANMAZ — sunucu doğrular ve
-                    // health_update yayınlar (protokol §10.3).
-                    SendHitReport(hitBox.PlayerId, hit.point);
-                }
-                else
-                {
-                    // Ağ oyuncusu değil (pratik dummy'si, kırılabilir hedef): eski
-                    // yerel hasar yolu korunur — bunların canı sunucuda tutulmaz.
                     Health target = hit.collider.GetComponentInParent<Health>();
                     if (target != null)
                         target.TakeDamage(damage, this);
@@ -242,67 +251,60 @@ namespace VortexArena.Core.Combat
                 StartReload();
         }
 
-        /// <summary>Starts a reload (also triggered automatically on an empty magazine).</summary>
+        /// <summary>
+        /// Tetik girdisi. Raf silahı ortak <c>Player/Attack</c> action'ını okur; VERİLEN silah
+        /// kendi elinin tetiğini <see cref="OVRInput"/> ile okur.
+        /// <para>
+        /// Ayrım zorunlu: <c>Player/Attack</c> tek bir Button action'dır ve
+        /// <c>&lt;XRController&gt;/{PrimaryAction}</c> ile İKİ kumandayı da toplar — iki elde iki
+        /// silahla oynanan FFA'da tek tetiğe basmak ikisini birden ateşlerdi.
+        /// </para>
+        /// Okunamıyorsa (action yok, verilen el geçersiz) <c>false</c> döner ve ateş bloğu hiç
+        /// çalışmaz.
+        /// </summary>
+        private bool TryReadTrigger(out bool held, out bool pressedThisFrame)
+        {
+            if (IsGranted)
+            {
+                held = OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, GrantedHand);
+                pressedThisFrame = OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, GrantedHand);
+                return true;
+            }
+
+            if (attackAction == null)
+            {
+                held = false;
+                pressedThisFrame = false;
+                return false;
+            }
+
+            held = attackAction.IsPressed();
+            pressedThisFrame = attackAction.WasPressedThisFrame();
+            return true;
+        }
+
+        /// <summary>
+        /// Silahı bir kumandaya VERİR (<see cref="WeaponGranter"/> çağırır): tutuş sayılır, ISDK
+        /// kavraması hiç işletilmez ve <b>şarjör değiştirme kapanır</b> — bu modda şarjör bitince
+        /// silahı bırakıp yenisini çekmek oyuncunun işidir (§10.5 <c>weaponSource:"random"</c>).
+        /// </summary>
+        public void GrantTo(OVRInput.Controller hand)
+        {
+            GrantedHand = hand;
+            // Ele yeni geçen silah dolu şarjörle başlar; yarım kalmış bir reload iptal edilir.
+            IsReloading = false;
+            CurrentAmmo = magazineSize;
+        }
+
+        /// <summary>Starts a reload (also triggered automatically on an empty magazine).
+        /// <b>Verilen silahta no-op'tur</b> (yukarıdaki kural).</summary>
         public void StartReload()
         {
-            if (IsReloading || CurrentAmmo == magazineSize)
+            if (IsGranted || IsReloading || CurrentAmmo == magazineSize)
                 return;
             IsReloading = true;
             reloadEndTime = Time.time + reloadTime;
             weaponAudio?.PlayReload();
-        }
-
-        // ------------------------------------------------------------------- ağ
-
-        /// <summary>
-        /// shot_fired gönderir (sunucu doğrulamaz, yalnız relay eder). Bağlantı yoksa
-        /// ArenaClient.Send zaten no-op'tur — yerel sunum etkilenmez.
-        /// </summary>
-        private void SendShotFired(Vector3 worldMuzzlePosition, Vector3 worldDirection)
-        {
-            ArenaClient client = ArenaClient.Instance;
-            if (client == null || !client.IsConnected)
-                return;
-
-            if (string.IsNullOrEmpty(WeaponId))
-            {
-                WarnMissingWeaponId();
-                return;
-            }
-
-            Vector3 arenaPos = ArenaSpace.WorldToArena(worldMuzzlePosition);
-            // Yön bir NOKTA değildir: origin farkı düşülür (yalnız dönüş uygulanır).
-            Vector3 arenaDir = (ArenaSpace.WorldToArena(worldMuzzlePosition + worldDirection) - arenaPos).normalized;
-
-            netShot.seq = ++netSeq;
-            netShot.weaponId = WeaponId;
-            Write(netShot.muzzlePos, arenaPos);
-            Write(netShot.muzzleDir, arenaDir);
-            client.Send(netShot);
-        }
-
-        /// <summary>
-        /// hit_report gönderir (hedef bir ağ oyuncusu). <b>Hasarı biz belirleriz</b>: sunucuda
-        /// silah tablosu yoktur, buradaki <c>damage</c> aynen uygulanır (protokol §10.3). Sunucu
-        /// yalnız durum tutarlılığına bakar (faz, atıcı/hedef canlı mı, dost ateşi).
-        /// </summary>
-        private void SendHitReport(int targetPlayerId, Vector3 worldHitPosition)
-        {
-            ArenaClient client = ArenaClient.Instance;
-            if (client == null || !client.IsConnected)
-                return;
-
-            // weaponId artık yalnız kill feed etiketi (sunucu doğrulamaz) — eksikse uyarırız ama
-            // vuruşu YİNE göndeririz: kozmetik bir alan yüzünden meşru hasar kaybolmasın.
-            if (string.IsNullOrEmpty(WeaponId))
-                WarnMissingWeaponId();
-
-            netHit.seq = ++netSeq;
-            netHit.targetPlayerId = targetPlayerId;
-            netHit.weaponId = WeaponId;
-            netHit.damage = damage;
-            Write(netHit.hitPos, ArenaSpace.WorldToArena(worldHitPosition));
-            client.Send(netHit);
         }
 
         private void WarnMissingWeaponId()
@@ -312,13 +314,6 @@ namespace VortexArena.Core.Combat
             weaponIdWarned = true;
             Debug.LogWarning($"[Weapon] '{name}' weaponId olmadan ateş etti; vuruş gönderildi ama " +
                              "kill feed etiketi boş kalacak.", this);
-        }
-
-        private static void Write(float[] target, in Vector3 value)
-        {
-            target[0] = value.x;
-            target[1] = value.y;
-            target[2] = value.z;
         }
 
         private IEnumerator HapticPulse()

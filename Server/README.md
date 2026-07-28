@@ -11,7 +11,7 @@ Server/
   VortexArena.Server.sln
   VortexArena.Server.Core/    # Kestrel WS host, beacon, PlayerRegistry, LobbyService,
                               # StateHost (UDP), MatchDirector (faz makinesi + vuruş hattı),
-                              # MapTable, Modes/ (IGameMode, TdmMode)
+                              # MapTable, Modes/ (IGameMode, TdmMode, FfaMode)
   VortexArena.Server.App/     # konsol exe (UI YOK — yönetim UI'ı Unity admin build'i)
   VortexArena.PoseBot/        # sentetik oyuncu test istemcisi (poz senkronunu Quest'siz test eder)
   config/server.json          # portlar + mekan adı + tickHz (ELLE)
@@ -49,7 +49,7 @@ Açılışta:
   (`server.json`; `maps.json` **üretilmez** — o Unity export'undan gelir).
 - Konsolda bağlanan/kopan cihazlar ve çevrimiçi sayısı akar; **Ctrl+C** temiz kapatır.
 
-Açılış başlığında `Modlar : tdm` ve `Haritalar : Arena10x10` satırları kayıtlı mod/harita
+Açılış başlığında `Modlar : tdm, ffa` ve `Haritalar : Arena10x10` satırları kayıtlı mod/harita
 tablosunu özetler (`maps.json` yoksa `Haritalar : yok (doğrulama kapalı)`); `Hasar : istemci
 bildirir` satırı sunucuda silah tablosu ve hile denetimi olmadığını hatırlatır (§10.3).
 
@@ -132,7 +132,7 @@ olmadığı ve o haritanın modu destekleyip desteklemediği buradan doğrulanı
 ile `load_match.spawnSlot` sahnede gerçekten var olan slot aralığına sarılır (modulo).
 ```json
 { "maps": [ { "sceneName": "Arena10x10", "sizeX": 10, "sizeZ": 10,
-              "spawnSlotsPerTeam": 4, "modes": ["tdm"] } ] }
+              "spawnSlotsPerTeam": 4, "modes": ["ffa", "tdm"] } ] }
 ```
 `modes` boş bırakılırsa harita tüm modları kabul eder. **Dosya yoksa oluşturulmaz** (sunucunun
 uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması ve slot sınırı devre dışı
@@ -221,6 +221,17 @@ boş/`0` ise modun varsayılanı (`DefaultRoundSeconds`/`DefaultScoreLimit`) kul
 sayıları **kilit değil varsayılandır** — operatör raundu kısaltıp uzatabilir. Seçim mod/harita ile
 aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki operatör sapmaz.
 
+**Kayıtlı modlar** (`MatchDirector.RegisterModes()`; tanınmayan `modeId`'li `start_match` reddedilir):
+
+| `modeId` | Sınıf | Şekli (`Rules`) | Varsayılan süre / limit |
+|---|---|---|---|
+| `tdm` | `Modes/TdmMode.cs` | Tümüyle varsayılan (`ModeRules.TeamDefault`): iki takım, takım skoru, kendi tabanında canlanma, raf silahı, 5 sn gecikme | 300 sn / 30 |
+| `ffa` | `Modes/FfaMode.cs` | Takımsız · bireysel skor · sabit durarak canlanma · silahı mod dağıtır · gecikme 0 | 300 sn / 20 |
+
+> `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;
+> eşitlikte `TryGetLeader` false döndüğü için maç berabere biter. Oyuncusuz başlatılan maçta
+> (admin harita önizlemesi) lider yoktur — süre dolunca berabere kapanır, ek kod gerekmez.
+
 **Yeni mod eklemek:**
 1. `Modes/<Ad>Mode.cs` içinde `IGameMode` uygula.
 2. **`Rules`** döndür — modun şekli (`ModeRules`): `Teams` (takımlı/takımsız), `Scoring` (takım
@@ -284,6 +295,7 @@ rolündeyken ortamda başka admin kalmadığı için loopback denemelerinde bu b
   `SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16` girdi ≈ 1382 B, fazlası aynı tik içinde ek datagramlara
   bölünür). Snapshot `flags` bit0 gerçek `alive` durumunu taşır.
 - **Maç:** `MatchDirector` faz makinesi (`load_match` → Countdown → Live → End → lobi) +
-  `Modes/TdmMode.cs` (`IGameMode`) + vuruş hattı, can/skor yayını, free-roam canlanma.
+  `Modes/TdmMode.cs` + `Modes/FfaMode.cs` (`IGameMode`) + vuruş hattı, can/skor yayını,
+  free-roam canlanma.
 - **Hasar modeli:** sunucuda silah tablosu YOKTUR; hasarı istemci hesaplar, sunucu aynen uygular
   (`weaponId` yalnız etiket) — `../Docs/ArenaNet-Protokol.md` §10.3.

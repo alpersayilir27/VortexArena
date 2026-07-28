@@ -58,16 +58,24 @@ D:\Games\vortexarena\
                                + Prefabs\FX_SnowStorm — 7 katmanlı kar fırtınası)
     Arenas\Venues\DemoVenue\ (sihirbazla üretildi — 11×8 asimetrik)
     Modes\TeamDeathmatch\    mod kutusu: {Scripts → VortexArena.Modes.Tdm, Data, UI}
+    Modes\FreeForAll\        mod kutusu: {Scripts → VortexArena.Modes.Ffa, Data, UI} — takımsız
+                             "Herkes Tek"; arena-özel hiçbir iş gerektirmez
   Server\                    .NET 10 çözümü (Core kütüphanesi + App konsolu + PoseBot test istemcisi)
   launcher\                  Flutter Windows launcher (vortex_launcher) — operatör giriş noktası
     lib\main.dart            uygulama kabuğu
     lib\launcher_config.dart kalıcı ayarlar (admin exe yolu + IP:port) + doğrulama
     lib\launcher_page.dart   tek ekran: Sunucu / Ayarlar / Yönetimi Başlat
+  docs-serve.bat             dokuman sitesini localhost:1111'de sunar (Quartz; icerik = Docs\,
+                             motor repo DISINDA ..\vortexarena-docs-site — git'e girmez)
   scripts\                   deploy-admin-game.bat · deploy-server.bat · deploy-launcher.bat
+                             docs-setup.bat (doküman sitesini yeni PC'de bir kez kurar)
   deploy\                    ÜRETİLEN çalıştırılabilirler: admin\ server\ launcher\ (git'e girmez)
   dev-targets.json           dev penceresinin adlandırılmış sunucu hedefleri (COMMIT'Lİ;
                              seçim EditorPrefs'te kişisel kalır — bkz. §6.2)
-  Docs\  plan\  .claude\rules\  CLAUDE.md
+  Docs\                      dokumantasyon (docs-serve.bat bunu sunar)
+    Gelistirici\             OYUN GELISTIRICISI icin giris kapisi: Ilk-Adimlar · Yemek-Kitabi
+                             (receteler) · API-Referansi · Sahne-Kurulumu · Yapma-Listesi
+  plan\  .claude\rules\  CLAUDE.md
 ```
 
 **Bağımlılıklar hep aşağı akar; modlar birbirini referanslamaz:**
@@ -79,7 +87,7 @@ D:\Games\vortexarena\
                  ▲                                            │ <Compile Include>
         VortexArena.Core          oyun kodu (arena, savaş)     │ ile derlenir
            ▲          ▲                                       │
-  VortexArena.App   VortexArena.Modes.Tdm                   ──┘
+  VortexArena.App   VortexArena.Modes.Tdm / .Ffa           ──┘
 ```
 
 Bunun iki sert sonucu var:
@@ -285,8 +293,22 @@ IGameMode.Rules  →  MatchDirector  →  load_match.rules / welcome.match.rules
 | `Weapons` | `Rack` / `RandomGrant` | `Rack` | **Yalnız istemci sunumu** — sunucuda karşılığı yok |
 | `RespawnDelay` | saniye | `RESPAWN_DELAY` (5) | `respawn.delaySeconds` + sunucudaki gecikme eşiği |
 
+**Bugün kayıtlı iki mod** (somut örnek — soldaki TDM tüm varsayılanları alır, sağdaki FFA beş alanı
+farklı yazar):
+
+| | `tdm` — Takım Ölüm Maçı | `ffa` — Herkes Tek |
+|---|---|---|
+| `Teams` | `TwoTeams` | **`None`** |
+| `Scoring` | `Team` | **`Player`** |
+| `Revive` | `OwnBase` | **`StandStill`** (3 sn / 1 m) |
+| `Weapons` | `Rack` | **`RandomGrant`** (grip'e basınca elde silah) |
+| `RespawnDelay` | `5` | **`0`** (bekleme yerine sabit durma şartı) |
+| Süre / limit | 300 sn / 30 | 300 sn / 20 |
+
 - **Varsayılan = bugünkü TDM.** Yeni mod yalnız FARKLI olduğu alanı yazar (`TdmMode.Rules =>
   ModeRules.TeamDefault`).
+- **`FriendlyFire = false` takımsız modu KİLİTLEMEZ:** boş takım asla takım arkadaşı sayılmaz, FFA'da
+  herkesin takımı `""` olduğu için dost ateşi kapısı hiç kapanmaz (§3.6).
 - **Bilinmeyen/boş değer varsayılana düşer** (değerler bilerek string) → yeni bir kural değeri
   eklemek `PROTOCOL_VERSION`'ı artırmaz.
 - **Sunucusuz editör oturumunda** (dev penceresinin sentetik maçı) kurallar `ModeDefinition`'ın
@@ -366,7 +388,8 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 `ArenaSpace` (dünya↔arena dönüşümü), `BaseZone` (taban bölgesi — canlanma kapısı), `SpawnPoint`
 (takım + slot marker'ı; takımsız modlar için `FindGlobal(slot)` tek havuz araması),
 `MapDefinition` / `ModeDefinition` / `GameCatalog` (içerik SO'ları),
-`Weapon` + `WeaponDefinition` + `WeaponAudio`, `Health` (sunucudan set edilir), `PlayerCombatState`
+`Weapon` + `WeaponDefinition` + `WeaponAudio` (+ `WeaponGranter`, aşağıdaki tabloda),
+`Health` (sunucudan set edilir), `PlayerCombatState`
 (yerel oyuncunun takım/can/ateş yetkisi/canlanma akışı), `RemoteAvatar` + `RemoteHitBox`
 (uzak oyuncu gövdesi ve isabet kutusu),
 `ProximityWarning` (`Core/Player` — free-roam çarpışma önleme: `RemotePlayerRegistry` pozlarını
@@ -386,6 +409,8 @@ katmanların göreli hız farkı korunur).
 |---|---|
 | `ModeRuntime` (+ `ModeRuntimePump`) | Aktif maçın kurallarının **tek okuma noktası** (§3.9). `load_match.rules` / `welcome.match.rules` besler; kurallar telde yoksa (sunucusuz editör oturumu) `ModeDefinition` önizlemesi devralır. Statik durum + statik `Changed`; pompa kendini önyükler (`BeforeSceneLoad` + `DontDestroyOnLoad`). Tüketiciler: `PlayerCombatState`, `ModeHudBase`, `AdminRoster` |
 | `UI/ModeHudBase` | Mod HUD'larının **takım-agnostik** tabanı: faz/süre, geri sayım, can barı, ölüm ekranı + durum metni, kill-feed (ad çözümü `lobby_state`'ten), kendi öldürme/ölüm sayacın, maç sonu satırı. **Takıma ait hiçbir şey burada değil** — skor satırı (`ScoreLine`) ve kazanan metni (`WinnerLine`) alt sınıfın işi. Core'da durur çünkü modlar birbirini referanslamaz |
+| `Combat/ArenaCombat` | **Oyun kodunun ağa açılan tek kapısı** (statik). `ReportShot` / `ReportHit` / `ReportRaycastHit` / `ReportAreaHit` + `TryGetTargetPlayerId` / `IsHeadshot` / `CanFire` / `LocalPlayerId`. Bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektiriyor (arena uzayı, yön≠nokta, `RemoteHitBox` ile hedef çözme, hasarı istemcinin belirlemesi) — bunlar `Weapon` içinde gömülü kalsaydı ikinci bir hasar kaynağı yazan herkes aynı dördünü yeniden keşfederdi. `Weapon` de bu kapıyı kullanır (tek doğruluk kaynağı). Bağlantı yokken sessizce no-op. Reçeteler: `Gelistirici/Yemek-Kitabi.md` |
+| `Combat/WeaponGranter` | `weaponSource:"random"` modlarının (§3.9) silah kaynağı. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz, bu yüzden yeni arenaya ek kurulum adımı doğurmaz. İki iş: (1) sahne süpürmesi — raf silahları gizlenir, `BaseZone` **bileşeni** kapatılır + görsel taban şeridi gizlenir; (2) grip basılıyken o elde rastgele silah durur, bırakılınca yok olur, tekrar basınca **yenisi** gelir. TDM'de (kural `rack`) tümüyle pasiftir; kural değişince süpürme geri alınır. Admin'de rig kapalı olduğu için silah verme yolu kendiliğinden kapalı, süpürme ise çalışır |
 | `Team` | `Red` / `Blue` / **`Neutral`**. ⚠️ Yeni değer SONA eklenir: `BaseZone`/`SpawnPoint`/`Weapon` bu enum'u serialize ediyor, başa ekleme her arenanın taban/spawn takımlarını kaydırır |
 
 **`ArenaRoof`** (çatılı arenalar için, **isteğe bağlı**): çatı hiyerarşisinin köküne konur
@@ -410,7 +435,7 @@ bile görünmez. Oyuncu tarafında etkisi YOKTUR — yalnız `AdminSpectator.Ref
 | `LobbyService` | Roster yayını (`lobby_state`), ready/takım/kick + **adminler arası ortak durumun sahibi**: mod/harita seçimi burada yaşar, `set_selection` ile değişir, `admin_state` ile yalnız adminlere yayılır. Her admin komutu "kim ne yaptı" duyurusu üretir |
 | `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş hattı, can/skor, canlanma, zorla canlandırma.** Mod kaydı tek yerde (`RegisterModes()` — yeni mod buraya bir satır). **Skor defteri:** `AddScore(team,…)` (takım) + `AddPlayerScore/ScoreOf/TryGetLeader` (bireysel); modlar skoru YALNIZ buradan yazar |
 | `MapTable` | `maps.json` (Unity export'undan) — sunucunun okuduğu tek içerik tablosu |
-| `Modes/IGameMode` + `TdmMode` | Mod kuralları: skor, kazanma koşulu, tur süresi. Yeni kancalar **varsayılan gövdeyle** eklenir (default interface method) → mevcut modların hiçbiri değişmez; **tüketicisi olmayan kanca EKLENMEZ** |
+| `Modes/IGameMode` + `TdmMode` + `FfaMode` | Mod kuralları: skor, kazanma koşulu, tur süresi. Yeni kancalar **varsayılan gövdeyle** eklenir (default interface method) → mevcut modların hiçbiri değişmez; **tüketicisi olmayan kanca EKLENMEZ**. `FfaMode` yüzeyin ilk tüketicisidir: takımsız + bireysel skor + sabit durma canlanması, `MatchDirector`'a tek satır kayıt dışında hiçbir dokunuş yok |
 | `Modes/ModeRules` | Modun ŞEKLİ (§3.9): takım kipi, skor kanalı, dost ateşi, canlanma, silah kaynağı, canlanma gecikmesi. `ToInfo()` ile tele çıkar. Varsayılanı (`TeamDefault`) bugünkü TDM'dir |
 | `Modes/MatchOutcome` | Maç sonucunun tek tipi: kazanan takım **veya** kazanan oyuncu (`match_end`'in iki kanalı) |
 
@@ -741,29 +766,42 @@ konsoluna tek satır sebep yazar.
     duvarda kaybolur, duvarda iyi görünen değer gökyüzünde bulanık perde olur. Her ayardan
     sonra **hem yukarı hem duvara** bakan iki kare al. `Snow_G_Haze` yalnız gökyüzüne karşı
     okunur — bu bilinçli.
+27. **`BaseZone`'un GameObject'ini kapatma — bileşenini kapat.** Altındaki `SpawnPoint` marker'ları
+    `OnDisable`'da statik kayıttan düşer, maç başı spawn göstergesi çöker. Ama YALNIZ bileşeni
+    kapatmak da yarım çözümdür: görsel taban şeridi (Renderer'lı doğrudan çocuk) ekranda kalır.
+    Doğrusu ikisi birlikte — `zone.enabled = false` + `SpawnPoint` taşımayan Renderer'lı çocukları
+    `SetActive(false)` (`WeaponGranter.SweepScene`). Kontrol `GetComponent` değil
+    **`GetComponentInChildren`** olmalı: marker şeridin torunu olabilir.
+28. **Verilen silah kavrama sistemine SOKULMAZ ve tetiği ayrı okunur.** `Weapon.IsHeld` yalnız
+    `grabbable.SelectingPointsCount`'a bakarsa el anchor'ının altına örneklenen silah **hiç ateş
+    edemez** (`GrantedHand` bu yüzden var). İkinci tuzak tetikte: `Player/Attack` tek bir Button
+    action'dır ve `<XRController>/{PrimaryAction}` ile İKİ kumandayı da toplar → iki elde iki
+    silahla tek tetiğe basmak ikisini birden ateşlerdi. Verilen silah bu yüzden kendi elinin
+    tetiğini `OVRInput` ile okur; raf silahının yolu değişmedi.
 
 ---
 
 ## 8. Durum ve sıradaki işler
 
-**Bugün çalışan sistem** (ayrıntı §2–§7): lobi + 20 Hz poz senkronu + sunucu-otoriter TDM maçı
-(faz makinesi, vuruş hattı, free-roam canlanma, kill-feed/HUD) · **çok mod altyapısı** (`ModeRules`
+**Bugün çalışan sistem** (ayrıntı §2–§7): lobi + 20 Hz poz senkronu + sunucu-otoriter maç
+(faz makinesi, vuruş hattı, free-roam canlanma, kill-feed/HUD) · **iki oyun modu** — `tdm` (Takım
+Ölüm Maçı) ve `ffa` (Herkes Tek: takımsız, bireysel skor, sabit durma canlanması, grip'e basınca
+elde rastgele silah) · **çok mod altyapısı** (`ModeRules`
 şekil tanımı §3.9, bireysel skor, `MatchOutcome`, takım-agnostik `ModeHudBase`, admin'den maç
-süresi/skor limiti) · dört arena (A10x10, A12x12, IceWorld, DemoVenue) + arena şablon sihirbazı ve
+süresi/skor limiti) · dört arena (A10x10, A12x12, IceWorld, DemoVenue — hepsi iki modu da
+destekler) + arena şablon sihirbazı ve
 `Export Server Config` · admin **sahne-içi gözlemci** (üç kamera kipi + sahne üstü yönetim HUD'ı,
 çoklu admin) · geliştirici araç seti (`Tools > VortexArena > Dev`, `dev-targets.json`,
 `Ctrl+Alt+R`) · rolden bağımsız adres zinciri + `ConnectionOverlay` bağlantı hata ekranı ·
 Flutter launcher + üç dağıtım betiği.
 
-> **Mod altyapısı tek başına yeni bir oyun getirmez** — TDM birebir eskisi gibi oynanır. Değeri
-> ikinci ve sonraki modların (FFA, turnuva, silah yarışı, zombi) mevcut kodu kırmadan takılabildiği
-> **yüzey**dir; ilk tüketicisi Faz 8'dir.
+> **Mod altyapısının değeri FFA ile kanıtlandı:** ikinci mod protokole **tek bir alan bile
+> eklemedi** ve TDM'in tek satırını değiştirmedi — sunucuda bir `IGameMode` dosyası + tek satır
+> kayıt, istemcide bir mod kutusu + bir paylaşımlı bileşen (`WeaponGranter`). Sonraki modlar
+> (turnuva, silah yarışı, bölge kontrolü, zombi) aynı ucuzlukta gelmeli; gelmiyorsa eksik olan
+> `ModeRules`'te bir kuraldır, istemcide bir `if` değil.
 
-**Sıradaki planlanmış iş** (`plan/`):
-
-| İş | Dosya | Kapsam |
-|---|---|---|
-| Herkes Tek (FFA) | `plan/faz8-ffa-modu.md` | Takımsız mod: bireysel skor, "sabit dur" canlanması, raf yerine hold ile rastgele silah. **Protokole yeni alan eklemez** — Faz 7'nin açtığı yüzeye oturur |
+**`plan/` şu an boş** — sıradaki planlanmış iş yok.
 
 **Kapsam dışı — bilinçli kararlar** (yeniden gündeme gelirse bu gerekçeler tartışılmalı):
 
