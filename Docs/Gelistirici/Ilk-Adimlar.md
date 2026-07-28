@@ -32,7 +32,7 @@ kuramazsın (dev penceresinin sentetik maçı yeterliyse sorun değil).
 
 > ⚠️ **Rol ve IP'yi sahneye yazma.** Bu değerler `EditorPrefs`'te kişisel kalır — böylece rol
 > değiştirmek hiçbir sahneyi ya da asset'i kirletmez ve commit'inde görünmez.
-> Boot sahnesine `[SerializeField]` override koyma; tam bu yüzden kaldırıldı.
+> Boot sahnesine `[SerializeField]` override koyma; `AppBoot`'ta böyle bir alan yoktur.
 
 ---
 

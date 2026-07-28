@@ -12,7 +12,7 @@ namespace VortexArena.Core.Player
     /// takım rengi MaterialPropertyBlock ile _BaseColor'a yazılır (URP Lit).
     /// RemotePlayerSpawner tarafından Instantiate + Initialize ile kurulur.
     /// <para>
-    /// Faz 3: snapshot'taki alive bayrağı okunur — ölü oyuncu SOLUKLAŞIR (URP Lit opak
+    /// Snapshot'taki alive bayrağı okunur — ölü oyuncu SOLUKLAŞIR (URP Lit opak
     /// materyalde alpha işe yaramadığı için takım rengi karartılır), ad etiketine
     /// " (ölü)" eklenir ve vuruş kutuları kapatılır (ölüye ateş edilemez).
     /// </para>

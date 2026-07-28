@@ -296,9 +296,9 @@ Geçerse: `hp -= damage` (istemcinin bildirdiği değer) → `health_update{play
 **herkese** yayınlanır. `hp ≤ 0` ise `alive=0`, `kill_event{killerId, victimId, weaponId}` +
 `IGameMode.OnKill` (skor) + kurbana `respawn{delaySeconds:RESPAWN_DELAY}`.
 
-Atış hızı denetimi, `weaponId` beyaz listesi ve sunucu-otoriter silah tablosu **YOKTUR**
-(v1'de vardı, kaldırıldı): pompalı saçması, bomba parçası ve ok yaylımı gibi meşru "hızlı
-art arda vuruş" örüntülerini sessizce düşürüyordu.
+Atış hızı denetimi, `weaponId` beyaz listesi ve sunucu-otoriter silah tablosu **YOKTUR** ve
+eklenmez: pompalı saçması, bomba parçası ve ok yaylımı gibi meşru "hızlı art arda vuruş"
+örüntülerini sessizce düşürürler.
 
 `shot_fired` sunucuda **doğrulanmaz**, yalnız relay edilir (atan hariç herkese, `playerId`
 eklenerek) — ölü/maç dışı oyuncunun `shot_fired`'ı relay EDİLMEZ.
@@ -392,7 +392,7 @@ Sunucusuz editör oturumunda (dev penceresi sentetik maç) kurallar `ModeDefinit
 | `devices.json` | **Sunucu üretir** | `deviceId → "Gözlük NN"`; ilk bağlantıda ve `set_name`'de yazılır (§2). UTF-8, BOM'suz. |
 | `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `modes` (§10.1). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide `MapDefinition.size`'da kalır. |
 
-> **`weapons.json` KALDIRILDI** (v1'de vardı): sunucu artık silah tanımı tutmaz, hasarı istemci
-> bildirir (§10.3). Silah istatistikleri yalnız Unity'deki `WeaponDefinition` SO'larındadır.
+> **`weapons.json` YOKTUR:** sunucu silah tanımı tutmaz, hasarı istemci bildirir (§10.3). Silah
+> istatistikleri yalnız Unity'deki `WeaponDefinition` SO'larındadır.
 >
 > **`maps.json` ELLE DÜZENLENMEZ** — `Tools > VortexArena > Export Server Config` üretir ve bir sonraki export elle yapılan değişikliği **ezer**. Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir (alfabetik, LF, UTF-8 BOM'suz) → git diff'i temiz kalır. Harita ekleyip export'u çalıştırmayı unutursanız bilinmeyen `sceneName` → `start_match` reddedilir. `maps.json` hiç yoksa sunucu harita doğrulamasını **atlar** (geriye dönük uyumlu davranış).

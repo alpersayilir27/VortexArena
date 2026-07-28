@@ -42,7 +42,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
   - **Kutu:** `Venue` · **İşletme adı (klasör):** işletme adı → hedef `Assets/Arenas/Venues/<İşletme>/`
   - **GameCatalog:** `Assets/_Shared/Data/GameCatalog.asset`
 - [ ] "Oluştur" → sihirbaz `{Scenes, Data, Prefabs}` kutusunu üretir, sahneyi **bire bir kopyalar**, `MapDefinition` yazar, `GameCatalog`'a ve **Build Settings**'e ekler.
-  > ⚠️ **Sihirbaz boyut sormaz ve geometriyi ölçeklemez.** Sahne 10×10 şablonundan olduğu gibi gelir; arena planını sen çizersin. Sebebi: her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak üretmiyordu. Sihirbazın işi, sahnenin ağ bileşenlerini (kalibratör, poz senkronu, sınır, taban bölgeleri, rig) eksiksiz getirmesi.
+  > ⚠️ **Sihirbaz boyut sormaz ve geometriyi ölçeklemez.** Sahne 10×10 şablonundan olduğu gibi gelir; arena planını sen çizersin. Sebebi: her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak üretmez. Sihirbazın işi, sahnenin ağ bileşenlerini (kalibratör, poz senkronu, sınır, taban bölgeleri, rig) eksiksiz getirmesi.
 - [ ] **Arena planını çiz** (duvar/cover yerleşimi, ölçüler) ve şu üçünü gerçek ölçüye getir: sahnedeki **`ArenaBoundary.halfExtentX/Z`** · **`MapDefinition.size`** · **kalibrasyon işaretçilerinin konumu** (Bölüm 3).
 - [ ] Sihirbazın kalan uyarılarını uygula: **NavMesh ve ışık verisi kaynak sahneden miras kalır** → yeni plana göre yeniden bake et; **tek `SpawnPoint`** elle konur.
 - [ ] `Tools > VortexArena > Export Server Config` çalıştır → `Server/config/maps.json` üretilir. Çıkan uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.

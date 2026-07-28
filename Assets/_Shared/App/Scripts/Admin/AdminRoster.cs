@@ -96,9 +96,9 @@ namespace VortexArena.App.Admin
         /// <para>
         /// Maç yokken (faz Lobby) henüz kural yayınlanmamıştır; o zaman ortak seçimin modu
         /// katalogdan okunur (<see cref="AdminSelection.ModeId"/>). Katalog da yoksa
-        /// <b>sezgisel</b> yedeğe düşülür ("hiçbir çevrimiçi oyuncunun takımı yok") — bu eskiden
-        /// TEK karar yoluydu ve lobide takımı henüz atanmamış TDM maçını da FFA gösteriyordu;
-        /// artık yalnız arayüz boş kalmasın diye duruyor.
+        /// <b>sezgisel</b> yedeğe düşülür ("hiçbir çevrimiçi oyuncunun takımı yok"). Bu yedek
+        /// TEK BAŞINA yanıltıcıdır — lobide takımı henüz atanmamış TDM maçını FFA gösterir;
+        /// yalnız arayüz boş kalmasın diye, son çare olarak durur.
         /// </para>
         /// <para>
         /// Alan değil <b>hesaplanan özelliktir</b>: girdileri (faz, sunucu kuralı, ortak seçim)
