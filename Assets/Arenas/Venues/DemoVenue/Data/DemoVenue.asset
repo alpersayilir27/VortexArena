@@ -18,3 +18,4 @@ MonoBehaviour:
   spawnSlotsPerTeam: 3
   supportedModeIds:
   - tdm
+  - ffa

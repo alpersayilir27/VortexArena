@@ -1,0 +1,187 @@
+---
+title: Yapma Listesi
+---
+
+# Yapma Listesi
+
+Pahalıya öğrenilmiş tuzaklar. Ortak özellikleri: **hiçbiri hata vermez** — sessizce yanlış çalışır.
+
+> Bir şey "çalışması gerekirken çalışmıyorsa" önce buraya bak.
+
+---
+
+## Free-roam kuralları
+
+### ⛔ Rig'i, kamerayı, oyuncuyu taşıma
+
+Oyuncu fiziksel olarak yürüyor. Işınlanma, knockback, "spawn noktasına götür", "duvardan geri it" —
+hiçbiri yok. Ölüp canlanmak bile bir **durum** değişimidir, konum değişimi değil.
+
+`SpawnPoint` bir *gösterge*dir: "tabanının şu noktasına dön". Hiçbir kod oyuncuyu oraya taşımaz.
+
+### ⛔ `ArenaBoundary`'yi devre dışı bırakma
+
+`OnDisable` → arena orijin kaydı silinir → **bütün uzak oyuncular dünya orijinine yığılır**
+(halkalar, ad etiketleri dahil). Susturmak gerekiyorsa `SetSpectatorMode(true)` kullan.
+
+Bu kural her "sınırı geçici kapatalım" isteğinde geçerlidir.
+
+### ⛔ Ölü oyuncuları uzak oyuncu listesinden eleme
+
+Ölüm bir durum değişimi olduğu için ölünün bedeni sahada durmaya devam eder. Çarpışma/yakınlık
+riski canlı oyuncuyla aynıdır.
+
+---
+
+## Otorite
+
+### ⛔ Canı yerelde düşürme
+
+```csharp
+avatar.hp -= 25f;                              // ❌ iki istemci farklı can görür
+ArenaCombat.ReportHit(id, nokta, 25f, "ak47"); // ✅ sunucu düşürür, health_update ile döner
+```
+
+Aynısı skor, ölüm sayısı ve maç fazı için de geçerli — hepsi sunucudan gelir.
+
+### ⛔ `if (modeId == "ffa")` zinciri yazma
+
+Modun şekli telden gelir. `ModeRuntime`'dan oku. Zincir yazarsan her yeni mod senin kodunu
+değiştirir ve dört ayrı yerde ayrı ayrı bayatlar.
+
+### ⚠️ `RespawnDelay == 0` geçerli bir değerdir
+
+FFA'da öyle: bekleme yerine "sabit dur" şartı işler. `if (delay > 0)` deyip varsayılana düşme.
+
+### ⚠️ Kazanan iki kanaldan biriyle gelir
+
+Takım skorlu modlarda `match_end.winnerTeam`, bireysel skorlu modlarda `winnerPlayerId`.
+Hangisine bakacağını `ModeRuntime.Scoring` söyler. Bir mod ikisini birden doldurmaz.
+
+---
+
+## Koordinat
+
+### ⚠️ Yön bir nokta değildir
+
+```csharp
+ArenaSpace.WorldToArena(dir);                                  // ❌ orijin kadar kayar
+(ArenaSpace.WorldToArena(p + dir) - ArenaSpace.WorldToArena(p)).normalized;  // ✅
+```
+
+`ArenaCombat.ReportShot` bunu zaten doğru yapar.
+
+### ⚠️ Ağdan gelen her poz arena uzayındadır
+
+`RemotePlayerRegistry.GetInterpolatedPose` ve `ShotFiredMsg.muzzlePos` dünya koordinatı **değildir**.
+`ArenaSpace.ArenaToWorld` ile çevir.
+
+---
+
+## Sahne ve prefab
+
+### ⛔ `BaseZone`'un GameObject'ini kapatma
+
+Altındaki `SpawnPoint`'ler `OnDisable`'da statik kayıttan düşer → maç başı spawn göstergesi çöker.
+Gizlemen gerekiyorsa **bileşeni** kapat (`zone.enabled = false`) ve görsel şeridi ayrıca gizle
+(`SpawnPoint` taşımayan, Renderer'lı çocuklar).
+
+### ⚠️ Arena sahnelerinde `EventSystem` yoktur
+
+Yalnız Lobby'de bir tane var. Sahnene UI düğmesi koyup "tıklanmıyor" diyorsan sebebi budur.
+Proje **Input System-only**: modül `InputSystemUIInputModule` olmalı — `StandaloneInputModule`
+runtime'da patlar. İki etkin `EventSystem` de girdiyi ikiye böler.
+
+### ⚠️ BB Camera Rig'in üç kamerası da `MainCamera` etiketli
+
+Left/Right/CenterEye. `Camera.main` hangisini döndüreceği **garanti değildir**. Kafa transformu
+gerekiyorsa rig'in `centerEyeAnchor`'ını kullan:
+
+```csharp
+OVRCameraRig rig = FindFirstObjectByType<OVRCameraRig>();
+Transform kafa = rig != null ? rig.centerEyeAnchor : null;
+```
+
+### ⛔ `.meta` dosyası kopyalayarak asmdef/asset üretme
+
+GUID çakışır ve Unity referansları rastgele koparır. JSON'u kopyala, `.meta`'yı Unity üretsin.
+
+### ⛔ `_Shared` köküne asmdef'siz script koyma
+
+`Assembly-CSharp`'a düşer, hiçbir asmdef göremez.
+
+---
+
+## Serialize edilen veriler
+
+### ⛔ Enum'un başına/ortasına yeni değer ekleme
+
+Unity enum'ları **sayısal indeksle** saklar. `Team`'e başa bir değer eklemek sahnelerdeki tüm
+`BaseZone`/`SpawnPoint`/`Weapon` takımlarını kaydırır. Yeni değer **her zaman sona** eklenir —
+`Team.Neutral` bu yüzden sonda.
+
+Aynısı `ModeTeamMode` / `ModeScoreKind` / `ModeReviveAnchor` / `ModeWeaponSource` için de geçerli.
+
+### ⛔ `Server/config/maps.json`'ı elle düzenleme
+
+`Export Server Config` üretir ve bir sonraki export elini ezer. Tek doğruluk kaynağı
+`MapDefinition` SO'larıdır.
+
+### ⚠️ `GameCatalog.asset`'i `Resources/` dışına taşıma
+
+`Resources.Load<GameCatalog>("GameCatalog")` ile okunuyor. Taşırsan admin mod/harita seçicisi ve
+rastgele silah havuzu sessizce boşalır.
+
+---
+
+## Ağ olayları
+
+### ⚠️ `OnDisable`'da abonelikten çık
+
+`NetEvents` statiktir; abonelikte kalan ölü nesne `MissingReferenceException` üretir.
+
+### ⚠️ `OnLoadMatch` sahne yüklenmeden ÖNCE gelir
+
+Sahnedeki bir bileşende dinlersen **kaçırırsın**. Sahneye özel iş için `Start`'ta
+`SceneRouter.Instance.LastModeId` / `LastMatchScene` oku, ya da kendini önyükleyen kalıcı bir
+tekil kullan (`PlayerCombatState` deseni).
+
+### ⚠️ `match_state` saniyede bir gelir
+
+Her karede değil. Akıcı geri sayım istiyorsan son değeri kendin azalt.
+
+---
+
+## Build ve paketler
+
+### ⛔ Meta umbrella paketini (`com.meta.xr.sdk.all`) ekleme
+
+Meta Project Setup Tool önerse bile. Çektiği `voice` paketi Android namespace çakışmasıyla build'i
+kırar. Bireysel paketler kullanılır: core + interaction + interaction.ovr @203.0.0, audio @85.0.0.
+
+### ⚠️ `Shader.Find` build'de `null` dönebilir
+
+Hiçbir materyalin referanslamadığı shader strip edilir. Runtime'da üretilen görseller bu yüzden
+UI/TMP shader'ları üzerinden çizilir.
+
+### ⚠️ Quest'te "Soft Particles" yok
+
+`supportsCameraDepthTexture = false` (PC asset'te açık — editörde çalışır, cihazda çalışmaz).
+Derinlik dokusu gerektirmeyen iki araç var: materyalde **Camera Fading** ve Collision modülünde
+tek düzlem + `lifetimeLoss = 1`.
+
+### ⚠️ Silah dengesi değişikliği APK build'i ister
+
+Hasar sayıları istemcide yaşar; sunucuyu yeniden başlatmak yetmez.
+
+---
+
+## Doküman
+
+### ⛔ Kodu değiştirip dokümanı bırakma
+
+Bu projede kural: protokol, ağ akışı, maç kuralı, bileşen sorumluluğu, klasör/asmdef yapısı,
+editör aracı ya da sunucu config'i değiştiyse **ilgili doküman aynı commit'te** güncellenir.
+
+Ağ davranışı değişecekse sıra: **önce `ArenaNet-Protokol.md`, sonra kod.** Kod-önce gidilirse
+istemci ve sunucu iki uçlu sapmaya başlar.

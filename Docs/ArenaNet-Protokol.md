@@ -350,6 +350,22 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
   kural değeri eklemek `PROTOCOL_VERSION`'ı **artırmaz**.
 - **Kazanan ifadesi `scoring`'e bağlıdır:** `"team"` → `match_end.winnerTeam`, `"player"` →
   `match_end.winnerPlayerId`.
+**Kayıtlı modlar** (sunucuda `MatchDirector.RegisterModes()`; `start_match.modeId` bunlardan biri
+olmalı, tanınmayan `modeId` reddedilir):
+
+| `modId` | Ad | `teamMode` | `scoring` | `friendlyFire` | `reviveAnchor` | `weaponSource` | `respawnDelay` | Varsayılan süre / limit |
+|---|---|---|---|---|---|---|---|---|
+| `tdm` | Takım Ölüm Maçı | `two` | `team` | `false` | `base` | `rack` | `5` | 300 sn / 30 |
+| `ffa` | Herkes Tek | `none` | `player` | `false` | `standstill` | `random` | `0` | 300 sn / 20 |
+
+> `ffa` satırı kuralların somut örneğidir: **takım yok** (`team:""` gelir, `winnerPlayerId`
+> dolar), ölünce 5 sn'lik gecikme yerine **sabit durma** şartı işler (`REVIVE_HOLD_SECONDS` = 3 sn,
+> `REVIVE_HOLD_RADIUS` = 1 m) ve silah sahnedeki raftan değil **istemcinin dağıtımından** gelir.
+> `friendlyFire:false` FFA'yı kilitlemez — boş takım asla takım arkadaşı sayılmadığı için
+> (§10.3/4) kapı hiç kapanmaz; `false` bırakılması "bu modda dost kavramı yok" demektir.
+> **`weaponSource` sunucuyu hiç ilgilendirmez** (§10.3: silah tablosu yok) — telde yalnız
+> istemciye "silahı nasıl vereceksin" diye taşınır.
+
 - **3+ takım bugün YOK.** Geldiğinde yol açık: `PlayerInfo.team` zaten serbest string
   (`"green"`/`"yellow"` bugün de geçer) ve `match_state`'e `teamScores:[{team,score}]` eklenir;
   `scoreRed`/`scoreBlue` iki takımlı modlar için kısayol olarak kalır. Karar **o mod gelince**

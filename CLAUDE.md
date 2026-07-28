@@ -5,6 +5,11 @@ Oyuncular fiziksel alanda 1:1 yürür; farklı boyutlarda arenalar (10x10, 12x12
 farklı oyun modları/haritalar/silahlar. VR build = player, Windows build = admin (yönetim + izleme).
 Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN) — Mirror/NGO YOK.
 
+> **Dokümanı okumanın yolu: repo kökünde `docs-serve.bat` → http://localhost:1111** (Quartz;
+> içerik doğrudan `Docs/`, kaydedince tarayıcı yenilenir. Yeni PC'de bir kez `scripts/docs-setup.bat`;
+> motor repo DIŞINDA `../vortexarena-docs-site`, git'e girmez).
+> **Oyun tarafını yazan geliştirici için giriş kapısı: `Docs/Gelistirici/`** (İlk Adımlar ·
+> **Yemek Kitabı** = reçeteler · API Referansı · Sahne Kurulumu · Yapma Listesi).
 > Kurallar `.claude/rules/` altındadır. Sıradaki planlanmış işler: `plan/` (biten iş dokümanı silinir). Protokol: `Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı).
 > Sistemin tek sayfalık haritası (ne var, ağ nasıl çalışır, nasıl kullanılır): `Docs/Sistem-Ozeti.md`.
 > Sahadaki operatörün günlük kullanım kılavuzu (teknik olmayan dille): `Docs/Kullanim-Kilavuzu.md`.
@@ -33,7 +38,9 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 
 `Assets/` (Unity) · `Server/` (.NET 10 sunucu kaynağı) · **`launcher/`** (Flutter Windows
 launcher — operatör buradan admin oyununu başlatır) · **`scripts/`** (`deploy-admin-game.bat`,
-`deploy-server.bat`, `deploy-launcher.bat`) · **`deploy/`** (üretilen çalıştırılabilirler:
+`deploy-server.bat`, `deploy-launcher.bat`, `docs-setup.bat`) · **`docs-serve.bat`** (repo kökü:
+doküman sitesini localhost:1111'de sunar; motor repo DIŞINDA `../vortexarena-docs-site`) ·
+**`deploy/`** (üretilen çalıştırılabilirler:
 `admin/`, `server/`, `launcher/` — **git'e girmez**) · **`dev-targets.json`** (repo kökü,
 **commit'li**: dev penceresinin adlandırılmış sunucu hedefi kataloğu — `Local`, `Kesif (beacon)`,
 `Ornek-PC` + `defaultTarget`/`defaultRole`; bir hedefin `ip`'si **boşsa** adres yazılmaz,
@@ -72,7 +79,10 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   listesinden gelir. Açık tavanlı arenalarda bu adım hiç yapılmaz.
   → tam reçete, editör aracının davranışı, tuzaklar ve sorun giderme: **`Docs/Cati-Gizleme.md`**
 - `Assets/Modes/<Mod>/` — mod kutuları: `{Scripts (VortexArena.Modes.<Ad>.asmdef), Data, UI}`.
-  Modlar birbirini REFERANSLAMAZ.
+  Modlar birbirini REFERANSLAMAZ. Bugün iki kutu var: `TeamDeathmatch` (`tdm`) ve
+  `FreeForAll` (`ffa` — takımsız "Herkes Tek"). Ortak HUD/silah kodu mod kutusunda DEĞİL Core'da
+  durur (`ModeHudBase`, `WeaponGranter`) — modlar birbirini göremediği için ikinci mod aksi hâlde
+  aynı kodu baştan yazardı.
 - Üçüncü parti: `Assets/ThirdPartyPackages/`.
 
 **Assembly grafiği** (bağımlılık hep aşağı):
@@ -175,15 +185,34 @@ mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafınd
    `EndScoreLine`/`OnLobbyStateApplied`) yazar. Takıma ait hiçbir şey tabana koyulmaz.
 3. **Kural önizlemesi** `ModeDefinition` SO'suna girilir (dev penceresi + sunucusuz editör oturumu
    için) — **otorite sunucudadır, sapmada sunucu kazanır.**
+Sonra `FFA.asset` gibi bir `ModeDefinition` yaz (modId, süre/limit, kural alanları, `maps`,
+`loadout`, `hudPrefab`), `GameCatalog.asset`'e ekle, oynanacak `MapDefinition`'ların
+`supportedModeIds`'ine yeni modId'yi koy ve **`Export Server Config`'i çalıştır** — atlanırsa
+`start_match` "harita bu modu desteklemiyor" diye sessizce reddedilir.
 `IGameMode`'a yeni kanca eklerken **varsayılan gövde** kullan (default interface method) ve
 **tüketicisi olmayan kancayı hiç ekleme**; skor yalnız `MatchDirector` skor defterinden yazılır
 (`AddScore` takım / `AddPlayerScore` bireysel).
+**Silah rafsız mod** (`weaponSource:"random"`, ör. FFA): sahnede ya da arenada **hiçbir iş yoktur**.
+`WeaponGranter` (`_Shared/Core/Combat/`) kendini önyükleyen kalıcı tekildir — kural
+`RandomGrant` olunca sahnedeki raf silahlarını ve taban bölgelerini gizler, grip'e basılı tutulan
+her elde `ModeDefinition.loadout`'tan rastgele bir silah tutturur (bırakınca yok olur, tekrar
+basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki duruşu
+`WeaponDefinition.grantedHoldPosition/Euler`'dan gelir — VR'da ince ayar buradan yapılır.
+⚠️ Sahneye bileşen KOYMA: tekil olmasının sebebi her yeni arenaya elle bir kurulum adımı
+eklememektir.
 **Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): prefab
 `_Shared/Arsenal/Prefabs/` + WeaponDefinition SO `_Shared/Arsenal/Data/` + gerekiyorsa
 `ModeDefinition.loadout`. **Sunucu tarafında iş YOKTUR** ve export gerekmez — sunucuda silah
 tablosu yok, hasarı istemci hesaplayıp `hit_report.damage` ile bildirir, sunucu aynen uygular
-(§10.3); `weaponId` yalnız kill feed etiketi, doğrulanmaz. Alan etkisi için etkilenen her hedefe
-bir `hit_report` yollanır. Denge sayıları istemcide yaşadığı için değişiklik APK build'i ister.
+(§10.3); `weaponId` yalnız kill feed etiketi, doğrulanmaz. Denge sayıları istemcide yaşadığı için
+değişiklik APK build'i ister.
+⚠️ **Ağa bildirim TEK kapıdan yapılır: `ArenaCombat`** (`_Shared/Core/Combat/`, statik) —
+`ReportShot` · `ReportHit` · `ReportRaycastHit` · `ReportAreaHit` (alan etkisi = hedef başına bir
+`hit_report`) + `TryGetTargetPlayerId` · `IsHeadshot` · `CanFire`. Protokol DTO'su kurma, arena
+uzayı dönüşümünü elle yazma, `ArenaClient.Send`'i doğrudan çağırma: bir vuruşu doğru bildirmek
+dört ayrı şeyi bilmeyi gerektiriyor (arena uzayı, **yön bir nokta değildir**, `RemoteHitBox` ile
+hedef çözme, hasarı istemcinin belirlemesi) ve `Weapon` da bu kapıyı kullanıyor. Reçeteler:
+`Docs/Gelistirici/Yemek-Kitabi.md`.
 İçerik kataloğu: **`_Shared/Data/Resources/GameCatalog.asset`**
 (ModeDefinition + MapDefinition listesi) — admin tercihler panelinin mod/harita seçicisi bunu
 `Resources.Load<GameCatalog>("GameCatalog")` ile okur, bu yüzden `Resources/` altında kalmalı.
