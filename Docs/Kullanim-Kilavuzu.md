@@ -171,16 +171,26 @@ yerde görür.**
 
 Kalibrasyon **arena içindeyken** (maç başladıktan sonra) yapılır — lobide yapılmaz.
 
-- [ ] **1.** Oyuncu sağ kumandayı zemindeki **A** bandının üzerine, ucu yere değecek şekilde koyar.
+- [ ] **1.** Oyuncu sağ kumandayı zemindeki **A** bandının üzerine, **kalem gibi dimdik** tutup
+      ucunu yere değdirir. ⚠️ **Duruş önemli:** gözlük zemin yüksekliğini de bu ölçümden
+      öğrenir; eğik tutulursa oyuncular birbirini havada ya da yere gömülü görür.
 - [ ] **2.** Sağ kumandada **A + B tuşlarına birlikte 3 saniye basılı tutar.**
       Titreşim giderek artar → **tek titreşim** = A noktası alındı.
-- [ ] **3.** Aynısını zemindeki **B** bandında yapar → **çift titreşim** = tamam, arena hizalandı.
-- [ ] **4.** **Üç kısa titreşim** gelirse: noktalar birbirine çok yakın alınmış → B'yi tekrar al.
+- [ ] **3.** Aynısını zemindeki **B** bandında, **aynı dik duruşla** yapar → **çift titreşim** =
+      tamam, arena hizalandı.
+- [ ] **4.** Hata sinyalleri — ikisinde de B'yi tekrar al:
+      **üç kısa titreşim** = iki nokta arasındaki mesafe yanlış (bant ölçüsünü kontrol et) ·
+      **bir uzun titreşim** = kumanda dik tutulmamış, zemin ölçümü tutmadı.
 
 **Bilmen gerekenler**
 
 - Kalibrasyon gözlükte **saklanır**; aynı gözlük ertesi gün açıldığında genelde kendiliğinden
   geri gelir. Baştan yapmak istersen A+B'yi tekrar 3 saniye tut, sıfırdan başlar.
+- **Harita değiştirmek kalibrasyonu bozmaz.** Yeni arenaya geçince oyuncular yeniden kalibre
+  etmez, bir yere de "ışınlanmaz" — oldukları yerde kalırlar, yeni arena üzerlerine hizalanır.
+  Yeni harita yüklenirken birkaç saniye halkalar kaybolabilir; hizalama oturunca geri gelir.
+  ⚠️ Bunun şartı: **aynı işletmede hep aynı ölçüdeki arenayı oynat** (zemindeki A/B işaretleri
+  değişmediği sürece kalibrasyon geçerli kalır).
 - **A ile B'yi karıştırma!** Ters alınırsa arena 180° dönük olur, oyuncular birbirini
   ters tarafta görür.
 - **Lobide** oyuncuların birbirinin üstünde/yanlış yerde görünmesi **normaldir** — kontrolü
@@ -304,6 +314,8 @@ ilet.
 | Launcher "Admin exe bulunamadı" diyor | Oyun dosyası taşınmış/silinmiş | Launcher > **Ayarlar > Gözat** ile `deploy\admin\VortexArena.exe` dosyasını yeniden seç. Dosya yoksa teknik ekibi ara |
 | Oyuncu listede "çevrimdışı" düşüyor | Wi-Fi zayıf ya da gözlük uykuya geçmiş | Gözlüğü uyandır; kapsama sorunu tekrarlıyorsa teknik ekibi ara |
 | Oyuncular birbirini yanlış yerde görüyor | Kalibrasyon yapılmadı ya da A–B ters alındı | Arenada **A + B ile yeniden kalibrasyon** yaptır (Bölüm 4) |
+| Oyuncular birbirini **havada / yere gömülü** görüyor | Kalibrasyonda kumanda dik tutulmamış | O oyuncuya kalibrasyonu tekrarlat; kumanda **kalem gibi dik**, ucu yere değecek (Bölüm 4). Herkeste aynı sorun varsa teknik ekibi ara |
+| Oyun ortasında arena birden kaydı | Gözlüğün konum takibi sıfırlandı | Genelde kendiliğinden düzelir. Düzelmezse o oyuncuya kalibrasyonu tekrarlat |
 | Ateş ediyor ama can azalmıyor | Aynı takımdalar (dost ateşi kapalı) ya da maç henüz başlamadı | Takımları kontrol et; geri sayım bitmiş mi bak |
 | Ölen oyuncu canlanmıyor | Kendi takımının tabanına girmemiş | Oyuncuya **kendi renginin köşesine yürümesini** söyle |
 | Maç başlamıyor | Bağlı oyuncu yok ya da bir gözlükte eski sürüm var | Listede oyuncu var mı bak; varsa sunucu penceresindeki son satırı teknik ekibe ilet |
@@ -345,9 +357,11 @@ Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten
 │                              (lobide, bağlanamayınca)    │
 │                                                          │
 │  A + B  3 saniye basılı   →  Kalibrasyon noktası al      │
-│                              1 titreşim = A alındı       │
-│                              2 titreşim = B alındı, tamam│
-│                              3 titreşim = çok yakın,     │
+│  (kumanda KALEM GİBİ DİK,    1 titreşim = A alındı       │
+│   ucu yere değecek)          2 titreşim = B alındı, tamam│
+│                              3 titreşim = mesafe yanlış, │
+│                                           B'yi tekrar al │
+│                              1 UZUN     = dik tutulmadı, │
 │                                           B'yi tekrar al │
 ├──────────────────────────────────────────────────────────┤
 │  OYUNCUYA — "HERKES TEK" MODUNDA                         │

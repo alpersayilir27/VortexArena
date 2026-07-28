@@ -15,7 +15,6 @@ MonoBehaviour:
   sceneName: Arena10x10
   displayName: "Standart 10\xD710"
   size: {x: 10, y: 10}
-  spawnSlotsPerTeam: 4
   supportedModeIds:
   - tdm
   - ffa

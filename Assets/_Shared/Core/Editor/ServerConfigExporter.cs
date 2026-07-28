@@ -150,11 +150,6 @@ namespace VortexArena.Core.Editor
                     result.Warnings.Add($"sceneName '{sceneName}' Build Settings'te var ama KAPALI (enabled=false) — '{path}'.");
                 }
 
-                if (map.SpawnSlotsPerTeam <= 0)
-                {
-                    result.Warnings.Add($"sceneName '{sceneName}' spawnSlotsPerTeam <= 0 ({map.SpawnSlotsPerTeam}) — '{path}'.");
-                }
-
                 accepted.Add(map);
             }
 
@@ -192,8 +187,8 @@ namespace VortexArena.Core.Editor
 
         /// <summary>
         /// <c>{ "maps": [ { "sceneName": "Arena10x10", "sizeX": 10, "sizeZ": 10,
-        /// "spawnSlotsPerTeam": 4, "modes": ["tdm"] } ] }</c> — sunucunun start_match
-        /// doğrulaması ve ileriki bölge tabanlı modlar için.
+        /// "modes": ["tdm"] } ] }</c> — sunucunun start_match doğrulaması ve ileriki bölge
+        /// tabanlı modlar için.
         /// </summary>
         private static string BuildMapsJson(List<MapDefinition> maps)
         {
@@ -213,7 +208,6 @@ namespace VortexArena.Core.Editor
                     sb.Append("    { \"sceneName\": \"").Append(EscapeJson(map.SceneName))
                         .Append("\", \"sizeX\": ").Append(Number(map.Size.x))
                         .Append(", \"sizeZ\": ").Append(Number(map.Size.y))
-                        .Append(", \"spawnSlotsPerTeam\": ").Append(map.SpawnSlotsPerTeam.ToString(CultureInfo.InvariantCulture))
                         .Append(", \"modes\": ").Append(BuildModesArray(map.SupportedModeIds))
                         .Append(" }")
                         .Append(i < maps.Count - 1 ? ",\n" : "\n");

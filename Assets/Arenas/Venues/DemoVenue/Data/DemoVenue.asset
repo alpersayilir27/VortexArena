@@ -15,7 +15,6 @@ MonoBehaviour:
   sceneName: ArenaDemoVenue
   displayName: "DemoVenue 11\xD78"
   size: {x: 11, y: 8}
-  spawnSlotsPerTeam: 3
   supportedModeIds:
   - tdm
   - ffa

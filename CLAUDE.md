@@ -72,9 +72,16 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `{Scenes, Data, Prefabs}` (+ arenaya özel sanat varsa `Art/{Materials,Textures}`; ör. `Standard/IceWorld`).
   Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ (marker bileşenleri Core'dan gelir).
   Bir arenanın ağa bağlanması için sahnede şunlar olmalı: `ArenaBoundary` (arena origin + halfExtent),
-  `BaseZone`×2, `SpawnPoint`×(2×slot), `ArenaCalibrator`, `PlayerPoseTracker`, `RemotePlayerSpawner`,
+  `BaseZone`×2 (**taban bölgesi** = kırmızı/mavi şerit; ölen oyuncu buraya girince canlanır,
+  `Team.Neutral` = herkese açık), `ArenaCalibrator`, `PlayerPoseTracker`, `RemotePlayerSpawner`,
   `ModeHudSpawner`, BB Camera Rig. **Admin gözlemci için ek adım YOKTUR** — `AdminSpectator`
   kendini önyükler ve sahneyi devralır (rig'i kapatır, `ArenaBoundary`'yi susturur).
+  Ayrıca arena başına **tek** `SpawnPoint`: `GameObject > VortexArena > Spawn Point` ile eklenir ve
+  ELLE yerleştirilir (sihirbaz üretmez). Yalnız "maçtan önce şurada toplanın" göstergesidir —
+  takımı/slotu yoktur, hiçbir kod okumaz, protokolde karşılığı yoktur. ⚠️ **Harita değişimi ne
+  oyuncuyu yeniden doğurur ne kalibrasyonu sıfırlar**: `ArenaCalibrator` yeni sahnede kayıtlı
+  `OVRSpatialAnchor`'dan hizalamayı geri yükler — ön koşulu bir işletmede hep aynı ölçüde arena
+  oynatmaktır (zemin işaretleri sabit kalsın).
   **Çatılı arenada tek isteğe bağlı adım:** çatı kökünde `ArenaRoof`
   (`GameObject > VortexArena > Arena Roof`) — altındaki tüm Renderer'lar çatı sayılır, `ArenaRoof`
   katmanı (user layer 8) damgalanır ve admin kuş bakışına geçince çatı çizilmez (gölgesi kalır).
@@ -103,7 +110,8 @@ proje **Input System-only** — `StandaloneInputModule` runtime'da patlar, kulla
 dosyasında (`Team.cs` gibi). Sahne adı = katalog anahtarı (`load_match` string'i) → birebir eşleşme.
 ⚠️ **Serialize edilen enum'a yeni değer SONA eklenir** — Unity sayısal indeks saklar, başa/ortaya
 ekleme sahnelerdeki değerleri kaydırır. `Team = { Red, Blue, Neutral }`: `Neutral` bu yüzden sonda
-(`BaseZone`/`SpawnPoint`/`Weapon` bu enum'u serialize ediyor). Aynısı `ModeTeamMode`/`ModeScoreKind`/
+(`BaseZone`/`Weapon` bu enum'u serialize ediyor; `BaseZone`'da `Neutral` "herkese açık" demektir).
+Aynısı `ModeTeamMode`/`ModeScoreKind`/
 `ModeReviveAnchor`/`ModeWeaponSource` için de geçerli.
 
 **Paylaşımlı-mı-modül-mü:** "İkinci bir mod/arena bunu aynen kullanır mı?" → evet=_Shared, hayır=kutu.
@@ -118,6 +126,15 @@ ekleme sahnelerdeki değerleri kaydırır. `Team = { Red, Blue, Neutral }`: `Neu
   @203.0.0, audio @85.0.0 (spatializer=Meta XR Audio olduğu için gerekli, pinli).
 - Haptik: `OVRInput.SetControllerVibration` (core) — ayrı haptics paketi ekleme.
 - XR loader: OpenXR (mevcut, çalışıyor) — değiştirme.
+- **Tracking origin = `Stage` (2), tüm sahnelerde; `AllowRecenter = 0`.** `FloorLevel` ile aynı
+  zemin seviyesini verir ama OpenXR'da **recentering'i zorla açar** (`OVRManager`:
+  `SetAllowRecentering(true)`), `Stage` kapatır — recenter free-roam'da kalibrasyonu bayatlatıp
+  arenayı kaydırır. `AllowRecenter` alanı tek başına yetmez (yalnız OVR'ın kendi çağrısını keser).
+- **İşletme başlıklarında guardian/alan kurulumu YAPILMAZ** (serbest dolaşım). Sonucu: sistemin
+  zemin seviyesi tahmindir → `ArenaCalibrator` zemini kumandanın **ucundan** ölçer
+  (`tipLocalOffset`, pivot gövdenin içinde olduğu için zorunlu) ve hizalama 6DOF'tur. Eğim
+  telafisi **yoktur, eklenmez** (iki nokta düzlem tanımlamaz + eğik dünya VR'da mide bulandırır).
+  Detay: `Docs/Sistem-Ozeti.md` §7.29–30.
 
 ## Network (özet — detay Docs/ArenaNet-Protokol.md)
 
@@ -125,7 +142,7 @@ Portlar: UDP beacon 47820 · WS kontrol 47821 `/ws` · UDP state 47822 (cosmos 4
 Pozlar istemci-otoriter (kalibrasyon sonrası ARENA UZAYINDA, 20 Hz UDP); can/skor/kurallar/maç
 fazları SUNUCU-otoriter (.NET `Server/`, mod kuralları `IGameMode`). Vuruş: atıcı raycast →
 hit_report → server doğrular → health_update. **Free-roam respawn = konum değil DURUM değişimi**
-(fiziksel oyuncu ışınlanamaz): ölüm → `RESPAWN_DELAY` → oyuncu kendi `BaseZone`'una fiziken girince
+(fiziksel oyuncu ışınlanamaz): ölüm → `RESPAWN_DELAY` → oyuncu bir `BaseZone`'a fiziken girince
 `revive_request` → sunucu canlandırır (istemci takılırsa `REVIVE_GRACE` ile zorla). Rig'i ASLA taşıma. Keşif zinciri **rolden bağımsız**: komut satırı
 `--server-ip` > PlayerPrefs (elle girilmiş) > beacon > StreamingAssets/arena.json — **VR'a adres
 verilmediği için pratikte beacon ile otomatik** (bulamazsa sağ kumandada **A×2** ile gizli IP
@@ -171,11 +188,19 @@ Arena sahneleri kendine yeten (kendi BB rig'i taşır).
 
 ## Yeni içerik ekleme reçeteleri
 
-**Yeni arena:** `Tools > VortexArena > Create Arena From Template` → arenaId + sahne adı + boyut +
-takım başına spawn + hedef (Standard / Venue). Sihirbaz: klasörleri (`{Scenes,Data,Prefabs}`) ve
-sahne kopyasını üretir, duvar/zemin/taban/spawn'ları yeni boyuta göre ölçekler, MapDefinition
-asset'ini yazar, GameCatalog + uyumlu ModeDefinition'lara ekler, Build Settings'e koyar
-(sahne adı = katalog anahtarı). Duvar/cover sanat rötuşu ELDE; sonrasında
+**Yeni arena:** `Tools > VortexArena > Create Arena From Template` → arenaId + sahne adı +
+hedef (Standard / Venue). ⚠️ **Sihirbaz arena GEOMETRİSİNE DOKUNMAZ — boyut sormaz, ölçekleme
+yapmaz.** Yaptığı iş: klasörleri (`{Scenes,Data,Prefabs}`) + kaynak sahnenin bire bir kopyasını
+üretir, MapDefinition asset'ini yazar (boyut kaynaktan kopyalanır), GameCatalog + uyumlu
+ModeDefinition'lara ekler, Build Settings'e koyar (sahne adı = katalog anahtarı). Değeri
+**bileşen bütünlüğü**: kopyalanan sahne ağa bağlanmak için gereken her şeyi hazır taşır
+(`ArenaBoundary`, `ArenaCalibrator` + işaretçiler, `PlayerPoseTracker`, `RemotePlayerSpawner`,
+`ModeHudSpawner`, `BaseZone`'lar, BB rig). Ölçekleme bilinçli olarak KALDIRILDI (28 Tem 2026):
+her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen bile değil, plan zaten baştan
+çiziliyor — orantılı ölçekleme işe yarar taslak değil, elle düzeltilecek yalancı-doğru
+üretiyordu. ELDE: geometri çizimi · `ArenaBoundary.halfExtentX/Z` + `MapDefinition.size` ·
+kalibrasyon işaretçilerinin yerleşimi (yerleri zemin bandından gelir) · tek `SpawnPoint` ·
+NavMesh/ışık bake. Sonrasında
 `Tools > VortexArena > Export Server Config` çalıştır (sunucu `maps.json` tazelensin).
 **Yeni mod:** `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol;
 mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafında `Modes/<Ad>Mode.cs`
@@ -244,7 +269,7 @@ için WD_*.asset + WPN_*.prefab + FX_RemoteShot + WeaponCatalog üretir/güncell
 dialog açmaz; *…(Yalnız Kataloğu Tazele)* varyantı yalnız katalog+prefab bağlarını yeniler),
 `… > Create Arena From
 Template`, **`… > Dev`** (`_Shared/App/Scripts/Editor/`: rol · hedef · Play başlangıcı (Boot'tan /
-açık sahneden) · sentetik maç parametreleri (mod, takım, spawn slot, raund sn, skor limiti) + test
+açık sahneden) · sentetik maç parametreleri (mod, takım, raund sn, skor limiti) + test
 botu düğmeleri: N Bot · N Bot + Admin · Botları Durdur · Sahipsiz botları temizle ·
 Derle (dotnet build) + canlı durum satırı. **Kısayol `Ctrl+Alt+R`**
 rolü player↔admin çevirir, pencere açık olmasa da. Seçim `EditorPrefs`'te, hedefler
@@ -254,6 +279,8 @@ objesine `NetIdentity` + benzersiz
 `GameObject > VortexArena > Arena Roof` (seçime `ArenaRoof` ekler + altındaki Renderer'lara
 `ArenaRoof` katmanını damgalar — admin kuş bakışında gizlenecek çatı geometrisi;
 çoklu seçim + tek adımda Undo + prefab asset'leri atlar, ayrıntı `Docs/Cati-Gizleme.md` §4),
+`GameObject > VortexArena > Spawn Point` (arenanın TEK başlangıç noktasını üretir; yerleştirme
+elle, ikinci nokta eklenirse uyarı basar — sihirbaz bu noktayı üretmez),
 `PlayerBuildTool.BuildWindowsAdmin` (menü değil — batch-mode `-executeMethod` girişi; sahne listesi
 Build Settings'ten gelir, çıktı `-buildOutput` ile verilir; `scripts/deploy-admin-game.bat` çağırır).
 ⚠️ **Sunucu editörden YÖNETİLMEZ** — dev penceresinde başlat/durdur düğmesi yoktur, sunucu her

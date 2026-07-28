@@ -35,15 +35,6 @@ namespace VortexArena.Core.Editor
         /// <summary>Arayüzde gösterilen ad (ör. "Standart 12×12").</summary>
         public string displayName = "";
 
-        /// <summary>Fiziksel alan genişliği (metre, arena X ekseni).</summary>
-        public float sizeX = 12f;
-
-        /// <summary>Fiziksel alan derinliği (metre, arena Z ekseni).</summary>
-        public float sizeZ = 12f;
-
-        /// <summary>Takım başına üretilecek SpawnPoint sayısı (en az 1).</summary>
-        public int spawnSlotsPerTeam = 4;
-
         /// <summary>Hedef kutu: standart katalog arenası mı, işletmeye özel mi.</summary>
         public ArenaTemplateTarget target = ArenaTemplateTarget.Standard;
 

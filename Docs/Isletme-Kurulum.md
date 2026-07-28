@@ -20,6 +20,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 > **Not:** minimum tavan yüksekliği (öneri ~3 m) ve minimum aydınlatma seviyesi (lux) sahada ölçülüp buraya yazılacak — **doğrulanacak**.
 > **Not:** tek renkli/parlak, desensiz zeminlerde takip zayıflayabilir; mat ve dokulu zemin tercih edilir — **doğrulanacak**.
+> **Zemin DÜZ olmalı.** Bu bir tercih değil gereksinimdir: (1) serbest dolaşımda koşan oyuncu için eğim düşme riskidir, (2) kalibrasyon zemini tek bir yükseklik olarak alır — eğim telafisi **yoktur** ve bilerek yapılmamıştır (iki nokta bir düzlem tanımlamaz; ayrıca sanal dünyayı eğmek VR'da mide bulantısı yapar). Arena alanı içinde A–B işaretleri arasındaki yükseklik farkı **3 cm'i geçmemeli**.
 
 **Donanım**
 
@@ -38,11 +39,12 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
   - **Kaynak sahne:** `Assets/Arenas/Standard/A10x10/Scenes/Arena10x10.unity`
   - **Kaynak MapDefinition:** `Assets/Arenas/Standard/A10x10/Data/A10x10.asset`
   - **Arena Id (klasör):** işletme/arena adı · **Sahne adı:** katalog anahtarı (benzersiz olmalı) · **Gösterim adı:** admin panelinde görünecek ad
-  - **Genişlik X / Derinlik Z:** hesapladığın arena boyutu · **Takım başına spawn:** takım başına en fazla oyuncu sayısı
   - **Kutu:** `Venue` · **İşletme adı (klasör):** işletme adı → hedef `Assets/Arenas/Venues/<İşletme>/`
   - **GameCatalog:** `Assets/_Shared/Data/GameCatalog.asset`
-- [ ] "Oluştur" → sihirbaz `{Scenes, Data, Prefabs}` kutusunu üretir, sahneyi yeni boyuta ölçekler, `MapDefinition` yazar, `GameCatalog`'a ve **Build Settings**'e ekler.
-- [ ] Sihirbazın uyarılarını uygula: **duvar/cover yerleşimi kabadır** → sanat geçişini elle yap; **NavMesh ve ışık verisi kaynak sahneden miras kalır** → yeni boyutta yeniden bake et.
+- [ ] "Oluştur" → sihirbaz `{Scenes, Data, Prefabs}` kutusunu üretir, sahneyi **bire bir kopyalar**, `MapDefinition` yazar, `GameCatalog`'a ve **Build Settings**'e ekler.
+  > ⚠️ **Sihirbaz boyut sormaz ve geometriyi ölçeklemez.** Sahne 10×10 şablonundan olduğu gibi gelir; arena planını sen çizersin. Sebebi: her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak üretmiyordu. Sihirbazın işi, sahnenin ağ bileşenlerini (kalibratör, poz senkronu, sınır, taban bölgeleri, rig) eksiksiz getirmesi.
+- [ ] **Arena planını çiz** (duvar/cover yerleşimi, ölçüler) ve şu üçünü gerçek ölçüye getir: sahnedeki **`ArenaBoundary.halfExtentX/Z`** · **`MapDefinition.size`** · **kalibrasyon işaretçilerinin konumu** (Bölüm 3).
+- [ ] Sihirbazın kalan uyarılarını uygula: **NavMesh ve ışık verisi kaynak sahneden miras kalır** → yeni plana göre yeniden bake et; **tek `SpawnPoint`** elle konur.
 - [ ] `Tools > VortexArena > Export Server Config` çalıştır → `Server/config/maps.json` üretilir. Çıkan uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
 - [ ] Build Settings'te yeni sahnenin **listede ve işaretli (enabled)** olduğunu doğrula. Sahne adı = `start_match` katalog anahtarı; boşluk/typo dahil birebir eşleşmeli.
 - [ ] Android APK'yı **yeniden al** ve repo kökünde `game.apk` adıyla kaydet (`install_game.bat` bu adı bekler).
@@ -54,22 +56,28 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrator`). Sahnede iki sanal işaretçi vardır: **`anchor_a`** ve **`anchor_b`**.
 
-- [ ] Unity'de arena sahnesini aç → `CalibrationManager` altındaki `anchor_a` / `anchor_b` objelerinin Inspector'daki **Position** değerlerini oku ve aralarındaki mesafeyi hesapla.
+> **Kalibrasyon 6 serbestlik derecesini de kurar:** yönü (yaw) ve yatay konumu A→B çiftinden, **zemin yüksekliğini B noktasında kumandanın ucundan** alır. Zemin yüksekliği gözlüğün kendi "floor level" bilgisinden ALINMAZ — başlıklarda alan kurulumu yapılmadığı için (§5) o değer bir tahmindir: gözlük havadayken açılırsa yanlış başlar, oturum içinde tracking kaybı sonrası kayabilir. Bu yüzden her kalibrasyon zemini de yeniden ölçer.
+
+- [ ] Unity'de arena sahnesini aç → `anchor_a` / `anchor_b` objelerinin Inspector'daki **Position** değerlerini oku ve aralarındaki mesafeyi hesapla. ⚠️ Objeler `CalibrationManager`'ın altında DEĞİL, arena kökündeki **`Ground`** grubunun altındadır ve sahnede **kapalı** görünür (kalibrasyonda açılırlar) — hiyerarşide arama kutusuna `anchor_` yazmak en hızlısı. `CalibrationManager` yalnız `ArenaCalibrator` bileşenini taşır ve iki objeye referans verir.
   - `A10x10` şablonunda işaretçiler arena-yerel X ekseninde **±3 m** (yani **aralarında 6 m**) ve arena merkezine göre simetriktir.
-  - Sihirbazla üretilen venue arenasında bu mesafe genişlik oranıyla **ölçeklenir** (ör. 10 m → 10.5 m genişlikte 6 × 1.05 = 6.3 m). **Varsayma, sahneden oku.**
-- [ ] Gerekirse işaretçileri sahnede fiziksel alana uyacak şekilde taşı (odanın içinde, geçiş güzergâhının dışında kalsınlar) ve yeni mesafeyi not et; sahneyi kaydedip APK'yı yeniden al.
-- [ ] Zemine iki bant işareti yapıştır: **A** ve **B**. Aralarındaki mesafe sahneden okuduğun değere eşit olmalı; bandın üzerine büyük harfle "A" ve "B" yaz.
+  - Sihirbazla üretilen venue arenasında işaretçiler **ÖLÇEKLENMEZ** — kaynak arenadaki yerlerinde dururlar (sihirbaz sonuç ekranında bunu uyarır). Yerleri arena boyutundan değil sahadaki zemin bandından geldiği için yerleştirme bilinçli olarak elle bırakılmıştır. **Varsayma, sahneden oku.**
+- [ ] İşaretçileri sahnede fiziksel alana uyacak şekilde **taşı** (odanın içinde, geçiş güzergâhının dışında kalsınlar) ve yeni mesafeyi not et; sahneyi kaydedip APK'yı yeniden al. Yeni üretilmiş bir venue arenasında bu adım **zorunludur** — işaretçiler kaynak arenadan olduğu gibi gelir.
+- [ ] Zemine iki bant işareti yapıştır: **A** ve **B**. Aralarındaki mesafe sahneden okuduğun değere eşit olmalı; bandın üzerine büyük harfle "A" ve "B" yaz. ⚠️ Ölçü **±%20 tolerans** içinde olmalı — dışındaysa başlık kalibrasyonu reddeder (üç kısa titreşim), çünkü yanlış mesafe sessizce bozuk bir hizalama üretirdi.
 - [ ] **A → B doğrultusu arenanın yönünü belirler.** A ve B karıştırılırsa arena 180° ters döner — işaretleri kalıcı ve okunur biçimde etiketle.
 - [ ] İşaretler kalıcı olmalı (bant + gerekiyorsa zemine dayanıklı işaret); temizlik/mobilya hareketiyle kaymamalı. **Her başlık aynı iki noktayı kullanır.**
 - [ ] Ölçüyü (A–B mesafesi, hangi duvara göre nerede) teslim paketine yaz.
 
 **Başlıkta kalibrasyon prosedürü** (operatörün her başlıkta yapacağı):
 
-1. Arena sahnesindeyken sağ kumandayı **A** işaretinin üzerine, zemine değecek şekilde koy (her başlıkta aynı tutuş).
+1. Arena sahnesindeyken sağ kumandayı **A** işaretinin üzerine, **yere 90° dik** tutup **ucunu zemine değdir**. Bu duruş her iki noktada da aynı olmalı — zemin yüksekliği bu ölçümden çıkar.
 2. Sağ kumandada **A + B tuşlarına 3 saniye basılı tut** — titreşim giderek artar; **tek titreşim** = A noktası alındı.
 3. Aynısını **B** işaretinde yap — **çift titreşim** = B alındı ve arena hizalandı.
-4. **Üç kısa titreşim** = iki nokta birbirine 1 m'den yakın; B'yi tekrar al.
+4. Hata sinyalleri:
+   - **Üç kısa titreşim** = iki nokta arasındaki mesafe sahnedeki `anchor_a`–`anchor_b` mesafesine uymuyor (±%20 dışında); bant ölçüsünü kontrol et, B'yi tekrar al.
+   - **Bir uzun titreşim** = iki noktanın ölçülen zemin yüksekliği 10 cm'den fazla ayrışıyor; kumanda dik tutulmamış (ya da zemin eğimli). Duruşu düzelt, B'yi tekrar al.
 5. Kalibrasyon başlıkta kaydedilir (uzamsal anchor) ve sonraki açılışta **otomatik geri yüklenir**. Yeniden kalibre etmek için A+B'yi tekrar 3 sn tut — kalibrasyon sıfırdan başlar.
+
+> **Kumanda tutuşu neden önemli:** başlığın takip ettiği nokta kumandanın **ucu değil gövdesinin içindeki pivottur**. Yazılım bu farkı `ArenaCalibrator.tipLocalOffset` ile telafi eder; değer kumanda modeline özgüdür ve **bir kez ölçülür**: alan kurulumu YAPILMIŞ bir gözlükte kumandayı dik tutup yere değdir, `rightControllerAnchor.position.y` değerini oku ve alanın Y'sine (eksi işaretle) gir. Ölçülene kadar varsayılan **-0.08 m** bir tahmindir. Doğrulaması: kalibrasyondan sonra sanal işaretçi küpleri görünür olur — kumandanın ucu küpün tabanıyla aynı hizada olmalı.
 
 > Kalibrasyon **arena sahnesinde** yapılır; lobide kalibratör yoktur, bu yüzden lobide uzak avatarların fiziksel olarak örtüşmesi beklenmez (normaldir). Bir başlık kalibre olana kadar arena sahnesinde poz göndermez.
 
@@ -155,10 +163,12 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 - [ ] Cihaz adları: başlık ilk bağlandığında sunucu ona `Gözlük NN` adını atar ve `Server/config/devices.json`'a (`deviceId → ad`) yazar.
   - [ ] Admin panelindeki **"Bu cihazı tanıt" (identify)** komutuyla hangi adın hangi fiziksel başlık olduğunu bul, başlığa aynı numarayı **fiziken etiketle**.
   - [ ] Ad değiştirmek gerekirse `devices.json`'u **sunucu kapalıyken** düzenle (UTF-8, **BOM'suz**) ve sunucuyu yeniden başlat.
-- [ ] Guardian/sınır ayarı: free-roam oyunda oyuncu tüm alanda yürür; oyun içi güvenlik `ArenaBoundary` ile sağlanır (kenara yaklaşınca duvarlar belirginleşir, dışarı çıkınca ekran kararır + uyarı).
+- [ ] **Guardian/alan kurulumu YAPILMAZ.** Her başlıkta geliştirici ayarlarından fiziksel alan özellikleri kapatılır; oyuncu tüm alanda serbest dolaşır. Oyun içi güvenlik `ArenaBoundary` ile sağlanır (kenara yaklaşınca duvarlar belirginleşir, dışarı çıkınca ekran kararır + uyarı) — **guardian uyarısı olmadığı için tek fiziksel güvenlik ağı budur**, kalibrasyonun doğruluğu bu yüzden bir konfor değil güvenlik meselesidir.
+  - Bunun iki sonucu var ve ikisi de yazılımda karşılanmıştır: (1) sistemin zemin seviyesi güvenilmez → kalibrasyon zemini kumandadan ölçer (§3), (2) tracking origin kayması kalibrasyonu bozardı → sahneler **Stage** tracking origin kullanır (sistem recenter'ı kapalı) ve yine de bir kayma olursa `ArenaCalibrator` kayıtlı anchor'dan kendini yeniden hizalar.
 - [ ] Uyku/ekran kapanma: başlıkların maç arasında uykuya geçmemesi için ekran/uyku süresi en uzun değere alındı.
 
 > **Not:** Guardian'ın hangi ayardan devre dışı bırakılacağı (geliştirici ayarları / boundaryless) ve uyku süresi menü yolu cihaz yazılımı sürümüne göre değişir — kurulumda ekran görüntüsüyle belgelenecek, **doğrulanacak**.
+> **Doğrulanacak (ilk saha testi):** alan kurulumu kapalıyken (1) Stage tracking origin zemin yüksekliğini veriyor mu, (2) `OVRSpatialAnchor` kalıcılığı çalışıyor mu — uygulamayı kapatıp açtığında logda `rig aligned from saved anchor` görünmeli. Görünmüyorsa her gözlük devrinde elle kalibrasyon gerekir.
 
 - [ ] Şarj düzeni: her başlık için sabit şarj yeri ve etiket; seans öncesi pil seviyesi kontrol ediliyor.
 
@@ -182,7 +192,7 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 - [ ] **9.** İki oyuncu fiziksel olarak **yan yana / aynı noktada** durdu → birbirlerinin avatarını doğru yerde görüyor; admin kuş bakışında da iki halka üst üste geliyor. (Örtüşme yoksa Bölüm 8'e bak.)
 - [ ] **10.** Maç `Countdown (5 sn)` → `Live` geçişini yaptı; iki başlıkta da skor/can HUD'ı görünüyor.
 - [ ] **11.** Bir oyuncu diğerine ateş etti → **can azaldı**, admin HUD'ında **skor + HP barı + ölüm akışı** ve istatistik tablosundaki **K/D** güncellendi; sunucu konsolunda `öldürme: … — skor kırmızı N : mavi N` satırı var.
-- [ ] **12.** Ölen oyuncu ölüm ekranını gördü → **5 sn** sonra kendi takım tabanına (`BaseZone`) fiziken girdi → **canlandı** (`canlandı: Gözlük NN`). Zorla canlandırma satırı (`zorla canlandırma`) görünüyorsa taban/ölüm akışını gözden geçir.
+- [ ] **12.** Ölen oyuncu ölüm ekranını gördü → **5 sn** sonra kendi takımının taban bölgesine (`BaseZone` — renkli şerit) fiziken girdi → **canlandı** (`canlandı: Gözlük NN`). Zorla canlandırma satırı (`zorla canlandırma`) görünüyorsa taban/ölüm akışını gözden geçir.
 - [ ] **13.** Maç süresi/skor limiti dolunca `maç sonu — kazanan: …` yayınlandı; 10 sn sonra tüm başlıklar **lobiye döndü**.
 - [ ] **14.** Bir başlığı kapat-aç → kendiliğinden yeniden bağlandı ve roster'da göründü.
 - [ ] **15.** İşletme personeline: sunucu başlatma/kapatma, maç başlatma, kalibrasyon ve sorun giderme tablosu bir kez uygulamalı gösterildi.
@@ -213,10 +223,12 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 | Launcher "Admin exe bulunamadı" diyor | `deploy\admin\` silinmiş/taşınmış veya build alınmamış | `scripts\deploy-admin-game.bat` (editör kapalıyken) çalıştır, launcher'da exe'yi yeniden seç |
 | Bağlanıyor ama roster'da "çevrimdışı" düşüyor | 15 sn boyunca status gelmedi (Wi-Fi zayıf, başlık uykuya geçti) | AP kapsamasını/kanalı kontrol et; başlıkta uyku süresini uzat |
 | Avatarlar fiziksel olarak örtüşmüyor | Bir başlıkta kalibrasyon yapılmadı; A ile B karışmış (arena 180° ters); zemin işaretleri kaymış; işaret mesafesi sahnedeki `anchor_a`/`anchor_b` mesafesiyle uyuşmuyor | Her başlıkta A+B ile **yeniden kalibre et** (tamamlanmış kalibrasyonda A+B tutmak sıfırlar); bant ölçüsünü sahnedeki değerle karşılaştır. **Lobide örtüşme beklenmez** — kontrolü arena sahnesinde yap |
+| Avatarlar doğru yerde ama **yükseklikleri yanlış** (yere gömük / havada) | Kalibrasyonda kumanda dik tutulmamış ya da ucu yere değmemiş; `ArenaCalibrator.tipLocalOffset` o kumanda modeli için henüz ölçülmemiş (varsayılan -0.08 m tahmindir) | O başlıkta kumandayı **dik tutup ucunu zemine değdirerek** yeniden kalibre et. Tüm başlıklarda aynı yönde sapma varsa offset yanlıştır: §3'teki reçeteyle ölç, alanı güncelle, APK'yı yeniden al |
+| Oyun ortasında arena birden kaydı | Tracking origin değişti (recenter / tracking kaybı sonrası geri kazanım) | Normalde kendini onarır — logda `tracking origin changed, realigning from the saved anchor` satırını ara. Onarım gelmiyorsa kayıtlı anchor yok demektir; A+B ile yeniden kalibre et |
 | Vuruş kaydolmuyor | Sunucu reddediyor: dost ateşi, hedef zaten ölü, faz `Live` değil | Sunucu konsolundaki `hit_report reddedildi (…): <sebep>` satırını oku. Atış hızı / silah tablosu denetimi YOKTUR, sebep bunlardan biri olamaz |
 | Hasar beklenenden farklı | Başlıklarda farklı APK sürümü var: denge sayıları istemcide yaşar (sunucuda silah tablosu yok) | Tüm başlıklara **aynı APK**'yı kur; denge değişikliği yeni bir istemci build'i gerektirir |
 | Maç başlamıyor: "sahne build listesinde yok" / `start_match reddedildi` | Sahne bazı başlıkların APK'sında yok (eski sürüm); sahne Build Settings'te yok/kapalı; sahne adı ≠ katalog anahtarı (typo) | Tüm başlıklara **aynı APK**'yı kur; Build Settings'te sahneyi ekle+işaretle; `MapDefinition.sceneName` ile sahne dosya adını birebir eşitle, `Export Server Config`'i tekrarla |
 | Maç `Loading`'de takılıyor | Bir başlık `set_ready` göndermedi (sahne yüklenemedi) | 20 sn sonra sunucu yine de devam eder; konsoldaki `loading zaman aşımı — hazır olmayanlar: …` satırındaki başlığı kontrol et |
-| Ölen oyuncu canlanmıyor | 5 sn gecikme dolmadı; oyuncu **kendi takımının** tabanına fiziken girmedi | Oyuncuya doğru tabana (takım rengi) yürümesi söylenir; 20 sn sonunda sunucu zaten zorla canlandırır (`zorla canlandırma` satırı) |
+| Ölen oyuncu canlanmıyor | 5 sn gecikme dolmadı; oyuncu **kendi takımının** taban bölgesine fiziken girmedi | Oyuncuya doğru tabana (takım rengi) yürümesi söylenir; 20 sn sonunda sunucu zaten zorla canlandırır (`zorla canlandırma` satırı) |
 | Ses yok / silah sesi gelmiyor | Başlık sistem sesi kısık; oyuncu kulaklık takmış; silah prefabındaki ses kaynağı/klipler boş; build'de spatializer ayarı bozulmuş | Başlık sesini aç; silah prefabında `WeaponAudio` kaynağı ve klipleri dolu mu bak; ses ayarında spatializer'ın **Meta XR Audio** olduğunu doğrula ve APK'yı yeniden al |
 | Oyuncunun ekranı kararıyor, "alan dışı" uyarısı çıkıyor | Oyuncu arena sınırının dışına çıktı; arena boyutu fiziksel alandan büyük girilmiş; kalibrasyon kaymış | Fiziksel alanı yeniden ölç (0.5 m güvenlik payı!); gerekirse arenayı sihirbazla doğru boyutta yeniden üret; kalibrasyonu tekrarla |

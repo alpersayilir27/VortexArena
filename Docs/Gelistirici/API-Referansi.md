@@ -13,7 +13,7 @@ Oyun kodundan çağırabileceğin her şey. Sıralama **kullanım sıklığına*
 | Savaş | `VortexArena.Core.Combat` | Vuruş bildirme, can, ateş yetkisi |
 | Ağ olayları | `VortexArena.Net` | Sunucudan gelen her şey |
 | Mod kuralları | `VortexArena.Core` | Modun şekli, katalog |
-| Arena | `VortexArena.Core.Arena` | Koordinat, sınır, taban, spawn |
+| Arena | `VortexArena.Core.Arena` | Koordinat, sınır, taban bölgesi, başlangıç noktası |
 | UI | `VortexArena.Core.UI` | HUD tabanı |
 | DTO'lar | `VortexArena.Protocol` | Olay parametrelerinin tipleri |
 
@@ -75,7 +75,7 @@ Statik olmalarının sebebi: dinleyicinin bağlantının ne zaman kurulduğunu b
 | ✅ `OnMatchState` | `MatchStateMsg` | **Saniyede bir**: faz, kalan süre, takım skorları |
 | ✅ `OnHealthUpdate` | `HealthUpdateMsg` | Birinin canı değişti (`attackerId == 0` → canlanma) |
 | ✅ `OnKillEvent` | `KillEventMsg` | Öldürme (`killerId == 0` → çevre ölümü) |
-| ✅ `OnRespawn` | `RespawnMsg` | **Yalnız ölen oyuncuya**: gecikme + hangi slota dönecek |
+| ✅ `OnRespawn` | `RespawnMsg` | **Yalnız ölen oyuncuya**: canlanma gecikmesi (konum taşımaz) |
 | ✅ `OnMatchEnd` | `MatchEndMsg` | Maç bitti; kazanan takım **veya** oyuncu |
 | ✅ `OnReturnToLobby` | — | Herkes lobiye dönüyor |
 | ✅ `OnShotFired` | `ShotFiredMsg` | **Başkası** ateş etti (atana gönderilmez). Pozlar arena uzayında |
@@ -94,12 +94,12 @@ Statik olmalarının sebebi: dinleyicinin bağlantının ne zaman kurulduğunu b
 MatchStateMsg   { string phase; float timeRemaining; int scoreRed; int scoreBlue; }
 HealthUpdateMsg { int playerId; float hp; int attackerId; }
 KillEventMsg    { int killerId; int victimId; string weaponId; }
-RespawnMsg      { int playerId; int spawnSlot; float delaySeconds; }
+RespawnMsg      { int playerId; float delaySeconds; }
 MatchEndMsg     { string winnerTeam; int winnerPlayerId; int scoreRed; int scoreBlue; }
 CountdownMsg    { int seconds; }
 ShotFiredMsg    { int playerId; string weaponId; float[] muzzlePos; float[] muzzleDir; }
 LoadMatchMsg    { string modeId; string sceneName; int roundSeconds; int scoreLimit;
-                  string yourTeam; int spawnSlot; ModeRulesInfo rules; }
+                  string yourTeam; ModeRulesInfo rules; }
 PlayerInfo      { int playerId; string name; string role; string team; bool ready; bool online;
                   float battery; string scene; int kills; int deaths; float hp; bool alive; int score; }
 ```
@@ -118,7 +118,6 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 | ✅ `Instance` | `PlayerCombatState` | ⚠️ `Awake`'te henüz `null` olabilir |
 | ✅ `PlayerId` | `int` | Sunucu kimliği |
 | ✅ `Team` | `Team` | Takımsız modda `Neutral` |
-| ✅ `SpawnSlot` | `int` | **Yalnız gösterge** — hiçbir kod rig'i buraya taşımaz |
 | ✅ `ModeId` | `string` | Aktif mod |
 | ✅ `Phase` | `string` | `"Lobby"`/`"Loading"`/`"Countdown"`/`"Live"`/`"End"` |
 | ✅ `Hp` | `float` | Yalnız `health_update`'ten set edilir |
@@ -156,7 +155,7 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 
 ---
 
-## Arena (koordinat, sınır, taban, spawn)
+## Arena (koordinat, sınır, taban bölgesi, başlangıç noktası)
 
 `VortexArena.Core.Arena`
 
@@ -177,20 +176,38 @@ Arena orijinini kaydeder + fiziksel sınır uyarısını çizer. Sahnede **bir t
 > ⛔ **Devre dışı bırakma.** `OnDisable` orijin kaydını siler → tüm uzak oyuncular dünya orijinine
 > yığılır. Susturmak gerekiyorsa `SetSpectatorMode(true)`.
 
-### BaseZone / SpawnPoint
+### BaseZone (taban bölgesi)
+
+Arenadaki kırmızı/mavi şerit. Ölen oyuncu buraya fiziken girince canlanır (`reviveAnchor:"base"`).
 
 | Üye | Açıklama |
 |---|---|
-| ✅ `BaseZone.Team` / `.IsPlayerInside` | Oyuncu tabanda mı |
-| ✅ `BaseZone.onPlayerEntered` / `.onPlayerExited` | UnityEvent |
-| ✅ `SpawnPoint.Find(Team, int slot)` | Takım + slot ile marker |
-| ✅ `SpawnPoint.FindGlobal(int slot)` | **Takımsız modlar**: tüm noktalar tek havuz |
-| ✅ `SpawnPoint.All` | Sahnedeki aktif noktalar |
+| ✅ `BaseZone.Team` | Bölgeyi kim kullanabilir; `Team.Neutral` = **herkes** |
+| ✅ `BaseZone.IsPlayerInside` | Yerel oyuncunun HMD'si bölgede mi (bileşen kapalıyken DONAR) |
+| ✅ `BaseZone.onPlayerEntered` / `.onPlayerExited` | UnityEvent — iyileşme/tazeleme buraya takılır |
 
-> ⚠️ **`BaseZone`'un GameObject'ini kapatma** — altındaki `SpawnPoint`'ler kayıttan düşer.
-> Gerekiyorsa **bileşeni** kapat (`zone.enabled = false`).
+Eşleşme kuralı: bölge açıktır eğer takımı oyuncununkiyle aynıysa, bölge `Neutral` ise ya da
+oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge konabilir —
+**herhangi birine** girmek yeter.
 
-> ⛔ `SpawnPoint` bir *gösterge*dir, hedef değil. Hiçbir kod oyuncuyu oraya taşımaz.
+> ⚠️ **GameObject'ini kapatma** — altına konmuş marker'lar kayıttan düşer. Gerekiyorsa **bileşeni**
+> kapat (`zone.enabled = false`). Kapalı bölge canlanma için açık sayılmaz.
+
+### SpawnPoint (tek başlangıç noktası)
+
+Arena başına **bir tane**. Takımı ve slotu yoktur. `GameObject > VortexArena > Spawn Point` ile
+eklenir, elle yerleştirilir.
+
+| Üye | Açıklama |
+|---|---|
+| ✅ `SpawnPoint.Current` | Sahnedeki nokta; yoksa `null`. **Yalnız Play kipinde** dolar |
+| ✅ `SpawnPoint.All` | Play kipinde kayıtlı noktalar (normalde 0 ya da 1) |
+
+> ⛔ Bu bir *gösterge*dir, hedef değil. **Hiçbir kod oyuncuyu oraya taşımaz** — ne maç başında,
+> ne canlanmada, ne harita değişiminde. Protokolde konum/slot taşıyan bir alan yoktur.
+
+> ⚠️ Editör aracı yazıyorsan `SpawnPoint.All` yerine `FindObjectsByType<SpawnPoint>` kullan:
+> kayıt `OnEnable`'da dolar, edit kipinde `OnEnable` çalışmaz.
 
 ---
 
@@ -293,6 +310,7 @@ kill-feed, kendi öldürme/ölüm sayacın.
 | `Tools > VortexArena > Dev` | Rol · sunucu hedefi · Play başlangıcı · sentetik maç · test botları · derle. Kısayol **Ctrl+Alt+R** (rol çevirir) |
 | `Tools > VortexArena > Create Arena From Template` | Yeni arena sihirbazı |
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json`. ⚠️ JSON'u elle düzenleme, export ezer |
+| `GameObject > VortexArena > Spawn Point` | Arenanın **tek** başlangıç noktasını üretir (yerleştirme elle) |
 | `GameObject > VortexArena > Arena Roof` | Çatı geometrisini işaretler (admin kuş bakışında gizlenir) |
 | `GameObject > VortexArena > Network Parent` | Sahne objesine `NetIdentity` + benzersiz `sceneId` |
 

@@ -234,7 +234,6 @@ namespace VortexArena.Protocol
         public int roundSeconds;
         public int scoreLimit;
         public string yourTeam;
-        public int spawnSlot;
 
         /// <summary>Bu maçın kural şekli (§10.5); istemci kendini BUNA göre kurar.</summary>
         public ModeRulesInfo rules;
@@ -280,7 +279,6 @@ namespace VortexArena.Protocol
     {
         public string type = MessageTypes.Respawn;
         public int playerId;
-        public int spawnSlot;
         public float delaySeconds;
     }
 

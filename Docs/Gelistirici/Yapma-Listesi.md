@@ -17,7 +17,17 @@ Pahalıya öğrenilmiş tuzaklar. Ortak özellikleri: **hiçbiri hata vermez** �
 Oyuncu fiziksel olarak yürüyor. Işınlanma, knockback, "spawn noktasına götür", "duvardan geri it" —
 hiçbiri yok. Ölüp canlanmak bile bir **durum** değişimidir, konum değişimi değil.
 
-`SpawnPoint` bir *gösterge*dir: "tabanının şu noktasına dön". Hiçbir kod oyuncuyu oraya taşımaz.
+`SpawnPoint` bir *gösterge*dir (arena başına tek): "maçtan önce şurada toplanın". Hiçbir kod
+oyuncuyu oraya taşımaz. Ölünce dönülecek yer o değil, **taban bölgesi**dir (`BaseZone`).
+
+### ⛔ Harita değişiminde oyuncuyu "yeniden doğurma"
+
+`load_match` oyuncu için yalnız bir sahne değişimidir. Kimse başlangıç noktasına götürülmez ve
+**kalibrasyon sıfırlanmaz**: yeni sahnenin `ArenaCalibrator`'ı kayıtlı `OVRSpatialAnchor`'dan
+hizalamayı geri yükler, oyuncu fiziksel olarak nerede duruyorsa orada kalır.
+
+Ön koşul: aynı işletmede oynanan arenaların **zemin işaretleri aynı yerde** olmalı — anchor
+fiziksel dünyada sabittir, sanal işaretler sahneden gelir.
 
 ### ⛔ `ArenaBoundary`'yi devre dışı bırakma
 
@@ -82,9 +92,13 @@ ArenaSpace.WorldToArena(dir);                                  // ❌ orijin kad
 
 ### ⛔ `BaseZone`'un GameObject'ini kapatma
 
-Altındaki `SpawnPoint`'ler `OnDisable`'da statik kayıttan düşer → maç başı spawn göstergesi çöker.
+Altına konmuş marker'lar (`SpawnPoint`) `OnDisable`'da statik kayıttan düşer.
 Gizlemen gerekiyorsa **bileşeni** kapat (`zone.enabled = false`) ve görsel şeridi ayrıca gizle
 (`SpawnPoint` taşımayan, Renderer'lı çocuklar).
+
+İkinci yüzü: **kapalı bir `BaseZone` canlanma için açık sayılmaz.** `Update` koşmadığı için
+`IsPlayerInside` donar — açık sayılsaydı oyuncu bölgeye girse de canlanamaz, yalnız sunucunun
+`REVIVE_GRACE`'ini beklerdi.
 
 ### ⚠️ Arena sahnelerinde `EventSystem` yoktur
 
@@ -117,8 +131,8 @@ GUID çakışır ve Unity referansları rastgele koparır. JSON'u kopyala, `.met
 ### ⛔ Enum'un başına/ortasına yeni değer ekleme
 
 Unity enum'ları **sayısal indeksle** saklar. `Team`'e başa bir değer eklemek sahnelerdeki tüm
-`BaseZone`/`SpawnPoint`/`Weapon` takımlarını kaydırır. Yeni değer **her zaman sona** eklenir —
-`Team.Neutral` bu yüzden sonda.
+`BaseZone`/`Weapon` takımlarını kaydırır. Yeni değer **her zaman sona** eklenir —
+`Team.Neutral` bu yüzden sonda (`BaseZone`'da "herkese açık" anlamına da gelir).
 
 Aynısı `ModeTeamMode` / `ModeScoreKind` / `ModeReviveAnchor` / `ModeWeaponSource` için de geçerli.
 

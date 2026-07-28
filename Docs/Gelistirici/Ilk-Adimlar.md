@@ -38,7 +38,7 @@ kuramazsın (dev penceresinin sentetik maçı yeterliyse sorun değil).
 
 ## 3. Sunucusuz ilk test (en hızlı yol)
 
-Dev penceresindeki **sentetik maç** bölümünden mod, takım, spawn slot, süre ve skor limitini seç →
+Dev penceresindeki **sentetik maç** bölümünden mod, takım, süre ve skor limitini seç →
 Play'e bas. Sunucu olmadan bir `load_match` enjekte edilir: arena sahnesi yüklenir, mod HUD'ı
 gelir, silahını test edebilirsin.
 

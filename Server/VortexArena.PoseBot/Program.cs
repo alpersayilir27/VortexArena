@@ -429,8 +429,7 @@ internal static class Program
                     bot.Phase = "Loading";
                     if (!string.IsNullOrEmpty(load.yourTeam)) bot.Team = load.yourTeam;
                     if (!string.IsNullOrEmpty(load.sceneName)) bot.Scene = load.sceneName;
-                    bot.SpawnSlot = load.spawnSlot;
-                    bot.LogFlow($"load_match: {load.modeId} / {load.sceneName}, takım {bot.Team}, slot {load.spawnSlot}.");
+                    bot.LogFlow($"load_match: {load.modeId} / {load.sceneName}, takım {bot.Team}.");
                     _ = ReadyAfterLoadAsync(bot, ct);
                 }
                 break;
@@ -662,7 +661,6 @@ internal static class Program
         public readonly bool Verbose;
 
         public byte PlayerId;
-        public int SpawnSlot;
         public volatile string Team = "";
         public volatile string Phase = "Lobby";
         public volatile string Scene = "Lobby";

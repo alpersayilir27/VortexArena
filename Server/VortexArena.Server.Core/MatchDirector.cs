@@ -475,12 +475,7 @@ public sealed class MatchDirector
             _registry.SetReady(player.DeviceId, false);
 
         var outbox = new List<Outgoing>();
-        int red = 0, blue = 0, pool = 0;
-        // Harita biliniyorsa takım başına slot sayısı sahnedeki SpawnPoint sayısıdır; 0 = sınır yok.
-        var slotsPerTeam = map?.spawnSlotsPerTeam ?? 0;
         var teamless = rules.Teams == TeamMode.None;
-        // Takımsız modda sahnedeki İKİ tabanın slotları tek havuzda birleşir (§10.4).
-        var slotCeiling = slotsPerTeam > 0 ? (teamless ? slotsPerTeam * 2 : slotsPerTeam) : 0;
         // Admin verdiyse o maça özel değer, vermediyse modun varsayılanı (§5.2).
         var appliedRound = roundSeconds > 0 ? roundSeconds : mode.DefaultRoundSeconds;
         var appliedLimit = scoreLimit > 0 ? scoreLimit : mode.DefaultScoreLimit;
@@ -507,15 +502,11 @@ public sealed class MatchDirector
             foreach (var player in players)
             {
                 ResetMatchStateLocked(player);
-                // Takımlıda takım içi, takımsızda tek havuzda 0 tabanlı sıra; harita slot sayısını
-                // biliyorsak modulo ile sarılır — sahnede olmayan bir slota atama yapılmasın
-                // (kalabalık takımda slotlar paylaşılır).
-                var slot = teamless ? pool++ : player.Team == "blue" ? blue++ : red++;
-                player.SpawnSlot = slotCeiling > 0 ? slot % slotCeiling : slot;
 
                 var connection = player.Connection;
                 if (connection == null) continue;
-                // load_match kişiselleştirilir: her oyuncuya kendi takımı + slotu (§10.1).
+                // load_match kişiselleştirilir: her oyuncuya kendi takımı (§10.1). Konum/slot
+                // taşınmaz — oyuncu fiziksel olarak nerede duruyorsa orada kalır (§10.4).
                 var load = new LoadMatchMsg
                 {
                     modeId = _modeId,
@@ -523,16 +514,15 @@ public sealed class MatchDirector
                     roundSeconds = _roundSeconds,
                     scoreLimit = _scoreLimit,
                     yourTeam = player.Team,
-                    spawnSlot = player.SpawnSlot,
                     rules = rulesInfo
                 };
                 outbox.Add(new Outgoing(connection, JsonUtil.Serialize(load), player.Name));
             }
 
-            // Adminler de aynı sahneyi yükler (gözlemci görünümü, §2): takım/slot anlamsız
-            // olduğu için boş/-1 gider ve admin karşılığında set_ready GÖNDERMEZ — Loading
-            // kapısı yalnız role=player bağlantılarını sayar (OnlinePlayersLocked). Kurallar
-            // admin'e de gider: takım kipi admin arayüzünün tek/çift kolon kararını besler.
+            // Adminler de aynı sahneyi yükler (gözlemci görünümü, §2): takım anlamsız olduğu için
+            // boş gider ve admin karşılığında set_ready GÖNDERMEZ — Loading kapısı yalnız
+            // role=player bağlantılarını sayar (OnlinePlayersLocked). Kurallar admin'e de gider:
+            // takım kipi admin arayüzünün tek/çift kolon kararını besler.
             var adminLoad = JsonUtil.Serialize(new LoadMatchMsg
             {
                 modeId = _modeId,
@@ -540,7 +530,6 @@ public sealed class MatchDirector
                 roundSeconds = _roundSeconds,
                 scoreLimit = _scoreLimit,
                 yourTeam = "",
-                spawnSlot = -1,
                 rules = rulesInfo
             });
             foreach (var admin in _registry.Snapshot())
@@ -555,8 +544,11 @@ public sealed class MatchDirector
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         }
 
-        var mapInfo = map == null ? "" : $" ({map.sizeX:0.#}×{map.sizeZ:0.#}, {map.spawnSlotsPerTeam} slot/takım)";
-        var teamInfo = teamless ? "takımsız" : $"kırmızı {red} / mavi {blue}";
+        var mapInfo = map == null ? "" : $" ({map.sizeX:0.#}×{map.sizeZ:0.#})";
+        // Takım dağılımı BalanceTeams/ClearTeams sonrasındaki GERÇEK durumdan sayılır
+        // (players listesi PlayerState referansları tutuyor, SetTeam onları yerinde günceller).
+        var blueCount = players.Count(p => p.Team == "blue");
+        var teamInfo = teamless ? "takımsız" : $"kırmızı {players.Count - blueCount} / mavi {blueCount}";
         Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}'{mapInfo}, " +
                           $"{appliedRound} sn / limit {appliedLimit}, {players.Count} oyuncu ({teamInfo}).");
         await FlushAsync(outbox);
@@ -696,7 +688,6 @@ public sealed class MatchDirector
                     var respawn = new RespawnMsg
                     {
                         playerId = target.PlayerId,
-                        spawnSlot = target.SpawnSlot,
                         delaySeconds = _rules.RespawnDelay
                     };
                     outbox.Add(new Outgoing(victimConnection, JsonUtil.Serialize(respawn), target.Name));
@@ -813,7 +804,6 @@ public sealed class MatchDirector
         {
             if (player.Role != "player") continue;
             ResetMatchStateLocked(player);
-            player.SpawnSlot = 0;
             QueueReadyClearLocked(player);
         }
 
