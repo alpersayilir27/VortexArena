@@ -27,13 +27,13 @@ namespace VortexArena.Core.Editor
         /// gelirdi. O ölçü için kendi <c>Default</c>'unu kur (ölçekleme bilinçli olarak yoktur).
         /// </para>
         /// </summary>
-        public string sourceScenePath = "Assets/Arenas/Standard/Default12x12/Scenes/Default12x12.unity";
+        public string sourceScenePath = "Assets/Arenas/Template/Default12x12/Scenes/Default12x12.unity";
 
         /// <summary>
         /// Kaynak <c>MapDefinition</c> asset yolu — yeni haritanın <c>supportedModeIds</c>
         /// listesi buradan kopyalanır (boş/eksikse yeni harita kısıtsız olur).
         /// </summary>
-        public string sourceMapPath = "Assets/Arenas/Standard/Default12x12/Data/Default12x12.asset";
+        public string sourceMapPath = "Assets/Arenas/Template/Default12x12/Data/Default12x12.asset";
 
         /// <summary>Arena kutusunun klasör adı ve MapDefinition asset adı (ör. <c>A12x12</c>).</summary>
         public string arenaId = "";
@@ -62,10 +62,15 @@ namespace VortexArena.Core.Editor
         /// </summary>
         public string shapePath = "";
 
-        /// <summary>Hedef kutu: standart katalog arenası mı, işletmeye özel mi.</summary>
-        public ArenaTemplateTarget target = ArenaTemplateTarget.Standard;
-
-        /// <summary>İşletme klasör adı — yalnız <see cref="ArenaTemplateTarget.Venue"/> için.</summary>
+        /// <summary>
+        /// Mekan (işletme) klasör adı — <b>ZORUNLU</b>. Arena
+        /// <c>Assets/Arenas/Venues/&lt;venueName&gt;/&lt;arenaId&gt;</c> altına üretilir.
+        /// <para>
+        /// Mekansız arena kutusu yoktur: haritanın mekanı yalnız klasör yolundan türetilir
+        /// (<c>MapDefinition</c>'da mekan alanı YOKTUR) ve sunucu açılışta operatöre bu mekanları
+        /// sorar. Mekan dışına üretilen bir arena o listede sahte bir seçenek açardı.
+        /// </para>
+        /// </summary>
         public string venueName = "";
 
         /// <summary>

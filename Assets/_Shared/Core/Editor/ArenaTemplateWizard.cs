@@ -52,7 +52,6 @@ namespace VortexArena.Core.Editor
     /// </summary>
     public class ArenaTemplateWizard : EditorWindow
     {
-        private const string StandardRoot = "Assets/Arenas/Standard";
         private const string VenuesRoot = "Assets/Arenas/Venues";
 
         // Şablon sahnesindeki hazır geometrinin GERÇEK adları (Default12x12): plan verildiğinde
@@ -147,17 +146,16 @@ namespace VortexArena.Core.Editor
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Hedef", EditorStyles.boldLabel);
-            options.target = (ArenaTemplateTarget)EditorGUILayout.EnumPopup("Kutu", options.target);
-            if (options.target == ArenaTemplateTarget.Venue)
-            {
-                options.venueName = EditorGUILayout.TextField("İşletme adı (klasör)", options.venueName);
-            }
+            options.venueName = EditorGUILayout.TextField(
+                new GUIContent("Mekan (klasör)", "Arenanın oynanacağı işletme/mekan klasörü, ör. VortexAntep"),
+                options.venueName);
 
             options.catalogPath = AssetPathField<GameCatalog>("GameCatalog", options.catalogPath);
             EditorGUILayout.HelpBox("Hedef klasör: " + ResolveTargetFolder(options), MessageType.None);
 
             EditorGUILayout.Space();
-            using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(options.arenaId)))
+            using (new EditorGUI.DisabledScope(
+                       string.IsNullOrWhiteSpace(options.arenaId) || string.IsNullOrWhiteSpace(options.venueName)))
             {
                 if (GUILayout.Button("Oluştur", GUILayout.Height(28f)))
                 {
@@ -278,9 +276,12 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            if (options.target == ArenaTemplateTarget.Venue && !IsValidFileName(options.venueName))
+            // Mekan ZORUNLUDUR: oynanacak her arena bir mekana aittir ve mekanı klasör yolu belirler
+            // (MapDefinition'da mekan alanı yoktur — CLAUDE.md). Mekansız bir arena export'ta
+            // sahte bir mekan üretir ve sunucu açılışında operatöre yanlış liste gösterirdi.
+            if (!IsValidFileName(options.venueName))
             {
-                Fail(result, $"Venue hedefi için geçerli bir işletme adı gerekli (verilen: '{options.venueName}').");
+                Fail(result, $"Geçerli bir mekan (işletme) klasör adı gerekli (verilen: '{options.venueName}').");
                 return;
             }
 
@@ -310,10 +311,13 @@ namespace VortexArena.Core.Editor
             }
 
             // ---------------------------------------------------- 2) klasörler
+            // Yalnız DOLU olacak klasörler açılır. Boş bir Prefabs/Art klasörü git'te yaşayamaz
+            // (git dosya tutar, klasör tutmaz) → klonda kaybolur, geriye yetim .meta kalır ve
+            // Unity açılışta klasörü hayalet olarak geri üretir. Arenaya özel prefab/sanat
+            // gerektiğinde klasörü elle açmak doğru olanıdır.
             if (!EnsureFolder(targetFolder) ||
                 !EnsureFolder(targetFolder + "/Scenes") ||
-                !EnsureFolder(targetFolder + "/Data") ||
-                !EnsureFolder(targetFolder + "/Prefabs"))
+                !EnsureFolder(targetFolder + "/Data"))
             {
                 Fail(result, $"Klasör yapısı oluşturulamadı: '{targetFolder}'.");
                 return;
@@ -389,8 +393,13 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Hedef kutu klasörü: <c>Standard/&lt;arenaId&gt;</c> veya
-        /// <c>Venues/&lt;venueName&gt;/&lt;arenaId&gt;</c>.
+        /// Hedef kutu klasörü — HER ZAMAN <c>Venues/&lt;venueName&gt;/&lt;arenaId&gt;</c>.
+        /// <para>
+        /// ⚠️ Mekansız ("standart") arena kutusu YOKTUR: oynanacak her arena bir mekana aittir ve
+        /// mekanı yalnız klasör yolu söyler (<c>MapDefinition</c>'da mekan alanı yoktur). Mekan
+        /// dışına üretilen bir arena export'ta sahte bir mekan doğurur ve sunucu açılışında
+        /// operatöre var olmayan bir seçenek gösterirdi.
+        /// </para>
         /// <para>
         /// ⚠️ İşletme klasörü bir arena DEĞİL, arena kutularının kabıdır: bir işletmede birden
         /// çok arena oynatılır ve hepsi o işletmenin <c>Default</c>'undan türetilir. Arena adı bu
@@ -407,9 +416,7 @@ namespace VortexArena.Core.Editor
 
             string arenaId = (options.arenaId ?? string.Empty).Trim();
 
-            return options.target == ArenaTemplateTarget.Venue
-                ? $"{VenuesRoot}/{(options.venueName ?? string.Empty).Trim()}/{arenaId}"
-                : $"{StandardRoot}/{arenaId}";
+            return $"{VenuesRoot}/{(options.venueName ?? string.Empty).Trim()}/{arenaId}";
         }
 
         // ---------------------------------------------------------- arena planı

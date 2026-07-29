@@ -36,12 +36,12 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 - [ ] Fiziksel alanı ölç (X ve Z, metre). Arena boyutu = ölçü − 0.5 m.
 - [ ] Unity'de `Tools > VortexArena > Create Arena From Template` menüsünü aç ve doldur:
-  - **Kaynak sahne:** `Assets/Arenas/Standard/Default12x12/Scenes/Default12x12.unity`
-  - **Kaynak MapDefinition:** `Assets/Arenas/Standard/Default12x12/Data/Default12x12.asset`
-  - **Arena Id (klasör):** işletme/arena adı · **Sahne adı:** katalog anahtarı (benzersiz olmalı) · **Gösterim adı:** admin panelinde görünecek ad
-  - **Kutu:** `Venue` · **İşletme adı (klasör):** işletme adı → hedef `Assets/Arenas/Venues/<İşletme>/`
-  - **GameCatalog:** `Assets/_Shared/Data/GameCatalog.asset`
-- [ ] "Oluştur" → sihirbaz `{Scenes, Data, Prefabs}` kutusunu üretir, sahneyi **bire bir kopyalar**, `MapDefinition` yazar, `GameCatalog`'a ve **Build Settings**'e ekler.
+  - **Kaynak sahne:** `Assets/Arenas/Template/Default12x12/Scenes/Default12x12.unity`
+  - **Kaynak MapDefinition:** `Assets/Arenas/Template/Default12x12/Data/Default12x12.asset`
+  - **Arena Id (klasör):** arena adı · **Sahne adı:** katalog anahtarı (benzersiz olmalı) · **Gösterim adı:** admin panelinde görünecek ad
+  - **Mekan (klasör):** işletme adı — **zorunludur** → kutu `Assets/Arenas/Venues/<İşletme>/<Arena>/` altına açılır. Mekan adı sunucunun açılışta sorduğu listede görünecek addır; aynı işletmenin ikinci arenası da **aynı** mekan adıyla üretilir.
+  - **GameCatalog:** `Assets/_Shared/Data/Resources/GameCatalog.asset`
+- [ ] "Oluştur" → sihirbaz `{Scenes, Data}` kutusunu üretir, sahneyi **bire bir kopyalar**, `MapDefinition` yazar, `GameCatalog`'a ve **Build Settings**'e ekler.
   > ⚠️ **Sihirbaz boyut sormaz ve geometriyi ölçeklemez.** Sahne 12×12 şablonundan olduğu gibi gelir; arena planını sen çizersin. Sebebi: her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak üretmez. Sihirbazın işi, sahnenin ağ bileşenlerini (kalibratör, poz senkronu, sınır, taban bölgeleri, rig) eksiksiz getirmesi.
 - [ ] **Arena planını çiz** (duvar/cover yerleşimi, ölçüler) ve şu ikisini gerçek ölçüye getir: sahnedeki **`ArenaBoundary.halfExtentX/Z`** · **kalibrasyon işaretçilerinin konumu** (Bölüm 3).
   > ⚠️ **Alan dikdörtgen değilse** (yamuk, L, kırık duvarlı) tek ölçü çifti o alanı tarif etmez: planı bir **`ArenaShapeDefinition`** asset'ine gir (köşeler + kolonlar), geometriyi `Tools > VortexArena > Build Arena From Shape` ile ürettir ve asset'i `ArenaBoundary.shape` alanına bağla — bağlanmazsa muhafaza eksene hizalı kutu kalır ve oyuncu gerçek duvara uyarısız yürüyebilir. Sihirbazın **Arena planı (isteğe bağlı)** alanına baştan verilirse bu adımlar kendiliğinden yapılır. Reçete: `Docs/Gelistirici/Yemek-Kitabi.md`.

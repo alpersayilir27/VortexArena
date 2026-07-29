@@ -129,6 +129,22 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.AbortMatch;
     }
 
+    /// <summary>Koşan maçı dondurur: <c>playing</c> → <c>paused</c>/<c>operator</c> (§5.2).
+    /// Yalnız <c>playing</c> iken iş yapar.</summary>
+    [Serializable]
+    public class PauseMatchMsg
+    {
+        public string type = MessageTypes.PauseMatch;
+    }
+
+    /// <summary>Operatörün duraklattığı maçı sürdürür (§5.2). Yalnız
+    /// <c>phaseReason == "operator"</c> iken kabul edilir — her duraklamayı kendi sahibi kaldırır.</summary>
+    [Serializable]
+    public class ResumeMatchMsg
+    {
+        public string type = MessageTypes.ResumeMatch;
+    }
+
     [Serializable]
     public class SetTeamMsg
     {

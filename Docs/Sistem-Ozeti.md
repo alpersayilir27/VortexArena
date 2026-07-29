@@ -52,11 +52,16 @@ D:\Games\vortexarena\
         Editor\              VortexArena.App.Editor  (Dev penceresi: rol/hedef + sunucu derleme)
       Arsenal\ FX\ Environments\ Scenes\             (kod-dışı ortak içerik + Boot/Lobby)
       Data\Resources\        GameCatalog.asset — prosedürel admin arayüzü Resources.Load ile okur
-    Arenas\Standard\A12x12\  arena kutusu: {Scenes, Data, Prefabs} — arena-özel KOD yazılmaz
-    Arenas\Standard\A12x12\  (sihirbazla üretildi)
-    Arenas\Standard\IceWorld\ (elle modellenmiş 12×12 tematik arena + Art/{Materials,Textures}
-                               + Prefabs\FX_SnowStorm — 7 katmanlı kar fırtınası)
-    Arenas\Venues\DemoVenue\ (sihirbazla üretildi — 11×8 asimetrik)
+    Arenas\Template\         sihirbaz kaynağı — OYNANMAZ (export/Build Settings/katalog dışı)
+      Default12x12\          dizayn taşımayan tek kaynak arena
+    Arenas\Venues\<İşletme>\ MEKAN = kutuların kabı; kökünde o mekanın TÜM sahnelerinin
+                             paylaştığı Art\ Prefabs\ Data\ durur
+      <Arena>\               arena kutusu: {Scenes, Data} — arena-özel KOD yazılmaz
+      Lobby\                 mekanın kendi lobisi (MapDefinition.supportedModeIds = ["lobby"])
+    Arenas\Venues\Outdoor12x12\  IceWorld (elle modellenmiş tematik arena + Art\{Materials,Textures}
+                             + Prefabs\FX_SnowStorm) · A12x12 (sihirbazla üretildi) · Lobby
+    Arenas\Venues\VortexAntep\   Default (planlı asimetrik arena) · Lobby (aynı planın kopyası)
+                             + Data\VortexAntep_Shape — mekanın fiziksel planı, ikisi de kullanır
     Modes\TeamDeathmatch\    mod kutusu: {Scripts → VortexArena.Modes.Tdm, Data, UI}
     Modes\FreeForAll\        mod kutusu: {Scripts → VortexArena.Modes.Ffa, Data, UI} — takımsız
                              "Herkes Tek"; arena-özel hiçbir iş gerektirmez
@@ -315,6 +320,13 @@ olan bir mod, çekirdek enum'unu büyütmek yerine `phaseReason:"mode"` + `modeS
 duraklatmak isterse çekirdekten `paused` + `phaseReason:"mode"` ister, gerekçesini `modeState`'e
 yazar; operatör duraklatması (`operator`) ile karışmaz, o yüzden mod kaldığı yerden sürebilir.
 
+**Operatör duraklatması** `pause_match` / `resume_match` ile gelir (§5.2). Duraklatmada süre
+kendiliğinden durur (sayaç yalnız `playing` tikinde azalıyor), hasar kapanır, skor/can/`modeState`
+ellenmez. ⚠️ **`resume_match` yalnız `phaseReason == "operator"` iken kabul edilir** — her
+duraklamayı kendi sahibi kaldırır: modun istediği duraklamayı operatörün kaldırması modun ara
+durumunu bozar, geri sayımı elle bitirmek yükleme kapısını atlar. Duraklatmak maçtan çıkmak
+değildir; çıkış hâlâ `abort_match`/`return_to_lobby`'dir ve ikisi duraklı maçta da çalışır.
+
 `start_match` doğrulaması (sırayla): mod kayıtlı mı → sahne adı boş değil → sahne `maps.json`'da
 var ve modu destekliyor mu (**tablo boşsa bu adım atlanır**) → sahne TÜM oyuncuların
 `hello.scenes` listesinde. Geçerse takımlar **modun şekline göre** kurulur (takımlıda dengelenir,
@@ -479,12 +491,12 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 | `AdminPlayerMarkers` | Oyuncu başına **zeminde halka + altında ad etiketi** (kuş bakışı isteği). Halka baş pozunun x/z'sinden arena zeminine indirilir; etiket kameraya döner ve kameranın yukarı vektörünün tersine kaydırılarak her kipte "dairenin altında" okunur. `RemoteAvatar`'a dokunmaz |
 | `AdminHud` | **Kalıcı** ekran-uzayı HUD'ı (`sortingOrder = 4000`; hata ekranı 5000'de üstte kalır): üst orta takım skorları + **ortada istatistik chip'i** (faz/süre de gösterir), sol üst tercihler, sağ üst mod·harita + bağlantı/poz yaşı + **çoklu admin satırı** (kaç admin bağlı · son admin eylemi; tek admin varken boş kalır), yanlarda takım kolonları (**FFA'da tek kolon** — karar veriden gelir), alt orta kamera şeridi + seçili oyuncu, alt sağ ölüm akışı |
 | `AdminPlayerRow` | Oyuncu satırı: takım şeridi, ad + `#id`, HP barı, `K/D · batarya · durum`, eylemler POV/**KAL**/TAKIM/KİMLİK/**AT**. `KAL` ve `AT` **iki adımlı onay** ister (oyuncuyu savaş dışı bırakan/atan eylem tek tıkla olmamalı). `KAL` hem gösterge hem düğmedir (`KAL` yeşil / `KAL !` kırmızı — sembol değil renk+ünlem, çünkü TMP varsayılan fontunda ✓/✗ garantisi yok) ve **yalnız sıfırlar** — geri açmayı gözlük yapar (§3.11); kalibresiz satırın kenarlığı kırmızıya döner. Satıra tıklamak seçer (MonoBehaviour değil, havuzlanan görünüm nesnesi) |
-| `AdminPreferencesPanel` | Eski dashboard'un işi. **MAÇ bölümü ORTAK** (başlıkta yazar): mod/harita seçicileri yerel alana değil `set_selection` ile sunucudaki ortak seçime yazar → tüm adminlerde aynı anda değişir; tıklamada yerel imleç de iyimser ilerletilir, sunucudan gelen değer son sözü söyler. **Harita değişince o arenayı HERKES yükler** (§10.7 sahneleme — sunucu `return_to_lobby` yayar, faz `Lobby` kalır, maç başlamaz); panel ayrıca sahneyi yerel olarak da açar (`SceneRouter.LoadPreview`) ama bu yalnız gecikmeyi gizler. ⚠️ **Mod/harita satırları maç sürerken PASİFTİR** (`AdminRoster.InLobby`) — bölüm başlığı sebebini yazar, tıklanırsa durum satırına uyarı düşer; süre/limit her fazda açıktır. Bu bileşen panel **kapalıyken de etkin** olduğu için başka bir operatörün harita değişikliği panel açılmadan da yansır. **GÖRÜNÜM bölümü YEREL** (halkalar, ad etiketleri, kamera hızı, duvar saydamlığı, **çatı**) + bağlantı (yeniden bağlan/kes, bağlı admin sayısı). MAÇ bölümünde ayrıca **Süre** (`ROUND_SECONDS_OPTIONS`: 2.5/5/10/15/20/30 dk · 1 saat) ve **Skor limiti** (eşiğin altında ±1, üstünde ±5) seçicileri vardır — ikisi de ORTAK; **mod değişince o modun `ModeDefinition` varsayılanına dönerler**. Yarı saydam, **scrim YOK**. Dropdown/slider yerine `[<] değer [>]` döngüleyici |
+| `AdminPreferencesPanel` | Eski dashboard'un işi. **MAÇ bölümü ORTAK** (başlıkta yazar): mod/harita seçicileri yerel alana değil `set_selection` ile sunucudaki ortak seçime yazar → tüm adminlerde aynı anda değişir; tıklamada yerel imleç de iyimser ilerletilir, sunucudan gelen değer son sözü söyler. **Harita değişince o arenayı HERKES yükler** (§10.7 sahneleme — sunucu `return_to_lobby` yayar, faz `Lobby` kalır, maç başlamaz); panel ayrıca sahneyi yerel olarak da açar (`SceneRouter.LoadPreview`) ama bu yalnız gecikmeyi gizler. ⚠️ **Mod/harita satırları maç sürerken PASİFTİR** (`AdminRoster.InLobby`) — bölüm başlığı sebebini yazar, tıklanırsa durum satırına uyarı düşer; süre/limit her fazda açıktır. Bu bileşen panel **kapalıyken de etkin** olduğu için başka bir operatörün harita değişikliği panel açılmadan da yansır. **GÖRÜNÜM bölümü YEREL** (halkalar, ad etiketleri, kamera hızı, duvar saydamlığı, **çatı**) + bağlantı (yeniden bağlan/kes, bağlı admin sayısı). MAÇ bölümünde ayrıca **Süre** (`ROUND_SECONDS_OPTIONS`: 2.5/5/10/15/20/30 dk · 1 saat) ve **Skor limiti** (eşiğin altında ±1, üstünde ±5) seçicileri vardır — ikisi de ORTAK; **mod değişince o modun `ModeDefinition` varsayılanına dönerler**. Yarı saydam, **scrim YOK**. Dropdown/slider yerine `[<] değer [>]` döngüleyici. Maç düğmelerinin altında **tek** DURAKLAT/DEVAM ET düğmesi: hangi komutu göndereceğine yerel bir bayrakla değil sunucudan gelen faza bakarak karar verir (`playing` → `pause_match`, `paused`/`operator` → `resume_match`), diğer her durumda pasiftir — çoklu admin'de duraklatmayı başkası da yapmış olabilir, yerel bayrak iki paneli birbirine ters düşürürdü |
 | `AdminStatsPanel` | Takım toplamları + oyuncu tablosu (ad/takım/**SKOR**/K/D/K-D/HP/batarya/durum/sahne) + maç bilgisi. **FFA'da tablo skora göre azalan sıralanır**, başlık lideri yazar. Tablo **kolon kolon** çizilir (TMP fontu eşit genişlikli değil, boşlukla hizalama kayar). Protokolde olmayan metrik (hasar/isabet/ping) **gösterilmez** |
 | `AdminRoster` | Admin arayüzünün veri katmanı: `lobby_state` (otoriter tam görüntü + `kills/deaths/hp/alive/score`) + `health_update`/`kill_event` (anlık) + `match_state`/`countdown`/`match_end` birleşimi; takım listeleri, takım kipi kararı, ölüm akışı, snapshot yaşı. **`IsFfa` OTORİTER:** maç yüklüyse `ModeRuntime.Teams`, lobide ortak seçimin katalogdaki modu, ikisi de yoksa eski sezgisel yedek ("kimsenin takımı yok"). ⚠️ `respawn` admin'e GELMEZ (yalnız ölen oyuncuya gider) → geri sayım `kill_event` + `RESPAWN_DELAY` ile yerel hesaplanır |
 | `AdminSession` | **YEREL** seçimler (kamera kipi, seçili oyuncu, açık panel) + görünüm tercihleri (`PlayerPrefs`'te kalıcı, admin PC'sine özel — halkalar, ad etiketleri, kamera hızı, duvar saydamlığı, **çatı kipi**). Tek doğruluk noktası; `Changed` ile HUD/kamera/işaretçiler senkron kalır. `RoofAlphaNow()` tercih + kamera kipinden çatı alfasını türetir |
 | `AdminSelection` | **ORTAK** durumun aynası (`admin_state`, §5.3): mod/harita seçimi, **maç süresi + skor limiti**, çevrimiçi admin sayısı, son admin eyleminin duyurusu. Statik durum + statik `Changed` (bileşen kurulum sırası dinleyiciyi ilgilendirmesin); bileşenin kendisi yalnız ağ olayı pompasıdır. Otorite sunucudadır — buraya yerelden yazılmaz |
-| `AdminCommands` | Admin komutlarının tek çıkış kapısı (§5.2) + son işlemin durum metni. "Gönderildi" der, "oldu" demez — kabul/ret sunucuda. `SetSelection` ortak seçimi (mod/harita/süre/limit) değiştirir, maçı başlatmaz; `StartMatch` süre/limit taşır (`0` = mod varsayılanı) |
+| `AdminCommands` | Admin komutlarının tek çıkış kapısı (§5.2) + son işlemin durum metni. "Gönderildi" der, "oldu" demez — kabul/ret sunucuda. `SetSelection` ortak seçimi (mod/harita/süre/limit) değiştirir, maçı başlatmaz; `StartMatch` süre/limit taşır (`0` = mod varsayılanı); `PauseMatch`/`ResumeMatch` koşan maçı dondurur/sürdürür |
 | `AdminContent` | `Resources.Load<GameCatalog>("GameCatalog")` (asset: `_Shared/Data/Resources/`) → mod/harita listeleri. Prosedürel arayüzün `[SerializeField]`'i olamaz, tek meşru yol bu |
 
 ### Editör: `VortexArena.App.Editor` (dev araç seti — yalnız Editor)
@@ -815,15 +827,17 @@ doğrudan dashboard'a düşer. Ayrıntı: `deploy/README.md`.
 
 | İstek | Yol |
 |---|---|
-| **Yeni arena** | `Tools > VortexArena > Create Arena From Template` → arenaId, sahne adı, hedef (Standard/Venue) + **arena planı (isteğe bağlı)**. Sihirbaz klasörleri + sahnenin **bire bir kopyasını** üretir, `MapDefinition` yazar, `GameCatalog` + uyumlu `ModeDefinition` + Build Settings'e ekler. **Plan alanı doluysa** şablondan gelen zemin/duvar mesh'leri silinip `ArenaShapeDefinition`'dan üretilir ve `ArenaBoundary`'nin `shape` + `wallRenderers` alanları bağlanır; **boşsa geometriye hiç dokunulmaz.** ⚠️ **Geometri ölçeklenmez** (boyut sorulmaz): plan kullanılmıyorsa arena çizimi, `ArenaBoundary.halfExtentX/Z`, kalibrasyon işaretçileri, tek `SpawnPoint` ve bake işleri ELDE. Sihirbazın değeri sahnenin ağ bileşenlerini eksiksiz taşıması. **Sonra `Export Server Config`.** |
+| **Yeni arena** | `Tools > VortexArena > Create Arena From Template` → arenaId, sahne adı, **mekan (zorunlu)** + **arena planı (isteğe bağlı)**. Kutu her zaman `Venues/<İşletme>/<arenaId>/` altına açılır. Sihirbaz klasörleri + sahnenin **bire bir kopyasını** üretir, `MapDefinition` yazar, `GameCatalog` + uyumlu `ModeDefinition` + Build Settings'e ekler. **Plan alanı doluysa** şablondan gelen zemin/duvar mesh'leri silinip `ArenaShapeDefinition`'dan üretilir ve `ArenaBoundary`'nin `shape` + `wallRenderers` alanları bağlanır; **boşsa geometriye hiç dokunulmaz.** ⚠️ **Geometri ölçeklenmez** (boyut sorulmaz): plan kullanılmıyorsa arena çizimi, `ArenaBoundary.halfExtentX/Z`, kalibrasyon işaretçileri, tek `SpawnPoint` ve bake işleri ELDE. Sihirbazın değeri sahnenin ağ bileşenlerini eksiksiz taşıması. **Sonra `Export Server Config`.** |
 | **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack prefabı) → `Tools > VortexArena > Build Weapon Prefabs` → `WD_*.asset` + `WPN_*.prefab` üretir (ses + namlu alevi/dumanı + kovan kiti dahil), `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). ⚠️ Araç **mevcut prefabların `Muzzle`/`Model` yerleşimine DOKUNMAZ**, yalnız definition bağlarını + ses/VFX/kovan kitini tazeler — VR'da elle ayarlanmış tutuş/namlu konumu tekrar çalıştırmakla bozulmaz. Paylaşılan şablon yoktur: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
 | **Elle modellenmiş sahneyi arenaya çevirmek** | Aşağıdaki 6 adım (IceWorld böyle bağlandı) |
 
 **Elle modellenmiş bir sahneyi ağa bağlama** (sihirbaz kullanılmadıysa — ör. `IceWorld`):
 
-1. Sahneyi arena kutusuna taşı: `Assets/Arenas/Standard/<Ad>/Scenes/<Ad>.unity` (+ `Data`, `Prefabs`,
-   arenaya özel sanat için `Art/`). **Sahne adı = katalog anahtarı** — sonradan değiştirme.
+1. Sahneyi arena kutusuna taşı: `Assets/Arenas/Venues/<İşletme>/<Ad>/Scenes/<Ad>.unity` (+ `Data`;
+   arenaya özel sanat/prefab varsa `Art/`, `Prefabs/` — mekanın tümüne aitse bir seviye yukarı,
+   mekan kökündeki ortak klasörlere). **Sahne adı = katalog anahtarı** — sonradan değiştirme.
+   ⚠️ Mekan klasörü dışına konan arena export'a girmez, yani sunucuda hiç görünmez.
 2. Arena çerçevesini kur: arena merkezinde, duvarlara hizalı bir objeye **`ArenaBoundary`**
    (halfExtentX/Z = iç ölçünün yarısı, `wallRenderers` = duvarlar, `head` = `CenterEyeAnchor`,
    `fadeRenderer`/`warningText` = rig altındaki `OutOfBoundsFade`/`BoundaryWarningText`).
@@ -1108,8 +1122,8 @@ konsoluna tek satır sebep yazar.
 Ölüm Maçı) ve `ffa` (Herkes Tek: takımsız, bireysel skor, sabit durma canlanması, grip'e basınca
 elde rastgele silah) · **çok mod altyapısı** (`ModeRules`
 şekil tanımı §3.9, bireysel skor, `MatchOutcome`, takım-agnostik `ModeHudBase`, admin'den maç
-süresi/skor limiti) · arenalar (A12x12, Default12x12, IceWorld, DemoVenue — hepsi iki modu da
-destekler) + arena şablon sihirbazı ve
+süresi/skor limiti) · **iki mekan** (`Outdoor12x12`, `VortexAntep`) ve her birinin kendi lobisi —
+sunucu açılışta hangisinin oynatılacağını sorar (§3.8) + arena şablon sihirbazı ve
 `Export Server Config` · admin **sahne-içi gözlemci** (üç kamera kipi + sahne üstü yönetim HUD'ı,
 çoklu admin) · geliştirici araç seti (`Tools > VortexArena > Dev`, `dev-targets.json`,
 `Ctrl+Alt+R`) · rolden bağımsız adres zinciri + `ConnectionOverlay` bağlantı hata ekranı ·

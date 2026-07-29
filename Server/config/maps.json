@@ -1,11 +1,9 @@
 {
   "maps": [
-    { "sceneName": "Arena12x12", "venue": "Standard", "modes": ["ffa", "tdm"] },
-    { "sceneName": "ArenaDemoVenue", "venue": "DemoVenue", "modes": ["ffa", "tdm"] },
-    { "sceneName": "ArenaVortexAntep", "venue": "Standard", "modes": ["ffa", "tdm"] },
-    { "sceneName": "Default12x12", "venue": "Standard", "modes": ["ffa", "tdm"] },
-    { "sceneName": "IceWorld", "venue": "Standard", "modes": ["ffa", "tdm"] },
-    { "sceneName": "Lobby12x12", "venue": "Standard", "modes": ["lobby"] },
-    { "sceneName": "LobbyDemoVenue", "venue": "DemoVenue", "modes": ["lobby"] }
+    { "sceneName": "Arena12x12", "venue": "Outdoor12x12", "modes": ["ffa", "tdm"] },
+    { "sceneName": "ArenaVortexAntep", "venue": "VortexAntep", "modes": ["ffa", "tdm"] },
+    { "sceneName": "IceWorld", "venue": "Outdoor12x12", "modes": ["ffa", "tdm"] },
+    { "sceneName": "Lobby12x12", "venue": "Outdoor12x12", "modes": ["lobby"] },
+    { "sceneName": "LobbyVortexAntep", "venue": "VortexAntep", "modes": ["lobby"] }
   ]
 }

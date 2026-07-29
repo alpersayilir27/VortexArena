@@ -571,8 +571,9 @@ Vector3 dunyaPos = ArenaSpace.ArenaToWorld(gelenPoz);
 İşletme alanı kare/dikdörtgen değilse arenanın planı bir asset'te tutulur; **aynı asset geometriyi
 üretir, muhafazayı besler ve admin kuş bakışı kadrajını verir.**
 
-1. **Planı oluştur:** `Create > VortexArena > Arena Shape Definition` → arena kutusunun `Data/`
-   klasörüne koy (ör. `Arenas/Standard/VortexAntep/Data/VortexAntep_Shape.asset`).
+1. **Planı oluştur:** `Create > VortexArena > Arena Shape Definition` → **mekanın** `Data/`
+   klasörüne koy (ör. `Arenas/Venues/VortexAntep/Data/VortexAntep_Shape.asset`). Plan fiziksel
+   odayı tarif eder, tek bir arenayı değil: aynı mekanın arenası ve lobisi onu birlikte kullanır.
 2. **Köşeleri gir** (`outline`): sıralı 2B köşeler, **metre**. Çokgen **kapalıdır** — ilk noktayı
    sona tekrar yazma. Koordinatlar `ArenaBoundary`'yi taşıyan transformun **yerel XZ**'sindedir
    (X = sağ, Y alanı = Z = ileri); ölçüyü bir köşeden alıyorsan o köşe (0,0) olur.

@@ -11,7 +11,8 @@ namespace VortexArena.App.Admin
 {
     /// <summary>
     /// Tercihler paneli — eski dashboard'un işi buraya taşındı: <b>maç kontrolü</b> (mod/harita
-    /// seçimi, başlat/iptal/lobiye dön), <b>görünüm tercihleri</b> ve <b>bağlantı</b>.
+    /// seçimi, başlat/iptal/lobiye dön, duraklat/devam), <b>görünüm tercihleri</b> ve
+    /// <b>bağlantı</b>.
     /// <para>
     /// Kart yarı saydamdır ve <b>arkasına scrim koyulmaz</b> — panel açıkken canlı sahne
     /// izlenmeye devam eder (kullanıcının açık isteği). Maç/oyun DURMAZ; otorite sunucudadır.
@@ -49,9 +50,11 @@ namespace VortexArena.App.Admin
         /// KALİBRASYON bölümü eklenince içerik 810 px'e çıkmıştı, yani paneli 10 px'e kadar
         /// doldurmuştu; bu değer 880'e çekildi ki bir sonraki satır sessizce taşmasın.
         /// OYUNCU KİMLİĞİ bölümü (+114) ile içerik ~924'e çıktı → 1000.
-        /// Kabaca hesap: başlangıç 78 + her Section 34 + her Cycler 40 + maç düğmeleri 50.
-        /// <para>⚠️ 1000 px, 1080p bir ekranda üstten/alttan ~40 px pay bırakır. Bir bölüm daha
-        /// eklenecekse panel yükseltilemez — o noktada içeriğin kaydırılabilir olması gerekir.</para></summary>
+        /// DURAKLAT/DEVAM düğmesi (+50) ile ~974: <b>pay bitti.</b>
+        /// Kabaca hesap: başlangıç 78 + her Section 34 + her Cycler 40 + her düğme satırı 50.
+        /// <para>⚠️ 1000 px, 1080p bir ekranda üstten/alttan ~40 px pay bırakır ve içerik artık
+        /// panelin dibinde. <b>Bir satır daha eklenirse panel yükseltilemez</b> — o noktada
+        /// içeriğin kaydırılabilir olması gerekir.</para></summary>
         private const float PanelHeight = 1000f;
         private const float RowHeight = 40f;
 
@@ -79,6 +82,12 @@ namespace VortexArena.App.Admin
         private Button _modeNext;
         private Button _mapPrev;
         private Button _mapNext;
+
+        /// <summary>Duraklat/devam düğmesi — etiketi ve gönderdiği komut faza göre değişir
+        /// (<see cref="ApplyPauseButton"/>).</summary>
+        private Button _pauseButton;
+
+        private TextMeshProUGUI _pauseLabel;
 
         private TextMeshProUGUI _durationValue;
         private TextMeshProUGUI _scoreLimitValue;
@@ -381,7 +390,8 @@ namespace VortexArena.App.Admin
             return y + RowHeight;
         }
 
-        /// <summary>Üç eşit maç düğmesi (oranlı anchor: panel genişliğinden bağımsız).</summary>
+        /// <summary>Üç eşit maç düğmesi (oranlı anchor: panel genişliğinden bağımsız) + altında
+        /// tam genişlikte duraklat/devam düğmesi.</summary>
         private float MatchButtons(Transform body, float y)
         {
             Button start = UiKit.Button(body, "StartMatch", "BAŞLAT", 20f, UiKit.Good,
@@ -395,6 +405,19 @@ namespace VortexArena.App.Admin
             Button lobby = UiKit.Button(body, "ReturnLobby", "LOBİYE DÖN", 20f,
                 UiKit.Hex(0x2A303B, 0xFF), UiKit.Title, AdminCommands.ReturnToLobby, out _);
             PlaceThird((RectTransform)lobby.transform, 2, y);
+
+            y += 50f;
+
+            // Tek düğme, iki iş: hangi komutun gideceğini faz belirler (ApplyPauseButton).
+            // İki ayrı düğme koymak, her an ikisinden birinin ölü durması demekti.
+            _pauseButton = UiKit.Button(body, "PauseMatch", PauseLabel, 20f,
+                UiKit.Hex(0x2A303B, 0xFF), UiKit.Title, TogglePause, out _pauseLabel);
+            var rect = (RectTransform)_pauseButton.transform;
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.offsetMin = new Vector2(28f, -(y + 40f));
+            rect.offsetMax = new Vector2(-28f, -y);
 
             return y + 50f;
         }
@@ -413,6 +436,52 @@ namespace VortexArena.App.Admin
         private void StartMatch()
         {
             AdminCommands.StartMatch(SelectedModeId, SelectedSceneName, _roundSeconds, _scoreLimit);
+        }
+
+        private const string PauseLabel = "DURAKLAT";
+        private const string ResumeLabel = "DEVAM ET";
+
+        /// <summary>
+        /// Faz <c>playing</c> ise duraklatır, operatörün duraklattığı maçta ise sürdürür.
+        /// <para>
+        /// Karar YEREL bir bayrağa değil sunucudan gelen faza bakar: çoklu admin var (CLAUDE.md) ve
+        /// duraklatmayı başkası da yapmış olabilir. Yerel bayrak tutulsaydı iki panel birbirine
+        /// ters düşerdi.
+        /// </para>
+        /// </summary>
+        private static void TogglePause()
+        {
+            if (IsOperatorPaused)
+            {
+                AdminCommands.ResumeMatch();
+            }
+            else
+            {
+                AdminCommands.PauseMatch();
+            }
+        }
+
+        /// <summary>Maç koşuyor mu (§10.1: tek cevap <c>phase == playing</c>).</summary>
+        private static bool IsMatchLive
+        {
+            get
+            {
+                AdminRoster roster = AdminRoster.Instance;
+                return roster != null && roster.Phase == ArenaProtocol.PHASE_PLAYING;
+            }
+        }
+
+        /// <summary>Maç OPERATÖR tarafından duraklatılmış mı. Modun/geri sayımın duraklaması
+        /// buraya girmez — sunucu onları <c>resume_match</c> ile kaldırtmaz (§5.2).</summary>
+        private static bool IsOperatorPaused
+        {
+            get
+            {
+                AdminRoster roster = AdminRoster.Instance;
+                return roster != null &&
+                       roster.Phase == ArenaProtocol.PHASE_PAUSED &&
+                       roster.PhaseReason == ArenaProtocol.PAUSE_REASON_OPERATOR;
+            }
         }
 
         private string SelectedModeId =>
@@ -936,6 +1005,25 @@ namespace VortexArena.App.Admin
             {
                 _matchSectionLabel.text = open ? MatchSectionTitle : MatchSectionLockedTitle;
                 _matchSectionLabel.color = open ? UiKit.Faint : UiKit.Bad;
+            }
+
+            ApplyPauseButton();
+        }
+
+        /// <summary>Duraklat/devam düğmesini fazla hizalar: koşan maçta "DURAKLAT", operatörün
+        /// duraklattığı maçta "DEVAM ET", diğer her durumda pasif (lobide, yüklemede, geri sayımda
+        /// ve bitmiş maçta duraklatılacak/sürdürülecek bir şey yok — sunucu da reddeder).</summary>
+        private void ApplyPauseButton()
+        {
+            if (_pauseButton == null) return;
+
+            bool paused = IsOperatorPaused;
+            SetInteractable(_pauseButton, paused || IsMatchLive);
+
+            if (_pauseLabel != null)
+            {
+                _pauseLabel.text = paused ? ResumeLabel : PauseLabel;
+                _pauseLabel.color = paused ? UiKit.Good : UiKit.Title;
             }
         }
 

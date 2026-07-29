@@ -16,6 +16,8 @@ namespace VortexArena.Protocol
         // Yalnız admin → Sunucu
         public const string StartMatch = "start_match";
         public const string AbortMatch = "abort_match";
+        public const string PauseMatch = "pause_match"; // koşan maçı dondurur (§5.2)
+        public const string ResumeMatch = "resume_match"; // yalnız operatör duraklatmasını kaldırır
         public const string SetTeam = "set_team";
         public const string Kick = "kick";
         public const string Identify = "identify"; // sunucu → istemci yönü de aynı type

@@ -135,6 +135,8 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 - **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30 }`
   `roundSeconds`/`scoreLimit` **o maça özeldir**: `≤ 0` ya da eksikse modun kendi varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`) kullanılır. Operatörün arayüzde seçtiği süre/limit buradan geçer; `ROUND_SECONDS_OPTIONS` yalnız arayüz listesidir, sunucu her pozitif değeri kabul eder.
 - **`abort_match`** `{ "type":"abort_match" }`
+- **`pause_match`** `{ "type":"pause_match" }` — koşan maçı dondurur: `playing` → `paused` + `phaseReason:"operator"` (§10.1). Süre durur, hasar kapanır, skorlar ve `modeState` **korunur**. **Yalnız `playing` iken iş yapar**; başka fazda loglanıp yok sayılır (duraklı bir maçı duraklatmanın anlamı yok).
+- **`resume_match`** `{ "type":"resume_match" }` — `paused`/`operator`'dan `playing`'e döner; süre kaldığı yerden akar, canlar/skorlar sıfırlanmaz. ⚠️ **Yalnız operatörün duraklattığı maç sürdürülebilir:** `phaseReason` `loading`/`countdown`/`mode`/`lobby` iken reddedilir. Sebep: o duraklamaların sahibi operatör değildir — modun istediği duraklamayı (`mode`) operatörün kaldırması modun ara durumunu bozar, geri sayımı elle bitirmek de yükleme kapısını atlar. Her duraklamayı kendi sahibi kaldırır.
 - **`set_team`** `{ "type":"set_team", "playerId":5, "team":"blue" }` (`"red"|"blue"`) — hedef oyuncunun takımı. **Faz kapısı YOKTUR:** operatör `playing` dahil her fazda, sunucuya bağlı herkesin takımını değiştirebilir; değişiklik `lobby_state` ile yayılır ve istemcide anında geçerlidir (taban bölgesi, arayüz renkleri). Hedef admin ise reddedilir. Oyuncudan gelen `set_team` loglanıp yok sayılır — **oyuncu kendi takımını seçemez, bunun için protokol mesajı YOKTUR ve eklenmeyecektir.**
 - **`kick`** `{ "type":"kick", "playerId":5 }`
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
@@ -226,11 +228,11 @@ Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken har
 **`admin_state`** — **yalnız `role=admin` bağlantılara**; adminler arası ortak durumun tek doğruluk kaynağı:
 ```json
 { "type":"admin_state", "modeId":"tdm", "sceneName":"Arena12x12",
-  "venueId":"Standard", "venueScenes":["Arena12x12","Default12x12","IceWorld","Lobby12x12"],
+  "venueId":"Outdoor12x12", "venueScenes":["Arena12x12","IceWorld","Lobby12x12"],
   "roundSeconds":600, "scoreLimit":30,
   "notice":"Ofis-PC: harita -> Arena12x12", "adminCount":2 }
 ```
-- Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`return_to_lobby`/`kick`/`identify`/`set_team`) ve admin bağlanıp ayrıldığında.
+- Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`return_to_lobby`/`kick`/`identify`/`set_team`) ve admin bağlanıp ayrıldığında. ⚠️ `pause_match`/`resume_match` için duyuru **yalnız komut gerçekten uygulandıysa** yayılır — reddedilen komut diğer operatörlerin ekranına olmamış bir eylemi yazmamalı.
 - `modeId`/`sceneName` = ortak seçim. Admin arayüzü **kendi yerel seçimini değil bunu gösterir**; gelen değer arayüzdeki mod/harita seçicisini günceller. Yani bir operatör haritayı değiştirdiğinde diğerinin ekranı da (paneli açık olmasa bile) o haritaya döner — sahneyi zaten `return_to_lobby` sahnelemesi taşır (§10.7), `admin_state` yalnız seçiciyi hizalar.
 - `roundSeconds`/`scoreLimit` = bir sonraki maçın ortak parametreleri (`0` = hiç seçilmedi, modun varsayılanı kullanılacak). Mod/harita ile aynı kanaldan gider — sebebi §5.2 `set_selection` notunda.
 - `notice` = son admin eyleminin insan okuyabilir özeti (`"<admin adı>: <eylem>"`), tüm adminlerin durum satırında görünür. Boş olabilir.
@@ -356,6 +358,8 @@ ile tanımlanır (§10.5, §10.7).
 - **`finished`:** `match_end` yayınlanır, `MATCH_END_SECONDS` sonra `return_to_lobby` + faz `paused`/`lobby` (skorlar/canlar sıfırlanır, oyuncular açık sahneye döner). `finished` iken operatör harita/mod seçebilir ve yeni maç başlatabilir.
 - **`abort_match`** her durumdan `paused`/`lobby`'ye düşürür (`return_to_lobby` yayınlanır); `return_to_lobby` doğrudan aynı işi yapar.
 - **Duraklatma (`phaseReason:"operator"` / `"mode"`):** `playing` iken duraklatılan maç `paused`'a geçer — süre durur, hasar kapanır, `modeState` **korunur** (mod kaldığı yerden sürer). Devam edilince `playing`'e döner. ⚠️ Operatörün duraklatması ile modun duraklatması aynı fazı üretir ama gerekçeleri ayrıdır: turnuva "herkes tabana dönsün" derken (`mode`) operatör de duraklatırsa (`operator`) HUD'un doğru mesajı gösterebilmesi için ikisi karışmamalıdır.
+  - Operatörün kapısı `pause_match` / `resume_match`'tir (§5.2) ve **yalnız kendi duraklatmasını kaldırabilir** (`phaseReason == "operator"`). `mode` gerekçesini kaldırma yetkisi modundur; `loading`/`countdown` zaten kendi koşullarıyla biter.
+  - `abort_match` duraklı maçta da çalışır: duraklatmak maçtan çıkmak değildir, çıkış hâlâ `abort_match`/`return_to_lobby`'dir.
 
 ### 10.2 Oyuncu maç durumu (sunucuda)
 
@@ -632,15 +636,20 @@ Bu yüzden sunucu açılırken **hangi mekanın oynatılacağı seçilir** ve o 
 
 ```
 Hangi mekan açılsın?
-  1) DemoVenue  (2 harita)
-  2) Standard   (4 harita)
+  1) Outdoor12x12  (3 harita)
+  2) VortexAntep   (2 harita)
 Seçim [1-2]:
 ```
 
 **Mekan asset yolundan gelir, ayrı bir alan YOKTUR.** Export şu kuralı uygular:
-`Assets/Arenas/Venues/<İşletme>/…` → o işletme, başka her yer → `Standard`. Klasör yerleşimi zaten
-mekanı anlatıyor; ikinci bir alan eklemek onu unutulabilir hâle getirirdi. Bir haritayı yanlış
-mekana yazmanın tek yolu onu yanlış klasöre koymaktır, o da gözle görülür.
+`Assets/Arenas/Venues/<İşletme>/…` → o işletme. Klasör yerleşimi zaten mekanı anlatıyor; ikinci bir
+alan eklemek onu unutulabilir hâle getirirdi. Bir haritayı yanlış mekana yazmanın tek yolu onu
+yanlış klasöre koymaktır, o da gözle görülür.
+
+⚠️ **Mekan klasörü dışındaki haritalar export'a HİÇ girmez.** `Assets/Arenas/Template/` altındakiler
+(sihirbaz şablonları) sessizce atlanır; başka bir yerdeki `MapDefinition` ise uyarı basılarak
+atlanır. Sebep: bu listenin her satırı operatörün açılışta seçebileceği gerçek bir işletmedir —
+şablonlar ya da yanlış yere konmuş bir harita orada var olmayan bir mekan satırı açardı.
 
 Seçim sırası: `--venue <ad>` → `server.json → venue` → tek mekan varsa o → **konsolda sor**.
 Soru yalnız konsol etkileşimliyse sorulur; girdi yönlendirilmişse (servis, betik, launcher) sunucu

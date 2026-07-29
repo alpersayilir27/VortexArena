@@ -12,26 +12,20 @@ EditorBuildSettings:
     path: Assets/_Shared/Scenes/Lobby.unity
     guid: 1c4fe2cafa667bc4ba8d0b445d2351e7
   - enabled: 1
-    path: Assets/Arenas/Standard/A12x12/Scenes/Arena12x12.unity
+    path: Assets/Arenas/Venues/Outdoor12x12/A12x12/Scenes/Arena12x12.unity
     guid: 4a43674b9cafa3c41836aa27188b6efc
   - enabled: 1
-    path: Assets/Arenas/Standard/IceWorld/Scenes/IceWorld.unity
+    path: Assets/Arenas/Venues/Outdoor12x12/IceWorld/Scenes/IceWorld.unity
     guid: d028955a3ff573c46b2423eb95b213fb
   - enabled: 1
-    path: Assets/Arenas/Venues/DemoVenue/Default/Scenes/ArenaDemoVenue.unity
-    guid: bc63e3f842dc1434185e669a8ffa141f
-  - enabled: 1
-    path: Assets/Arenas/Standard/Lobby12x12/Scenes/Lobby12x12.unity
+    path: Assets/Arenas/Venues/Outdoor12x12/Lobby/Scenes/Lobby12x12.unity
     guid: f099688eb1fbf594caa3416b1e17770c
   - enabled: 1
-    path: Assets/Arenas/Venues/DemoVenue/Lobby/Scenes/LobbyDemoVenue.unity
-    guid: ddcfdabd784ac3546b9c121b2c3a5fd0
-  - enabled: 1
-    path: Assets/Arenas/Standard/Default12x12/Scenes/Default12x12.unity
-    guid: 96f2af78242321e4db1bd68329c93567
-  - enabled: 1
-    path: Assets/Arenas/Standard/VortexAntep/Scenes/ArenaVortexAntep.unity
+    path: Assets/Arenas/Venues/VortexAntep/Default/Scenes/ArenaVortexAntep.unity
     guid: 1a4bcb3a31a3aa648ae8437a740026ba
+  - enabled: 1
+    path: Assets/Arenas/Venues/VortexAntep/Lobby/Scenes/LobbyVortexAntep.unity
+    guid: f5989f4ded2d4900a9d0f65317e82352
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

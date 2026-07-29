@@ -378,6 +378,21 @@ public sealed class LobbyService
         await _director.ReturnToLobbyAsync();
     }
 
+    /// <summary>pause_match (§5.2). Duyuru YALNIZ gerçekten duraklatıldıysa yayılır — reddedilen
+    /// komut diğer operatörlerin ekranına "duraklattı" yazmamalı.</summary>
+    public async Task HandlePauseMatchAsync(ClientConnection connection)
+    {
+        if (await _director.PauseMatchAsync())
+            await BroadcastAdminStateAsync(Notice(connection, "maç duraklatıldı"));
+    }
+
+    /// <summary>resume_match (§5.2) — yalnız operatörün duraklattığı maçı sürdürür.</summary>
+    public async Task HandleResumeMatchAsync(ClientConnection connection)
+    {
+        if (await _director.ResumeMatchAsync())
+            await BroadcastAdminStateAsync(Notice(connection, "maç sürdürüldü"));
+    }
+
     /// <summary>Duyuru satırı: "<admin adı>: <eylem>" — tüm adminlerin durum satırında görünür.</summary>
     private static string Notice(ClientConnection connection, string action) =>
         $"{connection.State?.Name ?? "Admin"}: {action}";

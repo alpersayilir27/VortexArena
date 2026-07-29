@@ -645,6 +645,72 @@ public sealed class MatchDirector
         await FlushAsync(outbox);
     }
 
+    /// <summary>
+    /// <c>pause_match</c> (§5.2) — koşan maçı dondurur: <see cref="Phase.Playing"/> →
+    /// <see cref="Phase.Paused"/> + <see cref="PauseReason.Operator"/>.
+    /// <para>
+    /// Süre kendiliğinden durur: sayaç yalnız <see cref="TickLiveLocked"/> içinde azalıyor ve o da
+    /// yalnız <see cref="Phase.Playing"/>'de çağrılıyor. Skorlar, canlar ve
+    /// <c>modeState</c> ELLENMEZ — duraklatmak maçtan çıkmak değildir (çıkış
+    /// <c>abort_match</c>).
+    /// </para>
+    /// <para>Koşmayan maç duraklatılmaz; <c>false</c> döner ve durum değişmez.</para>
+    /// </summary>
+    public async Task<bool> PauseMatchAsync()
+    {
+        var outbox = new List<Outgoing>();
+        lock (_gate)
+        {
+            if (_phase != Phase.Playing)
+            {
+                Console.WriteLine($"[match] pause_match yok sayıldı: faz {PhaseWire(_phase)} (yalnız koşan maç duraklatılır).");
+                return false;
+            }
+
+            SetPhaseLocked(Phase.Paused, PauseReason.Operator, DateTime.UtcNow);
+            QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
+        }
+        await FlushAsync(outbox);
+        return true;
+    }
+
+    /// <summary>
+    /// <c>resume_match</c> (§5.2) — operatörün duraklattığı maçı sürdürür.
+    /// <para>
+    /// ⚠️ <b>Yalnız <see cref="PauseReason.Operator"/> kaldırılır.</b> Her duraklamayı kendi sahibi
+    /// kaldırır: <see cref="PauseReason.Mode"/>'u kaldırmak modun ara durumunu bozar,
+    /// <see cref="PauseReason.Loading"/>/<see cref="PauseReason.Countdown"/> zaten kendi
+    /// koşullarıyla biter, <see cref="PauseReason.Lobby"/>'de sürdürülecek maç yoktur.
+    /// </para>
+    /// <para>
+    /// <see cref="EnterLiveLocked"/> KULLANILMAZ: o maçı baştan kurar (süreyi tam raunda çeker,
+    /// canları doldurur). Sürdürme kaldığı yerden devam etmektir.
+    /// </para>
+    /// </summary>
+    public async Task<bool> ResumeMatchAsync()
+    {
+        var outbox = new List<Outgoing>();
+        lock (_gate)
+        {
+            if (_phase != Phase.Paused || _pauseReason != PauseReason.Operator)
+            {
+                Console.WriteLine($"[match] resume_match reddedildi: durum {PhaseWire(_phase)}" +
+                                  $"{(_pauseReason != PauseReason.None ? "/" + ReasonWire(_pauseReason) : "")} " +
+                                  "(yalnız operatörün duraklattığı maç sürdürülür).");
+                return false;
+            }
+
+            var now = DateTime.UtcNow;
+            SetPhaseLocked(Phase.Playing, now);
+            // 1 Hz match_state ritmi duraklamada kaydığı için yeniden çıpalanır; süre ve skorlar
+            // olduğu gibi kalır.
+            _nextSecondAt = now.AddSeconds(1);
+            QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
+        }
+        await FlushAsync(outbox);
+        return true;
+    }
+
     /// <summary>abort_match — her fazdan Lobby'ye (§10.1).</summary>
     public Task AbortMatchAsync() => BackToLobbyAsync("abort_match");
 

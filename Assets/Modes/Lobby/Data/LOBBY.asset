@@ -24,8 +24,8 @@ MonoBehaviour:
   weapons: 0
   respawnDelay: 5
   maps:
-  - {fileID: 11400000, guid: 41456a8fc0db03145ae5d37897a0cf31, type: 2}
   - {fileID: 11400000, guid: a0d89b3444595f049bd3d1ed05c21d8c, type: 2}
+  - {fileID: 11400000, guid: c7fac0b075064be08aa75f50faf07984, type: 2}
   loadout:
   - {fileID: 11400000, guid: d42e84326e961f542ba86d57e9a71d20, type: 2}
   - {fileID: 11400000, guid: 3e86e22f37503ba4fafb3d09d30dffb2, type: 2}
