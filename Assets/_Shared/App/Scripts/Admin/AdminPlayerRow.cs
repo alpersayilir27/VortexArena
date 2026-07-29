@@ -157,7 +157,9 @@ namespace VortexArena.App.Admin
 
             float alpha = view.online ? 1f : 0.45f;
             _nameText.color = UiKit.WithAlpha(view.alive ? UiKit.Title : UiKit.Muted, alpha);
-            _nameText.text = view.name;
+            // Numara adın ÖNÜNE yazılır (avatar plakasıyla aynı biçim): adlar benzersiz değil,
+            // operatörün iki "ertu"yu ayırdığı şey numara. 0 = atanmamış → yalnız ad.
+            _nameText.text = view.number > 0 ? $"{view.number} · {view.name}" : view.name;
             _idText.text = $"#{view.playerId}";
 
             UiKit.SetBarFill(_hpFill, view.HpNormalized);

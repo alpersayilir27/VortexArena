@@ -35,13 +35,25 @@ namespace VortexArena.Protocol
         public string scene;
         public float battery;
         public float fps;
+
+        /// <summary>İstemcinin UYGULADIĞI son <see cref="LobbyStateMsg.version"/> (§5.1). Sunucu
+        /// geride kalmış istemciye — yalnız ona — tam bir lobby_state yollar; güncelse hiçbir şey
+        /// yapmaz. Yedek uzlaştırma ağıdır, birincil yol değil: kontrol kanalı TCP olduğu için
+        /// lobby_state kaybolmaz; bu alan istemcinin bir yayını uygulayamadığı pencereleri
+        /// (sahne geçişi, kopma anı) kapatır. 0 = hiç uygulanmadı → sunucu tam snapshot yollar.</summary>
+        public int rosterVersion;
     }
 
+    /// Oyuncunun adı ve/veya forma numarası (§5.1). Boş string / 0 bırakılan alan MEVCUT değeri
+    /// korur (set_selection ile aynı konvansiyon) → "yalnız numarayı değiştir" tek mesajdır.
+    /// Yetki set_team ile aynı: oyuncu yalnız KENDİ playerId'si için, admin herkes için.
     [Serializable]
-    public class SetNameMsg
+    public class SetIdentityMsg
     {
-        public string type = MessageTypes.SetName;
+        public string type = MessageTypes.SetIdentity;
+        public int playerId;
         public string name;
+        public int number;
     }
 
     [Serializable]
@@ -222,6 +234,11 @@ namespace VortexArena.Protocol
     {
         public int playerId;
         public string name;
+
+        /// <summary>Forma numarası 1..99 (§2); 0 = atanmamış, admin'de daima 0. Ad benzersiz
+        /// DEĞİLDİR (20'lik havuz tekrar eder) — ayırt edici alan budur, arayüzde "7 · ertu".</summary>
+        public int number;
+
         public string role;
         public string team;
         public bool ready;
@@ -253,6 +270,14 @@ namespace VortexArena.Protocol
     public class LobbyStateMsg
     {
         public string type = MessageTypes.LobbyState;
+
+        /// <summary>Monoton artan roster sürümü (§5.3); sunucu ömrü boyunca artar, yeniden
+        /// başlarsa 0'dan. İstemci <c>version &lt;= uyguladığı son sürüm</c> olan mesajı ATAR ve
+        /// sürümü her welcome'da sıfırlar. Sunucuda yayın tek yayıncıdan gittiği için sıra zaten
+        /// korunur; bu guard ikinci emniyettir — sürümsüz ateşle-unut yayında eski bir anlık
+        /// görüntü yeniyi ezer ve roster bir sonraki değişikliğe kadar bayat kalırdı.</summary>
+        public int version;
+
         public PlayerInfo[] players;
     }
 
@@ -326,10 +351,22 @@ namespace VortexArena.Protocol
         public int scoreBlue;
     }
 
+    /// <summary>Lobiye dönüş (§10.7). Şekli <see cref="LoadMatchMsg"/> ile aynıdır: lobi de bir
+    /// sahne + bir profil taşır.
+    /// <para><c>sceneName</c> işletmenin lobi sahnesidir (<c>server.json → lobbyScene</c>);
+    /// <b>boş gelirse</b> istemci kendi kabuk <c>Lobby</c> sahnesine döner — eski sunucuyla ve
+    /// lobisi yapılandırılmamış kurulumla uyum bu sayede korunur.</para>
+    /// <para><c>modeId</c> lobide <c>"lobby"</c>dir: istemci silah loadout'unu bu anahtarla
+    /// çözer. Kayıtlı bir maç modu DEĞİLDİR (§10.5) — <c>start_match</c> ile başlatılamaz.</para></summary>
     [Serializable]
     public class ReturnToLobbyMsg
     {
         public string type = MessageTypes.ReturnToLobby;
+        public string modeId;
+        public string sceneName;
+
+        /// <summary>Lobi profilinin kural şekli (§10.5); lobide bugünkü varsayılandır.</summary>
+        public ModeRulesInfo rules;
     }
 
     [Serializable]
@@ -362,6 +399,15 @@ namespace VortexArena.Protocol
 
         public string notice;
         public int adminCount;
+
+        /// <summary>Bu oturumda açılan mekan (§11) — sunucu başlarken seçilir, çalışırken
+        /// değişmez. Mekan ayrımı yoksa (maps.json boş) boş gelir.</summary>
+        public string venueId;
+
+        /// <summary>Bu mekanda oynatılabilen sahne adları. <b>Admin harita seçicisi kendi yerel
+        /// kataloğunu BUNUNLA süzer</b>: katalog tüm projeyi tanır, oynatılabilir olan ise
+        /// sunucunun o an açtığı mekandır. Boş gelirse (mekan ayrımı yok) süzme yapılmaz.</summary>
+        public string[] venueScenes;
     }
 
     // ---- UDP beacon (§4; WS mesajı değildir, alıcı app alanını doğrular) ----

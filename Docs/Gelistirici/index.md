@@ -11,7 +11,7 @@ okumadıysan ve "silahımı ateşleyince ne çağıracağım?" sorusunun cevabı
 
 | # | Sayfa | Ne verir |
 |---|---|---|
-| 1 | **[İlk Adımlar](Ilk-Adimlar.md)** | Projeyi aç, rolünü seç, sunucusuz test et, botlarla maç kur. ~15 dakika |
+| 1 | **[İlk Adımlar](Ilk-Adimlar.md)** | Projeyi aç, rolünü seç, sunucusuz test et, gerçek maç kur. ~15 dakika |
 | 2 | **[Yemek Kitabı](Yemek-Kitabi.md)** | "Şunu yapmak istiyorum" → kopyala-yapıştır reçete. **Günlük olarak burayı kullanacaksın** |
 | 3 | **[API Referansı](API-Referansi.md)** | Çağırabileceğin her şey: tip tip, üye üye, ne zaman çağrılır |
 | 4 | **[Sahne Kurulumu](Sahne-Kurulumu.md)** | Yeni arena/sahne yaparken sahnede bulunması gerekenler |

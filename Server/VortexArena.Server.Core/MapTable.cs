@@ -1,4 +1,6 @@
 #nullable enable
+using VortexArena.Protocol;
+
 namespace VortexArena.Server.Core;
 
 /// <summary>config/maps.json'daki tek harita girdisi. Public ALAN — JsonUtil (IncludeFields)
@@ -7,11 +9,16 @@ namespace VortexArena.Server.Core;
 ///
 /// <para><b>Arena ÖLÇÜSÜ burada YOKTUR</b> ve eklenmemelidir: sunucu metre bilmez (pozlar
 /// istemci-otoriter, arena uzayında gelir) ve her işletmenin alanı farklı — çoğu kare/dikdörtgen
-/// bile olmadığı için tek bir ölçü çifti arenayı tarif etmez. Ölçü yalnız istemcide,
-/// <c>MapDefinition.size</c>'da yaşar.</para></summary>
+/// bile olmadığı için tek bir ölçü çifti arenayı tarif etmez. Ölçü yalnız istemcide, sahnenin
+/// <c>ArenaBoundary.halfExtentX/Z</c>'sinde yaşar.</para></summary>
 public sealed class MapEntry
 {
     public string sceneName = "";
+
+    /// <summary>Haritanın MEKANI (§11). Export bunu asset yolundan türetir:
+    /// <c>Assets/Arenas/Venues/&lt;İşletme&gt;/…</c> → o işletme, başka her yer →
+    /// <c>"Standard"</c>. Boş gelirse (eski export) <c>"Standard"</c> sayılır.</summary>
+    public string venue = "";
 
     /// <summary>Bu haritanın desteklediği modId'ler; BOŞ = kısıt yok (MapDefinition.SupportsMode
     /// ile aynı semantik — yeni haritada unutulan alan modu gizlemesin).</summary>
@@ -36,17 +43,28 @@ public sealed class MapTableFile
 /// (§10.3) — hasarı istemci bildirir.</para></summary>
 public sealed class MapTable
 {
+    /// <summary>Mekanı boş gelen girdinin (eski export) sayıldığı mekan.</summary>
+    public const string DefaultVenue = "Standard";
+
     private readonly Dictionary<string, MapEntry> _byScene = new(StringComparer.Ordinal);
 
     /// <summary>Tabloya alınan sahne adları (açılış özeti / red mesajları için).</summary>
     public IReadOnlyList<string> SceneNames { get; }
 
+    /// <summary>Tablodaki mekanlar (alfabetik, tekrarsız). Açılışta operatöre bu liste sorulur.</summary>
+    public IReadOnlyList<string> Venues { get; }
+
+    /// <summary>Bu tablonun mekanı; tüm mekanları içeren TAM tabloda boştur.</summary>
+    public string Venue { get; }
+
     /// <summary>true = harita doğrulaması yapılmaz (maps.json yok/boş/bozuk).</summary>
     public bool IsEmpty => _byScene.Count == 0;
 
-    private MapTable(IEnumerable<MapEntry> entries)
+    private MapTable(IEnumerable<MapEntry> entries, string venue = "")
     {
+        Venue = venue;
         var names = new List<string>();
+        var venues = new List<string>();
         foreach (var entry in entries)
         {
             if (entry == null || string.IsNullOrWhiteSpace(entry.sceneName))
@@ -55,10 +73,53 @@ public sealed class MapTable
                 continue;
             }
             entry.modes ??= Array.Empty<string>();
+            if (string.IsNullOrWhiteSpace(entry.venue)) entry.venue = DefaultVenue;
             _byScene[entry.sceneName] = entry;
             names.Add(entry.sceneName);
+            if (!venues.Contains(entry.venue)) venues.Add(entry.venue);
         }
+        venues.Sort(StringComparer.Ordinal);
         SceneNames = names;
+        Venues = venues;
+    }
+
+    /// <summary>Yalnız verilen mekanın haritalarını içeren yeni tablo. Sunucu bunu
+    /// <see cref="MatchDirector"/>'a verir → <c>start_match</c> başka mekanın haritasını
+    /// otomatik reddeder (ayrı bir kontrol yazmaya gerek kalmaz).</summary>
+    public MapTable ForVenue(string venue)
+    {
+        var subset = new List<MapEntry>();
+        foreach (var entry in _byScene.Values)
+        {
+            if (string.Equals(entry.venue, venue, StringComparison.OrdinalIgnoreCase)) subset.Add(entry);
+        }
+        subset.Sort((a, b) => string.CompareOrdinal(a.sceneName, b.sceneName));
+        return new MapTable(subset, venue);
+    }
+
+    /// <summary>Bu tablodaki tek lobi haritası (modes == ["lobby"], §10.7); yoksa boş string.
+    /// Birden çoksa alfabetik ilki döner ve uyarı basılır — export deterministik sıralı olduğu
+    /// için seçim de deterministiktir.</summary>
+    public string ResolveLobbyScene()
+    {
+        var found = new List<string>();
+        foreach (var entry in _byScene.Values)
+        {
+            if (entry.modes.Length == 1 &&
+                string.Equals(entry.modes[0], ArenaProtocol.LOBBY_MODE_ID, StringComparison.OrdinalIgnoreCase))
+            {
+                found.Add(entry.sceneName);
+            }
+        }
+        if (found.Count == 0) return "";
+        found.Sort(StringComparer.Ordinal);
+        if (found.Count > 1)
+        {
+            Console.WriteLine($"[MapTable] '{Venue}' mekanında {found.Count} lobi haritası var " +
+                              $"({string.Join(", ", found)}) — '{found[0]}' seçildi. " +
+                              "Kesinleştirmek için server.json → lobbyScene yazın.");
+        }
+        return found[0];
     }
 
     /// <summary>Dosya yoksa/bozuksa BOŞ tablo döner (doğrulama atlanır) — sunucu asla

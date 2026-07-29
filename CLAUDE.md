@@ -1,7 +1,7 @@
 # VortexArena — Proje Talimatları (CLAUDE.md)
 
 Free-roam VR PvP arena ürünü (işletmelere kurulum / LBE; Meta Quest 3 & 3S, Unity 6000.3.20f1, URP).
-Oyuncular fiziksel alanda 1:1 yürür; farklı boyutlarda arenalar (10x10, 12x12, işletmeye özel),
+Oyuncular fiziksel alanda 1:1 yürür; farklı boyutlarda arenalar (12x12, işletmeye özel),
 farklı oyun modları/haritalar/silahlar. VR build = player, Windows build = admin (yönetim + izleme).
 Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN) — Mirror/NGO YOK.
 
@@ -43,7 +43,8 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 
 `Assets/` (Unity) · `Server/` (.NET 10 sunucu kaynağı) · **`launcher/`** (Flutter Windows
 launcher — operatör buradan admin oyununu başlatır) · **`scripts/`** (`deploy-admin-game.bat`,
-`deploy-server.bat`, `deploy-launcher.bat`, `docs-setup.bat`) · **`docs-serve.bat`** (repo kökü:
+`deploy-player-apk.bat`, `deploy-server.bat`, `deploy-launcher.bat`, `docs-setup.bat`) ·
+**`docs-serve.bat`** (repo kökü:
 doküman sitesini localhost:1111'de sunar; motor repo DIŞINDA `../vortexarena-docs-site`) ·
 **`deploy/`** (üretilen çalıştırılabilirler:
 `admin/`, `server/`, `launcher/` — **git'e girmez**) · **`dev-targets.json`** (repo kökü,
@@ -73,13 +74,27 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   ⚠️ Ayrı bir admin dashboard sahnesi YOKTUR ve açılmaz — admin
   oyuncularla aynı sahnede duran bir gözlemcidir.
   ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
-- `Assets/Arenas/Standard/<AXxX veya TemaAdı>/` ve `Assets/Arenas/Venues/<İşletme>/` — arena kutuları:
-  `{Scenes, Data, Prefabs}` (+ arenaya özel sanat varsa `Art/{Materials,Textures}`; ör. `Standard/IceWorld`).
+- `Assets/Arenas/Standard/<AXxX veya TemaAdı>/` ve `Assets/Arenas/Venues/<İşletme>/<Arena>/` —
+  arena kutuları: `{Scenes, Data, Prefabs}` (+ arenaya özel sanat varsa
+  `Art/{Materials,Textures}`; ör. `Standard/IceWorld`).
+  ⚠️ **İşletme klasörü kutu DEĞİL, kutuların kabıdır** — bir işletmede birden çok arena oynatılır,
+  hepsi o işletmenin `Default`'undan türetilir (`Venues/DemoVenue/Default/`).
+  ⚠️ **Klasör = MEKAN.** Export haritanın mekanını yoldan türetir (`Venues/<İşletme>/…` → o işletme,
+  başka her yer → `Standard`) ve sunucu açılışta hangi mekanı oynatacağını sorar; o oturumda
+  yalnız o mekanın haritaları başlatılabilir ve adminlere yalnız onlar görünür. Yani **bir arenayı
+  yanlış klasöre koymak onu yanlış işletmeye yazar** — `MapDefinition`'da mekan alanı YOKTUR ve
+  eklenmez (ikinci, unutulabilir bir doğruluk kaynağı olurdu). → `Docs/ArenaNet-Protokol.md` §11.1
+  **Her yeni arenanın kaynağı `Standard/Default12x12`'dir** — harita dizaynı taşımayan, yalnız ağa
+  bağlanmak için gerekenleri içeren TEK KAYNAK arena; sihirbazın varsayılan kaynağı da odur.
   Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ (marker bileşenleri Core'dan gelir).
   Bir arenanın ağa bağlanması için sahnede şunlar olmalı: `ArenaBoundary` (arena origin + halfExtent),
   `BaseZone`×2 (**taban bölgesi** = kırmızı/mavi şerit; ölen oyuncu buraya girince canlanır,
   `Team.Neutral` = herkese açık), `ArenaCalibrator`, `PlayerPoseTracker`, `RemotePlayerSpawner`,
-  `ModeHudSpawner`, BB Camera Rig. **Admin gözlemci için ek adım YOKTUR** — `AdminSpectator`
+  `ModeHudSpawner`, **`VA_CameraRig`** (`_Shared/App/Prefabs/` — SDK'nın Building Blocks rig'inden
+  türetilmiş kendi prefabımız; `PlayerBodyAvatar` içine gömülüdür, tracking origin `Stage`).
+  ⚠️ **Sahneye Building Blocks rig'i EKLENMEZ:** BB kurulumu prefabı otomatik unpack eder
+  (`CameraRigBBBlockData`), yani her arena rig'in donmuş bir kopyasını taşırdı ve bir rig düzeltmesi
+  arena sayısı kadar elle iş doğururdu. **Admin gözlemci için ek adım YOKTUR** — `AdminSpectator`
   kendini önyükler ve sahneyi devralır (rig'i kapatır, `ArenaBoundary`'yi susturur).
   Ayrıca arena başına **tek** `SpawnPoint`: `GameObject > VortexArena > Spawn Point` ile eklenir ve
   ELLE yerleştirilir (sihirbaz üretmez). Yalnız "maçtan önce şurada toplanın" göstergesidir —
@@ -157,13 +172,11 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
   kurma, arena uzayı dönüşümünü elle yazma, `ArenaClient.Send`'i doğrudan çağırma.
 - ⚠️ **Eşzamanlı oyuncu/admin KOTASI YOKTUR** (lisanslama geldiğinde eklenecek). `MAX_PLAYERS`
   gibi bir protokol sabiti **YOKTUR ve eklenmez**; tek tavan `PLAYER_ID_MAX = 255` ve o bir ürün
-  kararı değil `playerId`'nin `u8` olmasıdır. Dev aracı emniyeti gerekiyorsa
-  `DevProcesses.MaxDevBots` gibi **yerel** bir sabit kullan.
+  kararı değil `playerId`'nin `u8` olmasıdır. Dev aracı emniyeti gerekiyorsa **yerel** bir sabit
+  kullan, protokole sabit ekleme.
 - ⚠️ **Bir oyuncu durumuna savaş kapısı eklerken o durumu değiştiren TÜM yolları ara** — talep
   tabanlı olan (`revive_request`) ile zamanlayıcı tabanlı olan (`REVIVE_GRACE`) ayrı kod
-  yollarıdır; birini kapatmak kuralı işlevsiz bırakır. Sunucuya oyuncu için yeni bir ön koşul
-  eklediğinde `Server/VortexArena.PoseBot`'un da onu sağladığından emin ol, yoksa test botları
-  sessizce işlevsizleşir.
+  yollarıdır; birini kapatmak kuralı işlevsiz bırakır.
 - ⚠️ **Yeni admin ayarı eklerken önce sor: operatörler arasında ORTAK mı, ekrana mı ait?** —
   ortaksa `AdminSelection` + protokol (`admin_state`), ekrana aitse `AdminSession` (`PlayerPrefs`).
   Çoklu admin sınırsızdır ve hepsi eş yetkilidir.
@@ -173,20 +186,33 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
 ## Yeni içerik ekleme reçeteleri
 
 **Yeni arena:** `Tools > VortexArena > Create Arena From Template` → arenaId + sahne adı +
-hedef (Standard / Venue). ⚠️ **Sihirbaz arena GEOMETRİSİNE DOKUNMAZ — boyut sormaz, ölçekleme
-yapmaz.** Yaptığı iş: klasörleri (`{Scenes,Data,Prefabs}`) + kaynak sahnenin bire bir kopyasını
-üretir, MapDefinition asset'ini yazar (boyut kaynaktan kopyalanır), GameCatalog + uyumlu
+hedef (Standard / Venue; Venue'de kutu `Venues/<İşletme>/<arenaId>/` altına açılır).
+**Kaynak varsayılanı `Standard/Default12x12`'dir** — dizaynlı bir arenadan türetmek o arenanın
+geometrisini de kopyalar ve elle temizlemek gerekirdi. ⚠️ **Sihirbaz arena GEOMETRİSİNE DOKUNMAZ —
+boyut sormaz, ölçekleme yapmaz.** Yaptığı iş: klasörleri (`{Scenes,Data,Prefabs}`) + kaynak
+sahnenin bire bir kopyasını üretir, MapDefinition asset'ini yazar, GameCatalog + uyumlu
 ModeDefinition'lara ekler, Build Settings'e koyar (sahne adı = katalog anahtarı). Değeri
 **bileşen bütünlüğü**: kopyalanan sahne ağa bağlanmak için gereken her şeyi hazır taşır
 (`ArenaBoundary`, `ArenaCalibrator` + işaretçiler, `PlayerPoseTracker`, `RemotePlayerSpawner`,
-`ModeHudSpawner`, `BaseZone`'lar, BB rig). **Ölçekleme bilinçli olarak yoktur ve eklenmez:**
+`ModeHudSpawner`, `BaseZone`'lar, `VA_CameraRig`). ⚠️ **Farklı ÖLÇÜDEKİ arena Default12x12'den
+türetilmez** (10×10 bir arena 12×12 duvar/zeminle gelir) — o ölçü için kendi `Default`'unu kur.
+**Ölçekleme bilinçli olarak yoktur ve eklenmez:**
 her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen bile değil, plan zaten baştan
 çiziliyor — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek bir yalancı-doğru
-üretir. ELDE: geometri çizimi · `ArenaBoundary.halfExtentX/Z` + `MapDefinition.size` (**yalnız
-istemci** — admin mini haritası + gözlemci kamerası kadraj yedeği) · kalibrasyon işaretçilerinin
+üretir. ELDE: geometri çizimi · `ArenaBoundary.halfExtentX/Z` · kalibrasyon işaretçilerinin
 yerleşimi (yerleri zemin bandından gelir) · tek `SpawnPoint` · NavMesh/ışık bake. Sonrasında
 `Tools > VortexArena > Export Server Config` çalıştır — **yeni `sceneName` `maps.json`'a girsin
 diye** (ölçü için değil, oraya arena boyutu yazılmaz).
+**Yeni lobi:** lobi de bir arena kutusudur, farkı üç şeydir — `MapDefinition.supportedModeIds` **yalnız
+`["lobby"]`** (boş bırakılırsa "kısıtsız" sayılır!), sahnede `BaseZone` ve `ModeHudSpawner` YOK, silah
+rafı VAR. Kaynağı **o fiziksel odanın ölçüsündeki** arenadır (12×12 için `Standard/Lobby12x12`);
+ölçekleme yoktur. `Export Server Config` yeter: sunucu **seçilen mekanın** lobi haritasını kendi
+bulur (`server.json → lobbyScene` yalnız mekanda birden çok lobi varsa doldurulur).
+⚠️ `lobby` **kayıtlı bir mod DEĞİLDİR** — sunucuya `IGameMode` olarak eklenmez (`start_match` onu
+reddeder), `ModeDefinition.lobbyProfile` işaretlidir ve admin mod seçicisinde görünmez. Lobide savaşı
+kapatan şey kural değil **fazdır**; `hit_report`'un `Phase.Live` kapısına dokunma.
+→ `Docs/ArenaNet-Protokol.md` §10.7
+
 **Yeni mod:** `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol;
 mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafında `Modes/<Ad>Mode.cs`
 (IGameMode) + `MatchDirector.RegisterModes()`'a bir satır + `Docs/ArenaNet-Protokol.md`'ye modId ekle.
@@ -227,7 +253,11 @@ kiti de aynı tablodan (`WeaponSpec`) gelir: silaha özgü ateş/reload/dry-fire
 altında sub-emitter'lı namlu dumanı (`Smoke`), ve kalibreye göre (762x39/556x45) paylaşılan
 `Casing_*.prefab`'a bağlı `ShellEjector` (ateşte kovan fırlatan, `Weapon.Fired`'a abone bileşen —
 `Docs/Sistem-Ozeti.md` §4). Gerekiyorsa
-`ModeDefinition.loadout` + sahneye yerleştirme elle. **Sunucu tarafında iş YOKTUR** ve export
+`ModeDefinition.loadout`'a eklenir. ⚠️ **Sahneye elle `WPN_*` örneği KOYULMAZ:** raf silahlarını
+`WeaponRackSpawner` (`_Shared/Core/Combat/`, raf kökünde) kural `Rack` iken loadout'tan üretir —
+göz (`RackSlot`) yalnız KONUMU tutar, hangi silahın duracağını mod belirler. Elle konan örnek
+sahneye donar ve moda silah eklendiğinde her arenayı tek tek açmak gerekirdi.
+**Sunucu tarafında iş YOKTUR** ve export
 gerekmez — sunucuda silah tablosu yok, hasarı (headshot çarpanı dahil) istemci hesaplayıp
 `hit_report.damage` ile bildirir, sunucu aynen uygular (§10.3); `weaponId` yalnız kill feed
 etiketi, doğrulanmaz. Alan etkisi için etkilenen her hedefe bir `hit_report` yollanır. Denge
@@ -259,19 +289,24 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` değişti / yeni arena eklendi → `Server/config/maps.json` |
 | `… > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi (idempotent; *Yalnız Kataloğu Tazele* varyantı da var) |
 | `… > Create Arena From Template` | Yeni arena kutusu |
-| `… > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, sentetik maç, test botları |
+| `… > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, sentetik maç, sunucu çözümünü derleme |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` · `Spawn Point` | Sahneye ilgili bileşeni + kurulumunu ekler |
-| `PlayerBuildTool.BuildWindowsAdmin` | Menü değil — batch-mode `-executeMethod` girişi (`deploy-admin-game.bat` çağırır) |
+| `PlayerBuildTool.BuildWindowsAdmin` · `…BuildQuestPlayer` | Menü değil — batch-mode `-executeMethod` girişleri (`deploy-admin-game.bat` / `deploy-player-apk.bat` çağırır) |
 
 - ⚠️ **`maps.json` elle düzenlenmez** — export ezer. Tek doğruluk kaynağı Unity SO'larıdır.
 - ⚠️ **Sunucu editörden YÖNETİLMEZ** — dev penceresinde başlat/durdur düğmesi yoktur; sunucu her
-  zaman elle çalıştırılıp elle kapatılır. Pencere yalnız test botlarını yönetir.
+  zaman elle çalıştırılıp elle kapatılır. Pencere yalnız çözümü derler.
 - ⚠️ Süreç başlatırken **asla `dotnet run`** (yetim süreç portu tutar) ve **çıktıyı borulama**
-  (okunmayan boru süreci kilitler) — gerekçeler `Docs/Sistem-Ozeti.md` §7/13-14.
+  (okunmayan boru süreci kilitler) — gerekçeler `Docs/Sistem-Ozeti.md` §7 tuzaklar listesinde.
 
-**Dağıtım:** `scripts\deploy-admin-game.bat` · `deploy-server.bat` · `deploy-launcher.bat`
-(üçü de çift tıklanabilir; otomasyonda `--no-pause` / `VORTEX_NO_PAUSE=1`).
-⚠️ Admin build'i için **editör kapalı olmalı** (batch-mode proje kilidine takılır; betik bunu
-zorlamaz, takılırsa elle iptal et); launcher build'i için Windows **Developer Mode** açık olmalı.
+**Dağıtım:** `scripts\deploy-admin-game.bat` (Windows admin) · `deploy-player-apk.bat`
+(Quest oyuncu APK'sı) · `deploy-server.bat` · `deploy-launcher.bat`
+(dördü de çift tıklanabilir; otomasyonda `--no-pause` / `VORTEX_NO_PAUSE=1`).
+⚠️ **Her iki Unity build'i için editör kapalı olmalı** (batch-mode proje kilidine takılır; betik
+bunu zorlamaz, takılırsa elle iptal et); launcher build'i için Windows **Developer Mode** açık
+olmalı. ⚠️ **APK build'i aktif platformu Android'e çevirir ve geri almaz** (geri almak ikinci bir
+tam reimport demek olurdu) — Windows'tan ilk geçiş 20-40 dk sürer.
+⚠️ **İki Unity build'i AYNI sahne listesini kullanır** (Build Settings); platforma göre ayrı liste
+tutma — bir arenayı admin bilip oyuncu bilmezse `start_match` sessizce reddedilir.
 Betik yazım tuzakları ve aşama izleyici (`watch-unity-build.ps1`): `scripts/README.md`.
 Çıktı yerleşimi: `deploy/README.md`.

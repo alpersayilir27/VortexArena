@@ -17,7 +17,7 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 | Bileşen | Nerede durur | Ne yapar | Atlarsan |
 |---|---|---|---|
 | **BB Camera Rig** | Sahne kökü | Meta Building Blocks kamera/kumanda rig'i | Oyuncu hiçbir şey görmez |
-| **`ArenaBoundary`** | Arena **merkezinde**, duvarlara hizalı | **Arena orijinini kaydeder** + sınır uyarısını çizer | Tüm uzak oyuncular dünya orijinine yığılır |
+| **`ArenaBoundary`** | Arena **merkezinde**, duvarlara hizalı | **Arena orijinini kaydeder** + sınır uyarısını çizer + arena ölçüsünün tek kaynağıdır (admin kuş bakışı kadrajı bunu okur) | Tüm uzak oyuncular dünya orijinine yığılır, admin kuş bakışı kadrajsız kalır (konsola uyarı düşer) |
 | **`ArenaCalibrator`** | Sahne kökü | Zemindeki A–B işaretleriyle fiziksel hizalama | Sanal arena fiziksel odayla örtüşmez |
 | **`BaseZone` × 2** | Karşı kenarlarda (Red / Blue) | **Taban bölgesi** — kırmızı/mavi şerit, canlanma kapısı | TDM'de kimse canlanamaz |
 | **`SpawnPoint` × 1** | Arenada nereye istersen | Maç öncesi **yerleşim göstergesi** (kod okumaz) | Operatörün oyuncuyu yönlendireceği ortak bir nokta olmaz |
@@ -50,9 +50,8 @@ BB rig'i kapatır, `ArenaCalibrator`/`BaseZone`'u kapatır, `ArenaBoundary`'yi *
 
 Sahne dosyası tek başına yetmez — üç kayıt daha gerekir:
 
-1. **`MapDefinition` SO'su** (`Arenas/<...>/Data/`): `sceneName`, `displayName`, `size` (metre —
-   **yalnız istemcide**: admin mini haritasının ölçeği + gözlemci kamerası kadraj yedeği),
-   `supportedModeIds`.
+1. **`MapDefinition` SO'su** (`Arenas/<...>/Data/`): `sceneName`, `displayName`,
+   `supportedModeIds`. Arena ölçüsü burada değil, sahnedeki `ArenaBoundary.halfExtentX/Z`'dedir.
 2. **`GameCatalog.asset`** → `maps[]` listesine ekle.
 3. **Build Settings** → sahneyi ekle ve **enabled** bırak.
 4. **`Tools > VortexArena > Export Server Config`** → `Server/config/maps.json` tazelenir
@@ -65,9 +64,23 @@ Sahne dosyası tek başına yetmez — üç kayıt daha gerekir:
 > ⚠️ **Export'u unutma.** Unutursan `start_match` "harita tabloda yok" ya da "bu modu
 > desteklemiyor" diye **sessizce** reddedilir; sebep yalnız sunucu konsolunda tek satırdır.
 
-> ⚠️ **Yeni arena eklerken `Server/VortexArena.PoseBot`'taki `BuildScenes` listesini de güncelle.**
-> Sunucu sahneyi TÜM oyuncuların `hello.scenes` listesinde arar; listesi eksik kalan bir bot maçı
-> bloklar.
+> ⚠️ **Yeni sahneyi Build Settings'e eklemeyi unutma.** Sunucu sahneyi TÜM oyuncuların
+> `hello.scenes` listesinde arar (bu liste Build Settings'ten üretilir); listesi eksik kalan bir
+> istemci maçı bloklar.
+
+### Lobi sahnesi kuruyorsan
+
+Lobi de bir arena kutusudur; yukarıdaki dört kayıt aynen geçerlidir. Üç fark:
+
+- `supportedModeIds` **yalnız `["lobby"]`** — ⚠️ boş bırakılırsa "kısıtsız" sayılır ve lobide maç
+  başlatılabilir hâle gelir.
+- Sahnede **`BaseZone` ve `ModeHudSpawner` YOK** (lobide ölüm ve maç HUD'u yok), **silah rafı VAR**.
+- Sunucuya `IGameMode` eklenmez: `lobby` başlatılabilir bir mod değil bir **profildir**
+  (`ModeDefinition.lobbyProfile ✔`) — admin mod seçicisinde de görünmez.
+
+Hangi lobinin oynatılacağı sunucuda seçilir: `server.json → lobbyScene`. Lobi **fiziksel odanın
+ölçüsünde** olmalıdır, bu yüzden kaynağı o ölçüdeki arenadır (ölçekleme yoktur). Ayrıntı:
+`Docs/ArenaNet-Protokol.md` §10.7.
 
 ---
 

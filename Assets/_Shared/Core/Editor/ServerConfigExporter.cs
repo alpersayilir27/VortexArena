@@ -157,6 +157,33 @@ namespace VortexArena.Core.Editor
             return accepted;
         }
 
+        /// <summary>
+        /// Haritanın MEKANI — asset yolundan türetilir, ayrı bir alan yoktur.
+        /// <para>
+        /// <c>Assets/Arenas/Venues/&lt;İşletme&gt;/…</c> → <c>&lt;İşletme&gt;</c>,
+        /// başka her yer → <see cref="StandardVenue"/>. Klasör yerleşimi zaten mekanı anlatıyor
+        /// (CLAUDE.md: "işletme klasörü kutuların kabıdır"); ikinci bir alan eklemek onu
+        /// unutulabilir hâle getirirdi — bir haritayı yanlış mekana yazmanın tek yolu onu yanlış
+        /// klasöre koymaktır, o da gözle görülür.
+        /// </para>
+        /// </summary>
+        private static string VenueOf(MapDefinition map)
+        {
+            const string venuesRoot = "Assets/Arenas/Venues/";
+            string path = AssetDatabase.GetAssetPath(map);
+            if (string.IsNullOrEmpty(path) || !path.StartsWith(venuesRoot, StringComparison.Ordinal))
+            {
+                return StandardVenue;
+            }
+
+            string rest = path.Substring(venuesRoot.Length);
+            int slash = rest.IndexOf('/');
+            return slash > 0 ? rest.Substring(0, slash) : StandardVenue;
+        }
+
+        /// <summary>İşletme klasörü altında OLMAYAN haritaların mekanı (şablonlar + standart arenalar).</summary>
+        public const string StandardVenue = "Standard";
+
         /// <summary>Build Settings'teki sahne adları → enabled bayrağı (ad çakışırsa açık olan kazanır).</summary>
         private static Dictionary<string, bool> CollectBuildSettingsScenes()
         {
@@ -187,14 +214,12 @@ namespace VortexArena.Core.Editor
         // ----------------------------------------------------------------- json
 
         /// <summary>
-        /// <c>{ "maps": [ { "sceneName": "Arena10x10", "modes": ["tdm"] } ] }</c> — sunucunun
-        /// <c>start_match</c> doğrulaması için.
+        /// <c>{ "maps": [ { "sceneName": "Arena12x12", "venue": "Standard", "modes": ["tdm"] } ] }</c>
+        /// — sunucunun <c>start_match</c> doğrulaması ve <b>mekan seçimi</b> için.
         /// <para>
         /// <b>Arena ÖLÇÜSÜ yazılmaz.</b> Sunucu metre bilmez (pozlar istemci-otoriter, arena
         /// uzayında gelir); ayrıca her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile
         /// değil, yani tek bir ölçü çifti o arenayı tarif etmez.
-        /// <c>MapDefinition.size</c> yalnız İSTEMCİDE yaşar (admin mini haritasının metre ölçeği
-        /// + <c>ArenaBoundary</c> yoksa gözlemci kamerasının kadraj yedeği).
         /// </para>
         /// </summary>
         private static string BuildMapsJson(List<MapDefinition> maps)
@@ -213,6 +238,7 @@ namespace VortexArena.Core.Editor
                 {
                     MapDefinition map = maps[i];
                     sb.Append("    { \"sceneName\": \"").Append(EscapeJson(map.SceneName))
+                        .Append("\", \"venue\": \"").Append(EscapeJson(VenueOf(map)))
                         .Append("\", \"modes\": ").Append(BuildModesArray(map.SupportedModeIds))
                         .Append(" }")
                         .Append(i < maps.Count - 1 ? ",\n" : "\n");

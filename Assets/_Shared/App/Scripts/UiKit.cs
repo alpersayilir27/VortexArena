@@ -222,6 +222,60 @@ namespace VortexArena.App
         }
 
         /// <summary>
+        /// Tek satırlık metin girişi: koyu yuvarlatılmış zemin + <see cref="TMP_InputField"/>.
+        /// <para>
+        /// ⚠️ <b>Kitin TEK klavye alanıdır ve yalnız MASAÜSTÜ (admin) arayüzünde kullanılır.</b>
+        /// VR tarafında sistem klavyesi gerekir; oradaki metin girişi ayrı bir çözümdür.
+        /// </para>
+        /// <para>
+        /// Bileşen <b>obje pasifken</b> eklenir: <c>TMP_InputField.OnEnable</c> etkinleşme anında
+        /// <c>textComponent</c>/<c>textViewport</c> arar, aktif bir objeye eklenirse yarım kurulmuş
+        /// hâlde uyanır ve caret'i bozuk kalır. Sıra: pasifleştir → ekle → kur → etkinleştir.
+        /// </para>
+        /// </summary>
+        public static TMP_InputField Input(Transform parent, string name, string placeholder,
+            float fontSize, int characterLimit, UnityAction<string> onEndEdit)
+        {
+            UiImage background = Image(parent, name, RoundedSprite(8f), Hex(0x12151C, 0xFF));
+            background.raycastTarget = true;
+
+            RectTransform viewport = Node(background.rectTransform, "TextArea");
+            Stretch(viewport, 8f);
+            viewport.gameObject.AddComponent<RectMask2D>();
+
+            TextMeshProUGUI text = Text(viewport, "Text", fontSize, Title, FontStyles.Normal,
+                TextAlignmentOptions.MidlineLeft);
+            Stretch(text.rectTransform);
+
+            TextMeshProUGUI hint = Text(viewport, "Placeholder", fontSize, Faint, FontStyles.Italic,
+                TextAlignmentOptions.MidlineLeft);
+            Stretch(hint.rectTransform);
+            hint.text = placeholder;
+
+            GameObject host = background.gameObject;
+            host.SetActive(false);
+
+            var field = host.AddComponent<TMP_InputField>();
+            field.targetGraphic = background;
+            field.textViewport = viewport;
+            field.textComponent = text;
+            field.placeholder = hint;
+            field.characterLimit = characterLimit;
+            field.lineType = TMP_InputField.LineType.SingleLine;
+            field.richText = false;
+            field.restoreOriginalTextOnEscape = true;
+            field.text = "";
+
+            if (onEndEdit != null)
+            {
+                field.onEndEdit.AddListener(onEndEdit);
+            }
+
+            host.SetActive(true);
+            return field;
+        }
+
+        /// <summary>
         /// Yatay dolum barı (HP/ilerleme): zemin + soldan büyüyen dolgu.
         /// Dolgunun genişliği <c>fill.rectTransform.anchorMax.x</c> ile 0..1 arası ayarlanır.
         /// </summary>

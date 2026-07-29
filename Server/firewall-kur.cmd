@@ -37,7 +37,6 @@ echo.
 echo === [2/5] Eski / otomatik ENGELLE kurallarini temizle ===============
 rem Windows'un uygulamaya ozel otomatik Block kurallari:
 netsh advfirewall firewall delete rule name="VortexArena.Server.App" >nul 2>&1
-netsh advfirewall firewall delete rule name="VortexArena.PoseBot" >nul 2>&1
 rem Kendi kurallarimiz (idempotent olsun diye once silinir):
 netsh advfirewall firewall delete rule name="VortexArena Beacon (UDP 47820)" >nul 2>&1
 netsh advfirewall firewall delete rule name="VortexArena Control (TCP 47821)" >nul 2>&1

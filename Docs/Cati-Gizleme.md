@@ -23,7 +23,7 @@ göremez.
 `ArenaRoof.ApplyAll()` çağrıldığında tepki verir ve onu yalnız admin gözlemci çağırır. Quest
 build'inde bu kod yolu hiç koşmaz.
 
-**İsteğe bağlıdır.** Açık tavanlı arenalarda (bugünkü `Arena10x10`, `Arena12x12`, `IceWorld`…)
+**İsteğe bağlıdır.** Açık tavanlı arenalarda (bugünkü `Arena12x12`, `IceWorld`…)
 bu adım hiç yapılmaz, hiçbir şey değişmez.
 
 ---
@@ -234,7 +234,7 @@ Bu notun kapsamı çatıdır; tam liste ve sorumluluklar `CLAUDE.md` → *Editor
 
 | Araç | İş |
 |---|---|
-| `Tools > VortexArena > Dev` (`Ctrl+Alt+R`) | Rol · sunucu hedefi · Play başlangıcı · sentetik maç · test botları |
+| `Tools > VortexArena > Dev` (`Ctrl+Alt+R`) | Rol · sunucu hedefi · Play başlangıcı · sentetik maç |
 | `Tools > VortexArena > Create Arena From Template` | Yeni arena kutusu + sahne + `MapDefinition` + katalog + Build Settings |
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` |
 | `GameObject > VortexArena > Network Parent` | Sahne objesine `NetIdentity` + benzersiz `sceneId` |

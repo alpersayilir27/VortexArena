@@ -67,6 +67,18 @@ ArenaCombat.ReportHit(id, nokta, 25f, "ak47"); // ✅ sunucu düşürür, health
 
 Aynısı skor, ölüm sayısı ve maç fazı için de geçerli — hepsi sunucudan gelir.
 
+### ⛔ Yerel can havuzu yazma
+
+```csharp
+public class Kirilabilir : MonoBehaviour { private float hp = 100f; }   // ❌ ikinci doğruluk kaynağı
+if (!ArenaCombat.ReportRaycastHit(hit, 25f, "ak47")) { /* hiçbir şey yapma */ }   // ✅
+```
+
+İstemcide `hp` alanı tutan bir bileşen (kaldırılan `Health` gibi) **yazılmaz**: iki istemci farklı
+can görür, kimin haklı olduğunu söyleyecek bir merci kalmaz. `ReportRaycastHit` `false` dönmesi
+"hedef ağ oyuncusu değil, hasar yok" demektir — dönüş değeri yalnız sunum kararıdır. Ağa bağlı
+olmayan geometri (duvar, dekor) hasar almaz; hasar alması gereken her şey ağsal olur (`NetIdentity`).
+
 ### ⛔ `if (modeId == "ffa")` zinciri yazma
 
 Modun şekli telden gelir. `ModeRuntime`'dan oku. Zincir yazarsan her yeni mod senin kodunu

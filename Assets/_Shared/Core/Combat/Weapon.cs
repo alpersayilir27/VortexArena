@@ -372,15 +372,11 @@ namespace VortexArena.Core.Combat
                 float damage = definition.Damage *
                                (ArenaCombat.IsHeadshot(hit.collider) ? definition.HeadshotMultiplier : 1f);
 
-                // AĞ OYUNCUSU: hasar YEREL UYGULANMAZ — sunucu doğrular ve health_update
-                // yayınlar. false = hedef ağ oyuncusu değil (pratik dummy'si, kırılabilir
-                // hedef): eski yerel hasar yolu korunur, canları sunucuda tutulmaz.
-                if (!ArenaCombat.ReportRaycastHit(hit, damage, WeaponId))
-                {
-                    Health target = hit.collider.GetComponentInParent<Health>();
-                    if (target != null)
-                        target.TakeDamage(definition.Damage, this);
-                }
+                // Hasar HİÇBİR KOŞULDA yerelde uygulanmaz: can sunucu-otoriterdir, geri
+                // health_update ile gelir. Hedef ağ oyuncusu değilse (dekor, duvar) hiçbir şey
+                // olmaz — yukarıda oynatılan çarpma efekti kalır. Kırılabilir objeler ağsal
+                // olduğunda onlar da bu hit_report yoluna girecek.
+                ArenaCombat.ReportRaycastHit(hit, damage, WeaponId);
             }
 
             currentKick = Mathf.Min(currentKick + definition.KickDegrees * recoilScale, definition.KickDegrees * 4f);

@@ -20,6 +20,7 @@ namespace VortexArena.Core.Player
     public class RemoteAvatar : MonoBehaviour
     {
         [Header("Görseller")]
+        [Tooltip("Karakterli avatarda kullanılmaz; etiket/eski kapsül yolu için kafa transformu.")]
         [SerializeField] private Transform head;
         [Tooltip("Gövde kapsülü; kafanın BodyDropMeters altında, yalnız yaw döner (opsiyonel).")]
         [SerializeField] private Transform body;
@@ -27,6 +28,16 @@ namespace VortexArena.Core.Player
         [SerializeField] private Transform handR;
         [SerializeField] private TMP_Text nameLabel;
         [SerializeField] private Renderer[] teamRenderers;
+
+        [Header("Karakter")]
+        [Tooltip("Bağlıysa gövde üç noktalı IK ile çözülür; boşsa eski kafa/el/kapsül yolu kullanılır.")]
+        [SerializeField] private ThreePointBodyIK bodyIK;
+
+        [Tooltip("YEREL oyuncuyla aynı takımdayken görünen dost göstergesi (kafanın üstündeki küp).")]
+        [SerializeField] private GameObject friendMarker;
+
+        [Tooltip("İlk poz gelene dek gizlenecek görsel kök. Boşsa teamRenderers listesi kullanılır.")]
+        [SerializeField] private GameObject visualRoot;
 
         [Header("Vuruş kutuları")]
         [Tooltip("Kafa + gövde collider'ları; boş bırakılırsa çocuklardan otomatik toplanır.")]
@@ -44,6 +55,12 @@ namespace VortexArena.Core.Player
 
         /// <summary>Ölü avatarın renk çarpanı (opak materyalde alpha yerine karartma).</summary>
         private const float DeadColorScale = 0.35f;
+
+        /// <summary>Dost göstergesinin kafa merkezinin üstündeki yüksekliği (metre).</summary>
+        private const float FriendMarkerHeightMeters = 0.32f;
+
+        /// <summary>Ad etiketinin kafa merkezinin üstündeki yüksekliği (metre) — göstergenin üstünde.</summary>
+        private const float NameLabelHeightMeters = 0.5f;
 
         private const string DeadLabelSuffix = " (ölü)";
         private const string UncalibratedLabelSuffix = " (KALİBRESİZ)";
@@ -72,8 +89,15 @@ namespace VortexArena.Core.Player
 
         private bool _visible = true;
 
-        // Ad/renk SetInfo'da saklanır; ölüm görünümü bunların üstüne uygulanır.
+        /// <summary>Bu uzak oyuncu YEREL oyuncuyla aynı takımda mı (dost göstergesini sürer).</summary>
+        private bool _isFriendly;
+
+        // Ad/numara/renk SetInfo'da saklanır; ölüm görünümü bunların üstüne uygulanır.
         private string _displayName = "";
+
+        /// <summary>Forma numarası (§2); 0 = atanmamış → etikette basılmaz.</summary>
+        private int _number;
+
         private Color _teamColor = NeutralColor;
 
         private void Awake()
@@ -91,10 +115,14 @@ namespace VortexArena.Core.Player
             PlayerId = playerId;
         }
 
-        /// <summary>Ad etiketini ve takım rengini günceller ("red"/"blue"/diğer=gri).</summary>
-        public void SetInfo(string displayName, string team)
+        /// <summary>Ad etiketini, forma numarasını ve takım rengini günceller ("red"/"blue"/diğer=gri).
+        /// <para><paramref name="number"/> 0 ise numara BASILMAZ (atanmamış ya da admin): adlar
+        /// benzersiz olmadığı için ayırt edici alan numaradır, uydurma bir sayı göstermek onu
+        /// güvenilmez kılardı (§2).</para></summary>
+        public void SetInfo(string displayName, int number, string team)
         {
             _displayName = displayName ?? "";
+            _number = number;
             _teamColor = team == "red" ? TeamRedColor : team == "blue" ? TeamBlueColor : NeutralColor;
 
             ApplyLabelText();
@@ -120,13 +148,54 @@ namespace VortexArena.Core.Player
             RefreshColliders();
         }
 
+        /// <summary>
+        /// Bu uzak oyuncu YEREL oyuncuyla aynı takımda mı — kafanın üstündeki dost göstergesi
+        /// buna göre açılır.
+        /// <para>
+        /// Takım rengi karakter mesh'ine UYGULANMAZ: herkes aynı modeli kullanıyor ve ayrımı
+        /// yapan tek şey bu göstergedir. Düşmanda hiçbir işaret olmaması bilinçlidir — düşmanı
+        /// da işaretlemek arenada duvar arkasından okunabilen bir avantaj üretirdi.
+        /// </para>
+        /// </summary>
+        public void SetFriendly(bool friendly)
+        {
+            if (_isFriendly == friendly)
+            {
+                return;
+            }
+
+            _isFriendly = friendly;
+            RefreshFriendMarker();
+        }
+
+        /// <summary>Göstergeyi kafanın üstünde tutar — kafa KEMİĞİNE bağlanmaz, çünkü IK her
+        /// karede kemiği yeniden yerleştiriyor ve gösterge onunla birlikte eğilmemeli.</summary>
+        private void UpdateFriendMarker(in Pose headWorld)
+        {
+            if (friendMarker == null || !friendMarker.activeSelf)
+            {
+                return;
+            }
+
+            friendMarker.transform.position = headWorld.position + Vector3.up * FriendMarkerHeightMeters;
+        }
+
+        private void RefreshFriendMarker()
+        {
+            if (friendMarker != null)
+            {
+                friendMarker.SetActive(_visible && _isFriendly);
+            }
+        }
+
         /// <summary>Ad etiketi; ölüyken " (ölü)", kalibresizken " (KALİBRESİZ)" eki taşır.</summary>
         private void ApplyLabelText()
         {
             if (nameLabel != null)
             {
                 string suffix = !IsCalibrated ? UncalibratedLabelSuffix : IsAlive ? "" : DeadLabelSuffix;
-                nameLabel.text = _displayName + suffix;
+                string prefix = _number > 0 ? _number + " · " : "";
+                nameLabel.text = prefix + _displayName + suffix;
             }
         }
 
@@ -222,12 +291,25 @@ namespace VortexArena.Core.Player
 
             // Pozlar arena uzayında — sahnedeki origin'e göre dünyaya çevir.
             Pose headWorld = ArenaSpace.ArenaToWorld(headPose);
-            Apply(head, headWorld);
-            Apply(handL, ArenaSpace.ArenaToWorld(handLPose));
-            Apply(handR, ArenaSpace.ArenaToWorld(handRPose));
-            ApplyBody(headWorld);
+            Pose handLWorld = ArenaSpace.ArenaToWorld(handLPose);
+            Pose handRWorld = ArenaSpace.ArenaToWorld(handRPose);
 
-            UpdateLabelBillboard();
+            if (bodyIK != null)
+            {
+                // Karakterli avatar: gövde, kollar ve bacaklar bu üç noktadan türetilir.
+                bodyIK.Solve(headWorld, handLWorld, handRWorld);
+            }
+            else
+            {
+                // Eski kapsül avatarı — prefabda IK bağlı değilse davranış değişmesin.
+                Apply(head, headWorld);
+                Apply(handL, handLWorld);
+                Apply(handR, handRWorld);
+                ApplyBody(headWorld);
+            }
+
+            UpdateFriendMarker(headWorld);
+            UpdateLabel(headWorld);
         }
 
         /// <summary>
@@ -273,13 +355,20 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Ad etiketini kameraya döndürür (etiket ters bakmasın diye etiket→kamera tersi).</summary>
-        private void UpdateLabelBillboard()
+        /// <summary>
+        /// Ad etiketini kafanın üstünde tutar ve kameraya döndürür (etiket ters bakmasın diye
+        /// etiket→kamera tersi).
+        /// <para>Konum her karede YAZILIR: karakterli avatarda etiket bir kafa objesinin çocuğu
+        /// değildir (kafa artık IK'nın sürdüğü bir kemiktir ve etiket onunla eğilmemeli).</para>
+        /// </summary>
+        private void UpdateLabel(in Pose headWorld)
         {
             if (nameLabel == null)
             {
                 return;
             }
+
+            nameLabel.transform.position = headWorld.position + Vector3.up * NameLabelHeightMeters;
 
             if (_mainCamera == null)
             {
@@ -316,7 +405,12 @@ namespace VortexArena.Core.Player
 
             _visible = visible;
 
-            if (teamRenderers != null)
+            if (visualRoot != null)
+            {
+                // Karakterli avatar: tek kök kapatılır (mesh listesi tutmak gerekmez).
+                visualRoot.SetActive(visible);
+            }
+            else if (teamRenderers != null)
             {
                 for (int i = 0; i < teamRenderers.Length; i++)
                 {
@@ -332,6 +426,7 @@ namespace VortexArena.Core.Player
                 nameLabel.enabled = visible;
             }
 
+            RefreshFriendMarker();
             RefreshColliders();
         }
     }

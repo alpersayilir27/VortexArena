@@ -13,7 +13,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 **Fiziksel alan**
 
 - [ ] Serbest (engelsiz) oyun alanını ölç: arena boyutu = ölçülen alan − **0.5 m güvenlik payı** (her iki eksende).
-- [ ] Standart `A10x10` arenayı olduğu gibi kullanacaksan alan en az **10.5 × 10.5 m** olmalı; daha küçük/asimetrik alanlarda arena şablon sihirbazıyla özel arena üretilir (Bölüm 2).
+- [ ] Standart `A12x12` arenayı olduğu gibi kullanacaksan alan en az **12.5 × 12.5 m** olmalı; daha küçük/asimetrik alanlarda arena şablon sihirbazıyla özel arena üretilir (Bölüm 2).
 - [ ] Zemin düz, kaygan değil, seviye farkı ve kablo/eşik yok; alan içinde sütun, sabit mobilya, cam yüzey yok.
 - [ ] Aydınlatma homojen ve gölgesiz; doğrudan güneş ışığı, güçlü spot ve ayna/parlak yansıtıcı yüzey yok (inside-out takip bozulur, lensler zarar görür).
 - [ ] Tavan yüksekliği yeterli (kollar yukarıda serbest hareket edebilmeli).
@@ -36,19 +36,18 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 - [ ] Fiziksel alanı ölç (X ve Z, metre). Arena boyutu = ölçü − 0.5 m.
 - [ ] Unity'de `Tools > VortexArena > Create Arena From Template` menüsünü aç ve doldur:
-  - **Kaynak sahne:** `Assets/Arenas/Standard/A10x10/Scenes/Arena10x10.unity`
-  - **Kaynak MapDefinition:** `Assets/Arenas/Standard/A10x10/Data/A10x10.asset`
+  - **Kaynak sahne:** `Assets/Arenas/Standard/Default12x12/Scenes/Default12x12.unity`
+  - **Kaynak MapDefinition:** `Assets/Arenas/Standard/Default12x12/Data/Default12x12.asset`
   - **Arena Id (klasör):** işletme/arena adı · **Sahne adı:** katalog anahtarı (benzersiz olmalı) · **Gösterim adı:** admin panelinde görünecek ad
   - **Kutu:** `Venue` · **İşletme adı (klasör):** işletme adı → hedef `Assets/Arenas/Venues/<İşletme>/`
   - **GameCatalog:** `Assets/_Shared/Data/GameCatalog.asset`
 - [ ] "Oluştur" → sihirbaz `{Scenes, Data, Prefabs}` kutusunu üretir, sahneyi **bire bir kopyalar**, `MapDefinition` yazar, `GameCatalog`'a ve **Build Settings**'e ekler.
-  > ⚠️ **Sihirbaz boyut sormaz ve geometriyi ölçeklemez.** Sahne 10×10 şablonundan olduğu gibi gelir; arena planını sen çizersin. Sebebi: her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak üretmez. Sihirbazın işi, sahnenin ağ bileşenlerini (kalibratör, poz senkronu, sınır, taban bölgeleri, rig) eksiksiz getirmesi.
-- [ ] **Arena planını çiz** (duvar/cover yerleşimi, ölçüler) ve şu üçünü gerçek ölçüye getir: sahnedeki **`ArenaBoundary.halfExtentX/Z`** · **`MapDefinition.size`** · **kalibrasyon işaretçilerinin konumu** (Bölüm 3).
+  > ⚠️ **Sihirbaz boyut sormaz ve geometriyi ölçeklemez.** Sahne 12×12 şablonundan olduğu gibi gelir; arena planını sen çizersin. Sebebi: her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak üretmez. Sihirbazın işi, sahnenin ağ bileşenlerini (kalibratör, poz senkronu, sınır, taban bölgeleri, rig) eksiksiz getirmesi.
+- [ ] **Arena planını çiz** (duvar/cover yerleşimi, ölçüler) ve şu ikisini gerçek ölçüye getir: sahnedeki **`ArenaBoundary.halfExtentX/Z`** · **kalibrasyon işaretçilerinin konumu** (Bölüm 3).
 - [ ] Sihirbazın kalan uyarılarını uygula: **NavMesh ve ışık verisi kaynak sahneden miras kalır** → yeni plana göre yeniden bake et; **tek `SpawnPoint`** elle konur.
 - [ ] `Tools > VortexArena > Export Server Config` çalıştır → `Server/config/maps.json` üretilir. Çıkan uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
 - [ ] Build Settings'te yeni sahnenin **listede ve işaretli (enabled)** olduğunu doğrula. Sahne adı = `start_match` katalog anahtarı; boşluk/typo dahil birebir eşleşmeli.
-- [ ] Android APK'yı **yeniden al** ve repo kökünde `game.apk` adıyla kaydet (`install_game.bat` bu adı bekler).
-- [ ] (Test edilecekse) `Server/VortexArena.PoseBot` içindeki `BuildScenes` sabitine yeni sahne adını ekle — yoksa PoseBot ile `start_match` reddedilir.
+- [ ] Android APK'yı **yeniden al**: `scripts\deploy-player-apk.bat` (Unity editörü kapalı) → `deploy\player\game.apk`. Yeni arena APK'da yoksa o başlık maçı engeller (Bölüm 8).
 
 ---
 
@@ -59,7 +58,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 > **Kalibrasyon 6 serbestlik derecesini de kurar:** yönü (yaw) ve yatay konumu A→B çiftinden, **zemin yüksekliğini B noktasında kumandanın ucundan** alır. Zemin yüksekliği gözlüğün kendi "floor level" bilgisinden ALINMAZ — başlıklarda alan kurulumu yapılmadığı için (§5) o değer bir tahmindir: gözlük havadayken açılırsa yanlış başlar, oturum içinde tracking kaybı sonrası kayabilir. Bu yüzden her kalibrasyon zemini de yeniden ölçer.
 
 - [ ] Unity'de arena sahnesini aç → `anchor_a` / `anchor_b` objelerinin Inspector'daki **Position** değerlerini oku ve aralarındaki mesafeyi hesapla. ⚠️ Objeler `CalibrationManager`'ın altında DEĞİL, arena kökündeki **`Ground`** grubunun altındadır ve sahnede **kapalı** görünür (kalibrasyonda açılırlar) — hiyerarşide arama kutusuna `anchor_` yazmak en hızlısı. `CalibrationManager` yalnız `ArenaCalibrator` bileşenini taşır ve iki objeye referans verir.
-  - `A10x10` şablonunda işaretçiler arena-yerel X ekseninde **±3 m** (yani **aralarında 6 m**) ve arena merkezine göre simetriktir.
+  - `Default12x12` şablonunda işaretçiler arena-yerel X ekseninde **±3 m** (yani **aralarında 6 m**) ve arena merkezine göre simetriktir.
   - Sihirbazla üretilen venue arenasında işaretçiler **ÖLÇEKLENMEZ** — kaynak arenadaki yerlerinde dururlar (sihirbaz sonuç ekranında bunu uyarır). Yerleri arena boyutundan değil sahadaki zemin bandından geldiği için yerleştirme bilinçli olarak elle bırakılmıştır. **Varsayma, sahneden oku.**
 - [ ] İşaretçileri sahnede fiziksel alana uyacak şekilde **taşı** (odanın içinde, geçiş güzergâhının dışında kalsınlar) ve yeni mesafeyi not et; sahneyi kaydedip APK'yı yeniden al. Yeni üretilmiş bir venue arenasında bu adım **zorunludur** — işaretçiler kaynak arenadan olduğu gibi gelir.
 - [ ] Zemine iki bant işareti yapıştır: **A** ve **B**. Aralarındaki mesafe sahneden okuduğun değere eşit olmalı; bandın üzerine büyük harfle "A" ve "B" yaz. ⚠️ Ölçü **±%20 tolerans** içinde olmalı — dışındaysa başlık kalibrasyonu reddeder (üç kısa titreşim), çünkü yanlış mesafe sessizce bozuk bir hizalama üretirdi.
@@ -79,7 +78,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 
 > **Kumanda tutuşu neden önemli:** başlığın takip ettiği nokta kumandanın **ucu değil gövdesinin içindeki pivottur**. Yazılım bu farkı `ArenaCalibrator.tipLocalOffset` ile telafi eder; değer kumanda modeline özgüdür ve **bir kez ölçülür**: alan kurulumu YAPILMIŞ bir gözlükte kumandayı dik tutup yere değdir, `rightControllerAnchor.position.y` değerini oku ve alanın Y'sine (eksi işaretle) gir. Ölçülene kadar varsayılan **-0.08 m** bir tahmindir. Doğrulaması: kalibrasyondan sonra sanal işaretçi küpleri görünür olur — kumandanın ucu küpün tabanıyla aynı hizada olmalı.
 
-> Kalibrasyon **arena sahnesinde** yapılır; lobide kalibratör yoktur, bu yüzden lobide uzak avatarların fiziksel olarak örtüşmesi beklenmez (normaldir). Bir başlık kalibre olmadan da poz gönderir — ama o pozlar arena ile örtüşmez: avatar kaymış görünür, hareket ettiği yine de izlenir. Örtüşme kalibrasyondan sonra oturur.
+> Kalibrasyon **işletmenin lobi sahnesinde** yapılır (§5, `server.json → lobbyScene`) — maçtan önce, arenaya girmeden. Lobi sahnesi de bir arena kutusudur: `ArenaCalibrator` ve A/B işaretçileri oradadır, harita değişimi kalibrasyonu sıfırlamadığı için hizalama maça taşınır. ⚠️ **`lobbyScene` yapılandırılmamışsa** oyuncular kalibratörsüz kabuk lobide kalır; o durumda kalibrasyon arena sahnesinde yapılır ve kabuk lobide avatarların fiziksel olarak örtüşmesi beklenmez (normaldir). Bir başlık kalibre olmadan da poz gönderir — ama o pozlar arena ile örtüşmez: avatar kaymış görünür, hareket ettiği yine de izlenir. Örtüşme kalibrasyondan sonra oturur.
 
 > **Kalibrasyon durumu sunucuda tutulur ve operatör tarafından sıfırlanabilir** (`Docs/ArenaNet-Protokol.md` §10.6). Bir başlığın hizalaması sahada kayarsa operatör admin ekranındaki **KAL** düğmesiyle o oyuncuyu savaş dışı bırakır (ateş edemez, hasar yemez, canlanamaz; avatarı diğerlerinin ekranında parlar), oyuncu yeniden kalibre olunca kaldığı yerden devam eder. **Kalibre durumdayken A+B kilitlidir** — oyuncu kendi hizalamasını kazara bozamaz. Operatör yönergesi: `Docs/Kullanim-Kilavuzu.md` §4.1.
 
@@ -124,16 +123,26 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 
 ## 5. Sunucu kurulumu
 
-- [ ] `Server/config/server.json` dosyasını düzenle — genelde yalnız **`venueName`** işletme adına çekilir, portlar varsayılan kalır:
+- [ ] `Server/config/server.json` dosyasını düzenle — genelde yalnız **`venueName`** ve **`lobbyScene`** işletmeye çekilir, portlar varsayılan kalır:
   ```json
-  { "controlPort": 47821, "beaconPort": 47820, "statePort": 47822, "venueName": "<İşletme Adı>", "tickHz": 20 }
+  { "controlPort": 47821, "beaconPort": 47820, "statePort": 47822, "venueName": "<İşletme Adı>",
+    "tickHz": 20, "venue": "", "lobbyScene": "" }
   ```
+  `venue` = **açılışta oynatılacak mekan** (§11.1). Boş bırakılırsa sunucu her açılışta konsolda
+  sorar (saha kullanımı budur; operatör listeden işletmeyi seçer). O oturumda **yalnız o mekanın
+  haritaları** başlatılabilir ve admin panelinde yalnız onlar görünür. Kiosk/otomatik açılış
+  isteniyorsa işletmenin adı buraya yazılır — mekan adı, arenaların durduğu klasörün adıdır
+  (`Assets/Arenas/Venues/<İşletme>/`).
+
+  `lobbyScene` = lobi sahnesi. **Normalde BOŞ bırakılır** — seçilen mekanın lobi haritası otomatik
+  bulunur. Yalnız bir mekanda birden çok lobi varsa doldurulur. Maç koşmadığı sürece oyuncular orada bekler: birbirlerini görürler, **kalibrasyonlarını orada yaparlar**, raftan silah alıp hedef tahtalarına ateş edebilirler — birbirlerine hasar veremeden. Doldurulacaksa değer, odanın ölçüsüne uyan lobi olmalıdır (12×12 → `Lobby12x12`, işletmeye özel ölçü → o işletmenin kendi lobisi) ve seçilen mekanda bulunmalıdır. Mekanda hiç lobi haritası yoksa oyuncular kabuk bekleme ekranında kalır ve kalibrasyonu arenada yapmak zorunda kalırlar.
 - [ ] `Server/config/maps.json` dosyasının Bölüm 2'deki export'tan geldiğini doğrula (silah tablosu yoktur — hasarı istemci bildirir).
 - [ ] **Dağıtım paketlerini üret** (ofiste, geliştirme makinesinde):
   - `scripts\deploy-server.bat` → `deploy\server\` (self-contained; işletme PC'sine .NET kurmak gerekmez)
   - `scripts\deploy-admin-game.bat` → `deploy\admin\` (**Unity editörü kapalı olmalı**)
+  - `scripts\deploy-player-apk.bat` → `deploy\player\` (**Unity editörü kapalı olmalı** + Android Build Support modülü; aktif platformu Android'e çevirir, ilk geçiş 20-40 dk)
   - `scripts\deploy-launcher.bat` → `deploy\launcher\` (Windows Developer Mode açık olmalı)
-  - Üç klasörün **tamamını** kopyala — exe'ler tek başına çalışmaz.
+  - Klasörlerin **tamamını** kopyala — exe'ler tek başına çalışmaz.
 - [ ] Sunucuyu başlat:
   - İşletmede: `deploy\server\VortexArena.Server.App.exe` (masaüstü kısayolu koyun)
   - Geliştirme: `dotnet run --project Server/VortexArena.Server.App`
@@ -157,14 +166,14 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 ## 6. Başlıkların hazırlanması
 
 - [ ] Her başlıkta geliştirici modu açık, USB hata ayıklama izni verildi.
-- [ ] APK kurulumu: `game.apk` dosyasını repo köküne koy → `install_game.bat` çalıştır. Betik `adb devices` listesini gösterir ve `adb install -r -g game.apk` ile kurar.
+- [ ] APK kurulumu: `install_game.bat` çalıştır — **repo kökündeki de `deploy\player\` altındaki kopya da olur**. Betik APK'yı sırayla kendi yanında, `deploy\player\` ve `Builds\player\` altında arar; bulduğu dosyanın yolunu, boyutunu ve tarihini yazar (doğru build'i kurduğunu böyle görürsün), sonra `adb devices` listesini gösterip `adb install -r -g` ile kurar.
   - `adb` bulunamıyorsa Android platform-tools (veya Meta Quest Developer Hub) kur ve PATH'e ekle.
   - Kablosuz kurulum için önce `adb connect <gozluk-ip>:5555`.
   - Aynı anda birden fazla cihaz bağlıysa diğerlerini çıkar.
 - [ ] **Tüm başlıklarda aynı APK sürümü** olmalı — sahne listesi farklı olan bir başlık maçın başlamasını engeller (bkz. Bölüm 8).
-- [ ] Cihaz adları: başlık ilk bağlandığında sunucu ona `Gözlük NN` adını atar ve `Server/config/devices.json`'a (`deviceId → ad`) yazar.
-  - [ ] Admin panelindeki **"Bu cihazı tanıt" (identify)** komutuyla hangi adın hangi fiziksel başlık olduğunu bul, başlığa aynı numarayı **fiziken etiketle**.
-  - [ ] Ad değiştirmek gerekirse `devices.json`'u **sunucu kapalıyken** düzenle (UTF-8, **BOM'suz**) ve sunucuyu yeniden başlat.
+- [ ] Cihaz kimlikleri: başlık ilk bağlandığında sunucu ona havuzdan rastgele bir **ad** ve 1'den itibaren ilk boş **forma numarasını** (1..99) atar, `Server/config/devices.json`'a (`deviceId → {name, number}`) yazar. Ad tekrar edebilir, **numara tüm kayıtlı cihazlar arasında benzersizdir**.
+  - [ ] Admin panelindeki **"Bu cihazı tanıt" (identify)** komutuyla hangi kimliğin hangi fiziksel başlık olduğunu bul, başlığa **numarasını** fiziken etiketle.
+  - [ ] Ad/numara değiştirmek: admin **Tercihler → OYUNCU KİMLİĞİ** bölümünden, oyuncu seçiliyken, sunucuyu durdurmadan yapılır. (Elle `devices.json` düzenlemek gerekmez; gerekirse **sunucu kapalıyken** düzenle — UTF-8, **BOM'suz** — ve yeniden başlat.)
 - [ ] **Guardian/alan kurulumu YAPILMAZ.** Her başlıkta geliştirici ayarlarından fiziksel alan özellikleri kapatılır; oyuncu tüm alanda serbest dolaşır. Oyun içi güvenlik `ArenaBoundary` ile sağlanır (kenara yaklaşınca duvarlar belirginleşir, dışarı çıkınca ekran kararır + uyarı) — **guardian uyarısı olmadığı için tek fiziksel güvenlik ağı budur**, kalibrasyonun doğruluğu bu yüzden bir konfor değil güvenlik meselesidir.
   - Bunun iki sonucu var ve ikisi de yazılımda karşılanmıştır: (1) sistemin zemin seviyesi güvenilmez → kalibrasyon zemini kumandadan ölçer (§3), (2) tracking origin kayması kalibrasyonu bozardı → sahneler **Stage** tracking origin kullanır (sistem recenter'ı kapalı) ve yine de bir kayma olursa `ArenaCalibrator` kayıtlı anchor'dan kendini yeniden hizalar.
 - [ ] Uyku/ekran kapanma: başlıkların maç arasında uykuya geçmemesi için ekran/uyku süresi en uzun değere alındı.
@@ -224,7 +233,7 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 | Admin uygulaması "Sunucu adresi yok" diyor (3 sn sonra tam ekran **"SUNUCU BULUNAMADI"**) | Oyun launcher'sız (elle) açılmış — `--server-ip` gelmemiş | Oyunu **launcher'dan** başlat; launcher'da Ayarlar→admin exe ve Sunucu IP dolu olmalı |
 | Launcher "Admin exe bulunamadı" diyor | `deploy\admin\` silinmiş/taşınmış veya build alınmamış | `scripts\deploy-admin-game.bat` (editör kapalıyken) çalıştır, launcher'da exe'yi yeniden seç |
 | Bağlanıyor ama roster'da "çevrimdışı" düşüyor | 15 sn boyunca status gelmedi (Wi-Fi zayıf, başlık uykuya geçti) | AP kapsamasını/kanalı kontrol et; başlıkta uyku süresini uzat |
-| Avatarlar fiziksel olarak örtüşmüyor | Bir başlıkta kalibrasyon yapılmadı; A ile B karışmış (arena 180° ters); zemin işaretleri kaymış; işaret mesafesi sahnedeki `anchor_a`/`anchor_b` mesafesiyle uyuşmuyor | Her başlıkta A+B ile **yeniden kalibre et** (tamamlanmış kalibrasyonda A+B tutmak sıfırlar); bant ölçüsünü sahnedeki değerle karşılaştır. **Lobide örtüşme beklenmez** — kontrolü arena sahnesinde yap |
+| Avatarlar fiziksel olarak örtüşmüyor | Bir başlıkta kalibrasyon yapılmadı; A ile B karışmış (arena 180° ters); zemin işaretleri kaymış; işaret mesafesi sahnedeki `anchor_a`/`anchor_b` mesafesiyle uyuşmuyor | Her başlıkta A+B ile **yeniden kalibre et** (tamamlanmış kalibrasyonda A+B tutmak sıfırlar); bant ölçüsünü sahnedeki değerle karşılaştır. **Kalibratörsüz kabuk lobide örtüşme beklenmez** — kontrolü lobi sahnesinde (`lobbyScene`) ya da arenada yap |
 | Avatarlar doğru yerde ama **yükseklikleri yanlış** (yere gömük / havada) | Kalibrasyonda kumanda dik tutulmamış ya da ucu yere değmemiş; `ArenaCalibrator.tipLocalOffset` o kumanda modeli için henüz ölçülmemiş (varsayılan -0.08 m tahmindir) | O başlıkta kumandayı **dik tutup ucunu zemine değdirerek** yeniden kalibre et. Tüm başlıklarda aynı yönde sapma varsa offset yanlıştır: §3'teki reçeteyle ölç, alanı güncelle, APK'yı yeniden al |
 | Oyun ortasında arena birden kaydı | Tracking origin değişti (recenter / tracking kaybı sonrası geri kazanım) | Normalde kendini onarır — logda `tracking origin changed, realigning from the saved anchor` satırını ara. Onarım gelmiyorsa kayıtlı anchor yok demektir; A+B ile yeniden kalibre et |
 | Vuruş kaydolmuyor | Sunucu reddediyor: dost ateşi, hedef zaten ölü, faz `Live` değil | Sunucu konsolundaki `hit_report reddedildi (…): <sebep>` satırını oku. Atış hızı / silah tablosu denetimi YOKTUR, sebep bunlardan biri olamaz |

@@ -1,10 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
-using System.Text;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Debug = UnityEngine.Debug;
@@ -12,72 +8,36 @@ using Debug = UnityEngine.Debug;
 namespace VortexArena.App.Editor
 {
     /// <summary>
-    /// Dev penceresinin ortam düğmelerinin arkasındaki süreç yönetimi: test botlarını (PoseBot)
-    /// editörden başlatır/durdurur ve sunucu çözümünü derler.
+    /// Dev penceresinin ortam düğmesinin arkasındaki süreç yönetimi: sunucu çözümünü derler.
     ///
     /// <para><b>⚠️ SUNUCU BURADAN YÖNETİLMEZ.</b> <c>.NET</c> sunucusu her zaman ELLE başlatılır
     /// ve ELLE durdurulur (<c>deploy\server\VortexArena.Server.App.exe</c> ya da
     /// <c>dotnet run --project Server/VortexArena.Server.App</c>). Editör sunucuyu ne başlatır ne
-    /// öldürür; ad bazlı süpürme de sunucuya DOKUNMAZ. Gerekçe: sunucu üretimde ayrı bir makinede
-    /// uzun ömürlüdür — editörün onu yönetmesi hem bu topolojiden uzaklaştırıyor hem de elle
-    /// başlatılmış bir sunucuyu beklenmedik anda öldürme riski taşıyordu. Buradaki
-    /// <see cref="BuildSolution"/> yalnız DERLER, çalıştırmaz.</para>
+    /// öldürür. Gerekçe: sunucu üretimde ayrı bir makinede uzun ömürlüdür — editörün onu
+    /// yönetmesi hem bu topolojiden uzaklaştırıyor hem de elle başlatılmış bir sunucuyu
+    /// beklenmedik anda öldürme riski taşıyordu. Buradaki <see cref="BuildSolution"/> yalnız
+    /// DERLER, çalıştırmaz.</para>
     ///
     /// <para><b>⚠️ TUZAK 1 — <c>dotnet run</c> ASLA KULLANILMAZ.</b> <c>dotnet run</c> derleyip
     /// asıl exe'yi ÇOCUK süreç olarak doğurur. Parent (dotnet) öldürüldüğünde çocuk hayatta
     /// kalıyor: <c>VortexArena.Server.App.exe</c> YETİM kaldı, 47821'i tutmaya devam etti ve
     /// artık PID takibimizde olmadığı için öldürülemedi → sonraki sunucu porta bind olamadı.
-    /// Bu gerçekten yaşandı. Bu yüzden <b>her zaman doğrudan exe</b> başlatılır (aşağıdaki arama
-    /// sırası), böylece elimizdeki PID gerçekten öldürülecek sürecin PID'sidir ve
-    /// <see cref="Process.Kill()"/> (ağaç değil, tek süreç) yeterlidir.</para>
+    /// Bu gerçekten yaşandı. Bu yüzden süreçler <b>her zaman doğrudan</b> başlatılır, araya
+    /// başka bir süreç sokulmaz.</para>
     ///
     /// <para><b>⚠️ TUZAK 2 — çıktı BORULANMAZ.</b> <c>RedirectStandardOutput/Error = true</c>
     /// yapıp boruyu okumazsan çocuk süreç, boru tamponu dolduğunda yazma çağrısında kilitlenir
     /// (bu projede Flutter launcher'da aynı hata yaşandı: süreç canlı görünür ama donmuştur).
     /// Bu yüzden <c>UseShellExecute = true</c> + <c>CreateNoWindow = false</c>: her süreç KENDİ
-    /// konsol penceresinde koşar, boru yoktur, geliştirici sunucu/bot loglarını canlı okur.
+    /// konsol penceresinde koşar, boru yoktur, geliştirici derleme çıktısını canlı okur.
     /// Bir dev aracı için zaten istenen davranış budur.</para>
-    ///
-    /// <para><b>PID takibi domain reload'a dayanır:</b> <see cref="Process"/> nesneleri script
-    /// yeniden derlenince kaybolur, bu yüzden yalnız PID'ler <see cref="SessionState"/>'te
-    /// tutulur (editör oturumu boyunca yaşar, domain reload'ı aşar). Süreci geri bulurken
-    /// PID'e ek olarak <b>süreç adı da doğrulanır</b>: PID'ler işletim sistemi tarafından
-    /// yeniden kullanılabilir, yanlış süreci öldürmek felaket olur.</para>
-    ///
-    /// <para><b>Yetim süreç güvenliği:</b> editör çökerse PID kaydı kaybolur. Bu yüzden
-    /// <see cref="SweepOrphans"/> ayrıca AD BAZLI süpürme yapar (yalnız PoseBot) — yetim süreç
-    /// tuzağının kesin çözümü bu.</para>
     ///
     /// Tüm hatalar yakalanır ve anlamlı <see cref="Debug.LogError"/> mesajına çevrilir; bu sınıf
     /// editörü kırmamalıdır.
     /// </summary>
     public static class DevProcesses
     {
-        /// <summary>PoseBot exe'sinin adı (uzantısız = <see cref="Process.ProcessName"/> ile aynı).</summary>
-        public const string BotProcessName = "VortexArena.PoseBot";
-
-        /// <summary>
-        /// Tek seferde açılabilecek test botu sayısı üst sınırı. <b>Protokol kotası DEĞİLDİR</b> —
-        /// protokolde eşzamanlı oyuncu sınırı yoktur (§2), bu yalnız dev aracı emniyeti:
-        /// yazım hatasıyla 120 bot açılıp makine boğulmasın.
-        /// </summary>
-        public const int MaxDevBots = 32;
-
-        private const string BotPidsKey = "VortexArena.Dev.BotPids";
-
         private const string SolutionRelativePath = @"Server\VortexArena.Server.sln";
-
-        /// <summary>
-        /// PoseBot exe'sinin arama sırası. <b>PoseBot bilinçli olarak <c>deploy/</c>'a publish
-        /// EDİLMEZ:</b> <c>deploy/</c> işletmeye giden klasördür, PoseBot ise yalnız dev/test
-        /// aracıdır — sahaya sentetik oyuncu üreten bir exe göndermek istemiyoruz. Bu yüzden
-        /// yalnız <c>bin\Release</c> / <c>bin\Debug</c> çıktısı aranır.
-        /// </summary>
-        private static readonly string[] BotExeCandidates =
-        {
-            @"Server\VortexArena.PoseBot\bin\Release\net10.0\VortexArena.PoseBot.exe",
-            @"Server\VortexArena.PoseBot\bin\Debug\net10.0\VortexArena.PoseBot.exe"
-        };
 
         /// <summary>Repo kökü = <c>Assets</c>'in üst klasörü.</summary>
         public static string RepoRoot
@@ -89,128 +49,7 @@ namespace VortexArena.App.Editor
             }
         }
 
-        // ------------------------------------------------------------------ durum
-
-        /// <summary>Kayıtlı ve HÂLÂ YAŞAYAN PoseBot süreçlerinin sayısı (süreç sayısı, bot sayısı değil).</summary>
-        public static int BotCount => GetLiveBotPids().Count;
-
-        /// <summary>En az bir PoseBot süreci koşuyor mu?</summary>
-        public static bool AreBotsRunning => BotCount > 0;
-
-        // -------------------------------------------------------------------- bot
-
-        /// <summary>
-        /// <paramref name="count"/> botu TEK bir PoseBot sürecinde başlatır (PoseBot bot sayısını
-        /// konumsal argüman olarak alır). Komut satırı: <c>&lt;ip&gt; &lt;count&gt; --fight</c>
-        /// (+ <paramref name="withAdmin"/> ise <c>--admin --mode &lt;modId&gt;</c> ve açık sahne
-        /// bir ARENA sahnesiyse <c>--map &lt;sahneAdı&gt;</c>).
-        /// <para>
-        /// IP: <see cref="DevSession.HasAddress"/> ise seçili adres, aksi hâlde
-        /// <c>127.0.0.1</c> — keşif kipinde istemci beacon'la bulur ama botun keşfi yoktur,
-        /// loopback'e bağlanır.
-        /// </para>
-        /// Her çağrı yeni bir süreç EKLER (iki kez basılırsa iki pencere açılır).
-        /// </summary>
-        public static void StartBots(int count, bool withAdmin)
-        {
-            string exe = ResolveExe(BotExeCandidates);
-            if (exe == null)
-            {
-                Debug.LogError(
-                    "[DevProcesses] PoseBot exe'si bulunamadı. Bu penceredeki " +
-                    "\"Derle (dotnet build)\" düğmesine basın (PoseBot bilinçli olarak deploy/'a " +
-                    "publish edilmez — dev/test aracı). Aranan yollar: " +
-                    DescribeCandidates(BotExeCandidates));
-                return;
-            }
-
-            int clamped = Mathf.Clamp(count, 1, MaxDevBots);
-            string ip = DevSession.HasAddress ? DevSession.Ip.Trim() : "127.0.0.1";
-
-            var args = new StringBuilder();
-            args.Append(Quote(ip))
-                .Append(' ')
-                .Append(clamped.ToString(CultureInfo.InvariantCulture))
-                .Append(" --fight");
-
-            if (withAdmin)
-            {
-                args.Append(" --admin");
-
-                string modeId = DevSession.ModeId;
-                if (!string.IsNullOrWhiteSpace(modeId))
-                {
-                    args.Append(" --mode ").Append(Quote(modeId.Trim()));
-                }
-
-                string arenaScene = ActiveArenaSceneName();
-                if (arenaScene != null)
-                {
-                    args.Append(" --map ").Append(Quote(arenaScene));
-                }
-            }
-
-            string arguments = args.ToString();
-            Process process = StartConsoleProcess(exe, arguments, Path.GetDirectoryName(exe));
-            if (process == null)
-            {
-                return;
-            }
-
-            List<int> pids = GetLiveBotPids();
-            pids.Add(process.Id);
-            WriteBotPids(pids);
-
-            Debug.Log($"[DevProcesses] PoseBot başlatıldı (PID {process.Id}): {clamped} bot → {ip} " +
-                      $"[{arguments}]");
-            process.Dispose();
-        }
-
-        /// <summary>Kayıtlı tüm PoseBot süreçlerini öldürür (kayıt boşsa sessizce çıkar).</summary>
-        public static void StopBots()
-        {
-            List<int> pids = GetLiveBotPids();
-            SessionState.EraseString(BotPidsKey);
-
-            if (pids.Count == 0)
-            {
-                return; // Her Play çıkışında çağrılıyor — boşken log basmıyoruz.
-            }
-
-            int killed = 0;
-            for (int i = 0; i < pids.Count; i++)
-            {
-                if (KillPid(pids[i], BotProcessName))
-                {
-                    killed++;
-                }
-            }
-
-            Debug.Log($"[DevProcesses] {killed} PoseBot süreci durduruldu.");
-        }
-
-        // ------------------------------------------------------------------- toplu
-
-        /// <summary>
-        /// AD BAZLI süpürme: <c>VortexArena.PoseBot</c> adlı TÜM süreçleri öldürür (editör
-        /// çöktüyse PID kaydı kaybolmuş olabilir). Kaç süreç kapatıldığını döndürür.
-        /// <b>Sunucuya dokunmaz</b> — sunucu elle yönetilir, editörün öldürme yetkisi yok.
-        /// </summary>
-        public static int SweepOrphans()
-        {
-            int killed = SweepByName();
-
-            if (killed > 0)
-            {
-                Debug.Log($"[DevProcesses] Sahipsiz bot temizliği: {killed} süreç kapatıldı.");
-            }
-            else
-            {
-                Debug.Log($"[DevProcesses] Sahipsiz bot süreci bulunamadı (aranan ad: {BotProcessName}).");
-            }
-
-            return killed;
-        }
+        // ----------------------------------------------------------------- derleme
 
         /// <summary>
         /// <c>dotnet build Server\VortexArena.Server.sln -c Release</c> — kendi konsol
@@ -246,8 +85,7 @@ namespace VortexArena.App.Editor
             }
 
             Debug.Log("[DevProcesses] `dotnet build -c Release` başlatıldı (kendi penceresinde; " +
-                      "bitince pencere açık kalır). Bittikten sonra bot düğmeleri Release " +
-                      "çıktısını bulacaktır; sunucuyu elle başlatın.");
+                      "bitince pencere açık kalır). Sunucuyu elle başlatın.");
             process.Dispose();
         }
 
@@ -273,37 +111,6 @@ namespace VortexArena.App.Editor
 
             return string.Equals(sceneName, AppSession.SceneBoot, StringComparison.Ordinal) ||
                    string.Equals(sceneName, AppSession.SceneLobby, StringComparison.Ordinal);
-        }
-
-        /// <summary>Adaylardan diskte var olan ilk yolu döndürür; hiçbiri yoksa null.</summary>
-        private static string ResolveExe(string[] relativeCandidates)
-        {
-            string root = RepoRoot;
-
-            for (int i = 0; i < relativeCandidates.Length; i++)
-            {
-                string full;
-                try
-                {
-                    full = Path.Combine(root, relativeCandidates[i]);
-                }
-                catch (ArgumentException)
-                {
-                    continue;
-                }
-
-                if (File.Exists(full))
-                {
-                    return full;
-                }
-            }
-
-            return null;
-        }
-
-        private static string DescribeCandidates(string[] relativeCandidates)
-        {
-            return string.Join(" | ", relativeCandidates);
         }
 
         /// <summary>
@@ -339,210 +146,6 @@ namespace VortexArena.App.Editor
                 Debug.LogError($"[DevProcesses] '{fileName}' başlatılamadı: {ex.Message}");
                 return null;
             }
-        }
-
-        /// <summary>PID yaşıyor ve süreç adı <paramref name="expectedProcessName"/> mi?</summary>
-        private static bool IsProcessAlive(int pid, string expectedProcessName)
-        {
-            if (pid <= 0)
-            {
-                return false;
-            }
-
-            Process process = null;
-            try
-            {
-                process = Process.GetProcessById(pid);
-                if (process.HasExited)
-                {
-                    return false;
-                }
-
-                return string.Equals(process.ProcessName, expectedProcessName, StringComparison.OrdinalIgnoreCase);
-            }
-            catch (ArgumentException)
-            {
-                return false; // Böyle bir PID yok.
-            }
-            catch (Exception)
-            {
-                return false; // Erişim/platform sorunu — süreci "yok" saymak güvenli taraf.
-            }
-            finally
-            {
-                process?.Dispose();
-            }
-        }
-
-        /// <summary>Ad doğrulamasından geçen PID'i öldürür; başarılıysa true.</summary>
-        private static bool KillPid(int pid, string expectedProcessName)
-        {
-            if (!IsProcessAlive(pid, expectedProcessName))
-            {
-                return false;
-            }
-
-            Process process = null;
-            try
-            {
-                process = Process.GetProcessById(pid);
-
-                // Ad ikinci kez doğrulanıyor: PID'in bu arada geri dönüşmüş olma ihtimali.
-                if (!string.Equals(process.ProcessName, expectedProcessName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-
-                // Kill() tek süreci öldürür — çocuk süreç YOK (exe'yi doğrudan başlattığımız için).
-                process.Kill();
-                process.WaitForExit(3000);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[DevProcesses] PID {pid} ({expectedProcessName}) öldürülemedi: {ex.Message}");
-                return false;
-            }
-            finally
-            {
-                process?.Dispose();
-            }
-        }
-
-        /// <summary>Ad bazlı bot süpürmesi (log YAZMAZ) — kapatılan süreç sayısını döndürür.</summary>
-        private static int SweepByName()
-        {
-            int killed = KillAllNamed(BotProcessName);
-
-            if (killed > 0)
-            {
-                SessionState.EraseString(BotPidsKey);
-            }
-
-            return killed;
-        }
-
-        private static int KillAllNamed(string processName)
-        {
-            Process[] found;
-            try
-            {
-                found = Process.GetProcessesByName(processName);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[DevProcesses] '{processName}' süreçleri listelenemedi: {ex.Message}");
-                return 0;
-            }
-
-            int killed = 0;
-            for (int i = 0; i < found.Length; i++)
-            {
-                Process process = found[i];
-                try
-                {
-                    if (!process.HasExited)
-                    {
-                        process.Kill();
-                        process.WaitForExit(3000);
-                        killed++;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"[DevProcesses] '{processName}' (PID {SafePid(process)}) öldürülemedi: {ex.Message}");
-                }
-                finally
-                {
-                    process.Dispose();
-                }
-            }
-
-            return killed;
-        }
-
-        private static string SafePid(Process process)
-        {
-            try
-            {
-                return process.Id.ToString(CultureInfo.InvariantCulture);
-            }
-            catch (Exception)
-            {
-                return "?";
-            }
-        }
-
-        /// <summary>SessionState'teki virgüllü PID listesinden yalnız YAŞAYANLARI döndürür (kaydı da tazeler).</summary>
-        private static List<int> GetLiveBotPids()
-        {
-            var alive = new List<int>();
-            string raw = SessionState.GetString(BotPidsKey, "");
-
-            if (!string.IsNullOrEmpty(raw))
-            {
-                string[] parts = raw.Split(',');
-                for (int i = 0; i < parts.Length; i++)
-                {
-                    int pid = ParsePid(parts[i]);
-                    if (pid > 0 && !alive.Contains(pid) && IsProcessAlive(pid, BotProcessName))
-                    {
-                        alive.Add(pid);
-                    }
-                }
-
-                if (alive.Count != parts.Length)
-                {
-                    WriteBotPids(alive); // ölmüş/geri dönüşmüş PID'leri kayıttan düş
-                }
-            }
-
-            return alive;
-        }
-
-        private static void WriteBotPids(List<int> pids)
-        {
-            if (pids == null || pids.Count == 0)
-            {
-                SessionState.EraseString(BotPidsKey);
-                return;
-            }
-
-            var sb = new StringBuilder();
-            for (int i = 0; i < pids.Count; i++)
-            {
-                if (i > 0)
-                {
-                    sb.Append(',');
-                }
-
-                sb.Append(pids[i].ToString(CultureInfo.InvariantCulture));
-            }
-
-            SessionState.SetString(BotPidsKey, sb.ToString());
-        }
-
-        private static int ParsePid(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return 0;
-            }
-
-            return int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int pid) && pid > 0
-                ? pid
-                : 0;
-        }
-
-        /// <summary>Boşluk içeren argümanı çift tırnağa alır (sahne/mod adları güvenli olsun).</summary>
-        private static string Quote(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return "\"\"";
-            }
-
-            return value.IndexOf(' ') >= 0 ? "\"" + value + "\"" : value;
         }
 
         /// <summary>

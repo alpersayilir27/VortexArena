@@ -100,14 +100,23 @@ public sealed class ClientConnection
             {
                 if (State == null) return; // hello öncesi status — yok sayılır
                 var status = JsonUtil.Deserialize<StatusMsg>(json);
-                if (status != null) _registry.UpdateStatus(State.DeviceId, status);
+                // Durum güncellemesi + roster uzlaştırması (status.rosterVersion, §5.1).
+                if (status != null) await _lobby.HandleStatusAsync(this, status);
                 return;
             }
-            case MessageTypes.SetName:
+            case MessageTypes.SetIdentity:
             {
                 if (State == null) return;
-                var msg = JsonUtil.Deserialize<SetNameMsg>(json);
-                if (msg != null) _lobby.HandleSetName(this, msg);
+                var msg = JsonUtil.Deserialize<SetIdentityMsg>(json);
+                if (msg == null) return;
+                // Admin herkesin kimliğini değiştirir; oyuncu yalnız kendisininkini (§5.1).
+                // playerId 0 = "kendim" kısayolu. set_team ile birebir aynı yetki kuralı.
+                if (!IsAdmin && msg.playerId != 0 && msg.playerId != State.PlayerId)
+                {
+                    Console.WriteLine($"[ClientConnection] set_identity: {State.Name} başka oyuncunun kimliğini değiştiremez — yok sayıldı.");
+                    return;
+                }
+                _lobby.HandleSetIdentity(this, msg);
                 return;
             }
             case MessageTypes.SetReady:

@@ -3,7 +3,9 @@
 > Bu klasör **yalnız henüz yapılmamış işleri** tutar: biten işin dokümanı silinir, kalıcı bilgisi
 > `CLAUDE.md` + `Docs/` altına işlenir (eski metin git geçmişinde kalır).
 
-**Şu an planlanmış iş yok** — klasör boş (yalnız bu README).
+| Planlanmış iş | Dosya |
+|---|---|
+| Kırılabilir objeleri sunucu-otoriter yapmak (yerel `Health` kaldırıldı, yerine ağsal obje canı) | `agsal-kirilabilir-objeler.md` |
 
 > Sıradaki büyük iş **bulut kalibrasyonu** (Meta grup / paylaşılan uzamsal anchor ile toplu
 > hizalama). Henüz planlanmadı; altyapısı hazır: `set_calibration.source` `"cloud"` değerini

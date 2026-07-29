@@ -1,14 +1,21 @@
 # scripts/ — dağıtım ve doküman betikleri
 
-Üç bileşenin her biri kendi betiğiyle `deploy/` altına üretilir. Betikler **idempotent**:
+Dört bileşenin her biri kendi betiğiyle `deploy/` altına üretilir. Betikler **idempotent**:
 hedef klasörü silip yeniden yazarlar.
 
 | Betik | Kaynak | Çıktı | Ön koşul |
 |---|---|---|---|
 | `deploy-admin-game.bat` | Unity projesi (`Assets/`) | `deploy\admin\VortexArena.exe` | Unity Editor kapalı (betik zorlamaz) |
+| `deploy-player-apk.bat` | Unity projesi (`Assets/`) | `deploy\player\game.apk` + `install_game.bat` | Unity Editor kapalı + **Android Build Support** modülü |
 | `deploy-server.bat` | `Server/VortexArena.Server.App` | `deploy\server\VortexArena.Server.App.exe` | .NET 10 SDK |
 | `deploy-launcher.bat` | `launcher/` (Flutter) | `deploy\launcher\vortex_launcher.exe` | Flutter + VS C++ + **Developer Mode** |
 | `docs-setup.bat` | — | `..\vortexarena-docs-site\` (repo DIŞI) | Node 22+, git, internet (yalnız kurulumda) |
+
+İki Unity betiği aynı `PlayerBuildTool` sınıfını farklı `-executeMethod` ile çağırır ve **aynı
+sahne listesini** kullanır (Build Settings). Fark yalnız platformdur: Windows = admin, Android =
+Quest oyuncusu. Rol ve sunucu adresi **hiçbirine gömülmez** — admin adresi launcher'ın
+`--server-ip` argümanından, oyuncu ise UDP beacon keşfinden alır, yani **aynı APK her gözlüğe**
+kurulur.
 
 ## Dokümantasyon sitesi
 
@@ -37,12 +44,13 @@ deploy-launcher.bat --no-pause
 set VORTEX_NO_PAUSE=1 && deploy-launcher.bat
 ```
 
-## Admin build'inde canlı ilerleme (`lib\watch-unity-build.ps1`)
+## Unity build'lerinde canlı ilerleme (`lib\watch-unity-build.ps1`)
 
 Batch-mode Unity konsola **hiçbir şey yazmaz**; 20 dakika boş ekrana bakılıyor ve build takıldı mı
-ilerliyor mu anlaşılmıyordu. Bu yüzden `deploy-admin-game.bat` Unity'yi doğrudan değil
-`scripts\lib\watch-unity-build.ps1` üzerinden çalıştırır. İzleyici aynı komut satırını kurar,
-`deploy\admin-build.log`'u Unity yazarken paylaşımlı kipte okur ve tek satırlık durum gösterir:
+ilerliyor mu anlaşılmıyordu. Bu yüzden `deploy-admin-game.bat` ve `deploy-player-apk.bat` Unity'yi
+doğrudan değil `scripts\lib\watch-unity-build.ps1` üzerinden çalıştırır. İzleyici aynı komut
+satırını kurar, kendi log'unu (`deploy\admin-build.log` / `deploy\player-build.log`) Unity yazarken
+paylaşımlı kipte okur ve tek satırlık durum gösterir:
 
 ```
   [04:12 / ~12:30] Scriptler derleniyor | %53 (1450/2714) | Csc Meta.XR.Editor.dll | log 2.4 MB | cpu +9.8 sn -
@@ -61,8 +69,13 @@ ilerliyor mu anlaşılmıyordu. Bu yüzden `deploy-admin-game.bat` Unity'yi doğ
   bir build'i çalışıyor gösterirdi.
 - **Hata satırları anında ekrana düşer** (proje kilidi, `error CS…`, `Aborting batchmode`) —
   log'da aramaya gerek yok. `[PlayerBuildTool]` satırları da olduğu gibi basılır.
-- **Süre referansı:** başarılı koşunun süresi `deploy\admin-build.last`'a yazılır, sonraki koşuda
-  başlıkta `~mm:ss` olarak gösterilir ("normalde bu kadar sürüyordu").
+- **Süre referansı:** başarılı koşunun süresi log'un yanına (`<log>.last`) yazılır, sonraki koşuda
+  başlıkta `~mm:ss` olarak gösterilir ("normalde bu kadar sürüyordu"). İki build'in referansı
+  ayrıdır — APK build'i admin build'inden belirgin uzun sürer.
+- **Hangi metot / hangi platform:** `-Method` çağrılacak `-executeMethod` girişini,
+  `-UnityBuildTarget` ise Unity'nin **açılış platformunu** (`-buildTarget Android`) belirler.
+  Platformu build metodunun içinden çevirmek işe yaramıyor: `SwitchActiveBuildTarget` domain
+  reload tetikliyor ve çalışan `-executeMethod` yarıda kalıyor.
 - **Ctrl+C** iptalinde izleyici Unity sürecini de öldürür (yoksa proje kilidi arkada kalırdı).
 - Çıkış kodu Unity'ninkidir; `.bat` başarısızlık dalını aynen çalıştırır. İzleyici dosyası yoksa
   betik eski davranışa (sessiz build) düşer, sadece uyarı basar.
@@ -78,14 +91,23 @@ powershell -NoProfile -File scripts\lib\watch-unity-build.ps1 -ReplayLog deploy\
 
 ## Neden bu ön koşullar?
 
-- **Editör kapalı olmalı:** `deploy-admin-game.bat` batch-mode Unity başlatır
-  (`-batchmode -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin`).
-  Aynı proje editörde açıkken **proje kilidine** takılır. Ama betik bunu **kontrol etmez**
-  (bilinçli): editör kapatıldıktan sonra bile AI motoru gibi alt süreçlerin `Unity.exe`'si arka
-  planda yaşayabiliyor ve `tasklist` kontrolü yanlış alarm veriyordu. Build ilerlemiyorsa Ctrl+C
-  ile iptal edip süreçleri kapatın, tekrar deneyin. Log: `deploy\admin-build.log` — script bunu
+- **Editör kapalı olmalı:** iki Unity betiği de batch-mode Unity başlatır
+  (`-batchmode -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin` /
+  `…BuildQuestPlayer`). Aynı proje editörde açıkken **proje kilidine** takılır. Ama betik bunu
+  **kontrol etmez** (bilinçli): editör kapatıldıktan sonra bile AI motoru gibi alt süreçlerin
+  `Unity.exe`'si arka planda yaşayabiliyor ve `tasklist` kontrolü yanlış alarm veriyordu. Build
+  ilerlemiyorsa Ctrl+C ile iptal edip süreçleri kapatın, tekrar deneyin. Log dosyasını script
   her koşuda siler; **silinemezse uyarır**, çünkü o dosyayı hâlâ bir Unity süreci tutuyor demektir
   (kilit için tasklist'ten çok daha güvenilir bir işaret) ve basılan log satırları bayat olabilir.
+- **Android Build Support:** `deploy-player-apk.bat` build'e girmeden önce editör klasöründe
+  `Data\PlaybackEngines\AndroidPlayer` var mı diye bakar. Modül yoksa Unity platformu Android'e
+  çeviremez ve **sessizce Windows'ta devam edip `.exe` üretirdi** — bu yüzden erken ve adıyla
+  durdurulur. Kurulum: Unity Hub > Installs > sürüm > Add modules > Android Build Support
+  (+ SDK/NDK + OpenJDK).
+- **İlk APK build'i çok uzun sürer.** Aktif platform Windows'sa Unity önce Android'e geçer; bu
+  tam reimport demektir (texture'lar ASTC'ye yeniden sıkıştırılır) — 20-40 dk. Sonraki koşular
+  hızlıdır. Betik platformu build sonunda **geri almaz**: geri almak ikinci bir tam reimport daha
+  olurdu, admin build'i zaten kendi platformuna geçiriyor.
 - **Developer Mode:** Flutter'ın Windows plugin sistemi symlink kullanır.
   Kapalıysa build → *"Building with plugins requires symlink support"*.
   Aç: `start ms-settings:developers`. Betik bunu **build'e girmeden önce** kayıt defterinden

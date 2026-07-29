@@ -29,8 +29,8 @@ namespace VortexArena.Core.Player
     /// </summary>
     public class ControllerModelHider : MonoBehaviour
     {
-        [Tooltip("Tüm kontrolcü/el görsellerinin ortak atası.")]
-        [SerializeField] private string rigRootName = "[BuildingBlock] Camera Rig";
+        [Tooltip("Rig kökünün adı. Bulunamazsa OVRCameraRig tipinden aranır — bu alan yalnız hızlandırıcıdır.")]
+        [SerializeField] private string rigRootName = "VA_CameraRig";
         [Tooltip("Bu parçalardan HERHANGİ biri adında geçen kökler gizlenir.")]
         [SerializeField] private string[] modelNameContains = { "questController_animrig", "HandVisual" };
 
@@ -42,7 +42,15 @@ namespace VortexArena.Core.Player
         {
             if (rigRoot == null)
             {
-                GameObject go = GameObject.Find(rigRootName);
+                GameObject go = string.IsNullOrEmpty(rigRootName) ? null : GameObject.Find(rigRootName);
+                if (go == null)
+                {
+                    // İsim tutmadı: rig prefabı yeniden adlandırılmış ya da sahnede başka bir adla
+                    // duruyor olabilir. Kimliği ADI değil BİLEŞENİ belirler — tipten ara.
+                    OVRCameraRig rig = FindFirstObjectByType<OVRCameraRig>();
+                    go = rig != null ? rig.gameObject : null;
+                }
+
                 if (go == null)
                 {
                     return; // rig henüz sahnede değil — sonraki karede tekrar denenir

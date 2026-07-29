@@ -4,7 +4,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using VortexArena.Core.Arena;
 using VortexArena.Net;
 
 namespace VortexArena.App.Admin
@@ -20,7 +19,7 @@ namespace VortexArena.App.Admin
     /// <item>Sol üst: tercihler düğmesi. Sağ üst: mod · harita + bağlantı durumu.</item>
     /// <item>Yan paneller: takım oyuncuları — takımlıda sol kırmızı / sağ mavi, <b>FFA'da tek
     /// kolon</b> (karar veriden gelir: hiçbir çevrimiçi oyuncunun takımı yoksa FFA).</item>
-    /// <item>Alt orta: kamera kipi şeridi + seçili oyuncu. Alt sağ: ölüm akışı (+ mini harita).</item>
+    /// <item>Alt orta: kamera kipi şeridi + seçili oyuncu. Alt sağ: ölüm akışı.</item>
     /// </list></para>
     ///
     /// <para><b>sortingOrder = 4000:</b> bağlantı hata ekranı 5000'de kalır ve gerektiğinde HUD'ın
@@ -75,13 +74,6 @@ namespace VortexArena.App.Admin
         private TextMeshProUGUI _selectedText;
         private TextMeshProUGUI _hintText;
         private TextMeshProUGUI _killFeedText;
-
-        // Mini harita
-        private GameObject _miniMap;
-        private TacticalView _miniMapView;
-
-        /// <summary>Mini haritanın ölçeği hangi sahne için ayarlandı (tekrar hesaplamamak için).</summary>
-        private string _miniMapScene = "";
 
         private AdminPreferencesPanel _preferences;
         private AdminStatsPanel _stats;
@@ -162,7 +154,6 @@ namespace VortexArena.App.Admin
             BuildColumns(rootRect);
             BuildBottomBar(rootRect);
             BuildKillFeed(rootRect);
-            BuildMiniMap(rootRect);
 
             _preferences = gameObject.AddComponent<AdminPreferencesPanel>();
             _preferences.Initialize(rootRect);
@@ -326,25 +317,6 @@ namespace VortexArena.App.Admin
                 new Vector2(-Margin, Margin + 130f), new Vector2(420f, 200f));
         }
 
-        /// <summary>
-        /// Sağ altta küçük taktik harita: mevcut <see cref="TacticalView"/> yeniden kullanılır
-        /// (POV/serbest kipte konum farkındalığı). Kuş bakışı kipinde gereksiz olduğu için gizlenir.
-        /// </summary>
-        private void BuildMiniMap(RectTransform parent)
-        {
-            Image panel = UiKit.Panel(parent, "MiniMap", UiKit.CardTranslucent, UiKit.Border);
-            var panelRoot = (RectTransform)panel.transform.parent;
-            UiKit.Corner(panelRoot, new Vector2(1f, 0f), new Vector2(-Margin, Margin + 340f),
-                new Vector2(240f, 240f));
-
-            RectTransform area = UiKit.Node(panel.transform, "MapArea");
-            UiKit.Stretch(area, 10f);
-
-            _miniMapView = panelRoot.gameObject.AddComponent<TacticalView>();
-            _miniMapView.Initialize(area);
-            _miniMap = panelRoot.gameObject;
-        }
-
         // ---------------------------------------------------------------- tazeleme
 
         private void Refresh()
@@ -359,52 +331,6 @@ namespace VortexArena.App.Admin
             RefreshColumns(roster);
             RefreshBottomBar(roster);
             RefreshKillFeed(roster);
-
-            RefreshMiniMap(roster);
-        }
-
-        /// <summary>
-        /// Mini harita yalnız POV/serbest kipte anlamlı (kuş bakışı zaten üstten görüyor).
-        /// Ölçek arena sınırından, o yoksa harita tanımından gelir; sahne değişince tazelenir.
-        /// </summary>
-        private void RefreshMiniMap(AdminRoster roster)
-        {
-            if (_miniMap == null)
-            {
-                return;
-            }
-
-            bool showMap = AdminSession.MiniMap && AdminSession.CameraMode != AdminCameraMode.TopDown;
-            if (_miniMap.activeSelf != showMap)
-            {
-                _miniMap.SetActive(showMap);
-            }
-
-            // Anahtar sunucunun sahnesi DEĞİL, gerçekten yüklü olan sahne: önizlemede de doğru
-            // ölçeklenmesi gerekiyor (Lobby fazında sunucu sahne bildirmez).
-            string scene = SceneManager.GetActiveScene().name;
-            if (!showMap || _miniMapView == null || _miniMapScene == scene)
-            {
-                return;
-            }
-
-            _miniMapScene = scene;
-
-            ArenaBoundary boundary = AdminSpectator.Instance != null
-                ? AdminSpectator.Instance.Boundary
-                : null;
-            if (boundary != null)
-            {
-                Vector2 half = boundary.HalfExtents;
-                _miniMapView.SetArenaSize(half.x * 2f, half.y * 2f);
-                return;
-            }
-
-            MapDefinition map = AdminContent.FindMap(scene);
-            if (map != null)
-            {
-                _miniMapView.SetArenaSize(map.Size.x, map.Size.y);
-            }
         }
 
         private void RefreshTopBar(AdminRoster roster)

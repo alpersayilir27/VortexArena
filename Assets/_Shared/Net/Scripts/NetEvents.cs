@@ -21,7 +21,9 @@ namespace VortexArena.Net
         public static event Action<KillEventMsg> OnKillEvent;
         public static event Action<RespawnMsg> OnRespawn;
         public static event Action<MatchEndMsg> OnMatchEnd;
-        public static event Action OnReturnToLobby;
+        /// <summary>Lobiye dönüş (§10.7). Mesaj lobi sahnesini + profilini taşır; ilgilenmeyen
+        /// dinleyici parametreyi yok sayar.</summary>
+        public static event Action<ReturnToLobbyMsg> OnReturnToLobby;
         public static event Action<ShotFiredMsg> OnShotFired;
         public static event Action<IdentifyMsg> OnIdentify;
         public static event Action<KickedMsg> OnKicked;
@@ -41,7 +43,7 @@ namespace VortexArena.Net
         internal static void RaiseKillEvent(KillEventMsg msg) { OnKillEvent?.Invoke(msg); }
         internal static void RaiseRespawn(RespawnMsg msg) { OnRespawn?.Invoke(msg); }
         internal static void RaiseMatchEnd(MatchEndMsg msg) { OnMatchEnd?.Invoke(msg); }
-        internal static void RaiseReturnToLobby() { OnReturnToLobby?.Invoke(); }
+        internal static void RaiseReturnToLobby(ReturnToLobbyMsg msg) { OnReturnToLobby?.Invoke(msg); }
         internal static void RaiseShotFired(ShotFiredMsg msg) { OnShotFired?.Invoke(msg); }
         internal static void RaiseIdentify(IdentifyMsg msg) { OnIdentify?.Invoke(msg); }
         internal static void RaiseKicked(KickedMsg msg) { OnKicked?.Invoke(msg); }

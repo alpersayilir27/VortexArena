@@ -21,6 +21,10 @@ namespace VortexArena.App
         private readonly List<int> _idScratch = new List<int>();
 
         private LobbyStateMsg _lastLobbyState;
+
+        /// <summary>YEREL oyuncunun takımı — uzak avatarların dost göstergesi buna göre açılır.
+        /// Admin gözlemcide (ve takımsız modlarda) boştur, o zaman hiçbir avatar dost işaretlenmez.</summary>
+        private string _localTeam = "";
         private bool _subscribed;
         private bool _prefabWarned;
 
@@ -125,11 +129,33 @@ namespace VortexArena.App
         private void HandleLobbyState(LobbyStateMsg msg)
         {
             _lastLobbyState = msg;
+            _localTeam = ResolveLocalTeam(msg);
 
             foreach (KeyValuePair<int, RemoteAvatar> kv in _avatars)
             {
                 ApplyLobbyInfo(kv.Value);
             }
+        }
+
+        /// <summary>Roster'da KENDİ id'mizi bulup takımımızı okur (bulunamazsa boş).</summary>
+        private static string ResolveLocalTeam(LobbyStateMsg msg)
+        {
+            ArenaClient client = ArenaClient.Instance;
+            if (client == null || msg == null || msg.players == null)
+            {
+                return "";
+            }
+
+            for (int i = 0; i < msg.players.Length; i++)
+            {
+                PlayerInfo info = msg.players[i];
+                if (info != null && info.playerId == client.PlayerId)
+                {
+                    return info.team ?? "";
+                }
+            }
+
+            return "";
         }
 
         // ---------------------------------------------------------------- yardımcı
@@ -143,6 +169,9 @@ namespace VortexArena.App
             }
 
             string displayName = $"Oyuncu {avatar.PlayerId}";
+            // Roster henüz gelmemişken numara UYDURULMAZ (0 = etikette basılmaz): forma numarası
+            // ayırt edici alandır, yanlış bir sayı adı tekrarlı oyuncularda doğrudan karışıklık olur.
+            int number = 0;
             string team = "";
             // Roster'da bulunamayan oyuncu KALİBRELİ sayılır (§10.6): bilinmeyen durumu alarm gibi
             // göstermek — henüz roster'ı gelmemiş yeni oyuncuyu parlatmak — gürültü üretir.
@@ -163,14 +192,18 @@ namespace VortexArena.App
                         displayName = info.name;
                     }
 
+                    number = info.number;
                     team = info.team ?? "";
                     calibrated = info.calibrated;
                     break;
                 }
             }
 
-            avatar.SetInfo(displayName, team);
+            avatar.SetInfo(displayName, number, team);
             avatar.SetCalibrated(calibrated);
+
+            // Takımsız modda (FFA) ve admin gözlemcide _localTeam boştur → kimse dost işaretlenmez.
+            avatar.SetFriendly(!string.IsNullOrEmpty(_localTeam) && team == _localTeam);
         }
     }
 }

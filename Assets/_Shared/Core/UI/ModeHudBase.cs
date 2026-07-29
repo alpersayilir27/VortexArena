@@ -247,7 +247,7 @@ namespace VortexArena.Core.UI
             }
         }
 
-        private void HandleReturnToLobby()
+        private void HandleReturnToLobby(ReturnToLobbyMsg _)
         {
             _countdownActive = false;
             _countdownLabel = "";

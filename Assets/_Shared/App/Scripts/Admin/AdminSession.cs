@@ -69,7 +69,6 @@ namespace VortexArena.App.Admin
         private const string KeyNameplates = Prefix + "Nameplates";
         private const string KeyFreeSpeed = Prefix + "FreeSpeed";
         private const string KeyWallAlpha = Prefix + "WallAlpha";
-        private const string KeyMiniMap = Prefix + "MiniMap";
         private const string KeyRoof = Prefix + "Roof";
 
         /// <summary>Serbest kip taban hızı sınırları (m/sn) — tercih slider'ı bu aralıkta.</summary>
@@ -87,7 +86,6 @@ namespace VortexArena.App.Admin
         private static bool _nameplates = true;
         private static float _freeSpeed = 4f;
         private static float _wallAlpha = 0.25f;
-        private static bool _miniMap = true;
         private static AdminRoofMode _roof = AdminRoofMode.HideInTopDown;
         private static bool _loaded;
 
@@ -213,24 +211,6 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Sağ altta küçük taktik harita (POV/serbest kipte konum farkındalığı).</summary>
-        public static bool MiniMap
-        {
-            get { Load(); return _miniMap; }
-            set
-            {
-                Load();
-                if (_miniMap == value)
-                {
-                    return;
-                }
-
-                _miniMap = value;
-                PlayerPrefs.SetInt(KeyMiniMap, value ? 1 : 0);
-                Raise();
-            }
-        }
-
         /// <summary>Arena çatısı gözlemcide ne zaman gizlensin (varsayılan: kuş bakışında).</summary>
         public static AdminRoofMode Roof
         {
@@ -314,7 +294,6 @@ namespace VortexArena.App.Admin
             _nameplates = PlayerPrefs.GetInt(KeyNameplates, 1) != 0;
             _freeSpeed = Mathf.Clamp(PlayerPrefs.GetFloat(KeyFreeSpeed, 4f), FreeSpeedMin, FreeSpeedMax);
             _wallAlpha = Mathf.Clamp01(PlayerPrefs.GetFloat(KeyWallAlpha, 0.25f));
-            _miniMap = PlayerPrefs.GetInt(KeyMiniMap, 1) != 0;
             _roof = (AdminRoofMode)PlayerPrefs.GetInt(KeyRoof, (int)AdminRoofMode.HideInTopDown);
         }
 

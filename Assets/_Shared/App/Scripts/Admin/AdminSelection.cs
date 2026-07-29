@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Net;
 using VortexArena.Protocol;
@@ -16,7 +17,7 @@ namespace VortexArena.App.Admin
     /// </para>
     /// <para>
     /// ⚠ <b>Görünüm tercihleri buraya GİRMEZ.</b> Kamera kipi, seçili oyuncu, halkalar, ad
-    /// etiketleri, kamera hızı, duvar/çatı saydamlığı ve mini harita her operatörün kendi
+    /// etiketleri, kamera hızı ve duvar/çatı saydamlığı her operatörün kendi
     /// ekranına aittir; onlar <see cref="AdminSession"/>'da yerel <c>PlayerPrefs</c> olarak kalır.
     /// İki operatörün kameralarını birbirine bağlamak yönetimi kolaylaştırmaz, imkânsızlaştırır.
     /// </para>
@@ -50,6 +51,38 @@ namespace VortexArena.App.Admin
         /// <summary>Son admin eyleminin duyurusu ("&lt;ad&gt;: &lt;eylem&gt;"); boş olabilir.</summary>
         public static string LastNotice { get; private set; } = "";
 
+        /// <summary>Sunucunun bu oturumda açtığı mekan (§11); mekan ayrımı yoksa boş.</summary>
+        public static string VenueId { get; private set; } = "";
+
+        /// <summary>
+        /// Bu mekanda oynatılabilen sahne adları — harita seçicisinin süzgeci.
+        /// <para><b>Boş = süzme yok</b> (mekan ayrımı olmayan sunucu ya da henüz admin_state
+        /// gelmedi). Katalog tüm projeyi tanır; hangi arenaların oynatılabildiğine sunucu karar
+        /// verir, bu yüzden liste yerelde üretilmez.</para>
+        /// </summary>
+        public static IReadOnlyList<string> VenueScenes => _venueScenes;
+
+        private static string[] _venueScenes = Array.Empty<string>();
+
+        /// <summary>Sahne bu mekanda oynatılabilir mi. Liste boşsa herkes geçer.</summary>
+        public static bool IsInVenue(string sceneName)
+        {
+            if (_venueScenes.Length == 0 || string.IsNullOrEmpty(sceneName))
+            {
+                return true;
+            }
+
+            for (int i = 0; i < _venueScenes.Length; i++)
+            {
+                if (string.Equals(_venueScenes[i], sceneName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private void OnEnable()
         {
             NetEvents.OnAdminState += HandleAdminState;
@@ -75,11 +108,17 @@ namespace VortexArena.App.Admin
                            msg.roundSeconds != RoundSeconds || msg.scoreLimit != ScoreLimit ||
                            msg.adminCount != AdminCount;
 
+            string venueId = msg.venueId ?? "";
+            string[] venueScenes = msg.venueScenes ?? Array.Empty<string>();
+            changed |= venueId != VenueId || !SameScenes(venueScenes, _venueScenes);
+
             ModeId = modeId;
             SceneName = sceneName;
             RoundSeconds = msg.roundSeconds;
             ScoreLimit = msg.scoreLimit;
             AdminCount = msg.adminCount;
+            VenueId = venueId;
+            _venueScenes = venueScenes;
 
             // Duyuru komutu GÖNDEREN admin'de de görünür: "kim ne yaptı" tek satırda toplansın
             // (AdminCommands.Status ile aynı yer — yerel "gönderildi" metnini sunucunun doğruladığı
@@ -101,9 +140,29 @@ namespace VortexArena.App.Admin
         {
             // Bağlantı yokken ortak durum bilinmiyor; seçim değerlerini uydurmayız (son bilinen
             // kalır, panel yine de "bağlı değil" yazar), yalnız sayaç/duyuru temizlenir.
+            // Mekan süzgeci de KORUNUR: bağlantı koptu diye seçiciyi tüm projeye açmak, operatöre
+            // başka mekanların arenalarını gösterip yeniden bağlanınca geri almak olurdu.
             AdminCount = 0;
             LastNotice = "";
             Changed?.Invoke();
+        }
+
+        private static bool SameScenes(string[] a, string[] b)
+        {
+            if (a.Length != b.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < a.Length; i++)
+            {
+                if (!string.Equals(a[i], b[i], StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }

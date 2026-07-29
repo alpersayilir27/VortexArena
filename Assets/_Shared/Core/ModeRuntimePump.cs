@@ -97,9 +97,20 @@ namespace VortexArena.Core
             ModeRuntime.Apply(msg.match.modeId, msg.match.rules);
         }
 
-        private static void HandleReturnToLobby()
+        /// <summary>Lobiye dönüş: kurallar SIFIRLANMAZ, lobi profili uygulanır (§10.7).
+        /// <para>Lobi de içerik taşır — silah rafı loadout'u <c>ModeRuntime.ModeId</c> ile
+        /// katalogdan çözülüyor. Mesaj boş <c>modeId</c> taşıyorsa (lobi yapılandırılmamış ya da
+        /// eski sunucu) <see cref="ModeRuntime.Apply"/> zaten varsayılana düşer, yani eski
+        /// davranışın aynısı olur.</para></summary>
+        private static void HandleReturnToLobby(ReturnToLobbyMsg msg)
         {
-            ModeRuntime.Reset();
+            if (msg == null)
+            {
+                ModeRuntime.Reset();
+                return;
+            }
+
+            ModeRuntime.Apply(msg.modeId, msg.rules);
         }
 
         private static void HandleDisconnected()

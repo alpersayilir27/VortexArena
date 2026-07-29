@@ -3,5 +3,7 @@
   "beaconPort": 47820,
   "statePort": 47822,
   "venueName": "Dev",
-  "tickHz": 20
+  "tickHz": 20,
+  "venue": "",
+  "lobbyScene": ""
 }
