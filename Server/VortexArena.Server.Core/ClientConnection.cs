@@ -136,10 +136,12 @@ public sealed class ClientConnection
                 if (State == null) return;
                 var msg = JsonUtil.Deserialize<SetTeamMsg>(json);
                 if (msg == null) return;
-                // Admin herkesin takımını değiştirir; oyuncu yalnız kendisininkini (§5.2).
-                if (State.Role != "admin" && msg.playerId != State.PlayerId)
+                // ⚠️ set_team YALNIZ ADMİN komutudur (§5.2) — oyuncu kendi takımını da seçemez.
+                // Takım kurgusu operatörün elindedir; oyuncunun kendini bir tarafa yazması
+                // dengelemeyi (BalanceTeams) ve operatörün planını sessizce bozardı.
+                if (!IsAdmin)
                 {
-                    Console.WriteLine($"[ClientConnection] set_team: {State.Name} başka oyuncunun takımını değiştiremez — yok sayıldı.");
+                    Console.WriteLine($"[ClientConnection] set_team yalnız admin içindir ({State.Name}) — yok sayıldı.");
                     return;
                 }
                 _lobby.HandleSetTeam(this, msg);

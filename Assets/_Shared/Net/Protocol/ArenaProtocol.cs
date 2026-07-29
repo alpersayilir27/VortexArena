@@ -4,10 +4,13 @@ namespace VortexArena.Protocol
     public static class ArenaProtocol
     {
         /// <summary>
+        /// v3: faz makinesi <c>paused</c>/<c>playing</c>/<c>finished</c>'a indi, <c>phaseReason</c> +
+        /// <c>modeState</c> eklendi, lobi faz olmaktan çıkıp <b>tür</b> oldu, <c>set_team</c> yalnız
+        /// admin (§10.1).
         /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
         /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
         /// </summary>
-        public const int PROTOCOL_VERSION = 2;
+        public const int PROTOCOL_VERSION = 3;
         public const string APP_ID = "VortexArena";
 
         /// <summary>Forma numarası aralığı (§2). <c>0</c> = atanmamış ve bu aralığın dışındadır;
@@ -49,11 +52,40 @@ namespace VortexArena.Protocol
         public const int SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16;
 
         /// <summary>
-        /// Lobi profilinin <c>modeId</c>'si (§10.7). <b>Kayıtlı bir maç modu DEĞİLDİR</b> — sunucuda
-        /// <c>IGameMode</c> karşılığı yoktur, <c>start_match</c> ile başlatılamaz. Yalnız istemcinin
-        /// lobide silah loadout'unu/HUD'unu katalogdan çözebilmesi için taşınır.
+        /// Lobi türünün <c>modeId</c>'si (§10.7). <b>Kayıtlı bir maç modu DEĞİLDİR</b> — sunucuda
+        /// <c>IGameMode</c> karşılığı yoktur, <c>start_match</c> ile başlatılamaz (yani "lobi türü
+        /// seçiliyken maç başlamaz" kuralı buradan gelir, ayrı bir kontrol yoktur). İstemci bununla
+        /// silah loadout'unu, HUD'unu ve ateş serbestliğini (<c>rules.fireWhilePaused</c>) çözer.
         /// </summary>
         public const string LOBBY_MODE_ID = "lobby";
+
+        // ---- Faz değerleri (§10.1). Telde string taşınır; bilinmeyen değer PAUSED sayılır. ----
+
+        /// <summary>Maç koşmuyor: lobi, yükleme, geri sayım, duraklatma. Hasar KAPALI.</summary>
+        public const string PHASE_PAUSED = "paused";
+
+        /// <summary>Maç koşuyor. <b>Hasarın işlendiği TEK faz</b> (§10.3).</summary>
+        public const string PHASE_PLAYING = "playing";
+
+        /// <summary>Maç bitti, skorlar kesin. Hasar KAPALI.</summary>
+        public const string PHASE_FINISHED = "finished";
+
+        // ---- phaseReason değerleri (§10.1): yalnız PHASE_PAUSED iken doludur. ----
+
+        /// <summary>Lobi türü açık, maç kurulmadı.</summary>
+        public const string PAUSE_REASON_LOBBY = "lobby";
+
+        /// <summary>Sahne yükleme kapısı: tüm oyuncuların set_ready'si bekleniyor.</summary>
+        public const string PAUSE_REASON_LOADING = "loading";
+
+        /// <summary>Geri sayım (COUNTDOWN_SECONDS).</summary>
+        public const string PAUSE_REASON_COUNTDOWN = "countdown";
+
+        /// <summary>Operatör koşan maçı duraklattı.</summary>
+        public const string PAUSE_REASON_OPERATOR = "operator";
+
+        /// <summary>Mod duraklatma istedi; gerekçesi <c>modeState</c>'tedir (ör. turnuva toplanması).</summary>
+        public const string PAUSE_REASON_MODE = "mode";
 
         // ---- Maç akışı + savaş (Docs/ArenaNet-Protokol.md §10) ----
 

@@ -207,8 +207,9 @@ taraması yoktur, maliyet sıfırdır.
 2. Play → `3` (kuş bakışı): çatı kalkmalı, **zemindeki gölge deseni durmalı**.
 3. `2` (serbest) → çatı geri gelmeli, gölge kipi bozulmamış olmalı.
 4. Tercihler (`P`) → Çatı → `hep gizli`: POV'da da tavan olmamalı. → `görünür`: hiçbir kipte kalkmamalı.
-5. Kuş bakışındayken tercihler panelinden **başka bir harita** seç (yerel önizleme yüklenir):
-   yeni sahnenin çatısı **hiç görünmeden** gizli gelmeli.
+5. Kuş bakışındayken tercihler panelinden **başka bir harita** seç (sahne yüklenir — sunucuya
+   bağlıysan oyuncular da o arenaya geçer, §10.7): yeni sahnenin çatısı **hiç görünmeden**
+   gizli gelmeli.
 6. Rolü **player** yap, aynı sahneyi aç: çatı normal, hiçbir gizleme olmamalı.
 
 ---

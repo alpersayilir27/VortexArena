@@ -203,13 +203,36 @@ namespace VortexArena.Protocol
 
         /// <summary>respawn.delaySeconds; ArenaProtocol.RESPAWN_DELAY varsayılanı.</summary>
         public float respawnDelay = ArenaProtocol.RESPAWN_DELAY;
+
+        /// <summary>
+        /// Faz <c>playing</c> değilken silah ateşlenebilir mi (§10.5). <c>true</c> = lobi gibi
+        /// serbest atış alanı: namlu alevi/ses relay edilir ama <b>hasar yine yoktur</b>
+        /// (<c>hit_report</c> kapısı her hâlükârda <c>playing</c>'dir, §10.3).
+        /// <para>Bu alan sayesinde istemcide <c>if (modeId == "lobby")</c> zinciri doğmaz.</para>
+        /// </summary>
+        public bool fireWhilePaused;
     }
 
+    /// <summary>
+    /// Maçın durumu (§10.1). <b>Dört alan, dört ayrı sahip:</b> <c>modeId</c> ne oynandığı,
+    /// <c>phase</c> çekirdeğin genel durumu, <c>phaseReason</c> duraklamanın gerekçesi,
+    /// <c>modeState</c> modun kendi ara durumu.
+    /// </summary>
     [Serializable]
     public class MatchInfo
     {
+        /// <summary>ArenaProtocol.PHASE_* — hasarın işlendiği TEK faz <c>playing</c>'dir.</summary>
         public string phase;
+
+        /// <summary>ArenaProtocol.PAUSE_REASON_* ; yalnız <c>phase == paused</c> iken dolu.</summary>
+        public string phaseReason;
+
         public string modeId;
+
+        /// <summary>Modun kendi ara durumu (serbest string). <b>Çekirdek yorumlamaz</b>, yalnız
+        /// HUD okur; asla bir kural/hasar kapısı değildir (§10.1).</summary>
+        public string modeState;
+
         public string sceneName;
         public float timeRemaining;
         public int scoreRed;
@@ -306,7 +329,16 @@ namespace VortexArena.Protocol
     public class MatchStateMsg
     {
         public string type = MessageTypes.MatchState;
+
+        /// <summary>ArenaProtocol.PHASE_* (§10.1).</summary>
         public string phase;
+
+        /// <summary>ArenaProtocol.PAUSE_REASON_* ; yalnız <c>phase == paused</c> iken dolu.</summary>
+        public string phaseReason;
+
+        /// <summary>Modun kendi ara durumu; çekirdek yorumlamaz (§10.1).</summary>
+        public string modeState;
+
         public float timeRemaining;
         public int scoreRed;
         public int scoreBlue;

@@ -8,7 +8,9 @@ namespace VortexArena.Server.App;
 /// Ctrl+C ile temiz kapan. UI YOK — yönetim UI'ı Unity admin build'idir.</summary>
 internal static class Program
 {
-    private static async Task Main(string[] args)
+    /// <summary>Çıkış kodu: <c>0</c> temiz kapanış, <c>2</c> açılış doğrulaması başarısız
+    /// (§11 fail-fast) — betikler/launcher bunu ayırt edebilsin.</summary>
+    private static async Task<int> Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -25,6 +27,11 @@ internal static class Program
 
         using var registry = new PlayerRegistry(Path.Combine(configDir, "devices.json"));
         var director = new MatchDirector(registry, maps, config.lobbyScene);
+
+        // ⚠️ Fail-fast (§11): sunucunun AÇIK SAHNESİ istemcinin tek yönlendirme kaynağıdır
+        // (welcome.match.sceneName). Çözülemiyorsa zaten bir yapılandırma hatası vardır ve oyuncu
+        // doğru oynayamaz — sessizce boş sahneyle açılmak hatayı sahaya taşır.
+        if (!ValidateLobbyScene(director.LobbyScene, maps, config.lobbyScene)) return 2;
         var lobby = new LobbyService(registry, director);
         var control = new ControlHost(registry, lobby, director, config.controlPort);
         var beacon = new BeaconService(config.beaconPort, config.controlPort, config.statePort);
@@ -86,6 +93,7 @@ internal static class Program
         stateHost.Stop();
         await control.StopAsync();
         Console.WriteLine("Kapandı.");
+        return 0;
     }
 
     /// <summary><c>--anahtar deger</c> biçimindeki argümanı okur; yoksa null.</summary>
@@ -171,18 +179,58 @@ internal static class Program
         }
     }
 
-    /// <summary>Açılış logundaki "Lobi" satırı (§10.7). Yapılandırma hatası sahada sessiz kalmasın:
-    /// lobi sahnesi maps.json'da yoksa istemciler o sahneyi yükleyemez ve kabuk lobide kalır —
-    /// bunu sunucu konsolunda tek bakışta görmek gerekir.</summary>
+    /// <summary>Açılış logundaki "Lobi" satırı (§10.7).</summary>
     private static string DescribeLobby(string lobbyScene, MapTable maps)
     {
-        if (string.IsNullOrEmpty(lobbyScene))
-            return "yapılandırılmamış (istemci kabuk Lobby sahnesinde kalır) — server.json → lobbyScene";
         if (maps.IsEmpty)
             return $"{lobbyScene} (maps.json yok — doğrulanamadı)";
-        return maps.TryGet(lobbyScene, out _)
-            ? lobbyScene
-            : $"{lobbyScene}  ⚠ maps.json'da YOK — Export Server Config çalıştırılmamış olabilir";
+        return lobbyScene;
+    }
+
+    /// <summary>
+    /// Açık sahne garantisi (§11 fail-fast). Sunucunun açık sahnesi istemcinin TEK yönlendirme
+    /// kaynağıdır (<c>welcome.match.sceneName</c>) — çözülemiyorsa sunucu hiç açılmamalıdır,
+    /// yoksa oyuncular hiçbir sahneye gidemeden kabuk lobide bekler ve hata sahada fark edilir.
+    /// <para><b>İstisna:</b> <c>maps.json</c> hiç yoksa harita tablosu boştur ve doğrulamanın
+    /// tamamı zaten kapalıdır (§11) — o yapılandırmada sunucuyu kilitlemek geliştirme akışını
+    /// kırardı, yalnız uyarılır.</para>
+    /// <para>false dönerse çağıran süreç <c>2</c> ile kapanır.</para>
+    /// </summary>
+    private static bool ValidateLobbyScene(string resolved, MapTable maps, string? configured)
+    {
+        if (maps.IsEmpty)
+        {
+            Console.WriteLine("[Lobi] ⚠ maps.json yok — açık sahne doğrulanamadı. " +
+                              "Tools > VortexArena > Export Server Config çalıştırın.");
+            return true;
+        }
+
+        if (string.IsNullOrEmpty(resolved))
+        {
+            Console.WriteLine();
+            Console.WriteLine("HATA: Bu mekanın açık sahnesi belirlenemedi — sunucu açılmıyor.");
+            Console.WriteLine($"  Mekan '{maps.Venue}' içinde lobi haritası yok " +
+                              "(MapDefinition.supportedModeIds == [\"lobby\"] olan bir arena).");
+            Console.WriteLine("  Çözüm: bu mekana bir lobi arenası ekleyip " +
+                              "Tools > VortexArena > Export Server Config çalıştırın, " +
+                              "ya da server.json → lobbyScene alanına mevcut bir sahne yazın.");
+            Console.WriteLine($"  Bu mekanda bilinen haritalar: {string.Join(", ", maps.SceneNames)}");
+            return false;
+        }
+
+        if (!maps.TryGet(resolved, out _))
+        {
+            Console.WriteLine();
+            Console.WriteLine("HATA: Açık sahne harita tablosunda yok — sunucu açılmıyor.");
+            Console.WriteLine($"  İstenen sahne: '{resolved}'" +
+                              (string.IsNullOrWhiteSpace(configured) ? "" : " (server.json → lobbyScene)"));
+            Console.WriteLine($"  Mekan '{maps.Venue}' içinde bilinen haritalar: {string.Join(", ", maps.SceneNames)}");
+            Console.WriteLine("  Çözüm: adı düzeltin ya da Export Server Config çalıştırın " +
+                              "(maps.json Unity'den üretilir, elle düzenlenmez).");
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>`dotnet run` bin/Debug/... içinden çalışır; gerçek dosyalar Server/config/ altındadır.

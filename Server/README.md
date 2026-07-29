@@ -136,9 +136,14 @@ değilse (servis/betik) sunucu **bloklanmaz**, ilk mekanla açılır ve bunu log
 `lobbyScene` = lobi sahnesi (§10.7). **Boş bırakılırsa seçilen mekanın lobi haritası
 (`modes:["lobby"]`) otomatik bulunur** — normalde boş kalır. Maç koşmadığı sürece oyuncular ve
 admin lobide durur: birbirlerini görürler, kalibrasyonlarını orada yaparlar, raftan silah alıp
-hedeflere ateş edebilirler — birbirlerine hasar veremeden (`hit_report` yalnız Live fazında
-işlenir). Mekanda hiç lobi haritası yoksa istemciler kabuk `Lobby` sahnesinde kalır; sunucu yine
-sorunsuz çalışır. Açılış özetindeki `Lobi :` satırı sonucu ve varsa uyarıyı gösterir.
+hedeflere ateş edebilirler — birbirlerine hasar veremeden (`hit_report` yalnız `playing` fazında
+işlenir; ateş serbestliği lobi türünün kuralıdır, `rules.fireWhilePaused`).
+
+> ⚠️ **Açık sahne çözülemezse sunucu AÇILMAZ.** `lobbyScene` boş ve mekanda lobi haritası yoksa,
+> ya da yazılan sahne `maps.json`'da bulunmuyorsa sunucu sebebi + çözümü yazıp **çıkış kodu 2** ile
+> kapanır. Sebep: sunucunun açık sahnesi istemcinin tek yönlendirme kaynağıdır
+> (`welcome.match.sceneName`) — çözülemiyorsa zaten yapılandırma hatası vardır ve oyuncu doğru
+> oynayamaz. (`maps.json` hiç yoksa doğrulamanın tamamı kapalıdır; sunucu uyarıp açılır.)
 
 > **`maps.json` Unity'den export edilir** — Unity'de `Tools > VortexArena > Export Server Config`
 > menüsü onu `MapDefinition` SO'larından üretir. **Elle düzenlemeyin: bir sonraki export
@@ -197,16 +202,26 @@ komut uygulanır.
   `Ofis-PC`, `Ofis-PC (2)` diye ayrıştırılır.
 - **Ortak durum:** bir sonraki maçın mod/harita seçimi **sunucuda** yaşar. Admin arayüzü onu
   `set_selection` ile değiştirir, sunucu `admin_state` ile TÜM adminlere yayar → bir operatör
-  haritayı değiştirdiğinde diğerinin paneli ve yerel önizlemesi de değişir. `start_match` de
+  haritayı değiştirdiğinde diğerinin paneli de değişir. `start_match` de
   seçimi günceller. Her admin komutu `admin_state.notice` ile "kim ne yaptı" satırı üretir.
+- **Harita seçimi = sahneleme:** maç koşmuyorken seçilen arena TÜM istemcilere yüklenir
+  (`return_to_lobby`, konsolda `[match] lobi sahnesi -> '<sahne>'`) — faz `paused` kalır, maç
+  başlamaz. Bu yüzden **mod/harita yalnız `playing` DEĞİLKEN değiştirilebilir** (`paused` ve
+  `finished` serbest, yani maç bitince operatör bir sonrakini seçebilir); koşan maçta komut
+  reddedilir (`[Lobby] set_selection reddedildi: maç sürüyor`) ve admin panelinde o iki satır
+  pasiftir. Süre/limit her durumda değiştirilebilir. Ayrıntı: `../Docs/ArenaNet-Protokol.md` §10.7.
 - **Yerel kalanlar:** kamera kipi, seçili oyuncu, halkalar/ad etiketleri, kamera hızı, duvar ve
   çatı saydamlığı — bunlar protokole girmez, her operatörün kendi ekranına aittir.
 
 ## Maç akışı — konsolda ne görünür
 
 Kural otoritesi tamamen sunucudadır (`MatchDirector` + `Modes/<X>Mode.cs`): istemci hasar
-uygulamaz, skor tutmaz, faz değiştirmez. Faz makinesi
-`Lobby → Loading → Countdown(5) → Live → End(10 sn) → Lobby` (detay: `../Docs/ArenaNet-Protokol.md` §10).
+uygulamaz, skor tutmaz, faz değiştirmez. **Faz üç değerdir:** `paused` · `playing` · `finished`.
+Duraklamanın gerekçesi ayrı bir alandır (`phaseReason`: `lobby`/`loading`/`countdown`/`operator`/
+`mode`), modun kendi ara durumu da öyle (`modeState`). Akış:
+`paused(lobby) → paused(loading) → paused(countdown 5) → playing → finished(10 sn) → paused(lobby)`
+(detay: `../Docs/ArenaNet-Protokol.md` §10.1). **Lobi bir faz değil bir türdür** — `modeId:"lobby"`,
+yalnız lobi haritasında ve o türdeyken maç başlatılamaz.
 
 Admin `start_match` yolladığında sunucu şunları doğrular: mod kayıtlı mı, `sceneName`
 `config/maps.json`'da var mı ve o harita bu modu destekliyor mu (tablo boşsa bu adım atlanır),
@@ -218,10 +233,10 @@ ve her oyuncuya KİŞİSEL `load_match` (`yourTeam` + maçın `rules`'ü) gider.
 **Çevrimiçi adminlere de bir kopya gider** (`yourTeam:""`) — admin gözlemci aynı sahneyi yükler; admin `set_ready`
 GÖNDERMEDİĞİ için Loading kapısı etkilenmez (kapı yalnız `role=player` sayar).
 
-**Oyuncusuz maç:** `load_match` yalnız adminlere gider, Loading'de beklenecek `set_ready`
-olmadığı için faz doğrudan Countdown'a geçer. Oyuncularla BAŞLAMIŞ bir maçta Loading sırasında son
-oyuncu da düşerse sunucu lobiye döner; oyuncusuz BAŞLATILMIŞ maçta dönmez — çıkış `abort_match` /
-`return_to_lobby`.
+**Oyuncusuz maç:** `load_match` yalnız adminlere gider, yükleme kapısında beklenecek `set_ready`
+olmadığı için doğrudan geri sayıma geçilir. Oyuncularla BAŞLAMIŞ bir maçta yükleme sırasında son
+oyuncu da düşerse sunucu açık sahneye döner; oyuncusuz BAŞLATILMIŞ maçta dönmez — çıkış
+`abort_match` / `return_to_lobby`.
 
 Ölüm ve canlanmadan sonra sunucu `lobby_state`'i bir kez tazeler: `kills`/`deaths`/`hp`/`alive`
 alanları roster ile taşınıyor ve admin istatistik tablosunun sağlama noktası bu (§5.3).
@@ -230,9 +245,9 @@ alanları roster ile taşınıyor ve admin istatistik tablosunun sağlama noktas
 
 | Satır | Anlamı |
 |---|---|
-| `faz Lobby → Loading` | her faz değişiminde (ayrıca herkese `match_state` yayınlanır) |
+| `durum paused/lobby → paused/loading` | her durum değişiminde (ayrıca herkese `match_state` yayınlanır) |
 | `start_match: mod 'tdm', sahne 'Arena12x12' (12×12), 2 oyuncu (kırmızı 1 / mavi 1)` | maç kuruldu (boyut yalnız harita tablodaysa) |
-| `start_match reddedildi: …` | doğrulama düştü, faz değişmedi (ör. `'Arena12x12' harita tablosunda yok`) |
+| `start_match reddedildi: …` | doğrulama düştü, durum değişmedi (ör. `'Arena12x12' harita tablosunda yok`, `'lobby' modu kayıtlı değil`) |
 | `takım dengeleme: 1 oyuncu 'blue' takımına taşındı` | boş takım kalmasın diye |
 | `loading zaman aşımı (20 sn) — hazır olmayanlar: Gözlük 03` | sahne yükleme beklenmedi |
 | `hit_report reddedildi (Gözlük 03 → 5): dost ateşi yok` | §10.3 tutarlılık kontrollerinden biri düştü |
@@ -297,7 +312,7 @@ olmayan kancayı hiç ekleme**.
   `0x02 Snapshot` yayını (20 Hz; oyuncu sayısı sınırsız, datagram başına en fazla
   `SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16` girdi ≈ 1382 B, fazlası aynı tik içinde ek datagramlara
   bölünür). Snapshot `flags` bit0 gerçek `alive` durumunu taşır.
-- **Maç:** `MatchDirector` faz makinesi (`load_match` → Countdown → Live → End → lobi) +
+- **Maç:** `MatchDirector` faz makinesi (`load_match` → geri sayım → `playing` → `finished` → lobi) +
   `Modes/TdmMode.cs` + `Modes/FfaMode.cs` (`IGameMode`) + vuruş hattı, can/skor yayını,
   free-roam canlanma.
 - **Hasar modeli:** sunucuda silah tablosu YOKTUR; hasarı istemci hesaplar, sunucu aynen uygular

@@ -165,16 +165,39 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 |---|---|
 | ✅ `WorldToArena(Vector3 / Quaternion / Pose)` | Ağa göndermeden önce |
 | ✅ `ArenaToWorld(Vector3 / Quaternion / Pose)` | Ağdan aldıktan sonra |
-| ✅ `HasOrigin` | Arena orijini kayıtlı mı (Lobby'de değildir) |
+| ✅ `HasOrigin` | Arena orijini kayıtlı mı (Lobby'de değildir) — origin'i `SpawnPoint` kaydeder |
 
 > ⚠️ Yön vektörü için iki noktayı çevirip farkını al — [reçete 16](Yemek-Kitabi.md#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı).
 
+> ⚠️ Origin yokken dönüşümler **kimlik** davranır (dünya = arena) ve `ArenaSpace` sahne başına bir
+> kez uyarı basar. Lobide bu normaldir; arena sahnesinde `SpawnPoint` eksik demektir.
+
 ### ArenaBoundary
 
-Arena orijinini kaydeder + fiziksel sınır uyarısını çizer. Sahnede **bir tane** olmalı.
+Fiziksel sınır uyarısını çizer (duvar alfası + karartma) + arena ölçüsünün tek kaynağıdır.
+Sahnede **bir tane** olmalı. **Arena orijinini KAYDETMEZ** — o `SpawnPoint`'in işidir.
 
-> ⛔ **Devre dışı bırakma.** `OnDisable` orijin kaydını siler → tüm uzak oyuncular dünya orijinine
-> yığılır. Susturmak gerekiyorsa `SetSpectatorMode(true)`.
+| Üye | Açıklama |
+|---|---|
+| ✅ `IsOutOfBounds` | Yerel HMD alan dışında mı |
+| ✅ `HalfExtents` | Arena yarı ölçüsü; plan bağlıysa çokgenin sınırlayıcı kutusundan gelir |
+| ✅ `LocalCenter` | Sınırın yerel merkezi (dikdörtgende sıfır) — admin kuş bakışı kadrajı bunu okur |
+| ✅ `SetSpectatorMode(bool, float)` | Muhafazayı susturur, duvarları çizili bırakır |
+
+Arena dikdörtgen değilse `shape` alanına bir `ArenaShapeDefinition` bağlanır: kenar mesafesi çokgene,
+kolonlara ve sahnedeki `ArenaObstacle`'lara olan mesafenin **en küçüğü** olur. Alan boşsa eksene
+hizalı `halfExtentX/Z` dikdörtgeni kullanılır.
+
+> ⛔ **Muhafazayı susturmak için bileşeni kapatma** — kapalı bileşen duvar alfasını son değerinde
+> dondurur, karartma açık kalabilir. Doğrusu `SetSpectatorMode(true)`.
+
+### ArenaObstacle
+
+Elle konan engel (kolon, kasa, direk): `ArenaBoundary` onu muhafaza hesabına katar, oyuncu
+yaklaşınca uyarı alır. Ölçü `Size` alanından gelir, transform scale'inden değil.
+
+> ⛔ **Collider DEĞİLDİR, fizik YAPMAZ.** Free-roam'da oyuncuyu durduran şey gerçek dünyadaki
+> nesnedir; bu bileşenin tek işi uyarı üretmek.
 
 ### BaseZone (taban bölgesi)
 
@@ -193,18 +216,26 @@ oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge k
 > ⚠️ **GameObject'ini kapatma** — altına konmuş marker'lar kayıttan düşer. Gerekiyorsa **bileşeni**
 > kapat (`zone.enabled = false`). Kapalı bölge canlanma için açık sayılmaz.
 
-### SpawnPoint (tek başlangıç noktası)
+### SpawnPoint (tek başlangıç noktası — **arena origin'i**)
 
 Arena başına **bir tane**. Takımı ve slotu yoktur. `GameObject > VortexArena > Spawn Point` ile
-eklenir, elle yerleştirilir.
+eklenir, elle yerleştirilir. İki işi vardır: maç öncesi yerleşim göstergesi **ve arena uzayının
+sıfırı** (`ArenaSpace.SetOrigin` buradan çağrılır).
 
 | Üye | Açıklama |
 |---|---|
-| ✅ `SpawnPoint.Current` | Sahnedeki nokta; yoksa `null`. **Yalnız Play kipinde** dolar |
+| ✅ `SpawnPoint.Current` | Sahnedeki nokta; yoksa `null`. **Yalnız Play kipinde** dolar. Origin buna bağlanır |
 | ✅ `SpawnPoint.All` | Play kipinde kayıtlı noktalar (normalde 0 ya da 1) |
 
 > ⛔ Bu bir *gösterge*dir, hedef değil. **Hiçbir kod oyuncuyu oraya taşımaz** — ne maç başında,
 > ne canlanmada, ne harita değişiminde. Protokolde konum/slot taşıyan bir alan yoktur.
+
+> ⛔ **Yerleştirdikten sonra oynatma.** Bir metre kaydırmak arenadaki **herkesin** koordinatını bir
+> metre kaydırır; hata ancak iki başlık aynı sahnede buluşunca görünür.
+
+> ⚠️ **Zemin seviyesinde durmalı:** uzak avatarların bastığı zemin
+> `ArenaSpace.ArenaToWorld(Vector3.zero).y`'den gelir (`ThreePointBodyIK`) — marker havadaysa
+> avatarların ayakları da havada kalır.
 
 > ⚠️ Editör aracı yazıyorsan `SpawnPoint.All` yerine `FindObjectsByType<SpawnPoint>` kullan:
 > kayıt `OnEnable`'da dolar, edit kipinde `OnEnable` çalışmaz.

@@ -42,12 +42,24 @@ Aynı sebeple: bir oyuncu durumuna savaş kapısı eklerken **o durumu değişti
 Kalibrasyonda bu `revive_request` ile birlikte `REVIVE_GRACE` zorla canlandırmasıydı; yalnız
 birincisini kapatmak kuralı işlevsiz bırakıyordu.
 
-### ⛔ `ArenaBoundary`'yi devre dışı bırakma
+### ⛔ `SpawnPoint`'i yerleştirdikten sonra oynatma
 
-`OnDisable` → arena orijin kaydı silinir → **bütün uzak oyuncular dünya orijinine yığılır**
-(halkalar, ad etiketleri dahil). Susturmak gerekiyorsa `SetSpectatorMode(true)` kullan.
+Gösterge gibi görünür ama **arena uzayının sıfırıdır**: ağa giden/gelen tüm pozlar ona göre
+çevrilir. Bir metre kaydırmak arenadaki **herkesin** koordinatını bir metre kaydırır ve hata ancak
+iki başlık aynı sahnede buluşunca görünür. Bir kez konur, bırakılır.
 
-Bu kural her "sınırı geçici kapatalım" isteğinde geçerlidir.
+Aynı sebeple **zemin seviyesinde** durmalı: uzak avatarların bastığı zemin
+`ArenaSpace.ArenaToWorld(Vector3.zero).y`'den gelir (`ThreePointBodyIK`) → marker havadaysa
+avatarların ayakları da havada kalır.
+
+Sahnede hiç marker yoksa dünya = arena sayılır; tek işareti `ArenaSpace`'in sahne başına bir kez
+bastığı uyarıdır (lobide o uyarı normaldir).
+
+### ⛔ Muhafazayı susturmak için `ArenaBoundary` bileşenini kapatma
+
+Kapatılan bileşen duvar alfasını son yazdığı değerde dondurur, alan-dışı karartması açık kalabilir.
+Doğrusu `SetSpectatorMode(true)` — uyarıyı keser, duvarları çizili bırakır (admin gözlemci bunu
+kullanır).
 
 ### ⛔ Ölü oyuncuları uzak oyuncu listesinden eleme
 
@@ -124,6 +136,15 @@ Gizlemen gerekiyorsa **bileşeni** kapat (`zone.enabled = false`) ve görsel şe
 İkinci yüzü: **kapalı bir `BaseZone` canlanma için açık sayılmaz.** `Update` koşmadığı için
 `IsPlayerInside` donar — açık sayılsaydı oyuncu bölgeye girse de canlanamaz, yalnız sunucunun
 `REVIVE_GRACE`'ini beklerdi.
+
+### ⛔ `ArenaObstacle`'ı collider sanma
+
+Fizik YAPMAZ, collider EKLEMEZ, hiçbir şeyi durdurmaz. Free-roam'da oyuncuyu durduran şey gerçek
+dünyadaki nesnedir; bileşenin tek işi `ArenaBoundary`'ye "burası engel" demek — oyuncu kolona
+yaklaşırken duvar uyarısını alsın diye. Ölçü `size` alanından gelir, transform scale'inden değil.
+
+Arena dikdörtgen değilse tekil engel işaretlemek yetmez: planın kendisi
+`ArenaShapeDefinition` ile verilir ve `ArenaBoundary.shape`'e bağlanır.
 
 ### ⚠️ Arena sahnelerinde `EventSystem` yoktur
 

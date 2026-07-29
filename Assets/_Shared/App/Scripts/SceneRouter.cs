@@ -79,19 +79,22 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Geç katılım senkronu: welcome'daki match fazı Lobby dışındaysa maç sahnesine yetiş.
-        /// Admin için de geçerli — maç koşarken açılan admin doğrudan arena sahnesine düşer.
+        /// Bağlanınca sunucunun <b>açık sahnesine</b> gidilir — istemcinin tek yönlendirme
+        /// kaynağı budur (§5.3). Maç koşuyorsa o arenadır (geç katılım), koşmuyorsa işletmenin
+        /// lobisi ya da operatörün sahnelediği arena. Admin için de geçerli.
         /// </summary>
         private void HandleConnected(WelcomeMsg msg)
         {
-            if (msg?.match == null || string.IsNullOrEmpty(msg.match.phase))
+            if (msg?.match == null)
             {
                 return;
             }
 
-            // Lobide de sahne gelir (§10.7): işletmenin kendi lobi sahnesi. Bu bir maç DEĞİLDİR —
-            // RememberMatch çağrılmaz, yani set_ready gönderilmez ve ModeHudSpawner maç HUD'u aramaz.
-            if (msg.match.phase == "Lobby")
+            // Maç dışında da sahne gelir (§10.7): sunucunun AÇIK SAHNESİ — işletmenin lobisi ya da
+            // operatörün sahnelediği arena. Bu bir maç DEĞİLDİR — RememberMatch çağrılmaz, yani
+            // set_ready gönderilmez ve ModeHudSpawner maç HUD'u aramaz.
+            // Ayrım fazdan değil TÜRDEN gelir (§10.1): lobi türü açıkken maç kurulmamıştır.
+            if (msg.match.modeId == ArenaProtocol.LOBBY_MODE_ID)
             {
                 LobbyScene = msg.match.sceneName ?? "";
                 LoadLobbyChecked();

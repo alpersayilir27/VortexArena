@@ -27,6 +27,7 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Yeni arena eklemek | [14](#14-yeni-arena-eklemek) |
 | Sunucusuz / gözlüksüz test | [15](#15-sunucusuz-ve-gözlüksüz-test) |
 | Bir konumu ağdan paylaşmak | [16](#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı) |
+| Dikdörtgen olmayan arena (yamuk, L) | [17](#17-dikdörtgen-olmayan-arena-yamuk-l-kırık-duvarlı) |
 
 ---
 
@@ -497,9 +498,14 @@ arenanın **tek** başlangıç noktasını koy · NavMesh/ışık bake et · **`
 Sahnede bulunması gerekenler → [Sahne Kurulumu](Sahne-Kurulumu.md).
 
 > **Başlangıç noktası nedir, ne değildir?** Maçtan önce operatörün oyuncuyu yönlendirdiği fiziksel
-> yer. Takımı ve slotu yoktur, arena başına bir tanedir ve **hiçbir kod onu okumaz** — oyuncuyu
-> oraya taşıyan bir mekanizma yok (free-roam). Ölünce dönülecek yer bu değil, **taban bölgesi**dir
-> (`BaseZone` — kırmızı/mavi şerit).
+> yer. Takımı ve slotu yoktur, arena başına bir tanedir ve oyuncuyu oraya taşıyan bir mekanizma
+> yoktur (free-roam). Ölünce dönülecek yer de bu değil, **taban bölgesi**dir (`BaseZone` —
+> kırmızı/mavi şerit).
+> Ama **arena uzayının sıfırı odur**: ağa giden/gelen tüm pozlar bu transforma göre çevrilir →
+> **zemin seviyesine** koy ve yerleştirdikten sonra taşıma (taşımak herkesin koordinatını kaydırır).
+
+Arena dikdörtgen değilse (yamuk, L, kırık duvarlı) sihirbazın **Arena planı** alanını doldur ya da
+sonradan bir plan bağla → [Reçete 17](#17-dikdörtgen-olmayan-arena-yamuk-l-kırık-duvarlı).
 
 > ⚠️ **Sahne adı = katalog anahtarıdır.** `load_match` bu string'i taşır ve Build Settings'teki
 > adla boşluk/harf farkı dahil birebir eşleşmelidir. Sonradan değiştirme.
@@ -531,7 +537,8 @@ Sunucusuz oturumda mod kuralları `ModeDefinition`'daki önizleme alanlarından 
 ## 16. Bir konumu ağ üzerinden paylaşmak (arena uzayı)
 
 Her oyuncunun fiziksel odası farklı yerdedir. Ağda dolaşan **her** konum bu yüzden *arena
-uzayında* taşınır — arena merkezinin orijin olduğu ortak çerçeve.
+uzayında* taşınır — arenada sabit tek bir noktanın (sahnedeki `SpawnPoint`) orijin olduğu ortak
+çerçeve.
 
 ```csharp
 using VortexArena.Core.Arena;
@@ -553,5 +560,45 @@ Vector3 dunyaPos = ArenaSpace.ArenaToWorld(gelenPoz);
 > ```
 > `ArenaCombat.ReportShot` bunu zaten doğru yapar — kendi mesajını yazmıyorsan hiç düşünme.
 
-> ⚠️ **`ArenaBoundary`'yi devre dışı bırakma.** Arena orijinini o kaydeder; kapatırsan kayıt
-> silinir ve **bütün uzak oyuncular dünya orijinine yığılır.**
+> ⚠️ **Orijin sahnedeki `SpawnPoint`'tir.** Silersen ya da kapatırsan dönüşüm kimliğe düşer
+> (`ArenaSpace` sahne başına bir kez uyarır) ve **bütün uzak oyuncular dünya orijinine yığılır**;
+> yerini oynatırsan hepsi o kadar kayar.
+
+---
+
+## 17. Dikdörtgen olmayan arena (yamuk, L, kırık duvarlı)
+
+İşletme alanı kare/dikdörtgen değilse arenanın planı bir asset'te tutulur; **aynı asset geometriyi
+üretir, muhafazayı besler ve admin kuş bakışı kadrajını verir.**
+
+1. **Planı oluştur:** `Create > VortexArena > Arena Shape Definition` → arena kutusunun `Data/`
+   klasörüne koy (ör. `Arenas/Standard/VortexAntep/Data/VortexAntep_Shape.asset`).
+2. **Köşeleri gir** (`outline`): sıralı 2B köşeler, **metre**. Çokgen **kapalıdır** — ilk noktayı
+   sona tekrar yazma. Koordinatlar `ArenaBoundary`'yi taşıyan transformun **yerel XZ**'sindedir
+   (X = sağ, Y alanı = Z = ileri); ölçüyü bir köşeden alıyorsan o köşe (0,0) olur.
+   `wallHeight` = duvar yüksekliği.
+3. **Kolonları gir** (`columns`): her biri ad + merkez XZ + ölçü XZ + `yaw` + yükseklik
+   (0 bırakılırsa `defaultColumnHeight`). `columnsBlockPlayer` açıkken kolonlar muhafaza hesabına
+   da girer — oyuncu gerçek kolona çarpmadan uyarı alır.
+4. **Geometriyi üret:** sahnede `ArenaBoundary`'yi taşıyan objeyi seç →
+   `Tools > VortexArena > Build Arena From Shape` → altına `Zemin` (ProBuilder çokgen), `Duvarlar`
+   (kenar başına bir duvar) ve `Kolonlar` (her kolonda `ArenaObstacle` ile) üretilir.
+   Araç **idempotenttir**: plan değişince yeniden çalıştır, eski üçlü silinip yeniden kurulur.
+5. **Muhafazaya bağla:** `ArenaBoundary.shape` = plan asset'i, `wallRenderers` = üretilen duvarlar.
+
+> Yeni arenayı sihirbazla açıyorsan bu adımların çoğu kendiliğinden olur: **Arena planı (isteğe
+> bağlı)** alanına asset'i verirsen şablondan gelen zemin/duvar silinip plandan üretilir, `shape`
+> ve `wallRenderers` bağlanır. Alan boşsa geometriye hiç dokunulmaz (bugünkü davranış).
+
+> ⚠️ **Planı bağlamayı unutma.** Geometriyi üretip `shape` alanını boş bırakırsan muhafaza eksene
+> hizalı dikdörtgen olarak kalır: ya köşeler oyun-dışı sayılır ya da oyuncu gerçek duvara uyarısız
+> yürür. Guardian kapalı olduğu için başka fren yoktur.
+
+> ⚠️ **`ArenaObstacle` collider DEĞİLDİR** — fizik yapmaz, hiçbir şeyi durdurmaz. Free-roam'da
+> oyuncuyu durduran şey gerçek nesnedir; bileşenin tek işi muhafazanın o engele yaklaşırken
+> uyarmasıdır. Plan dışı, sahneye elle konan kasa/direk için de aynısı geçerlidir: objeye ekle,
+> `size` alanına zemindeki ölçüsünü yaz.
+
+> ⚠️ **Plan sıfırı ile arena sıfırı ayrı şeylerdir.** Plan koordinatları `ArenaBoundary`
+> transformunun yerelidir; ağ koordinatlarının sıfırı ise `SpawnPoint`'tir. Duvarı büyütmek ya da
+> kaydırmak ağ uzayını bozmaz — bu ayrım bilinçlidir.

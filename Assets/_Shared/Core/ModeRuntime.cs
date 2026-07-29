@@ -52,6 +52,15 @@ namespace VortexArena.Core
         /// yani "yazılmadı" ile "sıfır yazıldı" birbirine karışmaz.</para></summary>
         public static float RespawnDelay { get; private set; } = ArenaProtocol.RESPAWN_DELAY;
 
+        /// <summary>
+        /// Faz <c>playing</c> değilken silah ateşlenebilir mi (§10.5 <c>fireWhilePaused</c>).
+        /// Lobi türünde <c>true</c>: hedef atışı yapılır, namlu alevi herkese relay edilir — ama
+        /// <b>hasar yine yoktur</b>, onu sunucu fazdan kapatır (§10.3).
+        /// <para>⚠️ Bu alan sayesinde istemcide <c>if (modeId == "lobby")</c> zinciri doğmaz;
+        /// "burada ateş edilir mi" sorusunun tek cevabı buradadır.</para>
+        /// </summary>
+        public static bool FireWhilePaused { get; private set; }
+
         /// <summary>Takımsız mod kısayolu — çağıranların enum karşılaştırmasını tekrarlamaması için.</summary>
         public static bool IsTeamless => Teams == ModeTeamMode.None;
 
@@ -74,7 +83,8 @@ namespace VortexArena.Core
                 info.friendlyFire,
                 ParseRevive(info.reviveAnchor),
                 ParseWeapons(info.weaponSource),
-                info.respawnDelay);
+                info.respawnDelay,
+                info.fireWhilePaused);
         }
 
         /// <summary>
@@ -95,21 +105,25 @@ namespace VortexArena.Core
                 return;
             }
 
+            // Serbest atış ayrı bir SO alanı DEĞİL, lobi profilinin türevidir: iki alanı da elle
+            // işaretlemek "lobi ama ateş kapalı" gibi anlamsız bir kombinasyonu mümkün kılardı.
+            // Otorite yine sunucuda (rules.fireWhilePaused); burası yalnız sunucusuz önizleme.
             Set(modeId, mode.TeamMode, mode.Scoring, mode.FriendlyFire,
-                mode.Revive, mode.Weapons, mode.RespawnDelay);
+                mode.Revive, mode.Weapons, mode.RespawnDelay, mode.IsLobbyProfile);
         }
 
-        /// <summary>Varsayılana (takımlı TDM) döner — lobiye dönüşte ve bağlantı kopunca.</summary>
+        /// <summary>Varsayılana (takımlı TDM) döner — açık sahneye dönüşte ve bağlantı kopunca.</summary>
         public static void Reset(string modeId = "")
         {
             Set(modeId, ModeTeamMode.TwoTeams, ModeScoreKind.Team, false,
-                ModeReviveAnchor.OwnBase, ModeWeaponSource.Rack, ArenaProtocol.RESPAWN_DELAY);
+                ModeReviveAnchor.OwnBase, ModeWeaponSource.Rack, ArenaProtocol.RESPAWN_DELAY, false);
         }
 
         // ---------------------------------------------------------------- iç işler
 
         private static void Set(string modeId, ModeTeamMode teams, ModeScoreKind scoring,
-            bool friendlyFire, ModeReviveAnchor revive, ModeWeaponSource weapons, float respawnDelay)
+            bool friendlyFire, ModeReviveAnchor revive, ModeWeaponSource weapons, float respawnDelay,
+            bool fireWhilePaused)
         {
             string id = modeId ?? "";
             // 0 korunur (anında canlanma); yalnız anlamsız negatif kırpılır.
@@ -117,6 +131,7 @@ namespace VortexArena.Core
 
             bool changed = id != ModeId || teams != Teams || scoring != Scoring ||
                            friendlyFire != FriendlyFire || revive != Revive || weapons != Weapons ||
+                           fireWhilePaused != FireWhilePaused ||
                            !Mathf.Approximately(delay, RespawnDelay);
 
             ModeId = id;
@@ -126,6 +141,7 @@ namespace VortexArena.Core
             Revive = revive;
             Weapons = weapons;
             RespawnDelay = delay;
+            FireWhilePaused = fireWhilePaused;
 
             if (changed)
             {
