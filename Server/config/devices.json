@@ -1,5 +1,14 @@
 {
-  "4155cd90329a1fc1aee207dce61d1a73b7c8a1f5": "ERTU",
-  "d2355573fca8d1cb0838329b5af1ac713b260f15": "Gözlük 03",
-  "eabcf8ee21e1b9b18b86b206e5a1a3d6": "Gözlük 04"
+  "4155cd90329a1fc1aee207dce61d1a73b7c8a1f5": {
+    "name": "ERTU",
+    "number": 0
+  },
+  "d2355573fca8d1cb0838329b5af1ac713b260f15": {
+    "name": "Gözlük 03",
+    "number": 1
+  },
+  "eabcf8ee21e1b9b18b86b206e5a1a3d6": {
+    "name": "Gözlük 04",
+    "number": 0
+  }
 }
