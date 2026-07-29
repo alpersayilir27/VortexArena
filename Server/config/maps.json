@@ -2,6 +2,7 @@
   "maps": [
     { "sceneName": "Arena12x12", "venue": "Standard", "modes": ["ffa", "tdm"] },
     { "sceneName": "ArenaDemoVenue", "venue": "DemoVenue", "modes": ["ffa", "tdm"] },
+    { "sceneName": "ArenaVortexAntep", "venue": "Standard", "modes": ["ffa", "tdm"] },
     { "sceneName": "Default12x12", "venue": "Standard", "modes": ["ffa", "tdm"] },
     { "sceneName": "IceWorld", "venue": "Standard", "modes": ["ffa", "tdm"] },
     { "sceneName": "Lobby12x12", "venue": "Standard", "modes": ["lobby"] },

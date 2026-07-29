@@ -29,6 +29,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Arenas/Standard/Default12x12/Scenes/Default12x12.unity
     guid: 96f2af78242321e4db1bd68329c93567
+  - enabled: 1
+    path: Assets/Arenas/Standard/VortexAntep/Scenes/ArenaVortexAntep.unity
+    guid: 1a4bcb3a31a3aa648ae8437a740026ba
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
