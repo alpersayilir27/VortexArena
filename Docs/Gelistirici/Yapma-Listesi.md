@@ -131,7 +131,7 @@ Yalnız Lobby'de bir tane var. Sahnene UI düğmesi koyup "tıklanmıyor" diyors
 Proje **Input System-only**: modül `InputSystemUIInputModule` olmalı — `StandaloneInputModule`
 runtime'da patlar. İki etkin `EventSystem` de girdiyi ikiye böler.
 
-### ⚠️ BB Camera Rig'in üç kamerası da `MainCamera` etiketli
+### ⚠️ `VA_CameraRig`'in üç kamerası da `MainCamera` etiketli
 
 Left/Right/CenterEye. `Camera.main` hangisini döndüreceği **garanti değildir**. Kafa transformu
 gerekiyorsa rig'in `centerEyeAnchor`'ını kullan:
