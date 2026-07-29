@@ -1,58 +1,86 @@
-# vortex_launcher — VortexArena operatör launcher'ı
+# VortexArena.Launcher — operatör launcher'ı
 
-Flutter **Windows desktop** uygulaması. Tek işi var: **admin (yönetim) oyununu doğru sunucu
-adresiyle başlatmak.** İşletmede operatörün açtığı tek program budur.
+**.NET 10 / WPF** Windows masaüstü uygulaması. İşletmede operatörün açtığı tek program budur.
+İki iş yapar: **sunucuyu doğru mekanla** ve **yönetim oyununu doğru adresle** başlatmak.
 
 ```
-launcher'da IP yaz  ──►  VortexArena.exe --server-ip <ip> --server-port <port>
-                              │
-                              └─ AppBoot argümanı okur → AppSession → Lobby (admin gözlemci)
-                                 doğrudan bağlı dashboard (IP SORULMAZ)
+launcher'da mekan seç ──►  VortexArena.Server.App.exe --venue <mekan>
+                                │
+                                └─ o oturumda YALNIZ o işletmenin haritaları oynatılabilir;
+                                   açılış sahnesi o mekanın lobisidir
+
+launcher'da IP yaz    ──►  VortexArena.exe --server-ip <ip> --server-port <port>
+                                │
+                                └─ AppBoot argümanı okur → AppSession → admin gözlemci
+                                   doğrudan bağlanır (IP SORULMAZ)
 ```
 
 ## Ne yapar / ne yapmaz
 
 | Yapar | Yapmaz |
 |---|---|
-| Admin exe yolunu seçip kalıcı saklar | **Sunucuyu başlatmaz** — o her zaman elle çalıştırılır |
-| Sunucu IP + port'unu saklar | Maç yönetmez (mod/harita/start oyunun dashboard'unda) |
-| Oyunu `--server-ip`/`--server-port` ile başlatır | Oyunla ağ üzerinden konuşmaz (protokole hiç girmez) |
-| Başlatılan process'i izler (PID, çıkış kodu), durdurabilir | APK dağıtmaz |
+| Sunucuyu **mekan seçilmeden başlatmaz** (`--venue`) | Sunucuyu yönetmez/kapatmaz — kendi penceresinde Ctrl+C |
+| Mekan listesini sunucunun `config\maps.json`'undan okur | İkinci bir mekan kataloğu tutmaz |
+| Admin exe yolunu, IP/port'u ve mekanı kalıcı saklar | Maç yönetmez (mod/harita/start oyunun panelinde) |
+| Oyunu `--server-ip`/`--server-port` ile başlatır | Başlattığı süreçlerle ağ üzerinden konuşmaz (protokole hiç girmez) |
+| Başlatılan süreçleri izler (PID, çıkış kodu); oyunu durdurabilir | APK dağıtmaz |
+
+> **Sunucuyu başlatmak isteğe bağlıdır.** Sunucu exe alanı boş bırakılırsa launcher yalnız yönetim
+> oyununu başlatır ve sunucu eskiden olduğu gibi elle çalıştırılır. Launcher'dan başlatılması
+> sadece `--venue`'nun **her seferinde** geçmesini garantiler.
+
+## Neden mekan zorunlu
+
+Sunucu mekan verilmeden açılırsa sırayla şuna bakar: `--venue` → `server.json → venue` → tek mekan
+varsa o → konsolda sor. **Konsol etkileşimli değilse** (betik, servis, launcher) soru sorulamaz ve
+**alfabetik ilk mekan** sessizce açılır. Operatör bunu fark etmez; yanlış işletmenin arenalarını
+yönetmeye çalışır. Launcher bu yolu hiç bırakmaz: mekan seçilmeden **Sunucuyu Başlat** çalışmaz.
+
+Mekan listesi launcher'a gömülü değildir — sunucu exe'sinin yanındaki `config\maps.json`'dan
+okunur (exe klasöründen başlayıp yukarı 6 seviye aranır). Yeni işletme eklendiğinde Unity'de
+`Tools > VortexArena > Export Server Config` çalıştırmak yeter, launcher'da yapılacak iş yoktur.
+Lobisi olmayan bir mekan listede **kırmızı** görünür ve başlatılmaz: sunucu o mekanda açık sahne
+çözemeyip çıkış kodu 2 ile kapanırdı.
 
 ## Dosyalar
 
 | Dosya | Sorumluluk |
 |---|---|
-| `lib/main.dart` | Uygulama kabuğu + tema |
-| `lib/launcher_config.dart` | Kalıcı ayarlar (`SharedPreferences`) + doğrulama + `gameArguments` |
-| `lib/launcher_page.dart` | Tek ekran: Sunucu / Ayarlar / Yönetimi Başlat |
-| `test/widget_test.dart` | `gameArguments` sözleşmesi, IP/port doğrulaması, ekran testleri |
+| `VortexArena.Launcher/App.xaml(.cs)` | Uygulama kabuğu + tema birleştirme + yakalanmamış hata kutusu |
+| `VortexArena.Launcher/MainWindow.xaml(.cs)` | Tek ekran: 1 · Sunucu / 2 · Bağlantı / 3 · Yönetim oyunu |
+| `VortexArena.Launcher/LauncherConfig.cs` | Kalıcı ayarlar + doğrulama + `GameArguments`/`ServerArguments` |
+| `VortexArena.Launcher/VenueCatalog.cs` | `maps.json` → mekan listesi (harita sayısı, lobi var mı) |
+| `VortexArena.Launcher/Theme/Dark.xaml` | Karanlık tema paleti + kontrol şablonları |
+| `VortexArena.Launcher.Tests/` | Argüman sözleşmesi, doğrulama, `maps.json` ayrıştırma testleri |
 
-> **`gameArguments` bir sözleşmedir:** ürettiği `--server-ip` / `--server-port` adları Unity
-> tarafındaki `AppBoot.ArgServerIp` / `ArgServerPort` sabitleriyle birebir aynı olmalıdır.
-> Testte bu birebirlik doğrulanır — argüman adını değiştirirsen İKİ tarafı birlikte değiştir.
+> **Argüman adları sözleşmedir.** `--server-ip`/`--server-port` Unity'deki
+> `AppBoot.ArgServerIp`/`ArgServerPort` ile, `--venue` ise sunucudaki `Program.SelectVenue` ile
+> birebir aynı olmalıdır. Üçü de testte doğrulanır — birini değiştirirsen **iki tarafı birlikte**
+> değiştir.
+
+> **Dış UI paketi yoktur** (MaterialDesignInXamlToolkit vb.). Tema `Theme/Dark.xaml` içinde elle
+> yazılmıştır; sebep işletmede çoğu zaman internetsiz makinede derlenmesi — NuGet'ten çekilen bir
+> tema kütüphanesi dağıtım betiğini ağa bağımlı hâle getirirdi.
 
 ## Geliştirme
 
 ```powershell
 cd launcher
-flutter pub get
-flutter run -d windows     # geliştirme
-flutter test               # testler
-flutter analyze            # statik analiz
+dotnet build VortexArena.Launcher.sln
+dotnet test  VortexArena.Launcher.sln
+dotnet run --project VortexArena.Launcher
 ```
 
-Dağıtım build'i: repo kökünden `scripts\deploy-launcher.bat` → `deploy\launcher\`.
+Dağıtım build'i: repo kökünden `scripts\deploy-launcher.bat` → `deploy\launcher\`
+(self-contained; operatör PC'sine .NET kurmak gerekmez).
 
 ## Ön koşullar
 
-- Flutter SDK (stable) + Dart
-- Visual Studio + **Desktop development with C++** workload
-- **Windows Developer Mode AÇIK** — Flutter'ın plugin symlink'leri için şart:
-  `start ms-settings:developers`. Kapalıysa `flutter pub get` şu hatayı verir:
-  *"Building with plugins requires symlink support"*.
+**.NET 10 SDK** (`dotnet` PATH'te) — tek ön koşul budur.
 
 ## Ayarlar nerede saklanıyor?
 
-`SharedPreferences` → Windows'ta kullanıcı profili (launcher klasörü taşınsa bile korunur).
-Anahtarlar: `adminExePath`, `serverIp`, `serverPort`.
+`%APPDATA%\VortexArena\launcher\settings.json` — kullanıcı profilinde, launcher klasörünün yanında
+DEĞİL: `deploy-launcher.bat` çıktı klasörünü silip yeniden ürettiği için oradaki bir dosya her
+dağıtımda kaybolurdu. Anahtarlar: `adminExePath`, `serverExePath`, `serverIp`, `serverPort`,
+`venue`.

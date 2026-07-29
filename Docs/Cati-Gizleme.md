@@ -235,7 +235,7 @@ Bu notun kapsamı çatıdır; tam liste ve sorumluluklar `CLAUDE.md` → *Editor
 
 | Araç | İş |
 |---|---|
-| `Tools > VortexArena > Dev` (`Ctrl+Alt+R`) | Rol · sunucu hedefi · Play başlangıcı · sentetik maç |
+| `Tools > VortexArena > Dev` (`Ctrl+Alt+R`) | Rol · sunucu hedefi · Play başlangıcı |
 | `Tools > VortexArena > Create Arena From Template` | Yeni arena kutusu + sahne + `MapDefinition` + katalog + Build Settings |
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` |
 | `GameObject > VortexArena > Network Parent` | Sahne objesine `NetIdentity` + benzersiz `sceneId` |

@@ -9,7 +9,8 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 > içerik doğrudan `Docs/`, kaydedince tarayıcı yenilenir. Yeni PC'de bir kez `scripts/docs-setup.bat`;
 > motor repo DIŞINDA `../vortexarena-docs-site`, git'e girmez).
 > **Oyun tarafını yazan geliştirici için giriş kapısı: `Docs/Gelistirici/`** (İlk Adımlar ·
-> **Yemek Kitabı** = reçeteler · API Referansı · Sahne Kurulumu · Yapma Listesi).
+> **Yemek Kitabı** = reçeteler · API Referansı · Sahne Kurulumu · **Arayüz Tasarımı** = 2D/UI
+> nerede, hangisi prefab · Yapma Listesi).
 > Kurallar `.claude/rules/` altındadır. Sıradaki planlanmış işler: `plan/` (biten iş dokümanı silinir). Protokol: `Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı).
 > Sistemin tek sayfalık haritası (ne var, ağ nasıl çalışır, nasıl kullanılır): `Docs/Sistem-Ozeti.md`.
 > Sahadaki operatörün günlük kullanım kılavuzu (teknik olmayan dille): `Docs/Kullanim-Kilavuzu.md`.
@@ -41,8 +42,9 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 
 ## Repo üst düzey yerleşim
 
-`Assets/` (Unity) · `Server/` (.NET 10 sunucu kaynağı) · **`launcher/`** (Flutter Windows
-launcher — operatör buradan admin oyununu başlatır) · **`scripts/`** (`deploy-admin-game.bat`,
+`Assets/` (Unity) · `Server/` (.NET 10 sunucu kaynağı) · **`launcher/`** (.NET 10 WPF Windows
+launcher — operatör buradan sunucuyu **mekan seçerek** (`--venue`) ve admin oyununu başlatır;
+mekansız sunucu başlatmaz) · **`scripts/`** (`deploy-admin-game.bat`,
 `deploy-player-apk.bat`, `deploy-server.bat`, `deploy-launcher.bat`, `docs-setup.bat`) ·
 **`docs-serve.bat`** (repo kökü:
 doküman sitesini localhost:1111'de sunar; motor repo DIŞINDA `../vortexarena-docs-site`) ·
@@ -53,11 +55,11 @@ bir hedefin `ip`'si **boşsa** adres yazılmaz, keşif zinciri devralır) ·
 `Docs/` · `plan/` · `.claude/rules/`.
 
 **`.gitignore` proje tipi başına ayrıdır** — her biri kendi klasörünü yönetir:
-kök = Unity (+ repo geneli OS/IDE) · `Server/` = .NET 10 · `launcher/` = Flutter (Windows-only;
-`launcher/windows/.gitignore` Flutter'ın kendi dosyası) · `deploy/` = beyaz liste (`*` + yalnız
+kök = Unity (+ repo geneli OS/IDE) · `Server/` = .NET 10 · `launcher/` = .NET 10 WPF
+(Windows-only) · `deploy/` = beyaz liste (`*` + yalnız
 README). ⚠️ Köke Unity deseni eklerken **`/` ile sabitle**: `*.sln`/`*.csproj` sabitlenmezse
 Server'ın gerçek kaynaklarını, `*.app` ise Windows'ta (`core.ignorecase=true`)
-`Server/VortexArena.Server.App/` klasörünü yutar. Alt proje çıktısı (bin/obj, build/, .dart_tool)
+`Server/VortexArena.Server.App/` klasörünü yutar. Alt proje çıktısı (bin/obj)
 kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
 
 ## Asset mimarisi (feature-first + asmdef)
@@ -65,12 +67,19 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
 - `Assets/_Shared/` — ortak. Ortak KOD yalnız bir asmdef altında: `Core/` (VortexArena.Core),
   `Net/Protocol` (VortexArena.Protocol — saf C#, server aynı dosyaları derler), `Net/Scripts`
   (VortexArena.Net), `App/Scripts` (VortexArena.App — `Admin/` alt klasörü aynı asmdef'te:
-  admin gözlemci; `UiKit.cs` prosedürel arayüz kiti). Kod-dışı: `Arsenal/` (silah prefab+SO),
+  admin gözlemci; `UiKit.cs` arayüz paleti + EventSystem garantisi — görünüm prefablarda).
+  Kod-dışı: `Arsenal/` (silah prefab+SO),
   `FX/`, `Environments/`, `Avatars/` (**`PlayerBodyAvatar.prefab`** — Mixamo Ch15 + Movement SDK
   CharacterRetargeter'lı yerel gövde avatarı; retarget config JSON'u FBX'in yanında,
   `ThirdPartyPackages/MixamoCharacters/`), `Data/` (**`Data/Resources/GameCatalog.asset`** —
-  prosedürel admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ),
-  `Scenes/` (Boot, Lobby).
+  admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ),
+  `Scenes/` (Boot, Lobby),
+  **`App/Resources/UI/`** (⚠️ **arayüzün TAMAMI burada, prefab olarak** — admin HUD'ı + tercihler
+  ve istatistik panelleri, oyuncu satırı, oyuncu halkası, bağlantı ekranının iki varyantı,
+  cephane göstergesi, kimlik kartı. Kodda görsel kurulum YOKTUR ve yazılmaz: sınıflar yalnız veri
+  yazar. `Resources/` altından ÇIKARILMAZ — sahneye konmuyorlar, `Resources.Load` ile
+  yükleniyorlar; taşınırsa ilgili arayüz sessizce hiç çizilmez) ve **`App/UI/Sprites/`**
+  (yuvarlak köşe + halka görselleri, 9-slice). → `Docs/Gelistirici/Arayuz-Tasarimi.md`
   ⚠️ Ayrı bir admin dashboard sahnesi YOKTUR ve açılmaz — admin
   oyuncularla aynı sahnede duran bir gözlemcidir.
   ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
@@ -79,8 +88,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   - `Assets/Arenas/Venues/<İşletme>/<Arena>/` — arena kutusu: `{Scenes, Data}` (+ yalnız o arenaya
     ait sanat/prefab varsa `Art/`, `Prefabs/`; ör. `Outdoor12x12/IceWorld/`). Mekanın **tüm**
     sahnelerinin paylaştığı sanat/prefab/veri ise bir seviye yukarıda, mekan kökündeki
-    `Art/` · `Prefabs/` · `Data/` klasörlerine girer (ör. `VortexAntep/Data/VortexAntep_Shape` =
-    mekanın fiziksel planı, hem arena hem lobi kullanır).
+    `Art/` · `Prefabs/` · `Data/` klasörlerine girer (ör. `VortexAntep/Data/vortexantep_dimensions.json`
+    = mekanın fiziksel ölçüsü, hem arena hem lobi kullanır).
   - ⚠️ **Boş klasör açma** (ne sihirbaz ne elle): git klasör tutmaz, dosya tutar → klonda kaybolur,
     geriye yetim `.meta` kalır ve Unity klasörü hayalet olarak geri üretir. Klasör, içine ilk dosya
     girdiğinde açılır.
@@ -100,7 +109,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `GameCatalog`'a girmez (yoksa sunucu açılışında sahte bir mekan olarak listelenirlerdi).
   Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ (marker bileşenleri Core'dan gelir).
   Bir arenanın ağa bağlanması için sahnede şunlar olmalı: `SpawnPoint` (**arena uzayının sıfırı**),
-  `ArenaBoundary` (muhafaza + arena ölçüsü),
+  `ArenaBoundary` (muhafaza; ölçüsü **zorunlu** olarak bağlı boyut dosyasından gelir —
+  `dimensionsJson` boşsa muhafaza hata basıp kendini kapatır),
   `BaseZone`×2 (**taban bölgesi** = kırmızı/mavi şerit; ölen oyuncu buraya girince canlanır,
   `Team.Neutral` = herkese açık) ve **altyapı prefabları** (`_Shared/App/Prefabs/`):
   **`VA_CameraRig`** (kamera rig'i + `OVRComprehensiveInteractionRig` + `PlayerBodyAvatar` tek
@@ -218,8 +228,13 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
 **Yeni arena:** `Tools > VortexArena > Create Arena From Template` → arenaId + sahne adı +
 **mekan** (kutu her zaman `Venues/<İşletme>/<arenaId>/` altına açılır; mekan ZORUNLUDUR).
 **Kaynak varsayılanı `Template/Default12x12`'dir** — dizaynlı bir arenadan türetmek o arenanın
-geometrisini de kopyalar ve elle temizlemek gerekirdi. ⚠️ **Sihirbaz arena GEOMETRİSİNE DOKUNMAZ —
-boyut sormaz, ölçekleme yapmaz.** Yaptığı iş: klasörleri (`{Scenes,Data}`) + kaynak
+geometrisini de kopyalar ve elle temizlemek gerekirdi. Sihirbazda bir **geometri kaynağı**
+(`ArenaGeometrySource`) seçilir ve **kaynak ZORUNLUDUR** — "geometriye dokunmadan kopyala"
+seçeneği YOKTUR: boyut dosyası (JSON) ya da TestMesh kökü. İkisi de aynı kapıdan geçer; TestMesh
+seçilirse araç önce ondan bir boyut JSON'u üretir (arena kutusunun `Data/` klasörüne). Her iki
+yolda da `ArenaBoundary.dimensionsJson` + `wallRenderers` otomatik bağlanır.
+⚠️ **Hiçbir kaynakta ölçekleme yapılmaz.**
+Yaptığı iş: klasörleri (`{Scenes,Data}`) + kaynak
 sahnenin bire bir kopyasını üretir, MapDefinition asset'ini yazar, GameCatalog + uyumlu
 ModeDefinition'lara ekler, Build Settings'e koyar (sahne adı = katalog anahtarı). Değeri
 **bileşen bütünlüğü**: kopyalanan sahne ağa bağlanmak için gereken her şeyi hazır taşır
@@ -229,20 +244,31 @@ türetilmez** (10×10 bir arena 12×12 duvar/zeminle gelir) — o ölçü için 
 **Ölçekleme bilinçli olarak yoktur ve eklenmez:**
 her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen bile değil, plan zaten baştan
 çiziliyor — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek bir yalancı-doğru
-üretir. ELDE: geometri çizimi · `ArenaBoundary.halfExtentX/Z` · kalibrasyon işaretçilerinin
+üretir. ELDE: alanın ölçüsünü boyut dosyasına yazmak (ya da TestMesh'i modellemek) ·
+kalibrasyon işaretçilerinin
 yerleşimi (yerleri zemin bandından gelir) · tek `SpawnPoint` · **raf kipinde oynanacaksa silah rafı**
 (raf kökünde `WeaponRackSpawner`, altında konum tutan `RackSlot` gözleri — şablon dizayn taşımadığı
 için raf içermez) · NavMesh/ışık bake. Sonrasında
 `Tools > VortexArena > Export Server Config` çalıştır — **yeni `sceneName` `maps.json`'a girsin
 diye** (ölçü için değil, oraya arena boyutu yazılmaz).
-**Dikdörtgen OLMAYAN alan** (yamuk, L, kırık duvarlı): plan bir SO'ya girilir —
-`ArenaShapeDefinition` (`Create > VortexArena > Arena Shape Definition`, arenanın `Data/`
-klasöründe): `outline` = sıralı köşeler (metre, `ArenaBoundary` transformunun yerel XZ'si,
-**kapalı** — ilk noktayı sona tekrarlama), `columns` = kolonlar. Sihirbazın "Arena planı" alanına
-verilirse zemin/duvar/kolon geometrisi ondan üretilir; sonradan `Tools > VortexArena >
-Build Arena From Shape` ile yeniden üretilir (idempotent). ⚠️ **Plan üç yeri birden besler**
-(geometri · muhafaza mesafesi · admin kuş bakışı kadrajı) — ölçüyü ikinci bir yere yazma.
-Alan boş bırakılırsa `ArenaBoundary` eksene hizalı dikdörtgen olarak çalışır (bugünkü davranış).
+**Arena ölçüsü:** tek doğruluk kaynağı **boyut dosyasıdır** (`ArenaDimensions` — elle yazılabilir
+JSON, `Venues/<İşletme>/…/Data/<ad>_dimensions.json`): `outline` = sıralı köşeler (metre,
+`ArenaBoundary` transformunun yerel XZ'si, **kapalı** — ilk noktayı sona tekrarlama), `columns` =
+kolonlar. Sahnede `ArenaBoundary.dimensionsJson` alanına bağlanır ve çalışma anında okunur.
+⚠️ **Alan tam kare/dikdörtgen bile olsa dört köşeli bir `outline` olarak yazılır** — "dikdörtgense
+şu hızlı yol" ayrımı ve ona ait alanlar (`halfExtentX/Z`, `rectCenter`) YOKTUR ve geri eklenmez:
+aynı ölçünün iki ayrı ifadesi kaçınılmaz olarak birbirinden sapıyordu.
+⚠️ **Boyut dosyası ZORUNLUDUR** — bağlı değilse ya da okunamıyorsa `ArenaBoundary` bir kez hata
+basıp muhafazayı tümden kapatır (açık başarısızlık; gerekçe `Docs/Sistem-Ozeti.md` §7).
+⚠️ **Bağlanmayan JSON build'e GİRMEZ** (çalışma anında okunur, `TextAsset` referansı yoksa Unity
+onu paketlemez). ⚠️ **Ölçü üç yeri birden besler** (geometri · muhafaza mesafesi · admin kuş bakışı
+kadrajı) — ikinci bir yere yazma.
+Dosya değişince `Tools > VortexArena > Build Arena From Dimensions` (seçimde boyut JSON'u)
+geometriyi yeniden üretir (idempotent).
+**Elde modellenmiş kaba bir alan varsa** (mekanın fiziksel alanını temsil eden basit
+quad/blok yığını = TestMesh) `Tools > VortexArena > Build Arena From TestMesh` ondan bir boyut
+JSON'u ÜRETİR ve geometriyi o dosyadan çizer — TestMesh ikinci bir üretim yolu değil, boyut
+dosyasının otomatik yazılma biçimidir; ölçü sonradan dosyada elle düzeltilebilir.
 Elle konan engeller için `ArenaObstacle` (`Core/Arena/`): muhafaza onu engel sayar —
 ⚠️ **collider değildir, fizik yapmaz** (free-roam'da çarpışma yoktur).
 **Yeni lobi:** lobi de bir arena kutusudur (`Venues/<İşletme>/Lobby/`), farkı üç şeydir —
@@ -270,8 +296,8 @@ mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafınd
 2. **HUD = `ModeHudBase` alt sınıfı** (`_Shared/Core/UI/`). Faz/süre, geri sayım, can, ölüm ekranı,
    kill-feed, kendi sayaçların tabandan gelir; alt sınıf yalnız `ScoreLine`/`WinnerLine` (+ istersen
    `EndScoreLine`/`OnLobbyStateApplied`) yazar. Takıma ait hiçbir şey tabana koyulmaz.
-3. **Kural önizlemesi** `ModeDefinition` SO'suna girilir (dev penceresi + sunucusuz editör oturumu
-   için) — **otorite sunucudadır, sapmada sunucu kazanır.**
+3. **Kural önizlemesi** `ModeDefinition` SO'suna girilir (kurallar telde gelmediğinde —
+   `rules == null` — devreye giren fallback) — **otorite sunucudadır, sapmada sunucu kazanır.**
 Sonra `FFA.asset` gibi bir `ModeDefinition` yaz (modId, süre/limit, kural alanları, `maps`,
 `loadout`, `hudPrefab`), `GameCatalog.asset`'e ekle, oynanacak `MapDefinition`'ların
 `supportedModeIds`'ine yeni modId'yi koy ve **`Export Server Config`'i çalıştır** — atlanırsa
@@ -333,15 +359,17 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 |---|---|
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` değişti / yeni arena eklendi → `Server/config/maps.json` |
 | `… > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi (idempotent; *Yalnız Kataloğu Tazele* varyantı da var) |
-| `… > Create Arena From Template` | Yeni arena kutusu (dikdörtgen değilse "Arena planı" alanına `ArenaShapeDefinition` ver) |
-| `… > Build Arena From Shape` | `ArenaShapeDefinition` değişti → zemin/duvar/kolon geometrisini yeniden üretir (idempotent) |
-| `… > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, sentetik maç, sunucu çözümünü derleme |
+| `… > Create Arena From Template` | Yeni arena kutusu — geometri kaynağı ZORUNLU: boyut JSON'u ya da TestMesh kökü (kaynak `ArenaBoundary.dimensionsJson` + `wallRenderers`'ı da bağlar) |
+| `… > Build Arena From Dimensions` | Boyut dosyası değişti (seçimde JSON) → zemin/duvar/kolon geometrisini yeniden üretir (idempotent) |
+| `… > Build Arena From TestMesh` | Kaba alan bloklarından boyut JSON'u üretilecek → dosyayı yazar, sonra geometriyi ondan çizer (idempotent) |
+| `… > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` · `Spawn Point` | Sahneye ilgili bileşeni + kurulumunu ekler |
 | `PlayerBuildTool.BuildWindowsAdmin` · `…BuildQuestPlayer` | Menü değil — batch-mode `-executeMethod` girişleri (`deploy-admin-game.bat` / `deploy-player-apk.bat` çağırır) |
 
 - ⚠️ **`maps.json` elle düzenlenmez** — export ezer. Tek doğruluk kaynağı Unity SO'larıdır.
-- ⚠️ **Sunucu editörden YÖNETİLMEZ** — dev penceresinde başlat/durdur düğmesi yoktur; sunucu her
-  zaman elle çalıştırılıp elle kapatılır. Pencere yalnız çözümü derler.
+- ⚠️ **Sunucu editörden YÖNETİLMEZ** — dev penceresinin sunucuyla hiç işi yoktur (başlatmaz,
+  durdurmaz, derlemez); sunucu her zaman elle çalıştırılıp elle kapatılır, derleme `dotnet build`
+  ya da `scripts\deploy-server.bat` ile yapılır.
 - ⚠️ Süreç başlatırken **asla `dotnet run`** (yetim süreç portu tutar) ve **çıktıyı borulama**
   (okunmayan boru süreci kilitler) — gerekçeler `Docs/Sistem-Ozeti.md` §7 tuzaklar listesinde.
 
@@ -349,8 +377,9 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 (Quest oyuncu APK'sı) · `deploy-server.bat` · `deploy-launcher.bat`
 (dördü de çift tıklanabilir; otomasyonda `--no-pause` / `VORTEX_NO_PAUSE=1`).
 ⚠️ **Her iki Unity build'i için editör kapalı olmalı** (batch-mode proje kilidine takılır; betik
-bunu zorlamaz, takılırsa elle iptal et); launcher build'i için Windows **Developer Mode** açık
-olmalı. ⚠️ **APK build'i aktif platformu Android'e çevirir ve geri almaz** (geri almak ikinci bir
+bunu zorlamaz, takılırsa elle iptal et). Sunucu ve launcher `dotnet publish` ile self-contained
+üretilir — tek ön koşul .NET 10 SDK'dır.
+⚠️ **APK build'i aktif platformu Android'e çevirir ve geri almaz** (geri almak ikinci bir
 tam reimport demek olurdu) — Windows'tan ilk geçiş 20-40 dk sürer.
 ⚠️ **İki Unity build'i AYNI sahne listesini kullanır** (Build Settings); platforma göre ayrı liste
 tutma — bir arenayı admin bilip oyuncu bilmezse `start_match` sessizce reddedilir.

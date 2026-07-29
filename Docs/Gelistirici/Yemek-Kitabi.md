@@ -25,9 +25,9 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Kendi mod HUD'ını yazmak | [12](#12-kendi-hudını-yazmak) |
 | Yeni mod eklemek | [13](#13-yeni-mod-eklemek) |
 | Yeni arena eklemek | [14](#14-yeni-arena-eklemek) |
-| Sunucusuz / gözlüksüz test | [15](#15-sunucusuz-ve-gözlüksüz-test) |
+| Gözlüksüz test (dev penceresi) | [15](#15-gözlüksüz-test-dev-penceresi) |
 | Bir konumu ağdan paylaşmak | [16](#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı) |
-| Dikdörtgen olmayan arena (yamuk, L) | [17](#17-dikdörtgen-olmayan-arena-yamuk-l-kırık-duvarlı) |
+| Arena ölçüsünü girmek (boyut dosyası) | [17](#17-arena-ölçüsü-boyut-dosyası) |
 
 ---
 
@@ -479,20 +479,31 @@ Ayrıntı: `ModeRules` alanlarının tamamı → [Sistem Özeti §3.9](../Sistem
 ## 14. Yeni arena eklemek
 
 `Tools > VortexArena > Create Arena From Template` sihirbazını çalıştır: arenaId, sahne adı,
-hedef (Standard / Venue). Sihirbaz klasörleri, **sahnenin bire bir kopyasını**, `MapDefinition`
-asset'ini, katalog kaydını ve Build Settings girdisini üretir.
+hedef (Standard / Venue) ve **geometri kaynağı**. Sihirbaz klasörleri, **sahnenin bire bir
+kopyasını**, `MapDefinition` asset'ini, katalog kaydını ve Build Settings girdisini üretir.
+
+**Geometri kaynağı (`ArenaGeometrySource`) ZORUNLUDUR** — "geometriye dokunmadan kopyala" diye bir
+seçenek yoktur:
+
+| Kaynak | Ne verirsin | Sihirbaz ne yapar |
+|---|---|---|
+| `DimensionsJson` | Boyut dosyası (`TextAsset`) | Şablonun zemin/duvarını siler, geometriyi dosyadan üretir, dosyayı `ArenaBoundary.dimensionsJson`'a bağlar |
+| `TestMesh` | Kaba blok yığınının kök objesi | Bloklardan bir boyut dosyası ÇIKARIP arena kutusunun `Data/` klasörüne yazar, sonrası üstteki satırla birebir aynıdır |
+
+İki yol da aynı noktada buluşur: sahnede sonunda bir boyut dosyası vardır ve `dimensionsJson` +
+`wallRenderers` bağlıdır. Ölçü için `ArenaBoundary`'de doldurulacak ayrı bir alan **yoktur** —
+tek temsil boyut dosyasıdır ([Reçete 17](#17-arena-ölçüsü-boyut-dosyası)).
 
 ⚠️ **Sihirbaz boyut sormaz, geometriyi ölçeklemez.** Kazandırdığı şey sahnenin ağ bileşenlerini
 eksiksiz taşıması (`ArenaBoundary`, `ArenaCalibrator` + işaretçiler, `PlayerPoseTracker`,
-`RemotePlayerSpawner`, `ModeHudSpawner`, `BaseZone`, `VA_CameraRig`) — arena planı zaten her kurulumda
-baştan çiziliyor, orantılı ölçekleme elle düzeltilecek bir yalancı-doğru üretir.
+`RemotePlayerSpawner`, `ModeHudSpawner`, `BaseZone`, `VA_CameraRig`) — arena ölçüsü zaten her
+kurulumda baştan alınıyor, orantılı ölçekleme elle düzeltilecek bir yalancı-doğru üretir.
 
-Sonra **elde**: arena planını çiz · `ArenaBoundary.halfExtentX/Z`'yi gerçek
-ölçüye getir · kalibrasyon işaretçilerini yerleştir · `GameObject > VortexArena > Spawn Point` ile
+Sonra **elde**: kalibrasyon işaretçilerini yerleştir · `GameObject > VortexArena > Spawn Point` ile
 arenanın **tek** başlangıç noktasını koy · NavMesh/ışık bake et · **`Export Server Config`**.
 
 > Arena ölçüsü **sunucuya gitmez** (maps.json'a yalnız `sceneName` + `modes` yazılır); arenanın
-> tek ölçü kaynağı sahnedeki `ArenaBoundary.halfExtentX/Z`'dir. Export'u ise ölçü için değil,
+> tek ölçü kaynağı **boyut dosyasıdır**. Export'u ise ölçü için değil,
 > **yeni `sceneName` tabloya girsin** diye çalıştırıyorsun.
 
 Sahnede bulunması gerekenler → [Sahne Kurulumu](Sahne-Kurulumu.md).
@@ -504,15 +515,15 @@ Sahnede bulunması gerekenler → [Sahne Kurulumu](Sahne-Kurulumu.md).
 > Ama **arena uzayının sıfırı odur**: ağa giden/gelen tüm pozlar bu transforma göre çevrilir →
 > **zemin seviyesine** koy ve yerleştirdikten sonra taşıma (taşımak herkesin koordinatını kaydırır).
 
-Arena dikdörtgen değilse (yamuk, L, kırık duvarlı) sihirbazın **Arena planı** alanını doldur ya da
-sonradan bir plan bağla → [Reçete 17](#17-dikdörtgen-olmayan-arena-yamuk-l-kırık-duvarlı).
+Boyut dosyasının biçimi, elle yazma ve yeniden üretme →
+[Reçete 17](#17-arena-ölçüsü-boyut-dosyası).
 
 > ⚠️ **Sahne adı = katalog anahtarıdır.** `load_match` bu string'i taşır ve Build Settings'teki
 > adla boşluk/harf farkı dahil birebir eşleşmelidir. Sonradan değiştirme.
 
 ---
 
-## 15. Sunucusuz ve gözlüksüz test
+## 15. Gözlüksüz test (dev penceresi)
 
 `Tools > VortexArena > Dev` penceresi (kısayol **Ctrl+Alt+R** rolü player↔admin çevirir):
 
@@ -521,13 +532,13 @@ sonradan bir plan bağla → [Reçete 17](#17-dikdörtgen-olmayan-arena-yamuk-l-
 | **Rol** | player / admin — sahne kirletmeden, `EditorPrefs`'te kişisel kalır |
 | **Hedef** | Sunucu adresi (`dev-targets.json`'dan gelir: Local, Keşif, örnek PC) |
 | **Play başlangıcı** | Boot'tan mı, açık sahneden mi |
-| **Sentetik maç** | Mod, takım, raund süresi, skor limiti — **sunucu olmadan** `load_match` enjekte eder |
-| **Derle** | `dotnet build` |
 
-Sunucusuz oturumda mod kuralları `ModeDefinition`'daki önizleme alanlarından okunur.
+Pencerede maç parametresi yoktur: mod / takım / süre / limit **yalnız sunucudan** gelir, yani maçı
+bir **admin** başlatmalıdır. Kurallar telde gelmezse (`rules == null`) `ModeDefinition`'daki
+önizleme alanları fallback olarak devreye girer.
 
-> ⚠️ **Sunucu editörden yönetilmez** — dev penceresinde başlat/durdur düğmesi yoktur. Sunucu her
-> zaman elle çalıştırılır ve elle kapatılır.
+> ⚠️ **Sunucu editörden yönetilmez** — dev penceresinin sunucuyla hiç işi yoktur (başlatmaz,
+> durdurmaz, derlemez). Sunucu her zaman elle derlenir, elle çalıştırılır ve elle kapatılır.
 
 > ⚠️ **Sapmada sunucu kazanır.** `ModeDefinition`'daki kural alanları yalnız önizleme içindir;
 > gerçek bir `load_match` geldiği anda ezilirler.
@@ -566,14 +577,71 @@ Vector3 dunyaPos = ArenaSpace.ArenaToWorld(gelenPoz);
 
 ---
 
-## 17. Dikdörtgen olmayan arena (yamuk, L, kırık duvarlı)
+## 17. Arena ölçüsü: boyut dosyası
 
-İşletme alanı kare/dikdörtgen değilse arenanın planı bir asset'te tutulur; **aynı asset geometriyi
-üretir, muhafazayı besler ve admin kuş bakışı kadrajını verir.**
+Her arenanın ölçüsü bir **boyut dosyasına** yazılır (`ArenaDimensions` — elle düzenlenebilir JSON):
+`Venues/<İşletme>/…/Data/<ad>_dimensions.json`, ör.
+`Arenas/Venues/VortexAntep/Data/vortexantep_dimensions.json`. Sahnede
+`ArenaBoundary.dimensionsJson` alanına bağlanır ve **çalışma anında** okunur.
+**Aynı dosya geometriyi üretir, muhafazayı besler ve admin kuş bakışı kadrajını verir** — ölçüyü
+ikinci bir yere yazma.
 
-1. **Planı oluştur:** `Create > VortexArena > Arena Shape Definition` → **mekanın** `Data/`
-   klasörüne koy (ör. `Arenas/Venues/VortexAntep/Data/VortexAntep_Shape.asset`). Plan fiziksel
-   odayı tarif eder, tek bir arenayı değil: aynı mekanın arenası ve lobisi onu birlikte kullanır.
+⚠️ **Alan tam kare/dikdörtgen bile olsa dört köşeli bir `outline` olarak yazılır.** "Dikdörtgense
+şu hızlı yol, değilse çokgen" ayrımı ve ona ait bileşen alanları YOKTUR: aynı ölçünün iki ayrı
+ifadesi kaçınılmaz olarak birbirinden sapıyordu (biri düzeltiliyor, öteki eski değerde kalıyordu).
+
+⚠️ **Boyut dosyası zorunludur.** Bağlı değilse ya da okunamıyorsa `ArenaBoundary` bir kez hata
+basıp **kendini kapatır** — duvar alfası, alan-dışı karartması ve uyarı çalışmaz. Bu bilinçli bir
+seçim: ölçüsü bilinmeyen bir arenada doğru bir muhafaza zaten üretilemez, her karede ekranı
+karartmak ise işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açtığında
+konsolu oku.
+
+### 17.1 Dosyayı yazmak
+
+```json
+{
+  "name": "VortexAntep",
+  "outline": [
+    { "x": 0.00, "y": 0.00 },
+    { "x": 8.32, "y": 0.00 },
+    { "x": 8.32, "y": 13.23 },
+    { "x": 0.46, "y": 13.12 }
+  ],
+  "wallHeight": 3.0,
+  "columns": [
+    {
+      "name": "Kolon_Orta",
+      "center": { "x": 3.605, "y": 7.38 },
+      "size":   { "x": 0.67,  "y": 0.38 },
+      "yaw": 0,
+      "height": 0
+    }
+  ],
+  "defaultColumnHeight": 3.0,
+  "columnsBlockPlayer": true
+}
+```
+
+| Alan | Anlamı |
+|---|---|
+| `name` | Yalnız etiket (üretilen objelerin adlandırmasında görünür) |
+| `outline` | Sıralı sınır köşeleri, **metre**. Çokgen **kapalıdır** — ilk noktayı sona tekrar yazma. Koordinatlar `ArenaBoundary`'yi taşıyan transformun **yerel XZ**'sidir: JSON'daki `y` = dünya **Z**'si |
+| `wallHeight` | Üretilen duvarların yüksekliği (m) |
+| `columns[]` | `name` + `center` (XZ merkez) + `size` (XZ ölçü) + `yaw` (derece) + `height` (0 = `defaultColumnHeight`) |
+| `defaultColumnHeight` | `height: 0` bırakılan kolonların yüksekliği |
+| `columnsBlockPlayer` | Açıkken kolonlar muhafaza hesabına da girer — oyuncu gerçek kolona çarpmadan uyarı alır |
+
+> **Yazmadığın alan varsayılanında kalır** (`JsonUtility.FromJsonOverwrite`): yalnız `outline`
+> yazıp gerisini atlayabilirsin. Bozuk dosya **exception atmaz** — sahne yüklenmeye devam eder,
+> ama muhafaza kapanır ve konsola sebebini yazar.
+
+> ⚠️ **Dosyayı alana bağlamayı unutma — bağlanmayan dosya build'e GİRMEZ.** İçerik çalışma anında
+> okunur ve Unity bir `TextAsset`'i yalnız referanslandığı için paketler.
+
+### 17.2 Adım adım
+
+1. **Dosyayı oluştur** → **mekanın** `Data/` klasörüne koy. Dosya fiziksel odayı tarif eder, tek bir
+   arenayı değil: aynı mekanın arenası ve lobisi onu birlikte kullanır.
 2. **Köşeleri gir** (`outline`): sıralı 2B köşeler, **metre**. Çokgen **kapalıdır** — ilk noktayı
    sona tekrar yazma. Koordinatlar `ArenaBoundary`'yi taşıyan transformun **yerel XZ**'sindedir
    (X = sağ, Y alanı = Z = ileri); ölçüyü bir köşeden alıyorsan o köşe (0,0) olur.
@@ -581,25 +649,59 @@ Vector3 dunyaPos = ArenaSpace.ArenaToWorld(gelenPoz);
 3. **Kolonları gir** (`columns`): her biri ad + merkez XZ + ölçü XZ + `yaw` + yükseklik
    (0 bırakılırsa `defaultColumnHeight`). `columnsBlockPlayer` açıkken kolonlar muhafaza hesabına
    da girer — oyuncu gerçek kolona çarpmadan uyarı alır.
-4. **Geometriyi üret:** sahnede `ArenaBoundary`'yi taşıyan objeyi seç →
-   `Tools > VortexArena > Build Arena From Shape` → altına `Zemin` (ProBuilder çokgen), `Duvarlar`
-   (kenar başına bir duvar) ve `Kolonlar` (her kolonda `ArenaObstacle` ile) üretilir.
-   Araç **idempotenttir**: plan değişince yeniden çalıştır, eski üçlü silinip yeniden kurulur.
-5. **Muhafazaya bağla:** `ArenaBoundary.shape` = plan asset'i, `wallRenderers` = üretilen duvarlar.
+4. **Geometriyi üret:** sahnede `ArenaBoundary`'yi taşıyan objeyi ve boyut dosyasını
+   (`TextAsset`) seç → `Tools > VortexArena > Build Arena From Dimensions`.
+   Üretilen her şey arena kökünün altında açılan **tek bir `ArenaGeometry` dalında** durur:
+   `Zemin` (ProBuilder çokgen), `Duvarlar` (kenar başına bir duvar) ve `Kolonlar` (her kolonda
+   `ArenaObstacle` ile). Tek dal olmasının sebebi elle konan sahne objeleriyle karışmaması ve tek
+   seferde silinebilmesi. Araç **idempotenttir**: dosya değişince yeniden çalıştır, eski dal
+   silinip yeniden kurulur. ⚠️ Kök **`ArenaBoundary`'yi taşıyan transform olmalıdır** — koordinatlar
+   onun yerelidir, başka bir objenin altına üretmek planı sessizce kaydırır.
+5. **Muhafazaya bağla:** dosyayı `ArenaBoundary.dimensionsJson` alanına, `wallRenderers` = üretilen
+   duvarlar. (Araç ikisini de kendisi bağlar; elle kurduysan kontrol et.)
 
-> Yeni arenayı sihirbazla açıyorsan bu adımların çoğu kendiliğinden olur: **Arena planı (isteğe
-> bağlı)** alanına asset'i verirsen şablondan gelen zemin/duvar silinip plandan üretilir, `shape`
-> ve `wallRenderers` bağlanır. Alan boşsa geometriye hiç dokunulmaz (bugünkü davranış).
-
-> ⚠️ **Planı bağlamayı unutma.** Geometriyi üretip `shape` alanını boş bırakırsan muhafaza eksene
-> hizalı dikdörtgen olarak kalır: ya köşeler oyun-dışı sayılır ya da oyuncu gerçek duvara uyarısız
-> yürür. Guardian kapalı olduğu için başka fren yoktur.
+> Yeni arenayı sihirbazla açıyorsan bu adımlar kendiliğinden olur: seçtiğin geometri kaynağından
+> şablonun zemin/duvarı silinip geometri üretilir, `dimensionsJson` + `wallRenderers` bağlanır.
 
 > ⚠️ **`ArenaObstacle` collider DEĞİLDİR** — fizik yapmaz, hiçbir şeyi durdurmaz. Free-roam'da
 > oyuncuyu durduran şey gerçek nesnedir; bileşenin tek işi muhafazanın o engele yaklaşırken
-> uyarmasıdır. Plan dışı, sahneye elle konan kasa/direk için de aynısı geçerlidir: objeye ekle,
-> `size` alanına zemindeki ölçüsünü yaz.
+> uyarmasıdır. Dosyada yazmayan, sahneye elle konan kasa/direk için de aynısı geçerlidir: objeye
+> ekle, `size` alanına zemindeki ölçüsünü yaz.
 
 > ⚠️ **Plan sıfırı ile arena sıfırı ayrı şeylerdir.** Plan koordinatları `ArenaBoundary`
 > transformunun yerelidir; ağ koordinatlarının sıfırı ise `SpawnPoint`'tir. Duvarı büyütmek ya da
 > kaydırmak ağ uzayını bozmaz — bu ayrım bilinçlidir.
+
+### 17.3 Boyut dosyasını kaba maketten çıkarmak (TestMesh)
+
+Alanı sayı yazarak değil, kabaca modelleyerek çıkardıysan (tek kök altında MeshRenderer taşıyan
+basit quad/blok yığını — "TestMesh") dosyayı elle yazmana gerek yok: kaynağı ve
+`ArenaBoundary`'yi taşıyan objeyi seç → `Tools > VortexArena > Build Arena From TestMesh`.
+Araç bloklardan bir plan çıkarır, **onu boyut dosyası olarak diske yazar**
+(`<sahneAdı>_dimensions.json`, arena kutusunun `Data/` klasörüne) ve geometriyi o dosyadan üretir.
+
+⚠️ **TestMesh ayrı bir üretim yolu DEĞİLDİR** — boyut dosyasının otomatik yazılma biçimidir. Bu
+yüzden çıkardığın ölçüyü sonradan dosyada elle düzeltip
+`Build Arena From Dimensions` ile yeniden çizebilirsin, ve çalışma anında muhafazanın okuduğu ölçü
+de üretilen geometriyle aynı dosyadan gelir.
+
+Sınıflandırma önce **ad ipucuna** bakar, ad bir şey söylemiyorsa **geometriye**:
+
+| Sonuç | Ad ipucu | Ad yoksa geometri |
+|---|---|---|
+| Zemin | `zemin` · `floor` · `ground` · `taban` | Yassı kutu (yüksekliği taban ölçüsünün yanında ihmal edilebilir) |
+| Duvar | `duvar` · `wall` | Yatay ayak izinin uzun kenarı kısa kenarından belirgin şekilde uzun |
+| Kolon | `kolon` · `column` · `sutun` · `sütun` | Kalan her şey |
+
+Sınır çokgeni (`outline`) **zemin parçasının gerçek mesh sınırından** çıkarılır: düz bir quad ya da
+`extrude = 0` bir poly-shape çizdiysen L/yamuk şekli olduğu gibi korunur. Zemin **kapalı bir katı**
+ise (ProBuilder küpü) parçanın kendi yönelimli dikdörtgeninden dört köşe üretilir — kare/dikdörtgen
+alanların beklenen yoludur, hata değil. Kolonlar **kendi frame'lerinde** ölçülür ve dönüşleri `yaw`
+alanında korunur, yani arena köküne göre döndürülmüş bloklar şişmez.
+
+> Şekli korunsun istediğin zemini **quad / `extrude = 0` poly-shape** olarak çiz; katı bir küple
+> modellersen dosyaya dört köşe yazılır (kutunun kendisi doğru ölçüdedir, ama girinti/çıkıntı
+> kaybolur). Çıkan dosyayı her zaman elle düzeltebilirsin.
+
+> Adlandırma ipucu ölçüden güçlüdür ve modelciye maliyeti sıfırdır: blokları `Duvar_Kuzey`,
+> `Kolon_Orta`, `Zemin` gibi adlandır — sınıflandırma tahmine kalmasın.

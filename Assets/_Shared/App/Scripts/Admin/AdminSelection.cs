@@ -62,6 +62,17 @@ namespace VortexArena.App.Admin
         /// </summary>
         public static IReadOnlyList<string> VenueScenes => _venueScenes;
 
+        /// <summary>
+        /// Mekan süzgecinin sürümü — <see cref="VenueScenes"/> her değiştiğinde artar.
+        /// <para>
+        /// Harita seçicisi listesini bu sayıya bakarak yeniden süzer. Gerekli, çünkü liste
+        /// <b>bağlantıdan önce</b> kuruluyor (panel <c>Initialize</c>) ve o an süzgeç henüz boştur:
+        /// ilk <c>admin_state</c> gelene kadar tüm projenin arenaları geçerli görünür. "Seçim
+        /// değişti mi" sorusu bunu yakalamaz — mekan bilgisi seçimden bağımsız gelir.
+        /// </para>
+        /// </summary>
+        public static int VenueVersion { get; private set; }
+
         private static string[] _venueScenes = Array.Empty<string>();
 
         /// <summary>Sahne bu mekanda oynatılabilir mi. Liste boşsa herkes geçer.</summary>
@@ -110,7 +121,12 @@ namespace VortexArena.App.Admin
 
             string venueId = msg.venueId ?? "";
             string[] venueScenes = msg.venueScenes ?? Array.Empty<string>();
-            changed |= venueId != VenueId || !SameScenes(venueScenes, _venueScenes);
+            bool venueChanged = venueId != VenueId || !SameScenes(venueScenes, _venueScenes);
+            changed |= venueChanged;
+            if (venueChanged)
+            {
+                VenueVersion++;
+            }
 
             ModeId = modeId;
             SceneName = sceneName;

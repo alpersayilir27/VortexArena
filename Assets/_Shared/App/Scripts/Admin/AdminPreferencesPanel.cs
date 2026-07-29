@@ -71,52 +71,98 @@ namespace VortexArena.App.Admin
         private const string MatchSectionTitle = "MAÇ (TÜM ADMİNLERDE ORTAK)";
         private const string MatchSectionLockedTitle = "MAÇ (SÜRÜYOR — HARİTA/MOD KİLİTLİ)";
 
-        private GameObject _root;
-        private TextMeshProUGUI _modeValue;
-        private TextMeshProUGUI _mapValue;
+        // ⚠️ Alanlar [SerializeField] — görünüm PREFABTAN gelir
+        // (`_Shared/App/Resources/UI/AdminPreferencesPanel.prefab`). Bu sınıf yalnız veri
+        // yazar; yerleşim/renk/punto prefabta düzenlenir. Prefabta bağlanmayan alan sessizce
+        // çizilmez, bu yüzden öge SİLİNMEZ (gizlenecekse devre dışı bırakılır).
+
+        [Header("Panel kökü")]
+        [Tooltip("Açılıp kapanan kart — panel kapalıyken bu obje devre dışı bırakılır.")]
+        [SerializeField] private GameObject _root;
+
+        [SerializeField] private Button _closeButton;
+
+        [Header("MAÇ bölümü (ortak)")]
+        [SerializeField] private TextMeshProUGUI _modeValue;
+        [SerializeField] private TextMeshProUGUI _mapValue;
 
         // MAÇ bölümünün kilitlenebilir parçaları (§10.7): harita seçmek TÜM istemcilere sahne
         // yükletiyor, bu yüzden maç sürerken bu dört düğme pasifleşir ve başlık sebebini yazar.
-        private TextMeshProUGUI _matchSectionLabel;
-        private Button _modePrev;
-        private Button _modeNext;
-        private Button _mapPrev;
-        private Button _mapNext;
+        [SerializeField] private TextMeshProUGUI _matchSectionLabel;
+        [SerializeField] private Button _modePrev;
+        [SerializeField] private Button _modeNext;
+        [SerializeField] private Button _mapPrev;
+        [SerializeField] private Button _mapNext;
+
+        [SerializeField] private TextMeshProUGUI _durationValue;
+        [SerializeField] private Button _durationPrev;
+        [SerializeField] private Button _durationNext;
+
+        [SerializeField] private TextMeshProUGUI _scoreLimitValue;
+        [SerializeField] private Button _scoreLimitPrev;
+        [SerializeField] private Button _scoreLimitNext;
+
+        [SerializeField] private Button _startButton;
+        [SerializeField] private Button _abortButton;
+        [SerializeField] private Button _lobbyButton;
 
         /// <summary>Duraklat/devam düğmesi — etiketi ve gönderdiği komut faza göre değişir
         /// (<see cref="ApplyPauseButton"/>).</summary>
-        private Button _pauseButton;
+        [SerializeField] private Button _pauseButton;
 
-        private TextMeshProUGUI _pauseLabel;
+        [SerializeField] private TextMeshProUGUI _pauseLabel;
+        [SerializeField] private TextMeshProUGUI _statusText;
 
-        private TextMeshProUGUI _durationValue;
-        private TextMeshProUGUI _scoreLimitValue;
-        private TextMeshProUGUI _statusText;
-        private TextMeshProUGUI _clearAllLabel;
+        [Header("Kalibrasyon")]
+        [SerializeField] private Button _clearAllButton;
+        [SerializeField] private TextMeshProUGUI _clearAllLabel;
 
         /// <summary>Toplu kalibrasyon sıfırlamanın onay penceresi (sn) — AdminPlayerRow ile aynı
         /// gerekçe: herkesi savaş dışı bırakan bir eylem tek yanlış tıklamayla olmamalı.</summary>
         private const float ClearAllConfirmSeconds = 3f;
         private float _clearAllArmedAt = -1f;
-        private TextMeshProUGUI _connectionText;
+
+        [Header("Bağlantı")]
+        [SerializeField] private TextMeshProUGUI _connectionText;
+        [SerializeField] private Button _reconnectButton;
+        [SerializeField] private Button _disconnectButton;
 
         // ---- Oyuncu kimliği (§2): SEÇİLİ oyuncunun adı + forma numarası ----
         // Hedef ayrı bir seçiciyle DEĞİL AdminSession.SelectedPlayerId ile belirlenir: satıra
         // tıklamak zaten seçim jestidir, ikinci bir liste iki ayrı "seçili oyuncu" kavramı üretirdi.
-        private TMP_InputField _identityNameField;
-        private TextMeshProUGUI _identityNumberValue;
-        private TextMeshProUGUI _identityTargetText;
+        [Header("Oyuncu kimliği")]
+        [SerializeField] private TMP_InputField _identityNameField;
+        [SerializeField] private TextMeshProUGUI _identityNumberValue;
+        [SerializeField] private TextMeshProUGUI _identityTargetText;
+        [SerializeField] private Button _identityNumberPrev;
+        [SerializeField] private Button _identityNumberNext;
+        [SerializeField] private Button _applyIdentityButton;
 
         /// <summary>Alanların hangi oyuncu için doldurulduğu — seçim değişince yeniden doldurulur.
         /// Operatör yazarken roster tazelenip yazdığını EZMESİN diye aynı oyuncuda tekrar dolmaz.</summary>
         private int _identityBoundPlayerId;
         private int _identityNumber;
 
-        private TextMeshProUGUI _markersValue;
-        private TextMeshProUGUI _nameplatesValue;
-        private TextMeshProUGUI _speedValue;
-        private TextMeshProUGUI _wallValue;
-        private TextMeshProUGUI _roofValue;
+        [Header("GÖRÜNÜM bölümü (yalnız bu ekran)")]
+        [SerializeField] private TextMeshProUGUI _markersValue;
+        [SerializeField] private Button _markersPrev;
+        [SerializeField] private Button _markersNext;
+
+        [SerializeField] private TextMeshProUGUI _nameplatesValue;
+        [SerializeField] private Button _nameplatesPrev;
+        [SerializeField] private Button _nameplatesNext;
+
+        [SerializeField] private TextMeshProUGUI _speedValue;
+        [SerializeField] private Button _speedPrev;
+        [SerializeField] private Button _speedNext;
+
+        [SerializeField] private TextMeshProUGUI _wallValue;
+        [SerializeField] private Button _wallPrev;
+        [SerializeField] private Button _wallNext;
+
+        [SerializeField] private TextMeshProUGUI _roofValue;
+        [SerializeField] private Button _roofPrev;
+        [SerializeField] private Button _roofNext;
 
         private readonly List<ModeDefinition> _modes = new List<ModeDefinition>();
         private readonly List<MapDefinition> _maps = new List<MapDefinition>();
@@ -130,13 +176,83 @@ namespace VortexArena.App.Admin
 
         private bool _dirty = true;
 
-        public void Initialize(RectTransform parent)
+        /// <summary>Harita listesinin hangi mekan süzgeciyle kurulduğu
+        /// (<see cref="AdminSelection.VenueVersion"/>). <c>-1</c> = hiç süzülmedi: panel
+        /// bağlantıdan önce kurulduğu için ilk liste kaçınılmaz olarak süzgeçsizdir.</summary>
+        private int _appliedVenueVersion = -1;
+
+        private void Start()
         {
-            Build(parent);
+            WireButtons();
+
+            if (_root != null)
+            {
+                _root.SetActive(false); // görünürlüğü Apply() belirler
+            }
+
             AdminContent.CollectModes(_modes);
             RefreshMapList();
             ResetMatchParametersToModeDefaults();
             Apply();
+        }
+
+        /// <summary>
+        /// Prefabtaki düğmelere davranışı bağlar.
+        /// <para>
+        /// ⚠️ <b>Prefabta kalıcı (persistent) <c>onClick</c> kaydı YOKTUR ve olmamalıdır.</b>
+        /// Buradaki geri çağrıların çoğu koşullu (kilitli satır, iki adımlı onay, faza göre
+        /// değişen komut); inspector'dan bağlanan bir kayıt o koşulları atlar — ör. "TÜM
+        /// KALİBRASYONLARI SIFIRLA" onay penceresini atlayıp doğrudan herkesi sıfırlardı.
+        /// </para>
+        /// </summary>
+        private void WireButtons()
+        {
+            Wire(_closeButton, AdminSession.ClosePanel);
+
+            Wire(_modePrev, CycleModePrev);
+            Wire(_modeNext, CycleModeNext);
+            Wire(_mapPrev, CycleMapPrev);
+            Wire(_mapNext, CycleMapNext);
+            Wire(_durationPrev, DurationPrev);
+            Wire(_durationNext, DurationNext);
+            Wire(_scoreLimitPrev, ScoreLimitDown);
+            Wire(_scoreLimitNext, ScoreLimitUp);
+
+            Wire(_startButton, StartMatch);
+            Wire(_abortButton, AdminCommands.AbortMatch);
+            Wire(_lobbyButton, AdminCommands.ReturnToLobby);
+            Wire(_pauseButton, TogglePause);
+
+            Wire(_clearAllButton, ArmClearAllCalibration);
+
+            Wire(_applyIdentityButton, ApplyIdentity);
+            Wire(_identityNumberPrev, IdentityNumberDown);
+            Wire(_identityNumberNext, IdentityNumberUp);
+
+            Wire(_markersPrev, PrevMarkers);
+            Wire(_markersNext, NextMarkers);
+            Wire(_nameplatesPrev, ToggleNameplates);
+            Wire(_nameplatesNext, ToggleNameplates);
+            Wire(_speedPrev, SpeedDown);
+            Wire(_speedNext, SpeedUp);
+            Wire(_wallPrev, WallDown);
+            Wire(_wallNext, WallUp);
+            Wire(_roofPrev, PrevRoof);
+            Wire(_roofNext, NextRoof);
+
+            Wire(_reconnectButton, AdminCommands.Reconnect);
+            Wire(_disconnectButton, AdminCommands.Disconnect);
+        }
+
+        private static void Wire(Button button, UnityEngine.Events.UnityAction action)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(action);
         }
 
         private void OnEnable()
@@ -149,6 +265,12 @@ namespace VortexArena.App.Admin
             // etkindir (HUD kökünde durur, yalnız kartı gizlenir) — bu yüzden diğer operatörün
             // harita değişikliği panel açılmasa da yerel önizlemeye yansır.
             AdminSelection.Changed += HandleSharedSelectionChanged;
+
+            // Açık sahne değişti (§10.7 sahneleme / maç yükleme) → bölüm başlığındaki "AÇIK:"
+            // satırı tazelensin. Sahne komutu ortak seçimden bağımsız gelebilir (maç sonu
+            // lobiye dönüş), o yüzden AdminSelection.Changed'e güvenilmez.
+            NetEvents.OnReturnToLobby += HandleOpenSceneChanged;
+            NetEvents.OnLoadMatch += HandleOpenSceneChanged;
 
             // Faz değişimi harita/mod seçicilerini kilitleyip açıyor (§10.7) — maç başlayınca
             // düğmeler bir sonraki tıklamayı beklemeden pasifleşmeli.
@@ -164,6 +286,8 @@ namespace VortexArena.App.Admin
             AdminCommands.StatusChanged -= MarkDirty;
             NetEvents.OnConnectionStateChanged -= HandleConnectionState;
             AdminSelection.Changed -= HandleSharedSelectionChanged;
+            NetEvents.OnReturnToLobby -= HandleOpenSceneChanged;
+            NetEvents.OnLoadMatch -= HandleOpenSceneChanged;
 
             if (AdminRoster.Instance != null)
             {
@@ -212,223 +336,15 @@ namespace VortexArena.App.Admin
             _dirty = true;
         }
 
-        // ------------------------------------------------------------------ kurulum
-
-        private void Build(RectTransform parent)
+        /// <summary>Sunucu sahne komutu yolladı — açık sahne değişti (§10.7).</summary>
+        private void HandleOpenSceneChanged(ReturnToLobbyMsg msg)
         {
-            Image card = UiKit.Panel(parent, "PreferencesPanel", UiKit.CardTranslucent, UiKit.Border);
-            _root = card.transform.parent.gameObject;
-            card.raycastTarget = true; // panel arkasındaki HUD düğmelerine tıklama sızmasın
-            UiKit.Center((RectTransform)_root.transform, new Vector2(PanelWidth, PanelHeight));
-
-            Transform body = card.transform;
-
-            TextMeshProUGUI title = UiKit.Text(body, "Title", 30f, UiKit.Title, FontStyles.Bold,
-                TextAlignmentOptions.TopLeft);
-            UiKit.Block(title.rectTransform, 28f, 22f, 90f, 38f);
-            title.text = "TERCİHLER";
-            title.characterSpacing = 3f;
-
-            Button close = UiKit.Button(body, "Close", "KAPAT", 18f, UiKit.Hex(0x2A303B, 0xFF),
-                UiKit.Muted, AdminSession.ClosePanel, out _);
-            UiKit.Corner((RectTransform)close.transform, new Vector2(1f, 1f),
-                new Vector2(-24f, -24f), new Vector2(110f, 34f));
-
-            float y = 78f;
-
-            // "ortak" etiketi bilinçli: bu iki seçici tüm adminlerde aynı anda değişir (§5.3).
-            y = Section(body, MatchSectionTitle, y, out _matchSectionLabel);
-            y = Cycler(body, "Mod", y, CycleModePrev, CycleModeNext, out _modeValue,
-                out _modePrev, out _modeNext);
-            y = Cycler(body, "Harita", y, CycleMapPrev, CycleMapNext, out _mapValue,
-                out _mapPrev, out _mapNext);
-            y = Cycler(body, "Süre", y, DurationPrev, DurationNext, out _durationValue);
-            y = Cycler(body, "Skor limiti", y, ScoreLimitDown, ScoreLimitUp, out _scoreLimitValue);
-            y = MatchButtons(body, y);
-
-            _statusText = UiKit.Text(body, "Status", 18f, UiKit.Accent, FontStyles.Normal,
-                TextAlignmentOptions.TopLeft);
-            UiKit.Block(_statusText.rectTransform, 28f, y, 28f, 24f);
-            y += 34f;
-
-            // §10.6 — toplu sıfırlama. Tek oyuncunun kalibrasyonu kendi satırındaki KAL
-            // düğmesinden sıfırlanır; buradaki düğme maç öncesi "hepsini yeniden aldır" içindir.
-            y = Section(body, "KALİBRASYON (TÜM ADMİNLERDE ORTAK)", y);
-
-            Button clearAll = UiKit.Button(body, "ClearAllCalibration", "TÜM KALİBRASYONLARI SIFIRLA",
-                18f, UiKit.Hex(0x2A303B, 0xFF), UiKit.Bad, ArmClearAllCalibration, out _clearAllLabel);
-            UiKit.Corner((RectTransform)clearAll.transform, new Vector2(0f, 1f),
-                new Vector2(28f, -y), new Vector2(340f, 36f));
-            y += 46f;
-
-            // §2 — ad + forma numarası. Hedef, listede SEÇİLİ olan oyuncudur.
-            y = Section(body, "OYUNCU KİMLİĞİ (SEÇİLİ OYUNCU)", y);
-
-            _identityTargetText = UiKit.Text(body, "IdentityTarget", 18f, UiKit.Muted,
-                FontStyles.Normal, TextAlignmentOptions.TopLeft);
-            UiKit.Block(_identityTargetText.rectTransform, 28f, y + 6f, 300f, 24f);
-
-            _identityNameField = UiKit.Input(body, "IdentityName", "ad", 20f, 24, null);
-            UiKit.Corner((RectTransform)_identityNameField.transform, new Vector2(1f, 1f),
-                new Vector2(-28f, -y), new Vector2(266f, 32f));
-            y += RowHeight;
-
-            // Numara döngüleyicisi + UYGULA aynı satırda: döngüleyici sağ kenardan sabitlendiği
-            // için (Cycler ile birebir aynı Corner değerleri) solda 240 px boş kalıyor. Ayrı bir
-            // satır açmak paneli taşırırdı — PanelHeight notu.
-            Button applyIdentity = UiKit.Button(body, "ApplyIdentity", "KİMLİĞİ UYGULA", 18f,
-                UiKit.Accent, UiKit.OnAccent, ApplyIdentity, out _);
-            UiKit.Corner((RectTransform)applyIdentity.transform, new Vector2(0f, 1f),
-                new Vector2(28f, -y), new Vector2(240f, 32f));
-
-            Button numberPrev = UiKit.Button(body, "Prev_Numara", "<", 20f, UiKit.Hex(0x2A303B, 0xFF),
-                UiKit.Title, IdentityNumberDown, out _);
-            UiKit.Corner((RectTransform)numberPrev.transform, new Vector2(1f, 1f),
-                new Vector2(-238f, -y), new Vector2(32f, 32f));
-
-            _identityNumberValue = UiKit.Text(body, "Value_Numara", 20f, UiKit.Title, FontStyles.Bold,
-                TextAlignmentOptions.Center);
-            UiKit.Corner(_identityNumberValue.rectTransform, new Vector2(1f, 1f),
-                new Vector2(-64f, -(y + 3f)), new Vector2(170f, 26f));
-
-            Button numberNext = UiKit.Button(body, "Next_Numara", ">", 20f, UiKit.Hex(0x2A303B, 0xFF),
-                UiKit.Title, IdentityNumberUp, out _);
-            UiKit.Corner((RectTransform)numberNext.transform, new Vector2(1f, 1f),
-                new Vector2(-28f, -y), new Vector2(32f, 32f));
-
-            y += RowHeight;
-
-            y = Section(body, "GÖRÜNÜM (YALNIZ BU EKRAN)", y);
-            y = Cycler(body, "Halkalar", y, PrevMarkers, NextMarkers, out _markersValue);
-            y = Cycler(body, "Ad etiketleri", y, ToggleNameplates, ToggleNameplates, out _nameplatesValue);
-            y = Cycler(body, "Kamera hızı", y, SpeedDown, SpeedUp, out _speedValue);
-            y = Cycler(body, "Duvar saydamlığı", y, WallDown, WallUp, out _wallValue);
-            y = Cycler(body, "Çatı", y, PrevRoof, NextRoof, out _roofValue);
-
-            y = Section(body, "BAĞLANTI", y);
-
-            _connectionText = UiKit.Text(body, "Connection", 18f, UiKit.Muted, FontStyles.Normal,
-                TextAlignmentOptions.TopLeft);
-            UiKit.Block(_connectionText.rectTransform, 28f, y, 28f, 24f);
-            y += 30f;
-
-            Button reconnect = UiKit.Button(body, "Reconnect", "YENİDEN BAĞLAN", 18f,
-                UiKit.Accent, UiKit.OnAccent, AdminCommands.Reconnect, out _);
-            UiKit.Corner((RectTransform)reconnect.transform, new Vector2(0f, 1f),
-                new Vector2(28f, -y), new Vector2(230f, 36f));
-
-            Button disconnect = UiKit.Button(body, "Disconnect", "BAĞLANTIYI KES", 18f,
-                UiKit.Hex(0x2A303B, 0xFF), UiKit.Muted, AdminCommands.Disconnect, out _);
-            UiKit.Corner((RectTransform)disconnect.transform, new Vector2(0f, 1f),
-                new Vector2(268f, -y), new Vector2(230f, 36f));
-
-            _root.SetActive(false);
+            _dirty = true;
         }
 
-        private static float Section(Transform body, string label, float y)
+        private void HandleOpenSceneChanged(LoadMatchMsg msg)
         {
-            return Section(body, label, y, out _);
-        }
-
-        /// <summary>Başlığı sonradan değiştirebilmek için metnini de veren biçim (MAÇ bölümü
-        /// kilitlendiğinde sebebini yazıyor).</summary>
-        private static float Section(Transform body, string label, float y, out TextMeshProUGUI text)
-        {
-            text = UiKit.Text(body, $"Section_{label}", 18f, UiKit.Faint,
-                FontStyles.Bold, TextAlignmentOptions.TopLeft);
-            UiKit.Block(text.rectTransform, 28f, y, 28f, 22f);
-            text.text = label;
-            text.characterSpacing = 4f;
-
-            Image divider = UiKit.Solid(body, $"Divider_{label}", UiKit.Border);
-            UiKit.Block(divider.rectTransform, 28f, y + 24f, 28f, 1f);
-
-            return y + 34f;
-        }
-
-        /// <summary>
-        /// `Etiket  [&lt;] değer [&gt;]` satırı. Düğmeler sağ kenardan sabitlenir
-        /// (<see cref="UiKit.Corner"/>): panel genişliği değişse de hizalama bozulmaz.
-        /// </summary>
-        private static float Cycler(Transform body, string label, float y,
-            UnityEngine.Events.UnityAction onPrev, UnityEngine.Events.UnityAction onNext,
-            out TextMeshProUGUI value)
-        {
-            return Cycler(body, label, y, onPrev, onNext, out value, out _, out _);
-        }
-
-        /// <summary>Düğmeleri de veren biçim — sonradan <c>interactable</c> çevirebilmek için
-        /// (yalnız kilitlenebilen satırlar kullanır).</summary>
-        private static float Cycler(Transform body, string label, float y,
-            UnityEngine.Events.UnityAction onPrev, UnityEngine.Events.UnityAction onNext,
-            out TextMeshProUGUI value, out Button prevButton, out Button nextButton)
-        {
-            TextMeshProUGUI caption = UiKit.Text(body, $"Label_{label}", 20f, UiKit.Muted,
-                FontStyles.Normal, TextAlignmentOptions.TopLeft);
-            UiKit.Block(caption.rectTransform, 28f, y + 4f, 320f, 26f);
-            caption.text = label;
-
-            Button prev = UiKit.Button(body, $"Prev_{label}", "<", 20f, UiKit.Hex(0x2A303B, 0xFF),
-                UiKit.Title, onPrev, out _);
-            UiKit.Corner((RectTransform)prev.transform, new Vector2(1f, 1f),
-                new Vector2(-238f, -y), new Vector2(32f, 32f));
-
-            value = UiKit.Text(body, $"Value_{label}", 20f, UiKit.Title, FontStyles.Bold,
-                TextAlignmentOptions.Center);
-            UiKit.Corner(value.rectTransform, new Vector2(1f, 1f),
-                new Vector2(-64f, -(y + 3f)), new Vector2(170f, 26f));
-            value.textWrappingMode = TextWrappingModes.NoWrap;
-            value.overflowMode = TextOverflowModes.Ellipsis;
-
-            Button next = UiKit.Button(body, $"Next_{label}", ">", 20f, UiKit.Hex(0x2A303B, 0xFF),
-                UiKit.Title, onNext, out _);
-            UiKit.Corner((RectTransform)next.transform, new Vector2(1f, 1f),
-                new Vector2(-28f, -y), new Vector2(32f, 32f));
-
-            prevButton = prev;
-            nextButton = next;
-            return y + RowHeight;
-        }
-
-        /// <summary>Üç eşit maç düğmesi (oranlı anchor: panel genişliğinden bağımsız) + altında
-        /// tam genişlikte duraklat/devam düğmesi.</summary>
-        private float MatchButtons(Transform body, float y)
-        {
-            Button start = UiKit.Button(body, "StartMatch", "BAŞLAT", 20f, UiKit.Good,
-                UiKit.OnAccent, StartMatch, out _);
-            PlaceThird((RectTransform)start.transform, 0, y);
-
-            Button abort = UiKit.Button(body, "AbortMatch", "İPTAL", 20f, UiKit.Hex(0x2A303B, 0xFF),
-                UiKit.Title, AdminCommands.AbortMatch, out _);
-            PlaceThird((RectTransform)abort.transform, 1, y);
-
-            Button lobby = UiKit.Button(body, "ReturnLobby", "LOBİYE DÖN", 20f,
-                UiKit.Hex(0x2A303B, 0xFF), UiKit.Title, AdminCommands.ReturnToLobby, out _);
-            PlaceThird((RectTransform)lobby.transform, 2, y);
-
-            y += 50f;
-
-            // Tek düğme, iki iş: hangi komutun gideceğini faz belirler (ApplyPauseButton).
-            // İki ayrı düğme koymak, her an ikisinden birinin ölü durması demekti.
-            _pauseButton = UiKit.Button(body, "PauseMatch", PauseLabel, 20f,
-                UiKit.Hex(0x2A303B, 0xFF), UiKit.Title, TogglePause, out _pauseLabel);
-            var rect = (RectTransform)_pauseButton.transform;
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.offsetMin = new Vector2(28f, -(y + 40f));
-            rect.offsetMax = new Vector2(-28f, -y);
-
-            return y + 50f;
-        }
-
-        private static void PlaceThird(RectTransform rect, int index, float y)
-        {
-            rect.anchorMin = new Vector2(index / 3f, 1f);
-            rect.anchorMax = new Vector2((index + 1) / 3f, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.offsetMin = new Vector2(index == 0 ? 28f : 4f, -(y + 40f));
-            rect.offsetMax = new Vector2(index == 2 ? -28f : -4f, -y);
+            _dirty = true;
         }
 
         // ------------------------------------------------------------------ eylemler
@@ -635,15 +551,17 @@ namespace VortexArena.App.Admin
         /// süre/limit her fazda serbesttir (sahne yüklemezler).
         /// </para>
         /// </summary>
-        /// <param name="mapChanged">Bu yayın haritayı değiştirdi mi. Yerel yükleme YALNIZ o zaman
-        /// yapılır: süre/limit dokunuşunda da yüklemek, sunucu kimseyi taşımadığı hâlde operatörü
-        /// tek başına seçili arenaya atardı (maç sonrası herkes lobideyken en görünür hâli).</param>
+        /// <param name="mapChanged">Operatör mod/harita imlecini gerçekten oynattı mı.
+        /// <b>Mod/harita alanları YALNIZ o zaman doldurulur</b> (§5.2): sunucu harita alanı dolu
+        /// gelen her <c>set_selection</c>'da sahneleme dener, yani süre/limit dokunuşunda da
+        /// doldurmak herkesi seçili arenaya taşırdı. Yerel önizleme de aynı kapıdan geçer —
+        /// yoksa sunucu kimseyi taşımadığı hâlde operatör tek başına o arenaya düşerdi.</param>
         private void PublishSelection(bool mapChanged)
         {
-            bool selectionOpen = CanChangeSelection;
+            bool sendSelection = mapChanged && CanChangeSelection;
             AdminCommands.SetSelection(
-                selectionOpen ? SelectedModeId : "",
-                selectionOpen ? SelectedSceneName : "",
+                sendSelection ? SelectedModeId : "",
+                sendSelection ? SelectedSceneName : "",
                 _roundSeconds, _scoreLimit);
 
             if (mapChanged)
@@ -658,18 +576,28 @@ namespace VortexArena.App.Admin
         /// Sunucudan gelen ortak seçim (başka bir admin değiştirmiş olabilir): imleçleri ona
         /// taşır ve yerel önizlemeyi açar. Zaten aynıysa hiçbir şey yapmaz — kendi gönderdiğimiz
         /// <c>set_selection</c>'ın echo'su bu yüzden önizlemeyi tekrar tetiklemez.
-        /// Katalogda olmayan bir seçim gelirse (sürüm farkı) imleç yerinde bırakılır.
+        /// Seçicide karşılığı olmayan bir seçim gelirse imleç yerinde bırakılır. Bu <b>normal</b>
+        /// bir durumdur, sürüm farkı değil: sunucu açılışta ortak seçimi mekanın **lobi**
+        /// haritasıyla tohumlar (§5.3) ve lobi ne mod seçicisinde ne harita seçicisinde vardır —
+        /// o an açık olanı bölüm başlığı yazar (<see cref="ApplySelectionLock"/>).
         /// </summary>
         private void HandleSharedSelectionChanged()
         {
             _dirty = true;
 
+            // Mekan süzgeci SEÇİMDEN ÖNCE uygulanır ve seçimden BAĞIMSIZDIR: harita listesi
+            // bağlantıdan önce kuruldu (Initialize), yani o an süzgeç boştu ve listede başka
+            // işletmelerin arenaları da vardı. Sunucu mekanı ilk admin_state ile bildirir —
+            // burada süzülmezse operatör mod düğmesine dokunana kadar oynatılamayacak arenalar
+            // görünür kalırdı (seçtiğinde sunucu sahnelemeyi reddeder).
+            if (_appliedVenueVersion != AdminSelection.VenueVersion)
+            {
+                _appliedVenueVersion = AdminSelection.VenueVersion;
+                RefreshMapList();
+            }
+
             string sharedMode = AdminSelection.ModeId;
             string sharedScene = AdminSelection.SceneName;
-            if (string.IsNullOrEmpty(sharedMode) && string.IsNullOrEmpty(sharedScene))
-            {
-                return; // sunucuda henüz seçim yok: yerel varsayılanı bozma
-            }
 
             bool changed = false;
             bool sceneChanged = false; // önizleme YALNIZ mod/harita değişince tazelenir
@@ -751,11 +679,19 @@ namespace VortexArena.App.Admin
             return -1;
         }
 
+        /// <summary>Harita listesini seçili moda + sunucunun bildirdiği mekana göre yeniden kurar.
+        /// <b>Seçili harita hayatta kalıyorsa imleç onda bırakılır</b> — liste mekan süzgeci
+        /// geldiğinde de yeniden kuruluyor ve o an operatörün seçimini başa atmak, panelin
+        /// gösterdiği haritayı görünür bir sebep olmadan değiştirmek olurdu.</summary>
         private void RefreshMapList()
         {
             string modeId = _modeIndex >= 0 && _modeIndex < _modes.Count ? _modes[_modeIndex].ModeId : "";
+            string previous = SelectedSceneName;
+
             AdminContent.CollectMaps(modeId, _maps);
-            _mapIndex = 0;
+
+            int index = string.IsNullOrEmpty(previous) ? -1 : IndexOfMap(previous);
+            _mapIndex = index >= 0 ? index : 0;
         }
 
         /// <summary>
@@ -1003,7 +939,15 @@ namespace VortexArena.App.Admin
 
             if (_matchSectionLabel != null)
             {
-                _matchSectionLabel.text = open ? MatchSectionTitle : MatchSectionLockedTitle;
+                // Başlığa AÇIK SAHNE yazılır: harita satırı "bir sonraki maçın adayı"dır, sunucunun
+                // açık sahnesi ise gerçekten yüklü olandır (§10.7) ve ikisi maç sonrası ayrışır
+                // (herkes lobiye döner, imleç son arenada kalır). Operatör hangisinin ne olduğunu
+                // tahmin etmek zorunda kalmasın.
+                string openScene = SceneRouter.Instance != null ? SceneRouter.Instance.OpenScene : "";
+                string title = open ? MatchSectionTitle : MatchSectionLockedTitle;
+                _matchSectionLabel.text = string.IsNullOrEmpty(openScene)
+                    ? title
+                    : $"{title} · AÇIK: {openScene}";
                 _matchSectionLabel.color = open ? UiKit.Faint : UiKit.Bad;
             }
 

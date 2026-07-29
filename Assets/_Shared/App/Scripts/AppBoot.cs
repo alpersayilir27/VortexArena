@@ -16,7 +16,7 @@ namespace VortexArena.App
     /// takip eder (<c>SceneRouter</c>); sahne üstü yönetim arayüzünü <c>AdminHud</c> çizer.
     /// </para>
     ///
-    /// Adres: masaüstü admin build'i **Flutter launcher tarafından** başlatılır ve adres
+    /// Adres: masaüstü admin build'i **operatör launcher'ı tarafından** başlatılır ve adres
     /// komut satırından gelir (`--server-ip 192.168.1.10 [--server-port 47821]`). Bu yüzden
     /// oyun içinde IP soran bir ekran YOKTUR. Komut satırı adresi rolden bağımsız
     /// okunur: verilmişse VR oyuncusunda da keşif zincirinin ÜSTÜNDE yer alır

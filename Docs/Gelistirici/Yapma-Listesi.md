@@ -61,6 +61,14 @@ Kapatılan bileşen duvar alfasını son yazdığı değerde dondurur, alan-dı�
 Doğrusu `SetSpectatorMode(true)` — uyarıyı keser, duvarları çizili bırakır (admin gözlemci bunu
 kullanır).
 
+### ⛔ Arena ölçüsünü boyut dosyası dışında bir yere yazma
+
+Ölçünün tek temsili `ArenaBoundary.dimensionsJson`'a bağlanan boyut dosyasıdır; alan tam kare olsa
+bile dört köşeli bir `outline` olarak yazılır. Bileşene "kısa yol" bir yarım-ölçü alanı geri
+eklemeye kalkma — aynı ölçünün iki ifadesi kaçınılmaz olarak birbirinden sapar. Dosyayı yazıp
+**alana bağlamayı unutmak** da sessiz değil, yıkıcıdır: dosya build'e girmez ve muhafaza konsola
+hata basıp tümden kapanır.
+
 ### ⛔ Ölü oyuncuları uzak oyuncu listesinden eleme
 
 Ölüm bir durum değişimi olduğu için ölünün bedeni sahada durmaya devam eder. Çarpışma/yakınlık
@@ -127,6 +135,30 @@ ArenaSpace.WorldToArena(dir);                                  // ❌ orijin kad
 
 ## Sahne ve prefab
 
+### ⛔ Arayüz prefabındaki bir ögeyi SİLME
+
+Arayüzün tamamı `_Shared/App/Resources/UI/` altında prefabtır ve her öge kök bileşende bir
+`[SerializeField]` alanına bağlıdır (`scoreRedText`, `hpFill`, `_modeValue`…). Ögeyi silersen
+alan boşalır ve **hiçbir hata çıkmaz — o parça sessizce çizilmez.** Gizlemen gerekiyorsa objeyi
+devre dışı bırak ya da alfasını sıfırla.
+
+Aynı sebeple prefabı `Resources/` klasöründen **çıkarma**: sahneye konmuyorlar, çalışırken
+`Resources.Load` ile yükleniyorlar. Taşınırsa o arayüz hiç doğmaz (konsola
+`… prefabı bulunamadı` düşer).
+
+### ⛔ Arayüz düğmesinin `onClick`'ini inspector'dan doldurma
+
+Prefablarda bilerek boştur; davranış çalışırken koddan bağlanır (`WireButtons` / `Initialize`).
+Geri çağrıların çoğu **koşulludur** — iki adımlı onay (`AT`, `KAL`, toplu kalibrasyon sıfırlama),
+maç sürerken kilitlenen mod/harita satırları, faza göre komut değiştiren DURAKLAT/DEVAM.
+Inspector'dan eklenen kalıcı bir kayıt bu koşulları **atlar**: oyuncu satırındaki `AT` düğmesi
+"EMİN?" adımını geçip doğrudan atardı.
+
+Ayrıca hedef statik değildir — satır her `Bind`'da başka bir oyuncuya bağlanır; kalıcı bir kayıt
+yanlış oyuncuya komut gönderir.
+
+→ ayrıntı ve düzenleme kuralları: **[Arayüz Tasarımı](Arayuz-Tasarimi.md)**
+
 ### ⛔ `BaseZone`'un GameObject'ini kapatma
 
 Altına konmuş marker'lar (`SpawnPoint`) `OnDisable`'da statik kayıttan düşer.
@@ -143,8 +175,8 @@ Fizik YAPMAZ, collider EKLEMEZ, hiçbir şeyi durdurmaz. Free-roam'da oyuncuyu d
 dünyadaki nesnedir; bileşenin tek işi `ArenaBoundary`'ye "burası engel" demek — oyuncu kolona
 yaklaşırken duvar uyarısını alsın diye. Ölçü `size` alanından gelir, transform scale'inden değil.
 
-Arena dikdörtgen değilse tekil engel işaretlemek yetmez: planın kendisi
-`ArenaShapeDefinition` ile verilir ve `ArenaBoundary.shape`'e bağlanır.
+Tekil engel işaretlemek arena ölçüsünün yerini tutmaz: sınırın kendisi arenanın **boyut
+dosyasından** gelir ve o dosya `ArenaBoundary.dimensionsJson` alanına bağlanır.
 
 ### ⚠️ Arena sahnelerinde `EventSystem` yoktur
 

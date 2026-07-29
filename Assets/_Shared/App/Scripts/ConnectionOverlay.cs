@@ -16,12 +16,14 @@ namespace VortexArena.App
     /// masaüstü admin build'inde (screen-space + scrim + buton) hem Quest'te (world-space
     /// kart, lazy-follow, butonsuz) gösterilir.
     ///
-    /// **Neden tamamen prosedürel (prefab/Resources/sahne bağı YOK):** overlay her sahnede
-    /// gerekli. Sahneye elle bağlanan bir prefab, yeni arena eklerken unutulacak bir adım
-    /// olurdu (arena sahneleri kendine yeten kutulardır). Bu yüzden `ArenaClient` /
-    /// `IdentifyOverlay` deseni tekrarlanır: `RuntimeInitializeOnLoadMethod(AfterSceneLoad)`
-    /// ile kendini önyükler, `DontDestroyOnLoad` tekil olarak yaşar, tüm UI koddan kurulur.
-    /// Yuvarlatılmış köşe sprite'ı da runtime'da üretilir (tek statik, önbellekli).
+    /// **Görünüm prefabtan gelir, SAHNEDEN değil:** iki varyant vardır —
+    /// `Resources/UI/ConnectionOverlayScreen` (masaüstü) ve `…World` (VR); hangisinin
+    /// yükleneceğine <see cref="Bootstrap"/> karar verir. Prefab sahneye KONMAZ: konsaydı
+    /// yeni arena eklerken unutulacak bir adım olurdu (arena sahneleri kendine yeten
+    /// kutulardır). Bu yüzden `ArenaClient` deseni korunur —
+    /// `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` ile kendini önyükler, prefabı
+    /// `Resources.Load` ile alır ve `DontDestroyOnLoad` tekil olarak yaşar.
+    /// Bu sınıf yalnız **veri yazar ve görünürlüğü sürer**; yerleşim/renk/punto prefabta.
     ///
     /// **Neden grace süresi:** kopuş anlıksa (WS yeniden bağlanma backoff'u 1→2→5 sn) ekranın
     /// yanıp sönmesi hem çirkin hem maç ortasında dikkat dağıtıcı. Bağlı olmayan durum
@@ -75,20 +77,37 @@ namespace VortexArena.App
 
         private static ConnectionOverlay _instance;
 
-        private bool _worldSpace;
+        /// <summary>Prefabın <c>Resources</c> yolları (uzantısız) — VR world-space / masaüstü
+        /// screen-space iki ayrı prefabtır, hangisinin yükleneceğine <see cref="Bootstrap"/>
+        /// karar verir.</summary>
+        public const string WorldResourcePath = "UI/ConnectionOverlayWorld";
 
-        private Canvas _canvas;
-        private CanvasGroup _group;
-        private Image _accentStrip;
-        private Image _badge;
-        private TextMeshProUGUI _titleText;
-        private TextMeshProUGUI _addressText;
-        private TextMeshProUGUI _metaText;
-        private TextMeshProUGUI _hintText;
-        private TextMeshProUGUI _errorText;
-        private Button _reconnectButton;
-        private TextMeshProUGUI _reconnectLabel;
-        private HudFollow _hudFollow;
+        public const string ScreenResourcePath = "UI/ConnectionOverlayScreen";
+
+        // ⚠️ Alanlar [SerializeField] — görünüm PREFABTAN gelir. Bu sınıf yalnız veri yazar
+        // ve görünürlüğü sürer; yerleşim/renk/punto prefabta düzenlenir.
+
+        [Tooltip("Bu prefab VR (world-space) varyantı mı? Screen-space varyantta KAPALI olmalı.")]
+        [SerializeField] private bool _worldSpace;
+
+        [Header("Kök")]
+        [SerializeField] private Canvas _canvas;
+        [SerializeField] private CanvasGroup _group;
+        [Tooltip("Yalnız world-space varyantta dolu — kartı tembel takiple kameranın önüne taşır.")]
+        [SerializeField] private HudFollow _hudFollow;
+
+        [Header("Kart")]
+        [SerializeField] private Image _accentStrip;
+        [SerializeField] private Image _badge;
+        [SerializeField] private TextMeshProUGUI _titleText;
+        [SerializeField] private TextMeshProUGUI _addressText;
+        [SerializeField] private TextMeshProUGUI _metaText;
+        [SerializeField] private TextMeshProUGUI _hintText;
+        [SerializeField] private TextMeshProUGUI _errorText;
+
+        [Tooltip("Yalnız masaüstü (screen-space) varyantta dolu — VR'da yeniden bağlanma düğmesi yok.")]
+        [SerializeField] private Button _reconnectButton;
+        [SerializeField] private TextMeshProUGUI _reconnectLabel;
 
         /// <summary>Bağlantısız duruma girdiğimiz an (unscaled); bağlıyken -1.</summary>
         private float _disconnectedSince = -1f;
@@ -119,9 +138,23 @@ namespace VortexArena.App
                 return;
             }
 
-            var go = new GameObject("[ConnectionOverlay]");
-            DontDestroyOnLoad(go);
-            _instance = go.AddComponent<ConnectionOverlay>();
+            // Quest'te (ya da XR aygıtı etkinken) world-space kart, masaüstünde screen-space.
+            bool worldSpace = UnityEngine.XR.XRSettings.isDeviceActive ||
+                              Application.platform == RuntimePlatform.Android;
+            string path = worldSpace ? WorldResourcePath : ScreenResourcePath;
+
+            var prefab = Resources.Load<ConnectionOverlay>(path);
+            if (prefab == null)
+            {
+                Debug.LogError($"[ConnectionOverlay] '{path}' prefabı bulunamadı — bağlantı hata " +
+                               "ekranı çizilemeyecek.");
+                return;
+            }
+
+            ConnectionOverlay overlay = Instantiate(prefab);
+            overlay.name = "[ConnectionOverlay]";
+            DontDestroyOnLoad(overlay.gameObject);
+            _instance = overlay;
         }
 
         private void Awake()
@@ -134,9 +167,13 @@ namespace VortexArena.App
 
             _instance = this;
 
-            // Quest'te (ya da XR aygıtı etkinken) world-space kart, masaüstünde screen-space.
-            _worldSpace = UnityEngine.XR.XRSettings.isDeviceActive ||
-                          Application.platform == RuntimePlatform.Android;
+            if (_reconnectButton != null)
+            {
+                // Prefabta kalıcı onClick kaydı YOKTUR: düğme yalnız adres bilinirken
+                // etkindir (RefreshTexts) ve komut AdminCommands üzerinden gider.
+                _reconnectButton.onClick.RemoveAllListeners();
+                _reconnectButton.onClick.AddListener(HandleReconnectPressed);
+            }
         }
 
         private void OnEnable()
@@ -178,10 +215,11 @@ namespace VortexArena.App
                 return;
             }
 
-            EnsureUi();
-            if (_group == null)
+            // VR'da kart kameranın önüne HudFollow ile yerleşir; kamera henüz yoksa (Boot gibi
+            // erken/kamerasız sahneler) göstermeyi ertele — panel origin'de asılı kalmasın.
+            if (_group == null || (_worldSpace && Camera.main == null))
             {
-                return; // VR'da Camera.main henüz yok — kart kurulumu ertelendi.
+                return;
             }
 
             SetVisible(true);
@@ -425,177 +463,6 @@ namespace VortexArena.App
         }
 
         // ------------------------------------------------------------ UI kurulumu
-
-        private void EnsureUi()
-        {
-            if (_canvas != null)
-            {
-                return;
-            }
-
-            // VR'da kart kameranın önüne yerleşir; Camera.main yoksa (Boot gibi erken/kamerasız
-            // sahneler) kurulumu erteleriz — böylece panel origin'de asılı kalmaz.
-            if (_worldSpace && Camera.main == null)
-            {
-                return;
-            }
-
-            float cardHeight = _worldSpace ? CardHeightVr : CardHeightDesktop;
-
-            var root = new GameObject(_worldSpace ? "[ConnectionCardWorld]" : "[ConnectionCardScreen]");
-            root.transform.SetParent(transform, false);
-
-            _canvas = root.AddComponent<Canvas>();
-            _canvas.sortingOrder = 5000; // her şeyin üstünde
-            _group = root.AddComponent<CanvasGroup>();
-
-            var rootRect = root.GetComponent<RectTransform>();
-
-            if (_worldSpace)
-            {
-                _canvas.renderMode = RenderMode.WorldSpace;
-                rootRect.sizeDelta = new Vector2(CardWidth, cardHeight);
-                root.transform.localScale = Vector3.one * WorldScale;
-
-                // Kafaya KİLİTLEME yok: mevcut tembel takip bileşeni yeniden kullanılır.
-                _hudFollow = root.AddComponent<HudFollow>();
-            }
-            else
-            {
-                _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-
-                var scaler = root.AddComponent<CanvasScaler>();
-                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                scaler.referenceResolution = new Vector2(1920f, 1080f);
-                scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-                scaler.matchWidthOrHeight = 0.5f;
-
-                root.AddComponent<GraphicRaycaster>();
-
-                // Tam ekran scrim: dashboard'ın okunmasını engellemesi İSTENEN şey.
-                Image scrim = UiKit.Image(rootRect, "Scrim", null, ColorScrim);
-                UiKit.Stretch(scrim.rectTransform);
-            }
-
-            BuildCard(rootRect, cardHeight);
-
-            // Kurulum gizli durumla başlar (_visible ile birebir tutarlı olsun); aynı karede
-            // SetVisible(true) çağrılıp açılır.
-            _canvas.enabled = false;
-            _group.alpha = 0f;
-            _group.blocksRaycasts = false;
-            _group.interactable = false;
-        }
-
-        private void BuildCard(RectTransform parent, float cardHeight)
-        {
-            // Kart = kenar rengindeki yuvarlatılmış zemin + 2 px içeri kaçmış dolgu.
-            Image border = UiKit.Image(parent, "CardBorder", UiKit.RoundedSprite(CardRadius), ColorBorder);
-            RectTransform borderRect = border.rectTransform;
-
-            if (_worldSpace)
-            {
-                UiKit.Stretch(borderRect); // world-space canvas'ın kendisi kart boyutunda
-            }
-            else
-            {
-                borderRect.anchorMin = new Vector2(0.5f, 0.5f);
-                borderRect.anchorMax = new Vector2(0.5f, 0.5f);
-                borderRect.pivot = new Vector2(0.5f, 0.5f);
-                borderRect.anchoredPosition = Vector2.zero;
-                borderRect.sizeDelta = new Vector2(CardWidth, cardHeight);
-            }
-
-            Image fill = UiKit.Image(borderRect, "CardFill", UiKit.RoundedSprite(CardRadius),
-                _worldSpace ? ColorCardWorld : ColorCard);
-            UiKit.Stretch(fill.rectTransform, 2f);
-            RectTransform card = fill.rectTransform;
-
-            // Üstte 4 px accent şerit (yuvarlak köşelerden taşmaması için yatayda 20 px içeri).
-            _accentStrip = UiKit.Image(card, "AccentStrip", null, ColorAccent);
-            RectTransform strip = _accentStrip.rectTransform;
-            strip.anchorMin = new Vector2(0f, 1f);
-            strip.anchorMax = new Vector2(1f, 1f);
-            strip.pivot = new Vector2(0.5f, 1f);
-            strip.offsetMin = new Vector2(20f, -4f);
-            strip.offsetMax = new Vector2(-20f, 0f);
-
-            // Sol üstte "!" badge'i (⚠ yerine "!" — TMP varsayılan fontunda glif garantisi yok).
-            _badge = UiKit.Image(card, "Badge", UiKit.RoundedSprite(CardRadius), ColorAccent);
-            RectTransform badgeRect = _badge.rectTransform;
-            badgeRect.anchorMin = new Vector2(0f, 1f);
-            badgeRect.anchorMax = new Vector2(0f, 1f);
-            badgeRect.pivot = new Vector2(0f, 1f);
-            badgeRect.anchoredPosition = new Vector2(44f, -48f);
-            badgeRect.sizeDelta = new Vector2(80f, 80f);
-
-            TextMeshProUGUI badgeText = UiKit.Text(badgeRect, "BadgeText", 52f, ColorOnAccent,
-                FontStyles.Bold, TextAlignmentOptions.Center);
-            UiKit.Stretch(badgeText.rectTransform);
-            badgeText.text = "!";
-
-            _titleText = UiKit.Text(card, "Title", 44f, ColorTitle, FontStyles.Bold,
-                TextAlignmentOptions.TopLeft);
-            UiKit.Block(_titleText.rectTransform, 148f, 52f, 44f, 56f);
-            _titleText.characterSpacing = 3f; // hafif letter-spacing (TMP font birimi)
-
-            _addressText = UiKit.Text(card, "Address", 30f, ColorAccent, FontStyles.Normal,
-                TextAlignmentOptions.TopLeft);
-            UiKit.Block(_addressText.rectTransform, 148f, 116f, 44f, 40f);
-
-            _metaText = UiKit.Text(card, "Meta", 24f, ColorMuted, FontStyles.Normal,
-                TextAlignmentOptions.TopLeft);
-            UiKit.Block(_metaText.rectTransform, 148f, 160f, 44f, 34f);
-
-            Image divider = UiKit.Image(card, "Divider", null, ColorBorder);
-            UiKit.Block(divider.rectTransform, 44f, 232f, 44f, 2f);
-
-            _hintText = UiKit.Text(card, "Hint", 24f, ColorMuted, FontStyles.Normal,
-                TextAlignmentOptions.TopLeft);
-            UiKit.Block(_hintText.rectTransform, 44f, 258f, 44f, 108f);
-            _hintText.lineSpacing = 18f; // rahat satır aralığı
-
-            _errorText = UiKit.Text(card, "Error", 20f, ColorFaint, FontStyles.Normal,
-                TextAlignmentOptions.TopLeft);
-            UiKit.Block(_errorText.rectTransform, 44f, 386f, 44f, 60f);
-
-            if (!_worldSpace)
-            {
-                BuildReconnectButton(card);
-            }
-        }
-
-        /// <summary>VR'da buton YOK: prosedürel canvas'ın işaretçisi olmaz, yerine A×2 ipucu var.</summary>
-        private void BuildReconnectButton(RectTransform card)
-        {
-            Image background = UiKit.Image(card, "ReconnectButton", UiKit.RoundedSprite(CardRadius), ColorAccent);
-            background.raycastTarget = true; // tek tıklanabilir öge (UiKit.Image varsayılanı kapalı)
-            RectTransform rect = background.rectTransform;
-            rect.anchorMin = new Vector2(1f, 0f);
-            rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(1f, 0f);
-            rect.anchoredPosition = new Vector2(-44f, 44f);
-            rect.sizeDelta = new Vector2(320f, 64f);
-
-            _reconnectLabel = UiKit.Text(rect, "Label", 26f, ColorOnAccent, FontStyles.Bold,
-                TextAlignmentOptions.Center);
-            UiKit.Stretch(_reconnectLabel.rectTransform);
-            _reconnectLabel.text = "YENİDEN BAĞLAN";
-
-            _reconnectButton = background.gameObject.AddComponent<Button>();
-            _reconnectButton.targetGraphic = background;
-
-            ColorBlock colors = _reconnectButton.colors;
-            colors.normalColor = Color.white;                    // Image rengi accent, tint 1
-            colors.highlightedColor = new Color(1.1f, 1.1f, 1.1f, 1f);
-            colors.pressedColor = new Color(0.82f, 0.82f, 0.82f, 1f);
-            colors.selectedColor = Color.white;
-            colors.disabledColor = new Color(0.42f, 0.45f, 0.52f, 1f);
-            colors.fadeDuration = 0.08f;
-            _reconnectButton.colors = colors;
-
-            _reconnectButton.onClick.AddListener(HandleReconnectPressed);
-        }
 
         /// <summary>
         /// "Yeniden Bağlan" tıklanabilir olsun diye EventSystem garantisi (yalnız masaüstü).

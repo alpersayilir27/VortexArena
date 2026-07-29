@@ -70,9 +70,9 @@ Hem `255.255.255.255` hem her arayüzün subnet-broadcast adresine gönderilir:
 | Rol | Adres nereden gelir |
 |---|---|
 | `player` (Quest) | **komut satırı `--server-ip <ip> [--server-port <port>]`** > PlayerPrefs (elle girilmiş) > **beacon** > `StreamingAssets/arena.json`. Bulunan adrese **otomatik bağlanılır**; oyuncuya sorulmaz. VR build'ine argüman geçilmediği için pratikte beacon kazanır. Hiçbiri yoksa lobide sağ kumandada **A×2** ile gizli IP paneli açılır ve elle girilen değer beacon'ı ezer (PlayerPrefs'e kalıcı yazılır). |
-| `admin` (Windows) | **Yalnız komut satırı:** `--server-ip <ip> [--server-port <port>]` — Flutter launcher geçer. Beacon/PlayerPrefs kullanılmaz, kullanıcıya IP sorulmaz. Argüman yoksa bağlanmaz ve ekranda sebebini yazar. |
+| `admin` (Windows) | **Yalnız komut satırı:** `--server-ip <ip> [--server-port <port>]` — operatör launcher'ı geçer. Beacon/PlayerPrefs kullanılmaz, kullanıcıya IP sorulmaz. Argüman yoksa bağlanmaz ve ekranda sebebini yazar. |
 
-> **Zincir rolden bağımsızdır:** `AppBoot` komut satırı adresini **her rolde** okur; verilmişse keşfin en üstünde yer alır (açıkça verilen adres kazanır, gelen beacon onu ezmez). **Editörde** rol ve adres komut satırı yerine `Tools > VortexArena > Dev` penceresinden gelir (`EditorPrefs` — sahnede rol/IP override alanı YOKTUR); aynı pencere yalnız-editör bir **sentetik `load_match` enjeksiyonu** da yapabilir (bir arena sahnesinden doğrudan Play). Bu bir test kancasıdır (`NetEvents.InjectLoadMatch`, `#if UNITY_EDITOR`) — **yeni mesaj/alan değildir**, mevcut `load_match` (§5.3) kullanılır ve protokol yüzeyi değişmez.
+> **Zincir rolden bağımsızdır:** `AppBoot` komut satırı adresini **her rolde** okur; verilmişse keşfin en üstünde yer alır (açıkça verilen adres kazanır, gelen beacon onu ezmez). **Editörde** rol ve adres komut satırı yerine `Tools > VortexArena > Dev` penceresinden gelir (`EditorPrefs` — sahnede rol/IP override alanı YOKTUR). Maç verisi (mod / takım / süre / limit) **yalnız sunucudan** gelir: editörün enjekte ettiği bir yol yoktur.
 
 > **Bağlantı kurulamazsa:** istemci bağlantısızlık ~3 sn sürdüğünde tasarımlı bir hata ekranı gösterir (`ConnectionOverlay`, VR + masaüstü): adres biliniyorsa "SUNUCUYA BAĞLANILAMIYOR" + adres + deneme sayacı + son hata, adres hiç yoksa "SUNUCU BULUNAMADI". Sunum katmanıdır, protokolü etkilemez; yeniden deneme kuralı `RECONNECT_BACKOFF`'tur (§1).
 
@@ -143,6 +143,7 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 - **`clear_calibration`** `{ "type":"clear_calibration", "playerId":5 }` — o oyuncunun kalibrasyonunu **sıfırlar** (§10.6). **`playerId:0` = TÜM oyuncular** (toplu sıfırlama). Admin kalibrasyonu yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez — hizalamanın gerçekten oturduğunu yalnız başlık bilir (§10.6).
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
 - **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30 }` — bir sonraki maçın **ortak** mod/harita/süre/limit seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim maç bitiminde sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
+  ⚠️ **`sceneName` yalnız operatör harita/mod imlecini gerçekten oynattığında doldurulur** (süre/limit dokunuşunda boş gider): dolu harita alanı sahnelemeyi tetikler (§10.7), yani süre değiştirmek herkesi bir arenaya taşırdı.
   **Neden maç parametreleri de ortak:** iki operatör aynı ekranı görmezse biri 5 dk sandığı maçı 30 dk başlatır. Süre/limit *operasyonel* durumdur, görünüm tercihi değil (§5.3 son madde).
   ⚠️ **`sceneName` yalnız bir not değil, anlık bir sahne komutudur:** harita değiştiğinde sunucu o arenayı **sahneler** — TÜM istemciler (oyuncular + adminler) oraya geçer (§10.7). Bu yüzden **`modeId`/`sceneName` yalnız faz `playing` DEĞİLKEN kabul edilir** (yani `paused` ve `finished`'da serbest); `playing` iken ikisi de **düşürülür** (komutun süre/limit kısmı yine işlenir), konsola sebep yazılır ve `admin_state` mevcut seçimle geri yayınlanır — iyimser davranan panelin imleci sunucunun değerine çekilsin. Koşan maçın ortasında harita değişimi diye bir şey yoktur; yeni harita `start_match` ile gelir.
 
@@ -233,7 +234,7 @@ Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken har
   "notice":"Ofis-PC: harita -> Arena12x12", "adminCount":2 }
 ```
 - Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`return_to_lobby`/`kick`/`identify`/`set_team`) ve admin bağlanıp ayrıldığında. ⚠️ `pause_match`/`resume_match` için duyuru **yalnız komut gerçekten uygulandıysa** yayılır — reddedilen komut diğer operatörlerin ekranına olmamış bir eylemi yazmamalı.
-- `modeId`/`sceneName` = ortak seçim. Admin arayüzü **kendi yerel seçimini değil bunu gösterir**; gelen değer arayüzdeki mod/harita seçicisini günceller. Yani bir operatör haritayı değiştirdiğinde diğerinin ekranı da (paneli açık olmasa bile) o haritaya döner — sahneyi zaten `return_to_lobby` sahnelemesi taşır (§10.7), `admin_state` yalnız seçiciyi hizalar.
+- `modeId`/`sceneName` = ortak seçim. ⚠️ **Hiçbir zaman boş değildir:** sunucu açılışta seçimi **mekanın lobi haritasıyla** tohumlar (`modeId:"lobby"`, `sceneName:<mekanın lobisi>` — §10.7 açık sahnenin açılış değeri), sonrasında da boş alan mevcut değeri koruduğu için seçim bir daha boşalamaz. Böylece ilk `admin_state`'i alan admin de "hiç harita seçilmemiş" bir durum görmez. Admin arayüzü **kendi yerel seçimini değil bunu gösterir**; gelen değer arayüzdeki mod/harita seçicisini günceller. Yani bir operatör haritayı değiştirdiğinde diğerinin ekranı da (paneli açık olmasa bile) o haritaya döner — sahneyi zaten `return_to_lobby` sahnelemesi taşır (§10.7), `admin_state` yalnız seçiciyi hizalar.
 - `roundSeconds`/`scoreLimit` = bir sonraki maçın ortak parametreleri (`0` = hiç seçilmedi, modun varsayılanı kullanılacak). Mod/harita ile aynı kanaldan gider — sebebi §5.2 `set_selection` notunda.
 - `notice` = son admin eyleminin insan okuyabilir özeti (`"<admin adı>: <eylem>"`), tüm adminlerin durum satırında görünür. Boş olabilir.
 - `adminCount` = o an çevrimiçi admin sayısı.
@@ -497,8 +498,9 @@ olmalı, tanınmayan `modeId` reddedilir):
 **İstemcide tek okuma noktası:** `VortexArena.Core.ModeRuntime` (statik). `load_match`/`welcome`
 onu besler; canlanma (`PlayerCombatState`), skor satırı (`ModeHudBase`) ve admin takım kipi
 (`AdminRoster`) yalnız oradan okur. Dördü ayrı ayrı `load_match` dinlerse dördü ayrı ayrı bayatlar.
-Sunucusuz editör oturumunda (dev penceresi sentetik maç) kurallar `ModeDefinition`'dan okunur;
-**sapmada sunucu kazanır** — `ModeDefinition`'daki kural alanları yalnız önizleme/editör içindir.
+Kurallar telde gelmediğinde (`rules == null` — kuralları taşımayan bir sunucu) `ModeDefinition`'ın
+önizleme alanları devralır; **sapmada sunucu kazanır** — `ModeDefinition`'daki kural alanları
+yalnız önizleme/fallback içindir.
 
 ### 10.6 Kalibrasyon durumu (sunucu-otoriter)
 
@@ -588,7 +590,9 @@ alanlar varsayılandır (§10.5). Böylece **savaşı kapatan şey faz** (`hit_r
 #### Sahneleme — operatörün seçtiği harita herkese açılır
 
 **Sunucunun her zaman bir "açık sahnesi" vardır** ve istemcinin tek yönlendirme kaynağı odur.
-Açılışta bu, mekanın lobi haritasıdır. Operatör admin panelinden başka bir harita seçtiğinde
+Açılışta bu, mekanın lobi haritasıdır — **ortak seçim de (§5.3 `admin_state`) aynı değerle
+tohumlanır**, yani sunucu ayakta olduğu sürece "harita seçilmemiş" diye bir durum yoktur.
+Operatör admin panelinden başka bir harita seçtiğinde
 (`set_selection`, §5.2) sunucu o arenayı **sahneler**:
 `return_to_lobby{ modeId:"lobby", sceneName:<seçilen arena> }` TÜM istemcilere gider ve herkes o
 sahneyi yükler. Amaç saha akışıdır — oyuncular maç başlamadan arenaya girer, kalibrasyonunu orada
@@ -597,7 +601,7 @@ yapar, yerini alır; operatör bunu tek tek anlatmak zorunda kalmaz.
 | | |
 |---|---|
 | Faz | **Değişmez, `paused` kalır** — hasar kapısı (§10.3) kapalı, `set_ready` yok, süre/skor işlemez |
-| Ne zaman olur | Yalnız `set_selection` **haritayı gerçekten değiştirdiğinde**. Süre/limit dokunuşu kimseyi taşımaz |
+| Ne zaman olur | `set_selection`'ın **`sceneName` alanı dolu geldiğinde** — istenen sahne zaten açıksa hiçbir şey olmaz (idempotent). Süre/limit dokunuşunda alan boş gider, kimse taşınmaz. ⚠️ Ölçüt "seçim değişti mi" DEĞİL "açık sahne bu mu": maç bitip lobiye dönüldüğünde seçim hâlâ o arenayı gösterir, operatör aynı arenayı tekrar seçtiğinde sahnelenebilmelidir |
 | Ne zaman OLMAZ | Faz `playing` iken. Sahne komutu herkese gittiği için koşan maçın ortasında harita değişimi maçı bozardı. `finished` iken serbesttir — operatör maç bitince yeni haritayı seçebilsin |
 | Doğrulama | `start_match` ile aynı (§10.1): sahne harita tablosunda olmalı **ve** tüm çevrimiçi oyuncuların build listesinde bulunmalı. Geçmezse sahneleme yapılmaz, seçim yine kaydedilir ve sebep `admin_state.notice` ile operatöre yazılır |
 | Geç katılan | `welcome.match.sceneName` sahnelenen arenadır → doğrudan oraya düşer |
@@ -652,9 +656,14 @@ atlanır. Sebep: bu listenin her satırı operatörün açılışta seçebilece�
 şablonlar ya da yanlış yere konmuş bir harita orada var olmayan bir mekan satırı açardı.
 
 Seçim sırası: `--venue <ad>` → `server.json → venue` → tek mekan varsa o → **konsolda sor**.
-Soru yalnız konsol etkileşimliyse sorulur; girdi yönlendirilmişse (servis, betik, launcher) sunucu
+Soru yalnız konsol etkileşimliyse sorulur; girdi yönlendirilmişse (servis, betik) sunucu
 **bloklanmaz**, ilk mekanla açılır ve bunu loglar. Yazılan ad tanınmazsa yine sorulur — sessizce
 başka bir mekanı açmak, operatörün yanlış arenaları görmesi demek olurdu.
+
+⚠️ **Bu "ilk mekan" yolu bir emniyet subabıdır, kullanılacak yol değildir** — hangi mekanın
+açıldığı yalnız logda görünür ve sahada kimse logu okumaz. Operatör launcher'ı bu yüzden mekan
+seçilmeden sunucuyu **hiç başlatmaz** ve her açılışta `--venue` geçer; betikten/servisten
+kaldırılacaksa `server.json → venue` doldurulur.
 
 Seçimin üç sonucu:
 

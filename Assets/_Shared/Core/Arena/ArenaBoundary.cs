@@ -9,14 +9,17 @@ namespace VortexArena.Core.Arena
     /// arena's local space and (a) fades in the boundary walls as the player
     /// approaches the edge, (b) fades the screen to black and shows a warning
     /// when they step outside the allowed area.
-    /// Attach to an object positioned at the arena center, aligned with the
-    /// arena's rotation; walls are expected to sit at +/- halfExtent.
+    /// Attach to an object positioned inside the arena, aligned with the arena's rotation.
     /// <para>
-    /// <b>İki hesap kipi vardır:</b> <see cref="shape"/> BOŞSA eksene hizalı dikdörtgen (hızlı
-    /// yol, mevcut arenaların tamamı böyle çalışır); DOLUYSA plan çokgeni + engeller
-    /// (<see cref="ArenaShapeDefinition.Columns"/> ve sahnedeki <see cref="ArenaObstacle"/>'lar).
-    /// Uyarı/karartma mantığı iki kipte de aynıdır — yalnız "kenara uzaklık" değerinin kaynağı
-    /// değişir.
+    /// <b>Arena ölçüsünün TEK kaynağı <see cref="dimensionsJson"/>'dur</b> (boyut dosyası,
+    /// <see cref="ArenaDimensions"/> olarak çözülür). Alan dikdörtgen bile olsa dört köşeli bir
+    /// <c>outline</c> olarak yazılır — "dikdörtgense şu hızlı yol" ayrımı YOKTUR, aynı ölçünün iki
+    /// ayrı ifadesi birbirinden sapıyordu. Sahnedeki <see cref="ArenaObstacle"/>'lar plana ek olarak
+    /// hesaba girer.
+    /// </para>
+    /// <para>
+    /// ⚠️ Boyut dosyası yoksa/okunamıyorsa muhafaza <b>kendini kapatır</b> — gerekçe
+    /// <see cref="ResolvePlan"/>'de.
     /// </para>
     /// <para>
     /// ⚠️ Bu bileşen <b>arena uzayının origin'i DEĞİLDİR</b>: ağ koordinatlarının sıfırı
@@ -35,12 +38,11 @@ namespace VortexArena.Core.Arena
         [SerializeField] private TextMesh warningText;
 
         [Header("Arena size (meters)")]
-        [SerializeField] private float halfExtentX = 5f;
-        [SerializeField] private float halfExtentZ = 5f;
-
-        [Tooltip("İsteğe bağlı arena planı (yamuk/L şeklindeki alanlar + kolonlar). BOŞ bırakılırsa " +
-                 "yukarıdaki dikdörtgen ölçü kullanılır.")]
-        [SerializeField] private ArenaShapeDefinition shape;
+        [Tooltip("Boyut dosyası (JSON, TextAsset) — arena ölçüsünün TEK kaynağı, ZORUNLUDUR. " +
+                 "İşletmenin ölçüsü şeritmetreyle alınıp doğrudan bu dosyaya yazılır; alan dikdörtgen " +
+                 "olsa bile dört köşeli bir 'outline' olarak girilir. Boşsa muhafaza devre dışı kalır. " +
+                 "Örnek: Assets/Arenas/Venues/VortexAntep/Data/vortexantep_dimensions.json")]
+        [SerializeField] private TextAsset dimensionsJson;
 
         [Header("Warning behaviour")]
         [Tooltip("Distance from the edge (m) where the walls start brightening.")]
@@ -58,42 +60,38 @@ namespace VortexArena.Core.Arena
         public bool IsOutOfBounds { get; private set; }
 
         /// <summary>
-        /// Arena yarı ölçüleri (metre, X/Z) — admin kuş bakışı kadrajı bunu okur. Plan varsa
-        /// çokgenin sınırlayıcı kutusundan, yoksa dikdörtgen alanlardan gelir.
+        /// Arena yarı ölçüleri (metre, X/Z) — admin kuş bakışı kadrajı bunu okur. Plandaki sınır
+        /// çokgeninin sınırlayıcı kutusundan gelir; plan yoksa <see cref="Vector2.zero"/>.
         /// </summary>
         public Vector2 HalfExtents
         {
             get
             {
-                if (shape != null && shape.IsValid)
+                EnsurePlan();
+                if (activePlan == null)
                 {
-                    Rect bounds = shape.LocalBounds();
-                    return new Vector2(bounds.width * 0.5f, bounds.height * 0.5f);
+                    return Vector2.zero;
                 }
 
-                return new Vector2(halfExtentX, halfExtentZ);
+                Rect bounds = activePlan.LocalBounds();
+                return new Vector2(bounds.width * 0.5f, bounds.height * 0.5f);
             }
         }
 
         /// <summary>
-        /// Arena alanının YEREL uzaydaki merkezi (XZ, metre). Dikdörtgen kipte her zaman sıfırdır;
-        /// plan kipinde çokgenin sınırlayıcı kutusunun merkezidir.
+        /// Arena alanının YEREL uzaydaki merkezi (XZ, metre) = sınır çokgeninin sınırlayıcı
+        /// kutusunun merkezi. Plan yoksa <see cref="Vector2.zero"/>.
         /// <para>
-        /// ⚠️ Kadrajlarken <see cref="HalfExtents"/> tek başına yetmez: plan sıfırı bir köşeden
-        /// ölçülmüş olabilir, yani kutu transformun tam merkezinde DEĞİLDİR.
+        /// ⚠️ Kadrajlarken <see cref="HalfExtents"/> tek başına yetmez: ölçü genellikle bir köşeden
+        /// alınır (plan sıfırı o köşedir), yani kutu bu transformun tam merkezinde DEĞİLDİR.
         /// </para>
         /// </summary>
         public Vector2 LocalCenter
         {
             get
             {
-                if (shape != null && shape.IsValid)
-                {
-                    Rect bounds = shape.LocalBounds();
-                    return bounds.center;
-                }
-
-                return Vector2.zero;
+                EnsurePlan();
+                return activePlan != null ? activePlan.LocalBounds().center : Vector2.zero;
             }
         }
 
@@ -101,11 +99,15 @@ namespace VortexArena.Core.Arena
         private bool spectatorMode;
         private float spectatorWallAlpha = 0.25f;
 
-        // Plan önbelleği: kenar dizisi ve kolon dikdörtgenleri kare başına yeniden kurulmasın
-        // (Update her karede çalışıyor, tahsis GC baskısı demek).
-        private ArenaShapeDefinition cachedShape;
-        private Vector2[] cachedOutline;
+        // Plan önbelleği: JSON ayrıştırma, kenar dizisi ve kolon dikdörtgenleri kare başına yeniden
+        // kurulmasın (Update her karede, gizmo her repaint'te çalışıyor — tahsis GC baskısı demek).
+        private ArenaDimensions activePlan;      // çözülmüş plan (null = muhafaza devre dışı)
+        private Vector2[] cachedOutline;         // activePlan.outline (hızlı erişim)
         private ObstacleRect[] cachedColumns;
+        private TextAsset cachedJsonSource;      // plan hangi TextAsset'ten çözüldü
+        // ⚠️ Bir kez çözüldü mü: eksik/geçersiz bir JSON'da activePlan null kalır, bu bayrak olmasa
+        // kare başına yeniden ayrıştırılır ve hata log'u sel olurdu.
+        private bool planResolved;
 
         /// <summary>Muhafaza hesabına giren, döndürülmüş bir engel dikdörtgeni (yerel XZ).</summary>
         private struct ObstacleRect
@@ -127,7 +129,10 @@ namespace VortexArena.Core.Arena
 
         private void OnEnable()
         {
-            RebuildShapeCache();
+            // Alanlar çalışma anında (ya da devre dışıyken) değiştirilmiş olabilir: her etkinleşmede
+            // sıfırdan çözülür, yoksa bayat bir plan taşınırdı.
+            planResolved = false;
+            ResolvePlan();
         }
 
         /// <summary>
@@ -164,6 +169,21 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
+            EnsurePlan();
+            if (activePlan == null)
+            {
+                // Plansız = muhafaza devre dışı (gerekçe ResolvePlan'de). Alan-dışı durumu ve
+                // karartma sıfırlanır, uyarı yazısı kapanır; duvar alfalarına DOKUNULMAZ —
+                // ölçüyü bilmeden "kenara ne kadar yakınız" sorusunun cevabı yok, duvarları
+                // rastgele bir değere sürüklemek yanlış bilgi verirdi.
+                IsOutOfBounds = false;
+                if (fadeRenderer != null)
+                    SetAlpha(fadeRenderer, 0f);
+                if (warningText != null && warningText.gameObject.activeSelf)
+                    warningText.gameObject.SetActive(false);
+                return;
+            }
+
             if (head == null)
                 return;
 
@@ -189,23 +209,12 @@ namespace VortexArena.Core.Arena
         /// içinde) ve o kadar metre içeri girmiş. Duvar alfası, karartma ve uyarı bu tek sayıdan
         /// türer.
         /// <para>
-        /// Plan yoksa eksene hizalı dikdörtgen hesabı (hızlı yol) korunur — mevcut arenaların
-        /// tamamı bu yoldan geçer ve davranışları birebir aynıdır.
+        /// ⚠️ Yalnız plan varken çağrılır — çağıran (<c>Update</c>) plansız durumu zaten erken
+        /// çıkışla eliyor.
         /// </para>
         /// </summary>
         private float EdgeDistance(Vector2 point)
         {
-            if (cachedShape != shape)
-            {
-                // Plan çalışma anında değiştirilmiş (ya da OnEnable'dan sonra atanmış) olabilir.
-                RebuildShapeCache();
-            }
-
-            if (cachedOutline == null)
-            {
-                return Mathf.Min(halfExtentX - Mathf.Abs(point.x), halfExtentZ - Mathf.Abs(point.y));
-            }
-
             float distance = SignedDistanceToOutline(point);
 
             if (cachedColumns != null)
@@ -317,29 +326,61 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Plan önbelleğini kurar. Plan yoksa/geçersizse önbellek boşaltılır ve dikdörtgen hızlı
-        /// yolu devreye girer. Kolonlar burada bir kez dikdörtgene çevrilir: asset çalışma anında
-        /// değişmez, ama <c>Update</c> her karede koşar.
+        /// Önbelleği yalnız <b>kaynak referansı değiştiyse</b> (ya da hiç çözülmediyse) tazeler.
+        /// <para>
+        /// ⚠️ Ayrıştırma/hata burada değil <see cref="ResolvePlan"/> içinde: bu metot her karede
+        /// (Update) ve her repaint'te (gizmo) çağrılıyor, koşul olmasa JSON kare başına
+        /// ayrıştırılırdı.
+        /// </para>
         /// </summary>
-        private void RebuildShapeCache()
+        private void EnsurePlan()
         {
-            cachedShape = shape;
+            if (!planResolved || cachedJsonSource != dimensionsJson)
+            {
+                ResolvePlan();
+            }
+        }
+
+        /// <summary>
+        /// Planı tek kaynaktan — <see cref="dimensionsJson"/> — çözer. Kolonlar burada bir kez
+        /// dikdörtgene çevrilir: kaynak çalışma anında değişmez, ama <c>Update</c> her karede koşar.
+        /// <para>
+        /// ⚠️ Dosya bağlanmamışsa ya da ayrıştırılamıyorsa <b>açık başarısızlık</b> seçilir:
+        /// konsola bir kez hata basılır ve muhafaza tümden susar. Gerekçe: ölçüsü bilinmeyen bir
+        /// arenada zaten doğru bir muhafaza üretilemez; kapalı başarısızlık (ör. her karede ekranı
+        /// karartmak) işletmede oyunu tümden oynanamaz kılardı. Bu bir KURULUM hatasıdır ve
+        /// editörde/QA'da yakalanır — sahadaki oturumu düşürmemesi gerekir.
+        /// </para>
+        /// </summary>
+        private void ResolvePlan()
+        {
+            cachedJsonSource = dimensionsJson;
+            planResolved = true;
+
+            activePlan = null;
             cachedOutline = null;
             cachedColumns = null;
 
-            if (shape == null || !shape.IsValid)
+            activePlan = ArenaDimensions.FromTextAsset(dimensionsJson, out string error);
+
+            if (activePlan == null)
             {
+                string reason = string.IsNullOrEmpty(error) ? string.Empty : " — " + error;
+                Debug.LogError(
+                    $"[ArenaBoundary] '{name}': boyut dosyası (dimensionsJson) bağlanmamış ya da " +
+                    $"okunamadı{reason}. Muhafaza DEVRE DIŞI. Arena ölçüsünün tek kaynağı bu dosyadır.",
+                    this);
                 return;
             }
 
-            cachedOutline = shape.Outline;
+            cachedOutline = activePlan.outline;
 
-            if (!shape.ColumnsBlockPlayer)
+            if (!activePlan.columnsBlockPlayer)
             {
                 return; // kolonlar yalnız geometri: muhafaza onları görmez
             }
 
-            ArenaShapeDefinition.Column[] columns = shape.Columns;
+            ArenaDimensions.Column[] columns = activePlan.columns;
             if (columns == null || columns.Length == 0)
             {
                 return;
@@ -356,17 +397,23 @@ namespace VortexArena.Core.Arena
 
         /// <summary>
         /// Seçiliyken planı çizer: sınır çokgeni + kolon kutuları (yerel uzayda hesaplanıp dünyaya
-        /// taşınır). Yamuk bir arenayı elle ayarlarken bu çizim şarttır — plan asset'i sayı
-        /// listesidir, sahnede karşılığını görmeden köşe taşımak körlemedir.
+        /// taşınır). Yamuk bir arenayı elle ayarlarken bu çizim şarttır — plan sayı listesidir,
+        /// sahnede karşılığını görmeden köşe taşımak körlemedir.
+        /// <para>
+        /// ⚠️ Plan yoksa HİÇBİR ŞEY çizilmez: uydurulmuş bir kutu, muhafazanın aslında devre dışı
+        /// olduğunu gizlerdi. Sebebi konsoldaki hata satırıdır.
+        /// </para>
         /// </summary>
         private void OnDrawGizmosSelected()
         {
-            if (shape == null || !shape.IsValid)
+            EnsurePlan();
+
+            if (activePlan == null)
             {
                 return;
             }
 
-            Vector2[] outline = shape.Outline;
+            Vector2[] outline = activePlan.outline;
             Gizmos.color = new Color(0.2f, 0.8f, 1f, 0.9f);
             for (int i = 0, j = outline.Length - 1; i < outline.Length; j = i++)
             {
@@ -375,27 +422,27 @@ namespace VortexArena.Core.Arena
 
             // Duvar üst kenarı: yüksekliği de gözle doğrulanabilsin.
             Gizmos.color = new Color(0.2f, 0.8f, 1f, 0.35f);
-            float wallHeight = shape.WallHeight;
+            float wallHeight = activePlan.wallHeight;
             for (int i = 0, j = outline.Length - 1; i < outline.Length; j = i++)
             {
                 Gizmos.DrawLine(LocalToWorld(outline[j], wallHeight), LocalToWorld(outline[i], wallHeight));
                 Gizmos.DrawLine(LocalToWorld(outline[i]), LocalToWorld(outline[i], wallHeight));
             }
 
-            ArenaShapeDefinition.Column[] columns = shape.Columns;
+            ArenaDimensions.Column[] columns = activePlan.columns;
             if (columns == null)
             {
                 return;
             }
 
-            Gizmos.color = shape.ColumnsBlockPlayer
+            Gizmos.color = activePlan.columnsBlockPlayer
                 ? new Color(0.95f, 0.55f, 0.15f, 0.9f)  // muhafazaya giriyor
                 : new Color(0.6f, 0.6f, 0.6f, 0.6f);    // yalnız geometri
 
             for (int i = 0; i < columns.Length; i++)
             {
-                ArenaShapeDefinition.Column column = columns[i];
-                float height = shape.HeightOf(column);
+                ArenaDimensions.Column column = columns[i];
+                float height = activePlan.HeightOf(column);
                 Vector3 center = new Vector3(column.center.x, height * 0.5f, column.center.y);
 
                 Gizmos.matrix = transform.localToWorldMatrix *

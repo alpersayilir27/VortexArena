@@ -9,12 +9,19 @@ using VortexArena.Core.Arena;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// Bir <see cref="ArenaShapeDefinition"/> planını ProBuilder geometrisine çevirir:
+    /// Bir arena planını (<see cref="ArenaDimensions"/>) ProBuilder geometrisine çevirir:
     /// <c>Zemin</c> (çokgen yüzey) + <c>Duvarlar</c> (her kenar için bir kutu) + <c>Kolonlar</c>.
     /// <para>
-    /// Menü girişi: <c>Tools &gt; VortexArena &gt; Build Arena From Shape</c>. Sihirbaz
-    /// (<see cref="ArenaTemplateWizard"/>) de aynı kapıdan geçer — plan doluysa şablondan gelen
-    /// hazır zemin/duvarı bununla değiştirir.
+    /// <b>Arena geometrisinin TEK üretim kapısıdır.</b> Ölçünün tek temsili
+    /// <see cref="ArenaDimensions"/>'dır; elle yazılan boyut JSON'u da TestMesh'ten çıkarılan plan
+    /// da (<see cref="ArenaTestMeshBuilder"/>) buraya girer. İkinci bir geometri üreteci ikinci bir
+    /// doğruluk kaynağı olurdu — bu yüzden "alan dikdörtgense şu kısa yol" gibi bir ayrım YOKTUR:
+    /// alan tam kare bile olsa dört köşeli bir <c>outline</c>'dır.
+    /// </para>
+    /// <para>
+    /// Menü girişi: <c>Tools &gt; VortexArena &gt; Build Arena From Dimensions</c> (seçimde boyut
+    /// JSON'u = <c>TextAsset</c>). Sihirbaz (<see cref="ArenaTemplateWizard"/>) de aynı kapıdan
+    /// geçer.
     /// </para>
     /// <para>
     /// ⚠️ <b>Kök = <see cref="ArenaBoundary"/>'yi taşıyan transform.</b> Plan koordinatları o
@@ -23,10 +30,15 @@ namespace VortexArena.Core.Editor
     /// <c>ArenaBoundary</c>'den bulur, elle çalıştırırken de seçili obje o olmalıdır.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Idempotent:</b> aynı kök üstünde tekrar çalıştırmak eski <c>Zemin</c>/<c>Duvarlar</c>/
-    /// <c>Kolonlar</c> çocuklarını siler. Plan değişince aracı yeniden çalıştırmak yeterlidir,
-    /// sahnede ikinci bir kopya birikmez. Şablondan gelen ÖTEKİ objelere (kalibrasyon işaretçileri,
-    /// taban bölgeleri, rig) dokunmaz — onlar bu üç addan farklıdır.
+    /// ⚠️ <b>Üretilen her şey tek bir dalda toplanır:</b> <c>Zemin</c>/<c>Duvarlar</c>/
+    /// <c>Kolonlar</c> doğrudan köke değil, kökün <see cref="GeometryRootName"/> adlı çocuğunun
+    /// altına kurulur. Sebep: arena geometrisi kalibrasyon işaretçileri, taban bölgeleri ve rig
+    /// ile aynı seviyede karışmasın; tek tıkla gizlenip gösterilebilsin.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Idempotent:</b> aynı kök üstünde tekrar çalıştırmak eski geometriyi siler. Plan
+    /// değişince aracı yeniden çalıştırmak yeterlidir, sahnede ikinci bir kopya birikmez.
+    /// Şablondan gelen ÖTEKİ objelere (kalibrasyon işaretçileri, taban bölgeleri, rig) dokunmaz.
     /// </para>
     /// <para>
     /// ⚠️ Sonda <c>EditorUtility.DisplayDialog</c> YOK: modal dialog Unity ana thread'ini
@@ -36,6 +48,12 @@ namespace VortexArena.Core.Editor
     /// </summary>
     internal static class ArenaShapeBuilder
     {
+        /// <summary>
+        /// Üretilen geometrinin tek ortak ebeveyni — kökün altındaki çocuk objenin adı.
+        /// Idempotent temizlik ve göç bu adı arar.
+        /// </summary>
+        public const string GeometryRootName = "ArenaGeometry";
+
         /// <summary>Zemin objesinin adı — idempotent temizlik bu adı arar.</summary>
         public const string FloorName = "Zemin";
 
@@ -60,11 +78,28 @@ namespace VortexArena.Core.Editor
             /// <summary>Üretilen zemin objesi (plan geçersizse null).</summary>
             public GameObject Floor;
 
+            /// <summary>
+            /// Üretilen her şeyin toplandığı ortak ebeveyn (<see cref="GeometryRootName"/>).
+            /// Başarısız üretimde null.
+            /// </summary>
+            public GameObject GeometryRoot;
+
             /// <summary>Üretilen duvarların Renderer'ları, kenar sırasıyla.</summary>
             public readonly List<MeshRenderer> WallRenderers = new List<MeshRenderer>();
 
             /// <summary>Üretilen kolon objeleri.</summary>
             public readonly List<GameObject> Columns = new List<GameObject>();
+
+            /// <summary>
+            /// Üretilen geometrinin arena YEREL XZ sınırlayıcı kutusu — yalnız RAPORLAMA içindir
+            /// (log satırı / sihirbaz özeti).
+            /// <para>
+            /// ⚠️ Buradan hiçbir bileşen alanı doldurulmaz: muhafaza ölçüsü de admin kuş bakışı
+            /// kadrajı da <see cref="ArenaBoundary"/>'nin okuduğu boyut JSON'undan gelir. Ölçüyü
+            /// ikinci bir yere yazmak tam olarak kaçındığımız şey.
+            /// </para>
+            /// </summary>
+            public Rect LocalBounds;
 
             /// <summary>Üretim gerçekleşti mi.</summary>
             public bool Success;
@@ -80,16 +115,16 @@ namespace VortexArena.Core.Editor
         /// hata durumunda <see cref="Result.Success"/> <c>false</c> döner (sihirbaz kısmi bir
         /// arena kutusuyla yarıda kalmasın diye).
         /// </summary>
-        /// <param name="shape">Zemin sınırı + kolonlar.</param>
+        /// <param name="plan">Zemin sınırı + kolonlar.</param>
         /// <param name="root">Arena kökü — <see cref="ArenaBoundary"/>'yi taşıyan transform.</param>
         /// <param name="material">Zemin/duvar/kolon materyali; null ise ortak mekan materyali.</param>
-        public static Result Build(ArenaShapeDefinition shape, Transform root, Material material = null)
+        public static Result Build(ArenaDimensions plan, Transform root, Material material = null)
         {
             var result = new Result();
 
-            if (shape == null || !shape.IsValid)
+            if (plan == null || !plan.IsValid)
             {
-                result.Error = $"Plan boş ya da geçersiz (en az {ArenaShapeDefinition.MinOutlinePoints} köşe gerekir).";
+                result.Error = $"Plan boş ya da geçersiz (en az {ArenaDimensions.MinOutlinePoints} köşe gerekir).";
                 return result;
             }
 
@@ -110,8 +145,10 @@ namespace VortexArena.Core.Editor
             Undo.SetCurrentGroupName("VortexArena Arena Şekli");
 
             ClearGenerated(root);
+            Transform geometryRoot = CreateGeometryRoot(root);
+            result.GeometryRoot = geometryRoot.gameObject;
 
-            Vector2[] outline = shape.Outline;
+            Vector2[] outline = plan.outline;
 
             // ------------------------------------------------------------- zemin
             // CreateShapeFromPolygon extrude=0 → düz yüzey; duvarlar ayrı üretiliyor çünkü
@@ -126,15 +163,15 @@ namespace VortexArena.Core.Editor
             ProBuilderMesh floor = ProBuilderMesh.Create();
             floor.gameObject.name = FloorName;
             floor.CreateShapeFromPolygon(floorPoints, 0f, false);
-            Finalize(floor, mat, root);
+            Finalize(floor, mat, geometryRoot);
             result.Floor = floor.gameObject;
 
             // ----------------------------------------------------------- duvarlar
             var wallsGroup = new GameObject(WallsGroupName);
             Undo.RegisterCreatedObjectUndo(wallsGroup, "Arena Duvarları");
-            wallsGroup.transform.SetParent(root, false);
+            wallsGroup.transform.SetParent(geometryRoot, false);
 
-            float height = Mathf.Max(0.01f, shape.WallHeight);
+            float height = Mathf.Max(0.01f, plan.wallHeight);
             for (int i = 0; i < outline.Length; i++)
             {
                 // Kapalı çokgen: son köşe ilk köşeye bağlanır (asset tekrarı yasak).
@@ -169,17 +206,17 @@ namespace VortexArena.Core.Editor
             }
 
             // ----------------------------------------------------------- kolonlar
-            ArenaShapeDefinition.Column[] columns = shape.Columns;
+            ArenaDimensions.Column[] columns = plan.columns;
             if (columns != null && columns.Length > 0)
             {
                 var columnsGroup = new GameObject(ColumnsGroupName);
                 Undo.RegisterCreatedObjectUndo(columnsGroup, "Arena Kolonları");
-                columnsGroup.transform.SetParent(root, false);
+                columnsGroup.transform.SetParent(geometryRoot, false);
 
                 for (int i = 0; i < columns.Length; i++)
                 {
-                    ArenaShapeDefinition.Column column = columns[i];
-                    float columnHeight = Mathf.Max(0.01f, shape.HeightOf(column));
+                    ArenaDimensions.Column column = columns[i];
+                    float columnHeight = Mathf.Max(0.01f, plan.HeightOf(column));
 
                     ProBuilderMesh box = ShapeGenerator.GenerateCube(
                         PivotLocation.Center,
@@ -201,20 +238,106 @@ namespace VortexArena.Core.Editor
 
             Undo.CollapseUndoOperations(undoGroup);
 
+            result.LocalBounds = plan.LocalBounds();
             result.Success = true;
             return result;
         }
 
+        // -------------------------------------------------------- ArenaBoundary
+
         /// <summary>
-        /// Daha önce üretilmiş <c>Zemin</c>/<c>Duvarlar</c>/<c>Kolonlar</c> çocuklarını siler.
-        /// Aynı adla birden çok çocuk olabileceği için (elle kopyalanmış olabilir) hepsi taranır.
+        /// Üretim sonrası <see cref="ArenaBoundary"/>'yi bağlar: boyut dosyası + duvar Renderer'ları.
+        /// <para>
+        /// ⚠️ <b>Boyut dosyası her zaman bağlanır</b> — her iki üretim yolunda da (elle yazılan JSON
+        /// ve TestMesh'ten çıkarılan JSON) ortada bir <c>TextAsset</c> vardır. Bağlanmazsa muhafaza
+        /// ölçüsüz kalır ve <c>ArenaBoundary</c> devre dışı düşer; arena sessizce sınırsız olurdu.
+        /// </para>
+        /// <para>
+        /// Alanlar <c>[SerializeField] private</c> olduğu için <see cref="SerializedObject"/>
+        /// üzerinden yazılır; alan bulunamazsa kod kırılmaz, <paramref name="warnings"/>'e elle
+        /// bağlama notu düşer. <c>head</c>/<c>fadeRenderer</c>/<c>warningText</c>'e DOKUNULMAZ —
+        /// onlar rig prefabına bakar ve şablondan doğru gelir.
+        /// </para>
         /// </summary>
-        private static void ClearGenerated(Transform root)
+        internal static void BindBoundary(
+            ArenaBoundary boundary,
+            TextAsset dimensionsAsset,
+            IList<MeshRenderer> walls,
+            List<string> warnings)
+        {
+            if (boundary == null)
+            {
+                return;
+            }
+
+            var serialized = new SerializedObject(boundary);
+
+            SerializedProperty jsonProp = serialized.FindProperty("dimensionsJson");
+            if (jsonProp != null)
+            {
+                jsonProp.objectReferenceValue = dimensionsAsset;
+            }
+            else
+            {
+                warnings?.Add(
+                    "ArenaBoundary'de 'dimensionsJson' alanı bulunamadı — boyut dosyasını alana ELLE bağla, " +
+                    "yoksa muhafaza ölçüsüz kalır.");
+            }
+
+            SerializedProperty wallsProp = serialized.FindProperty("wallRenderers");
+            if (wallsProp != null && wallsProp.isArray)
+            {
+                int count = walls?.Count ?? 0;
+                wallsProp.arraySize = count;
+                for (int i = 0; i < count; i++)
+                {
+                    wallsProp.GetArrayElementAtIndex(i).objectReferenceValue = walls[i];
+                }
+            }
+
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(boundary);
+        }
+
+        /// <summary>
+        /// Üretilen geometrinin ortak ebeveynini açar (yerel dönüşümü sıfırlanmış olarak) —
+        /// plan koordinatları kökün yerel XZ'sinde olduğu için ara ebeveyn kaydırma/döndürme
+        /// TAŞIMAMALIDIR.
+        /// </summary>
+        internal static Transform CreateGeometryRoot(Transform root)
+        {
+            var geometryRoot = new GameObject(GeometryRootName);
+            Undo.RegisterCreatedObjectUndo(geometryRoot, "Arena Geometri Kökü");
+            geometryRoot.transform.SetParent(root, false);
+            geometryRoot.transform.localPosition = Vector3.zero;
+            geometryRoot.transform.localRotation = Quaternion.identity;
+            geometryRoot.transform.localScale = Vector3.one;
+            return geometryRoot.transform;
+        }
+
+        /// <summary>
+        /// Daha önce üretilmiş geometriyi siler: kökün <see cref="GeometryRootName"/> çocukları
+        /// <b>ve</b> eski düzenden kalmış doğrudan <c>Zemin</c>/<c>Duvarlar</c>/<c>Kolonlar</c>
+        /// çocukları.
+        /// <para>
+        /// ⚠️ İkinci grup bir <b>göç adımıdır</b>: mevcut sahneler (ör.
+        /// <c>Venues/VortexAntep/Default/Scenes/ArenaVortexAntep.unity</c>) geometriyi ortak
+        /// ebeveyn YOKKEN üretilmiş. Silinmezse aracı yeniden çalıştırmak eski geometriyi
+        /// sahnede bırakır ve arena iki kat çizilirdi.
+        /// </para>
+        /// <para>
+        /// Aynı adla birden çok çocuk olabileceği için (elle kopyalanmış olabilir) hepsi taranır.
+        /// </para>
+        /// </summary>
+        internal static void ClearGenerated(Transform root)
         {
             for (int i = root.childCount - 1; i >= 0; i--)
             {
                 Transform child = root.GetChild(i);
-                if (child.name == FloorName || child.name == WallsGroupName || child.name == ColumnsGroupName)
+                if (child.name == GeometryRootName ||
+                    child.name == FloorName ||
+                    child.name == WallsGroupName ||
+                    child.name == ColumnsGroupName)
                 {
                     Undo.DestroyObjectImmediate(child.gameObject);
                 }
@@ -228,7 +351,7 @@ namespace VortexArena.Core.Editor
         /// üzerinden doldurulur — erişim değişse de bu kod kırılmaz.
         /// </para>
         /// </summary>
-        private static void ApplyObstacle(GameObject target, Vector2 size)
+        internal static void ApplyObstacle(GameObject target, Vector2 size)
         {
             ArenaObstacle obstacle = target.GetComponent<ArenaObstacle>();
             if (obstacle == null)
@@ -248,7 +371,7 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>ProBuilder mesh'ini materyalle kapatıp köke bağlar (yerel dönüşüm sıfırlanır).</summary>
-        private static void Finalize(ProBuilderMesh mesh, Material material, Transform parent)
+        internal static void Finalize(ProBuilderMesh mesh, Material material, Transform parent)
         {
             mesh.SetMaterial(mesh.faces, material);
             mesh.ToMesh();
@@ -263,7 +386,7 @@ namespace VortexArena.Core.Editor
         /// Ortak mekan materyali: varsa <c>Assets/Materials/M_Mekan.mat</c>, yoksa URP/Lit ile
         /// üretilip oraya yazılır. Proje URP değilse null döner (çağıran hata bildirir).
         /// </summary>
-        private static Material ResolveMaterial()
+        internal static Material ResolveMaterial()
         {
             var existing = AssetDatabase.LoadAssetAtPath<Material>(SharedMaterialPath);
             if (existing != null)
@@ -293,21 +416,32 @@ namespace VortexArena.Core.Editor
         // --------------------------------------------------------------- menü
 
         /// <summary>
-        /// <c>Tools &gt; VortexArena &gt; Build Arena From Shape</c> — seçili
-        /// <see cref="ArenaShapeDefinition"/> asset'ini aktif sahnedeki arena kökü üstünde üretir.
+        /// <c>Tools &gt; VortexArena &gt; Build Arena From Dimensions</c> — seçili boyut JSON'unu
+        /// (<c>TextAsset</c>) aktif sahnedeki arena kökü üstünde geometriye çevirir.
+        /// <para>
+        /// Ölçüyü dosyada elle düzeltip aynı menüden yeniden çizmek içindir: üretim idempotenttir,
+        /// eski geometri silinip yenisi konur.
+        /// </para>
         /// <para>
         /// Kök seçimi: seçimde bir SAHNE objesi varsa o; yoksa sahnedeki
         /// <see cref="ArenaBoundary"/>'nin transformu. İkisi de yoksa iş yapılmaz — plan yanlış
         /// transformun altına düşerse sessizce kaymış bir arena üretilirdi.
         /// </para>
         /// </summary>
-        [MenuItem("Tools/VortexArena/Build Arena From Shape")]
+        [MenuItem("Tools/VortexArena/Build Arena From Dimensions")]
         private static void BuildFromSelection()
         {
-            ArenaShapeDefinition shape = FindSelectedShape();
-            if (shape == null)
+            TextAsset json = FindSelectedTextAsset();
+            if (json == null)
             {
-                Debug.LogError("[ArenaShape] Project penceresinden bir ArenaShapeDefinition asset'i seç.");
+                Debug.LogError("[ArenaShape] Project penceresinden bir boyut dosyası (JSON / TextAsset) seç.");
+                return;
+            }
+
+            ArenaDimensions plan = ArenaDimensions.FromTextAsset(json, out string planError);
+            if (plan == null)
+            {
+                Debug.LogError($"[ArenaShape] Boyut dosyası okunamadı ('{json.name}'): {planError}");
                 return;
             }
 
@@ -320,35 +454,55 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            Result result = Build(shape, root);
+            Result result = Build(plan, root);
             if (!result.Success)
             {
                 Debug.LogError($"[ArenaShape] Üretilemedi: {result.Error}");
                 return;
             }
 
+            // Muhafazayı da burada bağlıyoruz: elle "wallRenderers'ı doldurmayı unutma" demek,
+            // unutulduğunda sessizce solmayan duvarlar üretiyordu.
+            ArenaBoundary boundary = root.GetComponent<ArenaBoundary>();
+            var warnings = new List<string>();
+            BindBoundary(boundary, json, result.WallRenderers, warnings);
+
             Debug.Log(
-                $"[ArenaShape] '{shape.name}' → '{root.name}': zemin + {result.WallRenderers.Count} duvar + " +
-                $"{result.Columns.Count} kolon üretildi. " +
-                "Duvarları ArenaBoundary.wallRenderers alanına bağlamayı unutma.");
+                $"[ArenaShape] '{json.name}' → '{root.name}/{GeometryRootName}': zemin + " +
+                $"{result.WallRenderers.Count} duvar + {result.Columns.Count} kolon üretildi " +
+                $"(yerel sınır {result.LocalBounds.width:0.##}×{result.LocalBounds.height:0.##} m).");
+
+            if (boundary == null)
+            {
+                Debug.LogWarning(
+                    "[ArenaShape] Kökte ArenaBoundary yok — boyut dosyasını ve duvarları ELLE bağla.");
+            }
+
+            for (int i = 0; i < warnings.Count; i++)
+            {
+                Debug.LogWarning("[ArenaShape] " + warnings[i]);
+            }
+
             Selection.activeGameObject = root.gameObject;
         }
 
-        [MenuItem("Tools/VortexArena/Build Arena From Shape", true)]
+        [MenuItem("Tools/VortexArena/Build Arena From Dimensions", true)]
         private static bool ValidateBuildFromSelection()
         {
-            return FindSelectedShape() != null;
+            // Ayrıştırma denenmez, yalnız TÜR bakılır: menü doğrulaması her repaint'te koşuyor,
+            // JSON ayrıştırmak orada gereksiz maliyet olurdu (bozuk dosya çalıştırınca raporlanır).
+            return FindSelectedTextAsset() != null;
         }
 
-        /// <summary>Seçimdeki ilk <see cref="ArenaShapeDefinition"/> asset'i.</summary>
-        private static ArenaShapeDefinition FindSelectedShape()
+        /// <summary>Seçimdeki ilk <c>TextAsset</c> (boyut JSON'u adayı).</summary>
+        private static TextAsset FindSelectedTextAsset()
         {
             Object[] selection = Selection.objects;
             for (int i = 0; i < selection.Length; i++)
             {
-                if (selection[i] is ArenaShapeDefinition shape)
+                if (selection[i] is TextAsset text)
                 {
-                    return shape;
+                    return text;
                 }
             }
 
@@ -356,7 +510,7 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>Seçili sahne objesi, yoksa sahnedeki <see cref="ArenaBoundary"/>'nin transformu.</summary>
-        private static Transform FindSelectedRoot()
+        internal static Transform FindSelectedRoot()
         {
             GameObject[] selection = Selection.gameObjects;
             for (int i = 0; i < selection.Length; i++)

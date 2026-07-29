@@ -1,6 +1,7 @@
 using System;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 namespace VortexArena.App.Admin
@@ -9,21 +10,30 @@ namespace VortexArena.App.Admin
     /// Yan panellerdeki tek oyuncu satırı: takım şeridi, ad + <c>#id</c>, HP barı, K/D · batarya ·
     /// durum ve eylem düğmeleri (POV · KAL · TAKIM · KİMLİK · AT).
     /// <para>
+    /// <b>Görünüm prefabtan gelir:</b> <c>Assets/_Shared/App/Resources/UI/AdminPlayerRow.prefab</c>.
+    /// Bu sınıf yalnız <b>davranış</b>tır — yerleşim/renk/punto prefabta düzenlenir. Alanların
+    /// hepsi <c>[SerializeField]</c>; prefabta bağlanmayan alan sessizce çizilmez, bu yüzden
+    /// prefab düzenlenirken bağlantılar korunmalıdır.
+    /// </para>
+    /// <para>
     /// <b>Atma ve kalibrasyon sıfırlama iki adımlıdır:</b> ilk tıklama düğmeyi "EMİN?" yapar ve
     /// <see cref="ConfirmSeconds"/> sonra kendiliğinden geri döner; oyuncuyu maçtan atmak ya da
     /// savaş dışı bırakmak tek yanlış tıklamayla olmamalı.
     /// </para>
     /// <para>
-    /// <b>KAL düğmesi</b> kalibrasyon durumunu hem GÖSTERİR (✓ yeşil / ✗ kırmızı) hem sıfırlar
+    /// <b>KAL düğmesi</b> kalibrasyon durumunu hem GÖSTERİR (yeşil / kırmızı) hem sıfırlar
     /// (§10.6). Yalnız sıfırlar: kalibrasyonu geri açmayı yalnız başlığın kendisi yapabilir,
     /// çünkü hizalamanın gerçekten oturduğunu yalnız o bilir. Kalibresiz satırın kenarlığı da
     /// kırmızıya döner — operatör listeye bakınca hemen görsün.
     /// </para>
-    /// MonoBehaviour DEĞİL: HUD tarafından havuzlanan saf bir görünüm nesnesidir.
     /// </summary>
-    public class AdminPlayerRow
+    public class AdminPlayerRow : MonoBehaviour
     {
-        /// <summary>Satır yüksekliği (px) — HUD yerleşimi bunu kullanır.</summary>
+        /// <summary>
+        /// Satır yüksekliğinin <b>yedek</b> değeri (px). Gerçek yükseklik prefabın
+        /// <see cref="RectTransform"/>'undan okunur (<see cref="AdminHud"/>) — sanatçı prefabta
+        /// satırı büyütürse kolon yerleşimi kendiliğinden uyar.
+        /// </summary>
         public const float Height = 116f;
 
         /// <summary>"AT" ve "KAL" düğmelerinin onay penceresi (sn).</summary>
@@ -38,21 +48,38 @@ namespace VortexArena.App.Admin
 
         private const float DeadColorScale = 0.5f;
 
-        private readonly RectTransform _root;
-        private readonly Image _border;
-        private readonly Image _background;
-        private readonly Image _stripe;
-        private readonly TextMeshProUGUI _nameText;
-        private readonly TextMeshProUGUI _idText;
-        private readonly Image _hpFill;
-        private readonly TextMeshProUGUI _hpText;
-        private readonly TextMeshProUGUI _statsText;
-        private readonly Button _teamButton;
-        private readonly TextMeshProUGUI _teamLabel;
-        private readonly Button _kickButton;
-        private readonly TextMeshProUGUI _kickLabel;
-        private readonly Button _calibButton;
-        private readonly TextMeshProUGUI _calibLabel;
+        [Header("Kart")]
+        [Tooltip("Kartın dış (kenarlık) görseli — seçim ve kalibrasyon vurgusu bunun rengiyle verilir.")]
+        [SerializeField] private Image border;
+        [Tooltip("Kartın iç dolgusu; satırı seçen düğme de bunun üstündedir.")]
+        [SerializeField] private Image background;
+        [SerializeField] private Button selectButton;
+        [Tooltip("Sol kenardaki takım şeridi.")]
+        [SerializeField] private Image stripe;
+
+        [Header("Metinler")]
+        [SerializeField] private TextMeshProUGUI nameText;
+        [SerializeField] private TextMeshProUGUI idText;
+        [SerializeField] private TextMeshProUGUI hpText;
+        [SerializeField] private TextMeshProUGUI statsText;
+
+        [Header("Can barı")]
+        [Tooltip("Barın DOLGU görseli (zemin değil) — genişliği anchorMax.x ile sürülür.")]
+        [SerializeField] private Image hpFill;
+
+        [Header("Eylem düğmeleri")]
+        [SerializeField] private Button povButton;
+        [SerializeField] private Button calibButton;
+        [SerializeField] private TextMeshProUGUI calibLabel;
+        [SerializeField] private Button teamButton;
+        [SerializeField] private TextMeshProUGUI teamLabel;
+        [SerializeField] private Button identifyButton;
+        [SerializeField] private Button kickButton;
+        [SerializeField] private TextMeshProUGUI kickLabel;
+
+        private RectTransform _rect;
+        private Action<int> _onSelect;
+        private Action<int> _onPov;
 
         private int _playerId;
         private string _team = "";
@@ -60,76 +87,35 @@ namespace VortexArena.App.Admin
         private float _calibArmedAt = -1f;
         private bool _calibrated = true;
 
-        public GameObject GameObject => _root != null ? _root.gameObject : null;
+        private RectTransform Rect => _rect != null ? _rect : _rect = (RectTransform)transform;
 
-        public AdminPlayerRow(Transform parent, Action<int> onSelect, Action<int> onPov)
+        /// <summary>
+        /// Düğme geri çağrılarını bağlar. Prefabta <c>onClick</c> kaydı YOKTUR ve olmamalıdır:
+        /// hedef oyuncu her <see cref="Bind"/> ile değişiyor, kalıcı (persistent) bir kayıt
+        /// yanlış oyuncuya komut gönderirdi.
+        /// </summary>
+        public void Initialize(Action<int> onSelect, Action<int> onPov)
         {
-            _background = UiKit.Panel(parent, "PlayerRow", UiKit.CardTranslucent, UiKit.Border);
-            _root = (RectTransform)_background.transform.parent; // Panel: kenar > dolgu
-            _border = _root.GetComponent<Image>();               // seçim vurgusu kenar rengiyle
-            _background.raycastTarget = true;
+            _onSelect = onSelect;
+            _onPov = onPov;
 
-            var selectButton = _background.gameObject.AddComponent<Button>();
-            selectButton.targetGraphic = _background;
-            ColorBlock colors = selectButton.colors;
-            colors.normalColor = Color.white;
-            colors.highlightedColor = new Color(1.12f, 1.12f, 1.12f, 1f);
-            colors.pressedColor = new Color(0.9f, 0.9f, 0.9f, 1f);
-            colors.fadeDuration = 0.06f;
-            selectButton.colors = colors;
-            selectButton.onClick.AddListener(() => onSelect?.Invoke(_playerId));
+            Wire(selectButton, () => _onSelect?.Invoke(_playerId));
+            Wire(povButton, () => _onPov?.Invoke(_playerId));
+            Wire(calibButton, PressCalibration);
+            Wire(teamButton, ToggleTeam);
+            Wire(identifyButton, () => AdminCommands.Identify(_playerId));
+            Wire(kickButton, PressKick);
+        }
 
-            Transform card = _background.transform;
+        private static void Wire(Button button, UnityAction action)
+        {
+            if (button == null)
+            {
+                return;
+            }
 
-            // Sol kenarda takım şeridi (seçim vurgusu kartın KENAR rengiyle verilir, şeridi ezmesin).
-            _stripe = UiKit.Solid(card, "TeamStripe", UiKit.TeamNeutral);
-            UiKit.Corner(_stripe.rectTransform, new Vector2(0f, 1f), Vector2.zero, new Vector2(6f, Height - 8f));
-
-            _nameText = UiKit.Text(card, "Name", 24f, UiKit.Title, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-            UiKit.Block(_nameText.rectTransform, 18f, 8f, 74f, 28f);
-            _nameText.textWrappingMode = TextWrappingModes.NoWrap;
-            _nameText.overflowMode = TextOverflowModes.Ellipsis;
-
-            _idText = UiKit.Text(card, "Id", 20f, UiKit.Faint, FontStyles.Normal, TextAlignmentOptions.TopRight);
-            UiKit.Block(_idText.rectTransform, 18f, 10f, 14f, 24f);
-
-            Image hpBar = UiKit.Bar(card, "HpBar", UiKit.Hex(0x2A303B, 0xFF), UiKit.Good);
-            UiKit.Block(((RectTransform)hpBar.transform.parent), 18f, 40f, 96f, 12f);
-            _hpFill = hpBar;
-
-            _hpText = UiKit.Text(card, "Hp", 18f, UiKit.Muted, FontStyles.Normal, TextAlignmentOptions.TopRight);
-            UiKit.Block(_hpText.rectTransform, 18f, 36f, 14f, 22f);
-
-            _statsText = UiKit.Text(card, "Stats", 18f, UiKit.Muted, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-            UiKit.Block(_statsText.rectTransform, 18f, 58f, 14f, 22f);
-            _statsText.textWrappingMode = TextWrappingModes.NoWrap;
-            _statsText.overflowMode = TextOverflowModes.Ellipsis;
-
-            // Eylem düğmeleri: 5 eşit sütun. ⚠️ Punto 16 DEĞİL 14: sütun 380 px ve beşe bölününce
-            // düğme başına ~70 px kalıyor; 16 puntoda "KİMLİK" ve takım etiketi ellipsis'e giriyor.
-            const float buttonTop = 82f;
-            const float buttonHeight = 26f;
-            const float buttonFont = 14f;
-            Button pov = UiKit.Button(card, "Pov", "POV", buttonFont, UiKit.Hex(0x2A303B, 0xFF), UiKit.Title,
-                () => onPov?.Invoke(_playerId), out _);
-            PlaceAction(pov, 0, buttonTop, buttonHeight);
-
-            // Kalibrasyon: hem gösterge hem sıfırlama düğmesi (§10.6).
-            _calibButton = UiKit.Button(card, "Calib", LabelCalibrated, buttonFont, UiKit.Hex(0x2A303B, 0xFF),
-                UiKit.Good, PressCalibration, out _calibLabel);
-            PlaceAction(_calibButton, 1, buttonTop, buttonHeight);
-
-            _teamButton = UiKit.Button(card, "Team", "TAKIM", buttonFont, UiKit.Hex(0x2A303B, 0xFF), UiKit.Title,
-                ToggleTeam, out _teamLabel);
-            PlaceAction(_teamButton, 2, buttonTop, buttonHeight);
-
-            Button identify = UiKit.Button(card, "Identify", "KİMLİK", buttonFont, UiKit.Hex(0x2A303B, 0xFF), UiKit.Title,
-                () => AdminCommands.Identify(_playerId), out _);
-            PlaceAction(identify, 3, buttonTop, buttonHeight);
-
-            _kickButton = UiKit.Button(card, "Kick", "AT", buttonFont, UiKit.Hex(0x2A303B, 0xFF), UiKit.Muted,
-                PressKick, out _kickLabel);
-            PlaceAction(_kickButton, 4, buttonTop, buttonHeight);
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(action);
         }
 
         /// <summary>Satırı verilen oyuncuya bağlar (her tazelemede çağrılır).</summary>
@@ -145,35 +131,58 @@ namespace VortexArena.App.Admin
             _calibrated = view.calibrated;
 
             Color team = UiKit.TeamColor(view.team);
-            _stripe.color = view.alive ? team : UiKit.Dim(team, DeadColorScale);
+            if (stripe != null)
+            {
+                stripe.color = view.alive ? team : UiKit.Dim(team, DeadColorScale);
+            }
 
-            if (_border != null)
+            if (border != null)
             {
                 // Kalibresiz satır seçili olmasa da kırmızı kenarlıkla ayrışır: operatör
                 // listeye baktığında ilgilenmesi gereken satırı hemen görmeli (§10.6).
-                _border.color = selected ? UiKit.Accent
+                border.color = selected ? UiKit.Accent
                     : view.NeedsCalibration ? UiKit.Bad : UiKit.Border;
             }
 
             float alpha = view.online ? 1f : 0.45f;
-            _nameText.color = UiKit.WithAlpha(view.alive ? UiKit.Title : UiKit.Muted, alpha);
-            // Numara adın ÖNÜNE yazılır (avatar plakasıyla aynı biçim): adlar benzersiz değil,
-            // operatörün iki "ertu"yu ayırdığı şey numara. 0 = atanmamış → yalnız ad.
-            _nameText.text = view.number > 0 ? $"{view.number} · {view.name}" : view.name;
-            _idText.text = $"#{view.playerId}";
+            if (nameText != null)
+            {
+                nameText.color = UiKit.WithAlpha(view.alive ? UiKit.Title : UiKit.Muted, alpha);
+                // Numara adın ÖNÜNE yazılır (avatar plakasıyla aynı biçim): adlar benzersiz değil,
+                // operatörün iki "ertu"yu ayırdığı şey numara. 0 = atanmamış → yalnız ad.
+                nameText.text = view.number > 0 ? $"{view.number} · {view.name}" : view.name;
+            }
 
-            UiKit.SetBarFill(_hpFill, view.HpNormalized);
-            _hpFill.color = view.HpNormalized > 0.5f ? UiKit.Good
-                : view.HpNormalized > 0.2f ? UiKit.Accent : UiKit.Bad;
-            _hpText.text = $"{Mathf.RoundToInt(view.hp)} HP";
+            if (idText != null)
+            {
+                idText.text = $"#{view.playerId}";
+            }
 
-            _statsText.text = BuildStatsLine(view);
-            _statsText.color = view.online ? UiKit.Muted : UiKit.Faint;
+            UiKit.SetBarFill(hpFill, view.HpNormalized);
+            if (hpFill != null)
+            {
+                hpFill.color = view.HpNormalized > 0.5f ? UiKit.Good
+                    : view.HpNormalized > 0.2f ? UiKit.Accent : UiKit.Bad;
+            }
+
+            if (hpText != null)
+            {
+                hpText.text = $"{Mathf.RoundToInt(view.hp)} HP";
+            }
+
+            if (statsText != null)
+            {
+                statsText.text = BuildStatsLine(view);
+                statsText.color = view.online ? UiKit.Muted : UiKit.Faint;
+            }
 
             // Takım düğmesi karşı takımı gösterir (ne olacağını yazar, ne olduğunu değil).
             // ⚠️ "MAVİYE"/"KIRMIZIYA" değil: beş düğmeli satırda ~70 px kalıyor ve uzun olan
             // ellipsis'e giriyordu ("KIRMIZ…"). Hâl eki düşürüldü, anlam korundu.
-            _teamLabel.text = view.team == "red" ? "MAVİ" : view.team == "blue" ? "KIRMIZI" : "TAKIM";
+            if (teamLabel != null)
+            {
+                teamLabel.text = view.team == "red" ? "MAVİ" : view.team == "blue" ? "KIRMIZI" : "TAKIM";
+            }
 
             RefreshKickButton();
             RefreshCalibrationButton();
@@ -197,31 +206,19 @@ namespace VortexArena.App.Admin
 
         public void SetVisible(bool visible)
         {
-            if (_root != null && _root.gameObject.activeSelf != visible)
+            if (gameObject.activeSelf != visible)
             {
-                _root.gameObject.SetActive(visible);
+                gameObject.SetActive(visible);
             }
         }
 
         /// <summary>Satırı kolonun içinde verilen üst ofsete yerleştirir.</summary>
-        public void Place(float top)
+        public void Place(float top, float height)
         {
-            UiKit.Block(_root, 0f, top, 0f, Height);
+            UiKit.Block(Rect, 0f, top, 0f, height);
         }
 
         // ---------------------------------------------------------------- iç işler
-
-        private void PlaceAction(Button button, int index, float top, float height)
-        {
-            const int lastIndex = 4; // POV · KAL · TAKIM · KİMLİK · AT
-            const float slot = 1f / (lastIndex + 1);
-            var rect = (RectTransform)button.transform;
-            rect.anchorMin = new Vector2(index * slot, 1f);
-            rect.anchorMax = new Vector2((index + 1) * slot, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.offsetMin = new Vector2(index == 0 ? 18f : 3f, -(top + height));
-            rect.offsetMax = new Vector2(index == lastIndex ? -14f : -3f, -top);
-        }
 
         private void ToggleTeam()
         {
@@ -272,10 +269,14 @@ namespace VortexArena.App.Admin
         private void RefreshCalibrationButton()
         {
             bool armed = _calibArmedAt >= 0f;
-            _calibLabel.text = armed ? LabelConfirm : _calibrated ? LabelCalibrated : LabelUncalibrated;
-            _calibLabel.color = armed ? UiKit.OnAccent : _calibrated ? UiKit.Good : UiKit.Bad;
 
-            if (_calibButton.targetGraphic is Image image)
+            if (calibLabel != null)
+            {
+                calibLabel.text = armed ? LabelConfirm : _calibrated ? LabelCalibrated : LabelUncalibrated;
+                calibLabel.color = armed ? UiKit.OnAccent : _calibrated ? UiKit.Good : UiKit.Bad;
+            }
+
+            if (calibButton != null && calibButton.targetGraphic is Image image)
             {
                 image.color = armed ? UiKit.Bad : UiKit.Hex(0x2A303B, 0xFF);
             }
@@ -284,10 +285,14 @@ namespace VortexArena.App.Admin
         private void RefreshKickButton()
         {
             bool armed = _kickArmedAt >= 0f;
-            _kickLabel.text = armed ? "EMİN?" : "AT";
-            _kickLabel.color = armed ? UiKit.OnAccent : UiKit.Muted;
 
-            if (_kickButton.targetGraphic is Image image)
+            if (kickLabel != null)
+            {
+                kickLabel.text = armed ? LabelConfirm : "AT";
+                kickLabel.color = armed ? UiKit.OnAccent : UiKit.Muted;
+            }
+
+            if (kickButton != null && kickButton.targetGraphic is Image image)
             {
                 image.color = armed ? UiKit.Bad : UiKit.Hex(0x2A303B, 0xFF);
             }

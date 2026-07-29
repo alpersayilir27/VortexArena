@@ -3,6 +3,25 @@ using System;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
+    /// Sihirbazın arena ölçüsünü nereden okuyacağı. İki seçenek vardır ve <b>kaynak
+    /// ZORUNLUDUR</b>: ölçüsüz bir arenanın <c>ArenaBoundary</c>'si devre dışı kalır, yani arena
+    /// sessizce sınırsız olurdu. İki kaynak da aynı temsile (<c>ArenaDimensions</c> JSON'u)
+    /// indirgenir ve aynı üretim kapısından geçer.
+    /// </summary>
+    public enum ArenaGeometrySource
+    {
+        /// <summary>Elle yazılan boyut dosyası (<c>ArenaDimensions</c> JSON'u, <c>TextAsset</c>).</summary>
+        DimensionsJson,
+
+        /// <summary>
+        /// Kaba bloklardan oluşan bir TestMesh prefabı. Bloklar bir <c>ArenaDimensions</c> planına
+        /// ÇIKARILIR, plan arena kutusunun <c>Data/</c> klasörüne JSON olarak yazılır ve geometri
+        /// oradan üretilir — yani sonuç elle yazılmış bir JSON'dan ayırt edilemez.
+        /// </summary>
+        TestMesh
+    }
+
+    /// <summary>
     /// <see cref="ArenaTemplateWizard.Create"/> girdisi — sihirbaz penceresinin alanlarının
     /// veri karşılığı.
     /// <para>
@@ -48,19 +67,40 @@ namespace VortexArena.Core.Editor
         public string displayName = "";
 
         /// <summary>
-        /// İsteğe bağlı <c>ArenaShapeDefinition</c> asset yolu — arena planı (zemin sınırı +
-        /// kolonlar).
+        /// Geometri kaynağı — hangi yol alanının okunacağını bu belirler
+        /// (<see cref="dimensionsJsonPath"/> / <see cref="testMeshPath"/>).
         /// <para>
-        /// <b>Boş bırakılırsa hiçbir şey değişmez:</b> sahne kaynak arenadan bire bir kopyalanır
-        /// ve geometriye dokunulmaz (sihirbazın öteden beri yaptığı iş).
-        /// </para>
-        /// <para>
-        /// Doluysa şablondan gelen hazır zemin/duvar mesh'leri SİLİNİR, yerine plandan üretilen
-        /// geometri konur ve sahnedeki <c>ArenaBoundary</c> bu asset'e + üretilen duvarlara
-        /// bağlanır. Kalibrasyon işaretçileri, taban bölgeleri ve rig yerinde kalır.
+        /// ⚠️ Seçilen kaynağa AİT OLMAYAN yol alanı görmezden gelinir — bir arenanın ölçüsü tek
+        /// bir yerden gelmeli.
         /// </para>
         /// </summary>
-        public string shapePath = "";
+        public ArenaGeometrySource geometrySource = ArenaGeometrySource.DimensionsJson;
+
+        /// <summary>
+        /// Boyut dosyası (<c>ArenaDimensions</c> JSON'u) asset yolu — yalnız
+        /// <see cref="ArenaGeometrySource.DimensionsJson"/> seçiliyken okunur.
+        /// <para>
+        /// Şablondan gelen hazır zemin/duvar mesh'leri SİLİNİR, geometri plandan üretilir ve
+        /// sahnedeki <c>ArenaBoundary.dimensionsJson</c> bu <c>TextAsset</c>'e bağlanır.
+        /// </para>
+        /// <para>
+        /// ⚠️ Boş bırakılır ya da ayrıştırılamazsa sahne şablondan OLDUĞU GİBİ kalır (sihirbaz
+        /// yarıda kesilmez) — ama arena ölçüsüz olur ve sonuç uyarısı bunu yüksek sesle söyler.
+        /// </para>
+        /// </summary>
+        public string dimensionsJsonPath = "";
+
+        /// <summary>
+        /// TestMesh kökünün (kaba blok yığını) prefab asset yolu — yalnız
+        /// <see cref="ArenaGeometrySource.TestMesh"/> seçiliyken okunur.
+        /// <para>
+        /// TestMesh bir <c>ArenaDimensions</c> planına çıkarılır, plan yeni arena kutusunun
+        /// <c>Data/</c> klasörüne <c>&lt;sahneAdı&gt;_dimensions.json</c> olarak YAZILIR ve
+        /// geometri oradan üretilir; <c>ArenaBoundary.dimensionsJson</c> o dosyaya bağlanır.
+        /// Yani iki kaynak arasındaki tek fark JSON'un kim tarafından yazıldığıdır.
+        /// </para>
+        /// </summary>
+        public string testMeshPath = "";
 
         /// <summary>
         /// Mekan (işletme) klasör adı — <b>ZORUNLU</b>. Arena
@@ -82,5 +122,15 @@ namespace VortexArena.Core.Editor
         /// </para>
         /// </summary>
         public string catalogPath = "Assets/_Shared/Data/Resources/GameCatalog.asset";
+
+        /// <summary>
+        /// Seçili kaynağa ait yol alanı (<see cref="dimensionsJsonPath"/> ya da
+        /// <see cref="testMeshPath"/>). Sihirbaz "Oluştur" düğmesini bu boşken kapatır: kaynak
+        /// zorunludur, ölçüsüz arena üretilmez.
+        /// </summary>
+        public string SourcePath()
+        {
+            return geometrySource == ArenaGeometrySource.TestMesh ? testMeshPath : dimensionsJsonPath;
+        }
     }
 }

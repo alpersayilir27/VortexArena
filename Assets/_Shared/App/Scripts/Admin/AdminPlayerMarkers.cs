@@ -46,6 +46,7 @@ namespace VortexArena.App.Admin
         private class Marker
         {
             public GameObject root;
+            public AdminPlayerMarker view;
             public Transform ring;
             public Image ringImage;
             public Transform label;
@@ -53,6 +54,12 @@ namespace VortexArena.App.Admin
         }
 
         private readonly Dictionary<int, Marker> _markers = new Dictionary<int, Marker>();
+
+        /// <summary>İşaretçi prefabı (<c>Resources</c>'tan bir kez yüklenir). Bu bileşen sahneye
+        /// değil koddan eklendiği için <c>[SerializeField]</c> ile bağlanamaz.</summary>
+        private AdminPlayerMarker _markerPrefab;
+
+        private bool _prefabMissingLogged;
         private readonly List<int> _idScratch = new List<int>();
         private bool _subscribed;
 
@@ -159,7 +166,11 @@ namespace VortexArena.App.Admin
                 if (marker.ringImage != null)
                 {
                     marker.ringImage.color = color;
-                    marker.ringImage.sprite = UiKit.RingSprite(selected ? 0.22f : 0.14f);
+                }
+
+                if (marker.view != null)
+                {
+                    marker.view.SetSelected(selected);
                 }
 
                 if (marker.label == null)
@@ -204,29 +215,34 @@ namespace VortexArena.App.Admin
                 return;
             }
 
-            var root = new GameObject($"[AdminMarker_{playerId}]");
-            root.transform.SetParent(transform, false);
+            if (_markerPrefab == null)
+            {
+                _markerPrefab = Resources.Load<AdminPlayerMarker>(AdminPlayerMarker.ResourcePath);
+                if (_markerPrefab == null)
+                {
+                    if (!_prefabMissingLogged)
+                    {
+                        _prefabMissingLogged = true;
+                        Debug.LogError(
+                            $"[AdminPlayerMarkers] '{AdminPlayerMarker.ResourcePath}' prefabı " +
+                            "bulunamadı — oyuncu halkaları çizilemeyecek.");
+                    }
 
-            Canvas ringCanvas = UiKit.WorldCanvas(root.transform, "Ring",
-                new Vector2(RingPixels, RingPixels), 1f);
-            Image ringImage = UiKit.Image(ringCanvas.transform, "RingImage",
-                UiKit.RingSprite(), UiKit.TeamNeutral);
-            ringImage.type = UnityEngine.UI.Image.Type.Simple; // halka ölçeklenir, 9-slice değil
-            UiKit.Stretch(ringImage.rectTransform);
+                    return;
+                }
+            }
 
-            Canvas labelCanvas = UiKit.WorldCanvas(root.transform, "Label",
-                new Vector2(600f, 90f), 0.0022f);
-            TextMeshProUGUI labelText = UiKit.Text(labelCanvas.transform, "Text", 46f,
-                UiKit.Title, FontStyles.Bold, TextAlignmentOptions.Center);
-            UiKit.Stretch(labelText.rectTransform);
+            AdminPlayerMarker instance = Instantiate(_markerPrefab, transform, false);
+            instance.name = $"[AdminMarker_{playerId}]";
 
             _markers.Add(playerId, new Marker
             {
-                root = root,
-                ring = ringCanvas.transform,
-                ringImage = ringImage,
-                label = labelCanvas.transform,
-                labelText = labelText
+                root = instance.gameObject,
+                view = instance,
+                ring = instance.Ring,
+                ringImage = instance.RingImage,
+                label = instance.Label,
+                labelText = instance.LabelText
             });
         }
 

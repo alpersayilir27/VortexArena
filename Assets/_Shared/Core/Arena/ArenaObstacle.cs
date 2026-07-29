@@ -8,7 +8,7 @@ namespace VortexArena.Core.Arena
     /// işaretlenmiş dikdörtgen. Konum ve dönüş objenin kendi transformundan gelir; bileşene
     /// yalnız zemindeki ölçüsü (<see cref="Size"/>) yazılır.
     /// <para>
-    /// <b>Neden ayrı bir bileşen:</b> <see cref="ArenaShapeDefinition"/>'daki kolonlar arena
+    /// <b>Neden ayrı bir bileşen:</b> <see cref="ArenaDimensions"/>'daki kolonlar arena
     /// PLANININ parçasıdır (editör aracı geometriyi onlardan üretir). Plana girmeyen, sahneye
     /// serpiştirilen dekor için ise tek doğruluk kaynağı objenin kendisidir — bu bileşen o objeyi
     /// <see cref="ArenaBoundary"/>'ye "buraya yürüme" diye tanıtır.

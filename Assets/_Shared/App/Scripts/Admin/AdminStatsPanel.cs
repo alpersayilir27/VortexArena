@@ -38,19 +38,38 @@ namespace VortexArena.App.Admin
         /// <summary>FFA sıralaması için tampon — her tazelemede yeni liste ayırmamak adına.</summary>
         private readonly List<AdminPlayerView> _sorted = new List<AdminPlayerView>();
 
-        private GameObject _root;
-        private TextMeshProUGUI _headline;
-        private TextMeshProUGUI _teamSummary;
-        private TextMeshProUGUI _matchSummary;
-        private readonly TextMeshProUGUI[] _columns = new TextMeshProUGUI[ColumnTitles.Length];
+        // ⚠️ Alanlar [SerializeField] — görünüm PREFABTAN gelir
+        // (`_Shared/App/Resources/UI/AdminStatsPanel.prefab`). Bu sınıf yalnız veri yazar.
+
+        [Tooltip("Açılıp kapanan kart — panel kapalıyken bu obje devre dışı bırakılır.")]
+        [SerializeField] private GameObject _root;
+        [SerializeField] private Button _closeButton;
+        [SerializeField] private TextMeshProUGUI _headline;
+        [SerializeField] private TextMeshProUGUI _teamSummary;
+        [SerializeField] private TextMeshProUGUI _matchSummary;
+
+        [Tooltip("Tablo kolonları — ColumnTitles ile AYNI SIRADA ve aynı sayıda olmalı.")]
+        [SerializeField] private TextMeshProUGUI[] _columns = new TextMeshProUGUI[ColumnTitles.Length];
+
         private readonly StringBuilder _sb = new StringBuilder();
 
         private float _nextRefresh;
         private bool _dirty = true;
 
-        public void Initialize(RectTransform parent)
+        private void Start()
         {
-            Build(parent);
+            if (_closeButton != null)
+            {
+                // Prefabta kalıcı onClick kaydı YOKTUR (bkz. AdminPreferencesPanel.WireButtons).
+                _closeButton.onClick.RemoveAllListeners();
+                _closeButton.onClick.AddListener(AdminSession.ClosePanel);
+            }
+
+            if (_root != null)
+            {
+                _root.SetActive(false); // görünürlüğü Apply() belirler
+            }
+
             Apply();
         }
 
@@ -92,70 +111,6 @@ namespace VortexArena.App.Admin
         private void MarkDirty()
         {
             _dirty = true;
-        }
-
-        // ------------------------------------------------------------------ kurulum
-
-        private void Build(RectTransform parent)
-        {
-            Image card = UiKit.Panel(parent, "StatsPanel", UiKit.CardTranslucent, UiKit.Border);
-            _root = card.transform.parent.gameObject;
-            card.raycastTarget = true;
-            UiKit.Center((RectTransform)_root.transform, new Vector2(PanelWidth, PanelHeight));
-
-            Transform body = card.transform;
-
-            TextMeshProUGUI title = UiKit.Text(body, "Title", 30f, UiKit.Title, FontStyles.Bold,
-                TextAlignmentOptions.TopLeft);
-            UiKit.Block(title.rectTransform, 28f, 22f, 160f, 38f);
-            title.text = "İSTATİSTİKLER";
-            title.characterSpacing = 3f;
-
-            Button close = UiKit.Button(body, "Close", "KAPAT", 18f, UiKit.Hex(0x2A303B, 0xFF),
-                UiKit.Muted, AdminSession.ClosePanel, out _);
-            UiKit.Corner((RectTransform)close.transform, new Vector2(1f, 1f),
-                new Vector2(-24f, -24f), new Vector2(110f, 34f));
-
-            _headline = UiKit.Text(body, "Headline", 34f, UiKit.Accent, FontStyles.Bold,
-                TextAlignmentOptions.TopLeft);
-            UiKit.Block(_headline.rectTransform, 28f, 66f, 160f, 42f);
-
-            _teamSummary = UiKit.Text(body, "TeamSummary", 20f, UiKit.Muted, FontStyles.Normal,
-                TextAlignmentOptions.TopLeft);
-            UiKit.Block(_teamSummary.rectTransform, 28f, 112f, 28f, 52f);
-            _teamSummary.lineSpacing = 8f;
-
-            Image divider = UiKit.Solid(body, "Divider", UiKit.Border);
-            UiKit.Block(divider.rectTransform, 28f, TableTop - 26f, 28f, 1f);
-
-            // Kolonlar: her biri kendi TMP'si (hizalama font metriğinden bağımsız kalsın).
-            float x = 28f;
-            for (int i = 0; i < ColumnTitles.Length; i++)
-            {
-                TextMeshProUGUI header = UiKit.Text(body, $"Header{i}", 16f, UiKit.Faint,
-                    FontStyles.Bold, TextAlignmentOptions.TopLeft);
-                UiKit.Corner(header.rectTransform, new Vector2(0f, 1f), new Vector2(x, -(TableTop - 22f)),
-                    new Vector2(ColumnWidths[i], 20f));
-                header.text = ColumnTitles[i];
-
-                _columns[i] = UiKit.Text(body, $"Column{i}", 18f, UiKit.Title, FontStyles.Normal,
-                    TextAlignmentOptions.TopLeft);
-                UiKit.Corner(_columns[i].rectTransform, new Vector2(0f, 1f), new Vector2(x, -TableTop),
-                    new Vector2(ColumnWidths[i], 380f));
-                _columns[i].lineSpacing = 14f;
-                _columns[i].textWrappingMode = TextWrappingModes.NoWrap;
-                _columns[i].overflowMode = TextOverflowModes.Ellipsis;
-
-                x += ColumnWidths[i];
-            }
-
-            _matchSummary = UiKit.Text(body, "MatchSummary", 18f, UiKit.Muted, FontStyles.Normal,
-                TextAlignmentOptions.BottomLeft);
-            UiKit.Corner(_matchSummary.rectTransform, new Vector2(0f, 0f), new Vector2(28f, 24f),
-                new Vector2(PanelWidth - 80f, 76f));
-            _matchSummary.lineSpacing = 8f;
-
-            _root.SetActive(false);
         }
 
         // ------------------------------------------------------------------ tazeleme

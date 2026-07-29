@@ -3,7 +3,6 @@ using System.Collections;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using VortexArena.Core;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -11,7 +10,7 @@ namespace VortexArena.App
 {
     /// <summary>
     /// YALNIZ EDITOR — geliştirici seçiminin runtime tarafı. `Tools &gt; VortexArena &gt; Dev`
-    /// penceresinin `EditorPrefs`'e yazdığı rol/adres/takım seçimini Play başlarken uygular.
+    /// penceresinin `EditorPrefs`'e yazdığı rol/adres seçimini Play başlarken uygular.
     ///
     /// <para><b>İki katmanlı config'in "seçim" katmanı burasıdır.</b> Hedeflerin adlandırılmış
     /// listesi repo'da commit'lidir (`dev-targets.json` → `DevTargets`), ama o listeden HANGİ
@@ -26,11 +25,9 @@ namespace VortexArena.App
     /// <item>`BeforeSceneLoad`: rol + sunucu adresini <see cref="AppSession"/>'a yazar
     ///   (`RoleResolved = true` → <see cref="AppBoot"/> ve kabuk controller'ları kendi
     ///   varsayılanlarını yazmaz).</item>
-    /// <item>`AfterSceneLoad`: doğrudan bir ARENA sahnesinden Play'e basıldıysa (a) sunucuya
-    ///   **bağlanır** ve (b) player rolünde sentetik bir `load_match` yayınlar — takım/spawn slot
-    ///   bilgisi böylece gerçek kod yolundan (`PlayerCombatState`, `ModeHudSpawner`,
-    ///   `SceneRouter`) geçer. Dev'e özel ikinci bir API açmaktan kaçınmanın sebebi bu: editörde
-    ///   denenen akış sahada koşanla aynı kalsın.</item>
+    /// <item>`AfterSceneLoad`: doğrudan bir ARENA sahnesinden Play'e basıldıysa sunucuya
+    ///   **bağlanır** — başka hiçbir şey yapmaz. Maç verisi (mod, takım, faz, süre) yalnız
+    ///   sunucudan gelir.</item>
     /// </list>
     ///
     /// <para><b>Bağlanmayı neden burası yapıyor:</b> `Connect(...)` çağrısı normalde kabuk
@@ -39,10 +36,10 @@ namespace VortexArena.App
     /// basıldığında kimse bağlanmazdı: can/skor/faz güncellemesi gelmez, `CanFire` sunucu `Live`
     /// demediği için hiç açılmaz ve maç akışı denenemezdi.</para>
     ///
-    /// <para>Sunucuda gerçekten bir maç koşuyorsa <b>sunucunun gerçek `load_match`'i kazanır:</b>
-    /// bağlanınca `welcome.match` geç-katılım senkronu devreye girer
-    /// (`SceneRouter.HandleConnected`) ve takımı sunucu atar. Sentetik mesaj yalnız "sunucuda maç
-    /// yokken yerel çalışma" için vardır.</para>
+    /// <para><b>Takım/mod/faz bilgisinin TEK kaynağı sunucudur.</b> Bağlanınca `welcome.match`
+    /// geç-katılım senkronu devreye girer (`SceneRouter.HandleConnected`) ve takımı sunucu atar.
+    /// Sunucuda maç koşmuyorsa istemci maç verisi ALMAZ — bu beklenen davranıştır; bir admin
+    /// maçı başlatmalıdır. Bu sınıf sunucudan gelmiş gibi mesaj üretmez.</para>
     ///
     /// <para><b>Kapatmak:</b> dev penceresindeki "Dev enjeksiyonu" onayı kapatılırsa bu sınıf
     /// hiçbir şey yapmaz ve üretim yolu birebir koşar (beacon keşfini editörde denemek için).
@@ -64,10 +61,6 @@ namespace VortexArena.App
         public const string KeyIp = Prefix + "Ip";
         public const string KeyPort = Prefix + "Port";
         public const string KeyStartFromBoot = Prefix + "StartFromBoot";
-        public const string KeyTeam = Prefix + "Team";
-        public const string KeyModeId = Prefix + "ModeId";
-        public const string KeyRoundSeconds = Prefix + "RoundSeconds";
-        public const string KeyScoreLimit = Prefix + "ScoreLimit";
 
         // ------------------------------------------------------------------- seçim
 
@@ -114,32 +107,6 @@ namespace VortexArena.App
             set => EditorPrefs.SetBool(KeyStartFromBoot, value);
         }
 
-        /// <summary>Sentetik load_match'in takımı ("red" | "blue").</summary>
-        public static string Team
-        {
-            get => EditorPrefs.GetString(KeyTeam, "red") == "blue" ? "blue" : "red";
-            set => EditorPrefs.SetString(KeyTeam, value);
-        }
-
-        /// <summary>Sentetik load_match'in modu (ModeHudSpawner HUD'ı buna göre seçer).</summary>
-        public static string ModeId
-        {
-            get => EditorPrefs.GetString(KeyModeId, "tdm");
-            set => EditorPrefs.SetString(KeyModeId, value ?? "");
-        }
-
-        public static int RoundSeconds
-        {
-            get => EditorPrefs.GetInt(KeyRoundSeconds, 300);
-            set => EditorPrefs.SetInt(KeyRoundSeconds, value);
-        }
-
-        public static int ScoreLimit
-        {
-            get => EditorPrefs.GetInt(KeyScoreLimit, 50);
-            set => EditorPrefs.SetInt(KeyScoreLimit, value);
-        }
-
         /// <summary>Seçimin tek satırlık özeti (pencere başlığı + konsol satırı için).</summary>
         public static string Summary
         {
@@ -182,7 +149,7 @@ namespace VortexArena.App
                       "Değiştirmek için: Tools > VortexArena > Dev (rol: Ctrl+Alt+R).");
         }
 
-        // ---------------------------- 2) arena sahnesinden Play: bağlan + sentetik load_match
+        // -------------------------------------- 2) arena sahnesinden Play: sunucuya bağlan
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void ScheduleArenaSceneSetup()
@@ -217,7 +184,6 @@ namespace VortexArena.App
             yield return null; // tüm tekiller ve sahne aboneleri (OnEnable/Start) hazır olsun
 
             ConnectFromArenaScene();
-            InjectSyntheticLoadMatch();
 
             Destroy(gameObject);
         }
@@ -251,38 +217,6 @@ namespace VortexArena.App
 
             Debug.Log($"[DevSession] Arena sahnesinden bağlanılıyor: {Ip}:{Port} ({Role}).");
             ArenaClient.Instance.Connect(Ip.Trim(), Port, Role);
-        }
-
-        /// <summary>
-        /// Takım/mod bilgisini gerçek kod yolundan geçirir. Yalnız player rolünde:
-        /// `SceneRouter` admin rolünde `load_match`'i zaten yok sayar.
-        /// </summary>
-        private void InjectSyntheticLoadMatch()
-        {
-            if (Role != AppSession.RolePlayer)
-            {
-                return;
-            }
-
-            // Kurallar telde YOK (rules = null): sunucusuz oturumda ModeRuntime onları katalogdan
-            // okur (§10.5 K7). Takımı burada kendimiz belirlemek için önce kuralı çözeriz —
-            // takımsız modda "red" göndermek oyuncuyu var olmayan bir tabana yönlendirirdi.
-            ModeRuntime.ApplyFromCatalog(ModeId);
-
-            var msg = new LoadMatchMsg
-            {
-                modeId = ModeId,
-                sceneName = SceneManager.GetActiveScene().name,
-                roundSeconds = RoundSeconds,
-                scoreLimit = ScoreLimit,
-                yourTeam = ModeRuntime.IsTeamless ? "" : Team
-            };
-
-            Debug.Log($"[DevSession] Sentetik load_match → sahne '{msg.sceneName}', mod " +
-                      $"'{msg.modeId}', takım {(string.IsNullOrEmpty(msg.yourTeam) ? "yok" : msg.yourTeam)}. " +
-                      "(Sunucudan gelmedi; yalnız editör. Sunucuda maç varsa gerçek load_match bunu ezer.)");
-
-            NetEvents.InjectLoadMatch(msg);
         }
     }
 }

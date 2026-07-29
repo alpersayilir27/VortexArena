@@ -9,7 +9,9 @@
 Aşağıdakiler kod incelemesiyle ya da tek başına sunucu çalıştırarak doğrulanamaz — gerçek istemci,
 sahne yükleme ve fiziksel hareket ister. Bugüne kadar doğrulananlar: sunucu derlemesi (0 hata),
 Unity derlemesi, `maps.json` export'u, sunucunun mekan listesi ve her mekanın kendi lobisini
-çözmesi (`Outdoor12x12 → Lobby12x12`, `VortexAntep → LobbyVortexAntep`).
+çözmesi (`Outdoor12x12 → Lobby12x12`, `VortexAntep → LobbyVortexAntep`), launcher derlemesi +
+testleri ve sunucunun `--venue <ad>` ile açılışı (elle çalıştırılarak doğrulandı).
+**Launcher'ın düğmelerinden süreç başlatma yolu henüz tıklanarak denenmedi.**
 
 ## ⚠️ Önce: `PROTOCOL_VERSION` 2 → 3
 
@@ -18,8 +20,14 @@ Sahadaki **tüm APK ve admin build'leri yenilenmeden** test edilemez — eski is
 
 ## Adımlar
 
-- [ ] **Mekan seçimi:** sunucu açılışında liste **yalnız** `Outdoor12x12` ve `VortexAntep`
-      gösteriyor; seçilen mekanın dışındaki harita admin panelinde görünmüyor.
+- [ ] **Launcher → sunucu:** launcher'da (`deploy\launcher\VortexArena.Launcher.exe`) sunucu
+      exe'si seçilince mekan listesi **kendiliğinden** doluyor (`Outdoor12x12`, `VortexAntep`;
+      ikisi de "lobi var"); mekan seçmeden **Sunucuyu Başlat** uyarı veriyor; seçince sunucu
+      penceresinde `[Venue] '<mekan>' yapılandırmadan seçildi` satırı çıkıyor.
+- [ ] **Launcher → yönetim oyunu:** **Yönetimi Başlat** admin build'ini açıyor, oyun IP sormadan
+      bağlanıyor; **Durdur** onu kapatıyor. Launcher kapatılınca **sunucu ayakta kalıyor**.
+- [ ] **Mekan seçimi:** sunucu elle (launchersız) açıldığında liste **yalnız** `Outdoor12x12` ve
+      `VortexAntep` gösteriyor; seçilen mekanın dışındaki harita admin panelinde görünmüyor.
 - [ ] **Mekan lobisi:** her iki mekanda da oyuncular açık sahne olarak o mekanın kendi lobisine
       düşüyor; `VortexAntep` lobisi arenayla aynı geometride (aynı fiziksel oda).
 - [ ] **Lobide ateş:** silah alınabiliyor, ateş edilebiliyor, **hasar yok** (`fireWhilePaused`).

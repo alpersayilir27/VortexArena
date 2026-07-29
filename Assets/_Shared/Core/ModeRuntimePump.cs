@@ -73,8 +73,8 @@ namespace VortexArena.Core
             _instance = null;
         }
 
-        /// <summary>Maç kuruluyor: kurallar bu mesajdan gelir. <c>rules</c> boşsa (dev penceresinin
-        /// sentetik maçı) katalog devralır — <see cref="ModeRuntime.ApplyFromCatalog"/>.</summary>
+        /// <summary>Maç kuruluyor: kurallar bu mesajdan gelir. <c>rules</c> boşsa (kuralları
+        /// taşımayan bir sunucu) katalog devralır — <see cref="ModeRuntime.ApplyFromCatalog"/>.</summary>
         private static void HandleLoadMatch(LoadMatchMsg msg)
         {
             if (msg == null)

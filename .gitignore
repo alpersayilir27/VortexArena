@@ -3,7 +3,7 @@
 # Bu repo ÜÇ ayrı proje tipi barındırır; her biri KENDİ .gitignore'una sahiptir:
 #   .           → Unity 6000.3 (bu dosya)
 #   Server/     → .NET 10          → Server/.gitignore
-#   launcher/   → Flutter (Windows) → launcher/.gitignore
+#   launcher/   → .NET 10 WPF (Windows) → launcher/.gitignore
 #   deploy/     → üretilen çıktılar → deploy/.gitignore
 #
 # ⚠️ Buradaki Unity desenleri alt projelere SIZMASIN diye köke sabitlenmiştir

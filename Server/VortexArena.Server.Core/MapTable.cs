@@ -9,8 +9,8 @@ namespace VortexArena.Server.Core;
 ///
 /// <para><b>Arena ÖLÇÜSÜ burada YOKTUR</b> ve eklenmemelidir: sunucu metre bilmez (pozlar
 /// istemci-otoriter, arena uzayında gelir) ve her işletmenin alanı farklı — çoğu kare/dikdörtgen
-/// bile olmadığı için tek bir ölçü çifti arenayı tarif etmez. Ölçü yalnız istemcide, sahnenin
-/// <c>ArenaBoundary.halfExtentX/Z</c>'sinde yaşar.</para></summary>
+/// bile olmadığı için tek bir ölçü çifti arenayı tarif etmez. Ölçü yalnız istemcide yaşar:
+/// sahnedeki <c>ArenaBoundary</c>'ye bağlı boyut dosyasında (JSON, <c>ArenaDimensions</c>).</para></summary>
 public sealed class MapEntry
 {
     public string sceneName = "";

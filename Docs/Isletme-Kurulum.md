@@ -12,7 +12,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 **Fiziksel alan**
 
-- [ ] Serbest (engelsiz) oyun alanını ölç: arena boyutu = ölçülen alan − **0.5 m güvenlik payı** (her iki eksende).
+- [ ] Serbest (engelsiz) oyun alanını ölç: oyun alanı = ölçülen alan − **0.5 m güvenlik payı** (her duvardan).
 - [ ] Standart `A12x12` arenayı olduğu gibi kullanacaksan alan en az **12.5 × 12.5 m** olmalı; daha küçük/asimetrik alanlarda arena şablon sihirbazıyla özel arena üretilir (Bölüm 2).
 - [ ] Zemin düz, kaygan değil, seviye farkı ve kablo/eşik yok; alan içinde sütun, sabit mobilya, cam yüzey yok.
 - [ ] Aydınlatma homojen ve gölgesiz; doğrudan güneş ışığı, güçlü spot ve ayna/parlak yansıtıcı yüzey yok (inside-out takip bozulur, lensler zarar görür).
@@ -34,17 +34,29 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 ## 2. Alanı ölç ve arenayı üret (Unity, ofiste)
 
-- [ ] Fiziksel alanı ölç (X ve Z, metre). Arena boyutu = ölçü − 0.5 m.
+- [ ] Fiziksel alanı ölç (metre) ve **alanın köşelerini sırayla yaz**: bir köşeyi başlangıç (0,0)
+      kabul edip duvar duvar ilerle. Alan kare değilse (yamuk, L, kırık duvarlı) bu zaten tek yoldur;
+      **kare olsa bile dört köşe olarak yazılır** — arenanın ölçüsünü tarif etmenin tek bir yolu
+      vardır, "eni-boyu şu kadar" diye kısa bir kip yoktur. Oyun alanı = ölçülen alan − 0.5 m
+      güvenlik payı. Odanın içindeki kolon/direkleri de not al (merkez + genişlik/derinlik).
 - [ ] Unity'de `Tools > VortexArena > Create Arena From Template` menüsünü aç ve doldur:
   - **Kaynak sahne:** `Assets/Arenas/Template/Default12x12/Scenes/Default12x12.unity`
   - **Kaynak MapDefinition:** `Assets/Arenas/Template/Default12x12/Data/Default12x12.asset`
   - **Arena Id (klasör):** arena adı · **Sahne adı:** katalog anahtarı (benzersiz olmalı) · **Gösterim adı:** admin panelinde görünecek ad
   - **Mekan (klasör):** işletme adı — **zorunludur** → kutu `Assets/Arenas/Venues/<İşletme>/<Arena>/` altına açılır. Mekan adı sunucunun açılışta sorduğu listede görünecek addır; aynı işletmenin ikinci arenası da **aynı** mekan adıyla üretilir.
   - **GameCatalog:** `Assets/_Shared/Data/Resources/GameCatalog.asset`
-- [ ] "Oluştur" → sihirbaz `{Scenes, Data}` kutusunu üretir, sahneyi **bire bir kopyalar**, `MapDefinition` yazar, `GameCatalog`'a ve **Build Settings**'e ekler.
-  > ⚠️ **Sihirbaz boyut sormaz ve geometriyi ölçeklemez.** Sahne 12×12 şablonundan olduğu gibi gelir; arena planını sen çizersin. Sebebi: her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak üretmez. Sihirbazın işi, sahnenin ağ bileşenlerini (kalibratör, poz senkronu, sınır, taban bölgeleri, rig) eksiksiz getirmesi.
-- [ ] **Arena planını çiz** (duvar/cover yerleşimi, ölçüler) ve şu ikisini gerçek ölçüye getir: sahnedeki **`ArenaBoundary.halfExtentX/Z`** · **kalibrasyon işaretçilerinin konumu** (Bölüm 3).
-  > ⚠️ **Alan dikdörtgen değilse** (yamuk, L, kırık duvarlı) tek ölçü çifti o alanı tarif etmez: planı bir **`ArenaShapeDefinition`** asset'ine gir (köşeler + kolonlar), geometriyi `Tools > VortexArena > Build Arena From Shape` ile ürettir ve asset'i `ArenaBoundary.shape` alanına bağla — bağlanmazsa muhafaza eksene hizalı kutu kalır ve oyuncu gerçek duvara uyarısız yürüyebilir. Sihirbazın **Arena planı (isteğe bağlı)** alanına baştan verilirse bu adımlar kendiliğinden yapılır. Reçete: `Docs/Gelistirici/Yemek-Kitabi.md`.
+  - **Geometri kaynağı:** ölçüyü nereden alacağını seçmen **zorunludur** — ya sahadan yazdığın
+    **boyut dosyası**, ya da alanın Unity'de kabaca modellenmiş maketi (araç maketten boyut
+    dosyasını kendi yazar). "Geometriye hiç dokunma" diye bir seçenek yoktur.
+- [ ] "Oluştur" → sihirbaz `{Scenes, Data}` kutusunu üretir, sahneyi **bire bir kopyalar**, zemin/duvarları ölçüye göre yeniden çizer, `MapDefinition` yazar, `GameCatalog`'a ve **Build Settings**'e ekler.
+  > ⚠️ **Sihirbaz "eni-boyu kaç metre" diye sormaz ve şablonu ölçeklemez.** Ölçü tek bir yerden gelir: boyut dosyası. Sebebi: her işletmenin alanı farklı ve çoğu kare bile değil — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek yanlış bir sonuç üretir.
+- [ ] **Alanın ölçüsünü boyut dosyasına gir.** Bu dosya arenanın **tek** ölçü kaynağıdır: hem duvar/zemin geometrisi, hem oyuncuya çıkan "alan dışına çıktın" uyarısı, hem de yöneticinin kuş bakışı görüntüsü buradan beslenir. Ölçüyü ikinci bir yere yazmazsın; **`halfExtentX/Z` gibi elle doldurulan bir alan artık YOKTUR**, kaldırıldı.
+  > **Dosya nerede:** `Assets/Arenas/Venues/<İşletme>/…/Data/<ad>_dimensions.json` (örnek: `VortexAntep/Data/vortexantep_dimensions.json`). Düz metin dosyasıdır — sahadan aldığın metreleri **Unity açmadan** girip güncelleyebilirsin. İçine köşe listesini (`outline`) ve kolonları yazarsın; **alan tam kare olsa bile dört köşe** yazılır.
+  > **Ölçüyü değiştirdiysen:** dosyayı düzelt → Unity'de `Tools > VortexArena > Build Arena From Dimensions` ile duvar/zemin yeniden çizilir.
+  > **Alanı sayı yerine kabaca modellediysen:** `Tools > VortexArena > Build Arena From TestMesh` o bloklardan boyut dosyasını senin yerine yazar; sonrasında dosyayı elle düzeltmen serbesttir.
+  > ⚠️ **Dosya sahnede bağlı olmalıdır** (`ArenaBoundary` üstündeki boyut dosyası alanı — sihirbaz ve iki araç da bunu kendiliğinden bağlar). Bağlı değilse iki şey birden olur: dosya oyuna hiç girmez **ve** alan-dışı uyarısı tümden çalışmaz (oyun konsola hata basar). Bunu ofiste yakala: guardian kapalı olduğu için sahada oyuncuyu gerçek duvardan koruyan başka bir fren yoktur.
+  > Ayrıntılı reçete: `Docs/Gelistirici/Yemek-Kitabi.md`.
+- [ ] **Kalibrasyon işaretçilerinin konumunu** gerçek ölçüye getir (Bölüm 3).
 - [ ] Sihirbazın kalan uyarılarını uygula: **NavMesh ve ışık verisi kaynak sahneden miras kalır** → yeni plana göre yeniden bake et; **tek `SpawnPoint`** elle konur — bu marker arena uzayının sıfırıdır, **zemin seviyesine** konur ve sonradan taşınmaz (taşımak tüm oyuncuların arenadaki koordinatını kaydırır).
 - [ ] `Tools > VortexArena > Export Server Config` çalıştır → `Server/config/maps.json` üretilir. Çıkan uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
 - [ ] Build Settings'te yeni sahnenin **listede ve işaretli (enabled)** olduğunu doğrula. Sahne adı = `start_match` katalog anahtarı; boşluk/typo dahil birebir eşleşmeli.
@@ -142,12 +154,13 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   - `scripts\deploy-server.bat` → `deploy\server\` (self-contained; işletme PC'sine .NET kurmak gerekmez)
   - `scripts\deploy-admin-game.bat` → `deploy\admin\` (**Unity editörü kapalı olmalı**)
   - `scripts\deploy-player-apk.bat` → `deploy\player\` (**Unity editörü kapalı olmalı** + Android Build Support modülü; aktif platformu Android'e çevirir, ilk geçiş 20-40 dk)
-  - `scripts\deploy-launcher.bat` → `deploy\launcher\` (Windows Developer Mode açık olmalı)
+  - `scripts\deploy-launcher.bat` → `deploy\launcher\` (self-contained; tek ön koşul .NET 10 SDK)
   - Klasörlerin **tamamını** kopyala — exe'ler tek başına çalışmaz.
 - [ ] Sunucuyu başlat:
-  - İşletmede: `deploy\server\VortexArena.Server.App.exe` (masaüstü kısayolu koyun)
+  - İşletmede: **launcher'dan** — *1 · Sunucu* bölümünde exe + **mekan** seçili, **Sunucuyu Başlat**. Launcher mekanı `--venue` ile geçtiği için açılışta soru sorulmaz ve yanlış mekan açılmaz.
+  - Alternatif (ya da launcher kurulmadan önce): `deploy\server\VortexArena.Server.App.exe` çift tıkla; mekan konsolda sorulur.
   - Geliştirme: `dotnet run --project Server/VortexArena.Server.App`
-  - Sunucu **her zaman elle** başlatılır; ne admin uygulaması ne launcher sunucuyu başlatır. Sebep: sunucu maçın tek otoritesidir, ömrü operatör uygulamasına bağlanmamalıdır.
+  - **Launcher sunucuyu kapatmaz** — ömrü operatör uygulamasına bağlı değildir. Kapatmak: sunucunun kendi penceresinde **Ctrl+C**.
 - [ ] Açılış özetinde şunları gör ve doğrula:
   ```
   Mekan      : <İşletme Adı>
@@ -192,8 +205,8 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 
 Sırayla uygula; her madde geçmeden sonrakine geçme.
 
-- [ ] **1.** Sunucu PC'de sunucu **elle** çalıştırıldı, açılış özeti doğru (Bölüm 5).
-- [ ] **2.** **Launcher** (`deploy\launcher\vortex_launcher.exe`) açıldı; Ayarlar'da `deploy\admin\VortexArena.exe` seçili, **Sunucu IP** sunucunun statik IP'si.
+- [ ] **1.** **Launcher** (`deploy\launcher\VortexArena.Launcher.exe`) açıldı; *1 · Sunucu*'da sunucu exe'si + **doğru mekan** seçili, *2 · Bağlantı*'da **Sunucu IP** sunucunun statik IP'si, *3 · Yönetim oyunu*'nda `deploy\admin\VortexArena.exe` seçili.
+- [ ] **2.** **Sunucuyu Başlat** → sunucu penceresinde `[Venue] '<Mekan>' yapılandırmadan seçildi` satırı ve açılış özeti doğru (Bölüm 5). *(Sunucu ayrı bir PC'deyse orada elle başlatılır; bu maddede mekanın konsolda doğru seçildiği doğrulanır.)*
 - [ ] **3.** Launcher'da **Yönetimi Başlat** → admin uygulaması açıldı ve **IP sormadan** doğrudan **oyuncuların bulunduğu sahneye** düştü (bağlanma ekranında takılı kalmıyor); ortada skor bandı, yanlarda oyuncu listeleri, altta kamera şeridi görünüyor.
 - [ ] **4.** İki başlık açıldı → uygulama doğrudan **Lobi**'ye düştü → ikisi de **kendiliğinden** bağlandı (IP girilmedi).
 - [ ] **5.** Admin **roster**'ında iki oyuncu da çevrimiçi görünüyor; sunucu konsolunda `[+] Gözlük NN bağlandı` ve `[u] UDP kayıt` satırları var.
@@ -217,10 +230,10 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 
 - [ ] Sunucu PC'de: `deploy\server\` klasörü (exe + `config/server.json`, `maps.json`, `devices.json` + `firewall-kur.cmd`) ve masaüstünde **sunucu exe** kısayolu.
 - [ ] Yönetim PC'sinde: `deploy\admin\` + `deploy\launcher\` klasörleri ve masaüstünde **launcher** kısayolu. Operatör yalnız launcher'ı açar — admin exe'sine doğrudan tıklanmaz (adres gelmez).
-- [ ] Launcher'da Ayarlar (admin exe yolu) ve Sunucu IP bir kez doldurulup **Yönetimi Başlat** ile doğrulandı; ayarlar kalıcı saklanır.
+- [ ] Launcher'da üç bölüm de bir kez dolduruldu (sunucu exe + **mekan**, Sunucu IP, admin exe) ve **Sunucuyu Başlat** + **Yönetimi Başlat** ile doğrulandı; ayarlar `%APPDATA%\VortexArena\launcher\settings.json` içinde kalıcı saklanır (launcher klasörü yeniden dağıtılsa da korunur).
 - [ ] Bilgi kartı: SSID + Wi-Fi parolası, sunucu statik **IP:port** (`…:47821`), arena **sahne adı**, A–B zemin işaretleri arası **mesafe**, APK sürümü + kurulum tarihi.
 - [ ] Başlık etiketleri ↔ `devices.json` adları eşleşme listesi.
-- [ ] Tek sayfalık operatör kartı: **sunucu exe'sini başlat → launcher'ı aç → Yönetimi Başlat → başlıkları aç (kendiliğinden bağlanır) → maç başlat → kalibrasyon → maç sonu.**
+- [ ] Tek sayfalık operatör kartı: **launcher'ı aç → Sunucuyu Başlat → Yönetimi Başlat → başlıkları aç (kendiliğinden bağlanır) → maç başlat → kalibrasyon → maç sonu.**
 - [ ] **`Docs/Kullanim-Kilavuzu.md`** (operatörün günlük kullanım kılavuzu — teknik olmayan dille: açılış sırası, 2×A gizli IP paneli, kalibrasyon, dashboard kontrolleri, sorun giderme) yazdırılıp işletmede bırakıldı; sondaki kumanda hatırlatma kartı ayrıca yönetim masasına asıldı.
 
 **Sorun giderme**
@@ -228,11 +241,14 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 | Belirti | Olası sebep | Çözüm |
 |---|---|---|
 | Ekranda **"SUNUCUYA BAĞLANILAMIYOR"** yazıyor (altında adres + `N sn · M. deneme`) | Adres **biliniyor** ama sunucuya erişilemiyor: sunucu exe'si kapalı/çökmüş; firewall engelliyor; cihaz farklı SSID/subnet'te; sunucunun IP'si değişmiş (DHCP) — ekrandaki adres artık yanlış | Ekranda yazan **adresi oku** (sahada ilk teşhis budur): sunucu PC'sinin gerçek IP'siyle aynı mı? 1) sunucuyu başlat, 2) `Server/firewall-kur.cmd`'yi **yönetici** olarak çalıştır, 3) sunucu PC'sinde `netstat -ano` çıktısında **`0.0.0.0:47821`** görün. Bağlantı kurulunca ekran kendiliğinden kaybolur; masaüstünde beklemek istemezsen **"Yeniden Bağlan"**a bas. Ekranın alt satırındaki **"Son hata"** mesajı (ör. bağlantı reddedildi / zaman aşımı) firewall ile kapalı sunucuyu ayırt ettirir |
-| Ekranda **"SUNUCU BULUNAMADI"** yazıyor ("adres yok") | Cihazın elinde **hiç adres yok**. Gözlük: beacon gelmiyor ve kayıtlı IP de `arena.json` da yok. Admin: oyun **launcher'sız** (exe'ye çift tıklanarak) açılmış → `--server-ip` gelmemiş | Gözlük: lobide sağ kumandada **A×2** → gizli IP paneli → `IP:port` gir (kalıcı saklanır). Admin: uygulamayı **launcher'dan** başlat (Ayarlar→admin exe + Sunucu IP dolu olmalı). Bu ekranda **"Yeniden Bağlan" devre dışıdır** — denenecek adres olmadığı için bilinçlidir |
+| Ekranda **"SUNUCU BULUNAMADI"** yazıyor ("adres yok") | Cihazın elinde **hiç adres yok**. Gözlük: beacon gelmiyor ve kayıtlı IP de `arena.json` da yok. Admin: oyun **launcher'sız** (exe'ye çift tıklanarak) açılmış → `--server-ip` gelmemiş | Gözlük: lobide sağ kumandada **A×2** → gizli IP paneli → `IP:port` gir (kalıcı saklanır). Admin: uygulamayı **launcher'dan** başlat (*3 · Yönetim oyunu*'nda admin exe + *2 · Bağlantı*'da Sunucu IP dolu olmalı). Bu ekranda **"Yeniden Bağlan" devre dışıdır** — denenecek adres olmadığı için bilinçlidir |
 | Başlık sunucuyu bulamıyor / bağlanamıyor | Firewall'da engelle kuralı; AP'de **client isolation açık**; başlık farklı SSID/subnet'te; PC ağ profili "Genel" | `firewall-kur.cmd`'yi **yönetici** olarak çalıştır; AP'de isolation'ı kapat; SSID'yi kontrol et; ağ profilini **Özel** yap |
 | Başlık kendiliğinden bağlanmıyor, "sunucu aranıyor" | AP broadcast'i kesiyor / VLAN ayrımı → beacon gelmiyor | Lobide sağ kumandada **A×2** → gizli IP paneli → **IP:port** elle gir (beacon'ı ezer, kalıcı saklanır); kalıcı çözüm için `StreamingAssets/arena.json` + yeni APK |
-| Admin uygulaması "Sunucu adresi yok" diyor (3 sn sonra tam ekran **"SUNUCU BULUNAMADI"**) | Oyun launcher'sız (elle) açılmış — `--server-ip` gelmemiş | Oyunu **launcher'dan** başlat; launcher'da Ayarlar→admin exe ve Sunucu IP dolu olmalı |
+| Admin uygulaması "Sunucu adresi yok" diyor (3 sn sonra tam ekran **"SUNUCU BULUNAMADI"**) | Oyun launcher'sız (elle) açılmış — `--server-ip` gelmemiş | Oyunu **launcher'dan** başlat; launcher'da admin exe (*3 · Yönetim oyunu*) ve Sunucu IP (*2 · Bağlantı*) dolu olmalı |
 | Launcher "Admin exe bulunamadı" diyor | `deploy\admin\` silinmiş/taşınmış veya build alınmamış | `scripts\deploy-admin-game.bat` (editör kapalıyken) çalıştır, launcher'da exe'yi yeniden seç |
+| Launcher **"Mekan seçilmedi"** diyor, sunucuyu başlatmıyor | Bilinçli: mekansız başlatılsa sunucu **alfabetik ilk mekanı** sessizce açardı ve yanlış işletmenin arenaları yönetilirdi | *1 · Sunucu* bölümündeki listeden bu işletmeyi seç. Liste boşsa sunucu exe'si seçilmemiş ya da `config\maps.json` yok → **Yenile** |
+| Admin harita seçicisinde **başka işletmenin arenaları** var / beklenen arena yok | Sunucu yanlış mekanla açılmış | Sunucu penceresindeki `[Venue] …` satırını oku. Sunucuyu kapat (Ctrl+C), launcher'da doğru mekanı seçip yeniden başlat — **mekan çalışırken değişmez** |
+| Sunucu penceresi açılıp hemen kapanıyor (**çıkış kodu 2**) | Açık sahne çözülemedi: seçilen mekanda lobi haritası yok, ya da `maps.json` eksik/bayat | O mekanın `Lobby` kutusunu ekle (`supportedModeIds = ["lobby"]`), Unity'de **Export Server Config** çalıştır, sunucuyu yeniden dağıt. Launcher listesinde lobisiz mekanlar **kırmızı** görünür |
 | Bağlanıyor ama roster'da "çevrimdışı" düşüyor | 15 sn boyunca status gelmedi (Wi-Fi zayıf, başlık uykuya geçti) | AP kapsamasını/kanalı kontrol et; başlıkta uyku süresini uzat |
 | Avatarlar fiziksel olarak örtüşmüyor | Bir başlıkta kalibrasyon yapılmadı; A ile B karışmış (arena 180° ters); zemin işaretleri kaymış; işaret mesafesi sahnedeki `anchor_a`/`anchor_b` mesafesiyle uyuşmuyor | Her başlıkta A+B ile **yeniden kalibre et** (tamamlanmış kalibrasyonda A+B tutmak sıfırlar); bant ölçüsünü sahnedeki değerle karşılaştır. **Kalibratörsüz kabuk lobide örtüşme beklenmez** — kontrolü lobi sahnesinde (`lobbyScene`) ya da arenada yap |
 | Avatarlar doğru yerde ama **yükseklikleri yanlış** (yere gömük / havada) | Kalibrasyonda kumanda dik tutulmamış ya da ucu yere değmemiş; `ArenaCalibrator.tipLocalOffset` o kumanda modeli için henüz ölçülmemiş (varsayılan -0.08 m tahmindir) | O başlıkta kumandayı **dik tutup ucunu zemine değdirerek** yeniden kalibre et. Tüm başlıklarda aynı yönde sapma varsa offset yanlıştır: §3'teki reçeteyle ölç, alanı güncelle, APK'yı yeniden al |
