@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>VortexArena.Launcher</RootNamespace>
+    <AssemblyName>VortexArena.Launcher</AssemblyName>
+    <AssemblyTitle>VortexArena Launcher</AssemblyTitle>
+    <Product>VortexArena</Product>
+    <Version>1.0.0</Version>
+    <!-- Operatör makinesinde .NET kurulu olmayabilir; dağıtım self-contained yapılır
+         (scripts\deploy-launcher.bat). Trimming KAPALI: System.Text.Json yansıma
+         tabanlı serileştirme kullanıyor. -->
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+</Project>

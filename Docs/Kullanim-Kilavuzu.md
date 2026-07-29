@@ -26,8 +26,9 @@ diğer ikisi hiçbir işe yaramaz.
 
 Deneyimli operatör için kısa liste — detaylar aşağıdaki bölümlerde.
 
-- [ ] **1.** Sunucu bilgisayarında sunucuyu başlat, sorduğunda **mekanı seç** (siyah pencere açık kalsın).
-- [ ] **2.** Yönetim bilgisayarında **Launcher**'ı aç → **Yönetimi Başlat**.
+- [ ] **1.** Yönetim bilgisayarında **Launcher**'ı aç → **Sunucuyu Başlat** (siyah pencere açık kalsın).
+      *Sunucu ayrı bir bilgisayardaysa oradan elle başlat ve sorduğunda **mekanı seç**.*
+- [ ] **2.** Launcher'da **Yönetimi Başlat**.
 - [ ] **3.** Gözlükleri aç, oyunu başlat → kendiliğinden bağlanırlar.
 - [ ] **4.** Yönetim ekranında oyuncuların listede göründüğünü doğrula.
 - [ ] **5.** Mod + harita seç → **Maçı Başlat**.
@@ -38,8 +39,25 @@ Deneyimli operatör için kısa liste — detaylar aşağıdaki bölümlerde.
 
 ## 1. Sunucuyu başlatmak
 
-Sunucu **kendiliğinden açılmaz**, her seansta elle başlatılır. Bu bilinçli bir tercihtir:
-oyunun tek karar mercii odur, yanlışlıkla kapanmasın diye kimse onu senin yerine yönetmez.
+Sunucu **kendiliğinden açılmaz**, her seansta başlatılır. Bu bilinçli bir tercihtir: oyunun tek
+karar mercii odur, yanlışlıkla kapanmasın diye kimse onu senin yerine kapatmaz.
+
+Sunucu hangi bilgisayarda kuruluysa oradan açılır. İki yol vardır; kurulumunda hangisi geçerliyse
+onu uygula (bilgi kartında yazar).
+
+### 1.A Sunucu yönetim bilgisayarındaysa — Launcher'dan
+
+- [ ] Masaüstündeki **VortexArena Launcher** kısayoluna çift tıkla.
+- [ ] **1 · Sunucu** bölümünde listeden **işletmenin adını** seç (kurulumda seçili bırakılmış
+      olmalı; değiştirmen gerekmez).
+- [ ] **Sunucuyu Başlat**'a bas → siyah sunucu penceresi açılır.
+- [ ] Aşağıdaki **"Ne görmelisin"** listesini kontrol et.
+
+> Launcher mekanı sunucuya kendisi bildirir; sana soru sorulmaz. Bu yüzden **yanlış işletmenin
+> açılması mümkün değildir** — listede yanlış satır seçiliyse zaten gözle görürsün.
+> Mekan seçilmeden **Sunucuyu Başlat** çalışmaz; "Mekan seçilmedi" uyarısı görürsen listeden seç.
+
+### 1.B Sunucu ayrı bir bilgisayardaysa — elle
 
 - [ ] Sunucu bilgisayarını aç, ağ kablosunun/Wi-Fi'nin bağlı olduğunu gör.
 - [ ] Masaüstündeki **VortexArena Sunucu** kısayoluna çift tıkla.
@@ -57,7 +75,9 @@ Seçim [1-2]:
       çıkmaz, kendiliğinden onu açar.) **Yanlış seçersen** yönetim ekranında başka bir işletmenin
       haritalarını görürsün — o zaman sunucuyu kapatıp yeniden aç, mekan çalışırken değişmez.
 
-- [ ] Ardından şuna benzer bir liste görmelisin:
+### Ne görmelisin (iki yolda da aynı)
+
+- [ ] Sunucu penceresinde şuna benzer bir liste:
 
 ```
 Mekan      : <İşletmenin adı>
@@ -83,13 +103,14 @@ Lobi       : Lobby12x12
 
 ## 2. Yönetim (Admin) panelini açmak
 
-- [ ] Yönetim bilgisayarında masaüstündeki **VortexArena Launcher** kısayoluna çift tıkla.
-      (Kısayol yoksa: `deploy\launcher\` klasöründeki **`vortex_launcher.exe`**.)
-- [ ] Açılan pencerede **Sunucu IP** kutusunda sunucu bilgisayarının adresi yazıyor olmalı
-      (ör. `192.168.1.10`). Yazmıyorsa bilgi kartındaki adresi yaz. **Port** kutusuna
+- [ ] Launcher zaten açık olmalı (Bölüm 1). Değilse masaüstündeki **VortexArena Launcher**
+      kısayoluna çift tıkla.
+      (Kısayol yoksa: `deploy\launcher\` klasöründeki **`VortexArena.Launcher.exe`**.)
+- [ ] **2 · Bağlantı** bölümünde **Sunucu IP** kutusunda sunucu bilgisayarının adresi yazıyor
+      olmalı (ör. `192.168.1.10`). Yazmıyorsa bilgi kartındaki adresi yaz. **Port** kutusuna
       dokunma (`47821` kalsın).
-- [ ] **Ayarlar** bölümündeki dosya yolu doluysa (`...\deploy\admin\VortexArena.exe`) hazırsın.
-      Boşsa **Gözat** ile o dosyayı bir kez seç — bir daha sormaz.
+- [ ] **3 · Yönetim oyunu** bölümündeki dosya yolu doluysa (`...\deploy\admin\VortexArena.exe`)
+      hazırsın. Boşsa **Gözat** ile o dosyayı bir kez seç — bir daha sormaz.
 - [ ] Büyük **Yönetimi Başlat** düğmesine bas.
 - [ ] Oyun penceresi açılır ve **IP sormadan doğrudan yönetim ekranına** düşer.
 
@@ -110,7 +131,10 @@ Lobi       : Lobby12x12
 **Launcher'daki diğer düğmeler**
 
 - **Durdur:** launcher'dan başlattığın yönetim oyununu kapatır.
-- Launcher **sunucuyu başlatmaz/kapatmaz** — o ayrı bir programdır (Bölüm 1).
+- **Sunucuyu Başlat:** Bölüm 1'deki sunucuyu açar (mekanı listeden alır).
+- **Yenile:** mekan listesini sunucunun dosyalarından yeniden okur — yeni bir arena eklendikten
+  sonra liste eksik görünüyorsa buna bas.
+- Launcher sunucuyu **kapatmaz**. Kapatmak için sunucunun kendi siyah penceresinde **Ctrl + C**.
 
 ---
 
@@ -274,7 +298,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Tercihler** | Sol üstteki düğme (veya `P`) | Mod/harita seçimi + başlat/iptal, görünüm ayarları, bağlantı |
 
 **Oyuncu seçmek:** yandaki listede bir oyuncuya tıkla — seçili oyuncunun çerçevesi turuncu olur,
-halkası kalınlaşır. `Tab` ile sıradakine geçersin. Satırdaki küçük düğmeler: **POV** (o oyuncunun
+zemindeki halkası büyür. `Tab` ile sıradakine geçersin. Satırdaki küçük düğmeler: **POV** (o oyuncunun
 gözünden izle), **MAVİYE/KIRMIZIYA** (takımını değiştir), **KİMLİK** (o gözlüğün ekranında büyük
 işaret göster), **AT** (bağlantıdan çıkar — güvenlik için **iki kez** basmak gerekir, ilk basışta
 düğme "EMİN?" olur).
@@ -364,7 +388,7 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 
 - [ ] **1.** Gözlüklerdeki uygulamayı kapat, gözlükleri şarja tak.
 - [ ] **2.** Yönetim oyununu kapat (pencereyi kapat veya launcher'da **Durdur**).
-- [ ] **3.** Launcher'ı kapat.
+- [ ] **3.** Launcher'ı kapat. *(Launcher'ı kapatmak sunucuyu kapatmaz — o ayrı bir penceredir.)*
 - [ ] **4.** **En son** sunucu penceresini kapat (Ctrl + C veya pencereyi kapat).
 
 ---
@@ -380,7 +404,9 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 | POV kipinde "poz yok" yazıyor | O gözlükten konum bilgisi gelmiyor (kalibre değil ya da ağ koptu) | O oyuncuya kalibrasyonu tekrar yaptır; sağ üstteki nokta kırmızıysa bağlantı sorunu var |
 | Fareyle bakış çevirmiyorum | Serbest kipte bakış **sağ tuş basılıyken** çalışır (imleç serbest kalsın diye) | `2` ile serbest kipe geç, sağ tuşu basılı tutarak fareyi oynat |
 | Yönetim ekranı "Sunucu adresi yok" diyor | Oyun launcher'sız, doğrudan açılmış | Oyunu kapat, **Launcher**'dan **Yönetimi Başlat** ile aç |
-| Launcher "Admin exe bulunamadı" diyor | Oyun dosyası taşınmış/silinmiş | Launcher > **Ayarlar > Gözat** ile `deploy\admin\VortexArena.exe` dosyasını yeniden seç. Dosya yoksa teknik ekibi ara |
+| Launcher "Admin exe bulunamadı" diyor | Oyun dosyası taşınmış/silinmiş | Launcher > **3 · Yönetim oyunu > Gözat** ile `deploy\admin\VortexArena.exe` dosyasını yeniden seç. Dosya yoksa teknik ekibi ara |
+| Launcher "Mekan seçilmedi" diyor, sunucu açılmıyor | İşletme listede seçili değil | **1 · Sunucu** bölümündeki listeden işletmenin adına tıkla. Liste boşsa **Yenile**'ye bas; yine boşsa teknik ekibi ara |
+| Yönetim ekranında **başka bir işletmenin haritaları** çıkıyor | Sunucu yanlış mekanla açılmış | Sunucu penceresini kapat (Ctrl + C), Launcher'da doğru işletmeyi seçip **Sunucuyu Başlat**. Mekan sunucu çalışırken değişmez |
 | Oyuncu listede "çevrimdışı" düşüyor | Wi-Fi zayıf ya da gözlük uykuya geçmiş | Gözlüğü uyandır; kapsama sorunu tekrarlıyorsa teknik ekibi ara |
 | Oyuncular birbirini yanlış yerde görüyor | Kalibrasyon yapılmadı ya da A–B ters alındı | Arenada **A + B ile yeniden kalibrasyon** yaptır (Bölüm 4) |
 | Oyuncular birbirini **havada / yere gömülü** görüyor | Kalibrasyonda kumanda dik tutulmamış | O oyuncuya kalibrasyonu tekrarlat; kumanda **kalem gibi dik**, ucu yere değecek (Bölüm 4). Herkeste aynı sorun varsa teknik ekibi ara |

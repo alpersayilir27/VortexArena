@@ -174,19 +174,50 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 
 ### ArenaBoundary
 
-Fiziksel sınır uyarısını çizer (duvar alfası + karartma) + arena ölçüsünün tek kaynağıdır.
-Sahnede **bir tane** olmalı. **Arena orijinini KAYDETMEZ** — o `SpawnPoint`'in işidir.
+Fiziksel sınır uyarısını çizer (duvar alfası + karartma). Sahnede **bir tane** olmalı.
+**Arena orijinini KAYDETMEZ** — o `SpawnPoint`'in işidir.
 
 | Üye | Açıklama |
 |---|---|
 | ✅ `IsOutOfBounds` | Yerel HMD alan dışında mı |
-| ✅ `HalfExtents` | Arena yarı ölçüsü; plan bağlıysa çokgenin sınırlayıcı kutusundan gelir |
-| ✅ `LocalCenter` | Sınırın yerel merkezi (dikdörtgende sıfır) — admin kuş bakışı kadrajı bunu okur |
+| ✅ `HalfExtents` | Arena yarı ölçüsü — plandaki çokgenin sınırlayıcı kutusundan gelir (plan yoksa sıfır) |
+| ✅ `LocalCenter` | O kutunun yerel merkezi — admin kuş bakışı kadrajı bunu okur. ⚠️ Ölçü genellikle bir köşeden alınır, yani kutu transformun tam ortasında DEĞİLDİR: kadrajlarken `HalfExtents` tek başına yetmez |
 | ✅ `SetSpectatorMode(bool, float)` | Muhafazayı susturur, duvarları çizili bırakır |
 
-Arena dikdörtgen değilse `shape` alanına bir `ArenaShapeDefinition` bağlanır: kenar mesafesi çokgene,
-kolonlara ve sahnedeki `ArenaObstacle`'lara olan mesafenin **en küçüğü** olur. Alan boşsa eksene
-hizalı `halfExtentX/Z` dikdörtgeni kullanılır.
+Ölçünün **tek kaynağı** `dimensionsJson` alanına bağlanan boyut dosyasıdır (`ArenaDimensions`);
+bileşen ölçü tutan başka bir alan taşımaz. Plan çözüldüğünde kenar mesafesi çokgene, kolonlara ve
+sahnedeki `ArenaObstacle`'lara olan mesafenin **en küçüğü** olur. Dosya kare başına ayrıştırılmaz
+(referans değişmedikçe önbellek).
+
+> ⛔ **Boyut dosyası ZORUNLUDUR.** Bağlı değilse ya da çözülemiyorsa bileşen bir kez
+> `Debug.LogError` basar ve **kendini devre dışı bırakır** — duvar alfası, karartma ve alan-dışı
+> uyarısı çalışmaz. Açık başarısızlık bilinçli: ölçüsü bilinmeyen arenada doğru muhafaza zaten
+> üretilemez, her karede ekranı karartmak ise oyunu tümden oynanamaz kılardı.
+
+### ArenaDimensions
+
+**Arena ölçüsünün tek doğruluk kaynağı** — elle yazılabilir bir JSON dosyası olarak yaşayan saf
+veri sınıfı: `name`, `outline` (kapalı çokgen; ilk nokta sona tekrarlanmaz), `wallHeight`,
+`columns[]` (`name`/`center`/`size`/`yaw`/`height`), `defaultColumnHeight`, `columnsBlockPlayer`.
+Koordinatlar metre ve `ArenaBoundary`'yi taşıyan transformun **yerel XZ**'sindedir — JSON'daki
+`y` dünya **Z**'sidir.
+
+> ⛔ **Dikdörtgen alan için ayrı bir kip YOKTUR:** alan tam kare bile olsa dört köşeli bir `outline`
+> olarak yazılır. Aynı ölçünün iki ayrı ifadesi kaçınılmaz olarak birbirinden saptığı için ikinci
+> temsil (bileşen üstünde yarım ölçü + merkez alanları) kaldırıldı ve geri eklenmez.
+
+| Üye | Açıklama |
+|---|---|
+| ✅ `Parse(string, out string error)` | Metinden çözer. **Exception FIRLATMAZ** — bozuk girdide `null` + hata metni döner (çağıran yer sahne yükleme yolu; bir yazım hatası sahneyi düşürmemeli) |
+| ✅ `FromTextAsset(TextAsset, out string error)` | Aynısı `TextAsset` üzerinden; asset `null` ise sessizce `null` |
+| ✅ `LocalBounds()` | Çokgenin yerel XZ sınırlayıcı kutusu (muhafaza ölçüsü + kuş bakışı kadrajı bundan türer) |
+| ✅ `ToJson(bool pretty)` | Planı metne çevirir — editör araçları dosyayı bununla yazar |
+
+`JsonUtility.FromJsonOverwrite` kullanılır: **JSON'da yazılmayan alan varsayılanında kalır**
+(`FromJson` ile eksik bir `wallHeight` sessizce 0 olurdu = duvarsız arena).
+
+> ⚠️ Dosya **çalışma anında** okunur → bir sahneden referanslanmalıdır. `Assets/` altında durup
+> kimsenin referanslamadığı bir `TextAsset` build'e **girmez**.
 
 > ⛔ **Muhafazayı susturmak için bileşeni kapatma** — kapalı bileşen duvar alfasını son değerinde
 > dondurur, karartma açık kalabilir. Doğrusu `SetSpectatorMode(true)`.
@@ -322,8 +353,10 @@ kill-feed, kendi öldürme/ölüm sayacın.
 
 | Menü | Ne yapar |
 |---|---|
-| `Tools > VortexArena > Dev` | Rol · sunucu hedefi · Play başlangıcı · sentetik maç · derle. Kısayol **Ctrl+Alt+R** (rol çevirir) |
-| `Tools > VortexArena > Create Arena From Template` | Yeni arena sihirbazı |
+| `Tools > VortexArena > Dev` | Rol · sunucu hedefi · Play başlangıcı · derle. Kısayol **Ctrl+Alt+R** (rol çevirir) |
+| `Tools > VortexArena > Create Arena From Template` | Yeni arena sihirbazı — geometri kaynağı ZORUNLU: boyut dosyası ya da TestMesh kökü |
+| `Tools > VortexArena > Build Arena From Dimensions` | Seçili boyut dosyasından zemin/duvar/kolon üretir — `ArenaGeometry` dalı altına, idempotent |
+| `Tools > VortexArena > Build Arena From TestMesh` | Kaba blok yığınından bir boyut dosyası çıkarıp diske yazar, geometriyi o dosyadan üretir |
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` — girdi başına yalnız `sceneName` + `modes` (arena ölçüsü sunucuya gitmez). ⚠️ JSON'u elle düzenleme, export ezer |
 | `GameObject > VortexArena > Spawn Point` | Arenanın **tek** başlangıç noktasını üretir (yerleştirme elle) |
 | `GameObject > VortexArena > Arena Roof` | Çatı geometrisini işaretler (admin kuş bakışında gizlenir) |

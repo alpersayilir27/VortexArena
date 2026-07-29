@@ -15,7 +15,8 @@ okumadıysan ve "silahımı ateşleyince ne çağıracağım?" sorusunun cevabı
 | 2 | **[Yemek Kitabı](Yemek-Kitabi.md)** | "Şunu yapmak istiyorum" → kopyala-yapıştır reçete. **Günlük olarak burayı kullanacaksın** |
 | 3 | **[API Referansı](API-Referansi.md)** | Çağırabileceğin her şey: tip tip, üye üye, ne zaman çağrılır |
 | 4 | **[Sahne Kurulumu](Sahne-Kurulumu.md)** | Yeni arena/sahne yaparken sahnede bulunması gerekenler |
-| 5 | **[Yapma Listesi](Yapma-Listesi.md)** | Pahalıya öğrenilmiş tuzaklar. Bir şey "sessizce çalışmıyorsa" önce buraya bak |
+| 5 | **[Arayüz Tasarımı](Arayuz-Tasarimi.md)** | 2D/UI nerede duruyor, hangisi prefab hangisi kod, düzenlerken nelere dikkat edilir |
+| 6 | **[Yapma Listesi](Yapma-Listesi.md)** | Pahalıya öğrenilmiş tuzaklar. Bir şey "sessizce çalışmıyorsa" önce buraya bak |
 
 ---
 

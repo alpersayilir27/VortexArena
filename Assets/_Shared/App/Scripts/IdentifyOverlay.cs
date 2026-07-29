@@ -13,6 +13,9 @@ namespace VortexArena.App
     /// </summary>
     public class IdentifyOverlay : MonoBehaviour
     {
+        /// <summary>Kimlik kartı prefabının <c>Resources</c> yolu (uzantısız).</summary>
+        public const string ResourcePath = "UI/IdentifyDisplay";
+
         private const float ShowSeconds = 4f;
         private const float FadeSeconds = 1f;
         private const float DistanceMeters = 1.5f;
@@ -137,39 +140,22 @@ namespace VortexArena.App
                 Destroy(_display);
             }
 
-            _display = new GameObject("[IdentifyDisplay]");
-            _display.transform.SetParent(transform, false);
+            var prefab = Resources.Load<IdentifyDisplay>(ResourcePath);
+            if (prefab == null)
+            {
+                Debug.LogError($"[IdentifyOverlay] '{ResourcePath}' prefabı bulunamadı — kimlik " +
+                               "göstergesi çizilemiyor.");
+                return;
+            }
 
-            var canvas = _display.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.WorldSpace;
-            canvas.sortingOrder = 1000; // her şeyin üstünde
+            IdentifyDisplay display = Instantiate(prefab, transform, false);
+            _display = display.gameObject;
+            _group = display.Group;
 
-            _group = _display.AddComponent<CanvasGroup>();
-            _group.interactable = false;
-            _group.blocksRaycasts = false;
-
-            var rect = _display.GetComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(800f, 400f);
-            _display.transform.localScale = Vector3.one * 0.002f; // 800px → 1.6 m
-
-            var textGo = new GameObject("Text");
-            textGo.transform.SetParent(_display.transform, false);
-
-            var tmp = textGo.AddComponent<TextMeshProUGUI>();
             string line2 = playerId > 0
                 ? $"Oyuncu {playerId}" + (string.IsNullOrEmpty(playerName) ? "" : $" — {playerName}")
                 : "";
-            tmp.text = string.IsNullOrEmpty(line2) ? "SEN BUSUN" : $"SEN BUSUN\n{line2}";
-            tmp.fontSize = 96f;
-            tmp.fontStyle = FontStyles.Bold;
-            tmp.alignment = TextAlignmentOptions.Center;
-            tmp.color = new Color(1f, 0.92f, 0.2f, 1f); // parlak sarı
-
-            var textRect = tmp.rectTransform;
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
+            display.SetText(string.IsNullOrEmpty(line2) ? "SEN BUSUN" : $"SEN BUSUN\n{line2}");
 
             _expireTime = Time.unscaledTime + ShowSeconds;
             PlaceInFront();

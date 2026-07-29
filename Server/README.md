@@ -30,9 +30,10 @@ veya derlenmiş exe: `Server/VortexArena.Server.App/bin/Debug/net10.0/VortexAren
 İşletme dağıtımı için: `scripts\deploy-server.bat` → `deploy\server\VortexArena.Server.App.exe`
 (self-contained, .NET kurulumu gerekmez; `config/` yanında gider).
 
-> Sunucu **her zaman elle** başlatılır. Ne Unity admin uygulaması ne Flutter launcher sunucuyu
-> başlatır — ikisi de yalnız çalışan bir sunucuya bağlanır. Sebep: sunucu maçın tek otoritesidir,
-> ömrü operatör uygulamasının ömrüne bağlanmamalıdır.
+> Sunucuyu **operatör launcher'ı da başlatabilir** (`--venue <mekan>` ile; bkz. `launcher/README.md`).
+> Unity admin uygulaması başlatmaz — yalnız çalışan bir sunucuya bağlanır. Launcher da sunucuyu
+> **kapatmaz**: sunucu maçın tek otoritesidir, ömrü operatör uygulamasının ömrüne bağlanmaz —
+> kapatma sunucunun kendi penceresinde Ctrl+C'dir.
 
 Açılışta:
 - Kestrel `http://0.0.0.0:47821/ws` (WebSocket kontrol) dinler.
@@ -170,8 +171,8 @@ uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması dev
 > Sunucu sahne GEOMETRİSİNİ bilmez: konum/spawn noktası taşıyan bir alan ne bu tabloda ne de
 > protokolde vardır. Oyuncular fiziksel olarak yürür (§10.4). **Arena ÖLÇÜSÜ de yoktur:** sunucu
 > metre kullanmaz ve her işletmenin alanı farklı, çoğu kare/dikdörtgen bile değil — tek bir ölçü
-> çifti arenayı tarif etmez. Ölçü yalnız istemcide, sahnedeki `ArenaBoundary.halfExtentX/Z`'de
-> yaşar.
+> çifti arenayı tarif etmez. Ölçü yalnız istemcide yaşar: sahnedeki `ArenaBoundary`'ye bağlı
+> boyut dosyasında (JSON, köşe listesi + kolonlar).
 
 **devices.json** — `{ "<deviceId>": { "name": "ertu", "number": 7 } }` (§2). Bilinmeyen player
 cihazı bağlanınca **ad** 20 kişilik havuzdan rastgele (kullanılmayanlar arasından), **numara**

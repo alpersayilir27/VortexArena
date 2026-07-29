@@ -15,20 +15,30 @@ namespace VortexArena.Core.Editor
     /// sahneyi kopyalar, <c>MapDefinition</c> asset'i yazar, <c>GameCatalog</c>'a ve Build
     /// Settings'e ekler.
     /// <para>
-    /// <b>Sihirbaz arena GEOMETRİSİNE DOKUNMAZ — ölçekleme yoktur.</b> Sahne kaynak arenadan
-    /// (varsayılan 10×10) bire bir kopyalanır ve duvar/zemin/taban/işaretçi yerleşimi olduğu
-    /// gibi gelir. Sebebi ürün gerçeği: her işletmenin alanı farklı ölçüde ve çoğu kare ya da
-    /// dikdörtgen bile değil, yani arena planı her kurulumda zaten baştan çiziliyor. Orantılı
-    /// ölçekleme bu durumda işe yarar bir taslak üretmiyor, yalnız elle düzeltilmesi gereken
-    /// bir yalancı-doğru üretiyordu (ve zemin/işaretçi hiyerarşisine bağımlı kırılgan bir kod
-    /// yığınıydı).
+    /// <b>Arena ölçüsünün tek temsili boyut JSON'udur</b> (<c>ArenaDimensions</c>) ve bir geometri
+    /// kaynağı seçmek <b>ZORUNLUDUR</b>: ölçüsüz bir arenanın <c>ArenaBoundary</c>'si devre dışı
+    /// kalır, yani arena sessizce sınırsız olurdu. İki kaynak vardır ve <b>tek boru hattında</b>
+    /// buluşurlar:
+    /// <list type="bullet">
+    /// <item><c>DimensionsJson</c> — elle yazılan boyut dosyası (şeritmetreyle alınan ölçü).</item>
+    /// <item><c>TestMesh</c> — kaba blok yığını; <see cref="ArenaTestMeshBuilder"/> onu bir plana
+    /// ÇIKARIR, planı yeni arena kutusunun <c>Data/</c> klasörüne JSON olarak YAZAR ve oradan
+    /// sonrası birinci yolla birebir aynıdır.</item>
+    /// </list>
+    /// Yani her iki yolda da diskte bir boyut dosyası oluşur ve
+    /// <c>ArenaBoundary.dimensionsJson</c> her zaman DOLU bağlanır.
     /// </para>
     /// <para>
-    /// <b>Tek istisna: arena planı (<c>ArenaShapeDefinition</c>) verilirse</b> — o zaman şablonun
-    /// hazır zemin/duvar mesh'leri silinip geometri plandan üretilir
-    /// (<see cref="ArenaShapeBuilder"/>) ve <c>ArenaBoundary</c> plana + üretilen duvarlara
-    /// bağlanır. Bu ÖLÇEKLEME değildir: gerçek ölçüler plan asset'inde elle çizilidir. Alan boş
-    /// bırakıldığında yukarıdaki davranış birebir geçerlidir.
+    /// <b>Bu ÖLÇEKLEME değildir</b> — sihirbaz hiçbir geometriyi büyütüp küçültmez. Sahne kaynak
+    /// arenadan kopyalanır, şablonun hazır zemin/duvar mesh'leri silinir ve yerine kaynaktaki
+    /// GERÇEK ölçüden geometri üretilir. Orantılı ölçekleme bilinçli olarak yoktur: her işletmenin
+    /// alanı farklı ölçüde ve çoğu kare ya da dikdörtgen bile değil, yani plan her kurulumda zaten
+    /// baştan çiziliyor.
+    /// </para>
+    /// <para>
+    /// <b>Üretilen her şey tek bir dalda toplanır:</b> zemin/duvar/kolon,
+    /// <c>ArenaBoundary</c>'nin altındaki <c>ArenaGeometry</c> çocuğuna kurulur — kalibrasyon
+    /// işaretçileri, taban bölgeleri ve rig ile karışmasın diye.
     /// </para>
     /// <para>
     /// Sihirbazın kattığı değer <b>bileşen bütünlüğü</b>: kopyalanan sahne ağa bağlanmak için
@@ -37,9 +47,8 @@ namespace VortexArena.Core.Editor
     /// <c>BaseZone</c>'lar, BB Camera Rig) — hiçbiri elle kurulmaz.
     /// </para>
     /// <para>
-    /// <b>ELDE kalan işler</b> (sonuç uyarıları hatırlatır): arena geometrisini kendi planına
-    /// göre çiz · <c>ArenaBoundary.halfExtentX/Z</c> değerlerini gerçek ölçüye getir ·
-    /// kalibrasyon işaretçilerini zemin bandına göre yerleştir ·
+    /// <b>ELDE kalan işler</b> (sonuç uyarıları hatırlatır): taban bölgelerini yeni plana göre
+    /// taşı · kalibrasyon işaretçilerini zemin bandına göre yerleştir ·
     /// tek <see cref="SpawnPoint"/>'i <c>GameObject &gt; VortexArena &gt; Spawn Point</c> ile
     /// koy (sihirbaz ÜRETMEZ) · NavMesh/ışık bake et.
     /// </para>
@@ -131,18 +140,49 @@ namespace VortexArena.Core.Editor
             options.displayName = EditorGUILayout.TextField("Gösterim adı", options.displayName);
 
             EditorGUILayout.Space();
-            options.shapePath = AssetPathField<ArenaShapeDefinition>(
-                new GUIContent("Arena planı (isteğe bağlı)",
-                    "ArenaShapeDefinition: zemin sınırı + kolonlar. Boş bırakılırsa geometriye dokunulmaz."),
-                options.shapePath);
+            // Kaynak TEK seçilir ve yalnız ona ait alan çizilir: iki dolu alan "hangisinin
+            // ölçüsü geçerli" sorusunu doğurur, o da ikinci bir doğruluk kaynağıdır.
+            var pickedSource = (ArenaGeometrySource)EditorGUILayout.EnumPopup(
+                new GUIContent("Geometri kaynağı",
+                    "Arena ölçüsü nereden gelsin. İki yol da diske bir boyut JSON'u bırakır."),
+                options.geometrySource);
 
-            EditorGUILayout.HelpBox(
-                string.IsNullOrEmpty(options.shapePath)
-                    ? "Plan boş: sihirbaz arena geometrisini ÖLÇEKLEMEZ — sahne kaynak arenadan bire bir " +
-                      "kopyalanır. Planı kendin çizip ArenaBoundary değerlerini gerçek ölçüye getireceksin."
-                    : "Plan dolu: şablondan gelen zemin/duvar mesh'leri silinip plandan üretilecek, " +
-                      "ArenaBoundary bu asset'e ve üretilen duvarlara bağlanacak.",
-                MessageType.Info);
+            if (pickedSource != options.geometrySource)
+            {
+                // Seçim değişince ötekinin yolu TEMİZLENİR — kapalı bir alanda kalan yol,
+                // sonradan geri dönüldüğünde sessizce eski kaynağı diriltirdi.
+                if (pickedSource != ArenaGeometrySource.DimensionsJson)
+                {
+                    options.dimensionsJsonPath = string.Empty;
+                }
+
+                if (pickedSource != ArenaGeometrySource.TestMesh)
+                {
+                    options.testMeshPath = string.Empty;
+                }
+            }
+
+            options.geometrySource = pickedSource;
+
+            switch (options.geometrySource)
+            {
+                case ArenaGeometrySource.TestMesh:
+                    options.testMeshPath = AssetPathField<GameObject>(
+                        new GUIContent("TestMesh (prefab)",
+                            "Alanı kabaca temsil eden blok yığınının kökü. Plana çıkarılıp arena " +
+                            "kutusunun Data/ klasörüne JSON olarak yazılır."),
+                        options.testMeshPath);
+                    break;
+
+                default:
+                    options.dimensionsJsonPath = AssetPathField<TextAsset>(
+                        new GUIContent("Boyut dosyası (JSON)",
+                            "ArenaDimensions JSON'u: zemin sınırı + kolonlar (metre, arena yerel XZ)."),
+                        options.dimensionsJsonPath);
+                    break;
+            }
+
+            EditorGUILayout.HelpBox(GeometrySourceHelp(options), MessageType.Info);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Hedef", EditorStyles.boldLabel);
@@ -154,8 +194,12 @@ namespace VortexArena.Core.Editor
             EditorGUILayout.HelpBox("Hedef klasör: " + ResolveTargetFolder(options), MessageType.None);
 
             EditorGUILayout.Space();
+            // Kaynak alanı da zorunlu: ölçüsüz üretilen arenanın ArenaBoundary'si devre dışı kalır
+            // ve arena sessizce sınırsız olur — bunu düğmeyi kapatarak baştan engelliyoruz.
             using (new EditorGUI.DisabledScope(
-                       string.IsNullOrWhiteSpace(options.arenaId) || string.IsNullOrWhiteSpace(options.venueName)))
+                       string.IsNullOrWhiteSpace(options.arenaId) ||
+                       string.IsNullOrWhiteSpace(options.venueName) ||
+                       string.IsNullOrWhiteSpace(options.SourcePath())))
             {
                 if (GUILayout.Button("Oluştur", GUILayout.Height(28f)))
                 {
@@ -204,6 +248,21 @@ namespace VortexArena.Core.Editor
             {
                 EditorGUILayout.HelpBox(lastResult.Warnings[i], MessageType.Warning);
             }
+        }
+
+        /// <summary>Seçili geometri kaynağının ne yapacağını anlatan kutu metni.</summary>
+        private static string GeometrySourceHelp(ArenaTemplateOptions options)
+        {
+            if (options.geometrySource == ArenaGeometrySource.TestMesh)
+            {
+                return "TestMesh: bloklardan bir plan çıkarılıp arena kutusunun Data/ klasörüne " +
+                       "'<sahneAdı>_dimensions.json' olarak YAZILACAK, geometri o dosyadan üretilecek ve " +
+                       "ArenaBoundary ona bağlanacak. Ölçüyü sonradan dosyada düzeltip " +
+                       "'Build Arena From Dimensions' ile yeniden çizebilirsin.";
+            }
+
+            return "Boyut dosyası: şablondan gelen zemin/duvar mesh'leri silinip JSON'daki plandan " +
+                   "üretilecek, ArenaBoundary bu dosyaya ve üretilen duvarlara bağlanacak.";
         }
 
         /// <summary>Asset yolunu ObjectField olarak çizer; seçim değişirse yeni yolu döner.</summary>
@@ -342,10 +401,10 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            // -------------------------------------- 5) arena planı (isteğe bağlı)
-            // Plan boşsa buradan hiçbir şey yapılmaz: sihirbazın öteden beri yaptığı iş
-            // (geometriye dokunmadan kopyalama) birebir korunur.
-            bool shapeApplied = ApplyShape(options, scene, result);
+            // -------------------------------------------------- 5) geometri
+            // Kaynak ZORUNLU; okunamazsa sahne şablondan olduğu gibi kalır ve uyarı düşer
+            // (sihirbaz yarıda kesilmez, ama arena ölçüsüz kalır).
+            bool geometryApplied = ApplyGeometry(options, scene, targetFolder, sceneName, result);
 
             // ------------------------------------------- 6) MapDefinition asset
             string mapAssetPath = $"{targetFolder}/Data/{arenaId}.asset";
@@ -366,19 +425,15 @@ namespace VortexArena.Core.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            if (!shapeApplied)
+            // Kaynak seçilip de üretilemediyse sebebi ApplyGeometry zaten uyarı olarak yazdı.
+            if (geometryApplied)
             {
                 result.Warnings.Add(
-                    "Arena geometrisi ÖLÇEKLENMEDİ — duvar/zemin/taban yerleşimi kaynak arenadan bire bir geldi. " +
-                    "Planı kendi alanına göre çiz; sonra ArenaBoundary.halfExtentX/Z değerlerini gerçek " +
-                    "ölçüye getir.");
+                    "Zemin/duvar/kolon boyut dosyasından üretildi (ArenaGeometry altında) ve " +
+                    "ArenaBoundary.dimensionsJson bağlandı. Taban bölgeleri (Base_Red/Base_Blue) ve " +
+                    "kalibrasyon işaretçileri şablondaki yerinde kaldı — yeni plana göre elle taşı.");
             }
-            else
-            {
-                result.Warnings.Add(
-                    "Zemin/duvar plandan üretildi. Taban bölgeleri (Base_Red/Base_Blue) ve kalibrasyon " +
-                    "işaretçileri şablondaki yerinde kaldı — yeni plana göre elle taşı.");
-            }
+
             result.Warnings.Add(
                 "Kalibrasyon işaretçilerini (anchor_a/anchor_b) zemin bandına göre yerleştir ve aralarındaki " +
                 "mesafeyi not et (Docs/Isletme-Kurulum.md §3).");
@@ -422,8 +477,14 @@ namespace VortexArena.Core.Editor
         // ---------------------------------------------------------- arena planı
 
         /// <summary>
-        /// Şablon sahnesindeki hazır zemin/duvar mesh'lerini plandan üretilenle değiştirir ve
-        /// sahnedeki <c>ArenaBoundary</c>'yi (plan asset'i + üretilen duvarlar) bağlar.
+        /// Şablon sahnesindeki hazır zemin/duvar mesh'lerini seçilen kaynaktan üretilenle
+        /// değiştirir ve sahnedeki <c>ArenaBoundary</c>'yi bağlar (boyut dosyası + duvarlar).
+        /// <para>
+        /// İki kaynak (<see cref="ArenaGeometrySource"/>) farklı yerden başlar ama AYNI noktada
+        /// buluşur: ortada bir boyut JSON'u olur, geometri ondan üretilir ve
+        /// <c>ArenaBoundary.dimensionsJson</c> ona bağlanır. TestMesh yolunun tek fazlası, JSON'u
+        /// yeni arena kutusunun <c>Data/</c> klasörüne kendisinin yazmasıdır.
+        /// </para>
         /// <para>
         /// ⚠️ <b>Silinecek objeler ada göre bulunur</b> — şablon sahnesinin gerçek hiyerarşisi:
         /// <c>PlayArea &gt; Ground &gt; GroundMesh</c> (zemin mesh'i) ve <c>ArenaBoundary</c>'nin
@@ -436,67 +497,96 @@ namespace VortexArena.Core.Editor
         /// koordinatları o transformun yerel XZ düzlemindedir, başka bir ebeveyn planı kaydırırdı.
         /// </para>
         /// </summary>
-        /// <returns>Plan uygulandıysa <c>true</c>; plan boşsa ya da uygulanamadıysa <c>false</c>.</returns>
-        private static bool ApplyShape(ArenaTemplateOptions options, Scene scene, ArenaTemplateResult result)
+        /// <returns>Geometri üretildiyse <c>true</c>; kaynak okunamadıysa <c>false</c>.</returns>
+        private static bool ApplyGeometry(
+            ArenaTemplateOptions options,
+            Scene scene,
+            string targetFolder,
+            string sceneName,
+            ArenaTemplateResult result)
         {
-            if (string.IsNullOrWhiteSpace(options.shapePath))
-            {
-                return false; // plan verilmedi: bugünkü davranış aynen sürer
-            }
-
-            var shape = AssetDatabase.LoadAssetAtPath<ArenaShapeDefinition>(options.shapePath);
-            if (shape == null || !shape.IsValid)
-            {
-                result.Warnings.Add(
-                    $"Arena planı okunamadı ya da geçersiz ('{options.shapePath}') — geometri şablondan " +
-                    "OLDUĞU GİBİ geldi.");
-                return false;
-            }
-
             var boundary = UnityEngine.Object.FindFirstObjectByType<ArenaBoundary>(FindObjectsInactive.Include);
             if (boundary == null)
             {
-                result.Warnings.Add("Sahnede ArenaBoundary yok — plan uygulanamadı, geometri şablondan geldi.");
+                result.Warnings.Add(
+                    "Sahnede ArenaBoundary yok — ölçü uygulanamadı, geometri şablondan geldi. Arena SINIRSIZ.");
                 return false;
             }
 
-            Transform root = boundary.transform;
-            RemoveTemplateGeometry(scene, root);
+            // ------------------------------------------------- 1) kaynağı çöz
+            // Kaynak okunamazsa sahneye HİÇ dokunulmaz: şablon geometrisini silip yerine bir şey
+            // koyamamak, arenayı zeminsiz bırakırdı.
+            TextAsset dimensionsAsset = null;
+            GameObject testMesh = null;
+            ArenaDimensions plan = null;
 
-            ArenaShapeBuilder.Result built = ArenaShapeBuilder.Build(shape, root);
-            if (!built.Success)
+            if (options.geometrySource == ArenaGeometrySource.TestMesh)
             {
-                result.Warnings.Add("Plan geometriye çevrilemedi: " + built.Error);
-                return false;
-            }
-
-            // Plan + duvarlar bağlanır; head/fadeRenderer/warningText'e DOKUNULMAZ — onlar rig
-            // prefabına bakar ve şablondan doğru gelir.
-            var boundaryObject = new SerializedObject(boundary);
-            SerializedProperty shapeProp = boundaryObject.FindProperty("shape");
-            if (shapeProp != null)
-            {
-                shapeProp.objectReferenceValue = shape;
+                testMesh = AssetDatabase.LoadAssetAtPath<GameObject>(options.testMeshPath);
+                if (testMesh == null)
+                {
+                    result.Warnings.Add(
+                        $"TestMesh bulunamadı ('{options.testMeshPath}') — geometri şablondan OLDUĞU GİBİ geldi, " +
+                        "arena ÖLÇÜSÜZ kaldı.");
+                    return false;
+                }
             }
             else
             {
-                result.Warnings.Add(
-                    "ArenaBoundary'de 'shape' alanı bulunamadı — plan asset'ini alana ELLE bağla " +
-                    "(muhafaza aksi hâlde dikdörtgen hızlı yolunda kalır).");
-            }
-
-            SerializedProperty wallsProp = boundaryObject.FindProperty("wallRenderers");
-            if (wallsProp != null && wallsProp.isArray)
-            {
-                wallsProp.arraySize = built.WallRenderers.Count;
-                for (int i = 0; i < built.WallRenderers.Count; i++)
+                dimensionsAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(options.dimensionsJsonPath);
+                if (dimensionsAsset == null)
                 {
-                    wallsProp.GetArrayElementAtIndex(i).objectReferenceValue = built.WallRenderers[i];
+                    result.Warnings.Add(
+                        $"Boyut dosyası bulunamadı ('{options.dimensionsJsonPath}') — geometri şablondan " +
+                        "OLDUĞU GİBİ geldi, arena ÖLÇÜSÜZ kaldı.");
+                    return false;
+                }
+
+                plan = ArenaDimensions.FromTextAsset(dimensionsAsset, out string dimensionsError);
+                if (plan == null)
+                {
+                    result.Warnings.Add(
+                        $"Boyut dosyası okunamadı ('{options.dimensionsJsonPath}'): {dimensionsError} — " +
+                        "geometri şablondan OLDUĞU GİBİ geldi, arena ÖLÇÜSÜZ kaldı.");
+                    return false;
                 }
             }
 
-            boundaryObject.ApplyModifiedPropertiesWithoutUndo();
-            EditorUtility.SetDirty(boundary);
+            // ---------------------------------------------------- 2) üretim
+            Transform root = boundary.transform;
+            RemoveTemplateGeometry(scene, root);
+
+            List<MeshRenderer> walls;
+
+            if (testMesh != null)
+            {
+                ArenaTestMeshBuilder.TestMeshResult extracted = ArenaTestMeshBuilder.BuildAndWrite(
+                    testMesh, root, targetFolder + "/Data", sceneName, result.Warnings);
+
+                if (!extracted.Success)
+                {
+                    result.Warnings.Add("TestMesh plana çevrilemedi: " + extracted.Error);
+                    return false;
+                }
+
+                dimensionsAsset = extracted.DimensionsAsset;
+                walls = extracted.Geometry.WallRenderers;
+                result.Warnings.Add($"Boyut dosyası yazıldı: {extracted.JsonPath}");
+            }
+            else
+            {
+                ArenaShapeBuilder.Result built = ArenaShapeBuilder.Build(plan, root);
+                if (!built.Success)
+                {
+                    result.Warnings.Add("Plan geometriye çevrilemedi: " + built.Error);
+                    return false;
+                }
+
+                walls = built.WallRenderers;
+            }
+
+            // ------------------------------------------- 3) ArenaBoundary bağla
+            ArenaShapeBuilder.BindBoundary(boundary, dimensionsAsset, walls, result.Warnings);
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
@@ -504,7 +594,7 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Şablondan gelen zemin/duvar mesh'lerini siler (bkz. <see cref="ApplyShape"/> hiyerarşi
+        /// Şablondan gelen zemin/duvar mesh'lerini siler (bkz. <see cref="ApplyGeometry"/> hiyerarşi
         /// notu). Bulunamayanlar sessizce atlanır: şablon zamanla değişebilir ve eksik bir ad
         /// yüzünden arena üretimini durdurmak orantısız olurdu.
         /// </summary>

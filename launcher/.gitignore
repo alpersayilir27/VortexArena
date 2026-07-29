@@ -1,54 +1,32 @@
-# VortexArena — launcher/ (Flutter, YALNIZ Windows masaüstü) .gitignore
+# VortexArena — launcher/ (.NET 10 WPF, YALNIZ Windows masaüstü) .gitignore
 #
-# Bu paket sadece Windows hedefler (android/ ios/ web/ klasörleri YOK), o yüzden
-# Flutter varsayılan şablonundaki mobil desenler buradan çıkarıldı.
-# COMMIT'lenenler (bilerek): `pubspec.lock` (uygulama → sürüm kilidi repo'da
-# durur), `.metadata`, `windows/runner/**`, `windows/flutter/CMakeLists.txt` ve
-# `windows/flutter/generated_plugin_registrant.*` (Flutter bunları izler).
+# Bu klasör kendi çıktısını kendi yönetir; kök .gitignore Unity içindir.
+# COMMIT'lenenler (bilerek): .sln, .csproj, .xaml, .cs — yani kaynağın tamamı.
+# NuGet paket kilidi yok: sürümler csproj'da sabit yazılı.
 
-# ═══════════════════════════════════════════════════════ Dart / Flutter ══════
-.dart_tool/
-.packages
-.pub/
-.pub-cache/
-.flutter-plugins
-.flutter-plugins-dependencies
-/build/
-/coverage/
-**/doc/api/
-
-# Sembolizasyon / obfuscation çıktıları
-app.*.symbols
-app.*.map.json
-
-# ═══════════════════════════════════════════════════ Windows masaüstü ════════
-# (launcher/windows/.gitignore Flutter tarafından yönetilir; burada tekrar
-#  edilmesi, o dosya yeniden üretilirse boşluk kalmasın diyedir.)
-/windows/flutter/ephemeral/
-/windows/x64/
-/windows/Win32/
-/windows/[Dd]ebug/
-/windows/[Rr]elease/
+# ═══════════════════════════════════════════════════════════ .NET çıktı ══════
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+*.cache
 
 # ═══════════════════════════════════════════════════════════ IDE / araçlar ═══
-# IntelliJ / Android Studio (.idea/ kökte de ignore'lu)
-*.iml
-*.ipr
-*.iws
+.vs/
+*.csproj.user
+*.sln.docstates
+
+# JetBrains Rider
 .idea/
+*.iml
 
 # VS Code klasörü BİLEREK ignore edilmez — paylaşılan .vscode/*.json commit'li.
 
 # ═══════════════════════════════════════════════════════════════ muhtelif ════
-*.class
 *.log
-*.pyc
 *.swp
 .DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/

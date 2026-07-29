@@ -8,7 +8,7 @@ hedef klasörü silip yeniden yazarlar.
 | `deploy-admin-game.bat` | Unity projesi (`Assets/`) | `deploy\admin\VortexArena.exe` | Unity Editor kapalı (betik zorlamaz) |
 | `deploy-player-apk.bat` | Unity projesi (`Assets/`) | `deploy\player\game.apk` + `install_game.bat` | Unity Editor kapalı + **Android Build Support** modülü |
 | `deploy-server.bat` | `Server/VortexArena.Server.App` | `deploy\server\VortexArena.Server.App.exe` | .NET 10 SDK |
-| `deploy-launcher.bat` | `launcher/` (Flutter) | `deploy\launcher\vortex_launcher.exe` | Flutter + VS C++ + **Developer Mode** |
+| `deploy-launcher.bat` | `launcher/VortexArena.Launcher` (WPF) | `deploy\launcher\VortexArena.Launcher.exe` | .NET 10 SDK + launcher kapalı |
 | `docs-setup.bat` | — | `..\vortexarena-docs-site\` (repo DIŞI) | Node 22+, git, internet (yalnız kurulumda) |
 
 İki Unity betiği aynı `PlayerBuildTool` sınıfını farklı `-executeMethod` ile çağırır ve **aynı
@@ -108,11 +108,10 @@ powershell -NoProfile -File scripts\lib\watch-unity-build.ps1 -ReplayLog deploy\
   tam reimport demektir (texture'lar ASTC'ye yeniden sıkıştırılır) — 20-40 dk. Sonraki koşular
   hızlıdır. Betik platformu build sonunda **geri almaz**: geri almak ikinci bir tam reimport daha
   olurdu, admin build'i zaten kendi platformuna geçiriyor.
-- **Developer Mode:** Flutter'ın Windows plugin sistemi symlink kullanır.
-  Kapalıysa build → *"Building with plugins requires symlink support"*.
-  Aç: `start ms-settings:developers`. Betik bunu **build'e girmeden önce** kayıt defterinden
-  kontrol eder (`HKLM\...\AppModelUnlock\AllowDevelopmentWithoutDevLicense` = `0x1`), böylece
-  dakikalarca süren `pub get` + build boşa gitmez.
+- **Çalışan exe çıktı klasörünü kilitler.** `deploy-server.bat` ve `deploy-launcher.bat` publish'e
+  girmeden önce `tasklist` ile kendi exe'sini arar (`VortexArena.Server.App.exe` /
+  `VortexArena.Launcher.exe`) ve çalışıyorsa adıyla durur — yoksa `rmdir` yarıda kalıp publish
+  anlamsız bir dosya izni hatası verirdi.
 
 ## Betik yazarken üç tuzak (kanıtlanmış)
 
@@ -122,14 +121,12 @@ powershell -NoProfile -File scripts\lib\watch-unity-build.ps1 -ReplayLog deploy\
   (cmd bloğu çalıştırmadan önce tümüyle ayrıştırır). Blok içinde her zaman `^(` / `^)` kullan.
   Yaşanmış örnek: `docs-setup.bat` npm adımından sonra sessizce sonlanıyor, junction ve
   `quartz.config.yaml` hiç kurulmuyordu.
-- **`call flutter …` çağıran betiği de öldürür.** `flutter.bat` sonunda
-  `… & bin\internal\exit_with_errorlevel.bat` zinciri var; bu zincir `call` ile girilen batch
-  bağlamını komple sonlandırıyor → betik hiçbir şey yazmadan ölür, çift tıklanmışsa pencere
-  anında kapanır. Flutter **her zaman ayrı bir çocuk süreçte** çağrılır:
-  `cmd /c call "%VA_FLUTTER%" build windows --release`.
-  Ayrıca `flutter.bat` PATH üzerinden tırnaklı çağrılırsa (`"flutter"`) `FLUTTER_ROOT`'u yanlış
-  çözüp *"The Flutter directory is not a clone of the GitHub project"* verir — betik önce
-  `where` ile **tam yola** çözer, sonra tam yolla çağırır.
+- **`call <araç>.bat` çağıran betiği de öldürebilir.** Sarmalayıcı `.bat` dosyaları sonlarında
+  `… & exit_with_errorlevel.bat` gibi zincirler taşıyabiliyor ve bu zincir `call` ile girilen
+  batch bağlamını komple sonlandırıyor → betik hiçbir şey yazmadan ölür, çift tıklanmışsa pencere
+  anında kapanır. Böyle bir aracı **her zaman ayrı bir çocuk süreçte** çağır:
+  `cmd /c call "<tam yol>" …` — ve yolu önce `where` ile tam yola çöz (PATH'ten tırnaklı çağrı
+  aracın kendi kök dizinini yanlış çözebiliyor).
 - **Betik-içi değişkenler `VA_` önekli olmalı.** Bu değişkenler çocuk süreçlere miras kalıyor;
   kısa genel adlar derleme zincirini kırıyor. Yaşanmış örnek: `set "RC=0"` → CMake `RC`'yi
   resource compiler sanıp *"Could not find the compiler specified in the environment variable
@@ -141,7 +138,6 @@ powershell -NoProfile -File scripts\lib\watch-unity-build.ps1 -ReplayLog deploy\
 | Değişken | Ne için | Varsayılan |
 |---|---|---|
 | `UNITY_EXE` | Unity editör exe'si | `C:\Program Files\Unity\Hub\Editor\<ProjectVersion>\Editor\Unity.exe` |
-| `FLUTTER_EXE` | Flutter komutu | PATH'teki `flutter` |
 
 Unity sürümü `ProjectSettings/ProjectVersion.txt`'ten okunur — sürüm yükseltilince betik
 kendiliğinden doğru editörü bulur.

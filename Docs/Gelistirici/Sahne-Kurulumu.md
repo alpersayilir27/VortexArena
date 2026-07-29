@@ -17,7 +17,8 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 | Bileşen | Nerede durur | Ne yapar | Atlarsan |
 |---|---|---|---|
 | **`VA_CameraRig`** | Sahne kökü, **prefab örneği** (`_Shared/App/Prefabs/`) | Kamera/kumanda rig'i + etkileşim rig'i (`OVRComprehensiveInteractionRig`) + yerel gövde avatarı (`PlayerBodyAvatar`) tek pakette | Oyuncu hiçbir şey görmez |
-| **`ArenaBoundary`** | Arena **merkezinde**, duvarlara hizalı | Sınır uyarısını çizer (duvar alfası + karartma) + arena ölçüsünün tek kaynağıdır (admin kuş bakışı kadrajı bunu okur). Arena dikdörtgen değilse `shape` alanına bir `ArenaShapeDefinition` bağlanır | Alan-dışı uyarısı hiç çıkmaz, admin kuş bakışı kadrajsız kalır (konsola uyarı düşer) |
+| **`ArenaBoundary`** | Duvarlara hizalı bir obje (plan koordinatları onun yerel XZ'si) | Sınır uyarısını çizer (duvar alfası + karartma); ölçüyü **bağlı boyut dosyasından** okur (admin kuş bakışı kadrajı da oradan gelir). `dimensionsJson` = arenanın `Data/` klasöründeki boyut dosyası — **ZORUNLU**, bileşende ölçü tutan başka alan yoktur | Boyut dosyası bağlı değilse muhafaza konsola hata basıp **kendini kapatır**: alan-dışı uyarısı hiç çıkmaz, admin kuş bakışı kadrajsız kalır |
+| **Boyut dosyası** (`ArenaDimensions` JSON) | Arena/mekan kutusunun `Data/` klasöründe; `ArenaBoundary.dimensionsJson` alanına bağlı | **Arena ölçüsünün tek kaynağı:** `outline` (sıralı köşeler) + `columns`. Alan tam kare olsa bile dört köşeli bir çokgen olarak yazılır — "dikdörtgen kipi" YOKTUR. Aynı dosya geometriyi üretir, muhafazayı besler ve kuş bakışı kadrajını verir | Muhafaza tümden kapanır (üstteki satır). ⚠️ Dosyayı yazıp alana bağlamamak onu **build'in dışında** da bırakır |
 | **`ArenaCalibrator`** | Sahne kökü — **`VA_CalibrationManager`** prefabıyla gelir | Zemindeki A–B işaretleriyle fiziksel hizalama | Sanal arena fiziksel odayla örtüşmez |
 | **`BaseZone` × 2** | Karşı kenarlarda (Red / Blue) | **Taban bölgesi** — kırmızı/mavi şerit, canlanma kapısı | TDM'de kimse canlanamaz |
 | **`SpawnPoint` × 1** | Arena uzayının sıfırı olacak yerde, **zemin seviyesinde** | **Arena orijini** — ağa giden/gelen tüm pozlar buna göre çevrilir; ayrıca maç öncesi yerleşim göstergesidir | Tüm uzak oyuncular dünya orijinine yığılır (konsola `ArenaSpace` uyarısı düşer) |
@@ -57,7 +58,6 @@ veri üretir, ama duvarlar çizilmeye devam etmeli.
 | Bileşen | Ne zaman | Nasıl |
 |---|---|---|
 | **Silah rafı** | Arena raf kipinde (`weaponSource: rack`, ör. TDM) oynanacaksa | **ELLE kurulur** — şablonda (`Template/Default12x12`) raf yoktur. Raf kökünde `WeaponRackSpawner`, altında yalnız KONUM tutan `RackSlot` gözleri; hangi silahın duracağını mod belirler, sahneye `WPN_*` örneği koyulmaz |
-| **Arena planı** (`ArenaShapeDefinition`) | Arena dikdörtgen DEĞİLSE (yamuk, L, kırık duvarlı) | `Create > VortexArena > Arena Shape Definition` ile asset üret, köşeleri + kolonları gir, `Tools > VortexArena > Build Arena From Shape` ile geometriyi üret ve asset'i `ArenaBoundary.shape`'e bağla. Bağlanmazsa muhafaza dikdörtgen kalır → [Yemek Kitabı](Yemek-Kitabi.md) |
 | **`ArenaObstacle`** | Sahneye elle konmuş bir engel (kolon, kasa, direk) muhafaza uyarısına girecekse | Engel objesine ekle, `size` alanına zemindeki ölçüsünü yaz (X = genişlik, Y = derinlik). ⚠️ **Collider EKLEMEZ, fizik yapmaz** — tek işi `ArenaBoundary`'nin oyuncuyu engele yaklaşırken uyarmasıdır. Plandan üretilen kolonlara aracın kendisi ekler |
 | **`ArenaRoof`** | Arenanın çatısı varsa | Çatı hiyerarşisinin köküne: `GameObject > VortexArena > Arena Roof`. Admin kuş bakışına geçince çatı çizilmez (gölgesi kalır). Açık tavanlı arenada hiç yapılmaz → [Çatı Gizleme](../Cati-Gizleme.md) |
 | **`FX_SnowStorm`** | Kar/hava efekti isteniyorsa | `Arenas/Venues/Outdoor12x12/IceWorld/Prefabs/` altındaki prefabı arena orijinine (0,0,0) bırak. 12×12 değilse `Snow_A/B/E` shape scale'lerini arena boyutu + ~3 m payla ölçekle |
@@ -71,8 +71,7 @@ veri üretir, ama duvarlar çizilmeye devam etmeli.
 Sahne dosyası tek başına yetmez — üç kayıt daha gerekir:
 
 1. **`MapDefinition` SO'su** (`Arenas/<...>/Data/`): `sceneName`, `displayName`,
-   `supportedModeIds`. Arena ölçüsü burada değil, sahnedeki `ArenaBoundary.halfExtentX/Z`'dedir
-   (plan bağlıysa planın sınırlayıcı kutusundan gelir).
+   `supportedModeIds`. Arena ölçüsü burada değil, arenanın **boyut dosyasındadır**.
 2. **`GameCatalog.asset`** → `maps[]` listesine ekle.
 3. **Build Settings** → sahneyi ekle ve **enabled** bırak.
 4. **`Tools > VortexArena > Export Server Config`** → `Server/config/maps.json` tazelenir
@@ -113,8 +112,8 @@ Sahneyi kaydettikten sonra:
 unity cmd recompile && unity cmd get_console_logs --json
 ```
 
-Sonra dev penceresinden sentetik maçla aç: arena yükleniyorsa, HUD geliyorsa ve konsolda
-`ArenaSpace` uyarısı yoksa sahne bağlıdır.
+Sonra sunucuyu çalıştır, bir admin istemciden bu haritada maç başlat ve editörden bağlan: arena
+yükleniyorsa, HUD geliyorsa ve konsolda `ArenaSpace` uyarısı yoksa sahne bağlıdır.
 
 Gerçek testte üç şeye bak:
 - **Uzak avatarlar doğru yerde mi?** Değilse sahnede `SpawnPoint` yoktur, kapalıdır ya da yeri

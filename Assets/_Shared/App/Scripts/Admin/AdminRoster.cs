@@ -111,7 +111,8 @@ namespace VortexArena.App.Admin
         /// <see cref="ModeRuntime.Teams"/>'den, yani <c>load_match.rules</c>'tan gelir (§10.5).
         /// <para>
         /// Maç yokken (faz Lobby) henüz kural yayınlanmamıştır; o zaman ortak seçimin modu
-        /// katalogdan okunur (<see cref="AdminSelection.ModeId"/>). Katalog da yoksa
+        /// katalogdan okunur (<see cref="AdminSelection.ModeId"/>). Katalog yoksa ya da seçim
+        /// henüz açılış tohumundaki <b>lobi profilindeyse</b> (§5.3 — lobi bir maç modu değildir)
         /// <b>sezgisel</b> yedeğe düşülür ("hiçbir çevrimiçi oyuncunun takımı yok"). Bu yedek
         /// TEK BAŞINA yanıltıcıdır — lobide takımı henüz atanmamış TDM maçını FFA gösterir;
         /// yalnız arayüz boş kalmasın diye, son çare olarak durur.
@@ -623,10 +624,14 @@ namespace VortexArena.App.Admin
             }
 
             // (2) Lobide henüz kural yok: operatörün seçtiği mod ne diyor?
+            // ⚠️ Lobi profili ATLANIR: sunucu açılışta ortak seçimi mekanın lobi haritasıyla
+            // tohumluyor (§5.3), yani hiçbir operatör mod seçmeden önce ModeId "lobby" olur.
+            // Lobi bir MAÇ modu değildir (mod seçicisinde de yoktur) — "bir sonraki maçta takım
+            // var mı" sorusunu cevaplayamaz, cevaplarsa boş lobiyi kendi takım kipiyle boyar.
             ModeDefinition selected = AdminContent.Catalog != null
                 ? AdminContent.Catalog.FindMode(AdminSelection.ModeId)
                 : null;
-            if (selected != null)
+            if (selected != null && !selected.IsLobbyProfile)
             {
                 return selected.TeamMode == ModeTeamMode.None;
             }

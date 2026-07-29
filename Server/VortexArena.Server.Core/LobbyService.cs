@@ -24,8 +24,13 @@ public sealed class LobbyService
 
     /// <summary>Ortak seçimi koruyan kilit; WS işleyicileri farklı thread'lerden gelebilir.</summary>
     private readonly object _selectionGate = new();
-    private string _selectedModeId = "";
-    private string _selectedSceneName = "";
+
+    /// <summary>Ortak seçim (§5.3). ⚠️ <b>Hiçbir zaman boş olmaz:</b> kurucuda mekanın lobi
+    /// haritasıyla tohumlanır (açık sahnenin açılış değeri, §10.7) ve <see cref="ApplySelection"/>
+    /// boş alanı yok saydığı için bir daha boşalamaz. Tohumlanmasaydı ilk <c>admin_state</c>
+    /// "hiç harita seçilmemiş" derdi ve panel mekan süzgecini uygulayacak veriyi de geç alırdı.</summary>
+    private string _selectedModeId;
+    private string _selectedSceneName;
 
     // ---- Roster yayıncısı (§5.3) ----
     // TEK yayıncı garantisi: aynı anda birden fazla lobby_state üretimi YOKTUR. Eski hâlde
@@ -49,6 +54,10 @@ public sealed class LobbyService
     {
         _registry = registry;
         _director = director;
+        // Açılış seçimi = açık sahnenin açılış değeri (§10.7): mekanın lobi haritası. Sunucu
+        // lobiyi çözemezse zaten hiç açılmıyor (§11 fail-fast), yani pratikte boş kalmaz.
+        _selectedSceneName = director.LobbyScene;
+        _selectedModeId = director.LobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
         _registry.Changed += OnRegistryChanged;
     }
 
@@ -273,11 +282,13 @@ public sealed class LobbyService
         }
 
         var changed = ApplySelection(requestedModeId, requestedSceneName,
-            msg.roundSeconds, msg.scoreLimit, out var sceneChanged);
+            msg.roundSeconds, msg.scoreLimit);
 
         // Reddedildiyse DEĞİŞMESE de yayın yapılır: komutu gönderen panel imlecini iyimser olarak
         // ilerletmiş olabilir, sunucunun değeri onu geri çeksin (tek doğruluk kaynağı, §5.3).
-        if (!changed && rejection.Length == 0) return; // değişmedi: gereksiz yayın yapma
+        // Harita alanı doluysa da çıkılmaz: seçim aynı kalmış olsa bile o sahne AÇIK olmayabilir
+        // (maç bitip lobiye dönüldüğünde seçim hâlâ arenayı gösterir) — sahneleme denenmelidir.
+        if (!changed && requestedSceneName.Length == 0 && rejection.Length == 0) return;
 
         string modeId, sceneName;
         int roundSeconds, scoreLimit;
@@ -289,10 +300,14 @@ public sealed class LobbyService
             scoreLimit = _selectedScoreLimit;
         }
 
-        // Sahneleme: harita gerçekten değiştiyse herkes o arenayı yükler (§10.7). Yalnız harita
-        // değişiminde tetiklenir — süre/limit dokunuşu kimseyi sahne değiştirmeye zorlamamalı.
+        // Sahneleme (§10.7): harita alanı DOLU geldiyse herkes o arenayı yükler. Ölçüt "seçim
+        // değişti mi" değil "istendi mi": maç bitip lobiye dönüldükten sonra seçim hâlâ o arenayı
+        // gösterdiği için, aynı arenayı tekrar seçen operatör aksi hâlde hiçbir şey olmadığını
+        // görürdü. İstenen sahne zaten açıksa StageSceneAsync Unchanged döner (idempotent).
+        // ⚠️ Bu yüzden panel harita alanını YALNIZ imleci oynattığında doldurur (§5.2) — süre/limit
+        // dokunuşunda dolduran bir istemci herkesi arenaya taşırdı.
         var stageNote = "";
-        if (sceneChanged)
+        if (requestedSceneName.Length > 0)
         {
             var staged = await _director.StageSceneAsync(sceneName);
             stageNote = staged.Outcome switch
@@ -316,17 +331,11 @@ public sealed class LobbyService
     }
 
     /// <summary>true = seçim gerçekten değişti. Boş/null string ve <c>0</c> sayı mevcut değeri
-    /// korur (§5.2) — arayüz yalnız değiştirdiği alanı doldurabilsin.</summary>
-    private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit) =>
-        ApplySelection(modeId, sceneName, roundSeconds, scoreLimit, out _);
-
-    /// <summary><paramref name="sceneChanged"/> ayrı raporlanır çünkü sahneleme (§10.7) YALNIZ
-    /// haritanın değiştiği çağrıda tetiklenir; "bir şey değişti" bilgisi bunun için yeterli
-    /// değildir (süre değişimi de onu true yapar).</summary>
-    private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit,
-        out bool sceneChanged)
+    /// korur (§5.2) — arayüz yalnız değiştirdiği alanı doldurabilsin.
+    /// <para>⚠️ Bu koruma aynı zamanda "seçim asla boşalmaz" garantisidir: kurucudaki lobi
+    /// tohumundan sonra hiçbir komut mod/haritayı boşa çekemez.</para></summary>
+    private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit)
     {
-        sceneChanged = false;
         lock (_selectionGate)
         {
             var changed = false;
@@ -338,7 +347,6 @@ public sealed class LobbyService
             if (!string.IsNullOrEmpty(sceneName) && _selectedSceneName != sceneName)
             {
                 _selectedSceneName = sceneName;
-                sceneChanged = true;
                 changed = true;
             }
             if (roundSeconds > 0 && _selectedRoundSeconds != roundSeconds)

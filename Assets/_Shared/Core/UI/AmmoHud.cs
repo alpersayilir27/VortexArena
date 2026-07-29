@@ -26,9 +26,15 @@ namespace VortexArena.Core.UI
         /// <summary>Düşük mermi/reload vurgusu (WeaponAmmoDisplay'in eski kırmızısı).</summary>
         private static readonly Color LowAmmoColor = new Color(1f, 0.32f, 0.26f);
 
+        /// <summary>Prefabın <c>Resources</c> içindeki yolu (uzantısız).</summary>
+        public const string ResourcePath = "UI/AmmoHud";
+
         private static AmmoHud _instance;
 
-        private TMP_Text _label;
+        // ⚠️ Görünüm PREFABTAN gelir (`_Shared/App/Resources/UI/AmmoHud.prefab`): punto, konum,
+        // hizalama orada düzenlenir. Bu sınıf yalnız metni yazar ve rengi sürer.
+        [Tooltip("Cephane metni — konumu/puntosu prefabta ayarlanır.")]
+        [SerializeField] private TMP_Text _label;
         private readonly List<Weapon> _subscribed = new List<Weapon>();
         private readonly StringBuilder _builder = new StringBuilder(96);
 
@@ -43,9 +49,18 @@ namespace VortexArena.Core.UI
                 return;
             }
 
-            var go = new GameObject("[AmmoHud]");
-            DontDestroyOnLoad(go);
-            _instance = go.AddComponent<AmmoHud>();
+            var prefab = Resources.Load<AmmoHud>(ResourcePath);
+            if (prefab == null)
+            {
+                Debug.LogError($"[AmmoHud] '{ResourcePath}' prefabı bulunamadı — cephane " +
+                               "göstergesi çizilemeyecek.");
+                return;
+            }
+
+            AmmoHud hud = Instantiate(prefab);
+            hud.name = "[AmmoHud]";
+            DontDestroyOnLoad(hud.gameObject);
+            _instance = hud;
         }
 
         private void Awake()
@@ -58,22 +73,10 @@ namespace VortexArena.Core.UI
 
             _instance = this;
 
-            // Panel: HudFollow kökü taşır; metin sağ-alt hissi için +X'e kaydırılmış child'da.
-            gameObject.AddComponent<HudFollow>();
-
-            var textGo = new GameObject("Text");
-            textGo.transform.SetParent(transform, false);
-            textGo.transform.localPosition = new Vector3(0.34f, -0.10f, 0f);
-
-            var tmp = textGo.AddComponent<TextMeshPro>();
-            tmp.fontSize = 0.55f;
-            tmp.alignment = TextAlignmentOptions.Right;
-            tmp.rectTransform.sizeDelta = new Vector2(0.8f, 0.3f);
-            tmp.rectTransform.pivot = new Vector2(1f, 0.5f);
-            tmp.color = NormalColor;
-            tmp.text = "";
-            _label = tmp;
-            _label.gameObject.SetActive(false);
+            if (_label != null)
+            {
+                _label.gameObject.SetActive(false); // silah tutulmuyorken gizli
+            }
         }
 
         private void OnEnable()

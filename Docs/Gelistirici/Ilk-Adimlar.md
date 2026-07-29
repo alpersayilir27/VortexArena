@@ -18,8 +18,8 @@ Sıfırdan çalışır duruma ~15 dakika. Quest gözlüğü **gerekmez** — mas
 | 4 | **.NET 10 SDK** | Sunucuyu derlemek için |
 | 5 | `scripts\docs-setup.bat` | Bu dokümanı yerel olarak sunmak için (bir kez) |
 
-Sunucu tarafını hiç derlemeyeceksen 4. adımı atlayabilirsin — ama o zaman gerçek bir maç
-kuramazsın (dev penceresinin sentetik maçı yeterliyse sorun değil).
+Sunucu tarafını hiç derlemeyeceksen 4. adımı atlayabilirsin — ama o zaman **hiç maç kuramazsın**:
+maç verisini yalnız sunucu üretir ve maçı yalnız bir admin başlatır.
 
 ---
 
@@ -36,16 +36,19 @@ kuramazsın (dev penceresinin sentetik maçı yeterliyse sorun değil).
 
 ---
 
-## 3. Sunucusuz ilk test (en hızlı yol)
+## 3. Sunucusuz ilk test (en hızlı yol, sınırlı)
 
-Dev penceresindeki **sentetik maç** bölümünden mod, takım, süre ve skor limitini seç →
-Play'e bas. Sunucu olmadan bir `load_match` enjekte edilir: arena sahnesi yüklenir, mod HUD'ı
-gelir, silahını test edebilirsin.
+Dev penceresinde *Play başlangıcı* = **Açık sahneden**, bir arena sahnesi açıkken Play'e bas.
+Sunucu yoksa bağlantı kurulmaz ama sahne koşar: silahını ve efektlerini test edebilirsin.
 
 Bu kipte:
-- ✅ Silah ateşler, efektler çalışır, HUD çizilir
-- ✅ Mod kuralları `ModeDefinition`'daki **önizleme** alanlarından okunur
+- ✅ Silah ateşler, efektler çalışır, HUD çizilir (mod katalogdaki ilkine düşer)
+- ✅ Mod kuralları `ModeDefinition`'daki **önizleme** alanlarından okunur (telde kural yoksa
+  devreye giren fallback)
+- ❌ Maç yoktur: takım, faz, süre, skor limiti gelmez — bunları **yalnız sunucu** üretir
 - ❌ Can/skor/ölüm yoktur (bunlar sunucu-otoriter)
+
+Yani mod/takım/süre denemek istiyorsan bir sonraki adım zorunlu.
 
 > Ağ çağrılarının hepsi bağlantı yokken sessizce no-op'tur — kodunun etrafına
 > `if (bağlıysa)` yazmana gerek yok.
@@ -108,7 +111,9 @@ unity cmd get_console_logs --json  # 0 hata / 0 uyarı bekleriz
 
 **"Play'e bastım, hiçbir şey olmuyor."**
 Boot sahnesinden mi başlıyorsun? Dev penceresinde *Play başlangıcı* ayarı var: Boot'tan ya da açık
-sahneden. Açık sahneden başlarken sentetik maç parametrelerinin dolu olması gerekir.
+sahneden. Açık sahneden başlarken `DevSession` yalnız **bağlanır**; arena/HUD dolu görünse de maç
+verisi (takım, faz, süre, limit) sunucudan gelir — sunucuda koşan bir maç yoksa hiçbir şey olmaz,
+maçı bir **admin** başlatmalıdır.
 
 **"Silahım ateş ediyor ama karşı taraf can kaybetmiyor."**
 Üç şeyi sırayla kontrol et: (1) `ArenaCombat.ReportHit`/`ReportRaycastHit` çağrılıyor mu,

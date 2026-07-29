@@ -144,10 +144,34 @@ namespace VortexArena.App.Admin
 
             _cameraDriver = cameraGo.AddComponent<AdminSpectatorCamera>();
             gameObject.AddComponent<AdminPlayerMarkers>();
-            gameObject.AddComponent<AdminHud>();
+            SpawnHud();
 
             AdoptScene(SceneManager.GetActiveScene());
             Debug.Log("[AdminSpectator] Admin gözlemci etkin — sahne devralındı.");
+        }
+
+        /// <summary>
+        /// Yönetim arayüzünü prefabtan örnekler (<c>Resources/UI/AdminHud</c>).
+        /// <para>
+        /// ⚠️ Prefab SAHNEYE KONMAZ, buradan yüklenir: sahneye konsaydı her yeni arena sahnesine
+        /// elle bir kurulum adımı doğardı ve bir gün unutulurdu. Aynı sebeple gözlemcinin
+        /// altına örneklenir — gözlemci kalıcıdır (DontDestroyOnLoad), arayüz de öyle olur ve
+        /// lobi ↔ arena geçişlerinde yeniden kurulmaz.
+        /// </para>
+        /// </summary>
+        private void SpawnHud()
+        {
+            var prefab = Resources.Load<AdminHud>(AdminHud.ResourcePath);
+            if (prefab == null)
+            {
+                Debug.LogError(
+                    $"[AdminSpectator] '{AdminHud.ResourcePath}' prefabı bulunamadı — yönetim " +
+                    "arayüzü çizilemiyor. Tools > VortexArena > Bake UI Prefabs ile üretilmeli.");
+                return;
+            }
+
+            AdminHud hud = Instantiate(prefab, transform);
+            hud.name = "AdminHud";
         }
 
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)

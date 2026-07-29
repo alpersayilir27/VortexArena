@@ -35,6 +35,15 @@ namespace VortexArena.App
         /// bildiğimiz sahne odur.</summary>
         public string LobbyScene { get; private set; } = "";
 
+        /// <summary>
+        /// Sunucunun <b>açık sahnesi</b> (§10.7): maç koşuyorsa arena, koşmuyorsa lobi ya da
+        /// operatörün sahnelediği arena. Sunucu ayaktayken boş olmaz — açılış değeri işletmenin
+        /// lobi haritasıdır. Bağlanmadan önce boştur (henüz hiçbir şey bilinmiyor).
+        /// <para>Admin arayüzü "şu an ne açık" sorusunu buradan cevaplar: kendi harita imleci
+        /// bir sonraki maçın adayıdır, açık sahne ise sunucunun söylediği gerçektir.</para>
+        /// </summary>
+        public string OpenScene => LastMatchScene.Length > 0 ? LastMatchScene : LobbyScene;
+
         /// <summary>Aynı maç sahnesi için set_ready bir kez gönderilir.</summary>
         private string _readyReportedScene = "";
 

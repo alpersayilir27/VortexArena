@@ -1,0 +1,106 @@
+---
+title: Arayüz tasarımı — 2D'yi nerede bulurum, nasıl düzenlerim
+---
+
+# Arayüz tasarımı (2D / UI)
+
+Projedeki tüm arayüz **uGUI**'dir: `Canvas` + `TextMeshPro`. **UI Toolkit kullanılmıyor** —
+projede tek bir `.uxml`/`.uss` yok, aramayın.
+
+**Arayüzün tamamı prefabtır ve elle düzenlenir.** Kodda görsel kurulum kalmadı; sınıflar yalnız
+veri yazar (metin, renk, görünürlük, konum). Yerleşim, punto, renk, sprite — hepsi prefabta.
+
+## Nerede ne var
+
+Tüm arayüz prefabları **tek klasörde**: `Assets/_Shared/App/Resources/UI/`
+
+| Prefab | Ne çizer | Kim kullanır |
+|---|---|---|
+| **`AdminHud.prefab`** | Admin ekranının tamamı: skorlar, chip, takım kolonları, kamera şeridi, ölüm akışı — **ve içinde tercihler + istatistik panelleri** | `AdminSpectator` |
+| **`AdminPlayerRow.prefab`** | Kolonlardaki tek oyuncu satırı (ad, HP barı, POV/KAL/TAKIM/KİMLİK/AT) | `AdminHud` örnekler |
+| **`AdminPlayerMarker.prefab`** | Oyuncunun zemindeki halkası + ad etiketi (dünya uzayı) | `AdminPlayerMarkers` örnekler |
+| **`ConnectionOverlayScreen.prefab`** | Bağlantı hata ekranı — masaüstü (scrim + "Yeniden Bağlan" düğmesi) | `ConnectionOverlay` |
+| **`ConnectionOverlayWorld.prefab`** | Bağlantı hata ekranı — VR (world-space kart, düğmesiz) | `ConnectionOverlay` |
+| **`AmmoHud.prefab`** | VR'da sağ altta cephane göstergesi | `AmmoHud` |
+| **`IdentifyDisplay.prefab`** | `identify` komutunda göz hizasında beliren "SEN BUSUN" kartı | `IdentifyOverlay` |
+
+Oyuncu HUD'ları ayrı yerdedir (mod kutularında):
+
+| Prefab | Ne çizer |
+|---|---|
+| `Assets/Modes/TeamDeathmatch/UI/TdmHud.prefab` | TDM oyuncu HUD'ı |
+| `Assets/Modes/FreeForAll/UI/FfaHud.prefab` | FFA oyuncu HUD'ı |
+
+Ortak görseller: `Assets/_Shared/App/UI/Sprites/` — yuvarlak köşe (`RoundedRect_4/8/12/20`,
+9-slice kenarları ayarlı) ve halka (`Ring_16`).
+
+> **Neden `Resources/` altında?** Prefablar **sahneye KONMAZ** — çalışırken `Resources.Load`
+> ile yüklenip örneklenirler. Sahneye konsalardı her yeni arena sahnesine elle bir kurulum adımı
+> doğardı ve bir gün unutulurdu. Bu yüzden `Resources/` klasöründen **çıkarılmamalıdırlar**;
+> taşınırlarsa ilgili arayüz sessizce hiç çizilmez (konsola `… prefabı bulunamadı` hatası düşer).
+
+## Düzenlerken nelere dikkat edilir
+
+Prefabı Project penceresinden çift tıklayıp prefab kipinde açın. **Serbestçe yapabilecekleriniz:**
+konum/boyut/anchor değiştirmek, renk, punto, font, sprite değiştirmek, öge eklemek/çıkarmak,
+görsel efekt (Shadow, Outline) eklemek.
+
+**Dikkat edilecek üç şey var:**
+
+1. **Bileşen alan bağlarını koparmayın.** Kök objedeki bileşende (`AdminHud`,
+   `AdminPreferencesPanel`, `AdminPlayerRow`…) her ögenin bir alanı var (`scoreRedText`,
+   `hpFill`, `_modeValue`…). Bir ögeyi **silerseniz** o alan boşalır ve **hata vermez —
+   sessizce çizilmez.** Silmek yerine objeyi devre dışı bırakın ya da alfasını 0 yapın.
+   Yeni bir öge ekleyip koda bağlamak gerekiyorsa geliştiriciye söyleyin (yeni alan gerekir).
+
+2. **Düğme `onClick` kayıtlarını inspector'dan doldurmayın.** Prefablarda bilerek boştur;
+   davranış çalışırken koddan bağlanır (`WireButtons` / `Initialize`). Inspector'dan eklenen
+   kalıcı bir kayıt, kodun koşullarını atlar — ör. oyuncu satırındaki "AT" düğmesi iki adımlı
+   onayı atlayıp doğrudan atardı, ya da "TÜM KALİBRASYONLARI SIFIRLA" onay penceresini geçerdi.
+
+3. **Metinleri yazmayın, yer tutucu sayın.** `ScoreRed`, `KillFeed`, `Name` gibi ögelerin
+   içeriği çalışırken koddan yazılır; prefabtaki yazı yalnız tasarım yaparken görebilmeniz
+   içindir. **Punto/renk/hizalama kalıcıdır**, metnin kendisi değil.
+
+Ayrıca birkaç teknik not:
+
+- **Font atamayın** (ya da atarken dikkat edin): varsayılan TMP fontu Türkçe glifleri taşıyor.
+  Türkçe karakteri olmayan bir fonta geçerseniz `İ Ş Ğ Ü Ö Ç` kutu (□) çizilir. Aynı sebeple
+  arayüzde `✓ ✗ ⚠ → •` gibi sembol **kullanılmaz** — garantisi yok.
+- **Satır yüksekliğini değiştirebilirsiniz.** `AdminPlayerRow` prefabının yüksekliğini
+  büyütürseniz kolon yerleşimi kendiliğinden uyar (kod yüksekliği prefabtan okur). Satır arası
+  boşluk ve kolon başına satır sayısı `AdminHud` bileşeninde alandır (`rowGap`,
+  `maxRowsPerColumn`).
+- **`AdminHud.rowPrefab` alanı doluysa bırakın.** Kopması hâlinde `AdminPlayerRow.prefab`'ı
+  inspector'da o alana sürükleyin — yoksa oyuncu satırları hiç çizilmez.
+- **Seçili oyuncunun halkası:** `AdminPlayerMarker` bileşeninde `ringNormal` ve `ringSelected`
+  iki ayrı sprite alanıdır. Şu an ikisi de aynı görseldir (seçim yalnız boyut artışıyla
+  anlatılır); `ringSelected`'a **daha kalın** bir halka koyarsanız seçim belirginleşir.
+- **`ConnectionOverlay`'in iki varyantı ayrı prefabtır** ve farklı alanları dolu olur:
+  masaüstü varyantında `_hudFollow` boştur, VR varyantında `_reconnectButton`/`_reconnectLabel`
+  boştur (VR'da düğme yoktur, yerine A×2 ipucu vardır). **Bu boşluklar normaldir, doldurmayın.**
+- **`AdminHud`'ın `sortingOrder`'ı 4000, bağlantı ekranınınki 5000.** Bu sıra bilinçlidir:
+  bağlantı hatası HUD'ın üstünü kaplamalı. Canvas bileşeninde değiştirmeyin.
+
+## Renk paleti
+
+⚠️ **Renkler artık prefablarda gömülüdür** — paleti tek yerden değiştirmek mümkün değil.
+Kodda kalan `UiKit` paleti (`Assets/_Shared/App/Scripts/UiKit.cs`) yalnız **çalışırken sürülen**
+renkler için kullanılır: HP barının yeşil/turuncu/kırmızısı, seçim vurgusu, kalibresiz satırın
+kenarlığı, bağlantı noktasının rengi. Ton değişikliği yaparken **hem prefabları hem `UiKit`
+paletini** güncelleyin, yoksa statik ögelerle durum renkleri birbirini tutmaz.
+
+⚠️ **Takım renkleri iki yerde birden yaşar:** `UiKit.TeamRed`/`TeamBlue` ve
+`Core.Player.RemoteAvatar`. Aynı oyuncu HUD'da ve sahnede farklı renkte görünürse operatör
+yanılır — ikisini birlikte değiştirin.
+
+## Bu prefablar nasıl doğdu
+
+Elle çizilmediler: arayüzü kuran prosedürel kod bir kereliğine çalıştırılıp sonucu prefab olarak
+kaydedildi (geçici bir editör aracıyla). Bu yüzden tasarım, koddaki hâliyle **piksel piksel
+aynıdır**. Aynı geçiş sırasında `UiKit`'in çalışırken ürettiği yuvarlak köşe ve halka görselleri
+de gerçek PNG asset'lerine yazıldı ve 9-slice kenarları ayarlandı.
+
+**O araç işini bitirdiği için silindi.** Görünümün tek doğruluk kaynağı artık prefablardır;
+araç dursaydı ikinci ve sessizce bayatlayan bir kaynak olurdu (ve yanlışlıkla çalıştırılması
+elle yapılmış tüm tasarımı ezerdi).

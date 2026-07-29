@@ -11165,9 +11165,7 @@ MonoBehaviour:
   - {fileID: 1035592532}
   fadeRenderer: {fileID: 1221461641}
   warningText: {fileID: 1221461640}
-  halfExtentX: 6
-  halfExtentZ: 6
-  shape: {fileID: 0}
+  dimensionsJson: {fileID: 4900000, guid: fe6d36d873adb5d41a313c795e2be4e1, type: 3}
   warnDistance: 1
   minWallAlpha: 0.05
   maxWallAlpha: 0.85

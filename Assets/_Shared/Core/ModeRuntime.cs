@@ -66,8 +66,7 @@ namespace VortexArena.Core
 
         /// <summary>
         /// Sunucudan gelen kural şeklini uygular. <paramref name="info"/> <c>null</c> ise
-        /// (sunucusuz editör oturumu ya da kuralları taşımayan eski sunucu) katalog devralır —
-        /// bkz. <see cref="ApplyFromCatalog"/>.
+        /// (kuralları taşımayan bir sunucu) katalog devralır — bkz. <see cref="ApplyFromCatalog"/>.
         /// </summary>
         public static void Apply(string modeId, ModeRulesInfo info)
         {
@@ -88,7 +87,7 @@ namespace VortexArena.Core
         }
 
         /// <summary>
-        /// Kurallar telden gelmediğinde (dev penceresinin sentetik maçı) <see cref="ModeDefinition"/>
+        /// Kurallar telde gelmediğinde (kuralları taşımayan bir sunucu) <see cref="ModeDefinition"/>
         /// önizleme değerlerini uygular; mod katalogda yoksa varsayılana döner.
         /// <para>
         /// ⚠ <b>Sapmada SUNUCU kazanır.</b> <see cref="ModeDefinition"/>'daki kural alanları yalnız
@@ -107,7 +106,7 @@ namespace VortexArena.Core
 
             // Serbest atış ayrı bir SO alanı DEĞİL, lobi profilinin türevidir: iki alanı da elle
             // işaretlemek "lobi ama ateş kapalı" gibi anlamsız bir kombinasyonu mümkün kılardı.
-            // Otorite yine sunucuda (rules.fireWhilePaused); burası yalnız sunucusuz önizleme.
+            // Otorite yine sunucuda (rules.fireWhilePaused); burası yalnız kuralsız telin yedeği.
             Set(modeId, mode.TeamMode, mode.Scoring, mode.FriendlyFire,
                 mode.Revive, mode.Weapons, mode.RespawnDelay, mode.IsLobbyProfile);
         }
@@ -157,8 +156,8 @@ namespace VortexArena.Core
             }
 
             // Katalog admin arayüzüyle aynı yerden okunur (Assets/_Shared/Data/Resources/).
-            // Bulunamazsa sessizce varsayılana düşülür: bu yol yalnız sunucusuz editör
-            // oturumunda koşar, sahada kurallar her zaman telden gelir.
+            // Bulunamazsa sessizce varsayılana düşülür: bu yol yalnız kurallar telde
+            // gelmediğinde koşar, sahada kurallar her zaman sunucudan gelir.
             var catalog = Resources.Load<GameCatalog>(CatalogResourceName);
             return catalog != null ? catalog.FindMode(modeId) : null;
         }

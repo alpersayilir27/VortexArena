@@ -5,7 +5,7 @@
 
 | Planlanmış iş | Dosya |
 |---|---|
-| Sahada yapılacak duman testi (durum modeli + mekan yapısı + duraklatma) — ⚠️ önce APK/admin build'i yenilenmeli, `PROTOCOL_VERSION` 2→3 | `duman-testi.md` |
+| Sahada yapılacak duman testi (durum modeli + mekan yapısı + duraklatma + WPF launcher) — ⚠️ önce APK/admin build'i yenilenmeli, `PROTOCOL_VERSION` 2→3 | `duman-testi.md` |
 | Kırılabilir objeleri sunucu-otoriter yapmak (yerel `Health` kaldırıldı, yerine ağsal obje canı) | `agsal-kirilabilir-objeler.md` |
 
 > Sıradaki büyük iş **bulut kalibrasyonu** (Meta grup / paylaşılan uzamsal anchor ile toplu
