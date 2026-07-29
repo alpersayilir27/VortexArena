@@ -89,12 +89,17 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ (marker bileşenleri Core'dan gelir).
   Bir arenanın ağa bağlanması için sahnede şunlar olmalı: `ArenaBoundary` (arena origin + halfExtent),
   `BaseZone`×2 (**taban bölgesi** = kırmızı/mavi şerit; ölen oyuncu buraya girince canlanır,
-  `Team.Neutral` = herkese açık), `ArenaCalibrator`, `PlayerPoseTracker`, `RemotePlayerSpawner`,
-  `ModeHudSpawner`, **`VA_CameraRig`** (`_Shared/App/Prefabs/` — SDK'nın Building Blocks rig'inden
-  türetilmiş kendi prefabımız; `PlayerBodyAvatar` içine gömülüdür, tracking origin `Stage`).
-  ⚠️ **Sahneye Building Blocks rig'i EKLENMEZ:** BB kurulumu prefabı otomatik unpack eder
-  (`CameraRigBBBlockData`), yani her arena rig'in donmuş bir kopyasını taşırdı ve bir rig düzeltmesi
-  arena sayısı kadar elle iş doğururdu. **Admin gözlemci için ek adım YOKTUR** — `AdminSpectator`
+  `Team.Neutral` = herkese açık) ve **altyapı prefabları** (`_Shared/App/Prefabs/`):
+  **`VA_CameraRig`** (kamera rig'i + `OVRComprehensiveInteractionRig` + `PlayerBodyAvatar` tek
+  pakette, tracking origin `Stage`), **`VA_PoseSync`** (`PlayerPoseTracker` + `RemotePlayerSpawner`),
+  **`VA_CalibrationManager`** (`ArenaCalibrator`), **`VA_ModeHud`** (`ModeHudSpawner`).
+  ⚠️ **Altyapı sahneye PREFAB ÖRNEĞİ olarak konur — kopyalanmaz, unpack edilmez:** kopya konursa
+  rig/kalibrasyon kurulumundaki tek bir düzeltme arena sayısı kadar elle iş doğurur. Aynı sebeple
+  sahneye **Building Blocks rig'i ya da ayrı bir `OVRComprehensiveInteractionRig` EKLENMEZ**: BB
+  kurulumu prefabı otomatik unpack eder (`CameraRigBBBlockData`) ve ikisi de zaten `VA_CameraRig`
+  içindedir. `VA_CalibrationManager`'ın `anchorA`/`anchorB`/`rigRoot` alanları sahneye baktığı için
+  örnek üstünde doldurulur (prefab asset'inde boş durur — normaldir).
+  **Admin gözlemci için ek adım YOKTUR** — `AdminSpectator`
   kendini önyükler ve sahneyi devralır (rig'i kapatır, `ArenaBoundary`'yi susturur).
   Ayrıca arena başına **tek** `SpawnPoint`: `GameObject > VortexArena > Spawn Point` ile eklenir ve
   ELLE yerleştirilir (sihirbaz üretmez). Yalnız "maçtan önce şurada toplanın" göstergesidir —
@@ -139,7 +144,8 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
 ## XR / Meta politikası
 
 - **Meta-first:** önce Meta Building Blocks + Meta XR SDK; yetmezse Unity XR Interaction Toolkit
-  (XRI kurulu, yedek). Hedef YALNIZ Quest 3/3S. Sahnelerde BB Camera Rig kullanılır.
+  (XRI kurulu, yedek). Hedef YALNIZ Quest 3/3S. Sahnelerde `VA_CameraRig` prefabı kullanılır
+  (BB rig'i sahneye eklenmez — gerekçe "Asset mimarisi" altında).
 - **Umbrella paket YASAK** (`com.meta.xr.sdk.all` — Meta Project Setup Tool önerse bile ekleme):
   kullanılmayan voice@85, SDKTelemetry.aar ↔ OVRPlugin.aar Android namespace çakışmasıyla
   build kırar (vortexcosmos'ta yaşandı). Bireysel paketler: core + interaction + interaction.ovr
@@ -193,18 +199,20 @@ boyut sormaz, ölçekleme yapmaz.** Yaptığı iş: klasörleri (`{Scenes,Data,P
 sahnenin bire bir kopyasını üretir, MapDefinition asset'ini yazar, GameCatalog + uyumlu
 ModeDefinition'lara ekler, Build Settings'e koyar (sahne adı = katalog anahtarı). Değeri
 **bileşen bütünlüğü**: kopyalanan sahne ağa bağlanmak için gereken her şeyi hazır taşır
-(`ArenaBoundary`, `ArenaCalibrator` + işaretçiler, `PlayerPoseTracker`, `RemotePlayerSpawner`,
-`ModeHudSpawner`, `BaseZone`'lar, `VA_CameraRig`). ⚠️ **Farklı ÖLÇÜDEKİ arena Default12x12'den
+(`ArenaBoundary`, kalibrasyon işaretçileri, `BaseZone`'lar + altyapı prefablarının örnekleri —
+`VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, `VA_ModeHud`). ⚠️ **Farklı ÖLÇÜDEKİ arena Default12x12'den
 türetilmez** (10×10 bir arena 12×12 duvar/zeminle gelir) — o ölçü için kendi `Default`'unu kur.
 **Ölçekleme bilinçli olarak yoktur ve eklenmez:**
 her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen bile değil, plan zaten baştan
 çiziliyor — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek bir yalancı-doğru
 üretir. ELDE: geometri çizimi · `ArenaBoundary.halfExtentX/Z` · kalibrasyon işaretçilerinin
-yerleşimi (yerleri zemin bandından gelir) · tek `SpawnPoint` · NavMesh/ışık bake. Sonrasında
+yerleşimi (yerleri zemin bandından gelir) · tek `SpawnPoint` · **raf kipinde oynanacaksa silah rafı**
+(raf kökünde `WeaponRackSpawner`, altında konum tutan `RackSlot` gözleri — şablon dizayn taşımadığı
+için raf içermez) · NavMesh/ışık bake. Sonrasında
 `Tools > VortexArena > Export Server Config` çalıştır — **yeni `sceneName` `maps.json`'a girsin
 diye** (ölçü için değil, oraya arena boyutu yazılmaz).
 **Yeni lobi:** lobi de bir arena kutusudur, farkı üç şeydir — `MapDefinition.supportedModeIds` **yalnız
-`["lobby"]`** (boş bırakılırsa "kısıtsız" sayılır!), sahnede `BaseZone` ve `ModeHudSpawner` YOK, silah
+`["lobby"]`** (boş bırakılırsa "kısıtsız" sayılır!), sahnede `BaseZone` ve `VA_ModeHud` YOK, silah
 rafı VAR. Kaynağı **o fiziksel odanın ölçüsündeki** arenadır (12×12 için `Standard/Lobby12x12`);
 ölçekleme yoktur. `Export Server Config` yeter: sunucu **seçilen mekanın** lobi haritasını kendi
 bulur (`server.json → lobbyScene` yalnız mekanda birden çok lobi varsa doldurulur).

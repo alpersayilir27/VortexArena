@@ -418,9 +418,9 @@ Tam semantik: `Docs/ArenaNet-Protokol.md` §10.6.
 | `ConnectionOverlay` | **Bağlantı hata ekranı** — kalıcı tekil, `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` ile kendini önyükler, tüm UI prosedürel (prefab/Resources/sahne bağı YOK → yeni arena eklerken unutulacak adım yok). ~3 sn **grace** (anlık kopmada yanıp sönmesin; açılışı da maç ortasındaki kopmayı da kapsar). İki durum: adres biliniyor → "SUNUCUYA BAĞLANILAMIYOR" + adres + `N sn · M. deneme` + son hata; adres yok → "SUNUCU BULUNAMADI". Rol'e göre ipucu (player: A×2 / admin: launcher). Masaüstü: screen-space + scrim + **"Yeniden Bağlan"** (adres yoksa devre dışı; `Disconnect()` otomatik denemeyi durdurduğu için tek kurtarma yolu). VR: world-space kart + `HudFollow`, scrim YOK. ⚠️ `ArenaBoundary.IsOutOfBounds` iken **tamamen gizlenir** — alan-dışı uyarısı her zaman baskın |
 | `DevSession` | **Yalnız editör** (dosyanın tamamı `#if UNITY_EDITOR`): dev penceresinin `EditorPrefs` seçimini Play'e uygular. (a) `BeforeSceneLoad` → rol + adres `AppSession`'a, `RoleResolved = true`; (b) `AfterSceneLoad` → "Açık sahneden" kipinde ve aktif sahne bir ARENA sahnesiyse, bir kare sonra **sunucuya bağlanır** ve (player rolünde) **sentetik `load_match`** yayınlar (`NetEvents.InjectLoadMatch`) → takım/slot/mod gerçek kod yolundan geçer. **Bağlanmayı neden o üstleniyor:** `Connect` normalde kabuk controller'larından gelir, arena sahnelerinde onlar YOKTUR — bağlanmazsa can/skor/faz gelmez ve `CanFire` hiç açılmaz. Sunucuda maç koşuyorsa `welcome.match` geç-katılım senkronu devreye girip **gerçek takım ataması sentetiği ezer**. Pencerede "Dev enjeksiyonu" kapatılırsa üretim yolu birebir koşar |
 | `AppSession` | Oturum: rol + sunucu adresi (`ServerIp`/`ServerPort`/`HasServerEndpoint`) — `AppBoot` yazar, controller'lar okur |
-| `PlayerPoseTracker` | BB rig anchor'larını bulur, **dünya→arena** çevirip `IPoseSource` olarak kaydolur (kalibrasyon BEKLENMEZ; hizalanana dek pozlar ofsetli gider) |
-| `RemotePlayerSpawner` | Katılan/ayrılan uzak oyuncular için `RemoteAvatar` yaratır/yok eder; her `lobby_state`'te ad/takım/**kalibrasyon** bilgisini besler. Ayrıca roster'da KENDİ id'sini bulup yerel takımı çözer ve her avatara **dost mu** olduğunu bildirir (`SetFriendly`) — takımsız modda (FFA) ve admin gözlemcide yerel takım boştur, kimse dost işaretlenmez |
-| `ModeHudSpawner` | Aktif modun HUD prefabını katalogdan örnekler — **App, mod assembly'lerini referanslamaz** (prefab yalnız `GameObject` olarak taşınır) |
+| `PlayerPoseTracker` | *(`VA_PoseSync` prefabı)* Rig anchor'larını bulur, **dünya→arena** çevirip `IPoseSource` olarak kaydolur (kalibrasyon BEKLENMEZ; hizalanana dek pozlar ofsetli gider) |
+| `RemotePlayerSpawner` | *(aynı `VA_PoseSync` prefabı)* Katılan/ayrılan uzak oyuncular için `RemoteAvatar` yaratır/yok eder; her `lobby_state`'te ad/takım/**kalibrasyon** bilgisini besler. Ayrıca roster'da KENDİ id'sini bulup yerel takımı çözer ve her avatara **dost mu** olduğunu bildirir (`SetFriendly`) — takımsız modda (FFA) ve admin gözlemcide yerel takım boştur, kimse dost işaretlenmez |
+| `ModeHudSpawner` | *(`VA_ModeHud` prefabı)* Aktif modun HUD prefabını katalogdan örnekler — **App, mod assembly'lerini referanslamaz** (prefab yalnız `GameObject` olarak taşınır) |
 | `IdentifyOverlay` | Admin `identify` yollayınca o başlıkta büyük kimlik overlay'i |
 
 ### İstemci: `VortexArena.App.Admin` (admin gözlemci — masaüstü)
@@ -435,7 +435,7 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 
 | Sınıf | Görevi |
 |---|---|
-| `AdminSpectator` | Gözlemcinin kökü: kendini önyükler (`AfterSceneLoad` + `DontDestroyOnLoad`), rol çözülünce etkinleşir, kamerayı/HUD'ı/işaretçileri yaratır ve **her `sceneLoaded`'da sahneyi devralır**: BB Camera Rig kökünü kapatır (üç kamerası da `MainCamera` etiketli → `Camera.main` belirsiz kalırdı), `ArenaCalibrator` + `BaseZone`'ları kapatır, **`ArenaBoundary`'yi KAPATMADAN** `SetSpectatorMode(true)` ile susturur, world-space canvas'ları gizler, EventSystem'i devralır. Kısayollar: `1/2/3` kip · `Tab` sonraki oyuncu · `F` POV · `P`/`I` panel · `Esc` kapat |
+| `AdminSpectator` | Gözlemcinin kökü: kendini önyükler (`AfterSceneLoad` + `DontDestroyOnLoad`), rol çözülünce etkinleşir, kamerayı/HUD'ı/işaretçileri yaratır ve **her `sceneLoaded`'da sahneyi devralır**: `VA_CameraRig` kökünü kapatır (üç kamerası da `MainCamera` etiketli → `Camera.main` belirsiz kalırdı), `ArenaCalibrator` + `BaseZone`'ları kapatır, **`ArenaBoundary`'yi KAPATMADAN** `SetSpectatorMode(true)` ile susturur, world-space canvas'ları gizler, EventSystem'i devralır. Kısayollar: `1/2/3` kip · `Tab` sonraki oyuncu · `F` POV · `P`/`I` panel · `Esc` kapat |
 | `AdminSpectatorCamera` | Üç kip: **POV** (seçili oyuncunun baş pozu; poz yoksa son konumda kalır) · **Serbest** (WASD + Q/E + **sağ tuş basılı** fare bakışı, Shift ×3, tekerlek hız; imleç KİLİTLENMEZ → HUD tıklanabilir kalır) · **Kuş bakışı** (ortografik, arena yaw'ına hizalı; kadrajın **tek kaynağı** sahnedeki `ArenaBoundary`, varsayılan ölçü YOKTUR — sınır bulunamazsa kamera dünya origin'inin üstünde kalır, ölçü değişmez ve konsola sahne başına bir uyarı düşer (lobide susar); tekerlek zoom). Kip değişiminde `AdminSpectator.RefreshRoof()` çağrılır → sahnede `ArenaRoof` varsa çatı kuş bakışında kalkar |
 | `AdminPlayerMarkers` | Oyuncu başına **zeminde halka + altında ad etiketi** (kuş bakışı isteği). Halka baş pozunun x/z'sinden arena zeminine indirilir; etiket kameraya döner ve kameranın yukarı vektörünün tersine kaydırılarak her kipte "dairenin altında" okunur. `RemoteAvatar`'a dokunmaz |
 | `AdminHud` | **Kalıcı** ekran-uzayı HUD'ı (`sortingOrder = 4000`; hata ekranı 5000'de üstte kalır): üst orta takım skorları + **ortada istatistik chip'i** (faz/süre de gösterir), sol üst tercihler, sağ üst mod·harita + bağlantı/poz yaşı + **çoklu admin satırı** (kaç admin bağlı · son admin eylemi; tek admin varken boş kalır), yanlarda takım kolonları (**FFA'da tek kolon** — karar veriden gelir), alt orta kamera şeridi + seçili oyuncu, alt sağ ölüm akışı |
@@ -459,8 +459,9 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 
 ### İstemci: `VortexArena.Core` (oyun kodu)
 
-`ArenaBoundary` (arena origin + sınır), `ArenaCalibrator` (2 nokta → 6DOF hizalama + OVRSpatialAnchor
-kalıcılığı + recenter onarımı; **A+B yalnız sunucu "kalibresiz" derken açılır**, §3.11),
+`ArenaBoundary` (arena origin + sınır), `ArenaCalibrator` (`VA_CalibrationManager` prefabıyla gelir; 2 nokta → 6DOF hizalama +
+OVRSpatialAnchor kalıcılığı + recenter onarımı; **A+B yalnız sunucu "kalibresiz" derken açılır**,
+§3.11),
 `CalibrationState` (kalıcı tekil — kalibrasyon durumunun sunucu ile iki yönlü köprüsü: hizalanınca
 `set_calibration` yollar, operatör sıfırlayınca `ArenaCalibrator.Invalidate()` çağırır),
 `ArenaSpace` (dünya↔arena dönüşümü), `BaseZone` (**taban bölgesi** — kırmızı/mavi şerit, canlanma
@@ -777,11 +778,15 @@ doğrudan dashboard'a düşer. Ayrıntı: `deploy/README.md`.
    Ölen oyuncu bunlardan birine fiziken girince canlanır — rig ASLA taşınmaz.
    Ayrıca **tek** başlangıç noktası: `GameObject > VortexArena > Spawn Point` ile ekle ve elle
    yerleştir (yalnız gösterge, kod okumaz).
-4. Ağ objeleri: `CalibrationManager` (`ArenaCalibrator` + iki anchor marker), `PoseSync`
-   (`PlayerPoseTracker` + `RemotePlayerSpawner`), `[ModeHud]` (`ModeHudSpawner`), BB Camera Rig.
-   En kolayı mevcut bir arenadan kopyalamak; **kopyaladıktan sonra sahneler-arası referansları
-   (ör. `BaseZone.head`) yeni sahnenin `CenterEyeAnchor`'ına yeniden bağla** — Unity kopuk
-   sahneler-arası referansı sessizce null yapar.
+4. Ağ objeleri: `_Shared/App/Prefabs/` altındaki prefabları sahne köküne **örnek olarak** sürükle —
+   `VA_CameraRig` (kamera/kumanda + etkileşim rig'i + yerel gövde avatarı), `VA_PoseSync`
+   (`PlayerPoseTracker` + `RemotePlayerSpawner`), `VA_CalibrationManager` (`ArenaCalibrator`),
+   `VA_ModeHud` (`ModeHudSpawner`). **Başka bir arenadan kopyalama** (kopya prefab bağını kaybeder,
+   rig/kalibrasyon düzeltmeleri o sahneye ulaşmaz). Sonra sahneye bakan referansları elle bağla:
+   `VA_CalibrationManager`'ın `anchorA`/`anchorB`/`rigRoot`'u (örnek üstünde override edilir,
+   prefab asset'inde boştur) ile `ArenaBoundary`/`BaseZone`'un `head` alanı → sahnenin
+   `CenterEyeAnchor`'ı. Boş bırakılırsa sahne sessizce çalışmaz; Unity kopuk sahneler-arası
+   referansı sessizce null yapar.
 5. `MapDefinition` asset'i (`Data/`): sceneName + görünen ad + desteklenen modlar →
    `GameCatalog.maps` + ilgili `ModeDefinition.maps` + **Build Settings**.
 6. **`Tools > VortexArena > Export Server Config`** — yeni `sceneName` `maps.json`'a girsin diye.
@@ -866,7 +871,7 @@ konsoluna tek satır sebep yazar.
     `TakeOverEventSystem()` sahnedekini kapatır: **iki etkin EventSystem** Unity uyarısı basar ve
     girdiyi ikisi arasında böler. Ayrıca proje Input System-only → modül
     `InputSystemUIInputModule` olmalı (`StandaloneInputModule` runtime'da patlar).
-16. **BB Camera Rig'in ÜÇ kamerası da `MainCamera` etiketli** (Left/Right/CenterEye) → `Camera.main`
+16. **`VA_CameraRig`'in ÜÇ kamerası da `MainCamera` etiketli** (Left/Right/CenterEye) → `Camera.main`
     hangisini döndüreceği garanti değil ve `RemoteAvatar` ad etiketleri yanlış kameraya döner.
     Sahnede kendi kamerasını kuran her şey (admin gözlemci) rig kökünü kapatmalı ve
     **kendi `AudioListener`'ını** eklemelidir (rig kapanınca sahnede dinleyici kalmaz).

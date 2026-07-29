@@ -483,7 +483,7 @@ asset'ini, katalog kaydını ve Build Settings girdisini üretir.
 
 ⚠️ **Sihirbaz boyut sormaz, geometriyi ölçeklemez.** Kazandırdığı şey sahnenin ağ bileşenlerini
 eksiksiz taşıması (`ArenaBoundary`, `ArenaCalibrator` + işaretçiler, `PlayerPoseTracker`,
-`RemotePlayerSpawner`, `ModeHudSpawner`, `BaseZone`, BB rig) — arena planı zaten her kurulumda
+`RemotePlayerSpawner`, `ModeHudSpawner`, `BaseZone`, `VA_CameraRig`) — arena planı zaten her kurulumda
 baştan çiziliyor, orantılı ölçekleme elle düzeltilecek bir yalancı-doğru üretir.
 
 Sonra **elde**: arena planını çiz · `ArenaBoundary.halfExtentX/Z`'yi gerçek
