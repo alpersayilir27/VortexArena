@@ -136,6 +136,28 @@ namespace VortexArena.Core.Editor
                     continue;
                 }
 
+                // ⚠️ Eleme, YİNELEME kontrolünden ÖNCE gelir: elenen harita `seen`'e adını
+                // yazmamalı. Yazsaydı, şablonla aynı sahne adını taşıyan GERÇEK bir harita
+                // "yinelenen" diye sessizce düşerdi (sıralama şablonu öne alıyor).
+
+                // Şablon = oynanmaz içerik: sessizce atlanır (uyarı gürültü olurdu, orada olması normal).
+                if (path.StartsWith(TemplateRoot, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                // Mekan dışında kalan harita EXPORT EDİLMEZ. Sebep: sunucu açılışta operatöre
+                // mekan listesi sorar ve o liste bu dosyadan gelir — mekansız bir harita orada
+                // gerçekte var olmayan bir işletme satırı açardı. Yeri klasördür, alan değil.
+                if (!path.StartsWith(VenuesRoot, StringComparison.Ordinal))
+                {
+                    result.Warnings.Add(
+                        $"'{sceneName}' bir mekan klasöründe değil ('{path}') — ATLANDI. " +
+                        $"Oynanacak arena {VenuesRoot}<İşletme>/<Arena>/ altında olmalı; " +
+                        $"şablonların yeri {TemplateRoot}.");
+                    continue;
+                }
+
                 if (!seen.Add(sceneName))
                 {
                     result.Warnings.Add($"Yinelenen sceneName '{sceneName}': '{path}' — atlandı (ilk eşleşme yazıldı).");
@@ -157,32 +179,31 @@ namespace VortexArena.Core.Editor
             return accepted;
         }
 
+        /// <summary>Oynanacak arenaların kökü — mekan adı bu yolun bir alt seviyesinden okunur.</summary>
+        public const string VenuesRoot = "Assets/Arenas/Venues/";
+
+        /// <summary>Sihirbaz şablonlarının kökü — buradaki haritalar export EDİLMEZ.</summary>
+        public const string TemplateRoot = "Assets/Arenas/Template/";
+
         /// <summary>
         /// Haritanın MEKANI — asset yolundan türetilir, ayrı bir alan yoktur.
         /// <para>
-        /// <c>Assets/Arenas/Venues/&lt;İşletme&gt;/…</c> → <c>&lt;İşletme&gt;</c>,
-        /// başka her yer → <see cref="StandardVenue"/>. Klasör yerleşimi zaten mekanı anlatıyor
-        /// (CLAUDE.md: "işletme klasörü kutuların kabıdır"); ikinci bir alan eklemek onu
-        /// unutulabilir hâle getirirdi — bir haritayı yanlış mekana yazmanın tek yolu onu yanlış
-        /// klasöre koymaktır, o da gözle görülür.
+        /// <c>Assets/Arenas/Venues/&lt;İşletme&gt;/…</c> → <c>&lt;İşletme&gt;</c>. Klasör yerleşimi
+        /// zaten mekanı anlatıyor (CLAUDE.md: "işletme klasörü kutuların kabıdır"); ikinci bir alan
+        /// eklemek onu unutulabilir hâle getirirdi — bir haritayı yanlış mekana yazmanın tek yolu
+        /// onu yanlış klasöre koymaktır, o da gözle görülür.
+        /// </para>
+        /// <para>
+        /// Mekan dışındaki haritalar buraya HİÇ GELMEZ: <see cref="CollectMaps"/> onları eler.
         /// </para>
         /// </summary>
         private static string VenueOf(MapDefinition map)
         {
-            const string venuesRoot = "Assets/Arenas/Venues/";
             string path = AssetDatabase.GetAssetPath(map);
-            if (string.IsNullOrEmpty(path) || !path.StartsWith(venuesRoot, StringComparison.Ordinal))
-            {
-                return StandardVenue;
-            }
-
-            string rest = path.Substring(venuesRoot.Length);
+            string rest = path.Substring(VenuesRoot.Length);
             int slash = rest.IndexOf('/');
-            return slash > 0 ? rest.Substring(0, slash) : StandardVenue;
+            return slash > 0 ? rest.Substring(0, slash) : rest;
         }
-
-        /// <summary>İşletme klasörü altında OLMAYAN haritaların mekanı (şablonlar + standart arenalar).</summary>
-        public const string StandardVenue = "Standard";
 
         /// <summary>Build Settings'teki sahne adları → enabled bayrağı (ad çakışırsa açık olan kazanır).</summary>
         private static Dictionary<string, bool> CollectBuildSettingsScenes()
@@ -214,7 +235,7 @@ namespace VortexArena.Core.Editor
         // ----------------------------------------------------------------- json
 
         /// <summary>
-        /// <c>{ "maps": [ { "sceneName": "Arena12x12", "venue": "Standard", "modes": ["tdm"] } ] }</c>
+        /// <c>{ "maps": [ { "sceneName": "Arena12x12", "venue": "Outdoor12x12", "modes": ["tdm"] } ] }</c>
         /// — sunucunun <c>start_match</c> doğrulaması ve <b>mekan seçimi</b> için.
         /// <para>
         /// <b>Arena ÖLÇÜSÜ yazılmaz.</b> Sunucu metre bilmez (pozlar istemci-otoriter, arena

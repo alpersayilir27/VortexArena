@@ -48,8 +48,8 @@ oyunun tek karar mercii odur, yanlışlıkla kapanmasın diye kimse onu senin ye
 
 ```
 Hangi mekan açılsın?
-  1) DemoVenue  (2 harita)
-  2) Standard   (4 harita)
+  1) Outdoor12x12  (3 harita)
+  2) VortexAntep   (2 harita)
 Seçim [1-2]:
 ```
 
@@ -62,9 +62,9 @@ Seçim [1-2]:
 ```
 Mekan      : <İşletmenin adı>
 Aktif alan : <seçtiğin mekan>
-Modlar     : tdm
-Silahlar   : ak47, m4
-Haritalar  : Arena12x12, IceWorld, ...
+Modlar     : tdm, ffa
+Haritalar  : Arena12x12, IceWorld, Lobby12x12
+Lobi       : Lobby12x12
 ```
 
 - [ ] **Bu üç satırı görüyorsan sistem hazırdır:** `Mekan`, `Modlar`, `Haritalar`.
@@ -333,6 +333,21 @@ ilet.
   uyarı çıkar → geri içeri girmesi yeterli.
 - Maç, süre dolunca veya skor limitine ulaşılınca biter; kazanan duyurulur ve **~10 saniye
   sonra tüm gözlükler kendiliğinden lobiye döner.**
+
+**Maçı geçici olarak durdurmak (DURAKLAT)**
+
+Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düştü, seyirciyle konuşulacak —
+**Tercihler → DURAKLAT**:
+
+- Süre durur, kimse kimseye hasar veremez, **skorlar olduğu gibi kalır.**
+- Oyuncular arenada kalır, hiçbir yere ışınlanmaz; maç bittiği sanılmaz.
+- Aynı düğme **DEVAM ET**'e döner; bastığında maç **kaldığı yerden** sürer.
+- Maçı gerçekten bitirmek istiyorsan duraklatma değil **İPTAL** (ya da **LOBİYE DÖN**) kullan.
+
+> Düğme yalnız **maç koşarken** ve **senin duraklattığın maçta** çalışır. Geri sayım sırasında ya
+> da lobide sönük durur — orada duraklatılacak bir şey yoktur. Birden çok yönetim ekranı varsa
+> hepsi aynı düğmeyi görür: biri duraklatınca diğerinin ekranında da **DEVAM ET** yazar ve kimin
+> yaptığı durum satırına düşer.
 
 ---
 

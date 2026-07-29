@@ -16,8 +16,9 @@ public sealed class MapEntry
     public string sceneName = "";
 
     /// <summary>Haritanın MEKANI (§11). Export bunu asset yolundan türetir:
-    /// <c>Assets/Arenas/Venues/&lt;İşletme&gt;/…</c> → o işletme, başka her yer →
-    /// <c>"Standard"</c>. Boş gelirse (eski export) <c>"Standard"</c> sayılır.</summary>
+    /// <c>Assets/Arenas/Venues/&lt;İşletme&gt;/…</c> → o işletme. Mekan klasörü dışındaki
+    /// haritalar (şablonlar) export'a HİÇ girmez. Boş gelirse (eski export)
+    /// <see cref="MapTable.DefaultVenue"/> sayılır.</summary>
     public string venue = "";
 
     /// <summary>Bu haritanın desteklediği modId'ler; BOŞ = kısıt yok (MapDefinition.SupportsMode

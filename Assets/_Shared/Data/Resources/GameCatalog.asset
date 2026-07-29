@@ -18,9 +18,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 00d909d417dc7724d8310754a176b08c, type: 2}
   maps:
   - {fileID: 11400000, guid: f64979099ffa12d409e09a698be8ad57, type: 2}
-  - {fileID: 11400000, guid: 890c6f2eeb2bdfd4aa97a55879a4eea3, type: 2}
   - {fileID: 11400000, guid: bceb09007c055e248973177e91f29578, type: 2}
-  - {fileID: 11400000, guid: 41456a8fc0db03145ae5d37897a0cf31, type: 2}
   - {fileID: 11400000, guid: a0d89b3444595f049bd3d1ed05c21d8c, type: 2}
-  - {fileID: 11400000, guid: 45a432d6a4ee43244bf448fa3e63446e, type: 2}
   - {fileID: 11400000, guid: e81f1242a0f99824086d13c9f0084b4e, type: 2}
+  - {fileID: 11400000, guid: c7fac0b075064be08aa75f50faf07984, type: 2}

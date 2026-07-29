@@ -74,18 +74,30 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   ⚠️ Ayrı bir admin dashboard sahnesi YOKTUR ve açılmaz — admin
   oyuncularla aynı sahnede duran bir gözlemcidir.
   ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
-- `Assets/Arenas/Standard/<AXxX veya TemaAdı>/` ve `Assets/Arenas/Venues/<İşletme>/<Arena>/` —
-  arena kutuları: `{Scenes, Data, Prefabs}` (+ arenaya özel sanat varsa
-  `Art/{Materials,Textures}`; ör. `Standard/IceWorld`).
-  ⚠️ **İşletme klasörü kutu DEĞİL, kutuların kabıdır** — bir işletmede birden çok arena oynatılır,
-  hepsi o işletmenin `Default`'undan türetilir (`Venues/DemoVenue/Default/`).
-  ⚠️ **Klasör = MEKAN.** Export haritanın mekanını yoldan türetir (`Venues/<İşletme>/…` → o işletme,
-  başka her yer → `Standard`) ve sunucu açılışta hangi mekanı oynatacağını sorar; o oturumda
-  yalnız o mekanın haritaları başlatılabilir ve adminlere yalnız onlar görünür. Yani **bir arenayı
-  yanlış klasöre koymak onu yanlış işletmeye yazar** — `MapDefinition`'da mekan alanı YOKTUR ve
-  eklenmez (ikinci, unutulabilir bir doğruluk kaynağı olurdu). → `Docs/ArenaNet-Protokol.md` §11.1
-  **Her yeni arenanın kaynağı `Standard/Default12x12`'dir** — harita dizaynı taşımayan, yalnız ağa
+- `Assets/Arenas/` altında **yalnız iki kök vardır**: `Venues/` (oynanan içerik) ve `Template/`
+  (sihirbaz kaynağı). Üçüncü bir kök açma — mekansız arena diye bir şey yoktur.
+  - `Assets/Arenas/Venues/<İşletme>/<Arena>/` — arena kutusu: `{Scenes, Data}` (+ yalnız o arenaya
+    ait sanat/prefab varsa `Art/`, `Prefabs/`; ör. `Outdoor12x12/IceWorld/`). Mekanın **tüm**
+    sahnelerinin paylaştığı sanat/prefab/veri ise bir seviye yukarıda, mekan kökündeki
+    `Art/` · `Prefabs/` · `Data/` klasörlerine girer (ör. `VortexAntep/Data/VortexAntep_Shape` =
+    mekanın fiziksel planı, hem arena hem lobi kullanır).
+  - ⚠️ **Boş klasör açma** (ne sihirbaz ne elle): git klasör tutmaz, dosya tutar → klonda kaybolur,
+    geriye yetim `.meta` kalır ve Unity klasörü hayalet olarak geri üretir. Klasör, içine ilk dosya
+    girdiğinde açılır.
+  - ⚠️ **İşletme klasörü kutu DEĞİL, kutuların kabıdır** — bir işletmede birden çok arena oynatılır
+    (`Venues/Outdoor12x12/IceWorld/`, `.../A12x12/`, `.../Lobby/`).
+  - Her mekanın **kendi lobi kutusu** olur (`<İşletme>/Lobby/`) ve o kutudaki `MapDefinition`'ın
+    `supportedModeIds`'i `["lobby"]`'dir — sunucu açık sahneyi bununla bulur (§10.7).
+  ⚠️ **Klasör = MEKAN.** Export haritanın mekanını yoldan türetir (`Venues/<İşletme>/…` → o işletme)
+  ve sunucu açılışta hangi mekanı oynatacağını sorar; o oturumda yalnız o mekanın haritaları
+  başlatılabilir ve adminlere yalnız onlar görünür. Yani **bir arenayı yanlış klasöre koymak onu
+  yanlış işletmeye yazar** — `MapDefinition`'da mekan alanı YOKTUR ve eklenmez (ikinci,
+  unutulabilir bir doğruluk kaynağı olurdu). Mekan klasörü dışındaki haritalar export'a HİÇ
+  girmez (uyarı basılır) → `Docs/ArenaNet-Protokol.md` §11.1
+  **Her yeni arenanın kaynağı `Template/Default12x12`'dir** — harita dizaynı taşımayan, yalnız ağa
   bağlanmak için gerekenleri içeren TEK KAYNAK arena; sihirbazın varsayılan kaynağı da odur.
+  ⚠️ `Template/` altındaki haritalar **oynanmaz**: export edilmez, Build Settings'e ve
+  `GameCatalog`'a girmez (yoksa sunucu açılışında sahte bir mekan olarak listelenirlerdi).
   Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ (marker bileşenleri Core'dan gelir).
   Bir arenanın ağa bağlanması için sahnede şunlar olmalı: `SpawnPoint` (**arena uzayının sıfırı**),
   `ArenaBoundary` (muhafaza + arena ölçüsü),
@@ -204,10 +216,10 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
 ## Yeni içerik ekleme reçeteleri
 
 **Yeni arena:** `Tools > VortexArena > Create Arena From Template` → arenaId + sahne adı +
-hedef (Standard / Venue; Venue'de kutu `Venues/<İşletme>/<arenaId>/` altına açılır).
-**Kaynak varsayılanı `Standard/Default12x12`'dir** — dizaynlı bir arenadan türetmek o arenanın
+**mekan** (kutu her zaman `Venues/<İşletme>/<arenaId>/` altına açılır; mekan ZORUNLUDUR).
+**Kaynak varsayılanı `Template/Default12x12`'dir** — dizaynlı bir arenadan türetmek o arenanın
 geometrisini de kopyalar ve elle temizlemek gerekirdi. ⚠️ **Sihirbaz arena GEOMETRİSİNE DOKUNMAZ —
-boyut sormaz, ölçekleme yapmaz.** Yaptığı iş: klasörleri (`{Scenes,Data,Prefabs}`) + kaynak
+boyut sormaz, ölçekleme yapmaz.** Yaptığı iş: klasörleri (`{Scenes,Data}`) + kaynak
 sahnenin bire bir kopyasını üretir, MapDefinition asset'ini yazar, GameCatalog + uyumlu
 ModeDefinition'lara ekler, Build Settings'e koyar (sahne adı = katalog anahtarı). Değeri
 **bileşen bütünlüğü**: kopyalanan sahne ağa bağlanmak için gereken her şeyi hazır taşır
@@ -233,10 +245,11 @@ Build Arena From Shape` ile yeniden üretilir (idempotent). ⚠️ **Plan üç y
 Alan boş bırakılırsa `ArenaBoundary` eksene hizalı dikdörtgen olarak çalışır (bugünkü davranış).
 Elle konan engeller için `ArenaObstacle` (`Core/Arena/`): muhafaza onu engel sayar —
 ⚠️ **collider değildir, fizik yapmaz** (free-roam'da çarpışma yoktur).
-**Yeni lobi:** lobi de bir arena kutusudur, farkı üç şeydir — `MapDefinition.supportedModeIds` **yalnız
-`["lobby"]`** (boş bırakılırsa "kısıtsız" sayılır!), sahnede `BaseZone` ve `VA_ModeHud` YOK, silah
-rafı VAR. Kaynağı **o fiziksel odanın ölçüsündeki** arenadır (12×12 için `Standard/Lobby12x12`);
-ölçekleme yoktur. `Export Server Config` yeter: sunucu **seçilen mekanın** lobi haritasını kendi
+**Yeni lobi:** lobi de bir arena kutusudur (`Venues/<İşletme>/Lobby/`), farkı üç şeydir —
+`MapDefinition.supportedModeIds` **yalnız `["lobby"]`** (boş bırakılırsa "kısıtsız" sayılır!),
+sahnede `BaseZone` ve `VA_ModeHud` YOK, silah rafı VAR. **Her mekanın kendi lobisi olur** ve
+kaynağı **o mekanın kendi arenasıdır** — fiziksel oda aynı olduğu için geometri birebir tutar
+(ölçekleme yoktur). `Export Server Config` yeter: sunucu **seçilen mekanın** lobi haritasını kendi
 bulur (`server.json → lobbyScene` yalnız mekanda birden çok lobi varsa doldurulur).
 ⚠️ `lobby` **kayıtlı bir mod DEĞİLDİR** — sunucuya `IGameMode` olarak eklenmez (`start_match` onu
 reddeder, "lobi türünde maç başlamaz" kuralı buradan gelir), `ModeDefinition.lobbyProfile`
@@ -307,7 +320,7 @@ hedef çözme, hasarı istemcinin belirlemesi) ve `Weapon` da bu kapıyı kullan
 İçerik kataloğu: **`_Shared/Data/Resources/GameCatalog.asset`**
 (ModeDefinition + MapDefinition listesi) — admin tercihler panelinin mod/harita seçicisi bunu
 `Resources.Load<GameCatalog>("GameCatalog")` ile okur, bu yüzden `Resources/` altında kalmalı.
-**Kar/hava efekti (başka arenaya):** `Arenas/Standard/IceWorld/Prefabs/FX_SnowStorm.prefab`'ı
+**Kar/hava efekti (başka arenaya):** `Arenas/Venues/Outdoor12x12/IceWorld/Prefabs/FX_SnowStorm.prefab`'ı
 sahneye arena origin'ine (0,0,0) bırak; kendine yeter (`Snow_C_NearField` üstündeki
 `WeatherVolumeFollow` hedefi boşsa `Camera.main`'i bulur). Arena 12×12 değilse `Snow_A/B/E`
 shape scale'lerini arena boyutu + ~3 m payla ölçekle — geniş kutu bütçeyi görünmeyen alana harcar.

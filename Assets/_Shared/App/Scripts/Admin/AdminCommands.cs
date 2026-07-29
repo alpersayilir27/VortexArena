@@ -105,6 +105,26 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>Koşan maçı dondurur (§5.2). Sunucu yalnız <c>playing</c> iken uygular;
+        /// başka fazda komut sessizce düşer, durum değişmez.</summary>
+        public static void PauseMatch()
+        {
+            if (Send(new PauseMatchMsg()))
+            {
+                SetStatus("Duraklatma gönderildi.");
+            }
+        }
+
+        /// <summary>Operatörün duraklattığı maçı sürdürür (§5.2). Modun ya da geri sayımın
+        /// duraklamasını KALDIRMAZ — sunucu onu reddeder.</summary>
+        public static void ResumeMatch()
+        {
+            if (Send(new ResumeMatchMsg()))
+            {
+                SetStatus("Devam isteği gönderildi.");
+            }
+        }
+
         public static void ReturnToLobby()
         {
             if (Send(new ReturnToLobbyMsg()))
