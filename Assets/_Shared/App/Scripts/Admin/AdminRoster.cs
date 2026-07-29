@@ -127,7 +127,21 @@ namespace VortexArena.App.Admin
         /// (<see cref="Rebuild"/> hesaplar).</summary>
         private bool _anyOnlineTeam;
 
-        public string Phase { get; private set; } = "Lobby";
+        /// <summary>Sunucudan gelen faz (§10.1): <c>paused</c> | <c>playing</c> | <c>finished</c>.</summary>
+        public string Phase { get; private set; } = ArenaProtocol.PHASE_PAUSED;
+
+        /// <summary>Duraklamanın gerekçesi (§10.1); duraklı değilken boş.</summary>
+        public string PhaseReason { get; private set; } = ArenaProtocol.PAUSE_REASON_LOBBY;
+
+        /// <summary>Modun kendi ara durumu (§10.1); çekirdek yorumlamaz.</summary>
+        public string ModeState { get; private set; } = "";
+
+        /// <summary>Maç koşmuyor mu? (§10.1: <i>"maç koşuyor mu?"</i> sorusunun tek cevabı
+        /// <c>phase == playing</c>'dir.) Harita/mod seçicileri buna bakar: harita değiştirmek
+        /// TÜM istemcilere sahne yükletir (§10.7 sahneleme), o yüzden koşan maçta yapılamaz —
+        /// ama maç bittiğinde (<c>finished</c>) operatör bir sonrakini seçebilmelidir.</summary>
+        public bool CanChangeSelection => Phase != ArenaProtocol.PHASE_PLAYING;
+
         public float TimeRemaining { get; private set; }
         public int ScoreRed { get; private set; }
         public int ScoreBlue { get; private set; }
@@ -288,7 +302,9 @@ namespace VortexArena.App.Admin
                 return;
             }
 
-            Phase = string.IsNullOrEmpty(msg.match.phase) ? "Lobby" : msg.match.phase;
+            Phase = string.IsNullOrEmpty(msg.match.phase) ? ArenaProtocol.PHASE_PAUSED : msg.match.phase;
+            PhaseReason = msg.match.phaseReason ?? "";
+            ModeState = msg.match.modeState ?? "";
             TimeRemaining = msg.match.timeRemaining;
             ScoreRed = msg.match.scoreRed;
             ScoreBlue = msg.match.scoreBlue;
@@ -401,11 +417,13 @@ namespace VortexArena.App.Admin
             }
 
             Phase = string.IsNullOrEmpty(msg.phase) ? Phase : msg.phase;
+            PhaseReason = msg.phaseReason ?? "";
+            ModeState = msg.modeState ?? "";
             TimeRemaining = msg.timeRemaining;
             ScoreRed = msg.scoreRed;
             ScoreBlue = msg.scoreBlue;
 
-            if (Phase != "Countdown")
+            if (PhaseReason != ArenaProtocol.PAUSE_REASON_COUNTDOWN)
             {
                 CountdownSeconds = 0;
             }
@@ -435,13 +453,16 @@ namespace VortexArena.App.Admin
             WinnerPlayerId = msg.winnerPlayerId;
             ScoreRed = msg.scoreRed;
             ScoreBlue = msg.scoreBlue;
-            Phase = "End";
+            Phase = ArenaProtocol.PHASE_FINISHED;
+            PhaseReason = "";
             Raise();
         }
 
         private void HandleReturnToLobby(ReturnToLobbyMsg _)
         {
-            Phase = "Lobby";
+            Phase = ArenaProtocol.PHASE_PAUSED;
+            PhaseReason = ArenaProtocol.PAUSE_REASON_LOBBY;
+            ModeState = "";
             CountdownSeconds = 0;
             WinnerTeam = "";
             WinnerPlayerId = 0;
@@ -594,7 +615,9 @@ namespace VortexArena.App.Admin
         private bool ResolveIsFfa()
         {
             // (1) Maç yüklendiyse kural sunucudan gelmiştir (load_match.rules / welcome.match.rules).
-            if (Phase != "Lobby")
+            // "Maç yüklendi" = lobi bekleyişinde DEĞİLİZ; yükleme/geri sayım/duraklatma/koşma/bitiş
+            // hepsinde kural gerçektir.
+            if (PhaseReason != ArenaProtocol.PAUSE_REASON_LOBBY)
             {
                 return ModeRuntime.Teams == ModeTeamMode.None;
             }

@@ -24,6 +24,13 @@ namespace VortexArena.Core.Editor
     /// yığınıydı).
     /// </para>
     /// <para>
+    /// <b>Tek istisna: arena planı (<c>ArenaShapeDefinition</c>) verilirse</b> — o zaman şablonun
+    /// hazır zemin/duvar mesh'leri silinip geometri plandan üretilir
+    /// (<see cref="ArenaShapeBuilder"/>) ve <c>ArenaBoundary</c> plana + üretilen duvarlara
+    /// bağlanır. Bu ÖLÇEKLEME değildir: gerçek ölçüler plan asset'inde elle çizilidir. Alan boş
+    /// bırakıldığında yukarıdaki davranış birebir geçerlidir.
+    /// </para>
+    /// <para>
     /// Sihirbazın kattığı değer <b>bileşen bütünlüğü</b>: kopyalanan sahne ağa bağlanmak için
     /// gereken her şeyi hazır taşır (<c>ArenaBoundary</c>, <c>ArenaCalibrator</c> + işaretçiler,
     /// <c>PlayerPoseTracker</c>, <c>RemotePlayerSpawner</c>, <c>ModeHudSpawner</c>,
@@ -47,6 +54,11 @@ namespace VortexArena.Core.Editor
     {
         private const string StandardRoot = "Assets/Arenas/Standard";
         private const string VenuesRoot = "Assets/Arenas/Venues";
+
+        // Şablon sahnesindeki hazır geometrinin GERÇEK adları (Default12x12): plan verildiğinde
+        // yalnız bunlar silinir — kalibrasyon işaretçileri ve taban bölgeleri korunur.
+        private const string TemplateGroundMeshName = "GroundMesh";
+        private const string TemplateWallPrefix = "Wall_";
 
         [SerializeField] private ArenaTemplateOptions options = new ArenaTemplateOptions();
 
@@ -120,9 +132,17 @@ namespace VortexArena.Core.Editor
             options.displayName = EditorGUILayout.TextField("Gösterim adı", options.displayName);
 
             EditorGUILayout.Space();
+            options.shapePath = AssetPathField<ArenaShapeDefinition>(
+                new GUIContent("Arena planı (isteğe bağlı)",
+                    "ArenaShapeDefinition: zemin sınırı + kolonlar. Boş bırakılırsa geometriye dokunulmaz."),
+                options.shapePath);
+
             EditorGUILayout.HelpBox(
-                "Sihirbaz arena geometrisini ÖLÇEKLEMEZ — sahne kaynak arenadan bire bir kopyalanır. " +
-                "Planı kendin çizip ArenaBoundary değerlerini gerçek ölçüye getireceksin.",
+                string.IsNullOrEmpty(options.shapePath)
+                    ? "Plan boş: sihirbaz arena geometrisini ÖLÇEKLEMEZ — sahne kaynak arenadan bire bir " +
+                      "kopyalanır. Planı kendin çizip ArenaBoundary değerlerini gerçek ölçüye getireceksin."
+                    : "Plan dolu: şablondan gelen zemin/duvar mesh'leri silinip plandan üretilecek, " +
+                      "ArenaBoundary bu asset'e ve üretilen duvarlara bağlanacak.",
                 MessageType.Info);
 
             EditorGUILayout.Space();
@@ -190,6 +210,12 @@ namespace VortexArena.Core.Editor
 
         /// <summary>Asset yolunu ObjectField olarak çizer; seçim değişirse yeni yolu döner.</summary>
         private static string AssetPathField<T>(string label, string path) where T : UnityEngine.Object
+        {
+            return AssetPathField<T>(new GUIContent(label), path);
+        }
+
+        /// <summary>İpucu metinli varyant (bkz. yukarıdaki özet).</summary>
+        private static string AssetPathField<T>(GUIContent label, string path) where T : UnityEngine.Object
         {
             T current = string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadAssetAtPath<T>(path);
             T picked = EditorGUILayout.ObjectField(label, current, typeof(T), false) as T;
@@ -312,6 +338,11 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
+            // -------------------------------------- 5) arena planı (isteğe bağlı)
+            // Plan boşsa buradan hiçbir şey yapılmaz: sihirbazın öteden beri yaptığı iş
+            // (geometriye dokunmadan kopyalama) birebir korunur.
+            bool shapeApplied = ApplyShape(options, scene, result);
+
             // ------------------------------------------- 6) MapDefinition asset
             string mapAssetPath = $"{targetFolder}/Data/{arenaId}.asset";
             MapDefinition map = CreateMapDefinition(mapAssetPath, sceneName, options, result);
@@ -331,10 +362,19 @@ namespace VortexArena.Core.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            result.Warnings.Add(
-                "Arena geometrisi ÖLÇEKLENMEDİ — duvar/zemin/taban yerleşimi kaynak arenadan bire bir geldi. " +
-                "Planı kendi alanına göre çiz; sonra ArenaBoundary.halfExtentX/Z değerlerini gerçek " +
-                "ölçüye getir.");
+            if (!shapeApplied)
+            {
+                result.Warnings.Add(
+                    "Arena geometrisi ÖLÇEKLENMEDİ — duvar/zemin/taban yerleşimi kaynak arenadan bire bir geldi. " +
+                    "Planı kendi alanına göre çiz; sonra ArenaBoundary.halfExtentX/Z değerlerini gerçek " +
+                    "ölçüye getir.");
+            }
+            else
+            {
+                result.Warnings.Add(
+                    "Zemin/duvar plandan üretildi. Taban bölgeleri (Base_Red/Base_Blue) ve kalibrasyon " +
+                    "işaretçileri şablondaki yerinde kaldı — yeni plana göre elle taşı.");
+            }
             result.Warnings.Add(
                 "Kalibrasyon işaretçilerini (anchor_a/anchor_b) zemin bandına göre yerleştir ve aralarındaki " +
                 "mesafeyi not et (Docs/Isletme-Kurulum.md §3).");
@@ -370,6 +410,117 @@ namespace VortexArena.Core.Editor
             return options.target == ArenaTemplateTarget.Venue
                 ? $"{VenuesRoot}/{(options.venueName ?? string.Empty).Trim()}/{arenaId}"
                 : $"{StandardRoot}/{arenaId}";
+        }
+
+        // ---------------------------------------------------------- arena planı
+
+        /// <summary>
+        /// Şablon sahnesindeki hazır zemin/duvar mesh'lerini plandan üretilenle değiştirir ve
+        /// sahnedeki <c>ArenaBoundary</c>'yi (plan asset'i + üretilen duvarlar) bağlar.
+        /// <para>
+        /// ⚠️ <b>Silinecek objeler ada göre bulunur</b> — şablon sahnesinin gerçek hiyerarşisi:
+        /// <c>PlayArea &gt; Ground &gt; GroundMesh</c> (zemin mesh'i) ve <c>ArenaBoundary</c>'nin
+        /// KENDİ çocukları <c>Wall_N/S/E/W</c>. <c>Ground</c> objesinin kendisine dokunulmaz:
+        /// kalibrasyon işaretçileri (<c>anchor_a</c>/<c>anchor_b</c>) onun altındadır, silinirse
+        /// arena ağa hizalanamaz.
+        /// </para>
+        /// <para>
+        /// ⚠️ Geometri <see cref="ArenaBoundary"/>'yi taşıyan transformun ALTINA üretilir: plan
+        /// koordinatları o transformun yerel XZ düzlemindedir, başka bir ebeveyn planı kaydırırdı.
+        /// </para>
+        /// </summary>
+        /// <returns>Plan uygulandıysa <c>true</c>; plan boşsa ya da uygulanamadıysa <c>false</c>.</returns>
+        private static bool ApplyShape(ArenaTemplateOptions options, Scene scene, ArenaTemplateResult result)
+        {
+            if (string.IsNullOrWhiteSpace(options.shapePath))
+            {
+                return false; // plan verilmedi: bugünkü davranış aynen sürer
+            }
+
+            var shape = AssetDatabase.LoadAssetAtPath<ArenaShapeDefinition>(options.shapePath);
+            if (shape == null || !shape.IsValid)
+            {
+                result.Warnings.Add(
+                    $"Arena planı okunamadı ya da geçersiz ('{options.shapePath}') — geometri şablondan " +
+                    "OLDUĞU GİBİ geldi.");
+                return false;
+            }
+
+            var boundary = UnityEngine.Object.FindFirstObjectByType<ArenaBoundary>(FindObjectsInactive.Include);
+            if (boundary == null)
+            {
+                result.Warnings.Add("Sahnede ArenaBoundary yok — plan uygulanamadı, geometri şablondan geldi.");
+                return false;
+            }
+
+            Transform root = boundary.transform;
+            RemoveTemplateGeometry(scene, root);
+
+            ArenaShapeBuilder.Result built = ArenaShapeBuilder.Build(shape, root);
+            if (!built.Success)
+            {
+                result.Warnings.Add("Plan geometriye çevrilemedi: " + built.Error);
+                return false;
+            }
+
+            // Plan + duvarlar bağlanır; head/fadeRenderer/warningText'e DOKUNULMAZ — onlar rig
+            // prefabına bakar ve şablondan doğru gelir.
+            var boundaryObject = new SerializedObject(boundary);
+            SerializedProperty shapeProp = boundaryObject.FindProperty("shape");
+            if (shapeProp != null)
+            {
+                shapeProp.objectReferenceValue = shape;
+            }
+            else
+            {
+                result.Warnings.Add(
+                    "ArenaBoundary'de 'shape' alanı bulunamadı — plan asset'ini alana ELLE bağla " +
+                    "(muhafaza aksi hâlde dikdörtgen hızlı yolunda kalır).");
+            }
+
+            SerializedProperty wallsProp = boundaryObject.FindProperty("wallRenderers");
+            if (wallsProp != null && wallsProp.isArray)
+            {
+                wallsProp.arraySize = built.WallRenderers.Count;
+                for (int i = 0; i < built.WallRenderers.Count; i++)
+                {
+                    wallsProp.GetArrayElementAtIndex(i).objectReferenceValue = built.WallRenderers[i];
+                }
+            }
+
+            boundaryObject.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(boundary);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            return true;
+        }
+
+        /// <summary>
+        /// Şablondan gelen zemin/duvar mesh'lerini siler (bkz. <see cref="ApplyShape"/> hiyerarşi
+        /// notu). Bulunamayanlar sessizce atlanır: şablon zamanla değişebilir ve eksik bir ad
+        /// yüzünden arena üretimini durdurmak orantısız olurdu.
+        /// </summary>
+        private static void RemoveTemplateGeometry(Scene scene, Transform boundaryRoot)
+        {
+            for (int i = boundaryRoot.childCount - 1; i >= 0; i--)
+            {
+                Transform child = boundaryRoot.GetChild(i);
+                if (child.name.StartsWith(TemplateWallPrefix, StringComparison.Ordinal))
+                {
+                    UnityEngine.Object.DestroyImmediate(child.gameObject);
+                }
+            }
+
+            GameObject[] roots = scene.GetRootGameObjects();
+            for (int i = 0; i < roots.Length; i++)
+            {
+                Transform groundMesh = FindDescendant(roots[i].transform, TemplateGroundMeshName);
+                if (groundMesh != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(groundMesh.gameObject);
+                }
+            }
         }
 
         // ----------------------------------------------------- asset + katalog

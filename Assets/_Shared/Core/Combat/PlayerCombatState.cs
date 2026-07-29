@@ -33,12 +33,11 @@ namespace VortexArena.Core.Combat
     /// </summary>
     public class PlayerCombatState : MonoBehaviour
     {
-        // Faz adları protokolde string taşınır (Docs §10.1: Lobby → Loading → Countdown → Live → End).
-        private const string PhaseLobby = "Lobby";
-        private const string PhaseLoading = "Loading";
-        private const string PhaseCountdown = "Countdown";
-        private const string PhaseLive = "Live";
-        private const string PhaseEnd = "End";
+        // Faz adları protokolde string taşınır (Docs §10.1). ÜÇ değer vardır: paused/playing/
+        // finished. Sabitler ArenaProtocol'den gelir — tel değerinin tek yazıldığı yer orasıdır.
+        private const string PhasePaused = ArenaProtocol.PHASE_PAUSED;
+        private const string PhasePlaying = ArenaProtocol.PHASE_PLAYING;
+        private const string PhaseFinished = ArenaProtocol.PHASE_FINISHED;
 
         /// <summary>Canlanma talebi tekrar aralığı (sunucu onaylayana dek, §10.4).</summary>
         private const float ReviveRepeatSeconds = 1f;
@@ -59,8 +58,18 @@ namespace VortexArena.Core.Combat
         /// <summary>Aktif maçın modId'si (load_match'ten).</summary>
         public string ModeId { get; private set; } = "";
 
-        /// <summary>Sunucudan gelen son faz adı ("Lobby"/"Loading"/"Countdown"/"Live"/"End").</summary>
-        public string Phase { get; private set; } = PhaseLobby;
+        /// <summary>Sunucudan gelen son faz adı: <c>paused</c> | <c>playing</c> | <c>finished</c>
+        /// (§10.1). Bilinmeyen bir değer gelirse duraklamış sayılır — hasar/ateş kapısı
+        /// güvenli tarafta kalsın.</summary>
+        public string Phase { get; private set; } = PhasePaused;
+
+        /// <summary>Duraklamanın gerekçesi (§10.1 <c>phaseReason</c>): <c>lobby</c>/<c>loading</c>/
+        /// <c>countdown</c>/<c>operator</c>/<c>mode</c>; duraklı değilken boş. Yalnız SUNUM
+        /// içindir — hiçbir savaş kapısı buna bakmaz.</summary>
+        public string PhaseReason { get; private set; } = ArenaProtocol.PAUSE_REASON_LOBBY;
+
+        /// <summary>Modun kendi ara durumu (§10.1 <c>modeState</c>); çekirdek yorumlamaz, HUD okur.</summary>
+        public string ModeState { get; private set; } = "";
 
         /// <summary>Yerel oyuncunun canı — YALNIZ health_update'ten set edilir.</summary>
         public float Hp { get; private set; } = ArenaProtocol.PLAYER_MAX_HP;
@@ -76,8 +85,14 @@ namespace VortexArena.Core.Combat
         public event Action<string> StatusChanged;
 
         /// <summary>
-        /// Silah tetiği çekilebilir mi: hayatta + faz Lobby/Live (Loading/Countdown/End'de
-        /// ateş yok; lobide test atışına izin verilir).
+        /// Silah tetiği çekilebilir mi: hayatta + (faz <c>playing</c> <b>veya</b> modun serbest
+        /// atışı açık — <see cref="ModeRuntime.FireWhilePaused"/>, §10.5).
+        /// <para>
+        /// ⚠️ <b>Bu bir MOD kuralıdır, faz kuralı değil.</b> Lobi türünde serbest atış açıktır ve
+        /// hedeflere ateş edilir; hasar yine yoktur çünkü onu sunucu <c>playing</c> kapısıyla
+        /// kapatır (§10.3). Buraya <c>if (modeId == "lobby")</c> YAZILMAZ — yeni bir mod (turnuva
+        /// ısınması gibi) aynı davranışı isterse kendi kuralında bildirir.
+        /// </para>
         /// <para>
         /// Bağlantı koşulu: bir kez bağlandıysak bağlantı kopukken ateş kilitlenir
         /// (mesajlar zaten sunucuya ulaşmaz). Hiç bağlanılmamışsa (sunucusuz Editor
@@ -100,7 +115,7 @@ namespace VortexArena.Core.Combat
                     return false;
                 }
 
-                if (Phase != PhaseLobby && Phase != PhaseLive)
+                if (Phase != PhasePlaying && !ModeRuntime.FireWhilePaused)
                 {
                     return false;
                 }
@@ -436,11 +451,16 @@ namespace VortexArena.Core.Combat
 
             PlayerId = msg.playerId;
 
-            // Geç katılım: welcome'daki faz bilgisiyle senkronla.
-            string phase = msg.match != null && !string.IsNullOrEmpty(msg.match.phase) ? msg.match.phase : PhaseLobby;
-            if (msg.match != null && !string.IsNullOrEmpty(msg.match.modeId))
+            // Geç katılım: welcome'daki durum bilgisiyle senkronla.
+            string phase = msg.match != null && !string.IsNullOrEmpty(msg.match.phase) ? msg.match.phase : PhasePaused;
+            if (msg.match != null)
             {
-                ModeId = msg.match.modeId;
+                PhaseReason = msg.match.phaseReason ?? "";
+                ModeState = msg.match.modeState ?? "";
+                if (!string.IsNullOrEmpty(msg.match.modeId))
+                {
+                    ModeId = msg.match.modeId;
+                }
             }
 
             ResetCombat(phase);
@@ -449,7 +469,9 @@ namespace VortexArena.Core.Combat
         private void HandleDisconnected()
         {
             PlayerId = 0;
-            ResetCombat(PhaseLobby);
+            PhaseReason = ArenaProtocol.PAUSE_REASON_LOBBY;
+            ModeState = "";
+            ResetCombat(PhasePaused);
         }
 
         /// <summary>Takımı lobide de bilelim (canlanma bölgesi ve arayüz renkleri buna bakar).</summary>
@@ -485,13 +507,17 @@ namespace VortexArena.Core.Combat
             Team = ParseTeam(msg.yourTeam);
             ModeId = msg.modeId ?? "";
 
-            // Sahne yükleniyor: ateş kapalı, can tam, ölüm durumu temiz.
-            ResetCombat(PhaseLoading);
+            // Sahne yükleniyor: maç henüz BAŞLAMADI (§5.3) — faz paused/loading. Ateş kapalı
+            // (lobi türünden çıkıldığı için fireWhilePaused da artık false), can tam, ölüm temiz.
+            PhaseReason = ArenaProtocol.PAUSE_REASON_LOADING;
+            ModeState = "";
+            ResetCombat(PhasePaused);
         }
 
         private void HandleCountdown(CountdownMsg msg)
         {
-            Phase = PhaseCountdown;
+            Phase = PhasePaused;
+            PhaseReason = ArenaProtocol.PAUSE_REASON_COUNTDOWN;
         }
 
         private void HandleMatchState(MatchStateMsg msg)
@@ -502,6 +528,8 @@ namespace VortexArena.Core.Combat
             }
 
             Phase = msg.phase;
+            PhaseReason = msg.phaseReason ?? "";
+            ModeState = msg.modeState ?? "";
         }
 
         private void HandleHealthUpdate(HealthUpdateMsg msg)
@@ -543,12 +571,15 @@ namespace VortexArena.Core.Combat
 
         private void HandleMatchEnd(MatchEndMsg msg)
         {
-            Phase = PhaseEnd;
+            Phase = PhaseFinished;
+            PhaseReason = "";
         }
 
         private void HandleReturnToLobby(ReturnToLobbyMsg _)
         {
-            ResetCombat(PhaseLobby);
+            PhaseReason = ArenaProtocol.PAUSE_REASON_LOBBY;
+            ModeState = "";
+            ResetCombat(PhasePaused);
         }
 
         // ---------------------------------------------------------------- yardımcı
@@ -578,7 +609,7 @@ namespace VortexArena.Core.Combat
 
         private void ResetCombat(string phase)
         {
-            Phase = string.IsNullOrEmpty(phase) ? PhaseLobby : phase;
+            Phase = string.IsNullOrEmpty(phase) ? PhasePaused : phase;
             _awaitingRevive = false;
             _nextReviveSendAt = 0f;
             _hasHoldAnchor = false;

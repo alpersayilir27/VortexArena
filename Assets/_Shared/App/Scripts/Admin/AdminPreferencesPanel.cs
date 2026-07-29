@@ -26,6 +26,13 @@ namespace VortexArena.App.Admin
     /// <br/><b>GÖRÜNÜM bölümü YERELdir</b> — her operatörün kendi ekranı (bkz. <see cref="AdminSession"/>).
     /// </para>
     /// <para>
+    /// ⚠️ <b>Harita seçmek OYUNCULARI DA taşır (§10.7 sahneleme).</b> Sunucu lobideyken seçilen
+    /// arenayı <c>return_to_lobby</c> ile tüm istemcilere yükletir — burası "bir sonraki maçın
+    /// notu" değil anlık bir sahne komutudur. Bunun doğrudan sonucu: <b>mod/harita yalnız faz
+    /// <c>Lobby</c> iken değiştirilebilir</b> (<see cref="CanChangeSelection"/>); maç sürerken
+    /// satırlar pasifleşir. Süre/limit her fazda açık kalır, onlar sahne yüklemez.
+    /// </para>
+    /// <para>
     /// <b>Neden dropdown/slider yok:</b> <c>TMP_Dropdown</c> ve <c>Slider</c> serialize edilmiş
     /// şablon hiyerarşisi ister (viewport, item template, handle); prosedürel kurulumda bu hem
     /// uzun hem kırılgandır. Yerine <c>[&lt;] değer [&gt;]</c> döngüleyicileri ve
@@ -56,9 +63,23 @@ namespace VortexArena.App.Admin
         private const int ScoreLimitMin = 1;
         private const int ScoreLimitMax = 999;
 
+        /// <summary>MAÇ bölümünün normal başlığı; kilitliyken <see cref="MatchSectionLockedTitle"/>
+        /// ile değişir ki operatör düğmelerin neden pasif olduğunu görsün.</summary>
+        private const string MatchSectionTitle = "MAÇ (TÜM ADMİNLERDE ORTAK)";
+        private const string MatchSectionLockedTitle = "MAÇ (SÜRÜYOR — HARİTA/MOD KİLİTLİ)";
+
         private GameObject _root;
         private TextMeshProUGUI _modeValue;
         private TextMeshProUGUI _mapValue;
+
+        // MAÇ bölümünün kilitlenebilir parçaları (§10.7): harita seçmek TÜM istemcilere sahne
+        // yükletiyor, bu yüzden maç sürerken bu dört düğme pasifleşir ve başlık sebebini yazar.
+        private TextMeshProUGUI _matchSectionLabel;
+        private Button _modePrev;
+        private Button _modeNext;
+        private Button _mapPrev;
+        private Button _mapNext;
+
         private TextMeshProUGUI _durationValue;
         private TextMeshProUGUI _scoreLimitValue;
         private TextMeshProUGUI _statusText;
@@ -119,6 +140,13 @@ namespace VortexArena.App.Admin
             // etkindir (HUD kökünde durur, yalnız kartı gizlenir) — bu yüzden diğer operatörün
             // harita değişikliği panel açılmasa da yerel önizlemeye yansır.
             AdminSelection.Changed += HandleSharedSelectionChanged;
+
+            // Faz değişimi harita/mod seçicilerini kilitleyip açıyor (§10.7) — maç başlayınca
+            // düğmeler bir sonraki tıklamayı beklemeden pasifleşmeli.
+            if (AdminRoster.Instance != null)
+            {
+                AdminRoster.Instance.Changed += MarkDirty;
+            }
         }
 
         private void OnDisable()
@@ -127,6 +155,11 @@ namespace VortexArena.App.Admin
             AdminCommands.StatusChanged -= MarkDirty;
             NetEvents.OnConnectionStateChanged -= HandleConnectionState;
             AdminSelection.Changed -= HandleSharedSelectionChanged;
+
+            if (AdminRoster.Instance != null)
+            {
+                AdminRoster.Instance.Changed -= MarkDirty;
+            }
         }
 
         private void Update()
@@ -195,9 +228,11 @@ namespace VortexArena.App.Admin
             float y = 78f;
 
             // "ortak" etiketi bilinçli: bu iki seçici tüm adminlerde aynı anda değişir (§5.3).
-            y = Section(body, "MAÇ (TÜM ADMİNLERDE ORTAK)", y);
-            y = Cycler(body, "Mod", y, CycleModePrev, CycleModeNext, out _modeValue);
-            y = Cycler(body, "Harita", y, CycleMapPrev, CycleMapNext, out _mapValue);
+            y = Section(body, MatchSectionTitle, y, out _matchSectionLabel);
+            y = Cycler(body, "Mod", y, CycleModePrev, CycleModeNext, out _modeValue,
+                out _modePrev, out _modeNext);
+            y = Cycler(body, "Harita", y, CycleMapPrev, CycleMapNext, out _mapValue,
+                out _mapPrev, out _mapNext);
             y = Cycler(body, "Süre", y, DurationPrev, DurationNext, out _durationValue);
             y = Cycler(body, "Skor limiti", y, ScoreLimitDown, ScoreLimitUp, out _scoreLimitValue);
             y = MatchButtons(body, y);
@@ -283,7 +318,14 @@ namespace VortexArena.App.Admin
 
         private static float Section(Transform body, string label, float y)
         {
-            TextMeshProUGUI text = UiKit.Text(body, $"Section_{label}", 18f, UiKit.Faint,
+            return Section(body, label, y, out _);
+        }
+
+        /// <summary>Başlığı sonradan değiştirebilmek için metnini de veren biçim (MAÇ bölümü
+        /// kilitlendiğinde sebebini yazıyor).</summary>
+        private static float Section(Transform body, string label, float y, out TextMeshProUGUI text)
+        {
+            text = UiKit.Text(body, $"Section_{label}", 18f, UiKit.Faint,
                 FontStyles.Bold, TextAlignmentOptions.TopLeft);
             UiKit.Block(text.rectTransform, 28f, y, 28f, 22f);
             text.text = label;
@@ -302,6 +344,15 @@ namespace VortexArena.App.Admin
         private static float Cycler(Transform body, string label, float y,
             UnityEngine.Events.UnityAction onPrev, UnityEngine.Events.UnityAction onNext,
             out TextMeshProUGUI value)
+        {
+            return Cycler(body, label, y, onPrev, onNext, out value, out _, out _);
+        }
+
+        /// <summary>Düğmeleri de veren biçim — sonradan <c>interactable</c> çevirebilmek için
+        /// (yalnız kilitlenebilen satırlar kullanır).</summary>
+        private static float Cycler(Transform body, string label, float y,
+            UnityEngine.Events.UnityAction onPrev, UnityEngine.Events.UnityAction onNext,
+            out TextMeshProUGUI value, out Button prevButton, out Button nextButton)
         {
             TextMeshProUGUI caption = UiKit.Text(body, $"Label_{label}", 20f, UiKit.Muted,
                 FontStyles.Normal, TextAlignmentOptions.TopLeft);
@@ -325,6 +376,8 @@ namespace VortexArena.App.Admin
             UiKit.Corner((RectTransform)next.transform, new Vector2(1f, 1f),
                 new Vector2(-28f, -y), new Vector2(32f, 32f));
 
+            prevButton = prev;
+            nextButton = next;
             return y + RowHeight;
         }
 
@@ -376,7 +429,7 @@ namespace VortexArena.App.Admin
 
         private void StepMode(int delta)
         {
-            if (_modes.Count == 0)
+            if (_modes.Count == 0 || !GuardSelectionChange())
             {
                 return;
             }
@@ -386,7 +439,7 @@ namespace VortexArena.App.Admin
             // Süre/limit her modun kendi varsayılanına döner: 10 dakikalık bir TDM ayarı,
             // 3 dakikalık olması gereken bir moda sessizce taşınmasın.
             ResetMatchParametersToModeDefaults();
-            PublishSelection(); // mod değişti → harita listesi başa döndü, seçili harita da değişti
+            PublishSelection(mapChanged: true); // mod değişti → harita listesi başa döndü, seçili harita da değişti
         }
 
         // ---- maç parametreleri (ORTAK) ----
@@ -417,7 +470,7 @@ namespace VortexArena.App.Admin
 
             int index = (NearestDurationIndex(options, _roundSeconds) + delta + options.Length) % options.Length;
             _roundSeconds = options[index];
-            PublishSelection();
+            PublishSelection(mapChanged: false);
         }
 
         private static int NearestDurationIndex(int[] options, int seconds)
@@ -454,7 +507,7 @@ namespace VortexArena.App.Admin
             }
 
             _scoreLimit = Mathf.Clamp(_scoreLimit + direction * step, ScoreLimitMin, ScoreLimitMax);
-            PublishSelection();
+            PublishSelection(mapChanged: false);
         }
 
         private void CycleMapPrev() { StepMap(-1); }
@@ -462,13 +515,43 @@ namespace VortexArena.App.Admin
 
         private void StepMap(int delta)
         {
-            if (_maps.Count == 0)
+            if (_maps.Count == 0 || !GuardSelectionChange())
             {
                 return;
             }
 
             _mapIndex = (_mapIndex + delta + _maps.Count) % _maps.Count;
-            PublishSelection();
+            PublishSelection(mapChanged: true);
+        }
+
+        /// <summary>
+        /// Mod/harita seçimi şu an değiştirilebilir mi (§10.7)? Harita seçmek TÜM istemcilere sahne
+        /// yükletiyor — maç sürerken bunu yapmak maçı bozardı, o yüzden yalnız faz <c>Lobby</c>'de
+        /// açıktır. Düğmeler zaten pasifleştiriliyor (<see cref="Apply"/>); bu kapı ikinci
+        /// emniyettir ve reddi operatöre görünür kılar.
+        /// <para>Otorite yine sunucudadır: aynı kural <c>set_selection</c> işlenirken de uygulanır,
+        /// arayüz yalnız operatörü boşuna tıklatmamak için önden bilir.</para>
+        /// </summary>
+        private static bool GuardSelectionChange()
+        {
+            if (CanChangeSelection)
+            {
+                return true;
+            }
+
+            AdminCommands.Note("Maç sürerken harita/mod değiştirilemez — önce İPTAL ya da LOBİYE DÖN.");
+            return false;
+        }
+
+        /// <summary>Faz Lobby mi? <see cref="AdminRoster"/> henüz yoksa (bağlanmadan önceki ilk
+        /// kareler) engellenmez — sunucu zaten son sözü söylüyor.</summary>
+        private static bool CanChangeSelection
+        {
+            get
+            {
+                AdminRoster roster = AdminRoster.Instance;
+                return roster == null || roster.CanChangeSelection;
+            }
         }
 
         /// <summary>
@@ -476,11 +559,29 @@ namespace VortexArena.App.Admin
         /// önizleme + arayüz beklemeden tepki versin. Sunucu değişikliği tüm adminlere yayınca
         /// <see cref="HandleSharedSelectionChanged"/> aynı değeri görür ve iş yapmaz — döngü olmaz.
         /// Bağlantı yoksa komut sessizce düşer, yerel önizleme yine de çalışır.
+        /// <para>
+        /// ⚠️ <b>Harita alanı bir sonraki maçın notu değil, ANLIK bir sahne komutudur (§10.7):</b>
+        /// sunucu lobideyken seçilen arenayı <c>return_to_lobby</c> ile tüm istemcilere yükletir.
+        /// Mod/harita bu yüzden yalnız <see cref="CanChangeSelection"/> doğruyken gönderilir;
+        /// süre/limit her fazda serbesttir (sahne yüklemezler).
+        /// </para>
         /// </summary>
-        private void PublishSelection()
+        /// <param name="mapChanged">Bu yayın haritayı değiştirdi mi. Yerel yükleme YALNIZ o zaman
+        /// yapılır: süre/limit dokunuşunda da yüklemek, sunucu kimseyi taşımadığı hâlde operatörü
+        /// tek başına seçili arenaya atardı (maç sonrası herkes lobideyken en görünür hâli).</param>
+        private void PublishSelection(bool mapChanged)
         {
-            AdminCommands.SetSelection(SelectedModeId, SelectedSceneName, _roundSeconds, _scoreLimit);
-            PreviewSelectedMap();
+            bool selectionOpen = CanChangeSelection;
+            AdminCommands.SetSelection(
+                selectionOpen ? SelectedModeId : "",
+                selectionOpen ? SelectedSceneName : "",
+                _roundSeconds, _scoreLimit);
+
+            if (mapChanged)
+            {
+                PreviewSelectedMap();
+            }
+
             Apply();
         }
 
@@ -589,21 +690,21 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Seçili harita değişti: maç BAŞLAMAMIŞSA (faz Lobby) o arenayı hemen yerel olarak açar.
-        /// Operatör haritayı seçerken görmek ister; sunucuya komut gönderilmez, oyuncular
-        /// etkilenmez. Maç sürüyorsa dokunulmaz — seçim yalnız sonraki `start_match` için.
+        /// Seçili arenayı bu ekranda hemen açar — <b>iyimser</b> bir yükleme.
+        /// <para>
+        /// ⚠️ Bu artık "yalnız admin görür" demek DEĞİLDİR: sunucu lobideyken seçilen haritayı
+        /// <c>return_to_lobby</c> ile tüm istemcilere yükletiyor (§10.7 sahneleme) ve o mesaj
+        /// admin'e de geliyor. Buradaki yerel yükleme yalnız <b>gecikmeyi gizler</b> (ve sunucusuz
+        /// dev oturumunda tek yol odur); sunucu aynı sahneyi söylediğinde
+        /// <see cref="SceneRouter"/> zaten o sahnede olduğumuzu görüp ikinci kez yüklemez.
+        /// </para>
+        /// Maç sürüyorsa dokunulmaz — sahne otoritesi sunucudadır.
         /// </summary>
         private void PreviewSelectedMap()
         {
-            if (_mapIndex < 0 || _mapIndex >= _maps.Count)
+            if (_mapIndex < 0 || _mapIndex >= _maps.Count || !CanChangeSelection)
             {
                 return;
-            }
-
-            AdminRoster roster = AdminRoster.Instance;
-            if (roster != null && roster.Phase != "Lobby")
-            {
-                return; // maç sürüyor: sahne otoritesi sunucuda
             }
 
             string sceneName = _maps[_mapIndex].SceneName;
@@ -613,7 +714,7 @@ namespace VortexArena.App.Admin
             }
 
             SceneRouter.Instance.LoadPreview(sceneName);
-            AdminCommands.Note($"Önizleme: {sceneName} (maç başlatılmadı)");
+            AdminCommands.Note($"Harita: {sceneName} (herkes yükleniyor; maç başlatılmadı)");
         }
 
         private static void PrevMarkers() { StepMarkers(-1); }
@@ -773,6 +874,8 @@ namespace VortexArena.App.Admin
                 ? "harita yok"
                 : DisplayOf(_maps[_mapIndex].DisplayName, _maps[_mapIndex].SceneName);
 
+            ApplySelectionLock();
+
             // 0 = arayüz bir değer bilmiyor → sunucu modun varsayılanını kullanacak.
             _durationValue.text = _roundSeconds > 0
                 ? AdminCommands.FormatDuration(_roundSeconds)
@@ -811,6 +914,37 @@ namespace VortexArena.App.Admin
                 ? $" — {AdminSelection.AdminCount} admin bağlı"
                 : "";
             _connectionText.text = $"{state} — {endpoint}{peers}";
+        }
+
+        /// <summary>Maç sürerken mod/harita satırlarını pasif gösterir (§10.7): düğmeler
+        /// tıklanmaz, değerler sönükleşir, bölüm başlığı sebebini yazar. Süre/limit satırları
+        /// AÇIK kalır — onlar bir sonraki maçın parametreleridir, kimseye sahne yükletmezler.</summary>
+        private void ApplySelectionLock()
+        {
+            bool open = CanChangeSelection;
+
+            SetInteractable(_modePrev, open);
+            SetInteractable(_modeNext, open);
+            SetInteractable(_mapPrev, open);
+            SetInteractable(_mapNext, open);
+
+            Color valueColor = open ? UiKit.Title : UiKit.Faint;
+            _modeValue.color = valueColor;
+            _mapValue.color = valueColor;
+
+            if (_matchSectionLabel != null)
+            {
+                _matchSectionLabel.text = open ? MatchSectionTitle : MatchSectionLockedTitle;
+                _matchSectionLabel.color = open ? UiKit.Faint : UiKit.Bad;
+            }
+        }
+
+        private static void SetInteractable(Button button, bool value)
+        {
+            if (button != null)
+            {
+                button.interactable = value;
+            }
         }
 
         private static string DisplayOf(string displayName, string fallback)

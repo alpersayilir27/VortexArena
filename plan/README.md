@@ -5,6 +5,7 @@
 
 | Planlanmış iş | Dosya |
 |---|---|
+| Faz makinesi `paused · playing · finished`; lobi faz değil **tür** olur (+ mod durumu alanı) | `durum-modeli.md` |
 | Kırılabilir objeleri sunucu-otoriter yapmak (yerel `Health` kaldırıldı, yerine ağsal obje canı) | `agsal-kirilabilir-objeler.md` |
 
 > Sıradaki büyük iş **bulut kalibrasyonu** (Meta grup / paylaşılan uzamsal anchor ile toplu

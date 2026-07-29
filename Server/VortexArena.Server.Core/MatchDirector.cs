@@ -4,15 +4,68 @@ using VortexArena.Server.Core.Modes;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>Maç fazları (§5.3): Lobby → Loading → Countdown → Live → End → Lobby.</summary>
+/// <summary>
+/// Maçın genel durumu (§10.1). <b>Tel formatıyla birebir aynıdır</b> — üç değer, fazlası yok.
+/// <para>⚠️ Bu enum'un TEK yetkisi hasar kapısıdır: <c>hit_report</c> yalnız <see cref="Playing"/>
+/// fazında işlenir. "Ateş edebilir miyim", "silahım nereden gelir", "hangi HUD" sorularının cevabı
+/// buradan DEĞİL moddan gelir (<see cref="Modes.ModeRules"/>). Yeni bir mod ara durum isterse bu
+/// enum büyümez — <see cref="PauseReason.Mode"/> + <c>modeState</c> kullanılır.</para>
+/// </summary>
 public enum Phase
 {
-    Lobby,
-    Loading,
-    Countdown,
-    Live,
-    End
+    /// <summary>Maç koşmuyor: lobi, yükleme, geri sayım, duraklatma. Hasar KAPALI.</summary>
+    Paused,
+
+    /// <summary>Maç koşuyor. Hasarın işlendiği TEK faz.</summary>
+    Playing,
+
+    /// <summary>Maç bitti, skorlar kesin. Hasar KAPALI.</summary>
+    Finished
 }
+
+/// <summary>
+/// <see cref="Phase.Paused"/>'un gerekçesi (§10.1 <c>phaseReason</c>). Çekirdeğin iç durumu da
+/// budur: tik döngüsü hangi işi yapacağını (yükleme kapısı mı, geri sayım mı) buradan bilir.
+/// <para>Neden ayrı bir alan: turnuva "herkes tabana dönsün" derken (<see cref="Mode"/>) operatör
+/// de duraklatırsa (<see cref="Operator"/>) ikisi karışmamalı — mod kendi durumunu
+/// <c>modeState</c>'te korur, çekirdek gerekçeyi burada tutar.</para>
+/// </summary>
+public enum PauseReason
+{
+    /// <summary>Duraklı değil (<see cref="Phase.Playing"/> / <see cref="Phase.Finished"/>).</summary>
+    None,
+
+    /// <summary>Lobi türü açık, maç kurulmadı.</summary>
+    Lobby,
+
+    /// <summary>Sahne yükleme kapısı: oyuncuların set_ready'si bekleniyor.</summary>
+    Loading,
+
+    /// <summary>Geri sayım.</summary>
+    Countdown,
+
+    /// <summary>Operatör koşan maçı duraklattı.</summary>
+    Operator,
+
+    /// <summary>Mod duraklatma istedi; gerekçesi <c>modeState</c>'tedir.</summary>
+    Mode
+}
+
+/// <summary>Lobi sahnelemesinin sonucu (§10.7) — operatöre gösterilecek duyuru bundan üretilir.</summary>
+public enum StageOutcome
+{
+    /// <summary>Sahne değişti; tüm istemcilere <c>return_to_lobby</c> yollandı.</summary>
+    Staged,
+
+    /// <summary>Zaten o sahnedeydik ya da istenen sahne boştu — kimse yeniden yüklemedi.</summary>
+    Unchanged,
+
+    /// <summary>Yapılmadı; sebebi <see cref="StageSceneResult.Reason"/>'da.</summary>
+    Rejected
+}
+
+/// <summary>Sahneleme sonucu + reddedildiyse insan okuyabilir sebebi (admin duyurusuna girer).</summary>
+public readonly record struct StageSceneResult(StageOutcome Outcome, string Reason = "");
 
 /// <summary>Sunucu-otoriter maç akışı (§10): faz makinesi, kişisel load_match, countdown,
 /// match_state yayını, vuruş doğrulama hattı, skor ve free-roam canlanma. İstemci sunum+girdidir;
@@ -69,7 +122,14 @@ public sealed class MatchDirector
     private readonly Dictionary<int, DateTime> _lastRejectLogAt = new();
     private readonly Dictionary<int, int> _suppressedRejects = new();
 
-    private Phase _phase = Phase.Lobby;
+    private Phase _phase = Phase.Paused;
+    private PauseReason _pauseReason = PauseReason.Lobby;
+
+    /// <summary>Modun kendi ara durumu (§10.1 <c>modeState</c>). <b>Çekirdek bunu YORUMLAMAZ</b> —
+    /// yalnız taşır; okuyanı istemcideki HUD'dur. Duraklatma boyunca korunur ki mod kaldığı yerden
+    /// sürebilsin.</summary>
+    private string _modeState = "";
+
     private string _modeId = "";
     private string _sceneName = "";
     private float _timeRemaining;
@@ -96,10 +156,11 @@ public sealed class MatchDirector
     private CancellationTokenSource? _cts;
     private Task? _loop;
 
-    /// <summary>Bu işletmenin lobi sahnesi (§10.7, <c>server.json → lobbyScene</c>). Boş olabilir:
-    /// o zaman istemci kendi kabuk <c>Lobby</c> sahnesinde kalır.
-    /// <para>⚠️ Lobi bir MAÇ DEĞİLDİR — bu alan <c>_modeId</c>/<c>_sceneName</c>'i lobi fazında
-    /// doldurur, fazı değiştirmez. Savaş kapıları (§10.3) fazdan okumaya devam eder.</para></summary>
+    /// <summary>Bu işletmenin lobi sahnesi (§10.7, <c>server.json → lobbyScene</c>).
+    /// <para>⚠️ <b>Boş olamaz:</b> sunucu açılışta bunu çözemezse hiç açılmaz (§11 fail-fast,
+    /// <c>Program.cs</c>). Sunucunun açık sahnesi istemcinin TEK yönlendirme kaynağıdır.</para>
+    /// <para>⚠️ Lobi bir MAÇ DEĞİLDİR, bir <b>tür</b>dür — bu alan <c>_sceneName</c>/<c>_modeId</c>'yi
+    /// maç dışında doldurur. Hasar kapısı (§10.3) fazdan okumaya devam eder.</para></summary>
     private readonly string _lobbyScene;
 
     public MatchDirector(PlayerRegistry registry, MapTable maps, string lobbyScene = "")
@@ -110,10 +171,11 @@ public sealed class MatchDirector
         // yazılması gereken bir alan olmasın; config yalnız istisna için doldurulur.
         _lobbyScene = string.IsNullOrWhiteSpace(lobbyScene) ? maps.ResolveLobbyScene() : lobbyScene.Trim();
         RegisterModes();
-        // Faz zaten Lobby ile başlıyor; lobi profilini de başlangıçta yaz ki ilk welcome
-        // (henüz hiç EnterLobbyLocked çalışmadan) doğru sahneyi/modId'yi taşısın.
+        // Durum zaten Paused/Lobby ile başlıyor; lobi profilini de başlangıçta yaz ki ilk welcome
+        // (henüz hiç EnterLobbyLocked çalışmadan) doğru sahneyi/modId'yi/kuralı taşısın.
         _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
         _sceneName = _lobbyScene;
+        _rules = ModeRules.LobbyProfile;
     }
 
     /// <summary>Sunucunun yapılandırılmış lobi sahnesi — açılış logu ve doğrulaması için.</summary>
@@ -315,18 +377,21 @@ public sealed class MatchDirector
 
         lock (_gate)
         {
+            // Dağıtım (faz, gerekçe) ikilisinden yapılır: telde tek bir `paused` görünen durum
+            // çekirdekte üç ayrı iş olabiliyor (yükleme kapısı, geri sayım, öylece bekleme).
             switch (_phase)
             {
-                case Phase.Loading:
+                case Phase.Paused when _pauseReason == PauseReason.Loading:
                     TickLoadingLocked(outbox, now);
                     break;
-                case Phase.Countdown:
+                case Phase.Paused when _pauseReason == PauseReason.Countdown:
                     TickCountdownLocked(outbox, now);
                     break;
-                case Phase.Live:
+                // Lobby/Operator/Mode: beklenecek bir şey yok, sayaç işlemez.
+                case Phase.Playing:
                     modeToTick = TickLiveLocked(outbox, now, deltaSeconds);
                     break;
-                case Phase.End:
+                case Phase.Finished:
                     TickEndLocked(outbox, now);
                     break;
             }
@@ -509,8 +574,8 @@ public sealed class MatchDirector
 
         lock (_gate)
         {
-            if (_phase != Phase.Lobby)
-                Console.WriteLine($"[match] start_match: faz {_phase} — mevcut maç iptal edilip yenisi kuruluyor.");
+            if (_phase != Phase.Paused || _pauseReason != PauseReason.Lobby)
+                Console.WriteLine($"[match] start_match: durum {PhaseWire(_phase)} — mevcut maç iptal edilip yenisi kuruluyor.");
 
             _mode = mode;
             _rules = rules;
@@ -567,7 +632,7 @@ public sealed class MatchDirector
                 outbox.Add(new Outgoing(adminConnection, adminLoad, admin.Name));
             }
 
-            SetPhaseLocked(Phase.Loading, DateTime.UtcNow);
+            SetPhaseLocked(Phase.Paused, PauseReason.Loading, DateTime.UtcNow);
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         }
 
@@ -599,6 +664,90 @@ public sealed class MatchDirector
         FlushRosterRefresh();
     }
 
+    /// <summary>
+    /// <b>Lobi sahnelemesi (§10.7):</b> operatörün seçtiği haritayı lobideyken TÜM istemcilere
+    /// yükletir — admin panelinde harita değiştirmek oyuncuların da o arenaya geçmesi demektir.
+    /// <para>
+    /// Bu bir MAÇ DEĞİLDİR: faz <see cref="Phase.Paused"/>'da kalır, hasar kapısı (§10.3) kapalı
+    /// kalır, kimse <c>set_ready</c> göndermez ve süre/skor işlemez. Taşıyıcı mesaj
+    /// <c>return_to_lobby</c>'dir (lobi profili + yeni sahne) — istemci tarafında "lobideyiz,
+    /// şu sahneyi yükle" zaten o mesajın anlamı, ikinci bir mesaj tipi eklemek gerekmez.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Yalnız Lobby fazında iş yapar.</b> Koşan bir maçın ortasında sahne değiştirmek maçı
+    /// bozardı; maç sırasında harita değişimi diye bir şey yoktur, yeni harita <c>start_match</c>
+    /// ile gelir.
+    /// </para>
+    /// <para>
+    /// Doğrulama <c>start_match</c> ile aynıdır (§10.1): sahne harita tablosunda olmalı (tablo
+    /// boşsa bu adım atlanır) ve TÜM çevrimiçi oyuncuların build listesinde bulunmalı — yoksa bir
+    /// kısmı lobide kalır, operatör de bunu ekranında göremezdi.
+    /// </para>
+    /// </summary>
+    public async Task<StageSceneResult> StageSceneAsync(string? sceneName)
+    {
+        var target = (sceneName ?? "").Trim();
+        if (target.Length == 0) return new StageSceneResult(StageOutcome.Unchanged);
+
+        // Erken çıkış: doğrulama (registry taraması) boşuna yapılmasın.
+        lock (_gate)
+        {
+            // Kapı YALNIZ koşan maçtır (§10.7): `finished` iken operatör yeni haritayı seçebilmeli.
+            if (_phase == Phase.Playing)
+                return new StageSceneResult(StageOutcome.Rejected, "maç sürüyor");
+            if (_sceneName == target) return new StageSceneResult(StageOutcome.Unchanged);
+        }
+
+        if (!_maps.IsEmpty && !_maps.TryGet(target, out _))
+        {
+            return new StageSceneResult(StageOutcome.Rejected,
+                $"'{target}' harita tablosunda yok (bilinen: {string.Join(", ", _maps.SceneNames)})");
+        }
+
+        var missing = _registry.Snapshot()
+            .Where(p => p.Online && p.Role == "player" && !p.Scenes.Contains(target))
+            .Select(p => p.Name)
+            .ToList();
+        if (missing.Count > 0)
+        {
+            return new StageSceneResult(StageOutcome.Rejected,
+                $"'{target}' şu istemcilerin build listesinde yok: {string.Join(", ", missing)}");
+        }
+
+        var outbox = new List<Outgoing>();
+        lock (_gate)
+        {
+            // Kilit yeniden alındı (doğrulama kilit DIŞINDA yapıldı, kilit sözleşmesi gereği):
+            // arada start_match girmiş olabilir, kapı burada bir daha kontrol edilir.
+            if (_phase == Phase.Playing)
+                return new StageSceneResult(StageOutcome.Rejected, "maç sürüyor");
+            if (_sceneName == target) return new StageSceneResult(StageOutcome.Unchanged);
+
+            _sceneName = target;
+            // TÜR lobi olarak kalır: sahne bir arena olsa da henüz maç yoktur (§10.7). Buraya
+            // seçili maç modunu yazmak maç HUD'unu ve maç loadout'unu maç başlamadan açardı.
+            // Tür ancak start_match ile değişir. Kural şekli de lobi profilinde kalır (serbest
+            // atış); hasarı zaten faz kapatıyor.
+            _modeId = ArenaProtocol.LOBBY_MODE_ID;
+            _rules = ModeRules.LobbyProfile;
+
+            // Sahneleme koşan maçı değil bekleyişi değiştirir: eğer `finished` iken sahnelendiyse
+            // artık lobi bekleyişindeyiz.
+            SetPhaseLocked(Phase.Paused, PauseReason.Lobby, DateTime.UtcNow);
+
+            QueueBroadcastLocked(outbox, JsonUtil.Serialize(new ReturnToLobbyMsg
+            {
+                modeId = _modeId,
+                sceneName = _sceneName,
+                rules = _rules.ToInfo()
+            }));
+        }
+
+        Console.WriteLine($"[match] lobi sahnesi -> '{target}' (tüm istemciler yüklüyor).");
+        await FlushAsync(outbox);
+        return new StageSceneResult(StageOutcome.Staged);
+    }
+
     // ---- Savaş hattı (§10.3) ----
 
     /// <summary>shot_fired doğrulanmaz, yalnız relay edilir: faz Live/Lobby + atıcı hayatta player
@@ -612,7 +761,11 @@ public sealed class MatchDirector
         var outbox = new List<Outgoing>();
         lock (_gate)
         {
-            if (_phase != Phase.Live && _phase != Phase.Lobby) return;
+            // Atış kapısı ile HASAR kapısı bilerek AYRI (§10.3): atış bir sunum olayı, vuruş bir
+            // durum değişimidir. Ateş serbestliği MODdan gelir (rules.fireWhilePaused) — lobi
+            // türünde hedef atışı yapılabildiği için namlu alevinin görünmesi doğrudur; hasar yine
+            // yalnız `playing`'de işlenir (HandleHitReportAsync).
+            if (_phase != Phase.Playing && !_rules.FireWhilePaused) return;
             // Kalibresizin atışı relay EDİLMEZ (§10.6): ateş edemediği hâlde başkalarının
             // ekranında namlu alevi çakması yanıltıcı olurdu.
             if (shooter.Role != "player" || !shooter.Alive || !shooter.Calibrated) return;
@@ -652,9 +805,11 @@ public sealed class MatchDirector
 
         lock (_gate)
         {
-            if (_phase != Phase.Live)
+            // ⚠️ HASARIN TEK KAPISI (§10.1/§10.3). Lobi, yükleme, geri sayım, duraklatma ve maç
+            // sonu — hepsi `playing` değildir, hiçbirinde hasar işlenmez.
+            if (_phase != Phase.Playing)
             {
-                RejectHit(shooter, msg.targetPlayerId, $"faz {_phase}");
+                RejectHit(shooter, msg.targetPlayerId, $"faz {PhaseWire(_phase)}");
                 return;
             }
             if (!shooter.Online || shooter.Role != "player" || !shooter.Alive)
@@ -767,7 +922,7 @@ public sealed class MatchDirector
         var outbox = new List<Outgoing>();
         lock (_gate)
         {
-            if (_phase != Phase.Live || player.Role != "player" || player.Alive) return;
+            if (_phase != Phase.Playing || player.Role != "player" || player.Alive) return;
             if (!player.Calibrated) return; // §10.6: kalibresiz oyuncu canlanamaz
             if ((DateTime.UtcNow - player.DiedAt).TotalSeconds < _rules.RespawnDelay) return;
             RevivePlayerLocked(outbox, player);
@@ -781,14 +936,56 @@ public sealed class MatchDirector
 
     private void SetPhaseLocked(Phase next, DateTime now)
     {
-        if (_phase != next) Console.WriteLine($"[match] faz {_phase} → {next}");
-        _phase = next;
-        _phaseEnteredAt = now;
+        SetPhaseLocked(next, PauseReason.None, now);
     }
+
+    /// <summary>Faz + gerekçeyi birlikte yazar. İkisi tek yerden değişir ki telde tutarsız bir
+    /// ikili (ör. <c>playing</c> + <c>loading</c>) hiç doğmasın.</summary>
+    private void SetPhaseLocked(Phase next, PauseReason reason, DateTime now)
+    {
+        // Gerekçe yalnız Paused'da anlamlıdır; diğer fazlarda zorla temizlenir.
+        if (next != Phase.Paused) reason = PauseReason.None;
+
+        if (_phase != next || _pauseReason != reason)
+        {
+            var from = Describe(_phase, _pauseReason);
+            var to = Describe(next, reason);
+            Console.WriteLine($"[match] durum {from} → {to}");
+        }
+
+        _phase = next;
+        _pauseReason = reason;
+        _phaseEnteredAt = now;
+
+        static string Describe(Phase phase, PauseReason reason) =>
+            phase == Phase.Paused && reason != PauseReason.None
+                ? $"{PhaseWire(phase)}/{ReasonWire(reason)}"
+                : PhaseWire(phase);
+    }
+
+    /// <summary>Faz → tel değeri (§10.1). Enum adı ile tel değeri BİLEREK ayrı tutulur: tel
+    /// küçük harf sözleşmesini izler, C# adı C# sözleşmesini.</summary>
+    private static string PhaseWire(Phase phase) => phase switch
+    {
+        Phase.Playing => ArenaProtocol.PHASE_PLAYING,
+        Phase.Finished => ArenaProtocol.PHASE_FINISHED,
+        _ => ArenaProtocol.PHASE_PAUSED
+    };
+
+    /// <summary>Duraklama gerekçesi → tel değeri; <see cref="PauseReason.None"/> boş string.</summary>
+    private static string ReasonWire(PauseReason reason) => reason switch
+    {
+        PauseReason.Lobby => ArenaProtocol.PAUSE_REASON_LOBBY,
+        PauseReason.Loading => ArenaProtocol.PAUSE_REASON_LOADING,
+        PauseReason.Countdown => ArenaProtocol.PAUSE_REASON_COUNTDOWN,
+        PauseReason.Operator => ArenaProtocol.PAUSE_REASON_OPERATOR,
+        PauseReason.Mode => ArenaProtocol.PAUSE_REASON_MODE,
+        _ => ""
+    };
 
     private void EnterCountdownLocked(List<Outgoing> outbox, DateTime now)
     {
-        SetPhaseLocked(Phase.Countdown, now);
+        SetPhaseLocked(Phase.Paused, PauseReason.Countdown, now);
         _countdownRemaining = ArenaProtocol.COUNTDOWN_SECONDS;
         _nextSecondAt = now.AddSeconds(1);
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
@@ -797,10 +994,10 @@ public sealed class MatchDirector
 
     private void EnterLiveLocked(List<Outgoing> outbox, DateTime now)
     {
-        SetPhaseLocked(Phase.Live, now);
+        SetPhaseLocked(Phase.Playing, now);
         _timeRemaining = _roundSeconds;
         _nextSecondAt = now.AddSeconds(1);
-        // §10.2: Live'a girerken herkes tam can + canlı.
+        // §10.2: playing'e girerken herkes tam can + canlı.
         foreach (var player in OnlinePlayersLocked()) ResetMatchStateLocked(player, keepScore: true);
         _matchStartPending = _mode != null;
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
@@ -808,7 +1005,7 @@ public sealed class MatchDirector
 
     private void EnterEndLocked(List<Outgoing> outbox, DateTime now, MatchOutcome outcome)
     {
-        SetPhaseLocked(Phase.End, now);
+        SetPhaseLocked(Phase.Finished, now);
         Console.WriteLine($"[match] maç sonu — kazanan: {DescribeOutcomeLocked(outcome)} " +
                           $"(kırmızı {_scoreRed} : mavi {_scoreBlue})");
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
@@ -833,14 +1030,13 @@ public sealed class MatchDirector
 
     private void EnterLobbyLocked(List<Outgoing> outbox, DateTime now)
     {
-        SetPhaseLocked(Phase.Lobby, now);
+        SetPhaseLocked(Phase.Paused, PauseReason.Lobby, now);
         _mode = null;
-        // Kurallar TDM varsayılanına döner: lobide de anlamlı bir cevap olsun (welcome.match.rules).
-        // Lobiye ÖZEL bir kural şekli YOKTUR (§10.7) — savaşı kapatan şey kural değil fazdır.
-        _rules = ModeRules.TeamDefault;
-        // Lobi profili (§10.7): sahne yapılandırılmışsa modId de dolar, çünkü istemci silah
-        // loadout'unu/HUD'unu bu anahtarla çözüyor. Lobi sahnesi yoksa ikisi de boş kalır ve
-        // istemci kendi kabuk Lobby sahnesinde durur.
+        _modeState = "";
+        // Lobi TÜRÜ (§10.7): kural şekli varsayılandan yalnız serbest atışla ayrılır. Hasarı yine
+        // faz kapatır (hit_report yalnız playing) — bu bayrak sadece namlu alevinin görünmesini
+        // sağlar. modId de dolar, çünkü istemci silah loadout'unu/HUD'unu bu anahtarla çözüyor.
+        _rules = ModeRules.LobbyProfile;
         _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
         _sceneName = _lobbyScene;
         _timeRemaining = 0f;
@@ -874,7 +1070,7 @@ public sealed class MatchDirector
         var outbox = new List<Outgoing>();
         lock (_gate)
         {
-            if (_phase != Phase.Live) return;
+            if (_phase != Phase.Playing) return;
             EnterEndLocked(outbox, DateTime.UtcNow, outcome);
         }
         await FlushAsync(outbox);
@@ -966,8 +1162,10 @@ public sealed class MatchDirector
 
     private MatchInfo BuildMatchInfoLocked() => new()
     {
-        phase = _phase.ToString(),
+        phase = PhaseWire(_phase),
+        phaseReason = ReasonWire(_pauseReason),
         modeId = _modeId,
+        modeState = _modeState,
         sceneName = _sceneName,
         timeRemaining = _timeRemaining,
         scoreRed = _scoreRed,
@@ -977,7 +1175,9 @@ public sealed class MatchDirector
 
     private MatchStateMsg BuildMatchStateLocked() => new()
     {
-        phase = _phase.ToString(),
+        phase = PhaseWire(_phase),
+        phaseReason = ReasonWire(_pauseReason),
+        modeState = _modeState,
         timeRemaining = _timeRemaining,
         scoreRed = _scoreRed,
         scoreBlue = _scoreBlue

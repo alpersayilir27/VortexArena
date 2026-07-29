@@ -2,7 +2,8 @@
     "name": "VortexArena.Core.Editor",
     "rootNamespace": "VortexArena.Core.Editor",
     "references": [
-        "VortexArena.Core"
+        "VortexArena.Core",
+        "Unity.ProBuilder"
     ],
     "includePlatforms": [
         "Editor"

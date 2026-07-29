@@ -1,4 +1,3 @@
-using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,9 +7,17 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Lobby (VR) world-space panelini sürer: canlı roster, ready/takım ve
+    /// Kabuk <c>Lobby</c> sahnesinin denetleyicisi. <b>Tek işi bağlantıdır:</b> durum metni ve
     /// **gizli** IP paneli (numpad ile elle adres girme).
     ///
+    /// <para>
+    /// <b>Bu sahne bir oyun alanı DEĞİL, bir bekleme odasıdır.</b> Oyuncu burada yalnız sunucuya
+    /// bağlanmayı bekler; bağlanır bağlanmaz sunucunun <b>açık sahnesine</b> geçer
+    /// (<c>SceneRouter</c>, §10.7) ve gerçek lobi orasıdır. Bu yüzden burada roster, "hazır"
+    /// düğmesi ve takım seçimi <b>YOKTUR</b>: takımı yalnız admin atar (§5.2) ve <c>set_ready</c>
+    /// bir yükleme kapısıdır, <c>SceneRouter</c> gönderir. Buraya oyun arayüzü eklenirse iki
+    /// lobi doğar ve sahada hangisinin geçerli olduğu belirsizleşir.
+    /// </para>
     /// <para>
     /// <b>Normal akış oyuncuya hiçbir şey sormaz:</b> adres öncelik zinciriyle
     /// (komut satırı <c>--server-ip</c> &gt; PlayerPrefs &gt; beacon &gt;
@@ -43,7 +50,6 @@ namespace VortexArena.App
 
         [Header("Durum")]
         [SerializeField] private TMP_Text statusText;
-        [SerializeField] private TMP_Text rosterText;
 
         [Header("IP paneli (gizli — sağ kumandada A×2 ile açılır)")]
         [SerializeField] private GameObject ipPanel;
@@ -51,12 +57,8 @@ namespace VortexArena.App
         [SerializeField] private Button connectButton;
         [SerializeField] private Button disconnectButton;
 
-        [Header("Hazır/Takım")]
-        [SerializeField] private TMP_Text readyButtonText;
-
         private string _ipBuffer = "";
         private bool _manualEntry; // elle giriş (veya kayıtlı IP) beacon'ı ezer
-        private bool _ready;
         private bool _beaconSubscribed;
 
         private bool _ipPanelVisible;
@@ -79,7 +81,6 @@ namespace VortexArena.App
         {
             NetEvents.OnConnectionStateChanged += HandleConnectionStateChanged;
             NetEvents.OnConnected += HandleConnected;
-            NetEvents.OnLobbyState += HandleLobbyState;
             NetEvents.OnKicked += HandleKicked;
             TrySubscribeBeacon();
         }
@@ -88,7 +89,6 @@ namespace VortexArena.App
         {
             NetEvents.OnConnectionStateChanged -= HandleConnectionStateChanged;
             NetEvents.OnConnected -= HandleConnected;
-            NetEvents.OnLobbyState -= HandleLobbyState;
             NetEvents.OnKicked -= HandleKicked;
 
             if (_beaconSubscribed && ServerDiscovery.Instance != null)
@@ -125,9 +125,6 @@ namespace VortexArena.App
             }
 
             RefreshIpText();
-            RefreshReadyLabel();
-            RedrawRoster(null);
-
             TryAutoConnect(); // adres varsa hemen bağlan; yoksa beacon'ı bekle
             RefreshStatus();
         }
@@ -304,63 +301,16 @@ namespace VortexArena.App
             }
         }
 
-        public void ToggleReady()
-        {
-            if (ArenaClient.Instance == null || !ArenaClient.Instance.IsConnected)
-            {
-                return;
-            }
-
-            _ready = !_ready;
-            ArenaClient.Instance.Send(new SetReadyMsg { ready = _ready });
-            RefreshReadyLabel();
-        }
-
-        /// <summary>Kendi takımını seçer ("red"|"blue"). Not: protokolde set_team admin
-        /// komutudur; sunucu oyuncudan kabul etmiyorsa loglayıp yok sayar.</summary>
-        public void SetTeam(string team)
-        {
-            if (ArenaClient.Instance == null || !ArenaClient.Instance.IsConnected)
-            {
-                return;
-            }
-
-            if (team != "red" && team != "blue")
-            {
-                return;
-            }
-
-            ArenaClient.Instance.Send(new SetTeamMsg
-            {
-                playerId = ArenaClient.Instance.PlayerId,
-                team = team
-            });
-        }
-
         // -------------------------------------------------------- olay işleyiciler
 
         private void HandleConnectionStateChanged(ArenaConnectionState state)
         {
-            if (state != ArenaConnectionState.Connected)
-            {
-                _ready = false;
-                RefreshReadyLabel();
-                RedrawRoster(null);
-            }
-
             RefreshStatus();
         }
 
         private void HandleConnected(WelcomeMsg msg)
         {
-            _ready = false;
-            RefreshReadyLabel();
             RefreshStatus();
-        }
-
-        private void HandleLobbyState(LobbyStateMsg msg)
-        {
-            RedrawRoster(msg);
         }
 
         private void HandleKicked(KickedMsg msg)
@@ -390,14 +340,6 @@ namespace VortexArena.App
             if (ipText != null)
             {
                 ipText.text = _ipBuffer;
-            }
-        }
-
-        private void RefreshReadyLabel()
-        {
-            if (readyButtonText != null)
-            {
-                readyButtonText.text = _ready ? "HAZIR (vazgeç)" : "HAZIR OL";
             }
         }
 
@@ -439,49 +381,6 @@ namespace VortexArena.App
             {
                 statusText.text = text;
             }
-        }
-
-        private void RedrawRoster(LobbyStateMsg msg)
-        {
-            if (rosterText == null)
-            {
-                return;
-            }
-
-            if (msg == null || msg.players == null || msg.players.Length == 0)
-            {
-                rosterText.text = "";
-                return;
-            }
-
-            var sb = new StringBuilder();
-            for (int i = 0; i < msg.players.Length; i++)
-            {
-                PlayerInfo p = msg.players[i];
-                if (p == null)
-                {
-                    continue;
-                }
-
-                string team = string.IsNullOrEmpty(p.team) ? "-" : p.team;
-                string battery = p.battery < 0f ? "-" : $"%{Mathf.RoundToInt(Mathf.Clamp01(p.battery) * 100f)}";
-
-                sb.Append(p.playerId).Append("  ")
-                  .Append(p.name).Append("  [")
-                  .Append(p.role).Append("]  ")
-                  .Append(team).Append("  ")
-                  .Append(p.ready ? "HAZIR" : "bekliyor").Append("  ")
-                  .Append(battery);
-
-                if (!p.online)
-                {
-                    sb.Append("  (çevrimdışı)");
-                }
-
-                sb.AppendLine();
-            }
-
-            rosterText.text = sb.ToString();
         }
 
         private static string FormatEndpoint(string ip, int port)

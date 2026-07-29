@@ -47,6 +47,21 @@ namespace VortexArena.Core.Editor
         /// <summary>Arayüzde gösterilen ad (ör. "Standart 12×12").</summary>
         public string displayName = "";
 
+        /// <summary>
+        /// İsteğe bağlı <c>ArenaShapeDefinition</c> asset yolu — arena planı (zemin sınırı +
+        /// kolonlar).
+        /// <para>
+        /// <b>Boş bırakılırsa hiçbir şey değişmez:</b> sahne kaynak arenadan bire bir kopyalanır
+        /// ve geometriye dokunulmaz (sihirbazın öteden beri yaptığı iş).
+        /// </para>
+        /// <para>
+        /// Doluysa şablondan gelen hazır zemin/duvar mesh'leri SİLİNİR, yerine plandan üretilen
+        /// geometri konur ve sahnedeki <c>ArenaBoundary</c> bu asset'e + üretilen duvarlara
+        /// bağlanır. Kalibrasyon işaretçileri, taban bölgeleri ve rig yerinde kalır.
+        /// </para>
+        /// </summary>
+        public string shapePath = "";
+
         /// <summary>Hedef kutu: standart katalog arenası mı, işletmeye özel mi.</summary>
         public ArenaTemplateTarget target = ArenaTemplateTarget.Standard;
 

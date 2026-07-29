@@ -70,8 +70,22 @@ public sealed record ModeRules
     /// <summary>respawn.delaySeconds + revive_request gecikme eşiği.</summary>
     public float RespawnDelay { get; init; } = ArenaProtocol.RESPAWN_DELAY;
 
+    /// <summary>
+    /// Faz <c>playing</c> değilken silah ateşlenebilir mi (§10.5). <c>true</c> = serbest atış alanı:
+    /// <c>shot_fired</c> relay edilir ama <b>hasar yine yoktur</b> — <c>hit_report</c> kapısı her
+    /// hâlükârda <c>playing</c>'dir (§10.3). Lobi türünün tek farkı budur.
+    /// </summary>
+    public bool FireWhilePaused { get; init; }
+
     /// <summary>Bugünkü TDM davranışı — yeni mod bir alanı belirtmezse buraya düşer.</summary>
     public static readonly ModeRules TeamDefault = new();
+
+    /// <summary>
+    /// Lobi türünün kural şekli (§10.7): tek farkı serbest atıştır. Lobi bir <see cref="IGameMode"/>
+    /// DEĞİLDİR — bu kural yalnız istemciye "burada ateş edebilirsin, ama hasar yok" demek için
+    /// telde taşınır.
+    /// </summary>
+    public static readonly ModeRules LobbyProfile = new() { FireWhilePaused = true };
 
     /// <summary>Tel formatına çevirir (§10.5). Enum → string: bilinmeyen değer okuyan tarafta
     /// varsayılana düştüğü için sürüm uyumu sayısal enum'dan güvenlidir.</summary>
@@ -82,6 +96,7 @@ public sealed record ModeRules
         friendlyFire = FriendlyFire,
         reviveAnchor = Revive == ReviveAnchor.StandStill ? "standstill" : "base",
         weaponSource = Weapons == WeaponSource.RandomGrant ? "random" : "rack",
-        respawnDelay = RespawnDelay
+        respawnDelay = RespawnDelay,
+        fireWhilePaused = FireWhilePaused
     };
 }

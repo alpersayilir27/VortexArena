@@ -3510,6 +3510,50 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 2593791109173705674, guid: 14fecc2e00953cf4db4c710dcbd61915, type: 3}
   m_PrefabInstance: {fileID: 261041082}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &267023937
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 267023938}
+  - component: {fileID: 267023939}
+  m_Layer: 0
+  m_Name: SpawnPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &267023938
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 267023937}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: 0.41250414, z: -0, w: 0.9109557}
+  m_LocalPosition: {x: 4.85442, y: -0.9787798, z: 1.6029301}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 759080084}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &267023939
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 267023937}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1fa4e8d2d5ac26b4985f8ab97c512deb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.SpawnPoint
 --- !u!1001 &267373313
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -10157,6 +10201,7 @@ Transform:
   - {fileID: 1065191553}
   - {fileID: 452307081}
   - {fileID: 640131}
+  - {fileID: 267023938}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &760379701
@@ -12574,6 +12619,7 @@ MonoBehaviour:
   warningText: {fileID: 2093465407}
   halfExtentX: 5.5
   halfExtentZ: 4
+  shape: {fileID: 0}
   warnDistance: 1
   minWallAlpha: 0.05
   maxWallAlpha: 0.85

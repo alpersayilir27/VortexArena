@@ -236,7 +236,13 @@ namespace VortexArena.App.Admin
             }
 
             Transform origin = boundary.transform;
-            center = origin.position;
+
+            // ⚠️ Merkez transformun KONUMU DEĞİL, sınırın yerel merkezidir: çokgen planlı
+            // (yamuk/kırık duvarlı) arenalarda sınırlayıcı kutunun ortası transformun üstüne
+            // düşmez — konumu merkez saymak kadrajı arenanın dışına kaydırır. Dikdörtgen
+            // arenalarda LocalCenter sıfırdır, yani davranış değişmez.
+            Vector2 localCenter = boundary.LocalCenter;
+            center = origin.TransformPoint(new Vector3(localCenter.x, 0f, localCenter.y));
             yaw = origin.eulerAngles.y;
             halfExtents = boundary.HalfExtents;
             return true;

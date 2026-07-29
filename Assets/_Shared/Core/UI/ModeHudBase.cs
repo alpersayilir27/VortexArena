@@ -163,14 +163,14 @@ namespace VortexArena.Core.UI
                 return;
             }
 
-            if (msg.phase != "Countdown" && _countdownActive)
+            if (msg.phaseReason != ArenaProtocol.PAUSE_REASON_COUNTDOWN && _countdownActive)
             {
                 _countdownActive = false;
                 _countdownLabel = "";
                 RefreshStatusText();
             }
 
-            SetText(phaseText, PhaseLabel(msg.phase));
+            SetText(phaseText, PhaseLabel(msg.phase, msg.phaseReason, msg.modeState));
             SetText(timeText, FormatTime(msg.timeRemaining));
             SetText(scoreText, ScoreLine(msg));
         }
@@ -186,7 +186,8 @@ namespace VortexArena.Core.UI
             {
                 _countdownActive = true;
                 _countdownLabel = msg.seconds.ToString();
-                SetText(phaseText, PhaseLabel("Countdown"));
+                SetText(phaseText, PhaseLabel(ArenaProtocol.PHASE_PAUSED,
+                    ArenaProtocol.PAUSE_REASON_COUNTDOWN, ""));
             }
             else
             {
@@ -426,19 +427,35 @@ namespace VortexArena.Core.UI
             }
         }
 
-        /// <summary>Protokol faz adını (§10.1) ekran metnine çevirir; bilinmeyen faz aynen gösterilir.</summary>
-        protected static string PhaseLabel(string phase)
+        /// <summary>
+        /// Durumu (§10.1) ekran metnine çevirir. <b>Faz tek başına yetmez:</b> telde tek bir
+        /// <c>paused</c> görünen durum lobi de olabilir, yükleme/geri sayım/duraklatma da —
+        /// gerekçe (<c>phaseReason</c>) bunları ayırır. Modun kendi ara durumu
+        /// (<c>modeState</c>, ör. turnuva toplanması) gerekçe <c>mode</c> iken devreye girer;
+        /// tabanın onu yorumlaması beklenmez, alt sınıf <see cref="ModeStateLabel"/> ile yazar.
+        /// </summary>
+        protected string PhaseLabel(string phase, string phaseReason, string modeState)
         {
-            switch (phase)
+            if (phase == ArenaProtocol.PHASE_PLAYING) return "MAÇ";
+            if (phase == ArenaProtocol.PHASE_FINISHED) return "MAÇ BİTTİ";
+
+            switch (phaseReason)
             {
-                case "Lobby": return "LOBİ";
-                case "Loading": return "YÜKLENİYOR";
-                case "Countdown": return "HAZIRLAN";
-                case "Live": return "MAÇ";
-                case "End": return "MAÇ BİTTİ";
-                default: return phase ?? "";
+                case ArenaProtocol.PAUSE_REASON_LOBBY: return "LOBİ";
+                case ArenaProtocol.PAUSE_REASON_LOADING: return "YÜKLENİYOR";
+                case ArenaProtocol.PAUSE_REASON_COUNTDOWN: return "HAZIRLAN";
+                case ArenaProtocol.PAUSE_REASON_OPERATOR: return "DURAKLATILDI";
+                case ArenaProtocol.PAUSE_REASON_MODE: return ModeStateLabel(modeState);
+                default: return "BEKLEME";
             }
         }
+
+        /// <summary>
+        /// Mod duraklatma istediğinde (<c>phaseReason == "mode"</c>) gösterilecek metin. Taban
+        /// <c>modeState</c>'i YORUMLAMAZ — anlamı yalnız modun kendisi bilir (turnuvada
+        /// "herkes tabana dönsün" gibi). Alt sınıf yazmazsa nötr bir metin gösterilir.
+        /// </summary>
+        protected virtual string ModeStateLabel(string modeState) => "BEKLEME";
 
         protected static string FormatTime(float seconds)
         {

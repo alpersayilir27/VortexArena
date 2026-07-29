@@ -242,11 +242,42 @@ public sealed class LobbyService
     // ---- Ortak seçim (§5.2 set_selection / §5.3 admin_state) ----
 
     /// <summary>Bir sonraki maçın ortak mod/harita seçimi. Maçı BAŞLATMAZ; boş alan mevcut
-    /// değerini korur. Değişiklik tüm adminlere yayılır — çoklu operatör aynı ekranı görsün.</summary>
-    public Task HandleSetSelectionAsync(ClientConnection connection, SetSelectionMsg msg)
+    /// değerini korur. Değişiklik tüm adminlere yayılır — çoklu operatör aynı ekranı görsün.
+    /// <para>
+    /// <b>Harita seçmek aynı zamanda SAHNELEMEktir (§10.7):</b> lobideyken seçilen arena
+    /// <see cref="MatchDirector.StageSceneAsync"/> ile TÜM istemcilere anında yüklenir. Operatör
+    /// haritayı yalnız kendi ekranında değil oyuncuların başlıklarında da değiştirir.
+    /// </para>
+    /// <para>
+    /// ⚠️ Bu yüzden <b>mod/harita YALNIZ <c>Lobby</c> fazında değiştirilebilir</b>: sahne komutu
+    /// herkese gittiği için koşan maçın ortasında harita değiştirmek maçı bozardı. Reddedilen
+    /// alanlar düşürülür, komutun geri kalanı (süre/limit) işlenmeye devam eder — onlar bir
+    /// sonraki maçın parametreleridir, sahne yüklemezler.
+    /// </para></summary>
+    public async Task HandleSetSelectionAsync(ClientConnection connection, SetSelectionMsg msg)
     {
-        if (!ApplySelection(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit))
-            return Task.CompletedTask; // değişmedi: gereksiz yayın yapma
+        var requestedModeId = msg.modeId ?? "";
+        var requestedSceneName = msg.sceneName ?? "";
+
+        // Faz kapısı (§10.7): YALNIZ koşan maç engeller. `finished` iken operatör bir sonraki
+        // haritayı seçebilmeli. Otorite sunucudadır — arayüz seçicileri maç sürerken zaten
+        // pasiftir, burası bayat/yarışan bir panelin komutunu da keser.
+        var phase = _director.CurrentPhase;
+        var rejection = "";
+        if (phase == Phase.Playing && (requestedModeId.Length > 0 || requestedSceneName.Length > 0))
+        {
+            rejection = "maç sürüyor — harita/mod değiştirilemez";
+            Console.WriteLine($"[Lobby] set_selection reddedildi ({connection.State?.Name}): {rejection}.");
+            requestedModeId = "";
+            requestedSceneName = "";
+        }
+
+        var changed = ApplySelection(requestedModeId, requestedSceneName,
+            msg.roundSeconds, msg.scoreLimit, out var sceneChanged);
+
+        // Reddedildiyse DEĞİŞMESE de yayın yapılır: komutu gönderen panel imlecini iyimser olarak
+        // ilerletmiş olabilir, sunucunun değeri onu geri çeksin (tek doğruluk kaynağı, §5.3).
+        if (!changed && rejection.Length == 0) return; // değişmedi: gereksiz yayın yapma
 
         string modeId, sceneName;
         int roundSeconds, scoreLimit;
@@ -258,18 +289,44 @@ public sealed class LobbyService
             scoreLimit = _selectedScoreLimit;
         }
 
+        // Sahneleme: harita gerçekten değiştiyse herkes o arenayı yükler (§10.7). Yalnız harita
+        // değişiminde tetiklenir — süre/limit dokunuşu kimseyi sahne değiştirmeye zorlamamalı.
+        var stageNote = "";
+        if (sceneChanged)
+        {
+            var staged = await _director.StageSceneAsync(sceneName);
+            stageNote = staged.Outcome switch
+            {
+                StageOutcome.Staged => " (herkes yüklüyor)",
+                StageOutcome.Rejected => $" — SAHNELENEMEDİ: {staged.Reason}",
+                _ => ""
+            };
+        }
+
         var parameters = roundSeconds > 0 || scoreLimit > 0
             ? $", {(roundSeconds > 0 ? roundSeconds + " sn" : "mod süresi")} / " +
               $"{(scoreLimit > 0 ? "limit " + scoreLimit : "mod limiti")}"
             : "";
         Console.WriteLine($"[Lobby] set_selection: mod '{modeId}', harita '{sceneName}'{parameters} ({connection.State?.Name}).");
-        return BroadcastAdminStateAsync(Notice(connection, $"seçim -> {sceneName} / {modeId}{parameters}"));
+
+        var action = rejection.Length > 0
+            ? rejection
+            : $"seçim -> {sceneName} / {modeId}{parameters}{stageNote}";
+        await BroadcastAdminStateAsync(Notice(connection, action));
     }
 
     /// <summary>true = seçim gerçekten değişti. Boş/null string ve <c>0</c> sayı mevcut değeri
     /// korur (§5.2) — arayüz yalnız değiştirdiği alanı doldurabilsin.</summary>
-    private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit)
+    private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit) =>
+        ApplySelection(modeId, sceneName, roundSeconds, scoreLimit, out _);
+
+    /// <summary><paramref name="sceneChanged"/> ayrı raporlanır çünkü sahneleme (§10.7) YALNIZ
+    /// haritanın değiştiği çağrıda tetiklenir; "bir şey değişti" bilgisi bunun için yeterli
+    /// değildir (süre değişimi de onu true yapar).</summary>
+    private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit,
+        out bool sceneChanged)
     {
+        sceneChanged = false;
         lock (_selectionGate)
         {
             var changed = false;
@@ -281,6 +338,7 @@ public sealed class LobbyService
             if (!string.IsNullOrEmpty(sceneName) && _selectedSceneName != sceneName)
             {
                 _selectedSceneName = sceneName;
+                sceneChanged = true;
                 changed = true;
             }
             if (roundSeconds > 0 && _selectedRoundSeconds != roundSeconds)

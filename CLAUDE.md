@@ -87,7 +87,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   **Her yeni arenanın kaynağı `Standard/Default12x12`'dir** — harita dizaynı taşımayan, yalnız ağa
   bağlanmak için gerekenleri içeren TEK KAYNAK arena; sihirbazın varsayılan kaynağı da odur.
   Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ (marker bileşenleri Core'dan gelir).
-  Bir arenanın ağa bağlanması için sahnede şunlar olmalı: `ArenaBoundary` (arena origin + halfExtent),
+  Bir arenanın ağa bağlanması için sahnede şunlar olmalı: `SpawnPoint` (**arena uzayının sıfırı**),
+  `ArenaBoundary` (muhafaza + arena ölçüsü),
   `BaseZone`×2 (**taban bölgesi** = kırmızı/mavi şerit; ölen oyuncu buraya girince canlanır,
   `Team.Neutral` = herkese açık) ve **altyapı prefabları** (`_Shared/App/Prefabs/`):
   **`VA_CameraRig`** (kamera rig'i + `OVRComprehensiveInteractionRig` + `PlayerBodyAvatar` tek
@@ -97,13 +98,22 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   rig/kalibrasyon kurulumundaki tek bir düzeltme arena sayısı kadar elle iş doğurur. Aynı sebeple
   sahneye **Building Blocks rig'i ya da ayrı bir `OVRComprehensiveInteractionRig` EKLENMEZ**: BB
   kurulumu prefabı otomatik unpack eder (`CameraRigBBBlockData`) ve ikisi de zaten `VA_CameraRig`
-  içindedir. `VA_CalibrationManager`'ın `anchorA`/`anchorB`/`rigRoot` alanları sahneye baktığı için
+  içindedir. ⚠️ **`VA_CameraRig`'de yapay hareket KAPALIDIR ve açılmaz** (kumandayla yürüme,
+  eksende dönme, adımlama, ışınlanma): free-roam'da hareket yalnız fizikseldir. Rig'e locomotion
+  geri gelirse sebebi neredeyse her zaman sahneye elle eklenmiş bir BB rig'idir →
+  `Docs/Sistem-Ozeti.md` §7, "rig'i/kamerayı asla taşıma" maddesi.
+  `VA_CalibrationManager`'ın `anchorA`/`anchorB`/`rigRoot` alanları sahneye baktığı için
   örnek üstünde doldurulur (prefab asset'inde boş durur — normaldir).
   **Admin gözlemci için ek adım YOKTUR** — `AdminSpectator`
   kendini önyükler ve sahneyi devralır (rig'i kapatır, `ArenaBoundary`'yi susturur).
-  Ayrıca arena başına **tek** `SpawnPoint`: `GameObject > VortexArena > Spawn Point` ile eklenir ve
-  ELLE yerleştirilir (sihirbaz üretmez). Yalnız "maçtan önce şurada toplanın" göstergesidir —
-  takımı/slotu yoktur, hiçbir kod okumaz, protokolde karşılığı yoktur. ⚠️ **Harita değişimi ne
+  Arena başına **tek** `SpawnPoint` (`GameObject > VortexArena > Spawn Point`): hem "maçtan önce
+  şurada toplanın" göstergesi hem **arena uzayının sıfırıdır** — ağa giden/gelen tüm pozlar ona göre
+  çevrilir. Takımı/slotu yoktur ve protokolde karşılığı yoktur (kimse oraya ışınlanmaz).
+  ⚠️ **Bir kez yerleştirilir, sonra TAŞINMAZ:** taşımak tüm oyuncuların arenadaki koordinatını
+  kaydırır. ⚠️ **Zemin seviyesinde durmalıdır** — `ThreePointBodyIK` zemin Y'sini
+  `ArenaSpace.ArenaToWorld(Vector3.zero).y`'den türetir, marker havadaysa avatarların ayağı havada
+  kalır. Yoksa origin hiç kaydolmaz: dünya=arena kabul edilir (uzak oyuncular dünya orijininde
+  toplanır) ve konsola uyarı düşer — lobide bu normaldir. ⚠️ **Harita değişimi ne
   oyuncuyu yeniden doğurur ne kalibrasyonu sıfırlar**: `ArenaCalibrator` yeni sahnede kayıtlı
   `OVRSpatialAnchor`'dan hizalamayı geri yükler — ön koşulu bir işletmede hep aynı ölçüde arena
   oynatmaktır (zemin işaretleri sabit kalsın).
@@ -124,7 +134,9 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
 **Assembly grafiği** (bağımlılık hep aşağı):
 Protocol (saf C#, noEngineReferences) ← Net ← Core ← App, Modes.<X>
 Net oyun/sahne bilgisi içermez; olay yayınlar, App dinler. Editor asmdef'leri
-`includePlatforms:["Editor"]` + kendi runtime'ını referanslar.
+`includePlatforms:["Editor"]` + kendi runtime'ını referanslar; `Core.Editor` ayrıca
+`Unity.ProBuilder` referanslar (plandan arena geometrisi üretimi — yalnız editörde,
+runtime'a ProBuilder BULAŞMAZ).
 App ayrıca `Unity.InputSystem` referanslar (gözlemci kamerası klavye/fare + `InputSystemUIInputModule`);
 proje **Input System-only** — `StandaloneInputModule` runtime'da patlar, kullanılmaz.
 Core ayrıca `Unity.RenderPipelines.Universal.Runtime` referanslar (`LocalBodyOverlayCamera` —
@@ -211,14 +223,26 @@ yerleşimi (yerleri zemin bandından gelir) · tek `SpawnPoint` · **raf kipinde
 için raf içermez) · NavMesh/ışık bake. Sonrasında
 `Tools > VortexArena > Export Server Config` çalıştır — **yeni `sceneName` `maps.json`'a girsin
 diye** (ölçü için değil, oraya arena boyutu yazılmaz).
+**Dikdörtgen OLMAYAN alan** (yamuk, L, kırık duvarlı): plan bir SO'ya girilir —
+`ArenaShapeDefinition` (`Create > VortexArena > Arena Shape Definition`, arenanın `Data/`
+klasöründe): `outline` = sıralı köşeler (metre, `ArenaBoundary` transformunun yerel XZ'si,
+**kapalı** — ilk noktayı sona tekrarlama), `columns` = kolonlar. Sihirbazın "Arena planı" alanına
+verilirse zemin/duvar/kolon geometrisi ondan üretilir; sonradan `Tools > VortexArena >
+Build Arena From Shape` ile yeniden üretilir (idempotent). ⚠️ **Plan üç yeri birden besler**
+(geometri · muhafaza mesafesi · admin kuş bakışı kadrajı) — ölçüyü ikinci bir yere yazma.
+Alan boş bırakılırsa `ArenaBoundary` eksene hizalı dikdörtgen olarak çalışır (bugünkü davranış).
+Elle konan engeller için `ArenaObstacle` (`Core/Arena/`): muhafaza onu engel sayar —
+⚠️ **collider değildir, fizik yapmaz** (free-roam'da çarpışma yoktur).
 **Yeni lobi:** lobi de bir arena kutusudur, farkı üç şeydir — `MapDefinition.supportedModeIds` **yalnız
 `["lobby"]`** (boş bırakılırsa "kısıtsız" sayılır!), sahnede `BaseZone` ve `VA_ModeHud` YOK, silah
 rafı VAR. Kaynağı **o fiziksel odanın ölçüsündeki** arenadır (12×12 için `Standard/Lobby12x12`);
 ölçekleme yoktur. `Export Server Config` yeter: sunucu **seçilen mekanın** lobi haritasını kendi
 bulur (`server.json → lobbyScene` yalnız mekanda birden çok lobi varsa doldurulur).
 ⚠️ `lobby` **kayıtlı bir mod DEĞİLDİR** — sunucuya `IGameMode` olarak eklenmez (`start_match` onu
-reddeder), `ModeDefinition.lobbyProfile` işaretlidir ve admin mod seçicisinde görünmez. Lobide savaşı
-kapatan şey kural değil **fazdır**; `hit_report`'un `Phase.Live` kapısına dokunma.
+reddeder, "lobi türünde maç başlamaz" kuralı buradan gelir), `ModeDefinition.lobbyProfile`
+işaretlidir ve admin mod seçicisinde görünmez. **Hasarı kapatan şey fazdır** (`hit_report` yalnız
+`playing`) — o kapıya dokunma; **ateşe izin veren şey moddur** (`rules.fireWhilePaused`, lobide
+`lobbyProfile`'dan türetilir). İkisi ayrı olduğu için lobi "hasarsız atış alanı"dır.
 → `Docs/ArenaNet-Protokol.md` §10.7
 
 **Yeni mod:** `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol;
@@ -296,7 +320,8 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 |---|---|
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` değişti / yeni arena eklendi → `Server/config/maps.json` |
 | `… > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi (idempotent; *Yalnız Kataloğu Tazele* varyantı da var) |
-| `… > Create Arena From Template` | Yeni arena kutusu |
+| `… > Create Arena From Template` | Yeni arena kutusu (dikdörtgen değilse "Arena planı" alanına `ArenaShapeDefinition` ver) |
+| `… > Build Arena From Shape` | `ArenaShapeDefinition` değişti → zemin/duvar/kolon geometrisini yeniden üretir (idempotent) |
 | `… > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, sentetik maç, sunucu çözümünü derleme |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` · `Spawn Point` | Sahneye ilgili bileşeni + kurulumunu ekler |
 | `PlayerBuildTool.BuildWindowsAdmin` · `…BuildQuestPlayer` | Menü değil — batch-mode `-executeMethod` girişleri (`deploy-admin-game.bat` / `deploy-player-apk.bat` çağırır) |

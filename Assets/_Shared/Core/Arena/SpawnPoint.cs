@@ -17,6 +17,13 @@ namespace VortexArena.Core.Arena
     /// Ölünce dönülecek yer bu DEĞİLDİR — o <see cref="BaseZone"/>'dur (taban bölgesi).
     /// </para>
     /// <para>
+    /// ⚠️ <b>Bu marker aynı zamanda arena uzayının SIFIRIDIR</b> (<see cref="ArenaSpace"/> origin'i):
+    /// ağa giden/gelen tüm pozlar bu transforma göre çevrilir. Yerini (ya da dönüşünü) değiştirmek
+    /// arenadaki TÜM oyuncuların koordinatını kaydırır — bir kez yerleştirilir ve bırakılır.
+    /// Origin bilinçli olarak <see cref="ArenaBoundary"/>'de DEĞİLDİR: muhafaza duvarını
+    /// büyütmek/kaydırmak ağ uzayını bozmasın diye ikisi ayrıldı.
+    /// </para>
+    /// <para>
     /// Sahneye <c>GameObject &gt; VortexArena &gt; Spawn Point</c> ile eklenir ve ELLE
     /// yerleştirilir. Kayıt <see cref="OnEnable"/>/<see cref="OnDisable"/> ile yapılır; sahne
     /// değişiminde statik liste kendiliğinden boşalır (sızıntı yok).
@@ -51,11 +58,29 @@ namespace VortexArena.Core.Arena
                     $"[SpawnPoint] Sahnede {Registry.Count} başlangıç noktası var — arena başına " +
                     "TEK nokta beklenir. Fazlalıkları sil.", this);
             }
+
+            // Origin yalnız GEÇERLİ nokta için kaydedilir: fazlalık bir marker ağ uzayını
+            // sessizce kendine çekmesin (hangisi olduğu Current ile aynı cevap olsun).
+            SyncOrigin();
         }
 
         private void OnDisable()
         {
             Registry.Remove(this);
+            ArenaSpace.ClearOrigin(transform);
+
+            // Geçerli nokta gittiyse sıradaki devralır; hiç kalmadıysa origin boş kalır.
+            SyncOrigin();
+        }
+
+        /// <summary>Arena uzayı origin'ini <see cref="Current"/> ile hizalar (yoksa dokunmaz).</summary>
+        private static void SyncOrigin()
+        {
+            SpawnPoint current = Current;
+            if (current != null)
+            {
+                ArenaSpace.SetOrigin(current.transform);
+            }
         }
 
         // ------------------------------------------------------------------ gizmo

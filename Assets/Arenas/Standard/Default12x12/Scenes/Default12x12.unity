@@ -2405,8 +2405,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 181687883}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: -0, y: 0.41250414, z: -0, w: 0.9109557}
+  m_LocalPosition: {x: 4.85442, y: -0.9787798, z: 1.6029301}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -10814,6 +10814,7 @@ MonoBehaviour:
   warningText: {fileID: 1221461640}
   halfExtentX: 6
   halfExtentZ: 6
+  shape: {fileID: 0}
   warnDistance: 1
   minWallAlpha: 0.05
   maxWallAlpha: 0.85

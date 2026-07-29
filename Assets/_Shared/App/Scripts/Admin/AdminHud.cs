@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using VortexArena.Net;
+using VortexArena.Protocol;
 
 namespace VortexArena.App.Admin
 {
@@ -341,27 +342,29 @@ namespace VortexArena.App.Admin
             _scoreBlueText.text = ffa ? "" : roster.ScoreBlue.ToString();
             _leaderboardText.text = ffa ? LeaderboardLine(roster) : "";
 
-            if (roster.Phase == "Countdown" && roster.CountdownSeconds > 0)
+            if (roster.PhaseReason == ArenaProtocol.PAUSE_REASON_COUNTDOWN && roster.CountdownSeconds > 0)
             {
                 _chipText.text = $"BAŞLIYOR {roster.CountdownSeconds}";
             }
-            else if (roster.Phase == "End")
+            else if (roster.Phase == ArenaProtocol.PHASE_FINISHED)
             {
                 _chipText.text = WinnerLabel(roster);
             }
-            else if (roster.Phase == "Live")
+            else if (roster.Phase == ArenaProtocol.PHASE_PLAYING)
             {
                 _chipText.text = $"{FormatTime(roster.TimeRemaining)} · LIVE";
             }
             else
             {
-                _chipText.text = PhaseLabel(roster.Phase);
+                _chipText.text = PhaseLabel(roster.Phase, roster.PhaseReason);
             }
 
-            // Lobby fazında sunucunun sahnesi yoktur; admin bir arenayı ÖNİZLİYOR olabilir →
-            // sunucunun boş değerini değil, gerçekten baktığımız sahneyi yaz.
+            // Lobi bekleyişinde admin bir arenayı yerel olarak ÖNİZLİYOR olabilir → sunucunun
+            // bildirdiği sahne yerine gerçekten baktığımız sahneyi yaz.
             string activeScene = SceneManager.GetActiveScene().name;
-            bool previewing = roster.Phase == "Lobby" && activeScene != AppSession.SceneLobby;
+            bool previewing = roster.PhaseReason == ArenaProtocol.PAUSE_REASON_LOBBY &&
+                              activeScene != roster.SceneName &&
+                              activeScene != AppSession.SceneLobby;
             string map = previewing
                 ? $"{activeScene} (önizleme)"
                 : string.IsNullOrEmpty(roster.SceneName) ? "-" : roster.SceneName;
@@ -620,14 +623,19 @@ namespace VortexArena.App.Admin
 
         // ------------------------------------------------------------- biçimleme
 
-        private static string PhaseLabel(string phase)
+        /// <summary>Durumu operatör metnine çevirir (§10.1). Faz tek başına yetmez: telde tek bir
+        /// <c>paused</c> lobi de olabilir, yükleme/geri sayım/duraklatma da — gerekçe ayırır.</summary>
+        private static string PhaseLabel(string phase, string phaseReason)
         {
-            switch (phase)
+            if (phase == ArenaProtocol.PHASE_PLAYING) return "LIVE";
+            if (phase == ArenaProtocol.PHASE_FINISHED) return "MAÇ BİTTİ";
+
+            switch (phaseReason)
             {
-                case "Loading": return "SAHNE YÜKLENİYOR";
-                case "Countdown": return "BAŞLIYOR";
-                case "Live": return "LIVE";
-                case "End": return "MAÇ BİTTİ";
+                case ArenaProtocol.PAUSE_REASON_LOADING: return "SAHNE YÜKLENİYOR";
+                case ArenaProtocol.PAUSE_REASON_COUNTDOWN: return "BAŞLIYOR";
+                case ArenaProtocol.PAUSE_REASON_OPERATOR: return "DURAKLATILDI";
+                case ArenaProtocol.PAUSE_REASON_MODE: return "MOD BEKLİYOR";
                 default: return "LOBİ";
             }
         }
