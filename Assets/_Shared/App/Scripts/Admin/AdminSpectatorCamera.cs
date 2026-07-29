@@ -16,9 +16,9 @@ namespace VortexArena.App.Admin
     /// Shift ×3, tekerlek taban hızı. İmleç KİLİTLENMEZ — operatörün tek ekranı var ve HUD
     /// düğmelerine erişmesi gerekir.</item>
     /// <item><b>Kuş bakışı:</b> ortografik, arena merkezinin üstünde, arena yaw'ına hizalı.
-    /// Kadraj sırayla <see cref="ArenaBoundary"/> → <c>MapDefinition.Size</c> → 10x10
-    /// varsayılanından gelir; tekerlek zoom. Sahnede <see cref="ArenaRoof"/> varsa bu kipe
-    /// girerken çatı gizlenir (tercih <c>AdminSession.Roof</c>), çıkarken geri gelir.</item>
+    /// Kadrajın TEK kaynağı sahnedeki <see cref="ArenaBoundary"/>'dir (varsayılan ölçü YOKTUR);
+    /// tekerlek zoom. Sahnede <see cref="ArenaRoof"/> varsa bu kipe girerken çatı gizlenir
+    /// (tercih <c>AdminSession.Roof</c>), çıkarken geri gelir.</item>
     /// </list>
     /// <para>Poz okuması <c>LateUpdate</c>'te yapılır: <c>RemoteAvatar</c> de aynı karede aynı
     /// kayıtçıdan okuyor, kamera bir kare geriden gitmesin.</para>
@@ -45,11 +45,11 @@ namespace VortexArena.App.Admin
         private const float ZoomMin = 0.4f;
         private const float ZoomMax = 1.6f;
 
-        /// <summary>Arena sınırı bulunamazsa varsayılan yarı ölçü (m).</summary>
-        private static readonly Vector2 DefaultHalfExtents = new Vector2(5f, 5f);
-
         private Camera _camera;
         private AdminCameraMode _appliedMode = (AdminCameraMode)(-1);
+
+        /// <summary>Bu sahne için "ArenaBoundary yok" uyarısı verildi mi (kare başına bağırmasın).</summary>
+        private bool _warnedMissingBoundary;
 
         // Serbest kip durumu.
         private float _yaw;
@@ -67,6 +67,7 @@ namespace VortexArena.App.Admin
         public void OnSceneAdopted()
         {
             _appliedMode = (AdminCameraMode)(-1);
+            _warnedMissingBoundary = false;
         }
 
         private void LateUpdate()
@@ -194,7 +195,16 @@ namespace VortexArena.App.Admin
                 }
             }
 
-            ResolveArena(out Vector3 center, out float yaw, out Vector2 halfExtents);
+            if (!TryResolveArena(out Vector3 center, out float yaw, out Vector2 halfExtents))
+            {
+                // Kadraj ölçüsü UYDURULMAZ: kamera dünya origin'inin üstünde aşağı bakar ve
+                // ortografik ölçü olduğu gibi kalır (operatör tekerlekle ayarlar).
+                WarnMissingBoundary();
+                transform.SetPositionAndRotation(
+                    Vector3.up * TopDownHeight,
+                    Quaternion.Euler(90f, 0f, 0f));
+                return;
+            }
 
             float aspect = _camera.aspect > 0.01f ? _camera.aspect : 16f / 9f;
             float sizeFromZ = halfExtents.y;
@@ -207,35 +217,53 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Arena merkezi/yönü/yarı ölçüsü. Sıra: sahnedeki <see cref="ArenaBoundary"/> (gerçek
-        /// duvarlar) → aktif haritanın <c>MapDefinition.Size</c>'ı → 10x10 varsayılanı (Lobby
-        /// gibi sınırsız sahneler).
+        /// Arena merkezi/yönü/yarı ölçüsü — TEK kaynağı sahnedeki <see cref="ArenaBoundary"/>'dir.
+        /// <b>Varsayılan ölçü YOKTUR:</b> uydurulan bir arena boyutu doğru sandığın yanlış bir
+        /// kadraj üretir; her arena sahnesinde bu bileşen zorunludur.
         /// </summary>
-        private void ResolveArena(out Vector3 center, out float yaw, out Vector2 halfExtents)
+        private bool TryResolveArena(out Vector3 center, out float yaw, out Vector2 halfExtents)
         {
             ArenaBoundary boundary = AdminSpectator.Instance != null
                 ? AdminSpectator.Instance.Boundary
                 : null;
 
-            if (boundary != null)
+            if (boundary == null)
             {
-                Transform origin = boundary.transform;
-                center = origin.position;
-                yaw = origin.eulerAngles.y;
-                halfExtents = boundary.HalfExtents;
+                center = Vector3.zero;
+                yaw = 0f;
+                halfExtents = Vector2.zero;
+                return false;
+            }
+
+            Transform origin = boundary.transform;
+            center = origin.position;
+            yaw = origin.eulerAngles.y;
+            halfExtents = boundary.HalfExtents;
+            return true;
+        }
+
+        /// <summary>
+        /// Arena sahnesinde <see cref="ArenaBoundary"/> eksikse sahne başına BİR KEZ uyarır —
+        /// kurulum hatası sessizce "biraz kayık kadraj" olarak gizlenmesin. Lobide arena
+        /// olmaması beklenen durumdur, orada susulur.
+        /// </summary>
+        private void WarnMissingBoundary()
+        {
+            if (_warnedMissingBoundary)
+            {
                 return;
             }
 
-            center = Vector3.zero;
-            yaw = 0f;
-            halfExtents = DefaultHalfExtents;
+            _warnedMissingBoundary = true;
 
-            // Yüklü sahnenin adı (sunucunun bildirdiği değil): harita önizlemesinde de doğru olsun.
-            MapDefinition map = AdminContent.FindMap(SceneManager.GetActiveScene().name);
-            if (map != null)
+            string scene = SceneManager.GetActiveScene().name;
+            if (scene == AppSession.SceneLobby)
             {
-                halfExtents = new Vector2(Mathf.Max(1f, map.Size.x * 0.5f), Mathf.Max(1f, map.Size.y * 0.5f));
+                return;
             }
+
+            Debug.LogWarning($"[AdminSpectatorCamera] '{scene}' sahnesinde ArenaBoundary yok — " +
+                             "kuş bakışı kadrajı ölçüsüz kaldı. Arena sahnesinde ArenaBoundary ZORUNLUDUR.");
         }
 
         private static float NormalizePitch(float pitch)

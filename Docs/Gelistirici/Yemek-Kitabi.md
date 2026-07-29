@@ -58,11 +58,9 @@ public class Yay : MonoBehaviour
         // 3) Isabet
         if (!Physics.Raycast(muzzle.position, dir, out RaycastHit hit, range)) return;
 
-        // Hedef bir AĞ OYUNCUSU ise vuruşu bildir; değilse yerel hasar yolu.
-        if (!ArenaCombat.ReportRaycastHit(hit, damage, "yay"))
-        {
-            hit.collider.GetComponentInParent<Health>()?.TakeDamage(damage);
-        }
+        // Hedef bir AĞ OYUNCUSU ise vuruşu bildirir; değilse hiçbir şey olmaz.
+        // Dönüş değeri yalnız sunum içindir: gövde efekti mi, duvar efekti mi?
+        ArenaCombat.ReportRaycastHit(hit, damage, "yay");
     }
 }
 ```
@@ -72,12 +70,15 @@ Bu kadar. Hiçbir DTO kurmadın, hiçbir koordinat dönüşümü yapmadın, hiç
 > **Neden böyle:** bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektirir — poz *arena uzayına*
 > çevrilmeli, **yön bir nokta değildir** (öteleme düşülmeli), hedef bir `RemoteHitBox` üzerinden
 > çözülmeli ve hasarı istemci belirler. `ArenaCombat` dördünü de kapsar.
-> `ReportRaycastHit` `false` dönerse hedef ağ oyuncusu değildir (pratik dummy'si, kırılabilir
-> obje) — onların canı sunucuda tutulmaz, eski yerel `Health` yolu geçerlidir.
+> `ReportRaycastHit` `false` dönerse hedef ağ oyuncusu değildir (dekor, duvar) —
+> **hasar uygulanmaz ve yapılacak yerel bir şey yoktur**; istemcide can tutan bir yol YOKTUR.
+> Dönüş değerini yalnız sunum için kullan (kan efekti mi, isabet izi mi). Kırılabilir objeler
+> ileride ağsal (sunucu-otoriter) olacak → `plan/agsal-kirilabilir-objeler.md`.
 
 > ⚠️ **Canı yerelde düşürme.** `ReportHit` yalnızca *bildirir*. Hedefin canı sunucudan
-> `health_update` ile geri gelir ve `Health.ApplyServerHealth` ile uygulanır. Yerelde düşürürsen
-> hasar iki kez uygulanmış gibi görünür ve iki istemci farklı can görür.
+> `health_update` ile geri gelir; yerel oyuncunun canını `PlayerCombatState` (ve ondan beslenen
+> HUD) okur. Yerelde düşürürsen hasar iki kez uygulanmış gibi görünür ve iki istemci farklı can
+> görür.
 
 ---
 
@@ -95,13 +96,10 @@ public class Mermi : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        // Ağ oyuncusu değilse (duvar, dekor) mermi yalnız yok olur — yerel hasar yolu yoktur.
         if (ArenaCombat.TryGetTargetPlayerId(other, out int playerId))
         {
             ArenaCombat.ReportHit(playerId, transform.position, damage, "mermi");
-        }
-        else
-        {
-            other.GetComponentInParent<Health>()?.TakeDamage(damage);
         }
 
         Destroy(gameObject);
@@ -157,8 +155,7 @@ if (Physics.Raycast(muzzle.position, dir, out RaycastHit hit, range))
 {
     float uygulanan = ArenaCombat.IsHeadshot(hit.collider) ? damage * 2.5f : damage;
 
-    if (!ArenaCombat.ReportRaycastHit(hit, uygulanan, "ak47"))
-        hit.collider.GetComponentInParent<Health>()?.TakeDamage(uygulanan);
+    ArenaCombat.ReportRaycastHit(hit, uygulanan, "ak47");
 }
 ```
 
@@ -489,14 +486,13 @@ eksiksiz taşıması (`ArenaBoundary`, `ArenaCalibrator` + işaretçiler, `Playe
 `RemotePlayerSpawner`, `ModeHudSpawner`, `BaseZone`, BB rig) — arena planı zaten her kurulumda
 baştan çiziliyor, orantılı ölçekleme elle düzeltilecek bir yalancı-doğru üretir.
 
-Sonra **elde**: arena planını çiz · `ArenaBoundary.halfExtentX/Z` + `MapDefinition.size`'ı gerçek
+Sonra **elde**: arena planını çiz · `ArenaBoundary.halfExtentX/Z`'yi gerçek
 ölçüye getir · kalibrasyon işaretçilerini yerleştir · `GameObject > VortexArena > Spawn Point` ile
 arenanın **tek** başlangıç noktasını koy · NavMesh/ışık bake et · **`Export Server Config`**.
 
-> `MapDefinition.size` **sunucuya gitmez** (maps.json'a yalnız `sceneName` + `modes` yazılır) —
-> yalnız admin mini haritasının metre ölçeği ve `ArenaBoundary` bulunamazsa gözlemci kamerasının
-> kadraj yedeği için okunur. Arenanın gerçek sınırı `ArenaBoundary.halfExtentX/Z`'dir; export'u
-> ise ölçü için değil, **yeni `sceneName` tabloya girsin** diye çalıştırıyorsun.
+> Arena ölçüsü **sunucuya gitmez** (maps.json'a yalnız `sceneName` + `modes` yazılır); arenanın
+> tek ölçü kaynağı sahnedeki `ArenaBoundary.halfExtentX/Z`'dir. Export'u ise ölçü için değil,
+> **yeni `sceneName` tabloya girsin** diye çalıştırıyorsun.
 
 Sahnede bulunması gerekenler → [Sahne Kurulumu](Sahne-Kurulumu.md).
 
@@ -520,7 +516,6 @@ Sahnede bulunması gerekenler → [Sahne Kurulumu](Sahne-Kurulumu.md).
 | **Hedef** | Sunucu adresi (`dev-targets.json`'dan gelir: Local, Keşif, örnek PC) |
 | **Play başlangıcı** | Boot'tan mı, açık sahneden mi |
 | **Sentetik maç** | Mod, takım, raund süresi, skor limiti — **sunucu olmadan** `load_match` enjekte eder |
-| **N Bot / N Bot + Admin** | Sentetik oyuncu süreçleri başlatır (poz + atış) |
 | **Derle** | `dotnet build` |
 
 Sunucusuz oturumda mod kuralları `ModeDefinition`'daki önizleme alanlarından okunur.

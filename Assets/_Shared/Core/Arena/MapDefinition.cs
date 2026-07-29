@@ -4,7 +4,7 @@ using UnityEngine;
 namespace VortexArena.Core.Arena
 {
     /// <summary>
-    /// Harita (arena) tanımı: sahne adı + fiziksel boyut + hangi modlarda oynanabildiği.
+    /// Harita (arena) tanımı: sahne adı + hangi modlarda oynanabildiği.
     /// <para>
     /// <see cref="SceneName"/> Build Settings'teki sahne adıyla BİREBİR aynı olmalıdır —
     /// admin <c>start_match{sceneName}</c> gönderir, sunucu bu string'i tüm istemcilerin
@@ -19,10 +19,6 @@ namespace VortexArena.Core.Arena
         [SerializeField] private string sceneName = "";
         [SerializeField] private string displayName = "";
 
-        [Header("Fiziksel alan")]
-        [Tooltip("Arena zemin ölçüsü (metre): X × Z.")]
-        [SerializeField] private Vector2 size = new Vector2(10f, 10f);
-
         [Header("Uyumluluk")]
         [Tooltip("Bu haritanın desteklediği modId'ler; boş bırakılırsa tüm modlar sayılır.")]
         [SerializeField] private string[] supportedModeIds = Array.Empty<string>();
@@ -32,9 +28,6 @@ namespace VortexArena.Core.Arena
 
         /// <summary>Arayüzde gösterilen ad.</summary>
         public string DisplayName => displayName;
-
-        /// <summary>Arena zemin ölçüsü (metre, X × Z).</summary>
-        public Vector2 Size => size;
 
         /// <summary>Desteklenen modId listesi (boş = kısıt yok).</summary>
         public string[] SupportedModeIds => supportedModeIds;

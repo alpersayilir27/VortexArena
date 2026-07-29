@@ -41,8 +41,11 @@ namespace VortexArena.App.Admin
         /// (Layout Group yok, UiKit kararı) — yani yeni bir satır eklemek burayı da ilgilendirir.
         /// KALİBRASYON bölümü eklenince içerik 810 px'e çıkmıştı, yani paneli 10 px'e kadar
         /// doldurmuştu; bu değer 880'e çekildi ki bir sonraki satır sessizce taşmasın.
-        /// Kabaca hesap: başlangıç 78 + her Section 34 + her Cycler 40 + maç düğmeleri 50.</summary>
-        private const float PanelHeight = 880f;
+        /// OYUNCU KİMLİĞİ bölümü (+114) ile içerik ~924'e çıktı → 1000.
+        /// Kabaca hesap: başlangıç 78 + her Section 34 + her Cycler 40 + maç düğmeleri 50.
+        /// <para>⚠️ 1000 px, 1080p bir ekranda üstten/alttan ~40 px pay bırakır. Bir bölüm daha
+        /// eklenecekse panel yükseltilemez — o noktada içeriğin kaydırılabilir olması gerekir.</para></summary>
+        private const float PanelHeight = 1000f;
         private const float RowHeight = 40f;
 
         /// <summary>Skor limiti adımlayıcısının eşiği: bu değerin altında ±1, üstünde ±5 adımlar.
@@ -67,12 +70,23 @@ namespace VortexArena.App.Admin
         private float _clearAllArmedAt = -1f;
         private TextMeshProUGUI _connectionText;
 
+        // ---- Oyuncu kimliği (§2): SEÇİLİ oyuncunun adı + forma numarası ----
+        // Hedef ayrı bir seçiciyle DEĞİL AdminSession.SelectedPlayerId ile belirlenir: satıra
+        // tıklamak zaten seçim jestidir, ikinci bir liste iki ayrı "seçili oyuncu" kavramı üretirdi.
+        private TMP_InputField _identityNameField;
+        private TextMeshProUGUI _identityNumberValue;
+        private TextMeshProUGUI _identityTargetText;
+
+        /// <summary>Alanların hangi oyuncu için doldurulduğu — seçim değişince yeniden doldurulur.
+        /// Operatör yazarken roster tazelenip yazdığını EZMESİN diye aynı oyuncuda tekrar dolmaz.</summary>
+        private int _identityBoundPlayerId;
+        private int _identityNumber;
+
         private TextMeshProUGUI _markersValue;
         private TextMeshProUGUI _nameplatesValue;
         private TextMeshProUGUI _speedValue;
         private TextMeshProUGUI _wallValue;
         private TextMeshProUGUI _roofValue;
-        private TextMeshProUGUI _miniMapValue;
 
         private readonly List<ModeDefinition> _modes = new List<ModeDefinition>();
         private readonly List<MapDefinition> _maps = new List<MapDefinition>();
@@ -203,13 +217,49 @@ namespace VortexArena.App.Admin
                 new Vector2(28f, -y), new Vector2(340f, 36f));
             y += 46f;
 
+            // §2 — ad + forma numarası. Hedef, listede SEÇİLİ olan oyuncudur.
+            y = Section(body, "OYUNCU KİMLİĞİ (SEÇİLİ OYUNCU)", y);
+
+            _identityTargetText = UiKit.Text(body, "IdentityTarget", 18f, UiKit.Muted,
+                FontStyles.Normal, TextAlignmentOptions.TopLeft);
+            UiKit.Block(_identityTargetText.rectTransform, 28f, y + 6f, 300f, 24f);
+
+            _identityNameField = UiKit.Input(body, "IdentityName", "ad", 20f, 24, null);
+            UiKit.Corner((RectTransform)_identityNameField.transform, new Vector2(1f, 1f),
+                new Vector2(-28f, -y), new Vector2(266f, 32f));
+            y += RowHeight;
+
+            // Numara döngüleyicisi + UYGULA aynı satırda: döngüleyici sağ kenardan sabitlendiği
+            // için (Cycler ile birebir aynı Corner değerleri) solda 240 px boş kalıyor. Ayrı bir
+            // satır açmak paneli taşırırdı — PanelHeight notu.
+            Button applyIdentity = UiKit.Button(body, "ApplyIdentity", "KİMLİĞİ UYGULA", 18f,
+                UiKit.Accent, UiKit.OnAccent, ApplyIdentity, out _);
+            UiKit.Corner((RectTransform)applyIdentity.transform, new Vector2(0f, 1f),
+                new Vector2(28f, -y), new Vector2(240f, 32f));
+
+            Button numberPrev = UiKit.Button(body, "Prev_Numara", "<", 20f, UiKit.Hex(0x2A303B, 0xFF),
+                UiKit.Title, IdentityNumberDown, out _);
+            UiKit.Corner((RectTransform)numberPrev.transform, new Vector2(1f, 1f),
+                new Vector2(-238f, -y), new Vector2(32f, 32f));
+
+            _identityNumberValue = UiKit.Text(body, "Value_Numara", 20f, UiKit.Title, FontStyles.Bold,
+                TextAlignmentOptions.Center);
+            UiKit.Corner(_identityNumberValue.rectTransform, new Vector2(1f, 1f),
+                new Vector2(-64f, -(y + 3f)), new Vector2(170f, 26f));
+
+            Button numberNext = UiKit.Button(body, "Next_Numara", ">", 20f, UiKit.Hex(0x2A303B, 0xFF),
+                UiKit.Title, IdentityNumberUp, out _);
+            UiKit.Corner((RectTransform)numberNext.transform, new Vector2(1f, 1f),
+                new Vector2(-28f, -y), new Vector2(32f, 32f));
+
+            y += RowHeight;
+
             y = Section(body, "GÖRÜNÜM (YALNIZ BU EKRAN)", y);
             y = Cycler(body, "Halkalar", y, PrevMarkers, NextMarkers, out _markersValue);
             y = Cycler(body, "Ad etiketleri", y, ToggleNameplates, ToggleNameplates, out _nameplatesValue);
             y = Cycler(body, "Kamera hızı", y, SpeedDown, SpeedUp, out _speedValue);
             y = Cycler(body, "Duvar saydamlığı", y, WallDown, WallUp, out _wallValue);
             y = Cycler(body, "Çatı", y, PrevRoof, NextRoof, out _roofValue);
-            y = Cycler(body, "Mini harita", y, ToggleMiniMap, ToggleMiniMap, out _miniMapValue);
 
             y = Section(body, "BAĞLANTI", y);
 
@@ -582,11 +632,6 @@ namespace VortexArena.App.Admin
             AdminSession.Nameplates = !AdminSession.Nameplates;
         }
 
-        private static void ToggleMiniMap()
-        {
-            AdminSession.MiniMap = !AdminSession.MiniMap;
-        }
-
         private static void SpeedDown() { AdminSession.FreeSpeed -= 0.5f; }
         private static void SpeedUp() { AdminSession.FreeSpeed += 0.5f; }
 
@@ -613,6 +658,91 @@ namespace VortexArena.App.Admin
             if (next > 2) next = 0;
             AdminSession.Roof = (AdminRoofMode)next;
             AdminSpectator.RefreshRoof(); // tercih anında görünsün, kip değişimini bekleme
+        }
+
+        // ------------------------------------------------------------ oyuncu kimliği (§2)
+
+        private void IdentityNumberDown()
+        {
+            StepIdentityNumber(-1);
+        }
+
+        private void IdentityNumberUp()
+        {
+            StepIdentityNumber(1);
+        }
+
+        /// <summary>Numarayı 1..99 arasında döndürür. <c>0</c> ("değiştirme") adımlamada ATLANIR:
+        /// numarayı korumak isteyen operatör alanı hiç kurcalamaz, sıfıra inmesi gerekmez.</summary>
+        private void StepIdentityNumber(int delta)
+        {
+            int next = _identityNumber + delta;
+            if (next < ArenaProtocol.PLAYER_NUMBER_MIN)
+            {
+                next = ArenaProtocol.PLAYER_NUMBER_MAX;
+            }
+            else if (next > ArenaProtocol.PLAYER_NUMBER_MAX)
+            {
+                next = ArenaProtocol.PLAYER_NUMBER_MIN;
+            }
+
+            _identityNumber = next;
+            MarkDirty();
+        }
+
+        /// <summary>Seçili oyuncuya ad + numara gönderir. ⚠️ Yerel roster GÜNCELLENMEZ — otorite
+        /// sunucudadır: kabul edilirse değişiklik <c>lobby_state</c> ile geri gelir, reddedilirse
+        /// hiç gelmez ve sebebi durum satırında (<c>admin_state.notice</c>) görünür.</summary>
+        private void ApplyIdentity()
+        {
+            int playerId = AdminSession.SelectedPlayerId;
+            if (playerId <= 0)
+            {
+                return;
+            }
+
+            AdminCommands.SetIdentity(playerId, _identityNameField != null ? _identityNameField.text : "",
+                _identityNumber);
+        }
+
+        /// <summary>Alanları SEÇİLİ oyuncudan doldurur. ⚠️ Aynı oyuncuda ikinci kez DOLDURMAZ:
+        /// roster sürekli tazelendiği için her tazelemede doldurmak operatörün o an yazdığı adı
+        /// ezerdi. Yeniden doldurma yalnız seçim değişince olur.</summary>
+        private void RefreshIdentityFields()
+        {
+            int playerId = AdminSession.SelectedPlayerId;
+            AdminRoster roster = AdminRoster.Instance;
+            AdminPlayerView view = roster != null ? roster.Find(playerId) : null;
+
+            if (view == null)
+            {
+                if (_identityBoundPlayerId != 0)
+                {
+                    _identityBoundPlayerId = 0;
+                    _identityNumber = 0;
+                    if (_identityNameField != null)
+                    {
+                        _identityNameField.text = "";
+                    }
+                }
+
+                _identityTargetText.text = "oyuncu seçilmedi";
+                _identityNumberValue.text = "-";
+                return;
+            }
+
+            if (_identityBoundPlayerId != playerId)
+            {
+                _identityBoundPlayerId = playerId;
+                _identityNumber = view.number;
+                if (_identityNameField != null)
+                {
+                    _identityNameField.text = view.name ?? "";
+                }
+            }
+
+            _identityTargetText.text = $"#{view.playerId} · {view.name}";
+            _identityNumberValue.text = _identityNumber > 0 ? _identityNumber.ToString() : "yok";
         }
 
         // ------------------------------------------------------------------ tazeleme
@@ -658,6 +788,8 @@ namespace VortexArena.App.Admin
                 _clearAllLabel.color = armed ? UiKit.OnAccent : UiKit.Bad;
             }
 
+            RefreshIdentityFields();
+
             _markersValue.text = AdminSession.Markers == AdminMarkerVisibility.Off ? "kapalı"
                 : AdminSession.Markers == AdminMarkerVisibility.TopDownOnly ? "kuş bakışı" : "her zaman";
             _nameplatesValue.text = AdminSession.Nameplates ? "açık" : "kapalı";
@@ -665,7 +797,6 @@ namespace VortexArena.App.Admin
             _wallValue.text = $"%{Mathf.RoundToInt(AdminSession.WallAlpha * 100f)}";
             _roofValue.text = AdminSession.Roof == AdminRoofMode.Visible ? "görünür"
                 : AdminSession.Roof == AdminRoofMode.HideInTopDown ? "kuş bakışında gizli" : "hep gizli";
-            _miniMapValue.text = AdminSession.MiniMap ? "açık" : "kapalı";
 
             ArenaClient client = ArenaClient.Instance;
             string endpoint = AppSession.HasServerEndpoint

@@ -42,7 +42,7 @@ Hepsi bağlantı yokken sessizce no-op'tur.
 
 | Metot | Döner | Açıklama |
 |---|---|---|
-| ✅ `TryGetTargetPlayerId(Collider, out int playerId)` | `bool` | Çarpılan collider'ın arkasında ağ oyuncusu var mı. `false` → yerel `Health` yolu |
+| ✅ `TryGetTargetPlayerId(Collider, out int playerId)` | `bool` | Çarpılan collider'ın arkasında ağ oyuncusu var mı. `false` → **hasar yok** (istemcide can tutulmaz) |
 | ✅ `IsHeadshot(Collider)` | `bool` | Kafa kutusuna mı isabet etti. **Çarpanı sen uygularsın** |
 
 ### Bildirme
@@ -51,7 +51,7 @@ Hepsi bağlantı yokken sessizce no-op'tur.
 |---|---|
 | ✅ `ReportShot(Vector3 worldMuzzlePos, Vector3 worldDir, string weaponId)` | Atışı diğer oyunculara relay ettirir (namlu alevi/ses). Hasarla ilgisi yok, sunucu doğrulamaz |
 | ⚠️ `ReportHit(int targetPlayerId, Vector3 worldHitPoint, float damage, string weaponId)` | Vuruşu bildirir. **Hasarı sen belirlersin**, sunucu aynen uygular. Canı yerelde düşürme |
-| ✅ `ReportRaycastHit(in RaycastHit, float damage, string weaponId)` | Hitscan kısayolu. `false` → hedef ağ oyuncusu değil |
+| ✅ `ReportRaycastHit(in RaycastHit, float damage, string weaponId)` | Hitscan kısayolu. `false` → hedef ağ oyuncusu değil, **hasar uygulanmaz**; dönüş değeri yalnız sunum kararı içindir (gövde efekti mi, duvar efekti mi) |
 | ⚠️ `ReportAreaHit(Vector3 center, float radius, float damage, string weaponId, float edgeScale = 0.25f, int layerMask = ~0)` | Yarıçaptaki her oyuncuya ayrı vuruş; merkeze uzaklıkla doğrusal düşer. **Duvar arkası kontrolü yok** |
 
 **Hasar geçerlilik kuralı:** pozitif ve sonlu olmalı. `NaN`/`∞`/negatif hem burada hem sunucuda
@@ -77,7 +77,7 @@ Statik olmalarının sebebi: dinleyicinin bağlantının ne zaman kurulduğunu b
 | ✅ `OnKillEvent` | `KillEventMsg` | Öldürme (`killerId == 0` → çevre ölümü) |
 | ✅ `OnRespawn` | `RespawnMsg` | **Yalnız ölen oyuncuya**: canlanma gecikmesi (konum taşımaz) |
 | ✅ `OnMatchEnd` | `MatchEndMsg` | Maç bitti; kazanan takım **veya** oyuncu |
-| ✅ `OnReturnToLobby` | — | Herkes lobiye dönüyor |
+| ✅ `OnReturnToLobby` | `ReturnToLobbyMsg` | Herkes lobiye dönüyor. Mesaj lobi sahnesini + profilini taşır (§10.7); ilgilenmiyorsan parametreyi yok say |
 | ✅ `OnShotFired` | `ShotFiredMsg` | **Başkası** ateş etti (atana gönderilmez). Pozlar arena uzayında |
 | ✅ `OnIdentify` | `IdentifyMsg` | Admin "bu cihazı tanıt" dedi |
 | ✅ `OnKicked` | `KickedMsg` | Bağlantıdan atıldık |
@@ -251,22 +251,6 @@ kill-feed, kendi öldürme/ölüm sayacın.
 
 ---
 
-## Health
-
-`VortexArena.Core.Combat.Health` — **ağ oyuncusu OLMAYAN** hedefler için (pratik dummy'si, kırılabilir obje).
-
-| Üye | Açıklama |
-|---|---|
-| ✅ `TakeDamage(float, Weapon source = null)` | Yerel hasar |
-| ✅ `Current` / `Max` / `IsDead` | |
-| ✅ `onDamaged` / `onDeath` | UnityEvent |
-| ⛔ `ApplyServerHealth(float)` | Ağ katmanı çağırır |
-
-> ⚠️ **Ağ oyuncularının canı burada tutulmaz.** Uzak oyuncuya `TakeDamage` çağırma —
-> `ArenaCombat.ReportHit` kullan.
-
----
-
 ## ArenaClient
 
 `VortexArena.Net.ArenaClient` — WebSocket bağlantısı. Oyun kodunda **nadiren** gerekir.
@@ -307,7 +291,7 @@ kill-feed, kendi öldürme/ölüm sayacın.
 
 | Menü | Ne yapar |
 |---|---|
-| `Tools > VortexArena > Dev` | Rol · sunucu hedefi · Play başlangıcı · sentetik maç · test botları · derle. Kısayol **Ctrl+Alt+R** (rol çevirir) |
+| `Tools > VortexArena > Dev` | Rol · sunucu hedefi · Play başlangıcı · sentetik maç · derle. Kısayol **Ctrl+Alt+R** (rol çevirir) |
 | `Tools > VortexArena > Create Arena From Template` | Yeni arena sihirbazı |
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` — girdi başına yalnız `sceneName` + `modes` (arena ölçüsü sunucuya gitmez). ⚠️ JSON'u elle düzenleme, export ezer |
 | `GameObject > VortexArena > Spawn Point` | Arenanın **tek** başlangıç noktasını üretir (yerleştirme elle) |

@@ -4,13 +4,13 @@ using System.Net;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core;
 
 /// <summary>deviceId → PlayerState kaydı: playerId tahsisi (1..PLAYER_ID_MAX), devices.json ad
-/// kalıcılığı ("Gözlük NN" otomatik), takım dengeleme ve OFFLINE_TIMEOUT süpürmesi.
+/// kalıcılığı (ad havuzdan rastgele + 1..99 forma numarası, ikisi de otomatik), takım dengeleme
+/// ve OFFLINE_TIMEOUT süpürmesi.
 /// (Cosmos DeviceRegistry + DeviceNameStore desenlerinin birleşimi.)
 /// <para>
 /// <b>Rol başına kalıcılık farkı (§2):</b> oyuncu kaydı kalıcıdır (deviceId sabit, kopunca
@@ -20,19 +20,34 @@ namespace VortexArena.Server.Core;
 /// </para></summary>
 public sealed class PlayerRegistry : IDisposable
 {
-    private static readonly JsonSerializerOptions NamesJsonOptions = new()
+    private static readonly JsonSerializerOptions DevicesJsonOptions = new()
     {
         WriteIndented = true,
+        // DeviceRecord PROPERTY taşır (alan değil) → camelCase policy ile {"name":…,"number":…}.
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping // Türkçe karakterler dosyada okunur kalsın
     };
     private static readonly UTF8Encoding Utf8NoBom = new(false);
-    private static readonly Regex AutoNamePattern = new(@"^Gözlük (\d+)$", RegexOptions.Compiled);
+
+    /// <summary>Oyuncu adı havuzu (§2) — ilk bağlantıda buradan RASTGELE seçilir. Adlar benzersiz
+    /// değildir: havuz tükenince tekrar eder, ayırt edici alan numaradır. Admin bu havuzu
+    /// KULLANMAZ (adı PC adından gelir ve diske yazılmaz).</summary>
+    private static readonly string[] NamePool =
+    {
+        "umut", "alper", "ertu", "yunus", "resul", "enver", "enes", "nisa", "ceren", "tuğba",
+        "elif", "pınar", "taner", "yasemin", "hüseyin", "deniz", "selin", "kaan", "burcu", "emre"
+    };
 
     private readonly ConcurrentDictionary<string, PlayerState> _players = new();
     private readonly object _gate = new();
     private readonly Timer _offlineTimer;
     private readonly string _devicesPath;
-    private Dictionary<string, string> _names = new();
+
+    /// <summary>devices.json'ın bellekteki kopyası (deviceId → ad + numara). Numara sahipliğinin
+    /// TEK doğruluk kaynağıdır: hiç bağlanmamış bir cihazın da burada satırı vardır, bu yüzden
+    /// çakışma sorgusu <c>_players</c>'a değil buraya bakar.</summary>
+    private Dictionary<string, DeviceRecord> _devices = new();
 
     /// <summary>İşçi thread'lerden tetiklenir. TryRegisterHello İÇİN raise edilmez —
     /// LobbyService welcome'ı yolladıktan sonra Announce çağırır (welcome her zaman
@@ -42,7 +57,7 @@ public sealed class PlayerRegistry : IDisposable
     public PlayerRegistry(string devicesJsonPath)
     {
         _devicesPath = devicesJsonPath;
-        LoadNames();
+        LoadDevices();
         _offlineTimer = new Timer(_ => CheckOfflinePlayers(), null,
             TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
@@ -117,7 +132,7 @@ public sealed class PlayerRegistry : IDisposable
             }
 
             state.Role = hello.role == "admin" ? "admin" : "player";
-            state.Name = ResolveNameLocked(state.DeviceId, state.Role, hello.deviceName);
+            ResolveIdentityLocked(state, hello.deviceName);
             state.Team = state.Role == "player"
                 ? (string.IsNullOrEmpty(state.Team) ? SmallerTeamLocked() : state.Team)
                 : ""; // admin oynamaz
@@ -151,34 +166,106 @@ public sealed class PlayerRegistry : IDisposable
     /// <summary>TryRegisterHello'nun ertelenmiş bildirimi — LobbyService welcome'dan SONRA çağırır.</summary>
     public void Announce(PlayerState state, PlayerChangeKind kind) => Changed?.Invoke(state, kind);
 
+    /// <summary>status kalp atışı (§5.1). ⚠️ <b>Koşulsuz Changed raise ETMEZ</b> — yalnız roster'da
+    /// GÖRÜNEN bir alan (scene/battery/online) gerçekten değiştiyse yayın tetikler. Eskiden her
+    /// status bir tam roster yayını açıyordu: 18 istemci × 5 sn'de bir × 18 alıcı ≈ saniyede 65 tam
+    /// roster JSON'u, hiçbir şey değişmese bile. <c>Fps</c> PlayerInfo'da taşınmadığı için yayın
+    /// tetiklemez.</summary>
     public void UpdateStatus(string deviceId, StatusMsg status)
     {
         if (!_players.TryGetValue(deviceId, out var state)) return;
+        bool changed;
         lock (_gate)
         {
-            state.Scene = status.scene ?? state.Scene;
+            var scene = status.scene ?? state.Scene;
+            changed = !state.Online || state.Scene != scene || state.Battery != status.battery;
+            state.Scene = scene;
             state.Battery = status.battery;
             state.Fps = status.fps;
             state.LastSeen = DateTime.UtcNow;
             state.Online = true;
         }
-        Changed?.Invoke(state, PlayerChangeKind.Updated);
+        if (changed) Changed?.Invoke(state, PlayerChangeKind.Updated);
     }
 
-    public void SetName(string deviceId, string name)
+    /// <summary>set_identity (§5.1): ad ve/veya forma numarası. <b>Boş ad ve <c>0</c> numara mevcut
+    /// değeri korur</b> (set_selection konvansiyonu) — "yalnız numarayı değiştir" tek çağrıdır.
+    /// <para>
+    /// Numara benzersizliği burada zorlanır ve <b>çevrimdışı sahibi AYNI ANDA taşınır</b>: sahibi
+    /// çevrimiçiyse reddedilir (operatör onu roster'da görüp kendisi çözebilir), çevrimdışıysa o
+    /// cihaz 1'den itibaren ilk boş numaraya yazılır. Taşımayı sonraki bağlantıya ertelemek
+    /// devices.json'ı o süre boyunca çift numaralı bırakırdı; çevrimdışına karşı da reddetmek ise
+    /// operatörü kilitlerdi (numarayı tutan cihaz roster'da görünmez, serbest bırakılamaz).
+    /// </para>
+    /// <para>false = değişiklik olmadı ya da reddedildi; <paramref name="error"/> doluysa reddedildi
+    /// ve metin operatöre <c>admin_state.notice</c> ile gösterilir.</para></summary>
+    public bool SetIdentity(int playerId, string? name, int number, out string error)
     {
-        if (!_players.TryGetValue(deviceId, out var state)) return;
-        lock (_gate)
+        error = "";
+        if (!TryGetByPlayerId(playerId, out var state))
         {
-            state.Name = name;
-            // Admin deviceId'si oturumluk (§2) — diske yazmak devices.json'ı çöple doldururdu.
-            if (state.Role != "admin")
+            error = $"playerId {playerId} bulunamadı";
+            return false;
+        }
+
+        var wantedName = name?.Trim();
+        var setName = !string.IsNullOrEmpty(wantedName);
+        var setNumber = number != 0;
+        if (!setName && !setNumber) return false; // her iki alan da "koru" — sessizce çık
+
+        if (setNumber)
+        {
+            if (number < ArenaProtocol.PLAYER_NUMBER_MIN || number > ArenaProtocol.PLAYER_NUMBER_MAX)
             {
-                _names[deviceId] = name;
-                SaveNamesLocked();
+                error = $"numara {number} geçersiz ({ArenaProtocol.PLAYER_NUMBER_MIN}-{ArenaProtocol.PLAYER_NUMBER_MAX})";
+                return false;
+            }
+            if (state.Role == "admin")
+            {
+                error = "admin'e numara atanmaz";
+                return false;
             }
         }
-        Changed?.Invoke(state, PlayerChangeKind.Updated);
+
+        var changed = false;
+        lock (_gate)
+        {
+            if (setNumber && number != state.Number)
+            {
+                var holder = FindNumberHolderLocked(number, state.DeviceId);
+                if (holder != null)
+                {
+                    if (_players.TryGetValue(holder, out var owner) && owner.Online)
+                    {
+                        error = $"{number} numara {owner.Name}'da";
+                        return false;
+                    }
+                    // Çevrimdışı sahip: numarayı state almadan ÖNCE taşı ki ilk boş hesabı
+                    // (devices.json hâlâ eski sahibi gösterirken) `number`'ı seçemesin.
+                    var moved = NextFreeNumberLocked();
+                    if (_devices.TryGetValue(holder, out var record)) record.Number = moved;
+                    if (_players.TryGetValue(holder, out var offline)) offline.Number = moved;
+                }
+                state.Number = number;
+                changed = true;
+            }
+
+            if (setName && state.Name != wantedName)
+            {
+                state.Name = wantedName!;
+                changed = true;
+            }
+
+            // Admin deviceId'si oturumluk (§2) — diske yazmak devices.json'ı çöple doldururdu.
+            if (changed && state.Role != "admin")
+            {
+                _devices[state.DeviceId] = new DeviceRecord { Name = state.Name, Number = state.Number };
+                SaveDevicesLocked();
+            }
+        }
+
+        if (changed) Changed?.Invoke(state, PlayerChangeKind.Updated);
+        return changed;
     }
 
     public void SetReady(string deviceId, bool ready)
@@ -351,48 +438,152 @@ public sealed class PlayerRegistry : IDisposable
         return token;
     }
 
-    // ---- devices.json ad kalıcılığı (cosmos DeviceNameStore deseni; UTF-8 BOM'suz) ----
+    // ---- devices.json kimlik kalıcılığı (ad + numara; UTF-8 BOM'suz) ----
 
-    private void LoadNames()
+    /// <summary>devices.json'ı okur. <b>İki biçimi de kabul eder:</b> v1 <c>deviceId → "ad"</c>
+    /// (numara 0 sayılır, ilk bağlantıda atanır) ve v2 <c>deviceId → {name, number}</c>.
+    /// Yalnız yapıcıdan çağrılır (tek thread).</summary>
+    private void LoadDevices()
     {
+        _devices = new();
+        if (!File.Exists(_devicesPath)) return;
+
         try
         {
-            _names = File.Exists(_devicesPath)
-                ? JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(_devicesPath)) ?? new()
-                : new();
+            using var doc = JsonDocument.Parse(File.ReadAllText(_devicesPath));
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return;
+
+            foreach (var entry in doc.RootElement.EnumerateObject())
+            {
+                switch (entry.Value.ValueKind)
+                {
+                    case JsonValueKind.String: // v1 — yalnız ad, numara sonra atanır
+                        _devices[entry.Name] = new DeviceRecord { Name = entry.Value.GetString() ?? "" };
+                        break;
+                    case JsonValueKind.Object: // v2 — ad + numara
+                        _devices[entry.Name] = new DeviceRecord
+                        {
+                            Name = entry.Value.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String
+                                ? n.GetString() ?? ""
+                                : "",
+                            Number = entry.Value.TryGetProperty("number", out var num) && num.TryGetInt32(out var parsed)
+                                ? parsed
+                                : 0
+                        };
+                        break;
+                }
+            }
+            ResolveDuplicateNumbersLocked();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[PlayerRegistry] devices.json okunamadı ({ex.Message}) — boş ad haritasıyla başlanıyor.");
-            _names = new();
+            Console.WriteLine($"[PlayerRegistry] devices.json okunamadı ({ex.Message}) — boş kimlik haritasıyla başlanıyor.");
+            _devices = new();
         }
     }
 
+    /// <summary>Yüklemede aynı numarayı taşıyan kayıtları ayıklar: ilk gelen numarayı korur,
+    /// sonrakiler ilk boş numaraya taşınır. Gerekçesi elle düzenlenmiş dosyadır — "iki cihaz aynı
+    /// numarayı taşımaz" değişmez kuralı dosyaya değil bu sınıfa aittir, o yüzden girişte zorlanır.</summary>
+    private void ResolveDuplicateNumbersLocked()
+    {
+        var seen = new HashSet<int>();
+        var repaired = 0;
+        foreach (var record in _devices.Values)
+        {
+            if (record.Number == 0) continue;
+            if (seen.Add(record.Number)) continue;
+
+            record.Number = NextFreeNumberLocked();
+            if (record.Number != 0) seen.Add(record.Number);
+            repaired++;
+        }
+        if (repaired == 0) return;
+
+        Console.WriteLine($"[PlayerRegistry] devices.json'da {repaired} çift numara bulundu — yeniden numaralandı.");
+        SaveDevicesLocked();
+    }
+
     /// <summary>
-    /// <b>Oyuncu:</b> devices.json'daki kayıtlı ad varsa o, yoksa ilk boş "Gözlük NN" atanır ve
-    /// dosyaya yazılır (kalıcı kimlik).
+    /// <b>Oyuncu:</b> devices.json'da kaydı varsa ad+numara oradan gelir (kalıcı kimlik); yoksa ad
+    /// havuzdan RASTGELE, numara 1'den itibaren ilk boş olarak atanıp dosyaya yazılır. v1'den
+    /// yükseltilen (numarasız) kayda ilk görüşte numara verilir.
     /// <para>
-    /// <b>Admin:</b> `hello.deviceName` (PC adı; boşsa "Admin") kullanılır ve <b>diske YAZILMAZ</b> —
-    /// admin deviceId'si oturumluk olduğu için her açılış devices.json'a çöp bir satır eklerdi.
-    /// Aynı ad başka bir çevrimiçi admin'de kullanılıyorsa sonuna " (2)", " (3)"… eklenir:
-    /// aynı PC'de iki admin penceresi açıkken roster'da hangisinin hangisi olduğu ayırt edilebilsin.
+    /// <b>Admin:</b> ad `hello.deviceName` (PC adı; boşsa "Admin"), numara YOK (0) — admin oynamaz.
+    /// Diske YAZILMAZ: admin deviceId'si oturumluk olduğu için her açılış çöp bir satır eklerdi.
+    /// Aynı ad başka bir çevrimiçi admin'de kullanılıyorsa sonuna " (2)", " (3)"… eklenir.
     /// </para>
     /// </summary>
-    private string ResolveNameLocked(string deviceId, string role, string? fallbackDeviceName)
+    private void ResolveIdentityLocked(PlayerState state, string? fallbackDeviceName)
     {
-        if (role == "admin")
-            return UniqueAdminNameLocked(deviceId, fallbackDeviceName);
+        if (state.Role == "admin")
+        {
+            state.Name = UniqueAdminNameLocked(state.DeviceId, fallbackDeviceName);
+            state.Number = 0;
+            return;
+        }
 
-        if (_names.TryGetValue(deviceId, out var existing) && !string.IsNullOrWhiteSpace(existing))
-            return existing;
+        if (_devices.TryGetValue(state.DeviceId, out var record) && !string.IsNullOrWhiteSpace(record.Name))
+        {
+            state.Name = record.Name;
+            state.Number = record.Number;
+            if (state.Number != 0) return;
 
-        var assigned = NextFreeAutoNameLocked();
-        if (string.IsNullOrWhiteSpace(assigned))
-            assigned = string.IsNullOrWhiteSpace(fallbackDeviceName) ? deviceId : fallbackDeviceName!;
+            state.Number = NextFreeNumberLocked(); // v1'den yükseltilen kayıt
+            record.Number = state.Number;
+            SaveDevicesLocked();
+            return;
+        }
 
-        _names[deviceId] = assigned;
-        SaveNamesLocked();
-        return assigned;
+        state.Name = PickPoolNameLocked();
+        state.Number = NextFreeNumberLocked();
+        _devices[state.DeviceId] = new DeviceRecord { Name = state.Name, Number = state.Number };
+        SaveDevicesLocked();
+    }
+
+    /// <summary>Havuzdan RASTGELE ad (§2): önce hiçbir kayıtlı cihazın kullanmadığı adlar arasından,
+    /// hepsi kullanımdaysa havuzun tamamından. <b>Adlar benzersiz değildir</b> — ayırt edici alan
+    /// numaradır, bu yüzden havuzun tükenmesi hata değil normal işleyiştir.</summary>
+    private string PickPoolNameLocked()
+    {
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var record in _devices.Values)
+            if (!string.IsNullOrEmpty(record.Name)) taken.Add(record.Name);
+
+        var free = new List<string>(NamePool.Length);
+        foreach (var candidate in NamePool)
+            if (!taken.Contains(candidate)) free.Add(candidate);
+
+        return free.Count > 0
+            ? free[Random.Shared.Next(free.Count)]
+            : NamePool[Random.Shared.Next(NamePool.Length)];
+    }
+
+    /// <summary>1'den itibaren hiçbir KAYITLI cihazın kullanmadığı ilk numara (§2). Sıralıdır,
+    /// rastgele değil: işletmede küçük ve akılda kalır sayılar kullanılsın. <c>0</c> = havuz dolu
+    /// (100+ kayıtlı cihaz) — cihaz numarasız kalır, operatör elle numaralar.</summary>
+    private int NextFreeNumberLocked()
+    {
+        var used = new HashSet<int>();
+        foreach (var record in _devices.Values)
+            if (record.Number != 0) used.Add(record.Number);
+
+        for (var n = ArenaProtocol.PLAYER_NUMBER_MIN; n <= ArenaProtocol.PLAYER_NUMBER_MAX; n++)
+            if (!used.Contains(n)) return n;
+
+        Console.WriteLine($"[PlayerRegistry] {ArenaProtocol.PLAYER_NUMBER_MIN}-{ArenaProtocol.PLAYER_NUMBER_MAX} " +
+                          $"numara havuzu dolu ({_devices.Count} kayıtlı cihaz) — yeni cihaz numarasız (0) kalıyor.");
+        return 0;
+    }
+
+    /// <summary>Verilen numarayı tutan cihazın deviceId'si (kendisi hariç), yoksa null.
+    /// Sorgu <c>_players</c>'a DEĞİL <c>_devices</c>'a yapılır: numarayı hiç bağlanmamış (bellekte
+    /// PlayerState'i olmayan) bir cihaz da tutuyor olabilir.</summary>
+    private string? FindNumberHolderLocked(int number, string exceptDeviceId)
+    {
+        foreach (var entry in _devices)
+            if (entry.Value.Number == number && entry.Key != exceptDeviceId) return entry.Key;
+        return null;
     }
 
     /// <summary>Başka bir admin kaydının kullanmadığı ilk ad ("Ofis-PC", "Ofis-PC (2)", …).</summary>
@@ -416,26 +607,13 @@ public sealed class PlayerRegistry : IDisposable
         }
     }
 
-    private string NextFreeAutoNameLocked()
-    {
-        var used = new HashSet<int>();
-        foreach (var value in _names.Values)
-        {
-            var match = AutoNamePattern.Match(value);
-            if (match.Success && int.TryParse(match.Groups[1].Value, out var n)) used.Add(n);
-        }
-        var candidate = 1;
-        while (used.Contains(candidate)) candidate++;
-        return $"Gözlük {candidate:00}";
-    }
-
-    private void SaveNamesLocked()
+    private void SaveDevicesLocked()
     {
         try
         {
             var dir = Path.GetDirectoryName(_devicesPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(_devicesPath, JsonSerializer.Serialize(_names, NamesJsonOptions), Utf8NoBom);
+            File.WriteAllText(_devicesPath, JsonSerializer.Serialize(_devices, DevicesJsonOptions), Utf8NoBom);
         }
         catch (Exception ex)
         {

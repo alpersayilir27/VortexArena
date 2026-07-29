@@ -12,6 +12,11 @@ namespace VortexArena.App.Admin
     {
         public int playerId;
         public string name = "";
+
+        /// <summary>Forma numarası 1..99 (§2); 0 = atanmamış, admin'de daima 0. Adlar benzersiz
+        /// olmadığı için operatörün ayırt edici alanı budur.</summary>
+        public int number;
+
         public string role = AppSession.RolePlayer;
         public string team = "";
         public bool ready;
@@ -333,6 +338,7 @@ namespace VortexArena.App.Admin
                 }
 
                 view.name = string.IsNullOrEmpty(info.name) ? $"Oyuncu {info.playerId}" : info.name;
+                view.number = info.number;
                 view.role = string.IsNullOrEmpty(info.role) ? AppSession.RolePlayer : info.role;
                 view.team = info.team ?? "";
                 view.ready = info.ready;
@@ -433,7 +439,7 @@ namespace VortexArena.App.Admin
             Raise();
         }
 
-        private void HandleReturnToLobby()
+        private void HandleReturnToLobby(ReturnToLobbyMsg _)
         {
             Phase = "Lobby";
             CountdownSeconds = 0;

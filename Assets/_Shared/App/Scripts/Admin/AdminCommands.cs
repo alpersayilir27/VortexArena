@@ -126,6 +126,39 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>Oyuncunun adını ve/veya forma numarasını değiştirir (§5.1).
+        /// <para>Boş <paramref name="name"/> ve <c>0</c> <paramref name="number"/> ilgili alanı
+        /// DEĞİŞTİRMEZ (sunucu konvansiyonu) — "yalnız numarayı düzelt" tek çağrıdır. Numara
+        /// çevrimiçi biri tarafından kullanılıyorsa sunucu reddeder ve sebebi admin_state.notice
+        /// ile döner; burada iyimser bir yerel güncelleme YAPILMAZ (otorite sunucudadır).</para></summary>
+        public static void SetIdentity(int playerId, string name, int number)
+        {
+            if (playerId <= 0)
+            {
+                return;
+            }
+
+            string trimmed = string.IsNullOrWhiteSpace(name) ? "" : name.Trim();
+            if (trimmed.Length == 0 && number == 0)
+            {
+                return; // her iki alan da "koru" — mesaj yollamaya değmez
+            }
+
+            if (number != 0 && (number < ArenaProtocol.PLAYER_NUMBER_MIN || number > ArenaProtocol.PLAYER_NUMBER_MAX))
+            {
+                SetStatus($"Numara {ArenaProtocol.PLAYER_NUMBER_MIN}-{ArenaProtocol.PLAYER_NUMBER_MAX} aralığında olmalı.");
+                return;
+            }
+
+            if (Send(new SetIdentityMsg { playerId = playerId, name = trimmed, number = number }))
+            {
+                string what = trimmed.Length > 0 && number != 0 ? $"{number} · {trimmed}"
+                    : trimmed.Length > 0 ? trimmed
+                    : $"numara {number}";
+                SetStatus($"Kimlik gönderildi: oyuncu {playerId} → {what}");
+            }
+        }
+
         public static void Kick(int playerId)
         {
             if (playerId <= 0)

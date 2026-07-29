@@ -6,7 +6,7 @@ namespace VortexArena.Protocol
         // İstemci → Sunucu
         public const string Hello = "hello";
         public const string Status = "status";
-        public const string SetName = "set_name";
+        public const string SetIdentity = "set_identity"; // ad + forma numarası; oyuncu kendini, admin herkesi (§5.1)
         public const string SetReady = "set_ready";
         public const string ShotFired = "shot_fired"; // sunucu relay'i de aynı type
         public const string HitReport = "hit_report";

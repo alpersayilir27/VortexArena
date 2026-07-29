@@ -72,8 +72,8 @@ namespace VortexArena.Core.Combat
         /// Bir çarpışmanın arkasında AĞ OYUNCUSU var mı. Raycast'in vurduğu collider'ı ver;
         /// <c>true</c> dönerse <paramref name="playerId"/> o oyuncunun kimliğidir ve hasarı
         /// <see cref="ReportHit"/> ile BİLDİRMELİSİN. <c>false</c> dönerse hedef ağ oyuncusu
-        /// değildir (pratik dummy'si, kırılabilir obje) — orada eski yerel
-        /// <see cref="Health.TakeDamage"/> yolu geçerlidir.
+        /// değildir (dekor, duvar) ve <b>hasar diye bir şey yoktur</b>: istemcide can
+        /// tutan bir yol yok, o hedef hasar almaz. Kırılabilir objeler ileride ağsal olacak.
         /// </summary>
         public static bool TryGetTargetPlayerId(Collider collider, out int playerId)
         {
@@ -148,7 +148,8 @@ namespace VortexArena.Core.Combat
         /// atıcı ve hedef canlı mı, dost ateşi açık mı) ve sayının kullanılabilir olduğuna bakar
         /// (NaN/∞/negatif reddedilir).
         /// </para>
-        /// <para>Canı YERELDE DÜŞÜRME: hedefin canı sunucudan geri gelir.</para>
+        /// <para>Canı YERELDE DÜŞÜRME: hedefin canı sunucudan geri gelir. Bu bir tercih değil,
+        /// mutlak kuraldır — istemcide can tutan hiçbir bileşen yoktur.</para>
         /// </summary>
         /// <param name="targetPlayerId"><see cref="TryGetTargetPlayerId"/>'den gelen kimlik.</param>
         /// <param name="worldHitPoint">İsabet noktasının dünya konumu (efekt/istatistik için).</param>
@@ -186,13 +187,14 @@ namespace VortexArena.Core.Combat
         /// Hitscan silahlar için kısayol: raycast sonucundaki hedef bir ağ oyuncusuysa vuruşu
         /// bildirir ve <c>true</c> döner.
         /// <para>
-        /// <c>false</c> dönerse hedef ağ oyuncusu DEĞİLDİR — çağıran orada kendi yerel hasar
-        /// yolunu işletir. Tipik kullanım:
+        /// <c>false</c> dönerse hedef ağ oyuncusu DEĞİLDİR ve <b>hasar uygulanmaz</b> (istemcide
+        /// can yok). Dönüş değeri yalnız bir SUNUM kararı içindir — gövde efekti mi, duvar efekti
+        /// mi oynatayım:
         /// <code>
         /// if (Physics.Raycast(muzzle.position, dir, out var hit, range))
         /// {
-        ///     if (!ArenaCombat.ReportRaycastHit(hit, damage, "ok"))
-        ///         hit.collider.GetComponentInParent&lt;Health&gt;()?.TakeDamage(damage, null);
+        ///     bool isPlayer = ArenaCombat.ReportRaycastHit(hit, damage, "ok");
+        ///     Instantiate(isPlayer ? bloodFx : sparkFx, hit.point, Quaternion.LookRotation(hit.normal));
         /// }
         /// </code>
         /// </para>

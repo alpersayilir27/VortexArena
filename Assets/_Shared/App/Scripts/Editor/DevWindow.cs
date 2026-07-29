@@ -9,7 +9,7 @@ namespace VortexArena.App.Editor
 {
     /// <summary>
     /// <c>Tools &gt; VortexArena &gt; Dev</c> — geliştirici kontrol paneli: rol, sunucu hedefi,
-    /// Play başlangıcı, sentetik maç parametreleri ve test botları.
+    /// Play başlangıcı ve sentetik maç parametreleri.
     ///
     /// <para><b>Sunucu bu pencereden başlatılmaz/durdurulmaz</b> — her zaman elle çalıştırılır
     /// (gerekçe: <see cref="DevProcesses"/> sınıf dokümanı). Buradaki "Derle (dotnet build)"
@@ -37,14 +37,12 @@ namespace VortexArena.App.Editor
         private static readonly string[] TeamLabels = { "Kırmızı", "Mavi" };
 
         [SerializeField] private Vector2 scroll;
-        [SerializeField] private int botCount = 2;
 
         // Önbellekler — her OnGUI'de asset taraması yapmamak için OnEnable/"Tazele"de kurulur.
         [NonSerialized] private DevTarget[] targetList = Array.Empty<DevTarget>();
         [NonSerialized] private string[] targetLabels = Array.Empty<string>();
         [NonSerialized] private ModeDefinition[] modeDefs = Array.Empty<ModeDefinition>();
         [NonSerialized] private string[] modeIds = Array.Empty<string>();
-        [NonSerialized] private double lastRepaintTime;
 
         [MenuItem("Tools/VortexArena/Dev")]
         private static void Open()
@@ -59,19 +57,6 @@ namespace VortexArena.App.Editor
             titleContent = new GUIContent("Dev");
             RefreshCaches();
             BootstrapSelection();
-        }
-
-        /// <summary>Durum satırı canlı kalsın diye saniyede ~2 kez yeniden çiz (her karede süreç yoklamıyoruz).</summary>
-        private void Update()
-        {
-            double now = EditorApplication.timeSinceStartup;
-            if (now - lastRepaintTime < 0.5)
-            {
-                return;
-            }
-
-            lastRepaintTime = now;
-            Repaint();
         }
 
         // ------------------------------------------------------------------ önbellek
@@ -391,12 +376,12 @@ namespace VortexArena.App.Editor
         }
 
         /// <summary>
-        /// Ortam bölümü — <b>yalnız test botları</b>. Sunucu bilinçli olarak buradan
-        /// yönetilmez: elle başlatılır/durdurulur (bkz. <see cref="DevProcesses"/> sınıf dokümanı).
+        /// Ortam bölümü — <b>yalnız sunucu çözümünü derler</b>. Sunucu bilinçli olarak buradan
+        /// başlatılmaz/durdurulmaz: elle yönetilir (bkz. <see cref="DevProcesses"/> sınıf dokümanı).
         /// </summary>
         private void DrawEnvironment()
         {
-            EditorGUILayout.LabelField("Ortam (test botları)", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Ortam", EditorStyles.boldLabel);
 
             EditorGUILayout.HelpBox(
                 "Sunucu editörden başlatılmaz/durdurulmaz — elle çalıştırın:\n" +
@@ -404,50 +389,10 @@ namespace VortexArena.App.Editor
                 "dotnet run --project Server/VortexArena.Server.App)",
                 MessageType.Info);
 
-            bool botsRunning = DevProcesses.AreBotsRunning;
-
-            botCount = EditorGUILayout.IntSlider("Bot sayısı", Mathf.Clamp(botCount, 1, DevProcesses.MaxDevBots),
-                1, DevProcesses.MaxDevBots);
-
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button($"{botCount} Bot"))
-            {
-                DevProcesses.StartBots(botCount, false);
-            }
-
-            if (GUILayout.Button($"{botCount} Bot + Admin"))
-            {
-                DevProcesses.StartBots(botCount, true);
-            }
-
-            using (new EditorGUI.DisabledScope(!botsRunning))
-            {
-                if (GUILayout.Button("Botları Durdur"))
-                {
-                    DevProcesses.StopBots();
-                }
-            }
-
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Sahipsiz botları temizle"))
-            {
-                DevProcesses.SweepOrphans();
-            }
-
             if (GUILayout.Button("Derle (dotnet build)"))
             {
                 DevProcesses.BuildSolution();
             }
-
-            EditorGUILayout.EndHorizontal();
-
-            string botStatus = botsRunning
-                ? $"{DevProcesses.BotCount} bot süreci ● çalışıyor"
-                : "bot süreci ○ yok";
-
-            EditorGUILayout.LabelField($"Durum: {botStatus}");
         }
 
         // ---------------------------------------------------------------- yardımcı

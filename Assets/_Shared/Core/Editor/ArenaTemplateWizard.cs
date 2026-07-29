@@ -31,8 +31,8 @@ namespace VortexArena.Core.Editor
     /// </para>
     /// <para>
     /// <b>ELDE kalan işler</b> (sonuç uyarıları hatırlatır): arena geometrisini kendi planına
-    /// göre çiz · <c>ArenaBoundary.halfExtentX/Z</c> + <c>MapDefinition.size</c> değerlerini
-    /// gerçek ölçüye getir · kalibrasyon işaretçilerini zemin bandına göre yerleştir ·
+    /// göre çiz · <c>ArenaBoundary.halfExtentX/Z</c> değerlerini gerçek ölçüye getir ·
+    /// kalibrasyon işaretçilerini zemin bandına göre yerleştir ·
     /// tek <see cref="SpawnPoint"/>'i <c>GameObject &gt; VortexArena &gt; Spawn Point</c> ile
     /// koy (sihirbaz ÜRETMEZ) · NavMesh/ışık bake et.
     /// </para>
@@ -122,8 +122,7 @@ namespace VortexArena.Core.Editor
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox(
                 "Sihirbaz arena geometrisini ÖLÇEKLEMEZ — sahne kaynak arenadan bire bir kopyalanır. " +
-                "Planı kendin çizip ArenaBoundary ve MapDefinition.size değerlerini gerçek ölçüye " +
-                "getireceksin.",
+                "Planı kendin çizip ArenaBoundary değerlerini gerçek ölçüye getireceksin.",
                 MessageType.Info);
 
             EditorGUILayout.Space();
@@ -334,8 +333,8 @@ namespace VortexArena.Core.Editor
 
             result.Warnings.Add(
                 "Arena geometrisi ÖLÇEKLENMEDİ — duvar/zemin/taban yerleşimi kaynak arenadan bire bir geldi. " +
-                "Planı kendi alanına göre çiz; sonra ArenaBoundary.halfExtentX/Z ve MapDefinition.size " +
-                "değerlerini gerçek ölçüye getir.");
+                "Planı kendi alanına göre çiz; sonra ArenaBoundary.halfExtentX/Z değerlerini gerçek " +
+                "ölçüye getir.");
             result.Warnings.Add(
                 "Kalibrasyon işaretçilerini (anchor_a/anchor_b) zemin bandına göre yerleştir ve aralarındaki " +
                 "mesafeyi not et (Docs/Isletme-Kurulum.md §3).");
@@ -349,7 +348,16 @@ namespace VortexArena.Core.Editor
             result.Summary = $"Arena '{arenaId}' üretildi: {sceneName} → {targetFolder}";
         }
 
-        /// <summary>Hedef kutu klasörü: Standard/&lt;arenaId&gt; veya Venues/&lt;venueName&gt;.</summary>
+        /// <summary>
+        /// Hedef kutu klasörü: <c>Standard/&lt;arenaId&gt;</c> veya
+        /// <c>Venues/&lt;venueName&gt;/&lt;arenaId&gt;</c>.
+        /// <para>
+        /// ⚠️ İşletme klasörü bir arena DEĞİL, arena kutularının kabıdır: bir işletmede birden
+        /// çok arena oynatılır ve hepsi o işletmenin <c>Default</c>'undan türetilir. Arena adı bu
+        /// yüzden bir alt seviyededir — venue klasörünün kendisi kutu olsaydı ikinci arena için
+        /// yer kalmazdı.
+        /// </para>
+        /// </summary>
         private static string ResolveTargetFolder(ArenaTemplateOptions options)
         {
             if (options == null)
@@ -357,9 +365,11 @@ namespace VortexArena.Core.Editor
                 return string.Empty;
             }
 
+            string arenaId = (options.arenaId ?? string.Empty).Trim();
+
             return options.target == ArenaTemplateTarget.Venue
-                ? $"{VenuesRoot}/{(options.venueName ?? string.Empty).Trim()}"
-                : $"{StandardRoot}/{(options.arenaId ?? string.Empty).Trim()}";
+                ? $"{VenuesRoot}/{(options.venueName ?? string.Empty).Trim()}/{arenaId}"
+                : $"{StandardRoot}/{arenaId}";
         }
 
         // ----------------------------------------------------- asset + katalog
@@ -376,26 +386,18 @@ namespace VortexArena.Core.Editor
             ArenaTemplateResult result)
         {
             string[] supportedModeIds = Array.Empty<string>();
-            // Boyut da kaynaktan gelir: sahne geometrisi ölçeklenmediği için MapDefinition'ın
-            // kaynak arenayla aynı ölçüyü göstermesi tutarlıdır. Plan çizilince ikisi birlikte
-            // elle güncellenir (sonuç uyarısı hatırlatır).
-            Vector2 size = new Vector2(10f, 10f);
             if (!string.IsNullOrEmpty(options.sourceMapPath))
             {
                 var sourceMap = AssetDatabase.LoadAssetAtPath<MapDefinition>(options.sourceMapPath);
-                if (sourceMap != null)
-                {
-                    size = sourceMap.Size;
-                    if (sourceMap.SupportedModeIds != null)
-                    {
-                        supportedModeIds = (string[])sourceMap.SupportedModeIds.Clone();
-                    }
-                }
-                else
+                if (sourceMap == null)
                 {
                     result.Warnings.Add(
                         $"Kaynak MapDefinition bulunamadı ('{options.sourceMapPath}') — supportedModeIds boş " +
-                        "bırakıldı (kısıtsız), boyut 10×10 yazıldı.");
+                        "bırakıldı (kısıtsız).");
+                }
+                else if (sourceMap.SupportedModeIds != null)
+                {
+                    supportedModeIds = (string[])sourceMap.SupportedModeIds.Clone();
                 }
             }
 
@@ -407,7 +409,6 @@ namespace VortexArena.Core.Editor
             mapObject.FindProperty("displayName").stringValue = string.IsNullOrWhiteSpace(options.displayName)
                 ? sceneName
                 : options.displayName.Trim();
-            mapObject.FindProperty("size").vector2Value = size;
 
             SerializedProperty modesProp = mapObject.FindProperty("supportedModeIds");
             modesProp.arraySize = supportedModeIds.Length;

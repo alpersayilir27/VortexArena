@@ -52,7 +52,7 @@ namespace VortexArena.Modes.Ffa
             NetEvents.OnReturnToLobby -= HandleReturnToLobbyLocal;
         }
 
-        private void HandleReturnToLobbyLocal()
+        private void HandleReturnToLobbyLocal(ReturnToLobbyMsg _)
         {
             _ranked.Clear();
             _scoreLine = "";
@@ -127,7 +127,7 @@ namespace VortexArena.Modes.Ffa
             return byScore != 0 ? byScore : a.playerId.CompareTo(b.playerId);
         }
 
-        /// <summary>"SEN 7 · LİDER 9 (Gözlük 04)" — lider kendimizsek ikinci parça yazılmaz.</summary>
+        /// <summary>"SEN 7 · LİDER 9 (ertu)" — lider kendimizsek ikinci parça yazılmaz.</summary>
         private string BuildScoreLine()
         {
             if (_ranked.Count == 0)

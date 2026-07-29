@@ -52,7 +52,7 @@ Bu kipte:
 
 ---
 
-## 4. Gerçek maç (sunucu + botlar)
+## 4. Gerçek maç (sunucu + ikinci istemci)
 
 **a) Sunucuyu başlat** — elle, her zaman:
 
@@ -64,15 +64,11 @@ dotnet run
 Sunucu hiçbir yerden otomatik başlatılmaz ve editör onu ne başlatır ne öldürür. Açılış
 başlığında kayıtlı modları (`tdm, ffa`) ve harita tablosunu görürsün.
 
-**b) Dev penceresinden bot başlat:** *N Bot* ya da *N Bot + Admin*. Botlar sentetik oyunculardır:
-poz gönderir, ateş eder, canlanır. *N Bot + Admin* seçersen bot-admin 2 oyuncu kararlı olunca
-maçı kendiliğinden başlatır.
+**b) Maçı başlatacak bir admin bağla.** Maçı yalnız admin rolündeki bir istemci başlatabilir:
+ya `deploy\admin\VortexArena.exe`'yi çalıştır, ya da editörde rolü `Ctrl+Alt+R` ile `admin`
+yapıp oradan başlat.
 
 **c) Play'e bas.** Rolün `player` ise lobiye düşer, admin maçı başlatınca arenaya geçersin.
-
-> ⚠️ **Botları `dotnet run` ile elle başlatma.** `dotnet run` asıl exe'yi çocuk süreç olarak
-> doğurur; parent ölünce exe **yetim** kalır ve portu tutmaya devam eder. Dev penceresi bu yüzden
-> doğrudan exe çalıştırır.
 
 ---
 

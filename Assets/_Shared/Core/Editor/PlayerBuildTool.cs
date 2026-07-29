@@ -8,16 +8,24 @@ using UnityEngine;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// Batch-mode build girişi — <c>scripts/deploy-admin-game.bat</c> buradan çağırır:
+    /// Batch-mode build girişleri — <c>scripts/deploy-admin-game.bat</c> ve
+    /// <c>scripts/deploy-player-apk.bat</c> buradan çağırır:
     /// <code>
     /// Unity.exe -batchmode -quit -projectPath &lt;proje&gt; \
     ///   -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin \
     ///   -buildOutput &lt;deploy\admin&gt;
+    ///
+    /// Unity.exe -batchmode -quit -projectPath &lt;proje&gt; -buildTarget Android \
+    ///   -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildQuestPlayer \
+    ///   -buildOutput &lt;deploy\player&gt;
     /// </code>
     /// <para>
-    /// <b>Sahne listesi Build Settings'ten gelir</b> (etkin olanlar, sırayla). Boot index 0
-    /// olmalıdır; arena sahneleri listede olmalıdır — `start_match` sahneyi TÜM oyuncuların
-    /// <c>hello.scenes</c> listesinde arar (CLAUDE.md).
+    /// <b>İki rol, iki platform, TEK sahne listesi:</b> Windows build'i admin (yönetim),
+    /// Android build'i Quest oyuncusudur. İkisi de Build Settings'teki etkin sahneleri
+    /// aynen kullanır — Boot index 0 olmalıdır ve arena sahneleri listede olmalıdır, çünkü
+    /// <c>start_match</c> sahneyi TÜM oyuncuların <c>hello.scenes</c> listesinde arar
+    /// (CLAUDE.md). Sahne listesi platforma göre AYRIŞTIRILMAZ: ayrışsaydı bir arenayı
+    /// admin bilir oyuncu bilmez olurdu ve maç sessizce reddedilirdi.
     /// </para>
     /// <para>
     /// <b>Rol ve adres build'e gömülmez:</b> masaüstü build'i çalışma anında admin rolüne
@@ -35,32 +43,61 @@ namespace VortexArena.Core.Editor
         private const string ArgBuildOutput = "-buildOutput";
         private const string ExeName = "VortexArena.exe";
 
+        /// <summary>APK adı — <c>install_game.bat</c> tam olarak bu adı arar, değiştirme.</summary>
+        private const string ApkName = "game.apk";
+
         /// <summary>Windows 64-bit admin/yönetim build'i. Hata durumunda exit code 1 döner.</summary>
         public static void BuildWindowsAdmin()
         {
+            Run("admin", ExeName, BuildTarget.StandaloneWindows64, BuildTargetGroup.Standalone);
+        }
+
+        /// <summary>
+        /// Meta Quest 3/3S oyuncu build'i (Android, <c>game.apk</c>). Hata durumunda exit code 1.
+        /// <para>
+        /// Aktif platform Android DEĞİLSE build iptal edilir: <c>.bat</c> Unity'yi
+        /// <c>-buildTarget Android</c> ile başlatır, çünkü platformu bu metodun içinden
+        /// çevirmek ortasında domain reload tetikler ve <c>-executeMethod</c> yarıda kalır.
+        /// </para>
+        /// </summary>
+        public static void BuildQuestPlayer()
+        {
+            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
+            {
+                Fail($"Aktif platform Android değil ({EditorUserBuildSettings.activeBuildTarget}). " +
+                     "Unity'yi `-buildTarget Android` ile başlat (deploy-player-apk.bat bunu yapar).");
+                return;
+            }
+
+            Run("player", ApkName, BuildTarget.Android, BuildTargetGroup.Android);
+        }
+
+        // ------------------------------------------------------------------ ortak
+
+        /// <summary>İki build girişinin de gövdesi — tek fark hedef platform ve çıktı adı.</summary>
+        private static void Run(string defaultFolder, string artifactName,
+            BuildTarget target, BuildTargetGroup group)
+        {
             try
             {
-                string outputDir = ResolveOutputDir();
-                string[] scenes = EnabledScenes();
-
-                if (scenes.Length == 0)
+                string outputDir = ResolveOutputDir(defaultFolder);
+                if (!TryGetEnabledScenes(out string[] scenes))
                 {
-                    Fail("Build Settings'te etkin sahne yok — build iptal edildi.");
                     return;
                 }
 
                 Directory.CreateDirectory(outputDir);
-                string exePath = Path.Combine(outputDir, ExeName);
+                string artifactPath = Path.Combine(outputDir, artifactName);
 
-                Debug.Log($"[PlayerBuildTool] Hedef: {exePath}");
+                Debug.Log($"[PlayerBuildTool] Hedef: {artifactPath} ({target})");
                 Debug.Log($"[PlayerBuildTool] Sahneler ({scenes.Length}): {string.Join(", ", scenes.Select(Path.GetFileNameWithoutExtension))}");
 
                 var options = new BuildPlayerOptions
                 {
                     scenes = scenes,
-                    locationPathName = exePath,
-                    target = BuildTarget.StandaloneWindows64,
-                    targetGroup = BuildTargetGroup.Standalone,
+                    locationPathName = artifactPath,
+                    target = target,
+                    targetGroup = group,
                     options = BuildOptions.None
                 };
 
@@ -74,7 +111,7 @@ namespace VortexArena.Core.Editor
                 }
 
                 Debug.Log(
-                    $"[PlayerBuildTool] Build BAŞARILI: {exePath} " +
+                    $"[PlayerBuildTool] Build BAŞARILI: {artifactPath} " +
                     $"({summary.totalSize / (1024f * 1024f):0.0} MB, {summary.totalTime.TotalSeconds:0} sn, " +
                     $"{summary.totalWarnings} uyarı)");
 
@@ -89,17 +126,42 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>Build Settings'teki etkin sahneler; sıra korunur (index 0 = Boot).</summary>
-        private static string[] EnabledScenes()
+        /// <summary>
+        /// Build Settings'teki etkin sahneler; sıra korunur (index 0 = Boot).
+        /// <para>
+        /// ⚠️ <b>Diskte olmayan sahne burada yakalanır.</b> Silinmiş bir arenanın satırı
+        /// Build Settings'te kalabiliyor (klasör dosya sisteminden silinince Unity satırı
+        /// temizlemez); o hâlde <c>BuildPipeline</c> yığın izli, sebebi görünmeyen bir hatayla
+        /// düşerdi. Erken ve adıyla söylemek 20 dakikalık bir build'i baştan kurtarır.
+        /// </para>
+        /// </summary>
+        private static bool TryGetEnabledScenes(out string[] scenes)
         {
-            return EditorBuildSettings.scenes
+            scenes = EditorBuildSettings.scenes
                 .Where(s => s.enabled && !string.IsNullOrEmpty(s.path))
                 .Select(s => s.path)
                 .ToArray();
+
+            if (scenes.Length == 0)
+            {
+                Fail("Build Settings'te etkin sahne yok — build iptal edildi.");
+                return false;
+            }
+
+            string[] missing = scenes.Where(p => !File.Exists(p)).ToArray();
+            if (missing.Length > 0)
+            {
+                Fail($"Build Settings'te diskte olmayan {missing.Length} sahne var — build iptal edildi:" +
+                     Environment.NewLine + "  " + string.Join(Environment.NewLine + "  ", missing) +
+                     Environment.NewLine + "File > Build Profiles listesinden bu satırları silin.");
+                return false;
+            }
+
+            return true;
         }
 
-        /// <summary>`-buildOutput &lt;yol&gt;`; verilmezse &lt;proje&gt;/Builds/admin.</summary>
-        private static string ResolveOutputDir()
+        /// <summary>`-buildOutput &lt;yol&gt;`; verilmezse &lt;proje&gt;/Builds/&lt;defaultFolder&gt;.</summary>
+        private static string ResolveOutputDir(string defaultFolder)
         {
             string[] args = Environment.GetCommandLineArgs();
             for (int i = 0; i < args.Length - 1; i++)
@@ -112,7 +174,7 @@ namespace VortexArena.Core.Editor
             }
 
             string projectRoot = Path.GetDirectoryName(Application.dataPath);
-            return Path.Combine(projectRoot ?? ".", "Builds", "admin");
+            return Path.Combine(projectRoot ?? ".", "Builds", defaultFolder);
         }
 
         private static void Fail(string message)

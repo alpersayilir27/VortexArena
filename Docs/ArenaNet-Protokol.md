@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `1` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı kesilmez) |
+| `PROTOCOL_VERSION` | `2` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı kesilmez). **v2:** `set_name` kaldırıldı (→ `set_identity`), `lobby_state.version` + `status.rosterVersion` + `PlayerInfo.number` eklendi |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -21,6 +21,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `SNAPSHOT_RATE_HZ` | `20` | Sunucu snapshot yayın frekansı |
 | `INTERP_DELAY_MS` | `100` | Uzak avatar interpolasyon tamponu |
 | `PLAYER_ID_MAX` | `255` | `playerId` tahsis tavanı. **Ürün kotası değil, tel formatı tavanıdır** — `playerId` UDP paketlerinde `u8`. Eşzamanlı oyuncu/admin sayısına başka sınır YOKTUR (kota ileride lisanslamayla gelecek) |
+| `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
 | `SNAPSHOT_MAX_ENTRIES_PER_PACKET` | `16` | Tek snapshot datagramına yazılan en fazla oyuncu; fazlası ek pakete taşar (§6.3). 6 + 16×86 = 1382 B < MTU |
 | `PLAYER_MAX_HP` | `100` | Oyuncu tam canı (sunucu-otoriter; §10) |
 | `COUNTDOWN_SECONDS` | `5` | Countdown fazının uzunluğu |
@@ -37,11 +38,17 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 - `role`: `"player"` (VR/Quest) veya `"admin"` (Windows masaüstü). Admin oynamaz; lobi rosterinde görünür, komut yetkisi vardır.
 - **Admin sahne olarak oyuncuları takip eder:** `load_match` / `welcome.match` / `return_to_lobby` admin istemcisinde de sahne yükler (gözlemci görünümü). İki fark: admin `set_ready` **göndermez** (Loading kapısını yalnız `role=player` besler) ve poz **göndermez** (`0x01 PoseUpdate` yok), ama `0x00` ile UDP kaydı yapıp snapshot'ları alır.
 - `deviceId` — **role göre iki ayrı semantik:**
-  - `player`: `SystemInfo.deviceUniqueIdentifier`, **kalıcı** kimlik. Sunucu `devices.json`'da ada eşler ("Gözlük NN" otomatik adlandırma), kayıt bağlantı kopsa da durur (aynı gözlük geri gelince adı/kimliği korunur).
+  - `player`: `SystemInfo.deviceUniqueIdentifier`, **kalıcı** kimlik. Sunucu `devices.json`'da **ad + numara** çiftine eşler (ikisi de otomatik atanır, aşağıda), kayıt bağlantı kopsa da durur (aynı gözlük geri gelince adı/numarası/kimliği korunur).
   - `admin`: `<deviceUniqueIdentifier>:admin:<oturum GUID'i>` — **oturum başına benzersiz**. Sebep: aynı fiziksel PC'de iki admin penceresi açılabilsin. Ortak deviceId ile ikisi aynı kaydı paylaşır, her `hello` diğerinin soketini kapatır ve sonsuz kick döngüsü olurdu. GUID süreç ömrü boyunca sabittir (yeniden bağlanma aynı kaydı bulur), uygulama kapanınca ölür.
 - **Admin kayıtları kalıcı DEĞİLDİR:** admin bağlantısı koptuğunda (veya `OFFLINE_TIMEOUT` dolduğunda) kaydı registry'den **tümüyle silinir** ve `playerId`'si havuza döner; adı `devices.json`'a **yazılmaz**. Oyuncu kayıtları eskisi gibi çevrimdışı işaretlenir ama durur. Böylece admin'i her açıp kapatma roster'da hayalet satır bırakmaz.
 - **Admin sayısı sınırsız ve hepsi eş yetkilidir.** Birincil/ikincil admin kavramı yoktur: `role=="admin"` olan her bağlantı §5.2'deki tüm komutları gönderebilir, son gelen komut uygulanır. Operatörlerin birbirini ezmemesi için ortak seçim `admin_state` ile senkronlanır (§5.3) ve her komut `admin_state.notice` ile diğerlerine duyurulur.
 - `playerId` = sunucunun `welcome`'da atadığı **1..`PLAYER_ID_MAX`** arası küçük tamsayı (UDP paketlerinde 1 bayt). Admin'e de atanır (poz göndermez). Havuz dolarsa `kicked{reason:"Sunucu dolu"}` ile reddedilir — bu bir ürün kotası değil, `u8` tel formatının tavanıdır.
+- **Ad ve numara = CİHAZ kimliğidir, oturum kimliği değil.** İkisi de oyuncunun ilk bağlantısında otomatik atanır ve `devices.json`'a `deviceId` başına kalıcı yazılır; admin `set_identity` ile ikisini de değiştirebilir (§5.1). Roster'da `name` + `number` olarak taşınır (§5.3).
+  - **Ad:** 20 kişilik havuzdan **rastgele** — `umut, alper, ertu, yunus, resul, enver, enes, nisa, ceren, tuğba, elif, pınar, taner, yasemin, hüseyin, deniz, selin, kaan, burcu, emre`. Henüz hiçbir kayıtlı cihazın kullanmadığı adlar arasından seçilir; hepsi kullanımdaysa havuzun tamamından. **Adlar benzersiz DEĞİLDİR** (21. cihazdan sonra tekrar eder) — ayırt edici alan numaradır.
+  - **Numara:** `1..99`, **1'den itibaren ilk boş** değer (sıralı, rastgele değil). `0` = atanmamış. **Değişmez kural: `devices.json` içinde iki cihaz aynı numarayı ASLA taşımaz** — benzersizlik çevrimiçilerle sınırlı değil, **tüm kayıtlı cihazlar** arasında geçerlidir, böylece bir gözlük numarasını kalıcı korur.
+  - Admin bir numarayı **çevrimiçi** bir oyuncudan isterse **reddedilir** (`admin_state.notice` ile bildirilir). **Çevrimdışı kayıtlı** bir cihazdan isterse kabul edilir ve o cihaz **aynı anda** 1'den itibaren ilk boş numaraya taşınıp diske yazılır. ⚠️ Çevrimdışına karşı da reddetmek operatörü kilitlerdi (numarayı tutan cihaz roster'da görünmez, serbest bırakılamaz); yeniden numaralamayı sonraki bağlantıya ertelemek ise dosyayı o süre boyunca çift numaralı bırakırdı.
+  - `1..99` havuzu dolarsa (100+ kayıtlı cihaz) yeni cihaz `0` alır + konsol logu; operatör elle numaralar. 16 gözlüklü bir işletme bunu görmez.
+  - **Admin'e ad atanır ama numara ATANMAZ** (`number:0`): admin oynamaz. Admin adı havuzdan değil `hello.deviceName`'den (PC adı) gelir ve diske yazılmaz — admin `deviceId`'si oturumluktur.
 - Aynı `deviceId` ikinci kez bağlanırsa eski bağlantı kapatılır, yenisi kabul edilir (cihaz yeniden bağlanmıştır).
 
 ## 3. Koordinat çerçevesi — ARENA UZAYI
@@ -79,16 +86,30 @@ Hem `255.255.255.255` hem her arayüzün subnet-broadcast adresine gönderilir:
 ```json
 { "type": "hello", "protocolVersion": 1, "role": "player",
   "deviceId": "...", "deviceName": "...", "appVersion": "0.1.0",
-  "currentScene": "Lobby", "scenes": ["Boot","Lobby","Arena10x10","IceWorld"] }
+  "currentScene": "Lobby", "scenes": ["Boot","Lobby","Arena12x12","IceWorld"] }
 ```
 `scenes` = build listesinden runtime'da toplanır (`SceneUtility.GetScenePathByBuildIndex`) → admin katalog doğrulaması bunu kullanır.
 
-**`status`** — her 5 sn: `{ "type":"status", "scene":"Arena10x10", "battery":0.87, "fps":71.6 }`
+**`status`** — her 5 sn: `{ "type":"status", "scene":"Arena12x12", "battery":0.87, "fps":71.6, "rosterVersion":42 }`
 
-**`set_name`** `{ "type":"set_name", "name":"Oyuncu 3" }`
+`rosterVersion` = istemcinin **uyguladığı son** `lobby_state.version`'ı (§5.3). Sunucu istemci geride
+kalmışsa — ve **yalnız o bağlantıya** — tam bir `lobby_state` yollar; güncelse hiçbir şey yapmaz.
+Bu bir **yedek uzlaştırma ağıdır, birincil yol değil**: kontrol kanalı WS/TCP olduğu için bir
+`lobby_state` "ping yüzünden düşmez", ya sırayla teslim edilir ya bağlantı ölür. Alan, istemcinin bir
+yayını uygulayamadığı pencereleri (sahne geçişi, kopma anı) kapatır. Alanı hiç göndermeyen istemci
+`0` yollar → sunucu tam snapshot ile yanıtlar.
+
 **`set_ready`** `{ "type":"set_ready", "ready":true }` (yalnız player)
 **`set_team`** `{ "type":"set_team", "playerId":5, "team":"blue" }` (`"red"|"blue"`) — oyuncu yalnız
 KENDİ `playerId`'si için gönderebilir (lobide takım seçimi); admin herkes için. Aksi loglanıp yok sayılır.
+
+**`set_identity`** `{ "type":"set_identity", "playerId":5, "name":"ertu", "number":7 }` — oyuncunun
+**adı ve/veya numarası** (§2). Boş string ya da `0` bırakılan alan **mevcut değerini korur**
+(`set_selection` ile aynı konvansiyon) → "yalnız numarayı değiştir" tek mesajdır. Yetki kuralı
+`set_team` ile aynı: oyuncu yalnız KENDİ `playerId`'si için, admin herkes için. Numara `1..99`
+dışındaysa veya **çevrimiçi** bir oyuncuda kullanılıyorsa reddedilir (§2); değer `devices.json`'a
+kalıcı yazılır.
+> ⚠️ v1'deki **`set_name` KALDIRILDI** — ad ve numara tek kapıdan yönetilir (`PROTOCOL_VERSION` 2).
 
 **`shot_fired`** — atış anında (uzak VFX/SFX + sayım için; vuruş AYRI rapor edilir):
 ```json
@@ -112,14 +133,14 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 
 ### 5.2 Yalnız admin → Sunucu
 
-- **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":600, "scoreLimit":30 }`
+- **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30 }`
   `roundSeconds`/`scoreLimit` **o maça özeldir**: `≤ 0` ya da eksikse modun kendi varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`) kullanılır. Operatörün arayüzde seçtiği süre/limit buradan geçer; `ROUND_SECONDS_OPTIONS` yalnız arayüz listesidir, sunucu her pozitif değeri kabul eder.
 - **`abort_match`** `{ "type":"abort_match" }`
 - **`kick`** `{ "type":"kick", "playerId":5 }`
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
 - **`clear_calibration`** `{ "type":"clear_calibration", "playerId":5 }` — o oyuncunun kalibrasyonunu **sıfırlar** (§10.6). **`playerId:0` = TÜM oyuncular** (toplu sıfırlama). Admin kalibrasyonu yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez — hizalamanın gerçekten oturduğunu yalnız başlık bilir (§10.6).
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
-- **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":600, "scoreLimit":30 }` — bir sonraki maçın **ortak** mod/harita/süre/limit seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim sunucuda faz Lobby'ye dönerken sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
+- **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30 }` — bir sonraki maçın **ortak** mod/harita/süre/limit seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim sunucuda faz Lobby'ye dönerken sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
   **Neden maç parametreleri de ortak:** iki operatör aynı ekranı görmezse biri 5 dk sandığı maçı 30 dk başlatır. Süre/limit *operasyonel* durumdur, görünüm tercihi değil (§5.3 son madde).
 
 Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar.
@@ -129,7 +150,7 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
 **`welcome`** — hello yanıtı:
 ```json
 { "type":"welcome", "protocolVersion":1, "playerId":3, "udpToken":123456789,
-  "match": { "phase":"Lobby", "modeId":"", "sceneName":"", "timeRemaining":0,
+  "match": { "phase":"Lobby", "modeId":"lobby", "sceneName":"Lobby12x12", "timeRemaining":0,
              "scoreRed":0, "scoreBlue":0,
              "rules": { "teamMode":"two", "scoring":"team", "friendlyFire":false,
                         "reviveAnchor":"base", "weaponSource":"rack", "respawnDelay":5.0 } } }
@@ -137,14 +158,28 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
 `match.phase` boş/`"Lobby"` değilse **geç katılım senkronu**: istemci `sceneName`'i yükleyip maça katılır.
 `match.rules` = koşan maçın kural şekli (§10.5) — geç katılan istemci/admin kendini aynı kurallara göre kurar.
 
+**Lobby fazında da `modeId`/`sceneName` doludur** (§10.7): `modeId` = `"lobby"`, `sceneName` =
+işletmenin lobi sahnesi. İstemci o sahneyi yükler; `sceneName` boş gelirse (lobi yapılandırılmamış
+ya da eski sunucu) kendi kabuk `Lobby` sahnesinde kalır.
+
 **`lobby_state`** — roster her değiştiğinde **ve maç sayaçları değiştiğinde** (ölüm/canlanma) TAM anlık görüntü:
 ```json
-{ "type":"lobby_state", "players":[
-  { "playerId":3, "name":"Gözlük 03", "role":"player", "team":"red",
-    "ready":true, "online":true, "battery":0.87, "scene":"Arena10x10",
+{ "type":"lobby_state", "version":42, "players":[
+  { "playerId":3, "number":7, "name":"ertu", "role":"player", "team":"red",
+    "ready":true, "online":true, "battery":0.87, "scene":"Arena12x12",
     "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7,
     "calibrated":true, "calibrationSource":"anchor" } ] }
 ```
+
+`version` = **monoton artan** roster sürümü (sunucu ömrü boyunca; sunucu yeniden başlarsa `0`'dan).
+İstemci `version <= uyguladığı son sürüm` olan mesajı **atar** ve sürümü her `welcome`'da sıfırlar.
+Sunucuda yayın **tek bir yayıncı** üzerinden gittiği için sıra zaten korunur; bu guard ikinci
+emniyettir. ⚠️ Gerekçesi ucuz bir "her ihtimale karşı" değil: sürümsüz ve ateşle-unut yayında eski
+bir anlık görüntü yeniyi ezebilir ve roster bir sonraki değişikliğe kadar bayat kalır — belirtisi
+**"atılan oyuncu hâlâ listede online görünüyor"**dur.
+
+`number` = oyuncunun **1..99 forma numarası** (§2); `0` = atanmamış, admin'de daima `0`. **Ad benzersiz
+değildir, ayırt edici alan budur** — arayüzlerde `"7 · ertu"` biçiminde gösterilir.
 `kills`/`deaths`/`hp`/`alive`/`score` **sunucu-otoriter** maç sayaçlarıdır (§10.2) ve admin gözlemci
 arayüzünün tek doğruluk kaynağıdır: yalnız `kill_event`/`health_update` sayılsa admin yeniden
 bağlandığında tablo sıfırlanırdı. Lobby fazında `hp=PLAYER_MAX_HP`, `alive=true`, sayaçlar 0.
@@ -159,7 +194,7 @@ skoru `match_state.scoreRed`/`scoreBlue`'da kalır — §10.5). Bireysel skorun 
 (hem `set_calibration` hem `clear_calibration` registry'yi değiştirir → `lobby_state` yayınlanır).
 Admin'de her ikisi de `false`/`""` kalır — admin kalibre olmaz, arayüzde "kalibresiz" sayılmaz.
 
-**`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena10x10", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "rules":{ … } }`
+**`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "rules":{ … } }`
 → istemci sahneyi yükler, `status`'ta yeni sahne görünür. Sahne yüklenince istemci `set_ready` (loading tamam anlamında) gönderir; herkes hazır olunca sunucu `countdown` başlatır.
 **Oyuncu ışınlanmaz ve kalibrasyon SIFIRLANMAZ** — harita değişimi oyuncu için yalnız bir sahne değişimidir, fiziksel duruşu ve hizalaması kaldığı yerden devam eder (§10.4).
 **Adminlere de gönderilir** (gözlemci sahneyi yüklesin diye) ama `yourTeam:""` ile — admin oynamadığı için takım anlamsızdır ve admin `set_ready` göndermez.
@@ -172,29 +207,31 @@ Admin'de her ikisi de `false`/`""` kalır — admin kalibre olmaz, arayüzde "ka
 ```
 Fazlar: `Lobby → Loading → Countdown → Live → End → Lobby`.
 
-**`shot_fired`** (relay) `{ "type":"shot_fired", "playerId":4, "weaponId":"ak47", "muzzlePos":[...], "muzzleDir":[...] }` — diğer istemciler uzak namlu alevi/ses oynatır (atan hariç herkese).
+**`shot_fired`** (relay) `{ "type":"shot_fired", "playerId":4, "weaponId":"ak47", "muzzlePos":[...], "muzzleDir":[...] }` — diğer istemciler uzak namlu alevi/ses oynatır (atan hariç herkese). **Live'da ve Lobby'de relay edilir** (§10.3) — lobide hedef atışı da görünür.
 **`health_update`** `{ "type":"health_update", "playerId":5, "hp":75.0, "attackerId":3 }`
 **`kill_event`** `{ "type":"kill_event", "killerId":3, "victimId":5, "weaponId":"ak47" }`
 **`respawn`** `{ "type":"respawn", "playerId":5, "delaySeconds":5.0 }` — istemci `delaySeconds` sonra, modun canlanma şartını sağlayınca canlanır (§10.4). Sunucu sahne geometrisini bilmez; canlanma yeri diye bir alan taşınmaz.
 **`match_end`** `{ "type":"match_end", "winnerTeam":"blue", "winnerPlayerId":0, "scoreRed":12, "scoreBlue":30 }`
 Kazanan **iki kanaldan biriyle** ifade edilir (`rules.scoring`, §10.5): takım skorlu modlarda `winnerTeam` (`"red"|"blue"|""`), bireysel skorlu modlarda `winnerPlayerId` (`0` = yok/berabere). Bir mod ikisini de doldurmaz; okuyan istemci dolu olana bakar.
-**`return_to_lobby`** `{ "type":"return_to_lobby" }` — herkes Lobby sahnesine döner.
+**`return_to_lobby`** `{ "type":"return_to_lobby", "modeId":"lobby", "sceneName":"Lobby12x12", "rules":{ … } }` — herkes lobi sahnesine döner. Şekli `load_match` ile aynıdır (§10.7): `sceneName` işletmenin lobi sahnesi, `modeId`/`rules` lobi profili. `sceneName` boşsa istemci kabuk `Lobby` sahnesine döner (eski davranış).
 **`ping`** `{ "type":"ping" }` — istemci `status` ile yanıtlar (ayrı pong yok).
 **`identify`** `{ "type":"identify" }` — istemci büyük kimlik overlay'i gösterir (playerId + ad).
 **`kicked`** `{ "type":"kicked", "reason":"" }` — istemci bağlantıyı kapatır, lobi bağlantı ekranına döner.
 
 **`admin_state`** — **yalnız `role=admin` bağlantılara**; adminler arası ortak durumun tek doğruluk kaynağı:
 ```json
-{ "type":"admin_state", "modeId":"tdm", "sceneName":"Arena10x10",
+{ "type":"admin_state", "modeId":"tdm", "sceneName":"Arena12x12",
+  "venueId":"Standard", "venueScenes":["Arena12x12","Default12x12","IceWorld","Lobby12x12"],
   "roundSeconds":600, "scoreLimit":30,
-  "notice":"Ofis-PC: harita -> Arena10x10", "adminCount":2 }
+  "notice":"Ofis-PC: harita -> Arena12x12", "adminCount":2 }
 ```
 - Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`return_to_lobby`/`kick`/`identify`/`set_team`) ve admin bağlanıp ayrıldığında.
 - `modeId`/`sceneName` = ortak seçim. Admin arayüzü **kendi yerel seçimini değil bunu gösterir**; gelen değer arayüzdeki mod/harita seçicisini ve yerel harita önizlemesini günceller. Yani bir operatör haritayı değiştirdiğinde diğerinin ekranı da (paneli açık olmasa bile) o haritaya döner.
 - `roundSeconds`/`scoreLimit` = bir sonraki maçın ortak parametreleri (`0` = hiç seçilmedi, modun varsayılanı kullanılacak). Mod/harita ile aynı kanaldan gider — sebebi §5.2 `set_selection` notunda.
 - `notice` = son admin eyleminin insan okuyabilir özeti (`"<admin adı>: <eylem>"`), tüm adminlerin durum satırında görünür. Boş olabilir.
 - `adminCount` = o an çevrimiçi admin sayısı.
-- **Yalnız operasyonel durum senkronlanır.** Görünüm tercihleri (kamera kipi, seçili oyuncu, halka/ad etiketi, kamera hızı, duvar/çatı saydamlığı, mini harita) her admin'in **kendi ekranına** aittir, protokole girmez ve `PlayerPrefs`'te yerel kalır.
+- `venueId`/`venueScenes` = sunucunun açılışta seçtiği mekan ve o mekanın sahne adları (§11.1). Oturum boyunca değişmez ama her `admin_state`'te taşınır ki geç bağlanan admin de ilk mesajda hangi arenaları görebileceğini öğrensin. **Admin harita seçicisi kendi yerel kataloğunu bununla süzer**: katalog tüm projeyi tanır, oynatılabilir olana sunucu karar verir. Boş gelirse süzme yapılmaz.
+- **Yalnız operasyonel durum senkronlanır.** Görünüm tercihleri (kamera kipi, seçili oyuncu, halka/ad etiketi, kamera hızı, duvar/çatı saydamlığı) her admin'in **kendi ekranına** aittir, protokole girmez ve `PlayerPrefs`'te yerel kalır.
 
 ## 6. UDP state mesajları (binary, little-endian)
 
@@ -222,7 +259,7 @@ Pozlar **arena uzayında**. `seq` sarmalanır (u16); eski `seq` gelirse paket at
 [u8 0x02][u8 playerCount][u32 serverTick]
 oyuncu başına: [u8 playerId][u8 flags][92B'lik PoseUpdate'in poz kısmı = 84 B]
 ```
-`flags` bit0 = alive. İstemci kendi pozunu snapshot'tan ÇİZMEZ (yerelden çizer); uzak oyuncuları `INTERP_DELAY_MS` tamponuyla interpole eder. Admin'e de aynı snapshot gider (taktik görünüm bundan beslenir).
+`flags` bit0 = alive. İstemci kendi pozunu snapshot'tan ÇİZMEZ (yerelden çizer); uzak oyuncuları `INTERP_DELAY_MS` tamponuyla interpole eder. Admin'e de aynı snapshot gider (gözlemci avatarları/işaretçileri bundan beslenir).
 
 **Parçalama (MTU):** pozlu oyuncu sayısı `SNAPSHOT_MAX_ENTRIES_PER_PACKET`'i aşarsa sunucu aynı tik'i **birden çok datagrama böler**; her datagram kendi `playerCount`'unu taşır, hepsi aynı `serverTick`'i taşır ve aynı hedeflere yollanır. 16 girdi = 6 + 16×86 = **1382 B** (MTU 1500 altı). **İstemcide birleştirme mantığı YOKTUR ve gerekmez:** her paket taşıdığı girdileri bağımsız olarak uygular, oyuncu düşürme kararı "bu pakette yok" değil ~1.5 sn'lik zaman aşımıdır. Bu yüzden parçalama tel formatını değiştirmez — ek başlık alanı yoktur, eski okuyucu da doğru çalışır.
 
@@ -242,10 +279,13 @@ oyuncu başına: [u8 playerId][u8 flags][92B'lik PoseUpdate'in poz kısmı = 84 
          (PlayerPrefs); yoksa beacon dinle 5 sn; yoksa StreamingAssets/arena.json statik IP)
        → ws://ip:47821/ws bağlan → hello → welcome (playerId + udpToken + match durumu)
        → UDP kayıt (0x00, ack'e dek tekrar) → geç katılımsa sahne senkronu
-       → StatusLoop (5 sn) + (player ise, Live/Lobby fark etmez) PoseLoop (20 Hz)
+       → StatusLoop (5 sn; status.rosterVersion ile roster uzlaştırması) + (player ise,
+         Live/Lobby fark etmez) PoseLoop (20 Hz)
 Kopma  → 1→2→5 sn backoff ile discovery'den itibaren baştan (sonsuz)
        → bağlantısızlık ~3 sn sürerse istemci hata ekranı gösterir (sunum; §4 notu)
 Sunucu : hello'suz bağlantıyı 10 sn içinde kapat; deviceId çakışmasında eskisini kapat
+       → roster değişince TEK yayıncı üzerinden lobby_state (version artar); status.rosterVersion
+         geride kalan istemciye YALNIZ ona tam snapshot yollatır
        → 15 sn status yoksa Offline işaretle + bağlantıyı kapat + lobby_state yayınla
 ```
 
@@ -312,7 +352,12 @@ eklenmez: pompalı saçması, bomba parçası ve ok yaylımı gibi meşru "hızl
 örüntülerini sessizce düşürürler.
 
 `shot_fired` sunucuda **doğrulanmaz**, yalnız relay edilir (atan hariç herkese, `playerId`
-eklenerek) — ölü/maç dışı/**kalibresiz** oyuncunun `shot_fired`'ı relay EDİLMEZ.
+eklenerek) — ölü/**kalibresiz** oyuncunun `shot_fired`'ı relay EDİLMEZ. Faz kapısı `Live` **ve**
+`Lobby`'dir: lobide hedef atışı yapılabildiği için (§10.7) başkalarının namlu alevini görmesi
+doğrudur. Ara fazlarda (Loading/Countdown/End) relay yoktur.
+
+⚠️ **`hit_report`'un faz kapısı bundan AYRIDIR ve yalnız `Live`'dır** — lobide oyuncuya hasar
+verilemez. İki kapı bilerek ayrı: atış bir sunum olayı, vuruş bir durum değişimidir.
 
 > **Denge sayıları istemcide yaşar.** Hasar/atış hızı/menzil tek kaynak olarak Unity'deki
 > `WeaponDefinition` SO'larındadır; sunucuya export edilmez, `config/weapons.json` diye bir dosya
@@ -379,6 +424,10 @@ olmalı, tanınmayan `modeId` reddedilir):
 |---|---|---|---|---|---|---|---|---|
 | `tdm` | Takım Ölüm Maçı | `two` | `team` | `false` | `base` | `rack` | `5` | 300 sn / 30 |
 | `ffa` | Herkes Tek | `none` | `player` | `false` | `standstill` | `random` | `0` | 300 sn / 20 |
+
+> ⚠️ **`lobby` bu tabloda YOKTUR ve olmayacaktır.** Lobi bir maç modu değil bir *profil*dir
+> (§10.7): sunucuda `IGameMode` karşılığı yoktur, dolayısıyla `start_match{"lobby"}` "bilinmeyen
+> mod" diye reddedilir. Lobi modId'si yalnız istemcinin içerik (silah loadout'u) çözmesi içindir.
 
 > `ffa` satırı kuralların somut örneğidir: **takım yok** (`team:""` gelir, `winnerPlayerId`
 > dolar), ölünce 5 sn'lik gecikme yerine **sabit durma** şartı işler (`REVIVE_HOLD_SECONDS` = 3 sn,
@@ -447,17 +496,81 @@ koyabilmesi ve parlayan avatarın hareket ettiğini görebilmesi için pozun ak�
 değişmez: `source:"cloud"` zaten geçerli bir değer, `clear_calibration{playerId:0}` zaten toplu
 sıfırlama yapıyor. Grup/oturum kimliği taşıyan alanlar **o iş gelene kadar eklenmez**.
 
+### 10.7 Lobi (faz + sahne + profil)
+
+Lobi bir **faz**tır (`Phase.Lobby`), bir maç değildir. Ama boş bir bekleme durumu da değildir:
+işletmenin kendi lobi sahnesi vardır, oyuncular orada birbirini görür, **kalibrasyonunu orada
+yapar**, silah rafından silah alıp hedeflere ateş eder — birbirlerine hasar veremeden.
+
+| Soru | Cevap |
+|---|---|
+| Lobi sahnesi hangisi? | Sunucu söyler: `server.json → lobbyScene` (§11). `welcome.match.sceneName` ve `return_to_lobby.sceneName` ile taşınır. Boşsa istemci kendi kabuk `Lobby` sahnesinde kalır |
+| Oyuncuya hasar? | **İmkânsız** — `hit_report` yalnız `Live` fazında işlenir (§10.3) |
+| Atış görünür mü? | Evet — `shot_fired` `Lobby`'de de relay edilir (§10.3) |
+| Silah nereden gelir? | Sahnedeki raf. Loadout'u istemci `modeId:"lobby"` ile kendi katalogundan çözer |
+| Canlanma / skor / süre? | Yok. Lobide herkes canlı (`hp=PLAYER_MAX_HP`), sayaçlar 0 (§5.3) |
+| Takım? | Vardır ve **yalnız admin atar** (`set_team`, §5.2). Oyuncu kendi takımını seçemez; bunun için protokol mesajı YOKTUR ve eklenmeyecektir |
+
+**`modeId:"lobby"` neden var?** İstemcide silah loadout'u ve HUD `modeId` anahtarıyla çözülüyor
+(`GameCatalog`). Lobi fazında `modeId` boş bırakılsaydı lobiye silah rafı koymak ayrı bir kod yolu
+gerektirirdi. `rules` lobide bugünkü varsayılandır (§10.5 `TeamDefault`) — lobiye özel bir kural
+şekli YOKTUR: savaşı kapatan şey kural değil **faz**tır.
+
+> ⚠️ **Lobi bir maç yapılMAZ.** `Phase.Live`'a taşınsaydı §10.3'ün üç faz kapısı (atış relay'i,
+> `hit_report`, canlanma) açılır ve arkalarına yeni bir kural bayrağıyla ikinci kilit takmak
+> gerekirdi; ayrıca Loading/Countdown/tur sayacı/End yaşam döngüsü ve `return_to_lobby`'nin kendini
+> çağırması gibi lobide karşılığı olmayan bir makine devralınırdı. "Maç koşuyor mu?" sorusunun tek
+> cevabı `phase != Lobby` olarak kalır.
+
+**Lobi haritaları** `MapDefinition.supportedModeIds = ["lobby"]` taşır → `lobby` kayıtlı bir mod
+olmadığı için o sahnede hiçbir maç başlatılamaz. Tersi de doğrudur: gerçek arenalar `lobby`'yi
+listelemediği (ve `lobby` zaten başlatılamadığı) için lobi profili başka haritaya sızamaz.
+
 ## 11. Sunucu config dosyaları
 
 `Server/config/` altındaki üç dosya; kaynakları FARKLIDIR:
 
 | Dosya | Kaynağı | Not |
 |---|---|---|
-| `server.json` | **Elle** | Portlar + `venueName` + `tickHz`; yoksa varsayılanlarla oluşturulur (§1 sabitleri). |
-| `devices.json` | **Sunucu üretir** | `deviceId → "Gözlük NN"`; ilk bağlantıda ve `set_name`'de yazılır (§2). UTF-8, BOM'suz. |
-| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `modes` (§10.1). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide `MapDefinition.size`'da kalır. |
+| `server.json` | **Elle** | Portlar + `venueName` + `tickHz` + `venue` + `lobbyScene`; yoksa varsayılanlarla oluşturulur (§1 sabitleri). `venue` = açılışta seçilecek mekan (boş = konsolda sorulur). `lobbyScene` = lobi sahnesi (§10.7); **boş = seçilen mekanın lobi haritası otomatik bulunur**. |
+| `devices.json` | **Sunucu üretir** | `deviceId → { "name":"ertu", "number":7 }`; ilk bağlantıda ve `set_identity`'de yazılır (§2). Eski v1 biçimi (`deviceId → "ad"`) okunur — numara `0` sayılır — ve ilk yazımda yeni biçime yükseltilir. UTF-8, BOM'suz. |
+| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `venue`, `modes` (§10.1, §11.1). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide sahnenin `ArenaBoundary`'sinde kalır. |
 
 > **`weapons.json` YOKTUR:** sunucu silah tanımı tutmaz, hasarı istemci bildirir (§10.3). Silah
 > istatistikleri yalnız Unity'deki `WeaponDefinition` SO'larındadır.
 >
 > **`maps.json` ELLE DÜZENLENMEZ** — `Tools > VortexArena > Export Server Config` üretir ve bir sonraki export elle yapılan değişikliği **ezer**. Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir (alfabetik, LF, UTF-8 BOM'suz) → git diff'i temiz kalır. Harita ekleyip export'u çalıştırmayı unutursanız bilinmeyen `sceneName` → `start_match` reddedilir. `maps.json` hiç yoksa sunucu harita doğrulamasını **atlar** (geriye dönük uyumlu davranış).
+
+### 11.1 Mekan seçimi (açılışta)
+
+Bir sunucu kurulumu **tek bir işletmeye** hizmet eder, ama içerik projesi tüm işletmeleri tanır.
+Bu yüzden sunucu açılırken **hangi mekanın oynatılacağı seçilir** ve o oturum boyunca sabit kalır.
+
+```
+Hangi mekan açılsın?
+  1) DemoVenue  (2 harita)
+  2) Standard   (4 harita)
+Seçim [1-2]:
+```
+
+**Mekan asset yolundan gelir, ayrı bir alan YOKTUR.** Export şu kuralı uygular:
+`Assets/Arenas/Venues/<İşletme>/…` → o işletme, başka her yer → `Standard`. Klasör yerleşimi zaten
+mekanı anlatıyor; ikinci bir alan eklemek onu unutulabilir hâle getirirdi. Bir haritayı yanlış
+mekana yazmanın tek yolu onu yanlış klasöre koymaktır, o da gözle görülür.
+
+Seçim sırası: `--venue <ad>` → `server.json → venue` → tek mekan varsa o → **konsolda sor**.
+Soru yalnız konsol etkileşimliyse sorulur; girdi yönlendirilmişse (servis, betik, launcher) sunucu
+**bloklanmaz**, ilk mekanla açılır ve bunu loglar. Yazılan ad tanınmazsa yine sorulur — sessizce
+başka bir mekanı açmak, operatörün yanlış arenaları görmesi demek olurdu.
+
+Seçimin üç sonucu:
+
+| Nereye | Ne olur |
+|---|---|
+| `start_match` doğrulaması | Harita tablosu o mekana daraltılır → başka mekanın sahnesi "harita tablosunda yok" diye reddedilir. Ayrı bir kontrol yazılmaz |
+| Admin harita seçicisi | `admin_state.venueId` + `venueScenes` ile bildirilir; admin **kendi yerel kataloğunu bununla süzer**. Katalog tüm projeyi tanır, oynatılabilir olana sunucu karar verir |
+| Lobi | `server.json → lobbyScene` boşsa mekanın kendi lobi haritası (`modes:["lobby"]`) otomatik seçilir (§10.7) |
+
+> ⚠️ **Mekan çalışırken DEĞİŞMEZ.** Başka bir mekana geçmek sunucuyu yeniden başlatmak demektir —
+> bilinçli: kalibrasyon, lobi ve harita listesi hep birlikte o fiziksel odaya aittir, maç ortasında
+> hepsini birden takas etmenin güvenli bir anlamı yok.

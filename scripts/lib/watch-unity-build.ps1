@@ -36,6 +36,7 @@ param(
   [string]$OutDir,
   [string]$Log,
   [string]$Method = 'VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin',
+  [string]$UnityBuildTarget,
   [int]$HeartbeatSeconds = 15,
   [int]$StallSeconds = 180,
   [string]$ReplayLog
@@ -54,13 +55,15 @@ $PhaseRules = @(
   @{ Rank = 2; Label = 'Paketler cozumleniyor';                   Re = '\[Package Manager\]|Registering packages|Packages were changed' }
   @{ Rank = 3; Label = 'Asset veritabani yenileniyor';            Re = 'AssetDatabase Initial Refresh|Asset Pipeline Refresh|Refreshing native plugins' }
   @{ Rank = 4; Label = 'Assetler ice aktariliyor';                Re = 'Start importing |ImportAndPostprocessOutOfDateAssets|Import Asset' }
-  @{ Rank = 4; Label = 'Platform degistiriliyor (-> Windows)';    Re = 'Switching to |SwitchActiveBuildTarget|switching active build target|Reloading assemblies after switching' }
+  @{ Rank = 4; Label = 'Platform degistiriliyor';                 Re = 'Switching to |SwitchActiveBuildTarget|switching active build target|Reloading assemblies after switching' }
   @{ Rank = 5; Label = 'Scriptler derleniyor';                    Re = 'DisplayProgressbar: Compiling|ScriptCompilationBuildProgram|script compilation time' }
   @{ Rank = 5; Label = 'Domain reload';                           Re = 'Begin MonoManager ReloadAssembly|resetting the current domain|Reloading assemblies after finishing' }
   @{ Rank = 6; Label = 'Player build hazirligi';   Gate = $true; Re = '\[PlayerBuildTool\] (Hedef|Sahneler)' }
   @{ Rank = 7; Label = 'Player build';             Gate = $true; Re = 'DisplayProgressbar: Build|PlayerBuildProgram|Building Player|Start building Player' }
   @{ Rank = 7; Label = 'Shader varyantlari derleniyor';           Re = 'Compiling shader |Compiled shader |shader variants' }
   @{ Rank = 8; Label = 'IL2CPP / native derleme';  Gate = $true; Re = 'il2cpp\.exe|IL2CPP Conversion|Building native binary|UnityLinker' }
+  # Android'e ozgu son asama: IL2CPP bittikten sonra Gradle APK'yi paketler.
+  @{ Rank = 8; Label = 'Gradle / APK paketleniyor'; Gate = $true; Re = 'Gradle|BuildingGradleProject|Packaging APK|assembleRelease|aapt2' }
   @{ Rank = 9; Label = 'Bitiriyor (rapor + kapanis)'; Gate = $true; Re = '\[PlayerBuildTool\] Build |Total build time|Exiting batchmode' }
 )
 
@@ -386,6 +389,13 @@ $argList = @(
   '-batchmode'
   '-quit'
   '-projectPath'; ('"{0}"' -f $Project)
+)
+# Platformu -executeMethod'un ICINDEN cevirmek olmuyor: SwitchActiveBuildTarget domain
+# reload tetikler ve calisan metot yarida kalir. Unity'yi dogru platformda BASLATIRIZ.
+if (-not [string]::IsNullOrWhiteSpace($UnityBuildTarget)) {
+  $argList += @('-buildTarget'; $UnityBuildTarget)
+}
+$argList += @(
   '-executeMethod'; $Method
   '-buildOutput'; ('"{0}"' -f $OutDir)
   '-logFile'; ('"{0}"' -f $Log)

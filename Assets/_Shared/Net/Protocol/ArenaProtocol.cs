@@ -3,8 +3,17 @@ namespace VortexArena.Protocol
     /// Protokol sabitleri — tek doğruluk kaynağı: Docs/ArenaNet-Protokol.md §1.
     public static class ArenaProtocol
     {
-        public const int PROTOCOL_VERSION = 1;
+        /// <summary>
+        /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
+        /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
+        /// </summary>
+        public const int PROTOCOL_VERSION = 2;
         public const string APP_ID = "VortexArena";
+
+        /// <summary>Forma numarası aralığı (§2). <c>0</c> = atanmamış ve bu aralığın dışındadır;
+        /// admin'de daima 0 kalır. Numara TÜM kayıtlı cihazlar arasında benzersizdir.</summary>
+        public const int PLAYER_NUMBER_MIN = 1;
+        public const int PLAYER_NUMBER_MAX = 99;
 
         public const int UDP_BEACON_PORT = 47820;
         public const int CONTROL_PORT = 47821;
@@ -38,6 +47,13 @@ namespace VortexArena.Protocol
         /// İstemcide birleştirme mantığı gerekmez: her paket kendi girdilerini bağımsız uygular.
         /// </summary>
         public const int SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16;
+
+        /// <summary>
+        /// Lobi profilinin <c>modeId</c>'si (§10.7). <b>Kayıtlı bir maç modu DEĞİLDİR</b> — sunucuda
+        /// <c>IGameMode</c> karşılığı yoktur, <c>start_match</c> ile başlatılamaz. Yalnız istemcinin
+        /// lobide silah loadout'unu/HUD'unu katalogdan çözebilmesi için taşınır.
+        /// </summary>
+        public const string LOBBY_MODE_ID = "lobby";
 
         // ---- Maç akışı + savaş (Docs/ArenaNet-Protokol.md §10) ----
 

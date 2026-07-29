@@ -96,12 +96,35 @@ public sealed class MatchDirector
     private CancellationTokenSource? _cts;
     private Task? _loop;
 
-    public MatchDirector(PlayerRegistry registry, MapTable maps)
+    /// <summary>Bu işletmenin lobi sahnesi (§10.7, <c>server.json → lobbyScene</c>). Boş olabilir:
+    /// o zaman istemci kendi kabuk <c>Lobby</c> sahnesinde kalır.
+    /// <para>⚠️ Lobi bir MAÇ DEĞİLDİR — bu alan <c>_modeId</c>/<c>_sceneName</c>'i lobi fazında
+    /// doldurur, fazı değiştirmez. Savaş kapıları (§10.3) fazdan okumaya devam eder.</para></summary>
+    private readonly string _lobbyScene;
+
+    public MatchDirector(PlayerRegistry registry, MapTable maps, string lobbyScene = "")
     {
         _registry = registry;
         _maps = maps;
+        // Boş bırakılırsa mekanın kendi lobi haritası devralır (§11) — her kurulumda elle
+        // yazılması gereken bir alan olmasın; config yalnız istisna için doldurulur.
+        _lobbyScene = string.IsNullOrWhiteSpace(lobbyScene) ? maps.ResolveLobbyScene() : lobbyScene.Trim();
         RegisterModes();
+        // Faz zaten Lobby ile başlıyor; lobi profilini de başlangıçta yaz ki ilk welcome
+        // (henüz hiç EnterLobbyLocked çalışmadan) doğru sahneyi/modId'yi taşısın.
+        _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
+        _sceneName = _lobbyScene;
     }
+
+    /// <summary>Sunucunun yapılandırılmış lobi sahnesi — açılış logu ve doğrulaması için.</summary>
+    public string LobbyScene => _lobbyScene;
+
+    /// <summary>Bu oturumda oynatılan mekan (§11); mekan ayrımı yoksa boş.</summary>
+    public string VenueId => _maps.Venue;
+
+    /// <summary>Bu mekanın harita adları — <c>admin_state</c> ile adminlere gider ki harita
+    /// seçicileri yalnız oynatılabilir arenaları göstersin.</summary>
+    public IReadOnlyList<string> VenueScenes => _maps.SceneNames;
 
     /// <summary>Sunucunun tanıdığı modların TEK kayıt yeri — yeni mod buraya bir satır eklenir
     /// (CLAUDE.md "Yeni mod" reçetesi). Kayıtlı olmayan modId'li start_match reddedilir.</summary>
@@ -578,14 +601,18 @@ public sealed class MatchDirector
 
     // ---- Savaş hattı (§10.3) ----
 
-    /// <summary>shot_fired doğrulanmaz, yalnız relay edilir: faz Live + atıcı hayatta player ise
-    /// playerId eklenip ATAN HARİÇ herkese gönderilir.</summary>
+    /// <summary>shot_fired doğrulanmaz, yalnız relay edilir: faz Live/Lobby + atıcı hayatta player
+    /// ise playerId eklenip ATAN HARİÇ herkese gönderilir.
+    /// <para>Lobby fazının açık olması bilinçlidir (§10.7): lobide hedef tahtasına ateş edilebiliyor,
+    /// dolayısıyla başkalarının namlu alevini görmesi doğrudur. <b>Bu kapı hasar hattının kapısı
+    /// DEĞİLDİR</b> — <c>hit_report</c> yalnız Live'da işlenir, yani lobide oyuncuya hasar veremez.
+    /// Ara fazlarda (Loading/Countdown/End) relay yoktur.</para></summary>
     public async Task HandleShotFiredAsync(PlayerState shooter, ShotFiredMsg msg)
     {
         var outbox = new List<Outgoing>();
         lock (_gate)
         {
-            if (_phase != Phase.Live) return;
+            if (_phase != Phase.Live && _phase != Phase.Lobby) return;
             // Kalibresizin atışı relay EDİLMEZ (§10.6): ateş edemediği hâlde başkalarının
             // ekranında namlu alevi çakması yanıltıcı olurdu.
             if (shooter.Role != "player" || !shooter.Alive || !shooter.Calibrated) return;
@@ -809,9 +836,13 @@ public sealed class MatchDirector
         SetPhaseLocked(Phase.Lobby, now);
         _mode = null;
         // Kurallar TDM varsayılanına döner: lobide de anlamlı bir cevap olsun (welcome.match.rules).
+        // Lobiye ÖZEL bir kural şekli YOKTUR (§10.7) — savaşı kapatan şey kural değil fazdır.
         _rules = ModeRules.TeamDefault;
-        _modeId = "";
-        _sceneName = "";
+        // Lobi profili (§10.7): sahne yapılandırılmışsa modId de dolar, çünkü istemci silah
+        // loadout'unu/HUD'unu bu anahtarla çözüyor. Lobi sahnesi yoksa ikisi de boş kalır ve
+        // istemci kendi kabuk Lobby sahnesinde durur.
+        _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
+        _sceneName = _lobbyScene;
         _timeRemaining = 0f;
         _scoreRed = 0;
         _scoreBlue = 0;
@@ -827,7 +858,13 @@ public sealed class MatchDirector
             QueueReadyClearLocked(player);
         }
 
-        QueueBroadcastLocked(outbox, JsonUtil.Serialize(new ReturnToLobbyMsg()));
+        var returnMsg = new ReturnToLobbyMsg
+        {
+            modeId = _modeId,
+            sceneName = _sceneName,
+            rules = _rules.ToInfo()
+        };
+        QueueBroadcastLocked(outbox, JsonUtil.Serialize(returnMsg));
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
     }
 

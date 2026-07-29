@@ -23,6 +23,10 @@ namespace VortexArena.Core
         [Tooltip("Protokol anahtarı — sunucudaki IGameMode.ModeId ile birebir aynı.")]
         [SerializeField] private string modeId = "";
         [SerializeField] private string displayName = "";
+        [Tooltip("Bu tanım bir MAÇ modu değil, LOBİ profilidir (§10.7): sunucuda IGameMode " +
+                 "karşılığı yoktur, start_match ile başlatılamaz. Yalnız lobide silah loadout'u " +
+                 "ve HUD çözmek için katalogda durur; admin mod seçicisinde gösterilmez.")]
+        [SerializeField] private bool lobbyProfile;
 
         [Header("Varsayılan kurallar (otorite sunucudadır)")]
         [SerializeField] private int roundSeconds = 300;
@@ -56,6 +60,16 @@ namespace VortexArena.Core
 
         /// <summary>Arayüzde gösterilen ad.</summary>
         public string DisplayName => displayName;
+
+        /// <summary>
+        /// Lobi profili mi (§10.7)? <c>true</c> ise bu tanım <b>başlatılabilir bir mod değildir</b>:
+        /// sunucuda <c>IGameMode</c> karşılığı yoktur ve <c>start_match</c> onu reddeder.
+        /// <para>Katalogda bulunma sebebi tek: lobide silah rafının loadout'u (ve varsa HUD)
+        /// <c>GameCatalog.FindMode(ModeRuntime.ModeId)</c> ile çözülüyor. Admin arayüzü bu bayrağa
+        /// bakarak modu seçiciden gizler — operatöre her basışta sessizce reddedilecek bir düğme
+        /// göstermemek için.</para>
+        /// </summary>
+        public bool IsLobbyProfile => lobbyProfile;
 
         /// <summary>Varsayılan raund süresi (saniye).</summary>
         public int RoundSeconds => roundSeconds;

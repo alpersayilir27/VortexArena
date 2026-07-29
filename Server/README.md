@@ -13,10 +13,9 @@ Server/
                               # StateHost (UDP), MatchDirector (faz makinesi + vuruş hattı),
                               # MapTable, Modes/ (IGameMode, TdmMode, FfaMode)
   VortexArena.Server.App/     # konsol exe (UI YOK — yönetim UI'ı Unity admin build'i)
-  VortexArena.PoseBot/        # sentetik oyuncu test istemcisi (poz senkronunu Quest'siz test eder)
-  config/server.json          # portlar + mekan adı + tickHz (ELLE)
-  config/maps.json            # harita tablosu (sceneName + modes) — Unity export
-  config/devices.json         # deviceId -> dostane ad ("Gözlük NN"); otomatik doldurulur
+  config/server.json          # portlar + mekan adı + tickHz + venue + lobbyScene (ELLE)
+  config/maps.json            # harita tablosu (sceneName + venue + modes) — Unity export
+  config/devices.json         # deviceId -> { ad, forma numarası }; otomatik doldurulur
   firewall-kur.cmd            # Windows Firewall kuralları (yönetici olarak çalıştırın)
 ```
 
@@ -49,8 +48,9 @@ Açılışta:
   (`server.json`; `maps.json` **üretilmez** — o Unity export'undan gelir).
 - Konsolda bağlanan/kopan cihazlar ve çevrimiçi sayısı akar; **Ctrl+C** temiz kapatır.
 
-Açılış başlığında `Modlar : tdm, ffa` ve `Haritalar : Arena10x10` satırları kayıtlı mod/harita
-tablosunu özetler (`maps.json` yoksa `Haritalar : yok (doğrulama kapalı)`); `Hasar : istemci
+Açılış başlığında `Modlar : tdm, ffa` ve `Haritalar : Arena12x12` satırları kayıtlı mod/harita
+tablosunu özetler (`maps.json` yoksa `Haritalar : yok (doğrulama kapalı)`); `Lobi :` satırı
+yapılandırılmış lobi sahnesini gösterir ve o sahne `maps.json`'da yoksa uyarır; `Hasar : istemci
 bildirir` satırı sunucuda silah tablosu ve hile denetimi olmadığını hatırlatır (§10.3).
 
 ## Portlar
@@ -111,10 +111,34 @@ olmuştur ve dışarıdan hiçbir cihaz bağlanamaz.
 ## Config dosyaları
 
 **server.json** — portlar ArenaProtocol sabitleriyle aynı varsayılanlardadır; mekana özel
-kurulumda genelde yalnız `venueName` değişir:
+kurulumda genelde yalnız `venueName` ve (kiosk kurulumunda) `venue` değişir:
 ```json
-{ "controlPort": 47821, "beaconPort": 47820, "statePort": 47822, "venueName": "Dev", "tickHz": 20 }
+{ "controlPort": 47821, "beaconPort": 47820, "statePort": 47822, "venueName": "Dev",
+  "tickHz": 20, "venue": "", "lobbyScene": "" }
 ```
+
+`venue` = **açılışta oynatılacak mekan** (§11.1). **Boş bırakılırsa sunucu açılırken konsolda
+sorar** — normal saha kullanımı budur:
+
+```
+Hangi mekan açılsın?
+  1) DemoVenue  (2 harita)
+  2) Standard   (4 harita)
+Seçim [1-2]:
+```
+
+Seçilen mekan o oturum boyunca sabittir: yalnız onun haritaları `start_match` ile başlatılabilir
+ve admin panelinin harita seçicisinde yalnız onlar görünür. Mekan `maps.json`'daki `venue`
+alanından gelir, o da Unity'deki klasör yerleşiminden (`Assets/Arenas/Venues/<İşletme>/…`).
+Soruyu atlamak için `venue` doldurulur ya da `--venue <ad>` argümanı verilir; konsol etkileşimli
+değilse (servis/betik) sunucu **bloklanmaz**, ilk mekanla açılır ve bunu loglar.
+
+`lobbyScene` = lobi sahnesi (§10.7). **Boş bırakılırsa seçilen mekanın lobi haritası
+(`modes:["lobby"]`) otomatik bulunur** — normalde boş kalır. Maç koşmadığı sürece oyuncular ve
+admin lobide durur: birbirlerini görürler, kalibrasyonlarını orada yaparlar, raftan silah alıp
+hedeflere ateş edebilirler — birbirlerine hasar veremeden (`hit_report` yalnız Live fazında
+işlenir). Mekanda hiç lobi haritası yoksa istemciler kabuk `Lobby` sahnesinde kalır; sunucu yine
+sorunsuz çalışır. Açılış özetindeki `Lobi :` satırı sonucu ve varsa uyarıyı gösterir.
 
 > **`maps.json` Unity'den export edilir** — Unity'de `Tools > VortexArena > Export Server Config`
 > menüsü onu `MapDefinition` SO'larından üretir. **Elle düzenlemeyin: bir sonraki export
@@ -130,7 +154,7 @@ kurulumda genelde yalnız `venueName` değişir:
 **maps.json** — harita tablosu (§10.1): `start_match`'te `sceneName`'in bilinen bir harita olup
 olmadığı ve o haritanın modu destekleyip desteklemediği buradan doğrulanır.
 ```json
-{ "maps": [ { "sceneName": "Arena10x10", "modes": ["ffa", "tdm"] } ] }
+{ "maps": [ { "sceneName": "Arena12x12", "venue": "Standard", "modes": ["ffa", "tdm"] } ] }
 ```
 `modes` boş bırakılırsa harita tüm modları kabul eder. **Dosya yoksa oluşturulmaz** (sunucunun
 uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması devre dışı kalır ve açılış
@@ -139,13 +163,24 @@ uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması dev
 > Sunucu sahne GEOMETRİSİNİ bilmez: konum/spawn noktası taşıyan bir alan ne bu tabloda ne de
 > protokolde vardır. Oyuncular fiziksel olarak yürür (§10.4). **Arena ÖLÇÜSÜ de yoktur:** sunucu
 > metre kullanmaz ve her işletmenin alanı farklı, çoğu kare/dikdörtgen bile değil — tek bir ölçü
-> çifti arenayı tarif etmez. Ölçü yalnız istemcide `MapDefinition.size`'da yaşar (admin mini
-> haritasının metre ölçeği + `ArenaBoundary` yoksa gözlemci kamerasının kadraj yedeği).
+> çifti arenayı tarif etmez. Ölçü yalnız istemcide, sahnedeki `ArenaBoundary.halfExtentX/Z`'de
+> yaşar.
 
-**devices.json** — `{ "<deviceId>": "Gözlük 07" }`. Bilinmeyen player cihazı bağlanınca ilk boş
-`Gözlük NN` atanır ve dosyaya yazılır; `set_name` ile değişen ad da buraya kalıcı yazılır.
-UTF-8, BOM'suz. ⚠️ **Admin adları buraya YAZILMAZ** — admin `deviceId`'si oturumlukttur (aşağı),
-her açılış dosyaya çöp bir satır eklerdi.
+**devices.json** — `{ "<deviceId>": { "name": "ertu", "number": 7 } }` (§2). Bilinmeyen player
+cihazı bağlanınca **ad** 20 kişilik havuzdan rastgele (kullanılmayanlar arasından), **numara**
+1'den itibaren ilk boş değer olarak atanır ve dosyaya yazılır; `set_identity` ile değişen değerler
+de buraya kalıcı yazılır. UTF-8, BOM'suz.
+
+⚠️ **Numara tüm kayıtlı cihazlar arasında benzersizdir** — yalnız çevrimiçiler arasında değil.
+Admin bir numarayı çevrimiçi bir oyuncudan isterse reddedilir; çevrimdışı kayıtlı bir cihazdan
+isterse o cihaz aynı anda ilk boş numaraya taşınır. Dosya elle bozulup çift numara içerirse
+sunucu açılışta yeniden numaralandırır ve bunu loglar.
+
+⚠️ Eski (v1) `{ "<deviceId>": "Gözlük 07" }` biçimi **okunur** — numara `0` sayılır ve cihaz ilk
+bağlantısında numara alır; dosya ilk yazımda yeni biçime yükseltilir.
+
+⚠️ **Admin adları buraya YAZILMAZ** — admin `deviceId`'si oturumlukttur (aşağı), her açılış
+dosyaya çöp bir satır eklerdi. Admin'e numara da atanmaz (`number: 0`).
 
 ## Çoklu admin
 
@@ -165,7 +200,7 @@ komut uygulanır.
   haritayı değiştirdiğinde diğerinin paneli ve yerel önizlemesi de değişir. `start_match` de
   seçimi günceller. Her admin komutu `admin_state.notice` ile "kim ne yaptı" satırı üretir.
 - **Yerel kalanlar:** kamera kipi, seçili oyuncu, halkalar/ad etiketleri, kamera hızı, duvar ve
-  çatı saydamlığı, mini harita — bunlar protokole girmez, her operatörün kendi ekranına aittir.
+  çatı saydamlığı — bunlar protokole girmez, her operatörün kendi ekranına aittir.
 
 ## Maç akışı — konsolda ne görünür
 
@@ -196,7 +231,7 @@ alanları roster ile taşınıyor ve admin istatistik tablosunun sağlama noktas
 | Satır | Anlamı |
 |---|---|
 | `faz Lobby → Loading` | her faz değişiminde (ayrıca herkese `match_state` yayınlanır) |
-| `start_match: mod 'tdm', sahne 'Arena10x10' (10×10), 2 oyuncu (kırmızı 1 / mavi 1)` | maç kuruldu (boyut yalnız harita tablodaysa) |
+| `start_match: mod 'tdm', sahne 'Arena12x12' (12×12), 2 oyuncu (kırmızı 1 / mavi 1)` | maç kuruldu (boyut yalnız harita tablodaysa) |
 | `start_match reddedildi: …` | doğrulama düştü, faz değişmedi (ör. `'Arena12x12' harita tablosunda yok`) |
 | `takım dengeleme: 1 oyuncu 'blue' takımına taşındı` | boş takım kalmasın diye |
 | `loading zaman aşımı (20 sn) — hazır olmayanlar: Gözlük 03` | sahne yükleme beklenmedi |
@@ -253,41 +288,6 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 `OnTick`/`OnHitApplied`/`OnKill` **varsayılan gövdelidir** — ilgilenmeyen mod hiç yazmaz. Yeni bir
 kanca eklerken de varsayılan gövde kullan (mevcut modların hiçbiri değişmesin) ve **tüketicisi
 olmayan kancayı hiç ekleme**.
-
-## PoseBot — sentetik oyuncu (test)
-
-Quest olmadan poz senkronunu uçtan uca denemek için:
-
-```powershell
-dotnet run --project Server/VortexArena.PoseBot -- 127.0.0.1 2                  # 2 bot, yalnız poz
-dotnet run --project Server/VortexArena.PoseBot -- 127.0.0.1 4 --fight          # 4 bot, savaşarak
-dotnet run --project Server/VortexArena.PoseBot -- 127.0.0.1 2 --fight --admin  # + maçı başlatan admin
-```
-
-Her bot player rolüyle WS'e bağlanır, UDP kaydını yapar ve 20 Hz'de dairesel yürüyüş pozu
-gönderir (bot başına farklı yarıçap/faz). Editor'de admin bağlanınca taktik görünümde,
-player bağlanınca lobide hayalet avatar olarak görünürler. Botların yazdığı `devices.json`
-girdilerini commit'lemeyin (test kirliliği). Kullanım: `PoseBot [ip] [botSayısı] [--fight] [--admin]`
-(bayrak sırası serbest, `--help` kısa kullanım basar).
-
-**`--fight`** botları maça da katar: `load_match` gelince 0.5–1.5 sn "sahne yükleniyor"
-simülasyonundan sonra `set_ready` gönderir, faz `Live` olunca saniyede 2 kez `shot_fired` +
-`hit_report` (ak47 etiketi, 34 hasar — sunucu doğrulamaz, bildirileni uygular) yollar, ölünce
-`respawn.delaySeconds` + 1 sn sonra `revive_request` ile canlanır (free-roam "tabana dön"
-akışının bot karşılığı). **Yalnız çift indeksli botlar ateş eder** (bot0, bot2…), tekler kurbandır;
-böylece skor tek yönlü ve okunur ilerler. Konsolu boğmamak için maç akışı satırlarını yalnız
-bot0 yazar. `--fight` verilmezse bot `set_ready` göndermez → maç Loading fazında `LOADING_TIMEOUT`
-(20 sn) bekler; savaş testlerinde bayrağı hep verin.
-
-**`--admin`** botlara ek olarak tek bir `role=admin` bağlantısı açar: roster'da 2+ çevrimiçi
-oyuncu 2 sn kararlı kalınca kendiliğinden `start_match{tdm, Arena10x10}` gönderir, maç akışını
-`[admin]` önekiyle yazar, konsolda `q` + Enter ile `abort_match` gönderir. Unity editörü **oyuncu**
-rolündeyken ortamda başka admin kalmadığı için loopback denemelerinde bu bayrak şarttır.
-
-> Botun bildirdiği `hello.scenes`, Build Settings listesidir (`Boot, Lobby,
-> Arena10x10, Arena12x12, ArenaDemoVenue, IceWorld`) — sunucu `start_match`'te sahneyi tüm
-> oyuncuların listesinde aradığı için yeni arena eklendiğinde PoseBot'taki `BuildScenes` sabiti de
-> güncellenmelidir.
 
 ## Sunucu bugün ne yapıyor
 

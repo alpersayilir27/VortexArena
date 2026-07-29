@@ -46,7 +46,10 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Katalogdaki geçerli modlar (modId'si dolu olanlar).</summary>
+        /// <summary>Katalogdaki <b>başlatılabilir</b> modlar: modId'si dolu ve lobi profili
+        /// olmayanlar. Lobi profili (§10.7) katalogda olmak zorundadır — istemci silah loadout'unu
+        /// oradan çözüyor — ama sunucuda <c>IGameMode</c> karşılığı yoktur, yani seçiciye konsaydı
+        /// operatöre her seferinde sessizce reddedilen bir düğme gösterilirdi.</summary>
         public static void CollectModes(List<ModeDefinition> buffer)
         {
             if (buffer == null)
@@ -63,14 +66,20 @@ namespace VortexArena.App.Admin
 
             for (int i = 0; i < modes.Length; i++)
             {
-                if (modes[i] != null && !string.IsNullOrEmpty(modes[i].ModeId))
+                if (modes[i] != null && !string.IsNullOrEmpty(modes[i].ModeId) && !modes[i].IsLobbyProfile)
                 {
                     buffer.Add(modes[i]);
                 }
             }
         }
 
-        /// <summary>Verilen modun oynanabildiği haritalar (sahne adı dolu olanlar).</summary>
+        /// <summary>
+        /// Verilen modun <b>bu mekanda</b> oynanabildiği haritalar (sahne adı dolu olanlar).
+        /// <para>İki süzgeç arka arkaya çalışır: (1) mod uyumu — katalogdan, (2) mekan —
+        /// <see cref="AdminSelection.IsInVenue"/> ile sunucunun açılışta seçtiği mekandan (§11).
+        /// Katalog tüm projeyi tanır; hangi arenaların oynatılabildiğine sunucu karar verir, bu
+        /// yüzden mekan süzgeci yerelde üretilmez — sunucu <c>admin_state</c> ile bildirir.</para>
+        /// </summary>
         public static void CollectMaps(string modeId, List<MapDefinition> buffer)
         {
             if (buffer == null)
@@ -92,17 +101,12 @@ namespace VortexArena.App.Admin
 
             for (int i = 0; i < maps.Count; i++)
             {
-                if (maps[i] != null && !string.IsNullOrEmpty(maps[i].SceneName))
+                if (maps[i] != null && !string.IsNullOrEmpty(maps[i].SceneName) &&
+                    AdminSelection.IsInVenue(maps[i].SceneName))
                 {
                     buffer.Add(maps[i]);
                 }
             }
-        }
-
-        /// <summary>Sahne adına göre harita tanımı; yoksa null.</summary>
-        public static MapDefinition FindMap(string sceneName)
-        {
-            return Catalog != null ? Catalog.FindMap(sceneName) : null;
         }
 
         /// <summary>Modun görünen adı; katalogda yoksa modId'nin kendisi.</summary>

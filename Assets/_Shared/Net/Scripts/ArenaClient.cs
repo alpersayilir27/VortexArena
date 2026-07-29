@@ -425,6 +425,15 @@ namespace VortexArena.Net
                     case MessageTypes.LobbyState:
                     {
                         LobbyStateMsg msg = JsonUtility.FromJson<LobbyStateMsg>(json);
+                        // §5.3: eski anlık görüntü yeniyi EZEMEZ. Sunucuda yayın tek yayıncıdan
+                        // gitse de bu ikinci emniyettir; bayat roster'ın belirtisi "atılan oyuncu
+                        // hâlâ listede online görünüyor" olurdu.
+                        if (msg == null || msg.version <= _lastRosterVersion)
+                        {
+                            break;
+                        }
+
+                        _lastRosterVersion = msg.version;
                         _mainThreadActions.Enqueue(() => NetEvents.RaiseLobbyState(msg));
                         break;
                     }
@@ -479,8 +488,11 @@ namespace VortexArena.Net
                     }
 
                     case MessageTypes.ReturnToLobby:
-                        _mainThreadActions.Enqueue(NetEvents.RaiseReturnToLobby);
+                    {
+                        ReturnToLobbyMsg msg = JsonUtility.FromJson<ReturnToLobbyMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseReturnToLobby(msg));
                         break;
+                    }
 
                     case MessageTypes.ShotFired:
                     {
@@ -546,6 +558,11 @@ namespace VortexArena.Net
                 Debug.LogWarning($"[ArenaClient] Protokol sürümü uyuşmuyor (sunucu {msg.protocolVersion}, istemci {ArenaProtocol.PROTOCOL_VERSION}); bağlantı sürdürülüyor.");
             }
 
+            // Yeni oturum = yeni sürüm ekseni. AĞ THREAD'İNDE sıfırlanır (kuyruğa alınmaz):
+            // bu welcome'ı izleyen lobby_state de ağ thread'inde işlenir, kuyruk beklenirse
+            // ilk roster "eski sürüm" sanılıp atılırdı.
+            _lastRosterVersion = 0;
+
             _mainThreadActions.Enqueue(() =>
             {
                 PlayerId = msg.playerId;
@@ -565,6 +582,11 @@ namespace VortexArena.Net
         }
 
         // --------------------------------------------------------- durum & status
+
+        /// <summary>UYGULANAN son <c>lobby_state.version</c> (§5.3). Ağ thread'i yazar (guard),
+        /// ana thread okur (status) → volatile. Her welcome'da 0'a döner: sunucu yeniden başlarsa
+        /// sürüm de 0'dan başlar ve sıfırlamasak istemci tüm roster'ları eski sanıp atardı.</summary>
+        private volatile int _lastRosterVersion;
 
         private IEnumerator StatusLoop()
         {
@@ -627,7 +649,9 @@ namespace VortexArena.Net
             {
                 scene = EngineScenes.GetActiveScene().name,
                 battery = SystemInfo.batteryLevel,
-                fps = _lastFps
+                fps = _lastFps,
+                // §5.1 uzlaştırma: geride kaldıysak sunucu YALNIZ bize tam roster yollar.
+                rosterVersion = _lastRosterVersion
             };
             return JsonUtility.ToJson(status);
         }

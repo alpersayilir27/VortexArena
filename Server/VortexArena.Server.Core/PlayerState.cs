@@ -14,6 +14,10 @@ public sealed class PlayerState
 
     public string Name { get; set; } = "";
 
+    /// <summary>Forma numarası 1..99 (§2); 0 = atanmamış. Admin'de daima 0 (admin oynamaz).
+    /// <b>Tüm kayıtlı cihazlar arasında benzersizdir</b> — yalnız çevrimiçiler arasında değil.</summary>
+    public int Number { get; set; }
+
     /// <summary>"player" (VR/Quest) veya "admin" (Windows masaüstü).</summary>
     public string Role { get; set; } = "player";
 
@@ -99,6 +103,7 @@ public sealed class PlayerState
     {
         playerId = PlayerId,
         name = Name,
+        number = Number,
         role = Role,
         team = Team,
         ready = Ready,

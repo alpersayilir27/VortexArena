@@ -30,6 +30,11 @@ namespace VortexArena.App
         /// <summary>Sunucunun en son istediği mod (HUD seçimi için ModeHudSpawner okur).</summary>
         public string LastModeId { get; private set; } = "";
 
+        /// <summary>Sunucunun bildirdiği lobi sahnesi (§10.7, <c>server.json → lobbyScene</c>).
+        /// Boşsa kabuk <c>Lobby</c> sahnesi kullanılır — sunucuya bağlanmadan önce zaten tek
+        /// bildiğimiz sahne odur.</summary>
+        public string LobbyScene { get; private set; } = "";
+
         /// <summary>Aynı maç sahnesi için set_ready bir kez gönderilir.</summary>
         private string _readyReportedScene = "";
 
@@ -79,9 +84,21 @@ namespace VortexArena.App
         /// </summary>
         private void HandleConnected(WelcomeMsg msg)
         {
-            if (msg == null || msg.match == null ||
-                string.IsNullOrEmpty(msg.match.phase) || msg.match.phase == "Lobby" ||
-                string.IsNullOrEmpty(msg.match.sceneName))
+            if (msg?.match == null || string.IsNullOrEmpty(msg.match.phase))
+            {
+                return;
+            }
+
+            // Lobide de sahne gelir (§10.7): işletmenin kendi lobi sahnesi. Bu bir maç DEĞİLDİR —
+            // RememberMatch çağrılmaz, yani set_ready gönderilmez ve ModeHudSpawner maç HUD'u aramaz.
+            if (msg.match.phase == "Lobby")
+            {
+                LobbyScene = msg.match.sceneName ?? "";
+                LoadLobbyChecked();
+                return;
+            }
+
+            if (string.IsNullOrEmpty(msg.match.sceneName))
             {
                 return;
             }
@@ -102,13 +119,17 @@ namespace VortexArena.App
             LoadChecked(msg.sceneName);
         }
 
-        private void HandleReturnToLobby()
+        /// <summary>Lobiye dönüş (§10.7): hedef sahne sunucudan gelir, sabit değildir.
+        /// <c>LastMatchScene</c> temizlenir — lobi bir maç sahnesi olmadığı için <c>set_ready</c>
+        /// gönderilmemelidir.</summary>
+        private void HandleReturnToLobby(ReturnToLobbyMsg msg)
         {
             LastMatchScene = "";
             LastModeId = "";
             _readyReportedScene = "";
 
-            LoadChecked(AppSession.SceneLobby);
+            LobbyScene = msg?.sceneName ?? "";
+            LoadLobbyChecked();
         }
 
         /// <summary>
@@ -145,6 +166,28 @@ namespace VortexArena.App
             LastMatchScene = sceneName ?? "";
             LastModeId = modeId ?? "";
             _readyReportedScene = "";
+        }
+
+        /// <summary>
+        /// Lobi sahnesini yükler. Sunucunun bildirdiği sahne yoksa ya da bu build'in sahne
+        /// listesinde değilse <b>kabuk <c>Lobby</c> sahnesine düşer</b>: oyuncunun lobisiz
+        /// kalması, yanlış yapılandırılmış bir lobiden daha kötüdür (bağlantı/kurtarma arayüzü
+        /// orada). Düşüş sessiz değildir — sebep konsola yazılır.
+        /// </summary>
+        private void LoadLobbyChecked()
+        {
+            string target = LobbyScene;
+
+            if (!string.IsNullOrEmpty(target) && !Application.CanStreamedLevelBeLoaded(target))
+            {
+                Debug.LogError(
+                    $"[SceneRouter] Sunucunun lobi sahnesi '{target}' bu build'in sahne listesinde " +
+                    $"yok — kabuk '{AppSession.SceneLobby}' sahnesine dönülüyor. (Build Settings + " +
+                    "server.json → lobbyScene uyumunu kontrol edin.)");
+                target = "";
+            }
+
+            LoadChecked(string.IsNullOrEmpty(target) ? AppSession.SceneLobby : target);
         }
 
         private void LoadChecked(string sceneName)

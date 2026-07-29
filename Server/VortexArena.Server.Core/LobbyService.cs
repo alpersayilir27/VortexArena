@@ -4,7 +4,12 @@ using VortexArena.Protocol;
 namespace VortexArena.Server.Core;
 
 /// <summary>Lobi semantiği: hello→welcome yanıtı, roster her değiştiğinde herkese lobby_state
-/// TAM anlık görüntüsü, set_name/set_ready/set_team/kick/identify işleme (§5).
+/// TAM anlık görüntüsü, set_identity/set_ready/set_team/kick/identify işleme (§5).
+/// <para>
+/// Roster yayını <b>tek bir yayıncı döngüden</b> gider (<c>MarkRosterDirty</c>) ve her yayın
+/// <c>lobby_state.version</c>'ı artırır; <c>status.rosterVersion</c> geride kalan istemciye yalnız
+/// ona tam snapshot yollatır (§5.1/5.3).
+/// </para>
 /// <para>
 /// Ayrıca <b>adminler arası ortak durumun</b> sahibidir (§5.3 <c>admin_state</c>): bir sonraki
 /// maçın mod/harita seçimi burada yaşar — admin arayüzündeki seçiciler yerel bir değişkeni değil
@@ -22,6 +27,18 @@ public sealed class LobbyService
     private string _selectedModeId = "";
     private string _selectedSceneName = "";
 
+    // ---- Roster yayıncısı (§5.3) ----
+    // TEK yayıncı garantisi: aynı anda birden fazla lobby_state üretimi YOKTUR. Eski hâlde
+    // OnRegistryChanged doğrudan `_ = BroadcastLobbyStateAsync()` çağırıyordu; arka arkaya iki
+    // değişiklik iki eşzamanlı task açıyor, her biri kendi Snapshot()'ını farklı anda alıp
+    // ClientConnection'ın gönderim semaforu için yarışıyordu. Semafor çerçevelerin iç içe
+    // geçmemesini garanti eder ama YENİ olanın kazanmasını etmez → eski roster sonra yazılabilir
+    // ve "atılan oyuncu hâlâ listede online" olarak kalır.
+    private readonly object _broadcastGate = new();
+    private bool _rosterDirty;
+    private bool _broadcasting;
+    private int _rosterVersion;
+
     /// <summary>Bir sonraki maçın ortak parametreleri (§5.2); <c>0</c> = seçilmedi, modun
     /// varsayılanı kullanılacak. Mod/harita ile AYNI kanaldan gider: parametreler yerel kalsaydı
     /// bir operatörün 5 dk sandığı maç diğerinin seçtiği 30 dk ile başlardı.</summary>
@@ -37,7 +54,7 @@ public sealed class LobbyService
 
     private void OnRegistryChanged(PlayerState state, PlayerChangeKind kind)
     {
-        _ = BroadcastLobbyStateAsync();
+        MarkRosterDirty();
 
         // Admin geldi/gitti → adminCount değişti, kalan adminler tazelensin.
         if (state.Role == "admin" && kind != PlayerChangeKind.Updated)
@@ -85,11 +102,43 @@ public sealed class LobbyService
         _registry.Announce(state, kind); // konsol satırı + lobby_state yayını
     }
 
-    public void HandleSetName(ClientConnection connection, SetNameMsg msg)
+    /// <summary>status kalp atışı (§5.1): cihaz durumunu günceller ve <b>roster uzlaştırması</b>
+    /// yapar — istemcinin <c>rosterVersion</c>'ı geride kalmışsa YALNIZ ona tam bir lobby_state
+    /// gider. Yedek ağdır, birincil yol değil: kontrol kanalı TCP olduğu için yayın "kaybolmaz";
+    /// bu yol istemcinin bir yayını uygulayamadığı pencereleri (sahne geçişi, kopma anı) kapatır.</summary>
+    public async Task HandleStatusAsync(ClientConnection connection, StatusMsg msg)
     {
-        var name = msg.name?.Trim();
-        if (string.IsNullOrEmpty(name) || connection.State == null) return;
-        _registry.SetName(connection.State.DeviceId, name);
+        var state = connection.State;
+        if (state == null) return;
+
+        _registry.UpdateStatus(state.DeviceId, msg);
+        if (msg.rosterVersion >= Volatile.Read(ref _rosterVersion)) return;
+
+        await SendSafeAsync(connection, BuildLobbyStateJson(), state.Name);
+    }
+
+    /// <summary>set_identity (§5.1): ad ve/veya forma numarası. Yetki denetimi ClientConnection'da
+    /// (oyuncu yalnız kendini, admin herkesi). Reddedilen numara operatöre admin_state.notice ile
+    /// bildirilir — sessizce yutmak "verdim sandığı" numarayı görünmez kılardı.</summary>
+    public void HandleSetIdentity(ClientConnection connection, SetIdentityMsg msg)
+    {
+        if (connection.State == null) return;
+        var playerId = msg.playerId != 0 ? msg.playerId : connection.State.PlayerId;
+
+        if (_registry.SetIdentity(playerId, msg.name, msg.number, out var error))
+        {
+            if (_registry.TryGetByPlayerId(playerId, out var target))
+            {
+                var label = target.Number > 0 ? $"{target.Number} · {target.Name}" : target.Name;
+                Console.WriteLine($"[Lobby] set_identity: playerId {playerId} -> {label}.");
+                if (connection.IsAdmin) _ = BroadcastAdminStateAsync(Notice(connection, $"kimlik -> {label}"));
+            }
+            return;
+        }
+
+        if (string.IsNullOrEmpty(error)) return; // değişiklik yok — sessiz
+        Console.WriteLine($"[Lobby] set_identity reddedildi (playerId {playerId}): {error}.");
+        if (connection.IsAdmin) _ = BroadcastAdminStateAsync(Notice(connection, $"kimlik reddedildi — {error}"));
     }
 
     public void HandleSetReady(ClientConnection connection, SetReadyMsg msg)
@@ -303,19 +352,69 @@ public sealed class LobbyService
                 roundSeconds = _selectedRoundSeconds,
                 scoreLimit = _selectedScoreLimit,
                 notice = notice,
-                adminCount = _registry.OnlineAdminCount()
+                adminCount = _registry.OnlineAdminCount(),
+                // Mekan bu oturum boyunca sabittir (açılışta seçilir), ama admin_state ile
+                // taşınır: geç bağlanan admin de ilk mesajda hangi arenaları görebileceğini öğrenir.
+                venueId = _director.VenueId,
+                venueScenes = _director.VenueScenes.ToArray()
             });
         }
     }
 
-    /// <summary>Roster'ın TAM anlık görüntüsünü tüm çevrimiçi bağlantılara yollar (§5.3 lobby_state).</summary>
-    public async Task BroadcastLobbyStateAsync()
+    /// <summary>Roster'ı kirli işaretler; yayıncı koşmuyorsa başlatır (§5.3).
+    /// <para>Bu aynı zamanda <b>birleştiricidir</b>: bir yayın uçarken gelen N değişiklik tek bir
+    /// ek yayına çöker — 16 oyuncu aynı anda bağlanınca 16 tam roster yayını değil 2 tane olur.</para></summary>
+    private void MarkRosterDirty()
+    {
+        lock (_broadcastGate)
+        {
+            _rosterDirty = true;
+            if (_broadcasting) return;
+            _broadcasting = true;
+        }
+        _ = RunRosterBroadcastLoopAsync();
+    }
+
+    /// <summary>Kirli oldukça yayınlar, temizlenince durur. <b>Aynı anda tek örnek koşar</b> —
+    /// lobby_state sürümünün monotonluğu ve sıra garantisi buradan gelir.</summary>
+    private async Task RunRosterBroadcastLoopAsync()
+    {
+        try
+        {
+            while (true)
+            {
+                lock (_broadcastGate)
+                {
+                    if (!_rosterDirty)
+                    {
+                        _broadcasting = false;
+                        return;
+                    }
+                    _rosterDirty = false;
+                }
+                await BroadcastLobbyStateAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Buraya düşmek beklenmez (yayın kendi içinde yutuyor) ama düşerse bayrağı bırak:
+            // aksi hâlde _broadcasting takılı kalır ve roster bir daha HİÇ yayınlanmaz.
+            lock (_broadcastGate) _broadcasting = false;
+            Console.WriteLine($"[Lobby] roster yayıncısı durdu: {ex.Message}");
+        }
+    }
+
+    /// <summary>Roster'ın TAM anlık görüntüsünü tüm çevrimiçi bağlantılara yollar (§5.3 lobby_state)
+    /// ve sürümü artırır. ⚠️ <b>Yalnız yayıncı döngüden çağrılır</b> — doğrudan çağırmak eşzamanlı
+    /// yayın demektir ve sıra garantisini bozar.</summary>
+    private async Task BroadcastLobbyStateAsync()
     {
         try
         {
             var snapshot = _registry.Snapshot();
             var msg = new LobbyStateMsg
             {
+                version = Interlocked.Increment(ref _rosterVersion),
                 players = snapshot.OrderBy(p => p.PlayerId).Select(p => p.ToPlayerInfo()).ToArray()
             };
             var json = JsonUtil.Serialize(msg);
@@ -331,6 +430,14 @@ public sealed class LobbyService
             Console.WriteLine($"[Lobby] lobby_state yayını hatası: {ex.Message}");
         }
     }
+
+    /// <summary>Tek bir bağlantıya yollanacak roster (uzlaştırma yolu). ⚠️ Sürümü <b>artırmaz</b>:
+    /// geride kalan istemciye mevcut sürümü göndeririz, yeni bir sürüm üretmeyiz.</summary>
+    private string BuildLobbyStateJson() => JsonUtil.Serialize(new LobbyStateMsg
+    {
+        version = Volatile.Read(ref _rosterVersion),
+        players = _registry.Snapshot().OrderBy(p => p.PlayerId).Select(p => p.ToPlayerInfo()).ToArray()
+    });
 
     private static async Task SendSafeAsync(ClientConnection connection, string json, string who)
     {

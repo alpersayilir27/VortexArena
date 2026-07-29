@@ -546,7 +546,7 @@ namespace VortexArena.Core.Combat
             Phase = PhaseEnd;
         }
 
-        private void HandleReturnToLobby()
+        private void HandleReturnToLobby(ReturnToLobbyMsg _)
         {
             ResetCombat(PhaseLobby);
         }

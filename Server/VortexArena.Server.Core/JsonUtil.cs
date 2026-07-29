@@ -13,7 +13,7 @@ public static class JsonUtil
     {
         IncludeFields = true,
         PropertyNameCaseInsensitive = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping // "Gözlük 03" telde/dosyada okunur kalsın
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping // "tuğba" telde/dosyada okunur kalsın
     };
 
     public static string Serialize<T>(T message) => JsonSerializer.Serialize(message, Options);

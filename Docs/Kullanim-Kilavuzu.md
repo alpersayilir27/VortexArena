@@ -26,7 +26,7 @@ diğer ikisi hiçbir işe yaramaz.
 
 Deneyimli operatör için kısa liste — detaylar aşağıdaki bölümlerde.
 
-- [ ] **1.** Sunucu bilgisayarında sunucuyu başlat (siyah pencere açık kalsın).
+- [ ] **1.** Sunucu bilgisayarında sunucuyu başlat, sorduğunda **mekanı seç** (siyah pencere açık kalsın).
 - [ ] **2.** Yönetim bilgisayarında **Launcher**'ı aç → **Yönetimi Başlat**.
 - [ ] **3.** Gözlükleri aç, oyunu başlat → kendiliğinden bağlanırlar.
 - [ ] **4.** Yönetim ekranında oyuncuların listede göründüğünü doğrula.
@@ -44,13 +44,27 @@ oyunun tek karar mercii odur, yanlışlıkla kapanmasın diye kimse onu senin ye
 - [ ] Sunucu bilgisayarını aç, ağ kablosunun/Wi-Fi'nin bağlı olduğunu gör.
 - [ ] Masaüstündeki **VortexArena Sunucu** kısayoluna çift tıkla.
       (Kısayol yoksa: `deploy\server\` klasöründeki **`VortexArena.Server.App.exe`** dosyası.)
-- [ ] Siyah bir pencere açılır. İçinde şuna benzer bir liste görmelisin:
+- [ ] Siyah bir pencere açılır ve **hangi mekanın açılacağını sorar:**
+
+```
+Hangi mekan açılsın?
+  1) DemoVenue  (2 harita)
+  2) Standard   (4 harita)
+Seçim [1-2]:
+```
+
+      İşletmenin adını içeren satırın numarasını yazıp **Enter**'a bas. (Tek mekan varsa soru
+      çıkmaz, kendiliğinden onu açar.) **Yanlış seçersen** yönetim ekranında başka bir işletmenin
+      haritalarını görürsün — o zaman sunucuyu kapatıp yeniden aç, mekan çalışırken değişmez.
+
+- [ ] Ardından şuna benzer bir liste görmelisin:
 
 ```
 Mekan      : <İşletmenin adı>
+Aktif alan : <seçtiğin mekan>
 Modlar     : tdm
 Silahlar   : ak47, m4
-Haritalar  : Arena10x10, IceWorld, ...
+Haritalar  : Arena12x12, IceWorld, ...
 ```
 
 - [ ] **Bu üç satırı görüyorsan sistem hazırdır:** `Mekan`, `Modlar`, `Haritalar`.
@@ -108,11 +122,18 @@ Haritalar  : Arena10x10, IceWorld, ...
 - [ ] VortexArena uygulamasını başlat.
 - [ ] Uygulama **lobiye** düşer ve **sunucuyu kendisi bulup bağlanır** — kimseye adres
       sorulmaz. Ekranda "Bağlı — oyuncu N" benzeri bir durum satırı görürsün.
-- [ ] Yönetim ekranındaki listede o gözlüğün adı (ör. `Gözlük 03`) belirir. Görünüyorsa iş tamam.
+- [ ] Yönetim ekranındaki listede o gözlüğün **numarası ve adı** (ör. `7 · ertu`) belirir.
+      Görünüyorsa iş tamam.
 
-Bir gözlük ilk bağlandığında sunucu ona kalıcı bir isim verir. Hangi ismin hangi fiziksel
-gözlük olduğunu bulmak için yönetim ekranındaki **"Bu cihazı tanıt"** düğmesini kullan:
-o gözlüğün ekranında büyük bir uyarı belirir.
+Bir gözlük ilk bağlandığında sunucu ona kalıcı bir **isim** (hazır listeden rastgele) ve kalıcı bir
+**forma numarası** (1'den başlayarak ilk boş sayı) verir. İsimler tekrar edebilir, **numara asla** —
+iki oyuncuyu ayırt eden şey numaradır. Hangi kimliğin hangi fiziksel gözlük olduğunu bulmak için
+yönetim ekranındaki **"Bu cihazı tanıt"** düğmesini kullan: o gözlüğün ekranında büyük bir uyarı
+belirir.
+
+İsmi veya numarayı değiştirmek istersen: listeden oyuncuya tıkla, **Tercihler** panelini aç ve
+**OYUNCU KİMLİĞİ** bölümünden düzenleyip **KİMLİĞİ UYGULA**'ya bas. Verdiğin numara o an bağlı
+başka bir oyuncudaysa değişiklik kabul edilmez ve durum satırında sebebi yazar.
 
 ### 3.2 Bağlanmazsa — gizli IP paneli: **sağ kumandada A tuşuna 2 kez**
 
@@ -169,7 +190,10 @@ Oyuncular fiziksel alanda gerçekten yürüdüğü için, her gözlüğün "odan
 bilgisini bir kez öğrenmesi gerekir. **Kalibrasyon yapılmazsa oyuncular birbirini yanlış
 yerde görür.**
 
-Kalibrasyon **arena içindeyken** (maç başladıktan sonra) yapılır — lobide yapılmaz.
+Kalibrasyon **lobide, maç başlamadan önce** yapılır. Lobi de gerçek bir oda: oyuncular orada
+birbirini görür, silah rafından silah alıp hedef tahtalarına ateş edebilir (birbirlerine hasar
+veremezler) ve zemindeki A/B işaretleri oradadır. Bir kez kalibre olan oyuncu maça hazır girer —
+harita değişimi kalibrasyonu bozmaz. (Maç sırasında da aynı adımlarla yeniden kalibre edilebilir.)
 
 - [ ] **1.** Oyuncu sağ kumandayı zemindeki **A** bandının üzerine, **kalem gibi dimdik** tutup
       ucunu yere değdirir. ⚠️ **Duruş önemli:** gözlük zemin yüksekliğini de bu ölçümden
@@ -197,8 +221,9 @@ Kalibrasyon **arena içindeyken** (maç başladıktan sonra) yapılır — lobid
   değişmediği sürece kalibrasyon geçerli kalır).
 - **A ile B'yi karıştırma!** Ters alınırsa arena 180° dönük olur, oyuncular birbirini
   ters tarafta görür.
-- **Lobide** oyuncuların birbirinin üstünde/yanlış yerde görünmesi **normaldir** — kontrolü
-  arena içinde yap.
+- **Henüz kalibre olmamış** oyuncuların birbirinin üstünde/yanlış yerde görünmesi **normaldir** —
+  örtüşme kalibrasyondan sonra oturur. Bağlantı ekranında (gözlük sunucuyu henüz bulamadıysa)
+  gösterilen basit bekleme sahnesinde de örtüşme beklenmez.
 
 ### 4.1 Bir oyuncunun kalibrasyonu kaydıysa — **KAL** düğmesi
 
@@ -375,7 +400,7 @@ Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten
 - [ ] **Sunucu bilgisayarının adresi** (ör. `192.168.1.10`) — 2×A paneline girilecek numara
 - [ ] Zemindeki **A–B işaretleri arası mesafe** (bantlar kayarsa yeniden yerleştirmek için)
 - [ ] Kullanılacak arena/harita adı
-- [ ] Gözlük etiketleri ↔ ekrandaki isimler listesi (`Gözlük 01` = hangi fiziksel gözlük)
+- [ ] Gözlük etiketleri ↔ ekrandaki kimlikler listesi (`7 · ertu` = hangi fiziksel gözlük)
 - [ ] Teknik destek telefonu
 
 ---

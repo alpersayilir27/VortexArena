@@ -14,14 +14,26 @@ namespace VortexArena.Core.Editor
     [Serializable]
     public class ArenaTemplateOptions
     {
-        /// <summary>Kopyalanacak kaynak sahnenin asset yolu.</summary>
-        public string sourceScenePath = "Assets/Arenas/Standard/A10x10/Scenes/Arena10x10.unity";
+        /// <summary>
+        /// Kopyalanacak kaynak sahnenin asset yolu.
+        /// <para>
+        /// Varsayılan <b>Default12x12</b>'dir: harita dizaynı taşımayan, yalnız ağa bağlanmak için
+        /// gereken bileşenleri (kalibrasyon, poz, HUD, sınır, taban, raf, <c>VA_CameraRig</c>)
+        /// içeren TEK KAYNAK arena. Dizaynlı bir arenadan türetmek, o arenanın geometrisini de
+        /// yeni kutuya kopyalar ve elle temizlenmesi gerekirdi.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Farklı ÖLÇÜDEKİ arena bundan türetilmez</b> — 10×10 bir arena 12×12 duvar/zeminle
+        /// gelirdi. O ölçü için kendi <c>Default</c>'unu kur (ölçekleme bilinçli olarak yoktur).
+        /// </para>
+        /// </summary>
+        public string sourceScenePath = "Assets/Arenas/Standard/Default12x12/Scenes/Default12x12.unity";
 
         /// <summary>
         /// Kaynak <c>MapDefinition</c> asset yolu — yeni haritanın <c>supportedModeIds</c>
         /// listesi buradan kopyalanır (boş/eksikse yeni harita kısıtsız olur).
         /// </summary>
-        public string sourceMapPath = "Assets/Arenas/Standard/A10x10/Data/A10x10.asset";
+        public string sourceMapPath = "Assets/Arenas/Standard/Default12x12/Data/Default12x12.asset";
 
         /// <summary>Arena kutusunun klasör adı ve MapDefinition asset adı (ör. <c>A12x12</c>).</summary>
         public string arenaId = "";
@@ -41,7 +53,14 @@ namespace VortexArena.Core.Editor
         /// <summary>İşletme klasör adı — yalnız <see cref="ArenaTemplateTarget.Venue"/> için.</summary>
         public string venueName = "";
 
-        /// <summary>Yeni haritanın ekleneceği <c>GameCatalog</c> asset yolu (boş = katalog güncellenmez).</summary>
-        public string catalogPath = "Assets/_Shared/Data/GameCatalog.asset";
+        /// <summary>
+        /// Yeni haritanın ekleneceği <c>GameCatalog</c> asset yolu (boş = katalog güncellenmez).
+        /// <para>
+        /// ⚠️ Katalog <c>Resources/</c> ALTINDADIR — prosedürel admin arayüzü onu
+        /// <c>Resources.Load</c> ile okuduğu için oradan çıkarılamaz. Bu yol yanlış yazılırsa
+        /// sihirbaz katalog kaydını sessizce atlar ve yeni arena admin listesinde görünmez.
+        /// </para>
+        /// </summary>
+        public string catalogPath = "Assets/_Shared/Data/Resources/GameCatalog.asset";
     }
 }
