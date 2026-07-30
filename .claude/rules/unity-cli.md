@@ -3,6 +3,12 @@
 Derleme/konsol/build/test doğrulaması **Unity CLI** ile yapılır (`unity`, `%LOCALAPPDATA%\Unity\bin`).
 Projede `com.unity.pipeline` kurulu; editör açıkken CLI ona bağlanır.
 
+⚠️ **Giriş kapısı shell DEĞİL, MCP'dir** ([[unity-mcp-first]]): aynı 140 komut
+`mcp__unity-editor-mcp__*` tool'ları olarak duruyor — `get_console_logs`, `recompile`, `build`,
+`run_tests`, `menu` … Aşağıdaki komut satırları o tool'un **karşılığı**dır; MCP çağrısı gerçekten
+düştüğünde (bağlantı yok / timeout) shell'den koşulur. Shell'e inildiğinde komut Windows
+komutudur → [[windows-shell]].
+
 ```bash
 unity status                       # bağlı editör (port/PID/versiyon)
 unity list                         # 140 komut
