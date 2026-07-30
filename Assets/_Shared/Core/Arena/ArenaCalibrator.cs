@@ -8,12 +8,12 @@ namespace VortexArena.Core.Arena
 {
     /// <summary>
     /// Two-point calibration that aligns the virtual arena with the physical play
-    /// space. Hold A+B on the right controller while resting the controller TIP on a
-    /// floor mark: the first capture lights up anchor_a, the second lights up
-    /// anchor_b and moves the camera rig so both virtual markers land on their
-    /// physical marks. The calibrated pose is persisted as an OVRSpatialAnchor and
-    /// restored automatically on the next session. Holding A+B again after a
-    /// completed calibration starts a fresh one.
+    /// space. Hold A on the right controller and double-tap B while resting the
+    /// controller TIP on a floor mark: the first capture lights up anchor_a, the
+    /// second lights up anchor_b and moves the camera rig so both virtual markers
+    /// land on their physical marks. The calibrated pose is persisted as an
+    /// OVRSpatialAnchor and restored automatically on the next session. Repeating
+    /// the gesture after a completed calibration starts a fresh one.
     /// <para>
     /// Hizalama <b>6DOF</b>'tur: yaw ve yatay konum A-&gt;B çiftinden, <b>zemin yüksekliği
     /// B noktasında yakalanan uçtan</b> gelir. Zemin tracking origin'den DEĞİL ölçümden
@@ -48,7 +48,8 @@ namespace VortexArena.Core.Arena
     /// pozlar arena ile örtüşmez (rig henüz hizalanmadığı için ofsetlidir) — oyuncunun bağlı ve
     /// hareket hâlinde olduğu ağdan görülebilsin diye bilinçli bir tercihtir. Yükleme geçici
     /// olarak başarısız olabildiği için <see cref="RestoreAttempts"/> kez denenir; hepsi düşerse
-    /// oyuncu A+B ile elle kalibre etmelidir ve konsola bunu söyleyen bir uyarı düşer.
+    /// oyuncu elle (A basılıyken B'ye çift basarak) kalibre etmelidir ve konsola bunu söyleyen
+    /// bir uyarı düşer.
     /// </para>
     /// </summary>
     public class ArenaCalibrator : MonoBehaviour
@@ -61,15 +62,15 @@ namespace VortexArena.Core.Arena
         [Tooltip("Fallback marker pivot height above the arena floor, used only when the marker has no Renderer to measure.")]
         [SerializeField] private float markerHalfHeight = 0.05f;
         [Tooltip("Hizalama tamamlandıktan sonra işaretçilerin görünür kaldığı süre (saniye). Süre dolunca gizlenirler; 0 = anında gizle.")]
-        [SerializeField] private float markerVisibleSeconds = 3f;
+        [SerializeField] private float markerVisibleSeconds = 1f;
 
         [Header("Rig")]
         [Tooltip("Root moved by the alignment. Falls back to the OVRCameraRig transform.")]
         [SerializeField] private Transform rigRoot;
 
         [Header("Capture")]
-        [Tooltip("How long A+B must be held before a point is captured (seconds).")]
-        [SerializeField] private float holdSeconds = 3f;
+        [Tooltip("A basılı tutulurken B'ye iki kez basmak için tanınan süre (saniye). İki basış arası bundan uzunsa ikinci basış yeni bir sekansın ilki sayılır.")]
+        [SerializeField] private float doubleTapSeconds = 1f;
         [Tooltip("Controller pivot -> tip offset, in controller local space. The tracked pivot sits inside the controller body, so resting the tip on the floor leaves the pivot a few cm above it. Measure once per controller model: with a guardian set up, hold the controller upright on the floor and read rightControllerAnchor.position.y.")]
         [SerializeField] private Vector3 tipLocalOffset = new Vector3(0f, -0.08f, 0f);
         [Tooltip("The captured A-B distance must match the anchor_a/anchor_b distance within this fraction.")]
@@ -88,6 +89,13 @@ namespace VortexArena.Core.Arena
         private const float FloorMismatchWarn = 0.03f;
         private const float FloorMismatchReject = 0.10f;
         private const float LongPulseSeconds = 0.6f;
+
+        /// <summary>A noktası alındı: tek KISA titreşim.</summary>
+        private const float PointAPulseSeconds = 0.3f;
+
+        /// <summary>B noktası alındı ve rig hizalandı: tek UZUN titreşim — kalibrasyonun
+        /// bittiği A onayından duyulur biçimde ayrılsın diye.</summary>
+        private const float PointBPulseSeconds = 1f;
 
         /// <summary>Kayıtlı anchor yüklenemezse kaç kez daha denenir. Sahne yüklendiği anda
         /// anchor servisi her zaman hazır olmuyor; tek denemede pes etmek harita değişiminde
@@ -121,7 +129,8 @@ namespace VortexArena.Core.Arena
         private OVRSpatialAnchor worldAnchor;
         private Vector3 capturedA;
         private int capturedCount;
-        private float holdTimer;
+        private int pendingBTaps;
+        private float firstBTapTime;
         private bool waitingForRelease;
         private bool manualCalibrationStarted;
         private float markerFloorDrop;
@@ -174,47 +183,56 @@ namespace VortexArena.Core.Arena
             if (!trackingEventsHooked)
                 TryHookTrackingEvents();
 
-            bool held = OVRInput.Get(OVRInput.Button.One, Hand) &&
-                        OVRInput.Get(OVRInput.Button.Two, Hand);
+            // Sekans: A BASILI TUTULURKEN B'ye doubleTapSeconds içinde iki kez basmak.
+            // Basılı tutma süresi yoktur — kumandanın ucu zemin işaretinde dururken üç saniye
+            // beklemek elin titremesine ve ölçümün kaymasına yol açıyordu; çift basış anlıktır.
+            bool aHeld = OVRInput.Get(OVRInput.Button.One, Hand);
 
             if (waitingForRelease)
             {
-                if (!held)
+                if (!aHeld)
                     waitingForRelease = false;
                 return;
             }
 
+            // A bırakıldı → yarım kalan sekans düşer: çift basış yalnız A basılıyken sayılır.
+            if (!aHeld)
+            {
+                pendingBTaps = 0;
+                return;
+            }
+
+            // Pencere doldu → bir sonraki basış yeni sekansın İLKİ sayılır.
+            if (pendingBTaps > 0 && Time.time - firstBTapTime > doubleTapSeconds)
+                pendingBTaps = 0;
+
+            if (!OVRInput.GetDown(OVRInput.Button.Two, Hand))
+                return;
+
+            if (pendingBTaps == 0)
+            {
+                pendingBTaps = 1;
+                firstBTapTime = Time.time;
+                return;
+            }
+
+            pendingBTaps = 0;
+
             // §10.6: KALİBRE durumdayken elle kalibrasyon KAPALIDIR — oyuncu kendi hizalamasını
             // kazara bozamasın; kapıyı yalnız operatör açar (admin ekranından sıfırlama).
             // Sessizce yutulmaz: tek uzun titreşim + log, yoksa oyuncu kumandayı bozuk sanır.
-            if (held && !CalibrationState.ManualAllowed)
+            // Kapı sekansın SONUNDA denetlenir: B tuşu oyunda başka işlere de basılıyor,
+            // tek basışta uyarmak yanlış alarm üretirdi.
+            if (!CalibrationState.ManualAllowed)
             {
                 waitingForRelease = true;
-                holdTimer = 0f;
                 OVRInput.SetControllerVibration(0f, 0f, Hand);
                 StartCoroutine(Pulse(1, LongPulseSeconds));
                 Debug.Log("ArenaCalibrator: kalibrasyon zaten alınmış — yeniden almak için operatörün admin ekranından sıfırlaması gerekir (§10.6).");
                 return;
             }
 
-            if (!held)
-            {
-                if (holdTimer > 0f)
-                    OVRInput.SetControllerVibration(0f, 0f, Hand);
-                holdTimer = 0f;
-                return;
-            }
-
-            holdTimer += Time.deltaTime;
-            OVRInput.SetControllerVibration(1f, Mathf.Lerp(0.05f, 0.4f, holdTimer / holdSeconds), Hand);
-
-            if (holdTimer >= holdSeconds)
-            {
-                holdTimer = 0f;
-                waitingForRelease = true;
-                OVRInput.SetControllerVibration(0f, 0f, Hand);
-                CapturePoint();
-            }
+            CapturePoint();
         }
 
         /// <summary>
@@ -274,7 +292,7 @@ namespace VortexArena.Core.Arena
                 capturedA = point;
                 capturedCount = 1;
                 if (anchorA != null) anchorA.SetActive(true);
-                StartCoroutine(Pulse(1));
+                StartCoroutine(Pulse(1, PointAPulseSeconds));
                 Debug.Log($"ArenaCalibrator: point A captured at {point}.");
                 return;
             }
@@ -306,7 +324,7 @@ namespace VortexArena.Core.Arena
 
             capturedCount = 2;
             if (anchorB != null) anchorB.SetActive(true);
-            StartCoroutine(Pulse(2));
+            StartCoroutine(Pulse(1, PointBPulseSeconds));
             Debug.Log($"ArenaCalibrator: point B captured at {point}.");
             AlignRig(capturedA, point);
             HideMarkersAfterConfirmation();
@@ -465,7 +483,7 @@ namespace VortexArena.Core.Arena
 
         /// <summary>
         /// Hizalamayı geçersiz kılar (§10.6): işaretçiler gizlenir, kayıtlı <c>OVRSpatialAnchor</c>
-        /// SİLİNİR ve A+B kapısı yeniden açılır. Çağıran <c>CalibrationState</c>'tir — operatör
+        /// SİLİNİR ve elle kalibrasyon kapısı yeniden açılır. Çağıran <c>CalibrationState</c>'tir — operatör
         /// admin ekranından kalibrasyonu sıfırladığında.
         /// <para>
         /// Anchor'ı bırakmak olmazdı: bir sonraki <c>load_match</c> bozuk hizalamayı sessizce geri
@@ -597,7 +615,8 @@ namespace VortexArena.Core.Arena
 
             Debug.LogWarning(
                 $"ArenaCalibrator: kayıtlı kalibrasyon {RestoreAttempts} denemede geri " +
-                "yüklenemedi — sağ kumandada A+B ile ELLE kalibre edin (o ana dek gönderilen " +
+                "yüklenemedi — sağ kumandada A basılıyken B'ye çift basarak ELLE kalibre edin " +
+                "(o ana dek gönderilen " +
                 "pozlar arena ile örtüşmez).",
                 this);
         }
@@ -671,8 +690,8 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Haptik sözlüğü: 1 kısa = A alındı · 2 kısa = B alındı ve hizalandı ·
-        /// 3 kısa = mesafe hatası · 1 uzun = zemin ölçümü tutarsız.
+        /// Haptik sözlüğü: 1 kısa (0.3 sn) = A alındı · 1 uzun (1 sn) = B alındı ve hizalandı ·
+        /// 3 kısa = mesafe hatası · 1 orta (0.6 sn) = zemin ölçümü tutarsız / kalibrasyon kilitli.
         /// </summary>
         private IEnumerator Pulse(int count, float seconds = 0.12f)
         {

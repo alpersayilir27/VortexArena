@@ -2,13 +2,14 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using VortexArena.Core;
 using VortexArena.Protocol;
 
 namespace VortexArena.App.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Dev</c> — geliştirici kontrol paneli: rol, sunucu hedefi ve
-    /// Play başlangıcı.
+    /// <c>Tools &gt; VortexArena &gt; Dev</c> — geliştirici kontrol paneli: rol, sunucu hedefi,
+    /// Play başlangıcı ve <b>sunucusuz sandbox</b> kipi.
     ///
     /// <para><b>Sunucuya hiç dokunmaz</b> — ne başlatır, ne durdurur, ne derler: sunucu her zaman
     /// elle çalıştırılır.</para>
@@ -32,6 +33,7 @@ namespace VortexArena.App.Editor
 
         private static readonly string[] RoleLabels = { "Player", "Admin" };
         private static readonly string[] StartLabels = { "Boot'tan", "Açık sahneden" };
+        private static readonly string[] WeaponLabels = { "Raf", "Rastgele (elde)" };
 
         [SerializeField] private Vector2 scroll;
 
@@ -39,11 +41,16 @@ namespace VortexArena.App.Editor
         [NonSerialized] private DevTarget[] targetList = Array.Empty<DevTarget>();
         [NonSerialized] private string[] targetLabels = Array.Empty<string>();
 
+        /// <summary>Sandbox mod seçicisinin kaynağı: <c>GameCatalog</c>'daki modId'ler. Lobi
+        /// profili de listelenir (admin seçicisinin aksine) — silah rafı denemek için meşru bir
+        /// sandbox seçimidir.</summary>
+        [NonSerialized] private string[] modeIds = Array.Empty<string>();
+
         [MenuItem("Tools/VortexArena/Dev")]
         private static void Open()
         {
             var window = GetWindow<DevWindow>(false, "Dev", true);
-            window.minSize = new Vector2(430f, 260f);
+            window.minSize = new Vector2(430f, 320f);
             window.Show();
         }
 
@@ -69,6 +76,33 @@ namespace VortexArena.App.Editor
             }
 
             targetLabels[targets.Count] = CustomTargetLabel;
+
+            RefreshModeCache();
+        }
+
+        /// <summary>Katalogdaki modId'leri okur. Katalog <c>Resources</c> altındadır ve editörde
+        /// de aynı yoldan yüklenir — ikinci bir arama yolu (AssetDatabase) açmıyoruz ki çalışma
+        /// anıyla aynı listeyi görelim.</summary>
+        private void RefreshModeCache()
+        {
+            var catalog = Resources.Load<GameCatalog>("GameCatalog");
+            ModeDefinition[] modes = catalog != null ? catalog.Modes : null;
+            if (modes == null)
+            {
+                modeIds = Array.Empty<string>();
+                return;
+            }
+
+            var ids = new List<string>(modes.Length);
+            for (int i = 0; i < modes.Length; i++)
+            {
+                if (modes[i] != null && !string.IsNullOrEmpty(modes[i].ModeId))
+                {
+                    ids.Add(modes[i].ModeId);
+                }
+            }
+
+            modeIds = ids.ToArray();
         }
 
         /// <summary>
@@ -78,6 +112,13 @@ namespace VortexArena.App.Editor
         /// </summary>
         private void BootstrapSelection()
         {
+            // Sandbox modu hiç seçilmemişse katalogdaki ilk mod: seçicinin boş açılması, ilk
+            // Play'de "mod seçilmedi" uyarısı demek olurdu.
+            if (string.IsNullOrEmpty(DevSession.SandboxModeId) && modeIds.Length > 0)
+            {
+                DevSession.SandboxModeId = modeIds[0];
+            }
+
             if (!string.IsNullOrEmpty(DevSession.TargetName))
             {
                 return;
@@ -139,7 +180,110 @@ namespace VortexArena.App.Editor
                 DevSession.Role = roleIndex == 0 ? AppSession.RolePlayer : AppSession.RoleAdmin;
             }
 
-            // ---- hedef
+            // ---- sunucusuz sandbox
+            EditorGUI.BeginChangeCheck();
+            bool sandbox = EditorGUILayout.ToggleLeft(
+                new GUIContent("Sunucusuz sandbox",
+                    "Sunucuya hiç bağlanmaz: admin'den harita seçmek ve elle kalibrasyon gerekmez"),
+                DevSession.Sandbox);
+            if (EditorGUI.EndChangeCheck())
+            {
+                DevSession.Sandbox = sandbox;
+                if (sandbox)
+                {
+                    // Sandbox yalnız oynanan bir sahneden Play'de anlamlı: Boot'tan koşulursa
+                    // akışı kabuk sahnesi sürer ve LobbyController bağlanmayı dener.
+                    DevSession.StartFromBoot = false;
+                }
+            }
+
+            if (DevSession.Sandbox)
+            {
+                DrawSandbox();
+            }
+
+            // ---- hedef (sandbox'ta bağlanılmadığı için anlamsız)
+            using (new EditorGUI.DisabledScope(DevSession.Sandbox))
+            {
+                DrawTarget();
+            }
+
+            // ---- Play başlangıcı
+            EditorGUI.BeginChangeCheck();
+            int startIndex = RadioRow("Başlangıç", StartLabels, DevSession.StartFromBoot ? 0 : 1, null);
+            if (EditorGUI.EndChangeCheck())
+            {
+                DevSession.StartFromBoot = startIndex == 0;
+            }
+
+            if (DevSession.Sandbox && DevSession.StartFromBoot)
+            {
+                EditorGUILayout.HelpBox(
+                    "Sandbox açık ama başlangıç \"Boot'tan\" — sandbox UYGULANMAZ (Boot → Lobby " +
+                    "akışını kabuk sahnesi sürer ve sunucuya bağlanmaya çalışır). Başlangıcı " +
+                    "\"Açık sahneden\" yapın.",
+                    MessageType.Warning);
+            }
+        }
+
+        /// <summary>
+        /// Sandbox ayarları: mod (loadout'un okunduğu anahtar) + silah kaynağı.
+        /// </summary>
+        private void DrawSandbox()
+        {
+            if (modeIds.Length == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "GameCatalog okunamadı ya da içinde mod yok — sandbox'ta silah gelmez. " +
+                    "Katalog 'Resources/GameCatalog' yolunda olmalı.",
+                    MessageType.Warning);
+            }
+            else
+            {
+                int currentMode = Array.IndexOf(modeIds, DevSession.SandboxModeId);
+
+                EditorGUI.BeginChangeCheck();
+                int pickedMode = EditorGUILayout.Popup(
+                    new GUIContent("Mod", "Silah loadout'u bu moddan okunur (GameCatalog.FindMode)"),
+                    Mathf.Max(0, currentMode), modeIds);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    DevSession.SandboxModeId = modeIds[pickedMode];
+                }
+
+                if (currentMode < 0)
+                {
+                    EditorGUILayout.HelpBox(
+                        $"Kayıtlı mod '{DevSession.SandboxModeId}' katalogda yok — yukarıdan " +
+                        "yeniden seçin.",
+                        MessageType.Warning);
+                }
+            }
+
+            EditorGUI.BeginChangeCheck();
+            int weaponIndex = RadioRow("Silah",
+                WeaponLabels,
+                DevSession.SandboxWeapons == DevSession.WeaponsRandom ? 1 : 0,
+                null);
+            if (EditorGUI.EndChangeCheck())
+            {
+                DevSession.SandboxWeapons = weaponIndex == 1
+                    ? DevSession.WeaponsRandom
+                    : DevSession.WeaponsRack;
+            }
+
+            EditorGUILayout.HelpBox(
+                "Sunucuya BAĞLANILMAZ: harita seçen admin ve elle kalibrasyon gerekmez, silahlar " +
+                "ve serbest atış açılır. Hasar/skor/faz YOKTUR — üçünün de otoritesi sunucudadır. " +
+                "Test edeceğiniz arena (ya da mekan lobisi) sahnesini açıp Play'e basın.",
+                MessageType.Info);
+
+            EditorGUILayout.Space();
+        }
+
+        /// <summary>Sunucu hedefi seçimi (adlandırılmış hedef ya da "Özel" IP/Port).</summary>
+        private void DrawTarget()
+        {
             int customIndex = targetList.Length;
             int currentIndex = CurrentTargetIndex();
 
@@ -186,14 +330,6 @@ namespace VortexArena.App.Editor
                 }
 
                 EditorGUI.indentLevel--;
-            }
-
-            // ---- Play başlangıcı
-            EditorGUI.BeginChangeCheck();
-            int startIndex = RadioRow("Başlangıç", StartLabels, DevSession.StartFromBoot ? 0 : 1, null);
-            if (EditorGUI.EndChangeCheck())
-            {
-                DevSession.StartFromBoot = startIndex == 0;
             }
         }
 

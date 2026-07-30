@@ -57,6 +57,13 @@ namespace VortexArena.Protocol
         public const int PLAYER_ID_MAX = 255;
 
         /// <summary>
+        /// Atılan istemcinin bağlantısı bu <b>kapanış çerçevesi sebebiyle</b> kapatılır (§5.4).
+        /// İkinci emniyet: `kicked` JSON'u kapanışa yetişemezse istemci kopuşu sıradan bir
+        /// kesinti sanıp yeniden bağlanırdı — atılan oyuncu kendiliğinden geri gelirdi.
+        /// </summary>
+        public const string KICK_CLOSE_REASON = "kicked";
+
+        /// <summary>
         /// Tek snapshot datagramına yazılan en fazla oyuncu girdisi. Fazlası aynı tik içinde
         /// ek datagramlara taşar (§6.3) — 6 + 16×88 = 1414 B, MTU 1500'ün altında kalır.
         /// İstemcide birleştirme mantığı gerekmez: her paket kendi girdilerini bağımsız uygular.

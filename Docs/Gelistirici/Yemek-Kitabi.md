@@ -533,12 +533,37 @@ Boyut dosyasının biçimi, elle yazma ve yeniden üretme →
 | Düğme | Ne yapar |
 |---|---|
 | **Rol** | player / admin — sahne kirletmeden, `EditorPrefs`'te kişisel kalır |
+| **Sunucusuz sandbox** | Sunucuya hiç bağlanmadan, silahlar elde/rafta Play — aşağı bak |
 | **Hedef** | Sunucu adresi (`dev-targets.json`'dan gelir: Local, Keşif, örnek PC) |
 | **Play başlangıcı** | Boot'tan mı, açık sahneden mi |
 
 Pencerede maç parametresi yoktur: mod / takım / süre / limit **yalnız sunucudan** gelir, yani maçı
 bir **admin** başlatmalıdır. Kurallar telde gelmezse (`rules == null`) `ModeDefinition`'daki
 önizleme alanları fallback olarak devreye girer.
+
+### Sunucusuz sandbox — silah/namlu/ses denemenin kısa yolu
+
+Silah duruşu, namlu alevi, kavrama soketi, ses gibi **tümüyle yerel** şeyleri denerken sunucu
+açmak, admin'den harita seçmek ve elle kalibrasyon almak gerekmez:
+
+1. Test edeceğin arena (ya da mekan lobisi) sahnesini aç.
+2. Dev penceresi → **Sunucusuz sandbox** işaretle (başlangıcı otomatik "Açık sahneden" yapar),
+   **mod** ve **silah kaynağını** (Raf / Rastgele) seç.
+3. Play.
+
+Silahlar gelir ve ateş edilebilir. Sebebi: sunucuya hiç bağlanılmadığı için kalibrasyon kapısı
+zaten açıktır (`CalibrationState.IsCalibrated` = `!_hasEverConnected`) ve `ArenaCombat` UDP
+kanalı yokken sessiz no-op'tur; kapalı kalan iki kapıyı `DevSession` tek `ModeRuntime.Apply`
+çağrısıyla açar — `modeId` (**silah loadout'u buradan okunur**, onsuz raf boş doğar) ve
+`fireWhilePaused` (faz sunucusuz `paused` kaldığı için tetiği açan tek şey).
+
+> ⚠️ **Sandbox bir maç DEĞİLDİR:** hasar, skor, faz, canlanma yoktur (üçünün de otoritesi
+> sunucudadır) ve takım/skor/canlanma kuralları `ModeRulesInfo` varsayılanında kalır. Maç
+> kuralı davranışı test edilecekse sunucu + admin yolu kullanılır.
+
+> ⚠️ Yalnız **"Açık sahneden"** başlangıcıyla ve **kabuk dışı** bir sahnede çalışır: Boot/Lobby'de
+> akışı kabuk controller'ı sürer ve sunucuya bağlanmayı dener. İkisi de sağlanmazsa sandbox
+> sessizce atlanmaz — konsola uyarı düşer.
 
 > ⚠️ **Sunucu editörden yönetilmez** — dev penceresinin sunucuyla hiç işi yoktur (başlatmaz,
 > durdurmaz, derlemez). Sunucu her zaman elle derlenir, elle çalıştırılır ve elle kapatılır.

@@ -47,8 +47,9 @@ MonoBehaviour:
   anchorA: {fileID: 0}
   anchorB: {fileID: 0}
   markerHalfHeight: 0.05
+  markerVisibleSeconds: 1
   rigRoot: {fileID: 0}
-  holdSeconds: 3
+  doubleTapSeconds: 1
   tipLocalOffset: {x: 0, y: -0.08, z: 0}
   distanceTolerance: 0.2
   fallbackMinDistance: 1

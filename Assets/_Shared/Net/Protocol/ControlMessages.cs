@@ -113,7 +113,7 @@ namespace VortexArena.Protocol
 
     /// Başlığın KENDİ hizalama durumunu bildirmesi (§10.6). Yalnız player gönderir.
     /// <para>
-    /// <c>source</c> ∈ "manual" (kumandada A+B) | "anchor" (kayıtlı OVRSpatialAnchor'dan geri
+    /// <c>source</c> ∈ "manual" (kumandada elle: A basılıyken B'ye çift basış) | "anchor" (kayıtlı OVRSpatialAnchor'dan geri
     /// yükleme) | "cloud" (ileride: paylaşılan uzamsal anchor). Sunucu DOĞRULAMAZ, yalnız
     /// kaydedip roster'da yayar — weaponId gibi serbest etiket, yeni kaynak sunucuda iş çıkarmaz.
     /// Bu yüzden bilinçli olarak <b>string</b>, enum değil.

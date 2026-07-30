@@ -22,8 +22,8 @@ namespace VortexArena.Core.Arena
     /// </para>
     /// <para>
     /// ⚠️ <b>Hiç bağlanılmamışsa kapı AÇIKTIR</b> (<see cref="IsCalibrated"/> = true,
-    /// <see cref="ManualAllowed"/> = true): sunucusuz editör testinde silah ve A+B çalışmaya devam
-    /// etsin. <c>PlayerCombatState.CanFire</c>'daki "_hasEverConnected" ile aynı gerekçe.
+    /// <see cref="ManualAllowed"/> = true): sunucusuz editör testinde silah ve elle kalibrasyon
+    /// çalışmaya devam etsin. <c>PlayerCombatState.CanFire</c>'daki "_hasEverConnected" ile aynı gerekçe.
     /// </para>
     /// <para>
     /// Sahnede DURMAZ: kalıcı tekil olarak kendini önyükler (<see cref="PlayerCombatState"/>
@@ -47,7 +47,7 @@ namespace VortexArena.Core.Arena
         public static bool IsCalibrated => !_hasEverConnected || _serverCalibrated;
 
         /// <summary>
-        /// Kumandada A+B ile ELLE kalibrasyon açık mı. Kalibreli durumdayken kapalıdır: oyuncu
+        /// Kumandada ELLE kalibrasyon (A basılıyken B'ye çift basış) açık mı. Kalibreli durumdayken kapalıdır: oyuncu
         /// kendi hizalamasını kazara bozamasın, kapıyı yalnız operatör açsın (§10.6).
         /// </summary>
         public static bool ManualAllowed => !_hasEverConnected || !_serverCalibrated;
@@ -107,7 +107,7 @@ namespace VortexArena.Core.Arena
 
         // ------------------------------------------------------------- başlık → sunucu
 
-        /// <summary>Başlık hizalandı (elle A+B ya da kayıtlı anchor) → sunucuya bildir.</summary>
+        /// <summary>Başlık hizalandı (elle ya da kayıtlı anchor) → sunucuya bildir.</summary>
         private void HandleLocalCalibrated(string source)
         {
             _localCalibrated = true;
@@ -192,7 +192,7 @@ namespace VortexArena.Core.Arena
                     calibrator.Invalidate();
                 }
 
-                Debug.Log("[CalibrationState] Sunucu kalibrasyonu sıfırladı — yeniden kalibre edin (A+B).");
+                Debug.Log("[CalibrationState] Sunucu kalibrasyonu sıfırladı — yeniden kalibre edin (A basılıyken B×2).");
             }
 
             if (_serverCalibrated == calibrated)

@@ -332,7 +332,7 @@ namespace VortexArena.Core.Combat
             // "Tabanına dön ve canlan" yazmak onu boşuna koşturmak olurdu.
             if (!CalibrationState.IsCalibrated)
             {
-                text = "Kalibrasyon gerekli — sağ kumandada A+B";
+                text = "Kalibrasyon gerekli — sağ kumandada A basılıyken B×2";
             }
             else if (!IsAlive)
             {
