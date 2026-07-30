@@ -58,6 +58,12 @@ namespace VortexArena.Core.Editor
     /// eklenmezse admin harita seçicisinde GÖRÜNMEZ — bu yüzden sihirbaz, haritayı destekleyen
     /// her modun dolu <c>maps</c> dizisine yeni haritayı da ekler.
     /// </para>
+    /// <para>
+    /// <b>Katalog seçtirilmez</b> — pencerede alanı yoktur: projedeki tek <c>GameCatalog</c>
+    /// asset'i otomatik çözülür (<see cref="ResolveCatalog"/>), çünkü çalışma anında katalog
+    /// yolla değil <c>Resources.Load</c> ile bulunuyor. Birden fazla katalog varsa kayıt
+    /// YAPILMAZ ve hata basılır.
+    /// </para>
     /// </summary>
     public class ArenaTemplateWizard : EditorWindow
     {
@@ -190,7 +196,9 @@ namespace VortexArena.Core.Editor
                 new GUIContent("Mekan (klasör)", "Arenanın oynanacağı işletme/mekan klasörü, ör. VortexAntep"),
                 options.venueName);
 
-            options.catalogPath = AssetPathField<GameCatalog>("GameCatalog", options.catalogPath);
+            // GameCatalog SEÇTİRİLMEZ: projede tek bir katalog vardır ve çalışma anında yolla
+            // değil `Resources.Load<GameCatalog>("GameCatalog")` ile bulunur — seçtirmek yalnız
+            // yanlış asset'e yazma yolu açardı. Araç kataloğu kendi çözer (RegisterInCatalog).
             EditorGUILayout.HelpBox("Hedef klasör: " + ResolveTargetFolder(options), MessageType.None);
 
             EditorGUILayout.Space();
@@ -412,7 +420,7 @@ namespace VortexArena.Core.Editor
             result.MapAssetPath = mapAssetPath;
 
             // ------------------------------------------------------ 7) katalog
-            RegisterInCatalog(options.catalogPath, map, result);
+            RegisterInCatalog(map, result);
 
             // ------------------------------------------------ 8) build settings
             var buildScenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes)
@@ -674,19 +682,18 @@ namespace VortexArena.Core.Editor
         /// Haritayı <c>GameCatalog.maps</c>'e ekler ve haritayı destekleyen her modun DOLU
         /// <c>maps</c> dizisine de ekler — aksi hâlde açık liste yeni haritayı gizler
         /// (bkz. sınıf başlığındaki katalog tuzağı).
+        /// <para>
+        /// Katalog PARAMETRE DEĞİLDİR, projeden çözülür: çalışma anında katalog
+        /// <c>Resources.Load&lt;GameCatalog&gt;("GameCatalog")</c> ile bulunuyor, yani doğru olan
+        /// tek bir asset var. Yol seçtirmek yalnız "hiçbir şeyin okumadığı bir kataloğa yazma"
+        /// yolunu açardı.
+        /// </para>
         /// </summary>
-        private static void RegisterInCatalog(string catalogPath, MapDefinition map, ArenaTemplateResult result)
+        private static void RegisterInCatalog(MapDefinition map, ArenaTemplateResult result)
         {
-            if (string.IsNullOrEmpty(catalogPath))
-            {
-                result.Warnings.Add("GameCatalog yolu boş — harita kataloğa EKLENMEDİ (admin seçicisinde görünmez).");
-                return;
-            }
-
-            var catalog = AssetDatabase.LoadAssetAtPath<GameCatalog>(catalogPath);
+            GameCatalog catalog = ResolveCatalog(result);
             if (catalog == null)
             {
-                result.Warnings.Add($"GameCatalog bulunamadı ('{catalogPath}') — harita kataloğa EKLENMEDİ.");
                 return;
             }
 
@@ -720,6 +727,64 @@ namespace VortexArena.Core.Editor
                 modeObject.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(mode);
             }
+        }
+
+        /// <summary>
+        /// Projedeki TEK <c>GameCatalog</c> asset'ini bulur; bulunamazsa ya da birden fazlaysa
+        /// null döner (sebep sonuç uyarılarına yazılır).
+        /// <para>
+        /// Birden fazla katalog bir PROJE HATASIDIR: çalışma anında <c>Resources.Load</c> hangisini
+        /// döndüreceğini garanti etmez, yani "hangisine yazmalıyım" sorusunun doğru cevabı yoktur.
+        /// Bu durumda kayıt yapılmaz — yanlış kataloğa yazmak sessizce görünmeyen bir arena üretir.
+        /// </para>
+        /// </summary>
+        private static GameCatalog ResolveCatalog(ArenaTemplateResult result)
+        {
+            string[] guids = AssetDatabase.FindAssets("t:" + nameof(GameCatalog));
+            if (guids == null || guids.Length == 0)
+            {
+                result.Warnings.Add(
+                    "Projede GameCatalog asset'i YOK — harita kataloğa EKLENMEDİ " +
+                    "(admin mod/harita seçicisinde görünmez). Beklenen yer: " +
+                    "Assets/_Shared/Data/Resources/GameCatalog.asset");
+                return null;
+            }
+
+            if (guids.Length > 1)
+            {
+                var paths = new List<string>(guids.Length);
+                for (int i = 0; i < guids.Length; i++)
+                {
+                    paths.Add(AssetDatabase.GUIDToAssetPath(guids[i]));
+                }
+
+                string message =
+                    "Projede birden fazla GameCatalog asset'i var — harita hiçbirine EKLENMEDİ. " +
+                    "Katalog çalışma anında Resources.Load ile bulunuyor, yani tek olmak ZORUNDA. " +
+                    "Bulunanlar: " + string.Join(" · ", paths);
+                Debug.LogError("[CreateArena] " + message);
+                result.Warnings.Add(message);
+                return null;
+            }
+
+            string catalogPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+            var catalog = AssetDatabase.LoadAssetAtPath<GameCatalog>(catalogPath);
+            if (catalog == null)
+            {
+                result.Warnings.Add($"GameCatalog yüklenemedi ('{catalogPath}') — harita kataloğa EKLENMEDİ.");
+                return null;
+            }
+
+            // Resources/ dışındaki katalog derlemeyi kırmaz ama çalışma anında HİÇ yüklenmez:
+            // admin seçicisi ve mod HUD eşlemesi boş kalır. Kayıt yine de yapılır, uyarı düşer.
+            if (catalogPath.IndexOf("/Resources/", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                result.Warnings.Add(
+                    $"GameCatalog 'Resources/' altında DEĞİL ('{catalogPath}') — çalışma anında " +
+                    "Resources.Load ile yüklenemez; harita kataloğa yazıldı ama admin listesinde görünmez.");
+            }
+
+            return catalog;
         }
 
         /// <summary>Diziye referansı sonuna ekler (zaten varsa dokunmaz).</summary>

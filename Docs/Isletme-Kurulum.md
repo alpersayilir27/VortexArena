@@ -72,7 +72,6 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
   - **Kaynak MapDefinition:** `Assets/Arenas/Template/Default12x12/Data/Default12x12.asset`
   - **Arena Id (klasör):** arena adı · **Sahne adı:** katalog anahtarı (benzersiz olmalı) · **Gösterim adı:** admin panelinde görünecek ad
   - **Mekan (klasör):** işletme adı — **zorunludur** → kutu `Assets/Arenas/Venues/<İşletme>/<Arena>/` altına açılır. Mekan adı sunucunun açılışta sorduğu listede görünecek addır; aynı işletmenin ikinci arenası da **aynı** mekan adıyla üretilir.
-  - **GameCatalog:** `Assets/_Shared/Data/Resources/GameCatalog.asset`
   - **Geometri kaynağı:** ölçüyü nereden alacağını seçmen **zorunludur** — ya sahadan yazdığın
     **boyut dosyası**, ya da alanın Unity'de kabaca modellenmiş maketi (araç maketten boyut
     dosyasını kendi yazar). "Geometriye hiç dokunma" diye bir seçenek yoktur.
