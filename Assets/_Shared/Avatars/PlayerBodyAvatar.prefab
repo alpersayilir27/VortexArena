@@ -71,6 +71,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1394218242175387678}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3371817155914991558}
   m_SourcePrefab: {fileID: 100100000, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
 --- !u!4 &6056437335852257 stripped
 Transform:
@@ -369,9 +372,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 65908d0f388ec9549bec2f0843ab3f46, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.ControllerModelHider
-  leftAnchorName: LeftControllerAnchor
-  rightAnchorName: RightControllerAnchor
-  modelNameContains: questController_animrig
+  rigRootName: VA_CameraRig
+  modelNameContains: []
+--- !u!114 &3371817155914991558
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1540584392028898936}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d8af9546034d6d41a9218aababe2e8e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.LocalAvatarRootDetacher
 --- !u!4 &1583342072899493815 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8333627713332763490, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}

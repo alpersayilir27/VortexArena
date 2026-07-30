@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Player;
 
 namespace VortexArena.App.Admin
 {
@@ -26,6 +27,8 @@ namespace VortexArena.App.Admin
     /// `Camera.main` belirsiz kalır ve `RemoteAvatar` ad etiketlerini yanlış kameraya döndürür.
     /// Masaüstünde XR hiç başlatılmıyor (Standalone `Initialize XR on Startup` KAPALI), yani rig
     /// zaten işlevsizdir.</item>
+    /// <item>Yerel gövde avatarı AYRICA kapatılır: <see cref="LocalAvatarRootDetacher"/> onu
+    /// sahne köküne ayırdığı için rig'i kapatmak artık onu kapatmıyor.</item>
     /// <item><see cref="ArenaCalibrator"/> ve <see cref="BaseZone"/> bileşenleri kapatılır —
     /// OVRSpatialAnchor/HMD mantığı masaüstünde anlamsız veri ve log üretir.</item>
     /// <item><see cref="ArenaBoundary"/> <b>KAPATILMAZ</b>, `SetSpectatorMode(true)` ile susturulur:
@@ -192,6 +195,17 @@ namespace VortexArena.App.Admin
             if (rig != null && rig.gameObject.activeSelf)
             {
                 rig.gameObject.SetActive(false);
+            }
+
+            // 1b) Yerel gövde avatarı rig'in ALTINDA DEĞİLDİR — LocalAvatarRootDetacher onu sahne
+            //     köküne ayırır (retarget çıktısı dünya uzayında olduğu için zorunlu). Bu yüzden
+            //     rig'i kapatmak onu kapatmaz; ayrıca kapatılır, yoksa gözlemci ekranında sahibi
+            //     olmayan bir gövde havada durur.
+            LocalAvatarRootDetacher localBody =
+                FindFirstObjectByType<LocalAvatarRootDetacher>(FindObjectsInactive.Include);
+            if (localBody != null && localBody.gameObject.activeSelf)
+            {
+                localBody.gameObject.SetActive(false);
             }
 
             // 2) HMD/kumanda mantığı taşıyan bileşenler.

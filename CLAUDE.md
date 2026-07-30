@@ -114,7 +114,11 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `BaseZone`×2 (**taban bölgesi** = kırmızı/mavi şerit; ölen oyuncu buraya girince canlanır,
   `Team.Neutral` = herkese açık) ve **altyapı prefabları** (`_Shared/App/Prefabs/`):
   **`VA_CameraRig`** (kamera rig'i + `OVRComprehensiveInteractionRig` + `PlayerBodyAvatar` tek
-  pakette, tracking origin `Stage`), **`VA_PoseSync`** (`PlayerPoseTracker` + `RemotePlayerSpawner`),
+  pakette, tracking origin `Stage`; ⚠️ `PlayerBodyAvatar` çalışma anında **sahne köküne ayrılır**
+  (`LocalAvatarRootDetacher`) ve rig'in ya da hareket eden başka bir kökün altına GERİ KONMAZ —
+  retarget çıktısı dünya uzayında olduğu için rig transformu iki kez uygulanırdı →
+  `Docs/Sistem-Ozeti.md` §7, "retarget avatarı hareket eden kökün altına konmaz" maddesi),
+  **`VA_PoseSync`** (`PlayerPoseTracker` + `RemotePlayerSpawner`),
   **`VA_CalibrationManager`** (`ArenaCalibrator`), **`VA_ModeHud`** (`ModeHudSpawner`).
   ⚠️ **Altyapı sahneye PREFAB ÖRNEĞİ olarak konur — kopyalanmaz, unpack edilmez:** kopya konursa
   rig/kalibrasyon kurulumundaki tek bir düzeltme arena sayısı kadar elle iş doğurur. Aynı sebeple
