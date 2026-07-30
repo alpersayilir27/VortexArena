@@ -1512,6 +1512,8 @@ namespace VortexArena.Core.Editor
                 Debug.Log(Log + ctx + ": MoveTowardsTargetProvider kaldırıldı (yetim kaldı).");
             }
 
+            ApplyReleasePhysics(root, ctx);
+
             Component grabInteractable = FindComponentByTypeFullName(root, "Oculus.Interaction.GrabInteractable");
             if (grabInteractable == null)
             {
@@ -1541,6 +1543,54 @@ namespace VortexArena.Core.Editor
             filters.arraySize = 1;
             filters.GetArrayElementAtIndex(0).objectReferenceValue = sockets;
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Bırakma anındaki fiziği söker: <c>Grabbable._throwWhenUnselected = false</c>.
+        /// <para>
+        /// ⚠️ <b>Neden zorunlu:</b> ISDK bırakışta silaha elin İZLENEN hızını uygular
+        /// (<c>ThrowWhenUnselected</c>). Ama bu silahın kökü tutuş boyunca ISDK tarafından
+        /// taşınmıyor — <c>Weapon.ApplyCanonicalGrip</c> her kare kanonik kavramadan ışınlıyor
+        /// (§6.6). Işınlanan bir gövdeden türetilen "hız" fiziksel bir büyüklük değil, kare
+        /// farkının artığıdır; bırakınca silah elden fırlıyordu.
+        /// </para>
+        /// <para>
+        /// <c>_kinematicWhileSelected</c> AÇIK bırakılır (varsayılan): tutuş boyunca gövde
+        /// kinematik olduğu için yerçekimi hız biriktirmez, bırakınca silah bulunduğu yerden
+        /// düşer. İkisi birlikte "bırakınca yere düşer, fırlamaz" davranışını verir.
+        /// </para>
+        /// <para>⚠️ Fırlatma gerektiren eşya (bomba) bu kapıdan GEÇMEZ: onun atılışı
+        /// <c>ArenaCombat.ReportThrow</c> ile telde bildirilen kendi balistiğidir, ISDK'nın
+        /// fizik impulsu değil (Faz 4).</para>
+        /// </summary>
+        private static void ApplyReleasePhysics(GameObject root, string ctx)
+        {
+            Component grabbable = FindComponentByTypeFullName(root, "Oculus.Interaction.Grabbable");
+            if (grabbable == null)
+            {
+                Warn(ctx + ": kökte Oculus.Interaction.Grabbable yok — bırakma fiziği ayarlanamadı " +
+                     "(silah bırakılınca elden fırlayabilir).");
+                return;
+            }
+
+            var so = new SerializedObject(grabbable);
+            SerializedProperty throwProp = so.FindProperty("_throwWhenUnselected");
+            if (throwProp == null)
+            {
+                Warn(ctx + ": Grabbable'da '_throwWhenUnselected' alanı yok (ISDK sözleşme kayması?) — " +
+                     "bırakma fiziği ayarlanamadı.");
+                return;
+            }
+
+            if (!throwProp.boolValue)
+            {
+                return; // zaten kapalı — idempotent
+            }
+
+            throwProp.boolValue = false;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            Debug.Log(Log + ctx + ": Grabbable._throwWhenUnselected kapatıldı — silah bırakılınca " +
+                      "fırlamaz (poz kanonik kavramadan sürülüyor, ISDK'nın hız tahmini geçersiz).");
         }
 
         /// <summary>Namlu alevi particle modüllerini (renk/boyut/ömür/koni açısı) silaha göre ayarlar.</summary>

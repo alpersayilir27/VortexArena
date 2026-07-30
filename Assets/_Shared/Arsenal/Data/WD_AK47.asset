@@ -12,8 +12,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 55accdfacbb64ab428182bb5c93442d3, type: 3}
   m_Name: WD_AK47
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
-  weaponId: ak47
   displayName: AK-47
+  netItemId: 1
+  prefab: {fileID: 1554324386449819339, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
+  holdMode: 1
+  primaryGripPosition: {x: -0, y: -0.042, z: -0.059}
+  primaryGripEuler: {x: 0, y: 0, z: 0}
+  secondaryGripPosition: {x: 0, y: 0.071, z: 0.357}
+  secondaryGripEuler: {x: 0, y: 0, z: 0}
+  primaryGripRadius: 0.12
+  secondaryGripRadius: 0.12
+  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
+  tracerWidth: 0.02
+  tracerLifetime: 0.06
+  tracerEveryNthRound: 3
+  weaponId: ak47
   damage: 36
   headshotMultiplier: 4
   fireRateRpm: 600
@@ -39,10 +52,3 @@ MonoBehaviour:
   firePitchBase: 1
   firePitchJitter: 0.05
   fireVolume: 1
-  prefab: {fileID: 1554324386449819339, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
-  netItemId: 1
-  holdMode: 1
-  primaryGripPosition: {x: 0, y: 0, z: 0}
-  primaryGripEuler: {x: 0, y: 0, z: 0}
-  secondaryGripPosition: {x: 0, y: 0, z: 0}
-  secondaryGripEuler: {x: 0, y: 0, z: 0}
