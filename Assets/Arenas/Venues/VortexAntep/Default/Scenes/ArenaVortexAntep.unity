@@ -11159,10 +11159,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ArenaBoundary
   head: {fileID: 1221461639}
   wallRenderers:
-  - {fileID: 2128080705}
-  - {fileID: 1840869158}
-  - {fileID: 1350994696}
-  - {fileID: 1035592532}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
   fadeRenderer: {fileID: 1221461641}
   warningText: {fileID: 1221461640}
   dimensionsJson: {fileID: 4900000, guid: 12ecdae42a1359e429a02ed23bd13d09, type: 3}

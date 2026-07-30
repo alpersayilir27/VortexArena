@@ -757,6 +757,15 @@ bu yüzden `[BuildingBlock] Camera Rig` kökünden TÜM alt ağacı isim eşleş
 bırakılıp-tutulduğunda Meta bunları yeniden aktifleştirdiği için tek seferlik değil, sürekli
 çalışır. RAY/RETİKÜL gibi etkileşim görsellerine dokunmaz; kozmetik, `OVRInput` girdisini
 etkilemez),
+`LocalAvatarRootDetacher` (`Core/Player` — aynı prefab'da; `Awake`'te avatarı **sahne köküne
+ayırır** ve dünya transformunu birime oturtur. Zorunlu: Movement SDK'nın retarget çıktısı DÜNYA
+uzayındadır (`GetPosesFromTheTracker` her kemiğe `OVRCameraRig.trackingSpace.localToWorldMatrix`'i
+baskılar, kök eklem ebeveynine göre yerelleştirilmeden `SetLocalPositionAndRotation` ile yazılır) ve
+bu projede kök eklem avatarın KENDİ transformudur — avatar rig'in altında dursaydı rig transformu
+iki kez uygulanırdı. Tek seferliktir, kare başına maliyeti yoktur; `Awake` seçilmesinin sebebi
+`CharacterRetargeterConfig.Setup`'ın `Start`'ta koşup ölçeği `lossyScale`'den okumasıdır.
+⚠️ Avatar artık rig'in çocuğu olmadığı için rig'i kapatmak onu kapatmaz — `AdminSpectator` onu
+ayrıca kapatır),
 `WeatherVolumeFollow` (`Core/FX` — ambiyans parçacık hacmini yerel kameranın üstünde tutar; bağlı
 sistemler **World** simülasyon uzayında olmalı, `Start` sapmayı uyarır. Yalnız kendi transform'unu
 taşır, rig'e dokunmaz), `WeatherWindDriver` (`Core/FX` — kök objeye takılır, altındaki tüm
@@ -1408,6 +1417,23 @@ konsoluna tek satır sebep yazar.
       0,3 Mbps'lik hiçbir şeydir ama çatışmada sistemin en çok paket üreten kanalıdır — üstelik
       TCP olduğu için retransmit/ACK ile katlanır. Yeni bir "olay başına herkese haber ver"
       kanalı eklerken sorulacak soru "kaç bayt" değil **"tik başına kaç datagram"**dır.
+
+51. **Movement SDK retarget avatarı hareket eden bir kökün altına KONMAZ — çıktı dünya
+    uzayındadır.** Sezgi "avatar rig'in çocuğu olsun, rig'le gelsin" der; SDK'nın sözleşmesi
+    bunun tam tersidir. `SkeletonUtilities.GetPosesFromTheTracker` verilen ofseti
+    `OVRCameraRig.trackingSpace.localToWorldMatrix` ile çarpıp **her kemiğe** baskılar, ardından
+    `ConvertWorldToLocalPoseJob` **kök eklemi** ebeveynine göre yerelleştirmeden bırakır ve
+    `ApplyPoseJob` onu `SetLocalPositionAndRotation` ile yazar. Bu projede kök eklem avatarın
+    KENDİ transformudur → avatar rig'in altındayken rig transformu **iki kez** uygulanıyordu.
+    Belirtisi gecikmelidir ve bu yüzden pahalıdır: rig birimken (arena origin'inde, kalibrasyon
+    alınmamışken) hiçbir şey görünmez; kalibrasyon rig'e bir dönüşüm yazar yazmaz avatar
+    oyuncudan tam **bir kalibrasyon ofseti** kadar uzağa oturur — arena etrafında dönmüş, zemin
+    düzeltmesi kadar yükselmiş, oyuncunun hareketlerini birebir yapan "ikinci bir gövde" gibi; ve
+    oyuncu kendi kollarını göremez, çünkü kollar da o kopyadadır. Çözüm `LocalAvatarRootDetacher`:
+    `Awake`'te sahne köküne ayırır, dünya transformunu birime oturtur, kare başına iş yapmaz.
+    ⚠️ İki yan koşul: ayırma `Awake`'te olmalıdır (`CharacterRetargeterConfig.Setup` `Start`'ta
+    koşup ölçeği `lossyScale`'den okur) ve avatar artık rig'in çocuğu olmadığı için **rig'i
+    kapatmak onu kapatmaz** — `AdminSpectator` onu ayrıca kapatır.
 
 ---
 
