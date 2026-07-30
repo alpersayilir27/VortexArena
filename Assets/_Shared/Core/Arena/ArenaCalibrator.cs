@@ -36,6 +36,14 @@ namespace VortexArena.Core.Arena
     /// örtüşmez; işletme başına tek arena ölçüsü kuralı bu yüzden vardır.
     /// </para>
     /// <para>
+    /// <b>İşaretçiler kurulum aracıdır, sahne dekoru değildir:</b> yalnız elle kalibrasyon
+    /// sürerken görünürler (A yakalanınca A, B yakalanınca B) ve hizalamadan
+    /// <see cref="markerVisibleSeconds"/> saniye sonra gizlenirler — o kısa pencere oyuncunun
+    /// sanal işaretlerin fiziksel zemin işaretlerine oturduğunu gözle doğrulaması içindir.
+    /// Kayıtlı anchor'dan geri yükleme yolunda HİÇ gösterilmezler: orada oyuncu bir şey yapmaz,
+    /// gösterilecek bir onay yoktur; oyunun ortasında (harita değişiminde) ekrana obje düşerdi.
+    /// </para>
+    /// <para>
     /// <c>PlayerPoseTracker</c> hizalamayı BEKLEMEZ: kalibrasyondan önce de poz gönderir, ama o
     /// pozlar arena ile örtüşmez (rig henüz hizalanmadığı için ofsetlidir) — oyuncunun bağlı ve
     /// hareket hâlinde olduğu ağdan görülebilsin diye bilinçli bir tercihtir. Yükleme geçici
@@ -52,6 +60,8 @@ namespace VortexArena.Core.Arena
         [SerializeField] private GameObject anchorB;
         [Tooltip("Fallback marker pivot height above the arena floor, used only when the marker has no Renderer to measure.")]
         [SerializeField] private float markerHalfHeight = 0.05f;
+        [Tooltip("Hizalama tamamlandıktan sonra işaretçilerin görünür kaldığı süre (saniye). Süre dolunca gizlenirler; 0 = anında gizle.")]
+        [SerializeField] private float markerVisibleSeconds = 3f;
 
         [Header("Rig")]
         [Tooltip("Root moved by the alignment. Falls back to the OVRCameraRig transform.")]
@@ -117,6 +127,7 @@ namespace VortexArena.Core.Arena
         private float markerFloorDrop;
         private bool trackingEventsHooked;
         private bool realignQueued;
+        private Coroutine markerHideRoutine;
 
         private Transform RigRoot
         {
@@ -147,8 +158,7 @@ namespace VortexArena.Core.Arena
         private void Start()
         {
             markerFloorDrop = MeasureMarkerFloorDrop();
-            if (anchorA != null) anchorA.SetActive(false);
-            if (anchorB != null) anchorB.SetActive(false);
+            SetMarkersVisible(false);
             TryHookTrackingEvents();
             _ = RestoreSavedCalibrationAsync();
         }
@@ -299,6 +309,7 @@ namespace VortexArena.Core.Arena
             StartCoroutine(Pulse(2));
             Debug.Log($"ArenaCalibrator: point B captured at {point}.");
             AlignRig(capturedA, point);
+            HideMarkersAfterConfirmation();
             Calibrated?.Invoke(SourceManual);
             _ = CreateAndSaveAnchorAsync();
         }
@@ -467,11 +478,47 @@ namespace VortexArena.Core.Arena
             ResetCalibration();
         }
 
+        /// <summary>
+        /// Hizalama bitti: işaretçiler kısa bir doğrulama penceresi kadar açık kalır, sonra
+        /// gizlenir. Maç bu sırada başlayabildiği için pencere bilinçli olarak kısadır —
+        /// işaretçi kalibrasyon geri bildirimidir, arena dekoru değil.
+        /// </summary>
+        private void HideMarkersAfterConfirmation()
+        {
+            if (markerHideRoutine != null)
+                StopCoroutine(markerHideRoutine);
+
+            if (markerVisibleSeconds <= 0f)
+            {
+                SetMarkersVisible(false);
+                return;
+            }
+
+            markerHideRoutine = StartCoroutine(HideMarkersDelayed());
+        }
+
+        private IEnumerator HideMarkersDelayed()
+        {
+            yield return new WaitForSeconds(markerVisibleSeconds);
+            markerHideRoutine = null;
+            SetMarkersVisible(false);
+        }
+
+        private void SetMarkersVisible(bool visible)
+        {
+            if (anchorA != null) anchorA.SetActive(visible);
+            if (anchorB != null) anchorB.SetActive(visible);
+        }
+
         private void ResetCalibration()
         {
             capturedCount = 0;
-            if (anchorA != null) anchorA.SetActive(false);
-            if (anchorB != null) anchorB.SetActive(false);
+            if (markerHideRoutine != null)
+            {
+                StopCoroutine(markerHideRoutine);
+                markerHideRoutine = null;
+            }
+            SetMarkersVisible(false);
             if (worldAnchor != null)
             {
                 OVRSpatialAnchor stale = worldAnchor;
@@ -596,8 +643,9 @@ namespace VortexArena.Core.Arena
                 unboundAnchor.BindTo(anchor);
                 worldAnchor = anchor;
                 capturedCount = 2;
-                if (anchorA != null) anchorA.SetActive(true);
-                if (anchorB != null) anchorB.SetActive(true);
+                // İşaretçiler burada GÖSTERİLMEZ: geri yükleme sessizdir (oyuncu bir şey
+                // yapmadı) ve harita değişiminde koştuğu için maçın ortasında ekrana obje
+                // düşmesi olurdu. Onay gerekiyorsa admin ekranındaki kalibrasyon tik'i var.
                 Calibrated?.Invoke(SourceAnchor);
                 return true;
             }

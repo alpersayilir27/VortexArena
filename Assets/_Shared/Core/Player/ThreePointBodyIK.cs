@@ -34,6 +34,23 @@ namespace VortexArena.Core.Player
     /// (3) El/kafa kemiğine <b>konum yazılmaz, yalnız rotasyon</b>: konum yazmak kemiği
     /// ebeveyninden koparır (mesh gerilir), üstelik erişilemeyen hedefte bunu her kare yapar.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>Çözücü İKİ dikey referansı birleştirir</b> ve bu onun en kırılgan yeridir: kafa/eller
+    /// AĞDAN (gönderenin uzayı), kök ve ayaklar ARENA ZEMİNİNDEN gelir. İkisi uyuşmazsa —
+    /// gönderenin rig'i hizalı değilse — çözücü imkânsız bir gövde kurmak zorunda kalır: kafa
+    /// zeminin altındayken ayak hedefi kalçanın ÜSTÜNE düşer ve CCD bacakları gövdenin üzerine
+    /// sarar (avatar "top" olur, kafa göğsün içinde kalır). Bu yüzden gelen poz önce
+    /// <b>makullüğe</b> bakılır: kafa arena zemininden
+    /// [<see cref="MinPlausibleHeadHeight"/>, <see cref="MaxPlausibleHeadHeight"/>] m dışındaysa
+    /// zemin referansı ARENADAN değil POZDAN türetilir — avatar yanlış yükseklikte çizilir ama
+    /// <b>bütün bir insan</b> kalır (maç ortasında düşmanı kaybetmemek bilinçli bir tercihtir).
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Hiçbir tahmin MANDALLANMAZ.</b> Boy tahmini sonsuz maksimum tutuyordu ve ayak bastığı
+    /// noktaya kilitleniyordu; tek bozuk kare avatarı kalıcı olarak bozuyordu (poz düzeldiği hâlde
+    /// dev + ayakları zeminin altında kalıyordu — ölçüldü). Boy artık kayan pencere maksimumu,
+    /// ayaklar da ışınlanmada yeniden ziplatılıyor.
+    /// </para>
     /// </summary>
     [RequireComponent(typeof(Animator))]
     public class ThreePointBodyIK : MonoBehaviour
@@ -72,6 +89,34 @@ namespace VortexArena.Core.Player
         private const float MinScale = 0.75f;
         private const float MaxScale = 1.35f;
 
+        /// <summary>
+        /// Kafanın arena zemininden makul yüksekliği (m). Bu aralığın DIŞINDAKİ poz "gönderenin
+        /// rig'i hizalı değil" demektir; zemin referansı o zaman arenadan değil pozdan alınır.
+        /// <para>Aralık geniş tutulur (çömelmiş kısa oyuncu ↔ zıplayan uzun oyuncu): amaç boy
+        /// denetlemek değil, METRELERCE kayan bir uzayı yakalamaktır.</para>
+        /// </summary>
+        private const float MinPlausibleHeadHeight = 0.6f;
+        private const float MaxPlausibleHeadHeight = 2.6f;
+
+        /// <summary>
+        /// Boy tahmininin kayan pencere uzunluğu (sn). ⚠️ <b>Sonsuz maksimum kullanılmaz:</b> tek
+        /// bozuk kare avatarı kalıcı olarak devleştiriyordu. Pencere, çömelmede küçülmeyi
+        /// önleyecek kadar uzun, hatalı bir örneği unutacak kadar kısadır.
+        /// </summary>
+        private const float StandingHeightWindowSeconds = 5f;
+
+        /// <summary>
+        /// Ayak, bulunması gereken yerden bu kadar uzaktaysa adım atılmaz, doğrudan ZIPLATILIR (m).
+        /// <para>⚠️ <see cref="stepTriggerDistance"/> ile karıştırma: o "adım başlat" eşiği, bu
+        /// "adım atmanın anlamsız olduğu sıçrama" eşiğidir. Işınlanan avatarda (harita değişimi,
+        /// kalibrasyon düzeltmesi, poz sıçraması) ayak eski noktada kalıp bacağı metrelerce
+        /// uzatıyordu.</para>
+        /// </summary>
+        private const float FootResnapDistance = 1f;
+
+        /// <summary>Güvenilmez poz uyarısının en sık tekrar aralığı (sn) — 20 Hz'de log seli olurdu.</summary>
+        private const float UntrustedWarnCooldownSeconds = 10f;
+
         private Animator _animator;
         private bool _bonesResolved;
 
@@ -104,9 +149,17 @@ namespace VortexArena.Core.Player
         private float _modelHipsDrop;
         private float _modelAnkleHeight;
 
-        /// <summary>Oyuncunun ölçülen ayakta kafa yüksekliği — avatar buna göre ölçeklenir.</summary>
+        /// <summary>Oyuncunun ölçülen ayakta kafa yüksekliği — avatar buna göre ölçeklenir.
+        /// <para>Kayan pencere maksimumu: <see cref="_recentMaxHeadHeight"/> ikinci kovadır,
+        /// pencere dolunca yerine geçer (O(1), tahsissiz).</para></summary>
         private float _standingHeadHeight;
+        private float _recentMaxHeadHeight;
+        private float _heightWindowTimer;
         private float _scale = 1f;
+
+        /// <summary>Son karede gelen poz makul müydü (bkz. sınıf özeti). Değişimde ayaklar sıfırlanır.</summary>
+        private bool _poseTrusted = true;
+        private float _lastUntrustedWarnTime = float.NegativeInfinity;
 
         /// <summary>
         /// Çözücüye verilecek tolerans. ⚠️ <see cref="IKUtilities.SolveCCDIK"/> toleransı
@@ -148,21 +201,138 @@ namespace VortexArena.Core.Player
                 return;
             }
 
+            // NaN/sonsuz poz: çizilecek makul hiçbir şey yok. Avatar son geçerli karesinde
+            // bırakılır — bozuk sayıyı kemiklere yazmak Unity'de matris hatası basar ve iskelet
+            // o kareden sonra geri gelmez.
+            if (!IsFinite(head) || !IsFinite(handL) || !IsFinite(handR))
+            {
+                WarnUntrusted("poz NaN/sonsuz değer taşıyor", 0f, 0f, 0f);
+                return;
+            }
+
+            Pose safeHead = Sanitize(head);
+            Pose safeHandL = Sanitize(handL);
+            Pose safeHandR = Sanitize(handR);
+
             float deltaTime = Time.deltaTime;
-            float groundY = ArenaSpace.HasOrigin
+            float arenaGroundY = ArenaSpace.HasOrigin
                 ? ArenaSpace.ArenaToWorld(Vector3.zero).y
                 : 0f;
 
+            // Gelen pozun arena zeminiyle uyumu: uyumsuzsa gövde ARENAYA göre değil KENDİNE göre
+            // kurulur (bkz. sınıf özeti — yanlış yükseklikte ama bütün bir insan).
+            float headHeight = safeHead.position.y - arenaGroundY;
+            bool trusted = headHeight >= MinPlausibleHeadHeight && headHeight <= MaxPlausibleHeadHeight;
+
             RestoreBindPose();
-            ApplyScale(head.position.y - groundY);
 
-            Quaternion yaw = SolveTorsoYaw(head.rotation, deltaTime);
+            if (trusted)
+            {
+                ApplyScale(headHeight, deltaTime);
+            }
+            else
+            {
+                WarnUntrusted("kafa arena zemininden makul olmayan yükseklikte",
+                    headHeight, arenaGroundY, safeHead.position.y);
+            }
 
-            PlaceRoot(head.position, yaw, groundY);
-            PlaceTorso(head, yaw);
-            SolveArm(_leftArmChain, _leftHand, handL);
-            SolveArm(_rightArmChain, _rightHand, handR);
+            // ⚠️ Güvenilmez pozda zemin POZDAN türetilir. Arena zeminini kullanmak kökü gövdeden
+            // metrelerce ayırır: ayak hedefi kalçanın üstüne çıkar ve bacaklar gövdeye sarılır.
+            float groundY = trusted
+                ? arenaGroundY
+                : safeHead.position.y - _modelHeadHeight * _scale;
+
+            if (trusted != _poseTrusted)
+            {
+                // Zemin referansı değişti: eski referansta basılan ayaklar artık anlamsız.
+                _poseTrusted = trusted;
+                _feetInitialized = false;
+            }
+
+            Quaternion yaw = SolveTorsoYaw(safeHead.rotation, deltaTime);
+
+            PlaceRoot(safeHead.position, yaw, groundY);
+            PlaceTorso(safeHead, yaw);
+            SolveArm(_leftArmChain, _leftHand, safeHandL);
+            SolveArm(_rightArmChain, _rightHand, safeHandR);
             SolveLegs(yaw, deltaTime, groundY);
+        }
+
+        /// <summary>
+        /// Avatar başka bir oyuncuya devredildiğinde ya da poz akışı baştan başladığında çağrılır:
+        /// tahmin edilen HER ŞEYİ (boy, ölçek, gövde yaw'ı, basılan ayaklar) sıfırlar.
+        /// <para>⚠️ Bu olmadan önceki oyuncunun boyu/duruşu yeni oyuncuya miras kalır — hepsi
+        /// mandallı tahminler olduğu için kendiliğinden düzelmezler.</para>
+        /// </summary>
+        public void ResetPoseState()
+        {
+            _standingHeadHeight = _modelHeadHeight;
+            _recentMaxHeadHeight = _modelHeadHeight;
+            _heightWindowTimer = 0f;
+            _scale = 1f;
+            transform.localScale = Vector3.one;
+            _yawInitialized = false;
+            _feetInitialized = false;
+            _leftStepProgress = 1f;
+            _rightStepProgress = 1f;
+            _poseTrusted = true;
+            _lastUntrustedWarnTime = float.NegativeInfinity;
+        }
+
+        // -------------------------------------------------------------- poz denetimi
+
+        /// <summary>Poz sonlu sayılardan mı oluşuyor (NaN/∞ kemiklere yazılmaz).</summary>
+        private static bool IsFinite(in Pose pose)
+        {
+            Vector3 p = pose.position;
+            Quaternion q = pose.rotation;
+            return IsFinite(p.x) && IsFinite(p.y) && IsFinite(p.z) &&
+                   IsFinite(q.x) && IsFinite(q.y) && IsFinite(q.z) && IsFinite(q.w);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        /// <summary>
+        /// Rotasyonu kullanılabilir hâle getirir. ⚠️ <b>Sıfır quaternion telde meşru bir değer
+        /// gibi görünür</b> (dört sıfır bayt) ama Unity'de geçersizdir: bir Transform'a yazılınca
+        /// "Quaternion To Matrix conversion failed" basar ve o kemik o kareden sonra bozuk kalır
+        /// (ölçüldü: ayak zeminin altına kilitleniyordu). Normalize edilemeyen rotasyon kimliğe
+        /// düşürülür — yanlış yön, bozuk iskeletten iyidir.
+        /// </summary>
+        private static Pose Sanitize(in Pose pose)
+        {
+            Quaternion q = pose.rotation;
+            float sqrMagnitude = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+            if (sqrMagnitude < 0.5f || sqrMagnitude > 2f)
+            {
+                return new Pose(pose.position, Quaternion.identity);
+            }
+
+            return new Pose(pose.position, Quaternion.Normalize(q));
+        }
+
+        /// <summary>
+        /// Güvenilmez pozu bir kez (sonra en fazla <see cref="UntrustedWarnCooldownSeconds"/>'de bir)
+        /// SAYILARLA loglar: sahada "avatar tuhaf" demek yerine hangi uzayın kaydığı okunabilsin.
+        /// </summary>
+        private void WarnUntrusted(string reason, float headHeight, float groundY, float headWorldY)
+        {
+            if (Time.time - _lastUntrustedWarnTime < UntrustedWarnCooldownSeconds)
+            {
+                return;
+            }
+
+            _lastUntrustedWarnTime = Time.time;
+            Debug.LogWarning(
+                $"[ThreePointBodyIK] '{name}': {reason} " +
+                $"(kafa yüksekliği {headHeight:F2} m, arena zemini Y={groundY:F2}, kafa dünya Y={headWorldY:F2}; " +
+                $"makul aralık [{MinPlausibleHeadHeight:F2}, {MaxPlausibleHeadHeight:F2}] m). " +
+                "Gönderen oyuncunun rig'i arenayla hizalı değil — kalibrasyon yapılmamış ya da " +
+                "kayıtlı hizalama yanlış geri yüklenmiş olabilir. Gövde, zemini POZDAN türetilerek " +
+                "bütün çizildi (yükseklik yanlış).", this);
         }
 
         // ------------------------------------------------------------ bind + ölçek
@@ -192,8 +362,12 @@ namespace VortexArena.Core.Player
         /// uzuv" görüntüsü buradan çıkar.
         /// <para>Ölçü <b>en yüksek</b> gözlenen kafa yüksekliğinden alınır: eğilen/çömelen oyuncuda
         /// anlık yüksekliğe uyulsaydı avatar her çömelmede küçülürdü.</para>
+        /// <para>⚠️ Maksimum <b>KAYAN PENCEREDE</b> tutulur (iki kova,
+        /// <see cref="StandingHeightWindowSeconds"/>). Sonsuz maksimum, tek bir yüksek (ama makul
+        /// aralıkta kalan) örneği kalıcı yapıyordu: 2.05 m'lik bir kafa avatarı 1.32×'e kilitliyor
+        /// ve poz düzelse bile geri dönmüyordu.</para>
         /// </summary>
-        private void ApplyScale(float headHeightMeters)
+        private void ApplyScale(float headHeightMeters, float deltaTime)
         {
             if (_modelHeadHeight <= 0.01f || headHeightMeters <= 0.01f)
             {
@@ -203,6 +377,20 @@ namespace VortexArena.Core.Player
             if (headHeightMeters > _standingHeadHeight)
             {
                 _standingHeadHeight = headHeightMeters;
+            }
+
+            if (headHeightMeters > _recentMaxHeadHeight)
+            {
+                _recentMaxHeadHeight = headHeightMeters;
+            }
+
+            _heightWindowTimer += deltaTime;
+            if (_heightWindowTimer >= StandingHeightWindowSeconds)
+            {
+                // Pencere devri: geçmiş kova düşer, yerine son pencerenin maksimumu geçer.
+                _heightWindowTimer = 0f;
+                _standingHeadHeight = _recentMaxHeadHeight;
+                _recentMaxHeadHeight = headHeightMeters;
             }
 
             float scale = Mathf.Clamp(_standingHeadHeight / _modelHeadHeight, MinScale, MaxScale);
@@ -368,11 +556,20 @@ namespace VortexArena.Core.Player
             Vector3 leftTarget = root - right * halfWidth;
             Vector3 rightTarget = root + right * halfWidth;
 
-            if (!_feetInitialized)
+            // ⚠️ Işınlanma emniyeti — ADIM eşiğinden AYRI: hedef bastığı noktadan bu kadar
+            // uzaktaysa oraya adımla gidilmez, ayak ziplatılır. Yoksa avatar sıçradığında (harita
+            // değişimi, kalibrasyon düzeltmesi, bozuk kare) ayak eski dünya noktasında kalıp
+            // bacağı metrelerce uzatıyor ve o poz bir daha düzelmiyordu.
+            float resnapDistance = FootResnapDistance * _scale;
+            if (!_feetInitialized ||
+                Vector3.Distance(_leftFootPlanted, leftTarget) > resnapDistance ||
+                Vector3.Distance(_rightFootPlanted, rightTarget) > resnapDistance)
             {
                 _feetInitialized = true;
                 _leftFootPlanted = _leftFootFrom = leftTarget;
                 _rightFootPlanted = _rightFootFrom = rightTarget;
+                _leftStepProgress = 1f;
+                _rightStepProgress = 1f;
             }
 
             bool leftStepping = _leftStepProgress < 1f;
@@ -559,6 +756,7 @@ namespace VortexArena.Core.Player
                 : 0f;
 
             _standingHeadHeight = _modelHeadHeight;
+            _recentMaxHeadHeight = _modelHeadHeight;
         }
 
         /// <summary>Üç kemikten zincir kurar; biri bile eksikse zincir kurulmaz (CCD en az iki

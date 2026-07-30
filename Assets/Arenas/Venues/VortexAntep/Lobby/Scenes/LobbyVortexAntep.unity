@@ -13691,7 +13691,6 @@ GameObject:
   - component: {fileID: 1150860327}
   - component: {fileID: 1150860330}
   - component: {fileID: 1150860329}
-  - component: {fileID: 1150860328}
   m_Layer: 0
   m_Name: anchor_a
   m_TagString: Untagged
@@ -13708,33 +13707,12 @@ Transform:
   m_GameObject: {fileID: 1150860326}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.284, y: 0.033, z: 1.365}
-  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
+  m_LocalPosition: {x: -0.28399992, y: 0.14178276, z: 1.365}
+  m_LocalScale: {x: 0.05, y: 0.05, z: 0.05}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 53423731}
   m_LocalEulerAnglesHint: {x: 0, y: 48.724, z: 0}
---- !u!65 &1150860328
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1150860326}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 1, z: 1}
-  m_Center: {x: 0, y: 0, z: 0}
 --- !u!23 &1150860329
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -13760,7 +13738,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 9875a245ac49007498213638a307faa1, type: 2}
+  - {fileID: 2100000, guid: 934808c9f51eb4debb13ce4c13d9bc0a, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -13791,7 +13769,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1150860326}
-  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: -4342215553738798809, guid: 0100267d95f3a41fd88e781cc9451d0d, type: 3}
 --- !u!1001 &1154378577
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -14476,7 +14454,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8533244126985759826, guid: 7638164cacb666e438514af666498c4d, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 7.4
+      value: 7.05
       objectReference: {fileID: 0}
     - target: {fileID: 8533244126985759826, guid: 7638164cacb666e438514af666498c4d, type: 3}
       propertyPath: m_LocalPosition.z
@@ -17405,7 +17383,6 @@ GameObject:
   - component: {fileID: 1436388276}
   - component: {fileID: 1436388279}
   - component: {fileID: 1436388278}
-  - component: {fileID: 1436388277}
   m_Layer: 0
   m_Name: anchor_b
   m_TagString: Untagged
@@ -17422,33 +17399,12 @@ Transform:
   m_GameObject: {fileID: 1436388275}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.38, y: 0.0359, z: -3.533}
-  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
+  m_LocalPosition: {x: -0.38000035, y: 0.14468288, z: -3.533}
+  m_LocalScale: {x: 0.05, y: 0.05, z: 0.05}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 53423731}
   m_LocalEulerAnglesHint: {x: 0, y: 48.724, z: 0}
---- !u!65 &1436388277
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1436388275}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 1, z: 1}
-  m_Center: {x: 0, y: 0, z: 0}
 --- !u!23 &1436388278
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -17474,7 +17430,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 15303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: 934808c9f51eb4debb13ce4c13d9bc0a, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -17505,7 +17461,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1436388275}
-  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: -4342215553738798809, guid: 0100267d95f3a41fd88e781cc9451d0d, type: 3}
 --- !u!1001 &1444969959
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -23297,6 +23253,7 @@ MonoBehaviour:
   anchorA: {fileID: 1150860326}
   anchorB: {fileID: 1436388275}
   markerHalfHeight: 0.05
+  markerVisibleSeconds: 3
   rigRoot: {fileID: 1221461638}
   holdSeconds: 3
   tipLocalOffset: {x: 0, y: -0.08, z: 0}
