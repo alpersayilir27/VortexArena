@@ -302,6 +302,8 @@ MonoBehaviour:
   handR: {fileID: 0}
   nameLabel: {fileID: 4145113380260593776}
   teamRenderers: []
+  bodyRenderers:
+  - {fileID: 3858937266322927765}
   bodyIK: {fileID: 1096054676568372337}
   friendMarker: {fileID: 6756981665450713295}
   visualRoot: {fileID: 3915598790773187048}
@@ -516,9 +518,21 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -8134667007107732436, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
       propertyPath: m_Name
       value: Character
+      objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
+      propertyPath: m_CullingMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
+      propertyPath: m_ApplyRootMotion
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -539,6 +553,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8021001004253913084, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
   m_PrefabInstance: {fileID: 4221677747953540281}
   m_PrefabAsset: {fileID: 0}
+--- !u!137 &3858937266322927765 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: -8134667007107732436, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
+  m_PrefabInstance: {fileID: 4221677747953540281}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &3915598790773187048 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 83161e7977750d14894ea33ce3d9d336, type: 3}
@@ -556,7 +575,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0a14c7e16c07e4f4cbd7b3540f8776bb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.ThreePointBodyIK
-  hipsDropMeters: 0.72
   hipsBackOffsetMeters: 0.06
   torsoYawFollowSpeed: 360
   torsoMaxYawLagDegrees: 70

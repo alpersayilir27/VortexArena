@@ -495,6 +495,12 @@ açar. Hiç bağlanılmamışsa (sunucusuz editör testi) kapı açıktır ve si
 Bilinçlidir: operatörün "avatar kaymış" teşhisini koyabilmesi ve parlayan avatarın hareket ettiğini
 görebilmesi için pozun akıyor olması gerekir.
 
+⚠️ **Parlamayı çizen liste `RemoteAvatar.bodyRenderers`'tır** — takım rengini taşıyan
+`teamRenderers`'tan AYRI tutulur, çünkü takım rengi karakter mesh'ine bilerek uygulanmaz (düşmanı
+işaretlemek duvar arkasından okunabilen bir avantaj olurdu). İkisi tek listeye bağlanamaz; liste
+boş bırakılırsa **uyarı sessizce hiç çizilmez** ve konumu yalan söyleyen avatar normal görünür —
+sahada tam olarak bu yaşandı (§7).
+
 Tam semantik: `Docs/ArenaNet-Protokol.md` §10.6.
 
 ### 3.12 Bant, paket ve airtime bütçesi
@@ -691,7 +697,12 @@ demekti). Dosya olmasının kazancı: ölçüyü sahadan alan kişi Unity açmad
 gerçek nesnedir, bileşenin tek işi uyarıyı erken tetiklemektir),
 `ArenaCalibrator` (`VA_CalibrationManager` prefabıyla gelir; 2 nokta → 6DOF hizalama +
 OVRSpatialAnchor kalıcılığı + recenter onarımı; **A+B yalnız sunucu "kalibresiz" derken açılır**,
-§3.11),
+§3.11. Sahnedeki `anchor_a`/`anchor_b` işaretçileri **kurulum aracıdır, dekor değil**: yalnız elle
+kalibrasyon sürerken görünürler ve hizalamadan `markerVisibleSeconds` sonra gizlenirler — kayıtlı
+anchor'dan geri yükleme yolunda hiç gösterilmezler, yoksa harita değişiminde maçın ortasında ekrana
+obje düşerdi. ⚠️ İşaretçinin **mesh'inin alt noktası arena zeminine oturmalıdır**: `VirtualFloorY`
+görselin bounds'undan ölçülür (`MeasureMarkerFloorDrop`), yani görseli değiştiren kişi objeyi
+zemine geri oturtmazsa hizalamanın zemin yüksekliği sessizce kayar),
 `CalibrationState` (kalıcı tekil — kalibrasyon durumunun sunucu ile iki yönlü köprüsü: hizalanınca
 `set_calibration` yollar, operatör sıfırlayınca `ArenaCalibrator.Invalidate()` çağırır),
 `ArenaSpace` (dünya↔arena dönüşümü; origin YOKKEN kimlik dönüşümü yapar ama **sahne başına bir kez
@@ -777,7 +788,7 @@ katmanların göreli hız farkı korunur).
 | `Combat/ArenaCombat` | **Oyun kodunun ağa açılan tek kapısı** (statik). `ReportShot` / `ReportThrow` / `ReportHit` / `ReportRaycastHit` / `ReportAreaHit` + `TryGetTargetPlayerId` / `IsHeadshot` / `CanFire` / `LocalPlayerId`. ⚠️ `ReportShot`/`ReportThrow` **UDP olay kanalına** (`0x03`) gider, `ReportHit` **WS**'te kalır — kaybı kozmetik olan ile otoriter olanın kanalı ayrıdır (§10.3). Bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektiriyor (arena uzayı, yön≠nokta, `RemoteHitBox` ile hedef çözme, hasarı istemcinin belirlemesi) — bunlar `Weapon` içinde gömülü kalsaydı ikinci bir hasar kaynağı yazan herkes aynı dördünü yeniden keşfederdi. `Weapon` de bu kapıyı kullanır (tek doğruluk kaynağı). Bağlantı yokken sessizce no-op. Reçeteler: `Gelistirici/Yemek-Kitabi.md` |
 | `Combat/WeaponGranter` | `weaponSource:"random"` modlarının (§3.9) silah kaynağı. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz, bu yüzden yeni arenaya ek kurulum adımı doğurmaz. İki iş: (1) sahne süpürmesi — raf silahları gizlenir, `BaseZone` **bileşeni** kapatılır + görsel taban şeridi gizlenir; (2) grip basılıyken o elde rastgele silah durur, bırakılınca yok olur, tekrar basınca **yenisi** gelir. TDM'de (kural `rack`) tümüyle pasiftir; kural değişince süpürme geri alınır. Admin'de rig kapalı olduğu için silah verme yolu kendiliğinden kapalı, süpürme ise çalışır |
 | `Combat/WeaponRackSpawner` (+ `RackSlot`) | Rafın silah kaynağı: kural `rack` iken gözlere `ModeDefinition.loadout`'tan silah **örnekler**, kural değişince toplar. Loadout'u `WeaponGranter` ile aynı yoldan okur (katalog → mod → loadout). Göz (`RackSlot`) yalnız KONUMU tutar (sanat kararı); hangi silahın duracağı moddan gelir — gözün `weapon` alanı doldurulursa o silah sabitlenir, boşsa loadout sırası kullanılır. **Neden sahneye elle `WPN_*` konmuyor:** elle konan örnek sahneye donar, moda silah eklenince her arenayı tek tek açmak gerekirdi. Silahlar prefabındaki fizikle gelir (kavrama/fizik ayarlarına dokunulmaz — dokunulsaydı raftan alınan silah "verilen silah" gibi davranır, bırakılamazdı) |
-| `Player/ThreePointBodyIK` | Ağdan gelen **üç noktadan** (kafa + iki el) humanoid iskeleti çözer — uzak avatarların sürücüsü. Kemikler isimle değil `Animator.GetBoneTransform` ile bulunur (karakter humanoid; model değişse bu bileşende tek satır değişmez); **gövde ölçüleri de sabit sayı değil, karakterin bind pozundan ölçülür** (kalça düşüşü, ayak bileği yüksekliği). Avatar oyuncunun **ölçülen ayakta kafa yüksekliğine göre ölçeklenir** — model sabit boydadır, ölçeklenmezse kısa kol ele yetişmez, bacak zemine değmez. Gövde: kalça kafanın altında, gövde yaw'ı kafayı **gecikmeli** takip eder (anında yapışsaydı avatar her bakışta bütün gövdesiyle dönerdi), omurga eğimi zincire paylaştırılır. Kollar/bacaklar: Movement SDK `IKUtilities.SolveCCDIK`; el ve kafa kemiğine **yalnız rotasyon** yazılır (konum yazmak kemiği ebeveyninden koparır). Bacaklar **tamamen prosedürel** (adım döngüsü + ayak IK): projede yürüme klibi yok ve aynı anda iki ayak birden adım atmaz. Her kare önce **bind pozuna dönülür** (§7 tuzaklar). ⚠️ Dirsek/omuz yönü TAHMİNDİR — gerçek body tracking değildir; ağa tek bayt eklenmez |
+| `Player/ThreePointBodyIK` | Ağdan gelen **üç noktadan** (kafa + iki el) humanoid iskeleti çözer — uzak avatarların sürücüsü. Kemikler isimle değil `Animator.GetBoneTransform` ile bulunur (karakter humanoid; model değişse bu bileşende tek satır değişmez); **gövde ölçüleri de sabit sayı değil, karakterin bind pozundan ölçülür** (kalça düşüşü, ayak bileği yüksekliği). Avatar oyuncunun **ölçülen ayakta kafa yüksekliğine göre ölçeklenir** — model sabit boydadır, ölçeklenmezse kısa kol ele yetişmez, bacak zemine değmez. Gövde: kalça kafanın altında, gövde yaw'ı kafayı **gecikmeli** takip eder (anında yapışsaydı avatar her bakışta bütün gövdesiyle dönerdi), omurga eğimi zincire paylaştırılır. Kollar/bacaklar: Movement SDK `IKUtilities.SolveCCDIK`; el ve kafa kemiğine **yalnız rotasyon** yazılır (konum yazmak kemiği ebeveyninden koparır). Bacaklar **tamamen prosedürel** (adım döngüsü + ayak IK): projede yürüme klibi yok ve aynı anda iki ayak birden adım atmaz. Her kare önce **bind pozuna dönülür** (§7 tuzaklar). Gelen poz önce **denetlenir**: NaN/∞ taşıyan poz hiç uygulanmaz, normalize edilemeyen rotasyon kimliğe düşürülür, kafa arena zemininden makul aralığın (0.6–2.6 m) dışındaysa zemin arenadan değil **pozdan** türetilir — avatar yanlış yükseklikte ama BÜTÜN bir insan çizilir ve sayılarla bir kez uyarı basılır. Tahminlerin hiçbiri mandallanmaz: boy kayan pencere maksimumudur, ayak hedefinden 1 m'den fazla uzaklaşınca ziplatılır, hepsi `ResetPoseState()` ile sıfırlanır (avatar başka oyuncuya devredilebiliyor). ⚠️ Dirsek/omuz yönü TAHMİNDİR — gerçek body tracking değildir; ağa tek bayt eklenmez |
 | `Team` | `Red` / `Blue` / **`Neutral`**. `BaseZone`'da `Neutral` = herkese açık joker. ⚠️ Yeni değer SONA eklenir: `BaseZone`/`Weapon` bu enum'u serialize ediyor, başa ekleme her arenanın taban takımlarını kaydırır |
 
 **`ArenaRoof`** (çatılı arenalar için, **isteğe bağlı**): çatı hiyerarşisinin köküne konur
@@ -1420,6 +1431,43 @@ konsoluna tek satır sebep yazar.
     varsayıma dayanıyor olabilir — pozu/durumu devraldığın her yerde o varsayımı yeniden sına.**
     ⚠️ Fırlatma gereken eşya (bomba) bu kapıdan geçmez: atılışı telde bildirilen kendi balistiğidir
     (`ArenaCombat.ReportThrow`), ISDK'nın fizik impulsu değil.
+
+52. **İKİ ayrı kaynaktan gelen dikey referansı birleştiren bir çözücü, uyuşmazlıkta "biraz yanlış"
+    değil GROTESK sonuç verir.** `ThreePointBodyIK`'da kafa/eller AĞDAN (gönderenin uzayı), kök ve
+    ayaklar ARENA ZEMİNİNDEN gelir. Gönderenin rig'i hizalı değilse ikisi ayrışır ve çözücü
+    imkânsız bir gövde kurmaya çalışır: kafa zeminin altına düştüğünde **ayak hedefi kalçanın
+    ÜSTÜNE** çıkar, CCD bacakları gövdeye sarar, kafa göğsün içinde kalır — sahada "avatar top olup
+    dönüyor, kolu/kafası yok, uzayda" diye görünen şey budur. Ölçüm: kafa zeminin 5 m altındayken
+    kalça 1.25 m'de, ayak 2.20 m'de (ayak dizden ve kalçadan yukarıda) çıkıyordu. Çözüm gelen pozu
+    **makullüğe** bakmaktır: kafa arena zemininden 0.6–2.6 m dışındaysa zemin arenadan değil
+    **pozdan** türetilir → avatar yanlış yükseklikte ama bütün bir insan kalır (maç ortasında
+    düşmanı tamamen kaybetmemek bilinçli tercih) ve sayılarla bir kez uyarı basılır. Genel kural:
+    **iki bağımsız uzayı aynı formülde birleştiren her yerde, birleştirmeden önce ikisinin
+    uyuştuğunu doğrula.**
+
+53. **Kendini düzeltmeyen bir tahmin, tek bozuk kareyi KALICI hataya çevirir.** Aynı çözücüde boy
+    tahmini "gözlenen en yüksek kafa" (sonsuz maksimum) idi ve ayak bastığı dünya noktasına
+    kilitleniyordu. Sonuç ölçüldü: bir kare 2.05 m'lik kafa gören avatar 1.32×'e kilitleniyor, bir
+    kare bozuk rotasyon gören avatarın ayağı zeminin 17 cm altına çakılıyor ve **poz düzeldiği hâlde
+    ikisi de geri dönmüyordu** — "bir kere bozulan avatar bir daha düzelmiyor" şikâyetinin kaynağı.
+    Boy artık kayan pencere maksimumu (iki kova, 5 sn), ayak da hedefinden 1 m'den fazla
+    uzaklaşınca adımlamadan ziplatılıyor, hepsi `ResetPoseState()` ile sıfırlanıyor (avatar başka
+    oyuncuya devredilebiliyor). Kural: **zamanla biriken her tahminin geri dönüş yolu olmalı;**
+    "yalnız büyüyen" bir değişken er geç bir gürültü örneğine kilitlenir.
+
+54. **Sıfır quaternion telde meşru görünür, Unity'de geçersizdir.** Dört sıfır bayt geçerli bir
+    poz gibi okunur; bir Transform'a yazılınca "Quaternion To Matrix conversion failed" basar ve o
+    kemik o kareden sonra bozuk kalır. Poz zincirinde (`RemoteAvatar` → `ThreePointBodyIK`) gelen
+    rotasyon normalize edilemiyorsa kimliğe düşürülür, NaN/∞ taşıyan poz ise hiç uygulanmaz (avatar
+    son geçerli karesinde bırakılır). ⚠️ Sunucu poz İÇERİĞİNİ doğrulamaz ve doğrulamayacak
+    (istemci-otoriter, §3.2) — denetim çizen tarafın işidir.
+
+55. **Rig kökü arena zemininde durmalıdır — tracking origin `Stage` onu FİZİKSEL ZEMİN sayar.**
+    VortexAntep sahnelerinde `VA_CameraRig` Y=7.40, arena zemini Y=7.05 idi: kalibrasyon yapılmadan
+    oynayan her oyuncu 35 cm havada duruyor, bu da uzak avatarını 1.32× dev gösteriyordu (yukarıdaki
+    boy tahmini üzerinden). Arena dünya orijininden yüksekte kurulduğunda (burada ~7 m) bu tür her
+    dikey hata o kadar büyür — "uzayda duran oyuncu" görüntüsünün ölçeği oradan gelir. Yeni arena
+    kurarken rig kökünün Y'si `SpawnPoint`'in Y'si ile aynı olmalıdır.
 
 ---
 
