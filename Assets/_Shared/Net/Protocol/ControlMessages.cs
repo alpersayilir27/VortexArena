@@ -42,6 +42,32 @@ namespace VortexArena.Protocol
         /// lobby_state kaybolmaz; bu alan istemcinin bir yayını uygulayamadığı pencereleri
         /// (sahne geçişi, kopma anı) kapatır. 0 = hiç uygulanmadı → sunucu tam snapshot yollar.</summary>
         public int rosterVersion;
+
+        // ---- Ağ telemetrisi: İSTEMCİ ölçer, sunucu yalnız taşır ----
+        // Ölçüm istemcide çünkü ikisi de bedavaya oradan çıkıyor: RTT 0x06 echo'sundan (iki damga da
+        // istemcinin → saat senkronu gerekmez), downlink jitter/kaybı ise zaten gelen 20 Hz snapshot
+        // akışından (EK PAKET YOK). Raporlama da bedava: status hâlihazırda 5 sn'de bir gidiyor ve
+        // operatör göstergesi için bu fazlasıyla yeter.
+        //
+        // ⚠️ Bu üç alan PlayerInfo'ya (lobby_state roster'ına) KONMAZ. Sürekli değişen sayılar
+        // oldukları için PlayerRegistry.UpdateStatus'taki "görünen bir alan gerçekten değişti mi"
+        // kapısını her seferinde açarlar ve çözülmüş bir hatayı geri getirirler (her status bir tam
+        // roster yayını → saniyede onlarca roster JSON'u). Fps tam bu sebeple PlayerInfo'da
+        // taşınmıyor; izlenecek emsal odur. Adminlere ayrı, kaybı zararsız bir kanal gider: net_stats.
+
+        /// <summary>Ölçülen gidiş-dönüş süresi (ms), <b>UDP state kanalı</b> üzerinden;
+        /// <b>-1 = bilinmiyor</b> (henüz yoklama dönmedi ya da istemci eski sürüm).
+        /// <para>0 değil -1: 0 ms gerçekten mümkün bir ölçüm gibi okunur, "bilinmiyor" ile
+        /// karışırdı.</para></summary>
+        public int rttMs = -1;
+
+        /// <summary>Snapshot varış aralığının nominalden (50 ms) ortalama sapması (ms);
+        /// -1 = bilinmiyor.</summary>
+        public float jitterMs = -1f;
+
+        /// <summary>Downlink snapshot kaybı yüzdesi (<c>serverTick</c> boşluğundan);
+        /// -1 = bilinmiyor.</summary>
+        public float lossPct = -1f;
     }
 
     /// Oyuncunun adı ve/veya forma numarası (§5.1). Boş string / 0 bırakılan alan MEVCUT değeri
@@ -63,17 +89,8 @@ namespace VortexArena.Protocol
         public bool ready;
     }
 
-    /// İstemci → sunucu yönünde seq dolu; sunucu relay'inde playerId dolu (seq taşınmaz).
-    [Serializable]
-    public class ShotFiredMsg
-    {
-        public string type = MessageTypes.ShotFired;
-        public int seq;
-        public int playerId;
-        public string weaponId;
-        public float[] muzzlePos;
-        public float[] muzzleDir;
-    }
+    // ShotFiredMsg v4'te KALDIRILDI → UDP 0x03/0x04 (§6.4/6.5); 10 atış/sn/oyuncu otoriter WS
+    // kanalını boğuyordu.
 
     [Serializable]
     public class HitReportMsg
@@ -360,12 +377,24 @@ namespace VortexArena.Protocol
         public int scoreBlue;
     }
 
+    /// <summary>
+    /// Can değişimi (§10.3). ⚠️ <b>Broadcast DEĞİL:</b> yalnız <c>playerId</c>'nin sahibine ve
+    /// adminlere gider. İki tüketicisi de dar — <c>PlayerCombatState</c> kendisine ait olmayan her
+    /// mesajı zaten düşürüyor, admin tablosu ise herkesin canını çiziyor. Herkese yayınlandığı
+    /// dönemde 10 oyunculu maçta her isabette 11 mesaj gidip 9'u çöpe atılıyordu ve bu, oyuncu
+    /// sayısıyla <b>kare</b> büyüyen tek WS kanalıydı (Docs/Sistem-Ozeti.md §3.12).
+    /// </summary>
     [Serializable]
     public class HealthUpdateMsg
     {
         public string type = MessageTypes.HealthUpdate;
         public int playerId;
         public float hp;
+
+        /// <summary>Vuran oyuncu; <c>0</c> = saldırı değil (canlanma).
+        /// <para><b>Bugün okuyan yok</b> — yönlü hasar göstergesi için ayrılmıştır ve mesaj artık
+        /// zaten yalnız kurbana gittiği için doğal yeri burasıdır. Kaldırılacaksa göstergenin de
+        /// hiç yapılmayacağına karar verilmiş olmalı.</para></summary>
         public int attackerId;
     }
 
@@ -456,6 +485,36 @@ namespace VortexArena.Protocol
         /// kataloğunu BUNUNLA süzer</b>: katalog tüm projeyi tanır, oynatılabilir olan ise
         /// sunucunun o an açtığı mekandır. Boş gelirse (mekan ayrımı yok) süzme yapılmaz.</summary>
         public string[] venueScenes;
+    }
+
+    /// <summary>Tek oyuncunun ağ telemetrisi (<see cref="NetStatsMsg"/> girdisi). Değerler
+    /// İSTEMCİDEN gelir (<see cref="StatusMsg"/>), sunucu yalnız taşır; -1 = bilinmiyor.</summary>
+    [Serializable]
+    public class NetStatsEntry
+    {
+        public int playerId;
+        public int rttMs = -1;
+        public float jitterMs = -1f;
+        public float lossPct = -1f;
+    }
+
+    /// <summary>
+    /// Yalnız <c>role=admin</c> bağlantılara, 1 Hz: oyuncu başına ping/jitter/kayıp.
+    /// <para>⚠️ <b>Broadcast EDİLMEZ.</b> Herkese yayınlamak, oyuncu sayısıyla kare büyüyen bir
+    /// fan-out üretirdi — yani bu telemetrinin ölçmek için var olduğu sorunun aynısını. Hedef kuralı
+    /// <c>admin_state</c> ile aynıdır.</para>
+    /// <para>⚠️ <b>Roster'ın (<c>lobby_state</c>) alternatifi değil, bilinçli olarak ayrı bir
+    /// kanaldır:</b> roster'ın bir <c>version</c>'ı ve uzlaştırma protokolü var (§5.1); saniyede bir
+    /// değişen telemetriyi oraya koymak versiyonu sürekli çevirip uzlaştırmayı anlamsızlaştırırdı.
+    /// Bu mesajın kaybı ise zararsızdır (teşhis verisi, bir sonraki saniye yenisi gelir).</para>
+    /// <para><b>Bant/bayt alanı YOKTUR ve eklenmez</b> — hacim sayıları sunucu konsolunda kalır
+    /// (`[state]` satırı); operatörün eyleme çevirebileceği sayı ping'dir.</para>
+    /// </summary>
+    [Serializable]
+    public class NetStatsMsg
+    {
+        public string type = MessageTypes.NetStats;
+        public NetStatsEntry[] players;
     }
 
     // ---- UDP beacon (§4; WS mesajı değildir, alıcı app alanını doğrular) ----

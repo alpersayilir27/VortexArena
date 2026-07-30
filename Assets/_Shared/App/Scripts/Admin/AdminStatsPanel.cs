@@ -16,24 +16,36 @@ namespace VortexArena.App.Admin
     /// satırlar <c>\n</c> ile birleştirilir — hizalama font metriğinden bağımsız kalır.</para>
     ///
     /// <para><b>Uydurma metrik yok:</b> yalnız protokolde gerçekten taşınan veriler gösterilir
-    /// (K/D/HP sunucudan — §5.3 <c>lobby_state</c>; batarya/sahne <c>status</c>'tan). Hasar,
-    /// isabet oranı ve ping protokolde YOK, bu yüzden tabloda da yok.</para>
+    /// (K/D/HP sunucudan — §5.3 <c>lobby_state</c>; batarya/sahne <c>status</c>'tan; <b>ping</b>
+    /// istemcinin ölçüp bildirdiği RTT — §6.7 <c>net_stats</c>). <b>Hasar ve isabet oranı protokolde
+    /// YOK, bu yüzden tabloda da yok.</b></para>
+    /// <para><b>Jitter ve paket kaybı bilinçli olarak tabloda DEĞİL</b> — ikisi de ölçülüyor ve
+    /// <c>net_stats</c> ile geliyor, ama operatörün eyleme çevirebileceği tek sayı ping'dir. Hacim
+    /// (bayt/sn, paket/sn) hiç gelmiyor: o sayılar sunucu konsolundadır (<c>[state]</c> satırı) ve
+    /// oraya aittir.</para>
     /// </summary>
     public class AdminStatsPanel : MonoBehaviour
     {
-        private const float PanelWidth = 1180f;
-        private const float PanelHeight = 660f;
-        private const float TableTop = 190f;
         private const float RefreshInterval = 0.5f;
 
-        /// <summary>Kolon başlıkları ve genişlikleri (px) — sırayla soldan sağa.
-        /// <c>SKOR</c> bireysel maç skorudur (§10.2) ve <c>K</c> ile aynı şey DEĞİLDİR: skoru mod
-        /// yazar, öldürme başına 1 olmak zorunda değil.</summary>
+        /// <summary>Kolon sırası — soldan sağa. <b>Tek işi <see cref="CellText"/>'in <c>switch</c>
+        /// sırasını ve <see cref="_columns"/>'un beklenen uzunluğunu belgelemektir</b>; başlık
+        /// metinleri ve genişlikler PREFABTA yaşar.
+        /// <para>⚠️ Buraya kolon eklemek YETMEZ: prefabta da bir TMP objesi açıp <c>_columns</c>
+        /// dizisine bağlamak gerekir, yoksa yeni kolon sessizce hiç çizilmez (dizi prefabtan gelir,
+        /// buradaki uzunluk yalnız yeni örneklerin varsayılanıdır).</para>
+        /// <para><c>SKOR</c> bireysel maç skorudur (§10.2) ve <c>K</c> ile aynı şey DEĞİLDİR: skoru
+        /// mod yazar, öldürme başına 1 olmak zorunda değil.</para></summary>
+        /// <remarks>PING <b>sona</b> eklendi, BATARYA'nın yanına değil: prefabtaki kolonlar
+        /// <c>Header0..N</c>/<c>Column0..N</c> çiftleri hâlinde ve araya girmek mevcut dört objenin
+        /// hepsini yeniden konumlandırmayı gerektirirdi. Sağ kenar bir teşhis kolonu için doğal yer.</remarks>
         private static readonly string[] ColumnTitles =
-            { "OYUNCU", "TAKIM", "SKOR", "K", "D", "K/D", "HP", "BATARYA", "DURUM", "SAHNE" };
+            { "OYUNCU", "TAKIM", "SKOR", "K", "D", "K/D", "HP", "BATARYA", "DURUM", "SAHNE", "PING" };
 
-        private static readonly float[] ColumnWidths =
-            { 260f, 80f, 70f, 55f, 55f, 75f, 70f, 95f, 160f, 160f };
+        // NOT: PanelWidth/PanelHeight/TableTop/ColumnWidths sabitleri KALDIRILDI — hiçbiri
+        // okunmuyordu (panel kod tarafından çizildiği dönemden kalmışlar) ve durdukları yerde
+        // "yerleşimi kod belirliyor" diye yalan söylüyorlardı. Kart ölçüsü ve kolon genişlikleri
+        // prefabın kendi RectTransform'larındadır; tek doğruluk kaynağı orasıdır.
 
         /// <summary>FFA sıralaması için tampon — her tazelemede yeni liste ayırmamak adına.</summary>
         private readonly List<AdminPlayerView> _sorted = new List<AdminPlayerView>();
@@ -229,7 +241,13 @@ namespace VortexArena.App.Admin
                     ? "-"
                     : $"%{Mathf.RoundToInt(Mathf.Clamp01(view.battery) * 100f)}";
                 case 8: return StateText(view);
-                default: return string.IsNullOrEmpty(view.scene) ? "-" : view.scene;
+                case 9: return string.IsNullOrEmpty(view.scene) ? "-" : view.scene;
+                // §6.7: -1 = ölçüm yok (henüz yoklama dönmedi ya da gözlükte eski sürüm var).
+                // 0 yazmak "0 ms ping" gibi okunurdu, bu yüzden "-".
+                case 10: return view.rttMs < 0 ? "-" : $"{view.rttMs} ms";
+                // Prefabta ColumnTitles'tan FAZLA kolon bağlanmışsa boş kalsın — eskiden burada
+                // `default: scene` vardı ve yeni kolon eklenince sessizce sahne adını tekrarlardı.
+                default: return "";
             }
         }
 

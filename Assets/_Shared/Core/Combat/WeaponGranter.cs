@@ -309,9 +309,12 @@ namespace VortexArena.Core.Combat
                 return null;
             }
 
+            // §6.6 kanonik kavrama: duruş tanımın SABİT kavrama ofsetinden gelir (raftan kavranan
+            // silah da aynı ofsetten sürülür — Weapon.ApplyCanonicalGrip). Buradaki fark yalnız
+            // yöntem: verilen silah anchor'ın ÇOCUĞU olduğu için ofset yerel transformda yaşar.
             GameObject instance = Instantiate(definition.Prefab, anchor, false);
-            instance.transform.localPosition = definition.GrantedHoldPosition;
-            instance.transform.localRotation = definition.GrantedHoldRotation;
+            instance.transform.localPosition = definition.PrimaryGripPosition;
+            instance.transform.localRotation = definition.PrimaryGripRotation;
             instance.name = definition.Prefab.name;
 
             var weapon = instance.GetComponent<Weapon>();
@@ -417,6 +420,33 @@ namespace VortexArena.Core.Combat
         }
 
         // ---------------------------------------------------------------- yardımcı
+
+        /// <summary>
+        /// El anchor'ı çözmenin <b>TEK</b> yolu: verilen silah da (bkz. <see cref="Grant"/>),
+        /// raftan kavranan silah da (<c>Weapon.ApplyCanonicalGrip</c>) buradan geçer.
+        /// <para>
+        /// ⚠️ İkinci bir rig keşif yolu YAZILMAZ: iki ayrı arama farklı karelerde farklı rig
+        /// bulabilir (sahne geçişi, gözlemcinin kapattığı rig) ve silah bir karede el değiştirmiş
+        /// gibi zıplardı. Rig yoksa <c>null</c> döner — çağıran hiçbir şey yapmaz.
+        /// </para>
+        /// <para><see cref="OVRInput.Controller.None"/> için de <c>null</c> döner: "el çözülemedi"
+        /// durumunda sessizce sağ ele yapıştırmak silahı yanlış elde gösterirdi.</para>
+        /// </summary>
+        public static Transform ResolveHandAnchor(OVRInput.Controller hand)
+        {
+            if (hand != OVRInput.Controller.LTouch && hand != OVRInput.Controller.RTouch)
+            {
+                return null;
+            }
+
+            OVRCameraRig rig = Instance != null ? Instance.ResolveRig() : null;
+            if (rig == null)
+            {
+                return null;
+            }
+
+            return hand == OVRInput.Controller.LTouch ? rig.leftHandAnchor : rig.rightHandAnchor;
+        }
 
         /// <summary>BB rig'i (aktif olan) bulur; bulunamazsa saniyede bir yeniden dener.
         /// Admin gözlemcide rig KAPALI olduğu için burası kalıcı olarak null döner.</summary>

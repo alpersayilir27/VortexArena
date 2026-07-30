@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f3a1d64e29b48c5a0d3f81b6c72e945, type: 3}
+  m_Name: NetItemCatalog
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.NetItemCatalog
+  items:
+  - {fileID: 11400000, guid: d42e84326e961f542ba86d57e9a71d20, type: 2}
+  - {fileID: 11400000, guid: 3e86e22f37503ba4fafb3d09d30dffb2, type: 2}
+  - {fileID: 11400000, guid: dc384828f17138049a24328b7e07b1ff, type: 2}
+  - {fileID: 11400000, guid: 1518aa11b38b11c4c9ab387c384b2e28, type: 2}
+  - {fileID: 11400000, guid: 3fac3cc2036001d40a6c64c3f00632d2, type: 2}
+  - {fileID: 11400000, guid: 379b9af2cf125564a940fa2e72d865c6, type: 2}

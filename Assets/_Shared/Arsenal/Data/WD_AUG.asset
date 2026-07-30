@@ -40,5 +40,9 @@ MonoBehaviour:
   firePitchJitter: 0.05
   fireVolume: 1
   prefab: {fileID: 8455591924629767172, guid: e2e2ac91ad92d7a4aa2040aaf4254a90, type: 3}
-  grantedHoldPosition: {x: 0, y: 0, z: 0}
-  grantedHoldEuler: {x: 0, y: 0, z: 0}
+  netItemId: 6
+  holdMode: 1
+  primaryGripPosition: {x: 0, y: 0, z: 0}
+  primaryGripEuler: {x: 0, y: 0, z: 0}
+  secondaryGripPosition: {x: 0, y: 0, z: 0}
+  secondaryGripEuler: {x: 0, y: 0, z: 0}

@@ -220,6 +220,11 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
 - ⚠️ **Yeni admin ayarı eklerken önce sor: operatörler arasında ORTAK mı, ekrana mı ait?** —
   ortaksa `AdminSelection` + protokol (`admin_state`), ekrana aitse `AdminSession` (`PlayerPrefs`).
   Çoklu admin sınırsızdır ve hepsi eş yetkilidir.
+- **Protokol değişikliği bir MALİYET KALEMİ DEĞİLDİR.** Tel formatı gerektiğinde değişir:
+  `PROTOCOL_VERSION` artar, tüm başlıklara yeni APK kurulur — bu normal iş akışıdır, plana ayrı bir
+  yük olarak yazılmaz ve **tasarım ondan kaçınmak için eğilmez** (karışık sürüm çalışsın diye ek kod
+  yolu, ya da "tek APK turu olsun" diye kapsam kesme/faz birleştirme yok). Karışık sürümün *bozuk
+  çizim* ürettiği durumlar yine yazılır — bilgi olarak, kısıt olarak değil.
 - Portlar: UDP beacon 47820 · WS kontrol 47821 `/ws` · UDP state 47822 (cosmos 47800/1 ile
   çakışmaz).
 
@@ -310,7 +315,9 @@ Sonra `FFA.asset` gibi bir `ModeDefinition` yaz (modId, süre/limit, kural alanl
 `RandomGrant` olunca sahnedeki raf silahlarını ve taban bölgelerini gizler, grip'e basılı tutulan
 her elde `ModeDefinition.loadout`'tan rastgele bir silah tutturur (bırakınca yok olur, tekrar
 basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki duruşu
-`WeaponDefinition.grantedHoldPosition/Euler`'dan gelir — VR'da ince ayar buradan yapılır.
+`ItemDefinition.primaryGripPosition/Euler`'dan gelir — VR'da ince ayar buradan yapılır ve
+**tek yerden**: aynı iki alan hem yerel duruşu, hem uzak çizimi, hem kavrama soketinin yerini
+besler (verilen silahta soket çizilmez — silah zaten elde).
 ⚠️ Sahneye bileşen KOYMA: tekil olmasının sebebi her yeni arenaya elle bir kurulum adımı
 eklememektir.
 **Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfekler
@@ -324,7 +331,11 @@ kiti de aynı tablodan (`WeaponSpec`) gelir: silaha özgü ateş/reload/dry-fire
 altında sub-emitter'lı namlu dumanı (`Smoke`), ve kalibreye göre (762x39/556x45) paylaşılan
 `Casing_*.prefab`'a bağlı `ShellEjector` (ateşte kovan fırlatan, `Weapon.Fired`'a abone bileşen —
 `Docs/Sistem-Ozeti.md` §4). Gerekiyorsa
-`ModeDefinition.loadout`'a eklenir. ⚠️ **Sahneye elle `WPN_*` örneği KOYULMAZ:** raf silahlarını
+`ModeDefinition.loadout`'a eklenir. Kavrama **soketi** kurulum istemez: araç prefaba
+`ItemGripSockets`'ı koyar ve `GrabInteractable`'ın filtre listesine bağlar — ⚠️ **prefaba
+`DistanceGrabInteractable` GERİ EKLENMEZ** (araç onu bilerek siler: mesafeden kavrama soket
+tasarımının zıddıdır ve filtre hover'ı kesmediği için yalan söyleyen bir vurgu bırakırdı →
+`Docs/Sistem-Ozeti.md` §7). ⚠️ **Sahneye elle `WPN_*` örneği KOYULMAZ:** raf silahlarını
 `WeaponRackSpawner` (`_Shared/Core/Combat/`, raf kökünde) kural `Rack` iken loadout'tan üretir —
 göz (`RackSlot`) yalnız KONUMU tutar, hangi silahın duracağını mod belirler. Elle konan örnek
 sahneye donar ve moda silah eklendiğinde her arenayı tek tek açmak gerekirdi.
@@ -359,11 +370,14 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 |---|---|
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` değişti / yeni arena eklendi → `Server/config/maps.json` |
 | `… > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi (idempotent; *Yalnız Kataloğu Tazele* varyantı da var) |
+| `… > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
 | `… > Create Arena From Template` | Yeni arena kutusu — geometri kaynağı ZORUNLU: boyut JSON'u ya da TestMesh kökü (kaynak `ArenaBoundary.dimensionsJson` + `wallRenderers`'ı da bağlar) |
 | `… > Build Arena From Dimensions` | Boyut dosyası değişti (seçimde JSON) → zemin/duvar/kolon geometrisini yeniden üretir (idempotent) |
 | `… > Build Arena From TestMesh` | Kaba alan bloklarından boyut JSON'u üretilecek → dosyayı yazar, sonra geometriyi ondan çizer (idempotent) |
+| `… > Write Grip Sockets To Definition` | Sahnedeki kavrama işaretçileri sürüklenip ayarlandı → `WD_*.asset`'e yazar (ters/düz bileşimi araç yapar). Yalnız BULUNAN işaretçinin alanlarına dokunur |
 | `… > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` · `Spawn Point` | Sahneye ilgili bileşeni + kurulumunu ekler |
+| `GameObject > VortexArena > Grip Socket (Primary/Secondary)` | Seçili silahın altına kavrama işaretçisi üretir (mevcut değerlerden başlatır; aynı türden ikincisini üretmez) |
 | `PlayerBuildTool.BuildWindowsAdmin` · `…BuildQuestPlayer` | Menü değil — batch-mode `-executeMethod` girişleri (`deploy-admin-game.bat` / `deploy-player-apk.bat` çağırır) |
 
 - ⚠️ **`maps.json` elle düzenlenmez** — export ezer. Tek doğruluk kaynağı Unity SO'larıdır.

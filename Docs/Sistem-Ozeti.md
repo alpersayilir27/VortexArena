@@ -196,15 +196,56 @@ kesen/izole eden AP'lerde kurtarıcı budur. Açıkça verilen komut satırı ad
 ### 3.5 Poz akışı (20 Hz)
 
 ```
-PlayerPoseTracker (kafa + 2 el, dünya→arena)
+PlayerPoseTracker (kafa + 2 el, dünya→arena) + HeldItems (elde ne var)
         │ IPoseSource
         ▼
-UdpStateChannel ──0x01 PoseUpdate (92 B)──► StateHost ──0x02 Snapshot (≤1382 B)──► TÜM kayıtlı endpoint'ler
+UdpStateChannel ──0x01 PoseUpdate (95 B)──► StateHost ──0x02 Snapshot (≤1414 B)──► TÜM kayıtlı endpoint'ler
+                                                       (olay varsa ve sığıyorsa 0x05 birleşik, §6.8)
                                                                                           │ (admin dahil)
                                                                      RemotePlayerRegistry ─┘
-                                                                          │ 100 ms tamponla interpolasyon
+                                                          │ poz: 100 ms tamponla interpolasyon
+                                                          │ eşya: interpole EDİLMEZ, son değer geçerli
                                                                     RemoteAvatar
 ```
+
+Eşya baytları (`itemL`/`itemR` + kavrama bitleri) pozla **aynı pakette** gider: ikisi de
+istemci-otoriter sunum bilgisidir. Duruş telde GİTMEZ — eşyanın ele göre pozu her istemcinin
+APK'sındaki `ItemDefinition`'dan gelir (ön koşul: kanonik kavrama). → `Docs/ArenaNet-Protokol.md` §6.6
+
+### 3.5b Atış/atma olay akışı (olay başına yukarı, 20 Hz batch aşağı)
+
+```
+Weapon.Fire() ──► ArenaCombat.ReportShot (dünya→arena YÖN çevirimi)
+        │
+        ▼
+UdpStateChannel ──0x03 FireEvent (12 B, HEMEN)──► StateHost (kapı: faz + canlı + kalibre;
+        │                                          kopya bastırma: seq)
+        │                                                   │ ConcurrentQueue
+        │                                                   ▼
+        │                          0x04 EventBatch (6+9n B, snapshot ile aynı tik) ──► TÜM endpoint'ler
+        ▼                                                                                     │
+  yerel tracer (anında — sunucu atana geri yollamaz)         RemoteShotFx ────────────────────┘
+                                                             │ kendi playerId'sini süzer
+                                                             │ tik halkasıyla kopya ayıklar
+                                                             │ serverTick'in oynatma anına kadar BEKLETİR
+                                                       namlu alevi + ses + ShotTracer
+```
+
+⚠️ Atış **UDP**'de (kaybı kozmetik), `hit_report` **WS**'te (otoriter hasar). Kanal ayrımı
+bilinçli — gerekçe §7'de ve `Docs/ArenaNet-Protokol.md` §10.3'te.
+
+**Olay neden bekletiliyor:** uzak avatarın pozu bilerek `INTERP_DELAY_MS` (100 ms) geriden
+çizilir, ama sunucu snapshot'ı ile olay batch'ini AYNI tik'te yayınlar. Olay geldiği anda
+oynatılsa alev/ses/tracer elin **100 ms öncesindeki** yerinden çıkardı (kol 2 m/s ise ~20 cm
+kayma). Bu yüzden `RemotePlayerRegistry` snapshot'ların `serverTick → alım zamanı` eşlemesini
+tutar (global bir halka — tik başına bir snapshot var, eşleme oyuncu başına değil) ve
+`TryGetPlaybackTimeMs` her olayın oynatılacağı yerel anı verir: `alım + INTERP_DELAY_MS`.
+Sonuç olarak 20 Hz batch'leme **algılanan gecikmeye eklenmez** — ≤50 ms'lik batch beklemesi
+100 ms'lik tamponun içinde erir. Eşleme yoksa (henüz snapshot gelmemiş / tik halkadan düşmüş)
+olay **hemen** oynatılır: geciken tracer kabul edilebilir, kaybolan tracer edilemez.
+⚠️ **Geçmiş pozu örnekleyen bir kapı YOK ve gerekmiyor** — tracer'ın orijini telden gelen bir
+konum değil, o karede ÇİZİLMİŞ silahın namlusu (§6.4 "tutarlılık > sadakat"); olay doğru anda
+oynayınca çizili namlu zaten o tik'in namlusudur.
 
 - Kendi pozunu snapshot'tan **çizmezsin** (yerelden çizersin) — gecikme sıfır kalır.
 - Uzak oyuncular `INTERP_DELAY_MS = 100` tamponuyla yumuşatılır; paket kaybı tolere edilir
@@ -212,7 +253,7 @@ UdpStateChannel ──0x01 PoseUpdate (92 B)──► StateHost ──0x02 Snaps
 - **Eşzamanlı oyuncu/admin sınırı YOKTUR** (kota ileride lisanslamayla gelecek). Tek tavan
   `PLAYER_ID_MAX = 255` ve o bir ürün kotası değil, `playerId`'nin UDP'de `u8` olmasıdır.
   16'dan fazla pozlu oyuncu olduğunda snapshot MTU'ya sığan parçalara bölünür
-  (`SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16` → 1382 B); **istemcide birleştirme yoktur ve
+  (`SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16` → 1414 B); **istemcide birleştirme yoktur ve
   gerekmez** — her paket taşıdığı girdileri bağımsız uygular, düşürme kararı zaman aşımıdır.
 - Bir `playerId` ~1.5 sn snapshot'larda görünmezse avatarı kaldırılır (sunucunun 15 sn'lik
   offline eşiğini beklemez).
@@ -222,9 +263,10 @@ UdpStateChannel ──0x01 PoseUpdate (92 B)──► StateHost ──0x02 Snaps
 ```
 Weapon.Fire() / balta savurma / ok isabeti / bomba patlaması
    │
-   ├─ shot_fired  → sunucu DOĞRULAMAZ, sadece relay eder; istemcide `RemoteShotFx`
-   │                tüketir (uzak namlu alevi + konumsal atış sesi, weaponId profiliyle)
-   └─ hit_report  → sunucu 5 tutarlılık kontrolü yapar:
+   ├─ 0x03 atış olayı (UDP) → sunucu DOĞRULAMAZ, sadece relay eder (0x04 batch); istemcide
+   │                `RemoteShotFx` tüketir (uzak namlu alevi + konumsal atış sesi + tracer,
+   │                itemId profiliyle). Kaybı KOZMETİKTİR — güvenilirlik aranmaz (§6.4)
+   └─ hit_report (WS) → sunucu 5 tutarlılık kontrolü yapar:
         faz Live? · atıcı canlı? · hedef canlı? (çift ölüm olmasın) ·
         hedef başkası + takım arkadaşı DEĞİL mi? · damage sonlu ve pozitif mi?
                             ↓ geçerse
@@ -455,6 +497,94 @@ görebilmesi için pozun akıyor olması gerekir.
 
 Tam semantik: `Docs/ArenaNet-Protokol.md` §10.6.
 
+### 3.12 Bant, paket ve airtime bütçesi
+
+**Sonuç önce: bant genişliği bu üründe hiçbir zaman darboğaz değil, paket sayısı olabilir.**
+Kablosuzda maliyet bayt başına değil **çerçeve başına** ödenir; ürünün trafiği ise "az bayt, çok
+çerçeve" desenindedir (20 Hz × hedef sayısı kadar minik datagram).
+
+**Ağ tick'i 20 Hz'dir** (`SNAPSHOT_RATE_HZ` / `POSE_RATE_HZ`). `MatchDirector`'ın 10 Hz maç tick'i
+(`TickIntervalMs`) ağa hiçbir şey yazmaz — faz/süre/zorla canlanma çözünürlüğüdür.
+
+**Hesap formülleri** (`N` = pozlu oyuncu, `A` = admin, hedef sayısı `N+A`; snapshot her hedefe
+**ayrı unicast** gider, multicast yoktur):
+
+```
+snapshot   (sunucu TX) = SNAPSHOT_RATE_HZ × (6 + 88×N) × (N+A)     ← N² büyür
+                         olay varken tek pakette birleşir (0x05, §6.8): (7 + 88×N + 9×E/20) × (N+A)
+pose       (sunucu RX) = POSE_RATE_HZ × 95 × N
+health_update (sunucu TX, TCP) = isabet/sn × (1 + admin sayısı) × ~140 B   ← N ile büyümez
+rttProbe   (her iki yön) = 1 Hz × (N+A) × 2 datagram
+```
+
+Snapshot'ın `N²` olmasının sebebi bilinçli: her oyuncu diğerlerinin pozunu **ve kendi pozunu**
+alır (kendi pozunu yok sayar — §3.5). Kazancı hedef başına serileştirme yapmamaktır.
+`health_update`'in `N` ile büyümemesi ise sonradan kazanıldı (aşağıya bak).
+
+**Örnek: 10 oyuncu + 1 admin, aktif çatışma** (10 oyuncu da ~600 RPM = 100 atış/sn toplam,
+~%25 isabet). IP+UDP/TCP başlıkları dahil, 802.11 çerçevelemesi hariç. ⚠️ **Hesaplanmış
+değerlerdir** — sunucu konsolundaki `[state]` satırı bunları artık ölçüyor; sapma olursa doğru olan
+ölçümdür:
+
+| Kanal | Yön | Bant | paket/sn | (önce) |
+|---|---|---|---|---|
+| `0x05` snapshot+olay birleşik (932 B/tik/hedef) | ↓ | 1,69 Mbps | 220 | 440 |
+| WS `health_update` + `kill_event` | ↓ | 0,06 Mbps | 50 | 275 |
+| WS `match_state` (1 Hz) | ↓ | 0,02 Mbps | 11 | 11 |
+| `0x06` RTT echo | ↓ | ~0 | 11 | — |
+| WS `net_stats` (1 Hz, admin) | ↓ | ~0 | 1 | — |
+| `0x01` poz | ↑ | 0,20 Mbps | 200 | 200 |
+| `0x03` atış | ↑ | 0,03 Mbps | 100 | 100 |
+| WS `hit_report` | ↑ | 0,03 Mbps | 25 | 25 |
+| `0x06` RTT yoklaması | ↑ | ~0 | 11 | — |
+| **Toplam** | | **~2,0 Mbps** | **~630** | **~1.050** |
+
+Sakin durumda (lobi, atış yok) `0x02` + poz + yoklama kalır: **~1,8 Mbps, ~450 paket/sn**.
+
+**1 Gbps'lik bir AP'ye göre bant %0,2'dir.** Buna karşılık ~730 çerçeve/sn (TCP ACK'leri dahil),
+802.11ax'te küçük unicast çerçeve başına ~120–200 µs havayı tuttuğu için **tek radyoda ~%10–12
+airtime** demektir (fan-out kesilmeden önce ~%15–20 idi). Yani darboğaz bant değil airtime;
+konforlu üst sınır kabaca **2.500–3.500 çerçeve/sn**, bugünün ~4–5 katı. (AP'nin DL/UL OFDMA'sı
+çalışıyorsa bu tavan belirgin yükselir — bu iş yükü tam OFDMA'nın tasarım hedefi; ama consumer
+AP'lerde garanti sayılmaz.)
+
+**Paket sayısı nasıl düştü** (~1.050 → ~630, %40):
+
+1. **`health_update` broadcast olmaktan çıktı** → kurban + adminler (§10.3). İki tüketicisi de dardı:
+   istemci kendisine ait olmayanı **zaten düşürüyordu**, admin ise tabloyu çiziyor. 10 oyunculu
+   maçta her isabette 11 mesaj gidip 9'u çöpe atılıyordu. **−225 paket/sn.**
+2. **`0x02` + `0x04` tek datagramda birleşti** (`0x05`, §6.8) — sığdığı sürece. **−220 paket/sn.**
+3. **RTT yoklaması eklendi** (§6.7): **+22 paket/sn** — bu planın paket EKLEYEN tek parçası, ve
+   bilinçli olarak 1 Hz'de tutuluyor.
+
+⚠️ **Sunucu PC kabloyla bağlanmalıdır.** Wi-Fi'daysa her downstream paket havayı iki kez geçer
+(sunucu→AP, AP→istemci) → airtime ikiye katlanır. Sahadaki AP/ağ kontrol listesi:
+`Docs/Isletme-Kurulum.md` "Ağ" bölümü.
+
+**Ne ölçülüyor** (§6.7): uplink jitter/kayıp ve sunucu tik kayması **sunucuda** (konsol `[state]`
+satırı), downlink jitter/kayıp ve RTT **istemcide** (snapshot varışlarından — RTT dışında ek paket
+yok) → `status` → `net_stats` → admin panelinde **PING** kolonu. Yön asimetriktir: 802.11'de yukarı
+ve aşağı simetrik bozulmaz, bu yüzden iki taraf ayrı ölçülür. Hacim sayıları bilinçli olarak yalnız
+konsoldadır, panelde gösterilmez.
+
+⚠️ **Sunucu PC kabloyla bağlanmalıdır.** Wi-Fi'daysa her downstream paket havayı iki kez geçer
+(sunucu→AP, AP→istemci) → airtime ikiye katlanır. Sahadaki AP/ağ kontrol listesi:
+`Docs/Isletme-Kurulum.md` "Ağ" bölümü.
+
+**Ölçeklendiğinde ilk çarpılacak tavanlar, sırayla:**
+
+1. **Airtime / paket-sn** — yukarıdaki tavan. Bağlayıcı kısıt budur.
+2. **MTU 1500** → `SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16` ve `COMBINED_MAX_BYTES = 1200`. Girdi
+   büyürse (ör. tam gövde izleme) ikisi de düşer; ayrıca 16 girdiyi aşan tik **birleştirilemez**
+   (§6.8) ve o tik'te paket sayısı bugünkü iki katına döner.
+3. **`u8 playerCount`** ve `PLAYER_ID_MAX = 255`.
+4. **Quest 3 CPU'su** — 20 Hz'de 10 uzak avatarı interpole etmek bedava; 60 Hz tam gövde değil.
+
+Karşılaştırma için: 60 Hz snapshot 10 oyuncuda 4,7 Mbps / 660 paket-sn; 20 oyuncu bugünkü formatta
+5,9 Mbps / 420 paket-sn; 32 oyuncu 14,9 Mbps / 1.320 paket-sn (16 girdi sınırı aşıldığı için tik
+başına iki datagram **ve birleştirme devre dışı**). **Hiçbiri bant sorunu değil, hepsi airtime
+sorunu.**
+
 ---
 
 ## 4. Bileşen sözlüğü — kim ne yapıyor
@@ -465,10 +595,11 @@ Tam semantik: `Docs/ArenaNet-Protokol.md` §10.6.
 |---|---|
 | `ArenaClient` | Kalıcı tekil; WS bağlantısı (arka plan Task + `ConcurrentQueue` → ana thread köprüsü), hello/welcome, status kalp atışı, otomatik reconnect. **Tüm mesaj gönderimi buradan.** Teşhis için `ConnectAttempts` (son başarılı bağlantıdan beri kaçıncı deneme; bağlanınca 0) + `LastError` (son bağlanma hatası) — `ConnectionOverlay` bunları gösterir. `Disconnect()` otomatik yeniden denemeyi **durdurur** (dönüş yalnız açık `Connect` ile) |
 | `ServerDiscovery` | Beacon dinleme (Android'de MulticastLock), elle girilen adresin `PlayerPrefs`'e yazılması, `arena.json` fallback |
-| `UdpStateChannel` | UDP kaydı (`0x00`), 20 Hz poz gönderimi, snapshot alımı |
-| `RemotePlayerRegistry` | Snapshot → oyuncu başına halka tampon → `GetInterpolatedPose`, `IsAlive`, `OnRemoteJoined/Left` |
-| `NetEvents` | **Statik olay merkezi** — sunucu mesajları buradan ana thread'de yayınlanır |
-| `IPoseSource` | 20 Hz döngüye arena-uzayı pozu sağlayan arayüz |
+| `UdpStateChannel` | UDP kaydı (`0x00`), 20 Hz poz + eşya gönderimi (`0x01`), snapshot alımı (`0x02` ve birleşik `0x05`), atış/atma olayı gönderimi (`SendFireEvent` → `0x03`, olay başına, hemen) ve olay bloğu alımı (`0x04`/`0x05`, **tek** `serverTick` halkasıyla kopya ayıklama). Ayrıca **ağ telemetrisini ölçer** (§6.7): 1 Hz RTT yoklaması (`0x06`) + snapshot varışlarından downlink jitter/kayıp; `SampleTelemetry` ile `ArenaClient`'a verir, o da `status`'a yazar |
+| `RemotePlayerRegistry` | Snapshot → oyuncu başına halka tampon → `GetInterpolatedPose`, `IsAlive`, `OnRemoteJoined/Left`; ayrıca **eşya durumu** `TryGetHeldItems` (interpole edilmez — ayrık veri, son gelen geçerli) ve **`serverTick` → yerel oynatma zamanı** eşlemesi `TryGetPlaybackTimeMs` (§3.5b). ⚠️ Tik eşlemesi **global** bir halkada durur, oyuncu başına halkada değil: tik başına bir snapshot var ve hiç pozu olmayan bir oyuncunun olayı da zamanlanabilmeli. Damga `playerCount = 0` snapshot'ında da yazılır (o da meşru bir yayın) ve parçalanmış snapshot'ta yalnız İLK parçadan alınır |
+| `NetEvents` | **Statik olay merkezi** — sunucu mesajları buradan ana thread'de yayınlanır (`OnRemoteFireEvent` dahil) |
+| `RemoteFireEvent` | Uzak atış/atma olayının istemci-içi taşıyıcısı: `kind`, `rightHand`, `itemId`, arena-uzayı yönü, `magnitude` (atışta mesafe m / atmada hız m·sn⁻¹), `serverTick` |
+| `IPoseSource` | 20 Hz döngüye arena-uzayı pozu **ve elde tutulan eşya baytlarını** sağlayan arayüz (`GetHeldItems`) — Net katmanı Core'u göremediği için eşya bilgisi buradan sızar |
 | `NetIdentity` / `NetSpawnCatalog` | Sahne objesi kimliği (`sceneId`) ve id→prefab kataloğu — **dinamik obje senkronu altyapısı** (v1'de oyuncu senkronu playerId ile gider) |
 
 ### İstemci: `VortexArena.App` (akış ve köprüler)
@@ -516,7 +647,7 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 | `AdminHud` | **Kalıcı** ekran-uzayı HUD'ı (`sortingOrder = 4000`; hata ekranı 5000'de üstte kalır): üst orta takım skorları + **ortada istatistik chip'i** (faz/süre de gösterir), sol üst tercihler, sağ üst mod·harita + bağlantı/poz yaşı + **çoklu admin satırı** (kaç admin bağlı · son admin eylemi; tek admin varken boş kalır), yanlarda takım kolonları (**FFA'da tek kolon** — karar veriden gelir), alt orta kamera şeridi + seçili oyuncu, alt sağ ölüm akışı. **Görünüm prefabtan gelir** (`_Shared/App/Resources/UI/AdminHud.prefab`) — sınıfın kendisi yalnız veri bağlama/tazelemedir, yerleşim ve renk elle düzenlenir. Prefab **sahneye konmaz**, `AdminSpectator` onu `Resources.Load` ile yükleyip kendi altına örnekler (gözlemci kalıcı → arayüz de kalıcı, lobi ↔ arena geçişinde yeniden kurulmaz). ⚠️ Prefabtaki ögeler silinirse alan boşalır ve **hata vermeden sessizce çizilmez** |
 | `AdminPlayerRow` | Oyuncu satırı: takım şeridi, ad + `#id`, HP barı, `K/D · batarya · durum`, eylemler POV/**KAL**/TAKIM/KİMLİK/**AT**. `KAL` ve `AT` **iki adımlı onay** ister (oyuncuyu savaş dışı bırakan/atan eylem tek tıkla olmamalı). `KAL` hem gösterge hem düğmedir (`KAL` yeşil / `KAL !` kırmızı — sembol değil renk+ünlem, çünkü TMP varsayılan fontunda ✓/✗ garantisi yok) ve **yalnız sıfırlar** — geri açmayı gözlük yapar (§3.11); kalibresiz satırın kenarlığı kırmızıya döner. Satıra tıklamak seçer. **Görünüm prefabtan gelir** (`_Shared/App/Resources/UI/AdminPlayerRow.prefab`); `AdminHud` onu kolona örnekler ve havuzlar. Satır **yüksekliği prefabtan okunur** → sanatçı satırı büyütünce kolon yerleşimi kendiliğinden uyar. ⚠️ Düğmelerin `onClick`'i prefabta BOŞTUR ve doldurulmamalıdır: hedef oyuncu her `Bind` ile değişiyor, kalıcı bir inspector kaydı yanlış oyuncuya komut gönderir (ve iki adımlı onayı atlar) |
 | `AdminPreferencesPanel` | Eski dashboard'un işi. **MAÇ bölümü ORTAK** (başlıkta yazar): mod/harita seçicileri yerel alana değil `set_selection` ile sunucudaki ortak seçime yazar → tüm adminlerde aynı anda değişir; tıklamada yerel imleç de iyimser ilerletilir, sunucudan gelen değer son sözü söyler. **Harita değişince o arenayı HERKES yükler** (§10.7 sahneleme — sunucu `return_to_lobby` yayar, faz `Lobby` kalır, maç başlamaz); panel ayrıca sahneyi yerel olarak da açar (`SceneRouter.LoadPreview`) ama bu yalnız gecikmeyi gizler. ⚠️ **Mod/harita satırları maç sürerken PASİFTİR** (`AdminRoster.InLobby`) — bölüm başlığı sebebini yazar, tıklanırsa durum satırına uyarı düşer; süre/limit her fazda açıktır. Bu bileşen panel **kapalıyken de etkin** olduğu için başka bir operatörün harita değişikliği panel açılmadan da yansır. ⚠️ **Harita listesi mekan süzgeci her değiştiğinde yeniden kurulur** (`AdminSelection.VenueVersion`) — panel bağlantıdan ÖNCE kurulduğu için ilk liste kaçınılmaz olarak süzgeçsizdir ve orada bırakılırsa operatör başka işletmelerin arenalarını görür. Yeniden kurulumda **seçili harita hayatta kalıyorsa imleç onda bırakılır**. Bölüm başlığı ayrıca sunucunun **açık sahnesini** yazar (`SceneRouter.OpenScene`): harita satırı bir sonraki maçın adayı, açık sahne şu an yüklü olandır. **GÖRÜNÜM bölümü YEREL** (halkalar, ad etiketleri, kamera hızı, duvar saydamlığı, **çatı**) + bağlantı (yeniden bağlan/kes, bağlı admin sayısı). MAÇ bölümünde ayrıca **Süre** (`ROUND_SECONDS_OPTIONS`: 2.5/5/10/15/20/30 dk · 1 saat) ve **Skor limiti** (eşiğin altında ±1, üstünde ±5) seçicileri vardır — ikisi de ORTAK; **mod değişince o modun `ModeDefinition` varsayılanına dönerler**. Yarı saydam, **scrim YOK**. Dropdown/slider yerine `[<] değer [>]` döngüleyici. Maç düğmelerinin altında **tek** DURAKLAT/DEVAM ET düğmesi: hangi komutu göndereceğine yerel bir bayrakla değil sunucudan gelen faza bakarak karar verir (`playing` → `pause_match`, `paused`/`operator` → `resume_match`), diğer her durumda pasiftir — çoklu admin'de duraklatmayı başkası da yapmış olabilir, yerel bayrak iki paneli birbirine ters düşürürdü |
-| `AdminStatsPanel` | Takım toplamları + oyuncu tablosu (ad/takım/**SKOR**/K/D/K-D/HP/batarya/durum/sahne) + maç bilgisi. **FFA'da tablo skora göre azalan sıralanır**, başlık lideri yazar. Tablo **kolon kolon** çizilir (TMP fontu eşit genişlikli değil, boşlukla hizalama kayar). Protokolde olmayan metrik (hasar/isabet/ping) **gösterilmez** |
+| `AdminStatsPanel` | Takım toplamları + oyuncu tablosu (ad/takım/**SKOR**/K/D/K-D/HP/batarya/durum/sahne/**PING**) + maç bilgisi. **FFA'da tablo skora göre azalan sıralanır**, başlık lideri yazar. Tablo **kolon kolon** çizilir (TMP fontu eşit genişlikli değil, boşlukla hizalama kayar). ⚠️ Kolon eklemek koda yetmez, prefabta (`AdminHud.prefab`) bir TMP objesi açıp `_columns` dizisine bağlamak gerekir — bağlanmazsa kolon sessizce hiç çizilmez. Protokolde olmayan metrik (hasar/isabet oranı) **gösterilmez**; jitter/kayıp protokolde VAR ama panelde bilinçli olarak yok (operatörün eyleme çevirebileceği sayı ping'dir) |
 | `AdminRoster` | Admin arayüzünün veri katmanı: `lobby_state` (otoriter tam görüntü + `kills/deaths/hp/alive/score`) + `health_update`/`kill_event` (anlık) + `match_state`/`countdown`/`match_end` birleşimi; takım listeleri, takım kipi kararı, ölüm akışı, snapshot yaşı. **`IsFfa` OTORİTER:** maç yüklüyse `ModeRuntime.Teams`, lobide ortak seçimin katalogdaki modu, ikisi de yoksa eski sezgisel yedek ("kimsenin takımı yok"). ⚠️ `respawn` admin'e GELMEZ (yalnız ölen oyuncuya gider) → geri sayım `kill_event` + `RESPAWN_DELAY` ile yerel hesaplanır |
 | `AdminSession` | **YEREL** seçimler (kamera kipi, seçili oyuncu, açık panel) + görünüm tercihleri (`PlayerPrefs`'te kalıcı, admin PC'sine özel — halkalar, ad etiketleri, kamera hızı, duvar saydamlığı, **çatı kipi**). Tek doğruluk noktası; `Changed` ile HUD/kamera/işaretçiler senkron kalır. `RoofAlphaNow()` tercih + kamera kipinden çatı alfasını türetir |
 | `AdminSelection` | **ORTAK** durumun aynası (`admin_state`, §5.3): mod/harita seçimi, **maç süresi + skor limiti**, çevrimiçi admin sayısı, son admin eyleminin duyurusu, **mekan süzgeci** (`venueId`/`venueScenes` + her değişiminde artan `VenueVersion`). Statik durum + statik `Changed` (bileşen kurulum sırası dinleyiciyi ilgilendirmesin); bileşenin kendisi yalnız ağ olayı pompasıdır. Otorite sunucudadır — buraya yerelden yazılmaz |
@@ -579,7 +710,8 @@ vuruş/atış bildirimi `ArenaCombat` üzerinden gider — protokol DTO'su bu s�
 yolu:** `WeaponGranter` silahı doğrudan ele verir (`GrantTo` — §3.9 `weaponSource:"random"`); verilen
 silah tanım gereği tutuluyordur, her zaman tek ellidir, rezervi yoktur ve reload'u KAPALIDIR) +
 `WeaponDefinition` (SO — hasar/HS çarpanı/RPM/şarjör/reload/spread/recoil/ses profili + verilen
-silahın el duruşu `grantedHold*`; **tek denge kaynağı**, sunucuya export edilmez) + `WeaponAudio` (Meta XR spatializer'lı namlu AudioSource:
+**tek denge kaynağı**, sunucuya export edilmez; el duruşu tabandaki `ItemDefinition.primaryGrip*`'te,
+burada DEĞİL) + `WeaponAudio` (Meta XR spatializer'lı namlu AudioSource:
 ateş/şarjör çıkar-tak/kuru tetik/alma) + `WeaponAnimator` (Animator'sız kod-güdümlü parça
 animasyonu: atışta bolt tepmesi, reload'da `*_Mag` child'ı çıkar-takılır; şarjör seslerini de bu
 zaman çizgisi çalar — görüntü/ses tek kaynaktan) + `WeaponReloadGesture` (silah bel hizasının
@@ -636,7 +768,13 @@ katmanların göreli hız farkı korunur).
 |---|---|
 | `ModeRuntime` (+ `ModeRuntimePump`) | Aktif maçın kurallarının **tek okuma noktası** (§3.9). `load_match.rules` / `welcome.match.rules` / `return_to_lobby.rules` besler; kurallar telde yoksa (`rules == null`) `ModeDefinition` önizlemesi fallback olarak devralır. Lobiye dönüşte SIFIRLANMAZ, **lobi profili uygulanır** (`modeId:"lobby"`, §3.8.1) — lobideki silah rafı loadout'unu bu anahtarla buluyor. Statik durum + statik `Changed`; pompa kendini önyükler (`BeforeSceneLoad` + `DontDestroyOnLoad`). Tüketiciler: `PlayerCombatState`, `ModeHudBase`, `AdminRoster` |
 | `UI/ModeHudBase` | Mod HUD'larının **takım-agnostik** tabanı: faz/süre, geri sayım, can barı, ölüm ekranı + durum metni, kill-feed (ad çözümü `lobby_state`'ten), kendi öldürme/ölüm sayacın, maç sonu satırı. **Takıma ait hiçbir şey burada değil** — skor satırı (`ScoreLine`) ve kazanan metni (`WinnerLine`) alt sınıfın işi. Core'da durur çünkü modlar birbirini referanslamaz |
-| `Combat/ArenaCombat` | **Oyun kodunun ağa açılan tek kapısı** (statik). `ReportShot` / `ReportHit` / `ReportRaycastHit` / `ReportAreaHit` + `TryGetTargetPlayerId` / `IsHeadshot` / `CanFire` / `LocalPlayerId`. Bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektiriyor (arena uzayı, yön≠nokta, `RemoteHitBox` ile hedef çözme, hasarı istemcinin belirlemesi) — bunlar `Weapon` içinde gömülü kalsaydı ikinci bir hasar kaynağı yazan herkes aynı dördünü yeniden keşfederdi. `Weapon` de bu kapıyı kullanır (tek doğruluk kaynağı). Bağlantı yokken sessizce no-op. Reçeteler: `Gelistirici/Yemek-Kitabi.md` |
+| `Combat/ItemDefinition` | Elde tutulabilen her şeyin (silah, ileride bomba) **dar** tabanı: `netItemId` (telde giden kimlik, §6.6), prefab, `holdMode`, kanonik kavrama pozları, tracer görünümü. Davranış alanı (hasar/şarjör/fitil) **girmez** — `RemoteAvatar` eşyayı ne YAPTIĞINI bilmeden çizer; Net katmanının "oyun bilgisi içermez" ilkesinin sunumdaki karşılığı. ⚠️ `primaryGrip` = eşyanın **ele göre** pozu, `secondaryGrip` = ön kabzanın **eşyaya göre** pozu — uzayları terstir (§6.6). Soket çizimi ana noktanın **eşyaya göre** yerini ister ve o `PrimaryGripPointOnItem` olarak **türetilir** (`Inverse(R)·(−P)`), ayrı bir alan olarak tutulmaz — aynı nokta iki yerde yaşasa biri güncellenip diğeri unutulurdu |
+| `Combat/ItemGripSockets` | Kavrama noktalarını **soket** yapar: el yaklaşınca (`0.30 m`) gösterge belirir, soketin üstünde (`0.12 m`) grip'e basılınca kavrama doğar. Kapı ISDK'nın **kendi** uzatma noktasıdır — bileşen bir `IGameObjectFilter`'dır ve `GrabInteractable._interactorFilters`'a yazılır (`WeaponKitBuilder` bağlar), yani kavramanın ALGISI ISDK'da kalır ve tel yolu (`Grabbable` → `Weapon` → `HeldItems`) hiç değişmez. Çizim ile kapı **aynı** açıklık kuralını kullanır (`IsSocketOpen`): ana soket eşya tutulmuyorsa açık, ön kabza yalnız tutuluyor + çift elli + soran el ana el değilken açık — tek elli eşyada ön kabza hiç açılmaz, bu ikinci elin aynı tabancayı kavramasını da engeller. Gösterge `WeaponCatalog.GripSocketPrefab`, yoksa prosedürel halka. Kavrama yarıçapı **silah başınadır** (`ItemDefinition.primary/secondaryGripRadius`) — tabanca kabzası ile tüfek ön kabzası aynı büyüklükte değil; hover (0.30 m) global sabit ama etkin değeri `Max(hover, yarıçap)`, yoksa yarıçap hover'ı geçtiğinde oyuncu soketi hiç görmeden kavrardı. ⚠️ El çözülemezse **fail-open** (editörde kavrama mümkün kalsın) ve bu tek seferlik loglanır — sessiz bırakılsa özellik "çalışıyor gibi görünüp" hiçbir şey yapmazdı |
+| `Combat/GripSocketMarker` | Kavrama noktasını sahnede **sürüklenerek** ayarlamak için işaretçi (`kind` + `radius`). **Çalışma anı davranışı YOKTUR ve oyun onu OKUMAZ** — tek doğruluk kaynağı `ItemDefinition`'dır; bu yalnız bir yazma aracıdır (`GripSocketAuthoring`). `OnDrawGizmos` sarı saydam dolu küre + opak tel kenar + el yönünü gösteren eksen çizgileri (soketin yalnız konumu değil DÖNÜŞÜ de yazılıyor). ⚠️ Sarı = yazılmayı bekleyen, camgöbeği (`ItemGripSockets`) = SO'nun dediği: **çakışmıyorlarsa henüz yazmadın** — iki temsilin sapması böylece gözle görünür bir kontrol olur |
+| `Combat/NetItemCatalog` | `netItemId` → `ItemDefinition` eşlemesi (`Resources`, ilk sorguda sözlük kurar). `Tools > VortexArena > Rebuild Net Item Catalog` projedeki TÜM `ItemDefinition`'lardan yazar — silah tablosundan değil, ki yeni bir eşya TÜRÜ (bomba) eklenince sessizce eksik kalmasın. `Resources/` altından çıkarılmaz |
+| `Combat/HeldItems` | Yerel oyuncunun "hangi elde hangi eşya" durumunun tek buluşma noktası (statik). **Yazan** `Weapon`/`WeaponGranter` (`Weapon.ActiveChanged` üzerinden toplanır — çift tabanca mümkün olduğu için bildirim per-instance olamaz), **okuyan** `PlayerPoseTracker`. Hiçbir şey göndermez |
+| `Combat/ShotTracer` | Havuzlu `LineRenderer` mermi izi. `RemoteShotFx` sürer; görünüm `ItemDefinition`'dan, sıklık `tracerEveryNthRound`'dan (her mermide çizmek lazer ışını gibi durur + konumu fazla ifşa eder; asıl maliyet bayt değil GC/draw call) |
+| `Combat/ArenaCombat` | **Oyun kodunun ağa açılan tek kapısı** (statik). `ReportShot` / `ReportThrow` / `ReportHit` / `ReportRaycastHit` / `ReportAreaHit` + `TryGetTargetPlayerId` / `IsHeadshot` / `CanFire` / `LocalPlayerId`. ⚠️ `ReportShot`/`ReportThrow` **UDP olay kanalına** (`0x03`) gider, `ReportHit` **WS**'te kalır — kaybı kozmetik olan ile otoriter olanın kanalı ayrıdır (§10.3). Bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektiriyor (arena uzayı, yön≠nokta, `RemoteHitBox` ile hedef çözme, hasarı istemcinin belirlemesi) — bunlar `Weapon` içinde gömülü kalsaydı ikinci bir hasar kaynağı yazan herkes aynı dördünü yeniden keşfederdi. `Weapon` de bu kapıyı kullanır (tek doğruluk kaynağı). Bağlantı yokken sessizce no-op. Reçeteler: `Gelistirici/Yemek-Kitabi.md` |
 | `Combat/WeaponGranter` | `weaponSource:"random"` modlarının (§3.9) silah kaynağı. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz, bu yüzden yeni arenaya ek kurulum adımı doğurmaz. İki iş: (1) sahne süpürmesi — raf silahları gizlenir, `BaseZone` **bileşeni** kapatılır + görsel taban şeridi gizlenir; (2) grip basılıyken o elde rastgele silah durur, bırakılınca yok olur, tekrar basınca **yenisi** gelir. TDM'de (kural `rack`) tümüyle pasiftir; kural değişince süpürme geri alınır. Admin'de rig kapalı olduğu için silah verme yolu kendiliğinden kapalı, süpürme ise çalışır |
 | `Combat/WeaponRackSpawner` (+ `RackSlot`) | Rafın silah kaynağı: kural `rack` iken gözlere `ModeDefinition.loadout`'tan silah **örnekler**, kural değişince toplar. Loadout'u `WeaponGranter` ile aynı yoldan okur (katalog → mod → loadout). Göz (`RackSlot`) yalnız KONUMU tutar (sanat kararı); hangi silahın duracağı moddan gelir — gözün `weapon` alanı doldurulursa o silah sabitlenir, boşsa loadout sırası kullanılır. **Neden sahneye elle `WPN_*` konmuyor:** elle konan örnek sahneye donar, moda silah eklenince her arenayı tek tek açmak gerekirdi. Silahlar prefabındaki fizikle gelir (kavrama/fizik ayarlarına dokunulmaz — dokunulsaydı raftan alınan silah "verilen silah" gibi davranır, bırakılamazdı) |
 | `Player/ThreePointBodyIK` | Ağdan gelen **üç noktadan** (kafa + iki el) humanoid iskeleti çözer — uzak avatarların sürücüsü. Kemikler isimle değil `Animator.GetBoneTransform` ile bulunur (karakter humanoid; model değişse bu bileşende tek satır değişmez); **gövde ölçüleri de sabit sayı değil, karakterin bind pozundan ölçülür** (kalça düşüşü, ayak bileği yüksekliği). Avatar oyuncunun **ölçülen ayakta kafa yüksekliğine göre ölçeklenir** — model sabit boydadır, ölçeklenmezse kısa kol ele yetişmez, bacak zemine değmez. Gövde: kalça kafanın altında, gövde yaw'ı kafayı **gecikmeli** takip eder (anında yapışsaydı avatar her bakışta bütün gövdesiyle dönerdi), omurga eğimi zincire paylaştırılır. Kollar/bacaklar: Movement SDK `IKUtilities.SolveCCDIK`; el ve kafa kemiğine **yalnız rotasyon** yazılır (konum yazmak kemiği ebeveyninden koparır). Bacaklar **tamamen prosedürel** (adım döngüsü + ayak IK): projede yürüme klibi yok ve aynı anda iki ayak birden adım atmaz. Her kare önce **bind pozuna dönülür** (§7 tuzaklar). ⚠️ Dirsek/omuz yönü TAHMİNDİR — gerçek body tracking değildir; ağa tek bayt eklenmez |
@@ -656,10 +794,11 @@ bile görünmez. Oyuncu tarafında etkisi YOKTUR — yalnız `AdminSpectator.Ref
 ### Editör: `VortexArena.Core.Editor` (içerik araçları — yalnız Editor)
 
 Menü öğelerinin tam listesi ve "ne zaman çalıştırılır" tablosu `CLAUDE.md`'de; burada arena
-geometrisini üreten iki araç:
+geometrisini üreten iki araç + kavrama ayarı:
 
 | Sınıf | Görevi |
 |---|---|
+| `GripSocketAuthoring` | Kavrama noktalarını **sahnede sürükleyerek** ayarlama aracı: `GameObject > VortexArena > Grip Socket (Primary/Secondary)` işaretçi üretir (mevcut SO değerlerinden başlatarak — araç ayarı sıfırlamaz), `Tools > VortexArena > Write Grip Sockets To Definition` onu `WD_*.asset`'e yazar. **Var olma sebebi asimetri:** aynı sürüklenmiş poz `primaryGrip` için TERS bileşimle (`R=Inverse(localRot)`, `P=−(R·localPos)`), `secondaryGrip` için DÜZ yazılır — elle yapıldığında bu fark sessiz bir işaret hatası üretiyordu. Round trip birebir: geri okuma işaretçiyi aynı yere koyar. Yalnız **bulunan** işaretçinin alanları yazılır (yarısı ayarlı silahı sıfırlamasın); ölçek bulaşmasın diye `InverseTransformPoint` yerine elle bileşim |
 | `ArenaShapeBuilder` | **Arena geometrisinin TEK üretim kapısı** (`Build Arena From Dimensions`): boyut dosyasından zemin/duvar/kolon üretir — `Zemin` ProBuilder çokgeni, kenar başına bir duvar, kolon başına bir kutu + `ArenaObstacle`. Kök = `ArenaBoundary`'yi taşıyan transform (plan koordinatları onun yerel XZ'sinde); geometriyi başka bir objenin altına üretmek planı sessizce kaydırır. Üretilen her şey o kökün altında açılan **tek bir `ArenaGeometry` dalında** durur (`Zemin`/`Duvarlar`/`Kolonlar`) — elle konan sahne objeleriyle (kalibrasyon işaretçileri, taban bölgeleri, rig) karışmasın ve tek seferde silinebilsin diye; araç **idempotenttir**, dosya değişince tekrar çalıştırılır ve birikme olmaz. Duvarları `ArenaBoundary.wallRenderers`'a, boyut dosyasını `dimensionsJson`'a kendisi bağlar |
 | `ArenaTestMeshBuilder` | TestMesh (= mekanın fiziksel alanını temsil eden basit quad/blok yığını) → **boyut dosyası**. İkinci bir geometri üreteci DEĞİLDİR: bloklardan bir plan çıkarır, planı diske JSON olarak yazar ve üretimi yukarıdaki tek kapıya devreder — ölçü sonradan dosyada elle düzeltilip yeniden çizilebilsin ve çalışma anındaki muhafaza da aynı dosyayı okusun diye. Sınıflandırma önce **ad ipucu** (`kolon`/`column`/`sütun` · `zemin`/`floor`/`ground`/`taban` · `duvar`/`wall`), ipucu yoksa **geometri**: yassı kutu → zemin, ayak izinin uzun kenarı kısa kenarın belli bir katından uzunsa → duvar, aksi hâlde → kolon. Sınır çokgeni zemin parçasının **gerçek mesh sınırından** çıkarılır (düz quad / `extrude=0` poly-shape ise L/yamuk şekli korunur); zemin kapalı bir katıysa (ProBuilder küpü) parçanın kendi yönelimli dikdörtgeninden dört köşe üretilir — kare/dikdörtgen alanların beklenen yoludur, hata değil. Kolonlar parçanın **kendi frame'inde** ölçülür ve dönüş `yaw` alanında korunur |
 
@@ -669,7 +808,7 @@ geometrisini üreten iki araç:
 |---|---|
 | `ControlHost` | Kestrel WebSocket host (`/ws`), bağlantı başına `ClientConnection` |
 | `BeaconService` | 2 sn'de bir broadcast |
-| `StateHost` | UDP kaydı, poz alımı, 20 Hz snapshot yayını (16 girdiden fazlası MTU'ya sığan parçalara bölünür) |
+| `StateHost` | UDP kaydı, poz alımı, 20 Hz snapshot yayını (16 girdiden fazlası MTU'ya sığan parçalara bölünür; olay varsa ve sığıyorsa `0x05` ile tek datagramda birleşir), `0x06` RTT echo'su. **Telemetriyi burada üretir:** saniyelik `[state]` satırı — gerçek bayt-sn/paket-sn, tik kayması, uplink jitter + poz/olay kaybı; eşiği aşan oyuncu için ek `[net]` satırı |
 | `PlayerRegistry` | Oyuncu listesi, `playerId` tahsisi (1..255), `devices.json` ile kalıcı **kimlik** (ad + forma numarası), çevrimiçi/çevrimdışı. **Kimlik:** ilk bağlantıda ad 20'lik havuzdan rastgele (kullanılmayanlar arasından), numara 1'den itibaren ilk boş (1..99); `set_identity` ikisini de değiştirir. Adlar tekrar edebilir, **numara tüm KAYITLI cihazlar arasında benzersizdir** — sahiplik sorgusu `_players`'a değil `_devices`'a bakar (hiç bağlanmamış cihaz da numara tutar). Çevrimiçi sahipten numara istenirse reddedilir; çevrimdışı sahip **aynı anda** yeniden numaralanır. **Rol başına kalıcılık farkı:** oyuncu kaydı kopunca Offline işaretlenir ama DURUR (deviceId kalıcı); **admin kaydı tümüyle SİLİNİR** (deviceId oturumluk — yoksa her açıp kapatma roster'da hayalet satır ve tükenen playerId bırakırdı) ve admin adı diske yazılmaz. Aynı PC'de iki admin varsa ad " (2)" ile ayrıştırılır |
 | `LobbyService` | Roster yayını (`lobby_state`) — **tek yayıncı döngüden**, kirli bayrakla birleştirilerek, her yayında `version` artarak (Tuzaklar: "ateşle-unut yayın sıra garantisi vermez"); `status.rosterVersion` geride kalan istemciye yalnız ona tam snapshot yollatır. Ayrıca ready/takım/kick/`set_identity` + **adminler arası ortak durumun sahibi**: mod/harita seçimi burada yaşar, `set_selection` ile değişir, `admin_state` ile yalnız adminlere yayılır. Her admin komutu "kim ne yaptı" duyurusu üretir |
 | `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş hattı, can/skor, canlanma, zorla canlandırma.** Mod kaydı tek yerde (`RegisterModes()` — yeni mod buraya bir satır). **Skor defteri:** `AddScore(team,…)` (takım) + `AddPlayerScore/ScoreOf/TryGetLeader` (bireysel); modlar skoru YALNIZ buradan yazar |
@@ -1202,11 +1341,83 @@ konsoluna tek satır sebep yazar.
     özellik (gövde overlay kamerası, çatı gizleme) kurulumunu atlar. Katman/tag/qualite ayarı
     editörden ya da `SerializedObject` ile yapılır; git'e giden dosya o yolun çıktısıdır.
 
+44. **Poz kanalının "eski `seq`'i at" kuralı OLAY kanalına kopyalanmaz.** İkisi aynı alan adını
+    taşır, kuralları taban tabana zıttır: poz bir **durum**dur (son gelen kazanır, geç kalan eski poz
+    oyuncuyu geri zıplatır → atılmalı), atış/atma bir **olgu**dur (sırası bozuk gelen atış gerçekten
+    olmuş bir atıştır → atmak sessizce bir tracer ve bir ses siler). Olay kanalında `seq` yalnız
+    **birebir kopyayı** bastırır (UDP paket çoğaltabilir → çift ses/çift tracer) ve kayıp ölçer.
+    Aşağı yönde karşılığı `serverTick` halkasıdır, aynı kuralla: eski tik'li ama görülmemiş batch
+    OYNATILIR. → `Docs/ArenaNet-Protokol.md` §6.4/§6.5
+
+45. **Serialize edilen `int` alana `[Range(min,…)]` koymak varsayılan `0`'ı SESSİZCE min'e çeker.**
+    Unity'nin Range drawer'ı `IntSlider` ile çizerken değeri clamp'ler **ve asset'i dirty yapar** —
+    yani Inspector'da açılan her asset kendiliğinden değişir. `netItemId` (varsayılan `0` =
+    "atanmamış", §6.6) için bu, Inspector'ı açılan altı silahın hepsinin `netItemId=1` olması, yani
+    altı kimliğin birbiriyle çakışması demekti. Aralık denetimi koda (`HasNetItemId`) ve editör
+    bekçisine (`Tools > VortexArena > Rebuild Net Item Catalog`) ait; `[Range]` "0 = atanmamış"
+    semantiği taşıyan alanlarda kullanılmaz.
+
+46. **Alanı yeniden adlandırırken `[FormerlySerializedAs]` yoksa değer sessizce sıfırlanır.** Unity
+    alanı **isimle** saklar: `grantedHoldPosition` → `primaryGripPosition` geçişi attribute olmadan
+    yapılsaydı altı `WD_*.asset`'in kavrama pozu boşalırdı ve bunu ancak VR'da "silah elde ters
+    duruyor" olarak görürdük. (Alanı türetilmiş sınıftan **tabana taşımak** isim aynı kaldığı sürece
+    güvenlidir — kaybettiren şey taşıma değil **yeniden adlandırma**dır.)
+
+47. **Uzak oyuncuda çizilen eşya bir GÖRSELDİR; prefabın bileşenleri sterilize edilmeli — ve
+    `enabled=false` YETMEZ.** `Awake` devre dışı bırakılmış bileşende de koşar, `AudioSource`
+    `playOnAwake` ile ses çalar. Sterilize edilmemiş bir uzak silah kendi sesini çalar, fizik yapar,
+    hatta raycast atar; teşhisi en zor hata sınıfıdır çünkü **yalnız başkalarının ekranında** olur —
+    atıcının kendi görüntüsü kusursuzdur. Çözüm: örneği **pasif** bir kökün altında `Instantiate`
+    edip (hiç `Awake` koşmaz) sonra bileşenleri toptan kaldırmak. Tipe göre liste tutmak da tuzak:
+    prefaba yeni bileşen eklenince liste güncellenmeyi unutur.
+
+48. **Uzak bir olayı GELDİĞİ ANDA oynatmak, pozu bilerek geciktirmiş olmakla çelişir.** Uzak
+    avatar `INTERP_DELAY_MS` geriden çizilir; sunucu snapshot'ı ile olay batch'ini aynı tik'te
+    yayınladığı için "hemen oynat" demek efekti elin **100 ms öncesindeki** yerine koymak demektir
+    (kol 2 m/s ise ~20 cm). Kaymanın sinsiliği şu: görüntü kendi içinde tutarlı görünür, çünkü
+    tracer o karede çizilmiş namludan çıkar — yani yanlış olan efektin YERİ değil ZAMANI, ve gözle
+    "biraz geriden çıkıyor" diye okunur, hata gibi değil. Kural: interpolasyon tamponu olan her
+    sistemde olayın da **kendi tik'inde** oynaması gerekir; tamponun büyüklüğü kadar bekle.
+    ⚠️ Bunun tersi de tuzak: bekletmek için "geçmiş pozu örnekleyen" bir API yazmak. Gerekmiyor —
+    doğru anda oynayınca zaten çizili poz doğru pozdur (§3.5b).
+
+49. **Bir affordance'ı yalnız SEÇİM tarafından kesmek onu ekrandan kaldırmaz.** ISDK'nın
+    `_interactorFilters` kapısı `CanBeSelectedBy`'ı süzer, **hover'ı süzmez**: soket kapısı bağlı
+    bir `DistanceGrabInteractable` bırakılsaydı oyuncu silahı odanın öbür ucundan hâlâ vurgulu
+    görür, nişan alır, grip'e basar ve **hiçbir şey olmazdı**. Yalan söyleyen bir affordance,
+    hiç olmayandan kötüdür. Bu yüzden bileşen filtrelenmedi, **kaldırıldı** (`WeaponKitBuilder`) —
+    tek referansçısı olduğu `MoveTowardsTargetProvider` ile birlikte: yetim bileşen davranışsızdır
+    ama sonraki okuyucuya "burada mesafe kavraması var" diye yalan söyler.
+
+50. **Kablosuzda maliyet BAYT değil ÇERÇEVE'dir — "bant genişliği bol" ölçeklenebilirlik demek
+    değildir.** Bu ürün 1 Gbps'lik bir AP'nin binde ikisini kullanıyor ama tek radyonun
+    airtime'ının ~%15–20'sini tutuyor (§3.12): trafiği "az bayt, çok çerçeve" desenindedir ve
+    802.11'de her minik unicast çerçeve preamble + SIFS + ACK + backoff olarak sabit bir hava
+    bedeli öder. Pratik sonuçları:
+    - **Bant üzerinden yapılan kapasite planı yanlış sonuç verir.** "%0,2 kullanıyoruz, 50 kat
+      büyüyebiliriz" cümlesi bant için doğru, airtime için yanlıştır (paket tarafında pay ~2,5 kat).
+    - ⚠️ **Donanım datasheet'i bu profili hiç ölçmez.** "1000 Mbps / AX3000" rakamı **büyük TCP
+      paketleriyle** üretilir; bu yükte tıkanan şey radyo değil AP'nin **küçük paket iletim hızı
+      (pps) / CPU'su**dur ve o sayı yazılmaz. Yani AP seçimi bir hız kıyaslaması değil bir
+      **yönetilebilirlik** kıyaslamasıdır (OFDMA DL+UL, sabit kanal, DTIM, elle WMM/QoS
+      ayarlanabiliyor mu) → seçim ölçütleri `Docs/Isletme-Kurulum.md` "Ön koşullar / Donanım".
+    - ⚠️ **Sıkıştırma bu darboğaza DOKUNMAZ.** Quaternion sıkıştırma / delta snapshot bandı ~2,5×
+      düşürür, **paket sayısını hiç düşürmez** — yani bugün hiçbir şey çözmez. Paketi kesen tek
+      şey **kanal birleştirmek**tir (durumu zaten giden bir pakete bindirmek), baytı kısmak değil.
+    - **Fan-out'u N² olan her kanal önce paket olarak patlar.** `health_update` bant olarak
+      0,3 Mbps'lik hiçbir şeydir ama çatışmada sistemin en çok paket üreten kanalıdır — üstelik
+      TCP olduğu için retransmit/ACK ile katlanır. Yeni bir "olay başına herkese haber ver"
+      kanalı eklerken sorulacak soru "kaç bayt" değil **"tik başına kaç datagram"**dır.
+
 ---
 
 ## 8. Durum ve sıradaki işler
 
-**Bugün çalışan sistem** (ayrıntı §2–§7): lobi + 20 Hz poz senkronu + sunucu-otoriter maç
+**Bugün çalışan sistem** (ayrıntı §2–§7): lobi + 20 Hz poz senkronu + **elde tutulan eşya senkronu**
+(uzak oyuncuların silahı kanonik kavramayla çizilir) + **soket tabanlı kavrama** (el yaklaşınca
+gösterge belirir, soketin üstünde grip'e basılınca kavranır; mesafeden kavrama yok) + **UDP
+atış/atma olay kanalı** (namlu alevi, ses, mermi izi — her olay kendi `serverTick`'inde,
+interpolasyon saatiyle oynatılır) + sunucu-otoriter maç
 (faz makinesi, vuruş hattı, free-roam canlanma, kill-feed/HUD) · **iki oyun modu** — `tdm` (Takım
 Ölüm Maçı) ve `ffa` (Herkes Tek: takımsız, bireysel skor, sabit durma canlanması, grip'e basınca
 elde rastgele silah) · **çok mod altyapısı** (`ModeRules`
@@ -1217,8 +1428,10 @@ sunucu açılışta hangisinin oynatılacağını sorar (§3.8) + arena şablon 
 çoklu admin) · geliştirici araç seti (`Tools > VortexArena > Dev`, `dev-targets.json`,
 `Ctrl+Alt+R`) · rolden bağımsız adres zinciri + `ConnectionOverlay` bağlantı hata ekranı ·
 **sunucu-otoriter kalibrasyon durumu** (§3.11: admin sıfırlar → oyuncu savaş dışı + avatarı parlar;
-geri açmayı gözlük yapar) · WPF operatör launcher'ı (sunucuyu `--venue` ile başlatır) + dört
-dağıtım betiği.
+geri açmayı gözlük yapar) · **ağ telemetrisi** (§3.12/§6.7: sunucu konsolunda gerçek bayt-sn +
+paket-sn + tik kayması + uplink jitter/kayıp; gözlükte ölçülen RTT/downlink jitter/kayıp → admin
+istatistik panelinde **PING** kolonu) · WPF operatör launcher'ı (sunucuyu `--venue` ile başlatır) +
+dört dağıtım betiği.
 
 > **Sıradaki büyük iş: bulut kalibrasyonu** (Meta grup / paylaşılan uzamsal anchor ile toplu
 > hizalama). Altyapısı hazır bırakıldı — `set_calibration.source` `"cloud"`'u kabul ediyor,
@@ -1247,9 +1460,14 @@ silinir.
 - **Admin'den oyuncuya ses/mesaj** — `identify` dışında kanal yok.
 - **Hile koruması** — ürün gözetimli özel alanda çalıştığı için bilinçli olarak yok
   (`Docs/ArenaNet-Protokol.md` §10.3).
+- **Quaternion sıkıştırma / delta snapshot** — bir zamanlar "kalabalık maçta bant gerekirse"
+  diye ufukta duruyordu; **listeden çıkarıldı.** Bant hiçbir zaman darboğaz değil (§3.12) ve
+  sıkıştırma bağlayıcı kısıt olan paket sayısına dokunmuyor. Doğru kaldıraç **kanal
+  birleştirmek**tir ve o yapıldı: `0x05` (§6.8) + `health_update`'in hedefli gönderimi paket
+  sayısını ~%40 düşürdü, sıkıştırma bunun yanında hiçbir şey getirmezdi (§7, "kablosuzda maliyet
+  BAYT değil ÇERÇEVE" maddesi).
 
-**Planlanmamış ufuk:** quaternion sıkıştırma + delta snapshot (kalabalık maçta bant genişliği
-gerektirirse), yeni modlar (bölge kontrolü, turnuva, silah yarışı, zombi), dinamik obje senkronu
+**Planlanmamış ufuk:** yeni modlar (bölge kontrolü, turnuva, silah yarışı, zombi), dinamik obje senkronu
 (`NetIdentity` + `NetSpawnCatalog` üzerinden), Meta colocation/paylaşımlı anchor araştırması
 (offline çalışma şartıyla), launcher ekranından APK dağıtımı, eşzamanlı oyuncu kotası (lisanslama
 katmanı geldiğinde).

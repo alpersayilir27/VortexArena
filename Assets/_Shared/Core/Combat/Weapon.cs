@@ -14,8 +14,17 @@ namespace VortexArena.Core.Combat
     /// yalnız tutulurken ateş eder. Tetik, silahı FİİLEN tutan ANA elin kontrolcüsünden
     /// okunur (Grabbable pointer olayından el çözülür; çözülemezse Input System
     /// "Player/Attack" editör fallback'i). İki elle tutuş saçılım ve geri tepmeyi
-    /// çarpanla düşürür; geri tepme <see cref="ModelPivot"/>'a uygulanır (grab sistemi
-    /// kök transformu sürdüğü için onunla yarışmaz).
+    /// çarpanla düşürür; geri tepme <see cref="ModelPivot"/>'a uygulanır (kök transformu
+    /// kanonik kavrama sürdüğü için onunla yarışmaz).
+    /// <para>
+    /// <b>KAVRAMA KANONİKTİR</b> (§6.6): silah tutulduğu sürece kökü ana elin anchor'ından +
+    /// <see cref="ItemDefinition.PrimaryGripPosition"/>/<see cref="ItemDefinition.PrimaryGripRotation"/>'dan
+    /// sürülür (<see cref="LateUpdate"/>). ISDK'nın <c>*GrabFreeTransformer</c>'ları bu yüzden
+    /// <c>WPN_*</c> prefablarından kaldırıldı: kavramanın ALGILANMASI Grabbable/GrabInteractable'da,
+    /// silahı TAŞIMA işi burada. Gerekçe ağdadır — duruş telde gitmez, uzak taraf silahı "elin pozu ×
+    /// sabit kavrama ofseti" olarak çizer; serbest kavrama (keyfi ofset) o eşitliği bozar ve namlusundan
+    /// ters tutulan bir AK karşı tarafta düzgün tutuluyor görünürdü.
+    /// </para>
     /// <para>
     /// Tüm denge/his/ses değerleri <see cref="WeaponDefinition"/>'dan gelir (ZORUNLU);
     /// hasar istemci-otoriterdir: headshot çarpanı dahil burada hesaplanır ve
@@ -73,6 +82,13 @@ namespace VortexArena.Core.Combat
         /// <summary>Protokol silah anahtarı — yalnız kill feed etiketi, sunucu doğrulamaz (§10.3).</summary>
         public string WeaponId => definition != null ? definition.WeaponId : "";
 
+        /// <summary>
+        /// Telde giden eşya kimliği (§6.6); <c>0</c> = tanım yok ya da <c>netItemId</c> atanmamış.
+        /// ⚠️ <see cref="WeaponId"/> ile karıştırma: o bir kill feed <i>etiketi</i> (string, serbest),
+        /// bu bir <i>ağ kimliği</i> (u8) ve uzak tarafın hangi eşyayı çizeceğini o belirler.
+        /// </summary>
+        public byte NetItemId => definition != null && definition.HasNetItemId ? definition.NetItemId : (byte)0;
+
         /// <summary>Silah tanımı (Awake'te doğrulanır; null ise silah kilitlidir).</summary>
         public WeaponDefinition Definition => definition;
 
@@ -101,6 +117,21 @@ namespace VortexArena.Core.Combat
         /// <summary>İki elle sabitleme YALNIZ ISDK kavramasıyla gelir; verilen silah her zaman tek
         /// ellidir (iki el iki AYRI silah tutabilir — çapraz-el durumu tutulmaz).</summary>
         public bool IsTwoHanded => !IsGranted && heldPoints.Count > 1;
+
+        /// <summary>
+        /// Tetik/ana el: VERİLEN silahta silahın verildiği el, raf silahında İLK kavrayan el.
+        /// <c>None</c> = tutulmuyor ya da kontrolcü çözülemedi (editör fallback'i).
+        /// </summary>
+        public OVRInput.Controller MainHand =>
+            IsGranted ? GrantedHand
+                      : (heldPoints.Count > 0 ? heldPoints[0].ctl : OVRInput.Controller.None);
+
+        /// <summary>
+        /// Ana el sağ mı — §6.4 olay bayrağının ve §6.6 <c>FLAG_PRIMARY_RIGHT</c>'ının kaynağı.
+        /// <para>⚠️ Çözülemeyen el SAĞ sayılır: telde "bilinmeyen el" diye bir değer yok, tek bir
+        /// bit var. Yanlış ele düşen bir tracer, hiç çizilmeyen bir tracer'dan iyidir.</para>
+        /// </summary>
+        public bool IsMainHandRight => MainHand != OVRInput.Controller.LTouch;
 
         public int CurrentAmmo { get; private set; }
         public int MagazineSize => definition != null ? definition.MagazineSize : 0;
@@ -142,6 +173,12 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Active listesi değişti VEYA bir silahın tutulma durumu değişti.</summary>
         public static event Action ActiveChanged;
+
+        // HeldItems toplayıcısının durumu (§6.6): abonelik bir kez kurulur, uyarılar tek seferlik
+        // (durum değişimi insan hızında olsa da hatalı bir kurulum her kavramada tekrarlanırdı).
+        private static bool heldItemsHooked;
+        private static bool missingNetItemIdWarned;
+        private static bool handConflictWarned;
 
         // Tutan eller SIRALI tutulur: İLK eleman tetik/ana eldir. id = PointerEvent.Identifier
         // (Unselect/Cancel'da eşleştirme anahtarı), ctl = ele çözülen OVR kontrolcüsü
@@ -213,6 +250,10 @@ namespace VortexArena.Core.Combat
 
             TrySubscribeAlive();
 
+            // Toplayıcı abone OLMADAN listeye ekleme: aşağıdaki ActiveChanged bu silahı da
+            // saysın (aksi hâlde ilk silah HeldItems'a hiç yazılmazdı).
+            EnsureHeldItemsHook();
+
             Active.Add(this);
             ActiveChanged?.Invoke();
         }
@@ -281,6 +322,55 @@ namespace VortexArena.Core.Combat
             }
         }
 
+        /// <summary>El izlemesi güncellendikten SONRA sürülür: LateUpdate'te yapılmazsa silah bir
+        /// kare geriden gelir ve nişan hissi bulanıklaşır.</summary>
+        protected virtual void LateUpdate()
+        {
+            ApplyCanonicalGrip();
+        }
+
+        // -------------------------------------------------------- kanonik kavrama
+
+        /// <summary>
+        /// §6.6 <b>KANONİK KAVRAMA</b>: silah tutulduğu sürece kökü ana elin anchor'ından +
+        /// tanımın SABİT kavrama ofsetinden sürülür — kavradığı andaki keyfi ofset korunmaz.
+        /// <para>
+        /// <b>Neden zorunlu:</b> duruş telde gitmez; uzak taraf silahı "elin pozu × sabit kavrama
+        /// ofseti" olarak çizer. Serbest kavrama o eşitliği bozar ve iki uçta iki ayrı duruş doğar.
+        /// </para>
+        /// <para>
+        /// <b>Verilen silah burada işlenmez</b> (<see cref="IsGranted"/>): o örnek anchor'ın ÇOCUĞU
+        /// olarak doğar (<see cref="WeaponGranter"/>) ve pozu zaten aynı ofsetten gelir. İki yol
+        /// aynı kurala uyar, ama biri parent hiyerarşisiyle, öteki her karede sürülerek.
+        /// </para>
+        /// <para>
+        /// Rig yoksa (admin gözlemci, editör oturumu, sahne henüz yüklenmemiş) hiçbir şey yapılmaz —
+        /// silah bulunduğu yerde kalır; bırakılınca da öyle (mevcut davranış).
+        /// </para>
+        /// <para>⚠️ Geri tepme <see cref="ModelPivot"/>'a uygulanır ve buraya KARIŞMAZ: kökü el
+        /// sürer, görsel sarsıntı çocukta yaşar. Fizik de yarışmaz — Grabbable tutuş boyunca
+        /// Rigidbody'yi kinematik yapıyor (<c>_kinematicWhileSelected</c>).</para>
+        /// </summary>
+        private void ApplyCanonicalGrip()
+        {
+            if (definition == null || IsGranted || heldPoints.Count == 0)
+            {
+                return;
+            }
+
+            Transform anchor = WeaponGranter.ResolveHandAnchor(MainHand);
+            if (anchor == null)
+            {
+                return;
+            }
+
+            // TransformPoint DEĞİL: anchor'ın ölçeği (rig'de 1 olmalı ama garanti değil) kavrama
+            // ofsetini büyütür/küçültürdü. Kavrama ofseti METRE cinsindendir, ölçeklenmez.
+            transform.SetPositionAndRotation(
+                anchor.position + anchor.rotation * definition.PrimaryGripPosition,
+                anchor.rotation * definition.PrimaryGripRotation);
+        }
+
         // ------------------------------------------------------------------ tetik
 
         private void TickTrigger()
@@ -292,7 +382,7 @@ namespace VortexArena.Core.Combat
             // Ayrım zorunlu: 'Player/Attack' tek bir Button action'dır ve
             // <XRController>/{PrimaryAction} ile İKİ kumandayı da toplar — iki elde iki
             // silahla oynanan FFA'da tek tetiğe basmak ikisini birden ateşlerdi.
-            OVRInput.Controller mainHand = IsGranted ? GrantedHand : heldPoints[0].ctl;
+            OVRInput.Controller mainHand = MainHand;
 
             if (mainHand != OVRInput.Controller.None)
             {
@@ -351,14 +441,20 @@ namespace VortexArena.Core.Combat
                                 Quaternion.AngleAxis(scatter.y, muzzle.right) *
                                 muzzle.forward;
 
-            // Ağ: her atış relay edilir (uzak namlu alevi/sesi + sayım). Arena uzayı dönüşümü
-            // ve DTO yönetimi ArenaCombat'ın işi — kendi hasar kaynağını yazan da aynı kapıyı
-            // kullanır (Docs/Gelistirici/Yemek-Kitabi.md).
             if (string.IsNullOrEmpty(WeaponId))
                 WarnMissingWeaponId();
-            ArenaCombat.ReportShot(muzzle.position, direction, WeaponId);
 
-            if (Physics.Raycast(muzzle.position, direction, out RaycastHit hit, definition.Range))
+            bool didHit = Physics.Raycast(muzzle.position, direction, out RaycastHit hit, definition.Range);
+
+            // Ağ — ATIŞ (§6.4, UDP olay kanalı): her Fire()'da TAM BİR KEZ, isabet olsun olmasın.
+            // Uzak taraf bununla namlu alevini/sesini oynatır ve tracer'ı çizer, o yüzden mesafe
+            // ışının GERÇEKTE gittiği yoldur: isabet varsa oraya kadar, yoksa menzil sonu.
+            // ⚠️ Bu bildirim VURUŞTAN (aşağıdaki hit_report) BAĞIMSIZDIR — biri sunum, öteki
+            // otoriter durum; kanalları da ayrıdır (Docs/Gelistirici/Yemek-Kitabi.md).
+            ArenaCombat.ReportShot(direction, didHit ? hit.distance : definition.Range,
+                NetItemId, IsMainHandRight);
+
+            if (didHit)
             {
                 if (hitEffectPrefab != null)
                 {
@@ -531,8 +627,12 @@ namespace VortexArena.Core.Combat
             {
                 HeldChanged?.Invoke(true);
                 weaponAudio?.PlayPickup();
-                ActiveChanged?.Invoke();
             }
+
+            // ⚠️ ActiveChanged KOŞULSUZ yayınlanır (yalnız 0→1 geçişinde değil): ikinci elin
+            // kabzaya girmesi telde bir değişikliktir (§6.6 GRIP_LINKED) ve HeldItems toplayıcısı
+            // bu olaya bağlı. Koşula bağlıyken çift el kavraması ağa hiç yansımıyordu.
+            ActiveChanged?.Invoke();
         }
 
         private void RemoveHeldPoint(int identifier)
@@ -552,9 +652,10 @@ namespace VortexArena.Core.Combat
                 if (heldPoints.Count == 0)
                 {
                     HeldChanged?.Invoke(false);
-                    ActiveChanged?.Invoke();
                 }
 
+                // Koşulsuz — gerekçe AddHeldPoint'te (ikinci elin bırakılması da telde değişiklik).
+                ActiveChanged?.Invoke();
                 return;
             }
         }
@@ -611,6 +712,179 @@ namespace VortexArena.Core.Combat
         }
 
         // ------------------------------------------------------------------- ağ
+
+        /// <summary>
+        /// §6.6: YEREL oyuncunun elinde ne olduğunu <see cref="HeldItems"/>'a bildiren TEK yer.
+        /// <para>
+        /// <b>Neden statik ve merkezî:</b> <c>HeldItems</c> oyuncunun TAMAMINI anlatır (iki slot +
+        /// kavrama bitleri), tek bir silahı değil — çift tabanca meşru bir durumdur. Her silah kendi
+        /// durumunu bildirseydi ikinci silah birincinin slotunu ezer ve elde ne olduğu silahların
+        /// rastgele sırasına bağlı kalırdı.
+        /// </para>
+        /// <para>
+        /// ⚠️ Her karede DEĞİL, yalnız <see cref="ActiveChanged"/>'de koşar: "elde ne var" insan
+        /// hızında değişir, <see cref="Active"/>'i kare başına taramanın karşılığı yoktur.
+        /// </para>
+        /// </summary>
+        private static void RefreshHeldItems()
+        {
+            byte left = 0;
+            byte right = 0;
+            bool gripLinked = false;
+            bool primaryRight = false;
+
+            for (int i = 0; i < Active.Count; i++)
+            {
+                Weapon weapon = Active[i];
+                if (weapon == null || !weapon.IsHeld)
+                {
+                    continue;
+                }
+
+                byte id = weapon.NetItemId;
+                if (id == 0)
+                {
+                    // Kimliksiz silah uzak tarafta HİÇ çizilmez; sessiz kalması sahada teşhis
+                    // edilemez bir "elinde bir şey yok" olarak görünürdü.
+                    WarnMissingNetItemId(weapon);
+                    continue;
+                }
+
+                weapon.GetHeldHands(out bool wantsLeft, out bool wantsRight);
+
+                if (wantsLeft && wantsRight)
+                {
+                    // Çift ellide İKİ slota AYNI id yazılır + GRIP_LINKED: "aynı id iki slotta"
+                    // tek başına çift el demek değildir (çift tabanca), ayrımı yalnız bayrak taşır.
+                    if (left != 0 || right != 0)
+                    {
+                        WarnHandConflict(weapon);
+                        continue;
+                    }
+
+                    left = id;
+                    right = id;
+                    gripLinked = true;
+                    primaryRight = weapon.IsMainHandRight;
+                    continue;
+                }
+
+                if (wantsLeft)
+                {
+                    if (left != 0)
+                    {
+                        WarnHandConflict(weapon);
+                        continue;
+                    }
+
+                    left = id;
+                }
+                else if (wantsRight)
+                {
+                    if (right != 0)
+                    {
+                        WarnHandConflict(weapon);
+                        continue;
+                    }
+
+                    right = id;
+                }
+            }
+
+            if (left == 0 && right == 0)
+            {
+                HeldItems.Clear();
+                return;
+            }
+
+            HeldItems.Report(left, right, gripLinked, primaryRight);
+        }
+
+        /// <summary>
+        /// Bu silahı hangi el(ler) tutuyor. Verilen silah TANIM GEREĞİ tek ellidir; raf silahında
+        /// eller <see cref="heldPoints"/>'tan gelir.
+        /// <para>⚠️ Çözülemeyen el (<c>None</c>) SAĞ sayılır — telde "bilinmeyen el" diye bir değer
+        /// yok. Ama iki kavrama noktası varsa el çözülemese bile İKİSİ birden işaretlenir: aksi
+        /// hâlde editör oturumunda (kontrolcü çözülemez) çift el kavraması tek elli görünürdü.</para>
+        /// </summary>
+        private void GetHeldHands(out bool left, out bool right)
+        {
+            left = false;
+            right = false;
+
+            if (IsGranted)
+            {
+                if (GrantedHand == OVRInput.Controller.LTouch)
+                {
+                    left = true;
+                }
+                else
+                {
+                    right = true;
+                }
+
+                return;
+            }
+
+            for (int i = 0; i < heldPoints.Count; i++)
+            {
+                if (heldPoints[i].ctl == OVRInput.Controller.LTouch)
+                {
+                    left = true;
+                }
+                else
+                {
+                    right = true;
+                }
+            }
+
+            if (heldPoints.Count > 1)
+            {
+                left = true;
+                right = true;
+            }
+        }
+
+        /// <summary>Toplayıcıyı <see cref="ActiveChanged"/>'e BİR KEZ bağlar (statik olay, statik
+        /// dinleyici: sahne değişse de abonelik kalır, iki kez bağlanmak refresh'i çiftlerdi).</summary>
+        private static void EnsureHeldItemsHook()
+        {
+            if (heldItemsHooked)
+            {
+                return;
+            }
+
+            heldItemsHooked = true;
+            ActiveChanged += RefreshHeldItems;
+        }
+
+        private static void WarnMissingNetItemId(Weapon weapon)
+        {
+            if (missingNetItemIdWarned)
+            {
+                return;
+            }
+
+            missingNetItemIdWarned = true;
+            Debug.LogWarning($"[Weapon] '{weapon.name}' tanımında netItemId yok (0); elde tutulan " +
+                             "eşya AĞA BİLDİRİLMEZ ve uzak oyuncularda çizilmez. Tanıma 1-255 " +
+                             "arası kararlı bir kimlik ver (Tools > VortexArena > Validate Net Item Ids).",
+                weapon);
+        }
+
+        private static void WarnHandConflict(Weapon weapon)
+        {
+            if (handConflictWarned)
+            {
+                return;
+            }
+
+            handConflictWarned = true;
+            Debug.LogWarning($"[Weapon] '{weapon.name}' zaten dolu bir el slotunu istedi; ilk bulunan " +
+                             "silah kazandı ve bu silah ağa bildirilmedi. Aynı eli iki silahın " +
+                             "tutması beklenmez — kavrama/verme yollarından biri temizlenmemiş olabilir.",
+                weapon);
+        }
 
         private void WarnMissingWeaponId()
         {

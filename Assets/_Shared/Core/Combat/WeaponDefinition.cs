@@ -5,6 +5,13 @@ namespace VortexArena.Core.Combat
     /// <summary>
     /// Silah tanımı (ScriptableObject): kimlik + tüm denge/his/ses değerleri.
     /// <para>
+    /// <b>Ağın ve uzak çizimin gördüğü kısım tabandadır</b> (<see cref="ItemDefinition"/>):
+    /// <c>netItemId</c>, prefab, <c>holdMode</c> ve kavrama pozları — eski
+    /// <c>grantedHoldPosition/Euler</c> alanları oraya <c>primaryGrip*</c> olarak terfi etti
+    /// (Docs/ArenaNet-Protokol.md §6.6). Burada kalan her şey <i>davranıştır</i> ve bilinçli
+    /// olarak tabana çıkarılmaz.
+    /// </para>
+    /// <para>
     /// <b>Denge sayılarının TEK doğruluk kaynağı burasıdır ve hasar İSTEMCİ-otoriterdir</b>
     /// (Docs/ArenaNet-Protokol.md §10.3): sunucuda silah tablosu yoktur; istemci hasarı burada
     /// hesaplar — <see cref="HeadshotMultiplier"/> istemcide <c>RemoteHitBox.IsHead</c>'e
@@ -20,12 +27,11 @@ namespace VortexArena.Core.Combat
     /// değerlerini <see cref="WeaponAudio"/> da (Configure sonrası) buradan okur.
     /// </summary>
     [CreateAssetMenu(fileName = "Weapon", menuName = "VortexArena/Weapon Definition")]
-    public class WeaponDefinition : ScriptableObject
+    public class WeaponDefinition : ItemDefinition
     {
         [Header("Kimlik")]
         [Tooltip("Kill feed / istatistik etiketi. Sunucu doğrulamaz, serbestçe seçilebilir.")]
         [SerializeField] private string weaponId = "";
-        [SerializeField] private string displayName = "";
 
         [Header("Vuruş")]
         [Tooltip("Gövde vuruşu başına hasar (istemci hesaplar, hit_report.damage ile gider).")]
@@ -82,22 +88,8 @@ namespace VortexArena.Core.Combat
         [Range(0f, 1f)]
         [SerializeField] private float fireVolume = 1f;
 
-        [Header("Referanslar")]
-        [Tooltip("Silah prefabı (opsiyonel; loadout kurulumları için).")]
-        [SerializeField] private GameObject prefab;
-
-        [Header("Elde tutuş — yalnız weaponSource:\"random\" modlarında")]
-        [Tooltip("Silahın el anchor'ına göre konumu (m). Prefabın kökü zaten kabza hizasındaysa " +
-                 "sıfır bırakılır; VR'da rahat duruş için burada ince ayar yapılır.")]
-        [SerializeField] private Vector3 grantedHoldPosition = Vector3.zero;
-        [Tooltip("Silahın el anchor'ına göre dönüşü (derece, Euler).")]
-        [SerializeField] private Vector3 grantedHoldEuler = Vector3.zero;
-
         /// <summary>Kill feed / istatistik etiketi ("ak47" / "m4") — sunucu doğrulamaz.</summary>
         public string WeaponId => weaponId;
-
-        /// <summary>Arayüzde gösterilen ad.</summary>
-        public string DisplayName => displayName;
 
         /// <summary>Gövde vuruşu başına hasar.</summary>
         public float Damage => damage;
@@ -168,23 +160,11 @@ namespace VortexArena.Core.Combat
         /// <summary>Ateş sesi seviyesi (0-1).</summary>
         public float FireVolume => fireVolume;
 
-        /// <summary>Silah prefabı (atanmamış olabilir).</summary>
-        public GameObject Prefab => prefab;
-
-        /// <summary>
-        /// Verilen silahın el anchor'ına göre yerel duruşu (§10.5 <c>weaponSource:"random"</c>).
-        /// <para>
-        /// <b>Neden burada:</b> kavrama hizası silahın SANATINA aittir (kabza nerede, namlu nereye
-        /// bakıyor) — silah başına değişir ve Inspector'dan ayarlanabilmelidir.
-        /// <see cref="WeaponGranter"/> kendini önyükleyen bir tekil olduğu için onun üzerinde
-        /// ayarlanabilir bir alan olamazdı; sahneye bileşen koymak ise her arenaya elle bir adım
-        /// eklerdi. Raf silahlarını (<c>weaponSource:"rack"</c>) hiç ilgilendirmez.
-        /// </para>
-        /// </summary>
-        public Vector3 GrantedHoldPosition => grantedHoldPosition;
-
-        /// <summary>Verilen silahın el anchor'ına göre yerel dönüşü (bkz. <see cref="GrantedHoldPosition"/>).</summary>
-        public Quaternion GrantedHoldRotation => Quaternion.Euler(grantedHoldEuler);
+        // ⚠️ GrantedHoldPosition/GrantedHoldRotation KALDIRILDI (v4 refactor'ünün geçici köprüsüydü).
+        // Duruşun tek adı ItemDefinition.PrimaryGripPosition/PrimaryGripRotation'dır ve tek olmak
+        // ZORUNDA: "verilen silahın duruşu" ile "uzak tarafta çizilen duruş" aynı ölçüdür, ikinci
+        // bir ad kaçınılmaz olarak birinin güncellenip diğerinin unutulmasıyla sonuçlanırdı.
+        // Kavrama artık raf silahı ile verilen silah için tek kural (Weapon.ApplyCanonicalGrip).
 
         /// <summary>İki atış arası en kısa süre (saniye).</summary>
         public float SecondsPerShot => 60f / Mathf.Max(1f, fireRateRpm);

@@ -33,6 +33,21 @@ public sealed class PlayerState
     public float Fps { get; set; }
     public string Scene { get; set; } = "";
 
+    // ---- İstemcinin ölçüp status ile bildirdiği ağ telemetrisi (§6.7) ----
+    // ⚠️ Bunlar ToPlayerInfo()'ya EKLENMEZ. Sürekli değişen sayılar oldukları için
+    // PlayerRegistry.UpdateStatus'taki "görünen bir alan gerçekten değişti mi" kapısını her
+    // status'ta açar ve çözülmüş bir hatayı geri getirirler (her status = bir tam roster yayını).
+    // Fps tam bu sebeple PlayerInfo'da taşınmıyor; izlenecek emsal odur. Adminlere net_stats gider.
+
+    /// <summary>İstemcinin ölçtüğü RTT (ms); -1 = bilinmiyor (eski sürüm ya da henüz yoklama yok).</summary>
+    public int RttMs { get; set; } = -1;
+
+    /// <summary>İstemcinin ölçtüğü downlink snapshot jitter'ı (ms); -1 = bilinmiyor.</summary>
+    public float JitterMs { get; set; } = -1f;
+
+    /// <summary>İstemcinin ölçtüğü downlink snapshot kaybı (%); -1 = bilinmiyor.</summary>
+    public float LossPct { get; set; } = -1f;
+
     /// <summary>hello'da bildirilen build sahne listesi (admin katalog doğrulaması için).</summary>
     public List<string> Scenes { get; set; } = new();
 
@@ -93,8 +108,56 @@ public sealed class PlayerState
     /// <summary>Son kabul edilen pozun sıra numarası (u16 sarmalamalı eskilik kontrolü için).</summary>
     public ushort LastSeq { get; set; }
 
-    /// <summary>Son kabul edilen pozun UTC zamanı.</summary>
+    /// <summary>Son kabul edilen pozun UTC zamanı. <b>Canlılık</b> ölçütüdür (OFFLINE/bayatlık);
+    /// jitter için KULLANILMAZ — <c>DateTime.UtcNow</c>'un Windows'taki varsayılan çözünürlüğü
+    /// ~15,6 ms olduğu için 50 ms'lik bir aralığın sapmasını ölçmeye yetmez. Jitter
+    /// <see cref="LastPoseStamp"/> (monotonik) üzerinden hesaplanır.</summary>
     public DateTime LastPoseAt { get; set; }
+
+    // ---- Uplink telemetrisi (istemci → sunucu) ----
+    // ⚠️ Bu alanların TAMAMI PoseGate altında yazılır ve okunur — yani telemetri için YENİ KİLİT
+    // AÇILMAZ. Gerekçe StateHost'un thread sözleşmesi: recv thread'i maç kilidine giremez ve 20 Hz
+    // poz alım yolu bir teşhis sayacı için bekletilemez. Poz yolu bu kilidi zaten alıyor.
+
+    /// <summary>Son kabul edilen pozun monotonik damgası (<c>Stopwatch.GetTimestamp()</c>);
+    /// 0 = henüz poz yok. Jitter iki ardışık damganın farkından çıkar.</summary>
+    public long LastPoseStamp { get; set; }
+
+    /// <summary>Bu özet penceresinde kabul edilen poz sayısı (kayıp yüzdesinin paydası).</summary>
+    public int PoseAccepted { get; set; }
+
+    /// <summary><c>seq</c> boşluğundan sayılan kayıp poz (§6.2). Kayıp = boşluk − 1.</summary>
+    public int PoseLost { get; set; }
+
+    /// <summary>Varış aralığının nominalden (50 ms) sapmalarının toplamı, mikrosaniye.</summary>
+    public long PoseJitterSumMicros { get; set; }
+
+    /// <summary>Sapma örnek sayısı (ortalama için) ve gördüğü en büyük sapma, mikrosaniye.</summary>
+    public int PoseJitterSamples { get; set; }
+    public long PoseJitterMaxMicros { get; set; }
+
+    // ---- Atış olayı kanalı (0x03, §6.4) ----
+    // ⚠️ Bu iki alana YALNIZ UDP recv thread'i dokunur (tek yazar + tek okuyucu aynı thread) →
+    // kilit gerekmez; PoseGate'e de girilmez (poz ile ilgisi yoktur).
+    // ⚠️ LastSeq'ten AYRIDIR ve öyle kalmalı: LastSeq POZ kanalınındır ve SIRA ZORLAR (durum:
+    // son gelen kazanır); bu alan OLAY kanalınındır ve yalnız BİREBİR KOPYAYI bastırır.
+
+    /// <summary>Son işlenen atış olayının <c>seq</c>'i — kopya bastırma için (§6.4): UDP paket
+    /// çoğaltabilir, aynı <c>seq</c> ikinci kez gelirse relay edilmez (çift tracer + çift ses).</summary>
+    public ushort LastEventSeq { get; set; }
+
+    /// <summary>En az bir atış olayı işlendi mi (<see cref="LastEventSeq"/> ancak o zaman anlamlı —
+    /// yoksa <c>seq=0</c> ile gelen ilk olay kopya sanılıp düşerdi).</summary>
+    public bool HasEventSeq { get; set; }
+
+    /// <summary>Olay kanalı telemetrisi: bu pencerede alınan ve <c>seq</c> boşluğundan kayıp
+    /// sayılan olay adedi.
+    /// <para>⚠️ Poz sayaçlarının aksine bunlar <b>PoseGate altında DEĞİL</b> — olay yolu o kilidi
+    /// hiç almıyor ve teşhis için almaya başlamak 20 Hz poz alımını olay trafiğine bağlamak olurdu.
+    /// Bu yüzden yazma/okuma <c>Interlocked</c> ile yapılır (recv thread'i yazar, 1 Hz özet okur).
+    /// Üç sayacın grup hâlinde atomik olmaması telemetri için önemsizdir.</para></summary>
+    public long EventAccepted;
+    public long EventLost;
 
     public ClientConnection? Connection { get; set; }
 

@@ -182,6 +182,12 @@ public sealed class PlayerRegistry : IDisposable
             state.Scene = scene;
             state.Battery = status.battery;
             state.Fps = status.fps;
+            // ⚠️ Ağ telemetrisi `changed`'e GİRMEZ — Fps ile birebir aynı gerekçe (§6.7): sürekli
+            // değişen sayılar oldukları için her status'u bir tam roster yayınına çevirirlerdi.
+            // Adminlere ayrı kanaldan gider (net_stats), roster'a hiç girmez.
+            state.RttMs = status.rttMs;
+            state.JitterMs = status.jitterMs;
+            state.LossPct = status.lossPct;
             state.LastSeen = DateTime.UtcNow;
             state.Online = true;
         }

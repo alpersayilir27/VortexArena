@@ -12,6 +12,18 @@ namespace VortexArena.Protocol
         public const byte UdpHello = 0x00;
         public const byte PoseUpdate = 0x01;
         public const byte Snapshot = 0x02;
+        public const byte FireEvent = 0x03;
+        public const byte EventBatch = 0x04;
+
+        /// <summary>0x05 — snapshot + olay batch'i TEK datagramda (<see cref="SnapshotWithEvents"/>).
+        /// Sığmadığında sunucu <c>0x02</c>+<c>0x04</c>'e düşer; ikisi de kaldırılmadı.</summary>
+        public const byte SnapshotWithEvents = 0x05;
+
+        /// <summary>0x06 — RTT yoklaması; sunucu aynı baytları geri yollar (<see cref="RttProbe"/>).
+        /// <para>⚠️ WS'teki <c>MessageTypes.Ping</c> ile <b>alakası yoktur</b>: o, sunucunun
+        /// "bana bir <c>status</c> yolla" tetiğidir ve TCP üzerindedir — gecikme ölçmez ve ölçemez
+        /// (TCP retransmit'i sonuca karışır). Gecikme oyunun aktığı kanaldan, buradan ölçülür.</para></summary>
+        public const byte RttProbe = 0x06;
     }
 
     /// Poz bloğu: f32 px,py,pz,qx,qy,qz,qw — 28 B, arena uzayında.
@@ -60,14 +72,120 @@ namespace VortexArena.Protocol
         }
     }
 
-    /// 0x01 — [u8 tip][u8 playerId][u16 seq][u32 clientTimeMs][head][handL][handR] = 92 B.
+    /// <summary>
+    /// 0x05 — [u8 tip][u8 playerCount][u8 eventCount][u32 serverTick] + playerCount×
+    /// <see cref="SnapshotEntry"/> + eventCount×<see cref="FireEventEntry"/>. Başlık <b>7 B</b>.
+    /// <para><b>Varlık sebebi paket sayısı:</b> tipik bir maçta (10 oyuncu) snapshot 886 B ve 5 olay
+    /// 45 B — ikisi tek datagrama rahat sığıyor, oysa ayrı gönderildiklerinde tik başına hedef başına
+    /// <b>iki</b> datagram üretiliyordu. Bant kazancı yok denecek kadar az; kazanç
+    /// <b>airtime</b>'dadır (Docs/Sistem-Ozeti.md §3.12).</para>
+    /// <para>⚠️ <c>0x02</c> ve <c>0x04</c> <b>kaldırılmadı ve kaldırılmaz</b>: snapshot parçalanmak
+    /// zorunda kaldığında (16'dan fazla girdi) ya da toplam
+    /// <see cref="ArenaProtocol.COMBINED_MAX_BYTES"/>'ı aştığında sunucu onlara düşer.</para>
+    /// <para>⚠️ <b>Tik başına ya 0x05 ya 0x04 üretilir, ikisi birden ASLA.</b> §6.5'in kopya
+    /// koruması "tik başına en fazla bir olay datagramı" değişmezine dayanıyor ve kimlik
+    /// <c>serverTick</c>; aynı tik için iki olay datagramı çıkarsa istemci ikincisini birebir tekrar
+    /// sanıp <b>düşürür</b>. Aynı sebeple parçalanmış snapshot'ta olaylar bu pakete HİÇ girmez —
+    /// parçalar arasında olay bloğu çoğaltmak tam olarak bu değişmezi kırardı.</para>
+    /// </summary>
+    public struct SnapshotWithEvents
+    {
+        /// <summary>[tip][playerCount][eventCount][serverTick] — girdilerden önceki sabit kısım.</summary>
+        public const int HEADER_SIZE = 7;
+
+        public uint serverTick;
+        public SnapshotEntry[] players;
+        public FireEventEntry[] events;
+
+        public void Write(BinaryWriter w)
+        {
+            w.Write(UdpPacketType.SnapshotWithEvents);
+            w.Write((byte)players.Length);
+            w.Write((byte)events.Length);
+            w.Write(serverTick);
+            for (int i = 0; i < players.Length; i++) players[i].Write(w);
+            for (int i = 0; i < events.Length; i++) events[i].Write(w);
+        }
+
+        public static SnapshotWithEvents Read(BinaryReader r)
+        {
+            SnapshotWithEvents m;
+            byte playerCount = r.ReadByte();
+            byte eventCount = r.ReadByte();
+            m.serverTick = r.ReadUInt32();
+            m.players = new SnapshotEntry[playerCount];
+            for (int i = 0; i < playerCount; i++) m.players[i] = SnapshotEntry.Read(r);
+            m.events = new FireEventEntry[eventCount];
+            for (int i = 0; i < eventCount; i++) m.events[i] = FireEventEntry.Read(r);
+            return m;
+        }
+    }
+
+    /// <summary>
+    /// 0x06 — [u8 tip][u8 playerId][u32 clientStamp] = <b>6 B</b>. İstemci → sunucu, 1 Hz; sunucu
+    /// <b>aynı 6 baytı</b> geri yollar (<see cref="UdpHello"/> ack'inin birebir aynı deseni).
+    /// <para><b>Ölçen taraf İSTEMCİDİR:</b> <c>RTT = şimdi − clientStamp</c>. Damga opaktır — sunucu
+    /// yorumlamaz, yalnız taşır; bu yüzden <b>saat senkronu gerekmez</b> (iki damga da istemcinin).</para>
+    /// <para><b>Neden ayrı bir paket gerekiyor</b> (üçü de denendi ve reddedildi):
+    /// <c>clientTimeMs</c> saat senkronu olmadan mutlak gecikme vermez; sunucunun snapshot'ta
+    /// istemcinin damgasını geri yollaması damgayı <b>hedefe özel</b> yapardı ve tek paylaşımlı
+    /// buffer'ı tik başına N serileştirmeye çevirirdi (§6.5 aynı gerekçeyle olay batch'ini de hedefe
+    /// özelleştirmiyor); WS/TCP üzerinden ölçmek ise retransmit'i gecikmeye karıştırır.</para>
+    /// <para>⚠️ <b>1 Hz'in üstüne çıkarılmaz:</b> her yoklama 2 datagram (gidiş + echo) demektir ve
+    /// bu ürünün darboğazı bant değil paket sayısıdır. Jitter zaten snapshot varışlarından 20 Hz
+    /// çözünürlükle ve <b>sıfır ek paketle</b> ölçülüyor; bu paket yalnız operatörün okuduğu
+    /// "ping" sayısı içindir.</para>
+    /// </summary>
+    public struct RttProbe
+    {
+        public const int SIZE = 6;
+
+        public byte playerId;
+
+        /// <summary>İstemcinin gönderim anı — <b>yalnız istemci için anlamlı</b>, sunucu okumaz.</summary>
+        public uint clientStamp;
+
+        public void Write(BinaryWriter w)
+        {
+            w.Write(UdpPacketType.RttProbe);
+            w.Write(playerId);
+            w.Write(clientStamp);
+        }
+
+        public static RttProbe Read(BinaryReader r)
+        {
+            RttProbe m;
+            m.playerId = r.ReadByte();
+            m.clientStamp = r.ReadUInt32();
+            return m;
+        }
+    }
+
+    /// <summary>
+    /// 0x01 — [u8 tip][u8 playerId][u16 seq][u32 clientTimeMs][u8 itemL][u8 itemR][u8 gripFlags]
+    /// [head][handL][handR] = <b>95 B</b> (§6.2).
+    /// <para><b>Eşya baytları neden pozla aynı pakette:</b> ikisi de aynı otoriteye ait —
+    /// "elimde ne var" da "elim nerede" gibi <b>istemci-otoriter bir sunum bilgisidir</b>. Sunucu
+    /// bunları doğrulamaz, snapshot'a kopyalar (§6.3); sunucuda eşya tablosu YOKTUR.</para>
+    /// <para>⚠️ <c>gripFlags</c>'te bit0 (<see cref="SnapshotEntry.FLAG_ALIVE"/>) gelirse yok
+    /// sayılır — sunucu <see cref="SnapshotEntry.GRIP_FLAG_MASK"/> ile süzer, istemci kendini canlı
+    /// ilan edemez.</para>
+    /// </summary>
     public struct PoseUpdate
     {
-        public const int SIZE = 92;
+        public const int SIZE = 95;
 
         public byte playerId;
         public ushort seq;
         public uint clientTimeMs;
+
+        /// <summary>Sol/sağ eldeki eşyanın <c>netItemId</c>'si; 0 = el boş (§6.6).</summary>
+        public byte itemL;
+        public byte itemR;
+
+        /// <summary>Kavrama bitleri: <c>FLAG_GRIP_LINKED</c> | <c>FLAG_PRIMARY_RIGHT</c> (§6.3).</summary>
+        public byte gripFlags;
+
         public PoseData head;
         public PoseData handL;
         public PoseData handR;
@@ -78,6 +196,9 @@ namespace VortexArena.Protocol
             w.Write(playerId);
             w.Write(seq);
             w.Write(clientTimeMs);
+            w.Write(itemL);
+            w.Write(itemR);
+            w.Write(gripFlags);
             head.Write(w);
             handL.Write(w);
             handR.Write(w);
@@ -89,6 +210,9 @@ namespace VortexArena.Protocol
             m.playerId = r.ReadByte();
             m.seq = r.ReadUInt16();
             m.clientTimeMs = r.ReadUInt32();
+            m.itemL = r.ReadByte();
+            m.itemR = r.ReadByte();
+            m.gripFlags = r.ReadByte();
             m.head = PoseData.Read(r);
             m.handL = PoseData.Read(r);
             m.handR = PoseData.Read(r);
@@ -96,14 +220,41 @@ namespace VortexArena.Protocol
         }
     }
 
-    /// Snapshot oyuncu girdisi: [u8 playerId][u8 flags][head][handL][handR] = 86 B.
+    /// <summary>
+    /// Snapshot oyuncu girdisi: [u8 playerId][u8 flags][u8 itemL][u8 itemR][head][handL][handR]
+    /// = <b>88 B</b> (§6.3).
+    /// <para><b>flags: tek bayt, iki yazar</b> (otorite bölünmesinin tel karşılığı) — bit0
+    /// <b>sunucunun</b>dur (otoriter <c>alive</c>), bit1-2 istemcinin <c>gripFlags</c>'inden
+    /// kopyalanır. Bit3-7 rezerv: sıfır yazılır, okuyucu yok sayar.</para>
+    /// </summary>
     public struct SnapshotEntry
     {
-        public const int SIZE = 86;
+        public const int SIZE = 88;
+
+        /// <summary>Sunucu yazar: oyuncu hayatta (otoriter durum).</summary>
         public const byte FLAG_ALIVE = 1 << 0;
+
+        /// <summary>İstemciden kopya: iki el AYNI eşyayı tutuyor (çift tabanca DEĞİL, §6.6).</summary>
+        public const byte FLAG_GRIP_LINKED = 1 << 1;
+
+        /// <summary>İstemciden kopya: ana el sağ. Yalnız <see cref="FLAG_GRIP_LINKED"/> iken anlamlı.</summary>
+        public const byte FLAG_PRIMARY_RIGHT = 1 << 2;
+
+        /// <summary>
+        /// İstemciden kopyalanmasına izin verilen bitler. <b>Varlık sebebi bir bekçidir:</b> sunucu
+        /// <c>PoseUpdate.gripFlags</c>'i bu maskeyle süzüp snapshot'a yazar, böylece istemci bit0'ı
+        /// (<see cref="FLAG_ALIVE"/> — kendini canlı ilan etmeyi) set EDEMEZ. Maskesiz kopyalama
+        /// ölü bir oyuncunun kendini diriltmesi olurdu.
+        /// </summary>
+        public const byte GRIP_FLAG_MASK = FLAG_GRIP_LINKED | FLAG_PRIMARY_RIGHT;
 
         public byte playerId;
         public byte flags;
+
+        /// <summary>Sol/sağ eldeki eşyanın <c>netItemId</c>'si; 0 = el boş (§6.6).</summary>
+        public byte itemL;
+        public byte itemR;
+
         public PoseData head;
         public PoseData handL;
         public PoseData handR;
@@ -112,6 +263,8 @@ namespace VortexArena.Protocol
         {
             w.Write(playerId);
             w.Write(flags);
+            w.Write(itemL);
+            w.Write(itemR);
             head.Write(w);
             handL.Write(w);
             handR.Write(w);
@@ -122,6 +275,8 @@ namespace VortexArena.Protocol
             SnapshotEntry e;
             e.playerId = r.ReadByte();
             e.flags = r.ReadByte();
+            e.itemL = r.ReadByte();
+            e.itemR = r.ReadByte();
             e.head = PoseData.Read(r);
             e.handL = PoseData.Read(r);
             e.handR = PoseData.Read(r);
@@ -130,7 +285,7 @@ namespace VortexArena.Protocol
     }
 
     /// 0x02 — [u8 tip][u8 playerCount][u32 serverTick] + playerCount × SnapshotEntry.
-    /// 16 oyuncu: 6 + 16×86 = 1382 B (tek UDP paketi).
+    /// 16 oyuncu: 6 + 16×88 = 1414 B (tek UDP paketi).
     public struct Snapshot
     {
         public uint serverTick;
@@ -154,6 +309,167 @@ namespace VortexArena.Protocol
             for (int i = 0; i < count; i++)
                 s.players[i] = SnapshotEntry.Read(r);
             return s;
+        }
+    }
+
+    /// <summary>
+    /// Tek atış/atma olayının kaydı: [u8 playerId][u8 kindHand][u8 itemId][i16 dirOctX]
+    /// [i16 dirOctY][u16 magnitude] = <b>9 B</b>. Hem <c>0x03</c> (§6.4) hem <c>0x04</c> (§6.5)
+    /// gövdesinde aynı alanlar taşınır; <c>seq</c> yalnız yukarı yönde vardır.
+    /// <para><b>Yön neden telde:</b> 20 Hz interpole el pozundan türetilse aynı tik'e düşen iki
+    /// atış aynı yöne giderdi ve geri tepme kaybolurdu. <b>Orijin neden telde DEĞİL:</b> tracer
+    /// alıcının ÇİZDİĞİ namludan çıkmalı — mutlak namlu konumu gönderilirse gözle kaymış görünür
+    /// (tutarlılık > sadakat, §6.4).</para>
+    /// </summary>
+    public struct FireEventEntry
+    {
+        public const int SIZE = 9;
+
+        /// <summary>Tür: hitscan atış.</summary>
+        public const byte KIND_SHOT = 0;
+
+        /// <summary>Tür: fırlatma (atma).</summary>
+        public const byte KIND_THROW = 1;
+
+        /// <summary><c>kindHand</c>'in alt nibble'ı türdür.</summary>
+        public const byte KIND_MASK = 0x0F;
+
+        /// <summary><c>kindHand</c>'in bit7'si el: set = sağ, temiz = sol.</summary>
+        public const byte HAND_RIGHT_BIT = 0x80;
+
+        public byte playerId;
+
+        /// <summary>Alt nibble = tür (<see cref="KIND_MASK"/>), bit7 = el (<see cref="HAND_RIGHT_BIT"/>).</summary>
+        public byte kindHand;
+
+        /// <summary>Olay anındaki eşyanın <c>netItemId</c>'si (§6.6) — sunum profilini çözer;
+        /// durum baytı kaybolsa da olay kendi kendine yeter.</summary>
+        public byte itemId;
+
+        /// <summary>Oktahedral sıkıştırılmış birim yön, arena uzayında
+        /// (<see cref="OctahedralDirection"/>).</summary>
+        public short dirOctX, dirOctY;
+
+        /// <summary>Türe göre: atışta <b>mesafe</b> (cm → 0–655 m), atmada <b>başlangıç hızı</b>
+        /// (cm/sn).</summary>
+        public ushort magnitude;
+
+        public static byte PackKindHand(byte kind, bool rightHand)
+            => (byte)((kind & KIND_MASK) | (rightHand ? HAND_RIGHT_BIT : 0));
+
+        public byte Kind => (byte)(kindHand & KIND_MASK);
+        public bool IsRightHand => (kindHand & HAND_RIGHT_BIT) != 0;
+
+        /// <summary>Gövde yazıcısı — tip baytı YOKTUR. Yalnız <see cref="EventBatch"/> kullanır;
+        /// <c>0x03</c>'te alan sırası farklıdır (bkz. <see cref="FireEvent"/>).</summary>
+        public void Write(BinaryWriter w)
+        {
+            w.Write(playerId);
+            w.Write(kindHand);
+            w.Write(itemId);
+            w.Write(dirOctX);
+            w.Write(dirOctY);
+            w.Write(magnitude);
+        }
+
+        public static FireEventEntry Read(BinaryReader r)
+        {
+            FireEventEntry e;
+            e.playerId = r.ReadByte();
+            e.kindHand = r.ReadByte();
+            e.itemId = r.ReadByte();
+            e.dirOctX = r.ReadInt16();
+            e.dirOctY = r.ReadInt16();
+            e.magnitude = r.ReadUInt16();
+            return e;
+        }
+    }
+
+    /// <summary>
+    /// 0x03 — [u8 tip][u8 playerId][u16 seq][u8 kindHand][u8 itemId][i16][i16][u16] = <b>12 B</b>
+    /// (istemci → sunucu, olay başına; §6.4). <b>HEMEN gönderilir</b>, poz tik'i beklenmez.
+    /// <para><b><c>seq</c> sözleşmesi — YALNIZ yukarı yön:</b>
+    /// ✅ <b>kopya bastırma</b> (sunucu oyuncu başına son <c>seq</c>'i tutar; UDP paket çoğaltabilir
+    /// → çift tracer + çift ses), ✅ <b>kayıp ölçümü</b> (<c>seq</c> boşluğu = kaybolan olay sayısı),
+    /// ❌ <b>SIRA ZORLAMASI YOK.</b></para>
+    /// <para>⚠️ "Eski <c>seq</c>'i at" kuralı <b>POZ</b> kuralıdır (durum: son gelen kazanır) ve
+    /// olaylara UYGULANMAZ: sırası bozuk gelen atış gerçekten olmuş bir atıştır; atmak sessizce bir
+    /// tracer ve bir ses silmektir.</para>
+    /// </summary>
+    public struct FireEvent
+    {
+        public const int SIZE = 12;
+
+        public ushort seq;
+
+        /// <summary>Olay gövdesi. <c>entry.playerId</c> telde <c>seq</c>'ten ÖNCE gider (aşağıya bak).</summary>
+        public FireEventEntry entry;
+
+        // ⚠️ Alanlar elle sırayla yazılır/okunur, entry.Write/Read ÇAĞRILMAZ: 0x03'te tel düzeni
+        // [tip][playerId][seq][kindHand]… yani entry'nin playerId'si seq'in ÖNÜNDE. FireEventEntry'nin
+        // kendi Write/Read'i yalnız 0x04 gövdesi içindir (orada seq yoktur, alanlar bitişiktir).
+        public void Write(BinaryWriter w)
+        {
+            w.Write(UdpPacketType.FireEvent);
+            w.Write(entry.playerId);
+            w.Write(seq);
+            w.Write(entry.kindHand);
+            w.Write(entry.itemId);
+            w.Write(entry.dirOctX);
+            w.Write(entry.dirOctY);
+            w.Write(entry.magnitude);
+        }
+
+        public static FireEvent Read(BinaryReader r)
+        {
+            FireEvent m;
+            m.entry = default;
+            m.entry.playerId = r.ReadByte();
+            m.seq = r.ReadUInt16();
+            m.entry.kindHand = r.ReadByte();
+            m.entry.itemId = r.ReadByte();
+            m.entry.dirOctX = r.ReadInt16();
+            m.entry.dirOctY = r.ReadInt16();
+            m.entry.magnitude = r.ReadUInt16();
+            return m;
+        }
+    }
+
+    /// <summary>
+    /// 0x04 — [u8 tip][u8 count][u32 serverTick] + count × <see cref="FireEventEntry"/>
+    /// = 6 + count×9 B (sunucu → tüm istemciler, 20 Hz; §6.5). Olay yoksa <b>paket yok</b>.
+    /// <para><b>Kopya koruması <c>seq</c> DEĞİL TİK'tir:</b> batch'in kimliği <c>serverTick</c> ve
+    /// <b>tik başına en fazla bir batch</b> üretilir (bu yüzden taşan olay atılmaz, sonraki tik'e
+    /// kayar — <see cref="ArenaProtocol.EVENT_MAX_ENTRIES_PER_PACKET"/>). İstemci son işlediği
+    /// <see cref="ArenaProtocol.EVENT_TICK_HISTORY"/> tik'i halkada tutar ve yalnız <b>birebir
+    /// tekrarı</b> düşürür.</para>
+    /// <para>⚠️ Eski tik'li ama görülmemiş batch <b>OYNATILIR</b> (interp saati o tik'i geçmişse
+    /// hemen): ~50 ms gecikmiş tracer, kaybolmuş tracer'dan iyidir.</para>
+    /// <para>⚠️ Snapshot'a EKLENMEZ, ayrı datagramdır — 1414 B + tek olay MTU'yu aşar.</para>
+    /// </summary>
+    public struct EventBatch
+    {
+        public uint serverTick;
+        public FireEventEntry[] events;
+
+        public void Write(BinaryWriter w)
+        {
+            w.Write(UdpPacketType.EventBatch);
+            w.Write((byte)events.Length);
+            w.Write(serverTick);
+            for (int i = 0; i < events.Length; i++)
+                events[i].Write(w);
+        }
+
+        public static EventBatch Read(BinaryReader r)
+        {
+            EventBatch b;
+            byte count = r.ReadByte();
+            b.serverTick = r.ReadUInt32();
+            b.events = new FireEventEntry[count];
+            for (int i = 0; i < count; i++)
+                b.events[i] = FireEventEntry.Read(r);
+            return b;
         }
     }
 }

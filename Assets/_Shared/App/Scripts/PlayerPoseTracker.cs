@@ -1,6 +1,8 @@
 using UnityEngine;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Combat;
 using VortexArena.Net;
+using VortexArena.Protocol;
 
 namespace VortexArena.App
 {
@@ -16,6 +18,13 @@ namespace VortexArena.App
     /// hâlinde olduğu ağdan görülebilsin diye. Kalibrasyon bitince rig hizalanır ve
     /// aynı kaynak kendiliğinden doğru uzayda poz vermeye başlar; yeniden kaydolmak
     /// gerekmez.
+    /// </para>
+    /// <para>
+    /// <b>Poz + eşya bildiriminin TEK kapısı burasıdır</b> (§6.2: <c>itemL</c>/<c>itemR</c>/
+    /// <c>gripFlags</c> pozla aynı pakette gider). ⚠️ Bu sınıf eşya durumunu <b>ÜRETMEZ</b> —
+    /// <see cref="HeldItems"/>'tan okur; üreten taraf <c>Weapon</c>/<c>WeaponGranter</c>'dır.
+    /// Buraya "elde ne var" keşfi (silah listesi tarama, grab olayına abonelik) eklenirse aynı
+    /// bilginin ikinci bir kaynağı doğar.
     /// </para>
     /// </summary>
     public class PlayerPoseTracker : MonoBehaviour, IPoseSource
@@ -69,6 +78,30 @@ namespace VortexArena.App
             handL = ArenaSpace.WorldToArena(new Pose(_handL.position, _handL.rotation));
             handR = ArenaSpace.WorldToArena(new Pose(_handR.position, _handR.rotation));
             return true;
+        }
+
+        /// <summary>
+        /// §6.2: o an elde tutulan eşya baytları — yalnız <see cref="HeldItems"/>'ın son
+        /// bildirilen durumunu telin beklediği biçime çevirir.
+        /// </summary>
+        public void GetHeldItems(out byte itemL, out byte itemR, out byte gripFlags)
+        {
+            itemL = HeldItems.Left;
+            itemR = HeldItems.Right;
+
+            // ⚠️ bit0 (FLAG_ALIVE) BURADA ASLA yazılmaz: o bitin yazarı yalnız sunucudur, istemci
+            // kendini canlı ilan edemez (§6.2/§6.3). Sunucu gelen baytı maskeyle süzüyor ama
+            // doğrusu hiç yazmamaktır — maske ileride gevşerse bu satır kuralı taşımaya devam eder.
+            gripFlags = 0;
+            if (HeldItems.GripLinked)
+            {
+                gripFlags |= SnapshotEntry.FLAG_GRIP_LINKED;
+            }
+
+            if (HeldItems.PrimaryRight)
+            {
+                gripFlags |= SnapshotEntry.FLAG_PRIMARY_RIGHT;
+            }
         }
     }
 }

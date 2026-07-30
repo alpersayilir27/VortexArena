@@ -294,7 +294,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Kamera: Kuş bakışı** (`3`) | Arenayı yukarıdan görürsün; her oyuncunun **etrafında renkli halka, altında adı** yazar | Kimin nerede olduğunu görmek, güvenlik takibi — **varsayılan görünüm** |
 | **Kamera: POV** (`1`) | Seçili oyuncunun **kendi gözünden** izlersin | "Bu oyuncu ne görüyor / neden takıldı?" |
 | **Kamera: Serbest** (`2`) | Arenada özgürce dolaşırsın: **W A S D** yürü, **Q/E** in-çık, **sağ fare tuşunu basılı tutup** bakış çevir, **Shift** hızlı | Bir köşeye yakından bakmak |
-| **İstatistik** | Skorun ortasındaki kutuya bas (veya `I`) | Oyuncu başına öldürme/ölüm/can/batarya tablosu |
+| **İstatistik** | Skorun ortasındaki kutuya bas (veya `I`) | Oyuncu başına öldürme/ölüm/can/batarya **ve PING** tablosu |
 | **Tercihler** | Sol üstteki düğme (veya `P`) | Mod/harita seçimi + başlat/iptal, görünüm ayarları, bağlantı |
 
 **Oyuncu seçmek:** yandaki listede bir oyuncuya tıkla — seçili oyuncunun çerçevesi turuncu olur,
@@ -305,6 +305,18 @@ düğme "EMİN?" olur).
 
 **Panel açıkken oyun durmaz:** Tercihler/İstatistik panelleri yarı saydamdır, arkada sahneyi
 görmeye devam edersin. `Esc` ile kapatırsın.
+
+**PING kolonu ne demek:** o gözlükle sunucu arasındaki gecikme (milisaniye). **Düşük iyidir.**
+Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt ettirir:
+
+- **Herkesin ping'i yüksek** → ağ sorunu (birazdan sorun giderme bölümündeki adımlar).
+- **Tek bir oyuncunun ping'i yüksek** → o gözlüğün Wi-Fi kapsaması zayıf; oyuncuyu alanın ortasına
+  doğru yönlendir.
+- **`-` yazıyor** → o gözlük ölçüm göndermiyor (büyük ihtimalle eski sürüm APK) ya da daha yeni
+  bağlandı. Birkaç saniye bekle; geçmezse teknik ekibe söyle.
+
+> **Normal değer aralığı işletmeye özeldir ve kurulumda ölçülüp bilgi kartına yazılır.** Kendi
+> arenanın "normal"ini ilk sakin seansta not et — sonraki günlerde kıyaslayacağın sayı odur.
 
 ### İki oyun modu — hangisini seçmeli?
 
@@ -408,6 +420,8 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 | Launcher "Mekan seçilmedi" diyor, sunucu açılmıyor | İşletme listede seçili değil | **1 · Sunucu** bölümündeki listeden işletmenin adına tıkla. Liste boşsa **Yenile**'ye bas; yine boşsa teknik ekibi ara |
 | Yönetim ekranında **başka bir işletmenin haritaları** çıkıyor | Sunucu yanlış mekanla açılmış | Sunucu penceresini kapat (Ctrl + C), Launcher'da doğru işletmeyi seçip **Sunucuyu Başlat**. Mekan sunucu çalışırken değişmez |
 | Oyuncu listede "çevrimdışı" düşüyor | Wi-Fi zayıf ya da gözlük uykuya geçmiş | Gözlüğü uyandır; kapsama sorunu tekrarlıyorsa teknik ekibi ara |
+| **Birden bire HERKES takılmaya başladı** (tek oyuncu değil, hepsi) | Wi-Fi'ı oyun dışı bir şey doldurdu | **Önce İstatistikler panelini aç ve PING kolonuna bak** (aşağıda). Herkesinki yüksekse sırayla: 1) bir gözlükte **ekran yayını (cast/kayıt) açık mı** — en sık sebep budur, kapat. 2) Arena Wi-Fi'ına telefon/dizüstü bağlanmış mı, indirme mi var — çıkar. 3) Sunucu bilgisayarının **ağ kablosu takılı mı** — çıkmışsa tak. Düzelmezse teknik ekibi ara |
+| **Tek bir oyuncu** takılıyor, diğerleri normal | O gözlüğün Wi-Fi kapsaması zayıf | İstatistiklerde o satırın PING'i diğerlerinden belirgin yüksekse oyuncuyu alanın ortasına doğru yönlendir; sürekli tekrarlıyorsa teknik ekibi ara |
 | Oyuncular birbirini yanlış yerde görüyor | Kalibrasyon yapılmadı ya da A–B ters alındı | Arenada **A + B ile yeniden kalibrasyon** yaptır (Bölüm 4) |
 | Oyuncular birbirini **havada / yere gömülü** görüyor | Kalibrasyonda kumanda dik tutulmamış | O oyuncuya kalibrasyonu tekrarlat; kumanda **kalem gibi dik**, ucu yere değecek (Bölüm 4). Herkeste aynı sorun varsa teknik ekibi ara |
 | Oyun ortasında arena birden kaydı | Gözlüğün konum takibi sıfırlandı | Genelde kendiliğinden düzelir. Düzelmezse o oyuncuya kalibrasyonu tekrarlat |
@@ -430,6 +444,10 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 - ❌ **Zemindeki A / B bantlarını kaldırma veya kaydırma** — tüm kalibrasyon onlara bağlıdır.
 - ❌ **Yönetim panelini oyunculara bırakma** — maçı iptal edebilir, oyuncu atabilirler.
 - ❌ Sunucu klasöründeki ayar dosyalarını kurcalama (`config` klasörü) — teknik ekibin işi.
+- ❌ **Gözlükten ekran yayını (cast / kayıt) açma** — tek bir yayın tüm oyuncuların Wi-Fi'ını
+  doldurur ve herkesin görüntüsü takılır. Tanıtım görüntüsü gerekiyorsa **yönetim ekranının
+  gözlemci kamerası** kullanılır.
+- ❌ **Arena Wi-Fi'ına oyun dışı cihaz bağlama** (telefon, dizüstü, misafir) — aynı sebep.
 
 ---
 

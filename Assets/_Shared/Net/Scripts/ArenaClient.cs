@@ -494,12 +494,8 @@ namespace VortexArena.Net
                         break;
                     }
 
-                    case MessageTypes.ShotFired:
-                    {
-                        ShotFiredMsg msg = JsonUtility.FromJson<ShotFiredMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseShotFired(msg));
-                        break;
-                    }
+                    // v4: `shot_fired` KALDIRILDI — atış/atma artık UDP 0x03/0x04 (§6.4/6.5),
+                    // UdpStateChannel yayınlıyor. WS'te bu tip hiç gelmez.
 
                     case MessageTypes.Identify:
                     {
@@ -517,9 +513,19 @@ namespace VortexArena.Net
                     }
 
                     case MessageTypes.Ping:
-                        // ping → status ile yanıtlanır (ayrı pong yok); status Unity API'si ister → ana thread.
+                        // ⚠️ Bu bir GECİKME ÖLÇÜMÜ DEĞİL: sunucunun "bana bir status yolla" tetiği.
+                        // Gecikme UDP 0x06 ile ölçülür (§6.7) — TCP üzerinden ölçmek retransmit'i
+                        // sonuca karıştırır. status Unity API'si ister → ana thread.
                         _mainThreadActions.Enqueue(() => TrySendText(BuildStatusJson()));
                         break;
+
+                    case MessageTypes.NetStats:
+                    {
+                        // Sunucu yalnız admin bağlantılarına yollar; player'a gelirse dinleyen yoktur.
+                        NetStatsMsg msg = JsonUtility.FromJson<NetStatsMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseNetStats(msg));
+                        break;
+                    }
 
                     case MessageTypes.Kicked:
                     {
@@ -653,6 +659,18 @@ namespace VortexArena.Net
                 // §5.1 uzlaştırma: geride kaldıysak sunucu YALNIZ bize tam roster yollar.
                 rosterVersion = _lastRosterVersion
             };
+
+            // §6.7: ağ telemetrisini İSTEMCİ ölçer, status ile bildirir (ek kanal açılmaz — bu mesaj
+            // zaten 5 sn'de bir gidiyor ve operatör göstergesi için o ritim fazlasıyla yeter).
+            // Kanal henüz kurulmadıysa alanlar -1 (bilinmiyor) kalır.
+            if (UdpChannel != null)
+            {
+                UdpChannel.SampleTelemetry(out int rttMs, out float jitterMs, out float lossPct);
+                status.rttMs = rttMs;
+                status.jitterMs = jitterMs;
+                status.lossPct = lossPct;
+            }
+
             return JsonUtility.ToJson(status);
         }
 
