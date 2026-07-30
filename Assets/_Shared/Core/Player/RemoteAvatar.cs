@@ -37,6 +37,10 @@ namespace VortexArena.Core.Player
         [SerializeField] private TMP_Text nameLabel;
         [SerializeField] private Renderer[] teamRenderers;
 
+        [Tooltip("Karakter mesh'i — YALNIZ ölüm karartması ve kalibresiz nabzı için. Takım rengi " +
+                 "buraya YAZILMAZ (düşmanı işaretlemek duvar arkası avantaj olurdu).")]
+        [SerializeField] private Renderer[] bodyRenderers;
+
         [Header("Karakter")]
         [Tooltip("Bağlıysa gövde üç noktalı IK ile çözülür; boşsa eski kafa/el/kapsül yolu kullanılır.")]
         [SerializeField] private ThreePointBodyIK bodyIK;
@@ -96,6 +100,12 @@ namespace VortexArena.Core.Player
 
         /// <summary>Nabzın takım rengiyle beyaz arasındaki en yüksek karışım oranı.</summary>
         private const float UncalibratedPulseAmount = 0.85f;
+
+        /// <summary>
+        /// Kalibresiz karakterin nabız rengi. Takım renklerinden (kırmızı/mavi) bilerek uzak bir
+        /// turuncu: bu bir takım işareti DEĞİL, "bu avatarın konumu yalan" uyarısıdır.
+        /// </summary>
+        private static readonly Color UncalibratedTint = new Color(1f, 0.45f, 0.1f);
 
         /// <summary>Bu avatarın temsil ettiği uzak oyuncunun id'si.</summary>
         public int PlayerId { get; private set; }
@@ -178,6 +188,12 @@ namespace VortexArena.Core.Player
             }
 
             PlayerId = playerId;
+
+            // IK'nın tahminleri (boy, ölçek, basılan ayaklar) önceki oyuncudan miras kalmasın.
+            if (bodyIK != null)
+            {
+                bodyIK.ResetPoseState();
+            }
         }
 
         /// <summary>Ad etiketini, forma numarasını ve takım rengini günceller ("red"/"blue"/diğer=gri).
@@ -210,6 +226,7 @@ namespace VortexArena.Core.Player
             IsCalibrated = calibrated;
             ApplyLabelText();
             ApplyTeamColor();
+            ApplyBodyTint();
             RefreshColliders();
         }
 
@@ -316,6 +333,59 @@ namespace VortexArena.Core.Player
             }
         }
 
+        /// <summary>
+        /// Karakter mesh'inin durum tonu: canlı+kalibreli = <b>tonsuz</b> (beyaz, doku olduğu gibi),
+        /// ölü = karartma, kalibresiz = turuncu nabız.
+        /// <para>
+        /// ⚠️ <b>Neden <see cref="teamRenderers"/>'tan AYRI bir liste:</b> takım rengi karaktere
+        /// bilerek uygulanmaz (düşmanı işaretlemek duvar arkasından okunabilen bir avantaj olurdu),
+        /// ama ölüm ve <b>kalibresizlik</b> görünmek ZORUNDA. İkisi tek listeye bağlansaydı biri
+        /// diğerini getirirdi; sahada olan tam da buydu — liste boş bırakıldığı için kalibresiz
+        /// uyarısı hiç çizilmiyordu ve konumu yalan söyleyen avatar normal görünüyordu.
+        /// </para>
+        /// </summary>
+        private void ApplyBodyTint()
+        {
+            if (bodyRenderers == null || bodyRenderers.Length == 0)
+            {
+                return;
+            }
+
+            if (_propertyBlock == null)
+            {
+                _propertyBlock = new MaterialPropertyBlock();
+            }
+
+            Color color;
+            if (!IsCalibrated)
+            {
+                float pulse = Mathf.PingPong(Time.time * UncalibratedPulseHz, 1f) * UncalibratedPulseAmount;
+                color = Color.Lerp(Color.white, UncalibratedTint, pulse);
+            }
+            else if (IsAlive)
+            {
+                // Beyaz = çarpan 1: doku olduğu gibi kalır (URP Lit _BaseColor taban dokuyu çarpar).
+                color = Color.white;
+            }
+            else
+            {
+                color = new Color(DeadColorScale, DeadColorScale, DeadColorScale, 1f);
+            }
+
+            for (int i = 0; i < bodyRenderers.Length; i++)
+            {
+                Renderer target = bodyRenderers[i];
+                if (target == null)
+                {
+                    continue;
+                }
+
+                target.GetPropertyBlock(_propertyBlock);
+                _propertyBlock.SetColor(BaseColorId, color);
+                target.SetPropertyBlock(_propertyBlock);
+            }
+        }
+
         /// <summary>Ölü/görünmez/kalibresiz avatara ateş edilemez: vuruş kutuları kapatılır.</summary>
         private void RefreshColliders()
         {
@@ -352,6 +422,7 @@ namespace VortexArena.Core.Player
             if (!IsCalibrated)
             {
                 ApplyTeamColor();
+                ApplyBodyTint();
             }
 
             // Pozlar arena uzayında — sahnedeki origin'e göre dünyaya çevir.
@@ -423,6 +494,7 @@ namespace VortexArena.Core.Player
             IsAlive = alive;
             ApplyLabelText();
             ApplyTeamColor();
+            ApplyBodyTint();
             RefreshColliders();
             RefreshHeldItemVisibility();
         }

@@ -51,8 +51,13 @@ kökünde — kabzada değil. Altyapı ve araç çalışıyor, **sayılar girilm
 Karar verilecek: her silahın tracer'ı farklı mı görünecek, yoksa hepsi aynı mı kalacak (altyapı
 ikisini de destekliyor — alanlar silah başına, değerler şu an aynı).
 
-Soket tarafında ayarlanacaklar (`ItemGripSockets` sabitleri — kod içinde, silah başına DEĞİL):
-`HoverRadius` (0.30 m) · `GrabRadius` (0.12 m) · halka yarıçapı/kalınlığı/rengi.
+Soket tarafında ayarlanacaklar: **kavrama yarıçapı silah başınadır** (`primaryGripRadius` /
+`secondaryGripRadius`, varsayılan 12 cm — işaretçinin `radius` alanından yazılır). `ItemGripSockets`
+sabitleri (kod içinde, tüm eşyalarda ortak): `HoverRadius` (0.30 m) · halka
+yarıçapı/kalınlığı/rengi.
+⚠️ Ön kabza yarıçapı ana kabzadan **daha cömert** olmalı: ana soket dururken kavranıyor, ön kabza
+ise silah zaten ana elde SALLANIRKEN. Hareketli bir hedefe 12 cm dar geliyorsa önce bu sayıyı
+büyüt — kod değişikliği değil, silah başına bir ayar.
 İsteğe bağlı: `WeaponCatalog.gripSocketPrefab`'a düzgün bir gösterge prefabı koymak — boş kalırsa
 prosedürel halka çiziliyor, yani **iş yapılmadan da çalışıyor**. Prefab konursa gösterge eşyanın
 dönüşünü alır (halka yedeği kameraya döner) — uzamsal bir işaret çizmek isteniyorsa yolu bu.
