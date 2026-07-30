@@ -639,7 +639,7 @@ katmanların göreli hız farkı korunur).
 | `Combat/ArenaCombat` | **Oyun kodunun ağa açılan tek kapısı** (statik). `ReportShot` / `ReportHit` / `ReportRaycastHit` / `ReportAreaHit` + `TryGetTargetPlayerId` / `IsHeadshot` / `CanFire` / `LocalPlayerId`. Bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektiriyor (arena uzayı, yön≠nokta, `RemoteHitBox` ile hedef çözme, hasarı istemcinin belirlemesi) — bunlar `Weapon` içinde gömülü kalsaydı ikinci bir hasar kaynağı yazan herkes aynı dördünü yeniden keşfederdi. `Weapon` de bu kapıyı kullanır (tek doğruluk kaynağı). Bağlantı yokken sessizce no-op. Reçeteler: `Gelistirici/Yemek-Kitabi.md` |
 | `Combat/WeaponGranter` | `weaponSource:"random"` modlarının (§3.9) silah kaynağı. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz, bu yüzden yeni arenaya ek kurulum adımı doğurmaz. İki iş: (1) sahne süpürmesi — raf silahları gizlenir, `BaseZone` **bileşeni** kapatılır + görsel taban şeridi gizlenir; (2) grip basılıyken o elde rastgele silah durur, bırakılınca yok olur, tekrar basınca **yenisi** gelir. TDM'de (kural `rack`) tümüyle pasiftir; kural değişince süpürme geri alınır. Admin'de rig kapalı olduğu için silah verme yolu kendiliğinden kapalı, süpürme ise çalışır |
 | `Combat/WeaponRackSpawner` (+ `RackSlot`) | Rafın silah kaynağı: kural `rack` iken gözlere `ModeDefinition.loadout`'tan silah **örnekler**, kural değişince toplar. Loadout'u `WeaponGranter` ile aynı yoldan okur (katalog → mod → loadout). Göz (`RackSlot`) yalnız KONUMU tutar (sanat kararı); hangi silahın duracağı moddan gelir — gözün `weapon` alanı doldurulursa o silah sabitlenir, boşsa loadout sırası kullanılır. **Neden sahneye elle `WPN_*` konmuyor:** elle konan örnek sahneye donar, moda silah eklenince her arenayı tek tek açmak gerekirdi. Silahlar prefabındaki fizikle gelir (kavrama/fizik ayarlarına dokunulmaz — dokunulsaydı raftan alınan silah "verilen silah" gibi davranır, bırakılamazdı) |
-| `Player/ThreePointBodyIK` | Ağdan gelen **üç noktadan** (kafa + iki el) humanoid iskeleti çözer — uzak avatarların sürücüsü. Kemikler isimle değil `Animator.GetBoneTransform` ile bulunur (karakter humanoid; model değişse bu bileşende tek satır değişmez). Gövde: kalça kafanın altında, gövde yaw'ı kafayı **gecikmeli** takip eder (anında yapışsaydı avatar her bakışta bütün gövdesiyle dönerdi), omurga eğimi zincire paylaştırılır. Kollar: Movement SDK `IKUtilities.SolveCCDIK`, ardından elin kendi rotasyonu birebir yazılır (silah tutuşu el yönünden okunuyor). Bacaklar **tamamen prosedürel** (adım döngüsü + ayak IK): projede yürüme klibi yok ve aynı anda iki ayak birden adım atmaz. ⚠️ Dirsek/omuz yönü TAHMİNDİR — gerçek body tracking değildir; ağa tek bayt eklenmez |
+| `Player/ThreePointBodyIK` | Ağdan gelen **üç noktadan** (kafa + iki el) humanoid iskeleti çözer — uzak avatarların sürücüsü. Kemikler isimle değil `Animator.GetBoneTransform` ile bulunur (karakter humanoid; model değişse bu bileşende tek satır değişmez); **gövde ölçüleri de sabit sayı değil, karakterin bind pozundan ölçülür** (kalça düşüşü, ayak bileği yüksekliği). Avatar oyuncunun **ölçülen ayakta kafa yüksekliğine göre ölçeklenir** — model sabit boydadır, ölçeklenmezse kısa kol ele yetişmez, bacak zemine değmez. Gövde: kalça kafanın altında, gövde yaw'ı kafayı **gecikmeli** takip eder (anında yapışsaydı avatar her bakışta bütün gövdesiyle dönerdi), omurga eğimi zincire paylaştırılır. Kollar/bacaklar: Movement SDK `IKUtilities.SolveCCDIK`; el ve kafa kemiğine **yalnız rotasyon** yazılır (konum yazmak kemiği ebeveyninden koparır). Bacaklar **tamamen prosedürel** (adım döngüsü + ayak IK): projede yürüme klibi yok ve aynı anda iki ayak birden adım atmaz. Her kare önce **bind pozuna dönülür** (§7 tuzaklar). ⚠️ Dirsek/omuz yönü TAHMİNDİR — gerçek body tracking değildir; ağa tek bayt eklenmez |
 | `Team` | `Red` / `Blue` / **`Neutral`**. `BaseZone`'da `Neutral` = herkese açık joker. ⚠️ Yeni değer SONA eklenir: `BaseZone`/`Weapon` bu enum'u serialize ediyor, başa ekleme her arenanın taban takımlarını kaydırır |
 
 **`ArenaRoof`** (çatılı arenalar için, **isteğe bağlı**): çatı hiyerarşisinin köküne konur
@@ -1176,6 +1176,31 @@ konsoluna tek satır sebep yazar.
     işletmede oyunu tümden oynanamaz kılardı. Yani bu bir KURULUM hatasıdır ve editörde/QA'da
     yakalanmalıdır: yeni bir arena sahnesini ilk açtığında konsolu oku, guardian kapalı olduğu için
     sahada başka fren yoktur.
+
+41. **Meta'nın CCD çözücüsü kemik dizisini UÇ→KÖK bekler, toleransı da KARE alır.**
+    `IKUtilities.SolveCCDIK` effector olarak dizinin **0. elemanını** kullanır ve zincirin kökünü
+    son elemanın *ebeveyninden* bulur; kök→uç verilirse çözücü sessizce ters çalışır — eli hedefe
+    götürmek yerine omzu/kalçayı hedefe sürükler (diz kalçanın üstüne çıkar, ayak havada kalır).
+    İkinci yüzü: döngü koşulu `sqrMagnitude > tolerance`, yani parametre **metre değil metrekare**;
+    `0.01` yazmak 1 cm değil **10 cm** slop demektir. Kural: zinciri `{ uç, orta, kök }` sırala,
+    toleransı karesiyle geç.
+
+42. **Kemiklerini kodla süren avatar her kare bind pozuna dönmelidir.** Sahnedeki karakterlerde
+    AnimatorController yok (animasyon klibi kullanılmıyor), yani pozu sıfırlayan hiçbir şey yok:
+    `rotation = delta * rotation` gibi **birikimli** bir yazım (omurga eğimi) her karede biraz daha
+    büker, avatar dakikalar içinde katlanır. İkinci kural aynı aileden: el/kafa kemiğine **konum
+    yazılmaz, yalnız rotasyon** — konum yazmak kemiği ebeveyninden koparır ve aradaki mesh gerilir;
+    hedef erişilemez olduğunda (kumanda pozu bileğin değil avucun ötesindedir) bu her kare olur.
+    Üçüncüsü: model **sabit boyda**, oyuncu değil — avatar oyuncunun kafa yüksekliğine
+    ölçeklenmezse kollar ele yetişmez, ayaklar zemine değmez. Belirti üçünde de aynı görünür:
+    "uzamış/kopmuş uzuvlar".
+
+43. **Editör AÇIKKEN `ProjectSettings/*.asset` dosyasını elle düzenleme — Unity onu okumaz, üstüne
+    yazar.** Editör bu dosyaları açılışta belleğe alır; diskteki değişikliği görmez ve bir sonraki
+    kaydında kendi hâlini geri yazar. Sinsi tarafı sessiz olmasıdır: dosyada `LocalBody`/`ArenaRoof`
+    katmanları **yazılı dururken** editörde (ve ondan üretilen build'de) o katmanlar yoktur, bağlı
+    özellik (gövde overlay kamerası, çatı gizleme) kurulumunu atlar. Katman/tag/qualite ayarı
+    editörden ya da `SerializedObject` ile yapılır; git'e giden dosya o yolun çıktısıdır.
 
 ---
 
