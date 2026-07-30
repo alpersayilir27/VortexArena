@@ -24,8 +24,36 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 **Donanım**
 
-- [ ] 1 adet **Sunucu PC** (Windows, **.NET 10 ASP.NET Core Runtime** kurulu — sunucu Kestrel kullandığı için düz .NET Runtime yetmez), tercihen kablolu Gigabit Ethernet ile AP'ye bağlı.
-- [ ] 1 adet **5 GHz AP/router** (tercihen Wi-Fi 6), arenaya özel SSID.
+- [ ] 1 adet **Sunucu PC** (Windows, **.NET 10 ASP.NET Core Runtime** kurulu — sunucu Kestrel kullandığı için düz .NET Runtime yetmez), **kablolu** Gigabit Ethernet ile AP'ye bağlı (gerekçe: Bölüm 4).
+- [ ] 1 adet **AP** (tercihen Wi-Fi 6E / 6 GHz), arenaya özel SSID.
+
+> ### ⚠️ AP seçerken bakılacak spec: nominal hız DEĞİL
+>
+> **Datasheet'teki "1000 Mbps / AX3000 / 1200 Mbps" rakamı bu iş için anlamsızdır.** O sayı
+> **büyük TCP paketleriyle** ölçülür; bu ürünün yükü ise ~1.200 **minik** çerçeve/sn'dir
+> (10 oyuncuda toplam ~2,3 Mbps — nominalin binde ikisi, ama tek radyonun airtime'ının %15–20'si →
+> `Docs/Sistem-Ozeti.md` §3.12). Bu profilde tıkanan şey radyo değil **AP'nin CPU'su / küçük paket
+> iletim hızıdır (pps)** ve o sayı hiçbir datasheet'te yazmaz.
+>
+> **Bu yüzden seçim ölçütü yönetilebilirliktir.** Aşağıdaki dördü **elle yapılandırılabiliyor mu**
+> diye bak — hepsi Bölüm 4'te ayarlanacak maddelerdir ve tüketici router arayüzlerinde çoğu
+> kilitlidir:
+>
+> | Ayar | Neden gerekli |
+> |---|---|
+> | **OFDMA (DL **ve** UL)** açılabiliyor mu | Bu iş yükü (çok istemci, minik paket) tam OFDMA'nın hedefi; çerçeve başı hava bedelini belirgin düşürür |
+> | **Kanal sabitlenebiliyor** mu (otomatik kanal kapatılabiliyor mu) | Maç ortasında kanal değişimi kesinti demektir |
+> | **DTIM** ayarlanabiliyor mu | DTIM=1 olmazsa başlığın radyosu uyur ve 20 Hz akışa gecikme ekler |
+> | **WMM/QoS** elle yapılandırılabiliyor mu | Poz kanalını (UDP 47822) video/voice sınıfına almak için |
+>
+> **Sonuç: yönetilebilir sınıf bir AP (Ubiquiti UniFi / TP-Link Omada vb.), tüketici router'ının
+> nominal hız etiketinden bu iş için kat kat daha değerlidir.** Ek olarak bu sınıf AP'ler bağlı
+> istemci başına airtime/retry istatistiği gösterir — sahada "kimin Wi-Fi'ı kötü" sorusunun tek
+> doğrudan cevabı budur.
+>
+> ⚠️ **Mevcut bir tüketici router'ı kullanılacaksa** yukarıdaki dördünden hangilerinin
+> yapılandırılamadığını **teslim paketine yaz** — sahada "neden takılıyor" tartışması çıktığında
+> ilk bakılacak yer o listedir.
 - [ ] Oyuncu sayısı kadar **Quest 3 / 3S** başlık + kumandalar + şarj istasyonu/powerbank. **Yazılımda eşzamanlı oyuncu sınırı yoktur** — pratik sınırı fiziksel alan (kişi başına güvenli hareket payı) ve AP kapasitesi belirler.
 - [ ] USB-C kablo + `adb` (Meta Quest Developer Hub kuruluysa birlikte gelir).
 - [ ] **Zemin bandı** (kalibrasyon işaretleri için, kalıcı ve renkli), şerit metre, işaretleme kalemi.
@@ -99,18 +127,32 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 
 ## 4. Ağ (AP + sunucu PC + firewall)
 
+> **Bu bölümün mantığı:** ürünün trafiği **bant değil airtime** tüketir — 10 oyuncuda ~2,3 Mbps
+> (1 Gbps'lik bir AP'nin %0,2'si) ama ~1.200 çerçeve/sn, yani tek radyonun ~%15–20'si. Aşağıdaki
+> maddelerin hemen hepsi bant kazanmak için değil **airtime korumak** içindir; sayılar ve gerekçe:
+> `Docs/Sistem-Ozeti.md` §3.12.
+
 **Erişim noktası**
 
-- [ ] **5 GHz** yayın; arenaya özel **tek SSID** (tüm başlıklar ve sunucu PC aynı SSID/subnet'te).
+- [ ] **6 GHz** yayın (Wi-Fi 6E AP + Quest 3/3S destekliyor). 6 GHz yoksa 5 GHz; **2.4 GHz tamamen kapalı** (ya da başlıkların göremeyeceği ayrı SSID). Gerekçe: 20 Hz'lik düzenli minik paketlerin düşmanı bant değil **girişim**.
+- [ ] Kanal genişliği **80 MHz** — 160 MHz'e **çıkma**. Bant zaten %0,2 kullanılıyor; 160 MHz yalnız girişim/DFS yüzeyi ekler. **Dar + temiz > geniş + kirli.**
+- [ ] Arenaya özel **tek SSID** (tüm başlıklar ve sunucu PC aynı SSID/subnet'te).
 - [ ] **Client isolation / AP isolation KAPALI** (cihazlar sunucuyu görebilmeli — kapalı değilse hiçbir başlık bağlanamaz).
 - [ ] Kanal **sabit** (otomatik kanal değil), WMM/QoS **açık**, band steering kapalı.
+- [ ] **Tek AP, tek kanal — ikinci AP koyulmaz.** Tek arenalık alanda ikinci AP roaming/handoff kesintisi üretir, karşılığı sıfırdır.
+- [ ] **OFDMA (DL + UL) ve airtime fairness açık.** Bu iş yükü (çok istemci, minik paket) tam OFDMA'nın tasarım hedefidir; çerçeve başı bedeli belirgin düşürebilir — ama consumer AP'lerde tutarsız çalıştığı için **garanti sayılmaz**, plan %15–20 airtime üzerinden yapılır.
+- [ ] **DTIM = 1.** Daha yükseği başlığın Wi-Fi radyosunu uyutup 20 Hz akışa gecikme ekler.
+- [ ] Mümkünse QoS'ta **UDP 47822'yi video/voice sınıfına** al (WMM AC_VI/AC_VO).
 - [ ] AP arenanın görüş alanına, oyuncuların üstünde/kenarında konumlandırıldı.
 
-> **Not:** sabit kanal seçimi (DFS dışı kanal tercihi), WMM ve band steering ayarları saha tecrübesiyle netleşecek — **doğrulanacak**.
+- [ ] ⚠️ **Ağ izole: internet YOK, oyun dışı cihaz YOK.** Sahadaki en büyük tek risk budur — aynı kanaldaki tek bir APK indirmesi / Windows update / telefon senkronu, 10 başlığın airtime'ını yer ve 2,3 Mbps'lik oyun trafiği 900 Mbps'lik bir transferin arkasında kuyruğa girer. Router'ın WAN'ı boş kalsın; misafir/ofis cihazları bu SSID'ye alınmasın.
+
+> **Not:** sabit kanal seçimi (DFS dışı kanal tercihi), WMM ve band steering ayarları saha tecrübesiyle netleşecek — **doğrulanacak**. OFDMA ve DTIM ayarlarının menü yolu AP markasına göre değişir.
 
 **Sunucu PC**
 
-- [ ] Tercihen **kablolu (GbE)** bağlantı + **statik IP** (router'da DHCP rezervasyonu tercih edilir); IP'yi teslim paketine yaz. IP değişirse `arena.json` / başlıklardaki kayıtlı adres bozulur.
+- [ ] ⚠️ **Kablolu (GbE) bağlantı — Wi-Fi'a bırakılmaz.** Sunucu Wi-Fi'daysa her downstream paket havayı **iki kez** geçer (sunucu→AP, AP→istemci) ve airtime ikiye katlanır (~%15–20 → ~%30–40). Bant için değil, **havadaki çerçeve sayısını yarıya indirdiği için** zorunlu sayılır.
+- [ ] **Statik IP** (router'da DHCP rezervasyonu tercih edilir); IP'yi teslim paketine yaz. IP değişirse `arena.json` / başlıklardaki kayıtlı adres bozulur.
 - [ ] `Server/firewall-kur.cmd` dosyasına **sağ tık → "Yönetici olarak çalıştır"**. Betik:
   - ağ profilini **Özel (Private)** yapar (Public profilde Defender gelen broadcast'i keser),
   - Windows'un otomatik eklediği **ENGELLE** kurallarını siler,
@@ -191,6 +233,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 - [ ] **Guardian/alan kurulumu YAPILMAZ.** Her başlıkta geliştirici ayarlarından fiziksel alan özellikleri kapatılır; oyuncu tüm alanda serbest dolaşır. Oyun içi güvenlik `ArenaBoundary` ile sağlanır (kenara yaklaşınca duvarlar belirginleşir, dışarı çıkınca ekran kararır + uyarı) — **guardian uyarısı olmadığı için tek fiziksel güvenlik ağı budur**, kalibrasyonun doğruluğu bu yüzden bir konfor değil güvenlik meselesidir.
   - Bunun iki sonucu var ve ikisi de yazılımda karşılanmıştır: (1) sistemin zemin seviyesi güvenilmez → kalibrasyon zemini kumandadan ölçer (§3), (2) tracking origin kayması kalibrasyonu bozardı → sahneler **Stage** tracking origin kullanır (sistem recenter'ı kapalı) ve yine de bir kayma olursa `ArenaCalibrator` kayıtlı anchor'dan kendini yeniden hizalar.
 - [ ] Uyku/ekran kapanma: başlıkların maç arasında uykuya geçmemesi için ekran/uyku süresi en uzun değere alındı.
+- [ ] ⚠️ **Casting / kayıt / streaming KAPALI (her başlıkta).** Cast eden tek bir başlık kendi başına 10–20 Mbps ve ağır airtime tüketir — oyunun tümü ~2,3 Mbps olduğu için bu, tüm maçın gecikmesini bozar (gerekçe: `Docs/Sistem-Ozeti.md` §3.12). Sahada "birden herkes takılmaya başladı" şikayetinde **ilk bakılacak yer budur.** Seans tanıtımı için görüntü isteniyorsa admin PC'nin gözlemci kamerası kullanılır, başlıktan cast edilmez.
 
 > **Not:** Guardian'ın hangi ayardan devre dışı bırakılacağı (geliştirici ayarları / boundaryless) ve uyku süresi menü yolu cihaz yazılımı sürümüne göre değişir — kurulumda ekran görüntüsüyle belgelenecek, **doğrulanacak**.
 > **Doğrulanacak (ilk saha testi):** alan kurulumu kapalıyken (1) Stage tracking origin zemin yüksekliğini veriyor mu, (2) `OVRSpatialAnchor` kalıcılığı çalışıyor mu — uygulamayı kapatıp açtığında logda `rig aligned from saved anchor` görünmeli. Görünmüyorsa her gözlük devrinde elle kalibrasyon gerekir.
@@ -250,6 +293,8 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 | Admin harita seçicisinde **başka işletmenin arenaları** var / beklenen arena yok | Sunucu yanlış mekanla açılmış | Sunucu penceresindeki `[Venue] …` satırını oku. Sunucuyu kapat (Ctrl+C), launcher'da doğru mekanı seçip yeniden başlat — **mekan çalışırken değişmez** |
 | Sunucu penceresi açılıp hemen kapanıyor (**çıkış kodu 2**) | Açık sahne çözülemedi: seçilen mekanda lobi haritası yok, ya da `maps.json` eksik/bayat | O mekanın `Lobby` kutusunu ekle (`supportedModeIds = ["lobby"]`), Unity'de **Export Server Config** çalıştır, sunucuyu yeniden dağıt. Launcher listesinde lobisiz mekanlar **kırmızı** görünür |
 | Bağlanıyor ama roster'da "çevrimdışı" düşüyor | 15 sn boyunca status gelmedi (Wi-Fi zayıf, başlık uykuya geçti) | AP kapsamasını/kanalı kontrol et; başlıkta uyku süresini uzat |
+| **Birden herkesin avatarı takılmaya/zıplamaya başladı** (tek oyuncu değil, hepsi) | Airtime doldu — ağ bandı değil. Sıralı şüpheliler: (1) bir başlık **cast/kayıt** ediyor, (2) ağa oyun dışı bir cihaz/indirme girdi, (3) sunucu PC **Wi-Fi'a** düşmüş (kablo çıkmış / Ethernet devre dışı), (4) komşu ağ aynı kanala oturdu | **Önce ölç, sonra tahmin et:** admin **İstatistikler** panelindeki **PING** kolonuna bak. ① *Herkesin ping'i yüksek* → airtime/ağ: başlıklarda casting'i kapat, router'a bağlı oyun dışı cihazları çıkar, sunucu PC'de `ipconfig` ile **Ethernet'in aktif** olduğunu doğrula (Wi-Fi'daysa airtime iki katına çıkar), gerekirse AP kanalını değiştir. ② *Ping'ler normal ama görüntü takılıyor* → sorun ağda değil: sunucu konsolundaki `[state]` satırında **tik sapma** değerine bak (yüksekse sunucu PC yükleniyor). ③ *Yalnız bir oyuncunun ping'i yüksek* → o başlığın kapsaması/konumu. Gerekçe: `Docs/Sistem-Ozeti.md` §3.12 |
+| Admin panelinde bir oyuncunun **PING'i `-`** görünüyor | O başlıkta eski APK var (ölçüm göndermiyor) ya da başlık henüz UDP kaydını tamamlamadı | Birkaç saniye bekle; geçmiyorsa o başlığa güncel APK'yı kur. Karışık APK sürümü zaten desteklenmiyor (protokol v5) |
 | Avatarlar fiziksel olarak örtüşmüyor | Bir başlıkta kalibrasyon yapılmadı; A ile B karışmış (arena 180° ters); zemin işaretleri kaymış; işaret mesafesi sahnedeki `anchor_a`/`anchor_b` mesafesiyle uyuşmuyor | Her başlıkta A+B ile **yeniden kalibre et** (tamamlanmış kalibrasyonda A+B tutmak sıfırlar); bant ölçüsünü sahnedeki değerle karşılaştır. **Kalibratörsüz kabuk lobide örtüşme beklenmez** — kontrolü lobi sahnesinde (`lobbyScene`) ya da arenada yap |
 | Avatarlar doğru yerde ama **yükseklikleri yanlış** (yere gömük / havada) | Kalibrasyonda kumanda dik tutulmamış ya da ucu yere değmemiş; `ArenaCalibrator.tipLocalOffset` o kumanda modeli için henüz ölçülmemiş (varsayılan -0.08 m tahmindir) | O başlıkta kumandayı **dik tutup ucunu zemine değdirerek** yeniden kalibre et. Tüm başlıklarda aynı yönde sapma varsa offset yanlıştır: §3'teki reçeteyle ölç, alanı güncelle, APK'yı yeniden al |
 | Oyun ortasında arena birden kaydı | Tracking origin değişti (recenter / tracking kaybı sonrası geri kazanım) | Normalde kendini onarır — logda `tracking origin changed, realigning from the saved anchor` satırını ara. Onarım gelmiyorsa kayıtlı anchor yok demektir; A+B ile yeniden kalibre et |

@@ -22,15 +22,22 @@ namespace VortexArena.Core.Combat
     /// Can, ölüm, skor ve maç fazı sunucudan <c>health_update</c>/<c>kill_event</c> ile geri gelir
     /// (Docs/ArenaNet-Protokol.md §10.3). Canı yerelde düşürme — iki taraf sapar.</para>
     ///
+    /// <para><b>İki bildirimin İKİ AYRI kanalı vardır ve bu bilinçlidir:</b>
+    /// <see cref="ReportShot"/>/<see cref="ReportThrow"/> birer <i>sunum</i> olayıdır (namlu alevi,
+    /// ses, tracer) → UDP olay kanalı, güvenilirlik aranmaz, kaybolursa yalnız bir efekt eksilir
+    /// (§6.4). <see cref="ReportHit"/> ise <i>otoriter durumu</i> değiştirir (can, ölüm, skor) →
+    /// WS'te <c>hit_report</c> olarak kalır. 600 RPM'de atış olayları otoriter kanalı boğuyordu;
+    /// ayırmak o kanalı atış gürültüsünden tümüyle kurtarır.</para>
+    ///
     /// <para><b>Hepsi bağlantı yokken sessizce no-op'tur.</b> Sunucusuz editör oturumunda oyun
     /// kodun aynen çalışır; hiçbir çağrının etrafına <c>if (bağlıysa)</c> yazman gerekmez.</para>
     /// </summary>
     public static class ArenaCombat
     {
-        // Her atışta yeni DTO ayırmamak için tek örnek yeniden kullanılır: ArenaClient.Send
+        // Her vuruşta yeni DTO ayırmamak için tek örnek yeniden kullanılır: ArenaClient.Send
         // JSON'a ÇAĞRI İÇİNDE çevirir (JsonUtility.ToJson senkron), dolayısıyla gönderim
         // bittiğinde nesne serbesttir. Dizi alanları da bir kez ayrılır.
-        private static readonly ShotFiredMsg Shot = new ShotFiredMsg { muzzlePos = new float[3], muzzleDir = new float[3] };
+        // (Atış olayının DTO'su burada yok: UDP kanalı kendi ön-ayrılmış tamponunu kullanır.)
         private static readonly HitReportMsg Hit = new HitReportMsg { hitPos = new float[3] };
         private static int _seq;
 
@@ -111,32 +118,60 @@ namespace VortexArena.Core.Combat
         // ---------------------------------------------------------------- bildirim
 
         /// <summary>
-        /// <b>Bir atış yapıldı</b> — namlu alevi/sesi diğer oyuncuların ekranında da görünsün diye.
-        /// Sunucu bunu DOĞRULAMAZ, yalnız atan hariç herkese relay eder; hasarla ilgisi yoktur.
-        /// <para>Dünya uzayında ver — arena uzayına çevrimi bu metot yapar.</para>
+        /// <b>§6.4: bir atış yapıldı</b> — uzak namlu alevi/sesi/tracer'ı için. Sunucu bunu
+        /// DOĞRULAMAZ, yalnız relay eder ve <b>hasarla hiçbir ilgisi yoktur</b> (o ayrı bir
+        /// bildirimdir: <see cref="ReportHit"/>). İkisini birden çağırmak normaldir — bir atış
+        /// hem olur hem isabet eder.
+        /// <para>
+        /// <b>Namlu KONUMU gönderilmez</b> (ve gönderilmemeli): tracer alıcının ÇİZDİĞİ silahın
+        /// namlusundan çıkmalı. Mutlak bir orijin, alıcı silahı interpole edilmiş el pozundan
+        /// çizdiği için çizilen namludan kaymış bir tracer verirdi — tutarlılık &gt; sadakat (§6.4).
+        /// </para>
         /// </summary>
-        /// <param name="worldMuzzlePosition">Namlu ucunun dünya konumu.</param>
         /// <param name="worldDirection">Merminin gittiği dünya yönü (normalize edilmesi gerekmez).</param>
-        /// <param name="weaponId">Kill feed etiketi ("ak47"). Sunucu doğrulamaz, serbesttir.</param>
-        public static void ReportShot(Vector3 worldMuzzlePosition, Vector3 worldDirection, string weaponId)
+        /// <param name="distanceMeters">Işının GERÇEKTE gittiği mesafe: isabet varsa
+        /// <c>hit.distance</c>, yoksa silahın menzili. Tracer'ın uzunluğu bundan gelir.</param>
+        /// <param name="netItemId">Ateş eden eşyanın <c>netItemId</c>'si (§6.6); <c>0</c> =
+        /// çözülemedi (uzak taraf sunum profilini bulamaz, olayı yine de duyar).</param>
+        /// <param name="rightHand">Olay sağ elden mi çıktı (telde tek bit — "bilinmiyor" yok).</param>
+        public static void ReportShot(Vector3 worldDirection, float distanceMeters, byte netItemId, bool rightHand)
         {
-            ArenaClient client = ArenaClient.Instance;
-            if (client == null || !client.IsConnected)
+            SendFireEvent(FireEventEntry.KIND_SHOT, worldDirection, distanceMeters, netItemId, rightHand);
+        }
+
+        /// <summary>
+        /// <b>§6.4: bir eşya atıldı</b> (bomba). Alıcılar aynı balistiği <b>YEREL simüle eder</b> —
+        /// yerçekimi tek kuvvet olduğu için deterministiktir, akış (poz akışı) GEREKMEZ. Bu yüzden
+        /// telde yalnız yön + başlangıç hızı gider; sapma kozmetiktir ve patlamayla kendini bitirir.
+        /// <para>Patlamanın hasarı bu metotla DEĞİL, mevcut yoldan bildirilir:
+        /// <see cref="ReportAreaHit"/> (hedef başına bir <c>hit_report</c>).</para>
+        /// </summary>
+        /// <param name="worldDirection">Atış yönü, dünya uzayı (normalize edilmesi gerekmez).</param>
+        /// <param name="speedMetersPerSecond">Başlangıç hızı (m/sn).</param>
+        /// <param name="netItemId">Atılan eşyanın <c>netItemId</c>'si (§6.6).</param>
+        /// <param name="rightHand">Hangi elden atıldı.</param>
+        public static void ReportThrow(Vector3 worldDirection, float speedMetersPerSecond, byte netItemId, bool rightHand)
+        {
+            SendFireEvent(FireEventEntry.KIND_THROW, worldDirection, speedMetersPerSecond, netItemId, rightHand);
+        }
+
+        /// <summary>
+        /// İki olay türünün ortak gönderim yolu. Kanal/kayıt yoksa <b>sessiz no-op</b> (sınıfın
+        /// sözleşmesi): sunucusuz editör oturumunda silahlar aynen çalışır.
+        /// <para>Yön dönüşümü <see cref="ArenaSpace.WorldToArenaDirection"/>'a bırakılır — Net
+        /// katmanı arena uzayını bilmez, çevrim çağıranın (yani bu kapının) işidir.</para>
+        /// </summary>
+        private static void SendFireEvent(byte kind, Vector3 worldDirection, float magnitudeMeters,
+            byte netItemId, bool rightHand)
+        {
+            UdpStateChannel channel = ArenaClient.Instance?.UdpChannel;
+            if (channel == null)
             {
                 return;
             }
 
-            Vector3 arenaPos = ArenaSpace.WorldToArena(worldMuzzlePosition);
-            // ⚠️ YÖN BİR NOKTA DEĞİLDİR: iki noktayı ayrı ayrı çevirip farkını almak origin
-            // ötelemesini düşürür, geriye yalnız dönüş kalır. Doğrudan WorldToArena(dir) demek
-            // yönü arena origin'i kadar KAYDIRIRDI.
-            Vector3 arenaDir = (ArenaSpace.WorldToArena(worldMuzzlePosition + worldDirection.normalized) - arenaPos).normalized;
-
-            Shot.seq = ++_seq;
-            Shot.weaponId = weaponId ?? "";
-            Write(Shot.muzzlePos, arenaPos);
-            Write(Shot.muzzleDir, arenaDir);
-            client.Send(Shot);
+            channel.SendFireEvent(kind, rightHand, netItemId,
+                ArenaSpace.WorldToArenaDirection(worldDirection), magnitudeMeters);
         }
 
         /// <summary>

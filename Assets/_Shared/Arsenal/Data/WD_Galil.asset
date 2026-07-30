@@ -12,8 +12,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 55accdfacbb64ab428182bb5c93442d3, type: 3}
   m_Name: WD_Galil
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
-  weaponId: galil
   displayName: Galil AR
+  netItemId: 4
+  prefab: {fileID: 9073305505722264021, guid: 60f11818acfb9c04d995ab4f09960cec, type: 3}
+  holdMode: 1
+  primaryGripPosition: {x: -1.1931206e-10, y: -0.030000087, z: 0.42399994}
+  primaryGripEuler: {x: 0, y: 0, z: 0}
+  secondaryGripPosition: {x: 0, y: 0, z: 0}
+  secondaryGripEuler: {x: 0, y: 0, z: 0}
+  primaryGripRadius: 0.12
+  secondaryGripRadius: 0.12
+  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
+  tracerWidth: 0.02
+  tracerLifetime: 0.06
+  tracerEveryNthRound: 3
+  weaponId: galil
   damage: 30
   headshotMultiplier: 4
   fireRateRpm: 666
@@ -39,6 +52,3 @@ MonoBehaviour:
   firePitchBase: 1.06
   firePitchJitter: 0.05
   fireVolume: 1
-  prefab: {fileID: 9073305505722264021, guid: 60f11818acfb9c04d995ab4f09960cec, type: 3}
-  grantedHoldPosition: {x: 0, y: 0, z: 0}
-  grantedHoldEuler: {x: 0, y: 0, z: 0}

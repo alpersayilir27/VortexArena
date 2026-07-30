@@ -387,9 +387,12 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 
 `weaponId` yalnızca **kill feed etiketidir** — sunucu doğrulamaz, istediğini yazabilirsin.
 
-> **Silah rafsız modlar için** (`weaponSource:"random"`, ör. FFA) `WeaponDefinition` üzerindeki
-> `grantedHoldPosition` / `grantedHoldEuler` alanları silahın elde nasıl duracağını belirler.
-> VR'da ince ayar buradan yapılır, kod değişmez.
+> Silahın elde nasıl duracağını `ItemDefinition` (tabandaki) `primaryGripPosition` /
+> `primaryGripEuler` alanları belirler, çift ellide ek olarak `secondaryGrip*`. VR'da ince ayar
+> buradan yapılır, kod değişmez. ⚠️ **Tek yer, üç tüketici:** aynı ölçü yerel duruşu, uzak
+> oyuncudaki çizimi ve kavrama soketinin yerini birlikte besliyor — ikinci bir "duruş" alanı
+> açmak biri güncellenip diğeri unutulan bir çift üretir. Raftan alınan silah ile verilen silah
+> (`weaponSource:"random"`) da aynı alanları kullanır, ayrım yoktur.
 
 > ⚠️ Denge sayıları istemcide yaşadığı için değişiklik **APK build'i ister** — sunucuyu yeniden
 > başlatmak yetmez.

@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `3` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı kesilmez). **v3:** faz makinesi `paused`/`playing`/`finished`'a indi, `phaseReason` + `modeState` eklendi, lobi faz olmaktan çıkıp **tür** oldu, `set_team` yalnız admin (§10.1). **v2:** `set_name` kaldırıldı (→ `set_identity`), `lobby_state.version` + `status.rosterVersion` + `PlayerInfo.number` eklendi |
+| `PROTOCOL_VERSION` | `5` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı kesilmez). **v5:** ağ telemetrisi (`0x06` RTT yoklaması §6.7, `status.rttMs/jitterMs/lossPct`, admin-only `net_stats`) + **paket birleştirme** (`0x05` §6.8; `0x02`/`0x04` geri düşüş yolu olarak korundu) + `health_update` broadcast olmaktan çıkıp **kurban + adminler**e gitmeye başladı (§10.3, alan düzeni aynı). ⚠️ v5'i **kırıcı** yapan tek şey `0x05`'tir — tanımayan istemci birleştirme devreye girince uzak avatarları ve tracer'ları kaybeder; diğer üçü tümüyle eklemelidir. **v4:** elde tutulan eşya tele girdi (`0x01`/`0x02` byte düzeni; §6.2/6.3/6.6), atış olayları WS'ten UDP'ye taşındı (`shot_fired` **kaldırıldı** → `0x03`/`0x04`; §6.4/6.5). **v3:** faz makinesi `paused`/`playing`/`finished`'a indi, `phaseReason` + `modeState` eklendi, lobi faz olmaktan çıkıp **tür** oldu, `set_team` yalnız admin (§10.1). **v2:** `set_name` kaldırıldı (→ `set_identity`), `lobby_state.version` + `status.rosterVersion` + `PlayerInfo.number` eklendi |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -22,7 +22,9 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `INTERP_DELAY_MS` | `100` | Uzak avatar interpolasyon tamponu |
 | `PLAYER_ID_MAX` | `255` | `playerId` tahsis tavanı. **Ürün kotası değil, tel formatı tavanıdır** — `playerId` UDP paketlerinde `u8`. Eşzamanlı oyuncu/admin sayısına başka sınır YOKTUR (kota ileride lisanslamayla gelecek) |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
-| `SNAPSHOT_MAX_ENTRIES_PER_PACKET` | `16` | Tek snapshot datagramına yazılan en fazla oyuncu; fazlası ek pakete taşar (§6.3). 6 + 16×86 = 1382 B < MTU |
+| `SNAPSHOT_MAX_ENTRIES_PER_PACKET` | `16` | Tek snapshot datagramına yazılan en fazla oyuncu; fazlası ek pakete taşar (§6.3). 6 + 16×88 = 1414 B < MTU |
+| `EVENT_MAX_ENTRIES_PER_PACKET` | `128` | Tek `0x04` datagramına yazılan en fazla olay (§6.5). 6 + 128×9 = 1158 B < MTU. Taşan olay **atılmaz, sonraki tik'e kayar** — "tik başına en fazla bir batch" değişmezi kopya korumasının dayanağıdır |
+| `EVENT_TICK_HISTORY` | `64` | İstemcinin kopya ayıklama için hatırladığı `0x04` tik sayısı (§6.5) |
 | `PLAYER_MAX_HP` | `100` | Oyuncu tam canı (sunucu-otoriter; §10) |
 | `COUNTDOWN_SECONDS` | `5` | Geri sayımın uzunluğu (`phaseReason:"countdown"`) |
 | `MATCH_END_SECONDS` | `10` | `finished` → otomatik `return_to_lobby` |
@@ -90,7 +92,10 @@ Hem `255.255.255.255` hem her arayüzün subnet-broadcast adresine gönderilir:
 ```
 `scenes` = build listesinden runtime'da toplanır (`SceneUtility.GetScenePathByBuildIndex`) → admin katalog doğrulaması bunu kullanır.
 
-**`status`** — her 5 sn: `{ "type":"status", "scene":"Arena12x12", "battery":0.87, "fps":71.6, "rosterVersion":42 }`
+**`status`** — her 5 sn: `{ "type":"status", "scene":"Arena12x12", "battery":0.87, "fps":71.6, "rosterVersion":42, "rttMs":14, "jitterMs":3.2, "lossPct":0.4 }`
+
+> **`rttMs`/`jitterMs`/`lossPct` (v5)** — ağ telemetrisi; **ölçen taraf İSTEMCİDİR** (§6.7), sunucu yalnız taşır. `-1` = bilinmiyor (`0` değil: 0 ms gerçekten mümkün bir ölçüm gibi okunur). Ayrı bir kanal açılmadı çünkü bu mesaj zaten 5 sn'de bir gidiyor ve operatör göstergesi için o ritim fazlasıyla yeterli.
+> ⚠️ **Bu üç alan `PlayerInfo`'ya GİRMEZ** (yani `lobby_state` roster'ında taşınmaz). Sürekli değişen sayılar oldukları için sunucudaki "görünen bir alan gerçekten değişti mi" kapısını her `status`'ta açar ve **her status'u bir tam roster yayınına** çevirirler — çözülmüş bir hata geri gelir. `fps` tam bu sebeple `PlayerInfo`'da yok; izlenecek emsal odur. Adminlere ayrı ve kaybı zararsız bir kanaldan gider: `net_stats` (§5.3).
 
 `rosterVersion` = istemcinin **uyguladığı son** `lobby_state.version`'ı (§5.3). Sunucu istemci geride
 kalmışsa — ve **yalnız o bağlantıya** — tam bir `lobby_state` yollar; güncelse hiçbir şey yapmaz.
@@ -110,12 +115,10 @@ dışındaysa veya **çevrimiçi** bir oyuncuda kullanılıyorsa reddedilir (§2
 kalıcı yazılır.
 > ⚠️ v1'deki **`set_name` KALDIRILDI** — ad ve numara tek kapıdan yönetilir (`PROTOCOL_VERSION` 2).
 
-**`shot_fired`** — atış anında (uzak VFX/SFX + sayım için; vuruş AYRI rapor edilir):
-```json
-{ "type":"shot_fired", "seq":123, "weaponId":"ak47",
-  "muzzlePos":[1.2,1.4,-3.0], "muzzleDir":[0.1,0.0,0.99] }
-```
-`muzzlePos`/`muzzleDir` **arena uzayındadır** (§3) — alıcı istemci kendi dünyasına çevirir.
+> ⚠️ **`shot_fired` KALDIRILDI** (`PROTOCOL_VERSION` 4). Atış artık WS/JSON'da değil, UDP olay
+> kanalındadır: `0x03 FireEvent` (§6.4). Gerekçe: 600 RPM = 10 atış/sn/oyuncu; 16 oyuncu tam ateşte
+> sunucu saniyede ~2400 WS mesajı serileştiriyordu ve bu yük hasar/can/faz ile **aynı güvenilir TCP
+> kanalını** paylaşıyordu. Atış bir sunum olayıdır — kaybı kozmetiktir, güvenilirlik gerektirmez.
 
 **`hit_report`** — istemci bir oyuncuya hasar verdiğinde (mermi, balta, ok, patlama, çevre — kaynağı fark etmez):
 ```json
@@ -214,8 +217,10 @@ Admin'de her ikisi de `false`/`""` kalır — admin kalibre olmaz, arayüzde "ka
 ```
 Fazlar ve alanların anlamı §10.1'de. `phase` yalnız üç değer alır: `paused` · `playing` · `finished`.
 
-**`shot_fired`** (relay) `{ "type":"shot_fired", "playerId":4, "weaponId":"ak47", "muzzlePos":[...], "muzzleDir":[...] }` — diğer istemciler uzak namlu alevi/ses oynatır (atan hariç herkese). Relay kapısı **`playing` VEYA `rules.fireWhilePaused`**'tur (§10.3) — lobide hedef atışı da görünür.
+> ⚠️ **`shot_fired` relay'i KALDIRILDI** (v4) — yerine `0x04 EventBatch` (§6.5). Relay kapısı (faz + atıcı canlı/kalibreli) aynen korundu, yalnız kanal değişti.
 **`health_update`** `{ "type":"health_update", "playerId":5, "hp":75.0, "attackerId":3 }`
+> ⚠️ **Broadcast DEĞİL** (v5): yalnız **`playerId`'nin sahibine ve adminlere** gider. İki tüketicisi de dar — istemci kendisine ait olmayan her `health_update`'i **zaten düşürüyor**, admin tablosu ise herkesin canını çiziyor. Herkese yayınlandığı dönemde 10 oyunculu bir maçta her isabette 11 mesaj gidip **9'u çöpe** atılıyordu; isabet başına üretildiği için de fan-out'u oyuncu sayısıyla **kare** büyüyen tek WS kanalıydı. Alan düzeni **değişmedi**; `attackerId`'yi bugün okuyan yoktur (yönlü hasar göstergesi için ayrılmıştır ve mesaj artık zaten yalnız kurbana gittiği için doğal yeri burasıdır). Bu, "WS mesajları tanımı gereği herkese gider" varsayımının **bilinçli istisnası**dır → `Docs/Sistem-Ozeti.md` §3.12.
+
 **`kill_event`** `{ "type":"kill_event", "killerId":3, "victimId":5, "weaponId":"ak47" }`
 **`respawn`** `{ "type":"respawn", "playerId":5, "delaySeconds":5.0 }` — istemci `delaySeconds` sonra, modun canlanma şartını sağlayınca canlanır (§10.4). Sunucu sahne geometrisini bilmez; canlanma yeri diye bir alan taşınmaz.
 **`match_end`** `{ "type":"match_end", "winnerTeam":"blue", "winnerPlayerId":0, "scoreRed":12, "scoreBlue":30 }`
@@ -241,6 +246,19 @@ Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken har
 - `venueId`/`venueScenes` = sunucunun açılışta seçtiği mekan ve o mekanın sahne adları (§11.1). Oturum boyunca değişmez ama her `admin_state`'te taşınır ki geç bağlanan admin de ilk mesajda hangi arenaları görebileceğini öğrensin. **Admin harita seçicisi kendi yerel kataloğunu bununla süzer**: katalog tüm projeyi tanır, oynatılabilir olana sunucu karar verir. Boş gelirse süzme yapılmaz.
 - **Yalnız operasyonel durum senkronlanır.** Görünüm tercihleri (kamera kipi, seçili oyuncu, halka/ad etiketi, kamera hızı, duvar/çatı saydamlığı) her admin'in **kendi ekranına** aittir, protokole girmez ve `PlayerPrefs`'te yerel kalır.
 
+**`net_stats`** (v5) — yalnız adminlere, **1 Hz**: oyuncu başına ağ telemetrisi.
+
+```json
+{ "type":"net_stats",
+  "players":[ {"playerId":3,"rttMs":14,"jitterMs":3.2,"lossPct":0.4} ] }
+```
+
+- Değerleri **istemciler ölçer** (§6.7) ve `status` ile bildirir; sunucu yalnız adminlere taşır. `-1` = bilinmiyor.
+- ⚠️ **Broadcast EDİLMEZ.** Herkese yayınlamak oyuncu sayısıyla **kare** büyüyen bir fan-out üretirdi — yani bu telemetrinin ölçmek için var olduğu sorunun aynısını. Hedef kuralı `admin_state` ile aynı.
+- ⚠️ **Roster'a (`lobby_state`) alternatif değil, bilinçli olarak ayrı bir kanal:** roster'ın bir `version`'ı ve uzlaştırma protokolü var (§5.1); saniyede bir değişen telemetriyi oraya koymak versiyonu sürekli çevirip uzlaştırmayı anlamsızlaştırırdı. Bu mesajın **kaybı zararsızdır** (bir sonraki saniye yenisi gelir), o yüzden uzlaştırması da yoktur.
+- ⚠️ **Bant/bayt alanı YOKTUR ve eklenmez.** Hacim sayıları (bayt/sn, paket/sn, anlık paket boyutu, tik kayması) sunucu konsolundaki `[state]` satırındadır ve oraya aittir; operatörün eyleme çevirebileceği sayı ping'dir. Admin panelinde de yalnız **PING** kolonu vardır (jitter/kayıp ölçülür ama gösterilmez).
+- Admin yokken sunucu bu mesajı **hiç serileştirmez** — kimse bakmıyorken üretmek boşa pakettir.
+
 ## 6. UDP state mesajları (binary, little-endian)
 
 ### 6.1 Kayıt: `0x00 UdpHello` (istemci → sunucu, welcome'dan sonra)
@@ -254,24 +272,167 @@ Sunucu `playerId↔udpToken` eşleşirse istemcinin UDP endpoint'ini kaydeder ve
 
 ```
 [u8 0x01][u8 playerId][u16 seq][u32 clientTimeMs]
+[u8 itemL][u8 itemR][u8 gripFlags]    (3 B — v4)
 [head : f32 px,py,pz, qx,qy,qz,qw]   (28 B)
 [handL: aynı düzen]                   (28 B)
 [handR: aynı düzen]                   (28 B)
-Toplam: 8 + 84 = 92 B  → 20 Hz'de ~14.7 kbps/oyuncu
+Toplam: 11 + 84 = 95 B  → 20 Hz'de ~15.2 kbps/oyuncu
 ```
 Pozlar **arena uzayında**. `seq` sarmalanır (u16); eski `seq` gelirse paket atılır (son gelen kazanır). v1'de quaternion sıkıştırma YOK (basitlik); v2 rezervi: smallest-three.
+
+**`itemL`/`itemR`/`gripFlags` (v4)** — elde tutulan eşya (§6.6). Pozla aynı pakette gider çünkü aynı otoriteye aittir: "elimde ne var" da "elim nerede" gibi **istemci-otoriter bir sunum bilgisidir**. Sunucu bu üç baytı **doğrulamaz**, snapshot'a kopyalar (§6.3) — sunucuda eşya tablosu YOKTUR ve eklenmez (§10.3 felsefesi). `gripFlags`'te bit0 gelirse **yok sayılır**: o bit snapshot'ta `FLAG_ALIVE`'dır ve yazarı yalnız sunucudur (istemci kendini canlı ilan edemez).
+
+⚠️ **Poz kanalı FİZİKSEL gerçeği taşır.** `handL`/`handR` ham rig anchor'larıdır — eşyaya "yapıştırılmış" düzeltilmiş poz DEĞİL. Çift elli silahta boş elin kabzaya oturtulması bir **sunum** kararıdır ve alıcı tarafta yapılır (§6.6). Bu kanal bir kez bulanırsa (düzeltilmiş poz taşımaya başlarsa) sonraki her tüketici — yakın dövüş, elle etkileşim, admin teşhisi — o bulanıklığı miras alır.
 
 ### 6.3 `0x02 Snapshot` (sunucu → tüm istemciler, 20 Hz)
 
 ```
 [u8 0x02][u8 playerCount][u32 serverTick]
-oyuncu başına: [u8 playerId][u8 flags][92B'lik PoseUpdate'in poz kısmı = 84 B]
+oyuncu başına: [u8 playerId][u8 flags][u8 itemL][u8 itemR][head 28][handL 28][handR 28] = 88 B
 ```
-`flags` bit0 = alive. İstemci kendi pozunu snapshot'tan ÇİZMEZ (yerelden çizer); uzak oyuncuları `INTERP_DELAY_MS` tamponuyla interpole eder. Admin'e de aynı snapshot gider (gözlemci avatarları/işaretçileri bundan beslenir).
 
-**Parçalama (MTU):** pozlu oyuncu sayısı `SNAPSHOT_MAX_ENTRIES_PER_PACKET`'i aşarsa sunucu aynı tik'i **birden çok datagrama böler**; her datagram kendi `playerCount`'unu taşır, hepsi aynı `serverTick`'i taşır ve aynı hedeflere yollanır. 16 girdi = 6 + 16×86 = **1382 B** (MTU 1500 altı). **İstemcide birleştirme mantığı YOKTUR ve gerekmez:** her paket taşıdığı girdileri bağımsız olarak uygular, oyuncu düşürme kararı "bu pakette yok" değil ~1.5 sn'lik zaman aşımıdır. Bu yüzden parçalama tel formatını değiştirmez — ek başlık alanı yoktur, eski okuyucu da doğru çalışır.
+`flags` bitleri — **tek bayt, iki yazar** (otorite bölünmesi §10.1'in tel karşılığı):
+
+| Bit | Ad | Yazarı | Anlamı |
+|---|---|---|---|
+| 0 | `FLAG_ALIVE` | **sunucu** | Oyuncu hayatta (otoriter durum) |
+| 1 | `FLAG_GRIP_LINKED` | istemci (`gripFlags`'ten kopya) | İki el **aynı** eşyayı tutuyor |
+| 2 | `FLAG_PRIMARY_RIGHT` | istemci (aynı) | Ana el sağ (yalnız `GRIP_LINKED` iken anlamlı) |
+| 3–7 | rezerv | — | Sıfır yazılır, okuyucu yok sayar |
+
+İstemci kendi pozunu snapshot'tan ÇİZMEZ (yerelden çizer); uzak oyuncuları `INTERP_DELAY_MS` tamponuyla interpole eder. Admin'e de aynı snapshot gider (gözlemci avatarları/işaretçileri bundan beslenir).
+
+**Parçalama (MTU):** pozlu oyuncu sayısı `SNAPSHOT_MAX_ENTRIES_PER_PACKET`'i aşarsa sunucu aynı tik'i **birden çok datagrama böler**; her datagram kendi `playerCount`'unu taşır, hepsi aynı `serverTick`'i taşır ve aynı hedeflere yollanır. 16 girdi = 6 + 16×88 = **1414 B** (MTU 1500 altı). **İstemcide birleştirme mantığı YOKTUR ve gerekmez:** her paket taşıdığı girdileri bağımsız olarak uygular, oyuncu düşürme kararı "bu pakette yok" değil ~1.5 sn'lik zaman aşımıdır. Bu yüzden parçalama tel formatını değiştirmez — ek başlık alanı yoktur, eski okuyucu da doğru çalışır.
+
+⚠️ **Olay batch'i (`0x04`) snapshot'a EKLENMEZ, ayrı datagramdır.** 1414 B + tek olay MTU'yu aşar ve snapshot'ın boyut garantisi çöker.
 
 **İçerik kuralı:** snapshot'a yalnız *online* olup en az bir `PoseUpdate`'i alınmış `role=player` girişleri konur (admin hiç girmez — poz göndermez; ama UDP kaydı yaptığı için snapshot ALIR, ve birden çok admin varsa her biri ayrı hedeftir). Kopan oyuncu (WS kapanışı/OFFLINE_TIMEOUT) bir sonraki tikten itibaren düşer; `playerCount=0` snapshot yine yayınlanır (istemciler bayat avatarı böyle temizler). **Yayın hedefi:** UDP kaydı yapılmış tüm online endpoint'ler (admin dahil). **İstemci düşürme kuralı:** bir `playerId` snapshot'larda ~1.5 sn görünmezse uzak avatarı kaldırılır (paket kaybı toleransı; sunucunun 15 sn'lik OFFLINE_TIMEOUT'unu beklemez).
+
+⚠️ **Yayın hedef başına ayrı unicast'tir (multicast yok)** — yani snapshot trafiği hem girdi hem hedef sayısıyla, `N²` olarak büyür. Bu bir bant sorunu değil **paket/airtime** sorunudur; bütçe hesabı, ölçek tavanları ve "sıkıştırma bu darboğaza dokunmaz" gerekçesi `Docs/Sistem-Ozeti.md` §3.12'de.
+
+### 6.4 `0x03 FireEvent` (istemci → sunucu, olay başına; yalnız player)
+
+```
+[u8 0x03][u8 playerId][u16 seq][u8 kindHand][u8 itemId][i16 dirOctX][i16 dirOctY][u16 magnitude]
+Toplam: 12 B
+```
+
+| Alan | Anlamı |
+|---|---|
+| `kindHand` | Alt nibble = **tür**: `0` atış (hitscan), `1` atma (fırlatma). Bit7 = **el**: `0` sol, `1` sağ |
+| `itemId` | Atış/atma anındaki eşya (§6.6). Sunum profilini (ses/alev/tracer) çözer; durum baytı kaybolsa da olay kendi kendine yeter |
+| `dirOctX/Y` | **Oktahedral sıkıştırılmış birim yön**, arena uzayında (2×i16 = 4 B, ~0.01° hata). 3×f32 = 12 B yerine |
+| `magnitude` | Türe göre: atışta **mesafe** (u16, cm → 0–655 m), atmada **başlangıç hızı** (u16, cm/sn) |
+
+**HEMEN gönderilir**, poz tik'i beklenmez: bekletmek yerel tetik ile relay arasına 0–50 ms koyar, karşılığı yoktur (10 paket/sn/oyuncu bir AP için hiçtir).
+
+**`seq` sözleşmesi — YALNIZ yukarı yön:**
+- ✅ **Kopya bastırma:** sunucu oyuncu başına son `seq`'i tutar; aynısı ikinci kez gelirse relay etmez (UDP paket çoğaltabilir → çift tracer + çift ses).
+- ✅ **Kayıp ölçümü:** `seq` boşluğu = kaybolan olay sayısı (başlık başına Wi-Fi teşhisi).
+- ❌ **SIRA ZORLAMASI YOK.** "Eski `seq`'i at" kuralı **POZ** kuralıdır (durum: son gelen kazanır) ve olaylara **UYGULANMAZ**: sırası bozuk gelen atış gerçekten olmuş bir atıştır; atmak sessizce bir tracer ve bir ses silmektir.
+
+**Yön neden gönderiliyor** (el pozundan türetilebilir gibi duruyor): 20 Hz interpole el pozundan türetilirse aynı tik'e düşen iki atış aynı yöne gider ve geri tepme kaybolur. Nişan, oyun açısından anlamlı bilgidir; 4 B'ye değer.
+
+**Orijin neden gönderilmiyor:** tracer, alıcının **çizdiği silahın namlusundan** çıkmalıdır. Mutlak bir namlu konumu gönderilirse alıcı silahı interpole edilmiş el pozundan çizdiği için tracer çizilen namludan kaymış başlar — atıcının gerçeğine bir tık daha sadık, gözle daha bozuk bir sonuç. **Tutarlılık > sadakat.** Orijin `itemId` + o tik'teki el pozu + eşyanın statik `muzzle` ofsetinden türetilir; eşya çözülemezse el pozuna düşülür.
+
+### 6.5 `0x04 EventBatch` (sunucu → tüm istemciler, 20 Hz; yalnız olay varken)
+
+```
+[u8 0x04][u8 count][u32 serverTick]
+olay başına: [u8 playerId][u8 kindHand][u8 itemId][i16 dirOctX][i16 dirOctY][u16 magnitude] = 9 B
+Toplam: 6 + count×9 B
+```
+
+Alanlar §6.4 ile birebir aynı; `seq` **taşınmaz** (sunucu kopyayı zaten ayıkladı).
+
+**Relay kapısı** (`shot_fired`'ın v3'teki kapısı aynen korundu, §10.3): faz `playing` **VEYA** `rules.fireWhilePaused`, atıcı online + `role=player` + **hayatta** + **kalibreli**. Ara fazlarda (yükleme/geri sayım/maç sonu, `fireWhilePaused:false` iken) relay yoktur. İçerik **doğrulanmaz**: yön, mesafe ve `itemId` serbesttir (§10.3).
+
+**Hedef:** UDP kayıtlı tüm online endpoint'ler (admin dahil — gözlemci de uzak atışları görür/duyar). **Atan da kendi olayını geri alır ve kendisi yok sayar** — snapshot'ta kendi pozunu yok saymasıyla birebir aynı desen (§6.3). Sunucuda hedef başına ayrı batch üretmek (atanı süzmek) tik başına N serileştirme demek olurdu; karşılığı oyuncu başına ~90 B/sn'lik bir israftır ve tek satırlık istemci süzgeci onu bedavaya kapatır.
+
+**Oynatma zamanı:** olay kendi `serverTick`'inde, alıcının interpolasyon saatiyle oynatılır. Bu yüzden 20 Hz batch'leme **algılanan gecikmeye eklenmez**: batch bekleme süresi (≤50 ms) `INTERP_DELAY_MS` (100 ms) tamponunun içinde erir — anında yollansa da el pozu tampon kadar geriden geldiği için daha erken OYNATILAMAZDI.
+
+**Kopya koruması `seq` değil TİK'tir:** batch'in kimliği `serverTick` ve **tik başına en fazla bir batch** üretilir. İstemci son işlediği `EVENT_TICK_HISTORY` tik'i halkada tutar ve yalnız **birebir tekrarı** düşürür. Eski tik'li ama görülmemiş batch **OYNATILIR** (interp saati o tik'i geçmişse hemen) — ~50 ms gecikmiş tracer, kaybolmuş tracer'dan iyidir.
+
+⚠️ `EVENT_MAX_ENTRIES_PER_PACKET`'i aşan olaylar **atılmaz, sonraki tik'in batch'ine kayar** — "tik başına bir batch" değişmezi korunsun (kopya koruması buna dayanıyor). Sınır 128/tik = 2560 olay/sn; pratikte erişilmez.
+
+**Olay yoksa paket yok:** lobide, geri sayımda ve sessiz anlarda bu kanal tümüyle susar (snapshot'ın `count=0` yayınından farklı — burada bayat durum temizlenmesi gerekmez, olaylar anlıktır).
+
+### 6.6 `netItemId` — elde tutulan eşya kimliği
+
+`itemL`/`itemR` (§6.2/6.3) ve `itemId` (§6.4/6.5) alanlarının hepsi aynı `u8` isim uzayını kullanır:
+
+| Değer | Anlam |
+|---|---|
+| `0` | **El boş** (rezerve — hiçbir eşyaya verilemez) |
+| `1..255` | Bir `ItemDefinition`'ın `netItemId`'si |
+
+Eşleme tablosu Unity tarafındadır (`ItemDefinition.netItemId`, katalog `NetItemCatalog`) ve **sunucuya export EDİLMEZ** — sunucu bu baytı yalnız kopyalar, çözmez. Kimlikler `WeaponKitBuilder` tablosundan açıkça verilir; **katalog dizi indeksi kimlik olarak KULLANILMAZ** (dizi sırası değişince tüm eşyalar kayar — serialize edilen enum tuzağının aynısı). Editör bekçisi çakışan `netItemId`'de hata verir: çakışma derlemede patlamaz, sahada "elinde yanlış eşya çizildi" olarak görünürdü.
+
+**Alıcının çözüm tablosu** (`itemL`, `itemR`, `FLAG_GRIP_LINKED`):
+
+| Durum | `itemL` | `itemR` | `GRIP_LINKED` | Çizim |
+|---|---|---|---|---|
+| Boş | `0` | `0` | – | Eşya yok |
+| Tek elli, sağ (tabanca) | `0` | `p` | `0` | Sağ elde `p` |
+| Çift tabanca (aynı eşya!) | `p` | `p` | `0` | **İki** ayrı `p` |
+| Tüfek, iki el | `r` | `r` | `1` | **Bir** `r`, ana elin (`FLAG_PRIMARY_RIGHT`) pozundan |
+| Sağda tüfek, solda bomba | `b` | `r` | `0` | İkisi ayrı |
+
+⚠️ "Aynı id iki slotta" tek başına **çift elle tutmak demek DEĞİLDİR** (çift tabanca meşru bir durum) — ayrımı yalnız `FLAG_GRIP_LINKED` taşır.
+
+**Duruş telde gitmez.** Eşyanın ele göre konumu/dönüşü `ItemDefinition.primaryGrip` (ve çift ellide `secondaryGrip`) alanlarından, yani her istemcinin APK'sından gelir. Ön koşulu **kanonik kavramadır**: her eşyanın eline denk gelen noktası sabittir (serbest kavrama = keyfi ofset = uzak tarafta yanlış duruş). Aynı sebeple namlu yönü de telde gitmez — `muzzle` çocuğu prefabdadır.
+
+⚠️ **Kavrama noktaları yerelde SOKET gibi davranır** (el yaklaşınca belirginleşir, ancak soketin üstünde grip'e basılınca kavrama doğar — `ItemGripSockets`) ve **bu telde HİÇBİR ŞEY değiştirmez:** aynı iki ölçü (`primaryGrip`/`secondaryGrip`) hem yerel soketi hem uzak çizimi besler, yani soket için ne yeni bir alan ne yeni bir mesaj vardır. Soket bir **giriş kapısıdır** (kavrama nerede başlayabilir), duruşun kaynağı değil. Buraya bir "soket yarıçapı/durumu" alanı eklemek gerekmiyor ve eklenmemeli: yarıçap bir his ayarıdır, uzak taraf kavramanın nasıl başladığını değil yalnız SONUCUNU (hangi eşya, hangi el, kavrama bağlı mı) çizer.
+
+**Çift ellide boş el:** `GRIP_LINKED` iken alıcı boş eli `secondaryGrip`'e **eşikli** (~25 cm) yapıştırır. Eşik güzellik ayarı değil **paket kaybı emniyetidir**: bayrağın kaybolduğu bayat tik penceresinde oyuncu silahı gerçekten bırakmışsa koşulsuz yapıştırma kolu arenanın öbür ucuna uzatırdı.
+
+### 6.7 `0x06 RttProbe` (istemci → sunucu, 1 Hz; echo ile döner)
+
+```
+[u8 0x06][u8 playerId][u32 clientStamp]
+Toplam: 6 B — sunucu AYNI 6 baytı geri yollar (echo)
+```
+
+**Ölçen taraf İSTEMCİDİR:** `RTT = şimdi − clientStamp`. `clientStamp` **opak bir damgadır** — sunucu okumaz, yorumlamaz, aynen taşır; bu yüzden **saat senkronu gerekmez** (iki damga da istemcinin). Sunucu tarafında durum tutulmaz: doğrulama poz/olay yolundaki kuralın aynısı (yalnız `0x00` ile kaydedilmiş endpoint'ten) ve yanıt `0x00` ack'inin birebir aynı deseni.
+
+**Neden ayrı bir paket gerekiyor** — üç alternatif denendi ve reddedildi:
+
+| Alternatif | Neden olmaz |
+|---|---|
+| `clientTimeMs`'i kullanmak (§6.2, v1'den beri telde) | Saat senkronu olmadan **mutlak gecikme vermez**; yalnız farkının değişimi tek yönlü jitter verir — onu snapshot varışları zaten daha iyi ölçüyor |
+| Sunucunun snapshot'ta istemcinin damgasını geri yollaması | Damga **hedefe özel** olurdu ve tek paylaşımlı buffer'ı tik başına N serileştirmeye çevirirdi (§6.5 olay batch'ini de aynı gerekçeyle hedefe özelleştirmiyor) |
+| WS/TCP üzerinden ölçmek | TCP retransmit'i gecikmeye karışır. **Gecikme oyunun aktığı kanaldan ölçülmelidir.** ⚠️ WS'teki `ping` mesajı bir gecikme ölçümü DEĞİL, sunucunun "bana bir `status` yolla" tetiğidir |
+
+**Jitter ve paket kaybı bu paketle ölçülmez** — istemci ikisini de zaten aldığı **20 Hz snapshot akışından** çıkarır (varış aralığının 50 ms'den sapması = jitter, `serverTick` boşluğu = kayıp), yani **sıfır ek paketle**. ⚠️ Aynı tik'in parçaları (§6.3) ve `0x05` (§6.8) bu sayımda **doğru** ele alınmalıdır: parçaları ayrı varış saymak jitter'ı sıfıra çeker, `0x05`'i saymamak ise birleştirme devreye girdiğinde kaybı %100 gösterir.
+
+⚠️ **1 Hz'in üstüne çıkarılmaz.** Her yoklama **2 datagram**dır (gidiş + echo) ve bu ürünün darboğazı bant değil paket sayısıdır: 5 Hz ping 10 oyuncuda ~110 paket/sn eder ve §6.8'in kazancının dörtte birini geri verir. Bu paketin tek işi operatörün okuduğu sayıdır (`net_stats` → admin panelinde **PING** kolonu); teşhis çözünürlüğü jitter'dan gelir.
+
+Sunucu tarafı ölçüm (**uplink**: poz varış aralığı + `seq` boşluğu) ve sunucunun kendi tik kayması **konsolda** kalır (`[state]` satırı) — yön asimetriktir, iki taraf ayrı ayrı ölçülür. Bütçe ve gerekçeler: `Docs/Sistem-Ozeti.md` §3.12.
+
+### 6.8 `0x05 SnapshotWithEvents` (sunucu → tüm istemciler, 20 Hz; snapshot + olaylar birlikte)
+
+```
+[u8 0x05][u8 playerCount][u8 eventCount][u32 serverTick]
+oyuncu başına: SnapshotEntry (88 B, §6.3 ile birebir aynı)
+olay başına:   FireEventEntry (9 B, §6.5 ile birebir aynı)
+Başlık: 7 B
+```
+
+**Varlık sebebi paket sayısıdır, bant değil.** Tipik bir maçta (10 oyuncu, 5 olay/tik) snapshot 886 B ve olay bloğu 45 B — ikisi tek datagrama rahat sığıyor, oysa ayrı gönderildiklerinde **tik başına hedef başına iki** datagram üretiliyordu. 10 oyuncu + 1 admin'de bu ~220 paket/sn'dir; bant kazancı ihmal edilebilir, kazanç **airtime**'dadır (`Docs/Sistem-Ozeti.md` §3.12).
+
+**Sunucunun birleştirme kapısı — üç koşulun HEPSİ gerekli:**
+
+1. O tik'te **olay var** (yoksa birleştirilecek bir şey yok, düz `0x02` gider).
+2. Snapshot **tek parçaya sığıyor** (girdi sayısı `SNAPSHOT_MAX_ENTRIES_PER_PACKET`'i aşmıyor).
+3. Toplam boyut `COMBINED_MAX_BYTES` (1200 B) altında.
+
+Koşullar sağlanmazsa sunucu **bugünkü davranışa düşer**: `0x02` parçaları + `0x04`. ⚠️ **`0x02` ve `0x04` kaldırılmadı ve kaldırılmaz** — geri düşüş yolu onlardır.
+
+⚠️ **Tik başına ya `0x05` ya `0x04` üretilir, ikisi birden ASLA.** §6.5'in kopya koruması "tik başına en fazla bir olay datagramı" değişmezine dayanıyor ve kimlik `serverTick`; aynı tik için iki olay datagramı çıkarsa istemci ikincisini birebir tekrar sanıp **düşürür**. Aynı sebeple **parçalanmış snapshot'ta olaylar bu pakete hiç girmez** — parçalar arasında olay bloğu çoğaltmak tam olarak bu değişmezi kırardı.
+
+⚠️ **İstemcide olay bloğu `0x04` ile AYNI koddan ve AYNI tik halkasından geçer** (`EVENT_TICK_HISTORY`). Ayrı bir halka açılırsa aynı tik iki kez oynar: çift tracer + çift ses.
+
+Snapshot bloğu `0x02` ile birebir aynı işlenir; tik tekrarında durumu yeniden uygulamak zararsızdır (durum kanalı, son gelen kazanır) — düşürülmesi gereken yalnız **olaylardır**.
 
 ## 7. DTO tasarım kuralları
 
@@ -397,8 +558,8 @@ Atış hızı denetimi, `weaponId` beyaz listesi ve sunucu-otoriter silah tablos
 eklenmez: pompalı saçması, bomba parçası ve ok yaylımı gibi meşru "hızlı art arda vuruş"
 örüntülerini sessizce düşürürler.
 
-`shot_fired` sunucuda **doğrulanmaz**, yalnız relay edilir (atan hariç herkese, `playerId`
-eklenerek) — ölü/**kalibresiz** oyuncunun `shot_fired`'ı relay EDİLMEZ. Kapısı
+**Atış olayı** (`0x03`/`0x04`, §6.4/6.5) sunucuda **doğrulanmaz**, yalnız relay edilir (atan hariç
+herkese, `playerId` ile) — ölü/**kalibresiz** oyuncunun atışı relay EDİLMEZ. Kapısı
 **`phase == playing` VEYA `rules.fireWhilePaused`**'tur: lobide hedef atışı yapılabildiği için
 (§10.7) başkalarının namlu alevini görmesi doğrudur. Yükleme/geri sayım/duraklatma sırasında
 (`fireWhilePaused:false` olan modlarda) relay yoktur.
@@ -407,6 +568,16 @@ eklenerek) — ölü/**kalibresiz** oyuncunun `shot_fired`'ı relay EDİLMEZ. Ka
 duraklatmada oyuncuya hasar verilemez. İki kapı bilerek ayrı: atış bir sunum olayı, vuruş bir
 durum değişimidir. Bu yüzden "ateş edebilir miyim" moda (`fireWhilePaused`), "hasar var mı"
 çekirdeğe (`phase`) bağlıdır.
+
+⚠️ **İki kapının KANALI da ayrıdır ve bu bilinçlidir** (v4): atış olayı **UDP**'dedir (kaybı
+kozmetik, güvenilirlik gerekmez), `hit_report` **WS/TCP**'de kalır (otoriter hasar, kaybı bir ölümü
+yutar). `hit_report`'u UDP'ye taşıma — ve atış olayını WS'e geri getirme (10 atış/sn/oyuncu otoriter
+kanalı boğar; v4'ün taşıma gerekçesi budur).
+
+⚠️ **Atış relay kapısı UDP recv thread'inde okunur** ve `MatchDirector`'ın maç kilidine (`_gate`)
+GİREMEZ — girerse 20 Hz poz alım yolunu bekletir. `PlayerState.Alive`'ın mevcut kilitsiz okuma
+deseni buraya da uygulanır: faz değişiminde "atış relay edilir" bayrağı volatile yayınlanır, olay
+yolu yalnız onu ve `Alive`/`Calibrated`'ı okur. Bir tik gecikme sunum için önemsizdir.
 
 > **Denge sayıları istemcide yaşar.** Hasar/atış hızı/menzil tek kaynak olarak Unity'deki
 > `WeaponDefinition` SO'larındadır; sunucuya export edilmez, `config/weapons.json` diye bir dosya
@@ -524,7 +695,7 @@ hasar açılırdı — bu sistemin önlemek için var olduğu durumun ta kendisi
 
 1. `hit_report`'u **reddedilir** (ateş edemez) — §10.3/2
 2. Ona gelen `hit_report` **reddedilir** (hasar yemez) — §10.3/3
-3. `shot_fired`'ı **relay edilmez** — §10.3
+3. Atış olayı (`0x03`) **relay edilmez** — §10.3
 4. `revive_request`'i reddedilir **ve `REVIVE_GRACE` zorla canlandırması onu atlar** — §10.4
 5. Maç sayaçları (`hp`/`kills`/`deaths`/`score`) **korunur** — kalibrasyon geri gelince oyuncu
    kaldığı yerden devam eder; bu bir cezalandırma değil, geçici bir dondurmadır.
@@ -562,7 +733,7 @@ veremeden.
 | Lobi sahnesi hangisi? | Sunucu söyler: `server.json → lobbyScene`, boşsa mekanın tek lobi haritası (§11). Çözülemezse **sunucu açılmaz** (§11) |
 | Faz ne olur? | `paused` + `phaseReason:"lobby"` (§10.1). Lobi diye bir faz YOKTUR |
 | Oyuncuya hasar? | **İmkânsız** — `hit_report` yalnız `playing` fazında işlenir (§10.3) |
-| Atış görünür mü? | Evet — `rules.fireWhilePaused:true` olduğu için `shot_fired` relay edilir (§10.3) |
+| Atış görünür mü? | Evet — `rules.fireWhilePaused:true` olduğu için atış olayı relay edilir (§6.5/§10.3) |
 | Silah nereden gelir? | Sahnedeki raf. Loadout'u istemci `modeId:"lobby"` ile kendi katalogundan çözer |
 | Canlanma / skor / süre? | Yok. Herkes canlı (`hp=PLAYER_MAX_HP`), sayaçlar 0 (§5.3) |
 | Takım? | Vardır ve **yalnız admin atar** (`set_team`, §5.2) — her fazda, sunucuya bağlı herkes için. Oyuncu kendi takımını seçemez; bunun için protokol mesajı YOKTUR ve eklenmeyecektir |

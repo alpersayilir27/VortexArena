@@ -23,12 +23,17 @@ namespace VortexArena.Core.Combat
         [SerializeField] private WeaponDefinition[] definitions = Array.Empty<WeaponDefinition>();
         [Tooltip("Uzak oyuncu atışlarının FX düğümü (RemoteShotFx havuzunda çoğaltılır); boşsa sade ses fallback'i üretilir.")]
         [SerializeField] private GameObject remoteShotFxPrefab;
+        [Tooltip("Kavrama soketi göstergesi (ItemGripSockets çoğaltır); boşsa prosedürel halka yedeği çizilir.")]
+        [SerializeField] private GameObject gripSocketPrefab;
 
         /// <summary>Katalogdaki silah tanımları.</summary>
         public WeaponDefinition[] Definitions => definitions;
 
         /// <summary>Uzak atış FX prefabı (null olabilir).</summary>
         public GameObject RemoteShotFxPrefab => remoteShotFxPrefab;
+
+        /// <summary>Kavrama soketi göstergesi prefabı (null olabilir → prosedürel halka).</summary>
+        public GameObject GripSocketPrefab => gripSocketPrefab;
 
         /// <summary>weaponId ile tanım bulur (büyük/küçük harf duyarsız); yoksa/boşsa null.</summary>
         public WeaponDefinition FindByWeaponId(string id)

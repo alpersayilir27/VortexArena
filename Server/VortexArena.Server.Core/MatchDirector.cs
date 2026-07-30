@@ -143,6 +143,11 @@ public sealed class MatchDirector
     /// lobide de anlamlı bir cevap vardır ve her okuyucunun null kontrolü yapması gerekmez.</summary>
     private ModeRules _rules = ModeRules.TeamDefault;
 
+    /// <summary>Atış olayı relay kapısının (§6.5) kilitsiz okunabilir yayını — faz
+    /// <see cref="Phase.Playing"/> VEYA <c>rules.fireWhilePaused</c>. TEK yazarı
+    /// <see cref="RefreshShotRelayLocked"/>'dır.</summary>
+    private volatile bool _shotRelayOpen;
+
     private DateTime _phaseEnteredAt = DateTime.UtcNow;
 
     /// <summary>1 Hz işler (countdown geri sayımı + Live'da match_state) için sonraki eşik.</summary>
@@ -176,7 +181,21 @@ public sealed class MatchDirector
         _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
         _sceneName = _lobbyScene;
         _rules = ModeRules.LobbyProfile;
+        RefreshShotRelayLocked();
     }
+
+    /// <summary>
+    /// Atış olayı (<c>0x03</c>/<c>0x04</c>, §6.4/6.5) relay edilir mi: faz <c>playing</c> <b>VEYA</b>
+    /// <c>rules.fireWhilePaused</c>. Atıcının kendi koşulları (online + player + alive + calibrated)
+    /// buna girmez, onları <see cref="StateHost"/> oyuncu başına okur.
+    /// <para>⚠️ <b>Neden bir bayrak, neden kilitli bir okuma değil</b> (§10.3): bu kapı <b>UDP recv
+    /// thread'inde</b> okunur ve o thread <c>_gate</c>'e GİREMEZ — girerse 20 Hz poz alım yolunu
+    /// maç kilidinin arkasında bekletir. <see cref="PlayerState.Alive"/>'ın mevcut kilitsiz okuma
+    /// deseninin aynısı: faz/kural değişiminde bayrak volatile yayınlanır, olay yolu yalnız onu
+    /// okur. Bir tik gecikme <b>sunum</b> için önemsizdir (hasar kapısı bu değil, o WS'te ve
+    /// kilitlidir).</para>
+    /// </summary>
+    public bool ShotRelayOpen => _shotRelayOpen;
 
     /// <summary>Sunucunun yapılandırılmış lobi sahnesi — açılış logu ve doğrulaması için.</summary>
     public string LobbyScene => _lobbyScene;
@@ -579,6 +598,7 @@ public sealed class MatchDirector
 
             _mode = mode;
             _rules = rules;
+            RefreshShotRelayLocked();
             _modeId = mode.ModeId;
             _sceneName = sceneName;
             _roundSeconds = appliedRound;
@@ -796,6 +816,7 @@ public sealed class MatchDirector
             // atış); hasarı zaten faz kapatıyor.
             _modeId = ArenaProtocol.LOBBY_MODE_ID;
             _rules = ModeRules.LobbyProfile;
+            RefreshShotRelayLocked();
 
             // Sahneleme koşan maçı değil bekleyişi değiştirir: eğer `finished` iken sahnelendiyse
             // artık lobi bekleyişindeyiz.
@@ -816,37 +837,9 @@ public sealed class MatchDirector
 
     // ---- Savaş hattı (§10.3) ----
 
-    /// <summary>shot_fired doğrulanmaz, yalnız relay edilir: faz Live/Lobby + atıcı hayatta player
-    /// ise playerId eklenip ATAN HARİÇ herkese gönderilir.
-    /// <para>Lobby fazının açık olması bilinçlidir (§10.7): lobide hedef tahtasına ateş edilebiliyor,
-    /// dolayısıyla başkalarının namlu alevini görmesi doğrudur. <b>Bu kapı hasar hattının kapısı
-    /// DEĞİLDİR</b> — <c>hit_report</c> yalnız Live'da işlenir, yani lobide oyuncuya hasar veremez.
-    /// Ara fazlarda (Loading/Countdown/End) relay yoktur.</para></summary>
-    public async Task HandleShotFiredAsync(PlayerState shooter, ShotFiredMsg msg)
-    {
-        var outbox = new List<Outgoing>();
-        lock (_gate)
-        {
-            // Atış kapısı ile HASAR kapısı bilerek AYRI (§10.3): atış bir sunum olayı, vuruş bir
-            // durum değişimidir. Ateş serbestliği MODdan gelir (rules.fireWhilePaused) — lobi
-            // türünde hedef atışı yapılabildiği için namlu alevinin görünmesi doğrudur; hasar yine
-            // yalnız `playing`'de işlenir (HandleHitReportAsync).
-            if (_phase != Phase.Playing && !_rules.FireWhilePaused) return;
-            // Kalibresizin atışı relay EDİLMEZ (§10.6): ateş edemediği hâlde başkalarının
-            // ekranında namlu alevi çakması yanıltıcı olurdu.
-            if (shooter.Role != "player" || !shooter.Alive || !shooter.Calibrated) return;
-
-            var relay = new ShotFiredMsg
-            {
-                playerId = shooter.PlayerId, // relay'de seq taşınmaz (§5.3)
-                weaponId = msg.weaponId ?? "",
-                muzzlePos = msg.muzzlePos ?? new float[3],
-                muzzleDir = msg.muzzleDir ?? new float[3]
-            };
-            QueueBroadcastLocked(outbox, JsonUtil.Serialize(relay), exceptPlayerId: shooter.PlayerId);
-        }
-        await FlushAsync(outbox);
-    }
+    // Atış olayı (0x03/0x04) burada işlenmez: v4'te UDP'ye taşındı ve relay'i StateHost yapar
+    // (§6.4/6.5). Buradaki tek payı ShotRelayOpen bayrağıdır — 10 atış/sn/oyuncu otoriter WS
+    // kanalını boğuyordu; hasar (hit_report) bilinçli olarak WS'te KALDI (§10.3).
 
     /// <summary>hit_report hattı (§10.3, sırayla): faz → atıcı → hedef → takım → hasar sayısı.
     /// Herhangi biri düşerse tek satır log + sessiz ret (istemciye yanıt yok).
@@ -926,7 +919,8 @@ public sealed class MatchDirector
             weaponId = msg.weaponId ?? "";
             appliedDamage = msg.damage;
             target.Hp = MathF.Max(0f, target.Hp - appliedDamage);
-            QueueBroadcastLocked(outbox, JsonUtil.Serialize(new HealthUpdateMsg
+            // Hedefli gönderim (§10.3): kurban + adminler. Diğer oyuncular bu mesajı zaten atıyordu.
+            QueueHealthUpdateLocked(outbox, target, JsonUtil.Serialize(new HealthUpdateMsg
             {
                 playerId = target.PlayerId,
                 hp = target.Hp,
@@ -1022,12 +1016,21 @@ public sealed class MatchDirector
         _phase = next;
         _pauseReason = reason;
         _phaseEnteredAt = now;
+        RefreshShotRelayLocked();
 
         static string Describe(Phase phase, PauseReason reason) =>
             phase == Phase.Paused && reason != PauseReason.None
                 ? $"{PhaseWire(phase)}/{ReasonWire(reason)}"
                 : PhaseWire(phase);
     }
+
+    /// <summary>Atış relay kapısını (<see cref="ShotRelayOpen"/>) faz + kuraldan yeniden hesaplar.
+    /// <b>TEK yazar burasıdır</b> ve faz ya da <c>_rules</c> değişen HER yerde çağrılır
+    /// (<see cref="SetPhaseLocked"/> + her <c>_rules</c> ataması). Dağınık atama yapılmaması
+    /// bilinçli: kapı iki ayrı durumdan türüyor, iki yazar olsa biri güncellenmeden kalır ve
+    /// sahada "lobide kimsenin namlu alevi görünmüyor" gibi sessiz bir sapma olarak çıkardı.</summary>
+    private void RefreshShotRelayLocked() =>
+        _shotRelayOpen = _phase == Phase.Playing || _rules.FireWhilePaused;
 
     /// <summary>Faz → tel değeri (§10.1). Enum adı ile tel değeri BİLEREK ayrı tutulur: tel
     /// küçük harf sözleşmesini izler, C# adı C# sözleşmesini.</summary>
@@ -1103,6 +1106,9 @@ public sealed class MatchDirector
         // faz kapatır (hit_report yalnız playing) — bu bayrak sadece namlu alevinin görünmesini
         // sağlar. modId de dolar, çünkü istemci silah loadout'unu/HUD'unu bu anahtarla çözüyor.
         _rules = ModeRules.LobbyProfile;
+        // ⚠️ SetPhaseLocked yukarıda çağrıldı, yani kapı burada _rules'ün ESKİ hâliyle hesaplanmış
+        // durumda — kuralı değiştiren her yerin kendi tazelemesini yapması bu yüzden şart.
+        RefreshShotRelayLocked();
         _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
         _sceneName = _lobbyScene;
         _timeRemaining = 0f;
@@ -1169,7 +1175,8 @@ public sealed class MatchDirector
         player.Alive = true;
         _rosterRefreshFor = player;
         // attackerId=0: canlanma bir saldırı sonucu değildir (§10.4/3).
-        QueueBroadcastLocked(outbox, JsonUtil.Serialize(new HealthUpdateMsg
+        // Hedefli gönderim (§10.3): canlanan oyuncu + adminler.
+        QueueHealthUpdateLocked(outbox, player, JsonUtil.Serialize(new HealthUpdateMsg
         {
             playerId = player.PlayerId,
             hp = player.Hp,
@@ -1249,16 +1256,41 @@ public sealed class MatchDirector
         scoreBlue = _scoreBlue
     };
 
-    /// <summary>Çevrimiçi tüm bağlantılara (admin dahil) kuyruklar; exceptPlayerId dolu ise o
-    /// oyuncu atlanır (shot_fired relay'i atana gönderilmez).</summary>
-    private void QueueBroadcastLocked(List<Outgoing> outbox, string json, int exceptPlayerId = 0)
+    /// <summary>Çevrimiçi tüm bağlantılara (admin dahil) kuyruklar.
+    /// <para>"Şu oyuncuyu atla" parametresi <b>kaldırıldı</b>: tek kullanıcısı atış relay'iydi ve o
+    /// v4'te UDP'ye taşındı. Yeni kanalda süzme YOK — atan kendi olayını geri alır ve kendisi yok
+    /// sayar (§6.5). WS mesajlarının hepsi tanımı gereği herkese gider.</para></summary>
+    private void QueueBroadcastLocked(List<Outgoing> outbox, string json)
     {
         foreach (var player in _registry.Snapshot())
         {
             if (!player.Online) continue;
-            if (exceptPlayerId != 0 && player.PlayerId == exceptPlayerId) continue;
             var connection = player.Connection;
             if (connection == null) continue;
+            outbox.Add(new Outgoing(connection, json, player.Name));
+        }
+    }
+
+    /// <summary>
+    /// <c>health_update</c>'i YALNIZ <b>ilgili oyuncuya + adminlere</b> kuyruklar (§10.3).
+    /// <para><b>Neden broadcast değil:</b> mesajın iki tüketicisi var ve ikisi de dar —
+    /// <c>PlayerCombatState</c> kendi <c>playerId</c>'si dışındaki her mesajı <b>zaten atıyor</b>,
+    /// admin tablosu ise herkesin canını çiziyor. Yani 10 oyunculu bir maçta her isabette 11 TCP
+    /// mesajı gidip <b>9'u çöpe</b> atılıyordu. Fan-out'u kesmek davranışı hiç değiştirmez;
+    /// yalnızca kimsenin okumadığı paketleri üretmeyi bırakır.</para>
+    /// <para>⚠️ Bu, "WS mesajlarının hepsi tanımı gereği herkese gider" varsayımının <b>istisnası</b>
+    /// ve bilinçlidir: isabet başına üretildiği için tek fan-out'u oyuncu sayısıyla <b>kare</b>
+    /// büyüyen mesaj budur. Yeni bir "olay başına herkese haber ver" mesajı eklerken sorulacak soru
+    /// "kaç bayt" değil <b>"kaç datagram"</b>dır (Docs/Sistem-Ozeti.md §3.12).</para>
+    /// </summary>
+    private void QueueHealthUpdateLocked(List<Outgoing> outbox, PlayerState subject, string json)
+    {
+        foreach (var player in _registry.Snapshot())
+        {
+            if (!player.Online) continue;
+            var connection = player.Connection;
+            if (connection == null) continue;
+            if (!ReferenceEquals(player, subject) && player.Role != "admin") continue;
             outbox.Add(new Outgoing(connection, json, player.Name));
         }
     }

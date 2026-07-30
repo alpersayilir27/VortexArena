@@ -4,13 +4,25 @@ namespace VortexArena.Protocol
     public static class ArenaProtocol
     {
         /// <summary>
+        /// v5: ağ telemetrisi (<c>0x06</c> RTT yoklaması §6.7, <c>status.rttMs/jitterMs/lossPct</c>,
+        /// admin-only <c>net_stats</c>) ve <b>paket birleştirme</b> (<c>0x05</c> §6.8 — snapshot +
+        /// olaylar tek datagramda; <c>0x02</c>/<c>0x04</c> geri düşüş yolu olarak korundu).
+        /// <c>health_update</c> broadcast olmaktan çıkıp <b>kurban + adminler</b>e gitmeye başladı
+        /// (§10.3) — alan düzeni değişmedi.
+        /// <para>⚠️ <b>v5'i kırıcı yapan tek şey <c>0x05</c>'tir:</b> onu tanımayan bir istemci
+        /// birleştirme devreye girdiğinde uzak avatarları ve tracer'ları kaybeder. Diğer üç değişiklik
+        /// tümüyle eklemelidir. Sürüm uyuşmazlığı bağlantıyı <b>reddetmez</b> (yalnız konsola uyarı
+        /// basılır), bu yüzden karışık sürüm sessizce bozuk çizim üretir — APK turu tamamlanmalıdır.</para>
+        /// v4: elde tutulan eşya tele girdi (<c>0x01</c>/<c>0x02</c> byte düzeni; §6.2/6.3/6.6),
+        /// atış olayları WS'ten UDP'ye taşındı (<c>shot_fired</c> <b>kaldırıldı</b> →
+        /// <c>0x03</c>/<c>0x04</c>; §6.4/6.5).
         /// v3: faz makinesi <c>paused</c>/<c>playing</c>/<c>finished</c>'a indi, <c>phaseReason</c> +
         /// <c>modeState</c> eklendi, lobi faz olmaktan çıkıp <b>tür</b> oldu, <c>set_team</c> yalnız
         /// admin (§10.1).
         /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
         /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
         /// </summary>
-        public const int PROTOCOL_VERSION = 3;
+        public const int PROTOCOL_VERSION = 5;
         public const string APP_ID = "VortexArena";
 
         /// <summary>Forma numarası aralığı (§2). <c>0</c> = atanmamış ve bu aralığın dışındadır;
@@ -46,10 +58,36 @@ namespace VortexArena.Protocol
 
         /// <summary>
         /// Tek snapshot datagramına yazılan en fazla oyuncu girdisi. Fazlası aynı tik içinde
-        /// ek datagramlara taşar (§6.3) — 6 + 16×86 = 1382 B, MTU 1500'ün altında kalır.
+        /// ek datagramlara taşar (§6.3) — 6 + 16×88 = 1414 B, MTU 1500'ün altında kalır.
         /// İstemcide birleştirme mantığı gerekmez: her paket kendi girdilerini bağımsız uygular.
         /// </summary>
         public const int SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16;
+
+        /// <summary>
+        /// Tek <c>0x04</c> EventBatch datagramına yazılan en fazla olay (§6.5) —
+        /// 6 + 128×9 = 1158 B, MTU 1500'ün altında kalır.
+        /// <para>⚠️ Taşan olay <b>ATILMAZ, sonraki tik'in batch'ine kayar</b>: "tik başına en fazla
+        /// bir batch" değişmezi istemcideki kopya korumasının dayanağıdır (kimlik <c>serverTick</c>).
+        /// Aynı tik için ikinci bir batch üretilirse istemci onu birebir tekrar sanıp düşürür.</para>
+        /// </summary>
+        public const int EVENT_MAX_ENTRIES_PER_PACKET = 128;
+
+        /// <summary>
+        /// İstemcinin kopya ayıklama için hatırladığı <c>0x04</c> tik sayısı (§6.5). Halka tampon:
+        /// yalnız birebir tekrar düşürülür, eski tik'li ama görülmemiş batch OYNATILIR.
+        /// <para>⚠️ <c>0x05</c> (§6.8) de <b>aynı</b> halkayı kullanır — ayrı bir halka açılırsa aynı
+        /// tik iki kez oynar (çift tracer + çift ses).</para>
+        /// </summary>
+        public const int EVENT_TICK_HISTORY = 64;
+
+        /// <summary>
+        /// <c>0x05</c> birleşik datagramının (§6.8) üst sınırı. Sunucu snapshot + olayları yalnız bu
+        /// boyutun altında kalıyorsa tek pakette birleştirir; aşarsa <c>0x02</c>+<c>0x04</c>'e düşer.
+        /// <para>MTU 1500 iken 1200 seçildi: LAN'da tünel/VPN yok ama sahada 1500'den küçük MTU
+        /// görülebiliyor ve birleştirme bir <b>optimizasyon</b>dur — parçalanma riskine karşılık
+        /// alınacak bir kazanç değil. Sınırın altında kalmayan tik zaten eski yolla çalışır.</para>
+        /// </summary>
+        public const int COMBINED_MAX_BYTES = 1200;
 
         /// <summary>
         /// Lobi türünün <c>modeId</c>'si (§10.7). <b>Kayıtlı bir maç modu DEĞİLDİR</b> — sunucuda

@@ -72,8 +72,8 @@ public sealed record ModeRules
 
     /// <summary>
     /// Faz <c>playing</c> değilken silah ateşlenebilir mi (§10.5). <c>true</c> = serbest atış alanı:
-    /// <c>shot_fired</c> relay edilir ama <b>hasar yine yoktur</b> — <c>hit_report</c> kapısı her
-    /// hâlükârda <c>playing</c>'dir (§10.3). Lobi türünün tek farkı budur.
+    /// atış olayı (UDP <c>0x03</c>/<c>0x04</c>, §6.4/6.5) relay edilir ama <b>hasar yine yoktur</b> —
+    /// <c>hit_report</c> kapısı her hâlükârda <c>playing</c>'dir (§10.3). Lobi türünün tek farkı budur.
     /// </summary>
     public bool FireWhilePaused { get; init; }
 

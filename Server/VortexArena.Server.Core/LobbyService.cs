@@ -422,6 +422,82 @@ public sealed class LobbyService
         }
     }
 
+    // ---- net_stats yayıncısı (§6.7): yalnız adminlere, 1 Hz ----
+    // ⚠️ Ayrı bir döngü olmasının sebebi ritmi: admin_state OLAY tabanlıdır (seçim/komut değişince),
+    // telemetri ise periyodiktir. admin_state'e bindirilse ya telemetri seyrek kalırdı ya da her
+    // saniye bir "duyuru" yayını üretilirdi.
+
+    private CancellationTokenSource? _netStatsCts;
+    private Task? _netStatsLoop;
+
+    public void Start()
+    {
+        if (_netStatsLoop is { IsCompleted: false }) return;
+        _netStatsCts = new CancellationTokenSource();
+        _netStatsLoop = Task.Run(() => NetStatsLoopAsync(_netStatsCts.Token));
+    }
+
+    public void Stop()
+    {
+        _netStatsCts?.Cancel();
+        _netStatsCts = null;
+        _netStatsLoop = null;
+    }
+
+    /// <summary>Oyuncu başına ping/jitter/kayıp — İSTEMCİNİN ölçüp <c>status</c> ile bildirdiği
+    /// değerler (§6.7); sunucu yalnız taşır.
+    /// <para>⚠️ <b>Broadcast değil:</b> hedef yalnız çevrimiçi adminler. Herkese yayınlamak oyuncu
+    /// sayısıyla kare büyüyen bir fan-out üretirdi — yani bu telemetrinin ölçmek için var olduğu
+    /// sorunun aynısını.</para>
+    /// <para>Kaybı zararsızdır: bir sonraki saniye yenisi gelir, uzlaştırma gerekmez. Roster'a
+    /// (<c>lobby_state</c>) bu yüzden hiç girmiyor — orada bir <c>version</c> ve uzlaştırma
+    /// protokolü var, saniyede bir çevrilirse anlamsızlaşır.</para></summary>
+    private async Task NetStatsLoopAsync(CancellationToken token)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        var entries = new List<NetStatsEntry>();
+
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                if (!await timer.WaitForNextTickAsync(token)) break;
+            }
+            catch (OperationCanceledException) { break; }
+
+            try
+            {
+                var admins = _registry.OnlineAdminConnections();
+                // Kimse bakmıyorsa serileştirme bile yapılmaz: telemetrinin tek tüketicisi operatör
+                // ekranıdır ve boşa üretmek boşa pakettir.
+                if (admins.Count == 0) continue;
+
+                entries.Clear();
+                foreach (var state in _registry.Snapshot())
+                {
+                    if (state.Role != "player" || !state.Online) continue;
+                    entries.Add(new NetStatsEntry
+                    {
+                        playerId = state.PlayerId,
+                        rttMs = state.RttMs,
+                        jitterMs = state.JitterMs,
+                        lossPct = state.LossPct
+                    });
+                }
+
+                if (entries.Count == 0) continue;
+
+                var json = JsonUtil.Serialize(new NetStatsMsg { players = entries.ToArray() });
+                foreach (var connection in admins)
+                    await SendSafeAsync(connection, json, "(admin)");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Lobby] net_stats yayını hatası: {ex.Message}");
+            }
+        }
+    }
+
     private string BuildAdminStateJson(string notice)
     {
         lock (_selectionGate)

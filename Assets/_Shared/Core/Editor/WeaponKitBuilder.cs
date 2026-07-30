@@ -82,6 +82,16 @@ namespace VortexArena.Core.Editor
             public string PackPrefab;  // PackRoot/Prefabs/Weapons/<PackPrefab>.prefab
             public string WeaponId;
             public string DisplayName;
+
+            /// ⚠️ Telde giden ağ kimliği (Docs/ArenaNet-Protokol.md §6.6) — snapshot'ta bu bayt
+            /// gider. KARARLI olmak zorundadır: bu tabloda satır sırası değişirse veya bir silah
+            /// silinirse KALAN silahların kimliği DEĞİŞMEMELİDİR (katalog dizi indeksi kimlik
+            /// olarak kullanılmadığının sebebi budur). Yeni silah = kullanılmamış bir sayı;
+            /// silinen silahın sayısı geri kullanılmaz. 0 geçersizdir (§6.6'da "el boş" rezervi).
+            public int NetItemId;
+
+            /// ItemHoldMode adı: "OneHand" (tabanca/bomba) | "TwoHand" (tüfek).
+            public string HoldMode;
             public int Damage;
             public int Rpm;
             public int Magazine;
@@ -115,6 +125,7 @@ namespace VortexArena.Core.Editor
             new WeaponSpec
             {
                 Name = "AK47", PackPrefab = "AR_A_1", WeaponId = "ak47", DisplayName = "AK-47",
+                NetItemId = 1, HoldMode = "TwoHand",
                 Damage = 36, Rpm = 600, Magazine = 30, Reload = 2.43f, BaseSpread = 1.10f, BloomPerShot = 0.30f,
                 MaxBloom = 2.5f, BloomRecovery = 4.0f, Kick = 2.4f, PitchBase = 1.00f, Volume = 1.0f,
                 FireClips = new[] { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" },
@@ -127,6 +138,7 @@ namespace VortexArena.Core.Editor
             new WeaponSpec
             {
                 Name = "M4A4", PackPrefab = "AR_B", WeaponId = "m4a4", DisplayName = "M4A4",
+                NetItemId = 2, HoldMode = "TwoHand",
                 Damage = 33, Rpm = 666, Magazine = 30, Reload = 3.07f, BaseSpread = 0.90f, BloomPerShot = 0.25f,
                 MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 2.0f, PitchBase = 1.00f, Volume = 1.0f,
                 FireClips = new[] { "SFX_M4A4_Shot_01.wav", "SFX_M4A4_Shot_02.wav" },
@@ -139,6 +151,7 @@ namespace VortexArena.Core.Editor
             new WeaponSpec
             {
                 Name = "M4A1S", PackPrefab = "AR_C", WeaponId = "m4a1s", DisplayName = "M4A1-S",
+                NetItemId = 3, HoldMode = "TwoHand",
                 Damage = 38, Rpm = 600, Magazine = 25, Reload = 3.07f, BaseSpread = 0.80f, BloomPerShot = 0.22f,
                 MaxBloom = 2.0f, BloomRecovery = 4.5f, Kick = 1.8f, PitchBase = 0.92f, Volume = 0.80f,
                 FireClips = new[] { "SFX_M4A1S_Shot_01.wav", "SFX_M4A1S_Shot_02.wav" },
@@ -152,6 +165,7 @@ namespace VortexArena.Core.Editor
             new WeaponSpec
             {
                 Name = "Galil", PackPrefab = "AR_D", WeaponId = "galil", DisplayName = "Galil AR",
+                NetItemId = 4, HoldMode = "TwoHand",
                 Damage = 30, Rpm = 666, Magazine = 35, Reload = 3.03f, BaseSpread = 1.20f, BloomPerShot = 0.30f,
                 MaxBloom = 2.6f, BloomRecovery = 4.0f, Kick = 2.2f, PitchBase = 1.06f, Volume = 1.0f,
                 FireClips = new[] { "SFX_GALIL_Shot_01.wav", "SFX_GALIL_Shot_02.wav" },
@@ -164,6 +178,7 @@ namespace VortexArena.Core.Editor
             new WeaponSpec
             {
                 Name = "FAMAS", PackPrefab = "AR_E", WeaponId = "famas", DisplayName = "FAMAS",
+                NetItemId = 5, HoldMode = "TwoHand",
                 Damage = 30, Rpm = 666, Magazine = 25, Reload = 3.30f, BaseSpread = 1.10f, BloomPerShot = 0.28f,
                 MaxBloom = 2.4f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.05f, Volume = 1.0f,
                 FireClips = new[] { "SFX_FAMAS_Shot_01.wav", "SFX_FAMAS_Shot_02.wav" },
@@ -176,6 +191,7 @@ namespace VortexArena.Core.Editor
             new WeaponSpec
             {
                 Name = "AUG", PackPrefab = "AR_A_2", WeaponId = "aug", DisplayName = "AUG",
+                NetItemId = 6, HoldMode = "TwoHand",
                 Damage = 28, Rpm = 666, Magazine = 30, Reload = 3.80f, BaseSpread = 0.90f, BloomPerShot = 0.25f,
                 MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 1.9f, PitchBase = 0.97f, Volume = 1.0f,
                 FireClips = new[] { "SFX_AUG_Shot_01.wav", "SFX_AUG_Shot_02.wav" },
@@ -331,6 +347,10 @@ namespace VortexArena.Core.Editor
 
             SetString(so, "weaponId", spec.WeaponId, ctx);
             SetString(so, "displayName", spec.DisplayName, ctx);
+            // §6.6: ağ kimliği + kaç elle tutulduğu. Tablo bunların doğruluk kaynağıdır ve her
+            // koşuda EZER — kimliği Inspector'dan elle değiştirmek kalıcı olmaz, tabloyu düzenle.
+            SetNumber(so, "netItemId", spec.NetItemId, ctx);
+            SetEnumByName(so, "holdMode", spec.HoldMode, ctx);
             SetNumber(so, "damage", spec.Damage, ctx);
             SetNumber(so, "headshotMultiplier", HeadshotMultiplier, ctx);
             SetNumber(so, "fireRateRpm", spec.Rpm, ctx);
@@ -523,6 +543,8 @@ namespace VortexArena.Core.Editor
             Component animator = EnsureComponentByTypeName(inst, "WeaponAnimator", ctx);
             Component reloadGesture = EnsureComponentByTypeName(inst, "WeaponReloadGesture", ctx);
 
+            ApplyGripSocketKit(inst, ctx);
+
             // Cephane göstergesi artık silah üstünde DEĞİL (AmmoHud, ekran-köşesi paneli) —
             // eski kurulumdan kalan AmmoDisplay child'ı/bileşeni varsa temizle.
             RemoveLegacyAmmoDisplay(inst);
@@ -638,6 +660,10 @@ namespace VortexArena.Core.Editor
                 {
                     ApplyVfxAndShellKit(contents, spec, casing762, casing556, smokeMaterial, ctx);
                 }
+
+                // Şablon artık yok, yani sahada ASIL çalışan yol burası — soket kiti de burada
+                // uygulanmazsa mevcut WPN'ler filtresiz (yani mesafeden kavranabilir) kalırdı.
+                ApplyGripSocketKit(contents, ctx);
 
                 PrefabUtility.SaveAsPrefabAsset(contents, wpnPath);
             }
@@ -1445,6 +1471,76 @@ namespace VortexArena.Core.Editor
             Component shellEjector = EnsureComponentByTypeName(root, "ShellEjector", ctx);
             GameObject casingForSpec = spec.CasingFamily == "762x39" ? casing762 : casing556;
             BindFields(shellEjector, ctx, ("casingPrefab", casingForSpec), ("ejectPoint", ejectT));
+        }
+
+        /// <summary>
+        /// Kavrama soketi kitini bir WPN kökü üzerinde kurar (idempotent): <see cref="ItemGripSockets"/>
+        /// bileşeni + ISDK <c>GrabInteractable</c>'ın <c>_interactorFilters</c> listesine bağlanması.
+        /// <para>
+        /// Filtre ISDK'nın tasarlanmış uzatma noktasıdır (<c>Interactable&lt;,&gt;.CanBeSelectedBy</c>
+        /// her filtreyi sorar): kavramanın ALGISI ISDK'da kalır, biz yalnız "izin var mı" sorusuna
+        /// cevap veririz.
+        /// </para>
+        /// </summary>
+        private static void ApplyGripSocketKit(GameObject root, string ctx)
+        {
+            // Tip Core'da yaşıyor (derleme zamanında bağlı) — tip adıyla arama gerekmez.
+            ItemGripSockets sockets = root.GetComponent<ItemGripSockets>();
+            if (sockets == null)
+            {
+                sockets = root.AddComponent<ItemGripSockets>();
+            }
+
+            // Soket tasarımı "eli soketin üstüne getir" demektir; mesafeden kavrama bunun tam zıddı.
+            // Bileşen bırakılsa ISDK uzaktan HOVER göstergesini çizmeye devam ederdi (filtre yalnız
+            // SEÇİMİ keser, hover'ı kesmez) → oyuncuya yalan söyleyen bir affordance kalırdı.
+            Component distanceGrab = FindComponentByTypeFullName(root, "Oculus.Interaction.DistanceGrabInteractable");
+            if (distanceGrab != null)
+            {
+                Object.DestroyImmediate(distanceGrab, true);
+                Debug.Log(Log + ctx + ": DistanceGrabInteractable kaldırıldı — soket tasarımında " +
+                          "mesafeden kavrama yok.");
+            }
+
+            // Yukarıdakinin tek referansçısı olduğu için ARDINDAN bu da gider: mesafeden kavrama
+            // yoksa "hedefe doğru taşı" sağlayıcısını çağıran kimse kalmaz. Yetim bir bileşen
+            // davranışsızdır ama sonraki okuyucuya "burada mesafe kavraması var" diye yalan söyler.
+            Component moveProvider = FindComponentByTypeFullName(root, "Oculus.Interaction.MoveTowardsTargetProvider");
+            if (moveProvider != null)
+            {
+                Object.DestroyImmediate(moveProvider, true);
+                Debug.Log(Log + ctx + ": MoveTowardsTargetProvider kaldırıldı (yetim kaldı).");
+            }
+
+            Component grabInteractable = FindComponentByTypeFullName(root, "Oculus.Interaction.GrabInteractable");
+            if (grabInteractable == null)
+            {
+                Warn(ctx + ": kökte Oculus.Interaction.GrabInteractable yok — soket filtresi bağlanamadı " +
+                     "(silah mesafe/soket ayrımı olmadan kavranır).");
+                return;
+            }
+
+            var so = new SerializedObject(grabInteractable);
+            SerializedProperty filters = so.FindProperty("_interactorFilters");
+            if (filters == null || !filters.isArray)
+            {
+                Warn(ctx + ": GrabInteractable'da '_interactorFilters' alanı yok ya da dizi değil " +
+                     "(ISDK sözleşme kayması?) — soket filtresi bağlanamadı.");
+                return;
+            }
+
+            for (int i = 0; i < filters.arraySize; i++)
+            {
+                if (filters.GetArrayElementAtIndex(i).objectReferenceValue == sockets)
+                {
+                    return; // zaten bağlı — idempotent
+                }
+            }
+
+            // Silahın başka bir interactor filtresi yok ve olması da beklenmiyor: liste tek elemana indirilir.
+            filters.arraySize = 1;
+            filters.GetArrayElementAtIndex(0).objectReferenceValue = sockets;
+            so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         /// <summary>Namlu alevi particle modüllerini (renk/boyut/ömür/koni açısı) silaha göre ayarlar.</summary>

@@ -108,6 +108,39 @@ namespace VortexArena.Core.Arena
             return _origin.rotation * arenaRotation;
         }
 
+        /// <summary>
+        /// Bir <b>YÖNÜ</b> dünya→arena çevirir (öteleme düşer, yalnız dönüş kalır).
+        /// <para>
+        /// ⚠️ <b>YÖN BİR NOKTA DEĞİLDİR:</b> <see cref="WorldToArena(Vector3)"/>'yı bir yöne
+        /// uygulamak onu arena origin'i kadar KAYDIRIR — sonuç patlamaz, sessizce yanlış bir nişan
+        /// yönü olur. Bu yardımcı o tuzağı tek bir yerde kapatır; yön gönderen hiçbir çağıran farkı
+        /// elle yazmasın (ağa vuruş/atış bildiren tek kapı <c>ArenaCombat</c> de bunu kullanır).
+        /// </para>
+        /// <para>
+        /// Uygulama iki noktayı ayrı ayrı çevirip farkını alır. Referans nokta
+        /// <see cref="Vector3.zero"/> seçildi ama <b>değeri fark etmez</b>: dönüşüm rijittir
+        /// (dönüş + öteleme), farkı almak ötelemeyi hangi noktada olursan ol aynı şekilde düşürür.
+        /// </para>
+        /// <para>
+        /// Normalize edilemeyen girdide (sıfır vektör, NaN) <see cref="Vector3.forward"/> döner:
+        /// çağıranı sıfır vektörle beslemek telde "yön yok" gibi bir şey üretirdi, oysa protokolde
+        /// öyle bir değer yok (§6.4 her olayda bir birim yön taşır).
+        /// </para>
+        /// </summary>
+        public static Vector3 WorldToArenaDirection(Vector3 worldDirection)
+        {
+            // Vector3.normalized sıfır/NaN girdide SIFIR döner (Unity sözleşmesi) — ayrı bir
+            // IsNaN kontrolü gerekmiyor, tek eşik ikisini birden yakalar.
+            Vector3 unit = worldDirection.normalized;
+            if (unit.sqrMagnitude < 0.5f)
+            {
+                return Vector3.forward;
+            }
+
+            Vector3 arena = (WorldToArena(unit) - WorldToArena(Vector3.zero)).normalized;
+            return arena.sqrMagnitude < 0.5f ? Vector3.forward : arena;
+        }
+
         /// <summary>Dünya pozunu arena uzayına çevirir (origin yoksa kimlik).</summary>
         public static Pose WorldToArena(in Pose worldPose)
         {

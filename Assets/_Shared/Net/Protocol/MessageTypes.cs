@@ -8,7 +8,8 @@ namespace VortexArena.Protocol
         public const string Status = "status";
         public const string SetIdentity = "set_identity"; // ad + forma numarası; oyuncu kendini, admin herkesi (§5.1)
         public const string SetReady = "set_ready";
-        public const string ShotFired = "shot_fired"; // sunucu relay'i de aynı type
+        // shot_fired v4'te KALDIRILDI → UDP 0x03/0x04 (§6.4/6.5); 10 atış/sn/oyuncu otoriter WS
+        // kanalını boğuyordu.
         public const string HitReport = "hit_report";
         public const string ReviveRequest = "revive_request"; // free-roam canlanma talebi (§10.4)
         public const string SetCalibration = "set_calibration"; // başlık kendi hizalamasını bildirir (§10.6)
@@ -35,8 +36,9 @@ namespace VortexArena.Protocol
         public const string KillEvent = "kill_event";
         public const string Respawn = "respawn";
         public const string MatchEnd = "match_end";
-        public const string Ping = "ping";
+        public const string Ping = "ping"; // "bana status yolla" tetiği — GECİKME ÖLÇMEZ (UDP 0x06 ölçer)
         public const string Kicked = "kicked";
         public const string AdminState = "admin_state"; // yalnız adminlere: ortak seçim + duyuru
+        public const string NetStats = "net_stats"; // yalnız adminlere: oyuncu başına ping/jitter/kayıp
     }
 }

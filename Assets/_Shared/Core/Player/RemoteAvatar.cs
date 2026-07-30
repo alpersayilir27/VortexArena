@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Combat;
 using VortexArena.Net;
 
 namespace VortexArena.Core.Player
@@ -15,6 +16,13 @@ namespace VortexArena.Core.Player
     /// Snapshot'taki alive bayrağı okunur — ölü oyuncu SOLUKLAŞIR (URP Lit opak
     /// materyalde alpha işe yaramadığı için takım rengi karartılır), ad etiketine
     /// " (ölü)" eklenir ve vuruş kutuları kapatılır (ölüye ateş edilemez).
+    /// </para>
+    /// <para>
+    /// <b>Elde tutulan eşya</b> (§6.6): snapshot'tan gelen <c>itemL</c>/<c>itemR</c> baytları
+    /// <see cref="NetItemCatalog"/> ile prefaba çözülür ve ilgili elin pozundan sürülür. Örnekler
+    /// yalnız durum DEĞİŞİNCE kurulur/yıkılır; kare başına yapılan iş yalnız transform yazmaktır.
+    /// Kurulan örnek bir <b>görseldir</b>, çalışan bir silah değil — oyun bileşenleri
+    /// <see cref="SterilizeVisual"/>'da sökülür.
     /// </para>
     /// </summary>
     public class RemoteAvatar : MonoBehaviour
@@ -62,6 +70,24 @@ namespace VortexArena.Core.Player
         /// <summary>Ad etiketinin kafa merkezinin üstündeki yüksekliği (metre) — göstergenin üstünde.</summary>
         private const float NameLabelHeightMeters = 0.5f;
 
+        /// <summary>
+        /// Çift ellide (<c>FLAG_GRIP_LINKED</c>) boş elin kabzaya yapıştırılma yarıçapı (metre).
+        /// <para>
+        /// ⚠️ Bu bir <b>güzellik ayarı değil paket kaybı emniyetidir</b> (§6.6):
+        /// <c>FLAG_GRIP_LINKED</c> UDP'de kaybolabilir ya da bayat kalabilir; oyuncu silahı
+        /// gerçekten bıraktığı o ~50 ms'lik pencerede koşulsuz yapıştırma kolu arenanın öbür
+        /// ucuna uzatırdı. Telde gelen el pozu bu yarıçaptan uzaktaysa GERÇEK poz kullanılır.
+        /// </para>
+        /// </summary>
+        private const float SecondaryGripSnapRadius = 0.25f;
+
+        /// <summary>
+        /// Ölü avatarın elinde eşya çizilir mi. <b>Hayır</b> — telde karşılığı olmayan bir
+        /// SUNUM kararıdır: ölen oyuncunun silahı elinde durursa avatar hâlâ tehditmiş gibi
+        /// okunur (ölü avatarın vuruş kutuları da kapalıdır, yani yanlış okuma bedava değil).
+        /// </summary>
+        private const bool DrawItemsWhileDead = false;
+
         private const string DeadLabelSuffix = " (ölü)";
         private const string UncalibratedLabelSuffix = " (KALİBRESİZ)";
 
@@ -100,6 +126,37 @@ namespace VortexArena.Core.Player
 
         private Color _teamColor = NeutralColor;
 
+        // ── Elde tutulan eşya (§6.6) ────────────────────────────────────────────────────
+        // Katalog statik önbellekli ama aramayı kare başına yapmamak için burada tutulur.
+        private NetItemCatalog _itemCatalog;
+
+        // Çizilen örneklerin kabı: görünürlük (ölü/gizli avatar) tek kökten kapatılır, örnekler
+        // YIKILMAZ — durum değişmedikçe yeniden Instantiate etmemek asıl amaç.
+        private Transform _itemsRoot;
+
+        // ⚠️ PASİF kuluçka kökü: yeni örnek ÖNCE buraya kurulur (kök aktif değil → prefabın
+        // Awake'i HİÇ koşmaz), sterilize edildikten sonra _itemsRoot'a taşınır. Aktif bir köke
+        // kurup sonra bileşen sökmek, Awake'in bir kez çalışmasını (ses, fizik, abonelik)
+        // engellemezdi.
+        private Transform _itemStagingRoot;
+
+        // Çizilmekte olan durum — kare başına gelen durumla karşılaştırılır.
+        private byte _shownItemL;
+        private byte _shownItemR;
+        private bool _shownGripLinked;
+
+        // Etkin ana el (yalnız _shownGripLinked iken anlamlı). Telde gelenden SAPABİLİR: ana
+        // işaretlenen slot boşsa diğer slot ana el sayılır (aşağıda gerekçesi).
+        private bool _shownPrimaryRight;
+
+        private ItemDefinition _itemDefL;
+        private ItemDefinition _itemDefR;
+        private Transform _itemInstanceL;
+        private Transform _itemInstanceR;
+
+        // HoldMode ↔ GRIP_LINKED çelişkisi durum başına BİR kez loglanır (20 Hz'de log seli olurdu).
+        private bool _holdModeMismatchWarned;
+
         private void Awake()
         {
             // Prefabda liste bağlanmadıysa çocuk collider'ları vuruş kutusu sayılır.
@@ -107,11 +164,19 @@ namespace VortexArena.Core.Player
             {
                 hitColliders = GetComponentsInChildren<Collider>(true);
             }
+
+            _itemCatalog = NetItemCatalog.Load();
         }
 
         /// <summary>Spawner kurar; poz okumaları bu id ile yapılır.</summary>
         public void Initialize(int playerId)
         {
+            if (PlayerId != playerId)
+            {
+                // Aynı örnek başka bir oyuncuya devrediliyor: eski oyuncunun eşyası kalmasın.
+                ClearHeldItems();
+            }
+
             PlayerId = playerId;
         }
 
@@ -294,17 +359,31 @@ namespace VortexArena.Core.Player
             Pose handLWorld = ArenaSpace.ArenaToWorld(handLPose);
             Pose handRWorld = ArenaSpace.ArenaToWorld(handRPose);
 
+            // §6.6: eşya durumu okunur (örnek kurulumu YALNIZ değişimde) ve eşyalar HAM el
+            // pozundan sürülür — yapıştırma düzeltmesinden ÖNCE, çünkü eşyanın yeri ana elin
+            // fiziksel pozundan gelir.
+            UpdateHeldItems(registry);
+            ApplyItemPoses(handLWorld, handRWorld);
+
+            // ⚠️ Poz kanalına DOKUNULMAZ (§6.2: ham poz fiziksel gerçektir) — yapıştırma yalnız
+            // GÖSTERİME giden kopyayı değiştirir; hand*Pose/hand*World olduğu gibi kalır.
+            Pose displayHandL = handLWorld;
+            Pose displayHandR = handRWorld;
+            ApplySecondaryGripSnap(ref displayHandL, ref displayHandR);
+
             if (bodyIK != null)
             {
                 // Karakterli avatar: gövde, kollar ve bacaklar bu üç noktadan türetilir.
-                bodyIK.Solve(headWorld, handLWorld, handRWorld);
+                bodyIK.Solve(headWorld, displayHandL, displayHandR);
             }
             else
             {
-                // Eski kapsül avatarı — prefabda IK bağlı değilse davranış değişmesin.
+                // Eski kapsül avatarı — prefabda IK bağlı değilse davranış değişmesin. Yapıştırma
+                // burada da UYGULANIR (aynı düzeltilmiş poz yazılır): iki yol arasında farklı
+                // davranmak, kapsül avatarla test eden geliştiriciye yanlış bir gerçek gösterirdi.
                 Apply(head, headWorld);
-                Apply(handL, handLWorld);
-                Apply(handR, handRWorld);
+                Apply(handL, displayHandL);
+                Apply(handR, displayHandR);
                 ApplyBody(headWorld);
             }
 
@@ -345,6 +424,360 @@ namespace VortexArena.Core.Player
             ApplyLabelText();
             ApplyTeamColor();
             RefreshColliders();
+            RefreshHeldItemVisibility();
+        }
+
+        /// <summary>
+        /// §6.6: uzak oyuncunun elindeki eşya durumunu okur ve örnekleri <b>yalnız durum
+        /// değiştiğinde</b> kurar/yıkar. Durum insan hızında değişir; kare başına
+        /// Instantiate/Destroy yapmak Quest'te bedava değildir (GC + sahne hiyerarşisi trafiği).
+        /// </summary>
+        private void UpdateHeldItems(RemotePlayerRegistry registry)
+        {
+            if (!registry.TryGetHeldItems(PlayerId, out byte itemL, out byte itemR, out bool gripLinked, out bool primaryRight))
+            {
+                itemL = 0;
+                itemR = 0;
+                gripLinked = false;
+                primaryRight = false;
+            }
+
+            byte wantL = itemL;
+            byte wantR = itemR;
+
+            if (gripLinked)
+            {
+                // Bayat/kayıp bayrak toleransı: ana el işaretlenen slot BOŞ ama diğeri doluysa ana
+                // el çevrilir — yoksa o tik'te tüfek hiç çizilmezdi (iki bayt ile bir bayrak farklı
+                // paketlerden gelmiş olabilir).
+                if (primaryRight && itemR == 0 && itemL != 0)
+                {
+                    primaryRight = false;
+                }
+                else if (!primaryRight && itemL == 0 && itemR != 0)
+                {
+                    primaryRight = true;
+                }
+
+                // ⚠️ GRIP_LINKED = TEK örnek, ana elin pozundan (§6.6). Aynı id iki slotta
+                // gelse bile ikinci örnek KURULMAZ — ikinci örnek kurmak "aynı id iki slotta"yı
+                // çift tabanca ile karıştırmak olurdu; ayrımı yalnız bu bayrak taşır.
+                if (primaryRight)
+                {
+                    wantL = 0;
+                }
+                else
+                {
+                    wantR = 0;
+                }
+            }
+
+            if (wantL == _shownItemL && wantR == _shownItemR &&
+                gripLinked == _shownGripLinked && primaryRight == _shownPrimaryRight)
+            {
+                return; // hiçbir şey değişmedi: kare başına tek karşılaştırma
+            }
+
+            if (wantL != _shownItemL)
+            {
+                _shownItemL = wantL;
+                _itemDefL = Resolve(wantL);
+                RebuildItemInstance(ref _itemInstanceL, _itemDefL);
+            }
+
+            if (wantR != _shownItemR)
+            {
+                _shownItemR = wantR;
+                _itemDefR = Resolve(wantR);
+                RebuildItemInstance(ref _itemInstanceR, _itemDefR);
+            }
+
+            _shownGripLinked = gripLinked;
+            _shownPrimaryRight = primaryRight;
+            _holdModeMismatchWarned = false;
+            WarnOnHoldModeMismatch();
+        }
+
+        /// <summary>
+        /// Eşyanın kendi <c>HoldMode</c>'u ile telden gelen <c>GRIP_LINKED</c> çelişirse
+        /// <b>telde geleni esas alırız</b> (durumun sahibi atıcı istemcidir, §6.2) — ama tek elli
+        /// bir eşyanın çift elli bildirilmesi bir içerik/kod hatasının işareti olduğu için bir
+        /// kez loglanır (aksi hâlde çelişki sahada sessizce yanlış duruş olarak görünürdü).
+        /// </summary>
+        private void WarnOnHoldModeMismatch()
+        {
+            if (!_shownGripLinked || _holdModeMismatchWarned)
+            {
+                return;
+            }
+
+            ItemDefinition primary = _shownPrimaryRight ? _itemDefR : _itemDefL;
+            if (primary == null || primary.IsTwoHanded)
+            {
+                return;
+            }
+
+            _holdModeMismatchWarned = true;
+            Debug.LogWarning(
+                $"[RemoteAvatar] Oyuncu {PlayerId}: '{primary.DisplayName}' tek elli (HoldMode) ama " +
+                "GRIP_LINKED ile geldi — telde gelen esas alındı, duruş yanlış görünebilir (§6.6).");
+        }
+
+        private ItemDefinition Resolve(byte netItemId)
+        {
+            return netItemId == 0 || _itemCatalog == null ? null : _itemCatalog.FindByNetItemId(netItemId);
+        }
+
+        /// <summary>
+        /// Bir elin eşya örneğini yeniler: eski varsa yıkılır, yeni tanım varsa kurulur.
+        /// Yalnız durum değişiminde çağrılır (allocation burada meşrudur).
+        /// </summary>
+        private void RebuildItemInstance(ref Transform instance, ItemDefinition definition)
+        {
+            if (instance != null)
+            {
+                // Destroy kare sonuna ertelenir; o kare hâlâ ÇİZİLİR. Elden bırakılan eşyanın bir
+                // kare daha bayat pozda görünmemesi için önce kapatılır.
+                instance.gameObject.SetActive(false);
+                Destroy(instance.gameObject);
+                instance = null;
+            }
+
+            if (definition == null || definition.Prefab == null)
+            {
+                return;
+            }
+
+            EnsureItemRoots();
+
+            // Pasif kuluçka kökünde kurulur → prefabın hiçbir Awake'i çalışmaz.
+            GameObject spawned = Instantiate(definition.Prefab, _itemStagingRoot);
+            SterilizeVisual(spawned);
+
+            // Sterilize edildikten sonra görünür kaba taşınır (kap ölü/gizli avatarda pasiftir).
+            spawned.transform.SetParent(_itemsRoot, false);
+            instance = spawned.transform;
+        }
+
+        /// <summary>
+        /// Kurulan örneği <b>salt görsele</b> indirger.
+        /// <para>
+        /// ⚠️ <b>Bu adım atlanamaz:</b> uzak kopyada çalışan bir silah kendi sesini çalar, fizik
+        /// yapar, kavranabilir olur, hatta ateş edip <c>hit_report</c> üretir — sessizce çalışan
+        /// bir uzak silah teşhis edilmesi en zor hatalardan biridir.
+        /// </para>
+        /// <para>
+        /// Sökme sırası: MonoBehaviour'lar TERS sırada (bir bileşen <c>[RequireComponent]</c> ile
+        /// bir başkasına dayanıyorsa — ör. <c>ShellEjector</c> → <c>Weapon</c> — bağımlı olan
+        /// sonra eklenmiştir, önce o gider), ardından fizik ve ses. <c>DestroyImmediate</c>
+        /// kullanılıyor çünkü <c>Destroy</c> kare sonuna ertelenir: aynı karede sökülen bir
+        /// bağımlılık hâlâ "var" sayılır ve "can't remove component" hatası basılırdı. Örnek pasif
+        /// kökte durduğu için hiçbir callback'in ortasında değiliz.
+        /// </para>
+        /// </summary>
+        private static void SterilizeVisual(GameObject instance)
+        {
+            // Tüm oyun mantığı: Weapon, WeaponAudio, WeaponAnimator, WeaponReloadGesture,
+            // ShellEjector, Meta'nın Grabbable/GrabInteractable/DistanceGrabInteractable/
+            // OneGrab-TwoGrabFreeTransformer/MoveTowardsTargetProvider, MetaXRAudioSource…
+            // Tek tek tipe göre değil TOPTAN sökülür: prefaba yeni bir bileşen eklendiğinde bu
+            // liste güncellenmeyi bekleyemez (unutulan bileşen = sahada çalışan uzak silah).
+            MonoBehaviour[] behaviours = instance.GetComponentsInChildren<MonoBehaviour>(true);
+            for (int i = behaviours.Length - 1; i >= 0; i--)
+            {
+                if (behaviours[i] != null)
+                {
+                    DestroyImmediate(behaviours[i]);
+                }
+            }
+
+            Collider[] colliders = instance.GetComponentsInChildren<Collider>(true);
+            for (int i = colliders.Length - 1; i >= 0; i--)
+            {
+                if (colliders[i] != null)
+                {
+                    DestroyImmediate(colliders[i]);
+                }
+            }
+
+            Rigidbody[] bodies = instance.GetComponentsInChildren<Rigidbody>(true);
+            for (int i = bodies.Length - 1; i >= 0; i--)
+            {
+                if (bodies[i] != null)
+                {
+                    DestroyImmediate(bodies[i]);
+                }
+            }
+
+            // AudioSource MonoBehaviour DEĞİL: playOnAwake ile kendi kendine ses çalabilir.
+            AudioSource[] audioSources = instance.GetComponentsInChildren<AudioSource>(true);
+            for (int i = audioSources.Length - 1; i >= 0; i--)
+            {
+                if (audioSources[i] != null)
+                {
+                    DestroyImmediate(audioSources[i]);
+                }
+            }
+
+            // Parçacık sistemleri (namlu alevi/duman/kovan) BIRAKILIR — onları tetikleyen bileşen
+            // gitti, kendiliğinden oynamasınlar diye yalnız playOnAwake kapatılır. Yıkılmıyorlar
+            // çünkü uzak atış sunumu (RemoteShotFx) çizilen eşyanın namlusunu kullanır.
+            ParticleSystem[] particles = instance.GetComponentsInChildren<ParticleSystem>(true);
+            for (int i = 0; i < particles.Length; i++)
+            {
+                if (particles[i] != null)
+                {
+                    ParticleSystem.MainModule main = particles[i].main;
+                    main.playOnAwake = false;
+                }
+            }
+        }
+
+        private void EnsureItemRoots()
+        {
+            if (_itemsRoot == null)
+            {
+                var root = new GameObject("HeldItems");
+                root.transform.SetParent(transform, false);
+                _itemsRoot = root.transform;
+                RefreshHeldItemVisibility();
+            }
+
+            if (_itemStagingRoot == null)
+            {
+                var staging = new GameObject("HeldItemStaging");
+                staging.transform.SetParent(transform, false);
+                staging.SetActive(false); // pasif kalır: burada kurulan hiçbir şey Awake görmez
+                _itemStagingRoot = staging.transform;
+            }
+        }
+
+        /// <summary>
+        /// Eşyaları ilgili elin pozundan sürer: eşya, elin anchor'ına göre <c>primaryGrip</c>
+        /// ofsetiyle oturur (duruş telde gitmez, §6.6 — kanonik kavrama her istemcinin APK'sında).
+        /// <para>Eşya el KEMİĞİNİN çocuğu yapılmaz, dünya pozu yazılır: karakterli avatarda el
+        /// kemiği IK'nın türettiği bir sonuçtur (kol hedefe yetişmeyebilir) ve eşyanın yeri telden
+        /// gelen el pozudur — atışın bildirildiği poz da odur.</para>
+        /// </summary>
+        private void ApplyItemPoses(in Pose handLWorld, in Pose handRWorld)
+        {
+            if (_itemInstanceL != null && _itemDefL != null)
+            {
+                ApplyGrip(_itemInstanceL, handLWorld, _itemDefL);
+            }
+
+            if (_itemInstanceR != null && _itemDefR != null)
+            {
+                ApplyGrip(_itemInstanceR, handRWorld, _itemDefR);
+            }
+        }
+
+        private static void ApplyGrip(Transform item, in Pose hand, ItemDefinition definition)
+        {
+            item.SetPositionAndRotation(
+                hand.position + hand.rotation * definition.PrimaryGripPosition,
+                hand.rotation * definition.PrimaryGripRotation);
+        }
+
+        /// <summary>
+        /// §6.6 "Çift ellide boş el": <c>GRIP_LINKED</c> iken ANA OLMAYAN elin gösterim pozu
+        /// eşyanın <c>secondaryGrip</c> noktasına çekilir — ama yalnız gerçek poz o noktaya
+        /// <see cref="SecondaryGripSnapRadius"/> kadar yakınsa (paket kaybı emniyeti).
+        /// <para>⚠️ <c>secondaryGrip</c>, <c>primaryGrip</c> ile <b>AYNI UZAYDA DEĞİLDİR</b>
+        /// (<see cref="ItemDefinition"/>): <c>primaryGrip</c> "el → eşya", <c>secondaryGrip</c> ise
+        /// ön kabza noktasının <b>eşyaya göre</b> yerel pozudur, yani "eşya → el". Bu yüzden ikinci
+        /// elin hedefi ters bileşimle DEĞİL <b>düz ileri yönde</b> bulunur: eşyanın dünya pozu ana
+        /// elden türetilmiştir, ön kabza da eşyanın üstünde sabit bir noktadır. İki alanın uzayı
+        /// farklı olduğu için burada işaret/ters çevirme hatası sessizce yanlış duruş üretir.</para>
+        /// </summary>
+        private void ApplySecondaryGripSnap(ref Pose displayHandL, ref Pose displayHandR)
+        {
+            if (!_shownGripLinked)
+            {
+                return;
+            }
+
+            Transform item = _shownPrimaryRight ? _itemInstanceR : _itemInstanceL;
+            ItemDefinition definition = _shownPrimaryRight ? _itemDefR : _itemDefL;
+            if (item == null || definition == null)
+            {
+                return;
+            }
+
+            // TransformPoint yerine elle bileşim: eşya örneğinin ölçeği bugün 1 ama avatar kökünün
+            // ölçeği 1 olmasa bile kavrama ofseti METREdir, ölçeklenmemesi gerekir.
+            Quaternion itemRotation = item.rotation;
+            Vector3 handPosition = item.position + itemRotation * definition.SecondaryGripPosition;
+            Quaternion handRotation = itemRotation * definition.SecondaryGripRotation;
+
+            if (_shownPrimaryRight)
+            {
+                if (IsWithinSnapRadius(displayHandL.position, handPosition))
+                {
+                    displayHandL = new Pose(handPosition, handRotation);
+                }
+            }
+            else if (IsWithinSnapRadius(displayHandR.position, handPosition))
+            {
+                displayHandR = new Pose(handPosition, handRotation);
+            }
+        }
+
+        private static bool IsWithinSnapRadius(in Vector3 actual, in Vector3 target)
+        {
+            return (actual - target).sqrMagnitude <= SecondaryGripSnapRadius * SecondaryGripSnapRadius;
+        }
+
+        /// <summary>§6.6: o elde ÇİZİLMİŞ eşya örneğinin kök transformu; o elde eşya yoksa null.
+        /// <para>Uzak atış sunumu (RemoteShotFx) namluyu bununla bulur — ada/mesafeye dayalı sahne
+        /// aramasıyla değil. GRIP_LINKED (çift elli) durumda TEK örnek vardır ve hangi el sorulursa
+        /// sorulsun O örnek döner: silahı iki el birden tutuyordur.</para></summary>
+        public Transform GetHeldItemVisual(bool rightHand)
+        {
+            if (_shownGripLinked)
+            {
+                return _shownPrimaryRight ? _itemInstanceR : _itemInstanceL;
+            }
+
+            // ⚠️ Gizli/ölü avatarda da referans DÖNER: görünürlük çağıranın kararıdır. Burada null
+            // döndürmek "namlu yok" sanılıp gereksiz el-pozu fallback'ine düşürürdü.
+            return rightHand ? _itemInstanceR : _itemInstanceL;
+        }
+
+        /// <summary>
+        /// Eşyalar gizli/ölü avatarda görünmez olur — örnekler YIKILMAZ, yalnız kap kapanır
+        /// (durum değişmediği hâlde canlanmada yeniden Instantiate etmemek için).
+        /// </summary>
+        private void RefreshHeldItemVisibility()
+        {
+            if (_itemsRoot != null)
+            {
+                _itemsRoot.gameObject.SetActive(_visible && (IsAlive || DrawItemsWhileDead));
+            }
+        }
+
+        /// <summary>Örnekleri ve durumu sıfırlar (avatar başka bir oyuncuya devredilirse).</summary>
+        private void ClearHeldItems()
+        {
+            if (_itemInstanceL != null)
+            {
+                Destroy(_itemInstanceL.gameObject);
+                _itemInstanceL = null;
+            }
+
+            if (_itemInstanceR != null)
+            {
+                Destroy(_itemInstanceR.gameObject);
+                _itemInstanceR = null;
+            }
+
+            _itemDefL = null;
+            _itemDefR = null;
+            _shownItemL = 0;
+            _shownItemR = 0;
+            _shownGripLinked = false;
+            _shownPrimaryRight = false;
+            _holdModeMismatchWarned = false;
         }
 
         private static void Apply(Transform target, in Pose worldPose)
@@ -428,6 +861,7 @@ namespace VortexArena.Core.Player
 
             RefreshFriendMarker();
             RefreshColliders();
+            RefreshHeldItemVisibility();
         }
     }
 }

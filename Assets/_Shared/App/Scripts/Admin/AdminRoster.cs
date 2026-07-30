@@ -43,6 +43,22 @@ namespace VortexArena.App.Admin
 
         public string scene = "";
 
+        // ---- Ağ telemetrisi (§6.7): İSTEMCİ ölçer, sunucu net_stats ile taşır ----
+        // ⚠️ Varsayılan -1 = "bilinmiyor" ve 0 ile karıştırılmamalı: 0 ms ping gerçekten mümkün bir
+        // ölçüm gibi okunur. Eski sürüm bir gözlük hiç bildirmez ve satırı "-" kalır.
+        // battery = -1f ile birebir aynı desen.
+
+        /// <summary>Ölçülen gidiş-dönüş süresi (ms); -1 = bilinmiyor. Panelde PING kolonu.</summary>
+        public int rttMs = -1;
+
+        /// <summary>Downlink snapshot jitter'ı (ms); -1 = bilinmiyor. Panelde GÖSTERİLMEZ —
+        /// operatörün eyleme çevirebileceği sayı ping'dir; bu teşhis verisidir.</summary>
+        public float jitterMs = -1f;
+
+        /// <summary>Downlink snapshot kaybı (%); -1 = bilinmiyor. Panelde gösterilmez (jitterMs ile
+        /// aynı gerekçe).</summary>
+        public float lossPct = -1f;
+
         /// <summary>Ölüm anı (<c>Time.unscaledTime</c>); -1 = ölmedi/bilinmiyor.</summary>
         public float diedAt = -1f;
 
@@ -208,6 +224,7 @@ namespace VortexArena.App.Admin
             NetEvents.OnReturnToLobby += HandleReturnToLobby;
             NetEvents.OnHealthUpdate += HandleHealthUpdate;
             NetEvents.OnKillEvent += HandleKillEvent;
+            NetEvents.OnNetStats += HandleNetStats;
         }
 
         private void OnDisable()
@@ -222,6 +239,7 @@ namespace VortexArena.App.Admin
             NetEvents.OnReturnToLobby -= HandleReturnToLobby;
             NetEvents.OnHealthUpdate -= HandleHealthUpdate;
             NetEvents.OnKillEvent -= HandleKillEvent;
+            NetEvents.OnNetStats -= HandleNetStats;
         }
 
         // -------------------------------------------------------------- sorgular
@@ -476,6 +494,39 @@ namespace VortexArena.App.Admin
                 kv.Value.alive = true;
                 kv.Value.diedAt = -1f;
                 kv.Value.score = 0; // sunucu da lobiye dönerken sıfırlıyor (§10.2)
+            }
+
+            Raise();
+        }
+
+        /// <summary>§6.7 — oyuncu başına ping/jitter/kayıp. Yalnız admin bağlantılarına gelir.
+        /// <para>Mesajda olmayan oyuncunun değerleri <b>korunur</b>, sıfırlanmaz: sunucu yalnız
+        /// çevrimiçi oyuncuları yazıyor ve eksik bir girdiyi "-" yapmak, panelde satırın bir saniye
+        /// varıp bir saniye kaybolmasına yol açardı.</para></summary>
+        private void HandleNetStats(NetStatsMsg msg)
+        {
+            if (msg?.players == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < msg.players.Length; i++)
+            {
+                NetStatsEntry entry = msg.players[i];
+                if (entry == null)
+                {
+                    continue;
+                }
+
+                AdminPlayerView view = Find(entry.playerId);
+                if (view == null)
+                {
+                    continue;
+                }
+
+                view.rttMs = entry.rttMs;
+                view.jitterMs = entry.jitterMs;
+                view.lossPct = entry.lossPct;
             }
 
             Raise();

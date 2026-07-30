@@ -218,14 +218,10 @@ public sealed class ClientConnection
                 if (msg != null) await _lobby.HandleSetSelectionAsync(this, msg);
                 return;
             }
-            case MessageTypes.ShotFired:
-            {
-                if (State == null) return; // hello öncesi — yok sayılır
-                var msg = JsonUtil.Deserialize<ShotFiredMsg>(json);
-                // Faz/rol/hayatta olma denetimi MatchDirector'da (§10.3).
-                if (msg != null) await _director.HandleShotFiredAsync(State, msg);
-                return;
-            }
+            // Atış bildirimi burada YOKTUR (v4): UDP olay kanalına taşındı (0x03, §6.4) ve
+            // StateHost'ta karşılanıyor. ⚠️ Geri getirilmez — 10 atış/sn/oyuncu otoriter WS
+            // kanalını boğar. Eski istemciden `shot_fired` gelirse aşağıdaki default kolu bir
+            // satır log basıp yok sayar (sürüm el sıkışması zaten reddeder, §4).
             case MessageTypes.HitReport:
             {
                 if (State == null) return;

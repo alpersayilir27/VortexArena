@@ -35,7 +35,10 @@ internal static class Program
         var lobby = new LobbyService(registry, director);
         var control = new ControlHost(registry, lobby, director, config.controlPort);
         var beacon = new BeaconService(config.beaconPort, config.controlPort, config.statePort);
-        var stateHost = new StateHost(registry, config.statePort);
+        // director ZORUNLU: StateHost 0x03 atış olayının relay kapısını (faz + rules.fireWhilePaused)
+        // MatchDirector.ShotRelayOpen üzerinden KİLİTSİZ okur (§6.5/§10.3). Sonradan set edilen bir
+        // property olsaydı kurulumu unutmak olayları sessizce düşürürdü.
+        var stateHost = new StateHost(registry, config.statePort, director);
 
         Console.WriteLine("VortexArena Sunucusu");
         Console.WriteLine($"  Mekan      : {config.venueName}");
@@ -77,6 +80,7 @@ internal static class Program
         beacon.Start();
         stateHost.Start();
         director.Start(); // maç tick döngüsü (faz makinesi, 10 Hz)
+        lobby.Start(); // net_stats yayını (yalnız adminlere, 1 Hz)
         Console.WriteLine("Sunucu hazır. Çıkmak için Ctrl+C.");
 
         var quit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -88,6 +92,7 @@ internal static class Program
         await quit.Task;
 
         Console.WriteLine("Kapatılıyor...");
+        lobby.Stop();
         director.Stop();
         beacon.Stop();
         stateHost.Stop();
