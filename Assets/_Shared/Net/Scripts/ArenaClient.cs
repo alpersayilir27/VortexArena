@@ -360,7 +360,18 @@ namespace VortexArena.Net
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        Debug.Log("[ArenaClient] Sunucu bağlantıyı kapattı.");
+                        // Sunucu atma kapanışını sebep alanıyla imzalar (§5.4): `kicked` JSON'u
+                        // kapanışa yetişemediyse bile bu kopuş "yeniden bağlan" değil "atıldın"dır.
+                        if (socket.CloseStatusDescription == ArenaProtocol.KICK_CLOSE_REASON)
+                        {
+                            Debug.Log("[ArenaClient] Sunucu bağlantıyı ATMA sebebiyle kapattı.");
+                            HandleKicked(new KickedMsg());
+                        }
+                        else
+                        {
+                            Debug.Log("[ArenaClient] Sunucu bağlantıyı kapattı.");
+                        }
+
                         try
                         {
                             await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, ct);
@@ -528,16 +539,8 @@ namespace VortexArena.Net
                     }
 
                     case MessageTypes.Kicked:
-                    {
-                        KickedMsg msg = JsonUtility.FromJson<KickedMsg>(json);
-                        _mainThreadActions.Enqueue(() =>
-                        {
-                            NetEvents.RaiseKicked(msg);
-                            // Protokol: istemci bağlantıyı kapatır; oto-reconnect yapılmaz.
-                            Disconnect();
-                        });
+                        HandleKicked(JsonUtility.FromJson<KickedMsg>(json));
                         break;
-                    }
 
                     default:
                         // Bilinmeyen tip → logla ve yok say (ileri sürüm uyumluluğu).
@@ -549,6 +552,24 @@ namespace VortexArena.Net
             {
                 Debug.LogWarning($"[ArenaClient] '{envelope.type}' mesajı işlenemedi: {e.Message}");
             }
+        }
+
+        /// <summary>
+        /// Atılma (§5.4). Ağ thread'inde koşar: yeniden bağlanmayı **hemen** kapatır, çünkü
+        /// `_userDisconnect` yalnız ana thread'de (kuyruktaki `Disconnect`) kalksaydı bu arada
+        /// kopan soket backoff turunu başlatabilir ve atılan oyuncu geri bağlanabilirdi.
+        /// Olay + soket kapatma ana thread'e bırakılır (Unity API'si + abone kodu).
+        /// </summary>
+        private void HandleKicked(KickedMsg msg)
+        {
+            _userDisconnect = true;
+
+            _mainThreadActions.Enqueue(() =>
+            {
+                NetEvents.RaiseKicked(msg);
+                // Protokol: istemci bağlantıyı kapatır; oto-reconnect yapılmaz.
+                Disconnect();
+            });
         }
 
         private void HandleWelcome(WelcomeMsg msg)

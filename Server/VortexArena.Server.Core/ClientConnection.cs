@@ -12,6 +12,9 @@ public sealed class ClientConnection
     /// <summary>Kontrol mesajları küçük JSON'lardır; bunu aşan gövde bozuk/istenmeyen bir eştir.</summary>
     private const int MaxMessageBytes = 256 * 1024;
 
+    /// <summary>Atma kapanışında (§5.4) hem çerçeve yollama hem karşı tarafın cevabı için pay (sn).</summary>
+    private const double CloseHandshakeSeconds = 2;
+
     private readonly WebSocket _socket;
     private readonly PlayerRegistry _registry;
     private readonly LobbyService _lobby;
@@ -52,7 +55,16 @@ public sealed class ClientConnection
                     result = await _socket.ReceiveAsync(new ArraySegment<byte>(buffer), token);
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+                        // Kapanışı BİZ başlattıysak (atma, §5.4) çerçeve zaten gitti; ikincisini
+                        // yollamak hata verir. Yalnız karşı taraf başlattıysa el sıkışmayı kapatırız.
+                        if (_socket.State == WebSocketState.CloseReceived)
+                        {
+                            try
+                            {
+                                await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+                            }
+                            catch (WebSocketException) { /* karşı taraf çoktan gitti */ }
+                        }
                         return;
                     }
                     message.Write(buffer, 0, result.Count);
@@ -275,6 +287,49 @@ public sealed class ClientConnection
     {
         _cts.Cancel();
         try { _socket.Abort(); } catch { /* zaten ölü */ }
+    }
+
+    /// <summary>
+    /// Atma kapanışı (§5.4): önce kapanış çerçevesi yollanır, ancak paydan sonra koparılır.
+    /// ⚠️ <b>Abort ile kapatılmaz:</b> abortif kapanış (RST) istemcinin daha okumadığı
+    /// <c>kicked</c> çerçevesini tamponundan silebilir — o zaman istemci kopuşu sıradan bir
+    /// kesinti sanıp yeniden bağlanır, yani atılan oyuncu kendiliğinden geri gelirdi.
+    /// Kapanış sebebi <see cref="ArenaProtocol.KICK_CLOSE_REASON"/>'dır: JSON kaybolsa bile
+    /// istemci atıldığını buradan anlar.
+    /// <para>Çağıran BEKLEMEZ (fire-and-forget) — payı admin bağlantısının alma döngüsünde
+    /// harcamak diğer komutları geciktirirdi.</para>
+    /// </summary>
+    public async Task CloseAfterKickAsync()
+    {
+        try
+        {
+            await _sendLock.WaitAsync();
+            try
+            {
+                if (_socket.State == WebSocketState.Open)
+                {
+                    using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(CloseHandshakeSeconds));
+                    await _socket.CloseOutputAsync(
+                        WebSocketCloseStatus.NormalClosure, ArenaProtocol.KICK_CLOSE_REASON, closeCts.Token);
+                }
+            }
+            finally
+            {
+                _sendLock.Release();
+            }
+
+            // İstemci kendi kapanış çerçevesini yollarsa recv döngüsü zaten çıkar; bu pay
+            // yalnız cevapsız kalan (donmuş/uçmuş) istemci için üst sınırdır.
+            await Task.Delay(TimeSpan.FromSeconds(CloseHandshakeSeconds));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ClientConnection] atma kapanışı tamamlanamadı: {ex.Message}");
+        }
+        finally
+        {
+            Abort();
+        }
     }
 
     /// <summary>HELLO_TIMEOUT içinde hello gelmezse bağlantı kapatılır (§8).</summary>

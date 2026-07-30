@@ -480,7 +480,7 @@ sık sorunu çözer: bir oyuncunun kalibrasyonu kayar, avatarı fiziksel konumun
 
 **Akış:** operatör admin ekranında o satırın **KAL** düğmesiyle kalibrasyonu sıfırlar → oyuncu
 **ateş edemez, hasar yemez, canlanamaz**, diğer herkesin ekranında **avatarı parlar** ve vuruş
-kutuları kapanır → oyuncu A+B ile (ya da kayıtlı anchor'dan) yeniden kalibre olur → gözlük
+kutuları kapanır → oyuncu elle (ya da kayıtlı anchor'dan) yeniden kalibre olur → gözlük
 `set_calibration` yollar → tik geri yanar ve oyuncu **kaldığı yerden devam eder** (can/K-D/skor
 korunur, bu bir ceza değil geçici dondurmadır).
 
@@ -488,7 +488,7 @@ korunur, bu bir ceza değil geçici dondurmadır).
 hizalamanın gerçekten oturduğunu yalnız başlık bilir. Admin elle işaretleyebilseydi, sunucunun
 hizalı sandığı ama fiilen kaymış bir oyuncuya ateş ve hasar açılırdı.
 
-**Kalibreliyken A+B kilitlidir:** oyuncu kendi hizalamasını kazara bozamaz, kapıyı yalnız operatör
+**Kalibreliyken elle kalibrasyon kilitlidir:** oyuncu kendi hizalamasını kazara bozamaz, kapıyı yalnız operatör
 açar. Hiç bağlanılmamışsa (sunucusuz editör testi) kapı açıktır ve silah çalışır.
 
 ⚠️ **Poz gönderimi buna bağlı DEĞİLDİR** — kalibresiz oyuncu poz göndermeye devam eder (§3.5).
@@ -617,13 +617,14 @@ sorunu.**
 | `LobbyController` | VR lobi: roster, ready/takım + otomatik bağlanma; **gizli IP paneli** (varsayılan kapalı, sağ kumandada `OVRInput.Button.One`×2 ile açılır — beacon'ı kesen ağlar için kurtarma yolu). Admin de bu sahneden bağlanır (`Connect(..., AppSession.Role)`); world-space paneli admin'de `AdminSpectator` gizler |
 | `UiKit` | **Arayüz paleti + çalışma zamanı yardımcıları** (statik). Arayüz prefaba taşındıktan sonra geriye kalan iş: renk paleti (durum renkleri — HP eşikleri, seçim vurgusu, kalibresiz kenarlık, bağlantı noktası), `TeamColor`/`Dim`/`WithAlpha`, dinamik yerleşim (`Block` — havuzlanan satırların konumu), `SetBarFill` ve **EventSystem garantisi** (`EnsureEventSystem`/`TakeOverEventSystem`: arena sahnelerinde EventSystem YOK, edilmezse HUD düğmeleri sessizce ölür). ⚠️ Öge fabrikaları (`Panel`/`Button`/`Text`…) hâlâ durur ama **yeni arayüz onlarla kurulmaz** — görünüm prefabta yaşar |
 | `ConnectionOverlay` | **Bağlantı hata ekranı** — kalıcı tekil, `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` ile kendini önyükler ve **görünümü prefabtan alır**: `Resources/UI/ConnectionOverlayScreen` (masaüstü) ya da `…World` (VR), seçimi XR aygıtı/platform belirler. Prefab sahneye KONMAZ (yeni arena eklerken unutulacak adım doğmasın). ~3 sn **grace** (anlık kopmada yanıp sönmesin; açılışı da maç ortasındaki kopmayı da kapsar). İki durum: adres biliniyor → "SUNUCUYA BAĞLANILAMIYOR" + adres + `N sn · M. deneme` + son hata; adres yok → "SUNUCU BULUNAMADI". Rol'e göre ipucu (player: A×2 / admin: launcher). Masaüstü varyantı: screen-space + scrim + **"Yeniden Bağlan"** (adres yoksa devre dışı; `Disconnect()` otomatik denemeyi durdurduğu için tek kurtarma yolu). VR varyantı: world-space kart + `HudFollow`, scrim YOK, **düğme YOK** (o yüzden `_reconnectButton` alanı orada boştur — normaldir). ⚠️ `ArenaBoundary.IsOutOfBounds` iken **tamamen gizlenir** — alan-dışı uyarısı her zaman baskın |
-| `DevSession` | **Yalnız editör** (dosyanın tamamı `#if UNITY_EDITOR`): dev penceresinin `EditorPrefs` seçimini Play'e uygular. (a) `BeforeSceneLoad` → rol + adres `AppSession`'a, `RoleResolved = true`; (b) `AfterSceneLoad` → "Açık sahneden" kipinde ve aktif sahne bir ARENA sahnesiyse, bir kare sonra **sunucuya bağlanır**. **Bağlanmayı neden o üstleniyor:** `Connect` normalde kabuk controller'larından gelir, arena sahnelerinde onlar YOKTUR — bağlanmazsa can/skor/faz gelmez ve `CanFire` hiç açılmaz. Takım/mod/süre/limit/faz **yalnız sunucudan** gelir: `welcome.match` geç-katılım senkronu ya da gerçek `load_match`; sunucuda maç koşmuyorsa istemci maç verisi almaz ve bir **admin** maçı başlatmalıdır. Pencerede "Dev enjeksiyonu" kapatılırsa üretim yolu birebir koşar |
+| `DevSession` | **Yalnız editör** (dosyanın tamamı `#if UNITY_EDITOR`): dev penceresinin `EditorPrefs` seçimini Play'e uygular. (a) `BeforeSceneLoad` → rol + adres `AppSession`'a, `RoleResolved = true`; (b) `AfterSceneLoad` → "Açık sahneden" kipinde ve aktif sahne bir ARENA sahnesiyse, bir kare sonra **sunucuya bağlanır**. **Bağlanmayı neden o üstleniyor:** `Connect` normalde kabuk controller'larından gelir, arena sahnelerinde onlar YOKTUR — bağlanmazsa can/skor/faz gelmez ve `CanFire` hiç açılmaz. Takım/mod/süre/limit/faz **yalnız sunucudan** gelir: `welcome.match` geç-katılım senkronu ya da gerçek `load_match`; sunucuda maç koşmuyorsa istemci maç verisi almaz ve bir **admin** maçı başlatmalıdır. **Sandbox kipinde bağlanmaz:** adresi siler (tek başarılı bağlantı `_hasEverConnected`'i kalıcı açar ve kalibrasyon kapısını kapatırdı) ve bağlanmak yerine `ModeRuntime.Apply` ile seçilen `modeId` + `fireWhilePaused = true` + silah kaynağını yazar — sunucudan gelmiş gibi mesaj **üretmez** (§6.2). Pencerede "Dev enjeksiyonu" kapatılırsa üretim yolu birebir koşar |
 | `AppSession` | Oturum: rol + sunucu adresi (`ServerIp`/`ServerPort`/`HasServerEndpoint`) — `AppBoot` yazar, controller'lar okur |
 | `PlayerPoseTracker` | *(`VA_PoseSync` prefabı)* Rig anchor'larını bulur, **dünya→arena** çevirip `IPoseSource` olarak kaydolur (kalibrasyon BEKLENMEZ; hizalanana dek pozlar ofsetli gider) |
 | `RemotePlayerSpawner` | *(aynı `VA_PoseSync` prefabı)* Katılan/ayrılan uzak oyuncular için `RemoteAvatar` yaratır/yok eder; her `lobby_state`'te ad/takım/**kalibrasyon** bilgisini besler. Ayrıca roster'da KENDİ id'sini bulup yerel takımı çözer ve her avatara **dost mu** olduğunu bildirir (`SetFriendly`) — takımsız modda (FFA) ve admin gözlemcide yerel takım boştur, kimse dost işaretlenmez |
 | `ModeHudSpawner` | *(`VA_ModeHud` prefabı)* Aktif modun HUD prefabını katalogdan örnekler — **App, mod assembly'lerini referanslamaz** (prefab yalnız `GameObject` olarak taşınır) |
 | `IdentifyOverlay` | Admin `identify` yollayınca o başlıkta büyük kimlik overlay'i. Kalıcı dinleyicidir; kartın kendisi **geçicidir** ve `IdentifyDisplay` prefabından örneklenir (`Resources/UI/IdentifyDisplay`), birkaç saniye sonra yok edilir |
 | `IdentifyDisplay` | O kartın **görünümü** (prefab): world-space canvas + `CanvasGroup` (sönme) + yazı. İçeriği `IdentifyOverlay` yazar, biçimi prefabta |
+| `KickedShutdown` | `kicked` gelince **oyuncu uygulamasını kapatır** (kendini önyükleyen kalıcı tekil; sahnede işi yoktur). Atmanın karşılığı "lobiye dön" değil "oturumdan çık"tır — başlık açık kalırsa operatör panelde düşmüş ama sahada hâlâ oynayan bir oyuncu görür. ~1,5 sn pay (soketin kapanması + log), editörde Play'i durdurur. ⚠️ **Admin kapanmaz** — operatör penceresi sahadaki tek yönetim aracıdır, yalnız bağlantısız duruma düşer. Kapanış dizisi: `Docs/ArenaNet-Protokol.md` §5.4 |
 
 ### İstemci: `VortexArena.App.Admin` (admin gözlemci — masaüstü)
 
@@ -664,7 +665,7 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 
 | Sınıf | Görevi |
 |---|---|
-| `DevWindow` | `Tools > VortexArena > Dev` penceresi: "Dev enjeksiyonu açık" onayı · **Rol** (Player/Admin) · **Hedef** (`dev-targets.json` + "Özel…" IP/Port + Tazele) · **Başlangıç** (Boot'tan / Açık sahneden) · alttaki "Seçim: …" özeti. **Sunucuya hiç dokunmaz** — ne başlatır, ne durdurur, ne derler (§6.1). Maç parametresi taşımaz — mod/takım/süre/limit sunucudan gelir. **Modal dialog kullanmaz** (Unity CLI doğrulamasını kilitliyor); geri bildirim konsol + `HelpBox` |
+| `DevWindow` | `Tools > VortexArena > Dev` penceresi: "Dev enjeksiyonu açık" onayı · **Rol** (Player/Admin) · **Sunucusuz sandbox** (+ mod ve silah kaynağı seçicisi; açıkken Hedef bloğu devre dışı) · **Hedef** (`dev-targets.json` + "Özel…" IP/Port + Tazele) · **Başlangıç** (Boot'tan / Açık sahneden) · alttaki "Seçim: …" özeti. **Sunucuya hiç dokunmaz** — ne başlatır, ne durdurur, ne derler (§6.1). Maç parametresi taşımaz — mod/takım/süre/limit sunucudan gelir. **Modal dialog kullanmaz** (Unity CLI doğrulamasını kilitliyor); geri bildirim konsol + `HelpBox` |
 | `DevTargets` | Repo kökündeki `dev-targets.json` okuyucusu (`defaultTarget`/`defaultRole` + adlandırılmış hedefler). Dosya yok/bozuksa bellekte `Local` + `Kesif (beacon)` varsayılanına düşer ve **dosyayı OLUŞTURMAZ** (commit kirletmemek için). Bir hedefin `ip`'si boşsa adres yazılmaz → keşif zinciri devralır |
 | `DevBootstrap` | Editör kancaları: "Boot'tan" kipinde `EditorSceneManager.playModeStartScene`'i Boot sahnesine ayarlar (sahne **Build Settings'ten** bulunur, sabit yol gömülmez); `Ctrl+Alt+R` kısayolunu kurar (rol player↔admin). **Hiçbir süreç öldürmez** — sunucu kasıtlı olarak yaşar (üretimde de ayrı makinede sürekli açık) |
 
@@ -696,7 +697,9 @@ demekti). Dosya olmasının kazancı: ölçüyü sahadan alan kişi Unity açmad
 ölçü `size`'dan gelir — ⚠️ **collider eklemez, fizik yapmaz**: free-roam'da oyuncuyu durduran şey
 gerçek nesnedir, bileşenin tek işi uyarıyı erken tetiklemektir),
 `ArenaCalibrator` (`VA_CalibrationManager` prefabıyla gelir; 2 nokta → 6DOF hizalama +
-OVRSpatialAnchor kalıcılığı + recenter onarımı; **A+B yalnız sunucu "kalibresiz" derken açılır**,
+OVRSpatialAnchor kalıcılığı + recenter onarımı; nokta alma jesti **sağ kumandada A basılıyken
+B'ye çift basış** (`doubleTapSeconds` penceresi; basılı tutma süresi yoktur) ve **yalnız sunucu
+"kalibresiz" derken açılır**,
 §3.11. Sahnedeki `anchor_a`/`anchor_b` işaretçileri **kurulum aracıdır, dekor değil**: yalnız elle
 kalibrasyon sürerken görünürler ve hizalamadan `markerVisibleSeconds` sonra gizlenirler — kayıtlı
 anchor'dan geri yükleme yolunda hiç gösterilmezler, yoksa harita değişiminde maçın ortasında ekrana
@@ -968,12 +971,22 @@ kirletmez, `git status` temiz kalır. Bir hedefin `ip`'si **boşsa** adres yazı
 | **Hedef** + "Tazele" / "Özel…" | Adres; `Özel…` seçilirse IP/Port elle girilir (IP'yi boş bırakmak = keşif zinciri) |
 | **Başlangıç: Boot'tan** | `playModeStartScene` = Boot sahnesi → hangi sahne açık olursa olsun Play gerçek akıştan başlar (sahne Build Settings'ten bulunur) |
 | **Başlangıç: Açık sahneden** | Arena sahnesine doğrudan Play. Bir kare sonra `DevSession` **seçili hedefe bağlanır** — arena sahnesinde `LobbyController` olmadığı için bunu başka kimse yapmaz; bağlanmazsa can/skor/faz gelmez ve `CanFire` hiç açılmaz. Maç verisi (takım / mod / süre / limit / faz) **yalnız sunucudan** gelir: `welcome.match` geç-katılım senkronu (`SceneRouter`) ya da gerçek `load_match`. Sunucuda koşan bir maç yoksa istemci maç verisi almaz — bu beklenen davranıştır, bir **admin** maçı başlatmalıdır. Hedef "keşif" kipindeyse (ip boş) bağlanılmaz ve sebebi loglanır — arena sahnesinde adres girecek arayüz yok |
+| **Sunucusuz sandbox** (+ mod · silah) | Sunucuya **hiç bağlanılmaz**: sunucu açma, admin'den harita seçme ve elle kalibrasyon üçü de atlanır. `DevSession` bağlanmak yerine `ModeRuntime.Apply` ile iki alan yazar — seçilen `modeId` (**silah loadout'u buradan okunur**; onsuz raf boş doğar) ve `fireWhilePaused = true` (faz sunucusuz `paused` kaldığı için tetiği açan tek kapı). Silah kaynağı seçilir: **Raf** (sahnedeki `WeaponRackSpawner` dolar) / **Rastgele** (`WeaponGranter` grip'e basılı her ele silah tutturur). Yalnız **"Açık sahneden"** başlangıcıyla ve **kabuk dışı** bir sahnede (arena ya da mekan lobisi) çalışır; ikisi de sağlanmazsa konsola uyarı düşer. ⚠️ Hasar/skor/faz **YOKTUR** — üçünün de otoritesi sunucudadır; bu kip yerel şeyler (silah duruşu, namlu, ses, kavrama) içindir |
 | **"Dev enjeksiyonu" onayı** | Kapatılırsa üretim yolu **birebir** koşar (rol `AppBoot`'tan, adres keşif zincirinden) — beacon keşfini editörde denemenin yolu |
 
 Editör **player** rolündeyken ortamda maçı başlatacak bir admin kalmaz: ikinci bir istemciyi
 **admin** rolünde bağla (ikinci bir editör/Windows admin build'i) ya da rolü `Ctrl+Alt+R` ile
-çevirip maçı oradan başlat. ⚠️ Bu adım artık zorunludur — editörün maç verisi üreten bir kısa
-yolu yoktur, maçı her zaman bir admin başlatır.
+çevirip maçı oradan başlat. ⚠️ Bu adım **gerçek maç akışı için** zorunludur — editörün maç verisi
+üreten bir kısa yolu yoktur, maçı her zaman bir admin başlatır.
+
+**Maç akışı gerekmiyorsa sandbox kipi bu üçlüyü tümden atlar.** Silah duruşu/namlu/ses/kavrama
+gibi tümüyle YEREL şeyleri denemek için sunucu, admin ve kalibrasyon gerekmez: sandbox açıkken
+sunucuya hiç bağlanılmadığı için kalibrasyon kapısı da kendiliğinden açık kalır
+(`CalibrationState.IsCalibrated` = `!_hasEverConnected`) ve `ArenaCombat` UDP kanalı yokken
+sessiz no-op olduğu için silahlar olduğu gibi çalışır. ⚠️ Sandbox **sunucudan gelmiş gibi mesaj
+üretmez** ve bir maç simülasyonu değildir: hasar, skor, faz ve canlanma yoktur; takım/skor/canlanma
+kuralları `ModeRulesInfo` varsayılanında (TDM) kalır. Gerçek kural davranışı test edilecekse
+sunucu + admin yolu kullanılır — sapmada sunucu kazanır (§10.5).
 
 ### 6.3 Build ve dağıtım
 
@@ -1494,6 +1507,17 @@ konsoluna tek satır sebep yazar.
     ⚠️ İki yan koşul: ayırma `Awake`'te olmalıdır (`CharacterRetargeterConfig.Setup` `Start`'ta
     koşup ölçeği `lossyScale`'den okur) ve avatar artık rig'in çocuğu olmadığı için **rig'i
     kapatmak onu kapatmaz** — `AdminSpectator` onu ayrıca kapatır.
+
+57. **"Mesajı yolla, sonra soketi kopar" mesajı YOLLAMAMAKLA aynı şey olabilir.** Atma yolu
+    `kicked` JSON'unu yollayıp hemen `Abort()` ediyordu; abortif kapanış (RST) istemcinin henüz
+    okumadığı çerçeveyi tamponundan silebilir. `SendAsync`'in dönmesi *işletim sistemine teslim
+    edildi* demektir, *karşı taraf okudu* demek değildir. Sonuç sinsidir: atılan başlık kopuşu
+    sıradan bir kesinti sanıp yeniden bağlanma backoff'unu çalıştırır — operatör panelde "atıldı"
+    yazısını görür ama oyuncu sahada oynamaya devam eder. Kural: **son mesajdan sonra kapanış el
+    sıkışması** (`CloseOutputAsync`, cevapsız istemci için üst sınırlı) ve niyet **kapanış
+    sebebine de** yazılır (§5.4), yani JSON kaybolsa bile karşı taraf ne olduğunu bilir. İkinci
+    yüzü: aynı kapanış sebebi sıradan kopmalarda kullanılmamalıdır (bayat soket değişimi,
+    `OFFLINE_TIMEOUT` temizliği) — yoksa istemci kendini atılmış sanıp uygulamayı kapatır.
 
 ---
 

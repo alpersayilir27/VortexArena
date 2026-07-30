@@ -89,7 +89,9 @@ public sealed class LobbyService
         {
             Console.WriteLine($"[Lobby] playerId havuzu tükendi ({ArenaProtocol.PLAYER_ID_MAX}) — {hello.deviceName} reddedildi.");
             await SendSafeAsync(connection, JsonUtil.Serialize(new KickedMsg { reason = "Sunucu dolu" }), "(dolu)");
-            connection.Abort();
+            // Ret de bir atmadır (§5.4): abortif kapanış `kicked`'i düşürüp istemciyi sonsuz
+            // yeniden bağlanma döngüsüne sokardı.
+            _ = connection.CloseAfterKickAsync();
             return;
         }
         connection.State = state;
@@ -190,7 +192,10 @@ public sealed class LobbyService
         var targetConnection = target.Connection;
         if (targetConnection == null) return;
         await SendSafeAsync(targetConnection, JsonUtil.Serialize(new KickedMsg { reason = "" }), target.Name);
-        targetConnection.Abort(); // recv döngüsü kapanınca Offline + lobby_state yayını gelir
+        // ⚠️ Abort DEĞİL: RST istemcinin daha okumadığı `kicked` çerçevesini düşürebilir ve o
+        // zaman atılan başlık kopuşu sıradan bir kesinti sanıp geri bağlanırdı (§5.4).
+        // Beklemiyoruz: pay bu (admin) bağlantının alma döngüsünü meşgul etmemeli.
+        _ = targetConnection.CloseAfterKickAsync(); // recv döngüsü kapanınca Offline + lobby_state yayını gelir
     }
 
     public async Task HandleIdentifyAsync(ClientConnection connection, IdentifyMsg msg)

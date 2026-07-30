@@ -30,8 +30,8 @@ namespace VortexArena.App
     /// <b>Kurtarma yolu:</b> beacon'ı kesen/izole eden ağlarda sunucu bulunamazsa
     /// sağ kumandada <b>A tuşuna iki kez</b> basılarak IP paneli açılır ve adres elle
     /// girilir (girilen adres <c>PlayerPrefs</c>'e kalıcı yazılır, beacon'ı ezer).
-    /// Aynı kombinasyon paneli tekrar kapatır. Kalibrasyondaki A+B basılı tutma
-    /// kombinasyonu yalnız arena sahnelerinde olduğu için çakışma yoktur.
+    /// Aynı kombinasyon paneli tekrar kapatır. Kalibrasyon jestiyle (A basılıyken B'ye
+    /// çift basış) çakışmaz: orada A **basılı tutulur**, burada iki kez basılıp bırakılır.
     /// </para>
     /// Tüm sahne bağları [SerializeField] ve null olabilir; buton onClick'leri public
     /// metotlara bağlanır.

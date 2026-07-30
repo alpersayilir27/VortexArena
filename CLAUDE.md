@@ -381,7 +381,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `… > Build Arena From Dimensions` | Boyut dosyası değişti (seçimde JSON) → zemin/duvar/kolon geometrisini yeniden üretir (idempotent) |
 | `… > Build Arena From TestMesh` | Kaba alan bloklarından boyut JSON'u üretilecek → dosyayı yazar, sonra geometriyi ondan çizer (idempotent) |
 | `… > Write Grip Sockets To Definition` | Sahnedeki kavrama işaretçileri sürüklenip ayarlandı → `WD_*.asset`'e yazar (ters/düz bileşimi araç yapar). Yalnız BULUNAN işaretçinin alanlarına dokunur |
-| `… > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı |
+| `… > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek) |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` · `Spawn Point` | Sahneye ilgili bileşeni + kurulumunu ekler |
 | `GameObject > VortexArena > Grip Socket (Primary/Secondary)` | Seçili silahın altına kavrama işaretçisi üretir (mevcut değerlerden başlatır; aynı türden ikincisini üretmez) |
 | `PlayerBuildTool.BuildWindowsAdmin` · `…BuildQuestPlayer` | Menü değil — batch-mode `-executeMethod` girişleri (`deploy-admin-game.bat` / `deploy-player-apk.bat` çağırır) |

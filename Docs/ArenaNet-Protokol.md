@@ -131,7 +131,7 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 
 **`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** modun canlanma şartını sağladıktan (taban bölgesine girme ya da sabit durma) sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da oyuncu ışınlanamadığı için canlanma bir **konum değişimi değil, durum değişimidir**.
 
-**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada A+B) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
+**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye çift basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
 
 ### 5.2 Yalnız admin → Sunucu
 
@@ -141,7 +141,7 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 - **`pause_match`** `{ "type":"pause_match" }` — koşan maçı dondurur: `playing` → `paused` + `phaseReason:"operator"` (§10.1). Süre durur, hasar kapanır, skorlar ve `modeState` **korunur**. **Yalnız `playing` iken iş yapar**; başka fazda loglanıp yok sayılır (duraklı bir maçı duraklatmanın anlamı yok).
 - **`resume_match`** `{ "type":"resume_match" }` — `paused`/`operator`'dan `playing`'e döner; süre kaldığı yerden akar, canlar/skorlar sıfırlanmaz. ⚠️ **Yalnız operatörün duraklattığı maç sürdürülebilir:** `phaseReason` `loading`/`countdown`/`mode`/`lobby` iken reddedilir. Sebep: o duraklamaların sahibi operatör değildir — modun istediği duraklamayı (`mode`) operatörün kaldırması modun ara durumunu bozar, geri sayımı elle bitirmek de yükleme kapısını atlar. Her duraklamayı kendi sahibi kaldırır.
 - **`set_team`** `{ "type":"set_team", "playerId":5, "team":"blue" }` (`"red"|"blue"`) — hedef oyuncunun takımı. **Faz kapısı YOKTUR:** operatör `playing` dahil her fazda, sunucuya bağlı herkesin takımını değiştirebilir; değişiklik `lobby_state` ile yayılır ve istemcide anında geçerlidir (taban bölgesi, arayüz renkleri). Hedef admin ise reddedilir. Oyuncudan gelen `set_team` loglanıp yok sayılır — **oyuncu kendi takımını seçemez, bunun için protokol mesajı YOKTUR ve eklenmeyecektir.**
-- **`kick`** `{ "type":"kick", "playerId":5 }`
+- **`kick`** `{ "type":"kick", "playerId":5 }` — hedef bağlantı kapatılır ve **o başlıkta uygulama kapanır** (kapanış dizisi §5.4).
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
 - **`clear_calibration`** `{ "type":"clear_calibration", "playerId":5 }` — o oyuncunun kalibrasyonunu **sıfırlar** (§10.6). **`playerId:0` = TÜM oyuncular** (toplu sıfırlama). Admin kalibrasyonu yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez — hizalamanın gerçekten oturduğunu yalnız başlık bilir (§10.6).
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
@@ -229,7 +229,7 @@ Kazanan **iki kanaldan biriyle** ifade edilir (`rules.scoring`, §10.5): takım 
 Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken harita seçtiğinde `sceneName` o arenadır. İstemci için ikisi de aynı şeydir — *"lobideyiz, şu sahneyi yükle"* — bu yüzden ayrı bir mesaj tipi YOKTUR. `modeId` her iki durumda da `"lobby"` kalır: sahnenin arena olması fazı değiştirmez.
 **`ping`** `{ "type":"ping" }` — istemci `status` ile yanıtlar (ayrı pong yok).
 **`identify`** `{ "type":"identify" }` — istemci büyük kimlik overlay'i gösterir (playerId + ad).
-**`kicked`** `{ "type":"kicked", "reason":"" }` — istemci bağlantıyı kapatır, lobi bağlantı ekranına döner.
+**`kicked`** `{ "type":"kicked", "reason":"" }` — istemci bağlantıyı kapatır ve **oyuncu başlığında uygulama kapanır**; kapanış dizisi ve gerekçeleri §5.4'te.
 
 **`admin_state`** — **yalnız `role=admin` bağlantılara**; adminler arası ortak durumun tek doğruluk kaynağı:
 ```json
@@ -258,6 +258,28 @@ Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken har
 - ⚠️ **Roster'a (`lobby_state`) alternatif değil, bilinçli olarak ayrı bir kanal:** roster'ın bir `version`'ı ve uzlaştırma protokolü var (§5.1); saniyede bir değişen telemetriyi oraya koymak versiyonu sürekli çevirip uzlaştırmayı anlamsızlaştırırdı. Bu mesajın **kaybı zararsızdır** (bir sonraki saniye yenisi gelir), o yüzden uzlaştırması da yoktur.
 - ⚠️ **Bant/bayt alanı YOKTUR ve eklenmez.** Hacim sayıları (bayt/sn, paket/sn, anlık paket boyutu, tik kayması) sunucu konsolundaki `[state]` satırındadır ve oraya aittir; operatörün eyleme çevirebileceği sayı ping'dir. Admin panelinde de yalnız **PING** kolonu vardır (jitter/kayıp ölçülür ama gösterilmez).
 - Admin yokken sunucu bu mesajı **hiç serileştirmez** — kimse bakmıyorken üretmek boşa pakettir.
+
+### 5.4 Atma (kick) kapanış dizisi
+
+Operatör `kick` yolladığında sıra şudur:
+
+1. Sunucu hedef bağlantıya `kicked` yollar.
+2. Sunucu bağlantıyı **kapanış çerçevesiyle** kapatır; çerçevenin sebebi `"kicked"`
+   (`ArenaProtocol.KICK_CLOSE_REASON`). Cevap gelmezse en fazla 2 sn beklenir, sonra koparılır.
+   ⚠️ **Soket doğrudan koparılmaz (`Abort`):** abortif kapanış (RST) istemcinin henüz okumadığı
+   `kicked` çerçevesini tamponundan silebilir; o zaman kopuş sıradan bir kesinti gibi görünür,
+   istemci backoff'la geri bağlanır ve **atılan oyuncu kendiliğinden oyuna döner**. Kapanış sebebi
+   ikinci emniyettir: JSON kaybolsa bile istemci bu kopuşun atma olduğunu oradan anlar.
+3. İstemci yeniden bağlanmayı **kapatır** (oto-reconnect yok) ve soketi kapatır.
+4. **Oyuncu başlığında uygulama kapanır** (~1,5 sn sonra; soketin kapanması ve log için pay).
+   Atmanın karşılığı "lobiye dön" değil "oturumdan çık"tır: başlık açık kalırsa operatör panelde
+   düşmüş ama sahada hâlâ oynayan bir oyuncu görür. **Admin uygulaması kapanmaz** — operatör
+   penceresi sahadaki tek yönetim aracıdır, yalnız bağlantısız duruma düşer.
+
+Aynı dizi `playerId` havuzu dolduğunda gelen ret için de işler (`kicked{reason:"Sunucu dolu"}`).
+⚠️ Bayat soketin değiştirilmesi (aynı cihaz yeniden `hello` yolladı) ve `OFFLINE_TIMEOUT`
+temizliği atma **değildir** — onlar koparılarak kapatılır, yoksa istemci kendini atılmış sanıp
+uygulamayı kapatırdı.
 
 ## 6. UDP state mesajları (binary, little-endian)
 
@@ -701,8 +723,9 @@ hasar açılırdı — bu sistemin önlemek için var olduğu durumun ta kendisi
    kaldığı yerden devam eder; bu bir cezalandırma değil, geçici bir dondurmadır.
 
 **İstemci tarafı** (protokolün zorunlu kıldığı değil, beklenen davranış): kalibresizken tetik
-kilitlenir, uzak avatar **parlar** ve vuruş kutuları kapanır, kumandada A+B ile elle kalibrasyon
-**açılır**. Kalibreli durumdayken A+B **kilitlidir** — oyuncu kendi hizalamasını kazara bozamaz,
+kilitlenir, uzak avatar **parlar** ve vuruş kutuları kapanır, kumandada elle kalibrasyon
+(A basılıyken B'ye çift basış) **açılır**. Kalibreli durumdayken bu jest **kilitlidir** — oyuncu
+kendi hizalamasını kazara bozamaz,
 kapıyı yalnız operatör açar.
 
 **`hello`'da `calibrated` sıfırlanır.** Sunucu yeniden bağlanan bir başlığın hizalama durumunu

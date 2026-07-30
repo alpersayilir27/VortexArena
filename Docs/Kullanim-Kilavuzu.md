@@ -222,20 +222,21 @@ harita değişimi kalibrasyonu bozmaz. (Maç sırasında da aynı adımlarla yen
 - [ ] **1.** Oyuncu sağ kumandayı zemindeki **A** bandının üzerine, **kalem gibi dimdik** tutup
       ucunu yere değdirir. ⚠️ **Duruş önemli:** gözlük zemin yüksekliğini de bu ölçümden
       öğrenir; eğik tutulursa oyuncular birbirini havada ya da yere gömülü görür.
-- [ ] **2.** Sağ kumandada **A + B tuşlarına birlikte 3 saniye basılı tutar.**
-      Titreşim giderek artar → **tek titreşim** = A noktası alındı.
-- [ ] **3.** Aynısını zemindeki **B** bandında, **aynı dik duruşla** yapar → **çift titreşim** =
-      tamam, arena hizalandı.
-- [ ] **4.** Hata sinyalleri — ikisinde de B'yi tekrar al:
-      **üç kısa titreşim** = iki nokta arasındaki mesafe yanlış (bant ölçüsünü kontrol et) ·
-      **bir uzun titreşim** = kumanda dik tutulmamış, zemin ölçümü tutmadı.
+- [ ] **2.** Sağ kumandada **A tuşunu basılı tutarken B tuşuna hızlıca iki kez basar**
+      (iki basış arası 1 saniyeyi geçmemeli) → **kısa titreşim** = A noktası alındı ve
+      zeminde A çapası belirir. Basılı tutma/bekleme yoktur.
+- [ ] **3.** Aynısını zemindeki **B** bandında, **aynı dik duruşla** yapar → **uzun titreşim**
+      (~1 sn) + **iki çapa da belirip bir saniye sonra kaybolur** = tamam, arena hizalandı.
+- [ ] **4.** Hata sinyalleri — ikisinde de B'yi tekrar al (çapalar kaybolmaz, ikinci çapa hiç
+      belirmez): **üç kısa titreşim** = iki nokta arasındaki mesafe yanlış (bant ölçüsünü
+      kontrol et) · **tek titreşim** = kumanda dik tutulmamış, zemin ölçümü tutmadı.
 
 **Bilmen gerekenler**
 
 - Kalibrasyon gözlükte **saklanır**; aynı gözlük ertesi gün açıldığında genelde kendiliğinden
   geri gelir.
-- ⚠️ **Kalibrasyon bir kez alındıktan sonra oyuncu A+B ile onu değiştiremez.** Kumandaya bassa da
-  bir uzun titreşim alır ve hiçbir şey olmaz. Bu bilerek böyledir: oyuncunun maç ortasında
+- ⚠️ **Kalibrasyon bir kez alındıktan sonra oyuncu kumandayla onu değiştiremez.** Kombinasyonu
+  yapsa da tek titreşim alır ve hiçbir şey olmaz. Bu bilerek böyledir: oyuncunun maç ortasında
   kazara kendi hizalamasını bozmasını engeller. **Yeniden kalibre ettirmek senin işin** →
   aşağıdaki §4.1.
 - **Harita değiştirmek kalibrasyonu bozmaz.** Yeni arenaya geçince oyuncular yeniden kalibre
@@ -261,14 +262,14 @@ kalibrasyonu bozulmuştur. **Maçı durdurmana gerek yok:**
       düğme **kırmızı KAL !** olur ve kolon başlığında "1 KALİBRESİZ" yazar.
 - [ ] **3.** O andan itibaren oyuncu **ateş edemez, vurulamaz ve ölürse canlanmaz**;
       diğer oyuncuların ekranında **avatarı yanıp söner** (kimin sorunlu olduğu belli olsun).
-      Kendi ekranında "Kalibrasyon gerekli — sağ kumandada A+B" yazar.
-- [ ] **4.** Oyuncu §4'teki adımlarla **yeniden kalibre olur** (artık A+B açıktır).
+      Kendi ekranında "Kalibrasyon gerekli — sağ kumandada A basılıyken B×2" yazar.
+- [ ] **4.** Oyuncu §4'teki adımlarla **yeniden kalibre olur** (artık kombinasyon açıktır).
       Bitince tik kendiliğinden yeşile döner.
 - [ ] **5.** Oyuncu **kaldığı yerden devam eder** — canı, öldürme sayısı ve skoru sıfırlanmaz.
 
 **Maç öncesi hepsini birden aldırmak için:** TERCİHLER > KALİBRASYON >
 **"TÜM KALİBRASYONLARI SIFIRLA"** (iki kez basılır). Herkes aynı anda kalibresiz olur ve
-sırayla A+B yapar.
+sırayla §4'teki adımları yapar.
 
 > **Neden tik'i elle geri açamıyorsun:** hizalamanın gerçekten düzeldiğini yalnız gözlüğün
 > kendisi bilir. Sen "tamam" diyebilseydin, aslında hâlâ kaymış bir oyuncu ateş etmeye ve
@@ -285,7 +286,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Oyuncu listesi (roster)** | Bağlı oyuncular, takımları, çevrimiçi/çevrimdışı durumu | Maç öncesi herkesin bağlı olduğunu doğrulamak için |
 | **Kırmızı / Mavi** | Seçili oyuncunun takımını değiştirir | Takımları elle dengelemek için (boş bırakırsan sistem otomatik dengeler) |
 | **Bu cihazı tanıt** | O gözlüğün ekranında büyük bir işaret gösterir | "Bu listedeki isim hangi gözlük?" sorusuna cevap |
-| **Çıkar (kick)** | Oyuncuyu bağlantıdan atar | Yanlışlıkla bağlanan/oyunda olmaması gereken cihaz |
+| **Çıkar (kick)** | Oyuncuyu atar — **o gözlükteki oyun kapanır** | Yanlışlıkla bağlanan/oyunda olmaması gereken cihaz |
 | **Mod seçimi** | Oyun türü: **Takım Ölüm Maçı** (kırmızı-mavi) veya **Herkes Tek** (takım yok, herkes herkese karşı) | Her maç öncesi — aşağıdaki "İki oyun modu" kutusuna bak |
 | **Harita seçimi** | Hangi arenada oynanacağı | Her maç öncesi — sadece seçili modla uyumlu haritalar listelenir |
 | **Maçı Başlat** | Herkesi arenaya alır, geri sayımı başlatır | Herkes bağlı ve hazır olduğunda |
@@ -301,7 +302,9 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 zemindeki halkası büyür. `Tab` ile sıradakine geçersin. Satırdaki küçük düğmeler: **POV** (o oyuncunun
 gözünden izle), **MAVİYE/KIRMIZIYA** (takımını değiştir), **KİMLİK** (o gözlüğün ekranında büyük
 işaret göster), **AT** (bağlantıdan çıkar — güvenlik için **iki kez** basmak gerekir, ilk basışta
-düğme "EMİN?" olur).
+düğme "EMİN?" olur). ⚠️ **AT o gözlükteki oyunu kapatır**: oyuncu birkaç saniye içinde Quest'in
+kendi menüsünde bulur kendini, geri dönmesi için oyunun elle yeniden açılması gerekir. Yani "AT"
+molaya çıkarmak için değil, o cihazı oturumdan çıkarmak içindir.
 
 **Panel açıkken oyun durmaz:** Tercihler/İstatistik panelleri yarı saydamdır, arkada sahneyi
 görmeye devam edersin. `Esc` ile kapatırsın.
@@ -422,7 +425,7 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 | Oyuncu listede "çevrimdışı" düşüyor | Wi-Fi zayıf ya da gözlük uykuya geçmiş | Gözlüğü uyandır; kapsama sorunu tekrarlıyorsa teknik ekibi ara |
 | **Birden bire HERKES takılmaya başladı** (tek oyuncu değil, hepsi) | Wi-Fi'ı oyun dışı bir şey doldurdu | **Önce İstatistikler panelini aç ve PING kolonuna bak** (aşağıda). Herkesinki yüksekse sırayla: 1) bir gözlükte **ekran yayını (cast/kayıt) açık mı** — en sık sebep budur, kapat. 2) Arena Wi-Fi'ına telefon/dizüstü bağlanmış mı, indirme mi var — çıkar. 3) Sunucu bilgisayarının **ağ kablosu takılı mı** — çıkmışsa tak. Düzelmezse teknik ekibi ara |
 | **Tek bir oyuncu** takılıyor, diğerleri normal | O gözlüğün Wi-Fi kapsaması zayıf | İstatistiklerde o satırın PING'i diğerlerinden belirgin yüksekse oyuncuyu alanın ortasına doğru yönlendir; sürekli tekrarlıyorsa teknik ekibi ara |
-| Oyuncular birbirini yanlış yerde görüyor | Kalibrasyon yapılmadı ya da A–B ters alındı | Arenada **A + B ile yeniden kalibrasyon** yaptır (Bölüm 4) |
+| Oyuncular birbirini yanlış yerde görüyor | Kalibrasyon yapılmadı ya da A–B ters alındı | Arenada **yeniden kalibrasyon** yaptır (Bölüm 4) |
 | Oyuncular birbirini **havada / yere gömülü** görüyor | Kalibrasyonda kumanda dik tutulmamış | O oyuncuya kalibrasyonu tekrarlat; kumanda **kalem gibi dik**, ucu yere değecek (Bölüm 4). Herkeste aynı sorun varsa teknik ekibi ara |
 | Oyun ortasında arena birden kaydı | Gözlüğün konum takibi sıfırlandı | Genelde kendiliğinden düzelir. Düzelmezse o oyuncuya kalibrasyonu tekrarlat |
 | Ateş ediyor ama can azalmıyor | Aynı takımdalar (dost ateşi kapalı) ya da maç henüz başlamadı | Takımları kontrol et; geri sayım bitmiş mi bak |
@@ -430,9 +433,9 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 | Maç başlamıyor | Bağlı oyuncu yok ya da bir gözlükte eski sürüm var | Listede oyuncu var mı bak; varsa sunucu penceresindeki son satırı teknik ekibe ilet |
 | Ses gelmiyor | Gözlüğün sesi kısık | Gözlüğün ses seviyesini aç |
 | Oyuncunun ekranı karardı, uyarı çıktı | Oyun alanının dışına çıkmış | Oyuncuya geri içeri girmesini söyle |
-| Bir oyuncu yanlış yerde görünüyor / "nişan aldığım yere gitmiyor" diyor | O gözlüğün kalibrasyonu kaymış | Satırındaki **KAL** düğmesiyle sıfırla, yeniden A+B yaptır (§4.1) |
+| Bir oyuncu yanlış yerde görünüyor / "nişan aldığım yere gitmiyor" diyor | O gözlüğün kalibrasyonu kaymış | Satırındaki **KAL** düğmesiyle sıfırla, yeniden kalibre ettir (§4.1) |
 | Bir avatar yanıp sönüyor | O oyuncu kalibresiz — ateş edemez, vurulamaz | Yeniden kalibre olmasını söyle (§4.1); bitince kendiliğinden düzelir |
-| Oyuncu "silahım çalışmıyor" diyor, ekranında kalibrasyon yazısı var | Kalibrasyonu sıfırlanmış | A+B ile yeniden kalibre olsun (§4.1/4) |
+| Oyuncu "silahım çalışmıyor" diyor, ekranında kalibrasyon yazısı var | Kalibrasyonu sıfırlanmış | Bölüm 4'teki adımlarla yeniden kalibre olsun (§4.1/4) |
 | Oyuncu öldü ama canlanmıyor | Kalibresiz oyuncu canlanmaz | Önce kalibre olsun; hemen ardından kendiliğinden canlanır |
 
 ---
@@ -473,12 +476,12 @@ Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten
 │  A tuşuna hızlıca 2 KEZ   →  Gizli IP paneli (aç/kapat)  │
 │                              (lobide, bağlanamayınca)    │
 │                                                          │
-│  A + B  3 saniye basılı   →  Kalibrasyon noktası al      │
-│  (kumanda KALEM GİBİ DİK,    1 titreşim = A alındı       │
-│   ucu yere değecek)          2 titreşim = B alındı, tamam│
+│  A BASILIYKEN B'ye 2 KEZ  →  Kalibrasyon noktası al      │
+│  (kumanda KALEM GİBİ DİK,    kısa titr. = A alındı       │
+│   ucu yere değecek)          UZUN titr. = B alındı, tamam│
 │                              3 titreşim = mesafe yanlış, │
 │                                           B'yi tekrar al │
-│                              1 UZUN     = dik tutulmadı, │
+│                              1 titreşim = dik tutulmadı, │
 │                                           B'yi tekrar al │
 ├──────────────────────────────────────────────────────────┤
 │  OYUNCUYA — "HERKES TEK" MODUNDA                         │
