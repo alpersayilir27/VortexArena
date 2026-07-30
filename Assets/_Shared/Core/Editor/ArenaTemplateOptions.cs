@@ -114,16 +114,6 @@ namespace VortexArena.Core.Editor
         public string venueName = "";
 
         /// <summary>
-        /// Yeni haritanın ekleneceği <c>GameCatalog</c> asset yolu (boş = katalog güncellenmez).
-        /// <para>
-        /// ⚠️ Katalog <c>Resources/</c> ALTINDADIR — prosedürel admin arayüzü onu
-        /// <c>Resources.Load</c> ile okuduğu için oradan çıkarılamaz. Bu yol yanlış yazılırsa
-        /// sihirbaz katalog kaydını sessizce atlar ve yeni arena admin listesinde görünmez.
-        /// </para>
-        /// </summary>
-        public string catalogPath = "Assets/_Shared/Data/Resources/GameCatalog.asset";
-
-        /// <summary>
         /// Seçili kaynağa ait yol alanı (<see cref="dimensionsJsonPath"/> ya da
         /// <see cref="testMeshPath"/>). Sihirbaz "Oluştur" düğmesini bu boşken kapatır: kaynak
         /// zorunludur, ölçüsüz arena üretilmez.
