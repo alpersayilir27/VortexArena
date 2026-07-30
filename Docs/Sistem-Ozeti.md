@@ -752,40 +752,36 @@ halka (`VortexArena/ProximityHalo`, ZTest Always), 0.8 m'de tehlikenin geldiği 
 kumandada haptik. Ölü oyuncular ELENMEZ — respawn durum değişimi olduğu için ölünün bedeni sahada
 durmaya devam eder, çarpışma riski aynıdır. **Henüz hiçbir sahnede bağlı değil**: bileşen elle
 eklenir, `head` ve `haloMaterial` (`_Shared/FX/M_ProximityHalo`) alanları Inspector'dan verilir),
-`LocalAvatarHeadHider` (`Core/Player` — birinci şahıs gövde avatarında (Movement SDK retarget
-karakteri) kafa kemiğini her kare sıfıra yakın ölçekleyip gizler: kamera kafanın tam içinde
-durduğu için mesh'in içi görünmesin; yüksek execution order ile retargeter'dan SONRA yazar;
-kemik araması "Head" tam adı → ":Head" soneki (Mixamo). Şu an IceWorld'deki
-`_Shared/Avatars/PlayerBodyAvatar.prefab`'a (Mixamo Ch15 + CharacterRetargeter FullBody) bağlı —
-gövde takibi ürünleşirse rig kalıbına taşınacak), `LocalBodyOverlayCamera` (`Core/Player` —
-aynı prefab'da; kafa dışındaki gövde clipping'i için: kendi altındaki tüm Renderer'ları
-"LocalBody" katmanına alır, ana kameradan bu katmanı çıkarır ve daha büyük near-clip'li bir
-overlay kamerayı URP kamera yığınına (camera stack) ekler — aşağı bakınca ana kameranın
-near-clip'i (tipik 0.1 m) göğüs/omuz geometrisine girmez. "LocalBody" Layer'ı gerektirir;
-`VortexArena.Core.asmdef` bu yüzden `Unity.RenderPipelines.Universal.Runtime` referanslar),
-`ControllerModelHider` (`Core/Player` — aynı prefab'da; Meta Building Blocks kamera rigine
-BİRDEN FAZLA yerde (`Controller Tracking Left/Right` VE ayrıca `OVRComprehensiveInteractionRig`
-altında) fiziksel Touch controller modeli + "controller-driven" sentetik el overlay'i koyuyor —
-bu yüzden `[BuildingBlock] Camera Rig` kökünden TÜM alt ağacı isim eşleşmesiyle
-(`questController_animrig` / `HandVisual`) her karede tarar ve gizler; kontrolcü
-bırakılıp-tutulduğunda Meta bunları yeniden aktifleştirdiği için tek seferlik değil, sürekli
-çalışır. RAY/RETİKÜL gibi etkileşim görsellerine dokunmaz; kozmetik, `OVRInput` girdisini
-etkilemez),
-`LocalAvatarRootDetacher` (`Core/Player` — aynı prefab'da; `Awake`'te avatarı **sahne köküne
-ayırır** ve dünya transformunu birime oturtur. Zorunlu: Movement SDK'nın retarget çıktısı DÜNYA
-uzayındadır (`GetPosesFromTheTracker` her kemiğe `OVRCameraRig.trackingSpace.localToWorldMatrix`'i
-baskılar, kök eklem ebeveynine göre yerelleştirilmeden `SetLocalPositionAndRotation` ile yazılır) ve
-bu projede kök eklem avatarın KENDİ transformudur — avatar rig'in altında dursaydı rig transformu
-iki kez uygulanırdı. Tek seferliktir, kare başına maliyeti yoktur; `Awake` seçilmesinin sebebi
-`CharacterRetargeterConfig.Setup`'ın `Start`'ta koşup ölçeği `lossyScale`'den okumasıdır.
-⚠️ Avatar artık rig'in çocuğu olmadığı için rig'i kapatmak onu kapatmaz — `AdminSpectator` onu
-ayrıca kapatır),
+`ControllerModelHider` (`Core/Player` — **`VA_CameraRig` kökünde**; Meta Building Blocks kamera
+rigine BİRDEN FAZLA yerde (`Controller Tracking Left/Right` VE ayrıca
+`OVRComprehensiveInteractionRig` altında) fiziksel Touch controller modeli + "controller-driven"
+sentetik el overlay'i koyuyor — bu yüzden rig kökünden TÜM alt ağacı isim eşleşmesiyle her karede
+tarar ve gizler; kontrolcü bırakılıp-tutulduğunda Meta bunları yeniden aktifleştirdiği için tek
+seferlik değil, sürekli çalışır. **Gizlediği:** kumanda modelleri (`questController_animrig`) ve
+sentetik/distance-grab el KOPYALARI (`OVRLeftHandVisual`/`OVRRightHandVisual`,
+`Left/RightHandSynthetic` altında). **Gizlemediği:** BB etkileşim rig'inin ana elleri
+(`OVRHandVisualLeft`/`OVRHandVisualRight`) — oyuncunun kendi elleri olarak görünen şey bunlardır.
+⚠️ Desen listesi bu ayrımı sadece isimle yapıyor: `"HandVisual"` gibi geniş bir desen ana elleri de
+yutar ve oyuncu elini hiç göremez. RAY/RETİKÜL gibi etkileşim görsellerine dokunmaz; kozmetik,
+`OVRInput` girdisini etkilemez),
 `WeatherVolumeFollow` (`Core/FX` — ambiyans parçacık hacmini yerel kameranın üstünde tutar; bağlı
 sistemler **World** simülasyon uzayında olmalı, `Start` sapmayı uyarır. Yalnız kendi transform'unu
 taşır, rig'e dokunmaz), `WeatherWindDriver` (`Core/FX` — kök objeye takılır, altındaki tüm
 sistemlerin `Velocity over Lifetime` XZ'sini ve Noise şiddetini tek Perlin kanalından salındırır:
 rüzgar şiddeti + yönü + türbülans birlikte nefes alır. Temel değerler `Awake`'te alınır,
 katmanların göreli hız farkı korunur).
+
+> **Yerel gövde avatarı bugün YOKTUR.** Oyuncu kendinden yalnız BB rig'inin ellerini görür.
+> `_Shared/Avatars/PlayerBodyAvatar.prefab` (Mixamo Ch15 + Movement SDK `CharacterRetargeter` —
+> gerçek gövde takibi, IK değil) ve yalnız ona hizmet eden üç bileşen — `LocalAvatarHeadHider`
+> (kafa kemiğini sıfıra yakın ölçekler: kamera kafanın içinde), `LocalBodyOverlayCamera` (gövdeyi
+> "LocalBody" katmanına alıp daha büyük near-clip'li bir URP overlay kamerasıyla çizer),
+> `LocalAvatarRootDetacher` (§7, "retarget avatarı hareket eden kökün altına konmaz" maddesi) — **asset olarak duruyor ama hiçbir sahnede bağlı
+> değil**; `VA_CameraRig`'den çıkarıldılar. Sebep tercih değil yapıdır: Movement SDK'nın retarget
+> çıktısı `trackingSpace`'ten türetilen DÜNYA uzayı pozlarıdır ve free-roam'da kalibrasyonla
+> kaydırdığımız rig'le çakışır. Geri getirilecekse yol `plan/yerel-kol-gorseli.md`'de.
+> Uzak oyuncuların gövdesi bundan **bağımsızdır** ve çalışmaya devam eder: o `ThreePointBodyIK`,
+> yani ağdan gelen üç pozdan çözülen gerçek bir IK.
 
 | Sınıf | Görevi |
 |---|---|
@@ -832,7 +828,7 @@ geometrisini üreten iki araç + kavrama ayarı:
 | `ControlHost` | Kestrel WebSocket host (`/ws`), bağlantı başına `ClientConnection` |
 | `BeaconService` | 2 sn'de bir broadcast |
 | `StateHost` | UDP kaydı, poz alımı, 20 Hz snapshot yayını (16 girdiden fazlası MTU'ya sığan parçalara bölünür; olay varsa ve sığıyorsa `0x05` ile tek datagramda birleşir), `0x06` RTT echo'su. **Telemetriyi burada üretir:** saniyelik `[state]` satırı — gerçek bayt-sn/paket-sn, tik kayması, uplink jitter + poz/olay kaybı; eşiği aşan oyuncu için ek `[net]` satırı |
-| `PlayerRegistry` | Oyuncu listesi, `playerId` tahsisi (1..255), `devices.json` ile kalıcı **kimlik** (ad + forma numarası), çevrimiçi/çevrimdışı. **Kimlik:** ilk bağlantıda ad 20'lik havuzdan rastgele (kullanılmayanlar arasından), numara 1'den itibaren ilk boş (1..99); `set_identity` ikisini de değiştirir. Adlar tekrar edebilir, **numara tüm KAYITLI cihazlar arasında benzersizdir** — sahiplik sorgusu `_players`'a değil `_devices`'a bakar (hiç bağlanmamış cihaz da numara tutar). Çevrimiçi sahipten numara istenirse reddedilir; çevrimdışı sahip **aynı anda** yeniden numaralanır. **Rol başına kalıcılık farkı:** oyuncu kaydı kopunca Offline işaretlenir ama DURUR (deviceId kalıcı); **admin kaydı tümüyle SİLİNİR** (deviceId oturumluk — yoksa her açıp kapatma roster'da hayalet satır ve tükenen playerId bırakırdı) ve admin adı diske yazılmaz. Aynı PC'de iki admin varsa ad " (2)" ile ayrıştırılır |
+| `PlayerRegistry` | Oyuncu listesi, `playerId` tahsisi (1..255), `devices.json` ile kalıcı **kimlik** (ad + forma numarası), çevrimiçi/çevrimdışı. **Kimlik:** ilk bağlantıda ad 20'lik havuzdan rastgele (kullanılmayanlar arasından), numara 1'den itibaren ilk boş (1..99); `set_identity` ikisini de değiştirir. Adlar tekrar edebilir, **numara tüm KAYITLI cihazlar arasında benzersizdir** — sahiplik sorgusu `_players`'a değil `_devices`'a bakar (hiç bağlanmamış cihaz da numara tutar). Çevrimiçi sahipten numara istenirse reddedilir; çevrimdışı sahip **aynı anda** yeniden numaralanır. **Rol başına kalıcılık farkı:** oyuncu kaydı kopunca Offline işaretlenir ama DURUR (deviceId kalıcı); **admin kaydı tümüyle SİLİNİR** (deviceId oturumluk — yoksa her açıp kapatma roster'da hayalet satır ve tükenen playerId bırakırdı) ve admin adı diske yazılmaz. Aynı PC'de iki admin varsa ad " (2)" ile ayrıştırılır. **Atma bunun istisnasıdır** (`RemoveByPlayerId`): oyuncu kaydı da silinir — kopma "çevrimdışı" bırakır, atma bırakmaz; `devices.json`'a dokunulmaz, yani atılan cihaz geri bağlanırsa adını/numarasını korur (§5.4) |
 | `LobbyService` | Roster yayını (`lobby_state`) — **tek yayıncı döngüden**, kirli bayrakla birleştirilerek, her yayında `version` artarak (Tuzaklar: "ateşle-unut yayın sıra garantisi vermez"); `status.rosterVersion` geride kalan istemciye yalnız ona tam snapshot yollatır. Ayrıca ready/takım/kick/`set_identity` + **adminler arası ortak durumun sahibi**: mod/harita seçimi burada yaşar, `set_selection` ile değişir, `admin_state` ile yalnız adminlere yayılır. Her admin komutu "kim ne yaptı" duyurusu üretir |
 | `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş hattı, can/skor, canlanma, zorla canlandırma.** Mod kaydı tek yerde (`RegisterModes()` — yeni mod buraya bir satır). **Skor defteri:** `AddScore(team,…)` (takım) + `AddPlayerScore/ScoreOf/TryGetLeader` (bireysel); modlar skoru YALNIZ buradan yazar |
 | `MapTable` | `maps.json` (Unity export'undan) — sunucunun okuduğu tek içerik tablosu. Girdi başına yalnız `sceneName` + `modes`; **arena ÖLÇÜSÜ yoktur** (sunucu metre kullanmaz, §7.30) |

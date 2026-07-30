@@ -7,6 +7,7 @@
 |---|---|
 | Elde tutulan eşya + atış olayları: **Faz 0–3 + soket kavrama + olay zamanlaması bitti**. Kalan: ⚠️ **kavrama pozu ayarı** (araç hazır — `Grip Socket` işaretçisi + `Write Grip Sockets To Definition`; sayılar hâlâ sıfır) · tracer/soket değerleri · bomba | `elde-tutulan-esya-ve-atis-olaylari.md` |
 | Kırılabilir objeleri sunucu-otoriter yapmak (yerel `Health` kaldırıldı, yerine ağsal obje canı) | `agsal-kirilabilir-objeler.md` |
+| Yerel kol görseli: oyuncu kendi kollarını görsün (bugün yalnız BB rig'inin elleri görünüyor; Movement SDK gövde avatarı kalibre edilen rig'le çakıştığı için kaldırıldı) | `yerel-kol-gorseli.md` |
 
 > Sıradaki büyük iş **bulut kalibrasyonu** (Meta grup / paylaşılan uzamsal anchor ile toplu
 > hizalama). Henüz planlanmadı; altyapısı hazır: `set_calibration.source` `"cloud"` değerini

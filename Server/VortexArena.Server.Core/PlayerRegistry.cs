@@ -364,6 +364,36 @@ public sealed class PlayerRegistry : IDisposable
             Changed?.Invoke(affected, removed ? PlayerChangeKind.Removed : PlayerChangeKind.Offline);
     }
 
+    /// <summary>
+    /// Atma (§5.4): kaydı roster'dan <b>tümüyle siler</b>, varsa bağlantısını çağırana verir
+    /// (kapatmak onun işi). Kopmadan farkı budur — kopan cihaz "çevrimdışı" olarak listede
+    /// <b>durur</b> (aynı gözlük geri geldiğinde playerId'sini ve adını korusun diye), atılan
+    /// cihaz listeden kalkar. Aksi hâlde atma çevrimdışı bir kayıtta hiçbir şey yapmaz ve
+    /// operatör "AT"a bastıkça duran bir satır görürdü.
+    /// <para>⚠️ <c>devices.json</c>'a DOKUNMAZ: atma bir yasak değildir, cihaz yeniden
+    /// bağlanırsa adını ve forma numarasını korur (playerId havuza döner, yenisi verilir).</para>
+    /// </summary>
+    public bool RemoveByPlayerId(int playerId, out PlayerState state, out ClientConnection? connection)
+    {
+        lock (_gate)
+        {
+            if (!TryGetByPlayerId(playerId, out state!))
+            {
+                connection = null;
+                return false;
+            }
+
+            connection = state.Connection;
+            state.Connection = null;
+            state.Online = false;
+            state.Ready = false;
+            _players.TryRemove(state.DeviceId, out _);
+        }
+
+        Changed?.Invoke(state, PlayerChangeKind.Removed);
+        return true;
+    }
+
     /// <summary>OFFLINE_TIMEOUT boyunca status gelmeyen cihazları çevrimdışına düşürür,
     /// bağlantılarını kapatır (§8). Admin kayıtları burada da silinir (§2).</summary>
     private void CheckOfflinePlayers()

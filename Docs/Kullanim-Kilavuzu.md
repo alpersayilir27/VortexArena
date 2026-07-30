@@ -302,9 +302,11 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 zemindeki halkası büyür. `Tab` ile sıradakine geçersin. Satırdaki küçük düğmeler: **POV** (o oyuncunun
 gözünden izle), **MAVİYE/KIRMIZIYA** (takımını değiştir), **KİMLİK** (o gözlüğün ekranında büyük
 işaret göster), **AT** (bağlantıdan çıkar — güvenlik için **iki kez** basmak gerekir, ilk basışta
-düğme "EMİN?" olur). ⚠️ **AT o gözlükteki oyunu kapatır**: oyuncu birkaç saniye içinde Quest'in
-kendi menüsünde bulur kendini, geri dönmesi için oyunun elle yeniden açılması gerekir. Yani "AT"
-molaya çıkarmak için değil, o cihazı oturumdan çıkarmak içindir.
+düğme "EMİN?" olur). ⚠️ **AT o gözlükteki oyunu kapatır** ve **satırı listeden siler**: oyuncu
+birkaç saniye içinde Quest'in kendi menüsünde bulur kendini, geri dönmesi için oyunun elle yeniden
+açılması gerekir. Yani "AT" molaya çıkarmak için değil, o cihazı oturumdan çıkarmak içindir.
+Listede kalmış **çevrimdışı** bir satırı temizlemek için de AT kullanılır. Atmak yasaklamak
+değildir: aynı gözlük oyunu tekrar açarsa adıyla ve numarasıyla geri gelir.
 
 **Panel açıkken oyun durmaz:** Tercihler/İstatistik panelleri yarı saydamdır, arkada sahneyi
 görmeye devam edersin. `Esc` ile kapatırsın.
