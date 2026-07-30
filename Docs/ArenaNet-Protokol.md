@@ -263,7 +263,13 @@ Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken har
 
 Operatör `kick` yolladığında sıra şudur:
 
-1. Sunucu hedef bağlantıya `kicked` yollar.
+0. Sunucu hedefin kaydını **roster'dan siler** (`lobby_state` yayını `Removed` ile gider, `playerId`
+   havuza döner). ⚠️ Atmanın çevrimdışı bir kayıtta da iş yapmasının tek yolu budur: kopan cihaz
+   listede *"çevrimdışı"* olarak **durur** (aynı gözlük geri geldiğinde playerId'sini ve adını
+   korusun diye), atılan cihaz **kalkar**. Yalnız soket kapatılsaydı bağlantısı olmayan bir satırda
+   `kick` hiçbir şey yapmazdı. Silme `devices.json`'a dokunmaz — **atma yasak değildir**, cihaz
+   yeniden bağlanırsa adını ve forma numarasını korur (yeni bir `playerId` alır).
+1. Bağlantısı varsa sunucu hedefe `kicked` yollar (çevrimdışı kayıtta bu adım ve sonrası atlanır).
 2. Sunucu bağlantıyı **kapanış çerçevesiyle** kapatır; çerçevenin sebebi `"kicked"`
    (`ArenaProtocol.KICK_CLOSE_REASON`). Cevap gelmezse en fazla 2 sn beklenir, sonra koparılır.
    ⚠️ **Soket doğrudan koparılmaz (`Abort`):** abortif kapanış (RST) istemcinin henüz okumadığı

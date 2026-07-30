@@ -182,14 +182,16 @@ public sealed class LobbyService
 
     public async Task HandleKickAsync(ClientConnection connection, KickMsg msg)
     {
-        if (!_registry.TryGetByPlayerId(msg.playerId, out var target))
+        // Atma kaydı roster'dan SİLER (§5.4) — çevrimdışı bir kayıtta da iş yapmasının tek yolu
+        // budur; yalnız soketi kapatmak, bağlantısı zaten olmayan satırı listede bırakırdı.
+        if (!_registry.RemoveByPlayerId(msg.playerId, out var target, out var targetConnection))
         {
             Console.WriteLine($"[Lobby] kick: playerId {msg.playerId} bulunamadı.");
             return;
         }
-        Console.WriteLine($"[Lobby] kick: {target.Name} (playerId {target.PlayerId}).");
+        var how = targetConnection == null ? "çevrimdışıydı, kayıt silindi" : "bağlantı kapatılıyor";
+        Console.WriteLine($"[Lobby] kick: {target.Name} (playerId {target.PlayerId}) — {how}.");
         await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} atıldı"));
-        var targetConnection = target.Connection;
         if (targetConnection == null) return;
         await SendSafeAsync(targetConnection, JsonUtil.Serialize(new KickedMsg { reason = "" }), target.Name);
         // ⚠️ Abort DEĞİL: RST istemcinin daha okumadığı `kicked` çerçevesini düşürebilir ve o

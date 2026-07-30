@@ -113,11 +113,13 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `dimensionsJson` boşsa muhafaza hata basıp kendini kapatır),
   `BaseZone`×2 (**taban bölgesi** = kırmızı/mavi şerit; ölen oyuncu buraya girince canlanır,
   `Team.Neutral` = herkese açık) ve **altyapı prefabları** (`_Shared/App/Prefabs/`):
-  **`VA_CameraRig`** (kamera rig'i + `OVRComprehensiveInteractionRig` + `PlayerBodyAvatar` tek
-  pakette, tracking origin `Stage`; ⚠️ `PlayerBodyAvatar` çalışma anında **sahne köküne ayrılır**
-  (`LocalAvatarRootDetacher`) ve rig'in ya da hareket eden başka bir kökün altına GERİ KONMAZ —
-  retarget çıktısı dünya uzayında olduğu için rig transformu iki kez uygulanırdı →
-  `Docs/Sistem-Ozeti.md` §7, "retarget avatarı hareket eden kökün altına konmaz" maddesi),
+  **`VA_CameraRig`** (kamera rig'i + `OVRComprehensiveInteractionRig` + `ControllerModelHider`,
+  tracking origin `Stage`). ⚠️ **Yerel gövde avatarı YOKTUR ve rig'e geri eklenmez** — oyuncu
+  kendinden yalnız BB rig'inin ellerini görür (`OVRHandVisualLeft/Right`; kumanda modelleri ve
+  sentetik el kopyaları `ControllerModelHider` ile gizli). Movement SDK'nın retarget çıktısı
+  dünya uzayında olduğu için kalibre edilen rig'le çakışıyordu →
+  `Docs/Sistem-Ozeti.md` §7, "retarget avatarı hareket eden kökün altına konmaz" maddesi;
+  yerel kol görselinin doğru yolu `plan/yerel-kol-gorseli.md`.
   **`VA_PoseSync`** (`PlayerPoseTracker` + `RemotePlayerSpawner`),
   **`VA_CalibrationManager`** (`ArenaCalibrator`), **`VA_ModeHud`** (`ModeHudSpawner`).
   ⚠️ **Altyapı sahneye PREFAB ÖRNEĞİ olarak konur — kopyalanmaz, unpack edilmez:** kopya konursa
