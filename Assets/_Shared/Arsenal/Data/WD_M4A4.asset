@@ -12,8 +12,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 55accdfacbb64ab428182bb5c93442d3, type: 3}
   m_Name: WD_M4A4
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
-  weaponId: m4a4
   displayName: M4A4
+  netItemId: 2
+  prefab: {fileID: 190416508149715471, guid: 1d5f693f3c5240942a431985b1064bc3, type: 3}
+  holdMode: 1
+  primaryGripPosition: {x: 0, y: 0, z: 0}
+  primaryGripEuler: {x: 0, y: 0, z: 0}
+  secondaryGripPosition: {x: 0, y: 0.059, z: 0.3698}
+  secondaryGripEuler: {x: 0, y: 0, z: 0}
+  primaryGripRadius: 0.12
+  secondaryGripRadius: 0.12
+  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
+  tracerWidth: 0.02
+  tracerLifetime: 0.06
+  tracerEveryNthRound: 3
+  weaponId: m4a4
   damage: 33
   headshotMultiplier: 4
   fireRateRpm: 666
@@ -39,10 +52,3 @@ MonoBehaviour:
   firePitchBase: 1
   firePitchJitter: 0.05
   fireVolume: 1
-  prefab: {fileID: 190416508149715471, guid: 1d5f693f3c5240942a431985b1064bc3, type: 3}
-  netItemId: 2
-  holdMode: 1
-  primaryGripPosition: {x: 0, y: 0, z: 0}
-  primaryGripEuler: {x: 0, y: 0, z: 0}
-  secondaryGripPosition: {x: 0, y: 0, z: 0}
-  secondaryGripEuler: {x: 0, y: 0, z: 0}

@@ -1409,6 +1409,18 @@ konsoluna tek satır sebep yazar.
       TCP olduğu için retransmit/ACK ile katlanır. Yeni bir "olay başına herkese haber ver"
       kanalı eklerken sorulacak soru "kaç bayt" değil **"tik başına kaç datagram"**dır.
 
+51. **Pozunu KENDİN sürdüğün bir gövdede fizik motorunun "hız" tahmini anlamsızdır.** ISDK'nın
+    `Grabbable._throwWhenUnselected` bayrağı (varsayılan AÇIK) bırakış anında gövdeye elin izlenen
+    hızını uygular — makul bir varsayıma dayanır: eşyayı tutuş boyunca ISDK taşımıştır. Silahta bu
+    varsayım YANLIŞ: kökü `Weapon.ApplyCanonicalGrip` her kare kanonik kavramadan **ışınlıyor**
+    (§6.6). Işınlanan gövdeden türetilen hız fiziksel bir büyüklük değil kare farkının artığıdır ve
+    bırakınca silah elden fırlıyordu. `WeaponKitBuilder` bayrağı kapatıyor; `_kinematicWhileSelected`
+    ise AÇIK bırakılıyor (tutuşta yerçekimi hız biriktirmesin) → "bırakınca yere düşer, fırlamaz".
+    Genel kural: **bir üçüncü parti bileşenin varsayılanı, o bileşenin senaryosunda geçerli olan bir
+    varsayıma dayanıyor olabilir — pozu/durumu devraldığın her yerde o varsayımı yeniden sına.**
+    ⚠️ Fırlatma gereken eşya (bomba) bu kapıdan geçmez: atılışı telde bildirilen kendi balistiğidir
+    (`ArenaCombat.ReportThrow`), ISDK'nın fizik impulsu değil.
+
 ---
 
 ## 8. Durum ve sıradaki işler
