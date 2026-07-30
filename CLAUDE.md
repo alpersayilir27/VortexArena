@@ -339,7 +339,9 @@ altında sub-emitter'lı namlu dumanı (`Smoke`), ve kalibreye göre (762x39/556
 `ItemGripSockets`'ı koyar ve `GrabInteractable`'ın filtre listesine bağlar — ⚠️ **prefaba
 `DistanceGrabInteractable` GERİ EKLENMEZ** (araç onu bilerek siler: mesafeden kavrama soket
 tasarımının zıddıdır ve filtre hover'ı kesmediği için yalan söyleyen bir vurgu bırakırdı →
-`Docs/Sistem-Ozeti.md` §7). ⚠️ **Sahneye elle `WPN_*` örneği KOYULMAZ:** raf silahlarını
+`Docs/Sistem-Ozeti.md` §7). Aynı sebeple ⚠️ **`Grabbable._throwWhenUnselected` GERİ AÇILMAZ**
+(araç kapatır): silahın pozunu ISDK değil `ApplyCanonicalGrip` sürdüğü için bırakış hızı uydurmadır
+ve silah elden fırlar. ⚠️ **Sahneye elle `WPN_*` örneği KOYULMAZ:** raf silahlarını
 `WeaponRackSpawner` (`_Shared/Core/Combat/`, raf kökünde) kural `Rack` iken loadout'tan üretir —
 göz (`RackSlot`) yalnız KONUMU tutar, hangi silahın duracağını mod belirler. Elle konan örnek
 sahneye donar ve moda silah eklendiğinde her arenayı tek tek açmak gerekirdi.
