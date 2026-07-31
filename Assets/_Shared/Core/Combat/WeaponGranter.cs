@@ -4,6 +4,8 @@ using Oculus.Interaction.Input;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using VortexArena.Core.Arena;
+using VortexArena.Net;
+using VortexArena.Protocol;
 
 namespace VortexArena.Core.Combat
 {
@@ -131,6 +133,7 @@ namespace VortexArena.Core.Combat
             // Awake/OnDestroy'da abone oluruz (PlayerCombatState deseni).
             SceneManager.sceneLoaded += HandleSceneLoaded;
             ModeRuntime.Changed += HandleRulesChanged;
+            NetEvents.OnCountdown += HandleCountdown;
             ApplyRules();
         }
 
@@ -143,6 +146,7 @@ namespace VortexArena.Core.Combat
 
             SceneManager.sceneLoaded -= HandleSceneLoaded;
             ModeRuntime.Changed -= HandleRulesChanged;
+            NetEvents.OnCountdown -= HandleCountdown;
 
             if (_aliveSubscribed && PlayerCombatState.Instance != null)
             {
@@ -798,6 +802,25 @@ namespace VortexArena.Core.Combat
         private void HandleAliveChanged(bool alive)
         {
             if (alive && _summoned != null)
+            {
+                _summoned.RefillFull();
+            }
+        }
+
+        /// <summary>
+        /// Her geri sayımda (§10.1 <c>phaseReason:"countdown"</c>) elindeki silah tam dolar.
+        /// <para>
+        /// ⚠️ <see cref="HandleAliveChanged"/> tek başına YETMEZ: turu <b>sağ bitiren</b> oyuncu
+        /// canlanmadığı için o olayı hiç almaz ve bir sonraki tura yarım şarjörle girerdi. Kapı
+        /// geri sayım olduğu için mod-agnostiktir — tur tabanlı modda her tur, diğerlerinde maç
+        /// başında bir kez çalışır (orada sahne zaten yeni yüklendiği için etkisizdir).
+        /// </para>
+        /// <para><see cref="Weapon.RefillFull"/> idempotenttir; geri sayımın her saniyesinde
+        /// çağrılması zararsızdır (devam eden reload iptal olur, o da doğrudur).</para>
+        /// </summary>
+        private void HandleCountdown(CountdownMsg msg)
+        {
+            if (_summoned != null)
             {
                 _summoned.RefillFull();
             }

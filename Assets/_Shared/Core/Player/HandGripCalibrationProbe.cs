@@ -62,9 +62,14 @@ namespace VortexArena.Core.Player
                     Debug.LogWarning(
                         "[HandGripCalibrationProbe] Ölçüm yapılamadı: BB rig'inin kumandadan sürülen " +
                         "el iskeleti bulunamadı ya da sürülmüyor (OVRHandVisualLeft/Right → " +
-                        "OculusHand_* → b_*_wrist). İki kumandayı da tutarak tekrar dene; el " +
-                        "görselleri kapatılmışsa bu veri hiç gelmez. Elle ayar yolu açık: " +
-                        "ThreePointBodyIK → 'Bilek eşlemesi (canlı ayar)'.", this);
+                        "OculusHand_* → b_*_wrist).\n" +
+                        "⚠️ EN OLASI SEBEP: ControllerModelHider o el görselini kapatıyor (tip adı " +
+                        "'HandVisual' olan her şeyi kapatır) ve kapalı iskeletin kemikleri SÜRÜLMEZ. " +
+                        "Ölçmek için VA_CameraRig'deki ControllerModelHider'ı GEÇİCİ olarak kapat, " +
+                        "ölç, sonra geri aç. (Kapalı iskeleti ölçmek bind pozunu ölçmek olurdu; bu " +
+                        "yüzden burada sessizce devam edilmiyor.)\n" +
+                        "Alternatif: ThreePointBodyIK → 'Bilek eşlemesi (canlı ayar)' alanlarını " +
+                        "canlı avatarda çevir — ölçüm gerekmez.", this);
                     enabled = false;
                 }
 

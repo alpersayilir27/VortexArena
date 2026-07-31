@@ -128,8 +128,9 @@ namespace VortexArena.Protocol
 
     // ---- Yalnız admin → Sunucu ----
 
-    /// start_match (§5.2). roundSeconds/scoreLimit O MAÇA özeldir: ≤0 ya da eksikse modun
-    /// varsayılanı (IGameMode.DefaultRoundSeconds/DefaultScoreLimit) kullanılır.
+    /// start_match (§5.2). roundSeconds/scoreLimit/countdownSeconds O MAÇA özeldir: ≤0 ya da
+    /// eksikse modun varsayılanı (IGameMode.DefaultRoundSeconds/DefaultScoreLimit) — geri sayımda
+    /// protokol varsayılanı (COUNTDOWN_SECONDS) — kullanılır.
     [Serializable]
     public class StartMatchMsg
     {
@@ -138,6 +139,12 @@ namespace VortexArena.Protocol
         public string sceneName;
         public int roundSeconds;
         public int scoreLimit;
+
+        /// <summary>Geri sayımın uzunluğu (sn); sunucuda [COUNTDOWN_SECONDS_MIN,
+        /// COUNTDOWN_SECONDS_MAX] aralığına kırpılır. <c>0</c> = protokol varsayılanı.
+        /// <para>Maç boyunca HER geri sayımda kullanılır — tur tabanlı modlarda (<c>tournament</c>)
+        /// turlar arasındaki geri sayım da budur.</para></summary>
+        public int countdownSeconds;
     }
 
     [Serializable]
@@ -206,6 +213,10 @@ namespace VortexArena.Protocol
         public string sceneName;
         public int roundSeconds;
         public int scoreLimit;
+
+        /// <summary>Geri sayım uzunluğu (sn); <c>0</c> = mevcut değeri koru (diğer alanlarla
+        /// aynı sözleşme).</summary>
+        public int countdownSeconds;
     }
 
     // ---- Sunucu → İstemci ----
@@ -473,6 +484,9 @@ namespace VortexArena.Protocol
         /// <summary>Bir sonraki maçın ortak parametreleri; 0 = hiç seçilmedi (mod varsayılanı).</summary>
         public int roundSeconds;
         public int scoreLimit;
+
+        /// <summary>Geri sayım uzunluğu (sn); 0 = hiç seçilmedi (COUNTDOWN_SECONDS).</summary>
+        public int countdownSeconds;
 
         public string notice;
         public int adminCount;

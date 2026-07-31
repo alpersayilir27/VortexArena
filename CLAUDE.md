@@ -72,9 +72,9 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   (VortexArena.Net), `App/Scripts` (VortexArena.App — `Admin/` alt klasörü aynı asmdef'te:
   admin gözlemci; `UiKit.cs` arayüz paleti + EventSystem garantisi — görünüm prefablarda).
   Kod-dışı: `Arsenal/` (silah prefab+SO, `VA_WeaponFrame`),
-  `FX/`, `Environments/`, `Avatars/` (**`PlayerBodyAvatar.prefab`** — Mixamo Ch15 + Movement SDK
-  CharacterRetargeter'lı yerel gövde avatarı; retarget config JSON'u FBX'in yanında,
-  `ThirdPartyPackages/MixamoCharacters/`), `Data/` (**`Data/Resources/GameCatalog.asset`** —
+  `FX/`, `Environments/`, `Avatars/` (gövde avatarı modeli ve prefabları — yerel gövde
+  (`LocalBodyAvatar`) ile uzak avatarlar aynı modeli ve aynı sürücüyü (`ThreePointBodyIK`)
+  paylaşır), `Data/` (**`Data/Resources/GameCatalog.asset`** —
   admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ),
   `Scenes/` (Boot, Lobby),
   **`App/Resources/UI/`** (⚠️ **arayüzün TAMAMI burada, prefab olarak** — admin HUD'ı + tercihler
@@ -117,12 +117,12 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `BaseZone`×2 (**taban bölgesi** = kırmızı/mavi şerit; ölen oyuncu buraya girince canlanır,
   `Team.Neutral` = herkese açık) ve **altyapı prefabları** (`_Shared/App/Prefabs/`):
   **`VA_CameraRig`** (kamera rig'i + `OVRComprehensiveInteractionRig` + `ControllerModelHider`,
-  tracking origin `Stage`). ⚠️ **Yerel gövde avatarı YOKTUR ve rig'e geri eklenmez** — oyuncu
-  kendinden yalnız BB rig'inin ellerini görür (`OVRHandVisualLeft/Right`; kumanda modelleri ve
-  sentetik el kopyaları `ControllerModelHider` ile gizli). Movement SDK'nın retarget çıktısı
-  dünya uzayında olduğu için kalibre edilen rig'le çakışıyordu →
-  `Docs/Sistem-Ozeti.md` §7, "retarget avatarı hareket eden kökün altına konmaz" maddesi;
-  yerel kol görselinin doğru yolu `plan/yerel-kol-gorseli.md`.
+  tracking origin `Stage`). Oyuncu kendi gövdesini omuzlarından aşağı görür (`LocalBodyAvatar` —
+  kendini önyükleyen tekil, sahneye ve rig'e KONMAZ; `ThreePointBodyIK` ile sürülür); kumanda
+  modelleri ve Meta elleri `ControllerModelHider` ile **hiçbir yerde** çizilmez.
+  ⚠️ **Rig'e Movement SDK retarget avatarı asılmaz** — çıktısı dünya uzayında olduğu için kalibre
+  edilen rig'le çakışır → `Docs/Sistem-Ozeti.md` §7, "retarget avatarı hareket eden kökün altına
+  konmaz" maddesi.
   **`VA_PoseSync`** (`PlayerPoseTracker` + `RemotePlayerSpawner`),
   **`VA_CalibrationManager`** (`ArenaCalibrator`), **`VA_ModeHud`** (`ModeHudSpawner`).
   ⚠️ **Altyapı sahneye PREFAB ÖRNEĞİ olarak konur — kopyalanmaz, unpack edilmez:** kopya konursa
@@ -321,6 +321,11 @@ Sonra `FFA.asset` gibi bir `ModeDefinition` yaz (modId, süre/limit, kural alanl
 `IGameMode`'a yeni kanca eklerken **varsayılan gövde** kullan (default interface method) ve
 **tüketicisi olmayan kancayı hiç ekleme**; skor yalnız `MatchDirector` skor defterinden yazılır
 (`AddScore` takım / `AddPlayerScore` bireysel).
+**Tur tabanlı mod** (ör. `tournament`): `Phase` enum'unu BÜYÜTME — turlar modun iç durumudur.
+Çekirdeğin üç komutu yeter: `TryPauseForMode(modeState)` · `SetModeState` · `TryStartRound()`
+(→ `Docs/Sistem-Ozeti.md` §3.8.2). ⚠️ Tur başında oyuncuyu **`RevivePlayerLocked` ile** canlandır
+(`ResetMatchStateLocked` istemciye haber vermez → ölüm ekranında donar) ve "canlanma yok" kuralını
+**iki yolda birden** kapat (`revive_request` + `REVIVE_GRACE`).
 **Silah rafsız mod** (`weaponSource:"random"`, ör. FFA): sahnede ya da arenada **hiçbir iş yoktur**.
 `WeaponGranter` (`_Shared/Core/Combat/`) kendini önyükleyen kalıcı tekildir — kural
 `RandomGrant` olunca sahnedeki raf silahlarını ve taban bölgelerini gizler, grip'e basılı tutulan
