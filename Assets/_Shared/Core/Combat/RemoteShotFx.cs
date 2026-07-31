@@ -12,7 +12,7 @@ namespace VortexArena.Core.Combat
     /// <summary>
     /// Uzak oyuncuların atış sunumu: sunucunun 20 Hz batch'lediği olay kanalını
     /// (<c>NetEvents.OnRemoteFireEvent</c>, §6.4/6.5) dinler; namlu alevi + mekânsal ses oynatır
-    /// ve <see cref="ShotTracer"/> ile mermi izini çizer. Kendi atışımız buradan ASLA gelmez
+    /// ve <see cref="ShotTracer"/> ile mermi izini (çizgi + duman) çizer. Kendi atışımız buradan ASLA gelmez
     /// (kanal atanı süzer, §6.5); yerel atış FX'i Weapon/WeaponAudio'da kalır.
     /// <para>
     /// ⚠️ <b>Olayda namlu KONUMU yoktur</b> ve bu kasıtlıdır (§6.4 "Orijin neden gönderilmiyor"):
@@ -347,8 +347,8 @@ namespace VortexArena.Core.Combat
         // --------------------------------------------------------------------- tracer
 
         /// <summary>
-        /// Mermi izini çizer. <c>magnitude</c> KIND_SHOT'ta vuruş MESAFESİDİR (metre), bu yüzden
-        /// bitiş noktası <c>origin + yön × mesafe</c>'dir (§6.4).
+        /// Mermi izini (çizgi + yol boyunca duman) çizer. <c>magnitude</c> KIND_SHOT'ta vuruş
+        /// MESAFESİDİR (metre), bu yüzden bitiş noktası <c>origin + yön × mesafe</c>'dir (§6.4).
         /// <para>⚠️ Her mermiye çizilmez: <c>TracerEveryNthRound</c> oyuncu BAŞINA sayaçla
         /// uygulanır — sayaç paylaşılsa yoğun ateşte tracer'lar rastgele oyunculara dağılır ve
         /// "kim ateş ediyor" okunaksız olurdu.</para>
@@ -370,6 +370,8 @@ namespace VortexArena.Core.Combat
 
             // Havuz atanın kendi iziyle PAYLAŞILIR (ShotTracer.Shared): yerel ve uzak izlerin
             // görünümü zaten aynı kaynaktan (ItemDefinition) geliyor, havuzu da bölmenin sebebi yok.
+            // Duman izi de bu tek çağrının içinde yayılır — ayrı bir adım YOKTUR (ShotTracer sınıf
+            // özeti: iki çağırandan birinin dumanı unutması böylece imkânsız).
             ShotTracer.Shared.Play(
                 origin,
                 origin + worldDir * distanceMeters,

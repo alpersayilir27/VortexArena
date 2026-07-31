@@ -3,8 +3,7 @@
     "rootNamespace": "VortexArena.Net.Editor",
     "references": [
         "VortexArena.Net",
-        "VortexArena.Protocol",
-        "VortexArena.Core"
+        "VortexArena.Protocol"
     ],
     "includePlatforms": [
         "Editor"

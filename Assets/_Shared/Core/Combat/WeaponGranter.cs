@@ -49,6 +49,23 @@ namespace VortexArena.Core.Combat
 
         public static WeaponGranter Instance { get; private set; }
 
+#if UNITY_EDITOR
+        /// <summary>
+        /// <b>YALNIZ editör (dev sandbox):</b> loadout'tan rastgele değil <b>SIRAYLA</b> dağıt —
+        /// grip'e her basışta bir sonraki silah. Bütün silahları tek tek gözden geçirmek
+        /// (duruş, namlu, ses) rastgelelikte bir tesadüf oyununa dönüşüyordu.
+        /// <para>
+        /// ⚠️ <b>Üretim davranışı DEĞİŞMEZ</b>: bu bayrağı yalnız <c>DevSession</c> yazar, build'e
+        /// hiç girmez ve mod kuralı (<see cref="ModeWeaponSource.RandomGrant"/>) rastgele kalır —
+        /// rastgelelik FFA'da bir oyun tasarımı kararıdır, test kolaylığı için bozulmaz.
+        /// </para>
+        /// </summary>
+        public static bool SequentialGrant { get; set; }
+
+        /// <summary>Sıralı dağıtımın imleci; ilk grip'te loadout'un İLK silahı gelsin diye -1.</summary>
+        private int _sequentialIndex = -1;
+#endif
+
         /// <summary>Sol/sağ elde duran TEK KULLANIMLIK silah örneği (yoksa null).</summary>
         private Weapon _grantedLeft;
         private Weapon _grantedRight;
@@ -361,12 +378,12 @@ namespace VortexArena.Core.Combat
             granted = Grant(hand, anchor);
         }
 
-        /// <summary>Loadout'tan rastgele bir silahı el anchor'ının altına örnekler.
+        /// <summary>Loadout'tan bir silahı el anchor'ının altına örnekler.
         /// <para>Ard arda aynı silahın gelmesi ENGELLENMEZ: iki silahlık bir havuzda "asla aynısı
         /// gelmesin" kuralı rastgeleliği sırayla-dağıtıma çevirirdi.</para></summary>
         private Weapon Grant(OVRInput.Controller hand, Transform anchor)
         {
-            WeaponDefinition definition = PickRandom();
+            WeaponDefinition definition = PickFromLoadout();
             if (definition == null || definition.Prefab == null)
             {
                 WarnMissingLoadout(definition);
@@ -390,6 +407,9 @@ namespace VortexArena.Core.Combat
             }
 
             DetachFromPhysicsAndGrab(instance);
+
+            // Çerçeveyi burada kapatmaya gerek YOK: WeaponFrame silahın `HeldChanged`'ini dinliyor
+            // ve aşağıdaki GrantTo onu tetikliyor — kural tek yerde yaşasın.
             weapon.GrantTo(hand, WeaponGrantKind.Disposable);
             return weapon;
         }
@@ -435,7 +455,11 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        private WeaponDefinition PickRandom()
+        /// <summary>
+        /// Aktif modun loadout'undan bir silah seçer (prefabı olmayan tanımlar havuza girmez).
+        /// Normalde RASTGELE; dev sandbox'ta <see cref="SequentialGrant"/> ile SIRAYLA.
+        /// </summary>
+        private WeaponDefinition PickFromLoadout()
         {
             _pool.Clear();
 
@@ -455,7 +479,22 @@ namespace VortexArena.Core.Combat
                 }
             }
 
-            return _pool.Count == 0 ? null : _pool[Random.Range(0, _pool.Count)];
+            if (_pool.Count == 0)
+            {
+                return null;
+            }
+
+#if UNITY_EDITOR
+            if (SequentialGrant)
+            {
+                // İmleç havuz uzunluğuna göre sarılır; havuz iki Play arasında değişse bile
+                // (moda silah eklendi) indeks aralık dışına düşmez.
+                _sequentialIndex = (_sequentialIndex + 1) % _pool.Count;
+                return _pool[_sequentialIndex];
+            }
+#endif
+
+            return _pool[Random.Range(0, _pool.Count)];
         }
 
         private void WarnMissingLoadout(WeaponDefinition definition)

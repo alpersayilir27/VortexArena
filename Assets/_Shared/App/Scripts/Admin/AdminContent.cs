@@ -153,12 +153,32 @@ namespace VortexArena.App.Admin
             return best;
         }
 
+        /// <summary>
+        /// Bu sahne bir <b>lobi</b> sahnesi mi (katalogdan sorulur).
+        /// <para>
+        /// ⚠️ Ölçüt <see cref="ResolveLobbyMap"/>'in seçtiği sahneyle KARŞILAŞTIRMA değildir:
+        /// o mekan süzgecine bağlıdır ve süzgeç gelmeden önce (ilk <c>admin_state</c>'e kadar)
+        /// başka bir işletmenin lobisini gösterebilir. Burada katalogdaki tanıma bakılır, yani
+        /// cevap bağlantı durumundan bağımsız olarak doğrudur.
+        /// </para>
+        /// </summary>
+        public static bool IsLobbyScene(string sceneName)
+        {
+            MapDefinition map = Catalog != null ? Catalog.FindMap(sceneName) : null;
+            return map != null && IsLobbyMap(map);
+        }
+
         /// <summary>Harita lobi haritası mı: desteklediği TEK mod <c>lobby</c> ise. Listenin boş
         /// olması "kısıtsız" demektir (<see cref="MapDefinition.SupportsMode"/>), yani lobi
         /// değildir — arena sanılıp maç açılabilsin diye değil, tam tersi: kısıtsız harita her
         /// modda oynanır, lobi ise hiçbirinde.</summary>
-        private static bool IsLobbyMap(MapDefinition map)
+        public static bool IsLobbyMap(MapDefinition map)
         {
+            if (map == null)
+            {
+                return false;
+            }
+
             string[] modes = map.SupportedModeIds;
             return modes != null && modes.Length == 1 &&
                    string.Equals(modes[0], ArenaProtocol.LOBBY_MODE_ID,
