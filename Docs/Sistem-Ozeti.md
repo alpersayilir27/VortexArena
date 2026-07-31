@@ -401,27 +401,42 @@ de odur (§3.8.2).
 ### 3.8.2 Tur tabanlı modlar — çekirdek TUR diye bir şey bilmez
 
 `tournament` bir maçı **turlara** böler ama `Phase` enum'u bunun için büyümedi. Turun tamamı
-`TournamentMode` içinde yaşar; çekirdek yalnız üç yetenek sunar ve hiçbirini yorumlamaz:
+`TournamentMode` içinde yaşar; çekirdek yalnız dört yetenek sunar ve hiçbirini yorumlamaz:
 
 | Çekirdek API | İş |
 |---|---|
 | `TryPauseForMode(modeState)` | `playing` → `paused`/`mode`; süre 0'lanır, `ready` bayrakları temizlenir |
 | `SetModeState(modeState)` | Ara durumu yazar, **yalnız değiştiyse** `match_state` yayınlar |
 | `TryStartRound()` | `paused`/`mode` → geri sayım → `playing` (çekirdeğin normal yolu) |
+| `TryCancelCountdownForMode(modeState)` | Geri sayımı geri alır: `paused`/`countdown` → `paused`/`mode` |
 
 Akış: tur `playing`'de koşar → mod turu bitirir (eleme ya da süre) → maç bitmediyse
 `paused`/`mode` + `modeState:"regroup:2/6"` → herkes kendi tabanına yürüyüp `set_ready{true}`
-yollar → geri sayım → yeni tur.
+yollar → geri sayım → yeni tur. **Geri sayım geri alınabilir:** biri tabanından çıkıp bayrağını
+düşürürse mod geri sayımı iptal eder ve toplanmaya döner. Kural "tabanda **bekle**"dir, "tabana
+uğra" değil — şart girişte bir kez değil, tur açılana kadar **sürekli** ölçülür.
 
-Üç şey bunu mümkün kılıyor ve üçü de **zaten vardı**:
+Dört şey bunu mümkün kılıyor ve ilk üçü **zaten vardı**:
 
 1. **`phaseReason:"mode"`** — duraklamanın sahibi mod. `resume_match` onu kaldıramaz (§3.8), yani
    operatör modun ara durumunu kazara bozamaz.
 2. **`set_ready` bayrağı** — yükleme kapısında zaten "hazırım" demek. Toplanma kapısı onu yeniden
    kullanır; **yeni protokol mesajı yok**. "Tabanda mıyım" kararı istemcinindir (§3.7 felsefesi),
    sunucunun emniyeti kendi zaman aşımıdır (60 sn).
-3. **Mod tik'i duraklamada da koşar** — ama yalnız `paused`/`mode`'da. Operatör duraklatmasında
-   (`operator`) mod tik ALMAZ: donmuş maç donmuş kalır.
+3. **Mod tik'i duraklamada da koşar** — `paused`/`mode` **ve** `paused`/`countdown`'da. Operatör
+   duraklatmasında (`operator`) mod tik ALMAZ: donmuş maç donmuş kalır.
+4. **Mod kendi aşamasını hatırlar** (`RoundStage`). `phaseReason` yetmiyor: maçın ilk geri sayımı
+   da `paused`/`countdown`'dur ama toplanmadan gelmez, orada iptal edilecek bir şey yoktur.
+   Aynı ayrımı istemci de kendi tarafında yapar (raporlayıcı yalnız toplanmadan gelen geri sayımda
+   çalışır). Çekirdeğin `PauseReason`'ını dışarı açmak ikinci bir okuma yolu olurdu.
+
+⚠️ **`TryStartRound` `ready` bayraklarını TEMİZLEMEZ.** Toplanmada o bayrak "şu anda tabanımdayım"
+demektir ve geri sayım boyunca canlı kalması gerekir — iptal kararının tek dayanağı odur.
+Temizleyen tek yer toplanmanın **başıdır** (`TryPauseForMode`).
+
+⚠️ **Emniyet zaman aşımı turun bittiği andan işler ve iptaller onu sıfırlamaz.** Sıfırlasaydı
+sürekli girip çıkan tek bir oyuncu maçı süresiz askıda tutabilirdi; şimdi 60 sn dolduğunda tur
+"zaman aşımı" kipinde başlar ve o geri sayım artık iptal edilmez.
 
 ⚠️ **Tur başında sunucu herkese `health_update` yollar** (`RevivePlayerLocked`). Sunucu içi
 alanları sessizce sıfırlamak yetmez: maç içi tur geçişinde `load_match` yoktur, yani istemcinin
@@ -888,7 +903,7 @@ geometrisini üreten iki araç + kavrama ayarı:
 | `StateHost` | UDP kaydı, poz alımı, 20 Hz snapshot yayını (16 girdiden fazlası MTU'ya sığan parçalara bölünür; olay varsa ve sığıyorsa `0x05` ile tek datagramda birleşir), `0x06` RTT echo'su. **Telemetriyi burada üretir:** saniyelik `[state]` satırı — gerçek bayt-sn/paket-sn, tik kayması, uplink jitter + poz/olay kaybı; eşiği aşan oyuncu için ek `[net]` satırı |
 | `PlayerRegistry` | Oyuncu listesi, `playerId` tahsisi (1..255), `devices.json` ile kalıcı **kimlik** (ad + forma numarası), çevrimiçi/çevrimdışı. **Kimlik:** ilk bağlantıda ad 20'lik havuzdan rastgele (kullanılmayanlar arasından), numara 1'den itibaren ilk boş (1..99); `set_identity` ikisini de değiştirir. Adlar tekrar edebilir, **numara tüm KAYITLI cihazlar arasında benzersizdir** — sahiplik sorgusu `_players`'a değil `_devices`'a bakar (hiç bağlanmamış cihaz da numara tutar). Çevrimiçi sahipten numara istenirse reddedilir; çevrimdışı sahip **aynı anda** yeniden numaralanır. **Rol başına kalıcılık farkı:** oyuncu kaydı kopunca Offline işaretlenir ama DURUR (deviceId kalıcı); **admin kaydı tümüyle SİLİNİR** (deviceId oturumluk — yoksa her açıp kapatma roster'da hayalet satır ve tükenen playerId bırakırdı) ve admin adı diske yazılmaz. Aynı PC'de iki admin varsa ad " (2)" ile ayrıştırılır. **Atma bunun istisnasıdır** (`RemoveByPlayerId`): oyuncu kaydı da silinir — kopma "çevrimdışı" bırakır, atma bırakmaz; `devices.json`'a dokunulmaz, yani atılan cihaz geri bağlanırsa adını/numarasını korur (§5.4) |
 | `LobbyService` | Roster yayını (`lobby_state`) — **tek yayıncı döngüden**, kirli bayrakla birleştirilerek, her yayında `version` artarak (Tuzaklar: "ateşle-unut yayın sıra garantisi vermez"); `status.rosterVersion` geride kalan istemciye yalnız ona tam snapshot yollatır. Ayrıca ready/takım/kick/`set_identity` + **adminler arası ortak durumun sahibi**: mod/harita seçimi burada yaşar, `set_selection` ile değişir, `admin_state` ile yalnız adminlere yayılır. Her admin komutu "kim ne yaptı" duyurusu üretir |
-| `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş hattı, can/skor, canlanma, zorla canlandırma.** Mod kaydı tek yerde (`RegisterModes()` — yeni mod buraya bir satır). **Skor defteri:** `AddScore(team,…)` (takım) + `AddPlayerScore/ScoreOf/TryGetLeader` (bireysel); modlar skoru YALNIZ buradan yazar. **Mod komutları** (§3.8.2): `TryPauseForMode` / `SetModeState` / `TryStartRound` — modun fazı doğrudan yazmasını (ikinci otorite) ve kendi mesajını yollamasını (ikinci gönderici) gereksiz kılar |
+| `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş hattı, can/skor, canlanma, zorla canlandırma.** Mod kaydı tek yerde (`RegisterModes()` — yeni mod buraya bir satır). **Skor defteri:** `AddScore(team,…)` (takım) + `AddPlayerScore/ScoreOf/TryGetLeader` (bireysel); modlar skoru YALNIZ buradan yazar. **Mod komutları** (§3.8.2): `TryPauseForMode` / `SetModeState` / `TryStartRound` / `TryCancelCountdownForMode` — modun fazı doğrudan yazmasını (ikinci otorite) ve kendi mesajını yollamasını (ikinci gönderici) gereksiz kılar |
 | `MapTable` | `maps.json` (Unity export'undan) — sunucunun okuduğu tek içerik tablosu. Girdi başına yalnız `sceneName` + `modes`; **arena ÖLÇÜSÜ yoktur** (sunucu metre kullanmaz, §7.30) |
 | `Modes/IGameMode` + `TdmMode` + `FfaMode` | Mod kuralları: skor, kazanma koşulu, tur süresi. Yeni kancalar **varsayılan gövdeyle** eklenir (default interface method) → mevcut modların hiçbiri değişmez; **tüketicisi olmayan kanca EKLENMEZ**. `FfaMode` yüzeyin ilk tüketicisidir: takımsız + bireysel skor + sabit durma canlanması, `MatchDirector`'a tek satır kayıt dışında hiçbir dokunuş yok. `OnRoundStart` ikinci örnektir: Live'a HER girişte çağrılır, tur kavramı olmayan modlar hiç yazmaz |
 | `Modes/TournamentMode` | **Tur tabanlı takım elemesi** (§3.8.2). Kural olarak TDM'den tek farkı `Revive = None`'dır; turun tamamı bu sınıfın iç durumudur (`_round`, `_roundLive`, `_matchOver`). Eleme `OnKill`'de değil **`OnTick` taramasında** ölçülür — takım bağlantı kopmasıyla da boşalır ve o yolda `OnKill` çağrılmaz; tek tarama tek doğruluk kaynağıdır. Süre dolunca **savaşabilir** (canlı **ve** kalibreli) sayısı fazla olan tur alır, eşitse kimseye puan yok. Toplanma kapısı `set_ready` bayrağını yeniden kullanır ve 60 sn emniyet zaman aşımı vardır (bu bir mod kuralıdır, protokol sabiti değil). ⚠️ `IsMatchOver`'da `TimeRemaining <= 0` dalı YOKTUR: bu modda o sayaç **turun**dur |
@@ -1705,9 +1720,9 @@ konsoluna tek satır sebep yazar.
     yok" kuralını 20 saniyelik bir gecikmeye çevirirdi — kural işlemez, hata da vermezdi. Aynı tuzağa
     kalibrasyon yasağında bir kez düşülmüştü (§3.7).
 69. **Aynı değeri tekrar tekrar yazan bir bayrak, yayın tetikliyorsa fan-out'a dönüşür.**
-    `PlayerRegistry.SetReady` her çağrıda `Changed` yayınlıyordu → her çağrı bir TAM `lobby_state`
-    broadcast'i. Toplanma kapısı bu bayrağı yeniden kullanınca (§3.8.2) periyodik "tabandayım"
-    bildirimleri roster'ı saniyede birkaç kez herkese yollardı. İki taraflı düzeltildi: registry
+    `PlayerRegistry.SetReady` koşulsuz `Changed` yayınlasa her çağrı bir TAM `lobby_state`
+    broadcast'i olurdu; toplanma kapısı bu bayrağı yeniden kullandığı için (§3.8.2) "tabandayım"
+    bildirimleri roster'ı saniyede birkaç kez herkese yollardı. Kural iki taraflıdır: registry
     **değişmediyse yayınlamaz**, istemci de yalnız **kenarda** gönderir. Soru her zaman "kaç bayt"
     değil **"kaç datagram"**dır (§3.12).
 70. **Mod kancaları `await` edemez — kancadan mesaj yollamak sıra bozar.** `IGameMode.OnTick`
@@ -1715,6 +1730,23 @@ konsoluna tek satır sebep yazar.
     ihlali) ya da ateşle-unut bir `Task` bırakır — ikincisinde iki gönderim yarışır ve WebSocket'e
     ters sırada düşebilir. Çözüm: kanca mesajı **kilit altında bir bekleyen kutuya** yazar, tik
     döngüsü kanca dönüşünde yollar. Tek gönderici kalır, sıra korunur.
+71. **Elle yazılan bir asset referansı, Unity'nin ürettiği `.meta` GUID'iyle tutmuyorsa SESSİZCE
+    null olur.** Bir `.asset`/`.prefab` metin olarak (editör dışından) üretildiğinde `.meta`'yı
+    Unity yazar ve **kendi rastgele GUID'ini** verir; ona elle yazılmış `guid:` referansları
+    (katalog satırı, `hudPrefab` alanı) o an kırılır. Kırık referans hata basmaz — alan yalnızca
+    boş görünür. En pahalı biçimi **prefab referansı**dır: prefab bulunamayınca örneklenmez, onunla
+    birlikte köküne asılı bileşenler de hiç doğmaz — yani bozulan tek bir alan değil, o bileşenin
+    taşıdığı bütün davranıştır ve hiçbir yerde hata görünmez.
+    **Kural:** asset'i metin olarak üretiyorsan referansı yazmadan ÖNCE hedefin `.meta`'sındaki
+    gerçek GUID'i oku; işin sonunda üretilen dosyalardaki her `guid:`'i projedeki `.meta`'larla
+    karşılaştır (çözülmeyen varsa iş bitmemiştir). Editörde sürükleyip bırakmak bu tuzağı hiç
+    doğurmaz — elle GUID yazmak yalnız editör kapalıyken bir çaredir, varsayılan yol değildir.
+72. **Bir şartı "girişte bir kez" ölçmek, şartı sürdürmez.** Girişte ölçülen bir kapı, oyuncunun
+    koşulu bir saniye sağlayıp bırakmasına açıktır — turnuvada bu "tabana değip kaç, turu sahanın
+    ortasında karşıla" demek olurdu. Kapıyı açan koşul kararın **yürürlüğe girmesine kadar**
+    ölçülmeli ve bozulursa karar geri alınabilmeli (`TryCancelCountdownForMode`). Bunun kaçınılmaz
+    ikinci yarısı: kapının dayandığı bayrak (`ready`) o pencere boyunca **temizlenmez**, yoksa geri
+    alma kararının dayanağı kalmaz.
 
 ---
 
