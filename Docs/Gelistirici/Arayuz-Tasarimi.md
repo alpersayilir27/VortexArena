@@ -21,6 +21,8 @@ Tüm arayüz prefabları **tek klasörde**: `Assets/_Shared/App/Resources/UI/`
 | **`AdminPlayerMarker.prefab`** | Oyuncunun zemindeki halkası + ad etiketi (dünya uzayı) | `AdminPlayerMarkers` örnekler |
 | **`ConnectionOverlayScreen.prefab`** | Bağlantı hata ekranı — masaüstü (scrim + "Yeniden Bağlan" düğmesi) | `ConnectionOverlay` |
 | **`ConnectionOverlayWorld.prefab`** | Bağlantı hata ekranı — VR (world-space kart, düğmesiz) | `ConnectionOverlay` |
+| **`LoadingOverlayScreen.prefab`** | Sahne geçişi yükleme ekranı — masaüstü (scrim + kart + ilerleme barı) | `LoadingOverlay` |
+| **`LoadingOverlayWorld.prefab`** | Sahne geçişi yükleme ekranı — VR (world-space kart, **scrim YOK**) | `LoadingOverlay` |
 | **`AmmoHud.prefab`** | VR'da sağ altta cephane göstergesi | `AmmoHud` |
 | **`IdentifyDisplay.prefab`** | `identify` komutunda göz hizasında beliren "SEN BUSUN" kartı | `IdentifyOverlay` |
 
@@ -85,8 +87,17 @@ Ayrıca birkaç teknik not:
 - **`ConnectionOverlay`'in iki varyantı ayrı prefabtır** ve farklı alanları dolu olur:
   masaüstü varyantında `_hudFollow` boştur, VR varyantında `_reconnectButton`/`_reconnectLabel`
   boştur (VR'da düğme yoktur, yerine A×2 ipucu vardır). **Bu boşluklar normaldir, doldurmayın.**
-- **`AdminHud`'ın `sortingOrder`'ı 4000, bağlantı ekranınınki 5000.** Bu sıra bilinçlidir:
-  bağlantı hatası HUD'ın üstünü kaplamalı. Canvas bileşeninde değiştirmeyin.
+- **`LoadingOverlay` de iki varyattır** ve aynı kural geçerlidir: masaüstü varyantında `_hudFollow`
+  boştur, VR varyantında **scrim objesi hiç yoktur**. Scrim'i VR prefabına EKLEMEYİN — oyuncu
+  fiziksel alanda yürüyor, görüşü karartmak tehlikelidir (`ConnectionOverlayWorld` ile aynı
+  gerekçe). Kart üstündeki `Title` ve `Hint` metinleri **sabittir** (kod onlara dokunmaz);
+  `SceneLine`, `Percent` ve barın `Fill`'i çalışırken sürülür.
+- **İlerleme barının `Fill`'ine dokunurken:** dolum `anchorMax.x` ile sürülür
+  (`UiKit.SetBarFill` deseni). Pivot `(0, 0.5)` ve offsetler 0 kalmalı; `Fill`'i ortalarsanız ya da
+  `Image.Type`'ını `Filled` yaparsanız bar sessizce hep boş görünür.
+- **`AdminHud`'ın `sortingOrder`'ı 4000, yükleme ekranınınki 4500, bağlantı ekranınınki 5000.**
+  Bu sıra bilinçlidir: yükleme HUD'ın üstünü, bağlantı hatası ise her şeyin üstünü kaplamalı.
+  Canvas bileşeninde değiştirmeyin.
 
 ## Renk paleti
 

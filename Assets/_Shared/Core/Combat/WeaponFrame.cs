@@ -9,6 +9,9 @@ namespace VortexArena.Core.Combat
     /// oyuncu ≤<see cref="maxGrabDistance"/> m'den kumandayla nişan alıp grip'e basınca silahın bir
     /// KLONU eline gelir (klonu <see cref="WeaponGranter"/> üretir ve yönetir).
     /// <para>
+    /// <b>Yalnız sabit duran silahta vardır:</b> silah hangi yoldan tutulursa tutulsun (verildi ya
+    /// da kavrandı) çerçeve kapanır, bırakılınca geri gelir — <see cref="HandleHeldChanged"/>.
+    /// <para>
     /// <c>VA_WeaponFrame</c> prefabının KÖKÜNDE durur ve o prefab her <c>WPN_*</c> prefabının
     /// ÇOCUĞU olarak bulunur. ⚠️ Temsil ettiği silahı <b>parent'ından</b> okur
     /// (<c>GetComponentInParent&lt;Weapon&gt;()</c> → <see cref="Weapon.Definition"/>); çerçevede
@@ -106,6 +109,12 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // Çerçeve YALNIZ sahnede sabit duran silaha aittir (bkz. HandleHeldChanged).
+            // ⚠️ Abonelik Awake/OnDestroy'da kurulur, OnEnable/OnDisable'da DEĞİL: bu işleyici
+            // çerçevenin kendi GameObject'ini kapatıyor — OnDisable'da abonelikten çıksaydı
+            // "silah bırakıldı" sinyalini hiç duymaz ve çerçeve bir daha geri gelmezdi.
+            _weapon.HeldChanged += HandleHeldChanged;
+
             if (distanceGrab == null)
             {
                 distanceGrab = GetComponent<DistanceGrabInteractable>();
@@ -150,11 +159,36 @@ namespace VortexArena.Core.Combat
 
         private void OnDestroy()
         {
+            if (_weapon != null)
+            {
+                _weapon.HeldChanged -= HandleHeldChanged;
+            }
+
             if (_lineMaterial != null)
             {
                 Destroy(_lineMaterial);
                 _lineMaterial = null;
             }
+        }
+
+        /// <summary>
+        /// <b>Çerçeve yalnız silah sahnede SABİT dururken vardır.</b> Silah hangi yoldan tutulursa
+        /// tutulsun (ele verildi — <see cref="Weapon.GrantTo"/>, ya da ISDK ile kavrandı) çerçeve
+        /// kapanır; bırakılınca geri gelir.
+        /// <para>
+        /// Kural <see cref="Weapon.HeldChanged"/>'e bağlıdır, çağrı noktalarına değil: "silahı ele
+        /// alan" birden çok yol var (<see cref="WeaponGranter"/>'ın iki kipi + doğrudan kavrama) ve
+        /// her birine ayrı ayrı "çerçeveyi de kapat" eklemek, yeni bir yol açıldığında sessizce
+        /// unutulacak bir adım demekti.
+        /// </para>
+        /// <para>
+        /// ⚠️ Yok etmek DEĞİL kapatmak: aynı örnek bırakıldığında çerçevesiyle geri dönmeli.
+        /// Kapatma <c>OnDisable</c> üzerinden nişan ışınlarını ve ISDK aboneliğini de toplar.
+        /// </para>
+        /// </summary>
+        private void HandleHeldChanged(bool held)
+        {
+            gameObject.SetActive(!held);
         }
 
         private void Update()

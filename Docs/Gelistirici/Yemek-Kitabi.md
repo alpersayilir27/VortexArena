@@ -429,6 +429,13 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 > ⚠️ Görünürlük **yalnız sunumdur.** Çerçeve görünmez olsa bile silah yine oradan, ≤2 m'den
 > nişan alınarak seçilir ve ele klonlanır; alma menzilini ya da kavramayı kapatmaz.
 
+> **Çerçeve yalnız silah SABİT dururken vardır.** Silah hangi yoldan tutulursa tutulsun — ele
+> verildi (`WeaponGranter`) ya da doğrudan kavrandı (ISDK) — çerçevenin GameObject'i kapanır;
+> bırakılınca geri gelir. Yani elde duran silahta ne çerçeve görseli, ne nişan ışını, ne de
+> uzaktan seçim kapısı olur. Bu `isFrameVisible` ile ilgisizdir ve elle kurulum istemez:
+> `WeaponFrame` silahın `Weapon.HeldChanged` olayını dinler. Yeni bir "silahı ele alma" yolu
+> yazarsan o yola ayrıca bir şey eklemene gerek YOKTUR — kural olayda durur.
+
 ---
 
 ## 12. Kendi HUD'ını yazmak
@@ -565,7 +572,7 @@ Boyut dosyasının biçimi, elle yazma ve yeniden üretme →
 | Düğme | Ne yapar |
 |---|---|
 | **Rol** | player / admin — sahne kirletmeden, `EditorPrefs`'te kişisel kalır |
-| **Sunucusuz sandbox** | Sunucuya hiç bağlanmadan, silahlar elde/rafta Play — aşağı bak |
+| **Sunucusuz sandbox** | Sunucuya hiç bağlanmadan Play; silahlar loadout'tan sırayla ele gelir — aşağı bak |
 | **Hedef** | Sunucu adresi (`dev-targets.json`'dan gelir: Local, Keşif, örnek PC) |
 | **Play başlangıcı** | Boot'tan mı, açık sahneden mi |
 
@@ -579,15 +586,24 @@ Silah duruşu, namlu alevi, kavrama soketi, ses gibi **tümüyle yerel** şeyler
 açmak, admin'den harita seçmek ve elle kalibrasyon almak gerekmez:
 
 1. Test edeceğin arena (ya da mekan lobisi) sahnesini aç.
-2. Dev penceresi → **Sunucusuz sandbox** işaretle (başlangıcı otomatik "Açık sahneden" yapar),
-   **mod** ve **silah kaynağını** (Raf / Rastgele) seç.
-3. Play.
+2. Dev penceresi → **Sunucusuz sandbox** işaretle (başlangıcı otomatik "Açık sahneden" yapar) ve
+   **mod**'u seç — silahlar o modun `loadout`'undan gelir.
+3. Play. Grip'e bas: silah elde. **Bırakıp tekrar bas: loadout'un bir sonraki silahı.**
 
-Silahlar gelir ve ateş edilebilir. Sebebi: sunucuya hiç bağlanılmadığı için kalibrasyon kapısı
+Böylece bütün silahları tek turda gözden geçirebilirsin (duruş, namlu, ses, kovan). Sıra
+loadout sırasıdır ve başa sarar; rastgelelik burada bilerek kapalıdır — üretimdeki
+`RandomGrant` davranışı DEĞİŞMEZ, bayrak (`WeaponGranter.SequentialGrant`) yalnız editörde
+vardır ve yalnız sandbox yazar.
+
+Silahların gelip ateş edebilmesinin sebebi: sunucuya hiç bağlanılmadığı için kalibrasyon kapısı
 zaten açıktır (`CalibrationState.IsCalibrated` = `!_hasEverConnected`) ve `ArenaCombat` UDP
 kanalı yokken sessiz no-op'tur; kapalı kalan iki kapıyı `DevSession` tek `ModeRuntime.Apply`
-çağrısıyla açar — `modeId` (**silah loadout'u buradan okunur**, onsuz raf boş doğar) ve
+çağrısıyla açar — `modeId` (**silah loadout'u buradan okunur**, onsuz silah gelmez) ve
 `fireWhilePaused` (faz sunucusuz `paused` kaldığı için tetiği açan tek şey).
+
+> Çerçeve (`WeaponFrame`) yolu sandbox'ta kullanılmaz: amaç silahı uzaktan seçmek değil, hemen
+> ele almak. Zaten **ele alınan her silahta çerçeve kapanır** — bu sandbox'a özel değil, genel
+> kuraldır (bkz. bu dosyada çerçeve bölümü).
 
 > ⚠️ **Sandbox bir maç DEĞİLDİR:** hasar, skor, faz, canlanma yoktur (üçünün de otoritesi
 > sunucudadır) ve takım/skor/canlanma kuralları `ModeRulesInfo` varsayılanında kalır. Maç

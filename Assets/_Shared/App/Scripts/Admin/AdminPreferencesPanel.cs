@@ -35,9 +35,17 @@ namespace VortexArena.App.Admin
     /// </para>
     /// <para>
     /// <b>Lobi ayrı bir düğme değil, harita seçicisinin ilk satırıdır</b> (<see cref="LobbyRowLabel"/>):
-    /// seçilince <c>set_selection</c> değil <c>return_to_lobby</c> gider ve imleç orada kalmaz —
-    /// satır bir menü eylemidir, "bir sonraki maçın haritası" değil. Aynı kilit ona da uygulanır,
+    /// seçilince <c>set_selection</c> değil <c>return_to_lobby</c> gider. Aynı kilit ona da uygulanır,
     /// yani kurulmuş bir maçı lobiye çevirmenin yolu İPTAL'dir (sunucuda ikisi de aynı iştir).
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Harita seçicisinin imleci ORTAK SEÇİMİ değil AÇIK SAHNEYİ izler</b>
+    /// (<see cref="ApplyOpenScene"/>). İkisi ayrışır: maç bitip ya da lobiye dönülüp herkes lobiye
+    /// alındığında sunucudaki ortak seçim hâlâ son arenayı gösterir, açık sahne ise lobidir. İmleç
+    /// ortak seçime bağlanırsa seçici o arenayı gösterirken lobi açık olur — ve operatör <b>o
+    /// arenaya geri dönemez</b>: <see cref="TMP_Dropdown"/> seçili satıra tıklamayı olay saymaz
+    /// (<c>value == m_Value</c> iken <c>onValueChanged</c> hiç ateşlenmez), yani sahneleme komutu
+    /// hiç gönderilemez. Aynı sebeple seçicide <b>"zaten seçili" erken çıkışı yoktur</b>.
     /// </para>
     /// <para>
     /// <b>Liste seçimi dropdown, sayı adımlayıcı:</b> mod/harita gibi <b>liste tabanlı</b> seçimler
@@ -296,6 +304,12 @@ namespace VortexArena.App.Admin
             NetEvents.OnReturnToLobby += HandleOpenSceneChanged;
             NetEvents.OnLoadMatch += HandleOpenSceneChanged;
 
+            // Bağlanma/yeniden bağlanma: welcome açık sahneyi taşır. Gerekli, çünkü panel sonradan
+            // bağlanan bir admin'de sahne komutlarını KAÇIRMIŞ olur — maç bitip lobiye dönülmüş bir
+            // sunucuya bağlanan operatör, ortak seçim hâlâ son arenayı gösterdiği için seçicide o
+            // arenayı görür ve onu tekrar seçemezdi (seçili satır olay üretmez).
+            NetEvents.OnConnected += HandleWelcome;
+
             // Faz değişimi harita/mod seçicilerini kilitleyip açıyor (§10.7) — maç başlayınca
             // düğmeler bir sonraki tıklamayı beklemeden pasifleşmeli.
             if (AdminRoster.Instance != null)
@@ -312,6 +326,7 @@ namespace VortexArena.App.Admin
             AdminSelection.Changed -= HandleSharedSelectionChanged;
             NetEvents.OnReturnToLobby -= HandleOpenSceneChanged;
             NetEvents.OnLoadMatch -= HandleOpenSceneChanged;
+            NetEvents.OnConnected -= HandleWelcome;
 
             if (AdminRoster.Instance != null)
             {
@@ -363,18 +378,78 @@ namespace VortexArena.App.Admin
         /// <summary>Sunucu sahne komutu yolladı — açık sahne değişti (§10.7).</summary>
         private void HandleOpenSceneChanged(ReturnToLobbyMsg msg)
         {
-            _dirty = true;
+            ApplyOpenScene(msg != null ? msg.sceneName : "");
         }
 
         private void HandleOpenSceneChanged(LoadMatchMsg msg)
         {
+            ApplyOpenScene(msg != null ? msg.sceneName : "");
+        }
+
+        /// <summary>Bağlanıldı — <c>welcome</c> sunucunun o anki açık sahnesini taşır (§10.7).</summary>
+        private void HandleWelcome(WelcomeMsg msg)
+        {
+            ApplyOpenScene(msg != null && msg.match != null ? msg.match.sceneName : "");
+        }
+
+        /// <summary>
+        /// Harita seçicisinin imlecini sunucunun <b>AÇIK SAHNESİNE</b> taşır.
+        /// <para>
+        /// ⚠️ <b>Bu, ortak seçimden (<c>admin_state</c>) ayrı bir kaynaktır ve seçici için doğru
+        /// olanıdır.</b> İkisi ayrışır: maç bitip ya da lobiye dönülüp herkes lobiye alındığında
+        /// sunucudaki ortak seçim hâlâ son arenayı gösterir, açık sahne ise lobidir. İmleç ortak
+        /// seçime bağlansaydı seçici "Arena12x12" gösterirken lobi açık olurdu — ve operatör aynı
+        /// arenayı tekrar seçemezdi: <see cref="TMP_Dropdown"/> zaten <b>seçili satıra tıklamayı
+        /// olay saymaz</b> (<c>value == m_Value</c> ise <c>onValueChanged</c> hiç ateşlenmez), yani
+        /// sahneleme komutu hiç gönderilemezdi. Sunucu aynı arenayı tekrar sahnelemeyi bilerek
+        /// destekliyor (§10.7: ölçüt "seçim değişti mi" değil "açık sahne bu mu") — istemcinin de
+        /// bunu engellememesi gerekir.
+        /// </para>
+        /// <para>
+        /// Yerel iyimser önizleme (<see cref="PreviewSelectedMap"/>) buraya UĞRAMAZ
+        /// (<c>SceneRouter.LoadPreview</c> açık sahneyi değiştirmez), yani imleç sunucu onaylamadan
+        /// önce oynamaz ve geri sekmez.
+        /// </para>
+        /// </summary>
+        private void ApplyOpenScene(string sceneName)
+        {
             _dirty = true;
+
+            if (string.IsNullOrEmpty(sceneName))
+            {
+                return;
+            }
+
+            if (AdminContent.IsLobbyScene(sceneName))
+            {
+                _lobbyOpen = true;
+                return;
+            }
+
+            _lobbyOpen = false;
+
+            // Listede yoksa (başka bir modun arenası sahnelenmiş) imleç bırakılır — seçici boş
+            // kalmasın; hangi sahnenin açık olduğunu bölüm başlığı zaten yazar.
+            int index = IndexOfMap(sceneName);
+            if (index >= 0)
+            {
+                _mapIndex = index;
+            }
         }
 
         // ------------------------------------------------------------------ eylemler
 
+        /// <summary>Maçı başlatır. ⚠️ <b>Lobi açıkken reddedilir:</b> sahnelenmiş bir arena yoktur
+        /// ve sunucu lobi türünde maç başlatmaz (§10.7) — sessizce reddedilen bir komut yollamak
+        /// yerine sebebi durum satırına yazılır.</summary>
         private void StartMatch()
         {
+            if (_lobbyOpen)
+            {
+                AdminCommands.Note("Lobi açık — önce bir arena seç, sonra BAŞLAT.");
+                return;
+            }
+
             AdminCommands.StartMatch(SelectedModeId, SelectedSceneName, _roundSeconds, _scoreLimit);
         }
 
@@ -457,6 +532,7 @@ namespace VortexArena.App.Admin
 
             _modeIndex = index;
             RefreshMapList();
+            _lobbyOpen = false; // mod değişimi de bir arena sahneler (aşağıdaki PublishSelection)
             // Süre/limit her modun kendi varsayılanına döner: 10 dakikalık bir TDM ayarı,
             // 3 dakikalık olması gereken bir moda sessizce taşınmasın.
             ResetMatchParametersToModeDefaults();
@@ -534,11 +610,18 @@ namespace VortexArena.App.Admin
         /// <summary>
         /// Harita seçicisinden seçim geldi — gerekçeler <see cref="SelectMode"/>.
         /// <para>
-        /// ⚠️ <b>İlk satır bir harita DEĞİL, bir komuttur</b> (<see cref="LobbyRowLabel"/>): eski
+        /// ⚠️ <b>İlk satır bir arena DEĞİL, lobidir</b> (<see cref="LobbyRowLabel"/>): eski
         /// "LOBİYE DÖN" düğmesinin yerini aldı ve seçilince <c>set_selection</c> değil
-        /// <c>return_to_lobby</c> gider. Bu yüzden imleç orada BIRAKILMAZ — komut çalıştıktan
-        /// sonra seçici bir önceki arenaya döner: satır menüdeki bir eylemdir, "bir sonraki maçın
-        /// haritası" değil. İmleci lobide bırakmak BAŞLAT'ı anlamsız kılardı (lobide maç başlamaz).
+        /// <c>return_to_lobby</c> gider. İmleç orada <b>KALIR</b> — seçici "açık sahne"yi gösterir
+        /// (<see cref="ApplyOpenScene"/>), yani lobiye dönüldüğünde lobiyi göstermesi doğrudur.
+        /// Aksi hâlde seçici hâlâ eski arenayı gösterirdi ve operatör o arenaya geri dönemezdi:
+        /// seçili satıra tıklamak <c>onValueChanged</c>'i ateşlemez.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>"Zaten seçili" diye erken çıkış YOKTUR.</b> Operatör bir satıra bastıysa komut
+        /// gider; sunucu aynı sahneyi tekrar sahnelemeyi zaten idempotent karşılıyor (§10.7).
+        /// Buraya bir eşitlik kapısı koymak, açık sahne ile imlecin ayrıştığı her durumda
+        /// (maç sonu, lobiye dönüş) operatörü kilitler.
         /// </para>
         /// </summary>
         private void SelectMap(int index)
@@ -547,24 +630,27 @@ namespace VortexArena.App.Admin
 
             if (HasLobbyRow && index == LobbyRowIndex)
             {
-                if (GuardSelectionChange())
+                if (!GuardSelectionChange())
                 {
-                    AdminCommands.ReturnToLobby();
+                    Apply(); // imleç açık sahneye geri çekilir
+                    return;
                 }
 
-                Apply(); // imleç seçili arenaya geri çekilir (satır kalıcı bir seçim değil)
+                _lobbyOpen = true; // iyimser: sunucunun return_to_lobby'si aynı değeri doğrulayacak
+                AdminCommands.ReturnToLobby();
+                Apply();
                 return;
             }
 
             int mapIndex = index - MapRowOffset;
-            if (mapIndex == _mapIndex || mapIndex < 0 || mapIndex >= _maps.Count ||
-                !GuardSelectionChange())
+            if (mapIndex < 0 || mapIndex >= _maps.Count || !GuardSelectionChange())
             {
                 Apply();
                 return;
             }
 
             _mapIndex = mapIndex;
+            _lobbyOpen = false;
             PublishSelection(mapChanged: true);
         }
 
@@ -685,7 +771,11 @@ namespace VortexArena.App.Admin
                 }
             }
 
-            if (!string.IsNullOrEmpty(sharedScene) && sharedScene != SelectedSceneName)
+            // ⚠️ Lobi sahnesi buraya DÜŞMEZ ve düşmemeli: seçicinin lobiyi gösterip göstermeyeceğine
+            // ortak seçim değil AÇIK SAHNE karar verir (<see cref="ApplyOpenScene"/>). İkisi
+            // ayrışır — maç bitip lobiye dönüldüğünde ortak seçim hâlâ son arenayı gösterir.
+            if (!string.IsNullOrEmpty(sharedScene) && !AdminContent.IsLobbyScene(sharedScene) &&
+                sharedScene != SelectedSceneName)
             {
                 int index = IndexOfMap(sharedScene);
                 if (index >= 0)
@@ -792,6 +882,10 @@ namespace VortexArena.App.Admin
         /// dışarıda bırakıyorsa null, o zaman lobi satırı hiç çizilmez.</summary>
         private MapDefinition _lobbyMap;
 
+        /// <summary>Sunucunun açık sahnesi lobi mi (<see cref="ApplyOpenScene"/>). Doğruysa harita
+        /// seçicisi lobi satırını gösterir ve BAŞLAT reddeder — sahnelenmiş arena yoktur.</summary>
+        private bool _lobbyOpen;
+
         private bool HasLobbyRow => _lobbyMap != null;
 
         /// <summary>Seçici indeksinden <see cref="_maps"/> indeksine geçiş farkı: lobi satırı
@@ -835,14 +929,22 @@ namespace VortexArena.App.Admin
         /// <see cref="SyncDropdown"/> doğrudan kullanılamaz.</summary>
         private void SyncMapDropdown()
         {
-            if (_maps.Count == 0)
+            int count = Mathf.Max(1, _maps.Count + MapRowOffset);
+
+            if (_lobbyOpen && HasLobbyRow)
             {
-                // Yalnız lobi satırı (ya da "harita yok") var: imleç zaten tek yerde durabilir.
-                SyncDropdown(_mapDropdown, 0, 1);
+                SyncDropdown(_mapDropdown, LobbyRowIndex, count);
                 return;
             }
 
-            SyncDropdown(_mapDropdown, _mapIndex + MapRowOffset, _maps.Count + MapRowOffset);
+            if (_maps.Count == 0)
+            {
+                // Yalnız lobi satırı (ya da "harita yok") var: imleç zaten tek yerde durabilir.
+                SyncDropdown(_mapDropdown, 0, count);
+                return;
+            }
+
+            SyncDropdown(_mapDropdown, _mapIndex + MapRowOffset, count);
         }
 
         /// <summary>Seçenekleri yazar. Liste boşsa tek bir açıklama satırı konur ki seçicinin
@@ -891,10 +993,12 @@ namespace VortexArena.App.Admin
         /// <see cref="SceneRouter"/> zaten o sahnede olduğumuzu görüp ikinci kez yüklemez.
         /// </para>
         /// Maç sürüyorsa dokunulmaz — sahne otoritesi sunucudadır.
+        /// <para>⚠️ Lobi açıkken de dokunulmaz: lobiye dönüşü <c>return_to_lobby</c> sürer, burada
+        /// arena önizlemek operatörü tek başına arenaya düşürürdü.</para>
         /// </summary>
         private void PreviewSelectedMap()
         {
-            if (_mapIndex < 0 || _mapIndex >= _maps.Count || !CanChangeSelection)
+            if (_lobbyOpen || _mapIndex < 0 || _mapIndex >= _maps.Count || !CanChangeSelection)
             {
                 return;
             }
