@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 55accdfacbb64ab428182bb5c93442d3, type: 3}
-  m_Name: WD_Galil
+  m_Name: WD_G36C
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
-  displayName: Galil AR
+  displayName: G36C
   netItemId: 4
   prefab: {fileID: 9073305505722264021, guid: 60f11818acfb9c04d995ab4f09960cec, type: 3}
   holdMode: 1
@@ -26,29 +26,29 @@ MonoBehaviour:
   tracerWidth: 0.02
   tracerLifetime: 0.06
   tracerEveryNthRound: 3
-  weaponId: galil
-  damage: 30
+  weaponId: g36c
+  damage: 29
   headshotMultiplier: 4
-  fireRateRpm: 666
-  range: 60
-  baseSpreadDegrees: 1.2
+  fireRateRpm: 750
+  range: 28
+  baseSpreadDegrees: 0.7
   bloomPerShotDegrees: 0.3
   maxBloomDegrees: 2.6
-  bloomRecoveryPerSecond: 4
-  kickDegrees: 2.2
+  bloomRecoveryPerSecond: 4.2
+  kickDegrees: 1.9
   kickBackMeters: 0.02
   recoilRecoverSpeed: 10
-  magazineSize: 35
+  magazineSize: 30
   spareMagazines: 2
   reserveMode: 0
-  reloadTime: 3.03
+  reloadTime: 2.7
   fireClips:
-  - {fileID: 8300000, guid: 957e1de72b1bcb9439dd45fbb67829ef, type: 3}
-  - {fileID: 8300000, guid: 2545763209f6cc5499df8408ec5485d6, type: 3}
-  magOutClip: {fileID: 8300000, guid: 2d73420ae73bc974eba8612701c89070, type: 3}
+  - {fileID: 8300000, guid: b0fc482233c082e429a0af2837b693ff, type: 3}
+  - {fileID: 8300000, guid: eba2eddfef4ed4e4aa4b4dac1342139e, type: 3}
+  magOutClip: {fileID: 8300000, guid: 253f25514460f8748a9027f120088745, type: 3}
   magInClip: {fileID: 0}
-  dryFireClip: {fileID: 8300000, guid: 7fbfbee7bc76c5b4fb06ce4c43418ef8, type: 3}
+  dryFireClip: {fileID: 8300000, guid: 442ede1ee336b57438c55dc55fae590a, type: 3}
   pickupClip: {fileID: 0}
-  firePitchBase: 1.06
+  firePitchBase: 1.1
   firePitchJitter: 0.05
-  fireVolume: 1
+  fireVolume: 0.95

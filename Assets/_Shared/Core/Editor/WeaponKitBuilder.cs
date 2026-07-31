@@ -74,7 +74,6 @@ namespace VortexArena.Core.Editor
         private const int SpareMagazines = 2;
         private const float KickBackMeters = 0.02f;
         private const float RecoilRecoverSpeed = 10f;
-        private const float Range = 60f;
         private const float PitchJitter = 0.05f;
         private const string ReserveModeName = "DiscardMagazine";
 
@@ -100,6 +99,13 @@ namespace VortexArena.Core.Editor
             public int Rpm;
             public int Magazine;
             public float Reload;
+
+            /// Hitscan menzili (metre). ⚠️ Bu bir DENGE kolu DEĞİLDİR: arenaların en uzun
+            /// çatışma mesafesi ~20 m, en kısa menzil bile 28 m — yani hiçbir silah arena
+            /// içinde menzile takılmaz. Sıralama CS'in "range modifier" kimliğini korur
+            /// (uzun namlu daha uzağa) ve daha büyük mekanlar açıldığında anlam kazanır.
+            /// Mesafeyle gerçekten hissedilen fark SAÇILIMDAN gelir (bkz. BaseSpread).
+            public float Range;
             public float BaseSpread;
             public float BloomPerShot;
             public float MaxBloom;
@@ -124,26 +130,24 @@ namespace VortexArena.Core.Editor
             public string CasingFamily; // "762x39" | "556x45"
         }
 
+        // ⚠️ MODEL ↔ KİMLİK bağı bu tablodadır ve PackPrefab satırdan AYRILMAZ. Paketin
+        // modelleri jenerik adlarla geliyor (AR_A_1, AR_B …); hangi modelin hangi gerçek
+        // silaha benzediği GÖZLE tespit edildi. Bir satırın PackPrefab'ını değiştirmek
+        // "silahın modeli değişsin" demektir — istatistikleri taşımak için satırın geri
+        // kalanını taşı, PackPrefab/NetItemId'yi değil.
+        //
+        // Denge kaynağı: CS:GO/CS2'de karşılığı olanlar (AK-47, M4A1, FAMAS) doğrudan oradan;
+        // olmayanlar (SCAR-L, G36C) PUBG + gerçek hayat teknik verisinden; M16 CS'te yok,
+        // gerçek M16A4 (uzun namlu, 5.56) üzerinden M4'ün "nişancı" varyantı olarak kuruldu.
         private static readonly WeaponSpec[] Specs =
         {
+            // AR_A_1 — CS:GO M4A4/M4A1 gövdesi: dengeli, orta geri tepme, en yaygın 5.56.
             new WeaponSpec
             {
-                Name = "AK47", PackPrefab = "AR_A_1", WeaponId = "ak47", DisplayName = "AK-47",
+                Name = "M4A1", PackPrefab = "AR_A_1", WeaponId = "m4a1", DisplayName = "M4A1",
                 NetItemId = 1, HoldMode = "TwoHand",
-                Damage = 36, Rpm = 600, Magazine = 30, Reload = 2.43f, BaseSpread = 1.10f, BloomPerShot = 0.30f,
-                MaxBloom = 2.5f, BloomRecovery = 4.0f, Kick = 2.4f, PitchBase = 1.00f, Volume = 1.0f,
-                FireClips = new[] { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" },
-                MagOutClip = "SFX_AK47_Reload.wav", DryFireClip = "SFX_AK47_DryFire.wav",
-                FlashColorMin = new Color(1f, 0.55f, 0.15f), FlashColorMax = new Color(1f, 0.22f, 0.05f),
-                FlashSizeMin = 0.05f, FlashSizeMax = 0.09f, FlashLifetime = 0.09f, FlashConeAngle = 34f,
-                SmokeSizeMin = 0.05f, SmokeSizeMax = 0.09f, SmokeLifetime = 1.4f, SmokeAlpha = 0.35f,
-                CasingFamily = "762x39",
-            },
-            new WeaponSpec
-            {
-                Name = "M4A4", PackPrefab = "AR_B", WeaponId = "m4a4", DisplayName = "M4A4",
-                NetItemId = 2, HoldMode = "TwoHand",
-                Damage = 33, Rpm = 666, Magazine = 30, Reload = 3.07f, BaseSpread = 0.90f, BloomPerShot = 0.25f,
+                Damage = 33, Rpm = 666, Magazine = 30, Reload = 3.07f,
+                Range = 40f, BaseSpread = 0.50f, BloomPerShot = 0.26f,
                 MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 2.0f, PitchBase = 1.00f, Volume = 1.0f,
                 FireClips = new[] { "SFX_M4A4_Shot_01.wav", "SFX_M4A4_Shot_02.wav" },
                 MagOutClip = "SFX_M4A4_Reload.wav", DryFireClip = "SFX_M4A4_DryFire.wav",
@@ -152,39 +156,65 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.25f,
                 CasingFamily = "556x45",
             },
+            // AR_B — CS:GO AK-47: tek gövde vuruşu en yüksek, kafa vuruşu kralı, en sert geri tepme.
+            // 7.62x39 olduğu için kovan ailesi de diğerlerinden ayrı.
             new WeaponSpec
             {
-                Name = "M4A1S", PackPrefab = "AR_C", WeaponId = "m4a1s", DisplayName = "M4A1-S",
+                Name = "AK47", PackPrefab = "AR_B", WeaponId = "ak47", DisplayName = "AK-47",
+                NetItemId = 2, HoldMode = "TwoHand",
+                Damage = 36, Rpm = 600, Magazine = 30, Reload = 2.43f,
+                Range = 45f, BaseSpread = 0.60f, BloomPerShot = 0.32f,
+                MaxBloom = 2.6f, BloomRecovery = 4.0f, Kick = 2.6f, PitchBase = 1.00f, Volume = 1.0f,
+                FireClips = new[] { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" },
+                MagOutClip = "SFX_AK47_Reload.wav", DryFireClip = "SFX_AK47_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.55f, 0.15f), FlashColorMax = new Color(1f, 0.22f, 0.05f),
+                FlashSizeMin = 0.05f, FlashSizeMax = 0.09f, FlashLifetime = 0.09f, FlashConeAngle = 34f,
+                SmokeSizeMin = 0.05f, SmokeSizeMax = 0.09f, SmokeLifetime = 1.4f, SmokeAlpha = 0.35f,
+                CasingFamily = "762x39",
+            },
+            // AR_C — PUBG SCAR-L: en kolay kontrol edilen 5.56 (en düşük geri tepme + en yavaş
+            // bloom büyümesi + en hızlı toparlanma), bedeli en düşük DPS.
+            // ⚠️ SUSTURUCUSU YOK — eski M4A1-S satırının kısık ses/alev değerleri bilinçle atıldı.
+            new WeaponSpec
+            {
+                Name = "SCARL", PackPrefab = "AR_C", WeaponId = "scarl", DisplayName = "SCAR-L",
                 NetItemId = 3, HoldMode = "TwoHand",
-                Damage = 38, Rpm = 600, Magazine = 25, Reload = 3.07f, BaseSpread = 0.80f, BloomPerShot = 0.22f,
-                MaxBloom = 2.0f, BloomRecovery = 4.5f, Kick = 1.8f, PitchBase = 0.92f, Volume = 0.80f,
-                FireClips = new[] { "SFX_M4A1S_Shot_01.wav", "SFX_M4A1S_Shot_02.wav" },
-                MagOutClip = "SFX_M4A1S_Reload.wav", DryFireClip = "SFX_M4A1S_DryFire.wav",
-                // Susturuculu: alev KÜÇÜK ama gaz kaçağı dumanı diğerlerinden BÜYÜK/UZUN — bilinçli, hata değil.
-                FlashColorMin = new Color(0.85f, 0.82f, 0.78f), FlashColorMax = new Color(0.55f, 0.52f, 0.48f),
-                FlashSizeMin = 0.018f, FlashSizeMax = 0.032f, FlashLifetime = 0.045f, FlashConeAngle = 12f,
-                SmokeSizeMin = 0.05f, SmokeSizeMax = 0.09f, SmokeLifetime = 1.6f, SmokeAlpha = 0.40f,
+                Damage = 32, Rpm = 625, Magazine = 30, Reload = 2.90f,
+                Range = 38f, BaseSpread = 0.45f, BloomPerShot = 0.20f,
+                MaxBloom = 1.8f, BloomRecovery = 5.0f, Kick = 1.6f, PitchBase = 0.94f, Volume = 1.0f,
+                FireClips = new[] { "SFX_AUG_Shot_01.wav", "SFX_AUG_Shot_02.wav" },
+                MagOutClip = "SFX_AUG_Reload.wav", DryFireClip = "SFX_AUG_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.85f, 0.55f), FlashColorMax = new Color(1f, 0.55f, 0.22f),
+                FlashSizeMin = 0.038f, FlashSizeMax = 0.068f, FlashLifetime = 0.065f, FlashConeAngle = 26f,
+                SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.28f,
                 CasingFamily = "556x45",
             },
+            // AR_D — PUBG G36C: en yüksek atış hızı (750 rpm), en düşük mermi başı hasar,
+            // en kısa menzil. Yakın mesafe baskı silahı.
             new WeaponSpec
             {
-                Name = "Galil", PackPrefab = "AR_D", WeaponId = "galil", DisplayName = "Galil AR",
+                Name = "G36C", PackPrefab = "AR_D", WeaponId = "g36c", DisplayName = "G36C",
                 NetItemId = 4, HoldMode = "TwoHand",
-                Damage = 30, Rpm = 666, Magazine = 35, Reload = 3.03f, BaseSpread = 1.20f, BloomPerShot = 0.30f,
-                MaxBloom = 2.6f, BloomRecovery = 4.0f, Kick = 2.2f, PitchBase = 1.06f, Volume = 1.0f,
+                Damage = 29, Rpm = 750, Magazine = 30, Reload = 2.70f,
+                Range = 28f, BaseSpread = 0.70f, BloomPerShot = 0.30f,
+                MaxBloom = 2.6f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.10f, Volume = 0.95f,
                 FireClips = new[] { "SFX_GALIL_Shot_01.wav", "SFX_GALIL_Shot_02.wav" },
                 MagOutClip = "SFX_GALIL_Reload.wav", DryFireClip = "SFX_GALIL_DryFire.wav",
-                FlashColorMin = new Color(1f, 0.68f, 0.28f), FlashColorMax = new Color(1f, 0.38f, 0.10f),
-                FlashSizeMin = 0.045f, FlashSizeMax = 0.08f, FlashLifetime = 0.08f, FlashConeAngle = 30f,
-                SmokeSizeMin = 0.045f, SmokeSizeMax = 0.08f, SmokeLifetime = 1.2f, SmokeAlpha = 0.30f,
+                FlashColorMin = new Color(1f, 0.80f, 0.45f), FlashColorMax = new Color(1f, 0.45f, 0.15f),
+                FlashSizeMin = 0.042f, FlashSizeMax = 0.075f, FlashLifetime = 0.07f, FlashConeAngle = 28f,
+                SmokeSizeMin = 0.04f, SmokeSizeMax = 0.07f, SmokeLifetime = 1.1f, SmokeAlpha = 0.30f,
                 CasingFamily = "556x45",
             },
+            // AR_E — CS:GO FAMAS: değerler CS:GO ile birebir doğrulandı (30 hasar / 666 rpm /
+            // 25 şarjör / 3.30 s reload). ⚠️ 25'lik şarjör bilinçli — CS:GO'da öyle; diğer beş
+            // silahın 30'undan bu yüzden ayrılıyor. Burst kipi modellenmedi.
             new WeaponSpec
             {
                 Name = "FAMAS", PackPrefab = "AR_E", WeaponId = "famas", DisplayName = "FAMAS",
                 NetItemId = 5, HoldMode = "TwoHand",
-                Damage = 30, Rpm = 666, Magazine = 25, Reload = 3.30f, BaseSpread = 1.10f, BloomPerShot = 0.28f,
-                MaxBloom = 2.4f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.05f, Volume = 1.0f,
+                Damage = 30, Rpm = 666, Magazine = 25, Reload = 3.30f,
+                Range = 32f, BaseSpread = 0.65f, BloomPerShot = 0.28f,
+                MaxBloom = 2.4f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.03f, Volume = 1.0f,
                 FireClips = new[] { "SFX_FAMAS_Shot_01.wav", "SFX_FAMAS_Shot_02.wav" },
                 MagOutClip = "SFX_FAMAS_Reload.wav", DryFireClip = "SFX_FAMAS_DryFire.wav",
                 FlashColorMin = new Color(1f, 0.88f, 0.58f), FlashColorMax = new Color(1f, 0.52f, 0.18f),
@@ -192,17 +222,22 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.28f,
                 CasingFamily = "556x45",
             },
+            // AR_A_2 — M16 (SUSTURUCUSUZ): CS'te karşılığı yok, gerçek M16A4 üzerinden kuruldu.
+            // 20" namlu = en dar taban saçılım + en uzun menzil, bedeli en hızlı bozulan seri
+            // atış (en yüksek bloom, en yavaş toparlanma) ve en uzun reload. Tek tek nişan alana
+            // ödül, tarayana ceza. Ses M4 ailesiyle ORTAK ama pitch düşük — aynı silah, uzun namlu.
             new WeaponSpec
             {
-                Name = "AUG", PackPrefab = "AR_A_2", WeaponId = "aug", DisplayName = "AUG",
+                Name = "M16", PackPrefab = "AR_A_2", WeaponId = "m16", DisplayName = "M16",
                 NetItemId = 6, HoldMode = "TwoHand",
-                Damage = 28, Rpm = 666, Magazine = 30, Reload = 3.80f, BaseSpread = 0.90f, BloomPerShot = 0.25f,
-                MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 1.9f, PitchBase = 0.97f, Volume = 1.0f,
-                FireClips = new[] { "SFX_AUG_Shot_01.wav", "SFX_AUG_Shot_02.wav" },
-                MagOutClip = "SFX_AUG_Reload.wav", DryFireClip = "SFX_AUG_DryFire.wav",
-                FlashColorMin = new Color(1f, 0.90f, 0.74f), FlashColorMax = new Color(0.82f, 0.58f, 0.38f),
-                FlashSizeMin = 0.028f, FlashSizeMax = 0.048f, FlashLifetime = 0.055f, FlashConeAngle = 17f,
-                SmokeSizeMin = 0.03f, SmokeSizeMax = 0.05f, SmokeLifetime = 0.9f, SmokeAlpha = 0.25f,
+                Damage = 31, Rpm = 700, Magazine = 30, Reload = 3.40f,
+                Range = 50f, BaseSpread = 0.35f, BloomPerShot = 0.34f,
+                MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.3f, PitchBase = 0.93f, Volume = 1.0f,
+                FireClips = new[] { "SFX_M4A4_Shot_01.wav", "SFX_M4A4_Shot_02.wav" },
+                MagOutClip = "SFX_M4A4_Reload.wav", DryFireClip = "SFX_M4A4_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.90f, 0.74f), FlashColorMax = new Color(0.95f, 0.60f, 0.28f),
+                FlashSizeMin = 0.032f, FlashSizeMax = 0.058f, FlashLifetime = 0.062f, FlashConeAngle = 19f,
+                SmokeSizeMin = 0.032f, SmokeSizeMax = 0.055f, SmokeLifetime = 0.95f, SmokeAlpha = 0.26f,
                 CasingFamily = "556x45",
             },
         };
@@ -358,7 +393,7 @@ namespace VortexArena.Core.Editor
             SetNumber(so, "damage", spec.Damage, ctx);
             SetNumber(so, "headshotMultiplier", HeadshotMultiplier, ctx);
             SetNumber(so, "fireRateRpm", spec.Rpm, ctx);
-            SetNumber(so, "range", Range, ctx);
+            SetNumber(so, "range", spec.Range, ctx);
             SetNumber(so, "baseSpreadDegrees", spec.BaseSpread, ctx);
             SetNumber(so, "bloomPerShotDegrees", spec.BloomPerShot, ctx);
             SetNumber(so, "maxBloomDegrees", spec.MaxBloom, ctx);
