@@ -46,6 +46,13 @@ namespace VortexArena.Core.Player
     /// <b>bütün bir insan</b> kalır (maç ortasında düşmanı kaybetmemek bilinçli bir tercihtir).
     /// </para>
     /// <para>
+    /// ⚠️ <b>Ağdan gelen rotasyon kemiğe DOĞRUDAN yazılmaz</b> — izleme uzayı ile kemik uzayının
+    /// bind ekseni farklıdır (köprü <see cref="HandGripConvention"/>). Ch15'te kafa/boyun/kalça
+    /// kemiklerinin bind ekseni TESADÜFEN kimlik olduğu için <c>_head.rotation = head.rotation</c>
+    /// çalışıyor (ölçüldü: 0° sapma); eller 115°/128° sapıyordu. Başka bir karaktere geçilirse
+    /// kafa da aynı sebeple kırılır — o zaman çözüm ellerinkiyle aynıdır: bazı ölçüp çarpmak.
+    /// </para>
+    /// <para>
     /// ⚠️ <b>Hiçbir tahmin MANDALLANMAZ.</b> Boy tahmini sonsuz maksimum tutuyordu ve ayak bastığı
     /// noktaya kilitleniyordu; tek bozuk kare avatarı kalıcı olarak bozuyordu (poz düzeldiği hâlde
     /// dev + ayakları zeminin altında kalıyordu — ölçüldü). Boy artık kayan pencere maksimumu,
@@ -134,6 +141,11 @@ namespace VortexArena.Core.Player
         private Transform[] _rightArmChain;
         private Transform _leftHand;
         private Transform _rightHand;
+
+        /// <summary>İzleme uzayı → el kemiği ekseni köprüsü; karakterin bind pozundan BİR KEZ
+        /// ölçülür (bkz. <see cref="HandGripConvention"/>). Ölçülemezse kimlik kalır.</summary>
+        private Quaternion _leftHandCorrection = Quaternion.identity;
+        private Quaternion _rightHandCorrection = Quaternion.identity;
 
         // Bacaklar — aynı sıra: { ayak, alt bacak, üst bacak }.
         private Transform[] _leftLegChain;
@@ -253,8 +265,8 @@ namespace VortexArena.Core.Player
 
             PlaceRoot(safeHead.position, yaw, groundY);
             PlaceTorso(safeHead, yaw);
-            SolveArm(_leftArmChain, _leftHand, safeHandL);
-            SolveArm(_rightArmChain, _rightHand, safeHandR);
+            SolveArm(_leftArmChain, _leftHand, safeHandL, _leftHandCorrection);
+            SolveArm(_rightArmChain, _rightHand, safeHandR, _rightHandCorrection);
             SolveLegs(yaw, deltaTime, groundY);
         }
 
@@ -515,13 +527,17 @@ namespace VortexArena.Core.Player
         // -------------------------------------------------------------------- kol
 
         /// <summary>
-        /// Kolu ele ulaştırır (CCD), sonra elin KENDİ rotasyonunu birebir yazar: silah tutuşu
-        /// elin yönünden okunuyor, çözücünün bulduğu yönelim yeterli değil.
+        /// Kolu ele ulaştırır (CCD), sonra elin KENDİ rotasyonunu yazar: silah tutuşu elin
+        /// yönünden okunuyor, çözücünün bulduğu yönelim yeterli değil.
+        /// <para>⚠️ Rotasyon <b>çarpımla</b> yazılır: gelen poz kumanda anchor'ı uzayındadır,
+        /// kemik ise karakterin bind eksenindedir. <paramref name="correction"/> bu iki eksen
+        /// arasındaki köprüdür ve <see cref="ResolveBones"/> içinde karakterin bind pozundan
+        /// ölçülür (<see cref="HandGripConvention"/>); doğrudan atansaydı bilek ters çizilirdi.</para>
         /// <para>⚠️ El kemiğine KONUM yazılmaz. Hedef kolun erişemeyeceği kadar uzaktayken
         /// (kumanda pozu bileğin değil avucun ötesindedir) konum yazmak eli önkoldan koparır ve
         /// mesh gerilir; ulaşılamayan hedefte kol kısa kalsın, kopmasın.</para>
         /// </summary>
-        private void SolveArm(Transform[] chain, Transform hand, in Pose handPose)
+        private void SolveArm(Transform[] chain, Transform hand, in Pose handPose, in Quaternion correction)
         {
             if (chain == null || hand == null)
             {
@@ -529,7 +545,7 @@ namespace VortexArena.Core.Player
             }
 
             IKUtilities.SolveCCDIK(chain, handPose.position, SolverTolerance, armIterations);
-            hand.rotation = handPose.rotation;
+            hand.rotation = handPose.rotation * correction;
         }
 
         // ----------------------------------------------------------------- bacaklar
@@ -686,6 +702,56 @@ namespace VortexArena.Core.Player
 
             CacheBindPose();
             MeasureModel();
+            MeasureHandCorrections();
+        }
+
+        /// <summary>
+        /// El kemiklerinin bind eksenini ölçüp izleme uzayına köprüyü kurar
+        /// (<see cref="HandGripConvention"/>).
+        /// <para>⚠️ <b>Bind pozu bozulmadan ÖNCE</b> çağrılmalıdır: <see cref="Awake"/> anında
+        /// henüz hiçbir <see cref="Solve"/> koşmamıştır, sonraki bir kare ölçülseydi baz o karenin
+        /// duruşunu içerirdi ve düzeltme kalıcı olarak yanlış çıkardı.</para>
+        /// </summary>
+        private void MeasureHandCorrections()
+        {
+            MeasureHandCorrection(
+                _leftHand,
+                _animator.GetBoneTransform(HumanBodyBones.LeftMiddleProximal),
+                _animator.GetBoneTransform(HumanBodyBones.LeftThumbProximal),
+                false,
+                ref _leftHandCorrection);
+
+            MeasureHandCorrection(
+                _rightHand,
+                _animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal),
+                _animator.GetBoneTransform(HumanBodyBones.RightThumbProximal),
+                true,
+                ref _rightHandCorrection);
+        }
+
+        /// <summary>Tek elin düzeltmesi; parmak kemikleri humanoid'de İSTEĞE BAĞLI olduğu için
+        /// ölçüm düşebilir — o zaman düzeltme kimlik kalır ve durum AÇIKÇA loglanır.</summary>
+        private void MeasureHandCorrection(
+            Transform hand,
+            Transform middleProximal,
+            Transform thumbProximal,
+            bool rightHand,
+            ref Quaternion correction)
+        {
+            if (HandGripConvention.TryMeasureBoneBasis(
+                    hand, middleProximal, thumbProximal, rightHand, out Quaternion boneBasis))
+            {
+                correction = HandGripConvention.Correction(rightHand, boneBasis);
+                return;
+            }
+
+            correction = Quaternion.identity;
+            Debug.LogWarning(
+                $"[ThreePointBodyIK] '{name}': {(rightHand ? "SAĞ" : "SOL")} elin bind ekseni " +
+                "ölçülemedi (orta parmak / başparmak kemiği yok ya da yönleri dejenere). " +
+                "Humanoid'de parmak kemikleri isteğe bağlıdır; karakterin Avatar eşlemesinde " +
+                "MiddleProximal ve ThumbProximal atanmalı. Düzeltme kimlik bırakıldı — " +
+                "bu elin BİLEĞİ YANLIŞ YÖNDE çizilecek.", this);
         }
 
         /// <summary>Sürülen kemiklerin bind pozunu saklar — her kare buraya dönülür.</summary>

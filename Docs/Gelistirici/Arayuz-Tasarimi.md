@@ -49,7 +49,7 @@ görsel efekt (Shadow, Outline) eklemek.
 
 1. **Bileşen alan bağlarını koparmayın.** Kök objedeki bileşende (`AdminHud`,
    `AdminPreferencesPanel`, `AdminPlayerRow`…) her ögenin bir alanı var (`scoreRedText`,
-   `hpFill`, `_modeValue`…). Bir ögeyi **silerseniz** o alan boşalır ve **hata vermez —
+   `hpFill`, `_modeDropdown`…). Bir ögeyi **silerseniz** o alan boşalır ve **hata vermez —
    sessizce çizilmez.** Silmek yerine objeyi devre dışı bırakın ya da alfasını 0 yapın.
    Yeni bir öge ekleyip koda bağlamak gerekiyorsa geliştiriciye söyleyin (yeni alan gerekir).
 
@@ -66,7 +66,13 @@ Ayrıca birkaç teknik not:
 
 - **Font atamayın** (ya da atarken dikkat edin): varsayılan TMP fontu Türkçe glifleri taşıyor.
   Türkçe karakteri olmayan bir fonta geçerseniz `İ Ş Ğ Ü Ö Ç` kutu (□) çizilir. Aynı sebeple
-  arayüzde `✓ ✗ ⚠ → •` gibi sembol **kullanılmaz** — garantisi yok.
+  arayüzde `✓ ✗ ⚠ → •` gibi sembol **kullanılmaz** — garantisi yok. (Açılır listedeki ok ve
+  seçim işareti birer **sprite**tır, glif değil — onlar bu kuraldan etkilenmez.)
+- **Açılır listelerde (`Dropdown_Mod`, `Dropdown_Harita`) `Template` çocuğunu AÇMAYIN.** Prefabta
+  bilerek kapalıdır: TMP_Dropdown onu tıklanınca kopyalayıp açar, açık kaydedilirse liste panelin
+  üstünde sürekli asılı durur. Rengini/puntosunu/satır yüksekliğini (`Item`) değiştirmek serbest.
+  ⚠️ Listedeki **seçenek metinleri yer tutucudur** ("katalog yok"): gerçek mod/harita adlarını
+  çalışırken kod doldurur, prefabta yazdığınız satırlar temizlenir.
 - **Satır yüksekliğini değiştirebilirsiniz.** `AdminPlayerRow` prefabının yüksekliğini
   büyütürseniz kolon yerleşimi kendiliğinden uyar (kod yüksekliği prefabtan okur). Satır arası
   boşluk ve kolon başına satır sayısı `AdminHud` bileşeninde alandır (`rowGap`,

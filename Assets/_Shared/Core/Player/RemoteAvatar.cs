@@ -92,6 +92,12 @@ namespace VortexArena.Core.Player
         /// </summary>
         private const bool DrawItemsWhileDead = false;
 
+        /// <summary>
+        /// Eşya prefabında silah geometrisini taşıyan çocuğun adı (<c>WeaponKitBuilder</c> bunu
+        /// kökte kurar; yerelde <c>Weapon.modelPivot</c> aynı düğüme bağlanır).
+        /// </summary>
+        private const string ModelPivotChildName = "Model";
+
         private const string DeadLabelSuffix = " (ölü)";
         private const string UncalibratedLabelSuffix = " (KALİBRESİZ)";
 
@@ -166,6 +172,43 @@ namespace VortexArena.Core.Player
 
         // HoldMode ↔ GRIP_LINKED çelişkisi durum başına BİR kez loglanır (20 Hz'de log seli olurdu).
         private bool _holdModeMismatchWarned;
+
+        // ── Geri tepme (§6.4/6.5 atış olayından türetilir) ──────────────────────────────
+        /// <summary>
+        /// Bir elin geri tepme durumu. Telde geri tepme DİYE BİR ŞEY YOKTUR: yerelin eğrisi
+        /// (<c>Weapon.Update</c>) burada, gelen atış olayından tetiklenerek yeniden üretilir —
+        /// tek bayt bile eklenmeden.
+        /// <para>
+        /// Alanlar tek tek değil bir yapıda tutulur çünkü sol/sağ İKİ kopya gerekiyor; yapı
+        /// <c>ref</c> ile geçirilir, yani kare başına kutulama/allocation olmaz.
+        /// </para>
+        /// </summary>
+        private struct RecoilSlot
+        {
+            /// <summary>Örneğin <c>Model</c> çocuğu — YALNIZ örnek kurulurken aranır.</summary>
+            public Transform Pivot;
+
+            public Vector3 BasePosition;
+            public Quaternion BaseRotation;
+
+            public float Kick;
+            public float KickBack;
+
+            /// <summary>Son atışın tanımından gelen toparlanma hızı (derece/sn).</summary>
+            public float RecoverSpeed;
+
+            /// <summary>
+            /// Bu kare transform yazılacak mı. Sıfıra dönen son kare de YAZILIR (pivot tam tabana
+            /// otursun), sonrasında bayrak düşer — hareketsiz silahta boşuna transform trafiği yok.
+            /// </summary>
+            public bool Settling;
+        }
+
+        private RecoilSlot _recoilL;
+        private RecoilSlot _recoilR;
+
+        // "Örnekte Model çocuğu yok" uyarısı oyuncu başına BİR kez (olay yolu 53-160/sn, spam yasak).
+        private bool _modelPivotWarned;
 
         private void Awake()
         {
@@ -436,6 +479,12 @@ namespace VortexArena.Core.Player
             UpdateHeldItems(registry);
             ApplyItemPoses(handLWorld, handRWorld);
 
+            // Geri tepme, kavramadan SONRA sürülür ve onunla yarışmaz: ApplyGrip örneğin KÖK
+            // dünya pozunu yazar, buradaki eğri ise örneğin 'Model' ÇOCUĞUNUN yerel TRS'ini.
+            // Yerel silah da tam bu yüzden aynı pivotu kullanıyor (Weapon sınıf yorumu).
+            TickRecoil(ref _recoilL);
+            TickRecoil(ref _recoilR);
+
             // ⚠️ Poz kanalına DOKUNULMAZ (§6.2: ham poz fiziksel gerçektir) — yapıştırma yalnız
             // GÖSTERİME giden kopyayı değiştirir; hand*Pose/hand*World olduğu gibi kalır.
             Pose displayHandL = handLWorld;
@@ -554,14 +603,14 @@ namespace VortexArena.Core.Player
             {
                 _shownItemL = wantL;
                 _itemDefL = Resolve(wantL);
-                RebuildItemInstance(ref _itemInstanceL, _itemDefL);
+                RebuildItemInstance(ref _itemInstanceL, ref _recoilL, _itemDefL);
             }
 
             if (wantR != _shownItemR)
             {
                 _shownItemR = wantR;
                 _itemDefR = Resolve(wantR);
-                RebuildItemInstance(ref _itemInstanceR, _itemDefR);
+                RebuildItemInstance(ref _itemInstanceR, ref _recoilR, _itemDefR);
             }
 
             _shownGripLinked = gripLinked;
@@ -604,8 +653,12 @@ namespace VortexArena.Core.Player
         /// Bir elin eşya örneğini yeniler: eski varsa yıkılır, yeni tanım varsa kurulur.
         /// Yalnız durum değişiminde çağrılır (allocation burada meşrudur).
         /// </summary>
-        private void RebuildItemInstance(ref Transform instance, ItemDefinition definition)
+        private void RebuildItemInstance(ref Transform instance, ref RecoilSlot recoil, ItemDefinition definition)
         {
+            // Eski örneğin pivotu ve birikmiş kick'i sıfırlanır: bayat geri tepme yeni silaha
+            // taşınırsa eldeki tüfek hiç ateş edilmeden sarsılmış görünürdü.
+            recoil = default;
+
             if (instance != null)
             {
                 // Destroy kare sonuna ertelenir; o kare hâlâ ÇİZİLİR. Elden bırakılan eşyanın bir
@@ -629,6 +682,68 @@ namespace VortexArena.Core.Player
             // Sterilize edildikten sonra görünür kaba taşınır (kap ölü/gizli avatarda pasiftir).
             spawned.transform.SetParent(_itemsRoot, false);
             instance = spawned.transform;
+
+            CacheRecoilPivot(ref recoil, instance);
+        }
+
+        /// <summary>
+        /// Geri tepmenin uygulanacağı <c>Model</c> çocuğunu ve TABAN yerel TRS'ini saklar —
+        /// yerelde <c>Weapon.Awake</c>'in yaptığının aynısı.
+        /// <para>
+        /// ⚠️ Arama YALNIZ burada, yani örnek kurulurken yapılır: atış olayı yolu 53-160/sn ve
+        /// geri tepme her karede sürülüyor; kare/olay başına <c>Find</c> kabul edilemez.
+        /// Bulunamazsa pivot sessizce null kalır (o silahta geri tepme görselleşmez, sunumun
+        /// geri kalanı bozulmaz) ve oyuncu başına tek uyarı basılır.
+        /// </para>
+        /// </summary>
+        private void CacheRecoilPivot(ref RecoilSlot recoil, Transform instance)
+        {
+            // Önce doğrudan çocuk (WeaponKitBuilder onu kökte kurar), yoksa derin arama.
+            Transform pivot = instance.Find(ModelPivotChildName);
+            if (pivot == null)
+            {
+                pivot = FindChildByName(instance, ModelPivotChildName);
+            }
+
+            if (pivot == null)
+            {
+                if (!_modelPivotWarned)
+                {
+                    _modelPivotWarned = true;
+                    Debug.LogWarning(
+                        $"[RemoteAvatar] Oyuncu {PlayerId}: '{instance.name}' örneğinde " +
+                        $"'{ModelPivotChildName}' çocuğu yok — uzak silah geri tepmeyecek.");
+                }
+
+                return;
+            }
+
+            recoil.Pivot = pivot;
+            recoil.BasePosition = pivot.localPosition;
+            recoil.BaseRotation = pivot.localRotation;
+        }
+
+        // GetComponentsInChildren KULLANILMAZ (dizi ayırır): elle özyineleme allocation'sızdır ve
+        // bu arama eşya değişiminde bir kez koşar. İLK eşleşme alınır — eşyanın tek gövdesi vardır.
+        private static Transform FindChildByName(Transform parent, string childName)
+        {
+            int count = parent.childCount;
+            for (int i = 0; i < count; i++)
+            {
+                Transform child = parent.GetChild(i);
+                if (child.name == childName)
+                {
+                    return child;
+                }
+
+                Transform found = FindChildByName(child, childName);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -806,14 +921,91 @@ namespace VortexArena.Core.Player
         /// sorulsun O örnek döner: silahı iki el birden tutuyordur.</para></summary>
         public Transform GetHeldItemVisual(bool rightHand)
         {
-            if (_shownGripLinked)
-            {
-                return _shownPrimaryRight ? _itemInstanceR : _itemInstanceL;
-            }
-
             // ⚠️ Gizli/ölü avatarda da referans DÖNER: görünürlük çağıranın kararıdır. Burada null
             // döndürmek "namlu yok" sanılıp gereksiz el-pozu fallback'ine düşürürdü.
-            return rightHand ? _itemInstanceR : _itemInstanceL;
+            return ResolveSlotIsRight(rightHand) ? _itemInstanceR : _itemInstanceL;
+        }
+
+        /// <summary>
+        /// Bir olayın "hangi el" bilgisini ÇİZİLEN slota çevirir: <c>GRIP_LINKED</c> iken tek örnek
+        /// vardır ve o ANA elin slotunda durur, aksi hâlde elin kendi slotu.
+        /// <para>Namlu (<see cref="GetHeldItemVisual"/>) ile geri tepme (<see cref="ApplyShotRecoil"/>)
+        /// bu tek yardımcıyı paylaşır: ikisi ayrı yazılsaydı çift elli tutuşta biri diğerinden
+        /// farklı örneği seçebilir ve alev bir silahtan, sarsıntı ötekinden çıkardı.</para>
+        /// </summary>
+        private bool ResolveSlotIsRight(bool rightHand)
+        {
+            return _shownGripLinked ? _shownPrimaryRight : rightHand;
+        }
+
+        /// <summary>
+        /// §6.4/6.5: gelen atış olayında bu avatarın silahını geri tepmeye sokar — yerelin
+        /// (<c>Weapon</c>) eğrisinin BİREBİR aynısı, telde tek bayt yer kaplamadan.
+        /// <para>
+        /// ⚠️ Sürücü neden burada, ayrı bir bileşende değil: uzak örnek
+        /// <see cref="SterilizeVisual"/>'dan geçiyor ve orada TÜM MonoBehaviour'lar toptan
+        /// sökülüyor (bilinçli) — örneğe eklenen her bileşen bir sonraki kurulumda yok olurdu.
+        /// </para>
+        /// <para>
+        /// İki elle tutuşta çarpan <see cref="Weapon.DefaultTwoHandRecoilMultiplier"/>'dır:
+        /// prefabdaki alan telde gitmez (o const'un yorumuna bak), ama tutuşun çift elli olduğu
+        /// bilgisi <c>FLAG_GRIP_LINKED</c> ile zaten geliyor.
+        /// </para>
+        /// </summary>
+        public void ApplyShotRecoil(bool rightHand, WeaponDefinition definition)
+        {
+            if (definition == null)
+            {
+                return; // silah olmayan eşya (bomba vb.) ya da katalogda çözülemeyen id
+            }
+
+            if (ResolveSlotIsRight(rightHand))
+            {
+                AddKick(ref _recoilR, definition);
+            }
+            else
+            {
+                AddKick(ref _recoilL, definition);
+            }
+        }
+
+        /// <summary>Yerel <c>Weapon.Fire</c>'daki birikme + tavan kuralının aynısı.</summary>
+        private void AddKick(ref RecoilSlot recoil, WeaponDefinition definition)
+        {
+            if (recoil.Pivot == null)
+            {
+                return; // o elde eşya çizilmemiş ya da prefabda Model çocuğu yok
+            }
+
+            float scale = _shownGripLinked ? Weapon.DefaultTwoHandRecoilMultiplier : 1f;
+
+            recoil.Kick = Mathf.Min(recoil.Kick + definition.KickDegrees * scale, definition.KickDegrees * 4f);
+            recoil.KickBack = Mathf.Min(recoil.KickBack + definition.KickBackMeters * scale, definition.KickBackMeters * 3f);
+            recoil.RecoverSpeed = definition.RecoilRecoverSpeed;
+            recoil.Settling = true;
+        }
+
+        /// <summary>
+        /// Geri tepmeyi söndürür ve pivota uygular — yerel <c>Weapon.Update</c>'in aynısı
+        /// (geri dönüş hızı ötelemede 0.02 katsayısıyla yavaşlatılır).
+        /// <para>Hareketsiz silahta hiçbir şey yazılmaz: bayrak, sıfıra dönen SON kareyi de
+        /// kapsadığı için pivot tam tabana oturur, sonrasında döngü durur.</para>
+        /// </summary>
+        private static void TickRecoil(ref RecoilSlot recoil)
+        {
+            if (!recoil.Settling || recoil.Pivot == null)
+            {
+                return;
+            }
+
+            recoil.Kick = Mathf.MoveTowards(recoil.Kick, 0f, recoil.RecoverSpeed * Time.deltaTime);
+            recoil.KickBack = Mathf.MoveTowards(recoil.KickBack, 0f, recoil.RecoverSpeed * 0.02f * Time.deltaTime);
+
+            Quaternion rotation = recoil.BaseRotation * Quaternion.Euler(-recoil.Kick, 0f, 0f);
+            recoil.Pivot.localRotation = rotation;
+            recoil.Pivot.localPosition = recoil.BasePosition + rotation * (Vector3.back * recoil.KickBack);
+
+            recoil.Settling = recoil.Kick > 0f || recoil.KickBack > 0f;
         }
 
         /// <summary>
@@ -843,6 +1035,10 @@ namespace VortexArena.Core.Player
                 _itemInstanceR = null;
             }
 
+            // Örnekler gitti: pivot referansları da gitmeli (yıkılmış transform'a yazılmaz).
+            _recoilL = default;
+            _recoilR = default;
+
             _itemDefL = null;
             _itemDefR = null;
             _shownItemL = 0;
@@ -850,6 +1046,9 @@ namespace VortexArena.Core.Player
             _shownGripLinked = false;
             _shownPrimaryRight = false;
             _holdModeMismatchWarned = false;
+
+            // Avatar başka bir oyuncuya devredildi: uyarı kotası da yeni oyuncu için sıfırlanır.
+            _modelPivotWarned = false;
         }
 
         private static void Apply(Transform target, in Pose worldPose)
