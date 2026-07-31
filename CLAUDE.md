@@ -74,7 +74,9 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   Kod-dışı: `Arsenal/` (silah prefab+SO, `VA_WeaponFrame`),
   `FX/`, `Environments/`, `Avatars/` (gövde avatarı modeli ve prefabları — yerel gövde
   (`LocalBodyAvatar`) ile uzak avatarlar aynı modeli ve aynı sürücüyü (`ThreePointBodyIK`)
-  paylaşır), `Data/` (**`Data/Resources/GameCatalog.asset`** —
+  paylaşır; **`Avatars/Resources/LocalBodyAvatar.prefab`** kendini önyükleyen tekil tarafından
+  `Resources.Load` ile yüklendiği için `Resources/` altından ÇIKARILMAZ ve ADI DEĞİŞMEZ —
+  taşınırsa oyuncu kendi gövdesini sessizce hiç görmez), `Data/` (**`Data/Resources/GameCatalog.asset`** —
   admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ),
   `Scenes/` (Boot, Lobby),
   **`App/Resources/UI/`** (⚠️ **arayüzün TAMAMI burada, prefab olarak** — admin HUD'ı + tercihler

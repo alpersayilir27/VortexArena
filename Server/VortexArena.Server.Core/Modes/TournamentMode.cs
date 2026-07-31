@@ -26,6 +26,31 @@ public sealed class TournamentMode : IGameMode
     /// </summary>
     private const double RegroupTimeoutSeconds = 60.0;
 
+    /// <summary>
+    /// Turlar arası akışın nerede olduğu. ⚠️ Çekirdeğin duraklama gerekçesinin KOPYASI değildir:
+    /// mod, faz <c>Playing</c> değilken üç ayrı durumda tik alabiliyor (maçın ilk geri sayımı,
+    /// kendi toplanmamız, kendi geri sayımımız) ve üçünde yapılacak iş farklı. Çekirdekten
+    /// <c>PauseReason</c> okumak yerine kendi kararımızı hatırlıyoruz — duraklamayı koyan biziz.
+    /// </summary>
+    private enum RoundStage
+    {
+        /// <summary>Turlar arası akış çalışmıyor: maçın ilk geri sayımı ya da tur içi.</summary>
+        None,
+
+        /// <summary>Kendi koyduğumuz duraklama — herkesin tabanına dönmesi bekleniyor.</summary>
+        Regroup,
+
+        /// <summary>Toplanma bitti, tur geri sayımı işliyor (henüz geri alınabilir).</summary>
+        Countdown
+    }
+
+    private RoundStage _stage;
+
+    /// <summary>Geri sayım toplanma ŞARTIYLA mı açıldı. Zaman aşımıyla açıldıysa <c>false</c>'tur
+    /// ve iptal edilmez — "eksik oyuncu var" diye iptal etmek zaman aşımının varlık sebebini
+    /// çiğner ve sonsuz döngü kurardı.</summary>
+    private bool _countdownGated;
+
     private int _round;
 
     /// <summary>Tur şu an savaşta mı — eleme taraması yalnız o zaman koşar. Geri sayım sırasında
@@ -66,6 +91,8 @@ public sealed class TournamentMode : IGameMode
         _roundLive = false;
         _matchOver = false;
         _outcome = MatchOutcome.Draw;
+        _stage = RoundStage.None;
+        _countdownGated = false;
 
         Console.WriteLine($"[tournament] maç başladı — tur {director.RoundSeconds} sn, " +
                           $"{director.ScoreLimit} tur galibiyet (en fazla {MaxRounds(director.ScoreLimit)} tur).");
@@ -74,6 +101,8 @@ public sealed class TournamentMode : IGameMode
     public void OnRoundStart(MatchDirector director)
     {
         _roundLive = true;
+        _stage = RoundStage.None;
+        _countdownGated = false;
         director.SetModeState($"round:{_round}");
         Console.WriteLine($"[tournament] tur {_round} başladı " +
                           $"(kırmızı {director.ScoreRed} : mavi {director.ScoreBlue}).");
@@ -93,9 +122,20 @@ public sealed class TournamentMode : IGameMode
             return;
         }
 
-        // Çekirdek moda YALNIZ iki durumda tik verir: Playing ve Paused/Mode (§10.1). Yani buraya
-        // düşmek "kendi koyduğum duraklamadayım" demektir — ikinci bir faz kontrolü gereksiz.
-        TickRegroup(director);
+        // Faz Playing değil. Çekirdek moda burada üç ayrı durumda tik verebiliyor ve üçünde
+        // yapılacak iş farklı — ayrımı kendi aşamamızdan yapıyoruz (bkz. RoundStage).
+        switch (_stage)
+        {
+            case RoundStage.Regroup:
+                TickRegroup(director);
+                break;
+            case RoundStage.Countdown:
+                TickCountdownWatch(director);
+                break;
+            // RoundStage.None: buraya düşen tek durum maçın İLK geri sayımıdır (yükleme kapısından
+            // geliyor, toplanmadan değil). Turlar arası akış henüz başlamadı; burada toplanma
+            // yoklamak ilk tur başlamadan HUD'a "TOPLANMA" yazdırırdı.
+        }
     }
 
     /// <summary>⚠️ <b><c>TimeRemaining &lt;= 0</c> burada maçı BİTİRMEZ</b> (TDM/FFA'dan ayrıldığı
@@ -215,6 +255,8 @@ public sealed class TournamentMode : IGameMode
             return;
         }
 
+        _stage = RoundStage.Regroup;
+        _countdownGated = false;
         _regroupSince = DateTime.UtcNow;
     }
 
@@ -227,13 +269,7 @@ public sealed class TournamentMode : IGameMode
     /// </summary>
     private void TickRegroup(MatchDirector director)
     {
-        var total = 0;
-        var ready = 0;
-        foreach (var player in director.OnlinePlayers())
-        {
-            total++;
-            if (player.Ready) ready++;
-        }
+        var (ready, total) = CountInBase(director);
 
         director.SetModeState($"regroup:{ready}/{total}"); // yalnız DEĞİŞTİYSE yayınlar
 
@@ -242,7 +278,8 @@ public sealed class TournamentMode : IGameMode
         var timedOut = (DateTime.UtcNow - _regroupSince).TotalSeconds >= RegroupTimeoutSeconds;
         if (ready < total && !timedOut) return;
 
-        if (ready < total)
+        var gated = ready >= total;
+        if (!gated)
         {
             var missing = string.Join(", ", director.OnlinePlayers()
                 .Where(p => !p.Ready)
@@ -251,8 +288,54 @@ public sealed class TournamentMode : IGameMode
                               $"tabanına dönmeyenler: {missing}");
         }
 
-        if (director.TryStartRound())
-            Console.WriteLine($"[tournament] tur {_round} geri sayımı başlıyor.");
+        if (!director.TryStartRound()) return;
+
+        _stage = RoundStage.Countdown;
+        _countdownGated = gated;
+        Console.WriteLine($"[tournament] tur {_round} geri sayımı başlıyor " +
+                          $"({(gated ? "herkes tabanında" : "zaman aşımı — iptal edilmez")}).");
+    }
+
+    /// <summary>
+    /// Geri sayım gözcüsü: toplanma şartı geri sayım BOYUNCA da geçerlidir. Tabanından çıkan tek
+    /// oyuncu turu erteler — geri sayım iptal edilir ve toplanmaya dönülür (sayaç sıfırdan başlar).
+    /// <para>Şart "girişte bir kez" ölçülseydi oyuncu tabana bir saniye değip çıkabilir, tur onu
+    /// sahanın ortasında yakalardı; kural "tabanda BEKLE"dir, "tabana uğra" değil.</para>
+    /// </summary>
+    private void TickCountdownWatch(MatchDirector director)
+    {
+        if (!_countdownGated) return;
+
+        var (ready, total) = CountInBase(director);
+        if (total == 0 || ready >= total) return;
+
+        // Sayaç bu tikte dolduysa tur çoktan başlamıştır → false döner ve geri almayız.
+        if (!director.TryCancelCountdownForMode($"regroup:{ready}/{total}")) return;
+
+        _stage = RoundStage.Regroup;
+        _countdownGated = false;
+
+        // ⚠️ _regroupSince BİLEREK sıfırlanmaz: emniyet zaman aşımı turun BİTTİĞİ andan işler.
+        // Sıfırlansaydı sürekli girip çıkan tek oyuncu maçı süresiz askıda tutabilirdi (her iptal
+        // sayacı da baştan başlatırdı); böyle bir maçı operatörün elle kurtarması gerekirdi.
+        Console.WriteLine($"[tournament] geri sayım İPTAL — tabanından çıkan var ({ready}/{total}); " +
+                          "toplanmaya dönüldü.");
+    }
+
+    /// <summary>Kaç oyuncu tabanında (<c>ready</c>) ve toplam kaç oyuncu çevrimiçi.
+    /// <para><c>ready</c> bayrağının bu moddaki anlamı "şu anda kendi tabanımdayım"dır ve
+    /// istemci onu <b>her iki yönde</b> günceller (§10.1) — kapı da gözcü de aynı sayacı okur.</para></summary>
+    private static (int ready, int total) CountInBase(MatchDirector director)
+    {
+        var total = 0;
+        var ready = 0;
+        foreach (var player in director.OnlinePlayers())
+        {
+            total++;
+            if (player.Ready) ready++;
+        }
+
+        return (ready, total);
     }
 
     private void Decide(MatchOutcome outcome, string reason)
