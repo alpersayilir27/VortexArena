@@ -11,6 +11,13 @@ namespace VortexArena.Modes.Tournament
     /// görünce yeni turun geri sayımını başlatır (§10.1 "tur tabanlı modlar").
     ///
     /// <para>
+    /// <b>Bildirim geri sayım boyunca da sürer.</b> Kural "tabanda BEKLE"dir, "tabana uğra" değil:
+    /// geri sayım sırasında tabanından çıkan tek oyuncu turu erteler (sunucu geri sayımı iptal
+    /// edip toplanmaya döner). Bu yüzden bileşen <c>paused/mode</c> ile birlikte, ondan gelen
+    /// <c>paused/countdown</c>'da da çalışır — maçın İLK geri sayımında ise çalışmaz.
+    /// </para>
+    ///
+    /// <para>
     /// <b>Yeni bir protokol mesajı YOKTUR:</b> <c>ready</c> bayrağı yükleme kapısında zaten
     /// "hazırım" demek. Yan faydası, operatörün admin roster'ında kimin tabanına döndüğünü
     /// doğrudan görmesidir.
@@ -49,22 +56,29 @@ namespace VortexArena.Modes.Tournament
                 return;
             }
 
-            // Çekirdek mod duraklamasını yalnız mod koyar (§10.1) — koşan tek mod da biziz.
-            bool regrouping = combat.Phase == ArenaProtocol.PHASE_PAUSED &&
-                              combat.PhaseReason == ArenaProtocol.PAUSE_REASON_MODE;
+            bool paused = combat.Phase == ArenaProtocol.PHASE_PAUSED;
 
-            if (!regrouping)
+            // Çekirdek mod duraklamasını yalnız mod koyar (§10.1) — koşan tek mod da biziz.
+            bool modePause = paused && combat.PhaseReason == ArenaProtocol.PAUSE_REASON_MODE;
+            bool countdown = paused && combat.PhaseReason == ArenaProtocol.PAUSE_REASON_COUNTDOWN;
+
+            if (modePause)
             {
+                if (!_active)
+                {
+                    // Sunucu toplanmaya girerken TÜM ready bayraklarını temizliyor (§10.1) — yerel
+                    // başlangıç durumu onunla aynı olmalı ki ilk "tabandayım" bir KENAR olsun.
+                    _active = true;
+                    _reported = false;
+                }
+            }
+            else if (!(countdown && _active))
+            {
+                // ⚠️ Geri sayımda YALNIZ zaten toplanmadan geliyorsak sürdürürüz. Maçın İLK geri
+                // sayımı da `paused/countdown`tur ama ondan önce toplanma olmadığı için _active
+                // false'tur ve bu dala düşer — orada kimseyi tabana çağırmıyoruz.
                 Leave();
                 return;
-            }
-
-            if (!_active)
-            {
-                // Sunucu toplanmaya girerken TÜM ready bayraklarını temizliyor (§10.1) — yerel
-                // başlangıç durumu onunla aynı olmalı ki ilk "tabandayım" bir KENAR olsun.
-                _active = true;
-                _reported = false;
             }
 
             // Taban takibi ÖLÜ olmasak da gerekiyor: toplanmada herkes tabanına döner.
@@ -73,9 +87,9 @@ namespace VortexArena.Modes.Tournament
             // Sahnede açık taban bölgesi yoksa (kurulum eksik) oyuncuyu kilitleme — hazır say.
             bool inBase = combat.IsInsideOwnBase || !combat.HasOpenBaseZone;
 
-            combat.SetModePrompt(inBase
-                ? "Tabandasın — diğerleri bekleniyor"
-                : "Yeni tur — tabanına dön");
+            combat.SetModePrompt(countdown
+                ? (inBase ? "Tur başlıyor — tabandan çıkma" : "Tabanına dön — geri sayım iptal oluyor")
+                : (inBase ? "Tabandasın — diğerleri bekleniyor" : "Yeni tur — tabanına dön"));
 
             // ⚠️ Yalnız KENARDA gönderilir, periyodik tekrar YOK: her set_ready sunucuda bir TAM
             // lobby_state yayını tetikliyor (oyuncu sayısıyla çarpan fan-out). Kanal WS/TCP

@@ -300,9 +300,11 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > **savaşabilir** (canlı **ve** kalibreli) sayısı fazla olan takım alır, eşitse kimseye puan yok.
 > Turlar arasında faz `paused`/`mode` olur (`modeState:"regroup:2/6"`), oyuncular fiziksel olarak
 > kendi taban bölgelerine yürüyüp `set_ready{true}` yollar ve herkes toplanınca geri sayım başlar
-> (mod 60 sn sonra emniyet için yine başlatır). Çekirdek bunu üç API ile destekler —
-> `TryPauseForMode` / `SetModeState` / `TryStartRound` — ve `modeState`'i **hiç ayrıştırmaz**.
-> Konsolda `[tournament]` satırları tur akışını anlatır.
+> (mod 60 sn sonra emniyet için yine başlatır). **Geri sayım sırasında tabanından çıkan olursa
+> geri sayım iptal edilir ve toplanmaya dönülür** — kural "tabanda bekle"dir; zaman aşımıyla
+> başlamış geri sayım ise iptal edilmez. Çekirdek bunu dört API ile destekler —
+> `TryPauseForMode` / `SetModeState` / `TryStartRound` / `TryCancelCountdownForMode` — ve
+> `modeState`'i **hiç ayrıştırmaz**. Konsolda `[tournament]` satırları tur akışını anlatır.
 
 **Yeni mod eklemek:**
 1. `Modes/<Ad>Mode.cs` içinde `IGameMode` uygula.
