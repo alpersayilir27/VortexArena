@@ -34,11 +34,12 @@ namespace VortexArena.App.Admin
     /// satırlar pasifleşir. Süre/limit her fazda açık kalır, onlar sahne yüklemez.
     /// </para>
     /// <para>
-    /// <b>Neden dropdown/slider yok:</b> <c>TMP_Dropdown</c> ve <c>Slider</c> serialize edilmiş
-    /// şablon hiyerarşisi ister (viewport, item template, handle); prosedürel kurulumda bu hem
-    /// uzun hem kırılgandır. Yerine <c>[&lt;] değer [&gt;]</c> döngüleyicileri ve
-    /// <c>[-] değer [+]</c> adımlayıcıları kullanılır: operatör için daha az hatalı, kod için
-    /// çok daha az yüzey.
+    /// <b>Liste seçimi dropdown, sayı adımlayıcı:</b> mod/harita gibi <b>liste tabanlı</b> seçimler
+    /// <c>TMP_Dropdown</c>'dır — seçenek sayısı katalogla büyüyor ve ok tuşlarıyla gezmek operatörü
+    /// aradığı haritaya varana kadar tıklatıyordu. Süre/skor limiti gibi <b>sayısal</b> değerler
+    /// <c>[-] değer [+]</c> adımlayıcı kalır: onların gezilecek bir listesi yok, asıl jest komşu
+    /// değere gitmektir. Dropdown'ın şablon hiyerarşisi (viewport, item, scrollbar) prefabta durur;
+    /// bu sınıf yalnız seçenekleri doldurur ve imleci eşitler.
     /// </para>
     /// </summary>
     public class AdminPreferencesPanel : MonoBehaviour
@@ -83,16 +84,19 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _closeButton;
 
         [Header("MAÇ bölümü (ortak)")]
-        [SerializeField] private TextMeshProUGUI _modeValue;
-        [SerializeField] private TextMeshProUGUI _mapValue;
 
-        // MAÇ bölümünün kilitlenebilir parçaları (§10.7): harita seçmek TÜM istemcilere sahne
-        // yükletiyor, bu yüzden maç sürerken bu dört düğme pasifleşir ve başlık sebebini yazar.
+        /// <summary>Mod seçici. ⚠️ Seçeneklerini KOD doldurur (katalogdan) — prefabtaki liste
+        /// yalnız şablondur ve çalışırken temizlenir. Gösterilen metin dropdown'ın kendi
+        /// <c>captionText</c>'idir, bu sınıf ona metin YAZMAZ.</summary>
+        [SerializeField] private TMP_Dropdown _modeDropdown;
+
+        /// <summary>Harita seçici — seçenekleri seçili moda + mekan süzgecine göre
+        /// <see cref="RefreshMapList"/> her çalıştığında yeniden kurulur.</summary>
+        [SerializeField] private TMP_Dropdown _mapDropdown;
+
+        // MAÇ bölümünün kilitlenebilir parçası (§10.7): harita seçmek TÜM istemcilere sahne
+        // yükletiyor, bu yüzden maç sürerken iki seçici de pasifleşir ve başlık sebebini yazar.
         [SerializeField] private TextMeshProUGUI _matchSectionLabel;
-        [SerializeField] private Button _modePrev;
-        [SerializeField] private Button _modeNext;
-        [SerializeField] private Button _mapPrev;
-        [SerializeField] private Button _mapNext;
 
         [SerializeField] private TextMeshProUGUI _durationValue;
         [SerializeField] private Button _durationPrev;
@@ -191,17 +195,18 @@ namespace VortexArena.App.Admin
             }
 
             AdminContent.CollectModes(_modes);
-            RefreshMapList();
+            RebuildModeOptions(); // mod listesi katalogdan gelir ve sonra değişmez → bir kez
+            RefreshMapList();     // harita seçeneklerini kendi kurar (mod + mekan süzgeci)
             ResetMatchParametersToModeDefaults();
             Apply();
         }
 
         /// <summary>
-        /// Prefabtaki düğmelere davranışı bağlar.
+        /// Prefabtaki düğme ve seçicilere davranışı bağlar.
         /// <para>
-        /// ⚠️ <b>Prefabta kalıcı (persistent) <c>onClick</c> kaydı YOKTUR ve olmamalıdır.</b>
-        /// Buradaki geri çağrıların çoğu koşullu (kilitli satır, iki adımlı onay, faza göre
-        /// değişen komut); inspector'dan bağlanan bir kayıt o koşulları atlar — ör. "TÜM
+        /// ⚠️ <b>Prefabta kalıcı (persistent) <c>onClick</c>/<c>onValueChanged</c> kaydı YOKTUR ve
+        /// olmamalıdır.</b> Buradaki geri çağrıların çoğu koşullu (kilitli satır, iki adımlı onay,
+        /// faza göre değişen komut); inspector'dan bağlanan bir kayıt o koşulları atlar — ör. "TÜM
         /// KALİBRASYONLARI SIFIRLA" onay penceresini atlayıp doğrudan herkesi sıfırlardı.
         /// </para>
         /// </summary>
@@ -209,10 +214,8 @@ namespace VortexArena.App.Admin
         {
             Wire(_closeButton, AdminSession.ClosePanel);
 
-            Wire(_modePrev, CycleModePrev);
-            Wire(_modeNext, CycleModeNext);
-            Wire(_mapPrev, CycleMapPrev);
-            Wire(_mapNext, CycleMapNext);
+            WireDropdown(_modeDropdown, SelectMode);
+            WireDropdown(_mapDropdown, SelectMap);
             Wire(_durationPrev, DurationPrev);
             Wire(_durationNext, DurationNext);
             Wire(_scoreLimitPrev, ScoreLimitDown);
@@ -253,6 +256,18 @@ namespace VortexArena.App.Admin
 
             button.onClick.RemoveAllListeners();
             button.onClick.AddListener(action);
+        }
+
+        private static void WireDropdown(TMP_Dropdown dropdown,
+            UnityEngine.Events.UnityAction<int> action)
+        {
+            if (dropdown == null)
+            {
+                return;
+            }
+
+            dropdown.onValueChanged.RemoveAllListeners();
+            dropdown.onValueChanged.AddListener(action);
         }
 
         private void OnEnable()
@@ -409,17 +424,29 @@ namespace VortexArena.App.Admin
         private ModeDefinition SelectedMode =>
             _modeIndex >= 0 && _modeIndex < _modes.Count ? _modes[_modeIndex] : null;
 
-        private void CycleModePrev() { StepMode(-1); }
-        private void CycleModeNext() { StepMode(1); }
-
-        private void StepMode(int delta)
+        /// <summary>
+        /// Mod seçicisinden seçim geldi (<c>onValueChanged</c>).
+        /// <para>
+        /// ⚠️ Açılır liste <b>ilk iş olarak kapatılır</b>: hemen ardından harita önizlemesi
+        /// yükleniyor (<see cref="PreviewSelectedMap"/>) ve açık kalan bir liste sahne değişirken
+        /// ekranda asılı kalırdı.
+        /// </para>
+        /// <para>
+        /// Seçim uygulanmazsa (maç sürüyor, indeks bayat) <see cref="Apply"/> çağrılır: dropdown
+        /// kendi değerini zaten değiştirdi, imleci geri çekecek olan odur.
+        /// </para>
+        /// </summary>
+        private void SelectMode(int index)
         {
-            if (_modes.Count == 0 || !GuardSelectionChange())
+            HideDropdown(_modeDropdown);
+
+            if (index == _modeIndex || index < 0 || index >= _modes.Count || !GuardSelectionChange())
             {
+                Apply();
                 return;
             }
 
-            _modeIndex = (_modeIndex + delta + _modes.Count) % _modes.Count;
+            _modeIndex = index;
             RefreshMapList();
             // Süre/limit her modun kendi varsayılanına döner: 10 dakikalık bir TDM ayarı,
             // 3 dakikalık olması gereken bir moda sessizce taşınmasın.
@@ -495,18 +522,27 @@ namespace VortexArena.App.Admin
             PublishSelection(mapChanged: false);
         }
 
-        private void CycleMapPrev() { StepMap(-1); }
-        private void CycleMapNext() { StepMap(1); }
-
-        private void StepMap(int delta)
+        /// <summary>Harita seçicisinden seçim geldi — gerekçeler <see cref="SelectMode"/>.</summary>
+        private void SelectMap(int index)
         {
-            if (_maps.Count == 0 || !GuardSelectionChange())
+            HideDropdown(_mapDropdown);
+
+            if (index == _mapIndex || index < 0 || index >= _maps.Count || !GuardSelectionChange())
             {
+                Apply();
                 return;
             }
 
-            _mapIndex = (_mapIndex + delta + _maps.Count) % _maps.Count;
+            _mapIndex = index;
             PublishSelection(mapChanged: true);
+        }
+
+        private static void HideDropdown(TMP_Dropdown dropdown)
+        {
+            if (dropdown != null)
+            {
+                dropdown.Hide();
+            }
         }
 
         /// <summary>
@@ -692,6 +728,81 @@ namespace VortexArena.App.Admin
 
             int index = string.IsNullOrEmpty(previous) ? -1 : IndexOfMap(previous);
             _mapIndex = index >= 0 ? index : 0;
+
+            RebuildMapOptions();
+        }
+
+        // --------------------------------------------------------------- seçiciler
+
+        /// <summary>Katalog boşken seçicide görünen metin. O durumda seçici pasifleşir
+        /// (<see cref="ApplySelectionLock"/>) — açılıp tek satırlık bir liste gösteren seçici
+        /// operatörü "tıkladım, bir şey olmadı" diye bırakırdı.</summary>
+        private const string NoModesLabel = "katalog yok";
+
+        private const string NoMapsLabel = "harita yok";
+
+        /// <summary>Seçenek metinlerinin kurulduğu tampon — <see cref="TMP_Dropdown.AddOptions(List{string})"/>
+        /// içeriği kendi listesine kopyaladığı için paylaşılabilir.</summary>
+        private readonly List<string> _optionScratch = new List<string>();
+
+        private void RebuildModeOptions()
+        {
+            _optionScratch.Clear();
+            for (int i = 0; i < _modes.Count; i++)
+            {
+                _optionScratch.Add(DisplayOf(_modes[i].DisplayName, _modes[i].ModeId));
+            }
+
+            FillDropdown(_modeDropdown, _optionScratch, NoModesLabel);
+            SyncDropdown(_modeDropdown, _modeIndex, _modes.Count);
+        }
+
+        private void RebuildMapOptions()
+        {
+            _optionScratch.Clear();
+            for (int i = 0; i < _maps.Count; i++)
+            {
+                _optionScratch.Add(DisplayOf(_maps[i].DisplayName, _maps[i].SceneName));
+            }
+
+            FillDropdown(_mapDropdown, _optionScratch, NoMapsLabel);
+            SyncDropdown(_mapDropdown, _mapIndex, _maps.Count);
+        }
+
+        /// <summary>Seçenekleri yazar. Liste boşsa tek bir açıklama satırı konur ki seçicinin
+        /// başlığı hiçbir zaman boş kalmasın.</summary>
+        private static void FillDropdown(TMP_Dropdown dropdown, List<string> options, string emptyLabel)
+        {
+            if (dropdown == null)
+            {
+                return;
+            }
+
+            dropdown.ClearOptions();
+            dropdown.AddOptions(options.Count > 0 ? options : new List<string> { emptyLabel });
+        }
+
+        /// <summary>
+        /// Seçicinin imlecini yerel indekse çeker (tek doğruluk kaynağı yine sunucu → yerel liste).
+        /// <para>
+        /// ⚠️ <b><see cref="TMP_Dropdown.SetValueWithoutNotify"/> kullanılır:</b> <c>value</c>
+        /// ataması <c>onValueChanged</c>'i tetikler, yani sunucudan gelen her <c>admin_state</c>
+        /// tazelemesi yeni bir <c>set_selection</c> doğurur ve iki admin birbirini sonsuza kadar
+        /// tetiklerdi.
+        /// </para>
+        /// </summary>
+        private static void SyncDropdown(TMP_Dropdown dropdown, int index, int count)
+        {
+            if (dropdown == null)
+            {
+                return;
+            }
+
+            int target = count > 0 ? Mathf.Clamp(index, 0, count - 1) : 0;
+            if (dropdown.value != target)
+            {
+                dropdown.SetValueWithoutNotify(target);
+            }
         }
 
         /// <summary>
@@ -871,13 +982,11 @@ namespace VortexArena.App.Admin
                 return;
             }
 
-            _modeValue.text = _modes.Count == 0
-                ? "katalog yok"
-                : DisplayOf(_modes[_modeIndex].DisplayName, _modes[_modeIndex].ModeId);
-
-            _mapValue.text = _maps.Count == 0
-                ? "harita yok"
-                : DisplayOf(_maps[_mapIndex].DisplayName, _maps[_mapIndex].SceneName);
+            // Seçicilerin GÖSTERDİĞİ metin dropdown'ın kendi captionText'idir (seçenekler
+            // RebuildModeOptions/RebuildMapOptions'ta yazıldı); burada yalnız imleç eşitlenir —
+            // ortak seçimi başka bir admin de değiştirmiş olabilir.
+            SyncDropdown(_modeDropdown, _modeIndex, _modes.Count);
+            SyncDropdown(_mapDropdown, _mapIndex, _maps.Count);
 
             ApplySelectionLock();
 
@@ -921,21 +1030,21 @@ namespace VortexArena.App.Admin
             _connectionText.text = $"{state} — {endpoint}{peers}";
         }
 
-        /// <summary>Maç sürerken mod/harita satırlarını pasif gösterir (§10.7): düğmeler
-        /// tıklanmaz, değerler sönükleşir, bölüm başlığı sebebini yazar. Süre/limit satırları
+        /// <summary>Maç sürerken mod/harita satırlarını pasif gösterir (§10.7): seçiciler
+        /// açılmaz, değerler sönükleşir, bölüm başlığı sebebini yazar. Süre/limit satırları
         /// AÇIK kalır — onlar bir sonraki maçın parametreleridir, kimseye sahne yükletmezler.</summary>
         private void ApplySelectionLock()
         {
             bool open = CanChangeSelection;
 
-            SetInteractable(_modePrev, open);
-            SetInteractable(_modeNext, open);
-            SetInteractable(_mapPrev, open);
-            SetInteractable(_mapNext, open);
+            // Liste boşken de pasif: açılıp yalnız "katalog yok" gösteren bir seçici, seçilecek
+            // bir şey varmış gibi görünür.
+            SetInteractable(_modeDropdown, open && _modes.Count > 0);
+            SetInteractable(_mapDropdown, open && _maps.Count > 0);
 
             Color valueColor = open ? UiKit.Title : UiKit.Faint;
-            _modeValue.color = valueColor;
-            _mapValue.color = valueColor;
+            SetCaptionColor(_modeDropdown, valueColor);
+            SetCaptionColor(_mapDropdown, valueColor);
 
             if (_matchSectionLabel != null)
             {
@@ -971,11 +1080,23 @@ namespace VortexArena.App.Admin
             }
         }
 
-        private static void SetInteractable(Button button, bool value)
+        /// <summary>Düğme ve seçici için ortak (<see cref="Selectable"/> ikisinin de tabanı).</summary>
+        private static void SetInteractable(Selectable selectable, bool value)
         {
-            if (button != null)
+            if (selectable != null)
             {
-                button.interactable = value;
+                selectable.interactable = value;
+            }
+        }
+
+        /// <summary>Seçicinin başlık metnini soldurur. <see cref="Selectable"/>'ın kendi
+        /// <c>disabledColor</c>'ı yalnız zemini tintler — metin de sönmezse kilitli satır
+        /// açık görünmeye devam eder.</summary>
+        private static void SetCaptionColor(TMP_Dropdown dropdown, Color color)
+        {
+            if (dropdown != null && dropdown.captionText != null)
+            {
+                dropdown.captionText.color = color;
             }
         }
 

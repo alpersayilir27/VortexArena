@@ -305,6 +305,20 @@ namespace VortexArena.Core.Combat
 
             ItemDefinition item = ResolveItem(evt.itemId);
 
+            // Geri tepme, orijin çözümünden ÖNCE tetiklenir: aşağıdaki erken çıkış (hiç poz yok)
+            // sunumun görsel kalanını düşürür ama silahın sarsılmaması için bir sebep değildir.
+            // Zamanlama zaten doğru — olay kendi serverTick'inin interpolasyon anında buraya
+            // ulaşıyor (HandleFireEvent bekletir), yani kick avatarın eli o tik'e vardığında başlar.
+            // Silah OLMAYAN eşyada (bomba vb.) desen tutmaz: geri tepme diye bir şey yoktur.
+            if (item is WeaponDefinition recoilWeapon)
+            {
+                RemoteAvatar avatar = ResolveAvatar(fx, evt.playerId, now);
+                if (avatar != null)
+                {
+                    avatar.ApplyShotRecoil(evt.rightHand, recoilWeapon);
+                }
+            }
+
             if (!TryResolveOrigin(fx, evt, now, out Vector3 origin))
             {
                 // Ne namlu, ne el, ne kafa: oyuncunun hiç pozu yok (henüz snapshot gelmemiş) →

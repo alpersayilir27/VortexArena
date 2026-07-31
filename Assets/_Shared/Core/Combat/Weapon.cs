@@ -56,6 +56,18 @@ namespace VortexArena.Core.Combat
         private const float TriggerPressThreshold = 0.55f;
         private const float TriggerReleaseThreshold = 0.35f;
 
+        /// <summary>
+        /// İki elle tutuşta geri tepme çarpanının VARSAYILANI.
+        /// <para>
+        /// Uzak replika (<see cref="VortexArena.Core.Player.RemoteAvatar.ApplyShotRecoil"/>) bu
+        /// <b>varsayılanı</b> okur, prefabdaki alanı değil: <see cref="twoHandRecoilMultiplier"/>
+        /// prefaba serialize edilir ve telde GİTMEZ, uzak taraf onu hiçbir yoldan öğrenemez.
+        /// Bir prefabda alan elle değiştirilirse o fark yalnız atanın kendi ekranında görünür —
+        /// karşı taraf geri tepmeyi bu sabitle çizmeye devam eder.
+        /// </para>
+        /// </summary>
+        public const float DefaultTwoHandRecoilMultiplier = 0.35f;
+
         [Header("Tanım")]
         [Tooltip("Silah tanımı SO'su (_Shared/Arsenal/Data) — ZORUNLU: tüm istatistik/ses buradan okunur.")]
         [SerializeField] private WeaponDefinition definition;
@@ -75,7 +87,7 @@ namespace VortexArena.Core.Combat
         [Tooltip("İki elle tutarken saçılım çarpanı.")]
         [SerializeField] private float twoHandSpreadMultiplier = 0.45f;
         [Tooltip("İki elle tutarken geri tepme çarpanı.")]
-        [SerializeField] private float twoHandRecoilMultiplier = 0.35f;
+        [SerializeField] private float twoHandRecoilMultiplier = DefaultTwoHandRecoilMultiplier;
 
         [Header("Haptik")]
         [SerializeField] private float hapticAmplitude = 0.6f;

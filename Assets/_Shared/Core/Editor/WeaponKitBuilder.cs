@@ -10,11 +10,16 @@ using Object = UnityEngine.Object;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Build Weapon Prefabs</c> — Low Poly AR Weapon Pack
-    /// modellerinden 6 silahın tüm kitini üretir/günceller:
-    /// <c>WD_&lt;Ad&gt;.asset</c> (WeaponDefinition), <c>WPN_&lt;Ad&gt;.prefab</c>
-    /// (AK47_Red şablonundan), <c>FX_RemoteShot.prefab</c> ve
+    /// <c>Tools &gt; VortexArena &gt; Build Weapon Prefabs</c> — tablodaki silahların kitini
+    /// üretir/günceller: <c>WD_&lt;Ad&gt;.asset</c> (WeaponDefinition), mevcut
+    /// <c>WPN_&lt;Ad&gt;.prefab</c>'ların bağları/VFX'i, <c>FX_RemoteShot.prefab</c> ve
     /// <c>Resources/WeaponCatalog.asset</c>.
+    /// <para>
+    /// <b>WPN prefabı YOKTAN üretilmez:</b> gövde (model hiyerarşisi, Muzzle/MuzzleFlash yerleşimi,
+    /// kavrama pozları) elle ayarlanan bir şeydir ve prefab repoda yaşar; araç onu yerinde
+    /// günceller. Prefab yoksa hata basılır — sessizce yanlış yerleşimli bir silah üretmek
+    /// (ör. Muzzle'ı Model'in altından köke almak) geri tepmeyi ve nişanı bozuyordu.
+    /// </para>
     /// <para>
     /// <b>Idempotent:</b> tekrar koşulduğunda mevcut asset'ler yerinde güncellenir
     /// (GUID korunur; SaveAsPrefabAsset var olan yola yazar, CreateAsset yalnız yoksa çağrılır).
@@ -47,7 +52,6 @@ namespace VortexArena.Core.Editor
         private const string PackRoot = "Assets/Low Poly AR Weapon Pack 1";
 
         private const string AudioRoot = "Assets/Audio/Weapons";
-        private const string TemplatePath = "Assets/_Shared/Arsenal/Prefabs/AK47_Red.prefab";
 
         private const string DataDir = "Assets/_Shared/Arsenal/Data";
         private const string PrefabDir = "Assets/_Shared/Arsenal/Prefabs";
@@ -82,7 +86,11 @@ namespace VortexArena.Core.Editor
         private struct WeaponSpec
         {
             public string Name;        // dosya eki: WD_<Name>, WPN_<Name>
-            public string PackPrefab;  // PackRoot/Prefabs/Weapons/<PackPrefab>.prefab
+
+            /// PackRoot/Prefabs/Weapons/<PackPrefab>.prefab — üretimde ARTIK OKUNMAZ (WPN prefabları
+            /// yerinde güncellenir, modelden yeniden kurulmaz); hangi silahın hangi pack modelinden
+            /// geldiğinin köken kaydı olarak duruyor.
+            public string PackPrefab;
             public string WeaponId;
             public string DisplayName;
 
@@ -242,21 +250,21 @@ namespace VortexArena.Core.Editor
             },
         };
 
-        private enum BuildOutcome { FromTemplate, Rebound, Failed }
+        private enum BuildOutcome { Rebound, Failed }
 
         private static int _warnings;
         private static readonly Dictionary<string, Type> ResolvedTypes = new Dictionary<string, Type>();
 
         // ------------------------------------------------------------ menüler
 
-        /// <summary>Tam akış: WD asset'leri → WPN prefabları → FX → katalog → ikinci geçiş.</summary>
+        /// <summary>Tam akış: WD asset'leri → WPN prefablarının güncellenmesi → FX → katalog → ikinci geçiş.</summary>
         [MenuItem("Tools/VortexArena/Build Weapon Prefabs")]
         public static void BuildAll()
         {
             _warnings = 0;
 
             int wdNew = 0;
-            int wpnTemplate = 0, wpnRebound = 0, wpnFailed = 0;
+            int wpnRebound = 0, wpnFailed = 0;
             bool fxCreated = false;
             bool catalogCreated = false;
 
@@ -269,12 +277,6 @@ namespace VortexArena.Core.Editor
             var live = new List<GameObject>();
             try
             {
-                var template = AssetDatabase.LoadAssetAtPath<GameObject>(TemplatePath);
-                if (template == null)
-                {
-                    Warn("Şablon yok: " + TemplatePath + " — mevcut WPN prefabları yalnız yerinde güncellenecek.");
-                }
-
                 // ---- ADIM 1: WeaponDefinition asset'leri (prefab alanı ADIM 5'te bağlanır).
                 var defs = new WeaponDefinition[Specs.Length];
                 for (int i = 0; i < Specs.Length; i++)
@@ -299,9 +301,8 @@ namespace VortexArena.Core.Editor
 
                     try
                     {
-                        switch (BuildWeaponPrefab(Specs[i], defs[i], template, casing762, casing556, smokeMaterial, live))
+                        switch (BuildWeaponPrefab(Specs[i], defs[i], casing762, casing556, smokeMaterial))
                         {
-                            case BuildOutcome.FromTemplate: wpnTemplate++; break;
                             case BuildOutcome.Rebound: wpnRebound++; break;
                             default: wpnFailed++; break;
                         }
@@ -309,12 +310,12 @@ namespace VortexArena.Core.Editor
                     catch (Exception e)
                     {
                         wpnFailed++;
-                        Debug.LogError(Log + Specs[i].Name + ": prefab üretimi hata verdi — " + e);
+                        Debug.LogError(Log + Specs[i].Name + ": prefab güncellemesi hata verdi — " + e);
                     }
                 }
 
                 // ---- ADIM 3: uzak atış FX prefabı (varsa dokunulmaz).
-                fxCreated = EnsureRemoteShotFx(template, live);
+                fxCreated = EnsureRemoteShotFx(live);
 
                 // ---- ADIM 4: WeaponCatalog.
                 catalogCreated = UpdateCatalog();
@@ -326,7 +327,7 @@ namespace VortexArena.Core.Editor
                 AssetDatabase.Refresh();
 
                 Debug.Log(Log + "Bitti: WD " + wdNew + " yeni / " + (Specs.Length - wdNew) + " güncellendi · " +
-                          "WPN şablondan " + wpnTemplate + ", yerinde " + wpnRebound + ", hata " + wpnFailed + " · " +
+                          "WPN " + wpnRebound + " güncellendi, " + wpnFailed + " başarısız · " +
                           "FX_RemoteShot " + (fxCreated ? "üretildi" : "mevcut") + " · " +
                           "WeaponCatalog " + (catalogCreated ? "üretildi" : "güncellendi") + " · " +
                           _warnings + " uyarı.");
@@ -425,235 +426,32 @@ namespace VortexArena.Core.Editor
         // ------------------------------------------------ ADIM 2: WPN prefabları
 
         /// <summary>
-        /// Şablon varsa: instantiate + tam unpack (yoksa WPN silinecek şablonun variant'ı olurdu),
-        /// Model içi pack modeliyle değiştirilir (nested prefab bağı yaşar), bileşen/referans
-        /// bağları kurulur ve WPN_&lt;Ad&gt;.prefab'a kaydedilir. Şablon yoksa mevcut WPN yerinde
-        /// yalnız definition bağlarıyla güncellenir.
+        /// Mevcut WPN_&lt;Ad&gt;.prefab'ı yerinde günceller (<see cref="RebindExistingPrefab"/>):
+        /// definition bağları + namlu alevi/duman/kovan kiti + kavrama soketi kiti. Gövdeye
+        /// (model, Muzzle/MuzzleFlash konumu, kavrama pozları) DOKUNULMAZ — onlar elle ayarlanır.
+        /// Prefab yoksa üretilmez, hata basılır: eksik silahın prefabı repoya elle eklenir.
         /// </summary>
-        private static BuildOutcome BuildWeaponPrefab(WeaponSpec spec, WeaponDefinition def, GameObject template,
-            GameObject casing762, GameObject casing556, Material smokeMaterial, List<GameObject> live)
+        private static BuildOutcome BuildWeaponPrefab(WeaponSpec spec, WeaponDefinition def,
+            GameObject casing762, GameObject casing556, Material smokeMaterial)
         {
             string wpnPath = PrefabDir + "/WPN_" + spec.Name + ".prefab";
             string ctx = "WPN_" + spec.Name;
 
-            var existingWpn = AssetDatabase.LoadAssetAtPath<GameObject>(wpnPath);
-
-            GameObject packPrefab = null;
-            if (template != null)
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(wpnPath) == null)
             {
-                string packPath = PackRoot + "/Prefabs/Weapons/" + spec.PackPrefab + ".prefab";
-                packPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(packPath);
-                if (packPrefab == null)
-                {
-                    Debug.LogError(Log + ctx + ": pack prefabı yok: " + packPath);
-                }
-            }
-
-            if (template == null || packPrefab == null)
-            {
-                // Güncelleme modu: şablon (veya pack modeli) yok ama WPN varsa yalnız bağları tazele.
-                if (existingWpn != null)
-                {
-                    RebindExistingPrefab(wpnPath, spec, def, casing762, casing556, smokeMaterial, ctx);
-                    return BuildOutcome.Rebound;
-                }
-
-                Debug.LogError(Log + ctx + ": ne şablon/pack modeli ne de mevcut WPN prefabı var — üretilemedi.");
+                Debug.LogError(Log + ctx + ": '" + wpnPath + "' yok — bu araç WPN prefabı ÜRETMEZ, " +
+                               "yalnız mevcudu günceller. Prefabı repoya ekleyip tekrar çalıştır.");
                 return BuildOutcome.Failed;
             }
 
-            var inst = (GameObject)PrefabUtility.InstantiatePrefab(template);
-            live.Add(inst);
-
-            // ZORUNLU: tam unpack — aksi hâlde SaveAsPrefabAsset şablonun variant'ını üretir.
-            PrefabUtility.UnpackPrefabInstance(inst, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
-            inst.name = "WPN_" + spec.Name;
-            Transform rootT = inst.transform;
-
-            // Şablonda eski Assembly-CSharp kalıntısı missing script kalırsa temizle (yoksa sessiz geçer).
-            RemoveMissingScripts(inst);
-
-            Transform modelT = rootT.Find("Model");
-            if (modelT == null)
-            {
-                modelT = FindDeepChild(rootT, "Model");
-            }
-
-            if (modelT == null)
-            {
-                Debug.LogError(Log + ctx + ": şablonda 'Model' child'ı yok — üretilemedi.");
-                Object.DestroyImmediate(inst);
-                return BuildOutcome.Failed;
-            }
-
-            // YAML gerçeği: şablonda Muzzle, Model'in ALTINDA (MuzzleFlash da Muzzle'ın altında).
-            // Model içi boşaltılmadan önce Muzzle köke alınır; MuzzleFlash Muzzle'ın altında kalır.
-            Transform muzzleT = FindDeepChild(rootT, "Muzzle");
-            Transform flashT = FindDeepChild(rootT, "MuzzleFlash");
-
-            if (muzzleT == null)
-            {
-                Warn(ctx + ": şablonda 'Muzzle' child'ı bulunamadı.");
-            }
-            else if (muzzleT.parent != rootT)
-            {
-                muzzleT.SetParent(rootT, false);
-            }
-
-            if (flashT != null && (muzzleT == null || !flashT.IsChildOf(muzzleT)) && flashT.parent != rootT)
-            {
-                // Beklenmedik yerleşim: flash'ı muzzle'ın (o da yoksa kökün) altına kurtar.
-                flashT.SetParent(muzzleT != null ? muzzleT : rootT, false);
-            }
-
-            if (flashT == null)
-            {
-                Warn(ctx + ": şablonda 'MuzzleFlash' child'ı bulunamadı.");
-            }
-
-            // Model içini boşalt (eski AK47 parçaları); Modelin kendi local TRS'ine dokunulmaz.
-            for (int i = modelT.childCount - 1; i >= 0; i--)
-            {
-                Object.DestroyImmediate(modelT.GetChild(i).gameObject);
-            }
-
-            // Pack modelini Model altına nested prefab olarak tak — unpack ETME, bağ yaşasın.
-            var packInst = (GameObject)PrefabUtility.InstantiatePrefab(packPrefab, modelT);
-            packInst.transform.localPosition = Vector3.zero;
-            packInst.transform.localRotation = Quaternion.identity;
-            packInst.transform.localScale = Vector3.one;
-
-            // Pack modelinin birleşik bounds'u KÖK yerel uzayında.
-            Bounds bounds = ComputeLocalBounds(rootT, packInst, ctx);
-            if (bounds.size.z < bounds.size.x)
-            {
-                Debug.LogWarning(Log + ctx + ": bounds'un Z uzunluğu X'ten kısa — pack modeli +Z'ye bakmıyor olabilir; " +
-                                 "hizalama sonradan elle/parametreyle düzeltilecek.");
-            }
-
-            // Muzzle namlu ucuna: (0, merkez Y, maxZ + 5 mm). Flash aynı konumda (Muzzle altındaysa local sıfır).
-            var muzzleLocal = new Vector3(0f, bounds.center.y, bounds.max.z + 0.005f);
-            if (muzzleT != null)
-            {
-                muzzleT.localPosition = muzzleLocal;
-                muzzleT.localRotation = Quaternion.identity;
-            }
-
-            if (flashT != null)
-            {
-                if (muzzleT != null && flashT.IsChildOf(muzzleT))
-                {
-                    flashT.localPosition = Vector3.zero;
-                    flashT.localRotation = Quaternion.identity;
-                }
-                else
-                {
-                    flashT.localPosition = muzzleLocal;
-                    flashT.localRotation = Quaternion.identity;
-                }
-            }
-
-            // Kök BoxCollider yeni modele göre (eksen başına min 4 cm).
-            var box = inst.GetComponent<BoxCollider>();
-            if (box == null)
-            {
-                box = inst.AddComponent<BoxCollider>();
-            }
-
-            box.center = bounds.center;
-            box.size = new Vector3(
-                Mathf.Max(bounds.size.x, 0.04f),
-                Mathf.Max(bounds.size.y, 0.04f),
-                Mathf.Max(bounds.size.z, 0.04f));
-
-            // Eksik bileşenler (şablon eski sürümden geldiyse) — tip adıyla, derleme bağımlılığı almadan.
-            Weapon weapon = inst.GetComponent<Weapon>();
-            if (weapon == null)
-            {
-                weapon = inst.AddComponent<Weapon>();
-            }
-
-            WeaponAudio weaponAudio = inst.GetComponent<WeaponAudio>();
-            if (weaponAudio == null)
-            {
-                weaponAudio = inst.AddComponent<WeaponAudio>();
-            }
-
-            Component animator = EnsureComponentByTypeName(inst, "WeaponAnimator", ctx);
-            Component reloadGesture = EnsureComponentByTypeName(inst, "WeaponReloadGesture", ctx);
-
-            ApplyGripSocketKit(inst, ctx);
-            ApplyWeaponFrameKit(inst, ctx);
-
-            // Cephane göstergesi artık silah üstünde DEĞİL (AmmoHud, ekran-köşesi paneli) —
-            // eski kurulumdan kalan AmmoDisplay child'ı/bileşeni varsa temizle.
-            RemoveLegacyAmmoDisplay(inst);
-
-            // ---- Referans bağları (alan adları sözleşmeden BİREBİR).
-            Component grabbable = FindComponentByTypeFullName(inst, "Oculus.Interaction.Grabbable");
-            if (grabbable == null)
-            {
-                Warn(ctx + ": kökte Oculus.Interaction.Grabbable yok.");
-            }
-
-            ParticleSystem flashPs = flashT != null ? flashT.GetComponent<ParticleSystem>() : null;
-            if (flashT != null && flashPs == null)
-            {
-                Warn(ctx + ": MuzzleFlash üzerinde ParticleSystem yok.");
-            }
-
-            AudioSource muzzleSource = muzzleT != null ? muzzleT.GetComponent<AudioSource>() : null;
-            if (muzzleT != null && muzzleSource == null)
-            {
-                Warn(ctx + ": Muzzle üzerinde AudioSource yok.");
-            }
-
-            var weaponSo = new SerializedObject(weapon);
-            SetObjectRef(weaponSo, "definition", def, ctx);
-            SetObjectRef(weaponSo, "muzzle", muzzleT, ctx);
-            SetObjectRef(weaponSo, "modelPivot", modelT, ctx);
-            SetObjectRef(weaponSo, "grabbable", grabbable, ctx);
-            SetObjectRef(weaponSo, "muzzleFlash", flashPs, ctx);
-            SetObjectRef(weaponSo, "weaponAudio", weaponAudio, ctx);
-            // hitEffectPrefab + inputActions: şablondan gelen değerler KORUNUR — dokunma.
-            weaponSo.ApplyModifiedPropertiesWithoutUndo();
-
-            var audioSo = new SerializedObject(weaponAudio);
-            SetObjectRef(audioSo, "source", muzzleSource, ctx);
-            var audioDefProp = audioSo.FindProperty("definition");
-            if (audioDefProp != null)
-            {
-                // Alan yoksa sessiz atla — Configure runtime'da da çağrılıyor.
-                audioDefProp.objectReferenceValue = def;
-            }
-
-            audioSo.ApplyModifiedPropertiesWithoutUndo();
-
-            BindFields(animator, ctx, ("weapon", weapon), ("weaponAudio", weaponAudio), ("modelRoot", modelT));
-            BindFields(reloadGesture, ctx, ("weapon", weapon));
-
-            ApplyVfxAndShellKit(inst, spec, casing762, casing556, smokeMaterial, ctx);
-
-            // NOT: eski Weapon alan kalıntıları (team, damage vs.) yeni script'te alan olmadığı
-            // için kayıt sırasında kendiliğinden düşer — ek işlem gerekmez.
-
-            PrefabUtility.SaveAsPrefabAsset(inst, wpnPath, out bool saved);
-            Object.DestroyImmediate(inst);
-
-            if (!saved)
-            {
-                Debug.LogError(Log + ctx + ": SaveAsPrefabAsset başarısız: " + wpnPath);
-                return BuildOutcome.Failed;
-            }
-
-            return BuildOutcome.FromTemplate;
+            RebindExistingPrefab(wpnPath, spec, def, casing762, casing556, smokeMaterial, ctx);
+            return BuildOutcome.Rebound;
         }
 
         /// <summary>
-        /// Güncelleme modu: WPN içeriğini açıp definition bağlarını tazeler VE silaha özgü namlu
-        /// alevi/duman/kovan kitini (<see cref="ApplyVfxAndShellKit"/>) uygular — şablon
-        /// (AK47_Red.prefab) artık yok, bu yüzden asıl çalışan yol budur; model/Muzzle konumuna
-        /// DOKUNULMAZ (elle ayarlanmış olabilir).
+        /// WPN içeriğini açıp definition bağlarını tazeler VE silaha özgü namlu alevi/duman/kovan
+        /// kitini (<see cref="ApplyVfxAndShellKit"/>) uygular — aracın TEK üretim yolu budur;
+        /// model/Muzzle konumuna DOKUNULMAZ (elle ayarlanmış olabilir).
         /// </summary>
         private static void RebindExistingPrefab(string wpnPath, WeaponSpec spec, WeaponDefinition def,
             GameObject casing762, GameObject casing556, Material smokeMaterial, string ctx)
@@ -701,8 +499,8 @@ namespace VortexArena.Core.Editor
                     ApplyVfxAndShellKit(contents, spec, casing762, casing556, smokeMaterial, ctx);
                 }
 
-                // Şablon artık yok, yani sahada ASIL çalışan yol burası — soket kiti de burada
-                // uygulanmazsa mevcut WPN'ler filtresiz (yani mesafeden kavranabilir) kalırdı.
+                // Tek çalışan yol burası — soket kiti de burada uygulanmazsa mevcut WPN'ler
+                // filtresiz (yani mesafeden kavranabilir) kalırdı.
                 ApplyGripSocketKit(contents, ctx);
                 ApplyWeaponFrameKit(contents, ctx);
 
@@ -714,55 +512,29 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>
-        /// Eski kurulumdan kalan silah-üstü göstergesini söker: "AmmoDisplay" child'ı ve
-        /// (varsa) WeaponAmmoDisplay bileşeni. Gösterge artık AmmoHud'dadır (ekran köşesi).
-        /// </summary>
-        private static void RemoveLegacyAmmoDisplay(GameObject inst)
-        {
-            Transform ammoT = inst.transform.Find("AmmoDisplay");
-            if (ammoT != null)
-            {
-                UnityEngine.Object.DestroyImmediate(ammoT.gameObject);
-            }
-
-            Type displayType = ResolveType("VortexArena.Core.Combat.WeaponAmmoDisplay");
-            if (displayType != null && typeof(Component).IsAssignableFrom(displayType))
-            {
-                var legacy = inst.GetComponent(displayType);
-                if (legacy != null)
-                {
-                    UnityEngine.Object.DestroyImmediate(legacy);
-                }
-            }
-        }
-
         // ------------------------------------------------ ADIM 3: FX_RemoteShot
 
         /// <summary>
-        /// FX_RemoteShot.prefab yoksa üretir (varsa dokunmaz): şablonun (o da yoksa ilk WPN'in)
+        /// FX_RemoteShot.prefab yoksa üretir (varsa dokunmaz): bulunan ilk WPN prefabının
         /// Muzzle'ındaki AudioSource + MetaXRAudioSource köke kopyalanır, MuzzleFlash "Flash"
         /// adlı child olarak klonlanır. Döner: bu koşuda üretildi mi.
         /// </summary>
-        private static bool EnsureRemoteShotFx(GameObject template, List<GameObject> live)
+        private static bool EnsureRemoteShotFx(List<GameObject> live)
         {
             if (AssetDatabase.LoadAssetAtPath<GameObject>(FxPrefabPath) != null)
             {
                 return false; // varsa dokunma
             }
 
-            GameObject sourcePrefab = template;
-            if (sourcePrefab == null)
+            GameObject sourcePrefab = null;
+            for (int i = 0; i < Specs.Length && sourcePrefab == null; i++)
             {
-                for (int i = 0; i < Specs.Length && sourcePrefab == null; i++)
-                {
-                    sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabDir + "/WPN_" + Specs[i].Name + ".prefab");
-                }
+                sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabDir + "/WPN_" + Specs[i].Name + ".prefab");
             }
 
             if (sourcePrefab == null)
             {
-                Warn("FX_RemoteShot: kaynak yok (ne şablon ne WPN prefabı) — üretilemedi.");
+                Warn("FX_RemoteShot: kaynak yok (hiçbir WPN prefabı bulunamadı) — üretilemedi.");
                 return false;
             }
 
@@ -1064,23 +836,13 @@ namespace VortexArena.Core.Editor
             return null;
         }
 
-        /// <summary>Missing-script kalıntılarını kök + tüm çocuklardan temizler.</summary>
-        private static void RemoveMissingScripts(GameObject go)
-        {
-            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(go);
-            for (int i = 0; i < go.transform.childCount; i++)
-            {
-                RemoveMissingScripts(go.transform.GetChild(i).gameObject);
-            }
-        }
-
         /// <summary>
-        /// Pack instance'ın tüm Renderer'larının birleşik bounds'u, kökün worldToLocalMatrix'iyle
+        /// Verilen instance'ın tüm Renderer'larının birleşik bounds'u, kökün worldToLocalMatrix'iyle
         /// KÖK yerel uzayına çevrilir (8 köşe tek tek dönüştürülür).
         /// </summary>
-        private static Bounds ComputeLocalBounds(Transform root, GameObject packInstance, string ctx)
+        private static Bounds ComputeLocalBounds(Transform root, GameObject instance, string ctx)
         {
-            Renderer[] renderers = packInstance.GetComponentsInChildren<Renderer>(true);
+            Renderer[] renderers = instance.GetComponentsInChildren<Renderer>(true);
             Matrix4x4 toRoot = root.worldToLocalMatrix;
 
             bool hasAny = false;
@@ -1105,7 +867,7 @@ namespace VortexArena.Core.Editor
 
             if (!hasAny)
             {
-                Warn(ctx + ": pack modelinde Renderer yok — şablonun collider ölçüleri varsayıldı.");
+                Warn(ctx + ": modelde Renderer yok — kaba varsayılan ölçüler kullanıldı.");
                 return new Bounds(new Vector3(0f, 0.01f, 0.16f), new Vector3(0.08f, 0.18f, 0.68f));
             }
 
@@ -1287,7 +1049,7 @@ namespace VortexArena.Core.Editor
 
         /// <summary>
         /// Obje referansı yazar. <paramref name="value"/> null ise ve <paramref name="allowNull"/>
-        /// kapalıysa mevcut değer korunur (çalışan şablon bağını null ile ezmemek için).
+        /// kapalıysa mevcut değer korunur (prefabdaki çalışan bağı null ile ezmemek için).
         /// </summary>
         private static void SetObjectRef(SerializedObject so, string field, Object value, string ctx, bool allowNull = false)
         {
@@ -1421,61 +1183,10 @@ namespace VortexArena.Core.Editor
             return clip;
         }
 
-        /// <summary>Derleme referansı olmayan bileşenlerde (TMP) public property'yi reflection ile yazar.</summary>
-        private static void SetReflectedProperty(Component target, string propertyName, object value, string ctx)
-        {
-            if (target == null)
-            {
-                return;
-            }
-
-            PropertyInfo p = target.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
-            if (p == null || !p.CanWrite)
-            {
-                Warn(ctx + ": " + target.GetType().Name + "." + propertyName + " property'si yazılamadı.");
-                return;
-            }
-
-            try
-            {
-                p.SetValue(target, value);
-            }
-            catch (Exception e)
-            {
-                Warn(ctx + ": " + target.GetType().Name + "." + propertyName + " ataması başarısız — " + e.Message);
-            }
-        }
-
-        /// <summary>Enum tipli property'yi üye adıyla yazar (ör. TMP alignment = Center).</summary>
-        private static void SetReflectedEnumProperty(Component target, string propertyName, string memberName, string ctx)
-        {
-            if (target == null)
-            {
-                return;
-            }
-
-            PropertyInfo p = target.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
-            if (p == null || !p.CanWrite || !p.PropertyType.IsEnum)
-            {
-                Warn(ctx + ": " + target.GetType().Name + "." + propertyName + " enum property'si yazılamadı.");
-                return;
-            }
-
-            try
-            {
-                p.SetValue(target, Enum.Parse(p.PropertyType, memberName));
-            }
-            catch (Exception e)
-            {
-                Warn(ctx + ": " + target.GetType().Name + "." + propertyName + "=" + memberName + " ataması başarısız — " + e.Message);
-            }
-        }
-
         /// <summary>
-        /// Namlu alevi/duman/kovan kitini bir WPN kökü üzerinde kurar — hem şablondan taze üretilen
-        /// (<see cref="BuildWeaponPrefab"/>) hem yerinde güncellenen (<see cref="RebindExistingPrefab"/>)
-        /// WPN'lerde AYNI mantık çalışsın diye ortak metod. Muzzle/MuzzleFlash'ı OLDUĞU YERDE bulur,
-        /// TAŞIMAZ — yerinde güncellemede model konumu elle ayarlanmış olabilir.
+        /// Namlu alevi/duman/kovan kitini bir WPN kökü üzerinde kurar
+        /// (<see cref="RebindExistingPrefab"/>). Muzzle/MuzzleFlash'ı OLDUĞU YERDE bulur ve
+        /// TAŞIMAZ — model/namlu konumu elle ayarlanmıştır, araç onu bozmaz.
         /// </summary>
         private static void ApplyVfxAndShellKit(GameObject root, WeaponSpec spec,
             GameObject casing762, GameObject casing556, Material smokeMaterial, string ctx)
