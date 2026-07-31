@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using VortexArena.Net;
@@ -18,6 +19,12 @@ namespace VortexArena.App
     /// ayrışır: <see cref="ReportSceneLoaded"/> içindeki <c>set_ready</c> yalnız player'dan
     /// gider. Admin "hazır" görünürse operatör yanılır, ayrıca Loading kapısı zaten yalnız
     /// <c>role=player</c> bağlantılarını sayar (sunucu <c>OnlinePlayersLocked</c>).
+    /// </para>
+    /// <para>
+    /// <b>Yükleme asenkrondur</b> (<c>LoadSceneAsync</c>): geçiş boyunca oyun döngüsü akmaya
+    /// devam eder, bu sayede <see cref="LoadingOverlay"/> çizilebilir ve ilerleme gösterilebilir.
+    /// Asenkron yükleme <b>iptal edilemez</b> — yükleme sürerken gelen yeni bir hedef
+    /// (ör. maç ortasında <c>load_match</c>) sıraya alınır ve mevcut yükleme bitince yüklenir.
     /// </para>
     /// </summary>
     public class SceneRouter : MonoBehaviour
@@ -46,6 +53,12 @@ namespace VortexArena.App
 
         /// <summary>Aynı maç sahnesi için set_ready bir kez gönderilir.</summary>
         private string _readyReportedScene = "";
+
+        /// <summary>Şu an asenkron yüklenen sahne; yükleme yokken boş.</summary>
+        private string _loadingScene = "";
+
+        /// <summary>Yükleme sürerken istenen bir sonraki sahne (async yükleme iptal edilemez).</summary>
+        private string _queuedScene = "";
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -210,6 +223,22 @@ namespace VortexArena.App
                 return;
             }
 
+            if (_loadingScene.Length > 0)
+            {
+                // Yükleme sürerken yeni hedef geldi. `LoadSceneAsync` iptal EDİLEMEZ (aktivasyonu
+                // geciktirmek yüklenen sahneyi belleğe yüklemiş olmayı değiştirmez), bu yüzden
+                // hedef sıraya alınır ve mevcut yükleme biter bitmez ona geçilir.
+                _queuedScene = _loadingScene == sceneName ? "" : sceneName;
+
+                if (_queuedScene.Length > 0)
+                {
+                    Debug.Log($"[SceneRouter] '{_loadingScene}' yüklenirken '{sceneName}' istendi; " +
+                              "sıraya alındı.");
+                }
+
+                return;
+            }
+
             if (SceneManager.GetActiveScene().name == sceneName)
             {
                 // Zaten bu sahnedeyiz: sceneLoaded tetiklenmeyecek → hazır bildirimini elden ver.
@@ -217,8 +246,65 @@ namespace VortexArena.App
                 return;
             }
 
+            StartCoroutine(LoadRoutine(sceneName));
+        }
+
+        /// <summary>
+        /// Asenkron sahne yükleme + yükleme ekranı. Ekran yükleme BAŞLAMADAN açılır (aksi hâlde
+        /// oyuncu donmuş bir kare görür), ilerleme <c>AsyncOperation.progress</c>'ten sürülür ve
+        /// sahne tamamen ayağa kalkınca kapanır.
+        /// <para>
+        /// <c>allowSceneActivation</c> varsayılan (açık) bırakılır: kapatmak "yüklendi ama
+        /// gösterilmedi" diye ikinci bir durum üretirdi ve <c>set_ready</c> kapısı (§10.1) zaten
+        /// sahnenin gerçekten yüklenmiş olmasını bekliyor. Bu kipte <c>progress</c> 0..0.9
+        /// aralığında ilerler, aktivasyonda 1'e sıçrar — bar bu yüzden 0.9'a bölünerek normalize
+        /// edilir.
+        /// </para>
+        /// <para>
+        /// <c>set_ready</c> akışı DEĞİŞMEZ: <c>sceneLoaded</c> aktivasyon sırasında (bu döngü
+        /// hâlâ sürerken) tetiklenir ve <see cref="ReportSceneLoaded"/> her zamanki gibi oradan
+        /// çağrılır — bildirim bu rutine taşınmaz, tek kapı olarak kalır.
+        /// </para>
+        /// </summary>
+        private IEnumerator LoadRoutine(string sceneName)
+        {
+            _loadingScene = sceneName;
             Debug.Log($"[SceneRouter] Sahne yükleniyor → '{sceneName}'.");
-            SceneManager.LoadScene(sceneName);
+
+            LoadingOverlay.Show(sceneName);
+
+            AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName);
+            if (operation == null)
+            {
+                // Build listesi kontrolünden geçti ama yükleme başlamadı (ör. sahne bozuk).
+                Debug.LogError($"[SceneRouter] '{sceneName}' için asenkron yükleme başlatılamadı.");
+                FinishLoad();
+                yield break;
+            }
+
+            while (!operation.isDone)
+            {
+                LoadingOverlay.SetProgress(Mathf.Clamp01(operation.progress / 0.9f));
+                yield return null;
+            }
+
+            LoadingOverlay.SetProgress(1f);
+            FinishLoad();
+        }
+
+        /// <summary>Yükleme bitti: ekranı kapat, sıradaki hedef varsa ona geç.</summary>
+        private void FinishLoad()
+        {
+            _loadingScene = "";
+            LoadingOverlay.Hide();
+
+            string queued = _queuedScene;
+            _queuedScene = "";
+
+            if (queued.Length > 0)
+            {
+                LoadChecked(queued);
+            }
         }
 
         // ------------------------------------------------- §10.1 Loading bildirimi
@@ -226,6 +312,14 @@ namespace VortexArena.App
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             ReportSceneLoaded(scene.name);
+
+            // Emniyet ağı: yükleme ekranı SceneRouter'ın rutini tarafından kapatılır. Sahne
+            // buradan geçip de bizde bir yükleme sürmüyorsa (başka bir yol sahne değiştirmiş
+            // ya da rutin düşmüş) ekranın asılı kalmasına izin verilmez.
+            if (_loadingScene.Length == 0)
+            {
+                LoadingOverlay.Hide();
+            }
         }
 
         /// <summary>

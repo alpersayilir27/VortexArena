@@ -4,6 +4,11 @@ Editörle ilgili **her** iş (konsol logu, derleme, sahne/hiyerarşi, asset/pref
 öğesi, oynatma kipi, ekran görüntüsü, paket) **önce MCP tool'u ile** denenir. Shell (`unity cmd …`,
 `dotnet`, `adb`) bu işlerde ilk hamle DEĞİL, **fallback**'tir.
 
+⚠️ **Bu kural "hangi kapıdan" sorusunu cevaplar, "yapılır mı" sorusunu değil.** Derleme, build,
+test ve oynatma kipi ajana KAPALIDIR (kullanıcı açıkça istemedikçe) → [[derleme-kullaniciya-aittir]].
+Aşağıdaki basamaklar o istisna geldiğinde ya da tetikleyici olmayan işlerde (konsol okuma,
+hiyerarşi/asset sorgusu, ekran görüntüsü) geçerlidir.
+
 **Neden:** MCP tool'ları yapılandırılmış JSON döner (filtreli, kırpılmış, parse edilmiş), canlı
 editöre bağlanır ve Windows tırnak/kaçış/timeout tuzaklarına girmez. Ham shell çıktısını ayıklamak
 hem bağlamı şişirir hem de sessizce yanlış okunur.

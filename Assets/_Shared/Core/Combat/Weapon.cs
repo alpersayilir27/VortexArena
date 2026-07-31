@@ -548,7 +548,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Atanın KENDİ mermi izi (uzaktakini <see cref="RemoteShotFx"/> çizer).
+        /// Atanın KENDİ mermi izi — çizgi ve yol boyunca duman (uzaktakini
+        /// <see cref="RemoteShotFx"/> çizer). Duman ayrı bir çağrı DEĞİLDİR: <c>Play</c>'in
+        /// içindedir, yani burada unutulması mümkün değil.
         /// <para>Sıklık ve görünüm uzak izle <b>aynı kaynaktan</b> okunur
         /// (<see cref="ItemDefinition"/>): iki taraf ayrı ayarlansa aynı silah kendi ekranında
         /// başka, karşı ekranda başka görünürdü. Havuz da paylaşımlıdır

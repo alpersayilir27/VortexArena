@@ -20,6 +20,10 @@ unity cmd run_tests / test_status
 unity shell                        # warm REPL (çok komut tek process)
 ```
 
+⚠️ **Bu tabloyu ajan kendiliğinden çalıştırmaz:** `recompile` / `build` / `run_tests` (ve shell
+karşılıkları) kullanıcıya aittir → [[derleme-kullaniciya-aittir]]. Buradaki komutlar kullanıcı
+açıkça istediğinde **nasıl** koşulacağını anlatır.
+
 - `unity cmd …` **yalnız editör açıkken** çalışır.
 - `unity cmd menu --path "Tools/VortexArena/…"` ile menü öğesi çalıştırılır (path pozisyonel
   argüman olarak DEĞİL, `--path` bayrağıyla verilir; yanlış verilirse tüm menüyü listeler).

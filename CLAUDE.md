@@ -37,8 +37,11 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 - **AI notu kullanıcının makinesine YAZILMAZ.** Harness bir hafıza dizini
   (`~/.claude/.../memory/`) verse bile kullanılmaz: git'e girmediği için takım göremez.
   Hatırlanacak her şey repoda. → `ai-memory-scope.md`
-- Doğrulama batch'lenir (`batch-build-verification.md`), editör doğrulaması Unity CLI ile yapılır
-  (`unity-cli.md`).
+- **Projeyi ajan DERLEMEZ.** Derleme/build/test/Play kullanıcıya aittir — ajan işi bitirir, neyin
+  doğrulanması gerektiğini yazar ve durur; kullanıcı açıkça istemedikçe `recompile`/`build`/
+  `run_tests`/`dotnet build` çağrılmaz. → `derleme-kullaniciya-aittir.md`
+- Doğrulama batch'lenir (`batch-build-verification.md`), istisna geldiğinde editör işi Unity CLI
+  ile yapılır (`unity-cli.md`).
 
 ## Repo üst düzey yerleşim
 
@@ -76,7 +79,7 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `Scenes/` (Boot, Lobby),
   **`App/Resources/UI/`** (⚠️ **arayüzün TAMAMI burada, prefab olarak** — admin HUD'ı + tercihler
   ve istatistik panelleri, oyuncu satırı, oyuncu halkası, bağlantı ekranının iki varyantı,
-  cephane göstergesi, kimlik kartı. Kodda görsel kurulum YOKTUR ve yazılmaz: sınıflar yalnız veri
+  yükleme ekranının iki varyantı, cephane göstergesi, kimlik kartı. Kodda görsel kurulum YOKTUR ve yazılmaz: sınıflar yalnız veri
   yazar. `Resources/` altından ÇIKARILMAZ — sahneye konmuyorlar, `Resources.Load` ile
   yükleniyorlar; taşınırsa ilgili arayüz sessizce hiç çizilmez) ve **`App/UI/Sprites/`**
   (yuvarlak köşe + halka görselleri, 9-slice). → `Docs/Gelistirici/Arayuz-Tasarimi.md`

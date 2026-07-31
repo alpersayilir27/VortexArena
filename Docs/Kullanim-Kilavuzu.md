@@ -361,6 +361,13 @@ Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt 
 sahnesine döner. Ayrı bir "Lobiye Dön" düğmesi yoktur. Maç koşarken bu satır da kilitlidir; koşan
 maçı bitirmenin yolu **İPTAL**'dir (ikisi de aynı işi yapar).
 
+> **Harita satırı "şu an açık olan sahneyi" gösterir.** Lobiye dönüldüğünde (senin seçmenle ya da
+> maç bitince) satır **Lobi**'ye döner — arena adı orada kalmaz. Aynı arenayı tekrar açmak için
+> listeden yeniden seç, herkes ona geçer.
+>
+> **Lobi açıkken BAŞLAT çalışmaz** ve durum satırına *"Lobi açık — önce bir arena seç"* yazar:
+> lobide maç başlamaz. Önce arenayı seç (herkes yükler), sonra BAŞLAT.
+
 **Maç başlamıyorsa** en sık iki sebep: (1) hiç bağlı oyuncu yok, (2) gözlüklerden birinde
 farklı/eski sürüm var. Sunucu penceresinde sebep tek satır olarak yazar; teknik ekibe o satırı
 ilet.
