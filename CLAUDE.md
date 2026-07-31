@@ -330,8 +330,14 @@ besler (verilen silahta soket çizilmez — silah zaten elde).
 eklememektir.
 **Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfeklerin kiti
 `Tools > VortexArena > Build Weapon Prefabs` ile üretilir — `WeaponKitBuilder` tablosuna satır
-ekle (CS2 istatistikleri + ses profili), araç `_Shared/Arsenal/Data/WD_*.asset`'i üretir,
-**mevcut** `_Shared/Arsenal/Prefabs/WPN_*.prefab`'ı yerinde günceller ve
+ekle (CS2 istatistikleri + ses profili + "Low Poly AR Weapon Pack 1" modeli — model üretimde
+OKUNMAZ, köken kaydıdır). ⚠️ **Bir satırın `PackPrefab`'ı ve `NetItemId`'si o satırdan
+AYRILMAZ** — pack modelleri jenerik adlı (`AR_B`…), hangisinin hangi gerçek silah olduğu gözle
+eşlendi; kimliği taşımak istiyorsan satırın geri kalanını taşı. ⚠️ **Ses klipleri yalnız alan
+BOŞSA yazılır** (elle sürüklenen klip korunsun diye): mevcut bir silahın sesini değiştiriyorsan
+önce `WD_*.asset`'teki klip alanlarını boşalt, yoksa değişiklik sessizce inmez. Araç
+`_Shared/Arsenal/Data/WD_*.asset`'i üretir, **mevcut**
+`_Shared/Arsenal/Prefabs/WPN_*.prefab`'ı yerinde günceller ve
 **`_Shared/Data/Resources/WeaponCatalog.asset`**'i tazeler (RemoteShotFx `weaponId`→profil
 aramasını `Resources.Load` ile yapar — GameCatalog gibi klasöründen ÇIKARILMAZ).
 ⚠️ **Araç WPN prefabını YOKTAN ÜRETMEZ** (şablondan kurma yolu silindi: `Muzzle`'ı `Model`'in

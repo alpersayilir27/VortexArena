@@ -398,6 +398,13 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 > ⚠️ Denge sayıları istemcide yaşadığı için değişiklik **APK build'i ister** — sunucuyu yeniden
 > başlatmak yetmez.
 
+> ⚠️ **Mevcut bir silahın SESİNİ tablodan değiştirdiysen aracı koşmak yetmez.**
+> `WeaponKitBuilder` klip alanlarını yalnız **boşsa** yazar (elle sürüklenen klip korunsun diye),
+> dolayısıyla dolu bir alan sessizce atlanır ve tablo uygulanmamış bir niyet olarak kalır. Önce
+> `WD_<Ad>.asset`'te `fireClips` / `magOutClip` / `dryFireClip` alanlarını boşalt, sonra
+> `Build Weapon Prefabs`'i koş — ve sonucu aracın çıktısından değil **asset'ten** doğrula.
+> Aynı şey diğer alanlar için geçerli DEĞİLDİR: hasar/rpm/menzil/saçılım her koşuda ezilir.
+
 > Sahnedeki silahın **çerçevesi** için elle iş yoktur: `Build Weapon Prefabs` her `WPN_*` köküne
 > `VA_WeaponFrame` örneğini kendisi koyar. Çerçevenin arenada görünüp görünmemesi ayrı bir konudur
 > → bir sonraki reçete.
