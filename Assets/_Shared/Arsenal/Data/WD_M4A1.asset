@@ -10,15 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 55accdfacbb64ab428182bb5c93442d3, type: 3}
-  m_Name: WD_M4A4
+  m_Name: WD_M4A1
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
-  displayName: M4A4
-  netItemId: 2
-  prefab: {fileID: 190416508149715471, guid: 1d5f693f3c5240942a431985b1064bc3, type: 3}
+  displayName: M4A1
+  netItemId: 1
+  prefab: {fileID: 1554324386449819339, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
   holdMode: 1
-  primaryGripPosition: {x: 0, y: 0, z: 0}
+  primaryGripPosition: {x: -0, y: -0.042, z: -0.059}
   primaryGripEuler: {x: 0, y: 0, z: 0}
-  secondaryGripPosition: {x: 0, y: 0.059, z: 0.3698}
+  secondaryGripPosition: {x: 0, y: 0.071, z: 0.357}
   secondaryGripEuler: {x: 0, y: 0, z: 0}
   primaryGripRadius: 0.12
   secondaryGripRadius: 0.12
@@ -26,13 +26,13 @@ MonoBehaviour:
   tracerWidth: 0.02
   tracerLifetime: 0.06
   tracerEveryNthRound: 3
-  weaponId: m4a4
+  weaponId: m4a1
   damage: 33
   headshotMultiplier: 4
   fireRateRpm: 666
-  range: 60
-  baseSpreadDegrees: 0.9
-  bloomPerShotDegrees: 0.25
+  range: 40
+  baseSpreadDegrees: 0.5
+  bloomPerShotDegrees: 0.26
   maxBloomDegrees: 2.2
   bloomRecoveryPerSecond: 4.5
   kickDegrees: 2
@@ -43,11 +43,11 @@ MonoBehaviour:
   reserveMode: 0
   reloadTime: 3.07
   fireClips:
-  - {fileID: 8300000, guid: 82eb40cda1f46ea4ca416b11fc8802a5, type: 3}
-  - {fileID: 8300000, guid: 4c7a82e5724da5347a8d94d2726f001b, type: 3}
-  magOutClip: {fileID: 8300000, guid: 954a03517c1263e41b40a5b4c774bf22, type: 3}
+  - {fileID: 8300000, guid: a758d12d0a850f6438610cbcbaace458, type: 3}
+  - {fileID: 8300000, guid: 2b599947e2402964f87c84e611144255, type: 3}
+  magOutClip: {fileID: 8300000, guid: 0c0f5e52a9df83c4ba6f2d8ec57e4efd, type: 3}
   magInClip: {fileID: 0}
-  dryFireClip: {fileID: 8300000, guid: 7fbfbee7bc76c5b4fb06ce4c43418ef8, type: 3}
+  dryFireClip: {fileID: 8300000, guid: d7b64bbf9308d854aa5c0b03f0f443df, type: 3}
   pickupClip: {fileID: 0}
   firePitchBase: 1
   firePitchJitter: 0.05

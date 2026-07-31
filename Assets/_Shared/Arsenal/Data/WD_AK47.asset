@@ -13,12 +13,12 @@ MonoBehaviour:
   m_Name: WD_AK47
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
   displayName: AK-47
-  netItemId: 1
-  prefab: {fileID: 1554324386449819339, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
+  netItemId: 2
+  prefab: {fileID: 190416508149715471, guid: 1d5f693f3c5240942a431985b1064bc3, type: 3}
   holdMode: 1
-  primaryGripPosition: {x: -0, y: -0.042, z: -0.059}
+  primaryGripPosition: {x: 0, y: 0, z: 0}
   primaryGripEuler: {x: 0, y: 0, z: 0}
-  secondaryGripPosition: {x: 0, y: 0.071, z: 0.357}
+  secondaryGripPosition: {x: 0, y: 0.059, z: 0.3698}
   secondaryGripEuler: {x: 0, y: 0, z: 0}
   primaryGripRadius: 0.12
   secondaryGripRadius: 0.12
@@ -30,12 +30,12 @@ MonoBehaviour:
   damage: 36
   headshotMultiplier: 4
   fireRateRpm: 600
-  range: 60
-  baseSpreadDegrees: 1.1
-  bloomPerShotDegrees: 0.3
-  maxBloomDegrees: 2.5
+  range: 45
+  baseSpreadDegrees: 0.6
+  bloomPerShotDegrees: 0.32
+  maxBloomDegrees: 2.6
   bloomRecoveryPerSecond: 4
-  kickDegrees: 2.4
+  kickDegrees: 2.6
   kickBackMeters: 0.02
   recoilRecoverSpeed: 10
   magazineSize: 30
@@ -45,9 +45,9 @@ MonoBehaviour:
   fireClips:
   - {fileID: 8300000, guid: 957e1de72b1bcb9439dd45fbb67829ef, type: 3}
   - {fileID: 8300000, guid: 2545763209f6cc5499df8408ec5485d6, type: 3}
-  magOutClip: {fileID: 8300000, guid: 2d73420ae73bc974eba8612701c89070, type: 3}
+  magOutClip: {fileID: 8300000, guid: a8e36fe0ab091ca45b7d4d6a6e3f94ab, type: 3}
   magInClip: {fileID: 0}
-  dryFireClip: {fileID: 8300000, guid: 7fbfbee7bc76c5b4fb06ce4c43418ef8, type: 3}
+  dryFireClip: {fileID: 8300000, guid: da869a5ad3d13fd4c8291673b95a0141, type: 3}
   pickupClip: {fileID: 0}
   firePitchBase: 1
   firePitchJitter: 0.05

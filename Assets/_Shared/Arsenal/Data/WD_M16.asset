@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 55accdfacbb64ab428182bb5c93442d3, type: 3}
-  m_Name: WD_AUG
+  m_Name: WD_M16
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
-  displayName: AUG
+  displayName: M16
   netItemId: 6
   prefab: {fileID: 8455591924629767172, guid: e2e2ac91ad92d7a4aa2040aaf4254a90, type: 3}
   holdMode: 1
@@ -26,29 +26,29 @@ MonoBehaviour:
   tracerWidth: 0.02
   tracerLifetime: 0.06
   tracerEveryNthRound: 3
-  weaponId: aug
-  damage: 28
+  weaponId: m16
+  damage: 31
   headshotMultiplier: 4
-  fireRateRpm: 666
-  range: 60
-  baseSpreadDegrees: 0.9
-  bloomPerShotDegrees: 0.25
-  maxBloomDegrees: 2.2
-  bloomRecoveryPerSecond: 4.5
-  kickDegrees: 1.9
+  fireRateRpm: 700
+  range: 50
+  baseSpreadDegrees: 0.35
+  bloomPerShotDegrees: 0.34
+  maxBloomDegrees: 2.8
+  bloomRecoveryPerSecond: 3.8
+  kickDegrees: 2.3
   kickBackMeters: 0.02
   recoilRecoverSpeed: 10
   magazineSize: 30
   spareMagazines: 2
   reserveMode: 0
-  reloadTime: 3.8
+  reloadTime: 3.4
   fireClips:
-  - {fileID: 8300000, guid: 82eb40cda1f46ea4ca416b11fc8802a5, type: 3}
-  - {fileID: 8300000, guid: 4c7a82e5724da5347a8d94d2726f001b, type: 3}
-  magOutClip: {fileID: 8300000, guid: 954a03517c1263e41b40a5b4c774bf22, type: 3}
+  - {fileID: 8300000, guid: a758d12d0a850f6438610cbcbaace458, type: 3}
+  - {fileID: 8300000, guid: 2b599947e2402964f87c84e611144255, type: 3}
+  magOutClip: {fileID: 8300000, guid: 0c0f5e52a9df83c4ba6f2d8ec57e4efd, type: 3}
   magInClip: {fileID: 0}
-  dryFireClip: {fileID: 8300000, guid: 7fbfbee7bc76c5b4fb06ce4c43418ef8, type: 3}
+  dryFireClip: {fileID: 8300000, guid: d7b64bbf9308d854aa5c0b03f0f443df, type: 3}
   pickupClip: {fileID: 0}
-  firePitchBase: 0.97
+  firePitchBase: 0.93
   firePitchJitter: 0.05
   fireVolume: 1
