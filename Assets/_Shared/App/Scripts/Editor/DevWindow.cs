@@ -33,7 +33,6 @@ namespace VortexArena.App.Editor
 
         private static readonly string[] RoleLabels = { "Player", "Admin" };
         private static readonly string[] StartLabels = { "Boot'tan", "Açık sahneden" };
-        private static readonly string[] WeaponLabels = { "Raf", "Rastgele (elde)" };
 
         [SerializeField] private Vector2 scroll;
 
@@ -227,7 +226,8 @@ namespace VortexArena.App.Editor
         }
 
         /// <summary>
-        /// Sandbox ayarları: mod (loadout'un okunduğu anahtar) + silah kaynağı.
+        /// Sandbox ayarları — tek seçim: <b>mod</b> (silah loadout'unun okunduğu anahtar).
+        /// Silah kaynağı seçilemez; sandbox her zaman loadout'u sırayla ele verir.
         /// </summary>
         private void DrawSandbox()
         {
@@ -260,22 +260,11 @@ namespace VortexArena.App.Editor
                 }
             }
 
-            EditorGUI.BeginChangeCheck();
-            int weaponIndex = RadioRow("Silah",
-                WeaponLabels,
-                DevSession.SandboxWeapons == DevSession.WeaponsRandom ? 1 : 0,
-                null);
-            if (EditorGUI.EndChangeCheck())
-            {
-                DevSession.SandboxWeapons = weaponIndex == 1
-                    ? DevSession.WeaponsRandom
-                    : DevSession.WeaponsRack;
-            }
-
             EditorGUILayout.HelpBox(
-                "Sunucuya BAĞLANILMAZ: harita seçen admin ve elle kalibrasyon gerekmez, silahlar " +
-                "ve serbest atış açılır. Hasar/skor/faz YOKTUR — üçünün de otoritesi sunucudadır. " +
-                "Test edeceğiniz arena (ya da mekan lobisi) sahnesini açıp Play'e basın.",
+                "Sunucuya BAĞLANILMAZ: harita seçen admin ve elle kalibrasyon gerekmez, serbest " +
+                "atış açılır. Silahlar modun loadout'undan SIRAYLA gelir — grip'e her basışta bir " +
+                "sonraki (bırakınca yok olur). Hasar/skor/faz YOKTUR — üçünün de otoritesi " +
+                "sunucudadır. Test edeceğiniz arena (ya da mekan lobisi) sahnesini açıp Play'e basın.",
                 MessageType.Info);
 
             EditorGUILayout.Space();

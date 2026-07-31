@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using VortexArena.Core;
+using VortexArena.Core.Combat;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -53,8 +54,12 @@ namespace VortexArena.App
     ///
     /// <para>⚠️ Sandbox <b>maç kuralı testi DEĞİLDİR</b>: takım/skor/canlanma alanları
     /// <see cref="ModeRulesInfo"/> varsayılanlarında (TDM) kalır — modun kendi kuralları
-    /// sunucudan gelir ve sapmada sunucu kazanır (§10.5). Burada anlamlı olan `modeId`
-    /// (loadout) ve silah kaynağıdır.</para>
+    /// sunucudan gelir ve sapmada sunucu kazanır (§10.5). Burada anlamlı olan tek şey
+    /// `modeId`'dir — silah loadout'u ondan okunur.</para>
+    ///
+    /// <para><b>Silahlar SIRAYLA gelir</b> (<c>WeaponGranter.SequentialGrant</c>): grip'e her
+    /// basışta loadout'un bir sonrakisi. Testin kendisi "hepsini tek tek gözden geçirmek"
+    /// olduğu için rastgelelik burada bir engeldi; üretimdeki rastgele dağıtım DEĞİŞMEZ.</para>
     ///
     /// <para><b>Kapatmak:</b> dev penceresindeki "Dev enjeksiyonu" onayı kapatılırsa bu sınıf
     /// hiçbir şey yapmaz ve üretim yolu birebir koşar (beacon keşfini editörde denemek için).
@@ -78,13 +83,16 @@ namespace VortexArena.App
         public const string KeyStartFromBoot = Prefix + "StartFromBoot";
         public const string KeySandbox = Prefix + "Sandbox";
         public const string KeySandboxModeId = Prefix + "SandboxModeId";
-        public const string KeySandboxWeapons = Prefix + "SandboxWeapons";
 
-        /// <summary>Sandbox silah kaynağı — <c>ModeRulesInfo.weaponSource</c> tel değerleri
-        /// (<c>ModeRuntime.ParseWeapons</c> "random" dışındaki her şeyi raf sayar).</summary>
-        public const string WeaponsRack = "rack";
-
-        public const string WeaponsRandom = "random";
+        /// <summary>
+        /// Sandbox'ın silah kaynağı — <c>ModeRulesInfo.weaponSource</c> tel değeri.
+        /// <para>
+        /// Sabittir ve seçilemez: <b>çerçeve yolu sandbox'ta kullanılmaz</b>. Çerçeve, silahın
+        /// sahnede durup uzaktan seçilmesidir — oysa burada amaç silahı hemen ele almak ve
+        /// loadout'un tamamını sırayla gözden geçirmektir (<c>WeaponGranter.SequentialGrant</c>).
+        /// </para>
+        /// </summary>
+        private const string WeaponSourceGrant = "random";
 
         // ------------------------------------------------------------------- seçim
 
@@ -150,15 +158,6 @@ namespace VortexArena.App
             set => EditorPrefs.SetString(KeySandboxModeId, value ?? "");
         }
 
-        /// <summary><see cref="WeaponsRack"/> | <see cref="WeaponsRandom"/>.</summary>
-        public static string SandboxWeapons
-        {
-            get => EditorPrefs.GetString(KeySandboxWeapons, WeaponsRack) == WeaponsRandom
-                ? WeaponsRandom
-                : WeaponsRack;
-            set => EditorPrefs.SetString(KeySandboxWeapons, value);
-        }
-
         /// <summary>Seçimin tek satırlık özeti (pencere başlığı + konsol satırı için).</summary>
         public static string Summary
         {
@@ -168,7 +167,7 @@ namespace VortexArena.App
                 if (Sandbox)
                 {
                     string mode = string.IsNullOrEmpty(SandboxModeId) ? "(mod seçilmedi)" : SandboxModeId;
-                    return $"{Role} · SANDBOX (sunucusuz) · {mode} · silah: {SandboxWeapons} · {start}";
+                    return $"{Role} · SANDBOX (sunucusuz) · {mode} · silah: sırayla · {start}";
                 }
 
                 string address = HasAddress ? $"{Ip}:{Port}" : "keşif (adres yok)";
@@ -314,19 +313,23 @@ namespace VortexArena.App
             // sandbox bir maç kuralı testi değildir (sınıf dokümanı).
             var rules = new ModeRulesInfo
             {
-                weaponSource = SandboxWeapons,
+                weaponSource = WeaponSourceGrant,
 
                 // Faz sunucusuz 'paused' kalır; tetiği açan tek kapı budur (§10.5).
                 // Hasar yine yoktur — hit_report kapısı her hâlükârda 'playing'dir (§10.3).
                 fireWhilePaused = true
             };
 
+            // Rastgele yerine sırayla: bütün silahları tek tek görmek testin ta kendisi.
+            // Bayrak yalnız editörde var ve yalnız burada yazılır — üretimde grant rastgele kalır.
+            WeaponGranter.SequentialGrant = true;
+
             ModeRuntime.Apply(modeId, rules);
 
             Debug.Log(
-                $"[DevSession] SANDBOX (sunucusuz): mod '{modeId}', silah kaynağı " +
-                $"'{SandboxWeapons}', serbest atış açık. Sunucuya bağlanılmadı — hasar/skor/faz " +
-                "yoktur, kalibrasyon istenmez.");
+                $"[DevSession] SANDBOX (sunucusuz): mod '{modeId}', silahlar loadout'tan SIRAYLA " +
+                "(grip'e her basışta bir sonraki), serbest atış açık. Sunucuya bağlanılmadı — " +
+                "hasar/skor/faz yoktur, kalibrasyon istenmez.");
         }
 
         /// <summary>
