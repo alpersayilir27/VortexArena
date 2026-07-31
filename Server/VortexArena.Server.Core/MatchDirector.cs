@@ -459,8 +459,14 @@ public sealed class MatchDirector
                 case Phase.Paused when _pauseReason == PauseReason.Loading:
                     TickLoadingLocked(outbox, now);
                     break;
+                // ⚠️ Geri sayımda da mod tik ALIR. Sayacı çekirdek işletir ama tur tabanlı modda
+                // geri sayım GERİ ALINABİLİR bir karardır (toplananlardan biri tabanından çıkarsa
+                // iptal edilir, bkz. TryCancelCountdownForMode) — bunu yoklayabilmesi için tike
+                // ihtiyacı var. Sayaç bu tikte dolarsa faz zaten Playing olur ve mod aynı tikte
+                // OnRoundStart + OnTick alır; sıra bozulmaz.
                 case Phase.Paused when _pauseReason == PauseReason.Countdown:
                     TickCountdownLocked(outbox, now);
+                    modeToTick = _mode;
                     break;
                 // ⚠️ Duraklamayı MOD koydu (§10.1) → kaldırma yetkisi de onundur, yani tik'i
                 // alması gerekir; tik almayan mod toplanma kapısını hiç yoklayamaz. Süre
@@ -884,6 +890,10 @@ public sealed class MatchDirector
     /// <para>Canları/ölüleri BURASI toparlamaz — <see cref="EnterLiveLocked"/> zaten herkesi tam
     /// cana çekiyor ve ölülere <c>health_update</c> yolluyor. İki yerde yapmak ikinci bir
     /// canlandırma yolu açardı.</para>
+    /// <para>⚠️ <b><c>ready</c> bayrakları TEMİZLENMEZ.</b> Toplanma kapısında o bayrak "şu anda
+    /// tabanımdayım" demektir ve geri sayım boyunca canlı kalması gerekir — modun geri sayımı
+    /// iptal edip (<see cref="TryCancelCountdownForMode"/>) toplanmaya dönebilmesinin tek dayanağı
+    /// odur. Temizleyen yer <see cref="TryPauseForMode"/>'dur (toplanmanın BAŞINDA, bir kez).</para>
     /// <para>Yalnız mod duraklamasından çalışır; başka durumda <c>false</c> döner.</para>
     /// </summary>
     public bool TryStartRound()
@@ -893,8 +903,31 @@ public sealed class MatchDirector
             if (_phase != Phase.Paused || _pauseReason != PauseReason.Mode) return false;
 
             _modeState = "";
-            foreach (var player in OnlinePlayersLocked()) QueueReadyClearLocked(player);
             EnterCountdownLocked(_pendingOutbox, DateTime.UtcNow);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Modun açtığı geri sayımı <b>geri alır</b>: <see cref="PauseReason.Countdown"/> →
+    /// <see cref="PauseReason.Mode"/>. Tur tabanlı modda toplanma şartı geri sayım sırasında
+    /// bozulabilir (oyuncu tabanından çıkar) — o zaman tur başlamaz, toplanmaya dönülür.
+    /// <para>Ayrı bir "geri sayım iptal" mesajı YOKTUR ve gerekmez: istemci geri sayımı
+    /// <c>phaseReason != countdown</c> görünce zaten siliyor, yani yayınlanan <c>match_state</c>
+    /// tek başına yeter.</para>
+    /// <para>Yalnız geri sayımdan çalışır; sayaç o tikte dolup faz Playing'e geçtiyse <c>false</c>
+    /// döner — tur başlamıştır, geri alınmaz.</para>
+    /// </summary>
+    public bool TryCancelCountdownForMode(string? modeState)
+    {
+        lock (_gate)
+        {
+            if (_phase != Phase.Paused || _pauseReason != PauseReason.Countdown) return false;
+
+            _modeState = modeState ?? "";
+            _countdownRemaining = 0;
+            SetPhaseLocked(Phase.Paused, PauseReason.Mode, DateTime.UtcNow);
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(BuildMatchStateLocked()));
             return true;
         }
     }

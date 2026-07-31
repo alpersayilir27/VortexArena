@@ -567,18 +567,20 @@ ile tanımlanır (§10.5, §10.7).
   - `abort_match` duraklı maçta da çalışır: duraklatmak maçtan çıkmak değildir, çıkış hâlâ `abort_match`/`return_to_lobby`'dir.
 
 **Tur tabanlı modlar (`tournament`) — çekirdek TUR diye bir şey bilmez.** Turun tamamı modun
-içindedir; çekirdek yalnız üç yetenek sunar ve hiçbirini yorumlamaz:
+içindedir; çekirdek yalnız dört yetenek sunar ve hiçbirini yorumlamaz:
 
 ```
 paused/loading → paused/countdown → playing                     ◄── TUR n
-                        ▲                 │
-                        │                 │ mod turu bitirdi (eleme / süre)
-                        │                 ▼
-                        │        maç bitti mi? ──evet──► finished (normal yol)
-                        │                 │ hayır
-                        │                 ▼
-                        │        paused/mode · modeState="regroup:2/6"
+                        ▲   │             │
+                        │   │             │ mod turu bitirdi (eleme / süre)
+                        │   │             ▼
+                        │   │    maç bitti mi? ──evet──► finished (normal yol)
+                        │   │             │ hayır
+                        │   │             ▼
+                        │   └───►paused/mode · modeState="regroup:2/6"
                         └─────────────────┘ modun şartı sağlandı → yeni tur
+                            ▲
+                            └── mod geri sayımı İPTAL etti (şart bozuldu)
 ```
 
 - Duraklamayı **mod koydu** (`phaseReason:"mode"`), kaldırma yetkisi de onundur — `resume_match`
@@ -592,6 +594,17 @@ paused/loading → paused/countdown → playing                     ◄── TU
 - Toplanma kapısı **`set_ready` bayrağını yeniden kullanır** (yükleme kapısının aynısı, §5.1):
   oyuncu kendi taban bölgesine girince `set_ready{true}`, çıkınca `set_ready{false}` yollar. Yeni
   bir mesaj tipi YOKTUR ve eklenmez — "hazırım" zaten bu bayrağın anlamıdır.
+- **Modun açtığı geri sayım GERİ ALINABİLİR.** Şart yalnız girişte değil geri sayım **boyunca** da
+  ölçülür: bayrağı düşen tek oyuncu turu erteler, mod geri sayımı iptal eder ve faz `paused`/`mode`'a
+  döner (`modeState` yine `regroup:<h>/<t>`). İstemci için ek bir mesaj yoktur — geri sayımı
+  `phaseReason != "countdown"` görünce zaten siliyor, yani yayınlanan `match_state` tek başına yeter.
+  ⚠️ Bunun iki sonucu var: (1) `set_ready` bildirimi geri sayım boyunca da **sürer**, (2) mod
+  duraklamasından geri sayıma geçerken `ready` bayrakları **temizlenmez** (bayrak orada "şu anda
+  tabanımdayım" demektir; temizlenseydi iptal kararının dayanağı kalmazdı). Bayrakları temizleyen
+  tek yer toplanmanın **başıdır**.
+- ⚠️ Maçın **ilk** geri sayımı bu kapıya girmez: o yükleme kapısından gelir, öncesinde toplanma
+  yoktur. İstemci de sunucu da bu ayrımı "toplanmadan mı geldik" diye kendi durumundan yapar —
+  `phaseReason` ikisini ayırt etmez.
 
 ### 10.2 Oyuncu maç durumu (sunucuda)
 
@@ -739,6 +752,8 @@ olmalı, tanınmayan `modeId` reddedilir):
 > | Ayakta sayımında kim sayılır? | Yalnız `alive` **ve** `calibrated` oyuncular (§10.6): kalibresiz oyuncu ne vurur ne vurulur, savaş dışıdır. **Eleme** kontrolünde ise kalibrasyona bakılmaz — kalibresiz oyuncu ölü değildir, takımını ayakta tutar (tur süreye gider, kıyas onu zaten dışarıda bırakır) |
 > | Eleme neden `OnKill` ile değil tik ile ölçülür? | Takım **bağlantı kopmasıyla** da boşalır ve o yolda `OnKill` hiç çağrılmaz. Tek tarama = tek doğruluk kaynağı |
 > | Turlar arası ne olur? | `paused`/`mode`, `modeState:"regroup:<h>/<t>"`. Herkes kendi taban bölgesine girip `set_ready{true}` yollayınca (ya da mod zaman aşımına uğrayınca) geri sayım başlar |
+> | Geri sayımda biri tabandan çıkarsa? | Geri sayım **iptal edilir**, faz `paused`/`mode`'a döner ve sayaç sıfırdan başlar. Kural "tabanda **bekle**"dir, "tabana uğra" değil. ⚠️ Zaman aşımıyla başlamış geri sayım iptal EDİLMEZ (eksik oyuncu yüzünden başlamıştı; iptal etmek sonsuz döngü olurdu) |
+> | Toplanma sonsuza kadar sürebilir mi? | Hayır: emniyet zaman aşımı **turun bittiği andan** işler (60 sn, mod içi sabit) ve iptaller onu sıfırlamaz — sürekli girip çıkan bir oyuncu maçı askıda tutamaz |
 > | Cephane? | Şarjör + yedek şarjör (`weaponSource:"rack"`), **her tur başında herkes tam dolu** — istemci geri sayımda doldurur. Sunucunun bundan haberi yoktur (§10.3: silah tablosu yok) |
 
 > ⚠️ **`lobby` bu tabloda YOKTUR ve olmayacaktır.** Lobi bir **tür**dür ama `IGameMode` değildir
