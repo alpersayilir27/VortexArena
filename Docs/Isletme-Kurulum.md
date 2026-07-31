@@ -189,7 +189,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   (`Assets/Arenas/Venues/<İşletme>/`).
 
   `lobbyScene` = lobi sahnesi. **Normalde BOŞ bırakılır** — seçilen mekanın lobi haritası otomatik
-  bulunur. Yalnız bir mekanda birden çok lobi varsa doldurulur. Maç koşmadığı sürece oyuncular orada bekler: birbirlerini görürler, **kalibrasyonlarını orada yaparlar**, raftan silah alıp hedef tahtalarına ateş edebilirler — birbirlerine hasar veremeden. Doldurulacaksa değer, odanın ölçüsüne uyan lobi olmalıdır (12×12 → `Lobby12x12`, işletmeye özel ölçü → o işletmenin kendi lobisi) ve seçilen mekanda bulunmalıdır. Mekanda hiç lobi haritası yoksa oyuncular kabuk bekleme ekranında kalır ve kalibrasyonu arenada yapmak zorunda kalırlar.
+  bulunur. Yalnız bir mekanda birden çok lobi varsa doldurulur. Maç koşmadığı sürece oyuncular orada bekler: birbirlerini görürler, **kalibrasyonlarını orada yaparlar**, duran silahlardan birini seçip hedef tahtalarına ateş edebilirler — birbirlerine hasar veremeden. Doldurulacaksa değer, odanın ölçüsüne uyan lobi olmalıdır (12×12 → `Lobby12x12`, işletmeye özel ölçü → o işletmenin kendi lobisi) ve seçilen mekanda bulunmalıdır. Mekanda hiç lobi haritası yoksa oyuncular kabuk bekleme ekranında kalır ve kalibrasyonu arenada yapmak zorunda kalırlar.
 - [ ] `Server/config/maps.json` dosyasının Bölüm 2'deki export'tan geldiğini doğrula (silah tablosu yoktur — hasarı istemci bildirir).
 - [ ] **Dağıtım paketlerini üret** (ofiste, geliştirme makinesinde):
   - `scripts\deploy-server.bat` → `deploy\server\` (self-contained; işletme PC'sine .NET kurmak gerekmez)

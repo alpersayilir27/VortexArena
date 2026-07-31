@@ -61,6 +61,10 @@ namespace VortexArena.Core.Editor
         private const string CatalogDir = "Assets/_Shared/Data/Resources";
         private const string CatalogPath = CatalogDir + "/WeaponCatalog.asset";
 
+        /// <summary>Silah çerçevesi prefabı — her WPN'in altına ÖRNEK olarak konur
+        /// (bkz. <see cref="ApplyWeaponFrameKit"/>). Bu araç onu üretmez, yalnız bağlar.</summary>
+        private const string WeaponFramePrefabPath = PrefabDir + "/VA_WeaponFrame.prefab";
+
         private const string Casing762Path = PrefabDir + "/Casing_762x39.prefab";
         private const string Casing556Path = PrefabDir + "/Casing_556x45.prefab";
         private const string BulletPack762Path = PackRoot + "/Prefabs/Bullets/Bullet_A.prefab";
@@ -463,6 +467,7 @@ namespace VortexArena.Core.Editor
                 // Tek çalışan yol burası — soket kiti de burada uygulanmazsa mevcut WPN'ler
                 // filtresiz (yani mesafeden kavranabilir) kalırdı.
                 ApplyGripSocketKit(contents, ctx);
+                ApplyWeaponFrameKit(contents, ctx);
 
                 PrefabUtility.SaveAsPrefabAsset(contents, wpnPath);
             }
@@ -1255,6 +1260,62 @@ namespace VortexArena.Core.Editor
             filters.arraySize = 1;
             filters.GetArrayElementAtIndex(0).objectReferenceValue = sockets;
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Silah çerçevesi kitini bir WPN kökü üzerinde kurar (idempotent): <c>VA_WeaponFrame</c>
+        /// prefabının bir ÖRNEĞİ kökün altına konur.
+        /// <para>
+        /// <b>Çerçeve nedir:</b> sahnedeki silah artık yerden alınmaz — çerçevenin içinde durur ve
+        /// oradan hiç ayrılmaz. Oyuncu ≤2 m'den nişan alıp grip'e basınca silahın bir KLONU eline
+        /// gelir (<see cref="WeaponFrame"/> → <c>WeaponGranter.SelectWeapon</c>). Yani her
+        /// <c>WPN_*</c> prefabı hem "elde tutulan silah" hem "sahnede duran kaynak" olarak
+        /// kullanılır; hangisi olduğunu ÇERÇEVENİN varlığı belirler (klonda çerçeve yok edilir).
+        /// </para>
+        /// <para>
+        /// <b>Neden prefab ÖRNEĞİ (unpack DEĞİL):</b> çerçevede yapılan tek bir düzeltme —
+        /// kavrama menzili, ışın rengi, collider boyu — altı silaha birden insin. Unpack edilseydi
+        /// her değişiklik altı prefabı tek tek açmak demek olurdu (sahneye altyapı prefabı koyma
+        /// kuralının aynısı).
+        /// </para>
+        /// <para>
+        /// ⚠️ Bu, <see cref="ApplyGripSocketKit"/>'in <c>DistanceGrabInteractable</c> silme adımıyla
+        /// ÇELİŞMEZ: o adım <see cref="FindComponentByTypeFullName"/> kullanıyor ve o metot yalnız
+        /// KÖKÜN bileşenlerine bakıyor (çocuklara inmiyor). Yasak <c>WPN_*</c> kökü içindir —
+        /// soketli yakın kavramanın zıddı olduğu için; çerçeve ayrı bir objedir ve soket kullanmaz.
+        /// İnseydi araç kendi eklediği çerçevenin kavramasını siler ve silah hiç alınamaz olurdu.
+        /// </para>
+        /// </summary>
+        private static void ApplyWeaponFrameKit(GameObject root, string ctx)
+        {
+            // Zaten var mı — pasif çocukları da tarar (çerçeve görseli pasif başlıyor).
+            if (root.GetComponentInChildren<WeaponFrame>(true) != null)
+            {
+                return; // idempotent
+            }
+
+            var framePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(WeaponFramePrefabPath);
+            if (framePrefab == null)
+            {
+                Warn(ctx + ": '" + WeaponFramePrefabPath + "' bulunamadı — silah çerçevesi eklenemedi. " +
+                     "Çerçeve prefabı bu araç tarafından ÜRETİLMEZ (elle authoring gerektiren bir " +
+                     "görsel/ISDK kurulumu), yalnız bağlanır. Prefab geri gelene kadar bu silah " +
+                     "sahnede alınamaz kalır.");
+                return;
+            }
+
+            var frame = (GameObject)PrefabUtility.InstantiatePrefab(framePrefab, root.transform);
+            if (frame == null)
+            {
+                Warn(ctx + ": VA_WeaponFrame örneklenemedi.");
+                return;
+            }
+
+            frame.name = framePrefab.name;
+            frame.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+            frame.transform.localScale = Vector3.one;
+
+            Debug.Log(Log + ctx + ": VA_WeaponFrame eklendi — silah artık çerçevesinden, 2 m'den alınır.");
         }
 
         /// <summary>

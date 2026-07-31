@@ -1,5 +1,4 @@
 using Oculus.Interaction;
-using Oculus.Interaction.Input;
 using UnityEngine;
 
 namespace VortexArena.Core.Combat
@@ -165,9 +164,12 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Verilen silah (§10.5 weaponSource:"random") ZATEN elde: ISDK kavraması hiç işletilmez,
-            // dolayısıyla avucun içinde soket halkası çizmek yalnız yalan söylerdi.
-            if (_weapon != null && _weapon.IsGranted)
+            // TEK KULLANIMLIK verilen silah (§10.5 weaponSource:"random") ZATEN avuçta: ISDK
+            // kavraması hiç işletilmez, dolayısıyla avucun içinde soket halkası çizmek yalnız yalan
+            // söylerdi. ⚠️ ÇERÇEVE silahında (Persistent klon) durum tersidir ve soket ÇİZİLMELİDİR:
+            // ön kabza ISDK kavramasına açıktır, oyuncunun ikinci elini nereye götüreceğini oradan
+            // görmesi gerekir.
+            if (_weapon != null && _weapon.IsDisposableGrant)
             {
                 HideAll();
                 return;
@@ -225,7 +227,7 @@ namespace VortexArena.Core.Combat
                 return true;
             }
 
-            OVRInput.Controller hand = ResolveController(interactorGameObject);
+            OVRInput.Controller hand = WeaponGranter.ResolveControllerFromGameObject(interactorGameObject);
             if (hand == OVRInput.Controller.None)
             {
                 WarnFailOpen();
@@ -291,10 +293,18 @@ namespace VortexArena.Core.Combat
         /// aynı tabancayı kavramasını engeller: engellenmezse <c>Weapon.IsTwoHanded</c> true olur,
         /// telde <c>GRIP_LINKED</c> yazılır ve uzak taraf boş eli sıfır olan <c>secondaryGrip</c>'e
         /// yapıştırıp iki eli üst üste bindirirdi.</para>
+        /// <para>
+        /// ⚠️ <b>ÇERÇEVE klonu (Persistent) için EK KOD YOKTUR</b> ve gerekmez: kural zaten
+        /// "tutuluyorsa ana soket kapalı, ön kabza yalnız çift ellide ve soran el ANA EL değilse
+        /// açık" diyor. Klonda ana el <c>GrantedHand</c> olduğu için birinci el ana soketi kapalı,
+        /// ikinci el ön kabzayı açık bulur — yani "silah her zaman 1. soketten tutulur, 2. soket
+        /// aynı şekilde işler" kuralı kendiliğinden karşılanır. Buraya bir Persistent dalı yazmak
+        /// aynı kuralın ikinci bir kopyası olurdu.
+        /// </para>
         /// </summary>
         private bool IsSocketOpen(bool secondary, OVRInput.Controller hand)
         {
-            if (_weapon != null && _weapon.IsGranted)
+            if (_weapon != null && _weapon.IsDisposableGrant)
             {
                 return false;
             }
@@ -327,41 +337,6 @@ namespace VortexArena.Core.Combat
             }
 
             return best;
-        }
-
-        // ------------------------------------------------------ el çözümü (ISDK)
-
-        /// <summary>
-        /// Interactor'ın GameObject'inden eli çözer — <c>Weapon.ResolveController</c> ile AYNI yol
-        /// (decorator, yoksa hiyerarşideki <see cref="ControllerRef"/>). Weapon'daki metod private
-        /// olduğu için burada kopyası duruyor; ikisi birlikte değişir.
-        /// </summary>
-        private static OVRInput.Controller ResolveController(GameObject interactorGameObject)
-        {
-            if (interactorGameObject == null)
-            {
-                return OVRInput.Controller.None;
-            }
-
-            var view = interactorGameObject.GetComponent<IInteractorView>();
-            if (view != null &&
-                InteractorControllerDecorator.TryGetControllerForInteractor(view, out IController controller))
-            {
-                return ToOvrController(controller.Handedness);
-            }
-
-            ControllerRef controllerRef = interactorGameObject.GetComponentInParent<ControllerRef>();
-            if (controllerRef != null)
-            {
-                return ToOvrController(controllerRef.Handedness);
-            }
-
-            return OVRInput.Controller.None;
-        }
-
-        private static OVRInput.Controller ToOvrController(Handedness handedness)
-        {
-            return handedness == Handedness.Left ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
         }
 
         // ----------------------------------------------------------------- görsel
