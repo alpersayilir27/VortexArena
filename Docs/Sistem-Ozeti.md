@@ -391,8 +391,8 @@ sandığı maç diğerinin seçtiği 30 dk ile başlardı.
 
 Lobi "hiçbir şey olmuyor" durumu değil, **işletmenin kendi odası**dır. Maç koşmadığı sürece
 oyuncular ve admin orada durur: birbirlerini görürler, **kalibrasyonlarını orada yaparlar**
-(harita değişimi kalibrasyonu sıfırlamadığı için maça hazır girilir), silah rafından silah alıp
-hedeflere ateş edebilirler.
+(harita değişimi kalibrasyonu sıfırlamadığı için maça hazır girilir), silah çerçevesinden silah
+seçip hedeflere ateş edebilirler.
 
 - **Lobi bir türdür** (`modeId:"lobby"`), faz `paused` + `phaseReason:"lobby"`dir. Tür yalnız lobi
   haritasında olur ve o türdeyken **maç başlatılamaz** — ikisi de `maps.json`'daki `modes`
@@ -417,7 +417,7 @@ hedeflere ateş edebilirler.
 - **Atış görünür:** `shot_fired` relay'inin kapısı `playing` **veya** `rules.fireWhilePaused`'dur.
   İki kapı bilerek ayrı: atış bir sunum olayı, vuruş bir durum değişimidir. Yani **hasarı faz,
   ateşi mod** kapatır — lobiyi "hasarsız atış alanı" yapan tam olarak bu ayrım.
-- **Silah rafı çalışır** çünkü `modeId` boş değil `"lobby"`dir — istemci loadout'u
+- **Silah seçimi çalışır** çünkü `modeId` boş değil `"lobby"`dir — istemci loadout'u
   `GameCatalog.FindMode(ModeRuntime.ModeId)` ile çözüyor.
 - **Takımı yalnız admin atar** (`set_team`), üstelik **her fazda** — koşan maçın ortasında da.
   Oyuncunun kendi takımını seçmesi için protokol mesajı yoktur.
@@ -446,7 +446,7 @@ IGameMode.Rules  →  MatchDirector  →  load_match.rules / welcome.match.rules
 | `Scoring` | `Team` / `Player` | `Team` | Skor `match_state.scoreRed/Blue`'ya mı `PlayerInfo.score`'a mı yazılır |
 | `FriendlyFire` | bool | `false` | `hit_report` dost ateşi kapısı |
 | `Revive` | `OwnBase` / `StandStill` | `OwnBase` | Canlanma şartı (§3.7) |
-| `Weapons` | `Rack` / `RandomGrant` | `Rack` | **Yalnız istemci sunumu** — sunucuda karşılığı yok |
+| `Weapons` | `Rack` / `RandomGrant` | `Rack` | Silah sahnedeki **çerçevelerden** mi seçilir (ele klonlanır) yoksa mod mu dağıtır. **Yalnız istemci sunumu** — sunucuda karşılığı yok |
 | `RespawnDelay` | saniye | `RESPAWN_DELAY` (5) | `respawn.delaySeconds` + sunucudaki gecikme eşiği |
 | `FireWhilePaused` | bool | `false` | Faz `playing` değilken ateş edilebilir mi (§3.8.1). Lobi türünde `true`; **hasar yine yok** — onu faz kapatır. Bu alan sayesinde istemcide `if (modeId == "lobby")` zinciri doğmaz |
 
@@ -458,7 +458,7 @@ farklı yazar):
 | `Teams` | `TwoTeams` | **`None`** |
 | `Scoring` | `Team` | **`Player`** |
 | `Revive` | `OwnBase` | **`StandStill`** (3 sn / 1 m) |
-| `Weapons` | `Rack` | **`RandomGrant`** (grip'e basınca elde silah) |
+| `Weapons` | `Rack` (çerçeveden seçilir, kalıcı) | **`RandomGrant`** (grip'e basınca elde rastgele silah) |
 | `RespawnDelay` | `5` | **`0`** (bekleme yerine sabit durma şartı) |
 | Süre / limit | 300 sn / 30 | 300 sn / 20 |
 
@@ -721,8 +721,10 @@ silahta tetikler bağımsız; şarjör+yedek şarjör durumu taşır, boş şarj
 reload'da şarjörde kalan mermi **yanar** (ürün kuralı; `PoolRounds` = CS2 havuzu SO'dan seçilebilir);
 spread atış sürdükçe açılır (bloom) ve boşta toparlar; yerel canlanmada tutulan silah tam dolar;
 vuruş/atış bildirimi `ArenaCombat` üzerinden gider — protokol DTO'su bu sınıfta YOK. **İkinci tutuş
-yolu:** `WeaponGranter` silahı doğrudan ele verir (`GrantTo` — §3.9 `weaponSource:"random"`); verilen
-silah tanım gereği tutuluyordur, her zaman tek ellidir, rezervi yoktur ve reload'u KAPALIDIR) +
+yolu:** `WeaponGranter` silahı doğrudan ele verir (`GrantTo(hand, kind)` — §3.9); verilen silah
+tanım gereği tutuluyordur (ISDK kavraması işletilmez), gerisini `WeaponGrantKind` ayırır —
+`Disposable` (FFA'nın rastgele silahı) tek elli/rezervsiz ve reload'u KAPALIDIR, `Persistent`
+(çerçeveden seçilen silah) tam rezervle gelir, reload'u AÇIKTIR ve ön kabzası tutulabilir) +
 `WeaponDefinition` (SO — hasar/HS çarpanı/RPM/şarjör/reload/spread/recoil/ses profili + verilen
 **tek denge kaynağı**, sunucuya export edilmez; el duruşu tabandaki `ItemDefinition.primaryGrip*`'te,
 burada DEĞİL) + `WeaponAudio` (Meta XR spatializer'lı namlu AudioSource:
@@ -731,7 +733,7 @@ animasyonu: atışta bolt tepmesi, reload'da `*_Mag` child'ı çıkar-takılır;
 zaman çizgisi çalar — görüntü/ses tek kaynaktan) + `WeaponReloadGesture` (silah bel hizasının
 altına inince `TryStartReload`; bel çizgisi = kafa − `waistDropMeters` (0.62 m vars.) — ORAN DEĞİL:
 fark matematiği zemin/kalibrasyon ofsetlerinden etkilenmez; kavradıktan sonra bir kez bel üstüne
-çıkmadan devreye girmez — yerden alırken yanlış tetiklemeyi önler) + `WeaponCatalog` (SO, `_Shared/Data/Resources/` — `weaponId`→tanım araması;
+çıkmadan devreye girmez — alçakta duran bir silahı seçer seçmez yanlış tetiklemeyi önler) + `WeaponCatalog` (SO, `_Shared/Data/Resources/` — `weaponId`→tanım araması;
 `Resources.Load` ile okunduğu için klasöründen çıkarılmaz) + `RemoteShotFx` (kendini önyükler,
 sahne kurulumu istemez; `shot_fired`'ı tüketip uzak oyuncunun namlu alevi + konumsal atış sesini
 havuzlu çalar) + `ShellEjector` (`Weapon.Fired` olayına abone; ateşte namlunun yanındaki `Eject`
@@ -785,7 +787,7 @@ katmanların göreli hız farkı korunur).
 
 | Sınıf | Görevi |
 |---|---|
-| `ModeRuntime` (+ `ModeRuntimePump`) | Aktif maçın kurallarının **tek okuma noktası** (§3.9). `load_match.rules` / `welcome.match.rules` / `return_to_lobby.rules` besler; kurallar telde yoksa (`rules == null`) `ModeDefinition` önizlemesi fallback olarak devralır. Lobiye dönüşte SIFIRLANMAZ, **lobi profili uygulanır** (`modeId:"lobby"`, §3.8.1) — lobideki silah rafı loadout'unu bu anahtarla buluyor. Statik durum + statik `Changed`; pompa kendini önyükler (`BeforeSceneLoad` + `DontDestroyOnLoad`). Tüketiciler: `PlayerCombatState`, `ModeHudBase`, `AdminRoster` |
+| `ModeRuntime` (+ `ModeRuntimePump`) | Aktif maçın kurallarının **tek okuma noktası** (§3.9). `load_match.rules` / `welcome.match.rules` / `return_to_lobby.rules` besler; kurallar telde yoksa (`rules == null`) `ModeDefinition` önizlemesi fallback olarak devralır. Lobiye dönüşte SIFIRLANMAZ, **lobi profili uygulanır** (`modeId:"lobby"`, §3.8.1) — lobideki silah seçimi loadout'unu bu anahtarla buluyor. Statik durum + statik `Changed`; pompa kendini önyükler (`BeforeSceneLoad` + `DontDestroyOnLoad`). Tüketiciler: `PlayerCombatState`, `ModeHudBase`, `AdminRoster` |
 | `UI/ModeHudBase` | Mod HUD'larının **takım-agnostik** tabanı: faz/süre, geri sayım, can barı, ölüm ekranı + durum metni, kill-feed (ad çözümü `lobby_state`'ten), kendi öldürme/ölüm sayacın, maç sonu satırı. **Takıma ait hiçbir şey burada değil** — skor satırı (`ScoreLine`) ve kazanan metni (`WinnerLine`) alt sınıfın işi. Core'da durur çünkü modlar birbirini referanslamaz |
 | `Combat/ItemDefinition` | Elde tutulabilen her şeyin (silah, ileride bomba) **dar** tabanı: `netItemId` (telde giden kimlik, §6.6), prefab, `holdMode`, kanonik kavrama pozları, tracer görünümü. Davranış alanı (hasar/şarjör/fitil) **girmez** — `RemoteAvatar` eşyayı ne YAPTIĞINI bilmeden çizer; Net katmanının "oyun bilgisi içermez" ilkesinin sunumdaki karşılığı. ⚠️ `primaryGrip` = eşyanın **ele göre** pozu, `secondaryGrip` = ön kabzanın **eşyaya göre** pozu — uzayları terstir (§6.6). Soket çizimi ana noktanın **eşyaya göre** yerini ister ve o `PrimaryGripPointOnItem` olarak **türetilir** (`Inverse(R)·(−P)`), ayrı bir alan olarak tutulmaz — aynı nokta iki yerde yaşasa biri güncellenip diğeri unutulurdu |
 | `Combat/ItemGripSockets` | Kavrama noktalarını **soket** yapar: el yaklaşınca (`0.30 m`) gösterge belirir, soketin üstünde (`0.12 m`) grip'e basılınca kavrama doğar. Kapı ISDK'nın **kendi** uzatma noktasıdır — bileşen bir `IGameObjectFilter`'dır ve `GrabInteractable._interactorFilters`'a yazılır (`WeaponKitBuilder` bağlar), yani kavramanın ALGISI ISDK'da kalır ve tel yolu (`Grabbable` → `Weapon` → `HeldItems`) hiç değişmez. Çizim ile kapı **aynı** açıklık kuralını kullanır (`IsSocketOpen`): ana soket eşya tutulmuyorsa açık, ön kabza yalnız tutuluyor + çift elli + soran el ana el değilken açık — tek elli eşyada ön kabza hiç açılmaz, bu ikinci elin aynı tabancayı kavramasını da engeller. Gösterge `WeaponCatalog.GripSocketPrefab`, yoksa prosedürel halka. Kavrama yarıçapı **silah başınadır** (`ItemDefinition.primary/secondaryGripRadius`) — tabanca kabzası ile tüfek ön kabzası aynı büyüklükte değil; hover (0.30 m) global sabit ama etkin değeri `Max(hover, yarıçap)`, yoksa yarıçap hover'ı geçtiğinde oyuncu soketi hiç görmeden kavrardı. ⚠️ El çözülemezse **fail-open** (editörde kavrama mümkün kalsın) ve bu tek seferlik loglanır — sessiz bırakılsa özellik "çalışıyor gibi görünüp" hiçbir şey yapmazdı |
@@ -794,8 +796,11 @@ katmanların göreli hız farkı korunur).
 | `Combat/HeldItems` | Yerel oyuncunun "hangi elde hangi eşya" durumunun tek buluşma noktası (statik). **Yazan** `Weapon`/`WeaponGranter` (`Weapon.ActiveChanged` üzerinden toplanır — çift tabanca mümkün olduğu için bildirim per-instance olamaz), **okuyan** `PlayerPoseTracker`. Hiçbir şey göndermez |
 | `Combat/ShotTracer` | Havuzlu `LineRenderer` mermi izi. `RemoteShotFx` sürer; görünüm `ItemDefinition`'dan, sıklık `tracerEveryNthRound`'dan (her mermide çizmek lazer ışını gibi durur + konumu fazla ifşa eder; asıl maliyet bayt değil GC/draw call) |
 | `Combat/ArenaCombat` | **Oyun kodunun ağa açılan tek kapısı** (statik). `ReportShot` / `ReportThrow` / `ReportHit` / `ReportRaycastHit` / `ReportAreaHit` + `TryGetTargetPlayerId` / `IsHeadshot` / `CanFire` / `LocalPlayerId`. ⚠️ `ReportShot`/`ReportThrow` **UDP olay kanalına** (`0x03`) gider, `ReportHit` **WS**'te kalır — kaybı kozmetik olan ile otoriter olanın kanalı ayrıdır (§10.3). Bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektiriyor (arena uzayı, yön≠nokta, `RemoteHitBox` ile hedef çözme, hasarı istemcinin belirlemesi) — bunlar `Weapon` içinde gömülü kalsaydı ikinci bir hasar kaynağı yazan herkes aynı dördünü yeniden keşfederdi. `Weapon` de bu kapıyı kullanır (tek doğruluk kaynağı). Bağlantı yokken sessizce no-op. Reçeteler: `Gelistirici/Yemek-Kitabi.md` |
-| `Combat/WeaponGranter` | `weaponSource:"random"` modlarının (§3.9) silah kaynağı. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz, bu yüzden yeni arenaya ek kurulum adımı doğurmaz. İki iş: (1) sahne süpürmesi — raf silahları gizlenir, `BaseZone` **bileşeni** kapatılır + görsel taban şeridi gizlenir; (2) grip basılıyken o elde rastgele silah durur, bırakılınca yok olur, tekrar basınca **yenisi** gelir. TDM'de (kural `rack`) tümüyle pasiftir; kural değişince süpürme geri alınır. Admin'de rig kapalı olduğu için silah verme yolu kendiliğinden kapalı, süpürme ise çalışır |
-| `Combat/WeaponRackSpawner` (+ `RackSlot`) | Rafın silah kaynağı: kural `rack` iken gözlere `ModeDefinition.loadout`'tan silah **örnekler**, kural değişince toplar. Loadout'u `WeaponGranter` ile aynı yoldan okur (katalog → mod → loadout). Göz (`RackSlot`) yalnız KONUMU tutar (sanat kararı); hangi silahın duracağı moddan gelir — gözün `weapon` alanı doldurulursa o silah sabitlenir, boşsa loadout sırası kullanılır. **Neden sahneye elle `WPN_*` konmuyor:** elle konan örnek sahneye donar, moda silah eklenince her arenayı tek tek açmak gerekirdi. Silahlar prefabındaki fizikle gelir (kavrama/fizik ayarlarına dokunulmaz — dokunulsaydı raftan alınan silah "verilen silah" gibi davranır, bırakılamazdı) |
+| `Combat/WeaponFrame` | Sahnedeki silahın **çerçevesi** — `VA_WeaponFrame` prefabı olarak her `WPN_*` kökünün çocuğudur (`WeaponKitBuilder` bağlar). Kaynak silahı **dondurur** (Rigidbody kinematik + yerçekimsiz, `Grabbable`/`GrabInteractable`/`ItemGripSockets` kapatılır) → yakın kavrama tümden kapalıdır, silah **yalnız uzaktan** alınır ve çerçeveden hiç ayrılmaz. ISDK `DistanceGrabInteractable`'ın pointer olaylarını dinler: ≤`maxGrabDistance` (2 m) nişan alınınca mavi ışın çizilir, `Select` gelince `WeaponGranter.SelectWeapon(...)` çağrılır — yani oyuncunun eline giden şey kaynağın bir **KLONU**dur. Aynı zamanda bir `IGameObjectFilter`'dır (mesafe kapısı `_interactorFilters`'a bağlanır). Çerçeve görselinin görünürlüğü `isFrameVisible` ile **örnek başına** (sahneden sahneye) ayarlanır — reçete `Gelistirici/Yemek-Kitabi.md` |
+| `Combat/WeaponGranter` | Silahın ele geldiği **tek nokta** (§3.9). **Kendini önyükleyen kalıcı tekil** — sahneye konmaz, bu yüzden yeni arenaya ek kurulum adımı doğurmaz. İki kaynağı vardır: (a) **`RandomGrant`** kuralında sahne süpürülür (çerçevedeki silahlar gizlenir, `BaseZone` **bileşeni** kapatılır + görsel taban şeridi gizlenir) ve grip basılıyken o elde rastgele bir silah durur, bırakılınca **yok olur**, tekrar basınca **yenisi** gelir (`Disposable`); (b) **`Rack`** kuralında `WeaponFrame`'in çağırdığı `SelectWeapon` ile seçilen silahın **kalıcı klonu** tutulur — grip bırakılınca yalnız gizlenir, tekrar basınca arenanın neresinde olursa olsun aynı silah aynı mermiyle geri gelir (`Persistent`). Oyuncu başına **tek** silah; seçim ancak başka bir çerçeveden alınarak değişir ve **harita başına** sıfırlanır. Canlanmada seçim korunup silah `RefillFull` ile tam şarjör + rezervle döner — dolum yeri burasıdır. Admin'de rig kapalı olduğu için silah verme yolu kendiliğinden kapalı, süpürme ise çalışır |
+| `Combat/WeaponGrantKind` | `None` / `Disposable` / `Persistent` — silahın **nasıl** verildiği (`Weapon.GrantTo`'nun ikinci argümanı). `Disposable` = FFA'nın rastgele silahı: rezerv yok, reload kapalı, her zaman tek elli. `Persistent` = çerçeveden seçilen silah: tam rezerv, reload AÇIK, ikinci el ön kabzayı tutabilir. **Neden tek bayrak değil:** `IsGranted` üç ayrı kuralı birbirine kilitliyordu ("elde sabit" + "reload kapalı" + "tek el/rezervsiz"); çerçeve silahı yalnız ilkini ister. ⚠️ Serialize EDİLMEZ (çalışma anı durumu), o yüzden "yeni değer sona" kuralı burada bağlayıcı değildir |
+| `Combat/WeaponRackSpawner` (+ `RackSlot`) | Rafın silah kaynağı: kural `rack` iken gözlere `ModeDefinition.loadout`'tan silah **örnekler**, kural değişince toplar. Loadout'u `WeaponGranter` ile aynı yoldan okur (katalog → mod → loadout). Göz (`RackSlot`) yalnız KONUMU tutar (sanat kararı); hangi silahın duracağı moddan gelir — gözün `weapon` alanı doldurulursa o silah sabitlenir, boşsa loadout sırası kullanılır. **Neden sahneye elle `WPN_*` konmuyor:** elle konan örnek sahneye donar, moda silah eklenince her arenayı tek tek açmak gerekirdi. Raftaki silah da **çerçeve kaynağıdır**: prefabıyla birlikte gelen `WeaponFrame` onu dondurur (kavrama/fizik ayarlarını çerçeve kapatır), yani raftan silah "alınmaz", ele klonlanır |
+| `Combat/FrozenGrabTransformer` | Hiçbir şey yapmayan ISDK `ITransformer`'ı: kavranan nesneyi **yerinde dondurur**. Çerçevedeki kaynak silahın `Grabbable._oneGrabTransformer`/`_twoGrabTransformer` alanlarına bağlanır. ⚠️ **Alanları boş bırakmak hareketsizlik değil, SERBEST hareket demektir** — `Grabbable.Start` ikisi de boşsa kendisi bir `GrabFreeTransformer` üretir |
 | `Player/ThreePointBodyIK` | Ağdan gelen **üç noktadan** (kafa + iki el) humanoid iskeleti çözer — uzak avatarların sürücüsü. Kemikler isimle değil `Animator.GetBoneTransform` ile bulunur (karakter humanoid; model değişse bu bileşende tek satır değişmez); **gövde ölçüleri de sabit sayı değil, karakterin bind pozundan ölçülür** (kalça düşüşü, ayak bileği yüksekliği). Avatar oyuncunun **ölçülen ayakta kafa yüksekliğine göre ölçeklenir** — model sabit boydadır, ölçeklenmezse kısa kol ele yetişmez, bacak zemine değmez. Gövde: kalça kafanın altında, gövde yaw'ı kafayı **gecikmeli** takip eder (anında yapışsaydı avatar her bakışta bütün gövdesiyle dönerdi), omurga eğimi zincire paylaştırılır. Kollar/bacaklar: Movement SDK `IKUtilities.SolveCCDIK`; el ve kafa kemiğine **yalnız rotasyon** yazılır (konum yazmak kemiği ebeveyninden koparır). Bacaklar **tamamen prosedürel** (adım döngüsü + ayak IK): projede yürüme klibi yok ve aynı anda iki ayak birden adım atmaz. Her kare önce **bind pozuna dönülür** (§7 tuzaklar). Gelen poz önce **denetlenir**: NaN/∞ taşıyan poz hiç uygulanmaz, normalize edilemeyen rotasyon kimliğe düşürülür, kafa arena zemininden makul aralığın (0.6–2.6 m) dışındaysa zemin arenadan değil **pozdan** türetilir — avatar yanlış yükseklikte ama BÜTÜN bir insan çizilir ve sayılarla bir kez uyarı basılır. Tahminlerin hiçbiri mandallanmaz: boy kayan pencere maksimumudur, ayak hedefinden 1 m'den fazla uzaklaşınca ziplatılır, hepsi `ResetPoseState()` ile sıfırlanır (avatar başka oyuncuya devredilebiliyor). ⚠️ Dirsek/omuz yönü TAHMİNDİR — gerçek body tracking değildir; ağa tek bayt eklenmez |
 | `Team` | `Red` / `Blue` / **`Neutral`**. `BaseZone`'da `Neutral` = herkese açık joker. ⚠️ Yeni değer SONA eklenir: `BaseZone`/`Weapon` bu enum'u serialize ediyor, başa ekleme her arenanın taban takımlarını kaydırır |
 
@@ -967,7 +972,7 @@ kirletmez, `git status` temiz kalır. Bir hedefin `ip`'si **boşsa** adres yazı
 | **Hedef** + "Tazele" / "Özel…" | Adres; `Özel…` seçilirse IP/Port elle girilir (IP'yi boş bırakmak = keşif zinciri) |
 | **Başlangıç: Boot'tan** | `playModeStartScene` = Boot sahnesi → hangi sahne açık olursa olsun Play gerçek akıştan başlar (sahne Build Settings'ten bulunur) |
 | **Başlangıç: Açık sahneden** | Arena sahnesine doğrudan Play. Bir kare sonra `DevSession` **seçili hedefe bağlanır** — arena sahnesinde `LobbyController` olmadığı için bunu başka kimse yapmaz; bağlanmazsa can/skor/faz gelmez ve `CanFire` hiç açılmaz. Maç verisi (takım / mod / süre / limit / faz) **yalnız sunucudan** gelir: `welcome.match` geç-katılım senkronu (`SceneRouter`) ya da gerçek `load_match`. Sunucuda koşan bir maç yoksa istemci maç verisi almaz — bu beklenen davranıştır, bir **admin** maçı başlatmalıdır. Hedef "keşif" kipindeyse (ip boş) bağlanılmaz ve sebebi loglanır — arena sahnesinde adres girecek arayüz yok |
-| **Sunucusuz sandbox** (+ mod · silah) | Sunucuya **hiç bağlanılmaz**: sunucu açma, admin'den harita seçme ve elle kalibrasyon üçü de atlanır. `DevSession` bağlanmak yerine `ModeRuntime.Apply` ile iki alan yazar — seçilen `modeId` (**silah loadout'u buradan okunur**; onsuz raf boş doğar) ve `fireWhilePaused = true` (faz sunucusuz `paused` kaldığı için tetiği açan tek kapı). Silah kaynağı seçilir: **Raf** (sahnedeki `WeaponRackSpawner` dolar) / **Rastgele** (`WeaponGranter` grip'e basılı her ele silah tutturur). Yalnız **"Açık sahneden"** başlangıcıyla ve **kabuk dışı** bir sahnede (arena ya da mekan lobisi) çalışır; ikisi de sağlanmazsa konsola uyarı düşer. ⚠️ Hasar/skor/faz **YOKTUR** — üçünün de otoritesi sunucudadır; bu kip yerel şeyler (silah duruşu, namlu, ses, kavrama) içindir |
+| **Sunucusuz sandbox** (+ mod · silah) | Sunucuya **hiç bağlanılmaz**: sunucu açma, admin'den harita seçme ve elle kalibrasyon üçü de atlanır. `DevSession` bağlanmak yerine `ModeRuntime.Apply` ile iki alan yazar — seçilen `modeId` (**silah loadout'u buradan okunur**; onsuz raf boş doğar) ve `fireWhilePaused = true` (faz sunucusuz `paused` kaldığı için tetiği açan tek kapı). Silah kaynağı seçilir: **Raf** (sahnedeki `WeaponRackSpawner` dolar, silahlar çerçevelerinden seçilir) / **Rastgele** (`WeaponGranter` grip'e basılı her ele silah tutturur). Yalnız **"Açık sahneden"** başlangıcıyla ve **kabuk dışı** bir sahnede (arena ya da mekan lobisi) çalışır; ikisi de sağlanmazsa konsola uyarı düşer. ⚠️ Hasar/skor/faz **YOKTUR** — üçünün de otoritesi sunucudadır; bu kip yerel şeyler (silah duruşu, namlu, ses, kavrama) içindir |
 | **"Dev enjeksiyonu" onayı** | Kapatılırsa üretim yolu **birebir** koşar (rol `AppBoot`'tan, adres keşif zincirinden) — beacon keşfini editörde denemenin yolu |
 
 Editör **player** rolündeyken ortamda maçı başlatacak bir admin kalmaz: ikinci bir istemciyi
@@ -1236,7 +1241,8 @@ konsoluna tek satır sebep yazar.
     edemez** (`GrantedHand` bu yüzden var). İkinci tuzak tetikte: `Player/Attack` tek bir Button
     action'dır ve `<XRController>/{PrimaryAction}` ile İKİ kumandayı da toplar → iki elde iki
     silahla tek tetiğe basmak ikisini birden ateşlerdi. Verilen silah bu yüzden kendi elinin
-    tetiğini `OVRInput` ile okur; raf silahının yolu değişmedi.
+    tetiğini `OVRInput` ile okur. Bu yol çerçeveden seçilen silah için de aynıdır — o da
+    `GrantTo` ile ele verilir (`Persistent`), yalnız reload/rezerv/ön kabza kapıları açıktır.
 27. **Free-roam'da tracking origin `Stage`'dir, `FloorLevel` değil.** İkisi de aynı zemin
     seviyesini verir (`TrackingOriginModeFlags.Floor`) ama OpenXR loader'da `FloorLevel`
     **recentering'i zorla açar** (`OVRManager.cs`: `SetAllowRecentering(true)`), `Stage` kapatır.
@@ -1515,13 +1521,41 @@ konsoluna tek satır sebep yazar.
     yüzü: aynı kapanış sebebi sıradan kopmalarda kullanılmamalıdır (bayat soket değişimi,
     `OFFLINE_TIMEOUT` temizliği) — yoksa istemci kendini atılmış sanıp uygulamayı kapatır.
 
+58. **Silah çerçevesinin görseli prefabda PASİF durur; onu AÇAN tek yer `WeaponFrame.Awake`'tir.**
+    `RemoteAvatar.SterilizeVisual` kopyadaki tüm MonoBehaviour'ları siler ama **GameObject'leri
+    kapatmaz** — görsel aktif başlasaydı `WeaponFrame` bileşeni silinmiş olmasına rağmen çerçeve
+    uzak oyuncuların elindeki silahta ve oyuncunun kendi eline gelen klonda çizilmeye devam ederdi
+    (bir sahne kaynağının süsü, tutulan silahın üstünde). Kural: "yalnız çalışan bileşenle anlamı
+    olan" bir görsel prefabda kapalı doğar, onu bileşenin kendisi açar — sterilizasyon bileşeni
+    aldığında süs de kendiliğinden gitmiş olur.
+
+59. **ISDK interactor filtresi SEÇİMİ keser, HOVER'ı kesmez — mesafe testi İKİ yerde yapılır.**
+    Çerçevenin 2 m'lik kavrama menzili yalnız `IGameObjectFilter`'a yazılsaydı oyuncu 5 m'den de
+    mavi ışını ve vurguyu görür, nişan alır, grip'e basar ve hiçbir şey olmazdı; bu yüzden mesafe
+    testi hem filtrede hem **ışın çiziminde** koşar. Yukarıdaki "yalan söyleyen affordance"
+    tuzağının aynısıdır — orada çözüm bileşeni kaldırmaktı çünkü `WPN_*` **kökünde** mesafeden
+    kavrama soket tasarımının zıddıdır; o yasak hâlâ geçerli ama **yalnız kök için**: çerçeve ayrı
+    bir objedir ve silah zaten oradan, uzaktan alınır.
+
+60. **Transformer'sız bir `Grabbable` hareketsiz DEĞİLDİR — en serbest hâlidir.** `Grabbable.Start`
+    tek ve çift el transformer alanlarının İKİSİ de boşsa kendisi bir `GrabFreeTransformer` üretip
+    bağlar ("create missing defaults"), yani çerçevedeki silah seçilir seçilmez oyuncunun eline
+    doğru kaymaya başlar. Çözüm no-op bir `ITransformer` (`FrozenGrabTransformer`) yazıp
+    `_oneGrabTransformer`/`_twoGrabTransformer` alanlarına **açıkça** bağlamaktır. "Her karede pozu
+    geri yaz" alternatifi ISDK'nın transformer'ıyla kare kare yarışırdı — kimin sonra yazdığı
+    Unity'nin çağrı sırasına kalır ve silah titrer; kıpırdamamanın tek kesin yolu kıpırdatacak
+    kodu devreden çıkarmaktır.
+
 ---
 
 ## 8. Durum ve sıradaki işler
 
 **Bugün çalışan sistem** (ayrıntı §2–§7): lobi + 20 Hz poz senkronu + **elde tutulan eşya senkronu**
-(uzak oyuncuların silahı kanonik kavramayla çizilir) + **soket tabanlı kavrama** (el yaklaşınca
-gösterge belirir, soketin üstünde grip'e basılınca kavranır; mesafeden kavrama yok) + **UDP
+(uzak oyuncuların silahı kanonik kavramayla çizilir) + **çerçeveden silah seçimi** (sahnedeki silah
+çerçevesinden ayrılmaz; ≤2 m'den nişan alınıp grip'e basılınca ele bir klonu gelir, bırakılınca
+gizlenir ve aynı silah aynı mermiyle geri çağrılır — oyuncu başına tek silah, harita başına
+sıfırlanır) + **soket tabanlı kavrama** (elde tutulan eşyada: el yaklaşınca gösterge belirir,
+soketin üstünde grip'e basılınca kavranır) + **UDP
 atış/atma olay kanalı** (namlu alevi, ses, mermi izi — her olay kendi `serverTick`'inde,
 interpolasyon saatiyle oynatılır) + sunucu-otoriter maç
 (faz makinesi, vuruş hattı, free-roam canlanma, kill-feed/HUD) · **iki oyun modu** — `tdm` (Takım

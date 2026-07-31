@@ -68,7 +68,7 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `Net/Protocol` (VortexArena.Protocol — saf C#, server aynı dosyaları derler), `Net/Scripts`
   (VortexArena.Net), `App/Scripts` (VortexArena.App — `Admin/` alt klasörü aynı asmdef'te:
   admin gözlemci; `UiKit.cs` arayüz paleti + EventSystem garantisi — görünüm prefablarda).
-  Kod-dışı: `Arsenal/` (silah prefab+SO),
+  Kod-dışı: `Arsenal/` (silah prefab+SO, `VA_WeaponFrame`),
   `FX/`, `Environments/`, `Avatars/` (**`PlayerBodyAvatar.prefab`** — Mixamo Ch15 + Movement SDK
   CharacterRetargeter'lı yerel gövde avatarı; retarget config JSON'u FBX'in yanında,
   `ThirdPartyPackages/MixamoCharacters/`), `Data/` (**`Data/Resources/GameCatalog.asset`** —
@@ -338,15 +338,20 @@ altında sub-emitter'lı namlu dumanı (`Smoke`), ve kalibreye göre (762x39/556
 `Casing_*.prefab`'a bağlı `ShellEjector` (ateşte kovan fırlatan, `Weapon.Fired`'a abone bileşen —
 `Docs/Sistem-Ozeti.md` §4). Gerekiyorsa
 `ModeDefinition.loadout`'a eklenir. Kavrama **soketi** kurulum istemez: araç prefaba
-`ItemGripSockets`'ı koyar ve `GrabInteractable`'ın filtre listesine bağlar — ⚠️ **prefaba
-`DistanceGrabInteractable` GERİ EKLENMEZ** (araç onu bilerek siler: mesafeden kavrama soket
+`ItemGripSockets`'ı koyar ve `GrabInteractable`'ın filtre listesine bağlar — ⚠️ **`WPN_*` KÖKÜNE
+`DistanceGrabInteractable` GERİ EKLENMEZ** (araç onu bilerek siler: kökte mesafeden kavrama soket
 tasarımının zıddıdır ve filtre hover'ı kesmediği için yalan söyleyen bir vurgu bırakırdı →
-`Docs/Sistem-Ozeti.md` §7). Aynı sebeple ⚠️ **`Grabbable._throwWhenUnselected` GERİ AÇILMAZ**
+`Docs/Sistem-Ozeti.md` §7). Yasak yalnız kök içindir: **çerçeve prefabında (`VA_WeaponFrame`)
+mesafeden kavrama ZORUNLUDUR** — silah oradan alınır. Çerçeve adımı elle iş istemez, araç her
+`WPN_*` köküne bir `VA_WeaponFrame` örneği koyar (idempotent). Aynı sebeple ⚠️ **`Grabbable._throwWhenUnselected` GERİ AÇILMAZ**
 (araç kapatır): silahın pozunu ISDK değil `ApplyCanonicalGrip` sürdüğü için bırakış hızı uydurmadır
 ve silah elden fırlar. ⚠️ **Sahneye elle `WPN_*` örneği KOYULMAZ:** raf silahlarını
 `WeaponRackSpawner` (`_Shared/Core/Combat/`, raf kökünde) kural `Rack` iken loadout'tan üretir —
 göz (`RackSlot`) yalnız KONUMU tutar, hangi silahın duracağını mod belirler. Elle konan örnek
 sahneye donar ve moda silah eklendiğinde her arenayı tek tek açmak gerekirdi.
+Sahnedeki silah **çerçeve kaynağıdır**: alınmaz, ≤2 m'den seçilince ele klonlanır; çerçeve
+görselini `WeaponFrame.isFrameVisible` ile **örnek başına** (sahneden sahneye) aç/kapat →
+`Docs/Gelistirici/Yemek-Kitabi.md`.
 **Sunucu tarafında iş YOKTUR** ve export
 gerekmez — sunucuda silah tablosu yok, hasarı (headshot çarpanı dahil) istemci hesaplayıp
 `hit_report.damage` ile bildirir, sunucu aynen uygular (§10.3); `weaponId` yalnız kill feed

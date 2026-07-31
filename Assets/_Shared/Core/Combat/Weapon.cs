@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Oculus.Interaction;
-using Oculus.Interaction.Input;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Random = UnityEngine.Random;
@@ -38,10 +37,17 @@ namespace VortexArena.Core.Combat
     /// da tamamlanır. Şarjör seslerini bu sınıf ÇALMAZ (WeaponAnimator zaman çizgisi).
     /// </para>
     /// <para>
-    /// İKİNCİ TUTUŞ YOLU — <b>verilen silah</b> (§10.5 <c>weaponSource:"random"</c>):
-    /// <see cref="WeaponGranter"/> silahı doğrudan el anchor'ının altına örnekler ve
-    /// <see cref="GrantTo"/> ile bu silaha kendi elini bildirir; ISDK kavraması hiç işletilmez.
-    /// Bu yolda silah tanım gereği tutuluyordur, her zaman tek ellidir ve reload KAPALIDIR.
+    /// İKİNCİ TUTUŞ YOLU — <b>verilen silah</b> (<see cref="GrantTo"/>): silah ISDK kavraması hiç
+    /// işletilmeden, doğrudan bir kumandaya bildirilerek tutulur. İki türü vardır ve farkları
+    /// <see cref="WeaponGrantKind"/>'dadır:
+    /// <list type="bullet">
+    /// <item><b>Disposable</b> (§10.5 <c>weaponSource:"random"</c>): <see cref="WeaponGranter"/>
+    /// silahı el anchor'ının ALTINA örnekler; tanım gereği tutuluyordur, her zaman tek ellidir ve
+    /// reload KAPALIDIR.</item>
+    /// <item><b>Persistent</b> (çerçeveden seçilen silah, <see cref="WeaponFrame"/>): klon anchor'ın
+    /// çocuğu DEĞİLDİR — pozu her karede kanonik kavramayla sürülür. Reload açıktır, rezervi vardır
+    /// ve ikinci el ön kabzayı tutabilir.</item>
+    /// </list>
     /// </para>
     /// </summary>
     public class Weapon : MonoBehaviour
@@ -107,16 +113,33 @@ namespace VortexArena.Core.Combat
         /// </summary>
         public OVRInput.Controller GrantedHand { get; private set; } = OVRInput.Controller.None;
 
+        /// <summary>Verilme TÜRÜ (bkz. <see cref="WeaponGrantKind"/>) — "elde sabit duruyor" ile
+        /// "reload kapalı, tek elli" kuralları bu tiple ayrıldı; ikisi artık aynı bayrağa bağlı
+        /// değil.</summary>
+        public WeaponGrantKind GrantKind { get; private set; } = WeaponGrantKind.None;
+
         /// <summary>Silah verilerek mi tutuluyor (raf silahında her zaman false).</summary>
         public bool IsGranted => GrantedHand != OVRInput.Controller.None;
+
+        /// <summary>Çerçeveden seçilen KALICI klon mu (reload açık, rezerv var, ön kabza tutulabilir).</summary>
+        public bool IsPersistentGrant => GrantKind == WeaponGrantKind.Persistent;
+
+        /// <summary>FFA'nın TEK KULLANIMLIK rastgele silahı mı (reload kapalı, rezerv yok, tek elli).</summary>
+        public bool IsDisposableGrant => GrantKind == WeaponGrantKind.Disposable;
 
         /// <summary>Tutuluyor mu: verilen silah TANIM GEREĞİ tutuluyordur, raf silahı ISDK'nın
         /// pointer olaylarından izlenir. Bu <c>||</c> olmadan verilen silah hiç ateş edemezdi.</summary>
         public bool IsHeld => IsGranted || heldPoints.Count > 0;
 
-        /// <summary>İki elle sabitleme YALNIZ ISDK kavramasıyla gelir; verilen silah her zaman tek
-        /// ellidir (iki el iki AYRI silah tutabilir — çapraz-el durumu tutulmaz).</summary>
-        public bool IsTwoHanded => !IsGranted && heldPoints.Count > 1;
+        /// <summary>
+        /// İki elle sabitleme: raf silahında İKİ kavrama noktası, çerçeve klonunda ise VERİLEN el +
+        /// ön kabzayı tutan ikinci el (klonun ön kabzası ISDK kavramasına açıktır).
+        /// <para>⚠️ <b>Verilen (Disposable) silah her zaman tek ellidir</b> — o yolda ISDK kavraması
+        /// hiç işletilmez; iki el iki AYRI silah tutabilir (çapraz-el durumu tutulmaz).</para>
+        /// </summary>
+        public bool IsTwoHanded => IsPersistentGrant
+            ? heldPoints.Count > 0
+            : (!IsGranted && heldPoints.Count > 1);
 
         /// <summary>
         /// Tetik/ana el: VERİLEN silahta silahın verildiği el, raf silahında İLK kavrayan el.
@@ -267,6 +290,7 @@ namespace VortexArena.Core.Combat
             bool wasHeld = IsHeld;
             heldPoints.Clear();
             GrantedHand = OVRInput.Controller.None;
+            GrantKind = WeaponGrantKind.None;
             triggerHeld = false;
             if (wasHeld)
                 HeldChanged?.Invoke(false);
@@ -339,9 +363,16 @@ namespace VortexArena.Core.Combat
         /// ofseti" olarak çizer. Serbest kavrama o eşitliği bozar ve iki uçta iki ayrı duruş doğar.
         /// </para>
         /// <para>
-        /// <b>Verilen silah burada işlenmez</b> (<see cref="IsGranted"/>): o örnek anchor'ın ÇOCUĞU
-        /// olarak doğar (<see cref="WeaponGranter"/>) ve pozu zaten aynı ofsetten gelir. İki yol
-        /// aynı kurala uyar, ama biri parent hiyerarşisiyle, öteki her karede sürülerek.
+        /// <b>Yalnız Disposable verilen silah burada işlenmez</b> (<see cref="IsDisposableGrant"/>):
+        /// o örnek anchor'ın ÇOCUĞU olarak doğar (<see cref="WeaponGranter"/>) ve pozu zaten aynı
+        /// ofsetten gelir. İki yol aynı kurala uyar, ama biri parent hiyerarşisiyle, öteki her
+        /// karede sürülerek.
+        /// </para>
+        /// <para>
+        /// <b>Çerçeve klonu (Persistent) BURADAN sürülür</b>: o örnek anchor'ın çocuğu DEĞİLDİR
+        /// (DDOL kökünde park eder). Üstelik ön kabzasının ISDK kavramasına açık olması sahiden bir
+        /// transformer'ı devreye sokabilir — <c>LateUpdate</c>'te kanonik kavramayı yazmak §6.6'yı
+        /// o durumda da garantiler.
         /// </para>
         /// <para>
         /// Rig yoksa (admin gözlemci, editör oturumu, sahne henüz yüklenmemiş) hiçbir şey yapılmaz —
@@ -353,7 +384,17 @@ namespace VortexArena.Core.Combat
         /// </summary>
         private void ApplyCanonicalGrip()
         {
-            if (definition == null || IsGranted || heldPoints.Count == 0)
+            if (definition == null)
+            {
+                return;
+            }
+
+            if (IsDisposableGrant)
+            {
+                return;
+            }
+
+            if (!IsGranted && heldPoints.Count == 0)
             {
                 return;
             }
@@ -487,20 +528,33 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Silahı bir kumandaya VERİR (<see cref="WeaponGranter"/> çağırır): tutuş sayılır, ISDK
-        /// kavraması hiç işletilmez ve <b>şarjör değiştirme kapanır</b> — bu modda şarjör bitince
-        /// silahı bırakıp yenisini çekmek oyuncunun işidir (§10.5 <c>weaponSource:"random"</c>).
+        /// kavraması hiç işletilmez.
+        /// <para>
+        /// <b>Cephane davranışı türe göre AYRILIR</b> (<see cref="WeaponGrantKind"/>):
+        /// <list type="bullet">
+        /// <item><c>Disposable</c>: silah dolu şarjörle başlar, rezerv YOKTUR (reload kapalı olduğu
+        /// için yedek şarjör sayacı yalnız HUD'a yalan söylerdi) ve yarım kalmış reload iptal edilir
+        /// — her çağrı yeni bir silahtır.</item>
+        /// <item><c>Persistent</c>: cephaneye <b>HİÇ DOKUNULMAZ</b> ve devam eden reload da iptal
+        /// edilmez. Çerçeve silahı gizlenip tekrar açılan TEK örnek olduğu için "aynı silah aynı
+        /// mermiyle geri gelir" kuralı doğrudan bundan doğar; doldurmak, oyuncuya sonsuz cephane
+        /// veren bir bırak-tut hilesi açardı.</item>
+        /// </list>
+        /// </para>
         /// </summary>
-        public void GrantTo(OVRInput.Controller hand)
+        public void GrantTo(OVRInput.Controller hand, WeaponGrantKind kind)
         {
             bool wasHeld = IsHeld;
             GrantedHand = hand;
-
-            // Ele yeni geçen silah dolu şarjörle başlar; yarım kalmış bir reload iptal edilir.
-            IsReloading = false;
-            CurrentAmmo = MagazineSize;
-            // Rezerv YOK: reload kapalı olduğu için yedek şarjör sayacı yalnız HUD'a yalan söylerdi.
-            reserveRounds = 0;
+            GrantKind = kind;
             triggerHeld = false;
+
+            if (kind == WeaponGrantKind.Disposable)
+            {
+                IsReloading = false;
+                CurrentAmmo = MagazineSize;
+                reserveRounds = 0;
+            }
 
             AmmoChanged?.Invoke();
             if (!wasHeld)
@@ -508,18 +562,43 @@ namespace VortexArena.Core.Combat
             ActiveChanged?.Invoke();
         }
 
+        /// <summary>
+        /// Verilmeyi geri alır (silah artık elde değil). Çerçeve klonu gizlenirken
+        /// <see cref="WeaponGranter"/> çağırır.
+        /// <para>Gizleme (<c>SetActive(false)</c>) zaten <see cref="OnDisable"/>'ı tetikleyip aynı
+        /// temizliği yapıyor; açık API yine de var, çünkü "silahı elden al" niyeti bir yan etkiye
+        /// değil bir çağrıya bağlı olmalı — <c>OnDisable</c>'ın sırasına güvenen kod kırılgandır.</para>
+        /// </summary>
+        public void Revoke()
+        {
+            if (!IsGranted)
+            {
+                return;
+            }
+
+            bool wasHeld = IsHeld;
+            GrantedHand = OVRInput.Controller.None;
+            GrantKind = WeaponGrantKind.None;
+            triggerHeld = false;
+
+            if (wasHeld && !IsHeld)
+                HeldChanged?.Invoke(false);
+            ActiveChanged?.Invoke();
+        }
+
         // ------------------------------------------------------------------ reload
 
         /// <summary>
-        /// Reload başlatmayı dener; başlattıysa true. Reddetme koşulları: VERİLEN silah
-        /// (§10.5), zaten reload'da, tanımsız, şarjör tam, oyuncu ölü, rezerv yetersiz
+        /// Reload başlatmayı dener; başlattıysa true. Reddetme koşulları: TEK KULLANIMLIK verilen
+        /// silah (§10.5 <c>weaponSource:"random"</c>; çerçeve silahında reload AÇIKTIR ve bel-altı
+        /// jestiyle çalışır), zaten reload'da, tanımsız, şarjör tam, oyuncu ölü, rezerv yetersiz
         /// (Discard: tam şarjör yok; Pool: havuz boş). Discard modunda şarjör başlangıçta
         /// ÇIKAR: tetik reload boyunca ölüdür ve şarjörde kalan mermi YANMIŞTIR. Ses
         /// çalınmaz — şarjör seslerini WeaponAnimator kendi zaman çizgisinde çalar.
         /// </summary>
         public bool TryStartReload()
         {
-            if (IsGranted || IsReloading || definition == null)
+            if (IsDisposableGrant || IsReloading || definition == null)
                 return false;
             if (CurrentAmmo >= definition.MagazineSize)
                 return false;
@@ -576,8 +655,8 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// Şarjörü ve rezervi tanımındaki tam değerlere döndürür (canlanma dolumu).
         /// Devam eden reload iptal edilir ve dinleyiciler kapansın diye
-        /// <see cref="ReloadCompleted"/> yayınlanır. Verilen silahta rezerv 0 kalır
-        /// (o modda reload yok).
+        /// <see cref="ReloadCompleted"/> yayınlanır. TEK KULLANIMLIK verilen silahta rezerv 0 kalır
+        /// (o modda reload yok); çerçeve silahı tam rezervle döner.
         /// </summary>
         public void RefillFull()
         {
@@ -591,7 +670,7 @@ namespace VortexArena.Core.Combat
             }
 
             CurrentAmmo = definition.MagazineSize;
-            reserveRounds = IsGranted ? 0 : definition.SpareMagazines * definition.MagazineSize;
+            reserveRounds = IsDisposableGrant ? 0 : definition.SpareMagazines * definition.MagazineSize;
             AmmoChanged?.Invoke();
         }
 
@@ -621,7 +700,7 @@ namespace VortexArena.Core.Combat
             }
 
             bool wasHeld = heldPoints.Count > 0;
-            heldPoints.Add((evt.Identifier, ResolveController(evt)));
+            heldPoints.Add((evt.Identifier, WeaponGranter.ResolveController(evt)));
 
             if (!wasHeld)
             {
@@ -660,37 +739,10 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>
-        /// Select olayını üreten interactor'dan tutan elin OVR kontrolcüsünü çözer.
-        /// <c>evt.Data</c> varsayılan olarak interactor'ın kendisidir (Interactor._data);
-        /// BB kontrolcü rig'i interactor↔IController eşlemesini
-        /// <see cref="InteractorControllerDecorator"/> ile kurar. Çözülemezse None döner
-        /// (editör fallback işareti: tetik Input System'den okunur).
-        /// </summary>
-        private static OVRInput.Controller ResolveController(in PointerEvent evt)
-        {
-            if (evt.Data is IInteractorView view &&
-                InteractorControllerDecorator.TryGetControllerForInteractor(view, out IController controller))
-            {
-                return ToOvrController(controller.Handedness);
-            }
-
-            // Yedek: decorator kurulu değilse interactor hiyerarşisindeki ControllerRef'e bak.
-            Component dataComponent = evt.Data as Component;
-            if (dataComponent != null)
-            {
-                ControllerRef controllerRef = dataComponent.GetComponentInParent<ControllerRef>();
-                if (controllerRef != null)
-                    return ToOvrController(controllerRef.Handedness);
-            }
-
-            return OVRInput.Controller.None;
-        }
-
-        private static OVRInput.Controller ToOvrController(Handedness handedness)
-        {
-            return handedness == Handedness.Left ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
-        }
+        // ⚠️ El çözümü BURADA DEĞİL: interactor'dan OVR kontrolcüsü çıkarmanın tek yeri
+        // WeaponGranter.ResolveController(evt) / ResolveControllerFromGameObject(go). Üç ayrı
+        // tüketicisi var (bu sınıf, ItemGripSockets, WeaponFrame) ve kopyalandığında biri
+        // düzeltilip diğerleri unutuluyordu.
 
         // ------------------------------------------------------- canlanma dolumu
 
@@ -801,8 +853,11 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bu silahı hangi el(ler) tutuyor. Verilen silah TANIM GEREĞİ tek ellidir; raf silahında
-        /// eller <see cref="heldPoints"/>'tan gelir.
+        /// Bu silahı hangi el(ler) tutuyor. TEK KULLANIMLIK verilen silah TANIM GEREĞİ tek ellidir;
+        /// raf silahında eller <see cref="heldPoints"/>'tan gelir.
+        /// <para>⚠️ <b>Çerçeve klonunda ikisi BİRLEŞİR:</b> önce verilen el işaretlenir, sonra
+        /// <see cref="heldPoints"/>'takiler de eklenir — ön kabzayı tutan ikinci el telde
+        /// <c>GRIP_LINKED</c> üretmeli, yoksa uzak taraf silahı tek elle tutuyor çizerdi.</para>
         /// <para>⚠️ Çözülemeyen el (<c>None</c>) SAĞ sayılır — telde "bilinmeyen el" diye bir değer
         /// yok. Ama iki kavrama noktası varsa el çözülemese bile İKİSİ birden işaretlenir: aksi
         /// hâlde editör oturumunda (kontrolcü çözülemez) çift el kavraması tek elli görünürdü.</para>
@@ -812,7 +867,7 @@ namespace VortexArena.Core.Combat
             left = false;
             right = false;
 
-            if (IsGranted)
+            if (IsDisposableGrant)
             {
                 if (GrantedHand == OVRInput.Controller.LTouch)
                 {
@@ -820,6 +875,29 @@ namespace VortexArena.Core.Combat
                 }
                 else
                 {
+                    right = true;
+                }
+
+                return;
+            }
+
+            if (IsPersistentGrant)
+            {
+                if (GrantedHand == OVRInput.Controller.LTouch)
+                {
+                    left = true;
+                }
+                else
+                {
+                    right = true;
+                }
+
+                // Ön kabzayı tutan ikinci el varsa iki el birden işaretlenir (el çözülemese de):
+                // yukarıdaki "None → sağ" kuralı yüzünden ikinci el ana elle çakışabilirdi ve
+                // çift el kavraması telde tek elli görünürdü.
+                if (heldPoints.Count > 0)
+                {
+                    left = true;
                     right = true;
                 }
 
