@@ -67,7 +67,14 @@ namespace VortexArena.App
         [Tooltip("İlerleme barının DOLGUSU (UiKit.Bar deseni: anchorMax.x ile sürülür).")]
         [SerializeField] private Image _progressFill;
 
+        /// <summary><see cref="Show"/> ile açıldı mı (niyet). Fiilen çizilip çizilmediği
+        /// <see cref="_visible"/>'dır — VR'da kart kamera bulunana kadar çizilmez.</summary>
+        private bool _shown;
+
         private bool _visible;
+
+        /// <summary>World-space kipte kartın önünde durduğu kamera; değişince kart yeniden oturur.</summary>
+        private Camera _followedCamera;
 
         /// <summary>Hedef ilerleme (0..1) — <see cref="SetProgress"/> yazar.</summary>
         private float _target;
@@ -116,6 +123,10 @@ namespace VortexArena.App
             }
 
             _instance = this;
+
+            // `_visible = true` bilerek: ApplyVisible aynı değeri yeniden yazmayı atlar, oysa
+            // prefab yanlışlıkla açık canvas'la kaydedilmişse burada kapatılması gerekir.
+            _visible = true;
             ApplyVisible(false);
         }
 
@@ -154,6 +165,7 @@ namespace VortexArena.App
                 return;
             }
 
+            _instance._shown = false;
             _instance.ApplyVisible(false);
         }
 
@@ -167,27 +179,30 @@ namespace VortexArena.App
             _target = 0f;
             _displayed = 0f;
             _shownPercent = -1;
+            _shown = true;
 
             if (_sceneText != null)
             {
                 _sceneText.text = sceneName ?? "";
             }
 
-            // VR: kart yeni baştan kameranın önüne otursun — eski sahnedeki konumundan
-            // kaymasın (`OnEnable` → HudFollow._initialized sıfırlanır).
-            if (_hudFollow != null)
-            {
-                _hudFollow.enabled = false;
-                _hudFollow.enabled = true;
-            }
+            // Kart, bulunan kameranın önüne yeniden otursun (aşağıdaki TrackCamera snap eder).
+            _followedCamera = null;
 
-            ApplyVisible(true);
             ApplyProgress();
+            Refresh();
         }
 
         private void Update()
         {
-            if (_instance != this || !_visible)
+            if (_instance != this)
+            {
+                return;
+            }
+
+            Refresh();
+
+            if (!_visible)
             {
                 return;
             }
@@ -200,6 +215,55 @@ namespace VortexArena.App
 
             ApplyProgress();
             Pulse();
+        }
+
+        /// <summary>
+        /// Görünürlüğü her karede yeniden karara bağlar. Masaüstünde karar <see cref="_shown"/>'dur;
+        /// **VR'da ek bir koşul vardır: kamera.**
+        /// <para>
+        /// ⚠️ World-space kart <see cref="HudFollow"/> ile <c>Camera.main</c>'in önüne yerleşir.
+        /// Kamera yokken çizilirse kart dünya orijininde asılı kalır — oyuncu onu HİÇ görmez
+        /// (arenanın ortasında, ayaklarının dibinde ya da geometrinin içinde durur). Sahne geçişi
+        /// tam da kameranın yok olup yeniden doğduğu andır, yani bu istisna değil KURALDIR: eski
+        /// sahnenin kamerası aktivasyonda ölür, yenisi bir sonraki karede gelir.
+        /// </para>
+        /// <para>
+        /// Bu yüzden kart kamera bulunana kadar çizilmez ve kamera <b>değiştiğinde</b>
+        /// <see cref="HudFollow"/> yeniden başlatılır — aksi hâlde panel eski kameranın
+        /// konumundan yenisine doğru yumuşayarak SÜZÜLÜR ve geçişin yarısı boyunca yanlış yerde
+        /// durur. (`ConnectionOverlay` aynı kapıdan geçer; farkı, orada kameranın kaybolması
+        /// nadir bir durumken burada her geçişte yaşanmasıdır.)
+        /// </para>
+        /// </summary>
+        private void Refresh()
+        {
+            ApplyVisible(_shown && (!_worldSpace || TrackCamera()));
+        }
+
+        /// <summary>Kamerayı izler; yeni bir kamera bulununca kartı derhal önüne oturtur.</summary>
+        private bool TrackCamera()
+        {
+            Camera camera = Camera.main;
+            if (camera == null)
+            {
+                _followedCamera = null;
+                return false;
+            }
+
+            if (_followedCamera != camera)
+            {
+                _followedCamera = camera;
+
+                // OnEnable → HudFollow._initialized sıfırlanır → panel süzülmeden yerine oturur.
+                // (HudFollow LateUpdate'te çalışır; bu kare çizilmeden önce yerleşmiş olur.)
+                if (_hudFollow != null)
+                {
+                    _hudFollow.enabled = false;
+                    _hudFollow.enabled = true;
+                }
+            }
+
+            return true;
         }
 
         private void ApplyProgress()
@@ -230,9 +294,9 @@ namespace VortexArena.App
 
         private void ApplyVisible(bool visible)
         {
-            if (_group == null || _canvas == null)
+            if (_group == null || _canvas == null || _visible == visible)
             {
-                return;
+                return; // her karede aynı değeri yazıp canvas'ı kirletmeyelim
             }
 
             _visible = visible;

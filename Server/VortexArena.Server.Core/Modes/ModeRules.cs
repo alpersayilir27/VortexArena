@@ -27,7 +27,17 @@ public enum ReviveAnchor
     OwnBase,
 
     /// <summary>Oyuncu REVIVE_HOLD_SECONDS boyunca REVIVE_HOLD_RADIUS içinde sabit durur.</summary>
-    StandStill
+    StandStill,
+
+    /// <summary>
+    /// Canlanma YOKTUR (tur tabanlı eleme, <c>tournament</c>). <c>revive_request</c> reddedilir
+    /// <b>ve</b> <see cref="ArenaProtocol.REVIVE_GRACE"/> zorla canlandırması çalışmaz — ölü
+    /// oyuncuyu yalnız modun başlattığı yeni tur canlandırır.
+    /// <para>⚠️ İkisi birden kapatılmadıkça kural işlevsizdir: yollar ayrıdır (talep tabanlı vs
+    /// zamanlayıcı tabanlı) ve yalnız birini kapatmak oyuncuyu 20 sn sonra yine canlandırır
+    /// (§10.4).</para>
+    /// </summary>
+    None
 }
 
 /// <summary>Silah nereden gelir (§10.5 <c>weaponSource</c>) — TÜMÜYLE istemci sunumu;
@@ -94,7 +104,12 @@ public sealed record ModeRules
         teamMode = Teams == TeamMode.None ? "none" : "two",
         scoring = Scoring == ScoreKind.Player ? "player" : "team",
         friendlyFire = FriendlyFire,
-        reviveAnchor = Revive == ReviveAnchor.StandStill ? "standstill" : "base",
+        reviveAnchor = Revive switch
+        {
+            ReviveAnchor.StandStill => "standstill",
+            ReviveAnchor.None => "none",
+            _ => "base"
+        },
         weaponSource = Weapons == WeaponSource.RandomGrant ? "random" : "rack",
         respawnDelay = RespawnDelay,
         fireWhilePaused = FireWhilePaused

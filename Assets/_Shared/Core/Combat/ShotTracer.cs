@@ -3,8 +3,9 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Mermi izi (tracer): namludan vuruş noktasına kısa süre çizilen çizgi + o çizgi boyunca
-    /// dağılan duman izi. Sahnede DURMAZ ve kendi başına bir şey dinlemez — yalnız çizer;
+    /// Mermi izi (tracer): namludan vuruş noktasına çizilen, ömrü boyunca <b>sönerek kaybolan</b>
+    /// çizgi + o çizgi boyunca dağılan duman izi. Sahnede DURMAZ ve kendi başına bir şey
+    /// dinlemez — yalnız çizer;
     /// <b>ne çizileceğine iki çağıran karar verir:</b> atanın kendi izi için <see cref="Weapon"/>,
     /// uzak oyuncuların izi için <see cref="RemoteShotFx"/> (§6.4/6.5). İkisi ayrı olmak ZORUNDA:
     /// sunucu atış olayını atana geri yollamaz, istemci de kendi <c>playerId</c>'sini süzer.
@@ -88,8 +89,8 @@ namespace VortexArena.Core.Combat
         private const int SmokePuffsMax = 14;
 
         /// <summary>
-        /// Sistemin parçacık tavanı. Kaba hesap: ~53 tracer/sn × ~0.36 sn duman ömrü × 14 puf
-        /// ≈ 265 eşzamanlı; 384 pay bırakır. ⚠️ Tavana vurulduğunda parçacık sistemi <b>YENİ</b>
+        /// Sistemin parçacık tavanı. Kaba hesap en kötü hâl üzerinden: ~53 tracer/sn ×
+        /// <see cref="SmokeLifetimeMaxSeconds"/> × 14 puf ≈ 371 eşzamanlı. ⚠️ Tavana vurulduğunda parçacık sistemi <b>YENİ</b>
         /// emisyonu düşürür (çizgi havuzunun "en eskiyi kes" davranışının tersi) — duman kozmetik
         /// olduğu için bu kabul edilir, yoksa tavan aşımı eski dumanları kırpardı.
         /// </summary>
@@ -97,14 +98,17 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Duman ömrü = tracer ömrü × bu katsayı, sonra aşağıdaki banda kırpılır.
-        /// <para>⚠️ Duman tracer ömrüyle <b>birebir</b> DEĞİL, ORANTILI: varsayılan tracer ömrü
-        /// 0.06 sn ve o sürede sönen bir duman gözle hiç görülmez (tek karelik gri leke). Kırpma
-        /// bandı da bu yüzden var — playtest'te tracer ömrü uçlara çekilse bile duman kullanılabilir
-        /// kalır.</para>
+        /// <para>⚠️ Katsayı <b>küçük tutulur</b>: duman, sönen çizginin ARDINDA kalan bir tortudur,
+        /// ayrı bir bulut değil. Çizgiden kat kat uzun yaşarsa (ilk denemede 6×) iz çoktan
+        /// gitmişken havada asılı duran gri lekeler kalır — atışla bağı kopar ve "sis" gibi durur.
+        /// Birebir de yapılmaz: çizgiyle tam aynı anda ölen duman, dağıldığını gösteremeden
+        /// kaybolur.</para>
+        /// <para>Kırpma bandı, playtest'te <c>tracerLifetime</c> uçlara çekilse bile dumanı
+        /// kullanılabilir tutar.</para>
         /// </summary>
-        private const float SmokeLifetimeScale = 6f;
-        private const float SmokeLifetimeMinSeconds = 0.25f;
-        private const float SmokeLifetimeMaxSeconds = 1.2f;
+        private const float SmokeLifetimeScale = 2.5f;
+        private const float SmokeLifetimeMinSeconds = 0.15f;
+        private const float SmokeLifetimeMaxSeconds = 0.5f;
 
         /// <summary>Puf boyutu = tracer kalınlığı × (namluda Near, isabette Far) katsayısı.</summary>
         // Yol boyunca BÜYÜR: duman dağıldıkça genişler, bu da "namludan isabete doğru sönümlenme"
@@ -113,8 +117,8 @@ namespace VortexArena.Core.Combat
         private const float SmokeSizeFarScale = 8f;
 
         /// <summary>Puf alfası: namluda yoğun, isabet noktasına doğru sönümlenir.</summary>
-        private const float SmokeAlphaNear = 0.55f;
-        private const float SmokeAlphaFar = 0.05f;
+        private const float SmokeAlphaNear = 0.4f;
+        private const float SmokeAlphaFar = 0.04f;
 
         /// <summary>
         /// İsabet ucundaki puf ömrünün namludakine oranı: uzak uç önce ölür, yani iz gözle
@@ -135,12 +139,38 @@ namespace VortexArena.Core.Combat
         /// <summary>Duman dokusunun kenar uzunluğu (px) — yumuşak radyal düşüş için yeterli.</summary>
         private const int SmokeTextureSize = 32;
 
+        // ------------------------------------------------------------------ sönme (çizgi)
+
+        /// <summary>
+        /// Ömrün ilk bu kadarlık kısmında çizgi TAM parlaklıkta durur, sönme ondan sonra başlar.
+        /// <para>⚠️ Sıfır YAPILMAZ: mermi izi önce <b>okunabilir bir çizgi</b> olmalı, sonra
+        /// sönmeli. İlk kareden itibaren sönen bir iz, kısa ömürde (0.1 sn ≈ 7 kare) hiç tam
+        /// parlaklık göstermez ve "soluk bir hayalet" gibi durur.</para>
+        /// </summary>
+        private const float FadeHoldFraction = 0.25f;
+
+        /// <summary>Sönerken çizginin inceldiği oran (ömrün sonunda kalınlığın kaçta kaçı).</summary>
+        // Yalnız alfa düşseydi iz "silikleşir" ama aynı kalınlıkta durur; incelme onu dağılıyor
+        // gösterir. 1f yazmak inceltmeyi tümden kapatır.
+        private const float FadeEndWidthScale = 0.55f;
+
         /// <summary>Havuz düğümü; LineRenderer üretim anında önbelleklenir.</summary>
         private sealed class TracerNode
         {
             public LineRenderer Line;
-            public float ExpireAt;
             public bool Active;
+
+            /// <summary>Sönme eğrisinin ekseni: doğuş anı + toplam ömür (<c>Time.unscaledTime</c>).</summary>
+            // ⚠️ Ayrı bir ExpireAt alanı TUTULMAZ — StartAt+Duration'dan türer ve aynı bilginin
+            // ikinci kopyası, ömür ortada değişirse ikisinin sapmasına açık olurdu.
+            public float StartAt;
+            public float Duration;
+
+            /// <summary>Sönmenin başlangıç değerleri (her karede bunlardan yeniden hesaplanır).</summary>
+            // Çizgiden GERİ OKUNMAZ: okunan değer zaten sönmüş olan olurdu ve iz kare kare
+            // katlanarak kaybolurdu (klasik "fade'i kendi çıktısına uygulama" hatası).
+            public Color BaseColor;
+            public float BaseWidth;
         }
 
         private readonly TracerNode[] _pool = new TracerNode[PoolSize];
@@ -220,31 +250,83 @@ namespace VortexArena.Core.Combat
             node.Line.enabled = true;
 
             // Time.unscaledTime: maç duraklatılıp timeScale düşse bile tracer takılı kalmasın.
-            node.ExpireAt = Time.unscaledTime + life;
+            node.StartAt = Time.unscaledTime;
+            node.Duration = life;
+            node.BaseColor = color;
+            node.BaseWidth = w;
             node.Active = true;
 
             EmitSmoke(from, delta, Mathf.Sqrt(sqrDistance), color, w, life);
             return true;
         }
 
-        /// <summary>Ömrü geçen çizgileri kapatır (havuz düğümü yok EDİLMEZ, yalnız gizlenir).</summary>
+        /// <summary>
+        /// Canlı çizgileri <b>söndürür</b>: alfa düşer, kalınlık incelir; ömrü dolan kapatılır
+        /// (havuz düğümü yok EDİLMEZ, yalnız gizlenir).
+        /// <para>
+        /// ⚠️ İz eskiden ömrünün sonunda <c>enabled = false</c> ile <b>bir anda</b> kayboluyordu —
+        /// göz bunu "sönme" değil "pat diye kesilme" olarak okuyor. Sönme bu yüzden ömrün
+        /// KENDİSİNE yayıldı; ayrı bir sönme süresi alanı açılmadı, çünkü o zaman
+        /// <c>tracerLifetime</c> "iz ne kadar durur" olmaktan çıkıp ikinci bir sayıyla
+        /// pazarlık eden bir değere dönerdi.
+        /// </para>
+        /// <para>
+        /// Maliyet: kare başına yalnız <b>canlı</b> düğümler dokunulur (tipik 3-4 tane) ve
+        /// dokunulan şey vertex rengi/kalınlığı — materyal örneği açılmaz, SRP batch'i bölünmez.
+        /// </para>
+        /// </summary>
         private void Update()
         {
             float now = Time.unscaledTime;
             for (int i = 0; i < _pool.Length; i++)
             {
                 TracerNode node = _pool[i];
-                if (node == null || !node.Active || now < node.ExpireAt)
+                if (node == null || !node.Active)
                 {
                     continue;
                 }
 
-                node.Active = false;
-                if (node.Line != null)
+                if (node.Line == null)
                 {
-                    node.Line.enabled = false;
+                    node.Active = false;
+                    continue;
                 }
+
+                float t = (now - node.StartAt) / node.Duration;
+                if (t >= 1f)
+                {
+                    node.Active = false;
+                    node.Line.enabled = false;
+                    continue;
+                }
+
+                Color color = node.BaseColor;
+                color.a = node.BaseColor.a * FadeAlphaAt(t);
+                node.Line.startColor = color;
+                node.Line.endColor = color;
+
+                float width = node.BaseWidth * Mathf.Lerp(1f, FadeEndWidthScale, t);
+                node.Line.startWidth = width;
+                node.Line.endWidth = width;
             }
+        }
+
+        /// <summary>
+        /// Sönme eğrisi: <paramref name="t"/> 0 (doğuş) → 1 (ömrün sonu) için 1 → 0 çarpanı.
+        /// <para>Doğrusal DEĞİL: kısa bir tam parlaklık payından sonra <c>1 − u²</c> ile hızlanarak
+        /// söner. Doğrusal sönme "kısılan bir lamba" gibi durur; hızlanan sönme mermi izinin
+        /// kendi parlaklık düşüşüne benzer ve son kareler zaten görünmez olduğu için izin
+        /// "bitişi" gözle temiz okunur.</para>
+        /// </summary>
+        private static float FadeAlphaAt(float t)
+        {
+            if (t <= FadeHoldFraction)
+            {
+                return 1f;
+            }
+
+            float u = (t - FadeHoldFraction) / (1f - FadeHoldFraction);
+            return 1f - u * u;
         }
 
         // ---------------------------------------------------------------------- duman

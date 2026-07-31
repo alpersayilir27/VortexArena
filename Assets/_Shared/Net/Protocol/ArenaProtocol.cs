@@ -137,8 +137,18 @@ namespace VortexArena.Protocol
         /// <summary>Oyuncu tam canı; sunucu-otoriter (health_update bunu aşamaz).</summary>
         public const float PLAYER_MAX_HP = 100f;
 
-        /// <summary>Countdown fazının uzunluğu (saniye, tam sayı — countdown mesajı saniye sayar).</summary>
+        /// <summary>Countdown fazının VARSAYILAN uzunluğu (saniye, tam sayı — countdown mesajı
+        /// saniye sayar). Admin start_match.countdownSeconds ile o maça özel bir değer verebilir
+        /// (§5.2); tur tabanlı modlarda (tournament) turlar arasındaki geri sayım da odur.</summary>
         public const int COUNTDOWN_SECONDS = 5;
+
+        /// <summary>start_match.countdownSeconds kırpma aralığı (§5.2). <b>Arayüz listesi değil,
+        /// sunucunun uyguladığı kısıttır:</b> 1 sn'lik geri sayım oyuncuya yerini alacak zaman
+        /// bırakmaz, 30 sn'den uzun bekleme tur tabanlı modda ölü zamandır.</summary>
+        public const int COUNTDOWN_SECONDS_MIN = 5;
+
+        /// <inheritdoc cref="COUNTDOWN_SECONDS_MIN"/>
+        public const int COUNTDOWN_SECONDS_MAX = 30;
 
         /// <summary>End fazı: match_end sonrası otomatik return_to_lobby'ye kadar geçen süre.</summary>
         public const int MATCH_END_SECONDS = 10;
@@ -165,11 +175,14 @@ namespace VortexArena.Protocol
         public const float REVIVE_HOLD_RADIUS = 1f;
 
         /// <summary>
-        /// Admin arayüzünün maç süresi seçenekleri (saniye): 2.5 · 5 · 10 · 15 · 20 · 30 dk · 1 saat.
+        /// Admin arayüzünün maç süresi seçenekleri (saniye): 1 · 1.5 · 2 · 2.5 · 3 · 5 · 10 · 15 ·
+        /// 20 · 30 dk · 1 saat.
         /// <para><b>Protokol kısıtı DEĞİL, arayüz listesidir</b> — sunucu start_match.roundSeconds
         /// alanında her pozitif değeri kabul eder (§5.2).</para>
+        /// <para>Kısa uçtaki değerler tur tabanlı modlar içindir: <c>tournament</c>'ta bu alan
+        /// <b>turun</b> süresidir, maçın değil (§10.5).</para>
         /// </summary>
-        public static readonly int[] ROUND_SECONDS_OPTIONS = { 150, 300, 600, 900, 1200, 1800, 3600 };
+        public static readonly int[] ROUND_SECONDS_OPTIONS = { 60, 90, 120, 150, 180, 300, 600, 900, 1200, 1800, 3600 };
 
         // NOT: atış hızı toleransı gibi bir sabit YOKTUR ve eklenmez (§10.3). Sunucuda atış hızı
         // denetimi ve silah tablosu yoktur — hasarı istemci hesaplar, sunucu aynen uygular. Ürün

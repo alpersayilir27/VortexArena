@@ -60,6 +60,9 @@ namespace VortexArena.App
         /// <summary>Yükleme sürerken istenen bir sonraki sahne (async yükleme iptal edilemez).</summary>
         private string _queuedScene = "";
 
+        /// <summary>Geçiş öncesindeki arka plan yükleme önceliği — bitince geri konur.</summary>
+        private ThreadPriority _previousLoadingPriority = ThreadPriority.BelowNormal;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -265,6 +268,14 @@ namespace VortexArena.App
         /// hâlâ sürerken) tetiklenir ve <see cref="ReportSceneLoaded"/> her zamanki gibi oradan
         /// çağrılır — bildirim bu rutine taşınmaz, tek kapı olarak kalır.
         /// </para>
+        /// <para>
+        /// ⚠️ <b>Asenkron yükleme varsayılan ayarla senkrondan YAVAŞTIR</b> ve bunun tek sebebi
+        /// <see cref="Application.backgroundLoadingPriority"/>'dir: Unity kare hızını korumak için
+        /// yükleme entegrasyonuna kare başına yalnızca küçük bir dilim ayırır (proje varsayılanı
+        /// genelde <c>BelowNormal</c>), oysa <c>LoadScene</c> her şeyi tek karede bitirir. Geçiş
+        /// boyunca öncelik <c>High</c>'a çekilip sonra ESKİ DEĞERİNE geri konur — sabit bir değere
+        /// değil, çünkü ayarı başka bir yer değiştirmiş olabilir.
+        /// </para>
         /// </summary>
         private IEnumerator LoadRoutine(string sceneName)
         {
@@ -272,6 +283,11 @@ namespace VortexArena.App
             Debug.Log($"[SceneRouter] Sahne yükleniyor → '{sceneName}'.");
 
             LoadingOverlay.Show(sceneName);
+
+            // Geçiş boyunca yükleme entegrasyonuna kare başına daha çok zaman ver: yükleme
+            // ekranının bedeli "geçiş uzadı" olmamalı. Eski değer FinishLoad'da geri konur.
+            _previousLoadingPriority = Application.backgroundLoadingPriority;
+            Application.backgroundLoadingPriority = ThreadPriority.High;
 
             AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName);
             if (operation == null)
@@ -292,9 +308,11 @@ namespace VortexArena.App
             FinishLoad();
         }
 
-        /// <summary>Yükleme bitti: ekranı kapat, sıradaki hedef varsa ona geç.</summary>
+        /// <summary>Yükleme bitti: önceliği geri ver, ekranı kapat, sıradaki hedef varsa ona geç.</summary>
         private void FinishLoad()
         {
+            Application.backgroundLoadingPriority = _previousLoadingPriority;
+
             _loadingScene = "";
             LoadingOverlay.Hide();
 

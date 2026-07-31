@@ -50,6 +50,9 @@ public sealed class LobbyService
     private int _selectedRoundSeconds;
     private int _selectedScoreLimit;
 
+    /// <summary>Ortak geri sayım seçimi (§5.2); 0 = hiç seçilmedi → COUNTDOWN_SECONDS.</summary>
+    private int _selectedCountdownSeconds;
+
     public LobbyService(PlayerRegistry registry, MatchDirector director)
     {
         _registry = registry;
@@ -290,7 +293,7 @@ public sealed class LobbyService
         }
 
         var changed = ApplySelection(requestedModeId, requestedSceneName,
-            msg.roundSeconds, msg.scoreLimit);
+            msg.roundSeconds, msg.scoreLimit, msg.countdownSeconds);
 
         // Reddedildiyse DEĞİŞMESE de yayın yapılır: komutu gönderen panel imlecini iyimser olarak
         // ilerletmiş olabilir, sunucunun değeri onu geri çeksin (tek doğruluk kaynağı, §5.3).
@@ -342,7 +345,8 @@ public sealed class LobbyService
     /// korur (§5.2) — arayüz yalnız değiştirdiği alanı doldurabilsin.
     /// <para>⚠️ Bu koruma aynı zamanda "seçim asla boşalmaz" garantisidir: kurucudaki lobi
     /// tohumundan sonra hiçbir komut mod/haritayı boşa çekemez.</para></summary>
-    private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit)
+    private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit,
+        int countdownSeconds)
     {
         lock (_selectionGate)
         {
@@ -367,6 +371,11 @@ public sealed class LobbyService
                 _selectedScoreLimit = scoreLimit;
                 changed = true;
             }
+            if (countdownSeconds > 0 && _selectedCountdownSeconds != countdownSeconds)
+            {
+                _selectedCountdownSeconds = countdownSeconds;
+                changed = true;
+            }
             return changed;
         }
     }
@@ -377,9 +386,10 @@ public sealed class LobbyService
     /// aynı mod/haritayı göstersin (komutu kim gönderdiyse gönderdi).</summary>
     public async Task HandleStartMatchAsync(ClientConnection connection, StartMatchMsg msg)
     {
-        ApplySelection(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit);
+        ApplySelection(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit, msg.countdownSeconds);
         await BroadcastAdminStateAsync(Notice(connection, $"maç başlatılıyor: {msg.sceneName} / {msg.modeId}"));
-        await _director.StartMatchAsync(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit);
+        await _director.StartMatchAsync(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit,
+            msg.countdownSeconds);
     }
 
     public async Task HandleAbortMatchAsync(ClientConnection connection)
@@ -516,6 +526,7 @@ public sealed class LobbyService
                 sceneName = _selectedSceneName,
                 roundSeconds = _selectedRoundSeconds,
                 scoreLimit = _selectedScoreLimit,
+                countdownSeconds = _selectedCountdownSeconds,
                 notice = notice,
                 adminCount = _registry.OnlineAdminCount(),
                 // Mekan bu oturum boyunca sabittir (açılışta seçilir), ama admin_state ile
