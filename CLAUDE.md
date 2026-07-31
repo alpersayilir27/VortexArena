@@ -212,6 +212,8 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
   kuralı istemcide "de" uygulamak = ikinci doğruluk kaynağı; istemci sunucuyu bekler.
 - ⚠️ **Rig'i/kamerayı ASLA taşıma** — free-roam'da oyuncu fiziksel. Canlanma ve harita değişimi
   konum değil **durum** değişimidir.
+- ⚠️ **İzleme/ağdan gelen rotasyon humanoid kemiğe DOĞRUDAN yazılmaz** — `HandGripConvention`
+  köprüsünden geçer (`Docs/Sistem-Ozeti.md` §7, "izleme/ağ uzayından gelen rotasyon" maddesi).
 - ⚠️ **DTO'lar `_Shared/Net/Protocol/` altında saf C# kalır** — server csproj aynı dosyaları
   derler, `UnityEngine` girerse server derlemesi kırılır (bilinçli bekçi).
 - ⚠️ **Ağa vuruş bildirimi tek kapıdan: `ArenaCombat`** (`_Shared/Core/Combat/`). Protokol DTO'su
@@ -326,12 +328,16 @@ basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki duru�
 besler (verilen silahta soket çizilmez — silah zaten elde).
 ⚠️ Sahneye bileşen KOYMA: tekil olmasının sebebi her yeni arenaya elle bir kurulum adımı
 eklememektir.
-**Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfekler
+**Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfeklerin kiti
 `Tools > VortexArena > Build Weapon Prefabs` ile üretilir — `WeaponKitBuilder` tablosuna satır
-ekle (CS2 istatistikleri + ses profili + "Low Poly AR Weapon Pack 1" prefabı), araç
-`_Shared/Arsenal/Data/WD_*.asset` + `_Shared/Arsenal/Prefabs/WPN_*.prefab` üretip
+ekle (CS2 istatistikleri + ses profili), araç `_Shared/Arsenal/Data/WD_*.asset`'i üretir,
+**mevcut** `_Shared/Arsenal/Prefabs/WPN_*.prefab`'ı yerinde günceller ve
 **`_Shared/Data/Resources/WeaponCatalog.asset`**'i tazeler (RemoteShotFx `weaponId`→profil
-aramasını `Resources.Load` ile yapar — GameCatalog gibi klasöründen ÇIKARILMAZ). Ses/VFX/kovan
+aramasını `Resources.Load` ile yapar — GameCatalog gibi klasöründen ÇIKARILMAZ).
+⚠️ **Araç WPN prefabını YOKTAN ÜRETMEZ** (şablondan kurma yolu silindi: `Muzzle`'ı `Model`'in
+altından köke alıyordu, oysa geri tepmenin nişanı da kaldırması `Muzzle`'ın `Model` ALTINDA
+kalmasına bağlı). Yeni gövde mevcut bir `WPN_*` kopyalanarak kurulur: `Model` altındaki pack
+modelini ve `definition`'ı değiştir, sonra aracı çalıştır. Ses/VFX/kovan
 kiti de aynı tablodan (`WeaponSpec`) gelir: silaha özgü ateş/reload/dry-fire klipleri
 (`Assets/Audio/Weapons/SFX_<Ad>_*.wav`), namlu alevi (renk/boyut/ömür/koni açısı) + `MuzzleFlash`
 altında sub-emitter'lı namlu dumanı (`Smoke`), ve kalibreye göre (762x39/556x45) paylaşılan
@@ -377,7 +383,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | Araç | Ne zaman |
 |---|---|
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` değişti / yeni arena eklendi → `Server/config/maps.json` |
-| `… > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi (idempotent; *Yalnız Kataloğu Tazele* varyantı da var) |
+| `… > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle` yerleşimi elle ayarlanır |
 | `… > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
 | `… > Create Arena From Template` | Yeni arena kutusu — geometri kaynağı ZORUNLU: boyut JSON'u ya da TestMesh kökü (kaynak `ArenaBoundary.dimensionsJson` + `wallRenderers`'ı da bağlar) |
 | `… > Build Arena From Dimensions` | Boyut dosyası değişti (seçimde JSON) → zemin/duvar/kolon geometrisini yeniden üretir (idempotent) |
