@@ -431,6 +431,36 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 
 ---
 
+## 11.2 Silah yerde/masada dursun, oyuncu eğilip ELLE alsın
+
+**Ne zaman:** o sahnede silah bir çerçeve kaynağı değil, yerde duran normal bir nesne olsun
+istiyorsun (oyuncu yaklaşıp soketinden kavrasın, uzaktan seçme olmasın).
+
+⚠️ **`isFrameVisible` bunu YAPMAZ** — o yalnız çerçeve modelini gizler (§11.1). Kapatman gereken
+şey görsel değil, `WeaponFrame`'in **kendisidir**:
+
+1. Sahnedeki `WPN_*` örneğini seç → altındaki **`VA_WeaponFrame` çocuğunu** seç.
+2. Objenin **aktiflik kutusunu kaldır** (`SetActive(false)`) — bileşeni değil, GameObject'i.
+3. Sahneyi kaydet.
+
+Böylece `WeaponFrame.Awake` hiç koşmaz: silah donmaz (`Rigidbody` fizikli kalır), kendi
+`Grabbable`/`GrabInteractable`/`ItemGripSockets`'i açık kalır → normal yakın kavrama çalışır.
+Çerçeve görseli prefabda zaten pasif durduğu için kendiliğinden görünmez.
+
+⚠️ **Bileşeni `enabled = false` yapma.** Unity kapalı bileşende de `Awake` çağırır → silah yine
+donar ve yakın kavrama kapanır; ama `OnEnable` koşmadığı için uzaktan da seçilemez. Sonuç: hiç
+alınamayan ölü bir silah.
+
+Üç seçeneğin ölçülen farkı (`WPN_M4A1` örneği üstünde):
+
+| | Grabbable / GripSockets | Rigidbody | çerçeve görseli |
+|---|---|---|---|
+| Normal (çerçeve açık) | kapalı | kinematik, yerçekimsiz | görünür, silaha oturtulmuş |
+| `isFrameVisible = false` | **kapalı** (değişmez) | kinematik, yerçekimsiz | gizli |
+| `VA_WeaponFrame` GO kapalı | **açık** | fizikli, yerçekimli | gizli |
+
+---
+
 ## 12. Kendi HUD'ını yazmak
 
 Sıfırdan yazma — `ModeHudBase`'den türet. Faz/süre, geri sayım, can barı, ölüm ekranı, kill-feed

@@ -1602,6 +1602,18 @@ konsoluna tek satır sebep yazar.
     Komutu TEKRAR DENEME — yeni bir dialog kuyruğa girer. Editörde pencereyi kapat, sonra devam
     et. Kalıcı çözümü diğer araçlardaki gibi dialog'u kaldırmaktır (`Debug.Log` yeter).
 
+63. **Bir asset'in GUID'i değişirse asset silinmemiş olsa bile HERKES için yok olur — ve o
+    GUID'i onarmak EDİTÖR KAPALIYKEN yapılır.** `.meta`'daki `guid` asset'in kimliğidir; dosya
+    yerinde dursa da GUID değişince ona bakan her referans (mod `loadout`'ları, `WeaponCatalog` /
+    `NetItemCatalog`, prefabın `definition` alanı, sahnedeki örnekler) boşluğa bakar — Unity
+    "Missing" gösterir, `git status` ise yalnız iki satırlık masum bir `.meta` değişikliği. Teşhis
+    ucuz: eski ve yeni GUID'i repoda ara; **yeni GUID'e hiçbir dosya referans vermiyorsa** değişim
+    kazadır, doğru onarım eski GUID'i geri yazmaktır (önce başka bir `.meta` onu sahiplenmiyor mu
+    diye bak — sahipleniyorsa gerçek bir çakışma vardır). ⚠️ **Ama `.meta`'yı Unity açıkken
+    düzenleme:** editör GUID değişimini canlı yakalayıp asset'i yeniden içe aktarıyor ve prefabı
+    **boş bir GameObject olarak diske geri yazıyor** (385 KB → 914 byte). Onarım sırası: Unity'yi
+    kapat → GUID'i yaz → editörü aç. Aynısı GUID'e dokunan her toplu düzenleme için geçerlidir.
+
 ---
 
 ## 8. Durum ve sıradaki işler
