@@ -30,8 +30,16 @@ public interface IGameMode
     /// <summary>load_match.scoreLimit için varsayılan skor limiti (aynı şekilde ezilebilir).</summary>
     int DefaultScoreLimit { get; }
 
-    /// <summary>Faz Live'a geçerken bir kez çağrılır.</summary>
+    /// <summary>Maç boyunca BİR KEZ, ilk kez Live'a geçerken çağrılır.
+    /// <para>⚠️ Tur tabanlı modda (<c>tournament</c>) sonraki turların Live girişleri bunu
+    /// TEKRAR TETİKLEMEZ — "maç başladı" ile "tur başladı" ayrı olaylardır
+    /// (bkz. <see cref="OnRoundStart"/>).</para></summary>
     void OnMatchStart(MatchDirector director);
+
+    /// <summary>Faz Live'a HER girişte çağrılır — maçın ilk turu dahil, <see cref="OnMatchStart"/>
+    /// hemen ardından. Hasarın açıldığı andır.
+    /// <para>Tur kavramı olmayan modlar bunu hiç yazmaz (maçta bir kez çağrılır, yok sayılır).</para></summary>
+    void OnRoundStart(MatchDirector director) { }
 
     /// <summary>true dönerse MatchDirector fazı End'e taşır (süre doldu / skor limiti).
     /// Kazanan <see cref="MatchOutcome"/> ile ifade edilir: takım skorlu modlarda WinnerTeam,

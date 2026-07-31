@@ -101,6 +101,13 @@ public sealed class MatchDirector
     /// tetiklediği için (lobby_state yayını) kilit DIŞINDA uygulanır.</summary>
     private readonly List<string> _readyClearQueue = new();
 
+    /// <summary>Mod kancalarının (senkron, kilit dışı) ürettiği gönderimler. Kancalar
+    /// <c>await</c> edemez — <see cref="IGameMode.OnTick"/> <c>void</c>'dir — ve doğrudan
+    /// göndermeleri de yasak (kilit sözleşmesi + sıra bozulması). Bu yüzden mesajlar kilit
+    /// altında buraya yazılır, tik döngüsü kanca dönüşünde <see cref="FlushPendingAsync"/> ile
+    /// yollar: tek gönderici, korunan sıra, kilit altında hiç gönderim yok.</summary>
+    private readonly List<Outgoing> _pendingOutbox = new();
+
     /// <summary>Bu maç en az bir oyuncuyla mı başladı? Loading'de "oyuncu kalmadı" durumunun
     /// nasıl yorumlanacağını belirler (§10.1): oyuncusuz başlatılan maç admin harita
     /// önizlemesidir ve kendiliğinden lobiye DÖNMEZ.</summary>
@@ -137,6 +144,12 @@ public sealed class MatchDirector
     private int _scoreBlue;
     private int _roundSeconds;
     private int _scoreLimit;
+
+    /// <summary>Bu maçtaki her geri sayımın uzunluğu (§5.2 <c>start_match.countdownSeconds</c>);
+    /// admin vermezse <see cref="ArenaProtocol.COUNTDOWN_SECONDS"/>. Tur tabanlı modlarda turlar
+    /// arasındaki geri sayım da budur.</summary>
+    private int _countdownSeconds = ArenaProtocol.COUNTDOWN_SECONDS;
+
     private IGameMode? _mode;
 
     /// <summary>Koşan maçın kural şekli (§10.5). Maç yokken TDM varsayılanıdır — bu sayede
@@ -157,6 +170,15 @@ public sealed class MatchDirector
 
     /// <summary>Live'a girildi; IGameMode.OnMatchStart kilit dışında çağrılacak.</summary>
     private bool _matchStartPending;
+
+    /// <summary>Live'a girildi; IGameMode.OnRoundStart kilit dışında çağrılacak. <b>Her</b> Live
+    /// girişinde set edilir — <see cref="_matchStartPending"/>'den farkı budur.</summary>
+    private bool _roundStartPending;
+
+    /// <summary>Bu maç en az bir kez Live'a girdi mi. <c>OnMatchStart</c>'ın maç başına bir kez
+    /// çağrılmasını sağlar: tur tabanlı modda Live'a her turda yeniden girilir ve "maç başladı"
+    /// her turda tekrar duyurulsaydı mod maç durumunu her turda sıfırlardı.</summary>
+    private bool _matchStarted;
 
     private CancellationTokenSource? _cts;
     private Task? _loop;
@@ -213,6 +235,7 @@ public sealed class MatchDirector
     {
         Register(new TdmMode());
         Register(new FfaMode());
+        Register(new TournamentMode());
     }
 
     private void Register(IGameMode mode) => _modes[mode.ModeId] = mode;
@@ -282,6 +305,7 @@ public sealed class MatchDirector
     {
         get { lock (_gate) return _scoreLimit; }
     }
+
 
     /// <summary>Koşan maçın kural şekli (§10.5); maç yokken TDM varsayılanı.</summary>
     public ModeRules Rules
@@ -423,6 +447,7 @@ public sealed class MatchDirector
     {
         var outbox = new List<Outgoing>();
         IGameMode? modeToStart;
+        IGameMode? modeToRoundStart;
         IGameMode? modeToTick = null;
 
         lock (_gate)
@@ -437,7 +462,14 @@ public sealed class MatchDirector
                 case Phase.Paused when _pauseReason == PauseReason.Countdown:
                     TickCountdownLocked(outbox, now);
                     break;
-                // Lobby/Operator/Mode: beklenecek bir şey yok, sayaç işlemez.
+                // ⚠️ Duraklamayı MOD koydu (§10.1) → kaldırma yetkisi de onundur, yani tik'i
+                // alması gerekir; tik almayan mod toplanma kapısını hiç yoklayamaz. Süre
+                // İŞLEMEZ (TickLiveLocked çağrılmıyor) ve hasar kapalıdır (faz paused).
+                // Operatör duraklatmasında (Operator) mod tik ALMAZ: donmuş maç donmuş kalır.
+                case Phase.Paused when _pauseReason == PauseReason.Mode:
+                    modeToTick = _mode;
+                    break;
+                // Lobby/Operator: beklenecek bir şey yok, sayaç işlemez.
                 case Phase.Playing:
                     modeToTick = TickLiveLocked(outbox, now, deltaSeconds);
                     break;
@@ -446,17 +478,31 @@ public sealed class MatchDirector
                     break;
             }
             modeToStart = _matchStartPending ? _mode : null;
+            modeToRoundStart = _roundStartPending ? _mode : null;
             _matchStartPending = false;
+            _roundStartPending = false;
         }
 
         await FlushAsync(outbox);
         FlushReadyClear();
         FlushRosterRefresh();
 
-        // Mod kancaları kilit DIŞINDA (yukarıdaki kilit sözleşmesi).
+        // Mod kancaları kilit DIŞINDA (yukarıdaki kilit sözleşmesi). Kancaların ürettiği
+        // gönderimler _pendingOutbox'a birikir ve her kanca grubunun ardından yollanır.
         modeToStart?.OnMatchStart(this);
-        if (modeToTick == null) return;
+        modeToRoundStart?.OnRoundStart(this);
+
+        if (modeToTick == null)
+        {
+            await FlushPendingAsync();
+            return;
+        }
+
         modeToTick.OnTick(this, deltaSeconds);
+        await FlushPendingAsync();
+
+        // IsMatchOver mod duraklamasında da sorulur (mod turu bitirip maçı orada kapatabilir);
+        // EnterEndAsync yalnız Playing'den geçirir, yani faz makinesi bozulmaz.
         if (modeToTick.IsMatchOver(this, out var outcome))
             await EnterEndAsync(outcome);
     }
@@ -518,18 +564,25 @@ public sealed class MatchDirector
         _timeRemaining = MathF.Max(0f, _timeRemaining - deltaSeconds);
 
         // §10.4/4: talep gelmese de REVIVE_GRACE sonunda canlandır (takılan istemci maçı kilitlemesin).
-        foreach (var player in OnlinePlayersLocked())
+        // ⚠️ İKİNCİ İSTİSNA (§10.4): reviveAnchor "none" olan modda (tur tabanlı eleme) grace
+        // döngüsü HİÇ koşmaz. Bu satır olmadan "tur içinde canlanma yok" kuralı işlevsizdir —
+        // HandleReviveRequestAsync reddetse bile oyuncu 20 sn sonra buradan canlanırdı.
+        // Canlandırmanın iki yolu var ve bir yasak ikisini birden kapatmadıkça yoktur.
+        if (_rules.Revive != ReviveAnchor.None)
         {
-            if (player.Alive) continue;
-            // ⚠️ REVIVE_GRACE'in TEK istisnası (§10.6): kalibresiz oyuncu ZORLA da canlandırılmaz.
-            // Bu satır olmadan "kalibresiz oyuncu canlanamaz" kuralı işlevsizdir — HandleRevive-
-            // RequestAsync reddetse bile oyuncu birkaç saniye sonra buradan canlanırdı.
-            // Sonucu: kalibresiz ölü oyuncu kalibre olana dek ölü kalır; kalibrasyon gelince
-            // grace zaten dolmuş olduğu için ilk tik'te kendiliğinden canlanır.
-            if (!player.Calibrated) continue;
-            if ((now - player.DiedAt).TotalSeconds < ArenaProtocol.REVIVE_GRACE) continue;
-            RevivePlayerLocked(outbox, player);
-            Console.WriteLine($"[match] zorla canlandırma: {player.Name}");
+            foreach (var player in OnlinePlayersLocked())
+            {
+                if (player.Alive) continue;
+                // ⚠️ BİRİNCİ İSTİSNA (§10.6): kalibresiz oyuncu ZORLA da canlandırılmaz.
+                // Bu satır olmadan "kalibresiz oyuncu canlanamaz" kuralı işlevsizdir — HandleRevive-
+                // RequestAsync reddetse bile oyuncu birkaç saniye sonra buradan canlanırdı.
+                // Sonucu: kalibresiz ölü oyuncu kalibre olana dek ölü kalır; kalibrasyon gelince
+                // grace zaten dolmuş olduğu için ilk tik'te kendiliğinden canlanır.
+                if (!player.Calibrated) continue;
+                if ((now - player.DiedAt).TotalSeconds < ArenaProtocol.REVIVE_GRACE) continue;
+                RevivePlayerLocked(outbox, player);
+                Console.WriteLine($"[match] zorla canlandırma: {player.Name}");
+            }
         }
 
         if (now >= _nextSecondAt)
@@ -550,10 +603,12 @@ public sealed class MatchDirector
 
     /// <summary>start_match doğrulaması + kişisel load_match yayını (§10.1). Doğrulama geçmezse
     /// faz DEĞİŞMEZ, konsola sebep yazılır.
-    /// <para><paramref name="roundSeconds"/>/<paramref name="scoreLimit"/> O MAÇA özeldir:
-    /// <c>≤ 0</c> ise modun varsayılanı kullanılır (§5.2). Operatör raundu kısaltıp uzatabilsin
-    /// diye <see cref="IGameMode"/> üzerindeki sayılar kilit değil varsayılandır.</para></summary>
-    public async Task StartMatchAsync(string? modeId, string? sceneName, int roundSeconds = 0, int scoreLimit = 0)
+    /// <para><paramref name="roundSeconds"/>/<paramref name="scoreLimit"/>/
+    /// <paramref name="countdownSeconds"/> O MAÇA özeldir: <c>≤ 0</c> ise modun (geri sayımda
+    /// protokolün) varsayılanı kullanılır (§5.2). Operatör raundu kısaltıp uzatabilsin diye
+    /// <see cref="IGameMode"/> üzerindeki sayılar kilit değil varsayılandır.</para></summary>
+    public async Task StartMatchAsync(string? modeId, string? sceneName, int roundSeconds = 0,
+        int scoreLimit = 0, int countdownSeconds = 0)
     {
         modeId ??= "";
         sceneName ??= "";
@@ -621,6 +676,11 @@ public sealed class MatchDirector
         // Admin verdiyse o maça özel değer, vermediyse modun varsayılanı (§5.2).
         var appliedRound = roundSeconds > 0 ? roundSeconds : mode.DefaultRoundSeconds;
         var appliedLimit = scoreLimit > 0 ? scoreLimit : mode.DefaultScoreLimit;
+        // Geri sayım aralığı bir arayüz listesi değil, sunucunun kısıtıdır (§5.2): 0 = varsayılan,
+        // dolu değer kırpılır. Kırpma burada yapılır ki tek yazar olsun.
+        var appliedCountdown = countdownSeconds > 0
+            ? Math.Clamp(countdownSeconds, ArenaProtocol.COUNTDOWN_SECONDS_MIN, ArenaProtocol.COUNTDOWN_SECONDS_MAX)
+            : ArenaProtocol.COUNTDOWN_SECONDS;
 
         lock (_gate)
         {
@@ -634,10 +694,14 @@ public sealed class MatchDirector
             _sceneName = sceneName;
             _roundSeconds = appliedRound;
             _scoreLimit = appliedLimit;
+            _countdownSeconds = appliedCountdown;
             _scoreRed = 0;
             _scoreBlue = 0;
             _timeRemaining = _roundSeconds;
+            _modeState = "";
             _matchStartPending = false;
+            _roundStartPending = false;
+            _matchStarted = false;
             _startedWithPlayers = players.Count > 0;
 
             var rulesInfo = _rules.ToInfo();
@@ -692,7 +756,8 @@ public sealed class MatchDirector
         var blueCount = players.Count(p => p.Team == "blue");
         var teamInfo = teamless ? "takımsız" : $"kırmızı {players.Count - blueCount} / mavi {blueCount}";
         Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}', " +
-                          $"{appliedRound} sn / limit {appliedLimit}, {players.Count} oyuncu ({teamInfo}).");
+                          $"{appliedRound} sn / limit {appliedLimit} / geri sayım {appliedCountdown} sn, " +
+                          $"{players.Count} oyuncu ({teamInfo}).");
         await FlushAsync(outbox);
     }
 
@@ -760,6 +825,78 @@ public sealed class MatchDirector
         }
         await FlushAsync(outbox);
         return true;
+    }
+
+    // ---- Mod komutları (§10.1 "tur tabanlı modlar") ----
+    //
+    // Üçü de IGameMode kancalarından çağrılır: kilit DIŞINDAN ve SENKRON (OnTick void'dir, mod
+    // await edemez). Mesajlar kilit altında kurulup _pendingOutbox'a yazılır, tik döngüsü kanca
+    // dönüşünde yollar.
+    //
+    // ⚠️ Çekirdek TUR diye bir şey BİLMEZ. Burada "tur" geçen tek şey adlardır; anlamı modun
+    // içindedir. Bu üçü olmasaydı mod ya kendi mesajını yollamak (ikinci gönderici) ya da fazı
+    // doğrudan yazmak (ikinci otorite) zorunda kalırdı.
+
+    /// <summary>
+    /// Mod duraklaması ister (§10.1): <see cref="Phase.Playing"/> → <see cref="Phase.Paused"/> +
+    /// <see cref="PauseReason.Mode"/>, gerekçe <paramref name="modeState"/>'e yazılır.
+    /// <para>Süre <b>0'lanır</b>: tur bitti, donmuş bir sayaç göstermek HUD'da yalan olurdu.
+    /// Skorlar ve canlar ELLENMEZ. Tüm <c>ready</c> bayrakları temizlenir — toplanma kapısı o
+    /// bayrağı kullanıyor (§10.1) ve bayat bir <c>true</c> kapıyı anında açardı.</para>
+    /// <para><see cref="Phase.Playing"/> değilse hiçbir şey yapmaz ve <c>false</c> döner (araya
+    /// abort/operatör duraklatması girmiş olabilir).</para>
+    /// </summary>
+    public bool TryPauseForMode(string? modeState)
+    {
+        lock (_gate)
+        {
+            if (_phase != Phase.Playing) return false;
+
+            _modeState = modeState ?? "";
+            _timeRemaining = 0f;
+            foreach (var player in OnlinePlayersLocked()) QueueReadyClearLocked(player);
+
+            SetPhaseLocked(Phase.Paused, PauseReason.Mode, DateTime.UtcNow);
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(BuildMatchStateLocked()));
+            return true;
+        }
+    }
+
+    /// <summary>Modun ara durumunu (§10.1 <c>modeState</c>) günceller ve <b>yalnız değiştiyse</b>
+    /// <c>match_state</c> yayınlar. Değişmediğinde susması bilinçli: bu metod 10 Hz'lik bir
+    /// kancadan çağrılıyor, koşulsuz yayın saniyede 10 broadcast üretirdi.</summary>
+    public void SetModeState(string? modeState)
+    {
+        lock (_gate)
+        {
+            var next = modeState ?? "";
+            if (_modeState == next) return;
+
+            _modeState = next;
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(BuildMatchStateLocked()));
+        }
+    }
+
+    /// <summary>
+    /// Mod duraklamasını bitirip yeni bir tur açar: <see cref="Phase.Paused"/>/
+    /// <see cref="PauseReason.Mode"/> → geri sayım (<see cref="_countdownSeconds"/>) → oradan
+    /// çekirdeğin normal yolundan <see cref="Phase.Playing"/>.
+    /// <para>Canları/ölüleri BURASI toparlamaz — <see cref="EnterLiveLocked"/> zaten herkesi tam
+    /// cana çekiyor ve ölülere <c>health_update</c> yolluyor. İki yerde yapmak ikinci bir
+    /// canlandırma yolu açardı.</para>
+    /// <para>Yalnız mod duraklamasından çalışır; başka durumda <c>false</c> döner.</para>
+    /// </summary>
+    public bool TryStartRound()
+    {
+        lock (_gate)
+        {
+            if (_phase != Phase.Paused || _pauseReason != PauseReason.Mode) return false;
+
+            _modeState = "";
+            foreach (var player in OnlinePlayersLocked()) QueueReadyClearLocked(player);
+            EnterCountdownLocked(_pendingOutbox, DateTime.UtcNow);
+            return true;
+        }
     }
 
     /// <summary>abort_match — her fazdan Lobby'ye (§10.1).</summary>
@@ -1016,6 +1153,9 @@ public sealed class MatchDirector
         lock (_gate)
         {
             if (_phase != Phase.Playing || player.Role != "player" || player.Alive) return;
+            // §10.5: reviveAnchor "none" → tur içinde canlanma yok. İstemci zaten göndermez;
+            // burada da kapatmak "eski istemci gönderirse canlanır mı" sorusunu kapatır.
+            if (_rules.Revive == ReviveAnchor.None) return;
             if (!player.Calibrated) return; // §10.6: kalibresiz oyuncu canlanamaz
             if ((DateTime.UtcNow - player.DiedAt).TotalSeconds < _rules.RespawnDelay) return;
             RevivePlayerLocked(outbox, player);
@@ -1088,10 +1228,12 @@ public sealed class MatchDirector
         _ => ""
     };
 
+    /// <summary>Geri sayıma girer. Uzunluk maçın <see cref="_countdownSeconds"/>'ıdır (§5.2) —
+    /// maçın ilk turu ile sonraki turları arasında fark yoktur.</summary>
     private void EnterCountdownLocked(List<Outgoing> outbox, DateTime now)
     {
         SetPhaseLocked(Phase.Paused, PauseReason.Countdown, now);
-        _countdownRemaining = ArenaProtocol.COUNTDOWN_SECONDS;
+        _countdownRemaining = _countdownSeconds;
         _nextSecondAt = now.AddSeconds(1);
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(new CountdownMsg { seconds = _countdownRemaining }));
@@ -1102,9 +1244,30 @@ public sealed class MatchDirector
         SetPhaseLocked(Phase.Playing, now);
         _timeRemaining = _roundSeconds;
         _nextSecondAt = now.AddSeconds(1);
+
         // §10.2: playing'e girerken herkes tam can + canlı.
-        foreach (var player in OnlinePlayersLocked()) ResetMatchStateLocked(player, keepScore: true);
-        _matchStartPending = _mode != null;
+        // ⚠️ Ölü oyuncu RevivePlayerLocked ile canlandırılır, ResetMatchStateLocked ile DEĞİL:
+        // ikincisi sunucudaki alanları yazar ama İSTEMCİYE HİÇBİR ŞEY GÖNDERMEZ. Tek turlu
+        // modlarda zararsızdı (istemci load_match'te kendini sıfırlıyor), ama tur tabanlı modda
+        // turlar arası load_match yoktur → mesaj gitmezse tur içinde ölmüş oyuncu istemcide
+        // ölüm ekranında DONAR ve bir daha ateş edemez.
+        foreach (var player in OnlinePlayersLocked())
+        {
+            if (player.Alive)
+            {
+                ResetMatchStateLocked(player, keepScore: true);
+                continue;
+            }
+
+            RevivePlayerLocked(outbox, player); // hp = MAX, alive = 1, health_update yayını
+            player.DiedAt = DateTime.MinValue;
+        }
+
+        // OnMatchStart maç başına BİR KEZ, OnRoundStart her Live girişinde (§ IGameMode).
+        _roundStartPending = _mode != null;
+        _matchStartPending = _mode != null && !_matchStarted;
+        if (_mode != null) _matchStarted = true;
+
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
     }
 
@@ -1152,8 +1315,11 @@ public sealed class MatchDirector
         _scoreBlue = 0;
         _roundSeconds = 0;
         _scoreLimit = 0;
+        _countdownSeconds = ArenaProtocol.COUNTDOWN_SECONDS;
         _countdownRemaining = 0;
         _matchStartPending = false;
+        _roundStartPending = false;
+        _matchStarted = false;
 
         foreach (var player in _registry.Snapshot())
         {
@@ -1349,6 +1515,24 @@ public sealed class MatchDirector
         }
 
         if (player != null) _registry.Announce(player, PlayerChangeKind.Updated);
+    }
+
+    /// <summary>Mod kancalarının kilit altında biriktirdiği gönderimleri yollar (bkz.
+    /// <see cref="_pendingOutbox"/>). Tik döngüsünden çağrılır — tek gönderici olduğu için sıra
+    /// korunur.</summary>
+    private async Task FlushPendingAsync()
+    {
+        List<Outgoing> pending;
+        lock (_gate)
+        {
+            if (_pendingOutbox.Count == 0) return;
+            pending = new List<Outgoing>(_pendingOutbox);
+            _pendingOutbox.Clear();
+        }
+
+        await FlushAsync(pending);
+        FlushReadyClear();
+        FlushRosterRefresh();
     }
 
     private void FlushReadyClear()

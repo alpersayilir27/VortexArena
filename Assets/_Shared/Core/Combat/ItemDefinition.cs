@@ -87,8 +87,13 @@ namespace VortexArena.Core.Combat
         [Tooltip("Mermi izinin kalınlığı (metre).")]
         [SerializeField] private float tracerWidth = 0.02f;
 
-        [Tooltip("Mermi izinin ekranda kalma süresi (saniye).")]
-        [SerializeField] private float tracerLifetime = 0.06f;
+        // ⚠️ Bu süre "iz ne kadar TAM PARLAK durur" değil, "doğuşundan tümden kaybolmasına kadar
+        // geçen süre"dir: çizgi ömrü boyunca sönerek gider (ShotTracer.FadeAlphaAt). Ayrı bir
+        // "sönme süresi" alanı bilerek YOK — iki sayı olsaydı hangisinin diğerini kestiği
+        // (sönme ömürden uzunsa iz yarıda kesilir) sessiz bir tuzak olurdu.
+        [Tooltip("Mermi izinin doğuşundan tümden sönmesine kadar geçen süre (saniye). " +
+                 "İz bu süre boyunca sönerek kaybolur, sonunda pat diye kapanmaz.")]
+        [SerializeField] private float tracerLifetime = 0.1f;
 
         // ⚠️ HER MERMİYE TRACER ÇİZİLMEZ. İki katlı gerekçe:
         // (a) Gerçek silahlarda da öyle değildir — her mermide çizmek lazer ışını gibi durur ve

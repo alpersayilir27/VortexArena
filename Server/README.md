@@ -49,7 +49,7 @@ Açılışta:
   (`server.json`; `maps.json` **üretilmez** — o Unity export'undan gelir).
 - Konsolda bağlanan/kopan cihazlar ve çevrimiçi sayısı akar; **Ctrl+C** temiz kapatır.
 
-Açılış başlığında `Modlar : tdm, ffa` ve `Haritalar : Arena12x12` satırları kayıtlı mod/harita
+Açılış başlığında `Modlar : tdm, ffa, tournament` ve `Haritalar : Arena12x12` satırları kayıtlı mod/harita
 tablosunu özetler (`maps.json` yoksa `Haritalar : yok (doğrulama kapalı)`); `Lobi :` satırı
 yapılandırılmış lobi sahnesini gösterir ve o sahne `maps.json`'da yoksa uyarır; `Hasar : istemci
 bildirir` satırı sunucuda silah tablosu ve hile denetimi olmadığını hatırlatır (§10.3).
@@ -274,10 +274,13 @@ sunucu zorla canlandırır (maç kilitlenmesin).
 ⚠️ Şartın kendisi (**tabanda mı / sabit mi durdu**) sunucuda **doğrulanmaz** — sunucu hakemlik
 değil defter tutar (§10.3 felsefesi); faz + ölü + gecikme kontrolüyle yetinir.
 
-**Maç parametreleri:** `start_match.roundSeconds`/`scoreLimit` doluysa o maç bu değerlerle koşar,
-boş/`0` ise modun varsayılanı (`DefaultRoundSeconds`/`DefaultScoreLimit`) kullanılır. Yani modun
+**Maç parametreleri:** `start_match.roundSeconds`/`scoreLimit`/`countdownSeconds` doluysa o maç bu
+değerlerle koşar, boş/`0` ise modun varsayılanı (`DefaultRoundSeconds`/`DefaultScoreLimit`) —
+geri sayımda protokolün varsayılanı (`COUNTDOWN_SECONDS` = 5) — kullanılır. Yani modun
 sayıları **kilit değil varsayılandır** — operatör raundu kısaltıp uzatabilir. Seçim mod/harita ile
 aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki operatör sapmaz.
+`countdownSeconds` sunucuda **5–30 sn** aralığına kırpılır ve maçın HER geri sayımında kullanılır
+(tur tabanlı modda turlar arasındaki bekleme de odur).
 
 **Kayıtlı modlar** (`MatchDirector.RegisterModes()`; tanınmayan `modeId`'li `start_match` reddedilir):
 
@@ -285,10 +288,21 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 |---|---|---|---|
 | `tdm` | `Modes/TdmMode.cs` | Tümüyle varsayılan (`ModeRules.TeamDefault`): iki takım, takım skoru, kendi tabanında canlanma, raf silahı, 5 sn gecikme | 300 sn / 30 |
 | `ffa` | `Modes/FfaMode.cs` | Takımsız · bireysel skor · sabit durarak canlanma · silahı mod dağıtır · gecikme 0 | 300 sn / 20 |
+| `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından tek farkı: **canlanma yok** (`Revive = None`, gecikme 0). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur |
 
 > `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;
 > eşitlikte `TryGetLeader` false döndüğü için maç berabere biter. Oyuncusuz başlatılan maçta
 > (admin harita önizlemesi) lider yoktur — süre dolunca berabere kapanır, ek kod gerekmez.
+
+> **`tournament` bir maçı TURLARA böler ama çekirdek tur diye bir şey bilmez.** `roundSeconds`
+> **turun** süresidir, `scoreLimit` maçı kazanmak için gereken tur sayısıdır (tavan
+> `2 × limit − 1` tur). Bir takımın tüm çevrimiçi oyuncuları ölünce tur biter; süre dolarsa
+> **savaşabilir** (canlı **ve** kalibreli) sayısı fazla olan takım alır, eşitse kimseye puan yok.
+> Turlar arasında faz `paused`/`mode` olur (`modeState:"regroup:2/6"`), oyuncular fiziksel olarak
+> kendi taban bölgelerine yürüyüp `set_ready{true}` yollar ve herkes toplanınca geri sayım başlar
+> (mod 60 sn sonra emniyet için yine başlatır). Çekirdek bunu üç API ile destekler —
+> `TryPauseForMode` / `SetModeState` / `TryStartRound` — ve `modeState`'i **hiç ayrıştırmaz**.
+> Konsolda `[tournament]` satırları tur akışını anlatır.
 
 **Yeni mod eklemek:**
 1. `Modes/<Ad>Mode.cs` içinde `IGameMode` uygula.

@@ -26,14 +26,15 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `EVENT_MAX_ENTRIES_PER_PACKET` | `128` | Tek `0x04` datagramına yazılan en fazla olay (§6.5). 6 + 128×9 = 1158 B < MTU. Taşan olay **atılmaz, sonraki tik'e kayar** — "tik başına en fazla bir batch" değişmezi kopya korumasının dayanağıdır |
 | `EVENT_TICK_HISTORY` | `64` | İstemcinin kopya ayıklama için hatırladığı `0x04` tik sayısı (§6.5) |
 | `PLAYER_MAX_HP` | `100` | Oyuncu tam canı (sunucu-otoriter; §10) |
-| `COUNTDOWN_SECONDS` | `5` | Geri sayımın uzunluğu (`phaseReason:"countdown"`) |
+| `COUNTDOWN_SECONDS` | `5` | Geri sayımın **varsayılan** uzunluğu (`phaseReason:"countdown"`); admin `start_match.countdownSeconds` ile o maça özel bir değer verebilir (§5.2) |
+| `COUNTDOWN_SECONDS_MIN` / `COUNTDOWN_SECONDS_MAX` | `5` / `30` | `countdownSeconds` kırpma aralığı. **Bu bir arayüz listesi değil, sunucunun uyguladığı kısıttır** — 1 sn'lik geri sayım oyuncuya yerini alacak zaman bırakmaz, 30 sn'den uzun bekleme turnuvada ölü zamandır |
 | `MATCH_END_SECONDS` | `10` | `finished` → otomatik `return_to_lobby` |
 | `LOADING_TIMEOUT` | 20 sn | Yükleme kapısında (`phaseReason:"loading"`) tüm `set_ready` beklenmezse yine de geri sayıma geçilir |
 | `RESPAWN_DELAY` | 5 sn | Ölüm → en erken canlanma (`respawn.delaySeconds`) **varsayılanı**; mod `rules.respawnDelay` ile ezebilir (§10.5) |
 | `REVIVE_GRACE` | 20 sn | `revive_request` gelmezse sunucu ölümden bu kadar sonra zorla canlandırır |
 | `REVIVE_HOLD_SECONDS` | 3 sn | `reviveAnchor:"standstill"` (§10.5): ölü oyuncunun canlanmak için kesintisiz sabit durması gereken süre |
 | `REVIVE_HOLD_RADIUS` | 1 m | `reviveAnchor:"standstill"`: ölüm anındaki çapadan bu yarıçapı aşan hareket sayacı sıfırlar |
-| `ROUND_SECONDS_OPTIONS` | `150, 300, 600, 900, 1200, 1800, 3600` | Admin arayüzünün maç süresi seçenekleri (2.5 · 5 · 10 · 15 · 20 · 30 dk · 1 saat). **Protokol kısıtı değil, arayüz listesidir** — sunucu `start_match.roundSeconds`'ta her pozitif değeri kabul eder |
+| `ROUND_SECONDS_OPTIONS` | `60, 90, 120, 150, 180, 300, 600, 900, 1200, 1800, 3600` | Admin arayüzünün maç süresi seçenekleri (1 · 1.5 · 2 · 2.5 · 3 · 5 · 10 · 15 · 20 · 30 dk · 1 saat). **Protokol kısıtı değil, arayüz listesidir** — sunucu `start_match.roundSeconds`'ta her pozitif değeri kabul eder. Kısa uçtaki değerler tur tabanlı modlar içindir (`tournament`'ta bu alan **turun** süresidir, maçın değil) |
 
 ## 2. Roller ve kimlik
 
@@ -135,8 +136,9 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 
 ### 5.2 Yalnız admin → Sunucu
 
-- **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30 }`
-  `roundSeconds`/`scoreLimit` **o maça özeldir**: `≤ 0` ya da eksikse modun kendi varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`) kullanılır. Operatörün arayüzde seçtiği süre/limit buradan geçer; `ROUND_SECONDS_OPTIONS` yalnız arayüz listesidir, sunucu her pozitif değeri kabul eder.
+- **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }`
+  `roundSeconds`/`scoreLimit`/`countdownSeconds` **o maça özeldir**: `≤ 0` ya da eksikse modun kendi varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`, geri sayımda `COUNTDOWN_SECONDS`) kullanılır. Operatörün arayüzde seçtiği değerler buradan geçer; `ROUND_SECONDS_OPTIONS` yalnız arayüz listesidir, sunucu her pozitif değeri kabul eder.
+  `countdownSeconds` sunucuda `[COUNTDOWN_SECONDS_MIN, COUNTDOWN_SECONDS_MAX]` aralığına **kırpılır** ve maç boyunca **her** geri sayımda kullanılır — tur tabanlı modlarda (`tournament`, §10.5) turlar arasındaki geri sayım da budur. Oyuncu istemcisine ayrı bir alan olarak GİTMEZ: `countdown{seconds}` zaten her saniye gerçek değeri taşır.
 - **`abort_match`** `{ "type":"abort_match" }`
 - **`pause_match`** `{ "type":"pause_match" }` — koşan maçı dondurur: `playing` → `paused` + `phaseReason:"operator"` (§10.1). Süre durur, hasar kapanır, skorlar ve `modeState` **korunur**. **Yalnız `playing` iken iş yapar**; başka fazda loglanıp yok sayılır (duraklı bir maçı duraklatmanın anlamı yok).
 - **`resume_match`** `{ "type":"resume_match" }` — `paused`/`operator`'dan `playing`'e döner; süre kaldığı yerden akar, canlar/skorlar sıfırlanmaz. ⚠️ **Yalnız operatörün duraklattığı maç sürdürülebilir:** `phaseReason` `loading`/`countdown`/`mode`/`lobby` iken reddedilir. Sebep: o duraklamaların sahibi operatör değildir — modun istediği duraklamayı (`mode`) operatörün kaldırması modun ara durumunu bozar, geri sayımı elle bitirmek de yükleme kapısını atlar. Her duraklamayı kendi sahibi kaldırır.
@@ -145,7 +147,7 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
 - **`clear_calibration`** `{ "type":"clear_calibration", "playerId":5 }` — o oyuncunun kalibrasyonunu **sıfırlar** (§10.6). **`playerId:0` = TÜM oyuncular** (toplu sıfırlama). Admin kalibrasyonu yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez — hizalamanın gerçekten oturduğunu yalnız başlık bilir (§10.6).
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
-- **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30 }` — bir sonraki maçın **ortak** mod/harita/süre/limit seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim maç bitiminde sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
+- **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }` — bir sonraki maçın **ortak** mod/harita/süre/limit/geri sayım seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim maç bitiminde sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
   ⚠️ **`sceneName` yalnız operatör harita/mod imlecini gerçekten oynattığında doldurulur** (süre/limit dokunuşunda boş gider): dolu harita alanı sahnelemeyi tetikler (§10.7), yani süre değiştirmek herkesi bir arenaya taşırdı.
   **Neden maç parametreleri de ortak:** iki operatör aynı ekranı görmezse biri 5 dk sandığı maçı 30 dk başlatır. Süre/limit *operasyonel* durumdur, görünüm tercihi değil (§5.3 son madde).
   ⚠️ **`sceneName` yalnız bir not değil, anlık bir sahne komutudur:** harita değiştiğinde sunucu o arenayı **sahneler** — TÜM istemciler (oyuncular + adminler) oraya geçer (§10.7). Bu yüzden **`modeId`/`sceneName` yalnız MAÇ KURULMAMIŞKEN kabul edilir**, yani tam iki durumda: `finished` (maç bitti, sıradaki seçilebilmeli) ve `paused` + `phaseReason:"lobby"`. Diğer her durumda ikisi de **düşürülür** — `playing` ama aynı zamanda `paused` + `loading`/`countdown`/`operator`/`mode`: BAŞLAT'a basıldığı andan itibaren maç kuruludur, kurulmakta olanın (yükleme/geri sayım) ya da donmuş olanın (operatör/mod duraklatması) altından sahne çekilemez. Düşürülen alanlar için komutun süre/limit kısmı yine işlenir (onlar sahne yüklemez), konsola sebep yazılır ve `admin_state` mevcut seçimle geri yayınlanır — iyimser davranan panelin imleci sunucunun değerine çekilsin. Kurulmuş bir maçın haritasını değiştirmek diye bir şey yoktur; önce `abort_match`, sonra yeni harita `start_match` ile gelir.
@@ -236,12 +238,12 @@ Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken har
 ```json
 { "type":"admin_state", "modeId":"tdm", "sceneName":"Arena12x12",
   "venueId":"Outdoor12x12", "venueScenes":["Arena12x12","IceWorld","Lobby12x12"],
-  "roundSeconds":600, "scoreLimit":30,
+  "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10,
   "notice":"Ofis-PC: harita -> Arena12x12", "adminCount":2 }
 ```
 - Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`return_to_lobby`/`kick`/`identify`/`set_team`) ve admin bağlanıp ayrıldığında. ⚠️ `pause_match`/`resume_match` için duyuru **yalnız komut gerçekten uygulandıysa** yayılır — reddedilen komut diğer operatörlerin ekranına olmamış bir eylemi yazmamalı.
 - `modeId`/`sceneName` = ortak seçim. ⚠️ **Hiçbir zaman boş değildir:** sunucu açılışta seçimi **mekanın lobi haritasıyla** tohumlar (`modeId:"lobby"`, `sceneName:<mekanın lobisi>` — §10.7 açık sahnenin açılış değeri), sonrasında da boş alan mevcut değeri koruduğu için seçim bir daha boşalamaz. Böylece ilk `admin_state`'i alan admin de "hiç harita seçilmemiş" bir durum görmez. Admin arayüzü **kendi yerel seçimini değil bunu gösterir**; gelen değer arayüzdeki mod/harita seçicisini günceller. Yani bir operatör haritayı değiştirdiğinde diğerinin ekranı da (paneli açık olmasa bile) o haritaya döner — sahneyi zaten `return_to_lobby` sahnelemesi taşır (§10.7), `admin_state` yalnız seçiciyi hizalar.
-- `roundSeconds`/`scoreLimit` = bir sonraki maçın ortak parametreleri (`0` = hiç seçilmedi, modun varsayılanı kullanılacak). Mod/harita ile aynı kanaldan gider — sebebi §5.2 `set_selection` notunda.
+- `roundSeconds`/`scoreLimit`/`countdownSeconds` = bir sonraki maçın ortak parametreleri (`0` = hiç seçilmedi, modun/protokolün varsayılanı kullanılacak). Mod/harita ile aynı kanaldan gider — sebebi §5.2 `set_selection` notunda.
 - `notice` = son admin eyleminin insan okuyabilir özeti (`"<admin adı>: <eylem>"`), tüm adminlerin durum satırında görünür. Boş olabilir.
 - `adminCount` = o an çevrimiçi admin sayısı.
 - `venueId`/`venueScenes` = sunucunun açılışta seçtiği mekan ve o mekanın sahne adları (§11.1). Oturum boyunca değişmez ama her `admin_state`'te taşınır ki geç bağlanan admin de ilk mesajda hangi arenaları görebileceğini öğrensin. **Admin harita seçicisi kendi yerel kataloğunu bununla süzer**: katalog tüm projeyi tanır, oynatılabilir olana sunucu karar verir. Boş gelirse süzme yapılmaz.
@@ -517,6 +519,16 @@ gelir", "hangi HUD" sorularının cevabı **moddan** gelir (§10.5).
 oyunu durdurmak isterse çekirdekten `phase = paused` + `phaseReason = "mode"` ister ve gerekçesini
 `modeState`'e yazar. Aksi hâlde ikinci bir otorite doğar ve "maç koşuyor mu" sorusunun iki cevabı olur.
 
+**Bugün kullanılan `modeState` değerleri** (yalnız `tournament`, §10.5 — sözlük modun kendisine aittir):
+
+| Değer | Faz | Anlamı / HUD |
+|---|---|---|
+| `round:<n>` | `playing` | Kaçıncı tur oynanıyor. HUD skor satırına "TUR n" yazar |
+| `regroup:<hazır>/<toplam>` | `paused` + `mode` | Turlar arası toplanma: kaç oyuncu tabanına döndü. HUD "TOPLANMA 2/6" yazar |
+
+⚠️ Bu tablo **çekirdeğin sözleşmesi değildir** — `MatchDirector` bu stringleri hiç ayrıştırmaz.
+Yeni bir tur tabanlı mod kendi sözlüğünü tanımlar ve buraya bir satır ekler.
+
 ```
               start_match                 herkes set_ready | LOADING_TIMEOUT
 paused ─────────────────────► paused ──────────────────────────────► paused
@@ -543,7 +555,7 @@ ile tanımlanır (§10.5, §10.7).
   ⚠️ **`lobby` bir `IGameMode` DEĞİLDİR** → `start_match{"lobby"}` "bilinmeyen mod" diye reddedilir. Yani **lobi türü seçiliyken maç başlatılamaz** (§10.7); bunun için ayrı bir kural yazılmaz, kayıtlı olmaması yeterlidir.
 - **Oyuncusuz maç (yalnız admin):** `load_match` yalnız adminlere gider, yükleme kapısında beklenecek `set_ready` olmadığı için doğrudan geri sayıma geçilir ve maç normal işler (skor 0, süre akar). Ayrım şu: **oyuncularla başlamış** bir maçta yükleme sırasında son oyuncu da düşerse sunucu maçı bırakıp açık sahneye döner; oyuncusuz **başlatılmış** maçta dönmez — çıkış operatörün `abort_match`/`return_to_lobby` komutudur.
 - **Mod/harita/parametre seçimi sunucuda yaşar (çoklu admin):** admin arayüzündeki seçiciler yerel bir değişkeni değil, `set_selection` ile sunucudaki ortak seçimi değiştirir; sunucu `admin_state` ile hepsine geri yayar. `start_match` kendi `modeId`/`sceneName`'i ile gelmeye devam eder (protokol yüzeyi genişledi ama kırılmadı) ama sunucu onu aynı zamanda ortak seçime yazar — böylece maç başladığında tüm admin panelleri aynı değeri gösterir. Seçim yalnız bir niyet beyanıdır: doğrulama `start_match` anında yapılır.
-- **Maç parametreleri admin'den gelebilir:** `start_match.roundSeconds`/`scoreLimit` doluysa (`> 0`) o maç bu değerlerle koşar; boş/`0` ise modun varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`) kullanılır. Yani `ModeDefinition`/`IGameMode` üzerindeki sayılar **varsayılandır, kilit değil** — operatör raundu kısaltıp uzatabilir. Değer `load_match`/`match_state` üzerinden istemcilere zaten gidiyor, ek bir kanal doğmaz.
+- **Maç parametreleri admin'den gelebilir:** `start_match.roundSeconds`/`scoreLimit`/`countdownSeconds` doluysa (`> 0`) o maç bu değerlerle koşar; boş/`0` ise modun varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`) ya da protokol varsayılanı (`COUNTDOWN_SECONDS`) kullanılır. Yani `ModeDefinition`/`IGameMode` üzerindeki sayılar **varsayılandır, kilit değil** — operatör raundu kısaltıp uzatabilir. Değer `load_match`/`match_state`/`countdown` üzerinden istemcilere zaten gidiyor, ek bir kanal doğmaz.
 - **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam`'i gider; **takımsız modda** (`rules.teamMode == "none"`, §10.5) takım boş gider. Yükleme kapısına girerken tüm `ready` bayrakları sıfırlanır. **Çevrimiçi adminlere de bir kopya gider** (`yourTeam:""`) — admin gözlemci aynı sahneyi yükler.
 - **`phaseReason:"loading"`:** istemci sahneyi yükleyince `set_ready{ready:true}` gönderir ("sahne yüklendi" anlamında). Tüm çevrimiçi **oyuncular** hazır olunca (veya `LOADING_TIMEOUT` dolunca) geri sayım başlar. Kapı yalnız `role=player` bağlantılarını sayar: admin sahneyi yüklese de `set_ready` göndermez, geri sayımı ne hızlandırır ne geciktirir.
 - **`phaseReason:"countdown"`:** saniyede bir `countdown{seconds}` (5→1); 0'da faz `playing`.
@@ -553,6 +565,33 @@ ile tanımlanır (§10.5, §10.7).
 - **Duraklatma (`phaseReason:"operator"` / `"mode"`):** `playing` iken duraklatılan maç `paused`'a geçer — süre durur, hasar kapanır, `modeState` **korunur** (mod kaldığı yerden sürer). Devam edilince `playing`'e döner. ⚠️ Operatörün duraklatması ile modun duraklatması aynı fazı üretir ama gerekçeleri ayrıdır: turnuva "herkes tabana dönsün" derken (`mode`) operatör de duraklatırsa (`operator`) HUD'un doğru mesajı gösterebilmesi için ikisi karışmamalıdır.
   - Operatörün kapısı `pause_match` / `resume_match`'tir (§5.2) ve **yalnız kendi duraklatmasını kaldırabilir** (`phaseReason == "operator"`). `mode` gerekçesini kaldırma yetkisi modundur; `loading`/`countdown` zaten kendi koşullarıyla biter.
   - `abort_match` duraklı maçta da çalışır: duraklatmak maçtan çıkmak değildir, çıkış hâlâ `abort_match`/`return_to_lobby`'dir.
+
+**Tur tabanlı modlar (`tournament`) — çekirdek TUR diye bir şey bilmez.** Turun tamamı modun
+içindedir; çekirdek yalnız üç yetenek sunar ve hiçbirini yorumlamaz:
+
+```
+paused/loading → paused/countdown → playing                     ◄── TUR n
+                        ▲                 │
+                        │                 │ mod turu bitirdi (eleme / süre)
+                        │                 ▼
+                        │        maç bitti mi? ──evet──► finished (normal yol)
+                        │                 │ hayır
+                        │                 ▼
+                        │        paused/mode · modeState="regroup:2/6"
+                        └─────────────────┘ modun şartı sağlandı → yeni tur
+```
+
+- Duraklamayı **mod koydu** (`phaseReason:"mode"`), kaldırma yetkisi de onundur — `resume_match`
+  bu duraklamayı kaldırmaz (§5.2). Duraklama boyunca **süre işlemez ve hasar yoktur** (faz `paused`).
+- Yeni tur, çekirdeğin **mevcut geri sayımına** girer (`phaseReason:"countdown"`,
+  `countdownSeconds` uzunluğunda) ve oradan `playing`'e döner. Yeni bir faz/gerekçe **eklenmedi.**
+- Tur başında sunucu **her oyuncuya `health_update{hp:PLAYER_MAX_HP, attackerId:0}` gönderir** —
+  `playing`'e girerken canların dolması sunucu içi bir tazeleme değil, telde görünen bir olaydır.
+  ⚠️ Gönderilmezse tur içinde ölmüş oyuncu istemcide **ölüm ekranında kalır**: maç içi tur
+  geçişinde `load_match` yoktur, yani istemcinin kendini sıfırlayacağı ikinci bir yol da yoktur.
+- Toplanma kapısı **`set_ready` bayrağını yeniden kullanır** (yükleme kapısının aynısı, §5.1):
+  oyuncu kendi taban bölgesine girince `set_ready{true}`, çıkınca `set_ready{false}` yollar. Yeni
+  bir mesaj tipi YOKTUR ve eklenmez — "hazırım" zaten bu bayrağın anlamıdır.
 
 ### 10.2 Oyuncu maç durumu (sunucuda)
 
@@ -623,16 +662,22 @@ Fiziksel oyuncu ışınlanamaz → **respawn = konum değil durum değişimi**:
 2. `delaySeconds` dolduktan **ve modun canlanma şartı sağlandıktan** sonra istemci `revive_request` gönderir (canlanana dek ~1 sn'de bir tekrarlar). Şart `rules.reviveAnchor` ile seçilir:
    - **`"base"`** (varsayılan, TDM): oyuncu bir **taban bölgesine** (`BaseZone` — arenadaki kırmızı/mavi şerit) fiziken girer. Ölüm ekranı "Tabanına dön ve canlan" der.
    - **`"standstill"`**: oyuncu ölüm anındaki HMD konumunu çapa alır ve `REVIVE_HOLD_RADIUS` içinde `REVIVE_HOLD_SECONDS` boyunca kesintisiz sabit durur; çapadan çıkınca sayaç ve çapa sıfırlanır. Taban bölgesi olmayan modlar (FFA) bunu kullanır.
+   - **`"none"`**: canlanma **YOKTUR**. İstemci `revive_request` hiç göndermez, sunucu gelirse reddeder ve `REVIVE_GRACE` zorla canlandırması bu kipte **çalışmaz**. Ölü oyuncuyu yalnız modun başlattığı yeni bir tur canlandırır (tur tabanlı eleme, `tournament` §10.5). Ölüm ekranı "canlanmaya N sn" değil "takımın turu bitirene kadar bekle" der.
 3. Sunucu doğrular (faz `playing`, oyuncu ölü, gecikme dolmuş, **kalibreli**) → `hp=PLAYER_MAX_HP`, `alive=1` → `health_update{hp:100, attackerId:0}`.
 4. Ölümden `REVIVE_GRACE` geçtiği hâlde talep gelmediyse sunucu **zorla** canlandırır (istemci takılmışsa maç kilitlenmesin).
 
 > **`reviveAnchor` sunucuda DOĞRULANMAZ.** §10.3 felsefesinin aynısı: sunucu hakemlik değil defter tutar. "Tabanda mı / sabit mi durdu" kararı istemcinindir; sunucu faz + ölü + gecikme kontrolüyle yetinir. `REVIVE_GRACE` güvenlik ağı her iki şartta da aynen işler.
 
-> ⚠️ **`REVIVE_GRACE`'in TEK istisnası kalibrasyondur** (§10.6): kalibresiz oyuncu ne talep üzerine
-> ne de zorla canlandırılır — grace döngüsü onu atlar. Aksi hâlde "kalibresiz oyuncu canlanamaz"
-> kuralı işlevsiz olurdu (birkaç saniye sonra kendiliğinden canlanırdı). Kalibresiz ölü oyuncu
-> **kalibre olana dek ölü kalır**; kalibrasyon gelince grace zaten dolmuş olduğu için ilk tik'te
-> kendiliğinden canlanır.
+> ⚠️ **`REVIVE_GRACE`'in İKİ istisnası vardır** ve ikisi de aynı sebeple: bir canlanma yasağı,
+> canlandırmanın **her iki yolunu** birden kapatmadıkça işlevsizdir. Yollar ayrıdır — biri talep
+> tabanlı (`revive_request`), diğeri zamanlayıcı tabanlı (grace döngüsü); yalnız birini kapatmak
+> oyuncuyu 20 sn sonra yine canlandırır.
+>
+> 1. **Kalibrasyon** (§10.6): kalibresiz oyuncu ne talep üzerine ne de zorla canlandırılır. Kalibresiz
+>    ölü oyuncu **kalibre olana dek ölü kalır**; kalibrasyon gelince grace zaten dolmuş olduğu için
+>    ilk tik'te kendiliğinden canlanır.
+> 2. **`reviveAnchor:"none"`** (§10.5): grace döngüsü bu kipte hiç koşmaz. Ölü oyuncuyu yalnız modun
+>    başlattığı yeni tur canlandırır — "tur içinde canlanma yok" kuralı buradan gelir.
 
 **Taban bölgesi eşleşmesi (istemci):** bir `BaseZone` oyuncuya açıktır eğer takımı oyuncunun takımıyla aynıysa, **ya da** bölge `Neutral` işaretliyse, **ya da** oyuncunun takımı boşsa (takımsız mod). Aynı takıma ait birden çok bölge varsa **herhangi birine** girmek yeter. Sahnede hiç açık bölge yoksa şart aranmaz — oyuncu kalıcı ölü kalmasın (güvenlik ağı yine `REVIVE_GRACE`).
 
@@ -658,7 +703,7 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
 | `teamMode` | `"two"` \| `"none"` | `"two"` | `"two"`: kırmızı/mavi, sunucu takımları dengeler, slot takım içi. `"none"`: takım yok (`team:""`), slot tek havuzdan |
 | `scoring` | `"team"` \| `"player"` | `"team"` | Skor kime yazılır: `match_state.scoreRed/scoreBlue` mi, `lobby_state → PlayerInfo.score` mü (§10.2) |
 | `friendlyFire` | `true` \| `false` | `false` | `false` = takım arkadaşı vurulamaz (§10.3/4). Boş takım asla takım arkadaşı sayılmaz |
-| `reviveAnchor` | `"base"` \| `"standstill"` | `"base"` | Canlanma şartı (§10.4/2) |
+| `reviveAnchor` | `"base"` \| `"standstill"` \| `"none"` | `"base"` | Canlanma şartı (§10.4/2). `"none"` = tur içinde canlanma yok; `revive_request` reddedilir **ve** `REVIVE_GRACE` çalışmaz |
 | `weaponSource` | `"rack"` \| `"random"` | `"rack"` | Silah nereden gelir: `"rack"` = sahnedeki **çerçeveler** (silah çerçeveden ayrılmaz; seçilen silah grip'e basılınca oyuncunun eline **klonlanır**), `"random"` = modun dağıtımı. **Tümüyle istemci sunumu** — sunucuda karşılığı yok (§10.3: silah tablosu yoktur) |
 | `respawnDelay` | saniye | `RESPAWN_DELAY` (5) | `respawn.delaySeconds` ve sunucudaki `revive_request` gecikme eşiği. **`0` geçerli bir değerdir** (anında canlanma) ve varsayılana çekilmez — alan hiç gönderilmezse DTO'nun kendi başlangıcı geçerli olduğu için "yazılmadı" ile "sıfır yazıldı" karışmaz |
 | `fireWhilePaused` | `true` \| `false` | `false` | Faz `playing` değilken silah ateşlenebilir mi. `true` = lobi gibi serbest atış alanı: namlu alevi/ses relay edilir (§10.3) ama **hasar yine yoktur** (`hit_report` kapısı `playing`). Bu alan sayesinde istemcide `if (modeId == "lobby")` zinciri doğmaz |
@@ -677,6 +722,24 @@ olmalı, tanınmayan `modeId` reddedilir):
 |---|---|---|---|---|---|---|---|---|---|
 | `tdm` | Takım Ölüm Maçı | `two` | `team` | `false` | `base` | `rack` | `5` | `false` | 300 sn / 30 |
 | `ffa` | Herkes Tek | `none` | `player` | `false` | `standstill` | `random` | `0` | `false` | 300 sn / 20 |
+| `tournament` | Turnuva | `two` | `team` | `false` | **`none`** | `rack` | `0` | `false` | 120 sn / 4 tur |
+
+> **`tournament` — tur tabanlı takım elemesi.** TDM varsayılanından ayrıldığı **tek** kural
+> `reviveAnchor:"none"`dır; geri kalan her şey varsayılandır. Tur kavramı bir kural alanı DEĞİLDİR
+> ve `ModeRules`'a girmez — turlar modun iç durumudur, çekirdek onları bilmez (§10.1 "tur tabanlı
+> modlar"). Telde görünen tek izleri `modeState` (`round:<n>` / `regroup:<h>/<t>`) ve tur başındaki
+> `health_update`'lerdir.
+>
+> | Soru | Cevap |
+> |---|---|
+> | Skor ne sayar? | `scoreRed`/`scoreBlue` = **kazanılan tur sayısı** (öldürme değil) |
+> | `roundSeconds` neyin süresi? | **Turun**, maçın değil. Süre dolunca maç bitmez, tur biter |
+> | `scoreLimit` ne? | Maçı kazanmak için gereken tur sayısı. Tavan `2 × scoreLimit − 1` tur (best-of); tavanda yüksek skor kazanır, eşitse berabere |
+> | Tur nasıl biter? | Bir takımın **tüm** çevrimiçi oyuncuları ölü → diğer takıma +1. Süre dolarsa **çok kişi ayakta kalan** kazanır; eşitse kimseye puan yok |
+> | Ayakta sayımında kim sayılır? | Yalnız `alive` **ve** `calibrated` oyuncular (§10.6): kalibresiz oyuncu ne vurur ne vurulur, savaş dışıdır. **Eleme** kontrolünde ise kalibrasyona bakılmaz — kalibresiz oyuncu ölü değildir, takımını ayakta tutar (tur süreye gider, kıyas onu zaten dışarıda bırakır) |
+> | Eleme neden `OnKill` ile değil tik ile ölçülür? | Takım **bağlantı kopmasıyla** da boşalır ve o yolda `OnKill` hiç çağrılmaz. Tek tarama = tek doğruluk kaynağı |
+> | Turlar arası ne olur? | `paused`/`mode`, `modeState:"regroup:<h>/<t>"`. Herkes kendi taban bölgesine girip `set_ready{true}` yollayınca (ya da mod zaman aşımına uğrayınca) geri sayım başlar |
+> | Cephane? | Şarjör + yedek şarjör (`weaponSource:"rack"`), **her tur başında herkes tam dolu** — istemci geri sayımda doldurur. Sunucunun bundan haberi yoktur (§10.3: silah tablosu yok) |
 
 > ⚠️ **`lobby` bu tabloda YOKTUR ve olmayacaktır.** Lobi bir **tür**dür ama `IGameMode` değildir
 > (§10.7): sunucuda kaydı olmadığı için `start_match{"lobby"}` "bilinmeyen mod" diye reddedilir —

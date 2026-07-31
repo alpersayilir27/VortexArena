@@ -45,6 +45,11 @@ namespace VortexArena.App.Admin
         /// <summary>Ortak seçim: bir sonraki maçın skor limiti; <c>0</c> = modun varsayılanı.</summary>
         public static int ScoreLimit { get; private set; }
 
+        /// <summary>Ortak seçim: geri sayımın uzunluğu (sn); <c>0</c> = protokol varsayılanı
+        /// (<c>COUNTDOWN_SECONDS</c>). Tur tabanlı modlarda turlar arasındaki geri sayım da
+        /// budur (§5.2).</summary>
+        public static int CountdownSeconds { get; private set; }
+
         /// <summary>Sunucunun bildirdiği çevrimiçi admin sayısı (kendimiz dahil).</summary>
         public static int AdminCount { get; private set; }
 
@@ -117,6 +122,7 @@ namespace VortexArena.App.Admin
             string sceneName = msg.sceneName ?? "";
             bool changed = modeId != ModeId || sceneName != SceneName ||
                            msg.roundSeconds != RoundSeconds || msg.scoreLimit != ScoreLimit ||
+                           msg.countdownSeconds != CountdownSeconds ||
                            msg.adminCount != AdminCount;
 
             string venueId = msg.venueId ?? "";
@@ -132,6 +138,7 @@ namespace VortexArena.App.Admin
             SceneName = sceneName;
             RoundSeconds = msg.roundSeconds;
             ScoreLimit = msg.scoreLimit;
+            CountdownSeconds = msg.countdownSeconds;
             AdminCount = msg.adminCount;
             VenueId = venueId;
             _venueScenes = venueScenes;

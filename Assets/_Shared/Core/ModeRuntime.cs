@@ -177,7 +177,12 @@ namespace VortexArena.Core
 
         private static ModeReviveAnchor ParseRevive(string value)
         {
-            return Matches(value, "standstill") ? ModeReviveAnchor.StandStill : ModeReviveAnchor.OwnBase;
+            if (Matches(value, "standstill"))
+            {
+                return ModeReviveAnchor.StandStill;
+            }
+
+            return Matches(value, "none") ? ModeReviveAnchor.None : ModeReviveAnchor.OwnBase;
         }
 
         private static ModeWeaponSource ParseWeapons(string value)
