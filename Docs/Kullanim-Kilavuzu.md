@@ -288,10 +288,10 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Kırmızı / Mavi** | Seçili oyuncunun takımını değiştirir | Takımları elle dengelemek için (boş bırakırsan sistem otomatik dengeler) |
 | **Bu cihazı tanıt** | O gözlüğün ekranında büyük bir işaret gösterir | "Bu listedeki isim hangi gözlük?" sorusuna cevap |
 | **Çıkar (kick)** | Oyuncuyu atar — **o gözlükteki oyun kapanır** | Yanlışlıkla bağlanan/oyunda olmaması gereken cihaz |
-| **Mod seçimi** | Oyun türü: **Takım Ölüm Maçı** (kırmızı-mavi) veya **Herkes Tek** (takım yok, herkes herkese karşı) | Her maç öncesi — aşağıdaki "İki oyun modu" kutusuna bak |
-| **Harita seçimi** | Hangi arenada oynanacağı | Her maç öncesi — sadece seçili modla uyumlu haritalar listelenir |
+| **Mod seçimi** | Oyun türü: **Takım Ölüm Maçı** (kırmızı-mavi) veya **Herkes Tek** (takım yok, herkes herkese karşı). Satıra bas, liste aşağı açılır, seçeceğine tıkla | Her maç öncesi — aşağıdaki "İki oyun modu" kutusuna bak |
+| **Harita seçimi** | Hangi arenada oynanacağı — mod seçimiyle aynı açılır liste. Listenin **ilk satırı "Lobi"dir**: seçersen herkes lobiye döner | Her maç öncesi — sadece seçili modla uyumlu haritalar listelenir |
 | **Maçı Başlat** | Herkesi arenaya alır, geri sayımı başlatır | Herkes bağlı ve hazır olduğunda |
-| **Maçı İptal / Lobiye Dön** | Maçı erken bitirir, herkesi lobiye döndürür | Acil durum, oyuncu değişimi, yanlış harita |
+| **Maçı İptal** | Maçı erken bitirir, herkesi lobiye döndürür | Acil durum, oyuncu değişimi, yanlış harita |
 | **Skor ve öldürme akışı** | Ortada canlı skor + faz/süre, sağ altta "kim kimi vurdu" listesi | Maç sırasında takip |
 | **Kamera: Kuş bakışı** (`3`) | Arenayı yukarıdan görürsün; her oyuncunun **etrafında renkli halka, altında adı** yazar | Kimin nerede olduğunu görmek, güvenlik takibi — **varsayılan görünüm** |
 | **Kamera: POV** (`1`) | Seçili oyuncunun **kendi gözünden** izlersin | "Bu oyuncu ne görüyor / neden takıldı?" |
@@ -347,10 +347,19 @@ Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt 
 
 - [ ] Listede **tüm oyuncular çevrimiçi** görünüyor mu? (Eksik varsa o gözlüğü kontrol et.)
 - [ ] Takımlar istediğin gibi mi? (Değilse satırdaki takım düğmesiyle ata.)
-- [ ] **Tercihler**'i aç, **Mod** ve **Harita**'yı seç.
+- [ ] **Tercihler**'i aç, **Mod** ve **Harita**'yı seç (satıra bas → liste açılır → tıkla).
 - [ ] **BAŞLAT**'a bas.
 - [ ] Tüm gözlükler arenayı yükler → **5 saniye geri sayım** → maç başlar.
 - [ ] Oyuncular arenaya girdikten sonra **kalibrasyonu yaptır** (Bölüm 4).
+
+> ⚠️ **BAŞLAT'a bastıktan sonra harita/mod satırları kilitlenir** ve maç bitene (ya da **İPTAL**'e
+> basana) kadar sönük durur — yükleme ve geri sayım sırasında da. Sebebi: harita seçmek **tüm
+> gözlüklere** sahne yükletir, kurulmakta olan maçın altından çekilirse oyuncular yarı yüklü kalır.
+> Yanlış harita seçtiysen **İPTAL** → doğru haritayı seç → **BAŞLAT**.
+
+**Herkesi lobiye almak:** harita listesini aç, ilk satırdaki **Lobi**'yi seç — tüm gözlükler lobi
+sahnesine döner. Ayrı bir "Lobiye Dön" düğmesi yoktur. Maç koşarken bu satır da kilitlidir; koşan
+maçı bitirmenin yolu **İPTAL**'dir (ikisi de aynı işi yapar).
 
 **Maç başlamıyorsa** en sık iki sebep: (1) hiç bağlı oyuncu yok, (2) gözlüklerden birinde
 farklı/eski sürüm var. Sunucu penceresinde sebep tek satır olarak yazar; teknik ekibe o satırı
@@ -384,7 +393,9 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 - Süre durur, kimse kimseye hasar veremez, **skorlar olduğu gibi kalır.**
 - Oyuncular arenada kalır, hiçbir yere ışınlanmaz; maç bittiği sanılmaz.
 - Aynı düğme **DEVAM ET**'e döner; bastığında maç **kaldığı yerden** sürer.
-- Maçı gerçekten bitirmek istiyorsan duraklatma değil **İPTAL** (ya da **LOBİYE DÖN**) kullan.
+- Maçı gerçekten bitirmek istiyorsan duraklatma değil **İPTAL** kullan.
+- ⚠️ **Duraklatılmış maçta harita/mod değiştirilemez** — donmuş da olsa maç kuruludur. Önce
+  **İPTAL**, sonra yeni harita.
 
 > Düğme yalnız **maç koşarken** ve **senin duraklattığın maçta** çalışır. Geri sayım sırasında ya
 > da lobide sönük durur — orada duraklatılacak bir şey yoktur. Birden çok yönetim ekranı varsa

@@ -233,6 +233,11 @@ namespace VortexArena.Core.Combat
         private bool aliveSubscribed;
         private int reserveRounds;
 
+        // tracerEveryNthRound sayacı — silah BAŞINA tutulur (uzak tarafta RemoteShotFx aynısını
+        // oyuncu başına tutuyor): sayaç paylaşılsaydı çift tabancada izler iki silaha rastgele
+        // dağılır ve hangi namlunun ateş ettiği okunaksız olurdu.
+        private int shotCount;
+
         private bool weaponIdWarned;
 
         protected virtual void Awake()
@@ -507,6 +512,12 @@ namespace VortexArena.Core.Combat
             ArenaCombat.ReportShot(direction, didHit ? hit.distance : definition.Range,
                 NetItemId, IsMainHandRight);
 
+            // Yerel mermi izi. ⚠️ Uzak sunum yolu (RemoteShotFx) atanın kendi izini ÇİZEMEZ ve
+            // çizmeyecek: sunucu olayı atana geri yollamaz, istemci de kendi playerId'sini süzer
+            // (§6.5). Atanın izini çizecek tek yer burasıdır — atlanırsa "herkes görüyor, ateş
+            // eden görmüyor" gibi teşhisi zor bir eksik doğar.
+            DrawLocalTracer(direction, didHit ? hit.distance : definition.Range);
+
             if (didHit)
             {
                 if (hitEffectPrefab != null)
@@ -534,6 +545,33 @@ namespace VortexArena.Core.Combat
             if (hapticRoutine != null)
                 StopCoroutine(hapticRoutine);
             hapticRoutine = StartCoroutine(HapticPulse());
+        }
+
+        /// <summary>
+        /// Atanın KENDİ mermi izi (uzaktakini <see cref="RemoteShotFx"/> çizer).
+        /// <para>Sıklık ve görünüm uzak izle <b>aynı kaynaktan</b> okunur
+        /// (<see cref="ItemDefinition"/>): iki taraf ayrı ayarlansa aynı silah kendi ekranında
+        /// başka, karşı ekranda başka görünürdü. Havuz da paylaşımlıdır
+        /// (<see cref="ShotTracer.Shared"/>) — silah başına havuz açmak, silahların sürekli
+        /// üretilip yok edildiği modlarda (<c>weaponSource:"random"</c>) materyali ve Update
+        /// döngüsünü silah sayısınca çoğaltırdı.</para>
+        /// <para><c>direction</c> birim uzunluktadır (<c>muzzle.forward</c>'ın döndürülmüşü), bu
+        /// yüzden bitiş noktası doğrudan <c>× mesafe</c> ile bulunur.</para>
+        /// </summary>
+        private void DrawLocalTracer(in Vector3 direction, float distanceMeters)
+        {
+            shotCount++;
+
+            int everyNth = definition.TracerEveryNthRound;
+            if (everyNth < 1 || shotCount % everyNth != 0)
+                return;
+
+            ShotTracer.Shared.Play(
+                muzzle.position,
+                muzzle.position + direction * distanceMeters,
+                definition.TracerColor,
+                definition.TracerWidth,
+                definition.TracerLifetime);
         }
 
         // ------------------------------------------------------------ silah verme

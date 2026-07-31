@@ -7661,7 +7661,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 4ef31d21-d18d-48fe-bb71-cec50485e129
+  instanceId: 6dbd8c4b-8766-4e39-adf3-93b1e38f787b
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8370,7 +8370,7 @@ GameObject:
   - component: {fileID: 7838236327923957601}
   - component: {fileID: 3928402165460773773}
   - component: {fileID: 7858258814388069739}
-  - component: {fileID: 4959514606537148640}
+  - component: {fileID: 3359760567684406891}
   m_Layer: 0
   m_Name: VA_CameraRig
   m_TagString: Untagged
@@ -8408,7 +8408,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: 33df6473-827f-4c6e-9304-b6a4255daf85
+  instanceId: 90483c97-175d-4ca7-8711-d5e8c26a907a
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8559,7 +8559,7 @@ MonoBehaviour:
   - questController_animrig
   - OVRLeftHandVisual
   - OVRRightHandVisual
---- !u!114 &4959514606537148640
+--- !u!114 &3359760567684406891
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -10378,7 +10378,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: c5aec140-1dde-4565-a4c4-de3743323c1f
+  instanceId: 8c9fae56-26f8-4902-800e-823ef0566afb
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11246,7 +11246,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: 98b4de64-942e-4e56-82f0-83be5571c68a
+  instanceId: 95aba89b-5cc1-4e65-9757-0551804610f0
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc
