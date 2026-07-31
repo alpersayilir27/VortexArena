@@ -1059,7 +1059,7 @@ admin exe'si → **Sunucuyu Başlat** → **Yönetimi Başlat**. Sunucu `--venue
 | İstek | Yol |
 |---|---|
 | **Yeni arena** | `Tools > VortexArena > Create Arena From Template` → arenaId, sahne adı, **mekan (zorunlu)** + **geometri kaynağı** (`ArenaGeometrySource`, ZORUNLU: boyut dosyası ya da TestMesh kökü — "geometriye dokunma" seçeneği yoktur). Kutu her zaman `Venues/<İşletme>/<arenaId>/` altına açılır. Sihirbaz klasörleri + sahnenin **bire bir kopyasını** üretir, `MapDefinition` yazar, `GameCatalog` + uyumlu `ModeDefinition` + Build Settings'e ekler. Şablondan gelen zemin/duvar mesh'leri silinip geometri boyut dosyasından üretilir (`ArenaGeometry` dalı), `wallRenderers` + `dimensionsJson` bağlanır. **İki kaynak aynı noktada buluşur:** TestMesh seçilirse önce ondan bir boyut dosyası çıkarılıp arena kutusunun `Data/` klasörüne yazılır, sonrası elle yazılmış bir dosyayla birebir aynıdır. ⚠️ **Geometri ölçeklenmez** (boyut sorulmaz); kalibrasyon işaretçilerinin yerleşimi, tek `SpawnPoint` ve bake işleri ELDE'dir. Sihirbazın değeri sahnenin ağ bileşenlerini eksiksiz taşıması. **Sonra `Export Server Config`.** |
-| **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili) → `Tools > VortexArena > Build Weapon Prefabs` → `WD_*.asset` üretir, **mevcut** `WPN_*.prefab`'ı yerinde günceller (ses + namlu alevi/dumanı + kovan kiti dahil), `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). ⚠️ Araç **mevcut prefabların `Muzzle`/`Model` yerleşimine DOKUNMAZ**, yalnız definition bağlarını + ses/VFX/kovan kitini tazeler — VR'da elle ayarlanmış tutuş/namlu konumu tekrar çalıştırmakla bozulmaz. Paylaşılan şablon yoktur: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır |
+| **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack modeli = köken kaydı) → `Tools > VortexArena > Build Weapon Prefabs` → `WD_*.asset` üretir, **mevcut** `WPN_*.prefab`'ı yerinde günceller (ses + namlu alevi/dumanı + kovan kiti dahil), `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). ⚠️ Araç **mevcut prefabların `Muzzle`/`Model` yerleşimine DOKUNMAZ**, yalnız definition bağlarını + ses/VFX/kovan kitini tazeler — VR'da elle ayarlanmış tutuş/namlu konumu tekrar çalıştırmakla bozulmaz. Paylaşılan şablon yoktur: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır. ⚠️ **Ses klipleri yalnız alan BOŞSA yazılır** (elle sürüklenen klip korunsun diye): mevcut bir silahın sesini tablodan değiştiriyorsan önce `WD_*.asset`'teki klip alanlarını boşalt, yoksa değişiklik sessizce hiç inmez (Tuzaklar: "elle atanmışsa ezme"). Diğer alanlar (hasar/rpm/menzil/saçılım/kimlik) her koşuda ezilir |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
 | **Elle modellenmiş sahneyi arenaya çevirmek** | Aşağıdaki 6 adım (IceWorld böyle bağlandı) |
 
@@ -1583,6 +1583,24 @@ konsoluna tek satır sebep yazar.
     geri yaz" alternatifi ISDK'nın transformer'ıyla kare kare yarışırdı — kimin sonra yazdığı
     Unity'nin çağrı sırasına kalır ve silah titrer; kıpırdamamanın tek kesin yolu kıpırdatacak
     kodu devreden çıkarmaktır.
+
+61. **"Elle atanmışsa ezme" koruması, tabloyu SESSİZCE hiç uygulanmamış bir niyet hâline
+    getirebilir.** `WeaponKitBuilder` ses kliplerini yalnız alan boşsa yazıyor
+    (`SetClipArrayIfEmpty` / `SetObjectRefIfEmpty`) — gerekçesi doğru: Inspector'dan sürüklenen
+    klip bir sonraki koşuda silinmesin. Ama silahlar ilk üretildiğinde alanlar iki ESKİ ortak
+    klip setiyle dolmuştu, dolayısıyla tabloya sonradan yazılan silaha özgü setler
+    (`SFX_<Ad>_Shot_*`) **hiçbir koşuda inmedi**: dosyalar diskte duruyor, tablo onları
+    gösteriyor, asset'ler başka bir şey çalıyordu. Araç uyarı basmaz çünkü "dolu alanı atlamak"
+    onun için normal davranıştır. Ders: koşullu yazan bir alan, tabloyu tek doğruluk kaynağı
+    saymanı engeller — o alanları değiştirdiğinde **önce asset'te boşalt**, sonra aracı koş; ve
+    aracın çıktısına değil ASSET'in kendisine bak.
+
+62. **`Rebuild Net Item Catalog` modal dialog açar — CLI/MCP'den çalıştırılınca komut timeout
+    verir.** `NetItemIdGuard` sonda `EditorUtility.DisplayDialog` gösteriyor
+    (`ServerConfigExporter` ile aynı tuzak). İş **yapılır ve loglanır**, sonra ana thread dialog
+    kapanana kadar kilitlenir; ardından her MCP çağrısı (konsol okuma dahil) timeout verir.
+    Komutu TEKRAR DENEME — yeni bir dialog kuyruğa girer. Editörde pencereyi kapat, sonra devam
+    et. Kalıcı çözümü diğer araçlardaki gibi dialog'u kaldırmaktır (`Debug.Log` yeter).
 
 ---
 

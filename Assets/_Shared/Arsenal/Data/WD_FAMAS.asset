@@ -30,8 +30,8 @@ MonoBehaviour:
   damage: 30
   headshotMultiplier: 4
   fireRateRpm: 666
-  range: 60
-  baseSpreadDegrees: 1.1
+  range: 32
+  baseSpreadDegrees: 0.65
   bloomPerShotDegrees: 0.28
   maxBloomDegrees: 2.4
   bloomRecoveryPerSecond: 4.2
@@ -43,12 +43,12 @@ MonoBehaviour:
   reserveMode: 0
   reloadTime: 3.3
   fireClips:
-  - {fileID: 8300000, guid: 82eb40cda1f46ea4ca416b11fc8802a5, type: 3}
-  - {fileID: 8300000, guid: 4c7a82e5724da5347a8d94d2726f001b, type: 3}
-  magOutClip: {fileID: 8300000, guid: 954a03517c1263e41b40a5b4c774bf22, type: 3}
+  - {fileID: 8300000, guid: 88b2012708c33cc429cd164a175f10b9, type: 3}
+  - {fileID: 8300000, guid: fb138e940cd8ca14c8314e8f0826607c, type: 3}
+  magOutClip: {fileID: 8300000, guid: aa3e572f5829cf94dbd2f4c2784b90fe, type: 3}
   magInClip: {fileID: 0}
-  dryFireClip: {fileID: 8300000, guid: 7fbfbee7bc76c5b4fb06ce4c43418ef8, type: 3}
+  dryFireClip: {fileID: 8300000, guid: 2c9cefb4765ba1b41a64e95ffb781a76, type: 3}
   pickupClip: {fileID: 0}
-  firePitchBase: 1.05
+  firePitchBase: 1.03
   firePitchJitter: 0.05
   fireVolume: 1
