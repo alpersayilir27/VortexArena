@@ -361,6 +361,8 @@ Toplam: 12 B
 
 **Yön neden gönderiliyor** (el pozundan türetilebilir gibi duruyor): 20 Hz interpole el pozundan türetilirse aynı tik'e düşen iki atış aynı yöne gider ve geri tepme kaybolur. Nişan, oyun açısından anlamlı bilgidir; 4 B'ye değer.
 
+**Geri tepmenin kendisi neden gönderilmiyor** (ve bir alan eklenmeyecek): silahın sarsılması deterministik bir eğridir ve girdisi zaten telde — olayın kendisi + `itemId`. Alıcı, eğriyi `WeaponDefinition`'dan (`kickDegrees`/`kickBackMeters`/`recoilRecoverSpeed`) çizdiği silahın `Model` pivotuna uygular (`RemoteAvatar.ApplyShotRecoil`), çift elli tutuşun çarpanını da snapshot'taki `FLAG_GRIP_LINKED`'den bilir. Yani atış başına ek bayt sıfırdır. Silahın kare-kare duruşunu akıtmak ise aynı görüntüyü **20 Hz × oyuncu** maliyetle satın almak olurdu.
+
 **Orijin neden gönderilmiyor:** tracer, alıcının **çizdiği silahın namlusundan** çıkmalıdır. Mutlak bir namlu konumu gönderilirse alıcı silahı interpole edilmiş el pozundan çizdiği için tracer çizilen namludan kaymış başlar — atıcının gerçeğine bir tık daha sadık, gözle daha bozuk bir sonuç. **Tutarlılık > sadakat.** Orijin `itemId` + o tik'teki el pozu + eşyanın statik `muzzle` ofsetinden türetilir; eşya çözülemezse el pozuna düşülür.
 
 ### 6.5 `0x04 EventBatch` (sunucu → tüm istemciler, 20 Hz; yalnız olay varken)

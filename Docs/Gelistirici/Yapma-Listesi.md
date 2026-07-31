@@ -138,7 +138,7 @@ ArenaSpace.WorldToArena(dir);                                  // ❌ orijin kad
 ### ⛔ Arayüz prefabındaki bir ögeyi SİLME
 
 Arayüzün tamamı `_Shared/App/Resources/UI/` altında prefabtır ve her öge kök bileşende bir
-`[SerializeField]` alanına bağlıdır (`scoreRedText`, `hpFill`, `_modeValue`…). Ögeyi silersen
+`[SerializeField]` alanına bağlıdır (`scoreRedText`, `hpFill`, `_modeDropdown`…). Ögeyi silersen
 alan boşalır ve **hiçbir hata çıkmaz — o parça sessizce çizilmez.** Gizlemen gerekiyorsa objeyi
 devre dışı bırak ya da alfasını sıfırla.
 
