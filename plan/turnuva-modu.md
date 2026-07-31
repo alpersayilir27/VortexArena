@@ -5,7 +5,7 @@ Kod, asset ve dokümanların **tamamı yazıldı**. Kalıcı bilgi dokümanlara 
 sözlüğü, §10.4 `reviveAnchor:"none"`, §10.5 kayıtlı modlar) · `Docs/Sistem-Ozeti.md`
 (§3.7, §3.8.2, §3.9, §4, §7/67–70, §8) · `CLAUDE.md` (yeni mod reçetesi) · `Server/README.md`.
 
-Bu dosya yalnız **elde kalan iki adımı** ve doğrulama listesini tutuyor; ikisi de bitince silinir.
+Bu dosya yalnız **elde kalan adımları** ve doğrulama listesini tutuyor; hepsi bitince silinir.
 
 ---
 
@@ -56,13 +56,19 @@ Etkilenen arenalar: `Arena12x12` · `IceWorld` · `ArenaVortexAntep`.
       tabanına dön"
 - [ ] Oyuncu tabanına girince sayaç **0/2 → 1/2** ilerliyor, tabandan çıkınca geri düşüyor
 - [ ] İkisi de tabandayken geri sayım başlıyor (seçilen `countdownSeconds` kadar) ve yeni tur açılıyor
+- [ ] ⚠️ **Geri sayım sırasında biri tabandan çıkarsa geri sayım İPTAL** oluyor: HUD'daki sayı
+      kayboluyor, "TOPLANMA 1/2" geri geliyor, durum metni "Yeni tur — tabanına dön". Geri girince
+      geri sayım **baştan** başlıyor
 - [ ] **Yeni turda herkes tam şarjör + yedek şarjörle başlıyor** — turu sağ bitiren dahil
 - [ ] Yeni turda ölmüş oyuncu **canlı ve ateş edebiliyor** (ölüm ekranı kapandı = `health_update` geldi)
 
 **Sınır durumları**
 - [ ] Süre dolduğunda çok kişi ayakta olan takıma puan yazılıyor; eşitse kimseye yazılmıyor
 - [ ] Bir başlığı kapat → 60 sn sonra toplanma zaman aşımıyla tur yine başlıyor (konsolda
-      "tabanına dönmeyenler: …")
+      "tabanına dönmeyenler: …"). ⚠️ **O geri sayım artık iptal edilmemeli** — konsolda
+      "zaman aşımı — iptal edilmez" yazar
+- [ ] Sürekli girip çıkan oyuncu maçı askıda tutamıyor: zaman aşımı turun bittiği andan işliyor,
+      iptaller onu sıfırlamıyor
 - [ ] `abort_match` toplanma sırasında lobiye döndürüyor
 - [ ] Skor limitine ulaşılınca `finished` + "KIRMIZI/MAVİ KAZANDI", 10 sn sonra lobi
 
@@ -73,7 +79,26 @@ Etkilenen arenalar: `Arena12x12` · `IceWorld` · `ArenaVortexAntep`.
 
 ---
 
-## 4. Bilinçli olarak YAPILMAYANLAR (sorulursa cevap burada)
+## 4. Arsenal'de duran ayrı bir kusur (turnuvaya özgü DEĞİL, dört modu birden etkiler)
+
+`Assets/_Shared/Arsenal/` içinde AK47 ↔ M4A1 tanım bağları çapraz:
+
+| Dosya | `definition` → | Olması gereken |
+|---|---|---|
+| `WPN_M4A1.prefab` | `WD_AK47` | `WD_M4A1` |
+| `WPN_AK47.prefab` | **hiçbir şey** (ölü GUID `3e86e22f…`) | `WD_AK47` |
+
+Aynı ölü GUID **dört modun da** `loadout`'unda, `WeaponCatalog`'da ve `NetItemCatalog`'da duruyor;
+`WD_M4A1.asset`'i ise hiçbir şey referanslamıyor. Sonucu: rafta 6 değil **5** silah çıkar ve M4A1
+gövdesi AK47 istatistikleriyle ateş eder.
+
+⚠️ **Elle GUID yazarak düzeltilmez** — silah kimliği bu projede bilinçli olarak elle eşlendi
+(CLAUDE.md, "bir satırın `PackPrefab`'ı ve `NetItemId`'si o satırdan AYRILMAZ"). Doğru yol
+`Tools > VortexArena > Build Weapon Prefabs`: `WD_*` asset'lerini üretir, `WPN_*` prefablarını
+yerinde tazeler ve iki kataloğu yeniden yazar. Sonrasında dört `ModeDefinition`'ın `loadout`'una
+`WD_M4A1` elden eklenir (araç loadout'a dokunmaz).
+
+## 5. Bilinçli olarak YAPILMAYANLAR (sorulursa cevap burada)
 
 - **Taraf değişimi (side swap) yok.** CS'te taraflar yarıda değişir; free-roam'da bu, oyuncuların
   fiziksel olarak karşı tabana yürümesi demek ve arena simetrik değilse anlamı da az. İstenirse
