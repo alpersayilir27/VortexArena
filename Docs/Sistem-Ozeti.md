@@ -1720,9 +1720,9 @@ konsoluna tek satır sebep yazar.
     yok" kuralını 20 saniyelik bir gecikmeye çevirirdi — kural işlemez, hata da vermezdi. Aynı tuzağa
     kalibrasyon yasağında bir kez düşülmüştü (§3.7).
 69. **Aynı değeri tekrar tekrar yazan bir bayrak, yayın tetikliyorsa fan-out'a dönüşür.**
-    `PlayerRegistry.SetReady` her çağrıda `Changed` yayınlıyordu → her çağrı bir TAM `lobby_state`
-    broadcast'i. Toplanma kapısı bu bayrağı yeniden kullanınca (§3.8.2) periyodik "tabandayım"
-    bildirimleri roster'ı saniyede birkaç kez herkese yollardı. İki taraflı düzeltildi: registry
+    `PlayerRegistry.SetReady` koşulsuz `Changed` yayınlasa her çağrı bir TAM `lobby_state`
+    broadcast'i olurdu; toplanma kapısı bu bayrağı yeniden kullandığı için (§3.8.2) "tabandayım"
+    bildirimleri roster'ı saniyede birkaç kez herkese yollardı. Kural iki taraflıdır: registry
     **değişmediyse yayınlamaz**, istemci de yalnız **kenarda** gönderir. Soru her zaman "kaç bayt"
     değil **"kaç datagram"**dır (§3.12).
 70. **Mod kancaları `await` edemez — kancadan mesaj yollamak sıra bozar.** `IGameMode.OnTick`
@@ -1734,18 +1734,19 @@ konsoluna tek satır sebep yazar.
     null olur.** Bir `.asset`/`.prefab` metin olarak (editör dışından) üretildiğinde `.meta`'yı
     Unity yazar ve **kendi rastgele GUID'ini** verir; ona elle yazılmış `guid:` referansları
     (katalog satırı, `hudPrefab` alanı) o an kırılır. Kırık referans hata basmaz — alan yalnızca
-    boş görünür. Sonuç turnuvada şuydu: mod katalogda çözülmedi ve HUD prefabı bulunamadı, yani
-    HUD'la birlikte oraya asılı olan **toplanma raporlayıcısı da hiç örneklenmedi**; tur bittikten
-    sonra kimse "tabandayım" diyemediği için yeni tur yalnız emniyet zaman aşımıyla açılıyordu.
+    boş görünür. En pahalı biçimi **prefab referansı**dır: prefab bulunamayınca örneklenmez, onunla
+    birlikte köküne asılı bileşenler de hiç doğmaz — yani bozulan tek bir alan değil, o bileşenin
+    taşıdığı bütün davranıştır ve hiçbir yerde hata görünmez.
     **Kural:** asset'i metin olarak üretiyorsan referansı yazmadan ÖNCE hedefin `.meta`'sındaki
     gerçek GUID'i oku; işin sonunda üretilen dosyalardaki her `guid:`'i projedeki `.meta`'larla
     karşılaştır (çözülmeyen varsa iş bitmemiştir). Editörde sürükleyip bırakmak bu tuzağı hiç
     doğurmaz — elle GUID yazmak yalnız editör kapalıyken bir çaredir, varsayılan yol değildir.
-72. **Bir şartı "girişte bir kez" ölçmek, şartı sürdürmez.** Toplanma kapısı önce yalnız geri
-    sayımın açılışında ölçülüyordu: oyuncu tabana bir saniye değip çıkabiliyor, tur onu sahanın
-    ortasında yakalıyordu. Kapıyı açan koşul turun **başlamasına kadar** ölçülmeli ve bozulursa
-    karar geri alınabilmeli (`TryCancelCountdownForMode`). Aynı sebeple kapının dayandığı bayrak
-    (`ready`) geri sayım boyunca temizlenmez — temizlenseydi iptal kararının dayanağı kalmazdı.
+72. **Bir şartı "girişte bir kez" ölçmek, şartı sürdürmez.** Girişte ölçülen bir kapı, oyuncunun
+    koşulu bir saniye sağlayıp bırakmasına açıktır — turnuvada bu "tabana değip kaç, turu sahanın
+    ortasında karşıla" demek olurdu. Kapıyı açan koşul kararın **yürürlüğe girmesine kadar**
+    ölçülmeli ve bozulursa karar geri alınabilmeli (`TryCancelCountdownForMode`). Bunun kaçınılmaz
+    ikinci yarısı: kapının dayandığı bayrak (`ready`) o pencere boyunca **temizlenmez**, yoksa geri
+    alma kararının dayanağı kalmaz.
 
 ---
 
