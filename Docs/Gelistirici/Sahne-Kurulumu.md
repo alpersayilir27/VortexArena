@@ -57,7 +57,7 @@ veri üretir, ama duvarlar çizilmeye devam etmeli.
 
 | Bileşen | Ne zaman | Nasıl |
 |---|---|---|
-| **Silah rafı** | Arena raf kipinde (`weaponSource: rack`, ör. TDM) oynanacaksa | **ELLE kurulur** — şablonda (`Template/Default12x12`) raf yoktur. Raf kökünde `WeaponRackSpawner`, altında yalnız KONUM tutan `RackSlot` gözleri; hangi silahın duracağını mod belirler, sahneye `WPN_*` örneği koyulmaz |
+| **Silah rafı** | Arena raf kipinde (`weaponSource: rack`, ör. TDM) oynanacaksa | **ELLE kurulur** — şablonda (`Template/Default12x12`) raf yoktur. Raf kökünde `WeaponRackSpawner`, altında yalnız KONUM tutan `RackSlot` gözleri; hangi silahın duracağını mod belirler, sahneye `WPN_*` örneği koyulmaz. ⚠️ Raftaki silahlar da **çerçeve kaynağıdır**: yerinden alınmaz, ≤2 m'den seçilince oyuncunun eline klonlanır — raf bir sunum kararıdır, silahın alınma yolu her yerde aynıdır |
 | **`ArenaObstacle`** | Sahneye elle konmuş bir engel (kolon, kasa, direk) muhafaza uyarısına girecekse | Engel objesine ekle, `size` alanına zemindeki ölçüsünü yaz (X = genişlik, Y = derinlik). ⚠️ **Collider EKLEMEZ, fizik yapmaz** — tek işi `ArenaBoundary`'nin oyuncuyu engele yaklaşırken uyarmasıdır. Plandan üretilen kolonlara aracın kendisi ekler |
 | **`ArenaRoof`** | Arenanın çatısı varsa | Çatı hiyerarşisinin köküne: `GameObject > VortexArena > Arena Roof`. Admin kuş bakışına geçince çatı çizilmez (gölgesi kalır). Açık tavanlı arenada hiç yapılmaz → [Çatı Gizleme](../Cati-Gizleme.md) |
 | **`FX_SnowStorm`** | Kar/hava efekti isteniyorsa | `Arenas/Venues/Outdoor12x12/IceWorld/Prefabs/` altındaki prefabı arena orijinine (0,0,0) bırak. 12×12 değilse `Snow_A/B/E` shape scale'lerini arena boyutu + ~3 m payla ölçekle |
