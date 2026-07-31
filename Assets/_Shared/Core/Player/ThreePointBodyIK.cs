@@ -72,6 +72,16 @@ namespace VortexArena.Core.Player
         [Tooltip("Gövdenin kafaya göre en fazla sapabileceği açı — bu aşılırsa gövde anında yetişir.")]
         [SerializeField] private float torsoMaxYawLagDegrees = 70f;
 
+        [Header("Bilek eşlemesi (canlı ayar)")]
+        [Tooltip("Elin anatomik çerçevesinde ince ayar (derece). Z = PARMAK EKSENİ etrafında roll " +
+                 "(bilek ters yüz duruyorsa aranan budur, 180 dene), X = bileği yukarı/aşağı kır, " +
+                 "Y = içe/dışa çevir. Sıfır = HandGripConvention'daki değer olduğu gibi kullanılır.")]
+        [SerializeField] private Vector3 leftHandTuningEuler;
+
+        [Tooltip("Sağ elin karşılığı. İki el AYRI ayarlanır: iskeletlerin aynalanma biçimi farklı, " +
+                 "ortak bir sayı ikisini birden düzeltmez.")]
+        [SerializeField] private Vector3 rightHandTuningEuler;
+
         [Header("Kollar")]
         [Tooltip("El/ayak hedefine kabul edilen yakınlık (metre).")]
         [SerializeField] private float armTolerance = 0.01f;
@@ -142,10 +152,22 @@ namespace VortexArena.Core.Player
         private Transform _leftHand;
         private Transform _rightHand;
 
-        /// <summary>İzleme uzayı → el kemiği ekseni köprüsü; karakterin bind pozundan BİR KEZ
-        /// ölçülür (bkz. <see cref="HandGripConvention"/>). Ölçülemezse kimlik kalır.</summary>
-        private Quaternion _leftHandCorrection = Quaternion.identity;
-        private Quaternion _rightHandCorrection = Quaternion.identity;
+        /// <summary>
+        /// El kemiğinin ANATOMİK BAZI (el-yerel), karakterin bind pozundan BİR KEZ ölçülür —
+        /// izleme uzayı → kemik ekseni köprüsünün model tarafı (bkz. <see cref="HandGripConvention"/>).
+        /// <para>⚠️ Köprünün kendisi <b>her karede</b> kuruluyor, önceden hesaplanıp saklanmıyor:
+        /// ince ayar alanları Inspector'dan değiştirilince sonucun ANINDA görünmesi gerekiyor.
+        /// Ayar, admin (Windows) tarafında canlı bir uzak avatara bakılarak yapılıyor ve bir kare
+        /// gecikme bile "değişti mi değişmedi mi" sorusunu belirsizleştirirdi. Maliyet kare başına
+        /// iki quaternion çarpımıdır.</para>
+        /// </summary>
+        private Quaternion _leftHandBoneBasis = Quaternion.identity;
+        private Quaternion _rightHandBoneBasis = Quaternion.identity;
+
+        /// <summary>Baz ölçülebildi mi — ölçülemediyse köprü kurulmaz, düzeltme kimlik kalır
+        /// (ince ayar da uygulanmaz: ölçüm yoksa ayarlanacak bir çerçeve de yoktur).</summary>
+        private bool _leftHandBasisMeasured;
+        private bool _rightHandBasisMeasured;
 
         // Bacaklar — aynı sıra: { ayak, alt bacak, üst bacak }.
         private Transform[] _leftLegChain;
@@ -265,8 +287,8 @@ namespace VortexArena.Core.Player
 
             PlaceRoot(safeHead.position, yaw, groundY);
             PlaceTorso(safeHead, yaw);
-            SolveArm(_leftArmChain, _leftHand, safeHandL, _leftHandCorrection);
-            SolveArm(_rightArmChain, _rightHand, safeHandR, _rightHandCorrection);
+            SolveArm(_leftArmChain, _leftHand, safeHandL, HandCorrection(false));
+            SolveArm(_rightArmChain, _rightHand, safeHandR, HandCorrection(true));
             SolveLegs(yaw, deltaTime, groundY);
         }
 
@@ -714,44 +736,65 @@ namespace VortexArena.Core.Player
         /// </summary>
         private void MeasureHandCorrections()
         {
-            MeasureHandCorrection(
+            MeasureHandBasis(
                 _leftHand,
                 _animator.GetBoneTransform(HumanBodyBones.LeftMiddleProximal),
                 _animator.GetBoneTransform(HumanBodyBones.LeftThumbProximal),
                 false,
-                ref _leftHandCorrection);
+                ref _leftHandBoneBasis,
+                ref _leftHandBasisMeasured);
 
-            MeasureHandCorrection(
+            MeasureHandBasis(
                 _rightHand,
                 _animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal),
                 _animator.GetBoneTransform(HumanBodyBones.RightThumbProximal),
                 true,
-                ref _rightHandCorrection);
+                ref _rightHandBoneBasis,
+                ref _rightHandBasisMeasured);
         }
 
-        /// <summary>Tek elin düzeltmesi; parmak kemikleri humanoid'de İSTEĞE BAĞLI olduğu için
-        /// ölçüm düşebilir — o zaman düzeltme kimlik kalır ve durum AÇIKÇA loglanır.</summary>
-        private void MeasureHandCorrection(
+        /// <summary>Tek elin bind eksenini ölçer; parmak kemikleri humanoid'de İSTEĞE BAĞLI olduğu
+        /// için ölçüm düşebilir — o zaman köprü kurulmaz ve durum AÇIKÇA loglanır.</summary>
+        private void MeasureHandBasis(
             Transform hand,
             Transform middleProximal,
             Transform thumbProximal,
             bool rightHand,
-            ref Quaternion correction)
+            ref Quaternion boneBasis,
+            ref bool measured)
         {
-            if (HandGripConvention.TryMeasureBoneBasis(
-                    hand, middleProximal, thumbProximal, rightHand, out Quaternion boneBasis))
+            measured = HandGripConvention.TryMeasureBoneBasis(
+                hand, middleProximal, thumbProximal, rightHand, out boneBasis);
+
+            if (measured)
             {
-                correction = HandGripConvention.Correction(rightHand, boneBasis);
                 return;
             }
 
-            correction = Quaternion.identity;
+            boneBasis = Quaternion.identity;
             Debug.LogWarning(
                 $"[ThreePointBodyIK] '{name}': {(rightHand ? "SAĞ" : "SOL")} elin bind ekseni " +
                 "ölçülemedi (orta parmak / başparmak kemiği yok ya da yönleri dejenere). " +
                 "Humanoid'de parmak kemikleri isteğe bağlıdır; karakterin Avatar eşlemesinde " +
                 "MiddleProximal ve ThumbProximal atanmalı. Düzeltme kimlik bırakıldı — " +
                 "bu elin BİLEĞİ YANLIŞ YÖNDE çizilecek.", this);
+        }
+
+        /// <summary>
+        /// O elin izleme uzayı → kemik ekseni köprüsü, ince ayar dahil. Her karede kurulur
+        /// (gerekçe: <see cref="_leftHandBoneBasis"/>).
+        /// </summary>
+        private Quaternion HandCorrection(bool rightHand)
+        {
+            if (!(rightHand ? _rightHandBasisMeasured : _leftHandBasisMeasured))
+            {
+                return Quaternion.identity;
+            }
+
+            return HandGripConvention.Correction(
+                rightHand,
+                rightHand ? _rightHandBoneBasis : _leftHandBoneBasis,
+                rightHand ? rightHandTuningEuler : leftHandTuningEuler);
         }
 
         /// <summary>Sürülen kemiklerin bind pozunu saklar — her kare buraya dönülür.</summary>

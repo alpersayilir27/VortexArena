@@ -31,10 +31,14 @@ namespace VortexArena.Core.Player
         /// Parmaklar kumandanın ilerisine ve hafif aşağı bakar; avuç içe (gövde orta hattına) ve
         /// hafif yukarı bakar.
         /// <para>
-        /// ⚠️ Bu değerler <b>ERGONOMİK TAHMİNDİR, ölçülmüş değildir.</b> Kesin değeri
-        /// <see cref="HandGripCalibrationProbe"/> cihazda ölçüp yapıştırılabilir biçimde loglar;
-        /// bilek hâlâ eğrik duruyorsa düzeltilecek yer BURASIDIR (başka hiçbir yerde el eksenine
-        /// dokunulmaz).
+        /// ⚠️ Bu değerler <b>ERGONOMİK TAHMİNDİR, ölçülmüş değildir</b> — bilek hâlâ eğrik
+        /// duruyorsa düzeltilecek yer BURASIDIR (başka hiçbir yerde el eksenine dokunulmaz).
+        /// <b>Nasıl bulunur:</b> <c>ThreePointBodyIK</c>'nın "Bilek eşlemesi (canlı ayar)" alanları
+        /// admin (Windows) tarafında CANLI bir uzak avatar üzerinde çevrilir — admin uzak avatarları
+        /// çizdiği için ayar APK turu gerektirmez. Oturan değer buraya işlenir ve alan sıfıra döner.
+        /// <b>Ölçerek</b> bulmak bu projede mümkün değil: kumandadan sürülen sentetik el
+        /// (<c>OVRInput.Controller.LHand/RHand</c> ya da <c>b_*_wrist</c>) ya multimodal
+        /// gerektiriyor ya da <c>ControllerModelHider</c> tarafından kapatılmış durumda.
         /// </para>
         /// <para>
         /// İki vektörün birbirine dik olması gerekmez: <see cref="Quaternion.LookRotation"/> ikinci
@@ -45,17 +49,6 @@ namespace VortexArena.Core.Player
         public static readonly Vector3 LeftAnchorPalmNormal = new Vector3(0.87f, 0.50f, 0f);
         public static readonly Vector3 RightAnchorFingerDirection = new Vector3(0f, -0.42f, 0.91f);
         public static readonly Vector3 RightAnchorPalmNormal = new Vector3(-0.87f, 0.50f, 0f);
-
-        /// <summary>
-        /// Meta OVR el iskeletinin bilek kemiği (<c>b_*_wrist</c>) anatomisi, BİLEK-YEREL uzayda —
-        /// ölçülmüş sabitler.
-        /// <para>Yalnız <see cref="HandGripCalibrationProbe"/> kullanır: anchor→bilek dönüşü ölçülüp
-        /// bu vektörlerle çarpılınca yukarıdaki tahmini sabitlerin gerçek karşılığı çıkar.</para>
-        /// </summary>
-        public static readonly Vector3 LeftOvrWristFingerDirection = new Vector3(-1f, 0f, 0f);
-        public static readonly Vector3 LeftOvrWristPalmNormal = new Vector3(0f, 0.83f, 0.55f);
-        public static readonly Vector3 RightOvrWristFingerDirection = new Vector3(1f, 0f, 0f);
-        public static readonly Vector3 RightOvrWristPalmNormal = new Vector3(0f, -0.83f, -0.55f);
 
         /// <summary>Yön vektörünün "anlamlı" sayılması için gereken en küçük kare uzunluk.</summary>
         private const float MinDirectionSqrMagnitude = 1e-8f;
@@ -69,26 +62,6 @@ namespace VortexArena.Core.Player
             return rightHand
                 ? Quaternion.LookRotation(RightAnchorFingerDirection, RightAnchorPalmNormal)
                 : Quaternion.LookRotation(LeftAnchorFingerDirection, LeftAnchorPalmNormal);
-        }
-
-        /// <summary>OVR bilek kemiği uzayındaki anatomik baz (probe için).</summary>
-        public static Quaternion OvrWristBasis(bool rightHand)
-        {
-            return rightHand
-                ? Quaternion.LookRotation(RightOvrWristFingerDirection, RightOvrWristPalmNormal)
-                : Quaternion.LookRotation(LeftOvrWristFingerDirection, LeftOvrWristPalmNormal);
-        }
-
-        /// <summary>OVR bileğinin parmak yönü (bilek-yerel).</summary>
-        public static Vector3 OvrWristFingerDirection(bool rightHand)
-        {
-            return rightHand ? RightOvrWristFingerDirection : LeftOvrWristFingerDirection;
-        }
-
-        /// <summary>OVR bileğinin avuç normali (bilek-yerel).</summary>
-        public static Vector3 OvrWristPalmNormal(bool rightHand)
-        {
-            return rightHand ? RightOvrWristPalmNormal : LeftOvrWristPalmNormal;
         }
 
         /// <summary>
@@ -153,7 +126,26 @@ namespace VortexArena.Core.Player
         /// </summary>
         public static Quaternion Correction(bool rightHand, Quaternion boneBasisLocal)
         {
-            return AnchorBasis(rightHand) * Quaternion.Inverse(boneBasisLocal);
+            return Correction(rightHand, boneBasisLocal, Vector3.zero);
+        }
+
+        /// <summary>
+        /// Aynı düzeltme, elin <b>anatomik çerçevesinde</b> bir ince ayarla.
+        /// <para>
+        /// Ayar neden bu çerçevede uygulanıyor: <see cref="AnchorBasis"/> bir
+        /// <see cref="Quaternion.LookRotation"/> olduğu için yerel <c>+Z</c> = parmak yönü,
+        /// <c>+Y</c> = avuç normalidir. Yani <c>Euler(0, 0, z)</c> <b>parmak ekseni etrafında
+        /// roll</b> demektir — anchor anatomisinin analitik olarak en belirsiz terimi tam olarak
+        /// budur (bilek doğru yöne bakıp ters yüz durabiliyor) ve tek bir sayıyla aranabilsin diye
+        /// ayrı bir eksene düşürülmüştür. <c>X</c> bileği yukarı/aşağı kırar, <c>Y</c> içe/dışa çevirir.
+        /// </para>
+        /// <para>⚠️ Ayar <b>geçicidir</b>: doğru değer bulununca
+        /// <see cref="LeftAnchorFingerDirection"/> ailesine işlenip alan sıfıra döner. İki yerde
+        /// birden duran bir sabit er geç birbirinden sapar.</para>
+        /// </summary>
+        public static Quaternion Correction(bool rightHand, Quaternion boneBasisLocal, Vector3 tuningEuler)
+        {
+            return AnchorBasis(rightHand) * Quaternion.Euler(tuningEuler) * Quaternion.Inverse(boneBasisLocal);
         }
     }
 }

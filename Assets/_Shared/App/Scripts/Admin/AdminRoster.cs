@@ -153,11 +153,33 @@ namespace VortexArena.App.Admin
         /// <summary>Modun kendi ara durumu (§10.1); çekirdek yorumlamaz.</summary>
         public string ModeState { get; private set; } = "";
 
-        /// <summary>Maç koşmuyor mu? (§10.1: <i>"maç koşuyor mu?"</i> sorusunun tek cevabı
-        /// <c>phase == playing</c>'dir.) Harita/mod seçicileri buna bakar: harita değiştirmek
-        /// TÜM istemcilere sahne yükletir (§10.7 sahneleme), o yüzden koşan maçta yapılamaz —
-        /// ama maç bittiğinde (<c>finished</c>) operatör bir sonrakini seçebilmelidir.</summary>
-        public bool CanChangeSelection => Phase != ArenaProtocol.PHASE_PLAYING;
+        /// <summary>
+        /// Mod/harita seçimi şu an değiştirilebilir mi? Harita seçmek TÜM istemcilere sahne
+        /// yükletir (§10.7 sahneleme), o yüzden ölçüt <b>"maç kurulmuş mu"</b>dur — "koşuyor mu"
+        /// değil. İzin verilen tam iki durum: maç bittiğinde (<c>finished</c>; operatör bir
+        /// sonrakini seçebilmeli) ve lobide (maç hiç kurulmamış).
+        /// <para>
+        /// ⚠️ <b>Yükleme, geri sayım ve duraklatma da KAPALIDIR.</b> Hepsi <c>paused</c> fazında
+        /// görünür ama maç çoktan kurulmuştur: yüklenirken sahne değiştirmek kurulmakta olan maçı
+        /// yarıda keser, operatörün duraklattığı maç ise donmuş bir <i>canlı</i> maçtır. Çıkış
+        /// yolu her ikisinde de İPTAL'dir (<c>abort_match</c>).
+        /// </para>
+        /// <para>Otorite sunucudadır — aynı kural <c>set_selection</c> işlenirken de uygulanır;
+        /// buradaki kopya yalnız operatörü boşuna tıklatmamak içindir.</para>
+        /// </summary>
+        public bool CanChangeSelection
+        {
+            get
+            {
+                if (Phase == ArenaProtocol.PHASE_PLAYING) return false;
+                if (Phase == ArenaProtocol.PHASE_FINISHED) return true;
+
+                // paused: yalnız lobi serbest. Boş gerekçe lobi sayılır — sunucu her zaman
+                // dolduruyor, ama bir eksiklik seçiciyi kalıcı kilitlemesin.
+                return string.IsNullOrEmpty(PhaseReason) ||
+                       PhaseReason == ArenaProtocol.PAUSE_REASON_LOBBY;
+            }
+        }
 
         public float TimeRemaining { get; private set; }
         public int ScoreRed { get; private set; }

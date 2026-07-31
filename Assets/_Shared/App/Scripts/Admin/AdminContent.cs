@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Core;
 using VortexArena.Core.Arena;
+using VortexArena.Protocol;
 
 namespace VortexArena.App.Admin
 {
@@ -107,6 +108,61 @@ namespace VortexArena.App.Admin
                     buffer.Add(maps[i]);
                 }
             }
+        }
+
+        /// <summary>
+        /// Bu mekanın <b>lobi</b> haritası — <c>supportedModeIds == ["lobby"]</c> olan tek harita
+        /// (§10.7). Yoksa null.
+        /// <para>
+        /// Sunucudaki <c>MapTable.ResolveLobbyScene</c> ile aynı ölçütü kullanır; birden çok aday
+        /// varsa alfabetik ilki döner, yani iki taraf da aynı sahneyi seçer. Mekan süzgeci burada
+        /// da geçerlidir (<see cref="AdminSelection.IsInVenue"/>) — katalogda her işletmenin kendi
+        /// lobisi var, süzgeç gelmeden önce (ilk <c>admin_state</c>'e kadar) hepsi aday görünür ve
+        /// liste süzgeç geldiğinde yeniden kurulur.
+        /// </para>
+        /// <para>
+        /// ⚠️ Lobi <see cref="CollectMaps"/> sonucuna GİRMEZ: orada "seçili modun oynanabildiği
+        /// arenalar" durur, lobide maç oynanmaz. Admin panelindeki lobi satırı bir harita seçimi
+        /// değil <c>return_to_lobby</c> komutudur.
+        /// </para>
+        /// </summary>
+        public static MapDefinition ResolveLobbyMap()
+        {
+            MapDefinition[] maps = Catalog != null ? Catalog.Maps : null;
+            if (maps == null)
+            {
+                return null;
+            }
+
+            MapDefinition best = null;
+            for (int i = 0; i < maps.Length; i++)
+            {
+                MapDefinition map = maps[i];
+                if (map == null || string.IsNullOrEmpty(map.SceneName) || !IsLobbyMap(map) ||
+                    !AdminSelection.IsInVenue(map.SceneName))
+                {
+                    continue;
+                }
+
+                if (best == null || string.CompareOrdinal(map.SceneName, best.SceneName) < 0)
+                {
+                    best = map;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>Harita lobi haritası mı: desteklediği TEK mod <c>lobby</c> ise. Listenin boş
+        /// olması "kısıtsız" demektir (<see cref="MapDefinition.SupportsMode"/>), yani lobi
+        /// değildir — arena sanılıp maç açılabilsin diye değil, tam tersi: kısıtsız harita her
+        /// modda oynanır, lobi ise hiçbirinde.</summary>
+        private static bool IsLobbyMap(MapDefinition map)
+        {
+            string[] modes = map.SupportedModeIds;
+            return modes != null && modes.Length == 1 &&
+                   string.Equals(modes[0], ArenaProtocol.LOBBY_MODE_ID,
+                       System.StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>Modun görünen adı; katalogda yoksa modId'nin kendisi.</summary>

@@ -120,8 +120,6 @@ namespace VortexArena.Core.Combat
         private readonly Dictionary<int, PlayerFx> _players = new Dictionary<int, PlayerFx>();
         private readonly List<int> _pruneScratch = new List<int>();
 
-        private ShotTracer _tracer;
-
         private float _nextAvatarScan;
         private float _nextPrune;
 
@@ -370,29 +368,14 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            ShotTracer tracer = EnsureTracer();
-            if (tracer == null)
-            {
-                return;
-            }
-
-            tracer.Play(
+            // Havuz atanın kendi iziyle PAYLAŞILIR (ShotTracer.Shared): yerel ve uzak izlerin
+            // görünümü zaten aynı kaynaktan (ItemDefinition) geliyor, havuzu da bölmenin sebebi yok.
+            ShotTracer.Shared.Play(
                 origin,
                 origin + worldDir * distanceMeters,
                 item.TracerColor,
                 item.TracerWidth,
                 item.TracerLifetime);
-        }
-
-        private ShotTracer EnsureTracer()
-        {
-            if (_tracer == null)
-            {
-                // DDOL kökümüzün altında: sahne geçişinde havuz yok olmaz.
-                _tracer = ShotTracer.Create(transform);
-            }
-
-            return _tracer;
         }
 
         // --------------------------------------------------------------------- orijin

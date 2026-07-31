@@ -3,9 +3,16 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Uzak atışların mermi izi (tracer): namludan vuruş noktasına kısa süre çizilen çizgi.
-    /// <see cref="RemoteShotFx"/> tarafından kurulur ve beslenir (§6.4/6.5) — sahnede DURMAZ,
-    /// kendi başına da bir şey dinlemez: olay çözümü tek yerde (RemoteShotFx) kalsın.
+    /// Mermi izi (tracer): namludan vuruş noktasına kısa süre çizilen çizgi. Sahnede DURMAZ ve
+    /// kendi başına bir şey dinlemez — yalnız çizer; <b>ne çizileceğine iki çağıran karar verir:</b>
+    /// atanın kendi izi için <see cref="Weapon"/>, uzak oyuncuların izi için
+    /// <see cref="RemoteShotFx"/> (§6.4/6.5). İkisi ayrı olmak ZORUNDA: sunucu atış olayını atana
+    /// geri yollamaz, istemci de kendi <c>playerId</c>'sini süzer.
+    /// <para>
+    /// ⚠️ <b>Havuz PAYLAŞIMLIDIR</b> (<see cref="Shared"/>) ve çağıran başına açılmaz: silahlar
+    /// <c>weaponSource:"random"</c> modlarında sürekli üretilip yok ediliyor, silah başına havuz
+    /// materyali + <c>Update</c> döngüsünü silah sayısınca çoğaltırdı.
+    /// </para>
     /// <para>
     /// ⚠️ <b>HAVUZLU ve round-robin</b>: hedef yük tam ateşte ~53 olay/sn (16 oyuncu × üçte bir
     /// tracer). Bu hızda <c>Instantiate</c>/<c>Destroy</c> döngüsü Quest'te doğrudan GC dikeni
@@ -52,15 +59,27 @@ namespace VortexArena.Core.Combat
         private Material _material;
         private bool _warnedNoShader;
 
+        private static ShotTracer _shared;
+
         /// <summary>
-        /// Tracer havuzunu <paramref name="parent"/> altında (RemoteShotFx'in DDOL kökü) kurar.
-        /// Havuz sahne geçişinde yok olmasın diye kök DDOL olmak zorundadır — bunu çağıran sağlar.
+        /// Tüm mermi izlerinin kullandığı TEK havuz; ilk istendiğinde kendini kurar ve
+        /// <c>DontDestroyOnLoad</c> olur (harita değişiminde havuz + materyal yeniden kurulmasın).
+        /// Sahneye konmaz, kimse referans bağlamaz — çağıran yalnız <c>ShotTracer.Shared.Play(…)</c>
+        /// der.
         /// </summary>
-        public static ShotTracer Create(Transform parent)
+        public static ShotTracer Shared
         {
-            var go = new GameObject("[ShotTracer]");
-            go.transform.SetParent(parent, false);
-            return go.AddComponent<ShotTracer>();
+            get
+            {
+                if (_shared == null)
+                {
+                    var go = new GameObject("[ShotTracer]");
+                    DontDestroyOnLoad(go);
+                    _shared = go.AddComponent<ShotTracer>();
+                }
+
+                return _shared;
+            }
         }
 
         /// <summary>
@@ -195,6 +214,13 @@ namespace VortexArena.Core.Combat
 
         private void OnDestroy()
         {
+            if (_shared == this)
+            {
+                // Statik alan yıkılmış bileşene bağlı kalmaz: bir sonraki Play isteği havuzu
+                // yeniden kurar (Play modundan çıkışta domain reload kapalıysa bu şart).
+                _shared = null;
+            }
+
             if (_material != null)
             {
                 Destroy(_material);

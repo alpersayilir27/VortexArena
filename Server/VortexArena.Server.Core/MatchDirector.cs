@@ -225,6 +225,37 @@ public sealed class MatchDirector
         get { lock (_gate) return _phase; }
     }
 
+    /// <summary>Mod/harita seçimi ve sahneleme (§10.7) şu anda serbest mi? İzin verilen tam iki
+    /// durum var: <see cref="Phase.Finished"/> ve <see cref="Phase.Paused"/> +
+    /// <see cref="PauseReason.Lobby"/>.
+    /// <para>
+    /// Ölçüt "maç koşuyor mu" DEĞİL <b>"maç kurulmuş mu"</b>: harita seçmek herkese giden bir sahne
+    /// komutudur (§10.7), kurulmakta olan ya da donmuş bir maçın altından sahne çekilemez. Bu yüzden
+    /// <c>loading</c>/<c>countdown</c> (maç kuruluyor) ve <c>operator</c>/<c>mode</c> (maç donmuş)
+    /// duraklamaları da KAPALIDIR — <b>donmuş maç da kurulmuş maçtır</b>, operatör devam
+    /// ettirdiğinde altındaki sahne değişmiş olmamalı. Yalnız faza bakan bir kapı bu dört durumu
+    /// açık bırakırdı: ara durum <see cref="Phase"/>'de değil <see cref="PauseReason"/>'da yaşıyor.
+    /// </para>
+    /// <para>
+    /// <see cref="Phase.Finished"/> bilerek AÇIK: maç bitmiştir, operatör bir sonrakini
+    /// seçebilmelidir (lobiye dönmeyi beklemeden).
+    /// </para></summary>
+    public bool CanChangeSelection
+    {
+        get { lock (_gate) return CanChangeSelectionLocked; }
+    }
+
+    /// <summary>Kilit İÇİNDEN kullanılan biçim — kilit sözleşmesi gereği kilit altındayken public
+    /// property çağrılmaz (<see cref="_gate"/> yeniden girilebilir olsa da tek desen korunur).</summary>
+    private bool CanChangeSelectionLocked =>
+        _phase == Phase.Finished || (_phase == Phase.Paused && _pauseReason == PauseReason.Lobby);
+
+    /// <summary>Sahneleme reddinin operatöre gösterilecek gerekçesi. Durumu İÇERİR: "maç sürüyor"
+    /// diyen sabit bir metin, duraklatılmış bir maçta yalan söylerdi ve operatör neyin engellediğini
+    /// göremezdi.</summary>
+    private string RejectReasonLocked() =>
+        $"maç kurulu ({Describe(_phase, _pauseReason)}) — önce İPTAL edin";
+
     // ---- IGameMode'ların kullandığı public API (hepsi kilit güvenli, kilit DIŞINDAN çağrılır) ----
 
     public int ScoreRed
@@ -760,9 +791,10 @@ public sealed class MatchDirector
     /// şu sahneyi yükle" zaten o mesajın anlamı, ikinci bir mesaj tipi eklemek gerekmez.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Yalnız Lobby fazında iş yapar.</b> Koşan bir maçın ortasında sahne değiştirmek maçı
-    /// bozardı; maç sırasında harita değişimi diye bir şey yoktur, yeni harita <c>start_match</c>
-    /// ile gelir.
+    /// ⚠️ <b>Yalnız maç KURULMAMIŞKEN iş yapar</b> (<see cref="CanChangeSelection"/>): lobi
+    /// bekleyişinde ve <c>finished</c>'da. Kurulmuş bir maçın — koşan, kurulmakta olan ya da
+    /// donmuş — altından sahne çekmek maçı bozardı; harita değişimi diye bir şey yoktur, yeni
+    /// harita <c>abort_match</c> sonrası <c>start_match</c> ile gelir.
     /// </para>
     /// <para>
     /// Doğrulama <c>start_match</c> ile aynıdır (§10.1): sahne harita tablosunda olmalı (tablo
@@ -778,9 +810,10 @@ public sealed class MatchDirector
         // Erken çıkış: doğrulama (registry taraması) boşuna yapılmasın.
         lock (_gate)
         {
-            // Kapı YALNIZ koşan maçtır (§10.7): `finished` iken operatör yeni haritayı seçebilmeli.
-            if (_phase == Phase.Playing)
-                return new StageSceneResult(StageOutcome.Rejected, "maç sürüyor");
+            // Kapı "maç kurulmuş mu" sorusudur (§10.7): `finished` ve lobi bekleyişi serbest,
+            // yükleme/geri sayım/duraklatma dahil geri kalan her şey kapalı.
+            if (!CanChangeSelectionLocked)
+                return new StageSceneResult(StageOutcome.Rejected, RejectReasonLocked());
             if (_sceneName == target) return new StageSceneResult(StageOutcome.Unchanged);
         }
 
@@ -805,8 +838,8 @@ public sealed class MatchDirector
         {
             // Kilit yeniden alındı (doğrulama kilit DIŞINDA yapıldı, kilit sözleşmesi gereği):
             // arada start_match girmiş olabilir, kapı burada bir daha kontrol edilir.
-            if (_phase == Phase.Playing)
-                return new StageSceneResult(StageOutcome.Rejected, "maç sürüyor");
+            if (!CanChangeSelectionLocked)
+                return new StageSceneResult(StageOutcome.Rejected, RejectReasonLocked());
             if (_sceneName == target) return new StageSceneResult(StageOutcome.Unchanged);
 
             _sceneName = target;
@@ -1017,12 +1050,15 @@ public sealed class MatchDirector
         _pauseReason = reason;
         _phaseEnteredAt = now;
         RefreshShotRelayLocked();
-
-        static string Describe(Phase phase, PauseReason reason) =>
-            phase == Phase.Paused && reason != PauseReason.None
-                ? $"{PhaseWire(phase)}/{ReasonWire(reason)}"
-                : PhaseWire(phase);
     }
+
+    /// <summary>Faz + gerekçenin insan/log okunur tek parça hâli (<c>paused/loading</c> gibi).
+    /// Red gerekçelerinde de kullanılır: operatörün durum satırında "neden reddedildi" sorusunun
+    /// cevabı çoğu zaman fazın kendisidir.</summary>
+    private static string Describe(Phase phase, PauseReason reason) =>
+        phase == Phase.Paused && reason != PauseReason.None
+            ? $"{PhaseWire(phase)}/{ReasonWire(reason)}"
+            : PhaseWire(phase);
 
     /// <summary>Atış relay kapısını (<see cref="ShotRelayOpen"/>) faz + kuraldan yeniden hesaplar.
     /// <b>TEK yazar burasıdır</b> ve faz ya da <c>_rules</c> değişen HER yerde çağrılır

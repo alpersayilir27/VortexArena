@@ -265,24 +265,25 @@ public sealed class LobbyService
     /// haritayı yalnız kendi ekranında değil oyuncuların başlıklarında da değiştirir.
     /// </para>
     /// <para>
-    /// ⚠️ Bu yüzden <b>mod/harita YALNIZ <c>Lobby</c> fazında değiştirilebilir</b>: sahne komutu
-    /// herkese gittiği için koşan maçın ortasında harita değiştirmek maçı bozardı. Reddedilen
-    /// alanlar düşürülür, komutun geri kalanı (süre/limit) işlenmeye devam eder — onlar bir
-    /// sonraki maçın parametreleridir, sahne yüklemezler.
+    /// ⚠️ Bu yüzden <b>mod/harita yalnız maç KURULMAMIŞKEN değiştirilebilir</b>
+    /// (<see cref="MatchDirector.CanChangeSelection"/>): lobi bekleyişinde ve <c>finished</c>'da —
+    /// maç bittiğinde operatör bir sonrakini seçebilmelidir. Kurulmuş maç (koşan, yüklenen, geri
+    /// sayan ya da duraklatılmış) kapalıdır: sahne komutu herkese gittiği için maçın altından
+    /// sahne çekmek onu bozardı. Reddedilen alanlar düşürülür, komutun geri kalanı (süre/limit)
+    /// işlenmeye devam eder — onlar bir sonraki maçın parametreleridir, sahne yüklemezler.
     /// </para></summary>
     public async Task HandleSetSelectionAsync(ClientConnection connection, SetSelectionMsg msg)
     {
         var requestedModeId = msg.modeId ?? "";
         var requestedSceneName = msg.sceneName ?? "";
 
-        // Faz kapısı (§10.7): YALNIZ koşan maç engeller. `finished` iken operatör bir sonraki
-        // haritayı seçebilmeli. Otorite sunucudadır — arayüz seçicileri maç sürerken zaten
-        // pasiftir, burası bayat/yarışan bir panelin komutunu da keser.
-        var phase = _director.CurrentPhase;
+        // Faz kapısı (§10.7): kurulmuş maç engeller — koşan, yüklenen, geri sayan ya da
+        // duraklatılmış. `finished` ve lobi bekleyişi serbesttir. Otorite sunucudadır — arayüz
+        // seçicileri aynı kuralla zaten pasiftir, burası bayat/yarışan bir panelin komutunu keser.
         var rejection = "";
-        if (phase == Phase.Playing && (requestedModeId.Length > 0 || requestedSceneName.Length > 0))
+        if (!_director.CanChangeSelection && (requestedModeId.Length > 0 || requestedSceneName.Length > 0))
         {
-            rejection = "maç sürüyor — harita/mod değiştirilemez";
+            rejection = "maç kurulu — harita/mod değiştirilemez, önce İPTAL";
             Console.WriteLine($"[Lobby] set_selection reddedildi ({connection.State?.Name}): {rejection}.");
             requestedModeId = "";
             requestedSceneName = "";

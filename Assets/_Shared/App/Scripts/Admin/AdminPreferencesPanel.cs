@@ -11,8 +11,7 @@ namespace VortexArena.App.Admin
 {
     /// <summary>
     /// Tercihler paneli — eski dashboard'un işi buraya taşındı: <b>maç kontrolü</b> (mod/harita
-    /// seçimi, başlat/iptal/lobiye dön, duraklat/devam), <b>görünüm tercihleri</b> ve
-    /// <b>bağlantı</b>.
+    /// seçimi, başlat/iptal, duraklat/devam), <b>görünüm tercihleri</b> ve <b>bağlantı</b>.
     /// <para>
     /// Kart yarı saydamdır ve <b>arkasına scrim koyulmaz</b> — panel açıkken canlı sahne
     /// izlenmeye devam eder (kullanıcının açık isteği). Maç/oyun DURMAZ; otorite sunucudadır.
@@ -29,9 +28,16 @@ namespace VortexArena.App.Admin
     /// <para>
     /// ⚠️ <b>Harita seçmek OYUNCULARI DA taşır (§10.7 sahneleme).</b> Sunucu lobideyken seçilen
     /// arenayı <c>return_to_lobby</c> ile tüm istemcilere yükletir — burası "bir sonraki maçın
-    /// notu" değil anlık bir sahne komutudur. Bunun doğrudan sonucu: <b>mod/harita yalnız faz
-    /// <c>Lobby</c> iken değiştirilebilir</b> (<see cref="CanChangeSelection"/>); maç sürerken
-    /// satırlar pasifleşir. Süre/limit her fazda açık kalır, onlar sahne yüklemez.
+    /// notu" değil anlık bir sahne komutudur. Bunun doğrudan sonucu: <b>mod/harita ancak maç
+    /// KURULMAMIŞKEN değiştirilebilir</b> (<see cref="CanChangeSelection"/>) — koşan maçta,
+    /// yüklemede, geri sayımda ve duraklatmada seçiciler pasiftir. Süre/limit her fazda açık kalır,
+    /// onlar sahne yüklemez.
+    /// </para>
+    /// <para>
+    /// <b>Lobi ayrı bir düğme değil, harita seçicisinin ilk satırıdır</b> (<see cref="LobbyRowLabel"/>):
+    /// seçilince <c>set_selection</c> değil <c>return_to_lobby</c> gider ve imleç orada kalmaz —
+    /// satır bir menü eylemidir, "bir sonraki maçın haritası" değil. Aynı kilit ona da uygulanır,
+    /// yani kurulmuş bir maçı lobiye çevirmenin yolu İPTAL'dir (sunucuda ikisi de aynı iştir).
     /// </para>
     /// <para>
     /// <b>Liste seçimi dropdown, sayı adımlayıcı:</b> mod/harita gibi <b>liste tabanlı</b> seçimler
@@ -107,8 +113,12 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _scoreLimitNext;
 
         [SerializeField] private Button _startButton;
+
+        // ⚠️ Ayrı bir "LOBİYE DÖN" düğmesi YOKTUR ve geri eklenmez: lobi artık harita seçicisinin
+        // ilk satırıdır (<see cref="LobbyRowLabel"/>). İkisi birden dururken operatör aynı işi iki
+        // yerden yapabiliyordu ve satır kilitliyken düğme açık kalıyordu — kural tek kapıdan geçsin.
+        // Koşan maçı bitirip lobiye dönmenin yolu İPTAL'dir (sunucuda ikisi de aynı iştir).
         [SerializeField] private Button _abortButton;
-        [SerializeField] private Button _lobbyButton;
 
         /// <summary>Duraklat/devam düğmesi — etiketi ve gönderdiği komut faza göre değişir
         /// (<see cref="ApplyPauseButton"/>).</summary>
@@ -223,7 +233,6 @@ namespace VortexArena.App.Admin
 
             Wire(_startButton, StartMatch);
             Wire(_abortButton, AdminCommands.AbortMatch);
-            Wire(_lobbyButton, AdminCommands.ReturnToLobby);
             Wire(_pauseButton, TogglePause);
 
             Wire(_clearAllButton, ArmClearAllCalibration);
@@ -522,18 +531,40 @@ namespace VortexArena.App.Admin
             PublishSelection(mapChanged: false);
         }
 
-        /// <summary>Harita seçicisinden seçim geldi — gerekçeler <see cref="SelectMode"/>.</summary>
+        /// <summary>
+        /// Harita seçicisinden seçim geldi — gerekçeler <see cref="SelectMode"/>.
+        /// <para>
+        /// ⚠️ <b>İlk satır bir harita DEĞİL, bir komuttur</b> (<see cref="LobbyRowLabel"/>): eski
+        /// "LOBİYE DÖN" düğmesinin yerini aldı ve seçilince <c>set_selection</c> değil
+        /// <c>return_to_lobby</c> gider. Bu yüzden imleç orada BIRAKILMAZ — komut çalıştıktan
+        /// sonra seçici bir önceki arenaya döner: satır menüdeki bir eylemdir, "bir sonraki maçın
+        /// haritası" değil. İmleci lobide bırakmak BAŞLAT'ı anlamsız kılardı (lobide maç başlamaz).
+        /// </para>
+        /// </summary>
         private void SelectMap(int index)
         {
             HideDropdown(_mapDropdown);
 
-            if (index == _mapIndex || index < 0 || index >= _maps.Count || !GuardSelectionChange())
+            if (HasLobbyRow && index == LobbyRowIndex)
+            {
+                if (GuardSelectionChange())
+                {
+                    AdminCommands.ReturnToLobby();
+                }
+
+                Apply(); // imleç seçili arenaya geri çekilir (satır kalıcı bir seçim değil)
+                return;
+            }
+
+            int mapIndex = index - MapRowOffset;
+            if (mapIndex == _mapIndex || mapIndex < 0 || mapIndex >= _maps.Count ||
+                !GuardSelectionChange())
             {
                 Apply();
                 return;
             }
 
-            _mapIndex = index;
+            _mapIndex = mapIndex;
             PublishSelection(mapChanged: true);
         }
 
@@ -547,9 +578,12 @@ namespace VortexArena.App.Admin
 
         /// <summary>
         /// Mod/harita seçimi şu an değiştirilebilir mi (§10.7)? Harita seçmek TÜM istemcilere sahne
-        /// yükletiyor — maç sürerken bunu yapmak maçı bozardı, o yüzden yalnız faz <c>Lobby</c>'de
-        /// açıktır. Düğmeler zaten pasifleştiriliyor (<see cref="Apply"/>); bu kapı ikinci
-        /// emniyettir ve reddi operatöre görünür kılar.
+        /// yükletiyor — <b>maç KURULMUŞ olduğu her durumda</b> bu yapılamaz (koşan maç, yükleme,
+        /// geri sayım, duraklatma); ölçüt <see cref="AdminRoster.CanChangeSelection"/>. Seçiciler
+        /// zaten pasifleştiriliyor (<see cref="ApplySelectionLock"/>); bu kapı ikinci emniyettir ve
+        /// reddi operatöre görünür kılar.
+        /// <para>⚠️ <b>Lobi satırı da bu kapıdan geçer</b> — o da bir sahne komutudur; kurulmuş bir
+        /// maçı lobiye çevirmenin yolu İPTAL'dir.</para>
         /// <para>Otorite yine sunucudadır: aynı kural <c>set_selection</c> işlenirken de uygulanır,
         /// arayüz yalnız operatörü boşuna tıklatmamak için önden bilir.</para>
         /// </summary>
@@ -560,12 +594,12 @@ namespace VortexArena.App.Admin
                 return true;
             }
 
-            AdminCommands.Note("Maç sürerken harita/mod değiştirilemez — önce İPTAL ya da LOBİYE DÖN.");
+            AdminCommands.Note("Maç kurulu — harita/mod değiştirilemez; önce İPTAL.");
             return false;
         }
 
-        /// <summary>Faz Lobby mi? <see cref="AdminRoster"/> henüz yoksa (bağlanmadan önceki ilk
-        /// kareler) engellenmez — sunucu zaten son sözü söylüyor.</summary>
+        /// <summary>Maç kurulmamış mı? <see cref="AdminRoster"/> henüz yoksa (bağlanmadan önceki
+        /// ilk kareler) engellenmez — sunucu zaten son sözü söylüyor.</summary>
         private static bool CanChangeSelection
         {
             get
@@ -726,6 +760,10 @@ namespace VortexArena.App.Admin
 
             AdminContent.CollectMaps(modeId, _maps);
 
+            // Lobi satırı listeyle BİRLİKTE tazelenir: mekan süzgeci değiştiğinde (VenueVersion)
+            // arenalar gibi lobi de değişir — her işletmenin kendi lobisi var (§10.7).
+            _lobbyMap = AdminContent.ResolveLobbyMap();
+
             int index = string.IsNullOrEmpty(previous) ? -1 : IndexOfMap(previous);
             _mapIndex = index >= 0 ? index : 0;
 
@@ -740,6 +778,25 @@ namespace VortexArena.App.Admin
         private const string NoModesLabel = "katalog yok";
 
         private const string NoMapsLabel = "harita yok";
+
+        /// <summary>Harita seçicisinin ilk satırı — eski "LOBİYE DÖN" düğmesinin yerini aldı.
+        /// Seçilince <c>return_to_lobby</c> gider (<see cref="SelectMap"/>).</summary>
+        private const string LobbyRowLabel = "Lobi";
+
+        /// <summary>Lobi satırı listenin BAŞINDA durur ve orada kalır. Sona konsaydı indeksi
+        /// mod/mekan değiştikçe kayardı; başta duran satırın yeri sabittir ve operatörün kas
+        /// hafızası bozulmaz.</summary>
+        private const int LobbyRowIndex = 0;
+
+        /// <summary>Bu mekanın lobi haritası (§10.7) — katalogda yoksa ya da mekan süzgeci onu
+        /// dışarıda bırakıyorsa null, o zaman lobi satırı hiç çizilmez.</summary>
+        private MapDefinition _lobbyMap;
+
+        private bool HasLobbyRow => _lobbyMap != null;
+
+        /// <summary>Seçici indeksinden <see cref="_maps"/> indeksine geçiş farkı: lobi satırı
+        /// varken liste bir kayar.</summary>
+        private int MapRowOffset => HasLobbyRow ? 1 : 0;
 
         /// <summary>Seçenek metinlerinin kurulduğu tampon — <see cref="TMP_Dropdown.AddOptions(List{string})"/>
         /// içeriği kendi listesine kopyaladığı için paylaşılabilir.</summary>
@@ -760,13 +817,32 @@ namespace VortexArena.App.Admin
         private void RebuildMapOptions()
         {
             _optionScratch.Clear();
+            if (HasLobbyRow)
+            {
+                _optionScratch.Add(LobbyRowLabel);
+            }
+
             for (int i = 0; i < _maps.Count; i++)
             {
                 _optionScratch.Add(DisplayOf(_maps[i].DisplayName, _maps[i].SceneName));
             }
 
             FillDropdown(_mapDropdown, _optionScratch, NoMapsLabel);
-            SyncDropdown(_mapDropdown, _mapIndex, _maps.Count);
+            SyncMapDropdown();
+        }
+
+        /// <summary>Harita seçicisini yerel imlece çeker — lobi satırı listeyi kaydırdığı için
+        /// <see cref="SyncDropdown"/> doğrudan kullanılamaz.</summary>
+        private void SyncMapDropdown()
+        {
+            if (_maps.Count == 0)
+            {
+                // Yalnız lobi satırı (ya da "harita yok") var: imleç zaten tek yerde durabilir.
+                SyncDropdown(_mapDropdown, 0, 1);
+                return;
+            }
+
+            SyncDropdown(_mapDropdown, _mapIndex + MapRowOffset, _maps.Count + MapRowOffset);
         }
 
         /// <summary>Seçenekleri yazar. Liste boşsa tek bir açıklama satırı konur ki seçicinin
@@ -986,7 +1062,7 @@ namespace VortexArena.App.Admin
             // RebuildModeOptions/RebuildMapOptions'ta yazıldı); burada yalnız imleç eşitlenir —
             // ortak seçimi başka bir admin de değiştirmiş olabilir.
             SyncDropdown(_modeDropdown, _modeIndex, _modes.Count);
-            SyncDropdown(_mapDropdown, _mapIndex, _maps.Count);
+            SyncMapDropdown();
 
             ApplySelectionLock();
 
@@ -1038,9 +1114,9 @@ namespace VortexArena.App.Admin
             bool open = CanChangeSelection;
 
             // Liste boşken de pasif: açılıp yalnız "katalog yok" gösteren bir seçici, seçilecek
-            // bir şey varmış gibi görünür.
+            // bir şey varmış gibi görünür. Lobi satırı tek başına da seçilebilir bir şeydir.
             SetInteractable(_modeDropdown, open && _modes.Count > 0);
-            SetInteractable(_mapDropdown, open && _maps.Count > 0);
+            SetInteractable(_mapDropdown, open && (_maps.Count > 0 || HasLobbyRow));
 
             Color valueColor = open ? UiKit.Title : UiKit.Faint;
             SetCaptionColor(_modeDropdown, valueColor);

@@ -25,7 +25,7 @@ namespace VortexArena.Core.Combat
     /// </summary>
     public class WeaponFrame : MonoBehaviour, IGameObjectFilter
     {
-        /// <summary>Çerçeve/ışın materyalinin shader arama zinciri (ilk bulunan kullanılır).</summary>
+        /// <summary>Nişan ışını materyalinin shader arama zinciri (ilk bulunan kullanılır).</summary>
         // ⚠️ Zincir ItemGripSockets/ShotTracer'daki ile BİREBİR aynı ve "Sprites/Default" başta
         // duruyor: o shader Graphics Settings'in *Always Included Shaders* listesinde varsayılan
         // olarak bulunur → build'de kesin paketlenir (çalışma anında Shader.Find ile bulunan,
@@ -42,12 +42,17 @@ namespace VortexArena.Core.Combat
         // çerçeve var, örnek başına olsaydı aynı teşhis satırı onlarca kez düşerdi.
         private static bool _warnedFailOpen;
 
+        // "Çerçeve modeli yok" uyarısı da OTURUM başına bir kez: eksikse sahnedeki HER silahta
+        // eksiktir (hepsi aynı prefabtan geliyor), örnek başına loglamak aynı satırı çoğaltırdı.
+        private static bool _warnedNoFrameArt;
+
         [Header("Görünüm")]
         [Tooltip("Çerçeve görselini açar. Sahnedeki WPN_* ÖRNEĞİ üstünde override edilir — " +
                  "çerçevesiz durması istenen silahlarda kapatılır.")]
         [SerializeField] private bool isFrameVisible = true;
 
-        [Tooltip("Prefabdaki PASİF görsel kökü (üstündeki LineRenderer'a çerçeve dikdörtgeni yazılır).")]
+        [Tooltip("Prefabdaki PASİF görsel kökü. Altındaki çerçeve MODELİ çalışma anında silahın " +
+                 "ölçüsüne oturtulur (konum/dönüş/ölçek buradan yazılır).")]
         [SerializeField] private Transform frameVisual;
 
         [Tooltip("Silahın seçilebildiği en uzak mesafe (m) — el anchor'ı ile çerçeve merkezi arası.")]
@@ -58,9 +63,6 @@ namespace VortexArena.Core.Combat
 
         [Tooltip("Nişan ışınının kalınlığı (m).")]
         [SerializeField] private float rayWidth = 0.006f;
-
-        [Tooltip("Çerçeve çizgisinin kalınlığı (m).")]
-        [SerializeField] private float frameLineWidth = 0.008f;
 
         [Tooltip("Silahın sınırlarına eklenen pay (m) — çerçeve silaha yapışık durmasın.")]
         [SerializeField] private float framePadding = 0.06f;
@@ -84,7 +86,6 @@ namespace VortexArena.Core.Combat
         /// kaynak silah dondurulduğu için bir daha değişmez).</summary>
         private Vector3 _centerLocal;
 
-        private LineRenderer _frameLine;
         private LineRenderer _rayLeft;
         private LineRenderer _rayRight;
         private Material _lineMaterial;
@@ -97,7 +98,7 @@ namespace VortexArena.Core.Combat
             if (_weapon == null)
             {
                 // Çerçeve tek başına anlamsızdır: neyi temsil ettiğini yalnız parent silahtan
-                // öğrenebiliyor. Sessiz kalsaydı sahnede "hiçbir şey yapmayan mavi dikdörtgen"
+                // öğrenebiliyor. Sessiz kalsaydı sahnede "hiçbir şey yapmayan boş bir çerçeve"
                 // olarak durur, teşhisi pahalı olurdu.
                 Debug.LogWarning($"[WeaponFrame] '{name}' bir Weapon'ın altında değil; çerçeve " +
                                  "kapatıldı. VA_WeaponFrame prefabı WPN_* prefabının ÇOCUĞU olmalı.", this);
@@ -242,27 +243,35 @@ namespace VortexArena.Core.Combat
         // ---------------------------------------------------------------- çerçeve görseli
 
         /// <summary>
-        /// Çerçeve dikdörtgenini silahın Renderer sınırlarından üretir ve
-        /// <see cref="frameVisual"/> üstündeki <see cref="LineRenderer"/>'a yazar.
+        /// Çerçeve <b>MODELİNİ</b> (<see cref="frameVisual"/> altındaki sanat) silahın Renderer
+        /// sınırlarına oturtur: düzlemi silahın en büyük iki eksenine çevirir, o iki ekseni
+        /// kaplayacak kadar ölçekler ve silahın merkezine hizalar.
+        /// <para>
+        /// ⚠️ <b>Neden çalışma anında ve neden elle konmuyor</b> (<see cref="SizeGrabCollider"/>
+        /// ile aynı gerekçe): çerçeve TEK bir prefabtır ve altı ayrı boydaki silahın altında
+        /// duruyor. Her silaha elle çerçeve yerleştirmek, modelin ölçüsü/pivotu her değiştiğinde
+        /// silah sayısı kadar elle iş demekti — ölçüyü <b>silah</b> söyler, prefab değil.
+        /// </para>
         /// <para>
         /// ⚠️ <see cref="frameVisual"/> prefabda <b>PASİFTİR</b> ve burada yalnız
         /// <see cref="isFrameVisible"/> ise açılır. Gerekçe: <c>RemoteAvatar.SterilizeVisual</c>
         /// kopyadaki tüm MonoBehaviour'ları siler ama GameObject'leri KAPATMAZ (üstelik kopya pasif
         /// bir kuluçka kökünde kurulduğu için hiçbir <c>Awake</c> koşmaz). Pasif başlamasaydı hem
-        /// uzak oyuncunun elindeki silahta hem de yerel klonda çerçeve çizilirdi.
+        /// uzak oyuncunun elindeki silahta hem de yerel klonda çerçeve görünürdü.
         /// </para>
         /// <para>
-        /// Silahın <b>en büyük iki ekseni</b> seçilir: böylece yatan da duran da silah doğru
-        /// çerçevelenir (tek bir sabit düzlem seçilseydi silahın bir kısmı çerçevenin dışında
-        /// kalırdı).
+        /// İki tarafın da <b>en büyük iki ekseni</b> eşleştirilir (büyük→büyük, küçük→küçük):
+        /// böylece yatan da duran da silah doğru çerçevelenir ve modelin hangi eksende modellendiği
+        /// önemini yitirir. Derinlik ölçeği ikisinin KÜÇÜĞÜNE eşitlenir — düzlemde esneyen bir
+        /// çerçevenin kalınlığı da esnerse ahşap profil sünmüş görünür.
         /// </para>
         /// </summary>
         private void BuildFrameVisual(bool measured, Bounds local)
         {
             if (!measured)
             {
-                // Renderer yok (ya da hepsi çerçevenin altında): dikdörtgen çizilmez — ışının bir
-                // hedefi olsun yeter (merkez silahın kökü sayıldı).
+                // Renderer yok (ya da hepsi çerçevenin altında): oturtulacak bir ölçü yok — ışının
+                // bir hedefi olsun yeter (merkez silahın kökü sayıldı).
                 return;
             }
 
@@ -271,59 +280,143 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // ⚠️ Ölçüm TABAN duruşta yapılmalı: aşağıdaki fit'in girdisi modelin ölçeklenmemiş
+            // kutusudur. Sıfırlanmasaydı ikinci bir çağrı (ya da prefabda elle bırakılmış bir
+            // ölçek) kendi üstüne çarpılır ve çerçeve her seferinde büyürdü.
+            frameVisual.localPosition = Vector3.zero;
+            frameVisual.localRotation = Quaternion.identity;
+            frameVisual.localScale = Vector3.one;
+
+            if (!MeasureFrameArtBounds(out Bounds art) || art.size.sqrMagnitude < 1e-8f)
+            {
+                WarnNoFrameArt();
+                return;
+            }
+
             frameVisual.gameObject.SetActive(true);
 
-            Material material = EnsureLineMaterial();
-            if (material == null)
+            // Düzlem eksenleri: her iki tarafta da "en büyük iki eksen", büyükten küçüğe sıralı.
+            LargestTwoAxes(local.size, out int weaponA, out int weaponB);
+            OrderBySize(local.size, ref weaponA, ref weaponB);
+            int weaponNormal = 3 - weaponA - weaponB;
+
+            LargestTwoAxes(art.size, out int artA, out int artB);
+            OrderBySize(art.size, ref artA, ref artB);
+            int artNormal = 3 - artA - artB;
+
+            // Dönüş: modelin (düzlem normali, uzun kenarı) silahın karşılıklarına götürülür.
+            // Silahın eksenleri ÇERÇEVE GÖRSELİNİN EBEVEYN uzayına çevrilir — silah kökü ile
+            // çerçeve kökü aynı uzay olmak zorunda değil.
+            Transform parent = frameVisual.parent;
+            Vector3 targetNormal = ToParentDirection(parent, AxisVector(weaponNormal));
+            Vector3 targetUp = ToParentDirection(parent, AxisVector(weaponA));
+
+            Quaternion rotation =
+                Quaternion.LookRotation(targetNormal, targetUp) *
+                Quaternion.Inverse(Quaternion.LookRotation(AxisVector(artNormal), AxisVector(artA)));
+
+            // Ölçek MODELİN kendi eksenlerinde yazılır (localScale dönüşten ÖNCE uygulanır).
+            var scale = Vector3.one;
+            scale[artA] = (local.size[weaponA] + framePadding * 2f) / Mathf.Max(art.size[artA], 1e-4f);
+            scale[artB] = (local.size[weaponB] + framePadding * 2f) / Mathf.Max(art.size[artB], 1e-4f);
+            scale[artNormal] = Mathf.Min(scale[artA], scale[artB]);
+
+            // Konum: modelin ÖLÇÜLEN merkezi silahın merkezine otursun. Model pivotu merkezinde
+            // olmak zorunda değil (bu modelde değil), o yüzden merkez farkı geri alınıyor —
+            // dönüş+ölçek uygulandıktan SONRAKİ hâliyle.
+            Vector3 targetCenter = parent.InverseTransformPoint(_weapon.transform.TransformPoint(local.center));
+
+            frameVisual.localRotation = rotation;
+            frameVisual.localScale = scale;
+            frameVisual.localPosition = targetCenter - rotation * Vector3.Scale(scale, art.center);
+        }
+
+        /// <summary>İki ekseni BÜYÜKTEN küçüğe sıralar (büyük kenar büyük kenarla eşleşsin).</summary>
+        private static void OrderBySize(in Vector3 size, ref int major, ref int minor)
+        {
+            if (size[minor] > size[major])
+            {
+                (major, minor) = (minor, major);
+            }
+        }
+
+        /// <summary>Eksen indeksinin (0=X,1=Y,2=Z) birim vektörü.</summary>
+        private static Vector3 AxisVector(int axis)
+        {
+            var v = Vector3.zero;
+            v[axis] = 1f;
+            return v;
+        }
+
+        /// <summary>Silahın yerel uzayındaki bir YÖNÜ çerçeve görselinin ebeveyn uzayına çevirir.</summary>
+        private Vector3 ToParentDirection(Transform parent, in Vector3 weaponLocalDirection)
+        {
+            Vector3 world = _weapon.transform.TransformDirection(weaponLocalDirection);
+            return parent != null ? parent.InverseTransformDirection(world).normalized : world.normalized;
+        }
+
+        /// <summary>
+        /// Çerçeve sanatının sınırlarını <see cref="frameVisual"/>'ın YEREL uzayında ölçer.
+        /// <para>⚠️ Dünya AABB'si (<c>Renderer.bounds</c>) DEĞİL, <c>localBounds</c>'ın köşeleri —
+        /// gerekçesi <see cref="MeasureWeaponBounds"/>'takiyle aynı: döndürülmüş duran bir modelin
+        /// dünya kutusu gerçek boyutundan büyük çıkar ve çerçeve olduğundan geniş ölçeklenirdi.</para>
+        /// </summary>
+        private bool MeasureFrameArtBounds(out Bounds local)
+        {
+            local = new Bounds();
+            bool any = false;
+
+            Renderer[] renderers = frameVisual.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null)
+                {
+                    continue;
+                }
+
+                Bounds rendererLocal = renderer.localBounds;
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    var offset = new Vector3(
+                        (corner & 1) == 0 ? rendererLocal.min.x : rendererLocal.max.x,
+                        (corner & 2) == 0 ? rendererLocal.min.y : rendererLocal.max.y,
+                        (corner & 4) == 0 ? rendererLocal.min.z : rendererLocal.max.z);
+
+                    Vector3 point = frameVisual.InverseTransformPoint(
+                        renderer.transform.TransformPoint(offset));
+
+                    if (!any)
+                    {
+                        local = new Bounds(point, Vector3.zero);
+                        any = true;
+                    }
+                    else
+                    {
+                        local.Encapsulate(point);
+                    }
+                }
+            }
+
+            return any;
+        }
+
+        /// <summary>
+        /// Görsel kökünün altında hiç Renderer yoksa bir kez uyarır. <b>Neden loglanıyor:</b>
+        /// çerçeve sessizce hiç çizilmez ama silah yine seçilebilir — yani özellik "çalışıyor gibi
+        /// görünüp" görünmez kalır. Genellikle sebebi çerçeve modelinin prefabtan düşmesidir.
+        /// </summary>
+        private static void WarnNoFrameArt()
+        {
+            if (_warnedNoFrameArt)
             {
                 return;
             }
 
-            _frameLine = frameVisual.GetComponent<LineRenderer>();
-            if (_frameLine == null)
-            {
-                _frameLine = frameVisual.gameObject.AddComponent<LineRenderer>();
-            }
-
-            _frameLine.sharedMaterial = material;
-            _frameLine.useWorldSpace = false;
-            _frameLine.loop = true;
-            _frameLine.positionCount = 4;
-            _frameLine.numCapVertices = 0;
-            _frameLine.numCornerVertices = 0;
-            _frameLine.textureMode = LineTextureMode.Stretch;
-            _frameLine.alignment = LineAlignment.View;
-            _frameLine.startWidth = frameLineWidth;
-            _frameLine.endWidth = frameLineWidth;
-            _frameLine.startColor = rayColor;
-            _frameLine.endColor = rayColor;
-            _frameLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            _frameLine.receiveShadows = false;
-            _frameLine.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
-            _frameLine.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
-
-            Vector3 size = local.size;
-            LargestTwoAxes(size, out int axisA, out int axisB);
-
-            float halfA = size[axisA] * 0.5f + framePadding;
-            float halfB = size[axisB] * 0.5f + framePadding;
-
-            for (int i = 0; i < 4; i++)
-            {
-                // Köşe sırası: (+,+) (-,+) (-,-) (+,-) — loop=true ile kapalı dikdörtgen.
-                float signA = i == 0 || i == 3 ? 1f : -1f;
-                float signB = i == 0 || i == 1 ? 1f : -1f;
-
-                Vector3 corner = local.center;
-                corner[axisA] += halfA * signA;
-                corner[axisB] += halfB * signB;
-
-                // Köşeler SİLAHIN yerel uzayında hesaplandı; LineRenderer yerel uzayda çiziyor,
-                // o yüzden çerçeve görselinin kendi uzayına çevriliyor (ikisi aynı olmak zorunda
-                // değil — prefabda görsel kökü kaydırılmış/döndürülmüş olabilir).
-                Vector3 world = _weapon.transform.TransformPoint(corner);
-                _frameLine.SetPosition(i, frameVisual.InverseTransformPoint(world));
-            }
+            _warnedNoFrameArt = true;
+            Debug.LogWarning("[WeaponFrame] Görsel kökünün altında Renderer yok — çerçeve " +
+                             "çizilmeyecek (silah yine seçilebilir). VA_WeaponFrame prefabında " +
+                             "FrameVisual altındaki çerçeve modeli duruyor mu?");
         }
 
         /// <summary>
@@ -635,8 +728,9 @@ namespace VortexArena.Core.Combat
 
         // ---------------------------------------------------------------------- yardımcı
 
-        /// <summary>Çerçeve ve ışınların PAYLAŞTIĞI materyal (renk LineRenderer'ın vertex
-        /// renginden gelir).</summary>
+        /// <summary>İki nişan ışınının PAYLAŞTIĞI materyal (renk LineRenderer'ın vertex renginden
+        /// gelir). Çerçevenin kendisi artık çizilmiyor — o bir MODEL ve kendi materyalini taşıyor;
+        /// burası yalnız ışınlar için.</summary>
         private Material EnsureLineMaterial()
         {
             if (_lineMaterial != null)
@@ -658,9 +752,9 @@ namespace VortexArena.Core.Combat
             {
                 _warnedNoShader = true;
                 Debug.LogWarning(
-                    "[WeaponFrame] Çerçeve/ışın için shader bulunamadı (Sprites/Default dahil) — " +
-                    "silah yine seçilebilir ama hiçbir vurgu çizilmez. Graphics Settings > " +
-                    "Always Included Shaders listesini kontrol et.", this);
+                    "[WeaponFrame] Nişan ışını için shader bulunamadı (Sprites/Default dahil) — " +
+                    "silah yine seçilebilir ve çerçeve görünür, ama nişan ışını çizilmez. " +
+                    "Graphics Settings > Always Included Shaders listesini kontrol et.", this);
             }
 
             return null;
