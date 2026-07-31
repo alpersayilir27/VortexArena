@@ -391,11 +391,36 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 > `primaryGripEuler` alanları belirler, çift ellide ek olarak `secondaryGrip*`. VR'da ince ayar
 > buradan yapılır, kod değişmez. ⚠️ **Tek yer, üç tüketici:** aynı ölçü yerel duruşu, uzak
 > oyuncudaki çizimi ve kavrama soketinin yerini birlikte besliyor — ikinci bir "duruş" alanı
-> açmak biri güncellenip diğeri unutulan bir çift üretir. Raftan alınan silah ile verilen silah
-> (`weaponSource:"random"`) da aynı alanları kullanır, ayrım yoktur.
+> açmak biri güncellenip diğeri unutulan bir çift üretir. Çerçeveden seçilen silah (`"rack"`),
+> modun verdiği silah (`weaponSource:"random"`) ve elde ISDK ile kavranan eşya **aynı alanları**
+> kullanır; ayrım yoktur.
 
 > ⚠️ Denge sayıları istemcide yaşadığı için değişiklik **APK build'i ister** — sunucuyu yeniden
 > başlatmak yetmez.
+
+> Sahnedeki silahın **çerçevesi** için elle iş yoktur: `Build Weapon Prefabs` her `WPN_*` köküne
+> `VA_WeaponFrame` örneğini kendisi koyar. Çerçevenin arenada görünüp görünmemesi ayrı bir konudur
+> → bir sonraki reçete.
+
+---
+
+## 11.1 Bir arenada silah çerçevesini görünür/görünmez yapmak
+
+**Ne zaman:** çerçeve o arenanın sanat diline uymuyor (ör. silah bir masanın üstünde dursun,
+çerçeve görünmesin) ya da tersine oyuncuya "silah buradan alınır" diye göstermek istiyorsun.
+
+1. Arena sahnesini aç.
+2. Hiyerarşide sahnedeki `WPN_*` **örneğini** seç.
+3. Altındaki `VA_WeaponFrame` çocuğuna in.
+4. `WeaponFrame` bileşenindeki **`isFrameVisible`** kutusunu işaretle / kaldır.
+5. Sahneyi kaydet. (Birden çok silahı aynı anda seçip tek hamlede yapabilirsin.)
+
+> ⚠️ Bu bir **prefab override**'dır, yani ayar **sahneye özeldir** — istenen davranış budur:
+> aynı silah bir arenada çerçeveli, başka arenada çerçevesiz durabilir. `VA_WeaponFrame`
+> prefabının kendisini düzenlersen **tüm arenalar** etkilenir.
+
+> ⚠️ Görünürlük **yalnız sunumdur.** Çerçeve görünmez olsa bile silah yine oradan, ≤2 m'den
+> nişan alınarak seçilir ve ele klonlanır; alma menzilini ya da kavramayı kapatmaz.
 
 ---
 

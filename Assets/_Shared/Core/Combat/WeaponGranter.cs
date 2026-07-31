@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Oculus.Interaction;
+using Oculus.Interaction.Input;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using VortexArena.Core.Arena;
@@ -7,27 +8,34 @@ using VortexArena.Core.Arena;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// <c>weaponSource:"random"</c> modlarının (§10.5) silah kaynağı: sahnedeki <b>rafı kaldırır</b>
-    /// ve oyuncuya <b>grip'e basılı tuttukça</b> rastgele silah verir.
-    /// <para>
-    /// İki iş yapar, ikisi de yalnız kural <see cref="ModeWeaponSource.RandomGrant"/> iken:
+    /// Oyuncunun eline silah koyan <b>TEK</b> yer — iki ayrı kaynaktan beslenir ve hangisinin
+    /// işlediğini mod kuralı (<see cref="ModeWeaponSource"/>) belirler:
     /// <list type="number">
-    /// <item>Sahne süpürmesi: raf silahları ve taban bölgeleri gizlenir (bu modda "tabanına dön"
-    /// diye bir şey yok — canlanma sabit durmakla oluyor).</item>
-    /// <item>Verme döngüsü: her elde grip basılıyken o elde rastgele bir silah durur; bırakılınca
-    /// yok olur, tekrar basınca YENİSİ gelir.</item>
+    /// <item><b>RandomGrant</b> (§10.5 <c>weaponSource:"random"</c>): sahnedeki rafı/taban
+    /// bölgelerini SÜPÜRÜR ve grip'e basılı tutulan her elde loadout'tan rastgele bir silah durur;
+    /// bırakılınca <b>yok olur</b>, tekrar basınca YENİSİ gelir (<see cref="WeaponGrantKind.Disposable"/>).</item>
+    /// <item><b>Çerçeve</b> (<see cref="WeaponFrame"/>, <see cref="ModeWeaponSource.Rack"/>): silah
+    /// sahnede çerçevesinde sabit durur, oyuncu onu ≤2 m'den uzaktan SEÇER
+    /// (<see cref="SelectWeapon"/>); grip'e basınca seçilen silahın KLONU eline gelir, bırakınca
+    /// <b>yalnız gizlenir</b> — aynı örnek aynı mermiyle geri gelir
+    /// (<see cref="WeaponGrantKind.Persistent"/>). Oyuncu başına TEK silah.</item>
     /// </list>
+    /// <para>
+    /// <b>Neden ikisi de burada:</b> bu sınıf zaten rig/el anchor'ını çözen, grip'i yoklayan, ölünce
+    /// silahı geri alan ve sahne değişimini temizleyen yerdir. İkinci bir tekil açılsaydı ikinci bir
+    /// rig keşif yolu doğardı — iki arama farklı karelerde farklı rig bulur ve silah el değiştirmiş
+    /// gibi zıplardı (bkz. <see cref="ResolveHandAnchor"/> notu).
     /// </para>
     /// <para>
     /// <b>Neden kendini önyükleyen tekil</b> (<see cref="PlayerCombatState"/> deseni): sahneye
     /// bileşen konsaydı her yeni arenaya elle bir kurulum adımı doğardı ve CLAUDE.md'deki arena
-    /// listesi büyürdü. Bu bileşen görünmezdir; TDM'de (ve kural gelmemişken) hiçbir şey yapmaz.
+    /// listesi büyürdü. Bu bileşen görünmezdir.
     /// </para>
     /// <para>
-    /// <b>Admin gözlemcide verme yolu kendiliğinden kapalıdır:</b> <c>AdminSpectator</c> BB
-    /// rig'i kapattığı için <see cref="OVRCameraRig"/> aranınca bulunamaz (arama pasif objeleri
-    /// dahil etmez) → el anchor'ı yok → silah verilmez. Süpürme ise role bakmaz: raf FFA'da
-    /// gözlemcinin ekranında da durmamalı.
+    /// <b>Admin gözlemcide iki yol da kendiliğinden kapalıdır:</b> <c>AdminSpectator</c> BB rig'i
+    /// kapattığı için <see cref="OVRCameraRig"/> aranınca bulunamaz (arama pasif objeleri dahil
+    /// etmez) → el anchor'ı yok → silah verilmez. Süpürme ise role bakmaz: raf FFA'da gözlemcinin
+    /// ekranında da durmamalı.
     /// </para>
     /// </summary>
     public class WeaponGranter : MonoBehaviour
@@ -41,12 +49,24 @@ namespace VortexArena.Core.Combat
 
         public static WeaponGranter Instance { get; private set; }
 
-        /// <summary>Sol/sağ elde duran verilen silah örneği (yoksa null).</summary>
+        /// <summary>Sol/sağ elde duran TEK KULLANIMLIK silah örneği (yoksa null).</summary>
         private Weapon _grantedLeft;
         private Weapon _grantedRight;
 
+        /// <summary>Çerçeveden seçilen silah — oyuncu başına TEK. Harita başına sıfırlanır
+        /// (bkz. <see cref="HandleSceneLoaded"/>).</summary>
+        private WeaponDefinition _selected;
+
+        /// <summary>Seçili silahın KALICI klonu: bırakılınca yok edilmez, yalnız gizlenir —
+        /// "aynı silah aynı mermiyle geri gelir" kuralı bu tek örnekten doğar.</summary>
+        private Weapon _summoned;
+
+        /// <summary>Klonun şu an hangi elde olduğu (<c>None</c> = gizli).</summary>
+        private OVRInput.Controller _summonedHand = OVRInput.Controller.None;
+
         private OVRCameraRig _rig;
         private float _nextRigScanAt;
+        private bool _aliveSubscribed;
 
         /// <summary>Süpürmenin GİZLEDİĞİ objeler — kural değişince geri açılabilsin diye tutulur.
         /// Sahne değişince referanslar ölür (Unity null'ı) ve liste yeniden kurulur.</summary>
@@ -61,6 +81,11 @@ namespace VortexArena.Core.Combat
 
         private bool _swept;
         private bool _loadoutWarned;
+        private bool _summonPrefabWarned;
+
+        /// <summary>Son uygulanan silah kaynağı — yalnız GEÇİŞTE çerçeve durumunu sıfırlamak için
+        /// (bkz. <see cref="ApplyRules"/>).</summary>
+        private bool _appliedRandomGrant;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -101,13 +126,33 @@ namespace VortexArena.Core.Combat
 
             SceneManager.sceneLoaded -= HandleSceneLoaded;
             ModeRuntime.Changed -= HandleRulesChanged;
+
+            if (_aliveSubscribed && PlayerCombatState.Instance != null)
+            {
+                PlayerCombatState.Instance.AliveChanged -= HandleAliveChanged;
+            }
+
+            _aliveSubscribed = false;
             Instance = null;
         }
 
         private void Update()
         {
-            if (Instance != this || !IsRandomGrant)
+            if (Instance != this)
             {
+                return;
+            }
+
+            // PlayerCombatState kendini sahne yüklendikten SONRA önyükler; Awake sırasında henüz
+            // doğmamış olabilir (Weapon.TrySubscribeAlive ile aynı tembel abonelik deseni).
+            if (!_aliveSubscribed)
+            {
+                TrySubscribeAlive();
+            }
+
+            if (!IsRandomGrant)
+            {
+                TickFrameSummon();
                 return;
             }
 
@@ -152,6 +197,13 @@ namespace VortexArena.Core.Combat
             _grantedLeft = null;
             _grantedRight = null;
             _rig = null;
+
+            // ⚠️ Çerçeve seçimi HARİTA başına sıfırlanır: "bu round boyunca aynı silah" kuralının
+            // kapsamı bir haritadır. Yeni arenada oyuncu silahını yine kendi çerçevesinden alır —
+            // seçim taşınsaydı o haritada bulunmayan bir silahla oynanabilirdi.
+            _selected = null;
+            DestroySummoned();
+
             ApplyRules();
         }
 
@@ -159,7 +211,19 @@ namespace VortexArena.Core.Combat
         /// geri al ve eldekileri temizle.</summary>
         private void ApplyRules()
         {
-            if (IsRandomGrant)
+            // Silah KAYNAĞI değiştiyse çerçeve tarafı sıfırlanır — iki kaynak aynı anda elde silah
+            // tutmasın. ⚠️ Koşul bilinçli: ModeRuntime.Changed aynı kaynakla da tekrar tekrar
+            // yayınlanabilir (her load_match), koşulsuz sıfırlansaydı oyuncunun yarım şarjörü maçın
+            // ortasında sessizce dolardı.
+            bool random = IsRandomGrant;
+            if (random != _appliedRandomGrant)
+            {
+                _appliedRandomGrant = random;
+                _selected = null;
+                DestroySummoned();
+            }
+
+            if (random)
             {
                 SweepScene();
                 return;
@@ -326,15 +390,20 @@ namespace VortexArena.Core.Combat
             }
 
             DetachFromPhysicsAndGrab(instance);
-            weapon.GrantTo(hand);
+            weapon.GrantTo(hand, WeaponGrantKind.Disposable);
             return weapon;
         }
 
         /// <summary>
-        /// Verilen silah elde SABİT durur: kavrama ve fizik yolları kapatılır.
+        /// TEK KULLANIMLIK verilen silah elde SABİT durur: kavrama ve fizik yolları kapatılır.
         /// <para>
         /// Kapatılmasaydı silah (a) diğer elle ya da uzaktan kavranabilir, (b) yer çekimiyle elden
         /// düşer, (c) çarpışmalarıyla oyuncunun kendi ışınına takılırdı.
+        /// </para>
+        /// <para>
+        /// ⚠️ Çerçeve klonunun karşılığı <see cref="PrepareSummonedClone"/>'dur ve <b>bilerek daha
+        /// azını kapatır</b>: orada ön kabza ISDK kavramasına açık kalmalı, dolayısıyla
+        /// Grabbable/GrabInteractable ve collider'lar AÇIK bırakılır.
         /// </para>
         /// </summary>
         private static void DetachFromPhysicsAndGrab(GameObject instance)
@@ -417,6 +486,352 @@ namespace VortexArena.Core.Combat
         {
             Revoke(ref _grantedLeft);
             Revoke(ref _grantedRight);
+        }
+
+        // ------------------------------------------------------------- çerçeve silahı
+
+        /// <summary>
+        /// <see cref="WeaponFrame"/> çağırır: oyuncunun bu haritadaki silahını seçer.
+        /// <para>
+        /// Aynı silah yeniden seçilirse <b>hiçbir şey yapılmaz</b> — mevcut klon ve şarjörü korunur,
+        /// yoksa oyuncu çerçevesine her nişan aldığında mermisi sessizce dolardı. Farklı bir silah
+        /// seçilirse eski klon yok edilir ve yenisi bir sonraki grip'te TAM şarjörle doğar.
+        /// </para>
+        /// </summary>
+        public static void SelectWeapon(WeaponDefinition definition)
+        {
+            if (Instance == null || definition == null)
+            {
+                return;
+            }
+
+            Instance.ApplySelection(definition);
+        }
+
+        private void ApplySelection(WeaponDefinition definition)
+        {
+            if (_selected == definition)
+            {
+                return;
+            }
+
+            _selected = definition;
+            DestroySummoned();
+        }
+
+        /// <summary>
+        /// Çerçeve yolunun bir karelik durumu: grip basılıysa seçili silahın klonu elde olsun,
+        /// değilse gizlensin.
+        /// <para>
+        /// <b>Oyuncu başına TEK silah:</b> basılı olan İLK el kazanır; iki el de basılıysa silah
+        /// hâlihazırda çağırılmış elde kalır (yoksa sağ el) — el değiştirme silahı ellerin arasında
+        /// titretmesin.
+        /// </para>
+        /// <para>
+        /// ⚠️ Ölünce klon <b>gizlenir ama SEÇİM KORUNUR</b>: canlanan oyuncu aynı silahla döner
+        /// (dolumu <see cref="HandleAliveChanged"/> yapar). Seçim de silinseydi her ölümden sonra
+        /// çerçeveye yürümek gerekirdi.
+        /// </para>
+        /// </summary>
+        private void TickFrameSummon()
+        {
+            if (PlayerCombatState.Instance != null && !PlayerCombatState.Instance.IsAlive)
+            {
+                StowSummoned();
+                return;
+            }
+
+            OVRCameraRig rig = ResolveRig();
+            if (rig == null)
+            {
+                StowSummoned();
+                return;
+            }
+
+            bool leftHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.LTouch) >= GripThreshold;
+            bool rightHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.RTouch) >= GripThreshold;
+
+            OVRInput.Controller hand = OVRInput.Controller.None;
+            if (leftHeld && rightHeld)
+            {
+                hand = _summonedHand != OVRInput.Controller.None ? _summonedHand : OVRInput.Controller.RTouch;
+            }
+            else if (leftHeld)
+            {
+                hand = OVRInput.Controller.LTouch;
+            }
+            else if (rightHeld)
+            {
+                hand = OVRInput.Controller.RTouch;
+            }
+
+            if (hand == OVRInput.Controller.None)
+            {
+                StowSummoned();
+                return;
+            }
+
+            if (_selected == null)
+            {
+                // Henüz bir çerçeveden silah seçilmedi: grip boşa basılır (uyarı da basılmaz,
+                // maçın başında bu NORMAL durumdur).
+                return;
+            }
+
+            Transform anchor = hand == OVRInput.Controller.LTouch ? rig.leftHandAnchor : rig.rightHandAnchor;
+            if (anchor == null)
+            {
+                StowSummoned();
+                return;
+            }
+
+            SummonTo(hand, anchor);
+        }
+
+        /// <summary>
+        /// Seçili silahın klonunu <paramref name="hand"/>'e çağırır (gerekirse önce üretir).
+        /// </summary>
+        private void SummonTo(OVRInput.Controller hand, Transform anchor)
+        {
+            if (_summoned == null)
+            {
+                _summoned = CreateSummoned();
+                if (_summoned == null)
+                {
+                    return;
+                }
+            }
+
+            if (_summonedHand == hand && _summoned.gameObject.activeSelf)
+            {
+                return; // zaten aynı elde
+            }
+
+            // İlk kare için başlangıç pozu: klon DDOL kökünün altında park ediyor, poz yazılmasaydı
+            // silah bir kare dünyanın orijininde görünürdü (Weapon.ApplyCanonicalGrip LateUpdate'te
+            // devralır).
+            _summoned.transform.SetPositionAndRotation(
+                anchor.position + anchor.rotation * _selected.PrimaryGripPosition,
+                anchor.rotation * _selected.PrimaryGripRotation);
+
+            _summoned.gameObject.SetActive(true);
+            _summoned.GrantTo(hand, WeaponGrantKind.Persistent);
+            _summonedHand = hand;
+        }
+
+        /// <summary>
+        /// Seçili tanımın prefabından kalıcı klonu üretir.
+        /// <para>
+        /// ⚠️ Klon <b><see cref="transform"/>'un altına park eder</b> (yani DDOL kökü), el
+        /// anchor'ının ÇOCUĞU OLMAZ: pozunu <c>Weapon.ApplyCanonicalGrip</c> sürer. Anchor'ın altına
+        /// konsaydı silah sahne geçişinde rig'le birlikte yok olur ve "gizlenip geri gelen tek
+        /// örnek" kuralı çökerdi.
+        /// </para>
+        /// <para>
+        /// Klondaki <see cref="WeaponFrame"/>'in GameObject'i yok edilir — çerçeve sahnede kalan
+        /// KAYNAK silaha aittir, elde çerçeve olmaz.
+        /// </para>
+        /// </summary>
+        private Weapon CreateSummoned()
+        {
+            if (_selected == null || _selected.Prefab == null)
+            {
+                // Uyarı bir kez: bu metot grip basılı olduğu HER karede denenir, koşulsuz loglamak
+                // konsolu boğar ve asıl teşhis satırını görünmez yapardı.
+                if (!_summonPrefabWarned)
+                {
+                    _summonPrefabWarned = true;
+                    Debug.LogWarning($"[WeaponGranter] '{(_selected != null ? _selected.name : "(seçim yok)")}' " +
+                                     "tanımının prefabı yok; çerçeveden seçilen silah çağrılamıyor.");
+                }
+
+                return null;
+            }
+
+            GameObject instance = Instantiate(_selected.Prefab, transform, false);
+            instance.name = _selected.Prefab.name;
+
+            var weapon = instance.GetComponent<Weapon>();
+            if (weapon == null)
+            {
+                Debug.LogWarning($"[WeaponGranter] '{_selected.name}' prefabında Weapon bileşeni yok; " +
+                                 "çerçeve silahı çağrılamadı.");
+                Destroy(instance);
+                return null;
+            }
+
+            var frame = instance.GetComponentInChildren<WeaponFrame>(true);
+            if (frame != null)
+            {
+                frame.DetachForClone();
+                Destroy(frame.gameObject);
+            }
+
+            PrepareSummonedClone(instance);
+            return weapon;
+        }
+
+        /// <summary>
+        /// Klonu ele hazırlar: fizik kapatılır ama <b>kavrama AÇIK bırakılır</b>.
+        /// <para>
+        /// Fark <see cref="DetachFromPhysicsAndGrab"/>'e göre bilinçlidir: çerçeve silahında ikinci
+        /// el ön kabzayı ISDK ile tutar, dolayısıyla Grabbable/GrabInteractable ve collider'lar
+        /// çalışır kalmalı (collider olmadan kavrama hiç algılanmaz).
+        /// </para>
+        /// <para>
+        /// ⚠️ Bunlar burada <b>açıkça yeniden AÇILIR</b>, çünkü klon prefabtan doğarken içindeki
+        /// <see cref="WeaponFrame"/>'in <c>Awake</c>'i çoktan koşmuş ve kavrama yollarını kapatmış
+        /// olur (o bileşeni ancak doğduktan sonra yok edebiliyoruz — kaynak silahtaki doğru davranış
+        /// klonda yanlış davranıştır).
+        /// </para>
+        /// </summary>
+        private static void PrepareSummonedClone(GameObject instance)
+        {
+            var behaviours = instance.GetComponentsInChildren<MonoBehaviour>(true);
+            for (int i = 0; i < behaviours.Length; i++)
+            {
+                MonoBehaviour behaviour = behaviours[i];
+                if (behaviour is Grabbable || behaviour is GrabInteractable || behaviour is ItemGripSockets)
+                {
+                    behaviour.enabled = true;
+                }
+                else if (behaviour is DistanceGrabInteractable)
+                {
+                    // Mesafeden kavrama soket tasarımının zıddıdır (Docs/Sistem-Ozeti.md §7);
+                    // elde duran silahta hiç açılmaz.
+                    behaviour.enabled = false;
+                }
+            }
+
+            var bodies = instance.GetComponentsInChildren<Rigidbody>(true);
+            for (int i = 0; i < bodies.Length; i++)
+            {
+                // Yer çekimi kapalı ve kinematik: silahın pozunu kanonik kavrama sürüyor, fizik
+                // onunla yarışırsa silah elden düşer.
+                bodies[i].isKinematic = true;
+                bodies[i].useGravity = false;
+            }
+        }
+
+        /// <summary>Klonu elden alır: YOK ETMEZ, yalnız gizler — mermisi ve durumu korunsun.</summary>
+        private void StowSummoned()
+        {
+            if (_summoned != null)
+            {
+                _summoned.Revoke();
+                _summoned.gameObject.SetActive(false);
+            }
+
+            _summonedHand = OVRInput.Controller.None;
+        }
+
+        /// <summary>Klonu tümden yok eder (silah değişti / harita değişti / kural değişti).</summary>
+        private void DestroySummoned()
+        {
+            if (_summoned != null)
+            {
+                Destroy(_summoned.gameObject);
+                _summoned = null;
+            }
+
+            _summonedHand = OVRInput.Controller.None;
+        }
+
+        private void TrySubscribeAlive()
+        {
+            if (_aliveSubscribed || PlayerCombatState.Instance == null)
+            {
+                return;
+            }
+
+            PlayerCombatState.Instance.AliveChanged += HandleAliveChanged;
+            _aliveSubscribed = true;
+        }
+
+        /// <summary>
+        /// Canlanan oyuncu TAM şarjörle döner.
+        /// <para>
+        /// ⚠️ Bunu <c>Weapon.HandleAliveChanged</c> YAPAMAZ: o <c>IsHeld</c> şartına bakıyor, oysa
+        /// canlanma anında klon gizlidir (ölünce elden alındı) — yani silah hiç dolmaz ve oyuncu
+        /// bir önceki hayatından kalan yarım şarjörle savaşa dönerdi.
+        /// </para>
+        /// </summary>
+        private void HandleAliveChanged(bool alive)
+        {
+            if (alive && _summoned != null)
+            {
+                _summoned.RefillFull();
+            }
+        }
+
+        // ------------------------------------------------------------ el çözümü (ISDK)
+
+        /// <summary>
+        /// Pointer olayını üreten interactor'dan elin OVR kontrolcüsünü çözer.
+        /// <c>evt.Data</c> varsayılan olarak interactor'ın kendisidir (<c>Interactor._data</c>);
+        /// BB kontrolcü rig'i interactor↔IController eşlemesini
+        /// <see cref="InteractorControllerDecorator"/> ile kurar. Çözülemezse
+        /// <see cref="OVRInput.Controller.None"/> döner (editör fallback işareti).
+        /// <para>
+        /// ⚠️ <b>El çözümünün TEK yeri burasıdır</b> ve kopyalanmaz: üç tüketicisi var
+        /// (<see cref="Weapon"/>, <see cref="ItemGripSockets"/>, <see cref="WeaponFrame"/>) ve
+        /// kopyalandığı sürece biri düzeltilip diğerleri unutuluyordu. Burada durmasının sebebi de
+        /// rig keşfiyle aynı: el ve anchor aynı kapıdan çözülsün.
+        /// </para>
+        /// </summary>
+        public static OVRInput.Controller ResolveController(in PointerEvent evt)
+        {
+            if (evt.Data is IInteractorView view &&
+                InteractorControllerDecorator.TryGetControllerForInteractor(view, out IController controller))
+            {
+                return ToOvrController(controller.Handedness);
+            }
+
+            // Yedek: decorator kurulu değilse interactor hiyerarşisindeki ControllerRef'e bak.
+            Component dataComponent = evt.Data as Component;
+            if (dataComponent != null)
+            {
+                ControllerRef controllerRef = dataComponent.GetComponentInParent<ControllerRef>();
+                if (controllerRef != null)
+                {
+                    return ToOvrController(controllerRef.Handedness);
+                }
+            }
+
+            return OVRInput.Controller.None;
+        }
+
+        /// <summary>
+        /// Interactor'ın GameObject'inden eli çözer — <see cref="ResolveController(in PointerEvent)"/>
+        /// ile AYNI yol (decorator, yoksa hiyerarşideki <see cref="ControllerRef"/>). ISDK filtreleri
+        /// (<c>IGameObjectFilter.Filter</c>) olay değil GameObject aldığı için ikinci imza var.
+        /// </summary>
+        public static OVRInput.Controller ResolveControllerFromGameObject(GameObject interactorGameObject)
+        {
+            if (interactorGameObject == null)
+            {
+                return OVRInput.Controller.None;
+            }
+
+            var view = interactorGameObject.GetComponent<IInteractorView>();
+            if (view != null &&
+                InteractorControllerDecorator.TryGetControllerForInteractor(view, out IController controller))
+            {
+                return ToOvrController(controller.Handedness);
+            }
+
+            ControllerRef controllerRef = interactorGameObject.GetComponentInParent<ControllerRef>();
+            if (controllerRef != null)
+            {
+                return ToOvrController(controllerRef.Handedness);
+            }
+
+            return OVRInput.Controller.None;
+        }
+
+        private static OVRInput.Controller ToOvrController(Handedness handedness)
+        {
+            return handedness == Handedness.Left ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
         }
 
         // ---------------------------------------------------------------- yardımcı

@@ -215,7 +215,8 @@ bilgisini bir kez öğrenmesi gerekir. **Kalibrasyon yapılmazsa oyuncular birbi
 yerde görür.**
 
 Kalibrasyon **lobide, maç başlamadan önce** yapılır. Lobi de gerçek bir oda: oyuncular orada
-birbirini görür, silah rafından silah alıp hedef tahtalarına ateş edebilir (birbirlerine hasar
+birbirini görür, duran silahlardan birini kumandayla nişan alıp seçerek hedef tahtalarına ateş
+edebilir (birbirlerine hasar
 veremezler) ve zemindeki A/B işaretleri oradadır. Bir kez kalibre olan oyuncu maça hazır girer —
 harita değişimi kalibrasyonu bozmaz. (Maç sırasında da aynı adımlarla yeniden kalibre edilebilir.)
 

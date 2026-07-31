@@ -656,7 +656,7 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
 | `scoring` | `"team"` \| `"player"` | `"team"` | Skor kime yazılır: `match_state.scoreRed/scoreBlue` mi, `lobby_state → PlayerInfo.score` mü (§10.2) |
 | `friendlyFire` | `true` \| `false` | `false` | `false` = takım arkadaşı vurulamaz (§10.3/4). Boş takım asla takım arkadaşı sayılmaz |
 | `reviveAnchor` | `"base"` \| `"standstill"` | `"base"` | Canlanma şartı (§10.4/2) |
-| `weaponSource` | `"rack"` \| `"random"` | `"rack"` | Silah nereden gelir: sahnedeki raf mı, mod mu dağıtır. **Tümüyle istemci sunumu** — sunucuda karşılığı yok (§10.3: silah tablosu yoktur) |
+| `weaponSource` | `"rack"` \| `"random"` | `"rack"` | Silah nereden gelir: `"rack"` = sahnedeki **çerçeveler** (silah çerçeveden ayrılmaz; seçilen silah grip'e basılınca oyuncunun eline **klonlanır**), `"random"` = modun dağıtımı. **Tümüyle istemci sunumu** — sunucuda karşılığı yok (§10.3: silah tablosu yoktur) |
 | `respawnDelay` | saniye | `RESPAWN_DELAY` (5) | `respawn.delaySeconds` ve sunucudaki `revive_request` gecikme eşiği. **`0` geçerli bir değerdir** (anında canlanma) ve varsayılana çekilmez — alan hiç gönderilmezse DTO'nun kendi başlangıcı geçerli olduğu için "yazılmadı" ile "sıfır yazıldı" karışmaz |
 | `fireWhilePaused` | `true` \| `false` | `false` | Faz `playing` değilken silah ateşlenebilir mi. `true` = lobi gibi serbest atış alanı: namlu alevi/ses relay edilir (§10.3) ama **hasar yine yoktur** (`hit_report` kapısı `playing`). Bu alan sayesinde istemcide `if (modeId == "lobby")` zinciri doğmaz |
 
@@ -683,11 +683,17 @@ olmalı, tanınmayan `modeId` reddedilir):
 
 > `ffa` satırı kuralların somut örneğidir: **takım yok** (`team:""` gelir, `winnerPlayerId`
 > dolar), ölünce 5 sn'lik gecikme yerine **sabit durma** şartı işler (`REVIVE_HOLD_SECONDS` = 3 sn,
-> `REVIVE_HOLD_RADIUS` = 1 m) ve silah sahnedeki raftan değil **istemcinin dağıtımından** gelir.
+> `REVIVE_HOLD_RADIUS` = 1 m) ve silah sahnedeki çerçevelerden değil **istemcinin dağıtımından** gelir.
 > `friendlyFire:false` FFA'yı kilitlemez — boş takım asla takım arkadaşı sayılmadığı için
 > (§10.3/4) kapı hiç kapanmaz; `false` bırakılması "bu modda dost kavramı yok" demektir.
 > **`weaponSource` sunucuyu hiç ilgilendirmez** (§10.3: silah tablosu yok) — telde yalnız
 > istemciye "silahı nasıl vereceksin" diye taşınır.
+
+> ⚠️ **`"rack"`ın SUNUMU değişti, TELİ değişmedi.** Sahnedeki silah artık alınmıyor, çerçevesinde
+> kalıp ele klonlanıyor; ama değer yine `"rack"`, yeni bir alan/değer yok ve `PROTOCOL_VERSION`
+> artmadı. Sunum tarafındaki bir değişiklik bu alanı **hiç ilgilendirmiyorsa** protokole
+> dokunulmaz: sunucu zaten "silahı nasıl vereceksin" sorusunun cevabını taşıyor, "nasıl
+> tutuluyor"unu değil.
 
 - **3+ takım bugün YOK.** Geldiğinde yol açık: `PlayerInfo.team` zaten serbest string
   (`"green"`/`"yellow"` bugün de geçer) ve `match_state`'e `teamScores:[{team,score}]` eklenir;
@@ -754,8 +760,8 @@ sıfırlama yapıyor. Grup/oturum kimliği taşıyan alanlar **o iş gelene kada
 
 Lobi bir **türdür** (`modeId:"lobby"`), bir faz değildir ve bir maç değildir. Boş bir bekleme
 durumu da değildir: işletmenin kendi lobi sahnesi vardır, oyuncular orada birbirini görür,
-**kalibrasyonunu orada yapar**, silah rafından silah alıp hedeflere ateş eder — birbirlerine hasar
-veremeden.
+**kalibrasyonunu orada yapar**, silah çerçevesinden silah seçip hedeflere ateş eder — birbirlerine
+hasar veremeden.
 
 | Soru | Cevap |
 |---|---|
@@ -763,7 +769,7 @@ veremeden.
 | Faz ne olur? | `paused` + `phaseReason:"lobby"` (§10.1). Lobi diye bir faz YOKTUR |
 | Oyuncuya hasar? | **İmkânsız** — `hit_report` yalnız `playing` fazında işlenir (§10.3) |
 | Atış görünür mü? | Evet — `rules.fireWhilePaused:true` olduğu için atış olayı relay edilir (§6.5/§10.3) |
-| Silah nereden gelir? | Sahnedeki raf. Loadout'u istemci `modeId:"lobby"` ile kendi katalogundan çözer |
+| Silah nereden gelir? | Sahnedeki çerçeveler (silah çerçevede kalır, ele klonlanır). Loadout'u istemci `modeId:"lobby"` ile kendi katalogundan çözer |
 | Canlanma / skor / süre? | Yok. Herkes canlı (`hp=PLAYER_MAX_HP`), sayaçlar 0 (§5.3) |
 | Takım? | Vardır ve **yalnız admin atar** (`set_team`, §5.2) — her fazda, sunucuya bağlı herkes için. Oyuncu kendi takımını seçemez; bunun için protokol mesajı YOKTUR ve eklenmeyecektir |
 | Maç başlatılabilir mi? | **Hayır.** `lobby` kayıtlı bir `IGameMode` olmadığı için `start_match` reddedilir (§10.1) |
