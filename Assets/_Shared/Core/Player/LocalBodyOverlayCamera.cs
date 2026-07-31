@@ -8,7 +8,7 @@ namespace VortexArena.Core.Player
     /// katmanına alır ve ana kameradan hariç tutar; onun yerine daha büyük near-clip'li
     /// bir overlay kamera (URP camera stack) çizer. Amaç: aşağı bakınca ana kameranın
     /// near-clip'i (tipik 0.1 m) göğüs/omuz geometrisine girip içini göstermesin — bkz.
-    /// <see cref="LocalAvatarHeadHider"/> (aynı sorunun kafa için çözümü, farklı yöntemle).
+    /// <see cref="LocalAvatarBoneHider"/> (aynı sorunun kafa/boyun için çözümü, farklı yöntemle).
     /// <para>
     /// Projede "LocalBody" adlı bir Layer bulunmalı (ProjectSettings &gt; Tags and Layers).
     /// Yalnız yerel oyuncunun kendi görüşünü etkiler — uzak oyuncular bu avatarı hiç

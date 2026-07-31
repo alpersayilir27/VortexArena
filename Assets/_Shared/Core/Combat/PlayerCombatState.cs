@@ -80,6 +80,21 @@ namespace VortexArena.Core.Combat
         /// <summary>Ölüm/canlanma durum metni; canlıyken boş.</summary>
         public string StatusText { get; private set; } = "";
 
+        /// <summary>
+        /// Sahnede oyuncuya AÇIK (kendi takımı ya da <c>Neutral</c>) en az bir taban bölgesi var mı.
+        /// <para>Yalnız takip açıkken anlamlıdır — bkz. <see cref="RequestBaseTracking"/>.</para>
+        /// </summary>
+        public bool HasOpenBaseZone { get; private set; }
+
+        /// <summary>Oyuncu şu an kendine açık bir taban bölgesinin İÇİNDE mi.
+        /// <para>
+        /// ⚠️ <b>Bu bilgi canlanmadan bağımsızdır.</b> İki tüketicisi var ve şartları aynı değil:
+        /// canlanma (yalnız <see cref="ModeReviveAnchor.OwnBase"/> kipinde, yalnız ölüyken) ve tur
+        /// tabanlı modun toplanma kapısı (canlı/ölü fark etmez, kip <see cref="ModeReviveAnchor.None"/>
+        /// olsa bile). Bölge eşleşme kuralı (§10.4) bu sınıfta TEK yerde durur ve kopyalanmaz.
+        /// </para></summary>
+        public bool IsInsideOwnBase { get; private set; }
+
         public event Action<float> HpChanged;
         public event Action<bool> AliveChanged;
         public event Action<string> StatusChanged;
@@ -141,9 +156,13 @@ namespace VortexArena.Core.Combat
         private BaseZone[] _zones = Array.Empty<BaseZone>();
         private float _nextZoneScanAt;
 
-        // Taban bölgesi durumu (kare başına RefreshZoneState tazeler).
-        private bool _hasOpenZone;
-        private bool _insideOpenZone;
+        /// <summary>Taban takibinin geçerlilik süresi (<see cref="RequestBaseTracking"/>).
+        /// Süreli olması bilinçli: talep eden bileşen (tur toplanma raporlayıcısı) yok olduğunda
+        /// takip kendiliğinden kapanır, kimsenin "kapat" demeyi unutması mümkün olmaz.</summary>
+        private float _baseTrackingUntil;
+
+        /// <summary>Modun yazdığı durum yönergesi (<see cref="SetModePrompt"/>); boş = yok.</summary>
+        private string _modePrompt = "";
 
         // StandStill canlanma çapası (§10.4/2). _hasHoldAnchor aynı zamanda "kafa izlenebiliyor mu"
         // demektir: kamera yoksa çapa kurulamaz ve sabit durma şartı hiç aranmaz.
@@ -297,12 +316,20 @@ namespace VortexArena.Core.Combat
         /// <c>REVIVE_GRACE</c>'idir.</summary>
         private bool IsReviveConditionMet()
         {
+            // §10.5 reviveAnchor:"none" — tur tabanlı elemede canlanma YOKTUR. Sunucu zaten
+            // reddediyor; burada kapatmak saniyede bir boşuna revive_request yollamayı ve ölüm
+            // ekranında hiç gerçekleşmeyecek bir "canlanılıyor" metni göstermeyi engeller.
+            if (ModeRuntime.Revive == ModeReviveAnchor.None)
+            {
+                return false;
+            }
+
             if (ModeRuntime.Revive == ModeReviveAnchor.StandStill)
             {
                 return !_hasHoldAnchor || HoldRemaining <= 0f;
             }
 
-            return !_hasOpenZone || _insideOpenZone;
+            return !HasOpenBaseZone || IsInsideOwnBase;
         }
 
         /// <summary>Sabit durma sayacında kalan saniye (0 = şart sağlandı).</summary>
@@ -334,23 +361,38 @@ namespace VortexArena.Core.Combat
             {
                 text = "Kalibrasyon gerekli — sağ kumandada A basılıyken B×2";
             }
+            else if (!string.IsNullOrEmpty(_modePrompt))
+            {
+                // Modun kendi yönergesi (ör. turlar arası toplanma). Ölüm metnini EZER: mod
+                // duraklamasında canlanma diye bir şey yok, oyuncunun yapması gereken tek iş bu.
+                text = _modePrompt;
+            }
             else if (!IsAlive)
             {
-                float remaining = _reviveAt - Time.time;
-                if (remaining > 0f)
+                // §10.5 reviveAnchor:"none" — canlanma yok. Gecikme sayacı göstermek yalan olurdu;
+                // oyuncu turun bitmesini bekliyor, bir süreyi değil.
+                if (ModeRuntime.Revive == ModeReviveAnchor.None)
                 {
-                    text = $"Öldün — canlanmaya {Mathf.CeilToInt(remaining)} sn";
-                }
-                else if (ModeRuntime.Revive == ModeReviveAnchor.StandStill)
-                {
-                    float hold = HoldRemaining;
-                    text = hold > 0f
-                        ? $"Canlanmak için sabit dur — {Mathf.CeilToInt(hold)} sn"
-                        : "Canlanılıyor...";
+                    text = "Elendin — takımın turu bitirene kadar bekle";
                 }
                 else
                 {
-                    text = !_hasOpenZone || _insideOpenZone ? "Canlanılıyor..." : "Tabanına dön ve canlan";
+                    float remaining = _reviveAt - Time.time;
+                    if (remaining > 0f)
+                    {
+                        text = $"Öldün — canlanmaya {Mathf.CeilToInt(remaining)} sn";
+                    }
+                    else if (ModeRuntime.Revive == ModeReviveAnchor.StandStill)
+                    {
+                        float hold = HoldRemaining;
+                        text = hold > 0f
+                            ? $"Canlanmak için sabit dur — {Mathf.CeilToInt(hold)} sn"
+                            : "Canlanılıyor...";
+                    }
+                    else
+                    {
+                        text = !HasOpenBaseZone || IsInsideOwnBase ? "Canlanılıyor..." : "Tabanına dön ve canlan";
+                    }
                 }
             }
 
@@ -376,28 +418,74 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Taban bölgesi durumunu kare başına bir kez tazeler (yalnız ölüyken ve
-        /// <see cref="ModeReviveAnchor.OwnBase"/> kipinde — başka hâllerde bayraklar temizlenir).
-        /// Açık bölge bulunamazsa sahne saniyede bir yeniden taranır: bölge sonradan eklenmiş
-        /// ya da takımımız <c>load_match</c> ile yeni gelmiş olabilir.
+        /// Taban bölgesi durumunu kare başına bir kez tazeler — <b>ölüyken</b> (canlanma şartı) ya
+        /// da biri açıkça istediğinde (<see cref="RequestBaseTracking"/>, tur toplanması); başka
+        /// hâllerde bayraklar temizlenir. Açık bölge bulunamazsa sahne saniyede bir yeniden
+        /// taranır: bölge sonradan eklenmiş ya da takımımız <c>load_match</c> ile yeni gelmiş olabilir.
         /// </summary>
         private void RefreshZoneState()
         {
-            if (IsAlive || ModeRuntime.Revive != ModeReviveAnchor.OwnBase)
+            // ⚠️ Takip ARTIK canlanma şartına bağlı DEĞİL. Eskiden "canlıysan ya da kip OwnBase
+            // değilse hesaplama" deniyordu; tur tabanlı modun toplanma kapısı ikisini de ihlal
+            // ediyor (canlı oyuncunun da tabanda olup olmadığı bilinmeli, üstelik kip "none").
+            // Kapı yerine bir TALEP var: kimse istemiyorsa (lobi, FFA, canlı oyuncu) hesap yok.
+            if (IsAlive && Time.time >= _baseTrackingUntil)
             {
-                _hasOpenZone = false;
-                _insideOpenZone = false;
+                HasOpenBaseZone = false;
+                IsInsideOwnBase = false;
                 return;
             }
 
+            EvaluateZonesNow();
+        }
+
+        /// <summary>Bölgeleri değerlendirir; açık bölge bulunamadıysa (ve tarama aralığı dolduysa)
+        /// sahneyi bir kez yeniden tarayıp tekrar dener.</summary>
+        private void EvaluateZonesNow()
+        {
             EvaluateZones();
-            if (_hasOpenZone || Time.time < _nextZoneScanAt)
+            if (HasOpenBaseZone || Time.time < _nextZoneScanAt)
             {
                 return;
             }
 
             ScanZones();
             EvaluateZones();
+        }
+
+        /// <summary>
+        /// Taban bölgesi takibini bir sonraki yarım saniye için açar; her karede çağrılması
+        /// beklenir (kalp atışı deseni). Tur tabanlı modun toplanma raporlayıcısı bunu kullanır —
+        /// oyuncu CANLI iken de "tabanımda mıyım" sorusunun cevabı gerekiyor.
+        /// <para><b>Neden açık talep:</b> hesap sahnedeki tüm <see cref="BaseZone"/>'ları gezer ve
+        /// bulunamadığında saniyede bir sahneyi yeniden tarar. Lobide ve taban bölgesi olmayan
+        /// modlarda bunu koşulsuz yapmak kimsenin okumadığı bir iş olurdu.</para>
+        /// </summary>
+        public void RequestBaseTracking()
+        {
+            _baseTrackingUntil = Time.time + 0.5f;
+
+            // ⚠️ Değerlendirme HEMEN yapılır, bir sonraki Update'e bırakılmaz. Bırakılsaydı
+            // takibin açıldığı ilk karede bayraklar bir önceki (temizlenmiş) durumu gösterirdi:
+            // HasOpenBaseZone=false → çağıran onu "sahnede taban yok" diye okur ve tabandan
+            // metrelerce uzaktaki oyuncuyu hazır sayardı. Bileşen çalışma sırası bunu
+            // öngörülemez kılıyordu.
+            EvaluateZonesNow();
+        }
+
+        /// <summary>
+        /// Modun kendi durum yönergesini yazar (ör. turlar arası "tabanına dön"); boş string
+        /// temizler. Ölüm/canlanma metnini EZER, kalibrasyon uyarısını ezmez.
+        /// <para>
+        /// ⚠️ <b>Mod adına özel metin bu sınıfa YAZILMAZ</b> — istemcide <c>if (modeId == …)</c>
+        /// zinciri doğmasın diye (§10.5). Bu sınıf yalnız <b>kuralın</b> (<c>reviveAnchor</c>)
+        /// söylediğini yazar; modun kendi ara durumunun (<c>modeState</c>) ne anlama geldiğini
+        /// yalnız mod bilir ve buradan yazar.
+        /// </para>
+        /// </summary>
+        public void SetModePrompt(string prompt)
+        {
+            _modePrompt = prompt ?? "";
         }
 
         /// <summary>
@@ -413,8 +501,8 @@ namespace VortexArena.Core.Combat
         /// </summary>
         private void EvaluateZones()
         {
-            _hasOpenZone = false;
-            _insideOpenZone = false;
+            HasOpenBaseZone = false;
+            IsInsideOwnBase = false;
 
             for (int i = 0; i < _zones.Length; i++)
             {
@@ -429,10 +517,10 @@ namespace VortexArena.Core.Combat
                     continue;
                 }
 
-                _hasOpenZone = true;
+                HasOpenBaseZone = true;
                 if (zone.IsPlayerInside)
                 {
-                    _insideOpenZone = true;
+                    IsInsideOwnBase = true;
                     return;
                 }
             }
@@ -613,6 +701,9 @@ namespace VortexArena.Core.Combat
             _awaitingRevive = false;
             _nextReviveSendAt = 0f;
             _hasHoldAnchor = false;
+            // Maç/sahne değişti: modun yönergesi artık geçersiz. Yazan bileşen (HUD prefabıyla
+            // gelen mod raporlayıcısı) yok olmuş olabilir, temizliği ona bırakmayız.
+            _modePrompt = "";
             SetHp(ArenaProtocol.PLAYER_MAX_HP);
             SetAlive(true);
             RefreshStatusText();

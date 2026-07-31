@@ -15,6 +15,15 @@ namespace VortexArena.Core
 
         /// <summary>Oyuncu <c>REVIVE_HOLD_RADIUS</c> içinde <c>REVIVE_HOLD_SECONDS</c> boyunca
         /// kesintisiz sabit durur (takım tabanı olmayan modlar).</summary>
-        StandStill
+        StandStill,
+
+        /// <summary>
+        /// Canlanma YOKTUR (tur tabanlı eleme — <c>tournament</c>). İstemci <c>revive_request</c>
+        /// hiç göndermez, sunucu gelirse reddeder ve <c>REVIVE_GRACE</c> zorla canlandırması bu
+        /// kipte çalışmaz. Ölü oyuncuyu yalnız modun başlattığı yeni tur canlandırır.
+        /// <para>⚠ Enum'un SONUNA eklendi (serialize edilen enum kuralı) — araya eklemek tüm
+        /// <see cref="ModeDefinition"/> asset'lerindeki değerleri kaydırırdı.</para>
+        /// </summary>
+        None
     }
 }

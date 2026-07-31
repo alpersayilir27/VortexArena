@@ -274,11 +274,23 @@ public sealed class PlayerRegistry : IDisposable
         return changed;
     }
 
+    /// <summary>Hazır bayrağını yazar. <b>Değişmediyse yayın yapmaz</b> (<see cref="SetIdentity"/>
+    /// deseni): her <c>Changed</c> bir TAM <c>lobby_state</c> yayını demek, yani oyuncu sayısıyla
+    /// çarpan bir fan-out. Bayrağın iki kullanıcısı da aynı değeri tekrar tekrar gönderebiliyor —
+    /// yükleme kapısında istemcinin <c>set_ready</c>'si, tur toplanmasında oyuncunun taban
+    /// bildirimi (§10.1).</summary>
     public void SetReady(string deviceId, bool ready)
     {
         if (!_players.TryGetValue(deviceId, out var state)) return;
-        lock (_gate) state.Ready = ready;
-        Changed?.Invoke(state, PlayerChangeKind.Updated);
+
+        bool changed;
+        lock (_gate)
+        {
+            changed = state.Ready != ready;
+            state.Ready = ready;
+        }
+
+        if (changed) Changed?.Invoke(state, PlayerChangeKind.Updated);
     }
 
     public bool SetTeam(int playerId, string team)

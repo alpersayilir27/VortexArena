@@ -120,6 +120,13 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _scoreLimitPrev;
         [SerializeField] private Button _scoreLimitNext;
 
+        // Geri sayım uzunluğu (§5.2 countdownSeconds). Tur tabanlı modlarda (tournament) turlar
+        // ARASINDAKİ geri sayım da budur — oyuncular tabanlarında toplandıktan sonra bu kadar
+        // beklenir. Diğer modlarda maç başında bir kez işler.
+        [SerializeField] private TextMeshProUGUI _countdownValue;
+        [SerializeField] private Button _countdownPrev;
+        [SerializeField] private Button _countdownNext;
+
         [SerializeField] private Button _startButton;
 
         // ⚠️ Ayrı bir "LOBİYE DÖN" düğmesi YOKTUR ve geri eklenmez: lobi artık harita seçicisinin
@@ -196,6 +203,9 @@ namespace VortexArena.App.Admin
         private int _roundSeconds;
         private int _scoreLimit;
 
+        /// <summary>Geri sayım uzunluğu (sn); <c>0</c> = protokol varsayılanı (§5.2).</summary>
+        private int _countdownSeconds;
+
         private bool _dirty = true;
 
         /// <summary>Harita listesinin hangi mekan süzgeciyle kurulduğu
@@ -238,6 +248,8 @@ namespace VortexArena.App.Admin
             Wire(_durationNext, DurationNext);
             Wire(_scoreLimitPrev, ScoreLimitDown);
             Wire(_scoreLimitNext, ScoreLimitUp);
+            Wire(_countdownPrev, CountdownDown);
+            Wire(_countdownNext, CountdownUp);
 
             Wire(_startButton, StartMatch);
             Wire(_abortButton, AdminCommands.AbortMatch);
@@ -450,7 +462,8 @@ namespace VortexArena.App.Admin
                 return;
             }
 
-            AdminCommands.StartMatch(SelectedModeId, SelectedSceneName, _roundSeconds, _scoreLimit);
+            AdminCommands.StartMatch(SelectedModeId, SelectedSceneName, _roundSeconds, _scoreLimit,
+                _countdownSeconds);
         }
 
         private const string PauseLabel = "DURAKLAT";
@@ -549,6 +562,9 @@ namespace VortexArena.App.Admin
             ModeDefinition mode = SelectedMode;
             _roundSeconds = mode != null && mode.RoundSeconds > 0 ? mode.RoundSeconds : 0;
             _scoreLimit = mode != null ? Mathf.Clamp(mode.ScoreLimit, ScoreLimitMin, ScoreLimitMax) : 0;
+            // Geri sayımın ModeDefinition'da karşılığı YOKTUR ve eklenmez: mod şekli değil maç
+            // parametresidir (§5.2). 0 = protokol varsayılanı.
+            _countdownSeconds = 0;
         }
 
         private void DurationPrev() { StepDuration(-1); }
@@ -604,6 +620,23 @@ namespace VortexArena.App.Admin
             }
 
             _scoreLimit = Mathf.Clamp(_scoreLimit + direction * step, ScoreLimitMin, ScoreLimitMax);
+            PublishSelection(mapChanged: false);
+        }
+
+        private void CountdownDown() { StepCountdown(-1); }
+        private void CountdownUp() { StepCountdown(1); }
+
+        /// <summary>
+        /// Geri sayım adımlayıcısı: ±1 sn, <c>[COUNTDOWN_SECONDS_MIN, COUNTDOWN_SECONDS_MAX]</c>
+        /// aralığında. Aralık bir arayüz listesi değil, sunucunun da uyguladığı kısıttır (§5.2) —
+        /// panelin gösteremediği bir değeri sunucu zaten kırpardı.
+        /// <para>0 ("varsayılan") durumundan ilk dokunuşta alt sınıra çıkılır; geri dönüş yolu
+        /// mod değiştirmektir (skor limiti seçicisiyle aynı sözleşme).</para>
+        /// </summary>
+        private void StepCountdown(int direction)
+        {
+            _countdownSeconds = Mathf.Clamp(_countdownSeconds + direction,
+                ArenaProtocol.COUNTDOWN_SECONDS_MIN, ArenaProtocol.COUNTDOWN_SECONDS_MAX);
             PublishSelection(mapChanged: false);
         }
 
@@ -718,7 +751,7 @@ namespace VortexArena.App.Admin
             AdminCommands.SetSelection(
                 sendSelection ? SelectedModeId : "",
                 sendSelection ? SelectedSceneName : "",
-                _roundSeconds, _scoreLimit);
+                _roundSeconds, _scoreLimit, _countdownSeconds);
 
             if (mapChanged)
             {
@@ -797,6 +830,13 @@ namespace VortexArena.App.Admin
             if (AdminSelection.ScoreLimit > 0 && AdminSelection.ScoreLimit != _scoreLimit)
             {
                 _scoreLimit = Mathf.Clamp(AdminSelection.ScoreLimit, ScoreLimitMin, ScoreLimitMax);
+                changed = true;
+            }
+
+            if (AdminSelection.CountdownSeconds > 0 && AdminSelection.CountdownSeconds != _countdownSeconds)
+            {
+                _countdownSeconds = Mathf.Clamp(AdminSelection.CountdownSeconds,
+                    ArenaProtocol.COUNTDOWN_SECONDS_MIN, ArenaProtocol.COUNTDOWN_SECONDS_MAX);
                 changed = true;
             }
 
@@ -1175,6 +1215,15 @@ namespace VortexArena.App.Admin
                 ? AdminCommands.FormatDuration(_roundSeconds)
                 : "mod varsayılanı";
             _scoreLimitValue.text = _scoreLimit > 0 ? _scoreLimit.ToString() : "mod varsayılanı";
+
+            // Prefabı güncellenmemiş bir kurulumda alan boş olabilir; eksik bağ sessizce çizilmez
+            // (panelin geri kalanı çalışmaya devam eder).
+            if (_countdownValue != null)
+            {
+                _countdownValue.text = _countdownSeconds > 0
+                    ? $"{_countdownSeconds} sn"
+                    : $"varsayılan ({ArenaProtocol.COUNTDOWN_SECONDS} sn)";
+            }
 
             _statusText.text = AdminCommands.Status;
 

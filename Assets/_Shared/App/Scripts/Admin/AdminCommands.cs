@@ -26,7 +26,8 @@ namespace VortexArena.App.Admin
         /// özeldir; <c>0</c> gönderilirse sunucu modun varsayılanını kullanır (§5.2) — yani
         /// operatör bir şey seçmediyse davranış bugünküyle birebir aynıdır.
         /// </summary>
-        public static void StartMatch(string modeId, string sceneName, int roundSeconds = 0, int scoreLimit = 0)
+        public static void StartMatch(string modeId, string sceneName, int roundSeconds = 0,
+            int scoreLimit = 0, int countdownSeconds = 0)
         {
             if (string.IsNullOrEmpty(modeId) || string.IsNullOrEmpty(sceneName))
             {
@@ -39,14 +40,16 @@ namespace VortexArena.App.Admin
                 modeId = modeId,
                 sceneName = sceneName,
                 roundSeconds = Mathf.Max(0, roundSeconds),
-                scoreLimit = Mathf.Max(0, scoreLimit)
+                scoreLimit = Mathf.Max(0, scoreLimit),
+                countdownSeconds = Mathf.Max(0, countdownSeconds)
             };
 
             if (Send(msg))
             {
-                string parameters = msg.roundSeconds > 0 || msg.scoreLimit > 0
+                string parameters = msg.roundSeconds > 0 || msg.scoreLimit > 0 || msg.countdownSeconds > 0
                     ? $" ({(msg.roundSeconds > 0 ? FormatDuration(msg.roundSeconds) : "mod süresi")}" +
-                      $" · {(msg.scoreLimit > 0 ? "limit " + msg.scoreLimit : "mod limiti")})"
+                      $" · {(msg.scoreLimit > 0 ? "limit " + msg.scoreLimit : "mod limiti")}" +
+                      $"{(msg.countdownSeconds > 0 ? " · geri sayım " + msg.countdownSeconds + " sn" : "")})"
                     : "";
                 SetStatus($"Maç isteği gönderildi: {modeId} · {sceneName}{parameters}");
             }
@@ -80,10 +83,11 @@ namespace VortexArena.App.Admin
         /// <para>Süre/limit de bu kanaldan gider: parametreler yerel kalsaydı bir operatörün
         /// 5 dk sandığı maç diğerinin seçtiği 30 dk ile başlardı. <c>0</c> = "bu alanı değiştirme".</para>
         /// </summary>
-        public static void SetSelection(string modeId, string sceneName, int roundSeconds = 0, int scoreLimit = 0)
+        public static void SetSelection(string modeId, string sceneName, int roundSeconds = 0,
+            int scoreLimit = 0, int countdownSeconds = 0)
         {
             if (string.IsNullOrEmpty(modeId) && string.IsNullOrEmpty(sceneName) &&
-                roundSeconds <= 0 && scoreLimit <= 0)
+                roundSeconds <= 0 && scoreLimit <= 0 && countdownSeconds <= 0)
             {
                 return;
             }
@@ -93,7 +97,8 @@ namespace VortexArena.App.Admin
                 modeId = modeId ?? "",
                 sceneName = sceneName ?? "",
                 roundSeconds = Mathf.Max(0, roundSeconds),
-                scoreLimit = Mathf.Max(0, scoreLimit)
+                scoreLimit = Mathf.Max(0, scoreLimit),
+                countdownSeconds = Mathf.Max(0, countdownSeconds)
             });
         }
 

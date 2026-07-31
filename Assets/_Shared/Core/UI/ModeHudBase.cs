@@ -433,8 +433,13 @@ namespace VortexArena.Core.UI
         /// gerekçe (<c>phaseReason</c>) bunları ayırır. Modun kendi ara durumu
         /// (<c>modeState</c>, ör. turnuva toplanması) gerekçe <c>mode</c> iken devreye girer;
         /// tabanın onu yorumlaması beklenmez, alt sınıf <see cref="ModeStateLabel"/> ile yazar.
+        /// <para>
+        /// <c>virtual</c>: tur tabanlı bir mod koşan maça "MAÇ" yerine "TUR 3" yazmak isteyebilir.
+        /// Alt sınıf yalnız ilgilendiği dalı ezer, gerisini <c>base</c>'e bırakır — faz/gerekçe
+        /// sözlüğü tek yerde kalsın.
+        /// </para>
         /// </summary>
-        protected string PhaseLabel(string phase, string phaseReason, string modeState)
+        protected virtual string PhaseLabel(string phase, string phaseReason, string modeState)
         {
             if (phase == ArenaProtocol.PHASE_PLAYING) return "MAÇ";
             if (phase == ArenaProtocol.PHASE_FINISHED) return "MAÇ BİTTİ";
