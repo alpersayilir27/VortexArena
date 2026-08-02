@@ -59,25 +59,7 @@ henüz konmadı → **sahnede silah yok**. Aşağıdaki listenin silah gerektire
 
 ---
 
-## 3. Arsenal'de duran ayrı bir kusur (turnuvaya özgü DEĞİL, dört modu birden etkiler)
-
-`Assets/_Shared/Arsenal/` içinde M4A1'in tanım bağı kopuk:
-
-| Dosya | `definition` → | Olması gereken |
-|---|---|---|
-| `WPN_M4A1.prefab` | **hiçbir şey** (ölü GUID `d42e8432…`) | `WD_M4A1` (`1004acbf…`) |
-
-Aynı ölü GUID **dört modun da** `loadout`'unda, `WeaponCatalog`'da ve `NetItemCatalog`'da duruyor;
-`WD_M4A1.asset`'i ise hiçbir şey referanslamıyor. Sonucu: loadout'ta 6 değil **5** silah çıkar
-(FFA'da rastgele havuz beş silahlık) ve M4A1 gövdesi tanımsız kalır.
-
-⚠️ **Elle GUID yazarak düzeltilmez** — silah kimliği bu projede bilinçli olarak elle eşlendi
-(CLAUDE.md, "bir satırın `PackPrefab`'ı ve `NetItemId`'si o satırdan AYRILMAZ"). Doğru yol
-`Tools > VortexArena > Weapons > Build Weapon Prefabs`: `WD_*` asset'lerini üretir, `WPN_*` prefablarını
-yerinde tazeler ve iki kataloğu yeniden yazar. Sonrasında dört `ModeDefinition`'ın `loadout`'una
-`WD_M4A1` elden eklenir (araç loadout'a dokunmaz).
-
-## 4. Bilinçli olarak YAPILMAYANLAR (sorulursa cevap burada)
+## 3. Bilinçli olarak YAPILMAYANLAR (sorulursa cevap burada)
 
 - **Taraf değişimi (side swap) yok.** CS'te taraflar yarıda değişir; free-roam'da bu, oyuncuların
   fiziksel olarak karşı tabana yürümesi demek ve arena simetrik değilse anlamı da az. İstenirse
