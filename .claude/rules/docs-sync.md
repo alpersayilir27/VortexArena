@@ -27,14 +27,35 @@ güncellenir. Doküman ile kod arasında sapma = tuzak; bu projede tek doğruluk
   içeriğini satır satır yazmak gibi şeyler kaçınılmaz olarak bayatlar ve kimse fark etmez.
   Sayılabilir olanı sayma, **nerede olduğunu göster**. Aynı sebeple `§7.29` gibi **numara
   referansı verme** — araya madde eklenince sessizce yanlış yeri gösterir; bölümü adıyla an.
-- **Olay kaydı doküman değildir.** "Dört denemede de şu hatayı verdi", "şu tarihte yaşandı",
-  "şu kusur düzeltildi" gibi anlatılar tutulmaz; tutulacak olan **kuraldır**
-  ("bunu şu yüzden yapma"). Gerekçe bir cümleyi aşıyorsa yeri `Docs/Sistem-Ozeti.md` §7'dir,
-  CLAUDE.md değil.
-  ⚠️ **Bu `plan/` dosyaları DAHİL her yerde geçerlidir** — plan bir günlük değil, **yapılacak işin
-  listesidir**. Biten iş oraya "yapıldı" diye yazılmaz, listeden **silinir**; "ne zaman neyi
-  düzelttik" sorusunun cevabı zaten git geçmişindedir ve orada tek kopya kalır. Tarih atmak
-  ("2026-07-31") bunun en görünür biçimidir ve hiçbir doküman türünde yapılmaz.
+- ## ⚠️ Olay kaydı doküman değildir — İSTİSNASIZ, HER dosyada
+
+  Bu projede hiçbir doküman **ne olduğunu** anlatmaz; **ne olduğu doğru** onu anlatır. Yazılacak
+  olan daima **kuraldır** ("bunu şu yüzden yapma") ya da **şu anki durumdur** ("sistem böyle
+  çalışıyor"), yapılan işin hikâyesi değil.
+
+  **Kapsam:** `Docs/**` · `CLAUDE.md` · `Server/README.md` · `scripts/README.md` ·
+  `deploy/README.md` · `launcher/README.md` · `plan/**` · `.claude/rules/**` — **hepsi.**
+  "Bu sadece bir plan dosyası / sadece bir README" diye bir istisna YOKTUR.
+
+  **Yazılmayanlar:**
+  - Tarih (`2026-07-31`, "dün", "bu hafta") — hiçbir doküman türünde, hiçbir gerekçeyle.
+  - "Düzeltildi", "eklendi", "kaldırıldı", "yeniden yazıldı", "artık şöyle" gibi **yapılan işin
+    duyurusu**. Değişiklik zaten dosyanın kendisinde; duyurusu git geçmişindedir.
+  - "Şu hatayı verdi", "dört denemede de patladı", "önce şöyle denedik sonra böyle yaptık" gibi
+    **deneme günlüğü**.
+  - "Saha denemesinde çıktı", "kullanıcı bildirdi" gibi **kaynak/olay atfı**.
+  - Sürüm/aşama anlatısı ("v2'de eklendi", "ilk fazda yoktu").
+
+  **Somut test — yazacağın cümleyi 6 ay sonra okuyan biri için:** hâlâ *bir karar veriyor* mu
+  (kural/durum → KALIR), yoksa *ne yaşandığını öğreniyor* mu (olay → ÇIKAR)? Cümleyi geçmiş
+  zamandan bugüne çeviremiyorsan yeri doküman değildir.
+
+  **İzin verilen tek biçim:** bir kuralın **gerekçesi** olarak, geçmişe atıf yapmadan yazılmış
+  neden-sonuç ("koşulsuz yayınlasa her çağrı bir tam broadcast olurdu"). Gerekçe bir cümleyi
+  aşıyorsa yeri `Docs/Sistem-Ozeti.md` §7 "Tuzaklar"dır — CLAUDE.md değil.
+
+  **`plan/` için özel sonuç:** plan bir günlük değil, **yapılacak işin listesidir**. Biten iş
+  "yapıldı" diye işaretlenmez, satır **silinir**; dosyanın tamamı bitince dosya silinir.
 - Pahalıya öğrenilen bir tuzak çıktıysa `Docs/Sistem-Ozeti.md` §7 "Tuzaklar" listesine bir madde
   ekle; tekrarlanabilir bir çalışma kuralıysa `.claude/rules/` altına taşı.
 - Salt iç refactor (davranış aynı, dışa açık isim/yol değişmedi) doküman gerektirmez. Ama
