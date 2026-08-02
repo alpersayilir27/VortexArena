@@ -4,6 +4,17 @@ namespace VortexArena.Protocol
     public static class ArenaProtocol
     {
         /// <summary>
+        /// v6: <b>iskelet akışı</b> (<c>0x07</c> §6.9 / <c>0x08</c> §6.10) — gövde artık üç noktadan
+        /// TÜRETİLMİYOR, sahibinin cihazında Meta Movement SDK ile çözülüp retarget edilmiş iskelet
+        /// olarak akıyor. Blob <b>opak</b>tır: sunucu açmaz, doğrulamaz, kopyalar (<c>netItemId</c>
+        /// baytlarıyla aynı gerekçe, §6.6).
+        /// <para>⚠️ <c>0x01 PoseUpdate</c> <b>kaldırılmadı ve kaldırılmaz</b>: silah duruşu, eşya
+        /// baytları ve vuruş bildirimi ham el pozundan besleniyor (§6.2). İskelet onun yerine değil
+        /// YANINA gelir; iki kanalın kadansı da ayrıdır (20 Hz ↔ <see cref="SKELETON_RATE_HZ"/>).</para>
+        /// <para>⚠️ <b>v6'yı kırıcı yapan şey:</b> <c>0x07</c>/<c>0x08</c>'i tanımayan istemci uzak
+        /// oyuncuların GÖVDESİNİ hiç çizemez (eli/kafası yerinde durur) — eski istemcinin gönderdiği
+        /// iskeletsiz akış da yeni istemcide gövdesiz avatar üretir. Tel formatı eklemelidir ama
+        /// görüntü karışık sürümde iki yönde de bozuktur; APK turu tamamlanmalıdır.</para>
         /// v5: ağ telemetrisi (<c>0x06</c> RTT yoklaması §6.7, <c>status.rttMs/jitterMs/lossPct</c>,
         /// admin-only <c>net_stats</c>) ve <b>paket birleştirme</b> (<c>0x05</c> §6.8 — snapshot +
         /// olaylar tek datagramda; <c>0x02</c>/<c>0x04</c> geri düşüş yolu olarak korundu).
@@ -22,7 +33,7 @@ namespace VortexArena.Protocol
         /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
         /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
         /// </summary>
-        public const int PROTOCOL_VERSION = 5;
+        public const int PROTOCOL_VERSION = 6;
         public const string APP_ID = "VortexArena";
 
         /// <summary>Forma numarası aralığı (§2). <c>0</c> = atanmamış ve bu aralığın dışındadır;
@@ -48,6 +59,40 @@ namespace VortexArena.Protocol
         public const int POSE_RATE_HZ = 20;
         public const int SNAPSHOT_RATE_HZ = 20;
         public const int INTERP_DELAY_MS = 100;
+
+        /// <summary>
+        /// İskelet blob'unun gönderim frekansı (§6.9). <b>Poz kanalından AYRI ve daha düşüktür</b>:
+        /// blob poz paketinin birkaç katı büyüklüktedir ve bu ürünün darboğazı bant değil datagram
+        /// sayısıdır (<c>Docs/Sistem-Ozeti.md</c> §3.12).
+        /// <para>Düşük hızın görüntüyü bozmamasının sebebi, alıcıda <b>SDK'nın kendi
+        /// interpolasyonunun</b> koşmasıdır (<c>GetInterpolatedSkeleton</c> render zamanına göre
+        /// örnekler) — 12 Hz akış 72 Hz çizime yumuşak yayılır. Aynı sebeple bu sayı yükseltilerek
+        /// "daha akıcı gövde" alınmaz; yalnız paket sayısı artar.</para>
+        /// </summary>
+        public const int SKELETON_RATE_HZ = 12;
+
+        /// <summary>
+        /// Tek oyuncunun iskelet blob'u için kabul edilen en büyük boy (§6.9). Üst sınır bir bütçe
+        /// değil <b>emniyet</b>tir: <c>0x07</c> başlığıyla birlikte tek datagramda kalmalı
+        /// (34 + 1024 = 1058 B &lt; <see cref="COMBINED_MAX_BYTES"/>), çünkü bu kanalda parçalama
+        /// YOKTUR — blob bölünürse alıcı yarım bir kareyi deserialize etmeye çalışır.
+        /// <para>⚠️ Aşan blob <b>gönderilmez</b> (bir kez uyarı basılır): sığmayan paketi yollamak
+        /// IP parçalanmasına güvenmek olurdu ve tek parçanın kaybı tüm kareyi çöpe atardı. Blob bu
+        /// sınırı zorluyorsa çözüm sıkıştırmayı/eklem listesini daraltmaktır (parmak eklemleri
+        /// kumandayla oynanırken gerçek veri taşımaz).</para>
+        /// </summary>
+        public const int SKELETON_MAX_BLOB_BYTES = 1024;
+
+        /// <summary>
+        /// Tek <c>0x08</c> datagramına yazılan en fazla oyuncu girdisi (§6.10). ⚠️ Asıl kısıt
+        /// <b>bayt bütçesidir</b> (<see cref="COMBINED_MAX_BYTES"/>) — girdiler değişken uzunluklu
+        /// olduğu için sunucu her ikisine birden bakar; bu sayı yalnız <c>count</c> alanının
+        /// <c>u8</c> olmasının makul bir tavanıdır.
+        /// <para>Taşan girdi aynı tik içinde <b>ek datagrama</b> yazılır (snapshot parçalamasının
+        /// aynısı, §6.3): her datagram kendi <c>count</c>'unu, hepsi aynı <c>serverTick</c>'i taşır.
+        /// İstemcide birleştirme mantığı gerekmez — her girdi bağımsız uygulanır.</para>
+        /// </summary>
+        public const int SKELETON_MAX_ENTRIES_PER_PACKET = 16;
 
         /// <summary>
         /// <c>playerId</c> tahsis tavanı. <b>Ürün kotası DEĞİL, tel formatı tavanıdır</b> —

@@ -321,9 +321,8 @@ sıfırı** (`ArenaSpace.SetOrigin` buradan çağrılır).
 > ⛔ **Yerleştirdikten sonra oynatma.** Bir metre kaydırmak arenadaki **herkesin** koordinatını bir
 > metre kaydırır; hata ancak iki başlık aynı sahnede buluşunca görünür.
 
-> ⚠️ **Zemin seviyesinde durmalı:** uzak avatarların bastığı zemin
-> `ArenaSpace.ArenaToWorld(Vector3.zero).y`'den gelir (`ThreePointBodyIK`) — marker havadaysa
-> avatarların ayakları da havada kalır.
+> ⚠️ **Zemin seviyesinde durmalı:** uzak avatarların kökü `ArenaSpace.ArenaToWorld` ile
+> yerleştirilir — marker havadaysa herkes o yükseklik kadar havada durur.
 
 > ⚠️ Editör aracı yazıyorsan `SpawnPoint.All` yerine `FindObjectsByType<SpawnPoint>` kullan:
 > kayıt `OnEnable`'da dolar, edit kipinde `OnEnable` çalışmaz.

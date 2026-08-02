@@ -21,8 +21,7 @@ namespace VortexArena.Core.Player
     /// <para>
     /// <b>Kullanımı:</b> <c>VA_CameraRig</c> prefabında durur, iki kumanda da normal tutulurken bir
     /// kez log basıp kendini kapatır; çıkan iki satır <see cref="HandGripConvention"/> içindeki
-    /// tahmini sabitlerin yerine yapıştırılır. Ölçüm tutmazsa elle ayar yolu da açıktır
-    /// (<c>ThreePointBodyIK</c> → "Bilek eşlemesi (canlı ayar)").
+    /// tahmini sabitlerin yerine yapıştırılır.
     /// </para>
     /// </summary>
     public class HandGripCalibrationProbe : MonoBehaviour
@@ -67,9 +66,7 @@ namespace VortexArena.Core.Player
                         "'HandVisual' olan her şeyi kapatır) ve kapalı iskeletin kemikleri SÜRÜLMEZ. " +
                         "Ölçmek için VA_CameraRig'deki ControllerModelHider'ı GEÇİCİ olarak kapat, " +
                         "ölç, sonra geri aç. (Kapalı iskeleti ölçmek bind pozunu ölçmek olurdu; bu " +
-                        "yüzden burada sessizce devam edilmiyor.)\n" +
-                        "Alternatif: ThreePointBodyIK → 'Bilek eşlemesi (canlı ayar)' alanlarını " +
-                        "canlı avatarda çevir — ölçüm gerekmez.", this);
+                        "yüzden burada sessizce devam edilmiyor.)", this);
                     enabled = false;
                 }
 

@@ -1,25 +1,34 @@
+using Meta.XR.Movement.Networking;
 using UnityEngine;
+using VortexArena.Core.Arena;
+using VortexArena.Net;
 
 namespace VortexArena.Core.Player
 {
     /// <summary>
-    /// Yerel oyuncunun kendi gövdesini birinci şahıs çizen sürücü: aşağı bakınca kendi kollarını ve
-    /// gövdesini görür.
+    /// Yerel oyuncunun kendi gövdesi: aşağı bakınca kendi kollarını, bileklerini ve gövdesini görür.
     /// <para>
-    /// ⚠️ <b>Movement SDK / <c>CharacterRetargeter</c> KULLANILMAZ</b>: retarget çıktısı dünya
-    /// uzayında üretildiği için kalibre edilen rig'le çakışıyordu — belgeli bir başarısızlık
-    /// (<c>Docs/Sistem-Ozeti.md</c> §7). Onun yerine uzak avatarlarda ZATEN çalışan
-    /// <see cref="ThreePointBodyIK"/>, yerel rig anchor'larından beslenir.
+    /// <b>Uzak avatarlarla AYNI prefab, AYNI retarget config, AYNI kod yolu.</b> Tek fark
+    /// <see cref="ArenaNetCharacterBehaviour.HasInputAuthority"/>'dir: burada <c>true</c>, yani
+    /// gövde Meta Movement SDK'nın body tracking'inden çözülür ve sonucu ağa akar. Uzak tarafta
+    /// <c>false</c> olur ve aynı prefab gelen iskeleti uygular. Böylece "kendi gördüğüm gövde" ile
+    /// "başkalarının gördüğü gövde" tek doğruluk kaynağıdır.
     /// </para>
     /// <para>
     /// <b>Neden kendini önyükleyen kalıcı tekil</b> (<c>WeaponGranter</c> deseni): sahneye elle
-    /// konsaydı her yeni arena bir kurulum adımı doğururdu ve arena şablonu bir bileşen daha
-    /// taşımak zorunda kalırdı.
+    /// konsaydı her yeni arena bir kurulum adımı doğururdu.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Avatar SAHNE KÖKÜNDE durur, rig'in ALTINA KONMAZ.</b> SDK kök eklemi
+    /// <c>SetLocalPositionAndRotation</c> ile yazıyor; dolu bir ebeveyn dönüşümü ikinci kez
+    /// uygulanırdı (<c>Docs/Sistem-Ozeti.md</c> §7, "retarget avatarı hareket eden kökün altına
+    /// konmaz"). Yerel gövdede kök zaten izleme uzayından geliyor, yani kalibrasyonla rig hareket
+    /// edince gövde kendiliğinden onunla gelir.
     /// </para>
     /// <para>
     /// ⚠️ <b>Admin'de çizilmez ve bunun için rol kontrolü YAPILMAZ</b>: <c>AppSession</c>
     /// <c>VortexArena.App</c> asmdef'indedir, bağımlılık yönü App → Core, yani Core onu göremez.
-    /// Kapı şudur: etkin bir <see cref="OVRCameraRig"/> bulunamazsa hiçbir şey yapılmaz — admin
+    /// Kapı şudur: etkin bir <see cref="OVRCameraRig"/> bulunamazsa gövde kurulmaz — admin
     /// gözlemcide <c>AdminSpectator</c> rig'i kapattığı için bu kapı kendiliğinden doğru davranır
     /// (aynı gerekçe <c>WeaponGranter.ResolveRig</c>'de de geçerli).
     /// </para>
@@ -30,22 +39,46 @@ namespace VortexArena.Core.Player
     /// </summary>
     public class LocalBodyAvatar : MonoBehaviour
     {
-        /// <summary>Prefabın <c>Resources</c> altındaki adı (önyükleme bunu yükler).</summary>
+        /// <summary>Prefabın <c>Resources</c> altındaki adı (önyükleme bunu yükler).
+        /// ⚠️ Ad ve konum DEĞİŞMEZ — <c>Resources.Load</c> ile yükleniyor, taşınırsa oyuncu kendi
+        /// gövdesini sessizce hiç görmez.</summary>
         private const string PrefabResourceName = "LocalBodyAvatar";
 
-        /// <summary>Rig bulunamadığında iki arama arasındaki en kısa süre (sn).</summary>
+        /// <summary>Rig/oturum bulunamadığında iki arama arasındaki en kısa süre (sn).</summary>
         private const float RigSearchIntervalSeconds = 0.5f;
+
+        /// <summary>
+        /// Arena kalibrasyonu tamamlandıktan sonra gövde kalibrasyonuna kadar beklenen süre (sn).
+        /// <para>⚠️ Gecikme <b>zorunludur</b>: oyuncu arena kalibrasyonunu kumandanın ucunu zemin
+        /// işaretine değdirerek yapıyor, yani o anda EĞİLMİŞ durumda. <c>Calibrate()</c> gövde
+        /// oranlarını o andaki T-poza sabitliyor — eğilmiş bir oyuncudan alınan ölçü maçın kalanı
+        /// boyunca yanlış boy demektir.</para>
+        /// </summary>
+        private const float BodyCalibrationDelaySeconds = 3f;
 
         public static LocalBodyAvatar Instance { get; private set; }
 
-        [Tooltip("Gövdeyi çözen IK. Boşsa alt ağaçtan aranır.")]
-        [SerializeField] private ThreePointBodyIK bodyIK;
+        [Tooltip("Ağ köprüsü + SDK sürücüsü. Boşsa alt ağaçtan aranır.")]
+        [SerializeField] private ArenaNetCharacterBehaviour character;
+
+        [Tooltip("Gövde oranını sabitleyen SDK bileşeni. Boşsa alt ağaçtan aranır.")]
+        [SerializeField] private NetworkCharacterRetargeter retargeter;
+
+        [Tooltip("İlk poz/oturum gelene dek gizlenecek görsel kök. Boşsa karakterin kendisi kullanılır.")]
+        [SerializeField] private GameObject visualRoot;
 
         private OVRCameraRig _rig;
         private float _rigSearchTime = float.NegativeInfinity;
 
-        /// <summary>Gövde şu an çiziliyor mu — yalnız gerçekten SÜRÜLEBİLDİĞİ sürece çizilir.</summary>
         private bool _bodyVisible = true;
+        private bool _initialized;
+
+        /// <summary>Son görülen <see cref="ArenaCalibrator.CalibrationGeneration"/>; değişmesi
+        /// "arena yeniden hizalandı, gövde oranı yeniden ölçülmeli" demektir.</summary>
+        private int _calibrationGeneration = -1;
+
+        /// <summary>Gövde kalibrasyonuna kalan süre; <c>&lt; 0</c> = bekleyen kalibrasyon yok.</summary>
+        private float _calibrationCountdown = -1f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -64,10 +97,7 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            // ⚠️ Parent VERİLMEZ — avatar SAHNE KÖKÜNDE durur, rig'in ALTINA konmaz:
-            // ThreePointBodyIK.PlaceRoot kendi köküne DÜNYA transformu yazıyor, rig'in altındayken
-            // rig'in transformu ikinci kez uygulanır ve gövde oyuncudan kayardı (aynı tuzağın
-            // Movement SDK sürümü Docs/Sistem-Ozeti.md §7'de kayıtlı).
+            // ⚠️ Parent VERİLMEZ (gerekçe sınıf özetinde).
             GameObject instance = Instantiate(prefab);
             instance.name = prefab.name;
             DontDestroyOnLoad(instance);
@@ -83,16 +113,32 @@ namespace VortexArena.Core.Player
 
             Instance = this;
 
-            if (bodyIK == null)
+            if (character == null)
             {
-                bodyIK = GetComponentInChildren<ThreePointBodyIK>(true);
+                character = GetComponentInChildren<ArenaNetCharacterBehaviour>(true);
             }
 
-            if (bodyIK == null)
+            if (retargeter == null)
             {
-                Debug.LogWarning("[LocalBodyAvatar] ThreePointBodyIK bulunamadı; gövde çözülemeyecek.", this);
-                enabled = false;
+                retargeter = GetComponentInChildren<NetworkCharacterRetargeter>(true);
             }
+
+            if (visualRoot == null && character != null)
+            {
+                visualRoot = character.gameObject;
+            }
+
+            if (character == null || retargeter == null)
+            {
+                Debug.LogWarning("[LocalBodyAvatar] ArenaNetCharacterBehaviour / NetworkCharacterRetargeter " +
+                                 "bulunamadı; yerel gövde çizilmeyecek.", this);
+                enabled = false;
+                return;
+            }
+
+            // Kurulum tamamlanana dek gizli: kurulmamış bir retargeter T-pozunda durur ve oyuncunun
+            // yüzüne dikilmiş bir manken olurdu.
+            SetBodyVisible(false);
         }
 
         private void OnDestroy()
@@ -103,45 +149,93 @@ namespace VortexArena.Core.Player
             }
         }
 
-        private void LateUpdate()
+        private void Update()
         {
-            if (bodyIK == null)
+            if (!_initialized)
             {
+                TryInitialize();
                 return;
             }
 
+            // Rig kaybolduysa (sahne değişimi, gözlemcinin kapattığı rig) gövde gizlenir: sürülmeyen
+            // bir gövdeyi görünür bırakmak, dünya orijininde donmuş bir manken demektir.
             OVRCameraRig rig = ResolveRig();
-            if (rig == null || rig.centerEyeAnchor == null ||
-                rig.leftHandAnchor == null || rig.rightHandAnchor == null)
+            SetBodyVisible(rig != null);
+
+            TickBodyCalibration();
+        }
+
+        /// <summary>
+        /// Gövdeyi ancak <b>her iki koşul</b> sağlanınca kurar: etkin bir rig (yani rol gerçekten
+        /// oyuncu) ve sunucudan alınmış bir <c>playerId</c>.
+        /// <para>⚠️ <c>playerId</c> beklenir çünkü gövdenin ağa akan blob'u onunla etiketleniyor
+        /// (§6.9); kimliksiz gönderilen bir kare sunucuda sahipsiz kalırdı.</para>
+        /// </summary>
+        private void TryInitialize()
+        {
+            if (ResolveRig() == null)
             {
-                // ⚠️ Sürülmeyen gövde GİZLENİR, öylece bırakılmaz: bu tekil admin'de de kuruluyor
-                // (önyükleme rolü bilmiyor) ve rig olmayınca Solve hiç koşmaz — görünür bırakılsaydı
-                // dünya orijininde, bind pozunda duran bir manken gözlemcinin görüşüne dikilirdi.
-                SetBodyVisible(false);
                 return;
             }
 
+            ArenaClient client = ArenaClient.Instance;
+            if (client == null || client.PlayerId <= 0)
+            {
+                return;
+            }
+
+            _initialized = true;
+            character.Initialize(client.PlayerId, hasInputAuthority: true);
             SetBodyVisible(true);
 
-            // ⚠️ Pozlar DÜNYA uzayında verilir — ArenaSpace dönüşümü YAPILMAZ. O dönüşüm yalnız ağa
-            // giden/gelen pozlar içindir; buradaki kaynak zaten yerel rig'in kendisi.
-            bodyIK.Solve(
-                new Pose(rig.centerEyeAnchor.position, rig.centerEyeAnchor.rotation),
-                new Pose(rig.leftHandAnchor.position, rig.leftHandAnchor.rotation),
-                new Pose(rig.rightHandAnchor.position, rig.rightHandAnchor.rotation));
+            // İlk gövde ölçüsü de gecikmeli alınır: oyuncu bağlandığı anda ayakta olmayabilir.
+            _calibrationGeneration = ArenaCalibrator.CalibrationGeneration;
+            _calibrationCountdown = BodyCalibrationDelaySeconds;
+        }
+
+        /// <summary>
+        /// Arena hizalaması değiştiyse gövde oranını yeniden ölçtürür (gecikmeli).
+        /// <para>⚠️ <b>İki kalibrasyon KARIŞTIRILMAZ:</b> <see cref="ArenaCalibrator"/> rig'i
+        /// fiziksel arenaya hizalar (bizim, sunucu-otoriter durum §10.6);
+        /// <c>CharacterRetargeter.Calibrate()</c> karakterin gövde oranını oyuncununkine sabitler
+        /// (SDK'nın, tamamen yerel). Buradaki tek bağ şudur: arena yeniden hizalanınca oyuncu
+        /// zaten eğilip doğrulmuştur, yani boy ölçüsünü tazelemek için doğru an odur.</para>
+        /// </summary>
+        private void TickBodyCalibration()
+        {
+            int generation = ArenaCalibrator.CalibrationGeneration;
+            if (generation != _calibrationGeneration)
+            {
+                _calibrationGeneration = generation;
+                _calibrationCountdown = BodyCalibrationDelaySeconds;
+            }
+
+            if (_calibrationCountdown < 0f)
+            {
+                return;
+            }
+
+            _calibrationCountdown -= Time.unscaledDeltaTime;
+            if (_calibrationCountdown > 0f)
+            {
+                return;
+            }
+
+            _calibrationCountdown = -1f;
+            retargeter.Calibrate();
         }
 
         /// <summary>Gövdeyi tümden açar/kapatır. Kapalıyken hiçbir alt bileşen koşmaz — kemik
         /// gizleyicinin boşuna dönmesi de böylece durur.</summary>
         private void SetBodyVisible(bool visible)
         {
-            if (_bodyVisible == visible || bodyIK == null)
+            if (_bodyVisible == visible || visualRoot == null)
             {
                 return;
             }
 
             _bodyVisible = visible;
-            bodyIK.gameObject.SetActive(visible);
+            visualRoot.SetActive(visible);
         }
 
         /// <summary>Etkin rig'i bulur. Referans önbelleğe alınır ama null'a düşünce (sahne değişimi,

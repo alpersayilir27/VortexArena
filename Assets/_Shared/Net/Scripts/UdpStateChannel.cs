@@ -65,6 +65,29 @@ namespace VortexArena.Net
         // kaybı olay numaralarında boşluk açar ve sunucunun kayıp ölçümü yalan söyler.
         private ushort _eventSeq;
 
+        // ---- 0x07 iskelet gönderimi (yalnız ana thread dokunur) ----
+        // ⚠️ Poz/olay tamponlarından AYRI ve çok daha büyük (blob değişken uzunluklu, §6.9).
+        // ⚠️ Bu kanal PULL değil PUSH'tur — poz kanalının aksine kadansı UdpStateChannel değil
+        // Movement SDK belirler (kendi keyframe/aralık mantığı var) ve kaynak hazır olduğunda
+        // SendSkeleton'ı çağırır. Kanalın kendi hızını dayatması, SDK'nın ürettiği bir kareyi
+        // keyfi olarak düşürmek olurdu.
+        private byte[] _skeletonBuffer;
+        private MemoryStream _skeletonStream;
+        private BinaryWriter _skeletonWriter;
+        private ushort _skeletonSeq;
+        private bool _skeletonSendWarned;
+        private bool _skeletonSizeWarned;
+        private float _lastSkeletonSendTime = float.NegativeInfinity;
+
+        /// <summary>
+        /// İskelet gönderiminin alt sınır aralığı — <b>emniyet supabı</b>, kadans kaynağı değil.
+        /// <para>Kadansı SDK bileşeni belirliyor (prefabda ayarlanır); yanlış ayarlanmış bir prefab
+        /// kare hızında paket üretip §3.12 paket bütçesini tek başına yakabilir. Sınır
+        /// <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>'den biraz gevşektir: tam eşit olsaydı
+        /// zamanlayıcı jitter'ı meşru kareleri de düşürürdü.</para>
+        /// </summary>
+        private const float SkeletonMinSendInterval = 0.9f / ArenaProtocol.SKELETON_RATE_HZ;
+
         // ---- 0x04 batch alımı (ağ thread'i) ----
         // Son işlenen tik'lerin halkası: batch'in kimliği serverTick ve tik başına en fazla
         // bir batch üretilir (§6.5). Halka yalnız BİREBİR TEKRARI düşürür.
@@ -126,6 +149,12 @@ namespace VortexArena.Net
             _probeBuffer = new byte[RttProbe.SIZE];
             _probeStream = new MemoryStream(_probeBuffer, 0, _probeBuffer.Length, true);
             _probeWriter = new BinaryWriter(_probeStream);
+
+            // Blob değişken uzunluklu ama tavanı sabit — tampon en büyük meşru pakete göre bir kez
+            // ayrılır, gönderim başına yalnız gerçek uzunluk kadarı yollanır.
+            _skeletonBuffer = new byte[SkeletonUpdate.HEADER_SIZE + ArenaProtocol.SKELETON_MAX_BLOB_BYTES];
+            _skeletonStream = new MemoryStream(_skeletonBuffer, 0, _skeletonBuffer.Length, true);
+            _skeletonWriter = new BinaryWriter(_skeletonStream);
         }
 
         /// <summary>
@@ -189,6 +218,11 @@ namespace VortexArena.Net
             _sendAccumulator = 0f;
             _sendWarned = false; // yeni oturumda gönderim uyarısı yeniden loglanabilir
             _eventSendWarned = false;
+            _skeletonSendWarned = false;
+            _lastSkeletonSendTime = float.NegativeInfinity;
+            // ⚠️ _skeletonSizeWarned SIFIRLANMAZ: boyut aşımı ağ değil YAPILANDIRMA hatasıdır
+            // (prefabdaki sıkıştırma/eklem listesi) ve yeniden bağlanmakla düzelmez — her oturumda
+            // tekrar bastırmak konsolu doldurur, mesaj bir kez okunsun yeter.
 
             // Yeni oturum = yeni sunucu tik ekseni ve yeni ağ yolu → telemetri sıfırlanır.
             // ⚠️ _lastServerTick taşınırsa (sunucu yeniden başladıysa tik sıfırdan sayar) ilk
@@ -328,6 +362,77 @@ namespace VortexArena.Net
             {
                 // Yoklama kaybı zararsız: bir sonraki saniye yenisi gider. Poz/olay yolundaki gibi
                 // uyarı bile basılmaz — telemetri için log gürültüsü üretmeye değmez.
+            }
+        }
+
+        /// <summary>
+        /// ANA THREAD: retarget edilmiş iskelet blob'unu + karakter kökünün <b>arena uzayı</b> pozunu
+        /// <c>0x07</c> olarak yollar (§6.9). Kayıt yoksa sessizce düşer.
+        /// <para><b>PUSH kapısı:</b> kadansı bu sınıf değil Movement SDK belirler — çağıran, SDK bir
+        /// kare ürettiğinde buraya verir. <see cref="SkeletonMinSendInterval"/> yalnız kaçak bir
+        /// kadansa karşı emniyettir.</para>
+        /// <para>⚠️ <paramref name="arenaRoot"/> <b>zorunludur ve blob'un içindeki kök yerine
+        /// geçer</b>: SDK kök eklemi gönderenin dünya uzayında yazıyor, alıcının arenasıyla ilgisi
+        /// yok (§6.9). Dönüşümü çağıran yapar — Net katmanı <c>ArenaSpace</c>'i görmez, poz kanalında
+        /// olduğu gibi (bkz. <see cref="IPoseSource"/>).</para>
+        /// <para>⚠️ <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/>'ı aşan blob
+        /// <b>GÖNDERİLMEZ</b>: bu kanalda parçalama yoktur ve sığmayan paketi yollamak IP
+        /// parçalanmasına güvenmek olurdu (tek parçanın kaybı tüm kareyi çöpe atar).</para>
+        /// </summary>
+        public void SendSkeleton(byte[] blob, int length, Pose arenaRoot)
+        {
+            if (!Registered || _udp == null || blob == null || length <= 0)
+            {
+                return;
+            }
+
+            if (length > ArenaProtocol.SKELETON_MAX_BLOB_BYTES)
+            {
+                if (!_skeletonSizeWarned)
+                {
+                    _skeletonSizeWarned = true;
+                    Debug.LogWarning(
+                        $"[UdpStateChannel] İskelet blob'u {length} B — tavan " +
+                        $"{ArenaProtocol.SKELETON_MAX_BLOB_BYTES} B (§6.9). Kare gönderilmedi: bu kanalda " +
+                        "parçalama yoktur. Sıkıştırmayı yükselt ya da eklem listesini daralt " +
+                        "(parmak eklemleri kumandayla oynanırken gerçek veri taşımaz).");
+                }
+
+                return;
+            }
+
+            float now = Time.unscaledTime;
+            if (now - _lastSkeletonSendTime < SkeletonMinSendInterval)
+            {
+                return;
+            }
+
+            _lastSkeletonSendTime = now;
+
+            var update = new SkeletonUpdate
+            {
+                playerId = _playerId,
+                seq = _skeletonSeq++,
+                root = ToPoseData(arenaRoot),
+                blob = blob,
+                blobLength = length
+            };
+
+            try
+            {
+                _skeletonStream.Position = 0;
+                update.Write(_skeletonWriter);
+                _skeletonWriter.Flush();
+                _udp.Send(_skeletonBuffer, SkeletonUpdate.HEADER_SIZE + length, _serverEndpoint);
+            }
+            catch (Exception e)
+            {
+                // Poz yolundaki gerekçenin aynısı: yut + spam'siz tek uyarı.
+                if (!_skeletonSendWarned)
+                {
+                    _skeletonSendWarned = true;
+                    Debug.LogWarning($"[UdpStateChannel] SkeletonUpdate gönderimi başarısız: {e.Message}");
+                }
             }
         }
 
@@ -795,6 +900,38 @@ namespace VortexArena.Net
 
                         // Olay bloğu: 0x04 ile AYNI koddan ve AYNI tik halkasından geçer (§6.8).
                         DispatchFireEvents(combined.serverTick, combined.events);
+                        break;
+                    }
+
+                    case UdpPacketType.SkeletonBatch:
+                    {
+                        // 1(tip) + 1(count) + 4(serverTick) + değişken girdiler. Girdiler değişken
+                        // uzunluklu olduğu için başlıktan öteye kesin bir alt sınır hesaplanamaz;
+                        // en az bir girdinin sabit kısmı aranır, gerisini Read'in sınır denetimi
+                        // yakalar (kırpılmış blob boş döner ve girdi düşer).
+                        if (buffer.Length < SkeletonBatch.HEADER_SIZE
+                            || (buffer[1] > 0 && buffer.Length < SkeletonBatch.HEADER_SIZE + SkeletonEntry.HEADER_SIZE))
+                        {
+                            return;
+                        }
+
+                        SkeletonBatch batch = SkeletonBatch.Read(reader);
+
+                        // ⚠️ Downlink telemetrisine SAYILMAZ (§6.7): jitter/kayıp 20 Hz snapshot
+                        // akışından ölçülüyor ve bu kanal farklı kadansta akıyor — aynı sayaca
+                        // katmak varış aralığını bozar, ölçüm yalan söyler.
+                        RemoteSkeletonRegistry registry = RemoteSkeletonRegistry.Instance;
+                        if (registry == null)
+                        {
+                            break;
+                        }
+
+                        int recvMs = Environment.TickCount;
+                        for (int i = 0; i < batch.entries.Length; i++)
+                        {
+                            registry.IngestFromNetThread(batch.entries[i], recvMs, _playerId);
+                        }
+
                         break;
                     }
 

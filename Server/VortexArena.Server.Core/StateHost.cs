@@ -53,6 +53,17 @@ public sealed class StateHost
     /// üretebileceği olay sayısının çok üstünde, 65535'in ise çok altında olacak kadar seçildi.</summary>
     private const int EventGapMax = 512;
 
+    /// <summary>
+    /// İskelet blob'u bu kadar süre tazelenmezse yayından düşürülür (§6.10 "girdi yoksa paket yok").
+    /// <para><b>Yerel sabit, protokol sabiti DEĞİL:</b> istemcinin bu sayıyı bilmesine gerek yok —
+    /// gövdesi olmayan bir avatar zaten son karesinde donuyor ve avatarın kendi yaşam süresi
+    /// snapshot'tan geliyor (§6.3). Protokole eklenirse iki tarafın uyması gereken bir sözleşme
+    /// olurdu, oysa bu yalnız sunucunun bayat veri yayınlamama kararıdır.</para>
+    /// <para>Süre, <see cref="ArenaProtocol.SKELETON_RATE_HZ"/> aralığının birkaç katıdır: normal
+    /// paket kaybı gövdeyi düşürmesin, gerçekten susmuş bir gönderen ise yayında kalmasın.</para>
+    /// </summary>
+    private const double SkeletonStaleMs = 500.0;
+
     // ---- Telemetri sayaçları ----
     // ÇIKIŞ sayaçlarına yalnız yayın thread'i dokunur (yazan da okuyan da o) → kilit gerekmez.
     // GİRİŞ sayaçlarını recv thread'i yazar, yayın thread'i saniyede bir okuyup sıfırlar →
@@ -60,6 +71,7 @@ public sealed class StateHost
 
     private long _txSnapshotPackets, _txSnapshotBytes;
     private long _txEventPackets, _txEventBytes;
+    private long _txSkeletonPackets, _txSkeletonBytes;
     private long _rxPackets, _rxBytes;
 
     /// <summary>Snapshot sayacının içindeki, olayları da taşıyan (<c>0x05</c>) datagram adedi —
@@ -152,6 +164,10 @@ public sealed class StateHost
                 case UdpPacketType.RttProbe:
                     if (data.Length < RttProbe.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
                     await HandleRttProbeAsync(udp, data, result.RemoteEndPoint, token);
+                    break;
+                case UdpPacketType.SkeletonUpdate:
+                    if (data.Length < SkeletonUpdate.HEADER_SIZE) { Interlocked.Increment(ref _rxRejected); break; }
+                    HandleSkeletonUpdate(data, result.RemoteEndPoint);
                     break;
                 default:
                     // Bilinmeyen paket tipi — yok sayılır (ileri sürüm uyumluluğu).
@@ -293,6 +309,62 @@ public sealed class StateHost
         }
     }
 
+    /// <summary>
+    /// 0x07 SkeletonUpdate alımı (§6.9): kapı <c>0x01</c> ile birebir aynıdır (yalnız <c>0x00</c> ile
+    /// kaydedilmiş endpoint, u16 sarmalamalı eskilik kontrolü, sessiz ret).
+    /// <para>⚠️ <b>Blob AÇILMAZ.</b> Sunucu onu bir bayt dizisi olarak saklar ve batch'e kopyalar;
+    /// içeriğini yorumlamak sunucuya ikinci bir iskelet doğruluk kaynağı eklemek olurdu (§10.3
+    /// felsefesi — hasarı bile istemci hesaplıyor).</para>
+    /// <para>⚠️ Eskilik sayacı poz kanalınınkinden <b>ayrıdır</b> (<c>LastSkeletonSeq</c>): iki kanal
+    /// farklı kadanslarda akıyor, ortak sayaç birinin paketini diğerinin adına eskitirdi.</para>
+    /// </summary>
+    private void HandleSkeletonUpdate(byte[] data, IPEndPoint remote)
+    {
+        SkeletonUpdate msg;
+        using (var ms = new MemoryStream(data, 0, data.Length, writable: false))
+        using (var reader = new BinaryReader(ms))
+        {
+            reader.ReadByte(); // tip baytı dispatcher'da tüketildi sayılır
+            msg = SkeletonUpdate.Read(reader);
+        }
+
+        // Boş blob = bozuk/kırpılmış datagram (Read sınırı aşan uzunlukta boş döner).
+        if (msg.blobLength == 0)
+        {
+            Interlocked.Increment(ref _rxRejected);
+            return;
+        }
+
+        if (!_registry.TryGetByPlayerId(msg.playerId, out var state))
+        {
+            Interlocked.Increment(ref _rxRejected);
+            return;
+        }
+
+        if (state.UdpEndpoint == null || !state.UdpEndpoint.Equals(remote))
+        {
+            Interlocked.Increment(ref _rxRejected);
+            return;
+        }
+
+        lock (state.PoseGate)
+        {
+            if (state.HasSkeleton && (short)(msg.seq - state.LastSkeletonSeq) <= 0)
+            {
+                Interlocked.Increment(ref _rxRejected);
+                return;
+            }
+
+            // ⚠️ Referans DEĞİŞTİRİLİR, dizi yerinde yazılmaz: yayın thread'i referansı kilit altında
+            // alıp kilit DIŞINDA serileştiriyor (kilit süresini uzatmamak için).
+            state.LastSkeleton = msg.blob;
+            state.LastSkeletonRoot = msg.root;
+            state.LastSkeletonSeq = msg.seq;
+            state.HasSkeleton = true;
+            state.LastSkeletonStamp = Stopwatch.GetTimestamp();
+        }
+    }
+
     /// <summary>0x03 FireEvent alımı (§6.4): yalnız 0x00 ile kaydedilmiş endpoint'ten kabul edilir,
     /// birebir kopya bastırılır, relay kapısını geçen olay <see cref="_events"/> kuyruğuna girer ve
     /// bir sonraki 20 Hz tik'te 0x04 batch'i olarak yayınlanır.
@@ -392,6 +464,15 @@ public sealed class StateHost
         var eventBuffer = new List<FireEventEntry>(ArenaProtocol.EVENT_MAX_ENTRIES_PER_PACKET);
         var eventsThisSecond = 0;
 
+        // ---- İskelet kanalı (§6.10) ----
+        // Snapshot döngüsünün İÇİNDE ama AYRI kadansta koşar: ayrı bir timer/thread açmak yalnız
+        // serverTick'i iki sahibe bölerdi (batch onu taşıyor). Kadans tam sayı bölücüyle kurulur:
+        // her tik'te SKELETON_RATE_HZ eklenir, SNAPSHOT_RATE_HZ'ye ulaşınca ateşlenip düşülür —
+        // 20 tikte tam 12 kez, kayan noktalı birikim ve sürüklenme olmadan.
+        var skeletonEntries = new List<SkeletonEntry>(ArenaProtocol.SKELETON_MAX_ENTRIES_PER_PACKET);
+        var skeletonPackets = new List<byte[]>(1);
+        var skeletonAccumulator = 0;
+
         // ---- Tik kayması ölçümü ----
         // ⚠️ Monotonik saat şart: PeriodicTimer gecikmeyi TELAFİ ETMEZ (bir tik'te gönderimler
         // yavaşlarsa sonraki tik kayar ve bu istemcide jitter olur), ama DateTime.UtcNow'un
@@ -419,8 +500,13 @@ public sealed class StateHost
 
             lastTickStamp = tickStamp;
 
+            skeletonAccumulator += ArenaProtocol.SKELETON_RATE_HZ;
+            var skeletonDue = skeletonAccumulator >= ArenaProtocol.SNAPSHOT_RATE_HZ;
+            if (skeletonDue) skeletonAccumulator -= ArenaProtocol.SNAPSHOT_RATE_HZ;
+
             entries.Clear();
             targets.Clear();
+            skeletonEntries.Clear();
             var onlinePlayers = 0;
             foreach (var state in _registry.Snapshot())
             {
@@ -433,6 +519,24 @@ public sealed class StateHost
                 var alive = state.Alive;
                 lock (state.PoseGate)
                 {
+                    // İskelet girdisi (§6.10): poz ile AYNI kilit, AYRI kadans. Poz kapısından ÖNCE
+                    // toplanır — aşağıdaki `continue` pozsuz oyuncuyu atlıyor ve iki kanalın
+                    // birbirini düşürmesi için bir sebep yok.
+                    // ⚠️ Bayat blob yayınlanmaz: susmuş bir gönderenin gövdesini sonsuza kadar
+                    // tazelemek, donmuş bir avatarı bant harcayarak canlı göstermek olurdu.
+                    if (skeletonDue && state.HasSkeleton && state.LastSkeleton != null
+                        && StampToMs(tickStamp - state.LastSkeletonStamp) <= SkeletonStaleMs)
+                    {
+                        skeletonEntries.Add(new SkeletonEntry
+                        {
+                            playerId = (byte)state.PlayerId,
+                            // Kök arena uzayında taşınır; blob'un kendi kökü kullanılmaz (§6.9).
+                            root = state.LastSkeletonRoot,
+                            blob = state.LastSkeleton,
+                            blobLength = state.LastSkeleton.Length
+                        });
+                    }
+
                     if (!state.HasPose) continue;
                     var pose = state.LastPose;
                     entries.Add(new SnapshotEntry
@@ -543,6 +647,33 @@ public sealed class StateHost
             // susar. Snapshot'ın count=0 yayınından farklı — orada istemcinin bayat avatarı
             // temizlemesi gerekiyor, burada temizlenecek durum yok (olaylar anlıktır).
 
+            // 0x08 SkeletonBatch (§6.10) — snapshot/olaydan SONRA, aynı serverTick ve aynı hedeflere,
+            // ama yalnız kendi kadansında. Girdi yoksa paket yok.
+            // ⚠️ Gönderen SÜZÜLMEZ: kendi girdisini geri alır ve kendisi yok sayar (kendi gövdesini
+            // sensörden çiziyor). Hedefe özel batch üretmek tik başına N serileştirme demek olurdu —
+            // §6.5 olay batch'i de aynı gerekçeyle atanı süzmüyor.
+            if (skeletonEntries.Count > 0 && targets.Count > 0)
+            {
+                BuildSkeletonPackets(skeletonEntries, serverTick, skeletonPackets);
+                foreach (var packet in skeletonPackets)
+                {
+                    foreach (var target in targets)
+                    {
+                        try
+                        {
+                            await udp.SendAsync(packet, target, token);
+                            _txSkeletonPackets++;
+                            _txSkeletonBytes += packet.Length;
+                        }
+                        catch (OperationCanceledException) { return; }
+                        catch (Exception)
+                        {
+                            // Snapshot yayınıyla aynı gerekçe — döngü ölmesin.
+                        }
+                    }
+                }
+            }
+
             var sendMs = StampToMs(Stopwatch.GetTimestamp() - sendStart);
             if (sendMs > sendMaxMs) sendMaxMs = sendMs;
 
@@ -583,11 +714,15 @@ public sealed class StateHost
     {
         // Yayın çıkışına yalnız bu thread dokunur → düz okuma+sıfırlama yeter. Ack/echo çıkışı ise
         // recv thread'inden yazılıyor, o yüzden atomik okunur.
-        var txPackets = _txSnapshotPackets + _txEventPackets + Interlocked.Exchange(ref _txAckPackets, 0);
-        var txBytes = _txSnapshotBytes + _txEventBytes + Interlocked.Exchange(ref _txAckBytes, 0);
+        var txPackets = _txSnapshotPackets + _txEventPackets + _txSkeletonPackets
+                        + Interlocked.Exchange(ref _txAckPackets, 0);
+        var txBytes = _txSnapshotBytes + _txEventBytes + _txSkeletonBytes
+                      + Interlocked.Exchange(ref _txAckBytes, 0);
         var txCombined = _txCombinedPackets;
+        var txSkeleton = _txSkeletonPackets;
         _txSnapshotPackets = 0; _txSnapshotBytes = 0;
         _txEventPackets = 0; _txEventBytes = 0;
+        _txSkeletonPackets = 0; _txSkeletonBytes = 0;
         _txCombinedPackets = 0;
 
         // Giriş sayaçlarını recv thread'i yazıyor → oku-ve-sıfırla atomik olmalı.
@@ -649,6 +784,7 @@ public sealed class StateHost
             $" | tik sapma ort {tickDriftAvgMs:0.0} maks {tickDriftMaxMs:0.0} ms (gönderim maks {sendMaxMs:0.0} ms)" +
             $" | olay {eventsThisSecond}" +
             (txCombined > 0 ? $" (birleşik {txCombined})" : "") +
+            (txSkeleton > 0 ? $" | iskelet {txSkeleton} p/s" : "") +
             $" | kayıp poz %{posePct:0.0} olay %{eventPct:0.0}");
     }
 
@@ -686,6 +822,51 @@ public sealed class StateHost
         using var writer = new BinaryWriter(ms);
         combined.Write(writer);
         return ms.ToArray();
+    }
+
+    /// <summary>
+    /// İskelet girdilerini datagramlara böler (§6.10). Snapshot parçalamasından (<see cref="BuildPackets"/>)
+    /// tek farkı, girdilerin <b>değişken uzunluklu</b> olmasıdır: bölme kararı girdi sayısına DEĞİL
+    /// <b>bayt bütçesine</b> bakar (<see cref="ArenaProtocol.COMBINED_MAX_BYTES"/>), girdi tavanı ise
+    /// yalnız <c>count</c> alanının <c>u8</c> olmasının sınırıdır.
+    /// <para>⚠️ Snapshot'tan bir fark daha: <b>girdi yoksa boş paket üretilmez</b>. Boş snapshot bir
+    /// bildirimdir (istemci bayat avatarı onunla temizler); boş iskelet batch'inin karşılığı yoktur —
+    /// avatarın yaşam süresi snapshot'tan gelir (§6.3), gövde yalnız son karesinde donar.</para>
+    /// <para>⚠️ Tek bir girdi bütçeyi tek başına aşarsa yine <b>kendi paketinde</b> gönderilir:
+    /// gönderim tarafı <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/>'ı zaten uyguluyor, yani bu
+    /// durum ancak sınır büyütülürse oluşur ve sessizce girdi düşürmek gövdeyi kalıcı kaybettirirdi.</para>
+    /// </summary>
+    private static void BuildSkeletonPackets(List<SkeletonEntry> entries, uint serverTick, List<byte[]> output)
+    {
+        output.Clear();
+
+        var offset = 0;
+        while (offset < entries.Count)
+        {
+            var bytes = SkeletonBatch.HEADER_SIZE;
+            var count = 0;
+
+            while (offset + count < entries.Count
+                   && count < ArenaProtocol.SKELETON_MAX_ENTRIES_PER_PACKET)
+            {
+                var size = entries[offset + count].Size;
+                // İlk girdi koşulsuz alınır: aksi hâlde bütçeyi aşan tek bir blob sonsuz döngü
+                // (hiç girdi almayan paket) üretirdi.
+                if (count > 0 && bytes + size > ArenaProtocol.COMBINED_MAX_BYTES) break;
+                bytes += size;
+                count++;
+            }
+
+            var chunk = new SkeletonEntry[count];
+            entries.CopyTo(offset, chunk, 0, count);
+
+            using var ms = new MemoryStream(bytes);
+            using var writer = new BinaryWriter(ms);
+            SkeletonBatch.Write(writer, serverTick, chunk, 0, count);
+            output.Add(ms.ToArray());
+
+            offset += count;
+        }
     }
 
     /// <summary>Tek 0x04 datagramı: 6 + count×9 B (§6.5).</summary>

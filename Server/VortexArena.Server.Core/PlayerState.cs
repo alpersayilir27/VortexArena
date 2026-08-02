@@ -114,6 +114,35 @@ public sealed class PlayerState
     /// <see cref="LastPoseStamp"/> (monotonik) üzerinden hesaplanır.</summary>
     public DateTime LastPoseAt { get; set; }
 
+    // ---- İskelet kanalı (0x07, §6.9) ----
+    // ⚠️ PoseGate ALTINDA okunur/yazılır — poz ile aynı kilit, çünkü ikisi de aynı iki thread
+    // arasında paylaşılıyor (recv yazar, 20 Hz yayın okur) ve ikinci bir kilit yalnız kilitlenme
+    // sırası sorusu üretirdi. Yeni kilit açılmaz.
+
+    /// <summary>
+    /// Son kabul edilen iskelet blob'u — <b>OPAK</b>. Sunucu içeriğini açmaz, doğrulamaz, yalnız
+    /// batch'e kopyalar (§6.9); sunucuda iskelet tablosu YOKTUR ve eklenmez.
+    /// <para>⚠️ Bu dizi <b>yerinde DEĞİŞTİRİLMEZ</b>, her pakette yenisiyle değiştirilir: yayın
+    /// thread'i referansı kilit altında alıp kilit dışında serileştiriyor. Yerinde yazmak yarı
+    /// güncellenmiş bir blob yayınlamak olurdu.</para>
+    /// </summary>
+    public byte[]? LastSkeleton { get; set; }
+
+    /// <summary>Karakter kökünün arena uzayı pozu (§6.9) — blob'un kendi kökü kullanılmaz.</summary>
+    public PoseData LastSkeletonRoot { get; set; }
+
+    /// <summary>İskelet kanalının sıra numarası. ⚠️ <see cref="LastSeq"/>'ten AYRIDIR: iki kanal
+    /// farklı kadanslarda akıyor ve ortak bir sayaç birinin paketini diğerinin adına eskitir.</summary>
+    public ushort LastSkeletonSeq { get; set; }
+
+    /// <summary>En az bir geçerli iskelet alındı mı (<see cref="LastSkeletonSeq"/> ancak o zaman
+    /// anlamlı — yoksa <c>seq=0</c> ile gelen ilk paket eski sanılıp düşerdi).</summary>
+    public bool HasSkeleton { get; set; }
+
+    /// <summary>Son iskeletin monotonik damgası (<c>Stopwatch.GetTimestamp()</c>) — bayatlamış
+    /// gövdenin yayından düşürülmesi için. 0 = henüz iskelet yok.</summary>
+    public long LastSkeletonStamp { get; set; }
+
     // ---- Uplink telemetrisi (istemci → sunucu) ----
     // ⚠️ Bu alanların TAMAMI PoseGate altında yazılır ve okunur — yani telemetri için YENİ KİLİT
     // AÇILMAZ. Gerekçe StateHost'un thread sözleşmesi: recv thread'i maç kilidine giremez ve 20 Hz

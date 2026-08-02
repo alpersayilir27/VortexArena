@@ -58,9 +58,8 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 
 > ⚠️ **Bir kez yerleştirilir, sonra TAŞINMAZ.** Marker arena uzayının sıfırı olduğu için yerini
 > ya da dönüşünü değiştirmek arenadaki **tüm** oyuncuların koordinatını kaydırır.
-> ⚠️ **Zemin seviyesinde durmalı:** uzak avatarların bastığı zemin Y'si
-> `ArenaSpace.ArenaToWorld(Vector3.zero).y`'den türetilir (`ThreePointBodyIK`) — marker havada
-> kalırsa avatarların ayakları da havada kalır.
+> ⚠️ **Zemin seviyesinde durmalı:** uzak avatarların kökü `ArenaSpace.ArenaToWorld` ile
+> yerleştirilir — marker havada kalırsa herkes o yükseklik kadar havada durur.
 
 **Admin gözlemci için ek adım YOKTUR.** `AdminSpectator` kendini önyükler ve sahneyi devralır:
 `VA_CameraRig`'i kapatır, `ArenaCalibrator`/`BaseZone`'u kapatır, `ArenaBoundary`'yi **kapatmaz** —

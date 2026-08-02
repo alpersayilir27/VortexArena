@@ -48,9 +48,8 @@ Gösterge gibi görünür ama **arena uzayının sıfırıdır**: ağa giden/gel
 çevrilir. Bir metre kaydırmak arenadaki **herkesin** koordinatını bir metre kaydırır ve hata ancak
 iki başlık aynı sahnede buluşunca görünür. Bir kez konur, bırakılır.
 
-Aynı sebeple **zemin seviyesinde** durmalı: uzak avatarların bastığı zemin
-`ArenaSpace.ArenaToWorld(Vector3.zero).y`'den gelir (`ThreePointBodyIK`) → marker havadaysa
-avatarların ayakları da havada kalır.
+Aynı sebeple **zemin seviyesinde** durmalı: uzak avatarların kökü `ArenaSpace.ArenaToWorld` ile
+yerleştirilir → marker havadaysa herkes o yükseklik kadar havada durur.
 
 Sahnede hiç marker yoksa dünya = arena sayılır; tek işareti `ArenaSpace`'in sahne başına bir kez
 bastığı uyarıdır (lobide o uyarı normaldir).

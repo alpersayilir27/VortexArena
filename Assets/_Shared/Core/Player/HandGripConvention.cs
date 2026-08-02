@@ -8,9 +8,15 @@ namespace VortexArena.Core.Player
     /// <b>Neden ayrı bir sınıf:</b> ağdan gelen el rotasyonu <c>OVRCameraRig.leftHandAnchor</c> /
     /// <c>rightHandAnchor</c> uzayındadır (kumandanın pozu), kemik ise karakterin bind eksenindedir.
     /// İki uzayın "parmaklar nereye bakar / avuç nereye bakar" tanımı farklıdır; aradaki köprü
-    /// yazılmazsa bilek ters çizilir (ölçüldü: sol 115.4°, sağ 128.1° sapma). Aynı köprüye uzak
-    /// avatar (<see cref="ThreePointBodyIK"/>) ve yerel kol görseli birlikte ihtiyaç duyduğu için
-    /// dönüşüm tek yerde durur.
+    /// yazılmazsa bilek ters çizilir (ölçüldü: sol 115.4°, sağ 128.1° sapma).
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Kapsamı daraldı: gövde ARTIK BURADAN GEÇMEZ.</b> Kol/bilek zinciri Movement SDK'nın
+    /// retargeting'inden geliyor ve SDK kendi eşlemesini kendi yapıyor. Bu köprünün bugünkü tek işi
+    /// <b>eşyanın ele oturmasıdır</b> (kavrama soketi + uzak çizim): eşya duruşu
+    /// <c>ItemDefinition.primaryGrip</c>'ten geliyor ve o ölçü kumanda anchor'ı uzayında alınmış.
+    /// Buraya gövdeyle ilgili bir tüketici geri eklenirse, retargeting ile ikinci bir eşleme
+    /// kaynağı üretilmiş olur.
     /// </para>
     /// <para>
     /// <b>Türetme:</b> iki iskeletin de aynı anatomik yöne bakması istenir, yani
