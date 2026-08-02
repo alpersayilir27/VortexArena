@@ -53,7 +53,22 @@ namespace VortexArena.Core.Combat
         /// <summary>Takım: load_match.yourTeam (lobide lobby_state'ten de güncellenir).
         /// Başlangıç <see cref="CoreTeam.Neutral"/>'dır: takımsız modda oyuncu kendini kırmızı
         /// sanıp yanlış tabana yönlendirilmesin (§10.5).</summary>
-        public Team Team { get; private set; } = CoreTeam.Neutral;
+        public Team Team
+        {
+            get => _team;
+            private set
+            {
+                if (_team == value)
+                {
+                    return;
+                }
+
+                _team = value;
+                LocalTeamChanged?.Invoke(value);
+            }
+        }
+
+        private CoreTeam _team = CoreTeam.Neutral;
 
         /// <summary>Aktif maçın modId'si (load_match'ten).</summary>
         public string ModeId { get; private set; } = "";
@@ -98,6 +113,18 @@ namespace VortexArena.Core.Combat
         public event Action<float> HpChanged;
         public event Action<bool> AliveChanged;
         public event Action<string> StatusChanged;
+
+        /// <summary>
+        /// Yerel oyuncunun takımı değişti (<c>load_match</c> / <c>lobby_state</c>); yalnız DEĞER
+        /// değişince tetiklenir.
+        /// <para>
+        /// ⚠️ Diğerlerinin aksine <b>statik</b>: dinleyicisi (<c>BaseZoneVisibility</c>) kendini
+        /// önyükleyen kalıcı bir tekil ve <see cref="Instance"/>'tan ÖNCE doğabiliyor — örnek
+        /// olayına abone olabilmek için önce örneğin doğmasını beklemesi gerekirdi.
+        /// <c>ModeSelection.Changed</c> / <c>ModeRuntime.Changed</c> ile aynı desen.
+        /// </para>
+        /// </summary>
+        public static event Action<CoreTeam> LocalTeamChanged;
 
         /// <summary>
         /// Silah tetiği çekilebilir mi: hayatta + (faz <c>playing</c> <b>veya</b> modun serbest

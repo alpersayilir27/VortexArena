@@ -70,8 +70,26 @@ namespace VortexArena.Core.Player
         private OVRCameraRig _rig;
         private float _rigSearchTime = float.NegativeInfinity;
 
-        private bool _bodyVisible = true;
+        /// <summary>Gövde çiziliyor mu. ⚠️ Kurulumdan sonra görünürlük <b>renderer düzeyinde</b>
+        /// yönetilir, obje kapatılarak DEĞİL — gerekçe <see cref="SetBodyVisible"/>.</summary>
+        private bool _bodyVisible;
+
+        /// <summary>Karakterin renderer'ları; kurulumda bir kez toplanır.</summary>
+        private Renderer[] _bodyRenderers;
+
         private bool _initialized;
+
+        /// <summary>"Sensör başlamadı" hatası bir kez basılır (Update 72/sn).</summary>
+        private bool _sourceProviderWarned;
+
+        /// <summary>
+        /// Sensörün başlaması için tanınan süre (sn). Anında bakılmaz: <c>OVRBody</c> izin
+        /// verilmemişse kendini kapatıp <c>PermissionGranted</c>'ı bekliyor ve izin diyalogu
+        /// cevaplanınca kendini geri açıyor — hemen hata basmak bu meşru yolu yalancı çıkarırdı.
+        /// </summary>
+        private const float SourceProviderGraceSeconds = 5f;
+
+        private float _sourceProviderGrace = SourceProviderGraceSeconds;
 
         /// <summary>Son görülen <see cref="ArenaCalibrator.CalibrationGeneration"/>; değişmesi
         /// "arena yeniden hizalandı, gövde oranı yeniden ölçülmeli" demektir.</summary>
@@ -140,9 +158,16 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            // Kurulum tamamlanana dek gizli: kurulmamış bir retargeter T-pozunda durur ve oyuncunun
-            // yüzüne dikilmiş bir manken olurdu.
-            SetBodyVisible(false);
+            // ⚠️ Kurulumdan ÖNCE tüm alt ağaç PASİF durur (görünürlük değil, tümden kapalı) ve bu
+            // tek meşru kapatmadır: kurulmamış bir retargeter hem T-pozunda bir manken çizer, hem
+            // de her karede "Ownership is None" hatası basar. Admin'de rig hiç gelmediği için burada
+            // kapalı kalır — o da doğrusudur.
+            if (visualRoot != null)
+            {
+                visualRoot.SetActive(false);
+            }
+
+            _bodyVisible = false;
         }
 
         private void OnDestroy()
@@ -166,6 +191,7 @@ namespace VortexArena.Core.Player
             OVRCameraRig rig = ResolveRig();
             SetBodyVisible(rig != null);
 
+            TickSourceProviderCheck();
             TickBodyCalibration();
         }
 
@@ -189,8 +215,24 @@ namespace VortexArena.Core.Player
             }
 
             _initialized = true;
+
+            // ⚠️ SIRA ÖNEMLİ — obje önce AKTİF edilir, sonra kurulur. Buraya kadar pasifti; pasif
+            // objede Awake hiç koşmaz ve kurulumun ihtiyaç duyduğu bileşenler çözülmemiş olur (SDK
+            // sahipliği None kalır → karakter T-pozunda donar). SetActive(true) eksik Awake'leri
+            // kendi çağrısı içinde senkron koşturur, yani bu satırdan sonra karakter kurulmaya
+            // hazırdır. ⚠️ Bu, objenin SON kez etkinleştirilmesidir — bir daha KAPATILMAZ.
+            if (visualRoot != null)
+            {
+                visualRoot.SetActive(true);
+            }
+
+            _bodyRenderers = visualRoot != null
+                ? visualRoot.GetComponentsInChildren<Renderer>(true)
+                : System.Array.Empty<Renderer>();
+            _bodyVisible = true;
+
             character.Initialize(client.PlayerId, hasInputAuthority: true);
-            SetBodyVisible(true);
+            _sourceProviderGrace = SourceProviderGraceSeconds;
 
             // İlk gövde ölçüsü de gecikmeli alınır: oyuncu bağlandığı anda ayakta olmayabilir.
             _calibrationGeneration = ArenaCalibrator.CalibrationGeneration;
@@ -229,17 +271,65 @@ namespace VortexArena.Core.Player
             retargeter.Calibrate();
         }
 
-        /// <summary>Gövdeyi tümden açar/kapatır. Kapalıyken hiçbir alt bileşen koşmaz — kemik
-        /// gizleyicinin boşuna dönmesi de böylece durur.</summary>
+        /// <summary>
+        /// Gövdeyi gizler/gösterir — <b>yalnız renderer'ları kapatarak</b>.
+        /// <para>
+        /// ⚠️ <b>Obje KAPATILMAZ</b> (<c>SetActive(false)</c>) ve bu bir üslup tercihi değildir:
+        /// karakterin üstündeki sensör kaynağı bir <c>OVRBody</c>'dir ve objeyi kapatmak onun
+        /// <c>OnDisable</c>'ını çalıştırır — açık son örnek de kapanınca <c>StopBodyTracking</c>
+        /// çağrılır. Geri açıldığında <c>OnEnable</c> yeniden başlatmayı dener ve
+        /// <b>başaramazsa kendini KALICI olarak kapatır</b>, bir daha denemez. Yani rig'in bir an
+        /// kaybolduğu her harita geçişi, gövdeyi oturumun geri kalanı boyunca sessizce
+        /// öldürebilecek bir kumar olurdu. Renderer kapatmak aynı görsel sonucu verir ve hiçbir
+        /// yaşam döngüsü olayını tetiklemez.
+        /// </para>
+        /// <para>Tek meşru <c>SetActive(false)</c> kurulumdan ÖNCEDİR (<see cref="Awake"/>) — orada
+        /// sensör zaten hiç açılmamıştır, dolayısıyla kapatılacak bir izleme de yoktur.</para>
+        /// </summary>
         private void SetBodyVisible(bool visible)
         {
-            if (_bodyVisible == visible || visualRoot == null)
+            if (_bodyVisible == visible || _bodyRenderers == null)
             {
                 return;
             }
 
             _bodyVisible = visible;
-            visualRoot.SetActive(visible);
+            for (int i = 0; i < _bodyRenderers.Length; i++)
+            {
+                if (_bodyRenderers[i] != null)
+                {
+                    _bodyRenderers[i].enabled = visible;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Sensör kurulumdan sonra gerçekten koşuyor mu — koşmuyorsa <b>tek bir eyleme dönük
+        /// hata</b> basar.
+        /// <para>Gerekçe: <c>OVRBody</c> başlatamadığında kendi uyarısını basıp susuyor ve o satır
+        /// "gövdem neden yok" sorusuna bağlanmıyor; bağı burada açıkça kuruyoruz. Süre tanınmasının
+        /// sebebi <see cref="SourceProviderGraceSeconds"/>'da.</para>
+        /// </summary>
+        private void TickSourceProviderCheck()
+        {
+            if (_sourceProviderWarned || character.IsSourceProviderRunning)
+            {
+                return;
+            }
+
+            _sourceProviderGrace -= Time.unscaledDeltaTime;
+            if (_sourceProviderGrace > 0f)
+            {
+                return;
+            }
+
+            _sourceProviderWarned = true;
+            Debug.LogError(
+                "[LocalBodyAvatar] Body tracking başlamadı — yerel gövde çizilmeyecek ve ağa gövde " +
+                "akmayacak. Sebebi konsolda bunun üstündeki [OVRBody] satırı söyler. Sık görülen " +
+                "iki sebep: (1) editörden Link ile koşuluyor ve Meta Quest Link uygulamasında " +
+                "ilgili geliştirici çalışma zamanı özelliği kapalı, (2) cihazda BODY_TRACKING izni " +
+                "verilmemiş. Düzelttikten sonra oyunu yeniden başlat.", this);
         }
 
         /// <summary>Etkin rig'i bulur. Referans önbelleğe alınır ama null'a düşünce (sahne değişimi,

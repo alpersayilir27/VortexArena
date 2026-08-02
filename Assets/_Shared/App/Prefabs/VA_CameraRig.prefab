@@ -8555,10 +8555,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.ControllerModelHider
   rigRootName: VA_CameraRig
-  modelNameContains:
-  - questController_animrig
-  - OVRLeftHandVisual
-  - OVRRightHandVisual
 --- !u!114 &3359760567684406891
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8566,7 +8562,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7306791853712668284}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3d750d987bdd7184b81c4f69280c8eba, type: 3}
   m_Name: 
