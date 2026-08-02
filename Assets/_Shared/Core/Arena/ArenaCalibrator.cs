@@ -158,6 +158,18 @@ namespace VortexArena.Core.Arena
         /// </summary>
         public static event Action<string> Calibrated;
 
+        /// <summary>
+        /// Kalibrasyonun bu oturumda kaç kez tamamlandığı — <see cref="Calibrated"/> ile aynı anı
+        /// bildirir ama <b>abonelik gerektirmez</b>. Geç uyanan ya da arada kapatılan bir dinleyici
+        /// olayı sessizce KAÇIRIR (yerel gövde avatarı rig'i kaybettiğinde kapanıyor ve harita
+        /// değişiminde kayıtlı anchor tam o aralıkta geri yükleniyor); sayacı kaçıramaz, sonraki
+        /// karede farkı görür. 0 = bu oturumda hiç hizalanmadı.
+        /// <para>Tüketicisi <c>ThreePointBodyIK</c>'dır: hizalanmadan önce ölçülen göz yüksekliği
+        /// arenanın zeminine değil sistemin TAHMİN ettiği zemine göredir, o yüzden avatarın boy
+        /// ölçümü her hizalamadan sonra yeniden alınır.</para>
+        /// </summary>
+        public static int CalibrationGeneration { get; private set; }
+
         private OVRCameraRig cameraRig;
         private OVRSpatialAnchor worldAnchor;
         private Vector3 capturedA;
@@ -478,7 +490,7 @@ namespace VortexArena.Core.Arena
                       $"'{AnchorBName}' {(anchorB != null ? anchorB.transform.position.ToString() : "(yok)")}.");
             AlignRig(capturedA, point);
             HideMarkersAfterConfirmation();
-            Calibrated?.Invoke(SourceManual);
+            RaiseCalibrated(SourceManual);
             _ = CreateAndSaveAnchorAsync();
         }
 
@@ -697,6 +709,17 @@ namespace VortexArena.Core.Arena
             Debug.Log("ArenaCalibrator: calibration reset.");
         }
 
+        /// <summary>
+        /// Hizalama tamamlandı: sayaç artar, sonra olay yayınlanır. İki tamamlanma yolu da (elle
+        /// yakalama + kayıtlı anchor'dan geri yükleme) buradan geçer — sayacı artırmayı unutan bir
+        /// yol, ölçüsünü tazelemeyen sessiz bir dinleyici demektir.
+        /// </summary>
+        private static void RaiseCalibrated(string source)
+        {
+            CalibrationGeneration++;
+            Calibrated?.Invoke(source);
+        }
+
         private async Task CreateAndSaveAnchorAsync()
         {
             try
@@ -815,7 +838,7 @@ namespace VortexArena.Core.Arena
                 // İşaretçiler burada GÖSTERİLMEZ: geri yükleme sessizdir (oyuncu bir şey
                 // yapmadı) ve harita değişiminde koştuğu için maçın ortasında ekrana obje
                 // düşmesi olurdu. Onay gerekiyorsa admin ekranındaki kalibrasyon tik'i var.
-                Calibrated?.Invoke(SourceAnchor);
+                RaiseCalibrated(SourceAnchor);
                 return true;
             }
             catch (Exception e)

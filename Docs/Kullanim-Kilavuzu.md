@@ -229,7 +229,12 @@ harita değişimi kalibrasyonu bozmaz. (Maç sırasında da aynı adımlarla yen
       zeminde A çapası belirir. Basılı tutma/bekleme yoktur.
 - [ ] **3.** Aynısını zemindeki **B** bandında, **aynı dik duruşla** yapar → **uzun titreşim**
       (~1 sn) + **iki çapa da belirip bir saniye sonra kaybolur** = tamam, arena hizalandı.
-- [ ] **4.** Hata sinyalleri — ikisinde de B'yi tekrar al (çapalar kaybolmaz, ikinci çapa hiç
+- [ ] **4.** Uzun titreşimi duyunca oyuncu **doğrulup 3 saniye normal duruşta bekler**
+      (çömelmeden, zıplamadan, eğilmeden). ⚠️ **Karakterin boyu tam o anda ölçülür:** gözlüğün
+      yerden yüksekliği alınır ve oyuncunun karakteri o boya göre büyütülüp küçültülür — kısa
+      oyuncuda küçük, uzun oyuncuda büyük. Eğilmiş hâlde beklenirse karakter olduğundan kısa
+      kalır; düzeltmek için §4.1'den kalibrasyon sıfırlanıp baştan alınır.
+- [ ] **5.** Hata sinyalleri — ikisinde de B'yi tekrar al (çapalar kaybolmaz, ikinci çapa hiç
       belirmez): **üç kısa titreşim** = iki nokta arasındaki mesafe yanlış (bant ölçüsünü
       kontrol et) · **tek titreşim** = kumanda dik tutulmamış, zemin ölçümü tutmadı.
 
