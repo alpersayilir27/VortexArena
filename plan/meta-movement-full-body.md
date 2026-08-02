@@ -22,11 +22,12 @@ Eklem sayısı 66 ve sıkıştırma `High`; kaba hesapla blob ~300-400 B, yani
 
 - [ ] `SkeletonRetargeter.ScaleRange` varsayılanı `0.8–1.2`; oynayan boy aralığına göre genişlet.
       `ApplyHeadScale` **açık kalsın** (birinci şahısta yakayı near-clip'in dışında tutan şey odur).
-- [ ] Bacak isteniyorsa `OVRRuntimeSettings`: `BodyJointSet.FullBody` +
-      `BodyTrackingFidelity2.High` (IOBT). Varsayılanlar `UpperBody` + `Low`.
-      ⚠️ `FullBody` bacakları **izlemez, ÜRETİR** — eklem sayısını artırır, blob'u büyütür.
-- [ ] İzin (`com.oculus.permission.BODY_TRACKING`) ve `requestBodyTrackingPermissionOnStartup`
-      zaten açık; doğrula.
+- Body tracking ayarı **hazır**: `Assets/Resources/OculusRuntimeSettings.asset` (⚠️ dosya adı
+  `OVRRuntimeSettings` DEĞİL) `bodyTrackingJointSet: FullBody` + `bodyTrackingFidelity: High`.
+  ⚠️ `FullBody` bacakları **izlemez, ÜRETİR**. `OVRBody.StartBodyTracking` bu asset'i okur —
+  bileşendeki `ProvidedSkeletonType` alanını DEĞİL; ikisi ayrışırsa SDK uyarı basar.
+- İzinler hazır: manifest'te `BODY_TRACKING`/`USE_ANCHOR_API`/`USE_SCENE`, `OVRManager`'da
+  `requestBodyTrackingPermissionOnStartup` ve `requestScenePermissionOnStartup` açık.
 - [ ] Yerel gövdede `SkinnedMeshRenderer.quality = Bone4` (§7) ayarlı mı kontrol et; uzak
       avatarlarda Auto kalır.
 

@@ -72,7 +72,10 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   (VortexArena.Net), `App/Scripts` (VortexArena.App — `Admin/` alt klasörü aynı asmdef'te:
   admin gözlemci; `UiKit.cs` arayüz paleti + EventSystem garantisi — görünüm prefablarda).
   Kod-dışı: `Arsenal/` (silah prefab+SO, `VA_WeaponFrame`),
-  `FX/`, `Shaders/` + `Materials/` (paylaşılan shader/materyal — ör. `DissolveEffect`),
+  `FX/`, `Shaders/` + `Materials/` (paylaşılan shader/materyal — ör. `DissolveEffect`;
+  **`Materials/Resources/M_BaseZoneXRay.mat`** koddan `Resources.Load` ile alınır ve hiçbir
+  sahneden referansı yoktur → `Resources/` altından ÇIKARILMAZ, yoksa shader build'den strip
+  edilir ve taban şeridi Quest'te pembe çizilir),
   `Environments/`, `Avatars/` (gövde avatarı modeli ve prefabları — yerel gövde
   (`LocalBodyAvatar`) ile uzak avatarlar **aynı prefabı, aynı retarget config'ini ve aynı kod
   yolunu** paylaşır; tek fark `ArenaNetCharacterBehaviour.HasInputAuthority`'dir (yerelde gövde
@@ -120,7 +123,9 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `ArenaBoundary` (muhafaza; ölçüsü **zorunlu** olarak bağlı boyut dosyasından gelir —
   `dimensionsJson` boşsa muhafaza hata basıp kendini kapatır),
   `BaseZone`×2 (**taban bölgesi** = kırmızı/mavi şerit; ölen oyuncu buraya girince canlanır,
-  `Team.Neutral` = herkese açık) ve **altyapı prefabları** (`_Shared/App/Prefabs/`):
+  `Team.Neutral` = herkese açık; şerit oyuncunun **kendi** takımına duvar arkasından da görünür —
+  `BaseZoneVisibility` çalışma anında ekler, sahnede/prefabda kurulum adımı YOKTUR ve eklenmez)
+  ve **altyapı prefabları** (`_Shared/App/Prefabs/`):
   **`VA_CameraRig`** (kamera rig'i + `OVRComprehensiveInteractionRig` + `ControllerModelHider`,
   tracking origin `Stage`). Oyuncu kendi gövdesini omuzlarından aşağı görür (`LocalBodyAvatar` —
   kendini önyükleyen tekil, sahneye ve rig'e KONMAZ; Meta Movement SDK retargeting ile sürülür);
