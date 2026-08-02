@@ -14265,6 +14265,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 123839039055677940, guid: 7638164cacb666e438514af666498c4d, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7306791853712668284, guid: 7638164cacb666e438514af666498c4d, type: 3}
       propertyPath: m_Name
       value: VA_CameraRig
