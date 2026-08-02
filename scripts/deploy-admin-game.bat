@@ -90,10 +90,16 @@ mkdir "%VA_OUT%" 2>nul
 rem --- 4) Build --------------------------------------------------------
 rem  -nographics KULLANILMIYOR: player build'inde shader varyant derlemesi
 rem  grafik cihazi isteyebilir ve sessizce bozuk cikti uretebilir.
-rem  NOT: proje aktif platformu Android ise Unity once Standalone'a gecer ->
-rem  ilk calistirma tam reimport yuzunden cok uzun surer (sonrakiler hizli).
+rem  HEDEF PLATFORM BU BETIKTE SABITTIR: -buildTarget Win64. Aktif platformdan
+rem  turetilmez - projede hangi platform acik kalmis olursa olsun bu betik
+rem  Windows build'i alir. Bayrak Unity'ye ACILISTA verilir: platformu
+rem  -executeMethod'un icinden cevirmek domain reload tetikler ve calisan
+rem  metot yarida kalir.
+rem  Aktif platform zaten Windows ise bayrak etkisizdir; degilse gecis
+rem  acilista olur ve o kosu tam reimport yuzunden uzun surer (texture'lar
+rem  DXT'ye yeniden sikistirilir) - sonrakiler hizlidir.
 echo.
-echo   Build basliyor (ilk calistirma platform gecisi yuzunden uzun surebilir)...
+echo   Build basliyor (hedef: Windows; platform degisiyorsa uzun surebilir)...
 echo   Asagidaki durum satiri canli guncellenir; hicbir sey ilerlemiyorsa
 echo   izleyici uyari basar (editor/arka plan Unity.exe proje kilidini tutuyor
 echo   olabilir - Ctrl+C ile iptal edip surecleri kapattiktan sonra tekrar deneyin).
@@ -115,12 +121,14 @@ rem  cikis kodunu aynen dondurur. Izleyici yoksa eski davranisa duseriz.
 set "VA_WATCH=%~dp0lib\watch-unity-build.ps1"
 if exist "%VA_WATCH%" (
   powershell -NoProfile -ExecutionPolicy Bypass -File "%VA_WATCH%" ^
-    -Unity "!VA_UNITY!" -Project "%VA_REPO%" -OutDir "%VA_OUT%" -Log "%VA_LOG%"
+    -Unity "!VA_UNITY!" -Project "%VA_REPO%" -OutDir "%VA_OUT%" -Log "%VA_LOG%" ^
+    -UnityBuildTarget Win64
   set "VA_RC=!ERRORLEVEL!"
 ) else (
   echo   [UYARI] Izleyici yok, ilerleme basilamayacak: "%VA_WATCH%"
   "!VA_UNITY!" -batchmode -quit ^
     -projectPath "%VA_REPO%" ^
+    -buildTarget Win64 ^
     -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin ^
     -buildOutput "%VA_OUT%" ^
     -logFile "%VA_LOG%"

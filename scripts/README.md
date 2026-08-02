@@ -73,9 +73,11 @@ paylaşımlı kipte okur ve tek satırlık durum gösterir:
   başlıkta `~mm:ss` olarak gösterilir ("normalde bu kadar sürüyordu"). İki build'in referansı
   ayrıdır — APK build'i admin build'inden belirgin uzun sürer.
 - **Hangi metot / hangi platform:** `-Method` çağrılacak `-executeMethod` girişini,
-  `-UnityBuildTarget` ise Unity'nin **açılış platformunu** (`-buildTarget Android`) belirler.
-  Platformu build metodunun içinden çevirmek işe yaramıyor: `SwitchActiveBuildTarget` domain
-  reload tetikliyor ve çalışan `-executeMethod` yarıda kalıyor.
+  `-UnityBuildTarget` ise Unity'nin **açılış platformunu** belirler. Platformu build metodunun
+  içinden çevirmek işe yaramıyor: `SwitchActiveBuildTarget` domain reload tetikliyor ve çalışan
+  `-executeMethod` yarıda kalıyor. Bu yüzden **her iki betik de hedefini açıkça geçer**
+  (`Win64` / `Android`) — aktif platform zaten doğruysa bayrak etkisizdir, değilse geçiş
+  güvenli yerde, açılışta olur.
 - **Ctrl+C** iptalinde izleyici Unity sürecini de öldürür (yoksa proje kilidi arkada kalırdı).
 - Çıkış kodu Unity'ninkidir; `.bat` başarısızlık dalını aynen çalıştırır. İzleyici dosyası yoksa
   betik eski davranışa (sessiz build) düşer, sadece uyarı basar.
@@ -104,10 +106,17 @@ powershell -NoProfile -File scripts\lib\watch-unity-build.ps1 -ReplayLog deploy\
   çeviremez ve **sessizce Windows'ta devam edip `.exe` üretirdi** — bu yüzden erken ve adıyla
   durdurulur. Kurulum: Unity Hub > Installs > sürüm > Add modules > Android Build Support
   (+ SDK/NDK + OpenJDK).
-- **İlk APK build'i çok uzun sürer.** Aktif platform Windows'sa Unity önce Android'e geçer; bu
-  tam reimport demektir (texture'lar ASTC'ye yeniden sıkıştırılır) — 20-40 dk. Sonraki koşular
-  hızlıdır. Betik platformu build sonunda **geri almaz**: geri almak ikinci bir tam reimport daha
-  olurdu, admin build'i zaten kendi platformuna geçiriyor.
+- **Platform değişen koşu uzun sürer.** Hedef sabit olduğu için geçiş yalnız aktif platform
+  hedeften farklıysa olur; o koşu tam reimport demektir (texture'lar yeniden sıkıştırılır:
+  Quest'te ASTC, Windows'ta DXT) — 20-40 dk. Sonraki koşular hızlıdır. Betikler platformu build
+  sonunda **geri almaz**: geri almak ikinci bir tam reimport daha olurdu ve gerekmez, iki betik de
+  kendi hedefini açılışta zorluyor.
+- **İki build birbirinin cache'ini ısıtmaz.** `Library/` ortaktır ama içindeki şeritler platform
+  başınadır: shader varyantları grafik API'sine göre anahtarlanır (admin d3d11, oyuncu vulkan),
+  asset artifact'ları sıkıştırma biçimine göre (DXT / ASTC), script derleme çıktıları hedefe göre
+  ayrı klasörlerde. Yani her platform kendi cache'ini bir kez ısıtır; **soğuk cache'te sürenin
+  büyük kısmı shader varyantı derlemektir**. Buradan çıkan pratik sonuç: `Library/`'yi silme, ve
+  aynı gün ikisi de gerekiyorsa **önce admin, sonra APK** al (APK platformu Android'de bırakır).
 - **Çalışan exe çıktı klasörünü kilitler.** `deploy-server.bat` ve `deploy-launcher.bat` publish'e
   girmeden önce `tasklist` ile kendi exe'sini arar (`VortexArena.Server.App.exe` /
   `VortexArena.Launcher.exe`) ve çalışıyorsa adıyla durur — yoksa `rmdir` yarıda kalıp publish

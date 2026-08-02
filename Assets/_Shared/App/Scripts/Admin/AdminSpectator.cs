@@ -29,8 +29,9 @@ namespace VortexArena.App.Admin
     /// <item><see cref="ArenaCalibrator"/> ve <see cref="BaseZone"/> bileşenleri kapatılır —
     /// OVRSpatialAnchor/HMD mantığı masaüstünde anlamsız veri ve log üretir.</item>
     /// <item><see cref="ArenaBoundary"/> <b>KAPATILMAZ</b>, `SetSpectatorMode(true)` ile susturulur:
-    /// admin'in HMD'si olmadığı için muhafaza mantığı anlamsızdır, ama duvarlar gözlemci için
-    /// tercih edilen saydamlıkta ÇİZİLMEYE devam etmeli (kapatılan bileşen onları da bırakırdı).</item>
+    /// admin'in HMD'si olmadığı için muhafaza mantığı anlamsızdır, ama kuş bakışı kadrajı onun
+    /// <c>HalfExtents</c>/<c>LocalCenter</c> değerlerini okumaya devam ediyor (kapatılan bileşen
+    /// planı çözmeyi de bırakırdı).</item>
     /// <item>World-space canvas'lar kapatılır (Lobby'nin VR paneli masaüstü ekranında havada
     /// durmasın; aynı bilgi HUD roster'ında var).</item>
     /// <item>EventSystem devralınır (arena sahnelerinde HİÇ yok, Lobby'de bir tane var).</item>
@@ -210,11 +211,12 @@ namespace VortexArena.App.Admin
                 }
             }
 
-            // 3) Arena sınırı: KAPATILMAZ, susturulur (duvarlar çizilmeye devam etsin).
+            // 3) Arena sınırı: KAPATILMAZ, susturulur — kuş bakışı kadrajı onun HalfExtents /
+            //    LocalCenter değerlerini okumaya devam ediyor.
             Boundary = FindFirstObjectByType<ArenaBoundary>();
             if (Boundary != null)
             {
-                Boundary.SetSpectatorMode(true, AdminSession.WallAlpha);
+                Boundary.SetSpectatorMode(true);
             }
 
             // 4) VR için tasarlanmış world-space panelleri (Lobby paneli, mod HUD'ları).
@@ -237,15 +239,6 @@ namespace VortexArena.App.Admin
             if (_cameraDriver != null)
             {
                 _cameraDriver.OnSceneAdopted();
-            }
-        }
-
-        /// <summary>Duvar saydamlığı tercihi değişince aktif sahneye uygular.</summary>
-        public void RefreshWallAlpha()
-        {
-            if (Boundary != null)
-            {
-                Boundary.SetSpectatorMode(true, AdminSession.WallAlpha);
             }
         }
 

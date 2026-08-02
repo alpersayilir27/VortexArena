@@ -43,8 +43,8 @@ D:\Games\vortexarena\
   Assets\
     _Shared\                 ← "ikinci bir mod/arena bunu aynen kullanır mı?" → EVET olan her şey
       Core\                  VortexArena.Core        (arena, savaş, oyuncu, UI, katalog SO'ları, FX)
-        Editor\              VortexArena.Core.Editor (Export Server Config, Arena şablon sihirbazı,
-                             arena geometrisi üretimi: boyut dosyasından / TestMesh'ten)
+        Editor\              VortexArena.Core.Editor (Configure All Build Elements, Template
+                             Temellerini Yükle, ölçü maketi üretimi/geri okuması)
       Net\Protocol\          VortexArena.Protocol    (SAF C# — sunucu aynı dosyaları derler)
       Net\Scripts\           VortexArena.Net         (bağlantı/keşif/senkron; oyun bilgisi YOK)
         Editor\              VortexArena.Net.Editor  (Network Parent, sceneId bekçisi)
@@ -57,16 +57,17 @@ D:\Games\vortexarena\
         UI\Sprites\          o prefabların 9-slice köşe/halka görselleri
       Arsenal\ FX\ Environments\ Scenes\             (kod-dışı ortak içerik + Boot/Lobby)
       Data\Resources\        GameCatalog.asset — admin arayüzü Resources.Load ile okur
-    Arenas\Template\         sihirbaz kaynağı — OYNANMAZ (export/Build Settings/katalog dışı)
-      Default12x12\          dizayn taşımayan tek kaynak arena
+    Arenas\Template\         referans arena — OYNANMAZ (export/Build Settings/katalog dışı)
+      Default12x12\          dizayn taşımayan referans: "ağa bağlı sahne neye benzer"
     Arenas\Venues\<İşletme>\ MEKAN = kutuların kabı; kökünde o mekanın TÜM sahnelerinin
                              paylaştığı Art\ Prefabs\ Data\ durur
       <Arena>\               arena kutusu: {Scenes, Data} — arena-özel KOD yazılmaz
       Lobby\                 mekanın kendi lobisi (MapDefinition.supportedModeIds = ["lobby"])
     Arenas\Venues\Outdoor12x12\  IceWorld (elle modellenmiş tematik arena + Art\{Materials,Textures}
-                             + Prefabs\FX_SnowStorm) · A12x12 (sihirbazla üretildi) · Lobby
-    Arenas\Venues\VortexAntep\   Default (planlı asimetrik arena) · Lobby (aynı planın kopyası)
-                             + Data\vortexantep_dimensions.json — mekanın boyut dosyası (ölçünün
+                             + Prefabs\FX_SnowStorm) · A12x12 · Lobby
+                             + Data\Outdoor12x12_dimensions.json — mekanın boyut dosyası
+    Arenas\Venues\VortexAntep\   Default (planlı asimetrik arena) · Lobby (aynı fiziksel oda)
+                             + Data\VortexAntep_dimensions.json — mekanın boyut dosyası (ölçünün
                              TEK kaynağı), ikisi de kullanır
     Modes\TeamDeathmatch\    mod kutusu: {Scripts → VortexArena.Modes.Tdm, Data, UI}
     Modes\FreeForAll\        mod kutusu: {Scripts → VortexArena.Modes.Ffa, Data, UI} — takımsız
@@ -173,7 +174,7 @@ Quest'in kendi dünya uzayı ──(ArenaCalibrator: 2 nokta + OVRSpatialAnchor)
        > beacon (5 sn dinle) > StreamingAssets/arena.json
   └─ VR (player): pratikte beacon — VR build'ine argüman geçilmez
                  → bulunan adrese OTOMATİK bağlanır; oyuncuya sorulmaz
-                 → hiç bulunamazsa 8 sn sonra "sağ kumandada A×2" ipucu (gizli IP paneli)
+                 → hiç bulunamazsa 8 sn sonra "joystick'e 1 sn basılı tut" ipucu (gizli IP paneli)
   └─ admin: adres launcher'ın geçtiği `--server-ip`'ten gelir; argüman yoksa bağlanmaz,
             sebebini ekranda yazar (editörde adres/rol dev penceresinden gelir → §6.2)
             → admin de Lobby sahnesinden bağlanır (ayrı dashboard sahnesi YOK)
@@ -727,9 +728,9 @@ sorunu.**
 |---|---|
 | `AppBoot` | Rol çözümü: Android → player; masaüstü → `--role` > `VORTEX_ROLE` > admin. **Sahne her rolde `Lobby`'dir** (admin'in ayrı kabuğu yok). **Adres çözümü:** `--server-ip` / `--server-port`'u **her rolde** okuyup `AppSession`'a yazar (player'da keşif zincirinin en üstü; admin'de tek kaynak — yoksa uyarı loglar). `AppSession.RoleResolved` doluysa hiçbir şey yazmaz → editörde `DevSession` kazanır. **Inspector'da rol/IP override alanı YOKTUR** (kaldırıldı: sahneyi kirletiyordu) |
 | `SceneRouter` | `load_match` / `return_to_lobby` / geç katılım → sahne yükleme. **Rolden bağımsız** (admin de oyuncuların sahnesine gider); rol yalnız TEK yerde ayrışır — `set_ready` sadece player'dan gider (admin "hazır" görünmemeli). **Lobi sahnesi de sunucudan gelir** (§3.8.1): `LobbyScene` alanı `return_to_lobby`/`welcome`'dan beslenir, sahne bu build'in listesinde yoksa kabuk `Lobby`'ye düşer ve sebebini loglar. Lobi bir maç sahnesi olmadığı için `LastMatchScene` boş kalır → `set_ready` gönderilmez. **Yükleme asenkrondur** (`LoadSceneAsync`): geçiş boyunca oyun döngüsü aktığı için `LoadingOverlay` çizilebilir ve ilerleme gösterilebilir; `set_ready` kapısı DEĞİŞMEZ — `sceneLoaded` aktivasyon sırasında tetiklenir ve bildirim yine oradan gider (tek kapı). ⚠️ Asenkron yükleme **iptal edilemez**: yükleme sürerken gelen yeni hedef (ör. maç ortasında `load_match`) **sıraya alınır** ve mevcut yükleme biter bitmez yüklenir — hedef sessizce düşürülmez. ⚠️ Geçiş boyunca `Application.backgroundLoadingPriority` **`High`'a çekilir ve sonra eski değerine geri konur**: aksi hâlde asenkron yükleme senkrondan gözle görülür biçimde yavaştır (Tuzaklar: "`LoadSceneAsync` varsayılan ayarla yavaştır") |
-| `LobbyController` | VR lobi: roster, ready/takım + otomatik bağlanma; **gizli IP paneli** (varsayılan kapalı, sağ kumandada `OVRInput.Button.One`×2 ile açılır — beacon'ı kesen ağlar için kurtarma yolu). Admin de bu sahneden bağlanır (`Connect(..., AppSession.Role)`); world-space paneli admin'de `AdminSpectator` gizler |
+| `LobbyController` | VR lobi: roster, ready/takım + otomatik bağlanma; **gizli IP paneli** (varsayılan kapalı, sağ kumandada `OVRInput.Button.PrimaryThumbstick` **1 sn basılı tutularak** açılır/kapanır — beacon'ı kesen ağlar için kurtarma yolu; jest tetiklendiğinde kumanda titrer). Admin de bu sahneden bağlanır (`Connect(..., AppSession.Role)`); world-space paneli admin'de `AdminSpectator` gizler |
 | `UiKit` | **Arayüz paleti + çalışma zamanı yardımcıları** (statik). Arayüz prefaba taşındıktan sonra geriye kalan iş: renk paleti (durum renkleri — HP eşikleri, seçim vurgusu, kalibresiz kenarlık, bağlantı noktası), `TeamColor`/`Dim`/`WithAlpha`, dinamik yerleşim (`Block` — havuzlanan satırların konumu), `SetBarFill` ve **EventSystem garantisi** (`EnsureEventSystem`/`TakeOverEventSystem`: arena sahnelerinde EventSystem YOK, edilmezse HUD düğmeleri sessizce ölür). ⚠️ Öge fabrikaları (`Panel`/`Button`/`Text`…) hâlâ durur ama **yeni arayüz onlarla kurulmaz** — görünüm prefabta yaşar |
-| `ConnectionOverlay` | **Bağlantı hata ekranı** — kalıcı tekil, `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` ile kendini önyükler ve **görünümü prefabtan alır**: `Resources/UI/ConnectionOverlayScreen` (masaüstü) ya da `…World` (VR), seçimi XR aygıtı/platform belirler. Prefab sahneye KONMAZ (yeni arena eklerken unutulacak adım doğmasın). ~3 sn **grace** (anlık kopmada yanıp sönmesin; açılışı da maç ortasındaki kopmayı da kapsar). İki durum: adres biliniyor → "SUNUCUYA BAĞLANILAMIYOR" + adres + `N sn · M. deneme` + son hata; adres yok → "SUNUCU BULUNAMADI". Rol'e göre ipucu (player: A×2 / admin: launcher). Masaüstü varyantı: screen-space + scrim + **"Yeniden Bağlan"** (adres yoksa devre dışı; `Disconnect()` otomatik denemeyi durdurduğu için tek kurtarma yolu). VR varyantı: world-space kart + `HudFollow`, scrim YOK, **düğme YOK** (o yüzden `_reconnectButton` alanı orada boştur — normaldir). ⚠️ `ArenaBoundary.IsOutOfBounds` iken **tamamen gizlenir** — alan-dışı uyarısı her zaman baskın |
+| `ConnectionOverlay` | **Bağlantı hata ekranı** — kalıcı tekil, `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` ile kendini önyükler ve **görünümü prefabtan alır**: `Resources/UI/ConnectionOverlayScreen` (masaüstü) ya da `…World` (VR), seçimi XR aygıtı/platform belirler. Prefab sahneye KONMAZ (yeni arena eklerken unutulacak adım doğmasın). ~3 sn **grace** (anlık kopmada yanıp sönmesin; açılışı da maç ortasındaki kopmayı da kapsar). İki durum: adres biliniyor → "SUNUCUYA BAĞLANILAMIYOR" + adres + `N sn · M. deneme` + son hata; adres yok → "SUNUCU BULUNAMADI". Rol'e göre ipucu (player: joystick 1 sn / admin: launcher). Masaüstü varyantı: screen-space + scrim + **"Yeniden Bağlan"** (adres yoksa devre dışı; `Disconnect()` otomatik denemeyi durdurduğu için tek kurtarma yolu). VR varyantı: world-space kart + `HudFollow`, scrim YOK, **düğme YOK** (o yüzden `_reconnectButton` alanı orada boştur — normaldir). ⚠️ `ArenaBoundary.IsOutOfBounds` iken **tamamen gizlenir** — alan-dışı uyarısı her zaman baskın |
 | `LoadingOverlay` | **Sahne geçişi yükleme ekranı** — `ConnectionOverlay` ile birebir aynı desen: kalıcı tekil, `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` ile kendini önyükler, görünümü prefabtan alır (`Resources/UI/LoadingOverlayScreen` masaüstü / `…World` VR, seçimi XR aygıtı/platform belirler), prefab sahneye KONMAZ. **Açılışta önyüklenir, ilk gösterimde değil:** prefabı tam geçiş anında `Resources.Load` etmek yüklemenin en kötü karesinde takılma üretirdi. Yalnız `SceneRouter` sürer: `Show(sceneName)` / `SetProgress(0..1)` / `Hide()`. Bar dolumu `UiKit.SetBarFill` desenidir (`anchorMax.x`) ve hedefe **yumuşayarak** gider — yükleme kareleri düzensizdir, ham `progress` sıçrardı. Başlık ve ipucu metinleri prefabta SABİTTİR; kod yalnız sahne adını, yüzdeyi ve barı yazar. ⚠️ VR varyantında **scrim YOKTUR** (`ConnectionOverlay` ile aynı güvenlik gerekçesi: free-roam'da görüşü karartmak tehlikeli). ⚠️ **World-space kart kamera bulunana kadar ÇİZİLMEZ** ve kamera değişince `HudFollow` yeniden başlatılır (Tuzaklar: "dünya-uzayı overlay'i kamera yokken çizme") — sahne geçişi tam da kameranın öldüğü/doğduğu andır, bu kapı olmadan ekran masaüstünde görünüp VR'da hiç çizilmez. Prefab bulunamazsa hata loglanır ve ekran hiç çizilmez — **sahne geçişi yine de tamamlanır** |
 | `DevSession` | **Yalnız editör** (dosyanın tamamı `#if UNITY_EDITOR`): dev penceresinin `EditorPrefs` seçimini Play'e uygular. (a) `BeforeSceneLoad` → rol + adres `AppSession`'a, `RoleResolved = true`; (b) `AfterSceneLoad` → "Açık sahneden" kipinde ve aktif sahne bir ARENA sahnesiyse, bir kare sonra **sunucuya bağlanır**. **Bağlanmayı neden o üstleniyor:** `Connect` normalde kabuk controller'larından gelir, arena sahnelerinde onlar YOKTUR — bağlanmazsa can/skor/faz gelmez ve `CanFire` hiç açılmaz. Takım/mod/süre/limit/faz **yalnız sunucudan** gelir: `welcome.match` geç-katılım senkronu ya da gerçek `load_match`; sunucuda maç koşmuyorsa istemci maç verisi almaz ve bir **admin** maçı başlatmalıdır. **Sandbox kipinde bağlanmaz:** adresi siler (tek başarılı bağlantı `_hasEverConnected`'i kalıcı açar ve kalibrasyon kapısını kapatırdı) ve bağlanmak yerine `ModeRuntime.Apply` ile seçilen `modeId` + `fireWhilePaused = true` yazar, ayrıca `WeaponGranter.SequentialGrant`'i açar — sunucudan gelmiş gibi mesaj **üretmez** (§6.2). Pencerede "Dev enjeksiyonu" kapatılırsa üretim yolu birebir koşar |
 | `AppSession` | Oturum: rol + sunucu adresi (`ServerIp`/`ServerPort`/`HasServerEndpoint`) — `AppBoot` yazar, controller'lar okur |
@@ -767,10 +768,10 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 | `AdminPlayerMarkers` | Oyuncu başına **zeminde halka + altında ad etiketi** (kuş bakışı isteği). İşaretçiyi `AdminPlayerMarker` prefabından örnekler; konum/renk/seçim bu sınıfta kalır. Halka baş pozunun x/z'sinden arena zeminine indirilir; etiket kameraya döner ve kameranın yukarı vektörünün tersine kaydırılarak her kipte "dairenin altında" okunur. `RemoteAvatar`'a dokunmaz |
 | `AdminHud` | **Kalıcı** ekran-uzayı HUD'ı (`sortingOrder = 4000`; hata ekranı 5000'de üstte kalır): üst orta takım skorları + **ortada istatistik chip'i** (faz/süre de gösterir), sol üst tercihler, sağ üst mod·harita + bağlantı/poz yaşı + **çoklu admin satırı** (kaç admin bağlı · son admin eylemi; tek admin varken boş kalır), yanlarda takım kolonları (**FFA'da tek kolon** — karar veriden gelir), alt orta kamera şeridi + seçili oyuncu, alt sağ ölüm akışı. **Görünüm prefabtan gelir** (`_Shared/App/Resources/UI/AdminHud.prefab`) — sınıfın kendisi yalnız veri bağlama/tazelemedir, yerleşim ve renk elle düzenlenir. Prefab **sahneye konmaz**, `AdminSpectator` onu `Resources.Load` ile yükleyip kendi altına örnekler (gözlemci kalıcı → arayüz de kalıcı, lobi ↔ arena geçişinde yeniden kurulmaz). ⚠️ Prefabtaki ögeler silinirse alan boşalır ve **hata vermeden sessizce çizilmez** |
 | `AdminPlayerRow` | Oyuncu satırı: takım şeridi, ad + `#id`, HP barı, `K/D · batarya · durum`, eylemler POV/**KAL**/TAKIM/KİMLİK/**AT**. `KAL` ve `AT` **iki adımlı onay** ister (oyuncuyu savaş dışı bırakan/atan eylem tek tıkla olmamalı). `KAL` hem gösterge hem düğmedir (`KAL` yeşil / `KAL !` kırmızı — sembol değil renk+ünlem, çünkü TMP varsayılan fontunda ✓/✗ garantisi yok) ve **yalnız sıfırlar** — geri açmayı gözlük yapar (§3.11); kalibresiz satırın kenarlığı kırmızıya döner. Satıra tıklamak seçer. **Görünüm prefabtan gelir** (`_Shared/App/Resources/UI/AdminPlayerRow.prefab`); `AdminHud` onu kolona örnekler ve havuzlar. Satır **yüksekliği prefabtan okunur** → sanatçı satırı büyütünce kolon yerleşimi kendiliğinden uyar. ⚠️ Düğmelerin `onClick`'i prefabta BOŞTUR ve doldurulmamalıdır: hedef oyuncu her `Bind` ile değişiyor, kalıcı bir inspector kaydı yanlış oyuncuya komut gönderir (ve iki adımlı onayı atlar) |
-| `AdminPreferencesPanel` | Eski dashboard'un işi. **MAÇ bölümü ORTAK** (başlıkta yazar): mod/harita seçicileri yerel alana değil `set_selection` ile sunucudaki ortak seçime yazar → tüm adminlerde aynı anda değişir; tıklamada yerel imleç de iyimser ilerletilir, sunucudan gelen değer son sözü söyler. **Harita değişince o arenayı HERKES yükler** (§10.7 sahneleme — sunucu `return_to_lobby` yayar, faz `Lobby` kalır, maç başlamaz); panel ayrıca sahneyi yerel olarak da açar (`SceneRouter.LoadPreview`) ama bu yalnız gecikmeyi gizler. ⚠️ **Mod/harita satırları maç KURULMUŞKEN PASİFTİR** (`AdminRoster.CanChangeSelection`): izin yalnız lobide (maç kurulmamış) ve maç bittiğinde (`finished`, operatör bir sonrakini seçiyor) vardır — koşan maç, yükleme, geri sayım ve **duraklatma** kapalıdır (donmuş maç da kurulmuş maçtır; çıkış yolu `abort_match`). Bölüm başlığı sebebini yazar, tıklanırsa durum satırına uyarı düşer; süre/limit her fazda açıktır. Aynı kural sunucuda da uygulanır ve otorite orasıdır (`MatchDirector.CanChangeSelection`) — buradaki kopya yalnız operatörü boşuna tıklatmamak içindir. Bu bileşen panel **kapalıyken de etkin** olduğu için başka bir operatörün harita değişikliği panel açılmadan da yansır. ⚠️ **Harita listesi mekan süzgeci her değiştiğinde yeniden kurulur** (`AdminSelection.VenueVersion`) — panel bağlantıdan ÖNCE kurulduğu için ilk liste kaçınılmaz olarak süzgeçsizdir ve orada bırakılırsa operatör başka işletmelerin arenalarını görür. Yeniden kurulumda **seçili harita hayatta kalıyorsa imleç onda bırakılır**. Bölüm başlığı ayrıca sunucunun **açık sahnesini** yazar (`SceneRouter.OpenScene`): harita satırı bir sonraki maçın adayı, açık sahne şu an yüklü olandır. **GÖRÜNÜM bölümü YEREL** (halkalar, ad etiketleri, kamera hızı, duvar saydamlığı, **çatı**) + bağlantı (yeniden bağlan/kes, bağlı admin sayısı). MAÇ bölümünde ayrıca **Süre** (`ROUND_SECONDS_OPTIONS`: 2.5/5/10/15/20/30 dk · 1 saat) ve **Skor limiti** (eşiğin altında ±1, üstünde ±5) seçicileri vardır — ikisi de ORTAK; **mod değişince o modun `ModeDefinition` varsayılanına dönerler**. Bir de **Dost ateşi** satırı: tek değer + iki düğme, ikisi de aç/kapa yapar (satır deseni diğerleriyle aynı kalsın diye) ve değer AÇIK iken kırmızı vurguyla gösterilir. ⚠️ **Bu satır seçim kilidine takılmaz** — mod/harita gibi maç kuruluyken pasifleşmez, çünkü işin özü tam olarak koşan maçta basılabilmesidir (takım arkadaşlarını vuran oyuncu için operatör maçı iptal etmek zorunda kalmasın). Yerel bir alan tutulmaz: gönderilen istek sunucudakinin tersidir, panel `admin_state.friendlyFire`'ı gösterir — iki operatör sapmasın. Yarı saydam, **scrim YOK**. **Liste tabanlı seçim açılır listedir** (mod/harita → `TMP_Dropdown`): seçenekleri kod doldurur (katalogdan; boş katalogda tek satır "katalog yok"/"harita yok" yazar ve seçici pasifleşir), imleç `SetValueWithoutNotify` ile eşitlenir — `value` ataması `onValueChanged`'i tetikleyeceği için sunucudan gelen her tazeleme yeni bir `set_selection` doğururdu. Şablon hiyerarşisi (viewport/item/scrollbar) prefabtadır ve **kapalı durur**. ⚠️ **Harita listesinin ilk satırı "Lobi"dir:** ayrı bir "LOBİYE DÖN" düğmesi yoktur, satır seçilince `set_selection` değil `return_to_lobby` gider. Lobi haritası katalogdan `AdminContent.ResolveLobbyMap` ile çözülür (`supportedModeIds == ["lobby"]` + mekan süzgeci; sunucudaki `MapTable.ResolveLobbyScene` ile aynı ölçüt, birden çok adayda alfabetik ilki → iki taraf aynı sahneyi seçer) ve **arena listesine karışmaz**. ⚠️ **Harita seçicisinin imleci ortak seçimi değil AÇIK SAHNEYİ izler** (`ApplyOpenScene`, kaynak: `welcome` + `return_to_lobby` + `load_match`): ikisi ayrışır — maç bitip lobiye dönüldüğünde ortak seçim hâlâ son arenayı gösterir, açık sahne lobidir. İmleci ortak seçime bağlamak operatörü **o arenaya geri dönemez** hâle getiriyordu: `TMP_Dropdown` seçili satıra tıklamayı olay saymaz (`value == m_Value` iken `onValueChanged` ateşlenmez), yani sahneleme komutu hiç gönderilemiyordu. Aynı sebeple seçicide **"zaten seçili" erken çıkışı yoktur** (sunucu aynı sahneyi tekrar sahnelemeyi zaten idempotent karşılar). Lobi açıkken **BAŞLAT reddeder** ve sebebini durum satırına yazar — sahnelenmiş arena yoktur, sunucu lobi türünde maç başlatmaz. Sayısal değerler (süre, skor limiti, numara) `[<] değer [>]` adımlayıcı kalır: gezilecek bir listeleri yok, asıl jest komşu değere gitmektir. Maç düğmelerinin altında **tek** DURAKLAT/DEVAM ET düğmesi: hangi komutu göndereceğine yerel bir bayrakla değil sunucudan gelen faza bakarak karar verir (`playing` → `pause_match`, `paused`/`operator` → `resume_match`), diğer her durumda pasiftir — çoklu admin'de duraklatmayı başkası da yapmış olabilir, yerel bayrak iki paneli birbirine ters düşürürdü |
+| `AdminPreferencesPanel` | Eski dashboard'un işi. **MAÇ bölümü ORTAK** (başlıkta yazar): mod/harita seçicileri yerel alana değil `set_selection` ile sunucudaki ortak seçime yazar → tüm adminlerde aynı anda değişir; tıklamada yerel imleç de iyimser ilerletilir, sunucudan gelen değer son sözü söyler. **Harita değişince o arenayı HERKES yükler** (§10.7 sahneleme — sunucu `return_to_lobby` yayar, faz `Lobby` kalır, maç başlamaz); panel ayrıca sahneyi yerel olarak da açar (`SceneRouter.LoadPreview`) ama bu yalnız gecikmeyi gizler. ⚠️ **Mod/harita satırları maç KURULMUŞKEN PASİFTİR** (`AdminRoster.CanChangeSelection`): izin yalnız lobide (maç kurulmamış) ve maç bittiğinde (`finished`, operatör bir sonrakini seçiyor) vardır — koşan maç, yükleme, geri sayım ve **duraklatma** kapalıdır (donmuş maç da kurulmuş maçtır; çıkış yolu `abort_match`). Bölüm başlığı sebebini yazar, tıklanırsa durum satırına uyarı düşer; süre/limit her fazda açıktır. Aynı kural sunucuda da uygulanır ve otorite orasıdır (`MatchDirector.CanChangeSelection`) — buradaki kopya yalnız operatörü boşuna tıklatmamak içindir. Bu bileşen panel **kapalıyken de etkin** olduğu için başka bir operatörün harita değişikliği panel açılmadan da yansır. ⚠️ **Harita listesi mekan süzgeci her değiştiğinde yeniden kurulur** (`AdminSelection.VenueVersion`) — panel bağlantıdan ÖNCE kurulduğu için ilk liste kaçınılmaz olarak süzgeçsizdir ve orada bırakılırsa operatör başka işletmelerin arenalarını görür. Yeniden kurulumda **seçili harita hayatta kalıyorsa imleç onda bırakılır**. Bölüm başlığı ayrıca sunucunun **açık sahnesini** yazar (`SceneRouter.OpenScene`): harita satırı bir sonraki maçın adayı, açık sahne şu an yüklü olandır. **GÖRÜNÜM bölümü YEREL** (halkalar, ad etiketleri, kamera hızı, **çatı**) + bağlantı (yeniden bağlan/kes, bağlı admin sayısı). MAÇ bölümünde ayrıca **Süre** (`ROUND_SECONDS_OPTIONS`: 2.5/5/10/15/20/30 dk · 1 saat) ve **Skor limiti** (eşiğin altında ±1, üstünde ±5) seçicileri vardır — ikisi de ORTAK; **mod değişince o modun `ModeDefinition` varsayılanına dönerler**. Bir de **Dost ateşi** satırı: tek değer + iki düğme, ikisi de aç/kapa yapar (satır deseni diğerleriyle aynı kalsın diye) ve değer AÇIK iken kırmızı vurguyla gösterilir. ⚠️ **Bu satır seçim kilidine takılmaz** — mod/harita gibi maç kuruluyken pasifleşmez, çünkü işin özü tam olarak koşan maçta basılabilmesidir (takım arkadaşlarını vuran oyuncu için operatör maçı iptal etmek zorunda kalmasın). Yerel bir alan tutulmaz: gönderilen istek sunucudakinin tersidir, panel `admin_state.friendlyFire`'ı gösterir — iki operatör sapmasın. Yarı saydam, **scrim YOK**. **Liste tabanlı seçim açılır listedir** (mod/harita → `TMP_Dropdown`): seçenekleri kod doldurur (katalogdan; boş katalogda tek satır "katalog yok"/"harita yok" yazar ve seçici pasifleşir), imleç `SetValueWithoutNotify` ile eşitlenir — `value` ataması `onValueChanged`'i tetikleyeceği için sunucudan gelen her tazeleme yeni bir `set_selection` doğururdu. Şablon hiyerarşisi (viewport/item/scrollbar) prefabtadır ve **kapalı durur**. ⚠️ **Harita listesinin ilk satırı "Lobi"dir:** ayrı bir "LOBİYE DÖN" düğmesi yoktur, satır seçilince `set_selection` değil `return_to_lobby` gider. Lobi haritası katalogdan `AdminContent.ResolveLobbyMap` ile çözülür (`supportedModeIds == ["lobby"]` + mekan süzgeci; sunucudaki `MapTable.ResolveLobbyScene` ile aynı ölçüt, birden çok adayda alfabetik ilki → iki taraf aynı sahneyi seçer) ve **arena listesine karışmaz**. ⚠️ **Harita seçicisinin imleci ortak seçimi değil AÇIK SAHNEYİ izler** (`ApplyOpenScene`, kaynak: `welcome` + `return_to_lobby` + `load_match`): ikisi ayrışır — maç bitip lobiye dönüldüğünde ortak seçim hâlâ son arenayı gösterir, açık sahne lobidir. İmleci ortak seçime bağlamak operatörü **o arenaya geri dönemez** hâle getiriyordu: `TMP_Dropdown` seçili satıra tıklamayı olay saymaz (`value == m_Value` iken `onValueChanged` ateşlenmez), yani sahneleme komutu hiç gönderilemiyordu. Aynı sebeple seçicide **"zaten seçili" erken çıkışı yoktur** (sunucu aynı sahneyi tekrar sahnelemeyi zaten idempotent karşılar). Lobi açıkken **BAŞLAT reddeder** ve sebebini durum satırına yazar — sahnelenmiş arena yoktur, sunucu lobi türünde maç başlatmaz. Sayısal değerler (süre, skor limiti, numara) `[<] değer [>]` adımlayıcı kalır: gezilecek bir listeleri yok, asıl jest komşu değere gitmektir. Maç düğmelerinin altında **tek** DURAKLAT/DEVAM ET düğmesi: hangi komutu göndereceğine yerel bir bayrakla değil sunucudan gelen faza bakarak karar verir (`playing` → `pause_match`, `paused`/`operator` → `resume_match`), diğer her durumda pasiftir — çoklu admin'de duraklatmayı başkası da yapmış olabilir, yerel bayrak iki paneli birbirine ters düşürürdü |
 | `AdminStatsPanel` | Takım toplamları + oyuncu tablosu (ad/takım/**SKOR**/K/D/K-D/HP/batarya/durum/sahne/**PING**) + maç bilgisi. **FFA'da tablo skora göre azalan sıralanır**, başlık lideri yazar. Tablo **kolon kolon** çizilir (TMP fontu eşit genişlikli değil, boşlukla hizalama kayar). ⚠️ Kolon eklemek koda yetmez, prefabta (`AdminHud.prefab`) bir TMP objesi açıp `_columns` dizisine bağlamak gerekir — bağlanmazsa kolon sessizce hiç çizilmez. Protokolde olmayan metrik (hasar/isabet oranı) **gösterilmez**; jitter/kayıp protokolde VAR ama panelde bilinçli olarak yok (operatörün eyleme çevirebileceği sayı ping'dir) |
 | `AdminRoster` | Admin arayüzünün veri katmanı: `lobby_state` (otoriter tam görüntü + `kills/deaths/hp/alive/score`) + `health_update`/`kill_event` (anlık) + `match_state`/`countdown`/`match_end` birleşimi; takım listeleri, takım kipi kararı, ölüm akışı, snapshot yaşı. **`IsFfa` OTORİTER:** maç yüklüyse `ModeRuntime.Teams`, lobide ortak seçimin katalogdaki modu, ikisi de yoksa eski sezgisel yedek ("kimsenin takımı yok"). ⚠️ `respawn` admin'e GELMEZ (yalnız ölen oyuncuya gider) → geri sayım `kill_event` + `RESPAWN_DELAY` ile yerel hesaplanır |
-| `AdminSession` | **YEREL** seçimler (kamera kipi, seçili oyuncu, açık panel) + görünüm tercihleri (`PlayerPrefs`'te kalıcı, admin PC'sine özel — halkalar, ad etiketleri, kamera hızı, duvar saydamlığı, **çatı kipi**). Tek doğruluk noktası; `Changed` ile HUD/kamera/işaretçiler senkron kalır. `RoofAlphaNow()` tercih + kamera kipinden çatı alfasını türetir |
+| `AdminSession` | **YEREL** seçimler (kamera kipi, seçili oyuncu, açık panel) + görünüm tercihleri (`PlayerPrefs`'te kalıcı, admin PC'sine özel — halkalar, ad etiketleri, kamera hızı, **çatı kipi**). Tek doğruluk noktası; `Changed` ile HUD/kamera/işaretçiler senkron kalır. `RoofAlphaNow()` tercih + kamera kipinden çatı alfasını türetir |
 | `AdminSelection` | **ORTAK** durumun aynası (`admin_state`, §5.3): mod/harita seçimi, **maç süresi + skor limiti**, çevrimiçi admin sayısı, son admin eyleminin duyurusu, **mekan süzgeci** (`venueId`/`venueScenes` + her değişiminde artan `VenueVersion`), **dost ateşi anahtarının yürürlükteki değeri** (`FriendlyFire` — seçim değil durum, §3.9). Statik durum + statik `Changed` (bileşen kurulum sırası dinleyiciyi ilgilendirmesin); bileşenin kendisi yalnız ağ olayı pompasıdır. Otorite sunucudadır — buraya yerelden yazılmaz |
 | `AdminCommands` | Admin komutlarının tek çıkış kapısı (§5.2) + son işlemin durum metni. "Gönderildi" der, "oldu" demez — kabul/ret sunucuda. `SetSelection` ortak seçimi (mod/harita/süre/limit) değiştirir, maçı başlatmaz; `StartMatch` süre/limit taşır (`0` = mod varsayılanı); `PauseMatch`/`ResumeMatch` koşan maçı dondurur/sürdürür; `SetFriendlyFire` dost ateşi anahtarını çevirir (**faz kapısı yok** — koşan maçta da geçerli, §3.9) |
 | `AdminContent` | `Resources.Load<GameCatalog>("GameCatalog")` (asset: `_Shared/Data/Resources/`) → mod/harita listeleri. **Statik** yardımcıdır (`[SerializeField]` taşıyamaz), katalogu bu yüzden `Resources`'tan okur |
@@ -785,28 +786,50 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 
 ### İstemci: `VortexArena.Core` (oyun kodu)
 
-`ArenaBoundary` (muhafaza: kenara/kolona olan mesafeden duvar alfası + karartma + uyarı;
+`ArenaBoundary` (muhafaza: kenara/kolona olan mesafeden karartma + uyarı — kenara `warnDistance`
+kala hafif bir rampa başlar (`warnFadeAlpha`), sınır aşılınca tam karartmaya gider; iki dal sınırda
+aynı değeri verdiği için geçiş süreklidir. ⚠️ **Yarı saydam duvar göstergesi KALDIRILDI**
+(`wallRenderers`/`minWallAlpha`/`maxWallAlpha` yok): arenanın duvarları environment sanatına ait ve
+mekanizma oraya taşınamıyordu — alfa yazımı yalnız Transparent malzemede iş görür, üstelik alfa
+düşünce Renderer'ı kapatıyordu. Uyarı bu yüzden HMD'ye bağlı karartma quad'ına taşındı, arena
+geometrisinden tümden bağımsız;
 `HalfExtents`/`LocalCenter`'ı admin kuş bakışı kadrajı okur — ikisi de plandaki sınır çokgeninin
 sınırlayıcı kutusundan türer, ölçü bileşende TUTULMAZ. Planın **tek kaynağı** `dimensionsJson`
 alanına bağlanan boyut dosyasıdır; ikinci bir kip yoktur. Plan çözülünce mesafe **çokgene işaretli
 mesafe ⊓ kolonlar ⊓ sahnedeki `ArenaObstacle`'lar** olur — en yakın tehlike kazanır, kolonun içi
 alan-dışı sayılır. JSON kare başına ayrıştırılmaz (referans değişmedikçe önbelleklenir).
 ⚠️ Dosya bağlı değilse ya da okunamıyorsa **açık başarısızlık**: bir kez `Debug.LogError` basılır ve
-muhafaza tümden susar (duvar alfası, karartma, alan-dışı uyarısı çalışmaz). Gerekçe: ölçüsü
+muhafaza tümden susar (karartma ve alan-dışı uyarısı çalışmaz). Gerekçe: ölçüsü
 bilinmeyen bir arenada doğru bir muhafaza zaten üretilemez, kapalı başarısızlık (ör. her karede
 ekranı karartmak) işletmede oyunu tümden oynanamaz kılardı — bu bir KURULUM hatasıdır, editörde/
 QA'da yakalanmalıdır. Arena origin'i bu bileşende DEĞİLDİR, devre dışı bırakılabilir),
 `ArenaDimensions` (`Core/Arena` — **arena ölçüsünün TEK doğruluk kaynağı**: elle yazılabilir bir
-JSON dosyası (`TextAsset`), çalışma anında okunur. Alanlar
-`outline`/`wallHeight`/`columns`/`defaultColumnHeight`/`columnsBlockPlayer`; noktalar
-`ArenaBoundary` transformunun yerel XZ'sinde ve JSON'daki `y` dünya Z'sidir. Sınır **kapalı**dır
-(ilk nokta sona tekrarlanmaz), köşe yönü önemsizdir. ⚠️ **Alan tam kare/dikdörtgen bile olsa dört
-köşeli bir `outline` olarak yazılır** — "dikdörtgense şu hızlı yol" ayrımı ve ona ait bileşen
-alanları bilinçli olarak kaldırıldı, çünkü aynı ölçünün iki ayrı ifadesi kaçınılmaz olarak
-birbirinden sapıyordu. `Parse`/`FromTextAsset` **exception fırlatmaz** — bozuk dosyada `null` +
-hata metni döner, çünkü çağıran yer sahne yükleme yolu; `FromJsonOverwrite` kullanıldığı için
-**yazılmayan alan varsayılanında kalır** (aksi hâlde eksik bir `wallHeight` duvarsız arena
-demekti). Dosya olmasının kazancı: ölçüyü sahadan alan kişi Unity açmadan güncelleyebilir),
+JSON dosyası (`TextAsset`), çalışma anında okunur ve **MEKAN başınadır** — bir işletmenin bütün
+sahneleri (arenalar + lobi) aynı dosyayı gösterir, sahne başına kopya kaçınılmaz olarak sapardı.
+Alanlar `plane`/`columns`/`defaultColumnHeight`; noktalar `ArenaBoundary`
+transformunun yerel XZ'sinde ve JSON'daki `y` dünya Z'sidir. Halkalar **kapalı**dır (ilk nokta sona
+tekrarlanmaz), köşe yönü önemsizdir. ⚠️ **Taban da kolon da TEK sıralı köşe halkasıdır**: parçalardan
+birleştirme (union) yoktur — içbükeylik için gerekmez ve `ArenaBoundary` yüzünden çalışma anında da
+koşmak zorunda kalırdı. Aynı sebeple "dikdörtgense şu hızlı yol" ayrımı ve ona ait bileşen alanları
+da yoktur. ⚠️ **`wallHeight` alanı YOKTUR**: duvar üretimi de duvar göstergesi de kalktığı için
+okuyanı olmayan bir ölçü olurdu. ⚠️ Kolondaki `{"points": […]}` sarmalayıcısı zorunlu —
+`JsonUtility` iç içe dizi serialize etmiyor. `Parse`/`FromTextAsset` **exception fırlatmaz** — bozuk
+dosyada `null` + hata metni döner, çünkü çağıran yer sahne yükleme yolu; `FromJsonOverwrite`
+kullanıldığı için **yazılmayan alan varsayılanında kalır** (aksi hâlde eksik bir
+`defaultColumnHeight` hiç çizilmeyen kolonlar demekti). ⚠️ **Kolonun muhafazaya girip girmeyeceğini
+seçen bir anahtar YOKTUR ve eklenmez** — kolon binanın taşıyıcısıdır, oyuncu ona her hâlükârda
+çarpar. Dosya olmasının kazancı: ölçüyü sahadan
+alan kişi Unity açmadan güncelleyebilir),
+`Polygon2D` (`Core/Arena` — halkalara sorulan her geometrik sorunun tek yeri: `Contains`,
+`DistanceToRing`, `SignedDistance` (alan: içeride +) / `ObstacleDistance` (engel: dışarıda +),
+`Bounds`, `Centroid`, `IsSelfIntersecting`. İki mesafe sözleşmesi muhafazanın ikisini tek
+`Mathf.Min` ile birleştirebilmesi içindir — her ikisinde de "artı = güvenli pay". Metotlar tahsis
+yapmaz: muhafaza her karede çağırıyor),
+`ArenaDimensionMesh` + `DimensionPolygon` (ölçü maketinin işaretçileri; kökte mekan adı + kaynak
+`TextAsset` + geri yazma taşıyıcıları, çokgenlerde yalnız `Kind { Plane, Column }`. ⚠️ Nokta/ad/
+yükseklik işaretçide TUTULMAZ — kaynakları sırasıyla mesh, `GameObject` adı ve mesh'in Y aralığı;
+kopyalamak sahnede düzenlenen değerden sapan ikinci bir kaynak üretirdi. Maketin kökü `EditorOnly`
+etiketlidir, build'e girmez),
 `ArenaObstacle` (sahneye ELLE konan engelin muhafaza dikdörtgeni; konum/dönüş transformdan,
 ölçü `size`'dan gelir — ⚠️ **collider eklemez, fizik yapmaz**: free-roam'da oyuncuyu durduran şey
 gerçek nesnedir, bileşenin tek işi uyarıyı erken tetiklemektir),
@@ -927,7 +950,7 @@ katmanların göreli hız farkı korunur).
 (`GameObject > VortexArena > Arena Roof`), altındaki **tüm** Renderer'lar çatı sayılır ve
 `ArenaRoof` katmanı (user layer 8) damgalanır — hangi geometrinin gizleneceği sahne görünümündeki
 Layers süzgecinden görülsün. Katman yalnız ayıklama içindir; davranış Renderer listesinden gelir,
-damga unutulsa da çalışır. Gizleme `_BaseColor` alfasıyla (duvar saydamlığıyla aynı desen);
+damga unutulsa da çalışır. Gizleme `MaterialPropertyBlock` üstünden `_BaseColor` alfasıyla;
 tam gizlemede Renderer **kapatılmaz**, `ShadowsOnly`'ye alınır → çatı çizilmez ama gölgesini atar
 (kapatılsaydı iç mekân aydınlanıp kuş bakışı okunmaz olurdu). Son uygulanan alfa statik tutulur,
 yeni sahnedeki çatı `OnEnable`'da devralır → kuş bakışındayken arena değiştirilince çatı bir kare
@@ -942,8 +965,10 @@ geometrisini üreten iki araç + kavrama ayarı:
 | Sınıf | Görevi |
 |---|---|
 | `GripSocketAuthoring` | Kavrama noktalarını **sahnede sürükleyerek** ayarlama aracı: `GameObject > VortexArena > Grip Socket (Primary/Secondary)` işaretçi üretir (mevcut SO değerlerinden başlatarak — araç ayarı sıfırlamaz), `Tools > VortexArena > Write Grip Sockets To Definition` onu `WD_*.asset`'e yazar. **Var olma sebebi asimetri:** aynı sürüklenmiş poz `primaryGrip` için TERS bileşimle (`R=Inverse(localRot)`, `P=−(R·localPos)`), `secondaryGrip` için DÜZ yazılır — elle yapıldığında bu fark sessiz bir işaret hatası üretiyordu. Round trip birebir: geri okuma işaretçiyi aynı yere koyar. Yalnız **bulunan** işaretçinin alanları yazılır (yarısı ayarlı silahı sıfırlamasın); ölçek bulaşmasın diye `InverseTransformPoint` yerine elle bileşim |
-| `ArenaShapeBuilder` | **Arena geometrisinin TEK üretim kapısı** (`Build Arena From Dimensions`): boyut dosyasından zemin/duvar/kolon üretir — `Zemin` ProBuilder çokgeni, kenar başına bir duvar, kolon başına bir kutu + `ArenaObstacle`. Kök = `ArenaBoundary`'yi taşıyan transform (plan koordinatları onun yerel XZ'sinde); geometriyi başka bir objenin altına üretmek planı sessizce kaydırır. Üretilen her şey o kökün altında açılan **tek bir `ArenaGeometry` dalında** durur (`Zemin`/`Duvarlar`/`Kolonlar`) — elle konan sahne objeleriyle (kalibrasyon işaretçileri, taban bölgeleri, rig) karışmasın ve tek seferde silinebilsin diye; araç **idempotenttir**, dosya değişince tekrar çalıştırılır ve birikme olmaz. Duvarları `ArenaBoundary.wallRenderers`'a, boyut dosyasını `dimensionsJson`'a kendisi bağlar |
-| `ArenaTestMeshBuilder` | TestMesh (= mekanın fiziksel alanını temsil eden basit quad/blok yığını) → **boyut dosyası**. İkinci bir geometri üreteci DEĞİLDİR: bloklardan bir plan çıkarır, planı diske JSON olarak yazar ve üretimi yukarıdaki tek kapıya devreder — ölçü sonradan dosyada elle düzeltilip yeniden çizilebilsin ve çalışma anındaki muhafaza da aynı dosyayı okusun diye. Sınıflandırma önce **ad ipucu** (`kolon`/`column`/`sütun` · `zemin`/`floor`/`ground`/`taban` · `duvar`/`wall`), ipucu yoksa **geometri**: yassı kutu → zemin, ayak izinin uzun kenarı kısa kenarın belli bir katından uzunsa → duvar, aksi hâlde → kolon. Sınır çokgeni zemin parçasının **gerçek mesh sınırından** çıkarılır (düz quad / `extrude=0` poly-shape ise L/yamuk şekli korunur); zemin kapalı bir katıysa (ProBuilder küpü) parçanın kendi yönelimli dikdörtgeninden dört köşe üretilir — kare/dikdörtgen alanların beklenen yoludur, hata değil. Kolonlar parçanın **kendi frame'inde** ölçülür ve dönüş `yaw` alanında korunur |
+| `DimensionMeshBuilder` | `JSON'dan DimensionMesh Üret`: boyut dosyasından **ölçü maketi** üretir — tek `Plane` (ProBuilder çokgeni, extrude 0) + kolon başına bir prizma (pivotu ayak izinin ağırlık merkezinde, sürüklemek doğal olsun diye). ⚠️ **Duvar ÜRETMEZ ve maket oynanan geometri değildir**: kök `EditorOnly` etiketlenir, build'e girmez; arena sanatı maketin üstüne kurulur. Kök = sahnedeki `ArenaBoundary`'nin altı, yerel dönüşümü sıfırlanmış (plan koordinatları onun yerel XZ'sinde; başka bir ebeveyn planı sessizce kaydırır) — muhafaza yoksa sahne köküne düşer ve uyarı basar. **İdempotent**: aynı mekanın maketi varsa silinip yeniden kurulur. Üretimden önce halkayı `Polygon2D.IsSelfIntersecting` ile denetler |
+| `DimensionMeshReader` | `DimensionMesh'i JSON'a Çevir`: maketi okuyup **kaynak dosyanın üstüne** yazar (hedef sorulmaz, maketin işaretçisinden gelir). Ayak izi çıkarımı: yatay yüzler (`\|normal.y\| > 0.9`) Y seviyesine göre gruplanır, **en alt** grup alınır (prizmada alt yüz kazanır), kenarlar XZ'ye izdüşürülüp kaynaştırılır, **yalnız bir kez geçen** kenar sınır sayılır, halka yürünür ve doğrusal ara köşeler ayıklanır. Noktalar dünya üstünden kök uzayına çevrilir — kolonu sürüklemek/döndürmek doğru yazılır. ⚠️ Kenarlar köşe **indeksiyle değil konumla** anahtarlanır: ProBuilder sert normaller için köşeleri yüz başına ayırıyor, indeksle bakan tespit tüm mesh'i sınır sanar. Yazmadan önce çıktı geri ayrıştırılır; doğrulanamazsa dosyaya **dokunulmaz** |
+| `TemplateBasicsLoader` | `Template Temellerini Yükle`: aktif sahneye altyapıyı **prefab örneği** olarak koyar (`VA_ArenaRoot`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`; seçime bağlı `VA_ModeHud` · taban bölgeleri · `SpawnPoint`), `ArenaCalibrator`'ın sahneye bakan alanlarını bağlar, `ArenaBoundary`'nin rig'e bakan alanlarını (`head`/`fadeRenderer`/`warningText`) `VA_CameraRig` içinden bağlar ve mekanın boyut dosyasını `ArenaBoundary.dimensionsJson`'a takar. Taban bölgelerini takım malzemesiyle boyar (tek `VA_BaseZone` prefabı iki takıma da hizmet ediyor; şerit rengini çalışma anında kimse yazmıyor). **İdempotent** — var olan örneği asset yoluyla tanır ve atlar; dolu bir alanın üstüne YAZMAZ |
+| `BuildElementsConfigurator` | `Configure All Build Elements`: `MapDefinition` yazar/günceller, `GameCatalog.maps`'e ve haritayı destekleyen her modun **DOLU** `maps` listesine ekler (boş liste "kısıtsız" demek, dokunulmaz), Build Settings'e koyar, `ServerConfigExporter.Export(false)` çağırır ve bir **sağlık raporu** basar (`SpawnPoint` sayısı, `dimensionsJson` dolu mu, maket `EditorOnly` ve doğru ebeveyn altında mı, sahnede `Wall_*` kalıntısı var mı). Bu adımların biri atlanınca hata sessizdir — tek düğmede toplanmasının sebebi budur |
 
 ### Sunucu: `Server/VortexArena.Server.Core`
 
@@ -1148,15 +1173,23 @@ yığın iziyle düşerdi.
 - **Sunucu ve launcher build'i yalnız .NET 10 SDK ister.** İkisi de self-contained tek klasör
   üretir; işletme PC'sine .NET kurmak gerekmez. Launcher açıkken `deploy\launcher\` kilitli olur —
   script bunu kontrol edip uyarır.
-- **VR (player) build'i platformu Android'e çevirir ve geri almaz.** `deploy-player-apk.bat`
-  Unity'yi `-buildTarget Android` ile **başlatır** — platformu `-executeMethod`'un içinden
-  çevirmek olmuyor, `SwitchActiveBuildTarget` domain reload tetikleyip çalışan metodu yarıda
-  bırakıyor. Aktif platform Windows'sa ilk koşu **tam reimport** demektir (texture'lar ASTC'ye
-  yeniden sıkıştırılır, 20-40 dk); sonrakiler hızlıdır. Build sonunda platform Windows'a
-  **geri alınmaz** — geri almak ikinci bir tam reimport daha olurdu, admin build'i zaten kendi
-  platformuna geçiriyor. Betik Android Build Support modülünün kurulu olduğunu build'e girmeden
-  önce doğrular (`Data\PlaybackEngines\AndroidPlayer`): modül yoksa Unity sessizce Windows'ta
-  devam edip `.exe` üretirdi.
+- **Hedef platform betikte sabittir, aktif platformdan türetilmez.** İki Unity betiği de Unity'yi
+  kendi hedefiyle **başlatır** (`deploy-admin-game.bat` → `-buildTarget Win64`,
+  `deploy-player-apk.bat` → `-buildTarget Android`); bayrak açılışta verilir çünkü platformu
+  `-executeMethod`'un içinden çevirmek `SwitchActiveBuildTarget` ile domain reload tetikleyip
+  çalışan metodu yarıda bırakıyor. Projede hangi platform açık kalmış olursa olsun her betik kendi
+  çıktısını üretir. Aktif platform hedefe eşit değilse geçiş açılışta olur ve **o koşu tam
+  reimport** demektir (texture'lar yeniden sıkıştırılır: Quest'te ASTC, Windows'ta DXT — 20-40 dk);
+  sonrakiler hızlıdır. Platform build sonunda **geri alınmaz**, geri almak ikinci bir tam reimport
+  daha olurdu. `deploy-player-apk.bat` ayrıca Android Build Support modülünü build'e girmeden önce
+  doğrular (`Data\PlaybackEngines\AndroidPlayer`): modül yoksa Unity platformu çeviremez, sessizce
+  Windows'ta devam edip `.exe` üretirdi.
+- **İki Unity build'i birbirinin cache'ini ısıtmaz.** `Library/` ortaktır ama içindeki şeritler
+  platform başınadır: shader varyantları grafik API'sine göre anahtarlanır (admin d3d11, oyuncu
+  vulkan), asset artifact'ları sıkıştırma biçimine göre, script derleme çıktıları hedefe göre ayrı
+  klasörlerde. Her platform kendi cache'ini bir kez ısıtır; **soğuk cache'te build süresinin büyük
+  kısmı shader varyantı derlemektir.** Pratik sonuç: `Library/`'yi silme, ve aynı gün ikisi de
+  gerekiyorsa önce admin sonra APK al.
 - **APK kurulumu:** `install_game.bat` → `adb install -r -g`. Betik APK'yı **sırayla kendi yanında,
   `deploy\player\` ve `Builds\player\` altında** arar, ilk bulduğunu kurar — bu yüzden repo
   kökündeki kopya da `deploy-player-apk.bat`'in APK yanına bıraktığı kopya da çalışır ve dosya
@@ -1172,7 +1205,7 @@ yığın iziyle düşerdi.
   bağlantı için geçerlidir: adb server'ı her yeniden başladığında cihaz `unauthorized`'a döner ve
   onay yeniden istenir.
 - Boot sahnesi build listesinde **index 0** olmalı; tüm arena sahneleri listede olmalı
-  (sihirbaz bunu otomatik yapar).
+  (`Configure All Build Elements` sahneyi listeye kendisi ekler).
 
 **Operatör akışı (işletmede):** launcher'ı aç → (bir kez) sunucu exe'si + **mekan**, sunucu IP'si,
 admin exe'si → **Sunucuyu Başlat** → **Yönetimi Başlat**. Sunucu `--venue <mekan>` ile açılır; oyun
@@ -1183,25 +1216,27 @@ admin exe'si → **Sunucuyu Başlat** → **Yönetimi Başlat**. Sunucu `--venue
 
 | İstek | Yol |
 |---|---|
-| **Yeni arena** | `Tools > VortexArena > Create Arena From Template` → arenaId, sahne adı, **mekan (zorunlu)** + **geometri kaynağı** (`ArenaGeometrySource`, ZORUNLU: boyut dosyası ya da TestMesh kökü — "geometriye dokunma" seçeneği yoktur). Kutu her zaman `Venues/<İşletme>/<arenaId>/` altına açılır. Sihirbaz klasörleri + sahnenin **bire bir kopyasını** üretir, `MapDefinition` yazar, `GameCatalog` + uyumlu `ModeDefinition` + Build Settings'e ekler. Şablondan gelen zemin/duvar mesh'leri silinip geometri boyut dosyasından üretilir (`ArenaGeometry` dalı), `wallRenderers` + `dimensionsJson` bağlanır. **İki kaynak aynı noktada buluşur:** TestMesh seçilirse önce ondan bir boyut dosyası çıkarılıp arena kutusunun `Data/` klasörüne yazılır, sonrası elle yazılmış bir dosyayla birebir aynıdır. ⚠️ **Geometri ölçeklenmez** (boyut sorulmaz); kalibrasyon işaretçilerinin yerleşimi, tek `SpawnPoint` ve bake işleri ELDE'dir. Sihirbazın değeri sahnenin ağ bileşenlerini eksiksiz taşıması. **Sonra `Export Server Config`.** |
+| **Yeni arena** | Altı adım, tek düğmeli sihirbaz YOK: boş sahne → arena kutusuna kaydet (`Venues/<İşletme>/<arenaId>/Scenes/`) → `Template Temellerini Yükle` (altyapı prefab örnekleri + boyut dosyası bağlama) → `JSON'dan DimensionMesh Üret` (mekanın ölçü maketi; **bu araçtan SONRA**, çünkü maket `ArenaBoundary`'nin altına kuruluyor) → ölçü tutmuyorsa köşeleri ProBuilder ile düzeltip `DimensionMesh'i JSON'a Çevir` → environment sanatı + tek `SpawnPoint` (zemin seviyesinde) + kalibrasyon işaretçileri + bake → **`Configure All Build Elements`** (MapDefinition + katalog + mod listeleri + Build Settings + `maps.json`, tek geçişte). ⚠️ **Ölçekleme yoktur**; maket build'e girmez ve duvar üretmez — arenanın duvarları environment sanatına aittir ve fiziksel sınırla çakışmalıdır |
 | **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack modeli = köken kaydı) → `Tools > VortexArena > Build Weapon Prefabs` → `WD_*.asset` üretir, **mevcut** `WPN_*.prefab`'ı yerinde günceller (ses + namlu alevi/dumanı + kovan kiti dahil), `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). ⚠️ Araç **mevcut prefabların `Muzzle`/`Model` yerleşimine DOKUNMAZ**, yalnız definition bağlarını + ses/VFX/kovan kitini tazeler — VR'da elle ayarlanmış tutuş/namlu konumu tekrar çalıştırmakla bozulmaz. Paylaşılan şablon yoktur: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır. ⚠️ **Ses klipleri yalnız alan BOŞSA yazılır** (elle sürüklenen klip korunsun diye): mevcut bir silahın sesini tablodan değiştiriyorsan önce `WD_*.asset`'teki klip alanlarını boşalt, yoksa değişiklik sessizce hiç inmez (Tuzaklar: "elle atanmışsa ezme"). Diğer alanlar (hasar/rpm/menzil/saçılım/kimlik) her koşuda ezilir |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
-| **Elle modellenmiş sahneyi arenaya çevirmek** | Aşağıdaki 6 adım (IceWorld böyle bağlandı) |
+| **Hazır bir sahneyi arenaya çevirmek** | Aşağıdaki adımlar — araçları kullanmadan, elle |
 
-**Elle modellenmiş bir sahneyi ağa bağlama** (sihirbaz kullanılmadıysa — ör. `IceWorld`):
+**Hazır/dışarıdan gelmiş bir sahneyi ağa bağlama** (araçların ne yaptığını elle yapmak; normal yol
+yukarıdaki altı adımdır):
 
 1. Sahneyi arena kutusuna taşı: `Assets/Arenas/Venues/<İşletme>/<Ad>/Scenes/<Ad>.unity` (+ `Data`;
    arenaya özel sanat/prefab varsa `Art/`, `Prefabs/` — mekanın tümüne aitse bir seviye yukarı,
    mekan kökündeki ortak klasörlere). **Sahne adı = katalog anahtarı** — sonradan değiştirme.
    ⚠️ Mekan klasörü dışına konan arena export'a girmez, yani sunucuda hiç görünmez.
-2. Arena çerçevesini kur: duvarlara hizalı bir objeye **`ArenaBoundary`**
-   (`wallRenderers` = duvarlar, `head` = `CenterEyeAnchor`,
-   `fadeRenderer`/`warningText` = rig altındaki `OutOfBoundsFade`/`BoundaryWarningText`).
-   **Ölçüyü bir boyut dosyasına yaz** (`Data/<ad>_dimensions.json`) ve `dimensionsJson` alanına
-   bağla — alan tam kare olsa bile dört köşeli bir `outline` olarak girilir, ölçü için bileşende
-   ayrı bir alan YOKTUR. Dosya bağlanmazsa muhafaza hata basıp kendini kapatır. Plan koordinatları
-   bu transformun yerel XZ'sindedir; ölçüyü bir köşeden alıyorsan o köşe `(0,0)` olur (plan sıfırının
-   arena origin'i olması gerekmez). Elle konmuş kolon/kasa varsa üstlerine `ArenaObstacle` ekle.
+2. Arena çerçevesini kur: alana hizalı bir objeye **`ArenaBoundary`**
+   (`head` = `CenterEyeAnchor`, `fadeRenderer`/`warningText` = rig altındaki
+   `OutOfBoundsFade`/`BoundaryWarningText`; duvar Renderer'ı diye bir alan YOKTUR).
+   **Ölçüyü mekanın boyut dosyasına yaz** (`Venues/<İşletme>/Data/<İşletme>_dimensions.json`) ve
+   `dimensionsJson` alanına bağla — alan tam kare olsa bile dört köşeli bir `plane` halkası olarak
+   girilir, ölçü için bileşende ayrı bir alan YOKTUR. Dosya bağlanmazsa muhafaza hata basıp kendini
+   kapatır. Plan koordinatları bu transformun yerel XZ'sindedir; ölçüyü bir köşeden alıyorsan o köşe
+   `(0,0)` olur (plan sıfırının arena origin'i olması gerekmez). Elle konmuş kolon/kasa varsa
+   üstlerine `ArenaObstacle` ekle.
 3. Taban bölgeleri: iki `BaseZone` (Red/Blue, karşı kenarlarda; `Neutral` = herkese açık).
    Ölen oyuncu bunlardan birine fiziken girince canlanır — rig ASLA taşınmaz.
    Ayrıca **tek** başlangıç noktası: `GameObject > VortexArena > Spawn Point` ile ekle ve elle
@@ -1216,9 +1251,9 @@ admin exe'si → **Sunucuyu Başlat** → **Yönetimi Başlat**. Sunucu `--venue
    prefab asset'inde boştur) ile `ArenaBoundary`/`BaseZone`'un `head` alanı → sahnenin
    `CenterEyeAnchor`'ı. Boş bırakılırsa sahne sessizce çalışmaz; Unity kopuk sahneler-arası
    referansı sessizce null yapar.
-5. `MapDefinition` asset'i (`Data/`): sceneName + görünen ad + desteklenen modlar →
-   `GameCatalog.maps` + ilgili `ModeDefinition.maps` + **Build Settings**.
-6. **`Tools > VortexArena > Export Server Config`** — yeni `sceneName` `maps.json`'a girsin diye.
+5–6. **`Tools > VortexArena > Configure All Build Elements`** — `MapDefinition` (sceneName +
+   görünen ad + desteklenen modlar), `GameCatalog.maps`, ilgili `ModeDefinition.maps`, **Build
+   Settings** ve `maps.json` export'u tek geçişte; sonunda sağlık raporu basar.
 7. **Arenanın çatısı/tavanı varsa** (isteğe bağlı, açık tavanlı arenalarda atlanır): çatı
    hiyerarşisinin kökünü seç → `GameObject > VortexArena > Arena Roof`. Bileşen eklenir ve
    altındaki tüm Renderer'lara `ArenaRoof` katmanı damgalanır → admin kuş bakışına geçince çatı
@@ -1298,11 +1333,12 @@ konsoluna tek satır sebep yazar.
     çalışmaz). Launcher'ın başlattığı sunucu bu yüzden çıktı yönlendirmeden, **kendi konsol
     penceresinde** koşar — boru yok, log canlı okunur.
 13. **Muhafazayı susturmak bileşeni KAPATMAKLA yapılmaz — `SetSpectatorMode(true)` ile yapılır.**
-    Kapatılan `ArenaBoundary` duvar alfasını son yazdığı değerde dondurur ve alan-dışı karartması
-    açık kalabilir; susturma kipi ise uyarıyı keser, duvarları çizili bırakır. Admin gözlemci bu
-    yolu kullanır: başlığı olmadığı için muhafaza mesafesi onda anlamsız veri üretir, ama arenanın
-    duvarları kuş bakışında görünmelidir. (Arena origin'i artık bu bileşende değil `SpawnPoint`'te
-    olduğu için kapatmak koordinatları bozmaz.)
+    Kapatılan `ArenaBoundary` alan-dışı karartmasını son yazdığı değerde dondurur **ve planı
+    çözmeyi bırakır**; susturma kipi ise yalnız uyarıyı keser, bileşeni ayakta tutar. Admin
+    gözlemci bu yolu kullanır: başlığı olmadığı için muhafaza mesafesi onda anlamsız veri üretir,
+    ama kuş bakışı kadrajı bileşenin `HalfExtents`/`LocalCenter` değerlerini okumaya devam eder.
+    (Arena origin'i artık bu bileşende değil `SpawnPoint`'te olduğu için kapatmak koordinatları
+    bozmaz.)
 14. **Arena sahnelerinde EventSystem YOK** (yalnız Lobby'de bir tane var) — masaüstü admin oraya
     girdiğinde HUD düğmeleri sessizce ölürdü. `UiKit.EnsureEventSystem()` kalıcı bir tane kurar,
     `TakeOverEventSystem()` sahnedekini kapatır: **iki etkin EventSystem** Unity uyarısı basar ve
@@ -1461,7 +1497,7 @@ konsoluna tek satır sebep yazar.
     bastığı uyarıdır (lobide o uyarı normaldir).
 
 38. **Arena ölçüsünün TEK temsili boyut dosyasıdır — dikdörtgen alan için kısa yol açılmaz.**
-    Alan tam kare bile olsa dört köşeli bir `outline` olarak yazılır. Bileşende ölçü tutan alanlar
+    Alan tam kare bile olsa dört köşeli bir `plane` halkası olarak yazılır. Bileşende ölçü tutan alanlar
     (yarım genişlik/derinlik + merkez) bilinçli olarak kaldırıldı ve geri eklenmez: aynı ölçünün
     iki ayrı ifadesi kaçınılmaz olarak birbirinden sapar — biri düzeltilir, öteki eski değeriyle
     kalır ve hangisinin okunduğu koda gömülü bir öncelik sırasına bağlı olurdu. Kolayına kaçıp
@@ -1475,7 +1511,7 @@ konsoluna tek satır sebep yazar.
     dışında bırakır. Kural: JSON'u yazdıktan sonra alana bağla; bağlamadıysan o plan yok sayılmalıdır.
 
 40. **Boyut dosyası bağlanmazsa muhafaza tümden devre dışı kalır — sessizce değil, yüksek sesle.**
-    `ArenaBoundary` dosyayı çözemezse bir kez `Debug.LogError` basar ve kapanır: duvar alfası,
+    `ArenaBoundary` dosyayı çözemezse bir kez `Debug.LogError` basar ve kapanır: yaklaşma rampası,
     alan-dışı karartması ve uyarı çalışmaz. Bu bilinçli bir seçimdir — ölçüsü bilinmeyen bir arenada
     doğru bir muhafaza zaten üretilemez, kapalı başarısızlık (ör. her karede ekranı karartmak)
     işletmede oyunu tümden oynanamaz kılardı. Yani bu bir KURULUM hatasıdır ve editörde/QA'da
@@ -1830,6 +1866,30 @@ konsoluna tek satır sebep yazar.
     kapısını o besler); diğer çağrı yerleri (lobi profili, sahneleme) `welcome.match.rules`'un
     **doğru görünmesi** içindir — bugün onu okuyan bir tüketici olmasa da, olmadığı gün fark
     edilmeyecek bir yalan bırakırdı.
+75. **Bir görsel uyarı mekanizması, süreceği malzemeyi de kısıtlıyorsa "başka bir Renderer'a
+    bağlarız" diye taşınamaz.** Muhafazanın yarı saydam duvarı `_BaseColor.a` yazıyor ve alfa
+    düşünce Renderer'ı kapatıyordu — ikisi de yalnız o iş için üretilmiş bir geometride masumdur.
+    Environment'ın gerçek duvarlarına bağlanınca birincisi **hiç iş görmez** (opak malzemede alfa
+    yazımının görsel karşılığı yok), ikincisi **duvarı yok eder** (oyuncu uzaktayken kapanır).
+    Doğru hamle mekanizmayı taşımak değil, uyarıyı malzemeden bağımsız bir kanala almaktı: HMD'ye
+    bağlı karartma quad'ı. ⚠️ Bunun bedeli bir kurulum kuralıdır — **environment'ın duvarları
+    fiziksel sınırla çakışmalıdır**, çünkü oyuncunun gördüğü sınır artık yalnız o duvardır.
+76. **Bir editör aracının yanlış seçimle çalıştırılması, çıktısı DOSYAYSA sessizce kalıcı olur.**
+    `Build Arena From TestMesh` "seçili kök"ten plan çıkarıyordu; bir silah prefabı seçiliyken
+    çalıştırıldığında 20 cm'lik bir "arena" yazdı ve o dosya bir mekanın boyut dosyası olarak
+    aylarca durdu (`"name": "WPN_M4A4"`, kolonu `AR_B_Mag`). Hiçbir yerde hata yok: dosya geçerli
+    JSON, muhafaza onu okuyup çalışıyor — yalnız yanlış. Kural: **çıktısı üzerine yazan bir araç,
+    girdisini tür olarak değil ANLAM olarak doğrulamalı** (bu yüzden yeni maket aracı hedef dosyayı
+    sormaz — maketin kendi işaretçisinden okur, yanlış dosyaya yazma yolu hiç açılmaz).
+
+77. **Bir OBJE ADI, o objeyi üreten aracın imzası değildir — ada bakarak toplu silme yapılmaz.**
+    `Wall_N/S/E/W` hem kaldırılan muhafaza duvarlarının hem de bir arenanın gerçek environment
+    duvarlarının adı (IceWorld'de ProBuilder ile modellenmiş, köşe parçalarıyla birlikte duran
+    duvarlar tam olarak bu adı taşır). Ada bakan bir temizlik arenanın kendisini siler; ada bakan
+    bir "kalıntı var" uyarısı ise her açılışta yanlış alarm verir ve sağlık raporunun tamamını
+    okunmaz kılar. Ayırt eden şey **bileşen izidir** (üretilen duvar: `MeshFilter` + kutu mesh'i;
+    sanat duvarı: `ProBuilderMesh`). Bu yüzden `Configure All Build Elements` ada bakan bir kontrol
+    TAŞIMAZ.
 
 75. **İzlemeden gelen "kafa" GÖZÜN pozudur; humanoid kafa KEMİĞİ oraya oturtulmaz.**
     `centerEyeAnchor` (hem yerel rig'de hem telde) gözün yeridir, kafa kemiği ise Ch15'te gözün
@@ -1904,8 +1964,9 @@ elde rastgele silah) ve `tournament` (Turnuva: tur tabanlı takım elemesi — t
 tur bitince herkes tabanında toplanıp yeni tur başlar; §3.8.2) · **çok mod altyapısı** (`ModeRules`
 şekil tanımı §3.9, bireysel skor, `MatchOutcome`, takım-agnostik `ModeHudBase`, admin'den maç
 süresi/skor limiti/geri sayım) · **iki mekan** (`Outdoor12x12`, `VortexAntep`) ve her birinin kendi lobisi —
-sunucu açılışta hangisinin oynatılacağını sorar (§3.8) + arena şablon sihirbazı ve
-`Export Server Config` · admin **sahne-içi gözlemci** (üç kamera kipi + sahne üstü yönetim HUD'ı,
+sunucu açılışta hangisinin oynatılacağını sorar (§3.8) + arena kurulum araç zinciri
+(`Template Temellerini Yükle` → ölçü maketi → `Configure All Build Elements`) ·
+admin **sahne-içi gözlemci** (üç kamera kipi + sahne üstü yönetim HUD'ı,
 çoklu admin) · geliştirici araç seti (`Tools > VortexArena > Dev`, `dev-targets.json`,
 `Ctrl+Alt+R`) · rolden bağımsız adres zinciri + `ConnectionOverlay` bağlantı hata ekranı ·
 **sunucu-otoriter kalibrasyon durumu** (§3.11: admin sıfırlar → oyuncu savaş dışı + avatarı parlar;

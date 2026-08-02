@@ -6,9 +6,11 @@ title: Sahne Kurulumu
 
 Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 
-> **En kolay yol sihirbaz:** `Tools > VortexArena > Create Arena From Template` bu listenin
-> tamamını üretir. Bu sayfa "sihirbazın ürettiği şey ne işe yarıyor" ve "elle bir sahne
-> düzeltiyorum" durumları içindir.
+> **En kolay yol araç:** `Tools > VortexArena > Template Temellerini Yükle` bu listeyi boş bir
+> sahneye prefab örneği olarak koyar (idempotent — var olanı atlar). Bu sayfa "aracın koyduğu şey
+> ne işe yarıyor" ve "elle bir sahne düzeltiyorum" durumları içindir.
+> Ölçü maketi ayrı bir adımdır ve **bu araçtan SONRA** gelir
+> (`… > JSON'dan DimensionMesh Üret`): maket `ArenaBoundary`'nin altına kuruluyor.
 
 ---
 
@@ -17,8 +19,9 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 | Bileşen | Nerede durur | Ne yapar | Atlarsan |
 |---|---|---|---|
 | **`VA_CameraRig`** | Sahne kökü, **prefab örneği** (`_Shared/App/Prefabs/`) | Kamera/kumanda rig'i + etkileşim rig'i (`OVRComprehensiveInteractionRig`) tek pakette. ⚠️ Yerel gövde avatarı burada DEĞİLDİR: `LocalBodyAvatar` kendini önyükleyen tekildir ve sahne köküne kurulur (rig'in altına konsa rig transformu iki kez uygulanırdı) | Oyuncu hiçbir şey görmez |
-| **`ArenaBoundary`** | Duvarlara hizalı bir obje (plan koordinatları onun yerel XZ'si) | Sınır uyarısını çizer (duvar alfası + karartma); ölçüyü **bağlı boyut dosyasından** okur (admin kuş bakışı kadrajı da oradan gelir). `dimensionsJson` = arenanın `Data/` klasöründeki boyut dosyası — **ZORUNLU**, bileşende ölçü tutan başka alan yoktur | Boyut dosyası bağlı değilse muhafaza konsola hata basıp **kendini kapatır**: alan-dışı uyarısı hiç çıkmaz, admin kuş bakışı kadrajsız kalır |
-| **Boyut dosyası** (`ArenaDimensions` JSON) | Arena/mekan kutusunun `Data/` klasöründe; `ArenaBoundary.dimensionsJson` alanına bağlı | **Arena ölçüsünün tek kaynağı:** `outline` (sıralı köşeler) + `columns`. Alan tam kare olsa bile dört köşeli bir çokgen olarak yazılır — "dikdörtgen kipi" YOKTUR. Aynı dosya geometriyi üretir, muhafazayı besler ve kuş bakışı kadrajını verir | Muhafaza tümden kapanır (üstteki satır). ⚠️ Dosyayı yazıp alana bağlamamak onu **build'in dışında** da bırakır |
+| **`ArenaBoundary`** | Alana hizalı bir obje (plan koordinatları onun yerel XZ'si) — **`VA_ArenaRoot`** prefabıyla gelir | Sınır uyarısını sürer: kenara yaklaşınca HMD'ye bağlı karartma quad'ı hafifçe koyulaşır, dışarı çıkınca tam kararma + uyarı. Ölçüyü **bağlı boyut dosyasından** okur (admin kuş bakışı kadrajı da oradan gelir). `dimensionsJson` = mekanın boyut dosyası — **ZORUNLU**, bileşende ölçü tutan başka alan yoktur. ⚠️ Yarı saydam duvar göstergesi KALDIRILDI (`wallRenderers` yok): arenanın duvarları environment sanatına aittir | Boyut dosyası bağlı değilse muhafaza konsola hata basıp **kendini kapatır**: alan-dışı uyarısı hiç çıkmaz, admin kuş bakışı kadrajsız kalır |
+| **Boyut dosyası** (`ArenaDimensions` JSON) | **Mekan** kutusunun `Data/` klasöründe (`<İşletme>_dimensions.json`); `ArenaBoundary.dimensionsJson` alanına bağlı | **Ölçünün tek kaynağı:** `plane` (tabanın sıralı köşeleri) + `columns` (her biri kendi köşe halkası). Alan tam kare olsa bile dört köşe yazılır — "dikdörtgen kipi" YOKTUR; içbükey alan da tek halkadır, birleştirme yoktur. Aynı dosya ölçü maketini üretir, muhafazayı besler ve kuş bakışı kadrajını verir. **Mekanın tüm sahneleri aynı dosyayı gösterir** | Muhafaza tümden kapanır (üstteki satır). ⚠️ Dosyayı yazıp alana bağlamamak onu **build'in dışında** da bırakır |
+| **Ölçü maketi** (`<Mekan>_DimensionMesh`) | `ArenaBoundary`'nin altında, yerel dönüşümü sıfır — `… > JSON'dan DimensionMesh Üret` koyar | Fiziksel alanın sahnedeki referansı (taban + kolonlar). Arena sanatı bunun üstüne kurulur. ⚠️ Kökü `EditorOnly` etiketlidir, **build'e girmez**; duvar üretmez | Sanatı neye göre yerleştireceğini bilemezsin. Yanlış ebeveyn altındaysa koordinatları ölçü uzayıyla hizalı olmaz |
 | **`ArenaCalibrator`** | Sahne kökü — **`VA_CalibrationManager`** prefabıyla gelir | Zemindeki A–B işaretleriyle fiziksel hizalama | Sanal arena fiziksel odayla örtüşmez |
 | **`BaseZone` × 2** | Karşı kenarlarda (Red / Blue) | **Taban bölgesi** — kırmızı/mavi şerit, canlanma kapısı | TDM'de kimse canlanamaz |
 | **`SpawnPoint` × 1** | Arena uzayının sıfırı olacak yerde, **zemin seviyesinde** | **Arena orijini** — ağa giden/gelen tüm pozlar buna göre çevrilir; ayrıca maç öncesi yerleşim göstergesidir | Tüm uzak oyuncular dünya orijinine yığılır (konsola `ArenaSpace` uyarısı düşer) |
@@ -45,9 +48,10 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 > eklemek arenaları değiştirmez. `loadout` yalnız `random` modlarında (FFA, lobi) okunur.
 > Çerçeve görselini örnek başına `WeaponFrame.isFrameVisible` ile aç/kapat.
 
-> `SpawnPoint` sihirbaz tarafından ÜRETİLMEZ — nereye konacağı tasarım kararıdır.
-> `GameObject > VortexArena > Spawn Point` ile ekle ve elle yerleştir. Arena başına **bir tane**;
-> ikincisini eklersen konsola uyarı düşer (origin ilk kaydolana bağlanır).
+> `SpawnPoint`'i `Template Temellerini Yükle` origin'e koyar (kutusu kapatılabilir), ama
+> **nereye konacağı tasarım kararıdır ve elle taşınır**. Ayrıca `GameObject > VortexArena >
+> Spawn Point` ile de eklenebilir. Arena başına **bir tane**; ikincisini eklersen konsola uyarı
+> düşer (origin ilk kaydolana bağlanır).
 
 > ⚠️ **Bir kez yerleştirilir, sonra TAŞINMAZ.** Marker arena uzayının sıfırı olduğu için yerini
 > ya da dönüşünü değiştirmek arenadaki **tüm** oyuncuların koordinatını kaydırır.

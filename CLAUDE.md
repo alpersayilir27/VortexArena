@@ -90,11 +90,11 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   oyuncularla aynı sahnede duran bir gözlemcidir.
   ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
 - `Assets/Arenas/` altında **yalnız iki kök vardır**: `Venues/` (oynanan içerik) ve `Template/`
-  (sihirbaz kaynağı). Üçüncü bir kök açma — mekansız arena diye bir şey yoktur.
+  (referans arena). Üçüncü bir kök açma — mekansız arena diye bir şey yoktur.
   - `Assets/Arenas/Venues/<İşletme>/<Arena>/` — arena kutusu: `{Scenes, Data}` (+ yalnız o arenaya
     ait sanat/prefab varsa `Art/`, `Prefabs/`; ör. `Outdoor12x12/IceWorld/`). Mekanın **tüm**
     sahnelerinin paylaştığı sanat/prefab/veri ise bir seviye yukarıda, mekan kökündeki
-    `Art/` · `Prefabs/` · `Data/` klasörlerine girer (ör. `VortexAntep/Data/vortexantep_dimensions.json`
+    `Art/` · `Prefabs/` · `Data/` klasörlerine girer (ör. `VortexAntep/Data/VortexAntep_dimensions.json`
     = mekanın fiziksel ölçüsü, hem arena hem lobi kullanır).
   - ⚠️ **Boş klasör açma** (ne sihirbaz ne elle): git klasör tutmaz, dosya tutar → klonda kaybolur,
     geriye yetim `.meta` kalır ve Unity klasörü hayalet olarak geri üretir. Klasör, içine ilk dosya
@@ -109,8 +109,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   yanlış işletmeye yazar** — `MapDefinition`'da mekan alanı YOKTUR ve eklenmez (ikinci,
   unutulabilir bir doğruluk kaynağı olurdu). Mekan klasörü dışındaki haritalar export'a HİÇ
   girmez (uyarı basılır) → `Docs/ArenaNet-Protokol.md` §11.1
-  **Her yeni arenanın kaynağı `Template/Default12x12`'dir** — harita dizaynı taşımayan, yalnız ağa
-  bağlanmak için gerekenleri içeren TEK KAYNAK arena; sihirbazın varsayılan kaynağı da odur.
+  `Template/Default12x12` yalnız **referans** olarak durur (sahne kopyalayan sihirbaz kaldırıldı;
+  yeni arena boş sahneden başlayıp `Template Temellerini Yükle` ile donatılır).
   ⚠️ `Template/` altındaki haritalar **oynanmaz**: export edilmez, Build Settings'e ve
   `GameCatalog`'a girmez (yoksa sunucu açılışında sahte bir mekan olarak listelenirlerdi).
   Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ (marker bileşenleri Core'dan gelir).
@@ -245,56 +245,53 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
 
 ## Yeni içerik ekleme reçeteleri
 
-**Yeni arena:** `Tools > VortexArena > Create Arena From Template` → arenaId + sahne adı +
-**mekan** (kutu her zaman `Venues/<İşletme>/<arenaId>/` altına açılır; mekan ZORUNLUDUR).
-**Kaynak varsayılanı `Template/Default12x12`'dir** — dizaynlı bir arenadan türetmek o arenanın
-geometrisini de kopyalar ve elle temizlemek gerekirdi. Sihirbazda bir **geometri kaynağı**
-(`ArenaGeometrySource`) seçilir ve **kaynak ZORUNLUDUR** — "geometriye dokunmadan kopyala"
-seçeneği YOKTUR: boyut dosyası (JSON) ya da TestMesh kökü. İkisi de aynı kapıdan geçer; TestMesh
-seçilirse araç önce ondan bir boyut JSON'u üretir (arena kutusunun `Data/` klasörüne). Her iki
-yolda da `ArenaBoundary.dimensionsJson` + `wallRenderers` otomatik bağlanır.
-⚠️ **Hiçbir kaynakta ölçekleme yapılmaz.**
-Yaptığı iş: klasörleri (`{Scenes,Data}`) + kaynak
-sahnenin bire bir kopyasını üretir, MapDefinition asset'ini yazar, GameCatalog + uyumlu
-ModeDefinition'lara ekler, Build Settings'e koyar (sahne adı = katalog anahtarı). Değeri
-**bileşen bütünlüğü**: kopyalanan sahne ağa bağlanmak için gereken her şeyi hazır taşır
-(`ArenaBoundary`, kalibrasyon işaretçileri, `BaseZone`'lar + altyapı prefablarının örnekleri —
-`VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, `VA_ModeHud`). ⚠️ **Farklı ÖLÇÜDEKİ arena Default12x12'den
-türetilmez** (10×10 bir arena 12×12 duvar/zeminle gelir) — o ölçü için kendi `Default`'unu kur.
-**Ölçekleme bilinçli olarak yoktur ve eklenmez:**
-her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen bile değil, plan zaten baştan
-çiziliyor — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek bir yalancı-doğru
-üretir. ELDE: alanın ölçüsünü boyut dosyasına yazmak (ya da TestMesh'i modellemek) ·
-kalibrasyon işaretçilerinin
-yerleşimi (yerleri zemin bandından gelir) · tek `SpawnPoint` · NavMesh/ışık bake. Sonrasında
-`Tools > VortexArena > Export Server Config` çalıştır — **yeni `sceneName` `maps.json`'a girsin
-diye** (ölçü için değil, oraya arena boyutu yazılmaz).
+**Yeni arena — altı adım** (tek düğmeli sihirbaz YOKTUR, kaldırıldı):
+`File > New Scene` → arena kutusuna kaydet (`Venues/<İşletme>/<arenaId>/Scenes/`) →
+`Tools > VortexArena > Template Temellerini Yükle` (altyapı prefab ÖRNEKLERİ + `ArenaBoundary`) →
+`… > JSON'dan DimensionMesh Üret` (mekanın ölçü maketi) → ölçü yanlışsa köşeleri ProBuilder ile
+düzelt + `… > DimensionMesh'i JSON'a Çevir` → environment/asset yerleşimi, `SpawnPoint`'i **zemin
+seviyesine** oturt, kalibrasyon işaretçileri, bake → `… > Configure All Build Elements`.
+⚠️ **Son adım atlanırsa** harita ne katalogda ne `maps.json`'da olur; `start_match` sessizce
+reddedilir. ⚠️ **Ölçekleme YOKTUR ve eklenmez:** her işletmenin alanı farklı ölçüde ve çoğu
+kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek bir
+yalancı-doğru üretir.
 **Arena ölçüsü:** tek doğruluk kaynağı **boyut dosyasıdır** (`ArenaDimensions` — elle yazılabilir
-JSON, `Venues/<İşletme>/…/Data/<ad>_dimensions.json`): `outline` = sıralı köşeler (metre,
-`ArenaBoundary` transformunun yerel XZ'si, **kapalı** — ilk noktayı sona tekrarlama), `columns` =
-kolonlar. Sahnede `ArenaBoundary.dimensionsJson` alanına bağlanır ve çalışma anında okunur.
-⚠️ **Alan tam kare/dikdörtgen bile olsa dört köşeli bir `outline` olarak yazılır** — "dikdörtgense
-şu hızlı yol" ayrımı ve ona ait alanlar (`halfExtentX/Z`, `rectCenter`) YOKTUR ve geri eklenmez:
-aynı ölçünün iki ayrı ifadesi kaçınılmaz olarak birbirinden sapıyordu.
+JSON) ve dosya **MEKAN başınadır**: `Venues/<İşletme>/Data/<İşletme>_dimensions.json`. Bir
+işletmede hep aynı fiziksel alan oynatıldığı için o mekanın **tüm** sahneleri (arenalar + lobi)
+`ArenaBoundary.dimensionsJson` alanında aynı dosyayı gösterir — sahne başına kopya kaçınılmaz
+olarak sapar. İçerik: `plane` = tabanın sıralı köşeleri (metre, `ArenaBoundary` transformunun
+yerel XZ'si, **kapalı** — ilk noktayı sona tekrarlama), `columns` = her biri kendi sıralı köşe
+halkası olan kolonlar (`{name, height, points}`).
+⚠️ **Taban da kolon da TEK halkadır; parçalardan birleştirme (union) YOKTUR ve eklenmez.**
+İçbükeylik için ek bir şey gerekmez — L şekli, yamuk, girintili duvar tek halkayla ifade edilir.
+Birleşim `ArenaBoundary` yüzünden çalışma anında da koşmak zorunda kalırdı ve karşılığını mekan
+başına yalnız bir kez verirdi.
+⚠️ **Kolonun `{"points": […]}` sarmalayıcısı zorunlu** (`JsonUtility` iç içe dizi serialize
+etmiyor); `plane` düz `Vector2[]`'dir. ⚠️ **`wallHeight` alanı YOKTUR** — duvar üretimi de
+muhafazanın duvar göstergesi de kaldırıldı, okuyanı olmayan ölçü bayatlar.
 ⚠️ **Boyut dosyası ZORUNLUDUR** — bağlı değilse ya da okunamıyorsa `ArenaBoundary` bir kez hata
 basıp muhafazayı tümden kapatır (açık başarısızlık; gerekçe `Docs/Sistem-Ozeti.md` §7).
 ⚠️ **Bağlanmayan JSON build'e GİRMEZ** (çalışma anında okunur, `TextAsset` referansı yoksa Unity
-onu paketlemez). ⚠️ **Ölçü üç yeri birden besler** (geometri · muhafaza mesafesi · admin kuş bakışı
-kadrajı) — ikinci bir yere yazma.
-Dosya değişince `Tools > VortexArena > Build Arena From Dimensions` (seçimde boyut JSON'u)
-geometriyi yeniden üretir (idempotent).
-**Elde modellenmiş kaba bir alan varsa** (mekanın fiziksel alanını temsil eden basit
-quad/blok yığını = TestMesh) `Tools > VortexArena > Build Arena From TestMesh` ondan bir boyut
-JSON'u ÜRETİR ve geometriyi o dosyadan çizer — TestMesh ikinci bir üretim yolu değil, boyut
-dosyasının otomatik yazılma biçimidir; ölçü sonradan dosyada elle düzeltilebilir.
+onu paketlemez). ⚠️ **Ölçü iki yeri birden besler** (muhafaza mesafesi · admin kuş bakışı kadrajı)
+— ikinci bir yere yazma.
+**Ölçü maketi (`<Mekan>_DimensionMesh`)** oynanan geometri DEĞİLDİR: taban + kolonlardan ibarettir,
+duvar üretmez, kökü `EditorOnly` etiketli olduğu için build'e girmez. Arena sanatı hazır
+environment'ların içine kurulur ve maket yalnız o sanatın oturacağı fiziksel alanı gösterir.
+⚠️ Maket `ArenaBoundary`'nin altına, yerel dönüşümü sıfırlanmış kurulur — JSON koordinatları o
+transformun yerel XZ'sindedir. Bu yüzden **önce** `Template Temellerini Yükle` çalıştırılır.
 Elle konan engeller için `ArenaObstacle` (`Core/Arena/`): muhafaza onu engel sayar —
 ⚠️ **collider değildir, fizik yapmaz** (free-roam'da çarpışma yoktur).
+⚠️ **Arenanın duvarları environment sanatına aittir** ve fiziksel sınırla **çakışmalıdır**:
+muhafazanın yarı saydam duvar göstergesi kaldırıldı, yaklaşma uyarısı artık HMD'ye bağlı karartma
+quad'ından geliyor (`warnFadeAlpha`). Sanat duvarı alandan içeride/dışarıda durursa oyuncu yanlış
+yere göre kalibre olur.
 **Yeni lobi:** lobi de bir arena kutusudur (`Venues/<İşletme>/Lobby/`), farkı üç şeydir —
 `MapDefinition.supportedModeIds` **yalnız `["lobby"]`** (boş bırakılırsa "kısıtsız" sayılır!),
 sahnede `BaseZone` ve `VA_ModeHud` YOK, silah kaynağı `random` (sahneden silah alınmaz, grip'e
-basınca elde belirir). **Her mekanın kendi lobisi olur** ve
-kaynağı **o mekanın kendi arenasıdır** — fiziksel oda aynı olduğu için geometri birebir tutar
-(ölçekleme yoktur). `Export Server Config` yeter: sunucu **seçilen mekanın** lobi haritasını kendi
+basınca elde belirir). **Her mekanın kendi lobisi olur** ve mekanın boyut dosyasını arenayla
+**paylaşır** — fiziksel oda aynı, ikinci bir ölçü dosyası açılmaz. Kurulumu arenayla aynı altı
+adımdır; `Template Temellerini Yükle` penceresinde taban bölgeleri ve `VA_ModeHud` kutuları
+KAPATILIR. `Configure All Build Elements` yeter: sunucu **seçilen mekanın** lobi haritasını kendi
 bulur (`server.json → lobbyScene` yalnız mekanda birden çok lobi varsa doldurulur).
 ⚠️ `lobby` **kayıtlı bir mod DEĞİLDİR** — sunucuya `IGameMode` olarak eklenmez (`start_match` onu
 reddeder, "lobi türünde maç başlamaz" kuralı buradan gelir), `ModeDefinition.lobbyProfile`
@@ -422,12 +419,13 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 
 | Araç | Ne zaman |
 |---|---|
-| `Tools > VortexArena > Export Server Config` | `MapDefinition` değişti / yeni arena eklendi → `Server/config/maps.json` |
+| `Tools > VortexArena > Configure All Build Elements` | Sahne hazır → `MapDefinition` + `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json` export, hepsi tek geçişte (+ sağlık raporu) |
+| `… > Template Temellerini Yükle` | Yeni/boş sahneye altyapı prefab ÖRNEKLERİ (`VA_ArenaRoot`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı `VA_ModeHud`/taban bölgeleri/`SpawnPoint`) + kalibratör/muhafaza alanlarının rig'e bağlanması + boyut dosyası bağlama. İdempotent |
+| `… > JSON'dan DimensionMesh Üret` | Mekanın boyut JSON'undan ölçü maketi (taban + kolonlar). `ArenaBoundary`'nin altına kurar, `EditorOnly` etiketler. İdempotent |
+| `… > DimensionMesh'i JSON'a Çevir` | Maketin köşeleri sahnede düzeltildi → aynı boyut dosyasının ÜSTÜNE yazar (hedefi maketin kendisi söyler) |
+| `Tools > VortexArena > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
 | `… > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir) |
 | `… > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
-| `… > Create Arena From Template` | Yeni arena kutusu — geometri kaynağı ZORUNLU: boyut JSON'u ya da TestMesh kökü (kaynak `ArenaBoundary.dimensionsJson` + `wallRenderers`'ı da bağlar) |
-| `… > Build Arena From Dimensions` | Boyut dosyası değişti (seçimde JSON) → zemin/duvar/kolon geometrisini yeniden üretir (idempotent) |
-| `… > Build Arena From TestMesh` | Kaba alan bloklarından boyut JSON'u üretilecek → dosyayı yazar, sonra geometriyi ondan çizer (idempotent) |
 | `… > Write Grip Sockets To Definition` | Sahnedeki kavrama işaretçileri sürüklenip ayarlandı → `WD_*.asset`'e yazar (ters/düz bileşimi araç yapar). Yalnız BULUNAN işaretçinin alanlarına dokunur |
 | `… > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek) |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` · `Spawn Point` | Sahneye ilgili bileşeni + kurulumunu ekler |
@@ -447,8 +445,10 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 ⚠️ **Her iki Unity build'i için editör kapalı olmalı** (batch-mode proje kilidine takılır; betik
 bunu zorlamaz, takılırsa elle iptal et). Sunucu ve launcher `dotnet publish` ile self-contained
 üretilir — tek ön koşul .NET 10 SDK'dır.
-⚠️ **APK build'i aktif platformu Android'e çevirir ve geri almaz** (geri almak ikinci bir
-tam reimport demek olurdu) — Windows'tan ilk geçiş 20-40 dk sürer.
+⚠️ **Hedef platform betikte SABİTTİR, aktif platformdan türetilmez** — her betik Unity'yi kendi
+hedefiyle başlatır (`-buildTarget Win64` / `Android`) ve platformu build sonunda geri almaz.
+Aktif platform hedefe eşit değilse o koşu tam reimport demektir (20-40 dk). İki build birbirinin
+cache'ini ısıtmaz (shader/asset/script cache'i platform başınadır) → `Docs/Sistem-Ozeti.md` §7.
 ⚠️ **İki Unity build'i AYNI sahne listesini kullanır** (Build Settings); platforma göre ayrı liste
 tutma — bir arenayı admin bilip oyuncu bilmezse `start_match` sessizce reddedilir.
 Betik yazım tuzakları ve aşama izleyici (`watch-unity-build.ps1`): `scripts/README.md`.

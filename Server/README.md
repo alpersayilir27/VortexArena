@@ -106,8 +106,8 @@ olmuştur ve dışarıdan hiçbir cihaz bağlanamaz.
   tercihen Wi-Fi 6, arenaya özel SSID; tüm gözlükler bu SSID'de.
 - Beacon kesen/izole eden ağlarda: her gözlükte `Assets/StreamingAssets/arena.json` içine
   sunucunun statik IP'si yazılır (`{"serverIp":"192.168.x.y","serverPort":47821}`) —
-  beacon yoksa istemci buna düşer; son kurtarma yolu lobide sağ kumandada **A×2** ile açılan
-  gizli IP panelidir. (Admin istemcisi beacon kullanmaz — adresi launcher `--server-ip` ile geçer.)
+  beacon yoksa istemci buna düşer; son kurtarma yolu lobide sağ kumandada **joystick 1 sn
+  basılı tutularak** açılan gizli IP panelidir. (Admin istemcisi beacon kullanmaz — adresi launcher `--server-ip` ile geçer.)
 
 ## Config dosyaları
 
@@ -131,7 +131,7 @@ Seçim [1-2]:
 Seçilen mekan o oturum boyunca sabittir: yalnız onun haritaları `start_match` ile başlatılabilir
 ve admin panelinin harita seçicisinde yalnız onlar görünür. Mekan `maps.json`'daki `venue`
 alanından gelir, o da Unity'deki klasör yerleşiminden (`Assets/Arenas/Venues/<İşletme>/…`).
-Listede yalnız gerçek mekanlar çıkar: mekan klasörü dışındaki haritalar (sihirbaz şablonları
+Listede yalnız gerçek mekanlar çıkar: mekan klasörü dışındaki haritalar (referans şablonlar
 dahil) export'a hiç girmez.
 Soruyu atlamak için `venue` doldurulur ya da `--venue <ad>` argümanı verilir; konsol etkileşimli
 değilse (servis/betik) sunucu **bloklanmaz**, ilk mekanla açılır ve bunu loglar.

@@ -57,17 +57,26 @@ bastığı uyarıdır (lobide o uyarı normaldir).
 
 ### ⛔ Muhafazayı susturmak için `ArenaBoundary` bileşenini kapatma
 
-Kapatılan bileşen duvar alfasını son yazdığı değerde dondurur, alan-dışı karartması açık kalabilir.
-Doğrusu `SetSpectatorMode(true)` — uyarıyı keser, duvarları çizili bırakır (admin gözlemci bunu
-kullanır).
+Kapatılan bileşen alan-dışı karartmasını son yazdığı değerde dondurur ve planı çözmeyi bırakır —
+admin kuş bakışı kadrajı onun `HalfExtents`/`LocalCenter` değerlerini okuyor. Doğrusu
+`SetSpectatorMode(true)`: uyarıyı keser, bileşeni ayakta tutar (admin gözlemci bunu kullanır).
 
 ### ⛔ Arena ölçüsünü boyut dosyası dışında bir yere yazma
 
-Ölçünün tek temsili `ArenaBoundary.dimensionsJson`'a bağlanan boyut dosyasıdır; alan tam kare olsa
-bile dört köşeli bir `outline` olarak yazılır. Bileşene "kısa yol" bir yarım-ölçü alanı geri
-eklemeye kalkma — aynı ölçünün iki ifadesi kaçınılmaz olarak birbirinden sapar. Dosyayı yazıp
-**alana bağlamayı unutmak** da sessiz değil, yıkıcıdır: dosya build'e girmez ve muhafaza konsola
-hata basıp tümden kapanır.
+Ölçünün tek temsili `ArenaBoundary.dimensionsJson`'a bağlanan boyut dosyasıdır ve dosya **mekan
+başınadır** — aynı işletmenin ikinci arenası için kopya çıkarma. Alan tam kare olsa bile dört
+köşeli bir `plane` halkası olarak yazılır. Bileşene "kısa yol" bir yarım-ölçü alanı geri eklemeye
+kalkma — aynı ölçünün iki ifadesi kaçınılmaz olarak birbirinden sapar. Dosyayı yazıp **alana
+bağlamayı unutmak** da sessiz değil, yıkıcıdır: dosya build'e girmez ve muhafaza konsola hata basıp
+tümden kapanır.
+
+### ⛔ Muhafazaya duvar Renderer'ı bağlamaya çalışma
+
+Yarı saydam duvar göstergesi kaldırıldı ve **geri eklenmez**. Environment'ın gerçek duvarlarına
+bağlanamaz da: alfa yazımı yalnız Transparent malzemede iş görür (gerçek duvarlar opak) ve
+mekanizma alfa düşünce Renderer'ı kapatırdı — oyuncu uzaktayken duvar tümden kaybolurdu. Yaklaşma
+uyarısı artık HMD'ye bağlı karartma quad'ından geliyor (`warnFadeAlpha`), arena geometrisinden
+tümden bağımsız.
 
 ### ⛔ Ölü oyuncuları uzak oyuncu listesinden eleme
 

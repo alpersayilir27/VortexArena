@@ -28,10 +28,10 @@ namespace VortexArena.App
     /// </para>
     /// <para>
     /// <b>Kurtarma yolu:</b> beacon'ı kesen/izole eden ağlarda sunucu bulunamazsa
-    /// sağ kumandada <b>A tuşuna iki kez</b> basılarak IP paneli açılır ve adres elle
-    /// girilir (girilen adres <c>PlayerPrefs</c>'e kalıcı yazılır, beacon'ı ezer).
-    /// Aynı kombinasyon paneli tekrar kapatır. Kalibrasyon jestiyle (A basılıyken B'ye
-    /// çift basış) çakışmaz: orada A **basılı tutulur**, burada iki kez basılıp bırakılır.
+    /// sağ kumandada <b>joystick 1 saniye basılı tutularak</b> IP paneli açılır ve adres
+    /// elle girilir (girilen adres <c>PlayerPrefs</c>'e kalıcı yazılır, beacon'ı ezer).
+    /// Aynı jest paneli tekrar kapatır; tetiklendiğinde kumanda titrer. Kalibrasyon
+    /// jestiyle (A basılıyken B'ye çift basış) çakışmaz — ortak tuş yoktur.
     /// </para>
     /// Tüm sahne bağları [SerializeField] ve null olabilir; buton onClick'leri public
     /// metotlara bağlanır.
@@ -40,8 +40,8 @@ namespace VortexArena.App
     {
         private const int MaxIpTextLength = 21; // "255.255.255.255:65535"
 
-        /// <summary>İki A basışı arası bu süreden kısaysa kombinasyon sayılır.</summary>
-        private const float DoubleTapWindow = 0.6f;
+        /// <summary>Joystick bu süre kesintisiz basılı tutulursa IP paneli aç/kapat tetiklenir.</summary>
+        private const float IpPanelHoldDuration = 1f;
 
         /// <summary>Bu süre boyunca hiç adres bulunamazsa kurtarma ipucu gösterilir.</summary>
         private const float DiscoveryHintDelay = 8f;
@@ -51,7 +51,7 @@ namespace VortexArena.App
         [Header("Durum")]
         [SerializeField] private TMP_Text statusText;
 
-        [Header("IP paneli (gizli — sağ kumandada A×2 ile açılır)")]
+        [Header("IP paneli (gizli — sağ kumandada joystick 1 sn basılı tutularak açılır)")]
         [SerializeField] private GameObject ipPanel;
         [SerializeField] private TMP_Text ipText;
         [SerializeField] private Button connectButton;
@@ -62,7 +62,8 @@ namespace VortexArena.App
         private bool _beaconSubscribed;
 
         private bool _ipPanelVisible;
-        private float _lastATapTime = float.NegativeInfinity;
+        private float _joystickHoldTimer;
+        private bool _joystickHoldFired; // basılı tutmaya devam ederken ikinci kez tetiklenmesin
         private float _discoveryTimer;
         private bool _autoConnectDone;
         private bool _hintShown;
@@ -104,7 +105,7 @@ namespace VortexArena.App
             // Kalıcı singleton'lar sahne objelerinden sonra önyüklenebilir — burada tekrar dene.
             TrySubscribeBeacon();
 
-            SetIpPanelVisible(false); // oyuncuya adres sorulmaz; kurtarma A×2 ile açılır
+            SetIpPanelVisible(false); // oyuncuya adres sorulmaz; kurtarma joystick basılı tutarak açılır
 
             if (AppSession.HasServerEndpoint)
             {
@@ -149,29 +150,37 @@ namespace VortexArena.App
             if (_discoveryTimer >= DiscoveryHintDelay)
             {
                 _hintShown = true;
-                SetStatus("Sunucu bulunamadı. Adresi elle girmek için sağ kumandada A'ya İKİ KEZ bas.");
+                SetStatus("Sunucu bulunamadı. Adresi elle girmek için sağ kumandada joystick'e 1 sn basılı tut.");
             }
         }
 
-        /// <summary>Sağ kumandada A×2 → IP panelini aç/kapat (gizli kurtarma yolu).</summary>
+        /// <summary>
+        /// Sağ kumandada joystick 1 sn basılı → IP panelini aç/kapat (gizli kurtarma yolu).
+        /// Basış kesilirse sayaç sıfırlanır; tetikleme başına tek titreşim verilir.
+        /// </summary>
         private void DetectIpPanelCombo()
         {
-            if (!OVRInput.GetDown(OVRInput.Button.One, Hand))
+            if (!OVRInput.Get(OVRInput.Button.PrimaryThumbstick, Hand))
+            {
+                _joystickHoldTimer = 0f;
+                _joystickHoldFired = false;
+                return;
+            }
+
+            if (_joystickHoldFired)
+            {
+                return; // hâlâ basılı — bırakılmadan ikinci kez tetiklenmez
+            }
+
+            _joystickHoldTimer += Time.unscaledDeltaTime;
+            if (_joystickHoldTimer < IpPanelHoldDuration)
             {
                 return;
             }
 
-            float now = Time.unscaledTime;
-            if (now - _lastATapTime <= DoubleTapWindow)
-            {
-                _lastATapTime = float.NegativeInfinity; // üçüncü basış yeni çift saymasın
-                SetIpPanelVisible(!_ipPanelVisible);
-                OVRInput.SetControllerVibration(0.5f, 0.3f, Hand);
-            }
-            else
-            {
-                _lastATapTime = now;
-            }
+            _joystickHoldFired = true;
+            SetIpPanelVisible(!_ipPanelVisible);
+            OVRInput.SetControllerVibration(0.5f, 0.3f, Hand);
         }
 
         private void SetIpPanelVisible(bool visible)

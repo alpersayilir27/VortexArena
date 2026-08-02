@@ -194,10 +194,6 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _speedPrev;
         [SerializeField] private Button _speedNext;
 
-        [SerializeField] private TextMeshProUGUI _wallValue;
-        [SerializeField] private Button _wallPrev;
-        [SerializeField] private Button _wallNext;
-
         [SerializeField] private TextMeshProUGUI _roofValue;
         [SerializeField] private Button _roofPrev;
         [SerializeField] private Button _roofNext;
@@ -278,8 +274,6 @@ namespace VortexArena.App.Admin
             Wire(_nameplatesNext, ToggleNameplates);
             Wire(_speedPrev, SpeedDown);
             Wire(_speedNext, SpeedUp);
-            Wire(_wallPrev, WallDown);
-            Wire(_wallNext, WallUp);
             Wire(_roofPrev, PrevRoof);
             Wire(_roofNext, NextRoof);
 
@@ -1095,18 +1089,6 @@ namespace VortexArena.App.Admin
         private static void SpeedDown() { AdminSession.FreeSpeed -= 0.5f; }
         private static void SpeedUp() { AdminSession.FreeSpeed += 0.5f; }
 
-        private static void WallDown() { StepWall(-0.05f); }
-        private static void WallUp() { StepWall(0.05f); }
-
-        private static void StepWall(float delta)
-        {
-            AdminSession.WallAlpha += delta;
-            if (AdminSpectator.Instance != null)
-            {
-                AdminSpectator.Instance.RefreshWallAlpha();
-            }
-        }
-
         private static void PrevRoof() { StepRoof(-1); }
         private static void NextRoof() { StepRoof(1); }
 
@@ -1274,7 +1256,6 @@ namespace VortexArena.App.Admin
                 : AdminSession.Markers == AdminMarkerVisibility.TopDownOnly ? "kuş bakışı" : "her zaman";
             _nameplatesValue.text = AdminSession.Nameplates ? "açık" : "kapalı";
             _speedValue.text = $"{AdminSession.FreeSpeed:0.0} m/sn";
-            _wallValue.text = $"%{Mathf.RoundToInt(AdminSession.WallAlpha * 100f)}";
             _roofValue.text = AdminSession.Roof == AdminRoofMode.Visible ? "görünür"
                 : AdminSession.Roof == AdminRoofMode.HideInTopDown ? "kuş bakışında gizli" : "hep gizli";
 
