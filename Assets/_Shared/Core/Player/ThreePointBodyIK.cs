@@ -54,10 +54,20 @@ namespace VortexArena.Core.Player
     /// kafa da aynı sebeple kırılır — o zaman çözüm ellerinkiyle aynıdır: bazı ölçüp çarpmak.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Hiçbir tahmin MANDALLANMAZ.</b> Boy tahmini sonsuz maksimum tutuyordu ve ayak bastığı
-    /// noktaya kilitleniyordu; tek bozuk kare avatarı kalıcı olarak bozuyordu (poz düzeldiği hâlde
-    /// dev + ayakları zeminin altında kalıyordu — ölçüldü). Boy artık kayan pencere maksimumu,
-    /// ayaklar da ışınlanmada yeniden ziplatılıyor.
+    /// ⚠️ <b>Oyuncunun boyu TEK BİR ANDA ölçülür, sonra SABİT kalır.</b> Ölçüm penceresi
+    /// kalibrasyon tamamlanınca (<see cref="ArenaCalibrator.CalibrationGeneration"/>) ya da avatar
+    /// başka bir oyuncuya devredilince (<see cref="ResetPoseState"/>) açılır ve
+    /// <see cref="HeightMeasureDelaySeconds"/> saniye sonra kapanır: gecikme, oyuncunun zemin
+    /// işaretine eğilmiş hâlde ölçülmemesi içindir — aranan boy AYAKTA olandır. Sabitlendikten
+    /// sonra çömelme, zıplama ya da poz sıçraması avatarın ölçeğini DEĞİŞTİRMEZ.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Sabitlenen bir tahminin geri dönüş yolu OLMAK ZORUNDADIR</b> — yukarıdaki iki
+    /// tetikleyici o yollardır. Aynı sebeple ölçüm tek kareden değil, pencerenin son
+    /// <see cref="HeightMeasureAverageSeconds"/> saniyesinin ORTALAMASINDAN alınır: kendini
+    /// düzeltmeyen bir değerde tek gürültülü kare, maçın kalanı boyunca yanlış boy demektir.
+    /// Ölçüm inene kadar geçici olarak kayan pencere maksimumu sürülür, ayaklar da ışınlanmada
+    /// yeniden ziplatılır.
     /// </para>
     /// <para>
     /// ⚠️ <b>Gelen "kafa" pozu GÖZÜN pozudur</b> (<c>centerEyeAnchor</c> — hem yerel rig'den hem
@@ -131,9 +141,12 @@ namespace VortexArena.Core.Player
         [Tooltip("Adım yayının tepe yüksekliği (metre).")]
         [SerializeField] private float stepArcHeight = 0.09f;
 
-        /// <summary>Avatar ölçeğinin alt/üst sınırı — bozuk bir poz ölçümü avatarı devleştirmesin.</summary>
-        private const float MinScale = 0.75f;
-        private const float MaxScale = 1.35f;
+        /// <summary>Avatar ölçeğinin alt/üst sınırı — bozuk bir poz ölçümü avatarı devleştirmesin.
+        /// <para>Aralık, oynayan insan boyunu KISITLAMAYACAK kadar geniştir (çocuktan uzun yetişkine):
+        /// ölçek artık ölçülmüş bir boydan geliyor, kırpma bir denetim değil son savunma hattıdır.
+        /// Dar bir tavan, kısa oyuncuyu kendi gövdesinden büyük görmeye zorlardı.</para></summary>
+        private const float MinScale = 0.25f;
+        private const float MaxScale = 1.75f;
 
         /// <summary>
         /// GÖZÜN arena zemininden makul yüksekliği (m). Bu aralığın DIŞINDAKİ poz "gönderenin
@@ -145,11 +158,27 @@ namespace VortexArena.Core.Player
         private const float MaxPlausibleEyeHeight = 2.6f;
 
         /// <summary>
-        /// Boy tahmininin kayan pencere uzunluğu (sn). ⚠️ <b>Sonsuz maksimum kullanılmaz:</b> tek
-        /// bozuk kare avatarı kalıcı olarak devleştiriyordu. Pencere, çömelmede küçülmeyi
-        /// önleyecek kadar uzun, hatalı bir örneği unutacak kadar kısadır.
+        /// Boy tahmininin kayan pencere uzunluğu (sn) — yalnız ölçüm İNENE KADAR geçerli olan
+        /// geçici tahmin için. ⚠️ <b>Sonsuz maksimum kullanılmaz:</b> tek bozuk kare avatarı
+        /// kalıcı olarak devleştirirdi. Pencere, çömelmede küçülmeyi önleyecek kadar uzun, hatalı
+        /// bir örneği unutacak kadar kısadır.
         /// </summary>
         private const float StandingHeightWindowSeconds = 5f;
+
+        /// <summary>
+        /// Tetikten (kalibrasyon tamamlanması / <see cref="ResetPoseState"/>) boy ölçümüne kadar
+        /// beklenen süre (sn). Oyuncu kalibrasyonu kumandanın ucunu zemin işaretine değdirerek
+        /// yapıyor, yani o anda eğilmiş durumda; ölçüm ayağa kalkacak kadar beklemek zorundadır.
+        /// <para>⚠️ Süre <b>GÜVENİLİR</b> karelerde işler (bkz. <see cref="MinPlausibleEyeHeight"/>):
+        /// hiç izleme yokken saymak, ölçümü boş bir pozdan almak olurdu.</para>
+        /// </summary>
+        private const float HeightMeasureDelaySeconds = 3f;
+
+        /// <summary>
+        /// Ölçüm penceresinin sonunda ortalaması alınan kuyruk süresi (sn) — bkz. sınıf özeti,
+        /// "sabitlenen bir tahmin tek gürültülü kareye emanet edilmez".
+        /// </summary>
+        private const float HeightMeasureAverageSeconds = 0.5f;
 
         /// <summary>
         /// Ölçeğin hedefine yaklaşma hızı (ölçek birimi / sn).
@@ -158,8 +187,10 @@ namespace VortexArena.Core.Player
         /// edilmiyordu ama YEREL gövdede oyuncu kendi kollarına bakıyor ve sıçrama "kolum uzayıp
         /// kısalıyor" olarak görünüyordu. Hız, normal bir pencere devrini (birkaç cm) yarım
         /// saniyenin altında kapatacak kadar yüksek, sıçramayı gizleyecek kadar düşüktür.</para>
-        /// <para>İlk kare istisnadır: avatar görünürken hedefe ANINDA oturur
-        /// (<see cref="_scaleInitialized"/>), yoksa her doğuşta yavaşça büyürdü.</para>
+        /// <para>İKİ kare istisnadır ve ikisinde de hedefe ANINDA oturulur: avatarın ilk karesi
+        /// (<see cref="_scaleInitialized"/>, yoksa her doğuşta yavaşça büyürdü) ve boy ölçümünün
+        /// indiği kare (<see cref="TrackStandingHeight"/> — hedef orada son kez değişir, yumuşatma
+        /// onu saniyelerce süren bir büyüme animasyonuna çevirirdi).</para>
         /// </summary>
         private const float ScaleFollowRatePerSecond = 0.15f;
 
@@ -251,13 +282,29 @@ namespace VortexArena.Core.Player
         /// </summary>
         private float ModelEyeHeight => _modelHeadHeight + headBoneToEyeOffset.y;
 
-        /// <summary>Oyuncunun ölçülen ayakta GÖZ yüksekliği — avatar buna göre ölçeklenir.
-        /// <para>Kayan pencere maksimumu: <see cref="_recentMaxEyeHeight"/> ikinci kovadır,
-        /// pencere dolunca yerine geçer (O(1), tahsissiz).</para></summary>
+        /// <summary>Oyuncunun ayakta GÖZ yüksekliği — avatar buna göre ölçeklenir.
+        /// <para><see cref="_heightLocked"/> olunca bu değer ÖLÇÜLMÜŞ boydur ve bir sonraki
+        /// tetiğe kadar değişmez. O ana kadar geçici tahmindir: kayan pencere maksimumu
+        /// (<see cref="_recentMaxEyeHeight"/> ikinci kovadır, pencere dolunca yerine geçer —
+        /// O(1), tahsissiz).</para></summary>
         private float _standingEyeHeight;
         private float _recentMaxEyeHeight;
         private float _heightWindowTimer;
         private float _scale = 1f;
+
+        /// <summary>Ölçüm penceresi: tetikten bu yana geçen GÜVENİLİR süre ve son
+        /// <see cref="HeightMeasureAverageSeconds"/> saniyenin örnek toplamı/sayısı.</summary>
+        private float _measureTimer;
+        private float _measureSum;
+        private int _measureSamples;
+
+        /// <summary>Boy ölçüldü mü — true iken kayan pencere ARTIK İŞLEMEZ, ölçek sabit kalır.</summary>
+        private bool _heightLocked;
+
+        /// <summary>Son görülen <see cref="ArenaCalibrator.CalibrationGeneration"/>; değişmesi
+        /// "arena yeniden hizalandı, boy yeniden ölçülmeli" demektir. Olaya abone OLUNMAZ —
+        /// gerekçe o property'nin özetinde.</summary>
+        private int _calibrationGeneration;
 
         /// <summary>Ölçek ilk kez oturtuldu mu — ilk kare hedefe anında sıçrar, sonrası yumuşar.</summary>
         private bool _scaleInitialized;
@@ -332,6 +379,15 @@ namespace VortexArena.Core.Player
             float eyeHeight = safeHead.position.y - arenaGroundY;
             bool trusted = eyeHeight >= MinPlausibleEyeHeight && eyeHeight <= MaxPlausibleEyeHeight;
 
+            // Arena yeniden hizalandıysa boy ölçümü baştan alınır: hizalamadan ÖNCE ölçülen göz
+            // yüksekliği arenanın zeminine değil, sistemin tahmin ettiği zemine göredir.
+            int calibrationGeneration = ArenaCalibrator.CalibrationGeneration;
+            if (calibrationGeneration != _calibrationGeneration)
+            {
+                _calibrationGeneration = calibrationGeneration;
+                BeginHeightMeasurement();
+            }
+
             RestoreBindPose();
 
             if (trusted)
@@ -375,7 +431,8 @@ namespace VortexArena.Core.Player
 
         /// <summary>
         /// Avatar başka bir oyuncuya devredildiğinde ya da poz akışı baştan başladığında çağrılır:
-        /// tahmin edilen HER ŞEYİ (boy, ölçek, gövde yaw'ı, basılan ayaklar) sıfırlar.
+        /// tahmin edilen HER ŞEYİ (boy, ölçek, gövde yaw'ı, basılan ayaklar) sıfırlar ve yeni
+        /// oyuncunun boyu için ölçüm penceresini açar (<see cref="HeightMeasureDelaySeconds"/>).
         /// <para>⚠️ Bu olmadan önceki oyuncunun boyu/duruşu yeni oyuncuya miras kalır — hepsi
         /// mandallı tahminler olduğu için kendiliğinden düzelmezler.</para>
         /// </summary>
@@ -383,10 +440,15 @@ namespace VortexArena.Core.Player
         {
             _standingEyeHeight = ModelEyeHeight;
             _recentMaxEyeHeight = ModelEyeHeight;
-            _heightWindowTimer = 0f;
             _scale = 1f;
             _scaleInitialized = false;
             transform.localScale = Vector3.one;
+
+            // Devralınan avatar yeni oyuncunun boyunu yeniden ölçer. Sayaç da tazelenir: aksi
+            // hâlde ilk karede kalibrasyon kapısı da tetiklenir ve pencere iki kez başlardı.
+            _calibrationGeneration = ArenaCalibrator.CalibrationGeneration;
+            BeginHeightMeasurement();
+
             _yawInitialized = false;
             _feetInitialized = false;
             _leftStepProgress = 1f;
@@ -479,15 +541,17 @@ namespace VortexArena.Core.Player
         /// oyuncunun GÖZ yüksekliği, model tarafında da onun karşılığı kullanılmalı. Kafa kemiğine
         /// bölünüyordu ve avatar sistematik olarak ~%8 büyük çiziliyordu (Ch15'te kafa kemiği
         /// 1.56 m, göz ≈ 1.68 m) — büyüyen gövde oyuncunun yüzüne yaklaşan bir göğüs demekti.</para>
-        /// <para>Ölçü <b>en yüksek</b> gözlenen göz yüksekliğinden alınır: eğilen/çömelen oyuncuda
-        /// anlık yüksekliğe uyulsaydı avatar her çömelmede küçülürdü.</para>
-        /// <para>⚠️ Maksimum <b>KAYAN PENCEREDE</b> tutulur (iki kova,
-        /// <see cref="StandingHeightWindowSeconds"/>). Sonsuz maksimum, tek bir yüksek (ama makul
-        /// aralıkta kalan) örneği kalıcı yapıyordu: 2.05 m'lik bir göz avatarı 1.32×'e kilitliyor
-        /// ve poz düzelse bile geri dönmüyordu.</para>
-        /// <para>⚠️ Bulunan ölçek transform'a DOĞRUDAN yazılmaz, hedefe doğru YUMUŞATILIR
+        /// <para>Ölçü <b>tetikten <see cref="HeightMeasureDelaySeconds"/> sn sonra ÖLÇÜLÜR ve
+        /// sabitlenir</b> (bkz. sınıf özeti): oyuncu çömeldiğinde, eğildiğinde ya da zıpladığında
+        /// avatarın boyu değişmez. Sabitlenene kadar geçici olarak kayan pencere maksimumu sürülür
+        /// (iki kova, <see cref="StandingHeightWindowSeconds"/>) — 3 saniye boyunca model boyunda
+        /// donmuş bir avatar, kısa oyuncunun kendi kollarını yanlış yerde görmesi olurdu.</para>
+        /// <para>⚠️ Ölçek transform'a DOĞRUDAN yazılmaz, hedefe doğru YUMUŞATILIR
         /// (<see cref="ScaleFollowRatePerSecond"/>) — pencere devri tek karede atlıyor ve yerel
-        /// gövdede bu "kolum uzayıp kısalıyor" olarak görülüyordu.</para>
+        /// gövdede bu "kolum uzayıp kısalıyor" olarak görülüyordu. <b>Ölçümün indiği kare bunun
+        /// İSTİSNASIDIR:</b> orada hedef son kez değişir ve doğru boya ANINDA oturulur; yumuşatma,
+        /// hedefi sürekli oynayan bir tahmin için vardır, kesinleşen bir ölçümü saniyelerce süren
+        /// bir büyüme animasyonuna çevirmek için değil.</para>
         /// </summary>
         private void ApplyScale(float eyeHeightMeters, float deltaTime)
         {
@@ -495,6 +559,74 @@ namespace VortexArena.Core.Player
             if (modelEyeHeight <= 0.01f || eyeHeightMeters <= 0.01f)
             {
                 return;
+            }
+
+            // Sabitlendikten sonra hiçbir poz boyu değiştirmez — pencere de artık işlemez.
+            bool measurementLanded = !_heightLocked && TrackStandingHeight(eyeHeightMeters, deltaTime);
+
+            float target = Mathf.Clamp(_standingEyeHeight / modelEyeHeight, MinScale, MaxScale);
+
+            if (!_scaleInitialized || measurementLanded)
+            {
+                // İlk kare: avatar zaten yeni görünüyor, yumuşatmanın gizleyeceği bir sıçrama yok.
+                // Ölçüm karesi: hedef artık sabit, yumuşatacak bir şey kalmadı.
+                _scaleInitialized = true;
+                _scale = target;
+            }
+            else if (Mathf.Abs(target - _scale) > 1e-4f)
+            {
+                _scale = Mathf.MoveTowards(_scale, target, ScaleFollowRatePerSecond * deltaTime);
+            }
+            else
+            {
+                return;
+            }
+
+            transform.localScale = new Vector3(_scale, _scale, _scale);
+        }
+
+        /// <summary>
+        /// Boy ölçüm penceresini açar: bir sonraki <see cref="HeightMeasureDelaySeconds"/> saniyelik
+        /// güvenilir izlemenin sonunda <see cref="_standingEyeHeight"/> yeniden ÖLÇÜLÜR.
+        /// <para>⚠️ Mevcut boy burada SIFIRLANMAZ (<see cref="ResetPoseState"/> ayrıca yapar):
+        /// pencere boyunca avatar elindeki ölçüyle çizilmeye devam eder — sıfırlansaydı her
+        /// hizalamadan sonra avatar üç saniyeliğine model boyuna atlar ve geri inerdi.</para>
+        /// </summary>
+        private void BeginHeightMeasurement()
+        {
+            _heightLocked = false;
+            _measureTimer = 0f;
+            _measureSum = 0f;
+            _measureSamples = 0;
+            _heightWindowTimer = 0f;
+        }
+
+        /// <summary>
+        /// Açık ölçüm penceresini bir kare ilerletir; ölçüm bu karede indiyse <c>true</c> döner.
+        /// Yalnız GÜVENİLİR karelerden çağrılır, yani süre de yalnız gerçek izleme varken işler.
+        /// <para>Ölçüm penceresinin son <see cref="HeightMeasureAverageSeconds"/> saniyesinin
+        /// ortalamasıdır — gerekçe sınıf özetinde.</para>
+        /// <para>Pencere kapanana kadar boy geçici olarak kayan pencere maksimumundan sürülür:
+        /// eğilen/çömelen oyuncuda anlık yüksekliğe uyulsaydı avatar her çömelmede küçülürdü,
+        /// sonsuz maksimum ise tek yüksek örneğe kilitlenirdi.</para>
+        /// </summary>
+        private bool TrackStandingHeight(float eyeHeightMeters, float deltaTime)
+        {
+            _measureTimer += deltaTime;
+
+            if (_measureTimer >= HeightMeasureDelaySeconds - HeightMeasureAverageSeconds)
+            {
+                _measureSum += eyeHeightMeters;
+                _measureSamples++;
+            }
+
+            if (_measureTimer >= HeightMeasureDelaySeconds && _measureSamples > 0)
+            {
+                _heightLocked = true;
+                _standingEyeHeight = _measureSum / _measureSamples;
+                _recentMaxEyeHeight = _standingEyeHeight;
+                _heightWindowTimer = 0f;
+                return true;
             }
 
             if (eyeHeightMeters > _standingEyeHeight)
@@ -516,24 +648,7 @@ namespace VortexArena.Core.Player
                 _recentMaxEyeHeight = eyeHeightMeters;
             }
 
-            float target = Mathf.Clamp(_standingEyeHeight / modelEyeHeight, MinScale, MaxScale);
-
-            if (!_scaleInitialized)
-            {
-                // İlk kare: avatar zaten yeni görünüyor, yumuşatmanın gizleyeceği bir sıçrama yok.
-                _scaleInitialized = true;
-                _scale = target;
-            }
-            else if (Mathf.Abs(target - _scale) > 1e-4f)
-            {
-                _scale = Mathf.MoveTowards(_scale, target, ScaleFollowRatePerSecond * deltaTime);
-            }
-            else
-            {
-                return;
-            }
-
-            transform.localScale = new Vector3(_scale, _scale, _scale);
+            return false;
         }
 
         // ------------------------------------------------------------------- gövde

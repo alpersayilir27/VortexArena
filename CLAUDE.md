@@ -395,10 +395,12 @@ tasarımının zıddıdır ve filtre hover'ı kesmediği için yalan söyleyen b
 `Docs/Sistem-Ozeti.md` §7). Yasak yalnız kök içindir: **çerçeve prefabında (`VA_WeaponFrame`)
 mesafeden kavrama ZORUNLUDUR** — silah oradan alınır. Çerçeve adımı elle iş istemez, araç her
 `WPN_*` köküne bir `VA_WeaponFrame` örneği koyar (idempotent). **Çözülme efekti de kurulum
-istemez:** araç aynı köke `WeaponDissolve` koyup `_Shared/Materials/DissolveEffect.mat`'i bağlar
-(yalnız alan BOŞSA — silaha özel materyal bağlanmışsa ezilmez, ikinci seçenek `VoronoiDissolve`),
-silah ele çözülerek gelir. ⚠️ Geçişin **süre/desen ayarları araçtaki sabitlerden** gelir ve her
-koşuda prefaba geri yazılır — kalıcı ayar prefabda değil `WeaponKitBuilder`'da değiştirilir. Aynı sebeple ⚠️ **`Grabbable._throwWhenUnselected` GERİ AÇILMAZ**
+istemez:** araç aynı köke `SimpleWeaponDissolve` koyup `_Shared/Materials/DissolveEffect.mat`'i
+bağlar (yalnız alan BOŞSA — silaha özel materyal bağlanmışsa ezilmez, ikinci seçenek
+`VoronoiDissolveEffect`), silah ele çözülerek gelir; **bırakışta efekt YOKTUR**. ⚠️ Efektin
+**görünüm ayarları (kenar, desen) bileşende değil MATERYALDE** durur ve araç onlara dokunmaz;
+**süresi** ise araçtaki sabitten gelir ve her koşuda prefaba geri yazılır — kalıcı ayar prefabda
+değil `WeaponKitBuilder`'da değiştirilir. Aynı sebeple ⚠️ **`Grabbable._throwWhenUnselected` GERİ AÇILMAZ**
 (araç kapatır): silahın pozunu ISDK değil `ApplyCanonicalGrip` sürdüğü için bırakış hızı uydurmadır
 ve silah elden fırlar. **Silahı sahneye ELLE koyarsın** (`weaponSource:"weaponcanvas"` — TDM ·
 turnuva): yerleşim **arena kararıdır**, harita tasarlanırken yapılır ve bunu yapan bir bileşen

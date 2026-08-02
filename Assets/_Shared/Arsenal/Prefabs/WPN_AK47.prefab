@@ -257,13 +257,9 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 10c15c888017a024da8d92fb85942e57, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDissolve
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SimpleWeaponDissolve
   dissolveMaterial: {fileID: 2100000, guid: 65822b697fd322144a6838c20894a1d7, type: 2}
   appearSeconds: 1.2
-  disappearSeconds: 0.9
-  edgeColor: {r: 0, g: 2.7183907, b: 8.905661, a: 1}
-  edgeWidth: 0.08
-  noiseScale: 60
 --- !u!1 &940328498536189817
 GameObject:
   m_ObjectHideFlags: 0

@@ -10200,13 +10200,9 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 10c15c888017a024da8d92fb85942e57, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDissolve
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SimpleWeaponDissolve
   dissolveMaterial: {fileID: 2100000, guid: 0d5617cdec4ce984aa5d6cbb762af28e, type: 2}
   appearSeconds: 1.2
-  disappearSeconds: 0.9
-  edgeColor: {r: 0, g: 2.7183907, b: 8.905661, a: 1}
-  edgeWidth: 0.08
-  noiseScale: 60
 --- !u!1 &7540086726649234820
 GameObject:
   m_ObjectHideFlags: 0
@@ -10318,6 +10314,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 3488151720638866241}
     m_Modifications:
+    - target: {fileID: 2208109556859985965, guid: d436d390bb5bb6549904525e0a9f480f, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2488674098152396270, guid: d436d390bb5bb6549904525e0a9f480f, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6726882489417941671, guid: d436d390bb5bb6549904525e0a9f480f, type: 3}
       propertyPath: m_Name
       value: VA_WeaponFrame
