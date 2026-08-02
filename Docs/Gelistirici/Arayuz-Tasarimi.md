@@ -86,7 +86,8 @@ Ayrıca birkaç teknik not:
   anlatılır); `ringSelected`'a **daha kalın** bir halka koyarsanız seçim belirginleşir.
 - **`ConnectionOverlay`'in iki varyantı ayrı prefabtır** ve farklı alanları dolu olur:
   masaüstü varyantında `_hudFollow` boştur, VR varyantında `_reconnectButton`/`_reconnectLabel`
-  boştur (VR'da düğme yoktur, yerine A×2 ipucu vardır). **Bu boşluklar normaldir, doldurmayın.**
+  boştur (VR'da düğme yoktur, yerine "joystick'i 1 sn basılı tut" ipucu vardır).
+  **Bu boşluklar normaldir, doldurmayın.**
 - **`LoadingOverlay` de iki varyattır** ve aynı kural geçerlidir: masaüstü varyantında `_hudFollow`
   boştur, VR varyantında **scrim objesi hiç yoktur**. Scrim'i VR prefabına EKLEMEYİN — oyuncu
   fiziksel alanda yürüyor, görüşü karartmak tehlikelidir (`ConnectionOverlayWorld` ile aynı

@@ -8,7 +8,9 @@ namespace VortexArena.Core.Editor
     /// <summary>
     /// Hiyerarşi sağ-tık menüsü: <c>GameObject &gt; VortexArena &gt; Spawn Point</c>.
     /// Arenanın <b>tek</b> başlangıç noktasını (<see cref="SpawnPoint"/>) üretir; yerleştirme
-    /// ELLE yapılır (sihirbaz ya da başka bir araç bu noktayı otomatik koymaz).
+    /// ELLE yapılır. <c>Template Temellerini Yükle</c> nokta hiç yoksa origin'e bir tane koyar,
+    /// ama <b>yerini belirlemez</b> — nereye konacağı tasarım kararıdır ve zemin seviyesinde
+    /// olmalıdır.
     /// <para>
     /// Sahnede zaten bir nokta varsa uyarı basılır ama üretim ENGELLENMEZ — kullanıcı eskisini
     /// silip yenisini koymak isteyebilir; engellemek "önce sil, sonra ekle" sırasını dayatırdı.
