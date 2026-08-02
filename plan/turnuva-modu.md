@@ -9,37 +9,18 @@ Bu dosya yalnız **elde kalan adımları** ve doğrulama listesini tutuyor; heps
 
 ---
 
-## 1. Elde kalan (ajan yapamaz — editör/derleme kullanıcıya aittir)
+## 1. Ön koşul: silah kaynağı (ENGEL)
 
-| # | İş | Neden elle |
-|---|---|---|
-| 1 | **Unity'yi aç, derlenmesini bekle** | Yeni asmdef (`VortexArena.Modes.Tournament`) ve yeni asset'ler import edilecek |
-| 2 | **`Tools > VortexArena > Export Server Config`** | `Server/config/maps.json`'a `"tournament"` girsin. ⚠️ **Atlanırsa `start_match` "harita bu modu desteklemiyor" diye SESSİZCE reddedilir** (sebep yalnız sunucu konsolunda görünür). Araç sonda modal dialog açtığı için CLI/MCP'den çalıştırılmaz |
-| 3 | `dotnet build Server/` (ya da `scripts\deploy-server.bat`) | Sunucu tarafı derlemesi |
+Turnuva `weaponSource:"weaponcanvas"` kullanıyor ve silahlar arenaya **elle** konuyor; üç arenaya
+henüz konmadı → **sahnede silah yok**. Aşağıdaki listenin silah gerektiren maddeleri
+`plan/arenaya-dagilmis-silah.md`'deki yerleştirme bitmeden koşulamaz.
 
-**Build Settings'e dokunmak gerekmez** — turnuva yeni sahne getirmiyor, mevcut arenalarda oynanıyor.
-
-## 2. Arena ön koşulu (kontrol edilecek, iş çıkarsa yapılacak)
-
-Turnuva `weaponSource:"rack"` + taban tabanlı toplanma kullanıyor. Oynanacak her arenada:
-
-- [ ] **Silah rafı var mı** (`WeaponRackSpawner` + `RackSlot`'lar) — yoksa oyuncu silahsız kalır.
-      TDM de raf kullandığı için mevcut arenalarda olması beklenir.
-- [ ] **`BaseZone` ×2 var mı** (kırmızı/mavi) — toplanma kapısı tabana girmeye bağlı. Sahnede hiç
-      açık bölge yoksa raporlayıcı oyuncuyu kilitlemez (anında hazır sayar) ama toplanma
-      anlamsızlaşır.
-
-Etkilenen arenalar: `Arena12x12` · `IceWorld` · `ArenaVortexAntep`.
+`BaseZone` ×2 (toplanma kapısı) üç arenada da yerinde — `Arena12x12` · `IceWorld` ·
+`ArenaVortexAntep`.
 
 ---
 
-## 3. Doğrulama listesi
-
-**Derleme**
-- [ ] Unity konsolu temiz (yeni asmdef + `ModeReviveAnchor.None` + `PlayerCombatState` refactoru)
-- [ ] `dotnet build Server/` temiz
-- [ ] Sunucu açılış başlığı: `Modlar : tdm, ffa, tournament`
-- [ ] `Server/config/maps.json` — lobi olmayan haritalarda `"tournament"` **var**, lobilerde **yok**
+## 2. Doğrulama listesi
 
 **Admin arayüzü**
 - [ ] Mod seçicisinde `Turnuva` görünüyor
@@ -64,33 +45,31 @@ Etkilenen arenalar: `Arena12x12` · `IceWorld` · `ArenaVortexAntep`.
 
 **Sınır durumları**
 - [ ] Süre dolduğunda çok kişi ayakta olan takıma puan yazılıyor; eşitse kimseye yazılmıyor
-- [ ] Bir başlığı kapat → 60 sn sonra toplanma zaman aşımıyla tur yine başlıyor (konsolda
-      "tabanına dönmeyenler: …"). ⚠️ **O geri sayım artık iptal edilmemeli** — konsolda
-      "zaman aşımı — iptal edilmez" yazar
-- [ ] Sürekli girip çıkan oyuncu maçı askıda tutamıyor: zaman aşımı turun bittiği andan işliyor,
-      iptaller onu sıfırlamıyor
+- [ ] Bir başlığı kapat → tur **başlamıyor**, toplanma süresiz bekliyor; konsola 30 sn'de bir
+      "toplanma bekleniyor (1/2) — tabanına dönmeyenler: …" düşüyor
+- [ ] O oyuncu **atılınca** (kick) sayaç 1/2 → 1/1 oluyor ve geri sayım hemen başlıyor
 - [ ] `abort_match` toplanma sırasında lobiye döndürüyor
-- [ ] Skor limitine ulaşılınca `finished` + "KIRMIZI/MAVİ KAZANDI", 10 sn sonra lobi
+- [ ] Skor limitine ulaşılınca `finished` + "KIRMIZI/MAVİ KAZANDI"; kazanan ekranı **operatör
+      harita/lobi seçene kadar duruyor** (otomatik dönüş yalnız uzun emniyet süresinde)
 
 **Gerileme (bunlar DEĞİŞMEMELİ)**
 - [ ] TDM: geri sayım seçilmediyse 5 sn, canlanma tabanda çalışıyor, skor öldürme sayıyor
 - [ ] FFA: sabit durarak canlanma çalışıyor, rastgele silah geliyor
-- [ ] Lobide serbest atış ve silah çerçevesi çalışıyor
+- [ ] Lobide serbest atış çalışıyor (artık `random`: grip'e basınca elde silah belirir)
 
 ---
 
-## 4. Arsenal'de duran ayrı bir kusur (turnuvaya özgü DEĞİL, dört modu birden etkiler)
+## 3. Arsenal'de duran ayrı bir kusur (turnuvaya özgü DEĞİL, dört modu birden etkiler)
 
-`Assets/_Shared/Arsenal/` içinde AK47 ↔ M4A1 tanım bağları çapraz:
+`Assets/_Shared/Arsenal/` içinde M4A1'in tanım bağı kopuk:
 
 | Dosya | `definition` → | Olması gereken |
 |---|---|---|
-| `WPN_M4A1.prefab` | `WD_AK47` | `WD_M4A1` |
-| `WPN_AK47.prefab` | **hiçbir şey** (ölü GUID `3e86e22f…`) | `WD_AK47` |
+| `WPN_M4A1.prefab` | **hiçbir şey** (ölü GUID `d42e8432…`) | `WD_M4A1` (`1004acbf…`) |
 
 Aynı ölü GUID **dört modun da** `loadout`'unda, `WeaponCatalog`'da ve `NetItemCatalog`'da duruyor;
-`WD_M4A1.asset`'i ise hiçbir şey referanslamıyor. Sonucu: rafta 6 değil **5** silah çıkar ve M4A1
-gövdesi AK47 istatistikleriyle ateş eder.
+`WD_M4A1.asset`'i ise hiçbir şey referanslamıyor. Sonucu: loadout'ta 6 değil **5** silah çıkar
+(FFA'da rastgele havuz beş silahlık) ve M4A1 gövdesi tanımsız kalır.
 
 ⚠️ **Elle GUID yazarak düzeltilmez** — silah kimliği bu projede bilinçli olarak elle eşlendi
 (CLAUDE.md, "bir satırın `PackPrefab`'ı ve `NetItemId`'si o satırdan AYRILMAZ"). Doğru yol
@@ -98,14 +77,14 @@ gövdesi AK47 istatistikleriyle ateş eder.
 yerinde tazeler ve iki kataloğu yeniden yazar. Sonrasında dört `ModeDefinition`'ın `loadout`'una
 `WD_M4A1` elden eklenir (araç loadout'a dokunmaz).
 
-## 5. Bilinçli olarak YAPILMAYANLAR (sorulursa cevap burada)
+## 4. Bilinçli olarak YAPILMAYANLAR (sorulursa cevap burada)
 
 - **Taraf değişimi (side swap) yok.** CS'te taraflar yarıda değişir; free-roam'da bu, oyuncuların
   fiziksel olarak karşı tabana yürümesi demek ve arena simetrik değilse anlamı da az. İstenirse
   ayrı bir iş olarak planlanır.
-- **Toplanma süresi parametrik değil** (60 sn sabit, `TournamentMode` içinde). O bir emniyet
-  zaman aşımıdır, oyun ayarı değil — normal akışta hiç devreye girmez; operatörün göreceği tek
-  bekleme geri sayımdır ve o parametrik.
+- **Toplanmada zorunlu başlatma yok.** Tur, herkes tabanına girene kadar bekler; zaman aşımı diye
+  bir şey yoktur ve geri eklenmez (eksik oyuncuyla açılan tur, tam kadro beklemenin varlık sebebini
+  çiğniyordu). Takılan başlık için çıkış operatörün **AT**'ı ya da **İPTAL**'idir.
 - **`PROTOCOL_VERSION` artmadı.** `countdownSeconds` yalnız admin↔sunucu yönünde, isteğe bağlı ve
   `0 = varsayılan` fallback'i olan bir alan (`roundSeconds`/`scoreLimit` ile birebir aynı
   sözleşme); `reviveAnchor:"none"` ise §10.5'in "bilinmeyen değer varsayılana düşer" kuralına

@@ -36,6 +36,16 @@ namespace VortexArena.Net
         /// seçimi + son eylem duyurusu. App katmanında <c>AdminSelection</c> dinler.</summary>
         public static event Action<AdminStateMsg> OnAdminState;
 
+        /// <summary>HERKESE gelir (§5.3): koşan maçın kural şekli DEĞİŞTİ. <b>Gerçek bir kural
+        /// mesajıdır</b> ve <c>ModeRuntime</c>'a uygulanır (<c>ModeRuntimePump</c> dinler).
+        /// Bugün tek tetikleyicisi operatörün dost ateşi anahtarıdır (§5.2).</summary>
+        public static event Action<RulesUpdateMsg> OnRulesUpdate;
+
+        /// <summary>HERKESE gelir (§5.3): seçili modun takım kipi. <b>Kural değildir</b> —
+        /// <c>ModeRuntime</c>'a uygulanmaz; tek tüketicisi taban şeritlerinin görünürlüğüdür.
+        /// Core katmanında <c>ModeRuntimePump</c> dinleyip <c>ModeSelection</c>'a yazar.</summary>
+        public static event Action<SelectionStateMsg> OnSelectionState;
+
         /// <summary>Yalnız admin bağlantılarına gelir (§6.7), 1 Hz: oyuncu başına ping/jitter/kayıp.
         /// Değerleri İSTEMCİLER ölçer, sunucu taşır. App katmanında <c>AdminRoster</c> dinler.
         /// <para>Kaybı zararsızdır — bir sonraki saniye yenisi gelir, uzlaştırma yoktur.</para></summary>
@@ -59,6 +69,8 @@ namespace VortexArena.Net
         internal static void RaiseIdentify(IdentifyMsg msg) { OnIdentify?.Invoke(msg); }
         internal static void RaiseKicked(KickedMsg msg) { OnKicked?.Invoke(msg); }
         internal static void RaiseAdminState(AdminStateMsg msg) { OnAdminState?.Invoke(msg); }
+        internal static void RaiseSelectionState(SelectionStateMsg msg) { OnSelectionState?.Invoke(msg); }
+        internal static void RaiseRulesUpdate(RulesUpdateMsg msg) { OnRulesUpdate?.Invoke(msg); }
         internal static void RaiseNetStats(NetStatsMsg msg) { OnNetStats?.Invoke(msg); }
     }
 }

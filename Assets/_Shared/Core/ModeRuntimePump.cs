@@ -53,9 +53,12 @@ namespace VortexArena.Core
             NetEvents.OnConnected += HandleConnected;
             NetEvents.OnReturnToLobby += HandleReturnToLobby;
             NetEvents.OnDisconnected += HandleDisconnected;
+            NetEvents.OnSelectionState += HandleSelectionState;
+            NetEvents.OnRulesUpdate += HandleRulesUpdate;
 
             // Domain reload kapalıyken statikler önceki oturumdan sarkabilir.
             ModeRuntime.Reset();
+            ModeSelection.Reset();
         }
 
         private void OnDestroy()
@@ -69,6 +72,8 @@ namespace VortexArena.Core
             NetEvents.OnConnected -= HandleConnected;
             NetEvents.OnReturnToLobby -= HandleReturnToLobby;
             NetEvents.OnDisconnected -= HandleDisconnected;
+            NetEvents.OnSelectionState -= HandleSelectionState;
+            NetEvents.OnRulesUpdate -= HandleRulesUpdate;
 
             _instance = null;
         }
@@ -98,7 +103,7 @@ namespace VortexArena.Core
         }
 
         /// <summary>Lobiye dönüş: kurallar SIFIRLANMAZ, lobi profili uygulanır (§10.7).
-        /// <para>Lobi de içerik taşır — silah rafı loadout'u <c>ModeRuntime.ModeId</c> ile
+        /// <para>Lobi de içerik taşır — silah loadout'u <c>ModeRuntime.ModeId</c> ile
         /// katalogdan çözülüyor. Mesaj boş <c>modeId</c> taşıyorsa (lobi yapılandırılmamış ya da
         /// eski sunucu) <see cref="ModeRuntime.Apply"/> zaten varsayılana düşer, yani eski
         /// davranışın aynısı olur.</para></summary>
@@ -113,9 +118,49 @@ namespace VortexArena.Core
             ModeRuntime.Apply(msg.modeId, msg.rules);
         }
 
+        /// <summary>
+        /// Seçim bildirimi (§5.3 <c>selection_state</c>) — <b>kural DEĞİL sunum</b>: bilerek
+        /// <see cref="ModeRuntime"/>'a değil <see cref="ModeSelection"/>'a yazılır.
+        /// <para>
+        /// ⚠️ Buradan <c>ModeRuntime.Apply</c> çağrılMAZ: seçim koşan maçı değiştirmez ve
+        /// çağrılsaydı lobide bekleyen oyuncunun HUD'u ile loadout'u maç başlamadan seçili moda
+        /// atlardı (sunucunun sahneleme sırasında <c>modeId</c>'yi bilerek <c>"lobby"</c> tuttuğu
+        /// kararın istemci tarafındaki karşılığı, §10.7).
+        /// </para>
+        /// </summary>
+        private static void HandleSelectionState(SelectionStateMsg msg)
+        {
+            if (msg == null)
+            {
+                return;
+            }
+
+            ModeSelection.Apply(msg.modeId, msg.teamMode);
+        }
+
+        /// <summary>
+        /// Kural şekli maç ORTASINDA değişti (§5.3 <c>rules_update</c>) — bugün tek sebebi
+        /// operatörün dost ateşi anahtarıdır (§5.2).
+        /// <para>
+        /// ⚠️ <c>HandleSelectionState</c>'in aksine bu <b>uygulanır</b>: seçim gelecekteki bir maçı
+        /// anlatır, bu ise koşan maçın kuralını. Otorite yine sunucudadır — istemci yalnız aynasını
+        /// tazeler; hasar kararını zaten sunucu veriyor (§10.3).
+        /// </para>
+        /// </summary>
+        private static void HandleRulesUpdate(RulesUpdateMsg msg)
+        {
+            if (msg?.rules == null)
+            {
+                return;
+            }
+
+            ModeRuntime.Apply(msg.modeId, msg.rules);
+        }
+
         private static void HandleDisconnected()
         {
             ModeRuntime.Reset();
+            ModeSelection.Reset();
         }
     }
 }

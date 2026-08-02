@@ -264,9 +264,7 @@ her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen bile değil,
 çiziliyor — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek bir yalancı-doğru
 üretir. ELDE: alanın ölçüsünü boyut dosyasına yazmak (ya da TestMesh'i modellemek) ·
 kalibrasyon işaretçilerinin
-yerleşimi (yerleri zemin bandından gelir) · tek `SpawnPoint` · **raf kipinde oynanacaksa silah rafı**
-(raf kökünde `WeaponRackSpawner`, altında konum tutan `RackSlot` gözleri — şablon dizayn taşımadığı
-için raf içermez) · NavMesh/ışık bake. Sonrasında
+yerleşimi (yerleri zemin bandından gelir) · tek `SpawnPoint` · NavMesh/ışık bake. Sonrasında
 `Tools > VortexArena > Export Server Config` çalıştır — **yeni `sceneName` `maps.json`'a girsin
 diye** (ölçü için değil, oraya arena boyutu yazılmaz).
 **Arena ölçüsü:** tek doğruluk kaynağı **boyut dosyasıdır** (`ArenaDimensions` — elle yazılabilir
@@ -291,7 +289,8 @@ Elle konan engeller için `ArenaObstacle` (`Core/Arena/`): muhafaza onu engel sa
 ⚠️ **collider değildir, fizik yapmaz** (free-roam'da çarpışma yoktur).
 **Yeni lobi:** lobi de bir arena kutusudur (`Venues/<İşletme>/Lobby/`), farkı üç şeydir —
 `MapDefinition.supportedModeIds` **yalnız `["lobby"]`** (boş bırakılırsa "kısıtsız" sayılır!),
-sahnede `BaseZone` ve `VA_ModeHud` YOK, silah rafı VAR. **Her mekanın kendi lobisi olur** ve
+sahnede `BaseZone` ve `VA_ModeHud` YOK, silah kaynağı `random` (sahneden silah alınmaz, grip'e
+basınca elde belirir). **Her mekanın kendi lobisi olur** ve
 kaynağı **o mekanın kendi arenasıdır** — fiziksel oda aynı olduğu için geometri birebir tutar
 (ölçekleme yoktur). `Export Server Config` yeter: sunucu **seçilen mekanın** lobi haritasını kendi
 bulur (`server.json → lobbyScene` yalnız mekanda birden çok lobi varsa doldurulur).
@@ -306,11 +305,16 @@ işaretlidir ve admin mod seçicisinde görünmez. **Hasarı kapatan şey fazdı
 mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafında `Modes/<Ad>Mode.cs`
 (IGameMode) + `MatchDirector.RegisterModes()`'a bir satır + `Docs/ArenaNet-Protokol.md`'ye modId ekle.
 Üç ek adım:
-1. **`IGameMode.Rules`** — modun şekli (`ModeRules`: takım kipi, skor kanalı, dost ateşi, canlanma
-   şartı, silah kaynağı, canlanma gecikmesi). Bugünkü TDM davranışı için `ModeRules.TeamDefault`
-   tek satırdır; yalnız FARKLI olan alanı yaz. Bu kural `load_match.rules` ile istemciye gider ve
-   `ModeRuntime` üzerinden okunur → **istemcide `if (modeId == …)` zinciri YAZILMAZ**
+1. **`IGameMode.Rules`** — modun şekli (`ModeRules`: takım kipi, skor kanalı, canlanma şartı, silah
+   kaynağı, canlanma gecikmesi). Bugünkü TDM davranışı için `ModeRules.TeamDefault` tek satırdır;
+   yalnız FARKLI olan alanı yaz. Bu kural `load_match.rules` ile istemciye gider ve `ModeRuntime`
+   üzerinden okunur → **istemcide `if (modeId == …)` zinciri YAZILMAZ**
    (Docs/ArenaNet-Protokol.md §10.5).
+   ⚠️ **`FriendlyFire` bu listede YOKTUR ve moda YAZILMAZ:** dost ateşi bir mod kuralı değil,
+   operatörün canlı anahtarıdır (`set_friendly_fire`; sunucu açılışında kapalı, koşan maçta da
+   değişir). Değeri her kural şekline `MatchDirector.ApplyRulesLocked` damgalar — mod kendi
+   değerini yazarsa anahtar sessizce ezilir. Aynı sebeple **takımdaş öldürmede `OnKill` hiç
+   çağrılmaz** (skor yazılmaz; `kills`/`deaths` işler) — modun bunun için yazacağı bir şey yok.
 2. **HUD = `ModeHudBase` alt sınıfı** (`_Shared/Core/UI/`). Faz/süre, geri sayım, can, ölüm ekranı,
    kill-feed, kendi sayaçların tabandan gelir; alt sınıf yalnız `ScoreLine`/`WinnerLine` (+ istersen
    `EndScoreLine`/`OnLobbyStateApplied`) yazar. Takıma ait hiçbir şey tabana koyulmaz.
@@ -328,9 +332,10 @@ Sonra `FFA.asset` gibi bir `ModeDefinition` yaz (modId, süre/limit, kural alanl
 (→ `Docs/Sistem-Ozeti.md` §3.8.2). ⚠️ Tur başında oyuncuyu **`RevivePlayerLocked` ile** canlandır
 (`ResetMatchStateLocked` istemciye haber vermez → ölüm ekranında donar) ve "canlanma yok" kuralını
 **iki yolda birden** kapat (`revive_request` + `REVIVE_GRACE`).
-**Silah rafsız mod** (`weaponSource:"random"`, ör. FFA): sahnede ya da arenada **hiçbir iş yoktur**.
-`WeaponGranter` (`_Shared/Core/Combat/`) kendini önyükleyen kalıcı tekildir — kural
-`RandomGrant` olunca sahnedeki raf silahlarını ve taban bölgelerini gizler, grip'e basılı tutulan
+**Silahı mod dağıtan mod** (`weaponSource:"random"`, ör. FFA): sahnede ya da arenada **hiçbir iş
+yoktur**. `WeaponGranter` (`_Shared/Core/Combat/`) kendini önyükleyen kalıcı tekildir — kural
+`RandomGrant` olunca sahnedeki silahları gizler (taban şeritleri ONA AİT DEĞİL — onların kapısı
+takım kipidir, `BaseZoneVisibility`), grip'e basılı tutulan
 her elde `ModeDefinition.loadout`'tan rastgele bir silah tutturur (bırakınca yok olur, tekrar
 basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki duruşu
 `ItemDefinition.primaryGripPosition/Euler`'dan gelir — VR'da ince ayar buradan yapılır ve
@@ -358,7 +363,9 @@ kiti de aynı tablodan (`WeaponSpec`) gelir: silaha özgü ateş/reload/dry-fire
 (`Assets/Audio/Weapons/SFX_<Ad>_*.wav`), namlu alevi (renk/boyut/ömür/koni açısı) + `MuzzleFlash`
 altında sub-emitter'lı namlu dumanı (`Smoke`), ve kalibreye göre (762x39/556x45) paylaşılan
 `Casing_*.prefab`'a bağlı `ShellEjector` (ateşte kovan fırlatan, `Weapon.Fired`'a abone bileşen —
-`Docs/Sistem-Ozeti.md` §4). Gerekiyorsa
+`Docs/Sistem-Ozeti.md` §4). ⚠️ **Kovanın çıkış noktası (`Eject`) elle ayarlanır ve araç onu
+TAŞIMAZ** — `Muzzle` ile aynı kural; yalnız hiç yoksa kaba bir başlangıçla üretilir (gerekçe
+`Docs/Sistem-Ozeti.md` §7). Gerekiyorsa
 `ModeDefinition.loadout`'a eklenir. Kavrama **soketi** kurulum istemez: araç prefaba
 `ItemGripSockets`'ı koyar ve `GrabInteractable`'ın filtre listesine bağlar — ⚠️ **`WPN_*` KÖKÜNE
 `DistanceGrabInteractable` GERİ EKLENMEZ** (araç onu bilerek siler: kökte mesafeden kavrama soket
@@ -367,12 +374,18 @@ tasarımının zıddıdır ve filtre hover'ı kesmediği için yalan söyleyen b
 mesafeden kavrama ZORUNLUDUR** — silah oradan alınır. Çerçeve adımı elle iş istemez, araç her
 `WPN_*` köküne bir `VA_WeaponFrame` örneği koyar (idempotent). Aynı sebeple ⚠️ **`Grabbable._throwWhenUnselected` GERİ AÇILMAZ**
 (araç kapatır): silahın pozunu ISDK değil `ApplyCanonicalGrip` sürdüğü için bırakış hızı uydurmadır
-ve silah elden fırlar. ⚠️ **Sahneye elle `WPN_*` örneği KOYULMAZ:** raf silahlarını
-`WeaponRackSpawner` (`_Shared/Core/Combat/`, raf kökünde) kural `Rack` iken loadout'tan üretir —
-göz (`RackSlot`) yalnız KONUMU tutar, hangi silahın duracağını mod belirler. Elle konan örnek
-sahneye donar ve moda silah eklendiğinde her arenayı tek tek açmak gerekirdi.
-Sahnedeki silah **çerçeve kaynağıdır**: alınmaz, ≤2 m'den seçilince ele klonlanır; çerçeve
-görselini `WeaponFrame.isFrameVisible` ile **örnek başına** (sahneden sahneye) aç/kapat →
+ve silah elden fırlar. **Silahı sahneye ELLE koyarsın** (`weaponSource:"weaponcanvas"` — TDM ·
+turnuva): yerleşim **arena kararıdır**, harita tasarlanırken yapılır ve bunu yapan bir bileşen
+YOKTUR (silahı üreten raf sistemi kaldırıldı, yerine ikinci bir üretici gelmez — sahnedeki örnek
+ile onu üreten liste iki ayrı doğruluk kaynağı olurdu). ⚠️ Silah sahneye **`WPN_*` prefab ÖRNEĞİ**
+olarak konur (kopyalanmaz, unpack edilmez) — kopya sahneye donar ve silah kitinde yapılan tek bir
+düzeltme arena sayısı kadar elle iş doğurur. Örnekleri bir `WeaponCanvas` prefabında toplayıp onu
+her sahneye `BaseZone` gibi bir örnek olarak koymak yerleşimi tek yerden düzeltilebilir kılar.
+⚠️ **Bu kaynakta sahnede hangi silahın duracağını `ModeDefinition.loadout` DEĞİL arena belirler** —
+moda silah eklemek arenaları değiştirmez, yeni silah her arenaya tek tek konur; `loadout` yalnız
+`random` modlarında (FFA, lobi) okunur.
+Sahnedeki silah **çerçeve kaynağıdır**: alınmaz ve TÜKENMEZ, ≤2 m'den seçilince ele klonlanır;
+çerçeve görselini `WeaponFrame.isFrameVisible` ile **örnek başına** (sahneden sahneye) aç/kapat →
 `Docs/Gelistirici/Yemek-Kitabi.md`.
 **Sunucu tarafında iş YOKTUR** ve export
 gerekmez — sunucuda silah tablosu yok, hasarı (headshot çarpanı dahil) istemci hesaplayıp
@@ -404,7 +417,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | Araç | Ne zaman |
 |---|---|
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` değişti / yeni arena eklendi → `Server/config/maps.json` |
-| `… > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle` yerleşimi elle ayarlanır |
+| `… > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir) |
 | `… > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
 | `… > Create Arena From Template` | Yeni arena kutusu — geometri kaynağı ZORUNLU: boyut JSON'u ya da TestMesh kökü (kaynak `ArenaBoundary.dimensionsJson` + `wallRenderers`'ı da bağlar) |
 | `… > Build Arena From Dimensions` | Boyut dosyası değişti (seçimde JSON) → zemin/duvar/kolon geometrisini yeniden üretir (idempotent) |

@@ -37,7 +37,7 @@ namespace VortexArena.Core.Editor
         /// Kopyalanacak kaynak sahnenin asset yolu.
         /// <para>
         /// Varsayılan <b>Default12x12</b>'dir: harita dizaynı taşımayan, yalnız ağa bağlanmak için
-        /// gereken bileşenleri (kalibrasyon, poz, HUD, sınır, taban, raf, <c>VA_CameraRig</c>)
+        /// gereken bileşenleri (kalibrasyon, poz, HUD, sınır, taban, <c>VA_CameraRig</c>)
         /// içeren TEK KAYNAK arena. Dizaynlı bir arenadan türetmek, o arenanın geometrisini de
         /// yeni kutuya kopyalar ve elle temizlenmesi gerekirdi.
         /// </para>

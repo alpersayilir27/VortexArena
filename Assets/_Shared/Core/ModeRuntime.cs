@@ -43,7 +43,7 @@ namespace VortexArena.Core
 
         public static ModeReviveAnchor Revive { get; private set; } = ModeReviveAnchor.OwnBase;
 
-        public static ModeWeaponSource Weapons { get; private set; } = ModeWeaponSource.Rack;
+        public static ModeWeaponSource Weapons { get; private set; } = ModeWeaponSource.WeaponCanvas;
 
         /// <summary>Ölüm → en erken canlanma süresi; sunucunun <c>respawn.delaySeconds</c>'ı ile
         /// aynı değerdir (ikisi de modun kuralından beslendiği için çakışmazlar).
@@ -115,7 +115,7 @@ namespace VortexArena.Core
         public static void Reset(string modeId = "")
         {
             Set(modeId, ModeTeamMode.TwoTeams, ModeScoreKind.Team, false,
-                ModeReviveAnchor.OwnBase, ModeWeaponSource.Rack, ArenaProtocol.RESPAWN_DELAY, false);
+                ModeReviveAnchor.OwnBase, ModeWeaponSource.WeaponCanvas, ArenaProtocol.RESPAWN_DELAY, false);
         }
 
         // ---------------------------------------------------------------- iç işler
@@ -187,7 +187,7 @@ namespace VortexArena.Core
 
         private static ModeWeaponSource ParseWeapons(string value)
         {
-            return Matches(value, "random") ? ModeWeaponSource.RandomGrant : ModeWeaponSource.Rack;
+            return Matches(value, "random") ? ModeWeaponSource.RandomGrant : ModeWeaponSource.WeaponCanvas;
         }
 
         private static bool Matches(string value, string expected)

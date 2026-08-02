@@ -42,7 +42,7 @@ namespace VortexArena.Core
         [Tooltip("Canlanma şartı: kendi tabanına gir / sabit dur.")]
         [SerializeField] private ModeReviveAnchor revive = ModeReviveAnchor.OwnBase;
         [Tooltip("Silah kaynağı — tümüyle istemci sunumu, sunucuda karşılığı yok.")]
-        [SerializeField] private ModeWeaponSource weapons = ModeWeaponSource.Rack;
+        [SerializeField] private ModeWeaponSource weapons = ModeWeaponSource.WeaponCanvas;
         [Tooltip("Ölüm → en erken canlanma süresi (sn). 0 GEÇERLİDİR = anında canlanma; " +
                  "varsayılan protokoldeki RESPAWN_DELAY'dir.")]
         [SerializeField] private float respawnDelay = ArenaProtocol.RESPAWN_DELAY;
@@ -64,7 +64,7 @@ namespace VortexArena.Core
         /// <summary>
         /// Lobi profili mi (§10.7)? <c>true</c> ise bu tanım <b>başlatılabilir bir mod değildir</b>:
         /// sunucuda <c>IGameMode</c> karşılığı yoktur ve <c>start_match</c> onu reddeder.
-        /// <para>Katalogda bulunma sebebi tek: lobide silah rafının loadout'u (ve varsa HUD)
+        /// <para>Katalogda bulunma sebebi tek: lobinin silah loadout'u (ve varsa HUD)
         /// <c>GameCatalog.FindMode(ModeRuntime.ModeId)</c> ile çözülüyor. Admin arayüzü bu bayrağa
         /// bakarak modu seçiciden gizler — operatöre her basışta sessizce reddedilecek bir düğme
         /// göstermemek için.</para>

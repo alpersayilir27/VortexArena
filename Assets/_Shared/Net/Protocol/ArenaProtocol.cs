@@ -150,8 +150,12 @@ namespace VortexArena.Protocol
         /// <inheritdoc cref="COUNTDOWN_SECONDS_MIN"/>
         public const int COUNTDOWN_SECONDS_MAX = 30;
 
-        /// <summary>End fazı: match_end sonrası otomatik return_to_lobby'ye kadar geçen süre.</summary>
-        public const int MATCH_END_SECONDS = 10;
+        /// <summary>End fazı: match_end sonrası otomatik return_to_lobby'ye kadar geçen süre.
+        /// <para>⚠️ <b>Pratikte bu bir emniyettir, akış değil:</b> kazanan ekranını kapatan şey
+        /// operatörün harita/lobi seçimi (ya da BAŞLAT/İPTAL) olsun diye bilerek uzun tutuldu —
+        /// hepsi fazı değiştirdiği için sayacı öldürür (§10.1). Operatör hiçbir şey yapmazsa maç
+        /// yine de sonsuza kadar askıda kalmaz.</para></summary>
+        public const int MATCH_END_SECONDS = 999;
 
         /// <summary>Loading fazında tüm oyuncuların "sahne yüklendi" (set_ready) bildirimi
         /// beklenir; bu süre dolunca eksik olsa da Countdown'a geçilir.</summary>

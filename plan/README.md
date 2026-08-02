@@ -5,7 +5,9 @@
 
 | Planlanmış iş | Dosya |
 |---|---|
-| **Turnuva modu** (`tournament`): kod/asset/doküman **yazıldı**. Kalan: Unity'de derleme + **`Export Server Config`** + arenalarda raf/`BaseZone` kontrolü + doğrulama listesi | `turnuva-modu.md` |
+| **Maç sonu bekleme · toplanma · dost ateşi anahtarı**: kod/prefab/doküman **bitti**, sunucu derlemesi temiz. Kalan: Unity derlemesi + panel ve davranış doğrulaması | `mac-sonu-toplanma-dost-atesi.md` |
+| **Arenaya dağılmış silah**: raf sistemi kaldırıldı, kaynağın adı `WeaponCanvas` oldu ve yerleşim **elle** yapılacak (kod bitti) → kalan iş üç arenaya silah yerleştirmek; o zamana kadar TDM · turnuva silahsız, FFA ve lobi `random` kullandığı için çalışıyor | `arenaya-dagilmis-silah.md` |
+| **Turnuva modu** (`tournament`): kod/asset/export **bitti**. Kalan: doğrulama listesi + silah kaynağı (yukarıdaki iş) | `turnuva-modu.md` |
 | Elde tutulan eşya + atış olayları: **Faz 0–3 + soket kavrama + olay zamanlaması bitti**. Kalan: ⚠️ **kavrama pozu ayarı** (araç hazır — `Grip Socket` işaretçisi + `Write Grip Sockets To Definition`; sayılar hâlâ sıfır) · tracer/soket değerleri · bomba | `elde-tutulan-esya-ve-atis-olaylari.md` |
 | Kırılabilir objeleri sunucu-otoriter yapmak (yerel `Health` kaldırıldı, yerine ağsal obje canı) | `agsal-kirilabilir-objeler.md` |
 
