@@ -230,6 +230,13 @@ public sealed class ClientConnection
                 if (msg != null) await _lobby.HandleSetSelectionAsync(this, msg);
                 return;
             }
+            case MessageTypes.SetFriendlyFire:
+            {
+                if (!RequireAdmin(type)) return;
+                var msg = JsonUtil.Deserialize<SetFriendlyFireMsg>(json);
+                if (msg != null) await _lobby.HandleSetFriendlyFireAsync(this, msg);
+                return;
+            }
             // Atış bildirimi burada YOKTUR (v4): UDP olay kanalına taşındı (0x03, §6.4) ve
             // StateHost'ta karşılanıyor. ⚠️ Geri getirilmez — 10 atış/sn/oyuncu otoriter WS
             // kanalını boğar. Eski istemciden `shot_fired` gelirse aşağıdaki default kolu bir

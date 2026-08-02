@@ -127,6 +127,15 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _countdownPrev;
         [SerializeField] private Button _countdownNext;
 
+        // Dost ateşi (§5.2 set_friendly_fire). ⚠️ Diğer satırların aksine bu bir SEÇİM DEĞİL, anlık
+        // komuttur: koşan maçta da geçerlidir ve etkisi bir sonraki mermide görülür. Bu yüzden
+        // ApplySelectionLock onu kapsamaz — maç kuruluyken de basılabilir olması işin özü
+        // (takım arkadaşlarını vuran oyuncu için operatör maçı iptal etmek zorunda kalmasın).
+        // İki düğme de aynı işi yapar (aç/kapa), satır deseni diğerleriyle aynı kalsın diye.
+        [SerializeField] private TextMeshProUGUI _friendlyFireValue;
+        [SerializeField] private Button _friendlyFirePrev;
+        [SerializeField] private Button _friendlyFireNext;
+
         [SerializeField] private Button _startButton;
 
         // ⚠️ Ayrı bir "LOBİYE DÖN" düğmesi YOKTUR ve geri eklenmez: lobi artık harita seçicisinin
@@ -250,6 +259,8 @@ namespace VortexArena.App.Admin
             Wire(_scoreLimitNext, ScoreLimitUp);
             Wire(_countdownPrev, CountdownDown);
             Wire(_countdownNext, CountdownUp);
+            Wire(_friendlyFirePrev, ToggleFriendlyFire);
+            Wire(_friendlyFireNext, ToggleFriendlyFire);
 
             Wire(_startButton, StartMatch);
             Wire(_abortButton, AdminCommands.AbortMatch);
@@ -638,6 +649,18 @@ namespace VortexArena.App.Admin
             _countdownSeconds = Mathf.Clamp(_countdownSeconds + direction,
                 ArenaProtocol.COUNTDOWN_SECONDS_MIN, ArenaProtocol.COUNTDOWN_SECONDS_MAX);
             PublishSelection(mapChanged: false);
+        }
+
+        /// <summary>
+        /// Dost ateşini açar/kapatır (§5.2). <c>PublishSelection</c> KULLANILMAZ: bu değer ortak
+        /// seçimin parçası değil, sunucu oturumunun anlık ayarıdır ve <c>set_selection</c>'ın
+        /// "0/boş = değiştirme" sözleşmesine sığmaz.
+        /// <para>Yerel bir alan tutulmaz — istenen durum sunucudakinin tersidir ve panel sunucunun
+        /// <c>admin_state</c> ile geri yaydığı değeri gösterir (iki operatör sapmasın).</para>
+        /// </summary>
+        private void ToggleFriendlyFire()
+        {
+            AdminCommands.SetFriendlyFire(!AdminSelection.FriendlyFire);
         }
 
         /// <summary>
@@ -1223,6 +1246,17 @@ namespace VortexArena.App.Admin
                 _countdownValue.text = _countdownSeconds > 0
                     ? $"{_countdownSeconds} sn"
                     : $"varsayılan ({ArenaProtocol.COUNTDOWN_SECONDS} sn)";
+            }
+
+            if (_friendlyFireValue != null)
+            {
+                // Değer sunucudan okunur (yerel imleç yok): anahtar koşan maçta da değişebildiği
+                // için "gönderdim" ile "yürürlükte" arasındaki fark operatöre yalan söylemesin.
+                bool friendlyFire = AdminSelection.FriendlyFire;
+                _friendlyFireValue.text = friendlyFire ? "AÇIK" : "kapalı";
+                // Açıkken vurgulu: takım arkadaşının vurulabildiği bir maç, ekranda fark edilmeden
+                // geçmemesi gereken bir durumdur.
+                _friendlyFireValue.color = friendlyFire ? UiKit.Bad : UiKit.Title;
             }
 
             _statusText.text = AdminCommands.Status;

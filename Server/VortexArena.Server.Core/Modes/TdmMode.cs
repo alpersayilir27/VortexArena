@@ -5,7 +5,7 @@ namespace VortexArena.Server.Core.Modes;
 /// Maç, bir takım skor limitine ulaşınca ya da süre bitince biter; süre bitiminde yüksek skor
 /// kazanır, eşitlikte berabere (<see cref="MatchOutcome.Draw"/>).
 /// <para>Kurallar tümüyle varsayılandır (<see cref="ModeRules.TeamDefault"/>): iki takım, takım
-/// skoru, dost ateşi kapalı, kendi tabanında canlanma, raf silahı.</para></summary>
+/// skoru, dost ateşi kapalı, kendi tabanında canlanma, sahnede duran silah.</para></summary>
 public sealed class TdmMode : IGameMode
 {
     public string ModeId => "tdm";

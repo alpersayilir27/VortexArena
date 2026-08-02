@@ -33,7 +33,8 @@ Deneyimli operatör için kısa liste — detaylar aşağıdaki bölümlerde.
 - [ ] **4.** Yönetim ekranında oyuncuların listede göründüğünü doğrula.
 - [ ] **5.** Mod + harita seç → **Maçı Başlat**.
 - [ ] **6.** Her oyuncuya zemindeki **A** ve **B** işaretlerinde kalibrasyon yaptır.
-- [ ] **7.** Maç bitince oyuncular otomatik lobiye döner; yeni maç için 5. adıma dön.
+- [ ] **7.** Maç bitince **kazanan ekranı ekranda kalır ve seni bekler** — sıradaki haritayı (ya da
+      Lobi'yi) seçtiğinde herkes oraya geçer. Yeni maç için 5. adıma dön.
 
 ---
 
@@ -82,7 +83,7 @@ Seçim [1-2]:
 ```
 Mekan      : <İşletmenin adı>
 Aktif alan : <seçtiğin mekan>
-Modlar     : tdm, ffa
+Modlar     : tdm, ffa, tournament
 Haritalar  : Arena12x12, IceWorld, Lobby12x12
 Lobi       : Lobby12x12
 ```
@@ -215,8 +216,8 @@ bilgisini bir kez öğrenmesi gerekir. **Kalibrasyon yapılmazsa oyuncular birbi
 yerde görür.**
 
 Kalibrasyon **lobide, maç başlamadan önce** yapılır. Lobi de gerçek bir oda: oyuncular orada
-birbirini görür, duran silahlardan birini kumandayla nişan alıp seçerek hedef tahtalarına ateş
-edebilir (birbirlerine hasar
+birbirini görür, kumandanın **yan tuşunu (grip) basılı tutarak** eline gelen silahla hedef
+tahtalarına ateş edebilir (birbirlerine hasar
 veremezler) ve zemindeki A/B işaretleri oradadır. Bir kez kalibre olan oyuncu maça hazır girer —
 harita değişimi kalibrasyonu bozmaz. (Maç sırasında da aynı adımlarla yeniden kalibre edilebilir.)
 
@@ -288,10 +289,11 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Kırmızı / Mavi** | Seçili oyuncunun takımını değiştirir | Takımları elle dengelemek için (boş bırakırsan sistem otomatik dengeler) |
 | **Bu cihazı tanıt** | O gözlüğün ekranında büyük bir işaret gösterir | "Bu listedeki isim hangi gözlük?" sorusuna cevap |
 | **Çıkar (kick)** | Oyuncuyu atar — **o gözlükteki oyun kapanır** | Yanlışlıkla bağlanan/oyunda olmaması gereken cihaz |
-| **Mod seçimi** | Oyun türü: **Takım Ölüm Maçı** (kırmızı-mavi) veya **Herkes Tek** (takım yok, herkes herkese karşı). Satıra bas, liste aşağı açılır, seçeceğine tıkla | Her maç öncesi — aşağıdaki "İki oyun modu" kutusuna bak |
+| **Mod seçimi** | Oyun türü: **Takım Ölüm Maçı** (kırmızı-mavi), **Herkes Tek** (takım yok, herkes herkese karşı) veya **Turnuva** (turlar hâlinde takım elemesi). Satıra bas, liste aşağı açılır, seçeceğine tıkla | Her maç öncesi — aşağıdaki "Üç oyun modu" kutusuna bak |
 | **Harita seçimi** | Hangi arenada oynanacağı — mod seçimiyle aynı açılır liste. Listenin **ilk satırı "Lobi"dir**: seçersen herkes lobiye döner | Her maç öncesi — sadece seçili modla uyumlu haritalar listelenir |
 | **Maçı Başlat** | Herkesi arenaya alır, geri sayımı başlatır | Herkes bağlı ve hazır olduğunda |
 | **Maçı İptal** | Maçı erken bitirir, herkesi lobiye döndürür | Acil durum, oyuncu değişimi, yanlış harita |
+| **Dost ateşi** | Takım arkadaşının da vurulup vurulamayacağını belirler (Tercihler → MAÇ bölümü). **Kapalı** (varsayılan): takım arkadaşına ateş etsen de canı azalmaz. **Açık**: azalır. Satırdaki iki düğmeden hangisine bassan aç/kapa yapar; açıkken değer kırmızı yanar | Diğer satırların aksine **maç sırasında da değiştirilebilir** — maçı iptal etmen gerekmez, etkisi anında geçer. Takım arkadaşını öldürmek **puan kazandırmaz** (ceza da yoktur, öldürme listesinde yine görünür). Ayar sunucu kapanana kadar kalır: maç bitince, harita değişince kendiliğinden kapanmaz |
 | **Skor ve öldürme akışı** | Ortada canlı skor + faz/süre, sağ altta "kim kimi vurdu" listesi | Maç sırasında takip |
 | **Kamera: Kuş bakışı** (`3`) | Arenayı yukarıdan görürsün; her oyuncunun **etrafında renkli halka, altında adı** yazar | Kimin nerede olduğunu görmek, güvenlik takibi — **varsayılan görünüm** |
 | **Kamera: POV** (`1`) | Seçili oyuncunun **kendi gözünden** izlersin | "Bu oyuncu ne görüyor / neden takıldı?" |
@@ -324,24 +326,52 @@ Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt 
 > **Normal değer aralığı işletmeye özeldir ve kurulumda ölçülüp bilgi kartına yazılır.** Kendi
 > arenanın "normal"ini ilk sakin seansta not et — sonraki günlerde kıyaslayacağın sayı odur.
 
-### İki oyun modu — hangisini seçmeli?
+### Üç oyun modu — hangisini seçmeli?
 
-| | **Takım Ölüm Maçı** | **Herkes Tek** |
-|---|---|---|
-| Takım | Kırmızı ve mavi (sistem otomatik dengeler) | **Yok** — herkes herkesi vurabilir |
-| Skor | Takım puanı | **Kişi başına puan**; her öldürme öldürene +1 |
-| Kazanan | Puan limitine ilk ulaşan takım; süre biterse önde olan | Puan limitine ilk ulaşan **oyuncu**; süre biterse en yüksek puanlı. Tepede eşitlik varsa berabere |
-| Silah | Arenadaki **taban raflarından** alınır | **Raf yok.** Oyuncu kumandanın **yan tuşunu (grip) basılı tutunca** eline rastgele bir silah gelir; bıraktığında silah kaybolur, tekrar bastığında **başka** bir silah gelir |
-| Şarjör | Boşalınca kendiliğinden dolar | **Dolmaz** — oyuncu silahı bırakıp yenisini çeker |
-| Ölünce | 5 saniye bekle, sonra **kendi renkli tabanına yürü** | Tabana gitmek yok: **3 saniye boyunca olduğun yerde kıpırdamadan dur** (1 metreden fazla yürürsen sayaç başa döner) |
-| Varsayılan süre / puan | 300 sn (5 dk) / 30 | 300 sn (5 dk) / 20 |
+| | **Takım Ölüm Maçı** | **Herkes Tek** | **Turnuva** |
+|---|---|---|---|
+| Takım | Kırmızı ve mavi (sistem otomatik dengeler) | **Yok** — herkes herkesi vurabilir | Kırmızı ve mavi |
+| Skor | Takım puanı | **Kişi başına puan**; her öldürme öldürene +1 | **Kazanılan tur sayısı** — öldürme puan yazmaz |
+| Kazanan | Puan limitine ilk ulaşan takım; süre biterse önde olan | Puan limitine ilk ulaşan **oyuncu**; süre biterse en yüksek puanlı. Tepede eşitlik varsa berabere | **4 tur** kazanan takım (en fazla 7 tur oynanır) |
+| Silah | Arenaya yerleştirilmiş silahlardan seçilir: oyuncu silaha ~2 metreye kadar yaklaşıp nişan alır, yan tuşa (grip) basınca silahın bir kopyası eline gelir. Silah yerinden kaybolmaz, sınırsız kez alınabilir. ⚠️ Silahların arenaya konması **haritayı yapan kişinin işidir** — konmamış bir arenada oyuncunun eline silah gelmez | Oyuncu kumandanın **yan tuşunu (grip) basılı tutunca** eline rastgele bir silah gelir; bıraktığında silah kaybolur, tekrar bastığında **başka** bir silah gelir | Takım Ölüm Maçı ile aynı (arenadaki silahlardan seçilir) |
+| Şarjör | Boşalınca kendiliğinden dolar | **Dolmaz** — oyuncu silahı bırakıp yenisini çeker | Her **tur başında** herkes tam dolu başlar |
+| Ölünce | 5 saniye bekle, sonra **kendi renkli tabanına yürü** | Tabana gitmek yok: **3 saniye boyunca olduğun yerde kıpırdamadan dur** (1 metreden fazla yürürsen sayaç başa döner) | **Canlanma yok** — tur bitene kadar beklersin, yeni tur herkesi tam canla ayağa kaldırır |
+| Varsayılan süre / puan | 300 sn (5 dk) / 30 | 300 sn (5 dk) / 20 | **Tur başına** 2 dk / 4 tur |
 
 **Herkes Tek'te oyunculara söylenecek iki cümle:**
 1. *"Silah almak için kumandanın yan tuşunu basılı tut — bıraktığında silah kaybolur."*
 2. *"Öldüğünde bir yere yürüme; olduğun yerde 3 saniye kıpırdamadan dur, kendiliğinden canlanacaksın."*
 
-> Herkes Tek'te arenadaki silah rafları ve renkli taban şeritleri **kendiliğinden gizlenir** —
-> ayrıca bir şey yapman gerekmez. Aynı arenalar iki modda da oynanır; harita listesi değişmez.
+> Herkes Tek'te arenadaki silahlar ve renkli taban şeritleri **kendiliğinden gizlenir** (şeritler
+> siz modu seçer seçmez, maçı beklemeden) —
+> ayrıca bir şey yapman gerekmez. Aynı arenalar üç modda da oynanır; harita listesi değişmez.
+
+#### Turnuva modu — turlar hâlinde eleme
+
+Turnuva bir maçı **turlara** böler. Tur içinde canlanma yoktur: ölen oyuncu turun sonuna kadar
+izler. Bir takımın sahadaki **herkesi** ölünce tur biter ve diğer takım **+1 tur** alır. Tur süresi
+(varsayılan 2 dk) dolarsa **ayakta kalan sayısı fazla olan** takım turu alır; sayı eşitse o tur
+kimseye puan yazmaz. **4 turu kazanan maçı kazanır** (bu yüzden en fazla 7 tur oynanır).
+
+**Turlar arası TOPLANMA — operatörün asıl işi burada:**
+
+- Tur biter bitmez maç duraklar ve herkes **kendi renkli tabanına yürür**. Ekranda kaç kişinin
+  toplandığı yazar (ör. "TOPLANMA 4/6").
+- **Herkes tabanına girdiğinde** geri sayım başlar (varsayılan 5 saniye) ve yeni tur açılır —
+  herkes **tam can, tam şarjörle** ayağa kalkar.
+- ⚠️ **Geri sayım sırasında biri tabanından çıkarsa sayım iptal edilir** ve toplanmaya dönülür.
+  Kural "tabana uğra" değil, "tabanda **bekle**"dir. Oyunculara bunu bir kez söyle:
+  *"Turu bekleyeceğin yer kendi renginin köşesidir, sayım bitene kadar oradan çıkma."*
+- ⚠️ **Bekleme süresizdir: eksik oyuncuyla tur başlamaz.** Bir oyuncu takılırsa (gözlüğü düştü,
+  bağlantısı koptu, oyundan çıktı) sistem kendiliğinden devam etmez — çözüm sende:
+  - o oyuncuyu satırındaki **AT** düğmesiyle çıkar → kalanlar zaten tabanındaysa tur **hemen**
+    başlar, ya da
+  - **İPTAL** ile maçı bitir.
+  Bu bilinçlidir: turnuvada eksik oyuncuyla açılan bir tur, hakemin istemediği bir turdur.
+
+> Süre ve tur sayısını Tercihler'den değiştirebilirsin: **Süre** turnuvada **turun** süresidir
+> (maçın değil), **Skor limiti** ise maçı kazanmak için gereken tur sayısıdır. Geri sayım
+> uzunluğu da ayarlanabilir (5–30 saniye).
 
 **Maç başlatma sırası**
 
@@ -385,12 +415,16 @@ ilet.
   - **Herkes Tek:** taban yok — oyuncu **öldüğü yerde 3 saniye kıpırdamadan durur** → canlanır.
     Bir metreden fazla yürürse sayaç sıfırlanır. Ekranında kalan saniye yazar.
     Oyuncuya söylenecek cümle: **"Öldüğünde yürüme, olduğun yerde bekle."**
-  - Her iki modda da oyuncu şartı yerine getirmezse sistem bir süre sonra onu zaten canlandırır
-    (maç kilitlenmesin diye).
+  - **Turnuva:** canlanma **yoktur** — ölen oyuncu turun bitmesini bekler, yeni tur onu tam canla
+    ayağa kaldırır. Oyuncuya söylenecek cümle: **"Elendin, takımın turu bitirene kadar izle."**
+  - Takım Ölüm Maçı ve Herkes Tek'te oyuncu şartı yerine getirmezse sistem bir süre sonra onu
+    zaten canlandırır (maç kilitlenmesin diye).
 - Oyuncu arena sınırına yaklaşırsa duvarlar belirginleşir; dışarı çıkarsa ekranı kararır ve
   uyarı çıkar → geri içeri girmesi yeterli.
-- Maç, süre dolunca veya skor limitine ulaşılınca biter; kazanan duyurulur ve **~10 saniye
-  sonra tüm gözlükler kendiliğinden lobiye döner.**
+- Maç, süre dolunca veya skor limitine ulaşılınca biter; kazanan duyurulur ve **kazanan ekranı
+  sen bir şey seçene kadar ekranda kalır.** Kendiliğinden lobiye dönülmez: sıradaki haritayı seç
+  (herkes oraya geçer), harita listesinden **Lobi**'yi seç ya da **İPTAL**'e bas. Böylece maç
+  sonunu konuşmak, ödül vermek ya da sıradaki turu anlatmak için istediğin kadar vaktin olur.
 
 **Maçı geçici olarak durdurmak (DURAKLAT)**
 
@@ -415,7 +449,8 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 
 **Sıradaki maç**
 
-- [ ] Oyuncular lobiye döndü mü kontrol et (yönetim listesinde görünürler).
+- [ ] Maç bitti ve kazanan ekranı duruyorsa: sıradaki haritayı seç (ya da harita listesinden
+      **Lobi**) — gözlükler ancak o zaman oradan çıkar.
 - [ ] Gerekiyorsa oyuncu değişimi yap (yeni oyuncu gözlüğü açar, kendiliğinden bağlanır).
 - [ ] Mod/harita seç → **Maçı Başlat**. (Kalibrasyon genelde gözlükte saklı kalır; oyuncular
       birbirini yanlış yerde görüyorsa tekrar yaptır.)
@@ -449,7 +484,9 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 | Oyuncular birbirini yanlış yerde görüyor | Kalibrasyon yapılmadı ya da A–B ters alındı | Arenada **yeniden kalibrasyon** yaptır (Bölüm 4) |
 | Oyuncular birbirini **havada / yere gömülü** görüyor | Kalibrasyonda kumanda dik tutulmamış | O oyuncuya kalibrasyonu tekrarlat; kumanda **kalem gibi dik**, ucu yere değecek (Bölüm 4). Herkeste aynı sorun varsa teknik ekibi ara |
 | Oyun ortasında arena birden kaydı | Gözlüğün konum takibi sıfırlandı | Genelde kendiliğinden düzelir. Düzelmezse o oyuncuya kalibrasyonu tekrarlat |
-| Ateş ediyor ama can azalmıyor | Aynı takımdalar (dost ateşi kapalı) ya da maç henüz başlamadı | Takımları kontrol et; geri sayım bitmiş mi bak |
+| Ateş ediyor ama can azalmıyor | Aynı takımdalar (dost ateşi kapalı) ya da maç henüz başlamadı | Takımları kontrol et; geri sayım bitmiş mi bak. Takım arkadaşlarının birbirini vurabilmesini istiyorsan Tercihler → MAÇ → **Dost ateşi**'ni aç |
+| Turnuvada ekranda **"TOPLANMA 4/6"** yazıyor, yeni tur bir türlü başlamıyor | Bir ya da iki oyuncu kendi tabanına dönmedi (takıldı, koptu, oyundan çıktı) | Ekranda kimin eksik olduğunu bul: listedeki çevrimdışı satırı ya da tabanına yürümeyen oyuncuyu **AT** ile çıkar → kalanlar hazırsa tur hemen başlar. Vazgeçtiysen **İPTAL**. Tur eksik oyuncuyla kendiliğinden başlamaz |
+| Turnuvada geri sayım başlıyor ama hep iptal oluyor | Biri sayım bitmeden tabanından çıkıyor | Oyunculara "sayım bitene kadar kendi renginin köşesinden çıkmayın" de |
 | Ölen oyuncu canlanmıyor | Kendi takımının tabanına girmemiş | Oyuncuya **kendi renginin köşesine yürümesini** söyle |
 | Maç başlamıyor | Bağlı oyuncu yok ya da bir gözlükte eski sürüm var | Listede oyuncu var mı bak; varsa sunucu penceresindeki son satırı teknik ekibe ilet |
 | Ses gelmiyor | Gözlüğün sesi kısık | Gözlüğün ses seviyesini aç |
@@ -514,5 +551,13 @@ Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten
 │                              (şarjör dolmaz)             │
 │  Öldün                    →  YÜRÜME. Olduğun yerde       │
 │                              3 saniye kıpırdamadan dur   │
+├──────────────────────────────────────────────────────────┤
+│  OYUNCUYA — "TURNUVA" MODUNDA                            │
+│                                                          │
+│  Öldün                    →  Tur bitene kadar izle,      │
+│                              canlanma yok                │
+│  Tur bitti                →  KENDİ RENGİNİN köşesine     │
+│                              yürü ve ORADA BEKLE         │
+│                              (çıkarsan sayım iptal)      │
 └──────────────────────────────────────────────────────────┘
 ```

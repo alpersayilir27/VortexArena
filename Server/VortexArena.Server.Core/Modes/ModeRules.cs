@@ -44,8 +44,9 @@ public enum ReviveAnchor
 /// sunucuda karşılığı yoktur (§10.3: sunucuda silah tablosu yok).</summary>
 public enum WeaponSource
 {
-    /// <summary>Sahnedeki taban rafları.</summary>
-    Rack,
+    /// <summary>Sahnede duran silah — oyuncu onu çerçevesinden alır, silah tükenmez. Yerleşim
+    /// arena kararıdır (elle konur); tel değeri <c>"weaponcanvas"</c>.</summary>
+    WeaponCanvas,
 
     /// <summary>Modun dağıttığı rastgele silah.</summary>
     RandomGrant
@@ -60,9 +61,10 @@ public enum WeaponSource
 /// yeni mod yalnız FARKLI olduğu alanları belirtir. Bu yüzden bir kural eklemek mevcut modların
 /// hiçbirini değiştirmez.</para>
 ///
-/// <para><c>record</c> + <c>init</c> bilinçli: kurallar maç boyunca değişmez, mod bunları bir kez
-/// tanımlar. Değiştirilebilir olsalardı "maç ortasında kural değişti mi?" sorusu her tüketiciye
-/// bulaşırdı.</para>
+/// <para><c>record</c> + <c>init</c> bilinçli: bir kural şekli oluşturulduktan sonra DEĞİŞMEZ.
+/// Maç ortasında değişebilen tek alan <see cref="FriendlyFire"/>'dır ve o da yerinde yazılarak
+/// değil, <c>with</c> ile YENİ bir kayıt üretilerek değişir (<c>MatchDirector.ApplyRulesLocked</c>)
+/// — tüketiciler yine değişmez bir değer okur.</para>
 /// </summary>
 public sealed record ModeRules
 {
@@ -70,12 +72,16 @@ public sealed record ModeRules
 
     public ScoreKind Scoring { get; init; } = ScoreKind.Team;
 
-    /// <summary>false = aynı takım vuramaz (§10.3/4). Boş takım asla takım arkadaşı sayılmaz.</summary>
+    /// <summary>false = aynı takım vuramaz (§10.3/4). Boş takım asla takım arkadaşı sayılmaz.
+    /// <para>⚠️ <b>Modlar bu alanı YAZMAZ</b> (§5.2): değeri operatörün <c>set_friendly_fire</c>
+    /// anahtarı belirler ve <c>MatchDirector.ApplyRulesLocked</c> her kural şekline damgalar. Burada
+    /// durmasının sebebi telde taşınması — <c>ModeRulesInfo.friendlyFire</c> "o an geçerli değer"dir.
+    /// Bir mod kendi değerini yazarsa anahtar sessizce ezilir.</para></summary>
     public bool FriendlyFire { get; init; }
 
     public ReviveAnchor Revive { get; init; } = ReviveAnchor.OwnBase;
 
-    public WeaponSource Weapons { get; init; } = WeaponSource.Rack;
+    public WeaponSource Weapons { get; init; } = WeaponSource.WeaponCanvas;
 
     /// <summary>respawn.delaySeconds + revive_request gecikme eşiği.</summary>
     public float RespawnDelay { get; init; } = ArenaProtocol.RESPAWN_DELAY;
@@ -91,11 +97,21 @@ public sealed record ModeRules
     public static readonly ModeRules TeamDefault = new();
 
     /// <summary>
-    /// Lobi türünün kural şekli (§10.7): tek farkı serbest atıştır. Lobi bir <see cref="IGameMode"/>
-    /// DEĞİLDİR — bu kural yalnız istemciye "burada ateş edebilirsin, ama hasar yok" demek için
-    /// telde taşınır.
+    /// Lobi türünün kural şekli (§10.7): serbest atış + silahı mod dağıtır. Lobi bir
+    /// <see cref="IGameMode"/> DEĞİLDİR — bu kural yalnız istemciye "burada ateş edebilirsin, ama
+    /// hasar yok" demek için telde taşınır.
+    /// <para>
+    /// <c>Weapons</c> bilinçli olarak <see cref="WeaponSource.RandomGrant"/>: lobide oyuncu
+    /// grip'e basınca eline rastgele silah gelir, iki lobi sahnesinde silah yerleştirme işi
+    /// doğmaz. Varsayılan (<c>WeaponCanvas</c>) bırakılsaydı her lobiye elle silah konması
+    /// gerekirdi.
+    /// </para>
     /// </summary>
-    public static readonly ModeRules LobbyProfile = new() { FireWhilePaused = true };
+    public static readonly ModeRules LobbyProfile = new()
+    {
+        FireWhilePaused = true,
+        Weapons = WeaponSource.RandomGrant
+    };
 
     /// <summary>Tel formatına çevirir (§10.5). Enum → string: bilinmeyen değer okuyan tarafta
     /// varsayılana düştüğü için sürüm uyumu sayısal enum'dan güvenlidir.</summary>
@@ -110,7 +126,7 @@ public sealed record ModeRules
             ReviveAnchor.None => "none",
             _ => "base"
         },
-        weaponSource = Weapons == WeaponSource.RandomGrant ? "random" : "rack",
+        weaponSource = Weapons == WeaponSource.RandomGrant ? "random" : "weaponcanvas",
         respawnDelay = RespawnDelay,
         fireWhilePaused = FireWhilePaused
     };

@@ -357,7 +357,7 @@ if (ModeRuntime.Revive == ModeReviveAnchor.StandStill)
     SabitDurGostergesiniAc();
 
 if (ModeRuntime.Weapons == ModeWeaponSource.RandomGrant)
-    RafiGizle();
+    SahnedekiSilahlariGizle();
 
 float gecikme = ModeRuntime.RespawnDelay;    // 0 GEÇERLİDİR (anında canlanma)
 
@@ -391,7 +391,8 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 > `primaryGripEuler` alanları belirler, çift ellide ek olarak `secondaryGrip*`. VR'da ince ayar
 > buradan yapılır, kod değişmez. ⚠️ **Tek yer, üç tüketici:** aynı ölçü yerel duruşu, uzak
 > oyuncudaki çizimi ve kavrama soketinin yerini birlikte besliyor — ikinci bir "duruş" alanı
-> açmak biri güncellenip diğeri unutulan bir çift üretir. Çerçeveden seçilen silah (`"rack"`),
+> açmak biri güncellenip diğeri unutulan bir çift üretir. Çerçeveden seçilen silah
+> (`weaponSource:"weaponcanvas"`),
 > modun verdiği silah (`weaponSource:"random"`) ve elde ISDK ile kavranan eşya **aynı alanları**
 > kullanır; ayrım yoktur.
 

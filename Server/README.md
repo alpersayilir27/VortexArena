@@ -138,7 +138,7 @@ değilse (servis/betik) sunucu **bloklanmaz**, ilk mekanla açılır ve bunu log
 
 `lobbyScene` = lobi sahnesi (§10.7). **Boş bırakılırsa seçilen mekanın lobi haritası
 (`modes:["lobby"]`) otomatik bulunur** — normalde boş kalır. Maç koşmadığı sürece oyuncular ve
-admin lobide durur: birbirlerini görürler, kalibrasyonlarını orada yaparlar, raftan silah alıp
+admin lobide durur: birbirlerini görürler, kalibrasyonlarını orada yaparlar, silah alıp
 hedeflere ateş edebilirler — birbirlerine hasar veremeden (`hit_report` yalnız `playing` fazında
 işlenir; ateş serbestliği lobi türünün kuralıdır, `rules.fireWhilePaused`).
 
@@ -207,6 +207,9 @@ komut uygulanır.
   `set_selection` ile değiştirir, sunucu `admin_state` ile TÜM adminlere yayar → bir operatör
   haritayı değiştirdiğinde diğerinin paneli de değişir. `start_match` de
   seçimi günceller. Her admin komutu `admin_state.notice` ile "kim ne yaptı" satırı üretir.
+  Seçilen **mod** değiştiğinde ayrıca `selection_state` yayılır — bu mesaj **herkese** gider ve tek
+  bir alan taşır (`teamMode`): oyuncular lobide taban şeritlerini ona göre çizer (§5.3/§10.7).
+  Harita/süre/limit dokunuşu bu yayını üretmez.
 - **Harita seçimi = sahneleme:** maç koşmuyorken seçilen arena TÜM istemcilere yüklenir
   (`return_to_lobby`, konsolda `[match] lobi sahnesi -> '<sahne>'`) — faz `paused` kalır, maç
   başlamaz. Bu yüzden **mod/harita yalnız `playing` DEĞİLKEN değiştirilebilir** (`paused` ve
@@ -286,7 +289,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 
 | `modeId` | Sınıf | Şekli (`Rules`) | Varsayılan süre / limit |
 |---|---|---|---|
-| `tdm` | `Modes/TdmMode.cs` | Tümüyle varsayılan (`ModeRules.TeamDefault`): iki takım, takım skoru, kendi tabanında canlanma, raf silahı, 5 sn gecikme | 300 sn / 30 |
+| `tdm` | `Modes/TdmMode.cs` | Tümüyle varsayılan (`ModeRules.TeamDefault`): iki takım, takım skoru, kendi tabanında canlanma, sahnede duran silah, 5 sn gecikme | 300 sn / 30 |
 | `ffa` | `Modes/FfaMode.cs` | Takımsız · bireysel skor · sabit durarak canlanma · silahı mod dağıtır · gecikme 0 | 300 sn / 20 |
 | `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından tek farkı: **canlanma yok** (`Revive = None`, gecikme 0). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur |
 

@@ -3,7 +3,6 @@ using Oculus.Interaction;
 using Oculus.Interaction.Input;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using VortexArena.Core.Arena;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -13,15 +12,21 @@ namespace VortexArena.Core.Combat
     /// Oyuncunun eline silah koyan <b>TEK</b> yer — iki ayrı kaynaktan beslenir ve hangisinin
     /// işlediğini mod kuralı (<see cref="ModeWeaponSource"/>) belirler:
     /// <list type="number">
-    /// <item><b>RandomGrant</b> (§10.5 <c>weaponSource:"random"</c>): sahnedeki rafı/taban
-    /// bölgelerini SÜPÜRÜR ve grip'e basılı tutulan her elde loadout'tan rastgele bir silah durur;
+    /// <item><b>RandomGrant</b> (§10.5 <c>weaponSource:"random"</c>): sahnedeki silahları SÜPÜRÜR
+    /// ve grip'e basılı tutulan her elde loadout'tan rastgele bir silah durur;
     /// bırakılınca <b>yok olur</b>, tekrar basınca YENİSİ gelir (<see cref="WeaponGrantKind.Disposable"/>).</item>
-    /// <item><b>Çerçeve</b> (<see cref="WeaponFrame"/>, <see cref="ModeWeaponSource.Rack"/>): silah
+    /// <item><b>Çerçeve</b> (<see cref="WeaponFrame"/>, <see cref="ModeWeaponSource.WeaponCanvas"/>): silah
     /// sahnede çerçevesinde sabit durur, oyuncu onu ≤2 m'den uzaktan SEÇER
     /// (<see cref="SelectWeapon"/>); grip'e basınca seçilen silahın KLONU eline gelir, bırakınca
     /// <b>yalnız gizlenir</b> — aynı örnek aynı mermiyle geri gelir
     /// (<see cref="WeaponGrantKind.Persistent"/>). Oyuncu başına TEK silah.</item>
     /// </list>
+    /// <para>
+    /// ⚠️ <b>Silahı sahneye koyan bir bileşen YOKTUR ve yazılmaz</b> — <c>WeaponCanvas</c>
+    /// kaynağında yerleşim <b>arena kararıdır</b>: silahlar harita tasarlanırken elle konur
+    /// (<c>BaseZone</c> gibi bir prefab örneği olarak). Bu sınıf yalnız ALMA yolunu bilir;
+    /// sahnede silah yoksa sessizce eline bir şey gelmez, hata değildir.
+    /// </para>
     /// <para>
     /// <b>Neden ikisi de burada:</b> bu sınıf zaten rig/el anchor'ını çözen, grip'i yoklayan, ölünce
     /// silahı geri alan ve sahne değişimini temizleyen yerdir. İkinci bir tekil açılsaydı ikinci bir
@@ -36,8 +41,8 @@ namespace VortexArena.Core.Combat
     /// <para>
     /// <b>Admin gözlemcide iki yol da kendiliğinden kapalıdır:</b> <c>AdminSpectator</c> BB rig'i
     /// kapattığı için <see cref="OVRCameraRig"/> aranınca bulunamaz (arama pasif objeleri dahil
-    /// etmez) → el anchor'ı yok → silah verilmez. Süpürme ise role bakmaz: raf FFA'da gözlemcinin
-    /// ekranında da durmamalı.
+    /// etmez) → el anchor'ı yok → silah verilmez. Süpürme ise role bakmaz: sahnede duran silah
+    /// FFA'da gözlemcinin ekranında da durmamalı.
     /// </para>
     /// </summary>
     public class WeaponGranter : MonoBehaviour
@@ -90,10 +95,6 @@ namespace VortexArena.Core.Combat
         /// <summary>Süpürmenin GİZLEDİĞİ objeler — kural değişince geri açılabilsin diye tutulur.
         /// Sahne değişince referanslar ölür (Unity null'ı) ve liste yeniden kurulur.</summary>
         private readonly List<GameObject> _hiddenObjects = new List<GameObject>();
-
-        /// <summary>Süpürmenin KAPATTIĞI taban bileşenleri (GameObject'leri kapatılmaz — bkz.
-        /// <see cref="SweepScene"/>).</summary>
-        private readonly List<BaseZone> _disabledZones = new List<BaseZone>();
 
         /// <summary>Rastgele seçimin havuzu — her karede yeni liste ayırmamak için tampon.</summary>
         private readonly List<WeaponDefinition> _pool = new List<WeaponDefinition>();
@@ -211,10 +212,9 @@ namespace VortexArena.Core.Combat
 
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            // Yeni sahne = yeni raf, yeni taban, yeni rig. Eldekiler eski sahneyle birlikte gitti.
+            // Yeni sahne = yeni silahlar, yeni rig. Eldekiler eski sahneyle birlikte gitti.
             _swept = false;
             _hiddenObjects.Clear();
-            _disabledZones.Clear();
             _grantedLeft = null;
             _grantedRight = null;
             _rig = null;
@@ -257,13 +257,14 @@ namespace VortexArena.Core.Combat
         // --------------------------------------------------------------- süpürme
 
         /// <summary>
-        /// Raf silahlarını ve taban bölgelerini (<see cref="BaseZone"/>) gizler — bu modlarda
-        /// canlanma şartı sabit durmaktır, şeritlerin ekranda kalması yanıltıcı olurdu.
+        /// Sahnede duran silahları gizler: silahı mod dağıtıyorsa sahnedeki örnekler oyuncuya
+        /// alınabilirmiş gibi görünmemeli.
         /// <para>
-        /// ⚠️ <b>Bölgenin GameObject'i KAPATILMAZ, bileşeni kapatılır</b> + görsel şerit ayrıca
-        /// gizlenir: yalnız bileşen kapatılsaydı şerit ekranda kalırdı, GameObject kapatılsaydı
-        /// altına konmuş marker'lar (ör. <see cref="SpawnPoint"/>) <c>OnDisable</c>'da statik
-        /// kayıttan düşerdi.
+        /// ⚠️ <b>Taban bölgeleri BURADA DEĞİLDİR</b> ve buraya geri eklenmez — şeritlerin
+        /// görünürlüğü silah kaynağına değil takım kipine bağlıdır ve
+        /// <see cref="Arena.BaseZoneVisibility"/>'e aittir. İkisi eskiden aynı süpürmedeydi; FFA'da
+        /// birlikte değiştikleri için doğru görünüyordu, lobinin silahı rastgeleye alınınca
+        /// lobideki tabanlar da kayboldu.
         /// </para>
         /// <para>
         /// Verilen silahlar süpürmeden MUAFTIR (<see cref="Weapon.IsGranted"/>) — süpürme
@@ -286,47 +287,6 @@ namespace VortexArena.Core.Combat
                 weapon.gameObject.SetActive(false);
                 _hiddenObjects.Add(weapon.gameObject);
             }
-
-            BaseZone[] zones = FindObjectsByType<BaseZone>(FindObjectsSortMode.None);
-            for (int i = 0; i < zones.Length; i++)
-            {
-                BaseZone zone = zones[i];
-                if (zone == null)
-                {
-                    continue;
-                }
-
-                if (zone.enabled)
-                {
-                    zone.enabled = false;
-                    _disabledZones.Add(zone);
-                }
-
-                HideBaseStrip(zone);
-            }
-        }
-
-        /// <summary>Taban bölgesinin görsel şeridi: Renderer'lı doğrudan çocuklar.
-        /// <para>⚠️ Alt ağacında <see cref="SpawnPoint"/> BULUNAN çocuğa dokunulmaz — arenanın
-        /// tek başlangıç noktası şeridin torunu olarak konmuş olabilir ve kapatılırsa
-        /// <c>OnDisable</c> ile statik kayıttan düşer. Kontrol bu yüzden <c>GetComponent</c>
-        /// değil <c>GetComponentInChildren</c>'dır.</para></summary>
-        private void HideBaseStrip(BaseZone zone)
-        {
-            Transform root = zone.transform;
-            for (int i = 0; i < root.childCount; i++)
-            {
-                Transform child = root.GetChild(i);
-                if (child.GetComponentInChildren<SpawnPoint>(true) != null ||
-                    child.GetComponentInChildren<Renderer>(true) == null ||
-                    !child.gameObject.activeSelf)
-                {
-                    continue;
-                }
-
-                child.gameObject.SetActive(false);
-                _hiddenObjects.Add(child.gameObject);
-            }
         }
 
         /// <summary>Süpürmeyi geri alır (kural RandomGrant'ten çıktı). Sahne değiştiyse listeler
@@ -341,16 +301,7 @@ namespace VortexArena.Core.Combat
                 }
             }
 
-            for (int i = 0; i < _disabledZones.Count; i++)
-            {
-                if (_disabledZones[i] != null)
-                {
-                    _disabledZones[i].enabled = true;
-                }
-            }
-
             _hiddenObjects.Clear();
-            _disabledZones.Clear();
             _swept = false;
         }
 
@@ -394,7 +345,7 @@ namespace VortexArena.Core.Combat
                 return null;
             }
 
-            // §6.6 kanonik kavrama: duruş tanımın SABİT kavrama ofsetinden gelir (raftan kavranan
+            // §6.6 kanonik kavrama: duruş tanımın SABİT kavrama ofsetinden gelir (sahneden kavranan
             // silah da aynı ofsetten sürülür — Weapon.ApplyCanonicalGrip). Buradaki fark yalnız
             // yöntem: verilen silah anchor'ın ÇOCUĞU olduğu için ofset yerel transformda yaşar.
             GameObject instance = Instantiate(definition.Prefab, anchor, false);
@@ -900,7 +851,7 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// El anchor'ı çözmenin <b>TEK</b> yolu: verilen silah da (bkz. <see cref="Grant"/>),
-        /// raftan kavranan silah da (<c>Weapon.ApplyCanonicalGrip</c>) buradan geçer.
+        /// sahneden kavranan silah da (<c>Weapon.ApplyCanonicalGrip</c>) buradan geçer.
         /// <para>
         /// ⚠️ İkinci bir rig keşif yolu YAZILMAZ: iki ayrı arama farklı karelerde farklı rig
         /// bulabilir (sahne geçişi, gözlemcinin kapattığı rig) ve silah bir karede el değiştirmiş

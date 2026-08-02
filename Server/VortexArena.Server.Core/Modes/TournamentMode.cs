@@ -18,13 +18,12 @@ namespace VortexArena.Server.Core.Modes;
 public sealed class TournamentMode : IGameMode
 {
     /// <summary>
-    /// Toplanma emniyeti: bir istemci hiç "tabanımdayım" demezse (takılma, kalibrasyon derdi,
-    /// oyuncunun sahayı terk etmesi) maç sonsuza kadar beklemesin.
-    /// <para>Yükleme kapısındaki <c>LOADING_TIMEOUT</c> deseninin aynısıdır ama <b>protokol sabiti
-    /// DEĞİLDİR</b>: bu bir mod kuralıdır, telde karşılığı yoktur ve başka hiçbir bileşen
-    /// okumaz.</para>
+    /// Toplanma uzarsa konsola bu aralıkla "kim eksik" satırı düşer.
+    /// <para>⚠️ <b>Bir zaman aşımı DEĞİLDİR</b> — turu başlatmaz, yalnız teşhis basar: toplanmanın
+    /// tek çıkışı herkesin tabanına girmesi ya da operatörün oyuncuyu atması/maçı iptal etmesidir
+    /// (§10.1). Sunucu penceresi operatörün kimin takıldığını görebildiği tek yer.</para>
     /// </summary>
-    private const double RegroupTimeoutSeconds = 60.0;
+    private const double RegroupReportIntervalSeconds = 30.0;
 
     /// <summary>
     /// Turlar arası akışın nerede olduğu. ⚠️ Çekirdeğin duraklama gerekçesinin KOPYASI değildir:
@@ -46,11 +45,6 @@ public sealed class TournamentMode : IGameMode
 
     private RoundStage _stage;
 
-    /// <summary>Geri sayım toplanma ŞARTIYLA mı açıldı. Zaman aşımıyla açıldıysa <c>false</c>'tur
-    /// ve iptal edilmez — "eksik oyuncu var" diye iptal etmek zaman aşımının varlık sebebini
-    /// çiğner ve sonsuz döngü kurardı.</summary>
-    private bool _countdownGated;
-
     private int _round;
 
     /// <summary>Tur şu an savaşta mı — eleme taraması yalnız o zaman koşar. Geri sayım sırasında
@@ -59,7 +53,10 @@ public sealed class TournamentMode : IGameMode
 
     private bool _matchOver;
     private MatchOutcome _outcome = MatchOutcome.Draw;
-    private DateTime _regroupSince;
+
+    /// <summary>Bir sonraki "toplanma bekleniyor" konsol satırının zamanı (teşhis, bkz.
+    /// <see cref="RegroupReportIntervalSeconds"/>).</summary>
+    private DateTime _nextRegroupReportAt;
 
     public string ModeId => "tournament";
 
@@ -68,7 +65,7 @@ public sealed class TournamentMode : IGameMode
     /// tamamlayıcısıdır — canlanma hiç olmayacağına göre istemciye "canlanmaya 5 sn" diye
     /// gerçekleşmeyecek bir geri sayım göstertmenin anlamı yok.
     /// <para>Geri kalan her alan bilinçli olarak varsayılandır: iki takım, takım skoru, dost ateşi
-    /// kapalı, silah rafı (turnuvada şarjör/yedek şarjör muhasebesi işlesin diye —
+    /// kapalı, sahnede duran silah (turnuvada şarjör/yedek şarjör muhasebesi işlesin diye —
     /// <c>RandomGrant</c>'te reload kapalıdır).</para>
     /// </summary>
     public ModeRules Rules => new()
@@ -92,7 +89,6 @@ public sealed class TournamentMode : IGameMode
         _matchOver = false;
         _outcome = MatchOutcome.Draw;
         _stage = RoundStage.None;
-        _countdownGated = false;
 
         Console.WriteLine($"[tournament] maç başladı — tur {director.RoundSeconds} sn, " +
                           $"{director.ScoreLimit} tur galibiyet (en fazla {MaxRounds(director.ScoreLimit)} tur).");
@@ -102,7 +98,6 @@ public sealed class TournamentMode : IGameMode
     {
         _roundLive = true;
         _stage = RoundStage.None;
-        _countdownGated = false;
         director.SetModeState($"round:{_round}");
         Console.WriteLine($"[tournament] tur {_round} başladı " +
                           $"(kırmızı {director.ScoreRed} : mavi {director.ScoreBlue}).");
@@ -256,8 +251,7 @@ public sealed class TournamentMode : IGameMode
         }
 
         _stage = RoundStage.Regroup;
-        _countdownGated = false;
-        _regroupSince = DateTime.UtcNow;
+        ScheduleRegroupReport();
     }
 
     /// <summary>
@@ -266,6 +260,13 @@ public sealed class TournamentMode : IGameMode
     /// <para><b>Kapı yeni bir protokol mesajı kullanmaz</b> — <c>ready</c> bayrağı yükleme
     /// kapısında zaten "hazırım" demek (§10.1). "Tabanda mıyım" kararı istemcinindir; sunucu
     /// hakemlik değil defter tutar (§10.3 felsefesi, <c>reviveAnchor</c> ile aynı sözleşme).</para>
+    /// <para>
+    /// ⚠️ <b>Zorunlu başlatma YOKTUR ve eklenmez:</b> eksik oyuncuyla açılan tur, tam kadro
+    /// beklemenin varlık sebebini çiğniyordu (elenmiş sayılan oyuncu sahada, hazır olmayan oyuncu
+    /// tur ortasında). Takılan bir başlık maçı süresiz bekletebilir — çıkışı operatörün
+    /// <c>kick</c>'i ya da <c>abort_match</c>'idir. Atılan oyuncu <see cref="CountInBase"/>'in
+    /// toplamından da düştüğü için tur, kalanlar hazırsa o tik başlar.
+    /// </para>
     /// </summary>
     private void TickRegroup(MatchDirector director)
     {
@@ -275,37 +276,48 @@ public sealed class TournamentMode : IGameMode
 
         if (total == 0) return; // kimse kalmadı — operatörün abort_match'ini bekle
 
-        var timedOut = (DateTime.UtcNow - _regroupSince).TotalSeconds >= RegroupTimeoutSeconds;
-        if (ready < total && !timedOut) return;
-
-        var gated = ready >= total;
-        if (!gated)
+        if (ready < total)
         {
-            var missing = string.Join(", ", director.OnlinePlayers()
-                .Where(p => !p.Ready)
-                .Select(p => p.Name));
-            Console.WriteLine($"[tournament] toplanma zaman aşımı ({RegroupTimeoutSeconds:0} sn) — " +
-                              $"tabanına dönmeyenler: {missing}");
+            ReportRegroupWaiting(director, ready, total);
+            return;
         }
 
         if (!director.TryStartRound()) return;
 
         _stage = RoundStage.Countdown;
-        _countdownGated = gated;
-        Console.WriteLine($"[tournament] tur {_round} geri sayımı başlıyor " +
-                          $"({(gated ? "herkes tabanında" : "zaman aşımı — iptal edilmez")}).");
+        Console.WriteLine($"[tournament] tur {_round} geri sayımı başlıyor (herkes tabanında).");
     }
+
+    /// <summary>Toplanma uzarsa periyodik teşhis satırı: kim eksik. Operatörün sunucu penceresinden
+    /// göreceği tek bilgi budur; roster'daki HAZIR/bekliyor ile aynı kaynaktan gelir.</summary>
+    private void ReportRegroupWaiting(MatchDirector director, int ready, int total)
+    {
+        var now = DateTime.UtcNow;
+        if (now < _nextRegroupReportAt) return;
+
+        _nextRegroupReportAt = now.AddSeconds(RegroupReportIntervalSeconds);
+
+        var missing = string.Join(", ", director.OnlinePlayers()
+            .Where(p => !p.Ready)
+            .Select(p => p.Name));
+        Console.WriteLine($"[tournament] toplanma bekleniyor ({ready}/{total}) — " +
+                          $"tabanına dönmeyenler: {missing}");
+    }
+
+    /// <summary>Teşhis satırının ilk zamanını kurar (toplanmaya her girişte).</summary>
+    private void ScheduleRegroupReport() =>
+        _nextRegroupReportAt = DateTime.UtcNow.AddSeconds(RegroupReportIntervalSeconds);
 
     /// <summary>
     /// Geri sayım gözcüsü: toplanma şartı geri sayım BOYUNCA da geçerlidir. Tabanından çıkan tek
     /// oyuncu turu erteler — geri sayım iptal edilir ve toplanmaya dönülür (sayaç sıfırdan başlar).
     /// <para>Şart "girişte bir kez" ölçülseydi oyuncu tabana bir saniye değip çıkabilir, tur onu
     /// sahanın ortasında yakalardı; kural "tabanda BEKLE"dir, "tabana uğra" değil.</para>
+    /// <para>⚠️ İptalin <b>istisnası yoktur</b>: geri sayım her zaman toplanma şartıyla açıldığı
+    /// için (zorunlu başlatma kaldırıldı) her koşulda geri alınabilir.</para>
     /// </summary>
     private void TickCountdownWatch(MatchDirector director)
     {
-        if (!_countdownGated) return;
-
         var (ready, total) = CountInBase(director);
         if (total == 0 || ready >= total) return;
 
@@ -313,11 +325,8 @@ public sealed class TournamentMode : IGameMode
         if (!director.TryCancelCountdownForMode($"regroup:{ready}/{total}")) return;
 
         _stage = RoundStage.Regroup;
-        _countdownGated = false;
+        ScheduleRegroupReport();
 
-        // ⚠️ _regroupSince BİLEREK sıfırlanmaz: emniyet zaman aşımı turun BİTTİĞİ andan işler.
-        // Sıfırlansaydı sürekli girip çıkan tek oyuncu maçı süresiz askıda tutabilirdi (her iptal
-        // sayacı da baştan başlatırdı); böyle bir maçı operatörün elle kurtarması gerekirdi.
         Console.WriteLine($"[tournament] geri sayım İPTAL — tabanından çıkan var ({ready}/{total}); " +
                           "toplanmaya dönüldü.");
     }
