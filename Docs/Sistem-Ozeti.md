@@ -1998,6 +1998,19 @@ konsoluna tek satır sebep yazar.
     maddede 81'deki ofset eksikliğiydi. ⚠️ `LocalBody` katmanı `TagManager`'da bırakıldı (artık
     kullanılmıyor): katman silmek ProjectSettings'e dokunmaktır ve o dosyanın kendi tuzağı var.
 
+84. **Bir prefabın TEK sürücü bileşenini silmek, prefabı bozuk değil SESSİZ bırakır — mesh çizilir,
+    hiçbir şey onu sürmez.** Bir görsel bileşen (`RemoteAvatar`, `LocalBodyAvatar`) alanlarının
+    yalnız bir kısmını doldurup gerisini sürücüye bırakabilir: uzak avatarda `head`/`handL`/`handR`/
+    `body` alanlarının **hepsi boş** olabilir, çünkü gövdeyi kemik kemik süren ayrı bir bileşen
+    vardır. O bileşen silindiğinde geriye kalan "yedek yol" hiçbir şey yapmaz (her `Apply` çağrısı
+    `null` hedefe düşer), avatar dünya orijininde T-pozunda donar ve sahada **"ağ çalışmıyor, admin
+    oyuncuyu görmüyor"** diye okunur — teşhis protokole/sunucuya yönelir, oysa eksik olan tek bir
+    prefab bağıdır. İki kural: (1) bir bileşeni silmeden önce onu **referanslayan prefabların
+    alanlarına bak** — kod derleniyor olması prefabın çalıştığı anlamına gelmez, eksik script
+    derlemeyi kırmaz; (2) sürücüsü olmayan görsel yolu **sessiz bırakma**, `LogError` bas ve kökü
+    yine de doğru yere taşı — yanlış pozda ama doğru yerde duran avatar teşhis edilebilir, hiç
+    görünmeyen avatar edilemez.
+
 ---
 
 ## 8. Durum ve sıradaki işler
