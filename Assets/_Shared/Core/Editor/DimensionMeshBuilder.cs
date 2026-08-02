@@ -10,21 +10,23 @@ using VortexArena.Core.Arena;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; JSON'dan DimensionMesh Üret</c> — bir mekanın boyut
+    /// <c>Tools &gt; VortexArena &gt; Arena &gt; JSON'dan DimensionMesh Üret</c> — bir mekanın boyut
     /// dosyasını (<see cref="ArenaDimensions"/>) sahnedeki <b>ölçü maketine</b> çevirir:
-    /// <c>&lt;Mekan&gt;_DimensionMesh</c> kökü altında tek bir <c>Plane</c> çokgeni ve her kolon
-    /// için bir prizma.
+    /// <c>&lt;Mekan&gt;_DimensionMesh</c> kökü altında tek bir <c>Plane</c> çokgeni, her kolon için
+    /// bir prizma ve iki kalibrasyon işaretçisi (<c>anchor_a</c> / <c>anchor_b</c>).
     /// <para>
     /// <b>Maket oynanan geometri DEĞİLDİR</b> — kök <c>EditorOnly</c> etiketlidir, build'e
     /// girmez. Arena sanatı bunun üstüne kurulur; duvar ÜRETİLMEZ (arenanın duvarları
     /// environment'a aittir).
     /// </para>
     /// <para>
-    /// ⚠️ <b>Kök, sahnedeki <see cref="ArenaBoundary"/>'nin altına kurulur</b> (yerel dönüşümü
-    /// sıfırlanmış olarak): boyut dosyasındaki koordinatlar muhafaza transformunun yerel
-    /// XZ'sindedir. Sahnede muhafaza yoksa maket sahne köküne düşer ve uyarı basılır — koordinatlar
-    /// o durumda muhafaza uzayıyla hizalı DEĞİLDİR. Bu yüzden akışta önce
-    /// <c>Template Temellerini Yükle</c> çalıştırılır.
+    /// ⚠️ <b>Maket SAHNEDEN BAĞIMSIZ üretilir:</b> kök sahne köküne, dünya orijininde, dönüşsüz ve
+    /// 1 ölçekte kurulur — hiçbir şeyin altına parent'lanmaz. Sebep ölçünün okunabilir kalmasıdır:
+    /// dosyada 12×12 yazıyorsa Inspector'da, ProBuilder ölçü göstergesinde ve seçim kutusunda
+    /// 12×12 görünür. Döndürülmüş bir arena kökünün altında aynı kare
+    /// <c>12 × (cos θ + sin θ)</c> olarak okunur (48,72°'de 16,93) ve araç ölçeği bozuyor sanılır.
+    /// Maketi arenanın üstüne oturtmak isteyen onu ELLE taşır ve döndürür; geri okuma maketin
+    /// KENDİ kökünü referans aldığı için taşınmış/döndürülmüş maket de doğru çevrilir.
     /// </para>
     /// <para>
     /// ⚠️ <b>Idempotent:</b> sahnede aynı mekanın maketi varsa silinip yeniden üretilir; ikinci
@@ -39,6 +41,15 @@ namespace VortexArena.Core.Editor
     {
         private const string VenuesRoot = "Assets/Arenas/Venues";
         private const string SharedMaterialPath = "Assets/Materials/M_Mekan.mat";
+
+        // Kalibrasyon işaretçileri takım malzemeleriyle boyanır: A kırmızı, B mavi. Yeni asset
+        // üretmemek için mevcutlar kullanıldı — maket editör-only bir ölçü referansı, ve iki
+        // noktanın hangisi olduğunun BİR BAKIŞTA ayrılması sıranın (A→B) kendisinden önemli.
+        private const string MarkAMaterialPath = "Assets/Materials/M_TeamRed.mat";
+        private const string MarkBMaterialPath = "Assets/Materials/M_TeamBlue.mat";
+
+        /// <summary>Kalibrasyon işaretçisi küpünün kenar uzunluğu (metre).</summary>
+        private const float MarkSize = 0.12f;
 
         [SerializeField] private TextAsset dimensionsJson;
 
@@ -57,6 +68,15 @@ namespace VortexArena.Core.Editor
             /// <summary>Taban halkasının köşe sayısı.</summary>
             public int PlanePointCount;
 
+            /// <summary>
+            /// Üretilen tabanın XZ ölçüsü (metre) = dosyadaki halkanın sınırlayıcı kutusu. Maket
+            /// dönüşsüz kurulduğu için sahnede ölçülen değer de budur.
+            /// </summary>
+            public Vector2 PlaneLocalSize;
+
+            /// <summary>Kalibrasyon işaretçileri üretildi mi (dosyada nokta varsa).</summary>
+            public bool HasCalibration;
+
             /// <summary>Üretim gerçekleşti mi.</summary>
             public bool Success;
 
@@ -69,7 +89,7 @@ namespace VortexArena.Core.Editor
 
         // --------------------------------------------------------------- pencere
 
-        [MenuItem("Tools/VortexArena/JSON'dan DimensionMesh Üret")]
+        [MenuItem("Tools/VortexArena/Arena/JSON'dan DimensionMesh Üret", false, 2)]
         private static void Open()
         {
             var window = GetWindow<DimensionMeshBuilder>(true, "Boyut Maketi Üret", true);
@@ -96,9 +116,14 @@ namespace VortexArena.Core.Editor
 
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox(
-                "Maket yalnız ÖLÇÜ REFERANSIDIR: taban + kolonlar üretilir, duvar üretilmez ve kök " +
-                "'EditorOnly' etiketlendiği için build'e girmez. Köşeleri ProBuilder ile düzeltip " +
-                "'DimensionMesh'i JSON'a Çevir' ile aynı dosyaya geri yazabilirsin.",
+                "Maket yalnız ÖLÇÜ REFERANSIDIR: taban + kolonlar + kalibrasyon işaretçileri " +
+                "(anchor_a kırmızı, anchor_b mavi) üretilir, duvar üretilmez ve kök " +
+                "'EditorOnly' etiketlendiği için build'e girmez. Köşeleri ProBuilder ile, " +
+                "işaretçileri sürükleyerek düzeltip 'DimensionMesh'i JSON'a Çevir' ile aynı " +
+                "dosyaya geri yazabilirsin.\n\n" +
+                "Sahne köküne, dünya orijininde ve DÖNÜŞSÜZ kurulur — dosyadaki ölçüyü birebir " +
+                "görürsün. Arenanın üstüne oturtmak istersen elle taşı/döndür; geri okuma maketin " +
+                "kendi kökünü referans aldığı için bundan etkilenmez.",
                 MessageType.Info);
 
             EditorGUILayout.Space();
@@ -111,7 +136,10 @@ namespace VortexArena.Core.Editor
                     {
                         Debug.Log(
                             $"[DimensionMesh] '{result.VenueName}' maketi üretildi: " +
-                            $"{result.PlanePointCount} köşeli taban + {result.ColumnCount} kolon.",
+                            $"{result.PlanePointCount} köşeli taban + {result.ColumnCount} kolon" +
+                            (result.HasCalibration ? " + A/B kalibrasyon işaretçileri" : string.Empty) +
+                            $". Taban ölçüsü: {result.PlaneLocalSize.x:0.###} × " +
+                            $"{result.PlaneLocalSize.y:0.###} m.",
                             result.Root);
                         Selection.activeGameObject = result.Root;
                     }
@@ -172,21 +200,17 @@ namespace VortexArena.Core.Editor
             Undo.SetCurrentGroupName("VortexArena Boyut Maketi");
 
             // ------------------------------------------------------------- kök
-            var boundary = Object.FindFirstObjectByType<ArenaBoundary>(FindObjectsInactive.Include);
-            Transform parent = boundary != null ? boundary.transform : null;
-            if (parent == null)
-            {
-                result.Warnings.Add(
-                    "Sahnede ArenaBoundary YOK — maket sahne köküne kuruldu ve koordinatları " +
-                    "muhafaza uzayıyla hizalı DEĞİL. Önce 'Template Temellerini Yükle' çalıştırıp " +
-                    "maketi yeniden üret.");
-            }
-
-            DestroyExisting(result.VenueName, parent);
+            // ⚠️ Maket SAHNE KÖKÜNE, dünya orijininde ve dönüşsüz kurulur — hiçbir şeyin altına
+            // parent'lanmaz. Sebep ölçünün OKUNABİLİR kalmasıdır: dosyada 12×12 yazıyorsa
+            // Inspector'da, ProBuilder ölçü göstergesinde ve seçim kutusunda 12×12 görünmelidir.
+            // Döndürülmüş bir arena kökünün altında aynı kare dünya eksenine hizalı kutuda
+            // 12×(cos θ + sin θ) olarak okunur (48,72°'de 16,93) ve araç ölçeği bozuyor sanılır.
+            // Maketi arenanın üstüne oturtmak gerekiyorsa ELLE taşınıp döndürülür.
+            DestroyExisting(result.VenueName);
 
             var root = new GameObject(ArenaDimensionMesh.RootNameFor(result.VenueName));
             Undo.RegisterCreatedObjectUndo(root, "Boyut Maketi Kökü");
-            root.transform.SetParent(parent, false);
+            root.transform.SetParent(null, false);
             root.transform.localPosition = Vector3.zero;
             root.transform.localRotation = Quaternion.identity;
             root.transform.localScale = Vector3.one;
@@ -199,20 +223,36 @@ namespace VortexArena.Core.Editor
             result.Root = root;
 
             // ----------------------------------------------------------- taban
-            // Taban pivotu köke eşittir: halka koordinatları zaten muhafaza yerel XZ'sinde ve
-            // taban maket içinde tek parça, kaydırılacak bir şey yok.
+            // Taban pivotu köke eşittir: halka koordinatları planın kendi uzayında ve taban maket
+            // içinde tek parça, kaydırılacak bir şey yok.
             GameObject plane = CreatePolygon(
                 ArenaDimensionMesh.PlaneName,
                 plan.plane,
                 Vector2.zero,
                 0f,
                 material,
-                root.transform);
+                root.transform,
+                result.Warnings);
+
+            if (plane == null)
+            {
+                // Yarım maket bırakılmaz: tabansız bir kök geri okumada "taban bulunamadı" diye
+                // patlar ve sahnede işe yaramaz bir iskelet olarak durur.
+                Undo.DestroyObjectImmediate(root);
+                result.Root = null;
+                result.Error = "Taban çokgeni üretilemedi (ProBuilder üçgenlemesi düştü) — " +
+                               "köşe sırasını ve kendi kendini kesen kenarları gözden geçir.";
+                Undo.CollapseUndoOperations(undoGroup);
+                return result;
+            }
 
             var planeMarker = plane.AddComponent<DimensionPolygon>();
             planeMarker.SetKind(DimensionPolygon.PolygonKind.Plane);
             EditorUtility.SetDirty(planeMarker);
             result.PlanePointCount = plan.plane.Length;
+
+            Rect planeBounds = Polygon2D.Bounds(plan.plane);
+            result.PlaneLocalSize = new Vector2(planeBounds.width, planeBounds.height);
 
             // --------------------------------------------------------- kolonlar
             ArenaDimensions.Column[] columns = plan.columns;
@@ -240,13 +280,42 @@ namespace VortexArena.Core.Editor
                         pivot,
                         Mathf.Max(0.01f, plan.HeightOf(column)),
                         material,
-                        group.transform);
+                        group.transform,
+                        result.Warnings);
+
+                    if (prism == null)
+                    {
+                        // Taban zorunlu, kolon değil: biri düşse bile maketin geri kalanı işe yarar.
+                        result.Warnings.Add($"'{columnName}' üretilemedi — atlandı.");
+                        continue;
+                    }
 
                     var prismMarker = prism.AddComponent<DimensionPolygon>();
                     prismMarker.SetKind(DimensionPolygon.PolygonKind.Column);
                     EditorUtility.SetDirty(prismMarker);
                     result.ColumnCount++;
                 }
+            }
+
+            // --------------------------------------------- kalibrasyon işaretçileri
+            // Zemin bandının yeri de bir ölçüdür: maketten okunup dosyaya geri yazılabilsin diye
+            // geometri olarak kurulur. Nokta yazılmamış bir dosyada hiçbir şey üretilmez —
+            // uydurulmuş bir çift, sahadaki bandın oraya çekildiğini söylerdi.
+            if (plan.HasCalibration)
+            {
+                CreateMark(ArenaCalibrator.AnchorAName, DimensionAnchor.AnchorKind.A,
+                    plan.calibration.a, MarkAMaterialPath, material, root.transform);
+                CreateMark(ArenaCalibrator.AnchorBName, DimensionAnchor.AnchorKind.B,
+                    plan.calibration.b, MarkBMaterialPath, material, root.transform);
+                result.HasCalibration = true;
+            }
+            else
+            {
+                result.Warnings.Add(
+                    "Dosyada kalibrasyon noktası yok ('calibration' alanı boş ya da iki nokta " +
+                    $"{ArenaDimensions.MinCalibrationSpan:0.##} m'den yakın) — işaretçiler " +
+                    "üretilmedi. Zemin bandının yerini bu alana yaz, yoksa arena sahada elle " +
+                    "hizalanan işaretçilere kalır.");
             }
 
             Undo.CollapseUndoOperations(undoGroup);
@@ -268,14 +337,22 @@ namespace VortexArena.Core.Editor
         /// düzleminde</b> duracak şekilde kaydırılır: geri okuma "en alttaki yatay yüz" kuralıyla
         /// çalışıyor, prizmanın havada ya da zeminin altında durması maketi okunmaz kılardı.
         /// </para>
+        /// <para>
+        /// ⚠️ <b>ProBuilder'ın sonucu KONTROL EDİLİR.</b> Üçgenleme düştüğünde
+        /// <c>CreateShapeFromPolygon</c> exception atmaz, geriye <b>boş bir mesh</b> bırakır:
+        /// sahnede adı doğru ama geometrisi olmayan bir obje kalır ve eksiklik ancak günler sonra
+        /// fark edilir. Düşen çokgen bu yüzden silinir ve <c>null</c> dönülür.
+        /// </para>
         /// </summary>
+        /// <returns>Üretilen obje; üçgenleme düştüyse <c>null</c>.</returns>
         private static GameObject CreatePolygon(
             string name,
             Vector2[] ring,
             Vector2 pivot,
             float extrude,
             Material material,
-            Transform parent)
+            Transform parent,
+            List<string> warnings)
         {
             var points = new List<Vector3>(ring.Length);
             for (int i = 0; i < ring.Length; i++)
@@ -285,7 +362,15 @@ namespace VortexArena.Core.Editor
 
             ProBuilderMesh mesh = ProBuilderMesh.Create();
             mesh.gameObject.name = name;
-            mesh.CreateShapeFromPolygon(points, extrude, false);
+
+            UnityEngine.ProBuilder.ActionResult shape = mesh.CreateShapeFromPolygon(points, extrude, false);
+            if (!shape || mesh.faceCount == 0)
+            {
+                warnings.Add($"'{name}' çokgeni üretilemedi (ProBuilder: {shape.notification}).");
+                Object.DestroyImmediate(mesh.gameObject);
+                return null;
+            }
+
             mesh.SetMaterial(mesh.faces, material);
             mesh.ToMesh();
             mesh.Refresh();
@@ -307,13 +392,59 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Aynı mekanın önceden üretilmiş maketini siler (idempotentlik).
+        /// Bir kalibrasyon noktası işaretçisi üretir: plan noktasında duran küçük bir küp.
         /// <para>
-        /// Önce beklenen ebeveynin altına, sonra tüm sahneye bakılır: maket elle başka bir yere
-        /// taşınmış olabilir ve iki kopya bırakmak sessizce çift geometri üretirdi.
+        /// ⚠️ Küpün MERKEZİ noktanın üstündedir (tabanı değil): geri okuma objenin transformunu
+        /// aynen okuyor, yani Inspector'daki konum dosyadaki nokta ile birebir aynı görünmeli.
+        /// Yarısı tabanın altında kalması bilinçlidir — nokta zemindedir.
         /// </para>
         /// </summary>
-        private static void DestroyExisting(string venueName, Transform preferredParent)
+        private static void CreateMark(
+            string name,
+            DimensionAnchor.AnchorKind kind,
+            Vector2 point,
+            string materialPath,
+            Material fallbackMaterial,
+            Transform parent)
+        {
+            var mark = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            mark.name = name;
+            Undo.RegisterCreatedObjectUndo(mark, "Kalibrasyon İşaretçisi");
+
+            // Collider maketin işi değil: maket build'e girmiyor ve fiziksel çarpışma free-roam'da
+            // zaten yok — sahnede yalnız ray-cast'leri yakalayan görünmez bir kutu bırakırdı.
+            var collider = mark.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Object.DestroyImmediate(collider);
+            }
+
+            mark.transform.SetParent(parent, false);
+            mark.transform.localPosition = new Vector3(point.x, 0f, point.y);
+            mark.transform.localRotation = Quaternion.identity;
+            mark.transform.localScale = Vector3.one * MarkSize;
+
+            var renderer = mark.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                var material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+                renderer.sharedMaterial = material != null ? material : fallbackMaterial;
+            }
+
+            var anchor = mark.AddComponent<DimensionAnchor>();
+            anchor.SetKind(kind);
+            EditorUtility.SetDirty(anchor);
+        }
+
+        /// <summary>
+        /// Aynı mekanın önceden üretilmiş maketini siler (idempotentlik).
+        /// <para>
+        /// Eşleşme yalnız MEKAN ADINADIR, konuma bakılmaz: maket elle taşınıp döndürülmüş olabilir
+        /// ve konuma bakan bir eşleşme onu bulamayıp sahnede ikinci bir kopya bırakırdı.
+        /// Başka bir mekanın maketine dokunulmaz.
+        /// </para>
+        /// </summary>
+        private static void DestroyExisting(string venueName)
         {
             ArenaDimensionMesh[] existing =
                 Object.FindObjectsByType<ArenaDimensionMesh>(FindObjectsInactive.Include, FindObjectsSortMode.None);
@@ -326,9 +457,7 @@ namespace VortexArena.Core.Editor
                     continue;
                 }
 
-                bool sameVenue = string.Equals(candidate.VenueName, venueName, System.StringComparison.OrdinalIgnoreCase);
-                bool sameParent = preferredParent != null && candidate.transform.parent == preferredParent;
-                if (sameVenue || sameParent)
+                if (string.Equals(candidate.VenueName, venueName, System.StringComparison.OrdinalIgnoreCase))
                 {
                     Undo.DestroyObjectImmediate(candidate.gameObject);
                 }

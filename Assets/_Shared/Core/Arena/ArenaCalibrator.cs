@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace VortexArena.Core.Arena
 {
@@ -36,6 +37,23 @@ namespace VortexArena.Core.Arena
     /// örtüşmez; işletme başına tek arena ölçüsü kuralı bu yüzden vardır.
     /// </para>
     /// <para>
+    /// <b>İşaretçilerin YERİ sahneden değil boyut dosyasından gelir</b> (<c>calibration.a</c> /
+    /// <c>calibration.b</c>): zemine yapıştırılan bantların yeri de bir ölçüdür ve mekan
+    /// başınadır. <see cref="Start"/> işaretçileri <see cref="ArenaBoundary"/> üzerinden o
+    /// noktalara oturtur, yani aynı mekanın arenaları ile lobisi ölçüyü elle kopyalamadan
+    /// paylaşır. Alanlar boş bırakılırsa objeler <b>adlarından</b> çözülür
+    /// (<see cref="AnchorAName"/> / <see cref="AnchorBName"/>) — her yeni arenada elle bağlama
+    /// adımı kalmasın diye. Dosyada nokta yoksa işaretçilere DOKUNULMAZ (sahnedeki yerlerinde
+    /// kalırlar) ve konsola uyarı düşer.
+    /// </para>
+    /// <para>
+    /// <b>Sıra her zaman A → B'dir</b> ve bu geometrik olarak doğrulanamaz: iki nokta hangisinin
+    /// önce alındığını söylemez, mesafe kontrolü de simetriktir. Garanti prosedüreldir —
+    /// <see cref="CapturePoint"/> ilk yakalamayı A, ikinciyi B sayar ve her yakalamada o noktanın
+    /// işaretçisini yakar; operatör hangi işaretin yandığını görerek doğrular. Karıştırılırsa
+    /// arena 180° ters döner.
+    /// </para>
+    /// <para>
     /// <b>İşaretçiler kurulum aracıdır, sahne dekoru değildir:</b> yalnız elle kalibrasyon
     /// sürerken görünürler (A yakalanınca A, B yakalanınca B) ve hizalamadan
     /// <see cref="markerVisibleSeconds"/> saniye sonra gizlenirler — o kısa pencere oyuncunun
@@ -54,10 +72,25 @@ namespace VortexArena.Core.Arena
     /// </summary>
     public class ArenaCalibrator : MonoBehaviour
     {
+        /// <summary>
+        /// İlk kalibrasyon işaretçisinin obje adı — <b>projedeki tek kaynağı budur</b>: sahnedeki
+        /// işaretçi, ölçü maketindeki küp ve editör araçlarının aradığı ad hep buradan gelir.
+        /// C# alan adı (<c>anchorA</c>) aynı adın camelCase yazımıdır; alan adı serialize anahtarı
+        /// olduğu için değiştirilmez.
+        /// </summary>
+        public const string AnchorAName = "anchor_a";
+
+        /// <summary>İkinci kalibrasyon işaretçisinin obje adı (bkz. <see cref="AnchorAName"/>).</summary>
+        public const string AnchorBName = "anchor_b";
+
         [Header("Virtual markers")]
-        [Tooltip("Marker at the first physical floor mark. Enabled on first capture.")]
+        [Tooltip("İlk fiziksel zemin işaretinin sanal karşılığı; ilk yakalamada açılır. " +
+                 "Boş bırakılırsa sahnede 'anchor_a' adlı objeden çözülür. Konumu boyut " +
+                 "dosyasındaki calibration.a'dan gelir — elle taşımanın kalıcı bir etkisi yoktur.")]
         [SerializeField] private GameObject anchorA;
-        [Tooltip("Marker at the second physical floor mark. Enabled on second capture.")]
+        [Tooltip("İkinci fiziksel zemin işaretinin sanal karşılığı; ikinci yakalamada açılır. " +
+                 "Boş bırakılırsa sahnede 'anchor_b' adlı objeden çözülür. Konumu boyut " +
+                 "dosyasındaki calibration.b'den gelir.")]
         [SerializeField] private GameObject anchorB;
         [Tooltip("Fallback marker pivot height above the arena floor, used only when the marker has no Renderer to measure.")]
         [SerializeField] private float markerHalfHeight = 0.05f;
@@ -166,10 +199,101 @@ namespace VortexArena.Core.Arena
 
         private void Start()
         {
-            markerFloorDrop = MeasureMarkerFloorDrop();
+            ResolveMarkers();
+            // Ölçüm ötelemeden bağımsızdır (pivot ile mesh tabanı arasındaki fark), bu yüzden
+            // işaretçileri yerleştirmeden ÖNCE alınabilir ve yerleştirme sonrası geçerli kalır.
+            markerFloorDrop = MeasureFloorDrop(anchorA, markerHalfHeight);
+            PlaceMarkersFromPlan();
             SetMarkersVisible(false);
             TryHookTrackingEvents();
             _ = RestoreSavedCalibrationAsync();
+        }
+
+        /// <summary>
+        /// Boş bırakılan işaretçi alanlarını sahnedeki adlarından çözer. Her yeni arenada iki
+        /// referansı elle sürüklemek, unutulduğunda sessizce hizalanmayan bir arena üretiyordu.
+        /// <para>
+        /// ⚠️ Ölçü maketindeki küpler <b>aynı adı taşır</b> (aynı şeyin iki adı olmaz) ve build'e
+        /// girmedikleri hâlde editörde Play kipinde sahnededirler. Ayıran şey ad değil BİLEŞENDİR:
+        /// arama <see cref="DimensionAnchor"/> taşıyan objeleri atlar. <c>EditorOnly</c> etiketli
+        /// kökler de atlanır — maketin tamamı zaten oraya girer, ucuz bir ikinci savunma.
+        /// </para>
+        /// </summary>
+        private void ResolveMarkers()
+        {
+            if (anchorA == null)
+                anchorA = FindMarkerByName(AnchorAName);
+            if (anchorB == null)
+                anchorB = FindMarkerByName(AnchorBName);
+
+            if (anchorA == null || anchorB == null)
+            {
+                Debug.LogWarning(
+                    $"ArenaCalibrator: kalibrasyon işaretçileri bulunamadı " +
+                    $"('{AnchorAName}' / '{AnchorBName}'). Hizalama YAPILAMAZ.", this);
+                return;
+            }
+
+            if (anchorA == anchorB)
+            {
+                Debug.LogError("ArenaCalibrator: anchorA ile anchorB aynı obje — hizalama yön " +
+                               "üretemez. İkisi ayrı işaretçi olmalı.", this);
+            }
+        }
+
+        private GameObject FindMarkerByName(string markerName)
+        {
+            Scene scene = gameObject.scene;
+            if (!scene.IsValid())
+                return null;
+
+            GameObject[] roots = scene.GetRootGameObjects();
+            for (int i = 0; i < roots.Length; i++)
+            {
+                if (roots[i].CompareTag(ArenaDimensionMesh.EditorOnlyTag))
+                    continue;
+
+                Transform[] all = roots[i].GetComponentsInChildren<Transform>(true);
+                for (int k = 0; k < all.Length; k++)
+                {
+                    if (!string.Equals(all[k].name, markerName, StringComparison.Ordinal))
+                        continue;
+                    if (all[k].GetComponent<DimensionAnchor>() != null)
+                        continue; // ölçü maketinin küpü, sahnenin işaretçisi değil
+                    return all[k].gameObject;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// İşaretçileri boyut dosyasındaki kalibrasyon noktalarına oturtur (mesh'in TABANI zemin
+        /// düzlemine gelecek şekilde). Dosyada nokta yoksa işaretçilere dokunulmaz.
+        /// <para>
+        /// ⚠️ Sessiz geçilmez: nokta yazılmamış bir mekanda işaretçiler prefabtaki yerlerinde
+        /// kalır ve sahadaki bantla örtüşmezler — hizalama teknik olarak yine kurulur ama arena
+        /// yanlış yere oturur. Uyarı bu yüzden bir kurulum hatasıdır, tercih değil.
+        /// </para>
+        /// </summary>
+        private void PlaceMarkersFromPlan()
+        {
+            if (anchorA == null || anchorB == null)
+                return;
+
+            var boundary = FindFirstObjectByType<ArenaBoundary>(FindObjectsInactive.Include);
+            if (boundary == null || !boundary.TryGetCalibrationMarks(out Vector3 markA, out Vector3 markB))
+            {
+                Debug.LogWarning(
+                    "ArenaCalibrator: boyut dosyasında kalibrasyon noktası yok — işaretçiler " +
+                    "sahnedeki yerlerinde bırakıldı. Sahadaki zemin bandı buraya uymuyorsa arena " +
+                    "yanlış yere hizalanır; noktaları '<Mekan>_dimensions.json' dosyasındaki " +
+                    "'calibration' alanına yaz.", this);
+                return;
+            }
+
+            PlaceMarkerAtFloor(anchorA, markA, markerHalfHeight);
+            PlaceMarkerAtFloor(anchorB, markB, markerHalfHeight);
         }
 
         private void OnDestroy()
@@ -236,26 +360,46 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Marker pivotunun zeminden yüksekliği, Renderer'dan ölçülür — marker görseli
-        /// değiştiğinde elle güncellenmesi gereken bir sabit kalmasın diye.
+        /// Marker pivotunun zeminden yüksekliği, mesh'ten ölçülür — marker görseli değiştiğinde
+        /// elle güncellenmesi gereken bir sabit kalmasın diye.
+        /// <para>
+        /// ⚠️ <c>Renderer.bounds</c>'a güvenilmez: marker sahnede KAPALI durur (ilk yakalamaya dek
+        /// gizli) ve hiç render edilmemiş olabilir. Mesh'in kendi bounds'u asset verisidir, her
+        /// durumda doğrudur.
+        /// </para>
+        /// <para>
+        /// Editör aracı (<c>TemplateBasicsLoader</c>) da buradan geçer: işaretçiyi zemine oturtan
+        /// hesap tek yerde kalsın, sahne ile çalışma anı birbirinden sapmasın.
+        /// </para>
         /// </summary>
-        private float MeasureMarkerFloorDrop()
+        public static float MeasureFloorDrop(GameObject marker, float fallback)
         {
-            if (anchorA != null)
+            if (marker != null)
             {
-                // Marker sahnede KAPALI kaydedilir (ilk yakalamaya dek gizli), bu yüzden
-                // Renderer.bounds'a güvenilmez — mesh'in kendi bounds'u asset verisidir ve
-                // obje hiç render edilmemiş olsa da doğrudur.
-                MeshFilter filter = anchorA.GetComponentInChildren<MeshFilter>(true);
+                MeshFilter filter = marker.GetComponentInChildren<MeshFilter>(true);
                 if (filter != null && filter.sharedMesh != null)
                 {
                     Vector3 worldMin = filter.transform.TransformPoint(filter.sharedMesh.bounds.min);
-                    float drop = anchorA.transform.position.y - worldMin.y;
+                    float drop = marker.transform.position.y - worldMin.y;
                     if (drop > 0f)
                         return drop;
                 }
             }
-            return markerHalfHeight;
+
+            return fallback;
+        }
+
+        /// <summary>
+        /// İşaretçiyi verilen ZEMİN noktasına oturtur: mesh'in tabanı noktanın Y'sine gelir,
+        /// pivot yukarıda kalır. Konum dünya uzayındadır, yani işaretçinin hiyerarşide nereye
+        /// bağlandığı önemsizdir.
+        /// </summary>
+        public static void PlaceMarkerAtFloor(GameObject marker, Vector3 floorPoint, float fallbackDrop)
+        {
+            if (marker == null)
+                return;
+
+            marker.transform.position = floorPoint + Vector3.up * MeasureFloorDrop(marker, fallbackDrop);
         }
 
         /// <summary>Horizontal distance between the two virtual markers, 0 if unavailable.</summary>
@@ -286,6 +430,9 @@ namespace VortexArena.Core.Arena
             if (capturedCount >= 2)
                 ResetCalibration();
 
+            // Sıra sabittir: ilk yakalama A, ikincisi B. İki noktadan hangisinin önce alındığı
+            // GEOMETRİK olarak çıkarılamaz (mesafe kontrolü de simetriktir), bu yüzden garanti
+            // buradaki sayaç ile operatörün gördüğü işaretçidir — log da hangisi olduğunu yazar.
             if (capturedCount == 0)
             {
                 manualCalibrationStarted = true;
@@ -293,7 +440,9 @@ namespace VortexArena.Core.Arena
                 capturedCount = 1;
                 if (anchorA != null) anchorA.SetActive(true);
                 StartCoroutine(Pulse(1, PointAPulseSeconds));
-                Debug.Log($"ArenaCalibrator: point A captured at {point}.");
+                Debug.Log($"ArenaCalibrator: 1/2 — A yakalandı, fiziksel {point} → sanal " +
+                          $"'{AnchorAName}' {(anchorA != null ? anchorA.transform.position.ToString() : "(yok)")}. " +
+                          "Sıradaki nokta B.");
                 return;
             }
 
@@ -325,7 +474,8 @@ namespace VortexArena.Core.Arena
             capturedCount = 2;
             if (anchorB != null) anchorB.SetActive(true);
             StartCoroutine(Pulse(1, PointBPulseSeconds));
-            Debug.Log($"ArenaCalibrator: point B captured at {point}.");
+            Debug.Log($"ArenaCalibrator: 2/2 — B yakalandı, fiziksel {point} → sanal " +
+                      $"'{AnchorBName}' {(anchorB != null ? anchorB.transform.position.ToString() : "(yok)")}.");
             AlignRig(capturedA, point);
             HideMarkersAfterConfirmation();
             Calibrated?.Invoke(SourceManual);

@@ -8,7 +8,7 @@ namespace VortexArena.Core.Arena
     /// <para>
     /// <b>Ne işe yarar:</b> maket, işletmenin fiziksel alanını sahnede görünür kılar — arena
     /// sanatı bunun üstüne kurulur. Ölçü yanlış alınmışsa köşeler ProBuilder ile yerinde
-    /// düzeltilir ve <c>Tools &gt; VortexArena &gt; DimensionMesh'i JSON'a Çevir</c> maketi geri
+    /// düzeltilir ve <c>Tools &gt; VortexArena &gt; Arena &gt; DimensionMesh'i JSON'a Çevir</c> maketi geri
     /// okuyup <see cref="SourceJson"/>'un ÜSTÜNE yazar. Bu bileşen o aracın "neyi çevireceğim"
     /// sorusunun cevabıdır.
     /// </para>
@@ -19,10 +19,10 @@ namespace VortexArena.Core.Arena
     /// referans veremez.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Maketin kökü <see cref="ArenaBoundary"/> ile hizalı olmalıdır</b> (üretim aracı onu
-    /// muhafazanın çocuğu olarak, yerel dönüşümü sıfırlanmış hâlde kurar): boyut dosyasındaki
-    /// koordinatlar muhafaza transformunun yerel XZ'sindedir, maketi başka bir transformun altına
-    /// koymak planı sessizce kaydırır.
+    /// ⚠️ <b>Maket sahneden BAĞIMSIZDIR</b> — üretim aracı onu sahne köküne, dünya orijininde ve
+    /// dönüşsüz kurar ki dosyadaki ölçü sahnede birebir okunabilsin. İstenirse elle taşınır ve
+    /// döndürülür: ölçü çıkarımı bu <b>kökün</b> yerel uzayına göre yapıldığı için taşınmış bir
+    /// maket de doğru çevrilir. Yalnız <b>ölçeğini değiştirme</b> — plan metre cinsindendir.
     /// </para>
     /// </summary>
     [DisallowMultipleComponent]

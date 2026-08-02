@@ -26,7 +26,7 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
   tool'u, sunucu config'i) değişiklik AYNI commit'te dokümana yazılır; ağ davranışında sıra
   **önce `Docs/ArenaNet-Protokol.md`, sonra kod**. Hangi değişiklik hangi dokümana gider tablosu →
   `docs-sync.md`
-- **Editörde rol/adres dev penceresinden seçilir.** `Tools > VortexArena > Dev` (rolü çevirmek için
+- **Editörde rol/adres dev penceresinden seçilir.** `Tools > VortexArena > Development > Dev` (rolü çevirmek için
   `Ctrl+Alt+R`): hedef listesi `dev-targets.json`'dan gelir (commit'li), seçimin kendisi
   `EditorPrefs`'te kişisel kalır → rol/IP değiştirmek hiçbir sahne/asset kirletmez.
   ⚠️ Boot.unity'ye (ya da başka bir sahneye) rol/IP için **[SerializeField] override KOYULMAZ** —
@@ -136,7 +136,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   geri gelirse sebebi neredeyse her zaman sahneye elle eklenmiş bir BB rig'idir →
   `Docs/Sistem-Ozeti.md` §7, "rig'i/kamerayı asla taşıma" maddesi.
   `VA_CalibrationManager`'ın `anchorA`/`anchorB`/`rigRoot` alanları sahneye baktığı için
-  örnek üstünde doldurulur (prefab asset'inde boş durur — normaldir).
+  örnek üstünde doldurulur (prefab asset'inde boş durur — normaldir); `anchorA`/`anchorB` boş
+  kalırsa kalibratör onları **adlarından** (`anchor_a`/`anchor_b`) çözer.
   **Admin gözlemci için ek adım YOKTUR** — `AdminSpectator`
   kendini önyükler ve sahneyi devralır (rig'i kapatır, `ArenaBoundary`'yi susturur).
   Arena başına **tek** `SpawnPoint` (`GameObject > VortexArena > Spawn Point`): hem "maçtan önce
@@ -245,10 +246,10 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
 
 **Yeni arena — altı adım** (tek düğmeli sihirbaz YOKTUR, kaldırıldı):
 `File > New Scene` → arena kutusuna kaydet (`Venues/<İşletme>/<arenaId>/Scenes/`) →
-`Tools > VortexArena > Template Temellerini Yükle` (altyapı prefab ÖRNEKLERİ + `ArenaBoundary`) →
-`… > JSON'dan DimensionMesh Üret` (mekanın ölçü maketi) → ölçü yanlışsa köşeleri ProBuilder ile
-düzelt + `… > DimensionMesh'i JSON'a Çevir` → environment/asset yerleşimi, `SpawnPoint`'i **zemin
-seviyesine** oturt, kalibrasyon işaretçileri, bake → `… > Configure All Build Elements`.
+`Tools > VortexArena > Arena > Template Temellerini Yükle` (altyapı prefab ÖRNEKLERİ + `ArenaBoundary`) →
+`… > Arena > JSON'dan DimensionMesh Üret` (mekanın ölçü maketi) → ölçü yanlışsa köşeleri ProBuilder ile
+düzelt + `… > Arena > DimensionMesh'i JSON'a Çevir` → environment/asset yerleşimi, `SpawnPoint`'i **zemin
+seviyesine** oturt, bake → `… > Build > Configure All Build Elements`.
 ⚠️ **Son adım atlanırsa** harita ne katalogda ne `maps.json`'da olur; `start_match` sessizce
 reddedilir. ⚠️ **Ölçekleme YOKTUR ve eklenmez:** her işletmenin alanı farklı ölçüde ve çoğu
 kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek bir
@@ -259,7 +260,8 @@ işletmede hep aynı fiziksel alan oynatıldığı için o mekanın **tüm** sah
 `ArenaBoundary.dimensionsJson` alanında aynı dosyayı gösterir — sahne başına kopya kaçınılmaz
 olarak sapar. İçerik: `plane` = tabanın sıralı köşeleri (metre, `ArenaBoundary` transformunun
 yerel XZ'si, **kapalı** — ilk noktayı sona tekrarlama), `columns` = her biri kendi sıralı köşe
-halkası olan kolonlar (`{name, height, points}`).
+halkası olan kolonlar (`{name, height, points}`), `calibration` = zemin bandının iki noktası
+(`{a, b}`).
 ⚠️ **Taban da kolon da TEK halkadır; parçalardan birleştirme (union) YOKTUR ve eklenmez.**
 İçbükeylik için ek bir şey gerekmez — L şekli, yamuk, girintili duvar tek halkayla ifade edilir.
 Birleşim `ArenaBoundary` yüzünden çalışma anında da koşmak zorunda kalırdı ve karşılığını mekan
@@ -270,13 +272,34 @@ muhafazanın duvar göstergesi de kaldırıldı, okuyanı olmayan ölçü bayatl
 ⚠️ **Boyut dosyası ZORUNLUDUR** — bağlı değilse ya da okunamıyorsa `ArenaBoundary` bir kez hata
 basıp muhafazayı tümden kapatır (açık başarısızlık; gerekçe `Docs/Sistem-Ozeti.md` §7).
 ⚠️ **Bağlanmayan JSON build'e GİRMEZ** (çalışma anında okunur, `TextAsset` referansı yoksa Unity
-onu paketlemez). ⚠️ **Ölçü iki yeri birden besler** (muhafaza mesafesi · admin kuş bakışı kadrajı)
-— ikinci bir yere yazma.
-**Ölçü maketi (`<Mekan>_DimensionMesh`)** oynanan geometri DEĞİLDİR: taban + kolonlardan ibarettir,
+onu paketlemez). ⚠️ **Ölçü üç yeri birden besler** (muhafaza mesafesi · admin kuş bakışı kadrajı ·
+kalibrasyon işaretçilerinin yeri) — ikinci bir yere yazma.
+**Kalibrasyon noktaları (`calibration: {a, b}`)** de bu dosyadadır ve **mekan başınadır**: zemine
+yapıştırılan A/B bantlarının yeri bir ölçüdür, aynı odadaki tüm arenalar ve lobi aynı iki fiziksel
+işareti kullanır. Sahnedeki `anchor_a`/`anchor_b` objeleri **elle taşınmaz** — `ArenaCalibrator`
+her `Start`'ta onları buradan konumlandırır (alanları boşsa objeleri **adlarından** çözer;
+`Template Temellerini Yükle` de aynı yerleştirmeyi editörde yapar, sahne yalan söylemesin diye).
+Sahnede taşımanın kalıcı etkisi yoktur, ölçü **dosyaya** yazılır.
+⚠️ **Sıra A → B'dir ve geometrik olarak DOĞRULANAMAZ** (iki nokta hangisinin önce alındığını
+söylemez, mesafe kontrolü simetriktir): garanti prosedüreldir — ilk yakalama A sayılır, o anda
+A işaretçisi yanar. Karıştırılırsa arena 180° ters döner. ⚠️ İki nokta arasında en az
+`ArenaDimensions.MinCalibrationSpan` metre olmalı; altındaki çift **yok sayılır** (yaw hatası
+mesafeyle ters orantılı büyür).
+**Ölçü maketi (`<Mekan>_DimensionMesh`)** oynanan geometri DEĞİLDİR: taban + kolonlar +
+`anchor_a`/`anchor_b` işaretçilerinden ibarettir,
 duvar üretmez, kökü `EditorOnly` etiketli olduğu için build'e girmez. Arena sanatı hazır
 environment'ların içine kurulur ve maket yalnız o sanatın oturacağı fiziksel alanı gösterir.
-⚠️ Maket `ArenaBoundary`'nin altına, yerel dönüşümü sıfırlanmış kurulur — JSON koordinatları o
-transformun yerel XZ'sindedir. Bu yüzden **önce** `Template Temellerini Yükle` çalıştırılır.
+⚠️ **Maket SAHNEDEN BAĞIMSIZ üretilir**: sahne köküne, dünya orijininde, **dönüşsüz** ve 1
+ölçekte kurulur — hiçbir şeyin altına parent'lanmaz, böylece dosyadaki ölçü sahnede birebir okunur
+(döndürülmüş bir kökün altında 12×12 kare, dünya eksenli kutuda `12×(cos θ + sin θ)` görünür ve
+araç bozuk sanılır). Arenanın üstüne oturtmak isteyen **elle taşır/döndürür**; geri okuma maketin
+KENDİ kökünü referans aldığı için bundan etkilenmez. ⚠️ Maketin **ölçeği değiştirilmez**.
+⚠️ **Kalibrasyon işaretçisinin adı her yerde `anchor_a`/`anchor_b`'dir** — sahnede de, makette de,
+kodda da (tek sabit: `ArenaCalibrator.AnchorAName`/`AnchorBName`; C# alanı `anchorA` aynı adın
+camelCase yazımıdır ve serialize anahtarı olduğu için değişmez). Maketteki küple sahnedeki
+işaretçiyi ayıran şey ad değil **bileşendir**: küpte `DimensionAnchor` vardır ve kalibratörün ad
+araması o bileşeni taşıyan objeleri atlar (maket build'e girmez ama editörde Play kipinde
+sahnededir).
 Elle konan engeller için `ArenaObstacle` (`Core/Arena/`): muhafaza onu engel sayar —
 ⚠️ **collider değildir, fizik yapmaz** (free-roam'da çarpışma yoktur).
 ⚠️ **Arenanın duvarları environment sanatına aittir** ve fiziksel sınırla **çakışmalıdır**:
@@ -341,7 +364,7 @@ besler (verilen silahta soket çizilmez — silah zaten elde).
 ⚠️ Sahneye bileşen KOYMA: tekil olmasının sebebi her yeni arenaya elle bir kurulum adımı
 eklememektir.
 **Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfeklerin kiti
-`Tools > VortexArena > Build Weapon Prefabs` ile üretilir — `WeaponKitBuilder` tablosuna satır
+`Tools > VortexArena > Weapons > Build Weapon Prefabs` ile üretilir — `WeaponKitBuilder` tablosuna satır
 ekle (CS2 istatistikleri + ses profili + "Low Poly AR Weapon Pack 1" modeli — model üretimde
 OKUNMAZ, köken kaydıdır). ⚠️ **Bir satırın `PackPrefab`'ı ve `NetItemId`'si o satırdan
 AYRILMAZ** — pack modelleri jenerik adlı (`AR_B`…), hangisinin hangi gerçek silah olduğu gözle
@@ -413,15 +436,15 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 
 | Araç | Ne zaman |
 |---|---|
-| `Tools > VortexArena > Configure All Build Elements` | Sahne hazır → `MapDefinition` + `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json` export, hepsi tek geçişte (+ sağlık raporu) |
-| `… > Template Temellerini Yükle` | Yeni/boş sahneye altyapı prefab ÖRNEKLERİ (`VA_ArenaRoot`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı `VA_ModeHud`/taban bölgeleri/`SpawnPoint`) + kalibratör/muhafaza alanlarının rig'e bağlanması + boyut dosyası bağlama. İdempotent |
-| `… > JSON'dan DimensionMesh Üret` | Mekanın boyut JSON'undan ölçü maketi (taban + kolonlar). `ArenaBoundary`'nin altına kurar, `EditorOnly` etiketler. İdempotent |
-| `… > DimensionMesh'i JSON'a Çevir` | Maketin köşeleri sahnede düzeltildi → aynı boyut dosyasının ÜSTÜNE yazar (hedefi maketin kendisi söyler) |
-| `Tools > VortexArena > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
-| `… > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir) |
-| `… > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
-| `… > Write Grip Sockets To Definition` | Sahnedeki kavrama işaretçileri sürüklenip ayarlandı → `WD_*.asset`'e yazar (ters/düz bileşimi araç yapar). Yalnız BULUNAN işaretçinin alanlarına dokunur |
-| `… > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek) |
+| `Tools > VortexArena > Build > Configure All Build Elements` | Sahne hazır → `MapDefinition` + `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json` export, hepsi tek geçişte (+ sağlık raporu) |
+| `… > Arena > Template Temellerini Yükle` | Yeni/boş sahneye altyapı prefab ÖRNEKLERİ (`VA_ArenaRoot`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı `VA_ModeHud`/taban bölgeleri/`SpawnPoint`) + kalibratör/muhafaza alanlarının rig'e bağlanması + boyut dosyası bağlama + `anchor_a`/`anchor_b`'yi dosyadaki noktalara oturtma. İdempotent |
+| `… > Arena > JSON'dan DimensionMesh Üret` | Mekanın boyut JSON'undan ölçü maketi (taban + kolonlar + `anchor_a`/`anchor_b`). **Sahne köküne, dönüşsüz** kurar ve `EditorOnly` etiketler. İdempotent |
+| `… > Arena > DimensionMesh'i JSON'a Çevir` | Maketin köşeleri/kalibrasyon işaretçileri sahnede düzeltildi → aynı boyut dosyasının ÜSTÜNE yazar (hedefi maketin kendisi söyler). İşaretçi yoksa dosyadaki `calibration` KORUNUR |
+| `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
+| `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir) |
+| `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
+| `… > Weapons > Write Grip Sockets To Definition` | Sahnedeki kavrama işaretçileri sürüklenip ayarlandı → `WD_*.asset`'e yazar (ters/düz bileşimi araç yapar). Yalnız BULUNAN işaretçinin alanlarına dokunur |
+| `… > Development > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek) |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` · `Spawn Point` | Sahneye ilgili bileşeni + kurulumunu ekler |
 | `GameObject > VortexArena > Grip Socket (Primary/Secondary)` | Seçili silahın altına kavrama işaretçisi üretir (mevcut değerlerden başlatır; aynı türden ikincisini üretmez) |
 | `PlayerBuildTool.BuildWindowsAdmin` · `…BuildQuestPlayer` | Menü değil — batch-mode `-executeMethod` girişleri (`deploy-admin-game.bat` / `deploy-player-apk.bat` çağırır) |

@@ -23,7 +23,7 @@ namespace VortexArena.App
     /// (komut satırı <c>--server-ip</c> &gt; PlayerPrefs &gt; beacon &gt;
     /// StreamingAssets/arena.json) bulunur ve <b>otomatik bağlanılır</b>. IP paneli
     /// başlangıçta KAPALIDIR. Zincirin başındaki komut satırı adresini
-    /// <see cref="AppBoot"/> yazar (editörde <c>Tools &gt; VortexArena &gt; Dev</c>
+    /// <see cref="AppBoot"/> yazar (editörde <c>Tools &gt; VortexArena &gt; Development &gt; Dev</c>
     /// penceresinin seçtiği hedef de bu yoldan gelir) — açıkça verilen adres kazanır.
     /// </para>
     /// <para>

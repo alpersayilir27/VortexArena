@@ -11,7 +11,7 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// YALNIZ EDITOR — geliştirici seçiminin runtime tarafı. `Tools &gt; VortexArena &gt; Dev`
+    /// YALNIZ EDITOR — geliştirici seçiminin runtime tarafı. `Tools &gt; VortexArena &gt; Development &gt; Dev`
     /// penceresinin `EditorPrefs`'e yazdığı rol/adres seçimini Play başlarken uygular.
     ///
     /// <para><b>İki katmanlı config'in "seçim" katmanı burasıdır.</b> Hedeflerin adlandırılmış
@@ -200,7 +200,7 @@ namespace VortexArena.App
                 AppSession.ServerIp = "";
                 AppSession.ServerPort = 0;
                 Debug.Log($"[DevSession] Dev seçimi uygulandı → {Summary}. " +
-                          "Değiştirmek için: Tools > VortexArena > Dev (rol: Ctrl+Alt+R).");
+                          "Değiştirmek için: Tools > VortexArena > Development > Dev (rol: Ctrl+Alt+R).");
                 return;
             }
 
@@ -216,7 +216,7 @@ namespace VortexArena.App
             }
 
             Debug.Log($"[DevSession] Dev seçimi uygulandı → {Summary}. " +
-                      "Değiştirmek için: Tools > VortexArena > Dev (rol: Ctrl+Alt+R).");
+                      "Değiştirmek için: Tools > VortexArena > Development > Dev (rol: Ctrl+Alt+R).");
         }
 
         // -------------------------------------- 2) arena sahnesinden Play: sunucuya bağlan

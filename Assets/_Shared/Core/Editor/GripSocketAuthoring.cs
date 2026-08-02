@@ -11,7 +11,7 @@ namespace VortexArena.Core.Editor
     /// <list type="bullet">
     /// <item><c>GameObject &gt; VortexArena &gt; Grip Socket (Primary)</c> — ana el işaretçisi üretir</item>
     /// <item><c>GameObject &gt; VortexArena &gt; Grip Socket (Secondary)</c> — ön kabza işaretçisi</item>
-    /// <item><c>Tools &gt; VortexArena &gt; Write Grip Sockets To Definition</c> — işaretçileri SO'ya yazar</item>
+    /// <item><c>Tools &gt; VortexArena &gt; Weapons &gt; Write Grip Sockets To Definition</c> — işaretçileri SO'ya yazar</item>
     /// </list>
     /// <para>
     /// Akış: işaretçiyi üret → silahın kabzasına sürükle ve el gibi DÖNDÜR → yarıçapı ayarla →
@@ -148,12 +148,12 @@ namespace VortexArena.Core.Editor
 
             Debug.Log($"{LOG} {kind} işaretçisi '{root.name}' altında üretildi — kabzaya sürükle, elin " +
                       "gireceği açıyla döndür, yarıçapı ayarla; sonra " +
-                      "Tools > VortexArena > Write Grip Sockets To Definition.", go);
+                      "Tools > VortexArena > Weapons > Write Grip Sockets To Definition.", go);
         }
 
         // ------------------------------------------------------------------ SO'ya yazma
 
-        [MenuItem("Tools/VortexArena/Write Grip Sockets To Definition")]
+        [MenuItem("Tools/VortexArena/Weapons/Write Grip Sockets To Definition", false, 22)]
         private static void WriteToDefinition()
         {
             GameObject context = Selection.activeGameObject;

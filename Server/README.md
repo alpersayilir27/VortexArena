@@ -148,7 +148,7 @@ işlenir; ateş serbestliği lobi türünün kuralıdır, `rules.fireWhilePaused
 > (`welcome.match.sceneName`) — çözülemiyorsa zaten yapılandırma hatası vardır ve oyuncu doğru
 > oynayamaz. (`maps.json` hiç yoksa doğrulamanın tamamı kapalıdır; sunucu uyarıp açılır.)
 
-> **`maps.json` Unity'den export edilir** — Unity'de `Tools > VortexArena > Export Server Config`
+> **`maps.json` Unity'den export edilir** — Unity'de `Tools > VortexArena > Server > Export Server Config`
 > menüsü onu `MapDefinition` SO'larından üretir. **Elle düzenlemeyin: bir sonraki export
 > değişikliğinizi ezer.** Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir
 > (alfabetik, LF, UTF-8 BOM'suz) → git diff'leri temiz kalır.

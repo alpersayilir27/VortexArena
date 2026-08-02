@@ -8,13 +8,19 @@ using VortexArena.Core.Arena;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; DimensionMesh'i JSON'a Çevir</c> — sahnedeki ölçü maketini
+    /// <c>Tools &gt; VortexArena &gt; Arena &gt; DimensionMesh'i JSON'a Çevir</c> — sahnedeki ölçü maketini
     /// okuyup <see cref="ArenaDimensionMesh.SourceJson"/>'un <b>ÜSTÜNE</b> yazar.
     /// <para>
     /// <b>Ne için:</b> ölçü yanlış alınmışsa köşeler ProBuilder ile sahnede düzeltilir; gerçek
     /// ölçüyü tek doğruluk kaynağına (boyut dosyası) geri yazan adım budur. Hedef dosya
     /// kullanıcıya sorulmaz — maketin kökündeki işaretçiden gelir, yani maket hangi dosyadan
     /// üretildiyse ona döner.
+    /// </para>
+    /// <para>
+    /// <b>Kalibrasyon noktaları da çevrilir:</b> maketteki <c>anchor_a</c>/<c>anchor_b</c>
+    /// işaretçileri sürüklenip yerlerine oturtulur ve dosyanın <c>calibration</c> alanına geri
+    /// yazılır — zemin bandının yeri de bir ölçüdür. İşaretçi yoksa dosyadaki değerler korunur
+    /// (silinmez).
     /// </para>
     /// <para>
     /// ✔ <b>Gidiş-dönüş kayıpsız ve simetriktir:</b> JSON'daki tek halka → tek mesh → tek halka.
@@ -46,7 +52,7 @@ namespace VortexArena.Core.Editor
         /// <summary>Doğrusal (collinear) köşe ayıklama eşiği — ardışık iki kenarın çapraz çarpımı.</summary>
         private const float CollinearEpsilon = 1e-3f;
 
-        [MenuItem("Tools/VortexArena/DimensionMesh'i JSON'a Çevir")]
+        [MenuItem("Tools/VortexArena/Arena/DimensionMesh'i JSON'a Çevir", false, 3)]
         private static void ConvertSelected()
         {
             ArenaDimensionMesh target = ResolveTarget(out string targetError);
@@ -219,8 +225,76 @@ namespace VortexArena.Core.Editor
                 name = target.VenueName,
                 plane = planeRing,
                 columns = columns.ToArray(),
+                calibration = ExtractCalibration(target, root, warnings),
                 defaultColumnHeight = target.DefaultColumnHeight
             };
+        }
+
+        /// <summary>
+        /// Maketteki <see cref="DimensionAnchor"/> işaretçilerini kök uzayında okur.
+        /// <para>
+        /// ⚠️ İşaretçi bulunamazsa noktalar <b>SIFIRLANMAZ</b>, kaynak dosyadaki değerler
+        /// korunur: bu değişiklikten önce üretilmiş bir maketi çevirmek, mekanın zemin bandı
+        /// ölçüsünü sessizce silerdi. Eksiklik uyarı olarak bildirilir.
+        /// </para>
+        /// </summary>
+        private static ArenaDimensions.CalibrationMarks ExtractCalibration(
+            ArenaDimensionMesh target,
+            Transform root,
+            List<string> warnings)
+        {
+            DimensionAnchor[] anchors = target.GetComponentsInChildren<DimensionAnchor>(true);
+
+            Transform a = null;
+            Transform b = null;
+            for (int i = 0; i < anchors.Length; i++)
+            {
+                if (anchors[i].Kind == DimensionAnchor.AnchorKind.A)
+                {
+                    if (a == null) a = anchors[i].transform;
+                    else warnings?.Add($"Birden çok A işaretçisi var ('{a.name}', '{anchors[i].name}') — ilki kullanıldı.");
+                }
+                else
+                {
+                    if (b == null) b = anchors[i].transform;
+                    else warnings?.Add($"Birden çok B işaretçisi var ('{b.name}', '{anchors[i].name}') — ilki kullanıldı.");
+                }
+            }
+
+            if (a == null || b == null)
+            {
+                warnings?.Add(
+                    "Makette kalibrasyon işaretçisi (DimensionAnchor A/B) yok — dosyadaki " +
+                    "'calibration' değerleri OLDUĞU GİBİ korundu. İşaretçileri üretmek için " +
+                    "maketi 'JSON'dan DimensionMesh Üret' ile yeniden kur.");
+                return ReadCalibrationFromSource(target);
+            }
+
+            Vector3 localA = root.InverseTransformPoint(a.position);
+            Vector3 localB = root.InverseTransformPoint(b.position);
+
+            var marks = new ArenaDimensions.CalibrationMarks
+            {
+                a = new Vector2(localA.x, localA.z),
+                b = new Vector2(localB.x, localB.z)
+            };
+
+            if ((marks.b - marks.a).magnitude < ArenaDimensions.MinCalibrationSpan)
+            {
+                warnings?.Add(
+                    $"Kalibrasyon noktaları birbirine çok yakın ({(marks.b - marks.a).magnitude:0.##} m < " +
+                    $"{ArenaDimensions.MinCalibrationSpan:0.##} m) — bu çift yön tanımlamaz ve " +
+                    "kalibratör noktaları YOK sayar.");
+            }
+
+            return marks;
+        }
+
+        /// <summary>Kaynak dosyadaki kalibrasyon noktaları; okunamazsa boş çift.</summary>
+        private static ArenaDimensions.CalibrationMarks ReadCalibrationFromSource(ArenaDimensionMesh target)
+        {
+            ArenaDimensions existing = ArenaDimensions.FromTextAsset(target.SourceJson, out string _);
+            return existing != null ? existing.calibration : default;
         }
 
         /// <summary>

@@ -205,7 +205,7 @@ taraması yoktur, maliyet sıfırdır.
 
 ## 9. Test adımları (PR öncesi)
 
-1. Çatılı sahneyi aç, `Tools > VortexArena > Dev` penceresinden rolü **admin** yap (`Ctrl+Alt+R`).
+1. Çatılı sahneyi aç, `Tools > VortexArena > Development > Dev` penceresinden rolü **admin** yap (`Ctrl+Alt+R`).
 2. Play → `3` (kuş bakışı): çatı kalkmalı, **zemindeki gölge deseni durmalı**.
 3. `2` (serbest) → çatı geri gelmeli, gölge kipi bozulmamış olmalı.
 4. Tercihler (`P`) → Çatı → `hep gizli`: POV'da da tavan olmamalı. → `görünür`: hiçbir kipte kalkmamalı.
@@ -237,8 +237,8 @@ Bu notun kapsamı çatıdır; tam liste ve sorumluluklar `CLAUDE.md` → *Editor
 
 | Araç | İş |
 |---|---|
-| `Tools > VortexArena > Dev` (`Ctrl+Alt+R`) | Rol · sunucu hedefi · Play başlangıcı |
-| `Tools > VortexArena > Configure All Build Elements` | `MapDefinition` + katalog + Build Settings + `maps.json` export, tek geçişte |
-| `Tools > VortexArena > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` |
+| `Tools > VortexArena > Development > Dev` (`Ctrl+Alt+R`) | Rol · sunucu hedefi · Play başlangıcı |
+| `Tools > VortexArena > Build > Configure All Build Elements` | `MapDefinition` + katalog + Build Settings + `maps.json` export, tek geçişte |
+| `Tools > VortexArena > Server > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` |
 | `GameObject > VortexArena > Network Parent` | Sahne objesine `NetIdentity` + benzersiz `sceneId` |
 | **`GameObject > VortexArena > Arena Roof`** | **Bu not (§4)** |

@@ -8,7 +8,7 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Dev</c> — geliştirici kontrol paneli: rol, sunucu hedefi,
+    /// <c>Tools &gt; VortexArena &gt; Development &gt; Dev</c> — geliştirici kontrol paneli: rol, sunucu hedefi,
     /// Play başlangıcı ve <b>sunucusuz sandbox</b> kipi.
     ///
     /// <para><b>Sunucuya hiç dokunmaz</b> — ne başlatır, ne durdurur, ne derler: sunucu her zaman
@@ -45,7 +45,7 @@ namespace VortexArena.App.Editor
         /// sandbox seçimidir.</summary>
         [NonSerialized] private string[] modeIds = Array.Empty<string>();
 
-        [MenuItem("Tools/VortexArena/Dev")]
+        [MenuItem("Tools/VortexArena/Development/Dev", false, 80)]
         private static void Open()
         {
             var window = GetWindow<DevWindow>(false, "Dev", true);

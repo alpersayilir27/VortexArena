@@ -70,18 +70,18 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 - [ ] **Alanın ölçüsünü boyut dosyasına gir.** Bu dosya işletmenin **tek** ölçü kaynağıdır: hem sahnedeki ölçü maketi, hem oyuncuya çıkan "alan dışına çıktın" uyarısı, hem de yöneticinin kuş bakışı görüntüsü buradan beslenir. Ölçüyü ikinci bir yere yazmazsın.
   > **Dosya nerede:** `Assets/Arenas/Venues/<İşletme>/Data/<İşletme>_dimensions.json` (örnek: `VortexAntep/Data/VortexAntep_dimensions.json`). Düz metin dosyasıdır — sahadan aldığın metreleri **Unity açmadan** girip güncelleyebilirsin.
   > **Dosya İŞLETME başınadır**, arena başına değil: aynı fiziksel odada kaç arena ve lobi oynatılırsa oynatılsın hepsi bu tek dosyayı gösterir. İkinci bir kopya çıkarma — kaçınılmaz olarak birbirinden sapar.
-  > **İçine ne yazarsın:** `plane` = alanın çevresini dolaşarak sırayla yazdığın köşeler; `columns` = her kolonun kendi köşe listesi (`points`) + yüksekliği. **Alan tam kare olsa bile dört köşe** yazılır; girintili/L şeklinde bir alan da aynı tek listeye sığar.
+  > **İçine ne yazarsın:** `plane` = alanın çevresini dolaşarak sırayla yazdığın köşeler; `columns` = her kolonun kendi köşe listesi (`points`) + yüksekliği; `calibration` = zemine yapıştıracağın **A ve B** bantlarının yeri (Bölüm 3). **Alan tam kare olsa bile dört köşe** yazılır; girintili/L şeklinde bir alan da aynı tek listeye sığar.
   > Ayrıntılı reçete: `Docs/Gelistirici/Yemek-Kitabi.md`.
 - [ ] Unity'de yeni bir sahne aç ve arena kutusuna kaydet: `Assets/Arenas/Venues/<İşletme>/<Arena>/Scenes/<SahneAdı>.unity`.
   > **Mekan klasörü zorunludur** — sunucunun açılışta sorduğu listede görünecek ad odur; aynı işletmenin ikinci arenası da **aynı** mekan klasörünün altına açılır. Sahne adı katalog anahtarıdır ve benzersiz olmalıdır.
-- [ ] `Tools > VortexArena > Template Temellerini Yükle` → sahneye ağ altyapısı (muhafaza + kalibrasyon işaretçileri + rig + poz senkronu) prefab örneği olarak konur ve boyut dosyası muhafazaya bağlanır.
+- [ ] `Tools > VortexArena > Arena > Template Temellerini Yükle` → sahneye ağ altyapısı (muhafaza + kalibrasyon işaretçileri + rig + poz senkronu) prefab örneği olarak konur ve boyut dosyası muhafazaya bağlanır.
   > Lobi sahnesi kuruyorsan penceredeki **taban bölgeleri** ve **VA_ModeHud** kutularını kapat.
-- [ ] `Tools > VortexArena > JSON'dan DimensionMesh Üret` → boyut dosyasını seç, **Üret**. Sahnede alanın ölçü maketi (taban + kolonlar) belirir; arena sanatını bunun üstüne kurarsın.
+- [ ] `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` → boyut dosyasını seç, **Üret**. Sahnede alanın ölçü maketi (taban + kolonlar) belirir; arena sanatını bunun üstüne kurarsın.
   > ⚠️ **Bu maket oyuna girmez** — yalnız ölçü referansıdır. Oyuncunun gördüğü duvar/zemin senin koyduğun environment sanatıdır ve **gerçek duvarlar fiziksel sınırla çakışmalıdır**: sanat duvarı alandan içeride ya da dışarıda durursa oyuncu yanlış yere göre uyarılır.
-  > **Ölçü tutmadıysa** maketin köşesini ProBuilder ile yerine taşı, sonra `Tools > VortexArena > DimensionMesh'i JSON'a Çevir` — düzeltilmiş ölçü aynı dosyaya geri yazılır.
-- [ ] **Kalibrasyon işaretçilerinin konumunu** gerçek ölçüye getir (Bölüm 3).
+  > **Ölçü tutmadıysa** maketin köşesini ProBuilder ile yerine taşı, sonra `Tools > VortexArena > Arena > DimensionMesh'i JSON'a Çevir` — düzeltilmiş ölçü aynı dosyaya geri yazılır.
+- [ ] **Kalibrasyon noktalarını boyut dosyasına yaz** (Bölüm 3) — sahnedeki işaretçiler oradan yerleşir, elle taşınmaz.
 - [ ] **Tek `SpawnPoint`**'i yerine taşı — bu marker arena uzayının sıfırıdır, **zemin seviyesine** konur ve sonradan taşınmaz (taşımak tüm oyuncuların arenadaki koordinatını kaydırır). NavMesh ve ışık verisini bake et.
-- [ ] `Tools > VortexArena > Configure All Build Elements` çalıştır → `MapDefinition`, katalog kaydı, Build Settings girdisi ve `Server/config/maps.json` tek geçişte üretilir. Çıkan sağlık raporunu ve uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
+- [ ] `Tools > VortexArena > Build > Configure All Build Elements` çalıştır → `MapDefinition`, katalog kaydı, Build Settings girdisi ve `Server/config/maps.json` tek geçişte üretilir. Çıkan sağlık raporunu ve uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
 - [ ] Build Settings'te yeni sahnenin **listede ve işaretli (enabled)** olduğunu doğrula. Sahne adı = `start_match` katalog anahtarı; boşluk/typo dahil birebir eşleşmeli.
 - [ ] Android APK'yı **yeniden al**: `scripts\deploy-player-apk.bat` (Unity editörü kapalı) → `deploy\player\game.apk`. Yeni arena APK'da yoksa o başlık maçı engeller (Bölüm 8).
 
@@ -89,18 +89,26 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 ## 3. Kalibrasyon işaretleri (zemin bandı)
 
-Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrator`). Sahnede iki sanal işaretçi vardır: **`anchor_a`** ve **`anchor_b`**.
+Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrator`). Sahnede iki sanal işaretçi vardır: **`anchor_a`** ve **`anchor_b`** — **yerleri boyut dosyasından gelir**, sahneden değil. Yani zemin bandının nereye çekileceği de bir ölçüdür ve alanın köşeleriyle aynı dosyaya yazılır.
 
 > **Kalibrasyon 6 serbestlik derecesini de kurar:** yönü (yaw) ve yatay konumu A→B çiftinden, **zemin yüksekliğini B noktasında kumandanın ucundan** alır. Zemin yüksekliği gözlüğün kendi "floor level" bilgisinden ALINMAZ — başlıklarda alan kurulumu yapılmadığı için (§5) o değer bir tahmindir: gözlük havadayken açılırsa yanlış başlar, oturum içinde tracking kaybı sonrası kayabilir. Bu yüzden her kalibrasyon zemini de yeniden ölçer.
 
-- [ ] Unity'de arena sahnesini aç → `anchor_a` / `anchor_b` objelerinin Inspector'daki **Position** değerlerini oku ve aralarındaki mesafeyi hesapla. ⚠️ Objeler `VA_CalibrationManager`'ın altında DEĞİL, arena kökündeki **`Ground`** grubunun altındadır ve sahnede **kapalı** görünür (kalibrasyon sırasında açılır, hizalamadan birkaç saniye sonra yeniden gizlenirler — maç sürerken sahnede durmazlar) — hiyerarşide arama kutusuna `anchor_` yazmak en hızlısı. `VA_CalibrationManager` yalnız `ArenaCalibrator` bileşenini taşır ve iki objeye referans verir.
-  - `Default12x12` şablonunda işaretçiler arena-yerel X ekseninde **±3 m** (yani **aralarında 6 m**) ve arena merkezine göre simetriktir.
-  - `Template Temellerini Yükle` işaretçileri prefabtaki yerlerinde bırakır; **arena ölçüsüne göre taşımaz**. Yerleri arena boyutundan değil sahadaki zemin bandından geldiği için yerleştirme bilinçli olarak elle bırakılmıştır. **Varsayma, sahneden oku.**
-- [ ] İşaretçileri sahnede fiziksel alana uyacak şekilde **taşı** (odanın içinde, geçiş güzergâhının dışında kalsınlar) ve yeni mesafeyi not et; sahneyi kaydedip APK'yı yeniden al. Yeni kurulan bir arenada bu adım **zorunludur** — işaretçiler prefabtan olduğu gibi gelir.
-- [ ] Zemine iki bant işareti yapıştır: **A** ve **B**. Aralarındaki mesafe sahneden okuduğun değere eşit olmalı; bandın üzerine büyük harfle "A" ve "B" yaz. ⚠️ Ölçü **±%20 tolerans** içinde olmalı — dışındaysa başlık kalibrasyonu reddeder (üç kısa titreşim), çünkü yanlış mesafe sessizce bozuk bir hizalama üretirdi.
-- [ ] **A → B doğrultusu arenanın yönünü belirler.** A ve B karıştırılırsa arena 180° ters döner — işaretleri kalıcı ve okunur biçimde etiketle.
+- [ ] **Noktaları boyut dosyasına yaz**, sahneye değil: `Venues/<İşletme>/Data/<İşletme>_dimensions.json` → `calibration` alanı.
+  ```json
+  "calibration": {
+    "a": { "x": 3.17, "y": 1.82 },
+    "b": { "x": 3.17, "y": 7.19 }
+  }
+  ```
+  Koordinatlar `plane` ile **aynı uzaydadır** (metre; JSON'daki `y` = zemindeki ileri eksen), yani alanın köşelerini nasıl ölçtüysen bantların yerini de öyle ölçersin. Dosya **mekan başınadır**: aynı odadaki tüm arenalar ve lobi aynı iki fiziksel işareti kullanır — ikinci bir yere yazma.
+  - Sahnedeki `anchor_a` / `anchor_b` objeleri **elle TAŞINMAZ**: `Template Temellerini Yükle` onları bu noktalara oturtur ve başlık da her açılışta aynısını yapar. Sahnede taşımanın kalıcı etkisi yoktur.
+  - Nokta seçerken **sabit bir referans** kullan (kolon köşesi, duvar dibi): bant bir gün kayarsa aynı yere geri konabilsin. Örnek: iki kolonun aynı hizadaki köşesinden 10 cm açıkta.
+  - **Aralarını olabildiğince aç.** İki nokta arasında en az **0,5 m** olmalı (altındaki çift yok sayılır), ama yön hatası mesafeyle ters orantılı büyür: 5 m'lik bir aralık 1 m'linin beş katı hassasiyet verir.
+- [ ] Zemine iki bant işareti yapıştır: **A** ve **B**, dosyaya yazdığın yerlere. Bandın üzerine büyük harfle "A" ve "B" yaz. ⚠️ Aralarındaki mesafe dosyadaki ölçüye **±%20 tolerans** içinde uymalı — dışındaysa başlık kalibrasyonu reddeder (üç kısa titreşim), çünkü yanlış mesafe sessizce bozuk bir hizalama üretirdi.
+- [ ] **A → B doğrultusu arenanın yönünü belirler ve sıra ZORUNLUDUR: önce A, sonra B.** Yazılım hangi noktanın önce alındığını geometriden çıkaramaz (iki nokta bunu söylemez, mesafe kontrolü de her iki sırada aynı sonucu verir) — tek güvence senin sıraya uymandır. Karıştırılırsa arena 180° ters döner ve mesafe kontrolü bunu **yakalamaz**. İşaretleri kalıcı ve okunur biçimde etiketle. Başlıktaki doğrulaman şu: **ilk yakalamada tek bir çapa belirir** ve o çapa A'nın üstünde durmalıdır — başka bir yerde beliriyorsa yanlış işaretten başlamışsındır, kombinasyonu bırak ve baştan al.
 - [ ] İşaretler kalıcı olmalı (bant + gerekiyorsa zemine dayanıklı işaret); temizlik/mobilya hareketiyle kaymamalı. **Her başlık aynı iki noktayı kullanır.**
-- [ ] Ölçüyü (A–B mesafesi, hangi duvara göre nerede) teslim paketine yaz.
+- [ ] Ölçüyü (A–B mesafesi, hangi duvara/kolona göre nerede) teslim paketine yaz.
+- [ ] Sahneyi kaydet ve APK'yı yeniden al — boyut dosyası çalışma anında okunuyor, yani `calibration` değişikliği yeni bir APK ister.
 
 **Başlıkta kalibrasyon prosedürü** (operatörün her başlıkta yapacağı):
 
@@ -108,7 +116,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 2. Sağ kumandada **A tuşunu basılı tutarken B tuşuna 1 saniye içinde iki kez bas** — **kısa titreşim (0,3 sn)** = A noktası alındı. Basılı tutma süresi yoktur; ucu zemine değdirdiğin anda kombinasyonu yap.
 3. Aynısını **B** işaretinde yap — **uzun titreşim (1 sn)** + iki çapa birden belirip **1 saniye sonra kaybolur** = B alındı ve arena hizalandı.
 4. Hata sinyalleri (ikisinde de ikinci çapa hiç belirmez):
-   - **Üç kısa titreşim** = iki nokta arasındaki mesafe sahnedeki `anchor_a`–`anchor_b` mesafesine uymuyor (±%20 dışında); bant ölçüsünü kontrol et, B'yi tekrar al.
+   - **Üç kısa titreşim** = iki nokta arasındaki mesafe boyut dosyasındaki `calibration.a`–`calibration.b` mesafesine uymuyor (±%20 dışında); bant ölçüsünü kontrol et, B'yi tekrar al.
    - **Tek titreşim (0,6 sn)** = iki noktanın ölçülen zemin yüksekliği 10 cm'den fazla ayrışıyor; kumanda dik tutulmamış (ya da zemin eğimli). Duruşu düzelt, B'yi tekrar al.
 5. Kalibrasyon başlıkta kaydedilir (uzamsal anchor) ve sonraki açılışta **otomatik geri yüklenir**. Yeniden kalibre etmek için kombinasyonu tekrarla — kalibrasyon sıfırdan başlar.
 

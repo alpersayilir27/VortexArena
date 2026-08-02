@@ -5,7 +5,7 @@ namespace VortexArena.Server.Core;
 
 /// <summary>config/maps.json'daki tek harita girdisi. Public ALAN — JsonUtil (IncludeFields)
 /// ile okunur; adlar Unity'deki MapDefinition SO alanlarıyla birebir aynıdır (export bu adlarla
-/// yazar: Tools &gt; VortexArena &gt; Export Server Config).
+/// yazar: Tools &gt; VortexArena &gt; Server &gt; Export Server Config).
 ///
 /// <para><b>Arena ÖLÇÜSÜ burada YOKTUR</b> ve eklenmemelidir: sunucu metre bilmez (pozlar
 /// istemci-otoriter, arena uzayında gelir) ve her işletmenin alanı farklı — çoğu kare/dikdörtgen
@@ -33,7 +33,7 @@ public sealed class MapTableFile
 }
 
 /// <summary>Harita kataloğu (§10.1 start_match doğrulaması). İçerik
-/// projesinden gelir: Unity <c>Tools &gt; VortexArena &gt; Export Server Config</c> menüsü
+/// projesinden gelir: Unity <c>Tools &gt; VortexArena &gt; Server &gt; Export Server Config</c> menüsü
 /// MapDefinition SO'larından üretir — dosya ELLE DÜZENLENMEZ (export ezer).
 ///
 /// <para>Dosya yoksa varsayılan ÜRETİLMEZ ve dosya YAZILMAZ — sunucunun uyduracağı bir harita
@@ -131,7 +131,7 @@ public sealed class MapTable
         {
             if (!File.Exists(path))
             {
-                Console.WriteLine($"[MapTable] {path} yok — harita doğrulaması atlanıyor (Unity: Tools > VortexArena > Export Server Config).");
+                Console.WriteLine($"[MapTable] {path} yok — harita doğrulaması atlanıyor (Unity: Tools > VortexArena > Server > Export Server Config).");
                 return new MapTable(Array.Empty<MapEntry>());
             }
 

@@ -73,7 +73,7 @@ public sealed class VenueCatalog
         if (mapsPath == null)
         {
             return new VenueCatalog([], null,
-                "config\\maps.json bulunamadı. Unity'de Tools > VortexArena > Export Server Config " +
+                "config\\maps.json bulunamadı. Unity'de Tools > VortexArena > Server > Export Server Config " +
                 "çalıştırıp sunucuyu yeniden dağıtın.");
         }
 

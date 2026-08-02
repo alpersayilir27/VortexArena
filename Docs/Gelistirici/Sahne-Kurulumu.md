@@ -6,11 +6,11 @@ title: Sahne Kurulumu
 
 Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 
-> **En kolay yol araç:** `Tools > VortexArena > Template Temellerini Yükle` bu listeyi boş bir
+> **En kolay yol araç:** `Tools > VortexArena > Arena > Template Temellerini Yükle` bu listeyi boş bir
 > sahneye prefab örneği olarak koyar (idempotent — var olanı atlar). Bu sayfa "aracın koyduğu şey
 > ne işe yarıyor" ve "elle bir sahne düzeltiyorum" durumları içindir.
-> Ölçü maketi ayrı bir adımdır ve **bu araçtan SONRA** gelir
-> (`… > JSON'dan DimensionMesh Üret`): maket `ArenaBoundary`'nin altına kuruluyor.
+> Ölçü maketi (`… > Arena > JSON'dan DimensionMesh Üret`) ayrı ve **sırasız** bir adımdır:
+> sahneden bağımsız, dünya orijininde ve dönüşsüz kurulur.
 
 ---
 
@@ -20,9 +20,9 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 |---|---|---|---|
 | **`VA_CameraRig`** | Sahne kökü, **prefab örneği** (`_Shared/App/Prefabs/`) | Kamera/kumanda rig'i + etkileşim rig'i (`OVRComprehensiveInteractionRig`) tek pakette. ⚠️ Yerel gövde avatarı burada DEĞİLDİR: `LocalBodyAvatar` kendini önyükleyen tekildir ve sahne köküne kurulur (rig'in altına konsa rig transformu iki kez uygulanırdı) | Oyuncu hiçbir şey görmez |
 | **`ArenaBoundary`** | Alana hizalı bir obje (plan koordinatları onun yerel XZ'si) — **`VA_ArenaRoot`** prefabıyla gelir | Sınır uyarısını sürer: kenara yaklaşınca HMD'ye bağlı karartma quad'ı hafifçe koyulaşır, dışarı çıkınca tam kararma + uyarı. Ölçüyü **bağlı boyut dosyasından** okur (admin kuş bakışı kadrajı da oradan gelir). `dimensionsJson` = mekanın boyut dosyası — **ZORUNLU**, bileşende ölçü tutan başka alan yoktur. ⚠️ Yarı saydam duvar göstergesi KALDIRILDI (`wallRenderers` yok): arenanın duvarları environment sanatına aittir | Boyut dosyası bağlı değilse muhafaza konsola hata basıp **kendini kapatır**: alan-dışı uyarısı hiç çıkmaz, admin kuş bakışı kadrajsız kalır |
-| **Boyut dosyası** (`ArenaDimensions` JSON) | **Mekan** kutusunun `Data/` klasöründe (`<İşletme>_dimensions.json`); `ArenaBoundary.dimensionsJson` alanına bağlı | **Ölçünün tek kaynağı:** `plane` (tabanın sıralı köşeleri) + `columns` (her biri kendi köşe halkası). Alan tam kare olsa bile dört köşe yazılır — "dikdörtgen kipi" YOKTUR; içbükey alan da tek halkadır, birleştirme yoktur. Aynı dosya ölçü maketini üretir, muhafazayı besler ve kuş bakışı kadrajını verir. **Mekanın tüm sahneleri aynı dosyayı gösterir** | Muhafaza tümden kapanır (üstteki satır). ⚠️ Dosyayı yazıp alana bağlamamak onu **build'in dışında** da bırakır |
-| **Ölçü maketi** (`<Mekan>_DimensionMesh`) | `ArenaBoundary`'nin altında, yerel dönüşümü sıfır — `… > JSON'dan DimensionMesh Üret` koyar | Fiziksel alanın sahnedeki referansı (taban + kolonlar). Arena sanatı bunun üstüne kurulur. ⚠️ Kökü `EditorOnly` etiketlidir, **build'e girmez**; duvar üretmez | Sanatı neye göre yerleştireceğini bilemezsin. Yanlış ebeveyn altındaysa koordinatları ölçü uzayıyla hizalı olmaz |
-| **`ArenaCalibrator`** | Sahne kökü — **`VA_CalibrationManager`** prefabıyla gelir | Zemindeki A–B işaretleriyle fiziksel hizalama | Sanal arena fiziksel odayla örtüşmez |
+| **Boyut dosyası** (`ArenaDimensions` JSON) | **Mekan** kutusunun `Data/` klasöründe (`<İşletme>_dimensions.json`); `ArenaBoundary.dimensionsJson` alanına bağlı | **Ölçünün tek kaynağı:** `plane` (tabanın sıralı köşeleri) + `columns` (her biri kendi köşe halkası) + `calibration` (zemin bandının A/B noktaları). Alan tam kare olsa bile dört köşe yazılır — "dikdörtgen kipi" YOKTUR; içbükey alan da tek halkadır, birleştirme yoktur. Aynı dosya ölçü maketini üretir, muhafazayı besler, kuş bakışı kadrajını verir ve kalibrasyon işaretçilerini yerleştirir. **Mekanın tüm sahneleri aynı dosyayı gösterir** | Muhafaza tümden kapanır (üstteki satır). ⚠️ Dosyayı yazıp alana bağlamamak onu **build'in dışında** da bırakır |
+| **Ölçü maketi** (`<Mekan>_DimensionMesh`) | **Sahne kökü**, dünya orijininde ve dönüşsüz — `… > Arena > JSON'dan DimensionMesh Üret` koyar | Fiziksel alanın sahnedeki referansı (taban + kolonlar + `anchor_a`/`anchor_b` küpleri). Arena sanatı bunun üstüne kurulur; istersen maketi elle taşı/döndür (geri okuma kendi kökünü referans alır, ⚠️ **ölçeğini değiştirme**). ⚠️ Kökü `EditorOnly` etiketlidir, **build'e girmez**; duvar üretmez | Sanatı neye göre yerleştireceğini bilemezsin |
+| **`ArenaCalibrator`** | Sahne kökü — **`VA_CalibrationManager`** prefabıyla gelir | Zemindeki A–B işaretleriyle fiziksel hizalama; sahnedeki `anchor_a`/`anchor_b` işaretçilerini `Start`'ta boyut dosyasındaki noktalara oturtur | Sanal arena fiziksel odayla örtüşmez |
 | **`BaseZone` × 2** | Karşı kenarlarda (Red / Blue) | **Taban bölgesi** — kırmızı/mavi şerit, canlanma kapısı | TDM'de kimse canlanamaz |
 | **`SpawnPoint` × 1** | Arena uzayının sıfırı olacak yerde, **zemin seviyesinde** | **Arena orijini** — ağa giden/gelen tüm pozlar buna göre çevrilir; ayrıca maç öncesi yerleşim göstergesidir | Tüm uzak oyuncular dünya orijinine yığılır (konsola `ArenaSpace` uyarısı düşer) |
 | **`PlayerPoseTracker`** | Sahne kökü — **`VA_PoseSync`** prefabıyla gelir | Kafa + iki eli 20 Hz gönderir | Kimse seni göremez |
@@ -39,6 +39,9 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 > `VA_CalibrationManager`'ın `anchorA` / `anchorB` / `rigRoot` alanları sahneye bakar, bu yüzden
 > **örnek üstünde** (prefab override) doldurulur: sırasıyla `anchor_a`, `anchor_b` ve sahnedeki
 > `VA_CameraRig`. Prefab asset'inde üçü de boştur — normaldir, hata değil.
+> `anchorA`/`anchorB` boş bırakılabilir: kalibratör onları sahnede **adlarından** çözer
+> (`anchor_a` / `anchor_b`). Yerleri ise sahneden değil boyut dosyasından gelir — işaretçiyi elle
+> taşımanın kalıcı etkisi yoktur, ölçü `calibration` alanına yazılır.
 
 > ⚠️ **Silahı sahneye koyan bir bileşen YOKTUR ve yazılmayacak** — yerleşim arena kararıdır,
 > harita tasarlanırken elle yapılır. Silah `WPN_*` prefabının **ÖRNEĞİ** olarak konur
@@ -86,7 +89,7 @@ Sahne dosyası tek başına yetmez — üç kayıt daha gerekir:
    `supportedModeIds`. Arena ölçüsü burada değil, arenanın **boyut dosyasındadır**.
 2. **`GameCatalog.asset`** → `maps[]` listesine ekle.
 3. **Build Settings** → sahneyi ekle ve **enabled** bırak.
-4. **`Tools > VortexArena > Export Server Config`** → `Server/config/maps.json` tazelenir
+4. **`Tools > VortexArena > Server > Export Server Config`** → `Server/config/maps.json` tazelenir
    (dosyaya `sceneName` + `modes` yazılır; arena ölçüsü sunucuya gitmez).
 
 > ⚠️ **Sahne adı = katalog anahtarıdır.** `load_match` bu string'i taşır; Build Settings'teki adla
@@ -136,4 +139,5 @@ Gerçek testte üç şeye bak:
   takımıyla eşleşmiyor ya da **bileşeni kapalı** demektir (kapalı bölge açık sayılmaz).
 - **Harita değişince kalibrasyon duruyor mu?** Yeni arenada oyuncu fiziksel olarak nerede duruyorsa
   orada kalmalı. Kalmıyorsa kayıtlı `OVRSpatialAnchor` geri yüklenememiştir — konsolda
-  `ArenaCalibrator` uyarısını ara.
+  `ArenaCalibrator` uyarısını ara. Aynı yerde "boyut dosyasında kalibrasyon noktası yok" uyarısı
+  varsa `calibration` alanı boştur ve işaretçiler prefabtaki yerlerinde kalmıştır.

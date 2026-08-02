@@ -998,7 +998,7 @@ namespace VortexArena.Core.Combat
             missingNetItemIdWarned = true;
             Debug.LogWarning($"[Weapon] '{weapon.name}' tanımında netItemId yok (0); elde tutulan " +
                              "eşya AĞA BİLDİRİLMEZ ve uzak oyuncularda çizilmez. Tanıma 1-255 " +
-                             "arası kararlı bir kimlik ver (Tools > VortexArena > Validate Net Item Ids).",
+                             "arası kararlı bir kimlik ver (Tools > VortexArena > Weapons > Rebuild Net Item Catalog).",
                 weapon);
         }
 
