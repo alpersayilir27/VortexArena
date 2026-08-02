@@ -57,7 +57,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1c7490561178280499e244c777d8310b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Weapon
-  definition: {fileID: 11400000, guid: 3e86e22f37503ba4fafb3d09d30dffb2, type: 2}
+  definition: {fileID: 11400000, guid: d42e84326e961f542ba86d57e9a71d20, type: 2}
   muzzle: {fileID: 3425318394238971393}
   modelPivot: {fileID: 617575467654120835}
   grabbable: {fileID: 7605697035487337113}

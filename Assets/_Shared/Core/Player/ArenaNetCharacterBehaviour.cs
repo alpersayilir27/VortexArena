@@ -61,6 +61,15 @@ namespace VortexArena.Core.Player
         /// <inheritdoc cref="INetworkCharacterBehaviour.HasInputAuthority"/>
         public bool HasInputAuthority { get; private set; }
 
+        /// <summary>
+        /// Sensör kaynağı gerçekten koşuyor mu.
+        /// <para>⚠️ <see cref="Initialize"/>'ın onu açmış olması YETMEZ: <c>OVRBody.OnEnable</c>
+        /// body tracking'i başlatamazsa <b>kendini kapatır</b> ve bir daha denemez. Bu, gövdenin
+        /// sessizce hiç çizilmemesi demektir — çağıran tarafın kurulumdan hemen sonra bunu
+        /// okuyup durumu bildirmesi beklenir.</para>
+        /// </summary>
+        public bool IsSourceProviderRunning => _sourceProvider != null && _sourceProvider.enabled;
+
         /// <inheritdoc cref="INetworkCharacterBehaviour.CharacterPrefab"/>
         /// <remarks>Karakteri SDK doğurmuyor (<c>Setup(instantiateCharacter: false)</c>) — bu alan
         /// yalnız arayüz sözleşmesini doldurur.</remarks>
@@ -125,6 +134,14 @@ namespace VortexArena.Core.Player
         /// çalışabilmesi bileşenin orada DURMASINA bağlı.
         /// <para>Uzak gövdede kapatılmasının sebebi: her uzak avatar açık bir <c>OVRBody</c> demek
         /// olurdu ve hepsi aynı (yerel) sensörü okurdu — hem israf hem yanlış.</para>
+        /// <para>
+        /// ⚠️ <b>Bileşen prefabda KAPALI gelir ve öyle kalmalı</b> — burada yalnız yerel gövdede
+        /// AÇILIR. Açık gelemez: <c>OnEnable</c> <c>Instantiate</c> anında, yani
+        /// <see cref="Initialize"/>'dan ÖNCE koşar; açık gelen bir sağlayıcı her uzak avatar
+        /// doğarken bir kez <c>OVRBody.StartBodyTracking</c> çağırır. Admin'de (HMD yok) bu her
+        /// spawn'da bir hata satırıdır, Quest'te ise oyuncunun kendi izlemesini uzak bir avatarın
+        /// yeniden başlatmasıdır. "Sonradan kapatmak" bu pencereyi kapatmaz.
+        /// </para>
         /// </summary>
         private Behaviour _sourceProvider;
 
@@ -140,6 +157,24 @@ namespace VortexArena.Core.Player
 
         private void Awake()
         {
+            ResolveReferences();
+        }
+
+        /// <summary>
+        /// Bileşen referanslarını çözer; idempotenttir.
+        /// <para>⚠️ <b><see cref="Awake"/>'ten AYRI olmak zorunda:</b> <see cref="Initialize"/>,
+        /// objesi henüz PASİF olan bir karakter üzerinde çağrılabilir (yerel gövde kurulana dek
+        /// gizli duruyor) ve <b>pasif objenin <c>Awake</c>'i hiç koşmaz</b> — o hâlde bütün alanlar
+        /// null kalır ve <c>Setup</c> bir <c>NullReferenceException</c> ile düşer. Sessiz sonucu
+        /// şudur: retargeter'ın sahipliği <c>None</c> kalır ve karakter T-pozunda donar.</para>
+        /// </summary>
+        private void ResolveReferences()
+        {
+            if (_handler != null)
+            {
+                return;
+            }
+
             _handler = GetComponent<NetworkCharacterHandler>();
 
             // Kök = SDK'nın 0. eklemi yazdığı transform, yani retargeter'ın kendi objesi.
@@ -181,6 +216,16 @@ namespace VortexArena.Core.Player
         /// </summary>
         public void Initialize(int playerId, bool hasInputAuthority)
         {
+            // Objesi pasifken çağrılmış olabilir → Awake koşmamış olabilir (bkz. ResolveReferences).
+            ResolveReferences();
+
+            if (_handler == null)
+            {
+                Debug.LogError("[ArenaNetCharacterBehaviour] NetworkCharacterHandler yok — karakter " +
+                               "sürülemez. Prefabdaki Character objesine kurulmalı.", this);
+                return;
+            }
+
             PlayerId = playerId;
             HasInputAuthority = hasInputAuthority;
 

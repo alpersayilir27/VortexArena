@@ -126,6 +126,7 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 | ✅ `StatusText` | `string` | Ölüm/canlanma metni; ⚠️ kendi metnini yazma |
 | ✅ `CanFire` | `bool` | |
 | ✅ `HpChanged` / `AliveChanged` / `StatusChanged` | olay | `float` / `bool` / `string` |
+| ✅ `LocalTeamChanged` | **statik** olay | `Team` — yalnız değer değişince. Statik olmasının sebebi: dinleyicileri kendini önyükleyen kalıcı tekiller ve `Instance`'tan önce doğabiliyorlar |
 
 > ⛔ Bu sınıf hasar uygulamaz, skor tutmaz, faz değiştirmez — ve **hiçbir koşulda rig'i taşımaz.**
 
