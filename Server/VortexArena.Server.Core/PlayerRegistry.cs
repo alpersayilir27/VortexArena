@@ -89,6 +89,20 @@ public sealed class PlayerRegistry : IDisposable
         return count;
     }
 
+    /// <summary>Çevrimiçi TÜM bağlantılar — rol ayırmadan (selection_state yayını için anlık
+    /// kopya). Admin'e özel olanlar için <see cref="OnlineAdminConnections"/>.</summary>
+    public List<ClientConnection> OnlineConnections()
+    {
+        var result = new List<ClientConnection>();
+        foreach (var state in _players.Values)
+        {
+            if (!state.Online) continue;
+            var connection = state.Connection;
+            if (connection != null) result.Add(connection);
+        }
+        return result;
+    }
+
     /// <summary>Çevrimiçi adminlerin bağlantıları (admin_state yayını için anlık kopya).</summary>
     public List<ClientConnection> OnlineAdminConnections()
     {

@@ -851,7 +851,30 @@ namespace VortexArena.Core.Editor
 
             for (int r = 0; r < renderers.Length; r++)
             {
-                Bounds wb = renderers[r].bounds;
+                Renderer renderer = renderers[r];
+
+                // ⚠️ KAPALI Renderer'ın `bounds`'u BAYATTIR — Unity onu güncellemez, en son
+                // çizildiği yerdeki DÜNYA kutusunu döndürür. Çerçeve (VA_WeaponFrame) prefabda
+                // varsayılan olarak kapalı durduğu için buraya metrelerce ötede bir kutu sızıyor
+                // ve ölçüyü tümden kaydırıyordu (kovan çıkışı silahın 2.5 m önünde doğuyordu).
+                if (!renderer.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                // Çerçeve silahın GÖVDESİ değil sunum kabıdır: açık olsa da ölçüye girmez,
+                // yoksa "silah ne kadar geniş" sorusunun cevabı çerçevenin boyu olurdu.
+                if (renderer.GetComponentInParent<WeaponFrame>(true) != null)
+                {
+                    continue;
+                }
+
+                Bounds wb = renderer.bounds;
+                if (wb.size.sqrMagnitude <= 0f)
+                {
+                    continue;
+                }
+
                 for (int c = 0; c < 8; c++)
                 {
                     var corner = new Vector3(
@@ -1204,21 +1227,29 @@ namespace VortexArena.Core.Editor
                 Warn(ctx + ": MuzzleFlash/ParticleSystem bulunamadı — namlu alevi/dumanı ayarlanamadı.");
             }
 
-            // ---- Kovan çıkış noktası: gövdenin yan tarafı, namludan geriye yakın.
-            Bounds bounds = ComputeLocalBounds(rootT, root, ctx);
+            // ---- Kovan çıkış noktası.
+            // ⚠️ MEVCUT `Eject` TAŞINMAZ — Muzzle/MuzzleFlash ile aynı kural: yeri elle ayarlanır,
+            // araç yalnız bağlar. Burada bir kez hesaplanıp her koşuda yeniden yazılıyordu ve
+            // hesap silahın alt ağacındaki her Renderer'a bakıyordu; prefabdaki KAPALI çerçeve
+            // (VA_WeaponFrame) bayat dünya bounds'u döndürdüğü için ölçü kayıyor, elle yapılan
+            // ayar sessizce siliniyordu (Docs/Sistem-Ozeti.md §7).
             Transform ejectT = rootT.Find("Eject");
             if (ejectT == null)
             {
+                // Yalnız İLK kurulumda kaba bir başlangıç noktası verilir (yoksa silahın
+                // orijininde doğardı); sonrası elle ayarlanır ve bir daha dokunulmaz.
+                Bounds bounds = ComputeLocalBounds(rootT, root, ctx);
                 var ejectGo = new GameObject("Eject");
                 ejectT = ejectGo.transform;
                 ejectT.SetParent(rootT, false);
+                ejectT.localPosition = new Vector3(
+                    bounds.extents.x * 0.9f,
+                    bounds.center.y + bounds.extents.y * 0.25f,
+                    bounds.center.z - bounds.extents.z * 0.2f);
+                ejectT.localRotation = Quaternion.identity;
+                Warn(ctx + ": 'Eject' yoktu, kaba bir başlangıç noktasıyla üretildi — " +
+                     "kovan çıkışını sahnede gözle ayarla, araç bir daha taşımaz.");
             }
-
-            ejectT.localPosition = new Vector3(
-                bounds.extents.x * 0.9f,
-                bounds.center.y + bounds.extents.y * 0.25f,
-                bounds.center.z - bounds.extents.z * 0.2f);
-            ejectT.localRotation = Quaternion.identity;
 
             Component shellEjector = EnsureComponentByTypeName(root, "ShellEjector", ctx);
             GameObject casingForSpec = spec.CasingFamily == "762x39" ? casing762 : casing556;

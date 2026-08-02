@@ -81,6 +81,7 @@ Statik olmalarının sebebi: dinleyicinin bağlantının ne zaman kurulduğunu b
 | ✅ `OnShotFired` | `ShotFiredMsg` | **Başkası** ateş etti (atana gönderilmez). Pozlar arena uzayında |
 | ✅ `OnIdentify` | `IdentifyMsg` | Admin "bu cihazı tanıt" dedi |
 | ✅ `OnKicked` | `KickedMsg` | Bağlantıdan atıldık |
+| ⛔ `OnRulesUpdate` | `RulesUpdateMsg` | Koşan maçın kural şekli değişti (bugün: operatör dost ateşini çevirdi). **Sen dinleme** — `ModeRuntimePump` uygular, sen `ModeRuntime`'dan okursun |
 | ⛔ `OnAdminState` | `AdminStateMsg` | Yalnız admin arayüzü içindir |
 
 > ⚠️ **`OnDisable`'da abonelikten çık.** Statik olay, ölü nesneyi tutar → `MissingReferenceException`.
@@ -140,9 +141,9 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 | ✅ `Teams` | `ModeTeamMode` | `TwoTeams` \| `None` |
 | ✅ `IsTeamless` | `bool` | `Teams == None` kısayolu |
 | ✅ `Scoring` | `ModeScoreKind` | `Team` \| `Player` |
-| ✅ `FriendlyFire` | `bool` | |
+| ✅ `FriendlyFire` | `bool` | ⚠️ Modun değil **operatörün** anahtarı: maç ORTASINDA değişebilir (`rules_update`), `Changed`'i dinle |
 | ✅ `Revive` | `ModeReviveAnchor` | `OwnBase` \| `StandStill` |
-| ✅ `Weapons` | `ModeWeaponSource` | `Rack` \| `RandomGrant` |
+| ✅ `Weapons` | `ModeWeaponSource` | `WeaponCanvas` (sahnede elle konmuş silah, çerçeveden seçilir, tükenmez) \| `RandomGrant` (mod dağıtır) |
 | ✅ `RespawnDelay` | `float` | ⚠️ **`0` geçerlidir** (anında canlanma) |
 | ✅ `Changed` | olay | Kurallar değişti |
 | ⛔ `Apply` / `ApplyFromCatalog` / `Reset` | | Besleme sistemin işi |
@@ -334,7 +335,7 @@ kill-feed, kendi öldürme/ölüm sayacın.
 |---|---|---|
 | `PLAYER_MAX_HP` | `100` | Tam can |
 | `COUNTDOWN_SECONDS` | `5` | Maç öncesi geri sayım |
-| `MATCH_END_SECONDS` | `10` | Maç sonu ekranı süresi |
+| `MATCH_END_SECONDS` | `999` | Maç sonu ekranının **emniyet** süresi — kazanan ekranını normalde operatörün seçimi kapatır |
 | `RESPAWN_DELAY` | `5` | Varsayılan canlanma gecikmesi (mod ezebilir) |
 | `REVIVE_HOLD_SECONDS` | `3` | "Sabit dur" canlanmasında bekleme |
 | `REVIVE_HOLD_RADIUS` | `1` | Sabit durma toleransı (m) |

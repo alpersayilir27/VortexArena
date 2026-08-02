@@ -25,6 +25,7 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 | **`PlayerPoseTracker`** | Sahne kökü — **`VA_PoseSync`** prefabıyla gelir | Kafa + iki eli 20 Hz gönderir | Kimse seni göremez |
 | **`RemotePlayerSpawner`** | Sahne kökü — aynı **`VA_PoseSync`** prefabında | Uzak oyuncu avatarlarını üretir | Sen kimseyi göremezsin |
 | **`ModeHudSpawner`** | Sahne kökü — **`VA_ModeHud`** prefabıyla gelir | Aktif modun HUD prefabını örnekler | HUD çizilmez |
+| **Silahlar** (`WPN_*` prefab örnekleri) | Arenada tasarımın uygun gördüğü yerlerde | `weaponSource:"weaponcanvas"` modlarında (TDM · turnuva) oyuncunun silah aldığı yer. Silah ≤2 m'den seçilir, **klonu** ele gelir ve **tükenmez** | Oyuncunun eline hiç silah gelmez (hata basılmaz — silahsız arena geçerli bir sahnedir) |
 
 > ⚠️ **Yukarıdaki prefablar (`VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, `VA_ModeHud`)
 > sahneye ÖRNEK olarak konur** — başka bir sahneden kopyalanmaz, unpack edilmez. Kopya konursa
@@ -35,6 +36,14 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 > `VA_CalibrationManager`'ın `anchorA` / `anchorB` / `rigRoot` alanları sahneye bakar, bu yüzden
 > **örnek üstünde** (prefab override) doldurulur: sırasıyla `anchor_a`, `anchor_b` ve sahnedeki
 > `VA_CameraRig`. Prefab asset'inde üçü de boştur — normaldir, hata değil.
+
+> ⚠️ **Silahı sahneye koyan bir bileşen YOKTUR ve yazılmayacak** — yerleşim arena kararıdır,
+> harita tasarlanırken elle yapılır. Silah `WPN_*` prefabının **ÖRNEĞİ** olarak konur
+> (kopyalanmaz, unpack edilmez); örnekleri bir `WeaponCanvas` prefabında toplayıp onu her sahneye
+> `BaseZone` gibi tek örnek olarak koymak yerleşimi tek yerden düzeltilebilir kılar.
+> ⚠️ Hangi silahın duracağını **arena** belirler, `ModeDefinition.loadout` değil — moda silah
+> eklemek arenaları değiştirmez. `loadout` yalnız `random` modlarında (FFA, lobi) okunur.
+> Çerçeve görselini örnek başına `WeaponFrame.isFrameVisible` ile aç/kapat.
 
 > `SpawnPoint` sihirbaz tarafından ÜRETİLMEZ — nereye konacağı tasarım kararıdır.
 > `GameObject > VortexArena > Spawn Point` ile ekle ve elle yerleştir. Arena başına **bir tane**;
@@ -57,7 +66,6 @@ veri üretir, ama duvarlar çizilmeye devam etmeli.
 
 | Bileşen | Ne zaman | Nasıl |
 |---|---|---|
-| **Silah rafı** | Arena raf kipinde (`weaponSource: rack`, ör. TDM) oynanacaksa | **ELLE kurulur** — şablonda (`Template/Default12x12`) raf yoktur. Raf kökünde `WeaponRackSpawner`, altında yalnız KONUM tutan `RackSlot` gözleri; hangi silahın duracağını mod belirler, sahneye `WPN_*` örneği koyulmaz. ⚠️ Raftaki silahlar da **çerçeve kaynağıdır**: yerinden alınmaz, ≤2 m'den seçilince oyuncunun eline klonlanır — raf bir sunum kararıdır, silahın alınma yolu her yerde aynıdır |
 | **`ArenaObstacle`** | Sahneye elle konmuş bir engel (kolon, kasa, direk) muhafaza uyarısına girecekse | Engel objesine ekle, `size` alanına zemindeki ölçüsünü yaz (X = genişlik, Y = derinlik). ⚠️ **Collider EKLEMEZ, fizik yapmaz** — tek işi `ArenaBoundary`'nin oyuncuyu engele yaklaşırken uyarmasıdır. Plandan üretilen kolonlara aracın kendisi ekler |
 | **`ArenaRoof`** | Arenanın çatısı varsa | Çatı hiyerarşisinin köküne: `GameObject > VortexArena > Arena Roof`. Admin kuş bakışına geçince çatı çizilmez (gölgesi kalır). Açık tavanlı arenada hiç yapılmaz → [Çatı Gizleme](../Cati-Gizleme.md) |
 | **`FX_SnowStorm`** | Kar/hava efekti isteniyorsa | `Arenas/Venues/Outdoor12x12/IceWorld/Prefabs/` altındaki prefabı arena orijinine (0,0,0) bırak. 12×12 değilse `Snow_A/B/E` shape scale'lerini arena boyutu + ~3 m payla ölçekle |
@@ -94,7 +102,9 @@ Lobi de bir arena kutusudur; yukarıdaki dört kayıt aynen geçerlidir. Üç fa
 
 - `supportedModeIds` **yalnız `["lobby"]`** — ⚠️ boş bırakılırsa "kısıtsız" sayılır ve lobide maç
   başlatılabilir hâle gelir.
-- Sahnede **`BaseZone` ve `ModeHudSpawner` YOK** (lobide ölüm ve maç HUD'u yok), **silah rafı VAR**.
+- Sahnede **`BaseZone` ve `ModeHudSpawner` YOK** (lobide ölüm ve maç HUD'u yok) ve **silah da
+  konmaz**: lobinin kaynağı `weaponSource:"random"`, yani serbest atış silahı grip'e basılınca
+  `ModeDefinition.loadout`'tan gelir (`WeaponGranter` kendini önyükler — sahnede iş yoktur).
 - Sunucuya `IGameMode` eklenmez: `lobby` başlatılabilir bir mod değil bir **profildir**
   (`ModeDefinition.lobbyProfile ✔`) — admin mod seçicisinde de görünmez.
 

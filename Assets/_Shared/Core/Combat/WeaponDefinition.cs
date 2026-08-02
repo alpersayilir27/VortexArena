@@ -164,7 +164,7 @@ namespace VortexArena.Core.Combat
         // Duruşun tek adı ItemDefinition.PrimaryGripPosition/PrimaryGripRotation'dır ve tek olmak
         // ZORUNDA: "verilen silahın duruşu" ile "uzak tarafta çizilen duruş" aynı ölçüdür, ikinci
         // bir ad kaçınılmaz olarak birinin güncellenip diğerinin unutulmasıyla sonuçlanırdı.
-        // Kavrama artık raf silahı ile verilen silah için tek kural (Weapon.ApplyCanonicalGrip).
+        // Kavrama artık sahne silahı ile verilen silah için tek kural (Weapon.ApplyCanonicalGrip).
 
         /// <summary>İki atış arası en kısa süre (saniye).</summary>
         public float SecondsPerShot => 60f / Mathf.Max(1f, fireRateRpm);

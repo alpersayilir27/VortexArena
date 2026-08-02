@@ -41,7 +41,7 @@ namespace VortexArena.App.Editor
         [NonSerialized] private string[] targetLabels = Array.Empty<string>();
 
         /// <summary>Sandbox mod seçicisinin kaynağı: <c>GameCatalog</c>'daki modId'ler. Lobi
-        /// profili de listelenir (admin seçicisinin aksine) — silah rafı denemek için meşru bir
+        /// profili de listelenir (admin seçicisinin aksine) — lobi silahlarını denemek için meşru bir
         /// sandbox seçimidir.</summary>
         [NonSerialized] private string[] modeIds = Array.Empty<string>();
 

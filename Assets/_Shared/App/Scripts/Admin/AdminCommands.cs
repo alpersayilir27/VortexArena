@@ -102,6 +102,18 @@ namespace VortexArena.App.Admin
             });
         }
 
+        /// <summary>
+        /// Dost ateşi anahtarı (§5.2 <c>set_friendly_fire</c>) — <b>seçim değil, anlık komuttur</b>:
+        /// koşan maçta da geçerlidir, bu yüzden <c>set_selection</c>'a binmez (o mesajın
+        /// "boş/0 = değiştirme" sözleşmesi bir <c>bool</c>'u ifade edemez) ve seçim kilidine takılmaz.
+        /// <para>Değer yerel bir alana YAZILMAZ: sunucu <c>admin_state</c> ile geri yayar, panel onu
+        /// gösterir (tek doğruluk kaynağı — iki operatör sapmaz).</para>
+        /// </summary>
+        public static void SetFriendlyFire(bool enabled)
+        {
+            Send(new SetFriendlyFireMsg { enabled = enabled });
+        }
+
         public static void AbortMatch()
         {
             if (Send(new AbortMatchMsg()))

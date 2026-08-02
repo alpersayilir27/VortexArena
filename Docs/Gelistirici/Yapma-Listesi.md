@@ -163,7 +163,8 @@ yanlış oyuncuya komut gönderir.
 
 Altına konmuş marker'lar (`SpawnPoint`) `OnDisable`'da statik kayıttan düşer.
 Gizlemen gerekiyorsa **bileşeni** kapat (`zone.enabled = false`) ve görsel şeridi ayrıca gizle
-(`SpawnPoint` taşımayan, Renderer'lı çocuklar).
+(`SpawnPoint` taşımayan, Renderer'lı çocuklar) — ama bunu **elle yazma**: kararın tek yeri
+`BaseZoneVisibility`'dir (kapı takım kipi; `WeaponGranter`'ın silah süpürmesiyle ilgisi yoktur).
 
 İkinci yüzü: **kapalı bir `BaseZone` canlanma için açık sayılmaz.** `Update` koşmadığı için
 `IsPlayerInside` donar — açık sayılsaydı oyuncu bölgeye girse de canlanamaz, yalnız sunucunun

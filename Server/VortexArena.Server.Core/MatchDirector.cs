@@ -153,8 +153,24 @@ public sealed class MatchDirector
     private IGameMode? _mode;
 
     /// <summary>Koşan maçın kural şekli (§10.5). Maç yokken TDM varsayılanıdır — bu sayede
-    /// lobide de anlamlı bir cevap vardır ve her okuyucunun null kontrolü yapması gerekmez.</summary>
+    /// lobide de anlamlı bir cevap vardır ve her okuyucunun null kontrolü yapması gerekmez.
+    /// <para>⚠️ TEK yazarı <see cref="ApplyRulesLocked"/>'dır: dost ateşi anahtarı modun kuralını
+    /// ezdiği için her atama o kapıdan geçmek zorunda.</para></summary>
     private ModeRules _rules = ModeRules.TeamDefault;
+
+    /// <summary>
+    /// Dost ateşi anahtarı (§5.2) — <b>sunucu oturumu ayarı</b>, mod kuralı değil.
+    /// <para>
+    /// Açılışta <c>false</c>; yalnız <see cref="SetFriendlyFireAsync"/> değiştirir. Maç başlangıcı,
+    /// harita sahneleme ve lobiye dönüş bu değeri <b>sıfırlamaz</b> — operatörün ayarı sunucu
+    /// yeniden başlayana kadar yaşar (süre/limit seçimiyle aynı sözleşme).
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Modlar bu alanı bildirmez.</b> <see cref="ModeRules.FriendlyFire"/> yalnız telde "o an
+    /// geçerli değer"i taşır; iki yerden yazılsaydı "hangisi doğru" sorusunun iki cevabı olurdu.
+    /// </para>
+    /// </summary>
+    private bool _friendlyFire;
 
     /// <summary>Atış olayı relay kapısının (§6.5) kilitsiz okunabilir yayını — faz
     /// <see cref="Phase.Playing"/> VEYA <c>rules.fireWhilePaused</c>. TEK yazarı
@@ -202,9 +218,23 @@ public sealed class MatchDirector
         // (henüz hiç EnterLobbyLocked çalışmadan) doğru sahneyi/modId'yi/kuralı taşısın.
         _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
         _sceneName = _lobbyScene;
-        _rules = ModeRules.LobbyProfile;
+        ApplyRulesLocked(ModeRules.LobbyProfile);
         RefreshShotRelayLocked();
     }
+
+    /// <summary>
+    /// Kural şeklini yazan TEK kapı: modun/lobinin kuralına operatörün dost ateşi anahtarını
+    /// damgalar (§10.5).
+    /// <para>
+    /// ⚠️ İşlevsel olarak yük taşıyan tek çağrı <c>start_match</c>'inkidir — hasar yalnız
+    /// <see cref="Phase.Playing"/>'de işlenir ve oraya ancak oradan gelinir. Lobi profilini yazan
+    /// çağrıların da buradan geçmesi <c>welcome.match.rules</c> yalan söylemesin diyedir: anahtar
+    /// açıkken lobide bağlanan istemciye <c>friendlyFire:false</c> gitseydi, ileride bu alanı okuyan
+    /// ilk istemci özelliği sessizce yanlış çizerdi.
+    /// </para>
+    /// </summary>
+    private void ApplyRulesLocked(ModeRules baseRules) =>
+        _rules = baseRules with { FriendlyFire = _friendlyFire };
 
     /// <summary>
     /// Atış olayı (<c>0x03</c>/<c>0x04</c>, §6.4/6.5) relay edilir mi: faz <c>playing</c> <b>VEYA</b>
@@ -242,6 +272,22 @@ public sealed class MatchDirector
 
     /// <summary>Kayıtlı mod kimlikleri (açılış özeti / red mesajları için).</summary>
     public IReadOnlyCollection<string> ModeIds => _modes.Keys;
+
+    /// <summary>
+    /// Bir modun takım kipi — <c>selection_state.teamMode</c>'un kaynağı (§5.3). Kayıtlı olmayan
+    /// <paramref name="modeId"/> (lobi dahil, o bir <see cref="IGameMode"/> değildir) lobi
+    /// profiline düşer.
+    /// <para>⚠️ <b>Kural taşımaz</b>: bu kapıdan yalnız SUNUM için gereken tek alan geçer. Modun
+    /// tamamını yayınlamak, henüz başlamamış maçın kurallarını istemcide "aktif" gibi okunabilir
+    /// yapardı (§10.5 otoritesi <c>load_match.rules</c>'tur).</para>
+    /// </summary>
+    public TeamMode TeamModeOf(string modeId)
+    {
+        if (!string.IsNullOrEmpty(modeId) && _modes.TryGetValue(modeId, out var mode))
+            return mode.Rules.Teams;
+
+        return ModeRules.LobbyProfile.Teams;
+    }
 
     public Phase CurrentPhase
     {
@@ -694,7 +740,7 @@ public sealed class MatchDirector
                 Console.WriteLine($"[match] start_match: durum {PhaseWire(_phase)} — mevcut maç iptal edilip yenisi kuruluyor.");
 
             _mode = mode;
-            _rules = rules;
+            ApplyRulesLocked(rules);
             RefreshShotRelayLocked();
             _modeId = mode.ModeId;
             _sceneName = sceneName;
@@ -761,8 +807,11 @@ public sealed class MatchDirector
         // (players listesi PlayerState referansları tutuyor, SetTeam onları yerinde günceller).
         var blueCount = players.Count(p => p.Team == "blue");
         var teamInfo = teamless ? "takımsız" : $"kırmızı {players.Count - blueCount} / mavi {blueCount}";
+        // Dost ateşi satıra bilerek yazılır: anahtar oturum boyunca yaşadığı ve maç ortasında da
+        // değişebildiği için, hangi maçın hangi kuralla oynandığı sonradan yalnız buradan okunur.
         Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}', " +
                           $"{appliedRound} sn / limit {appliedLimit} / geri sayım {appliedCountdown} sn, " +
+                          $"dost ateşi {(FriendlyFire ? "AÇIK" : "kapalı")}, " +
                           $"{players.Count} oyuncu ({teamInfo}).");
         await FlushAsync(outbox);
     }
@@ -932,6 +981,47 @@ public sealed class MatchDirector
         }
     }
 
+    /// <summary>
+    /// <c>set_friendly_fire</c> (§5.2) — dost ateşi anahtarı. <b>Faz kapısı yoktur:</b> koşan maçta
+    /// da geçerlidir ve etkisi bir sonraki <c>hit_report</c>'ta görülür (hasar kapısı zaten
+    /// <c>_rules.FriendlyFire</c> okuyor, §10.3).
+    /// <para>
+    /// Değişimi tüm istemcilere <c>rules_update</c> ile duyurur: kurallar normalde
+    /// <c>welcome</c>/<c>load_match</c> ile geldiği için maç ORTASINDA değişen bir kuralı taşıyacak
+    /// başka kanal yok. Geç bağlanan yine <c>welcome.match.rules</c>'tan doğru değeri alır.
+    /// </para>
+    /// <para>Değer değişmediyse iş yapılmaz ve <c>false</c> döner (yayın da yok) — panel iyimser
+    /// davranıp aynı değeri tekrar yollayabilir.</para>
+    /// </summary>
+    public async Task<bool> SetFriendlyFireAsync(bool enabled)
+    {
+        var outbox = new List<Outgoing>();
+        lock (_gate)
+        {
+            if (_friendlyFire == enabled) return false;
+
+            _friendlyFire = enabled;
+            ApplyRulesLocked(_rules); // mevcut şekli koru, yalnız anahtarı yeniden damgala
+            QueueBroadcastLocked(outbox, JsonUtil.Serialize(new RulesUpdateMsg
+            {
+                modeId = _modeId,
+                rules = _rules.ToInfo()
+            }));
+
+            Console.WriteLine($"[match] dost ateşi {(enabled ? "AÇILDI" : "KAPATILDI")} " +
+                              $"(faz {PhaseWire(_phase)}).");
+        }
+
+        await FlushAsync(outbox);
+        return true;
+    }
+
+    /// <summary>Dost ateşi anahtarının o anki değeri (§5.2) — <c>admin_state</c> bunu yayar.</summary>
+    public bool FriendlyFire
+    {
+        get { lock (_gate) return _friendlyFire; }
+    }
+
     /// <summary>abort_match — her fazdan Lobby'ye (§10.1).</summary>
     public Task AbortMatchAsync() => BackToLobbyAsync("abort_match");
 
@@ -1018,7 +1108,7 @@ public sealed class MatchDirector
             // Tür ancak start_match ile değişir. Kural şekli de lobi profilinde kalır (serbest
             // atış); hasarı zaten faz kapatıyor.
             _modeId = ArenaProtocol.LOBBY_MODE_ID;
-            _rules = ModeRules.LobbyProfile;
+            ApplyRulesLocked(ModeRules.LobbyProfile);
             RefreshShotRelayLocked();
 
             // Sahneleme koşan maçı değil bekleyişi değiştirir: eğer `finished` iken sahnelendiyse
@@ -1063,6 +1153,7 @@ public sealed class MatchDirector
         IGameMode? mode;
         float appliedDamage;
         var killed = false;
+        var teamKill = false;
         string weaponId;
 
         lock (_gate)
@@ -1103,7 +1194,8 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, "hedef kalibresiz");
                 return;
             }
-            if (!_rules.FriendlyFire && AreTeammates(shooter, target))
+            teamKill = AreTeammates(shooter, target);
+            if (!_rules.FriendlyFire && teamKill)
             {
                 RejectHit(shooter, msg.targetPlayerId, "dost ateşi yok");
                 return;
@@ -1168,8 +1260,14 @@ public sealed class MatchDirector
         mode?.OnHitApplied(this, shooter.PlayerId, target.PlayerId, appliedDamage, killed);
         if (!killed) return;
 
-        mode?.OnKill(this, shooter.PlayerId, target.PlayerId, weaponId);
-        Console.WriteLine($"[match] öldürme: {shooter.Name} → {target.Name} ({weaponId}) — skor kırmızı {ScoreRed} : mavi {ScoreBlue}");
+        // ⚠️ TAKIMDAŞ ÖLDÜRME SKOR YAZMAZ (§10.2): dost ateşi açıkken kendi takımını eksilten bir
+        // vuruşun aynı takıma puan kazandırması saçmadır. Kapı modun İÇİNE değil çağrı yerine konur
+        // — skorun tek yazarı IGameMode olduğu için kural burada tek noktada durur ve her yeni mod
+        // ona kendiliğinden uyar. `kills`/`deaths` sayaçları ve kill feed satırı işlemeye devam
+        // eder: olay gerçekleşti, yalnız ödülü yok. Ceza (−1) bilinçli olarak YOK.
+        if (!teamKill) mode?.OnKill(this, shooter.PlayerId, target.PlayerId, weaponId);
+        Console.WriteLine($"[match] öldürme{(teamKill ? " (TAKIMDAŞ — skor yazılmadı)" : "")}: " +
+                          $"{shooter.Name} → {target.Name} ({weaponId}) — skor kırmızı {ScoreRed} : mavi {ScoreBlue}");
         // Maç sonu kontrolü tick döngüsünde (≤100 ms) yapılır; burada faz değiştirmiyoruz.
     }
 
@@ -1337,7 +1435,7 @@ public sealed class MatchDirector
         // Lobi TÜRÜ (§10.7): kural şekli varsayılandan yalnız serbest atışla ayrılır. Hasarı yine
         // faz kapatır (hit_report yalnız playing) — bu bayrak sadece namlu alevinin görünmesini
         // sağlar. modId de dolar, çünkü istemci silah loadout'unu/HUD'unu bu anahtarla çözüyor.
-        _rules = ModeRules.LobbyProfile;
+        ApplyRulesLocked(ModeRules.LobbyProfile);
         // ⚠️ SetPhaseLocked yukarıda çağrıldı, yani kapı burada _rules'ün ESKİ hâliyle hesaplanmış
         // durumda — kuralı değiştiren her yerin kendi tazelemesini yapması bu yüzden şart.
         RefreshShotRelayLocked();

@@ -49,7 +49,7 @@ namespace VortexArena.App
     /// kalibrasyon kapısı zaten "hiç bağlanılmadıysa açık"tır (`CalibrationState.IsCalibrated`)
     /// ve `ArenaCombat` kanal yokken sessiz no-op'tur, yani silahlar olduğu gibi çalışır. Kapalı
     /// kalan iki kapıyı tek çağrı açar: <see cref="ModeRuntime.Apply"/> ile `fireWhilePaused`
-    /// (faz `playing` olmadan tetik) ve `modeId` (loadout'un okunduğu yer — onsuz raf boş doğar).
+    /// (faz `playing` olmadan tetik) ve `modeId` (loadout'un okunduğu yer — onsuz elde silah belirmez).
     /// <b>Sunucudan gelmiş gibi mesaj üretilmez</b>, yalnız istemci kural durumu yazılır.</para>
     ///
     /// <para>⚠️ Sandbox <b>maç kuralı testi DEĞİLDİR</b>: takım/skor/canlanma alanları
@@ -291,10 +291,10 @@ namespace VortexArena.App
         /// <summary>
         /// Sunucusuz sandbox: kural durumunu YERELDE yazar, hiçbir yere bağlanmaz.
         /// <para>
-        /// Bir kare beklemek burada da şart: <c>WeaponRackSpawner.OnEnable</c> kendi
-        /// <c>Apply()</c>'ını çoktan koşmuş (modId boş olduğu için rafı boş bırakmış) olur;
-        /// <see cref="ModeRuntime.Apply"/> <c>Changed</c>'i tetikleyince raf ikinci kez —
-        /// bu sefer dolu — kurulur. Aynı olay <c>WeaponGranter</c>'ı da uyandırır.
+        /// Bir kare beklemek burada da şart: <c>WeaponGranter</c> kendini <c>AfterSceneLoad</c>
+        /// ile önyüklüyor ve o sırada <c>modeId</c> henüz boş (loadout okunamaz). Bir kare sonra
+        /// <see cref="ModeRuntime.Apply"/> <c>Changed</c>'i tetikleyince kural ikinci kez —
+        /// bu sefer mod bilinerek — uygulanır.
         /// </para>
         /// </summary>
         private void ApplySandboxRules()
@@ -304,7 +304,7 @@ namespace VortexArena.App
             {
                 Debug.LogWarning(
                     "[DevSession] Sandbox kipinde mod seçilmemiş — silah loadout'u moddan " +
-                    "okunduğu için raf boş kalır ve elde silah belirmez. Dev penceresinden " +
+                    "okunduğu için elde silah belirmez. Dev penceresinden " +
                     "bir mod seçin.");
                 return;
             }

@@ -13,10 +13,10 @@ public sealed class FfaMode : IGameMode
 {
     public string ModeId => "ffa";
 
-    /// <summary><c>FriendlyFire = false</c> bu modu KİLİTLEMEZ: dost ateşi kapısı boş takımı asla
-    /// takım arkadaşı saymaz (§10.3/4), FFA'da herkesin takımı <c>""</c> olduğu için kapı hiç
-    /// kapanmaz. <c>true</c> yazmak da aynı sonucu verirdi; <c>false</c> "bu modda dost kavramı
-    /// yok" niyetini doğru anlatır.
+    /// <summary>⚠️ <c>FriendlyFire</c> BURADA yazılmaz (§5.2): o bir mod kuralı değil, operatörün
+    /// sunucu oturumu ayarıdır ve <c>MatchDirector</c> her kural şekline onu kendisi damgalar.
+    /// FFA'da anahtarın görünür etkisi zaten yoktur: dost ateşi kapısı boş takımı asla takım
+    /// arkadaşı saymaz (§10.3/4) ve bu modda herkesin takımı <c>""</c>'tir, yani kapı hiç kapanmaz.
     /// <para><c>RespawnDelay = 0</c> bilinçlidir: bekleme süresi yerine <see cref="ReviveAnchor.StandStill"/>
     /// şartı işler (istemci <c>REVIVE_HOLD_SECONDS</c> boyunca sabit durmayı bekler), yani toplam
     /// bekleme yine ~3 sn'dir ama oyuncunun elindedir.</para></summary>
@@ -24,7 +24,6 @@ public sealed class FfaMode : IGameMode
     {
         Teams = TeamMode.None,
         Scoring = ScoreKind.Player,
-        FriendlyFire = false,
         Revive = ReviveAnchor.StandStill,
         Weapons = WeaponSource.RandomGrant,
         RespawnDelay = 0f

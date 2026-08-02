@@ -20,7 +20,7 @@ namespace VortexArena.Core.Combat
     /// <para>
     /// <b>Uzak avatarlarda soket ÇİZİLMEZ</b> ve bunun için bir şey yapmak gerekmiyor:
     /// <c>RemoteAvatar.SterilizeVisual</c> kopyadaki tüm MonoBehaviour'ları yok ediyor —
-    /// gösterge yalnız yerel oyuncunun elindeki/rafındaki eşyada yaşar.
+    /// gösterge yalnız yerel oyuncunun elindeki/sahnedeki eşyada yaşar.
     /// </para>
     /// <para>
     /// ⚠️ <b>Editördeki iki gizmo bilerek FARKLI renktedir:</b> sarı dolu küre
@@ -79,10 +79,10 @@ namespace VortexArena.Core.Combat
         };
 
         // Halka köşeleri TÜM örnekler için bir kez üretilir: kare başına dizi ayırmak Quest'te
-        // doğrudan GC dikeni demek (raftaki her silahta bir bileşen var).
+        // doğrudan GC dikeni demek (sahnedeki her silahta bir bileşen var).
         private static Vector3[] _ringPoints;
 
-        // Fail-open uyarısı OTURUM başına bir kez (örnek başına değil): raftaki her silahta bir
+        // Fail-open uyarısı OTURUM başına bir kez (örnek başına değil): sahnedeki her silahta bir
         // bileşen var, örnek başına olsaydı aynı teşhis satırı onlarca kez düşerdi.
         private static bool _warnedFailOpen;
 
@@ -90,7 +90,7 @@ namespace VortexArena.Core.Combat
                  "tanımı kazanır — ikinci bir doğruluk kaynağı olmasın.")]
         [SerializeField] private ItemDefinition definition;
 
-        /// <summary>Bir soketin görsel örneği; tembel üretilir (raftaki silahlar bedavaya durur).</summary>
+        /// <summary>Bir soketin görsel örneği; tembel üretilir (sahnedeki silahlar bedavaya durur).</summary>
         private sealed class SocketVisual
         {
             public Transform Root;

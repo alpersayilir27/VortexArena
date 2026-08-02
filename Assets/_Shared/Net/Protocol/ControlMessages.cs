@@ -219,6 +219,24 @@ namespace VortexArena.Protocol
         public int countdownSeconds;
     }
 
+    /// <summary>
+    /// Dost ateşi anahtarı (§5.2) — <b>sunucu oturumu ayarı</b>, maç parametresi değil.
+    /// <para>
+    /// ⚠️ <b>Faz kapısı yoktur:</b> koşan maçta da geçerlidir ve etkisi anlıktır (<c>set_team</c> ile
+    /// aynı gerekçe — sahadaki durumu operatör maçı iptal etmeden düzeltebilmeli). Sunucu açılışta
+    /// <c>false</c> başlar; değer maç bitiminde/harita değişiminde sıfırlanmaz, yalnız operatör
+    /// değiştirir.
+    /// </para>
+    /// <para>Neden <c>set_selection</c> alanı değil: o mesaj "boş/0 = değişme" sözleşmesiyle çalışır
+    /// ve bir <c>bool</c> "dokunulmadı"yı ifade edemez.</para>
+    /// </summary>
+    [Serializable]
+    public class SetFriendlyFireMsg
+    {
+        public string type = MessageTypes.SetFriendlyFire;
+        public bool enabled;
+    }
+
     // ---- Sunucu → İstemci ----
 
     /// <summary>
@@ -242,8 +260,10 @@ namespace VortexArena.Protocol
         /// <summary>"base" (kendi BaseZone'una gir) | "standstill" (sabit dur), §10.4.</summary>
         public string reviveAnchor = "base";
 
-        /// <summary>"rack" (sahnedeki raf) | "random" (mod dağıtır) — tümüyle istemci sunumu.</summary>
-        public string weaponSource = "rack";
+        /// <summary>"weaponcanvas" (sahnede duran silah) | "random" (mod dağıtır) — tümüyle istemci
+        /// sunumu. ⚠️ Eski adı <c>"rack"</c>'ti; okuyan taraf "random" değilse varsayılana düştüğü
+        /// için iki yazım da doğru davranışı verir (§10.5).</summary>
+        public string weaponSource = "weaponcanvas";
 
         /// <summary>respawn.delaySeconds; ArenaProtocol.RESPAWN_DELAY varsayılanı.</summary>
         public float respawnDelay = ArenaProtocol.RESPAWN_DELAY;
@@ -488,6 +508,11 @@ namespace VortexArena.Protocol
         /// <summary>Geri sayım uzunluğu (sn); 0 = hiç seçilmedi (COUNTDOWN_SECONDS).</summary>
         public int countdownSeconds;
 
+        /// <summary>Dost ateşi anahtarının O ANKİ değeri (§5.2). Seçim değil <b>yürürlükteki
+        /// durum</b>dur: koşan maçta da geçerlidir, bu yüzden diğer alanların "0 = seçilmedi"
+        /// sözleşmesine girmez.</summary>
+        public bool friendlyFire;
+
         public string notice;
         public int adminCount;
 
@@ -499,6 +524,54 @@ namespace VortexArena.Protocol
         /// kataloğunu BUNUNLA süzer</b>: katalog tüm projeyi tanır, oynatılabilir olan ise
         /// sunucunun o an açtığı mekandır. Boş gelirse (mekan ayrımı yok) süzme yapılmaz.</summary>
         public string[] venueScenes;
+    }
+
+    /// <summary>
+    /// Seçilen modun SUNUMA ait tek alanı (§5.3) — <b>herkese</b> gider, adminlere değil.
+    /// <para>
+    /// ⚠️ <b>Kural mesajı DEĞİLDİR:</b> <see cref="ModeRulesInfo"/> gibi <c>ModeRuntime</c>'a
+    /// uygulanmaz. Aktif kuralların kaynağı <c>load_match</c>/<c>welcome</c>/<c>return_to_lobby</c>
+    /// olarak kalır; bu mesaj yalnız "henüz başlamamış maçın şekli"ni anlatır ve tek tüketicisi
+    /// <c>BaseZoneVisibility</c>'dir (taban şeritleri görünsün mü — §10.7).
+    /// </para>
+    /// <para>Eski sunucu bu mesajı hiç yollamaz; istemci o zaman aktif kuralın takım kipine düşer,
+    /// bu yüzden <c>PROTOCOL_VERSION</c> artmadı.</para>
+    /// </summary>
+    /// <summary>
+    /// Koşan maçın kural şekli DEĞİŞTİ (§5.3) — <b>herkese</b> yayınlanır.
+    /// <para>
+    /// Bugün tek tetikleyicisi dost ateşi anahtarıdır (<see cref="SetFriendlyFireMsg"/>): kurallar
+    /// normalde <c>welcome</c>/<c>load_match</c> ile geldiği için maç ORTASINDA değişen bir kuralı
+    /// taşıyacak kanal yoktu. Bu mesaj o farkı taşır; geç bağlanan istemci doğru değeri yine
+    /// <c>welcome.match.rules</c>'tan alır (sunucu <c>_rules</c>'ü güncel tutuyor).
+    /// </para>
+    /// <para>⚠️ <c>SelectionStateMsg</c>'in aksine bu <b>gerçek bir kural mesajıdır</b> ve
+    /// <c>ModeRuntime</c>'a uygulanır. Eski sunucu hiç yollamaz, eski istemci tanımadığı tipi yok
+    /// sayar → <c>PROTOCOL_VERSION</c> artmadı.</para>
+    /// </summary>
+    [Serializable]
+    public class RulesUpdateMsg
+    {
+        public string type = MessageTypes.RulesUpdate;
+
+        /// <summary>O an geçerli tür (<c>match_state.modeId</c> ile aynı) — <c>ModeRuntime</c> kuralı
+        /// modla birlikte sakladığı için mesaj ikisini birden taşır.</summary>
+        public string modeId;
+
+        public ModeRulesInfo rules;
+    }
+
+    [Serializable]
+    public class SelectionStateMsg
+    {
+        public string type = MessageTypes.SelectionState;
+
+        /// <summary>Ortak seçim (<c>admin_state.modeId</c> ile aynı değer; açılışta "lobby").
+        /// Maç türünü DEĞİŞTİRMEZ — o `start_match`'i bekler.</summary>
+        public string modeId;
+
+        /// <summary>"two" | "none" — seçili modun takım kipi (§10.5). Tanınmayan modda "two".</summary>
+        public string teamMode;
     }
 
     /// <summary>Tek oyuncunun ağ telemetrisi (<see cref="NetStatsMsg"/> girdisi). Değerler
