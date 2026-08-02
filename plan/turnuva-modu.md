@@ -73,7 +73,7 @@ Aynı ölü GUID **dört modun da** `loadout`'unda, `WeaponCatalog`'da ve `NetIt
 
 ⚠️ **Elle GUID yazarak düzeltilmez** — silah kimliği bu projede bilinçli olarak elle eşlendi
 (CLAUDE.md, "bir satırın `PackPrefab`'ı ve `NetItemId`'si o satırdan AYRILMAZ"). Doğru yol
-`Tools > VortexArena > Build Weapon Prefabs`: `WD_*` asset'lerini üretir, `WPN_*` prefablarını
+`Tools > VortexArena > Weapons > Build Weapon Prefabs`: `WD_*` asset'lerini üretir, `WPN_*` prefablarını
 yerinde tazeler ve iki kataloğu yeniden yazar. Sonrasında dört `ModeDefinition`'ın `loadout`'una
 `WD_M4A1` elden eklenir (araç loadout'a dokunmaz).
 

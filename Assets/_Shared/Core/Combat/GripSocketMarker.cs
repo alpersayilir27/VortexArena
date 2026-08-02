@@ -6,7 +6,7 @@ namespace VortexArena.Core.Combat
     /// Sahne işaretçisi: bir kavrama soketinin <b>yerini, dönüşünü ve yarıçapını sürükleyerek</b>
     /// ayarlamak için. Silahın altına konur (<c>GameObject &gt; VortexArena &gt; Grip Socket
     /// (Primary/Secondary)</c>), kabzaya taşınır, el gibi döndürülür; sonra
-    /// <c>Tools &gt; VortexArena &gt; Write Grip Sockets To Definition</c> ile
+    /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Write Grip Sockets To Definition</c> ile
     /// <see cref="ItemDefinition"/>'a yazılır.
     /// <para>
     /// ⚠️ <b>ÇALIŞMA ANI DAVRANIŞI YOKTUR</b> — ne <c>Awake</c>, ne <c>Update</c>, hiçbir şey. Bu

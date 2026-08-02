@@ -38,7 +38,7 @@ yönetmeye çalışır. Launcher bu yolu hiç bırakmaz: mekan seçilmeden **Sun
 
 Mekan listesi launcher'a gömülü değildir — sunucu exe'sinin yanındaki `config\maps.json`'dan
 okunur (exe klasöründen başlayıp yukarı 6 seviye aranır). Yeni işletme eklendiğinde Unity'de
-`Tools > VortexArena > Export Server Config` çalıştırmak yeter, launcher'da yapılacak iş yoktur.
+`Tools > VortexArena > Server > Export Server Config` çalıştırmak yeter, launcher'da yapılacak iş yoktur.
 Lobisi olmayan bir mekan listede **kırmızı** görünür ve başlatılmaz: sunucu o mekanda açık sahne
 çözemeyip çıkış kodu 2 ile kapanırdı.
 

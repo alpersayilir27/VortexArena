@@ -10,7 +10,7 @@ using VortexArena.Core.Arena;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Configure All Build Elements</c> — açık sahneyi oynanabilir
+    /// <c>Tools &gt; VortexArena &gt; Build &gt; Configure All Build Elements</c> — açık sahneyi oynanabilir
     /// hâle getiren <b>tüm kayıt işini tek geçişte</b> yapar: <c>MapDefinition</c> yazar,
     /// <c>GameCatalog</c>'a ve uyumlu <c>ModeDefinition.maps</c> listelerine ekler, Build
     /// Settings'e koyar ve <c>Server/config/maps.json</c>'u export eder.
@@ -39,7 +39,7 @@ namespace VortexArena.Core.Editor
         [NonSerialized] private List<string> lastReport;
         private Vector2 scroll;
 
-        [MenuItem("Tools/VortexArena/Configure All Build Elements")]
+        [MenuItem("Tools/VortexArena/Build/Configure All Build Elements", false, 40)]
         private static void Open()
         {
             var window = GetWindow<BuildElementsConfigurator>(true, "Build Öğelerini Yapılandır", true);
@@ -357,11 +357,9 @@ namespace VortexArena.Core.Editor
                     report.Add($"SAĞLIK: '{maquette.name}' maketi 'EditorOnly' ETİKETLİ DEĞİL — build'e girer.");
                 }
 
-                if (boundary != null && maquette.transform.parent != boundary.transform)
-                {
-                    report.Add($"SAĞLIK: '{maquette.name}' maketi ArenaBoundary'nin altında değil — " +
-                               "koordinatları muhafaza uzayıyla hizalı olmayabilir.");
-                }
+                // ⚠️ Maketin NEREDE durduğu kontrol EDİLMEZ: sahneden bağımsız üretiliyor ve
+                // istendiği yere taşınabiliyor. Geri okuma maketin kendi kökünü referans aldığı
+                // için konumu/dönüşü sonucu etkilemez.
             }
 
             // ⚠️ Burada "Wall_* kalıntısı" diye bir kontrol YOKTUR ve eklenmez: arenanın gerçek

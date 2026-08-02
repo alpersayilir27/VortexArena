@@ -28,7 +28,7 @@ namespace VortexArena.Core.Combat
         // ⚠️ [Range(1,255)] KOYULMAZ. Unity'nin Range drawer'ı IntSlider ile çizerken 0'ı sessizce
         // min'e (1) clamp'ler VE asset'i dirty yapar — Inspector'da açılan her tanım netItemId=1
         // olurdu, yani tüm silahlar birbiriyle çakışırdı. Sınır denetimi HasNetItemId'de ve asıl
-        // koruma editör bekçisindedir (Tools > VortexArena > Validate Net Item Ids).
+        // koruma editör bekçisindedir (Tools > VortexArena > Weapons > Rebuild Net Item Catalog).
         [Tooltip("Ağ kimliği (1-255; 0 = atanmamış). Snapshot'ta bu bayt gider; katalog dizi " +
                  "indeksi DEĞİLDİR — elle, kararlı verilir. Çakışmayı bekçi yakalar.")]
         [SerializeField] private int netItemId = 0;
@@ -114,7 +114,7 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Kimlik atanmış mı. ⚠️ Asıl korumayı bu property DEĞİL editör bekçisi sağlar
-        /// (<c>Tools &gt; VortexArena &gt; Validate Net Item Ids</c>): çakışan/eksik id derlemede
+        /// (<c>Tools &gt; VortexArena &gt; Weapons &gt; Rebuild Net Item Catalog</c>): çakışan/eksik id derlemede
         /// patlamaz, sahada "elinde yanlış eşya çizildi" olarak görünür.
         /// </summary>
         public bool HasNetItemId => netItemId >= 1 && netItemId <= 255;

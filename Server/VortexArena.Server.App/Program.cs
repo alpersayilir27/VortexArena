@@ -17,7 +17,7 @@ internal static class Program
         var configDir = ResolveConfigDir();
         var config = ServerConfig.Load(Path.Combine(configDir, "server.json"));
         // Silah tablosu YOK (§10.3): hasarı istemci hesaplar, sunucu aynen uygular.
-        // maps.json Unity'den export edilir (Tools > VortexArena > Export Server Config);
+        // maps.json Unity'den export edilir (Tools > VortexArena > Server > Export Server Config);
         // yoksa tablo boş kalır ve start_match harita doğrulaması atlanır.
         var allMaps = MapTable.Load(Path.Combine(configDir, "maps.json"));
 
@@ -206,7 +206,7 @@ internal static class Program
         if (maps.IsEmpty)
         {
             Console.WriteLine("[Lobi] ⚠ maps.json yok — açık sahne doğrulanamadı. " +
-                              "Tools > VortexArena > Export Server Config çalıştırın.");
+                              "Tools > VortexArena > Server > Export Server Config çalıştırın.");
             return true;
         }
 
@@ -217,7 +217,7 @@ internal static class Program
             Console.WriteLine($"  Mekan '{maps.Venue}' içinde lobi haritası yok " +
                               "(MapDefinition.supportedModeIds == [\"lobby\"] olan bir arena).");
             Console.WriteLine("  Çözüm: bu mekana bir lobi arenası ekleyip " +
-                              "Tools > VortexArena > Export Server Config çalıştırın, " +
+                              "Tools > VortexArena > Server > Export Server Config çalıştırın, " +
                               "ya da server.json → lobbyScene alanına mevcut bir sahne yazın.");
             Console.WriteLine($"  Bu mekanda bilinen haritalar: {string.Join(", ", maps.SceneNames)}");
             return false;

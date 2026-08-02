@@ -26,7 +26,7 @@ kökünde — kabzada değil. Altyapı ve araç çalışıyor, **sayılar girilm
 3. İşaretçiyi **kabzaya sürükle** ve elin gireceği açıyla **döndür** — Scene view'de sarı saydam
    küre soketi gösterir; yarıçapı Inspector'dan (`radius`) büyüt/küçült.
 4. Çift elli silahta aynısını `Grip Socket (Secondary)` ile ön kabza için yap.
-5. `Tools > VortexArena > Write Grip Sockets To Definition` → değerler `WD_*.asset`'e yazılır.
+5. `Tools > VortexArena > Weapons > Write Grip Sockets To Definition` → değerler `WD_*.asset`'e yazılır.
 6. Kontrol: camgöbeği tel küre (SO'nun dediği) sarı küreyle **çakışmalı**. Çakışmıyorsa yazma
    gitmemiş. İşaretçi sonra silinebilir ya da bırakılabilir — oyun onu okumaz.
 7. Başlıkta yalnız **hissi** doğrula (nişan alırken rahat mı). Geometri editörde bitti.

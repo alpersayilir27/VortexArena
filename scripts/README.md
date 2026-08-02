@@ -154,6 +154,6 @@ kendiliğinden doğru editörü bulur.
 ## Sıra önemli mi?
 
 Bağımsızlar, ayrı ayrı çalıştırılabilir. Ama **silah/harita SO'su değiştiyse** önce Unity'de
-`Tools > VortexArena > Export Server Config`, sonra `deploy-server.bat` (config'i o kopyalar).
+`Tools > VortexArena > Server > Export Server Config`, sonra `deploy-server.bat` (config'i o kopyalar).
 
 Çıktıların işletmeye taşınma sırası: `deploy/README.md`.

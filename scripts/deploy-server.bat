@@ -8,7 +8,7 @@ rem  Kendine yeten (self-contained) TEK klasor uretir: isletme PC'sine
 rem  .NET kurmak gerekmez. config\ dosyalari yaninda gider.
 rem
 rem  maps.json Unity'den export edilir
-rem  (Tools > VortexArena > Export Server Config) - burada URETILMEZ,
+rem  (Tools > VortexArena > Server > Export Server Config) - burada URETILMEZ,
 rem  yalnizca kopyalanir. Yoksa uyarilir.
 rem  NOT: weapons.json diye bir dosya YOKTUR - sunucuda silah tablosu yok,
 rem  hasari istemci hesaplar (Docs/ArenaNet-Protokol.md 10.3).
@@ -115,7 +115,7 @@ for %%F in (server.json maps.json) do (
   ) else (
     echo     ! %%F YOK
     if /i "%%F"=="maps.json" (
-      echo       ^-^> Unity'de: Tools ^> VortexArena ^> Export Server Config
+      echo       ^-^> Unity'de: Tools ^> VortexArena ^> Server ^> Export Server Config
       echo          Yoksa start_match harita dogrulamasi devre disi kalir.
     )
   )

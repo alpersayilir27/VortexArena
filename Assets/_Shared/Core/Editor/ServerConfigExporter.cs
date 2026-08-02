@@ -11,7 +11,7 @@ using VortexArena.Core.Combat;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Export Server Config</c> — projedeki
+    /// <c>Tools &gt; VortexArena &gt; Server &gt; Export Server Config</c> — projedeki
     /// <see cref="MapDefinition"/> ScriptableObject'lerinden sunucunun okuduğu
     /// <c>Server/config/maps.json</c> dosyasını üretir.
     /// <para>
@@ -37,7 +37,7 @@ namespace VortexArena.Core.Editor
         private const string MapsFileName = "maps.json";
 
         /// <summary>Menü girişi — dialoglu (elle) export.</summary>
-        [MenuItem("Tools/VortexArena/Export Server Config")]
+        [MenuItem("Tools/VortexArena/Server/Export Server Config", false, 60)]
         private static void ExportMenu()
         {
             Export(true);

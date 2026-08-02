@@ -25,7 +25,7 @@ maç verisini yalnız sunucu üretir ve maçı yalnız bir admin başlatır.
 
 ## 2. Rolünü ve sunucunu seç
 
-`Tools > VortexArena > Dev` penceresini aç.
+`Tools > VortexArena > Development > Dev` penceresini aç.
 
 - **Rol:** `player` (VR oyuncusu) ya da `admin` (masaüstü gözlemci). Kısayol: **Ctrl+Alt+R**.
 - **Hedef:** sunucu adresi. Liste `dev-targets.json`'dan gelir (`Local`, `Keşif (beacon)`, örnek PC).

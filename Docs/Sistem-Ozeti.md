@@ -780,7 +780,7 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 
 | Sınıf | Görevi |
 |---|---|
-| `DevWindow` | `Tools > VortexArena > Dev` penceresi: "Dev enjeksiyonu açık" onayı · **Rol** (Player/Admin) · **Sunucusuz sandbox** (+ mod seçicisi; açıkken Hedef bloğu devre dışı) · **Hedef** (`dev-targets.json` + "Özel…" IP/Port + Tazele) · **Başlangıç** (Boot'tan / Açık sahneden) · alttaki "Seçim: …" özeti. **Sunucuya hiç dokunmaz** — ne başlatır, ne durdurur, ne derler (§6.1). Maç parametresi taşımaz — mod/takım/süre/limit sunucudan gelir. **Modal dialog kullanmaz** (Unity CLI doğrulamasını kilitliyor); geri bildirim konsol + `HelpBox` |
+| `DevWindow` | `Tools > VortexArena > Development > Dev` penceresi: "Dev enjeksiyonu açık" onayı · **Rol** (Player/Admin) · **Sunucusuz sandbox** (+ mod seçicisi; açıkken Hedef bloğu devre dışı) · **Hedef** (`dev-targets.json` + "Özel…" IP/Port + Tazele) · **Başlangıç** (Boot'tan / Açık sahneden) · alttaki "Seçim: …" özeti. **Sunucuya hiç dokunmaz** — ne başlatır, ne durdurur, ne derler (§6.1). Maç parametresi taşımaz — mod/takım/süre/limit sunucudan gelir. **Modal dialog kullanmaz** (Unity CLI doğrulamasını kilitliyor); geri bildirim konsol + `HelpBox` |
 | `DevTargets` | Repo kökündeki `dev-targets.json` okuyucusu (`defaultTarget`/`defaultRole` + adlandırılmış hedefler). Dosya yok/bozuksa bellekte `Local` + `Kesif (beacon)` varsayılanına düşer ve **dosyayı OLUŞTURMAZ** (commit kirletmemek için). Bir hedefin `ip`'si boşsa adres yazılmaz → keşif zinciri devralır |
 | `DevBootstrap` | Editör kancaları: "Boot'tan" kipinde `EditorSceneManager.playModeStartScene`'i Boot sahnesine ayarlar (sahne **Build Settings'ten** bulunur, sabit yol gömülmez); `Ctrl+Alt+R` kısayolunu kurar (rol player↔admin). **Hiçbir süreç öldürmez** — sunucu kasıtlı olarak yaşar (üretimde de ayrı makinede sürekli açık) |
 
@@ -818,18 +818,26 @@ dosyada `null` + hata metni döner, çünkü çağıran yer sahne yükleme yolu;
 kullanıldığı için **yazılmayan alan varsayılanında kalır** (aksi hâlde eksik bir
 `defaultColumnHeight` hiç çizilmeyen kolonlar demekti). ⚠️ **Kolonun muhafazaya girip girmeyeceğini
 seçen bir anahtar YOKTUR ve eklenmez** — kolon binanın taşıyıcısıdır, oyuncu ona her hâlükârda
-çarpar. Dosya olmasının kazancı: ölçüyü sahadan
-alan kişi Unity açmadan güncelleyebilir),
+çarpar. `calibration: {a, b}` = zemine yapıştırılan A/B bantlarının yeri; **mekan başınadır**
+(aynı odadaki tüm sahneler aynı iki fiziksel işareti kullanır) ve `HasCalibration` iki nokta
+arasında en az `MinCalibrationSpan` (0,5 m) ister — daha yakın bir çift yön tanımlamaz, yaw
+hatası mesafeyle ters orantılı büyür. ⚠️ Kalibrasyon noktaları `IsValid`'in parçası **değildir**:
+noktasız bir dosya muhafazayı çalıştırmaya yeter, yalnız işaretçiler kendiliğinden yerleşmez.
+Dosya olmasının kazancı: ölçüyü sahadan alan kişi Unity açmadan güncelleyebilir),
 `Polygon2D` (`Core/Arena` — halkalara sorulan her geometrik sorunun tek yeri: `Contains`,
 `DistanceToRing`, `SignedDistance` (alan: içeride +) / `ObstacleDistance` (engel: dışarıda +),
 `Bounds`, `Centroid`, `IsSelfIntersecting`. İki mesafe sözleşmesi muhafazanın ikisini tek
 `Mathf.Min` ile birleştirebilmesi içindir — her ikisinde de "artı = güvenli pay". Metotlar tahsis
 yapmaz: muhafaza her karede çağırıyor),
-`ArenaDimensionMesh` + `DimensionPolygon` (ölçü maketinin işaretçileri; kökte mekan adı + kaynak
-`TextAsset` + geri yazma taşıyıcıları, çokgenlerde yalnız `Kind { Plane, Column }`. ⚠️ Nokta/ad/
-yükseklik işaretçide TUTULMAZ — kaynakları sırasıyla mesh, `GameObject` adı ve mesh'in Y aralığı;
+`ArenaDimensionMesh` + `DimensionPolygon` + `DimensionAnchor` (ölçü maketinin işaretçileri; kökte
+mekan adı + kaynak `TextAsset` + geri yazma taşıyıcıları, çokgenlerde yalnız
+`Kind { Plane, Column }`, kalibrasyon küplerinde yalnız `Kind { A, B }`. ⚠️ Nokta/ad/
+yükseklik işaretçide TUTULMAZ — kaynakları sırasıyla mesh (kalibrasyon noktasında transform),
+`GameObject` adı ve mesh'in Y aralığı;
 kopyalamak sahnede düzenlenen değerden sapan ikinci bir kaynak üretirdi. Maketin kökü `EditorOnly`
-etiketlidir, build'e girmez),
+etiketlidir, build'e girmez. ⚠️ Kalibrasyon küpleri sahnedeki işaretçilerle **aynı adı** taşır
+(`anchor_a`/`anchor_b` — tek sabit `ArenaCalibrator.AnchorAName`); ikisini ayıran şey ad değil
+`DimensionAnchor` bileşenidir, kalibratörün ad araması onu taşıyan objeleri atlar),
 `ArenaObstacle` (sahneye ELLE konan engelin muhafaza dikdörtgeni; konum/dönüş transformdan,
 ölçü `size`'dan gelir — ⚠️ **collider eklemez, fizik yapmaz**: free-roam'da oyuncuyu durduran şey
 gerçek nesnedir, bileşenin tek işi uyarıyı erken tetiklemektir),
@@ -840,9 +848,18 @@ B'ye çift basış** (`doubleTapSeconds` penceresi; basılı tutma süresi yoktu
 §3.11. Sahnedeki `anchor_a`/`anchor_b` işaretçileri **kurulum aracıdır, dekor değil**: yalnız elle
 kalibrasyon sürerken görünürler ve hizalamadan `markerVisibleSeconds` sonra gizlenirler — kayıtlı
 anchor'dan geri yükleme yolunda hiç gösterilmezler, yoksa harita değişiminde maçın ortasında ekrana
-obje düşerdi. ⚠️ İşaretçinin **mesh'inin alt noktası arena zeminine oturmalıdır**: `VirtualFloorY`
-görselin bounds'undan ölçülür (`MeasureMarkerFloorDrop`), yani görseli değiştiren kişi objeyi
-zemine geri oturtmazsa hizalamanın zemin yüksekliği sessizce kayar),
+obje düşerdi. **Yerleri sahneden değil boyut dosyasından gelir**: `Start` işaretçileri
+`ArenaBoundary.TryGetCalibrationMarks` üzerinden `calibration.a`/`.b` noktalarına oturtur
+(`PlaceMarkerAtFloor`), dosyada nokta yoksa dokunmaz ve uyarır. `anchorA`/`anchorB` alanları boş
+bırakılırsa objeler **adlarından** çözülür (`AnchorAName`/`AnchorBName`) — `EditorOnly` etiketli
+kökler taranmaz, ölçü maketinin küpleri yakalanmasın diye.
+⚠️ **Sıra A → B'dir ve geometrik olarak doğrulanamaz**: iki nokta hangisinin önce alındığını
+söylemez, mesafe kontrolü de simetriktir. Garanti prosedüreldir — ilk yakalama A sayılır, o anda
+A işaretçisi yanar ve log `1/2 — A yakalandı` yazar. Karıştırılırsa arena 180° ters döner.
+⚠️ İşaretçinin **mesh'inin alt noktası arena zeminine oturur**: `VirtualFloorY`
+görselin mesh bounds'undan ölçülür (`MeasureFloorDrop`), yerleştirme de aynı ölçüyü kullanır —
+görseli değiştiren kişi bir şey yapmak zorunda değildir, ama pivot ile mesh tabanı arasına
+`Renderer` taşımayan bir ara obje sokarsa zemin yüksekliği sessizce kayar),
 `CalibrationState` (kalıcı tekil — kalibrasyon durumunun sunucu ile iki yönlü köprüsü: hizalanınca
 `set_calibration` yollar, operatör sıfırlayınca `ArenaCalibrator.Invalidate()` çağırır),
 `ArenaSpace` (dünya↔arena dönüşümü; origin YOKKEN kimlik dönüşümü yapar ama **sahne başına bir kez
@@ -929,7 +946,7 @@ katmanların göreli hız farkı korunur).
 | `Combat/ItemDefinition` | Elde tutulabilen her şeyin (silah, ileride bomba) **dar** tabanı: `netItemId` (telde giden kimlik, §6.6), prefab, `holdMode`, kanonik kavrama pozları, tracer görünümü. Davranış alanı (hasar/şarjör/fitil) **girmez** — `RemoteAvatar` eşyayı ne YAPTIĞINI bilmeden çizer; Net katmanının "oyun bilgisi içermez" ilkesinin sunumdaki karşılığı. ⚠️ `primaryGrip` = eşyanın **ele göre** pozu, `secondaryGrip` = ön kabzanın **eşyaya göre** pozu — uzayları terstir (§6.6). Soket çizimi ana noktanın **eşyaya göre** yerini ister ve o `PrimaryGripPointOnItem` olarak **türetilir** (`Inverse(R)·(−P)`), ayrı bir alan olarak tutulmaz — aynı nokta iki yerde yaşasa biri güncellenip diğeri unutulurdu |
 | `Combat/ItemGripSockets` | Kavrama noktalarını **soket** yapar: el yaklaşınca (`0.30 m`) gösterge belirir, soketin üstünde (`0.12 m`) grip'e basılınca kavrama doğar. Kapı ISDK'nın **kendi** uzatma noktasıdır — bileşen bir `IGameObjectFilter`'dır ve `GrabInteractable._interactorFilters`'a yazılır (`WeaponKitBuilder` bağlar), yani kavramanın ALGISI ISDK'da kalır ve tel yolu (`Grabbable` → `Weapon` → `HeldItems`) hiç değişmez. Çizim ile kapı **aynı** açıklık kuralını kullanır (`IsSocketOpen`): ana soket eşya tutulmuyorsa açık, ön kabza yalnız tutuluyor + çift elli + soran el ana el değilken açık — tek elli eşyada ön kabza hiç açılmaz, bu ikinci elin aynı tabancayı kavramasını da engeller. Gösterge `WeaponCatalog.GripSocketPrefab`, yoksa prosedürel halka. Kavrama yarıçapı **silah başınadır** (`ItemDefinition.primary/secondaryGripRadius`) — tabanca kabzası ile tüfek ön kabzası aynı büyüklükte değil; hover (0.30 m) global sabit ama etkin değeri `Max(hover, yarıçap)`, yoksa yarıçap hover'ı geçtiğinde oyuncu soketi hiç görmeden kavrardı. ⚠️ El çözülemezse **fail-open** (editörde kavrama mümkün kalsın) ve bu tek seferlik loglanır — sessiz bırakılsa özellik "çalışıyor gibi görünüp" hiçbir şey yapmazdı |
 | `Combat/GripSocketMarker` | Kavrama noktasını sahnede **sürüklenerek** ayarlamak için işaretçi (`kind` + `radius`). **Çalışma anı davranışı YOKTUR ve oyun onu OKUMAZ** — tek doğruluk kaynağı `ItemDefinition`'dır; bu yalnız bir yazma aracıdır (`GripSocketAuthoring`). `OnDrawGizmos` sarı saydam dolu küre + opak tel kenar + el yönünü gösteren eksen çizgileri (soketin yalnız konumu değil DÖNÜŞÜ de yazılıyor). ⚠️ Sarı = yazılmayı bekleyen, camgöbeği (`ItemGripSockets`) = SO'nun dediği: **çakışmıyorlarsa henüz yazmadın** — iki temsilin sapması böylece gözle görünür bir kontrol olur |
-| `Combat/NetItemCatalog` | `netItemId` → `ItemDefinition` eşlemesi (`Resources`, ilk sorguda sözlük kurar). `Tools > VortexArena > Rebuild Net Item Catalog` projedeki TÜM `ItemDefinition`'lardan yazar — silah tablosundan değil, ki yeni bir eşya TÜRÜ (bomba) eklenince sessizce eksik kalmasın. `Resources/` altından çıkarılmaz |
+| `Combat/NetItemCatalog` | `netItemId` → `ItemDefinition` eşlemesi (`Resources`, ilk sorguda sözlük kurar). `Tools > VortexArena > Weapons > Rebuild Net Item Catalog` projedeki TÜM `ItemDefinition`'lardan yazar — silah tablosundan değil, ki yeni bir eşya TÜRÜ (bomba) eklenince sessizce eksik kalmasın. `Resources/` altından çıkarılmaz |
 | `Combat/HeldItems` | Yerel oyuncunun "hangi elde hangi eşya" durumunun tek buluşma noktası (statik). **Yazan** `Weapon`/`WeaponGranter` (`Weapon.ActiveChanged` üzerinden toplanır — çift tabanca mümkün olduğu için bildirim per-instance olamaz), **okuyan** `PlayerPoseTracker`. Hiçbir şey göndermez |
 | `Combat/ShotTracer` | Havuzlu `LineRenderer` mermi izi — ömrü boyunca **sönerek** kaybolur (alfa düşer + çizgi incelir; eskiden ömrün sonunda `enabled=false` ile bir anda kesiliyordu, göz bunu sönme değil "pat" olarak okuyordu). Ayrı bir *sönme süresi* alanı YOK: sönme `tracerLifetime`'ın kendisine yayılır, yoksa iki sayıdan hangisinin diğerini kestiği sessiz bir tuzak olurdu. Üstüne **yol boyunca duman izi**. **İKİ çağıranı vardır ve olmak zorundadır:** atanın kendi izini `Weapon.Fire` çizer (sunucu atış olayını atana geri yollamaz, istemci de kendi `playerId`'sini süzer — §6.5), uzaktakileri `RemoteShotFx`. Havuz ikisi arasında **paylaşılır** (`ShotTracer.Shared`, kendini önyükleyen DDOL tekil): silah başına havuz açmak, silahların sürekli üretilip yok edildiği modlarda materyali + `Update`'i silah sayısınca çoğaltırdı. Görünüm `ItemDefinition`'dan, sıklık `tracerEveryNthRound`'dan — iki yol da aynı alanları okur (ayrı okusalar aynı silah kendi ekranında başka, karşı ekranda başka görünürdü). Sayaç yerelde silah başına, uzakta oyuncu başına (paylaşılan sayaç izleri rastgele namlulara dağıtırdı). Her mermide çizmek lazer ışını gibi durur + konumu fazla ifşa eder; asıl maliyet bayt değil GC/draw call. **Duman `Play`'in İÇİNDEDİR**, ayrı bir giriş noktası değil — ikinci bir `PlaySmoke` kapısı olsa iki çağırandan biri onu unutabilir, yani aynı silah kendi ekranında dumanlı, karşı ekranda dumansız görünürdü. Puf'lar TEK paylaşılan `ParticleSystem`'e manuel `Emit` edilir (sistemin kendi parçacık dizisi zaten havuz; atış başına `TrailRenderer` objesi üretmek Quest'te hem GC hem draw call olurdu) ve namludan isabete doğru **sönümlenir**: alfa düşer, boy büyür, ömür kısalır. Ömür `tracerLifetime`'dan TÜRETİLİR ama birebir değil — 0.06 sn'lik duman tek karelik gri lekedir, o yüzden ×katsayı + kullanılabilir banda kırpma. Eşyaya ayrı duman alanı **eklenmedi**: duman tracer'a biniyor, `tracerEveryNthRound` tracer'ı kapattığında duman da kapanır. Materyal/doku (yumuşak radyal puf) çalışma anında üretilir — hazır duman materyali `Resources/` altında değil ve serialize alan açmak bu tekili sahneye konması gereken bir bileşene çevirirdi |
 | `Combat/ArenaCombat` | **Oyun kodunun ağa açılan tek kapısı** (statik). `ReportShot` / `ReportThrow` / `ReportHit` / `ReportRaycastHit` / `ReportAreaHit` + `TryGetTargetPlayerId` / `IsHeadshot` / `CanFire` / `LocalPlayerId`. ⚠️ `ReportShot`/`ReportThrow` **UDP olay kanalına** (`0x03`) gider, `ReportHit` **WS**'te kalır — kaybı kozmetik olan ile otoriter olanın kanalı ayrıdır (§10.3). Bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektiriyor (arena uzayı, yön≠nokta, `RemoteHitBox` ile hedef çözme, hasarı istemcinin belirlemesi) — bunlar `Weapon` içinde gömülü kalsaydı ikinci bir hasar kaynağı yazan herkes aynı dördünü yeniden keşfederdi. `Weapon` de bu kapıyı kullanır (tek doğruluk kaynağı). Bağlantı yokken sessizce no-op. Reçeteler: `Gelistirici/Yemek-Kitabi.md` |
@@ -963,11 +980,11 @@ geometrisini üreten iki araç + kavrama ayarı:
 
 | Sınıf | Görevi |
 |---|---|
-| `GripSocketAuthoring` | Kavrama noktalarını **sahnede sürükleyerek** ayarlama aracı: `GameObject > VortexArena > Grip Socket (Primary/Secondary)` işaretçi üretir (mevcut SO değerlerinden başlatarak — araç ayarı sıfırlamaz), `Tools > VortexArena > Write Grip Sockets To Definition` onu `WD_*.asset`'e yazar. **Var olma sebebi asimetri:** aynı sürüklenmiş poz `primaryGrip` için TERS bileşimle (`R=Inverse(localRot)`, `P=−(R·localPos)`), `secondaryGrip` için DÜZ yazılır — elle yapıldığında bu fark sessiz bir işaret hatası üretiyordu. Round trip birebir: geri okuma işaretçiyi aynı yere koyar. Yalnız **bulunan** işaretçinin alanları yazılır (yarısı ayarlı silahı sıfırlamasın); ölçek bulaşmasın diye `InverseTransformPoint` yerine elle bileşim |
-| `DimensionMeshBuilder` | `JSON'dan DimensionMesh Üret`: boyut dosyasından **ölçü maketi** üretir — tek `Plane` (ProBuilder çokgeni, extrude 0) + kolon başına bir prizma (pivotu ayak izinin ağırlık merkezinde, sürüklemek doğal olsun diye). ⚠️ **Duvar ÜRETMEZ ve maket oynanan geometri değildir**: kök `EditorOnly` etiketlenir, build'e girmez; arena sanatı maketin üstüne kurulur. Kök = sahnedeki `ArenaBoundary`'nin altı, yerel dönüşümü sıfırlanmış (plan koordinatları onun yerel XZ'sinde; başka bir ebeveyn planı sessizce kaydırır) — muhafaza yoksa sahne köküne düşer ve uyarı basar. **İdempotent**: aynı mekanın maketi varsa silinip yeniden kurulur. Üretimden önce halkayı `Polygon2D.IsSelfIntersecting` ile denetler |
-| `DimensionMeshReader` | `DimensionMesh'i JSON'a Çevir`: maketi okuyup **kaynak dosyanın üstüne** yazar (hedef sorulmaz, maketin işaretçisinden gelir). Ayak izi çıkarımı: yatay yüzler (`\|normal.y\| > 0.9`) Y seviyesine göre gruplanır, **en alt** grup alınır (prizmada alt yüz kazanır), kenarlar XZ'ye izdüşürülüp kaynaştırılır, **yalnız bir kez geçen** kenar sınır sayılır, halka yürünür ve doğrusal ara köşeler ayıklanır. Noktalar dünya üstünden kök uzayına çevrilir — kolonu sürüklemek/döndürmek doğru yazılır. ⚠️ Kenarlar köşe **indeksiyle değil konumla** anahtarlanır: ProBuilder sert normaller için köşeleri yüz başına ayırıyor, indeksle bakan tespit tüm mesh'i sınır sanar. Yazmadan önce çıktı geri ayrıştırılır; doğrulanamazsa dosyaya **dokunulmaz** |
-| `TemplateBasicsLoader` | `Template Temellerini Yükle`: aktif sahneye altyapıyı **prefab örneği** olarak koyar (`VA_ArenaRoot`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`; seçime bağlı `VA_ModeHud` · taban bölgeleri · `SpawnPoint`), `ArenaCalibrator`'ın sahneye bakan alanlarını bağlar, `ArenaBoundary`'nin rig'e bakan alanlarını (`head`/`fadeRenderer`/`warningText`) `VA_CameraRig` içinden bağlar ve mekanın boyut dosyasını `ArenaBoundary.dimensionsJson`'a takar. Taban bölgelerini takım malzemesiyle boyar (tek `VA_BaseZone` prefabı iki takıma da hizmet ediyor; şerit rengini çalışma anında kimse yazmıyor). **İdempotent** — var olan örneği asset yoluyla tanır ve atlar; dolu bir alanın üstüne YAZMAZ |
-| `BuildElementsConfigurator` | `Configure All Build Elements`: `MapDefinition` yazar/günceller, `GameCatalog.maps`'e ve haritayı destekleyen her modun **DOLU** `maps` listesine ekler (boş liste "kısıtsız" demek, dokunulmaz), Build Settings'e koyar, `ServerConfigExporter.Export(false)` çağırır ve bir **sağlık raporu** basar (`SpawnPoint` sayısı, `dimensionsJson` dolu mu, maket `EditorOnly` ve doğru ebeveyn altında mı, sahnede `Wall_*` kalıntısı var mı). Bu adımların biri atlanınca hata sessizdir — tek düğmede toplanmasının sebebi budur |
+| `GripSocketAuthoring` | Kavrama noktalarını **sahnede sürükleyerek** ayarlama aracı: `GameObject > VortexArena > Grip Socket (Primary/Secondary)` işaretçi üretir (mevcut SO değerlerinden başlatarak — araç ayarı sıfırlamaz), `Tools > VortexArena > Weapons > Write Grip Sockets To Definition` onu `WD_*.asset`'e yazar. **Var olma sebebi asimetri:** aynı sürüklenmiş poz `primaryGrip` için TERS bileşimle (`R=Inverse(localRot)`, `P=−(R·localPos)`), `secondaryGrip` için DÜZ yazılır — elle yapıldığında bu fark sessiz bir işaret hatası üretiyordu. Round trip birebir: geri okuma işaretçiyi aynı yere koyar. Yalnız **bulunan** işaretçinin alanları yazılır (yarısı ayarlı silahı sıfırlamasın); ölçek bulaşmasın diye `InverseTransformPoint` yerine elle bileşim |
+| `DimensionMeshBuilder` | `JSON'dan DimensionMesh Üret`: boyut dosyasından **ölçü maketi** üretir — tek `Plane` (ProBuilder çokgeni, extrude 0) + kolon başına bir prizma (pivotu ayak izinin ağırlık merkezinde, sürüklemek doğal olsun diye) + iki kalibrasyon küpü (`anchor_a` kırmızı / `anchor_b` mavi, merkezleri noktanın üstünde — Inspector'daki konum dosyadaki nokta ile birebir aynı okunsun diye; dosyada nokta yoksa üretilmez ve uyarılır). ⚠️ **Duvar ÜRETMEZ ve maket oynanan geometri değildir**: kök `EditorOnly` etiketlenir, build'e girmez; arena sanatı maketin üstüne kurulur. ⚠️ **Kök SAHNEDEN BAĞIMSIZ kurulur**: sahne kökünde, dünya orijininde, dönüşsüz ve 1 ölçekte — hiçbir şeyin altına parent'lanmaz, böylece dosyadaki ölçü sahnede birebir okunur. Arenanın üstüne oturtmak isteyen elle taşır/döndürür; geri okuma maketin kendi kökünü referans aldığı için etkilenmez. **İdempotent**: aynı mekanın maketi varsa silinip yeniden kurulur. Üretimden önce halkayı `Polygon2D.IsSelfIntersecting` ile denetler |
+| `DimensionMeshReader` | `DimensionMesh'i JSON'a Çevir`: maketi okuyup **kaynak dosyanın üstüne** yazar (hedef sorulmaz, maketin işaretçisinden gelir). Ayak izi çıkarımı: yatay yüzler (`\|normal.y\| > 0.9`) Y seviyesine göre gruplanır, **en alt** grup alınır (prizmada alt yüz kazanır), kenarlar XZ'ye izdüşürülüp kaynaştırılır, **yalnız bir kez geçen** kenar sınır sayılır, halka yürünür ve doğrusal ara köşeler ayıklanır. Noktalar dünya üstünden kök uzayına çevrilir — kolonu sürüklemek/döndürmek doğru yazılır. ⚠️ Kenarlar köşe **indeksiyle değil konumla** anahtarlanır: ProBuilder sert normaller için köşeleri yüz başına ayırıyor, indeksle bakan tespit tüm mesh'i sınır sanar. Kalibrasyon noktaları `DimensionAnchor` küplerinin transformundan okunur; ⚠️ küp yoksa dosyadaki `calibration` **KORUNUR** (sıfırlanmaz — eski bir maketi çevirmek mekanın zemin bandı ölçüsünü silerdi). Yazmadan önce çıktı geri ayrıştırılır; doğrulanamazsa dosyaya **dokunulmaz** |
+| `TemplateBasicsLoader` | `Template Temellerini Yükle`: aktif sahneye altyapıyı **prefab örneği** olarak koyar (`VA_ArenaRoot`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`; seçime bağlı `VA_ModeHud` · taban bölgeleri · `SpawnPoint`), `ArenaCalibrator`'ın sahneye bakan alanlarını bağlar, `ArenaBoundary`'nin rig'e bakan alanlarını (`head`/`fadeRenderer`/`warningText`) `VA_CameraRig` içinden bağlar ve mekanın boyut dosyasını `ArenaBoundary.dimensionsJson`'a takar. `anchor_a`/`anchor_b` işaretçilerini dosyadaki `calibration` noktalarına oturtur (`ArenaCalibrator.PlaceMarkerAtFloor` — çalışma anındaki yerleştirmenin aynısı; sahne yalan söylemesin diye. Otorite dosyadadır, sahnede taşımanın kalıcı etkisi yoktur). Taban bölgelerini takım malzemesiyle boyar (tek `VA_BaseZone` prefabı iki takıma da hizmet ediyor; şerit rengini çalışma anında kimse yazmıyor). **İdempotent** — var olan örneği asset yoluyla tanır ve atlar; dolu bir alanın üstüne YAZMAZ |
+| `BuildElementsConfigurator` | `Configure All Build Elements`: `MapDefinition` yazar/günceller, `GameCatalog.maps`'e ve haritayı destekleyen her modun **DOLU** `maps` listesine ekler (boş liste "kısıtsız" demek, dokunulmaz), Build Settings'e koyar, `ServerConfigExporter.Export(false)` çağırır ve bir **sağlık raporu** basar (`SpawnPoint` sayısı, `dimensionsJson` dolu mu, maket `EditorOnly` etiketli mi). Bu adımların biri atlanınca hata sessizdir — tek düğmede toplanmasının sebebi budur |
 
 ### Sunucu: `Server/VortexArena.Server.Core`
 
@@ -1096,13 +1113,13 @@ geçer — sessiz "ilk mekan" yoluna hiç girilmez (launcher mekan seçilmeden b
 sunucuyu **kapatmaz**: ömrü operatör uygulamasına bağlı değildir, kapatma sunucunun kendi
 penceresinde Ctrl+C'dir. Sunucu istenirse eskisi gibi elle de çalıştırılır.
 
-Bu **geliştirirken de geçerlidir**: dev penceresinin (`Tools > VortexArena > Dev`) sunucuyla hiç
+Bu **geliştirirken de geçerlidir**: dev penceresinin (`Tools > VortexArena > Development > Dev`) sunucuyla hiç
 işi yoktur — ne başlatır, ne öldürür, ne derler (elle başlatılmış bir sunucunun Play çıkışında ya
 da editör kapanışında ölme riski kalmasın diye). Derleme `dotnet build Server/VortexArena.Server.sln
 -c Release` (ya da `scripts\deploy-server.bat`), çalıştırmak yine elle:
 `deploy\server\VortexArena.Server.App.exe`.
 
-### 6.2 Quest olmadan test (loopback) — `Tools > VortexArena > Dev`
+### 6.2 Quest olmadan test (loopback) — `Tools > VortexArena > Development > Dev`
 
 Editörde rol ve sunucu adresi **Inspector'dan DEĞİL** dev penceresinden seçilir. İki katmanlı:
 **hedef kataloğu** repo'da commit'lidir (`dev-targets.json`: `Local`, `Kesif (beacon)`, `Ornek-PC`
@@ -1206,8 +1223,8 @@ admin exe'si → **Sunucuyu Başlat** → **Yönetimi Başlat**. Sunucu `--venue
 
 | İstek | Yol |
 |---|---|
-| **Yeni arena** | Altı adım, tek düğmeli sihirbaz YOK: boş sahne → arena kutusuna kaydet (`Venues/<İşletme>/<arenaId>/Scenes/`) → `Template Temellerini Yükle` (altyapı prefab örnekleri + boyut dosyası bağlama) → `JSON'dan DimensionMesh Üret` (mekanın ölçü maketi; **bu araçtan SONRA**, çünkü maket `ArenaBoundary`'nin altına kuruluyor) → ölçü tutmuyorsa köşeleri ProBuilder ile düzeltip `DimensionMesh'i JSON'a Çevir` → environment sanatı + tek `SpawnPoint` (zemin seviyesinde) + kalibrasyon işaretçileri + bake → **`Configure All Build Elements`** (MapDefinition + katalog + mod listeleri + Build Settings + `maps.json`, tek geçişte). ⚠️ **Ölçekleme yoktur**; maket build'e girmez ve duvar üretmez — arenanın duvarları environment sanatına aittir ve fiziksel sınırla çakışmalıdır |
-| **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack modeli = köken kaydı) → `Tools > VortexArena > Build Weapon Prefabs` → `WD_*.asset` üretir, **mevcut** `WPN_*.prefab`'ı yerinde günceller (ses + namlu alevi/dumanı + kovan kiti dahil), `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). ⚠️ Araç **mevcut prefabların `Muzzle`/`Model` yerleşimine DOKUNMAZ**, yalnız definition bağlarını + ses/VFX/kovan kitini tazeler — VR'da elle ayarlanmış tutuş/namlu konumu tekrar çalıştırmakla bozulmaz. Paylaşılan şablon yoktur: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır. ⚠️ **Ses klipleri yalnız alan BOŞSA yazılır** (elle sürüklenen klip korunsun diye): mevcut bir silahın sesini tablodan değiştiriyorsan önce `WD_*.asset`'teki klip alanlarını boşalt, yoksa değişiklik sessizce hiç inmez (Tuzaklar: "elle atanmışsa ezme"). Diğer alanlar (hasar/rpm/menzil/saçılım/kimlik) her koşuda ezilir |
+| **Yeni arena** | Altı adım, tek düğmeli sihirbaz YOK: boş sahne → arena kutusuna kaydet (`Venues/<İşletme>/<arenaId>/Scenes/`) → `Template Temellerini Yükle` (altyapı prefab örnekleri + boyut dosyası bağlama) → `JSON'dan DimensionMesh Üret` (mekanın ölçü maketi — sahneden bağımsız, dönüşsüz kurulur; sırası serbesttir) → ölçü tutmuyorsa köşeleri ProBuilder ile düzeltip `DimensionMesh'i JSON'a Çevir` → environment sanatı + tek `SpawnPoint` (zemin seviyesinde) + bake → **`Configure All Build Elements`** (MapDefinition + katalog + mod listeleri + Build Settings + `maps.json`, tek geçişte). ⚠️ **Ölçekleme yoktur**; maket build'e girmez ve duvar üretmez — arenanın duvarları environment sanatına aittir ve fiziksel sınırla çakışmalıdır |
+| **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack modeli = köken kaydı) → `Tools > VortexArena > Weapons > Build Weapon Prefabs` → `WD_*.asset` üretir, **mevcut** `WPN_*.prefab`'ı yerinde günceller (ses + namlu alevi/dumanı + kovan kiti dahil), `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). ⚠️ Araç **mevcut prefabların `Muzzle`/`Model` yerleşimine DOKUNMAZ**, yalnız definition bağlarını + ses/VFX/kovan kitini tazeler — VR'da elle ayarlanmış tutuş/namlu konumu tekrar çalıştırmakla bozulmaz. Paylaşılan şablon yoktur: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır. ⚠️ **Ses klipleri yalnız alan BOŞSA yazılır** (elle sürüklenen klip korunsun diye): mevcut bir silahın sesini tablodan değiştiriyorsan önce `WD_*.asset`'teki klip alanlarını boşalt, yoksa değişiklik sessizce hiç inmez (Tuzaklar: "elle atanmışsa ezme"). Diğer alanlar (hasar/rpm/menzil/saçılım/kimlik) her koşuda ezilir |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
 | **Hazır bir sahneyi arenaya çevirmek** | Aşağıdaki adımlar — araçları kullanmadan, elle |
 
@@ -1225,8 +1242,9 @@ yukarıdaki altı adımdır):
    `dimensionsJson` alanına bağla — alan tam kare olsa bile dört köşeli bir `plane` halkası olarak
    girilir, ölçü için bileşende ayrı bir alan YOKTUR. Dosya bağlanmazsa muhafaza hata basıp kendini
    kapatır. Plan koordinatları bu transformun yerel XZ'sindedir; ölçüyü bir köşeden alıyorsan o köşe
-   `(0,0)` olur (plan sıfırının arena origin'i olması gerekmez). Elle konmuş kolon/kasa varsa
-   üstlerine `ArenaObstacle` ekle.
+   `(0,0)` olur (plan sıfırının arena origin'i olması gerekmez). Zemin bandının A/B noktalarını da
+   aynı dosyanın `calibration` alanına yaz — işaretçilerin sahnedeki yeri oradan gelir. Elle konmuş
+   kolon/kasa varsa üstlerine `ArenaObstacle` ekle.
 3. Taban bölgeleri: iki `BaseZone` (Red/Blue, karşı kenarlarda; `Neutral` = herkese açık).
    Ölen oyuncu bunlardan birine fiziken girince canlanır — rig ASLA taşınmaz.
    Ayrıca **tek** başlangıç noktası: `GameObject > VortexArena > Spawn Point` ile ekle ve elle
@@ -1237,11 +1255,11 @@ yukarıdaki altı adımdır):
    (`PlayerPoseTracker` + `RemotePlayerSpawner`), `VA_CalibrationManager` (`ArenaCalibrator`),
    `VA_ModeHud` (`ModeHudSpawner`). **Başka bir arenadan kopyalama** (kopya prefab bağını kaybeder,
    rig/kalibrasyon düzeltmeleri o sahneye ulaşmaz). Sonra sahneye bakan referansları elle bağla:
-   `VA_CalibrationManager`'ın `anchorA`/`anchorB`/`rigRoot`'u (örnek üstünde override edilir,
-   prefab asset'inde boştur) ile `ArenaBoundary`/`BaseZone`'un `head` alanı → sahnenin
+   `VA_CalibrationManager`'ın `rigRoot`'u ile `ArenaBoundary`/`BaseZone`'un `head` alanı → sahnenin
    `CenterEyeAnchor`'ı. Boş bırakılırsa sahne sessizce çalışmaz; Unity kopuk sahneler-arası
-   referansı sessizce null yapar.
-5–6. **`Tools > VortexArena > Configure All Build Elements`** — `MapDefinition` (sceneName +
+   referansı sessizce null yapar. (`anchorA`/`anchorB` istisnadır: boş bırakılabilir, kalibratör
+   `anchor_a`/`anchor_b` objelerini adlarından çözer.)
+5–6. **`Tools > VortexArena > Build > Configure All Build Elements`** — `MapDefinition` (sceneName +
    görünen ad + desteklenen modlar), `GameCatalog.maps`, ilgili `ModeDefinition.maps`, **Build
    Settings** ve `maps.json` export'u tek geçişte; sonunda sağlık raporu basar.
 7. **Arenanın çatısı/tavanı varsa** (isteğe bağlı, açık tavanlı arenalarda atlanır): çatı
@@ -1250,7 +1268,7 @@ yukarıdaki altı adımdır):
    kalkar, gölgesi kalır. Sonradan mesh eklersen bileşene sağ tık → *Çatı katmanını uygula*.
    **Tam not (davranış, tuzaklar, test, sorun giderme): [`Cati-Gizleme.md`](Cati-Gizleme.md).**
 
-### 6.5 `Tools > VortexArena > Export Server Config` — ne zaman?
+### 6.5 `Tools > VortexArena > Server > Export Server Config` — ne zaman?
 
 **Harita (`MapDefinition`) SO'su ekledin/değiştirdin mi → çalıştır.** Menü, `MapDefinition`
 SO'larından `Server/config/maps.json` üretir; çıktı deterministiktir (alfabetik, LF, UTF-8
@@ -1546,7 +1564,7 @@ konsoluna tek satır sebep yazar.
     yani Inspector'da açılan her asset kendiliğinden değişir. `netItemId` (varsayılan `0` =
     "atanmamış", §6.6) için bu, Inspector'ı açılan altı silahın hepsinin `netItemId=1` olması, yani
     altı kimliğin birbiriyle çakışması demekti. Aralık denetimi koda (`HasNetItemId`) ve editör
-    bekçisine (`Tools > VortexArena > Rebuild Net Item Catalog`) ait; `[Range]` "0 = atanmamış"
+    bekçisine (`Tools > VortexArena > Weapons > Rebuild Net Item Catalog`) ait; `[Range]` "0 = atanmamış"
     semantiği taşıyan alanlarda kullanılmaz.
 
 46. **Alanı yeniden adlandırırken `[FormerlySerializedAs]` yoksa değer sessizce sıfırlanır.** Unity
@@ -1881,6 +1899,30 @@ konsoluna tek satır sebep yazar.
     sanat duvarı: `ProBuilderMesh`). Bu yüzden `Configure All Build Elements` ada bakan bir kontrol
     TAŞIMAZ.
 
+78. **Ölçü gösteren bir çıktı, DÖNDÜRÜLMÜŞ bir ebeveynin altına kurulmaz.** Inspector, seçim
+    kutusu ve ProBuilder ölçü göstergesi — hepsi **dünya eksenine hizalı** kutuyu gösterir. Ölçü
+    maketi bir zamanlar `ArenaBoundary`'nin (48,72° döndürülmüş) altına kuruluyordu: dosyada 12×12
+    yazan kusursuz bir kare orada `12 × (cos θ + sin θ) ≈ 16,93` okunuyor ve araç ölçeği bozuyor
+    sanılıyordu. Geometri doğru olsa bile **okunamayan ölçü bozuk ölçüdür**; maket bu yüzden
+    sahneden bağımsız, dönüşsüz üretilir ve konumlandırma kullanıcıya bırakılır. Genel kural:
+    çıktısı *ölçü* olan bir araç, o ölçünün okunacağı çerçeveyi de garanti etmelidir.
+
+79. **Bir API başarısızlığını exception ile bildirmiyorsa dönüş değerini okumak ZORUNLUDUR.**
+    ProBuilder'ın `CreateShapeFromPolygon`'u üçgenleme düştüğünde `ActionResult.Failure` döner ve
+    geriye **boş bir mesh** bırakır — sahnede adı doğru, geometrisi olmayan bir obje. Sessizce
+    devam eden kod bunu hata saymaz; eksiklik ancak "maketimde taban yok" diye çok sonra fark
+    edilir. Düşen çokgen silinir, taban düşerse üretim tümden başarısız sayılır.
+
+80. **`EditorOnly` etiketi build'den siler, EDİTÖR PLAY KİPİNDEN silmez — ada bakan her arama onu
+    da görür.** Ölçü maketi build'e girmiyor diye "sahnede yok" sayılamaz: Play tuşuna basıldığında
+    hiyerarşidedir. Maketin kalibrasyon küpleri sahnedeki işaretçilerle aynı adı taşır
+    (`anchor_a`/`anchor_b` — aynı şeye iki ad vermek daha büyük bir kötülük), yani `ArenaCalibrator`
+    ada bakarak arasa arenayı görünmeyen bir küpe göre hizalayabilirdi. Çözüm adı bozmak değil,
+    **ayırt edici bir bileşen**: küpte `DimensionAnchor` vardır ve arama onu taşıyan objeleri atlar
+    (+ `EditorOnly` etiketli kökleri hiç gezmez). Genel kural: ada göre obje çözen kodun kapsamı
+    "build'e giren" değil **"sahnede duran"** kümesidir, ve iki şeyi ayırmanın doğru yolu adı
+    çeşitlendirmek değil türü işaretlemektir.
+
 ---
 
 ## 8. Durum ve sıradaki işler
@@ -1904,7 +1946,7 @@ süresi/skor limiti/geri sayım) · **iki mekan** (`Outdoor12x12`, `VortexAntep`
 sunucu açılışta hangisinin oynatılacağını sorar (§3.8) + arena kurulum araç zinciri
 (`Template Temellerini Yükle` → ölçü maketi → `Configure All Build Elements`) ·
 admin **sahne-içi gözlemci** (üç kamera kipi + sahne üstü yönetim HUD'ı,
-çoklu admin) · geliştirici araç seti (`Tools > VortexArena > Dev`, `dev-targets.json`,
+çoklu admin) · geliştirici araç seti (`Tools > VortexArena > Development > Dev`, `dev-targets.json`,
 `Ctrl+Alt+R`) · rolden bağımsız adres zinciri + `ConnectionOverlay` bağlantı hata ekranı ·
 **sunucu-otoriter kalibrasyon durumu** (§3.11: admin sıfırlar → oyuncu savaş dışı + avatarı parlar;
 geri açmayı gözlük yapar) · **ağ telemetrisi** (§3.12/§6.7: sunucu konsolunda gerçek bayt-sn +

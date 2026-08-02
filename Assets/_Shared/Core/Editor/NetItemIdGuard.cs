@@ -7,7 +7,7 @@ using VortexArena.Core.Combat;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Rebuild Net Item Catalog</c> — tüm <see cref="ItemDefinition"/>
+    /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Rebuild Net Item Catalog</c> — tüm <see cref="ItemDefinition"/>
     /// asset'lerinin <c>netItemId</c>'lerinin atanmış ve TEKİL olduğunu doğrular (§6.6), sonra
     /// <c>Resources/NetItemCatalog.asset</c>'i projede BULUNAN eşyalardan yeniden yazar.
     /// <para>
@@ -37,7 +37,7 @@ namespace VortexArena.Core.Editor
     {
         private const string CatalogPath = "Assets/_Shared/Data/Resources/NetItemCatalog.asset";
 
-        [MenuItem("Tools/VortexArena/Rebuild Net Item Catalog")]
+        [MenuItem("Tools/VortexArena/Weapons/Rebuild Net Item Catalog", false, 23)]
         private static void Validate()
         {
             // Alt sınıflar (WeaponDefinition, ileride ThrowableDefinition) da t:ItemDefinition

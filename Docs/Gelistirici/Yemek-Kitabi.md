@@ -538,7 +538,7 @@ public sealed class BenimModum : IGameMode
 
 **Katalog:** `_Shared/Data/Resources/GameCatalog.asset` → `modes[]`'e ekle, oynanacak
 `MapDefinition`'ların `supportedModeIds`'ine yeni `modeId`'yi yaz, sonra
-**`Tools > VortexArena > Export Server Config`** çalıştır.
+**`Tools > VortexArena > Server > Export Server Config`** çalıştır.
 
 > ⚠️ Export'u unutursan `start_match` "harita bu modu desteklemiyor" diye **sessizce** reddedilir;
 > sebep yalnızca sunucu konsolunda tek satır olarak görünür.
@@ -556,26 +556,29 @@ Tek düğmeli bir sihirbaz **yoktur** (kaldırıldı). Akış altı adımdır ve
 | # | Yaptığın | Araç |
 |---|---|---|
 | 1 | Boş sahne aç, arena kutusuna kaydet (`Venues/<İşletme>/<arenaId>/Scenes/`) | `File > New Scene` |
-| 2 | Ağ altyapısını koy | `Tools > VortexArena > Template Temellerini Yükle` |
-| 3 | Mekanın ölçü maketini üret | `… > JSON'dan DimensionMesh Üret` |
-| 4 | Ölçü yanlışsa köşeleri düzelt, dosyaya geri yaz | ProBuilder + `… > DimensionMesh'i JSON'a Çevir` |
-| 5 | Environment sanatı, `SpawnPoint`, kalibrasyon işaretçileri, bake | elle |
-| 6 | Tüm kayıtları yap | `… > Configure All Build Elements` |
+| 2 | Ağ altyapısını koy | `Tools > VortexArena > Arena > Template Temellerini Yükle` |
+| 3 | Mekanın ölçü maketini üret | `… > Arena > JSON'dan DimensionMesh Üret` |
+| 4 | Ölçü yanlışsa köşeleri düzelt, dosyaya geri yaz | ProBuilder + `… > Arena > DimensionMesh'i JSON'a Çevir` |
+| 5 | Environment sanatı, `SpawnPoint`, bake | elle |
+| 6 | Tüm kayıtları yap | `… > Build > Configure All Build Elements` |
 
 **2. adım** altyapıyı prefab **ÖRNEĞİ** olarak koyar (`VA_ArenaRoot` = `ArenaBoundary` +
 kalibrasyon işaretçileri, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı
 `VA_ModeHud` · taban bölgeleri · `SpawnPoint`), sahneye bakan referansları bağlar
 (`ArenaCalibrator`'ın `anchorA`/`anchorB`/`rigRoot`'u ile `ArenaBoundary`'nin
 `head`/`fadeRenderer`/`warningText`'i — sonuncular rig'in içindedir ve **boş kalırsa muhafaza
-sessizce hiçbir şey göstermez**), taban şeritlerini takım rengine boyar ve mekanın boyut dosyasını
-`ArenaBoundary.dimensionsJson`'a takar. İdempotenttir: var olanı atlar, ikinci kopya koymaz ve
+sessizce hiçbir şey göstermez**), taban şeritlerini takım rengine boyar, mekanın boyut dosyasını
+`ArenaBoundary.dimensionsJson`'a takar ve `anchor_a`/`anchor_b`'yi dosyadaki `calibration`
+noktalarına oturtur. İdempotenttir: var olanı atlar, ikinci kopya koymaz ve
 **dolu bir alanın üstüne yazmaz** — elle bağladığın referans korunur.
 
-**3. adım sırası önemlidir** — maket `ArenaBoundary`'nin altına, yerel dönüşümü sıfırlanmış
-kurulur; muhafaza sahnede yoksa maket sahne köküne düşer ve koordinatları ölçü uzayıyla hizalı
-olmaz. Bu yüzden önce 2. adım.
+**3. adımın sırası serbesttir** — maket sahne köküne, dünya orijininde ve dönüşsüz kurulur, yani
+hiçbir şeye bağlı değildir. Arenanın üstüne oturtmak istersen elle taşı/döndür; geri okuma maketin
+kendi kökünü referans aldığı için bundan etkilenmez. ⚠️ **Ölçeğini değiştirme** — plan metre
+cinsindendir.
 
-⚠️ **Maket oynanan geometri DEĞİLDİR:** taban + kolonlardan ibarettir, **duvar üretmez**, kökü
+⚠️ **Maket oynanan geometri DEĞİLDİR:** taban + kolonlar + kalibrasyon işaretçilerinden ibarettir,
+**duvar üretmez**, kökü
 `EditorOnly` etiketli olduğu için build'e girmez. Arena sanatı hazır environment'ların içine
 kurulur; maket yalnız o sanatın oturacağı fiziksel alanı gösterir
 ([Reçete 17](#17-arena-ölçüsü-boyut-dosyası)).
@@ -612,7 +615,7 @@ Boyut dosyasının biçimi, elle yazma ve yeniden üretme →
 
 ## 15. Gözlüksüz test (dev penceresi)
 
-`Tools > VortexArena > Dev` penceresi (kısayol **Ctrl+Alt+R** rolü player↔admin çevirir):
+`Tools > VortexArena > Development > Dev` penceresi (kısayol **Ctrl+Alt+R** rolü player↔admin çevirir):
 
 | Düğme | Ne yapar |
 |---|---|
@@ -707,8 +710,8 @@ oynatıldığı için o mekanın **tüm** sahneleri (arenalar + lobi) `ArenaBoun
 alanında **aynı** dosyayı gösterir — sahne başına kopya kaçınılmaz olarak sapar. İçerik **çalışma
 anında** okunur.
 
-**Aynı dosya ölçü maketini üretir, muhafazayı besler ve admin kuş bakışı kadrajını verir** — ölçüyü
-ikinci bir yere yazma.
+**Aynı dosya ölçü maketini üretir, muhafazayı besler, admin kuş bakışı kadrajını verir ve
+kalibrasyon işaretçilerini yerleştirir** — ölçüyü ikinci bir yere yazma.
 
 ⚠️ **Taban da kolon da TEK sıralı köşe halkasıdır; parçalardan birleştirme (union) YOKTUR.**
 İçbükeylik için ek bir şey gerekmez — L şekli, yamuk, girintili duvar tek halkayla ifade edilir ve
@@ -744,6 +747,10 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
       ]
     }
   ],
+  "calibration": {
+    "a": { "x": 3.17, "y": 1.82 },
+    "b": { "x": 3.17, "y": 7.19 }
+  },
   "defaultColumnHeight": 3.0
 }
 ```
@@ -753,7 +760,17 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
 | `name` | Yalnız etiket (üretilen objelerin adlandırmasında görünür) |
 | `plane` | Tabanın sıralı köşeleri, **metre**. Halka **kapalıdır** — ilk noktayı sona tekrar yazma. Koordinatlar `ArenaBoundary`'yi taşıyan transformun **yerel XZ**'sidir: JSON'daki `y` = dünya **Z**'si |
 | `columns[]` | `name` + `height` (0 = `defaultColumnHeight`) + `points` = kolonun kendi sıralı köşe halkası (tabanla aynı uzay, aynı kurallar) |
+| `calibration` | Zemin bandındaki **A** ve **B** işaretlerinin yeri (aynı uzay). Sahnedeki `anchor_a`/`anchor_b` objeleri buradan konumlanır |
 | `defaultColumnHeight` | `height: 0` bırakılan kolonların yüksekliği |
+
+> ⚠️ **Sıra A → B'dir ve geometrik olarak doğrulanamaz** (iki nokta hangisinin önce alındığını
+> söylemez, mesafe kontrolü simetriktir). Garanti prosedüreldir: başlıkta ilk yakalanan nokta A
+> sayılır ve o anda `anchor_a` işaretçisi yanar. Karıştırılırsa arena **180° ters döner** — zemin
+> bandını okunur biçimde etiketle.
+
+> ⚠️ İki nokta arasında **en az 0,5 m** olmalı (`ArenaDimensions.MinCalibrationSpan`); daha yakın
+> bir çift yön tanımlamaz ve yok sayılır. Pratikte alabildiğin kadar uzun tut: yaw hatası mesafeyle
+> ters orantılı büyür.
 
 > ⚠️ **Kolondaki `{"points": […]}` sarmalayıcısı zorunludur, süs değil:** `JsonUtility` iç içe dizi
 > (`Vector2[][]`) serialize etmiyor. Karşılığında `name`/`height` bedava geliyor — paralel
@@ -782,15 +799,29 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
 3. **Kolonları gir** (`columns`): her biri ad + yükseklik (0 bırakılırsa `defaultColumnHeight`) +
    kendi köşe halkası (`points`). Eğik duran bir paye de köşeleriyle yazılır — dönüş açısı diye bir
    alan yoktur, gerek de yoktur. Kolonlar **her zaman** muhafaza hesabına girer.
-4. **Maketi üret:** `Tools > VortexArena > JSON'dan DimensionMesh Üret` → dosyayı seç, **Üret**.
-   Sahnedeki `ArenaBoundary`'nin altına `<Mekan>_DimensionMesh` kurulur: `Plane` (ProBuilder
-   çokgeni) + `Columns/<ad>` (prizmalar). Araç **idempotenttir** — dosya değişince yeniden
-   çalıştır, eski maket silinip yenisi kurulur.
-   ⚠️ Sahnede `ArenaBoundary` yoksa maket sahne köküne düşer ve koordinatları ölçü uzayıyla hizalı
-   OLMAZ; önce `Template Temellerini Yükle` çalıştır.
+3b. **Kalibrasyon noktalarını gir** (`calibration.a` / `.b`): zemine yapıştıracağın A ve B
+   bantlarının yeri. Bunlar da mekan başınadır — aynı odadaki tüm arenalar ve lobi aynı iki
+   fiziksel işareti kullanır. Sahnedeki işaretçileri **elle taşıma**, ölçü buraya yazılır.
+4. **Maketi üret:** `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` → dosyayı seç, **Üret**.
+   `<Mekan>_DimensionMesh` **sahne köküne, dünya orijininde ve dönüşsüz** kurulur: `Plane`
+   (ProBuilder çokgeni) + `Columns/<ad>` (prizmalar) + `anchor_a` (kırmızı küp) / `anchor_b` (mavi
+   küp). Dosyada 12×12 yazıyorsa sahnede de 12×12
+   ölçersin — araç ürettiği ölçüyü ayrıca konsola basar. Araç **idempotenttir**: dosya değişince
+   yeniden çalıştır, aynı mekanın eski maketi silinip yenisi kurulur.
+
+   > **Maketi arenanın üstüne oturtmak istersen elle taşı ve döndür** — geri okuma maketin KENDİ
+   > kökünü referans aldığı için taşınmış/döndürülmüş maket de doğru çevrilir.
+   > ⚠️ Ama **ölçeğini değiştirme**: plan metre cinsindendir, ölçek onu sessizce yalan yapar.
+   >
+   > *Neden dönüşsüz kuruluyor:* Inspector, seçim kutusu ve ProBuilder ölçü göstergesi hep **dünya
+   > eksenine hizalı** kutuyu gösterir. Döndürülmüş bir kökün altında kusursuz bir 12×12 kare
+   > `12 × (cos θ + sin θ)` okunur — 48,72°'de **16,93**. Geometri doğru olsa bile okunamayan ölçü
+   > işe yaramaz.
 5. **Muhafazaya bağla:** dosyayı `ArenaBoundary.dimensionsJson` alanına.
    (`Template Temellerini Yükle` bunu mekan klasöründen çözüp kendisi bağlar; elle kurduysan
-   kontrol et.)
+   kontrol et.) Aynı araç sahnedeki `anchor_a`/`anchor_b` işaretçilerini de dosyadaki noktalara
+   oturtur — `ArenaCalibrator` çalışma anında aynısını tekrar yapar, yani otorite her hâlükârda
+   dosyadadır.
 
 > ⚠️ **Maket build'e girmez** — kökü `EditorOnly` etiketlidir. Oyuncunun gördüğü zemin/duvar
 > environment sanatından gelir; maket yalnız o sanatın oturacağı fiziksel alanı gösterir.
@@ -812,8 +843,9 @@ kovalamak yerine **maketi düzelt**:
 1. `Plane` (ya da bir `Columns/<ad>`) objesini seç, ProBuilder'ın **Vertex** kipine geç, kayan
    köşeyi gerçek yerine taşı. Kolonun tamamı yanlış yerdeyse objeyi Move tool ile sürükleyebilirsin
    — pivotu ayak izinin ağırlık merkezindedir ve geri okuma dünya üstünden geçtiği için sürükleme
-   de dönüş de doğru yazılır.
-2. `Tools > VortexArena > DimensionMesh'i JSON'a Çevir`.
+   de dönüş de doğru yazılır. Kalibrasyon noktası için maketin `anchor_a`/`anchor_b` küpünü
+   sürüklemen yeter.
+2. `Tools > VortexArena > Arena > DimensionMesh'i JSON'a Çevir`.
 
 Hedef dosya **sorulmaz**: maketin kökündeki işaretçi hangi dosyadan üretildiğini biliyor ve onun
 üstüne yazılır.
@@ -830,6 +862,7 @@ Araç ayak izini şöyle okur:
 | Kenar | Yalnız **bir kez** geçen kenar sınırdır; kenarlar köşe indeksiyle değil **konumla** anahtarlanır |
 | Sadeleştirme | Bir kenar üstünde duran doğrusal ara köşeler atılır |
 | Yükseklik | Mesh'in Y aralığı (kolonlar için) |
+| Kalibrasyon | `DimensionAnchor` küplerinin transformu. ⚠️ Küp yoksa dosyadaki `calibration` **korunur**, sıfırlanmaz |
 
 ⚠️ **Bir kolonun üst yüzünü alttan farklı düzenlersen kazanan ALT yüzdür** — muhafaza zemindeki
 ayak izini önemsiyor.

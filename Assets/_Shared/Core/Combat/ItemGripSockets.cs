@@ -27,7 +27,7 @@ namespace VortexArena.Core.Combat
     /// (<see cref="GripSocketMarker"/>) işaretçinin — yani SO'ya yazılmayı bekleyen değerin — yeri,
     /// camgöbeği tel küre (bu sınıf) <b>SO'nun gerçekte ne dediği</b>, yani oyunun kullandığı yer.
     /// İkisi üst üste oturmuyorsa <b>SO'ya henüz yazmadın</b>
-    /// (<c>Tools &gt; VortexArena &gt; Write Grip Sockets To Definition</c>). İki temsilin sapması
+    /// (<c>Tools &gt; VortexArena &gt; Weapons &gt; Write Grip Sockets To Definition</c>). İki temsilin sapması
     /// böylece gözle görünür bir kontrole dönüşür — sessiz bir işaret/uzay hatası olarak kalmaz.
     /// </para>
     /// </summary>

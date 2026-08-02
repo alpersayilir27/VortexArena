@@ -103,6 +103,32 @@ namespace VortexArena.Core.Arena
             }
         }
 
+        /// <summary>
+        /// Mekanın iki kalibrasyon noktasını DÜNYA uzayında verir (zemin seviyesinde, bu
+        /// transformun düzleminde). Dosyada nokta yoksa ya da ikisi birbirine çok yakınsa
+        /// <c>false</c> döner.
+        /// <para>
+        /// ⚠️ Planı okuyan tek yer bu bileşendir; <c>ArenaCalibrator</c> boyut dosyasını kendi
+        /// ayrıştırmaz, işaretçilerini buradan konumlandırır. Aksi hâlde aynı JSON iki kere
+        /// çözülür ve ikisi birbirinden sapabilirdi.
+        /// </para>
+        /// </summary>
+        public bool TryGetCalibrationMarks(out Vector3 worldA, out Vector3 worldB)
+        {
+            worldA = Vector3.zero;
+            worldB = Vector3.zero;
+
+            EnsurePlan();
+            if (activePlan == null || !activePlan.HasCalibration)
+            {
+                return false;
+            }
+
+            worldA = LocalToWorld(activePlan.calibration.a);
+            worldB = LocalToWorld(activePlan.calibration.b);
+            return true;
+        }
+
         // Gözlemci (admin) kipi: görsel muhafaza susar.
         private bool spectatorMode;
 
@@ -404,6 +430,19 @@ namespace VortexArena.Core.Arena
             for (int i = 0, j = ring.Length - 1; i < ring.Length; j = i++)
             {
                 Gizmos.DrawLine(LocalToWorld(ring[j]), LocalToWorld(ring[i]));
+            }
+
+            // Kalibrasyon noktaları: zemin bandının nereye çekileceğini sahnede göstermenin tek
+            // yolu bu — işaretçi objeleri sahnede KAPALI durur (yalnız kalibrasyon sırasında
+            // açılırlar), yani gizmo olmadan yerleri gözle denetlenemez.
+            if (activePlan.HasCalibration)
+            {
+                Vector3 markA = LocalToWorld(activePlan.calibration.a);
+                Vector3 markB = LocalToWorld(activePlan.calibration.b);
+                Gizmos.color = new Color(0.35f, 1f, 0.45f, 0.9f);
+                Gizmos.DrawLine(markA, markB);
+                Gizmos.DrawWireSphere(markA, 0.12f);
+                Gizmos.DrawWireSphere(markB, 0.2f); // B daha büyük: A→B yönü gizmodan okunabilsin
             }
 
             ArenaDimensions.Column[] columns = activePlan.columns;

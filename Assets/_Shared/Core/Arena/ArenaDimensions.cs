@@ -40,6 +40,12 @@ namespace VortexArena.Core.Arena
     /// yarı saydam duvar göstergesi de kaldırıldı, yani okuyanı olmayan bir sayı olurdu — okunmayan
     /// ölçü bayatlar. Arenanın duvarları environment sanatından gelir.
     /// </para>
+    /// <para>
+    /// <b>Kalibrasyon noktaları da buradadır</b> (<see cref="calibration"/>): zemine yapıştırılan
+    /// A/B bantlarının yeri de bir ÖLÇÜDÜR ve mekan başınadır — aynı odada oynanan tüm sahneler
+    /// aynı iki fiziksel işareti kullanır. Sahnedeki <c>anchor_a</c>/<c>anchor_b</c> objeleri
+    /// buradan konumlandırılır, yani ölçü sahneye elle kopyalanmaz.
+    /// </para>
     /// <example>
     /// Örnek dosya: <c>Assets/Arenas/Venues/VortexAntep/Data/VortexAntep_dimensions.json</c>
     /// <code>
@@ -51,6 +57,7 @@ namespace VortexArena.Core.Arena
     ///       "points": [ { "x": 3.27, "y": 7.19 }, { "x": 3.94, "y": 7.19 },
     ///                   { "x": 3.94, "y": 7.57 }, { "x": 3.27, "y": 7.57 } ] }
     ///   ],
+    ///   "calibration": { "a": { "x": 3.17, "y": 1.82 }, "b": { "x": 3.17, "y": 7.19 } },
     ///   "defaultColumnHeight": 3.0
     /// }
     /// </code>
@@ -94,6 +101,33 @@ namespace VortexArena.Core.Arena
             public Vector2[] points;
         }
 
+        /// <summary>
+        /// Mekanın iki kalibrasyon noktası (zemine yapıştırılan A ve B bantları), metre ve
+        /// plan uzayında. Hizalama sırası <b>her zaman A → B</b>'dir: yaw bu doğrultudan çıkar,
+        /// yani ikisini karıştırmak arenayı 180° ters çevirir.
+        /// <para>
+        /// ⚠️ <b>Ayrı bir nesne olmasının sebebi teknik:</b> <see cref="JsonUtility"/> alan adını
+        /// birebir eşliyor ve <c>anchor_a</c> gibi bir ad C# alan adı olarak yazılamıyor. Nesne
+        /// olarak sarınca dosyada <c>"calibration": { "a": …, "b": … }</c> okunur kalıyor.
+        /// </para>
+        /// </summary>
+        [Serializable]
+        public struct CalibrationMarks
+        {
+            /// <summary>İlk yakalanan nokta (sahnedeki <c>anchor_a</c>).</summary>
+            public Vector2 a;
+
+            /// <summary>İkinci yakalanan nokta (sahnedeki <c>anchor_b</c>).</summary>
+            public Vector2 b;
+        }
+
+        /// <summary>
+        /// İki nokta arasında olması gereken en kısa mesafe (metre). Bunun altındaki bir çift
+        /// yön tanımlamaz: yaw hatası mesafeyle ters orantılı büyüdüğü için 20 cm'lik bir aralık
+        /// birkaç milimetrelik ölçüm hatasını arenanın öbür ucunda metrelere çevirirdi.
+        /// </summary>
+        public const float MinCalibrationSpan = 0.5f;
+
         /// <summary>Bilgi amaçlı ad (üretilen geometriyi ve hata mesajlarını etiketler).</summary>
         public string name = string.Empty;
 
@@ -106,11 +140,30 @@ namespace VortexArena.Core.Arena
         /// <summary>Arena içindeki kolonlar/engeller. Boş bırakılabilir.</summary>
         public Column[] columns = Array.Empty<Column>();
 
+        /// <summary>
+        /// Zemin bandındaki A/B işaretlerinin yeri (metre, plan uzayı). Yazılmazsa iki nokta da
+        /// (0,0) kalır ve <see cref="HasCalibration"/> false döner — kalibratör o durumda sahnedeki
+        /// işaretçilere dokunmaz ve konsola uyarı basar.
+        /// </summary>
+        public CalibrationMarks calibration;
+
         /// <summary>Kolonun <c>height</c> alanı 0 bırakılırsa kullanılacak yükseklik (metre).</summary>
         public float defaultColumnHeight = 3f;
 
         /// <summary>Kullanılabilir bir plan mı (en az bir üçgen).</summary>
         public bool IsValid => Polygon2D.IsValid(plane);
+
+        /// <summary>
+        /// Kalibrasyon noktaları kullanılabilir mi: yazılmışlar ve aralarında en az
+        /// <see cref="MinCalibrationSpan"/> metre var mı.
+        /// <para>
+        /// ⚠️ Bu <b>plan geçerliliğinin parçası DEĞİLDİR</b> (<see cref="IsValid"/>): noktasız bir
+        /// dosya muhafazayı çalıştırmaya yeter, yalnız kalibrasyon işaretçileri kendiliğinden
+        /// yerleşmez. Ölçüyü ölçüsüzlükten ayıran çizgi taban halkasıdır.
+        /// </para>
+        /// </summary>
+        public bool HasCalibration =>
+            (calibration.b - calibration.a).sqrMagnitude >= MinCalibrationSpan * MinCalibrationSpan;
 
         /// <summary>Bir kolonun etkin yüksekliği (kendi değeri 0 ise varsayılan).</summary>
         public float HeightOf(in Column column)

@@ -75,7 +75,7 @@ Hem `255.255.255.255` hem her arayüzün subnet-broadcast adresine gönderilir:
 | `player` (Quest) | **komut satırı `--server-ip <ip> [--server-port <port>]`** > PlayerPrefs (elle girilmiş) > **beacon** > `StreamingAssets/arena.json`. Bulunan adrese **otomatik bağlanılır**; oyuncuya sorulmaz. VR build'ine argüman geçilmediği için pratikte beacon kazanır. Hiçbiri yoksa lobide sağ kumandada **joystick 1 sn basılı tutularak** gizli IP paneli açılır ve elle girilen değer beacon'ı ezer (PlayerPrefs'e kalıcı yazılır). |
 | `admin` (Windows) | **Yalnız komut satırı:** `--server-ip <ip> [--server-port <port>]` — operatör launcher'ı geçer. Beacon/PlayerPrefs kullanılmaz, kullanıcıya IP sorulmaz. Argüman yoksa bağlanmaz ve ekranda sebebini yazar. |
 
-> **Zincir rolden bağımsızdır:** `AppBoot` komut satırı adresini **her rolde** okur; verilmişse keşfin en üstünde yer alır (açıkça verilen adres kazanır, gelen beacon onu ezmez). **Editörde** rol ve adres komut satırı yerine `Tools > VortexArena > Dev` penceresinden gelir (`EditorPrefs` — sahnede rol/IP override alanı YOKTUR). Maç verisi (mod / takım / süre / limit) **yalnız sunucudan** gelir: editörün enjekte ettiği bir yol yoktur.
+> **Zincir rolden bağımsızdır:** `AppBoot` komut satırı adresini **her rolde** okur; verilmişse keşfin en üstünde yer alır (açıkça verilen adres kazanır, gelen beacon onu ezmez). **Editörde** rol ve adres komut satırı yerine `Tools > VortexArena > Development > Dev` penceresinden gelir (`EditorPrefs` — sahnede rol/IP override alanı YOKTUR). Maç verisi (mod / takım / süre / limit) **yalnız sunucudan** gelir: editörün enjekte ettiği bir yol yoktur.
 
 > **Bağlantı kurulamazsa:** istemci bağlantısızlık ~3 sn sürdüğünde tasarımlı bir hata ekranı gösterir (`ConnectionOverlay`, VR + masaüstü): adres biliniyorsa "SUNUCUYA BAĞLANILAMIYOR" + adres + deneme sayacı + son hata, adres hiç yoksa "SUNUCU BULUNAMADI". Sunum katmanıdır, protokolü etkilemez; yeniden deneme kuralı `RECONNECT_BACKOFF`'tur (§1).
 
@@ -977,7 +977,7 @@ yapar, yerini alır; operatör bunu tek tek anlatmak zorunda kalmaz.
 > yapılandırma hatası vardır ve oyuncu doğru oynayamaz; sessizce boş sahneyle açılmak hatayı sahaya
 > taşır. (`maps.json` hiç yoksa doğrulama atlanır, aşağıdaki maddeye bakın.)
 >
-> **`maps.json` ELLE DÜZENLENMEZ** — `Tools > VortexArena > Export Server Config` üretir ve bir sonraki export elle yapılan değişikliği **ezer**. Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir (alfabetik, LF, UTF-8 BOM'suz) → git diff'i temiz kalır. Harita ekleyip export'u çalıştırmayı unutursanız bilinmeyen `sceneName` → `start_match` reddedilir. `maps.json` hiç yoksa sunucu harita doğrulamasını **atlar** (geriye dönük uyumlu davranış).
+> **`maps.json` ELLE DÜZENLENMEZ** — `Tools > VortexArena > Server > Export Server Config` üretir ve bir sonraki export elle yapılan değişikliği **ezer**. Tek doğruluk kaynağı Unity SO'larıdır; çıktı deterministiktir (alfabetik, LF, UTF-8 BOM'suz) → git diff'i temiz kalır. Harita ekleyip export'u çalıştırmayı unutursanız bilinmeyen `sceneName` → `start_match` reddedilir. `maps.json` hiç yoksa sunucu harita doğrulamasını **atlar** (geriye dönük uyumlu davranış).
 
 ### 11.1 Mekan seçimi (açılışta)
 

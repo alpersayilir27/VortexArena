@@ -43,5 +43,10 @@
     }
   ],
 
+  "calibration": {
+    "a": { "x": 3.17, "y": 1.82 },
+    "b": { "x": 3.17, "y": 7.19 }
+  },
+
   "defaultColumnHeight": 3.0
 }

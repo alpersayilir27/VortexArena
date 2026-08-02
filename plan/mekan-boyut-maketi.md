@@ -9,13 +9,20 @@ kalıcı bilgi `CLAUDE.md` · `Docs/Sistem-Ozeti.md` (§4 bileşen sözlüğü, 
 
 - Bir arena sahnesini aç: konsolda `ArenaBoundary` hatası **olmamalı**, gizmo taban halkasını ve
   kolon prizmalarını çizmeli.
-- `JSON'dan DimensionMesh Üret` → maket `ArenaBoundary`'nin altında, `EditorOnly` etiketli, kolon
-  sayısı dosyayla aynı.
-- Bir köşeyi ProBuilder ile oynat → `DimensionMesh'i JSON'a Çevir` → dosyada yalnız o köşe değişmiş
-  olmalı (gidiş-dönüş kayıpsız).
+- `JSON'dan DimensionMesh Üret` → maket **sahne kökünde**, dünya orijininde, dönüşsüz, `EditorOnly`
+  etiketli; kolon sayısı dosyayla aynı, `Plane` ölçüsü dosyadaki ölçüyle birebir; `anchor_a`
+  (kırmızı) / `anchor_b` (mavi) küpleri `calibration` noktalarında.
+- Bir köşeyi ProBuilder ile, bir de kalibrasyon küpünü sürükleyerek oynat →
+  `DimensionMesh'i JSON'a Çevir` → dosyada yalnız o iki değer değişmiş olmalı (gidiş-dönüş
+  kayıpsız).
 - Boş sahnede `Template Temellerini Yükle` → muhafazanın `head`/`fadeRenderer`/`warningText`
-  alanları dolmalı, taban şeritleri kırmızı/mavi gelmeli; ikinci çalıştırma hiçbir şeyi
-  ikilememeli.
+  alanları dolmalı, taban şeritleri kırmızı/mavi gelmeli, `anchor_a`/`anchor_b` dosyadaki
+  noktalara oturmalı (rapor A–B mesafesini yazar); ikinci çalıştırma hiçbir şeyi ikilememeli.
+- `VA_CalibrationManager`'ın `anchorA`/`anchorB` alanlarını **boşalt** → Play → konsolda
+  "işaretçiler bulunamadı" uyarısı **olmamalı** (adlarından çözülmeli) ve maketin küpleri
+  seçilmemeli.
+- Play'de A→B kalibrasyonu al: konsolda `1/2 — A yakalandı` ve `2/2 — B yakalandı` satırları,
+  yazılan sanal konumlar dosyadaki noktalarla aynı olmalı.
 - `Configure All Build Elements` → `maps.json` tazelenmeli, sağlık raporu okunmalı.
 - Play: alan kenarına yaklaşınca karartma **rampası** başlamalı, sınır aşılınca tam kararma +
   uyarı.
@@ -24,7 +31,5 @@ kalıcı bilgi `CLAUDE.md` · `Docs/Sistem-Ozeti.md` (§4 bileşen sözlüğü, 
 
 ## Elde kalan yerleştirme işi
 
-- `VA_ArenaRoot` prefabındaki `anchor_a`/`anchor_b` işaretçileri ±3,6 m'de duruyor (referans
-  arenanın ölçüsü). Yeni bir arenada bunlar mekanın gerçek zemin işaretlerine göre taşınır.
 - `VA_BaseZone` şeridi 1×12 m; farklı ölçüdeki arenada `halfExtentX`/`halfExtentZ` ile birlikte
   ölçeklenir.

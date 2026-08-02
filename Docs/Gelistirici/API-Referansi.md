@@ -191,6 +191,7 @@ olmalı. **Arena orijinini KAYDETMEZ** — o `SpawnPoint`'in işidir.
 | ✅ `HalfExtents` | Arena yarı ölçüsü — plandaki çokgenin sınırlayıcı kutusundan gelir (plan yoksa sıfır) |
 | ✅ `LocalCenter` | O kutunun yerel merkezi — admin kuş bakışı kadrajı bunu okur. ⚠️ Ölçü genellikle bir köşeden alınır, yani kutu transformun tam ortasında DEĞİLDİR: kadrajlarken `HalfExtents` tek başına yetmez |
 | ✅ `SetSpectatorMode(bool)` | Muhafazayı susturur (karartma + uyarı kapanır) ama bileşeni ayakta tutar — kuş bakışı kadrajı `HalfExtents`/`LocalCenter`'ı okumaya devam ediyor |
+| ✅ `TryGetCalibrationMarks(out Vector3 a, out Vector3 b)` | Zemin bandının iki noktası, **dünya** uzayında ve zemin seviyesinde. Dosyada nokta yoksa `false`. `ArenaCalibrator` işaretçilerini bununla konumlandırır — boyut dosyasını iki kere çözen ikinci bir okuyucu olmasın diye |
 
 Ölçünün **tek kaynağı** `dimensionsJson` alanına bağlanan boyut dosyasıdır (`ArenaDimensions`);
 bileşen ölçü tutan başka bir alan taşımaz. Plan çözüldüğünde kenar mesafesi çokgene, kolonlara ve
@@ -206,7 +207,8 @@ sahnedeki `ArenaObstacle`'lara olan mesafenin **en küçüğü** olur. Dosya kar
 
 **Arena ölçüsünün tek doğruluk kaynağı** — elle yazılabilir bir JSON dosyası olarak yaşayan saf
 veri sınıfı: `name`, `plane` (tabanın kapalı köşe halkası; ilk nokta sona tekrarlanmaz),
-`columns[]` (`name`/`height`/`points` — her kolon kendi kapalı halkası), `defaultColumnHeight`.
+`columns[]` (`name`/`height`/`points` — her kolon kendi kapalı halkası), `calibration` (`{a, b}` —
+zemin bandının iki noktası), `defaultColumnHeight`.
 Koordinatlar metre ve `ArenaBoundary`'yi taşıyan transformun **yerel
 XZ**'sindedir — JSON'daki `y` dünya **Z**'sidir. Dosya **mekan başınadır**; o mekanın bütün
 sahneleri aynı dosyayı gösterir.
@@ -226,6 +228,7 @@ sahneleri aynı dosyayı gösterir.
 | ✅ `Parse(string, out string error)` | Metinden çözer. **Exception FIRLATMAZ** — bozuk girdide `null` + hata metni döner (çağıran yer sahne yükleme yolu; bir yazım hatası sahneyi düşürmemeli) |
 | ✅ `FromTextAsset(TextAsset, out string error)` | Aynısı `TextAsset` üzerinden; asset `null` ise sessizce `null` |
 | ✅ `LocalBounds()` | Çokgenin yerel XZ sınırlayıcı kutusu (muhafaza ölçüsü + kuş bakışı kadrajı bundan türer) |
+| ✅ `HasCalibration` | İki kalibrasyon noktası yazılmış ve aralarında en az `MinCalibrationSpan` (0,5 m) var mı. ⚠️ `IsValid`'in parçası DEĞİLDİR: noktasız bir dosya muhafazayı çalıştırmaya yeter |
 | ✅ `ToJson(bool pretty)` | Planı metne çevirir — editör araçları dosyayı bununla yazar |
 
 `JsonUtility.FromJsonOverwrite` kullanılır: **JSON'da yazılmayan alan varsayılanında kalır**
@@ -252,18 +255,25 @@ metotlar **tahsis yapmaz** (muhafaza her karede çağırıyor).
 > İki mesafe sözleşmesinin sebebi, muhafazanın ikisini tek bir `Mathf.Min` ile birleştirmesidir:
 > her ikisinde de "artı = güvenli pay". Alan için güvenli olan içerisi, engel için dışarısıdır.
 
-### ArenaDimensionMesh · DimensionPolygon
+### ArenaDimensionMesh · DimensionPolygon · DimensionAnchor
 
 Ölçü maketinin işaretçileri (`Core/Arena`, runtime asmdef — sahne objesi editör-only tipe referans
 veremez). `ArenaDimensionMesh` kökte durur: mekan adı, kaynak `TextAsset` ve geri yazarken korunan
 taşıyıcı alan (`DefaultColumnHeight`). `DimensionPolygon` her çokgende
-durur ve **yalnız** `Kind { Plane, Column }` taşır.
+durur ve **yalnız** `Kind { Plane, Column }` taşır. `DimensionAnchor` kalibrasyon küplerinde durur
+ve **yalnız** `Kind { A, B }` taşır; obje adı sahnedeki işaretçiyle aynıdır ve tek kaynaktan gelir
+(`ArenaCalibrator.AnchorAName`/`AnchorBName` = `anchor_a`/`anchor_b`).
 
-> ⛔ İşaretçilerde nokta/ad/yükseklik **tutulmaz**: noktaların kaynağı mesh, ad `GameObject`'in adı,
-> yükseklik mesh'in Y aralığıdır. Kopyalamak, sahnede düzenlenen değerden sessizce sapan ikinci bir
-> kaynak üretirdi.
-> ⚠️ Maketin kökü `EditorOnly` etiketlidir (build'e girmez) ve `ArenaBoundary`'nin altında,
-> yerel dönüşümü sıfırlanmış durmalıdır.
+> ⛔ İşaretçilerde nokta/ad/yükseklik **tutulmaz**: noktaların kaynağı mesh (kalibrasyon
+> küpünde transform), ad `GameObject`'in adı, yükseklik mesh'in Y aralığıdır. Kopyalamak, sahnede
+> düzenlenen değerden sessizce sapan ikinci bir kaynak üretirdi.
+> ⚠️ Kalibrasyon küpü sahnedeki işaretçiyle **aynı adı taşır**; ikisini ayıran şey ad değil bu
+> bileşendir. `EditorOnly` etiketi build'den siler ama editör Play kipinden silmez, ve
+> `ArenaCalibrator` işaretçilerini ada bakarak çözüyor — arama `DimensionAnchor` taşıyan objeleri
+> atladığı için maketin küpü gerçek işaretçinin yerine geçemez.
+> ⚠️ Maketin kökü `EditorOnly` etiketlidir (build'e girmez) ve **sahneden bağımsız** kurulur:
+> dünya orijininde, dönüşsüz, 1 ölçekte. Elle taşınıp döndürülebilir — çıkarım bu kökün yerel
+> uzayına göre yapılır. **Ölçeği değiştirilmez**: plan metre cinsindendir.
 
 > ⛔ **Muhafazayı susturmak için bileşeni kapatma** — kapalı bileşen karartmayı son değerinde
 > dondurur **ve planı çözmeyi bırakır** (kuş bakışı kadrajı ona bağlı). Doğrusu
@@ -400,12 +410,12 @@ kill-feed, kendi öldürme/ölüm sayacın.
 
 | Menü | Ne yapar |
 |---|---|
-| `Tools > VortexArena > Dev` | Rol · sunucu hedefi · Play başlangıcı · derle. Kısayol **Ctrl+Alt+R** (rol çevirir) |
-| `Tools > VortexArena > Template Temellerini Yükle` | Aktif sahneye altyapı prefab ÖRNEKLERİ + `ArenaCalibrator` ve `ArenaBoundary`'nin rig alanlarını bağlama + boyut dosyası bağlama; idempotent (`TemplateBasicsLoader`) |
-| `Tools > VortexArena > JSON'dan DimensionMesh Üret` | Boyut dosyasından ölçü maketi (`Plane` + `Columns/*`), `ArenaBoundary` altına, `EditorOnly` etiketli; idempotent (`DimensionMeshBuilder`) |
-| `Tools > VortexArena > DimensionMesh'i JSON'a Çevir` | Maketi okuyup kaynak boyut dosyasının üstüne yazar; doğrulanamayan çıktıda dosyaya dokunmaz (`DimensionMeshReader`) |
-| `Tools > VortexArena > Configure All Build Elements` | `MapDefinition` + `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json` export + sağlık raporu (`BuildElementsConfigurator`) |
-| `Tools > VortexArena > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` — girdi başına yalnız `sceneName` + `modes` (arena ölçüsü sunucuya gitmez). ⚠️ JSON'u elle düzenleme, export ezer |
+| `Tools > VortexArena > Development > Dev` | Rol · sunucu hedefi · Play başlangıcı · derle. Kısayol **Ctrl+Alt+R** (rol çevirir) |
+| `Tools > VortexArena > Arena > Template Temellerini Yükle` | Aktif sahneye altyapı prefab ÖRNEKLERİ + `ArenaCalibrator` ve `ArenaBoundary`'nin rig alanlarını bağlama + boyut dosyası bağlama + `anchor_a`/`anchor_b`'yi dosyadaki `calibration` noktalarına oturtma; idempotent (`TemplateBasicsLoader`) |
+| `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` | Boyut dosyasından ölçü maketi (`Plane` + `Columns/*` + `anchor_a`/`anchor_b`), **sahne köküne dönüşsüz**, `EditorOnly` etiketli; idempotent (`DimensionMeshBuilder`) |
+| `Tools > VortexArena > Arena > DimensionMesh'i JSON'a Çevir` | Maketi (köşeler + kalibrasyon işaretçileri) okuyup kaynak boyut dosyasının üstüne yazar; doğrulanamayan çıktıda dosyaya dokunmaz, işaretçi yoksa `calibration` korunur (`DimensionMeshReader`) |
+| `Tools > VortexArena > Build > Configure All Build Elements` | `MapDefinition` + `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json` export + sağlık raporu (`BuildElementsConfigurator`) |
+| `Tools > VortexArena > Server > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` — girdi başına yalnız `sceneName` + `modes` (arena ölçüsü sunucuya gitmez). ⚠️ JSON'u elle düzenleme, export ezer |
 | `GameObject > VortexArena > Spawn Point` | Arenanın **tek** başlangıç noktasını üretir (yerleştirme elle) |
 | `GameObject > VortexArena > Arena Roof` | Çatı geometrisini işaretler (admin kuş bakışında gizlenir) |
 | `GameObject > VortexArena > Network Parent` | Sahne objesine `NetIdentity` + benzersiz `sceneId` |

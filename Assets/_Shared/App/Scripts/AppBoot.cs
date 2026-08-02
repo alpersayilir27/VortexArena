@@ -22,7 +22,7 @@ namespace VortexArena.App
     /// okunur: verilmişse VR oyuncusunda da keşif zincirinin ÜSTÜNDE yer alır
     /// (bkz. LobbyController) — açıkça verilen adres her zaman kazanır.
     ///
-    /// Editörde rol/adres seçimi Inspector'dan DEĞİL `Tools > VortexArena > Dev`
+    /// Editörde rol/adres seçimi Inspector'dan DEĞİL `Tools > VortexArena > Development > Dev`
     /// penceresinden yapılır (`DevSession` bu değerleri Boot koşmadan önce yazar; burada
     /// yalnız "zaten çözülmüşse dokunma" kuralı vardır). Sebep: [SerializeField] override
     /// her değişiklikte Boot.unity'yi kirletiyordu ve ekipte birbirinin ayarını eziyordu.

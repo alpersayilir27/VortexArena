@@ -10,7 +10,7 @@ using Object = UnityEngine.Object;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Build Weapon Prefabs</c> — tablodaki silahların kitini
+    /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Build Weapon Prefabs</c> — tablodaki silahların kitini
     /// üretir/günceller: <c>WD_&lt;Ad&gt;.asset</c> (WeaponDefinition), mevcut
     /// <c>WPN_&lt;Ad&gt;.prefab</c>'ların bağları/VFX'i, <c>FX_RemoteShot.prefab</c> ve
     /// <c>Resources/WeaponCatalog.asset</c>.
@@ -258,7 +258,7 @@ namespace VortexArena.Core.Editor
         // ------------------------------------------------------------ menüler
 
         /// <summary>Tam akış: WD asset'leri → WPN prefablarının güncellenmesi → FX → katalog → ikinci geçiş.</summary>
-        [MenuItem("Tools/VortexArena/Build Weapon Prefabs")]
+        [MenuItem("Tools/VortexArena/Weapons/Build Weapon Prefabs", false, 20)]
         public static void BuildAll()
         {
             _warnings = 0;
@@ -345,7 +345,7 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>Yalnız ADIM 4+5: kataloğu ve WD.prefab bağlarını tazeler; prefab üretmez.</summary>
-        [MenuItem("Tools/VortexArena/Build Weapon Prefabs (Yalnız Kataloğu Tazele)")]
+        [MenuItem("Tools/VortexArena/Weapons/Build Weapon Prefabs (Yalnız Kataloğu Tazele)", false, 21)]
         public static void RefreshCatalogOnly()
         {
             _warnings = 0;
