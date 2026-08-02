@@ -160,20 +160,20 @@ belirir.
 **OYUNCU KİMLİĞİ** bölümünden düzenleyip **KİMLİĞİ UYGULA**'ya bas. Verdiğin numara o an bağlı
 başka bir oyuncudaysa değişiklik kabul edilmez ve durum satırında sebebi yazar.
 
-### 3.2 Bağlanmazsa — gizli IP paneli: **sağ kumandada A tuşuna 2 kez**
+### 3.2 Bağlanmazsa — gizli IP paneli: **sağ kumandada joystick'e 1 saniye bas**
 
 Bazı ağlarda gözlük sunucuyu kendiliğinden bulamaz. Bu durumda adres **elle** girilir.
-Panel normalde **gizlidir** (oyuncular karıştırmasın diye) ve şu kombinasyonla açılır:
+Panel normalde **gizlidir** (oyuncular karıştırmasın diye) ve şu jestle açılır:
 
-> ### 🎮 Sağ kumandadaki **A** tuşuna **hızlıca İKİ KEZ** bas (2×A)
+> ### 🎮 Sağ kumandadaki **joystick'e bastır ve 1 saniye basılı tut**
 >
-> - Sağ kumandanın **üstteki** düğmesi = **A**.
-> - İki basış arası **yarım saniyeden kısa** olmalı — kapı zilini iki kez çalar gibi hızlı.
-> - Doğru yaptıysan kumanda **kısa bir titreşim** verir ve panel açılır.
-> - Aynı kombinasyon paneli **kapatır** da.
+> - Joystick'i yana itmek değil, **aşağı bastırmak** (tıklamak) gerekir.
+> - Parmağını **bir saniye boyunca kaldırma** — arada bırakırsan sayaç sıfırlanır.
+> - Süre dolduğunda kumanda **kısa bir titreşim** verir ve panel açılır.
+> - Aynı jest paneli **kapatır** da.
 
-Panel açılmıyorsa: basışlar arası çok yavaştır → daha hızlı dene. Yanlış kumandaya
-basıyor olabilirsin → **sağ** kumanda, üstteki düğme.
+Panel açılmıyorsa: basılı tutma süresi yetmemiştir → biraz daha uzun bekle. Yanlış kumandaya
+basıyor olabilirsin → **sağ** kumanda.
 
 **Panelde adresi girmek**
 
@@ -194,8 +194,8 @@ basıyor olabilirsin → **sağ** kumanda, üstteki düğme.
 **Yardımcı ipuçları**
 
 - Gözlük sunucuyu ~8 saniye bulamazsa lobide zaten
-  *"Sunucu bulunamadı. Adresi elle girmek için sağ kumandada A'ya İKİ KEZ bas."*
-  yazısı çıkar — yani kombinasyonu ezberlemek zorunda değilsin, ekran hatırlatır.
+  *"Sunucu bulunamadı. Adresi elle girmek için sağ kumandada joystick'e 1 sn basılı tut."*
+  yazısı çıkar — yani jesti ezberlemek zorunda değilsin, ekran hatırlatır.
 - Maç sırasında bağlantı koparsa oyuncunun ekranında turuncu şeritli bir kart belirir ve
   aynı ipucunu verir. Gözlük arka planda **kendiliğinden yeniden bağlanmayı dener**;
   sunucu geri geldiğinde kart kaybolur.
@@ -419,7 +419,7 @@ ilet.
     ayağa kaldırır. Oyuncuya söylenecek cümle: **"Elendin, takımın turu bitirene kadar izle."**
   - Takım Ölüm Maçı ve Herkes Tek'te oyuncu şartı yerine getirmezse sistem bir süre sonra onu
     zaten canlandırır (maç kilitlenmesin diye).
-- Oyuncu arena sınırına yaklaşırsa duvarlar belirginleşir; dışarı çıkarsa ekranı kararır ve
+- Oyuncu arena sınırına yaklaşırsa ekranı hafifçe kararmaya başlar; dışarı çıkarsa tümden kararır ve
   uyarı çıkar → geri içeri girmesi yeterli.
 - Maç, süre dolunca veya skor limitine ulaşılınca biter; kazanan duyurulur ve **kazanan ekranı
   sen bir şey seçene kadar ekranda kalır.** Kendiliğinden lobiye dönülmez: sıradaki haritayı seç
@@ -468,7 +468,7 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 
 | Ne görüyorsun | Muhtemel sebep | Ne yapacaksın |
 |---|---|---|
-| Gözlükte "Sunucu bulunamadı" | Sunucu kapalı ya da gözlük sunucuyu bulamıyor | Önce sunucu penceresi açık mı bak. Açıksa: **sağ kumandada 2×A** → adresi elle gir (Bölüm 3.2) |
+| Gözlükte "Sunucu bulunamadı" | Sunucu kapalı ya da gözlük sunucuyu bulamıyor | Önce sunucu penceresi açık mı bak. Açıksa: **sağ kumandada joystick'e 1 sn basılı tut** → adresi elle gir (Bölüm 3.2) |
 | Gözlük yanlış Wi-Fi'de | Gözlük ev/misafir ağına bağlanmış | Gözlüğün Wi-Fi ayarından arenaya özel ağı seç |
 | Yönetim ekranı turuncu hata kartı gösteriyor | Sunucuya ulaşamıyor | Sunucu penceresi açık mı? Launcher'daki **Sunucu IP** doğru mu? Sonra **Yeniden Bağlan** |
 | Yönetim ekranında arena görünüyor ama oyuncu yok | Henüz kimse bağlanmadı ya da gözlükler kalibre değil | Oyuncu listesi boşsa gözlükleri kontrol et (Bölüm 3). Liste doluysa ama halkalar yoksa **kalibrasyon** yaptır (Bölüm 4) |
@@ -517,7 +517,7 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten iste:
 
 - [ ] Wi-Fi ağ adı (SSID) ve şifresi
-- [ ] **Sunucu bilgisayarının adresi** (ör. `192.168.1.10`) — 2×A paneline girilecek numara
+- [ ] **Sunucu bilgisayarının adresi** (ör. `192.168.1.10`) — gizli IP paneline girilecek numara
 - [ ] Zemindeki **A–B işaretleri arası mesafe** (bantlar kayarsa yeniden yerleştirmek için)
 - [ ] Kullanılacak arena/harita adı
 - [ ] Gözlük etiketleri ↔ ekrandaki kimlikler listesi (`7 · ertu` = hangi fiziksel gözlük)
@@ -531,7 +531,7 @@ Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten
 ┌──────────────────────────────────────────────────────────┐
 │  SAĞ KUMANDA — OPERATÖR KISAYOLLARI                      │
 ├──────────────────────────────────────────────────────────┤
-│  A tuşuna hızlıca 2 KEZ   →  Gizli IP paneli (aç/kapat)  │
+│  JOYSTICK'e bas, 1 sn tut →  Gizli IP paneli (aç/kapat)  │
 │                              (lobide, bağlanamayınca)    │
 │                                                          │
 │  A BASILIYKEN B'ye 2 KEZ  →  Kalibrasyon noktası al      │

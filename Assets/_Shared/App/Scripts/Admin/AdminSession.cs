@@ -68,7 +68,6 @@ namespace VortexArena.App.Admin
         private const string KeyMarkers = Prefix + "Markers";
         private const string KeyNameplates = Prefix + "Nameplates";
         private const string KeyFreeSpeed = Prefix + "FreeSpeed";
-        private const string KeyWallAlpha = Prefix + "WallAlpha";
         private const string KeyRoof = Prefix + "Roof";
 
         /// <summary>Serbest kip taban hızı sınırları (m/sn) — tercih slider'ı bu aralıkta.</summary>
@@ -85,7 +84,6 @@ namespace VortexArena.App.Admin
         private static AdminMarkerVisibility _markers = AdminMarkerVisibility.TopDownOnly;
         private static bool _nameplates = true;
         private static float _freeSpeed = 4f;
-        private static float _wallAlpha = 0.25f;
         private static AdminRoofMode _roof = AdminRoofMode.HideInTopDown;
         private static bool _loaded;
 
@@ -192,25 +190,6 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Arena duvarlarının gözlemci kipindeki sabit saydamlığı (0..1).</summary>
-        public static float WallAlpha
-        {
-            get { Load(); return _wallAlpha; }
-            set
-            {
-                Load();
-                float clamped = Mathf.Clamp01(value);
-                if (Mathf.Approximately(_wallAlpha, clamped))
-                {
-                    return;
-                }
-
-                _wallAlpha = clamped;
-                PlayerPrefs.SetFloat(KeyWallAlpha, clamped);
-                Raise();
-            }
-        }
-
         /// <summary>Arena çatısı gözlemcide ne zaman gizlensin (varsayılan: kuş bakışında).</summary>
         public static AdminRoofMode Roof
         {
@@ -293,7 +272,6 @@ namespace VortexArena.App.Admin
             _markers = (AdminMarkerVisibility)PlayerPrefs.GetInt(KeyMarkers, (int)AdminMarkerVisibility.TopDownOnly);
             _nameplates = PlayerPrefs.GetInt(KeyNameplates, 1) != 0;
             _freeSpeed = Mathf.Clamp(PlayerPrefs.GetFloat(KeyFreeSpeed, 4f), FreeSpeedMin, FreeSpeedMax);
-            _wallAlpha = Mathf.Clamp01(PlayerPrefs.GetFloat(KeyWallAlpha, 0.25f));
             _roof = (AdminRoofMode)PlayerPrefs.GetInt(KeyRoof, (int)AdminRoofMode.HideInTopDown);
         }
 

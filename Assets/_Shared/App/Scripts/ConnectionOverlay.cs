@@ -426,7 +426,7 @@ namespace VortexArena.App
             }
 
             return "Sunucunun açık olduğundan emin olun.\n" +
-                   "Adresi elle girmek için sağ kumandada A'ya İKİ KEZ basın.";
+                   "Adresi elle girmek için sağ kumandada joystick'e 1 sn basılı tutun.";
         }
 
         private void ApplyButtonState(bool addressKnown)

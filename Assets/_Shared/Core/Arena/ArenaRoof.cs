@@ -18,8 +18,8 @@ namespace VortexArena.Core.Arena
     /// GÖRÜNÜRLÜK/AYIKLAMA içindir — davranış Renderer listesinden gelir, damga unutulsa da
     /// gizleme çalışır.</para>
     ///
-    /// <para><b>Gizleme yöntemi:</b> <c>MaterialPropertyBlock</c> ile <c>_BaseColor</c> alfası
-    /// (<see cref="ArenaBoundary"/> duvar saydamlığıyla aynı desen). Tam gizlemede Renderer
+    /// <para><b>Gizleme yöntemi:</b> <c>MaterialPropertyBlock</c> ile <c>_BaseColor</c> alfası —
+    /// paylaşılan malzeme değiştirilmez, örnek başına bir blok yazılır. Tam gizlemede Renderer
     /// KAPATILMAZ, <see cref="ShadowCastingMode.ShadowsOnly"/>'ye alınır: çatı çizilmez ama
     /// gölgesini atmaya devam eder. Kapatılsaydı iç mekân aydınlanır, kuş bakışı düz ve
     /// okunmaz bir aydınlık levhaya dönerdi.</para>
@@ -59,8 +59,9 @@ namespace VortexArena.Core.Arena
         /// <summary>
         /// Sahnedeki tüm çatılara alfa uygular ve değeri sonraki sahneler için hatırlar.
         /// 1 = normal, 0 = çizilmez (gölge kalır). Aradaki değerler yarı saydam çatı verir —
-        /// ama yalnız malzeme Transparent kipteyse (duvar saydamlığındaki kısıtın aynısı);
-        /// Opaque malzemede ara değer görsel olarak 1 gibi davranır, 0 yine tam gizler.
+        /// ⚠️ ama yalnız malzeme <b>Transparent</b> surface type'taysa: Opaque malzemede alfa
+        /// yazımının görsel karşılığı yoktur, ara değer 1 gibi davranır (0 yine tam gizler, çünkü
+        /// o yol alfadan değil <see cref="ShadowCastingMode.ShadowsOnly"/>'den geçer).
         /// </summary>
         public static void ApplyAll(float alpha)
         {

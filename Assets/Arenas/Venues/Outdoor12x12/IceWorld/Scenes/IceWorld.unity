@@ -1335,7 +1335,7 @@ PrefabInstance:
   m_SourcePrefab: {fileID: 100100000, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
 --- !u!4 &220202141 stripped
 Transform:
-  m_CorrespondingSourceObject: {fileID: 8915795193496911649, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
+  m_CorrespondingSourceObject: {fileID: 700569645560758806, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
   m_PrefabInstance: {fileID: 220202140}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &227510461
@@ -4703,17 +4703,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.ArenaBoundary
   head: {fileID: 1089983458}
-  wallRenderers:
-  - {fileID: 2002973095}
-  - {fileID: 1343732305}
-  - {fileID: 2024839526}
-  - {fileID: 199557688}
   fadeRenderer: {fileID: 1828584550}
   warningText: {fileID: 1338664383}
-  dimensionsJson: {fileID: 4900000, guid: 10fc6a179e44b874baa1c6d123f7e81e, type: 3}
+  dimensionsJson: {fileID: 4900000, guid: 6d82ec80ea878a04197a1eada67bce3f, type: 3}
   warnDistance: 1
-  minWallAlpha: 0.05
-  maxWallAlpha: 0.85
+  warnFadeAlpha: 0.35
   fadeOutsideDistance: 0.3
   maxFadeAlpha: 0.96
 --- !u!1 &809387973
@@ -9680,7 +9674,7 @@ PrefabInstance:
   m_SourcePrefab: {fileID: 100100000, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
 --- !u!4 &1451800956 stripped
 Transform:
-  m_CorrespondingSourceObject: {fileID: 8915795193496911649, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
+  m_CorrespondingSourceObject: {fileID: 700569645560758806, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
   m_PrefabInstance: {fileID: 1451800955}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &1477946636
