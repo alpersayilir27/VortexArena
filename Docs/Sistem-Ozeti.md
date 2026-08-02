@@ -633,9 +633,17 @@ Kablosuzda maliyet bayt başına değil **çerçeve başına** ödenir; ürünü
 snapshot   (sunucu TX) = SNAPSHOT_RATE_HZ × (6 + 88×N) × (N+A)     ← N² büyür
                          olay varken tek pakette birleşir (0x05, §6.8): (7 + 88×N + 9×E/20) × (N+A)
 pose       (sunucu RX) = POSE_RATE_HZ × 95 × N
+skeleton   (sunucu RX) = SKELETON_RATE_HZ × (34 + B) × N            ← B = blob boyu
+           (sunucu TX) = SKELETON_RATE_HZ × ⌈(31+B)×N / 1200⌉ datagram × (N+A)   ← N² büyür
 health_update (sunucu TX, TCP) = isabet/sn × (1 + admin sayısı) × ~140 B   ← N ile büyümez
 rttProbe   (her iki yön) = 1 Hz × (N+A) × 2 datagram
 ```
+
+⚠️ **İskelet kanalı bu bütçenin en duyarlı kalemidir** ve tasarımı ona göredir: oyuncu başına ayrı
+datagram yollansaydı `SKELETON_RATE_HZ × N × (N+A)` paket ederdi, batch'leme (§6.10) onu
+`⌈(31+B)×N / 1200⌉` ile böler. `B` bilinmeden hesap yapılmaz — **ölçülür** (sunucu konsolundaki
+`[state]` satırında `iskelet … p/s`). Kanal ayrıca poz kanalından **daha düşük hızda** akar; oradaki
+sayı bir akıcılık ayarı değildir, alıcıda SDK'nın kendi interpolasyonu koşuyor.
 
 Snapshot'ın `N²` olmasının sebebi bilinçli: her oyuncu diğerlerinin pozunu **ve kendi pozunu**
 alır (kendi pozunu yok sayar — §3.5). Kazancı hedef başına serileştirme yapmamaktır.
@@ -858,8 +866,12 @@ anchor'dan geri yükleme) tek kapıdan geçer: statik `Calibrated` olayı (dinle
 `CalibrationState`) ve statik **`CalibrationGeneration`** sayacı. Sayaç abonelik istemez — geç
 uyanan ya da arada kapatılan bir dinleyici olayı sessizce kaçırır (yerel gövde avatarı rig'i
 kaybedince kapanıyor ve harita değişiminde kayıtlı anchor tam o aralıkta geri yükleniyor), sayacı
-kaçıramaz: sonraki karede farkı görür. Tüketicisi `ThreePointBodyIK`'dır, avatarın boy ölçümünü
-her hizalamadan sonra tazeler.
+kaçıramaz: sonraki karede farkı görür. Tüketicisi `LocalBodyAvatar`'dır: her hizalamadan sonra
+gövde oranını yeniden ölçtürür (`CharacterRetargeter.Calibrate()`, gecikmeli).
+⚠️ **İki kalibrasyon ayrı şeydir:** bu sınıf rig'i fiziksel arenaya hizalar (sunucu-otoriter durum,
+§10.6), SDK'nınki karakterin gövde oranını oyuncununkine sabitler (tamamen yerel, ağda karşılığı
+yok). Aralarındaki tek bağ zamanlamadır — arena hizalamasından sonra oyuncu eğilip doğrulmuştur,
+yani boy ölçmek için doğru andır.
 ⚠️ **Sıra A → B'dir ve geometrik olarak doğrulanamaz**: iki nokta hangisinin önce alındığını
 söylemez, mesafe kontrolü de simetriktir. Garanti prosedüreldir — ilk yakalama A sayılır, o anda
 A işaretçisi yanar ve log `1/2 — A yakalandı` yazar. Karıştırılırsa arena 180° ters döner.
@@ -936,13 +948,20 @@ sistemlerin `Velocity over Lifetime` XZ'sini ve Noise şiddetini tek Perlin kana
 rüzgar şiddeti + yönü + türbülans birlikte nefes alır. Temel değerler `Awake`'te alınır,
 katmanların göreli hız farkı korunur).
 
-> **Oyuncu kendi gövdesini görür** (`LocalBodyAvatar`) — omuzlarından aşağı kollarını ve gövdesini.
-> Sürücü Movement SDK DEĞİL, uzak avatarlarda zaten çalışan `ThreePointBodyIK`'dır: yerel rig
-> anchor'larından (`centerEyeAnchor` + `left/rightHandAnchor`, dünya uzayında) beslenir, yani yerel
-> ve uzak gövde bilek köprüsü (`HandGripConvention`) dahil **tek kod yolunu** paylaşır. Movement SDK
-> `CharacterRetargeter` yoluna dönülmez: retarget çıktısı dünya uzayındadır ve free-roam'da
-> kalibrasyonla kaydırdığımız rig'le çakışır (§7, "retarget avatarı hareket eden kökün altına
-> konmaz").
+> **Gövde Meta Movement SDK ile çözülür ve yerel/uzak AYNI yoldan geçer.** Oyuncu kendi gövdesini
+> omuzlarından aşağı görür (`LocalBodyAvatar`), başkaları onu uzak avatarda görür — ikisi de **aynı
+> prefab, aynı retarget config, aynı kod**. Tek fark
+> `ArenaNetCharacterBehaviour.HasInputAuthority`'dir: yerelde `true` (gövde body tracking'den çözülür
+> ve ağa akar), uzakta `false` (gelen iskelet uygulanır, sensör hiç koşmaz).
+>
+> ⚠️ **Üç noktadan gövde TÜRETMEK bırakıldı.** Sebep yapısaldır: Meta'nın body tracking'i bir cihaz
+> servisidir ve dışarıdan poz kabul etmez, yani uzak avatara "aynı body tracking'i takmak" her
+> avatarın YEREL gövdeyi oynatması demektir. Doğru çözüm gövdeyi sahibinin cihazında çözüp sonucu
+> akıtmaktır (`0x07`/`0x08`, §6.9/6.10) — SDK'nın kendi çözümü de budur.
+>
+> ⚠️ **Bacak izleme YOKTUR ve gelmeyecek:** Quest 3'te bacakta sensör yok. `BodyJointSet.FullBody`
+> seçilse bile alt gövde ÜRETİLİR (generative legs), yani "full body" adı izlemeyi değil eklem
+> sayısını anlatır.
 
 | Sınıf | Görevi |
 |---|---|
@@ -962,11 +981,11 @@ katmanların göreli hız farkı korunur).
 | `Combat/WeaponGrantKind` | `None` / `Disposable` / `Persistent` — silahın **nasıl** verildiği (`Weapon.GrantTo`'nun ikinci argümanı). `Disposable` = FFA'nın rastgele silahı: rezerv yok, reload kapalı, her zaman tek elli. `Persistent` = çerçeveden seçilen silah: tam rezerv, reload AÇIK, ikinci el ön kabzayı tutabilir. **Neden tek bayrak değil:** `IsGranted` üç ayrı kuralı birbirine kilitliyordu ("elde sabit" + "reload kapalı" + "tek el/rezervsiz"); çerçeve silahı yalnız ilkini ister. ⚠️ Serialize EDİLMEZ (çalışma anı durumu), o yüzden "yeni değer sona" kuralı burada bağlayıcı değildir |
 | `Combat/SimpleWeaponDissolve` | *(her `WPN_*` kökünde; `WeaponKitBuilder` takar ve `DissolveEffect.mat`'i bağlar)* Silah ele geldiğinde **çözülerek belirir**: model geçici olarak çözülme materyaline çevrilir, `_Dissolve` 1→0 sürülür (SmoothStep, `appearSeconds`), sonra özgün materyaller geri konur. **Yalnız beliriş vardır** — bırakışta efekt yoktur, silah anında gider ve yerinde kalan bir kopya bırakmaz. Kapı **`Weapon.HeldChanged`**'dir, çağrı noktaları değil — üç tutma yolu da (rastgele verilen silah, çerçeve klonu, ISDK kavraması) tek yerden karşılansın, yeni bir yol açıldığında sessizce unutulmasın (`WeaponFrame` aynı olayı aynı sebeple dinliyor). Silahın **kendi albedosu** (`_BaseMap`/`_MainTex` + `_BaseColor`/`_Color`) özgün materyalden okunup `MaterialPropertyBlock` ile taşınır: çözülme materyali TEK bir asset ve hangi silaha takıldığını bilmiyor, taşınmasaydı silah düz renkli bir siluet olarak çözülürdü. Materyal `.sharedMaterials` ile takılır (`.materials` her renderer için toplanmayan bir kopya üretirdi). Hedefler `Awake`'te bir kez toplanır: yalnız `MeshRenderer`/`SkinnedMeshRenderer` (namlu alevi/duman ve nişan ışını kendi materyalleriyle çizilir), `WeaponFrame`'in alt ağacı atlanır. ⚠️ `OnDisable` materyalleri geri koyar: obje kapanınca coroutine ölüyor — geri konmasaydı silah bir dahaki çağrılışında yarı çözülmüş belirir, üstelik property block'lu renderer SRP Batcher dışında kalmaya devam ederdi. ⚠️ **Kenar rengi/kalınlığı, desen sıklığı gibi görünüm ayarları bileşende YOKTUR ve eklenmez** — onların tek doğruluk kaynağı **materyaldir** (`_Edge_Color`, `_Edge_Width`, `_NoiseScale`, `_DissolveAxis`, `_DirectionStrength` orada ayarlanır); bileşen yalnız `_Dissolve`'u ve albedoyu yazar, materyalin geri kalanına dokunmaz. Serialize edilen alan bu yüzden yalnız iki tane: `dissolveMaterial` ve `appearSeconds` (süreyi `WeaponKitBuilder` her koşuda prefaba geri yazar). **İki materyal seçeneği var:** `DissolveEffect` (Simple Noise — yumuşak lekeler) ve `VoronoiDissolveEffect` (Voronoi — hücresel, "parçalara ayrılıyor"); ikisi de aynı property setini konuşur, yani bileşende yalnız materyal alanı değişir |
 | `Combat/FrozenGrabTransformer` | Hiçbir şey yapmayan ISDK `ITransformer`'ı: kavranan nesneyi **yerinde dondurur**. Çerçevedeki kaynak silahın `Grabbable._oneGrabTransformer`/`_twoGrabTransformer` alanlarına bağlanır. ⚠️ **Alanları boş bırakmak hareketsizlik değil, SERBEST hareket demektir** — `Grabbable.Start` ikisi de boşsa kendisi bir `GrabFreeTransformer` üretir |
-| `Player/ThreePointBodyIK` | Ağdan gelen **üç noktadan** (kafa + iki el) humanoid iskeleti çözer — uzak avatarların sürücüsü. Kemikler isimle değil `Animator.GetBoneTransform` ile bulunur (karakter humanoid; model değişse bu bileşende tek satır değişmez); **gövde ölçüleri de sabit sayı değil, karakterin bind pozundan ölçülür** (kalça düşüşü, ayak bileği yüksekliği). ⚠️ Gelen "kafa" pozu **GÖZÜN** pozudur (`centerEyeAnchor`), kafa kemiğinin değil: iskelet `headBoneToEyeOffset` kadar geriye/aşağıya oturtulur, yoksa gövde bir kafa yarısı kadar yukarı+öne kayar ve oyuncu aşağı bakınca kendi göğsünün içini görür (§7). Avatar oyuncunun **ölçülen ayakta GÖZ yüksekliğine göre ölçeklenir** (payda da model GÖZ yüksekliğidir — kafa kemiğine bölmek avatarı ~%8 büyütürdü) — model sabit boydadır, ölçeklenmezse kısa kol ele yetişmez, bacak zemine değmez. ⚠️ **Boy TEK BİR ANDA ölçülür ve sabitlenir:** ölçüm penceresi kalibrasyon tamamlanınca (`ArenaCalibrator.CalibrationGeneration`) ya da avatar başka bir oyuncuya devredilince (`ResetPoseState`) açılır, **3 sn** sonra kapanır ve o ana kadar yalnız GÜVENİLİR kareler sayılır. Gecikme, oyuncunun zemin işaretine eğilmiş hâlde ölçülmemesi içindir — aranan boy AYAKTA olandır; sabitlendikten sonra çömelme/zıplama/poz sıçraması ölçeği DEĞİŞTİRMEZ. Ölçüm tek kareden değil pencerenin son yarım saniyesinin **ortalamasından** alınır (kendini düzeltmeyen bir değerde tek gürültülü kare maçın kalanı boyunca yanlış boy demektir), ölçüm inene kadar da geçici olarak kayan pencere maksimumu sürülür (3 sn model boyunda donmuş bir avatar, kısa oyuncunun kendi kollarını yanlış yerde görmesi olurdu). Ölçek transform'a doğrudan yazılmaz, **yumuşatılır** (pencere devri tek karede atlıyor ve yerel gövdede "kol uzayıp kısalıyor" olarak görünüyordu); istisna avatarın ilk karesi ile **ölçümün indiği karedir** — orada hedef son kez değişir, yumuşatma onu saniyelerce süren bir büyüme animasyonuna çevirirdi. Ölçek kırpması (`0.25×–1.75×`) bir boy denetimi değil son savunma hattıdır: dar bir tavan kısa oyuncuyu kendi gövdesinden büyük görmeye zorlardı. Gövde: kalça kafanın altında, gövde yaw'ı kafayı **gecikmeli** takip eder (anında yapışsaydı avatar her bakışta bütün gövdesiyle dönerdi), omurga eğimi zincire paylaştırılır. Kollar/bacaklar: Movement SDK `IKUtilities.SolveCCDIK`; el ve kafa kemiğine **yalnız rotasyon** yazılır (konum yazmak kemiği ebeveyninden koparır). ⚠️ Çözücüye **ham dünya hedefi verilmez**: `SolveCCDIK` ölçeği görmezden geldiği için hedef zincir kökü etrafında `1/S` ile ölçeklenir (§7) — atlanırsa el hedefi sistematik olarak ıskalar. Bilek burulmasının bir payı **önkola devredilir** (`forearmTwistShare`, swing-twist ayrıştırması): Mixamo rig'inde twist kemiği yok ve tüm roll tek eklemde birikince mesh "şeker ambalajı" gibi çöküyor (§7). Gizlenmiş uzuv (ölçeği sıfıra yakın kemik) hiç çözülmez. ⚠️ Ele yazılan rotasyon ağdan geldiği gibi DEĞİL, `HandGripConvention` köprüsünden geçirilerek yazılır — anchor (kumanda) uzayı ile el kemiğinin bind ekseni farklı sözleşmelerdir (§7, "izleme/ağ uzayından gelen rotasyon humanoid kemiğe doğrudan yazılmaz" maddesi). Bacaklar **tamamen prosedürel** (adım döngüsü + ayak IK): projede yürüme klibi yok ve aynı anda iki ayak birden adım atmaz. Her kare önce **bind pozuna dönülür** (§7 tuzaklar). Gelen poz önce **denetlenir**: NaN/∞ taşıyan poz hiç uygulanmaz, normalize edilemeyen rotasyon kimliğe düşürülür, kafa arena zemininden makul aralığın (0.6–2.6 m) dışındaysa zemin arenadan değil **pozdan** türetilir — avatar yanlış yükseklikte ama BÜTÜN bir insan çizilir ve sayılarla bir kez uyarı basılır. Sabitlenen tek tahmin boydur ve **geri dönüş yolu vardır** (yukarıdaki iki tetikleyici); gerisi mandallanmaz: ayak hedefinden 1 m'den fazla uzaklaşınca ziplatılır, hepsi `ResetPoseState()` ile sıfırlanır (avatar başka oyuncuya devredilebiliyor). ⚠️ Dirsek/omuz yönü TAHMİNDİR — gerçek body tracking değildir; ağa tek bayt eklenmez |
-| `Player/HandGripConvention` | Anchor (kumanda) uzayındaki el pozunu karakterin el kemiğinin bind eksenine çeviren **statik köprü** — `ThreePointBodyIK`'nın el rotasyonunu yazdığı tek kapı. Kemik anatomisi (parmak yönü = hand→MiddleProximal, avuç normali = parmak×başparmak) **modelden çalışma anında ölçülür**, sabit derece yazılmaz: karakter değişince burada tek satır değişmez. Sabit olan tek şey anchor tarafındaki el anatomisidir — **tek ayar noktası** budur ve bugünkü değeri ergonomik bir TAHMİNDİR. Sol ve sağ ayrı hesaplanır; ortak bir ofset iki eli birden düzeltemez (§7). Doğru değere iki yol var: `HandGripCalibrationProbe` ile **ölçmek**, ya da `ThreePointBodyIK`'nın "Bilek eşlemesi (canlı ayar)" alanlarıyla **çevirmek** (admin uzak avatarları çizdiği için Windows tarafında canlı, APK turu gerekmez). ⚠️ Her iki yolda da bulunan değer buraya İŞLENİR ve ayar alanı sıfıra döner — sabitin iki yerde durması sapma üretir |
+| `Player/ArenaNetCharacterBehaviour` | Movement SDK'nın ağ katmanı ile ArenaNet arasındaki **tek köprü** (§6.9/6.10). SDK'nın `INetworkCharacterBehaviour`'ını uygular: ürettiği blob'u `0x07` olarak yollar, gelen blob'u `NetworkCharacterHandler.ReceiveData`'ya verir, karakterin kökünü `LateUpdate`'te arena uzayına oturtur. **Rol ayrımının uygulandığı TEK yer**: `HasInputAuthority` yerelde `true` (sensör kaynağı `MetaSourceDataProvider` açık, gövde body tracking'den çözülür ve akar), uzakta `false` (kaynak KAPATILIR — açık bırakılsaydı her uzak avatar aynı yerel sensörü okurdu). ⚠️ Kaynak bileşen prefabdan **silinmez, yalnız kapatılır**: `CharacterRetargeter.Awake` onu kendi GameObject'inden `GetComponent` ile arıyor ve yoksa assert atıyor — tek prefabın hem yerel hem uzak çalışabilmesi bileşenin orada durmasına bağlı. ⚠️ **Kökü SDK değil bu sınıf yazar**: blob'un 0. eklemi gönderenin dünya uzayındadır ve blob opak olduğu için içeriden çevrilemez, o yüzden kök arena uzayında ayrıca taşınır (§6.9). ⚠️ `NetworkTime`/`RenderTime` **sunucunun tik saatinden** gelir (`RemotePlayerRegistry.TryGetServerTimeSeconds`), `Time.unscaledTime`'dan DEĞİL: SDK'nın interpolasyonu gönderenin damgasıyla alıcının render zamanını karşılaştırıyor, iki uç aynı epoch'ta olmazsa gövde 12 Hz basamaklarla oynar. ⚠️ `ReceiveStreamAck` **bilerek boştur** — ack yalnız delta sıkıştırma içindir ve delta kapalıdır (§6.9) |
+| `Player/HandGripConvention` | Anchor (kumanda) uzayındaki el pozunu karakterin el kemiğinin bind eksenine çeviren **statik köprü**. Kemik anatomisi (parmak yönü = hand→MiddleProximal, avuç normali = parmak×başparmak) **modelden çalışma anında ölçülür**, sabit derece yazılmaz: karakter değişince burada tek satır değişmez. Sabit olan tek şey anchor tarafındaki el anatomisidir — **tek ayar noktası** budur ve bugünkü değeri ergonomik bir TAHMİNDİR; kesin değeri `HandGripCalibrationProbe` ölçer. Sol ve sağ ayrı hesaplanır; ortak bir ofset iki eli birden düzeltemez (§7). ⚠️ **Kapsamı daraldı: gövde artık buradan geçmez.** Kol/bilek zinciri Movement SDK retargeting'inden geliyor ve SDK kendi eşlemesini kendi yapıyor; bu köprünün bugünkü tek işi **eşyanın ele oturmasıdır** (kavrama soketi + uzak çizim), çünkü `ItemDefinition.primaryGrip` ölçüsü anchor uzayında alınmış. Buraya gövdeyle ilgili bir tüketici geri eklenirse retargeting ile ikinci bir eşleme kaynağı doğar |
 | `Player/HandGripCalibrationProbe` | Yukarıdaki tahmini sabitin **kesin** değerini cihazda ölçen geliştirici aracı (`VA_CameraRig`'de durur): bir kez log basıp kendini kapatır, çıkan iki satır `HandGripConvention`'a yapıştırılır. Ölçüm kaynağı **BB rig'inin kumandadan sürdüğü el iskeletidir** (`OVRHandVisualLeft/Right → OculusHand_* → b_*_wrist`) — oyuncu kendi elini doğru yerde gördüğü için o iskelet "anchor'a göre el nerede" sorusunun canlı cevabıdır. ⚠️ Denenip elenen iki kaynak: `OVRInput.Controller.LHand/RHand` **multimodal** ister (projede kapalı), mesafeli kavrama önizlemesindeki kopyalar ise `ControllerModelHider` tarafından kapatılır (kapalı kemik sürülmez, bind pozu ölçülürdü). Oyun kodu onu OKUMAZ. ⚠️ Bugün ölçüm kaynağı da `ControllerModelHider` tarafından kapatılıyor (el görselleri tip eşleşmesiyle gizleniyor) — probe kullanılacaksa gizleyici geçici olarak devre dışı bırakılmalıdır |
-| `Player/LocalBodyAvatar` | Oyuncunun **kendi gövdesi**: yerel rig anchor'larını (`centerEyeAnchor` + `left/rightHandAnchor`, dünya uzayında) `ThreePointBodyIK`'ya besler — yani yerel ve uzak gövde tek kod yolunu paylaşır (bilek köprüsü `HandGripConvention` dahil). **Kendini önyükleyen kalıcı tekil** (`WeaponGranter` kalıbı): gövde prefabını `Resources.Load("LocalBodyAvatar")` ile yükleyip sahne köküne kurar, sahneye elle KONMAZ → yeni arena bir kurulum adımı doğurmaz. ⚠️ Avatar **sahne kökünde** durur, rig'in altına konmaz: `ThreePointBodyIK` kendi köküne dünya transformu yazar, rig'in altındayken rig transformu ikinci kez uygulanırdı (§7, "retarget avatarı hareket eden kökün altına konmaz"). ⚠️ Gövdede **collider yoktur** — `Weapon`'ın atış raycast'i maskesiz, kendi gövden kendi atışını yerdi. Admin'de çizilmez ve bu rol kontrolüyle DEĞİL, **etkin `OVRCameraRig` yoksa hiç çalışmayarak** sağlanır (`AdminSpectator` rig'i kapatır): `AppSession` App asmdef'indedir, Core onu göremez |
-| `Player/LocalAvatarBoneHider` | Yerel gövdede oyuncunun görmemesi gereken kemikleri `Animator.GetBoneTransform` ile bulup **sıfıra yakın ölçekler** — mesh tek `SkinnedMeshRenderer` olduğu için renderer kapatmak seçenek değil. Varsayılan gizlenenler **Head, Neck, LeftUpperLeg, RightUpperLeg**: kamera kafa/boyunun içinde durur, bacaklar ise `ThreePointBodyIK`'da prosedürel adım döngüsüyle sürülür (gerçek ayak takibi yok — aşağı bakan oyuncu yanlış adımlayan ayaklar görürdü). Kalan görüntü: omuzlardan aşağı kollar + gövde. ⚠️ Gizlenen kemik `ThreePointBodyIK`'yı da etkiler: sıfıra yakın ölçek CCD'nin iç modelini 10.000× şişirdiği için o zincir hiç çözülmez — kapı gizleyicinin LİSTESİNE değil kemiğin ÖLÇEĞİNE bakar (liste iki yerde dursaydı saparlardı). Ayrıca yerel gövdenin `SkinnedMeshRenderer.quality`'si **Bone4'e sabittir** (Auto değil): Quest'in "Mobile" seviyesi vertex başına 2 kemik veriyor ve 30 cm'den bakılan bilek onunla çöküyor (§7) |
+| `Player/LocalBodyAvatar` | Oyuncunun **kendi gövdesi** — uzak avatarlarla **aynı prefabı** `Owner = Host` olarak kurar (`ArenaNetCharacterBehaviour.Initialize(playerId, hasInputAuthority: true)`), yani "kendi gördüğüm gövde" ile "başkalarının gördüğü gövde" tek doğruluk kaynağıdır. **Kendini önyükleyen kalıcı tekil** (`WeaponGranter` kalıbı): prefabı `Resources.Load("LocalBodyAvatar")` ile yükleyip sahne köküne kurar, sahneye elle KONMAZ → yeni arena bir kurulum adımı doğurmaz. Gövde ancak **iki koşul** birden sağlanınca kurulur: etkin bir `OVRCameraRig` (yani rol gerçekten oyuncu) ve sunucudan alınmış bir `playerId` (blob onunla etiketleniyor, §6.9); o ana kadar gizli durur — kurulmamış bir retargeter oyuncunun yüzüne dikilmiş bir T-poz mankeni olurdu. **Gövde kalibrasyonunun tetikleyicisi de buradadır:** `ArenaCalibrator.CalibrationGeneration` değişince 3 sn sonra `CharacterRetargeter.Calibrate()` çağrılır — gecikme zorunludur, oyuncu arena kalibrasyonunu zemine EĞİLEREK yapıyor ve o andaki poza sabitlenen gövde oranı maçın kalanı boyunca yanlış boy demektir. ⚠️ Avatar **sahne kökünde** durur, rig'in altına konmaz (§7, "retarget avatarı hareket eden kökün altına konmaz"). ⚠️ Gövdede **collider yoktur** — `Weapon`'ın atış raycast'i maskesiz, kendi gövden kendi atışını yerdi. Admin'de çizilmez ve bu rol kontrolüyle DEĞİL, etkin rig yoksa hiç çalışmayarak sağlanır (`AppSession` App asmdef'indedir, Core onu göremez) |
+| `Player/LocalAvatarBoneHider` | Yerel gövdede oyuncunun görmemesi gereken kemikleri `Animator.GetBoneTransform` ile bulup **sıfıra yakın ölçekler** — mesh tek `SkinnedMeshRenderer` olduğu için renderer kapatmak seçenek değil. Varsayılan gizlenenler **Head, Neck, LeftUpperLeg, RightUpperLeg**: kamera kafa/boyunun içinde durur; bacaklar ise izlenmiyor (Quest 3'te bacakta sensör yok — `FullBody` seçilse bile alt gövde ÜRETİLİR), aşağı bakan oyuncu uydurma adımlar görürdü. ⚠️ Liste bir tercih değil **izlenmeyen uzuvların listesidir**: gerçek bacak izlemesi gelirse buradan çıkarılırlar. Kalan görüntü: omuzlardan aşağı kollar + gövde. `DefaultExecutionOrder` yüksektir — retargeting kemikleri her kare yazıyor, ölçek EN SON basılmalı. Ayrıca yerel gövdenin `SkinnedMeshRenderer.quality`'si **Bone4'e sabittir** (Auto değil): Quest'in "Mobile" seviyesi vertex başına 2 kemik veriyor ve 30 cm'den bakılan bilek onunla çöküyor (§7) |
 | `Team` | `Red` / `Blue` / **`Neutral`**. `BaseZone`'da `Neutral` = herkese açık joker. ⚠️ Yeni değer SONA eklenir: `BaseZone`/`Weapon` bu enum'u serialize ediyor, başa ekleme her arenanın taban takımlarını kaydırır |
 
 **`ArenaRoof`** (çatılı arenalar için, **isteğe bağlı**): çatı hiyerarşisinin köküne konur
@@ -1515,8 +1534,8 @@ konsoluna tek satır sebep yazar.
     zararsız bir gösterge gibi görünür ("maçtan önce şurada toplanın"), oysa `ArenaSpace` origin'i
     odur: birkaç metre kaydırmak arenadaki **tüm** oyuncuların ağ koordinatını aynı miktarda
     kaydırır ve hata yalnız birden çok başlık aynı sahnede buluşunca görünür. İkinci yüzü dikeydir:
-    uzak avatarların bastığı zemin `ArenaSpace.ArenaToWorld(Vector3.zero).y`'den türetilir
-    (`ThreePointBodyIK`) → marker havada bırakılırsa herkesin ayakları havada durur. Sahnede hiç
+    uzak avatarların kökü `ArenaSpace.ArenaToWorld` ile yerleştirilir → marker havada bırakılırsa
+    herkes o yükseklik kadar havada durur. Sahnede hiç
     marker yoksa dönüşüm kimliğe düşer; bunun tek işareti `ArenaSpace`'in sahne başına bir kez
     bastığı uyarıdır (lobide o uyarı normaldir).
 
@@ -1647,39 +1666,33 @@ konsoluna tek satır sebep yazar.
     ⚠️ Fırlatma gereken eşya (bomba) bu kapıdan geçmez: atılışı telde bildirilen kendi balistiğidir
     (`ArenaCombat.ReportThrow`), ISDK'nın fizik impulsu değil.
 
-52. **İKİ ayrı kaynaktan gelen dikey referansı birleştiren bir çözücü, uyuşmazlıkta "biraz yanlış"
-    değil GROTESK sonuç verir.** `ThreePointBodyIK`'da kafa/eller AĞDAN (gönderenin uzayı), kök ve
-    ayaklar ARENA ZEMİNİNDEN gelir. Gönderenin rig'i hizalı değilse ikisi ayrışır ve çözücü
-    imkânsız bir gövde kurmaya çalışır: kafa zeminin altına düştüğünde **ayak hedefi kalçanın
-    ÜSTÜNE** çıkar, CCD bacakları gövdeye sarar, kafa göğsün içinde kalır — sahada "avatar top olup
-    dönüyor, kolu/kafası yok, uzayda" diye görünen şey budur. Ölçüm: kafa zeminin 5 m altındayken
-    kalça 1.25 m'de, ayak 2.20 m'de (ayak dizden ve kalçadan yukarıda) çıkıyordu. Çözüm gelen pozu
-    **makullüğe** bakmaktır: kafa arena zemininden 0.6–2.6 m dışındaysa zemin arenadan değil
-    **pozdan** türetilir → avatar yanlış yükseklikte ama bütün bir insan kalır (maç ortasında
-    düşmanı tamamen kaybetmemek bilinçli tercih) ve sayılarla bir kez uyarı basılır. Genel kural:
-    **iki bağımsız uzayı aynı formülde birleştiren her yerde, birleştirmeden önce ikisinin
-    uyuştuğunu doğrula.**
+52. **Bir gövdeyi üç noktadan TÜRETMEK bir çözücü sorunu değil, bir VERİ sorunudur.** Kafa + iki
+    elden gövde uyduran her çözücü dirsek, omuz ve bacak yönünü tahmin eder; tahmin ne kadar
+    incelirse incelsin gerçek olmaz ve ayar alanları (bilek roll'ü, kalça ofseti, adım eşiği) er geç
+    "hangi sayı hangi bozukluğu düzeltiyor" sorusuna dönüşür. Meta'nın body tracking'i aynı üç
+    noktadan çalışır ama arkasında öğrenilmiş bir model + IOBT kameraları vardır — yani fark
+    algoritmada değil **girdide**dir ve o girdiye uygulama erişemez (servis dışarıdan poz kabul
+    etmez). Genel kural: **tahmin üreten bir bileşeni iyileştirmeden önce, tahmini gereksiz kılan
+    bir veri kaynağı olup olmadığına bak.** Burada cevabı vardı: gövdeyi sahibinin cihazında çöz,
+    sonucu akıt (§6.9). ⚠️ Bunun bedeli tel formatıdır ve **bu bir kısıt değildir** — protokol
+    gerektiğinde değişir.
 
-53. **Kendini düzeltmeyen bir tahmin, tek bozuk kareyi KALICI hataya çevirir.** Aynı çözücüde boy
-    tahmini "gözlenen en yüksek kafa" (sonsuz maksimum) idi ve ayak bastığı dünya noktasına
-    kilitleniyordu. Sonuç ölçüldü: bir kare 2.05 m'lik kafa gören avatar 1.32×'e kilitleniyor, bir
-    kare bozuk rotasyon gören avatarın ayağı zeminin 17 cm altına çakılıyor ve **poz düzeldiği hâlde
-    ikisi de geri dönmüyordu** — "bir kere bozulan avatar bir daha düzelmiyor" şikâyetinin kaynağı.
-    Ayak artık hedefinden 1 m'den fazla uzaklaşınca adımlamadan ziplatılıyor ve her şey
-    `ResetPoseState()` ile sıfırlanıyor (avatar başka oyuncuya devredilebiliyor). Boy ise
-    **tanımlı bir anda ölçülüp sabitleniyor** — pencereyi kalibrasyonun tamamlanması ya da avatarın
-    devredilmesi açıyor, 3 sn sonra kapanıyor. Kural: **sabitlenen tahmine izin var, ama
-    tetikleyicisi ve geri dönüş yolu ADI KONMUŞ olmalı;** kendini düzeltmeyen bir değer tek kareye
-    de emanet edilmez (ölçüm pencerenin son yarım saniyesinin ortalamasıdır). Adı konmamış bir
-    mandal ile "yalnız büyüyen" bir değişken aynı kapıya çıkar: er geç bir gürültü örneğine
-    kilitlenir ve geri dönmez.
+53. **Kendini düzeltmeyen bir tahmin, tek bozuk kareyi KALICI hataya çevirir.** Sabitlenen (mandallı)
+    her değer için kural: **tetikleyicisi ve geri dönüş yolu ADI KONMUŞ olmalı.** Bugünkü örneği
+    gövde oranıdır — `CharacterRetargeter.Calibrate()` onu o andaki poza sabitler ve bir daha
+    kendiliğinden değişmez; tetikleyicisi `ArenaCalibrator.CalibrationGeneration`, geri dönüş yolu da
+    aynı sayaçtır. ⚠️ Bu yüzden çağrı **gecikmelidir**: oyuncu arena kalibrasyonunu zemine
+    EĞİLEREK yapıyor, o andaki poza sabitlenen oran maçın kalanı boyunca yanlış boy demektir.
+    Adı konmamış bir mandal ile "yalnız büyüyen" bir değişken aynı kapıya çıkar: er geç bir gürültü
+    örneğine kilitlenir ve geri dönmez.
 
 54. **Sıfır quaternion telde meşru görünür, Unity'de geçersizdir.** Dört sıfır bayt geçerli bir
     poz gibi okunur; bir Transform'a yazılınca "Quaternion To Matrix conversion failed" basar ve o
-    kemik o kareden sonra bozuk kalır. Poz zincirinde (`RemoteAvatar` → `ThreePointBodyIK`) gelen
-    rotasyon normalize edilemiyorsa kimliğe düşürülür, NaN/∞ taşıyan poz ise hiç uygulanmaz (avatar
-    son geçerli karesinde bırakılır). ⚠️ Sunucu poz İÇERİĞİNİ doğrulamaz ve doğrulamayacak
-    (istemci-otoriter, §3.2) — denetim çizen tarafın işidir.
+    kemik o kareden sonra bozuk kalır. Poz zincirinde (`RemoteAvatar` → eşya/etiket sunumu) gelen
+    rotasyon normalize edilemiyorsa kimliğe düşürülür, NaN/∞ taşıyan poz ise hiç uygulanmaz.
+    ⚠️ Aynı denetim **iskelet kökü için de gereklidir** (`0x07`'nin `root` alanı): o da doğrudan bir
+    Transform'a yazılıyor. ⚠️ Sunucu poz İÇERİĞİNİ doğrulamaz ve doğrulamayacak (istemci-otoriter,
+    §3.2) — denetim çizen tarafın işidir.
 
 55. **Rig kökü arena zemininde durmalıdır — tracking origin `Stage` onu FİZİKSEL ZEMİN sayar.**
     VortexAntep sahnelerinde `VA_CameraRig` Y=7.40, arena zemini Y=7.05 idi: kalibrasyon yapılmadan
@@ -1699,11 +1712,16 @@ konsoluna tek satır sebep yazar.
     alınmamışken) hiçbir şey görünmez; kalibrasyon rig'e bir dönüşüm yazar yazmaz avatar
     oyuncudan tam **bir kalibrasyon ofseti** kadar uzağa oturur — arena etrafında dönmüş, zemin
     düzeltmesi kadar yükselmiş, oyuncunun hareketlerini birebir yapan "ikinci bir gövde" gibi; ve
-    oyuncu kendi kollarını göremez, çünkü kollar da o kopyadadır. Sahne köküne ayırma denendi ve
-    **yetmedi** — çakışma tek bir parenting düzeltmesiyle kapanmıyor. ⚠️ **Yerel gövde bugün
-    `ThreePointBodyIK` ile çözülüyor** (`LocalBodyAvatar`, rig anchor'larından beslenir) ve Movement
-    SDK retarget yoluna DÖNÜLMEZ; kuralın kalan yarısı hâlâ bağlayıcıdır: kendi köküne dünya
-    transformu yazan bir avatar sahne kökünde durur, rig'in altına asılmaz.
+    oyuncu kendi kollarını göremez, çünkü kollar da o kopyadadır.
+
+    **Kural bugün de bağlayıcıdır ve tasarımın kendisi oldu:** karakter — yerel de uzak da — sahne
+    kökünde durur, hiçbir şeyin altına parent'lanmaz. Uzak tarafta kökü `ArenaNetCharacterBehaviour`
+    yazar (`ArenaSpace.ArenaToWorld`, `LateUpdate`), yerelde ise kök zaten izleme uzayından gelir,
+    yani kalibrasyon rig'i kaydırınca gövde kendiliğinden onunla gelir. ⚠️ Uzak tarafta blob'un
+    KENDİ kök eklemi **kullanılmaz** (gönderenin dünya uzayındadır ve blob opaktır) — kök arena
+    uzayında ayrı bir alanda taşınır, §6.9. Bu iki maddeyi birleştiren tek cümle: **retarget çıktısı
+    dünya uzayındadır; onu bir uzaydan diğerine taşımanın yolu parenting değil, kökü açıkça
+    yazmaktır.**
 
 57. **"Mesajı yolla, sonra soketi kopar" mesajı YOLLAMAMAKLA aynı şey olabilir.** Atma yolu
     `kicked` JSON'unu yollayıp hemen `Abort()` ediyordu; abortif kapanış (RST) istemcinin henüz
@@ -1953,37 +1971,21 @@ konsoluna tek satır sebep yazar.
     ölçektir: oyuncunun göz yüksekliğini modelin **kafa kemiği** yüksekliğine bölmek avatarı
     sistematik olarak ~%8 büyütür (büyüyen gövde = yüze daha yakın göğüs, yani aynı sorunun
     beslemesi). Kural: **ölçülen büyüklüğün model tarafındaki karşılığı aynı nokta olmalı** —
-    göz/göz. Köprü `ThreePointBodyIK.headBoneToEyeOffset`'tir; karakterin ölçüsüdür, oyuncunun
-    değil, yani yerel ve uzak prefabda **aynı** girilir ve model değişince tek yerde değişir.
+    göz/göz. ⚠️ Bugün bu eşlemeyi Movement SDK'nın retarget config'i yapıyor ve ölçek tarafını
+    `SkeletonRetargeter.ApplyHeadScale` (kafayı 0.95 ile daha az büyütür) taşıyor — yani madde bir
+    uygulama talimatı değil **retarget config'i hazırlarken kontrol edilecek bir ölçüttür**: birinci
+    şahısta aşağı bak, yaka near-clip'in içinde mi.
 
-82. **Meta'nın `IKUtilities.SolveCCDIK`'i ÖLÇEĞİ görmezden gelir — hedef ona ham verilmez.**
-    Çözücü zinciri önbelleğe alırken `parent.InverseTransformPoint(bone.position)` ile ölçeği
-    BÖLER, geri kurarken (`position += rotation * pose.position`) geri ÇARPMAZ. Yani iç modeli
-    gerçek zincirin `1/S` katıdır (S = zincir kökünün dünya ölçeği) ve avatar oyuncunun boyuna
-    ölçeklendiği için S neredeyse hiç 1 değildir. Belirti **kemik gerilmesi değildir** (yalnız
-    rotasyon yazılıyor) — el hedefi sistematik olarak ıskalar, ıskalama kolun yönüyle ve ölçekle
-    değiştiği için "kol uzayıp kısalıyor" diye okunur; S=1.09'da ~4.5 cm, ölçek tavanında ~17 cm.
-    Telafi tek satırdır ve **birebir doğrudur**: çözücünün iç modeli, gerçek zincirin kök noktası
-    etrafında `1/S` ile ölçeklenmiş hâli olduğu için hedefi aynı dönüşümden geçirmek yeter
-    (tolerans da `S²`'ye bölünür — çözücü mesafeyi o sahte uzayda karesiyle karşılaştırıyor).
-    ⚠️ Bu bir üçüncü parti davranışının telafisidir: SDK bir gün düzeltirse telafi çift sayılır,
-    Movement SDK güncellemesinde `ThreePointBodyIK.SolveChain` doğrulanmalıdır.
+82. **Bilek 30 cm'den bakıldığında `skinWeights` bir görsel ayar değil, DOĞRULUK ayarıdır.**
+    `QualitySettings`'te Android varsayılanı **"Mobile" seviyesidir ve `skinWeights: 2`** (PC'de 4),
+    yani vertex başına yalnız iki kemik. Bilek gibi çok kemikli bir bölge bununla lineer blend
+    skinning altında "şeker ambalajı" gibi çöker — büküldükçe incelip kalınlaşır. Uzaktan bakan bunu
+    görmez; oyuncunun KENDİ birinci şahıs görüşünde belirgindir. Kural: oyuncunun 30 cm'den baktığı
+    **yerel** gövdede `SkinnedMeshRenderer.quality` Bone4'e **sabitlenir** (Auto bırakılmaz).
+    ⚠️ Uzak avatarlarda Auto kalır ve bu bilinçlidir: eşzamanlı oyuncu kotası yoktur, N avatarın
+    hepsini Bone4 yapmak bedava değildir ve mesafeden fark edilmez.
 
-83. **Bir eklemde biriken burulma mesh'i çökertir — bilek roll'ü önkolla PAYLAŞILIR.** Ele mutlak
-    rotasyon yazılıyor, CCD ise önkola roll veremiyor (`Quaternion.FromToRotation` minimum yaydır,
-    kemiğin kendi ekseni etrafında sıfır dönüş üretir) ve Mixamo rig'inde **twist kemiği yok**.
-    Sonuç: oyuncu bileğini çevirdiğinde (tüfek tutarken sürekli) dönüşün tamamı tek eklemde
-    birikiyor ve lineer blend skinning bileği "şeker ambalajı" gibi çökertiyor — bilek büküldükçe
-    incelip kalınlaşıyor. Quest'te etki daha da belirgin: `QualitySettings`'te Android varsayılanı
-    **"Mobile" seviyesidir ve `skinWeights: 2`** (PC'de 4), yani vertex başına yalnız iki kemik.
-    Çözüm iki yanlıdır: burulmanın bir payını önkola devret (swing-twist ayrıştırması;
-    ⚠️ elin YERİNİ bozmaz — döndürülen eksen zaten önkoldan ele giden eksendir, el o eksenin
-    üzerindedir, bu yüzden CCD'nin çözümü geçerli kalır) ve oyuncunun 30 cm'den baktığı **yerel**
-    gövdede `SkinnedMeshRenderer.quality`'yi Bone4'e sabitle. Uzak avatarlarda Auto bırakılır:
-    eşzamanlı oyuncu kotası yoktur, N avatarın hepsini Bone4 yapmak bedava değildir ve mesafeden
-    fark edilmez.
-
-84. **URP overlay kamerasının near-clip'i XR'da SESSİZCE yok sayılır.** "Gövdeyi ayrı bir katmana
+83. **URP overlay kamerasının near-clip'i XR'da SESSİZCE yok sayılır.** "Gövdeyi ayrı bir katmana
     alıp daha büyük near-clip'li bir overlay kamerayla çiz" kalıbı masaüstünde çalışır, Quest'te
     çalışmaz: `XRLayout.AddCamera` z-aralığını **yalnız base kameradan** alır
     (`SetDisplayZRange(camera.nearClipPlane, ...)`) ve URP her overlay kamerada

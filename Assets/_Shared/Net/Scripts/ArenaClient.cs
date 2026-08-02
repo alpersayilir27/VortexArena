@@ -49,6 +49,11 @@ namespace VortexArena.Net
         /// <summary>Uzak oyuncu poz kayıtçısı: snapshot'ları biriktirir, interpolasyonlu okutur.</summary>
         public RemotePlayerRegistry Remotes { get; private set; }
 
+        /// <summary>Uzak oyuncu iskelet kayıtçısı (§6.10): <c>0x08</c> girdilerini biriktirir.
+        /// ⚠️ <see cref="Remotes"/>'tan AYRI: iki kanalın kadansı ve girdi ömrü farklıdır
+        /// (blob tüketilir, kök interpole edilir).</summary>
+        public RemoteSkeletonRegistry RemoteSkeletons { get; private set; }
+
         /// <summary>Soket açık mı — her thread'den güvenli.</summary>
         public bool IsConnected => IsSocketOpen;
 
@@ -113,6 +118,7 @@ namespace VortexArena.Net
 
             UdpChannel = gameObject.AddComponent<UdpStateChannel>();
             Remotes = gameObject.AddComponent<RemotePlayerRegistry>();
+            RemoteSkeletons = gameObject.AddComponent<RemoteSkeletonRegistry>();
 
             _hardwareId = SystemInfo.deviceUniqueIdentifier;
             // Aynı PC'de iki admin penceresi açılabilsin diye admin kimliği OTURUMLUK olur (§2);

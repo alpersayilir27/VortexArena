@@ -42,8 +42,9 @@ namespace VortexArena.Core.Player
         [SerializeField] private Renderer[] bodyRenderers;
 
         [Header("Karakter")]
-        [Tooltip("Bağlıysa gövde üç noktalı IK ile çözülür; boşsa eski kafa/el/kapsül yolu kullanılır.")]
-        [SerializeField] private ThreePointBodyIK bodyIK;
+        [Tooltip("Bağlıysa gövde ağdan gelen Movement SDK iskeletiyle çizilir; boşsa eski " +
+                 "kafa/el/kapsül yolu kullanılır.")]
+        [SerializeField] private ArenaNetCharacterBehaviour character;
 
         [Tooltip("YEREL oyuncuyla aynı takımdayken görünen dost göstergesi (kafanın üstündeki küp).")]
         [SerializeField] private GameObject friendMarker;
@@ -228,14 +229,19 @@ namespace VortexArena.Core.Player
             {
                 // Aynı örnek başka bir oyuncuya devrediliyor: eski oyuncunun eşyası kalmasın.
                 ClearHeldItems();
+
+                // ⚠️ Eski oyuncunun iskeleti ve kökü de kalmamalı — hepsi mandallı durum, kendi
+                // kendine düzelmez ve devralan avatar bir kare önceki oyuncunun gövdesiyle çizilirdi.
+                RemoteSkeletonRegistry.Instance?.Forget(PlayerId);
             }
 
             PlayerId = playerId;
 
-            // IK'nın tahminleri (boy, ölçek, basılan ayaklar) önceki oyuncudan miras kalmasın.
-            if (bodyIK != null)
+            // Gövde ağdan gelen iskeletle sürülür: bu avatar hiçbir zaman input authority'ye sahip
+            // olmaz (kendi gövdemizi LocalBodyAvatar çiziyor). Sensör kaynağı da burada kapanır.
+            if (character != null)
             {
-                bodyIK.ResetPoseState();
+                character.Initialize(playerId, hasInputAuthority: false);
             }
         }
 
@@ -491,16 +497,16 @@ namespace VortexArena.Core.Player
             Pose displayHandR = handRWorld;
             ApplySecondaryGripSnap(ref displayHandL, ref displayHandR);
 
-            if (bodyIK != null)
+            // ⚠️ Karakter bağlıysa GÖVDEYE HİÇ DOKUNULMAZ: iskelet ağdan geliyor ve
+            // ArenaNetCharacterBehaviour onu kendi kadansında uyguluyor (§6.10). Buradan kafa/el
+            // transformlarına yazmak, retarget edilmiş kemiklerin üstüne ikinci bir sürücü koymak
+            // olurdu. Bu döngünün gövdeyle ilgili tek işi kalmadı — eşya, etiket ve işaretçi.
+            if (character == null)
             {
-                // Karakterli avatar: gövde, kollar ve bacaklar bu üç noktadan türetilir.
-                bodyIK.Solve(headWorld, displayHandL, displayHandR);
-            }
-            else
-            {
-                // Eski kapsül avatarı — prefabda IK bağlı değilse davranış değişmesin. Yapıştırma
-                // burada da UYGULANIR (aynı düzeltilmiş poz yazılır): iki yol arasında farklı
-                // davranmak, kapsül avatarla test eden geliştiriciye yanlış bir gerçek gösterirdi.
+                // Kapsül avatarı: karakter prefabı henüz kurulmamışken (retarget config'i yokken)
+                // ve sunucusuz sandbox'ta uzak oyuncu yine de görülebilsin diye korunur.
+                // Yapıştırma burada da UYGULANIR: iki yol arasında farklı davranmak, kapsül avatarla
+                // test eden geliştiriciye yanlış bir gerçek gösterirdi.
                 Apply(head, headWorld);
                 Apply(handL, displayHandL);
                 Apply(handR, displayHandR);

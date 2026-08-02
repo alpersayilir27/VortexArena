@@ -74,8 +74,10 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   Kod-dışı: `Arsenal/` (silah prefab+SO, `VA_WeaponFrame`),
   `FX/`, `Shaders/` + `Materials/` (paylaşılan shader/materyal — ör. `DissolveEffect`),
   `Environments/`, `Avatars/` (gövde avatarı modeli ve prefabları — yerel gövde
-  (`LocalBodyAvatar`) ile uzak avatarlar aynı modeli ve aynı sürücüyü (`ThreePointBodyIK`)
-  paylaşır; **`Avatars/Resources/LocalBodyAvatar.prefab`** kendini önyükleyen tekil tarafından
+  (`LocalBodyAvatar`) ile uzak avatarlar **aynı prefabı, aynı retarget config'ini ve aynı kod
+  yolunu** paylaşır; tek fark `ArenaNetCharacterBehaviour.HasInputAuthority`'dir (yerelde gövde
+  body tracking'den çözülür, uzakta ağdan gelen iskelet uygulanır);
+  **`Avatars/Resources/LocalBodyAvatar.prefab`** kendini önyükleyen tekil tarafından
   `Resources.Load` ile yüklendiği için `Resources/` altından ÇIKARILMAZ ve ADI DEĞİŞMEZ —
   taşınırsa oyuncu kendi gövdesini sessizce hiç görmez), `Data/` (**`Data/Resources/GameCatalog.asset`** —
   admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ),
@@ -121,11 +123,12 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `Team.Neutral` = herkese açık) ve **altyapı prefabları** (`_Shared/App/Prefabs/`):
   **`VA_CameraRig`** (kamera rig'i + `OVRComprehensiveInteractionRig` + `ControllerModelHider`,
   tracking origin `Stage`). Oyuncu kendi gövdesini omuzlarından aşağı görür (`LocalBodyAvatar` —
-  kendini önyükleyen tekil, sahneye ve rig'e KONMAZ; `ThreePointBodyIK` ile sürülür); kumanda
-  modelleri ve Meta elleri `ControllerModelHider` ile **hiçbir yerde** çizilmez.
-  ⚠️ **Rig'e Movement SDK retarget avatarı asılmaz** — çıktısı dünya uzayında olduğu için kalibre
-  edilen rig'le çakışır → `Docs/Sistem-Ozeti.md` §7, "retarget avatarı hareket eden kökün altına
-  konmaz" maddesi.
+  kendini önyükleyen tekil, sahneye ve rig'e KONMAZ; Meta Movement SDK retargeting ile sürülür);
+  kumanda modelleri ve Meta elleri `ControllerModelHider` ile **hiçbir yerde** çizilmez.
+  ⚠️ **Karakter rig'in (ya da başka bir şeyin) ALTINA asılmaz** — retarget çıktısı dünya
+  uzayındadır, dolu bir ebeveyn dönüşümü ikinci kez uygulanır. Uzak tarafta kökü
+  `ArenaNetCharacterBehaviour` açıkça yazar → `Docs/Sistem-Ozeti.md` §7, "retarget avatarı hareket
+  eden kökün altına konmaz" maddesi.
   **`VA_PoseSync`** (`PlayerPoseTracker` + `RemotePlayerSpawner`),
   **`VA_CalibrationManager`** (`ArenaCalibrator`), **`VA_ModeHud`** (`ModeHudSpawner`).
   ⚠️ **Altyapı sahneye PREFAB ÖRNEĞİ olarak konur — kopyalanmaz, unpack edilmez:** kopya konursa
@@ -145,9 +148,9 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   şurada toplanın" göstergesi hem **arena uzayının sıfırıdır** — ağa giden/gelen tüm pozlar ona göre
   çevrilir. Takımı/slotu yoktur ve protokolde karşılığı yoktur (kimse oraya ışınlanmaz).
   ⚠️ **Bir kez yerleştirilir, sonra TAŞINMAZ:** taşımak tüm oyuncuların arenadaki koordinatını
-  kaydırır. ⚠️ **Zemin seviyesinde durmalıdır** — `ThreePointBodyIK` zemin Y'sini
-  `ArenaSpace.ArenaToWorld(Vector3.zero).y`'den türetir, marker havadaysa avatarların ayağı havada
-  kalır. Yoksa origin hiç kaydolmaz: dünya=arena kabul edilir (uzak oyuncular dünya orijininde
+  kaydırır. ⚠️ **Zemin seviyesinde durmalıdır** — uzak avatarların kökü `ArenaSpace.ArenaToWorld`
+  ile yerleştirilir, marker havadaysa herkes o yükseklik kadar havada durur.
+  Yoksa origin hiç kaydolmaz: dünya=arena kabul edilir (uzak oyuncular dünya orijininde
   toplanır) ve konsola uyarı düşer — lobide bu normaldir. ⚠️ **Harita değişimi ne
   oyuncuyu yeniden doğurur ne kalibrasyonu sıfırlar**: `ArenaCalibrator` yeni sahnede kayıtlı
   `OVRSpatialAnchor`'dan hizalamayı geri yükler — ön koşulu bir işletmede hep aynı ölçüde arena

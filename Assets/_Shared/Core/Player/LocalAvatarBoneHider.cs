@@ -14,10 +14,11 @@ namespace VortexArena.Core.Player
     /// değiştiğinde (Mixamo öneki, farklı rig adlandırması) burada tek satır bile değişmesin.
     /// </para>
     /// <para>
-    /// <see cref="DefaultExecutionOrder"/> yüksektir çünkü <see cref="ThreePointBodyIK"/> kemikleri
-    /// her kare yazıyor — ölçek EN SON basılmalı. (Bugün <c>RestoreBindPose</c> yalnız
-    /// localPosition/localRotation'a dokunuyor, yani ölçeği ezmiyor; sıralama yine de garanti
-    /// altına alınır ki IK'ya ölçek yazan bir satır eklendiğinde uzuv sessizce geri gelmesin.)
+    /// <see cref="DefaultExecutionOrder"/> yüksektir çünkü Movement SDK retargeting kemikleri her
+    /// kare yazıyor — ölçek EN SON basılmalı. ⚠️ SDK'nın <c>ApplyPoseJob</c>'u kemiklere
+    /// <c>SetLocalPositionAndRotation</c> ile yazıyor, yani bugün ölçeği ezmiyor; sıralama yine de
+    /// garanti altına alınır ki retargeting'e ölçek yazan bir yol eklendiğinde uzuv sessizce geri
+    /// gelmesin.
     /// </para>
     /// </summary>
     [DefaultExecutionOrder(30000)]
@@ -28,9 +29,11 @@ namespace VortexArena.Core.Player
         /// <list type="bullet">
         /// <item><b>Head/Neck</b> — kamera tam onların içinde durur; gizlenmezse oyuncu kafatasının
         /// içini görür.</item>
-        /// <item><b>LeftUpperLeg/RightUpperLeg</b> — <see cref="ThreePointBodyIK"/> bacakları
-        /// PROSEDÜREL adım döngüsüyle sürüyor (gerçek ayak takibi yok). Uzaktan bakan için ikna
-        /// edici, ama kendi bakışında aşağı bakınca yanlış adımlayan ayaklar görünürdü.</item>
+        /// <item><b>LeftUpperLeg/RightUpperLeg</b> — bacak izleme YOKTUR: Quest 3'te bacakta sensör
+        /// yok, <c>BodyJointSet.FullBody</c> seçilse bile alt gövde ÜRETİLİR (generative legs).
+        /// Uzaktan bakan için ikna edici, ama kendi bakışında aşağı bakınca uydurma adımlar
+        /// görünürdü. ⚠️ Bu liste bir tercih değil, <b>izlenmeyen uzuvların listesidir</b>: gerçek
+        /// bacak izlemesi gelirse buradan çıkarılırlar.</item>
         /// </list>
         /// <para>Alt bacak/ayak ayrıca yazılmaz: çocuk kemikler ölçeği miras alır.</para>
         /// </summary>

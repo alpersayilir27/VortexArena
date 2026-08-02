@@ -281,6 +281,45 @@ namespace VortexArena.Net
             }
         }
 
+        /// <summary>
+        /// Sunucunun tik eksenine oturtulmuş <b>PAYLAŞILAN saat</b> (saniye). Hiç snapshot gelmediyse
+        /// false.
+        /// <para><b>Neden gerekiyor:</b> iskelet blob'unun içine gönderenin zaman damgası gömülüyor
+        /// ve alıcı taraf interpolasyonu o damgayla kendi render zamanını karşılaştırarak yapıyor
+        /// (§6.9). İki uç aynı epoch'u paylaşmazsa interpolasyon ya uca kilitlenir ya hiç çalışmaz —
+        /// gövde 12 Hz basamaklarla oynar. <c>Environment.TickCount</c> makineye özeldir, bu iş için
+        /// kullanılamaz.</para>
+        /// <para><b>Neden saat senkronu paketi gerekmiyor:</b> zaten 20 Hz akan snapshot'ın
+        /// <c>serverTick</c>'i tüm istemcilerde <b>aynı</b> sayıdır; tek yapılan onu saniyeye
+        /// çevirip son varıştan bu yana geçen süreyi eklemek. Uçlar arasındaki hata tek yönlü
+        /// gecikme farkı kadardır (LAN'da birkaç ms) — 12 Hz'lik bir akışın interpolasyonu için
+        /// fazlasıyla yeterli. ⚠️ Bu bir <b>mutlak</b> saat değildir ve §6.7'nin "saat senkronu
+        /// gerekmez" kuralını çiğnemez: RTT ölçümü hâlâ tek uçlu damgayla yapılıyor, burada üretilen
+        /// değer yalnız iki istemcinin ORTAK bir eksende buluşması içindir.</para>
+        /// <para>⚠️ Sunucu yeniden başlarsa tik sıfırdan sayar ve bu saat <b>geriye atlar</b>; SDK'nın
+        /// tamponu birkaç kare içinde yeni eksene oturur. Ayrı bir düzeltme eklenmedi: yeniden
+        /// başlatma zaten tüm istemcilerin yeniden bağlandığı bir olaydır.</para>
+        /// <para>⚠️ Değer <c>float</c>'tur ve sunucu ne kadar uzun koşarsa çözünürlüğü o kadar
+        /// kabalaşır (bir haftalık kesintisiz koşuda ~60 ms). Tavan, bir iskelet karesinin
+        /// süresidir (~83 ms) ve pratikte mekân sunucusu günlük yeniden başlatılır.</para>
+        /// </summary>
+        public bool TryGetServerTimeSeconds(out float seconds)
+        {
+            lock (_gate)
+            {
+                if (!_hasNewestTick)
+                {
+                    seconds = 0f;
+                    return false;
+                }
+
+                int sinceNewestMs = Environment.TickCount - _newestTickRecvMs;
+                double ms = (double)_newestTick * MS_PER_SNAPSHOT + sinceNewestMs;
+                seconds = (float)(ms / 1000.0);
+                return true;
+            }
+        }
+
         private void Update()
         {
             _joinedScratch.Clear();

@@ -24,6 +24,17 @@ namespace VortexArena.Protocol
         /// "bana bir <c>status</c> yolla" tetiğidir ve TCP üzerindedir — gecikme ölçmez ve ölçemez
         /// (TCP retransmit'i sonuca karışır). Gecikme oyunun aktığı kanaldan, buradan ölçülür.</para></summary>
         public const byte RttProbe = 0x06;
+
+        /// <summary>0x07 — retarget edilmiş iskelet blob'u + arena-uzayı kökü
+        /// (<see cref="SkeletonUpdate"/>, §6.9). İstemci → sunucu,
+        /// <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>; yalnız player.</summary>
+        public const byte SkeletonUpdate = 0x07;
+
+        /// <summary>0x08 — iskelet girdilerinin batch'i (<see cref="SkeletonBatch"/>, §6.10).
+        /// <para>⚠️ <b>Neden batch:</b> oyuncu başına ayrı datagram yollamak tik başına hedef
+        /// başına N paket demek olurdu ve bu üründe darboğaz bant değil paket sayısıdır
+        /// (<c>Docs/Sistem-Ozeti.md</c> §3.12).</para></summary>
+        public const byte SkeletonBatch = 0x08;
     }
 
     /// Poz bloğu: f32 px,py,pz,qx,qy,qz,qw — 28 B, arena uzayında.
@@ -469,6 +480,170 @@ namespace VortexArena.Protocol
             b.events = new FireEventEntry[count];
             for (int i = 0; i < count; i++)
                 b.events[i] = FireEventEntry.Read(r);
+            return b;
+        }
+    }
+
+    /// <summary>
+    /// 0x07 — [u8 tip][u8 playerId][u16 seq][root: <see cref="PoseData"/> 28][u16 len][blob]
+    /// (istemci → sunucu, <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>; yalnız player, §6.9).
+    /// <para><b>Blob OPAKTIR.</b> İçeriği Meta Movement SDK'nın native serileştirmesidir
+    /// (<c>SerializeSkeletonAndFace</c>); sunucu onu açmaz, doğrulamaz, yalnız kopyalar — sunucuda
+    /// iskelet tablosu YOKTUR ve eklenmez. Gerekçe <c>netItemId</c> baytlarınınkiyle aynıdır (§6.6):
+    /// bu bir <b>istemci-otoriter sunum bilgisi</b>dir.</para>
+    /// <para>⚠️ <b><c>root</c> neden ayrı bir alan:</b> blob'un kendi 0. eklemi SDK tarafından
+    /// <c>JointType.NoWorldSpace</c> ile yazılır, yani <b>gönderenin dünya pozudur</b> ve alıcının
+    /// arenasıyla ilgisi yoktur. Blob opak olduğu için içindeki kökü çeviremeyiz; bu yüzden kök
+    /// arena uzayında AYRICA taşınır ve alıcı <c>ApplyBodyPose</c>'dan sonra karakterin kökünü
+    /// bununla yazar. Blob'un kendi kökü kullanılmaz.</para>
+    /// <para>⚠️ Bu kanalda <b>parçalama YOKTUR</b>: blob
+    /// <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/>'ı aşarsa paket hiç gönderilmez. Yarım
+    /// bir kareyi deserialize etmek bozuk iskelet demektir.</para>
+    /// </summary>
+    public struct SkeletonUpdate
+    {
+        /// <summary>[tip][playerId][seq][root 28][len] — blob'dan önceki sabit kısım.</summary>
+        public const int HEADER_SIZE = 34;
+
+        public byte playerId;
+
+        /// <summary>Sarmalanır (u16); eski <c>seq</c> gelirse paket atılır — <c>0x01</c> ile aynı
+        /// "son gelen kazanır" kuralı (§6.2). Durum kanalıdır, olay değil.</summary>
+        public ushort seq;
+
+        /// <summary>Karakter kökünün <b>arena uzayı</b> pozu (§3).</summary>
+        public PoseData root;
+
+        /// <summary>Serileştirilmiş iskelet. ⚠️ Yalnız ilk <see cref="blobLength"/> baytı geçerlidir
+        /// — gönderen havuzlanmış tampon verebilsin diye dizi boyu bağlayıcı değildir.</summary>
+        public byte[] blob;
+
+        public int blobLength;
+
+        public void Write(BinaryWriter w)
+        {
+            w.Write(UdpPacketType.SkeletonUpdate);
+            w.Write(playerId);
+            w.Write(seq);
+            root.Write(w);
+            w.Write((ushort)blobLength);
+            w.Write(blob, 0, blobLength);
+        }
+
+        public static SkeletonUpdate Read(BinaryReader r)
+        {
+            SkeletonUpdate m;
+            m.playerId = r.ReadByte();
+            m.seq = r.ReadUInt16();
+            m.root = PoseData.Read(r);
+            int len = r.ReadUInt16();
+
+            // Meşru bir gönderen bu sınırı aşamaz (gönderim tarafı da aşanı yollamıyor); aşan değer
+            // bozuk/kırpılmış datagram demektir — boş blob geri döner, çağıran girdiyi düşürür.
+            if (len > ArenaProtocol.SKELETON_MAX_BLOB_BYTES)
+            {
+                m.blob = System.Array.Empty<byte>();
+                m.blobLength = 0;
+                return m;
+            }
+
+            m.blob = r.ReadBytes(len);
+            m.blobLength = m.blob.Length;
+            return m;
+        }
+    }
+
+    /// <summary>
+    /// <c>0x08</c> batch'inin oyuncu girdisi: [u8 playerId][root 28][u16 len][blob]
+    /// = <b>31 + len</b> B (§6.10). Alanların anlamı <see cref="SkeletonUpdate"/> ile birebir aynı;
+    /// <c>seq</c> taşınmaz (sunucu eskisini zaten ayıkladı).
+    /// </summary>
+    public struct SkeletonEntry
+    {
+        /// <summary>[playerId][root 28][len] — blob'dan önceki sabit kısım.</summary>
+        public const int HEADER_SIZE = 31;
+
+        public byte playerId;
+        public PoseData root;
+        public byte[] blob;
+        public int blobLength;
+
+        /// <summary>Bu girdinin telde kapladığı bayt — batch'i bölerken kullanılır.</summary>
+        public int Size => HEADER_SIZE + blobLength;
+
+        public void Write(BinaryWriter w)
+        {
+            w.Write(playerId);
+            root.Write(w);
+            w.Write((ushort)blobLength);
+            w.Write(blob, 0, blobLength);
+        }
+
+        public static SkeletonEntry Read(BinaryReader r)
+        {
+            SkeletonEntry e;
+            e.playerId = r.ReadByte();
+            e.root = PoseData.Read(r);
+            int len = r.ReadUInt16();
+
+            if (len > ArenaProtocol.SKELETON_MAX_BLOB_BYTES)
+            {
+                e.blob = System.Array.Empty<byte>();
+                e.blobLength = 0;
+                return e;
+            }
+
+            e.blob = r.ReadBytes(len);
+            e.blobLength = e.blob.Length;
+            return e;
+        }
+    }
+
+    /// <summary>
+    /// 0x08 — [u8 tip][u8 count][u32 serverTick] + count × <see cref="SkeletonEntry"/>
+    /// (sunucu → tüm istemciler, §6.10). Girdi yoksa <b>paket yok</b>.
+    /// <para><b>Parçalama:</b> girdiler değişken uzunluklu olduğu için sunucu hem bayt bütçesine
+    /// (<see cref="ArenaProtocol.COMBINED_MAX_BYTES"/>) hem girdi tavanına
+    /// (<see cref="ArenaProtocol.SKELETON_MAX_ENTRIES_PER_PACKET"/>) bakar; taşan girdi aynı tik
+    /// içinde ek datagrama yazılır. Her datagram kendi <c>count</c>'unu, hepsi aynı
+    /// <c>serverTick</c>'i taşır — snapshot parçalamasının aynısı (§6.3), istemcide birleştirme
+    /// mantığı gerekmez.</para>
+    /// <para>⚠️ <b>Gönderen kendi girdisini de geri alır ve KENDİSİ yok sayar</b> — kendi gövdesini
+    /// sensörden çiziyor. Hedefe özel batch üretmek tik başına N serileştirme demek olurdu; §6.5
+    /// olay batch'i de aynı gerekçeyle atanı süzmüyor.</para>
+    /// <para>⚠️ Snapshot'a (<c>0x05</c>) <b>birleştirilmez</b>: snapshot 16 girdide zaten 1414 B ve
+    /// değişken uzunluklu bir blok eklemek onun boyut garantisini çökertir.</para>
+    /// </summary>
+    public struct SkeletonBatch
+    {
+        /// <summary>[tip][count][serverTick] — girdilerden önceki sabit kısım.</summary>
+        public const int HEADER_SIZE = 6;
+
+        public uint serverTick;
+        public SkeletonEntry[] entries;
+
+        /// <summary>
+        /// Paylaşılan bir diziden <b>bir dilimi</b> yazar (parçalama). Örnek metot yerine statik:
+        /// sunucu tik başına tek bir tampon dizisi tutup onu bölerek yolluyor — her parça için
+        /// ayrı dizi kopyalamak tik başına tahsis demek olurdu.
+        /// </summary>
+        public static void Write(BinaryWriter w, uint serverTick, SkeletonEntry[] entries, int offset, int count)
+        {
+            w.Write(UdpPacketType.SkeletonBatch);
+            w.Write((byte)count);
+            w.Write(serverTick);
+            for (int i = 0; i < count; i++)
+                entries[offset + i].Write(w);
+        }
+
+        public static SkeletonBatch Read(BinaryReader r)
+        {
+            SkeletonBatch b;
+            byte count = r.ReadByte();
+            b.serverTick = r.ReadUInt32();
+            b.entries = new SkeletonEntry[count];
+            for (int i = 0; i < count; i++)
+                b.entries[i] = SkeletonEntry.Read(r);
             return b;
         }
     }

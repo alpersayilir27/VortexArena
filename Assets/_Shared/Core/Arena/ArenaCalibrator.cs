@@ -164,9 +164,11 @@ namespace VortexArena.Core.Arena
         /// olayı sessizce KAÇIRIR (yerel gövde avatarı rig'i kaybettiğinde kapanıyor ve harita
         /// değişiminde kayıtlı anchor tam o aralıkta geri yükleniyor); sayacı kaçıramaz, sonraki
         /// karede farkı görür. 0 = bu oturumda hiç hizalanmadı.
-        /// <para>Tüketicisi <c>ThreePointBodyIK</c>'dır: hizalanmadan önce ölçülen göz yüksekliği
-        /// arenanın zeminine değil sistemin TAHMİN ettiği zemine göredir, o yüzden avatarın boy
-        /// ölçümü her hizalamadan sonra yeniden alınır.</para>
+        /// <para>Tüketicisi <c>LocalBodyAvatar</c>'dır: arena yeniden hizalanınca gövde oranı da
+        /// yeniden ölçtürülür (<c>CharacterRetargeter.Calibrate()</c>). ⚠️ İki kalibrasyon ayrı
+        /// şeydir — bu sınıf rig'i fiziksel arenaya hizalar, o ise karakterin gövde oranını
+        /// oyuncununkine sabitler; buradaki tek bağ, hizalamadan sonranın ölçüm için doğru an
+        /// olmasıdır (oyuncu eğilip doğrulmuştur).</para>
         /// </summary>
         public static int CalibrationGeneration { get; private set; }
 

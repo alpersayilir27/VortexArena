@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `5` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı kesilmez). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur. Yine de bilinsin diye: bu sürümü tanımayan bir istemcinin gözle görülür biçimde bozulduğu tek yer **`0x05` paket birleştirmesidir** (§6.8) — birleştirme devreye girince uzak avatarları ve tracer'ları kaybeder; telin geri kalanı eklemelidir |
+| `PROTOCOL_VERSION` | `6` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı kesilmez). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur. v6'da bozulma **iki yönlüdür**: `0x07`/`0x08`'i tanımayan istemci uzak oyuncuların gövdesini hiç çizemez, iskelet göndermeyen eski istemci de yeni istemcide gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -20,6 +20,9 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `POSE_RATE_HZ` | `20` | İstemci poz gönderim frekansı |
 | `SNAPSHOT_RATE_HZ` | `20` | Sunucu snapshot yayın frekansı |
 | `INTERP_DELAY_MS` | `100` | Uzak avatar interpolasyon tamponu |
+| `SKELETON_RATE_HZ` | `12` | İskelet blob'u gönderim frekansı (§6.9). Poz kanalından **ayrı ve daha düşük** — blob poz paketinin birkaç katı ve darboğaz paket sayısı. Alıcıda SDK'nın kendi interpolasyonu koştuğu için 12 Hz akış 72 Hz çizime yumuşak yayılır; yükseltmek akıcılık değil yalnız paket satın alır |
+| `SKELETON_MAX_BLOB_BYTES` | `1024` | Tek oyuncunun blob tavanı (§6.9). Bütçe değil **emniyet**: 34 + 1024 = 1058 B < `COMBINED_MAX_BYTES`, çünkü bu kanalda **parçalama yoktur**. Aşan blob hiç gönderilmez |
+| `SKELETON_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x08` datagramına yazılan en fazla girdi (§6.10). Asıl kısıt **bayt bütçesidir** (`COMBINED_MAX_BYTES`) — girdiler değişken uzunluklu; bu sayı `count`'un `u8` olmasının tavanıdır |
 | `PLAYER_ID_MAX` | `255` | `playerId` tahsis tavanı. **Ürün kotası değil, tel formatı tavanıdır** — `playerId` UDP paketlerinde `u8`. Eşzamanlı oyuncu/admin sayısına başka sınır YOKTUR (kota ileride lisanslamayla gelecek) |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
 | `SNAPSHOT_MAX_ENTRIES_PER_PACKET` | `16` | Tek snapshot datagramına yazılan en fazla oyuncu; fazlası ek pakete taşar (§6.3). 6 + 16×88 = 1414 B < MTU |
@@ -356,6 +359,8 @@ Pozlar **arena uzayında**. `seq` sarmalanır (u16); eski `seq` gelirse paket at
 
 **`itemL`/`itemR`/`gripFlags` (v4)** — elde tutulan eşya (§6.6). Pozla aynı pakette gider çünkü aynı otoriteye aittir: "elimde ne var" da "elim nerede" gibi **istemci-otoriter bir sunum bilgisidir**. Sunucu bu üç baytı **doğrulamaz**, snapshot'a kopyalar (§6.3) — sunucuda eşya tablosu YOKTUR ve eklenmez (§10.3 felsefesi). `gripFlags`'te bit0 gelirse **yok sayılır**: o bit snapshot'ta `FLAG_ALIVE`'dır ve yazarı yalnız sunucudur (istemci kendini canlı ilan edemez).
 
+⚠️ **İskelet akışı (§6.9) bu paketin yerine GEÇMEZ.** v6'da gövde ayrı bir kanaldan geliyor ama poz kanalı duruyor: silahın ele oturması, eşya baytları ve vuruş bildirimi ham anchor pozundan besleniyor. İki kanalın kadansı da ayrıdır (20 Hz ↔ `SKELETON_RATE_HZ`) — iskeletin gecikmesi silahın gecikmesi olmasın diye. "İskelet zaten el eklemini taşıyor, poz kanalı silinsin" **yapılmaz**: blob opaktır (alıcı içinden tek bir eklemi ucuza okuyamaz) ve o eklem elin fiziksel pozu değil retarget edilmiş bilek kemiğidir.
+
 ⚠️ **Poz kanalı FİZİKSEL gerçeği taşır.** `handL`/`handR` ham rig anchor'larıdır — eşyaya "yapıştırılmış" düzeltilmiş poz DEĞİL. Çift elli silahta boş elin kabzaya oturtulması bir **sunum** kararıdır ve alıcı tarafta yapılır (§6.6). Bu kanal bir kez bulanırsa (düzeltilmiş poz taşımaya başlarsa) sonraki her tüketici — yakın dövüş, elle etkileşim, admin teşhisi — o bulanıklığı miras alır.
 
 ### 6.3 `0x02 Snapshot` (sunucu → tüm istemciler, 20 Hz)
@@ -509,6 +514,72 @@ Koşullar sağlanmazsa sunucu **bugünkü davranışa düşer**: `0x02` parçala
 ⚠️ **İstemcide olay bloğu `0x04` ile AYNI koddan ve AYNI tik halkasından geçer** (`EVENT_TICK_HISTORY`). Ayrı bir halka açılırsa aynı tik iki kez oynar: çift tracer + çift ses.
 
 Snapshot bloğu `0x02` ile birebir aynı işlenir; tik tekrarında durumu yeniden uygulamak zararsızdır (durum kanalı, son gelen kazanır) — düşürülmesi gereken yalnız **olaylardır**.
+
+### 6.9 `0x07 SkeletonUpdate` (istemci → sunucu, `SKELETON_RATE_HZ`; yalnız player)
+
+```
+[u8 0x07][u8 playerId][u16 seq][root : f32 px,py,pz, qx,qy,qz,qw] (28 B)
+[u16 len][blob len B]
+Başlık: 34 B  →  len=200'de 234 B
+```
+
+Gövde artık üç noktadan **türetilmiyor**: sahibinin cihazında Meta Movement SDK'nın body tracking'i
+koşuyor, retarget ediliyor ve **sonuç iskelet** akıyor. Sebep yapısaldır — body tracking bir cihaz
+servisidir, dışarıdan poz kabul etmez; uzak avatara "aynı body tracking'i" takmak her avatarın
+**yerel** gövdeyi oynatması demektir.
+
+**`blob` OPAKTIR.** İçeriği SDK'nın native serileştirmesidir; sunucu açmaz, doğrulamaz, kopyalar —
+sunucuda iskelet tablosu YOKTUR ve eklenmez. Gerekçe `netItemId` baytlarınınkiyle aynıdır (§6.6):
+bu bir **istemci-otoriter sunum bilgisidir**.
+
+⚠️ **`root` neden ayrı bir alan** (blob'un kendi kökü varken): SDK kök eklemi
+`JointType.NoWorldSpace` ile yazıyor, yani **gönderenin dünya pozu** — alıcının arenasıyla ilgisi
+yok. Blob opak olduğu için içindeki kökü çeviremeyiz; kök bu yüzden **arena uzayında ayrıca**
+taşınır ve alıcı `ApplyBodyPose`'dan sonra karakterin kökünü bununla yazar. Blob'un kendi kökü
+kullanılmaz. Aynı madde `Docs/Sistem-Ozeti.md` §7'deki "retarget avatarı hareket eden kökün altına
+konmaz" tuzağının da çözümüdür: karakter hiçbir şeyin altına parent'lanmaz.
+
+⚠️ **Bu kanalda PARÇALAMA YOKTUR.** Blob `SKELETON_MAX_BLOB_BYTES`'ı aşarsa paket **hiç
+gönderilmez** (bir kez uyarı basılır). Yarım bir kareyi deserialize etmek bozuk iskelet demektir ve
+IP parçalanmasına güvenmek tek parçanın kaybında tüm kareyi çöpe atardı. Blob sınırı zorluyorsa
+çözüm eklem listesini daraltmaktır — **parmak eklemleri kumandayla oynanırken gerçek veri
+taşımaz**.
+
+`seq` sarmalanır (u16); eski `seq` gelirse paket atılır. `0x01` ile aynı "son gelen kazanır"
+kuralıdır — bu bir **durum** kanalıdır, olay değil (karşılaştır §6.4: olayda sıra zorlaması yoktur).
+
+### 6.10 `0x08 SkeletonBatch` (sunucu → tüm istemciler, `SKELETON_RATE_HZ`)
+
+```
+[u8 0x08][u8 count][u32 serverTick]
+oyuncu başına: [u8 playerId][root 28][u16 len][blob] = 31 + len B
+Başlık: 6 B
+```
+
+**Neden batch:** oyuncu başına ayrı datagram, tik başına **hedef başına N** paket demek olurdu. Bu
+üründe darboğaz bant değil paket/airtime'dır (`Docs/Sistem-Ozeti.md` §3.12) — batch onu N'den
+`⌈N/5⌉`e indirir.
+
+**Parçalama:** girdiler değişken uzunluklu olduğu için sunucu **hem** bayt bütçesine
+(`COMBINED_MAX_BYTES`) **hem** girdi tavanına (`SKELETON_MAX_ENTRIES_PER_PACKET`) bakar; taşan girdi
+aynı tik içinde ek datagrama yazılır. Her datagram kendi `count`'unu, hepsi aynı `serverTick`'i
+taşır. **İstemcide birleştirme mantığı YOKTUR ve gerekmez** — her girdi bağımsız uygulanır, tıpkı
+snapshot parçalamasında olduğu gibi (§6.3).
+
+**Hedef:** UDP kayıtlı tüm online endpoint'ler (admin dahil — gözlemci de gövdeleri görür).
+⚠️ **Gönderen kendi girdisini geri alır ve KENDİSİ yok sayar** (kendi gövdesini sensörden çiziyor).
+Hedefe özel batch üretmek tik başına N serileştirme demek olurdu; §6.5 olay batch'i de aynı
+gerekçeyle atanı süzmüyor.
+
+⚠️ **Snapshot'a (`0x05`) birleştirilmez.** Snapshot 16 girdide zaten 1414 B; değişken uzunluklu bir
+blok eklemek `0x05`'in boyut garantisini çökertir.
+
+**Girdi yoksa paket yok** — lobide ve gövdesiz anlarda bu kanal tümüyle susar (`0x04` ile aynı
+davranış; bayat durum temizliği snapshot'ın işidir).
+
+⚠️ **İstemci düşürme kuralı iskelete DAYANMAZ:** uzak avatarın yaşam süresi snapshot'tan gelir
+(§6.3, ~1.5 sn). İskelet akışı kesilirse avatar kaybolmaz, gövdesi son karede donar — gövdeyi
+kaybetmek avatarı kaybetmekten iyidir.
 
 ## 7. DTO tasarım kuralları
 
