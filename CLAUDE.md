@@ -72,7 +72,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   (VortexArena.Net), `App/Scripts` (VortexArena.App — `Admin/` alt klasörü aynı asmdef'te:
   admin gözlemci; `UiKit.cs` arayüz paleti + EventSystem garantisi — görünüm prefablarda).
   Kod-dışı: `Arsenal/` (silah prefab+SO, `VA_WeaponFrame`),
-  `FX/`, `Environments/`, `Avatars/` (gövde avatarı modeli ve prefabları — yerel gövde
+  `FX/`, `Shaders/` + `Materials/` (paylaşılan shader/materyal — ör. `DissolveEffect`),
+  `Environments/`, `Avatars/` (gövde avatarı modeli ve prefabları — yerel gövde
   (`LocalBodyAvatar`) ile uzak avatarlar aynı modeli ve aynı sürücüyü (`ThreePointBodyIK`)
   paylaşır; **`Avatars/Resources/LocalBodyAvatar.prefab`** kendini önyükleyen tekil tarafından
   `Resources.Load` ile yüklendiği için `Resources/` altından ÇIKARILMAZ ve ADI DEĞİŞMEZ —
@@ -172,8 +173,9 @@ Net oyun/sahne bilgisi içermez; olay yayınlar, App dinler. Editor asmdef'leri
 runtime'a ProBuilder BULAŞMAZ).
 App ayrıca `Unity.InputSystem` referanslar (gözlemci kamerası klavye/fare + `InputSystemUIInputModule`);
 proje **Input System-only** — `StandaloneInputModule` runtime'da patlar, kullanılmaz.
-Core ayrıca `Unity.RenderPipelines.Universal.Runtime` referanslar (`LocalBodyOverlayCamera` —
-yerel oyuncunun gövdesini ayrı bir kamerayla, farklı near-clip ile çizen URP camera stack kurulumu).
+⚠️ Core'a URP (`Unity.RenderPipelines.Universal.Runtime`) referansı **geri eklenmez**: tek
+tüketicisi olan overlay kamera kurulumu silindi (gerekçe `Docs/Sistem-Ozeti.md` §7, "URP overlay
+kamerasının near-clip'i XR'da sessizce yok sayılır" maddesi).
 
 **İsimlendirme:** asmdef = `VortexArena.<Katman>`; namespace = asmdef adıyla birebir
 (rootNamespace dolu); global namespace'te tip YOK; serialize edilen ikincil tipler kendi
@@ -372,7 +374,11 @@ TAŞIMAZ** — `Muzzle` ile aynı kural; yalnız hiç yoksa kaba bir başlangı�
 tasarımının zıddıdır ve filtre hover'ı kesmediği için yalan söyleyen bir vurgu bırakırdı →
 `Docs/Sistem-Ozeti.md` §7). Yasak yalnız kök içindir: **çerçeve prefabında (`VA_WeaponFrame`)
 mesafeden kavrama ZORUNLUDUR** — silah oradan alınır. Çerçeve adımı elle iş istemez, araç her
-`WPN_*` köküne bir `VA_WeaponFrame` örneği koyar (idempotent). Aynı sebeple ⚠️ **`Grabbable._throwWhenUnselected` GERİ AÇILMAZ**
+`WPN_*` köküne bir `VA_WeaponFrame` örneği koyar (idempotent). **Çözülme efekti de kurulum
+istemez:** araç aynı köke `WeaponDissolve` koyup `_Shared/Materials/DissolveEffect.mat`'i bağlar
+(yalnız alan BOŞSA — silaha özel materyal bağlanmışsa ezilmez, ikinci seçenek `VoronoiDissolve`),
+silah ele çözülerek gelir. ⚠️ Geçişin **süre/desen ayarları araçtaki sabitlerden** gelir ve her
+koşuda prefaba geri yazılır — kalıcı ayar prefabda değil `WeaponKitBuilder`'da değiştirilir. Aynı sebeple ⚠️ **`Grabbable._throwWhenUnselected` GERİ AÇILMAZ**
 (araç kapatır): silahın pozunu ISDK değil `ApplyCanonicalGrip` sürdüğü için bırakış hızı uydurmadır
 ve silah elden fırlar. **Silahı sahneye ELLE koyarsın** (`weaponSource:"weaponcanvas"` — TDM ·
 turnuva): yerleşim **arena kararıdır**, harita tasarlanırken yapılır ve bunu yapan bir bileşen

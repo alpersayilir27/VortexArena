@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 9005754220157407963}
   - component: {fileID: 8296904830291880243}
   - component: {fileID: 2511738044547762096}
+  - component: {fileID: 625159750789931343}
   m_Layer: 0
   m_Name: WPN_AK47
   m_TagString: Untagged
@@ -152,8 +153,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WeaponAudio
   source: {fileID: 3978852933558783543}
   fireClips:
-  - {fileID: 8300000, guid: 957e1de72b1bcb9439dd45fbb67829ef, type: 3}
-  - {fileID: 8300000, guid: 2545763209f6cc5499df8408ec5485d6, type: 3}
+  - {fileID: 8300000, guid: 7b901a37702e4b544ae2b0d4fe11a13f, type: 3}
+  - {fileID: 8300000, guid: 7b901a37702e4b544ae2b0d4fe11a13f, type: 3}
   dryFireClip: {fileID: 0}
   firePitchJitter: 0.05
 --- !u!114 &5069606845487077834
@@ -245,6 +246,24 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.ItemGripSockets
   definition: {fileID: 0}
+--- !u!114 &625159750789931343
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 190416508149715471}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 10c15c888017a024da8d92fb85942e57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDissolve
+  dissolveMaterial: {fileID: 2100000, guid: 65822b697fd322144a6838c20894a1d7, type: 2}
+  appearSeconds: 1.2
+  disappearSeconds: 0.9
+  edgeColor: {r: 0, g: 2.7183907, b: 8.905661, a: 1}
+  edgeWidth: 0.08
+  noiseScale: 60
 --- !u!1 &940328498536189817
 GameObject:
   m_ObjectHideFlags: 0
@@ -10272,6 +10291,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6305741427357233449, guid: 68587b2d9c60944489560cf05cdd1aaf, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 65822b697fd322144a6838c20894a1d7, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:

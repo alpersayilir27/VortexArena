@@ -222,6 +222,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 
 - [ ] Her başlıkta geliştirici modu açık, USB hata ayıklama izni verildi.
 - [ ] APK kurulumu: `install_game.bat` çalıştır — **repo kökündeki de `deploy\player\` altındaki kopya da olur**. Betik APK'yı sırayla kendi yanında, `deploy\player\` ve `Builds\player\` altında arar; bulduğu dosyanın yolunu, boyutunu ve tarihini yazar (doğru build'i kurduğunu böyle görürsün), sonra `adb devices` listesini gösterip `adb install -r -g` ile kurar.
+  - Cihaz `unauthorized` çıkarsa betik kurmadan durur ve sırayla: onayınla `adb kill-server` + `adb start-server` çalıştırıp onay penceresini yeniden tetikler, gözlükte izni verdiğini sorar, cevabı `adb devices` ile teyit eder ve ancak o zaman kurar. Gözlükte pencereyi görmek için başlığı **takmış** olman gerekir (masada ekran kapalıyken çizilmez) ve bir uygulamanın içindeysen önce ana ekrana çık. ⚠️ **"Bu bilgisayardan her zaman izin ver"i işaretle** — işaretlenmezse yetki adb yeniden başladığında düşer ve her kurulumda yeniden sorulur.
   - `adb` bulunamıyorsa Android platform-tools (veya Meta Quest Developer Hub) kur ve PATH'e ekle.
   - Kablosuz kurulum için önce `adb connect <gozluk-ip>:5555`.
   - Aynı anda birden fazla cihaz bağlıysa diğerlerini çıkar.
