@@ -40,10 +40,11 @@ namespace VortexArena.Core.Player
     /// gönderenin rig'i hizalı değilse — çözücü imkânsız bir gövde kurmak zorunda kalır: kafa
     /// zeminin altındayken ayak hedefi kalçanın ÜSTÜNE düşer ve CCD bacakları gövdenin üzerine
     /// sarar (avatar "top" olur, kafa göğsün içinde kalır). Bu yüzden gelen poz önce
-    /// <b>makullüğe</b> bakılır: kafa arena zemininden
-    /// [<see cref="MinPlausibleHeadHeight"/>, <see cref="MaxPlausibleHeadHeight"/>] m dışındaysa
+    /// <b>makullüğe</b> bakılır: göz arena zemininden
+    /// [<see cref="MinPlausibleEyeHeight"/>, <see cref="MaxPlausibleEyeHeight"/>] m dışındaysa
     /// zemin referansı ARENADAN değil POZDAN türetilir — avatar yanlış yükseklikte çizilir ama
     /// <b>bütün bir insan</b> kalır (maç ortasında düşmanı kaybetmemek bilinçli bir tercihtir).
+    /// (Ölçülen büyüklük GÖZÜN yüksekliğidir; gerekçesi aşağıda.)
     /// </para>
     /// <para>
     /// ⚠️ <b>Ağdan gelen rotasyon kemiğe DOĞRUDAN yazılmaz</b> — izleme uzayı ile kemik uzayının
@@ -58,10 +59,31 @@ namespace VortexArena.Core.Player
     /// dev + ayakları zeminin altında kalıyordu — ölçüldü). Boy artık kayan pencere maksimumu,
     /// ayaklar da ışınlanmada yeniden ziplatılıyor.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>Gelen "kafa" pozu GÖZÜN pozudur</b> (<c>centerEyeAnchor</c> — hem yerel rig'den hem
+    /// telden aynı kaynak gelir), kafa KEMİĞİNİN pozu değil. İkisi karıştırılırsa iskelet gözün
+    /// olduğu yere oturur ve gövde bir kafa yarısı kadar yukarı + öne kayar: Ch15'te yaka kemiği
+    /// gözün 18-20 cm altında olması gerekirken 6-7 cm altına çıkıyor, yani ana kameranın
+    /// near-clip'inin (0.1 m) İÇİNE giriyordu — aşağı bakan oyuncu kendi gövdesinin içini
+    /// görüyordu. Köprü <see cref="headBoneToEyeOffset"/>'tir ve aynı sebeple <b>ölçek</b> de
+    /// kafa kemiği yüksekliğine değil <see cref="ModelEyeHeight"/>'a bölünür (aksi hâlde avatar
+    /// sistematik olarak ~%8 büyük çizilirdi).
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Meta'nın CCD çözücüsü ÖLÇEĞİ görmezden gelir</b> — hedef ona ham verilmez, bkz.
+    /// <see cref="SolveChain"/>.
+    /// </para>
     /// </summary>
     [RequireComponent(typeof(Animator))]
     public class ThreePointBodyIK : MonoBehaviour
     {
+        [Header("Göz ↔ kafa kemiği")]
+        [Tooltip("Gözün kafa KEMİĞİNE göre yeri (kemik-yerel, metre; +Y yukarı, +Z ileri). " +
+                 "Gelen poz gözün pozudur; kafa kemiği bu ofset kadar geriye/aşağıya oturtulur. " +
+                 "Bu KARAKTERİN ölçüsüdür, oyuncunun değil — yerel ve uzak prefabda aynı girilir. " +
+                 "Sıfır bırakılırsa gövde ~12 cm yükselir ve yaka near-clip'in içine girer.")]
+        [SerializeField] private Vector3 headBoneToEyeOffset = new Vector3(0f, 0.12f, 0.09f);
+
         [Header("Gövde")]
         [Tooltip("Kalçanın kafa yönünün GERİSİNDE durma payı — öne eğilince gövde yatar.")]
         [SerializeField] private float hipsBackOffsetMeters = 0.06f;
@@ -83,6 +105,13 @@ namespace VortexArena.Core.Player
         [SerializeField] private Vector3 rightHandTuningEuler;
 
         [Header("Kollar")]
+        [Tooltip("Bileğin KENDİ ekseni etrafındaki dönüşünün önkola devredilen payı [0..1]. " +
+                 "0 = burulmanın tamamı tek eklemde kalır ve bilek büküldükçe incelip kalınlaşır " +
+                 "(mesh'in şeker ambalajı gibi çökmesi); 0.5 = gerçek önkolun radius/ulna paylaşımı. " +
+                 "Elin YERİNİ değiştirmez — dönüş ekseni zaten önkoldan ele giden eksendir.")]
+        [Range(0f, 1f)]
+        [SerializeField] private float forearmTwistShare = 0.5f;
+
         [Tooltip("El/ayak hedefine kabul edilen yakınlık (metre).")]
         [SerializeField] private float armTolerance = 0.01f;
 
@@ -107,13 +136,13 @@ namespace VortexArena.Core.Player
         private const float MaxScale = 1.35f;
 
         /// <summary>
-        /// Kafanın arena zemininden makul yüksekliği (m). Bu aralığın DIŞINDAKİ poz "gönderenin
+        /// GÖZÜN arena zemininden makul yüksekliği (m). Bu aralığın DIŞINDAKİ poz "gönderenin
         /// rig'i hizalı değil" demektir; zemin referansı o zaman arenadan değil pozdan alınır.
         /// <para>Aralık geniş tutulur (çömelmiş kısa oyuncu ↔ zıplayan uzun oyuncu): amaç boy
         /// denetlemek değil, METRELERCE kayan bir uzayı yakalamaktır.</para>
         /// </summary>
-        private const float MinPlausibleHeadHeight = 0.6f;
-        private const float MaxPlausibleHeadHeight = 2.6f;
+        private const float MinPlausibleEyeHeight = 0.6f;
+        private const float MaxPlausibleEyeHeight = 2.6f;
 
         /// <summary>
         /// Boy tahmininin kayan pencere uzunluğu (sn). ⚠️ <b>Sonsuz maksimum kullanılmaz:</b> tek
@@ -121,6 +150,18 @@ namespace VortexArena.Core.Player
         /// önleyecek kadar uzun, hatalı bir örneği unutacak kadar kısadır.
         /// </summary>
         private const float StandingHeightWindowSeconds = 5f;
+
+        /// <summary>
+        /// Ölçeğin hedefine yaklaşma hızı (ölçek birimi / sn).
+        /// <para>⚠️ <b>Ölçek DOĞRUDAN yazılmaz.</b> Pencere devrinde
+        /// (<see cref="StandingHeightWindowSeconds"/>) hedef bir karede atlıyor; uzak avatarda fark
+        /// edilmiyordu ama YEREL gövdede oyuncu kendi kollarına bakıyor ve sıçrama "kolum uzayıp
+        /// kısalıyor" olarak görünüyordu. Hız, normal bir pencere devrini (birkaç cm) yarım
+        /// saniyenin altında kapatacak kadar yüksek, sıçramayı gizleyecek kadar düşüktür.</para>
+        /// <para>İlk kare istisnadır: avatar görünürken hedefe ANINDA oturur
+        /// (<see cref="_scaleInitialized"/>), yoksa her doğuşta yavaşça büyürdü.</para>
+        /// </summary>
+        private const float ScaleFollowRatePerSecond = 0.15f;
 
         /// <summary>
         /// Ayak, bulunması gereken yerden bu kadar uzaktaysa adım atılmaz, doğrudan ZIPLATILIR (m).
@@ -133,6 +174,13 @@ namespace VortexArena.Core.Player
 
         /// <summary>Güvenilmez poz uyarısının en sık tekrar aralığı (sn) — 20 Hz'de log seli olurdu.</summary>
         private const float UntrustedWarnCooldownSeconds = 10f;
+
+        /// <summary>
+        /// Bir kemiğin "gizlenmiş" sayıldığı ölçek eşiği. <see cref="LocalAvatarBoneHider"/> uzuvları
+        /// 0.0001'e ölçekleyerek gizliyor; eşik ondan belirgin biçimde büyük, meşru hiçbir avatar
+        /// ölçeğine (<see cref="MinScale"/>) yaklaşmayacak kadar küçüktür.
+        /// </summary>
+        private const float DegenerateBoneScale = 1e-3f;
 
         private Animator _animator;
         private bool _bonesResolved;
@@ -169,6 +217,17 @@ namespace VortexArena.Core.Player
         private bool _leftHandBasisMeasured;
         private bool _rightHandBasisMeasured;
 
+        /// <summary>
+        /// Önkolun burulma ekseni (ÖNKOL-yerel, birim): önkoldan ele giden yön, bind pozunda bir kez
+        /// ölçülür. Bileğin bu eksen etrafındaki dönüşü <see cref="forearmTwistShare"/> kadar önkola
+        /// devredilir.
+        /// <para>⚠️ Eksen sabit yazılmaz (Ch15'te önkol-yerel <c>+Y</c>): karakter değişince burada
+        /// tek satır değişmesin — aynı gerekçe <see cref="_leftHandBoneBasis"/>'te de geçerli.</para>
+        /// <para>Sıfır vektör = ölçülemedi (zincir yok) → burulma paylaştırılmaz.</para>
+        /// </summary>
+        private Vector3 _leftForearmTwistAxis;
+        private Vector3 _rightForearmTwistAxis;
+
         // Bacaklar — aynı sıra: { ayak, alt bacak, üst bacak }.
         private Transform[] _leftLegChain;
         private Transform[] _rightLegChain;
@@ -178,18 +237,30 @@ namespace VortexArena.Core.Player
         private Quaternion[] _bindLocalRotations;
         private Vector3[] _bindLocalPositions;
 
-        /// <summary>Karakterin KENDİ ölçüleri (bind pozunda, kök uzayında; ölçek 1 iken).</summary>
+        /// <summary>Karakterin KENDİ ölçüleri (bind pozunda, kök uzayında; ölçek 1 iken).
+        /// <para><see cref="_modelHeadHeight"/> kafa KEMİĞİNİN yüksekliğidir (Ch15'te ≈ 1.56 m);
+        /// oyuncuyla karşılaştırılacak olan ise gözdür → <see cref="ModelEyeHeight"/>.</para></summary>
         private float _modelHeadHeight;
         private float _modelHipsDrop;
         private float _modelAnkleHeight;
 
-        /// <summary>Oyuncunun ölçülen ayakta kafa yüksekliği — avatar buna göre ölçeklenir.
-        /// <para>Kayan pencere maksimumu: <see cref="_recentMaxHeadHeight"/> ikinci kovadır,
+        /// <summary>
+        /// Modelin GÖZ yüksekliği — ölçeğin ve zemin türetmesinin paydası.
+        /// <para>Alan değil property: <see cref="headBoneToEyeOffset"/> Inspector'dan canlı
+        /// ayarlanabilsin diye (aynı gerekçe <see cref="_leftHandBoneBasis"/> yorumunda).</para>
+        /// </summary>
+        private float ModelEyeHeight => _modelHeadHeight + headBoneToEyeOffset.y;
+
+        /// <summary>Oyuncunun ölçülen ayakta GÖZ yüksekliği — avatar buna göre ölçeklenir.
+        /// <para>Kayan pencere maksimumu: <see cref="_recentMaxEyeHeight"/> ikinci kovadır,
         /// pencere dolunca yerine geçer (O(1), tahsissiz).</para></summary>
-        private float _standingHeadHeight;
-        private float _recentMaxHeadHeight;
+        private float _standingEyeHeight;
+        private float _recentMaxEyeHeight;
         private float _heightWindowTimer;
         private float _scale = 1f;
+
+        /// <summary>Ölçek ilk kez oturtuldu mu — ilk kare hedefe anında sıçrar, sonrası yumuşar.</summary>
+        private bool _scaleInitialized;
 
         /// <summary>Son karede gelen poz makul müydü (bkz. sınıf özeti). Değişimde ayaklar sıfırlanır.</summary>
         private bool _poseTrusted = true;
@@ -225,6 +296,8 @@ namespace VortexArena.Core.Player
 
         /// <summary>
         /// Bir karelik çözüm. Pozlar DÜNYA uzayındadır (çağıran arena→dünya dönüşümünü yapmıştır).
+        /// ⚠️ <paramref name="head"/> <b>GÖZÜN</b> pozudur (<c>centerEyeAnchor</c>), kafa kemiğinin
+        /// değil — dönüşümü <see cref="headBoneToEyeOffset"/> yapar (bkz. sınıf özeti).
         /// <see cref="LateUpdate"/> yerine dışarıdan çağrılır: sürücü <c>RemoteAvatar</c>'dır ve
         /// pozu ancak kayıt defterinden okuduktan sonra verebilir.
         /// </summary>
@@ -255,26 +328,27 @@ namespace VortexArena.Core.Player
 
             // Gelen pozun arena zeminiyle uyumu: uyumsuzsa gövde ARENAYA göre değil KENDİNE göre
             // kurulur (bkz. sınıf özeti — yanlış yükseklikte ama bütün bir insan).
-            float headHeight = safeHead.position.y - arenaGroundY;
-            bool trusted = headHeight >= MinPlausibleHeadHeight && headHeight <= MaxPlausibleHeadHeight;
+            // ⚠️ Ölçülen şey GÖZ yüksekliğidir (gelen poz gözün pozu); ölçek de ona bölünür.
+            float eyeHeight = safeHead.position.y - arenaGroundY;
+            bool trusted = eyeHeight >= MinPlausibleEyeHeight && eyeHeight <= MaxPlausibleEyeHeight;
 
             RestoreBindPose();
 
             if (trusted)
             {
-                ApplyScale(headHeight, deltaTime);
+                ApplyScale(eyeHeight, deltaTime);
             }
             else
             {
-                WarnUntrusted("kafa arena zemininden makul olmayan yükseklikte",
-                    headHeight, arenaGroundY, safeHead.position.y);
+                WarnUntrusted("göz arena zemininden makul olmayan yükseklikte",
+                    eyeHeight, arenaGroundY, safeHead.position.y);
             }
 
             // ⚠️ Güvenilmez pozda zemin POZDAN türetilir. Arena zeminini kullanmak kökü gövdeden
             // metrelerce ayırır: ayak hedefi kalçanın üstüne çıkar ve bacaklar gövdeye sarılır.
             float groundY = trusted
                 ? arenaGroundY
-                : safeHead.position.y - _modelHeadHeight * _scale;
+                : safeHead.position.y - ModelEyeHeight * _scale;
 
             if (trusted != _poseTrusted)
             {
@@ -285,10 +359,17 @@ namespace VortexArena.Core.Player
 
             Quaternion yaw = SolveTorsoYaw(safeHead.rotation, deltaTime);
 
-            PlaceRoot(safeHead.position, yaw, groundY);
-            PlaceTorso(safeHead, yaw);
-            SolveArm(_leftArmChain, _leftHand, safeHandL, HandCorrection(false));
-            SolveArm(_rightArmChain, _rightHand, safeHandR, HandCorrection(true));
+            // ⚠️ Gövde GÖZE değil KAFA KEMİĞİNE göre kurulur (bkz. sınıf özeti): iskeleti gözün
+            // olduğu yere oturtmak yakayı near-clip'in içine sokuyordu. Ofset kemik-yereldir,
+            // yani kafanın rotasyonuyla döner ve avatarın ölçeğiyle ölçeklenir.
+            var headBone = new Pose(
+                safeHead.position - safeHead.rotation * (headBoneToEyeOffset * _scale),
+                safeHead.rotation);
+
+            PlaceRoot(headBone.position, yaw, groundY);
+            PlaceTorso(headBone, yaw);
+            SolveArm(_leftArmChain, _leftHand, safeHandL, HandCorrection(false), _leftForearmTwistAxis);
+            SolveArm(_rightArmChain, _rightHand, safeHandR, HandCorrection(true), _rightForearmTwistAxis);
             SolveLegs(yaw, deltaTime, groundY);
         }
 
@@ -300,10 +381,11 @@ namespace VortexArena.Core.Player
         /// </summary>
         public void ResetPoseState()
         {
-            _standingHeadHeight = _modelHeadHeight;
-            _recentMaxHeadHeight = _modelHeadHeight;
+            _standingEyeHeight = ModelEyeHeight;
+            _recentMaxEyeHeight = ModelEyeHeight;
             _heightWindowTimer = 0f;
             _scale = 1f;
+            _scaleInitialized = false;
             transform.localScale = Vector3.one;
             _yawInitialized = false;
             _feetInitialized = false;
@@ -352,7 +434,7 @@ namespace VortexArena.Core.Player
         /// Güvenilmez pozu bir kez (sonra en fazla <see cref="UntrustedWarnCooldownSeconds"/>'de bir)
         /// SAYILARLA loglar: sahada "avatar tuhaf" demek yerine hangi uzayın kaydığı okunabilsin.
         /// </summary>
-        private void WarnUntrusted(string reason, float headHeight, float groundY, float headWorldY)
+        private void WarnUntrusted(string reason, float eyeHeight, float groundY, float eyeWorldY)
         {
             if (Time.time - _lastUntrustedWarnTime < UntrustedWarnCooldownSeconds)
             {
@@ -362,8 +444,8 @@ namespace VortexArena.Core.Player
             _lastUntrustedWarnTime = Time.time;
             Debug.LogWarning(
                 $"[ThreePointBodyIK] '{name}': {reason} " +
-                $"(kafa yüksekliği {headHeight:F2} m, arena zemini Y={groundY:F2}, kafa dünya Y={headWorldY:F2}; " +
-                $"makul aralık [{MinPlausibleHeadHeight:F2}, {MaxPlausibleHeadHeight:F2}] m). " +
+                $"(göz yüksekliği {eyeHeight:F2} m, arena zemini Y={groundY:F2}, göz dünya Y={eyeWorldY:F2}; " +
+                $"makul aralık [{MinPlausibleEyeHeight:F2}, {MaxPlausibleEyeHeight:F2}] m). " +
                 "Gönderen oyuncunun rig'i arenayla hizalı değil — kalibrasyon yapılmamış ya da " +
                 "kayıtlı hizalama yanlış geri yüklenmiş olabilir. Gövde, zemini POZDAN türetilerek " +
                 "bütün çizildi (yükseklik yanlış).", this);
@@ -391,31 +473,38 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Avatarı oyuncunun boyuna ölçekler. Model sabit boydadır (Ch15 ≈ 1.56 m kafa kemiği);
-        /// ölçeklenmezse kısa kollar ele yetişemez, bacaklar zemine değmez — tam da "uzamış/kopuk
-        /// uzuv" görüntüsü buradan çıkar.
-        /// <para>Ölçü <b>en yüksek</b> gözlenen kafa yüksekliğinden alınır: eğilen/çömelen oyuncuda
+        /// Avatarı oyuncunun boyuna ölçekler. Model sabit boydadır; ölçeklenmezse kısa kollar ele
+        /// yetişemez, bacaklar zemine değmez — tam da "uzamış/kopuk uzuv" görüntüsü buradan çıkar.
+        /// <para>⚠️ Payda kafa kemiği DEĞİL <see cref="ModelEyeHeight"/>'tır: ölçülen büyüklük
+        /// oyuncunun GÖZ yüksekliği, model tarafında da onun karşılığı kullanılmalı. Kafa kemiğine
+        /// bölünüyordu ve avatar sistematik olarak ~%8 büyük çiziliyordu (Ch15'te kafa kemiği
+        /// 1.56 m, göz ≈ 1.68 m) — büyüyen gövde oyuncunun yüzüne yaklaşan bir göğüs demekti.</para>
+        /// <para>Ölçü <b>en yüksek</b> gözlenen göz yüksekliğinden alınır: eğilen/çömelen oyuncuda
         /// anlık yüksekliğe uyulsaydı avatar her çömelmede küçülürdü.</para>
         /// <para>⚠️ Maksimum <b>KAYAN PENCEREDE</b> tutulur (iki kova,
         /// <see cref="StandingHeightWindowSeconds"/>). Sonsuz maksimum, tek bir yüksek (ama makul
-        /// aralıkta kalan) örneği kalıcı yapıyordu: 2.05 m'lik bir kafa avatarı 1.32×'e kilitliyor
+        /// aralıkta kalan) örneği kalıcı yapıyordu: 2.05 m'lik bir göz avatarı 1.32×'e kilitliyor
         /// ve poz düzelse bile geri dönmüyordu.</para>
+        /// <para>⚠️ Bulunan ölçek transform'a DOĞRUDAN yazılmaz, hedefe doğru YUMUŞATILIR
+        /// (<see cref="ScaleFollowRatePerSecond"/>) — pencere devri tek karede atlıyor ve yerel
+        /// gövdede bu "kolum uzayıp kısalıyor" olarak görülüyordu.</para>
         /// </summary>
-        private void ApplyScale(float headHeightMeters, float deltaTime)
+        private void ApplyScale(float eyeHeightMeters, float deltaTime)
         {
-            if (_modelHeadHeight <= 0.01f || headHeightMeters <= 0.01f)
+            float modelEyeHeight = ModelEyeHeight;
+            if (modelEyeHeight <= 0.01f || eyeHeightMeters <= 0.01f)
             {
                 return;
             }
 
-            if (headHeightMeters > _standingHeadHeight)
+            if (eyeHeightMeters > _standingEyeHeight)
             {
-                _standingHeadHeight = headHeightMeters;
+                _standingEyeHeight = eyeHeightMeters;
             }
 
-            if (headHeightMeters > _recentMaxHeadHeight)
+            if (eyeHeightMeters > _recentMaxEyeHeight)
             {
-                _recentMaxHeadHeight = headHeightMeters;
+                _recentMaxEyeHeight = eyeHeightMeters;
             }
 
             _heightWindowTimer += deltaTime;
@@ -423,18 +512,28 @@ namespace VortexArena.Core.Player
             {
                 // Pencere devri: geçmiş kova düşer, yerine son pencerenin maksimumu geçer.
                 _heightWindowTimer = 0f;
-                _standingHeadHeight = _recentMaxHeadHeight;
-                _recentMaxHeadHeight = headHeightMeters;
+                _standingEyeHeight = _recentMaxEyeHeight;
+                _recentMaxEyeHeight = eyeHeightMeters;
             }
 
-            float scale = Mathf.Clamp(_standingHeadHeight / _modelHeadHeight, MinScale, MaxScale);
-            if (Mathf.Abs(scale - _scale) < 0.001f)
+            float target = Mathf.Clamp(_standingEyeHeight / modelEyeHeight, MinScale, MaxScale);
+
+            if (!_scaleInitialized)
+            {
+                // İlk kare: avatar zaten yeni görünüyor, yumuşatmanın gizleyeceği bir sıçrama yok.
+                _scaleInitialized = true;
+                _scale = target;
+            }
+            else if (Mathf.Abs(target - _scale) > 1e-4f)
+            {
+                _scale = Mathf.MoveTowards(_scale, target, ScaleFollowRatePerSecond * deltaTime);
+            }
+            else
             {
                 return;
             }
 
-            _scale = scale;
-            transform.localScale = new Vector3(scale, scale, scale);
+            transform.localScale = new Vector3(_scale, _scale, _scale);
         }
 
         // ------------------------------------------------------------------- gövde
@@ -559,15 +658,134 @@ namespace VortexArena.Core.Player
         /// (kumanda pozu bileğin değil avucun ötesindedir) konum yazmak eli önkoldan koparır ve
         /// mesh gerilir; ulaşılamayan hedefte kol kısa kalsın, kopmasın.</para>
         /// </summary>
-        private void SolveArm(Transform[] chain, Transform hand, in Pose handPose, in Quaternion correction)
+        private void SolveArm(
+            Transform[] chain,
+            Transform hand,
+            in Pose handPose,
+            in Quaternion correction,
+            Vector3 twistAxis)
         {
             if (chain == null || hand == null)
             {
                 return;
             }
 
-            IKUtilities.SolveCCDIK(chain, handPose.position, SolverTolerance, armIterations);
-            hand.rotation = handPose.rotation * correction;
+            SolveChain(chain, handPose.position);
+
+            Quaternion target = handPose.rotation * correction;
+
+            // ⚠️ Burulma ELDEN ÖNCE önkola devredilir; el yine MUTLAK yazılır (hedef değişmiyor).
+            DistributeWristTwist(chain[1], target, twistAxis);
+            hand.rotation = target;
+        }
+
+        /// <summary>
+        /// Bileğin kendi ekseni etrafındaki dönüşünün bir payını önkola devreder — gerçek önkolun
+        /// radius/ulna burulmasının karşılığı.
+        /// <para>
+        /// ⚠️ <b>Neden gerekli:</b> ele MUTLAK rotasyon yazılıyor, CCD ise önkola roll VEREMİYOR
+        /// (<c>Quaternion.FromToRotation</c> minimum yaydır, kemiğin kendi ekseni etrafında sıfır
+        /// dönüş üretir) ve Mixamo rig'inde <b>twist kemiği yok</b>. Yani oyuncu bileğini çevirdiğinde
+        /// (tüfek tutarken sürekli) dönüşün TAMAMI tek eklemde birikiyor ve lineer blend skinning
+        /// bileği "şeker ambalajı" gibi çökertiyor: bilek incelip kalınlaşıyor. Quest'te
+        /// (QualitySettings "Mobile", vertex başına 2 kemik) etki daha da belirgin.
+        /// </para>
+        /// <para>
+        /// ⚠️ Bu düzeltme elin YERİNİ bozmaz: döndürülen eksen zaten önkoldan ele giden eksendir,
+        /// el o eksenin ÜZERİNDE durur. Bu yüzden CCD'nin bulduğu çözüm geçerli kalır ve düzeltme
+        /// çözücüden sonra uygulanabilir.
+        /// </para>
+        /// </summary>
+        private void DistributeWristTwist(Transform lowerArm, Quaternion handTarget, Vector3 twistAxis)
+        {
+            if (lowerArm == null || forearmTwistShare <= 0f || twistAxis.sqrMagnitude < 0.5f)
+            {
+                return;
+            }
+
+            Quaternion local = Quaternion.Inverse(lowerArm.rotation) * handTarget;
+            Quaternion twist = ExtractTwist(local, twistAxis);
+            lowerArm.rotation *= Quaternion.Slerp(Quaternion.identity, twist, forearmTwistShare);
+        }
+
+        /// <summary>
+        /// Swing-twist ayrıştırmasının twist yarısı: rotasyonun <paramref name="axis"/> etrafındaki
+        /// bileşeni. Quaternion'ın vektör kısmı eksene izdüşürülür, kalan normalize edilir.
+        /// <para>Dejenere durumda (dönüş ekseni <paramref name="axis"/>'e dik) kimlik döner —
+        /// devredilecek burulma yok demektir.</para>
+        /// </summary>
+        private static Quaternion ExtractTwist(Quaternion rotation, Vector3 axis)
+        {
+            var vector = new Vector3(rotation.x, rotation.y, rotation.z);
+            Vector3 projection = Vector3.Project(vector, axis);
+
+            float magnitude = Mathf.Sqrt(
+                projection.x * projection.x + projection.y * projection.y +
+                projection.z * projection.z + rotation.w * rotation.w);
+
+            if (magnitude < 1e-6f)
+            {
+                return Quaternion.identity;
+            }
+
+            return new Quaternion(
+                projection.x / magnitude,
+                projection.y / magnitude,
+                projection.z / magnitude,
+                rotation.w / magnitude);
+        }
+
+        /// <summary>
+        /// Ölçek telafili CCD çağrısı — <b>çözücüye ham dünya hedefi verilmez</b>.
+        /// <para>
+        /// ⚠️ <b>Meta'nın <see cref="IKUtilities.SolveCCDIK"/>'i ÖLÇEĞİ görmezden gelir:</b> zinciri
+        /// önbelleğe alırken <c>parent.InverseTransformPoint(bone.position)</c> ile ölçeği BÖLER,
+        /// ama zinciri geri kurarken (<c>position += rotation * pose.position</c>) geri ÇARPMAZ.
+        /// Yani çözücünün kafasındaki kol, gerçek kolun <c>1/S</c> katıdır (S = zincir kökünün
+        /// dünya ölçeği). Avatar oyuncunun boyuna ölçeklendiği için S neredeyse hiç 1 değildir:
+        /// S=1.09'da çözücü kolu ~4.5 cm kısa sanır, ölçek tavanında (<see cref="MaxScale"/>)
+        /// ~17 cm. Kemikler gerilmez (yalnız rotasyon yazılıyor) ama <b>el hedefi sistematik olarak
+        /// ıskalar</b> ve ıskalama kolun yönüyle değiştiği için "kol uzayıp kısalıyor" görünür.
+        /// </para>
+        /// <para>
+        /// Çözücünün iç modeli, gerçek zincirin KÖK NOKTASI etrafında <c>1/S</c> ile ölçeklenmiş
+        /// hâlidir — yani hedefi aynı dönüşümden geçirmek çözümü <b>birebir</b> doğru yapar. Aynı
+        /// sebeple tolerans da <c>S²</c>'ye bölünür: çözücü mesafeyi o sahte uzayda karesiyle
+        /// karşılaştırıyor.
+        /// </para>
+        /// <para>⚠️ Bu bir üçüncü parti davranışının TELAFİSİDİR. SDK bir gün düzeltirse telafi
+        /// çift sayılır — güncellemede bu metot doğrulanmalıdır.</para>
+        /// </summary>
+        private void SolveChain(Transform[] chain, Vector3 worldTarget)
+        {
+            Transform chainRoot = chain[chain.Length - 1];
+
+            // ⚠️ GİZLENMİŞ uzuv hiç çözülmez. LocalAvatarBoneHider görünmesini istemediği kemiği
+            // sıfıra yakın ÖLÇEKLİYOR; çözücü ise zinciri önbelleğe alırken o ölçeğe BÖLÜYOR
+            // (InverseTransformPoint) → iç modeli 10.000× şişiyor. Görünmeyen bir uzuv için hem
+            // anlamsız hem sayısal olarak tehlikeli bir iş. Kapı ölçeğe bakar, gizleyicinin
+            // listesine DEĞİL: liste iki yerde durursa er geç birbirinden sapar.
+            if (chainRoot.lossyScale.x <= DegenerateBoneScale)
+            {
+                return;
+            }
+
+            Transform chainParent = chainRoot.parent;
+            Vector3 target = worldTarget;
+            float tolerance = SolverTolerance;
+
+            if (chainParent != null)
+            {
+                float scale = chainParent.lossyScale.x;
+                if (scale > 1e-4f && Mathf.Abs(scale - 1f) > 1e-4f)
+                {
+                    Vector3 root = chainParent.position;
+                    target = root + (worldTarget - root) / scale;
+                    tolerance /= scale * scale;
+                }
+            }
+
+            IKUtilities.SolveCCDIK(chain, target, tolerance, armIterations);
         }
 
         // ----------------------------------------------------------------- bacaklar
@@ -639,8 +857,8 @@ namespace VortexArena.Core.Player
             Vector3 rightFoot = AdvanceStep(
                 ref _rightStepProgress, ref _rightFootPlanted, _rightFootFrom, rightTarget, rightStepping, deltaTime);
 
-            IKUtilities.SolveCCDIK(_leftLegChain, leftFoot, SolverTolerance, armIterations);
-            IKUtilities.SolveCCDIK(_rightLegChain, rightFoot, SolverTolerance, armIterations);
+            SolveChain(_leftLegChain, leftFoot);
+            SolveChain(_rightLegChain, rightFoot);
         }
 
         /// <summary>Adımı bir kare ilerletir; adım yoksa ayak bastığı yerde kalır.</summary>
@@ -725,6 +943,29 @@ namespace VortexArena.Core.Player
             CacheBindPose();
             MeasureModel();
             MeasureHandCorrections();
+            MeasureTwistAxes();
+        }
+
+        /// <summary>Önkolların burulma eksenini bind pozunda ölçer (bkz.
+        /// <see cref="_leftForearmTwistAxis"/>). ⚠️ Poz bozulmadan ÖNCE çağrılmalıdır.</summary>
+        private void MeasureTwistAxes()
+        {
+            _leftForearmTwistAxis = MeasureTwistAxis(_leftArmChain);
+            _rightForearmTwistAxis = MeasureTwistAxis(_rightArmChain);
+        }
+
+        /// <summary>Zincirin önkol→el yönü, ÖNKOL-yerel uzayda. Ölçülemezse sıfır vektör.</summary>
+        private static Vector3 MeasureTwistAxis(Transform[] chain)
+        {
+            if (chain == null)
+            {
+                return Vector3.zero;
+            }
+
+            Transform hand = chain[0];
+            Transform lowerArm = chain[1];
+            Vector3 axis = lowerArm.InverseTransformDirection(hand.position - lowerArm.position);
+            return axis.sqrMagnitude > 1e-8f ? axis.normalized : Vector3.zero;
         }
 
         /// <summary>
@@ -864,8 +1105,8 @@ namespace VortexArena.Core.Player
                 ? Mathf.Max(0f, transform.InverseTransformPoint(foot.position).y)
                 : 0f;
 
-            _standingHeadHeight = _modelHeadHeight;
-            _recentMaxHeadHeight = _modelHeadHeight;
+            _standingEyeHeight = ModelEyeHeight;
+            _recentMaxEyeHeight = ModelEyeHeight;
         }
 
         /// <summary>Üç kemikten zincir kurar; biri bile eksikse zincir kurulmaz (CCD en az iki

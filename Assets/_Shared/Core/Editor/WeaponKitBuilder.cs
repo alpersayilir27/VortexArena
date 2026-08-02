@@ -65,6 +65,21 @@ namespace VortexArena.Core.Editor
         /// (bkz. <see cref="ApplyWeaponFrameKit"/>). Bu araç onu üretmez, yalnız bağlar.</summary>
         private const string WeaponFramePrefabPath = PrefabDir + "/VA_WeaponFrame.prefab";
 
+        /// <summary>Silah ele gelirken oynayan çözülme materyali — her WPN köküne takılan
+        /// <see cref="WeaponDissolve"/>'a bağlanır (bkz. <see cref="ApplyDissolveKit"/>).
+        /// Bu araç onu üretmez, yalnız bağlar.</summary>
+        private const string DissolveMaterialPath = "Assets/_Shared/Materials/DissolveEffect.mat";
+
+        // Çözülme geçişinin ayarları. ⚠️ Bunlar prefabda elle değiştirilse bile araç bir sonraki
+        // koşuda GERİ YAZAR (denge sayılarıyla aynı kural) — kalıcı ayar bu satırlardır. Sahnede
+        // deneme yaparken Play modunda bileşen üstünden oynanır, beğenilen değer buraya işlenir.
+        // ⚠️ Materyal alanı bu kuralın DIŞINDADIR (yalnız boşsa yazılır): bir silaha başka bir
+        // çözülme materyali bağlamak (ör. VoronoiDissolve) bilinçli bir tercihtir.
+        private const float DissolveAppearSeconds = 1.2f;
+        private const float DissolveDisappearSeconds = 0.9f;
+        private const float DissolveNoiseScale = 60f;
+        private const float DissolveEdgeWidth = 0.08f;
+
         private const string Casing762Path = PrefabDir + "/Casing_762x39.prefab";
         private const string Casing556Path = PrefabDir + "/Casing_556x45.prefab";
         private const string BulletPack762Path = PackRoot + "/Prefabs/Bullets/Bullet_A.prefab";
@@ -503,6 +518,7 @@ namespace VortexArena.Core.Editor
                 // filtresiz (yani mesafeden kavranabilir) kalırdı.
                 ApplyGripSocketKit(contents, ctx);
                 ApplyWeaponFrameKit(contents, ctx);
+                ApplyDissolveKit(contents, ctx);
 
                 PrefabUtility.SaveAsPrefabAsset(contents, wpnPath);
             }
@@ -1382,6 +1398,48 @@ namespace VortexArena.Core.Editor
             frame.transform.localScale = Vector3.one;
 
             Debug.Log(Log + ctx + ": VA_WeaponFrame eklendi — silah artık çerçevesinden, 2 m'den alınır.");
+        }
+
+        /// <summary>
+        /// Çözülme kitini bir WPN kökü üzerinde kurar (idempotent): <see cref="WeaponDissolve"/>
+        /// bileşeni + <c>DissolveEffect.mat</c> bağı. Silah ele geldiğinde model kısa bir süre
+        /// dissolve materyaline çevrilip yoktan var edilir; efekt bitince özgün materyaller geri
+        /// konur.
+        /// <para>
+        /// <b>Neden araçta:</b> bileşen her <c>WPN_*</c> köküne gerekiyor ve elle eklendiğinde yeni
+        /// silahta sessizce unutulurdu — silah eskisi gibi anında belirir, kimse fark etmez.
+        /// <see cref="ApplyWeaponFrameKit"/> ile aynı gerekçe.
+        /// </para>
+        /// <para>
+        /// ⚠️ Materyal alanı yalnız <b>BOŞSA</b> yazılır (ses klipleriyle aynı kural): bir silaha
+        /// elle başka bir çözülme materyali bağlanmışsa araç onu ezmez.
+        /// </para>
+        /// </summary>
+        private static void ApplyDissolveKit(GameObject root, string ctx)
+        {
+            var dissolve = root.GetComponent<WeaponDissolve>();
+            if (dissolve == null)
+            {
+                dissolve = root.AddComponent<WeaponDissolve>();
+                Debug.Log(Log + ctx + ": WeaponDissolve eklendi — silah ele çözülerek gelir.");
+            }
+
+            var material = AssetDatabase.LoadAssetAtPath<Material>(DissolveMaterialPath);
+            if (material == null)
+            {
+                Warn(ctx + ": '" + DissolveMaterialPath + "' bulunamadı — çözülme materyali " +
+                     "bağlanamadı. Bileşen takılı kalır ama efekt oynamaz (silah eskisi gibi " +
+                     "anında belirir).");
+                return;
+            }
+
+            var so = new SerializedObject(dissolve);
+            SetObjectRefIfEmpty(so, "dissolveMaterial", material, ctx);
+            SetNumber(so, "appearSeconds", DissolveAppearSeconds, ctx);
+            SetNumber(so, "disappearSeconds", DissolveDisappearSeconds, ctx);
+            SetNumber(so, "noiseScale", DissolveNoiseScale, ctx);
+            SetNumber(so, "edgeWidth", DissolveEdgeWidth, ctx);
+            so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         /// <summary>

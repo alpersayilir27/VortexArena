@@ -49,10 +49,75 @@ if errorlevel 1 (
     exit /b 1
 )
 
+rem =====================================================================
+rem  Cihaz yetkilendirmesi
+rem  "unauthorized" = gozluk bu PC'nin RSA anahtarini kabul etmemis.
+rem  Gelistirici modu ACIK olsa bile ayri bir onay gerekir; anahtar
+rem  yenilendiginde (%USERPROFILE%\.android\adbkey) eski onay olur.
+rem  Cozum: adb kill-server + start-server -> anahtar yeniden gonderilir,
+rem  onay penceresi gozlukte yeniden cikar. Betik once izin ister,
+rem  sonra kullanicinin gozlukte onayladigini adb'ye tekrar sorarak teyit eder.
+rem =====================================================================
+
+:va_devcheck
 echo Bagli cihazlar:
 adb devices
 echo.
 
+call :va_find_unauthorized
+if not defined VA_UNAUTH goto :va_install
+
+echo [UYARI] Gozluk "unauthorized" durumda  ^(%VA_UNAUTH%^)
+echo   Cihaz gorunuyor ama bu bilgisayara guvenmiyor: RSA anahtari onaylanmamis.
+echo   Kablo/surucu sorunu degildir.
+echo.
+echo   Onay penceresini yeniden tetiklemek icin su iki komut calistirilir:
+echo       adb kill-server
+echo       adb start-server
+echo.
+choice /c EH /n /m "Bu komutlari simdi calistirayim mi? (E=Evet / H=Hayir): "
+if errorlevel 2 goto :va_auth_abort
+
+echo.
+echo ^> adb kill-server
+adb kill-server
+echo ^> adb start-server
+adb start-server
+echo.
+echo   Simdi GOZLUGU TAK ^(masada dururken ekran kapali oldugu icin pencere cizilmez^):
+echo     1^) Bir uygulamanin icindeysen Meta tusuyla ana ekrana cik.
+echo     2^) Kilit deseni/PIN varsa once kilidi ac.
+echo     3^) "USB hata ayiklamaya izin verilsin mi?" penceresinde
+echo        "Bu bilgisayardan her zaman izin ver" isaretle, sonra Izin Ver.
+echo.
+choice /c EH /n /m "Gozlukte izni verdin mi? (E=Evet, kontrol edeyim / H=Hayir, vazgec): "
+if errorlevel 2 goto :va_auth_abort
+
+echo.
+echo Kontrol ediliyor...
+call :va_find_unauthorized
+if not defined VA_UNAUTH goto :va_auth_ok
+
+echo.
+echo [HATA] Cihaz hala "unauthorized" gorunuyor - onay adb'ye ulasmamis.
+echo   Gozlukte pencere hic cikmadiysa:
+echo     - Ayarlar ^> Sistem ^> Gelistirici ^> "USB hata ayiklama yetkilendirmelerini
+echo       iptal et", ardindan kabloyu cikar-tak.
+echo     - Hala cikmiyorsa PC'deki anahtari sifirla ^(gozluk yepyeni bir anahtar
+echo       gorur ve pencereyi gostermek zorunda kalir^):
+echo         del "%%USERPROFILE%%\.android\adbkey" "%%USERPROFILE%%\.android\adbkey.pub"
+echo.
+choice /c TV /n /m "(T) Tekrar dene / (V) Vazgec: "
+if errorlevel 2 goto :va_auth_abort
+echo.
+goto :va_devcheck
+
+:va_auth_ok
+echo Cihaz yetkilendirildi:
+adb devices
+echo.
+
+:va_install
 echo Gozluge kuruluyor, lutfen bekleyin...
 adb install -r -g "%VA_APK%"
 if errorlevel 1 (
@@ -70,3 +135,21 @@ if errorlevel 1 (
 echo.
 echo Kurulum tamamlandi.
 pause
+exit /b 0
+
+:va_auth_abort
+echo.
+echo Kurulum yapilmadi - cihaz yetkilendirilmedi.
+pause
+exit /b 1
+
+rem ---------------------------------------------------------------------
+rem  adb devices ciktisinda "unauthorized" satiri ararsa seri numarasini
+rem  VA_UNAUTH'a yazar, yoksa tanimsiz birakir.
+rem ---------------------------------------------------------------------
+:va_find_unauthorized
+set "VA_UNAUTH="
+for /f "tokens=1,2" %%A in ('adb devices 2^>nul') do (
+    if /i "%%B"=="unauthorized" set "VA_UNAUTH=%%A"
+)
+exit /b 0

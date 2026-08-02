@@ -9962,6 +9962,7 @@ GameObject:
   - component: {fileID: 6601938358019947135}
   - component: {fileID: 1705440738403151360}
   - component: {fileID: 5239912952035229229}
+  - component: {fileID: 2585388787075755340}
   m_Layer: 0
   m_Name: WPN_FAMAS
   m_TagString: Untagged
@@ -10188,6 +10189,24 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.ItemGripSockets
   definition: {fileID: 0}
+--- !u!114 &2585388787075755340
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6511540988315402901}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 10c15c888017a024da8d92fb85942e57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDissolve
+  dissolveMaterial: {fileID: 2100000, guid: 0d5617cdec4ce984aa5d6cbb762af28e, type: 2}
+  appearSeconds: 1.2
+  disappearSeconds: 0.9
+  edgeColor: {r: 0, g: 2.7183907, b: 8.905661, a: 1}
+  edgeWidth: 0.08
+  noiseScale: 60
 --- !u!1 &7540086726649234820
 GameObject:
   m_ObjectHideFlags: 0
