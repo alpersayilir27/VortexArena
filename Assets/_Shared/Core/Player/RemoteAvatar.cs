@@ -211,6 +211,9 @@ namespace VortexArena.Core.Player
         // "Örnekte Model çocuğu yok" uyarısı oyuncu başına BİR kez (olay yolu 53-160/sn, spam yasak).
         private bool _modelPivotWarned;
 
+        /// <summary>Bağsız <see cref="character"/> uyarısı örnek başına bir kez (LateUpdate 72/sn).</summary>
+        private bool _characterWarned;
+
         private void Awake()
         {
             // Prefabda liste bağlanmadıysa çocuk collider'ları vuruş kutusu sayılır.
@@ -503,10 +506,18 @@ namespace VortexArena.Core.Player
             // olurdu. Bu döngünün gövdeyle ilgili tek işi kalmadı — eşya, etiket ve işaretçi.
             if (character == null)
             {
-                // Kapsül avatarı: karakter prefabı henüz kurulmamışken (retarget config'i yokken)
-                // ve sunucusuz sandbox'ta uzak oyuncu yine de görülebilsin diye korunur.
-                // Yapıştırma burada da UYGULANIR: iki yol arasında farklı davranmak, kapsül avatarla
-                // test eden geliştiriciye yanlış bir gerçek gösterirdi.
+                // ⚠️ Bu yol bir "kapsül avatarı" DEĞİLDİR ve öyle sayılmamalıdır: prefabda
+                // head/handL/handR/body alanları boş olabilir (öyleydiler) ve o hâlde aşağıdaki
+                // dört çağrının hepsi sessiz no-op olur — gövde dünya orijininde T-pozunda donar,
+                // sahada "oyuncu hiç görünmüyor" diye okunur. Bu yüzden önce AÇIKÇA bağırılır.
+                WarnMissingCharacter();
+
+                // Kök yine de doğru yere taşınır: yanlış yerde görünmeyen bir avatar yerine, yanlış
+                // POZDA ama doğru YERDE duran bir avatar teşhis edilebilir bir hatadır.
+                transform.SetPositionAndRotation(
+                    headWorld.position - Vector3.up * BodyDropMeters,
+                    Quaternion.identity);
+
                 Apply(head, headWorld);
                 Apply(handL, displayHandL);
                 Apply(handR, displayHandR);
@@ -535,6 +546,26 @@ namespace VortexArena.Core.Player
                 : body.rotation;
 
             body.SetPositionAndRotation(headWorldPose.position - Vector3.up * BodyDropMeters, yaw);
+        }
+
+        /// <summary>
+        /// <see cref="character"/> bağlı değilse örnek başına bir kez HATA basar.
+        /// <para>⚠️ Uyarı değil <b>hata</b>: bu durumda uzak oyuncunun gövdesini süren hiçbir şey
+        /// yoktur ve eksiklik sahada "ağ bozuk" diye okunur — oysa tek eksik prefab bağıdır.
+        /// Sessiz kalmak, teşhisi ağ katmanına yönlendirip saatler yakar.</para>
+        /// </summary>
+        private void WarnMissingCharacter()
+        {
+            if (_characterWarned)
+            {
+                return;
+            }
+
+            _characterWarned = true;
+            Debug.LogError(
+                $"[RemoteAvatar] Oyuncu {PlayerId}: 'character' alanı boş — uzak gövdeyi çizen " +
+                "hiçbir bileşen yok (T-pozunda donar). RemoteAvatar.prefab'daki Character objesine " +
+                "ArenaNetCharacterBehaviour + NetworkCharacterRetargeter kurulmalı.", this);
         }
 
         /// <summary>Snapshot alive bayrağını okur; değiştiyse görünüm + collider'ları tazeler.</summary>

@@ -5,7 +5,7 @@
 
 | Planlanmış iş | Dosya |
 |---|---|
-| **Meta Movement SDK ile full body avatar**: kod, protokol (`0x07`/`0x08`, v6) ve doküman **bitti**. Kalan iş editörde: blob boyutu ölçümü, Ch15 retarget config'i, karakter prefabı ve prefab bağları. O bitene kadar uzak avatarlar kapsül yolundan çizilir | `meta-movement-full-body.md` |
+| **Meta Movement SDK ile full body avatar**: kod, protokol (`0x07`/`0x08`, v6), doküman ve **prefab kurulumu bitti** (iki avatar da Ch15 retarget config'i + `ArenaNetCharacterBehaviour` ile kurulu, 66 eklem). Kalan: blob boyutu/paket bütçesi ölçümü ve boy-bacak ayarları | `meta-movement-full-body.md` |
 | **Maç sonu bekleme · toplanma · dost ateşi anahtarı**: kod/prefab/doküman **bitti**, sunucu derlemesi temiz. Kalan: Unity derlemesi + panel ve davranış doğrulaması | `mac-sonu-toplanma-dost-atesi.md` |
 | **Arenaya dağılmış silah**: raf sistemi kaldırıldı, kaynağın adı `WeaponCanvas` oldu ve yerleşim **elle** yapılacak (kod bitti) → kalan iş üç arenaya silah yerleştirmek; o zamana kadar TDM · turnuva silahsız, FFA ve lobi `random` kullandığı için çalışıyor | `arenaya-dagilmis-silah.md` |
 | **Turnuva modu** (`tournament`): kod/asset/export **bitti**. Kalan: doğrulama listesi + silah kaynağı (yukarıdaki iş) | `turnuva-modu.md` |
