@@ -13,10 +13,11 @@ MonoBehaviour:
   m_Name: WeaponCatalog
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponCatalog
   definitions:
-  - {fileID: 11400000, guid: d42e84326e961f542ba86d57e9a71d20, type: 2}
+  - {fileID: 11400000, guid: 1004acbfc90c5854d995bbfd4f73b494, type: 2}
   - {fileID: 11400000, guid: 3e86e22f37503ba4fafb3d09d30dffb2, type: 2}
   - {fileID: 11400000, guid: dc384828f17138049a24328b7e07b1ff, type: 2}
   - {fileID: 11400000, guid: 1518aa11b38b11c4c9ab387c384b2e28, type: 2}
   - {fileID: 11400000, guid: 3fac3cc2036001d40a6c64c3f00632d2, type: 2}
   - {fileID: 11400000, guid: 379b9af2cf125564a940fa2e72d865c6, type: 2}
   remoteShotFxPrefab: {fileID: 6439128782644113794, guid: f04edde40b30f634e8e36f02340ebcbc, type: 3}
+  gripSocketPrefab: {fileID: 0}

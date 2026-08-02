@@ -18,7 +18,7 @@ namespace VortexArena.Core.Combat
     /// </summary>
     public enum WeaponGrantKind
     {
-        /// <summary>Verilmedi: silah raftadır ya da ISDK kavramasıyla tutulur.</summary>
+        /// <summary>Verilmedi: silah sahnededir ya da ISDK kavramasıyla tutulur.</summary>
         None,
 
         /// <summary>FFA'nın rastgele silahı (§10.5 <c>weaponSource:"random"</c>): grip bırakılınca

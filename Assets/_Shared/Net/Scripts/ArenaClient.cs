@@ -523,6 +523,24 @@ namespace VortexArena.Net
                         break;
                     }
 
+                    case MessageTypes.RulesUpdate:
+                    {
+                        // Herkese gelir (§5.3). SelectionState'in aksine GERÇEK kuraldır: koşan
+                        // maçın şekli değişti (bugün tek sebebi dost ateşi anahtarı) → ModeRuntime.
+                        RulesUpdateMsg msg = JsonUtility.FromJson<RulesUpdateMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseRulesUpdate(msg));
+                        break;
+                    }
+
+                    case MessageTypes.SelectionState:
+                    {
+                        // Herkese gelir (§5.3). Kural DEĞİL sunum bilgisidir — ModeRuntime'a
+                        // uygulanmaz; ModeSelection'a yazılır (taban şeritleri).
+                        SelectionStateMsg msg = JsonUtility.FromJson<SelectionStateMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseSelectionState(msg));
+                        break;
+                    }
+
                     case MessageTypes.Ping:
                         // ⚠️ Bu bir GECİKME ÖLÇÜMÜ DEĞİL: sunucunun "bana bir status yolla" tetiği.
                         // Gecikme UDP 0x06 ile ölçülür (§6.7) — TCP üzerinden ölçmek retransmit'i

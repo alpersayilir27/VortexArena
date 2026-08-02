@@ -50,6 +50,14 @@ namespace VortexArena.App.Admin
         /// budur (§5.2).</summary>
         public static int CountdownSeconds { get; private set; }
 
+        /// <summary>
+        /// Dost ateşi anahtarının YÜRÜRLÜKTEKİ değeri (§5.2) — diğerleri gibi bir "seçim" değildir:
+        /// koşan maçta da geçerlidir ve etkisi anlıktır.
+        /// <para>Bu yüzden seçim kilidine (<c>AdminRoster.CanChangeSelection</c>) girmez: maç
+        /// kuruluyken de değiştirilebilir.</para>
+        /// </summary>
+        public static bool FriendlyFire { get; private set; }
+
         /// <summary>Sunucunun bildirdiği çevrimiçi admin sayısı (kendimiz dahil).</summary>
         public static int AdminCount { get; private set; }
 
@@ -123,6 +131,7 @@ namespace VortexArena.App.Admin
             bool changed = modeId != ModeId || sceneName != SceneName ||
                            msg.roundSeconds != RoundSeconds || msg.scoreLimit != ScoreLimit ||
                            msg.countdownSeconds != CountdownSeconds ||
+                           msg.friendlyFire != FriendlyFire ||
                            msg.adminCount != AdminCount;
 
             string venueId = msg.venueId ?? "";
@@ -139,6 +148,7 @@ namespace VortexArena.App.Admin
             RoundSeconds = msg.roundSeconds;
             ScoreLimit = msg.scoreLimit;
             CountdownSeconds = msg.countdownSeconds;
+            FriendlyFire = msg.friendlyFire;
             AdminCount = msg.adminCount;
             VenueId = venueId;
             _venueScenes = venueScenes;

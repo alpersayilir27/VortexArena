@@ -116,7 +116,7 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// <c>weaponSource:"random"</c> modlarında (§10.5) silah doğrudan kumandaya VERİLİR:
         /// el anchor'ının altına örneklenir, ISDK kavraması hiç işletilmez. <c>None</c> = normal
-        /// raf silahı (kavranarak tutulur).
+        /// sahne silahı (kavranarak tutulur).
         /// <para>
         /// Neden ayrı bir yol: <see cref="Grabbable"/>'ı programla "seçili" hâle getirmek ISDK'nın
         /// iç durumuna girmek demektir — kırılgan ve sürüm bağımlı. Verilen silah zaten tanım
@@ -130,7 +130,7 @@ namespace VortexArena.Core.Combat
         /// değil.</summary>
         public WeaponGrantKind GrantKind { get; private set; } = WeaponGrantKind.None;
 
-        /// <summary>Silah verilerek mi tutuluyor (raf silahında her zaman false).</summary>
+        /// <summary>Silah verilerek mi tutuluyor (sahne silahında her zaman false).</summary>
         public bool IsGranted => GrantedHand != OVRInput.Controller.None;
 
         /// <summary>Çerçeveden seçilen KALICI klon mu (reload açık, rezerv var, ön kabza tutulabilir).</summary>
@@ -139,12 +139,12 @@ namespace VortexArena.Core.Combat
         /// <summary>FFA'nın TEK KULLANIMLIK rastgele silahı mı (reload kapalı, rezerv yok, tek elli).</summary>
         public bool IsDisposableGrant => GrantKind == WeaponGrantKind.Disposable;
 
-        /// <summary>Tutuluyor mu: verilen silah TANIM GEREĞİ tutuluyordur, raf silahı ISDK'nın
+        /// <summary>Tutuluyor mu: verilen silah TANIM GEREĞİ tutuluyordur, sahne silahı ISDK'nın
         /// pointer olaylarından izlenir. Bu <c>||</c> olmadan verilen silah hiç ateş edemezdi.</summary>
         public bool IsHeld => IsGranted || heldPoints.Count > 0;
 
         /// <summary>
-        /// İki elle sabitleme: raf silahında İKİ kavrama noktası, çerçeve klonunda ise VERİLEN el +
+        /// İki elle sabitleme: sahne silahında İKİ kavrama noktası, çerçeve klonunda ise VERİLEN el +
         /// ön kabzayı tutan ikinci el (klonun ön kabzası ISDK kavramasına açıktır).
         /// <para>⚠️ <b>Verilen (Disposable) silah her zaman tek ellidir</b> — o yolda ISDK kavraması
         /// hiç işletilmez; iki el iki AYRI silah tutabilir (çapraz-el durumu tutulmaz).</para>
@@ -154,7 +154,7 @@ namespace VortexArena.Core.Combat
             : (!IsGranted && heldPoints.Count > 1);
 
         /// <summary>
-        /// Tetik/ana el: VERİLEN silahta silahın verildiği el, raf silahında İLK kavrayan el.
+        /// Tetik/ana el: VERİLEN silahta silahın verildiği el, sahne silahında İLK kavrayan el.
         /// <c>None</c> = tutulmuyor ya da kontrolcü çözülemedi (editör fallback'i).
         /// </summary>
         public OVRInput.Controller MainHand =>
@@ -269,7 +269,7 @@ namespace VortexArena.Core.Combat
                 Debug.LogError($"[Weapon] '{name}' muzzle atanmadı; ateş edilemez.", this);
             if (grabbable == null)
                 Debug.LogWarning($"[Weapon] '{name}' Grabbable atanmadı; silah yalnız VERİLEN silah olarak " +
-                                 "kullanılabilir (weaponSource:\"random\"), raftan alınamaz.", this);
+                                 "kullanılabilir (weaponSource:\"random\"), sahneden alınamaz.", this);
 
             if (modelPivot != null)
             {
@@ -436,7 +436,7 @@ namespace VortexArena.Core.Combat
             bool pressed;
             bool pressedThisFrame;
 
-            // Ana el: VERİLEN silahta silahın verildiği el, raf silahında ilk kavrayan el.
+            // Ana el: VERİLEN silahta silahın verildiği el, sahne silahında ilk kavrayan el.
             // Ayrım zorunlu: 'Player/Attack' tek bir Button action'dır ve
             // <XRController>/{PrimaryAction} ile İKİ kumandayı da toplar — iki elde iki
             // silahla oynanan FFA'da tek tetiğe basmak ikisini birden ateşlerdi.
@@ -906,7 +906,7 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Bu silahı hangi el(ler) tutuyor. TEK KULLANIMLIK verilen silah TANIM GEREĞİ tek ellidir;
-        /// raf silahında eller <see cref="heldPoints"/>'tan gelir.
+        /// sahne silahında eller <see cref="heldPoints"/>'tan gelir.
         /// <para>⚠️ <b>Çerçeve klonunda ikisi BİRLEŞİR:</b> önce verilen el işaretlenir, sonra
         /// <see cref="heldPoints"/>'takiler de eklenir — ön kabzayı tutan ikinci el telde
         /// <c>GRIP_LINKED</c> üretmeli, yoksa uzak taraf silahı tek elle tutuyor çizerdi.</para>

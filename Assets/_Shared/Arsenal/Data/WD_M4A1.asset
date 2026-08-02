@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
   displayName: M4A1
   netItemId: 1
-  prefab: {fileID: 1554324386449819339, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
+  prefab: {fileID: 1554324386449819339, guid: e8169d0b220f2ea4dadcaca7eaeee099, type: 3}
   holdMode: 1
   primaryGripPosition: {x: -0, y: -0.042, z: -0.059}
   primaryGripEuler: {x: 0, y: 0, z: 0}

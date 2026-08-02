@@ -113,6 +113,11 @@ public sealed class LobbyService
         if (state.Role == "admin")
             await SendSafeAsync(connection, BuildAdminStateJson(""), state.Name);
 
+        // Seçili modun takım kipi ROL AYIRMADAN gider (§5.3): oyuncu lobide taban şeritlerini
+        // buna göre çizer ve bağlandığı anda doğru görmelidir — yayını beklerse bir sonraki
+        // seçim değişikliğine kadar yanlış kalırdı.
+        await SendSafeAsync(connection, BuildSelectionStateJson(), state.Name);
+
         _registry.Announce(state, kind); // konsol satırı + lobby_state yayını
     }
 
@@ -292,8 +297,17 @@ public sealed class LobbyService
             requestedSceneName = "";
         }
 
+        string previousModeId;
+        lock (_selectionGate) previousModeId = _selectedModeId;
+
         var changed = ApplySelection(requestedModeId, requestedSceneName,
             msg.roundSeconds, msg.scoreLimit, msg.countdownSeconds);
+
+        // Taban şeritleri seçili modun takım kipine bağlı (§10.7) — MOD değiştiyse herkese
+        // bildirilir. Harita/süre/limit değişimi bu yayını üretmez.
+        bool modeChanged;
+        lock (_selectionGate) modeChanged = _selectedModeId != previousModeId;
+        if (modeChanged) await BroadcastSelectionStateAsync();
 
         // Reddedildiyse DEĞİŞMESE de yayın yapılır: komutu gönderen panel imlecini iyimser olarak
         // ilerletmiş olabilir, sunucunun değeri onu geri çeksin (tek doğruluk kaynağı, §5.3).
@@ -386,7 +400,15 @@ public sealed class LobbyService
     /// aynı mod/haritayı göstersin (komutu kim gönderdiyse gönderdi).</summary>
     public async Task HandleStartMatchAsync(ClientConnection connection, StartMatchMsg msg)
     {
+        string previousModeId;
+        lock (_selectionGate) previousModeId = _selectedModeId;
+
         ApplySelection(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit, msg.countdownSeconds);
+
+        bool modeChanged;
+        lock (_selectionGate) modeChanged = _selectedModeId != previousModeId;
+        if (modeChanged) await BroadcastSelectionStateAsync();
+
         await BroadcastAdminStateAsync(Notice(connection, $"maç başlatılıyor: {msg.sceneName} / {msg.modeId}"));
         await _director.StartMatchAsync(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit,
             msg.countdownSeconds);
@@ -419,9 +441,68 @@ public sealed class LobbyService
             await BroadcastAdminStateAsync(Notice(connection, "maç sürdürüldü"));
     }
 
+    /// <summary>
+    /// <c>set_friendly_fire</c> (§5.2) — dost ateşi anahtarı, <b>faz kapısı yok</b>: koşan maçta da
+    /// geçerli ve etkisi anlık.
+    /// <para>Değer değişmediyse sunucu iş yapmaz; yine de <c>admin_state</c> yayınlanır ki iyimser
+    /// davranmış bir panel sunucunun değerine çekilsin (§5.3 tek doğruluk kaynağı).</para>
+    /// </summary>
+    public async Task HandleSetFriendlyFireAsync(ClientConnection connection, SetFriendlyFireMsg msg)
+    {
+        var changed = await _director.SetFriendlyFireAsync(msg.enabled);
+        var label = msg.enabled ? "AÇIK" : "kapalı";
+        await BroadcastAdminStateAsync(changed
+            ? Notice(connection, $"dost ateşi {label}")
+            : "");
+    }
+
     /// <summary>Duyuru satırı: "<admin adı>: <eylem>" — tüm adminlerin durum satırında görünür.</summary>
     private static string Notice(ClientConnection connection, string action) =>
         $"{connection.State?.Name ?? "Admin"}: {action}";
+
+    /// <summary>
+    /// Seçili modun takım kipini <b>HERKESE</b> yollar (§5.3 <c>selection_state</c>).
+    /// <para>
+    /// ⚠️ <c>admin_state</c>'e binmemesinin sebebi hedef kitledir: o mesaj roster/duyuru/telemetri
+    /// taşır ve yalnız adminlere gider. Oyuncunun ihtiyacı tek bir sunum alanı — taban şeritleri
+    /// görünsün mü (§10.7).
+    /// </para>
+    /// <para>
+    /// ⚠️ Çağrı yerleri dar tutulur: <c>welcome</c> sonrası ve <b>seçili MOD değiştiğinde</b>.
+    /// Harita/süre/limit dokunuşunda yayınlansaydı, operatör imleci oynattıkça her oyuncuya
+    /// gereksiz mesaj giderdi.
+    /// </para>
+    /// </summary>
+    public async Task BroadcastSelectionStateAsync()
+    {
+        try
+        {
+            var connections = _registry.OnlineConnections();
+            if (connections.Count == 0) return;
+            var json = BuildSelectionStateJson();
+            foreach (var connection in connections)
+                await SendSafeAsync(connection, json, "(selection)");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Lobby] selection_state yayını hatası: {ex.Message}");
+        }
+    }
+
+    private string BuildSelectionStateJson()
+    {
+        string modeId;
+        lock (_selectionGate)
+        {
+            modeId = _selectedModeId;
+        }
+
+        return JsonUtil.Serialize(new SelectionStateMsg
+        {
+            modeId = modeId,
+            teamMode = _director.TeamModeOf(modeId) == Modes.TeamMode.None ? "none" : "two"
+        });
+    }
 
     /// <summary>Ortak durumu YALNIZ çevrimiçi adminlere yollar (§5.3).</summary>
     public async Task BroadcastAdminStateAsync(string notice)
@@ -527,6 +608,9 @@ public sealed class LobbyService
                 roundSeconds = _selectedRoundSeconds,
                 scoreLimit = _selectedScoreLimit,
                 countdownSeconds = _selectedCountdownSeconds,
+                // Seçim DEĞİL, yürürlükteki durum (§5.2): anahtar koşan maçta da geçerli olduğu için
+                // seçim kilidine (CanChangeSelection) girmez ve buradan olduğu gibi yayılır.
+                friendlyFire = _director.FriendlyFire,
                 notice = notice,
                 adminCount = _registry.OnlineAdminCount(),
                 // Mekan bu oturum boyunca sabittir (açılışta seçilir), ama admin_state ile
