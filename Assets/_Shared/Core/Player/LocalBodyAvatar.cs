@@ -130,8 +130,12 @@ namespace VortexArena.Core.Player
 
             if (character == null || retargeter == null)
             {
-                Debug.LogWarning("[LocalBodyAvatar] ArenaNetCharacterBehaviour / NetworkCharacterRetargeter " +
-                                 "bulunamadı; yerel gövde çizilmeyecek.", this);
+                // ⚠️ Uyarı değil HATA: bu durumda oyuncu kendi gövdesini HİÇ görmez ve eksiklik
+                // sahada "izleme çalışmıyor" diye okunur — oysa tek eksik prefab bağıdır. Sessiz
+                // kalmak teşhisi Meta SDK'sına/sensöre yönlendirip saatler yakar.
+                Debug.LogError("[LocalBodyAvatar] ArenaNetCharacterBehaviour / NetworkCharacterRetargeter " +
+                               "bulunamadı; yerel gövde çizilmeyecek. Resources/LocalBodyAvatar.prefab " +
+                               "içindeki Character objesine bu bileşenler kurulmalı.", this);
                 enabled = false;
                 return;
             }
