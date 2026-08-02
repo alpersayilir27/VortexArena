@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `5` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı kesilmez). **v5:** ağ telemetrisi (`0x06` RTT yoklaması §6.7, `status.rttMs/jitterMs/lossPct`, admin-only `net_stats`) + **paket birleştirme** (`0x05` §6.8; `0x02`/`0x04` geri düşüş yolu olarak korundu) + `health_update` broadcast olmaktan çıkıp **kurban + adminler**e gitmeye başladı (§10.3, alan düzeni aynı). ⚠️ v5'i **kırıcı** yapan tek şey `0x05`'tir — tanımayan istemci birleştirme devreye girince uzak avatarları ve tracer'ları kaybeder; diğer üçü tümüyle eklemelidir. **v4:** elde tutulan eşya tele girdi (`0x01`/`0x02` byte düzeni; §6.2/6.3/6.6), atış olayları WS'ten UDP'ye taşındı (`shot_fired` **kaldırıldı** → `0x03`/`0x04`; §6.4/6.5). **v3:** faz makinesi `paused`/`playing`/`finished`'a indi, `phaseReason` + `modeState` eklendi, lobi faz olmaktan çıkıp **tür** oldu, `set_team` yalnız admin (§10.1). **v2:** `set_name` kaldırıldı (→ `set_identity`), `lobby_state.version` + `status.rosterVersion` + `PlayerInfo.number` eklendi |
+| `PROTOCOL_VERSION` | `5` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı kesilmez). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur. Yine de bilinsin diye: bu sürümü tanımayan bir istemcinin gözle görülür biçimde bozulduğu tek yer **`0x05` paket birleştirmesidir** (§6.8) — birleştirme devreye girince uzak avatarları ve tracer'ları kaybeder; telin geri kalanı eklemelidir |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -114,9 +114,10 @@ yayını uygulayamadığı pencereleri (sahne geçişi, kopma anı) kapatır. Al
 yalnız KENDİ `playerId`'si için, admin herkes için (`playerId:0` = "kendim"). Numara `1..99`
 dışındaysa veya **çevrimiçi** bir oyuncuda kullanılıyorsa reddedilir (§2); değer `devices.json`'a
 kalıcı yazılır.
-> ⚠️ v1'deki **`set_name` KALDIRILDI** — ad ve numara tek kapıdan yönetilir (`PROTOCOL_VERSION` 2).
+> ⚠️ **`set_name` diye bir mesaj YOKTUR ve eklenmez** — ad ve numara tek kapıdan
+> (`set_identity`) yönetilir; ikinci bir kapı iki doğruluk kaynağı olurdu.
 
-> ⚠️ **`shot_fired` KALDIRILDI** (`PROTOCOL_VERSION` 4). Atış artık WS/JSON'da değil, UDP olay
+> ⚠️ **`shot_fired` diye bir WS mesajı YOKTUR ve eklenmez.** Atış WS/JSON'da değil, UDP olay
 > kanalındadır: `0x03 FireEvent` (§6.4). Gerekçe: 600 RPM = 10 atış/sn/oyuncu; 16 oyuncu tam ateşte
 > sunucu saniyede ~2400 WS mesajı serileştiriyordu ve bu yük hasar/can/faz ile **aynı güvenilir TCP
 > kanalını** paylaşıyordu. Atış bir sunum olayıdır — kaybı kozmetiktir, güvenilirlik gerektirmez.
@@ -220,7 +221,7 @@ Admin'de her ikisi de `false`/`""` kalır — admin kalibre olmaz, arayüzde "ka
 ```
 Fazlar ve alanların anlamı §10.1'de. `phase` yalnız üç değer alır: `paused` · `playing` · `finished`.
 
-> ⚠️ **`shot_fired` relay'i KALDIRILDI** (v4) — yerine `0x04 EventBatch` (§6.5). Relay kapısı (faz + atıcı canlı/kalibreli) aynen korundu, yalnız kanal değişti.
+> ⚠️ **WS üzerinde atış relay'i YOKTUR** — atış olayları `0x04 EventBatch` ile gider (§6.5). Relay kapısı (faz + atıcı canlı/kalibreli) aynıdır, yalnız kanal UDP'dir.
 **`health_update`** `{ "type":"health_update", "playerId":5, "hp":75.0, "attackerId":3 }`
 > ⚠️ **Broadcast DEĞİL** (v5): yalnız **`playerId`'nin sahibine ve adminlere** gider. İki tüketicisi de dar — istemci kendisine ait olmayan her `health_update`'i **zaten düşürüyor**, admin tablosu ise herkesin canını çiziyor. Herkese yayınlandığı dönemde 10 oyunculu bir maçta her isabette 11 mesaj gidip **9'u çöpe** atılıyordu; isabet başına üretildiği için de fan-out'u oyuncu sayısıyla **kare** büyüyen tek WS kanalıydı. Alan düzeni **değişmedi**; `attackerId`'yi bugün okuyan yoktur (yönlü hasar göstergesi için ayrılmıştır ve mesaj artık zaten yalnız kurbana gittiği için doğal yeri burasıdır). Bu, "WS mesajları tanımı gereği herkese gider" varsayımının **bilinçli istisnası**dır → `Docs/Sistem-Ozeti.md` §3.12.
 
@@ -309,7 +310,7 @@ Sunucu `playerId↔udpToken` eşleşirse istemcinin UDP endpoint'ini kaydeder ve
 [handR: aynı düzen]                   (28 B)
 Toplam: 11 + 84 = 95 B  → 20 Hz'de ~15.2 kbps/oyuncu
 ```
-Pozlar **arena uzayında**. `seq` sarmalanır (u16); eski `seq` gelirse paket atılır (son gelen kazanır). v1'de quaternion sıkıştırma YOK (basitlik); v2 rezervi: smallest-three.
+Pozlar **arena uzayında**. `seq` sarmalanır (u16); eski `seq` gelirse paket atılır (son gelen kazanır). Quaternion sıkıştırma **YOKTUR ve planlanmıyor**: bant hiçbir zaman darboğaz değil, bağlayıcı kısıt paket sayısıdır (`Docs/Sistem-Ozeti.md` §8).
 
 **`itemL`/`itemR`/`gripFlags` (v4)** — elde tutulan eşya (§6.6). Pozla aynı pakette gider çünkü aynı otoriteye aittir: "elimde ne var" da "elim nerede" gibi **istemci-otoriter bir sunum bilgisidir**. Sunucu bu üç baytı **doğrulamaz**, snapshot'a kopyalar (§6.3) — sunucuda eşya tablosu YOKTUR ve eklenmez (§10.3 felsefesi). `gripFlags`'te bit0 gelirse **yok sayılır**: o bit snapshot'ta `FLAG_ALIVE`'dır ve yazarı yalnız sunucudur (istemci kendini canlı ilan edemez).
 
@@ -378,7 +379,7 @@ Toplam: 6 + count×9 B
 
 Alanlar §6.4 ile birebir aynı; `seq` **taşınmaz** (sunucu kopyayı zaten ayıkladı).
 
-**Relay kapısı** (`shot_fired`'ın v3'teki kapısı aynen korundu, §10.3): faz `playing` **VEYA** `rules.fireWhilePaused`, atıcı online + `role=player` + **hayatta** + **kalibreli**. Ara fazlarda (yükleme/geri sayım/maç sonu, `fireWhilePaused:false` iken) relay yoktur. İçerik **doğrulanmaz**: yön, mesafe ve `itemId` serbesttir (§10.3).
+**Relay kapısı** (§10.3): faz `playing` **VEYA** `rules.fireWhilePaused`, atıcı online + `role=player` + **hayatta** + **kalibreli**. Ara fazlarda (yükleme/geri sayım/maç sonu, `fireWhilePaused:false` iken) relay yoktur. İçerik **doğrulanmaz**: yön, mesafe ve `itemId` serbesttir (§10.3).
 
 **Hedef:** UDP kayıtlı tüm online endpoint'ler (admin dahil — gözlemci de uzak atışları görür/duyar). **Atan da kendi olayını geri alır ve kendisi yok sayar** — snapshot'ta kendi pozunu yok saymasıyla birebir aynı desen (§6.3). Sunucuda hedef başına ayrı batch üretmek (atanı süzmek) tik başına N serileştirme demek olurdu; karşılığı oyuncu başına ~90 B/sn'lik bir israftır ve tek satırlık istemci süzgeci onu bedavaya kapatır.
 
@@ -428,11 +429,11 @@ Toplam: 6 B — sunucu AYNI 6 baytı geri yollar (echo)
 
 **Ölçen taraf İSTEMCİDİR:** `RTT = şimdi − clientStamp`. `clientStamp` **opak bir damgadır** — sunucu okumaz, yorumlamaz, aynen taşır; bu yüzden **saat senkronu gerekmez** (iki damga da istemcinin). Sunucu tarafında durum tutulmaz: doğrulama poz/olay yolundaki kuralın aynısı (yalnız `0x00` ile kaydedilmiş endpoint'ten) ve yanıt `0x00` ack'inin birebir aynı deseni.
 
-**Neden ayrı bir paket gerekiyor** — üç alternatif denendi ve reddedildi:
+**Neden ayrı bir paket gerekiyor** — akla gelen üç alternatifin hiçbiri bu işi görmez:
 
 | Alternatif | Neden olmaz |
 |---|---|
-| `clientTimeMs`'i kullanmak (§6.2, v1'den beri telde) | Saat senkronu olmadan **mutlak gecikme vermez**; yalnız farkının değişimi tek yönlü jitter verir — onu snapshot varışları zaten daha iyi ölçüyor |
+| `clientTimeMs`'i kullanmak (§6.2, zaten telde) | Saat senkronu olmadan **mutlak gecikme vermez**; yalnız farkının değişimi tek yönlü jitter verir — onu snapshot varışları zaten daha iyi ölçüyor |
 | Sunucunun snapshot'ta istemcinin damgasını geri yollaması | Damga **hedefe özel** olurdu ve tek paylaşımlı buffer'ı tik başına N serileştirmeye çevirirdi (§6.5 olay batch'ini de aynı gerekçeyle hedefe özelleştirmiyor) |
 | WS/TCP üzerinden ölçmek | TCP retransmit'i gecikmeye karışır. **Gecikme oyunun aktığı kanaldan ölçülmelidir.** ⚠️ WS'teki `ping` mesajı bir gecikme ölçümü DEĞİL, sunucunun "bana bir `status` yolla" tetiğidir |
 
