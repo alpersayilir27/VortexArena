@@ -965,7 +965,7 @@ katmanların göreli hız farkı korunur).
 
 | Sınıf | Görevi |
 |---|---|
-| `Arena/BaseZoneVisibility` | Taban şeritlerinin (`BaseZone`) görünür/etkin olup olmadığına karar veren **tek yer**. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz. Kapı **takım kipidir**: takımlı modda (TDM/turnuva) şeritler durur — biri canlanma kapısı, diğeri tur arası toplanma kapısıdır; takımsızda (FFA) gizlenir, çünkü orada canlanma şartı sabit durmaktır ve renkli şerit olmayan bir kuralı anlatırdı. Hangi mod? **Öncelik `ModeSelection`** (seçili mod): admin lobide bir arena sahnelediğinde herkes o arenaya geçer ama aktif kural hâlâ lobi profilidir, yani koşan kurala bakan bir kapı "hangi maç kurulacak" sorusunu göremezdi. Seçim bilinmiyorsa `ModeRuntime`'ın takım kipine düşer. **Bileşen kapatılır, GameObject KAPATILMAZ** (altındaki `SpawnPoint` statik kayıttan düşerdi) + Renderer'lı doğrudan çocuklar gizlenir; alt ağacında `SpawnPoint` bulunan çocuğa dokunulmaz. ⚠️ **Yalnız kendi kapattığını geri açar** — aynı bileşenleri `AdminSpectator` de kapatıyor. Eskiden bu iş `WeaponGranter`'ın süpürmesindeydi ve kapısı `weaponSource`'tu; FFA'da ikisi birlikte değiştiği için doğru görünüyordu, lobinin silahı rastgeleye alınınca lobideki tabanlar da kayboldu |
+| `Arena/BaseZoneVisibility` | Taban şeritlerinin (`BaseZone`) görünür/etkin olup olmadığına karar veren **tek yer**. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz. Kapı **takım kipidir**: takımlı modda (TDM/turnuva) şeritler durur — biri canlanma kapısı, diğeri tur arası toplanma kapısıdır; takımsızda (FFA) gizlenir, çünkü orada canlanma şartı sabit durmaktır ve renkli şerit olmayan bir kuralı anlatırdı. Hangi mod? **Öncelik `ModeSelection`** (seçili mod): admin lobide bir arena sahnelediğinde herkes o arenaya geçer ama aktif kural hâlâ lobi profilidir, yani koşan kurala bakan bir kapı "hangi maç kurulacak" sorusunu göremezdi. Seçim bilinmiyorsa `ModeRuntime`'ın takım kipine düşer. **Bileşen kapatılır, GameObject KAPATILMAZ** (altındaki `SpawnPoint` statik kayıttan düşerdi) + Renderer'lı doğrudan çocuklar gizlenir; alt ağacında `SpawnPoint` bulunan çocuğa dokunulmaz. ⚠️ **Yalnız kendi kapattığını geri açar** — aynı bileşenleri `AdminSpectator` de kapatıyor. Eskiden bu iş `WeaponGranter`'ın süpürmesindeydi ve kapısı `weaponSource`'tu; FFA'da ikisi birlikte değiştiği için doğru görünüyordu, lobinin silahı rastgeleye alınınca lobideki tabanlar da kayboldu. **İkinci işi duvar-arkası görünürlüktür (x-ray):** şeritler görünürken oyuncunun **kendi** takımının şerit renderer'ına ikinci bir materyal slotu eklenir (`M_BaseZoneXRay` → `VortexArena/BaseZoneXRay`, `ZTest Greater`) — aynı mesh bir kez daha çizilir ve yalnız **önünde başka geometri olan** piksellerde görünür, yani arena dekorla dolsa da ölen oyuncu canlanma noktasını görür. Yeni GameObject / URP renderer feature / katman gerekmez, arena başına kurulum adımı doğmaz. ⚠️ **Rakip taban hiçbir koşulda çizilmez** (slot eklenmez) ve takım `Neutral` ise (takım atanmadı, admin gözlemci) hiç eklenmez; takım rengi **şeridin kendi materyalinden** okunur, ikinci bir renk tanımı yoktur. Slotu **çalışma anında** ekler çünkü `TemplateBasicsLoader` her renderer'a tek `sharedMaterial` yazıyor — asset'e konan ikinci slot o araç her çalıştığında silinirdi; ayrıca çalışma anı yolu mevcut tüm arenaları sahne düzenlemesi olmadan kapsar. Takım değişimini `PlayerCombatState.LocalTeamChanged` ile dinler |
 | `ModeSelection` | **Henüz başlamamış** maçın seçili modu (`selection_state`, §5.3) — yalnız sunum. `ModeRuntime` ile karıştırılmaz: orası **koşan** maçın kuralıdır. Statik `HasValue`/`ModeId`/`IsTeamless` + `Changed`; besleyicisi `ModeRuntimePump`. ⚠️ Hiçbir kuralı/HUD'ı/loadout'u değiştirmez (maç türü `start_match`'i bekler) ve **tüketicisi olmayan alan eklenmez** — bugün tek tüketicisi `BaseZoneVisibility` |
 | `ModeRuntime` (+ `ModeRuntimePump`) | Aktif maçın kurallarının **tek okuma noktası** (§3.9). `load_match.rules` / `welcome.match.rules` / `return_to_lobby.rules` besler, **`rules_update` maç ortasında tazeler** (bugün tek tetikleyicisi dost ateşi anahtarı — §3.9); kurallar telde yoksa (`rules == null`) `ModeDefinition` önizlemesi fallback olarak devralır. Lobiye dönüşte SIFIRLANMAZ, **lobi profili uygulanır** (`modeId:"lobby"`, §3.8.1) — lobideki silah seçimi loadout'unu bu anahtarla buluyor. Statik durum + statik `Changed`; pompa kendini önyükler (`BeforeSceneLoad` + `DontDestroyOnLoad`). Tüketiciler: `PlayerCombatState`, `ModeHudBase`, `AdminRoster` |
 | `UI/ModeHudBase` | Mod HUD'larının **takım-agnostik** tabanı: faz/süre, geri sayım, can barı, ölüm ekranı + durum metni, kill-feed (ad çözümü `lobby_state`'ten), kendi öldürme/ölüm sayacın, maç sonu satırı. **Takıma ait hiçbir şey burada değil** — skor satırı (`ScoreLine`) ve kazanan metni (`WinnerLine`) alt sınıfın işi. Core'da durur çünkü modlar birbirini referanslamaz. `PhaseLabel`/`ModeStateLabel` `virtual`'dır: tur tabanlı mod "MAÇ" yerine "TUR 3", mod duraklamasında da "TOPLANMA 2/6" yazabilsin diye — taban `modeState`'i **yorumlamaz** |
@@ -2010,6 +2010,71 @@ konsoluna tek satır sebep yazar.
     derlemeyi kırmaz; (2) sürücüsü olmayan görsel yolu **sessiz bırakma**, `LogError` bas ve kökü
     yine de doğru yere taşı — yanlış pozda ama doğru yerde duran avatar teşhis edilebilir, hiç
     görünmeyen avatar edilemez.
+
+85. **Rol ayrımı `Initialize`'da yapılıyorsa, role bağlı bileşen prefabda AÇIK gelemez —
+    `OnEnable` `Instantiate` anında koşar.** "Bileşeni prefabda bırak, kurulumda rolüne göre
+    aç/kapat" kalıbı sezgisel ama bir kare geç kalır: `Instantiate` dönmeden `Awake`+`OnEnable`
+    çalışır, `Initialize` ise ondan sonra çağrılır. Aradaki pencerede bileşen **bir kez tam
+    yetkiyle** koşmuştur. `MetaSourceDataProvider` (`OVRBody`) örneğinde bu, her uzak avatar
+    doğarken bir `StartBodyTracking` çağrısıdır: HMD'siz admin'de spawn başına bir hata satırı,
+    Quest'te oyuncunun kendi izlemesini uzak bir avatarın yeniden başlatması. Doğrusu tersidir —
+    **bileşen prefabda KAPALI gelir, sahibi olan taraf onu açar**; "kapalı doğup açılan" yolda
+    yanlış çalışan bir pencere yoktur. Aynı kural `AudioSource.playOnAwake`, `ParticleSystem`,
+    fizik ve abonelik kuran her bileşen için geçerlidir (uzak eşya örneklerinin PASİF kuluçka
+    kökünde kurulmasının sebebi de budur).
+
+86. **85'in AYNASI: pasif objede `Awake` HİÇ koşmaz — kurulum çağrısı objeyi açmadan yapılmaz.**
+    "Kurulana kadar gizli tut" deseni (`visualRoot.SetActive(false)`) ile "kurulumu `Initialize`
+    yapar" deseni yan yana geldiğinde sessizce çakışırlar: gizlenen kök kurulacak bileşenin
+    KENDİ objesiyse, o objenin `Awake`'i hiç çalışmamıştır ve `Initialize` içindeki her referans
+    null'dur. Belirtisi teşhisi saptırır — `NullReferenceException` kurulum satırını gösterir,
+    asıl sebep ise iki satır yukarıdaki `SetActive` sırasıdır; üstelik SDK tarafında sonuç
+    "sahiplik None, karakter T-pozunda" gibi tamamen alakasız görünen ikinci bir hata üretir.
+    İki kural: (1) `SetActive(true)` **önce** çağrılır — `Awake`'leri kendi çağrısı içinde senkron
+    koşturur, yani o satırdan sonra obje kurulmaya hazırdır; (2) dışarıdan çağrılan kurulum
+    metotları referanslarını **`Awake`'ten ayrı, idempotent** bir çözücüden alır (`Awake` koşmamış
+    olabilir) — böylece sıra hatası patlamaya değil, en fazla bir kez fazladan `GetComponent`'e
+    mal olur.
+
+87. **Görünürlüğü `SetActive` ile yönetmek, altındaki bileşenlerin `OnEnable`'ını TEKRAR
+    koşturur — ve bazı bileşenler başarısızlıkta kendilerini KALICI kapatır.** "Gizle/göster"
+    için objeyi kapatmak masumdur sanılır, oysa her gizle/göster çevrimi tam bir yaşam döngüsü
+    turudur. `OVRBody` bunun en pahalı örneği: `OnDisable` açık son örnekte
+    `StopBodyTracking` çağırıyor, `OnEnable` yeniden başlatmayı deniyor ve
+    **başaramazsa `enabled = false` yapıp bir daha DENEMİYOR**. Yani rig'in bir an kaybolduğu
+    her harita geçişi, oyuncunun gövdesini oturumun geri kalanı boyunca sessizce öldürebilecek
+    bir kumardır — geriye konsolda tek bir `[OVRBody]` satırı kalır ve o satır "gövdem neden
+    yok" sorusuna bağlanmaz. Kural: **kurulmuş bir alt ağacın görünürlüğü renderer düzeyinde
+    yönetilir** (`Renderer.enabled`), `SetActive` yalnız kurulumdan ÖNCE meşrudur (orada henüz
+    başlatılmış bir şey yoktur). Kendini kapatabilen bir bileşene bağımlıysan durumunu kurulumdan
+    sonra **oku ve bildir**; sessiz kalırsa teşhis sensöre/SDK'ya gider, oysa sebep senin
+    gizleme yöntemindir.
+88. **Ters derinlik testi (`ZTest Greater`) oyuncunun KENDİ silahını, elini ve gövdesini de
+    "engel" sayar.** Duvar arkasından görünen bir işaret (taban şeridinin x-ray çizimi) yalnız
+    arena dekorunun arkasında değil, **eldeki silahın ve `LocalBodyAvatar` bacaklarının** arkasında
+    da geçerlidir: oyuncu kendi tabanının içinde durup aşağı baktığında hayalet doğrudan silahının
+    üstüne çizilir ve "silahım şeffaflaştı" gibi görünür. Çözüm efekti kapatmak değil **yakın
+    mesafe sönümüdür** — `M_BaseZoneXRay`'in `_NearFadeStart`/`_NearFadeEnd` alanları hayaleti
+    birkaç metrenin altında tamamen söndürür; zaten o mesafede gerçek şerit görünüyordur, yani
+    sönüm hiçbir bilgi kaybettirmez. Aynı sorun ileride duvar arkasından çizilecek her işaret için
+    (takım arkadaşı halkası, hedef işareti) tekrar eder.
+
+89. **Bir `.meta` guid'i değişince o asset'e yapılan TÜM referanslar sessizce ölür — ne derleyici
+    ne konsol bunu tam olarak söyler.** Asset silinip yeniden import edilirse (ya da `.meta`
+    kaybolursa) yeni bir guid üretilir; eski guid'e bakan her yer artık `None` görür. Tehlikesi
+    kapsamıdır: tek bir silah için bu aynı anda **sahnedeki prefab örneği**, **SO alanı**
+    (`Weapon.definition`), **SO dizileri** (`ModeDefinition.loadout`) ve **kataloglar**
+    (`NetItemCatalog`, `WeaponCatalog`) demektir — belirtiler de o kadar dağınık çıkar: silah
+    sahnede yok, uzak oyuncunun elinde çizilmiyor, atış sesi/alevi gelmiyor, alınınca hasar
+    vermiyor. Hepsi tek sebepten ama hiçbiri sebebi göstermez; Unity yalnız sahnedeki prefab
+    örneği için "Missing Prefab" basar, dizideki boş slot için hiçbir şey demez.
+    **Tespit:** tüm `*.unity`/`*.prefab`/`*.asset` dosyalarındaki `guid:` değerlerini toplayıp
+    `AssetDatabase.GUIDToAssetPath` ile çözülüyor mu diye bak — çözülemeyen her guid ölü bir
+    referanstır ve bu tarama saniyeler sürer. **Onarım:** ölü guid'in taşıdığı `fileID`'ler yeni
+    asset'te de duruyorsa (asset aynı, yalnız kimliği değişmiş) guid'i metinsel değiştirmek birebir
+    doğrudur; tutmuyorsa referanslar Unity API'siyle tek tek bağlanır — kopuk alanı boş alandan
+    ayırmak için `objectReferenceValue == null && objectReferenceInstanceIDValue != 0` bak.
+    ⚠️ Editörde **açık ve kirli** bir sahnenin dosyasına diskten dokunma: kaydedilmemiş iş ezilir.
 
 ---
 
