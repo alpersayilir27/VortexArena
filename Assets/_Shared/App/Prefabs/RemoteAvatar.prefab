@@ -575,9 +575,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0a14c7e16c07e4f4cbd7b3540f8776bb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.ThreePointBodyIK
+  headBoneToEyeOffset: {x: 0, y: 0.12, z: 0.09}
   hipsBackOffsetMeters: 0.06
   torsoYawFollowSpeed: 360
   torsoMaxYawLagDegrees: 70
+  forearmTwistShare: 0.5
   armTolerance: 0.01
   armIterations: 8
   stanceHalfWidth: 0.11
