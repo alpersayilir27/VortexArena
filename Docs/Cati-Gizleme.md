@@ -138,8 +138,8 @@ Kaynak: `Assets/_Shared/Core/Arena/ArenaRoof.cs`.
 
 ### Gizleme yöntemi
 
-`MaterialPropertyBlock` ile `_BaseColor` alfası — `ArenaBoundary`'nin duvar saydamlığıyla **birebir
-aynı desen** (yeni bir teknik getirilmedi).
+`MaterialPropertyBlock` ile `_BaseColor` alfası: paylaşılan malzeme değiştirilmez, örnek başına bir
+blok yazılır (aynı malzemeyi kullanan başka objeler etkilenmesin diye).
 
 Tam gizlemede (`alpha < 0.004`) Renderer **kapatılmaz**, `ShadowCastingMode.ShadowsOnly`'ye alınır:
 
@@ -187,10 +187,12 @@ taraması yoktur, maliyet sıfırdır.
 
 - **Ara alfa (ör. %30 saydam çatı) yalnız Transparent malzemede çalışır.** Opaque malzemede
   `_BaseColor.a` görsel olarak etkisizdir → ara değer 1 gibi davranır. `0` yine tam gizler (o
-  `ShadowsOnly` yoluyla olur, alfadan bağımsız). Duvar saydamlığındaki kısıtın aynısıdır. Bugünkü
-  arayüz zaten yalnız 0/1 üretiyor; yarı saydam çatı isteyen malzemeyi Transparent'a almalı.
-- **Çatıyı `ArenaBoundary`'nin `wallRenderers`'ına KOYMA.** İkisi aynı Renderer'a farklı alfa yazar,
-  hangisi son yazarsa o kazanır → titreme. Duvar duvardır, çatı çatıdır.
+  `ShadowsOnly` yoluyla olur, alfadan bağımsız). Bugünkü arayüz zaten yalnız 0/1 üretiyor; yarı
+  saydam çatı isteyen malzemeyi Transparent'a almalı.
+- **Aynı Renderer'ı iki alfa sürücüsüne bağlama.** Hangisi son yazarsa o kazanır → titreme. Çatı
+  yalnız `ArenaRoof`'a aittir. (`ArenaBoundary`'nin duvar alfası yazan bir mekanizması artık yok —
+  muhafazanın yarı saydam duvar göstergesi kaldırıldı, arenanın duvarları environment sanatına
+  aittir.)
 - **`ArenaRoof` bileşenini devre dışı bırakma** (`enabled = false`): kayıt listesinden düşer ve çatı
   o anki hâlinde donar. Gizlemek istiyorsan tercihi kullan, bileşeni kapatma.
 - **Prefab'a bake edeceksen** katmanı Prefab Mode'da damgala; sahne örneğinde yapılan katman
@@ -236,7 +238,7 @@ Bu notun kapsamı çatıdır; tam liste ve sorumluluklar `CLAUDE.md` → *Editor
 | Araç | İş |
 |---|---|
 | `Tools > VortexArena > Dev` (`Ctrl+Alt+R`) | Rol · sunucu hedefi · Play başlangıcı |
-| `Tools > VortexArena > Create Arena From Template` | Yeni arena kutusu + sahne + `MapDefinition` + katalog + Build Settings |
+| `Tools > VortexArena > Configure All Build Elements` | `MapDefinition` + katalog + Build Settings + `maps.json` export, tek geçişte |
 | `Tools > VortexArena > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` |
 | `GameObject > VortexArena > Network Parent` | Sahne objesine `NetIdentity` + benzersiz `sceneId` |
 | **`GameObject > VortexArena > Arena Roof`** | **Bu not (§4)** |

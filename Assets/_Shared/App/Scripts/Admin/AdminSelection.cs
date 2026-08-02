@@ -17,7 +17,7 @@ namespace VortexArena.App.Admin
     /// </para>
     /// <para>
     /// ⚠ <b>Görünüm tercihleri buraya GİRMEZ.</b> Kamera kipi, seçili oyuncu, halkalar, ad
-    /// etiketleri, kamera hızı ve duvar/çatı saydamlığı her operatörün kendi
+    /// etiketleri, kamera hızı ve çatı saydamlığı her operatörün kendi
     /// ekranına aittir; onlar <see cref="AdminSession"/>'da yerel <c>PlayerPrefs</c> olarak kalır.
     /// İki operatörün kameralarını birbirine bağlamak yönetimi kolaylaştırmaz, imkânsızlaştırır.
     /// </para>

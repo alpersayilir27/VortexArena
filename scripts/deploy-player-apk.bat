@@ -13,12 +13,16 @@ rem  ONEMLI 1: batch-mode Unity, editor ayni projeyi acikken proje kilidine
 rem  takilabilir. Betik bunu KONTROL ETMEZ (bilincli, bkz. deploy-admin-game.bat).
 rem  Build kilitte takilirsa elle iptal edip tekrar baslatin.
 rem
-rem  ONEMLI 2: proje aktif platformu Windows ise Unity once Android'e gecer.
-rem  Bu ILK calistirmada TAM REIMPORT demektir (texture'lar ASTC'ye yeniden
-rem  sikistirilir) - 20-40 dk surebilir. Sonraki calistirmalar hizlidir.
-rem  Platform, build bitince Windows'a GERI ALINMAZ: geri almak ikinci bir
-rem  tam reimport daha demek olurdu. Admin build'i zaten kendi platformuna
-rem  gecirir.
+rem  ONEMLI 2: HEDEF PLATFORM BU BETIKTE SABITTIR: -buildTarget Android.
+rem  Aktif platformdan turetilmez - projede hangi platform acik kalmis olursa
+rem  olsun bu betik APK alir. Bayrak Unity'ye ACILISTA verilir: platformu
+rem  -executeMethod'un icinden cevirmek domain reload tetikler ve calisan
+rem  metot yarida kalir.
+rem  Aktif platform Android degilse gecis acilista olur ve o kosu TAM REIMPORT
+rem  demektir (texture'lar ASTC'ye yeniden sikistirilir) - 20-40 dk surebilir;
+rem  sonrakiler hizlidir. Platform build sonunda geri ALINMAZ (geri almak
+rem  ikinci bir tam reimport daha olurdu) ve gerekmez: admin betigi de kendi
+rem  hedefini sabit geciyor.
 rem
 rem  Unity yolu: UNITY_EXE ortam degiskeni > Hub'daki proje surumu.
 rem
@@ -106,8 +110,8 @@ rem  -nographics KULLANILMIYOR: shader varyant derlemesi grafik cihazi
 rem  isteyebilir ve sessizce bozuk cikti uretebilir.
 echo.
 echo   Build basliyor.
-echo   [!] Aktif platform Windows ise once Android'e gecilir - ILK seferde
-echo       tam reimport yuzunden 20-40 dk surebilir, sonrakiler hizlidir.
+echo   [!] Hedef platform sabit: Android. Aktif platform baska ise acilista
+echo       gecilir - o kosu tam reimport yuzunden 20-40 dk surebilir.
 echo   Asagidaki durum satiri canli guncellenir.
 echo   Log   : %VA_LOG%
 del /q "%VA_LOG%" 2>nul

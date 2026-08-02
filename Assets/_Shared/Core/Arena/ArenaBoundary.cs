@@ -4,26 +4,33 @@ using UnityEngine;
 namespace VortexArena.Core.Arena
 {
     /// <summary>
-    /// Free-roam arena guard for a physical play space. The player moves
-    /// 1:1 with their real body; this component watches the HMD position in the
-    /// arena's local space and (a) fades in the boundary walls as the player
-    /// approaches the edge, (b) fades the screen to black and shows a warning
-    /// when they step outside the allowed area.
+    /// Free-roam arena guard for a physical play space. The player moves 1:1 with their real body;
+    /// this component watches the HMD position in the arena's local space and fades the screen —
+    /// gently as the player nears the edge, to black once they step outside — plus shows a warning.
     /// Attach to an object positioned inside the arena, aligned with the arena's rotation.
     /// <para>
     /// <b>Arena ölçüsünün TEK kaynağı <see cref="dimensionsJson"/>'dur</b> (boyut dosyası,
     /// <see cref="ArenaDimensions"/> olarak çözülür). Alan dikdörtgen bile olsa dört köşeli bir
-    /// <c>outline</c> olarak yazılır — "dikdörtgense şu hızlı yol" ayrımı YOKTUR, aynı ölçünün iki
-    /// ayrı ifadesi birbirinden sapıyordu. Sahnedeki <see cref="ArenaObstacle"/>'lar plana ek olarak
-    /// hesaba girer.
+    /// <c>plane</c> halkası olarak yazılır — "dikdörtgense şu hızlı yol" ayrımı YOKTUR, aynı
+    /// ölçünün iki ayrı ifadesi birbirinden sapıyordu. Sahnedeki <see cref="ArenaObstacle"/>'lar
+    /// plana ek olarak hesaba girer.
     /// </para>
     /// <para>
     /// ⚠️ Boyut dosyası yoksa/okunamıyorsa muhafaza <b>kendini kapatır</b> — gerekçe
     /// <see cref="ResolvePlan"/>'de.
     /// </para>
     /// <para>
+    /// ⚠️ <b>Yarı saydam muhafaza duvarı KALDIRILDI ve geri eklenmez.</b> Eskiden kenara
+    /// yaklaşıldıkça belirginleşen bir duvar geometrisi vardı; arenanın gerçek duvarları
+    /// environment sanatından geldiği için görevi göz zaten yapıyor. Mekanizma sanat duvarına
+    /// TAŞINAMAZ da: alfa yazımı yalnız Transparent malzemede iş görür (gerçek duvarlar opak) ve
+    /// Renderer'ı alfa düşünce kapatırdı — oyuncu uzaktayken duvar tümden kaybolurdu. Yaklaşma
+    /// uyarısı bu yüzden karartma quad'ına taşındı (<see cref="warnFadeAlpha"/>): HMD'ye bağlı
+    /// olduğu için arena geometrisinden tümden bağımsızdır.
+    /// </para>
+    /// <para>
     /// ⚠️ Bu bileşen <b>arena uzayının origin'i DEĞİLDİR</b>: ağ koordinatlarının sıfırı
-    /// <see cref="SpawnPoint"/>'tedir (<see cref="ArenaSpace"/>). Muhafaza objesini büyütmek ya da
+    /// <c>SpawnPoint</c>'tedir (<see cref="ArenaSpace"/>). Muhafaza objesini büyütmek ya da
     /// kaydırmak oyuncuların ağ konumunu etkilemez.
     /// </para>
     /// </summary>
@@ -32,23 +39,24 @@ namespace VortexArena.Core.Arena
         [Header("References")]
         [Tooltip("HMD transform (CenterEyeAnchor). Falls back to Camera.main.")]
         [SerializeField] private Transform head;
-        [SerializeField] private Renderer[] wallRenderers;
-        [Tooltip("Quad parented to the HMD used for the out-of-bounds blackout.")]
+        [Tooltip("Quad parented to the HMD used for the approach/out-of-bounds fade.")]
         [SerializeField] private Renderer fadeRenderer;
         [SerializeField] private TextMesh warningText;
 
         [Header("Arena size (meters)")]
         [Tooltip("Boyut dosyası (JSON, TextAsset) — arena ölçüsünün TEK kaynağı, ZORUNLUDUR. " +
-                 "İşletmenin ölçüsü şeritmetreyle alınıp doğrudan bu dosyaya yazılır; alan dikdörtgen " +
-                 "olsa bile dört köşeli bir 'outline' olarak girilir. Boşsa muhafaza devre dışı kalır. " +
-                 "Örnek: Assets/Arenas/Venues/VortexAntep/Data/vortexantep_dimensions.json")]
+                 "Dosya MEKAN başınadır: bir işletmenin tüm sahneleri aynı dosyayı gösterir. " +
+                 "İşletmenin ölçüsü şeritmetreyle alınıp doğrudan bu dosyaya yazılır; alan " +
+                 "dikdörtgen olsa bile dört köşeli bir 'plane' halkası olarak girilir. Boşsa " +
+                 "muhafaza devre dışı kalır. " +
+                 "Örnek: Assets/Arenas/Venues/VortexAntep/Data/VortexAntep_dimensions.json")]
         [SerializeField] private TextAsset dimensionsJson;
 
         [Header("Warning behaviour")]
-        [Tooltip("Distance from the edge (m) where the walls start brightening.")]
+        [Tooltip("Distance from the edge (m) where the approach fade starts.")]
         [SerializeField] private float warnDistance = 1f;
-        [SerializeField] private float minWallAlpha = 0.05f;
-        [SerializeField] private float maxWallAlpha = 0.85f;
+        [Tooltip("Fade alpha reached exactly AT the boundary (approach warning ceiling).")]
+        [SerializeField] private float warnFadeAlpha = 0.35f;
         [Tooltip("Meters past the boundary at which the blackout is fully opaque.")]
         [SerializeField] private float fadeOutsideDistance = 0.3f;
         [SerializeField] private float maxFadeAlpha = 0.96f;
@@ -60,8 +68,8 @@ namespace VortexArena.Core.Arena
         public bool IsOutOfBounds { get; private set; }
 
         /// <summary>
-        /// Arena yarı ölçüleri (metre, X/Z) — admin kuş bakışı kadrajı bunu okur. Plandaki sınır
-        /// çokgeninin sınırlayıcı kutusundan gelir; plan yoksa <see cref="Vector2.zero"/>.
+        /// Arena yarı ölçüleri (metre, X/Z) — admin kuş bakışı kadrajı bunu okur. Plandaki taban
+        /// halkasının sınırlayıcı kutusundan gelir; plan yoksa <see cref="Vector2.zero"/>.
         /// </summary>
         public Vector2 HalfExtents
         {
@@ -79,7 +87,7 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Arena alanının YEREL uzaydaki merkezi (XZ, metre) = sınır çokgeninin sınırlayıcı
+        /// Arena alanının YEREL uzaydaki merkezi (XZ, metre) = taban halkasının sınırlayıcı
         /// kutusunun merkezi. Plan yoksa <see cref="Vector2.zero"/>.
         /// <para>
         /// ⚠️ Kadrajlarken <see cref="HalfExtents"/> tek başına yetmez: ölçü genellikle bir köşeden
@@ -97,13 +105,12 @@ namespace VortexArena.Core.Arena
 
         // Gözlemci (admin) kipi: görsel muhafaza susar.
         private bool spectatorMode;
-        private float spectatorWallAlpha = 0.25f;
 
-        // Plan önbelleği: JSON ayrıştırma, kenar dizisi ve kolon dikdörtgenleri kare başına yeniden
-        // kurulmasın (Update her karede, gizmo her repaint'te çalışıyor — tahsis GC baskısı demek).
+        // Plan önbelleği: JSON ayrıştırma ve halka dizileri kare başına yeniden kurulmasın
+        // (Update her karede, gizmo her repaint'te çalışıyor — tahsis GC baskısı demek).
         private ArenaDimensions activePlan;      // çözülmüş plan (null = muhafaza devre dışı)
-        private Vector2[] cachedOutline;         // activePlan.outline (hızlı erişim)
-        private ObstacleRect[] cachedColumns;
+        private Vector2[] cachedPlane;           // activePlan.plane (hızlı erişim)
+        private Vector2[][] cachedColumns;       // muhafazaya giren kolon halkaları
         private TextAsset cachedJsonSource;      // plan hangi TextAsset'ten çözüldü
         // ⚠️ Bir kez çözüldü mü: eksik/geçersiz bir JSON'da activePlan null kalır, bu bayrak olmasa
         // kare başına yeniden ayrıştırılır ve hata log'u sel olurdu.
@@ -136,25 +143,23 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Gözlemci (admin) kipi. Görsel muhafazayı susturur: karartma quad'ı ve alan-dışı
-        /// uyarısı kapanır, duvarlar <paramref name="wallAlpha"/>'da sabitlenir,
-        /// <see cref="IsOutOfBounds"/> false'a kilitlenir.
+        /// Gözlemci (admin) kipi. Görsel muhafazayı susturur: karartma quad'ı ve alan-dışı uyarısı
+        /// kapanır, <see cref="IsOutOfBounds"/> false'a kilitlenir.
         /// <para>
         /// Gerekçe: admin masaüstündedir, HMD'si yoktur; kafası (kapatılmış rig'in
         /// CenterEyeAnchor'ı) sabit durduğu için muhafaza mantığı anlamsız veri üretir. Bileşen
-        /// kapatılmak yerine susturulur ki duvarlar gözlemci için istenen saydamlıkta kalsın.
+        /// kapatılmak yerine susturulur ki <see cref="HalfExtents"/> / <see cref="LocalCenter"/>
+        /// (kuş bakışı kadrajı) okunmaya devam edebilsin.
         /// </para>
         /// </summary>
-        public void SetSpectatorMode(bool on, float wallAlpha = 0.25f)
+        public void SetSpectatorMode(bool on)
         {
             spectatorMode = on;
-            spectatorWallAlpha = Mathf.Clamp01(wallAlpha);
             if (!on)
                 return; // bir sonraki Update gerçek duruma göre yeniden çizer
 
             propertyBlock ??= new MaterialPropertyBlock();
             IsOutOfBounds = false;
-            SetWallsAlpha(spectatorWallAlpha);
             if (fadeRenderer != null)
                 SetAlpha(fadeRenderer, 0f);
             if (warningText != null && warningText.gameObject.activeSelf)
@@ -165,17 +170,15 @@ namespace VortexArena.Core.Arena
         {
             if (spectatorMode)
             {
-                // Muhafaza susuyor; duvar alfası tercihten gelip sabit kaldığı için iş yok.
-                return;
+                return; // muhafaza susuyor
             }
 
             EnsurePlan();
             if (activePlan == null)
             {
                 // Plansız = muhafaza devre dışı (gerekçe ResolvePlan'de). Alan-dışı durumu ve
-                // karartma sıfırlanır, uyarı yazısı kapanır; duvar alfalarına DOKUNULMAZ —
-                // ölçüyü bilmeden "kenara ne kadar yakınız" sorusunun cevabı yok, duvarları
-                // rastgele bir değere sürüklemek yanlış bilgi verirdi.
+                // karartma sıfırlanır, uyarı yazısı kapanır — ölçüyü bilmeden "kenara ne kadar
+                // yakınız" sorusunun cevabı yok, ekranı rastgele karartmak yanlış bilgi verirdi.
                 IsOutOfBounds = false;
                 if (fadeRenderer != null)
                     SetAlpha(fadeRenderer, 0f);
@@ -191,14 +194,33 @@ namespace VortexArena.Core.Arena
             float edgeDistance = EdgeDistance(new Vector2(local.x, local.z));
             IsOutOfBounds = edgeDistance < 0f;
 
-            float warn = Mathf.Clamp01(1f - edgeDistance / warnDistance);
-            SetWallsAlpha(Mathf.Lerp(minWallAlpha, maxWallAlpha, warn));
-
-            float outside = Mathf.Clamp01(-edgeDistance / fadeOutsideDistance);
             if (fadeRenderer != null)
-                SetAlpha(fadeRenderer, outside * maxFadeAlpha);
+                SetAlpha(fadeRenderer, FadeAlphaFor(edgeDistance));
             if (warningText != null && warningText.gameObject.activeSelf != IsOutOfBounds)
                 warningText.gameObject.SetActive(IsOutOfBounds);
+        }
+
+        /// <summary>
+        /// Karartma alfası: içeride yaklaşma rampası, dışarıda tam karartmaya giden rampa.
+        /// <para>
+        /// İki dal sınırda (<paramref name="edgeDistance"/> = 0) aynı değeri —
+        /// <see cref="warnFadeAlpha"/> — verdiği için geçiş SÜREKLİDİR. Bu, kaldırılan yarı saydam
+        /// duvarın yerini alan tek uyarı kanalıdır: oyuncu sınırı geçmeden önce uyarılmalı, aksi
+        /// hâlde gerçek duvara çarptıktan sonra haberi olurdu.
+        /// </para>
+        /// </summary>
+        private float FadeAlphaFor(float edgeDistance)
+        {
+            if (edgeDistance >= 0f)
+            {
+                float warn = warnDistance > 0f ? Mathf.Clamp01(1f - edgeDistance / warnDistance) : 0f;
+                return warn * warnFadeAlpha;
+            }
+
+            float outside = fadeOutsideDistance > 0f
+                ? Mathf.Clamp01(-edgeDistance / fadeOutsideDistance)
+                : 1f;
+            return Mathf.Lerp(warnFadeAlpha, maxFadeAlpha, outside);
         }
 
         // -------------------------------------------------------------- mesafe hesabı
@@ -206,8 +228,7 @@ namespace VortexArena.Core.Arena
         /// <summary>
         /// Verilen YEREL XZ noktasının "en yakın tehlikeye" işaretli uzaklığı: <b>artı</b> = güvenli
         /// alanın içinde ve o kadar metre payı var, <b>eksi</b> = dışarıda (ya da bir engelin
-        /// içinde) ve o kadar metre içeri girmiş. Duvar alfası, karartma ve uyarı bu tek sayıdan
-        /// türer.
+        /// içinde) ve o kadar metre içeri girmiş. Karartma ve uyarı bu tek sayıdan türer.
         /// <para>
         /// ⚠️ Yalnız plan varken çağrılır — çağıran (<c>Update</c>) plansız durumu zaten erken
         /// çıkışla eliyor.
@@ -215,13 +236,13 @@ namespace VortexArena.Core.Arena
         /// </summary>
         private float EdgeDistance(Vector2 point)
         {
-            float distance = SignedDistanceToOutline(point);
+            float distance = Polygon2D.SignedDistance(cachedPlane, point);
 
             if (cachedColumns != null)
             {
                 for (int i = 0; i < cachedColumns.Length; i++)
                 {
-                    distance = Mathf.Min(distance, DistanceToRect(point, cachedColumns[i]));
+                    distance = Mathf.Min(distance, Polygon2D.ObstacleDistance(cachedColumns[i], point));
                 }
             }
 
@@ -245,50 +266,15 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Noktanın sınır çokgenine işaretli uzaklığı: içerideyse +, dışarıdaysa −; büyüklük her
-        /// iki durumda da en yakın KENAR PARÇASINA olan mesafedir (köşe yakınında da doğru sonuç
-        /// verir, kenar doğrularına değil parçalarına bakıldığı için).
-        /// </summary>
-        private float SignedDistanceToOutline(Vector2 point)
-        {
-            float minDistance = float.MaxValue;
-            bool inside = false;
-
-            for (int i = 0, j = cachedOutline.Length - 1; i < cachedOutline.Length; j = i++)
-            {
-                Vector2 a = cachedOutline[i];
-                Vector2 b = cachedOutline[j];
-
-                minDistance = Mathf.Min(minDistance, DistanceToSegment(point, a, b));
-
-                // Ray-casting: noktadan +X yönüne giden ışın kaç kenarı kesiyor (tek = içeride).
-                if ((a.y > point.y) != (b.y > point.y) &&
-                    point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x)
-                {
-                    inside = !inside;
-                }
-            }
-
-            return inside ? minDistance : -minDistance;
-        }
-
-        private static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
-        {
-            Vector2 ab = b - a;
-            float lengthSq = ab.sqrMagnitude;
-            if (lengthSq < 1e-8f)
-            {
-                return Vector2.Distance(point, a); // dejenere kenar (üst üste iki köşe)
-            }
-
-            float t = Mathf.Clamp01(Vector2.Dot(point - a, ab) / lengthSq);
-            return Vector2.Distance(point, a + ab * t);
-        }
-
-        /// <summary>
         /// Noktanın döndürülmüş bir engel dikdörtgenine işaretli uzaklığı: dışarıdaysa + (kutuya
         /// olan mesafe), içerideyse − (en yakın yüzeye olan derinlik). Sınır hesabıyla aynı işaret
         /// sözleşmesini kullanır, böylece ikisi tek bir <c>Mathf.Min</c> ile birleşebilir.
+        /// <para>
+        /// ⚠️ Yalnız <see cref="ArenaObstacle"/> için kalmıştır — plandaki kolonlar artık çokgendir
+        /// ve <see cref="Polygon2D.ObstacleDistance"/> ile ölçülür. Sahneye elle konan dekorun
+        /// gösterimi ise dikdörtgen kaldı: taşınabilir bir objenin ölçüsünü tek bir alandan
+        /// (<c>Size</c>) okumak, ona ayrıca bir köşe listesi yazdırmaktan basit.
+        /// </para>
         /// </summary>
         private static float DistanceToRect(Vector2 point, in ObstacleRect rect)
         {
@@ -342,8 +328,8 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Planı tek kaynaktan — <see cref="dimensionsJson"/> — çözer. Kolonlar burada bir kez
-        /// dikdörtgene çevrilir: kaynak çalışma anında değişmez, ama <c>Update</c> her karede koşar.
+        /// Planı tek kaynaktan — <see cref="dimensionsJson"/> — çözer. Kolon halkaları burada bir
+        /// kez toplanır: kaynak çalışma anında değişmez, ama <c>Update</c> her karede koşar.
         /// <para>
         /// ⚠️ Dosya bağlanmamışsa ya da ayrıştırılamıyorsa <b>açık başarısızlık</b> seçilir:
         /// konsola bir kez hata basılır ve muhafaza tümden susar. Gerekçe: ölçüsü bilinmeyen bir
@@ -358,7 +344,7 @@ namespace VortexArena.Core.Arena
             planResolved = true;
 
             activePlan = null;
-            cachedOutline = null;
+            cachedPlane = null;
             cachedColumns = null;
 
             activePlan = ArenaDimensions.FromTextAsset(dimensionsJson, out string error);
@@ -373,12 +359,7 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            cachedOutline = activePlan.outline;
-
-            if (!activePlan.columnsBlockPlayer)
-            {
-                return; // kolonlar yalnız geometri: muhafaza onları görmez
-            }
+            cachedPlane = activePlan.plane;
 
             ArenaDimensions.Column[] columns = activePlan.columns;
             if (columns == null || columns.Length == 0)
@@ -386,22 +367,27 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            cachedColumns = new ObstacleRect[columns.Length];
+            // Parse geçersiz halkalı kolonları zaten ayıkladı; burada yalnız halkalar toplanır.
+            cachedColumns = new Vector2[columns.Length][];
             for (int i = 0; i < columns.Length; i++)
             {
-                cachedColumns[i] = MakeRect(columns[i].center, columns[i].size, columns[i].yaw);
+                cachedColumns[i] = columns[i].points;
             }
         }
 
         // ------------------------------------------------------------------ gizmo
 
         /// <summary>
-        /// Seçiliyken planı çizer: sınır çokgeni + kolon kutuları (yerel uzayda hesaplanıp dünyaya
-        /// taşınır). Yamuk bir arenayı elle ayarlarken bu çizim şarttır — plan sayı listesidir,
-        /// sahnede karşılığını görmeden köşe taşımak körlemedir.
+        /// Seçiliyken planı çizer: taban halkası + kolon prizmaları (yerel uzayda hesaplanıp
+        /// dünyaya taşınır). Yamuk bir arenayı elle ayarlarken bu çizim şarttır — plan sayı
+        /// listesidir, sahnede karşılığını görmeden köşe taşımak körlemedir.
         /// <para>
         /// ⚠️ Plan yoksa HİÇBİR ŞEY çizilmez: uydurulmuş bir kutu, muhafazanın aslında devre dışı
         /// olduğunu gizlerdi. Sebebi konsoldaki hata satırıdır.
+        /// </para>
+        /// <para>
+        /// ⚠️ Sınırın ÜST kenarı artık çizilmez: duvar yüksekliği alanı kaldırıldı (duvar üretimi
+        /// de duvar göstergesi de yok), okuyanı olmayan bir ölçü bayatlardı.
         /// </para>
         /// </summary>
         private void OnDrawGizmosSelected()
@@ -413,20 +399,11 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            Vector2[] outline = activePlan.outline;
+            Vector2[] ring = activePlan.plane;
             Gizmos.color = new Color(0.2f, 0.8f, 1f, 0.9f);
-            for (int i = 0, j = outline.Length - 1; i < outline.Length; j = i++)
+            for (int i = 0, j = ring.Length - 1; i < ring.Length; j = i++)
             {
-                Gizmos.DrawLine(LocalToWorld(outline[j]), LocalToWorld(outline[i]));
-            }
-
-            // Duvar üst kenarı: yüksekliği de gözle doğrulanabilsin.
-            Gizmos.color = new Color(0.2f, 0.8f, 1f, 0.35f);
-            float wallHeight = activePlan.wallHeight;
-            for (int i = 0, j = outline.Length - 1; i < outline.Length; j = i++)
-            {
-                Gizmos.DrawLine(LocalToWorld(outline[j], wallHeight), LocalToWorld(outline[i], wallHeight));
-                Gizmos.DrawLine(LocalToWorld(outline[i]), LocalToWorld(outline[i], wallHeight));
+                Gizmos.DrawLine(LocalToWorld(ring[j]), LocalToWorld(ring[i]));
             }
 
             ArenaDimensions.Column[] columns = activePlan.columns;
@@ -435,35 +412,29 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            Gizmos.color = activePlan.columnsBlockPlayer
-                ? new Color(0.95f, 0.55f, 0.15f, 0.9f)  // muhafazaya giriyor
-                : new Color(0.6f, 0.6f, 0.6f, 0.6f);    // yalnız geometri
+            Gizmos.color = new Color(0.95f, 0.55f, 0.15f, 0.9f);
 
             for (int i = 0; i < columns.Length; i++)
             {
-                ArenaDimensions.Column column = columns[i];
-                float height = activePlan.HeightOf(column);
-                Vector3 center = new Vector3(column.center.x, height * 0.5f, column.center.y);
+                Vector2[] footprint = columns[i].points;
+                if (!Polygon2D.IsValid(footprint))
+                {
+                    continue;
+                }
 
-                Gizmos.matrix = transform.localToWorldMatrix *
-                                Matrix4x4.TRS(center, Quaternion.Euler(0f, column.yaw, 0f), Vector3.one);
-                Gizmos.DrawWireCube(Vector3.zero, new Vector3(column.size.x, height, column.size.y));
-                Gizmos.matrix = Matrix4x4.identity;
+                float height = activePlan.HeightOf(columns[i]);
+                for (int k = 0, m = footprint.Length - 1; k < footprint.Length; m = k++)
+                {
+                    Gizmos.DrawLine(LocalToWorld(footprint[m]), LocalToWorld(footprint[k]));
+                    Gizmos.DrawLine(LocalToWorld(footprint[m], height), LocalToWorld(footprint[k], height));
+                    Gizmos.DrawLine(LocalToWorld(footprint[k]), LocalToWorld(footprint[k], height));
+                }
             }
         }
 
         private Vector3 LocalToWorld(Vector2 localPoint, float height = 0f)
         {
             return transform.TransformPoint(new Vector3(localPoint.x, height, localPoint.y));
-        }
-
-        private void SetWallsAlpha(float alpha)
-        {
-            if (wallRenderers == null)
-                return;
-            foreach (var wall in wallRenderers)
-                if (wall != null)
-                    SetAlpha(wall, alpha);
         }
 
         private void SetAlpha(Renderer target, float alpha)

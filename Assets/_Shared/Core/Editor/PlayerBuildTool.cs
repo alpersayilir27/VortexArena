@@ -11,7 +11,7 @@ namespace VortexArena.Core.Editor
     /// Batch-mode build girişleri — <c>scripts/deploy-admin-game.bat</c> ve
     /// <c>scripts/deploy-player-apk.bat</c> buradan çağırır:
     /// <code>
-    /// Unity.exe -batchmode -quit -projectPath &lt;proje&gt; \
+    /// Unity.exe -batchmode -quit -projectPath &lt;proje&gt; -buildTarget Win64 \
     ///   -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin \
     ///   -buildOutput &lt;deploy\admin&gt;
     ///
@@ -19,6 +19,14 @@ namespace VortexArena.Core.Editor
     ///   -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildQuestPlayer \
     ///   -buildOutput &lt;deploy\player&gt;
     /// </code>
+    /// <para>
+    /// <b>Hedef platform aktif platformdan TÜRETİLMEZ:</b> her iki giriş de hedefini sabit
+    /// tutar (<c>StandaloneWindows64</c> / <c>Android</c>) ve çağıran <c>.bat</c> Unity'yi
+    /// aynı hedefle <b>başlatır</b> (<c>-buildTarget</c>). Bayrak açılışta verilir, çünkü
+    /// platformu bu metodun içinden çevirmek domain reload tetikler ve çalışan
+    /// <c>-executeMethod</c> yarıda kalır. Projede hangi platform açık kalmış olursa olsun
+    /// betikler kendi çıktısını üretir.
+    /// </para>
     /// <para>
     /// <b>İki rol, iki platform, TEK sahne listesi:</b> Windows build'i admin (yönetim),
     /// Android build'i Quest oyuncusudur. İkisi de Build Settings'teki etkin sahneleri
@@ -55,17 +63,20 @@ namespace VortexArena.Core.Editor
         /// <summary>
         /// Meta Quest 3/3S oyuncu build'i (Android, <c>game.apk</c>). Hata durumunda exit code 1.
         /// <para>
-        /// Aktif platform Android DEĞİLSE build iptal edilir: <c>.bat</c> Unity'yi
-        /// <c>-buildTarget Android</c> ile başlatır, çünkü platformu bu metodun içinden
-        /// çevirmek ortasında domain reload tetikler ve <c>-executeMethod</c> yarıda kalır.
+        /// Baştaki kontrol hedefi SEÇMEZ — hedef zaten sabittir; yalnız <c>-buildTarget Android</c>
+        /// bayrağının <b>uygulanmadığı</b> hâli yakalar. Tek gerçek sebebi Android Build Support
+        /// modülünün kurulu olmamasıdır: o hâlde Unity platformu çeviremez, sessizce Windows'ta
+        /// devam eder ve <c>game.apk</c> adında bir <c>.exe</c> üretirdi. Windows tarafında böyle
+        /// bir sessiz düşüş yok (masaüstü desteği her kurulumda var), o yüzden orada kontrol de yok.
         /// </para>
         /// </summary>
         public static void BuildQuestPlayer()
         {
             if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
             {
-                Fail($"Aktif platform Android değil ({EditorUserBuildSettings.activeBuildTarget}). " +
-                     "Unity'yi `-buildTarget Android` ile başlat (deploy-player-apk.bat bunu yapar).");
+                Fail($"`-buildTarget Android` uygulanmamış, platform {EditorUserBuildSettings.activeBuildTarget} " +
+                     "olarak kaldı. En olası sebep: Android Build Support modülü kurulu değil " +
+                     "(deploy-player-apk.bat bayrağı zaten geçiyor).");
                 return;
             }
 

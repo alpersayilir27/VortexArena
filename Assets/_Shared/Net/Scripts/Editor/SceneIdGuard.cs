@@ -10,7 +10,7 @@ namespace VortexArena.Net.Editor
     /// <see cref="NetIdentity.SceneId"/> değerlerini onarır — Mirror'ın sceneId bake
     /// deseninin sade hali.
     /// <para>
-    /// Asıl derdi SAHNE KOPYALAMA: arena şablon sihirbazı veya elle "Save As"
+    /// Asıl derdi SAHNE KOPYALAMA: elle "Save As" ya da bir sahnenin çoğaltılması
     /// ile üretilen kopyada tüm id'ler kaynak sahneyle birebir aynı gelir. Bekçi kayıt anında
     /// çakışmaları ayırdığı için kimse elle id yönetmez, kopyalanan arena kutudan çıkar çıkmaz
     /// tutarlıdır.
