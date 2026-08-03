@@ -13,10 +13,19 @@ namespace VortexArena.Core.Arena
     /// sorusunun cevabıdır.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Maket oynanan geometri DEĞİLDİR.</b> Kökü <c>EditorOnly</c> etiketiyle damgalanır,
-    /// yani build'e hiç girmez. Oyuncunun gördüğü zemin/duvar environment sanatından gelir.
-    /// Bileşenin runtime asmdef'inde olmasının sebebi teknik: sahne objesi editör-only bir tipe
-    /// referans veremez.
+    /// ⚠️ <b>Maket oynanan geometri DEĞİLDİR ama build'e GİRER:</b> kalibrasyon işaretçileri
+    /// (<c>anchor_a</c> / <c>anchor_b</c>) maketin altındadır ve <see cref="ArenaCalibrator"/>
+    /// onları çalışma anında arar — build'den düşen bir maket, hizalanamayan bir arena demektir.
+    /// Görünmemesini sağlayan şey etiket değil davranıştır: <see cref="Awake"/> yalnız ölçü
+    /// görselini (<see cref="PlaneName"/> + <see cref="ColumnsGroupName"/>) kapatır. Oyuncunun
+    /// gördüğü zemin/duvar environment sanatından gelir.
+    /// </para>
+    /// <para>
+    /// ⚠️ Gerçek bir build'de o görsel dal <b>hiç girmez</b>: <c>DimensionMeshBuildStripper</c>
+    /// onu build'e giden geçici sahne kopyasından siler, çünkü <c>Plane</c>/kolonlar
+    /// <c>ProBuilderMesh</c> taşır ve o da <c>Unity.ProBuilder</c>'ı runtime'a sokardı. Yani
+    /// <see cref="Awake"/>'teki gizleme <b>editör Play kipi</b> içindir — iki mekanizma aynı
+    /// sonucu iki ayrı bağlamda verir, biri diğerinin yedeği değildir.
     /// </para>
     /// <para>
     /// ⚠️ <b>Maket sahneden BAĞIMSIZDIR</b> — üretim aracı onu sahne köküne, dünya orijininde ve
@@ -37,9 +46,6 @@ namespace VortexArena.Core.Arena
         /// <summary>Kolonların toplandığı grup objesinin adı.</summary>
         public const string ColumnsGroupName = "Columns";
 
-        /// <summary>Maketin build'e girmemesini sağlayan Unity etiketi.</summary>
-        public const string EditorOnlyTag = "EditorOnly";
-
         [Tooltip("Mekan (işletme) klasör adı — kök obje adı ve raporlar bunu kullanır.")]
         [SerializeField] private string venueName = string.Empty;
 
@@ -59,6 +65,42 @@ namespace VortexArena.Core.Arena
         /// Geri yazarken korunan taşıyıcı alan (bkz. <see cref="Configure"/>).
         /// </summary>
         public float DefaultColumnHeight => defaultColumnHeight;
+
+        /// <summary>
+        /// Maketin ÖLÇÜ GÖRSELİNİ oyunda gizler: taban ve kolon prizmaları oyuncunun görmesi
+        /// gereken geometri değil, editördeki bir referanstır.
+        /// <para>
+        /// ⚠️ Kalibrasyon işaretçilerine (<c>anchor_a</c> / <c>anchor_b</c>) DOKUNULMAZ: onların
+        /// görünürlüğünü <see cref="ArenaCalibrator"/> yönetir (yakalama sırasında yakar, hizalama
+        /// onaylanınca gizler). Burada kapatmak o geri bildirimi sessizce öldürürdü.
+        /// </para>
+        /// <para>
+        /// ⚠️ Kapatılan şey <see cref="Renderer.enabled"/>'dır, obje DEĞİL: maketin dalı kapanırsa
+        /// kalibratör işaretçileri bulamaz ve boyut dosyasındaki noktalara oturtamaz.
+        /// </para>
+        /// <para>
+        /// Editörde görünür kalması gerekir (maket bir kurulum aracıdır), bu yüzden
+        /// <c>[ExecuteAlways]</c> YOKTUR — <c>Awake</c> yalnız Play/çalışma anında koşar.
+        /// </para>
+        /// </summary>
+        private void Awake()
+        {
+            HideMeasurementVisual(PlaneName);
+            HideMeasurementVisual(ColumnsGroupName);
+        }
+
+        private void HideMeasurementVisual(string childName)
+        {
+            Transform child = transform.Find(childName);
+            if (child == null)
+                return;
+
+            Renderer[] renderers = child.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                renderers[i].enabled = false;
+            }
+        }
 
         /// <summary>
         /// Üretim aracı tarafından doldurulur. <b>Yalnız editör araçları çağırır</b>, çalışma

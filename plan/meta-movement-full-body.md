@@ -20,8 +20,16 @@ Eklem sayısı 66 ve sıkıştırma `High`; kaba hesapla blob ~300-400 B, yani
 
 ## 2. Ayar
 
-- [ ] `SkeletonRetargeter.ScaleRange` varsayılanı `0.8–1.2`; oynayan boy aralığına göre genişlet.
-      **Karar gözle değil konsoldan verilir:** `LocalBodyAvatar` kalibrasyondan sonra uygulanan
+- [ ] **Birinci şahıs ofseti** (`LocalBodyAvatar.firstPersonOffset`) başlıkta tek turda ayarlanır:
+      aşağı bakınca gövdenin içi görünmemeli, göğüs kameranın önünde durmamalı. ⚠️ Ön koşul
+      `calibrateBodyProportions`'ın **kapalı** olmasıdır (varsayılan) — açıkken oran her oturumda
+      başka bir poza sabitlenir ve sabit bir ofset değişken bir hatayı kapatamaz
+      (`Docs/Sistem-Ozeti.md` §7).
+- [ ] `SkeletonRetargeter.ScaleRange` varsayılanı `0.8–1.2`; **yalnız gövde oranı kalibrasyonu
+      açılırsa** anlamlıdır (kapalıyken herkes prefabın oranlarını kullanır ve ölçek uygulanmaz).
+      Açılacaksa önce uzak gövdedeki bozulma çözülmelidir: blob `High` sıkıştırmada eklem
+      uzunluklarına dayanıyor (§7). **Karar gözle değil konsoldan verilir:** `LocalBodyAvatar`
+      kalibrasyondan sonra uygulanan
       gövde ölçeğini bir kez basar ve değer aralığın sınırındaysa uyarıya çevirir — sınıra dayanmış
       bir ölçek, karakterin oyuncunun boyuna yetişemediği anlamına gelir ve birinci şahısta "gövde
       kameraya göre kaymış" diye görünür. `ApplyHeadScale` **açık kalsın** (birinci şahısta yakayı

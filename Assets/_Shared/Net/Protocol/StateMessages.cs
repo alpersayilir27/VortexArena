@@ -548,7 +548,20 @@ namespace VortexArena.Protocol
             }
 
             m.blob = r.ReadBytes(len);
-            m.blobLength = m.blob.Length;
+
+            // ⚠️ Kırpılmış blob boş sayılır — bkz. <see cref="SkeletonEntry.Read"/>. Bu yol
+            // ÖZELLİKLE kritiktir: sunucu uplink'i buradan okuyup blob'u OLDUĞU GİBİ tüm
+            // istemcilere relay ediyor, yani yarım bir kare tek bir oyuncuyu değil arenadaki
+            // HERKESİ bozuk iskeletle çizerdi. Sunucunun blobLength == 0 denetimi ancak bu
+            // atama doğruysa kırpılmışı da yakalar.
+            if (m.blob.Length != len)
+            {
+                m.blob = System.Array.Empty<byte>();
+                m.blobLength = 0;
+                return m;
+            }
+
+            m.blobLength = len;
             return m;
         }
     }
@@ -594,7 +607,20 @@ namespace VortexArena.Protocol
             }
 
             e.blob = r.ReadBytes(len);
-            e.blobLength = e.blob.Length;
+
+            // ⚠️ KISA OKUMA SESSİZ BOZULMADIR: BinaryReader.ReadBytes akış erken bittiğinde
+            // istisna ATMAZ, daha kısa bir dizi döner. Uzunluğu okunan bayta göre yazmak
+            // kırpılmış bir blob'u "geçerli" ilan ederdi ve Movement SDK onu deserialize edip
+            // bozuk bir iskelet üretirdi (uzak avatarın rastgele şekillere girmesi). Yarım kare
+            // yok sayılır: blobLength = 0 olan girdiyi RemoteSkeletonRegistry zaten düşürür.
+            if (e.blob.Length != len)
+            {
+                e.blob = System.Array.Empty<byte>();
+                e.blobLength = 0;
+                return e;
+            }
+
+            e.blobLength = len;
             return e;
         }
     }
@@ -643,7 +669,18 @@ namespace VortexArena.Protocol
             b.serverTick = r.ReadUInt32();
             b.entries = new SkeletonEntry[count];
             for (int i = 0; i < count; i++)
+            {
                 b.entries[i] = SkeletonEntry.Read(r);
+
+                // Kırpılmış girdiden sonrasını okumaya çalışmak akış sonunda istisna atardı ve
+                // ondan ÖNCE okunmuş sağlam girdiler de birlikte düşerdi. Döngü burada kesilir;
+                // kalan yuvalar blobLength = 0 ile boş kalır ve tüketici tarafında elenir.
+                if (b.entries[i].blobLength == 0)
+                {
+                    break;
+                }
+            }
+
             return b;
         }
     }

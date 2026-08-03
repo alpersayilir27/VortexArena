@@ -180,9 +180,10 @@ namespace VortexArena.Core.Arena
                     continue;
                 }
 
-                // ⚠️ Bölgenin GameObject'i KAPATILMAZ, bileşeni kapatılır: GameObject kapatılsaydı
-                // altına konmuş marker'lar (ör. SpawnPoint) OnDisable'da statik kayıttan düşerdi.
-                // Bileşeni kapatmak PlayerCombatState tarafından "açık taban yok" diye okunur.
+                // ⚠️ Bölgenin GameObject'i KAPATILMAZ, bileşeni kapatılır: bileşeni kapatmak
+                // PlayerCombatState tarafından "açık taban yok" diye okunur, GameObject'i kapatmak
+                // ise altındaki HER ŞEYİ (görsel şerit dahil) kapatır ve Restore'da neyi geri
+                // açacağımızı bulanıklaştırır — şeridi ayrıca HideStrip yönetiyor.
                 if (zone.enabled)
                 {
                     zone.enabled = false;
@@ -193,11 +194,7 @@ namespace VortexArena.Core.Arena
             }
         }
 
-        /// <summary>Taban bölgesinin görsel şeridi: Renderer'lı doğrudan çocuklar.
-        /// <para>⚠️ Alt ağacında <see cref="SpawnPoint"/> BULUNAN çocuğa dokunulmaz — arenanın tek
-        /// başlangıç noktası şeridin torunu olarak konmuş olabilir ve kapatılırsa <c>OnDisable</c>
-        /// ile statik kayıttan düşer. Kontrol bu yüzden <c>GetComponent</c> değil
-        /// <c>GetComponentInChildren</c>'dır.</para></summary>
+        /// <summary>Taban bölgesinin görsel şeridi: Renderer'lı doğrudan çocuklar.</summary>
         private void HideStrip(BaseZone zone)
         {
             Transform root = zone.transform;
@@ -218,8 +215,7 @@ namespace VortexArena.Core.Arena
         /// kümeye bakmalı — ayrı iki seçim kuralı sessizce sapardı.</summary>
         private static bool IsStripChild(Transform child)
         {
-            return child.GetComponentInChildren<SpawnPoint>(true) == null &&
-                   child.GetComponentInChildren<Renderer>(true) != null;
+            return child.GetComponentInChildren<Renderer>(true) != null;
         }
 
         /// <summary>Yalnız bu bileşenin kapattıklarını geri açar; ölü referanslar atlanır.</summary>

@@ -25,20 +25,22 @@ namespace VortexArena.Core.Editor
     /// içindedir.
     /// </para>
     /// <para>
-    /// Kalibrasyon işaretçileri ELLE TAŞINMAZ: yerleri boyut dosyasının <c>calibration</c>
-    /// alanından gelir ve bu araç onları oraya oturtur (aynısını <see cref="ArenaCalibrator"/>
-    /// çalışma anında da yapar). Ölçü sahaya göre değişince dosya güncellenir, sahne değil.
+    /// ⚠️ <b>Kalibrasyon işaretçilerini bu araç KOYMAZ</b> — onlar ölçü maketinin küpleridir ve
+    /// <c>Arena &gt; JSON'dan DimensionMesh Üret</c> tarafından, boyut dosyasının
+    /// <c>calibration</c> alanındaki noktalara üretilirler. Loader'ın onlara ikinci bir yerden
+    /// dokunması, sahnede kimin haklı olduğu belirsiz iki kaynak üretirdi.
     /// </para>
     /// <para>
-    /// ELDE kalan işler (sonuç raporu hatırlatır): taban bölgelerini arenanın gerçek yerleşimine
-    /// göre taşı · <c>SpawnPoint</c>'i zemin seviyesine oturt · environment sanatını kur ·
+    /// ELDE kalan işler (sonuç raporu hatırlatır): ölçü maketini üret (kalibrasyon işaretçileri
+    /// oradan gelir) · taban bölgelerini arenanın gerçek yerleşimine göre taşı · arena
+    /// geometrisini <b>dünya orijinine göre</b> kur (zemin y=0) · environment sanatını kur ·
     /// NavMesh/ışık bake et.
     /// </para>
     /// </summary>
     public class TemplateBasicsLoader : EditorWindow
     {
         private const string PrefabRoot = "Assets/_Shared/App/Prefabs";
-        private const string ArenaRootPrefab = PrefabRoot + "/VA_ArenaRoot.prefab";
+        private const string ArenaBoundaryPrefab = PrefabRoot + "/VA_ArenaBoundary.prefab";
         private const string CameraRigPrefab = PrefabRoot + "/VA_CameraRig.prefab";
         private const string PoseSyncPrefab = PrefabRoot + "/VA_PoseSync.prefab";
         private const string CalibrationPrefab = PrefabRoot + "/VA_CalibrationManager.prefab";
@@ -46,14 +48,6 @@ namespace VortexArena.Core.Editor
         private const string BaseZonePrefab = PrefabRoot + "/VA_BaseZone.prefab";
 
         private const string VenuesRoot = "Assets/Arenas/Venues";
-
-        // İşaretçi adları kalibratörden gelir: onları ada bakarak çözen de o, ikinci bir liste
-        // tutmak adı değiştirdiğinde sessizce sapardı.
-        private const string AnchorAName = ArenaCalibrator.AnchorAName;
-        private const string AnchorBName = ArenaCalibrator.AnchorBName;
-
-        /// <summary>İşaretçinin mesh'i ölçülemezse kullanılan pivot yüksekliği (metre).</summary>
-        private const float MarkerFallbackDrop = 0.05f;
 
         // VA_CameraRig içindeki, muhafazanın baktığı objeler. Muhafaza kendi başına yalnız
         // 'head'i çözebiliyor (Camera.main); karartma quad'ı ile uyarı yazısının fallback'i YOK,
@@ -67,7 +61,6 @@ namespace VortexArena.Core.Editor
 
         [SerializeField] private bool includeModeHud = true;
         [SerializeField] private bool includeBaseZones = true;
-        [SerializeField] private bool includeSpawnPoint = true;
 
         private Vector2 scroll;
         [System.NonSerialized] private List<string> lastReport;
@@ -88,7 +81,7 @@ namespace VortexArena.Core.Editor
             EditorGUILayout.Space();
 
             EditorGUILayout.LabelField("Her zaman konur", EditorStyles.miniBoldLabel);
-            EditorGUILayout.LabelField("VA_ArenaRoot · VA_CameraRig · VA_PoseSync · VA_CalibrationManager",
+            EditorGUILayout.LabelField("VA_ArenaBoundary · VA_CameraRig · VA_PoseSync · VA_CalibrationManager",
                 EditorStyles.wordWrappedMiniLabel);
 
             EditorGUILayout.Space();
@@ -100,20 +93,19 @@ namespace VortexArena.Core.Editor
                 new GUIContent("Taban bölgeleri (Base_Red / Base_Blue)",
                     "Lobi sahnesinde İSTENMEZ — lobide canlanma bölgesi yoktur."),
                 includeBaseZones);
-            includeSpawnPoint = EditorGUILayout.ToggleLeft(
-                new GUIContent("SpawnPoint", "Arena uzayının sıfırı. Origin'e konur, yerini SEN belirlersin."),
-                includeSpawnPoint);
 
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox(
                 "Hepsi prefab ÖRNEĞİ olarak konur ve var olanlar atlanır (idempotent). " +
-                "Boyut dosyası mekan klasöründen çözülüp ArenaBoundary'ye bağlanır.",
+                "Boyut dosyası mekan klasöründen çözülüp ArenaBoundary'ye bağlanır.\n\n" +
+                "Kalibrasyon işaretçileri BURADAN gelmez: 'Arena > JSON'dan DimensionMesh Üret' " +
+                "ile üretilen ölçü maketinin anchor_a/anchor_b küpleridir.",
                 MessageType.Info);
 
             EditorGUILayout.Space();
             if (GUILayout.Button("Yükle", GUILayout.Height(28f)))
             {
-                lastReport = Load(includeModeHud, includeBaseZones, includeSpawnPoint);
+                lastReport = Load(includeModeHud, includeBaseZones);
                 for (int i = 0; i < lastReport.Count; i++)
                 {
                     Debug.Log("[TemplateBasics] " + lastReport[i]);
@@ -138,7 +130,7 @@ namespace VortexArena.Core.Editor
         /// <summary>
         /// Aktif sahneye temelleri koyar ve ne yapıldığını satır satır döner. Exception FIRLATMAZ.
         /// </summary>
-        public static List<string> Load(bool modeHud, bool baseZones, bool spawnPoint)
+        public static List<string> Load(bool modeHud, bool baseZones)
         {
             var report = new List<string>();
             Scene scene = SceneManager.GetActiveScene();
@@ -152,7 +144,7 @@ namespace VortexArena.Core.Editor
             int undoGroup = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName("VortexArena Template Temelleri");
 
-            GameObject arenaRoot = EnsurePrefab(ArenaRootPrefab, report);
+            EnsurePrefab(ArenaBoundaryPrefab, report);
             GameObject cameraRig = EnsurePrefab(CameraRigPrefab, report);
             EnsurePrefab(PoseSyncPrefab, report);
             GameObject calibration = EnsurePrefab(CalibrationPrefab, report);
@@ -167,21 +159,18 @@ namespace VortexArena.Core.Editor
                 EnsureBaseZones(report);
             }
 
-            if (spawnPoint)
-            {
-                EnsureSpawnPoint(report);
-            }
-
-            WireCalibration(calibration, arenaRoot, cameraRig, report);
+            WireCalibration(calibration, cameraRig, report);
             WireBoundaryToRig(cameraRig, report);
             BindDimensions(scene, report);
-            PlaceCalibrationMarkers(arenaRoot, report);
+            ReportCalibrationMarkers(report);
 
             Undo.CollapseUndoOperations(undoGroup);
             EditorSceneManager.MarkSceneDirty(scene);
 
-            report.Add("ELDE: taban bölgelerini gerçek yerleşime göre taşı · " +
-                       "SpawnPoint'i ZEMİN seviyesine oturt (taşındıktan sonra bir daha TAŞINMAZ) · " +
+            report.Add("ELDE: ölçü maketini üret (kalibrasyon işaretçileri ondan gelir) · " +
+                       "taban bölgelerini gerçek yerleşime göre taşı · " +
+                       "arena geometrisini DÜNYA ORİJİNİNE göre kur (zemin y=0; arena uzayı = " +
+                       "dünya uzayı, sahneyi kaydırmak herkesin ağ konumunu kaydırır) · " +
                        "environment sanatını kur · NavMesh/ışık bake et.");
             report.Add("Sonra 'Tools > VortexArena > Build > Configure All Build Elements' çalıştır.");
             return report;
@@ -321,28 +310,17 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        private static void EnsureSpawnPoint(List<string> report)
-        {
-            SpawnPoint[] existing =
-                Object.FindObjectsByType<SpawnPoint>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            if (existing.Length > 0)
-            {
-                report.Add($"atlandı (zaten var): SpawnPoint ×{existing.Length}");
-                return;
-            }
-
-            var go = new GameObject("SpawnPoint", typeof(SpawnPoint));
-            Undo.RegisterCreatedObjectUndo(go, "Başlangıç Noktası");
-            report.Add("kondu: SpawnPoint (origin'de — ZEMİN seviyesine taşı, sonra bir daha taşıma)");
-        }
-
         /// <summary>
-        /// <see cref="ArenaCalibrator"/>'ın sahneye bakan alanlarını bağlar. Prefab asset'inde bu
-        /// alanlar boş durur (normaldir) — yalnız sahne örneği üstünde doldurulabilirler.
+        /// <see cref="ArenaCalibrator"/>'ın sahneye bakan alanını bağlar. Prefab asset'inde bu alan
+        /// boş durur (normaldir) — yalnız sahne örneği üstünde doldurulabilir.
+        /// <para>
+        /// ⚠️ <c>anchorA</c>/<c>anchorB</c> BAĞLANMAZ: kalibratör işaretçileri çalışma anında
+        /// maketin <see cref="DimensionAnchor"/> küplerinden (yoksa addan) kendisi çözer. Burada
+        /// bağlamak, maket yeniden üretilince ölü referansa dönen bir kopya bırakırdı.
+        /// </para>
         /// </summary>
         private static void WireCalibration(
             GameObject calibration,
-            GameObject arenaRoot,
             GameObject cameraRig,
             List<string> report)
         {
@@ -358,28 +336,12 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            Transform anchorA = arenaRoot != null ? FindDescendant(arenaRoot.transform, AnchorAName) : null;
-            Transform anchorB = arenaRoot != null ? FindDescendant(arenaRoot.transform, AnchorBName) : null;
-
             var serialized = new SerializedObject(calibrator);
-            bool wired = false;
-
-            wired |= AssignObject(serialized, "anchorA", anchorA != null ? anchorA.gameObject : null);
-            wired |= AssignObject(serialized, "anchorB", anchorB != null ? anchorB.gameObject : null);
-            wired |= AssignObject(serialized, "rigRoot", cameraRig != null ? cameraRig.transform : null);
-
-            if (wired)
+            if (AssignObject(serialized, "rigRoot", cameraRig != null ? cameraRig.transform : null))
             {
                 serialized.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(calibrator);
-                report.Add("bağlandı: ArenaCalibrator anchorA/anchorB/rigRoot");
-            }
-
-            if (anchorA == null || anchorB == null)
-            {
-                report.Add($"UYARI: VA_ArenaRoot altında '{AnchorAName}'/'{AnchorBName}' yok — " +
-                           "kalibratör onları çalışma anında sahne genelinde ada bakarak arar; " +
-                           "hiç yoksa hizalama YAPILAMAZ.");
+                report.Add("bağlandı: ArenaCalibrator.rigRoot → VA_CameraRig");
             }
         }
 
@@ -428,47 +390,27 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Kalibrasyon işaretçilerini boyut dosyasındaki noktalara oturtur — böylece sahne,
-        /// çalışma anında olacağı yeri gösterir.
+        /// Sahnede kalibrasyon işaretçisi var mı diye BAKAR, koymaz — işaretçiler ölçü maketinden
+        /// gelir ve onları üreten tek araç <c>JSON'dan DimensionMesh Üret</c>'tir.
         /// <para>
-        /// ⚠️ Bu bir KOLAYLIK adımıdır, ikinci bir doğruluk kaynağı değil: otorite dosyadadır ve
-        /// <see cref="ArenaCalibrator"/> her <c>Start</c>'ta aynı yerleştirmeyi yeniden yapar.
-        /// Dosya sonradan değişirse sahne bayatlar ama oyun doğru kalır — sahnedeki konumu elle
-        /// düzeltmenin kalıcı bir etkisi de yoktur, ölçü dosyaya yazılır.
+        /// Sessiz geçilmez: işaretçisiz bir arena sahada hiç hizalanmaz ve eksiklik ancak
+        /// başlıkla alana çıkıldığında fark edilir.
         /// </para>
         /// </summary>
-        private static void PlaceCalibrationMarkers(GameObject arenaRoot, List<string> report)
+        private static void ReportCalibrationMarkers(List<string> report)
         {
-            var boundary = Object.FindFirstObjectByType<ArenaBoundary>(FindObjectsInactive.Include);
-            if (boundary == null)
+            DimensionAnchor[] anchors =
+                Object.FindObjectsByType<DimensionAnchor>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            if (anchors.Length >= 2)
             {
+                report.Add($"bulundu: kalibrasyon işaretçisi ×{anchors.Length} (ölçü maketinden).");
                 return;
             }
 
-            Transform anchorA = arenaRoot != null ? FindDescendant(arenaRoot.transform, AnchorAName) : null;
-            Transform anchorB = arenaRoot != null ? FindDescendant(arenaRoot.transform, AnchorBName) : null;
-            if (anchorA == null || anchorB == null)
-            {
-                return; // WireCalibration zaten uyardı
-            }
-
-            if (!boundary.TryGetCalibrationMarks(out Vector3 markA, out Vector3 markB))
-            {
-                report.Add($"UYARI: boyut dosyasında 'calibration' noktaları yok — '{AnchorAName}'/" +
-                           $"'{AnchorBName}' prefabtaki yerlerinde kaldı. Zemin bandının ölçüsünü " +
-                           "dosyaya yaz, işaretçileri sahnede taşıma (yazılan ölçü kazanır).");
-                return;
-            }
-
-            Undo.RecordObjects(new Object[] { anchorA, anchorB }, "Kalibrasyon İşaretçileri");
-            ArenaCalibrator.PlaceMarkerAtFloor(anchorA.gameObject, markA, MarkerFallbackDrop);
-            ArenaCalibrator.PlaceMarkerAtFloor(anchorB.gameObject, markB, MarkerFallbackDrop);
-            EditorUtility.SetDirty(anchorA);
-            EditorUtility.SetDirty(anchorB);
-
-            float span = Vector3.Distance(markA, markB);
-            report.Add($"yerleşti: {AnchorAName}/{AnchorBName} → boyut dosyasındaki noktalar " +
-                       $"(A–B arası {span:0.##} m).");
+            report.Add("UYARI: sahnede kalibrasyon işaretçisi yok — 'Tools > VortexArena > Arena > " +
+                       "JSON'dan DimensionMesh Üret' çalıştır. İşaretçiler maketin anchor_a/anchor_b " +
+                       "küpleridir ve yerleri boyut dosyasının 'calibration' alanından gelir; " +
+                       "onlarsız hizalama YAPILAMAZ.");
         }
 
         /// <summary>Alanı yalnız DOLU bir değerle ve yalnız BOŞSA yazar (elle bağlanan korunur).</summary>

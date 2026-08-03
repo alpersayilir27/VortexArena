@@ -61,8 +61,7 @@ namespace VortexArena.Core.Editor
         private static void CreateMarker(MenuCommand command, GripSocketKind kind)
         {
             // Hiyerarşi bağlam menüsünde Unity komutu SEÇİLEN HER OBJE için bir kez çağırır;
-            // tek işaretçi ürettiğimiz için yalnız ilk çağrıyı geçiriyoruz (SpawnPointMenu'deki
-            // aynı emniyet).
+            // tek işaretçi ürettiğimiz için yalnız ilk çağrıyı geçiriyoruz.
             GameObject[] selection = Selection.gameObjects;
             if (command.context != null && selection.Length > 1 && command.context != selection[0])
             {

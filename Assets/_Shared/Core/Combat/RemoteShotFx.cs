@@ -613,14 +613,14 @@ namespace VortexArena.Core.Combat
         // ------------------------------------------------------------------- yardımcılar
 
         /// <summary>
-        /// Arena uzayındaki bir YÖNÜ dünyaya çevirir.
-        /// <para>⚠️ <b>Yön bir NOKTA değildir:</b> <c>ArenaToWorld(dir)</c> yönü origin kadar
-        /// öteler. Doğru dönüşüm iki dünya noktasının farkıdır (origin dönük/ötelenmişse de
-        /// doğru kalır). <c>ArenaSpace</c>'te bir yön yardımcısı olduğunda burası ona devredilir.</para>
+        /// Arena uzayındaki bir YÖNÜ dünyaya çevirir. Arena uzayı dünya uzayıyla çakışık olduğu
+        /// için (<see cref="ArenaSpace"/>) yön dönüşümü de kimliktir.
+        /// <para>Yardımcı buna rağmen duruyor: çağrı yerlerinde "bu değer <b>arena</b> uzayından
+        /// geldi" bilgisini görünür tutuyor.</para>
         /// </summary>
         private static Vector3 ArenaToWorldDirection(Vector3 arenaDirection)
         {
-            return ArenaSpace.ArenaToWorld(arenaDirection) - ArenaSpace.ArenaToWorld(Vector3.zero);
+            return ArenaSpace.ArenaToWorld(arenaDirection);
         }
 
         /// <summary>

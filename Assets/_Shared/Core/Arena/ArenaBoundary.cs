@@ -30,8 +30,8 @@ namespace VortexArena.Core.Arena
     /// </para>
     /// <para>
     /// ⚠️ Bu bileşen <b>arena uzayının origin'i DEĞİLDİR</b>: ağ koordinatlarının sıfırı
-    /// <c>SpawnPoint</c>'tedir (<see cref="ArenaSpace"/>). Muhafaza objesini büyütmek ya da
-    /// kaydırmak oyuncuların ağ konumunu etkilemez.
+    /// <b>dünya orijinidir</b> (<see cref="ArenaSpace"/> — arena uzayı dünya uzayıyla çakışıktır).
+    /// Muhafaza objesini büyütmek ya da kaydırmak oyuncuların ağ konumunu etkilemez.
     /// </para>
     /// </summary>
     public class ArenaBoundary : MonoBehaviour

@@ -17,8 +17,8 @@ Pahalıya öğrenilmiş tuzaklar. Ortak özellikleri: **hiçbiri hata vermez** �
 Oyuncu fiziksel olarak yürüyor. Işınlanma, knockback, "spawn noktasına götür", "duvardan geri it" —
 hiçbiri yok. Ölüp canlanmak bile bir **durum** değişimidir, konum değişimi değil.
 
-`SpawnPoint` bir *gösterge*dir (arena başına tek): "maçtan önce şurada toplanın". Hiçbir kod
-oyuncuyu oraya taşımaz. Ölünce dönülecek yer o değil, **taban bölgesi**dir (`BaseZone`).
+Ölünce dönülecek bir "başlangıç noktası" da yoktur: oyuncu **taban bölgesine** (`BaseZone`) kendi
+ayaklarıyla yürüyerek canlanır.
 
 ### ⛔ Harita değişiminde oyuncuyu "yeniden doğurma"
 
@@ -42,17 +42,15 @@ Aynı sebeple: bir oyuncu durumuna savaş kapısı eklerken **o durumu değişti
 Kalibrasyonda bu `revive_request` ile birlikte `REVIVE_GRACE` zorla canlandırmasıydı; yalnız
 birincisini kapatmak kuralı işlevsiz bırakıyordu.
 
-### ⛔ `SpawnPoint`'i yerleştirdikten sonra oynatma
+### ⛔ Arena geometrisini dünya orijininden kaydırma
 
-Gösterge gibi görünür ama **arena uzayının sıfırıdır**: ağa giden/gelen tüm pozlar ona göre
-çevrilir. Bir metre kaydırmak arenadaki **herkesin** koordinatını bir metre kaydırır ve hata ancak
-iki başlık aynı sahnede buluşunca görünür. Bir kez konur, bırakılır.
+Arena uzayı **dünya uzayıdır**: ağa giden/gelen tüm pozların sıfırı sahnenin dünya sıfırıdır.
+Arenayı bir metre kaydırmak (ya da döndürmek) arenadaki **herkesin** koordinatını o kadar kaydırır
+ve hata ancak iki başlık aynı sahnede buluşunca görünür.
 
-Aynı sebeple **zemin seviyesinde** durmalı: uzak avatarların kökü `ArenaSpace.ArenaToWorld` ile
-yerleştirilir → marker havadaysa herkes o yükseklik kadar havada durur.
-
-Sahnede hiç marker yoksa dünya = arena sayılır; tek işareti `ArenaSpace`'in sahne başına bir kez
-bastığı uyarıdır (lobide o uyarı normaldir).
+Aynı sebeple zemin **dünya y=0'da** durmalı: uzak avatarların kökü arena koordinatına oturur →
+zemin yukarıdaysa herkes o yükseklik kadar havada durur. `VA_CameraRig`'in kökü de Y=0'dadır
+(tracking origin `Stage` onu fiziksel zemin sayar).
 
 ### ⛔ Muhafazayı susturmak için `ArenaBoundary` bileşenini kapatma
 
@@ -167,11 +165,10 @@ yanlış oyuncuya komut gönderir.
 
 → ayrıntı ve düzenleme kuralları: **[Arayüz Tasarımı](Arayuz-Tasarimi.md)**
 
-### ⛔ `BaseZone`'un GameObject'ini kapatma
+### ⛔ `BaseZone`'u gizlemek için yalnız bileşeni kapatma
 
-Altına konmuş marker'lar (`SpawnPoint`) `OnDisable`'da statik kayıttan düşer.
-Gizlemen gerekiyorsa **bileşeni** kapat (`zone.enabled = false`) ve görsel şeridi ayrıca gizle
-(`SpawnPoint` taşımayan, Renderer'lı çocuklar) — ama bunu **elle yazma**: kararın tek yeri
+Bileşeni kapatmak görsel taban şeridini ekranda bırakır. Gizlemen gerekiyorsa **bileşeni** kapat
+(`zone.enabled = false`) **ve** Renderer'lı çocukları ayrıca gizle — ama bunu **elle yazma**: kararın tek yeri
 `BaseZoneVisibility`'dir (kapı takım kipi; `WeaponGranter`'ın silah süpürmesiyle ilgisi yoktur).
 
 İkinci yüzü: **kapalı bir `BaseZone` canlanma için açık sayılmaz.** `Update` koşmadığı için
@@ -186,6 +183,16 @@ yaklaşırken duvar uyarısını alsın diye. Ölçü `size` alanından gelir, t
 
 Tekil engel işaretlemek arena ölçüsünün yerini tutmaz: sınırın kendisi arenanın **boyut
 dosyasından** gelir ve o dosya `ArenaBoundary.dimensionsJson` alanına bağlanır.
+
+### ⛔ Sahneye elle kalibrasyon işaretçisi koyma
+
+`anchor_a`/`anchor_b` tektir ve ölçü maketinin (`<Mekan>_DimensionMesh`) altındadır; sahneye
+aynı adla ikinci bir obje koymak "hangisine hizalandık" sorusunu sahneye bakarak cevaplanamaz
+yapar. İşaretçi üreten tek yer `JSON'dan DimensionMesh Üret`, konumlarının otoritesi ise boyut
+dosyasının `calibration` alanıdır (`ArenaCalibrator` her `Start`'ta oradan oturtur — sahnede
+sürüklemenin kalıcı etkisi yoktur, düzeltmeyi `DimensionMesh'i JSON'a Çevir` ile geri yaz).
+
+⚠️ Maketi sahneden silme: kalibrasyon işaretçileri onunla gider, sahne fiziksel alana hizalanamaz.
 
 ### ⚠️ Arena sahnelerinde `EventSystem` yoktur
 

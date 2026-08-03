@@ -2511,50 +2511,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4706220218044689892, guid: ec824a14830595b43bea25b579291d93, type: 3}
   m_PrefabInstance: {fileID: 180288726}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &181687883
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 181687884}
-  - component: {fileID: 181687885}
-  m_Layer: 0
-  m_Name: SpawnPoint
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &181687884
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 181687883}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: 0.41250414, z: -0, w: 0.9109557}
-  m_LocalPosition: {x: 4.85442, y: -0.9787798, z: 1.6029301}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 759080084}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &181687885
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 181687883}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1fa4e8d2d5ac26b4985f8ab97c512deb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.SpawnPoint
 --- !u!1001 &181903378
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3675,7 +3631,7 @@ Transform:
   m_GameObject: {fileID: 315724576}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -7.15, y: -7.05, z: -6.63}
   m_LocalScale: {x: 0.4, y: 0.4, z: 0.4}
   m_ConstrainProportionsScale: 1
   m_Children:
@@ -8615,7 +8571,7 @@ Transform:
   m_GameObject: {fileID: 705507993}
   serializedVersion: 2
   m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
-  m_LocalPosition: {x: 0, y: 3, z: 0}
+  m_LocalPosition: {x: -7.15, y: -4.05, z: -6.63}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -9193,13 +9149,12 @@ Transform:
   m_GameObject: {fileID: 759080083}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 2.29558, y: 8.02878, z: 5.02707}
+  m_LocalPosition: {x: -4.85442, y: 0.9787798, z: -1.6029301}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 53423731}
   - {fileID: 940060611}
-  - {fileID: 181687884}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &784857984
@@ -14016,15 +13971,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8533244126985759826, guid: 7638164cacb666e438514af666498c4d, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 7.15
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8533244126985759826, guid: 7638164cacb666e438514af666498c4d, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 7.05
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8533244126985759826, guid: 7638164cacb666e438514af666498c4d, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 6.63
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8533244126985759826, guid: 7638164cacb666e438514af666498c4d, type: 3}
       propertyPath: m_LocalRotation.w

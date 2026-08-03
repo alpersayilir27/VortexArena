@@ -157,7 +157,7 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 
 ---
 
-## Arena (koordinat, sınır, taban bölgesi, başlangıç noktası)
+## Arena (koordinat, sınır, taban bölgesi)
 
 `VortexArena.Core.Arena`
 
@@ -167,18 +167,26 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 |---|---|
 | ✅ `WorldToArena(Vector3 / Quaternion / Pose)` | Ağa göndermeden önce |
 | ✅ `ArenaToWorld(Vector3 / Quaternion / Pose)` | Ağdan aldıktan sonra |
-| ✅ `HasOrigin` | Arena orijini kayıtlı mı (Lobby'de değildir) — origin'i `SpawnPoint` kaydeder |
+| ✅ `WorldToArenaDirection(Vector3)` | Yön için — sonucu **normalize eder**, sıfır/NaN girdide `Vector3.forward` döner |
 
-> ⚠️ Yön vektörü için iki noktayı çevirip farkını al — [reçete 16](Yemek-Kitabi.md#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı).
+> **Arena uzayı = dünya uzayı** (origin dünya (0,0,0), rotasyon kimlik), yani konum/rotasyon
+> dönüşümleri kimliktir. Yine de doğrudan ham `transform.position` gönderme: çağrıyı `ArenaSpace`
+> üzerinden yap, koordinat çerçevesi tek yerde tanımlı kalsın.
 
-> ⚠️ Origin yokken dönüşümler **kimlik** davranır (dünya = arena) ve `ArenaSpace` sahne başına bir
-> kez uyarı basar. Lobide bu normaldir; arena sahnesinde `SpawnPoint` eksik demektir.
+> ⚠️ Yön bir nokta değildir — iki noktanın farkını `WorldToArena` ile çevirme, `WorldToArenaDirection`
+> kullan: protokol her olayda bir **birim** yön taşıyor
+> ([reçete 16](Yemek-Kitabi.md#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı)).
+
+> ⚠️ Arena geometrisi **dünya orijinine göre** kurulur: zemin dünya y=0'da, arena merkezi dünya
+> (0,0,0) civarında. Sahneyi topluca kaydırmak/döndürmek arenadaki tüm oyuncuların ağ koordinatını
+> kaydırır.
 
 ### ArenaBoundary
 
 Fiziksel sınır uyarısını sürer: kenara `warnDistance` kala karartma quad'ında hafif bir rampa
-başlar (`warnFadeAlpha`), sınır aşılınca tam karartmaya gider + uyarı yazısı. Sahnede **bir tane**
-olmalı. **Arena orijinini KAYDETMEZ** — o `SpawnPoint`'in işidir.
+başlar (`warnFadeAlpha`), sınır aşılınca tam karartmaya gider + uyarı yazısı. Sahneye
+**`VA_ArenaBoundary`** prefabının örneği olarak konur ve sahnede **bir tane** olmalı. **Ağ koordinatlarının sıfırı bu bileşende DEĞİLDİR** (o dünya orijinidir): muhafazayı
+büyütmek/kaydırmak koordinatları oynatmaz.
 
 > ⛔ **Duvar Renderer'ı alanı YOKTUR.** Yarı saydam muhafaza duvarı kaldırıldı ve environment'ın
 > gerçek duvarlarına bağlanamaz: alfa yazımı yalnız Transparent malzemede iş görür ve mekanizma
@@ -262,19 +270,27 @@ metotlar **tahsis yapmaz** (muhafaza her karede çağırıyor).
 veremez). `ArenaDimensionMesh` kökte durur: mekan adı, kaynak `TextAsset` ve geri yazarken korunan
 taşıyıcı alan (`DefaultColumnHeight`). `DimensionPolygon` her çokgende
 durur ve **yalnız** `Kind { Plane, Column }` taşır. `DimensionAnchor` kalibrasyon küplerinde durur
-ve **yalnız** `Kind { A, B }` taşır; obje adı sahnedeki işaretçiyle aynıdır ve tek kaynaktan gelir
+ve **yalnız** `AnchorKind { A, B }` taşır; obje adı tek kaynaktan gelir
 (`ArenaCalibrator.AnchorAName`/`AnchorBName` = `anchor_a`/`anchor_b`).
 
 > ⛔ İşaretçilerde nokta/ad/yükseklik **tutulmaz**: noktaların kaynağı mesh (kalibrasyon
 > küpünde transform), ad `GameObject`'in adı, yükseklik mesh'in Y aralığıdır. Kopyalamak, sahnede
 > düzenlenen değerden sessizce sapan ikinci bir kaynak üretirdi.
-> ⚠️ Kalibrasyon küpü sahnedeki işaretçiyle **aynı adı taşır**; ikisini ayıran şey ad değil bu
-> bileşendir. `EditorOnly` etiketi build'den siler ama editör Play kipinden silmez, ve
-> `ArenaCalibrator` işaretçilerini ada bakarak çözüyor — arama `DimensionAnchor` taşıyan objeleri
-> atladığı için maketin küpü gerçek işaretçinin yerine geçemez.
-> ⚠️ Maketin kökü `EditorOnly` etiketlidir (build'e girmez) ve **sahneden bağımsız** kurulur:
-> dünya orijininde, dönüşsüz, 1 ölçekte. Elle taşınıp döndürülebilir — çıkarım bu kökün yerel
-> uzayına göre yapılır. **Ölçeği değiştirilmez**: plan metre cinsindendir.
+> ⚠️ **Sahnenin kalibrasyon işaretçileri bu küplerdir** — ikinci bir işaretçi ailesi yoktur ve
+> açılmaz; `ArenaCalibrator` onları `DimensionAnchor` + `AnchorKind` üzerinden çözer, ad araması
+> yalnız maketi olmayan eski sahneler için son basamaktır.
+> ⚠️ Maketin **kökü ve kalibrasyon küpleri build'e girer** (`EditorOnly` etiketlenmez):
+> işaretçiler çalışma anında gerekir. **Görsel dal (`Plane` + `Columns`) gerçek build'e hiç
+> girmez** — `DimensionMeshBuildStripper` (`IProcessSceneWithReport`) onu build'e giden geçici
+> sahne kopyasından siler; gerekçe boyut değil bağımlılıktır (`ProBuilderMesh` runtime'a
+> `Unity.ProBuilder`'ı sokardı) ve sahne dosyası değişmez.
+> **Editör Play kipinde** her şey sahnededir: `ArenaDimensionMesh.Awake` yalnız `Plane`/`Columns`
+> altındaki `Renderer.enabled`'ı false yapar — obje kapatılmaz (kapalı bir kökün altındaki
+> işaretçiler bulunamazdı) ve işaretçilerin `Renderer`'larına dokunulmaz (görünürlükleri
+> kalibratörün işidir).
+> ⚠️ Kök **sahneden bağımsız** kurulur: dünya orijininde, dönüşsüz, 1 ölçekte. Elle taşınıp
+> döndürülebilir — çıkarım bu kökün yerel uzayına göre yapılır. **Ölçeği değiştirilmez**: plan
+> metre cinsindendir.
 
 > ⛔ **Muhafazayı susturmak için bileşeni kapatma** — kapalı bileşen karartmayı son değerinde
 > dondurur **ve planı çözmeyi bırakır** (kuş bakışı kadrajı ona bağlı). Doğrusu
@@ -302,31 +318,8 @@ Eşleşme kuralı: bölge açıktır eğer takımı oyuncununkiyle aynıysa, bö
 oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge konabilir —
 **herhangi birine** girmek yeter.
 
-> ⚠️ **GameObject'ini kapatma** — altına konmuş marker'lar kayıttan düşer. Gerekiyorsa **bileşeni**
-> kapat (`zone.enabled = false`). Kapalı bölge canlanma için açık sayılmaz.
-
-### SpawnPoint (tek başlangıç noktası — **arena origin'i**)
-
-Arena başına **bir tane**. Takımı ve slotu yoktur. `GameObject > VortexArena > Spawn Point` ile
-eklenir, elle yerleştirilir. İki işi vardır: maç öncesi yerleşim göstergesi **ve arena uzayının
-sıfırı** (`ArenaSpace.SetOrigin` buradan çağrılır).
-
-| Üye | Açıklama |
-|---|---|
-| ✅ `SpawnPoint.Current` | Sahnedeki nokta; yoksa `null`. **Yalnız Play kipinde** dolar. Origin buna bağlanır |
-| ✅ `SpawnPoint.All` | Play kipinde kayıtlı noktalar (normalde 0 ya da 1) |
-
-> ⛔ Bu bir *gösterge*dir, hedef değil. **Hiçbir kod oyuncuyu oraya taşımaz** — ne maç başında,
-> ne canlanmada, ne harita değişiminde. Protokolde konum/slot taşıyan bir alan yoktur.
-
-> ⛔ **Yerleştirdikten sonra oynatma.** Bir metre kaydırmak arenadaki **herkesin** koordinatını bir
-> metre kaydırır; hata ancak iki başlık aynı sahnede buluşunca görünür.
-
-> ⚠️ **Zemin seviyesinde durmalı:** uzak avatarların kökü `ArenaSpace.ArenaToWorld` ile
-> yerleştirilir — marker havadaysa herkes o yükseklik kadar havada durur.
-
-> ⚠️ Editör aracı yazıyorsan `SpawnPoint.All` yerine `FindObjectsByType<SpawnPoint>` kullan:
-> kayıt `OnEnable`'da dolar, edit kipinde `OnEnable` çalışmaz.
+> ⚠️ Gizlemek gerekiyorsa **bileşeni** kapat (`zone.enabled = false`) ve görsel şeridi ayrıca
+> gizle. Kapalı bölge canlanma için açık sayılmaz.
 
 ---
 
@@ -411,12 +404,11 @@ kill-feed, kendi öldürme/ölüm sayacın.
 | Menü | Ne yapar |
 |---|---|
 | `Tools > VortexArena > Development > Dev` | Rol · sunucu hedefi · Play başlangıcı · derle. Kısayol **Ctrl+Alt+R** (rol çevirir) |
-| `Tools > VortexArena > Arena > Template Temellerini Yükle` | Aktif sahneye altyapı prefab ÖRNEKLERİ + `ArenaCalibrator` ve `ArenaBoundary`'nin rig alanlarını bağlama + boyut dosyası bağlama + `anchor_a`/`anchor_b`'yi dosyadaki `calibration` noktalarına oturtma; idempotent (`TemplateBasicsLoader`) |
-| `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` | Boyut dosyasından ölçü maketi (`Plane` + `Columns/*` + `anchor_a`/`anchor_b`), **sahne köküne dönüşsüz**, `EditorOnly` etiketli; idempotent (`DimensionMeshBuilder`) |
+| `Tools > VortexArena > Arena > Template Temellerini Yükle` | Aktif sahneye altyapı prefab ÖRNEKLERİ + `ArenaCalibrator` ve `ArenaBoundary`'nin rig alanlarını bağlama + boyut dosyası bağlama; idempotent (`TemplateBasicsLoader`). ⚠️ Kalibrasyon işaretçisi koymaz — onlar maketle gelir |
+| `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` | Boyut dosyasından ölçü maketi (`Plane` + `Columns/*` + kalibrasyon işaretçileri `anchor_a`/`anchor_b`), **sahne köküne dönüşsüz**; idempotent (`DimensionMeshBuilder`). ⚠️ Her arenada zorunlu: sahnenin kalibrasyon işaretçilerinin tek kaynağı budur |
 | `Tools > VortexArena > Arena > DimensionMesh'i JSON'a Çevir` | Maketi (köşeler + kalibrasyon işaretçileri) okuyup kaynak boyut dosyasının üstüne yazar; doğrulanamayan çıktıda dosyaya dokunmaz, işaretçi yoksa `calibration` korunur (`DimensionMeshReader`) |
 | `Tools > VortexArena > Build > Configure All Build Elements` | **Hepsini Yapılandır**: aktif sahnenin `MapDefinition`'ını yazar, sonra `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json`'ı `Venues/*/Scenes/*/` ağacına göre eşitler (fazla/ölü kayıt silinir, eksik olan uyarı olur) + sağlık raporu. **Yalnız Senkronize Et**: sahne açık olmadan yalnız eşitleme (`BuildElementsConfigurator`) |
 | `Tools > VortexArena > Server > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` — girdi başına yalnız `sceneName` + `modes` (arena ölçüsü sunucuya gitmez). ⚠️ JSON'u elle düzenleme, export ezer |
-| `GameObject > VortexArena > Spawn Point` | Arenanın **tek** başlangıç noktasını üretir (yerleştirme elle) |
 | `GameObject > VortexArena > Arena Roof` | Çatı geometrisini işaretler (admin kuş bakışında gizlenir) |
 | `GameObject > VortexArena > Network Parent` | Sahne objesine `NetIdentity` + benzersiz `sceneId` |
 

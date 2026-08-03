@@ -79,6 +79,11 @@ namespace VortexArena.Net
         private bool _skeletonSizeWarned;
         private float _lastSkeletonSendTime = float.NegativeInfinity;
 
+        /// <summary>Bozuk datagram uyarısı bir kez basılır — bozuk bir gönderen saniyede
+        /// onlarca paket yollayabilir ve konsolu doldurmak tanıyı kolaylaştırmaz.
+        /// ⚠️ Yeniden bağlanmada SIFIRLANMAZ: ilk örnek zaten sebebi söyledi.</summary>
+        private bool _datagramErrorWarned;
+
         /// <summary>
         /// İskelet gönderiminin alt sınır aralığı — <b>emniyet supabı</b>, kadans kaynağı değil.
         /// <para>Kadansı SDK bileşeni belirliyor (prefabda ayarlanır); yanlış ayarlanmış bir prefab
@@ -624,7 +629,27 @@ namespace VortexArena.Net
                 while (!ct.IsCancellationRequested)
                 {
                     UdpReceiveResult datagram = await udp.ReceiveAsync();
-                    HandleDatagram(datagram.Buffer);
+
+                    // ⚠️ Datagram başına yalıtım: bozuk/kırpılmış tek bir paket çözümlenirken
+                    // atarsa (BinaryReader akış sonunda EndOfStreamException atar) bu try
+                    // OLMASAYDI istisna while'ı saran dış catch'e düşer ve ALIM DÖNGÜSÜ TÜMDEN
+                    // ÖLÜRDÜ — istemci o andan sonra hiç snapshot/iskelet almaz, sessizce donar.
+                    // Tek paketi düşürmek doğru davranıştır: durum kanalıdır, bir sonraki tik
+                    // eksiği zaten kapatır.
+                    try
+                    {
+                        HandleDatagram(datagram.Buffer);
+                    }
+                    catch (Exception e)
+                    {
+                        if (!_datagramErrorWarned)
+                        {
+                            _datagramErrorWarned = true;
+                            Debug.LogWarning(
+                                $"[UdpStateChannel] Bozuk datagram düşürüldü: {e.Message}. " +
+                                "Bu uyarı bir kez basılır; alım sürüyor.");
+                        }
+                    }
                 }
             }
             catch (ObjectDisposedException)

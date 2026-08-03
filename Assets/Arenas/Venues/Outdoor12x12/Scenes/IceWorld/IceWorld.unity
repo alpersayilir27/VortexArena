@@ -1335,7 +1335,7 @@ PrefabInstance:
   m_SourcePrefab: {fileID: 100100000, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
 --- !u!4 &220202141 stripped
 Transform:
-  m_CorrespondingSourceObject: {fileID: 700569645560758806, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
+  m_CorrespondingSourceObject: {fileID: 8915795193496911649, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
   m_PrefabInstance: {fileID: 220202140}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &227510461
@@ -5418,7 +5418,6 @@ Transform:
   - {fileID: 1970078731}
   - {fileID: 115304715}
   - {fileID: 453563756}
-  - {fileID: 1655174745}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &905016223
@@ -9674,7 +9673,7 @@ PrefabInstance:
   m_SourcePrefab: {fileID: 100100000, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
 --- !u!4 &1451800956 stripped
 Transform:
-  m_CorrespondingSourceObject: {fileID: 700569645560758806, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
+  m_CorrespondingSourceObject: {fileID: 8915795193496911649, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
   m_PrefabInstance: {fileID: 1451800955}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &1477946636
@@ -11317,50 +11316,6 @@ MonoBehaviour:
   m_SelectedFaces: 
   m_SelectedEdges: []
   m_SelectedVertices: 
---- !u!1 &1655174744
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1655174745}
-  - component: {fileID: 1655174746}
-  m_Layer: 0
-  m_Name: SpawnPoint
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1655174745
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1655174744}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 896875076}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1655174746
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1655174744}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1fa4e8d2d5ac26b4985f8ab97c512deb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.SpawnPoint
 --- !u!1001 &1677154461
 PrefabInstance:
   m_ObjectHideFlags: 0
