@@ -238,7 +238,7 @@ Bu notun kapsamı çatıdır; tam liste ve sorumluluklar `CLAUDE.md` → *Editor
 | Araç | İş |
 |---|---|
 | `Tools > VortexArena > Development > Dev` (`Ctrl+Alt+R`) | Rol · sunucu hedefi · Play başlangıcı |
-| `Tools > VortexArena > Build > Configure All Build Elements` | `MapDefinition` + katalog + Build Settings + `maps.json` export, tek geçişte |
+| `Tools > VortexArena > Build > Configure All Build Elements` | `MapDefinition` + katalog + Build Settings + `maps.json`, tek geçişte — kayıtlar `Venues/*/Scenes/*/` ağacına göre eşitlenir |
 | `Tools > VortexArena > Server > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` |
 | `GameObject > VortexArena > Network Parent` | Sahne objesine `NetIdentity` + benzersiz `sceneId` |
 | **`GameObject > VortexArena > Arena Roof`** | **Bu not (§4)** |

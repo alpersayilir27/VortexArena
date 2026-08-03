@@ -58,16 +58,20 @@ D:\Games\vortexarena\
       Arsenal\ FX\ Environments\ Scenes\             (kod-dışı ortak içerik + Boot/Lobby)
       Data\Resources\        GameCatalog.asset — admin arayüzü Resources.Load ile okur
     Arenas\Template\         referans arena — OYNANMAZ (export/Build Settings/katalog dışı)
-      Default12x12\          dizayn taşımayan referans: "ağa bağlı sahne neye benzer"
-    Arenas\Venues\<İşletme>\ MEKAN = kutuların kabı; kökünde o mekanın TÜM sahnelerinin
-                             paylaştığı Art\ Prefabs\ Data\ durur
-      <Arena>\               arena kutusu: {Scenes, Data} — arena-özel KOD yazılmaz
-      Lobby\                 mekanın kendi lobisi (MapDefinition.supportedModeIds = ["lobby"])
-    Arenas\Venues\Outdoor12x12\  IceWorld (elle modellenmiş tematik arena + Art\{Materials,Textures}
-                             + Prefabs\FX_SnowStorm) · A12x12 · Lobby
+      Scenes\Default12x12\   dizayn taşımayan referans: "ağa bağlı sahne neye benzer"
+    Arenas\Venues\<İşletme>\ MEKAN = kutuların kabı; kökünde YALNIZ Art\ Prefabs\ Data\ Scenes\
+                             durur (ilk üçü o mekanın TÜM sahnelerinin paylaştığı içerik)
+      Scenes\<SahneAdı>\     arena kutusu: <SahneAdı>.unity + Data\<SahneAdı>.asset (MapDefinition)
+                             + istenirse Art\ Prefabs\ — klasör/sahne/asset adı ÜÇÜ DE aynı;
+                             arena-özel KOD yazılmaz. Lobi de bir kutudur, farkı
+                             MapDefinition.supportedModeIds = ["lobby"]
+    Arenas\Venues\Outdoor12x12\  Scenes\IceWorld (elle modellenmiş tematik arena +
+                             Art\{Materials,Textures} + Prefabs\FX_SnowStorm) · Scenes\Arena12x12
+                             · Scenes\Lobby12x12
                              + Data\Outdoor12x12_dimensions.json — mekanın boyut dosyası
-    Arenas\Venues\VortexAntep\   Default (planlı asimetrik arena) · Lobby (aynı fiziksel oda)
-                             + Data\VortexAntep_dimensions.json — mekanın boyut dosyası (ölçünün
+    Arenas\Venues\VortexAntep\   Scenes\Hangar (planlı asimetrik arena) · Scenes\LobbyVortexAntep
+                             (aynı fiziksel oda)
+                             + Data\vortexantep_dimensions.json — mekanın boyut dosyası (ölçünün
                              TEK kaynağı), ikisi de kullanır
     Modes\TeamDeathmatch\    mod kutusu: {Scripts → VortexArena.Modes.Tdm, Data, UI}
     Modes\FreeForAll\        mod kutusu: {Scripts → VortexArena.Modes.Ffa, Data, UI} — takımsız
@@ -1010,7 +1014,7 @@ geometrisini üreten iki araç + kavrama ayarı:
 | `DimensionMeshBuilder` | `JSON'dan DimensionMesh Üret`: boyut dosyasından **ölçü maketi** üretir — tek `Plane` (ProBuilder çokgeni, extrude 0) + kolon başına bir prizma (pivotu ayak izinin ağırlık merkezinde, sürüklemek doğal olsun diye) + iki kalibrasyon küpü (`anchor_a` kırmızı / `anchor_b` mavi, merkezleri noktanın üstünde — Inspector'daki konum dosyadaki nokta ile birebir aynı okunsun diye; dosyada nokta yoksa üretilmez ve uyarılır). ⚠️ **Duvar ÜRETMEZ ve maket oynanan geometri değildir**: kök `EditorOnly` etiketlenir, build'e girmez; arena sanatı maketin üstüne kurulur. ⚠️ **Kök SAHNEDEN BAĞIMSIZ kurulur**: sahne kökünde, dünya orijininde, dönüşsüz ve 1 ölçekte — hiçbir şeyin altına parent'lanmaz, böylece dosyadaki ölçü sahnede birebir okunur. Arenanın üstüne oturtmak isteyen elle taşır/döndürür; geri okuma maketin kendi kökünü referans aldığı için etkilenmez. **İdempotent**: aynı mekanın maketi varsa silinip yeniden kurulur. Üretimden önce halkayı `Polygon2D.IsSelfIntersecting` ile denetler |
 | `DimensionMeshReader` | `DimensionMesh'i JSON'a Çevir`: maketi okuyup **kaynak dosyanın üstüne** yazar (hedef sorulmaz, maketin işaretçisinden gelir). Ayak izi çıkarımı: yatay yüzler (`\|normal.y\| > 0.9`) Y seviyesine göre gruplanır, **en alt** grup alınır (prizmada alt yüz kazanır), kenarlar XZ'ye izdüşürülüp kaynaştırılır, **yalnız bir kez geçen** kenar sınır sayılır, halka yürünür ve doğrusal ara köşeler ayıklanır. Noktalar dünya üstünden kök uzayına çevrilir — kolonu sürüklemek/döndürmek doğru yazılır. ⚠️ Kenarlar köşe **indeksiyle değil konumla** anahtarlanır: ProBuilder sert normaller için köşeleri yüz başına ayırıyor, indeksle bakan tespit tüm mesh'i sınır sanar. Kalibrasyon noktaları `DimensionAnchor` küplerinin transformundan okunur; ⚠️ küp yoksa dosyadaki `calibration` **KORUNUR** (sıfırlanmaz — eski bir maketi çevirmek mekanın zemin bandı ölçüsünü silerdi). Yazmadan önce çıktı geri ayrıştırılır; doğrulanamazsa dosyaya **dokunulmaz** |
 | `TemplateBasicsLoader` | `Template Temellerini Yükle`: aktif sahneye altyapıyı **prefab örneği** olarak koyar (`VA_ArenaRoot`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`; seçime bağlı `VA_ModeHud` · taban bölgeleri · `SpawnPoint`), `ArenaCalibrator`'ın sahneye bakan alanlarını bağlar, `ArenaBoundary`'nin rig'e bakan alanlarını (`head`/`fadeRenderer`/`warningText`) `VA_CameraRig` içinden bağlar ve mekanın boyut dosyasını `ArenaBoundary.dimensionsJson`'a takar. `anchor_a`/`anchor_b` işaretçilerini dosyadaki `calibration` noktalarına oturtur (`ArenaCalibrator.PlaceMarkerAtFloor` — çalışma anındaki yerleştirmenin aynısı; sahne yalan söylemesin diye. Otorite dosyadadır, sahnede taşımanın kalıcı etkisi yoktur). Taban bölgelerini takım malzemesiyle boyar (tek `VA_BaseZone` prefabı iki takıma da hizmet ediyor; şerit rengini çalışma anında kimse yazmıyor). **İdempotent** — var olan örneği asset yoluyla tanır ve atlar; dolu bir alanın üstüne YAZMAZ |
-| `BuildElementsConfigurator` | `Configure All Build Elements`: `MapDefinition` yazar/günceller, `GameCatalog.maps`'e ve haritayı destekleyen her modun **DOLU** `maps` listesine ekler (boş liste "kısıtsız" demek, dokunulmaz), Build Settings'e koyar, `ServerConfigExporter.Export(false)` çağırır ve bir **sağlık raporu** basar (`SpawnPoint` sayısı, `dimensionsJson` dolu mu, maket `EditorOnly` etiketli mi). Bu adımların biri atlanınca hata sessizdir — tek düğmede toplanmasının sebebi budur |
+| `BuildElementsConfigurator` | `Configure All Build Elements`: kayıt listelerini **klasör ağacından eşitler** — `Venues/*/Scenes/*/` taranır ve klasör tek doğruluk kaynağı sayılır. **Hepsini Yapılandır** önce aktif sahnenin `MapDefinition`'ını yazar/günceller, sonra eşitler; **Yalnız Senkronize Et** sahne açık olmadan da eşitler (silinmiş bir arenanın kalıntısını temizlemenin yolu budur). Eşitleme: eksik olan **uyarı** üretir (kutuda sahne yok / birden çok sahne var / sahne adı klasör adıyla uyuşmuyor / `Data/<Sahne>.asset` MapDefinition yok ya da yanlış yerde / mekan kökünde `Art,Data,Prefabs,Scenes` dışında klasör), fazla olan **silinir** (Build Settings'te mekan ağacında olmayan ya da diskte bulunmayan satırlar; `GameCatalog.maps` ve `ModeDefinition.maps` içindeki ölü ve artık taranmayan referanslar). `Boot.unity` index 0'da kalır, mekan-dışı sahneler (`_Shared/Scenes/*`) korunur, `Template/` sahneleri listeye hiç girmez. `ModeDefinition.maps` **boşsa** dokunulmaz (boş = kısıtsız); doluysa o modu destekleyen haritalarla birebir eşitlenir — hedef küme boş çıkarsa liste boşaltılmaz (boş liste "kısıtsız" demek olurdu), yalnız uyarı basılır. Sonda `ServerConfigExporter.Export(false)` + **sağlık raporu** (`SpawnPoint` sayısı, `dimensionsJson` dolu mu, maket `EditorOnly` etiketli mi). ⚠️ **MapDefinition kendiliğinden ÜRETİLMEZ:** `supportedModeIds` boş bırakmak "kısıtsız" demek olduğu için üretilen boş bir tanım lobiyi sessizce her modda oynanır kılardı — sahne açılıp modlar araçtan seçilir. Ayrı bir "Arena Id" alanı yoktur: MapDefinition'ın adı sahne adıdır |
 
 ### Sunucu: `Server/VortexArena.Server.Core`
 
@@ -1258,7 +1262,7 @@ admin exe'si → **Sunucuyu Başlat** → **Yönetimi Başlat**. Sunucu `--venue
 
 | İstek | Yol |
 |---|---|
-| **Yeni arena** | Altı adım, tek düğmeli sihirbaz YOK: boş sahne → arena kutusuna kaydet (`Venues/<İşletme>/<arenaId>/Scenes/`) → `Template Temellerini Yükle` (altyapı prefab örnekleri + boyut dosyası bağlama) → `JSON'dan DimensionMesh Üret` (mekanın ölçü maketi — sahneden bağımsız, dönüşsüz kurulur; sırası serbesttir) → ölçü tutmuyorsa köşeleri ProBuilder ile düzeltip `DimensionMesh'i JSON'a Çevir` → environment sanatı + tek `SpawnPoint` (zemin seviyesinde) + bake → **`Configure All Build Elements`** (MapDefinition + katalog + mod listeleri + Build Settings + `maps.json`, tek geçişte). ⚠️ **Ölçekleme yoktur**; maket build'e girmez ve duvar üretmez — arenanın duvarları environment sanatına aittir ve fiziksel sınırla çakışmalıdır |
+| **Yeni arena** | Altı adım, tek düğmeli sihirbaz YOK: boş sahne → arena kutusuna kaydet (`Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity` — klasör adı = sahne adı) → `Template Temellerini Yükle` (altyapı prefab örnekleri + boyut dosyası bağlama) → `JSON'dan DimensionMesh Üret` (mekanın ölçü maketi — sahneden bağımsız, dönüşsüz kurulur; sırası serbesttir) → ölçü tutmuyorsa köşeleri ProBuilder ile düzeltip `DimensionMesh'i JSON'a Çevir` → environment sanatı + tek `SpawnPoint` (zemin seviyesinde) + bake → **`Configure All Build Elements`** (MapDefinition + katalog + mod listeleri + Build Settings + `maps.json`, tek geçişte). ⚠️ **Ölçekleme yoktur**; maket build'e girmez ve duvar üretmez — arenanın duvarları environment sanatına aittir ve fiziksel sınırla çakışmalıdır |
 | **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack modeli = köken kaydı) → `Tools > VortexArena > Weapons > Build Weapon Prefabs` → `WD_*.asset` üretir, **mevcut** `WPN_*.prefab`'ı yerinde günceller (ses + namlu alevi/dumanı + kovan kiti dahil), `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). ⚠️ Araç **mevcut prefabların `Muzzle`/`Model` yerleşimine DOKUNMAZ**, yalnız definition bağlarını + ses/VFX/kovan kitini tazeler — VR'da elle ayarlanmış tutuş/namlu konumu tekrar çalıştırmakla bozulmaz. Paylaşılan şablon yoktur: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır. ⚠️ **Ses klipleri yalnız alan BOŞSA yazılır** (elle sürüklenen klip korunsun diye): mevcut bir silahın sesini tablodan değiştiriyorsan önce `WD_*.asset`'teki klip alanlarını boşalt, yoksa değişiklik sessizce hiç inmez (Tuzaklar: "elle atanmışsa ezme"). Diğer alanlar (hasar/rpm/menzil/saçılım/kimlik) her koşuda ezilir |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
 | **Hazır bir sahneyi arenaya çevirmek** | Aşağıdaki adımlar — araçları kullanmadan, elle |
@@ -1266,9 +1270,10 @@ admin exe'si → **Sunucuyu Başlat** → **Yönetimi Başlat**. Sunucu `--venue
 **Hazır/dışarıdan gelmiş bir sahneyi ağa bağlama** (araçların ne yaptığını elle yapmak; normal yol
 yukarıdaki altı adımdır):
 
-1. Sahneyi arena kutusuna taşı: `Assets/Arenas/Venues/<İşletme>/<Ad>/Scenes/<Ad>.unity` (+ `Data`;
-   arenaya özel sanat/prefab varsa `Art/`, `Prefabs/` — mekanın tümüne aitse bir seviye yukarı,
-   mekan kökündeki ortak klasörlere). **Sahne adı = katalog anahtarı** — sonradan değiştirme.
+1. Sahneyi arena kutusuna taşı: `Assets/Arenas/Venues/<İşletme>/Scenes/<Ad>/<Ad>.unity`
+   (+ `Data/<Ad>.asset`; sahneye özel sanat/prefab varsa `Art/`, `Prefabs/` — mekanın tümüne aitse
+   mekan kökündeki ortak klasörlere). **Klasör adı, sahne adı ve MapDefinition asset adı ÜÇÜ DE
+   aynıdır**; sahne adı katalog anahtarıdır — sonradan değiştirme.
    ⚠️ Mekan klasörü dışına konan arena export'a girmez, yani sunucuda hiç görünmez.
 2. Arena çerçevesini kur: alana hizalı bir objeye **`ArenaBoundary`**
    (`head` = `CenterEyeAnchor`, `fadeRenderer`/`warningText` = rig altındaki
@@ -1294,9 +1299,10 @@ yukarıdaki altı adımdır):
    `CenterEyeAnchor`'ı. Boş bırakılırsa sahne sessizce çalışmaz; Unity kopuk sahneler-arası
    referansı sessizce null yapar. (`anchorA`/`anchorB` istisnadır: boş bırakılabilir, kalibratör
    `anchor_a`/`anchor_b` objelerini adlarından çözer.)
-5–6. **`Tools > VortexArena > Build > Configure All Build Elements`** — `MapDefinition` (sceneName +
-   görünen ad + desteklenen modlar), `GameCatalog.maps`, ilgili `ModeDefinition.maps`, **Build
-   Settings** ve `maps.json` export'u tek geçişte; sonunda sağlık raporu basar.
+5–6. **`Tools > VortexArena > Build > Configure All Build Elements` → Hepsini Yapılandır** —
+   `MapDefinition` (sceneName + görünen ad + desteklenen modlar) yazılır, ardından `GameCatalog.maps`,
+   dolu `ModeDefinition.maps`, **Build Settings** ve `maps.json` klasör ağacına göre eşitlenir;
+   sonunda sağlık raporu basar. Arena silindiyse/taşındıysa **Yalnız Senkronize Et** yeter.
 7. **Arenanın çatısı/tavanı varsa** (isteğe bağlı, açık tavanlı arenalarda atlanır): çatı
    hiyerarşisinin kökünü seç → `GameObject > VortexArena > Arena Roof`. Bileşen eklenir ve
    altındaki tüm Renderer'lara `ArenaRoof` katmanı damgalanır → admin kuş bakışına geçince çatı
@@ -2075,6 +2081,16 @@ konsoluna tek satır sebep yazar.
     doğrudur; tutmuyorsa referanslar Unity API'siyle tek tek bağlanır — kopuk alanı boş alandan
     ayırmak için `objectReferenceValue == null && objectReferenceInstanceIDValue != 0` bak.
     ⚠️ Editörde **açık ve kirli** bir sahnenin dosyasına diskten dokunma: kaydedilmemiş iş ezilir.
+
+90. **Kayıt listeleri elle değil klasör taramasından EŞİTLENİR — "ekleyen" bir araç silineni
+    temizleyemez.** Bir arena silindiğinde ya da taşındığında geride üç ölü kayıt kalır: Build
+    Settings satırı, `GameCatalog.maps` girdisi ve onu destekleyen `ModeDefinition.maps`
+    referansı. Üçü de sessizdir — katalogdaki `Missing` referans Inspector'da boş bir satır, Build
+    Settings'teki ölü yol ise build'i sebebi görünmeyen bir hatayla düşürür (sahne dosyası yok ama
+    liste onu istiyor). Bu yüzden `Configure All Build Elements` tek doğruluk kaynağı olarak
+    **`Venues/*/Scenes/*/` klasör ağacını** alır: ağaçta olmayan her kaydı siler, ağaçta olup
+    kaydı eksik olanı uyarı olarak bildirir. Pratik sonucu şudur: **arena silmek/taşımak bir
+    senkronizasyon adımı ister** (*Yalnız Senkronize Et*), kayıtları elle temizlemek değil.
 
 ---
 

@@ -68,7 +68,8 @@ Assets/
     Core/            oyun kodu: arena, savaş, oyuncu, UI, katalog SO'ları, FX
     Arsenal/         silah prefabları + WeaponDefinition SO'ları
     FX/              paylaşılan efektler
-  Arenas/            arena kutuları — arenaya ÖZEL kod yazılmaz
+  Arenas/Venues/<İşletme>/Scenes/<SahneAdı>/   arena kutusu (klasör/sahne/MapDefinition adı AYNI)
+                     — arenaya ÖZEL kod yazılmaz
   Modes/<Mod>/       mod kutuları: {Scripts, Data, UI} — modlar birbirini REFERANSLAMAZ
 ```
 

@@ -13,7 +13,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 **Fiziksel alan**
 
 - [ ] Serbest (engelsiz) oyun alanını ölç: oyun alanı = ölçülen alan − **0.5 m güvenlik payı** (her duvardan).
-- [ ] Standart `A12x12` arenayı olduğu gibi kullanacaksan alan en az **12.5 × 12.5 m** olmalı; daha küçük/asimetrik alanlarda o işletmeye özel arena kurulur (Bölüm 2).
+- [ ] Hazır 12×12 arenayı (`Outdoor12x12` mekanı) olduğu gibi kullanacaksan alan en az **12.5 × 12.5 m** olmalı; daha küçük/asimetrik alanlarda o işletmeye özel arena kurulur (Bölüm 2).
 - [ ] Zemin düz, kaygan değil, seviye farkı ve kablo/eşik yok; alan içinde sütun, sabit mobilya, cam yüzey yok.
 - [ ] Aydınlatma homojen ve gölgesiz; doğrudan güneş ışığı, güçlü spot ve ayna/parlak yansıtıcı yüzey yok (inside-out takip bozulur, lensler zarar görür).
 - [ ] Tavan yüksekliği yeterli (kollar yukarıda serbest hareket edebilmeli).
@@ -72,8 +72,9 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
   > **Dosya İŞLETME başınadır**, arena başına değil: aynı fiziksel odada kaç arena ve lobi oynatılırsa oynatılsın hepsi bu tek dosyayı gösterir. İkinci bir kopya çıkarma — kaçınılmaz olarak birbirinden sapar.
   > **İçine ne yazarsın:** `plane` = alanın çevresini dolaşarak sırayla yazdığın köşeler; `columns` = her kolonun kendi köşe listesi (`points`) + yüksekliği; `calibration` = zemine yapıştıracağın **A ve B** bantlarının yeri (Bölüm 3). **Alan tam kare olsa bile dört köşe** yazılır; girintili/L şeklinde bir alan da aynı tek listeye sığar.
   > Ayrıntılı reçete: `Docs/Gelistirici/Yemek-Kitabi.md`.
-- [ ] Unity'de yeni bir sahne aç ve arena kutusuna kaydet: `Assets/Arenas/Venues/<İşletme>/<Arena>/Scenes/<SahneAdı>.unity`.
-  > **Mekan klasörü zorunludur** — sunucunun açılışta sorduğu listede görünecek ad odur; aynı işletmenin ikinci arenası da **aynı** mekan klasörünün altına açılır. Sahne adı katalog anahtarıdır ve benzersiz olmalıdır.
+- [ ] Unity'de yeni bir sahne aç ve arena kutusuna kaydet: `Assets/Arenas/Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity`.
+  > **Kutunun klasör adı sahne adıyla AYNI olmalıdır** (MapDefinition da aynı adla `Data/<SahneAdı>.asset` olarak o kutuya yazılır) — araç bu üçünü karşılaştırır, uyuşmayan kutu uyarı verir.
+  > **Mekan klasörü zorunludur** — sunucunun açılışta sorduğu listede görünecek ad odur; aynı işletmenin ikinci arenası da **aynı** mekanın `Scenes/` klasörü altına açılır. Sahne adı katalog anahtarıdır ve benzersiz olmalıdır.
 - [ ] `Tools > VortexArena > Arena > Template Temellerini Yükle` → sahneye ağ altyapısı (muhafaza + kalibrasyon işaretçileri + rig + poz senkronu) prefab örneği olarak konur ve boyut dosyası muhafazaya bağlanır.
   > Lobi sahnesi kuruyorsan penceredeki **taban bölgeleri** ve **VA_ModeHud** kutularını kapat.
 - [ ] `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` → boyut dosyasını seç, **Üret**. Sahnede alanın ölçü maketi (taban + kolonlar) belirir; arena sanatını bunun üstüne kurarsın.
@@ -81,7 +82,8 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
   > **Ölçü tutmadıysa** maketin köşesini ProBuilder ile yerine taşı, sonra `Tools > VortexArena > Arena > DimensionMesh'i JSON'a Çevir` — düzeltilmiş ölçü aynı dosyaya geri yazılır.
 - [ ] **Kalibrasyon noktalarını boyut dosyasına yaz** (Bölüm 3) — sahnedeki işaretçiler oradan yerleşir, elle taşınmaz.
 - [ ] **Tek `SpawnPoint`**'i yerine taşı — bu marker arena uzayının sıfırıdır, **zemin seviyesine** konur ve sonradan taşınmaz (taşımak tüm oyuncuların arenadaki koordinatını kaydırır). NavMesh ve ışık verisini bake et.
-- [ ] `Tools > VortexArena > Build > Configure All Build Elements` çalıştır → `MapDefinition`, katalog kaydı, Build Settings girdisi ve `Server/config/maps.json` tek geçişte üretilir. Çıkan sağlık raporunu ve uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
+- [ ] `Tools > VortexArena > Build > Configure All Build Elements` → **Hepsini Yapılandır** (sahne açıkken) → `MapDefinition`, katalog kaydı, Build Settings girdisi ve `Server/config/maps.json` tek geçişte üretilir. Çıkan sağlık raporunu ve uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
+  > Araç kayıtları mekan klasörü ağacından **eşitler**: ağaçta olmayan katalog/Build Settings satırlarını siler. Bir arenayı sildiysen ya da başka bir kutuya taşıdıysan **Yalnız Senkronize Et** düğmesi yeter (sahne açık olmasa da çalışır) — kalıntı bir satır build'i sebebi görünmeyen bir hatayla düşürür.
 - [ ] Build Settings'te yeni sahnenin **listede ve işaretli (enabled)** olduğunu doğrula. Sahne adı = `start_match` katalog anahtarı; boşluk/typo dahil birebir eşleşmeli.
 - [ ] Android APK'yı **yeniden al**: `scripts\deploy-player-apk.bat` (Unity editörü kapalı) → `deploy\player\game.apk`. Yeni arena APK'da yoksa o başlık maçı engeller (Bölüm 8).
 

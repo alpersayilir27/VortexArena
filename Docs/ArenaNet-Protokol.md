@@ -1063,7 +1063,9 @@ Seçim [1-2]:
 ```
 
 **Mekan asset yolundan gelir, ayrı bir alan YOKTUR.** Export şu kuralı uygular:
-`Assets/Arenas/Venues/<İşletme>/…` → o işletme. Klasör yerleşimi zaten mekanı anlatıyor; ikinci bir
+`Assets/Arenas/Venues/<İşletme>/Scenes/<SahneAdı>/…` → o işletme; kutunun klasör adı, sahne dosyası
+adı ve `MapDefinition` asset adı (`Data/<SahneAdı>.asset`) üçü de aynıdır, yani sahne adı = katalog
+anahtarı klasöre bakınca okunur. Klasör yerleşimi zaten mekanı anlatıyor; ikinci bir
 alan eklemek onu unutulabilir hâle getirirdi. Bir haritayı yanlış mekana yazmanın tek yolu onu
 yanlış klasöre koymaktır, o da gözle görülür.
 
