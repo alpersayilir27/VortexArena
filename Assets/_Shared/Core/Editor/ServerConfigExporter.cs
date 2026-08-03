@@ -153,8 +153,8 @@ namespace VortexArena.Core.Editor
                 {
                     result.Warnings.Add(
                         $"'{sceneName}' bir mekan klasöründe değil ('{path}') — ATLANDI. " +
-                        $"Oynanacak arena {VenuesRoot}<İşletme>/<Arena>/ altında olmalı; " +
-                        $"şablonların yeri {TemplateRoot}.");
+                        $"Oynanacak arenanın MapDefinition'ı {VenuesRoot}<İşletme>/Scenes/<Sahne>/Data/<Sahne>.asset " +
+                        $"olmalı; şablonların yeri {TemplateRoot}.");
                     continue;
                 }
 
@@ -179,10 +179,16 @@ namespace VortexArena.Core.Editor
             return accepted;
         }
 
-        /// <summary>Oynanacak arenaların kökü — mekan adı bu yolun bir alt seviyesinden okunur.</summary>
+        /// <summary>
+        /// Oynanacak arenaların kökü — mekan adı bu yolun bir alt seviyesinden okunur:
+        /// <c>Assets/Arenas/Venues/&lt;İşletme&gt;/Scenes/&lt;Sahne&gt;/Data/&lt;Sahne&gt;.asset</c>.
+        /// </summary>
         public const string VenuesRoot = "Assets/Arenas/Venues/";
 
-        /// <summary>Sihirbaz şablonlarının kökü — buradaki haritalar export EDİLMEZ.</summary>
+        /// <summary>
+        /// Referans şablonların kökü (<c>Assets/Arenas/Template/Scenes/&lt;Sahne&gt;/…</c>) —
+        /// buradaki haritalar export EDİLMEZ.
+        /// </summary>
         public const string TemplateRoot = "Assets/Arenas/Template/";
 
         /// <summary>

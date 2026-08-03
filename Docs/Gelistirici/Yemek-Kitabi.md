@@ -555,7 +555,7 @@ Tek düğmeli bir sihirbaz **yoktur** (kaldırıldı). Akış altı adımdır ve
 
 | # | Yaptığın | Araç |
 |---|---|---|
-| 1 | Boş sahne aç, arena kutusuna kaydet (`Venues/<İşletme>/<arenaId>/Scenes/`) | `File > New Scene` |
+| 1 | Boş sahne aç, arena kutusuna kaydet (`Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity`) | `File > New Scene` |
 | 2 | Ağ altyapısını koy | `Tools > VortexArena > Arena > Template Temellerini Yükle` |
 | 3 | Mekanın ölçü maketini üret | `… > Arena > JSON'dan DimensionMesh Üret` |
 | 4 | Ölçü yanlışsa köşeleri düzelt, dosyaya geri yaz | ProBuilder + `… > Arena > DimensionMesh'i JSON'a Çevir` |
@@ -586,10 +586,24 @@ kurulur; maket yalnız o sanatın oturacağı fiziksel alanı gösterir
 ⚠️ **Ölçekleme yoktur ve eklenmez.** Her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen
 bile değil — orantılı ölçekleme elle düzeltilecek bir yalancı-doğru üretir.
 
-**6. adım** `MapDefinition`'ı yazar, `GameCatalog`'a ve haritayı destekleyen her modun **dolu**
-`maps` listesine ekler, Build Settings'e koyar ve `Export Server Config`'i çağırır; sonunda bir
-sağlık raporu basar (`SpawnPoint` var mı, `dimensionsJson` dolu mu, maket `EditorOnly` mi,
-sahnede `Wall_*` kalıntısı var mı).
+**1. adımda klasör adı sahne adıyla AYNI yazılır** ve MapDefinition da o kutuya aynı adla girer
+(`Data/<SahneAdı>.asset`). Sahne adı zaten katalog anahtarı olduğu için klasöre bakan anahtarı
+görür; araç bu üçünü karşılaştırır ve uyuşmayan kutuyu uyarı olarak bildirir.
+
+**6. adım** (**Hepsini Yapılandır**, sahne açıkken) `MapDefinition`'ı yazar, sonra kayıtları
+`Venues/*/Scenes/*/` ağacına göre **eşitler**: `GameCatalog.maps`, haritayı destekleyen her modun
+**dolu** `maps` listesi, Build Settings ve `maps.json`. Ağaçta karşılığı olmayan satırlar
+(silinmiş/taşınmış arena, `Missing` referans) **silinir**; kutuda eksik olan şey (sahne yok, birden
+çok sahne var, ad uyuşmuyor, MapDefinition yok ya da yanlış yerde) **uyarı** olur. `Boot.unity`
+index 0'da kalır, `_Shared/Scenes/*` gibi mekan-dışı sahnelere ve `Template/`'e dokunulmaz.
+Sonunda sağlık raporu basar (`SpawnPoint` var mı, `dimensionsJson` dolu mu, maket `EditorOnly` mi).
+
+⚠️ **MapDefinition kendiliğinden üretilmez** — `supportedModeIds` boş bırakmak "kısıtsız" demek
+olduğu için üretilen boş bir tanım lobiyi sessizce her modda oynanır kılardı. Sahneyi aç, modları
+araç penceresinden seç.
+
+⚠️ **Arena sildiysen/taşıdıysan aynı pencereden `Yalnız Senkronize Et`** — sahne açık olmadan da
+koşar ve kalıntı kayıtları temizler; kayıtlar elle düzenlenmez.
 
 > Arena ölçüsü **sunucuya gitmez** (maps.json'a yalnız `sceneName` + `modes` yazılır); arenanın
 > tek ölçü kaynağı **boyut dosyasıdır**. Export'u ise ölçü için değil,

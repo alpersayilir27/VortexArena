@@ -74,7 +74,7 @@ veri üretir, ama duvarlar çizilmeye devam etmeli.
 |---|---|---|
 | **`ArenaObstacle`** | Sahneye elle konmuş bir engel (kolon, kasa, direk) muhafaza uyarısına girecekse | Engel objesine ekle, `size` alanına zemindeki ölçüsünü yaz (X = genişlik, Y = derinlik). ⚠️ **Collider EKLEMEZ, fizik yapmaz** — tek işi `ArenaBoundary`'nin oyuncuyu engele yaklaşırken uyarmasıdır. Plandan üretilen kolonlara aracın kendisi ekler |
 | **`ArenaRoof`** | Arenanın çatısı varsa | Çatı hiyerarşisinin köküne: `GameObject > VortexArena > Arena Roof`. Admin kuş bakışına geçince çatı çizilmez (gölgesi kalır). Açık tavanlı arenada hiç yapılmaz → [Çatı Gizleme](../Cati-Gizleme.md) |
-| **`FX_SnowStorm`** | Kar/hava efekti isteniyorsa | `Arenas/Venues/Outdoor12x12/IceWorld/Prefabs/` altındaki prefabı arena orijinine (0,0,0) bırak. 12×12 değilse `Snow_A/B/E` shape scale'lerini arena boyutu + ~3 m payla ölçekle |
+| **`FX_SnowStorm`** | Kar/hava efekti isteniyorsa | `Arenas/Venues/Outdoor12x12/Scenes/IceWorld/Prefabs/` altındaki prefabı arena orijinine (0,0,0) bırak. 12×12 değilse `Snow_A/B/E` shape scale'lerini arena boyutu + ~3 m payla ölçekle |
 | **`ProximityWarning`** | Çarpışma önleme isteniyorsa | Elle eklenir; `head` ve `haloMaterial` (`_Shared/FX/M_ProximityHalo`) Inspector'dan verilir |
 | **`NetIdentity`** | Dinamik obje senkronu gerekiyorsa | `GameObject > VortexArena > Network Parent` — benzersiz `sceneId` damgalar |
 
@@ -84,8 +84,11 @@ veri üretir, ama duvarlar çizilmeye devam etmeli.
 
 Sahne dosyası tek başına yetmez — üç kayıt daha gerekir:
 
-1. **`MapDefinition` SO'su** (`Arenas/<...>/Data/`): `sceneName`, `displayName`,
+1. **`MapDefinition` SO'su** — sahnenin kendi kutusunda ve **sahneyle aynı adla**:
+   `Venues/<İşletme>/Scenes/<SahneAdı>/Data/<SahneAdı>.asset`. Alanları `sceneName`, `displayName`,
    `supportedModeIds`. Arena ölçüsü burada değil, arenanın **boyut dosyasındadır**.
+   ⚠️ Başka bir yere konursa `Configure All Build Elements` onu "yanlış yerde" diye uyarır ve
+   kutuyu eksik sayar.
 2. **`GameCatalog.asset`** → `maps[]` listesine ekle.
 3. **Build Settings** → sahneyi ekle ve **enabled** bırak.
 4. **`Tools > VortexArena > Server > Export Server Config`** → `Server/config/maps.json` tazelenir

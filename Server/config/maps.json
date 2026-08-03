@@ -1,6 +1,7 @@
 {
   "maps": [
     { "sceneName": "Arena12x12", "venue": "Outdoor12x12", "modes": ["ffa", "tdm", "tournament"] },
+    { "sceneName": "Hangar", "venue": "VortexAntep", "modes": ["ffa", "tdm", "tournament"] },
     { "sceneName": "IceWorld", "venue": "Outdoor12x12", "modes": ["ffa", "tdm", "tournament"] },
     { "sceneName": "Lobby12x12", "venue": "Outdoor12x12", "modes": ["lobby"] },
     { "sceneName": "LobbyVortexAntep", "venue": "VortexAntep", "modes": ["lobby"] }

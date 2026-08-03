@@ -96,17 +96,21 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
 - `Assets/Arenas/` altında **yalnız iki kök vardır**: `Venues/` (oynanan içerik) ve `Template/`
   (referans arena). Üçüncü bir kök açma — mekansız arena diye bir şey yoktur.
-  - `Assets/Arenas/Venues/<İşletme>/<Arena>/` — arena kutusu: `{Scenes, Data}` (+ yalnız o arenaya
-    ait sanat/prefab varsa `Art/`, `Prefabs/`; ör. `Outdoor12x12/IceWorld/`). Mekanın **tüm**
-    sahnelerinin paylaştığı sanat/prefab/veri ise bir seviye yukarıda, mekan kökündeki
-    `Art/` · `Prefabs/` · `Data/` klasörlerine girer (ör. `VortexAntep/Data/VortexAntep_dimensions.json`
-    = mekanın fiziksel ölçüsü, hem arena hem lobi kullanır).
+  - `Assets/Arenas/Venues/<İşletme>/Scenes/<SahneAdı>/` — arena kutusu: `<SahneAdı>.unity` +
+    `Data/<SahneAdı>.asset` (MapDefinition) (+ yalnız o sahneye ait sanat/prefab varsa `Art/`,
+    `Prefabs/`; ör. `Outdoor12x12/Scenes/IceWorld/`).
+    ⚠️ **Klasör adı = sahne dosyası adı = MapDefinition asset adı** — üçünü de aynı yaz. Sahne adı
+    zaten katalog anahtarıdır (`load_match` string'i), böylece klasöre bakan anahtarı görür ve isim
+    sapması imkansızlaşır. Mekanın **tüm** sahnelerinin paylaştığı sanat/prefab/veri ise mekan
+    kökündeki `Art/` · `Prefabs/` · `Data/` klasörlerine girer (ör.
+    `VortexAntep/Data/VortexAntep_dimensions.json` = mekanın fiziksel ölçüsü, hem arena hem lobi
+    kullanır). ⚠️ Mekan kökünde `Art`, `Data`, `Prefabs`, `Scenes` dışında klasör AÇMA.
   - ⚠️ **Boş klasör açma** (ne sihirbaz ne elle): git klasör tutmaz, dosya tutar → klonda kaybolur,
     geriye yetim `.meta` kalır ve Unity klasörü hayalet olarak geri üretir. Klasör, içine ilk dosya
     girdiğinde açılır.
-  - ⚠️ **İşletme klasörü kutu DEĞİL, kutuların kabıdır** — bir işletmede birden çok arena oynatılır
-    (`Venues/Outdoor12x12/IceWorld/`, `.../A12x12/`, `.../Lobby/`).
-  - Her mekanın **kendi lobi kutusu** olur (`<İşletme>/Lobby/`) ve o kutudaki `MapDefinition`'ın
+  - ⚠️ **İşletme klasörü kutu DEĞİL, kutuların kabıdır** — bir işletmede birden çok arena oynatılır;
+    hepsi `Venues/<İşletme>/Scenes/` altında yan yana durur (arenalar ve lobi aynı seviyede).
+  - Her mekanın **kendi lobi kutusu** olur (`<İşletme>/Scenes/<LobiSahnesi>/`) ve o kutudaki `MapDefinition`'ın
     `supportedModeIds`'i `["lobby"]`'dir — sunucu açık sahneyi bununla bulur (§10.7).
   ⚠️ **Klasör = MEKAN.** Export haritanın mekanını yoldan türetir (`Venues/<İşletme>/…` → o işletme)
   ve sunucu açılışta hangi mekanı oynatacağını sorar; o oturumda yalnız o mekanın haritaları
@@ -114,8 +118,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   yanlış işletmeye yazar** — `MapDefinition`'da mekan alanı YOKTUR ve eklenmez (ikinci,
   unutulabilir bir doğruluk kaynağı olurdu). Mekan klasörü dışındaki haritalar export'a HİÇ
   girmez (uyarı basılır) → `Docs/ArenaNet-Protokol.md` §11.1
-  `Template/Default12x12` yalnız **referans** olarak durur (sahne kopyalayan sihirbaz kaldırıldı;
-  yeni arena boş sahneden başlayıp `Template Temellerini Yükle` ile donatılır).
+  `Template/Scenes/Default12x12` yalnız **referans** olarak durur; yeni arena boş sahneden başlar ve
+  `Template Temellerini Yükle` ile donatılır (sahne kopyalayan sihirbaz YOKTUR).
   ⚠️ `Template/` altındaki haritalar **oynanmaz**: export edilmez, Build Settings'e ve
   `GameCatalog`'a girmez (yoksa sunucu açılışında sahte bir mekan olarak listelenirlerdi).
   Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ (marker bileşenleri Core'dan gelir).
@@ -255,13 +259,18 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
 ## Yeni içerik ekleme reçeteleri
 
 **Yeni arena — altı adım** (tek düğmeli sihirbaz YOKTUR, kaldırıldı):
-`File > New Scene` → arena kutusuna kaydet (`Venues/<İşletme>/<arenaId>/Scenes/`) →
+`File > New Scene` → arena kutusuna kaydet
+(`Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity` — klasör adı sahne adıyla AYNI) →
 `Tools > VortexArena > Arena > Template Temellerini Yükle` (altyapı prefab ÖRNEKLERİ + `ArenaBoundary`) →
 `… > Arena > JSON'dan DimensionMesh Üret` (mekanın ölçü maketi) → ölçü yanlışsa köşeleri ProBuilder ile
 düzelt + `… > Arena > DimensionMesh'i JSON'a Çevir` → environment/asset yerleşimi, `SpawnPoint`'i **zemin
 seviyesine** oturt, bake → `… > Build > Configure All Build Elements`.
 ⚠️ **Son adım atlanırsa** harita ne katalogda ne `maps.json`'da olur; `start_match` sessizce
-reddedilir. ⚠️ **Ölçekleme YOKTUR ve eklenmez:** her işletmenin alanı farklı ölçüde ve çoğu
+reddedilir. ⚠️ **Son adımı sahne AÇIKKEN çalıştır** — MapDefinition kendiliğinden üretilmez, tarama
+onu yalnız eksik diye bildirir; modları (`supportedModeIds`) araç penceresinden sen seçersin (boş
+bırakmak "kısıtsız" demektir, sahne o hâlde her modda oynanır).
+⚠️ **Arena silinince ya da taşınınca aracı tekrar çalıştır** (*Yalnız Senkronize Et* yeter): kayıt
+listeleri klasör taramasından eşitlenir, elle temizlenmez. ⚠️ **Ölçekleme YOKTUR ve eklenmez:** her işletmenin alanı farklı ölçüde ve çoğu
 kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek bir
 yalancı-doğru üretir.
 **Arena ölçüsü:** tek doğruluk kaynağı **boyut dosyasıdır** (`ArenaDimensions` — elle yazılabilir
@@ -316,7 +325,7 @@ Elle konan engeller için `ArenaObstacle` (`Core/Arena/`): muhafaza onu engel sa
 muhafazanın yarı saydam duvar göstergesi kaldırıldı, yaklaşma uyarısı artık HMD'ye bağlı karartma
 quad'ından geliyor (`warnFadeAlpha`). Sanat duvarı alandan içeride/dışarıda durursa oyuncu yanlış
 yere göre kalibre olur.
-**Yeni lobi:** lobi de bir arena kutusudur (`Venues/<İşletme>/Lobby/`), farkı üç şeydir —
+**Yeni lobi:** lobi de bir arena kutusudur (`Venues/<İşletme>/Scenes/<LobiSahnesi>/`), farkı üç şeydir —
 `MapDefinition.supportedModeIds` **yalnız `["lobby"]`** (boş bırakılırsa "kısıtsız" sayılır!),
 sahnede `BaseZone` ve `VA_ModeHud` YOK, silah kaynağı `random` (sahneden silah alınmaz, grip'e
 basınca elde belirir). **Her mekanın kendi lobisi olur** ve mekanın boyut dosyasını arenayla
@@ -441,7 +450,7 @@ hedef çözme, hasarı istemcinin belirlemesi) ve `Weapon` da bu kapıyı kullan
 İçerik kataloğu: **`_Shared/Data/Resources/GameCatalog.asset`**
 (ModeDefinition + MapDefinition listesi) — admin tercihler panelinin mod/harita seçicisi bunu
 `Resources.Load<GameCatalog>("GameCatalog")` ile okur, bu yüzden `Resources/` altında kalmalı.
-**Kar/hava efekti (başka arenaya):** `Arenas/Venues/Outdoor12x12/IceWorld/Prefabs/FX_SnowStorm.prefab`'ı
+**Kar/hava efekti (başka arenaya):** `Arenas/Venues/Outdoor12x12/Scenes/IceWorld/Prefabs/FX_SnowStorm.prefab`'ı
 sahneye arena origin'ine (0,0,0) bırak; kendine yeter (`Snow_C_NearField` üstündeki
 `WeatherVolumeFollow` hedefi boşsa `Camera.main`'i bulur). Arena 12×12 değilse `Snow_A/B/E`
 shape scale'lerini arena boyutu + ~3 m payla ölçekle — geniş kutu bütçeyi görünmeyen alana harcar.
@@ -452,7 +461,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 
 | Araç | Ne zaman |
 |---|---|
-| `Tools > VortexArena > Build > Configure All Build Elements` | Sahne hazır → `MapDefinition` + `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json` export, hepsi tek geçişte (+ sağlık raporu) |
+| `Tools > VortexArena > Build > Configure All Build Elements` | Sahne hazır → **Hepsini Yapılandır**: aktif sahnenin `MapDefinition`'ını yazar, sonra `Venues/*/Scenes/*/` taramasıyla `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json`'ı EŞİTLER (eksik = uyarı, fazla/ölü kayıt = silinir; `Boot.unity` index 0'da, mekan-dışı sahneler dokunulmadan kalır). Arena silindi/taşındı → **Yalnız Senkronize Et** (sahne açık olmasa da koşar). ⚠️ Ayrı "Arena Id" alanı YOKTUR: MapDefinition'ın adı sahne adıdır |
 | `… > Arena > Template Temellerini Yükle` | Yeni/boş sahneye altyapı prefab ÖRNEKLERİ (`VA_ArenaRoot`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı `VA_ModeHud`/taban bölgeleri/`SpawnPoint`) + kalibratör/muhafaza alanlarının rig'e bağlanması + boyut dosyası bağlama + `anchor_a`/`anchor_b`'yi dosyadaki noktalara oturtma. İdempotent |
 | `… > Arena > JSON'dan DimensionMesh Üret` | Mekanın boyut JSON'undan ölçü maketi (taban + kolonlar + `anchor_a`/`anchor_b`). **Sahne köküne, dönüşsüz** kurar ve `EditorOnly` etiketler. İdempotent |
 | `… > Arena > DimensionMesh'i JSON'a Çevir` | Maketin köşeleri/kalibrasyon işaretçileri sahnede düzeltildi → aynı boyut dosyasının ÜSTÜNE yazar (hedefi maketin kendisi söyler). İşaretçi yoksa dosyadaki `calibration` KORUNUR |
