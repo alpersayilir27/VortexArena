@@ -243,12 +243,22 @@ namespace VortexArena.Core.Player
         /// yazmadığı için <see cref="LocalAvatarBoneHider"/> gizlemeyi her kare elle geri almak
         /// zorundadır.
         /// </para>
+        /// <para>
+        /// ⚠️ <b>"SDK her kare yeniden yazıyor" KOŞULLUDUR ve koşulu burada da aranmak zorundadır:</b>
+        /// <c>CharacterRetargeter.LateUpdate</c> pozu yalnız <c>AppliedPose</c> iken uygular, aksi
+        /// hâlde köke DOKUNMADAN döner. Gövde izleme bir kare bile geçersiz veri üretirse (el/gövde
+        /// örtülmesi, sağlayıcının duraklaması) ofset o karede eskisinin ÜSTÜNE eklenir ve birikir:
+        /// kare başına ofset kadar, yani 72 Hz'de saniyede metrelerce. Yönü gövdenin yaw'ından
+        /// geldiği için oyuncu döndükçe kayma yön değiştirir — belirtisi "gövde sağa sola
+        /// süzülüyor"dur ve kafa izleme kusursuz çalışırken de olur (o ayrı bir hat). Bu yüzden
+        /// kapı, sınıfın geri kalanıyla AYNI kapıdır: <c>RetargeterValid</c>.
+        /// </para>
         /// <para>Ofset gövdenin tam rotasyonunda değil <b>yaw</b>'ında uygulanır: oyuncu
         /// eğildiğinde "geri" yönü yukarı/aşağı kaymasın.</para>
         /// </summary>
         private void LateUpdate()
         {
-            if (!_initialized || firstPersonOffset == Vector3.zero)
+            if (!_initialized || firstPersonOffset == Vector3.zero || !retargeter.RetargeterValid)
             {
                 return;
             }

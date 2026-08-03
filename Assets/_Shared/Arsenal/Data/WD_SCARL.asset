@@ -16,9 +16,9 @@ MonoBehaviour:
   netItemId: 3
   prefab: {fileID: 8917929639311514391, guid: bac9fd5252613dc40a2359d267b4563d, type: 3}
   holdMode: 1
-  primaryGripPosition: {x: 0, y: 0, z: 0}
+  primaryGripPosition: {x: -0, y: 0.053, z: 0.043}
   primaryGripEuler: {x: 0, y: 0, z: 0}
-  secondaryGripPosition: {x: 0, y: 0.073, z: 0.259}
+  secondaryGripPosition: {x: 0, y: 0.0584, z: 0.2072}
   secondaryGripEuler: {x: 0, y: 0, z: 0}
   primaryGripRadius: 0.12
   secondaryGripRadius: 0.12

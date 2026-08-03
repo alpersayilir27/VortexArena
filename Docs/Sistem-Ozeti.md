@@ -2162,6 +2162,30 @@ konsoluna tek satır sebep yazar.
     kaydı eksik olanı uyarı olarak bildirir. Pratik sonucu şudur: **arena silmek/taşımak bir
     senkronizasyon adımı ister** (*Yalnız Senkronize Et*), kayıtları elle temizlemek değil.
 
+96. **Retarget edilen bir transforma `+=` ile ofset yazmak, ancak SDK'nın o kare pozu GERÇEKTEN
+    uyguladığı doğrulanırsa güvenlidir.** "SDK kökü her kare yeniden yazıyor, ofset birikmez"
+    akıl yürütmesi doğru ama KOŞULLUdur: `CharacterRetargeter.LateUpdate` pozu yalnız
+    `AppliedPose` iken uygular, aksi hâlde köke hiç dokunmadan döner. Sensör bir kare bile
+    geçersiz veri ürettiğinde (el/gövde örtülmesi, sağlayıcının duraklaması ve özellikle **sahne
+    yüklemesi**) ofset eskisinin üstüne eklenir; kare başına birikir, yani 72 Hz'de saniyede
+    metrelerce. Yönü gövdenin yaw'ından geldiği için oyuncu döndükçe kayma yön değiştirir ve
+    belirti "gövde sağa sola süzülüyor" olur — kafa izleme kusursuz çalışırken de görülür, o ayrı
+    bir hattır. ⚠️ Gövde avatarı `DontDestroyOnLoad` olduğu için birikim **harita değişiminde
+    sıfırlanmaz ve taşınır**: hata haritaya göre değişiyormuş gibi okunur, oysa değişken haritanın
+    kendisi değil o oturumda o ana dek geçen geçersiz kare sayısıdır. Kural: böyle bir ofset,
+    sınıfın geri kalanıyla **aynı kapıdan** geçer (`RetargeterValid`).
+
+97. **Kavrama ofsetleri DÜNYA metresidir; işaretçinin YEREL konumu değildir — ölçekli bir kökte
+    ikisi aynı sayı değildir.** `Weapon.ApplyCanonicalGrip`, `ItemGripSockets.PrimarySocketWorld`
+    ve `GripSocketAuthoring.LocalPose` üçü de bilerek `TransformPoint`/`InverseTransformPoint`
+    KULLANMAZ (ofset metre cinsindendir, eşyanın görsel ölçeğiyle büyümemeli). `WPN_*` köklerinin
+    ölçeği 1 DEĞİLDİR; dolayısıyla Inspector'da okunan bir işaretçi `localPosition`'ını olduğu gibi
+    `WD_*.asset`'e yazmak ofseti `1/ölçek` kadar şişirir ve soket silahın üstünde görünür bir
+    noktadan kayar. Doğru yol tek: değeri **araçla** yaz (`Weapons > Write Grip Sockets To
+    Definition` — dünya farkını kendisi alır) ve gözle doğrula: **camgöbeği tel küre (SO'nun
+    dediği) sarı dolu küreyle (işaretçinin yeri) ÇAKIŞMALIDIR.** Çakışmıyorsa değer elle yazılmış
+    demektir.
+
 ---
 
 ## 8. Durum ve sıradaki işler
