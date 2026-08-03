@@ -467,6 +467,11 @@ ile onu üreten liste iki ayrı doğruluk kaynağı olurdu). ⚠️ Silah sahney
 olarak konur (kopyalanmaz, unpack edilmez) — kopya sahneye donar ve silah kitinde yapılan tek bir
 düzeltme arena sayısı kadar elle iş doğurur. Örnekleri bir `WeaponCanvas` prefabında toplayıp onu
 her sahneye `BaseZone` gibi bir örnek olarak koymak yerleşimi tek yerden düzeltilebilir kılar.
+⚠️ **Kural `VA_WeaponCanvas`'ın İÇİ için de geçerlidir** (kartların altındaki silahlar da prefab
+ÖRNEĞİDİR): orada unpack edilmiş bir kopya, kitin sonradan eklediği bileşenleri hiç almaz ve o
+canvas'ı kullanan sahnelerde silah bir gün sessizce alınamaz olur → `Docs/Sistem-Ozeti.md` §7.
+Tek satırlık denetim: `Weapon` bileşenini **doğrudan** serialize eden dosyalar yalnız
+`_Shared/Arsenal/Prefabs/WPN_*.prefab` olmalıdır.
 ⚠️ **Bu kaynakta sahnede hangi silahın duracağını `ModeDefinition.loadout` DEĞİL arena belirler** —
 moda silah eklemek arenaları değiştirmez, yeni silah her arenaya tek tek konur; `loadout` yalnız
 `random` modlarında (FFA, lobi) okunur.

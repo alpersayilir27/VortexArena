@@ -2372,6 +2372,20 @@ konsoluna tek satır sebep yazar.
     taşıyan `.meta` değil, **referansın kendisidir**; guid'i "tutsun diye" geri yazmak arızayı
     taşımaktan başka bir şey yapmaz ve karşı tarafta aynı anda ikinci bir kopuk referans üretir.
 
+110. **Unpack edilmiş bir kopya, kit değişikliklerinin ULAŞMADIĞI ikinci bir kaynaktır; arızası
+    aylar sonra ve tamamen ilgisiz bir yerde çıkar.** `WPN_*` / `VA_WeaponFrame` prefab örneği
+    yerine kopya konursa (tipik yeri bir `WeaponCanvas`'ın içidir) `Build Weapon Prefabs`'ın
+    sonradan eklediği hiçbir bileşen o kopyaya inmez. Kopya konduğu gün doğru çalıştığı için ortada
+    hata yoktur; kırılma **kite yeni bir bileşen eklendiğinde** olur ve belirtisi "şu üç sahnede
+    silah alınamıyor" diye okunur — yani teşhis, değişikliğin yapıldığı yerden çok uzakta aranır.
+    Somut biçimi: el hattı (`HandGrabInteractable` + `DistanceHandGrabInteractable`) kite
+    eklendiğinde kopyalar yalnız kumanda hattıyla kalır ve `controllerDrivenHandPosesType` açıkken
+    o silahlar hiç kavranamaz (§7 "eli göster ayarı kavrama hattını da değiştirir"). Kural: sahnede
+    ya da prefabta silah **her zaman `WPN_*` prefab ÖRNEĞİDİR**; `VA_WeaponCanvas`'ın içi de dahil.
+    Denetimi tek grep'tir: `Weapon` bileşenini **doğrudan** serialize eden dosya kümesi yalnız
+    `_Shared/Arsenal/Prefabs/WPN_*.prefab` olmalı — listeye başka bir `.unity`/`.prefab` giriyorsa
+    orada unpack edilmiş bir kopya vardır.
+
 ---
 
 ## 8. Durum ve sıradaki işler
