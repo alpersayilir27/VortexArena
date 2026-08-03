@@ -107,6 +107,13 @@ namespace VortexArena.Core.Combat
         /// (bkz. <see cref="ApplyRules"/>).</summary>
         private bool _appliedRandomGrant;
 
+        /// <summary>Son uygulanan "mod silahı dağıtıyor" durumu (<see cref="ModeDistributesWeapons"/>).
+        /// <para>⚠️ <see cref="_appliedRandomGrant"/> tek başına YETMEZ: sahnelenmiş arenadan FFA
+        /// maçına geçişte silah kaynağı <c>random</c> kalır (ikisi de öyle) ve yalnız bu bayrak
+        /// değişir — izlenmeseydi oyuncunun sahnelemede tezgâhtan seçtiği silah maça taşınır,
+        /// yani "modun dağıttığı rastgele silah" kuralı sessizce delinirdi.</para></summary>
+        private bool _appliedModeDistributes;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -172,15 +179,23 @@ namespace VortexArena.Core.Combat
                 TrySubscribeAlive();
             }
 
-            if (!IsRandomGrant)
+            // Çerçeve yolu iki durumda koşar: (1) modun silah kaynağı tezgâh, (2) oyuncu bir
+            // tezgâhtan silah SEÇTİ. İkincisi yalnız serbest alanda mümkündür — koşan bir maçta
+            // tezgâhlar gizlidir, dolayısıyla seçilemezler.
+            // ⚠️ RevokeAll koşulsuzdur: serbest alanda iki yol da açık olduğu için oyuncu tezgâhtan
+            // seçtiği anda elinde rastgele verilmiş bir silah duruyor olabilir; alınmasaydı iki
+            // kaynaktan iki silah birden taşırdı. Çerçeve kaynağında zaten no-op'tur (o yolda
+            // _grantedLeft/Right hiç dolmaz).
+            if (!IsRandomGrant || _selected != null)
             {
+                RevokeAll();
                 TickFrameSummon();
                 return;
             }
 
             // Süpürme sahne yüklendiğinde yapılır; kurallar sahneden SONRA gelmişse (geç katılım)
-            // burada telafi edilir.
-            if (!_swept)
+            // burada telafi edilir. ⚠️ Serbest alanda süpürülmez (gerekçe SweepScene'de).
+            if (!_swept && ModeDistributesWeapons)
             {
                 SweepScene();
             }
@@ -207,6 +222,27 @@ namespace VortexArena.Core.Combat
         // ------------------------------------------------------------------ kural
 
         private static bool IsRandomGrant => ModeRuntime.Weapons == ModeWeaponSource.RandomGrant;
+
+        /// <summary>
+        /// Kurulmuş bir maç YOK — oyuncu serbest alanda (lobi profili, §10.7).
+        /// <para>
+        /// ⚠️ <b>Bu "lobi SAHNESİNDEYİZ" demek DEĞİLDİR:</b> operatör lobideyken bir arena
+        /// seçtiğinde sunucu o arenayı <b>sahneler</b> — herkes arenaya geçer ama tür
+        /// <c>lobby</c> ve kural şekli lobi profilinde kalır (maç ancak <c>start_match</c> ile
+        /// kurulur). Yani serbest alan çoğu zaman <b>silah tezgâhı olan bir arenadır</b>.
+        /// </para>
+        /// <para>
+        /// ⚠️ Ayrım <c>modeId</c>'den DEĞİL kuraldan okunur (§10.5: istemcide
+        /// <c>if (modeId == "lobby")</c> zinciri yazılmaz). Lobi profilini benzersiz kılan bileşim
+        /// <c>random</c> + <c>fireWhilePaused</c>'dur: koşan bir FFA maçı da <c>random</c>'dır ama
+        /// serbest atışı yoktur, dolayısıyla ikisi karışmaz.
+        /// </para>
+        /// </summary>
+        private static bool IsFreePlayground => IsRandomGrant && ModeRuntime.FireWhilePaused;
+
+        /// <summary>Silahı MOD dağıtıyor, yani sahnedeki tezgâhlar gizlenmeli: kaynak
+        /// <c>random</c> <b>ve</b> ortada kurulmuş bir maç var (FFA). Serbest alan bunun dışındadır.</summary>
+        private static bool ModeDistributesWeapons => IsRandomGrant && !IsFreePlayground;
 
         private void HandleRulesChanged() => ApplyRules();
 
@@ -237,14 +273,17 @@ namespace VortexArena.Core.Combat
             // yayınlanabilir (her load_match), koşulsuz sıfırlansaydı oyuncunun yarım şarjörü maçın
             // ortasında sessizce dolardı.
             bool random = IsRandomGrant;
-            if (random != _appliedRandomGrant)
+            bool distributes = ModeDistributesWeapons;
+
+            if (random != _appliedRandomGrant || distributes != _appliedModeDistributes)
             {
                 _appliedRandomGrant = random;
+                _appliedModeDistributes = distributes;
                 _selected = null;
                 DestroySummoned();
             }
 
-            if (random)
+            if (distributes)
             {
                 SweepScene();
                 return;
@@ -259,6 +298,15 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// Sahnede duran silahları gizler: silahı mod dağıtıyorsa sahnedeki örnekler oyuncuya
         /// alınabilirmiş gibi görünmemeli.
+        /// <para>
+        /// ⚠️ <b>Yalnız KURULMUŞ bir maçta koşar</b> (<see cref="ModeDistributesWeapons"/>), maç
+        /// yokken DEĞİL. Sebep: operatör lobideyken bir arena seçince o arena sahnelenir ve kural
+        /// şekli lobi profilinde kalır (<c>random</c>) — kapı yalnız "kaynak random mı" olsaydı,
+        /// maç başlamadan arenanın silah tezgâhları gizlenirdi ve oyuncu bekleme süresince ne silah
+        /// alabilir ne de serbest atış yapabilirdi (oysa lobi profilinin bütün amacı odur).
+        /// Serbest alanda iki yol birden açıktır: tezgâhtan seçilirse o silah, seçilmezse
+        /// loadout'tan rastgele biri gelir.
+        /// </para>
         /// <para>
         /// ⚠️ <b>Taban bölgeleri BURADA DEĞİLDİR</b> ve buraya geri eklenmez — şeritlerin
         /// görünürlüğü silah kaynağına değil takım kipine bağlıdır ve

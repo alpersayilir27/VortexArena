@@ -509,7 +509,10 @@ seçip hedeflere ateş edebilirler.
   `GameCatalog.FindMode(ModeRuntime.ModeId)` ile çözüyor. Lobinin kaynağı
   `weaponSource:"random"`: grip'e basılı tutulan elde rastgele bir silah durur, bırakınca yok olur.
   `ModeRules.LobbyProfile` bilinçli olarak `RandomGrant` taşır — `WeaponCanvas` seçilseydi her
-  lobi sahnesine elle silah yerleştirmek gerekirdi.
+  lobi sahnesine elle silah yerleştirmek gerekirdi. ⚠️ Aynı profil **sahnelenen arenada da**
+  geçerlidir ve orada sahnede silah VARDIR: iki yol birden açıktır (tezgâhtan seçilen silah, ya da
+  hiç seçilmediyse loadout'tan rastgele biri) ve tezgâhlar **gizlenmez** — gizleme yalnız kurulmuş
+  bir maçta koşar (§7, "sahnelenen arena lobi profiliyle koşar").
 - **Takımı yalnız admin atar** (`set_team`), üstelik **her fazda** — koşan maçın ortasında da.
   Oyuncunun kendi takımını seçmesi için protokol mesajı yoktur.
 
@@ -951,14 +954,27 @@ eklenir, `head` ve `haloMaterial` (`_Shared/FX/M_ProximityHalo`) alanları Inspe
 `ControllerModelHider` (`Core/Player` — **`VA_CameraRig` kökünde**; Meta Building Blocks kamera
 rigine BİRDEN FAZLA yerde (`Controller Tracking Left/Right` VE ayrıca
 `OVRComprehensiveInteractionRig` altında) fiziksel Touch controller modeli + el görseli koyuyor.
-Rig kökünden TÜM alt ağacı **bileşen tipiyle** tarar ve gizler: her `OVRControllerHelper` ile tip
-adı `HandVisual` olan her `MonoBehaviour`'ın GameObject'i kapatılır. `LateUpdate`'te her kare
-yeniden çalışır — kontrolcü bırakılıp-tutulduğunda Meta bunları yeniden aktifleştiriyor.
-⚠️ İsim deseniyle çalışan eski sürüm hedefi ıskalıyordu (§7, "rig görselleri isimle değil bileşen
-tipiyle gizlenir"). ⚠️ **`SyntheticHand`, `OVRHand`, interactor'lar, retiküller ve `HandSphereMap`'e
-DOKUNULMAZ** — kavrama onlara bağlıdır; kapatılırsa silah hiç tutulamaz. Sonuç: kumanda modeli de
-Meta eli de **hiçbir yerde** (lobi ve kalibrasyon dahil) çizilmez; oyuncu kendinden `LocalBodyAvatar`
-gövdesini görür. Kozmetiktir, `OVRInput` girdisini etkilemez),
+Rig kökünden TÜM alt ağacı **bileşen tipiyle** tarar: her `OVRControllerHelper` ile tip adı
+`HandVisual` olan her `MonoBehaviour` adaydır. ⚠️ **Oyuncunun gördüğü el buradan GELMEZ** — o el
+`LocalBodyAvatar`'ın gövde meshinden kesilmiştir; bu bileşenin işi onun ÜSTÜNE binen rig
+görsellerini susturmaktır, yoksa oyuncu iç içe geçmiş iki el görürdü. **İki ayrı susturma yolu
+vardır ve seçim sonucu değiştirir:** kumanda modelleri ile mesafeli kavramanın hayalet el
+reticle'ları **objesiyle kapatılır** (`SetActive(false)`); oyuncunun kendi el görsellerinde
+(`drivenHandVisuals`, **tam ad** eşleşmesi) **yalnız Renderer kapatılır**, obje açık kalır — çünkü
+`HandVisual` kapanınca el iskeleti **sürülmeyi bırakır** ve o iskeletten ölçüm alan
+`HandGripCalibrationProbe` sessizce bind pozunu ölçmeye başlar. Çizim bakımından iki yol aynıdır;
+fark yalnız iskeletin canlı kalmasıdır. `LateUpdate`'te her kare yeniden çalışır — kontrolcü
+bırakılıp-tutulduğunda Meta gizlenenleri yeniden aktifleştiriyor.
+⚠️ İsim deseniyle çalışan bir gizleme hedefi ıskalar (§7, "rig görselleri isimle değil bileşen
+tipiyle gizlenir"); ad yalnız "hangi el BİZİM" sorusunda kullanılır ve o adlar birbirine tuzak
+kadar yakındır (§7, "`OVRHandVisualLeft` ile `OVRLeftHandVisual` aynı şey değildir"). Listeyle
+hiçbir el eşleşmezse oturum başına bir kez **uyarı** basılır (hata değil): oyunun görüntüsü
+etkilenmez — eller zaten avatardan geliyor — bozulan tek şey probe'un ölçümüdür.
+⚠️ **`SyntheticHand`, `OVRHand`, interactor'lar, retiküller ve
+`HandSphereMap`'e DOKUNULMAZ** — kavrama onlara bağlıdır; kapatılırsa silah hiç tutulamaz. Sonuç:
+oyuncu gözlükte **yalnız kendi karakterinin ellerini** görür; kumanda modeli **hiçbir yerde**
+(lobi ve kalibrasyon dahil) çizilmez, gövde de çizilmez (`LocalBodyAvatar`). Kozmetiktir,
+`OVRInput` girdisini etkilemez),
 `WeatherVolumeFollow` (`Core/FX` — ambiyans parçacık hacmini yerel kameranın üstünde tutar; bağlı
 sistemler **World** simülasyon uzayında olmalı, `Start` sapmayı uyarır. Yalnız kendi transform'unu
 taşır, rig'e dokunmaz), `WeatherWindDriver` (`Core/FX` — kök objeye takılır, altındaki tüm
@@ -966,9 +982,14 @@ sistemlerin `Velocity over Lifetime` XZ'sini ve Noise şiddetini tek Perlin kana
 rüzgar şiddeti + yönü + türbülans birlikte nefes alır. Temel değerler `Awake`'te alınır,
 katmanların göreli hız farkı korunur).
 
-> **Gövde Meta Movement SDK ile çözülür ve yerel/uzak AYNI yoldan geçer.** Oyuncu kendi gövdesini
-> omuzlarından aşağı görür (`LocalBodyAvatar`), başkaları onu uzak avatarda görür — ikisi de **aynı
-> prefab, aynı retarget config, aynı kod**. Tek fark
+> **Gövde Meta Movement SDK ile çözülür ve yerel/uzak AYNI yoldan geçer.** ⚠️ Oyuncu kendi
+> gövdesini, kollarını ve bacaklarını **HİÇ görmez; yalnız ellerini görür ve o eller kendi
+> karakterinin elleridir** — gövde meshinden kesilmiş ayrı bir el meshi aynı iskeletten, aynı
+> karede sürülür (`LocalBodyAvatar.firstPersonHands`), yani oyuncunun gördüğü el ile başkalarının
+> gördüğü el aynı modeldir. Yerel gövde (`LocalBodyAvatar`) hem **ağ kaynağıdır** hem de o ellerin
+> kaynağı; başkaları aynı gövdeyi uzak avatarda görür — iki taraf **aynı FBX, aynı retarget
+> config, aynı kod** (prefablar ayrıdır: `Avatars/Resources/LocalBodyAvatar.prefab` ve
+> `App/Prefabs/RemoteAvatar.prefab`). Tek fark
 > `ArenaNetCharacterBehaviour.HasInputAuthority`'dir: yerelde `true` (gövde body tracking'den çözülür
 > ve ağa akar), uzakta `false` (gelen iskelet uygulanır, sensör hiç koşmaz).
 >
@@ -995,15 +1016,14 @@ katmanların göreli hız farkı korunur).
 | `Combat/ShotTracer` | Havuzlu `LineRenderer` mermi izi — ömrü boyunca **sönerek** kaybolur (alfa düşer + çizgi incelir; eskiden ömrün sonunda `enabled=false` ile bir anda kesiliyordu, göz bunu sönme değil "pat" olarak okuyordu). Ayrı bir *sönme süresi* alanı YOK: sönme `tracerLifetime`'ın kendisine yayılır, yoksa iki sayıdan hangisinin diğerini kestiği sessiz bir tuzak olurdu. Üstüne **yol boyunca duman izi**. **İKİ çağıranı vardır ve olmak zorundadır:** atanın kendi izini `Weapon.Fire` çizer (sunucu atış olayını atana geri yollamaz, istemci de kendi `playerId`'sini süzer — §6.5), uzaktakileri `RemoteShotFx`. Havuz ikisi arasında **paylaşılır** (`ShotTracer.Shared`, kendini önyükleyen DDOL tekil): silah başına havuz açmak, silahların sürekli üretilip yok edildiği modlarda materyali + `Update`'i silah sayısınca çoğaltırdı. Görünüm `ItemDefinition`'dan, sıklık `tracerEveryNthRound`'dan — iki yol da aynı alanları okur (ayrı okusalar aynı silah kendi ekranında başka, karşı ekranda başka görünürdü). Sayaç yerelde silah başına, uzakta oyuncu başına (paylaşılan sayaç izleri rastgele namlulara dağıtırdı). Her mermide çizmek lazer ışını gibi durur + konumu fazla ifşa eder; asıl maliyet bayt değil GC/draw call. **Duman `Play`'in İÇİNDEDİR**, ayrı bir giriş noktası değil — ikinci bir `PlaySmoke` kapısı olsa iki çağırandan biri onu unutabilir, yani aynı silah kendi ekranında dumanlı, karşı ekranda dumansız görünürdü. Puf'lar TEK paylaşılan `ParticleSystem`'e manuel `Emit` edilir (sistemin kendi parçacık dizisi zaten havuz; atış başına `TrailRenderer` objesi üretmek Quest'te hem GC hem draw call olurdu) ve namludan isabete doğru **sönümlenir**: alfa düşer, boy büyür, ömür kısalır. Ömür `tracerLifetime`'dan TÜRETİLİR ama birebir değil — 0.06 sn'lik duman tek karelik gri lekedir, o yüzden ×katsayı + kullanılabilir banda kırpma. Eşyaya ayrı duman alanı **eklenmedi**: duman tracer'a biniyor, `tracerEveryNthRound` tracer'ı kapattığında duman da kapanır. Materyal/doku (yumuşak radyal puf) çalışma anında üretilir — hazır duman materyali `Resources/` altında değil ve serialize alan açmak bu tekili sahneye konması gereken bir bileşene çevirirdi |
 | `Combat/ArenaCombat` | **Oyun kodunun ağa açılan tek kapısı** (statik). `ReportShot` / `ReportThrow` / `ReportHit` / `ReportRaycastHit` / `ReportAreaHit` + `TryGetTargetPlayerId` / `IsHeadshot` / `CanFire` / `LocalPlayerId`. ⚠️ `ReportShot`/`ReportThrow` **UDP olay kanalına** (`0x03`) gider, `ReportHit` **WS**'te kalır — kaybı kozmetik olan ile otoriter olanın kanalı ayrıdır (§10.3). Bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektiriyor (arena uzayı, yön≠nokta, `RemoteHitBox` ile hedef çözme, hasarı istemcinin belirlemesi) — bunlar `Weapon` içinde gömülü kalsaydı ikinci bir hasar kaynağı yazan herkes aynı dördünü yeniden keşfederdi. `Weapon` de bu kapıyı kullanır (tek doğruluk kaynağı). Bağlantı yokken sessizce no-op. Reçeteler: `Gelistirici/Yemek-Kitabi.md` |
 | `Combat/WeaponFrame` | Sahnedeki silahın **çerçevesi** — `VA_WeaponFrame` prefabı olarak her `WPN_*` kökünün çocuğudur (`WeaponKitBuilder` bağlar). Kaynak silahı **dondurur** (Rigidbody kinematik + yerçekimsiz, `Grabbable`/`GrabInteractable`/`ItemGripSockets` kapatılır) → yakın kavrama tümden kapalıdır, silah **yalnız uzaktan** alınır ve çerçeveden hiç ayrılmaz. ISDK `DistanceGrabInteractable`'ın pointer olaylarını dinler: ≤`maxGrabDistance` (2 m) nişan alınınca mavi ışın çizilir, `Select` gelince `WeaponGranter.SelectWeapon(...)` çağrılır — yani oyuncunun eline giden şey kaynağın bir **KLONU**dur. Aynı zamanda bir `IGameObjectFilter`'dır (mesafe kapısı `_interactorFilters`'a bağlanır). Çerçeve görselinin görünürlüğü `isFrameVisible` ile **örnek başına** (sahneden sahneye) ayarlanır — reçete `Gelistirici/Yemek-Kitabi.md`. ⚠️ **Çerçeve yalnız silah SABİT dururken vardır:** `Weapon.HeldChanged` dinlenir ve silah hangi yoldan tutulursa tutulsun (ele verildi ya da ISDK ile kavrandı) çerçevenin GameObject'i kapanır, bırakılınca geri gelir. Kural olayda durur, çağrı noktalarında değil — "silahı ele alan" birden çok yol var ve her birine ayrı ayrı "çerçeveyi de kapat" eklemek yeni bir yol açıldığında unutulacak bir adım olurdu. Abonelik bu yüzden `Awake`/`OnDestroy`'dadır: `OnDisable`'da olsaydı çerçeve kendini kapattığı anda "bırakıldı" sinyalini duyamaz ve bir daha geri gelmezdi |
-| `Combat/WeaponGranter` | Silahın ele geldiği **tek nokta** (§3.9). **Kendini önyükleyen kalıcı tekil** — sahneye konmaz, bu yüzden yeni arenaya ek kurulum adımı doğurmaz. İki kaynağı vardır: (a) **`RandomGrant`** kuralında sahne süpürülür (çerçevedeki silahlar gizlenir — ⚠️ **taban bölgeleri BURAYA AİT DEĞİL**, onlar `BaseZoneVisibility`'dedir) ve grip basılıyken o elde rastgele bir silah durur, bırakılınca **yok olur**, tekrar basınca **yenisi** gelir (`Disposable`); (b) **`WeaponCanvas`** kuralında `WeaponFrame`'in çağırdığı `SelectWeapon` ile seçilen silahın **kalıcı klonu** tutulur — grip bırakılınca yalnız gizlenir, tekrar basınca arenanın neresinde olursa olsun aynı silah aynı mermiyle geri gelir (`Persistent`). Sahnedeki silah **tükenmez**, sınırsız kez seçilir. Oyuncu başına **tek** silah; seçim ancak başka bir çerçeveden alınarak değişir ve **harita başına** sıfırlanır. ⚠️ **(b) yolunda silahı sahneye koyan bileşen YOKTUR ve yazılmaz** — yerleşim arena kararıdır, harita tasarlanırken elle konur (`BaseZone` gibi prefab örneği olarak); silah konmamış bir arenada bu yol sessizce boş döner. Canlanmada seçim korunup silah `RefillFull` ile tam şarjör + rezervle döner — dolum yeri burasıdır. **İkinci dolum kapısı `countdown` mesajıdır:** her geri sayımın başında eldeki silah dolar. Tek başına canlanma yetmiyor — tur tabanlı modda turu **sağ bitiren** oyuncu canlanmaz ve yarım şarjörle yeni tura girerdi (§3.8.2). Kapı geri sayım olduğu için mod-agnostiktir. Admin'de rig kapalı olduğu için silah verme yolu kendiliğinden kapalı, süpürme ise çalışır. Dağıtım normalde rastgeledir; **yalnız editörde** `SequentialGrant` bayrağı (dev sandbox yazar, `#if UNITY_EDITOR`) onu loadout sırasına çevirir — bütün silahları tek tek gözden geçirmek için. Üretim davranışı değişmez |
+| `Combat/WeaponGranter` | Silahın ele geldiği **tek nokta** (§3.9). **Kendini önyükleyen kalıcı tekil** — sahneye konmaz, bu yüzden yeni arenaya ek kurulum adımı doğurmaz. İki kaynağı vardır: (a) **`RandomGrant`** kuralında grip basılıyken o elde rastgele bir silah durur, bırakılınca **yok olur**, tekrar basınca **yenisi** gelir (`Disposable`); (b) **`WeaponCanvas`** kuralında `WeaponFrame`'in çağırdığı `SelectWeapon` ile seçilen silahın **kalıcı klonu** tutulur — grip bırakılınca yalnız gizlenir, tekrar basınca arenanın neresinde olursa olsun aynı silah aynı mermiyle geri gelir (`Persistent`). Sahnedeki silah **tükenmez**, sınırsız kez seçilir. Oyuncu başına **tek** silah; seçim ancak başka bir çerçeveden alınarak değişir ve **harita başına** sıfırlanır. **Sahne süpürmesi** (arenadaki tezgâhların gizlenmesi — ⚠️ **taban bölgeleri BURAYA AİT DEĞİL**, onlar `BaseZoneVisibility`'dedir) tek bir kapıdan geçer: `ModeDistributesWeapons` = kaynak `random` **ve** ortada **kurulmuş bir maç var**. ⚠️ "Kaynak random mı" sorusu tek başına bu sorunun cevabı DEĞİLDİR (§7): sahnelenen arena lobi profiliyle koşar ve orada kaynak da `random`'dır — kapı yalnız kaynağa baksaydı maç kurulmadan tezgâhlar gizlenir, oyuncu bekleme boyunca ne silah alabilir ne serbest atış yapabilirdi. Ayrım `modeId`'den DEĞİL kuraldan okunur (§10.5): serbest alanı benzersiz kılan bileşim `random` + `fireWhilePaused`'dur, koşan FFA de `random`'dır ama serbest atışı yoktur. **Serbest alanda iki yol birden açıktır:** oyuncu tezgâhtan seçerse o silah gelir (seçildiği anda rastgele verilenler geri alınır), seçmezse loadout'tan rastgele biri. ⚠️ Sahnelemeden FFA'ya geçişte kaynak `random` kaldığı için "kaynak değişti mi" yetmez, "mod dağıtıyor mu" da izlenir — izlenmeseydi sahnelemede seçilen silah maça taşınır ve modun rastgele dağıtımı sessizce delinirdi. ⚠️ **(b) yolunda silahı sahneye koyan bileşen YOKTUR ve yazılmaz** — yerleşim arena kararıdır, harita tasarlanırken elle konur (`BaseZone` gibi prefab örneği olarak); silah konmamış bir arenada bu yol sessizce boş döner. Canlanmada seçim korunup silah `RefillFull` ile tam şarjör + rezervle döner — dolum yeri burasıdır. **İkinci dolum kapısı `countdown` mesajıdır:** her geri sayımın başında eldeki silah dolar. Tek başına canlanma yetmiyor — tur tabanlı modda turu **sağ bitiren** oyuncu canlanmaz ve yarım şarjörle yeni tura girerdi (§3.8.2). Kapı geri sayım olduğu için mod-agnostiktir. Admin'de rig kapalı olduğu için silah verme yolu kendiliğinden kapalı, süpürme ise çalışır. Dağıtım normalde rastgeledir; **yalnız editörde** `SequentialGrant` bayrağı (dev sandbox yazar, `#if UNITY_EDITOR`) onu loadout sırasına çevirir — bütün silahları tek tek gözden geçirmek için. Üretim davranışı değişmez |
 | `Combat/WeaponGrantKind` | `None` / `Disposable` / `Persistent` — silahın **nasıl** verildiği (`Weapon.GrantTo`'nun ikinci argümanı). `Disposable` = FFA'nın rastgele silahı: rezerv yok, reload kapalı, her zaman tek elli. `Persistent` = çerçeveden seçilen silah: tam rezerv, reload AÇIK, ikinci el ön kabzayı tutabilir. **Neden tek bayrak değil:** `IsGranted` üç ayrı kuralı birbirine kilitliyordu ("elde sabit" + "reload kapalı" + "tek el/rezervsiz"); çerçeve silahı yalnız ilkini ister. ⚠️ Serialize EDİLMEZ (çalışma anı durumu), o yüzden "yeni değer sona" kuralı burada bağlayıcı değildir |
 | `Combat/SimpleWeaponDissolve` | *(her `WPN_*` kökünde; `WeaponKitBuilder` takar ve `DissolveEffect.mat`'i bağlar)* Silah ele geldiğinde **çözülerek belirir**: model geçici olarak çözülme materyaline çevrilir, `_Dissolve` 1→0 sürülür (SmoothStep, `appearSeconds`), sonra özgün materyaller geri konur. **Yalnız beliriş vardır** — bırakışta efekt yoktur, silah anında gider ve yerinde kalan bir kopya bırakmaz. Kapı **`Weapon.HeldChanged`**'dir, çağrı noktaları değil — üç tutma yolu da (rastgele verilen silah, çerçeve klonu, ISDK kavraması) tek yerden karşılansın, yeni bir yol açıldığında sessizce unutulmasın (`WeaponFrame` aynı olayı aynı sebeple dinliyor). Silahın **kendi albedosu** (`_BaseMap`/`_MainTex` + `_BaseColor`/`_Color`) özgün materyalden okunup `MaterialPropertyBlock` ile taşınır: çözülme materyali TEK bir asset ve hangi silaha takıldığını bilmiyor, taşınmasaydı silah düz renkli bir siluet olarak çözülürdü. Materyal `.sharedMaterials` ile takılır (`.materials` her renderer için toplanmayan bir kopya üretirdi). Hedefler `Awake`'te bir kez toplanır: yalnız `MeshRenderer`/`SkinnedMeshRenderer` (namlu alevi/duman ve nişan ışını kendi materyalleriyle çizilir), `WeaponFrame`'in alt ağacı atlanır. ⚠️ `OnDisable` materyalleri geri koyar: obje kapanınca coroutine ölüyor — geri konmasaydı silah bir dahaki çağrılışında yarı çözülmüş belirir, üstelik property block'lu renderer SRP Batcher dışında kalmaya devam ederdi. ⚠️ **Kenar rengi/kalınlığı, desen sıklığı gibi görünüm ayarları bileşende YOKTUR ve eklenmez** — onların tek doğruluk kaynağı **materyaldir** (`_Edge_Color`, `_Edge_Width`, `_NoiseScale`, `_DissolveAxis`, `_DirectionStrength` orada ayarlanır); bileşen yalnız `_Dissolve`'u ve albedoyu yazar, materyalin geri kalanına dokunmaz. Serialize edilen alan bu yüzden yalnız iki tane: `dissolveMaterial` ve `appearSeconds` (süreyi `WeaponKitBuilder` her koşuda prefaba geri yazar). **İki materyal seçeneği var:** `DissolveEffect` (Simple Noise — yumuşak lekeler) ve `VoronoiDissolveEffect` (Voronoi — hücresel, "parçalara ayrılıyor"); ikisi de aynı property setini konuşur, yani bileşende yalnız materyal alanı değişir |
 | `Combat/FrozenGrabTransformer` | Hiçbir şey yapmayan ISDK `ITransformer`'ı: kavranan nesneyi **yerinde dondurur**. Çerçevedeki kaynak silahın `Grabbable._oneGrabTransformer`/`_twoGrabTransformer` alanlarına bağlanır. ⚠️ **Alanları boş bırakmak hareketsizlik değil, SERBEST hareket demektir** — `Grabbable.Start` ikisi de boşsa kendisi bir `GrabFreeTransformer` üretir |
 | `Player/ArenaNetCharacterBehaviour` | Movement SDK'nın ağ katmanı ile ArenaNet arasındaki **tek köprü** (§6.9/6.10). SDK'nın `INetworkCharacterBehaviour`'ını uygular: ürettiği blob'u `0x07` olarak yollar, gelen blob'u `NetworkCharacterHandler.ReceiveData`'ya verir, karakterin kökünü `LateUpdate`'te arena uzayına oturtur. **Rol ayrımının uygulandığı TEK yer**: `HasInputAuthority` yerelde `true` (sensör kaynağı `MetaSourceDataProvider` açık, gövde body tracking'den çözülür ve akar), uzakta `false` (kaynak KAPATILIR — açık bırakılsaydı her uzak avatar aynı yerel sensörü okurdu). ⚠️ Kaynak bileşen prefabdan **silinmez, yalnız kapatılır**: `CharacterRetargeter.Awake` onu kendi GameObject'inden `GetComponent` ile arıyor ve yoksa assert atıyor — tek prefabın hem yerel hem uzak çalışabilmesi bileşenin orada durmasına bağlı. ⚠️ **Kökü SDK değil bu sınıf yazar**: blob'un 0. eklemi gönderenin dünya uzayındadır ve blob opak olduğu için içeriden çevrilemez, o yüzden kök arena uzayında ayrıca taşınır (§6.9). ⚠️ `NetworkTime`/`RenderTime` **sunucunun tik saatinden** gelir (`RemotePlayerRegistry.TryGetServerTimeSeconds`), `Time.unscaledTime`'dan DEĞİL: SDK'nın interpolasyonu gönderenin damgasıyla alıcının render zamanını karşılaştırıyor, iki uç aynı epoch'ta olmazsa gövde 12 Hz basamaklarla oynar. ⚠️ `ReceiveStreamAck` **bilerek boştur** — ack yalnız delta sıkıştırma içindir ve delta kapalıdır (§6.9) |
 | `Player/HandGripConvention` | Anchor (kumanda) uzayındaki el pozunu karakterin el kemiğinin bind eksenine çeviren **statik köprü**. Kemik anatomisi (parmak yönü = hand→MiddleProximal, avuç normali = parmak×başparmak) **modelden çalışma anında ölçülür**, sabit derece yazılmaz: karakter değişince burada tek satır değişmez. Sabit olan tek şey anchor tarafındaki el anatomisidir — **tek ayar noktası** budur ve bugünkü değeri ergonomik bir TAHMİNDİR; kesin değeri `HandGripCalibrationProbe` ölçer. Sol ve sağ ayrı hesaplanır; ortak bir ofset iki eli birden düzeltemez (§7). ⚠️ **Kapsamı daraldı: gövde artık buradan geçmez.** Kol/bilek zinciri Movement SDK retargeting'inden geliyor ve SDK kendi eşlemesini kendi yapıyor; bu köprünün bugünkü tek işi **eşyanın ele oturmasıdır** (kavrama soketi + uzak çizim), çünkü `ItemDefinition.primaryGrip` ölçüsü anchor uzayında alınmış. Buraya gövdeyle ilgili bir tüketici geri eklenirse retargeting ile ikinci bir eşleme kaynağı doğar |
-| `Player/HandGripCalibrationProbe` | Yukarıdaki tahmini sabitin **kesin** değerini cihazda ölçen geliştirici aracı (`VA_CameraRig`'de durur): bir kez log basıp kendini kapatır, çıkan iki satır `HandGripConvention`'a yapıştırılır. Ölçüm kaynağı **BB rig'inin kumandadan sürdüğü el iskeletidir** (`OVRHandVisualLeft/Right → OculusHand_* → b_*_wrist`) — oyuncu kendi elini doğru yerde gördüğü için o iskelet "anchor'a göre el nerede" sorusunun canlı cevabıdır. ⚠️ Denenip elenen iki kaynak: `OVRInput.Controller.LHand/RHand` **multimodal** ister (projede kapalı), mesafeli kavrama önizlemesindeki kopyalar ise `ControllerModelHider` tarafından kapatılır (kapalı kemik sürülmez, bind pozu ölçülürdü). Oyun kodu onu OKUMAZ. ⚠️ Bugün ölçüm kaynağı da `ControllerModelHider` tarafından kapatılıyor (el görselleri tip eşleşmesiyle gizleniyor) — probe kullanılacaksa gizleyici geçici olarak devre dışı bırakılmalıdır |
-| `Player/LocalBodyAvatar` | Oyuncunun **kendi gövdesi** — uzak avatarlarla **aynı prefabı** `Owner = Host` olarak kurar (`ArenaNetCharacterBehaviour.Initialize(playerId, hasInputAuthority: true)`), yani "kendi gördüğüm gövde" ile "başkalarının gördüğü gövde" tek doğruluk kaynağıdır. **Kendini önyükleyen kalıcı tekil** (`WeaponGranter` kalıbı): prefabı `Resources.Load("LocalBodyAvatar")` ile yükleyip sahne köküne kurar, sahneye elle KONMAZ → yeni arena bir kurulum adımı doğurmaz. Gövde ancak **iki koşul** birden sağlanınca kurulur: etkin bir `OVRCameraRig` (yani rol gerçekten oyuncu) ve sunucudan alınmış bir `playerId` (blob onunla etiketleniyor, §6.9); o ana kadar gizli durur — kurulmamış bir retargeter oyuncunun yüzüne dikilmiş bir T-poz mankeni olurdu. ⚠️ **Kurulmuş olmak çizilmek için yetmez:** gövde ancak retargeter o kare bir poz gerçekten uyguladıysa (`RetargeterValid`) görünür, çünkü SDK sensör geçerli veri üretene dek karaktere hiçbir şey yazmaz ve o pencerede karakter **dünya orijininde T-pozunda** durur (§7) — oyuncu kendi kopyasını haritanın ortasında görürdü. Kurulumdan sonra görünürlük **renderer düzeyinde** yönetilir, obje kapatılarak DEĞİL (§7, `OVRBody` kendini kalıcı kapatabilir). **Gövde kalibrasyonunun tetikleyicisi de buradadır** ve ⚠️ **varsayılan KAPALIDIR** (`calibrateBodyProportions = false`): kapalıyken `CharacterRetargeter.Calibrate()` hiç çağrılmaz ve herkes prefabın oranlarını kullanır — kalibrasyon hem uzak gövdeyi bozuyor (blob sıkıştırması eklem uzunluklarına dayalı) hem birinci şahıs ofsetini oturumdan oturuma değiştiriyor (§7). ⚠️ **`firstPersonOffset` ancak bu kapalıyken ayarlanır**, tersi her denemede başka sonuç veren bir tur olur. Alan açıldığında yol şudur: `ArenaCalibrator.CalibrationGeneration` değişince 3 sn sonra `Calibrate()` çağrılır — gecikme zorunludur, oyuncu arena kalibrasyonunu zemine EĞİLEREK yapıyor ve o andaki poza sabitlenen gövde oranı maçın kalanı boyunca yanlış boy demektir. ⚠️ Sürenin dolması tek başına yetmez: `Calibrate()` geçerli poz yokken **sessizce hiçbir şey yapmaz** (§7), bu yüzden çağrı koşul sağlanana dek her karede yeniden denenir. Kalibrasyondan sonra uygulanan gövde ölçeği bir kez raporlanır; `ScaleRange` sınırına dayanmışsa uyarıya döner. ⚠️ Avatar **sahne kökünde** durur, rig'in altına konmaz (§7, "retarget avatarı hareket eden kökün altına konmaz"). **Birinci şahıs ince ayarı `firstPersonOffset`'tir** (metre, gövdenin yaw uzayı; `-Z` geri): retarget gövdeyi izlenen kafanın altına oturtur ve model oranları oyuncununkine birebir oturmadığında gövde kameraya göre bir tık ileride kalır — oyuncu aşağı bakınca kendi göğsünün içini görür. ⚠️ Ofset `LateUpdate`'te uygulanır ve sınıf `[DefaultExecutionOrder(30000)]`'dir: gönderim order 100'de olduğu için ofset **tele girmez**, ayrıca SDK kökü her kare yeniden yazdığı için **birikmez** (geri almak gerekmez — ölçekte durum tersidir, §7). ⚠️ Gövdede **collider yoktur** — `Weapon`'ın atış raycast'i maskesiz, kendi gövden kendi atışını yerdi. Admin'de çizilmez ve bu rol kontrolüyle DEĞİL, etkin rig yoksa hiç çalışmayarak sağlanır (`AppSession` App asmdef'indedir, Core onu göremez) |
-| `Player/LocalAvatarBoneHider` | Yerel gövdede oyuncunun görmemesi gereken kemikleri `Animator.GetBoneTransform` ile bulup **sıfıra yakın ölçekler** — mesh tek `SkinnedMeshRenderer` olduğu için renderer kapatmak seçenek değil. Varsayılan gizlenenler **Head, Neck, LeftUpperLeg, RightUpperLeg**: kamera kafa/boyunun içinde durur; bacaklar ise izlenmiyor (Quest 3'te bacakta sensör yok — `FullBody` seçilse bile alt gövde ÜRETİLİR), aşağı bakan oyuncu uydurma adımlar görürdü. ⚠️ Liste bir tercih değil **izlenmeyen uzuvların listesidir**: gerçek bacak izlemesi gelirse buradan çıkarılırlar. Kalan görüntü: omuzlardan aşağı kollar + gövde. `DefaultExecutionOrder` yüksektir — retargeting kemikleri her kare yazıyor, ölçek EN SON basılmalı. ⚠️ **Gizleme her kare `Update`'te GERİ ALINIR, yalnız `LateUpdate`'te basılır:** ağa giden iskelet kemiklerin canlı transformlarından okunuyor ve okuma `localScale`'i de kapsıyor (§7) — geri alınmasaydı uzak tarafta bacaklar kalçaya, kafa göğse çökerdi. Ayrıca yerel gövdenin `SkinnedMeshRenderer.quality`'si **Bone4'e sabittir** (Auto değil): Quest'in "Mobile" seviyesi vertex başına 2 kemik veriyor ve 30 cm'den bakılan bilek onunla çöküyor (§7) |
+| `Player/HandGripCalibrationProbe` | Yukarıdaki tahmini sabitin **kesin** değerini cihazda ölçen geliştirici aracı (`VA_CameraRig`'de durur): bir kez log basıp kendini kapatır, çıkan iki satır `HandGripConvention`'a yapıştırılır. Ölçüm kaynağı **BB rig'inin kumandadan sürdüğü el iskeletidir** (`OVRHandVisualLeft/Right → OculusHand_* → b_*_wrist`) — çizilmese de kumandadan canlı sürülür, yani "anchor'a göre el nerede" sorusunun cevabı odur. ⚠️ Denenip elenen iki kaynak: `OVRInput.Controller.LHand/RHand` **multimodal** ister (projede kapalı), mesafeli kavrama önizlemesindeki kopyalar (`OVRLeftHandVisual`/`OVRRightHandVisual`) ise `ControllerModelHider` tarafından kapatılır (kapalı kemik sürülmez, bind pozu ölçülürdü). Oyun kodu onu OKUMAZ. ⚠️ Ölçüm kaynağı ile o kopyalar **yalnız kelime sırasıyla** ayrılır (§7, "`OVRHandVisualLeft` ile `OVRLeftHandVisual` aynı şey değildir"); probe'un beslendiği el **çizilmez ama objesi açık kalır** — `ControllerModelHider` onu `drivenHandVisuals` listesi sayesinde yalnız Renderer düzeyinde söndürür, listeden çıkarılırsa obje tümden kapanır ve sürülmeyen iskeletten bind pozu ölçülür |
+| `Player/LocalBodyAvatar` | Oyuncunun gövdesi — hem **ağ kaynağı** hem **oyuncunun gözlükte gördüğü ellerin kaynağı**. ⚠️ Oyuncu gövdesini/kollarını/bacaklarını görmez, yalnız ellerini görür ve o eller **kendi karakterinin elleridir**: gövde meshinden kesilmiş ayrı bir el meshi (`firstPersonHands`, `Tools > VortexArena > Avatars > Build First-Person Hands Mesh` üretir) aynı iskeletten, aynı karede sürülür. **Kesim yalnız çizimdedir; telde tam gövde gider.** Rig'in ISDK el görselleri tam bu yüzden söndürülür (`ControllerModelHider`) — ikisi birden çizilse oyuncu iç içe iki el görürdü. Uzak avatarla **aynı FBX ve aynı retarget config'ini** `Owner = Host` olarak kurar (`ArenaNetCharacterBehaviour.Initialize(playerId, hasInputAuthority: true)`), yani "başkalarının gördüğü gövde" tek doğruluk kaynağıdır. **Kendini önyükleyen kalıcı tekil** (`WeaponGranter` kalıbı): prefabı `Resources.Load("LocalBodyAvatar")` ile yükleyip sahne köküne kurar, sahneye elle KONMAZ → yeni arena bir kurulum adımı doğurmaz. Gövde ancak **iki koşul** birden sağlanınca kurulur: etkin bir `OVRCameraRig` (yani rol gerçekten oyuncu) ve sunucudan alınmış bir `playerId` (blob onunla etiketleniyor, §6.9). Kurulumda `ApplyFirstPersonVisibility()` **el meshi DIŞINDAKİ** tüm Renderer'ları kapatır, el renderer'ını açar (prefabda kapalı gelir) ve bir daha çalışmaz — gövdeye sonradan renderer eklenmiyor. El meshi **adıyla değil referansla** seçilir, yani obje adı değişse de doğru renderer açık kalır. ⚠️ **El meshi bağlı değilse oyuncu HİÇBİR ŞEY görmez** (gövde zaten çizilmiyor) ve bu tek atışlık bir `LogError` ile bildirilir: belirtisi "izleme bozuk" diye okunur, oysa eksik olan üretilmemiş bir mesh asset'idir. ⚠️ **Obje YAŞAMAYA devam eder ve yıkılmaz** — gizli olması "gereksiz" demek değildir: bu obje giderse oyuncu ağa hiç iskelet göndermez ve **diğer oyuncular onu göremez**. ⚠️ Görünmezlik **renderer düzeyinde** yapılır, obje kapatılarak DEĞİL (§7, `OVRBody` kendini kalıcı kapatabilir) ve **kemik ölçeğiyle de DEĞİL** (§7, ağa giden iskelet `localScale`'i de okur). Retargeter hiç poz uygulamazsa (`RetargeterValid` kalıcı `false`) tek atışlık bir `LogError` basılır; body tracking arızası artık **yerelde de görünür** — oyuncu ellerini kaybeder (çizilen tek şey onlar) ve aynı anda başkalarının ekranından silinir. **Gövde kalibrasyonunun tetikleyicisi de buradadır** ve ⚠️ **varsayılan KAPALIDIR** (`calibrateBodyProportions = false`): kapalıyken `CharacterRetargeter.Calibrate()` hiç çağrılmaz ve herkes prefabın oranlarını kullanır — açılırsa **uzak gövde bozulur**, çünkü blob `SerializationCompressionType.High` ile eklem uzunlukları üzerinden sıkıştırılıyor ve gönderenin oranı değişince alıcının hedef iskeleti uyuşmaz (§7). ⚠️ Alanın artık **yerel görünüme de** etkisi var (eller aynı gövdeden çiziliyor): açmak oyuncunun kendi elini gerçek eline yaklaştırır ama uzak avatarı bozar — **uzak taraf tercih edilir**, kapalı kalır. Alan açıldığında yol şudur: `ArenaCalibrator.CalibrationGeneration` değişince 3 sn sonra `Calibrate()` çağrılır — gecikme zorunludur, oyuncu arena kalibrasyonunu zemine EĞİLEREK yapıyor ve o andaki poza sabitlenen gövde oranı maçın kalanı boyunca yanlış boy demektir. ⚠️ Sürenin dolması tek başına yetmez: `Calibrate()` geçerli poz yokken **sessizce hiçbir şey yapmaz** (§7), bu yüzden çağrı koşul sağlanana dek her karede yeniden denenir. Kalibrasyondan sonra uygulanan gövde ölçeği bir kez raporlanır; `ScaleRange` sınırına dayanmışsa uyarıya döner — sınıra dayanmış ölçek iki şeyi birden bozar: **diğer oyuncular** bu oyuncuyu yanlış boyda görür, oyuncunun kendisi de elini kaymış görür. ⚠️ Sınıf `[DefaultExecutionOrder(30000)]`'dir: `Calibrate()` o karenin **uygulanmış** pozunu ölçmeli, yani SDK'nın retarget döngüsünden ve iskeleti serileştiren `NetworkCharacterHandler`'dan (order 100) sonra koşmalıdır. ⚠️ Avatar **sahne kökünde** durur, rig'in altına konmaz (§7, "retarget avatarı hareket eden kökün altına konmaz"). ⚠️ Gövdede **collider yoktur** — `Weapon`'ın atış raycast'i maskesiz, kendi gövden kendi atışını yerdi. Admin'de kurulmaz ve bu rol kontrolüyle DEĞİL, etkin rig yoksa hiç çalışmayarak sağlanır (`AppSession` App asmdef'indedir, Core onu göremez) |
 | `Team` | `Red` / `Blue` / **`Neutral`**. `BaseZone`'da `Neutral` = herkese açık joker. ⚠️ Yeni değer SONA eklenir: `BaseZone`/`Weapon` bu enum'u serialize ediyor, başa ekleme her arenanın taban takımlarını kaydırır |
 
 **`ArenaRoof`** (çatılı arenalar için, **isteğe bağlı**): çatı hiyerarşisinin köküne konur
@@ -1020,11 +1040,12 @@ bile görünmez. Oyuncu tarafında etkisi YOKTUR — yalnız `AdminSpectator.Ref
 ### Editör: `VortexArena.Core.Editor` (içerik araçları — yalnız Editor)
 
 Menü öğelerinin tam listesi ve "ne zaman çalıştırılır" tablosu `CLAUDE.md`'de; burada arena
-geometrisini üreten iki araç + kavrama ayarı:
+geometrisini üreten araçlar + kavrama ayarı + birinci şahıs el meshi:
 
 | Sınıf | Görevi |
 |---|---|
 | `GripSocketAuthoring` | Kavrama noktalarını **sahnede sürükleyerek** ayarlama aracı: `GameObject > VortexArena > Grip Socket (Primary/Secondary)` işaretçi üretir (mevcut SO değerlerinden başlatarak — araç ayarı sıfırlamaz), `Tools > VortexArena > Weapons > Write Grip Sockets To Definition` onu `WD_*.asset`'e yazar. **Var olma sebebi asimetri:** aynı sürüklenmiş poz `primaryGrip` için TERS bileşimle (`R=Inverse(localRot)`, `P=−(R·localPos)`), `secondaryGrip` için DÜZ yazılır — elle yapıldığında bu fark sessiz bir işaret hatası üretiyordu. Round trip birebir: geri okuma işaretçiyi aynı yere koyar. Yalnız **bulunan** işaretçinin alanları yazılır (yarısı ayarlı silahı sıfırlamasın); ölçek bulaşmasın diye `InverseTransformPoint` yerine elle bileşim |
+| `FirstPersonHandsMeshBuilder` | `Build First-Person Hands Mesh`: gövde avatarının tek parça skinned meshinden **yalnız el geometrisini** keser, `_Shared/Avatars/<Model>_FirstPersonHands.mesh` olarak yazar ve `Resources/LocalBodyAvatar.prefab` içindeki `Character/FirstPersonHands` renderer'ına + `LocalBodyAvatar.firstPersonHands` alanına bağlar. **İdempotent, GUID korur.** El kemiği kümesi **ata zincirinden** çözülür (adı `LeftHand`/`RightHand` ile biten kemikler kök, parmaklar dahil); vertexin el ağırlığı ≥ 0.5 ise tutulur, üç vertexi de tutulan üçgenler kalır. ⚠️ **Kemik indeksleri remap EDİLMEZ** — yeni mesh kaynağın `bindposes` dizisini olduğu gibi taşır, böylece el renderer'ı gövdenin `bones` dizisini ve `rootBone`'unu aynen kullanır: kesim **yalnız çizimdedir, telde tam gövde gider**. Renderer prefabda `enabled = false`, gölge kapalı (gövde çizilmediği için yerde iki kopuk el gölgesi olurdu) ve `updateWhenOffscreen = true` (sınırlar bind pozundan türüyor; culling kaybı sessiz ve tam bir arıza olurdu). ⚠️ **Karakter modeli değişince tekrar çalıştırılır; atlanırsa oyuncu HİÇBİR ŞEY görmez** (§7) |
 | `DimensionMeshBuilder` | `JSON'dan DimensionMesh Üret`: boyut dosyasından **ölçü maketi** üretir — tek `Plane` (ProBuilder çokgeni, extrude 0) + kolon başına bir prizma (pivotu ayak izinin ağırlık merkezinde, sürüklemek doğal olsun diye) + iki kalibrasyon küpü (`anchor_a` kırmızı / `anchor_b` mavi; **küpün merkezi noktanın kendisidir**, yarısı zeminin altında kalır — Inspector'daki konum dosyadaki nokta ile birebir aynı okunsun diye; dosyada nokta yoksa üretilmez ve uyarılır). ⚠️ **Sahnenin kalibrasyon işaretçilerini üreten tek yer burasıdır**, yani her arenada çalıştırılması zorunludur; kök + küpler build'e girsin diye maket `EditorOnly` etiketlenmez (görsel dalı build'den `DimensionMeshBuildStripper` ayıklar). ⚠️ **Duvar ÜRETMEZ ve maket oynanan geometri değildir**: arena sanatı maketin üstüne kurulur. ⚠️ **Kök SAHNEDEN BAĞIMSIZ kurulur**: sahne kökünde, dünya orijininde, dönüşsüz ve 1 ölçekte — hiçbir şeyin altına parent'lanmaz, böylece dosyadaki ölçü sahnede birebir okunur. Arenanın üstüne oturtmak isteyen elle taşır/döndürür; geri okuma maketin kendi kökünü referans aldığı için etkilenmez. **İdempotent**: aynı mekanın maketi varsa silinip yeniden kurulur. Üretimden önce halkayı `Polygon2D.IsSelfIntersecting` ile denetler |
 | `DimensionMeshReader` | `DimensionMesh'i JSON'a Çevir`: maketi okuyup **kaynak dosyanın üstüne** yazar (hedef sorulmaz, maketin işaretçisinden gelir). Ayak izi çıkarımı: yatay yüzler (`\|normal.y\| > 0.9`) Y seviyesine göre gruplanır, **en alt** grup alınır (prizmada alt yüz kazanır), kenarlar XZ'ye izdüşürülüp kaynaştırılır, **yalnız bir kez geçen** kenar sınır sayılır, halka yürünür ve doğrusal ara köşeler ayıklanır. Noktalar dünya üstünden kök uzayına çevrilir — kolonu sürüklemek/döndürmek doğru yazılır. ⚠️ Kenarlar köşe **indeksiyle değil konumla** anahtarlanır: ProBuilder sert normaller için köşeleri yüz başına ayırıyor, indeksle bakan tespit tüm mesh'i sınır sanar. Kalibrasyon noktaları `DimensionAnchor` küplerinin transformundan okunur; ⚠️ küp yoksa dosyadaki `calibration` **KORUNUR** (sıfırlanmaz — eski bir maketi çevirmek mekanın zemin bandı ölçüsünü silerdi). Yazmadan önce çıktı geri ayrıştırılır; doğrulanamazsa dosyaya **dokunulmaz** |
 | `DimensionMeshBuildStripper` | Menü değil, **build kancası** (`IProcessSceneWithReport`): ölçü maketinin görsel dalını (`Plane` + `Columns`) build'e giden **geçici sahne kopyasından** siler — sahne dosyasına dokunmaz, kök ve `DimensionAnchor` küpleri kalır (kalibrasyon onlara bağlı). ⚠️ Gerekçe boyut değil **bağımlılık**: çokgenler `ProBuilderMesh` taşır ve o bileşen `Unity.ProBuilder`'ı runtime derlemesine sokardı; bu projede ProBuilder yalnız editör tarafıdır. Editör Play kipinde kanca koşmaz, orada görseli `ArenaDimensionMesh.Awake` `Renderer.enabled` ile gizler |
@@ -1306,7 +1327,8 @@ yukarıdaki altı adımdır):
    civarında. Arena uzayı dünya uzayıdır, yani sahneyi topluca kaydırmak/döndürmek arenadaki tüm
    oyuncuların ağ koordinatını kaydırır.
 4. Ağ objeleri: `_Shared/App/Prefabs/` altındaki prefabları sahne köküne **örnek olarak** sürükle —
-   `VA_CameraRig` (kamera/kumanda + etkileşim rig'i + yerel gövde avatarı), `VA_PoseSync`
+   `VA_CameraRig` (kamera/kumanda + etkileşim rig'i; ⚠️ gövde avatarı burada DEĞİL, kendini
+   önyükler), `VA_PoseSync`
    (`PlayerPoseTracker` + `RemotePlayerSpawner`), `VA_CalibrationManager` (`ArenaCalibrator`),
    `VA_ModeHud` (`ModeHudSpawner`). **Başka bir arenadan kopyalama** (kopya prefab bağını kaybeder,
    rig/kalibrasyon düzeltmeleri o sahneye ulaşmaz). Sonra sahneye bakan referansları elle bağla:
@@ -1357,7 +1379,7 @@ konsoluna tek satır sebep yazar.
    Ayrıca **sahneye Building Blocks rig'i eklenmez, `VA_CameraRig` prefabı kullanılır**: BB kurulum
    yordamı (`CameraRigBBBlockData`) prefabı örnekledikten sonra **otomatik unpack ediyor** — yani
    her arena rig'in birbirinden habersiz donmuş bir kopyasını taşırdı ve tek bir rig düzeltmesi
-   (tracking origin, el görselleri, gövde avatarı) arena sayısı kadar elle iş doğururdu. Rig'e bakan
+   (tracking origin, el görselleri, gizleyici listesi) arena sayısı kadar elle iş doğururdu. Rig'e bakan
    sahne referansları (`ArenaBoundary.head/fadeRenderer/warningText`, `BaseZone.head`,
    `WeaponReloadGesture.head`, `ArenaCalibrator.rigRoot`) rig değiştirilirken **yeniden bağlanmalı**;
    boş kalırlarsa sahne sessizce çalışmaz hâle gelir.
@@ -1730,8 +1752,9 @@ konsoluna tek satır sebep yazar.
     Belirtisi gecikmelidir ve bu yüzden pahalıdır: rig birimken (arena origin'inde, kalibrasyon
     alınmamışken) hiçbir şey görünmez; kalibrasyon rig'e bir dönüşüm yazar yazmaz avatar
     oyuncudan tam **bir kalibrasyon ofseti** kadar uzağa oturur — arena etrafında dönmüş, zemin
-    düzeltmesi kadar yükselmiş, oyuncunun hareketlerini birebir yapan "ikinci bir gövde" gibi; ve
-    oyuncu kendi kollarını göremez, çünkü kollar da o kopyadadır.
+    düzeltmesi kadar yükselmiş, oyuncunun hareketlerini birebir yapan "ikinci bir gövde" gibi.
+    ⚠️ Yerel gövde çizilmediği için belirti **yalnız başkalarının ekranında** görünür: hata onu
+    yapan kişinin başlığında hiçbir iz bırakmaz.
 
     **Kural bugün de bağlayıcıdır ve tasarımın kendisi oldu:** karakter — yerel de uzak da — sahne
     kökünde durur, hiçbir şeyin altına parent'lanmaz. Uzak tarafta kökü `ArenaNetCharacterBehaviour`
@@ -1983,24 +2006,25 @@ konsoluna tek satır sebep yazar.
 81. **İzlemeden gelen "kafa" GÖZÜN pozudur; humanoid kafa KEMİĞİ oraya oturtulmaz.**
     `centerEyeAnchor` (hem yerel rig'de hem telde) gözün yeridir, kafa kemiği ise Ch15'te gözün
     ~12 cm altında ve ~9 cm gerisindedir. İkisini eşit saymak bütün iskeleti bir kafa yarısı kadar
-    yukarı + öne kaydırır ve belirti **gövdenin neresinden baktığına göre değişir**: uzaktan
-    bakanda görünmez, oyuncunun KENDİ birinci şahıs görüşünde ölümcüldür — yaka kemiği gözün
-    18-20 cm altında olması gerekirken 6-7 cm altına çıkar, yani ana kameranın near-clip'inin
-    (0.1 m) **içine** girer ve oyuncu aşağı bakınca kendi gövdesinin içini görür. İkinci yüzü
+    yukarı + öne kaydırır: yaka kemiği gözün 18-20 cm altında olması gerekirken 6-7 cm altına
+    çıkar, yani gövde başın içine gömülür. ⚠️ Belirti **yalnız uzak avatarda görünür** (yerel gövde
+    çizilmiyor), yani hatayı yapan kişi kendi ekranında hiçbir şey fark etmez. İkinci yüzü
     ölçektir: oyuncunun göz yüksekliğini modelin **kafa kemiği** yüksekliğine bölmek avatarı
     sistematik olarak ~%8 büyütür (büyüyen gövde = yüze daha yakın göğüs, yani aynı sorunun
     beslemesi). Kural: **ölçülen büyüklüğün model tarafındaki karşılığı aynı nokta olmalı** —
     göz/göz. ⚠️ Bugün bu eşlemeyi Movement SDK'nın retarget config'i yapıyor ve ölçek tarafını
     `SkeletonRetargeter.ApplyHeadScale` (kafayı 0.95 ile daha az büyütür) taşıyor — yani madde bir
-    uygulama talimatı değil **retarget config'i hazırlarken kontrol edilecek bir ölçüttür**: birinci
-    şahısta aşağı bak, yaka near-clip'in içinde mi.
+    uygulama talimatı değil **retarget config'i hazırlarken kontrol edilecek bir ölçüttür**: ikinci
+    bir başlıktan uzak avatara bak, kafa gövdenin üstünde mi yoksa içinde mi.
 
 82. **Bilek 30 cm'den bakıldığında `skinWeights` bir görsel ayar değil, DOĞRULUK ayarıdır.**
     `QualitySettings`'te Android varsayılanı **"Mobile" seviyesidir ve `skinWeights: 2`** (PC'de 4),
     yani vertex başına yalnız iki kemik. Bilek gibi çok kemikli bir bölge bununla lineer blend
     skinning altında "şeker ambalajı" gibi çöker — büküldükçe incelip kalınlaşır. Uzaktan bakan bunu
-    görmez; oyuncunun KENDİ birinci şahıs görüşünde belirgindir. Kural: oyuncunun 30 cm'den baktığı
-    **yerel** gövdede `SkinnedMeshRenderer.quality` Bone4'e **sabitlenir** (Auto bırakılmaz).
+    görmez; oyuncunun KENDİ görüşünde belirgindir. Kural: oyuncunun 30 cm'den baktığı **her** skinned
+    mesh'te `SkinnedMeshRenderer.quality` Bone4'e **sabitlenir** (Auto bırakılmaz). Bu kümedeki tek
+    üye oyuncunun gördüğü **birinci şahıs el meshidir** (`LocalBodyAvatar.firstPersonHands`);
+    rig'in ISDK el görselleri çizilmediği için kümeye girmez.
     ⚠️ Uzak avatarlarda Auto kalır ve bu bilinçlidir: eşzamanlı oyuncu kotası yoktur, N avatarın
     hepsini Bone4 yapmak bedava değildir ve mesafeden fark edilmez.
 
@@ -2013,8 +2037,8 @@ konsoluna tek satır sebep yazar.
     (XR display yokken) doğru çalışmasıdır — bileşen "kapalı duruyor, gerekirse açılır" diye
     aylarca durabilir. Genel kural: **XR'da kamera projeksiyonu senin değil, display subsystem'in
     kararıdır**; near-clip'e dayanan her çözüm ana kameranın near-clip'i üzerinden kurulur.
-    Bu projede bileşen (`LocalBodyOverlayCamera`) bu yüzden **silindi**; asıl neden zaten
-    maddede 81'deki ofset eksikliğiydi. ⚠️ `LocalBody` katmanı `TagManager`'da bırakıldı (artık
+    Bu projede böyle bir overlay kamerası YOKTUR ve geri eklenmez (yerel gövde zaten hiç
+    çizilmiyor). ⚠️ `LocalBody` katmanı `TagManager`'da duruyor (artık
     kullanılmıyor): katman silmek ProjectSettings'e dokunmaktır ve o dosyanın kendi tuzağı var.
 
 84. **Bir prefabın TEK sürücü bileşenini silmek, prefabı bozuk değil SESSİZ bırakır — mesh çizilir,
@@ -2070,7 +2094,7 @@ konsoluna tek satır sebep yazar.
     gizleme yöntemindir.
 88. **Ters derinlik testi (`ZTest Greater`) oyuncunun KENDİ silahını, elini ve gövdesini de
     "engel" sayar.** Duvar arkasından görünen bir işaret (taban şeridinin x-ray çizimi) yalnız
-    arena dekorunun arkasında değil, **eldeki silahın ve `LocalBodyAvatar` bacaklarının** arkasında
+    arena dekorunun arkasında değil, **eldeki silahın ve elin** arkasında
     da geçerlidir: oyuncu kendi tabanının içinde durup aşağı baktığında hayalet doğrudan silahının
     üstüne çizilir ve "silahım şeffaflaştı" gibi görünür. Çözüm efekti kapatmak değil **yakın
     mesafe sönümüdür** — `M_BaseZoneXRay`'in `_NearFadeStart`/`_NearFadeEnd` alanları hayaleti
@@ -2098,20 +2122,20 @@ konsoluna tek satır sebep yazar.
 90. **Movement SDK retargeter'ı, sensör geçerli veri üretene dek karaktere HİÇBİR ŞEY uygulamaz —
     "kurulmuş olmak" ile "çizilebilir olmak" aynı şey değildir.** `CharacterRetargeter.Update`
     kaynağın `IsPoseValid()`'i false iken erkenden döner; o pencerede karakter hâlâ prefabdan
-    geldiği transformdadır, yani **dünya orijininde ve T-pozunda**. Görünürlüğü kurulumun
-    tamamlanmasına bağlamak, oyuncunun haritanın ortasında duran bir kopyasını görmesi demektir —
-    ve bu, sürülmeyen avatarın ekranda kalmasının her biçiminde aynı belirtiyi verir. Kapı
-    `RetargeterValid`'dir (`_isValid && IsInitialized && AppliedPose`): gövde yalnız o kare bir poz
-    gerçekten uygulanmışsa çizilir. ⚠️ Bu kapı konduğunda tanı satırının ölçütü de onunla
-    hizalanmalıdır — "sağlayıcı açık mı" diye bakan bir kontrol, açık kalıp geçerli veri üretmeyen
-    bir sensörü hiç uyarı basmadan görünmez bir gövdeye çevirir.
+    geldiği transformdadır, yani **dünya orijininde ve T-pozunda**. Çizilen bir avatarda bunun
+    bedeli görünür (haritanın ortasında duran bir kopya); çizilmeyen yerel gövdede ise **hiçbir
+    belirti yoktur** ve arıza yalnız başkalarının ekranında vardır. Ölçüt her iki durumda da
+    `RetargeterValid`'dir (`_isValid && IsInitialized && AppliedPose`): "kurulmuş" değil, **o kare
+    bir poz gerçekten uygulanmış** demektir. ⚠️ Tanı satırının ölçütü de bununla hizalanmalıdır —
+    "sağlayıcı açık mı" diye bakan bir kontrol, açık kalıp geçerli veri üretmeyen bir sensörü hiç
+    uyarı basmadan görünmez bir gövdeye çevirir.
 
 91. **`CharacterRetargeter.Calibrate()` geçerli bir poz yokken SESSİZCE hiçbir şey yapmaz** — ne
     döner değer, ne log. Zamanlayıcıyla tetiklenen tek atışlık bir çağrı tam o pencereye denk
     gelirse kalibrasyon **oturumun geri kalanı boyunca hiç yapılmamış** olur: `_isCalibrated` false
     kaldığı için her karede koşması gereken ölçek eşleme (`Align`) devreye girmez ve karakterin
     oranları oyuncununkine sabitlenmez. Belirtisi ağ ya da izleme arızasına hiç benzemez —
-    birinci şahısta "gövde kameraya göre kaymış, aşağı bakınca gövdenin içi görünüyor". Kural:
+    uzak avatar oyuncunun boyunda değildir ve bunu yalnız KARŞI taraf görür. Kural:
     böyle bir çağrı **koşul sağlanana dek her karede yeniden denenir**, süre dolduğunda bir kez
     denenip bırakılmaz. Aynı okuma testi kalibrasyondan bağımsız da geçerlidir: bir SDK çağrısı
     sessizce no-op olabiliyorsa, onu tetikleyen zamanlayıcı tek başına yeterli koşul değildir.
@@ -2125,17 +2149,17 @@ konsoluna tek satır sebep yazar.
     `localScale` dahil.** `NetworkCharacterHandler` serileştirmeyi `GetCurrentBodyPose` ile alıyor,
     o da `SkeletonJobs.GetPoseJob` üzerinden her kemiğin `localPosition`/`localRotation`'ının yanı
     sıra **`localScale`'ini de** okuyor. Sonuç: gövde üstünde yapılan her "yalnız görsel" kemik
-    hilesi aslında **telde gider**. Somut hâli: birinci şahısta uzuv gizlemenin tek yolu kemiği
-    sıfıra yakın ölçeklemektir (mesh tek `SkinnedMeshRenderer`), SDK ise ölçeği bir daha yazmaz —
-    yani sıfırlar kalıcıdır ve her kare serileştirilir; uzak tarafta bacaklar kalçaya, kafa göğse
-    ÇÖKER ve belirti "oyuncular havada duruyor" olur (görünen gövde kalçada bittiği için).
-    ⚠️ Teşhisi zorlaştıran şey, hatanın **kendini gizleyen** tarafta hiç görünmemesidir: yerel
-    oyuncu zaten o uzuvları görmüyordur. **Kural:** kemik transformuna yazan her yerel görsel
-    düzeltme, gönderimden (`NetworkCharacterHandler`, `[DefaultExecutionOrder(100)]`, `LateUpdate`)
-    ÖNCE geri alınmalı ve çizimden hemen önce yeniden basılmalıdır — pratikte `Update`'te geri al,
-    `LateUpdate`'te bas. **Ayrım:** SDK'nın her kare kendisinin yazdığı alanlar (kök konumu/rotasyonu,
-    kemik konum/rotasyonu) geri alma İSTEMEZ, kendiliğinden temizlenir; yazmadığı alanlar (ölçek)
-    ister. Bir alanı hangi grupta olduğunu bilmeden değiştirme.
+    hilesi aslında **telde gider**. Somut hâli: bir uzvu gizlemek için kemiği sıfıra yakın
+    ölçeklemek (mesh tek `SkinnedMeshRenderer` olduğunda akla gelen ilk yol) uzak tarafta bacakları
+    kalçaya, kafayı göğse ÇÖKERTİR — belirti "oyuncular havada duruyor" olur, çünkü görünen gövde
+    kalçada biter. ⚠️ Teşhisi zorlaştıran şey, hatanın **kendini gizleyen** tarafta hiç
+    görünmemesidir: gizleyen oyuncu o uzvu zaten görmüyordur. **Kural: gizlemeyi kemik ölçeğiyle
+    YAPMA** — görünürlük `Renderer.enabled` ile yönetilir, o transformlara hiç dokunmaz ve telde tam
+    gövde gider. Kemik transformuna yazmak zorunda kalınırsa yazı gönderimden
+    (`NetworkCharacterHandler`, `[DefaultExecutionOrder(100)]`, `LateUpdate`) ÖNCE geri alınmalı ve
+    çizimden hemen önce yeniden basılmalıdır. **Ayrım:** SDK'nın her kare kendisinin yazdığı alanlar
+    (kök konumu/rotasyonu, kemik konum/rotasyonu) geri alma İSTEMEZ, kendiliğinden temizlenir;
+    yazmadığı alanlar (ölçek) ister. Bir alanı hangi grupta olduğunu bilmeden değiştirme.
 
 93. **World-space canvas'ta düzlemden sapmış bir çocuk ÇİZİLİR ama tıklanamaz — ne ışın ne fare
     ulaşır.** Grafik raycast'i canvas düzleminde kurulan bir kameradan yapılır: ISDK
@@ -2231,12 +2255,13 @@ konsoluna tek satır sebep yazar.
     KAPALIDIR.** İskelet blob'u `SerializationCompressionType.High` ile kodlanıyor ve o kip
     eklemleri *joint lengths* üzerinden sıkıştırıyor: gönderen `CharacterRetargeter.Calibrate()`
     ile kendi gövde oranlarını değiştirdiğinde alıcının hedef iskeleti o uzunluklarla uyuşmaz ve
-    uzak avatar rastgele bozuk duruşlara girer. İkinci sebep birinci şahıstadır: ölçü, arena
-    hizalamasından birkaç saniye sonra **o anki poza** sabitlenir — oyuncu o sırada yürüyor ya da
-    eğilmişse oran yanlış kilitlenir ve oturumun kalanı boyunca öyle kalır, yani gövdenin kameraya
-    göre ofseti **oturumdan oturuma değişir**. Sabit bir `firstPersonOffset` değişken bir hatayı
-    kapatamaz. **Sıra bu yüzden bağlayıcıdır: önce kalibrasyon kapalı tutulur, `firstPersonOffset`
-    SONRA bir kez ayarlanır** — tersi, her denemede başka bir sonuç veren bir ince ayar turudur.
+    uzak avatar rastgele bozuk duruşlara girer. ⚠️ Anahtarın **yerel görünümle ilgisi yoktur**
+    (gövde oyuncunun kendisine hiç çizilmiyor): açmanın tek etkisi **başkalarının gördüğü**
+    gövdedir, yani arıza onu açan kişinin ekranında hiç görünmez. İkinci yüzü ölçünün oynaklığıdır:
+    kalibrasyon arena hizalamasından birkaç saniye sonra **o anki poza** sabitlenir — oyuncu o
+    sırada yürüyor ya da eğilmişse oran yanlış kilitlenir ve oturumun kalanı boyunca öyle kalır.
+    Genel kural: **yerel sanılan bir SDK ayarını açmadan önce telde ne taşındığına bak** —
+    sıkıştırma kipi bir ölçüyü tele bağlıyorsa o ayar artık yerel değildir.
 
 102. **Kaynak dosyaya karışmış tek bir NUL baytı o dosyayı TÜM aramalardan gizler.** ripgrep (ve
     onu kullanan editör/ajan arama araçları) içinde `\0` gören dosyayı ikili sayıp atlar: dosya
@@ -2249,12 +2274,57 @@ konsoluna tek satır sebep yazar.
     `null` kullanılır — `"\0"` hem bu tuzağı kurar hem `""`'den ayırt edilmesi gereken bir şey
     anlatmaz.
 
+103. **Sahnelenen arena LOBİ PROFİLİYLE koşar: "silah kaynağı `random` mı" sorusu "mod silah
+    dağıtıyor mu" sorusunun cevabı DEĞİLDİR.** Operatör lobideyken bir arena seçtiğinde sunucu o
+    arenayı sahneler — herkes arenaya geçer ama maç kurulmamıştır (`start_match` gelmedi), tür
+    `lobby` kalır ve kural şekli `ModeRules.LobbyProfile`'dır: `weaponSource:"random"` +
+    `fireWhilePaused`. Yani oyuncu **silah tezgâhı olan bir arenada** ama lobi kuralıyla durur.
+    Kapısını yalnız kaynağa bağlayan her davranış burada yanlış tarafa düşer; somut hâli sahnedeki
+    silahların gizlenmesidir — maçı bekleyen oyuncu ne silah alabilir ne serbest atış yapabilir,
+    oysa lobi profilinin bütün amacı odur. **Kural: "maç kuruldu mu" sorusunu kaynaktan değil
+    bileşimden sor** — `random` + `fireWhilePaused` = serbest alan, yalnız `random` = mod dağıtıyor
+    (FFA). ⚠️ İkinci yüzü GEÇİŞTEDİR: sahnelemeden FFA maçına geçerken kaynak `random` kalır, yani
+    "kaynak değişti mi" diye bakan bir sıfırlama hiç tetiklenmez ve serbest alanda seçilmiş durum
+    sessizce maça taşınır. Kaynağı değil **türetilmiş kararı** izle. Ayrım `modeId`'den okunmaz
+    (§10.5: istemcide `if (modeId == "lobby")` zinciri yazılmaz).
+
+104. **`OVRHandVisualLeft` ile `OVRLeftHandVisual` aynı şey değildir — rig'de yalnız kelime SIRASI
+    farklı iki el ailesi var, ve karıştırmanın bedeli GÖRÜNMEZ.**
+    `OVRHandVisualLeft`/`OVRHandVisualRight` etkileşim rig'inin doğrudan çocuğudur ve **kumandadan
+    canlı sürülen** el iskeletini taşır; `OVRLeftHandVisual`/`OVRRightHandVisual` ise
+    `…/DistanceHandGrabInteractor/Visuals/…Reticle/…Synthetic/` altındaki **mesafeli kavrama
+    hayaletidir**. İkisinin de bileşen tipi aynıdır (`HandVisual`), yani tip onları ayıramaz; ayıran
+    tek şey addır ve adlar bu kadar yakınken **"içerir" eşleşmesi ikisini birden yakalar**. Oyuncu
+    ellerini artık avatardan gördüğü için ikisi de zaten çizilmez — yani hata ekranda hiçbir iz
+    bırakmaz. Tek sonucu şudur: gerçek el görselinin **objesi** kapanırsa iskeleti sürülmeyi bırakır
+    ve `HandGripCalibrationProbe` bind pozunu ölçer, yani kavrama sabiti sessizce yanlış kalibre
+    edilir. Kural: bu ailelerde eşleşme **tam ad** iledir; gerçek el yalnız **Renderer** düzeyinde
+    söndürülür, objesi açık kalır.
+
+105. **Gövde avatarının kaynak meshi `isReadable = false` — el kesimi ÇALIŞMA ANINDA yapılamaz.**
+    Vertex/kemik ağırlığı verisi yalnız editörün tuttuğu kaynak veriden okunabiliyor; aynı kesimi
+    runtime'da yapan bir kod hata vermez, **boş bir mesh üretir** ve oyuncu hiçbir şey görmez.
+    Kural: el meshi bir **editör aracının** ürettiği asset'tir (`FirstPersonHandsMeshBuilder`),
+    runtime kodu değil. Kaynağı okunabilir yapmak da çözüm değildir: mesh verisi o zaman APK'da bir
+    kez daha, CPU tarafında taşınır.
+
+106. **Su geçirmez OLMAYAN bir meshte delik kapatmanın ölçütü "kenar yeni mi" DEĞİL, "halkaya kesim
+    dokundu mu"dur.** El kesiminde bilek ağzı açık kalır ve kapatılması gerekir; ama karakter meshi
+    zaten su geçirmez değildir — eldiven/kumaş kabukları binlerce açık kenar taşır ve hepsini
+    kapatan bir geçiş eldiven boyunca gözle görülen bir zar çizer. Buradaki tuzak, akla ilk gelen
+    kuralın (*yalnız kesimin AÇTIĞI kenarları kapat*) **sessizce hiçbir şey yapmamasıdır**: kesim
+    bilek halkalarının yalnız bir YAYINI açar, halkanın geri kalanı kaynakta zaten açıktır — yeni
+    kenarlar tek başına kapalı halka değil **açık yay** verir, yelpaze kurulamaz ve delik açık kalır.
+    Kural: halkalar sınırın TAMAMINDAN kurulur, bir halka ancak **en az bir kenarı kesimden
+    doğmuşsa** kapatılır; kaynakta baştan sona açık olan halkalara (kabuk dikişleri) dokunulmaz.
+
 ---
 
 ## 8. Durum ve sıradaki işler
 
-**Bugün çalışan sistem** (ayrıntı §2–§7): lobi + 20 Hz poz senkronu + **yerel gövde görseli**
-(oyuncu omuzlarından aşağı kendi kollarını ve gövdesini görür; kumanda modeli/Meta eli çizilmez) +
+**Bugün çalışan sistem** (ayrıntı §2–§7): lobi + 20 Hz poz senkronu + **gövde senkronu**
+(oyuncu kendi gövdesini görmez, yalnız **kendi karakterinin ellerini** görür — gövde meshinden
+kesilmiş el meshi; kumanda modeli ve rig'in ISDK el görselleri çizilmez) +
 **elde tutulan eşya senkronu**
 (uzak oyuncuların silahı kanonik kavramayla çizilir) + **çerçeveden silah seçimi** (sahnedeki silah
 çerçevesinden ayrılmaz; ≤2 m'den nişan alınıp grip'e basılınca ele bir klonu gelir, bırakılınca
