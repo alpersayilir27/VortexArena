@@ -20,32 +20,24 @@ Eklem sayısı 66 ve sıkıştırma `High`; kaba hesapla blob ~300-400 B, yani
 
 ## 2. Ayar
 
-- [ ] **Birinci şahıs ofseti** (`LocalBodyAvatar.firstPersonOffset`) başlıkta tek turda ayarlanır:
-      aşağı bakınca gövdenin içi görünmemeli, göğüs kameranın önünde durmamalı. ⚠️ Ön koşul
-      `calibrateBodyProportions`'ın **kapalı** olmasıdır (varsayılan) — açıkken oran her oturumda
-      başka bir poza sabitlenir ve sabit bir ofset değişken bir hatayı kapatamaz
-      (`Docs/Sistem-Ozeti.md` §7).
 - [ ] `SkeletonRetargeter.ScaleRange` varsayılanı `0.8–1.2`; **yalnız gövde oranı kalibrasyonu
       açılırsa** anlamlıdır (kapalıyken herkes prefabın oranlarını kullanır ve ölçek uygulanmaz).
       Açılacaksa önce uzak gövdedeki bozulma çözülmelidir: blob `High` sıkıştırmada eklem
       uzunluklarına dayanıyor (§7). **Karar gözle değil konsoldan verilir:** `LocalBodyAvatar`
       kalibrasyondan sonra uygulanan
       gövde ölçeğini bir kez basar ve değer aralığın sınırındaysa uyarıya çevirir — sınıra dayanmış
-      bir ölçek, karakterin oyuncunun boyuna yetişemediği anlamına gelir ve birinci şahısta "gövde
-      kameraya göre kaymış" diye görünür. `ApplyHeadScale` **açık kalsın** (birinci şahısta yakayı
-      near-clip'in dışında tutan şey odur).
+      bir ölçek, karakterin oyuncunun boyuna yetişemediği, yani **diğer oyuncuların** onu yanlış
+      boyda gördüğü anlamına gelir (yerelde çizilmediği için gözle anlaşılmaz).
 - Body tracking ayarı **hazır**: `Assets/Resources/OculusRuntimeSettings.asset` (⚠️ dosya adı
   `OVRRuntimeSettings` DEĞİL) `bodyTrackingJointSet: FullBody` + `bodyTrackingFidelity: High`.
   ⚠️ `FullBody` bacakları **izlemez, ÜRETİR**. `OVRBody.StartBodyTracking` bu asset'i okur —
   bileşendeki `ProvidedSkeletonType` alanını DEĞİL; ikisi ayrışırsa SDK uyarı basar.
 - İzinler hazır: manifest'te `BODY_TRACKING`/`USE_ANCHOR_API`/`USE_SCENE`, `OVRManager`'da
   `requestBodyTrackingPermissionOnStartup` ve `requestScenePermissionOnStartup` açık.
-- [ ] Yerel gövdede `SkinnedMeshRenderer.quality = Bone4` (§7) ayarlı mı kontrol et; uzak
-      avatarlarda Auto kalır.
 
 ## Doğrulanacaklar (derlemeyi kullanıcı koşar)
 
-- Yerel oyuncu kendi kollarını/bileklerini doğru görüyor; kafa/boyun görünmüyor.
+- Yerel oyuncu kendi gövdesini/kollarını hiç görmüyor, yalnız ellerini görüyor.
 - Uzak avatar full body, doğru boyda, arena zemininde; kalibrasyondan sonra kaymıyor.
 - Gövde ile eller arasında zaman kayması yok (ikisi de `INTERP_DELAY_MS` tamponunda).
 - Harita değişiminde ve avatar başka oyuncuya devredilince gövde bozulmuyor.

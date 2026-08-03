@@ -356,7 +356,8 @@ if (ModeRuntime.IsTeamless)                  // takım var mı
 if (ModeRuntime.Revive == ModeReviveAnchor.StandStill)
     SabitDurGostergesiniAc();
 
-if (ModeRuntime.Weapons == ModeWeaponSource.RandomGrant)
+// ⚠️ "Silahı mod mu dağıtıyor" sorusu tek başına kaynağa bakılarak cevaplanmaz — aşağıya bak
+if (ModeRuntime.Weapons == ModeWeaponSource.RandomGrant && !ModeRuntime.FireWhilePaused)
     SahnedekiSilahlariGizle();
 
 float gecikme = ModeRuntime.RespawnDelay;    // 0 GEÇERLİDİR (anında canlanma)
@@ -365,13 +366,20 @@ ModeRuntime.Changed += KurallarDegisti;      // maç yüklenince tetiklenir
 ```
 
 Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Weapons`,
-`RespawnDelay`, `IsTeamless`.
+`RespawnDelay`, `FireWhilePaused`, `IsTeamless`.
 
 > **Neden tek okuma noktası:** canlanma, skor satırı, silah kaynağı ve admin arayüzü aynı bilgiyi
 > ister. Dördü ayrı ayrı `load_match` dinlerse dördü ayrı ayrı bayatlar.
 
 > ⚠️ **`RespawnDelay == 0` geçerli bir değerdir** (FFA'da öyle). `if (delay > 0)` diye kontrol edip
 > varsayılana düşme.
+
+> ⚠️ **`Weapons == RandomGrant` "kurulmuş bir maç var" demek DEĞİLDİR.** Operatör lobideyken bir
+> arena seçtiğinde o arena sahnelenir ve kural şekli lobi profilinde kalır — kaynak orada da
+> `random`'dır. Serbest alanı ayıran bileşim `random` + `FireWhilePaused`'dur; koşan FFA maçı da
+> `random`'dır ama serbest atışı yoktur. Silah tezgâhlarını gizlemek gibi "maç kuruldu" varsayan
+> her davranış bu bileşimi sorar, yoksa maçı bekleyen oyuncunun elinden silahı alır
+> (`Docs/ArenaNet-Protokol.md` §10.7).
 
 ---
 

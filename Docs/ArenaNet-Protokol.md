@@ -574,7 +574,8 @@ taşır. **İstemcide birleştirme mantığı YOKTUR ve gerekmez** — her girdi
 snapshot parçalamasında olduğu gibi (§6.3).
 
 **Hedef:** UDP kayıtlı tüm online endpoint'ler (admin dahil — gözlemci de gövdeleri görür).
-⚠️ **Gönderen kendi girdisini geri alır ve KENDİSİ yok sayar** (kendi gövdesini sensörden çiziyor).
+⚠️ **Gönderen kendi girdisini geri alır ve KENDİSİ yok sayar** (kendi gövdesi zaten yerelde
+çözülüyor; oyuncuya ondan yalnız el meshi çizilir).
 Hedefe özel batch üretmek tik başına N serileştirme demek olurdu; §6.5 olay batch'i de aynı
 gerekçeyle atanı süzmüyor.
 
@@ -1039,6 +1040,12 @@ yapar, yerini alır; operatör bunu tek tek anlatmak zorunda kalmaz.
 > ⚠️ **`modeId` sahnelemede de `"lobby"` kalır.** Seçili maç modunu yazmak maç HUD'unu ve maç
 > loadout'unu maç başlamadan açardı; sahnenin arena olması türü değiştirmez. Tür ancak
 > `start_match` ile değişir.
+>
+> **Sonucu:** sahnelenen arena lobi profiliyle koşar (`weaponSource:"random"` + `fireWhilePaused`),
+> yani maç kurulana kadar **arenanın silah tezgâhları kullanılabilir kalır** — oyuncu bekleme
+> süresince silah alır ve serbest atış yapar. ⚠️ İstemci "mod silah dağıtıyor" durumunu `modeId`'den
+> değil bu **bileşimden** ayırır (§10.5): yalnız `random` = mod dağıtıyor (FFA, tezgâhlar gizlenir),
+> `random` + `fireWhilePaused` = serbest alan.
 
 ## 11. Sunucu config dosyaları
 

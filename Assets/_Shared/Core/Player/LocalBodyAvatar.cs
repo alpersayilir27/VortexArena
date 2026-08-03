@@ -6,13 +6,29 @@ using VortexArena.Net;
 namespace VortexArena.Core.Player
 {
     /// <summary>
-    /// Yerel oyuncunun kendi gövdesi: aşağı bakınca kendi kollarını, bileklerini ve gövdesini görür.
+    /// Yerel oyuncunun gövdesi — hem <b>ağ kaynağı</b>, hem oyuncunun gözlükte gördüğü
+    /// <b>ellerin</b> kaynağı.
+    /// <para>
+    /// ⚠️ <b>Oyuncu kendi gövdesini, kollarını ve bacaklarını görmez; yalnız ellerini görür</b> —
+    /// ve o eller <b>kendi karakterinin elleridir</b>: gövde meshinden kesilmiş ayrı bir el meshi
+    /// (<see cref="firstPersonHands"/>) aynı iskeletten, aynı karede sürülür. Yani oyuncunun
+    /// gördüğü el ile başkalarının gördüğü el aynı modeldir. Rig'in ISDK el görselleri
+    /// ("hayalet el") tam bu yüzden çizilmez — <see cref="ControllerModelHider"/> onları söndürür.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Kesim yalnız ÇİZİMDEDİR, telde tam gövde gider:</b> el meshi gövdeyle aynı kemiklere
+    /// bağlıdır ve hiçbir kemiğe dokunulmaz. Gövde renderer'ı kapalı, el renderer'ı açıktır.
+    /// </para>
     /// <para>
     /// <b>Uzak avatarlarla AYNI prefab, AYNI retarget config, AYNI kod yolu.</b> Tek fark
     /// <see cref="ArenaNetCharacterBehaviour.HasInputAuthority"/>'dir: burada <c>true</c>, yani
     /// gövde Meta Movement SDK'nın body tracking'inden çözülür ve sonucu ağa akar. Uzak tarafta
-    /// <c>false</c> olur ve aynı prefab gelen iskeleti uygular. Böylece "kendi gördüğüm gövde" ile
-    /// "başkalarının gördüğü gövde" tek doğruluk kaynağıdır.
+    /// <c>false</c> olur ve aynı prefab gelen iskeleti uygular.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Obje neden hâlâ var ve neden silinemez:</b> başkalarının gördüğü gövde tam olarak
+    /// buradan çıkıyor. Gizli olması "gereksiz" demek değildir — bu obje yıkılırsa oyuncu ağa
+    /// hiç iskelet göndermez ve <b>diğer oyuncular onu göremez</b>.
     /// </para>
     /// <para>
     /// <b>Neden kendini önyükleyen kalıcı tekil</b> (<c>WeaponGranter</c> deseni): sahneye elle
@@ -22,8 +38,7 @@ namespace VortexArena.Core.Player
     /// ⚠️ <b>Avatar SAHNE KÖKÜNDE durur, rig'in ALTINA KONMAZ.</b> SDK kök eklemi
     /// <c>SetLocalPositionAndRotation</c> ile yazıyor; dolu bir ebeveyn dönüşümü ikinci kez
     /// uygulanırdı (<c>Docs/Sistem-Ozeti.md</c> §7, "retarget avatarı hareket eden kökün altına
-    /// konmaz"). Yerel gövdede kök zaten izleme uzayından geliyor, yani kalibrasyonla rig hareket
-    /// edince gövde kendiliğinden onunla gelir.
+    /// konmaz").
     /// </para>
     /// <para>
     /// ⚠️ <b>Admin'de çizilmez ve bunun için rol kontrolü YAPILMAZ</b>: <c>AppSession</c>
@@ -38,17 +53,16 @@ namespace VortexArena.Core.Player
     /// </para>
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Execution order 100'den BÜYÜK olmak zorunda:</b> <see cref="firstPersonOffset"/>
-    /// <c>LateUpdate</c>'te uygulanıyor ve iskeleti ağa serileştiren
-    /// <c>NetworkCharacterHandler</c> <c>[DefaultExecutionOrder(100)]</c>. Daha küçük bir sırada
-    /// ofset gönderime de karışır, yani başkaları oyuncuyu kaymış görür.
+    /// ⚠️ <b>Execution order 100'den BÜYÜK olmak zorunda:</b> <c>Calibrate()</c> o karenin
+    /// UYGULANMIŞ pozunu ölçer, yani SDK'nın retarget döngüsünden ve iskeleti ağa serileştiren
+    /// <c>NetworkCharacterHandler</c>'dan (<c>[DefaultExecutionOrder(100)]</c>) sonra çağrılmalıdır.
     /// </remarks>
     [DefaultExecutionOrder(30000)]
     public class LocalBodyAvatar : MonoBehaviour
     {
         /// <summary>Prefabın <c>Resources</c> altındaki adı (önyükleme bunu yükler).
-        /// ⚠️ Ad ve konum DEĞİŞMEZ — <c>Resources.Load</c> ile yükleniyor, taşınırsa oyuncu kendi
-        /// gövdesini sessizce hiç görmez.</summary>
+        /// ⚠️ Ad ve konum DEĞİŞMEZ — <c>Resources.Load</c> ile yükleniyor, taşınırsa oyuncu ağa
+        /// gövde göndermez ve kimse onu göremez.</summary>
         private const string PrefabResourceName = "LocalBodyAvatar";
 
         /// <summary>Rig/oturum bulunamadığında iki arama arasındaki en kısa süre (sn).</summary>
@@ -58,7 +72,7 @@ namespace VortexArena.Core.Player
         /// Arena kalibrasyonu tamamlandıktan sonra gövde kalibrasyonuna kadar beklenen süre (sn).
         /// <para>⚠️ Gecikme <b>zorunludur</b>: oyuncu arena kalibrasyonunu kumandanın ucunu zemin
         /// işaretine değdirerek yapıyor, yani o anda EĞİLMİŞ durumda. <c>Calibrate()</c> gövde
-        /// oranlarını o andaki T-poza sabitliyor — eğilmiş bir oyuncudan alınan ölçü maçın kalanı
+        /// oranlarını o andaki poza sabitliyor — eğilmiş bir oyuncudan alınan ölçü maçın kalanı
         /// boyunca yanlış boy demektir.</para>
         /// </summary>
         private const float BodyCalibrationDelaySeconds = 3f;
@@ -71,12 +85,12 @@ namespace VortexArena.Core.Player
         [Tooltip("Gövde oranını sabitleyen SDK bileşeni. Boşsa alt ağaçtan aranır.")]
         [SerializeField] private NetworkCharacterRetargeter retargeter;
 
-        [Tooltip("İlk poz/oturum gelene dek gizlenecek görsel kök. Boşsa karakterin kendisi kullanılır.")]
+        [Tooltip("Gövdenin görsel kökü. Boşsa karakterin kendisi kullanılır.")]
         [SerializeField] private GameObject visualRoot;
 
-        [Tooltip("Gövdenin birinci şahısta kaydırılması (metre, gövdenin YAW uzayı: -Z geri, " +
-                 "+Y yukarı). YALNIZ yerel görünümü etkiler, ağa gitmez.")]
-        [SerializeField] private Vector3 firstPersonOffset = new Vector3(0f, 0f, -0.06f);
+        [Tooltip("Oyuncunun gözlükte gördüğü eller: gövde meshinden kesilmiş el meshi. " +
+                 "Tools > VortexArena > Avatars > Build First-Person Hands Mesh üretir ve bağlar.")]
+        [SerializeField] private SkinnedMeshRenderer firstPersonHands;
 
         [Tooltip("Gövde oranını oyuncunun boyuna sabitle (SDK Calibrate()). KAPALI olmalı — " +
                  "gerekçe koddaki açıklamada.")]
@@ -84,13 +98,6 @@ namespace VortexArena.Core.Player
 
         private OVRCameraRig _rig;
         private float _rigSearchTime = float.NegativeInfinity;
-
-        /// <summary>Gövde çiziliyor mu. ⚠️ Kurulumdan sonra görünürlük <b>renderer düzeyinde</b>
-        /// yönetilir, obje kapatılarak DEĞİL — gerekçe <see cref="SetBodyVisible"/>.</summary>
-        private bool _bodyVisible;
-
-        /// <summary>Karakterin renderer'ları; kurulumda bir kez toplanır.</summary>
-        private Renderer[] _bodyRenderers;
 
         private bool _initialized;
 
@@ -136,9 +143,9 @@ namespace VortexArena.Core.Player
             var prefab = Resources.Load<GameObject>(PrefabResourceName);
             if (prefab == null)
             {
-                // Yerel görsel yok diye oyun durmaz: tek satır uyarı, sessizce devam.
+                // Yerel çizim zaten yok; kayıp olan UZAK görünürlüktür — bu yüzden uyarı da onu söyler.
                 Debug.LogWarning($"[LocalBodyAvatar] 'Resources/{PrefabResourceName}' prefabı bulunamadı; " +
-                                 "yerel gövde avatarı çizilmeyecek.");
+                                 "ağa gövde gitmeyecek, yani diğer oyuncular bu oyuncuyu göremeyecek.");
                 return;
             }
 
@@ -175,26 +182,23 @@ namespace VortexArena.Core.Player
 
             if (character == null || retargeter == null)
             {
-                // ⚠️ Uyarı değil HATA: bu durumda oyuncu kendi gövdesini HİÇ görmez ve eksiklik
-                // sahada "izleme çalışmıyor" diye okunur — oysa tek eksik prefab bağıdır. Sessiz
-                // kalmak teşhisi Meta SDK'sına/sensöre yönlendirip saatler yakar.
+                // ⚠️ Uyarı değil HATA: bu durumda oyuncunun gövdesi ağa HİÇ gitmez, yani diğer
+                // oyuncular onu göremez — ve eksiklik sahada "ağ bozuk" diye okunur, oysa tek eksik
+                // prefab bağıdır. Sessiz kalmak teşhisi ağ katmanına yönlendirip saatler yakar.
                 Debug.LogError("[LocalBodyAvatar] ArenaNetCharacterBehaviour / NetworkCharacterRetargeter " +
-                               "bulunamadı; yerel gövde çizilmeyecek. Resources/LocalBodyAvatar.prefab " +
+                               "bulunamadı; ağa gövde gitmeyecek. Resources/LocalBodyAvatar.prefab " +
                                "içindeki Character objesine bu bileşenler kurulmalı.", this);
                 enabled = false;
                 return;
             }
 
-            // ⚠️ Kurulumdan ÖNCE tüm alt ağaç PASİF durur (görünürlük değil, tümden kapalı) ve bu
-            // tek meşru kapatmadır: kurulmamış bir retargeter hem T-pozunda bir manken çizer, hem
-            // de her karede "Ownership is None" hatası basar. Admin'de rig hiç gelmediği için burada
-            // kapalı kalır — o da doğrusudur.
+            // ⚠️ Kurulumdan ÖNCE tüm alt ağaç PASİF durur (renderer değil, tümden kapalı) ve bu tek
+            // meşru kapatmadır: kurulmamış bir retargeter her karede "Ownership is None" hatası
+            // basar. Admin'de rig hiç gelmediği için burada kapalı kalır — o da doğrusudur.
             if (visualRoot != null)
             {
                 visualRoot.SetActive(false);
             }
-
-            _bodyVisible = false;
         }
 
         private void OnDestroy()
@@ -213,16 +217,6 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            // Gövde YALNIZ gerçekten sürülürken çizilir ve bunun İKİ ayrı koşulu var: etkin bir rig
-            // (sahne değişimi, gözlemcinin kapattığı rig) ve retargeter'ın o kare bir poz gerçekten
-            // UYGULAMIŞ olması.
-            // ⚠️ İkincisi "kurulmuş olmak" ile aynı şey DEĞİLDİR: SDK'nın CharacterRetargeter.Update'i
-            // sensör geçerli veri üretene dek hiçbir şey uygulamadan döner — o pencerede karakter
-            // prefabdan geldiği yerde, yani DÜNYA ORİJİNİNDE ve T-pozunda durur. Kurulur kurulmaz
-            // görünür yapmak, oyuncunun haritanın ortasında kendi kopyasını görmesi demekti.
-            OVRCameraRig rig = ResolveRig();
-            SetBodyVisible(rig != null && retargeter.RetargeterValid);
-
             TickSourceProviderCheck();
 
             // ⚠️ Rapor kalibrasyondan ÖNCE tiklenir ve bu sıra kasıtlıdır: uygulanan ölçek
@@ -230,52 +224,6 @@ namespace VortexArena.Core.Player
             // döngüsünde tazeliyor), yani aynı karede okumak kalibrasyon ÖNCESİ değeri basardı.
             TickScaleReport();
             TickBodyCalibration();
-        }
-
-        /// <summary>
-        /// Gövdeyi birinci şahıs için kaydırır — <b>yalnız görüntüde</b>.
-        /// <para>Retarget çıktısı gövdeyi izlenen kafanın altına oturtur; modelin oranları
-        /// oyuncununkine birebir oturmadığında sonuç "gövde kameraya göre bir tık ileride" olur ve
-        /// oyuncu aşağı bakınca kendi göğsünün içini görür. Ayarı tek bir ofsettir
-        /// (<see cref="firstPersonOffset"/>).</para>
-        /// <para>
-        /// ⚠️ <b>Neden <c>LateUpdate</c> ve neden geri alınmıyor:</b> ağa giden kök gönderim anında
-        /// okunuyor (<c>NetworkCharacterHandler</c>, order 100); bu sınıf 30000'de olduğu için
-        /// ofset o okumadan SONRA basılır ve tele hiç girmez. Geri almak da gerekmez — SDK kökü
-        /// HER KARE yeniden yazıyor (<c>CharacterRetargeter.LateUpdate</c> → <c>ApplyPose</c>),
-        /// yani ofset birikmez. ⚠️ Aynısı kemik <b>ölçeği</b> için geçerli DEĞİLDİR: onu SDK
-        /// yazmadığı için <see cref="LocalAvatarBoneHider"/> gizlemeyi her kare elle geri almak
-        /// zorundadır.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>"SDK her kare yeniden yazıyor" KOŞULLUDUR ve koşulu burada da aranmak zorundadır:</b>
-        /// <c>CharacterRetargeter.LateUpdate</c> pozu yalnız <c>AppliedPose</c> iken uygular, aksi
-        /// hâlde köke DOKUNMADAN döner. Gövde izleme bir kare bile geçersiz veri üretirse (el/gövde
-        /// örtülmesi, sağlayıcının duraklaması) ofset o karede eskisinin ÜSTÜNE eklenir ve birikir:
-        /// kare başına ofset kadar, yani 72 Hz'de saniyede metrelerce. Yönü gövdenin yaw'ından
-        /// geldiği için oyuncu döndükçe kayma yön değiştirir — belirtisi "gövde sağa sola
-        /// süzülüyor"dur ve kafa izleme kusursuz çalışırken de olur (o ayrı bir hat). Bu yüzden
-        /// kapı, sınıfın geri kalanıyla AYNI kapıdır: <c>RetargeterValid</c>.
-        /// </para>
-        /// <para>Ofset gövdenin tam rotasyonunda değil <b>yaw</b>'ında uygulanır: oyuncu
-        /// eğildiğinde "geri" yönü yukarı/aşağı kaymasın.</para>
-        /// </summary>
-        private void LateUpdate()
-        {
-            if (!_initialized || firstPersonOffset == Vector3.zero || !retargeter.RetargeterValid)
-            {
-                return;
-            }
-
-            Transform root = retargeter.transform;
-            Vector3 forward = root.rotation * Vector3.forward;
-            forward.y = 0f;
-            if (forward.sqrMagnitude < 1e-6f)
-            {
-                return;
-            }
-
-            root.position += Quaternion.LookRotation(forward, Vector3.up) * firstPersonOffset;
         }
 
         /// <summary>
@@ -301,31 +249,86 @@ namespace VortexArena.Core.Player
 
             // ⚠️ SIRA ÖNEMLİ — obje önce AKTİF edilir, sonra kurulur. Buraya kadar pasifti; pasif
             // objede Awake hiç koşmaz ve kurulumun ihtiyaç duyduğu bileşenler çözülmemiş olur (SDK
-            // sahipliği None kalır → karakter T-pozunda donar). SetActive(true) eksik Awake'leri
-            // kendi çağrısı içinde senkron koşturur, yani bu satırdan sonra karakter kurulmaya
-            // hazırdır. ⚠️ Bu, objenin SON kez etkinleştirilmesidir — bir daha KAPATILMAZ.
+            // sahipliği None kalır → gövde ağa hiç gitmez). SetActive(true) eksik Awake'leri kendi
+            // çağrısı içinde senkron koşturur. ⚠️ Bu, objenin SON kez etkinleştirilmesidir — bir
+            // daha KAPATILMAZ (gerekçe ApplyFirstPersonVisibility'de).
             if (visualRoot != null)
             {
                 visualRoot.SetActive(true);
             }
 
-            _bodyRenderers = visualRoot != null
-                ? visualRoot.GetComponentsInChildren<Renderer>(true)
-                : System.Array.Empty<Renderer>();
-            _bodyVisible = true;
+            ApplyFirstPersonVisibility();
 
             character.Initialize(client.PlayerId, hasInputAuthority: true);
             _sourceProviderGrace = SourceProviderGraceSeconds;
-
-            // Kurulum bitti ama retargeter henüz TEK bir poz uygulamadı — gövde şu an prefabdan
-            // geldiği yerde, dünya orijininde duruyor. Görünürlük burada da doğru değere çekilir
-            // ki ilk Update'e kadar geçen karede oyuncu kendi kopyasını haritada görmesin.
-            SetBodyVisible(retargeter.RetargeterValid);
 
             // İlk gövde ölçüsü de gecikmeli alınır: oyuncu bağlandığı anda ayakta olmayabilir.
             _calibrationGeneration = ArenaCalibrator.CalibrationGeneration;
             _calibrationCountdown = BodyCalibrationDelaySeconds;
             _calibrationPending = true;
+        }
+
+        /// <summary>
+        /// Birinci şahıs görünümünü kurar: <b>gövdenin tamamı söner, yalnız el meshi çizilir.</b>
+        /// Oyuncu kendi gövdesini, kollarını ve bacaklarını hiçbir zaman görmez.
+        /// <para>
+        /// ⚠️ <b>Ayrım renderer bazındadır ve el meshi ADIYLA değil REFERANSLA seçilir</b>
+        /// (<see cref="firstPersonHands"/>): araç onu prefaba bağlıyor, yani ad değişse bile
+        /// doğru renderer açık kalır.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Obje KAPATILMAZ</b> (<c>SetActive(false)</c>) ve bu bir üslup tercihi değildir:
+        /// karakterin üstündeki sensör kaynağı bir <c>OVRBody</c>'dir ve objeyi kapatmak onun
+        /// <c>OnDisable</c>'ını çalıştırır — açık son örnek de kapanınca <c>StopBodyTracking</c>
+        /// çağrılır. Geri açıldığında <c>OnEnable</c> yeniden başlatmayı dener ve
+        /// <b>başaramazsa kendini KALICI olarak kapatır</b>, bir daha denemez. Kapatılan bir gövde
+        /// ağa da akmaz, yani oyuncu diğerlerinin ekranından kaybolurdu. Renderer kapatmak aynı
+        /// görsel sonucu verir ve hiçbir yaşam döngüsü olayını tetiklemez.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Kemik gizleme/ölçekleme ile YAPILMAZ ve o yol geri getirilmez:</b> ağa giden
+        /// iskelet kemiklerin canlı transformlarından okunuyor ve okuma <c>localScale</c>'i de
+        /// kapsıyor (<c>SkeletonJobs.GetPoseJob</c>) — sıfırlanan bir kemik uzak tarafta gövdeyi
+        /// çökertir. Renderer kapatmak transformlara hiç dokunmaz, yani telde tam gövde gider.
+        /// </para>
+        /// <para>Tek çağrı yeter: gövdeye sonradan renderer eklenmiyor.</para>
+        /// </summary>
+        private void ApplyFirstPersonVisibility()
+        {
+            if (visualRoot == null)
+            {
+                return;
+            }
+
+            Renderer[] renderers = visualRoot.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null)
+                {
+                    renderers[i].enabled = renderers[i] == firstPersonHands;
+                }
+            }
+
+            if (firstPersonHands == null)
+            {
+                // ⚠️ Uyarı değil HATA: oyuncunun ekranında çizilen TEK şey elleridir, yani bu
+                // eksiklik "hiçbir şey görünmüyor" olarak yaşanır ve izleme arızasıyla karıştırılır.
+                // Oysa tek eksik, üretilmemiş/bağlanmamış bir mesh asset'idir.
+                Debug.LogError(
+                    "[LocalBodyAvatar] Birinci şahıs el meshi bağlı değil — oyuncu kendi ellerini " +
+                    "GÖRMEYECEK (gövde zaten çizilmiyor). Tools > VortexArena > Avatars > " +
+                    "Build First-Person Hands Mesh çalıştırılmalı: araç meshi üretip " +
+                    "Resources/LocalBodyAvatar.prefab'a bağlar.", this);
+                return;
+            }
+
+            // Renderer prefabda KAPALI gelir (admin'de ve kurulum tamamlanmadan çizilmesin diye);
+            // açmak yukarıdaki döngünün işi. Objenin de kapatılmış olma ihtimaline karşı bu kapı:
+            // kapalı objede renderer'ı açmak sessizce hiçbir şey çizmezdi.
+            if (!firstPersonHands.gameObject.activeSelf)
+            {
+                firstPersonHands.gameObject.SetActive(true);
+            }
         }
 
         /// <summary>
@@ -338,19 +341,18 @@ namespace VortexArena.Core.Player
         /// </summary>
         private void TickBodyCalibration()
         {
-            // ⚠️ VARSAYILAN KAPALI — açmadan önce aşağıdaki iki bedeli oku.
+            // ⚠️ VARSAYILAN KAPALI — açmadan önce aşağıdaki bedeli oku.
             //
-            // 1) UZAK GÖVDEYİ BOZAR. İskelet blob'u SerializationCompressionType.High ile
-            //    kodlanıyor ve o kip eklemleri "joint lengths" ile sıkıştırıyor. Calibrate()
-            //    gönderenin gövde ORANLARINI değiştirdiği için, alıcının hedef iskeleti artık
-            //    gönderenin kodladığı uzunluklarla uyuşmaz — sonuç, uzak avatarda rastgele bozuk
-            //    duruşlardır. Kapalıyken herkes prefabın oranlarını kullanır ve iki uç eşleşir.
+            // UZAK GÖVDEYİ BOZAR. İskelet blob'u SerializationCompressionType.High ile kodlanıyor
+            // ve o kip eklemleri "joint lengths" ile sıkıştırıyor. Calibrate() gönderenin gövde
+            // ORANLARINI değiştirdiği için, alıcının hedef iskeleti artık gönderenin kodladığı
+            // uzunluklarla uyuşmaz — sonuç, uzak avatarda rastgele bozuk duruşlardır. Kapalıyken
+            // herkes prefabın oranlarını kullanır ve iki uç eşleşir.
             //
-            // 2) BİRİNCİ ŞAHIS OFSETİNİ DETERMİNİSTİK OLMAKTAN ÇIKARIR. Ölçü, arena hizalaması
-            //    tamamlandıktan BodyCalibrationDelaySeconds sonra o anki poza sabitleniyor;
-            //    oyuncu o sırada yürüyor ya da eğilmişse oran yanlış kilitlenir ve oturumun
-            //    kalanı boyunca öyle kalır. Sabit bir firstPersonOffset değişken bir hatayı
-            //    kapatamaz, bu yüzden önce bu kapatılır, ofset SONRA bir kez ayarlanır.
+            // ⚠️ Anahtarın İKİ ucu birden var ve ters yönde çekiyorlar: açmak oyuncunun kendi
+            // ellerini gerçek eline yaklaştırır (gövde oranı oyuncununkine sabitlenir), ama aynı
+            // hamle uzak avatarı bozar. Uzak taraf tercih edilir — yerelde el birkaç santim kayabilir,
+            // uzakta ise gövde tümden bozuk duruşlara girer.
             if (!calibrateBodyProportions)
             {
                 return;
@@ -377,10 +379,8 @@ namespace VortexArena.Core.Player
 
             // ⚠️ Sürenin dolması YETMEZ: SDK'nın Calibrate()'i geçerli bir poz yoksa SESSİZCE döner
             // (hiçbir şey yapmaz, hiçbir şey da basmaz). Tek atışlık bir çağrı tam bu pencereye denk
-            // gelirse kalibrasyon oturumun geri kalanı boyunca HİÇ yapılmamış olur: karakterin
-            // oranları oyuncununkine sabitlenmez ve gövde birinci şahısta kameraya göre yanlış
-            // yerde durur. Bu yüzden bayrak koşul sağlanana dek AÇIK kalır ve her karede yeniden
-            // denenir.
+            // gelirse kalibrasyon oturumun geri kalanı boyunca HİÇ yapılmamış olur. Bu yüzden bayrak
+            // koşul sağlanana dek AÇIK kalır ve her karede yeniden denenir.
             if (!retargeter.RetargeterValid)
             {
                 return;
@@ -396,10 +396,13 @@ namespace VortexArena.Core.Player
         /// <para>
         /// Sebep: ölçek <c>SkeletonRetargeter.ScaleRange</c> ile <b>kelepçelenir</b> (varsayılan
         /// 0.8–1.2). Oyuncunun boyu modelin boyundan bu aralığın dışında farklıysa karakter
-        /// oyuncuyla aynı boyda OLAMAZ — ve bunun birinci şahıstaki görünümü "gövde kameraya göre
-        /// yanlış yerde / aşağı bakınca gövdenin içi" olur. Sınıra dayanmış bir ölçek gözle
+        /// oyuncuyla aynı boyda OLAMAZ. Bunun iki sonucu var: <b>diğer oyuncular</b> onu yanlış
+        /// boyda görür, <b>kendisi</b> de ellerini gerçek elinden kaymış görür (kol uzunluğu
+        /// tutmayınca el meshi gerçek elin durduğu yere erişemez). Sınıra dayanmış bir ölçek gözle
         /// yanlış oranlardan ayırt EDİLEMEZ, bu yüzden tahmin edilmez, ölçülür.
         /// </para>
+        /// <para>Yalnız <see cref="calibrateBodyProportions"/> açıkken anlamlıdır: bayrak
+        /// <c>Calibrate()</c>'ten sonra kalkıyor.</para>
         /// </summary>
         private void TickScaleReport()
         {
@@ -425,8 +428,9 @@ namespace VortexArena.Core.Player
             {
                 Debug.LogWarning(
                     line + " Değer aralığın SINIRINDA: karakter oyuncunun boyuna yetişemiyor, yani " +
-                    "gövde kameraya göre kaymış görünür. Resources/LocalBodyAvatar.prefab içindeki " +
-                    "NetworkCharacterRetargeter > Scale Range genişletilmeli.", this);
+                    "diğer oyuncular bu oyuncuyu yanlış boyda görür. " +
+                    "Resources/LocalBodyAvatar.prefab içindeki NetworkCharacterRetargeter > " +
+                    "Scale Range genişletilmeli.", this);
                 return;
             }
 
@@ -434,47 +438,18 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Gövdeyi gizler/gösterir — <b>yalnız renderer'ları kapatarak</b>.
-        /// <para>
-        /// ⚠️ <b>Obje KAPATILMAZ</b> (<c>SetActive(false)</c>) ve bu bir üslup tercihi değildir:
-        /// karakterin üstündeki sensör kaynağı bir <c>OVRBody</c>'dir ve objeyi kapatmak onun
-        /// <c>OnDisable</c>'ını çalıştırır — açık son örnek de kapanınca <c>StopBodyTracking</c>
-        /// çağrılır. Geri açıldığında <c>OnEnable</c> yeniden başlatmayı dener ve
-        /// <b>başaramazsa kendini KALICI olarak kapatır</b>, bir daha denemez. Yani rig'in bir an
-        /// kaybolduğu her harita geçişi, gövdeyi oturumun geri kalanı boyunca sessizce
-        /// öldürebilecek bir kumar olurdu. Renderer kapatmak aynı görsel sonucu verir ve hiçbir
-        /// yaşam döngüsü olayını tetiklemez.
-        /// </para>
-        /// <para>Tek meşru <c>SetActive(false)</c> kurulumdan ÖNCEDİR (<see cref="Awake"/>) — orada
-        /// sensör zaten hiç açılmamıştır, dolayısıyla kapatılacak bir izleme de yoktur.</para>
-        /// </summary>
-        private void SetBodyVisible(bool visible)
-        {
-            if (_bodyVisible == visible || _bodyRenderers == null)
-            {
-                return;
-            }
-
-            _bodyVisible = visible;
-            for (int i = 0; i < _bodyRenderers.Length; i++)
-            {
-                if (_bodyRenderers[i] != null)
-                {
-                    _bodyRenderers[i].enabled = visible;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Kurulumdan sonra gerçekten <b>çizilebilir bir gövde</b> oluştu mu — oluşmadıysa tek bir
+        /// Kurulumdan sonra gerçekten <b>ağa akan bir gövde</b> oluştu mu — oluşmadıysa tek bir
         /// eyleme dönük hata basar.
-        /// <para>⚠️ Ölçüt sensörün açık olması DEĞİL, retargeter'ın poz uygulamasıdır: gövdeyi
-        /// çizen kapı odur (<see cref="Update"/>). Yalnız "sağlayıcı açık mı" diye bakılsaydı,
-        /// açık kalıp geçerli veri üretmeyen bir sensör <b>hiç uyarı basmadan</b> görünmez bir
-        /// gövdeye yol açardı.</para>
+        /// <para>⚠️ Ölçüt sensörün açık olması DEĞİL, retargeter'ın poz uygulamasıdır: ağa giden
+        /// iskeleti üreten kapı odur. Yalnız "sağlayıcı açık mı" diye bakılsaydı, açık kalıp
+        /// geçerli veri üretmeyen bir sensör <b>hiç uyarı basmadan</b> oyuncuyu diğerlerinin
+        /// ekranında görünmez bırakırdı.</para>
+        /// <para>⚠️ Arıza <b>iki şeyi birden</b> götürür: oyuncu kendi ellerini kaybeder (çizilen
+        /// tek şey onlar) ve başkalarının ekranından tümden silinir. İlki hemen fark edilir, ikincisi
+        /// hiç fark edilmeyebilir — bu yüzden sebep tahmine bırakılmaz, açıkça yazılır.</para>
         /// <para>Gerekçe: <c>OVRBody</c> başlatamadığında kendi uyarısını basıp susuyor ve o satır
-        /// "gövdem neden yok" sorusuna bağlanmıyor; bağı burada açıkça kuruyoruz. Süre tanınmasının
-        /// sebebi <see cref="SourceProviderGraceSeconds"/>'da.</para>
+        /// bu soruya bağlanmıyor; bağı burada açıkça kuruyoruz. Süre tanınmasının sebebi
+        /// <see cref="SourceProviderGraceSeconds"/>'da.</para>
         /// </summary>
         private void TickSourceProviderCheck()
         {
@@ -497,9 +472,9 @@ namespace VortexArena.Core.Player
                 : "Body tracking hiç başlamadı (sebebi konsolda bunun üstündeki [OVRBody] satırı söyler)";
 
             Debug.LogError(
-                $"[LocalBodyAvatar] {cause} — yerel gövde çizilmeyecek ve ağa gövde akmayacak. Sık " +
-                "görülen iki sebep: (1) editörden Link ile koşuluyor ve Meta Quest Link " +
-                "uygulamasında ilgili geliştirici çalışma zamanı özelliği kapalı, (2) cihazda " +
+                $"[LocalBodyAvatar] {cause} — ağa gövde akmayacak, yani diğer oyuncular bu oyuncuyu " +
+                "göremeyecek. Sık görülen iki sebep: (1) editörden Link ile koşuluyor ve Meta Quest " +
+                "Link uygulamasında ilgili geliştirici çalışma zamanı özelliği kapalı, (2) cihazda " +
                 "BODY_TRACKING izni verilmemiş. Düzelttikten sonra oyunu yeniden başlat.", this);
         }
 

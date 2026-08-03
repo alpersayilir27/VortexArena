@@ -144,12 +144,18 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 | ✅ `Scoring` | `ModeScoreKind` | `Team` \| `Player` |
 | ✅ `FriendlyFire` | `bool` | ⚠️ Modun değil **operatörün** anahtarı: maç ORTASINDA değişebilir (`rules_update`), `Changed`'i dinle |
 | ✅ `Revive` | `ModeReviveAnchor` | `OwnBase` \| `StandStill` |
-| ✅ `Weapons` | `ModeWeaponSource` | `WeaponCanvas` (sahnede elle konmuş silah, çerçeveden seçilir, tükenmez) \| `RandomGrant` (mod dağıtır) |
+| ✅ `Weapons` | `ModeWeaponSource` | `WeaponCanvas` (sahnede elle konmuş silah, çerçeveden seçilir, tükenmez) \| `RandomGrant` (mod dağıtır). ⚠️ Tek başına "kurulmuş maç var" demek değildir — aşağı bak |
+| ✅ `FireWhilePaused` | `bool` | Maç kurulmamışken ateş serbest mi (lobi profili). `RandomGrant` ile **birlikte** okunur: `random` + `FireWhilePaused` = serbest alan, yalnız `random` = mod silah dağıtıyor |
 | ✅ `RespawnDelay` | `float` | ⚠️ **`0` geçerlidir** (anında canlanma) |
 | ✅ `Changed` | olay | Kurallar değişti |
 | ⛔ `Apply` / `ApplyFromCatalog` / `Reset` | | Besleme sistemin işi |
 
 > ⚠️ **`if (modeId == "…")` zinciri yazma.** Yeni mod eklemek senin kodunu değiştirmemeli.
+
+> ⚠️ **Sahnelenen arena lobi profiliyle koşar** (operatör lobideyken bir arena seçtiğinde herkes o
+> arenaya geçer ama maç kurulmaz): orada `Weapons == RandomGrant`'tir. "Mod silah dağıtıyor mu"
+> sorusunun cevabı bu yüzden `Weapons == RandomGrant && !FireWhilePaused`'dur —
+> `Docs/ArenaNet-Protokol.md` §10.7.
 
 > ⚠️ **Serialize edilen mod enum'larına yeni değer SONA eklenir.** Unity enum'ları sayısal indeksle
 > saklar; başa/ortaya ekleme sahnelerdeki tüm değerleri kaydırır. Aynı kural `Team` için de geçerli
