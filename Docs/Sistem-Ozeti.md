@@ -147,19 +147,23 @@ kırılabilir/yıkılabilir sahne objeleri için de geçerli olacak — hasar al
 
 ### 3.3 Arena uzayı (koordinat çerçevesi)
 
-Ağa giden **her poz arena-yerel uzaydadır**: origin = sahnedeki `SpawnPoint` (arena zemininde sabit
-bir referans nokta), eksenler duvarlara hizalı.
+Ağa giden **her poz arena uzayındadır** ve **arena uzayı = sahnenin dünya uzayıdır**: origin dünya
+(0,0,0), rotasyon kimlik, eksenler duvarlara hizalı.
 
 ```
 Quest'in kendi dünya uzayı ──(ArenaCalibrator: 2 nokta + OVRSpatialAnchor)──► arena uzayı
                                      │
-                       ArenaSpace.WorldToArena/ArenaToWorld
+                       ArenaSpace.WorldToArena/ArenaToWorld  (kimlik)
 ```
 
-- Origin'i sahnedeki `SpawnPoint` `ArenaSpace`'e kaydeder; Lobby'de origin yoktur → dünya = arena
-  (kimlik dönüşümü, `ArenaSpace` sahne başına bir kez uyarır — lobide normaldir). Origin muhafazadan
-  (`ArenaBoundary`) **bağımsızdır**: duvarı büyütmek/kaydırmak ağ koordinatlarının sıfırını oynatmasın
-  diye ikisi ayrıldı.
+- `ArenaSpace`'in poz/pozisyon/rotasyon dönüşümleri **kimliktir**; çağrı yerleri yine ondan geçer,
+  böylece koordinat çerçevesi tek bir yerde tanımlı kalır. `WorldToArenaDirection` kimlik değildir:
+  yönü normalize eder (protokol her olayda bir **birim** yön taşır) ve sıfır/NaN girdide
+  `Vector3.forward` döner.
+- Bunun bağlayıcı sonucu: **arena geometrisi dünya orijinine göre kurulur** — arenanın zemini dünya
+  y=0'da, merkezi dünya (0,0,0) civarında olur. Sahneyi topluca kaydırmak ya da döndürmek tüm
+  oyuncuların ağ koordinatını kaydırır. Muhafaza (`ArenaBoundary`) bundan **bağımsızdır**: duvarı
+  büyütmek/kaydırmak ağ koordinatlarının sıfırını oynatmaz.
 - Dönüşüm **istemcide** yapılır (`PlayerPoseTracker`); sunucu ve admin ham arena koordinatı görür.
 - Bütün başlıklar aynı fiziksel alana kalibre olduğu için, arena uzayı **tüm cihazlarda aynı fiziksel
   noktayı** gösterir — çakışan avatar / yanlış yerde görünen rakip sorununun çözümü budur.
@@ -339,10 +343,8 @@ sunucu faz + ölü + gecikme kontrolüyle yetinir. Şart ölçülemiyorsa (sahne
 kamera yok) istemci onu sağlanmış sayar: bu sınıf hiçbir koşulda oyuncuyu kalıcı ölü bırakmaz.
 
 ⚠️ **Kod kuralı:** hiçbir bileşen rig'i/kamerayı taşımaz — ne canlanmada, ne harita değişiminde.
-Protokolde konum/slot taşıyan bir alan **yoktur**; sunucu sahne geometrisini bilmez. Arena başına
-sahnedeki tek `SpawnPoint` maç öncesi yerleşim göstergesidir ve oyuncuyu hiçbir yere taşımaz —
-ama arena uzayının **sıfırıdır** (§3.3), bu yüzden bir kez yerleştirilir ve sonra oynatılmaz
-(`GameObject > VortexArena > Spawn Point` ile eklenir, elle yerleştirilir).
+Protokolde konum/slot taşıyan bir alan **yoktur**; sunucu sahne geometrisini bilmez. Oyuncu
+canlandığı yerde durur, ölüm ekranı kapanır.
 
 ⚠️ **Harita değişimi kalibrasyonu sıfırlamaz.** `load_match` oyuncu için yalnız bir sahne
 değişimidir: kimse "yeniden doğmaz". Yeni sahnenin `ArenaCalibrator`'ı `Start`'ta kayıtlı
@@ -727,7 +729,7 @@ sorunu.**
 |---|---|
 | `ArenaClient` | Kalıcı tekil; WS bağlantısı (arka plan Task + `ConcurrentQueue` → ana thread köprüsü), hello/welcome, status kalp atışı, otomatik reconnect. **Tüm mesaj gönderimi buradan.** Teşhis için `ConnectAttempts` (son başarılı bağlantıdan beri kaçıncı deneme; bağlanınca 0) + `LastError` (son bağlanma hatası) — `ConnectionOverlay` bunları gösterir. `Disconnect()` otomatik yeniden denemeyi **durdurur** (dönüş yalnız açık `Connect` ile) |
 | `ServerDiscovery` | Beacon dinleme (Android'de MulticastLock), elle girilen adresin `PlayerPrefs`'e yazılması, `arena.json` fallback |
-| `UdpStateChannel` | UDP kaydı (`0x00`), 20 Hz poz + eşya gönderimi (`0x01`), snapshot alımı (`0x02` ve birleşik `0x05`), atış/atma olayı gönderimi (`SendFireEvent` → `0x03`, olay başına, hemen) ve olay bloğu alımı (`0x04`/`0x05`, **tek** `serverTick` halkasıyla kopya ayıklama). Ayrıca **ağ telemetrisini ölçer** (§6.7): 1 Hz RTT yoklaması (`0x06`) + snapshot varışlarından downlink jitter/kayıp; `SampleTelemetry` ile `ArenaClient`'a verir, o da `status`'a yazar |
+| `UdpStateChannel` | UDP kaydı (`0x00`), 20 Hz poz + eşya gönderimi (`0x01`), snapshot alımı (`0x02` ve birleşik `0x05`), atış/atma olayı gönderimi (`SendFireEvent` → `0x03`, olay başına, hemen) ve olay bloğu alımı (`0x04`/`0x05`, **tek** `serverTick` halkasıyla kopya ayıklama). Ayrıca **ağ telemetrisini ölçer** (§6.7): 1 Hz RTT yoklaması (`0x06`) + snapshot varışlarından downlink jitter/kayıp; `SampleTelemetry` ile `ArenaClient`'a verir, o da `status`'a yazar. ⚠️ **Datagram işleme kendi `try/catch`'i içindedir** (§7): bozuk tek bir paket alım döngüsünü öldürürse istemci sessizce donar — durum kanalında doğrusu paketi düşürüp devam etmektir, eksiği sonraki tik kapatır |
 | `RemotePlayerRegistry` | Snapshot → oyuncu başına halka tampon → `GetInterpolatedPose`, `IsAlive`, `OnRemoteJoined/Left`; ayrıca **eşya durumu** `TryGetHeldItems` (interpole edilmez — ayrık veri, son gelen geçerli) ve **`serverTick` → yerel oynatma zamanı** eşlemesi `TryGetPlaybackTimeMs` (§3.5b). ⚠️ Tik eşlemesi **global** bir halkada durur, oyuncu başına halkada değil: tik başına bir snapshot var ve hiç pozu olmayan bir oyuncunun olayı da zamanlanabilmeli. Damga `playerCount = 0` snapshot'ında da yazılır (o da meşru bir yayın) ve parçalanmış snapshot'ta yalnız İLK parçadan alınır |
 | `NetEvents` | **Statik olay merkezi** — sunucu mesajları buradan ana thread'de yayınlanır (`OnRemoteFireEvent` dahil) |
 | `RemoteFireEvent` | Uzak atış/atma olayının istemci-içi taşıyıcısı: `kind`, `rightHand`, `itemId`, arena-uzayı yönü, `magnitude` (atışta mesafe m / atmada hız m·sn⁻¹), `serverTick` |
@@ -799,7 +801,8 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 
 ### İstemci: `VortexArena.Core` (oyun kodu)
 
-`ArenaBoundary` (muhafaza: kenara/kolona olan mesafeden karartma + uyarı — kenara `warnDistance`
+`ArenaBoundary` (`VA_ArenaBoundary` prefabıyla gelir; muhafaza: kenara/kolona olan mesafeden
+karartma + uyarı — kenara `warnDistance`
 kala hafif bir rampa başlar (`warnFadeAlpha`), sınır aşılınca tam karartmaya gider; iki dal sınırda
 aynı değeri verdiği için geçiş süreklidir. ⚠️ **Yarı saydam duvar göstergesi KALDIRILDI**
 (`wallRenderers`/`minWallAlpha`/`maxWallAlpha` yok): arenanın duvarları environment sanatına ait ve
@@ -844,13 +847,20 @@ Dosya olmasının kazancı: ölçüyü sahadan alan kişi Unity açmadan güncel
 yapmaz: muhafaza her karede çağırıyor),
 `ArenaDimensionMesh` + `DimensionPolygon` + `DimensionAnchor` (ölçü maketinin işaretçileri; kökte
 mekan adı + kaynak `TextAsset` + geri yazma taşıyıcıları, çokgenlerde yalnız
-`Kind { Plane, Column }`, kalibrasyon küplerinde yalnız `Kind { A, B }`. ⚠️ Nokta/ad/
+`Kind { Plane, Column }`, kalibrasyon küplerinde yalnız `AnchorKind { A, B }`. ⚠️ Nokta/ad/
 yükseklik işaretçide TUTULMAZ — kaynakları sırasıyla mesh (kalibrasyon noktasında transform),
 `GameObject` adı ve mesh'in Y aralığı;
-kopyalamak sahnede düzenlenen değerden sapan ikinci bir kaynak üretirdi. Maketin kökü `EditorOnly`
-etiketlidir, build'e girmez. ⚠️ Kalibrasyon küpleri sahnedeki işaretçilerle **aynı adı** taşır
-(`anchor_a`/`anchor_b` — tek sabit `ArenaCalibrator.AnchorAName`); ikisini ayıran şey ad değil
-`DimensionAnchor` bileşenidir, kalibratörün ad araması onu taşıyan objeleri atlar),
+kopyalamak sahnede düzenlenen değerden sapan ikinci bir kaynak üretirdi.
+⚠️ **Maketin kökü ve kalibrasyon küpleri build'e GİRER** (`EditorOnly` etiketlenmez): sahnenin
+`anchor_a`/`anchor_b` işaretçileri bunlardır ve çalışma anında gerekir. **Görsel dal
+(`Plane` + `Columns`) gerçek build'e hiç girmez** — `DimensionMeshBuildStripper` onu build'e giden
+geçici sahne kopyasından siler (gerekçesi boyut değil bağımlılık: `ProBuilderMesh` runtime'a
+`Unity.ProBuilder`'ı sokardı; sahne dosyası değişmez). **Editör Play kipinde** ise her şey
+sahnededir: orada görseli `ArenaDimensionMesh.Awake` `Plane`/`Columns` altındaki
+`Renderer.enabled`'ı false yaparak gizler — obje kapatılmaz (kapalı bir kökün altındaki
+işaretçiler bulunamazdı) ve işaretçilerin `Renderer`'larına dokunulmaz (onları kalibrasyon
+sırasında `ArenaCalibrator` yakıp sonra gizler). ⚠️ Sahnede ikinci bir işaretçi
+ailesi yoktur: `anchor_a`/`anchor_b` yalnız bu küplerdir),
 `ArenaObstacle` (sahneye ELLE konan engelin muhafaza dikdörtgeni; konum/dönüş transformdan,
 ölçü `size`'dan gelir — ⚠️ **collider eklemez, fizik yapmaz**: free-roam'da oyuncuyu durduran şey
 gerçek nesnedir, bileşenin tek işi uyarıyı erken tetiklemektir),
@@ -858,40 +868,43 @@ gerçek nesnedir, bileşenin tek işi uyarıyı erken tetiklemektir),
 OVRSpatialAnchor kalıcılığı + recenter onarımı; nokta alma jesti **sağ kumandada A basılıyken
 B'ye çift basış** (`doubleTapSeconds` penceresi; basılı tutma süresi yoktur) ve **yalnız sunucu
 "kalibresiz" derken açılır**,
-§3.11. Sahnedeki `anchor_a`/`anchor_b` işaretçileri **kurulum aracıdır, dekor değil**: yalnız elle
+§3.11. `anchor_a`/`anchor_b` işaretçileri **kurulum aracıdır, dekor değil**: yalnız elle
 kalibrasyon sürerken görünürler ve hizalamadan `markerVisibleSeconds` sonra gizlenirler — kayıtlı
 anchor'dan geri yükleme yolunda hiç gösterilmezler, yoksa harita değişiminde maçın ortasında ekrana
 obje düşerdi. **Yerleri sahneden değil boyut dosyasından gelir**: `Start` işaretçileri
 `ArenaBoundary.TryGetCalibrationMarks` üzerinden `calibration.a`/`.b` noktalarına oturtur
-(`PlaceMarkerAtFloor`), dosyada nokta yoksa dokunmaz ve uyarır. `anchorA`/`anchorB` alanları boş
-bırakılırsa objeler **adlarından** çözülür (`AnchorAName`/`AnchorBName`) — `EditorOnly` etiketli
-kökler taranmaz, ölçü maketinin küpleri yakalanmasın diye.
+(`PlaceMarkerAtFloor`), dosyada nokta yoksa dokunmaz ve uyarır.
+İşaretçi çözümü üç basamaklıdır: (1) Inspector'da elle bağlanmış `anchorA`/`anchorB`, (2) ölçü
+maketinin `DimensionAnchor` küpleri (`AnchorKind`), (3) ada göre arama (`AnchorAName`/`AnchorBName`)
+— sonuncusu yalnız maketi olmayan eski sahneler için vardır.
 **Tamamlanma İKİ biçimde bildirilir** ve iki tamamlanma yolu da (elle yakalama + kayıtlı
 anchor'dan geri yükleme) tek kapıdan geçer: statik `Calibrated` olayı (dinleyicisi
 `CalibrationState`) ve statik **`CalibrationGeneration`** sayacı. Sayaç abonelik istemez — geç
 uyanan ya da arada kapatılan bir dinleyici olayı sessizce kaçırır (yerel gövde avatarı rig'i
 kaybedince kapanıyor ve harita değişiminde kayıtlı anchor tam o aralıkta geri yükleniyor), sayacı
 kaçıramaz: sonraki karede farkı görür. Tüketicisi `LocalBodyAvatar`'dır: her hizalamadan sonra
-gövde oranını yeniden ölçtürür (`CharacterRetargeter.Calibrate()`, gecikmeli).
+gövde oranını yeniden ölçtürebilir (`CharacterRetargeter.Calibrate()`, gecikmeli) — ⚠️ o yol
+`calibrateBodyProportions` ile **varsayılan kapalıdır** (§7).
 ⚠️ **İki kalibrasyon ayrı şeydir:** bu sınıf rig'i fiziksel arenaya hizalar (sunucu-otoriter durum,
-§10.6), SDK'nınki karakterin gövde oranını oyuncununkine sabitler (tamamen yerel, ağda karşılığı
-yok). Aralarındaki tek bağ zamanlamadır — arena hizalamasından sonra oyuncu eğilip doğrulmuştur,
+§10.6), SDK'nınki karakterin gövde oranını oyuncununkine sabitler (protokolde bir alanı yoktur ama
+**ağda karşılığı vardır**: blob sıkıştırması eklem uzunluklarına dayanıyor, §7). Aralarındaki tek
+bağ zamanlamadır — arena hizalamasından sonra oyuncu eğilip doğrulmuştur,
 yani boy ölçmek için doğru andır.
 ⚠️ **Sıra A → B'dir ve geometrik olarak doğrulanamaz**: iki nokta hangisinin önce alındığını
 söylemez, mesafe kontrolü de simetriktir. Garanti prosedüreldir — ilk yakalama A sayılır, o anda
 A işaretçisi yanar ve log `1/2 — A yakalandı` yazar. Karıştırılırsa arena 180° ters döner.
-⚠️ İşaretçinin **mesh'inin alt noktası arena zeminine oturur**: `VirtualFloorY`
-görselin mesh bounds'undan ölçülür (`MeasureFloorDrop`), yerleştirme de aynı ölçüyü kullanır —
-görseli değiştiren kişi bir şey yapmak zorunda değildir, ama pivot ile mesh tabanı arasına
-`Renderer` taşımayan bir ara obje sokarsa zemin yüksekliği sessizce kayar),
+⚠️ **Tek Y sözleşmesi: işaretçinin transform konumu zemin noktasıdır** — küp o noktada
+merkezlenir, yarısı zeminin altında kalır. Görsel bir telafi (mesh tabanını zemine kaldırma)
+YOKTUR: aynı transform hem dosyaya yazılan hem dosyadan okunan ölçü olduğu için ikinci bir
+sözleşme yazma/okuma arasında sessiz sapma üretirdi),
 `CalibrationState` (kalıcı tekil — kalibrasyon durumunun sunucu ile iki yönlü köprüsü: hizalanınca
 `set_calibration` yollar, operatör sıfırlayınca `ArenaCalibrator.Invalidate()` çağırır),
-`ArenaSpace` (dünya↔arena dönüşümü; origin YOKKEN kimlik dönüşümü yapar ama **sahne başına bir kez
-uyarır** — lobide normal, arenada "her şey çalışıyor ama koordinatlar kaymış" tablosunun tek işareti),
+`ArenaSpace` (dünya↔arena dönüşümünün **tek adresi**: arena uzayı dünya uzayıyla çakışık olduğu
+için poz/pozisyon/rotasyon dönüşümleri kimliktir. Çağrı yerleri yine ondan geçer — çerçeve tek
+yerde tanımlı kalsın. `WorldToArenaDirection` istisnadır: yönü **normalize eder** ve sıfır/NaN
+girdide `Vector3.forward` döner, çünkü protokol her olayda bir birim yön taşır),
 `BaseZone` (**taban bölgesi** — kırmızı/mavi şerit, canlanma
-kapısı; `Neutral` = herkese açık), `SpawnPoint` (arena başına **tek** marker: hem maç öncesi
-yerleşim göstergesi hem **arena uzayının sıfırı** — `OnEnable`'da `ArenaSpace`'e origin olarak
-kaydolur, birden çoksa ilk kaydolan geçerlidir. Oyuncuyu taşımaz, protokolde karşılığı yoktur),
+kapısı; `Neutral` = herkese açık),
 `MapDefinition` / `ModeDefinition` / `GameCatalog` (içerik SO'ları),
 `Weapon` (ISDK ile tutulan hitscan tüfek; tetik **silahı tutan elin** kumandasından okunur — çift
 silahta tetikler bağımsız; şarjör+yedek şarjör durumu taşır, boş şarjörde **otomatik reload YOK**
@@ -970,7 +983,7 @@ katmanların göreli hız farkı korunur).
 
 | Sınıf | Görevi |
 |---|---|
-| `Arena/BaseZoneVisibility` | Taban şeritlerinin (`BaseZone`) görünür/etkin olup olmadığına karar veren **tek yer**. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz. Kapı **takım kipidir**: takımlı modda (TDM/turnuva) şeritler durur — biri canlanma kapısı, diğeri tur arası toplanma kapısıdır; takımsızda (FFA) gizlenir, çünkü orada canlanma şartı sabit durmaktır ve renkli şerit olmayan bir kuralı anlatırdı. Hangi mod? **Öncelik `ModeSelection`** (seçili mod): admin lobide bir arena sahnelediğinde herkes o arenaya geçer ama aktif kural hâlâ lobi profilidir, yani koşan kurala bakan bir kapı "hangi maç kurulacak" sorusunu göremezdi. Seçim bilinmiyorsa `ModeRuntime`'ın takım kipine düşer. **Bileşen kapatılır, GameObject KAPATILMAZ** (altındaki `SpawnPoint` statik kayıttan düşerdi) + Renderer'lı doğrudan çocuklar gizlenir; alt ağacında `SpawnPoint` bulunan çocuğa dokunulmaz. ⚠️ **Yalnız kendi kapattığını geri açar** — aynı bileşenleri `AdminSpectator` de kapatıyor. Eskiden bu iş `WeaponGranter`'ın süpürmesindeydi ve kapısı `weaponSource`'tu; FFA'da ikisi birlikte değiştiği için doğru görünüyordu, lobinin silahı rastgeleye alınınca lobideki tabanlar da kayboldu. **İkinci işi duvar-arkası görünürlüktür (x-ray):** şeritler görünürken oyuncunun **kendi** takımının şerit renderer'ına ikinci bir materyal slotu eklenir (`M_BaseZoneXRay` → `VortexArena/BaseZoneXRay`, `ZTest Greater`) — aynı mesh bir kez daha çizilir ve yalnız **önünde başka geometri olan** piksellerde görünür, yani arena dekorla dolsa da ölen oyuncu canlanma noktasını görür. Yeni GameObject / URP renderer feature / katman gerekmez, arena başına kurulum adımı doğmaz. ⚠️ **Rakip taban hiçbir koşulda çizilmez** (slot eklenmez) ve takım `Neutral` ise (takım atanmadı, admin gözlemci) hiç eklenmez; takım rengi **şeridin kendi materyalinden** okunur, ikinci bir renk tanımı yoktur. Slotu **çalışma anında** ekler çünkü `TemplateBasicsLoader` her renderer'a tek `sharedMaterial` yazıyor — asset'e konan ikinci slot o araç her çalıştığında silinirdi; ayrıca çalışma anı yolu mevcut tüm arenaları sahne düzenlemesi olmadan kapsar. Takım değişimini `PlayerCombatState.LocalTeamChanged` ile dinler |
+| `Arena/BaseZoneVisibility` | Taban şeritlerinin (`BaseZone`) görünür/etkin olup olmadığına karar veren **tek yer**. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz. Kapı **takım kipidir**: takımlı modda (TDM/turnuva) şeritler durur — biri canlanma kapısı, diğeri tur arası toplanma kapısıdır; takımsızda (FFA) gizlenir, çünkü orada canlanma şartı sabit durmaktır ve renkli şerit olmayan bir kuralı anlatırdı. Hangi mod? **Öncelik `ModeSelection`** (seçili mod): admin lobide bir arena sahnelediğinde herkes o arenaya geçer ama aktif kural hâlâ lobi profilidir, yani koşan kurala bakan bir kapı "hangi maç kurulacak" sorusunu göremezdi. Seçim bilinmiyorsa `ModeRuntime`'ın takım kipine düşer. **Bileşen kapatılır** + Renderer'lı doğrudan çocuklar gizlenir. ⚠️ **Yalnız kendi kapattığını geri açar** — aynı bileşenleri `AdminSpectator` de kapatıyor. Eskiden bu iş `WeaponGranter`'ın süpürmesindeydi ve kapısı `weaponSource`'tu; FFA'da ikisi birlikte değiştiği için doğru görünüyordu, lobinin silahı rastgeleye alınınca lobideki tabanlar da kayboldu. **İkinci işi duvar-arkası görünürlüktür (x-ray):** şeritler görünürken oyuncunun **kendi** takımının şerit renderer'ına ikinci bir materyal slotu eklenir (`M_BaseZoneXRay` → `VortexArena/BaseZoneXRay`, `ZTest Greater`) — aynı mesh bir kez daha çizilir ve yalnız **önünde başka geometri olan** piksellerde görünür, yani arena dekorla dolsa da ölen oyuncu canlanma noktasını görür. Yeni GameObject / URP renderer feature / katman gerekmez, arena başına kurulum adımı doğmaz. ⚠️ **Rakip taban hiçbir koşulda çizilmez** (slot eklenmez) ve takım `Neutral` ise (takım atanmadı, admin gözlemci) hiç eklenmez; takım rengi **şeridin kendi materyalinden** okunur, ikinci bir renk tanımı yoktur. Slotu **çalışma anında** ekler çünkü `TemplateBasicsLoader` her renderer'a tek `sharedMaterial` yazıyor — asset'e konan ikinci slot o araç her çalıştığında silinirdi; ayrıca çalışma anı yolu mevcut tüm arenaları sahne düzenlemesi olmadan kapsar. Takım değişimini `PlayerCombatState.LocalTeamChanged` ile dinler |
 | `ModeSelection` | **Henüz başlamamış** maçın seçili modu (`selection_state`, §5.3) — yalnız sunum. `ModeRuntime` ile karıştırılmaz: orası **koşan** maçın kuralıdır. Statik `HasValue`/`ModeId`/`IsTeamless` + `Changed`; besleyicisi `ModeRuntimePump`. ⚠️ Hiçbir kuralı/HUD'ı/loadout'u değiştirmez (maç türü `start_match`'i bekler) ve **tüketicisi olmayan alan eklenmez** — bugün tek tüketicisi `BaseZoneVisibility` |
 | `ModeRuntime` (+ `ModeRuntimePump`) | Aktif maçın kurallarının **tek okuma noktası** (§3.9). `load_match.rules` / `welcome.match.rules` / `return_to_lobby.rules` besler, **`rules_update` maç ortasında tazeler** (bugün tek tetikleyicisi dost ateşi anahtarı — §3.9); kurallar telde yoksa (`rules == null`) `ModeDefinition` önizlemesi fallback olarak devralır. Lobiye dönüşte SIFIRLANMAZ, **lobi profili uygulanır** (`modeId:"lobby"`, §3.8.1) — lobideki silah seçimi loadout'unu bu anahtarla buluyor. Statik durum + statik `Changed`; pompa kendini önyükler (`BeforeSceneLoad` + `DontDestroyOnLoad`). Tüketiciler: `PlayerCombatState`, `ModeHudBase`, `AdminRoster` |
 | `UI/ModeHudBase` | Mod HUD'larının **takım-agnostik** tabanı: faz/süre, geri sayım, can barı, ölüm ekranı + durum metni, kill-feed (ad çözümü `lobby_state`'ten), kendi öldürme/ölüm sayacın, maç sonu satırı. **Takıma ait hiçbir şey burada değil** — skor satırı (`ScoreLine`) ve kazanan metni (`WinnerLine`) alt sınıfın işi. Core'da durur çünkü modlar birbirini referanslamaz. `PhaseLabel`/`ModeStateLabel` `virtual`'dır: tur tabanlı mod "MAÇ" yerine "TUR 3", mod duraklamasında da "TOPLANMA 2/6" yazabilsin diye — taban `modeState`'i **yorumlamaz** |
@@ -989,7 +1002,7 @@ katmanların göreli hız farkı korunur).
 | `Player/ArenaNetCharacterBehaviour` | Movement SDK'nın ağ katmanı ile ArenaNet arasındaki **tek köprü** (§6.9/6.10). SDK'nın `INetworkCharacterBehaviour`'ını uygular: ürettiği blob'u `0x07` olarak yollar, gelen blob'u `NetworkCharacterHandler.ReceiveData`'ya verir, karakterin kökünü `LateUpdate`'te arena uzayına oturtur. **Rol ayrımının uygulandığı TEK yer**: `HasInputAuthority` yerelde `true` (sensör kaynağı `MetaSourceDataProvider` açık, gövde body tracking'den çözülür ve akar), uzakta `false` (kaynak KAPATILIR — açık bırakılsaydı her uzak avatar aynı yerel sensörü okurdu). ⚠️ Kaynak bileşen prefabdan **silinmez, yalnız kapatılır**: `CharacterRetargeter.Awake` onu kendi GameObject'inden `GetComponent` ile arıyor ve yoksa assert atıyor — tek prefabın hem yerel hem uzak çalışabilmesi bileşenin orada durmasına bağlı. ⚠️ **Kökü SDK değil bu sınıf yazar**: blob'un 0. eklemi gönderenin dünya uzayındadır ve blob opak olduğu için içeriden çevrilemez, o yüzden kök arena uzayında ayrıca taşınır (§6.9). ⚠️ `NetworkTime`/`RenderTime` **sunucunun tik saatinden** gelir (`RemotePlayerRegistry.TryGetServerTimeSeconds`), `Time.unscaledTime`'dan DEĞİL: SDK'nın interpolasyonu gönderenin damgasıyla alıcının render zamanını karşılaştırıyor, iki uç aynı epoch'ta olmazsa gövde 12 Hz basamaklarla oynar. ⚠️ `ReceiveStreamAck` **bilerek boştur** — ack yalnız delta sıkıştırma içindir ve delta kapalıdır (§6.9) |
 | `Player/HandGripConvention` | Anchor (kumanda) uzayındaki el pozunu karakterin el kemiğinin bind eksenine çeviren **statik köprü**. Kemik anatomisi (parmak yönü = hand→MiddleProximal, avuç normali = parmak×başparmak) **modelden çalışma anında ölçülür**, sabit derece yazılmaz: karakter değişince burada tek satır değişmez. Sabit olan tek şey anchor tarafındaki el anatomisidir — **tek ayar noktası** budur ve bugünkü değeri ergonomik bir TAHMİNDİR; kesin değeri `HandGripCalibrationProbe` ölçer. Sol ve sağ ayrı hesaplanır; ortak bir ofset iki eli birden düzeltemez (§7). ⚠️ **Kapsamı daraldı: gövde artık buradan geçmez.** Kol/bilek zinciri Movement SDK retargeting'inden geliyor ve SDK kendi eşlemesini kendi yapıyor; bu köprünün bugünkü tek işi **eşyanın ele oturmasıdır** (kavrama soketi + uzak çizim), çünkü `ItemDefinition.primaryGrip` ölçüsü anchor uzayında alınmış. Buraya gövdeyle ilgili bir tüketici geri eklenirse retargeting ile ikinci bir eşleme kaynağı doğar |
 | `Player/HandGripCalibrationProbe` | Yukarıdaki tahmini sabitin **kesin** değerini cihazda ölçen geliştirici aracı (`VA_CameraRig`'de durur): bir kez log basıp kendini kapatır, çıkan iki satır `HandGripConvention`'a yapıştırılır. Ölçüm kaynağı **BB rig'inin kumandadan sürdüğü el iskeletidir** (`OVRHandVisualLeft/Right → OculusHand_* → b_*_wrist`) — oyuncu kendi elini doğru yerde gördüğü için o iskelet "anchor'a göre el nerede" sorusunun canlı cevabıdır. ⚠️ Denenip elenen iki kaynak: `OVRInput.Controller.LHand/RHand` **multimodal** ister (projede kapalı), mesafeli kavrama önizlemesindeki kopyalar ise `ControllerModelHider` tarafından kapatılır (kapalı kemik sürülmez, bind pozu ölçülürdü). Oyun kodu onu OKUMAZ. ⚠️ Bugün ölçüm kaynağı da `ControllerModelHider` tarafından kapatılıyor (el görselleri tip eşleşmesiyle gizleniyor) — probe kullanılacaksa gizleyici geçici olarak devre dışı bırakılmalıdır |
-| `Player/LocalBodyAvatar` | Oyuncunun **kendi gövdesi** — uzak avatarlarla **aynı prefabı** `Owner = Host` olarak kurar (`ArenaNetCharacterBehaviour.Initialize(playerId, hasInputAuthority: true)`), yani "kendi gördüğüm gövde" ile "başkalarının gördüğü gövde" tek doğruluk kaynağıdır. **Kendini önyükleyen kalıcı tekil** (`WeaponGranter` kalıbı): prefabı `Resources.Load("LocalBodyAvatar")` ile yükleyip sahne köküne kurar, sahneye elle KONMAZ → yeni arena bir kurulum adımı doğurmaz. Gövde ancak **iki koşul** birden sağlanınca kurulur: etkin bir `OVRCameraRig` (yani rol gerçekten oyuncu) ve sunucudan alınmış bir `playerId` (blob onunla etiketleniyor, §6.9); o ana kadar gizli durur — kurulmamış bir retargeter oyuncunun yüzüne dikilmiş bir T-poz mankeni olurdu. ⚠️ **Kurulmuş olmak çizilmek için yetmez:** gövde ancak retargeter o kare bir poz gerçekten uyguladıysa (`RetargeterValid`) görünür, çünkü SDK sensör geçerli veri üretene dek karaktere hiçbir şey yazmaz ve o pencerede karakter **dünya orijininde T-pozunda** durur (§7) — oyuncu kendi kopyasını haritanın ortasında görürdü. Kurulumdan sonra görünürlük **renderer düzeyinde** yönetilir, obje kapatılarak DEĞİL (§7, `OVRBody` kendini kalıcı kapatabilir). **Gövde kalibrasyonunun tetikleyicisi de buradadır:** `ArenaCalibrator.CalibrationGeneration` değişince 3 sn sonra `CharacterRetargeter.Calibrate()` çağrılır — gecikme zorunludur, oyuncu arena kalibrasyonunu zemine EĞİLEREK yapıyor ve o andaki poza sabitlenen gövde oranı maçın kalanı boyunca yanlış boy demektir. ⚠️ Sürenin dolması tek başına yetmez: `Calibrate()` geçerli poz yokken **sessizce hiçbir şey yapmaz** (§7), bu yüzden çağrı koşul sağlanana dek her karede yeniden denenir. Kalibrasyondan sonra uygulanan gövde ölçeği bir kez raporlanır; `ScaleRange` sınırına dayanmışsa uyarıya döner. ⚠️ Avatar **sahne kökünde** durur, rig'in altına konmaz (§7, "retarget avatarı hareket eden kökün altına konmaz"). **Birinci şahıs ince ayarı `firstPersonOffset`'tir** (metre, gövdenin yaw uzayı; `-Z` geri): retarget gövdeyi izlenen kafanın altına oturtur ve model oranları oyuncununkine birebir oturmadığında gövde kameraya göre bir tık ileride kalır — oyuncu aşağı bakınca kendi göğsünün içini görür. ⚠️ Ofset `LateUpdate`'te uygulanır ve sınıf `[DefaultExecutionOrder(30000)]`'dir: gönderim order 100'de olduğu için ofset **tele girmez**, ayrıca SDK kökü her kare yeniden yazdığı için **birikmez** (geri almak gerekmez — ölçekte durum tersidir, §7). ⚠️ Gövdede **collider yoktur** — `Weapon`'ın atış raycast'i maskesiz, kendi gövden kendi atışını yerdi. Admin'de çizilmez ve bu rol kontrolüyle DEĞİL, etkin rig yoksa hiç çalışmayarak sağlanır (`AppSession` App asmdef'indedir, Core onu göremez) |
+| `Player/LocalBodyAvatar` | Oyuncunun **kendi gövdesi** — uzak avatarlarla **aynı prefabı** `Owner = Host` olarak kurar (`ArenaNetCharacterBehaviour.Initialize(playerId, hasInputAuthority: true)`), yani "kendi gördüğüm gövde" ile "başkalarının gördüğü gövde" tek doğruluk kaynağıdır. **Kendini önyükleyen kalıcı tekil** (`WeaponGranter` kalıbı): prefabı `Resources.Load("LocalBodyAvatar")` ile yükleyip sahne köküne kurar, sahneye elle KONMAZ → yeni arena bir kurulum adımı doğurmaz. Gövde ancak **iki koşul** birden sağlanınca kurulur: etkin bir `OVRCameraRig` (yani rol gerçekten oyuncu) ve sunucudan alınmış bir `playerId` (blob onunla etiketleniyor, §6.9); o ana kadar gizli durur — kurulmamış bir retargeter oyuncunun yüzüne dikilmiş bir T-poz mankeni olurdu. ⚠️ **Kurulmuş olmak çizilmek için yetmez:** gövde ancak retargeter o kare bir poz gerçekten uyguladıysa (`RetargeterValid`) görünür, çünkü SDK sensör geçerli veri üretene dek karaktere hiçbir şey yazmaz ve o pencerede karakter **dünya orijininde T-pozunda** durur (§7) — oyuncu kendi kopyasını haritanın ortasında görürdü. Kurulumdan sonra görünürlük **renderer düzeyinde** yönetilir, obje kapatılarak DEĞİL (§7, `OVRBody` kendini kalıcı kapatabilir). **Gövde kalibrasyonunun tetikleyicisi de buradadır** ve ⚠️ **varsayılan KAPALIDIR** (`calibrateBodyProportions = false`): kapalıyken `CharacterRetargeter.Calibrate()` hiç çağrılmaz ve herkes prefabın oranlarını kullanır — kalibrasyon hem uzak gövdeyi bozuyor (blob sıkıştırması eklem uzunluklarına dayalı) hem birinci şahıs ofsetini oturumdan oturuma değiştiriyor (§7). ⚠️ **`firstPersonOffset` ancak bu kapalıyken ayarlanır**, tersi her denemede başka sonuç veren bir tur olur. Alan açıldığında yol şudur: `ArenaCalibrator.CalibrationGeneration` değişince 3 sn sonra `Calibrate()` çağrılır — gecikme zorunludur, oyuncu arena kalibrasyonunu zemine EĞİLEREK yapıyor ve o andaki poza sabitlenen gövde oranı maçın kalanı boyunca yanlış boy demektir. ⚠️ Sürenin dolması tek başına yetmez: `Calibrate()` geçerli poz yokken **sessizce hiçbir şey yapmaz** (§7), bu yüzden çağrı koşul sağlanana dek her karede yeniden denenir. Kalibrasyondan sonra uygulanan gövde ölçeği bir kez raporlanır; `ScaleRange` sınırına dayanmışsa uyarıya döner. ⚠️ Avatar **sahne kökünde** durur, rig'in altına konmaz (§7, "retarget avatarı hareket eden kökün altına konmaz"). **Birinci şahıs ince ayarı `firstPersonOffset`'tir** (metre, gövdenin yaw uzayı; `-Z` geri): retarget gövdeyi izlenen kafanın altına oturtur ve model oranları oyuncununkine birebir oturmadığında gövde kameraya göre bir tık ileride kalır — oyuncu aşağı bakınca kendi göğsünün içini görür. ⚠️ Ofset `LateUpdate`'te uygulanır ve sınıf `[DefaultExecutionOrder(30000)]`'dir: gönderim order 100'de olduğu için ofset **tele girmez**, ayrıca SDK kökü her kare yeniden yazdığı için **birikmez** (geri almak gerekmez — ölçekte durum tersidir, §7). ⚠️ Gövdede **collider yoktur** — `Weapon`'ın atış raycast'i maskesiz, kendi gövden kendi atışını yerdi. Admin'de çizilmez ve bu rol kontrolüyle DEĞİL, etkin rig yoksa hiç çalışmayarak sağlanır (`AppSession` App asmdef'indedir, Core onu göremez) |
 | `Player/LocalAvatarBoneHider` | Yerel gövdede oyuncunun görmemesi gereken kemikleri `Animator.GetBoneTransform` ile bulup **sıfıra yakın ölçekler** — mesh tek `SkinnedMeshRenderer` olduğu için renderer kapatmak seçenek değil. Varsayılan gizlenenler **Head, Neck, LeftUpperLeg, RightUpperLeg**: kamera kafa/boyunun içinde durur; bacaklar ise izlenmiyor (Quest 3'te bacakta sensör yok — `FullBody` seçilse bile alt gövde ÜRETİLİR), aşağı bakan oyuncu uydurma adımlar görürdü. ⚠️ Liste bir tercih değil **izlenmeyen uzuvların listesidir**: gerçek bacak izlemesi gelirse buradan çıkarılırlar. Kalan görüntü: omuzlardan aşağı kollar + gövde. `DefaultExecutionOrder` yüksektir — retargeting kemikleri her kare yazıyor, ölçek EN SON basılmalı. ⚠️ **Gizleme her kare `Update`'te GERİ ALINIR, yalnız `LateUpdate`'te basılır:** ağa giden iskelet kemiklerin canlı transformlarından okunuyor ve okuma `localScale`'i de kapsıyor (§7) — geri alınmasaydı uzak tarafta bacaklar kalçaya, kafa göğse çökerdi. Ayrıca yerel gövdenin `SkinnedMeshRenderer.quality`'si **Bone4'e sabittir** (Auto değil): Quest'in "Mobile" seviyesi vertex başına 2 kemik veriyor ve 30 cm'den bakılan bilek onunla çöküyor (§7) |
 | `Team` | `Red` / `Blue` / **`Neutral`**. `BaseZone`'da `Neutral` = herkese açık joker. ⚠️ Yeni değer SONA eklenir: `BaseZone`/`Weapon` bu enum'u serialize ediyor, başa ekleme her arenanın taban takımlarını kaydırır |
 
@@ -1012,10 +1025,11 @@ geometrisini üreten iki araç + kavrama ayarı:
 | Sınıf | Görevi |
 |---|---|
 | `GripSocketAuthoring` | Kavrama noktalarını **sahnede sürükleyerek** ayarlama aracı: `GameObject > VortexArena > Grip Socket (Primary/Secondary)` işaretçi üretir (mevcut SO değerlerinden başlatarak — araç ayarı sıfırlamaz), `Tools > VortexArena > Weapons > Write Grip Sockets To Definition` onu `WD_*.asset`'e yazar. **Var olma sebebi asimetri:** aynı sürüklenmiş poz `primaryGrip` için TERS bileşimle (`R=Inverse(localRot)`, `P=−(R·localPos)`), `secondaryGrip` için DÜZ yazılır — elle yapıldığında bu fark sessiz bir işaret hatası üretiyordu. Round trip birebir: geri okuma işaretçiyi aynı yere koyar. Yalnız **bulunan** işaretçinin alanları yazılır (yarısı ayarlı silahı sıfırlamasın); ölçek bulaşmasın diye `InverseTransformPoint` yerine elle bileşim |
-| `DimensionMeshBuilder` | `JSON'dan DimensionMesh Üret`: boyut dosyasından **ölçü maketi** üretir — tek `Plane` (ProBuilder çokgeni, extrude 0) + kolon başına bir prizma (pivotu ayak izinin ağırlık merkezinde, sürüklemek doğal olsun diye) + iki kalibrasyon küpü (`anchor_a` kırmızı / `anchor_b` mavi, merkezleri noktanın üstünde — Inspector'daki konum dosyadaki nokta ile birebir aynı okunsun diye; dosyada nokta yoksa üretilmez ve uyarılır). ⚠️ **Duvar ÜRETMEZ ve maket oynanan geometri değildir**: kök `EditorOnly` etiketlenir, build'e girmez; arena sanatı maketin üstüne kurulur. ⚠️ **Kök SAHNEDEN BAĞIMSIZ kurulur**: sahne kökünde, dünya orijininde, dönüşsüz ve 1 ölçekte — hiçbir şeyin altına parent'lanmaz, böylece dosyadaki ölçü sahnede birebir okunur. Arenanın üstüne oturtmak isteyen elle taşır/döndürür; geri okuma maketin kendi kökünü referans aldığı için etkilenmez. **İdempotent**: aynı mekanın maketi varsa silinip yeniden kurulur. Üretimden önce halkayı `Polygon2D.IsSelfIntersecting` ile denetler |
+| `DimensionMeshBuilder` | `JSON'dan DimensionMesh Üret`: boyut dosyasından **ölçü maketi** üretir — tek `Plane` (ProBuilder çokgeni, extrude 0) + kolon başına bir prizma (pivotu ayak izinin ağırlık merkezinde, sürüklemek doğal olsun diye) + iki kalibrasyon küpü (`anchor_a` kırmızı / `anchor_b` mavi; **küpün merkezi noktanın kendisidir**, yarısı zeminin altında kalır — Inspector'daki konum dosyadaki nokta ile birebir aynı okunsun diye; dosyada nokta yoksa üretilmez ve uyarılır). ⚠️ **Sahnenin kalibrasyon işaretçilerini üreten tek yer burasıdır**, yani her arenada çalıştırılması zorunludur; kök + küpler build'e girsin diye maket `EditorOnly` etiketlenmez (görsel dalı build'den `DimensionMeshBuildStripper` ayıklar). ⚠️ **Duvar ÜRETMEZ ve maket oynanan geometri değildir**: arena sanatı maketin üstüne kurulur. ⚠️ **Kök SAHNEDEN BAĞIMSIZ kurulur**: sahne kökünde, dünya orijininde, dönüşsüz ve 1 ölçekte — hiçbir şeyin altına parent'lanmaz, böylece dosyadaki ölçü sahnede birebir okunur. Arenanın üstüne oturtmak isteyen elle taşır/döndürür; geri okuma maketin kendi kökünü referans aldığı için etkilenmez. **İdempotent**: aynı mekanın maketi varsa silinip yeniden kurulur. Üretimden önce halkayı `Polygon2D.IsSelfIntersecting` ile denetler |
 | `DimensionMeshReader` | `DimensionMesh'i JSON'a Çevir`: maketi okuyup **kaynak dosyanın üstüne** yazar (hedef sorulmaz, maketin işaretçisinden gelir). Ayak izi çıkarımı: yatay yüzler (`\|normal.y\| > 0.9`) Y seviyesine göre gruplanır, **en alt** grup alınır (prizmada alt yüz kazanır), kenarlar XZ'ye izdüşürülüp kaynaştırılır, **yalnız bir kez geçen** kenar sınır sayılır, halka yürünür ve doğrusal ara köşeler ayıklanır. Noktalar dünya üstünden kök uzayına çevrilir — kolonu sürüklemek/döndürmek doğru yazılır. ⚠️ Kenarlar köşe **indeksiyle değil konumla** anahtarlanır: ProBuilder sert normaller için köşeleri yüz başına ayırıyor, indeksle bakan tespit tüm mesh'i sınır sanar. Kalibrasyon noktaları `DimensionAnchor` küplerinin transformundan okunur; ⚠️ küp yoksa dosyadaki `calibration` **KORUNUR** (sıfırlanmaz — eski bir maketi çevirmek mekanın zemin bandı ölçüsünü silerdi). Yazmadan önce çıktı geri ayrıştırılır; doğrulanamazsa dosyaya **dokunulmaz** |
-| `TemplateBasicsLoader` | `Template Temellerini Yükle`: aktif sahneye altyapıyı **prefab örneği** olarak koyar (`VA_ArenaRoot`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`; seçime bağlı `VA_ModeHud` · taban bölgeleri · `SpawnPoint`), `ArenaCalibrator`'ın sahneye bakan alanlarını bağlar, `ArenaBoundary`'nin rig'e bakan alanlarını (`head`/`fadeRenderer`/`warningText`) `VA_CameraRig` içinden bağlar ve mekanın boyut dosyasını `ArenaBoundary.dimensionsJson`'a takar. `anchor_a`/`anchor_b` işaretçilerini dosyadaki `calibration` noktalarına oturtur (`ArenaCalibrator.PlaceMarkerAtFloor` — çalışma anındaki yerleştirmenin aynısı; sahne yalan söylemesin diye. Otorite dosyadadır, sahnede taşımanın kalıcı etkisi yoktur). Taban bölgelerini takım malzemesiyle boyar (tek `VA_BaseZone` prefabı iki takıma da hizmet ediyor; şerit rengini çalışma anında kimse yazmıyor). **İdempotent** — var olan örneği asset yoluyla tanır ve atlar; dolu bir alanın üstüne YAZMAZ |
-| `BuildElementsConfigurator` | `Configure All Build Elements`: kayıt listelerini **klasör ağacından eşitler** — `Venues/*/Scenes/*/` taranır ve klasör tek doğruluk kaynağı sayılır. **Hepsini Yapılandır** önce aktif sahnenin `MapDefinition`'ını yazar/günceller, sonra eşitler; **Yalnız Senkronize Et** sahne açık olmadan da eşitler (silinmiş bir arenanın kalıntısını temizlemenin yolu budur). Eşitleme: eksik olan **uyarı** üretir (kutuda sahne yok / birden çok sahne var / sahne adı klasör adıyla uyuşmuyor / `Data/<Sahne>.asset` MapDefinition yok ya da yanlış yerde / mekan kökünde `Art,Data,Prefabs,Scenes` dışında klasör), fazla olan **silinir** (Build Settings'te mekan ağacında olmayan ya da diskte bulunmayan satırlar; `GameCatalog.maps` ve `ModeDefinition.maps` içindeki ölü ve artık taranmayan referanslar). `Boot.unity` index 0'da kalır, mekan-dışı sahneler (`_Shared/Scenes/*`) korunur, `Template/` sahneleri listeye hiç girmez. `ModeDefinition.maps` **boşsa** dokunulmaz (boş = kısıtsız); doluysa o modu destekleyen haritalarla birebir eşitlenir — hedef küme boş çıkarsa liste boşaltılmaz (boş liste "kısıtsız" demek olurdu), yalnız uyarı basılır. Sonda `ServerConfigExporter.Export(false)` + **sağlık raporu** (`SpawnPoint` sayısı, `dimensionsJson` dolu mu, maket `EditorOnly` etiketli mi). ⚠️ **MapDefinition kendiliğinden ÜRETİLMEZ:** `supportedModeIds` boş bırakmak "kısıtsız" demek olduğu için üretilen boş bir tanım lobiyi sessizce her modda oynanır kılardı — sahne açılıp modlar araçtan seçilir. Ayrı bir "Arena Id" alanı yoktur: MapDefinition'ın adı sahne adıdır |
+| `DimensionMeshBuildStripper` | Menü değil, **build kancası** (`IProcessSceneWithReport`): ölçü maketinin görsel dalını (`Plane` + `Columns`) build'e giden **geçici sahne kopyasından** siler — sahne dosyasına dokunmaz, kök ve `DimensionAnchor` küpleri kalır (kalibrasyon onlara bağlı). ⚠️ Gerekçe boyut değil **bağımlılık**: çokgenler `ProBuilderMesh` taşır ve o bileşen `Unity.ProBuilder`'ı runtime derlemesine sokardı; bu projede ProBuilder yalnız editör tarafıdır. Editör Play kipinde kanca koşmaz, orada görseli `ArenaDimensionMesh.Awake` `Renderer.enabled` ile gizler |
+| `TemplateBasicsLoader` | `Template Temellerini Yükle`: aktif sahneye altyapıyı **prefab örneği** olarak koyar (`VA_ArenaBoundary`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`; seçime bağlı `VA_ModeHud` · taban bölgeleri), `ArenaCalibrator`'ın sahneye bakan alanlarını bağlar, `ArenaBoundary`'nin rig'e bakan alanlarını (`head`/`fadeRenderer`/`warningText`) `VA_CameraRig` içinden bağlar ve mekanın boyut dosyasını `ArenaBoundary.dimensionsJson`'a takar. ⚠️ **Kalibrasyon işaretçisi koymaz ve yerleştirmez** — onların tek kaynağı ölçü maketidir (`DimensionMeshBuilder`); ikinci bir üretici hangisinin geçerli olduğunu belirsizleştirirdi. Taban bölgelerini takım malzemesiyle boyar (tek `VA_BaseZone` prefabı iki takıma da hizmet ediyor; şerit rengini çalışma anında kimse yazmıyor). **İdempotent** — var olan örneği asset yoluyla tanır ve atlar; dolu bir alanın üstüne YAZMAZ |
+| `BuildElementsConfigurator` | `Configure All Build Elements`: kayıt listelerini **klasör ağacından eşitler** — `Venues/*/Scenes/*/` taranır ve klasör tek doğruluk kaynağı sayılır. **Hepsini Yapılandır** önce aktif sahnenin `MapDefinition`'ını yazar/günceller, sonra eşitler; **Yalnız Senkronize Et** sahne açık olmadan da eşitler (silinmiş bir arenanın kalıntısını temizlemenin yolu budur). Eşitleme: eksik olan **uyarı** üretir (kutuda sahne yok / birden çok sahne var / sahne adı klasör adıyla uyuşmuyor / `Data/<Sahne>.asset` MapDefinition yok ya da yanlış yerde / mekan kökünde `Art,Data,Prefabs,Scenes` dışında klasör), fazla olan **silinir** (Build Settings'te mekan ağacında olmayan ya da diskte bulunmayan satırlar; `GameCatalog.maps` ve `ModeDefinition.maps` içindeki ölü ve artık taranmayan referanslar). `Boot.unity` index 0'da kalır, mekan-dışı sahneler (`_Shared/Scenes/*`) korunur, `Template/` sahneleri listeye hiç girmez. `ModeDefinition.maps` **boşsa** dokunulmaz (boş = kısıtsız); doluysa o modu destekleyen haritalarla birebir eşitlenir — hedef küme boş çıkarsa liste boşaltılmaz (boş liste "kısıtsız" demek olurdu), yalnız uyarı basılır. Sonda `ServerConfigExporter.Export(false)` + **sağlık raporu**: `ArenaBoundary` var mı · `dimensionsJson` dolu mu · muhafaza dünya orijinine yakın mı (arena uzayı = dünya uzayı) · ölçü maketi `EditorOnly` etiketli mi (etiketliyse build'e girmez ve kalibrasyon işaretçileri onunla birlikte silinir). Hiçbiri işi durdurmaz, hepsi rapora satır düşer. Kontroller **aktif sahneye** bakar, yani sahne bir kutuda değilse hiç koşmaz. ⚠️ **MapDefinition kendiliğinden ÜRETİLMEZ:** `supportedModeIds` boş bırakmak "kısıtsız" demek olduğu için üretilen boş bir tanım lobiyi sessizce her modda oynanır kılardı — sahne açılıp modlar araçtan seçilir. Ayrı bir "Arena Id" alanı yoktur: MapDefinition'ın adı sahne adıdır |
 
 ### Sunucu: `Server/VortexArena.Server.Core`
 
@@ -1263,7 +1277,7 @@ admin exe'si → **Sunucuyu Başlat** → **Yönetimi Başlat**. Sunucu `--venue
 
 | İstek | Yol |
 |---|---|
-| **Yeni arena** | Altı adım, tek düğmeli sihirbaz YOK: boş sahne → arena kutusuna kaydet (`Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity` — klasör adı = sahne adı) → `Template Temellerini Yükle` (altyapı prefab örnekleri + boyut dosyası bağlama) → `JSON'dan DimensionMesh Üret` (mekanın ölçü maketi — sahneden bağımsız, dönüşsüz kurulur; sırası serbesttir) → ölçü tutmuyorsa köşeleri ProBuilder ile düzeltip `DimensionMesh'i JSON'a Çevir` → environment sanatı + tek `SpawnPoint` (zemin seviyesinde) + bake → **`Configure All Build Elements`** (MapDefinition + katalog + mod listeleri + Build Settings + `maps.json`, tek geçişte). ⚠️ **Ölçekleme yoktur**; maket build'e girmez ve duvar üretmez — arenanın duvarları environment sanatına aittir ve fiziksel sınırla çakışmalıdır |
+| **Yeni arena** | Altı adım, tek düğmeli sihirbaz YOK: boş sahne → arena kutusuna kaydet (`Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity` — klasör adı = sahne adı) → `Template Temellerini Yükle` (altyapı prefab örnekleri + boyut dosyası bağlama) → `JSON'dan DimensionMesh Üret` (mekanın ölçü maketi + kalibrasyon işaretçileri — sahneden bağımsız, dönüşsüz kurulur; sırası serbest ama **atlanamaz**) → ölçü tutmuyorsa köşeleri ProBuilder ile düzeltip `DimensionMesh'i JSON'a Çevir` → environment sanatı (zemini **dünya y=0**'a, arenayı dünya orijinine kur) + bake → **`Configure All Build Elements`** (MapDefinition + katalog + mod listeleri + Build Settings + `maps.json`, tek geçişte). ⚠️ **Ölçekleme yoktur**; maket duvar üretmez — arenanın duvarları environment sanatına aittir ve fiziksel sınırla çakışmalıdır |
 | **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack modeli = köken kaydı) → `Tools > VortexArena > Weapons > Build Weapon Prefabs` → `WD_*.asset` üretir, **mevcut** `WPN_*.prefab`'ı yerinde günceller (ses + namlu alevi/dumanı + kovan kiti dahil), `WeaponCatalog`'u tazeler → gerekiyorsa `ModeDefinition.loadout` + sahneye yerleştir. **Export GEREKMEZ** (sunucuda silah tablosu yok). ⚠️ Araç **mevcut prefabların `Muzzle`/`Model` yerleşimine DOKUNMAZ**, yalnız definition bağlarını + ses/VFX/kovan kitini tazeler — VR'da elle ayarlanmış tutuş/namlu konumu tekrar çalıştırmakla bozulmaz. Paylaşılan şablon yoktur: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra *…(Yalnız Kataloğu Tazele)* çalıştır. ⚠️ **Ses klipleri yalnız alan BOŞSA yazılır** (elle sürüklenen klip korunsun diye): mevcut bir silahın sesini tablodan değiştiriyorsan önce `WD_*.asset`'teki klip alanlarını boşalt, yoksa değişiklik sessizce hiç inmez (Tuzaklar: "elle atanmışsa ezme"). Diğer alanlar (hasar/rpm/menzil/saçılım/kimlik) her koşuda ezilir |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
 | **Hazır bir sahneyi arenaya çevirmek** | Aşağıdaki adımlar — araçları kullanmadan, elle |
@@ -1276,7 +1290,7 @@ yukarıdaki altı adımdır):
    mekan kökündeki ortak klasörlere). **Klasör adı, sahne adı ve MapDefinition asset adı ÜÇÜ DE
    aynıdır**; sahne adı katalog anahtarıdır — sonradan değiştirme.
    ⚠️ Mekan klasörü dışına konan arena export'a girmez, yani sunucuda hiç görünmez.
-2. Arena çerçevesini kur: alana hizalı bir objeye **`ArenaBoundary`**
+2. Arena çerçevesini kur: sahne köküne **`VA_ArenaBoundary`** örneği (`ArenaBoundary`)
    (`head` = `CenterEyeAnchor`, `fadeRenderer`/`warningText` = rig altındaki
    `OutOfBoundsFade`/`BoundaryWarningText`; duvar Renderer'ı diye bir alan YOKTUR).
    **Ölçüyü mekanın boyut dosyasına yaz** (`Venues/<İşletme>/Data/<İşletme>_dimensions.json`) ve
@@ -1288,9 +1302,9 @@ yukarıdaki altı adımdır):
    kolon/kasa varsa üstlerine `ArenaObstacle` ekle.
 3. Taban bölgeleri: iki `BaseZone` (Red/Blue, karşı kenarlarda; `Neutral` = herkese açık).
    Ölen oyuncu bunlardan birine fiziken girince canlanır — rig ASLA taşınmaz.
-   Ayrıca **tek** başlangıç noktası: `GameObject > VortexArena > Spawn Point` ile ekle ve elle
-   yerleştir. Bu marker **arena origin'idir** — tüm ağ pozları buna göre çevrilir, bu yüzden
-   **zemin seviyesinde** durur ve sonradan taşınmaz.
+   ⚠️ Geometriyi **dünya orijinine** oturt: zemin dünya y=0'da, arena merkezi dünya (0,0,0)
+   civarında. Arena uzayı dünya uzayıdır, yani sahneyi topluca kaydırmak/döndürmek arenadaki tüm
+   oyuncuların ağ koordinatını kaydırır.
 4. Ağ objeleri: `_Shared/App/Prefabs/` altındaki prefabları sahne köküne **örnek olarak** sürükle —
    `VA_CameraRig` (kamera/kumanda + etkileşim rig'i + yerel gövde avatarı), `VA_PoseSync`
    (`PlayerPoseTracker` + `RemotePlayerSpawner`), `VA_CalibrationManager` (`ArenaCalibrator`),
@@ -1299,7 +1313,9 @@ yukarıdaki altı adımdır):
    `VA_CalibrationManager`'ın `rigRoot`'u ile `ArenaBoundary`/`BaseZone`'un `head` alanı → sahnenin
    `CenterEyeAnchor`'ı. Boş bırakılırsa sahne sessizce çalışmaz; Unity kopuk sahneler-arası
    referansı sessizce null yapar. (`anchorA`/`anchorB` istisnadır: boş bırakılabilir, kalibratör
-   `anchor_a`/`anchor_b` objelerini adlarından çözer.)
+   işaretçileri ölçü maketinin `DimensionAnchor` küplerinden çözer.)
+   ⚠️ Ölçü maketi bu yolda da zorunludur: sahnenin `anchor_a`/`anchor_b` işaretçileri onunla gelir,
+   maketsiz sahne kalibre edilemez.
 5–6. **`Tools > VortexArena > Build > Configure All Build Elements` → Hepsini Yapılandır** —
    `MapDefinition` (sceneName + görünen ad + desteklenen modlar) yazılır, ardından `GameCatalog.maps`,
    dolu `ModeDefinition.maps`, **Build Settings** ve `maps.json` klasör ağacına göre eşitlenir;
@@ -1387,8 +1403,8 @@ konsoluna tek satır sebep yazar.
     çözmeyi bırakır**; susturma kipi ise yalnız uyarıyı keser, bileşeni ayakta tutar. Admin
     gözlemci bu yolu kullanır: başlığı olmadığı için muhafaza mesafesi onda anlamsız veri üretir,
     ama kuş bakışı kadrajı bileşenin `HalfExtents`/`LocalCenter` değerlerini okumaya devam eder.
-    (Arena origin'i artık bu bileşende değil `SpawnPoint`'te olduğu için kapatmak koordinatları
-    bozmaz.)
+    (Ağ koordinatlarının sıfırı bu bileşende değil dünya orijinindedir; muhafazayı kapatmak
+    koordinatları bozmaz.)
 14. **Arena sahnelerinde EventSystem YOK** (yalnız Lobby'de bir tane var) — masaüstü admin oraya
     girdiğinde HUD düğmeleri sessizce ölürdü. `UiKit.EnsureEventSystem()` kalıcı bir tane kurar,
     `TakeOverEventSystem()` sahnedekini kapatır: **iki etkin EventSystem** Unity uyarısı basar ve
@@ -1445,12 +1461,10 @@ konsoluna tek satır sebep yazar.
     duvarda kaybolur, duvarda iyi görünen değer gökyüzünde bulanık perde olur. Her ayardan
     sonra **hem yukarı hem duvara** bakan iki kare al. `Snow_G_Haze` yalnız gökyüzüne karşı
     okunur — bu bilinçli.
-25. **`BaseZone`'un GameObject'ini kapatma — bileşenini kapat.** Altına konmuş
-    marker'lar (`SpawnPoint`) `OnDisable`'da statik kayıttan düşer. Ama YALNIZ bileşeni kapatmak
-    da yarım çözümdür: görsel taban şeridi (Renderer'lı doğrudan çocuk) ekranda kalır.
-    Doğrusu ikisi birlikte — `zone.enabled = false` + `SpawnPoint` taşımayan Renderer'lı çocukları
-    `SetActive(false)` (`BaseZoneVisibility`). Kontrol `GetComponent` değil
-    **`GetComponentInChildren`** olmalı: marker şeridin torunu olabilir.
+25. **`BaseZone`'u gizlemek bileşeni kapatmakla bitmez.** Yalnız `zone.enabled = false` yarım
+    çözümdür: görsel taban şeridi (Renderer'lı doğrudan çocuk) ekranda kalır. Doğrusu ikisi
+    birlikte — bileşen kapatılır + Renderer'lı doğrudan çocuklar `SetActive(false)`
+    (`BaseZoneVisibility`).
     İkinci yüzü: **kapalı bir `BaseZone` canlanma için AÇIK SAYILMAZ** — `Update` koşmadığı
     için `IsPlayerInside` donar (`PlayerCombatState.EvaluateZones`).
 26. **Verilen silah kavrama sistemine SOKULMAZ ve tetiği ayrı okunur.** `Weapon.IsHeld` yalnız
@@ -1537,14 +1551,12 @@ konsoluna tek satır sebep yazar.
     yayın varsa onu `status.rosterVersion` uzlaştırması kapatır — periyodik körlemesine yayın
     değil, geride kalana hedefli tek mesaj.
 
-37. **`SpawnPoint` arena uzayının SIFIRIDIR — yerleştirdikten sonra taşınmaz.** Marker göze
-    zararsız bir gösterge gibi görünür ("maçtan önce şurada toplanın"), oysa `ArenaSpace` origin'i
-    odur: birkaç metre kaydırmak arenadaki **tüm** oyuncuların ağ koordinatını aynı miktarda
-    kaydırır ve hata yalnız birden çok başlık aynı sahnede buluşunca görünür. İkinci yüzü dikeydir:
-    uzak avatarların kökü `ArenaSpace.ArenaToWorld` ile yerleştirilir → marker havada bırakılırsa
-    herkes o yükseklik kadar havada durur. Sahnede hiç
-    marker yoksa dönüşüm kimliğe düşer; bunun tek işareti `ArenaSpace`'in sahne başına bir kez
-    bastığı uyarıdır (lobide o uyarı normaldir).
+37. **Arena uzayının sıfırı DÜNYA orijinidir — arena geometrisi ona göre kurulur.** Sahne
+    düzenlemesi göze zararsız görünür, oysa ağ koordinatlarının sıfırı sahnenin dünya sıfırıdır:
+    arenayı birkaç metre kaydırmak (ya da döndürmek) arenadaki **tüm** oyuncuların ağ koordinatını
+    aynı miktarda kaydırır ve hata yalnız birden çok başlık aynı sahnede buluşunca görünür. İkinci
+    yüzü dikeydir: uzak avatarların kökü arena koordinatına oturur → zemin dünya y=0'da değilse
+    herkes aradaki fark kadar havada (ya da zeminin içinde) durur.
 
 38. **Arena ölçüsünün TEK temsili boyut dosyasıdır — dikdörtgen alan için kısa yol açılmaz.**
     Alan tam kare bile olsa dört köşeli bir `plane` halkası olarak yazılır. Bileşende ölçü tutan alanlar
@@ -1702,11 +1714,11 @@ konsoluna tek satır sebep yazar.
     §3.2) — denetim çizen tarafın işidir.
 
 55. **Rig kökü arena zemininde durmalıdır — tracking origin `Stage` onu FİZİKSEL ZEMİN sayar.**
-    VortexAntep sahnelerinde `VA_CameraRig` Y=7.40, arena zemini Y=7.05 idi: kalibrasyon yapılmadan
-    oynayan her oyuncu 35 cm havada duruyor, bu da uzak avatarını 1.32× dev gösteriyordu (yukarıdaki
-    boy tahmini üzerinden). Arena dünya orijininden yüksekte kurulduğunda (burada ~7 m) bu tür her
-    dikey hata o kadar büyür — "uzayda duran oyuncu" görüntüsünün ölçeği oradan gelir. Yeni arena
-    kurarken rig kökünün Y'si `SpawnPoint`'in Y'si ile aynı olmalıdır.
+    Rig kökü zeminden birkaç santim yukarıdaysa kalibrasyon yapılmadan oynayan her oyuncu o kadar
+    havada durur ve uzak avatarı orantısız büyük görünür (yukarıdaki boy tahmini üzerinden: 35 cm
+    fark ~1.32× dev bir avatar demektir). Zemin dünya y=0'da olduğu için kural tek satırdır:
+    **`VA_CameraRig`'in kökü Y=0'da durur** — "uzayda duran oyuncu" görüntüsünün kaynağı hep bu
+    dikey sapmadır.
 
 56. **Movement SDK retarget avatarı hareket eden bir kökün altına KONMAZ — çıktı dünya
     uzayındadır.** Sezgi "avatar rig'in çocuğu olsun, rig'le gelsin" der; SDK'nın sözleşmesi
@@ -1958,15 +1970,15 @@ konsoluna tek satır sebep yazar.
     devam eden kod bunu hata saymaz; eksiklik ancak "maketimde taban yok" diye çok sonra fark
     edilir. Düşen çokgen silinir, taban düşerse üretim tümden başarısız sayılır.
 
-80. **`EditorOnly` etiketi build'den siler, EDİTÖR PLAY KİPİNDEN silmez — ada bakan her arama onu
-    da görür.** Ölçü maketi build'e girmiyor diye "sahnede yok" sayılamaz: Play tuşuna basıldığında
-    hiyerarşidedir. Maketin kalibrasyon küpleri sahnedeki işaretçilerle aynı adı taşır
-    (`anchor_a`/`anchor_b` — aynı şeye iki ad vermek daha büyük bir kötülük), yani `ArenaCalibrator`
-    ada bakarak arasa arenayı görünmeyen bir küpe göre hizalayabilirdi. Çözüm adı bozmak değil,
-    **ayırt edici bir bileşen**: küpte `DimensionAnchor` vardır ve arama onu taşıyan objeleri atlar
-    (+ `EditorOnly` etiketli kökleri hiç gezmez). Genel kural: ada göre obje çözen kodun kapsamı
-    "build'e giren" değil **"sahnede duran"** kümesidir, ve iki şeyi ayırmanın doğru yolu adı
-    çeşitlendirmek değil türü işaretlemektir.
+80. **Aynı rolü oynayan iki obje ailesi tutma; kimliği ADLA değil BİLEŞENLE taşı.** Kalibrasyon
+    işaretçisi tektir ve ölçü maketinin altındadır: `DimensionAnchor` + `AnchorKind` onu ada
+    bakmadan çözülebilir kılar, ad araması yalnız maketi olmayan eski sahneler için son
+    basamaktadır. İki ayrı işaretçi ailesi (biri sahnede, biri makette) aynı adı taşıdığı sürece
+    hangisine hizalanıldığı sahneye bakarak anlaşılamaz — üstelik `EditorOnly` etiketi build'den
+    siler ama **editör Play kipinden silmez**, yani "build'e girmiyor" demek "aramada çıkmıyor"
+    demek değildir. Genel kural: ada göre obje çözen kodun kapsamı "build'e giren" değil
+    **"sahnede duran"** kümesidir; iki şeyi ayırmanın yolu adı çeşitlendirmek değil türü
+    işaretlemek, daha iyisi ikinci şeyi hiç var etmemektir.
 
 81. **İzlemeden gelen "kafa" GÖZÜN pozudur; humanoid kafa KEMİĞİ oraya oturtulmaz.**
     `centerEyeAnchor` (hem yerel rig'de hem telde) gözün yeridir, kafa kemiği ise Ch15'te gözün
@@ -2185,6 +2197,57 @@ konsoluna tek satır sebep yazar.
     Definition` — dünya farkını kendisi alır) ve gözle doğrula: **camgöbeği tel küre (SO'nun
     dediği) sarı dolu küreyle (işaretçinin yeri) ÇAKIŞMALIDIR.** Çakışmıyorsa değer elle yazılmış
     demektir.
+
+98. **Aynı transform hem yazılıyor hem okunuyorsa görsel bir telafi eklenmez — ölçünün TEK Y
+    sözleşmesi olur.** Kalibrasyon işaretçisinin konumu doğrudan zemin noktasıdır; küp o noktada
+    merkezlenir ve yarısı zeminin altında kalır. "Mesh'in tabanı zemine otursun" diye yerleştirmeye
+    yarım yükseklik eklemek kolaydır, ama aynı obje geri okumanın da kaynağıdır: yazma tarafı
+    telafiyi uygularken okuma tarafı unutursa ölçü her tur biraz kayar, üstelik belirti sahnede
+    değil **dosyada** görünür. Görsel bir hizalama gerçekten isteniyorsa ölçüyü taşıyan transformda
+    değil, onun ALTINDAKİ görselde yapılır.
+
+99. **`BinaryReader.ReadBytes(n)` akış erken bittiğinde İSTİSNA ATMAZ — daha kısa bir dizi
+    döndürür.** Uzunluk önekli bir alanı okuyup dönen diziyi doğrulamadan kullanmak, kırpılmış bir
+    datagramı "geçerli ama yarım" veri olarak sisteme sokar. İskelet blob'unda bunun bedeli tek
+    pakete kalmaz: `SkeletonUpdate.Read` yolu **sunucunun uplink okuyucusudur** ve sunucu blob'u
+    açmadan tüm istemcilere relay eder, yani yarım bir kare tek oyuncuyu değil arenadaki
+    **herkesi** bozuk iskeletle çizer (belirti: uzak avatarın rastgele şekillere girmesi). Kural:
+    okunan uzunluk istenenden azsa girdi **boş blob** sayılır (`blobLength = 0`) ve tüketici onu
+    düşürür — gövdeyi bir kare kaybetmek bozuk çizmekten iyidir. ⚠️ Değişken uzunluklu girdilerden
+    oluşan bir batch'te (`SkeletonBatch.Read`) kırpılmış girdiden **sonrası okunmaz**: sonraki
+    girdinin nerede başladığı bilinemez, okumayı sürdürmek akış sonunda istisna atar ve ondan önce
+    okunmuş **sağlam** girdileri de düşürürdü.
+
+100. **Alım döngüsünü saran `try`, döngünün DIŞINDAysa tek bozuk datagram kanalı tümden
+    öldürür.** `while (…) { Receive(); Handle(); }` gövdesinde `Handle`'ın attığı istisna dış
+    `catch`'e çıkar, döngü biter ve görev sessizce sonlanır — istemci o andan sonra hiç
+    snapshot/iskelet almaz, ne hata ekranı ne yeniden bağlanma vardır, yalnızca **donmuş bir
+    dünya** görür. Durum kanalında doğru davranış **tek paketi düşürmektir**: sonraki tik eksiği
+    zaten kapatır. Kural: her datagramın işlenmesi **kendi `try/catch`'i** içindedir, dış `try`
+    yalnız soketin kendi hatası içindir; uyarı bir kez basılır (paket başına log, bozuk bir
+    gönderende saniyede 20 satır demektir).
+
+101. **Gövde oranı kalibrasyonu YERELDİR ama sonucu TELDEN gider — bu yüzden varsayılan
+    KAPALIDIR.** İskelet blob'u `SerializationCompressionType.High` ile kodlanıyor ve o kip
+    eklemleri *joint lengths* üzerinden sıkıştırıyor: gönderen `CharacterRetargeter.Calibrate()`
+    ile kendi gövde oranlarını değiştirdiğinde alıcının hedef iskeleti o uzunluklarla uyuşmaz ve
+    uzak avatar rastgele bozuk duruşlara girer. İkinci sebep birinci şahıstadır: ölçü, arena
+    hizalamasından birkaç saniye sonra **o anki poza** sabitlenir — oyuncu o sırada yürüyor ya da
+    eğilmişse oran yanlış kilitlenir ve oturumun kalanı boyunca öyle kalır, yani gövdenin kameraya
+    göre ofseti **oturumdan oturuma değişir**. Sabit bir `firstPersonOffset` değişken bir hatayı
+    kapatamaz. **Sıra bu yüzden bağlayıcıdır: önce kalibrasyon kapalı tutulur, `firstPersonOffset`
+    SONRA bir kez ayarlanır** — tersi, her denemede başka bir sonuç veren bir ince ayar turudur.
+
+102. **Kaynak dosyaya karışmış tek bir NUL baytı o dosyayı TÜM aramalardan gizler.** ripgrep (ve
+    onu kullanan editör/ajan arama araçları) içinde `\0` gören dosyayı ikili sayıp atlar: dosya
+    eşleşse bile sonuçlarda **hiç görünmez**, "eşleşme yok" cevabı alınır. Bir tipi silip
+    referanslarını süpürürken bu sessiz bir yanlış negatiftir — derleyici hatayı yakalar ama
+    ondan önceki her doğrulama "temiz" der. NUL genelde bir string literalinin içine düşer ve
+    editörde boşluk gibi görünür, yani gözle de ayırt edilmez. Şüphe varsa arama ikili modda
+    tekrarlanır (`grep -a`) ya da doğrudan taranır:
+    `find Assets Server -name "*.cs" -print0 | xargs -0 grep -lP "\x00"`. Sentinel gerekiyorsa
+    `null` kullanılır — `"\0"` hem bu tuzağı kurar hem `""`'den ayırt edilmesi gereken bir şey
+    anlatmaz.
 
 ---
 

@@ -19,8 +19,7 @@ namespace VortexArena.Core.Arena
     /// takıma ait birden çok bölge konabilir — herhangi birine girmek yeter.
     /// </para>
     /// <para>
-    /// ⚠️ Maç başlangıç noktası bu DEĞİLDİR — o arena başına tek olan <see cref="SpawnPoint"/>'tir.
-    /// İkisi de bir konum değişimi TETİKLEMEZ: oyuncu fiziksel olarak yürür, ışınlanmaz.
+    /// ⚠️ Bölge bir konum değişimi TETİKLEMEZ: oyuncu fiziksel olarak yürür, ışınlanmaz.
     /// </para>
     /// </summary>
     public class BaseZone : MonoBehaviour

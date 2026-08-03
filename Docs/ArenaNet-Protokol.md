@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `6` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı kesilmez). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur. v6'da bozulma **iki yönlüdür**: `0x07`/`0x08`'i tanımayan istemci uzak oyuncuların gövdesini hiç çizemez, iskelet göndermeyen eski istemci de yeni istemcide gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
+| `PROTOCOL_VERSION` | `7` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -59,7 +59,9 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 ## 3. Koordinat çerçevesi — ARENA UZAYI
 
-Tüm ağ pozları **arena-yerel uzaydadır**: origin = sahnedeki tek `SpawnPoint` marker'ının transformu (zemin seviyesinde, eksenler arena duvarlarına hizalı olacak şekilde yerleştirilir). Her Quest, `ArenaCalibrator` (2-nokta + OVRSpatialAnchor) ile fiziksel alana hizalandığı için bütün cihazlar aynı fiziksel çerçeveyi paylaşır. Dönüşüm istemcide yapılır (rig-world → arena-local); sunucu ve admin görünümü ham arena koordinatı kullanır.
+Tüm ağ pozları **arena uzayındadır** ve arena uzayı **sahnenin dünya uzayıdır**: origin = dünya (0,0,0), rotasyon kimlik. ⚠️ **Origin'i sahnedeki bir marker belirlemez** — arena geometrisi doğrudan bu çerçeveye kurulur: zemin dünya y=0'da, eksenler arena duvarlarına hizalı. Her Quest, `ArenaCalibrator` (2-nokta + OVRSpatialAnchor) ile fiziksel alana hizalandığı için bütün cihazlar aynı fiziksel çerçeveyi paylaşır. Dönüşüm istemcide yapılır (rig-world → arena-local); sunucu ve admin görünümü ham arena koordinatı kullanır.
+
+⚠️ Bu tanım **tel formatında görünmez ama sürüm kırar**: pozların baytları çerçeveyi taşımıyor, iki taraf onu paylaştığı için anlaşıyorlar. Çerçeve tanımı değişirse `PROTOCOL_VERSION` artar (§1) ve tüm başlıklar aynı sürümü çalıştırmak zorundadır.
 
 ## 4. UDP Beacon (sunucu → 47820 broadcast, her 2 sn)
 
@@ -359,7 +361,7 @@ Pozlar **arena uzayında**. `seq` sarmalanır (u16); eski `seq` gelirse paket at
 
 **`itemL`/`itemR`/`gripFlags` (v4)** — elde tutulan eşya (§6.6). Pozla aynı pakette gider çünkü aynı otoriteye aittir: "elimde ne var" da "elim nerede" gibi **istemci-otoriter bir sunum bilgisidir**. Sunucu bu üç baytı **doğrulamaz**, snapshot'a kopyalar (§6.3) — sunucuda eşya tablosu YOKTUR ve eklenmez (§10.3 felsefesi). `gripFlags`'te bit0 gelirse **yok sayılır**: o bit snapshot'ta `FLAG_ALIVE`'dır ve yazarı yalnız sunucudur (istemci kendini canlı ilan edemez).
 
-⚠️ **İskelet akışı (§6.9) bu paketin yerine GEÇMEZ.** v6'da gövde ayrı bir kanaldan geliyor ama poz kanalı duruyor: silahın ele oturması, eşya baytları ve vuruş bildirimi ham anchor pozundan besleniyor. İki kanalın kadansı da ayrıdır (20 Hz ↔ `SKELETON_RATE_HZ`) — iskeletin gecikmesi silahın gecikmesi olmasın diye. "İskelet zaten el eklemini taşıyor, poz kanalı silinsin" **yapılmaz**: blob opaktır (alıcı içinden tek bir eklemi ucuza okuyamaz) ve o eklem elin fiziksel pozu değil retarget edilmiş bilek kemiğidir.
+⚠️ **İskelet akışı (§6.9) bu paketin yerine GEÇMEZ.** Gövde ayrı bir kanaldan gelir ama poz kanalı durur: silahın ele oturması, eşya baytları ve vuruş bildirimi ham anchor pozundan besleniyor. İki kanalın kadansı da ayrıdır (20 Hz ↔ `SKELETON_RATE_HZ`) — iskeletin gecikmesi silahın gecikmesi olmasın diye. "İskelet zaten el eklemini taşıyor, poz kanalı silinsin" **yapılmaz**: blob opaktır (alıcı içinden tek bir eklemi ucuza okuyamaz) ve o eklem elin fiziksel pozu değil retarget edilmiş bilek kemiğidir.
 
 ⚠️ **Poz kanalı FİZİKSEL gerçeği taşır.** `handL`/`handR` ham rig anchor'larıdır — eşyaya "yapıştırılmış" düzeltilmiş poz DEĞİL. Çift elli silahta boş elin kabzaya oturtulması bir **sunum** kararıdır ve alıcı tarafta yapılır (§6.6). Bu kanal bir kez bulanırsa (düzeltilmiş poz taşımaya başlarsa) sonraki her tüketici — yakın dövüş, elle etkileşim, admin teşhisi — o bulanıklığı miras alır.
 
@@ -545,6 +547,11 @@ IP parçalanmasına güvenmek tek parçanın kaybında tüm kareyi çöpe atard�
 çözüm eklem listesini daraltmaktır — **parmak eklemleri kumandayla oynanırken gerçek veri
 taşımaz**.
 
+⚠️ **Kırpılmış blob = boş blob.** Okuyucu `len` kadar bayt isteyip daha azını alırsa girdi
+`blobLength = 0` ile döner ve tüketici onu düşürür — yarım blob'u deserialize etmeye çalışmak bozuk
+iskelet çizmektir. Bu yol sunucunun **uplink** okuyucusudur ve sunucu blob'u olduğu gibi relay
+ettiği için yarım bir kare tek oyuncuyu değil arenadaki **herkesi** bozuk gövdeyle çizerdi.
+
 `seq` sarmalanır (u16); eski `seq` gelirse paket atılır. `0x01` ile aynı "son gelen kazanır"
 kuralıdır — bu bir **durum** kanalıdır, olay değil (karşılaştır §6.4: olayda sıra zorlaması yoktur).
 
@@ -573,6 +580,11 @@ gerekçeyle atanı süzmüyor.
 
 ⚠️ **Snapshot'a (`0x05`) birleştirilmez.** Snapshot 16 girdide zaten 1414 B; değişken uzunluklu bir
 blok eklemek `0x05`'in boyut garantisini çökertir.
+
+⚠️ **Kırpılmış girdiden sonra okuma DURUR.** Girdiler değişken uzunluklu olduğu için kırpılmış bir
+blob'un ardındaki baytların nerede başladığı bilinemez; okuyucu o girdiyi boş blob sayar
+(§6.9) ve döngüyü keser. Okumayı sürdürmek akış sonunda istisna atar ve **ondan önce okunmuş sağlam
+girdileri de** düşürürdü.
 
 **Girdi yoksa paket yok** — lobide ve gövdesiz anlarda bu kanal tümüyle susar (`0x04` ile aynı
 davranış; bayat durum temizliği snapshot'ın işidir).
@@ -810,7 +822,7 @@ Fiziksel oyuncu ışınlanamaz → **respawn = konum değil durum değişimi**:
 
 **Taban bölgesi eşleşmesi (istemci):** bir `BaseZone` oyuncuya açıktır eğer takımı oyuncunun takımıyla aynıysa, **ya da** bölge `Neutral` işaretliyse, **ya da** oyuncunun takımı boşsa (takımsız mod). Aynı takıma ait birden çok bölge varsa **herhangi birine** girmek yeter. Sahnede hiç açık bölge yoksa şart aranmaz — oyuncu kalıcı ölü kalmasın (güvenlik ağı yine `REVIVE_GRACE`).
 
-**Konum diye bir alan protokolde YOKTUR.** Ne `load_match` ne `respawn` bir spawn noktası/slotu taşır; sunucu sahne geometrisini bilmez. Arena başına sahnedeki tek `SpawnPoint` marker'ı **yerleşim göstergesidir** (maç öncesi operatörün oyuncuyu yönlendirdiği fiziksel nokta) ve rig'i oraya taşıyan bir mekanizma yoktur. Protokolde karşılığı olmayan ama istemcide bağlayıcı olan ikinci bir işi vardır: **arena-yerel uzayın origin'idir** (bkz. koordinat uzayı bölümü) — yani sahnede yerleştirildiği yer, telde taşınan tüm koordinatların sıfırıdır.
+**Konum diye bir alan protokolde YOKTUR.** Ne `load_match` ne `respawn` bir spawn noktası/slotu taşır; sunucu sahne geometrisini bilmez ve rig'i bir yere taşıyan mekanizma yoktur — oyuncu fiziksel olarak nerede duruyorsa orada canlanır. Telde taşınan tüm koordinatların sıfırı sahnenin **dünya orijinidir** (bkz. koordinat uzayı bölümü).
 
 **Harita değişimi kalibrasyonu sıfırlamaz.** `load_match` oyuncu için yalnız bir sahne değişimidir: kimse "yeniden doğmaz", rig taşınmaz. Yeni sahnenin `ArenaCalibrator`'ı `Start`'ta kayıtlı `OVRSpatialAnchor`'dan hizalamayı geri yükler, oyuncu fiziksel olarak nerede duruyorsa orada kalır. **Poz gönderimi hizalamayı beklemez:** `PlayerPoseTracker` baştan kaydolur, hizalama gelene dek gönderilen pozlar arena ile örtüşmez (rig ofsetli) ama akar — oyuncunun bağlı ve hareket hâlinde olduğu ağdan görülebilsin diye. Sunucu bu ayrımı bilmez; pozlar her hâlde `PoseUpdate` olarak kabul edilir ve snapshot'a girer.
 

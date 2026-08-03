@@ -23,8 +23,7 @@ namespace VortexArena.Core.Combat
     /// ⚠️ FREE-ROAM KURALI: fiziksel oyuncu IŞINLANAMAZ. Canlanma bir konum değil
     /// DURUM değişimidir — bu sınıf hiçbir koşulda rig'i/kamerayı taşımaz. Aynısı harita
     /// değişimi için de geçerli: <c>load_match</c> kimseyi "yeniden doğurmaz" ve kalibrasyonu
-    /// sıfırlamaz (§10.4). Ölünce dönülecek yer <see cref="BaseZone"/> (taban bölgesi);
-    /// <see cref="SpawnPoint"/> yalnız maç öncesi yerleşim göstergesidir.
+    /// sıfırlamaz (§10.4). Ölünce dönülecek yer <see cref="BaseZone"/> (taban bölgesi).
     /// </para>
     /// <para>
     /// Sahnede DURMAZ: <c>load_match</c> sahne yüklenmeden ÖNCE gelir, bu yüzden

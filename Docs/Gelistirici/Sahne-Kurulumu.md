@@ -9,8 +9,9 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 > **En kolay yol araç:** `Tools > VortexArena > Arena > Template Temellerini Yükle` bu listeyi boş bir
 > sahneye prefab örneği olarak koyar (idempotent — var olanı atlar). Bu sayfa "aracın koyduğu şey
 > ne işe yarıyor" ve "elle bir sahne düzeltiyorum" durumları içindir.
-> Ölçü maketi (`… > Arena > JSON'dan DimensionMesh Üret`) ayrı ve **sırasız** bir adımdır:
-> sahneden bağımsız, dünya orijininde ve dönüşsüz kurulur.
+> Ölçü maketi (`… > Arena > JSON'dan DimensionMesh Üret`) ayrı ve **sırasız** ama **zorunlu** bir
+> adımdır: sahneden bağımsız, dünya orijininde ve dönüşsüz kurulur, ve sahnenin kalibrasyon
+> işaretçilerini o üretir.
 
 ---
 
@@ -19,29 +20,31 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 | Bileşen | Nerede durur | Ne yapar | Atlarsan |
 |---|---|---|---|
 | **`VA_CameraRig`** | Sahne kökü, **prefab örneği** (`_Shared/App/Prefabs/`) | Kamera/kumanda rig'i + etkileşim rig'i (`OVRComprehensiveInteractionRig`) tek pakette. ⚠️ Yerel gövde avatarı burada DEĞİLDİR: `LocalBodyAvatar` kendini önyükleyen tekildir ve sahne köküne kurulur (rig'in altına konsa rig transformu iki kez uygulanırdı) | Oyuncu hiçbir şey görmez |
-| **`ArenaBoundary`** | Alana hizalı bir obje (plan koordinatları onun yerel XZ'si) — **`VA_ArenaRoot`** prefabıyla gelir | Sınır uyarısını sürer: kenara yaklaşınca HMD'ye bağlı karartma quad'ı hafifçe koyulaşır, dışarı çıkınca tam kararma + uyarı. Ölçüyü **bağlı boyut dosyasından** okur (admin kuş bakışı kadrajı da oradan gelir). `dimensionsJson` = mekanın boyut dosyası — **ZORUNLU**, bileşende ölçü tutan başka alan yoktur. ⚠️ Yarı saydam duvar göstergesi KALDIRILDI (`wallRenderers` yok): arenanın duvarları environment sanatına aittir | Boyut dosyası bağlı değilse muhafaza konsola hata basıp **kendini kapatır**: alan-dışı uyarısı hiç çıkmaz, admin kuş bakışı kadrajsız kalır |
+| **`ArenaBoundary`** | Alana hizalı bir obje (plan koordinatları onun yerel XZ'si) — **`VA_ArenaBoundary`** prefabıyla gelir | Sınır uyarısını sürer: kenara yaklaşınca HMD'ye bağlı karartma quad'ı hafifçe koyulaşır, dışarı çıkınca tam kararma + uyarı. Ölçüyü **bağlı boyut dosyasından** okur (admin kuş bakışı kadrajı da oradan gelir). `dimensionsJson` = mekanın boyut dosyası — **ZORUNLU**, bileşende ölçü tutan başka alan yoktur. ⚠️ Yarı saydam duvar göstergesi KALDIRILDI (`wallRenderers` yok): arenanın duvarları environment sanatına aittir | Boyut dosyası bağlı değilse muhafaza konsola hata basıp **kendini kapatır**: alan-dışı uyarısı hiç çıkmaz, admin kuş bakışı kadrajsız kalır |
 | **Boyut dosyası** (`ArenaDimensions` JSON) | **Mekan** kutusunun `Data/` klasöründe (`<İşletme>_dimensions.json`); `ArenaBoundary.dimensionsJson` alanına bağlı | **Ölçünün tek kaynağı:** `plane` (tabanın sıralı köşeleri) + `columns` (her biri kendi köşe halkası) + `calibration` (zemin bandının A/B noktaları). Alan tam kare olsa bile dört köşe yazılır — "dikdörtgen kipi" YOKTUR; içbükey alan da tek halkadır, birleştirme yoktur. Aynı dosya ölçü maketini üretir, muhafazayı besler, kuş bakışı kadrajını verir ve kalibrasyon işaretçilerini yerleştirir. **Mekanın tüm sahneleri aynı dosyayı gösterir** | Muhafaza tümden kapanır (üstteki satır). ⚠️ Dosyayı yazıp alana bağlamamak onu **build'in dışında** da bırakır |
-| **Ölçü maketi** (`<Mekan>_DimensionMesh`) | **Sahne kökü**, dünya orijininde ve dönüşsüz — `… > Arena > JSON'dan DimensionMesh Üret` koyar | Fiziksel alanın sahnedeki referansı (taban + kolonlar + `anchor_a`/`anchor_b` küpleri). Arena sanatı bunun üstüne kurulur; istersen maketi elle taşı/döndür (geri okuma kendi kökünü referans alır, ⚠️ **ölçeğini değiştirme**). ⚠️ Kökü `EditorOnly` etiketlidir, **build'e girmez**; duvar üretmez | Sanatı neye göre yerleştireceğini bilemezsin |
-| **`ArenaCalibrator`** | Sahne kökü — **`VA_CalibrationManager`** prefabıyla gelir | Zemindeki A–B işaretleriyle fiziksel hizalama; sahnedeki `anchor_a`/`anchor_b` işaretçilerini `Start`'ta boyut dosyasındaki noktalara oturtur | Sanal arena fiziksel odayla örtüşmez |
+| **Ölçü maketi** (`<Mekan>_DimensionMesh`) | **Sahne kökü**, dünya orijininde ve dönüşsüz — `… > Arena > JSON'dan DimensionMesh Üret` koyar | Fiziksel alanın sahnedeki referansı (taban + kolonlar) **ve sahnenin kalibrasyon işaretçileri** (`anchor_a`/`anchor_b` küpleri). Arena sanatı bunun üstüne kurulur; istersen maketi elle taşı/döndür (geri okuma kendi kökünü referans alır, ⚠️ **ölçeğini değiştirme**). ⚠️ Build'e **kök + işaretçiler** girer (kalibrasyon onlara bağlı, `EditorOnly` etiketlenmez); görsel dal (`Plane` + `Columns`) build'e alınmaz — `ProBuilderMesh` runtime'a ProBuilder'ı sokardı. Duvar üretmez | Sahne kalibre edilemez (işaretçi yok) ve sanatı neye göre yerleştireceğini bilemezsin |
+| **`ArenaCalibrator`** | Sahne kökü — **`VA_CalibrationManager`** prefabıyla gelir | Zemindeki A–B işaretleriyle fiziksel hizalama; maketin `anchor_a`/`anchor_b` küplerini `Start`'ta boyut dosyasındaki noktalara oturtur | Sanal arena fiziksel odayla örtüşmez |
 | **`BaseZone` × 2** | Karşı kenarlarda (Red / Blue) | **Taban bölgesi** — kırmızı/mavi şerit, canlanma kapısı | TDM'de kimse canlanamaz |
-| **`SpawnPoint` × 1** | Arena uzayının sıfırı olacak yerde, **zemin seviyesinde** | **Arena orijini** — ağa giden/gelen tüm pozlar buna göre çevrilir; ayrıca maç öncesi yerleşim göstergesidir | Tüm uzak oyuncular dünya orijinine yığılır (konsola `ArenaSpace` uyarısı düşer) |
 | **`PlayerPoseTracker`** | Sahne kökü — **`VA_PoseSync`** prefabıyla gelir | Kafa + iki eli 20 Hz gönderir | Kimse seni göremez |
 | **`RemotePlayerSpawner`** | Sahne kökü — aynı **`VA_PoseSync`** prefabında | Uzak oyuncu avatarlarını üretir | Sen kimseyi göremezsin |
 | **`ModeHudSpawner`** | Sahne kökü — **`VA_ModeHud`** prefabıyla gelir | Aktif modun HUD prefabını örnekler | HUD çizilmez |
 | **Silahlar** (`WPN_*` prefab örnekleri) | Arenada tasarımın uygun gördüğü yerlerde | `weaponSource:"weaponcanvas"` modlarında (TDM · turnuva) oyuncunun silah aldığı yer. Silah ≤2 m'den seçilir, **klonu** ele gelir ve **tükenmez** | Oyuncunun eline hiç silah gelmez (hata basılmaz — silahsız arena geçerli bir sahnedir) |
 
-> ⚠️ **Yukarıdaki prefablar (`VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, `VA_ModeHud`)
+> ⚠️ **Yukarıdaki prefablar (`VA_ArenaBoundary`, `VA_CameraRig`, `VA_PoseSync`,
+> `VA_CalibrationManager`, `VA_ModeHud`)
 > sahneye ÖRNEK olarak konur** — başka bir sahneden kopyalanmaz, unpack edilmez. Kopya konursa
 > rig ya da kalibrasyon kurulumundaki tek bir düzeltme arena sayısı kadar elle iş doğurur.
 > Aynı sebeple sahneye **Building Blocks rig'i ya
 > da ayrı bir `OVRComprehensiveInteractionRig` EKLENMEZ**: ikisi de `VA_CameraRig`'in içindedir.
 
 > `VA_CalibrationManager`'ın `anchorA` / `anchorB` / `rigRoot` alanları sahneye bakar, bu yüzden
-> **örnek üstünde** (prefab override) doldurulur: sırasıyla `anchor_a`, `anchor_b` ve sahnedeki
-> `VA_CameraRig`. Prefab asset'inde üçü de boştur — normaldir, hata değil.
-> `anchorA`/`anchorB` boş bırakılabilir: kalibratör onları sahnede **adlarından** çözer
-> (`anchor_a` / `anchor_b`). Yerleri ise sahneden değil boyut dosyasından gelir — işaretçiyi elle
-> taşımanın kalıcı etkisi yoktur, ölçü `calibration` alanına yazılır.
+> **örnek üstünde** (prefab override) doldurulur; prefab asset'inde üçü de boştur — normaldir,
+> hata değil. `rigRoot` = sahnedeki `VA_CameraRig`. `anchorA`/`anchorB` **boş bırakılabilir**:
+> kalibratör işaretçileri maketin `DimensionAnchor` küplerinden çözer (ad araması yalnız maketi
+> olmayan eski sahneler için son basamaktır). Yerleri ise sahneden değil boyut dosyasından gelir —
+> küpü elle taşımanın kalıcı etkisi yoktur, ölçü `calibration` alanına yazılır.
+> ⚠️ İşaretçinin konumu **zemin noktasının kendisidir**; küp o noktada merkezlenir, yarısı zeminin
+> altında kalır.
 
 > ⚠️ **Silahı sahneye koyan bir bileşen YOKTUR ve yazılmayacak** — yerleşim arena kararıdır,
 > harita tasarlanırken elle yapılır. Silah `WPN_*` prefabının **ÖRNEĞİ** olarak konur
@@ -51,15 +54,12 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 > eklemek arenaları değiştirmez. `loadout` yalnız `random` modlarında (FFA, lobi) okunur.
 > Çerçeve görselini örnek başına `WeaponFrame.isFrameVisible` ile aç/kapat.
 
-> `SpawnPoint`'i `Template Temellerini Yükle` origin'e koyar (kutusu kapatılabilir), ama
-> **nereye konacağı tasarım kararıdır ve elle taşınır**. Ayrıca `GameObject > VortexArena >
-> Spawn Point` ile de eklenebilir. Arena başına **bir tane**; ikincisini eklersen konsola uyarı
-> düşer (origin ilk kaydolana bağlanır).
-
-> ⚠️ **Bir kez yerleştirilir, sonra TAŞINMAZ.** Marker arena uzayının sıfırı olduğu için yerini
-> ya da dönüşünü değiştirmek arenadaki **tüm** oyuncuların koordinatını kaydırır.
-> ⚠️ **Zemin seviyesinde durmalı:** uzak avatarların kökü `ArenaSpace.ArenaToWorld` ile
-> yerleştirilir — marker havada kalırsa herkes o yükseklik kadar havada durur.
+> ⚠️ **Arena geometrisi dünya orijinine göre kurulur:** zemin dünya y=0'da, arena merkezi dünya
+> (0,0,0) civarında. Arena uzayı dünya uzayıdır — sahneyi topluca kaydırmak ya da döndürmek
+> arenadaki **tüm** oyuncuların ağ koordinatını kaydırır.
+> ⚠️ Dikey sapma özellikle görünürdür: uzak avatarların kökü arena koordinatına oturur, zemin
+> y=0'da değilse herkes aradaki fark kadar havada durur. Aynı sebeple `VA_CameraRig`'in kökü de
+> Y=0'dadır (tracking origin `Stage` onu fiziksel zemin sayar).
 
 **Admin gözlemci için ek adım YOKTUR.** `AdminSpectator` kendini önyükler ve sahneyi devralır:
 `VA_CameraRig`'i kapatır, `ArenaCalibrator`/`BaseZone`'u kapatır, `ArenaBoundary`'yi **kapatmaz** —
@@ -132,11 +132,11 @@ unity cmd recompile && unity cmd get_console_logs --json
 ```
 
 Sonra sunucuyu çalıştır, bir admin istemciden bu haritada maç başlat ve editörden bağlan: arena
-yükleniyorsa, HUD geliyorsa ve konsolda `ArenaSpace` uyarısı yoksa sahne bağlıdır.
+yükleniyorsa, HUD geliyorsa ve konsolda hata yoksa sahne bağlıdır.
 
 Gerçek testte üç şeye bak:
-- **Uzak avatarlar doğru yerde mi?** Değilse sahnede `SpawnPoint` yoktur, kapalıdır ya da yeri
-  değişmiştir — arena orijini oradan gelir. Ayakları havadaysa marker zeminin üstündedir.
+- **Uzak avatarlar doğru yerde mi?** Değilse arena geometrisi dünya orijininde değildir — sahnenin
+  tamamı kaymış ya da dönmüştür. Ayakları havadaysa zemin dünya y=0'ın üstündedir.
 - **Ölen oyuncu canlanabiliyor mu?** Canlanamıyorsa `BaseZone`'un takımı oyuncunun
   takımıyla eşleşmiyor ya da **bileşeni kapalı** demektir (kapalı bölge açık sayılmaz).
 - **Harita değişince kalibrasyon duruyor mu?** Yeni arenada oyuncu fiziksel olarak nerede duruyorsa

@@ -24,7 +24,8 @@ namespace VortexArena.Core.Arena
     /// ⚠️ <b>Koordinat sistemi:</b> tüm noktalar metre cinsinden ve <see cref="ArenaBoundary"/>'yi
     /// taşıyan transformun YEREL XZ düzlemindedir (JSON'da <c>y</c> alanı = dünya Z'si). Ölçüyü bir
     /// köşeden alıyorsan o köşe (0,0) olur; plan sıfırının arena origin'i olması GEREKMEZ — ağ
-    /// origin'i ayrı bir objededir (<c>SpawnPoint</c>).
+    /// koordinatlarının sıfırı dünya orijinidir (<see cref="ArenaSpace"/>) ve muhafazanın ölçüsü
+    /// ondan bağımsız olarak bu yerel düzlemde tanımlıdır.
     /// </para>
     /// <para>
     /// ⚠️ Halkalar <b>kapalı</b> kabul edilir: son köşe ilk köşeye kendiliğinden bağlanır, aynı

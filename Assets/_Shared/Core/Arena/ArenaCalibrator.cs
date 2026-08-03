@@ -41,10 +41,22 @@ namespace VortexArena.Core.Arena
     /// <c>calibration.b</c>): zemine yapıştırılan bantların yeri de bir ölçüdür ve mekan
     /// başınadır. <see cref="Start"/> işaretçileri <see cref="ArenaBoundary"/> üzerinden o
     /// noktalara oturtur, yani aynı mekanın arenaları ile lobisi ölçüyü elle kopyalamadan
-    /// paylaşır. Alanlar boş bırakılırsa objeler <b>adlarından</b> çözülür
-    /// (<see cref="AnchorAName"/> / <see cref="AnchorBName"/>) — her yeni arenada elle bağlama
-    /// adımı kalmasın diye. Dosyada nokta yoksa işaretçilere DOKUNULMAZ (sahnedeki yerlerinde
-    /// kalırlar) ve konsola uyarı düşer.
+    /// paylaşır. Dosyada nokta yoksa işaretçilere DOKUNULMAZ (sahnedeki yerlerinde kalırlar) ve
+    /// konsola uyarı düşer.
+    /// </para>
+    /// <para>
+    /// <b>İşaretçiler ölçü maketinin küpleridir</b> — ayrı bir "gerçek işaretçi" ailesi YOKTUR:
+    /// <c>JSON'dan DimensionMesh Üret</c> aracının ürettiği <see cref="DimensionAnchor"/>'lı
+    /// küpler hem ölçüyü gösterir hem kalibrasyonu sürer. <see cref="ResolveMarkers"/> bu yüzden
+    /// önce Inspector'da elle bağlanmış alanlara, sonra <see cref="DimensionAnchor.Kind"/>'a, en
+    /// sonda <b>ada</b> bakar (<see cref="AnchorAName"/> / <see cref="AnchorBName"/>) — ad yolu
+    /// maketi olmayan eski sahneler içindir, orada işaretçiler elle konmuştur.
+    /// </para>
+    /// <para>
+    /// Tek konum sözleşmesi: <b>işaretçinin transform konumu ZEMİN NOKTASIDIR</b> (küpün merkezi
+    /// noktanın üstünde, yarısı zeminin altında durur). Maket geri okuması da transformu ham
+    /// okuduğu için sözleşme her iki yönde aynıdır; mesh tabanını zemine oturtan ikinci bir
+    /// sözleşme olsaydı iki aile asla üst üste gelmezdi.
     /// </para>
     /// <para>
     /// <b>Sıra her zaman A → B'dir</b> ve bu geometrik olarak doğrulanamaz: iki nokta hangisinin
@@ -85,15 +97,14 @@ namespace VortexArena.Core.Arena
 
         [Header("Virtual markers")]
         [Tooltip("İlk fiziksel zemin işaretinin sanal karşılığı; ilk yakalamada açılır. " +
-                 "Boş bırakılırsa sahnede 'anchor_a' adlı objeden çözülür. Konumu boyut " +
-                 "dosyasındaki calibration.a'dan gelir — elle taşımanın kalıcı bir etkisi yoktur.")]
+                 "Boş bırakılırsa ölçü maketindeki DimensionAnchor(A) küpünden, o da yoksa " +
+                 "'anchor_a' adlı objeden çözülür. Konumu boyut dosyasındaki calibration.a'dan " +
+                 "gelir — elle taşımanın kalıcı bir etkisi yoktur.")]
         [SerializeField] private GameObject anchorA;
         [Tooltip("İkinci fiziksel zemin işaretinin sanal karşılığı; ikinci yakalamada açılır. " +
-                 "Boş bırakılırsa sahnede 'anchor_b' adlı objeden çözülür. Konumu boyut " +
-                 "dosyasındaki calibration.b'den gelir.")]
+                 "Boş bırakılırsa ölçü maketindeki DimensionAnchor(B) küpünden, o da yoksa " +
+                 "'anchor_b' adlı objeden çözülür. Konumu boyut dosyasındaki calibration.b'den gelir.")]
         [SerializeField] private GameObject anchorB;
-        [Tooltip("Fallback marker pivot height above the arena floor, used only when the marker has no Renderer to measure.")]
-        [SerializeField] private float markerHalfHeight = 0.05f;
         [Tooltip("Hizalama tamamlandıktan sonra işaretçilerin görünür kaldığı süre (saniye). Süre dolunca gizlenirler; 0 = anında gizle.")]
         [SerializeField] private float markerVisibleSeconds = 1f;
 
@@ -180,7 +191,6 @@ namespace VortexArena.Core.Arena
         private float firstBTapTime;
         private bool waitingForRelease;
         private bool manualCalibrationStarted;
-        private float markerFloorDrop;
         private bool trackingEventsHooked;
         private bool realignQueued;
         private Coroutine markerHideRoutine;
@@ -207,16 +217,16 @@ namespace VortexArena.Core.Arena
             }
         }
 
-        /// <summary>Arena floor height in world space, derived from marker A.</summary>
+        /// <summary>
+        /// Arenanın zemin yüksekliği (dünya uzayı), A işaretçisinden okunur. Öteleme hesabı YOK:
+        /// tek sözleşme gereği işaretçinin transform konumu zaten zemin noktasıdır.
+        /// </summary>
         private float VirtualFloorY =>
-            anchorA != null ? anchorA.transform.position.y - markerFloorDrop : 0f;
+            anchorA != null ? anchorA.transform.position.y : 0f;
 
         private void Start()
         {
             ResolveMarkers();
-            // Ölçüm ötelemeden bağımsızdır (pivot ile mesh tabanı arasındaki fark), bu yüzden
-            // işaretçileri yerleştirmeden ÖNCE alınabilir ve yerleştirme sonrası geçerli kalır.
-            markerFloorDrop = MeasureFloorDrop(anchorA, markerHalfHeight);
             PlaceMarkersFromPlan();
             SetMarkersVisible(false);
             TryHookTrackingEvents();
@@ -224,27 +234,33 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Boş bırakılan işaretçi alanlarını sahnedeki adlarından çözer. Her yeni arenada iki
-        /// referansı elle sürüklemek, unutulduğunda sessizce hizalanmayan bir arena üretiyordu.
+        /// Boş bırakılan işaretçi alanlarını sahneden çözer. Her yeni arenada iki referansı elle
+        /// sürüklemek, unutulduğunda sessizce hizalanmayan bir arena üretiyordu.
         /// <para>
-        /// ⚠️ Ölçü maketindeki küpler <b>aynı adı taşır</b> (aynı şeyin iki adı olmaz) ve build'e
-        /// girmedikleri hâlde editörde Play kipinde sahnededirler. Ayıran şey ad değil BİLEŞENDİR:
-        /// arama <see cref="DimensionAnchor"/> taşıyan objeleri atlar. <c>EditorOnly</c> etiketli
-        /// kökler de atlanır — maketin tamamı zaten oraya girer, ucuz bir ikinci savunma.
+        /// Sıra: (1) Inspector'da elle bağlanmış alan, (2) ölçü maketinin
+        /// <see cref="DimensionAnchor"/> taşıyan küpleri, (3) ad
+        /// (<see cref="AnchorAName"/> / <see cref="AnchorBName"/>).
+        /// </para>
+        /// <para>
+        /// ⚠️ Ad yolu KALDIRILAMAZ: maketi olmayan sahnelerde işaretçiler elle konmuştur ve
+        /// üzerlerinde <see cref="DimensionAnchor"/> yoktur — 2. adımın tek başına kalması o
+        /// arenaları sessizce hizalanamaz hâle getirirdi.
         /// </para>
         /// </summary>
         private void ResolveMarkers()
         {
             if (anchorA == null)
-                anchorA = FindMarkerByName(AnchorAName);
+                anchorA = FindMarkerByKind(DimensionAnchor.AnchorKind.A) ?? FindMarkerByName(AnchorAName);
             if (anchorB == null)
-                anchorB = FindMarkerByName(AnchorBName);
+                anchorB = FindMarkerByKind(DimensionAnchor.AnchorKind.B) ?? FindMarkerByName(AnchorBName);
 
             if (anchorA == null || anchorB == null)
             {
                 Debug.LogWarning(
                     $"ArenaCalibrator: kalibrasyon işaretçileri bulunamadı " +
-                    $"('{AnchorAName}' / '{AnchorBName}'). Hizalama YAPILAMAZ.", this);
+                    $"('{AnchorAName}' / '{AnchorBName}'). Hizalama YAPILAMAZ — sahnede ölçü " +
+                    "maketi yoksa 'Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret' " +
+                    "çalıştır.", this);
                 return;
             }
 
@@ -255,6 +271,50 @@ namespace VortexArena.Core.Arena
             }
         }
 
+        /// <summary>
+        /// İşaretçiyi <see cref="DimensionAnchor.Kind"/>'ından bulur — ölçü maketinin küpleri
+        /// bunlardır. Aynı türden birden çok varsa ilki alınır ve uyarı düşer: iki A küpü, iki
+        /// farklı ölçü maketi (ya da kopyalanmış bir maket) demektir ve hangisinin sahadaki bandı
+        /// temsil ettiği kestirilemez.
+        /// </summary>
+        private GameObject FindMarkerByKind(DimensionAnchor.AnchorKind kind)
+        {
+            Scene scene = gameObject.scene;
+            if (!scene.IsValid())
+                return null;
+
+            GameObject found = null;
+            int matches = 0;
+
+            GameObject[] roots = scene.GetRootGameObjects();
+            for (int i = 0; i < roots.Length; i++)
+            {
+                DimensionAnchor[] anchors = roots[i].GetComponentsInChildren<DimensionAnchor>(true);
+                for (int k = 0; k < anchors.Length; k++)
+                {
+                    if (anchors[k].Kind != kind)
+                        continue;
+                    matches++;
+                    if (found == null)
+                        found = anchors[k].gameObject;
+                }
+            }
+
+            if (matches > 1)
+            {
+                Debug.LogWarning(
+                    $"ArenaCalibrator: sahnede {kind} kalibrasyon işaretçisinden {matches} tane " +
+                    $"var — ilki ('{found.name}') kullanıldı. Sahnede tek bir ölçü maketi olmalı.",
+                    this);
+            }
+
+            return found;
+        }
+
+        /// <summary>
+        /// İşaretçiyi adından bulur. Ölçü maketi olmayan eski sahneler için geri uyumluluk yolu:
+        /// orada işaretçiler elle konmuştur ve <see cref="DimensionAnchor"/> taşımazlar.
+        /// </summary>
         private GameObject FindMarkerByName(string markerName)
         {
             Scene scene = gameObject.scene;
@@ -264,17 +324,11 @@ namespace VortexArena.Core.Arena
             GameObject[] roots = scene.GetRootGameObjects();
             for (int i = 0; i < roots.Length; i++)
             {
-                if (roots[i].CompareTag(ArenaDimensionMesh.EditorOnlyTag))
-                    continue;
-
                 Transform[] all = roots[i].GetComponentsInChildren<Transform>(true);
                 for (int k = 0; k < all.Length; k++)
                 {
-                    if (!string.Equals(all[k].name, markerName, StringComparison.Ordinal))
-                        continue;
-                    if (all[k].GetComponent<DimensionAnchor>() != null)
-                        continue; // ölçü maketinin küpü, sahnenin işaretçisi değil
-                    return all[k].gameObject;
+                    if (string.Equals(all[k].name, markerName, StringComparison.Ordinal))
+                        return all[k].gameObject;
                 }
             }
 
@@ -282,8 +336,8 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// İşaretçileri boyut dosyasındaki kalibrasyon noktalarına oturtur (mesh'in TABANI zemin
-        /// düzlemine gelecek şekilde). Dosyada nokta yoksa işaretçilere dokunulmaz.
+        /// İşaretçileri boyut dosyasındaki kalibrasyon noktalarına oturtur. Dosyada nokta yoksa
+        /// işaretçilere dokunulmaz.
         /// <para>
         /// ⚠️ Sessiz geçilmez: nokta yazılmamış bir mekanda işaretçiler prefabtaki yerlerinde
         /// kalır ve sahadaki bantla örtüşmezler — hizalama teknik olarak yine kurulur ama arena
@@ -306,8 +360,8 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            PlaceMarkerAtFloor(anchorA, markA, markerHalfHeight);
-            PlaceMarkerAtFloor(anchorB, markB, markerHalfHeight);
+            PlaceMarkerAtFloor(anchorA, markA);
+            PlaceMarkerAtFloor(anchorB, markB);
         }
 
         private void OnDestroy()
@@ -374,46 +428,23 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Marker pivotunun zeminden yüksekliği, mesh'ten ölçülür — marker görseli değiştiğinde
-        /// elle güncellenmesi gereken bir sabit kalmasın diye.
+        /// İşaretçiyi verilen ZEMİN noktasına oturtur. Tek sözleşme: işaretçinin transform konumu
+        /// zemin noktasının kendisidir (küpün merkezi noktada, yarısı zeminin altında) — ölçü
+        /// maketi de küplerini böyle üretir ve geri okuma transformu ham okur.
         /// <para>
-        /// ⚠️ <c>Renderer.bounds</c>'a güvenilmez: marker sahnede KAPALI durur (ilk yakalamaya dek
-        /// gizli) ve hiç render edilmemiş olabilir. Mesh'in kendi bounds'u asset verisidir, her
-        /// durumda doğrudur.
+        /// ⚠️ Mesh'in tabanını zemine oturtan bir öteleme YOKTUR ve geri eklenmez: iki farklı Y
+        /// sözleşmesi, aynı noktayı gösteren iki işaretçinin asla üst üste gelmemesi demektir.
         /// </para>
         /// <para>
-        /// Editör aracı (<c>TemplateBasicsLoader</c>) da buradan geçer: işaretçiyi zemine oturtan
-        /// hesap tek yerde kalsın, sahne ile çalışma anı birbirinden sapmasın.
+        /// Konum dünya uzayındadır, yani işaretçinin hiyerarşide nereye bağlandığı önemsizdir.
         /// </para>
         /// </summary>
-        public static float MeasureFloorDrop(GameObject marker, float fallback)
-        {
-            if (marker != null)
-            {
-                MeshFilter filter = marker.GetComponentInChildren<MeshFilter>(true);
-                if (filter != null && filter.sharedMesh != null)
-                {
-                    Vector3 worldMin = filter.transform.TransformPoint(filter.sharedMesh.bounds.min);
-                    float drop = marker.transform.position.y - worldMin.y;
-                    if (drop > 0f)
-                        return drop;
-                }
-            }
-
-            return fallback;
-        }
-
-        /// <summary>
-        /// İşaretçiyi verilen ZEMİN noktasına oturtur: mesh'in tabanı noktanın Y'sine gelir,
-        /// pivot yukarıda kalır. Konum dünya uzayındadır, yani işaretçinin hiyerarşide nereye
-        /// bağlandığı önemsizdir.
-        /// </summary>
-        public static void PlaceMarkerAtFloor(GameObject marker, Vector3 floorPoint, float fallbackDrop)
+        public static void PlaceMarkerAtFloor(GameObject marker, Vector3 floorPoint)
         {
             if (marker == null)
                 return;
 
-            marker.transform.position = floorPoint + Vector3.up * MeasureFloorDrop(marker, fallbackDrop);
+            marker.transform.position = floorPoint;
         }
 
         /// <summary>Horizontal distance between the two virtual markers, 0 if unavailable.</summary>

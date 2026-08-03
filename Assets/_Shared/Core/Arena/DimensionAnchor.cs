@@ -12,11 +12,19 @@ namespace VortexArena.Core.Arena
     /// (<see cref="DimensionPolygon"/> ile aynı gerekçe).
     /// </para>
     /// <para>
-    /// ⚠️ Obje adları sahnedeki işaretçilerle <b>aynıdır</b> (<c>anchor_a</c> / <c>anchor_b</c>,
-    /// tek kaynak: <see cref="ArenaCalibrator.AnchorAName"/>) — aynı şeyin iki adı olmaz. Adın
-    /// çakışmasını zararsız kılan şey <b>bu bileşenin kendisidir</b>: kalibratörün ad araması
-    /// <see cref="DimensionAnchor"/> taşıyan objeleri atlar, yani maket editörde Play kipinde
-    /// sahnede dururken bile gerçek işaretçinin yerine geçemez.
+    /// ⚠️ <b>Bu işaretçi çalışma anındaki işaretçinin ta kendisidir</b> — ikinci bir işaretçi
+    /// ailesi YOKTUR. <see cref="ArenaCalibrator"/> hizalayacağı objeyi önce bu bileşene ve
+    /// <see cref="Kind"/>'ına bakarak bulur; maketi olmayan eski sahneler için sonda
+    /// <b>ada</b> bakan bir yol kalır (<see cref="ArenaCalibrator.AnchorAName"/> /
+    /// <see cref="ArenaCalibrator.AnchorBName"/>). Maket bu yüzden build'e girer ve
+    /// <c>EditorOnly</c> etiketlenmez; oynanan geometri olmadığı için yalnız zemin/kolon
+    /// görseli çalışma anında gizlenir.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Konum sözleşmesi: objenin transformu ZEMİN NOKTASIDIR</b> (küpün merkezi noktada
+    /// durur, yarısı zeminin altında kalır). Geri okuma transformu ham okuduğu için sözleşmenin
+    /// tek olması şart — işaretçiyi mesh tabanı zemine gelecek şekilde kaldırmak, dosyaya
+    /// yazılan nokta ile sahnede görünen noktayı birbirinden ayırırdı.
     /// </para>
     /// </summary>
     [DisallowMultipleComponent]

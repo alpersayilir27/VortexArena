@@ -4,6 +4,15 @@ namespace VortexArena.Protocol
     public static class ArenaProtocol
     {
         /// <summary>
+        /// v7: <b>arena uzayı = dünya uzayı</b> (§3) — arena origin'i artık sahnedeki bir marker
+        /// değil, dünya (0,0,0) ve kimlik rotasyonudur.
+        /// <para>⚠️ <b>v7'yi kırıcı yapan şey tel DÜZENİ değil ANLAMIDIR:</b> baytlar birebir aynı
+        /// kaldı, ama <c>0x01</c>/<c>0x02</c>/<c>0x05</c> pozları, <c>0x03</c> atış yönleri ve
+        /// <c>0x07</c>/<c>0x08</c> iskelet kökleri artık BAŞKA bir çerçevede okunuyor. Eski
+        /// istemci onları kendi marker'ına göre çözer: karışık sürümde iki taraf da birbirini
+        /// metrelerce kaymış, hatta zeminin altında/havada görür. Sürüm uyuşmazlığı bağlantıyı
+        /// <b>reddetmez</b> (yalnız uyarı basılır) — bu yüzden APK turu tamamlanmalıdır ve
+        /// eksik kalırsa belirti "uzak oyuncular rastgele yerlere ışınlanıyor" olur.</para>
         /// v6: <b>iskelet akışı</b> (<c>0x07</c> §6.9 / <c>0x08</c> §6.10) — gövde artık üç noktadan
         /// TÜRETİLMİYOR, sahibinin cihazında Meta Movement SDK ile çözülüp retarget edilmiş iskelet
         /// olarak akıyor. Blob <b>opak</b>tır: sunucu açmaz, doğrulamaz, kopyalar (<c>netItemId</c>
@@ -33,7 +42,7 @@ namespace VortexArena.Protocol
         /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
         /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
         /// </summary>
-        public const int PROTOCOL_VERSION = 6;
+        public const int PROTOCOL_VERSION = 7;
         public const string APP_ID = "VortexArena";
 
         /// <summary>Forma numarası aralığı (§2). <c>0</c> = atanmamış ve bu aralığın dışındadır;

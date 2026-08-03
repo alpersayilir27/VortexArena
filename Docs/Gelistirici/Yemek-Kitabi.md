@@ -557,29 +557,32 @@ Tek düğmeli bir sihirbaz **yoktur** (kaldırıldı). Akış altı adımdır ve
 |---|---|---|
 | 1 | Boş sahne aç, arena kutusuna kaydet (`Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity`) | `File > New Scene` |
 | 2 | Ağ altyapısını koy | `Tools > VortexArena > Arena > Template Temellerini Yükle` |
-| 3 | Mekanın ölçü maketini üret | `… > Arena > JSON'dan DimensionMesh Üret` |
+| 3 | Mekanın ölçü maketini + kalibrasyon işaretçilerini üret | `… > Arena > JSON'dan DimensionMesh Üret` |
 | 4 | Ölçü yanlışsa köşeleri düzelt, dosyaya geri yaz | ProBuilder + `… > Arena > DimensionMesh'i JSON'a Çevir` |
-| 5 | Environment sanatı, `SpawnPoint`, bake | elle |
+| 5 | Environment sanatı (**dünya orijinine**, zemin y=0), bake | elle |
 | 6 | Tüm kayıtları yap | `… > Build > Configure All Build Elements` |
 
-**2. adım** altyapıyı prefab **ÖRNEĞİ** olarak koyar (`VA_ArenaRoot` = `ArenaBoundary` +
-kalibrasyon işaretçileri, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı
-`VA_ModeHud` · taban bölgeleri · `SpawnPoint`), sahneye bakan referansları bağlar
-(`ArenaCalibrator`'ın `anchorA`/`anchorB`/`rigRoot`'u ile `ArenaBoundary`'nin
+**2. adım** altyapıyı prefab **ÖRNEĞİ** olarak koyar (`VA_ArenaBoundary` = `ArenaBoundary`,
+`VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı
+`VA_ModeHud` · taban bölgeleri), sahneye bakan referansları bağlar
+(`ArenaCalibrator`'ın `rigRoot`'u ile `ArenaBoundary`'nin
 `head`/`fadeRenderer`/`warningText`'i — sonuncular rig'in içindedir ve **boş kalırsa muhafaza
-sessizce hiçbir şey göstermez**), taban şeritlerini takım rengine boyar, mekanın boyut dosyasını
-`ArenaBoundary.dimensionsJson`'a takar ve `anchor_a`/`anchor_b`'yi dosyadaki `calibration`
-noktalarına oturtur. İdempotenttir: var olanı atlar, ikinci kopya koymaz ve
+sessizce hiçbir şey göstermez**), taban şeritlerini takım rengine boyar ve mekanın boyut dosyasını
+`ArenaBoundary.dimensionsJson`'a takar. İdempotenttir: var olanı atlar, ikinci kopya koymaz ve
 **dolu bir alanın üstüne yazmaz** — elle bağladığın referans korunur.
+⚠️ Kalibrasyon işaretçisi **koymaz**: onlar 3. adımda gelir.
 
-**3. adımın sırası serbesttir** — maket sahne köküne, dünya orijininde ve dönüşsüz kurulur, yani
-hiçbir şeye bağlı değildir. Arenanın üstüne oturtmak istersen elle taşı/döndür; geri okuma maketin
-kendi kökünü referans aldığı için bundan etkilenmez. ⚠️ **Ölçeğini değiştirme** — plan metre
-cinsindendir.
+**3. adımın sırası serbest ama kendisi ZORUNLUDUR** — sahnenin `anchor_a`/`anchor_b`
+işaretçileri maketle gelir, maketsiz sahne kalibre edilemez. Maket sahne köküne, dünya orijininde
+ve dönüşsüz kurulur, yani hiçbir şeye bağlı değildir. Arenanın üstüne oturtmak istersen elle
+taşı/döndür; geri okuma maketin kendi kökünü referans aldığı için bundan etkilenmez.
+⚠️ **Ölçeğini değiştirme** — plan metre cinsindendir.
 
-⚠️ **Maket oynanan geometri DEĞİLDİR:** taban + kolonlar + kalibrasyon işaretçilerinden ibarettir,
-**duvar üretmez**, kökü
-`EditorOnly` etiketli olduğu için build'e girmez. Arena sanatı hazır environment'ların içine
+⚠️ **Maket oynanan geometri DEĞİLDİR:** taban + kolonlar + kalibrasyon işaretçilerinden ibarettir
+ve **duvar üretmez**. Build'e yalnız kök + kalibrasyon işaretçileri girer (onlar çalışma anında
+gerekir); taban/kolon görselini build kancası ayıklar, editör Play kipinde ise `Awake` gizler —
+yani oyuncu maketten yalnız işaretçileri, onları da yalnız kalibrasyon sürerken görür
+([17.4](#174-maket-build-ayrımı)). Arena sanatı hazır environment'ların içine
 kurulur; maket yalnız o sanatın oturacağı fiziksel alanı gösterir
 ([Reçete 17](#17-arena-ölçüsü-boyut-dosyası)).
 
@@ -596,7 +599,9 @@ görür; araç bu üçünü karşılaştırır ve uyuşmayan kutuyu uyarı olara
 (silinmiş/taşınmış arena, `Missing` referans) **silinir**; kutuda eksik olan şey (sahne yok, birden
 çok sahne var, ad uyuşmuyor, MapDefinition yok ya da yanlış yerde) **uyarı** olur. `Boot.unity`
 index 0'da kalır, `_Shared/Scenes/*` gibi mekan-dışı sahnelere ve `Template/`'e dokunulmaz.
-Sonunda sağlık raporu basar (`SpawnPoint` var mı, `dimensionsJson` dolu mu, maket `EditorOnly` mi).
+Sonunda sağlık raporu basar: `ArenaBoundary` var mı · `dimensionsJson` dolu mu · muhafaza dünya
+orijinine yakın mı · ölçü maketi `EditorOnly` etiketli mi (etiketliyse build'e girmez ve
+kalibrasyon işaretçileri onunla birlikte silinir).
 
 ⚠️ **MapDefinition kendiliğinden üretilmez** — `supportedModeIds` boş bırakmak "kısıtsız" demek
 olduğu için üretilen boş bir tanım lobiyi sessizce her modda oynanır kılardı. Sahneyi aç, modları
@@ -686,8 +691,8 @@ kanalı yokken sessiz no-op'tur; kapalı kalan iki kapıyı `DevSession` tek `Mo
 ## 16. Bir konumu ağ üzerinden paylaşmak (arena uzayı)
 
 Her oyuncunun fiziksel odası farklı yerdedir. Ağda dolaşan **her** konum bu yüzden *arena
-uzayında* taşınır — arenada sabit tek bir noktanın (sahnedeki `SpawnPoint`) orijin olduğu ortak
-çerçeve.
+uzayında* taşınır: arena uzayı **sahnenin dünya uzayıdır** (origin dünya (0,0,0)) ve her başlık
+`ArenaCalibrator` ile bu ortak çerçeveye hizalanır.
 
 ```csharp
 using VortexArena.Core.Arena;
@@ -701,17 +706,18 @@ Vector3 dunyaPos = ArenaSpace.ArenaToWorld(gelenPoz);
 
 `Pose` ve `Quaternion` aşırı yüklemeleri de var.
 
-> ⚠️ **YÖN BİR NOKTA DEĞİLDİR.** Bir yön vektörünü doğrudan `WorldToArena`'dan geçirirsen arena
-> orijini kadar kayar. Doğrusu iki noktayı çevirip farkı almaktır:
+> ⚠️ **YÖN BİR NOKTA DEĞİLDİR.** Yön vektörünü `WorldToArena`'dan geçirme, kendi kapısı var:
 > ```csharp
-> Vector3 a = ArenaSpace.WorldToArena(p);
-> Vector3 arenaDir = (ArenaSpace.WorldToArena(p + dir) - a).normalized;
+> Vector3 arenaDir = ArenaSpace.WorldToArenaDirection(dir);
 > ```
-> `ArenaCombat.ReportShot` bunu zaten doğru yapar — kendi mesajını yazmıyorsan hiç düşünme.
+> Sonuç **normalize** edilir (protokol her olayda bir birim yön taşır) ve sıfır/NaN girdide
+> `Vector3.forward` döner. `ArenaCombat.ReportShot` bunu zaten doğru yapar — kendi mesajını
+> yazmıyorsan hiç düşünme.
 
-> ⚠️ **Orijin sahnedeki `SpawnPoint`'tir.** Silersen ya da kapatırsan dönüşüm kimliğe düşer
-> (`ArenaSpace` sahne başına bir kez uyarır) ve **bütün uzak oyuncular dünya orijinine yığılır**;
-> yerini oynatırsan hepsi o kadar kayar.
+> ⚠️ **Arena uzayı dünya uzayıyla çakışıktır, ama çağrıyı yine de `ArenaSpace`'ten geçir:**
+> koordinat çerçevesi tek yerde tanımlı kalsın. Bunun bedeli bir sahne kuralıdır — arena
+> geometrisi **dünya orijinine göre** kurulur (zemin dünya y=0'da); sahnenin tamamını kaydırmak
+> ya da döndürmek arenadaki bütün oyuncuların ağ koordinatını kaydırır.
 
 ---
 
@@ -774,7 +780,7 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
 | `name` | Yalnız etiket (üretilen objelerin adlandırmasında görünür) |
 | `plane` | Tabanın sıralı köşeleri, **metre**. Halka **kapalıdır** — ilk noktayı sona tekrar yazma. Koordinatlar `ArenaBoundary`'yi taşıyan transformun **yerel XZ**'sidir: JSON'daki `y` = dünya **Z**'si |
 | `columns[]` | `name` + `height` (0 = `defaultColumnHeight`) + `points` = kolonun kendi sıralı köşe halkası (tabanla aynı uzay, aynı kurallar) |
-| `calibration` | Zemin bandındaki **A** ve **B** işaretlerinin yeri (aynı uzay). Sahnedeki `anchor_a`/`anchor_b` objeleri buradan konumlanır |
+| `calibration` | Zemin bandındaki **A** ve **B** işaretlerinin yeri (aynı uzay). Maketin `anchor_a`/`anchor_b` küpleri buradan konumlanır — küpün merkezi noktanın kendisidir, yarısı zeminin altında kalır |
 | `defaultColumnHeight` | `height: 0` bırakılan kolonların yüksekliği |
 
 > ⚠️ **Sıra A → B'dir ve geometrik olarak doğrulanamaz** (iki nokta hangisinin önce alındığını
@@ -815,11 +821,11 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
    alan yoktur, gerek de yoktur. Kolonlar **her zaman** muhafaza hesabına girer.
 3b. **Kalibrasyon noktalarını gir** (`calibration.a` / `.b`): zemine yapıştıracağın A ve B
    bantlarının yeri. Bunlar da mekan başınadır — aynı odadaki tüm arenalar ve lobi aynı iki
-   fiziksel işareti kullanır. Sahnedeki işaretçileri **elle taşıma**, ölçü buraya yazılır.
+   fiziksel işareti kullanır. Maketin küplerini **elle taşıma**, ölçü buraya yazılır.
 4. **Maketi üret:** `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` → dosyayı seç, **Üret**.
    `<Mekan>_DimensionMesh` **sahne köküne, dünya orijininde ve dönüşsüz** kurulur: `Plane`
-   (ProBuilder çokgeni) + `Columns/<ad>` (prizmalar) + `anchor_a` (kırmızı küp) / `anchor_b` (mavi
-   küp). Dosyada 12×12 yazıyorsa sahnede de 12×12
+   (ProBuilder çokgeni) + `Columns/<ad>` (prizmalar) + **sahnenin kalibrasyon işaretçileri**
+   `anchor_a` (kırmızı küp) / `anchor_b` (mavi küp). Dosyada 12×12 yazıyorsa sahnede de 12×12
    ölçersin — araç ürettiği ölçüyü ayrıca konsola basar. Araç **idempotenttir**: dosya değişince
    yeniden çalıştır, aynı mekanın eski maketi silinip yenisi kurulur.
 
@@ -833,12 +839,12 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
    > işe yaramaz.
 5. **Muhafazaya bağla:** dosyayı `ArenaBoundary.dimensionsJson` alanına.
    (`Template Temellerini Yükle` bunu mekan klasöründen çözüp kendisi bağlar; elle kurduysan
-   kontrol et.) Aynı araç sahnedeki `anchor_a`/`anchor_b` işaretçilerini de dosyadaki noktalara
-   oturtur — `ArenaCalibrator` çalışma anında aynısını tekrar yapar, yani otorite her hâlükârda
-   dosyadadır.
+   kontrol et.) İşaretçileri `ArenaCalibrator` her `Start`'ta dosyadaki noktalara yeniden oturtur,
+   yani otorite her hâlükârda dosyadadır.
 
-> ⚠️ **Maket build'e girmez** — kökü `EditorOnly` etiketlidir. Oyuncunun gördüğü zemin/duvar
-> environment sanatından gelir; maket yalnız o sanatın oturacağı fiziksel alanı gösterir.
+> ⚠️ **Build'e maketin yalnız kökü ve kalibrasyon işaretçileri girer** (görsel dal ayıklanır →
+> [17.4](#174-maket-build-ayrımı)). Oyuncunun gördüğü zemin/duvar environment sanatından gelir;
+> maket yalnız o sanatın oturacağı fiziksel alanı gösterir.
 
 > ⚠️ **`ArenaObstacle` collider DEĞİLDİR** — fizik yapmaz, hiçbir şeyi durdurmaz. Free-roam'da
 > oyuncuyu durduran şey gerçek nesnedir; bileşenin tek işi muhafazanın o engele yaklaşırken
@@ -846,7 +852,7 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
 > ekle, `size` alanına zemindeki ölçüsünü yaz.
 
 > ⚠️ **Plan sıfırı ile arena sıfırı ayrı şeylerdir.** Plan koordinatları `ArenaBoundary`
-> transformunun yerelidir; ağ koordinatlarının sıfırı ise `SpawnPoint`'tir. Duvarı büyütmek ya da
+> transformunun yerelidir; ağ koordinatlarının sıfırı ise sahnenin **dünya orijinidir**. Duvarı büyütmek ya da
 > kaydırmak ağ uzayını bozmaz — bu ayrım bilinçlidir.
 
 ### 17.3 Ölçü yanlışsa: maketi düzeltip dosyaya geri yazmak
@@ -887,6 +893,20 @@ geçmiş" sanar ve tüm mesh'i sınır olarak çıkarır.
 
 > Yazmadan önce sonuç geri ayrıştırılır; doğrulanamazsa dosyaya **hiç dokunulmaz**. Bozuk bir yazım
 > o mekanın bütün sahnelerini ölçüsüz bırakırdı.
+
+### 17.4 Maket build ayrımı
+
+Maketin iki dalı iki ayrı muameleye tabidir ve bunlar **birbirinin yedeği değildir**:
+
+| Bağlam | Kök + `anchor_a`/`anchor_b` | Görsel dal (`Plane` + `Columns`) |
+|---|---|---|
+| Gerçek build | **Girer** — kalibrasyon onlara bağlı | **Hiç girmez**: `DimensionMeshBuildStripper` (`IProcessSceneWithReport`) build'e giden **geçici sahne kopyasından** siler; sahne dosyan değişmez |
+| Editör Play kipi | Sahnede | Sahnede, ama `ArenaDimensionMesh.Awake` `Renderer.enabled`'ı false yapar |
+
+⚠️ **Ayıklamanın gerekçesi boyut değil bağımlılıktır:** taban ve kolonlar `ProBuilderMesh` taşır,
+o da `Unity.ProBuilder` runtime derlemesini build'e sokardı — bu projede ProBuilder yalnız editör
+tarafıdır. Aynı sebeple maket **`EditorOnly` etiketlenmez**: etiket kalibrasyon işaretçilerini de
+silerdi.
 
 ---
 

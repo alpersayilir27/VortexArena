@@ -153,8 +153,6 @@ namespace VortexArena.Core.Player
         /// gerekçe: kare başına tahsis etmemek için büyüdüğü yerde kalır.</summary>
         private byte[] _sendScratch;
 
-        private bool _rootWarned;
-
         private void Awake()
         {
             ResolveReferences();
@@ -321,14 +319,6 @@ namespace VortexArena.Core.Player
             if (client == null || client.UdpChannel == null)
             {
                 return;
-            }
-
-            if (!ArenaSpace.HasOrigin && !_rootWarned)
-            {
-                _rootWarned = true;
-                Debug.LogWarning(
-                    "[ArenaNetCharacterBehaviour] Sahnede arena origin'i (SpawnPoint) yok — iskelet " +
-                    "kökü dünya uzayında gidiyor. Uzak oyuncular gövdeyi yanlış yerde çizer.", this);
             }
 
             Pose arenaRoot = ArenaSpace.WorldToArena(

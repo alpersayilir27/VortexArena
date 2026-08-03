@@ -75,13 +75,14 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 - [ ] Unity'de yeni bir sahne aç ve arena kutusuna kaydet: `Assets/Arenas/Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity`.
   > **Kutunun klasör adı sahne adıyla AYNI olmalıdır** (MapDefinition da aynı adla `Data/<SahneAdı>.asset` olarak o kutuya yazılır) — araç bu üçünü karşılaştırır, uyuşmayan kutu uyarı verir.
   > **Mekan klasörü zorunludur** — sunucunun açılışta sorduğu listede görünecek ad odur; aynı işletmenin ikinci arenası da **aynı** mekanın `Scenes/` klasörü altına açılır. Sahne adı katalog anahtarıdır ve benzersiz olmalıdır.
-- [ ] `Tools > VortexArena > Arena > Template Temellerini Yükle` → sahneye ağ altyapısı (muhafaza + kalibrasyon işaretçileri + rig + poz senkronu) prefab örneği olarak konur ve boyut dosyası muhafazaya bağlanır.
+- [ ] `Tools > VortexArena > Arena > Template Temellerini Yükle` → sahneye ağ altyapısı (muhafaza + rig + poz senkronu) prefab örneği olarak konur ve boyut dosyası muhafazaya bağlanır.
   > Lobi sahnesi kuruyorsan penceredeki **taban bölgeleri** ve **VA_ModeHud** kutularını kapat.
-- [ ] `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` → boyut dosyasını seç, **Üret**. Sahnede alanın ölçü maketi (taban + kolonlar) belirir; arena sanatını bunun üstüne kurarsın.
-  > ⚠️ **Bu maket oyuna girmez** — yalnız ölçü referansıdır. Oyuncunun gördüğü duvar/zemin senin koyduğun environment sanatıdır ve **gerçek duvarlar fiziksel sınırla çakışmalıdır**: sanat duvarı alandan içeride ya da dışarıda durursa oyuncu yanlış yere göre uyarılır.
+- [ ] `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` → boyut dosyasını seç, **Üret**. Sahnede alanın ölçü maketi (taban + kolonlar) ve **A/B kalibrasyon işaretçileri** belirir; arena sanatını bunun üstüne kurarsın.
+  > ⚠️ **Bu adım atlanamaz** — kalibrasyon işaretçileri yalnız burada üretilir, maketsiz sahne fiziksel alana hizalanamaz.
+  > ⚠️ **Maketin ölçü görselleri oyunda görünmez** (yalnız referanstır); oyuncunun gördüğü duvar/zemin senin koyduğun environment sanatıdır ve **gerçek duvarlar fiziksel sınırla çakışmalıdır**: sanat duvarı alandan içeride ya da dışarıda durursa oyuncu yanlış yere göre uyarılır.
   > **Ölçü tutmadıysa** maketin köşesini ProBuilder ile yerine taşı, sonra `Tools > VortexArena > Arena > DimensionMesh'i JSON'a Çevir` — düzeltilmiş ölçü aynı dosyaya geri yazılır.
 - [ ] **Kalibrasyon noktalarını boyut dosyasına yaz** (Bölüm 3) — sahnedeki işaretçiler oradan yerleşir, elle taşınmaz.
-- [ ] **Tek `SpawnPoint`**'i yerine taşı — bu marker arena uzayının sıfırıdır, **zemin seviyesine** konur ve sonradan taşınmaz (taşımak tüm oyuncuların arenadaki koordinatını kaydırır). NavMesh ve ışık verisini bake et.
+- [ ] **Arena sanatını dünya orijinine oturt** — zemin dünya y=0'da, arena merkezi dünya (0,0,0) civarında olmalı. Ağ koordinatlarının sıfırı burasıdır: sahneyi topluca kaydırmak ya da döndürmek tüm oyuncuların arenadaki koordinatını kaydırır. NavMesh ve ışık verisini bake et.
 - [ ] `Tools > VortexArena > Build > Configure All Build Elements` → **Hepsini Yapılandır** (sahne açıkken) → `MapDefinition`, katalog kaydı, Build Settings girdisi ve `Server/config/maps.json` tek geçişte üretilir. Çıkan sağlık raporunu ve uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
   > Araç kayıtları mekan klasörü ağacından **eşitler**: ağaçta olmayan katalog/Build Settings satırlarını siler. Bir arenayı sildiysen ya da başka bir kutuya taşıdıysan **Yalnız Senkronize Et** düğmesi yeter (sahne açık olmasa da çalışır) — kalıntı bir satır build'i sebebi görünmeyen bir hatayla düşürür.
 - [ ] Build Settings'te yeni sahnenin **listede ve işaretli (enabled)** olduğunu doğrula. Sahne adı = `start_match` katalog anahtarı; boşluk/typo dahil birebir eşleşmeli.
@@ -91,7 +92,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 
 ## 3. Kalibrasyon işaretleri (zemin bandı)
 
-Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrator`). Sahnede iki sanal işaretçi vardır: **`anchor_a`** ve **`anchor_b`** — **yerleri boyut dosyasından gelir**, sahneden değil. Yani zemin bandının nereye çekileceği de bir ölçüdür ve alanın köşeleriyle aynı dosyaya yazılır.
+Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrator`). Sahnede iki sanal işaretçi vardır — **`anchor_a`** ve **`anchor_b`**, ölçü maketiyle birlikte gelirler ve **yerleri boyut dosyasından gelir**, sahneden değil. Yani zemin bandının nereye çekileceği de bir ölçüdür ve alanın köşeleriyle aynı dosyaya yazılır.
 
 > **Kalibrasyon 6 serbestlik derecesini de kurar:** yönü (yaw) ve yatay konumu A→B çiftinden, **zemin yüksekliğini B noktasında kumandanın ucundan** alır. Zemin yüksekliği gözlüğün kendi "floor level" bilgisinden ALINMAZ — başlıklarda alan kurulumu yapılmadığı için (§5) o değer bir tahmindir: gözlük havadayken açılırsa yanlış başlar, oturum içinde tracking kaybı sonrası kayabilir. Bu yüzden her kalibrasyon zemini de yeniden ölçer.
 
@@ -103,7 +104,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   }
   ```
   Koordinatlar `plane` ile **aynı uzaydadır** (metre; JSON'daki `y` = zemindeki ileri eksen), yani alanın köşelerini nasıl ölçtüysen bantların yerini de öyle ölçersin. Dosya **mekan başınadır**: aynı odadaki tüm arenalar ve lobi aynı iki fiziksel işareti kullanır — ikinci bir yere yazma.
-  - Sahnedeki `anchor_a` / `anchor_b` objeleri **elle TAŞINMAZ**: `Template Temellerini Yükle` onları bu noktalara oturtur ve başlık da her açılışta aynısını yapar. Sahnede taşımanın kalıcı etkisi yoktur.
+  - Sahnedeki `anchor_a` / `anchor_b` objeleri **elle TAŞINMAZ**: başlık her açılışta onları dosyadaki noktalara oturtur. Sahnede taşımanın kalıcı etkisi yoktur; düzeltmeyi dosyaya yaz (ya da maketi düzeltip `DimensionMesh'i JSON'a Çevir` ile geri yaz).
   - Nokta seçerken **sabit bir referans** kullan (kolon köşesi, duvar dibi): bant bir gün kayarsa aynı yere geri konabilsin. Örnek: iki kolonun aynı hizadaki köşesinden 10 cm açıkta.
   - **Aralarını olabildiğince aç.** İki nokta arasında en az **0,5 m** olmalı (altındaki çift yok sayılır), ama yön hatası mesafeyle ters orantılı büyür: 5 m'lik bir aralık 1 m'linin beş katı hassasiyet verir.
 - [ ] Zemine iki bant işareti yapıştır: **A** ve **B**, dosyaya yazdığın yerlere. Bandın üzerine büyük harfle "A" ve "B" yaz. ⚠️ Aralarındaki mesafe dosyadaki ölçüye **±%20 tolerans** içinde uymalı — dışındaysa başlık kalibrasyonu reddeder (üç kısa titreşim), çünkü yanlış mesafe sessizce bozuk bir hizalama üretirdi.

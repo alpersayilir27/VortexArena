@@ -15,9 +15,11 @@ namespace VortexArena.Core.Editor
     /// <c>&lt;Mekan&gt;_DimensionMesh</c> kökü altında tek bir <c>Plane</c> çokgeni, her kolon için
     /// bir prizma ve iki kalibrasyon işaretçisi (<c>anchor_a</c> / <c>anchor_b</c>).
     /// <para>
-    /// <b>Maket oynanan geometri DEĞİLDİR</b> — kök <c>EditorOnly</c> etiketlidir, build'e
-    /// girmez. Arena sanatı bunun üstüne kurulur; duvar ÜRETİLMEZ (arenanın duvarları
-    /// environment'a aittir).
+    /// <b>Maket oynanan geometri DEĞİLDİR ama build'e GİRER:</b> ürettiği <c>anchor_a</c> /
+    /// <c>anchor_b</c> küpleri sahnenin kalibrasyon işaretçilerinin ta kendisidir ve çalışma
+    /// anında <see cref="ArenaCalibrator"/> onları arar. Oyunda çizilen yalnız işaretçilerdir;
+    /// taban ve kolon görselini <see cref="ArenaDimensionMesh"/> <c>Awake</c>'te kapatır. Arena
+    /// sanatı maketin üstüne kurulur; duvar ÜRETİLMEZ (arenanın duvarları environment'a aittir).
     /// </para>
     /// <para>
     /// ⚠️ <b>Maket SAHNEDEN BAĞIMSIZ üretilir:</b> kök sahne köküne, dünya orijininde, dönüşsüz ve
@@ -43,8 +45,8 @@ namespace VortexArena.Core.Editor
         private const string SharedMaterialPath = "Assets/Materials/M_Mekan.mat";
 
         // Kalibrasyon işaretçileri takım malzemeleriyle boyanır: A kırmızı, B mavi. Yeni asset
-        // üretmemek için mevcutlar kullanıldı — maket editör-only bir ölçü referansı, ve iki
-        // noktanın hangisi olduğunun BİR BAKIŞTA ayrılması sıranın (A→B) kendisinden önemli.
+        // üretmemek için mevcutlar kullanıldı — iki noktanın hangisi olduğunun BİR BAKIŞTA
+        // ayrılması sıranın (A→B) kendisinden önemli, operatör yanan işaretçiden doğrular.
         private const string MarkAMaterialPath = "Assets/Materials/M_TeamRed.mat";
         private const string MarkBMaterialPath = "Assets/Materials/M_TeamBlue.mat";
 
@@ -116,11 +118,11 @@ namespace VortexArena.Core.Editor
 
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox(
-                "Maket yalnız ÖLÇÜ REFERANSIDIR: taban + kolonlar + kalibrasyon işaretçileri " +
-                "(anchor_a kırmızı, anchor_b mavi) üretilir, duvar üretilmez ve kök " +
-                "'EditorOnly' etiketlendiği için build'e girmez. Köşeleri ProBuilder ile, " +
-                "işaretçileri sürükleyerek düzeltip 'DimensionMesh'i JSON'a Çevir' ile aynı " +
-                "dosyaya geri yazabilirsin.\n\n" +
+                "Maket taban + kolonlar + kalibrasyon işaretçileri (anchor_a kırmızı, anchor_b " +
+                "mavi) üretir; duvar üretmez. Build'e GİRER çünkü işaretçileri kalibrasyon " +
+                "çalışma anında kullanır — ama taban/kolon görseli oyunda çizilmez. Köşeleri " +
+                "ProBuilder ile, işaretçileri sürükleyerek düzeltip 'DimensionMesh'i JSON'a " +
+                "Çevir' ile aynı dosyaya geri yazabilirsin.\n\n" +
                 "Sahne köküne, dünya orijininde ve DÖNÜŞSÜZ kurulur — dosyadaki ölçüyü birebir " +
                 "görürsün. Arenanın üstüne oturtmak istersen elle taşı/döndür; geri okuma maketin " +
                 "kendi kökünü referans aldığı için bundan etkilenmez.",
@@ -214,7 +216,11 @@ namespace VortexArena.Core.Editor
             root.transform.localPosition = Vector3.zero;
             root.transform.localRotation = Quaternion.identity;
             root.transform.localScale = Vector3.one;
-            root.tag = ArenaDimensionMesh.EditorOnlyTag;
+
+            // Maket build'e girmek ZORUNDA (kalibrasyon işaretçileri onun altında). Tag açıkça
+            // sıfırlanır: eski bir sahnede 'EditorOnly' etiketli bir kök yeniden kullanılırsa
+            // maket build'den sessizce düşer ve arena sahada hiç hizalanmaz.
+            root.tag = "Untagged";
 
             var marker = Undo.AddComponent<ArenaDimensionMesh>(root);
             marker.Configure(result.VenueName, json, plan.defaultColumnHeight);
@@ -398,6 +404,12 @@ namespace VortexArena.Core.Editor
         /// aynen okuyor, yani Inspector'daki konum dosyadaki nokta ile birebir aynı görünmeli.
         /// Yarısı tabanın altında kalması bilinçlidir — nokta zemindedir.
         /// </para>
+        /// <para>
+        /// ⚠️ Bu sözleşme <b>çalışma anında da geçerlidir</b>: üretilen küp aynı zamanda sahnenin
+        /// kalibrasyon işaretçisidir ve <c>ArenaCalibrator.PlaceMarkerAtFloor</c> onu doğrudan
+        /// zemin noktasına oturtur. Tek sözleşme (transform konumu = zemin noktası) iki tarafta da
+        /// aynı; ikiye ayrılırsa maketteki küp ile hizalanan işaretçi asla üst üste gelmez.
+        /// </para>
         /// </summary>
         private static void CreateMark(
             string name,
@@ -411,8 +423,8 @@ namespace VortexArena.Core.Editor
             mark.name = name;
             Undo.RegisterCreatedObjectUndo(mark, "Kalibrasyon İşaretçisi");
 
-            // Collider maketin işi değil: maket build'e girmiyor ve fiziksel çarpışma free-roam'da
-            // zaten yok — sahnede yalnız ray-cast'leri yakalayan görünmez bir kutu bırakırdı.
+            // Collider maketin işi değil: free-roam'da fiziksel çarpışma zaten yok — geriye
+            // yalnız ray-cast'leri (silah nişanı dahil) yakalayan bir kutu kalırdı.
             var collider = mark.GetComponent<Collider>();
             if (collider != null)
             {

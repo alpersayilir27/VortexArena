@@ -78,6 +78,10 @@ namespace VortexArena.Core.Player
                  "+Y yukarı). YALNIZ yerel görünümü etkiler, ağa gitmez.")]
         [SerializeField] private Vector3 firstPersonOffset = new Vector3(0f, 0f, -0.06f);
 
+        [Tooltip("Gövde oranını oyuncunun boyuna sabitle (SDK Calibrate()). KAPALI olmalı — " +
+                 "gerekçe koddaki açıklamada.")]
+        [SerializeField] private bool calibrateBodyProportions;
+
         private OVRCameraRig _rig;
         private float _rigSearchTime = float.NegativeInfinity;
 
@@ -334,6 +338,24 @@ namespace VortexArena.Core.Player
         /// </summary>
         private void TickBodyCalibration()
         {
+            // ⚠️ VARSAYILAN KAPALI — açmadan önce aşağıdaki iki bedeli oku.
+            //
+            // 1) UZAK GÖVDEYİ BOZAR. İskelet blob'u SerializationCompressionType.High ile
+            //    kodlanıyor ve o kip eklemleri "joint lengths" ile sıkıştırıyor. Calibrate()
+            //    gönderenin gövde ORANLARINI değiştirdiği için, alıcının hedef iskeleti artık
+            //    gönderenin kodladığı uzunluklarla uyuşmaz — sonuç, uzak avatarda rastgele bozuk
+            //    duruşlardır. Kapalıyken herkes prefabın oranlarını kullanır ve iki uç eşleşir.
+            //
+            // 2) BİRİNCİ ŞAHIS OFSETİNİ DETERMİNİSTİK OLMAKTAN ÇIKARIR. Ölçü, arena hizalaması
+            //    tamamlandıktan BodyCalibrationDelaySeconds sonra o anki poza sabitleniyor;
+            //    oyuncu o sırada yürüyor ya da eğilmişse oran yanlış kilitlenir ve oturumun
+            //    kalanı boyunca öyle kalır. Sabit bir firstPersonOffset değişken bir hatayı
+            //    kapatamaz, bu yüzden önce bu kapatılır, ofset SONRA bir kez ayarlanır.
+            if (!calibrateBodyProportions)
+            {
+                return;
+            }
+
             int generation = ArenaCalibrator.CalibrationGeneration;
             if (generation != _calibrationGeneration)
             {
