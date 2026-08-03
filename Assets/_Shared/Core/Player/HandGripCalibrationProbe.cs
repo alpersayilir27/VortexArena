@@ -22,8 +22,14 @@ namespace VortexArena.Core.Player
     /// ⚠️ <b>O iki ad yalnız kelime SIRASIYLA ayrılır ve karıştırmak sessizce bind pozu ölçtürür:</b>
     /// ölçümün kaynağı <c>OVRHandVisual<i>Left</i></c>, elenen kopya ise <c>OVR<i>Left</i>HandVisual</c>.
     /// Kaynağı açık tutan şey <see cref="ControllerModelHider"/>'ın "Driven Hand Visuals"
-    /// listesidir: o listedeki el görselinin objesi AÇIK kalır (yalnız çizimi kesilir), yani
+    /// listesidir: o listedeki el görseline hiç dokunulmaz (oyuncunun gördüğü el odur), yani
     /// iskeleti sürülmeye devam eder. Bu probe'un çalışması için gizleyiciyi kapatmak GEREKMEZ.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Ön koşul: <c>OVRManager.controllerDrivenHandPosesType</c> <c>None</c> OLMAMALI</b>
+    /// (<c>VA_CameraRig</c> prefabında <c>Natural</c>). <c>None</c> iken kumanda tutulurken el
+    /// verisi hiç üretilmez, iskelet bind pozunda kalır ve prob <b>hatasız ama yanlış</b> bir
+    /// sabit basar.
     /// </para>
     /// <para>
     /// <b>Kullanımı:</b> <c>VA_CameraRig</c> prefabında durur, iki kumanda da normal tutulurken bir
@@ -69,10 +75,13 @@ namespace VortexArena.Core.Player
                         "[HandGripCalibrationProbe] Ölçüm yapılamadı: BB rig'inin kumandadan sürülen " +
                         "el iskeleti bulunamadı ya da sürülmüyor (OVRHandVisualLeft/Right → " +
                         "OculusHand_* → b_*_wrist).\n" +
-                        "⚠️ EN OLASI SEBEP: o el görseli KAPALI ve kapalı iskeletin kemikleri " +
-                        "SÜRÜLMEZ. Oyuncunun kendi el görselinin objesi normalde açık tutulur; " +
-                        "kapanmışsa adı ControllerModelHider'ın 'Driven Hand Visuals' listesinden " +
-                        "düşmüş demektir (liste tam ad eşleştirir). ⚠️ Listeye benzer adlı OVRLeftHandVisual/" +
+                        "⚠️ EN OLASI SEBEP: OVRManager > Controller Driven Hand Poses Type = None " +
+                        "(VA_CameraRig prefabında Natural olmalı) — kapalıyken kumanda tutulurken " +
+                        "el verisi hiç üretilmez. İkinci sebep: o el görseli KAPALI ve kapalı " +
+                        "iskeletin kemikleri SÜRÜLMEZ; oyuncunun kendi el görselinin objesi " +
+                        "normalde açık tutulur, kapanmışsa adı ControllerModelHider'ın 'Driven " +
+                        "Hand Visuals' listesinden düşmüş demektir (liste tam ad eşleştirir). " +
+                        "⚠️ Listeye benzer adlı OVRLeftHandVisual/" +
                         "OVRRightHandVisual'ı YAZMA — onlar mesafeli kavrama hayaletidir, bind " +
                         "pozunda dururlar. (Kapalı iskeleti ölçmek bind pozunu ölçmek olurdu; bu " +
                         "yüzden burada sessizce devam edilmiyor.)", this);

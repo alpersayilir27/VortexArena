@@ -709,7 +709,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: be3ebb6547662534aaef8337c5627f3b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.Movement::Meta.XR.Movement.Retargeting.MetaSourceDataProvider
-  _providedSkeletonType: 0
+  _providedSkeletonType: 1
   _validBodyTrackingDelay: 0.25
   _debugDrawSkeleton: 0
   _debugSkeletonColor: {r: 1, g: 1, b: 1, a: 1}

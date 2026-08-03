@@ -5267,7 +5267,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponFrame
   isFrameVisible: 0
   frameVisual: {fileID: 103604405391163513}
-  maxGrabDistance: 2.5
+  maxGrabDistance: 4
   rayColor: {r: 0.35, g: 0.7, b: 1, a: 0.9}
   rayWidth: 0.006
   framePadding: 0.06
@@ -6509,7 +6509,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponFrame
   isFrameVisible: 0
   frameVisual: {fileID: 1306225733880415737}
-  maxGrabDistance: 2.5
+  maxGrabDistance: 4
   rayColor: {r: 0.35, g: 0.7, b: 1, a: 0.9}
   rayWidth: 0.006
   framePadding: 0.06
@@ -6884,7 +6884,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponFrame
   isFrameVisible: 0
   frameVisual: {fileID: 2164998931967090472}
-  maxGrabDistance: 2.5
+  maxGrabDistance: 4
   rayColor: {r: 0.35, g: 0.7, b: 1, a: 0.9}
   rayWidth: 0.006
   framePadding: 0.06
@@ -13772,7 +13772,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponFrame
   isFrameVisible: 0
   frameVisual: {fileID: 3040865898845149778}
-  maxGrabDistance: 2.5
+  maxGrabDistance: 4
   rayColor: {r: 0.35, g: 0.7, b: 1, a: 0.9}
   rayWidth: 0.006
   framePadding: 0.06
@@ -24812,7 +24812,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponFrame
   isFrameVisible: 0
   frameVisual: {fileID: 3607269610677388587}
-  maxGrabDistance: 2.5
+  maxGrabDistance: 4
   rayColor: {r: 0.35, g: 0.7, b: 1, a: 0.9}
   rayWidth: 0.006
   framePadding: 0.06
@@ -57499,7 +57499,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1c7490561178280499e244c777d8310b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Weapon
-  definition: {fileID: 11400000, guid: 3e86e22f37503ba4fafb3d09d30dffb2, type: 2}
+  definition: {fileID: 11400000, guid: d42e84326e961f542ba86d57e9a71d20, type: 2}
   muzzle: {fileID: 5755452077594720367}
   modelPivot: {fileID: 7549234021980279789}
   grabbable: {fileID: 710030446924025079}
@@ -58130,7 +58130,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponFrame
   isFrameVisible: 0
   frameVisual: {fileID: 7020239219180057262}
-  maxGrabDistance: 2.5
+  maxGrabDistance: 4
   rayColor: {r: 0.35, g: 0.7, b: 1, a: 0.9}
   rayWidth: 0.006
   framePadding: 0.06

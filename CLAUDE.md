@@ -76,7 +76,7 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   **`Materials/Resources/M_BaseZoneXRay.mat`** koddan `Resources.Load` ile alınır ve hiçbir
   sahneden referansı yoktur → `Resources/` altından ÇIKARILMAZ, yoksa shader build'den strip
   edilir ve taban şeridi Quest'te pembe çizilir),
-  `Environments/`, `Avatars/` (gövde avatarı modeli, birinci şahıs el meshi ve yerel gövde
+  `Environments/`, `Avatars/` (gövde avatarı modeli ve yerel gövde
   prefabı. Yerel gövde (`Avatars/Resources/LocalBodyAvatar.prefab`) ile uzak avatar
   (`_Shared/App/Prefabs/RemoteAvatar.prefab`) **iki AYRI prefabtır**; ikisi de aynı FBX'i
   (`ThirdPartyPackages/MixamoCharacters/Ch15_nonPBR.fbx`) örnekler, **aynı retarget config'ini ve
@@ -86,15 +86,13 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   **`LocalBodyAvatar.prefab`** kendini önyükleyen tekil tarafından
   `Resources.Load` ile yüklendiği için `Resources/` altından ÇIKARILMAZ ve ADI DEĞİŞMEZ —
   taşınırsa oyuncu ağa gövde göndermez, yani onu kimse göremez.
-  ⚠️ **`Ch15_FirstPersonHands.mesh`** (oyuncunun gözlükte gördüğü eller) `Resources/` altında
-  DEĞİLDİR ve konmaz — koddan yüklenmez, prefab referansıyla gelir; ama **silinirse/taşınırsa
-  oyuncu HİÇBİR ŞEY görmez** (gövde zaten çizilmiyor). Yeniden üretimi
-  `Tools > VortexArena > Avatars > Build First-Person Hands Mesh`.
+  ⚠️ **Yerel gövde HİÇ ÇİZİLMEZ ve ona görsel iş yaptırılmaz** — oyuncunun gözlükte gördüğü eller
+  rig'in sentetik elleridir (`VA_CameraRig`). Prefab yalnız ağ kaynağıdır; "görünmüyorsa
+  gereksizdir" refleksi tam da bu yüzden tehlikelidir, sileni etkilemez ama başkaları onu göremez.
   ⚠️ **`LocalBodyAvatar.calibrateBodyProportions` KAPALI tutulur** — açılırsa gönderenin gövde
-  oranı değişir ve uzak avatar bozuk duruşlara girer. Bu bilinçli bir takas: kapalıyken avatar
-  oyuncunun değil MODELİN kol uzunluğunu kullanır, yani oyuncu kendi elini gerçek elinden birkaç
-  santim kaymış görebilir. Kayma pahasına uzak taraf doğru tutulur; anahtar bu yüzden "eli
-  düzeltmek için" açılMAZ → `Docs/Sistem-Ozeti.md` §7),
+  oranı değişir ve uzak avatar bozuk duruşlara girer. Anahtarın yerel karşılığı YOKTUR (gövde
+  çizilmiyor, eller rig'den geliyor), yani açmanın kazancı yok bedeli var
+  → `Docs/Sistem-Ozeti.md` §7),
   `Data/` (**`Data/Resources/GameCatalog.asset`** —
   admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ),
   `Scenes/` (Boot, Lobby),
@@ -145,13 +143,16 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   **`VA_ArenaBoundary`** (`ArenaBoundary` = muhafaza; ölçüsü **zorunlu** olarak bağlı boyut
   dosyasından gelir — `dimensionsJson` boşsa muhafaza hata basıp kendini kapatır),
   **`VA_CameraRig`** (kamera rig'i + `OVRComprehensiveInteractionRig` + `ControllerModelHider`,
-  tracking origin `Stage`). ⚠️ **Oyuncu kendi gövdesini/kollarını GÖRMEZ, yalnız KENDİ
-  KARAKTERİNİN ellerini görür:** `LocalBodyAvatar` (kendini önyükleyen tekil, sahneye ve rig'e
-  KONMAZ) hem ağ kaynağıdır hem o ellerin kaynağı — gövde renderer'ları kapalı, gövde meshinden
-  kesilmiş el meshi açık sürülür; obje YIKILMAZ, yoksa diğer oyuncular onu göremez. Kumanda
-  modelleri, mesafeli kavramanın hayalet elleri **ve rig'in kendi ISDK el görselleri**
-  `ControllerModelHider` ile çizilmez (ikisi birden çizilse oyuncu iç içe iki el görürdü); el
-  görsellerinin yalnız Renderer'ı kapatılır, objeleri açık kalır → `Docs/Sistem-Ozeti.md` §4.
+  tracking origin `Stage`). ⚠️ **Oyuncu kendi gövdesinden HİÇBİR ŞEY görmez; gördüğü eller
+  RİG'İN SENTETİK ELLERİDİR** (`OVRHandVisualLeft/Right` → ISDK `SyntheticHand`).
+  `LocalBodyAvatar` (kendini önyükleyen tekil, sahneye ve rig'e KONMAZ) yalnız **ağ kaynağıdır**,
+  tüm renderer'ları kapalıdır; obje YIKILMAZ, yoksa diğer oyuncular onu göremez.
+  ⚠️ **Sentetik ellerin görünmesi `OVRManager.controllerDrivenHandPosesType`'a bağlıdır**
+  (prefabda `Natural`) — `None` yapılırsa kumanda tutulurken el verisi hiç üretilmez, `HandVisual`
+  mesh'i kendi kapatır ve oyuncu HİÇBİR el görmez. Kumanda modelleri ve mesafeli kavramanın
+  hayalet elleri `ControllerModelHider` ile gizlenir; ⚠️ **oyuncunun kendi el görsellerine
+  DOKUNULMAZ** (`drivenHandVisuals` listesi tam ad eşleştirir — liste saparsa gerçek eller de
+  hayalet sayılıp kapanır ve oyuncu ellerini kaybeder) → `Docs/Sistem-Ozeti.md` §4.
   ⚠️ **Karakter rig'in (ya da başka bir şeyin) ALTINA asılmaz** — retarget çıktısı dünya
   uzayındadır, dolu bir ebeveyn dönüşümü ikinci kez uygulanır. Uzak tarafta kökü
   `ArenaNetCharacterBehaviour` açıkça yazar → `Docs/Sistem-Ozeti.md` §7, "retarget avatarı hareket
@@ -433,11 +434,24 @@ altında sub-emitter'lı namlu dumanı (`Smoke`), ve kalibreye göre (762x39/556
 TAŞIMAZ** — `Muzzle` ile aynı kural; yalnız hiç yoksa kaba bir başlangıçla üretilir (gerekçe
 `Docs/Sistem-Ozeti.md` §7). Gerekiyorsa
 `ModeDefinition.loadout`'a eklenir. Kavrama **soketi** kurulum istemez: araç prefaba
-`ItemGripSockets`'ı koyar ve `GrabInteractable`'ın filtre listesine bağlar — ⚠️ **`WPN_*` KÖKÜNE
-`DistanceGrabInteractable` GERİ EKLENMEZ** (araç onu bilerek siler: kökte mesafeden kavrama soket
-tasarımının zıddıdır ve filtre hover'ı kesmediği için yalan söyleyen bir vurgu bırakırdı →
+`ItemGripSockets`'ı koyar ve **İKİ** yakın-kavrama bileşeninin birden filtre listesine bağlar —
+`GrabInteractable` (kumanda hattı) ve `HandGrabInteractable` (el hattı; ikincisini araç üretir).
+⚠️ **İkisi birden tutulur ve biri silinmez:** hangisinin koşacağını ISDK rig'i "el izleniyor mu"
+sorusuna göre seçiyor (`OVRManager.controllerDrivenHandPosesType`) — tek hat bırakmak o anahtarın
+her değişiminde silahı sessizce kavranamaz yapar → `Docs/Sistem-Ozeti.md` §7.
+⚠️ **`WPN_*` KÖKÜNE mesafeden kavrama GERİ EKLENMEZ** (araç `DistanceGrabInteractable` ve
+`DistanceHandGrabInteractable`'ı bilerek siler: kökte mesafeden kavrama soket
+tasarımının zıddıdır ve soket kapısı el çözülemediğinde fail-open olduğu için silah bazı
+oturumlarda odanın öbür ucundan kavranabilir kalırdı →
 `Docs/Sistem-Ozeti.md` §7). Yasak yalnız kök içindir: **çerçeve prefabında (`VA_WeaponFrame`)
-mesafeden kavrama ZORUNLUDUR** — silah oradan alınır. Çerçeve adımı elle iş istemez, araç her
+mesafeden kavrama ZORUNLUDUR ve orada da İKİ hat birden durur** — silah oradan alınır.
+⚠️ **Çerçevenin el hattında `Hand Alignment` = `None`'dır ve öyle kalır** (varsayılan
+`AlignOnGrab`): çerçeve bir kavrama hedefi değil bir SEÇİM tetikleyicisidir, `AlignOnGrab`
+sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silahta görür
+→ `Docs/Sistem-Ozeti.md` §7.
+⚠️ **`HandGrabPose` çocuğu eklenmez:** poz listesi boşken ISDK kavramayı collider mesafesine göre
+skorlar ve eli yeniden pozlamaz (el kumanda duruşunda kalır, bugünkü his korunur); poz eklemek
+elin silaha sarılmasını sağlar ve ayrı bir iştir. Çerçeve adımı elle iş istemez, araç her
 `WPN_*` köküne bir `VA_WeaponFrame` örneği koyar (idempotent). **Çözülme efekti de kurulum
 istemez:** araç aynı köke `SimpleWeaponDissolve` koyup `_Shared/Materials/DissolveEffect.mat`'i
 bağlar (yalnız alan BOŞSA — silaha özel materyal bağlanmışsa ezilmez, ikinci seçenek
@@ -456,7 +470,8 @@ her sahneye `BaseZone` gibi bir örnek olarak koymak yerleşimi tek yerden düze
 ⚠️ **Bu kaynakta sahnede hangi silahın duracağını `ModeDefinition.loadout` DEĞİL arena belirler** —
 moda silah eklemek arenaları değiştirmez, yeni silah her arenaya tek tek konur; `loadout` yalnız
 `random` modlarında (FFA, lobi) okunur.
-Sahnedeki silah **çerçeve kaynağıdır**: alınmaz ve TÜKENMEZ, ≤2 m'den seçilince ele klonlanır;
+Sahnedeki silah **çerçeve kaynağıdır**: alınmaz ve TÜKENMEZ, `WeaponFrame.maxGrabDistance`
+kadarından seçilince ele klonlanır (menzilin tavanı ISDK'nın 5 m'lik mesafe-kavrama konisidir);
 çerçeve görselini `WeaponFrame.isFrameVisible` ile **örnek başına** (sahneden sahneye) aç/kapat →
 `Docs/Gelistirici/Yemek-Kitabi.md`.
 **Sunucu tarafında iş YOKTUR** ve export
@@ -496,7 +511,6 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir) |
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
 | `… > Weapons > Write Grip Sockets To Definition` | Sahnedeki kavrama işaretçileri sürüklenip ayarlandı → `WD_*.asset`'e yazar (ters/düz bileşimi araç yapar). Yalnız BULUNAN işaretçinin alanlarına dokunur |
-| `… > Avatars > Build First-Person Hands Mesh` | Karakter modeli değişti ya da el meshi yok/bağlı değil → gövde avatarının meshinden yalnız el geometrisini keser, `_Shared/Avatars/<Model>_FirstPersonHands.mesh` olarak yazar ve `Resources/LocalBodyAvatar.prefab`'ın `FirstPersonHands` renderer'ına bağlar. İdempotent, GUID korur. **Arena başına değil, karakter modeli başına bir kez.** ⚠️ Atlanırsa oyuncu gözlükte HİÇBİR ŞEY görmez (gövde zaten çizilmiyor) |
 | `… > Development > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek) |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` | Sahneye ilgili bileşeni + kurulumunu ekler |
 | `GameObject > VortexArena > Grip Socket (Primary/Secondary)` | Seçili silahın altına kavrama işaretçisi üretir (mevcut değerlerden başlatır; aynı türden ikincisini üretmez) |

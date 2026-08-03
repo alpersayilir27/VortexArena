@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Oculus.Interaction;
+using Oculus.Interaction.HandGrab;
 using Oculus.Interaction.Input;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -16,7 +17,8 @@ namespace VortexArena.Core.Combat
     /// ve grip'e basılı tutulan her elde loadout'tan rastgele bir silah durur;
     /// bırakılınca <b>yok olur</b>, tekrar basınca YENİSİ gelir (<see cref="WeaponGrantKind.Disposable"/>).</item>
     /// <item><b>Çerçeve</b> (<see cref="WeaponFrame"/>, <see cref="ModeWeaponSource.WeaponCanvas"/>): silah
-    /// sahnede çerçevesinde sabit durur, oyuncu onu ≤2 m'den uzaktan SEÇER
+    /// sahnede çerçevesinde sabit durur, oyuncu onu <see cref="WeaponFrame"/>'in
+    /// <c>maxGrabDistance</c>'ı kadar uzaktan SEÇER
     /// (<see cref="SelectWeapon"/>); grip'e basınca seçilen silahın KLONU eline gelir, bırakınca
     /// <b>yalnız gizlenir</b> — aynı örnek aynı mermiyle geri gelir
     /// (<see cref="WeaponGrantKind.Persistent"/>). Oyuncu başına TEK silah.</item>
@@ -435,9 +437,13 @@ namespace VortexArena.Core.Combat
             for (int i = 0; i < interactables.Length; i++)
             {
                 MonoBehaviour behaviour = interactables[i];
-                // ISDK'nın kavrama yüzeyi: Grabbable + (Distance)GrabInteractable. Weapon'ın
-                // kendisi ve ses/efekt bileşenleri elbette AÇIK kalır.
-                if (behaviour is Grabbable || behaviour is GrabInteractable || behaviour is DistanceGrabInteractable)
+                // ISDK'nın kavrama yüzeyi: Grabbable + kumanda hattı ((Distance)GrabInteractable)
+                // + el hattı ((Distance)HandGrabInteractable). Weapon'ın kendisi ve ses/efekt
+                // bileşenleri elbette AÇIK kalır. ⚠️ İki hat da kapatılır: hangisinin koşacağını
+                // ISDK rig'i seçiyor, biri unutulursa verilen silah kavranabilir kalırdı.
+                if (behaviour is Grabbable || behaviour is GrabInteractable ||
+                    behaviour is DistanceGrabInteractable ||
+                    behaviour is HandGrabInteractable || behaviour is DistanceHandGrabInteractable)
                 {
                     behaviour.enabled = false;
                 }
@@ -733,14 +739,15 @@ namespace VortexArena.Core.Combat
             for (int i = 0; i < behaviours.Length; i++)
             {
                 MonoBehaviour behaviour = behaviours[i];
-                if (behaviour is Grabbable || behaviour is GrabInteractable || behaviour is ItemGripSockets)
+                if (behaviour is Grabbable || behaviour is GrabInteractable ||
+                    behaviour is HandGrabInteractable || behaviour is ItemGripSockets)
                 {
                     behaviour.enabled = true;
                 }
-                else if (behaviour is DistanceGrabInteractable)
+                else if (behaviour is DistanceGrabInteractable || behaviour is DistanceHandGrabInteractable)
                 {
                     // Mesafeden kavrama soket tasarımının zıddıdır (Docs/Sistem-Ozeti.md §7);
-                    // elde duran silahta hiç açılmaz.
+                    // elde duran silahta hiç açılmaz — iki hat için de geçerli.
                     behaviour.enabled = false;
                 }
             }

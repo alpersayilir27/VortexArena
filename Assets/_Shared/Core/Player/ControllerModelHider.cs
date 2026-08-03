@@ -4,48 +4,44 @@ using UnityEngine;
 namespace VortexArena.Core.Player
 {
     /// <summary>
-    /// Rig'in GÖRSEL temsillerini ayıklar: <b>oyuncu gözlükte yalnız kendi karakterinin ellerini
-    /// görür</b> — kumanda modeli çizilmez, rig'in ISDK el görselleri ("hayalet el") çizilmez,
-    /// gövde/kol hiç yoktur.
+    /// Rig'in GÖRSEL temsillerini ayıklar: <b>oyuncu gözlükte yalnız rig'in sentetik ellerini
+    /// görür</b> — kumanda modeli çizilmez, mesafeli kavramanın hayalet elleri çizilmez, gövde/kol
+    /// hiç yoktur.
     /// <para>
-    /// ⚠️ <b>Oyuncunun gördüğü el buradan GELMEZ:</b> o el <see cref="LocalBodyAvatar"/>'ın gövde
-    /// meshinden kesilmiş el meshidir. Bu bileşenin tek işi onun ÜSTÜNE binen rig görsellerini
-    /// susturmaktır — ikisi birden çizilirse oyuncu iç içe geçmiş iki el görür.
+    /// ⚠️ <b>Oyuncunun gördüğü el buradan GELMEZ ve buraya DOKUNULMAZ:</b> o el ISDK'nın sentetik
+    /// elidir (<c>OVRHandVisualLeft</c>/<c>OVRHandVisualRight</c> → <c>SyntheticHandData</c>) ve
+    /// kendi <c>HandVisual</c>'ı tarafından sürülür. Bu bileşenin tek işi onun ÜSTÜNE binen ikinci
+    /// görselleri susturmaktır — hepsi birden çizilirse oyuncu iç içe geçmiş eller ve elinde
+    /// duran bir kumanda modeli görür.
     /// </para>
     /// <para>
-    /// <b>İki ayrı susturma yolu vardır ve hangisinin seçildiği sonucu değiştirir:</b>
-    /// <list type="bullet">
-    /// <item><b>Obje kapatılır</b> (<c>SetActive(false)</c>): kumanda modelleri
-    /// (<see cref="OVRControllerHelper"/>) ve mesafeli kavramanın hayalet el reticle'ları. Bunlar
-    /// saf görseldir, kapatmakla kaybedilen bir şey yoktur.</item>
-    /// <item><b>Yalnız Renderer'ı kapatılır</b>: oyuncunun kendi el görselleri
-    /// (<see cref="drivenHandVisuals"/>). Obje AÇIK bırakılır çünkü <c>HandVisual</c> kapanırsa el
-    /// iskeleti <b>sürülmeyi bırakır</b> ve o iskeletten ölçüm alan
-    /// <see cref="HandGripCalibrationProbe"/> sessizce bind pozunu ölçmeye başlar. Çizim
-    /// bakımından iki yol da aynı sonucu verir; fark yalnız iskeletin canlı kalmasıdır.</item>
-    /// </list>
+    /// ⚠️ <b>Sentetik elin görünmesi bu bileşene DEĞİL, tek bir rig ayarına bağlıdır:</b>
+    /// <c>OVRManager.controllerDrivenHandPosesType</c> (<c>VA_CameraRig</c> prefabında
+    /// <c>Natural</c>). <c>None</c> olursa kumanda tutulurken el verisi hiç üretilmez,
+    /// <c>HandVisual</c> mesh'ini kendi kapatır ve oyuncu HİÇBİR el görmez — bu bileşende hiçbir
+    /// şey değişmemiş olsa bile.
     /// </para>
     /// <para>
-    /// ⚠️ <b>ADLAR NEREDEYSE AYNI — yalnız kelime SIRASI farklı.</b> Rig'de iki ayrı aile var:
+    /// ⚠️ <b>ADLAR NEREDEYSE AYNI — yalnız kelime SIRASI farklı.</b> Rig'de iki ayrı el ailesi var:
     /// <list type="bullet">
-    /// <item><c>OVRHandVisualLeft</c> / <c>OVRHandVisualRight</c> — <b>oyuncunun eli</b>, etkileşim
-    /// rig'inin doğrudan çocuğu. Renderer'ı kapatılır, kendisi açık kalır.</item>
+    /// <item><c>OVRHandVisualLeft</c> / <c>OVRHandVisualRight</c> — <b>oyuncunun gördüğü el</b>,
+    /// etkileşim rig'inin doğrudan çocuğu. Hiç dokunulmaz.</item>
     /// <item><c>OVRLeftHandVisual</c> / <c>OVRRightHandVisual</c> — mesafeli kavrama hayaleti,
-    /// <c>…/DistanceHandGrabInteractor/Visuals/…Reticle/…Synthetic/</c> altında. Objesi kapatılır.</item>
+    /// <c>…/DistanceHandGrabInteractor/Visuals/…Reticle/…Synthetic/</c> altında. Objesi
+    /// kapatılır.</item>
     /// </list>
-    /// Karıştırmanın bedeli görünmez: iki el de zaten çizilmez, ama gerçek el KAPANDIĞI için
-    /// kalibrasyon probu yanlış ölçer. Bu yüzden eşleşme <b>tam ad</b> iledir (içerir DEĞİL):
-    /// "contains" iki aileyi de yakalardı.
+    /// İkisinin de bileşen tipi aynıdır (<c>HandVisual</c>), yani tip onları ayıramaz; ayıran tek
+    /// şey addır. Bu yüzden eşleşme <b>tam ad</b> iledir (içerir DEĞİL): "contains" iki aileyi de
+    /// yakalar, gerçek eller de kapatılır ve <b>oyuncu ellerini tümden kaybeder</b>. Ad listesi
+    /// hiçbir şeyle eşleşmezse <see cref="ErrorNoDrivenHandVisual"/> bunu açıkça bildirir.
     /// </para>
     /// <para>
-    /// <b>Neden isim deseni DEĞİL bileşen tipi (kapatılanlar için):</b> önceki sürüm ada bakıyordu
-    /// (<c>questController_animrig</c>, …) ve deseni iki kez tutmadı. Ölçüldü ki
-    /// <c>questController_animrig</c> 24 objeyle eşleşiyor ama <b>hiçbiri aktif değil</b> — o
-    /// Quest 1 / Rift S varyantı. Quest 3'te aktif olan varyant <c>MetaQuestTouchPlus_Left/Right</c>
-    /// ve desene HİÇ uymuyordu. GameObject adı donanım varyantına göre değişir; <b>bileşen tipi
-    /// değişmez</b>. Ad yalnız "hangi el BİZİM" sorusunda kullanılır ve o soruyu tip cevaplayamaz
-    /// (altı objenin de bileşeni aynı) — bu yüzden ad tutmazsa
-    /// <see cref="WarnNoDrivenHandVisual"/> uyarır.
+    /// <b>Neden isim deseni DEĞİL bileşen tipi (kapatılanlar için):</b> <c>questController_animrig</c>
+    /// gibi bir ad deseni 24 objeyle eşleşiyor ama <b>hiçbiri aktif değil</b> — o Quest 1 / Rift S
+    /// varyantı. Quest 3'te aktif olan varyant <c>MetaQuestTouchPlus_Left/Right</c> ve desene HİÇ
+    /// uymuyor. GameObject adı donanım varyantına göre değişir; <b>bileşen tipi değişmez</b>. Ad
+    /// yalnız "hangi el OYUNCUNUN" sorusunda kullanılır ve o soruyu tip cevaplayamaz (altı objenin
+    /// de bileşeni aynı).
     /// </para>
     /// <para>
     /// ⚠️ <b>DOKUNULMAYANLAR</b> — kavrama/etkileşim bunlara bağlıdır, kapatılırsa oyun kırılır:
@@ -54,15 +50,13 @@ namespace VortexArena.Core.Player
     /// </para>
     /// <para>
     /// Her karede yeniden gizlenir: bu görseller kumanda bırakılıp tutulduğunda Meta tarafından
-    /// yeniden AKTİFLEŞTİRİLİYOR — tek seferlik gizleme kalıcı olmuyor. Aynısı el görsellerinin
-    /// Renderer'ı için de uygulanır: obje geri açıldığında ISDK'nın renderer'ı da tazelemesi
-    /// ihtimaline karşı kapatma her kare tekrarlanır (kapalı bir renderer'ı tekrar kapatmak bedava).
+    /// yeniden AKTİFLEŞTİRİLİYOR — tek seferlik gizleme kalıcı olmuyor.
     /// </para>
     /// </summary>
     public class ControllerModelHider : MonoBehaviour
     {
         /// <summary>
-        /// Kapatılacak ikinci tip: ISDK'nın el görseli.
+        /// Taranacak ikinci tip: ISDK'nın el görseli.
         /// <para>⚠️ Tip <b>doğrudan yazılamaz</b> (<c>Oculus.Interaction.Input.HandVisual</c>):
         /// yazmak Core asmdef'ine bir <c>Oculus.Interaction</c> referansı eklemeyi gerektirirdi.
         /// Bunun yerine <see cref="MonoBehaviour"/> taranıp tip ADI karşılaştırılır — bu ad
@@ -82,9 +76,8 @@ namespace VortexArena.Core.Player
         [Tooltip("Rig kökünün adı. Bulunamazsa OVRCameraRig tipinden aranır — bu alan yalnız hızlandırıcıdır.")]
         [SerializeField] private string rigRootName = "VA_CameraRig";
 
-        [Tooltip("OYUNCUNUN KENDİ elleri: bu adlardaki el görselleri ÇİZİLMEZ ama objeleri açık " +
-                 "kalır, çünkü iskeletlerinden kalibrasyon probu ölçüm alıyor (tam ad eşleşmesi). " +
-                 "Benzer adlı hayalet eller için sınıf açıklamasına bak.")]
+        [Tooltip("OYUNCUNUN GÖRDÜĞÜ eller: bu adlardaki el görsellerine HİÇ dokunulmaz (tam ad " +
+                 "eşleşmesi). Benzer adlı hayalet eller için sınıf açıklamasına bak.")]
         [SerializeField] private string[] drivenHandVisuals =
         {
             "OVRHandVisualLeft",
@@ -97,17 +90,13 @@ namespace VortexArena.Core.Player
         /// <summary>Objesi tümden kapatılacak görsel kökler (kumanda modelleri + hayalet eller).</summary>
         private readonly List<GameObject> targets = new List<GameObject>(16);
 
-        /// <summary>Yalnız çizimi kesilecek el görselleri — objeleri açık kalır (gerekçe sınıf
-        /// açıklamasında). Renderer'lar bir kez toplanır, her kare yeniden aranmaz.</summary>
-        private readonly List<Renderer> drivenHandRenderers = new List<Renderer>(8);
-
         /// <summary>Zaten loglanmışlar: gizleme her kare TEKRARLANIR ama log bir kez basılır.</summary>
         private readonly HashSet<GameObject> logged = new HashSet<GameObject>();
 
         private float rescanTimer = float.NegativeInfinity;
 
-        /// <summary>"Sürülen el görseli bulunamadı" uyarısı oturum başına bir kez.</summary>
-        private static bool warnedNoDrivenHandVisual;
+        /// <summary>"Oyuncunun eli bulunamadı" hatası oturum başına bir kez.</summary>
+        private static bool erroredNoDrivenHandVisual;
 
         private void LateUpdate()
         {
@@ -129,7 +118,6 @@ namespace VortexArena.Core.Player
 
                 rigRoot = go.transform;
                 targets.Clear();
-                drivenHandRenderers.Clear();
                 rescanTimer = float.NegativeInfinity; // yeni rig: hemen tara
             }
 
@@ -164,27 +152,11 @@ namespace VortexArena.Core.Player
                     Debug.Log($"[ControllerModelHider] Gizlendi: '{target.name}' ({parentName} altında).", this);
                 }
             }
-
-            // Oyuncunun kendi el görselleri: obje AÇIK kalır, yalnız çizim kesilir.
-            for (int i = drivenHandRenderers.Count - 1; i >= 0; i--)
-            {
-                Renderer renderer = drivenHandRenderers[i];
-                if (renderer == null)
-                {
-                    drivenHandRenderers.RemoveAt(i);
-                    continue;
-                }
-
-                if (renderer.enabled)
-                {
-                    renderer.enabled = false;
-                }
-            }
         }
 
         /// <summary>Rig altındaki gizlenecek görselleri yeniden bulur (tek geçişte iki tip birden).
-        /// <para>Oyuncunun kendi elleri ayrı listeye alınır: objeleri kapatılmaz, yalnız
-        /// Renderer'ları toplanır.</para></summary>
+        /// <para>Oyuncunun gördüğü el görselleri listeye HİÇ alınmaz — ne objesine ne
+        /// Renderer'ına dokunulur.</para></summary>
         private void Rescan()
         {
             rigRoot.GetComponentsInChildren(true, scanBuffer);
@@ -214,8 +186,7 @@ namespace VortexArena.Core.Player
                     if (IsPlayerHand(target.name))
                     {
                         handVisualsDriven++;
-                        CollectDrivenRenderers(target);
-                        continue; // oyuncunun kendi eli: objesi açık kalır, yalnız çizimi kesilir
+                        continue; // oyuncunun gördüğü el: hiç dokunulmaz
                     }
                 }
 
@@ -227,26 +198,11 @@ namespace VortexArena.Core.Player
 
             if (handVisualsSeen > 0 && handVisualsDriven == 0)
             {
-                WarnNoDrivenHandVisual();
+                ErrorNoDrivenHandVisual();
             }
         }
 
-        /// <summary>Bir el görselinin altındaki tüm Renderer'ları çizim-kesme listesine alır.
-        /// <para>Alt ağaç taranır çünkü <c>HandVisual</c> bileşeni ile mesh'i taşıyan obje aynı
-        /// olmak zorunda değil.</para></summary>
-        private void CollectDrivenRenderers(GameObject handVisual)
-        {
-            Renderer[] renderers = handVisual.GetComponentsInChildren<Renderer>(true);
-            for (int i = 0; i < renderers.Length; i++)
-            {
-                if (renderers[i] != null && !drivenHandRenderers.Contains(renderers[i]))
-                {
-                    drivenHandRenderers.Add(renderers[i]);
-                }
-            }
-        }
-
-        /// <summary>Bu el görseli oyuncunun KENDİ eli mi — <b>tam ad</b> eşleşmesi (gerekçe sınıf
+        /// <summary>Bu el görseli oyuncunun gördüğü el mi — <b>tam ad</b> eşleşmesi (gerekçe sınıf
         /// açıklamasında: hayalet ellerin adı yalnız kelime sırasıyla ayrılıyor).</summary>
         private bool IsPlayerHand(string objectName)
         {
@@ -267,26 +223,27 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Rig'de el görseli var ama hiçbiri listeyle eşleşmedi → hepsi tümden kapatıldı.
-        /// <para>⚠️ <b>Oyunun görüntüsü bundan etkilenmez</b> (oyuncunun elleri zaten
-        /// <see cref="LocalBodyAvatar"/>'dan geliyor); kaybedilen şey el iskeletinin sürülmesidir ve
-        /// tek kurbanı <see cref="HandGripCalibrationProbe"/>'dur. Bu yüzden hata değil UYARI:
-        /// sessiz kalmak probu sessizce bind pozu ölçer hâle getirirdi.</para>
+        /// Rig'de el görseli var ama hiçbiri listeyle eşleşmedi → <b>hepsi kapatıldı, oyuncu
+        /// ellerini tümden kaybetti.</b>
+        /// <para>⚠️ Uyarı değil HATA: oyuncunun ekranında çizilen tek el bunlar, yani belirtisi
+        /// "izleme bozuk / eller kayboldu" diye okunur — oysa tek eksik, Meta SDK'sının
+        /// değiştirdiği bir GameObject adıdır.</para>
         /// </summary>
-        private void WarnNoDrivenHandVisual()
+        private void ErrorNoDrivenHandVisual()
         {
-            if (warnedNoDrivenHandVisual)
+            if (erroredNoDrivenHandVisual)
             {
                 return;
             }
 
-            warnedNoDrivenHandVisual = true;
-            Debug.LogWarning(
+            erroredNoDrivenHandVisual = true;
+            Debug.LogError(
                 "[ControllerModelHider] Rig'de el görseli bulundu ama hiçbiri 'Driven Hand " +
-                "Visuals' ile eşleşmedi — hepsi tümden kapatıldı. Oyunun görüntüsü değişmez, ama " +
-                "el iskeleti artık sürülmediği için HandGripCalibrationProbe bind pozunu ölçer. " +
-                "Meta SDK'sı objeleri yeniden adlandırmış olabilir: rig altındaki gerçek adlara " +
-                "bakıp listeyi güncelle (beklenen: OVRHandVisualLeft / OVRHandVisualRight).", this);
+                "Visuals' ile eşleşmedi — hepsi hayalet sayılıp kapatıldı, yani OYUNCU ELLERİNİ " +
+                "GÖRMEYECEK. Meta SDK'sı objeleri yeniden adlandırmış olabilir: rig altındaki " +
+                "gerçek adlara bakıp listeyi güncelle (beklenen: OVRHandVisualLeft / " +
+                "OVRHandVisualRight). ⚠️ Listeye benzer adlı OVRLeftHandVisual/OVRRightHandVisual " +
+                "yazma — onlar mesafeli kavrama hayaletidir ve gizli kalmalıdır.", this);
         }
     }
 }

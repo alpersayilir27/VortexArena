@@ -1273,11 +1273,27 @@ namespace VortexArena.Core.Editor
 
         /// <summary>
         /// Kavrama soketi kitini bir WPN kökü üzerinde kurar (idempotent): <see cref="ItemGripSockets"/>
-        /// bileşeni + ISDK <c>GrabInteractable</c>'ın <c>_interactorFilters</c> listesine bağlanması.
+        /// bileşeni + ISDK'nın <b>İKİ</b> yakın-kavrama bileşeninin <c>_interactorFilters</c>
+        /// listesine bağlanması.
         /// <para>
         /// Filtre ISDK'nın tasarlanmış uzatma noktasıdır (<c>Interactable&lt;,&gt;.CanBeSelectedBy</c>
         /// her filtreyi sorar): kavramanın ALGISI ISDK'da kalır, biz yalnız "izin var mı" sorusuna
         /// cevap veririz.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Neden iki bileşen:</b> <c>GrabInteractable</c> (kumanda hattı) ile
+        /// <c>HandGrabInteractable</c> (el hattı) birlikte tutulur, çünkü hangisinin koşacağını
+        /// ISDK rig'i seçiyor — interactor grubu "el izleniyor mu" sorusuna göre değişiyor ve o da
+        /// <c>OVRManager.controllerDrivenHandPosesType</c>'a bağlı. Tek bileşen bırakılsa o
+        /// anahtarın her değişimi silahı sessizce kavranamaz yapardı
+        /// (<c>Docs/Sistem-Ozeti.md</c> §7). İkisi de aynı <c>Grabbable</c>'ı besler, yani
+        /// <see cref="Weapon"/> tarafında tek bir olay yolu kalır.
+        /// </para>
+        /// <para>
+        /// ⚠️ El hattına <c>HandGrabPose</c> çocuğu <b>eklenmez</b>: poz listesi boşken ISDK
+        /// kavramayı collider mesafesine göre skorlar ve eli yeniden pozlamaz — yani el, silahın
+        /// şekline sarılmadan kumanda duruşunda kalır. Poz eklemek elin silaha sarılmasını
+        /// sağlar ve ayrı bir iştir (ISDK'nın poz kaydedicisi gerekir).
         /// </para>
         /// </summary>
         private static void ApplyGripSocketKit(GameObject root, string ctx)
@@ -1290,56 +1306,114 @@ namespace VortexArena.Core.Editor
             }
 
             // Soket tasarımı "eli soketin üstüne getir" demektir; mesafeden kavrama bunun tam zıddı.
-            // Bileşen bırakılsa ISDK uzaktan HOVER göstergesini çizmeye devam ederdi (filtre yalnız
-            // SEÇİMİ keser, hover'ı kesmez) → oyuncuya yalan söyleyen bir affordance kalırdı.
-            Component distanceGrab = FindComponentByTypeFullName(root, "Oculus.Interaction.DistanceGrabInteractable");
-            if (distanceGrab != null)
-            {
-                Object.DestroyImmediate(distanceGrab, true);
-                Debug.Log(Log + ctx + ": DistanceGrabInteractable kaldırıldı — soket tasarımında " +
-                          "mesafeden kavrama yok.");
-            }
+            // Filtreye güvenip bileşeni bırakmak YETMEZ: ItemGripSockets.Filter el çözülemediğinde
+            // FAIL-OPEN'dır (bkz. WarnFailOpen) ve o oturumlarda silah odanın öbür ucundan
+            // kavranabilir kalırdı. Kapı "kapalı" demiyor, "çoğu zaman kapalı" diyor.
+            // ⚠️ İki hat da silinir: hangisinin koşacağını rig seçiyor, biri unutulursa yasak
+            // yarım kalır ve silah bazı yapılandırmalarda uzaktan kavranabilir olur.
+            RemoveRootComponent(root, "Oculus.Interaction.DistanceGrabInteractable", ctx,
+                "soket tasarımında mesafeden kavrama yok");
+            RemoveRootComponent(root, "Oculus.Interaction.HandGrab.DistanceHandGrabInteractable", ctx,
+                "soket tasarımında mesafeden kavrama yok (el hattı)");
 
-            // Yukarıdakinin tek referansçısı olduğu için ARDINDAN bu da gider: mesafeden kavrama
-            // yoksa "hedefe doğru taşı" sağlayıcısını çağıran kimse kalmaz. Yetim bir bileşen
-            // davranışsızdır ama sonraki okuyucuya "burada mesafe kavraması var" diye yalan söyler.
+            // Mesafe kavraması gidince asset'te duran sağlayıcı da gider: kalan tek tüketicisi
+            // HandGrabInteractable'dır ve o, alan boşsa kendi örneğini ÇALIŞMA ANINDA ekliyor.
+            // Prefabda tutmak sonraki okuyucuya "burada elle ayarlanmış bir hareket var" der.
             Component moveProvider = FindComponentByTypeFullName(root, "Oculus.Interaction.MoveTowardsTargetProvider");
             if (moveProvider != null)
             {
                 Object.DestroyImmediate(moveProvider, true);
-                Debug.Log(Log + ctx + ": MoveTowardsTargetProvider kaldırıldı (yetim kaldı).");
+                Debug.Log(Log + ctx + ": MoveTowardsTargetProvider kaldırıldı (çalışma anında kurulur).");
             }
 
             ApplyReleasePhysics(root, ctx);
 
+            Component grabbable = FindComponentByTypeFullName(root, "Oculus.Interaction.Grabbable");
+            Rigidbody body = root.GetComponent<Rigidbody>();
+
             Component grabInteractable = FindComponentByTypeFullName(root, "Oculus.Interaction.GrabInteractable");
             if (grabInteractable == null)
             {
-                Warn(ctx + ": kökte Oculus.Interaction.GrabInteractable yok — soket filtresi bağlanamadı " +
-                     "(silah mesafe/soket ayrımı olmadan kavranır).");
+                Warn(ctx + ": kökte Oculus.Interaction.GrabInteractable yok — kumanda hattının soket " +
+                     "filtresi bağlanamadı (silah mesafe/soket ayrımı olmadan kavranır).");
+            }
+            else
+            {
+                BindSocketFilter(grabInteractable, sockets, ctx);
+            }
+
+            // El hattı araç tarafından ÜRETİLİR (kumanda hattının aksine): yeni bir silah eklendiğinde
+            // elle kurulum adımı doğmasın diye.
+            Component handGrab = EnsureComponentByTypeName(
+                root, "Oculus.Interaction.HandGrab.HandGrabInteractable", ctx);
+            if (handGrab == null)
+            {
                 return;
             }
 
-            var so = new SerializedObject(grabInteractable);
+            var handSo = new SerializedObject(handGrab);
+            SerializedProperty rb = handSo.FindProperty("_rigidbody");
+            SerializedProperty pointable = handSo.FindProperty("_pointableElement");
+            if (rb != null)
+            {
+                rb.objectReferenceValue = body;
+            }
+
+            if (pointable != null)
+            {
+                pointable.objectReferenceValue = grabbable;
+            }
+
+            handSo.ApplyModifiedPropertiesWithoutUndo();
+
+            if (body == null)
+            {
+                // Rigidbody yoksa HandGrabInteractable Start'ta assert atıp kendini durdurur;
+                // belirtisi "silah bazen alınmıyor" olur, sebebi hiç görünmez.
+                Warn(ctx + ": kökte Rigidbody yok — HandGrabInteractable çalışamaz (silah el hattında " +
+                     "kavranamaz).");
+            }
+
+            BindSocketFilter(handGrab, sockets, ctx);
+        }
+
+        /// <summary>Kökteki bir bileşeni tam tip adıyla siler (yoksa sessizce geçer).</summary>
+        private static void RemoveRootComponent(GameObject root, string fullName, string ctx, string why)
+        {
+            Component component = FindComponentByTypeFullName(root, fullName);
+            if (component == null)
+            {
+                return;
+            }
+
+            Object.DestroyImmediate(component, true);
+            Debug.Log(Log + ctx + ": " + component.GetType().Name + " kaldırıldı — " + why + ".");
+        }
+
+        /// <summary>
+        /// Bir ISDK interactable'ının <c>_interactorFilters</c> listesini soket bileşenine
+        /// sabitler (idempotent).
+        /// <para>Silahın başka bir interactor filtresi yok ve olması da beklenmiyor: liste tek
+        /// elemana indirilir.</para>
+        /// </summary>
+        private static void BindSocketFilter(Component interactable, Object filter, string ctx)
+        {
+            var so = new SerializedObject(interactable);
             SerializedProperty filters = so.FindProperty("_interactorFilters");
             if (filters == null || !filters.isArray)
             {
-                Warn(ctx + ": GrabInteractable'da '_interactorFilters' alanı yok ya da dizi değil " +
-                     "(ISDK sözleşme kayması?) — soket filtresi bağlanamadı.");
+                Warn(ctx + ": " + interactable.GetType().Name + " üzerinde '_interactorFilters' alanı yok " +
+                     "ya da dizi değil (ISDK sözleşme kayması?) — soket filtresi bağlanamadı.");
                 return;
             }
 
-            for (int i = 0; i < filters.arraySize; i++)
+            if (filters.arraySize == 1 && filters.GetArrayElementAtIndex(0).objectReferenceValue == filter)
             {
-                if (filters.GetArrayElementAtIndex(i).objectReferenceValue == sockets)
-                {
-                    return; // zaten bağlı — idempotent
-                }
+                return; // zaten bağlı — idempotent
             }
 
-            // Silahın başka bir interactor filtresi yok ve olması da beklenmiyor: liste tek elemana indirilir.
             filters.arraySize = 1;
-            filters.GetArrayElementAtIndex(0).objectReferenceValue = sockets;
+            filters.GetArrayElementAtIndex(0).objectReferenceValue = filter;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -1348,7 +1422,8 @@ namespace VortexArena.Core.Editor
         /// prefabının bir ÖRNEĞİ kökün altına konur.
         /// <para>
         /// <b>Çerçeve nedir:</b> sahnedeki silah artık yerden alınmaz — çerçevenin içinde durur ve
-        /// oradan hiç ayrılmaz. Oyuncu ≤2 m'den nişan alıp grip'e basınca silahın bir KLONU eline
+        /// oradan hiç ayrılmaz. Oyuncu <c>WeaponFrame.maxGrabDistance</c> mesafesinden nişan alıp
+        /// grip'e basınca silahın bir KLONU eline
         /// gelir (<see cref="WeaponFrame"/> → <c>WeaponGranter.SelectWeapon</c>). Yani her
         /// <c>WPN_*</c> prefabı hem "elde tutulan silah" hem "sahnede duran kaynak" olarak
         /// kullanılır; hangisi olduğunu ÇERÇEVENİN varlığı belirler (klonda çerçeve yok edilir).
@@ -1360,8 +1435,8 @@ namespace VortexArena.Core.Editor
         /// kuralının aynısı).
         /// </para>
         /// <para>
-        /// ⚠️ Bu, <see cref="ApplyGripSocketKit"/>'in <c>DistanceGrabInteractable</c> silme adımıyla
-        /// ÇELİŞMEZ: o adım <see cref="FindComponentByTypeFullName"/> kullanıyor ve o metot yalnız
+        /// ⚠️ Bu, <see cref="ApplyGripSocketKit"/>'in mesafe-kavrama silme adımlarıyla (kumanda ve
+        /// el hattı) ÇELİŞMEZ: o adımlar <see cref="FindComponentByTypeFullName"/> kullanıyor ve o metot yalnız
         /// KÖKÜN bileşenlerine bakıyor (çocuklara inmiyor). Yasak <c>WPN_*</c> kökü içindir —
         /// soketli yakın kavramanın zıddı olduğu için; çerçeve ayrı bir objedir ve soket kullanmaz.
         /// İnseydi araç kendi eklediği çerçevenin kavramasını siler ve silah hiç alınamaz olurdu.
@@ -1396,7 +1471,8 @@ namespace VortexArena.Core.Editor
             frame.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
             frame.transform.localScale = Vector3.one;
 
-            Debug.Log(Log + ctx + ": VA_WeaponFrame eklendi — silah artık çerçevesinden, 2 m'den alınır.");
+            Debug.Log(Log + ctx + ": VA_WeaponFrame eklendi — silah artık çerçevesinden, " +
+                      "maxGrabDistance mesafesinden alınır.");
         }
 
         /// <summary>

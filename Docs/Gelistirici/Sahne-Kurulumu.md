@@ -28,7 +28,7 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 | **`PlayerPoseTracker`** | Sahne kökü — **`VA_PoseSync`** prefabıyla gelir | Kafa + iki eli 20 Hz gönderir | Kimse seni göremez |
 | **`RemotePlayerSpawner`** | Sahne kökü — aynı **`VA_PoseSync`** prefabında | Uzak oyuncu avatarlarını üretir | Sen kimseyi göremezsin |
 | **`ModeHudSpawner`** | Sahne kökü — **`VA_ModeHud`** prefabıyla gelir | Aktif modun HUD prefabını örnekler | HUD çizilmez |
-| **Silahlar** (`WPN_*` prefab örnekleri) | Arenada tasarımın uygun gördüğü yerlerde | `weaponSource:"weaponcanvas"` modlarında (TDM · turnuva) oyuncunun silah aldığı yer. Silah ≤2 m'den seçilir, **klonu** ele gelir ve **tükenmez** | Oyuncunun eline hiç silah gelmez (hata basılmaz — silahsız arena geçerli bir sahnedir) |
+| **Silahlar** (`WPN_*` prefab örnekleri) | Arenada tasarımın uygun gördüğü yerlerde | `weaponSource:"weaponcanvas"` modlarında (TDM · turnuva) oyuncunun silah aldığı yer. Silah `WeaponFrame.maxGrabDistance` mesafesinden seçilir, **klonu** ele gelir ve **tükenmez** | Oyuncunun eline hiç silah gelmez (hata basılmaz — silahsız arena geçerli bir sahnedir) |
 
 > ⚠️ **Yukarıdaki prefablar (`VA_ArenaBoundary`, `VA_CameraRig`, `VA_PoseSync`,
 > `VA_CalibrationManager`, `VA_ModeHud`)

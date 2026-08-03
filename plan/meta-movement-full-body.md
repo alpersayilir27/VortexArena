@@ -37,7 +37,7 @@ Eklem sayısı 66 ve sıkıştırma `High`; kaba hesapla blob ~300-400 B, yani
 
 ## Doğrulanacaklar (derlemeyi kullanıcı koşar)
 
-- Yerel oyuncu kendi gövdesini/kollarını hiç görmüyor, yalnız ellerini görüyor.
+- Yerel oyuncu kendi gövdesinden hiçbir şey görmüyor; gördüğü eller rig'in sentetik elleri.
 - Uzak avatar full body, doğru boyda, arena zemininde; kalibrasyondan sonra kaymıyor.
 - Gövde ile eller arasında zaman kayması yok (ikisi de `INTERP_DELAY_MS` tamponunda).
 - Harita değişiminde ve avatar başka oyuncuya devredilince gövde bozulmuyor.
