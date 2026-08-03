@@ -46,6 +46,13 @@ namespace VortexArena.App
         /// <summary>Bu süre boyunca hiç adres bulunamazsa kurtarma ipucu gösterilir.</summary>
         private const float DiscoveryHintDelay = 8f;
 
+        /// <summary>
+        /// IP paneli canvas düzleminden bu kadar (m) saparsa hata basılır — bkz.
+        /// <see cref="WarnIfPanelOffCanvasPlane"/>. Sapma sıfır olmalıdır; tolerans yalnız
+        /// kayan nokta yuvarlamasını yutar.
+        /// </summary>
+        private const float PanelPlaneTolerance = 0.01f;
+
         private static readonly OVRInput.Controller Hand = OVRInput.Controller.RTouch;
 
         [Header("Durum")]
@@ -67,6 +74,7 @@ namespace VortexArena.App
         private float _discoveryTimer;
         private bool _autoConnectDone;
         private bool _hintShown;
+        private bool _planeChecked;
 
         private void Awake()
         {
@@ -195,9 +203,54 @@ namespace VortexArena.App
             if (visible)
             {
                 _hintShown = true; // panel açıkken ipucu metnini tekrar yazma
+                WarnIfPanelOffCanvasPlane();
                 RefreshIpText();
                 RefreshStatus();
             }
+        }
+
+        /// <summary>
+        /// Panel canvas düzleminin ÜSTÜNDE mi diye bakar; değilse bir kez hata basar.
+        /// <para>
+        /// ⚠️ <b>Neden ayrı bir denetim:</b> world-space canvas'ta düzlemden sapmış bir çocuk
+        /// <b>çizilmeye devam eder ama tıklanamaz</b> — ne ISDK ışını ne fare ulaşır. Sebebi
+        /// grafik raycast'inin canvas düzleminde kurulan bir kameradan yapılmasıdır: düzlemin
+        /// önünde/arkasında kalan öge kameranın arkasına düşer ve
+        /// <c>RectangleContainsScreenPoint</c> false döner. Konsolda tek satır olmadan bu
+        /// "buton çalışmıyor" diye görünür ve saatler yer.
+        /// </para>
+        /// <para>
+        /// Kolayca olur: canvas ölçeği 0.0012 olduğu için sahne görünümünde panelin z'sini
+        /// yanlışlıkla 1 m kaydırmak yerel uzayda ~830 birimlik bir sapmadır.
+        /// </para>
+        /// Denetim <b>yalnız okur</b> — konumu düzeltmez: düzeltseydi sahnedeki değerle koddaki
+        /// değer iki ayrı doğruluk kaynağı olurdu.
+        /// </summary>
+        private void WarnIfPanelOffCanvasPlane()
+        {
+            if (_planeChecked || ipPanel == null)
+            {
+                return;
+            }
+
+            _planeChecked = true;
+
+            Canvas canvas = ipPanel.GetComponentInParent<Canvas>(true);
+            if (canvas == null)
+            {
+                return;
+            }
+
+            Transform plane = canvas.rootCanvas.transform;
+            float offset = Vector3.Dot(ipPanel.transform.position - plane.position, plane.forward);
+            if (Mathf.Abs(offset) <= PanelPlaneTolerance)
+            {
+                return;
+            }
+
+            Debug.LogError($"[LobbyController] '{ipPanel.name}' canvas düzleminden {offset:0.###} m " +
+                           "sapmış — panel çizilir ama hiçbir tuşuna basılamaz. RectTransform'un " +
+                           "Pos Z'sini 0 yap.", ipPanel);
         }
 
         /// <summary>
@@ -350,6 +403,17 @@ namespace VortexArena.App
             {
                 ipText.text = _ipBuffer;
             }
+
+            // ⚠️ "Bağlan" bağlantı DURUMUNA değil YAZILAN ADRESE bakar. Bu panel tam da istemci
+            // eski/yanlış adrese boşuna deneyip dururken açılır ve `ArenaClient` o sırada
+            // saniyelerce `Connecting`de kalır (WS zaman aşımı) — duruma bağlansaydı düğme tam
+            // gerektiği anda gri olurdu. `Connect` koşan döngüyü zaten iptal edip yenisini kurar,
+            // yani deneme ortasında basmak güvenlidir. Yan fayda: adres tamamlanır tamamlanmaz
+            // düğme yanar, eksik yazımda sönük kalır.
+            if (connectButton != null)
+            {
+                connectButton.interactable = ServerDiscovery.TryParseEndpoint(_ipBuffer, out _, out _);
+            }
         }
 
         private void RefreshStatus()
@@ -373,10 +437,7 @@ namespace VortexArena.App
                     break;
             }
 
-            if (connectButton != null)
-            {
-                connectButton.interactable = state == ArenaConnectionState.Disconnected;
-            }
+            // `connectButton` burada DEĞİL `RefreshIpText`'te sürülür (gerekçe orada).
 
             if (disconnectButton != null)
             {

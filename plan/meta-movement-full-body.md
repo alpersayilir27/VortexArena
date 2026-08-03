@@ -21,7 +21,11 @@ Eklem sayısı 66 ve sıkıştırma `High`; kaba hesapla blob ~300-400 B, yani
 ## 2. Ayar
 
 - [ ] `SkeletonRetargeter.ScaleRange` varsayılanı `0.8–1.2`; oynayan boy aralığına göre genişlet.
-      `ApplyHeadScale` **açık kalsın** (birinci şahısta yakayı near-clip'in dışında tutan şey odur).
+      **Karar gözle değil konsoldan verilir:** `LocalBodyAvatar` kalibrasyondan sonra uygulanan
+      gövde ölçeğini bir kez basar ve değer aralığın sınırındaysa uyarıya çevirir — sınıra dayanmış
+      bir ölçek, karakterin oyuncunun boyuna yetişemediği anlamına gelir ve birinci şahısta "gövde
+      kameraya göre kaymış" diye görünür. `ApplyHeadScale` **açık kalsın** (birinci şahısta yakayı
+      near-clip'in dışında tutan şey odur).
 - Body tracking ayarı **hazır**: `Assets/Resources/OculusRuntimeSettings.asset` (⚠️ dosya adı
   `OVRRuntimeSettings` DEĞİL) `bodyTrackingJointSet: FullBody` + `bodyTrackingFidelity: High`.
   ⚠️ `FullBody` bacakları **izlemez, ÜRETİR**. `OVRBody.StartBodyTracking` bu asset'i okur —

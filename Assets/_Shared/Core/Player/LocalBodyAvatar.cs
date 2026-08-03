@@ -37,6 +37,13 @@ namespace VortexArena.Core.Player
     /// (<c>Physics.Raycast(...)</c>, layer mask yok) — kendi gövden kendi atışını yerdi.
     /// </para>
     /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Execution order 100'den BÜYÜK olmak zorunda:</b> <see cref="firstPersonOffset"/>
+    /// <c>LateUpdate</c>'te uygulanıyor ve iskeleti ağa serileştiren
+    /// <c>NetworkCharacterHandler</c> <c>[DefaultExecutionOrder(100)]</c>. Daha küçük bir sırada
+    /// ofset gönderime de karışır, yani başkaları oyuncuyu kaymış görür.
+    /// </remarks>
+    [DefaultExecutionOrder(30000)]
     public class LocalBodyAvatar : MonoBehaviour
     {
         /// <summary>Prefabın <c>Resources</c> altındaki adı (önyükleme bunu yükler).
@@ -67,6 +74,10 @@ namespace VortexArena.Core.Player
         [Tooltip("İlk poz/oturum gelene dek gizlenecek görsel kök. Boşsa karakterin kendisi kullanılır.")]
         [SerializeField] private GameObject visualRoot;
 
+        [Tooltip("Gövdenin birinci şahısta kaydırılması (metre, gövdenin YAW uzayı: -Z geri, " +
+                 "+Y yukarı). YALNIZ yerel görünümü etkiler, ağa gitmez.")]
+        [SerializeField] private Vector3 firstPersonOffset = new Vector3(0f, 0f, -0.06f);
+
         private OVRCameraRig _rig;
         private float _rigSearchTime = float.NegativeInfinity;
 
@@ -95,8 +106,20 @@ namespace VortexArena.Core.Player
         /// "arena yeniden hizalandı, gövde oranı yeniden ölçülmeli" demektir.</summary>
         private int _calibrationGeneration = -1;
 
-        /// <summary>Gövde kalibrasyonuna kalan süre; <c>&lt; 0</c> = bekleyen kalibrasyon yok.</summary>
-        private float _calibrationCountdown = -1f;
+        /// <summary>Bekleyen bir gövde kalibrasyonu var mı. Süre dolmasıyla BİRLİKTE değil, ondan
+        /// AYRI tutulur: süre dolduğunda sensör hâlâ hazır olmayabilir ve o hâlde beklemeye devam
+        /// edilir (gerekçe <see cref="TickBodyCalibration"/>).</summary>
+        private bool _calibrationPending;
+
+        /// <summary>Gövde kalibrasyonuna kalan süre (sn); yalnız <see cref="_calibrationPending"/>
+        /// iken anlamlıdır.</summary>
+        private float _calibrationCountdown;
+
+        /// <summary>Kalibrasyondan sonra uygulanan ölçeğin bir kez raporlanması bekleniyor mu.</summary>
+        private bool _scaleReportPending;
+
+        /// <summary>Ölçeğin <c>ScaleRange</c> sınırına "dayanmış" sayılması için tolerans.</summary>
+        private const float ScaleClampEpsilon = 0.005f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -186,13 +209,59 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            // Rig kaybolduysa (sahne değişimi, gözlemcinin kapattığı rig) gövde gizlenir: sürülmeyen
-            // bir gövdeyi görünür bırakmak, dünya orijininde donmuş bir manken demektir.
+            // Gövde YALNIZ gerçekten sürülürken çizilir ve bunun İKİ ayrı koşulu var: etkin bir rig
+            // (sahne değişimi, gözlemcinin kapattığı rig) ve retargeter'ın o kare bir poz gerçekten
+            // UYGULAMIŞ olması.
+            // ⚠️ İkincisi "kurulmuş olmak" ile aynı şey DEĞİLDİR: SDK'nın CharacterRetargeter.Update'i
+            // sensör geçerli veri üretene dek hiçbir şey uygulamadan döner — o pencerede karakter
+            // prefabdan geldiği yerde, yani DÜNYA ORİJİNİNDE ve T-pozunda durur. Kurulur kurulmaz
+            // görünür yapmak, oyuncunun haritanın ortasında kendi kopyasını görmesi demekti.
             OVRCameraRig rig = ResolveRig();
-            SetBodyVisible(rig != null);
+            SetBodyVisible(rig != null && retargeter.RetargeterValid);
 
             TickSourceProviderCheck();
+
+            // ⚠️ Rapor kalibrasyondan ÖNCE tiklenir ve bu sıra kasıtlıdır: uygulanan ölçek
+            // Calibrate()'in ölçtüğü orandan bir kare SONRA yazılıyor (SDK onu retarget
+            // döngüsünde tazeliyor), yani aynı karede okumak kalibrasyon ÖNCESİ değeri basardı.
+            TickScaleReport();
             TickBodyCalibration();
+        }
+
+        /// <summary>
+        /// Gövdeyi birinci şahıs için kaydırır — <b>yalnız görüntüde</b>.
+        /// <para>Retarget çıktısı gövdeyi izlenen kafanın altına oturtur; modelin oranları
+        /// oyuncununkine birebir oturmadığında sonuç "gövde kameraya göre bir tık ileride" olur ve
+        /// oyuncu aşağı bakınca kendi göğsünün içini görür. Ayarı tek bir ofsettir
+        /// (<see cref="firstPersonOffset"/>).</para>
+        /// <para>
+        /// ⚠️ <b>Neden <c>LateUpdate</c> ve neden geri alınmıyor:</b> ağa giden kök gönderim anında
+        /// okunuyor (<c>NetworkCharacterHandler</c>, order 100); bu sınıf 30000'de olduğu için
+        /// ofset o okumadan SONRA basılır ve tele hiç girmez. Geri almak da gerekmez — SDK kökü
+        /// HER KARE yeniden yazıyor (<c>CharacterRetargeter.LateUpdate</c> → <c>ApplyPose</c>),
+        /// yani ofset birikmez. ⚠️ Aynısı kemik <b>ölçeği</b> için geçerli DEĞİLDİR: onu SDK
+        /// yazmadığı için <see cref="LocalAvatarBoneHider"/> gizlemeyi her kare elle geri almak
+        /// zorundadır.
+        /// </para>
+        /// <para>Ofset gövdenin tam rotasyonunda değil <b>yaw</b>'ında uygulanır: oyuncu
+        /// eğildiğinde "geri" yönü yukarı/aşağı kaymasın.</para>
+        /// </summary>
+        private void LateUpdate()
+        {
+            if (!_initialized || firstPersonOffset == Vector3.zero)
+            {
+                return;
+            }
+
+            Transform root = retargeter.transform;
+            Vector3 forward = root.rotation * Vector3.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 1e-6f)
+            {
+                return;
+            }
+
+            root.position += Quaternion.LookRotation(forward, Vector3.up) * firstPersonOffset;
         }
 
         /// <summary>
@@ -234,9 +303,15 @@ namespace VortexArena.Core.Player
             character.Initialize(client.PlayerId, hasInputAuthority: true);
             _sourceProviderGrace = SourceProviderGraceSeconds;
 
+            // Kurulum bitti ama retargeter henüz TEK bir poz uygulamadı — gövde şu an prefabdan
+            // geldiği yerde, dünya orijininde duruyor. Görünürlük burada da doğru değere çekilir
+            // ki ilk Update'e kadar geçen karede oyuncu kendi kopyasını haritada görmesin.
+            SetBodyVisible(retargeter.RetargeterValid);
+
             // İlk gövde ölçüsü de gecikmeli alınır: oyuncu bağlandığı anda ayakta olmayabilir.
             _calibrationGeneration = ArenaCalibrator.CalibrationGeneration;
             _calibrationCountdown = BodyCalibrationDelaySeconds;
+            _calibrationPending = true;
         }
 
         /// <summary>
@@ -254,21 +329,76 @@ namespace VortexArena.Core.Player
             {
                 _calibrationGeneration = generation;
                 _calibrationCountdown = BodyCalibrationDelaySeconds;
+                _calibrationPending = true;
             }
 
-            if (_calibrationCountdown < 0f)
+            if (!_calibrationPending)
             {
                 return;
             }
 
-            _calibrationCountdown -= Time.unscaledDeltaTime;
             if (_calibrationCountdown > 0f)
             {
+                _calibrationCountdown -= Time.unscaledDeltaTime;
                 return;
             }
 
-            _calibrationCountdown = -1f;
+            // ⚠️ Sürenin dolması YETMEZ: SDK'nın Calibrate()'i geçerli bir poz yoksa SESSİZCE döner
+            // (hiçbir şey yapmaz, hiçbir şey da basmaz). Tek atışlık bir çağrı tam bu pencereye denk
+            // gelirse kalibrasyon oturumun geri kalanı boyunca HİÇ yapılmamış olur: karakterin
+            // oranları oyuncununkine sabitlenmez ve gövde birinci şahısta kameraya göre yanlış
+            // yerde durur. Bu yüzden bayrak koşul sağlanana dek AÇIK kalır ve her karede yeniden
+            // denenir.
+            if (!retargeter.RetargeterValid)
+            {
+                return;
+            }
+
+            _calibrationPending = false;
             retargeter.Calibrate();
+            _scaleReportPending = true;
+        }
+
+        /// <summary>
+        /// Kalibrasyondan sonra karaktere uygulanan gövde ölçeğini <b>bir kez</b> raporlar.
+        /// <para>
+        /// Sebep: ölçek <c>SkeletonRetargeter.ScaleRange</c> ile <b>kelepçelenir</b> (varsayılan
+        /// 0.8–1.2). Oyuncunun boyu modelin boyundan bu aralığın dışında farklıysa karakter
+        /// oyuncuyla aynı boyda OLAMAZ — ve bunun birinci şahıstaki görünümü "gövde kameraya göre
+        /// yanlış yerde / aşağı bakınca gövdenin içi" olur. Sınıra dayanmış bir ölçek gözle
+        /// yanlış oranlardan ayırt EDİLEMEZ, bu yüzden tahmin edilmez, ölçülür.
+        /// </para>
+        /// </summary>
+        private void TickScaleReport()
+        {
+            if (!_scaleReportPending || !retargeter.RetargeterValid)
+            {
+                return;
+            }
+
+            var skeleton = retargeter.SkeletonRetargeter;
+            if (skeleton == null || !skeleton.IsInitialized)
+            {
+                return;
+            }
+
+            _scaleReportPending = false;
+
+            float scale = skeleton.RootScale.x;
+            Vector2 range = skeleton.ScaleRange;
+            string line = $"[LocalBodyAvatar] Gövde ölçeği {scale:F3} " +
+                          $"(izin verilen aralık {range.x:F2}–{range.y:F2}).";
+
+            if (scale <= range.x + ScaleClampEpsilon || scale >= range.y - ScaleClampEpsilon)
+            {
+                Debug.LogWarning(
+                    line + " Değer aralığın SINIRINDA: karakter oyuncunun boyuna yetişemiyor, yani " +
+                    "gövde kameraya göre kaymış görünür. Resources/LocalBodyAvatar.prefab içindeki " +
+                    "NetworkCharacterRetargeter > Scale Range genişletilmeli.", this);
+                return;
+            }
+
+            Debug.Log(line, this);
         }
 
         /// <summary>
@@ -304,15 +434,19 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Sensör kurulumdan sonra gerçekten koşuyor mu — koşmuyorsa <b>tek bir eyleme dönük
-        /// hata</b> basar.
+        /// Kurulumdan sonra gerçekten <b>çizilebilir bir gövde</b> oluştu mu — oluşmadıysa tek bir
+        /// eyleme dönük hata basar.
+        /// <para>⚠️ Ölçüt sensörün açık olması DEĞİL, retargeter'ın poz uygulamasıdır: gövdeyi
+        /// çizen kapı odur (<see cref="Update"/>). Yalnız "sağlayıcı açık mı" diye bakılsaydı,
+        /// açık kalıp geçerli veri üretmeyen bir sensör <b>hiç uyarı basmadan</b> görünmez bir
+        /// gövdeye yol açardı.</para>
         /// <para>Gerekçe: <c>OVRBody</c> başlatamadığında kendi uyarısını basıp susuyor ve o satır
         /// "gövdem neden yok" sorusuna bağlanmıyor; bağı burada açıkça kuruyoruz. Süre tanınmasının
         /// sebebi <see cref="SourceProviderGraceSeconds"/>'da.</para>
         /// </summary>
         private void TickSourceProviderCheck()
         {
-            if (_sourceProviderWarned || character.IsSourceProviderRunning)
+            if (_sourceProviderWarned || retargeter.RetargeterValid)
             {
                 return;
             }
@@ -324,12 +458,17 @@ namespace VortexArena.Core.Player
             }
 
             _sourceProviderWarned = true;
+
+            // İki farklı arıza aynı belirtiyi veriyor ama çözümleri ayrı — hangisi olduğu söylenir.
+            string cause = character.IsSourceProviderRunning
+                ? "Body tracking açık ama geçerli bir gövde pozu hiç üretmedi"
+                : "Body tracking hiç başlamadı (sebebi konsolda bunun üstündeki [OVRBody] satırı söyler)";
+
             Debug.LogError(
-                "[LocalBodyAvatar] Body tracking başlamadı — yerel gövde çizilmeyecek ve ağa gövde " +
-                "akmayacak. Sebebi konsolda bunun üstündeki [OVRBody] satırı söyler. Sık görülen " +
-                "iki sebep: (1) editörden Link ile koşuluyor ve Meta Quest Link uygulamasında " +
-                "ilgili geliştirici çalışma zamanı özelliği kapalı, (2) cihazda BODY_TRACKING izni " +
-                "verilmemiş. Düzelttikten sonra oyunu yeniden başlat.", this);
+                $"[LocalBodyAvatar] {cause} — yerel gövde çizilmeyecek ve ağa gövde akmayacak. Sık " +
+                "görülen iki sebep: (1) editörden Link ile koşuluyor ve Meta Quest Link " +
+                "uygulamasında ilgili geliştirici çalışma zamanı özelliği kapalı, (2) cihazda " +
+                "BODY_TRACKING izni verilmemiş. Düzelttikten sonra oyunu yeniden başlat.", this);
         }
 
         /// <summary>Etkin rig'i bulur. Referans önbelleğe alınır ama null'a düşünce (sahne değişimi,

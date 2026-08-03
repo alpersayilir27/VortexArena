@@ -20,6 +20,17 @@ namespace VortexArena.Core.Player
     /// garanti altına alınır ki retargeting'e ölçek yazan bir yol eklendiğinde uzuv sessizce geri
     /// gelmesin.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>Gizleme her kare GERİ ALINIR ve bu zorunludur, üslup değil:</b> ağa giden iskelet
+    /// blob'u kemiklerin <b>canlı Unity transformlarından</b> okunuyor ve okuma
+    /// <c>localScale</c>'i de kapsıyor (<c>SkeletonJobs.GetPoseJob</c>). SDK ölçeği bir daha
+    /// yazmadığı için buradaki sıfırlar kalıcıdır ve serileştirmeye olduğu gibi girerdi: uzak
+    /// tarafta bacaklar kalçaya, kafa göğse ÇÖKER — belirtisi "oyuncular havada duruyor"dur, çünkü
+    /// görünen gövde kalçada biter. Bu yüzden ölçek <see cref="Update"/>'te gerçek değerine
+    /// döndürülür (gönderim <c>LateUpdate</c>'te yapılıyor) ve yalnız
+    /// <see cref="LateUpdate"/>'te — çizimden hemen önce — gizlenir. Yani telde tam gövde gider,
+    /// ekranda uzuv görünmez.
+    /// </para>
     /// </summary>
     [DefaultExecutionOrder(30000)]
     public class LocalAvatarBoneHider : MonoBehaviour
@@ -53,6 +64,10 @@ namespace VortexArena.Core.Player
         /// çağrılmaz (sözlük araması, LateUpdate'te bedava değil).</summary>
         private Transform[] _bones;
 
+        /// <summary>Kemiklerin gizlemeden ÖNCEKİ gerçek ölçekleri; her kare bunlara döndürülür
+        /// (gerekçe sınıf özetinde: gizli ölçek ağa sızıyor).</summary>
+        private Vector3[] _originalScales;
+
         private void Awake()
         {
             var animator = GetComponentInChildren<Animator>();
@@ -65,9 +80,11 @@ namespace VortexArena.Core.Player
             }
 
             _bones = new Transform[hiddenBones.Length];
+            _originalScales = new Vector3[hiddenBones.Length];
             for (int i = 0; i < hiddenBones.Length; i++)
             {
                 _bones[i] = animator.GetBoneTransform(hiddenBones[i]);
+                _originalScales[i] = _bones[i] != null ? _bones[i].localScale : Vector3.one;
                 if (_bones[i] == null)
                 {
                     // Tek seferlik (Awake): eksik kemik kalıcı bir kurulum hatasıdır, her karede
@@ -78,7 +95,23 @@ namespace VortexArena.Core.Player
             }
         }
 
+        /// <summary>
+        /// Gizlemeyi geri alır — <b>ağa doğru gövde gitsin diye</b>.
+        /// <para>Tüm <c>Update</c>'ler tüm <c>LateUpdate</c>'lerden önce koştuğu için, iskeleti
+        /// serileştiren <c>NetworkCharacterHandler.LateUpdate</c> kemikleri her zaman GERÇEK
+        /// ölçekleriyle okur. Gerekçenin tamamı sınıf özetinde.</para>
+        /// </summary>
+        private void Update()
+        {
+            ApplyScales(hidden: false);
+        }
+
         private void LateUpdate()
+        {
+            ApplyScales(hidden: true);
+        }
+
+        private void ApplyScales(bool hidden)
         {
             if (_bones == null)
             {
@@ -90,7 +123,7 @@ namespace VortexArena.Core.Player
             {
                 if (_bones[i] != null)
                 {
-                    _bones[i].localScale = scale;
+                    _bones[i].localScale = hidden ? scale : _originalScales[i];
                 }
             }
         }
