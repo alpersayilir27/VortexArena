@@ -887,3 +887,37 @@ geçmiş" sanar ve tüm mesh'i sınır olarak çıkarır.
 
 > Yazmadan önce sonuç geri ayrıştırılır; doğrulanamazsa dosyaya **hiç dokunulmaz**. Bozuk bir yazım
 > o mekanın bütün sahnelerini ölçüsüz bırakırdı.
+
+---
+
+## 18. VR'da tıklanabilir bir dünya-uzayı paneli
+
+Ekran-uzayı arayüzü Quest'te çizilmez; sahnede duran bir panel **world-space canvas**'tır ve
+tıklanabilir olması için üç ayrı şeyin birden kurulması gerekir. Örneği `Lobby` sahnesindeki
+`LobbyCanvas`'tır (gizli IP paneli oradadır).
+
+**1 · Canvas** — `Render Mode: World Space`, `Event Camera` **boş bırakılır**: VR'da onu ISDK'nın
+`PointableCanvasModule`'ü her karede kendi kamerasıyla doldurur, masaüstünde `GraphicRaycaster`
+`Camera.main`'e düşer. Canvas'ta `GraphicRaycaster` bulunmalıdır (`Blocking Objects: None` —
+yoksa panelin kendi collider'ı grafik raycast'ini keser).
+
+**2 · İşaretçi köprüsü** — canvas objesine `PointableCanvas` (alanı: canvas'ın kendisi). Olayı ona
+taşıyan interactable'lar ayrıdır ve **ikisi de gerekir**:
+
+| Ne için | Bileşenler | `_pointableElement` |
+|---|---|---|
+| Kumanda ışını | `RayInteractable` + `ColliderSurface` + `BoxCollider` (canvas rect'i kadar) | `PointableCanvas` |
+| Parmakla dokunma | `PokeInteractable` + `ClippedPlaneSurface` (← `PlaneSurface` + `BoundsClipper`) | `PointableCanvas` |
+
+`PlaneSurface.Facing` **kullanıcının geldiği tarafı** gösterir (`Backward` = transformun -Z'si);
+`BoundsClipper.Size` canvas'ın **yerel** ölçüsüdür (piksel — ör. 1000×700×10), dünya metresi değil.
+
+**3 · EventSystem** — sahnede bir `EventSystem` + üstünde iki modül (`PointableCanvasModule` ve
+`InputSystemUIInputModule`) + `InputModuleAutoSwitch`. Modüllerden **yalnız biri** etkin kalır,
+seçimi XR aygıtının etkin olup olmadığı yapar. Yeni sahneye bunu kopyalarken **iki modülü de bırak**:
+biri eksikse o sahne ya Quest'te ya editörde tıklanmaz olur.
+
+⚠️ **Canvas altındaki her RectTransform'un Pos Z'si 0'dır.** Düzlemden sapmış bir öge çizilmeye
+devam eder ama **hiçbir işaretçi ona ulaşamaz** — belirti "panel açılıyor, tuşları basmıyor"
+olur. Gerekçe: `Docs/Sistem-Ozeti.md` §7, "world-space canvas'ta düzlemden sapmış bir çocuk"
+ve "ışınla tıklama ile parmakla dokunma ayrı kurulumdur" maddeleri.
