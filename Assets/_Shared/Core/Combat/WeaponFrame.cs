@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Oculus.Interaction;
+using Oculus.Interaction.HandGrab;
 using UnityEngine;
 
 namespace VortexArena.Core.Combat
@@ -21,9 +22,27 @@ namespace VortexArena.Core.Combat
     /// </para>
     /// <para>
     /// <b>Kapı ISDK'nın kendi uzatma noktasıdır</b> (<see cref="ItemGripSockets"/> ile aynı desen):
-    /// bu bileşen bir <see cref="IGameObjectFilter"/>'dır ve çerçevenin kendi
-    /// <see cref="DistanceGrabInteractable"/>'ının <c>_interactorFilters</c> listesine yazılır —
-    /// mesafe kapısını <see cref="Filter"/> uygular, seçimin ALGISI ISDK'da kalır.
+    /// bu bileşen bir <see cref="IGameObjectFilter"/>'dır ve çerçevenin mesafe-kavrama
+    /// bileşenlerinin <c>_interactorFilters</c> listesine yazılır — mesafe kapısını
+    /// <see cref="Filter"/> uygular, seçimin ALGISI ISDK'da kalır.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>İKİ mesafe-kavrama bileşeni birden taşınır ve ikisi de dinlenir:</b>
+    /// <see cref="DistanceGrabInteractable"/> (kumanda hattı) ve
+    /// <see cref="DistanceHandGrabInteractable"/> (el hattı). Sebep, hangisinin koşacağına ISDK
+    /// rig'inin karar vermesidir: interactor grubu "el izleniyor mu" sorusuna göre seçiliyor
+    /// (<c>Controller and No Hand</c> ↔ <c>Controller and Hand</c>) ve el izleme
+    /// <c>OVRManager.controllerDrivenHandPosesType</c> ile açılıp kapanıyor. Tek bileşen
+    /// tutulsaydı o anahtarın her değişimi silahı sessizce alınamaz yapardı
+    /// (<c>Docs/Sistem-Ozeti.md</c> §7).
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>El hattının <c>Hand Alignment</c>'ı prefabda <c>None</c>'dır ve öyle kalır.</b>
+    /// <c>AlignOnGrab</c> olsaydı ISDK kavrama boyunca sentetik elin bileğini kavranan nesneye
+    /// kilitlerdi (<c>HandGrabStateVisual</c> → <c>SyntheticHand.LockWristPose</c>); çerçeve
+    /// <see cref="FrozenGrabTransformer"/> ile yerinde durduğu için oyuncunun eli sahnedeki silaha
+    /// yapışır, oysa elinde silahın <b>klonu</b> vardır. Çerçeve bir kavrama hedefi değil bir
+    /// SEÇİM tetikleyicisidir: ele dair hiçbir şeyi sürmemelidir.
     /// </para>
     /// </summary>
     public class WeaponFrame : MonoBehaviour, IGameObjectFilter
@@ -54,12 +73,19 @@ namespace VortexArena.Core.Combat
                  "çerçevesiz durması istenen silahlarda kapatılır.")]
         [SerializeField] private bool isFrameVisible = true;
 
+        [Tooltip("Çerçevenin KENDİ nişan ışınını çizer. VARSAYILAN KAPALI: aynı geri bildirimi " +
+                 "ISDK'nın mesafe-kavrama göstergesi (tüp + reticle) zaten veriyor, ikisi birden " +
+                 "çizilince oyuncu elinde iki ışın görür.")]
+        [SerializeField] private bool isRayVisible;
+
         [Tooltip("Prefabdaki PASİF görsel kökü. Altındaki çerçeve MODELİ çalışma anında silahın " +
                  "ölçüsüne oturtulur (konum/dönüş/ölçek buradan yazılır).")]
         [SerializeField] private Transform frameVisual;
 
-        [Tooltip("Silahın seçilebildiği en uzak mesafe (m) — el anchor'ı ile çerçeve merkezi arası.")]
-        [SerializeField] private float maxGrabDistance = 2f;
+        [Tooltip("Silahın seçilebildiği en uzak mesafe (m) — el anchor'ı ile çerçeve merkezi arası. " +
+                 "⚠️ ISDK'nın kendi mesafe-kavrama konisi 5 m'de biter: bunun üstüne çıkmak işe " +
+                 "yaramaz, silah aday bile olmaz.")]
+        [SerializeField] private float maxGrabDistance = 4f;
 
         [Tooltip("Nişan ışınının rengi (alfa dahil).")]
         [SerializeField] private Color rayColor = new Color(0.35f, 0.7f, 1f, 0.9f);
@@ -71,8 +97,12 @@ namespace VortexArena.Core.Combat
         [SerializeField] private float framePadding = 0.06f;
 
         [Header("Referanslar")]
-        [Tooltip("Çerçevenin KENDİ mesafe-kavrama bileşeni. Boşsa GetComponent ile çözülür.")]
+        [Tooltip("Çerçevenin KENDİ mesafe-kavrama bileşeni (kumanda hattı). Boşsa GetComponent ile çözülür.")]
         [SerializeField] private DistanceGrabInteractable distanceGrab;
+
+        [Tooltip("Çerçevenin KENDİ mesafe-kavrama bileşeni (el hattı). Boşsa GetComponent ile " +
+                 "çözülür. İkisi birden tutulur — hangisinin koşacağını ISDK rig'i seçer.")]
+        [SerializeField] private DistanceHandGrabInteractable distanceHandGrab;
 
         [Tooltip("Nişan alınacak hacim — silahın sınırlarına göre ÇALIŞMA ANINDA boyutlanır. " +
                  "Boşsa GetComponent ile çözülür.")]
@@ -120,6 +150,21 @@ namespace VortexArena.Core.Combat
                 distanceGrab = GetComponent<DistanceGrabInteractable>();
             }
 
+            if (distanceHandGrab == null)
+            {
+                distanceHandGrab = GetComponent<DistanceHandGrabInteractable>();
+            }
+
+            if (distanceGrab == null && distanceHandGrab == null)
+            {
+                // ⚠️ Uyarı değil HATA: hiçbir kavrama bileşeni yoksa çerçeve sahnede görünür ama
+                // silah HİÇ alınamaz — belirtisi "kavrama bozuk" diye okunur, oysa eksik olan
+                // prefabdaki bir bileşendir. Kiti tazelemek (Build Weapon Prefabs) düzeltir.
+                Debug.LogError($"[WeaponFrame] '{name}' üzerinde ne DistanceGrabInteractable ne " +
+                               "DistanceHandGrabInteractable var; bu çerçeveden silah alınamaz. " +
+                               "Tools > VortexArena > Weapons > Build Weapon Prefabs çalıştırılmalı.", this);
+            }
+
             if (grabCollider == null)
             {
                 grabCollider = GetComponent<BoxCollider>();
@@ -138,9 +183,17 @@ namespace VortexArena.Core.Combat
 
         private void OnEnable()
         {
+            // ⚠️ İkisine de abone olunur ve bu ÇİFT SAYIM üretmez: bir karede yalnız bir interactor
+            // grubu koşuyor (gerekçe sınıf açıklamasında), yani aynı olay iki bileşenden birden
+            // gelmez. Gelse bile Identifier ayrı olurdu ve _hovering onları ayrı tutar.
             if (distanceGrab != null)
             {
                 distanceGrab.WhenPointerEventRaised += HandlePointerEvent;
+            }
+
+            if (distanceHandGrab != null)
+            {
+                distanceHandGrab.WhenPointerEventRaised += HandlePointerEvent;
             }
         }
 
@@ -149,6 +202,11 @@ namespace VortexArena.Core.Combat
             if (distanceGrab != null)
             {
                 distanceGrab.WhenPointerEventRaised -= HandlePointerEvent;
+            }
+
+            if (distanceHandGrab != null)
+            {
+                distanceHandGrab.WhenPointerEventRaised -= HandlePointerEvent;
             }
 
             // ISDK'nın Unhover/Cancel olayları artık bize ulaşmaz; ışınlar açık kalmasın.
@@ -193,8 +251,12 @@ namespace VortexArena.Core.Combat
 
         private void Update()
         {
-            if (_weapon == null || _detached)
+            if (_weapon == null || _detached || !isRayVisible)
             {
+                // Kutu çalışma anında kaldırılmış olabilir (editörde denenir): açık kalan şeridi
+                // de topla, yoksa ışın kapatıldığı hâliyle donar.
+                HideRay(_rayLeft);
+                HideRay(_rayRight);
                 return;
             }
 
@@ -261,7 +323,11 @@ namespace VortexArena.Core.Combat
                     continue;
                 }
 
-                if (behaviour is Grabbable || behaviour is GrabInteractable || behaviour is ItemGripSockets)
+                // ⚠️ Kumanda ve el hattı BİRLİKTE kapatılır: biri açık kalırsa sahnedeki donmuş
+                // silah çerçeveyi atlayarak doğrudan kavranabilir hale gelir.
+                if (behaviour is Grabbable || behaviour is GrabInteractable ||
+                    behaviour is HandGrabInteractable || behaviour is DistanceHandGrabInteractable ||
+                    behaviour is ItemGripSockets)
                 {
                     behaviour.enabled = false;
                 }
@@ -661,16 +727,22 @@ namespace VortexArena.Core.Combat
             _weapon != null ? _weapon.transform.TransformPoint(_centerLocal) : transform.position;
 
         /// <summary>
-        /// Hover eden elin anchor'ından çerçeve merkezine mavi ışın çizer — yalnız el MENZİL
-        /// İÇİNDEYSE.
+        /// Hover eden elin anchor'ından çerçeve merkezine ışın çizer — yalnız el MENZİL İÇİNDEYSE.
         /// <para>
-        /// ⚠️ <b>Mesafe testi burada TEKRAR yapılır</b>, çünkü <see cref="Filter"/> yalnız
-        /// <c>Select</c>'i keser: <b>ISDK filtresi hover'ı KESMEZ</b>. Tekrarlanmasaydı 5 m'den de
-        /// mavi ışın çıkar ama grip hiçbir şey yapmazdı — yani oyuncuya yalan söyleyen bir vurgu.
+        /// ⚠️ <b>Bu ışın varsayılan olarak KAPALIDIR</b> (<see cref="isRayVisible"/>): ISDK'nın
+        /// mesafe kavraması kendi göstergesini çiziyor (tüp + reticle) ve ikisi birden açıkken
+        /// oyuncu elinde iki ışın görüyor.
         /// </para>
         /// <para>
-        /// Ayrıca ışını bizim çizmemiz gerekiyor: ISDK'nın mesafe kavraması kendi başına ışın
-        /// çizmez (yalnız bir reticle gösterir).
+        /// ⚠️ ISDK'nın göstergesi <b>menzil dışında yalan söylemez</b>, o yüzden kapatmak bir şey
+        /// kaybettirmiyor: mesafe kavramasının aday listesi
+        /// <c>InteractableRegistry.List(interactor)</c>'dan geçiyor ve orası her adayı
+        /// <c>CanBeSelectedBy</c> ile — yani <see cref="Filter"/> ile — süzüyor. Menzil dışındaki
+        /// çerçeve aday bile olmaz, dolayısıyla hover göstergesi hiç çıkmaz.
+        /// </para>
+        /// <para>
+        /// Mesafe testi burada yine de tekrarlanır: <see cref="Filter"/> el çözülemediğinde
+        /// FAIL-OPEN'dır (editör oturumu), o durumda ışının kendi kapısı olmalı.
         /// </para>
         /// </summary>
         private void TickRay(OVRInput.Controller hand, ref LineRenderer ray)

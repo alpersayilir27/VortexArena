@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
   displayName: AK-47
   netItemId: 2
-  prefab: {fileID: 190416508149715471, guid: 1d5f693f3c5240942a431985b1064bc3, type: 3}
+  prefab: {fileID: 190416508149715471, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
   holdMode: 1
   primaryGripPosition: {x: -0, y: 0.059, z: 0.039}
   primaryGripEuler: {x: 0, y: 0, z: 0}

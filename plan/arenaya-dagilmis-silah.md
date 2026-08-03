@@ -2,7 +2,8 @@
 
 Silah rafı (`WeaponRackSpawner` + `RackSlot`) **kaldırıldı**; yerini alan kaynak **`WeaponCanvas`**
 (tel değeri `"weaponcanvas"`). Alma yolu — çerçeveden seçme (`WeaponFrame` →
-`WeaponGranter.SelectWeapon`, ≤2 m'den seçilir, klonu ele gelir, aynı mermiyle geri döner) — kodda
+`WeaponGranter.SelectWeapon`, `maxGrabDistance` mesafesinden seçilir, klonu ele gelir, aynı
+mermiyle geri döner) — kodda
 çalışır durumda. **Kod ve doküman işi bitti; elde yalnız arenalara silah yerleştirmek kaldı.**
 
 Bugünkü durum: `WeaponCanvas` kullanan modlarda (**TDM · turnuva**) sahnede silah olmadığı için

@@ -6,29 +6,32 @@ using VortexArena.Net;
 namespace VortexArena.Core.Player
 {
     /// <summary>
-    /// Yerel oyuncunun gövdesi — hem <b>ağ kaynağı</b>, hem oyuncunun gözlükte gördüğü
-    /// <b>ellerin</b> kaynağı.
+    /// Yerel oyuncunun gövdesi — <b>yalnız ağ kaynağı</b>: hiç çizilmez, başkalarının gördüğü
+    /// gövdeyi üretir.
     /// <para>
-    /// ⚠️ <b>Oyuncu kendi gövdesini, kollarını ve bacaklarını görmez; yalnız ellerini görür</b> —
-    /// ve o eller <b>kendi karakterinin elleridir</b>: gövde meshinden kesilmiş ayrı bir el meshi
-    /// (<see cref="firstPersonHands"/>) aynı iskeletten, aynı karede sürülür. Yani oyuncunun
-    /// gördüğü el ile başkalarının gördüğü el aynı modeldir. Rig'in ISDK el görselleri
-    /// ("hayalet el") tam bu yüzden çizilmez — <see cref="ControllerModelHider"/> onları söndürür.
+    /// ⚠️ <b>Oyuncu kendi gövdesinden HİÇBİR ŞEY görmez</b> — gövde de kol da el de çizilmez.
+    /// Oyuncunun gözlükte gördüğü eller rig'in <b>sentetik elleridir</b>
+    /// (<c>VA_CameraRig</c> → <c>OVRHandVisualLeft/Right</c>, ISDK <c>SyntheticHand</c>) ve bu
+    /// sınıfın onlarla hiçbir ilgisi yoktur.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Kesim yalnız ÇİZİMDEDİR, telde tam gövde gider:</b> el meshi gövdeyle aynı kemiklere
-    /// bağlıdır ve hiçbir kemiğe dokunulmaz. Gövde renderer'ı kapalı, el renderer'ı açıktır.
+    /// ⚠️ <b>Görünmezlik yalnız ÇİZİMDEDİR, telde tam gövde gider:</b> Renderer'lar kapatılır,
+    /// hiçbir kemiğe dokunulmaz — ağa giden iskelet kemiklerin canlı transformlarından okunuyor.
     /// </para>
     /// <para>
-    /// <b>Uzak avatarlarla AYNI prefab, AYNI retarget config, AYNI kod yolu.</b> Tek fark
+    /// <b>Uzak avatarla AYNI FBX, AYNI retarget config, AYNI kod yolu</b> (prefablar ayrıdır:
+    /// <c>Avatars/Resources/LocalBodyAvatar.prefab</c> ve <c>App/Prefabs/RemoteAvatar.prefab</c>).
+    /// Tek fark
     /// <see cref="ArenaNetCharacterBehaviour.HasInputAuthority"/>'dir: burada <c>true</c>, yani
     /// gövde Meta Movement SDK'nın body tracking'inden çözülür ve sonucu ağa akar. Uzak tarafta
     /// <c>false</c> olur ve aynı prefab gelen iskeleti uygular.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Obje neden hâlâ var ve neden silinemez:</b> başkalarının gördüğü gövde tam olarak
-    /// buradan çıkıyor. Gizli olması "gereksiz" demek değildir — bu obje yıkılırsa oyuncu ağa
-    /// hiç iskelet göndermez ve <b>diğer oyuncular onu göremez</b>.
+    /// ⚠️ <b>Obje neden var ve neden silinemez:</b> başkalarının gördüğü gövde tam olarak buradan
+    /// çıkıyor. Görünmez olması "gereksiz" demek değildir — bu obje yıkılırsa oyuncu ağa hiç
+    /// iskelet göndermez ve <b>diğer oyuncular onu göremez</b>. Artık yerelde tek bir pikseli bile
+    /// çizilmediği için bu refleks daha da tehlikelidir: silenin ekranında hiçbir şey değişmez,
+    /// bedeli yalnız <b>başkalarının</b> ekranında görülür.
     /// </para>
     /// <para>
     /// <b>Neden kendini önyükleyen kalıcı tekil</b> (<c>WeaponGranter</c> deseni): sahneye elle
@@ -87,10 +90,6 @@ namespace VortexArena.Core.Player
 
         [Tooltip("Gövdenin görsel kökü. Boşsa karakterin kendisi kullanılır.")]
         [SerializeField] private GameObject visualRoot;
-
-        [Tooltip("Oyuncunun gözlükte gördüğü eller: gövde meshinden kesilmiş el meshi. " +
-                 "Tools > VortexArena > Avatars > Build First-Person Hands Mesh üretir ve bağlar.")]
-        [SerializeField] private SkinnedMeshRenderer firstPersonHands;
 
         [Tooltip("Gövde oranını oyuncunun boyuna sabitle (SDK Calibrate()). KAPALI olmalı — " +
                  "gerekçe koddaki açıklamada.")]
@@ -251,13 +250,13 @@ namespace VortexArena.Core.Player
             // objede Awake hiç koşmaz ve kurulumun ihtiyaç duyduğu bileşenler çözülmemiş olur (SDK
             // sahipliği None kalır → gövde ağa hiç gitmez). SetActive(true) eksik Awake'leri kendi
             // çağrısı içinde senkron koşturur. ⚠️ Bu, objenin SON kez etkinleştirilmesidir — bir
-            // daha KAPATILMAZ (gerekçe ApplyFirstPersonVisibility'de).
+            // daha KAPATILMAZ (gerekçe HideAllRenderers'da).
             if (visualRoot != null)
             {
                 visualRoot.SetActive(true);
             }
 
-            ApplyFirstPersonVisibility();
+            HideAllRenderers();
 
             character.Initialize(client.PlayerId, hasInputAuthority: true);
             _sourceProviderGrace = SourceProviderGraceSeconds;
@@ -269,13 +268,9 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Birinci şahıs görünümünü kurar: <b>gövdenin tamamı söner, yalnız el meshi çizilir.</b>
-        /// Oyuncu kendi gövdesini, kollarını ve bacaklarını hiçbir zaman görmez.
-        /// <para>
-        /// ⚠️ <b>Ayrım renderer bazındadır ve el meshi ADIYLA değil REFERANSLA seçilir</b>
-        /// (<see cref="firstPersonHands"/>): araç onu prefaba bağlıyor, yani ad değişse bile
-        /// doğru renderer açık kalır.
-        /// </para>
+        /// Gövdeyi görsel olarak tümden susturur: <b>alt ağaçtaki her Renderer kapanır, istisna
+        /// yoktur.</b> Oyuncu kendi gövdesinden hiçbir şey görmez; gördüğü eller rig'in sentetik
+        /// elleridir ve bu sınıfın onlarla ilgisi yoktur.
         /// <para>
         /// ⚠️ <b>Obje KAPATILMAZ</b> (<c>SetActive(false)</c>) ve bu bir üslup tercihi değildir:
         /// karakterin üstündeki sensör kaynağı bir <c>OVRBody</c>'dir ve objeyi kapatmak onun
@@ -291,9 +286,10 @@ namespace VortexArena.Core.Player
         /// kapsıyor (<c>SkeletonJobs.GetPoseJob</c>) — sıfırlanan bir kemik uzak tarafta gövdeyi
         /// çökertir. Renderer kapatmak transformlara hiç dokunmaz, yani telde tam gövde gider.
         /// </para>
-        /// <para>Tek çağrı yeter: gövdeye sonradan renderer eklenmiyor.</para>
+        /// <para>Tek çağrı yeter: gövdeye sonradan renderer eklenmiyor. Prefabda da hepsi kapalı
+        /// gelir; buradaki geçiş yalnız garantidir.</para>
         /// </summary>
-        private void ApplyFirstPersonVisibility()
+        private void HideAllRenderers()
         {
             if (visualRoot == null)
             {
@@ -305,29 +301,8 @@ namespace VortexArena.Core.Player
             {
                 if (renderers[i] != null)
                 {
-                    renderers[i].enabled = renderers[i] == firstPersonHands;
+                    renderers[i].enabled = false;
                 }
-            }
-
-            if (firstPersonHands == null)
-            {
-                // ⚠️ Uyarı değil HATA: oyuncunun ekranında çizilen TEK şey elleridir, yani bu
-                // eksiklik "hiçbir şey görünmüyor" olarak yaşanır ve izleme arızasıyla karıştırılır.
-                // Oysa tek eksik, üretilmemiş/bağlanmamış bir mesh asset'idir.
-                Debug.LogError(
-                    "[LocalBodyAvatar] Birinci şahıs el meshi bağlı değil — oyuncu kendi ellerini " +
-                    "GÖRMEYECEK (gövde zaten çizilmiyor). Tools > VortexArena > Avatars > " +
-                    "Build First-Person Hands Mesh çalıştırılmalı: araç meshi üretip " +
-                    "Resources/LocalBodyAvatar.prefab'a bağlar.", this);
-                return;
-            }
-
-            // Renderer prefabda KAPALI gelir (admin'de ve kurulum tamamlanmadan çizilmesin diye);
-            // açmak yukarıdaki döngünün işi. Objenin de kapatılmış olma ihtimaline karşı bu kapı:
-            // kapalı objede renderer'ı açmak sessizce hiçbir şey çizmezdi.
-            if (!firstPersonHands.gameObject.activeSelf)
-            {
-                firstPersonHands.gameObject.SetActive(true);
             }
         }
 
@@ -349,10 +324,10 @@ namespace VortexArena.Core.Player
             // uzunluklarla uyuşmaz — sonuç, uzak avatarda rastgele bozuk duruşlardır. Kapalıyken
             // herkes prefabın oranlarını kullanır ve iki uç eşleşir.
             //
-            // ⚠️ Anahtarın İKİ ucu birden var ve ters yönde çekiyorlar: açmak oyuncunun kendi
-            // ellerini gerçek eline yaklaştırır (gövde oranı oyuncununkine sabitlenir), ama aynı
-            // hamle uzak avatarı bozar. Uzak taraf tercih edilir — yerelde el birkaç santim kayabilir,
-            // uzakta ise gövde tümden bozuk duruşlara girer.
+            // ⚠️ Anahtarın YEREL karşılığı yoktur: gövde hiç çizilmiyor, yani açmanın oyuncunun
+            // kendi ekranında görünür bir kazancı yok — eller rig'in sentetik ellerinden geliyor ve
+            // gövde oranından etkilenmiyor. Geriye yalnız bedeli kalır (uzak avatarda bozuk
+            // duruşlar), bu yüzden kapalı kalır.
             if (!calibrateBodyProportions)
             {
                 return;
@@ -396,10 +371,10 @@ namespace VortexArena.Core.Player
         /// <para>
         /// Sebep: ölçek <c>SkeletonRetargeter.ScaleRange</c> ile <b>kelepçelenir</b> (varsayılan
         /// 0.8–1.2). Oyuncunun boyu modelin boyundan bu aralığın dışında farklıysa karakter
-        /// oyuncuyla aynı boyda OLAMAZ. Bunun iki sonucu var: <b>diğer oyuncular</b> onu yanlış
-        /// boyda görür, <b>kendisi</b> de ellerini gerçek elinden kaymış görür (kol uzunluğu
-        /// tutmayınca el meshi gerçek elin durduğu yere erişemez). Sınıra dayanmış bir ölçek gözle
-        /// yanlış oranlardan ayırt EDİLEMEZ, bu yüzden tahmin edilmez, ölçülür.
+        /// oyuncuyla aynı boyda OLAMAZ ve <b>diğer oyuncular</b> onu yanlış boyda görür.
+        /// ⚠️ Sonucu <b>yalnız başkaları</b> görür — oyuncunun kendi ekranında hiçbir iz bırakmaz,
+        /// çünkü gövde çizilmiyor. Sınıra dayanmış bir ölçek gözle yanlış oranlardan ayırt
+        /// EDİLEMEZ, bu yüzden tahmin edilmez, ölçülür.
         /// </para>
         /// <para>Yalnız <see cref="calibrateBodyProportions"/> açıkken anlamlıdır: bayrak
         /// <c>Calibrate()</c>'ten sonra kalkıyor.</para>
@@ -444,9 +419,10 @@ namespace VortexArena.Core.Player
         /// iskeleti üreten kapı odur. Yalnız "sağlayıcı açık mı" diye bakılsaydı, açık kalıp
         /// geçerli veri üretmeyen bir sensör <b>hiç uyarı basmadan</b> oyuncuyu diğerlerinin
         /// ekranında görünmez bırakırdı.</para>
-        /// <para>⚠️ Arıza <b>iki şeyi birden</b> götürür: oyuncu kendi ellerini kaybeder (çizilen
-        /// tek şey onlar) ve başkalarının ekranından tümden silinir. İlki hemen fark edilir, ikincisi
-        /// hiç fark edilmeyebilir — bu yüzden sebep tahmine bırakılmaz, açıkça yazılır.</para>
+        /// <para>⚠️ Arıza <b>yerelde HİÇBİR iz bırakmaz</b> ve bu yüzden bu satır tek sinyaldir:
+        /// oyuncu ellerini rig'den gördüğü için ekranında her şey normal görünür, oysa başkalarının
+        /// ekranından tümden silinmiştir. Kendi başına fark edilmesi imkânsız olan bir arıza için
+        /// sebep tahmine bırakılmaz, açıkça yazılır.</para>
         /// <para>Gerekçe: <c>OVRBody</c> başlatamadığında kendi uyarısını basıp susuyor ve o satır
         /// bu soruya bağlanmıyor; bağı burada açıkça kuruyoruz. Süre tanınmasının sebebi
         /// <see cref="SourceProviderGraceSeconds"/>'da.</para>
@@ -473,7 +449,9 @@ namespace VortexArena.Core.Player
 
             Debug.LogError(
                 $"[LocalBodyAvatar] {cause} — ağa gövde akmayacak, yani diğer oyuncular bu oyuncuyu " +
-                "göremeyecek. Sık görülen iki sebep: (1) editörden Link ile koşuluyor ve Meta Quest " +
+                "göremeyecek. ⚠️ Oyuncunun KENDİ ekranında hiçbir belirti olmaz (eller rig'den " +
+                "geliyor); bu satır tek uyarıdır. Sık görülen iki sebep: (1) editörden Link ile " +
+                "koşuluyor ve Meta Quest " +
                 "Link uygulamasında ilgili geliştirici çalışma zamanı özelliği kapalı, (2) cihazda " +
                 "BODY_TRACKING izni verilmemiş. Düzelttikten sonra oyunu yeniden başlat.", this);
         }

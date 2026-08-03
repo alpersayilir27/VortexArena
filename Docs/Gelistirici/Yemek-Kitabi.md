@@ -435,13 +435,20 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 > aynı silah bir arenada çerçeveli, başka arenada çerçevesiz durabilir. `VA_WeaponFrame`
 > prefabının kendisini düzenlersen **tüm arenalar** etkilenir.
 
-> ⚠️ Görünürlük **yalnız sunumdur.** Çerçeve görünmez olsa bile silah yine oradan, ≤2 m'den
-> nişan alınarak seçilir ve ele klonlanır; alma menzilini ya da kavramayı kapatmaz.
+> ⚠️ Görünürlük **yalnız sunumdur.** Çerçeve görünmez olsa bile silah yine oradan,
+> `maxGrabDistance` mesafesinden nişan alınarak seçilir ve ele klonlanır; alma menzilini ya da
+> kavramayı kapatmaz.
+
+> ⚠️ **Nişan ışını çerçeveden gelmez.** Oyuncunun gördüğü uzaktan-seçim göstergesi ISDK'nın kendi
+> mesafe-kavrama görselidir (tüp + reticle); `WeaponFrame`'in kendi `LineRenderer` ışını
+> (`isRayVisible`) **kapalıdır**, ikisi birden açıkken elde iki ışın görünür. Menzil bilgisi
+> kaybolmaz: ISDK adaylarını `WeaponFrame.Filter`'dan geçiriyor, 2 m'nin dışındaki çerçeve hover
+> bile almaz.
 
 > **Çerçeve yalnız silah SABİT dururken vardır.** Silah hangi yoldan tutulursa tutulsun — ele
 > verildi (`WeaponGranter`) ya da doğrudan kavrandı (ISDK) — çerçevenin GameObject'i kapanır;
-> bırakılınca geri gelir. Yani elde duran silahta ne çerçeve görseli, ne nişan ışını, ne de
-> uzaktan seçim kapısı olur. Bu `isFrameVisible` ile ilgisizdir ve elle kurulum istemez:
+> bırakılınca geri gelir. Yani elde duran silahta ne çerçeve görseli ne de uzaktan seçim kapısı
+> olur. Bu `isFrameVisible` ile ilgisizdir ve elle kurulum istemez:
 > `WeaponFrame` silahın `Weapon.HeldChanged` olayını dinler. Yeni bir "silahı ele alma" yolu
 > yazarsan o yola ayrıca bir şey eklemene gerek YOKTUR — kural olayda durur.
 
@@ -460,7 +467,8 @@ istiyorsun (oyuncu yaklaşıp soketinden kavrasın, uzaktan seçme olmasın).
 3. Sahneyi kaydet.
 
 Böylece `WeaponFrame.Awake` hiç koşmaz: silah donmaz (`Rigidbody` fizikli kalır), kendi
-`Grabbable`/`GrabInteractable`/`ItemGripSockets`'i açık kalır → normal yakın kavrama çalışır.
+`Grabbable`/`GrabInteractable`/`HandGrabInteractable`/`ItemGripSockets`'i açık kalır → normal
+yakın kavrama çalışır (iki kavrama hattı da açık kaldığı için el izleme ayarından bağımsızdır).
 Çerçeve görseli prefabda zaten pasif durduğu için kendiliğinden görünmez.
 
 ⚠️ **Bileşeni `enabled = false` yapma.** Unity kapalı bileşende de `Awake` çağırır → silah yine

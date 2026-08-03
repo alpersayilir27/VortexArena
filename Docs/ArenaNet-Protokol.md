@@ -575,7 +575,7 @@ snapshot parçalamasında olduğu gibi (§6.3).
 
 **Hedef:** UDP kayıtlı tüm online endpoint'ler (admin dahil — gözlemci de gövdeleri görür).
 ⚠️ **Gönderen kendi girdisini geri alır ve KENDİSİ yok sayar** (kendi gövdesi zaten yerelde
-çözülüyor; oyuncuya ondan yalnız el meshi çizilir).
+çözülüyor; oyuncuya ondan hiçbir şey çizilmez).
 Hedefe özel batch üretmek tik başına N serileştirme demek olurdu; §6.5 olay batch'i de aynı
 gerekçeyle atanı süzmüyor.
 

@@ -47,6 +47,7 @@ GameObject:
   - component: {fileID: 4974439550944057558}
   - component: {fileID: 6732737295921368895}
   - component: {fileID: 3094610569354417226}
+  - component: {fileID: 8189665848709649336}
   m_Layer: 0
   m_Name: VA_WeaponFrame
   m_TagString: Untagged
@@ -187,15 +188,55 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d363713142acd4141b792362570a9877, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponFrame
-  isFrameVisible: 1
+  isFrameVisible: 0
+  isRayVisible: 0
   frameVisual: {fileID: 6421309455800825280}
-  maxGrabDistance: 2
+  maxGrabDistance: 4
   rayColor: {r: 0.35, g: 0.7, b: 1, a: 0.9}
   rayWidth: 0.006
-  frameLineWidth: 0.008
   framePadding: 0.06
   distanceGrab: {fileID: 6732737295921368895}
+  distanceHandGrab: {fileID: 8189665848709649336}
   grabCollider: {fileID: 1471724477417854280}
+--- !u!114 &8189665848709649336
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6726882489417941671}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: baed3e011583e1844a6e85b1cd0657f2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.HandGrab.DistanceHandGrabInteractable
+  _interactorFilters:
+  - {fileID: 3094610569354417226}
+  _maxInteractors: -1
+  _maxSelectingInteractors: -1
+  _data: {fileID: 0}
+  _pointableElement: {fileID: 4974439550944057558}
+  _rigidbody: {fileID: 330231544871175576}
+  _resetGrabOnGrabsUpdated: 1
+  _slippiness: 0
+  _supportedGrabTypes: 3
+  _pinchGrabRules:
+    _thumbRequirement: 1
+    _indexRequirement: 1
+    _middleRequirement: 1
+    _ringRequirement: 0
+    _pinkyRequirement: 0
+    _unselectMode: 0
+  _palmGrabRules:
+    _thumbRequirement: 1
+    _indexRequirement: 2
+    _middleRequirement: 2
+    _ringRequirement: 2
+    _pinkyRequirement: 1
+    _unselectMode: 0
+  _movementProvider: {fileID: 0}
+  _handAligment: 0
+  _handGrabPoses: []
 --- !u!1001 &117743131292059733
 PrefabInstance:
   m_ObjectHideFlags: 0
