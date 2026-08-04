@@ -950,10 +950,15 @@ yarışmazlar; telde geri tepme diye bir alan yoktur ve eklenmeyecek, §6.4.
 olduğu için gövdenin içi görünür, `ZTest` normaldir yani duvar arkasından GÖRÜNMEZ. Renk
 takım değil **dost/düşman** bilgisidir (dost mavi, düşman kırmızı; takımsız modda ve admin
 ekranında herkes kırmızı), kalibresizken turuncuya nabız atar ve **kalibresizlik ölümü ezer**.
-Canlı + kalibreli oyuncunun gövdesine HİÇ dokunulmaz. İki kurulum da geçerlidir ve kod ikisinde de
-aynıdır: `ghostRoot` bağlıysa karakterin mesh'i kapanıp ayrı hayalet gövdesi açılır (`GhostPoseDriver`
-onu karakterin canlı iskeletinden humanoid retarget ile sürer), bağlı değilse karakterin kendi
-mesh'i hayalet materyaline çevrilir — yani hayalet modelini değiştirmek prefab işidir, kod işi değil),
+Canlı + kalibreli oyuncunun gövdesine HİÇ dokunulmaz. Gövde **ayrı bir modeldir** ve karakterin
+mesh'inden bağımsızdır: `RemoteAvatar.prefab` içinde karakterin KARDEŞİ olan `Ghost` kabının
+altında bir model örneği durur (bugün Starter Assets robotu,
+`ThirdPartyPackages/StarterAssetsRobot/Armature.fbx`), karakter hayalete geçtiğinde kendi mesh'i
+kapanır ve robot açılır; pozu `GhostPoseDriver` karakterin canlı iskeletinden humanoid retarget
+ile sürer. Kardeş olmasının sebebi `visualRoot`'un karakterin KENDİSİ olmasıdır — hayalet onun
+altında olsaydı görünürlük kapandığında sürücü de kapanır, hayalet son pozunda donardı.
+Kurulumu `Tools > VortexArena > Avatars > Hayalet Gövdesini Kur` yapar; `ghostRoot` hiç bağlı
+değilse kod karakterin kendi mesh'ini hayalet materyaline çevirmeye düşer (aynı kod yolu),
 `ProximityWarning` (`Core/Player` — free-roam çarpışma önleme: `RemotePlayerRegistry` pozlarını
 yerel HMD ile karşılaştırır; 1.2 m'de uzak oyuncunun konumunda **duvar arkasından da görünen**
 halka (`VortexArena/ProximityHalo`, ZTest Always), 0.8 m'de tehlikenin geldiği **taraftaki**
