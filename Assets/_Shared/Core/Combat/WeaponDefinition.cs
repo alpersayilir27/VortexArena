@@ -14,8 +14,8 @@ namespace VortexArena.Core.Combat
     /// <para>
     /// <b>Denge sayılarının TEK doğruluk kaynağı burasıdır ve hasar İSTEMCİ-otoriterdir</b>
     /// (Docs/ArenaNet-Protokol.md §10.3): sunucuda silah tablosu yoktur; istemci hasarı burada
-    /// hesaplar — <see cref="HeadshotMultiplier"/> istemcide <c>RemoteHitBox.IsHead</c>'e
-    /// uygulanır — ve <c>hit_report.damage</c> ile bildirir, sunucu aynen uygular. Bu yüzden
+    /// hesaplar — bölge çarpanı istemcide <c>RemoteHitBox.Zone</c>'a göre seçilir
+    /// (<see cref="GetZoneMultiplier"/>) — ve <c>hit_report.damage</c> ile bildirir, sunucu aynen uygular. Bu yüzden
     /// değer değişikliği sunucuya export GEREKTİRMEZ — ama istemci build'i ister.
     /// </para>
     /// <para>
@@ -36,8 +36,12 @@ namespace VortexArena.Core.Combat
         [Header("Vuruş")]
         [Tooltip("Gövde vuruşu başına hasar (istemci hesaplar, hit_report.damage ile gider).")]
         [SerializeField] private float damage = 25f;
-        [Tooltip("Kafa vuruşunda hasar çarpanı (RemoteHitBox.IsHead — istemcide uygulanır).")]
+        [Tooltip("Kafa vuruşunda hasar çarpanı (RemoteHitBox.Zone — istemcide uygulanır).")]
         [SerializeField] private float headshotMultiplier = 4f;
+        [Tooltip("Karın/leğen vuruşunda hasar çarpanı (CS2: 1.25).")]
+        [SerializeField] private float stomachMultiplier = 1.25f;
+        [Tooltip("Bacak vuruşunda hasar çarpanı (CS2: 0.75). Kollar GÖVDE sayılır, çarpanı 1'dir.")]
+        [SerializeField] private float legMultiplier = 0.75f;
         [Tooltip("Dakikadaki atış sayısı.")]
         [SerializeField] private float fireRateRpm = 700f;
         [Tooltip("Hitscan menzili (metre).")]
@@ -96,6 +100,21 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Kafa vuruşunda hasar çarpanı.</summary>
         public float HeadshotMultiplier => headshotMultiplier;
+
+        /// <summary>Karın/leğen vuruşunda hasar çarpanı.</summary>
+        public float StomachMultiplier => stomachMultiplier;
+
+        /// <summary>Bacak vuruşunda hasar çarpanı (kollar gövde sayılır, çarpanı 1'dir).</summary>
+        public float LegMultiplier => legMultiplier;
+
+        /// <summary>Bölgenin hasar çarpanı — çarpanı UYGULAMAK çağıranın işi (hasar istemci-otoriter).</summary>
+        public float GetZoneMultiplier(HitZone zone) => zone switch
+        {
+            HitZone.Head => headshotMultiplier,
+            HitZone.Stomach => stomachMultiplier,
+            HitZone.Leg => legMultiplier,
+            _ => 1f,
+        };
 
         /// <summary>Dakikadaki atış sayısı.</summary>
         public float FireRateRpm => fireRateRpm;

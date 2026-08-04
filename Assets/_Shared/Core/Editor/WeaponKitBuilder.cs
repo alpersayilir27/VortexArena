@@ -89,6 +89,12 @@ namespace VortexArena.Core.Editor
 
         // Tüm silahlarda ortak sayılar (tablo başlığındaki varsayılanlar).
         private const float HeadshotMultiplier = 4f;
+
+        // Bölge çarpanları (CS2 modeli): kollar GÖVDE sayılır, yani 1× ayrı bir sabit istemez.
+        // ⚠️ Denge sayılarının tek doğruluk kaynağı bu tablodur — WD_*.asset'te Inspector'dan
+        // değiştirilen değer bir sonraki koşuda GERİ YAZILIR.
+        private const float StomachMultiplier = 1.25f;
+        private const float LegMultiplier = 0.75f;
         private const int SpareMagazines = 2;
         private const float KickBackMeters = 0.02f;
         private const float RecoilRecoverSpeed = 10f;
@@ -407,6 +413,8 @@ namespace VortexArena.Core.Editor
             SetEnumByName(so, "holdMode", spec.HoldMode, ctx);
             SetNumber(so, "damage", spec.Damage, ctx);
             SetNumber(so, "headshotMultiplier", HeadshotMultiplier, ctx);
+            SetNumber(so, "stomachMultiplier", StomachMultiplier, ctx);
+            SetNumber(so, "legMultiplier", LegMultiplier, ctx);
             SetNumber(so, "fireRateRpm", spec.Rpm, ctx);
             SetNumber(so, "range", spec.Range, ctx);
             SetNumber(so, "baseSpreadDegrees", spec.BaseSpread, ctx);

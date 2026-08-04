@@ -78,11 +78,24 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   edilir ve taban şeridi Quest'te pembe çizilir),
   `Environments/`, `Avatars/` (gövde avatarı modeli ve yerel gövde
   prefabı. Yerel gövde (`Avatars/Resources/LocalBodyAvatar.prefab`) ile uzak avatar
-  (`_Shared/App/Prefabs/RemoteAvatar.prefab`) **iki AYRI prefabtır**; ikisi de aynı FBX'i
-  (`ThirdPartyPackages/MixamoCharacters/Ch15_nonPBR.fbx`) örnekler, **aynı retarget config'ini ve
-  aynı kod yolunu** paylaşır — tek davranış farkı
+  (`_Shared/App/Prefabs/RemoteAvatar.prefab`) **iki AYRI prefabtır**; ikisinin de AĞ GÖVDESİ aynı
+  FBX'tir (`ThirdPartyPackages/MixamoCharacters/Ch15_nonPBR.fbx`), **aynı retarget config'ini ve
+  aynı kod yolunu** paylaşırlar — tek davranış farkı
   `ArenaNetCharacterBehaviour.HasInputAuthority`'dir (yerelde gövde body tracking'den çözülür,
   uzakta ağdan gelen iskelet uygulanır).
+  ⚠️ **Uzak avatar ayrıca KIRMIZI takımın gövdesini taşır** (`RemoteAvatar.redBodyRoot` →
+  `T-Avatars/Ch18_nonPBR.fbx`): iki gövdeden aynı anda yalnız biri çizilir, seçim takıma göredir
+  ve **yalnız istemci görselleştirmesidir** — takım zaten `lobby_state` ile geliyor, protokolde ve
+  sunucuda karşılığı YOKTUR ve eklenmez. Kırmızı gövde ağdan DEĞİL, karakterin canlı iskeletinden
+  `SkeletonPoseMirror` (kemik aynası: ada göre eşleşen kemiklerin `localRotation`'ı) ile sürülür;
+  ⚠️ **ikinci modelin mesh'i karakterin iskeletine BAĞLANMAZ** (Mixamo modellerinin kemik adları
+  aynı, oranları farklı → deforme gövde) ve ⚠️ **kırmızı gövde karakterin ALTINA asılmaz, KARDEŞİ
+  olur** (aşağıdaki retarget kuralının aynısı).
+  ⚠️ **Poz aktarımında `HumanPoseHandler` KULLANILMAZ** — `GetHumanPose` dünya uzayında verip
+  `SetHumanPose` köke göreli uyguladığı için gövde metrelerce kayar
+  (`Docs/Sistem-Ozeti.md` §7 "Tuzaklar", `HumanPoseHandler` maddesi).
+  Yeni takım modeli = `TeamBodyBuilder`'daki yol sabitini değiştirip aracı tekrar çalıştırmak;
+  tek koşul **kemik adlarının karakterinkiyle eşleşmesidir** (aynı Mixamo rig'i).
   **`LocalBodyAvatar.prefab`** kendini önyükleyen tekil tarafından
   `Resources.Load` ile yüklendiği için `Resources/` altından ÇIKARILMAZ ve ADI DEĞİŞMEZ —
   taşınırsa oyuncu ağa gövde göndermez, yani onu kimse göremez.
@@ -480,16 +493,19 @@ kadarından seçilince ele klonlanır (menzilin tavanı ISDK'nın 5 m'lik mesafe
 çerçeve görselini `WeaponFrame.isFrameVisible` ile **örnek başına** (sahneden sahneye) aç/kapat →
 `Docs/Gelistirici/Yemek-Kitabi.md`.
 **Sunucu tarafında iş YOKTUR** ve export
-gerekmez — sunucuda silah tablosu yok, hasarı (headshot çarpanı dahil) istemci hesaplayıp
+gerekmez — sunucuda silah tablosu yok, hasarı (**bölge çarpanı** dahil) istemci hesaplayıp
 `hit_report.damage` ile bildirir, sunucu aynen uygular (§10.3); `weaponId` yalnız kill feed
-etiketi, doğrulanmaz. Alan etkisi için etkilenen her hedefe bir `hit_report` yollanır. Denge
+etiketi, doğrulanmaz. Bölge çarpanları `WeaponDefinition`'da (`GetZoneMultiplier`) ve CS2
+modelindedir: kafa 4× · karın+leğen 1.25× · bacak 0.75× · gövde ve **kollar** 1×.
+⚠️ **`HitZone`'a yeni değer SONA eklenir** (serialize ediliyor) ve `Body` sıfırda kalır —
+atanmamış kutu 1× çarpana düşer. Alan etkisi için etkilenen her hedefe bir `hit_report` yollanır. Denge
 sayıları istemcide (WeaponDefinition SO) yaşadığı için değişiklik APK build'i ister.
 Şarjör kuralı: boş şarjörde otomatik reload YOK; reload silahı **bel altına indirme jestiyle**
 başlar; `reserveMode=DiscardMagazine` (varsayılan) erken reload'da şarjörde kalan mermiyi YAKAR
 (`PoolRounds` = CS2 havuz alternatifi SO'dan seçilir). Verilen silahta (`random`) reload kapalıdır.
 ⚠️ **Ağa bildirim TEK kapıdan yapılır: `ArenaCombat`** (`_Shared/Core/Combat/`, statik) —
 `ReportShot` · `ReportHit` · `ReportRaycastHit` · `ReportAreaHit` (alan etkisi = hedef başına bir
-`hit_report`) + `TryGetTargetPlayerId` · `IsHeadshot` · `CanFire`. Protokol DTO'su kurma, arena
+`hit_report`) + `TryGetTargetPlayerId` · `GetHitZone` · `IsHeadshot` · `CanFire`. Protokol DTO'su kurma, arena
 uzayı dönüşümünü elle yazma, `ArenaClient.Send`'i doğrudan çağırma: bir vuruşu doğru bildirmek
 dört ayrı şeyi bilmeyi gerektiriyor (arena uzayı, **yön bir nokta değildir**, `RemoteHitBox` ile
 hedef çözme, hasarı istemcinin belirlemesi) ve `Weapon` da bu kapıyı kullanıyor. Reçeteler:
@@ -517,6 +533,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
 | `… > Weapons > Write Grip Sockets To Definition` | Sahnedeki kavrama işaretçileri sürüklenip ayarlandı → `WD_*.asset`'e yazar (ters/düz bileşimi araç yapar). Yalnız BULUNAN işaretçinin alanlarına dokunur |
 | `… > Avatars > Hayalet Gövdesini Kur` | `RemoteAvatar.prefab`'a ölü/kalibresizde çizilen ayrı gövdeyi kurar: model ÖRNEĞİ + hayalet materyali + `GhostPoseDriver` bağları + `ghostRoot`. İdempotent. ⚠️ Hayalet modelini değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak, **prefabı elle düzenlemek DEĞİL** (model içi fileID'ler import öncesi bilinemez, elle yazılan bağ sessizce boşa düşer). Modelin tek koşulu **Rig = Humanoid**; iskelet adlarının karakterinkiyle eşleşmesi gerekmez |
+| `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |
 | `… > Development > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek) |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` | Sahneye ilgili bileşeni + kurulumunu ekler |
 | `GameObject > VortexArena > Grip Socket (Primary/Secondary)` | Seçili silahın altına kavrama işaretçisi üretir (mevcut değerlerden başlatır; aynı türden ikincisini üretmez) |

@@ -115,6 +115,21 @@ namespace VortexArena.Core.Combat
             return hitBox != null && hitBox.IsHead;
         }
 
+        /// <summary>Çarpan collider'ın vuruş bölgesi; ağ oyuncusu değilse <c>HitZone.Body</c>
+        /// (çarpan 1×). Bölge çarpanını UYGULAMAK senin işin: hasarı
+        /// <c>WeaponDefinition.GetZoneMultiplier</c> ile çarpıp <see cref="ReportHit"/>'e ver —
+        /// sunucu gönderdiğin sayıyı aynen uygular (§10.3).</summary>
+        public static HitZone GetHitZone(Collider collider)
+        {
+            if (collider == null)
+            {
+                return HitZone.Body;
+            }
+
+            RemoteHitBox hitBox = collider.GetComponentInParent<RemoteHitBox>();
+            return hitBox != null ? hitBox.Zone : HitZone.Body;
+        }
+
         // ---------------------------------------------------------------- bildirim
 
         /// <summary>
