@@ -14,7 +14,7 @@
 | **Bağlantı kopması**: kod, protokol (v8) ve doküman **bitti** — "çevrimdışı" kalktı, yerine `connected`/`reconnecting`/`left` + maç katılımcısı defteri geldi. Kalan: `dotnet build` + Unity derlemesi + doğrulama listesi (⚠️ v8 tüm başlıklara yeni APK ister) | `baglanti-kopmasi-ve-mac-katilimcilari.md` |
 | Kırılabilir objeleri sunucu-otoriter yapmak (yerel `Health` kaldırıldı, yerine ağsal obje canı) | `agsal-kirilabilir-objeler.md` |
 | **Mekan boyut maketi**: kod, boyut dosyaları, prefablar, sahneler ve doküman **bitti**. Kalan: doğrulama (maket gidiş-dönüşü · loader'ın ikinci çalıştırması · Play'de karartma rampası · admin paneli) | `mekan-boyut-maketi.md` |
-| **Hayalet avatar** (ölü / kalibresiz uzak oyuncu yarı saydam çizilir; kalibresizken silah da elden gider): shader, materyal, kod, prefab bağı ve doküman **bitti** — bugün karakterin kendi mesh'i hayalete çevriliyor. Kalan: doğrulama + ayrı hayalet gövdesi (Starter Assets robotu) | `hayalet-avatar.md` |
+| **Hayalet avatar** (ölü / kalibresiz uzak oyuncu ayrı bir modelle yarı saydam çizilir; kalibresizken silah da elden gider): shader, materyal, kod, hayalet modeli, editör aracı ve doküman **bitti**. Kalan: prefab kurulumunu bir kez çalıştırmak (`Avatars > Hayalet Gövdesini Kur`) + doğrulama | `hayalet-avatar.md` |
 
 > Sıradaki büyük iş **bulut kalibrasyonu** (Meta grup / paylaşılan uzamsal anchor ile toplu
 > hizalama). Henüz planlanmadı; altyapısı hazır: `set_calibration.source` `"cloud"` değerini
