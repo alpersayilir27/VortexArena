@@ -8,15 +8,16 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `7` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
+| `PROTOCOL_VERSION` | `8` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
 | `BEACON_INTERVAL` | 2 sn | Beacon yayın aralığı |
 | `DISCOVERY_TIMEOUT` | 5 sn | Beacon gelmezse statik IP fallback (`StreamingAssets/arena.json`); komut satırı adresi ve elle girilen IP beacon'ın **üstündedir** (zincirin tamamı §4) |
 | `STATUS_INTERVAL` | 5 sn | İstemci status kalp atışı |
-| `OFFLINE_TIMEOUT` | 15 sn | Status gelmezse cihaz çevrimdışı sayılır, bağlantı kapatılır |
-| `RECONNECT_BACKOFF` | 1 → 2 → 5 sn (tavan 5) | Kopunca sonsuz yeniden deneme; her denemede discovery baştan |
+| `HEARTBEAT_TIMEOUT` | 15 sn | Status gelmezse soket ölü sayılır, kapatılır ve cihaz `reconnecting`'e düşer (§2). ⚠️ Tek başına "oyuncu gitti" DEMEZ — asıl karar `RECONNECT_GRACE`'indir |
+| `RECONNECT_GRACE` | 45 sn | `reconnecting` cihazın geri beklendiği süre. Dolunca oyuncu oyundan **çıkarılır**: koşan maçın katılımcısıysa kaydı `left` olarak maç sonuna kadar durur, değilse tümden silinir ve `playerId`'si havuza döner (§2, §10.2). Kopuştan çıkarılmaya toplam süre `HEARTBEAT_TIMEOUT + RECONNECT_GRACE` |
+| `RECONNECT_BACKOFF` | 1 → 2 → 5 sn (tavan 5) | Kopunca sonsuz yeniden deneme; her denemede discovery baştan. ⚠️ İstemci `RECONNECT_GRACE` dolsa da denemeyi BIRAKMAZ (§8) |
 | `POSE_RATE_HZ` | `20` | İstemci poz gönderim frekansı |
 | `SNAPSHOT_RATE_HZ` | `20` | Sunucu snapshot yayın frekansı |
 | `INTERP_DELAY_MS` | `100` | Uzak avatar interpolasyon tamponu |
@@ -46,7 +47,13 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 - `deviceId` — **role göre iki ayrı semantik:**
   - `player`: `SystemInfo.deviceUniqueIdentifier`, **kalıcı** kimlik. Sunucu `devices.json`'da **ad + numara** çiftine eşler (ikisi de otomatik atanır, aşağıda), kayıt bağlantı kopsa da durur (aynı gözlük geri gelince adı/numarası/kimliği korunur).
   - `admin`: `<deviceUniqueIdentifier>:admin:<oturum GUID'i>` — **oturum başına benzersiz**. Sebep: aynı fiziksel PC'de iki admin penceresi açılabilsin. Ortak deviceId ile ikisi aynı kaydı paylaşır, her `hello` diğerinin soketini kapatır ve sonsuz kick döngüsü olurdu. GUID süreç ömrü boyunca sabittir (yeniden bağlanma aynı kaydı bulur), uygulama kapanınca ölür.
-- **Admin kayıtları kalıcı DEĞİLDİR:** admin bağlantısı koptuğunda (veya `OFFLINE_TIMEOUT` dolduğunda) kaydı registry'den **tümüyle silinir** ve `playerId`'si havuza döner; adı `devices.json`'a **yazılmaz**. Oyuncu kayıtları eskisi gibi çevrimdışı işaretlenir ama durur. Böylece admin'i her açıp kapatma roster'da hayalet satır bırakmaz.
+- ⚠️ **"Çevrimdışı" diye bir oyuncu durumu YOKTUR ve eklenmez.** Bağlantı durumu üç değerlidir ve `lobby_state.connection` ile taşınır (§5.3):
+  - `connected` — soket canlı.
+  - `reconnecting` — soket düştü (kopma ya da `HEARTBEAT_TIMEOUT`), cihaz `RECONNECT_GRACE` boyunca geri bekleniyor. Kayıt durur, **maç kapılarına girmez**: yükleme kapısı onu beklemez, vurulamaz, canlanmaz, snapshot'ta yer almaz.
+  - `left` — süre doldu, oyuncu oyundan çıkarıldı. Kayıt **yalnız koşan maçın katılımcısıysa** durur (§10.2: adı ve sayaçları maç sonuna kadar tabloda kalsın), aksi hâlde tümüyle silinir ve `playerId` havuza döner.
+  Süresiz duran bir "çevrimdışı" satır bilerek yok: roster canlı bağlantıları, maç defteri ise katılımcıları gösterir — ikisi ayrı sorudur.
+- **Admin kayıtları kalıcı DEĞİLDİR:** admin bağlantısı koptuğunda (veya `HEARTBEAT_TIMEOUT` dolduğunda) kaydı registry'den **tümüyle silinir** ve `playerId`'si havuza döner; adı `devices.json`'a **yazılmaz**. ⚠️ Admin `reconnecting` durumuna **hiç girmez**: `deviceId`'si oturumluktur, yani geri gelen admin yeni bir kimlikle gelir ve eski satır asla o bağlantıyla eşleşemezdi — "yeniden bağlanıyor" demek yalan olurdu. Böylece admin'i her açıp kapatma roster'da hayalet satır bırakmaz.
+- **Yeniden bağlanma kimliği KORUR.** Aynı `deviceId` hangi durumdan dönerse dönsün (`reconnecting` ya da `left`) mevcut kayda oturur: `playerId`, ad, forma numarası, takım ve `kills`/`deaths`/`score` olduğu gibi kalır — oyuncu kaldığı yerden devam eder, ikinci bir satır açılmaz.
 - **Admin sayısı sınırsız ve hepsi eş yetkilidir.** Birincil/ikincil admin kavramı yoktur: `role=="admin"` olan her bağlantı §5.2'deki tüm komutları gönderebilir, son gelen komut uygulanır. Operatörlerin birbirini ezmemesi için ortak seçim `admin_state` ile senkronlanır (§5.3) ve her komut `admin_state.notice` ile diğerlerine duyurulur.
 - `playerId` = sunucunun `welcome`'da atadığı **1..`PLAYER_ID_MAX`** arası küçük tamsayı (UDP paketlerinde 1 bayt). Admin'e de atanır (poz göndermez). Havuz dolarsa `kicked{reason:"Sunucu dolu"}` ile reddedilir — bu bir ürün kotası değil, `u8` tel formatının tavanıdır.
 - **Ad ve numara = CİHAZ kimliğidir, oturum kimliği değil.** İkisi de oyuncunun ilk bağlantısında otomatik atanır ve `devices.json`'a `deviceId` başına kalıcı yazılır; admin `set_identity` ile ikisini de değiştirebilir (§5.1). Roster'da `name` + `number` olarak taşınır (§5.3).
@@ -186,9 +193,10 @@ göre kurar. `phase`/`phaseReason`/`modeState` anlamları §10.1'de.
 ```json
 { "type":"lobby_state", "version":42, "players":[
   { "playerId":3, "number":7, "name":"ertu", "role":"player", "team":"red",
-    "ready":true, "online":true, "battery":0.87, "scene":"Arena12x12",
+    "ready":true, "connection":"connected", "reconnectSeconds":0,
+    "battery":0.87, "scene":"Arena12x12",
     "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7,
-    "calibrated":true, "calibrationSource":"anchor" } ] }
+    "inMatch":true, "calibrated":true, "calibrationSource":"anchor" } ] }
 ```
 
 `version` = **monoton artan** roster sürümü (sunucu ömrü boyunca; sunucu yeniden başlarsa `0`'dan).
@@ -196,7 +204,18 @@ göre kurar. `phase`/`phaseReason`/`modeState` anlamları §10.1'de.
 Sunucuda yayın **tek bir yayıncı** üzerinden gittiği için sıra zaten korunur; bu guard ikinci
 emniyettir. ⚠️ Gerekçesi ucuz bir "her ihtimale karşı" değil: sürümsüz ve ateşle-unut yayında eski
 bir anlık görüntü yeniyi ezebilir ve roster bir sonraki değişikliğe kadar bayat kalır — belirtisi
-**"atılan oyuncu hâlâ listede online görünüyor"**dur.
+**"atılan oyuncu hâlâ listede bağlı görünüyor"**dur.
+
+`connection` = `"connected"` | `"reconnecting"` | `"left"` (§2). **Bilinmeyen/boş değer `connected`
+sayılır** — kural değerlerinde olduğu gibi (§10.5), böylece ileride dördüncü bir durum eklemek sürüm
+artırmaz. `reconnectSeconds` yalnız `reconnecting` iken anlamlıdır: cihazın çıkarılmasına kalan
+saniye (`0` = yok). ⚠️ Bu sayı bir **geri sayımdır, bir zaman damgası değil** ve her `lobby_state`'te
+yeniden hesaplanır; roster yayını olay tabanlı olduğu için arayüz onu yerelde de tüketmeli (aksi
+hâlde sayaç yalnız başka bir değişiklik olduğunda ilerler).
+
+`inMatch` = bu kayıt **koşan maçın katılımcısı** mı (§10.2). Maç sonu tablosunun kapsamı budur:
+`left` bir satır yalnız `inMatch` olduğu için listede durur. Maç kapanınca hepsi `false` olur ve
+`left` kayıtlar silinir.
 
 `number` = oyuncunun **1..99 forma numarası** (§2); `0` = atanmamış, admin'de daima `0`. **Ad benzersiz
 değildir, ayırt edici alan budur** — arayüzlerde `"7 · ertu"` biçiminde gösterilir.
@@ -315,12 +334,13 @@ Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken har
 Operatör `kick` yolladığında sıra şudur:
 
 0. Sunucu hedefin kaydını **roster'dan siler** (`lobby_state` yayını `Removed` ile gider, `playerId`
-   havuza döner). ⚠️ Atmanın çevrimdışı bir kayıtta da iş yapmasının tek yolu budur: kopan cihaz
-   listede *"çevrimdışı"* olarak **durur** (aynı gözlük geri geldiğinde playerId'sini ve adını
-   korusun diye), atılan cihaz **kalkar**. Yalnız soket kapatılsaydı bağlantısı olmayan bir satırda
-   `kick` hiçbir şey yapmazdı. Silme `devices.json`'a dokunmaz — **atma yasak değildir**, cihaz
+   havuza döner). ⚠️ Atmanın **bağlantısız** bir kayıtta da iş yapmasının tek yolu budur: kopan
+   cihaz `reconnecting`/`left` olarak listede **durur** (aynı gözlük geri geldiğinde playerId'sini
+   ve adını korusun diye, §2), atılan cihaz **kalkar**. Yalnız soket kapatılsaydı bağlantısı olmayan
+   bir satırda `kick` hiçbir şey yapmazdı. Silme maç katılımcılığını da düşürür — atılan oyuncu maç
+   sonu tablosunda da yer almaz (§10.2). `devices.json`'a dokunulmaz: **atma yasak değildir**, cihaz
    yeniden bağlanırsa adını ve forma numarasını korur (yeni bir `playerId` alır).
-1. Bağlantısı varsa sunucu hedefe `kicked` yollar (çevrimdışı kayıtta bu adım ve sonrası atlanır).
+1. Bağlantısı varsa sunucu hedefe `kicked` yollar (bağlantısız kayıtta bu adım ve sonrası atlanır).
 2. Sunucu bağlantıyı **kapanış çerçevesiyle** kapatır; çerçevenin sebebi `"kicked"`
    (`ArenaProtocol.KICK_CLOSE_REASON`). Cevap gelmezse en fazla 2 sn beklenir, sonra koparılır.
    ⚠️ **Soket doğrudan koparılmaz (`Abort`):** abortif kapanış (RST) istemcinin henüz okumadığı
@@ -334,9 +354,10 @@ Operatör `kick` yolladığında sıra şudur:
    penceresi sahadaki tek yönetim aracıdır, yalnız bağlantısız duruma düşer.
 
 Aynı dizi `playerId` havuzu dolduğunda gelen ret için de işler (`kicked{reason:"Sunucu dolu"}`).
-⚠️ Bayat soketin değiştirilmesi (aynı cihaz yeniden `hello` yolladı) ve `OFFLINE_TIMEOUT`
-temizliği atma **değildir** — onlar koparılarak kapatılır, yoksa istemci kendini atılmış sanıp
-uygulamayı kapatırdı.
+⚠️ Bayat soketin değiştirilmesi (aynı cihaz yeniden `hello` yolladı), `HEARTBEAT_TIMEOUT` temizliği
+ve `RECONNECT_GRACE` dolunca yapılan çıkarma atma **değildir** — hiçbiri `kicked` yollamaz, soket
+koparılarak kapatılır. Yoksa istemci kendini atılmış sanıp uygulamayı kapatırdı; oysa bu üç durumda
+da geri bağlanması BEKLENİR (§8).
 
 ## 6. UDP state mesajları (binary, little-endian)
 
@@ -610,13 +631,34 @@ kaybetmek avatarı kaybetmekten iyidir.
        → UDP kayıt (0x00, ack'e dek tekrar) → geç katılımsa sahne senkronu
        → StatusLoop (5 sn; status.rosterVersion ile roster uzlaştırması) + (player ise,
          Live/Lobby fark etmez) PoseLoop (20 Hz)
-Kopma  → 1→2→5 sn backoff ile discovery'den itibaren baştan (sonsuz)
+Kopma  → 1→2→5 sn backoff ile discovery'den itibaren baştan (SONSUZ — aşağıdaki nota bak)
        → bağlantısızlık ~3 sn sürerse istemci hata ekranı gösterir (sunum; §4 notu)
 Sunucu : hello'suz bağlantıyı 10 sn içinde kapat; deviceId çakışmasında eskisini kapat
        → roster değişince TEK yayıncı üzerinden lobby_state (version artar); status.rosterVersion
          geride kalan istemciye YALNIZ ona tam snapshot yollatır
-       → 15 sn status yoksa Offline işaretle + bağlantıyı kapat + lobby_state yayınla
+       → soket düştü VEYA HEARTBEAT_TIMEOUT (15 sn) doldu → connection=reconnecting,
+         soketi kapat, lobby_state yayınla
+       → reconnecting RECONNECT_GRACE (45 sn) boyunca sürdü → oyuncu oyundan çıkarılır:
+         maç katılımcısıysa connection=left (kayıt maç sonuna kadar durur),
+         değilse kayıt silinir ve playerId havuza döner. Admin her iki adımda da SİLİNİR (§2)
+       → match_end: defter DOKUNULMAZ (ayrılmış oyuncular maç sonu tablosunda görünmeli)
+       → return_to_lobby: yayın gittikten SONRA left kayıtlar silinir, inMatch bayrakları temizlenir
 ```
+
+⚠️ **İstemci `RECONNECT_GRACE` dolduktan sonra da denemeyi bırakmaz.** Süre sunucunun kaydı ne zaman
+düşüreceğini söyler, başlığın ne zaman pes edeceğini değil: sahada bir gözlüğün ağ dönene kadar ölü
+beklemesi, operatörün her kopan başlığa elle gitmesi demektir. Süre dolduğunda değişen tek şey
+sunumdur (§5.3 `reconnectSeconds` biter, ekran "oyundan çıkarıldınız — yeniden bağlanılıyor" der);
+ağ geri gelince başlık normal `hello` ile katılır ve maç sürüyorsa **eski satırına oturur** (§2).
+
+⚠️ **İstemcinin geri sayımı sunucununkiyle her zaman aynı anda başlamaz.** Bağlantısız istemci
+sunucudan sayı alamadığı için süreyi kendi kopuş anından sayar: soket düzgün kapanırsa iki saat
+birlikte başlar, ama Wi-Fi **sessizce** ölürse sunucu düşüşü ancak `HEARTBEAT_TIMEOUT` sonunda fark
+eder ve istemcinin sayacı 15 sn'ye kadar erken biter. Sapma bilerek bu yöndedir: ekran "çıkarıldın"
+derken sunucu kaydı hâlâ tutuyor olabilir, tersi olamaz — oyuncuya hiçbir zaman olduğundan fazla
+süre vaat edilmez. ⚠️ Bu yüzden **admin başlığında bu iki hâl HİÇ gösterilmez** ve bugünkü
+"sunucuya bağlanılamıyor" metni kalır: admin kaydı kopar kopmaz silinir (§2), ona bir geri sayım
+göstermek yalan olurdu.
 
 ## 9. Güvenlik (v1)
 
@@ -743,6 +785,25 @@ Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `kills`, `deaths`, 
 
 `hp`/`alive`/`kills`/`deaths`/`score` **`lobby_state` ile de yayınlanır** (§5.3): ölüm işlendikten sonra roster bir kez tazelenir, böylece admin istatistik tablosu sunucudaki sayaçla birebir kalır ve admin yeniden bağlandığında geçmişi kaybetmez. Anlık akış (her vuruş) yine `health_update`/`kill_event` üzerinden gider — `lobby_state` sağlama noktasıdır, sıcak yol değil.
 
+**Maç katılımcısı defteri (`inMatch`).** Maç kurulurken o an **bağlı** olan her `role=player` kaydı
+katılımcı işaretlenir; maça sonradan bağlanan da işaretlenir. Bayrağın tek işi **istatistik satırını
+bağlantıdan bağımsız kılmaktır**: bağlantısı kopup `RECONNECT_GRACE`'i dolan bir katılımcı oyundan
+çıkarılır (`connection:"left"`) ama kaydı — adı, forma numarası, takımı, `kills`/`deaths`/`score`'u —
+**maç bitene kadar durur** ve maç sonu tablosunda görünür. Katılımcı olmayan bir kayıt aynı durumda
+tümüyle silinir.
+
+⚠️ **Defter `finished` fazının TAMAMI boyunca durur** ve ancak **lobiye dönerken**
+(`return_to_lobby` yayınından sonra) kapanır — `match_end`'de silmek maç sonu tablosunu tam da
+okunduğu anda boşaltırdı, oysa ayrılmış oyuncuların orada görünmesi bu defterin var olma sebebi.
+⚠️ Temizlik yayından **sonra** koşar (kayıt silmek `lobby_state` tetikliyor); ters sırada son
+roster satır eksik gider.
+
+⚠️ **Ayrılmış oyuncu maçı KAZANAMAZ.** Kazanan hesabı (§10.1) **bağlı** oyuncular arasından yürür:
+skoru tabloda durur ama kupayı almaz. Aksi hâlde kimsenin göremediği bir kazanan ilan edilirdi.
+
+⚠️ **Atma (§5.4) katılımcılıktan da düşürür:** operatör bilinçli attıysa kayıt tümüyle silinir ve
+maç sonu tablosunda da yer almaz — kopmadan farkı budur.
+
 ⚠️ `calibrated`/`calibrationSource` (§10.6) bu listeye **dahil değildir**: maç durumu değil cihaz durumudur, yazarı `MatchDirector` değil `PlayerRegistry`'dir (`Team` ile aynı desen — registry kilidinde yazılır, director kilidinde okunur; `bool` okuması atomik olduğu için iki kilidi birbirine bağlamaya gerek yoktur) ve maç sıfırlamalarında **korunur**.
 
 ### 10.3 Vuruş hattı — genel hasar modeli
@@ -800,7 +861,7 @@ yolu yalnız onu ve `Alive`/`Calibrated`'ı okur. Bir tik gecikme sunum için ö
 
 Fiziksel oyuncu ışınlanamaz → **respawn = konum değil durum değişimi**:
 
-1. Ölünce sunucu `respawn{playerId, delaySeconds}` gönderir (`delaySeconds` = `rules.respawnDelay`, §10.5); istemci ölüm ekranı gösterir, silah ateşlemez, avatar yarı saydam.
+1. Ölünce sunucu `respawn{playerId, delaySeconds}` gönderir (`delaySeconds` = `rules.respawnDelay`, §10.5); istemci ölüm ekranı gösterir, silah ateşlemez, avatar **hayalete döner** (yarı saydam; dost mavi, düşman kırmızı).
 2. `delaySeconds` dolduktan **ve modun canlanma şartı sağlandıktan** sonra istemci `revive_request` gönderir (canlanana dek ~1 sn'de bir tekrarlar). Şart `rules.reviveAnchor` ile seçilir:
    - **`"base"`** (varsayılan, TDM): oyuncu bir **taban bölgesine** (`BaseZone` — arenadaki kırmızı/mavi şerit) fiziken girer. Ölüm ekranı "Tabanına dön ve canlan" der.
    - **`"standstill"`**: oyuncu ölüm anındaki HMD konumunu çapa alır ve `REVIVE_HOLD_RADIUS` içinde `REVIVE_HOLD_SECONDS` boyunca kesintisiz sabit durur; çapadan çıkınca sayaç ve çapa sıfırlanır. Taban bölgesi olmayan modlar (FFA) bunu kullanır.
@@ -957,10 +1018,18 @@ hasar açılırdı — bu sistemin önlemek için var olduğu durumun ta kendisi
    kaldığı yerden devam eder; bu bir cezalandırma değil, geçici bir dondurmadır.
 
 **İstemci tarafı** (protokolün zorunlu kıldığı değil, beklenen davranış): kalibresizken tetik
-kilitlenir, uzak avatar **parlar** ve vuruş kutuları kapanır, kumandada elle kalibrasyon
+kilitlenir, **eldeki silah alınır ve yenisi alınamaz**, uzak avatar **hayalete döner** (yarı
+saydam, turuncu nabız) ve vuruş kutuları kapanır, kumandada elle kalibrasyon
 (A basılıyken B'ye çift basış) **açılır**. Kalibreli durumdayken bu jest **kilitlidir** — oyuncu
 kendi hizalamasını kazara bozamaz,
 kapıyı yalnız operatör açar.
+
+⚠️ **Silah kapısı ile tetik kapısı AYNI ŞEY DEĞİLDİR ve ikisi de gerekir.** Tetik kapısı tek
+başına bırakılsaydı oyuncunun elinde ateş etmeyen bir silah kalırdı ve bu, sorunu silahta
+sanmasına yol açardı. Kapı üç yolu birden kapatmak zorundadır: rastgele dağıtım, çerçeve klonu
+(ikisi `WeaponGranter`'ın tek kapısından) ve çerçevenin ISDK aday listesine girmesi
+(`WeaponFrame.Filter` — kapı orada olduğu için oyuncu ışını hiç görmez). Kalibrasyon geri
+geldiğinde silah **kendiliğinden dönmez**: oyuncu grip'e basınca seçili silahı geri gelir.
 
 **`hello`'da `calibrated` sıfırlanır.** Sunucu yeniden bağlanan bir başlığın hizalama durumunu
 bilemez (uygulama yeniden başlamış olabilir); başlık kayıtlı anchor'dan geri yükleyince zaten

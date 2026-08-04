@@ -15,7 +15,7 @@ public sealed class PlayerState
     public string Name { get; set; } = "";
 
     /// <summary>Forma numarası 1..99 (§2); 0 = atanmamış. Admin'de daima 0 (admin oynamaz).
-    /// <b>Tüm kayıtlı cihazlar arasında benzersizdir</b> — yalnız çevrimiçiler arasında değil.</summary>
+    /// <b>Tüm kayıtlı cihazlar arasında benzersizdir</b> — yalnız bağlı olanlar arasında değil.</summary>
     public int Number { get; set; }
 
     /// <summary>"player" (VR/Quest) veya "admin" (Windows masaüstü).</summary>
@@ -25,7 +25,26 @@ public sealed class PlayerState
     public string Team { get; set; } = "";
 
     public bool Ready { get; set; }
-    public bool Online { get; set; }
+
+    /// <summary>Bağlantı durumu (§2). Yazarı yalnız <see cref="PlayerRegistry"/>'dir.
+    /// <para>⚠️ Soket alanı bilerek <see cref="Socket"/> adını taşır: iki alan da "connection"
+    /// olamazdı ve telde taşınan kavram (<c>PlayerInfo.connection</c>) bu üç değerli durumdur,
+    /// WebSocket nesnesi değil.</para></summary>
+    public PlayerConnection Connection { get; set; }
+
+    /// <summary>Soketin düştüğü an (UTC); RECONNECT_GRACE hesabı buna bakar. Yalnız
+    /// <see cref="PlayerConnection.Reconnecting"/> iken anlamlıdır.</summary>
+    public DateTime DisconnectedAt { get; set; }
+
+    /// <summary>Kısayol: bugüne kadarki tüm "online mı" okumalarının karşılığı. Maç kapıları
+    /// (yükleme kapısı, vuruş, canlanma, snapshot) BUNA bakar — <c>reconnecting</c> ve
+    /// <c>left</c> kayıtlar hiçbirine girmez.</summary>
+    public bool IsConnected => Connection == PlayerConnection.Connected;
+
+    /// <summary>Koşan maçın defterine yazılmış mı (§10.2). Tek işi istatistik satırını
+    /// bağlantıdan bağımsız kılmaktır: çıkarılan bir katılımcının kaydı silinmez,
+    /// <see cref="PlayerConnection.Left"/> olarak maç sonuna kadar durur.</summary>
+    public bool MatchParticipant { get; set; }
 
     /// <summary>0–1 aralığı; -1 = bilinmiyor.</summary>
     public float Battery { get; set; } = -1f;
@@ -51,7 +70,7 @@ public sealed class PlayerState
     /// <summary>hello'da bildirilen build sahne listesi (admin katalog doğrulaması için).</summary>
     public List<string> Scenes { get; set; } = new();
 
-    /// <summary>Son hello/status'un UTC zamanı (OFFLINE_TIMEOUT süpürmesi buna bakar).</summary>
+    /// <summary>Son hello/status'un UTC zamanı (HEARTBEAT_TIMEOUT süpürmesi buna bakar).</summary>
     public DateTime LastSeen { get; set; }
 
     // ---- Maç durumu (§10.2) ----
@@ -108,7 +127,7 @@ public sealed class PlayerState
     /// <summary>Son kabul edilen pozun sıra numarası (u16 sarmalamalı eskilik kontrolü için).</summary>
     public ushort LastSeq { get; set; }
 
-    /// <summary>Son kabul edilen pozun UTC zamanı. <b>Canlılık</b> ölçütüdür (OFFLINE/bayatlık);
+    /// <summary>Son kabul edilen pozun UTC zamanı. <b>Canlılık</b> ölçütüdür (bayatlık);
     /// jitter için KULLANILMAZ — <c>DateTime.UtcNow</c>'un Windows'taki varsayılan çözünürlüğü
     /// ~15,6 ms olduğu için 50 ms'lik bir aralığın sapmasını ölçmeye yetmez. Jitter
     /// <see cref="LastPoseStamp"/> (monotonik) üzerinden hesaplanır.</summary>
@@ -188,7 +207,9 @@ public sealed class PlayerState
     public long EventAccepted;
     public long EventLost;
 
-    public ClientConnection? Connection { get; set; }
+    /// <summary>Açık WS bağlantısı; kopukken null. Adı <c>Connection</c> DEĞİL çünkü o ad
+    /// telde taşınan bağlantı DURUMUNA ait (bkz. <see cref="Connection"/>).</summary>
+    public ClientConnection? Socket { get; set; }
 
     /// <summary>lobby_state için tel formatı anlık görüntüsü.</summary>
     public PlayerInfo ToPlayerInfo() => new()
@@ -199,7 +220,11 @@ public sealed class PlayerState
         role = Role,
         team = Team,
         ready = Ready,
-        online = Online,
+        connection = ConnectionWire(Connection),
+        // Geri sayım her anlık görüntüde yeniden hesaplanır (§5.3): telde zaman damgası taşımıyoruz,
+        // istemcinin saati sunucununkiyle hizalı değil.
+        reconnectSeconds = ReconnectSecondsLeft(),
+        inMatch = MatchParticipant,
         battery = Battery,
         scene = Scene,
         // §10.2 sayaçları: admin istatistik tablosu bunları okur (§5.3 lobby_state).
@@ -212,4 +237,20 @@ public sealed class PlayerState
         calibrated = Calibrated,
         calibrationSource = CalibrationSource
     };
+
+    private static string ConnectionWire(PlayerConnection connection) => connection switch
+    {
+        PlayerConnection.Reconnecting => ArenaProtocol.CONNECTION_RECONNECTING,
+        PlayerConnection.Left => ArenaProtocol.CONNECTION_LEFT,
+        _ => ArenaProtocol.CONNECTION_CONNECTED
+    };
+
+    /// <summary>Oyuncunun oyundan çıkarılmasına kalan saniye (yukarı yuvarlanır, 0'a kırpılır);
+    /// yalnız <see cref="PlayerConnection.Reconnecting"/> iken dolu.</summary>
+    private int ReconnectSecondsLeft()
+    {
+        if (Connection != PlayerConnection.Reconnecting) return 0;
+        var elapsed = (DateTime.UtcNow - DisconnectedAt).TotalSeconds;
+        return (int)Math.Max(0d, Math.Ceiling(ArenaProtocol.RECONNECT_GRACE - elapsed));
+    }
 }

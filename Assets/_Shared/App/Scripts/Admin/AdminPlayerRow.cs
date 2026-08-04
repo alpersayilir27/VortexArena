@@ -48,6 +48,13 @@ namespace VortexArena.App.Admin
 
         private const float DeadColorScale = 0.5f;
 
+        /// <summary>Satır sönüklüğü: geri beklenen cihaz ile oyundan çıkarılmış cihaz aynı
+        /// görünmemeli (§2) — ilki dönebilir, ikincisi için yapılacak bir şey yoktur.</summary>
+        private const float ReconnectingAlpha = 0.7f;
+
+        /// <inheritdoc cref="ReconnectingAlpha"/>
+        private const float LeftAlpha = 0.45f;
+
         [Header("Kart")]
         [Tooltip("Kartın dış (kenarlık) görseli — seçim ve kalibrasyon vurgusu bunun rengiyle verilir.")]
         [SerializeField] private Image border;
@@ -144,7 +151,9 @@ namespace VortexArena.App.Admin
                     : view.NeedsCalibration ? UiKit.Bad : UiKit.Border;
             }
 
-            float alpha = view.online ? 1f : 0.45f;
+            // Sönüklük kademeli: bağlı 1.0, geri beklenen 0.7, ayrılmış 0.45. Ayrım görsel olarak
+            // taşınmalı — "geri gelebilir" ile "gitti" operatör için farklı iki karardır.
+            float alpha = view.IsConnected ? 1f : view.IsReconnecting ? ReconnectingAlpha : LeftAlpha;
             if (nameText != null)
             {
                 nameText.color = UiKit.WithAlpha(view.alive ? UiKit.Title : UiKit.Muted, alpha);
@@ -173,7 +182,7 @@ namespace VortexArena.App.Admin
             if (statsText != null)
             {
                 statsText.text = BuildStatsLine(view);
-                statsText.color = view.online ? UiKit.Muted : UiKit.Faint;
+                statsText.color = view.IsConnected ? UiKit.Muted : UiKit.Faint;
             }
 
             // Takım düğmesi karşı takımı gösterir (ne olacağını yazar, ne olduğunu değil).
@@ -184,8 +193,23 @@ namespace VortexArena.App.Admin
                 teamLabel.text = view.team == "red" ? "MAVİ" : view.team == "blue" ? "KIRMIZI" : "TAKIM";
             }
 
+            // Ayrılmış satırda komutun hedefi yok: oyuncu oyundan çıkarıldı, satır yalnız maç
+            // istatistiği için duruyor (§10.2). Düğmeler kapatılır ki operatör tepkisiz bir
+            // düğmeye basıp komutun gittiğini sanmasın.
+            SetInteractable(teamButton, !view.HasLeft);
+            SetInteractable(identifyButton, !view.HasLeft);
+            SetInteractable(kickButton, !view.HasLeft);
+
             RefreshKickButton();
             RefreshCalibrationButton();
+        }
+
+        private static void SetInteractable(Button button, bool value)
+        {
+            if (button != null && button.interactable != value)
+            {
+                button.interactable = value;
+            }
         }
 
         /// <summary>Onay pencereleri doldu mu (HUD her karede çağırır).</summary>
@@ -305,11 +329,18 @@ namespace VortexArena.App.Admin
             return $"{view.kills}/{view.deaths} · {battery} · {state}";
         }
 
+        /// <summary>Satırın durum metni. ⚠️ "çevrimdışı" diye bir durum YOKTUR (§2): kopan cihaz
+        /// ya geri bekleniyor ya oyundan çıkarılmıştır — sayaç operatöre hangisi olduğunu söyler.</summary>
         private static string BuildState(AdminPlayerView view)
         {
-            if (!view.online)
+            if (view.IsReconnecting)
             {
-                return "çevrimdışı";
+                return $"yeniden bağlanıyor · {view.ReconnectSecondsLeft} sn";
+            }
+
+            if (view.HasLeft)
+            {
+                return "ayrıldı";
             }
 
             if (!view.alive)

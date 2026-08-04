@@ -3,8 +3,11 @@ using UnityEngine;
 namespace VortexArena.Core.Player
 {
     /// <summary>
-    /// Geliştirici aracı: <see cref="HandGripConvention"/>'daki <b>tahmini</b> anchor anatomisinin
-    /// KESİN değerini cihazda ölçer ve doğrudan koda yapıştırılabilir biçimde loglar.
+    /// Geliştirici aracı: anchor uzayındaki <b>tahmini</b> iki sabiti cihazda ölçer ve doğrudan
+    /// koda yapıştırılabilir biçimde loglar — <see cref="HandGripConvention"/>'ın el ANATOMİSİ
+    /// (parmak yönü + avuç normali) ve <see cref="HandGripPivot"/>'un avuç OFSETİ (bileğin anchor'a
+    /// göre konumu). İkisi aynı örneklemeden çıkar: ayrı ölçülselerdi biri elin bir duruşunu,
+    /// öteki başkasını yakalar ve sabitler birbiriyle tutarsız kalırdı.
     /// <para>
     /// <b>Kaynak neden BB rig'inin kendi eli:</b> oyuncu kumandayı tutarken kendi ellerini doğru
     /// yerde görüyor — yani ISDK'nın kumandadan sürdüğü el iskeleti, aradığımız "anchor'a göre el
@@ -33,8 +36,8 @@ namespace VortexArena.Core.Player
     /// </para>
     /// <para>
     /// <b>Kullanımı:</b> <c>VA_CameraRig</c> prefabında durur, iki kumanda da normal tutulurken bir
-    /// kez log basıp kendini kapatır; çıkan iki satır <see cref="HandGripConvention"/> içindeki
-    /// tahmini sabitlerin yerine yapıştırılır.
+    /// kez log basıp kendini kapatır; çıkan satırlar <see cref="HandGripConvention"/> ve
+    /// <see cref="HandGripPivot"/> içindeki tahmini sabitlerin yerine yapıştırılır.
     /// </para>
     /// </summary>
     public class HandGripCalibrationProbe : MonoBehaviour
@@ -48,6 +51,11 @@ namespace VortexArena.Core.Player
         /// <summary>Kareler arası sapma bunu aşarsa ölçüm oturmamıştır (derece).</summary>
         private const float UnstableAngleDegrees = 5f;
 
+        /// <summary>Aynı kontrolün KONUM karşılığı (m). Ayrı bir eşik gerekiyor çünkü avuç ofseti
+        /// birkaç santimlik bir ölçü: derece cinsinden kararlı görünen bir örnekleme, konumda
+        /// tümüyle kaymış olabilir.</summary>
+        private const float UnstablePositionMeters = 0.01f;
+
         private OVRCameraRig _rig;
         private Transform _leftWrist, _leftMiddle, _leftThumb;
         private Transform _rightWrist, _rightMiddle, _rightThumb;
@@ -58,16 +66,22 @@ namespace VortexArena.Core.Player
         // Yön ortalaması: aradığımız şey zaten iki yön vektörü, quaternion ortalamasına gerek yok.
         private Vector3 _leftFingerSum, _leftPalmSum, _rightFingerSum, _rightPalmSum;
 
+        // Bileğin ANCHOR uzayındaki konum farkı — HandGripPivot.PalmOffset'in kaynağı.
+        private Vector3 _leftOffsetSum, _rightOffsetSum;
+
         private Quaternion _leftFirst = Quaternion.identity, _rightFirst = Quaternion.identity;
         private float _leftMaxDeviation, _rightMaxDeviation;
+
+        private Vector3 _leftFirstOffset, _rightFirstOffset;
+        private float _leftMaxOffsetDeviation, _rightMaxOffsetDeviation;
 
         private void Update()
         {
             _elapsed += Time.deltaTime;
 
             if (!EnsureReferences() ||
-                !TryReadAnchorBasis(false, out Quaternion leftBasis) ||
-                !TryReadAnchorBasis(true, out Quaternion rightBasis))
+                !TryReadAnchorSample(false, out Quaternion leftBasis, out Vector3 leftOffset) ||
+                !TryReadAnchorSample(true, out Quaternion rightBasis, out Vector3 rightOffset))
             {
                 if (_sampleCount == 0 && _elapsed >= NoDataTimeoutSeconds)
                 {
@@ -95,11 +109,17 @@ namespace VortexArena.Core.Player
             {
                 _leftFirst = leftBasis;
                 _rightFirst = rightBasis;
+                _leftFirstOffset = leftOffset;
+                _rightFirstOffset = rightOffset;
             }
             else
             {
                 _leftMaxDeviation = Mathf.Max(_leftMaxDeviation, Quaternion.Angle(_leftFirst, leftBasis));
                 _rightMaxDeviation = Mathf.Max(_rightMaxDeviation, Quaternion.Angle(_rightFirst, rightBasis));
+                _leftMaxOffsetDeviation = Mathf.Max(_leftMaxOffsetDeviation,
+                    Vector3.Distance(_leftFirstOffset, leftOffset));
+                _rightMaxOffsetDeviation = Mathf.Max(_rightMaxOffsetDeviation,
+                    Vector3.Distance(_rightFirstOffset, rightOffset));
             }
 
             // Baz bir LookRotation'dır: yerel +Z = parmak yönü, +Y = avuç normali.
@@ -107,6 +127,9 @@ namespace VortexArena.Core.Player
             _leftPalmSum += leftBasis * Vector3.up;
             _rightFingerSum += rightBasis * Vector3.forward;
             _rightPalmSum += rightBasis * Vector3.up;
+
+            _leftOffsetSum += leftOffset;
+            _rightOffsetSum += rightOffset;
 
             _sampleCount++;
             if (_sampleCount >= RequiredSamples)
@@ -190,14 +213,18 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Elin anatomik bazını ANCHOR uzayında verir — <see cref="HandGripConvention"/>'ın
-        /// beklediği şey tam olarak budur.
+        /// Elin ANCHOR uzayındaki iki ölçüsünü birden verir: anatomik BAZ
+        /// (<see cref="HandGripConvention"/>'ın beklediği) ve bileğin KONUM farkı
+        /// (<see cref="HandGripPivot.PalmOffset"/>'in beklediği).
+        /// <para>İkisi aynı karede ve aynı kaynaktan okunur: ayrı ayrı örneklenselerdi biri elin
+        /// bir duruşunu, öteki başka bir duruşunu yakalar ve iki sabit birbiriyle tutarsız çıkardı.</para>
         /// <para>Anatomi ölçümü <see cref="HandGripConvention.TryMeasureBoneBasis"/>'e devredilir:
         /// sol/sağ çapraz çarpım kuralının projede tek uygulaması orasıdır.</para>
         /// </summary>
-        private bool TryReadAnchorBasis(bool rightHand, out Quaternion anchorBasis)
+        private bool TryReadAnchorSample(bool rightHand, out Quaternion anchorBasis, out Vector3 anchorOffset)
         {
             anchorBasis = Quaternion.identity;
+            anchorOffset = Vector3.zero;
 
             Transform wrist = rightHand ? _rightWrist : _leftWrist;
             Transform middle = rightHand ? _rightMiddle : _leftMiddle;
@@ -211,6 +238,10 @@ namespace VortexArena.Core.Player
             }
 
             anchorBasis = Quaternion.Inverse(anchor.rotation) * wrist.rotation * wristLocalBasis;
+
+            // ⚠️ InverseTransformPoint DEĞİL: ofset METREdir, rig'in ölçeği 1 olmasa bile
+            // küçültülmemeli (HandGripPivot da aynı kuralla uyguluyor).
+            anchorOffset = Quaternion.Inverse(anchor.rotation) * (wrist.position - anchor.position);
             return true;
         }
 
@@ -218,28 +249,53 @@ namespace VortexArena.Core.Player
         {
             float maxDeviation = Mathf.Max(_leftMaxDeviation, _rightMaxDeviation);
             string stability = maxDeviation > UnstableAngleDegrees
-                ? $"⚠️ Kareler arası sapma {maxDeviation:F1}° — ölçüm oturmamış, DEĞERLER GÜVENİLMEZ. " +
+                ? $"⚠️ Kareler arası açı sapması {maxDeviation:F1}° — ölçüm oturmamış, DEĞERLER GÜVENİLMEZ. " +
                   "Elleri sabit tutup tekrar ölç."
-                : $"Kareler arası sapma {maxDeviation:F1}° (kararlı).";
+                : $"Kareler arası açı sapması {maxDeviation:F1}° (kararlı).";
+
+            float maxOffsetDeviation = Mathf.Max(_leftMaxOffsetDeviation, _rightMaxOffsetDeviation);
+            string offsetStability = maxOffsetDeviation > UnstablePositionMeters
+                ? $"⚠️ Kareler arası konum sapması {maxOffsetDeviation * 100f:F1} cm — avuç ofseti " +
+                  "oturmamış, DEĞERLER GÜVENİLMEZ."
+                : $"Kareler arası konum sapması {maxOffsetDeviation * 100f:F1} cm (kararlı).";
 
             Debug.Log(
                 $"[HandGripCalibrationProbe] Sol: fingerDir={Format(_leftFingerSum)} palmNormal={Format(_leftPalmSum)}\n" +
                 $"[HandGripCalibrationProbe] Sağ: fingerDir={Format(_rightFingerSum)} palmNormal={Format(_rightPalmSum)}\n" +
                 $"{stability} {_sampleCount} kare ortalandı. " +
-                "Bu değerleri HandGripConvention'daki tahmini anchor sabitlerinin yerine yaz.", this);
+                "Bu değerleri HandGripConvention'daki tahmini anchor sabitlerinin yerine yaz.\n" +
+                $"[HandGripCalibrationProbe] public static readonly Vector3 LeftPalmOffset = {FormatPoint(_leftOffsetSum)};\n" +
+                $"[HandGripCalibrationProbe] public static readonly Vector3 RightPalmOffset = {FormatPoint(_rightOffsetSum)};\n" +
+                $"{offsetStability} Bu iki satırı HandGripPivot'taki tahmini ofsetlerin yerine yaz.", this);
         }
 
-        /// <summary>Toplamı normalize edip doğrudan koda yapıştırılabilir biçimde yazar.
-        /// <para>⚠️ Biçimlendirme <b>InvariantCulture</b> ile yapılır: Türkçe yerelde ondalık
-        /// ayırıcı virgül olur ve basılan satır derlenmeyen bir C# ifadesine dönüşürdü — oysa bu
-        /// logun tek işi kopyalanıp koda yapıştırılmaktır.</para></summary>
+        /// <summary>Yön toplamını normalize edip doğrudan koda yapıştırılabilir biçimde yazar.</summary>
         private static string Format(Vector3 sum)
         {
             Vector3 direction = sum.sqrMagnitude > 1e-8f ? sum.normalized : Vector3.zero;
+            return FormatVector(direction);
+        }
+
+        /// <summary>Konum toplamının ORTALAMASINI yazar. ⚠️ <see cref="Format"/> gibi normalize
+        /// EDİLMEZ: bu bir yön değil metre cinsinden bir ölçüdür, birim uzunluğa çekmek 3 cm'lik
+        /// avuç ofsetini 1 m'ye şişirirdi.</summary>
+        private string FormatPoint(Vector3 sum)
+        {
+            return FormatVector(_sampleCount > 0 ? sum / _sampleCount : Vector3.zero);
+        }
+
+        /// <summary>
+        /// Vektörü doğrudan koda yapıştırılabilir biçimde yazar.
+        /// <para>⚠️ Biçimlendirme <b>InvariantCulture</b> ile yapılır: Türkçe yerelde ondalık
+        /// ayırıcı virgül olur ve basılan satır derlenmeyen bir C# ifadesine dönüşürdü — oysa bu
+        /// logun tek işi kopyalanıp koda yapıştırılmaktır.</para>
+        /// </summary>
+        private static string FormatVector(Vector3 value)
+        {
             return string.Format(
                 System.Globalization.CultureInfo.InvariantCulture,
                 "new Vector3({0:F3}f, {1:F3}f, {2:F3}f)",
-                direction.x, direction.y, direction.z);
+                value.x, value.y, value.z);
         }
     }
 }

@@ -13,9 +13,11 @@ namespace VortexArena.Core.Player
     /// takım rengi MaterialPropertyBlock ile _BaseColor'a yazılır (URP Lit).
     /// RemotePlayerSpawner tarafından Instantiate + Initialize ile kurulur.
     /// <para>
-    /// Snapshot'taki alive bayrağı okunur — ölü oyuncu SOLUKLAŞIR (URP Lit opak
-    /// materyalde alpha işe yaramadığı için takım rengi karartılır), ad etiketine
-    /// " (ölü)" eklenir ve vuruş kutuları kapatılır (ölüye ateş edilemez).
+    /// Snapshot'taki alive bayrağı okunur — ölü oyuncu <b>hayalet gövdeye</b> döner (yarı saydam,
+    /// iki yüzü de çizilen <c>VortexArena/AvatarGhost</c>; dost mavi, düşman kırmızı), ad
+    /// etiketine " (ölü)" eklenir ve vuruş kutuları kapatılır (ölüye ateş edilemez). <b>Aynı
+    /// hayalet görünümü kalibresiz oyuncuda da kullanılır</b> ve orada turuncuya nabız atar —
+    /// kalibresizlik ölümü EZER.
     /// </para>
     /// <para>
     /// <b>Elde tutulan eşya</b> (§6.6): snapshot'tan gelen <c>itemL</c>/<c>itemR</c> baytları
@@ -37,9 +39,19 @@ namespace VortexArena.Core.Player
         [SerializeField] private TMP_Text nameLabel;
         [SerializeField] private Renderer[] teamRenderers;
 
-        [Tooltip("Karakter mesh'i — YALNIZ ölüm karartması ve kalibresiz nabzı için. Takım rengi " +
-                 "buraya YAZILMAZ (düşmanı işaretlemek duvar arkası avantaj olurdu).")]
+        [Tooltip("Karakter mesh'i — canlı+kalibreli oyuncuda buna HİÇ dokunulmaz. Takım rengi " +
+                 "buraya YAZILMAZ (düşmanı işaretlemek duvar arkası avantaj olurdu); yalnız " +
+                 "hayalet durumunda gizlenir ya da hayalet materyaline çevrilir.")]
         [SerializeField] private Renderer[] bodyRenderers;
+
+        [Header("Hayalet gövde (ölü / kalibresiz)")]
+        [Tooltip("Yarı saydam hayalet materyali (VortexArena/AvatarGhost). BOŞSA hayalet " +
+                 "görünümü hiç uygulanmaz — ölü oyuncu canlıdan ayırt edilemez.")]
+        [SerializeField] private Material ghostMaterial;
+
+        [Tooltip("Ayrı hayalet gövde alt ağacı (Starter robot). BOŞSA karakterin KENDİ mesh'i " +
+                 "hayalet materyaliyle çizilir; ikisi de geçerli kurulumdur.")]
+        [SerializeField] private GameObject ghostRoot;
 
         [Header("Karakter")]
         [Tooltip("Bağlıysa gövde ağdan gelen Movement SDK iskeletiyle çizilir; boşsa eski " +
@@ -66,7 +78,10 @@ namespace VortexArena.Core.Player
         /// <summary>Gövde merkezinin kafa merkezinden aşağı ofseti (metre).</summary>
         private const float BodyDropMeters = 0.55f;
 
-        /// <summary>Ölü avatarın renk çarpanı (opak materyalde alpha yerine karartma).</summary>
+        /// <summary>
+        /// Ölü avatarın renk çarpanı — YALNIZ eski kapsül yolundaki <see cref="teamRenderers"/>
+        /// içindir. Karakter mesh'i karartılmaz, hayalete döner (<see cref="ApplyBodyVisual"/>).
+        /// </summary>
         private const float DeadColorScale = 0.35f;
 
         /// <summary>Dost göstergesinin kafa merkezinin üstündeki yüksekliği (metre).</summary>
@@ -113,6 +128,22 @@ namespace VortexArena.Core.Player
         /// turuncu: bu bir takım işareti DEĞİL, "bu avatarın konumu yalan" uyarısıdır.
         /// </summary>
         private static readonly Color UncalibratedTint = new Color(1f, 0.45f, 0.1f);
+
+        /// <summary>
+        /// Hayalet gövdenin taban alfası. Shader kenar parlamasını bunun ÜSTÜNE ekler, yani
+        /// silüet bu değerden her zaman daha opaktır.
+        /// </summary>
+        private const float GhostBaseAlpha = 0.28f;
+
+        /// <summary>Hayalet gövdenin dost rengi (yerel oyuncuyla AYNI takım).</summary>
+        private static readonly Color GhostFriendColor = new Color(0.20f, 0.45f, 0.90f);
+
+        /// <summary>
+        /// Hayalet gövdenin düşman rengi. ⚠️ Takımsız modda (FFA) ve admin gözlemcide HERKES
+        /// budur ve bu bilinçlidir: "dost değil" ile "takım yok" aynı cevabı verir, takımsız
+        /// oyunda karşındaki herkes gerçekten düşmandır.
+        /// </summary>
+        private static readonly Color GhostEnemyColor = new Color(0.90f, 0.20f, 0.20f);
 
         /// <summary>Bu avatarın temsil ettiği uzak oyuncunun id'si.</summary>
         public int PlayerId { get; private set; }
@@ -214,6 +245,26 @@ namespace VortexArena.Core.Player
         /// <summary>Bağsız <see cref="character"/> uyarısı örnek başına bir kez (LateUpdate 72/sn).</summary>
         private bool _characterWarned;
 
+        // ── Hayalet gövde ───────────────────────────────────────────────────────────────
+        /// <summary>Ayrı hayalet gövdesinin renderer'ları; <see cref="ghostRoot"/> boşsa null.</summary>
+        private Renderer[] _ghostRenderers;
+
+        /// <summary>Hayaleti canlı iskeletten süren köprü; hayaletle birlikte açılıp kapanır.</summary>
+        private GhostPoseDriver _ghostDriver;
+
+        // Materyal takasının geri alınabilmesi için her bodyRenderer'ın ÖZGÜN dizisi ve aynı
+        // UZUNLUKTA hayalet dizisi. ⚠️ Uzunluk birebir korunmalı: alt mesh sayısından fazla
+        // materyal SON alt mesh'i bir kez daha çizer, eksik olan hiç çizilmez.
+        private Material[][] _bodyOriginalMaterials;
+        private Material[][] _bodyGhostMaterials;
+
+        // Uygulanmış hayalet durumu — kare başına gereksiz materyal/renderer trafiği olmasın.
+        private bool _ghostApplied;
+        private bool _ghostStateKnown;
+
+        /// <summary>Kurulumsuz hayalet uyarısı örnek başına bir kez.</summary>
+        private bool _ghostSetupWarned;
+
         private void Awake()
         {
             // Prefabda liste bağlanmadıysa çocuk collider'ları vuruş kutusu sayılır.
@@ -223,6 +274,64 @@ namespace VortexArena.Core.Player
             }
 
             _itemCatalog = NetItemCatalog.Load();
+
+            CacheGhostTargets();
+        }
+
+        /// <summary>
+        /// Hayalet hedeflerini BİR kez toplar: ayrı hayalet gövdesi varsa onun renderer'ları,
+        /// yoksa karakterin kendi mesh'inin materyal dizileri.
+        /// <para>⚠️ <c>sharedMaterials</c> her çağrıda YENİ dizi döndürür — bu yüzden bir kez
+        /// okunup saklanır; durum değişiminde okumak kare başına çöp üretmese de, takas edilen
+        /// diziyi geri koyabilmek için özgün dizinin saklanması zaten şart.</para>
+        /// </summary>
+        private void CacheGhostTargets()
+        {
+            if (ghostRoot != null)
+            {
+                _ghostRenderers = ghostRoot.GetComponentsInChildren<Renderer>(true);
+                SetRenderersEnabled(_ghostRenderers, false); // hayalet kapalı doğar
+
+                // Görünmeyen hayaletin pozunu sürmek boşuna iş — sürücü hayaletle birlikte açılır.
+                _ghostDriver = ghostRoot.GetComponentInChildren<GhostPoseDriver>(true);
+                if (_ghostDriver != null)
+                {
+                    _ghostDriver.enabled = false;
+                }
+            }
+
+            if (_ghostRenderers != null && _ghostRenderers.Length > 0)
+            {
+                return; // ayrı hayalet gövdesi var: karakterin materyallerine HİÇ dokunulmaz
+            }
+
+            if (bodyRenderers == null || bodyRenderers.Length == 0 || ghostMaterial == null)
+            {
+                return;
+            }
+
+            _bodyOriginalMaterials = new Material[bodyRenderers.Length][];
+            _bodyGhostMaterials = new Material[bodyRenderers.Length][];
+
+            for (int i = 0; i < bodyRenderers.Length; i++)
+            {
+                Renderer target = bodyRenderers[i];
+                if (target == null)
+                {
+                    continue;
+                }
+
+                Material[] original = target.sharedMaterials;
+                _bodyOriginalMaterials[i] = original;
+
+                var ghosts = new Material[original.Length];
+                for (int m = 0; m < ghosts.Length; m++)
+                {
+                    ghosts[m] = ghostMaterial;
+                }
+
+                _bodyGhostMaterials[i] = ghosts;
+            }
         }
 
         /// <summary>Spawner kurar; poz okumaları bu id ile yapılır.</summary>
@@ -278,7 +387,7 @@ namespace VortexArena.Core.Player
             IsCalibrated = calibrated;
             ApplyLabelText();
             ApplyTeamColor();
-            ApplyBodyTint();
+            ApplyBodyVisual();
             RefreshColliders();
         }
 
@@ -300,6 +409,9 @@ namespace VortexArena.Core.Player
 
             _isFriendly = friendly;
             RefreshFriendMarker();
+
+            // Hayaletin rengi dost/düşman bilgisidir — takım değişimi onu da tazelemeli.
+            ApplyBodyVisual();
         }
 
         /// <summary>Göstergeyi kafanın üstünde tutar — kafa KEMİĞİNE bağlanmaz, çünkü IK her
@@ -386,19 +498,152 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Karakter mesh'inin durum tonu: canlı+kalibreli = <b>tonsuz</b> (beyaz, doku olduğu gibi),
-        /// ölü = karartma, kalibresiz = turuncu nabız.
+        /// Gövde görünümü: canlı + kalibreli = <b>hiç dokunulmaz</b> (karakter olduğu gibi çizilir),
+        /// ölü ya da kalibresiz = <b>hayalet</b>.
         /// <para>
-        /// ⚠️ <b>Neden <see cref="teamRenderers"/>'tan AYRI bir liste:</b> takım rengi karaktere
-        /// bilerek uygulanmaz (düşmanı işaretlemek duvar arkasından okunabilen bir avantaj olurdu),
-        /// ama ölüm ve <b>kalibresizlik</b> görünmek ZORUNDA. İkisi tek listeye bağlansaydı biri
-        /// diğerini getirirdi; sahada olan tam da buydu — liste boş bırakıldığı için kalibresiz
-        /// uyarısı hiç çizilmiyordu ve konumu yalan söyleyen avatar normal görünüyordu.
+        /// ⚠️ <b>Neden materyal takası, alfa DEĞİL:</b> karakterin materyali URP Lit ve OPAK
+        /// (<c>_Surface: 0</c>, <c>_ZWrite: 1</c>) — opak malzemede <c>_BaseColor.a</c> yazmanın
+        /// görsel karşılığı yoktur. Saydamlık ancak saydam bir shader'la gelir; renk çarpanıyla
+        /// karartmak ise sahada "ölü mü canlı mı" sorusunu cevaplamıyordu.
+        /// </para>
+        /// <para>
+        /// İki kurulum da geçerlidir ve kod tarafı ikisinde de aynıdır: <see cref="ghostRoot"/>
+        /// bağlıysa karakterin mesh'i kapanıp AYRI hayalet gövdesi açılır, bağlı değilse
+        /// karakterin kendi mesh'i hayalet materyaliyle çizilir. Yani hayalet modelini değiştirmek
+        /// bir prefab işidir, kod işi değil.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Takım rengi hâlâ karaktere yazılmaz</b> — hayaletin rengi takım değil
+        /// <b>dost/düşman</b> bilgisidir (<see cref="_isFriendly"/>) ve yalnız zaten tehdit
+        /// olmayan (ölü/kalibresiz) bir gövdede görünür.
         /// </para>
         /// </summary>
-        private void ApplyBodyTint()
+        private void ApplyBodyVisual()
         {
-            if (bodyRenderers == null || bodyRenderers.Length == 0)
+            // ⚠️ Görünürlük de karara girer: hayalet ayrı bir alt ağaçtaysa visualRoot onu
+            // kapatmayabilir (kardeş olabilir), o hâlde poz gelmeden havada asılı kalırdı.
+            bool ghost = _visible && (!IsCalibrated || !IsAlive);
+
+            if (_ghostStateKnown && ghost == _ghostApplied)
+            {
+                // Durum aynı: yalnız renk tazelenir — kalibresiz nabız her kare buraya uğrar.
+                if (ghost)
+                {
+                    ApplyGhostColor();
+                }
+
+                return;
+            }
+
+            _ghostStateKnown = true;
+            _ghostApplied = ghost;
+
+            if (_ghostRenderers != null && _ghostRenderers.Length > 0)
+            {
+                SetRenderersEnabled(bodyRenderers, !ghost);
+                SetRenderersEnabled(_ghostRenderers, ghost);
+
+                if (_ghostDriver != null)
+                {
+                    _ghostDriver.enabled = ghost;
+                }
+            }
+            else if (_bodyGhostMaterials != null)
+            {
+                ApplyBodyMaterials(ghost);
+            }
+            else if (ghost)
+            {
+                WarnMissingGhostSetup();
+            }
+
+            if (ghost)
+            {
+                ApplyGhostColor();
+            }
+            else
+            {
+                ClearGhostColor();
+            }
+        }
+
+        /// <summary>
+        /// Hayaletin rengi: dost mavi, düşman kırmızı; kalibresizken turuncuya nabız atar.
+        /// <para>Kalibresizlik ölümü EZER — operatörün ve diğer oyuncuların görmesi gereken şey
+        /// "bu adamın hizalaması bozuk", ölü olup olmadığı değil.</para>
+        /// </summary>
+        private void ApplyGhostColor()
+        {
+            Color color = _isFriendly ? GhostFriendColor : GhostEnemyColor;
+
+            if (!IsCalibrated)
+            {
+                float pulse = Mathf.PingPong(Time.time * UncalibratedPulseHz, 1f) * UncalibratedPulseAmount;
+                color = Color.Lerp(color, UncalibratedTint, pulse);
+            }
+
+            color.a = GhostBaseAlpha;
+            WriteBaseColor(GhostTargets, color);
+        }
+
+        /// <summary>Hayalet rengin yazılacağı renderer'lar: ayrı gövde varsa o, yoksa karakterin
+        /// kendi mesh'i (o hâlde üstünde zaten hayalet materyali duruyordur).</summary>
+        private Renderer[] GhostTargets =>
+            _ghostRenderers != null && _ghostRenderers.Length > 0 ? _ghostRenderers : bodyRenderers;
+
+        /// <summary>
+        /// Hayaletten çıkışta property block SÖKÜLÜR (boşaltılmaz): karakterin özgün materyali
+        /// dokusuyla çizilsin ve renderer SRP Batcher'a geri girsin — property block'lu bir
+        /// renderer batcher dışında kalır.
+        /// </summary>
+        private void ClearGhostColor()
+        {
+            ClearPropertyBlocks(_ghostRenderers);
+            ClearPropertyBlocks(bodyRenderers);
+        }
+
+        /// <summary>Karakterin kendi mesh'ini hayalet materyaline çevirir ya da geri alır.
+        /// Yalnız ayrı hayalet gövdesi YOKKEN çağrılır.</summary>
+        private void ApplyBodyMaterials(bool ghost)
+        {
+            for (int i = 0; i < bodyRenderers.Length; i++)
+            {
+                Renderer target = bodyRenderers[i];
+                if (target == null)
+                {
+                    continue;
+                }
+
+                Material[] materials = ghost ? _bodyGhostMaterials[i] : _bodyOriginalMaterials[i];
+                if (materials != null)
+                {
+                    target.sharedMaterials = materials;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Hayalet istendi ama uygulanacak hiçbir hedef yok — örnek başına bir kez HATA basar.
+        /// <para>⚠️ Uyarı değil <b>hata</b>: bu durumda ölü oyuncu canlıdan ayırt edilemez, yani
+        /// bileşen sessizce hiçbir şey yapmaz. Düzeltilmek istenen hatanın ta kendisi bu.</para>
+        /// </summary>
+        private void WarnMissingGhostSetup()
+        {
+            if (_ghostSetupWarned)
+            {
+                return;
+            }
+
+            _ghostSetupWarned = true;
+            Debug.LogError(
+                $"[RemoteAvatar] Oyuncu {PlayerId}: hayalet görünümü kurulmamış — RemoteAvatar " +
+                "prefabında 'ghostMaterial' (M_AvatarGhost) bağlanmalı ya da 'ghostRoot' bir " +
+                "hayalet gövdesi göstermeli. Ölü/kalibresiz oyuncu canlıdan ayırt edilemiyor.", this);
+        }
+
+        private void WriteBaseColor(Renderer[] targets, in Color color)
+        {
+            if (targets == null)
             {
                 return;
             }
@@ -408,25 +653,9 @@ namespace VortexArena.Core.Player
                 _propertyBlock = new MaterialPropertyBlock();
             }
 
-            Color color;
-            if (!IsCalibrated)
+            for (int i = 0; i < targets.Length; i++)
             {
-                float pulse = Mathf.PingPong(Time.time * UncalibratedPulseHz, 1f) * UncalibratedPulseAmount;
-                color = Color.Lerp(Color.white, UncalibratedTint, pulse);
-            }
-            else if (IsAlive)
-            {
-                // Beyaz = çarpan 1: doku olduğu gibi kalır (URP Lit _BaseColor taban dokuyu çarpar).
-                color = Color.white;
-            }
-            else
-            {
-                color = new Color(DeadColorScale, DeadColorScale, DeadColorScale, 1f);
-            }
-
-            for (int i = 0; i < bodyRenderers.Length; i++)
-            {
-                Renderer target = bodyRenderers[i];
+                Renderer target = targets[i];
                 if (target == null)
                 {
                     continue;
@@ -435,6 +664,38 @@ namespace VortexArena.Core.Player
                 target.GetPropertyBlock(_propertyBlock);
                 _propertyBlock.SetColor(BaseColorId, color);
                 target.SetPropertyBlock(_propertyBlock);
+            }
+        }
+
+        private static void ClearPropertyBlocks(Renderer[] targets)
+        {
+            if (targets == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < targets.Length; i++)
+            {
+                if (targets[i] != null)
+                {
+                    targets[i].SetPropertyBlock(null);
+                }
+            }
+        }
+
+        private static void SetRenderersEnabled(Renderer[] targets, bool enabled)
+        {
+            if (targets == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < targets.Length; i++)
+            {
+                if (targets[i] != null)
+                {
+                    targets[i].enabled = enabled;
+                }
             }
         }
 
@@ -474,7 +735,7 @@ namespace VortexArena.Core.Player
             if (!IsCalibrated)
             {
                 ApplyTeamColor();
-                ApplyBodyTint();
+                ApplyBodyVisual();
             }
 
             // Pozlar arena uzayında — sahnedeki origin'e göre dünyaya çevir.
@@ -580,7 +841,7 @@ namespace VortexArena.Core.Player
             IsAlive = alive;
             ApplyLabelText();
             ApplyTeamColor();
-            ApplyBodyTint();
+            ApplyBodyVisual();
             RefreshColliders();
             RefreshHeldItemVisibility();
         }
@@ -877,36 +1138,76 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Eşyaları ilgili elin pozundan sürer: eşya, elin anchor'ına göre <c>primaryGrip</c>
-        /// ofsetiyle oturur (duruş telde gitmez, §6.6 — kanonik kavrama her istemcinin APK'sında).
+        /// Eşyaları ilgili elin pozundan sürer (duruş telde gitmez, §6.6 — kanonik kavrama her
+        /// istemcinin APK'sında).
+        /// <para>
+        /// ⚠️ Telden gelen el pozu <b>kumanda anchor'ının</b> pozudur; kavrama ise AVUÇtan
+        /// hesaplanır — dönüşüm <see cref="HandGripPivot"/> ile burada da yapılır. Yerel uçta
+        /// yapılıp uzakta atlanırsa aynı silah iki ekranda birkaç santim kaymış çizilir.
+        /// </para>
+        /// <para>
+        /// <c>GRIP_LINKED</c> iken TEK örnek vardır ve iki elli çözümle sürülür: ana el
+        /// (<c>FLAG_PRIMARY_RIGHT</c>) eşyayı taşır, öteki elin avuç konumu eşyanın YÖNELİMİNİ
+        /// çeker. Çözücü yerelin kullandığının <b>aynısıdır</b> (<see cref="ItemGripSolver"/>);
+        /// <c>aimBlend</c> burada sabit <c>1</c>'dir — yumuşatma telin kendi interpolasyonundan
+        /// geliyor, ikinci bir zaman sabiti uzak duruşu yerelden geciktirirdi.
+        /// </para>
         /// <para>Eşya el KEMİĞİNİN çocuğu yapılmaz, dünya pozu yazılır: karakterli avatarda el
         /// kemiği IK'nın türettiği bir sonuçtur (kol hedefe yetişmeyebilir) ve eşyanın yeri telden
         /// gelen el pozudur — atışın bildirildiği poz da odur.</para>
         /// </summary>
         private void ApplyItemPoses(in Pose handLWorld, in Pose handRWorld)
         {
+            Pose palmL = HandGripPivot.Resolve(handLWorld, false);
+            Pose palmR = HandGripPivot.Resolve(handRWorld, true);
+
+            if (_shownGripLinked)
+            {
+                Transform item = _shownPrimaryRight ? _itemInstanceR : _itemInstanceL;
+                ItemDefinition definition = _shownPrimaryRight ? _itemDefR : _itemDefL;
+                if (item == null || definition == null)
+                {
+                    return;
+                }
+
+                ApplyGrip(item, _shownPrimaryRight ? palmR : palmL, definition,
+                    true, (_shownPrimaryRight ? palmL : palmR).position);
+                return;
+            }
+
             if (_itemInstanceL != null && _itemDefL != null)
             {
-                ApplyGrip(_itemInstanceL, handLWorld, _itemDefL);
+                ApplyGrip(_itemInstanceL, palmL, _itemDefL, false, Vector3.zero);
             }
 
             if (_itemInstanceR != null && _itemDefR != null)
             {
-                ApplyGrip(_itemInstanceR, handRWorld, _itemDefR);
+                ApplyGrip(_itemInstanceR, palmR, _itemDefR, false, Vector3.zero);
             }
         }
 
-        private static void ApplyGrip(Transform item, in Pose hand, ItemDefinition definition)
+        /// <summary>Kavrama matematiğinin TEK uygulaması <see cref="ItemGripSolver"/>'dadır; burası
+        /// yalnız sonucu transforma yazar (ikinci bir kavrama matematiği iki uçta iki ayrı duruş
+        /// demek olurdu).</summary>
+        private static void ApplyGrip(Transform item, in Pose palm, ItemDefinition definition,
+            bool hasSecondary, in Vector3 secondaryPalmPosition)
         {
-            item.SetPositionAndRotation(
-                hand.position + hand.rotation * definition.PrimaryGripPosition,
-                hand.rotation * definition.PrimaryGripRotation);
+            ItemGripSolver.Solve(definition, palm, hasSecondary, secondaryPalmPosition, 1f,
+                out Vector3 position, out Quaternion rotation);
+
+            item.SetPositionAndRotation(position, rotation);
         }
 
         /// <summary>
         /// §6.6 "Çift ellide boş el": <c>GRIP_LINKED</c> iken ANA OLMAYAN elin gösterim pozu
         /// eşyanın <c>secondaryGrip</c> noktasına çekilir — ama yalnız gerçek poz o noktaya
         /// <see cref="SecondaryGripSnapRadius"/> kadar yakınsa (paket kaybı emniyeti).
+        /// <para>
+        /// ⚠️ <b>Rolü artık son rötuştur:</b> silah zaten ikinci ele bakıyor
+        /// (<see cref="ApplyItemPoses"/> iki elli çözümü koşuyor), burası yalnız boş elin
+        /// GÖRSELİNİ soketin tam üstüne oturtur. Yani duruşu bu metot BELİRLEMEZ; kaldırılırsa
+        /// silah doğru durur ama boş el birkaç santim yanında yüzer.
+        /// </para>
         /// <para>⚠️ <c>secondaryGrip</c>, <c>primaryGrip</c> ile <b>AYNI UZAYDA DEĞİLDİR</b>
         /// (<see cref="ItemDefinition"/>): <c>primaryGrip</c> "el → eşya", <c>secondaryGrip</c> ise
         /// ön kabza noktasının <b>eşyaya göre</b> yerel pozudur, yani "eşya → el". Bu yüzden ikinci
@@ -1170,6 +1471,10 @@ namespace VortexArena.Core.Player
             RefreshFriendMarker();
             RefreshColliders();
             RefreshHeldItemVisibility();
+
+            // Hayalet ayrı bir alt ağaç olabilir (visualRoot onu kapatmaz) — görünürlük kararı
+            // oraya da taşınmalı, yoksa poz gelmeden hayalet havada asılı kalır.
+            ApplyBodyVisual();
         }
     }
 }

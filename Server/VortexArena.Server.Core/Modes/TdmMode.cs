@@ -22,7 +22,7 @@ public sealed class TdmMode : IGameMode
     public void OnKill(MatchDirector director, int killerId, int victimId, string weaponId)
     {
         var team = "";
-        foreach (var player in director.OnlinePlayers())
+        foreach (var player in director.ConnectedPlayers())
         {
             if (player.PlayerId != killerId) continue;
             team = player.Team;

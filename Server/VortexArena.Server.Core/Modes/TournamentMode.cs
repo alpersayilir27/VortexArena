@@ -3,7 +3,7 @@ namespace VortexArena.Server.Core.Modes;
 
 /// <summary>
 /// Turnuva: <b>tur tabanlı takım elemesi</b> ("Search &amp; Destroy"ın bombasız hâli). Tur içinde
-/// canlanma YOKTUR; bir takımın tüm çevrimiçi oyuncuları ölünce tur biter ve kazanan takıma
+/// canlanma YOKTUR; bir takımın tüm bağlı oyuncuları ölünce tur biter ve kazanan takıma
 /// <b>+1 tur</b> yazılır. Maç, bir takım <see cref="MatchDirector.ScoreLimit"/> tura ulaşınca biter.
 ///
 /// <para><b>Kurallar TDM varsayılanından TEK noktada ayrılır</b> (§10.5):
@@ -161,7 +161,7 @@ public sealed class TournamentMode : IGameMode
         // yani sahada yok sayılır.
         int redFit = 0, blueFit = 0;
 
-        foreach (var player in director.OnlinePlayers())
+        foreach (var player in director.ConnectedPlayers())
         {
             var isRed = player.Team == "red";
             var isBlue = player.Team == "blue";
@@ -297,7 +297,7 @@ public sealed class TournamentMode : IGameMode
 
         _nextRegroupReportAt = now.AddSeconds(RegroupReportIntervalSeconds);
 
-        var missing = string.Join(", ", director.OnlinePlayers()
+        var missing = string.Join(", ", director.ConnectedPlayers()
             .Where(p => !p.Ready)
             .Select(p => p.Name));
         Console.WriteLine($"[tournament] toplanma bekleniyor ({ready}/{total}) — " +
@@ -331,14 +331,14 @@ public sealed class TournamentMode : IGameMode
                           "toplanmaya dönüldü.");
     }
 
-    /// <summary>Kaç oyuncu tabanında (<c>ready</c>) ve toplam kaç oyuncu çevrimiçi.
+    /// <summary>Kaç oyuncu tabanında (<c>ready</c>) ve toplam kaç oyuncu bağlı.
     /// <para><c>ready</c> bayrağının bu moddaki anlamı "şu anda kendi tabanımdayım"dır ve
     /// istemci onu <b>her iki yönde</b> günceller (§10.1) — kapı da gözcü de aynı sayacı okur.</para></summary>
     private static (int ready, int total) CountInBase(MatchDirector director)
     {
         var total = 0;
         var ready = 0;
-        foreach (var player in director.OnlinePlayers())
+        foreach (var player in director.ConnectedPlayers())
         {
             total++;
             if (player.Ready) ready++;

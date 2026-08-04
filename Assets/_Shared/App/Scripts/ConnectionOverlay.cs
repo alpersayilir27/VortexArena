@@ -6,6 +6,7 @@ using UnityEngine.UI;
 using VortexArena.Core.Arena;
 using VortexArena.Core.UI;
 using VortexArena.Net;
+using VortexArena.Protocol;
 
 namespace VortexArena.App
 {
@@ -29,6 +30,14 @@ namespace VortexArena.App
     /// yanıp sönmesi hem çirkin hem maç ortasında dikkat dağıtıcı. Bağlı olmayan durum
     /// <see cref="GraceSeconds"/> kadar sürerse gösterilir; `Connected` olunca derhal kaybolur
     /// ve sayaç sıfırlanır. Aynı mantık açılışı ve maç ortasındaki kopmayı birlikte kapsar.
+    ///
+    /// **Oyuncuda iki hâl vardır (§8):** `RECONNECT_GRACE` dolana kadar "BAĞLANTI KOPTU —
+    /// çıkarılmana N sn" (istatistikler korunuyor), sonrasında "OYUNDAN ÇIKARILDINIZ". ⚠️ Değişen
+    /// yalnız SUNUMdur: `ArenaClient` her iki hâlde de denemeyi sürdürür (sonsuz backoff), ağ
+    /// dönünce başlık kendiliğinden katılır ve maç sürüyorsa eski satırına oturur. Süre istemcinin
+    /// kendi kopuş anından sayılır — bağlantı yokken sunucudan gelemez, sabit iki tarafta da aynı
+    /// olduğu için sapma birkaç saniyeyi geçmez. Adres hiç bilinmiyorsa (launcher'sız açılış) bu
+    /// ikisi yerine "SUNUCU BULUNAMADI" kalır: o bir bağlantı değil yapılandırma sorunudur.
     ///
     /// **VR güvenlik kuralı:** oyuncu fiziksel alanda 1:1 yürüyor. (a) Tam ekran scrim YOK —
     /// yalnız yarı saydam kart çizilir, görüşü karartmak tehlikeli. (b) `ArenaBoundary`
@@ -122,6 +131,7 @@ namespace VortexArena.App
 
         // Ekranda yazılı olan değerler (değişmedikçe TMP'ye dokunulmaz → çöp üretilmez).
         private bool _shownKnown;
+        private bool _shownExpelled;
         private string _shownIp = null;
         private int _shownPort = -1;
         private int _shownSeconds = -1;
@@ -366,19 +376,23 @@ namespace VortexArena.App
                 : 0;
             int attempts = client != null ? client.ConnectAttempts : 0;
             string error = client != null ? client.LastError : "";
+            int graceLeft = Mathf.Max(0, Mathf.CeilToInt(ArenaProtocol.RECONNECT_GRACE - seconds));
+            bool expelled = known && IsPlayerRole && graceLeft == 0;
 
-            // Başlık / adres / ipucu: yalnız adres durumu değişince yazılır.
+            // Başlık / adres / ipucu: yalnız adres durumu ya da çıkarılma eşiği değişince yazılır.
             if (_shownIp == null || _shownKnown != known || _shownPort != port ||
+                _shownExpelled != expelled ||
                 !string.Equals(_shownIp, ip, StringComparison.Ordinal))
             {
                 _shownKnown = known;
+                _shownExpelled = expelled;
                 _shownIp = ip;
                 _shownPort = port;
 
-                _titleText.text = known ? "SUNUCUYA BAĞLANILAMIYOR" : "SUNUCU BULUNAMADI";
+                _titleText.text = BuildTitle(known, expelled);
                 _addressText.text = known ? $"{ip}:{port}" : "adres yok";
                 _addressText.color = known ? ColorAccent : ColorFaint;
-                _hintText.text = BuildHint(known);
+                _hintText.text = BuildHint(known, expelled, graceLeft);
 
                 ApplyButtonState(known);
                 _shownAttempts = -1; // meta satırı da tazelensin (deneme sayacı görünürlüğü değişti)
@@ -393,6 +407,14 @@ namespace VortexArena.App
                 _metaText.text = known && attempts > 0
                     ? $"{seconds} sn · {attempts}. deneme"
                     : $"{seconds} sn";
+
+                // Çıkarılmaya kalan süre saniyede bir değişiyor; başlık bloğu yalnız durum
+                // değişince koştuğu için geri sayımı BURADAN tazeleriz (ayrı bir sayaç alanı
+                // açmaya gerek yok — `_shownSeconds` zaten saniye çözünürlüğünde).
+                if (known && IsPlayerRole && !expelled)
+                {
+                    _hintText.text = BuildHint(true, false, graceLeft);
+                }
             }
 
             // Son hata: küçük punto, soluk, en altta.
@@ -416,7 +438,41 @@ namespace VortexArena.App
             }
         }
 
-        private static string BuildHint(bool known)
+        /// <summary>
+        /// Kayıt ömrünün sahibi OYUNCUDUR: admin kaydı kopar kopmaz silinir (§2), yani onun için
+        /// "çıkarılmana N sn" diye bir geri sayım yoktur ve bugünkü metinleri korunur.
+        /// </summary>
+        private static bool IsPlayerRole => AppSession.Role != AppSession.RoleAdmin;
+
+        /// <summary>Adres bilinmiyorsa sorun bağlantı değil YAPILANDIRMAdır — o dal ayrı kalır.</summary>
+        private static string BuildTitle(bool known, bool expelled)
+        {
+            if (!known)
+            {
+                return "SUNUCU BULUNAMADI";
+            }
+
+            if (!IsPlayerRole)
+            {
+                return "SUNUCUYA BAĞLANILAMIYOR";
+            }
+
+            return expelled ? "OYUNDAN ÇIKARILDINIZ" : "BAĞLANTI KOPTU";
+        }
+
+        /// <summary>
+        /// İki hâl (§8): <see cref="ArenaProtocol.RECONNECT_GRACE"/> dolmadan "geri bekleniyorsun",
+        /// dolduktan sonra "çıkarıldın". ⚠️ İkisinde de deneme SÜRÜYOR — süre sunucunun kaydı ne
+        /// zaman düşüreceğini söyler, başlığın ne zaman pes edeceğini değil.
+        /// <para>Sayaç istemcinin kendi kopuş anından sayılır — bağlantı yokken sunucudan gelemez.
+        /// ⚠️ İki saat her zaman aynı anda başlamaz: soket düzgün kapanırsa sunucu da o an
+        /// <c>reconnecting</c>'e geçer (sapma yok), ama Wi-Fi sessizce ölürse sunucu düşüşü ancak
+        /// <c>HEARTBEAT_TIMEOUT</c> sonunda fark eder ve istemcinin geri sayımı o kadar ERKEN
+        /// biter. Sapma bu yönde olduğu için zararsızdır: ekran "çıkarıldın" derken sunucu kaydı
+        /// hâlâ tutuyor olabilir, tersi olamaz — yani oyuncuya hiçbir zaman olduğundan fazla süre
+        /// vaat edilmez.</para>
+        /// </summary>
+        private static string BuildHint(bool known, bool expelled, int graceLeft)
         {
             if (AppSession.Role == AppSession.RoleAdmin)
             {
@@ -425,8 +481,16 @@ namespace VortexArena.App
                     : $"Bu uygulama launcher'dan başlatılmalıdır ({AppBoot.ArgServerIp} <ip>).";
             }
 
-            return "Sunucunun açık olduğundan emin olun.\n" +
-                   "Adresi elle girmek için sağ kumandada joystick'e 1 sn basılı tutun.";
+            if (!known)
+            {
+                return "Sunucunun açık olduğundan emin olun.\n" +
+                       "Adresi elle girmek için sağ kumandada joystick'e 1 sn basılı tutun.";
+            }
+
+            return expelled
+                ? "Yeniden bağlanılıyor — ağ dönünce otomatik katılacaksın."
+                : $"Yeniden bağlanılıyor · oyundan çıkarılmana {graceLeft} sn\n" +
+                  "Maç istatistiklerin korunuyor.";
         }
 
         private void ApplyButtonState(bool addressKnown)

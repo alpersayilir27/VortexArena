@@ -62,8 +62,13 @@ namespace VortexArena.Core.Combat
         /// <summary>Ready durumunda ölçek: büyüme "şimdi bas" okumasını gözle ayırır.</summary>
         private const float ReadyScale = 1.35f;
 
-        /// <summary>Soket rengi (alfa durumdan gelir).</summary>
-        private static readonly Color SocketColor = new Color(0.45f, 0.85f, 1f, 1f);
+        /// <summary>Hover rengi (mavi): "burada bir yer var".</summary>
+        private static readonly Color HoverColor = new Color(0.45f, 0.85f, 1f, 1f);
+
+        /// <summary>Ready rengi (yeşil): "şimdi bas". ⚠️ Renk ayrımı alfa/ölçek farkının
+        /// ÜSTÜNE gelir, onun yerine değil — VR'da yalnız parlaklık değişimi kabul mesafesine
+        /// girildiğini yeterince okutmuyor.</summary>
+        private static readonly Color ReadyColor = new Color(0.35f, 0.95f, 0.45f, 1f);
 
         /// <summary>Halka materyalinin shader arama zinciri (ilk bulunan kullanılır).</summary>
         // ⚠️ Zincir ShotTracer'daki ile BİREBİR aynı ve "Sprites/Default" başta duruyor: o shader
@@ -109,6 +114,12 @@ namespace VortexArena.Core.Combat
         private Material _ringMaterial;
         private bool _warnedNoDefinition;
         private bool _warnedNoShader;
+
+        // Bu karenin avuç pozları (Update'te bir kez çözülür; bkz. NearestOpenHandDistance).
+        private Pose _leftPalm;
+        private Pose _rightPalm;
+        private bool _hasLeftPalm;
+        private bool _hasRightPalm;
 
         /// <summary>
         /// Kullanılan tanım: <see cref="Weapon"/> varsa ONUN tanımı, yoksa serialize edilen yedek.
@@ -164,20 +175,12 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // TEK KULLANIMLIK verilen silah (§10.5 weaponSource:"random") ZATEN avuçta: ISDK
-            // kavraması hiç işletilmez, dolayısıyla avucun içinde soket halkası çizmek yalnız yalan
-            // söylerdi. ⚠️ ÇERÇEVE silahında (Persistent klon) durum tersidir ve soket ÇİZİLMELİDİR:
-            // ön kabza ISDK kavramasına açıktır, oyuncunun ikinci elini nereye götüreceğini oradan
-            // görmesi gerekir.
-            if (_weapon != null && _weapon.IsDisposableGrant)
-            {
-                HideAll();
-                return;
-            }
-
-            Transform left = WeaponGranter.ResolveHandAnchor(OVRInput.Controller.LTouch);
-            Transform right = WeaponGranter.ResolveHandAnchor(OVRInput.Controller.RTouch);
-            if (left == null && right == null)
+            // ⚠️ Mesafe ANCHOR'dan değil AVUÇtan ölçülür (HandGripPivot): oyuncunun gördüğü şey
+            // kumanda değil sentetik eldir, anchor'a göre ölçülen kabul mesafesi elin birkaç santim
+            // ötesinde başlar ve soket "elimin içinde ama yeşile dönmüyor" diye okunur.
+            _hasLeftPalm = WeaponGranter.TryResolvePalm(OVRInput.Controller.LTouch, out _leftPalm);
+            _hasRightPalm = WeaponGranter.TryResolvePalm(OVRInput.Controller.RTouch, out _rightPalm);
+            if (!_hasLeftPalm && !_hasRightPalm)
             {
                 // Rig yok (admin gözlemci, editör oturumu, sahne henüz yüklenmemiş) — sessizce hiçbir şey.
                 HideAll();
@@ -187,8 +190,11 @@ namespace VortexArena.Core.Combat
             Vector3 primaryWorld = PrimarySocketWorld(def);
             Vector3 secondaryWorld = SecondarySocketWorld(def);
 
-            float primaryDistance = NearestOpenHandDistance(primaryWorld, false, left, right);
-            float secondaryDistance = NearestOpenHandDistance(secondaryWorld, true, left, right);
+            // ⚠️ Verilen silahta ANA soket kendiliğinden gizlenir (IsSocketOpen: silah tutuluyor →
+            // ana soket kapalı) ama İKİNCİL soket ÇİZİLİR: yoksa FFA'da eline tüfek verilen oyuncu
+            // ön kabzayı nereden tutacağını hiç göremezdi.
+            float primaryDistance = NearestOpenHandDistance(primaryWorld, false);
+            float secondaryDistance = NearestOpenHandDistance(secondaryWorld, true);
 
             // Yarıçap eşya başına (SO'dan) gelir; kapı ile "ready" eşiği AYNI değeri kullanır —
             // ikisi ayrışsa oyuncuya "şimdi bas" diye büyütülen soket sessizce reddedilebilirdi.
@@ -216,6 +222,13 @@ namespace VortexArena.Core.Combat
         /// kapısıdır: editör oturumunda kontrolcü çözülemez ve fail-close olsaydı silah editörde
         /// hiç kavranamaz, yani sahne testi imkânsız hale gelirdi.
         /// </para>
+        /// <para>
+        /// ⚠️ <b>Kapı yalnız SAHNE silahını ilgilendirir.</b> VERİLEN silahta (verildi ya da
+        /// çerçeveden çağrıldı) kavrama bileşenleri kapalıdır
+        /// (<c>WeaponGranter.PrepareSummonedClone</c> / <c>DetachFromPhysicsAndGrab</c>), yani ISDK
+        /// bu filtreyi hiç sormaz — orada ikinci eli granter'ın grip yoklaması çözer. Kural yine de
+        /// SİLİNMEZ: kuralın kendisi (hangi soket kime açık) çizimle paylaşılıyor.
+        /// </para>
         /// </summary>
         public bool Filter(GameObject interactorGameObject)
         {
@@ -234,13 +247,12 @@ namespace VortexArena.Core.Combat
                 return true;
             }
 
-            Transform anchor = WeaponGranter.ResolveHandAnchor(hand);
-            if (anchor == null)
+            if (!WeaponGranter.TryResolvePalm(hand, out Pose palm))
             {
                 return true; // rig yok → kapı anlamsız
             }
 
-            Vector3 handPosition = anchor.position;
+            Vector3 handPosition = palm.position;
 
             // Kapı eşiği = SO'daki yarıçap (eşya başına): tabanca kabzasıyla tüfek ön kabzası aynı
             // büyüklükte değil, tek global sabit ikisinden birini yanlış boyutta bırakıyordu.
@@ -294,21 +306,14 @@ namespace VortexArena.Core.Combat
         /// telde <c>GRIP_LINKED</c> yazılır ve uzak taraf boş eli sıfır olan <c>secondaryGrip</c>'e
         /// yapıştırıp iki eli üst üste bindirirdi.</para>
         /// <para>
-        /// ⚠️ <b>ÇERÇEVE klonu (Persistent) için EK KOD YOKTUR</b> ve gerekmez: kural zaten
-        /// "tutuluyorsa ana soket kapalı, ön kabza yalnız çift ellide ve soran el ANA EL değilse
-        /// açık" diyor. Klonda ana el <c>GrantedHand</c> olduğu için birinci el ana soketi kapalı,
-        /// ikinci el ön kabzayı açık bulur — yani "silah her zaman 1. soketten tutulur, 2. soket
-        /// aynı şekilde işler" kuralı kendiliğinden karşılanır. Buraya bir Persistent dalı yazmak
-        /// aynı kuralın ikinci bir kopyası olurdu.
+        /// ⚠️ <b>VERİLEN silah için (Disposable/Persistent) EK KOD YOKTUR</b> ve gerekmez: verilen
+        /// silah tanım gereği tutuluyordur, yani ana soket zaten kapalı, ön kabza ise ana el olmayan
+        /// ele açık çıkar — "silah her zaman 1. soketten tutulur, 2. soket aynı şekilde işler"
+        /// kuralı kendiliğinden karşılanır. Ayrı bir dal aynı kuralın ikinci bir kopyası olurdu.
         /// </para>
         /// </summary>
         private bool IsSocketOpen(bool secondary, OVRInput.Controller hand)
         {
-            if (_weapon != null && _weapon.IsDisposableGrant)
-            {
-                return false;
-            }
-
             bool held = _weapon != null && _weapon.IsHeld;
 
             if (!secondary)
@@ -321,19 +326,21 @@ namespace VortexArena.Core.Combat
                    (_weapon == null || _weapon.MainHand != hand);
         }
 
-        /// <summary>Sokete AÇIK olan eller arasından en yakınının mesafesi; hiçbiri açık değilse sonsuz.</summary>
-        private float NearestOpenHandDistance(Vector3 socketWorld, bool secondary, Transform left, Transform right)
+        /// <summary>Sokete AÇIK olan avuçlar arasından en yakınının mesafesi; hiçbiri açık değilse
+        /// sonsuz. Avuç pozları <see cref="Update"/>'te bir kez çözülür (kare başına dört rig
+        /// aramasından kaçınmak için alanlarda tutulur).</summary>
+        private float NearestOpenHandDistance(Vector3 socketWorld, bool secondary)
         {
             float best = float.PositiveInfinity;
 
-            if (left != null && IsSocketOpen(secondary, OVRInput.Controller.LTouch))
+            if (_hasLeftPalm && IsSocketOpen(secondary, OVRInput.Controller.LTouch))
             {
-                best = Mathf.Min(best, Vector3.Distance(left.position, socketWorld));
+                best = Mathf.Min(best, Vector3.Distance(_leftPalm.position, socketWorld));
             }
 
-            if (right != null && IsSocketOpen(secondary, OVRInput.Controller.RTouch))
+            if (_hasRightPalm && IsSocketOpen(secondary, OVRInput.Controller.RTouch))
             {
-                best = Mathf.Min(best, Vector3.Distance(right.position, socketWorld));
+                best = Mathf.Min(best, Vector3.Distance(_rightPalm.position, socketWorld));
             }
 
             return best;
@@ -370,7 +377,7 @@ namespace VortexArena.Core.Combat
             visual.Root.SetPositionAndRotation(world, SocketRotation(visual));
             visual.Root.localScale = Vector3.one * (ready ? ReadyScale : 1f);
 
-            Color color = SocketColor;
+            Color color = ready ? ReadyColor : HoverColor;
             color.a = ready ? 1f : HoverAlpha;
 
             if (visual.Line != null)

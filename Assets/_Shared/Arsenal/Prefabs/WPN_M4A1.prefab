@@ -260,7 +260,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SimpleWeaponDissolve
   dissolveMaterial: {fileID: 2100000, guid: 0d5617cdec4ce984aa5d6cbb762af28e, type: 2}
-  appearSeconds: 1.2
+  appearSeconds: 0.7
 --- !u!114 &1460921102876747205
 MonoBehaviour:
   m_ObjectHideFlags: 0

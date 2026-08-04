@@ -10,8 +10,11 @@
 | **Arenaya dağılmış silah**: raf sistemi kaldırıldı, kaynağın adı `WeaponCanvas` oldu ve yerleşim **elle** yapılacak (kod bitti) → kalan iş üç arenaya silah yerleştirmek; o zamana kadar TDM · turnuva silahsız, FFA ve lobi `random` kullandığı için çalışıyor | `arenaya-dagilmis-silah.md` |
 | **Turnuva modu** (`tournament`): kod/asset/export **bitti**. Kalan: doğrulama listesi + silah kaynağı (yukarıdaki iş) | `turnuva-modu.md` |
 | Elde tutulan eşya + atış olayları: **Faz 0–3 + soket kavrama + olay zamanlaması bitti**. Kalan: ⚠️ **kavrama pozu ayarı** (araç hazır — `Grip Socket` işaretçisi + `Write Grip Sockets To Definition`; sayılar hâlâ sıfır) · tracer/soket değerleri · bomba | `elde-tutulan-esya-ve-atis-olaylari.md` |
+| **Kavrama: avuç çerçevesi + ikinci el**: kod (`HandGripPivot`, `ItemGripSolver`) ve doküman **bitti**. Kalan: avuç ofsetini başlıkta ölçmek + altı silahın kavrama pozunu yazmak (hepsinde `primaryGripEuler` hâlâ sıfır — iki elli çözüm eksen olmadan koşmaz) + doğrulama | `iki-elli-kavrama.md` |
+| **Bağlantı kopması**: kod, protokol (v8) ve doküman **bitti** — "çevrimdışı" kalktı, yerine `connected`/`reconnecting`/`left` + maç katılımcısı defteri geldi. Kalan: `dotnet build` + Unity derlemesi + doğrulama listesi (⚠️ v8 tüm başlıklara yeni APK ister) | `baglanti-kopmasi-ve-mac-katilimcilari.md` |
 | Kırılabilir objeleri sunucu-otoriter yapmak (yerel `Health` kaldırıldı, yerine ağsal obje canı) | `agsal-kirilabilir-objeler.md` |
 | **Mekan boyut maketi**: kod, boyut dosyaları, prefablar, sahneler ve doküman **bitti**. Kalan: doğrulama (maket gidiş-dönüşü · loader'ın ikinci çalıştırması · Play'de karartma rampası · admin paneli) | `mekan-boyut-maketi.md` |
+| **Hayalet avatar** (ölü / kalibresiz uzak oyuncu yarı saydam çizilir; kalibresizken silah da elden gider): shader, materyal, kod, prefab bağı ve doküman **bitti** — bugün karakterin kendi mesh'i hayalete çevriliyor. Kalan: doğrulama + ayrı hayalet gövdesi (Starter Assets robotu) | `hayalet-avatar.md` |
 
 > Sıradaki büyük iş **bulut kalibrasyonu** (Meta grup / paylaşılan uzamsal anchor ile toplu
 > hizalama). Henüz planlanmadı; altyapısı hazır: `set_calibration.source` `"cloud"` değerini

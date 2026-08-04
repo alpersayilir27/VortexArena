@@ -426,7 +426,7 @@ public sealed class StateHost
         // (§10.3: girerse 20 Hz poz alımını maç kilidinin arkasında bekletir). Kalibresizin atışı
         // relay EDİLMEZ (§10.6): ateş edemediği hâlde başkalarının ekranında namlu alevi çakması
         // yanıltıcı olurdu.
-        if (!state.Online || state.Role != "player" || !state.Alive || !state.Calibrated) return;
+        if (!state.IsConnected || state.Role != "player" || !state.Alive || !state.Calibrated) return;
         if (!_matchDirector.ShotRelayOpen) return;
 
         var entry = msg.entry;
@@ -436,8 +436,8 @@ public sealed class StateHost
         _events.Enqueue(entry);
     }
 
-    /// <summary>20 Hz snapshot yayını: pozlu çevrimiçi oyuncular pakete yazılır, UDP kayıtlı
-    /// ve çevrimiçi HERKESE (admin dahil — birden çok admin varsa her biri ayrı hedef) aynı
+    /// <summary>20 Hz snapshot yayını: pozlu ve BAĞLI oyuncular pakete yazılır, UDP kayıtlı
+    /// ve bağlı HERKESE (admin dahil — birden çok admin varsa her biri ayrı hedef) aynı
     /// buffer yollanır. Girdi yokken hedef varsa count=0 snapshot gider (istemci uzak avatar
     /// kalmadığını böyle anlar); ikisi de yoksa (ve olay kuyruğu da boşsa) gönderilmez ve
     /// serverTick artmaz.
@@ -510,7 +510,7 @@ public sealed class StateHost
             var onlinePlayers = 0;
             foreach (var state in _registry.Snapshot())
             {
-                if (!state.Online) continue;
+                if (!state.IsConnected) continue;
                 if (state.UdpEndpoint != null) targets.Add(state.UdpEndpoint);
                 if (state.Role != "player") continue;
                 onlinePlayers++;

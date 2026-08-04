@@ -20,7 +20,53 @@ namespace VortexArena.App.Admin
         public string role = AppSession.RolePlayer;
         public string team = "";
         public bool ready;
-        public bool online = true;
+
+        /// <summary>Bağlantı durumu (§2/§5.3): <c>connected</c> | <c>reconnecting</c> | <c>left</c>.
+        /// ⚠️ <b>Bu string'i başka hiçbir yerde karşılaştırma</b> — okumanın tek yolu aşağıdaki üç
+        /// kısayoldur; üç dosyaya dağılmış bir <c>== "reconnecting"</c> zinciri, bilinmeyen değerin
+        /// <c>connected</c> sayılması kuralını er geç bir yerde kaçırır.</summary>
+        public string connection = ArenaProtocol.CONNECTION_CONNECTED;
+
+        /// <summary>Son <c>lobby_state</c>'te bildirilen "çıkarılmaya kalan saniye" ve o mesajın
+        /// alındığı an. İkisi birlikte tutulur çünkü roster yayını OLAY tabanlıdır: sunucu saniyede
+        /// bir güncelleme göndermez, sayacı yerelde biz ilerletiriz
+        /// (<see cref="ReconnectSecondsLeft"/>).</summary>
+        public int reconnectSeconds;
+
+        /// <inheritdoc cref="reconnectSeconds"/>
+        public float reconnectStampedAt = -1f;
+
+        /// <summary>Koşan maçın katılımcısı mı (§10.2) — <c>left</c> satırın maç sonu tablosunda
+        /// durmasının sebebi budur.</summary>
+        public bool inMatch;
+
+        /// <summary>Soket canlı mı. <b>Bilinmeyen/boş değer bağlı sayılır</b> (§5.3): eski/yeni
+        /// sunucu karışımında roster'ı tümden söndürmemek için.</summary>
+        public bool IsConnected => !IsReconnecting && !HasLeft;
+
+        /// <summary>Bağlantı koptu, cihaz geri bekleniyor.</summary>
+        public bool IsReconnecting => connection == ArenaProtocol.CONNECTION_RECONNECTING;
+
+        /// <summary>Süre doldu, oyuncu oyundan çıkarıldı; satır yalnız maç istatistiği için duruyor.</summary>
+        public bool HasLeft => connection == ArenaProtocol.CONNECTION_LEFT;
+
+        /// <summary>Oyuncunun oyundan çıkarılmasına kalan saniye (0 = yok). Sunucudan gelen değer
+        /// yerelde geçen süreyle düşülür — yayın olay tabanlı olduğu için aksi hâlde sayaç ancak
+        /// başka bir roster değişikliğinde ilerlerdi.</summary>
+        public int ReconnectSecondsLeft
+        {
+            get
+            {
+                if (!IsReconnecting || reconnectSeconds <= 0)
+                {
+                    return 0;
+                }
+
+                float elapsed = reconnectStampedAt < 0f ? 0f : Time.unscaledTime - reconnectStampedAt;
+                return Mathf.Max(0, reconnectSeconds - Mathf.FloorToInt(elapsed));
+            }
+        }
+
         public bool alive = true;
         public float battery = -1f;
         public float hp = ArenaProtocol.PLAYER_MAX_HP;
@@ -78,7 +124,7 @@ namespace VortexArena.App.Admin
     /// Hiçbir UI tipine dokunmaz; HUD ve paneller yalnız buradan okur.
     /// <para>
     /// <b>Kaynaklar ve otorite:</b> <c>lobby_state</c> TAM ve otoriter anlık görüntüdür
-    /// (ad/rol/takım/hazır/çevrimiçi/batarya/sahne + <c>kills/deaths/hp/alive</c>); sunucu
+    /// (ad/rol/takım/hazır/bağlantı durumu/batarya/sahne + <c>kills/deaths/hp/alive</c>); sunucu
     /// ölüm ve canlanmada onu tazeler. Aralarda <c>health_update</c> ve <c>kill_event</c> ile
     /// yerel olarak ilerletilir ki bar ve sayaçlar anında tepki versin. Sapma olursa bir
     /// sonraki <c>lobby_state</c> sunucunun dediğini yazar — sunucu her zaman kazanır.
@@ -140,9 +186,9 @@ namespace VortexArena.App.Admin
         /// </summary>
         public bool IsFfa => ResolveIsFfa();
 
-        /// <summary>Sezgisel yedeğin girdisi: çevrimiçi oyunculardan en az birinin takımı var mı
+        /// <summary>Sezgisel yedeğin girdisi: BAĞLI oyunculardan en az birinin takımı var mı
         /// (<see cref="Rebuild"/> hesaplar).</summary>
-        private bool _anyOnlineTeam;
+        private bool _anyConnectedTeam;
 
         /// <summary>Sunucudan gelen faz (§10.1): <c>paused</c> | <c>playing</c> | <c>finished</c>.</summary>
         public string Phase { get; private set; } = ArenaProtocol.PHASE_PAUSED;
@@ -278,8 +324,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// POV için sonraki uygun oyuncu (Tab): çevrimiçi oyuncular arasında playerId sırasında
-        /// döner. Hiç oyuncu yoksa 0.
+        /// POV için sonraki uygun oyuncu (Tab): yalnız BAĞLI oyuncular arasında playerId
+        /// sırasında döner (bağlantısı kopmuş ya da ayrılmış oyuncunun kamerası yoktur).
+        /// Hiç oyuncu yoksa 0.
         /// </summary>
         public int NextPlayerId(int currentId)
         {
@@ -301,7 +348,7 @@ namespace VortexArena.App.Admin
             for (int step = 1; step <= _all.Count; step++)
             {
                 AdminPlayerView candidate = _all[(index + step + _all.Count) % _all.Count];
-                if (candidate.online)
+                if (candidate.IsConnected)
                 {
                     return candidate.playerId;
                 }
@@ -327,7 +374,7 @@ namespace VortexArena.App.Admin
 
                 kills += view.kills;
                 deaths += view.deaths;
-                if (view.online && view.alive)
+                if (view.IsConnected && view.alive)
                 {
                     aliveCount++;
                 }
@@ -399,7 +446,13 @@ namespace VortexArena.App.Admin
                 view.role = string.IsNullOrEmpty(info.role) ? AppSession.RolePlayer : info.role;
                 view.team = info.team ?? "";
                 view.ready = info.ready;
-                view.online = info.online;
+                // Boş/bilinmeyen değer connected sayılır (§5.3) — kısayolların sözleşmesi budur.
+                view.connection = string.IsNullOrEmpty(info.connection)
+                    ? ArenaProtocol.CONNECTION_CONNECTED
+                    : info.connection;
+                view.reconnectSeconds = info.reconnectSeconds;
+                view.reconnectStampedAt = Time.unscaledTime;
+                view.inMatch = info.inMatch;
                 view.battery = info.battery;
                 view.scene = info.scene ?? "";
 
@@ -660,13 +713,13 @@ namespace VortexArena.App.Admin
                     _blue.Add(view);
                 }
 
-                if (view.online && !string.IsNullOrEmpty(view.team))
+                if (view.IsConnected && !string.IsNullOrEmpty(view.team))
                 {
                     anyTeam = true;
                 }
             }
 
-            _anyOnlineTeam = anyTeam;
+            _anyConnectedTeam = anyTeam;
 
             // Seçili oyuncu ayrıldıysa seçimi ilk uygun oyuncuya taşı (POV boşta kalmasın).
             if (AdminSession.SelectedPlayerId != 0 && Find(AdminSession.SelectedPlayerId) == null)
@@ -710,7 +763,7 @@ namespace VortexArena.App.Admin
             }
 
             // (3) Katalog/seçim yok — arayüz boş kalmasın.
-            return !_anyOnlineTeam;
+            return !_anyConnectedTeam;
         }
 
         private static int ComparePlayerId(AdminPlayerView a, AdminPlayerView b)

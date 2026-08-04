@@ -204,6 +204,9 @@ namespace VortexArena.App.Admin
             _teamSummary.text = _sb.ToString();
         }
 
+        /// <summary>⚠️ Tabloda bağlantı durumuna göre SÜZME YOKTUR ve eklenmez (§10.2): oyundan
+        /// çıkarılmış (<c>left</c>) satır maç sonu tablosunda görünmeli — sunucu onu tam da bunun
+        /// için maç bitene kadar roster'da tutuyor.</summary>
         private void RefreshTable(IReadOnlyList<AdminPlayerView> players)
         {
             for (int c = 0; c < _columns.Length; c++)
@@ -251,11 +254,18 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>⚠️ "çevrimdışı" diye bir durum YOKTUR (§2) — satır ya geri bekleniyor
+        /// (sayaçla) ya oyundan çıkarılmıştır.</summary>
         private static string StateText(AdminPlayerView view)
         {
-            if (!view.online)
+            if (view.IsReconnecting)
             {
-                return "çevrimdışı";
+                return $"yeniden bağlanıyor ({view.ReconnectSecondsLeft} sn)";
+            }
+
+            if (view.HasLeft)
+            {
+                return "ayrıldı";
             }
 
             if (!view.alive)
@@ -295,7 +305,7 @@ namespace VortexArena.App.Admin
             int count = 0;
             for (int i = 0; i < players.Count; i++)
             {
-                if (players[i].online && players[i].alive)
+                if (players[i].IsConnected && players[i].alive)
                 {
                     count++;
                 }

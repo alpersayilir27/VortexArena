@@ -118,6 +118,11 @@ public sealed class LobbyService
         // seçim değişikliğine kadar yanlış kalırdı.
         await SendSafeAsync(connection, BuildSelectionStateJson(), state.Name);
 
+        // Geç katılım maç defterine de yazılır (§10.2) — Announce'tan ÖNCE: aksi hâlde ilk
+        // lobby_state satırı `inMatch:false` gider ve arayüz maç sonu kapsamını bir yayın boyunca
+        // eksik çizer. Koşan maç yoksa hiçbir şey yapmaz.
+        _director.MarkParticipantIfMatchRunning(state);
+
         _registry.Announce(state, kind); // konsol satırı + lobby_state yayını
     }
 
@@ -190,14 +195,16 @@ public sealed class LobbyService
 
     public async Task HandleKickAsync(ClientConnection connection, KickMsg msg)
     {
-        // Atma kaydı roster'dan SİLER (§5.4) — çevrimdışı bir kayıtta da iş yapmasının tek yolu
-        // budur; yalnız soketi kapatmak, bağlantısı zaten olmayan satırı listede bırakırdı.
+        // Atma kaydı roster'dan SİLER (§5.4) — bağlantısı kopmuş bir kayıtta da iş yapmasının tek
+        // yolu budur; yalnız soketi kapatmak, bağlantısı zaten olmayan satırı listede bırakırdı.
+        // Katılımcı bayrağı ayrıca temizlenmez: kayıt tümüyle gittiği için onunla birlikte gider,
+        // yani atılan oyuncu maç sonu tablosunda da yer almaz (§10.2).
         if (!_registry.RemoveByPlayerId(msg.playerId, out var target, out var targetConnection))
         {
             Console.WriteLine($"[Lobby] kick: playerId {msg.playerId} bulunamadı.");
             return;
         }
-        var how = targetConnection == null ? "çevrimdışıydı, kayıt silindi" : "bağlantı kapatılıyor";
+        var how = targetConnection == null ? "bağlantısı yoktu, kayıt silindi" : "bağlantı kapatılıyor";
         Console.WriteLine($"[Lobby] kick: {target.Name} (playerId {target.PlayerId}) — {how}.");
         await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} atıldı"));
         if (targetConnection == null) return;
@@ -210,13 +217,13 @@ public sealed class LobbyService
 
     public async Task HandleIdentifyAsync(ClientConnection connection, IdentifyMsg msg)
     {
-        if (!_registry.TryGetByPlayerId(msg.playerId, out var target) || target.Connection == null)
+        if (!_registry.TryGetByPlayerId(msg.playerId, out var target) || target.Socket == null)
         {
-            Console.WriteLine($"[Lobby] identify: playerId {msg.playerId} bulunamadı/çevrimdışı.");
+            Console.WriteLine($"[Lobby] identify: playerId {msg.playerId} bulunamadı/bağlantısı yok.");
             return;
         }
         // Sunucu→istemci yönünde istemci kendi kimlik overlay'ini gösterir (§5.3).
-        await SendSafeAsync(target.Connection, JsonUtil.Serialize(new IdentifyMsg { playerId = target.PlayerId }), target.Name);
+        await SendSafeAsync(target.Socket, JsonUtil.Serialize(new IdentifyMsg { playerId = target.PlayerId }), target.Name);
         await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kimlik gösterdi"));
     }
 
@@ -477,7 +484,7 @@ public sealed class LobbyService
     {
         try
         {
-            var connections = _registry.OnlineConnections();
+            var connections = _registry.ConnectedConnections();
             if (connections.Count == 0) return;
             var json = BuildSelectionStateJson();
             foreach (var connection in connections)
@@ -504,12 +511,12 @@ public sealed class LobbyService
         });
     }
 
-    /// <summary>Ortak durumu YALNIZ çevrimiçi adminlere yollar (§5.3).</summary>
+    /// <summary>Ortak durumu YALNIZ bağlı adminlere yollar (§5.3).</summary>
     public async Task BroadcastAdminStateAsync(string notice)
     {
         try
         {
-            var admins = _registry.OnlineAdminConnections();
+            var admins = _registry.ConnectedAdminConnections();
             if (admins.Count == 0) return;
             var json = BuildAdminStateJson(notice);
             foreach (var connection in admins)
@@ -545,7 +552,7 @@ public sealed class LobbyService
 
     /// <summary>Oyuncu başına ping/jitter/kayıp — İSTEMCİNİN ölçüp <c>status</c> ile bildirdiği
     /// değerler (§6.7); sunucu yalnız taşır.
-    /// <para>⚠️ <b>Broadcast değil:</b> hedef yalnız çevrimiçi adminler. Herkese yayınlamak oyuncu
+    /// <para>⚠️ <b>Broadcast değil:</b> hedef yalnız bağlı adminler. Herkese yayınlamak oyuncu
     /// sayısıyla kare büyüyen bir fan-out üretirdi — yani bu telemetrinin ölçmek için var olduğu
     /// sorunun aynısını.</para>
     /// <para>Kaybı zararsızdır: bir sonraki saniye yenisi gelir, uzlaştırma gerekmez. Roster'a
@@ -566,7 +573,7 @@ public sealed class LobbyService
 
             try
             {
-                var admins = _registry.OnlineAdminConnections();
+                var admins = _registry.ConnectedAdminConnections();
                 // Kimse bakmıyorsa serileştirme bile yapılmaz: telemetrinin tek tüketicisi operatör
                 // ekranıdır ve boşa üretmek boşa pakettir.
                 if (admins.Count == 0) continue;
@@ -574,7 +581,7 @@ public sealed class LobbyService
                 entries.Clear();
                 foreach (var state in _registry.Snapshot())
                 {
-                    if (state.Role != "player" || !state.Online) continue;
+                    if (state.Role != "player" || !state.IsConnected) continue;
                     entries.Add(new NetStatsEntry
                     {
                         playerId = state.PlayerId,
@@ -612,7 +619,7 @@ public sealed class LobbyService
                 // seçim kilidine (CanChangeSelection) girmez ve buradan olduğu gibi yayılır.
                 friendlyFire = _director.FriendlyFire,
                 notice = notice,
-                adminCount = _registry.OnlineAdminCount(),
+                adminCount = _registry.ConnectedAdminCount(),
                 // Mekan bu oturum boyunca sabittir (açılışta seçilir), ama admin_state ile
                 // taşınır: geç bağlanan admin de ilk mesajda hangi arenaları görebileceğini öğrenir.
                 venueId = _director.VenueId,
@@ -664,7 +671,7 @@ public sealed class LobbyService
         }
     }
 
-    /// <summary>Roster'ın TAM anlık görüntüsünü tüm çevrimiçi bağlantılara yollar (§5.3 lobby_state)
+    /// <summary>Roster'ın TAM anlık görüntüsünü tüm bağlı soketlere yollar (§5.3 lobby_state)
     /// ve sürümü artırır. ⚠️ <b>Yalnız yayıncı döngüden çağrılır</b> — doğrudan çağırmak eşzamanlı
     /// yayın demektir ve sıra garantisini bozar.</summary>
     private async Task BroadcastLobbyStateAsync()
@@ -680,8 +687,8 @@ public sealed class LobbyService
             var json = JsonUtil.Serialize(msg);
             foreach (var state in snapshot)
             {
-                var connection = state.Connection;
-                if (connection == null || !state.Online) continue;
+                var connection = state.Socket;
+                if (connection == null || !state.IsConnected) continue;
                 await SendSafeAsync(connection, json, state.Name);
             }
         }
