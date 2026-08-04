@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using VortexArena.Core.Arena;
@@ -14,7 +15,7 @@ namespace VortexArena.Core.Player
     /// RemotePlayerSpawner tarafından Instantiate + Initialize ile kurulur.
     /// <para>
     /// Snapshot'taki alive bayrağı okunur — ölü oyuncu <b>hayalet gövdeye</b> döner (yarı saydam,
-    /// iki yüzü de çizilen <c>VortexArena/AvatarGhost</c>; dost mavi, düşman kırmızı), ad
+    /// iki yüzü de çizilen <c>VortexArena/AvatarGhost</c>; rengi oyuncunun KENDİ takımı), ad
     /// etiketine " (ölü)" eklenir ve vuruş kutuları kapatılır (ölüye ateş edilemez). <b>Aynı
     /// hayalet görünümü kalibresiz oyuncuda da kullanılır</b> ve orada turuncuya nabız atar —
     /// kalibresizlik ölümü EZER.
@@ -53,6 +54,12 @@ namespace VortexArena.Core.Player
                  "hayalet materyaliyle çizilir; ikisi de geçerli kurulumdur.")]
         [SerializeField] private GameObject ghostRoot;
 
+        [Header("Takıma göre gövde")]
+        [Tooltip("KIRMIZI takımın gövde alt ağacı (Ch18). Boşsa herkes varsayılan gövdeyi kullanır — " +
+                 "takım gövdesi kurulmamış sayılır ve hiçbir davranış değişmez. " +
+                 "Tools > VortexArena > Avatars > Takım Gövdesini Kur ile kurulur.")]
+        [SerializeField] private GameObject redBodyRoot;
+
         [Header("Karakter")]
         [Tooltip("Bağlıysa gövde ağdan gelen Movement SDK iskeletiyle çizilir; boşsa eski " +
                  "kafa/el/kapsül yolu kullanılır.")]
@@ -64,9 +71,13 @@ namespace VortexArena.Core.Player
         [Tooltip("İlk poz gelene dek gizlenecek görsel kök. Boşsa teamRenderers listesi kullanılır.")]
         [SerializeField] private GameObject visualRoot;
 
-        [Header("Vuruş kutuları")]
-        [Tooltip("Kafa + gövde collider'ları; boş bırakılırsa çocuklardan otomatik toplanır.")]
-        [SerializeField] private Collider[] hitColliders;
+        // ⚠️ Vuruş kutuları için serialize edilen bir liste YOKTUR ve eklenmez: kutular ELLE
+        // bakılıyor (her karakterin eti farklı, tek bir tabloya sığmıyor) ve elle bakılan bir
+        // yapının yanında elle güncellenen bir dizi tutmak, bir gün eşitliği bozulacak İKİNCİ bir
+        // doğruluk kaynağıdır — kemiğe yeni bir kutu asıldığında listeye eklenmezse o kutu ölü
+        // oyuncuda kapanmaz. Bunun yerine kutular her gövdenin ALTINDAN, RemoteHitBox işaretine
+        // bakılarak toplanır (aşağıda). İşaret filtresi bilinçli: işaretsiz bir collider (ileride
+        // eklenebilecek dekor/fizik parçası) sessizce vurulabilir hale gelmesin.
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly Color TeamRedColor = new Color(0.85f, 0.20f, 0.20f);
@@ -135,15 +146,25 @@ namespace VortexArena.Core.Player
         /// </summary>
         private const float GhostBaseAlpha = 0.28f;
 
-        /// <summary>Hayalet gövdenin dost rengi (yerel oyuncuyla AYNI takım).</summary>
-        private static readonly Color GhostFriendColor = new Color(0.20f, 0.45f, 0.90f);
+        /// <summary>
+        /// Hayalet gövdenin KIRMIZI takım rengi.
+        /// <para>⚠️ Takım renkleri (<see cref="TeamRedColor"/>/<see cref="TeamBlueColor"/>)
+        /// yeniden kullanılmaz: hayalet yarı saydam çizilir (<see cref="GhostBaseAlpha"/>) ve
+        /// opak gövde için seçilmiş bir renk o alfada sönük/griye kaçar. Aynı takımın iki
+        /// tonudur, ikinci bir takım paleti değil.</para>
+        /// </summary>
+        private static readonly Color GhostRedColor = new Color(0.90f, 0.20f, 0.20f);
+
+        /// <summary>Hayalet gövdenin MAVİ takım rengi (gerekçe <see cref="GhostRedColor"/>).</summary>
+        private static readonly Color GhostBlueColor = new Color(0.20f, 0.45f, 0.90f);
 
         /// <summary>
-        /// Hayalet gövdenin düşman rengi. ⚠️ Takımsız modda (FFA) ve admin gözlemcide HERKES
-        /// budur ve bu bilinçlidir: "dost değil" ile "takım yok" aynı cevabı verir, takımsız
-        /// oyunda karşındaki herkes gerçekten düşmandır.
+        /// Takımı OLMAYAN oyuncunun hayalet rengi (FFA — sunucu maç başında takımları temizler).
+        /// <para>⚠️ Takımsız modda kırmızı/mavi bir anlam TAŞIMAZ; oradaki hayaleti takım
+        /// renklerinden birine boyamak var olmayan bir takımı işaret ederdi. Nötr olması gerekli:
+        /// bu renk "takım yok" demektir, "düşman" değil.</para>
         /// </summary>
-        private static readonly Color GhostEnemyColor = new Color(0.90f, 0.20f, 0.20f);
+        private static readonly Color GhostNeutralColor = new Color(0.85f, 0.85f, 0.85f);
 
         /// <summary>Bu avatarın temsil ettiği uzak oyuncunun id'si.</summary>
         public int PlayerId { get; private set; }
@@ -173,6 +194,12 @@ namespace VortexArena.Core.Player
         private int _number;
 
         private Color _teamColor = NeutralColor;
+
+        /// <summary>
+        /// Hayalet gövdenin rengi — <see cref="_teamColor"/> ile AYNI kaynaktan (roster'ın takım
+        /// alanı) türer, ayrı bir tonu vardır (saydamda okunsun diye).
+        /// </summary>
+        private Color _ghostTeamColor = GhostNeutralColor;
 
         // ── Elde tutulan eşya (§6.6) ────────────────────────────────────────────────────
         // Katalog statik önbellekli ama aramayı kare başına yapmamak için burada tutulur.
@@ -258,6 +285,44 @@ namespace VortexArena.Core.Player
         private Material[][] _bodyOriginalMaterials;
         private Material[][] _bodyGhostMaterials;
 
+        // ── Takıma göre gövde ───────────────────────────────────────────────────────────
+        /// <summary>Kırmızı takım gövdesinin renderer'ları; <see cref="redBodyRoot"/> boşsa null.</summary>
+        private Renderer[] _redBodyRenderers;
+
+        /// <summary>Kırmızı gövdeyi canlı iskeletten süren köprü; gövdeyle birlikte açılıp kapanır.</summary>
+        private SkeletonPoseMirror _redBodyDriver;
+
+        /// <summary>Bu oyuncu KIRMIZI takımda mı — çizilen gövdeyi ve vuruş kutusu setini bu seçer.</summary>
+        private bool _useRedBody;
+
+        // Her gövdenin KENDİ kutuları (Awake'te bir kez toplanır) — gerekçe CacheHitColliders'ta.
+        private Collider[] _defaultHitColliders;
+        private Collider[] _redHitColliders;
+
+        // ⚠️ Hayalet materyal takası AKTİF gövdeye uygulanır, yani her gövdenin kendi özgün/hayalet
+        // dizisi olmak zorunda: tek bir ikili tutulsaydı takım değişiminden sonra takas yanlış
+        // renderer'a (ve yanlış submesh sayısıyla) yazılırdı.
+        private Material[][] _redOriginalMaterials;
+        private Material[][] _redGhostMaterials;
+
+        /// <summary>Çizilmekte olan gövdenin renderer'ları — hayalet/görünürlük hep buna uygulanır.</summary>
+        private Renderer[] ActiveBodyRenderers =>
+            _useRedBody && _redBodyRenderers != null && _redBodyRenderers.Length > 0
+                ? _redBodyRenderers
+                : bodyRenderers;
+
+        /// <summary>Çizilmekte olan gövdenin ÖZGÜN materyal dizileri (<see cref="ActiveBodyRenderers"/> ile aynı sırada).</summary>
+        private Material[][] ActiveOriginalMaterials =>
+            _useRedBody && _redBodyRenderers != null && _redBodyRenderers.Length > 0
+                ? _redOriginalMaterials
+                : _bodyOriginalMaterials;
+
+        /// <summary>Çizilmekte olan gövdenin hayalet materyal dizileri.</summary>
+        private Material[][] ActiveGhostMaterials =>
+            _useRedBody && _redBodyRenderers != null && _redBodyRenderers.Length > 0
+                ? _redGhostMaterials
+                : _bodyGhostMaterials;
+
         // Uygulanmış hayalet durumu — kare başına gereksiz materyal/renderer trafiği olmasın.
         private bool _ghostApplied;
         private bool _ghostStateKnown;
@@ -267,15 +332,41 @@ namespace VortexArena.Core.Player
 
         private void Awake()
         {
-            // Prefabda liste bağlanmadıysa çocuk collider'ları vuruş kutusu sayılır.
-            if (hitColliders == null || hitColliders.Length == 0)
-            {
-                hitColliders = GetComponentsInChildren<Collider>(true);
-            }
+            CacheHitColliders();
 
             _itemCatalog = NetItemCatalog.Load();
 
+            // ⚠️ Sıra önemli: hayalet materyal dizileri İKİ gövde için de kurulacak, yani kırmızı
+            // gövdenin renderer'ları o noktada zaten toplanmış olmalı.
+            CacheRedBody();
             CacheGhostTargets();
+        }
+
+        /// <summary>
+        /// Kırmızı takım gövdesini BİR kez toplar ve KAPALI doğurur — varsayılan gövde prefabda
+        /// açık, takım bilgisi ise ilk <see cref="SetInfo"/> ile geliyor.
+        /// <para>⚠️ Kapsam <see cref="redBodyRoot"/> altıdır, yani hayaletin kendi
+        /// <see cref="GhostPoseDriver"/>'ıyla çakışmaz (<see cref="CacheGhostTargets"/> de
+        /// <see cref="ghostRoot"/> altını tarıyor).</para>
+        /// <para>Alan boşsa hiçbir şey yapılmaz: takım gövdesi kurulmamış bir prefabda davranış
+        /// birebir eskisi gibi kalır.</para>
+        /// </summary>
+        private void CacheRedBody()
+        {
+            if (redBodyRoot == null)
+            {
+                return;
+            }
+
+            _redBodyRenderers = redBodyRoot.GetComponentsInChildren<Renderer>(true);
+            SetRenderersEnabled(_redBodyRenderers, false);
+
+            // Görünmeyen gövdenin pozunu sürmek boşuna iş — sürücü gövdeyle birlikte açılır.
+            _redBodyDriver = redBodyRoot.GetComponentInChildren<SkeletonPoseMirror>(true);
+            if (_redBodyDriver != null)
+            {
+                _redBodyDriver.enabled = false;
+            }
         }
 
         /// <summary>
@@ -305,32 +396,51 @@ namespace VortexArena.Core.Player
                 return; // ayrı hayalet gövdesi var: karakterin materyallerine HİÇ dokunulmaz
             }
 
-            if (bodyRenderers == null || bodyRenderers.Length == 0 || ghostMaterial == null)
+            if (ghostMaterial == null)
             {
                 return;
             }
 
-            _bodyOriginalMaterials = new Material[bodyRenderers.Length][];
-            _bodyGhostMaterials = new Material[bodyRenderers.Length][];
+            // ⚠️ İKİ gövde için de kurulur: hayalete geçiş takımdan bağımsız olabilir, yani takım
+            // gövdesindeyken ölen oyuncunun takas edeceği dizi hazır olmalı.
+            BuildGhostMaterials(bodyRenderers, out _bodyOriginalMaterials, out _bodyGhostMaterials);
+            BuildGhostMaterials(_redBodyRenderers, out _redOriginalMaterials, out _redGhostMaterials);
+        }
 
-            for (int i = 0; i < bodyRenderers.Length; i++)
+        /// <summary>Bir gövdenin özgün materyal dizilerini saklar ve aynı UZUNLUKTA hayalet
+        /// dizilerini üretir (uzunluk kuralının gerekçesi alan yorumlarında).</summary>
+        private void BuildGhostMaterials(Renderer[] renderers, out Material[][] original,
+                                         out Material[][] ghost)
+        {
+            original = null;
+            ghost = null;
+
+            if (renderers == null || renderers.Length == 0)
             {
-                Renderer target = bodyRenderers[i];
+                return;
+            }
+
+            original = new Material[renderers.Length][];
+            ghost = new Material[renderers.Length][];
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer target = renderers[i];
                 if (target == null)
                 {
                     continue;
                 }
 
-                Material[] original = target.sharedMaterials;
-                _bodyOriginalMaterials[i] = original;
+                Material[] sourceMaterials = target.sharedMaterials;
+                original[i] = sourceMaterials;
 
-                var ghosts = new Material[original.Length];
+                var ghosts = new Material[sourceMaterials.Length];
                 for (int m = 0; m < ghosts.Length; m++)
                 {
                     ghosts[m] = ghostMaterial;
                 }
 
-                _bodyGhostMaterials[i] = ghosts;
+                ghost[i] = ghosts;
             }
         }
 
@@ -360,15 +470,62 @@ namespace VortexArena.Core.Player
         /// <summary>Ad etiketini, forma numarasını ve takım rengini günceller ("red"/"blue"/diğer=gri).
         /// <para><paramref name="number"/> 0 ise numara BASILMAZ (atanmamış ya da admin): adlar
         /// benzersiz olmadığı için ayırt edici alan numaradır, uydurma bir sayı göstermek onu
-        /// güvenilmez kılardı (§2).</para></summary>
+        /// güvenilmez kılardı (§2).</para>
+        /// <para>⚠️ Hayaletin rengi de buradan gelir, bu yüzden takım DEĞİŞİMİ görünümü tazelemek
+        /// zorundadır (<see cref="ApplyBodyVisual"/>): admin koşan maçta <c>set_team</c> ile takım
+        /// değiştirebiliyor ve ölü bir oyuncunun hayaleti eski takımının renginde donardı.</para></summary>
         public void SetInfo(string displayName, int number, string team)
         {
             _displayName = displayName ?? "";
             _number = number;
             _teamColor = team == "red" ? TeamRedColor : team == "blue" ? TeamBlueColor : NeutralColor;
+            _ghostTeamColor = team == "red" ? GhostRedColor : team == "blue" ? GhostBlueColor : GhostNeutralColor;
+
+            ApplyRedBody(team == "red");
 
             ApplyLabelText();
             ApplyTeamColor();
+            ApplyBodyVisual();
+        }
+
+        /// <summary>
+        /// Çizilecek gövdeyi takıma göre seçer: kırmızı takım kendi modeliyle, diğer herkes
+        /// varsayılan modelle çizilir. Aynı anda YALNIZ biri çizilir.
+        /// <para>
+        /// ⚠️ Gövde değişimi <b>hayaletten çıkışla aynı temizliği ister</b>: pasif kalan gövdeye
+        /// bir daha hiç dokunulmayacağı için, üstünde kalmış hayalet materyali ya da property
+        /// block'u orada DONAR — takım değiştiren oyuncu bir sonraki ölümünde eski gövdesini
+        /// hayalet kılığında geri getirirdi.
+        /// </para>
+        /// <para>Takım gövdesi kurulmamışsa (alan boş) hiçbir şey yapılmaz; görünüm eskisi gibi
+        /// tek gövdeyle çalışır.</para>
+        /// </summary>
+        private void ApplyRedBody(bool useRed)
+        {
+            if (_redBodyRenderers == null || _redBodyRenderers.Length == 0)
+            {
+                return;
+            }
+
+            if (_useRedBody == useRed)
+            {
+                return;
+            }
+
+            _useRedBody = useRed;
+
+            Renderer[] passive = useRed ? bodyRenderers : _redBodyRenderers;
+            ClearPropertyBlocks(passive);
+            WriteMaterials(passive, useRed ? _bodyOriginalMaterials : _redOriginalMaterials);
+
+            // Hayalet durumu YENİ aktif gövdeye baştan uygulansın: o gövde şimdiye kadar hiç
+            // dokunulmamış hâlde duruyordu.
+            _ghostStateKnown = false;
+
+            // ⚠️ Vuruş kutusu seti de gövdeyle BİRLİKTE değişmeli: kutular kemiklere asılı ve iki
+            // modelin kemik oranları farklı. Burada çağrılmazsa admin takım değiştirdiğinde oyuncu
+            // bir önceki gövdesinin hacmiyle vurulmaya devam ederdi.
+            RefreshColliders();
         }
 
         /// <summary>
@@ -399,6 +556,11 @@ namespace VortexArena.Core.Player
         /// yapan tek şey bu göstergedir. Düşmanda hiçbir işaret olmaması bilinçlidir — düşmanı
         /// da işaretlemek arenada duvar arkasından okunabilen bir avantaj üretirdi.
         /// </para>
+        /// <para>⚠️ <b>Modelin kendisi bunun İSTİSNASIDIR:</b> kırmızı takım ayrı bir gövdeyle çizilir
+        /// (<see cref="redBodyRoot"/>), yani takım kimliği bakışla okunur. Renk kuralıyla çelişmez: renk
+        /// bakana göre değişen dost/düşman bilgisidir ve MaterialPropertyBlock ile duvar arkasından da
+        /// okunabilecek bir işaret üretirdi; model ise oyuncunun kendi özelliğidir, herkeste aynı görünür
+        /// ve normal ZTest ile çizilir.</para>
         /// </summary>
         public void SetFriendly(bool friendly)
         {
@@ -409,9 +571,6 @@ namespace VortexArena.Core.Player
 
             _isFriendly = friendly;
             RefreshFriendMarker();
-
-            // Hayaletin rengi dost/düşman bilgisidir — takım değişimi onu da tazelemeli.
-            ApplyBodyVisual();
         }
 
         /// <summary>Göstergeyi kafanın üstünde tutar — kafa KEMİĞİNE bağlanmaz, çünkü IK her
@@ -513,9 +672,9 @@ namespace VortexArena.Core.Player
         /// bir prefab işidir, kod işi değil.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Takım rengi hâlâ karaktere yazılmaz</b> — hayaletin rengi takım değil
-        /// <b>dost/düşman</b> bilgisidir (<see cref="_isFriendly"/>) ve yalnız zaten tehdit
-        /// olmayan (ölü/kalibresiz) bir gövdede görünür.
+        /// ⚠️ <b>Takım rengi CANLI karaktere hâlâ yazılmaz</b> (düşmanı işaretlemek avantaj
+        /// olurdu); hayalet ise takım rengiyle çizilir ve o gövde zaten tehdit değildir
+        /// (<see cref="ApplyGhostColor"/>).
         /// </para>
         /// </summary>
         private void ApplyBodyVisual()
@@ -540,7 +699,6 @@ namespace VortexArena.Core.Player
 
             if (_ghostRenderers != null && _ghostRenderers.Length > 0)
             {
-                SetRenderersEnabled(bodyRenderers, !ghost);
                 SetRenderersEnabled(_ghostRenderers, ghost);
 
                 if (_ghostDriver != null)
@@ -548,7 +706,7 @@ namespace VortexArena.Core.Player
                     _ghostDriver.enabled = ghost;
                 }
             }
-            else if (_bodyGhostMaterials != null)
+            else if (ActiveGhostMaterials != null)
             {
                 ApplyBodyMaterials(ghost);
             }
@@ -556,6 +714,10 @@ namespace VortexArena.Core.Player
             {
                 WarnMissingGhostSetup();
             }
+
+            // Gövde seçimi hayalet yolundan BAĞIMSIZ uygulanır: hangi yol koşarsa koşsun, pasif
+            // gövde kapalı ve aktif gövde doğru durumda olmalı.
+            SyncBodyRendererEnable(ghost);
 
             if (ghost)
             {
@@ -568,13 +730,21 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Hayaletin rengi: dost mavi, düşman kırmızı; kalibresizken turuncuya nabız atar.
+        /// Hayaletin rengi oyuncunun KENDİ takımıdır (kırmızı takım kırmızı, mavi takım mavi);
+        /// kalibresizken turuncuya nabız atar.
+        /// <para>
+        /// ⚠️ Renk <b>dost/düşman DEĞİL</b> (<see cref="_isFriendly"/> buraya girmez): dost/düşman
+        /// bakana göre değişir, yani aynı ölü oyuncu iki başlıkta iki ayrı renkte görünürdü ve
+        /// admin ekranında herkes tek renge düşerdi. Takım ise oyuncunun kendi özelliğidir —
+        /// herkeste aynı okunur. Duvar arkası avantajı doğmaz: hayalet <c>ZTest</c>'i normaldir
+        /// ve yalnız zaten tehdit olmayan (ölü/kalibresiz) bir gövdede görünür.
+        /// </para>
         /// <para>Kalibresizlik ölümü EZER — operatörün ve diğer oyuncuların görmesi gereken şey
         /// "bu adamın hizalaması bozuk", ölü olup olmadığı değil.</para>
         /// </summary>
         private void ApplyGhostColor()
         {
-            Color color = _isFriendly ? GhostFriendColor : GhostEnemyColor;
+            Color color = _ghostTeamColor;
 
             if (!IsCalibrated)
             {
@@ -586,10 +756,47 @@ namespace VortexArena.Core.Player
             WriteBaseColor(GhostTargets, color);
         }
 
-        /// <summary>Hayalet rengin yazılacağı renderer'lar: ayrı gövde varsa o, yoksa karakterin
-        /// kendi mesh'i (o hâlde üstünde zaten hayalet materyali duruyordur).</summary>
+        /// <summary>
+        /// İki gövdenin renderer'larını doğru duruma getirir.
+        /// <para>⚠️ <b>Aktif gövde hayaletteyken KAPATILMAZ</b> (materyal takası yolunda): mesh
+        /// aynı kalır, yalnız materyali değişir. Kapatılması gereken tek durum ayrı bir hayalet
+        /// gövdesinin devraldığı durumdur.</para>
+        /// <para>Pasif gövde HER hâlükârda kapalıdır — iki gövde birden çizilirse oyuncu iç içe
+        /// geçmiş iki karakter olarak görünür.</para>
+        /// </summary>
+        private void SyncBodyRendererEnable(bool ghost)
+        {
+            bool separateGhost = _ghostRenderers != null && _ghostRenderers.Length > 0;
+
+            Renderer[] active = ActiveBodyRenderers;
+            SetRenderersEnabled(active, !separateGhost || !ghost);
+
+            Renderer[] passive = ReferenceEquals(active, bodyRenderers) ? _redBodyRenderers : bodyRenderers;
+            SetRenderersEnabled(passive, false);
+
+            RefreshRedBodyDriver();
+        }
+
+        /// <summary>
+        /// Kırmızı gövde köprüsünü açar/kapatır: yalnız o gövde AKTİF ve avatar GÖRÜNÜRken sürülür
+        /// (görünmeyen gövdenin pozunu hesaplamak boşuna iş — hayalet sürücüsündeki gerekçenin aynısı).
+        /// <para>⚠️ <see cref="SetVisible"/> bunu ayrıca çağırmak zorunda: canlı ve kalibreli bir
+        /// avatarda görünürlük değişimi hayalet durumunu DEĞİŞTİRMEZ, yani
+        /// <see cref="ApplyBodyVisual"/> erken döner ve buraya hiç uğramaz. Uğramazsa görünmezken
+        /// gelen bir <c>lobby_state</c> köprüyü kapatır ve gövde geri geldiğinde T-pozunda donar.</para>
+        /// </summary>
+        private void RefreshRedBodyDriver()
+        {
+            if (_redBodyDriver != null)
+            {
+                _redBodyDriver.enabled = _visible && _useRedBody;
+            }
+        }
+
+        /// <summary>Hayalet rengin yazılacağı renderer'lar: ayrı gövde varsa o, yoksa AKTİF
+        /// gövdenin mesh'i (o hâlde üstünde zaten hayalet materyali duruyordur).</summary>
         private Renderer[] GhostTargets =>
-            _ghostRenderers != null && _ghostRenderers.Length > 0 ? _ghostRenderers : bodyRenderers;
+            _ghostRenderers != null && _ghostRenderers.Length > 0 ? _ghostRenderers : ActiveBodyRenderers;
 
         /// <summary>
         /// Hayaletten çıkışta property block SÖKÜLÜR (boşaltılmaz): karakterin özgün materyali
@@ -599,25 +806,36 @@ namespace VortexArena.Core.Player
         private void ClearGhostColor()
         {
             ClearPropertyBlocks(_ghostRenderers);
+
+            // İki gövde de temizlenir: hangisinin aktif olduğuna bakmak gerekmez, sökme işlemi
+            // ucuz ve pasif gövdede kalmış bir block ileride sessizce geri gelirdi.
             ClearPropertyBlocks(bodyRenderers);
+            ClearPropertyBlocks(_redBodyRenderers);
         }
 
-        /// <summary>Karakterin kendi mesh'ini hayalet materyaline çevirir ya da geri alır.
+        /// <summary>AKTİF gövdenin mesh'ini hayalet materyaline çevirir ya da geri alır.
         /// Yalnız ayrı hayalet gövdesi YOKKEN çağrılır.</summary>
         private void ApplyBodyMaterials(bool ghost)
         {
-            for (int i = 0; i < bodyRenderers.Length; i++)
-            {
-                Renderer target = bodyRenderers[i];
-                if (target == null)
-                {
-                    continue;
-                }
+            WriteMaterials(ActiveBodyRenderers, ghost ? ActiveGhostMaterials : ActiveOriginalMaterials);
+        }
 
-                Material[] materials = ghost ? _bodyGhostMaterials[i] : _bodyOriginalMaterials[i];
-                if (materials != null)
+        /// <summary>Saklanmış materyal dizilerini renderer'lara yazar (dizi sırası
+        /// <see cref="BuildGhostMaterials"/> ile birebir aynıdır).</summary>
+        private static void WriteMaterials(Renderer[] targets, Material[][] materials)
+        {
+            if (targets == null || materials == null)
+            {
+                return;
+            }
+
+            int count = Mathf.Min(targets.Length, materials.Length);
+            for (int i = 0; i < count; i++)
+            {
+                Renderer target = targets[i];
+                if (target != null && materials[i] != null)
                 {
-                    target.sharedMaterials = materials;
+                    target.sharedMaterials = materials[i];
                 }
             }
         }
@@ -699,20 +917,79 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Ölü/görünmez/kalibresiz avatara ateş edilemez: vuruş kutuları kapatılır.</summary>
+        /// <summary>
+        /// Her gövdenin KENDİ vuruş kutularını bir kez toplar (<see cref="RemoteHitBox"/> işareti
+        /// taşıyan collider'lar).
+        /// <para>
+        /// ⚠️ <b>İki gövde İKİ AYRI set taşır ve bu bilinçlidir:</b> kutular kemiklere asılı, kemik
+        /// oranları ise modelden modele değişiyor (bu iki modelde bacaklarda ~5 cm). Tek set
+        /// paylaşılsaydı, çizilen gövdeyle vurulan hacim birbirinden kayardı — "gördüğüm yere
+        /// sıkıyorum ama tutmuyor". Set, çizilen gövdeyle birlikte değişir
+        /// (<see cref="RefreshColliders"/>).
+        /// </para>
+        /// <para>Karakter bağlı değilse (eski kapsül yolu) tüm avatar taranır; o kurulumda ikinci
+        /// bir gövde zaten yoktur.</para>
+        /// </summary>
+        private void CacheHitColliders()
+        {
+            Transform defaultRoot = character != null ? character.transform : transform;
+            _defaultHitColliders = CollectHitColliders(defaultRoot);
+            _redHitColliders = redBodyRoot != null
+                ? CollectHitColliders(redBodyRoot.transform)
+                : System.Array.Empty<Collider>();
+        }
+
+        private static Collider[] CollectHitColliders(Transform root)
+        {
+            RemoteHitBox[] boxes = root.GetComponentsInChildren<RemoteHitBox>(true);
+            var found = new List<Collider>(boxes.Length);
+
+            for (int i = 0; i < boxes.Length; i++)
+            {
+                var collider = boxes[i] != null ? boxes[i].GetComponent<Collider>() : null;
+                if (collider != null)
+                {
+                    found.Add(collider);
+                }
+            }
+
+            return found.ToArray();
+        }
+
+        /// <summary>Çizilen gövdenin vuruş kutuları; öteki gövdeninkiler her zaman kapalıdır.</summary>
+        private Collider[] ActiveHitColliders =>
+            _useRedBody && _redHitColliders != null && _redHitColliders.Length > 0
+                ? _redHitColliders
+                : _defaultHitColliders;
+
+        /// <summary>
+        /// Ölü/görünmez/kalibresiz avatara ateş edilemez: vuruş kutuları kapatılır.
+        /// <para>⚠️ Çizilmeyen gövdenin kutuları KOŞULSUZ kapatılır — açık kalsalardı görünmeyen
+        /// bir hacim mermi yutardı ve atıcı hiçbir şeye çarpmadan ıskaladığını sanırdı.</para>
+        /// </summary>
         private void RefreshColliders()
         {
-            if (hitColliders == null)
+            bool enable = _visible && IsAlive && IsCalibrated;
+
+            Collider[] active = ActiveHitColliders;
+            SetCollidersEnabled(active, enable);
+            SetCollidersEnabled(ReferenceEquals(active, _defaultHitColliders)
+                ? _redHitColliders
+                : _defaultHitColliders, false);
+        }
+
+        private static void SetCollidersEnabled(Collider[] targets, bool enabled)
+        {
+            if (targets == null)
             {
                 return;
             }
 
-            bool enable = _visible && IsAlive && IsCalibrated;
-            for (int i = 0; i < hitColliders.Length; i++)
+            for (int i = 0; i < targets.Length; i++)
             {
-                if (hitColliders[i] != null)
+                if (targets[i] != null)
                 {
-                    hitColliders[i].enabled = enable;
+                    targets[i].enabled = enabled;
                 }
             }
         }
@@ -1462,6 +1739,15 @@ namespace VortexArena.Core.Player
                     }
                 }
             }
+
+            if (redBodyRoot != null)
+            {
+                // ⚠️ Kırmızı gövde visualRoot'un KARDEŞİdir — visualRoot onu kapatmaz, poz gelmeden
+                // havada asılı kalırdı (hayalet gövdesindeki tuzağın aynısı).
+                redBodyRoot.SetActive(visible);
+            }
+
+            RefreshRedBodyDriver();
 
             if (nameLabel != null)
             {

@@ -44,6 +44,7 @@ Hepsi bağlantı yokken sessizce no-op'tur.
 |---|---|---|
 | ✅ `TryGetTargetPlayerId(Collider, out int playerId)` | `bool` | Çarpılan collider'ın arkasında ağ oyuncusu var mı. `false` → **hasar yok** (istemcide can tutulmaz) |
 | ✅ `IsHeadshot(Collider)` | `bool` | Kafa kutusuna mı isabet etti. **Çarpanı sen uygularsın** |
+| ✅ `GetHitZone(Collider)` | `HitZone` | İsabet bölgesi (`Body`/`Head`/`Stomach`/`Leg`); ağ oyuncusu değilse `Body`. Çarpanı `WeaponDefinition.GetZoneMultiplier(zone)` verir, **uygulamak sana ait** |
 
 ### Bildirme
 

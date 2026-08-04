@@ -41,6 +41,12 @@ Silahlar: `WPN_AK47` · `WPN_M4A1` · `WPN_M16` · `WPN_G36C` · `WPN_FAMAS` · 
 - [ ] Silah ele geldiğinde `GripSocket_Primary` avucun ortasında; el döndükçe kaymıyor.
 - [ ] Boş el ön kabzaya yaklaşınca soket **mavi**, kabul mesafesinde **yeşil** ve büyük.
 - [ ] Grip'e basınca silahın yönü ikinci ele döner; bırakınca ~0.08 sn'de yumuşak geri gelir.
+- [ ] **Bağ yalnız tuşla kopar:** ön kabza tutulduktan sonra grip'e basılı tutarken kol uzatılıp
+      toplanınca, silah yukarı/aşağı/yana çevrilince ve gövde döndürülünce bağ **kopmuyor**;
+      yumuşak geri dönüş yalnız tuş bırakıldığında başlıyor.
+- [ ] **Savrulma yok:** ikinci el silahın arkasına geçecek kadar sola/geriye çekilince silah ters
+      yöne **atlamıyor**; takibi yumuşakça bırakıp ana elin duruşuna dönüyor ve el geri gelince
+      aynı yumuşaklıkla tekrar nişanlıyor (`ItemGripSolver.ReachWeight` bandı).
 - [ ] Ana kavrama noktası iki elli tutuşta da ana avuçta duruyor (silah ikinci ele kaymıyor).
 - [ ] Silahı önce sol elle tutarsan primary sol olur (el ataması sabit değil).
 - [ ] İkinci admin ekranında **uzak** oyuncunun silahı aynı açıda duruyor (iki uç sapmıyor).

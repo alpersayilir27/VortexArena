@@ -7,9 +7,9 @@
 // ⚠️ ZTest LEqual'dır ve öyle KALIR: ters derinlik testi hayaleti duvarların arkasından görünür
 // kılardı, yani duvar arkası avantaj üretirdi (Docs/Sistem-Ozeti.md, ters derinlik testi maddesi).
 //
-// ⚠️ Renk KODDAN gelir (RemoteAvatar → MaterialPropertyBlock): dost mavi, düşman kırmızı,
-// kalibresizde turuncuya nabız. Materyaldeki değerler yalnız editör önizlemesidir; buradaki
-// varsayılanlara bakıp "renk şu" diye karar verilmez.
+// ⚠️ Renk KODDAN gelir (RemoteAvatar → MaterialPropertyBlock): oyuncunun kendi takımı (kırmızı/
+// mavi, takımsız modda nötr), kalibresizde turuncuya nabız. Materyaldeki değerler yalnız editör
+// önizlemesidir; buradaki varsayılanlara bakıp "renk şu" diye karar verilmez.
 //
 // Gölge/derinlik pass'i YOKTUR ve eklenmez: hayalet gövdenin opak bir gölge düşürmesi onu ölü
 // değil canlı gösterirdi.

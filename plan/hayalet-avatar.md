@@ -20,8 +20,10 @@ Kod, shader, materyal, hayalet modeli, editör aracı ve dokümanların tamamı 
 - [ ] Unity konsolu temiz — dokunulan dosyalar: `RemoteAvatar` · `GhostPoseDriver` ·
       `GhostBodyBuilder` (yeni) · `WeaponGranter` · `WeaponFrame`
 - [ ] `AvatarGhost.shader` derleniyor (materyal önizlemesi pembe değil)
-- [ ] Ölen uzak oyuncu robot hayalete dönüyor; içi görünüyor, dost mavi / düşman kırmızı
-- [ ] Takımsız modda (FFA) ve admin ekranında hayalet **kırmızı**
+- [ ] Ölen uzak oyuncu robot hayalete dönüyor; içi görünüyor, rengi oyuncunun KENDİ takımı
+      (kırmızı takım kırmızı, mavi takım mavi) — hem oyuncu başlığında hem admin ekranında AYNI
+- [ ] Takımsız modda (FFA) hayalet **nötr** (kirli beyaz)
+- [ ] Admin koşan maçta takım değiştirince ÖLÜ oyuncunun hayaleti anında yeni takım rengine geçiyor
 - [ ] Kalibrasyonu admin'den sıfırla → hayalet turuncuya nabız atıyor **ve ölümü eziyor**
 - [ ] Canlı + kalibreli oyuncunun gövdesi bugünküyle **birebir aynı** (doku, renk, gölge)
 - [ ] Hayalet duvarların arkasından **görünmüyor**

@@ -98,6 +98,21 @@ namespace VortexArena.Core.Combat
         private Weapon _summonedLeft;
         private Weapon _summonedRight;
 
+        /// <summary>
+        /// Ön kabza <b>kilidi</b>: hangi silahın ikincil soketine hangi el bağlandı.
+        /// <para>
+        /// ⚠️ <b>Bağın KURULMASI ile SÜRDÜRÜLMESİ ayrı kurallardır</b> ve bu alan ayrımın kendisidir.
+        /// Kurulma mesafeye bakar (<see cref="IsPalmOnSecondarySocket"/> — oyuncuya yeşile dönen
+        /// soket neyi vaat ediyorsa o), sürdürme <b>yalnız grip tuşuna</b>. Sürdürme de mesafeye
+        /// baksaydı bağ oyuncu tuşu bırakmadan kopardı: iki elli çözüm silahı ikinci ele doğru
+        /// KAYDIRMAZ, yalnız nişanlar — yani soket ile avuç arasındaki fark her zaman
+        /// <i>|ellerin arası − silahın kavrama arası|</i> kadardır ve oyuncu kolunu uzatıp
+        /// topladıkça bu fark tek başına kabul yarıçapını (0.12 m) aşar.
+        /// </para>
+        /// </summary>
+        private Weapon _secondaryLatchWeapon;
+        private OVRInput.Controller _secondaryLatchHand = OVRInput.Controller.None;
+
         private OVRCameraRig _rig;
         private float _nextRigScanAt;
         private bool _aliveSubscribed;
@@ -414,10 +429,7 @@ namespace VortexArena.Core.Combat
             if (IsTwoHandHeld(otherHandWeapon))
             {
                 Revoke(ref granted);
-                otherHandWeapon.SetSecondaryHand(
-                    gripHeld && IsPalmOnSecondarySocket(otherHandWeapon, hand)
-                        ? hand
-                        : OVRInput.Controller.None);
+                otherHandWeapon.SetSecondaryHand(ResolveSecondaryHand(otherHandWeapon, hand, gripHeld));
                 return;
             }
 
@@ -635,8 +647,54 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
+        /// Ön kabza bağının bir karelik cevabı: bu el şu an <paramref name="weapon"/>'ın ikincil
+        /// soketini tutuyor mu.
+        /// <para>
+        /// <b>İki ayrı kural:</b> bağ <b>KURULURKEN</b> avuç soketin kabul yarıçapında olmalı
+        /// (<see cref="IsPalmOnSecondarySocket"/>) — gösterge oyuncuya tam bunu vaat ediyor. Bağ
+        /// <b>SÜRERKEN</b> tek şart grip tuşunun basılı kalmasıdır: ne mesafe ne açı yoklanır.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Sürdürmeye mesafe kapısı GERİ KONMAZ.</b> İki elli çözüm silahı ikinci ele doğru
+        /// taşımaz, yalnız o yöne <i>nişanlar</i> (<see cref="ItemGripSolver"/>): soketin avuçtan
+        /// uzaklığı, oyuncunun iki avucu arası ile silahın iki kavrama noktası arası farkına eşittir
+        /// ve oyuncu kolunu uzatıp topladıkça bu fark kabul yarıçapını kendiliğinden aşar. Yani
+        /// mesafeye bakan bir sürdürme kuralı, oyuncu tuşu bırakmadan bağı koparır — nişan alma,
+        /// eğilme, dönme gibi normal hareketlerde.
+        /// </para>
+        /// <para>
+        /// Kilit silah <b>örneğine</b> bağlıdır: silah yok edilip yenisi verildiğinde (grip
+        /// bırakılıp tekrar basıldığında) eşleşme düşer, yani yeni silahın ön kabzası yeniden
+        /// sokete götürülerek alınır — kilit bir silahtan ötekine sızmaz.
+        /// </para>
+        /// </summary>
+        private OVRInput.Controller ResolveSecondaryHand(Weapon weapon, OVRInput.Controller hand, bool gripHeld)
+        {
+            bool latched = _secondaryLatchWeapon == weapon && _secondaryLatchHand == hand;
+            bool linked = gripHeld && weapon != null &&
+                          (latched || IsPalmOnSecondarySocket(weapon, hand));
+
+            if (linked)
+            {
+                _secondaryLatchWeapon = weapon;
+                _secondaryLatchHand = hand;
+                return hand;
+            }
+
+            // Yalnız KENDİ kilidini açar: öteki elin/silahın kilidi bu çağrının konusu değil.
+            if (latched)
+            {
+                _secondaryLatchWeapon = null;
+                _secondaryLatchHand = OVRInput.Controller.None;
+            }
+
+            return OVRInput.Controller.None;
+        }
+
+        /// <summary>
         /// Bu elin AVUCU silahın ikincil soketinin kabul yarıçapında mı — ön kabza kavramasının
-        /// kapısı. Ölçü <see cref="ItemGripSockets"/>'in çizim/kapı ölçüsüyle aynıdır
+        /// <b>KURULMA</b> kapısı (sürdürme kapısı değil, bkz. <see cref="ResolveSecondaryHand"/>).
+        /// Ölçü <see cref="ItemGripSockets"/>'in çizim/kapı ölçüsüyle aynıdır
         /// (<c>SecondaryGripRadius</c>): oyuncuya "şimdi bas" diye yeşile dönen soket sessizce
         /// reddedilmesin.
         /// </summary>
@@ -772,8 +830,7 @@ namespace VortexArena.Core.Combat
             // ⚠️ Ön kabza SummonTo'dan SONRA yazılır: GrantTo ikinci eli temizliyor (silah el
             // değiştirmiş olabilir), ters sırada yazılan değer aynı karede silinirdi.
             bool otherGrip = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, other) >= GripThreshold;
-            weapon.SetSecondaryHand(
-                otherGrip && IsPalmOnSecondarySocket(weapon, other) ? other : OVRInput.Controller.None);
+            weapon.SetSecondaryHand(ResolveSecondaryHand(weapon, other, otherGrip));
         }
 
         /// <summary>Tek elli seçimde her el kendi klonunu taşır (çift tabanca).</summary>

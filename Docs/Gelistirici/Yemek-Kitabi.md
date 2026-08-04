@@ -14,7 +14,7 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Kendi silahımı ateşleyince ağa bildirmek | [1](#1-kendi-silahımı-yazdım-ateşleyince-ne-çağırayım) |
 | Mermi/ok gibi uçan bir şeyin çarpması | [2](#2-hitscan-değil--mermiokbıçak-çarptı) |
 | Bomba, el bombası, alan hasarı | [3](#3-alan-hasarı-bomba-şok-dalgası) |
-| Kafa vuruşu çarpanı | [4](#4-kafa-vuruşu) |
+| Bölgeye göre hasar (kafa/karın/bacak) | [4](#4-bölgeye-göre-hasar-kafa--karın--bacak) |
 | "Şu an ateş edebilir miyim?" | [5](#5-ateş-edilebilir-mi) |
 | Biri öldü / canlandı olayını yakalamak | [6](#6-biri-öldü--canlandı) |
 | Yerel oyuncunun canı, ölümü, durumu | [7](#7-yerel-oyuncunun-canı-ve-durumu) |
@@ -149,20 +149,29 @@ birden çok isabet kutusu vardır).
 
 ---
 
-## 4. Kafa vuruşu
+## 4. Bölgeye göre hasar (kafa / karın / bacak)
 
 ```csharp
 if (Physics.Raycast(muzzle.position, dir, out RaycastHit hit, range))
 {
-    float uygulanan = ArenaCombat.IsHeadshot(hit.collider) ? damage * 2.5f : damage;
+    float uygulanan = damage * definition.GetZoneMultiplier(ArenaCombat.GetHitZone(hit.collider));
 
     ArenaCombat.ReportRaycastHit(hit, uygulanan, "ak47");
 }
 ```
 
-> **Çarpanı sen uygularsın.** Sunucu gönderdiğin sayıyı aynen kullanır — kafa çarpanı, mesafe
+> **Çarpanı sen uygularsın.** Sunucu gönderdiğin sayıyı aynen kullanır — bölge çarpanı, mesafe
 > düşüşü, zırh, hepsi senin tarafında. Bu yüzden denge değişikliği için sunucuya dokunmazsın
 > (ama APK build'i gerekir, çünkü sayılar istemcide yaşar).
+
+`GetHitZone` ağ oyuncusu olmayan bir hedefte `HitZone.Body` döner, yani çarpan 1'dir — dekora
+ateş ederken ayrı bir kontrol yazmana gerek yok. Yalnız kafayı sorgulaman yetiyorsa
+`ArenaCombat.IsHeadshot(...)` hâlâ duruyor.
+
+⚠️ Bölge, isabet eden **kutunun** özelliğidir ve kutular **elle bakılır** (üreten bir araç yoktur).
+Kemiğe yeni bir kutu asarsan `RemoteHitBox` eklemeyi ve `zone`'unu seçmeyi unutma: işaretsiz
+collider hiç vurulamaz, işaretli ama bölgesi seçilmemiş kutu `Body` (1×) sayılır.
+Kutular her gövdenin altından otomatik toplanır — güncellenecek bir liste yok.
 
 ---
 

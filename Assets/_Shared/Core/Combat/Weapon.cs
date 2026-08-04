@@ -592,10 +592,9 @@ namespace VortexArena.Core.Combat
                     Destroy(fx, 2f);
                 }
 
-                // Headshot çarpanı BURADA uygulanır: hasar istemci-otoriter, sunucu
+                // Bölge çarpanı BURADA uygulanır: hasar istemci-otoriter, sunucu
                 // hit_report.damage'ı aynen işler (protokol §10.3).
-                float damage = definition.Damage *
-                               (ArenaCombat.IsHeadshot(hit.collider) ? definition.HeadshotMultiplier : 1f);
+                float damage = definition.Damage * definition.GetZoneMultiplier(ArenaCombat.GetHitZone(hit.collider));
 
                 // Hasar HİÇBİR KOŞULDA yerelde uygulanmaz: can sunucu-otoriterdir, geri
                 // health_update ile gelir. Hedef ağ oyuncusu değilse (dekor, duvar) hiçbir şey
