@@ -10,13 +10,21 @@ namespace VortexArena.Server.Core;
 
 /// <summary>deviceId → PlayerState kaydı: playerId tahsisi (1..PLAYER_ID_MAX), devices.json ad
 /// kalıcılığı (ad havuzdan rastgele + 1..99 forma numarası, ikisi de otomatik), takım dengeleme
-/// ve OFFLINE_TIMEOUT süpürmesi.
+/// ve bağlantı süpürmesi (HEARTBEAT_TIMEOUT → RECONNECT_GRACE).
 /// (Cosmos DeviceRegistry + DeviceNameStore desenlerinin birleşimi.)
 /// <para>
 /// <b>Rol başına kalıcılık farkı (§2):</b> oyuncu kaydı kalıcıdır (deviceId sabit, kopunca
-/// Offline işaretlenir ama durur, adı devices.json'a yazılır). Admin kaydı OTURUMLUKtur —
+/// Reconnecting olur ve geri beklenir, adı devices.json'a yazılır). Admin kaydı OTURUMLUKtur —
 /// deviceId'si her oturumda benzersizdir, kopunca kayıt tümüyle silinir ve adı diske yazılmaz;
 /// aksi hâlde admin'i her açıp kapatma roster'a hayalet satır ve tükenen playerId bırakırdı.
+/// ⚠️ Admin bu yüzden Reconnecting durumuna HİÇ girmez: geri gelen admin yeni bir kimlikle gelir,
+/// "yeniden bağlanıyor" satırı yalan olurdu.
+/// </para>
+/// <para>
+/// <b>Kaydın ömrü (§2/§8):</b> soket düşer → <c>Reconnecting</c> → RECONNECT_GRACE dolar →
+/// maç katılımcısıysa <c>Left</c> (kayıt maç sonuna kadar durur, §10.2), değilse kayıt SİLİNİR ve
+/// playerId havuza döner. Ayrı bir playerId rezervasyon defteri gerekmez: <c>Left</c> kayıt
+/// <c>_players</c>'ta durduğu sürece <see cref="NextFreePlayerIdLocked"/> onu zaten atlar.
 /// </para></summary>
 public sealed class PlayerRegistry : IDisposable
 {
@@ -41,7 +49,7 @@ public sealed class PlayerRegistry : IDisposable
 
     private readonly ConcurrentDictionary<string, PlayerState> _players = new();
     private readonly object _gate = new();
-    private readonly Timer _offlineTimer;
+    private readonly Timer _connectionTimer;
     private readonly string _devicesPath;
 
     /// <summary>devices.json'ın bellekteki kopyası (deviceId → ad + numara). Numara sahipliğinin
@@ -58,7 +66,7 @@ public sealed class PlayerRegistry : IDisposable
     {
         _devicesPath = devicesJsonPath;
         LoadDevices();
-        _offlineTimer = new Timer(_ => CheckOfflinePlayers(), null,
+        _connectionTimer = new Timer(_ => CheckConnections(), null,
             TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
 
@@ -80,45 +88,49 @@ public sealed class PlayerRegistry : IDisposable
         return false;
     }
 
-    /// <summary>Çevrimiçi admin sayısı (admin_state.adminCount).</summary>
-    public int OnlineAdminCount()
+    /// <summary>Bağlı admin sayısı (admin_state.adminCount).</summary>
+    public int ConnectedAdminCount()
     {
         var count = 0;
         foreach (var state in _players.Values)
-            if (state.Online && state.Role == "admin") count++;
+            if (state.IsConnected && state.Role == "admin") count++;
         return count;
     }
 
-    /// <summary>Çevrimiçi TÜM bağlantılar — rol ayırmadan (selection_state yayını için anlık
-    /// kopya). Admin'e özel olanlar için <see cref="OnlineAdminConnections"/>.</summary>
-    public List<ClientConnection> OnlineConnections()
+    /// <summary>Bağlı TÜM soketler — rol ayırmadan (selection_state yayını için anlık kopya).
+    /// Admin'e özel olanlar için <see cref="ConnectedAdminConnections"/>.</summary>
+    public List<ClientConnection> ConnectedConnections()
     {
         var result = new List<ClientConnection>();
         foreach (var state in _players.Values)
         {
-            if (!state.Online) continue;
-            var connection = state.Connection;
-            if (connection != null) result.Add(connection);
+            if (!state.IsConnected) continue;
+            var socket = state.Socket;
+            if (socket != null) result.Add(socket);
         }
         return result;
     }
 
-    /// <summary>Çevrimiçi adminlerin bağlantıları (admin_state yayını için anlık kopya).</summary>
-    public List<ClientConnection> OnlineAdminConnections()
+    /// <summary>Bağlı adminlerin soketleri (admin_state yayını için anlık kopya).</summary>
+    public List<ClientConnection> ConnectedAdminConnections()
     {
         var result = new List<ClientConnection>();
         foreach (var state in _players.Values)
         {
-            if (!state.Online || state.Role != "admin") continue;
-            var connection = state.Connection;
-            if (connection != null) result.Add(connection);
+            if (!state.IsConnected || state.Role != "admin") continue;
+            var socket = state.Socket;
+            if (socket != null) result.Add(socket);
         }
         return result;
     }
 
     /// <summary>false = playerId havuzu tükendi (1..PLAYER_ID_MAX). Bu bir ürün kotası değil,
     /// u8 tel formatının tavanıdır. Aynı deviceId yeniden bağlanırsa eski soket kapatılır,
-    /// playerId korunur (Docs/ArenaNet-Protokol.md §2).</summary>
+    /// playerId korunur (Docs/ArenaNet-Protokol.md §2).
+    /// <para>⚠️ Mevcut kayıt HANGİ durumdan dönerse dönsün (<c>Reconnecting</c> ya da
+    /// <c>Left</c>) Connected'a çekilir ve <b>ad/numara/takım/kills/deaths/score/MatchParticipant
+    /// KORUNUR</b>: "kaldığı yerden devam" ve "eski satırına oturur" kuralı (§2) budur —
+    /// sıfırlanırsa maç ortasında dönen oyuncu ikinci bir kimlik gibi görünür.</para></summary>
     public bool TryRegisterHello(HelloMsg hello, ClientConnection connection, out PlayerState state, out PlayerChangeKind kind)
     {
         ClientConnection? stale = null;
@@ -128,8 +140,8 @@ public sealed class PlayerRegistry : IDisposable
             {
                 state = existing;
                 kind = PlayerChangeKind.Reconnected;
-                if (existing.Connection != null && !ReferenceEquals(existing.Connection, connection))
-                    stale = existing.Connection;
+                if (existing.Socket != null && !ReferenceEquals(existing.Socket, connection))
+                    stale = existing.Socket;
             }
             else
             {
@@ -157,9 +169,10 @@ public sealed class PlayerRegistry : IDisposable
             // başlamış olabilir). Başlık kayıtlı anchor'dan geri yükleyince yeniden bildirir.
             state.Calibrated = false;
             state.CalibrationSource = "";
-            state.Online = true;
+            state.Connection = PlayerConnection.Connected;
+            state.DisconnectedAt = default;
             state.LastSeen = DateTime.UtcNow;
-            state.Connection = connection;
+            state.Socket = connection;
             // Her welcome yeni udpToken taşır; bayat UDP endpoint geçersizleşir
             // (istemci 0x00 UdpHello ile yeniden kaydolur).
             state.UdpToken = NextUdpToken();
@@ -181,7 +194,7 @@ public sealed class PlayerRegistry : IDisposable
     public void Announce(PlayerState state, PlayerChangeKind kind) => Changed?.Invoke(state, kind);
 
     /// <summary>status kalp atışı (§5.1). ⚠️ <b>Koşulsuz Changed raise ETMEZ</b> — yalnız roster'da
-    /// GÖRÜNEN bir alan (scene/battery/online) gerçekten değiştiyse yayın tetikler. Eskiden her
+    /// GÖRÜNEN bir alan (scene/battery/connection) gerçekten değiştiyse yayın tetikler. Eskiden her
     /// status bir tam roster yayını açıyordu: 18 istemci × 5 sn'de bir × 18 alıcı ≈ saniyede 65 tam
     /// roster JSON'u, hiçbir şey değişmese bile. <c>Fps</c> PlayerInfo'da taşınmadığı için yayın
     /// tetiklemez.</summary>
@@ -192,7 +205,7 @@ public sealed class PlayerRegistry : IDisposable
         lock (_gate)
         {
             var scene = status.scene ?? state.Scene;
-            changed = !state.Online || state.Scene != scene || state.Battery != status.battery;
+            changed = !state.IsConnected || state.Scene != scene || state.Battery != status.battery;
             state.Scene = scene;
             state.Battery = status.battery;
             state.Fps = status.fps;
@@ -203,7 +216,8 @@ public sealed class PlayerRegistry : IDisposable
             state.JitterMs = status.jitterMs;
             state.LossPct = status.lossPct;
             state.LastSeen = DateTime.UtcNow;
-            state.Online = true;
+            state.Connection = PlayerConnection.Connected;
+            state.DisconnectedAt = default;
         }
         if (changed) Changed?.Invoke(state, PlayerChangeKind.Updated);
     }
@@ -211,10 +225,10 @@ public sealed class PlayerRegistry : IDisposable
     /// <summary>set_identity (§5.1): ad ve/veya forma numarası. <b>Boş ad ve <c>0</c> numara mevcut
     /// değeri korur</b> (set_selection konvansiyonu) — "yalnız numarayı değiştir" tek çağrıdır.
     /// <para>
-    /// Numara benzersizliği burada zorlanır ve <b>çevrimdışı sahibi AYNI ANDA taşınır</b>: sahibi
-    /// çevrimiçiyse reddedilir (operatör onu roster'da görüp kendisi çözebilir), çevrimdışıysa o
+    /// Numara benzersizliği burada zorlanır ve <b>bağlantısız sahibi AYNI ANDA taşınır</b>: sahibi
+    /// bağlıysa reddedilir (operatör onu roster'da görüp kendisi çözebilir), bağlantısızsa o
     /// cihaz 1'den itibaren ilk boş numaraya yazılır. Taşımayı sonraki bağlantıya ertelemek
-    /// devices.json'ı o süre boyunca çift numaralı bırakırdı; çevrimdışına karşı da reddetmek ise
+    /// devices.json'ı o süre boyunca çift numaralı bırakırdı; bağlantısıza karşı da reddetmek ise
     /// operatörü kilitlerdi (numarayı tutan cihaz roster'da görünmez, serbest bırakılamaz).
     /// </para>
     /// <para>false = değişiklik olmadı ya da reddedildi; <paramref name="error"/> doluysa reddedildi
@@ -255,16 +269,16 @@ public sealed class PlayerRegistry : IDisposable
                 var holder = FindNumberHolderLocked(number, state.DeviceId);
                 if (holder != null)
                 {
-                    if (_players.TryGetValue(holder, out var owner) && owner.Online)
+                    if (_players.TryGetValue(holder, out var owner) && owner.IsConnected)
                     {
                         error = $"{number} numara {owner.Name}'da";
                         return false;
                     }
-                    // Çevrimdışı sahip: numarayı state almadan ÖNCE taşı ki ilk boş hesabı
+                    // Bağlantısız sahip: numarayı state almadan ÖNCE taşı ki ilk boş hesabı
                     // (devices.json hâlâ eski sahibi gösterirken) `number`'ı seçemesin.
                     var moved = NextFreeNumberLocked();
                     if (_devices.TryGetValue(holder, out var record)) record.Number = moved;
-                    if (_players.TryGetValue(holder, out var offline)) offline.Number = moved;
+                    if (_players.TryGetValue(holder, out var absent)) absent.Number = moved;
                 }
                 state.Number = number;
                 changed = true;
@@ -366,7 +380,9 @@ public sealed class PlayerRegistry : IDisposable
     }
 
     /// <summary>Bir bağlantının recv döngüsü kapanınca çağrılır. Cihaz daha yeni bir bağlantıya
-    /// geçtiyse no-op (yeniden bağlanma yarışına karşı).</summary>
+    /// geçtiyse no-op (yeniden bağlanma yarışına karşı).
+    /// <para>Oyuncu <c>Reconnecting</c>'e düşer ve RECONNECT_GRACE boyunca geri beklenir;
+    /// admin <see cref="RetireLocked"/> ile tümden silinir (§2).</para></summary>
     public void NotifyDisconnected(ClientConnection connection)
     {
         PlayerState? affected = null;
@@ -375,10 +391,11 @@ public sealed class PlayerRegistry : IDisposable
         {
             foreach (var state in _players.Values)
             {
-                if (ReferenceEquals(state.Connection, connection))
+                if (ReferenceEquals(state.Socket, connection))
                 {
-                    state.Connection = null;
-                    state.Online = false;
+                    state.Socket = null;
+                    state.Connection = PlayerConnection.Reconnecting;
+                    state.DisconnectedAt = DateTime.UtcNow;
                     state.Ready = false;
                     affected = state;
                     removed = RetireLocked(state);
@@ -387,15 +404,85 @@ public sealed class PlayerRegistry : IDisposable
             }
         }
         if (affected != null)
-            Changed?.Invoke(affected, removed ? PlayerChangeKind.Removed : PlayerChangeKind.Offline);
+            Changed?.Invoke(affected, removed ? PlayerChangeKind.Removed : PlayerChangeKind.Reconnecting);
+    }
+
+    /// <summary>Koşan maçın defterine yazar/siler (§10.2). Yalnız değiştiyse yayın yapar —
+    /// <c>inMatch</c> roster'da GÖRÜNEN bir alan, koşulsuz yayın her çağrıyı bir tam
+    /// lobby_state'e çevirirdi.</summary>
+    public void SetMatchParticipant(int playerId, bool value)
+    {
+        if (!TryGetByPlayerId(playerId, out var state)) return;
+        lock (_gate)
+        {
+            if (state.MatchParticipant == value) return;
+            state.MatchParticipant = value;
+        }
+        Changed?.Invoke(state, PlayerChangeKind.Updated);
+    }
+
+    /// <summary>Maç kurulurken o an BAĞLI olan her oyuncuyu katılımcı işaretler (§10.2);
+    /// dönüş = etkilenen kayıt sayısı.
+    /// <para>⚠️ Değişiklik başına değil, <b>tek bir</b> <c>Updated</c> yayınlanır: oyuncu başına
+    /// yayın N tam roster JSON'u demek olurdu ve hepsi aynı anlık görüntüyü taşırdı.</para></summary>
+    public int MarkConnectedPlayersAsParticipants() => SetParticipantsForAll(true);
+
+    /// <summary>Maç kapanınca defteri temizler (§10.2); dönüş = etkilenen kayıt sayısı.
+    /// Toplu yayın kuralı <see cref="MarkConnectedPlayersAsParticipants"/> ile aynıdır.</summary>
+    public int ClearMatchParticipants() => SetParticipantsForAll(false);
+
+    private int SetParticipantsForAll(bool value)
+    {
+        var affected = 0;
+        PlayerState? last = null;
+        lock (_gate)
+        {
+            foreach (var state in _players.Values)
+            {
+                if (state.Role != "player" || state.MatchParticipant == value) continue;
+                // İşaretlerken yalnız BAĞLI olanlar deftere girer (§10.2); temizlerken herkes.
+                if (value && !state.IsConnected) continue;
+                state.MatchParticipant = value;
+                last = state;
+                affected++;
+            }
+        }
+        if (last != null) Changed?.Invoke(last, PlayerChangeKind.Updated);
+        return affected;
+    }
+
+    /// <summary>Maç kapanışında <c>Left</c> kayıtları siler (playerId'leri havuza döner);
+    /// dönüş = silinen kayıt sayısı.
+    /// <para>⚠️ Çağrı anı bağlayıcıdır (§10.2): defter <c>finished</c> fazının TAMAMI boyunca
+    /// durur ve ancak <b>lobiye dönerken</b>, <c>return_to_lobby</c> yayınından SONRA kapanır.
+    /// <c>match_end</c>'de silmek maç sonu tablosunu tam da okunduğu anda boşaltırdı — ayrılmış
+    /// oyuncuların orada görünmesi bu özelliğin var olma sebebi.</para></summary>
+    public int PurgeLeftParticipants()
+    {
+        var purged = new List<PlayerState>();
+        lock (_gate)
+        {
+            foreach (var state in _players.Values)
+            {
+                if (state.Connection != PlayerConnection.Left) continue;
+                _players.TryRemove(state.DeviceId, out _);
+                purged.Add(state);
+            }
+        }
+        // Kilit dışında: her Changed bir lobby_state yayını tetikliyor (kilit altında gönderim yok).
+        foreach (var state in purged) Changed?.Invoke(state, PlayerChangeKind.Removed);
+        return purged.Count;
     }
 
     /// <summary>
     /// Atma (§5.4): kaydı roster'dan <b>tümüyle siler</b>, varsa bağlantısını çağırana verir
-    /// (kapatmak onun işi). Kopmadan farkı budur — kopan cihaz "çevrimdışı" olarak listede
+    /// (kapatmak onun işi). Kopmadan farkı budur — kopan cihaz <c>reconnecting</c> olarak listede
     /// <b>durur</b> (aynı gözlük geri geldiğinde playerId'sini ve adını korusun diye), atılan
-    /// cihaz listeden kalkar. Aksi hâlde atma çevrimdışı bir kayıtta hiçbir şey yapmaz ve
+    /// cihaz listeden kalkar. Aksi hâlde atma bağlantısız bir kayıtta hiçbir şey yapmaz ve
     /// operatör "AT"a bastıkça duran bir satır görürdü.
+    /// <para>⚠️ Atma <b>katılımcılıktan da düşürür</b> (§10.2): kayıt tümüyle silindiği için
+    /// <c>MatchParticipant</c> bayrağı onunla birlikte gider — ayrıca temizlemek gerekmez.
+    /// Operatör bilinçli attıysa satır maç sonu tablosunda da yer almaz.</para>
     /// <para>⚠️ <c>devices.json</c>'a DOKUNMAZ: atma bir yasak değildir, cihaz yeniden
     /// bağlanırsa adını ve forma numarasını korur (playerId havuza döner, yenisi verilir).</para>
     /// </summary>
@@ -409,10 +496,11 @@ public sealed class PlayerRegistry : IDisposable
                 return false;
             }
 
-            connection = state.Connection;
-            state.Connection = null;
-            state.Online = false;
+            connection = state.Socket;
+            state.Socket = null;
+            state.Connection = PlayerConnection.Left;
             state.Ready = false;
+            state.MatchParticipant = false;
             _players.TryRemove(state.DeviceId, out _);
         }
 
@@ -420,36 +508,65 @@ public sealed class PlayerRegistry : IDisposable
         return true;
     }
 
-    /// <summary>OFFLINE_TIMEOUT boyunca status gelmeyen cihazları çevrimdışına düşürür,
-    /// bağlantılarını kapatır (§8). Admin kayıtları burada da silinir (§2).</summary>
-    private void CheckOfflinePlayers()
+    /// <summary>
+    /// Bağlantı süpürmesi (§8) — <b>iki aşamalı</b>:
+    /// (a) <c>Connected</c> ama HEARTBEAT_TIMEOUT boyunca status gelmedi → soket ölü sayılır,
+    /// koparılır ve cihaz <c>Reconnecting</c>'e düşer;
+    /// (b) <c>Reconnecting</c> RECONNECT_GRACE boyunca sürdü → oyuncu oyundan çıkarılır: maç
+    /// katılımcısıysa <c>Left</c> (kayıt maç sonuna kadar durur, §10.2), değilse kayıt silinir ve
+    /// playerId havuza döner.
+    /// <para>Admin her iki aşamada da tümden silinir (§2 — <see cref="RetireLocked"/>).</para>
+    /// <para>⚠️ Kilit altında ne gönderim ne olay var: iş listesi toplanır, <c>Abort</c> ve
+    /// <c>Changed</c> kilit dışında koşar.</para>
+    /// </summary>
+    private void CheckConnections()
     {
         var now = DateTime.UtcNow;
-        var timeout = TimeSpan.FromSeconds(ArenaProtocol.OFFLINE_TIMEOUT);
-        var timedOut = new List<(PlayerState State, ClientConnection? Connection, bool Removed)>();
+        var heartbeat = TimeSpan.FromSeconds(ArenaProtocol.HEARTBEAT_TIMEOUT);
+        var grace = TimeSpan.FromSeconds(ArenaProtocol.RECONNECT_GRACE);
+        var pending = new List<(PlayerState State, ClientConnection? Socket, PlayerChangeKind Kind)>();
         lock (_gate)
         {
             foreach (var state in _players.Values)
             {
-                if (state.Online && now - state.LastSeen > timeout)
+                if (state.IsConnected)
                 {
-                    state.Online = false;
+                    if (now - state.LastSeen <= heartbeat) continue;
+
+                    state.Connection = PlayerConnection.Reconnecting;
+                    state.DisconnectedAt = now;
                     state.Ready = false;
-                    var connection = state.Connection;
-                    state.Connection = null;
-                    timedOut.Add((state, connection, RetireLocked(state)));
+                    var socket = state.Socket;
+                    state.Socket = null;
+                    pending.Add((state, socket,
+                        RetireLocked(state) ? PlayerChangeKind.Removed : PlayerChangeKind.Reconnecting));
+                    continue;
                 }
+
+                if (state.Connection != PlayerConnection.Reconnecting) continue;
+                if (now - state.DisconnectedAt <= grace) continue;
+
+                if (state.MatchParticipant)
+                {
+                    // Kayıt DURUR: adı ve sayaçları maç sonu tablosunda görünmeli (§10.2).
+                    state.Connection = PlayerConnection.Left;
+                    pending.Add((state, null, PlayerChangeKind.Left));
+                    continue;
+                }
+
+                _players.TryRemove(state.DeviceId, out _);
+                pending.Add((state, null, PlayerChangeKind.Removed));
             }
         }
-        foreach (var (state, connection, removed) in timedOut)
+        foreach (var (state, socket, kind) in pending)
         {
-            connection?.Abort();
-            Changed?.Invoke(state, removed ? PlayerChangeKind.Removed : PlayerChangeKind.Offline);
+            socket?.Abort();
+            Changed?.Invoke(state, kind);
         }
     }
 
     /// <summary>
-    /// Çevrimdışına düşmüş kaydı emekliye ayırır. <b>Admin kaydı tümüyle silinir</b> (deviceId'si
+    /// Bağlantısı düşmüş kaydı emekliye ayırır. <b>Admin kaydı tümüyle silinir</b> (deviceId'si
     /// zaten oturumluk — §2: geri gelen admin yeni bir kimlikle gelir, eski satır roster'da
     /// hayalet olarak kalırdı ve playerId'si havuza dönmezdi). Oyuncu kaydı DURUR: deviceId'si
     /// kalıcıdır, aynı gözlük geri geldiğinde playerId'sini ve adını korumalıdır.
@@ -462,7 +579,7 @@ public sealed class PlayerRegistry : IDisposable
         return true;
     }
 
-    public void Dispose() => _offlineTimer.Dispose();
+    public void Dispose() => _connectionTimer.Dispose();
 
     // ---- playerId / takım / token tahsisi ----
 
@@ -573,7 +690,7 @@ public sealed class PlayerRegistry : IDisposable
     /// <para>
     /// <b>Admin:</b> ad `hello.deviceName` (PC adı; boşsa "Admin"), numara YOK (0) — admin oynamaz.
     /// Diske YAZILMAZ: admin deviceId'si oturumluk olduğu için her açılış çöp bir satır eklerdi.
-    /// Aynı ad başka bir çevrimiçi admin'de kullanılıyorsa sonuna " (2)", " (3)"… eklenir.
+    /// Aynı ad başka bir bağlı admin'de kullanılıyorsa sonuna " (2)", " (3)"… eklenir.
     /// </para>
     /// </summary>
     private void ResolveIdentityLocked(PlayerState state, string? fallbackDeviceName)

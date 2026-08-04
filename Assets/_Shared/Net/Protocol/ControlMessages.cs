@@ -329,7 +329,25 @@ namespace VortexArena.Protocol
         public string role;
         public string team;
         public bool ready;
-        public bool online;
+
+        /// <summary>ArenaProtocol.CONNECTION_* (§2/§5.3): <c>connected</c> | <c>reconnecting</c> |
+        /// <c>left</c>. <b>Bilinmeyen/boş değer <c>connected</c> sayılır</b> — kural değerleriyle
+        /// aynı sözleşme (§10.5), dördüncü bir durum sürüm artırmasın diye.
+        /// <para>⚠️ Eski <c>online</c> (bool) alanının yerine geçer ve "çevrimdışı" diye bir durum
+        /// YOKTUR: kopan cihaz ya geri beklenir ya oyundan çıkarılır.</para></summary>
+        public string connection = ArenaProtocol.CONNECTION_CONNECTED;
+
+        /// <summary>Cihazın oyundan çıkarılmasına kalan saniye; yalnız <c>reconnecting</c> iken
+        /// anlamlıdır (0 = yok). <b>Geri sayımdır, zaman damgası değildir</b> ve her
+        /// <c>lobby_state</c>'te yeniden hesaplanır — roster yayını olay tabanlı olduğu için
+        /// arayüz onu YERELDE de tüketmelidir, yoksa sayaç ancak başka bir değişiklikte ilerler.</summary>
+        public int reconnectSeconds;
+
+        /// <summary>Bu kayıt koşan maçın katılımcısı mı (§10.2). Maç sonu tablosunun kapsamı budur:
+        /// <c>left</c> bir satır yalnız bu bayrak yüzünden listede durur. Maç kapanınca hepsi
+        /// <c>false</c> olur ve <c>left</c> kayıtlar silinir.</summary>
+        public bool inMatch;
+
         public float battery;
         public string scene;
 

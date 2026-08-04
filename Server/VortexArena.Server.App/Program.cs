@@ -54,21 +54,27 @@ internal static class Program
 
         registry.Changed += (player, kind) =>
         {
-            var online = registry.Snapshot().Count(p => p.Online);
+            var connected = registry.Snapshot().Count(p => p.IsConnected);
             switch (kind)
             {
                 case PlayerChangeKind.Added:
-                    Console.WriteLine($"[+] {player.Name} bağlandı (playerId {player.PlayerId}, rol {player.Role}) — çevrimiçi: {online}");
+                    Console.WriteLine($"[+] {player.Name} bağlandı (playerId {player.PlayerId}, rol {player.Role}) — bağlı: {connected}");
                     break;
                 case PlayerChangeKind.Reconnected:
-                    Console.WriteLine($"[+] {player.Name} yeniden bağlandı (playerId {player.PlayerId}) — çevrimiçi: {online}");
+                    Console.WriteLine($"[+] {player.Name} yeniden bağlandı (playerId {player.PlayerId}) — bağlı: {connected}");
                     break;
-                case PlayerChangeKind.Offline:
-                    Console.WriteLine($"[-] {player.Name} çevrimdışı — çevrimiçi: {online}");
+                case PlayerChangeKind.Reconnecting:
+                    Console.WriteLine($"[-] {player.Name} bağlantı koptu, yeniden bekleniyor " +
+                                      $"({ArenaProtocol.RECONNECT_GRACE:0} sn) — bağlı: {connected}");
+                    break;
+                case PlayerChangeKind.Left:
+                    // Kayıt SİLİNMEDİ: maç katılımcısı olduğu için satırı maç sonuna kadar durur (§10.2).
+                    Console.WriteLine($"[-] {player.Name} oyundan çıkarıldı (maç istatistiği korunuyor) — bağlı: {connected}");
                     break;
                 case PlayerChangeKind.Removed:
-                    // Yalnız admin: kimliği oturumluk olduğu için kaydı tümüyle silinir (§2).
-                    Console.WriteLine($"[-] {player.Name} ayrıldı, kaydı silindi (playerId {player.PlayerId} havuza döndü) — çevrimiçi: {online}");
+                    // Admin (oturumluk kimlik, §2), atılan oyuncu (§5.4) ve süresi dolan
+                    // maç-dışı oyuncu: kaydı tümüyle silinir.
+                    Console.WriteLine($"[-] {player.Name} ayrıldı, kaydı silindi (playerId {player.PlayerId} havuza döndü) — bağlı: {connected}");
                     break;
                 // Updated (status/ready/takım) konsola basılmaz — 5 sn'lik status'larla gürültü olur.
             }

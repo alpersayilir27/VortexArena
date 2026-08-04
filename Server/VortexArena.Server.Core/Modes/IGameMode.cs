@@ -6,7 +6,7 @@ namespace VortexArena.Server.Core.Modes;
 /// (ör. "tdm"); yeni mod eklerken Docs/ArenaNet-Protokol.md'ye modId işlenir (CLAUDE.md reçetesi).
 ///
 /// <para>Tüm kancalar MatchDirector'ın kilidi DIŞINDA çağrılır; mod, director'ın public API'sini
-/// (ScoreRed/ScoreBlue/AddScore/AddPlayerScore/TimeRemaining/OnlinePlayers…) serbestçe
+/// (ScoreRed/ScoreBlue/AddScore/AddPlayerScore/TimeRemaining/ConnectedPlayers…) serbestçe
 /// kullanabilir — o API kendi kilidini alır. Kancalar İÇİNDE bloklayan iş yapılmaz (maç tik'i 10 Hz).</para>
 ///
 /// <para><b>Yeni kanca eklerken VARSAYILAN GÖVDE kullan</b> (default interface method): böylece

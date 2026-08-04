@@ -304,6 +304,8 @@ MonoBehaviour:
   teamRenderers: []
   bodyRenderers:
   - {fileID: 3858937266322927765}
+  ghostMaterial: {fileID: 2100000, guid: 7f3b26d84e9a41c5b0d7e83a2c96f158, type: 2}
+  ghostRoot: {fileID: 0}
   character: {fileID: 8595517995428222429}
   friendMarker: {fileID: 6756981665450713295}
   visualRoot: {fileID: 3915598790773187048}

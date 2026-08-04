@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Oculus.Interaction;
 using Oculus.Interaction.HandGrab;
 using UnityEngine;
+using VortexArena.Core.Arena;
 
 namespace VortexArena.Core.Combat
 {
@@ -82,7 +83,7 @@ namespace VortexArena.Core.Combat
                  "ölçüsüne oturtulur (konum/dönüş/ölçek buradan yazılır).")]
         [SerializeField] private Transform frameVisual;
 
-        [Tooltip("Silahın seçilebildiği en uzak mesafe (m) — el anchor'ı ile çerçeve merkezi arası. " +
+        [Tooltip("Silahın seçilebildiği en uzak mesafe (m) — AVUÇ ile çerçeve merkezi arası. " +
                  "⚠️ ISDK'nın kendi mesafe-kavrama konisi 5 m'de biter: bunun üstüne çıkmak işe " +
                  "yaramaz, silah aday bile olmaz.")]
         [SerializeField] private float maxGrabDistance = 4f;
@@ -696,6 +697,16 @@ namespace VortexArena.Core.Combat
         /// ISDK kapısı: bu interactor şu an silahı seçebilir mi — yalnız MESAFE sorusu
         /// (<see cref="maxGrabDistance"/>).
         /// <para>
+        /// ⚠️ <b>"Elde çift elli silah varken seçim kapansın" diye bir kapı BURAYA EKLENMEZ.</b>
+        /// Çerçeve bir kavrama değil bir <b>seçim</b> tetikleyicisidir ve seçimi değiştirmek ikinci
+        /// bir silah üretmez: çift elli seçimde <c>WeaponGranter</c> oyuncu başına zaten TEK klon
+        /// tutar, yeni tanım eskisinin yerine geçer. Böyle bir kapı rafta silah değiştirmeyi de
+        /// kapatır ve belirtisi teşhis edilmesi zor bir biçimde görünür: <b>ışın çıkar ama seçim
+        /// olmaz</b> — çünkü grip'e basıldığı anda granter eski silahın klonunu ele çağırır ve kapı
+        /// tam o karede kapanır. "Aynı anda ikinci silah tutulamaz" kuralının yeri
+        /// <c>WeaponGranter.TickHand</c>'dir (rastgele dağıtım yolu, öteki el).
+        /// </para>
+        /// <para>
         /// ⚠️ <b>El/anchor çözülemezse FAIL-OPEN</b> (izin verilir), gerekçesi
         /// <c>ItemGripSockets.Filter</c>'daki ile birebir aynı: bu bir emniyet kapısı değil bir HİS
         /// kapısıdır — editör oturumunda kontrolcü çözülemez ve fail-close olsaydı silah editörde
@@ -704,6 +715,17 @@ namespace VortexArena.Core.Combat
         /// </summary>
         public bool Filter(GameObject interactorGameObject)
         {
+            // ⚠️ Kalibresiz oyuncu silah ALAMAZ (§10.6) ve kapı BURADA durur, seçim yolunda değil:
+            // aday listesinden düşen çerçeve ışın/reticle de çizdirmez. Seçim tarafına konsaydı
+            // oyuncu nişan alır, grip'e basar ve hiçbir şey olmazdı — bu sınıfın kendi yorumundaki
+            // "ışın çıkar ama seçim olmaz" belirtisinin ta kendisi.
+            // Silahın ele GELMESİ ayrıca WeaponGranter.CanHoldWeapon ile kapalıdır; buradaki kapı
+            // onun yerine geçmez, oyuncuya doğru geri bildirimi verir.
+            if (!CalibrationState.IsCalibrated)
+            {
+                return false;
+            }
+
             OVRInput.Controller hand = WeaponGranter.ResolveControllerFromGameObject(interactorGameObject);
             if (hand == OVRInput.Controller.None)
             {
@@ -711,13 +733,12 @@ namespace VortexArena.Core.Combat
                 return true;
             }
 
-            Transform anchor = WeaponGranter.ResolveHandAnchor(hand);
-            if (anchor == null)
+            if (!WeaponGranter.TryResolvePalm(hand, out Pose palm))
             {
                 return true; // rig yok → kapı anlamsız
             }
 
-            return (anchor.position - FrameCenterWorld).sqrMagnitude <= maxGrabDistance * maxGrabDistance;
+            return (palm.position - FrameCenterWorld).sqrMagnitude <= maxGrabDistance * maxGrabDistance;
         }
 
         // ------------------------------------------------------------------ nişan ışını
@@ -727,7 +748,7 @@ namespace VortexArena.Core.Combat
             _weapon != null ? _weapon.transform.TransformPoint(_centerLocal) : transform.position;
 
         /// <summary>
-        /// Hover eden elin anchor'ından çerçeve merkezine ışın çizer — yalnız el MENZİL İÇİNDEYSE.
+        /// Hover eden elin AVUCUNDAN çerçeve merkezine ışın çizer — yalnız el MENZİL İÇİNDEYSE.
         /// <para>
         /// ⚠️ <b>Bu ışın varsayılan olarak KAPALIDIR</b> (<see cref="isRayVisible"/>): ISDK'nın
         /// mesafe kavraması kendi göstergesini çiziyor (tüp + reticle) ve ikisi birden açıkken
@@ -753,15 +774,16 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            Transform anchor = WeaponGranter.ResolveHandAnchor(hand);
-            if (anchor == null)
+            // Mesafe AVUÇtan ölçülür — Filter ile aynı kaynaktan, yoksa ışın kapının izin verdiği
+            // menzilden birkaç santim önce/sonra sönerdi.
+            if (!WeaponGranter.TryResolvePalm(hand, out Pose palm))
             {
                 HideRay(ray);
                 return;
             }
 
             Vector3 center = FrameCenterWorld;
-            if ((anchor.position - center).sqrMagnitude > maxGrabDistance * maxGrabDistance)
+            if ((palm.position - center).sqrMagnitude > maxGrabDistance * maxGrabDistance)
             {
                 HideRay(ray);
                 return;
@@ -773,7 +795,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            ray.SetPosition(0, anchor.position);
+            ray.SetPosition(0, palm.position);
             ray.SetPosition(1, center);
             ray.enabled = true;
         }

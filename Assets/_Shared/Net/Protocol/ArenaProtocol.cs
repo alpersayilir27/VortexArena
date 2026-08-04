@@ -4,6 +4,15 @@ namespace VortexArena.Protocol
     public static class ArenaProtocol
     {
         /// <summary>
+        /// v8: <b>üç değerli bağlantı durumu</b> — <c>PlayerInfo.online</c> (bool) KALDIRILDI,
+        /// yerine <c>connection</c> (<see cref="CONNECTION_CONNECTED"/>/
+        /// <see cref="CONNECTION_RECONNECTING"/>/<see cref="CONNECTION_LEFT"/>) +
+        /// <c>reconnectSeconds</c> + <c>inMatch</c> geldi (§2/§5.3/§10.2).
+        /// <para>⚠️ <b>v8'i kırıcı yapan şey alanın ÇIKARILMASIDIR:</b> eski istemci <c>online</c>
+        /// alanını bulamayınca varsayılan <c>false</c> okur ve TÜM roster'ı "çevrimdışı" çizer;
+        /// yeni istemci eski sunucudan <c>connection</c> alamaz ama boş değer <c>connected</c>
+        /// sayıldığı için o yönde yalnız "yeniden bağlanıyor" satırını kaçırır. Sürüm uyuşmazlığı
+        /// bağlantıyı <b>reddetmez</b> (yalnız uyarı basılır) — APK turu tamamlanmalıdır.</para>
         /// v7: <b>arena uzayı = dünya uzayı</b> (§3) — arena origin'i artık sahnedeki bir marker
         /// değil, dünya (0,0,0) ve kimlik rotasyonudur.
         /// <para>⚠️ <b>v7'yi kırıcı yapan şey tel DÜZENİ değil ANLAMIDIR:</b> baytlar birebir aynı
@@ -42,7 +51,7 @@ namespace VortexArena.Protocol
         /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
         /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
         /// </summary>
-        public const int PROTOCOL_VERSION = 7;
+        public const int PROTOCOL_VERSION = 8;
         public const string APP_ID = "VortexArena";
 
         /// <summary>Forma numarası aralığı (§2). <c>0</c> = atanmamış ve bu aralığın dışındadır;
@@ -59,7 +68,21 @@ namespace VortexArena.Protocol
         public const float BEACON_INTERVAL = 2f;
         public const float DISCOVERY_TIMEOUT = 5f;
         public const float STATUS_INTERVAL = 5f;
-        public const float OFFLINE_TIMEOUT = 15f;
+        /// <summary>Status gelmezse soketin ölü sayılıp kapatıldığı süre (§1/§8). ⚠️ Tek başına
+        /// "oyuncu gitti" DEMEZ: cihaz bunun sonunda yalnız <see cref="CONNECTION_RECONNECTING"/>'e
+        /// düşer, asıl çıkarma kararı <see cref="RECONNECT_GRACE"/>'indir.</summary>
+        public const float HEARTBEAT_TIMEOUT = 15f;
+
+        /// <summary>
+        /// Bağlantısı kopan cihazın geri beklendiği süre (§2). Dolunca oyuncu oyundan çıkarılır:
+        /// koşan maçın katılımcısıysa kaydı <see cref="CONNECTION_LEFT"/> olarak maç sonuna kadar
+        /// durur (§10.2), değilse tümden silinir ve <c>playerId</c>'si havuza döner.
+        /// <para>⚠️ Bu süre <b>sunucunun</b> kaydı ne zaman düşüreceğini söyler, istemcinin ne zaman
+        /// pes edeceğini değil: yeniden deneme <see cref="RECONNECT_BACKOFF"/> ile SONSUZDUR (§8).
+        /// Kopuştan çıkarılmaya toplam süre <see cref="HEARTBEAT_TIMEOUT"/> + bu değerdir.</para>
+        /// </summary>
+        public const float RECONNECT_GRACE = 45f;
+
         public const float HELLO_TIMEOUT = 10f; // §8: hello'suz bağlantı bu süre içinde kapatılır
 
         // Yeniden bağlanma backoff dizisi; son eleman tavandır.
@@ -157,6 +180,23 @@ namespace VortexArena.Protocol
         /// silah loadout'unu, HUD'unu ve ateş serbestliğini (<c>rules.fireWhilePaused</c>) çözer.
         /// </summary>
         public const string LOBBY_MODE_ID = "lobby";
+
+        // ---- Bağlantı durumu (§2/§5.3). Telde string taşınır; bilinmeyen/boş değer CONNECTED
+        // sayılır — böylece ileride dördüncü bir durum eklemek PROTOCOL_VERSION artırmaz.
+        // ⚠️ "Çevrimdışı" diye bir değer YOKTUR ve eklenmez: kopan cihaz ya geri beklenir
+        // (reconnecting) ya da oyundan çıkarılır (left). ----
+
+        /// <summary>Soket canlı; oyuncu tüm maç kapılarına girer.</summary>
+        public const string CONNECTION_CONNECTED = "connected";
+
+        /// <summary>Soket düştü, cihaz <see cref="RECONNECT_GRACE"/> boyunca geri bekleniyor.
+        /// Kayıt durur ama maç kapılarına GİRMEZ (yükleme kapısı beklemez, vurulamaz, canlanmaz,
+        /// snapshot'ta yer almaz).</summary>
+        public const string CONNECTION_RECONNECTING = "reconnecting";
+
+        /// <summary>Süre doldu, oyuncu oyundan çıkarıldı. Kayıt yalnız koşan maçın katılımcısıysa
+        /// (<c>PlayerInfo.inMatch</c>) maç sonuna kadar durur (§10.2).</summary>
+        public const string CONNECTION_LEFT = "left";
 
         // ---- Faz değerleri (§10.1). Telde string taşınır; bilinmeyen değer PAUSED sayılır. ----
 

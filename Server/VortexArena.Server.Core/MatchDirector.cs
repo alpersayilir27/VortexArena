@@ -76,7 +76,7 @@ public readonly record struct StageSceneResult(StageOutcome Outcome, string Reas
 /// GÖNDERİLMEZ: mesajlar kilit altında kurulup <c>outbox</c>'a yazılır, kilit bırakıldıktan sonra
 /// yollanır. Aynı sebeple <c>IGameMode</c> kancaları ve event tetikleyen registry metodları
 /// (SetTeam/SetReady) kilit DIŞINDA çağrılır — modların kullandığı public API (ScoreRed,
-/// AddScore, OnlinePlayers…) kendi kilidini alır, yeniden giriş olmaz.
+/// AddScore, ConnectedPlayers…) kendi kilidini alır, yeniden giriş olmaz.
 /// PlayerRegistry.Snapshot()/TryGetByPlayerId registry kilidini ALMAZ (ConcurrentDictionary),
 /// bu yüzden _gate altından çağrılmaları güvenlidir.</para></summary>
 public sealed class MatchDirector
@@ -118,6 +118,11 @@ public sealed class MatchDirector
     /// registry.Announce olay tetiklediği için kilit DIŞINDA (FlushRosterRefresh) uygulanır;
     /// Announce imzası bir PlayerState istediği için bayrak yerine son değişen oyuncu tutulur.</summary>
     private PlayerState? _rosterRefreshFor;
+
+    /// <summary>Kilit altında işaretlenen "maç defteri kapansın" isteği (§10.2): <c>left</c>
+    /// kayıtların silinmesi + <c>inMatch</c> bayraklarının temizlenmesi. Registry olay
+    /// tetiklediği için kilit DIŞINDA (<see cref="FlushParticipantCleanup"/>) uygulanır.</summary>
+    private bool _participantCleanupPending;
 
     /// <summary>Vuruş reddi logu için atıcı başına kısıtlama aralığı: ölü hedefe ateş sürerken
     /// (gerçek oyuncuda da olur) konsol boğulmasın.</summary>
@@ -402,7 +407,7 @@ public sealed class MatchDirector
 
     /// <summary>Bireysel skorun lideri. <b>Eşitlikte false döner</b> (tek kazanan yok) — çağıran
     /// mod bunu "berabere" olarak yorumlar; sessizce ilk oyuncuyu seçmek yanlış kazanan ilan
-    /// ederdi. Hiç çevrimiçi oyuncu yoksa da false.</summary>
+    /// ederdi. Hiç bağlı oyuncu yoksa da false.</summary>
     public bool TryGetLeader(out int playerId, out int score)
     {
         playerId = 0;
@@ -411,7 +416,7 @@ public sealed class MatchDirector
         lock (_gate)
         {
             var tied = false;
-            foreach (var player in OnlinePlayersLocked())
+            foreach (var player in ConnectedPlayersLocked())
             {
                 if (playerId == 0 || player.Score > score)
                 {
@@ -432,11 +437,29 @@ public sealed class MatchDirector
         return false;
     }
 
-    /// <summary>Çevrimiçi oyuncuların (role=player) anlık kopyası — mod bunu kilit dışında
-    /// gezer; PlayerState alanlarının okunması sırasında değişebilir (int/string okuması atomik).</summary>
-    public IEnumerable<PlayerState> OnlinePlayers()
+    /// <summary>BAĞLI oyuncuların (role=player) anlık kopyası — mod bunu kilit dışında gezer;
+    /// PlayerState alanlarının okunması sırasında değişebilir (int/string okuması atomik).
+    /// <para>Bağlantısı kopmuş (<c>reconnecting</c>) ve oyundan çıkarılmış (<c>left</c>) kayıtlar
+    /// listede YOKTUR (§2) — mod onları hiç görmez.</para></summary>
+    public IEnumerable<PlayerState> ConnectedPlayers()
     {
-        lock (_gate) return OnlinePlayersLocked();
+        lock (_gate) return ConnectedPlayersLocked();
+    }
+
+    /// <summary>
+    /// Geç katılan oyuncuyu maç defterine yazar (§10.2) — <c>hello</c> yolundan, welcome
+    /// gönderildikten sonra çağrılır.
+    /// <para>⚠️ <b>Yalnız KURULMUŞ bir maç varken</b> iş yapar: lobide (faz <c>paused</c> + lobi
+    /// profili) katılımcı diye bir şey yoktur ve <c>finished</c>'da defter zaten kapanmıştır —
+    /// oraya yazmak maç sonu tablosuna maçı hiç oynamamış bir satır eklerdi.</para>
+    /// <para>Admin hiç yazılmaz: oynamaz, istatistiği yoktur.</para>
+    /// </summary>
+    public void MarkParticipantIfMatchRunning(PlayerState player)
+    {
+        if (player.Role != "player") return;
+        bool running;
+        lock (_gate) running = _mode != null && _phase != Phase.Finished;
+        if (running) _registry.SetMatchParticipant(player.PlayerId, true);
     }
 
     /// <summary>welcome.match anlık görüntüsü — geç katılım senkronu bunu kullanır (§5.3).</summary>
@@ -538,6 +561,7 @@ public sealed class MatchDirector
         await FlushAsync(outbox);
         FlushReadyClear();
         FlushRosterRefresh();
+        FlushParticipantCleanup(); // lobiye dönüldüyse defteri kapat (§10.2 — mesajlardan SONRA)
 
         // Mod kancaları kilit DIŞINDA (yukarıdaki kilit sözleşmesi). Kancaların ürettiği
         // gönderimler _pendingOutbox'a birikir ve her kanca grubunun ardından yollanır.
@@ -559,11 +583,11 @@ public sealed class MatchDirector
             await EnterEndAsync(outcome);
     }
 
-    /// <summary>Tüm çevrimiçi oyuncular "sahne yüklendi" (set_ready) dediğinde veya
-    /// LOADING_TIMEOUT dolduğunda Countdown'a geçilir. Çevrimdışı oyuncu beklenmez.</summary>
+    /// <summary>Tüm BAĞLI oyuncular "sahne yüklendi" (set_ready) dediğinde veya
+    /// LOADING_TIMEOUT dolduğunda Countdown'a geçilir. Bağlantısı kopmuş oyuncu beklenmez.</summary>
     private void TickLoadingLocked(List<Outgoing> outbox, DateTime now)
     {
-        var players = OnlinePlayersLocked();
+        var players = ConnectedPlayersLocked();
         if (players.Count == 0)
         {
             // Ayrım önemli (§10.1): oyuncularla BAŞLAMIŞ maçta son oyuncu da düştüyse maçı
@@ -572,7 +596,7 @@ public sealed class MatchDirector
             // abort_match/return_to_lobby komutudur.
             if (_startedWithPlayers)
             {
-                Console.WriteLine("[match] loading: çevrimiçi oyuncu kalmadı — lobiye dönülüyor.");
+                Console.WriteLine("[match] loading: bağlı oyuncu kalmadı — lobiye dönülüyor.");
                 EnterLobbyLocked(outbox, now);
                 return;
             }
@@ -622,7 +646,7 @@ public sealed class MatchDirector
         // Canlandırmanın iki yolu var ve bir yasak ikisini birden kapatmadıkça yoktur.
         if (_rules.Revive != ReviveAnchor.None)
         {
-            foreach (var player in OnlinePlayersLocked())
+            foreach (var player in ConnectedPlayersLocked())
             {
                 if (player.Alive) continue;
                 // ⚠️ BİRİNCİ İSTİSNA (§10.6): kalibresiz oyuncu ZORLA da canlandırılmaz.
@@ -693,7 +717,7 @@ public sealed class MatchDirector
         }
 
         var players = _registry.Snapshot()
-            .Where(p => p.Online && p.Role == "player")
+            .Where(p => p.IsConnected && p.Role == "player")
             .OrderBy(p => p.PlayerId)
             .ToList();
 
@@ -722,6 +746,10 @@ public sealed class MatchDirector
         // yüklendi" anlamına geliyor, bayat true kalsaydı countdown anında başlardı (§10.1).
         foreach (var player in players.Where(p => p.Ready).ToList())
             _registry.SetReady(player.DeviceId, false);
+
+        // Maç katılımcısı defteri (§10.2): o an bağlı her oyuncu deftere yazılır. Registry olay
+        // tetiklediği için kilit DIŞINDA — SetTeam/SetReady ile aynı sözleşme.
+        _registry.MarkConnectedPlayersAsParticipants();
 
         var outbox = new List<Outgoing>();
         var teamless = rules.Teams == TeamMode.None;
@@ -762,7 +790,7 @@ public sealed class MatchDirector
             {
                 ResetMatchStateLocked(player);
 
-                var connection = player.Connection;
+                var connection = player.Socket;
                 if (connection == null) continue;
                 // load_match kişiselleştirilir: her oyuncuya kendi takımı (§10.1). Konum/slot
                 // taşınmaz — oyuncu fiziksel olarak nerede duruyorsa orada kalır (§10.4).
@@ -780,7 +808,7 @@ public sealed class MatchDirector
 
             // Adminler de aynı sahneyi yükler (gözlemci görünümü, §2): takım anlamsız olduğu için
             // boş gider ve admin karşılığında set_ready GÖNDERMEZ — Loading kapısı yalnız
-            // role=player bağlantılarını sayar (OnlinePlayersLocked). Kurallar admin'e de gider:
+            // role=player bağlantılarını sayar (ConnectedPlayersLocked). Kurallar admin'e de gider:
             // takım kipi admin arayüzünün tek/çift kolon kararını besler.
             var adminLoad = JsonUtil.Serialize(new LoadMatchMsg
             {
@@ -793,8 +821,8 @@ public sealed class MatchDirector
             });
             foreach (var admin in _registry.Snapshot())
             {
-                if (!admin.Online || admin.Role != "admin") continue;
-                var adminConnection = admin.Connection;
+                if (!admin.IsConnected || admin.Role != "admin") continue;
+                var adminConnection = admin.Socket;
                 if (adminConnection == null) continue;
                 outbox.Add(new Outgoing(adminConnection, adminLoad, admin.Name));
             }
@@ -909,7 +937,7 @@ public sealed class MatchDirector
 
             _modeState = modeState ?? "";
             _timeRemaining = 0f;
-            foreach (var player in OnlinePlayersLocked()) QueueReadyClearLocked(player);
+            foreach (var player in ConnectedPlayersLocked()) QueueReadyClearLocked(player);
 
             SetPhaseLocked(Phase.Paused, PauseReason.Mode, DateTime.UtcNow);
             QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(BuildMatchStateLocked()));
@@ -1039,6 +1067,7 @@ public sealed class MatchDirector
         await FlushAsync(outbox);
         FlushReadyClear();
         FlushRosterRefresh();
+        FlushParticipantCleanup(); // §10.2: return_to_lobby / abort_match sonrası defter kapanır
     }
 
     /// <summary>
@@ -1058,7 +1087,7 @@ public sealed class MatchDirector
     /// </para>
     /// <para>
     /// Doğrulama <c>start_match</c> ile aynıdır (§10.1): sahne harita tablosunda olmalı (tablo
-    /// boşsa bu adım atlanır) ve TÜM çevrimiçi oyuncuların build listesinde bulunmalı — yoksa bir
+    /// boşsa bu adım atlanır) ve TÜM bağlı oyuncuların build listesinde bulunmalı — yoksa bir
     /// kısmı lobide kalır, operatör de bunu ekranında göremezdi.
     /// </para>
     /// </summary>
@@ -1084,7 +1113,7 @@ public sealed class MatchDirector
         }
 
         var missing = _registry.Snapshot()
-            .Where(p => p.Online && p.Role == "player" && !p.Scenes.Contains(target))
+            .Where(p => p.IsConnected && p.Role == "player" && !p.Scenes.Contains(target))
             .Select(p => p.Name)
             .ToList();
         if (missing.Count > 0)
@@ -1165,7 +1194,7 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, $"faz {PhaseWire(_phase)}");
                 return;
             }
-            if (!shooter.Online || shooter.Role != "player" || !shooter.Alive)
+            if (!shooter.IsConnected || shooter.Role != "player" || !shooter.Alive)
             {
                 RejectHit(shooter, msg.targetPlayerId, "atıcı ölü/oyuncu değil");
                 return;
@@ -1182,9 +1211,9 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, "kendini hedefledi");
                 return;
             }
-            if (!target.Online || target.Role != "player" || !target.Alive)
+            if (!target.IsConnected || target.Role != "player" || !target.Alive)
             {
-                RejectHit(shooter, msg.targetPlayerId, "hedef ölü/çevrimdışı");
+                RejectHit(shooter, msg.targetPlayerId, "hedef ölü/bağlantısız");
                 return;
             }
             // §10.6: kalibresiz oyuncu hasar YEMEZ. Avatarı fiziksel konumundan kaymış durumda
@@ -1238,7 +1267,7 @@ public sealed class MatchDirector
                     weaponId = weaponId // doğrulanmayan serbest etiket (kill feed / istatistik)
                 }));
 
-                var victimConnection = target.Connection;
+                var victimConnection = target.Socket;
                 if (victimConnection != null)
                 {
                     var respawn = new RespawnMsg
@@ -1382,7 +1411,7 @@ public sealed class MatchDirector
         // modlarda zararsızdı (istemci load_match'te kendini sıfırlıyor), ama tur tabanlı modda
         // turlar arası load_match yoktur → mesaj gitmezse tur içinde ölmüş oyuncu istemcide
         // ölüm ekranında DONAR ve bir daha ateş edemez.
-        foreach (var player in OnlinePlayersLocked())
+        foreach (var player in ConnectedPlayersLocked())
         {
             if (player.Alive)
             {
@@ -1467,6 +1496,12 @@ public sealed class MatchDirector
         };
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(returnMsg));
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
+
+        // ⚠️ Maç defteri BURADA kapanmaz, yalnız işaretlenir (§10.2): temizlik bu `return_to_lobby`
+        // yayınından SONRA, kilit dışında koşar (registry olay tetikliyor). Defterin `finished`
+        // fazının TAMAMI boyunca durması bilinçlidir — ayrılmış oyuncular maç sonu tablosunda
+        // görünmeli; `match_end`'de silmek tabloyu tam da okunduğu anda boşaltırdı.
+        _participantCleanupPending = true;
     }
 
     /// <summary>Tick dışından (mod IsMatchOver) çağrılır; araya abort girmişse no-op.</summary>
@@ -1563,8 +1598,11 @@ public sealed class MatchDirector
             Console.WriteLine($"[match] takımsız mod: {cleared} oyuncunun takımı temizlendi.");
     }
 
-    private List<PlayerState> OnlinePlayersLocked() =>
-        _registry.Snapshot().Where(p => p.Online && p.Role == "player").OrderBy(p => p.PlayerId).ToList();
+    /// <summary>Maç kapılarının tek oyuncu listesi: yalnız BAĞLI (§2 <c>connected</c>) oyuncular.
+    /// <c>reconnecting</c>/<c>left</c> kayıtlar burada görünmez — yükleme kapısı onları beklemez,
+    /// vurulamaz, canlanmaz, kazanan hesabına girmez.</summary>
+    private List<PlayerState> ConnectedPlayersLocked() =>
+        _registry.Snapshot().Where(p => p.IsConnected && p.Role == "player").OrderBy(p => p.PlayerId).ToList();
 
     private MatchInfo BuildMatchInfoLocked() => new()
     {
@@ -1589,7 +1627,7 @@ public sealed class MatchDirector
         scoreBlue = _scoreBlue
     };
 
-    /// <summary>Çevrimiçi tüm bağlantılara (admin dahil) kuyruklar.
+    /// <summary>Bağlı tüm soketlere (admin dahil) kuyruklar.
     /// <para>"Şu oyuncuyu atla" parametresi <b>kaldırıldı</b>: tek kullanıcısı atış relay'iydi ve o
     /// v4'te UDP'ye taşındı. Yeni kanalda süzme YOK — atan kendi olayını geri alır ve kendisi yok
     /// sayar (§6.5). WS mesajlarının hepsi tanımı gereği herkese gider.</para></summary>
@@ -1597,8 +1635,8 @@ public sealed class MatchDirector
     {
         foreach (var player in _registry.Snapshot())
         {
-            if (!player.Online) continue;
-            var connection = player.Connection;
+            if (!player.IsConnected) continue;
+            var connection = player.Socket;
             if (connection == null) continue;
             outbox.Add(new Outgoing(connection, json, player.Name));
         }
@@ -1620,8 +1658,8 @@ public sealed class MatchDirector
     {
         foreach (var player in _registry.Snapshot())
         {
-            if (!player.Online) continue;
-            var connection = player.Connection;
+            if (!player.IsConnected) continue;
+            var connection = player.Socket;
             if (connection == null) continue;
             if (!ReferenceEquals(player, subject) && player.Role != "admin") continue;
             outbox.Add(new Outgoing(connection, json, player.Name));
@@ -1646,6 +1684,28 @@ public sealed class MatchDirector
         }
 
         if (player != null) _registry.Announce(player, PlayerChangeKind.Updated);
+    }
+
+    /// <summary>
+    /// Maç defterini kapatır (§10.2): <c>left</c> kayıtlar silinir (playerId'leri havuza döner),
+    /// kalan <c>inMatch</c> bayrakları temizlenir.
+    /// <para>⚠️ <b>Sıra bağlayıcıdır:</b> yalnız lobiye dönerken ve <c>match_end</c> + son
+    /// <c>lobby_state</c> gönderildikten SONRA koşar — istemcideki maç sonu tablosu roster'dan
+    /// çiziliyor, erken temizlik onu satır kaybettirirdi. Registry olay tetiklediği için de kilit
+    /// dışında olmak zorunda.</para>
+    /// </summary>
+    private void FlushParticipantCleanup()
+    {
+        lock (_gate)
+        {
+            if (!_participantCleanupPending) return;
+            _participantCleanupPending = false;
+        }
+
+        var purged = _registry.PurgeLeftParticipants();
+        _registry.ClearMatchParticipants();
+        if (purged > 0)
+            Console.WriteLine($"[match] maç defteri kapandı: ayrılmış {purged} kayıt silindi (playerId'leri havuza döndü).");
     }
 
     /// <summary>Mod kancalarının kilit altında biriktirdiği gönderimleri yollar (bkz.

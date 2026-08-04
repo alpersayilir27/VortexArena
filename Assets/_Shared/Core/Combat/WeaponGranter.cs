@@ -4,6 +4,8 @@ using Oculus.Interaction.HandGrab;
 using Oculus.Interaction.Input;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using VortexArena.Core.Arena;
+using VortexArena.Core.Player;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -21,7 +23,8 @@ namespace VortexArena.Core.Combat
     /// <c>maxGrabDistance</c>'ı kadar uzaktan SEÇER
     /// (<see cref="SelectWeapon"/>); grip'e basınca seçilen silahın KLONU eline gelir, bırakınca
     /// <b>yalnız gizlenir</b> — aynı örnek aynı mermiyle geri gelir
-    /// (<see cref="WeaponGrantKind.Persistent"/>). Oyuncu başına TEK silah.</item>
+    /// (<see cref="WeaponGrantKind.Persistent"/>). Çift elli silahta oyuncu başına TEK klon; tek
+    /// elli silahta EL BAŞINA bir klon (çift tabanca).</item>
     /// </list>
     /// <para>
     /// ⚠️ <b>Silahı sahneye koyan bir bileşen YOKTUR ve yazılmaz</b> — <c>WeaponCanvas</c>
@@ -83,12 +86,17 @@ namespace VortexArena.Core.Combat
         /// (bkz. <see cref="HandleSceneLoaded"/>).</summary>
         private WeaponDefinition _selected;
 
-        /// <summary>Seçili silahın KALICI klonu: bırakılınca yok edilmez, yalnız gizlenir —
-        /// "aynı silah aynı mermiyle geri gelir" kuralı bu tek örnekten doğar.</summary>
-        private Weapon _summoned;
-
-        /// <summary>Klonun şu an hangi elde olduğu (<c>None</c> = gizli).</summary>
-        private OVRInput.Controller _summonedHand = OVRInput.Controller.None;
+        /// <summary>
+        /// Seçili silahın KALICI klonu, EL BAŞINA: bırakılınca yok edilmez, yalnız gizlenir —
+        /// "aynı silah aynı mermiyle geri gelir" kuralı bu örneklerden doğar.
+        /// <para>
+        /// ⚠️ <b>İki slot olması "her zaman iki klon" demek DEĞİLDİR:</b> ikinci klon yalnız seçili
+        /// silah TEK elliyken üretilir (çift tabanca). Çift elli silahta tek klon vardır ve el
+        /// değiştirdiğinde slotlar arasında TAŞINIR — yeniden üretmek şarjörü sıfırlardı.
+        /// </para>
+        /// </summary>
+        private Weapon _summonedLeft;
+        private Weapon _summonedRight;
 
         private OVRCameraRig _rig;
         private float _nextRigScanAt;
@@ -202,9 +210,7 @@ namespace VortexArena.Core.Combat
                 SweepScene();
             }
 
-            // Ölüyken silah verilmez ve eldeki alınır: "hâlâ oynuyorum" hissi kalmasın (canlanma
-            // zaten sabit durmayı istiyor — koşarken silah çekilmez).
-            if (PlayerCombatState.Instance != null && !PlayerCombatState.Instance.IsAlive)
+            if (!CanHoldWeapon)
             {
                 RevokeAll();
                 return;
@@ -217,8 +223,10 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            TickHand(OVRInput.Controller.LTouch, rig.leftHandAnchor, ref _grantedLeft);
-            TickHand(OVRInput.Controller.RTouch, rig.rightHandAnchor, ref _grantedRight);
+            // ⚠️ Her ele ÖTEKİ elin silahı da verilir: bir eldeki silah çift elliyse öteki el ikinci
+            // silah ALMAZ, ön kabzaya aday olur (bkz. TickHand).
+            TickHand(OVRInput.Controller.LTouch, rig.leftHandAnchor, ref _grantedLeft, _grantedRight);
+            TickHand(OVRInput.Controller.RTouch, rig.rightHandAnchor, ref _grantedRight, _grantedLeft);
         }
 
         // ------------------------------------------------------------------ kural
@@ -246,16 +254,43 @@ namespace VortexArena.Core.Combat
         /// <c>random</c> <b>ve</b> ortada kurulmuş bir maç var (FFA). Serbest alan bunun dışındadır.</summary>
         private static bool ModeDistributesWeapons => IsRandomGrant && !IsFreePlayground;
 
+        /// <summary>
+        /// Oyuncu şu an elinde silah TUTABİLİR mi: <b>canlı</b> ve <b>kalibreli</b> olmalı.
+        /// <para>
+        /// Ölümde gerekçe "hâlâ oynuyorum" hissinin kalmamasıdır (canlanma zaten sabit durmayı
+        /// istiyor). Kalibresizlikte gerekçe oyuncunun zaten ateş EDEMİYOR olmasıdır (§10.6,
+        /// <c>PlayerCombatState.CanFire</c>): elinde tetiği çekilen ama hiçbir şey yapmayan bir
+        /// silah tutmak, oyuncuya sorunun silahta olduğunu düşündürürdü.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Silahın ele geldiği İKİ yol da bu tek kapıdan geçer</b> (rastgele dağıtım ve
+        /// çerçeve klonu) — biri kapatılıp diğeri açık bırakılsaydı kural moda göre sessizce
+        /// delinirdi. Üçüncü yol olan çerçeveden SEÇİM ayrı kapatılır
+        /// (<see cref="SelectWeapon"/> + <see cref="CanSelect"/>).
+        /// </para>
+        /// <para>
+        /// Kalibrasyon durumu kare başına <b>yoklanır</b>, olaya abone olunmaz: bu sınıfın döngüsü
+        /// zaten her kare koşuyor, yani durum bozulduğu kare silah elden gider ve ikinci bir
+        /// abonelik ömrü yönetmek gerekmez.
+        /// </para>
+        /// </summary>
+        private static bool CanHoldWeapon =>
+            (PlayerCombatState.Instance == null || PlayerCombatState.Instance.IsAlive) &&
+            CalibrationState.IsCalibrated;
+
         private void HandleRulesChanged() => ApplyRules();
 
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            // Yeni sahne = yeni silahlar, yeni rig. Eldekiler eski sahneyle birlikte gitti.
+            // Yeni sahne = yeni silahlar, yeni rig.
             _swept = false;
             _hiddenObjects.Clear();
-            _grantedLeft = null;
-            _grantedRight = null;
             _rig = null;
+
+            // ⚠️ Verilen silahlar DDOL kökünün altında park ediyor (bkz. Grant): sahne geçişinde
+            // kendiliğinden ölmezler, açıkça yok edilmeliler — referansı null'lamak eski sahnenin
+            // silahını elde bırakırdı.
+            RevokeAll();
 
             // ⚠️ Çerçeve seçimi HARİTA başına sıfırlanır: "bu round boyunca aynı silah" kuralının
             // kapsamı bir haritadır. Yeni arenada oyuncu silahını yine kendi çerçevesinden alır —
@@ -357,8 +392,16 @@ namespace VortexArena.Core.Combat
 
         // ------------------------------------------------------------ silah verme
 
-        /// <summary>Bir elin bir karelik durumu: grip basılıysa elde silah olsun, değilse olmasın.</summary>
-        private void TickHand(OVRInput.Controller hand, Transform anchor, ref Weapon granted)
+        /// <summary>
+        /// Bir elin bir karelik durumu: grip basılıysa elde silah olsun, değilse olmasın.
+        /// <para>
+        /// ⚠️ <b>Öteki eldeki silah ÇİFT ELLİYSE bu ele ikinci bir silah VERİLMEZ</b>; o el ön
+        /// kabzaya adaydır (grip basılı + avuç ikincil soketin yarıçapında). Aksi hâlde oyuncu FFA'da
+        /// iki tüfek tutar ve tüfeği iki elle sabitlemenin hiçbir yolu kalmazdı.
+        /// </para>
+        /// </summary>
+        private void TickHand(OVRInput.Controller hand, Transform anchor, ref Weapon granted,
+            Weapon otherHandWeapon)
         {
             if (anchor == null)
             {
@@ -367,6 +410,16 @@ namespace VortexArena.Core.Combat
             }
 
             bool gripHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, hand) >= GripThreshold;
+
+            if (IsTwoHandHeld(otherHandWeapon))
+            {
+                Revoke(ref granted);
+                otherHandWeapon.SetSecondaryHand(
+                    gripHeld && IsPalmOnSecondarySocket(otherHandWeapon, hand)
+                        ? hand
+                        : OVRInput.Controller.None);
+                return;
+            }
 
             if (!gripHeld)
             {
@@ -380,13 +433,13 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            granted = Grant(hand, anchor);
+            granted = Grant(hand);
         }
 
-        /// <summary>Loadout'tan bir silahı el anchor'ının altına örnekler.
+        /// <summary>Loadout'tan bir silahı ele verir.
         /// <para>Ard arda aynı silahın gelmesi ENGELLENMEZ: iki silahlık bir havuzda "asla aynısı
         /// gelmesin" kuralı rastgeleliği sırayla-dağıtıma çevirirdi.</para></summary>
-        private Weapon Grant(OVRInput.Controller hand, Transform anchor)
+        private Weapon Grant(OVRInput.Controller hand)
         {
             WeaponDefinition definition = PickFromLoadout();
             if (definition == null || definition.Prefab == null)
@@ -395,13 +448,20 @@ namespace VortexArena.Core.Combat
                 return null;
             }
 
-            // §6.6 kanonik kavrama: duruş tanımın SABİT kavrama ofsetinden gelir (sahneden kavranan
-            // silah da aynı ofsetten sürülür — Weapon.ApplyCanonicalGrip). Buradaki fark yalnız
-            // yöntem: verilen silah anchor'ın ÇOCUĞU olduğu için ofset yerel transformda yaşar.
-            GameObject instance = Instantiate(definition.Prefab, anchor, false);
-            instance.transform.localPosition = definition.PrimaryGripPosition;
-            instance.transform.localRotation = definition.PrimaryGripRotation;
+            // ⚠️ Örnek el anchor'ının DEĞİL bu tekilin (DDOL kökü) altına kurulur ve pozunu her
+            // karede Weapon.ApplyCanonicalGrip sürer — Persistent klonla AYNI desen. Anchor'ın
+            // çocuğu olsaydı iki elli çözümün yazdığı dünya pozu parent dönüşümüyle çakışırdı.
+            GameObject instance = Instantiate(definition.Prefab, transform, false);
             instance.name = definition.Prefab.name;
+
+            // İlk kare için başlangıç pozu: kanonik kavrama LateUpdate'te devralır, poz yazılmasaydı
+            // silah bir kare dünyanın orijininde görünürdü.
+            if (TryResolvePalm(hand, out Pose palm))
+            {
+                ItemGripSolver.Solve(definition, palm, false, Vector3.zero, 0f,
+                    out Vector3 position, out Quaternion rotation);
+                instance.transform.SetPositionAndRotation(position, rotation);
+            }
 
             var weapon = instance.GetComponent<Weapon>();
             if (weapon == null)
@@ -426,9 +486,9 @@ namespace VortexArena.Core.Combat
         /// düşer, (c) çarpışmalarıyla oyuncunun kendi ışınına takılırdı.
         /// </para>
         /// <para>
-        /// ⚠️ Çerçeve klonunun karşılığı <see cref="PrepareSummonedClone"/>'dur ve <b>bilerek daha
-        /// azını kapatır</b>: orada ön kabza ISDK kavramasına açık kalmalı, dolayısıyla
-        /// Grabbable/GrabInteractable ve collider'lar AÇIK bırakılır.
+        /// ⚠️ Çerçeve klonunun karşılığı <see cref="PrepareSummonedClone"/>'dur ve kavrama tarafında
+        /// AYNI kapıyı uygular; farkı yalnız soket göstergesini açık bırakmasıdır. İkinci elin
+        /// algısı iki yolda da granter'ındır (<see cref="Weapon.SetSecondaryHand"/>).
         /// </para>
         /// </summary>
         private static void DetachFromPhysicsAndGrab(GameObject instance)
@@ -545,6 +605,17 @@ namespace VortexArena.Core.Combat
         /// yoksa oyuncu çerçevesine her nişan aldığında mermisi sessizce dolardı. Farklı bir silah
         /// seçilirse eski klon yok edilir ve yenisi bir sonraki grip'te TAM şarjörle doğar.
         /// </para>
+        /// <para>
+        /// ⚠️ <b>Seçimi kısıtlayan bir kapı YOKTUR ve eklenmez</b> — "elde çift elli silah varken
+        /// başkası seçilemesin" kuralı buraya AİT DEĞİLDİR. Çerçeve bir kavrama değil bir SEÇİM
+        /// tetikleyicisidir ve seçim değiştirmek ikinci bir silah üretmez: çift elli seçimde
+        /// oyuncu başına zaten TEK klon tutulur (<see cref="TickFrameSummon"/>), yeni tanım
+        /// eskisinin yerine geçer. Böyle bir kapı rafta silah değiştirmeyi de kapatır ve belirtisi
+        /// teşhisi zordur: <b>ışın çıkar ama seçim olmaz</b> — grip'e basıldığı anda bu sınıf eski
+        /// silahın klonunu ele çağırır, kapı tam o karede kapanır ve oyuncu ilk aldığı silaha
+        /// ömür boyu kilitlenir. "Aynı anda ikinci silah tutulamaz" kuralının yeri
+        /// <see cref="TickHand"/>'dir (rastgele dağıtım yolu, öteki el).
+        /// </para>
         /// </summary>
         public static void SelectWeapon(WeaponDefinition definition)
         {
@@ -556,6 +627,39 @@ namespace VortexArena.Core.Combat
             Instance.ApplySelection(definition);
         }
 
+        /// <summary>Bu silah şu an elde ve tanımı çift elli mi.</summary>
+        private static bool IsTwoHandHeld(Weapon weapon)
+        {
+            return weapon != null && weapon.IsHeld &&
+                   weapon.Definition != null && weapon.Definition.IsTwoHanded;
+        }
+
+        /// <summary>
+        /// Bu elin AVUCU silahın ikincil soketinin kabul yarıçapında mı — ön kabza kavramasının
+        /// kapısı. Ölçü <see cref="ItemGripSockets"/>'in çizim/kapı ölçüsüyle aynıdır
+        /// (<c>SecondaryGripRadius</c>): oyuncuya "şimdi bas" diye yeşile dönen soket sessizce
+        /// reddedilmesin.
+        /// </summary>
+        private static bool IsPalmOnSecondarySocket(Weapon weapon, OVRInput.Controller hand)
+        {
+            ItemDefinition definition = weapon != null ? weapon.Definition : null;
+            if (definition == null || !definition.IsTwoHanded)
+            {
+                return false;
+            }
+
+            if (!TryResolvePalm(hand, out Pose palm))
+            {
+                return false;
+            }
+
+            // TransformPoint DEĞİL: soket ofseti METRE cinsindendir, ölçeklenmez.
+            Transform item = weapon.transform;
+            Vector3 socket = item.position + item.rotation * definition.SecondaryGripPosition;
+            float radius = definition.SecondaryGripRadius;
+            return (palm.position - socket).sqrMagnitude <= radius * radius;
+        }
+
         private void ApplySelection(WeaponDefinition definition)
         {
             if (_selected == definition)
@@ -563,6 +667,9 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // ⚠️ Burada bir "alabilir mi" kapısı YOKTUR (gerekçe SelectWeapon'da): seçim her zaman
+            // uygulanır. Eldeki klon yok edilir; grip hâlâ basılıysa bir sonraki karede YENİ silahın
+            // klonu doğar, yani raf değişimi tek karelik bir boşlukla tamamlanır.
             _selected = definition;
             DestroySummoned();
         }
@@ -571,9 +678,15 @@ namespace VortexArena.Core.Combat
         /// Çerçeve yolunun bir karelik durumu: grip basılıysa seçili silahın klonu elde olsun,
         /// değilse gizlensin.
         /// <para>
-        /// <b>Oyuncu başına TEK silah:</b> basılı olan İLK el kazanır; iki el de basılıysa silah
-        /// hâlihazırda çağırılmış elde kalır (yoksa sağ el) — el değiştirme silahı ellerin arasında
-        /// titretmesin.
+        /// <b>Klon sayısı seçili silahın tutuş kipinden gelir:</b>
+        /// <list type="bullet">
+        /// <item><b>Çift elli</b> (tüfek): oyuncu başına TEK klon — basılı olan İLK el kazanır, iki
+        /// el de basılıysa silah hâlihazırda çağırılmış elde kalır (yoksa sağ el), yani el
+        /// değiştirme silahı ellerin arasında titretmez. Boş elin grip'i ön kabzada ise o el ikinci
+        /// eldir.</item>
+        /// <item><b>Tek elli</b> (tabanca): her el KENDİ klonunu alır — iki ayrı örnek, iki ayrı
+        /// şarjör. "Aynı silah aynı mermiyle geri gelir" kuralı el başına yürür.</item>
+        /// </list>
         /// </para>
         /// <para>
         /// ⚠️ Ölünce klon <b>gizlenir ama SEÇİM KORUNUR</b>: canlanan oyuncu aynı silahla döner
@@ -583,39 +696,24 @@ namespace VortexArena.Core.Combat
         /// </summary>
         private void TickFrameSummon()
         {
-            if (PlayerCombatState.Instance != null && !PlayerCombatState.Instance.IsAlive)
+            if (!CanHoldWeapon)
             {
-                StowSummoned();
+                StowAllSummoned();
                 return;
             }
 
-            OVRCameraRig rig = ResolveRig();
-            if (rig == null)
+            if (ResolveRig() == null)
             {
-                StowSummoned();
+                StowAllSummoned();
                 return;
             }
 
             bool leftHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.LTouch) >= GripThreshold;
             bool rightHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.RTouch) >= GripThreshold;
 
-            OVRInput.Controller hand = OVRInput.Controller.None;
-            if (leftHeld && rightHeld)
+            if (!leftHeld && !rightHeld)
             {
-                hand = _summonedHand != OVRInput.Controller.None ? _summonedHand : OVRInput.Controller.RTouch;
-            }
-            else if (leftHeld)
-            {
-                hand = OVRInput.Controller.LTouch;
-            }
-            else if (rightHeld)
-            {
-                hand = OVRInput.Controller.RTouch;
-            }
-
-            if (hand == OVRInput.Controller.None)
-            {
-                StowSummoned();
+                StowAllSummoned();
                 return;
             }
 
@@ -626,31 +724,88 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            Transform anchor = hand == OVRInput.Controller.LTouch ? rig.leftHandAnchor : rig.rightHandAnchor;
-            if (anchor == null)
+            if (_selected.IsTwoHanded)
             {
-                StowSummoned();
+                TickTwoHandSummon(leftHeld, rightHeld);
                 return;
             }
 
-            SummonTo(hand, anchor);
+            TickOneHandSummon(OVRInput.Controller.LTouch, leftHeld);
+            TickOneHandSummon(OVRInput.Controller.RTouch, rightHeld);
         }
 
-        /// <summary>
-        /// Seçili silahın klonunu <paramref name="hand"/>'e çağırır (gerekirse önce üretir).
-        /// </summary>
-        private void SummonTo(OVRInput.Controller hand, Transform anchor)
+        /// <summary>Çift elli seçimde tek klon: ana el seçilir, boş el ön kabzaya adaydır.</summary>
+        private void TickTwoHandSummon(bool leftHeld, bool rightHeld)
         {
-            if (_summoned == null)
+            OVRInput.Controller hand;
+            if (leftHeld && rightHeld)
             {
-                _summoned = CreateSummoned();
-                if (_summoned == null)
+                hand = _summonedLeft != null ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
+            }
+            else
+            {
+                hand = leftHeld ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
+            }
+
+            OVRInput.Controller other = Opposite(hand);
+
+            // El değiştiyse AYNI örnek öteki slottan taşınır: yeniden üretmek şarjörü sıfırlardı.
+            Weapon weapon = GetSummoned(hand);
+            if (weapon == null)
+            {
+                weapon = GetSummoned(other);
+                SetSummoned(other, null);
+            }
+
+            if (weapon == null)
+            {
+                weapon = CreateSummoned();
+                if (weapon == null)
                 {
                     return;
                 }
             }
 
-            if (_summonedHand == hand && _summoned.gameObject.activeSelf)
+            SetSummoned(hand, weapon);
+            SummonTo(weapon, hand);
+
+            // ⚠️ Ön kabza SummonTo'dan SONRA yazılır: GrantTo ikinci eli temizliyor (silah el
+            // değiştirmiş olabilir), ters sırada yazılan değer aynı karede silinirdi.
+            bool otherGrip = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, other) >= GripThreshold;
+            weapon.SetSecondaryHand(
+                otherGrip && IsPalmOnSecondarySocket(weapon, other) ? other : OVRInput.Controller.None);
+        }
+
+        /// <summary>Tek elli seçimde her el kendi klonunu taşır (çift tabanca).</summary>
+        private void TickOneHandSummon(OVRInput.Controller hand, bool gripHeld)
+        {
+            if (!gripHeld)
+            {
+                StowSummoned(hand);
+                return;
+            }
+
+            Weapon weapon = GetSummoned(hand);
+            if (weapon == null)
+            {
+                weapon = CreateSummoned();
+                if (weapon == null)
+                {
+                    return;
+                }
+
+                SetSummoned(hand, weapon);
+            }
+
+            SummonTo(weapon, hand);
+        }
+
+        /// <summary>
+        /// Klonu <paramref name="hand"/>'e çağırır (zaten oradaysa no-op).
+        /// </summary>
+        private void SummonTo(Weapon weapon, OVRInput.Controller hand)
+        {
+            if (weapon.GrantedHand == hand && weapon.gameObject.activeSelf)
             {
                 return; // zaten aynı elde
             }
@@ -658,13 +813,39 @@ namespace VortexArena.Core.Combat
             // İlk kare için başlangıç pozu: klon DDOL kökünün altında park ediyor, poz yazılmasaydı
             // silah bir kare dünyanın orijininde görünürdü (Weapon.ApplyCanonicalGrip LateUpdate'te
             // devralır).
-            _summoned.transform.SetPositionAndRotation(
-                anchor.position + anchor.rotation * _selected.PrimaryGripPosition,
-                anchor.rotation * _selected.PrimaryGripRotation);
+            if (TryResolvePalm(hand, out Pose palm))
+            {
+                ItemGripSolver.Solve(_selected, palm, false, Vector3.zero, 0f,
+                    out Vector3 position, out Quaternion rotation);
+                weapon.transform.SetPositionAndRotation(position, rotation);
+            }
 
-            _summoned.gameObject.SetActive(true);
-            _summoned.GrantTo(hand, WeaponGrantKind.Persistent);
-            _summonedHand = hand;
+            weapon.gameObject.SetActive(true);
+            weapon.GrantTo(hand, WeaponGrantKind.Persistent);
+        }
+
+        private Weapon GetSummoned(OVRInput.Controller hand)
+        {
+            return hand == OVRInput.Controller.LTouch ? _summonedLeft : _summonedRight;
+        }
+
+        private void SetSummoned(OVRInput.Controller hand, Weapon weapon)
+        {
+            if (hand == OVRInput.Controller.LTouch)
+            {
+                _summonedLeft = weapon;
+            }
+            else
+            {
+                _summonedRight = weapon;
+            }
+        }
+
+        private static OVRInput.Controller Opposite(OVRInput.Controller hand)
+        {
+            return hand == OVRInput.Controller.LTouch
+                ? OVRInput.Controller.RTouch
+                : OVRInput.Controller.LTouch;
         }
 
         /// <summary>
@@ -720,17 +901,18 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Klonu ele hazırlar: fizik kapatılır ama <b>kavrama AÇIK bırakılır</b>.
+        /// Klonu ele hazırlar: fizik ve <b>kavramanın TAMAMI kapatılır</b>, yalnız soket GÖRSELİ
+        /// (<see cref="ItemGripSockets"/>) açık kalır.
         /// <para>
-        /// Fark <see cref="DetachFromPhysicsAndGrab"/>'e göre bilinçlidir: çerçeve silahında ikinci
-        /// el ön kabzayı ISDK ile tutar, dolayısıyla Grabbable/GrabInteractable ve collider'lar
-        /// çalışır kalmalı (collider olmadan kavrama hiç algılanmaz).
+        /// ⚠️ <b>Kavrama bileşenleri bilerek AÇILMAZ:</b> verilen silahta ikinci elin algısının TEK
+        /// kaynağı granter'ın grip yoklamasıdır (<see cref="Weapon.SetSecondaryHand"/>). ISDK hattı
+        /// da açık bırakılsaydı aynı el iki ayrı kaynaktan "tutuyor" görünür, telde
+        /// <c>GRIP_LINKED</c> iki ayrı yoldan yazılır ve biri bırakınca durum yarım kalırdı.
         /// </para>
         /// <para>
-        /// ⚠️ Bunlar burada <b>açıkça yeniden AÇILIR</b>, çünkü klon prefabtan doğarken içindeki
-        /// <see cref="WeaponFrame"/>'in <c>Awake</c>'i çoktan koşmuş ve kavrama yollarını kapatmış
-        /// olur (o bileşeni ancak doğduktan sonra yok edebiliyoruz — kaynak silahtaki doğru davranış
-        /// klonda yanlış davranıştır).
+        /// <see cref="ItemGripSockets"/> AÇIK kalır çünkü o bir kavrama yolu değil bir GÖSTERGEDİR:
+        /// oyuncunun ön kabzayı nereden tutacağını görmesi gerekir (kapı işlevi verilen silahta
+        /// artık boşa çalışır, çizim işlevi değil).
         /// </para>
         /// </summary>
         private static void PrepareSummonedClone(GameObject instance)
@@ -739,15 +921,17 @@ namespace VortexArena.Core.Combat
             for (int i = 0; i < behaviours.Length; i++)
             {
                 MonoBehaviour behaviour = behaviours[i];
-                if (behaviour is Grabbable || behaviour is GrabInteractable ||
-                    behaviour is HandGrabInteractable || behaviour is ItemGripSockets)
+                if (behaviour is ItemGripSockets)
                 {
+                    // ⚠️ Açıkça AÇILIR: klon prefabtan doğarken içindeki WeaponFrame'in Awake'i
+                    // çoktan koşmuş ve göstergeyi kapatmış olur (kaynak silahtaki doğru davranış
+                    // klonda yanlış davranıştır).
                     behaviour.enabled = true;
                 }
-                else if (behaviour is DistanceGrabInteractable || behaviour is DistanceHandGrabInteractable)
+                else if (behaviour is Grabbable || behaviour is GrabInteractable ||
+                         behaviour is HandGrabInteractable ||
+                         behaviour is DistanceGrabInteractable || behaviour is DistanceHandGrabInteractable)
                 {
-                    // Mesafeden kavrama soket tasarımının zıddıdır (Docs/Sistem-Ozeti.md §7);
-                    // elde duran silahta hiç açılmaz — iki hat için de geçerli.
                     behaviour.enabled = false;
                 }
             }
@@ -762,28 +946,40 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>Klonu elden alır: YOK ETMEZ, yalnız gizler — mermisi ve durumu korunsun.</summary>
-        private void StowSummoned()
+        /// <summary>Bir elin klonunu elden alır: YOK ETMEZ, yalnız gizler — mermisi ve durumu
+        /// korunsun.</summary>
+        private void StowSummoned(OVRInput.Controller hand)
         {
-            if (_summoned != null)
+            Weapon weapon = GetSummoned(hand);
+            if (weapon == null)
             {
-                _summoned.Revoke();
-                _summoned.gameObject.SetActive(false);
+                return;
             }
 
-            _summonedHand = OVRInput.Controller.None;
+            weapon.Revoke();
+            weapon.gameObject.SetActive(false);
         }
 
-        /// <summary>Klonu tümden yok eder (silah değişti / harita değişti / kural değişti).</summary>
+        private void StowAllSummoned()
+        {
+            StowSummoned(OVRInput.Controller.LTouch);
+            StowSummoned(OVRInput.Controller.RTouch);
+        }
+
+        /// <summary>Klonları tümden yok eder (silah değişti / harita değişti / kural değişti).</summary>
         private void DestroySummoned()
         {
-            if (_summoned != null)
+            if (_summonedLeft != null)
             {
-                Destroy(_summoned.gameObject);
-                _summoned = null;
+                Destroy(_summonedLeft.gameObject);
+                _summonedLeft = null;
             }
 
-            _summonedHand = OVRInput.Controller.None;
+            if (_summonedRight != null)
+            {
+                Destroy(_summonedRight.gameObject);
+                _summonedRight = null;
+            }
         }
 
         private void TrySubscribeAlive()
@@ -807,9 +1003,9 @@ namespace VortexArena.Core.Combat
         /// </summary>
         private void HandleAliveChanged(bool alive)
         {
-            if (alive && _summoned != null)
+            if (alive)
             {
-                _summoned.RefillFull();
+                RefillSummoned();
             }
         }
 
@@ -826,9 +1022,20 @@ namespace VortexArena.Core.Combat
         /// </summary>
         private void HandleCountdown(CountdownMsg msg)
         {
-            if (_summoned != null)
+            RefillSummoned();
+        }
+
+        /// <summary>Her iki el klonunu da tam doldurur (tek elli seçimde iki ayrı örnek olabilir).</summary>
+        private void RefillSummoned()
+        {
+            if (_summonedLeft != null)
             {
-                _summoned.RefillFull();
+                _summonedLeft.RefillFull();
+            }
+
+            if (_summonedRight != null)
+            {
+                _summonedRight.RefillFull();
             }
         }
 
@@ -929,6 +1136,28 @@ namespace VortexArena.Core.Combat
             }
 
             return hand == OVRInput.Controller.LTouch ? rig.leftHandAnchor : rig.rightHandAnchor;
+        }
+
+        /// <summary>
+        /// Elin AVUÇ pozu (<see cref="ResolveHandAnchor"/> + <see cref="HandGripPivot"/>); rig ya da
+        /// el çözülemezse <c>false</c>.
+        /// <para>
+        /// ⚠️ <b>Avuç noktasını hesaplayan tek yer burasıdır</b> ve avuca bakan her tüketici
+        /// (kanonik kavrama, soket mesafesi, çerçeve mesafesi, ön kabza kapısı) buradan geçer:
+        /// ikinci bir yol açılırsa ofset iki yerde yaşar ve biri güncellenip öteki unutulur.
+        /// </para>
+        /// </summary>
+        public static bool TryResolvePalm(OVRInput.Controller hand, out Pose palm)
+        {
+            Transform anchor = ResolveHandAnchor(hand);
+            if (anchor == null)
+            {
+                palm = default;
+                return false;
+            }
+
+            palm = HandGripPivot.Resolve(anchor, HandGripPivot.IsRight(hand));
+            return true;
         }
 
         /// <summary>BB rig'i (aktif olan) bulur; bulunamazsa saniyede bir yeniden dener.
