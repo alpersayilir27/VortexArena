@@ -200,7 +200,7 @@ namespace VortexArena.App.Admin
 
                 if (marker.labelText != null)
                 {
-                    marker.labelText.color = color;
+                    marker.labelText.color = ResolveLabelColor(view, alive);
                     marker.labelText.text = BuildLabel(kv.Key, view, alive);
                 }
             }
@@ -261,6 +261,17 @@ namespace VortexArena.App.Admin
         }
 
         // ---------------------------------------------------------------- görünüm
+
+        /// <summary>
+        /// Ad etiketi rengi: <b>daima takım rengi</b> (ölüde karartılmış). Seçim vurgusu HALKANIN
+        /// işidir — halka zaten büyüyor ve sprite değiştiriyor; ismi de vurguya boyamak, operatörün
+        /// bir bakışta "bu hangi takım" sorusunu cevaplamasını her seferinde bir oyuncuda bozardı.
+        /// </summary>
+        private static Color ResolveLabelColor(AdminPlayerView view, bool alive)
+        {
+            Color team = UiKit.TeamColor(view != null ? view.team : "");
+            return alive ? team : UiKit.Dim(team, DeadColorScale);
+        }
 
         private static Color ResolveColor(AdminPlayerView view, bool selected, bool alive)
         {
