@@ -126,6 +126,19 @@ namespace VortexArena.Protocol
         public string source = "";
     }
 
+    /// Başlığın KENDİ gövde ölçeğini bildirmesi (§10.8). Yalnız player gönderir; <c>playerId</c>
+    /// taşımaz, bağlantıdan çözülür (<see cref="SetCalibrationMsg"/> ile aynı sözleşme).
+    /// <para>
+    /// Ölçümü İSTEMCİ yapar (oyuncunun gözü ile karakterin göz hizasının oranı); sunucu
+    /// yorumlamaz, yalnız <c>[BODY_SCALE_MIN, BODY_SCALE_MAX]</c> aralığına kırpıp roster'da yayar.
+    /// </para>
+    [Serializable]
+    public class SetBodyScaleMsg
+    {
+        public string type = MessageTypes.SetBodyScale;
+        public float scale;
+    }
+
     // ---- Yalnız admin → Sunucu ----
 
     /// start_match (§5.2). roundSeconds/scoreLimit/countdownSeconds O MAÇA özeldir: ≤0 ya da
@@ -195,6 +208,18 @@ namespace VortexArena.Protocol
     public class ClearCalibrationMsg
     {
         public string type = MessageTypes.ClearCalibration;
+        public int playerId;
+    }
+
+    /// Gövde ölçümünü başlatır (§10.8). Admin → sunucu yönünde <c>playerId</c> dolu
+    /// (<c>0</c> = TÜM oyuncular), sunucu → istemci yönünde alansız gider — <see cref="IdentifyMsg"/>
+    /// ile birebir aynı çift yönlü desen.
+    /// <para>Sunucu hiçbir şey hesaplamaz, yalnız iletir; ⚠️ <b>kalibresiz oyuncuya iletmez</b>
+    /// (ölçü arena zeminine göredir).</para>
+    [Serializable]
+    public class MeasureBodyScaleMsg
+    {
+        public string type = MessageTypes.MeasureBodyScale;
         public int playerId;
     }
 
@@ -373,6 +398,15 @@ namespace VortexArena.Protocol
         // hasar yemez, canlanamaz; uzak avatarı parlar. Admin'de daima false/"" kalır.
         public bool calibrated;
         public string calibrationSource;
+
+        /// <summary>Uzak avatara uygulanacak üniform gövde ölçeği (§10.8). <b><c>0</c> =
+        /// ölçülmemiş → okuyan taraf <c>1</c> uygular</b> (kural değerleriyle aynı sözleşme:
+        /// alanı hiç göndermeyen bir uç sessizce doğru davranır).
+        /// <para>Kalibrasyon alanlarıyla aynı sınıftadır — cihaz durumudur, maç sayacı değil — ve
+        /// aynı sebeple burada taşınır: değiştiği an roster'ın zaten tazelendiği andır.
+        /// ⚠️ İskelet kanalına (<c>0x07</c>/<c>0x08</c>) GİRMEZ; orada her karede tekrar eden bir
+        /// sabit olurdu.</para></summary>
+        public float bodyScale;
     }
 
     [Serializable]

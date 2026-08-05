@@ -549,6 +549,32 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
+        /// Gövde ölçeğini uygular (§10.8; <c>lobby_state</c>'ten gelir). <c>0</c> = ölçülmemiş →
+        /// <c>1</c> uygulanır.
+        /// <para>Ölçeği karakterin köküne <see cref="ArenaNetCharacterBehaviour"/> yazar (SDK'nın
+        /// yazdığı ölçekten sonra) — buradan doğrudan transform'a dokunulmaz.</para>
+        /// <para>Kendiliğinden doğru davranan üç şey: kırmızı takım gövdesi ve hayalet, kaynağın
+        /// <c>localScale</c>'ini zaten izliyor; vuruş kutuları kemiklerde olduğu için ölçekle
+        /// birlikte büyüyüp küçülüyor. Elde çizilen eşya <b>ölçeklenmez</b> — ham el pozundan
+        /// sürülüyor ve silah herkeste gerçek boyunda durmalı.</para>
+        /// </summary>
+        public void SetBodyScale(float bodyScale)
+        {
+            if (character == null)
+            {
+                return;
+            }
+
+            float applied = bodyScale > 0f ? bodyScale : 1f;
+            if (Mathf.Approximately(character.BodyScale, applied))
+            {
+                return;
+            }
+
+            character.BodyScale = applied;
+        }
+
+        /// <summary>
         /// Bu uzak oyuncu YEREL oyuncuyla aynı takımda mı — kafanın üstündeki dost göstergesi
         /// buna göre açılır.
         /// <para>

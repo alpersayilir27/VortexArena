@@ -102,10 +102,13 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   ⚠️ **Yerel gövde HİÇ ÇİZİLMEZ ve ona görsel iş yaptırılmaz** — oyuncunun gözlükte gördüğü eller
   rig'in sentetik elleridir (`VA_CameraRig`). Prefab yalnız ağ kaynağıdır; "görünmüyorsa
   gereksizdir" refleksi tam da bu yüzden tehlikelidir, sileni etkilemez ama başkaları onu göremez.
-  ⚠️ **`LocalBodyAvatar.calibrateBodyProportions` KAPALI tutulur** — açılırsa gönderenin gövde
-  oranı değişir ve uzak avatar bozuk duruşlara girer. Anahtarın yerel karşılığı YOKTUR (gövde
-  çizilmiyor, eller rig'den geliyor), yani açmanın kazancı yok bedeli var
-  → `Docs/Sistem-Ozeti.md` §7),
+  ⚠️ **Gövde oranı KALİBRE EDİLMEZ** (`CharacterRetargeter.Calibrate()` çağrılmaz ve o yol geri
+  gelmez): gönderenin oranını değiştirmek blob'un eklem uzunluğu sıkıştırmasıyla uyuşmaz ve uzak
+  avatarı bozuk duruşlara sokar. Boy farkı tek bir üniform çarpanla taşınır (`bodyScale`,
+  `Docs/ArenaNet-Protokol.md` §10.8): ölçümü **operatör** başlatır, `BodyScaleState` ölçer ve
+  ölçek YALNIZ uzak avatara uygulanır — yerel karakter ölçek-1 kalır, ölçümün referansı odur.
+  ⚠️ Prefabtaki **`EyeAnchor`** (kafa kemiğinin altında, iki gözün arasında) ölçümün referansıdır:
+  taşınırsa boy sessizce yanlış ölçülür → `Docs/Sistem-Ozeti.md` §7),
   `Data/` (**`Data/Resources/GameCatalog.asset`** —
   admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ),
   `Scenes/` (Boot, Lobby),

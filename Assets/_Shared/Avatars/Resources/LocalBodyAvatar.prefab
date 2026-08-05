@@ -48,7 +48,7 @@ MonoBehaviour:
   character: {fileID: 6238843644753830266}
   retargeter: {fileID: 190715221791149400}
   visualRoot: {fileID: 7646504822369862910}
-  calibrateBodyProportions: 0
+  eyeAnchor: {fileID: 0}
 --- !u!1001 &7412008331556420015
 PrefabInstance:
   m_ObjectHideFlags: 0

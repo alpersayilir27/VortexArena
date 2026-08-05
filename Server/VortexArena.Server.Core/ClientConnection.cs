@@ -171,6 +171,18 @@ public sealed class ClientConnection
                 if (msg != null) _lobby.HandleSetCalibration(this, msg);
                 return;
             }
+            case MessageTypes.SetBodyScale:
+            {
+                if (State == null) return;
+                if (State.Role != "player")
+                {
+                    Console.WriteLine($"[ClientConnection] set_body_scale yalnız player içindir ({State.Name}) — yok sayıldı.");
+                    return;
+                }
+                var msg = JsonUtil.Deserialize<SetBodyScaleMsg>(json);
+                if (msg != null) _lobby.HandleSetBodyScale(this, msg);
+                return;
+            }
             case MessageTypes.Kick:
             {
                 if (!RequireAdmin(type)) return;
@@ -190,6 +202,13 @@ public sealed class ClientConnection
                 if (!RequireAdmin(type)) return;
                 var msg = JsonUtil.Deserialize<IdentifyMsg>(json);
                 if (msg != null) await _lobby.HandleIdentifyAsync(this, msg);
+                return;
+            }
+            case MessageTypes.MeasureBodyScale:
+            {
+                if (!RequireAdmin(type)) return;
+                var msg = JsonUtil.Deserialize<MeasureBodyScaleMsg>(json);
+                if (msg != null) await _lobby.HandleMeasureBodyScaleAsync(this, msg);
                 return;
             }
             case MessageTypes.StartMatch:

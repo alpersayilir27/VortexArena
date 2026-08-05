@@ -27,6 +27,12 @@ namespace VortexArena.Net
         public static event Action<IdentifyMsg> OnIdentify;
         public static event Action<KickedMsg> OnKicked;
 
+        /// <summary>Operatör bu başlığın gövde ölçüsünü aldırdı (§10.8) — yalnız player'a gelir.
+        /// <c>BodyScaleState</c> dinler, ölçer ve <c>set_body_scale</c> ile döner.
+        /// <para>Mesajın sunucu → istemci yönünde alanı yoktur, bu yüzden olay da parametresizdir:
+        /// hedef zaten bu bağlantıdır (<c>identify</c> ile aynı desen).</para></summary>
+        public static event Action OnMeasureBodyScale;
+
         /// <summary>Operatör bu başlığın kalibrasyonunu sıfırladı (§10.6) — yalnız player'a gelir.
         /// <c>CalibrationState</c> dinler ve <c>ArenaCalibrator</c>'ı geçersiz kılar.
         /// <para>Mesajın sunucu → istemci yönünde alanı yoktur, bu yüzden olay da parametresizdir:
@@ -77,6 +83,7 @@ namespace VortexArena.Net
         internal static void RaiseRemoteFireEvent(in RemoteFireEvent evt) { OnRemoteFireEvent?.Invoke(evt); }
         internal static void RaiseIdentify(IdentifyMsg msg) { OnIdentify?.Invoke(msg); }
         internal static void RaiseKicked(KickedMsg msg) { OnKicked?.Invoke(msg); }
+        internal static void RaiseMeasureBodyScale() { OnMeasureBodyScale?.Invoke(); }
         internal static void RaiseClearCalibration() { OnClearCalibration?.Invoke(); }
         internal static void RaiseAdminState(AdminStateMsg msg) { OnAdminState?.Invoke(msg); }
         internal static void RaiseSelectionState(SelectionStateMsg msg) { OnSelectionState?.Invoke(msg); }

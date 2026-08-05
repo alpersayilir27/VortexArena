@@ -12,6 +12,13 @@ namespace VortexArena.Protocol
         /// <para>⚠️ Bu yön de <b>eklemelidir</b>: tanımayan eski istemci mesajı yok sayar ve yarım
         /// sekansı başlığında tutar. Karışık sürümde bozulan tek şey operatörün o oyuncuyu
         /// sıfırlayamamasıdır — yine de APK turu tamamlanmalıdır.</para>
+        /// v9: <b>gövde ölçeği</b> — <c>measure_body_scale</c> (§5.2) + <c>set_body_scale</c> (§5.1)
+        /// + <c>PlayerInfo.bodyScale</c> (§5.3/§10.8). Oyuncular arası boy farkı uzak avatara tek
+        /// bir üniform çarpanla taşınır; ölçümü operatör başlatır, başlık ölçer, sunucu yalnız
+        /// kırpıp yayar.
+        /// <para>⚠️ Değişiklik tümüyle <b>eklemelidir</b>: alanı tanımayan eski istemci
+        /// <c>bodyScale</c>'i <c>0</c> okur ve herkesi ölçeksiz çizer. Karışık sürümde bozulan tek
+        /// şey avatar boylarıdır — yine de APK turu tamamlanmalıdır.</para>
         /// v8: <b>üç değerli bağlantı durumu</b> — <c>PlayerInfo.online</c> (bool) KALDIRILDI,
         /// yerine <c>connection</c> (<see cref="CONNECTION_CONNECTED"/>/
         /// <see cref="CONNECTION_RECONNECTING"/>/<see cref="CONNECTION_LEFT"/>) +
@@ -61,6 +68,18 @@ namespace VortexArena.Protocol
         /// </summary>
         public const int PROTOCOL_VERSION = 8;
         public const string APP_ID = "VortexArena";
+
+        /// <summary>
+        /// <c>set_body_scale.scale</c> kırpma aralığı (§10.8). Ölçümü istemci yapar ama sonuç
+        /// <b>herkesin ekranına</b> gider; sunucu bu yüzden kırpar — bozuk bir istemci arenaya
+        /// dört metrelik bir avatar koyamasın.
+        /// <para><c>0</c> bu aralığın DIŞINDADIR ve "ölçülmemiş" demektir: okuyan taraf
+        /// <c>1</c> uygular.</para>
+        /// </summary>
+        public const float BODY_SCALE_MIN = 0.5f;
+
+        /// <inheritdoc cref="BODY_SCALE_MIN"/>
+        public const float BODY_SCALE_MAX = 1.6f;
 
         /// <summary>Forma numarası aralığı (§2). <c>0</c> = atanmamış ve bu aralığın dışındadır;
         /// admin'de daima 0 kalır. Numara TÜM kayıtlı cihazlar arasında benzersizdir.</summary>

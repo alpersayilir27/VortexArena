@@ -1,6 +1,5 @@
 using Meta.XR.Movement.Networking;
 using UnityEngine;
-using VortexArena.Core.Arena;
 using VortexArena.Net;
 
 namespace VortexArena.Core.Player
@@ -54,6 +53,14 @@ namespace VortexArena.Core.Player
     /// ⚠️ Bu avatara <b>collider konmaz</b>: <c>Weapon</c>'daki atış raycast'i maskesizdir
     /// (<c>Physics.Raycast(...)</c>, layer mask yok) — kendi gövden kendi atışını yerdi.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>Gövde oranı burada KALİBRE EDİLMEZ</b> — <c>CharacterRetargeter.Calibrate()</c> hiç
+    /// çağrılmaz ve o yol geri gelmez: gönderenin gövde ORANLARINI değiştirmek, blob'un eklem
+    /// uzunluğu sıkıştırmasıyla (<c>SerializationCompressionType.High</c>) uyuşmaz ve uzak avatarı
+    /// bozuk duruşlara sokar. Oyuncular arası boy farkı bunun yerine tek bir üniform çarpanla
+    /// taşınır (<c>BodyScaleState</c> ölçer, <c>bodyScale</c> ile gider, §10.8) ve YALNIZ uzak
+    /// avatara uygulanır. Bu sınıfın oradaki tek işi <see cref="EyeAnchor"/>'ı sunmaktır.
+    /// </para>
     /// </summary>
     /// <remarks>
     /// ⚠️ <b>Execution order 100'den BÜYÜK olmak zorunda:</b> <c>Calibrate()</c> o karenin
@@ -71,29 +78,21 @@ namespace VortexArena.Core.Player
         /// <summary>Rig/oturum bulunamadığında iki arama arasındaki en kısa süre (sn).</summary>
         private const float RigSearchIntervalSeconds = 0.5f;
 
-        /// <summary>
-        /// Arena kalibrasyonu tamamlandıktan sonra gövde kalibrasyonuna kadar beklenen süre (sn).
-        /// <para>⚠️ Gecikme <b>zorunludur</b>: oyuncu arena kalibrasyonunu kumandanın ucunu zemin
-        /// işaretine değdirerek yapıyor, yani o anda EĞİLMİŞ durumda. <c>Calibrate()</c> gövde
-        /// oranlarını o andaki poza sabitliyor — eğilmiş bir oyuncudan alınan ölçü maçın kalanı
-        /// boyunca yanlış boy demektir.</para>
-        /// </summary>
-        private const float BodyCalibrationDelaySeconds = 3f;
-
         public static LocalBodyAvatar Instance { get; private set; }
 
         [Tooltip("Ağ köprüsü + SDK sürücüsü. Boşsa alt ağaçtan aranır.")]
         [SerializeField] private ArenaNetCharacterBehaviour character;
 
-        [Tooltip("Gövde oranını sabitleyen SDK bileşeni. Boşsa alt ağaçtan aranır.")]
+        [Tooltip("Gövdeyi sensörden çözen SDK bileşeni. Boşsa alt ağaçtan aranır.")]
         [SerializeField] private NetworkCharacterRetargeter retargeter;
 
         [Tooltip("Gövdenin görsel kökü. Boşsa karakterin kendisi kullanılır.")]
         [SerializeField] private GameObject visualRoot;
 
-        [Tooltip("Gövde oranını oyuncunun boyuna sabitle (SDK Calibrate()). KAPALI olmalı — " +
-                 "gerekçe koddaki açıklamada.")]
-        [SerializeField] private bool calibrateBodyProportions;
+        [Tooltip("Karakterin GÖZ hizası — kafa kemiğinin altında, iki gözün arasında duran boş " +
+                 "işaretçi. Gövde ölçümünün referansıdır (§10.8): oyuncunun gözü ile buranın " +
+                 "yüksekliği oranlanır. Boşsa ölçüm hiç yapılmaz.")]
+        [SerializeField] private Transform eyeAnchor;
 
         private OVRCameraRig _rig;
         private float _rigSearchTime = float.NegativeInfinity;
@@ -112,24 +111,20 @@ namespace VortexArena.Core.Player
 
         private float _sourceProviderGrace = SourceProviderGraceSeconds;
 
-        /// <summary>Son görülen <see cref="ArenaCalibrator.CalibrationGeneration"/>; değişmesi
-        /// "arena yeniden hizalandı, gövde oranı yeniden ölçülmeli" demektir.</summary>
-        private int _calibrationGeneration = -1;
+        /// <summary>
+        /// Karakterin göz hizası (prefabta kafa kemiğinin altındaki işaretçi) — gövde ölçümünün
+        /// referansı (§10.8). Bağlı değilse <c>null</c>; ölçen taraf o hâlde ölçmez ve bağırır.
+        /// <para>⚠️ Ölçüm bunun DÜNYA konumunu okur ve o konumun ölçek-1 referansı olması
+        /// <see cref="ArenaNetCharacterBehaviour"/>'ın yerel karakteri hiç ölçeklememesine bağlıdır
+        /// — yoksa ikinci ölçüm çarpanı 1'e yaklaştırırdı.</para>
+        /// </summary>
+        public Transform EyeAnchor => eyeAnchor;
 
-        /// <summary>Bekleyen bir gövde kalibrasyonu var mı. Süre dolmasıyla BİRLİKTE değil, ondan
-        /// AYRI tutulur: süre dolduğunda sensör hâlâ hazır olmayabilir ve o hâlde beklemeye devam
-        /// edilir (gerekçe <see cref="TickBodyCalibration"/>).</summary>
-        private bool _calibrationPending;
-
-        /// <summary>Gövde kalibrasyonuna kalan süre (sn); yalnız <see cref="_calibrationPending"/>
-        /// iken anlamlıdır.</summary>
-        private float _calibrationCountdown;
-
-        /// <summary>Kalibrasyondan sonra uygulanan ölçeğin bir kez raporlanması bekleniyor mu.</summary>
-        private bool _scaleReportPending;
-
-        /// <summary>Ölçeğin <c>ScaleRange</c> sınırına "dayanmış" sayılması için tolerans.</summary>
-        private const float ScaleClampEpsilon = 0.005f;
+        /// <summary>
+        /// Gövde gerçekten çözülüyor mu (kurulmuş + retargeter geçerli). Ölçümün ön koşuludur:
+        /// pozu olmayan bir iskeletin göz hizası anlamsızdır.
+        /// </summary>
+        public bool IsBodyPoseValid => _initialized && retargeter != null && retargeter.RetargeterValid;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -217,12 +212,6 @@ namespace VortexArena.Core.Player
             }
 
             TickSourceProviderCheck();
-
-            // ⚠️ Rapor kalibrasyondan ÖNCE tiklenir ve bu sıra kasıtlıdır: uygulanan ölçek
-            // Calibrate()'in ölçtüğü orandan bir kare SONRA yazılıyor (SDK onu retarget
-            // döngüsünde tazeliyor), yani aynı karede okumak kalibrasyon ÖNCESİ değeri basardı.
-            TickScaleReport();
-            TickBodyCalibration();
         }
 
         /// <summary>
@@ -260,11 +249,6 @@ namespace VortexArena.Core.Player
 
             character.Initialize(client.PlayerId, hasInputAuthority: true);
             _sourceProviderGrace = SourceProviderGraceSeconds;
-
-            // İlk gövde ölçüsü de gecikmeli alınır: oyuncu bağlandığı anda ayakta olmayabilir.
-            _calibrationGeneration = ArenaCalibrator.CalibrationGeneration;
-            _calibrationCountdown = BodyCalibrationDelaySeconds;
-            _calibrationPending = true;
         }
 
         /// <summary>
@@ -304,112 +288,6 @@ namespace VortexArena.Core.Player
                     renderers[i].enabled = false;
                 }
             }
-        }
-
-        /// <summary>
-        /// Arena hizalaması değiştiyse gövde oranını yeniden ölçtürür (gecikmeli).
-        /// <para>⚠️ <b>İki kalibrasyon KARIŞTIRILMAZ:</b> <see cref="ArenaCalibrator"/> rig'i
-        /// fiziksel arenaya hizalar (bizim, sunucu-otoriter durum §10.6);
-        /// <c>CharacterRetargeter.Calibrate()</c> karakterin gövde oranını oyuncununkine sabitler
-        /// (SDK'nın, tamamen yerel). Buradaki tek bağ şudur: arena yeniden hizalanınca oyuncu
-        /// zaten eğilip doğrulmuştur, yani boy ölçüsünü tazelemek için doğru an odur.</para>
-        /// </summary>
-        private void TickBodyCalibration()
-        {
-            // ⚠️ VARSAYILAN KAPALI — açmadan önce aşağıdaki bedeli oku.
-            //
-            // UZAK GÖVDEYİ BOZAR. İskelet blob'u SerializationCompressionType.High ile kodlanıyor
-            // ve o kip eklemleri "joint lengths" ile sıkıştırıyor. Calibrate() gönderenin gövde
-            // ORANLARINI değiştirdiği için, alıcının hedef iskeleti artık gönderenin kodladığı
-            // uzunluklarla uyuşmaz — sonuç, uzak avatarda rastgele bozuk duruşlardır. Kapalıyken
-            // herkes prefabın oranlarını kullanır ve iki uç eşleşir.
-            //
-            // ⚠️ Anahtarın YEREL karşılığı yoktur: gövde hiç çizilmiyor, yani açmanın oyuncunun
-            // kendi ekranında görünür bir kazancı yok — eller rig'in sentetik ellerinden geliyor ve
-            // gövde oranından etkilenmiyor. Geriye yalnız bedeli kalır (uzak avatarda bozuk
-            // duruşlar), bu yüzden kapalı kalır.
-            if (!calibrateBodyProportions)
-            {
-                return;
-            }
-
-            int generation = ArenaCalibrator.CalibrationGeneration;
-            if (generation != _calibrationGeneration)
-            {
-                _calibrationGeneration = generation;
-                _calibrationCountdown = BodyCalibrationDelaySeconds;
-                _calibrationPending = true;
-            }
-
-            if (!_calibrationPending)
-            {
-                return;
-            }
-
-            if (_calibrationCountdown > 0f)
-            {
-                _calibrationCountdown -= Time.unscaledDeltaTime;
-                return;
-            }
-
-            // ⚠️ Sürenin dolması YETMEZ: SDK'nın Calibrate()'i geçerli bir poz yoksa SESSİZCE döner
-            // (hiçbir şey yapmaz, hiçbir şey da basmaz). Tek atışlık bir çağrı tam bu pencereye denk
-            // gelirse kalibrasyon oturumun geri kalanı boyunca HİÇ yapılmamış olur. Bu yüzden bayrak
-            // koşul sağlanana dek AÇIK kalır ve her karede yeniden denenir.
-            if (!retargeter.RetargeterValid)
-            {
-                return;
-            }
-
-            _calibrationPending = false;
-            retargeter.Calibrate();
-            _scaleReportPending = true;
-        }
-
-        /// <summary>
-        /// Kalibrasyondan sonra karaktere uygulanan gövde ölçeğini <b>bir kez</b> raporlar.
-        /// <para>
-        /// Sebep: ölçek <c>SkeletonRetargeter.ScaleRange</c> ile <b>kelepçelenir</b> (varsayılan
-        /// 0.8–1.2). Oyuncunun boyu modelin boyundan bu aralığın dışında farklıysa karakter
-        /// oyuncuyla aynı boyda OLAMAZ ve <b>diğer oyuncular</b> onu yanlış boyda görür.
-        /// ⚠️ Sonucu <b>yalnız başkaları</b> görür — oyuncunun kendi ekranında hiçbir iz bırakmaz,
-        /// çünkü gövde çizilmiyor. Sınıra dayanmış bir ölçek gözle yanlış oranlardan ayırt
-        /// EDİLEMEZ, bu yüzden tahmin edilmez, ölçülür.
-        /// </para>
-        /// <para>Yalnız <see cref="calibrateBodyProportions"/> açıkken anlamlıdır: bayrak
-        /// <c>Calibrate()</c>'ten sonra kalkıyor.</para>
-        /// </summary>
-        private void TickScaleReport()
-        {
-            if (!_scaleReportPending || !retargeter.RetargeterValid)
-            {
-                return;
-            }
-
-            var skeleton = retargeter.SkeletonRetargeter;
-            if (skeleton == null || !skeleton.IsInitialized)
-            {
-                return;
-            }
-
-            _scaleReportPending = false;
-
-            float scale = skeleton.RootScale.x;
-            Vector2 range = skeleton.ScaleRange;
-            string line = $"[LocalBodyAvatar] Gövde ölçeği {scale:F3} " +
-                          $"(izin verilen aralık {range.x:F2}–{range.y:F2}).";
-
-            if (scale <= range.x + ScaleClampEpsilon || scale >= range.y - ScaleClampEpsilon)
-            {
-                Debug.LogWarning(
-                    line + " Değer aralığın SINIRINDA: karakter oyuncunun boyuna yetişemiyor, yani " +
-                    "diğer oyuncular bu oyuncuyu yanlış boyda görür. " +
-                    "Resources/LocalBodyAvatar.prefab içindeki NetworkCharacterRetargeter > " +
-                    "Scale Range genişletilmeli.", this);
-                return;
-            }
-
-            Debug.Log(line, this);
         }
 
         /// <summary>

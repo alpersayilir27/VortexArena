@@ -155,6 +155,12 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _clearAllButton;
         [SerializeField] private TextMeshProUGUI _clearAllLabel;
 
+        /// <summary>Tüm oyuncuların gövde ölçüsünü aldırır (§10.8) — satırdaki ÖLÇ düğmesinin
+        /// toplu hâli. Toplu eylemlerin yeri burasıdır, HUD'ın üst barı değil.
+        /// <para>Etiketi <b>prefabta sabittir</b> ve koddan yazılmaz: durumu yok (yanındaki
+        /// sıfırlama düğmesinin aksine onay penceresi de yok), yani gösterecek bir veri yok.</para></summary>
+        [SerializeField] private Button _measureAllButton;
+
         /// <summary>Toplu kalibrasyon sıfırlamanın onay penceresi (sn) — AdminPlayerRow ile aynı
         /// gerekçe: herkesi savaş dışı bırakan bir eylem tek yanlış tıklamayla olmamalı.</summary>
         private const float ClearAllConfirmSeconds = 3f;
@@ -263,6 +269,10 @@ namespace VortexArena.App.Admin
             Wire(_pauseButton, TogglePause);
 
             Wire(_clearAllButton, ArmClearAllCalibration);
+            // ⚠️ Onay penceresi YOK (satırdaki ÖLÇ ile aynı gerekçe): ölçüm geri alınabilir bir
+            // eylemdir, kimseyi savaş dışı bırakmaz. Kalibresizler sunucuda elenir ve kaç kişinin
+            // atlandığı duyuru satırında görünür.
+            Wire(_measureAllButton, () => AdminCommands.MeasureBodyScale(0));
 
             Wire(_applyIdentityButton, ApplyIdentity);
             Wire(_identityNumberPrev, IdentityNumberDown);

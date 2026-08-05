@@ -221,22 +221,20 @@ tahtalarına ateş edebilir (birbirlerine hasar
 veremezler) ve zemindeki A/B işaretleri oradadır. Bir kez kalibre olan oyuncu maça hazır girer —
 harita değişimi kalibrasyonu bozmaz. (Maç sırasında da aynı adımlarla yeniden kalibre edilebilir.)
 
-- [ ] **1.** Oyuncu sağ kumandayı zemindeki **A** bandının üzerine, **kalem gibi dimdik** tutup
-      ucunu yere değdirir. ⚠️ **Duruş önemli:** gözlük zemin yüksekliğini de bu ölçümden
-      öğrenir; eğik tutulursa oyuncular birbirini havada ya da yere gömülü görür.
+- [ ] **1.** Oyuncu sağ kumandanın **ucunu** zemindeki **A** bandına değdirir. ⚠️ **Nasıl tuttuğu
+      önemli değil** (dik, eğik, yan — fark etmez); önemli olan **ucun yere değmesidir**.
 - [ ] **2.** Sağ kumandada **A tuşunu basılı tutarken B tuşuna hızlıca iki kez basar**
       (iki basış arası 1 saniyeyi geçmemeli) → **kısa titreşim** = A noktası alındı ve
       zeminde A çapası belirir. Basılı tutma/bekleme yoktur.
-- [ ] **3.** Aynısını zemindeki **B** bandında, **aynı dik duruşla** yapar → **uzun titreşim**
-      (~1 sn) + **iki çapa da belirip bir saniye sonra kaybolur** = tamam, arena hizalandı.
-- [ ] **4.** Uzun titreşimi duyunca oyuncu **doğrulup 3 saniye normal duruşta bekler**
-      (çömelmeden, zıplamadan, eğilmeden). ⚠️ **Karakterin boyu tam o anda ölçülür:** gözlüğün
-      yerden yüksekliği alınır ve oyuncunun karakteri o boya göre büyütülüp küçültülür — kısa
-      oyuncuda küçük, uzun oyuncuda büyük. Eğilmiş hâlde beklenirse karakter olduğundan kısa
-      kalır; düzeltmek için §4.1'den kalibrasyon sıfırlanıp baştan alınır.
-- [ ] **5.** Hata sinyalleri — ikisinde de B'yi tekrar al (çapalar kaybolmaz, ikinci çapa hiç
+- [ ] **3.** Aynısını zemindeki **B** bandında yapar → **uzun titreşim** (~1 sn) + **iki çapa da
+      belirip bir saniye sonra kaybolur** = tamam, arena hizalandı. Bekleme yoktur, oyuncu
+      doğrulup devam edebilir.
+- [ ] **4.** Hata sinyalleri — ikisinde de B'yi tekrar al (çapalar kaybolmaz, ikinci çapa hiç
       belirmez): **üç kısa titreşim** = iki nokta arasındaki mesafe yanlış (bant ölçüsünü
-      kontrol et) · **tek titreşim** = kumanda dik tutulmamış, zemin ölçümü tutmadı.
+      kontrol et) · **tek titreşim** = bir noktada kumandanın ucu yere değmemiş, iki zemin ölçümü
+      birbirini tutmadı.
+
+> ⚠️ **Karakterin boyu burada ölçülmez** — o ayrı bir adımdır ve **sana aittir**: §4.2.
 
 **Bilmen gerekenler**
 
@@ -281,6 +279,30 @@ sırayla §4'teki adımları yapar.
 > **Neden tik'i elle geri açamıyorsun:** hizalamanın gerçekten düzeldiğini yalnız gözlüğün
 > kendisi bilir. Sen "tamam" diyebilseydin, aslında hâlâ kaymış bir oyuncu ateş etmeye ve
 > vurulmaya devam ederdi — yani düzeltmeye çalıştığın sorunun ta kendisi sürerdi.
+
+### 4.2 Karakterlerin boyunu ayarlamak — **ÖLÇ** düğmesi
+
+Herkesin karakteri varsayılan olarak **aynı boydadır**. Oyuncunun kendi boyunda görünmesi için
+ölçüsünü **senin** aldırman gerekir; kalibrasyonla birlikte olmaz, çünkü oyuncu kalibrasyon
+sırasında kumandayı yere değdirmek için **eğilmiş** durumdadır.
+
+- [ ] **1.** Oyuncu kalibre olduktan sonra **ayakta ve dik** dursun (çömelme, eğilme, yürüme yok).
+- [ ] **2.** Yönetim ekranında o oyuncunun satırındaki **ÖLÇ** düğmesine bas. Onay istemez.
+- [ ] **3.** Düğmenin etiketi ölçülen çarpanı gösterir (`×1.04` gibi) — bu, ölçümün oturduğu
+      anlamına gelir. Karakteri o anda herkeste yeniden boyutlanır.
+- [ ] **4.** Ölçüm anında oyuncu hareket ettiyse **hiçbir şey değişmez** (eski değer durur);
+      dik durmasını söyleyip tekrar bas.
+
+**Hepsini birden ölçmek için:** TERCİHLER > **"TÜM OYUNCULARI ÖLÇEKLE"**. Herkesin dik durduğu
+bir an seç — maç başlamadan önceki hazırlık en uygunu.
+
+**Bilmen gerekenler**
+
+- Düğme **pasifse** oyuncu kalibresizdir: önce kalibrasyon, sonra ölçüm.
+- **Kalibrasyonu sıfırlarsan ölçü de sıfırlanır** (zemin geçersizleştiği için). Oyuncu yeniden
+  kalibre olunca ÖLÇ'e tekrar basman gerekir.
+- Ölçü gözlükte saklanır: aynı oyuncu ertesi gün bağlandığında boyu kendiliğinden geri gelir.
+- Aynı oyuncuyu **iki kez ölçmek zararsızdır** — aynı sonucu verir.
 
 ---
 
@@ -487,7 +509,8 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 | **Birden bire HERKES takılmaya başladı** (tek oyuncu değil, hepsi) | Wi-Fi'ı oyun dışı bir şey doldurdu | **Önce İstatistikler panelini aç ve PING kolonuna bak** (aşağıda). Herkesinki yüksekse sırayla: 1) bir gözlükte **ekran yayını (cast/kayıt) açık mı** — en sık sebep budur, kapat. 2) Arena Wi-Fi'ına telefon/dizüstü bağlanmış mı, indirme mi var — çıkar. 3) Sunucu bilgisayarının **ağ kablosu takılı mı** — çıkmışsa tak. Düzelmezse teknik ekibi ara |
 | **Tek bir oyuncu** takılıyor, diğerleri normal | O gözlüğün Wi-Fi kapsaması zayıf | İstatistiklerde o satırın PING'i diğerlerinden belirgin yüksekse oyuncuyu alanın ortasına doğru yönlendir; sürekli tekrarlıyorsa teknik ekibi ara |
 | Oyuncular birbirini yanlış yerde görüyor | Kalibrasyon yapılmadı ya da A–B ters alındı | Arenada **yeniden kalibrasyon** yaptır (Bölüm 4) |
-| Oyuncular birbirini **havada / yere gömülü** görüyor | Kalibrasyonda kumanda dik tutulmamış | O oyuncuya kalibrasyonu tekrarlat; kumanda **kalem gibi dik**, ucu yere değecek (Bölüm 4). Herkeste aynı sorun varsa teknik ekibi ara |
+| Oyuncular birbirini **havada / yere gömülü** görüyor | Kalibrasyonda kumandanın **ucu yere değmemiş** (havada yakalanmış) | O oyuncuya kalibrasyonu tekrarlat; kumandayı nasıl tuttuğu önemli değil, **ucu yere değecek** (Bölüm 4). Herkeste aynı sorun varsa teknik ekibi ara |
+| Bir oyuncunun karakteri **olduğundan kısa/uzun** görünüyor | Boyu hiç ölçülmemiş ya da ölçüm eğilmişken alınmış | Oyuncuyu dik durdurup satırındaki **ÖLÇ** düğmesine bas (§4.2) |
 | Oyun ortasında arena birden kaydı | Gözlüğün konum takibi sıfırlandı | Genelde kendiliğinden düzelir. Düzelmezse o oyuncuya kalibrasyonu tekrarlat |
 | Ateş ediyor ama can azalmıyor | Aynı takımdalar (dost ateşi kapalı) ya da maç henüz başlamadı | Takımları kontrol et; geri sayım bitmiş mi bak. Takım arkadaşlarının birbirini vurabilmesini istiyorsan Tercihler → MAÇ → **Dost ateşi**'ni aç |
 | Turnuvada ekranda **"TOPLANMA 4/6"** yazıyor, yeni tur bir türlü başlamıyor | Bir ya da iki oyuncu kendi tabanına dönmedi (takıldı, koptu, oyundan çıktı) | Ekranda kimin eksik olduğunu bul: listedeki çevrimdışı satırı ya da tabanına yürümeyen oyuncuyu **AT** ile çıkar → kalanlar hazırsa tur hemen başlar. Vazgeçtiysen **İPTAL**. Tur eksik oyuncuyla kendiliğinden başlamaz |
@@ -540,12 +563,12 @@ Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten
 │                              (lobide, bağlanamayınca)    │
 │                                                          │
 │  A BASILIYKEN B'ye 2 KEZ  →  Kalibrasyon noktası al      │
-│  (kumanda KALEM GİBİ DİK,    kısa titr. = A alındı       │
-│   ucu yere değecek)          UZUN titr. = B alındı, tamam│
-│                              3 titreşim = mesafe yanlış, │
+│  (kumandanın UCU yere         kısa titr. = A alındı      │
+│   değecek; nasıl tuttuğun     UZUN titr. = B alındı, tamam│
+│   önemli değil)              3 titreşim = mesafe yanlış, │
 │                                           B'yi tekrar al │
-│                              1 titreşim = dik tutulmadı, │
-│                                           B'yi tekrar al │
+│                              1 titreşim = uç yere        │
+│                                değmemiş, B'yi tekrar al  │
 ├──────────────────────────────────────────────────────────┤
 │  OYUNCUYA — "HERKES TEK" MODUNDA                         │
 │                                                          │

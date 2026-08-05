@@ -23,6 +23,12 @@ namespace VortexArena.Core.Arena
     /// içinde tracking kaybı sonrası kayabilir.
     /// </para>
     /// <para>
+    /// ⚠️ <b>Hiçbir rotasyon bu ölçüme girmez.</b> Yakalanan nokta kumanda pivotunun
+    /// <b>dünya</b> -Y ekseninde <see cref="floorProbeDropMeters"/> altındadır; kumandanın nasıl
+    /// tutulduğu, gözlüğün nereye baktığı ve gözlüğün yüksekliği sonucu değiştirmez. Yaw yalnız
+    /// iki YAKALANAN NOKTANIN yatay farkından gelir.
+    /// </para>
+    /// <para>
     /// <b>Harita değişimi kalibrasyonu SIFIRLAMAZ.</b> Kayıtlı anchor'ın UUID'si
     /// <see cref="AnchorUuidKey"/> altında PlayerPrefs'te durur — oturumu değil, cihazı aşar.
     /// Yeni arena sahnesi yüklenince o sahnenin kendi kalibratörü <see cref="Start"/>'ta aynı
@@ -115,8 +121,11 @@ namespace VortexArena.Core.Arena
         [Header("Capture")]
         [Tooltip("A basılı tutulurken B'ye iki kez basmak için tanınan süre (saniye). İki basış arası bundan uzunsa ikinci basış yeni bir sekansın ilki sayılır.")]
         [SerializeField] private float doubleTapSeconds = 1f;
-        [Tooltip("Controller pivot -> tip offset, in controller local space. The tracked pivot sits inside the controller body, so resting the tip on the floor leaves the pivot a few cm above it. Measure once per controller model: with a guardian set up, hold the controller upright on the floor and read rightControllerAnchor.position.y.")]
-        [SerializeField] private Vector3 tipLocalOffset = new Vector3(0f, -0.08f, 0f);
+        [Tooltip("Yakalanan noktanın kumanda pivotunun kaç metre ALTINDA olduğu (dünya -Y). " +
+                 "İzlenen pivot kumandanın gövdesinin içindedir; uç zemine değdiğinde pivot bu " +
+                 "kadar yukarıda kalır. ⚠️ Kumandanın yerel ekseninde DEĞİL dünya ekseninde " +
+                 "uygulanır — gerekçe koddaki açıklamada.")]
+        [SerializeField] private float floorProbeDropMeters = 0.08f;
         [Tooltip("The captured A-B distance must match the anchor_a/anchor_b distance within this fraction.")]
         [Range(0.05f, 0.5f)]
         [SerializeField] private float distanceTolerance = 0.2f;
@@ -473,10 +482,16 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            // Yakalanan nokta kumandanın PIVOTU değil UCUDUR: pivot gövdenin içinde
-            // durur, uç yere değdiğinde pivot birkaç cm yukarıda kalır ve o fark
-            // doğrudan zemin hatasına dönüşürdü.
-            Vector3 point = pointer.TransformPoint(tipLocalOffset);
+            // Yakalanan nokta kumandanın PIVOTU değil UCUDUR: pivot gövdenin içinde durur, uç
+            // yere değdiğinde pivot birkaç cm yukarıda kalır ve o fark doğrudan zemin hatasına
+            // dönüşürdü.
+            //
+            // ⚠️ Ofset DÜNYA -Y ekseninde uygulanır, kumandanın YEREL ekseninde DEĞİL
+            // (TransformPoint kullanılmaz): yerel uygulamada ölçüm kumandanın tutuş açısına
+            // bağlanır — 45° eğik tutulan bir kumandada nokta yatayda kayar ve dikeyde eksik
+            // düşer. Oyuncu kumandayı zemin işaretine değdirirken onu dik tutmak zorunda
+            // değildir; ne kumandanın ne gözlüğün rotasyonu bu ölçüme girmez.
+            Vector3 point = pointer.position + Vector3.down * floorProbeDropMeters;
 
             // A completed calibration restarts from scratch on the next capture.
             if (capturedCount >= 2)
@@ -783,9 +798,11 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Hizalama tamamlandı: sayaç artar, sonra olay yayınlanır. İki tamamlanma yolu da (elle
-        /// yakalama + kayıtlı anchor'dan geri yükleme) buradan geçer — sayacı artırmayı unutan bir
-        /// yol, ölçüsünü tazelemeyen sessiz bir dinleyici demektir.
+        /// Hizalama tamamlandı → olay yayınlanır. İki tamamlanma yolu da (elle yakalama + kayıtlı
+        /// anchor'dan geri yükleme) buradan geçer.
+        /// <para>⚠️ Gövde ölçüsü buna BAĞLI DEĞİLDİR (§10.8): ölçümü operatör başlatır. Hizalamadan
+        /// otomatik tetiklenen bir ölçüm, oyuncu kumandayı zemine değdirmek için eğilmişken ölçmek
+        /// olurdu.</para>
         /// </summary>
         private static void RaiseCalibrated(string source)
         {

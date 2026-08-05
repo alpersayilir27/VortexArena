@@ -84,6 +84,10 @@ namespace VortexArena.App.Admin
         /// <summary>"manual" | "anchor" | "cloud" | "" — doğrulanmayan serbest etiket.</summary>
         public string calibrationSource = "";
 
+        /// <summary>Gövde ölçeği (§10.8); <b>0 = ölçülmemiş</b>. Satırdaki ÖLÇ düğmesi bunu
+        /// gösterir — operatör kimin ölçüldüğünü listeye bakarak görmeli.</summary>
+        public float bodyScale;
+
         /// <summary>Operatörün ilgilenmesi gereken satır mı: yalnız OYUNCU ve kalibresiz.</summary>
         public bool NeedsCalibration => IsPlayer && !calibrated;
 
@@ -466,6 +470,7 @@ namespace VortexArena.App.Admin
                 // "kalibresiz" saymamak için burada true'ya sabitlenir (bkz. NeedsCalibration).
                 view.calibrated = view.IsPlayer ? info.calibrated : true;
                 view.calibrationSource = info.calibrationSource ?? "";
+                view.bodyScale = view.IsPlayer ? info.bodyScale : 0f;
 
                 if (view.alive != info.alive)
                 {

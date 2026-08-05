@@ -521,6 +521,14 @@ namespace VortexArena.Net
                         break;
                     }
 
+                    case MessageTypes.MeasureBodyScale:
+                    {
+                        // Sunucu yalnız player'a yollar (§10.8); admin'de dinleyen yoktur.
+                        // Ölçüm rig/karakter okuduğu için Unity API'si ister → ana thread.
+                        _mainThreadActions.Enqueue(NetEvents.RaiseMeasureBodyScale);
+                        break;
+                    }
+
                     case MessageTypes.ClearCalibration:
                     {
                         // Operatör kalibrasyonu sıfırladı (§10.6). Sunucu yalnız player'a yollar,

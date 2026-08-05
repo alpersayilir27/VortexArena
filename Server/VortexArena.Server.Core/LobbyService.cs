@@ -304,6 +304,74 @@ public sealed class LobbyService
         await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kalibrasyonu sıfırlandı"));
     }
 
+    // ---- Gövde ölçeği (§10.8) ----
+
+    /// <summary>set_body_scale: başlık KENDİ gövde ölçeğini bildirir (§5.1). Yalnız kendi kaydını
+    /// yazabilir — playerId taşımaz, bağlantıdan çözülür (set_calibration ile aynı sözleşme).
+    /// <para>Sunucu sayıyı yorumlamaz; kırpma <see cref="PlayerRegistry.SetBodyScale"/>'dedir.</para></summary>
+    public void HandleSetBodyScale(ClientConnection connection, SetBodyScaleMsg msg)
+    {
+        var state = connection.State;
+        if (state == null) return;
+        if (!_registry.SetBodyScale(state.PlayerId, msg.scale)) return;
+        Console.WriteLine($"[Lobby] set_body_scale: {state.Name} → {state.BodyScale:F3}.");
+    }
+
+    /// <summary>
+    /// measure_body_scale: admin bir oyuncunun (playerId 0 = HERKES) gövde ölçüsünü ALDIRIR (§5.2).
+    /// Sunucu hiçbir şey hesaplamaz — hedefe alansız bir measure_body_scale iletir, ölçümü başlık
+    /// yapıp <c>set_body_scale</c> ile döner (identify ile aynı çift yönlü desen).
+    /// <para>⚠️ <b>Kalibresiz hedefe iletilmez:</b> ölçü arena zeminine göredir ve kalibresiz
+    /// başlıkta zemin bilinmez — komut gitseydi başlık sessizce yanlış bir ölçek yazardı. Atlanan
+    /// hedefler operatöre duyurulur; sessizce yutmak "bastım ama olmadı" demektir.</para>
+    /// </summary>
+    public async Task HandleMeasureBodyScaleAsync(ClientConnection connection, MeasureBodyScaleMsg msg)
+    {
+        // Sunucu → istemci yönünde alan taşınmaz: hedef zaten o bağlantıdır.
+        var payload = JsonUtil.Serialize(new MeasureBodyScaleMsg());
+
+        if (msg.playerId == 0)
+        {
+            var sent = 0;
+            var skipped = 0;
+            foreach (var state in _registry.Snapshot())
+            {
+                if (state.Role != "player" || state.Socket == null) continue;
+                if (!state.Calibrated) { skipped++; continue; }
+                await SendSafeAsync(state.Socket, payload, state.Name);
+                sent++;
+            }
+
+            Console.WriteLine($"[Lobby] measure_body_scale: {sent} oyuncu, {skipped} kalibresiz atlandı — {connection.State?.Name}.");
+            var note = skipped > 0
+                ? $"{sent} oyuncu ölçülüyor ({skipped} kalibresiz atlandı)"
+                : $"{sent} oyuncu ölçülüyor";
+            await BroadcastAdminStateAsync(Notice(connection, note));
+            return;
+        }
+
+        if (!_registry.TryGetByPlayerId(msg.playerId, out var target) || target.Socket == null)
+        {
+            Console.WriteLine($"[Lobby] measure_body_scale: playerId {msg.playerId} bulunamadı/bağlantısı yok.");
+            return;
+        }
+        if (target.Role != "player")
+        {
+            Console.WriteLine($"[Lobby] measure_body_scale: {target.Name} admin — gövdesi yok, yok sayıldı.");
+            return;
+        }
+        if (!target.Calibrated)
+        {
+            Console.WriteLine($"[Lobby] measure_body_scale: {target.Name} kalibresiz — ölçüm gönderilmedi.");
+            await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kalibresiz — önce kalibrasyon"));
+            return;
+        }
+
+        await SendSafeAsync(target.Socket, payload, target.Name);
+        Console.WriteLine($"[Lobby] measure_body_scale: {target.Name} (playerId {target.PlayerId}) — {connection.State?.Name}.");
+        await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} ölçülüyor"));
+    }
+
     // ---- Ortak seçim (§5.2 set_selection / §5.3 admin_state) ----
 
     /// <summary>Bir sonraki maçın ortak mod/harita seçimi. Maçı BAŞLATMAZ; boş alan mevcut

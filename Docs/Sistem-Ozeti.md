@@ -170,8 +170,11 @@ Quest'in kendi dünya uzayı ──(ArenaCalibrator: 2 nokta + OVRSpatialAnchor)
 - Hizalama **6DOF**'tur: yaw + yatay konum A→B çiftinden, **zemin yüksekliği B noktasında yakalanan
   kumanda ucundan**. Zemin tracking origin'den alınmaz çünkü başlıklar **guardian/alan kurulumu
   olmadan** çalışır (§7.29). Yakalanan nokta kumandanın pivotu değil ucudur
-  (`ArenaCalibrator.tipLocalOffset`); iki noktanın Y farkı **eğim telafisi için kullanılmaz**, ölçüm
-  sağlığı olarak denetlenir (>10 cm → yakalama reddedilir).
+  (`ArenaCalibrator.floorProbeDropMeters`, **dünya -Y ekseninde**); iki noktanın Y farkı **eğim
+  telafisi için kullanılmaz**, ölçüm sağlığı olarak denetlenir (>10 cm → yakalama reddedilir).
+- ⚠️ **Bu ölçüme hiçbir rotasyon girmez:** ofset kumandanın YEREL ekseninde uygulanmaz, ne kumandanın
+  tutuş açısı ne gözlüğün bakışı/yüksekliği sonucu değiştirir. Yaw yalnız iki yakalanan noktanın
+  yatay farkından gelir.
 
 ### 3.4 Bağlantı yaşam döngüsü
 
@@ -904,10 +907,8 @@ geri yükleme) oradan geçer: statik `Calibrated` olayı (dinleyicisi `Calibrati
 hizalama değil — hizalamadan otomatik tetiklenen bir ölçüm, oyuncu kumandayı zemine değdirmek için
 **eğilmişken** ölçmek olurdu. `CharacterRetargeter.Calibrate()` bu projede hiç çağrılmaz.
 ⚠️ **İki kalibrasyon ayrı şeydir:** bu sınıf rig'i fiziksel arenaya hizalar (sunucu-otoriter durum,
-§10.6), SDK'nınki karakterin gövde oranını oyuncununkine sabitler (protokolde bir alanı yoktur ama
-**ağda karşılığı vardır**: blob sıkıştırması eklem uzunluklarına dayanıyor, §7). Aralarındaki tek
-bağ zamanlamadır — arena hizalamasından sonra oyuncu eğilip doğrulmuştur,
-yani boy ölçmek için doğru andır.
+§10.6), gövde ölçüsü ise ayrı bir eksendir (§10.8) — ölçünün ön koşulu hizalamanın geçerli
+olmasıdır (zemin oradan gelir) ama tetikleyicisi operatördür.
 ⚠️ **Sıra A → B'dir ve geometrik olarak doğrulanamaz**: iki nokta hangisinin önce alındığını
 söylemez, mesafe kontrolü de simetriktir. Garanti prosedüreldir — ilk yakalama A sayılır, o anda
 A işaretçisi yanar ve log `1/2 — A yakalandı` yazar. Karıştırılırsa arena 180° ters döner.
@@ -916,7 +917,19 @@ merkezlenir, yarısı zeminin altında kalır. Görsel bir telafi (mesh tabanın
 YOKTUR: aynı transform hem dosyaya yazılan hem dosyadan okunan ölçü olduğu için ikinci bir
 sözleşme yazma/okuma arasında sessiz sapma üretirdi),
 `CalibrationState` (kalıcı tekil — kalibrasyon durumunun sunucu ile iki yönlü köprüsü: hizalanınca
-`set_calibration` yollar, operatör sıfırlayınca `ArenaCalibrator.Invalidate()` çağırır),
+`set_calibration` yollar, operatör sıfırlayınca `ArenaCalibrator.Invalidate()` çağırır.
+⚠️ Sıfırlamayı **`clear_calibration` komutundan** duyar ve **koşulsuz** uygular — yerelde hizalama
+olup olmadığına bakmaz, çünkü silinecek şeyin bir kısmı hizalama değildir (yarım kalmış sekans).
+Roster'daki `calibrated:false` ikinci savunma hattı olarak durur: hello'nun sıfırlamasını ve komutu
+iletmeyen eski bir sunucuyu yakalar),
+**`BodyScaleState`** (kalıcı tekil — gövde ölçüsünü **operatör düğmesiyle** alır ve `set_body_scale`
+ile bildirir, §10.8. Ölçüm: oyuncunun gözü (`centerEyeAnchor`) ile karakterin göz işaretçisi
+(`LocalBodyAvatar.EyeAnchor`) **aynı karede**, arena uzayında okunup oranlanır; ~0,5 sn örneklenip
+medyanı alınır, yayılım %5'i aşarsa ölçüm reddedilir (oyuncu hareketli/eğilmiş). Sonuç cihazda
+saklanır ve yeniden bağlanınca yeniden bildirilir; sunucu ölçeği sıfırlarsa yerel kayıt da silinir —
+yoksa operatörün sıfırlaması bir sonraki bağlanışta sessizce geri alınırdı. ⚠️ Sabit bir "model göz
+yüksekliği" sayısı YOKTUR: karakter zaten oyuncuyla aynı pozdadır, oran duruş farkını götürür ve
+model değişince bayatlayacak bir sayı kalmaz),
 `ArenaSpace` (dünya↔arena dönüşümünün **tek adresi**: arena uzayı dünya uzayıyla çakışık olduğu
 için poz/pozisyon/rotasyon dönüşümleri kimliktir. Çağrı yerleri yine ondan geçer — çerçeve tek
 yerde tanımlı kalsın. `WorldToArenaDirection` istisnadır: yönü **normalize eder** ve sıfır/NaN
@@ -1804,10 +1817,11 @@ konsoluna tek satır sebep yazar.
 
 53. **Kendini düzeltmeyen bir tahmin, tek bozuk kareyi KALICI hataya çevirir.** Sabitlenen (mandallı)
     her değer için kural: **tetikleyicisi ve geri dönüş yolu ADI KONMUŞ olmalı.** Bugünkü örneği
-    gövde oranıdır — `CharacterRetargeter.Calibrate()` onu o andaki poza sabitler ve bir daha
-    kendiliğinden değişmez; tetikleyicisi `ArenaCalibrator.CalibrationGeneration`, geri dönüş yolu da
-    aynı sayaçtır. ⚠️ Bu yüzden çağrı **gecikmelidir**: oyuncu arena kalibrasyonunu zemine
-    EĞİLEREK yapıyor, o andaki poza sabitlenen oran maçın kalanı boyunca yanlış boy demektir.
+    gövde ölçeğidir (§10.8) — ölçüm o andaki poza sabitlenir ve bir daha kendiliğinden değişmez;
+    tetikleyicisi operatörün `measure_body_scale` düğmesi, geri dönüş yolu da aynı düğmedir (ve
+    kalibrasyonun düşmesi ölçeği sıfırlar). ⚠️ Tetikleyicinin **zaman değil komut** olması bu
+    kuralın sonucudur: hizalamadan otomatik tetiklenen bir ölçüm, oyuncu kumandayı zemine
+    değdirmek için EĞİLMİŞKEN ölçmek olurdu ve o oran maçın kalanı boyunca yanlış boy demektir.
     Adı konmamış bir mandal ile "yalnız büyüyen" bir değişken aynı kapıya çıkar: er geç bir gürültü
     örneğine kilitlenir ve geri dönmez.
 
@@ -2215,20 +2229,20 @@ konsoluna tek satır sebep yazar.
     "sağlayıcı açık mı" diye bakan bir kontrol, açık kalıp geçerli veri üretmeyen bir sensörü hiç
     uyarı basmadan görünmez bir gövdeye çevirir.
 
-91. **`CharacterRetargeter.Calibrate()` geçerli bir poz yokken SESSİZCE hiçbir şey yapmaz** — ne
-    döner değer, ne log. Zamanlayıcıyla tetiklenen tek atışlık bir çağrı tam o pencereye denk
-    gelirse kalibrasyon **oturumun geri kalanı boyunca hiç yapılmamış** olur: `_isCalibrated` false
-    kaldığı için her karede koşması gereken ölçek eşleme (`Align`) devreye girmez ve karakterin
-    oranları oyuncununkine sabitlenmez. Belirtisi ağ ya da izleme arızasına hiç benzemez —
-    uzak avatar oyuncunun boyunda değildir ve bunu yalnız KARŞI taraf görür. Kural:
-    böyle bir çağrı **koşul sağlanana dek her karede yeniden denenir**, süre dolduğunda bir kez
-    denenip bırakılmaz. Aynı okuma testi kalibrasyondan bağımsız da geçerlidir: bir SDK çağrısı
-    sessizce no-op olabiliyorsa, onu tetikleyen zamanlayıcı tek başına yeterli koşul değildir.
-    ⚠️ Kalibrasyon çalıştıktan sonra bile gövde oyuncunun boyunda olmayabilir: ölçek
-    `SkeletonRetargeter.ScaleRange` ile kelepçelenir (varsayılan 0.8–1.2) ve **sınıra dayanmış bir
-    ölçek gözle yanlış oranlardan ayırt edilemez** — bu yüzden uygulanan ölçek tahmin edilmez,
-    kalibrasyondan sonra bir kez raporlanır (`LocalBodyAvatar`). Değer sınırdaysa çözüm aralığı
-    genişletmektir, prefabda gövdeyi elle kaydırmak değil.
+91. **Gövde ORANINI değiştirmek ağ formatını bozar; BOYU taşımanın yolu ayrı bir alandır.**
+    `CharacterRetargeter.Calibrate()` gönderenin gövde oranlarını o andaki poza sabitler — ama
+    iskelet blob'u `SerializationCompressionType.High` ile **eklem uzunlukları** üzerinden
+    sıkışıyor, yani alıcının hedef iskeleti artık gönderenin kodladığı uzunluklarla uyuşmaz ve uzak
+    avatar rastgele **bozuk duruşlara** girer. Teşhisi zorlaştıran şey, arızanın yalnız KARŞI
+    tarafta görünmesidir: ölçen oyuncunun ekranında hiçbir belirti yoktur (yerel gövde zaten
+    çizilmiyor). Bu yüzden o çağrı bu projede **hiç kullanılmaz**; boy farkı tek bir üniform
+    çarpanla (`bodyScale`, §10.8) taşınır ve **yalnız alıcı tarafta**, karakter kökünün ölçeğine
+    uygulanır — blob'a hiç dokunulmaz. Genel kural: **bir "yerel görsel ayar", serileştirilen
+    yapının kendisini değiştiriyorsa yerel değildir.**
+    ⚠️ Aynı ölçeğin gönderen tarafta da uygulanması ayrı bir tuzaktır: ölçüm referansı karakterin
+    kendi göz hizası olduğu için, ölçeklenmiş bir gövdeden alınan ikinci ölçüm çarpanı `1`'e
+    yaklaştırır ve düğme ikinci basışta sessizce bozulur. Ölçüm referansı **her zaman ölçek-1
+    hâlinde** kalmalıdır.
 
 92. **Movement SDK'nın ağa gönderdiği iskelet, kemiklerin CANLI Unity transformlarından okunur —
     `localScale` dahil.** `NetworkCharacterHandler` serileştirmeyi `GetCurrentBodyPose` ile alıyor,
@@ -2559,6 +2573,31 @@ konsoluna tek satır sebep yazar.
     ⚠️ **`GhostPoseDriver` bu tuzağa DÜŞMÜŞ durumdadır ve henüz düzeltilmemiştir** — hayalet gövde
     prefabda hiç bağlı olmadığı için (`ghostRoot` boş) bugüne kadar hiç koşmadı; `Hayalet Gövdesini
     Kur` çalıştırıldığı gün hayalet aynı şekilde kayacaktır.
+
+119. **Kalibrasyonun ölçtüğü zemin ile gövde izlemenin varsaydığı zemin AYRI iki düzlemdir; aradaki
+    fark doğrudan "ayaklar zeminin altında" olarak görünür.** `AlignRig` dünyayı
+    `rise = VirtualFloorY − physicalB.y` kadar dikey kaydırır ve izlenen her şey bu kaydırmayı
+    birlikte yer (`trackingSpace.localToWorldMatrix`). Ama gövde iskeletinin **kökü gözlüğün kendi
+    zemin tahminine** (tracking `y ≈ 0`) çakılıdır — kafa ve eller doğrudan izlendiği için doğru
+    yerde kalır, ayaklar kalmaz. Sonuç tek satır: **avatarlar tam `physicalB.y` kadar gömülür**,
+    yani log'a basılan `floor R m` değerinin mutlak değeri kadar (`R` pozitifse aynı miktarda
+    havada dururlar). ⚠️ **Sezgi terstir:** kumandayı zeminden yukarıda tutmak yakalanan noktayı
+    yükseltir, dünyayı daha da aşağı indirir ve gömülmeyi ARTIRIR.
+    ⚠️ **Ofset kumandanın YEREL ekseninde uygulanmaz, dünya -Y'sinde uygulanır.** Yerel eksende
+    (`TransformPoint`) ölçüm kumandanın tutuş açısına bağlanır: eğik tutulan bir kumandada nokta
+    hem yatayda kayar hem dikeyde eksik düşer, üstelik iki yakalama farklı açılarda yapıldığında
+    aynı zemin iki farklı yükseklikte ölçülür ve yukarıdaki kapalı döngü ayarı anlamsızlaşır.
+    Oyuncudan kumandayı dik tutmasını istemek bir kurulum talimatı olarak yazılabilir ama ölçüm
+    ona BAĞLI OLMAMALIDIR.
+    ⚠️ `floorMismatch` bu hatayı yakalayamaz: o kontrol iki ölçümün **birbirine** uyumuna bakar,
+    gerçek zemine değil — iki noktada da aynı biçimde 10 cm yukarıdan yakalanan bir ölçü çifti
+    kontrolden temiz geçer. 3–10 cm aralığı ayrıca yalnız konsola yazılır, haptik karşılığı yoktur.
+    Telafi tek yerdedir (`floorProbeDropMeters`, `VA_CalibrationManager` prefabında) ve **kapalı
+    döngü** ayarlanır: `y_yeni = y_eski + R`. Bu yüzden alan bir donanım sabiti DEĞİLDİR; guardian
+    kurulmadığı için gözlüğün zemin tahmini oturumdan oturuma kayabilir ve tek bir sabit ancak
+    tahmin kararlıysa yeter. Sayı kumandanın fiziksel pivot→uç mesafesinden belirgin biçimde
+    büyükse (Touch Plus'ta o mesafe ~10 cm mertebesindedir) fazlası kumanda geometrisi değil
+    **zemin tahmini sapmasıdır** — okuması budur.
 
 123. **Bir durumu SIFIRLAYAN komut, o durumun telde görünen değerine bakarak kısa devre edilmez.**
     Kalibrasyon sıfırlama zincirinin üç halkası da (admin satırı · sunucu · istemci) bunu ayrı ayrı
