@@ -366,6 +366,12 @@ public sealed class PlayerRegistry : IDisposable
         return affected;
     }
 
+    // ⚠️ Toplu sıfırlama (clear_calibration playerId:0) burada DEĞİL LobbyService'tedir ve buraya
+    // geri taşınmaz: sıfırlamanın asıl işi bayrağı düşürmek değil komutu her başlığa İLETMEKtir
+    // (§10.6) ve registry soket görmez. "Zaten kalibresiz olanı atla" kısayolu da tam burada
+    // doğuyordu — yarım kalmış elle kalibrasyondaki oyuncunun bayrağı zaten `false`'tur, yani
+    // atlanan tek grup komuta en çok ihtiyacı olan gruptu.
+
     /// <summary>0x00 UdpHello doğrulaması: playerId↔udpToken eşleşirse endpoint kaydedilir (§6.1).
     /// Pozlar yalnız kayıtlı endpoint'ten kabul edilir (StateHost 0x01 alımı).</summary>
     public bool TryRegisterUdpEndpoint(byte playerId, uint udpToken, IPEndPoint endpoint)

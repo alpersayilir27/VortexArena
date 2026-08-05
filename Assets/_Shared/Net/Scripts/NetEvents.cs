@@ -27,6 +27,15 @@ namespace VortexArena.Net
         public static event Action<IdentifyMsg> OnIdentify;
         public static event Action<KickedMsg> OnKicked;
 
+        /// <summary>Operatör bu başlığın kalibrasyonunu sıfırladı (§10.6) — yalnız player'a gelir.
+        /// <c>CalibrationState</c> dinler ve <c>ArenaCalibrator</c>'ı geçersiz kılar.
+        /// <para>Mesajın sunucu → istemci yönünde alanı yoktur, bu yüzden olay da parametresizdir:
+        /// hedef zaten bu bağlantıdır (<c>identify</c> ile aynı desen).</para>
+        /// <para>⚠️ <b>Roster'daki <c>calibrated</c> alanının yerine geçmez, onu tamamlar:</b> alan
+        /// durumu taşır, bu olay komutu. Yarım kalmış elle kalibrasyonda alan zaten <c>false</c>
+        /// olduğu için sıfırlama yalnız bu olaydan duyulur (§5.3).</para></summary>
+        public static event Action OnClearCalibration;
+
         /// <summary>Uzak bir oyuncunun atış/atma olayı (UDP 0x04 EventBatch, §6.5) — v4'te WS
         /// <c>shot_fired</c>'ın yerini aldı. <c>ArenaClient</c> DEĞİL <c>UdpStateChannel</c>
         /// yayınlar, ama diğerleri gibi ANA thread'de. Kendi olaylarımız kanalda süzülür.</summary>
@@ -68,6 +77,7 @@ namespace VortexArena.Net
         internal static void RaiseRemoteFireEvent(in RemoteFireEvent evt) { OnRemoteFireEvent?.Invoke(evt); }
         internal static void RaiseIdentify(IdentifyMsg msg) { OnIdentify?.Invoke(msg); }
         internal static void RaiseKicked(KickedMsg msg) { OnKicked?.Invoke(msg); }
+        internal static void RaiseClearCalibration() { OnClearCalibration?.Invoke(); }
         internal static void RaiseAdminState(AdminStateMsg msg) { OnAdminState?.Invoke(msg); }
         internal static void RaiseSelectionState(SelectionStateMsg msg) { OnSelectionState?.Invoke(msg); }
         internal static void RaiseRulesUpdate(RulesUpdateMsg msg) { OnRulesUpdate?.Invoke(msg); }

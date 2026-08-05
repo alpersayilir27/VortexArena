@@ -268,16 +268,19 @@ namespace VortexArena.App.Admin
 
         /// <summary>
         /// Kalibrasyonu sıfırlar — iki adımlı, "AT" ile aynı gerekçe: oyuncuyu savaş dışı bırakan
-        /// bir eylem tek yanlış tıklamayla olmamalı. <b>Zaten kalibresizse hiçbir şey yapmaz</b>
-        /// (düğme o hâlde salt göstergedir; geri açmayı yalnız başlık yapabilir, §10.6).
+        /// bir eylem tek yanlış tıklamayla olmamalı.
+        /// <para>
+        /// ⚠️ <b>Satır kalibresiz görünürken de komut gönderilir</b> ve bu kapı geri konmaz: kırmızı
+        /// satır tek bir durum değil İKİ durum gösterir — hiç kalibre olmamış oyuncu ve elle
+        /// kalibrasyonun ortasında kalmış oyuncu (A'sını almış, B'sini almamış). İkincisinin telde
+        /// izi yoktur (<c>calibrated</c> ikisinde de <c>false</c>), yani arayüz "zaten kalibresiz"
+        /// diye eleyince operatör tam da sıfırlaması gereken oyuncuya ulaşamaz. Komut her iki
+        /// durumu da aynı yere götürür: başlık yarım sekans dahil her şeyi siler (§10.6).
+        /// </para>
+        /// <para>Yön yine tek taraflıdır — kalibrasyonu geri açmayı yalnız başlık yapabilir.</para>
         /// </summary>
         private void PressCalibration()
         {
-            if (!_calibrated)
-            {
-                return;
-            }
-
             if (_calibArmedAt < 0f)
             {
                 _calibArmedAt = Time.unscaledTime;

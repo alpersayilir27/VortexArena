@@ -161,6 +161,7 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 - **`kick`** `{ "type":"kick", "playerId":5 }` — hedef bağlantı kapatılır ve **o başlıkta uygulama kapanır** (kapanış dizisi §5.4).
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
 - **`clear_calibration`** `{ "type":"clear_calibration", "playerId":5 }` — o oyuncunun kalibrasyonunu **sıfırlar** (§10.6). **`playerId:0` = TÜM oyuncular** (toplu sıfırlama). Admin kalibrasyonu yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez — hizalamanın gerçekten oturduğunu yalnız başlık bilir (§10.6).
+  ⚠️ **Sunucu komutu hedefe KOŞULSUZ iletir** (`identify`/`measure_body_scale` ile aynı çift yönlü desen, §5.3): roster'daki `calibrated` zaten `false` olsa bile hedef başlığa alansız bir `clear_calibration` gider. Sebep, sıfırlanacak her şeyin roster'da görünmemesidir — **yarım kalmış elle kalibrasyon** (A alındı, B alınmadı) yalnız başlıkta yaşar ve telde hiçbir izi yoktur. Sunucu "değer zaten `false`, değişen bir şey yok" diye erken dönseydi komut tam da düzeltmek için var olduğu durumda hiçbir iş yapmazdı (§10.6).
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
 - **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }` — bir sonraki maçın **ortak** mod/harita/süre/limit/geri sayım seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim maç bitiminde sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
   ⚠️ **`sceneName` yalnız operatör harita/mod imlecini gerçekten oynattığında doldurulur** (süre/limit dokunuşunda boş gider): dolu harita alanı sahnelemeyi tetikler (§10.7), yani süre değiştirmek herkesi bir arenaya taşırdı.
@@ -232,6 +233,11 @@ skoru `match_state.scoreRed`/`scoreBlue`'da kalır — §10.5). Bireysel skorun 
 `calibration_changed` mesajı YOKTUR:** durumun değiştiği an roster'ın zaten tazelendiği andır
 (hem `set_calibration` hem `clear_calibration` registry'yi değiştirir → `lobby_state` yayınlanır).
 Admin'de her ikisi de `false`/`""` kalır — admin kalibre olmaz, arayüzde "kalibresiz" sayılmaz.
+⚠️ **Roster durumu taşır, sıfırlama KOMUTUNU taşımaz:** başlığı sıfırlayan şey bu alanın `false`'a
+düşmesi değil, hedefe iletilen `clear_calibration`'dır (§5.2). Roster'a bağlanamamasının sebebi
+şudur: yarım kalmış bir elle kalibrasyonda alan **zaten** `false`'tur, yani sıfırlamanın burada
+görünür bir deltası yoktur — dinleyen istemci hiçbir şey olmadığını sanır.
+
 
 **`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "rules":{ … } }`
 → istemci sahneyi yükler, `status`'ta yeni sahne görünür. Sahne yüklenince istemci `set_ready` (yükleme tamam anlamında) gönderir; herkes hazır olunca sunucu `countdown` başlatır. Bu süre boyunca faz `paused`'dur (`phaseReason` sırayla `loading` → `countdown`); **`load_match`'in gelmesi maçın başladığı anlamına GELMEZ** — maç `phase:"playing"` ile başlar.
@@ -259,6 +265,11 @@ Kazanan **iki kanaldan biriyle** ifade edilir (`rules.scoring`, §10.5): takım 
 Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken harita seçtiğinde `sceneName` o arenadır. İstemci için ikisi de aynı şeydir — *"lobideyiz, şu sahneyi yükle"* — bu yüzden ayrı bir mesaj tipi YOKTUR. `modeId` her iki durumda da `"lobby"` kalır: sahnenin arena olması fazı değiştirmez.
 **`ping`** `{ "type":"ping" }` — istemci `status` ile yanıtlar (ayrı pong yok).
 **`identify`** `{ "type":"identify" }` — istemci büyük kimlik overlay'i gösterir (playerId + ad).
+**`clear_calibration`** `{ "type":"clear_calibration" }` — istemci hizalamayı **ve yarım kalmış
+elle kalibrasyon sekansını** siler, kayıtlı `OVRSpatialAnchor`'ı yok eder ve elle kalibrasyon
+kapısını yeniden açar (§10.6). Yalnız player'a gider; alan taşımaz — hedef zaten o bağlantıdır.
+⚠️ **Rig TAŞINMAZ:** free-roam'da oyuncu fiziksel olarak neredeyse orada kalır, yalnız hizalama
+geçersiz sayılır.
 **`kicked`** `{ "type":"kicked", "reason":"" }` — istemci bağlantıyı kapatır ve **oyuncu başlığında uygulama kapanır**; kapanış dizisi ve gerekçeleri §5.4'te.
 
 **`admin_state`** — **yalnız `role=admin` bağlantılara**; adminler arası ortak durumun tek doğruluk kaynağı:
@@ -1007,6 +1018,29 @@ kalibre ettirebilmesi gerekir.
 **Admin neden "kalibre oldu" diyemez:** hizalamanın gerçekten oturduğunu yalnız başlık bilir.
 Admin elle işaretleyebilseydi, sunucunun hizalı sandığı ama fiilen kaymış bir oyuncuya ateş ve
 hasar açılırdı — bu sistemin önlemek için var olduğu durumun ta kendisi.
+
+⚠️ **Sıfırlama KOŞULSUZDUR: oyuncunun hangi aşamada olduğuna bakılmaz.** `clear_calibration`
+sunucudaki boole'yi `false` yapmakla kalmaz, hedef başlığa **komut olarak** iletilir (§5.2/§5.3) ve
+başlık üç şeyi birden siler: hizalamayı, kayıtlı `OVRSpatialAnchor`'ı ve **elle kalibrasyon
+sekansının ara durumunu** (alınmış A noktası, beklenen B, çift basış sayacı). Oyuncu hiçbir ara
+aşamada bırakılmaz; sekansa baştan başlar.
+
+Bunu üç yerde birden **koşulsuz** tutmak zorunludur, çünkü *yarım kalmış kalibrasyon* telde
+görünmez — A alınmış ama B alınmamış bir başlık henüz `set_calibration{true}` göndermemiştir, yani
+roster'da `calibrated:false` yazar:
+
+1. **Arayüz** komutu göndermeyi "satır kalibresiz görünüyor" diye atlamamalıdır — operatörün
+   gördüğü kırmızı satır iki farklı durumu birden gösterir (hiç başlamamış / yarıda kalmış) ve
+   komut ikisini de aynı yere götürmelidir.
+2. **Sunucu** "değer zaten `false`, değişen bir şey yok" diye erken dönmemelidir. Yalnız `lobby_state`
+   yayını değişime bağlı kalır (§5.3 guard'ı: gereksiz roster yayınını önler); komutun **iletilmesi**
+   ona bağlanamaz.
+3. **İstemci** komutu "yerelde hizalama yoktu" diye yutmamalıdır — silinecek şey tam da hizalama
+   olmayan durumda vardır.
+
+Üçünden birini duruma bağlamak kuralı tam da düzeltilmesi gereken durumda işlevsiz bırakır:
+operatör basar, hiçbir şey olmaz, oyuncunun yarım sekansı yaşamaya devam eder ve sonraki tek bir
+tuş basışı **eski A noktasıyla** kalibrasyonu tamamlayabilir.
 
 **Kalibresiz oyuncunun durumu:**
 

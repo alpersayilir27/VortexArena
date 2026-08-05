@@ -240,16 +240,46 @@ public sealed class LobbyService
         Console.WriteLine($"[Lobby] set_calibration: {state.Name} {what}.");
     }
 
-    /// <summary>clear_calibration: admin bir oyuncunun (playerId 0 = HERKES) kalibrasyonunu
-    /// sıfırlar (§5.2). Admin yalnız SIFIRLAYABİLİR — "kalibre oldu" işaretini yalnız başlık
-    /// koyar (§10.6), çünkü hizalamanın oturduğunu yalnız o bilir.</summary>
+    /// <summary>
+    /// clear_calibration: admin bir oyuncunun (playerId 0 = HERKES) kalibrasyonunu sıfırlar (§5.2).
+    /// Admin yalnız SIFIRLAYABİLİR — "kalibre oldu" işaretini yalnız başlık koyar (§10.6), çünkü
+    /// hizalamanın oturduğunu yalnız o bilir.
+    /// <para>
+    /// İki iş birden yapılır: (1) roster'daki <c>calibrated</c> düşürülür, (2) hedef başlığa
+    /// <b>alansız</b> bir <c>clear_calibration</c> iletilir (<c>identify</c> ile aynı çift yönlü
+    /// desen). İkincisi olmadan sıfırlama eksik kalır — hizalamayı, kayıtlı anchor'ı ve yarım kalmış
+    /// elle kalibrasyon sekansını silen taraf başlığın kendisidir.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>İletim oyuncunun durumuna BAĞLANMAZ.</b> <see cref="PlayerRegistry.SetCalibration"/>
+    /// dönüşü bir kapı değildir: <c>false</c> yalnız "roster'da değişen bir şey olmadı" demektir
+    /// (gereksiz <c>lobby_state</c> yayınını önleyen guard, §5.3). Sıfırlanacak şeylerin bir kısmı
+    /// roster'da hiç görünmez — <b>yarım kalmış elle kalibrasyon</b> (A alındı, B alınmadı) tam da
+    /// <c>calibrated</c> hâlâ <c>false</c>'ken vardır. Dönüşe bakıp erken çıkmak, komutu var olma
+    /// sebebi olan durumda işlevsiz bırakırdı (§10.6).
+    /// </para>
+    /// </summary>
     public async Task HandleClearCalibrationAsync(ClientConnection connection, ClearCalibrationMsg msg)
     {
+        // Sunucu → istemci yönünde alan taşınmaz: hedef zaten o bağlantıdır.
+        var payload = JsonUtil.Serialize(new ClearCalibrationMsg());
+
         if (msg.playerId == 0)
         {
-            var affected = _registry.ClearAllCalibration();
-            Console.WriteLine($"[Lobby] clear_calibration: TÜM oyuncular ({affected}) — {connection.State?.Name}.");
-            await BroadcastAdminStateAsync(Notice(connection, $"tüm kalibrasyonlar sıfırlandı ({affected} oyuncu)"));
+            var sent = 0;
+            foreach (var state in _registry.Snapshot())
+            {
+                if (state.Role != "player") continue;
+                // Kalibresiz olan ATLANMAZ: bayrağı zaten `false` olan oyuncu yarım kalmış bir
+                // sekansın ortasında olabilir ve toplu sıfırlamanın ona da ulaşması gerekir.
+                _registry.SetCalibration(state.PlayerId, false, null);
+                if (state.Socket == null) continue;
+                await SendSafeAsync(state.Socket, payload, state.Name);
+                sent++;
+            }
+
+            Console.WriteLine($"[Lobby] clear_calibration: TÜM oyuncular ({sent} başlığa iletildi) — {connection.State?.Name}.");
+            await BroadcastAdminStateAsync(Notice(connection, $"tüm kalibrasyonlar sıfırlandı ({sent} oyuncu)"));
             return;
         }
 
@@ -263,10 +293,14 @@ public sealed class LobbyService
             Console.WriteLine($"[Lobby] clear_calibration: {target.Name} admin — kalibrasyon yok, yok sayıldı.");
             return;
         }
-        // false = zaten kalibresizdi (SetCalibration değişmediyse yayın yapmaz) → sessizce çık:
-        // operatöre "sıfırlandı" duyurusu göndermek olmamış bir şeyi olmuş göstermek olurdu.
-        if (!_registry.SetCalibration(target.PlayerId, false, null)) return;
-        Console.WriteLine($"[Lobby] clear_calibration: {target.Name} (playerId {target.PlayerId}) — {connection.State?.Name}.");
+
+        _registry.SetCalibration(target.PlayerId, false, null);
+        if (target.Socket != null)
+        {
+            await SendSafeAsync(target.Socket, payload, target.Name);
+        }
+        var reach = target.Socket != null ? "iletildi" : "bağlantısı yok, yalnız kayıt sıfırlandı";
+        Console.WriteLine($"[Lobby] clear_calibration: {target.Name} (playerId {target.PlayerId}) — {reach}, {connection.State?.Name}.");
         await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kalibrasyonu sıfırlandı"));
     }
 

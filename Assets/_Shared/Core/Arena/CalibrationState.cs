@@ -15,10 +15,16 @@ namespace VortexArena.Core.Arena
     /// </para>
     /// <para>
     /// İki yön: (1) <see cref="ArenaCalibrator.Calibrated"/> → <c>set_calibration</c> ile sunucuya
-    /// "hizalandım" denir; (2) sunucu <c>calibrated:false</c> derken yerelde hizalama duruyorsa
-    /// <see cref="ArenaCalibrator.Invalidate"/> çağrılır — operatör tik'i kapatıyorsa hizalama
-    /// fiilen bozuktur, kayıtlı anchor da silinmelidir (yoksa sonraki <c>load_match</c> bozuk
-    /// hizalamayı sessizce geri yükler).
+    /// "hizalandım" denir; (2) sunucu sıfırlayınca <see cref="ArenaCalibrator.Invalidate"/>
+    /// çağrılır — hizalama fiilen bozuktur, kayıtlı anchor da silinmelidir (yoksa sonraki
+    /// <c>load_match</c> bozuk hizalamayı sessizce geri yükler).
+    /// </para>
+    /// <para>
+    /// İkinci yönün <b>asıl kapısı</b> <c>clear_calibration</c> komutudur (§5.3) ve
+    /// <b>koşulsuzdur</b>: operatör hangi aşamadaki oyuncuya basarsa bassın, başlık yarım kalmış
+    /// sekans dahil her şeyi siler. Roster'daki <c>calibrated:false</c> ikinci savunma hattıdır —
+    /// tek başına yeterli değildir, çünkü yarım kalmış bir kalibrasyonda o alan <b>zaten</b>
+    /// <c>false</c>'tur ve sıfırlamanın orada görünür bir deltası yoktur (§10.6).
     /// </para>
     /// <para>
     /// ⚠️ <b>Hiç bağlanılmamışsa kapı AÇIKTIR</b> (<see cref="IsCalibrated"/> = true,
@@ -89,6 +95,7 @@ namespace VortexArena.Core.Arena
             ArenaCalibrator.Calibrated += HandleLocalCalibrated;
             NetEvents.OnConnected += HandleConnected;
             NetEvents.OnLobbyState += HandleLobbyState;
+            NetEvents.OnClearCalibration += HandleClearCalibration;
         }
 
         private void OnDestroy()
@@ -101,6 +108,7 @@ namespace VortexArena.Core.Arena
             ArenaCalibrator.Calibrated -= HandleLocalCalibrated;
             NetEvents.OnConnected -= HandleConnected;
             NetEvents.OnLobbyState -= HandleLobbyState;
+            NetEvents.OnClearCalibration -= HandleClearCalibration;
 
             Instance = null;
         }
@@ -146,6 +154,37 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
+        /// Operatör kalibrasyonu sıfırladı (§10.6). <b>Koşulsuzdur:</b> yerelde hizalama olup
+        /// olmadığına bakılmaz, çünkü silinecek şeyin bir kısmı hizalama DEĞİLDİR — yarım kalmış
+        /// elle kalibrasyon (A alındı, B bekleniyor) tam da <see cref="_localCalibrated"/> hâlâ
+        /// <c>false</c>'ken vardır. Kapıyı ona bağlamak, komutu var olma sebebi olan durumda
+        /// işlevsiz bırakırdı.
+        /// <para>
+        /// <see cref="_serverCalibrated"/> de burada düşürülür: sunucunun bir sonraki
+        /// <c>lobby_state</c>'i onu zaten <c>false</c> taşıyacak, ama elle kalibrasyon kapısının
+        /// (<see cref="ManualAllowed"/>) o yayını beklemesi için bir sebep yok — oyuncu sekansa
+        /// hemen başlayabilmeli.
+        /// </para>
+        /// <para>⚠️ Rig TAŞINMAZ — free-roam kuralı: oyuncu fiziksel olarak neredeyse orada kalır,
+        /// yalnız hizalama geçersiz sayılır.</para>
+        /// </summary>
+        private void HandleClearCalibration()
+        {
+            _localCalibrated = false;
+            _serverCalibrated = false;
+            _source = "";
+
+            ArenaCalibrator calibrator = FindFirstObjectByType<ArenaCalibrator>();
+            if (calibrator != null)
+            {
+                calibrator.Invalidate();
+            }
+
+            Debug.Log("[CalibrationState] Operatör kalibrasyonu sıfırladı — yeniden kalibre edin (A basılıyken B×2).");
+            Raise();
+        }
+
+        /// <summary>
         /// Roster'daki kendi satırımız kalibrasyon durumunun TEK doğruluk kaynağıdır (§5.3).
         /// <para>
         /// ⚠️ <b>Bağlantı koptuğunda durum SIFIRLANMAZ</b> (bu yüzden bir <c>OnDisconnected</c>
@@ -178,10 +217,13 @@ namespace VortexArena.Core.Arena
 
         private void ApplyServerState(bool calibrated, string source)
         {
-            // Sunucu sıfırladı ama yerelde hizalama duruyor → operatör tik'i kapatmış demektir;
-            // hizalama fiilen bozuktur, işaretçileri gizle ve KAYITLI ANCHOR'I SİL. Anchor'ı
-            // bırakmak, sonraki load_match'te bozuk hizalamanın geri yüklenmesi olurdu (§10.4).
-            // ⚠️ Rig TAŞINMAZ — free-roam kuralı burada da geçerli.
+            // Sunucu sıfırladı ama yerelde hizalama duruyor → hizalama fiilen bozuktur,
+            // işaretçileri gizle ve KAYITLI ANCHOR'I SİL. Anchor'ı bırakmak, sonraki load_match'te
+            // bozuk hizalamanın geri yüklenmesi olurdu (§10.4). ⚠️ Rig TAŞINMAZ — free-roam kuralı.
+            //
+            // İKİNCİ savunma hattıdır: operatörün sıfırlaması zaten HandleClearCalibration'dan
+            // geçti (§5.3, koşulsuz). Burası roster'ın başka bir yoldan `false` taşıdığı durumları
+            // yakalar — hello'nun sıfırlaması ya da komutu iletmeyen eski bir sunucu.
             if (!calibrated && _localCalibrated)
             {
                 _localCalibrated = false;
