@@ -152,6 +152,23 @@ public sealed class PlayerState
     /// <see cref="LastPoseStamp"/> (monotonik) üzerinden hesaplanır.</summary>
     public DateTime LastPoseAt { get; set; }
 
+    /// <summary>
+    /// §10.9: gönderen kendi gövdesini bir <b>iç engelin içinde</b> ölçtü
+    /// (<c>gripFlags</c> bit5 = <see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/>).
+    /// <para>⚠️ <b>Bu bir ÖLÇÜMDÜR, bir ceza değil.</b> Cezayı (saniyelik can eritme)
+    /// <c>MatchDirector</c> kendi tikinde ve kendi saatiyle uygular — istemci bu bitle kendine
+    /// hasar yazdıramaz, yalnız cezanın başlamasını bildirir (<c>hit_report</c> ile aynı model).</para>
+    /// <para>⚠️ <b>Tek başına yeterli DEĞİL:</b> okuyan taraf <see cref="LastPoseAt"/> ile
+    /// tazeliğini de sorar (<see cref="ArenaProtocol.OBSTACLE_FLAG_STALE_MS"/>). Ayrı bir zaman
+    /// damgası açılmadı çünkü bu alanın tazeliği pozun tazeliğidir — bayrak her poz paketinde
+    /// yeniden geliyor.</para>
+    /// <para>Yazarı UDP recv thread'i (PoseGate altında), okuyucusu MatchDirector (kendi _gate'i
+    /// altında, PoseGate ALMADAN) — <see cref="Alive"/>/<see cref="Calibrated"/> ile birebir aynı
+    /// desen: bool okuması atomiktir, iki kilidi birbirine bağlamak yalnız kilitlenme riski
+    /// üretirdi.</para>
+    /// </summary>
+    public bool InObstacle { get; set; }
+
     // ---- İskelet kanalı (0x07, §6.9) ----
     // ⚠️ PoseGate ALTINDA okunur/yazılır — poz ile aynı kilit, çünkü ikisi de aynı iki thread
     // arasında paylaşılıyor (recv yazar, 20 Hz yayın okur) ve ikinci bir kilit yalnız kilitlenme

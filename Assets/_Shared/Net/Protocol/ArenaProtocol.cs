@@ -4,6 +4,13 @@ namespace VortexArena.Protocol
     public static class ArenaProtocol
     {
         /// <summary>
+        /// v11: <b>engel ihlali</b> — <c>0x01</c>/<c>0x02</c> bayrak baytında bit5
+        /// (<see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/>, §6.3) + sunucu tarafında saniyelik can
+        /// eritme (<see cref="OBSTACLE_DAMAGE_PER_SECOND"/>, §10.9).
+        /// <para>⚠️ Değişiklik tümüyle <b>eklemelidir</b>: bayt düzeni değişmedi (bit rezervden
+        /// alındı). Karışık sürümde eski istemci biti hiç göndermez (o oyuncu engelde ceza almaz)
+        /// ve gelen biti yok sayar (admin halkası yanıp sönmez) — kaybolan bir kural, bozuk bir
+        /// çizim değil.</para>
         /// v10: <b>kumanda durumu</b> — <c>0x01</c>/<c>0x02</c> bayrak baytında bit3/bit4
         /// (<see cref="SnapshotEntry.FLAG_HAND_L_STALE"/> /
         /// <see cref="SnapshotEntry.FLAG_HAND_R_STALE"/>, §6.3) + <c>status</c> ve
@@ -73,7 +80,7 @@ namespace VortexArena.Protocol
         /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
         /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
         /// </summary>
-        public const int PROTOCOL_VERSION = 8;
+        public const int PROTOCOL_VERSION = 11;
         public const string APP_ID = "VortexArena";
 
         /// <summary>
@@ -287,6 +294,33 @@ namespace VortexArena.Protocol
 
         /// <summary>Oyuncu tam canı; sunucu-otoriter (health_update bunu aşamaz).</summary>
         public const float PLAYER_MAX_HP = 100f;
+
+        /// <summary>
+        /// Engel ihlalinde saniyelik can kaybı (§10.9) — sunucu <b>kendi tikinde ve kendi
+        /// saatiyle</b> uygular.
+        /// <para>⚠️ <b>Ölüm süresi bir sabit DEĞİLDİR</b>, bunun <see cref="PLAYER_MAX_HP"/>'ye
+        /// oranıdır: 100 / 30 ≈ 3.3 sn (4. saniye içinde ölüm). Süreyi değiştirmek isteyen buradaki
+        /// hızı değiştirir; ikinci bir "süre" sabiti eklemek aynı sayının iki kaynağı olurdu.</para>
+        /// </summary>
+        public const float OBSTACLE_DAMAGE_PER_SECOND = 30f;
+
+        /// <summary>
+        /// <see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/> bu süredir (ms) tazelenmemişse bayrak
+        /// düşürülür ve ceza durur (§10.9).
+        /// <para>Poz kanalı <see cref="POSE_RATE_HZ"/> (50 ms) olduğu için altı paketlik kayba
+        /// dayanır. <b>Varlık sebebi:</b> bayrak durum taşır — susmuş ya da donmuş bir istemcinin
+        /// son paketi sonsuza kadar "duvardayım" demeye devam ederdi.</para>
+        /// </summary>
+        public const int OBSTACLE_FLAG_STALE_MS = 300;
+
+        /// <summary>
+        /// Engel ölümünün <c>kill_event.weaponId</c> etiketi (§10.9). O olayda
+        /// <c>killerId</c> <b>0</b>'dır (öldüren yok) — etiket yalnız kill feed'in "duvarda kaldı"
+        /// satırını normal bir öldürmeden ayırt etmesi içindir.
+        /// <para>⚠️ <c>weaponId</c> doğrulanmayan serbest bir etikettir (§10.3); bu sabit onu bir
+        /// kurala çevirmez, yalnız iki ucun aynı dizeyi yazmasını garanti eder.</para>
+        /// </summary>
+        public const string WEAPON_ID_OBSTACLE = "obstacle";
 
         /// <summary>Countdown fazının VARSAYILAN uzunluğu (saniye, tam sayı — countdown mesajı
         /// saniye sayar). Admin start_match.countdownSeconds ile o maça özel bir değer verebilir
