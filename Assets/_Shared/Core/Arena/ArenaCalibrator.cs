@@ -191,6 +191,13 @@ namespace VortexArena.Core.Arena
         private float firstBTapTime;
         private bool waitingForRelease;
         private bool manualCalibrationStarted;
+
+        /// <summary>Uçuşta olan kayıtlı-anchor geri yüklemesi iptal edildi mi
+        /// (<see cref="Invalidate"/>). <see cref="manualCalibrationStarted"/> ile aynı işi operatör
+        /// tarafı için yapar: geri yükleme birkaç saniyelik bir yeniden deneme penceresi sürüyor ve
+        /// o pencerede gelen sıfırlama yok sayılırsa deneme başarıya ulaşıp arenayı yeniden
+        /// hizalar — operatör sıfırladı sanırken oyuncu kalibre kalırdı (§10.6).</summary>
+        private bool restoreAborted;
         private bool trackingEventsHooked;
         private bool realignQueued;
         private Coroutine markerHideRoutine;
@@ -685,9 +692,21 @@ namespace VortexArena.Core.Arena
         /// yüklerdi (§10.4 geri yükleme yolu). ⚠️ <b>Rig TAŞINMAZ</b> — free-roam kuralı gereği
         /// oyuncu fiziksel olarak neredeyse orada kalır, yalnız hizalama geçersiz sayılır.
         /// </para>
+        /// <para>
+        /// ⚠️ <b>Oyuncunun hangi aşamada olduğuna bakılmaz.</b> Tamamlanmış hizalamanın yanında üç
+        /// ara durum daha silinir, çünkü sıfırlama oyuncuyu yarım yolda bırakmamalıdır (§10.6):
+        /// (1) yakalanmış A noktası ve bekleyen çift basış (<see cref="ResetCalibration"/>),
+        /// (2) o an basılı tutulan jestin kuyruğu (<see cref="waitingForRelease"/> — sıfırlama
+        /// anında A basılıysa oyuncu onu bırakıp baştan başlar; basılı değilse bayrak bir sonraki
+        /// karede kendiliğinden düşer), (3) uçuşta olan kayıtlı anchor geri yüklemesi
+        /// (<see cref="restoreAborted"/> — birkaç saniyelik yeniden deneme penceresi sürerken
+        /// gelen sıfırlama, yoksa deneme başarıya ulaşıp arenayı yeniden hizalardı).
+        /// </para>
         /// </summary>
         public void Invalidate()
         {
+            restoreAborted = true;
+            waitingForRelease = true;
             ResetCalibration();
         }
 
@@ -723,9 +742,30 @@ namespace VortexArena.Core.Arena
             if (anchorB != null) anchorB.SetActive(visible);
         }
 
+        /// <summary>
+        /// Kalibrasyonu sıfırlar: tamamlanmış hizalama **ve yarım kalmış sekans** birlikte gider.
+        /// <para>
+        /// ⚠️ <b>Ara durumu temizlemek şart:</b> <see cref="capturedCount"/> tek başına
+        /// sıfırlansaydı, A'sı alınmış bir oyuncuda <see cref="capturedA"/> ve bekleyen çift basış
+        /// sayacı yaşamaya devam ederdi — operatör sıfırladıktan sonraki tek bir B basışı
+        /// <b>sıfırlamadan önceki</b> A noktasıyla kalibrasyonu tamamlayabilirdi. Sıfırlama
+        /// oyuncuyu hiçbir ara aşamada bırakmaz (§10.6).
+        /// </para>
+        /// <para>
+        /// ⚠️ <see cref="waitingForRelease"/> buradan sürülmez, <see cref="Invalidate"/>'ten
+        /// sürülür: bu metodun ikinci çağıranı <see cref="CapturePoint"/>'tir (tamamlanmış
+        /// kalibrasyonun üstüne yeni jest) ve orada A <b>basılı tutulmaya devam etmelidir</b> —
+        /// B noktası yalnız A basılıyken yakalanıyor. Kilit yalnız dışarıdan gelen, jesti ortasından
+        /// kesen sıfırlamaya aittir.
+        /// </para>
+        /// </summary>
         private void ResetCalibration()
         {
             capturedCount = 0;
+            capturedA = Vector3.zero;
+            pendingBTaps = 0;
+            firstBTapTime = 0f;
+            manualCalibrationStarted = false;
             if (markerHideRoutine != null)
             {
                 StopCoroutine(markerHideRoutine);
@@ -806,7 +846,9 @@ namespace VortexArena.Core.Arena
 
             for (int attempt = 1; attempt <= RestoreAttempts; attempt++)
             {
-                if (this == null || manualCalibrationStarted)
+                // Oyuncu kendi jestiyle öne geçtiyse ya da operatör sıfırladıysa geri yükleme
+                // düşer: kayıtlı anchor zaten silindi, onu geri getirmek sıfırlamayı geri almak olurdu.
+                if (this == null || manualCalibrationStarted || restoreAborted)
                     return;
 
                 if (await TryRestoreOnceAsync(uuid, attempt))
@@ -816,7 +858,7 @@ namespace VortexArena.Core.Arena
                     await Task.Delay(RestoreRetryDelayMs);
             }
 
-            if (this == null)
+            if (this == null || restoreAborted)
                 return;
 
             Debug.LogWarning(
@@ -852,7 +894,9 @@ namespace VortexArena.Core.Arena
                 if (this == null) return true;
 
                 // The user beat the restore to it; keep their manual calibration.
-                if (manualCalibrationStarted)
+                // ⚠️ Operatörün sıfırlaması da burada durdurulur: son await'ten sonra gelmiş
+                // olabilir ve hizalamayı uygulamak sıfırlamayı sessizce geri alırdı (§10.6).
+                if (manualCalibrationStarted || restoreAborted)
                     return true;
 
                 if (!unboundAnchor.TryGetPose(out Pose pose))

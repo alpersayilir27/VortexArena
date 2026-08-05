@@ -521,6 +521,17 @@ namespace VortexArena.Net
                         break;
                     }
 
+                    case MessageTypes.ClearCalibration:
+                    {
+                        // Operatör kalibrasyonu sıfırladı (§10.6). Sunucu yalnız player'a yollar,
+                        // alansız: hedef zaten bu bağlantı. ⚠️ Roster'daki `calibrated` alanına
+                        // BAKILMAZ — yarım kalmış bir kalibrasyonda o alan zaten `false`'tur, yani
+                        // sıfırlamanın orada görünür bir deltası yoktur (§5.3). Sahne/anchor
+                        // dokunduğu için ana thread.
+                        _mainThreadActions.Enqueue(NetEvents.RaiseClearCalibration);
+                        break;
+                    }
+
                     case MessageTypes.AdminState:
                     {
                         // Sunucu yalnız admin bağlantılarına yollar; player'a gelirse zaten dinleyen yok.

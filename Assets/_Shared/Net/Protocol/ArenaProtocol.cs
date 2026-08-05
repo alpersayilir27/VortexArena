@@ -4,6 +4,14 @@ namespace VortexArena.Protocol
     public static class ArenaProtocol
     {
         /// <summary>
+        /// v10 ayrıca <c>clear_calibration</c>'a <b>sunucu → istemci yönü</b> ekler (§5.2/§5.3):
+        /// sıfırlama artık roster'a yazılan bir boole değil, hedef başlığa <b>alansız</b> iletilen
+        /// bir komuttur. Gerekçe §10.6'dadır — yarım kalmış elle kalibrasyonun (A alındı, B
+        /// alınmadı) telde izi yoktur (<c>calibrated</c> zaten <c>false</c>'tur), yani roster
+        /// deltası sıfırlamayı taşıyamaz.
+        /// <para>⚠️ Bu yön de <b>eklemelidir</b>: tanımayan eski istemci mesajı yok sayar ve yarım
+        /// sekansı başlığında tutar. Karışık sürümde bozulan tek şey operatörün o oyuncuyu
+        /// sıfırlayamamasıdır — yine de APK turu tamamlanmalıdır.</para>
         /// v8: <b>üç değerli bağlantı durumu</b> — <c>PlayerInfo.online</c> (bool) KALDIRILDI,
         /// yerine <c>connection</c> (<see cref="CONNECTION_CONNECTED"/>/
         /// <see cref="CONNECTION_RECONNECTING"/>/<see cref="CONNECTION_LEFT"/>) +

@@ -186,7 +186,11 @@ namespace VortexArena.Protocol
 
     /// Admin bir oyuncunun kalibrasyonunu SIFIRLAR (§10.6). Admin yalnız sıfırlayabilir,
     /// "kalibre oldu" diye işaretleyemez — onu yalnız başlık bilir (SetCalibrationMsg).
-    /// <para><c>playerId == 0</c> = TÜM oyuncular (toplu sıfırlama).</para>
+    /// <para>Admin → sunucu yönünde <c>playerId</c> dolu (<c>0</c> = TÜM oyuncular), sunucu →
+    /// istemci yönünde alansız gider — <see cref="IdentifyMsg"/> ile aynı çift yönlü desen.</para>
+    /// <para>⚠️ Sunucu komutu hedefe <b>koşulsuz</b> iletir: sıfırlanacak şeylerin hepsi roster'da
+    /// görünmez — yarım kalmış elle kalibrasyon (A alındı, B alınmadı) yalnız başlıkta yaşar ve
+    /// orada <c>calibrated</c> zaten <c>false</c>'tur (§10.6).</para>
     [Serializable]
     public class ClearCalibrationMsg
     {
