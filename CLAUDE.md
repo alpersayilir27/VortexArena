@@ -363,6 +363,15 @@ taşıyan bileşen `DimensionAnchor`'dır (`AnchorKind`) ve kalibratör önce on
 yalnız maketi olmayan eski sahneler için vardır.
 Elle konan engeller için `ArenaObstacle` (`Core/Arena/`): muhafaza onu engel sayar —
 ⚠️ **collider değildir, fizik yapmaz** (free-roam'da çarpışma yoktur).
+**İç engelin (sütun, kasa, sandık, blok) collider'ı `Obstacle` layer'ına (10) konur** — sözleşme tek
+cümledir: *"bunun içinde olmak ihlaldir"* (oyuncu gömülünce sn'de 30 HP, `Docs/ArenaNet-Protokol.md`
+§10.9). ⚠️ **Bu layer'daki collider KONVEKS olmalı** (Box/Sphere/Capsule ya da `MeshCollider` +
+`Convex`): non-convex mesh'te nokta-içeride testi daima "evet" der ve sahnedeki herkesi öldürür —
+denetimi `… > Arena > Engel Hacimlerini Denetle` yapar. ⚠️ **Dış duvar, zemin ve tavan bu layer'a
+KONMAZ** (kalibrasyonu kaymış oyuncu durduk yere ölmesin; dış sınırı zaten `ArenaBoundary`
+uyarıyor). ⚠️ **İkinci bir "mantık hacmi" collider'ı EKLENMEZ** — atış ışını maskesiz olduğu için
+mermi ona çarpar ve objelerin önünde durur; tek doğruluk kaynağı objenin kendi collider'ıdır.
+Layer 11 (`Breakable`) ve 12 (`PlayerHitbox`) sonraki işlere **rezervedir**, başka amaçla açılmaz.
 ⚠️ **Arenanın duvarları environment sanatına aittir** ve fiziksel sınırla **çakışmalıdır**:
 muhafazanın yarı saydam duvar göstergesi kaldırıldı, yaklaşma uyarısı artık HMD'ye bağlı karartma
 quad'ından geliyor (`warnFadeAlpha`). Sanat duvarı alandan içeride/dışarıda durursa oyuncu yanlış
@@ -532,6 +541,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `… > Arena > Template Temellerini Yükle` | Yeni/boş sahneye altyapı prefab ÖRNEKLERİ (`VA_ArenaBoundary`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı `VA_ModeHud`/taban bölgeleri) + kalibratör/muhafaza alanlarının rig'e bağlanması + boyut dosyası bağlama. İdempotent. ⚠️ Kalibrasyon işaretçisi KOYMAZ — onlar maketle gelir |
 | `… > Arena > JSON'dan DimensionMesh Üret` | Mekanın boyut JSON'undan ölçü maketi (taban + kolonlar + kalibrasyon işaretçileri `anchor_a`/`anchor_b`). **Sahne köküne, dönüşsüz** kurar. İdempotent. ⚠️ Her arenada ZORUNLU adım: sahnenin kalibrasyon işaretçileri burada üretilir |
 | `… > Arena > DimensionMesh'i JSON'a Çevir` | Maketin köşeleri/kalibrasyon işaretçileri sahnede düzeltildi → aynı boyut dosyasının ÜSTÜNE yazar (hedefi maketin kendisi söyler). İşaretçi yoksa dosyadaki `calibration` KORUNUR |
+| `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → `Obstacle` layer'ındaki konveks olmayan collider'ları, trigger'ları ve collider'sız damgalı objeleri raporlar. ⚠️ Hiçbir şeyi düzeltmez; non-convex bir collider tespiti sessizce herkesi öldürdüğü için bu tarama sahne kaydedilmeden koşturulur |
 | `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
 | `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir) |
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |

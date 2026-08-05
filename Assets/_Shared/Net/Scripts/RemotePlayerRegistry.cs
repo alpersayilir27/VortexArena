@@ -462,6 +462,35 @@ namespace VortexArena.Net
         }
 
         /// <summary>
+        /// §10.9: oyuncu son snapshot'ta bir <b>iç engelin içinde</b> miydi
+        /// (<see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/>). Tek tüketicisi admin gözlemcidir —
+        /// ihlal eden oyuncunun kuş bakışı halkası kırmızı yanıp söner.
+        /// <para>Kaydı/örneği olmayan id için <c>false</c> döner. ⚠️ Varsayılan
+        /// <see cref="IsAlive"/>'ın TERSİ yönde ("bilinmiyorsa ihlal yok"): bilinmeyen bir durumu
+        /// ihlal saymak, ağ boşluğunda operatöre var olmayan bir olay gösterirdi.</para>
+        /// <para>⚠️ Bayrak <b>durumdur</b>: her snapshot'ta yeniden geliyor, yani oyuncu engelden
+        /// çıkınca ek bir mesaj olmadan kendiliğinden söner.</para>
+        /// </summary>
+        public bool IsInObstacle(int playerId)
+        {
+            lock (_gate)
+            {
+                if (!_entries.TryGetValue(playerId, out RemoteEntry entry) || entry.count == 0)
+                {
+                    return false;
+                }
+
+                int last = entry.nextIndex - 1;
+                if (last < 0)
+                {
+                    last += RING_SIZE;
+                }
+
+                return (entry.ring[last].flags & SnapshotEntry.FLAG_IN_OBSTACLE) != 0;
+            }
+        }
+
+        /// <summary>
         /// §6.6: oyuncunun <b>son bilinen</b> eşya durumu. Oyuncu yoksa false.
         /// <para>⚠️ <c>gripLinked</c> olmadan "aynı id iki slotta" tek başına çift elle tutmak
         /// demek DEĞİLDİR — çift tabanca meşru bir durumdur (§6.6 çözüm tablosu).

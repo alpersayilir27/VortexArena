@@ -187,6 +187,10 @@ public sealed class PlayerRegistry : IDisposable
             {
                 state.HasPose = false;
                 state.LastSeq = 0;
+                // §10.9: bayat ihlal bayrağı da yeni oturuma taşınmaz. Tazelik kapısı (LastPoseAt)
+                // bunu zaten kapatıyor; alan yine de temizlenir ki "yeniden bağlandı ama hâlâ
+                // duvarda görünüyor" gibi bir ara durum hiç doğmasın.
+                state.InObstacle = false;
             }
         }
 

@@ -306,6 +306,11 @@ public sealed class StateHost
             state.LastSeq = pose.seq;
             state.HasPose = true;
             state.LastPoseAt = DateTime.UtcNow;
+
+            // §10.9: engel ihlali bayrağı burada AYRI bir alana çıkarılır (LastPose'da da duruyor)
+            // çünkü okuyucusu MatchDirector'dır ve o PoseGate'i ALMAZ — 88 B'lik bir struct'ı
+            // kilitsiz okumak tearing demektir, tek bool okumak değildir.
+            state.InObstacle = (pose.gripFlags & SnapshotEntry.FLAG_IN_OBSTACLE) != 0;
         }
     }
 
