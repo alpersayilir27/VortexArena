@@ -3,7 +3,8 @@
     "rootNamespace": "VortexArena.Core.Editor",
     "references": [
         "VortexArena.Core",
-        "Unity.ProBuilder"
+        "Unity.ProBuilder",
+        "Oculus.Interaction"
     ],
     "includePlatforms": [
         "Editor"
