@@ -661,12 +661,83 @@ public sealed class MatchDirector
             }
         }
 
+        TickObstacleLocked(outbox, now, deltaSeconds);
+
         if (now >= _nextSecondAt)
         {
             _nextSecondAt = now.AddSeconds(1);
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         }
         return _mode;
+    }
+
+    /// <summary>
+    /// §10.9: iç engelin İÇİNDE olduğunu bildiren oyuncuların canını eritir
+    /// (<see cref="ArenaProtocol.OBSTACLE_DAMAGE_PER_SECOND"/> · saniye).
+    /// <para><b>Otorite bölünmesi <c>hit_report</c>'un aynısıdır:</b> ölçümü istemci yapar (gövdesi
+    /// engelin içinde mi), <b>sonucu sunucu yazar</b>. Sunucu ihlali DOĞRULAYAMAZ — arena
+    /// geometrisi burada yoktur ve getirilmez (ikinci doğruluk kaynağı olurdu). Yapabildiği ve
+    /// yaptığı şey <b>sonucu sınırlamaktır</b>: süreyi kendi saatiyle ölçer, bayat bayrağı düşürür,
+    /// faz/canlılık/kalibrasyon kapılarını kendisi uygular.</para>
+    /// <para>⚠️ <b>Kalibrasyon kapısı zorunlu</b> (§10.6): hizalaması kaymış başlıkta sanal engel
+    /// gerçeğinden sapar ve tespit yalancı pozitif üretir — oyuncu durduk yere ölürdü.</para>
+    /// <para>⚠️ <b>Ölünce bayrak SIFIRLANMAZ ve sıfırlanmamalı:</b> oyuncu hâlâ engelin içindedir
+    /// ve istemci bunu 20 Hz bildirmeye devam eder. Canlanınca ceza kaldığı yerden sürer — doğrusu
+    /// budur, "canlandım ve bir saniye bedava" değil. Bayrağı canlanmada temizlemek oyuncuya engelin
+    /// içinde kalıcı bir sığınak açardı.</para>
+    /// </summary>
+    private void TickObstacleLocked(List<Outgoing> outbox, DateTime now, float deltaSeconds)
+    {
+        var damage = ArenaProtocol.OBSTACLE_DAMAGE_PER_SECOND * deltaSeconds;
+        if (damage <= 0f) return;
+
+        foreach (var player in ConnectedPlayersLocked())
+        {
+            if (!player.Alive) continue;
+            if (!player.Calibrated) continue;
+            if (!player.InObstacle) continue;
+            // Bayat bayrak = susmuş/donmuş istemci. Bit durum taşıdığı için son paket sonsuza
+            // kadar "duvardayım" demeye devam ederdi (§10.9).
+            if ((now - player.LastPoseAt).TotalMilliseconds >= ArenaProtocol.OBSTACLE_FLAG_STALE_MS)
+                continue;
+
+            player.Hp = MathF.Max(0f, player.Hp - damage);
+            // attackerId = 0: çevresel hasar, saldırı değil (§10.9).
+            QueueHealthUpdateLocked(outbox, player, JsonUtil.Serialize(new HealthUpdateMsg
+            {
+                playerId = player.PlayerId,
+                hp = player.Hp,
+                attackerId = 0
+            }));
+
+            if (player.Hp > 0f) continue;
+
+            player.Alive = false;
+            player.DiedAt = now;
+            player.Deaths++;
+            _rosterRefreshFor = player; // deaths + alive değişti → lobby_state tazelenir (§5.3)
+
+            // ⚠️ killerId = 0 ve IGameMode.OnKill ÇAĞRILMAZ: öldüren yok, yani skor da yok.
+            // Takımdaş öldürmedeki kuralın aynısı (§10.2) — olay gerçekleşir, ödülü olmaz.
+            QueueBroadcastLocked(outbox, JsonUtil.Serialize(new KillEventMsg
+            {
+                killerId = 0,
+                victimId = player.PlayerId,
+                weaponId = ArenaProtocol.WEAPON_ID_OBSTACLE
+            }));
+
+            var connection = player.Socket;
+            if (connection != null)
+            {
+                outbox.Add(new Outgoing(connection, JsonUtil.Serialize(new RespawnMsg
+                {
+                    playerId = player.PlayerId,
+                    delaySeconds = _rules.RespawnDelay
+                }), player.Name));
+            }
+
+            Console.WriteLine($"[match] engel ölümü: {player.Name}");
+        }
     }
 
     private void TickEndLocked(List<Outgoing> outbox, DateTime now)

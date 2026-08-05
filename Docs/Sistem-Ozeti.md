@@ -1142,6 +1142,36 @@ yeni sahnedeki çatı `OnEnable`'da devralır → kuş bakışındayken arena de
 bile görünmez. Oyuncu tarafında etkisi YOKTUR — yalnız `AdminSpectator.RefreshRoof()` tetikler.
 **Yapımcıya verilecek tek parça teknik not: [`Cati-Gizleme.md`](Cati-Gizleme.md).**
 
+**`BodyViolationProbe`** (kendini önyükleyen kalıcı tekil; sahneye ve prefaba KONMAZ): yerel
+oyuncunun gövdesi bir **iç engelin içinde** mi diye 20 Hz ölçer ve sonucu `IsViolating`'ten
+yayınlar — cezayı sunucu uygular (`ArenaNet-Protokol.md` §10.9). Üç kuraldan biri yeterlidir:
+gövdenin **%30'u** içeride · **kafa tamamen** içeride · **silah tamamen** içeride. Ölçüm
+**ağırlıklı nokta örneklemesidir**: iskeletten ~23 nokta alınır, her biri antropometrik bir kütle
+oranı taşır (kafa 8.1 · leğen 14.2 · göğüs 21.6 · uyluk 2×10 …) ve içeride kalanların ağırlığı
+toplanır. ⚠️ **Nokta SAYISI sayılmaz:** iki el + bir ayak gövdenin %1.8'i, göğüs tek başına
+%22'sidir — "10 noktadan 3'ü" kuralı ikisini eşitler ve kuralı anlamsızlaştırır. Kafa merkezi
+kemikten değil **HMD'den** gelir (yedi noktalı küre kabuğu), böylece kafa ve silah kuralları body
+tracking hiç başlamasa da çalışır; oran kuralı o hâlde sessizce devre dışı kalır. Eşik girişte
+0.30, çıkışta 0.24 (histerezis) + 0.15 sn minimum süre — tek eşikte sınırda duran oyuncu saniyede
+onlarca kez girip çıkar, halka titrer ve tel bayrağı zıplar. Hedef geometri `Obstacle` layer'ından
+gelir; geniş faz tek bir `OverlapSphereNonAlloc`'tur ve **yakında engel yokken orada durur**.
+⚠️ **Gövdeye collider konarak yapılamazdı:** `Weapon`'ın atış ışını maskesiz ve proje ayarı
+trigger'ları da vuruyor — oyuncu kendi atışını kendi gövdesine yerdi; üstelik trigger "değdi mi"
+der, "ne kadarı içeride" demez. Sunumu da bu bileşen yapar: kırmızı karartma (uyarı bandı 0.15'ten
+itibaren hafif) + nabız titreşimi.
+
+**`ScreenFade`** (statik hakem): HMD karartma quad'ını isteyen **iki** sistem var (muhafaza ·
+engel ihlali) ama quad tektir. Kaynaklar alfalarını her karede bildirir, **en yüksek** olan çizilir;
+bildirmeyi bırakan kaynak 0.25 sn sonra kendiliğinden düşer (kalp atışı sözleşmesi — "kapat" demeyi
+unutmak mümkün değil). ⚠️ Karışım (alfa toplama) bilinçli olarak yok: iki yarı saydam katman üst
+üste binince sonucu hiçbir kaynak istememiş olurdu. Renderer'ın **sahibi** yine `ArenaBoundary`'dir
+(quad onun serialize alanı); hakem yalnız hangi değerin çizileceğini söyler.
+
+**`ArenaLayers`** (statik): `Obstacle` layer adının tek yazıldığı yer, maskeyi bir kez çözer ve
+layer tanımsızsa **bir kez hata basar**. Gerekçe: `LayerMask.NameToLayer` tanımsız adda `-1` döner,
+maske `0` olur ve sorgu sessizce hiçbir şey bulmaz — yanlış yazımın belirtisi "sistem hiç
+çalışmıyor" olurdu.
+
 ### Editör: `VortexArena.Core.Editor` (içerik araçları — yalnız Editor)
 
 Menü öğelerinin tam listesi ve "ne zaman çalıştırılır" tablosu `CLAUDE.md`'de; burada arena
@@ -1155,6 +1185,7 @@ geometrisini üreten araçlar + kavrama ayarı:
 | `DimensionMeshReader` | `DimensionMesh'i JSON'a Çevir`: maketi okuyup **kaynak dosyanın üstüne** yazar (hedef sorulmaz, maketin işaretçisinden gelir). Ayak izi çıkarımı: yatay yüzler (`\|normal.y\| > 0.9`) Y seviyesine göre gruplanır, **en alt** grup alınır (prizmada alt yüz kazanır), kenarlar XZ'ye izdüşürülüp kaynaştırılır, **yalnız bir kez geçen** kenar sınır sayılır, halka yürünür ve doğrusal ara köşeler ayıklanır. Noktalar dünya üstünden kök uzayına çevrilir — kolonu sürüklemek/döndürmek doğru yazılır. ⚠️ Kenarlar köşe **indeksiyle değil konumla** anahtarlanır: ProBuilder sert normaller için köşeleri yüz başına ayırıyor, indeksle bakan tespit tüm mesh'i sınır sanar. Kalibrasyon noktaları `DimensionAnchor` küplerinin transformundan okunur; ⚠️ küp yoksa dosyadaki `calibration` **KORUNUR** (sıfırlanmaz — eski bir maketi çevirmek mekanın zemin bandı ölçüsünü silerdi). Yazmadan önce çıktı geri ayrıştırılır; doğrulanamazsa dosyaya **dokunulmaz** |
 | `DimensionMeshBuildStripper` | Menü değil, **build kancası** (`IProcessSceneWithReport`): ölçü maketinin görsel dalını (`Plane` + `Columns`) build'e giden **geçici sahne kopyasından** siler — sahne dosyasına dokunmaz, kök ve `DimensionAnchor` küpleri kalır (kalibrasyon onlara bağlı). ⚠️ Gerekçe boyut değil **bağımlılık**: çokgenler `ProBuilderMesh` taşır ve o bileşen `Unity.ProBuilder`'ı runtime derlemesine sokardı; bu projede ProBuilder yalnız editör tarafıdır. Editör Play kipinde kanca koşmaz, orada görseli `ArenaDimensionMesh.Awake` `Renderer.enabled` ile gizler |
 | `TemplateBasicsLoader` | `Template Temellerini Yükle`: aktif sahneye altyapıyı **prefab örneği** olarak koyar (`VA_ArenaBoundary`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`; seçime bağlı `VA_ModeHud` · taban bölgeleri), `ArenaCalibrator`'ın sahneye bakan alanlarını bağlar, `ArenaBoundary`'nin rig'e bakan alanlarını (`head`/`fadeRenderer`/`warningText`) `VA_CameraRig` içinden bağlar ve mekanın boyut dosyasını `ArenaBoundary.dimensionsJson`'a takar. ⚠️ **Kalibrasyon işaretçisi koymaz ve yerleştirmez** — onların tek kaynağı ölçü maketidir (`DimensionMeshBuilder`); ikinci bir üretici hangisinin geçerli olduğunu belirsizleştirirdi. Taban bölgelerini takım malzemesiyle boyar (tek `VA_BaseZone` prefabı iki takıma da hizmet ediyor; şerit rengini çalışma anında kimse yazmıyor). **İdempotent** — var olan örneği asset yoluyla tanır ve atlar; dolu bir alanın üstüne YAZMAZ |
+| `ObstacleLayerAuditor` | `Engel Hacimlerini Denetle`: açık sahnelerde `Obstacle` layer'ını tarar ve **konveks olmayan** collider'ları, trigger'ları ve collider'sız damgalı objeleri raporlar (dialog + tıklanabilir konsol satırları). **Var olma sebebi tek bir kuraldır ve gözle denetlenemez:** non-convex bir `MeshCollider` bu layer'a girerse `Collider.ClosestPoint` girdi noktasını aynen döndürür → nokta-içeride testi her zaman "içeride" der → **o sahnedeki herkes anında ölmeye başlar**. Çalışma anında `BodyViolationProbe` böyle bir collider'ı eliyor ama o satır ancak Play'e girilince görülür; bu araç aynı soruyu sahne kaydedilmeden önce sorar. ⚠️ Hiçbir şeyi DÜZELTMEZ — otomatik convex işaretlemek sanatçının bilerek yaptığı seçimi sessizce ezerdi |
 | `BuildElementsConfigurator` | `Configure All Build Elements`: kayıt listelerini **klasör ağacından eşitler** — `Venues/*/Scenes/*/` taranır ve klasör tek doğruluk kaynağı sayılır. **Hepsini Yapılandır** önce aktif sahnenin `MapDefinition`'ını yazar/günceller, sonra eşitler; **Yalnız Senkronize Et** sahne açık olmadan da eşitler (silinmiş bir arenanın kalıntısını temizlemenin yolu budur). Eşitleme: eksik olan **uyarı** üretir (kutuda sahne yok / birden çok sahne var / sahne adı klasör adıyla uyuşmuyor / `Data/<Sahne>.asset` MapDefinition yok ya da yanlış yerde / mekan kökünde `Art,Data,Prefabs,Scenes` dışında klasör), fazla olan **silinir** (Build Settings'te mekan ağacında olmayan ya da diskte bulunmayan satırlar; `GameCatalog.maps` ve `ModeDefinition.maps` içindeki ölü ve artık taranmayan referanslar). `Boot.unity` index 0'da kalır, mekan-dışı sahneler (`_Shared/Scenes/*`) korunur, `Template/` sahneleri listeye hiç girmez. `ModeDefinition.maps` **boşsa** dokunulmaz (boş = kısıtsız); doluysa o modu destekleyen haritalarla birebir eşitlenir — hedef küme boş çıkarsa liste boşaltılmaz (boş liste "kısıtsız" demek olurdu), yalnız uyarı basılır. Sonda `ServerConfigExporter.Export(false)` + **sağlık raporu**: `ArenaBoundary` var mı · `dimensionsJson` dolu mu · muhafaza dünya orijinine yakın mı (arena uzayı = dünya uzayı) · ölçü maketi `EditorOnly` etiketli mi (etiketliyse build'e girmez ve kalibrasyon işaretçileri onunla birlikte silinir). Hiçbiri işi durdurmaz, hepsi rapora satır düşer. Kontroller **aktif sahneye** bakar, yani sahne bir kutuda değilse hiç koşmaz. ⚠️ **MapDefinition kendiliğinden ÜRETİLMEZ:** `supportedModeIds` boş bırakmak "kısıtsız" demek olduğu için üretilen boş bir tanım lobiyi sessizce her modda oynanır kılardı — sahne açılıp modlar araçtan seçilir. Ayrı bir "Arena Id" alanı yoktur: MapDefinition'ın adı sahne adıdır |
 
 ### Sunucu: `Server/VortexArena.Server.Core`
@@ -2695,6 +2726,32 @@ konsoluna tek satır sebep yazar.
     şey **durumdur** (`ArenaProtocol.CONTROLLER_*`): kumanda bağlı mı, izleniyor mu.
     ⚠️ `PlayerInfo.battery` bununla karıştırılmaz — o **gözlüğün** pilidir, gerçekten okunur ve
     admin satırında %25 altında kırmızı, %50 altında sarı gösterilir.
+126. **`Collider.ClosestPoint` non-convex bir `MeshCollider`'da GİRDİ NOKTASINI AYNEN DÖNDÜRÜR —
+    yani "bu nokta içeride mi" testi orada DAİMA 'evet' der.** Belgelenmiş davranıştır ama istisna
+    atmaz, log basmaz, `false` dönmez: fonksiyon başarıyla çalışmış gibi görünür. Engel ihlali
+    tespiti bu teste dayandığı için tek bir non-convex collider `Obstacle` layer'ına girdiğinde
+    **o sahnedeki herkes anında ölmeye başlar** ve belirti hiçbir yerde bu collider'ı göstermez.
+    Bu yüzden kural iki yerden bekçilenir: çalışma anında `BodyViolationProbe` böyle bir collider'ı
+    kalıcı olarak eler ve bir kez hata basar, editörde `Engel Hacimlerini Denetle` sahneyi tarar.
+    ⚠️ Ters yöndeki kaçış da aynı derecede sessizdir: `Physics.CheckSphere` kapalı bir concave
+    mesh'in **derinindeki** nokta için `false` döner (yalnız üçgen kesişimine bakar), yani "içeriden
+    yüzey mesafesi" hiçbir yöntemle ölçülemez — kürenin tamamının içeride olup olmadığı bu yüzden
+    **kabuk noktalarıyla** örneklenir, merkez-yüzey mesafesiyle değil.
+127. **Bir hacmin İÇİNDE olmak, ona DEĞMEKTEN farklı bir sorudur; trigger olayları ikincisini
+    cevaplar.** `OnTriggerEnter`/`Stay` "temas var" der ve temas sayısı hacim oranı DEĞİLDİR: bir
+    parmak ucu da göğsün tamamı da tek bir olaydır. "Gövdenin %30'u içeride" gibi bir kural trigger
+    ile ifade edilemez, ölçülebilmesi için gövdenin **ağırlıklı noktalara** bölünmesi gerekir.
+    ⚠️ Ölçüde nokta SAYISI da yanıltıcıdır: iki el + bir ayak gövdenin %1.8'i, göğüs tek başına
+    %22'sidir — eşit sayılan noktalar kuralı sessizce anlamsızlaştırır.
+128. **Yerel oyuncunun gövdesine collider EKLENEMEZ — atış ışını maskesiz ve trigger'ları da
+    vuruyor.** `Weapon.Fire` `Physics.Raycast(muzzle, dir, out hit, range)` çağırıyor (layer mask
+    yok) ve proje ayarı `Queries Hit Triggers` **açık**; yani yerel gövdeye konan bir collider —
+    trigger olsa bile — oyuncunun kendi kurşununu kendine yedirir. Kendi gövdesiyle ilgili her ölçüm
+    (engel ihlali, temas, yakınlık) bu yüzden collider'sız yöntemlerle yapılır. ⚠️ Aynı sebeple
+    sahneye eklenen **her yeni collider** bir atış hattı kararıdır: mermi ona çarpacaktır. Sanatın
+    collider'ından ayrı, daha geniş bir "mantık hacmi" koymak mermileri objelerin birkaç santim
+    önünde durdurur — bu yüzden engel hacmi ayrı bir collider değil, objenin **kendi** collider'ının
+    layer'ıdır.
 
 ---
 

@@ -208,9 +208,22 @@ namespace VortexArena.Core.UI
             string victim = NameOf(msg.victimId);
             // Kill feed metni yalnız TMP fontunda BULUNAN karakterleri kullanır: LiberationSans SDF
             // (+ fallback) ok/kuru kafa gibi sembolleri içermez, eksik glif ekranda □ olarak çizilir.
-            string line = msg.killerId > 0 && msg.killerId != msg.victimId
-                ? $"{NameOf(msg.killerId)} -> {victim}"
-                : $"{victim} öldü";
+            string line;
+            if (msg.killerId > 0 && msg.killerId != msg.victimId)
+            {
+                line = $"{NameOf(msg.killerId)} -> {victim}";
+            }
+            else if (string.Equals(msg.weaponId, ArenaProtocol.WEAPON_ID_OBSTACLE))
+            {
+                // §10.9 çevresel ölüm: killerId 0 olduğu için üstteki dal tutmaz. Ayrı satır
+                // olmasının sebebi operatör/oyuncu ayrımıdır — "öldü" duvarda eriyen bir oyuncuyu
+                // sunucu hatasından ayırt etmiyordu.
+                line = $"{victim} engelde kaldı";
+            }
+            else
+            {
+                line = $"{victim} öldü";
+            }
 
             _killFeed.Add(new KillFeedLine
             {

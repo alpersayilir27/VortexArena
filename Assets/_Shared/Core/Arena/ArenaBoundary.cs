@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using VortexArena.Core.Player;
 
 namespace VortexArena.Core.Arena
 {
@@ -63,6 +64,9 @@ namespace VortexArena.Core.Arena
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private MaterialPropertyBlock propertyBlock;
+
+        /// <summary>Bu bileşenin <see cref="ScreenFade"/>'deki kaynak kimliği.</summary>
+        private const string FadeSourceId = "boundary";
 
         /// <summary>True while the HMD is outside the allowed area.</summary>
         public bool IsOutOfBounds { get; private set; }
@@ -186,8 +190,10 @@ namespace VortexArena.Core.Arena
 
             propertyBlock ??= new MaterialPropertyBlock();
             IsOutOfBounds = false;
+            // Gözlemcide hakeme HİÇ danışılmaz ve quad koşulsuz kapatılır: admin'in HMD'si yok,
+            // hiçbir karartma kaynağı onun ekranında anlamlı değil.
             if (fadeRenderer != null)
-                SetAlpha(fadeRenderer, 0f);
+                SetFade(fadeRenderer, 0f, Color.black);
             if (warningText != null && warningText.gameObject.activeSelf)
                 warningText.gameObject.SetActive(false);
         }
@@ -206,24 +212,51 @@ namespace VortexArena.Core.Arena
                 // karartma sıfırlanır, uyarı yazısı kapanır — ölçüyü bilmeden "kenara ne kadar
                 // yakınız" sorusunun cevabı yok, ekranı rastgele karartmak yanlış bilgi verirdi.
                 IsOutOfBounds = false;
-                if (fadeRenderer != null)
-                    SetAlpha(fadeRenderer, 0f);
+                // ⚠️ Kendi alfası 0 ama çizim yine YAPILIR: quad'ın öbür kaynağı (engel ihlali)
+                // muhafazanın kurulum hatasından etkilenmemeli.
+                DrawFade(0f);
                 if (warningText != null && warningText.gameObject.activeSelf)
                     warningText.gameObject.SetActive(false);
                 return;
             }
 
             if (head == null)
+            {
+                DrawFade(0f);
                 return;
+            }
 
             Vector3 local = transform.InverseTransformPoint(head.position);
             float edgeDistance = EdgeDistance(new Vector2(local.x, local.z));
             IsOutOfBounds = edgeDistance < 0f;
 
-            if (fadeRenderer != null)
-                SetAlpha(fadeRenderer, FadeAlphaFor(edgeDistance));
+            DrawFade(FadeAlphaFor(edgeDistance));
             if (warningText != null && warningText.gameObject.activeSelf != IsOutOfBounds)
                 warningText.gameObject.SetActive(IsOutOfBounds);
+        }
+
+        /// <summary>
+        /// Muhafazanın karartma isteğini <see cref="ScreenFade"/>'e bildirir ve <b>kazananı</b>
+        /// çizer.
+        /// <para>
+        /// ⚠️ <b>Quad'a doğrudan yazılmaz ve yazılmamalı:</b> aynı renderer'ı isteyen ikinci bir
+        /// sistem var (engel ihlali karartması, <c>BodyViolationProbe</c>). İkisi de kendi değerini
+        /// yazsaydı kare başına birbirini ezerlerdi — belirtisi "sınıra yaklaşırken engele girince
+        /// ekran titriyor" olurdu ve sebebi iki ayrı bileşene dağılırdı. Renderer'ın SAHİBİ yine bu
+        /// sınıftır (quad onun serialize alanı); hakem yalnız hangi değerin çizileceğini söyler.
+        /// </para>
+        /// </summary>
+        private void DrawFade(float ownAlpha)
+        {
+            if (fadeRenderer == null)
+                return;
+
+            ScreenFade.Report(FadeSourceId, ownAlpha, BaseColorOf(fadeRenderer));
+
+            if (ScreenFade.Resolve(out float alpha, out Color color))
+                SetFade(fadeRenderer, alpha, color);
+            else
+                SetFade(fadeRenderer, 0f, color);
         }
 
         /// <summary>
@@ -476,14 +509,25 @@ namespace VortexArena.Core.Arena
             return transform.TransformPoint(new Vector3(localPoint.x, height, localPoint.y));
         }
 
-        private void SetAlpha(Renderer target, float alpha)
+        /// <summary>Materyalin kendi taban rengi (RGB) — muhafazanın karartma tonu budur.</summary>
+        private static Color BaseColorOf(Renderer target)
         {
-            target.GetPropertyBlock(propertyBlock);
-            Color color = target.sharedMaterial != null && target.sharedMaterial.HasProperty(BaseColorId)
+            return target.sharedMaterial != null && target.sharedMaterial.HasProperty(BaseColorId)
                 ? target.sharedMaterial.GetColor(BaseColorId)
                 : Color.white;
-            color.a = alpha;
-            propertyBlock.SetColor(BaseColorId, color);
+        }
+
+        /// <summary>
+        /// Karartma quad'ını çizen TEK metot: RGB kazanan kaynaktan, alfa ondan gelir.
+        /// <para>Renk de kaynaktan gelir çünkü kaynaklar farklı şeyler söylüyor: muhafaza nötr
+        /// karartır, engel ihlali <b>kırmızı</b> karartır.</para>
+        /// </summary>
+        private void SetFade(Renderer target, float alpha, Color rgb)
+        {
+            propertyBlock ??= new MaterialPropertyBlock();
+            target.GetPropertyBlock(propertyBlock);
+            rgb.a = alpha;
+            propertyBlock.SetColor(BaseColorId, rgb);
             target.SetPropertyBlock(propertyBlock);
             target.enabled = alpha > 0.001f;
         }

@@ -43,6 +43,12 @@ namespace VortexArena.App.Admin
         /// <summary>Ölü işaretçinin renk çarpanı (RemoteAvatar ile aynı).</summary>
         private const float DeadColorScale = 0.35f;
 
+        /// <summary>Engel ihlalinde halkanın yanıp sönme frekansı (Hz).</summary>
+        private const float ObstacleBlinkHz = 3f;
+
+        /// <summary>Yanıp sönmenin "kısık" yarısındaki renk çarpanı — halka kaybolmasın, kararsın.</summary>
+        private const float ObstacleBlinkDim = 0.3f;
+
         private class Marker
         {
             public GameObject root;
@@ -156,7 +162,9 @@ namespace VortexArena.App.Admin
                 bool selected = kv.Key == selectedId;
                 AdminPlayerView view = roster != null ? roster.Find(kv.Key) : null;
                 bool alive = view != null ? view.alive : registry.IsAlive(kv.Key);
-                Color color = ResolveColor(view, selected, alive);
+                Color color = alive && registry.IsInObstacle(kv.Key)
+                    ? ObstacleColor()
+                    : ResolveColor(view, selected, alive);
 
                 // Halka: zeminde yatar (x=90). Daire olduğu için yaw önemsiz.
                 marker.ring.SetPositionAndRotation(floorWorld, Quaternion.Euler(90f, 0f, 0f));
@@ -271,6 +279,27 @@ namespace VortexArena.App.Admin
         {
             Color team = UiKit.TeamColor(view != null ? view.team : "");
             return alive ? team : UiKit.Dim(team, DeadColorScale);
+        }
+
+        /// <summary>
+        /// §10.9 engel ihlali: halka <b>kırmızı</b> ve saniyede <see cref="ObstacleBlinkHz"/> kez
+        /// yanıp söner.
+        /// <para>
+        /// ⚠️ <b>Öncelik ihlaldedir</b> (seçim ve takım rengini EZER): ihlal bir uyarıdır, seçim bir
+        /// tercihtir — operatörün göremediği uyarı işe yaramaz. Ölü oyuncuda hiç çizilmez: ceza
+        /// zaten durmuştur (sunucu <c>Alive</c> kapısı, §10.9).
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Yanıp sönme fazı SENKRONLANMAZ ve gerekmez.</b> Telde giden tek şey boolean'dır;
+        /// her admin ekranı kendi saatinde yanar. İki operatörün halkalarının aynı anda yanması
+        /// hiçbir karar değiştirmez, karşılığında protokole bir zaman damgası sokardı.
+        /// </para>
+        /// </summary>
+        private static Color ObstacleColor()
+        {
+            // Bir periyot = yarısı açık yarısı kısık; 3 Hz için saniyede 6 yarı periyot.
+            bool on = Mathf.Repeat(Time.unscaledTime * ObstacleBlinkHz, 1f) < 0.5f;
+            return on ? UiKit.Bad : UiKit.Dim(UiKit.Bad, ObstacleBlinkDim);
         }
 
         private static Color ResolveColor(AdminPlayerView view, bool selected, bool alive)
