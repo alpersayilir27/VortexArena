@@ -198,10 +198,10 @@ public sealed class PlayerRegistry : IDisposable
     public void Announce(PlayerState state, PlayerChangeKind kind) => Changed?.Invoke(state, kind);
 
     /// <summary>status kalp atışı (§5.1). ⚠️ <b>Koşulsuz Changed raise ETMEZ</b> — yalnız roster'da
-    /// GÖRÜNEN bir alan (scene/battery/connection) gerçekten değiştiyse yayın tetikler. Eskiden her
-    /// status bir tam roster yayını açıyordu: 18 istemci × 5 sn'de bir × 18 alıcı ≈ saniyede 65 tam
-    /// roster JSON'u, hiçbir şey değişmese bile. <c>Fps</c> PlayerInfo'da taşınmadığı için yayın
-    /// tetiklemez.</summary>
+    /// GÖRÜNEN bir alan (scene/battery/ctrlL/ctrlR/connection) gerçekten değiştiyse yayın tetikler.
+    /// Koşulsuz yayın her status'u bir tam roster JSON'una çevirirdi: 18 istemci × 5 sn'de bir ×
+    /// 18 alıcı ≈ saniyede 65 yayın, hiçbir şey değişmese bile. <c>Fps</c> PlayerInfo'da
+    /// taşınmadığı için yayın tetiklemez.</summary>
     public void UpdateStatus(string deviceId, StatusMsg status)
     {
         if (!_players.TryGetValue(deviceId, out var state)) return;
@@ -209,9 +209,15 @@ public sealed class PlayerRegistry : IDisposable
         lock (_gate)
         {
             var scene = status.scene ?? state.Scene;
-            changed = !state.IsConnected || state.Scene != scene || state.Battery != status.battery;
+            // Kumanda durumu Scene/Battery ile aynı taraftadır: KESİKLİ bir cihaz durumudur (üç
+            // değerden biri), her status'ta oynayan bir sayı değil — yani yayını nadiren tetikler
+            // ama düştüğü an operatörün ekranında görünmesi gerekir.
+            changed = !state.IsConnected || state.Scene != scene || state.Battery != status.battery
+                      || state.CtrlL != status.ctrlL || state.CtrlR != status.ctrlR;
             state.Scene = scene;
             state.Battery = status.battery;
+            state.CtrlL = status.ctrlL;
+            state.CtrlR = status.ctrlR;
             state.Fps = status.fps;
             // ⚠️ Ağ telemetrisi `changed`'e GİRMEZ — Fps ile birebir aynı gerekçe (§6.7): sürekli
             // değişen sayılar oldukları için her status'u bir tam roster yayınına çevirirlerdi.

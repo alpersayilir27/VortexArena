@@ -68,7 +68,21 @@ namespace VortexArena.App.Admin
         }
 
         public bool alive = true;
+
+        /// <summary>GÖZLÜĞÜN pili (0..1); -1 = bilinmiyor.</summary>
         public float battery = -1f;
+
+        /// <summary>Sol/sağ kumandanın durumu (§5.1 <c>ArenaProtocol.CONTROLLER_*</c>).
+        /// <para>⚠️ <b>Yüzde değil DURUM</b> — kumandanın şarjı Quest'te OpenXR altında okunamıyor;
+        /// pil yüzdesi <see cref="battery"/> ile gelen <b>gözlüğün</b> pilidir.</para>
+        /// <para>Varsayılan <c>0</c> = <c>CONTROLLER_UNKNOWN</c>, yani "bildirilmedi";
+        /// <c>battery = -1f</c> ile aynı desen — bilinmeyen değer geçerli aralığın dışındadır ve
+        /// asla "sağlıklı" sayılmaz. Admin kayıtlarında daima <c>0</c> kalır.</para></summary>
+        public int ctrlL;
+
+        /// <inheritdoc cref="ctrlL"/>
+        public int ctrlR;
+
         public float hp = ArenaProtocol.PLAYER_MAX_HP;
         public int kills;
         public int deaths;
@@ -458,6 +472,17 @@ namespace VortexArena.App.Admin
                 view.reconnectStampedAt = Time.unscaledTime;
                 view.inMatch = info.inMatch;
                 view.battery = info.battery;
+
+                // Kumanda durumu ATANMADAN ÖNCE bildirilir: karşılaştırmanın tek girdisi view'daki
+                // önceki değer ve o değer atamayla kaybolur.
+                if (view.IsPlayer)
+                {
+                    AnnounceControllerChange(view, "SOL", view.ctrlL, info.ctrlL);
+                    AnnounceControllerChange(view, "SAĞ", view.ctrlR, info.ctrlR);
+                }
+
+                view.ctrlL = info.ctrlL;
+                view.ctrlR = info.ctrlR;
                 view.scene = info.scene ?? "";
 
                 // Sunucu sayaçları yereli EZER (§5.3) — sapma burada kapanır.
@@ -687,6 +712,58 @@ namespace VortexArena.App.Admin
         }
 
         // ---------------------------------------------------------------- iç işler
+
+        /// <summary>
+        /// Bir elin kumanda durumu değiştiğinde operatörü BİR KEZ bilgilendirir (§5.1). Kumanda
+        /// düşünce el pozu bayatlar ve oyuncu bunu kendi göremez — haber operatöre gitmeli.
+        /// <para>
+        /// ⚠️ Kapı "durum kötü mü" değil <b>"durum DEĞİŞTİ mi"</b>dir: <c>lobby_state</c> tam bir
+        /// anlık görüntüdür ve her yayında tekrarlanır — koşulsuz bildirim, pili biten kumandayı
+        /// operatörün ekranına saniyede bir yazardı.
+        /// </para>
+        /// <para>
+        /// ⚠️ <see cref="ArenaProtocol.CONTROLLER_UNKNOWN"/>'dan gelen geçiş bildirilmez: alanı
+        /// doldurmayan bir istemcinin ilk raporu aksi hâlde her el için bir "durum değişti"
+        /// üretirdi. Aynı sebeple yalnız <c>role=player</c> kayıtları bakılır — admin kumanda
+        /// bildirmez, kaydı <c>UNKNOWN</c> kalır.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Bildirilen tek olay kaybın kendisidir:</b> düşüş
+        /// (<see cref="ArenaProtocol.CONTROLLER_LOST"/>'a giriş) duyurulur, kapanışı da yalnız
+        /// ondan ÇIKIŞ duyurur. <see cref="ArenaProtocol.CONTROLLER_UNTRACKED"/> bir arıza değil
+        /// olağan bir andır (el arkaya gider, kumanda görüş dışına çıkar) ve onu haber saymak
+        /// operatörün durum satırını kullanılamaz hâle getirirdi.
+        /// </para>
+        /// </summary>
+        private static void AnnounceControllerChange(AdminPlayerView view, string hand,
+            int previous, int current)
+        {
+            if (previous == current || previous == ArenaProtocol.CONTROLLER_UNKNOWN)
+            {
+                return;
+            }
+
+            if (current == ArenaProtocol.CONTROLLER_LOST)
+            {
+                string lost = $"{view.name} (#{view.playerId}) {hand} kumanda düştü — " +
+                              "pil bitmiş olabilir; o elin pozu bayat çizilir.";
+                AdminCommands.Note(lost);
+                Debug.LogWarning(lost);
+                return;
+            }
+
+            // ⚠️ Toparlanma YALNIZ düşmüş bir kumanda için bildirilir. UNTRACKED sahada sürekli
+            // olur (el arkaya gider, kumanda görüş dışına çıkar, yere bırakılır) ve o geçişi
+            // "geri geldi" saymak operatörün durum satırını hiç susmayan bir akışa çevirirdi —
+            // hiç düşmemiş bir kumandanın izlenmeye dönmesi zaten bir haber değildir. Bildirimin
+            // simetrisi bu yüzden OK'a değil LOST'a bakar: yalnız duyurulmuş bir kayıp kapanır.
+            if (previous == ArenaProtocol.CONTROLLER_LOST)
+            {
+                string back = $"{view.name} (#{view.playerId}) {hand} kumanda geri bağlandı.";
+                AdminCommands.Note(back);
+                Debug.Log(back);
+            }
+        }
 
         /// <summary>Takım listelerini ve FFA kararını yeniden kurar.</summary>
         private void Rebuild()

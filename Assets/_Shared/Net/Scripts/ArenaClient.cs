@@ -88,6 +88,13 @@ namespace VortexArena.Net
         private string _appVersion;
         private string[] _buildScenes;
 
+        // Kumanda durumu (§5.1): ÖLÇÜMÜ App yapar, bu katman yalnız taşır — `battery`/`rttMs` ile
+        // aynı desen. Burada ölçülemez: VortexArena.Net Oculus.VR'ı referanslamaz ve
+        // referanslamayacak (asmdef grafiği hep aşağı bakar).
+        // Bildirilmeyen istemci ve admin CONTROLLER_UNKNOWN'da kalır.
+        private int _ctrlL = ArenaProtocol.CONTROLLER_UNKNOWN;
+        private int _ctrlR = ArenaProtocol.CONTROLLER_UNKNOWN;
+
         // fps ölçümü: Update'te birikir, StatusLoop her aralıkta okuyup sıfırlar.
         private int _frameCount;
         private float _fpsElapsed;
@@ -222,6 +229,18 @@ namespace VortexArena.Net
             _userDisconnect = true;
             StopConnectionLoop();
             SetState(ArenaConnectionState.Disconnected);
+        }
+
+        /// <summary>
+        /// Sol/sağ kumandanın durumunu bildirir (<c>ArenaProtocol.CONTROLLER_*</c>); bir sonraki
+        /// <c>status</c> ile gider. Ölçümü yapan taraf <c>PlayerPoseTracker</c>'dır — bu katman
+        /// yalnız taşır (<c>battery</c>/<c>rttMs</c> ile aynı desen), çünkü <c>VortexArena.Net</c>
+        /// Oculus.VR'ı referanslamaz. Ek paket üretmez: alan zaten 5 sn'de bir giden mesajda.
+        /// </summary>
+        public void ReportControllerState(int ctrlL, int ctrlR)
+        {
+            _ctrlL = ctrlL;
+            _ctrlR = ctrlR;
         }
 
         /// <summary>Protokol DTO'sunu JSON'a çevirip gönderir (soket kapalıysa no-op).</summary>
@@ -719,6 +738,8 @@ namespace VortexArena.Net
             {
                 scene = EngineScenes.GetActiveScene().name,
                 battery = SystemInfo.batteryLevel,
+                ctrlL = _ctrlL,
+                ctrlR = _ctrlR,
                 fps = _lastFps,
                 // §5.1 uzlaştırma: geride kaldıysak sunucu YALNIZ bize tam roster yollar.
                 rosterVersion = _lastRosterVersion

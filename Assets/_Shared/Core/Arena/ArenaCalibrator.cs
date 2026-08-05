@@ -179,16 +179,12 @@ namespace VortexArena.Core.Arena
         public static event Action<string> Calibrated;
 
         /// <summary>
-        /// Kalibrasyonun bu oturumda kaç kez tamamlandığı — <see cref="Calibrated"/> ile aynı anı
-        /// bildirir ama <b>abonelik gerektirmez</b>. Geç uyanan ya da arada kapatılan bir dinleyici
-        /// olayı sessizce KAÇIRIR (yerel gövde avatarı rig'i kaybettiğinde kapanıyor ve harita
-        /// değişiminde kayıtlı anchor tam o aralıkta geri yükleniyor); sayacı kaçıramaz, sonraki
-        /// karede farkı görür. 0 = bu oturumda hiç hizalanmadı.
-        /// <para>Tüketicisi <c>LocalBodyAvatar</c>'dır: arena yeniden hizalanınca gövde oranı da
-        /// yeniden ölçtürülür (<c>CharacterRetargeter.Calibrate()</c>). ⚠️ İki kalibrasyon ayrı
-        /// şeydir — bu sınıf rig'i fiziksel arenaya hizalar, o ise karakterin gövde oranını
-        /// oyuncununkine sabitler; buradaki tek bağ, hizalamadan sonranın ölçüm için doğru an
-        /// olmasıdır (oyuncu eğilip doğrulmuştur).</para>
+        /// Rig'in kaçıncı hizalamasında olduğumuz — rig her hizalandığında (elle yakalama, kayıtlı
+        /// anchor'dan yükleme, tracking sonrası yeniden hizalama) artar.
+        /// <para>Hizalama <b>herkesi meşru olarak taşır</b>: o karede kök, el ve gövde topluca
+        /// yer değiştirir. Süreklilik varsayan emniyetler (ör. <c>ArenaNetCharacterBehaviour</c>'ın
+        /// kök sıçrama tutması) bu sayacı okuyup sakladıkları referansı düşürür — yoksa gerçek bir
+        /// hizalamayı arıza sanıp bastırırlardı.</para>
         /// </summary>
         public static int CalibrationGeneration { get; private set; }
 
@@ -612,6 +608,7 @@ namespace VortexArena.Core.Arena
             float rise = virtualFloorY - physicalB.y;
             rig.position += Vector3.up * rise;
 
+            CalibrationGeneration++;
             Debug.Log($"ArenaCalibrator: rig aligned (yaw {yaw:F1} deg, floor {rise:F3} m).");
         }
 
@@ -641,6 +638,7 @@ namespace VortexArena.Core.Arena
             Vector3 target = new Vector3(virtualA.x, VirtualFloorY, virtualA.z);
             rig.position += target - anchorPos;
 
+            CalibrationGeneration++;
             Debug.Log($"ArenaCalibrator: rig aligned from saved anchor (yaw {yaw:F1} deg).");
         }
 
@@ -806,7 +804,6 @@ namespace VortexArena.Core.Arena
         /// </summary>
         private static void RaiseCalibrated(string source)
         {
-            CalibrationGeneration++;
             Calibrated?.Invoke(source);
         }
 

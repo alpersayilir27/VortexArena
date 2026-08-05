@@ -52,6 +52,15 @@ namespace VortexArena.Core.Player
         /// </summary>
         private const ulong RelayClientId = ulong.MaxValue;
 
+        /// <summary>Emniyet silahlıyken bir gönderimde kabul edilen en büyük kök sıçraması (metre).
+        /// Free-roam'da 20 Hz'de bu kadar yol alınmaz; bunun üstü bir ölçüm değil çöküştür.</summary>
+        private const float RootJumpLimitMeters = 1.5f;
+
+        /// <summary>Kök en fazla kaç gönderim tutulur (≈2 sn @ 20 Hz). ⚠️ Tavan olmadan tek bir
+        /// yanlış ölçüm gövdeyi eski yerine SONSUZA DEK çivilerdi — oyuncu gerçekten oraya gitmiş
+        /// olabilir ve bu emniyet bir konum otoritesi değildir.</summary>
+        private const int RootHoldMaxSends = 24;
+
         /// <summary>
         /// Bu karakterin oyuncusu. Yerel gövdede <see cref="LocalBodyAvatar"/>, uzak gövdede
         /// <see cref="RemoteAvatar"/> atar.
@@ -162,6 +171,20 @@ namespace VortexArena.Core.Player
         /// <summary>Giden blob'un yönetilen kopyası (SDK native, tel yönetilen bekliyor). Aynı
         /// gerekçe: kare başına tahsis etmemek için büyüdüğü yerde kalır.</summary>
         private byte[] _sendScratch;
+
+        /// <summary>Son GÖNDERİLEN arena kökü — sıçrama emniyetinin karşılaştırma referansı.</summary>
+        private Pose _lastSentRoot;
+        private bool _hasLastSentRoot;
+
+        /// <summary>Kök üst üste kaç gönderimdir tutuluyor (bkz. <see cref="RootHoldMaxSends"/>).</summary>
+        private int _heldRootSends;
+
+        /// <summary>Hangi hizalama sürümünde saklandığı — değişince referans düşer
+        /// (<see cref="ArenaCalibrator.CalibrationGeneration"/>).</summary>
+        private int _rootCalibrationGeneration = -1;
+
+        /// <summary>Bu tutma epizodunda uyarı basıldı mı (kare başına log basmamak için).</summary>
+        private bool _rootHoldWarned;
 
         private void Awake()
         {
@@ -336,8 +359,8 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            Pose arenaRoot = ArenaSpace.WorldToArena(
-                new Pose(_characterRoot.position, _characterRoot.rotation));
+            Pose arenaRoot = GuardRootJump(ArenaSpace.WorldToArena(
+                new Pose(_characterRoot.position, _characterRoot.rotation)));
 
             // Native → yönetilen kopya: tel katmanı BinaryWriter ile yazıyor ve o yalnız byte[]
             // alıyor. Tampon büyüdüğü yerde kalır, yani ilk birkaç karenin dışında tahsis yok.
@@ -350,6 +373,62 @@ namespace VortexArena.Core.Player
 
             NativeArray<byte>.Copy(bytes, 0, managed, 0, bytes.Length);
             client.UdpChannel.SendSkeleton(managed, bytes.Length, arenaRoot);
+        }
+
+        /// <summary>
+        /// Kök sıçrama emniyeti: bilinen bir cihaz arızası sürerken kökün tek gönderimde
+        /// <see cref="RootJumpLimitMeters"/>'den fazla atmasını bastırır ve son kökü yollar.
+        /// <para>
+        /// ⚠️ <b>Emniyet YALNIZ bir el tutuluyorken silahlanır</b> ve eller sağlamken kök olduğu
+        /// gibi geçer. Bu bilinçlidir: koşulsuz bir hız kelepçesi kök için ikinci bir otorite
+        /// olurdu ve gerçek hareketi (koşan, eğilen, sıçrayan oyuncu) lastikletirdi. Kapı, körü
+        /// körüne bir "makul hız" varsayımına değil <b>tanımlı bir arızaya</b> bağlıdır: kumanda
+        /// düşünce rig el anchor'ını rig orijinine yazar, body tracking çözümü o eli hedefler ve
+        /// SDK'nın yazdığı kök sıçrar. Arıza geçince kapı kendiliğinden kapanır.
+        /// </para>
+        /// <para>
+        /// ⚠️ Yeniden kalibrasyon herkesi <b>meşru olarak</b> taşır — saklanan kök o anda
+        /// geçersizdir (<see cref="ArenaCalibrator.CalibrationGeneration"/>), yoksa hizalamayı
+        /// arıza sanıp <see cref="RootHoldMaxSends"/> gönderim boyunca eski yeri yollardık.
+        /// </para>
+        /// </summary>
+        private Pose GuardRootJump(Pose candidate)
+        {
+            int generation = ArenaCalibrator.CalibrationGeneration;
+            if (generation != _rootCalibrationGeneration)
+            {
+                _rootCalibrationGeneration = generation;
+                _hasLastSentRoot = false;
+                _heldRootSends = 0;
+            }
+
+            bool armed = !ControllerTracking.IsValid(false) || !ControllerTracking.IsValid(true);
+            bool jumped = _hasLastSentRoot &&
+                          Vector3.Distance(candidate.position, _lastSentRoot.position) > RootJumpLimitMeters;
+
+            if (armed && jumped && _heldRootSends < RootHoldMaxSends)
+            {
+                _heldRootSends++;
+                if (!_rootHoldWarned)
+                {
+                    _rootHoldWarned = true;
+                    Debug.LogWarning(
+                        "[ArenaNetCharacterBehaviour] Kumanda izlemesi düşükken gövde kökü " +
+                        $"{Vector3.Distance(candidate.position, _lastSentRoot.position):F1} m sıçradı — " +
+                        "son kök gönderiliyor. Kumandanın pili bitmiş olabilir.", this);
+                }
+
+                return _lastSentRoot;
+            }
+
+            // Kabul: ya emniyet silahsız, ya sıçrama yok, ya da tutma tavana vurdu (oyuncu
+            // gerçekten oraya gitmiş olabilir → sayaçlar sıfırlanır, bir sonraki epizot yeniden
+            // uyarabilir).
+            _lastSentRoot = candidate;
+            _hasLastSentRoot = true;
+            _heldRootSends = 0;
+            _rootHoldWarned = false;
+            return candidate;
         }
 
         /// <inheritdoc cref="INetworkCharacterBehaviour.ReceiveStreamAck"/>
