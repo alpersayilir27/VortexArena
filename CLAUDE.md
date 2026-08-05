@@ -465,9 +465,10 @@ mesafeden kavrama ZORUNLUDUR ve orada da İKİ hat birden durur** — silah orad
 `AlignOnGrab`): çerçeve bir kavrama hedefi değil bir SEÇİM tetikleyicisidir, `AlignOnGrab`
 sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silahta görür
 → `Docs/Sistem-Ozeti.md` §7.
-⚠️ **`HandGrabPose` çocuğu eklenmez:** poz listesi boşken ISDK kavramayı collider mesafesine göre
-skorlar ve eli yeniden pozlamaz (el kumanda duruşunda kalır, bugünkü his korunur); poz eklemek
-elin silaha sarılmasını sağlar ve ayrı bir iştir. Çerçeve adımı elle iş istemez, araç her
+⚠️ **Kavrama pozu düğümlerini araç açar, İÇİNİ insan doldurur:** düğümler ISDK'nın poz listesine
+(`_handGrabPoses`) **girmez** — girseydi kavrama skoru poz tabanlı olur ve silah alma hissi
+değişirdi; parmak pozu `Kavrama Pozu Stüdyosu`'nda yazılır, yazılmamış poz (düğüm hâlâ silahın
+orijininde) sessizce yok sayılır → `Docs/Sistem-Ozeti.md` §7. Çerçeve adımı elle iş istemez, araç her
 `WPN_*` köküne bir `VA_WeaponFrame` örneği koyar (idempotent). **Çözülme efekti de kurulum
 istemez:** araç aynı köke `SimpleWeaponDissolve` koyup `_Shared/Materials/DissolveEffect.mat`'i
 bağlar (yalnız alan BOŞSA — silaha özel materyal bağlanmışsa ezilmez, ikinci seçenek
@@ -534,6 +535,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
 | `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir) |
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
+| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavrama pozu yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek: soketlere hayalet el oturur, işaretçi sürüklenirken takip eder, baş parmak–soket ve avuç–kabza mesafesini cm olarak çizer. Poz düğümü üretir ve karşı ele aynalar. ⚠️ Hiçbir şey YAZMAZ — kalıcı duruş yine `Write Grip Sockets To Definition` ile yazılır |
 | `… > Weapons > Write Grip Sockets To Definition` | Sahnedeki kavrama işaretçileri sürüklenip ayarlandı → `WD_*.asset`'e yazar (ters/düz bileşimi araç yapar). Yalnız BULUNAN işaretçinin alanlarına dokunur |
 | `… > Avatars > Hayalet Gövdesini Kur` | `RemoteAvatar.prefab`'a ölü/kalibresizde çizilen ayrı gövdeyi kurar: model ÖRNEĞİ + hayalet materyali + `GhostPoseDriver` bağları + `ghostRoot`. İdempotent. ⚠️ Hayalet modelini değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak, **prefabı elle düzenlemek DEĞİL** (model içi fileID'ler import öncesi bilinemez, elle yazılan bağ sessizce boşa düşer). Modelin tek koşulu **Rig = Humanoid**; iskelet adlarının karakterinkiyle eşleşmesi gerekmez |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |

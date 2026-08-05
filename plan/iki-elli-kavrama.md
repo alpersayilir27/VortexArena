@@ -1,8 +1,6 @@
 # Kavrama: kalan iş (kavrama pozu ayarı + doğrulama)
 
-Kod, çözücü ve doküman yerinde (`Docs/Sistem-Ozeti.md` §4 `HandGripPivot` / `ItemGripSolver` /
-`ItemGripSockets` / `WeaponGranter`, §7 son iki madde). Kalan iş **asset/prefab tarafında** ve
-başlıkta doğrulamada.
+Kalan iş **asset/prefab tarafında** ve başlıkta doğrulamada.
 
 ---
 
@@ -19,18 +17,22 @@ başlıkta doğrulamada.
 
 ---
 
-## 2. Altı silahın kavrama pozunu YAZ
+## 2. Altı silahın kavrama duruşunu ve el pozunu YAZ
 
-⚠️ Bugün `WD_*.asset`'lerin hepsinde `primaryGripEuler` **sıfır** ve `primaryGripPosition` ≈ 0:
-silah kumandanın ekseninde duruyor. ⚠️ **İki elli çözüm de bu yüzden koşmaz** — ön kabza ekseni
-(`secondaryGrip − primaryGripPointOnItem`) yazılmamış bir silahta 1 cm eşiğinin altında kalır ve
-çözücü sessizce tek elli davranır.
+⚠️ `primaryGripEuler` sıfır + `primaryGripPosition` ≈ 0 olan bir silah kumandanın ekseninde durur ve
+**iki elli çözüm de koşmaz**: ön kabza ekseni (`secondaryGrip − primaryGripPointOnItem`) 1 cm
+eşiğinin altında kalır, çözücü sessizce tek elli davranır.
 
 Her `WPN_*` prefabında:
 1. `GripSocket_Primary` işaretçisini kabzaya sürükle ve **elin gireceği açıyla döndür**.
 2. `GripSocket_Secondary`'yi ön kabzaya taşı.
-3. `Tools > VortexArena > Weapons > Write Grip Sockets To Definition`.
-4. **Camgöbeği tel küre sarı dolu küreyle ÇAKIŞMALI** — çakışmıyorsa yazma gitmemiştir.
+3. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` ile parmakları bük: hayalet el sokete
+   oturur, avuç kabzayı saracak, baş parmak tetiğe ulaşacak biçimde ayarla.
+   ⚠️ Tüfekte **işaret parmağı `Free` bırakılır** — kilitli parmak ateş ederken kıpırdamaz ve oyuncu
+   tetiği çektiğini elinde göremez.
+4. Stüdyoda **Karşı Ele Aynala**; aynanın bileğini gerekirse sahnede elle düzelt.
+5. `Tools > VortexArena > Weapons > Write Grip Sockets To Definition`.
+6. **Camgöbeği tel küre sarı dolu küreyle ÇAKIŞMALI** — çakışmıyorsa yazma gitmemiştir.
 
 Silahlar: `WPN_AK47` · `WPN_M4A1` · `WPN_M16` · `WPN_G36C` · `WPN_FAMAS` · `WPN_SCARL`.
 
@@ -49,7 +51,15 @@ Silahlar: `WPN_AK47` · `WPN_M4A1` · `WPN_M16` · `WPN_G36C` · `WPN_FAMAS` · 
       aynı yumuşaklıkla tekrar nişanlıyor (`ItemGripSolver.ReachWeight` bandı).
 - [ ] Ana kavrama noktası iki elli tutuşta da ana avuçta duruyor (silah ikinci ele kaymıyor).
 - [ ] Silahı önce sol elle tutarsan primary sol olur (el ataması sabit değil).
-- [ ] İkinci admin ekranında **uzak** oyuncunun silahı aynı açıda duruyor (iki uç sapmıyor).
+- [ ] **Avuç kabzayı sarıyor:** parmaklar kabzanın içinden geçmiyor, havada da durmuyor.
+- [ ] **Baş parmak tetiğe/kabzanın üstüne ulaşıyor**, tetik korkuluğunun içine gömülmüyor.
+- [ ] **Ön kabzada ikinci el silaha yapışık kalıyor:** grip basılıyken kol uzatılıp toplanınca el
+      silahtan kopmuyor (kolun gerilmesi beklenen davranıştır).
+- [ ] **Tetik çekilince işaret parmağı kıpırdıyor** (poz onu kilitlememiş).
+- [ ] Silah sol elle tutulduğunda **aynalanan poz** doğru: parmaklar aynı yöne sarılıyor, bilek ters
+      dönmüyor.
+- [ ] İkinci admin ekranında **uzak** oyuncunun silahının duruşu sapmıyor (el pozu yerelde
+      uygulanıyor, silahın pozunu iki uç aynı formülle çiziyor).
 - [ ] **Raf değişimi:** elde tüfek varken başka bir çerçeveye nişan alıp grip'e basınca yeni silah
       geliyor (eski silaha kilitlenme yok). Çift elli seçimde elde her zaman **tek** silah kalıyor.
 - [ ] FFA'da bir elde çift elli silah varken öteki ele ikinci bir silah **verilmiyor** (o el ön
