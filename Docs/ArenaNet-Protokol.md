@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `8` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
+| `PROTOCOL_VERSION` | `11` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -31,6 +31,8 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `EVENT_MAX_ENTRIES_PER_PACKET` | `128` | Tek `0x04` datagramına yazılan en fazla olay (§6.5). 6 + 128×9 = 1158 B < MTU. Taşan olay **atılmaz, sonraki tik'e kayar** — "tik başına en fazla bir batch" değişmezi kopya korumasının dayanağıdır |
 | `EVENT_TICK_HISTORY` | `64` | İstemcinin kopya ayıklama için hatırladığı `0x04` tik sayısı (§6.5) |
 | `PLAYER_MAX_HP` | `100` | Oyuncu tam canı (sunucu-otoriter; §10) |
+| `OBSTACLE_DAMAGE_PER_SECOND` | `30` | Engel ihlalinde saniyelik can kaybı (§10.9). `PLAYER_MAX_HP` ile birlikte ölüm süresini verir: 100 / 30 ≈ **3.3 sn**, yani 4. saniye içinde. ⚠️ Süre bir sabit DEĞİLDİR, bu ikisinin oranıdır — süreyi değiştirmek isteyen buradaki hızı değiştirir |
+| `OBSTACLE_FLAG_STALE_MS` | `300` | `FLAG_IN_OBSTACLE` bu süredir tazelenmemişse bayrak **düşürülür** (§10.9). Poz kanalı 20 Hz (50 ms) olduğu için 6 paketlik kayba dayanır; susmuş bir istemci sonsuza kadar ceza almaz |
 | `COUNTDOWN_SECONDS` | `5` | Geri sayımın **varsayılan** uzunluğu (`phaseReason:"countdown"`); admin `start_match.countdownSeconds` ile o maça özel bir değer verebilir (§5.2) |
 | `COUNTDOWN_SECONDS_MIN` / `COUNTDOWN_SECONDS_MAX` | `5` / `30` | `countdownSeconds` kırpma aralığı. **Bu bir arayüz listesi değil, sunucunun uyguladığı kısıttır** — 1 sn'lik geri sayım oyuncuya yerini alacak zaman bırakmaz, 30 sn'den uzun bekleme turnuvada ölü zamandır |
 | `MATCH_END_SECONDS` | `999` | `finished` → otomatik `return_to_lobby`. **Akış değil emniyettir:** kazanan ekranı operatör bir şey seçene kadar durur (harita/lobi seçimi, `start_match`, `abort_match`/`return_to_lobby` — hepsi fazı değiştirdiği için sayacı öldürür, §10.1). Bilerek uzun tutuldu ki turnuvada tur/maç aralarını hakem yönetsin; operatör hiçbir şey yapmazsa maç yine de sonsuza kadar askıda kalmaz |
@@ -448,6 +450,10 @@ gelen baytı `GRIP_FLAG_MASK` ile süzer — **maskenin varlık sebebi bir bekç
 de maskeye dahildir ve **doğrulanmadan** kopyalanır, çünkü beşi de eşya baytlarıyla aynı türden
 **istemci-otoriter sunum bilgisidir** (§6.6 / §10.3). Maskeye yeni bir bit eklemek onu tel üzerinde
 istemcinin yazdığı bir alan yapar; sunucunun yazdığı bitler maskenin DIŞINDA kalır.
+
+⚠️ **`FLAG_IN_OBSTACLE` maskenin içinde olsa da SONUCU sunucu yazar** (§10.9): istemci "gövdem engelin
+içinde" der, cezayı (can eritme) sunucu kendi saatiyle uygular. Bu, `hit_report`'un hasar modelinin
+aynısıdır — ölçümü istemci yapar, otorite sunucudadır.
 
 ⚠️ **İskelet akışı (§6.9) bu paketin yerine GEÇMEZ.** Gövde ayrı bir kanaldan gelir ama poz kanalı durur: silahın ele oturması, eşya baytları ve vuruş bildirimi ham anchor pozundan besleniyor. İki kanalın kadansı da ayrıdır (20 Hz ↔ `SKELETON_RATE_HZ`) — iskeletin gecikmesi silahın gecikmesi olmasın diye. "İskelet zaten el eklemini taşıyor, poz kanalı silinsin" **yapılmaz**: blob opaktır (alıcı içinden tek bir eklemi ucuza okuyamaz) ve o eklem elin fiziksel pozu değil retarget edilmiş bilek kemiğidir.
 
@@ -1262,6 +1268,54 @@ karakterini de ölçekleseydi bir sonraki ölçüm zaten ölçeklenmiş bir refe
 ⚠️ **Kalibrasyon sıfırlanınca `bodyScale` de sıfırlanır.** Ölçü arena zeminine göredir; zemin
 geçersizse ölçü de geçersizdir. Kapı `clear_calibration` değil **kalibrasyonun `false` olması**dır:
 başlığın kendi `set_calibration{false}`'u da aynı sonucu doğurur.
+
+### 10.9 Engel ihlali (`FLAG_IN_OBSTACLE`)
+
+Arenanın **iç engellerine** (sütun, kasa, sandık, blok) gömülen oyuncu ceza alır: sunucu saniyede
+`OBSTACLE_DAMAGE_PER_SECOND` can eritir, istemci ekranı kızartıp titreşim verir, admin o oyuncunun
+kuş bakışı halkasını kırmızı yakıp söndürür.
+
+**Otorite bölünmesi hasar modelinin aynısıdır (§10.3):** ölçümü istemci yapar, sonucu sunucu yazar.
+
+| Taraf | Ne yapar |
+|---|---|
+| İstemci | Kendi gövdesini ölçer, `0x01`'in `gripFlags` bit5'ini set eder (20 Hz) |
+| Sunucu | Biti `PlayerState`'e alır, **kendi tikinde** can eritir, `health_update` yayar, ölümü işler |
+| Admin | Snapshot bit5'ini okur, halkayı kırmızı yanıp söndürür (yerel çizim) |
+
+**Sunucu bunu DOĞRULAMAZ ve doğrulayamaz:** sunucuda arena geometrisi yoktur (`maps.json` yalnız
+sahne adı + mod listesi taşır, §11.1). Bu bilinçlidir — hasarı bile istemci hesaplıyor (§10.3,
+gözetimli özel alan). Sunucunun işi **sebebi doğrulamak değil sonucu sınırlamaktır**:
+
+1. Süreyi kendi saatiyle ölçer → istemci cezayı hızlandıramaz,
+2. `OBSTACLE_FLAG_STALE_MS` dolunca bayrağı düşürür → susmuş/donmuş istemci sonsuz ceza üretmez,
+3. Faz/canlılık/kalibrasyon kapılarını kendisi uygular.
+
+**Can eritme kapıları** (hepsi gerekli, sırayla): faz `playing` (`hit_report` ile **aynı** kapı) ·
+oyuncu canlı · oyuncu **kalibre** (§10.6) · bayrak taze.
+
+⚠️ **Kalibrasyon kapısı zorunludur:** hizalaması kaymış bir başlıkta sanal engel gerçeğinden
+sapar ve tespit yalancı pozitif üretir — oyuncu durduk yere ölürdü. Kalibresiz oyuncu zaten ateş
+edemez ve hasar yemez; ceza da aynı kapıya girer.
+
+**Ölüm çevreseldir:** can 0'a inince `kill_event` **`killerId = 0`** ve `weaponId = "obstacle"` ile
+yayınlanır, `health_update`'in `attackerId`'si `0`'dır. Kurbanın `deaths` sayacı işler,
+**`IGameMode.OnKill` ÇAĞRILMAZ ve skor yazılmaz** — öldüren yoktur (takımdaş öldürmedeki kuralın
+aynısı, §10.2: olay olur, ödülü olmaz).
+
+⚠️ **Bayrak ölüm · canlanma · faz değişimi · harita değişiminde SIFIRLANIR.** Yoksa ölü oyuncunun
+bayrağı canlanma anında hâlâ set olur ve oyuncu doğar doğmaz erir.
+
+**Neden ayrı bir mesaj yok:** bayrak zaten 20 Hz giden iki pakete biniyor (`0x01` yukarı, `0x02`/
+`0x05` aşağı), yani ek bant yoktur. Daha önemlisi **durum tabanlıdır, olay tabanlı değil**: kaybolan
+bir UDP paketi 50 ms sonra kendini onarır. Kenar tetikli (`enter`/`exit`) bir mesajda kaybolan bir
+"çıktım" oyuncuyu sonsuza kadar duvarda bırakırdı.
+
+**Arenanın DIŞ duvarları ve zemini bu sisteme GİRMEZ.** Dış sınırı istemci tarafındaki muhafaza
+yönetir (karartma + uyarı, hasar yok). Gerekçe yine kalibrasyondur: dış duvar oyuncunun her an
+dibinde olduğu için kayan bir hizalamada sürekli yalancı ihlal üretirdi. Hangi geometrinin ihlal
+sayılacağı **sunucuya hiç bildirilmez** — o karar tümüyle sahne tarafındadır (`Obstacle` layer'ı,
+`CLAUDE.md`).
 
 ## 11. Sunucu config dosyaları
 
