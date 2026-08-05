@@ -26,6 +26,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `SKELETON_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x08` datagramına yazılan en fazla girdi (§6.10). Asıl kısıt **bayt bütçesidir** (`COMBINED_MAX_BYTES`) — girdiler değişken uzunluklu; bu sayı `count`'un `u8` olmasının tavanıdır |
 | `PLAYER_ID_MAX` | `255` | `playerId` tahsis tavanı. **Ürün kotası değil, tel formatı tavanıdır** — `playerId` UDP paketlerinde `u8`. Eşzamanlı oyuncu/admin sayısına başka sınır YOKTUR (kota ileride lisanslamayla gelecek) |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
+| `BODY_SCALE_MIN` / `BODY_SCALE_MAX` | `0.5` / `1.6` | `set_body_scale` kırpma aralığı (§10.8). Ölçüm istemcide yapılır ama sonuç **herkesin ekranına** gider; sunucu bu yüzden kırpar — bozuk bir istemci arenaya 4 metrelik bir avatar koyamasın. `0` bu aralığın dışındadır ve "ölçülmemiş" demektir |
 | `SNAPSHOT_MAX_ENTRIES_PER_PACKET` | `16` | Tek snapshot datagramına yazılan en fazla oyuncu; fazlası ek pakete taşar (§6.3). 6 + 16×88 = 1414 B < MTU |
 | `EVENT_MAX_ENTRIES_PER_PACKET` | `128` | Tek `0x04` datagramına yazılan en fazla olay (§6.5). 6 + 128×9 = 1158 B < MTU. Taşan olay **atılmaz, sonraki tik'e kayar** — "tik başına en fazla bir batch" değişmezi kopya korumasının dayanağıdır |
 | `EVENT_TICK_HISTORY` | `64` | İstemcinin kopya ayıklama için hatırladığı `0x04` tik sayısı (§6.5) |
@@ -147,6 +148,11 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 
 **`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye çift basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
 
+**`set_body_scale`** `{ "type":"set_body_scale", "scale":1.04 }` (yalnız player) — başlık **kendi**
+gövde ölçeğini bildirir (§10.8). `playerId` taşımaz, bağlantıdan çözülür (`set_calibration` ile aynı
+sözleşme). Ölçümü istemci yapar, sunucu **yorumlamaz**: yalnız `[BODY_SCALE_MIN, BODY_SCALE_MAX]`
+aralığına kırpar ve roster'da yayar.
+
 ### 5.2 Yalnız admin → Sunucu
 
 - **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }`
@@ -162,6 +168,11 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
 - **`clear_calibration`** `{ "type":"clear_calibration", "playerId":5 }` — o oyuncunun kalibrasyonunu **sıfırlar** (§10.6). **`playerId:0` = TÜM oyuncular** (toplu sıfırlama). Admin kalibrasyonu yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez — hizalamanın gerçekten oturduğunu yalnız başlık bilir (§10.6).
   ⚠️ **Sunucu komutu hedefe KOŞULSUZ iletir** (`identify`/`measure_body_scale` ile aynı çift yönlü desen, §5.3): roster'daki `calibrated` zaten `false` olsa bile hedef başlığa alansız bir `clear_calibration` gider. Sebep, sıfırlanacak her şeyin roster'da görünmemesidir — **yarım kalmış elle kalibrasyon** (A alındı, B alınmadı) yalnız başlıkta yaşar ve telde hiçbir izi yoktur. Sunucu "değer zaten `false`, değişen bir şey yok" diye erken dönseydi komut tam da düzeltmek için var olduğu durumda hiçbir iş yapmazdı (§10.6).
+- **`measure_body_scale`** `{ "type":"measure_body_scale", "playerId":5 }` — o oyuncunun gövde
+  ölçüsünü **şimdi aldırır** (§10.8). **`playerId:0` = TÜM oyuncular.** Sunucu bir şey hesaplamaz;
+  hedefe alansız bir `measure_body_scale` iletir (`identify` ile aynı çift yönlü desen) ve ölçümü
+  başlık yapıp `set_body_scale` ile döner. ⚠️ **Kalibresiz oyuncuya iletilmez:** ölçü arena zeminine
+  göredir, kalibresiz başlıkta zemin bilinmiyor — atlanan hedefler `admin_state.notice` ile bildirilir.
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
 - **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }` — bir sonraki maçın **ortak** mod/harita/süre/limit/geri sayım seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim maç bitiminde sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
   ⚠️ **`sceneName` yalnız operatör harita/mod imlecini gerçekten oynattığında doldurulur** (süre/limit dokunuşunda boş gider): dolu harita alanı sahnelemeyi tetikler (§10.7), yani süre değiştirmek herkesi bir arenaya taşırdı.
@@ -197,7 +208,7 @@ göre kurar. `phase`/`phaseReason`/`modeState` anlamları §10.1'de.
     "ready":true, "connection":"connected", "reconnectSeconds":0,
     "battery":0.87, "scene":"Arena12x12",
     "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7,
-    "inMatch":true, "calibrated":true, "calibrationSource":"anchor" } ] }
+    "inMatch":true, "calibrated":true, "calibrationSource":"anchor", "bodyScale":1.04 } ] }
 ```
 
 `version` = **monoton artan** roster sürümü (sunucu ömrü boyunca; sunucu yeniden başlarsa `0`'dan).
@@ -238,6 +249,11 @@ düşmesi değil, hedefe iletilen `clear_calibration`'dır (§5.2). Roster'a ba�
 şudur: yarım kalmış bir elle kalibrasyonda alan **zaten** `false`'tur, yani sıfırlamanın burada
 görünür bir deltası yoktur — dinleyen istemci hiçbir şey olmadığını sanır.
 
+`bodyScale` = o oyuncunun avatarına uygulanacak **üniform ölçek** (§10.8). **`0` = ölçülmemiş ve
+okuyan taraf `1` uygular** — kural değerleriyle aynı sözleşme, alanı hiç göndermeyen bir uç
+sessizce doğru davranır. Kalibrasyon alanlarıyla aynı sebepten burada taşınır: değiştiği an
+roster'ın zaten tazelendiği andır ve **iskelet kanalına girmez** — 12 Hz'de her karede tekrar eden
+bir sabit olurdu.
 
 **`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "rules":{ … } }`
 → istemci sahneyi yükler, `status`'ta yeni sahne görünür. Sahne yüklenince istemci `set_ready` (yükleme tamam anlamında) gönderir; herkes hazır olunca sunucu `countdown` başlatır. Bu süre boyunca faz `paused`'dur (`phaseReason` sırayla `loading` → `countdown`); **`load_match`'in gelmesi maçın başladığı anlamına GELMEZ** — maç `phase:"playing"` ile başlar.
@@ -265,6 +281,9 @@ Kazanan **iki kanaldan biriyle** ifade edilir (`rules.scoring`, §10.5): takım 
 Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken harita seçtiğinde `sceneName` o arenadır. İstemci için ikisi de aynı şeydir — *"lobideyiz, şu sahneyi yükle"* — bu yüzden ayrı bir mesaj tipi YOKTUR. `modeId` her iki durumda da `"lobby"` kalır: sahnenin arena olması fazı değiştirmez.
 **`ping`** `{ "type":"ping" }` — istemci `status` ile yanıtlar (ayrı pong yok).
 **`identify`** `{ "type":"identify" }` — istemci büyük kimlik overlay'i gösterir (playerId + ad).
+**`measure_body_scale`** `{ "type":"measure_body_scale" }` — istemci gövde ölçüsünü alır ve sonucu
+`set_body_scale` ile döner (§10.8). Yalnız player'a gider; ölçüm başarısız olursa istemci **hiçbir
+şey göndermez** (eski ölçek durur) ve sebebi kendi konsoluna yazar.
 **`clear_calibration`** `{ "type":"clear_calibration" }` — istemci hizalamayı **ve yarım kalmış
 elle kalibrasyon sekansını** siler, kayıtlı `OVRSpatialAnchor`'ı yok eder ve elle kalibrasyon
 kapısını yeniden açar (§10.6). Yalnız player'a gider; alan taşımaz — hedef zaten o bağlantıdır.
@@ -1065,6 +1084,10 @@ sanmasına yol açardı. Kapı üç yolu birden kapatmak zorundadır: rastgele d
 (`WeaponFrame.Filter` — kapı orada olduğu için oyuncu ışını hiç görmez). Kalibrasyon geri
 geldiğinde silah **kendiliğinden dönmez**: oyuncu grip'e basınca seçili silahı geri gelir.
 
+⚠️ **Kalibrasyon `false` olduğunda `bodyScale` de sıfırlanır** (§10.8): ölçü zemine göredir.
+Sıfırlama iki yoldan da geçer (`clear_calibration` ve başlığın kendi `set_calibration{false}`'u) —
+tek yolu kapatmak kuralı işlevsiz bırakırdı.
+
 **`hello`'da `calibrated` sıfırlanır.** Sunucu yeniden bağlanan bir başlığın hizalama durumunu
 bilemez (uygulama yeniden başlamış olabilir); başlık kayıtlı anchor'dan geri yükleyince zaten
 `set_calibration{source:"anchor"}` ile yeniden bildirir.
@@ -1149,6 +1172,44 @@ yapar, yerini alır; operatör bunu tek tek anlatmak zorunda kalmaz.
 > süresince silah alır ve serbest atış yapar. ⚠️ İstemci "mod silah dağıtıyor" durumunu `modeId`'den
 > değil bu **bileşimden** ayırır (§10.5): yalnız `random` = mod dağıtıyor (FFA, tezgâhlar gizlenir),
 > `random` + `fireWhilePaused` = serbest alan.
+
+### 10.8 Gövde ölçeği (`bodyScale`)
+
+Oyuncular arasındaki boy farkı avatara **tek bir üniform çarpanla** taşınır: `bodyScale`. Değer
+oyuncu başına sunucuda durur, `lobby_state` ile yayılır (§5.3) ve her istemci uzak avatarın
+karakter kökünün ölçeğine yazar. `0` = ölçülmemiş → `1` uygulanır.
+
+**Kim ne yapar:**
+
+| Taraf | Ne yapar |
+|---|---|
+| Operatör | `measure_body_scale` ile ölçümü **başlatır** (§5.2); tek oyuncu ya da `playerId:0` ile hepsi |
+| Başlık | Ölçer ve `set_body_scale` ile **bildirir** (§5.1) |
+| Sunucu | Aralığa kırpar, saklar, yayar. **Hesaplamaz** |
+
+**Ölçüm zamana değil komuta bağlıdır.** Ölçünün doğru anını (oyuncu ayakta ve dik) makine bilemez;
+operatör bilir. Kalibrasyondan otomatik tetiklenen bir ölçüm, oyuncu kumandayı zemine değdirmek
+için **eğilmişken** ölçmek demektir.
+
+**Ölçüm iki göz hizasının oranıdır:** oyuncunun gözü (HMD) ile karakterin **o anki** göz hizası aynı
+karede okunur, ikisi de arena uzayında. Karakter zaten body tracking'den sürüldüğü için oyuncuyla
+aynı pozdadır — yani duruş farkı orandan düşer ve "göz + şu kadar cm = boy" gibi bir tahmine hiç
+girilmez. ⚠️ **Kafa tepesi hiçbir yerde kullanılmaz:** modelin kafası oyuncunun gözüne göre
+hizalansaydı uzun bir kafa, kısa bir gövde satın alınırdı.
+
+⚠️ **Ölçek iskelet blob'una GİRMEZ.** Meta Movement SDK'nın `Calibrate()`'i gönderenin gövde
+ORANLARINI değiştirir; blob `SerializationCompressionType.High` ile eklem uzunlukları üzerinden
+sıkıştığı için alıcının hedef iskeleti artık gönderenin kodladığı uzunluklarla uyuşmaz ve uzak
+avatar **bozuk duruşlara** girer. Bu yüzden gönderenin iskeleti prefab oranlarında bırakılır
+(`Calibrate()` hiç çağrılmaz) ve boy ayrı bir alanda, **bir kez** taşınır.
+
+⚠️ **Yerel karakter ölçeklenmez.** Ölçek yalnız uzak avatarlara uygulanır. Gönderen kendi
+karakterini de ölçekleseydi bir sonraki ölçüm zaten ölçeklenmiş bir referansı okur ve çarpanı
+`1`'e yaklaştırırdı — düğme ikinci basışta sessizce bozulurdu.
+
+⚠️ **Kalibrasyon sıfırlanınca `bodyScale` de sıfırlanır.** Ölçü arena zeminine göredir; zemin
+geçersizse ölçü de geçersizdir. Kapı `clear_calibration` değil **kalibrasyonun `false` olması**dır:
+başlığın kendi `set_calibration{false}`'u da aynı sonucu doğurur.
 
 ## 11. Sunucu config dosyaları
 

@@ -8,7 +8,7 @@ namespace VortexArena.App.Admin
 {
     /// <summary>
     /// Yan panellerdeki tek oyuncu satırı: takım şeridi, ad + <c>#id</c>, HP barı, K/D · batarya ·
-    /// durum ve eylem düğmeleri (POV · KAL · TAKIM · KİMLİK · AT).
+    /// kumanda · durum ve eylem düğmeleri (POV · KAL · ÖLÇ · TAKIM · KİMLİK · AT).
     /// <para>
     /// <b>Görünüm prefabtan gelir:</b> <c>Assets/_Shared/App/Resources/UI/AdminPlayerRow.prefab</c>.
     /// Bu sınıf yalnız <b>davranış</b>tır — yerleşim/renk/punto prefabta düzenlenir. Alanların
@@ -25,6 +25,11 @@ namespace VortexArena.App.Admin
     /// (§10.6). Yalnız sıfırlar: kalibrasyonu geri açmayı yalnız başlığın kendisi yapabilir,
     /// çünkü hizalamanın gerçekten oturduğunu yalnız o bilir. Kalibresiz satırın kenarlığı da
     /// kırmızıya döner — operatör listeye bakınca hemen görsün.
+    /// </para>
+    /// <para>
+    /// <b>ÖLÇ düğmesi</b> gövde ölçüsünü aldırır (§10.8) ve KAL gibi hem komut hem göstergedir:
+    /// etiketi ölçülmüş çarpanı yazar. Tek adımlıdır (ölçüm geri alınabilir), kalibresiz oyuncuda
+    /// pasiftir — sunucu o komutu zaten keser.
     /// </para>
     /// </summary>
     public class AdminPlayerRow : MonoBehaviour
@@ -45,6 +50,9 @@ namespace VortexArena.App.Admin
         private const string LabelCalibrated = "KAL";
         private const string LabelUncalibrated = "KAL !";
         private const string LabelConfirm = "EMİN?";
+
+        /// <summary>Henüz ölçülmemiş oyuncunun ÖLÇ düğmesi.</summary>
+        private const string LabelMeasure = "ÖLÇ";
 
         private const float DeadColorScale = 0.5f;
 
@@ -78,6 +86,10 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button povButton;
         [SerializeField] private Button calibButton;
         [SerializeField] private TextMeshProUGUI calibLabel;
+        [Tooltip("Gövde ölçüsünü aldırır (§10.8). Etiketi aynı zamanda GÖSTERGEDİR: " +
+                 "ölçülmemişse 'ÖLÇ', ölçülmüşse çarpan.")]
+        [SerializeField] private Button measureButton;
+        [SerializeField] private TextMeshProUGUI measureLabel;
         [SerializeField] private Button teamButton;
         [SerializeField] private TextMeshProUGUI teamLabel;
         [SerializeField] private Button identifyButton;
@@ -109,6 +121,9 @@ namespace VortexArena.App.Admin
             Wire(selectButton, () => _onSelect?.Invoke(_playerId));
             Wire(povButton, () => _onPov?.Invoke(_playerId));
             Wire(calibButton, PressCalibration);
+            // ⚠️ Tek adımlı (onay penceresi YOK): ölçüm geri alınabilir bir eylemdir — yanlışlıkla
+            // basılırsa yeniden ölçülür. "AT"/"KAL" gibi savaş dışı bırakan bir komut değildir.
+            Wire(measureButton, () => AdminCommands.MeasureBodyScale(_playerId));
             Wire(teamButton, ToggleTeam);
             Wire(identifyButton, () => AdminCommands.Identify(_playerId));
             Wire(kickButton, PressKick);
@@ -136,6 +151,7 @@ namespace VortexArena.App.Admin
             _playerId = view.playerId;
             _team = view.team;
             _calibrated = view.calibrated;
+            RefreshMeasureButton(view);
 
             Color team = UiKit.TeamColor(view.team);
             if (stripe != null)
@@ -291,6 +307,27 @@ namespace VortexArena.App.Admin
             _calibArmedAt = -1f;
             AdminCommands.ClearCalibration(_playerId);
             RefreshCalibrationButton();
+        }
+
+        /// <summary>
+        /// ÖLÇ düğmesi hem KOMUT hem GÖSTERGEDİR (§10.8): ölçülmemişse "ÖLÇ", ölçülmüşse çarpanın
+        /// kendisi yazar — operatör kimin ölçüldüğünü listeye bakarak görmeli, tek tek deneyerek
+        /// değil.
+        /// <para>Kalibresiz oyuncuda düğme <b>pasiftir</b>: sunucu o komutu zaten kesiyor (ölçü
+        /// arena zeminine göre alınır), tepkisiz bir düğmeye bastırmak "gönderdim ama olmadı"
+        /// hissi üretirdi. Ayrılmış satırda da hedef yoktur.</para>
+        /// </summary>
+        private void RefreshMeasureButton(AdminPlayerView view)
+        {
+            bool usable = view.IsPlayer && view.calibrated && !view.HasLeft;
+            SetInteractable(measureButton, usable);
+
+            if (measureLabel != null)
+            {
+                measureLabel.text = view.bodyScale > 0f ? $"×{view.bodyScale:0.00}" : LabelMeasure;
+                measureLabel.color = !usable ? UiKit.Faint
+                    : view.bodyScale > 0f ? UiKit.Good : UiKit.Muted;
+            }
         }
 
         private void RefreshCalibrationButton()

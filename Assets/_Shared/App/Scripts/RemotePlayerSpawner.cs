@@ -176,6 +176,8 @@ namespace VortexArena.App
             // Roster'da bulunamayan oyuncu KALİBRELİ sayılır (§10.6): bilinmeyen durumu alarm gibi
             // göstermek — henüz roster'ı gelmemiş yeni oyuncuyu parlatmak — gürültü üretir.
             bool calibrated = true;
+            // §10.8: 0 = ölçülmemiş → RemoteAvatar 1 uygular. Roster gelmeden ölçek uydurulmaz.
+            float bodyScale = 0f;
 
             if (_lastLobbyState != null && _lastLobbyState.players != null)
             {
@@ -195,12 +197,14 @@ namespace VortexArena.App
                     number = info.number;
                     team = info.team ?? "";
                     calibrated = info.calibrated;
+                    bodyScale = info.bodyScale;
                     break;
                 }
             }
 
             avatar.SetInfo(displayName, number, team);
             avatar.SetCalibrated(calibrated);
+            avatar.SetBodyScale(bodyScale);
 
             // Takımsız modda (FFA) ve admin gözlemcide _localTeam boştur → kimse dost işaretlenmez.
             avatar.SetFriendly(!string.IsNullOrEmpty(_localTeam) && team == _localTeam);

@@ -108,6 +108,16 @@ public sealed class PlayerState
     /// <summary>"manual" | "anchor" | "cloud" | "" — doğrulanmayan serbest etiket (§5.1).</summary>
     public string CalibrationSource { get; set; } = "";
 
+    /// <summary>
+    /// Uzak avatara uygulanacak üniform gövde ölçeği (§10.8); <c>0</c> = ölçülmemiş.
+    /// <para>Kalibrasyonla AYNI sınıftadır (cihaz durumu, maç sıfırlamalarında korunur) ve aynı
+    /// kilit altında yazılır. Sunucu bu sayıyı <b>üretmez</b>: istemci ölçer, sunucu yalnız
+    /// aralığa kırpıp roster'da yayar.</para>
+    /// <para>⚠️ <see cref="Calibrated"/> <c>false</c> olduğunda sıfırlanır — ölçü arena zeminine
+    /// göredir, zemin geçersizse ölçü de geçersizdir.</para>
+    /// </summary>
+    public float BodyScale { get; set; }
+
     /// <summary>welcome'da verilen UDP kayıt jetonu; her yeni hello'da yenilenir.</summary>
     public uint UdpToken { get; set; }
 
@@ -235,7 +245,9 @@ public sealed class PlayerState
         score = Score,
         // §10.6 — admin gözlemci arayüzündeki kalibrasyon tik'i bunu okur.
         calibrated = Calibrated,
-        calibrationSource = CalibrationSource
+        calibrationSource = CalibrationSource,
+        // §10.8 — 0 = ölçülmemiş; okuyan taraf 1 uygular.
+        bodyScale = BodyScale
     };
 
     private static string ConnectionWire(PlayerConnection connection) => connection switch

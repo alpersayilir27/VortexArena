@@ -169,6 +169,10 @@ public sealed class PlayerRegistry : IDisposable
             // başlamış olabilir). Başlık kayıtlı anchor'dan geri yükleyince yeniden bildirir.
             state.Calibrated = false;
             state.CalibrationSource = "";
+            // §10.8: ölçü hizalamaya bağlı olduğu için o da bilinmiyor sayılır. Başlık kendi
+            // kaydından ölçeği hemen yeniden bildirir (set_body_scale), yani operatör yeniden
+            // ölçmek zorunda kalmaz.
+            state.BodyScale = 0f;
             state.Connection = PlayerConnection.Connected;
             state.DisconnectedAt = default;
             state.LastSeen = DateTime.UtcNow;
@@ -347,23 +351,38 @@ public sealed class PlayerRegistry : IDisposable
             if (state.Calibrated == calibrated && state.CalibrationSource == nextSource) return false;
             state.Calibrated = calibrated;
             state.CalibrationSource = nextSource;
+
+            // §10.8: hizalama düşünce gövde ölçüsü de düşer — ölçü arena zeminine göre alınmıştı.
+            // ⚠️ Kapı burasıdır, clear_calibration DEĞİL: başlığın kendi set_calibration{false}'u
+            // da aynı sonucu doğurur ve tek yolu kapatmak kuralı işlevsiz bırakırdı.
+            if (!calibrated) state.BodyScale = 0f;
         }
         Changed?.Invoke(state, PlayerChangeKind.Updated);
         return true;
     }
 
-    /// <summary>Tüm oyuncuların kalibrasyonunu sıfırlar (clear_calibration playerId:0).
-    /// Dönüş: etkilenen oyuncu sayısı. Zaten kalibresiz olan atlanır — gereksiz lobby_state
-    /// yayını üretmesin.</summary>
-    public int ClearAllCalibration()
+    /// <summary>
+    /// Gövde ölçeğini yazar (§10.8). Sunucu sayıyı ÜRETMEZ, yalnız
+    /// <c>[BODY_SCALE_MIN, BODY_SCALE_MAX]</c> aralığına kırpar: ölçümü istemci yapıyor ama sonuç
+    /// herkesin ekranına gidiyor.
+    /// <para>Kalibrasyon kapısı bilinçli olarak YOKTUR: yeniden bağlanan başlık kalibrasyonunu ve
+    /// ölçeğini aynı anda bildiriyor ve iki mesajın sırasına bağlı bir kapı, ölçeği bazen sessizce
+    /// düşürürdü. Hizalama gerçekten geçersizse ölçeği <see cref="SetCalibration"/> zaten siler.</para>
+    /// <para>Değişmediyse yayın yapılmaz — <see cref="SetCalibration"/> ile aynı gerekçe.</para>
+    /// </summary>
+    public bool SetBodyScale(int playerId, float scale)
     {
-        var affected = 0;
-        foreach (var state in Snapshot())
+        if (!TryGetByPlayerId(playerId, out var state)) return false;
+        if (state.Role != "player") return false;
+
+        var clamped = Math.Clamp(scale, ArenaProtocol.BODY_SCALE_MIN, ArenaProtocol.BODY_SCALE_MAX);
+        lock (_gate)
         {
-            if (state.Role != "player" || !state.Calibrated) continue;
-            if (SetCalibration(state.PlayerId, false, null)) affected++;
+            if (Math.Abs(state.BodyScale - clamped) < 0.0001f) return false;
+            state.BodyScale = clamped;
         }
-        return affected;
+        Changed?.Invoke(state, PlayerChangeKind.Updated);
+        return true;
     }
 
     // ⚠️ Toplu sıfırlama (clear_calibration playerId:0) burada DEĞİL LobbyService'tedir ve buraya

@@ -62,6 +62,16 @@ namespace VortexArena.Core.Player
         public bool HasInputAuthority { get; private set; }
 
         /// <summary>
+        /// Bu karakterin üniform gövde ölçeği (§10.8) — <c>1</c> = ölçüsüz. Yazarı
+        /// <see cref="RemoteAvatar"/>'dır (roster'dan gelir).
+        /// <para>⚠️ <b>Yalnız UZAK gövdede anlamlıdır ve yalnız orada uygulanır</b>
+        /// (<see cref="ApplyArenaRoot"/>). Yerel gövdede yazılsa gönderenin kendi ölçüm referansı
+        /// kayardı: ikinci ölçüm zaten ölçeklenmiş bir göz hizasını okur ve çarpanı <c>1</c>'e
+        /// yaklaştırırdı — düğme ikinci basışta sessizce bozulurdu.</para>
+        /// </summary>
+        public float BodyScale { get; set; } = 1f;
+
+        /// <summary>
         /// Sensör kaynağı gerçekten koşuyor mu.
         /// <para>⚠️ <see cref="Initialize"/>'ın onu açmış olması YETMEZ: <c>OVRBody.OnEnable</c>
         /// body tracking'i başlatamazsa <b>kendini kapatır</b> ve bir daha denemez. Bu, gövdenin
@@ -285,9 +295,10 @@ namespace VortexArena.Core.Player
         /// <para>⚠️ SDK'nın <c>ApplyBodyPose</c>'undan SONRA koşmak zorunda: o, 0. eklemi kök
         /// transformuna yazıp gönderenin dünya pozunu buraya taşıyor. <c>LateUpdate</c> tüm
         /// <c>Update</c>'lerden sonra çalıştığı için sıra garantidir.</para>
-        /// <para>⚠️ <b>Ölçeğe DOKUNULMAZ:</b> boy blob'un 0. ekleminden geliyor ve SDK onu
-        /// <c>localScale</c>'e yazıyor (oyuncunun gerçek boyu). Burada da yazmak iki doğruluk
-        /// kaynağı olurdu.</para>
+        /// <para>⚠️ <b>Ölçeği de BU sınıf yazar</b> (§10.8) ve SDK'nın yazdığını bilerek ezer:
+        /// gönderen <c>Calibrate()</c> çağırmadığı için blob'dan gelen ölçek her zaman <c>1</c>'dir,
+        /// gerçek boy ise ayrı bir alanla (<c>bodyScale</c>) taşınıyor. Tek ölçek yazarı burasıdır —
+        /// iki yazar olsaydı hangi boyun çizildiği kareye göre değişirdi.</para>
         /// </summary>
         private void ApplyArenaRoot()
         {
@@ -299,6 +310,10 @@ namespace VortexArena.Core.Player
 
             Pose world = ArenaSpace.ArenaToWorld(arenaRoot);
             _characterRoot.SetPositionAndRotation(world.position, world.rotation);
+
+            // ⚠️ Kare başına koşulsuz yazılır: SDK her karede ApplyBodyPose'ta kök ölçeğine
+            // dokunuyor, "değiştiyse yaz" guard'ı bir kare sonra bayat kalırdı.
+            _characterRoot.localScale = Vector3.one * BodyScale;
         }
 
         /// <inheritdoc cref="INetworkCharacterBehaviour.ReceiveStreamData"/>

@@ -242,6 +242,29 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>
+        /// Bir oyuncunun gövde ölçüsünü ALDIRIR; <paramref name="playerId"/> <b>0 = HERKES</b>
+        /// (§10.8). Sunucu hesap yapmaz, komutu başlığa iletir; ölçümü başlık yapıp
+        /// <c>set_body_scale</c> ile döner ve sonuç roster'dan herkese yayılır.
+        /// <para>⚠️ Ölçüm anında oyuncu <b>ayakta ve dik</b> olmalıdır — doğru anı bilen operatördür,
+        /// bu yüzden tetikleyici bir düğmedir. Kalibresiz oyuncuya komut gönderilmez (sunucu keser),
+        /// sebebi duyuru satırında görünür.</para>
+        /// </summary>
+        public static void MeasureBodyScale(int playerId)
+        {
+            if (playerId < 0)
+            {
+                return;
+            }
+
+            if (Send(new MeasureBodyScaleMsg { playerId = playerId }))
+            {
+                SetStatus(playerId == 0
+                    ? "Tüm oyuncuların ölçülmesi gönderildi."
+                    : $"Ölçüm gönderildi: oyuncu {playerId}");
+            }
+        }
+
         /// <summary>Elle yeniden bağlanma (bağlantı kesildikten sonra tek geri dönüş yolu).</summary>
         public static void Reconnect()
         {
