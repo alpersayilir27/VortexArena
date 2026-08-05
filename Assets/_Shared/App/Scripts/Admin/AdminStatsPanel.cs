@@ -23,6 +23,10 @@ namespace VortexArena.App.Admin
     /// <c>net_stats</c> ile geliyor, ama operatörün eyleme çevirebileceği tek sayı ping'dir. Hacim
     /// (bayt/sn, paket/sn) hiç gelmiyor: o sayılar sunucu konsolundadır (<c>[state]</c> satırı) ve
     /// oraya aittir.</para>
+    /// <para>⚠️ <b>BATARYA hücresi zengin metin içerir</b> (eşiğin altındaki pil ve kumanda
+    /// simgeleri token başına renklenir; tek TMP'nin tek <c>.color</c>'ı olduğu için başka yolu
+    /// yok). Prefabtaki o kolonun <c>richText</c>'i AÇIK kalmalı — kapatılırsa hücrede
+    /// <c>&lt;color=#…&gt;</c> etiketleri düz metin olarak görünür.</para>
     /// </summary>
     public class AdminStatsPanel : MonoBehaviour
     {
@@ -240,9 +244,17 @@ namespace VortexArena.App.Admin
                     ? (view.kills / (float)view.deaths).ToString("0.00")
                     : view.kills.ToString("0.00");
                 case 6: return Mathf.RoundToInt(view.hp).ToString();
-                case 7: return view.battery < 0f
-                    ? "-"
-                    : $"%{Mathf.RoundToInt(Mathf.Clamp01(view.battery) * 100f)}";
+                // Pil eşikleri/renkleri ve kumanda simgeleri satır kartıyla TEK kaynaktan gelir
+                // (AdminPlayerRow) — aynı gözlük iki yerde farklı renkte görünmemeli.
+                // ⚠️ Kumanda AYRI BİR KOLON DEĞİL, batarya hücresinin devamı: kolonlar prefabtaki
+                // TMP objelerinden geliyor (bkz. ColumnTitles) ve yeni kolon prefab işidir. İki
+                // değer karışmaz — kumanda tokeni kendi "K:" önekini taşır ve yüzde değildir.
+                case 7:
+                {
+                    string battery = AdminPlayerRow.FormatBattery(view);
+                    string controllers = AdminPlayerRow.FormatControllers(view);
+                    return string.IsNullOrEmpty(controllers) ? battery : $"{battery} {controllers}";
+                }
                 case 8: return StateText(view);
                 case 9: return string.IsNullOrEmpty(view.scene) ? "-" : view.scene;
                 // §6.7: -1 = ölçüm yok (henüz yoklama dönmedi ya da gözlükte eski sürüm var).

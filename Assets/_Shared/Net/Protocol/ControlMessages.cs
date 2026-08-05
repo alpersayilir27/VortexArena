@@ -34,6 +34,19 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.Status;
         public string scene;
         public float battery;
+
+        /// <summary>Sol/sağ kumandanın durumu: <c>ArenaProtocol.CONTROLLER_*</c> (§5.1).
+        /// <c>0</c> = bildirilmedi (atanmamış <c>int</c> "sağlıklı" sayılmasın diye).
+        /// <para>⚠️ <b>Bu bir pil YÜZDESİ DEĞİL, durumdur ve yüzde olamaz</b> — kumanda şarjı
+        /// Quest'te OpenXR altında okunamıyor. <see cref="battery"/> <b>gözlüğün</b> pilidir.</para>
+        /// <para>⚠️ Bu iki alan telemetri sayılarının aksine roster yayını TETİKLER (kesikli durum),
+        /// bu yüzden <see cref="PlayerInfo"/>'da da taşınır — aşağıdaki "PlayerInfo'ya KONMAZ"
+        /// notu <see cref="fps"/> ve ağ telemetrisi içindir.</para></summary>
+        public int ctrlL;
+
+        /// <inheritdoc cref="ctrlL"/>
+        public int ctrlR;
+
         public float fps;
 
         /// <summary>İstemcinin UYGULADIĞI son <see cref="LobbyStateMsg.version"/> (§5.1). Sunucu
@@ -378,6 +391,18 @@ namespace VortexArena.Protocol
         public bool inMatch;
 
         public float battery;
+
+        /// <summary>Sol/sağ kumandanın durumu: <c>ArenaProtocol.CONTROLLER_*</c> (değer tablosu
+        /// §5.1). <c>0</c> = bildirilmedi; admin kaydında daima <c>0</c> kalır.
+        /// <para>⚠️ <b>Pil YÜZDESİ DEĞİL, durumdur ve yüzde olamaz</b> (OpenXR kumanda şarjını
+        /// okumuyor). <see cref="battery"/> <b>gözlüğün</b> pilidir.</para>
+        /// <para>Roster'da taşınmasının gerekçesi kalibrasyon alanlarınınkiyle aynıdır: kesikli bir
+        /// durumdur, değiştiği an roster'ın zaten tazelendiği andır.</para></summary>
+        public int ctrlL;
+
+        /// <inheritdoc cref="ctrlL"/>
+        public int ctrlR;
+
         public string scene;
 
         // Maç sayaçları (§10.2) — SUNUCU-OTORİTER, admin gözlemci arayüzünün doğruluk kaynağı.

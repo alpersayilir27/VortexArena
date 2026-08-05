@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
+using VortexArena.Protocol;
 
 namespace VortexArena.App.Admin
 {
@@ -55,6 +56,24 @@ namespace VortexArena.App.Admin
         private const string LabelMeasure = "ÖLÇ";
 
         private const float DeadColorScale = 0.5f;
+
+        /// <summary>Gözlük pili için uyarı eşikleri (0..1): altında sarı, kritiğin altında kırmızı.
+        /// Eşik bir OPERATÖR kararıdır — %25 "seansı bitirmeden değiştir", %50 "gözün üstünde
+        /// olsun". Aynı iki eşik istatistik panelinde de kullanılır
+        /// (<see cref="FormatBattery"/> tek kaynaktır).</summary>
+        private const float BatteryCritical = 0.25f;
+
+        /// <inheritdoc cref="BatteryCritical"/>
+        private const float BatteryLow = 0.5f;
+
+        // ⚠️ Kumanda simgeleri ASCII: kalibrasyon etiketlerindeki (yukarı bak) ve kill feed'deki
+        // gerekçenin aynısı — TMP varsayılan fontunda ●/◐/✕ garantisi yok, eksik glif □ çizilir ve
+        // operatör üç durumu birbirinden ayıramaz. Ayrımı asıl taşıyan zaten RENKTİR; harf yalnız
+        // renk körü bir operatör için yedek.
+        private const string GlyphControllerOk = "+";
+        private const string GlyphControllerUntracked = "~";
+        private const string GlyphControllerLost = "X";
+        private const string GlyphControllerUnknown = "-";
 
         /// <summary>Satır sönüklüğü: geri beklenen cihaz ile oyundan çıkarılmış cihaz aynı
         /// görünmemeli (§2) — ilki dönebilir, ikincisi için yapılacak bir şey yoktur.</summary>
@@ -197,6 +216,10 @@ namespace VortexArena.App.Admin
 
             if (statsText != null)
             {
+                // ⚠️ Satırın TABAN rengi burada, token renkleri zengin metinle: tek TMP'nin tek
+                // `.color`'ı var, oysa pil ve kumanda kendi durumlarına göre ayrı ayrı renklenmeli.
+                // Ön koşul prefabtaki `richText`'in AÇIK olmasıdır (TMP varsayılanı açık); kapatan
+                // biri olursa etiketler düz metin olarak ("<color=#…>") görünür.
                 statsText.text = BuildStatsLine(view);
                 statsText.color = view.IsConnected ? UiKit.Muted : UiKit.Faint;
             }
@@ -364,9 +387,79 @@ namespace VortexArena.App.Admin
 
         private static string BuildStatsLine(AdminPlayerView view)
         {
-            string battery = view.battery < 0f ? "-" : $"%{Mathf.RoundToInt(Mathf.Clamp01(view.battery) * 100f)}";
+            string battery = FormatBattery(view);
+            string controllers = FormatControllers(view);
             string state = BuildState(view);
-            return $"{view.kills}/{view.deaths} · {battery} · {state}";
+
+            // Kumanda tokeni hiç bilgi taşımıyorsa (iki el de "bildirilmedi") satır onunla
+            // şişmez — dar kartta yer, okunmayan bir sütuna değil duruma ayrılır.
+            return string.IsNullOrEmpty(controllers)
+                ? $"{view.kills}/{view.deaths} · {battery} · {state}"
+                : $"{view.kills}/{view.deaths} · {battery} · {controllers} · {state}";
+        }
+
+        /// <summary>
+        /// GÖZLÜK pilinin metni; eşiğin altındaysa zengin metinle renklendirilmiş olarak döner.
+        /// <c>-</c> = bilinmiyor (<c>battery &lt; 0</c>) ve renklenmez: bilinmeyen bir değeri
+        /// alarm gibi göstermek operatörü boşuna koşturur.
+        /// <para>İstatistik paneli de bunu çağırır — eşikler iki yerde ayrı yazılsaydı biri
+        /// değiştiğinde aynı pil kartta kırmızı, tabloda sarı görünürdü.</para>
+        /// </summary>
+        internal static string FormatBattery(AdminPlayerView view)
+        {
+            if (view.battery < 0f)
+            {
+                return "-";
+            }
+
+            float level = Mathf.Clamp01(view.battery);
+            string text = $"%{Mathf.RoundToInt(level * 100f)}";
+
+            return level < BatteryCritical ? Colored(text, UiKit.Bad)
+                : level < BatteryLow ? Colored(text, UiKit.Accent)
+                : text;
+        }
+
+        /// <summary>
+        /// Sol ve sağ kumandanın durumu tek token hâlinde (<c>K:</c> + iki simge), HER simge kendi
+        /// rengiyle. İki el de bildirilmemişse <b>boş</b> döner (bkz. <see cref="BuildStatsLine"/>).
+        /// <para>⚠️ Burada YÜZDE gösterilemez: kumandanın şarjı Quest'te OpenXR altında okunamıyor
+        /// (§5.1). Operatörün eyleme çevirebileceği bilgi "bu el düştü mü"dür.</para>
+        /// </summary>
+        internal static string FormatControllers(AdminPlayerView view)
+        {
+            if (view.ctrlL == ArenaProtocol.CONTROLLER_UNKNOWN &&
+                view.ctrlR == ArenaProtocol.CONTROLLER_UNKNOWN)
+            {
+                return "";
+            }
+
+            return $"K:{ControllerGlyph(view.ctrlL)}{ControllerGlyph(view.ctrlR)}";
+        }
+
+        private static string ControllerGlyph(int state)
+        {
+            switch (state)
+            {
+                case ArenaProtocol.CONTROLLER_OK:
+                    return Colored(GlyphControllerOk, UiKit.Muted);
+                case ArenaProtocol.CONTROLLER_UNTRACKED:
+                    return Colored(GlyphControllerUntracked, UiKit.Accent);
+                case ArenaProtocol.CONTROLLER_LOST:
+                    return Colored(GlyphControllerLost, UiKit.Bad);
+                default:
+                    return Colored(GlyphControllerUnknown, UiKit.Faint);
+            }
+        }
+
+        /// <summary>Tek token'ı TMP zengin metniyle renklendirir.
+        /// <para>⚠️ Etiket <c>RGB</c>'dir, <c>RGBA</c> değil: TMP renklendirilen aralığın alfasını
+        /// zaten tam opak yapar, dolayısıyla token başına alfa vermek yalnız görünmez bir metin
+        /// üretme riski taşır. Renklenmeyen tokenler (normal pil, durum metni)
+        /// <c>statsText.color</c>'ı olduğu gibi kullanmaya devam eder.</para></summary>
+        private static string Colored(string text, Color color)
+        {
+            return $"<color=#{ColorUtility.ToHtmlStringRGB(color)}>{text}</color>";
         }
 
         /// <summary>Satırın durum metni. ⚠️ "çevrimdışı" diye bir durum YOKTUR (§2): kopan cihaz

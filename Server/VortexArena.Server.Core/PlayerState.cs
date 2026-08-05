@@ -49,6 +49,15 @@ public sealed class PlayerState
     /// <summary>0–1 aralığı; -1 = bilinmiyor.</summary>
     public float Battery { get; set; } = -1f;
 
+    /// <summary>Sol/sağ kumandanın durumu (<c>ArenaProtocol.CONTROLLER_*</c>, §5.1);
+    /// <c>CONTROLLER_UNKNOWN</c> = bilinmiyor — admin kaydı ve bu alanı doldurmayan istemci burada
+    /// kalır. Bilinmeyen değerin <c>0</c> olması şart: atanmamış <c>int</c> zaten <c>0</c> geldiği
+    /// için <c>0</c>'ı "sağlıklı" saymak bildirmeyen her kaydı sağlıklı gösterirdi.</summary>
+    public int CtrlL { get; set; } = ArenaProtocol.CONTROLLER_UNKNOWN;
+
+    /// <inheritdoc cref="CtrlL"/>
+    public int CtrlR { get; set; } = ArenaProtocol.CONTROLLER_UNKNOWN;
+
     public float Fps { get; set; }
     public string Scene { get; set; } = "";
 
@@ -236,6 +245,9 @@ public sealed class PlayerState
         reconnectSeconds = ReconnectSecondsLeft(),
         inMatch = MatchParticipant,
         battery = Battery,
+        // §5.1/§5.3 — kesikli cihaz durumu; telemetri sayılarının aksine roster'da taşınır.
+        ctrlL = CtrlL,
+        ctrlR = CtrlR,
         scene = Scene,
         // §10.2 sayaçları: admin istatistik tablosu bunları okur (§5.3 lobby_state).
         kills = Kills,

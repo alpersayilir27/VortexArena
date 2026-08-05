@@ -4,6 +4,13 @@ namespace VortexArena.Protocol
     public static class ArenaProtocol
     {
         /// <summary>
+        /// v10: <b>kumanda durumu</b> — <c>0x01</c>/<c>0x02</c> bayrak baytında bit3/bit4
+        /// (<see cref="SnapshotEntry.FLAG_HAND_L_STALE"/> /
+        /// <see cref="SnapshotEntry.FLAG_HAND_R_STALE"/>, §6.3) + <c>status</c> ve
+        /// <c>PlayerInfo</c> üzerinde <c>ctrlL</c>/<c>ctrlR</c> (§5.1/§5.3).
+        /// <para>⚠️ Değişiklik tümüyle <b>eklemelidir</b>: bayt düzeni değişmedi (bitler rezervden
+        /// alındı), bilmeyen uç bitleri yok sayar ve alanları <see cref="CONTROLLER_UNKNOWN"/>
+        /// okur. Karışık sürümde kaybolan tek şey "bu elin pozu tahmindir" bilgisidir.</para>
         /// v10 ayrıca <c>clear_calibration</c>'a <b>sunucu → istemci yönü</b> ekler (§5.2/§5.3):
         /// sıfırlama artık roster'a yazılan bir boole değil, hedef başlığa <b>alansız</b> iletilen
         /// bir komuttur. Gerekçe §10.6'dadır — yarım kalmış elle kalibrasyonun (A alındı, B
@@ -224,6 +231,29 @@ namespace VortexArena.Protocol
         /// <summary>Süre doldu, oyuncu oyundan çıkarıldı. Kayıt yalnız koşan maçın katılımcısıysa
         /// (<c>PlayerInfo.inMatch</c>) maç sonuna kadar durur (§10.2).</summary>
         public const string CONNECTION_LEFT = "left";
+
+        // ---- Kumanda durumu (§5.1/§5.3): status ve PlayerInfo'daki ctrlL/ctrlR. ----
+        // ⚠️ Taşınan şey bir YÜZDE DEĞİL DURUMDUR: kumandanın pil yüzdesi Quest'te OpenXR altında
+        // okunamıyor (OVRInput.GetControllerBatteryPercentRemaining kullanımdan kalktı ve daima 0
+        // döner, Unity OpenXR sağlayıcısı bu veriyi hiç yayınlamaz) — okunamayan bir sayıyı telde
+        // taşımak sahada "%0 yazıyor ama kumanda çalışıyor" olarak okunurdu. PlayerInfo.battery
+        // GÖZLÜĞÜN pilidir.
+
+        /// <summary>Bildirilmedi: admin kaydı ya da bu alanı doldurmayan istemci.
+        /// <para>⚠️ <b><c>0</c> bilerek "bilinmiyor"dur</b> — JSON'da atanmamış <c>int</c> <c>0</c>
+        /// olduğu için <c>0</c>'ı "sağlıklı" saymak bildirmeyen her kaydı sağlıklı gösterirdi
+        /// (<c>battery = -1</c> ile aynı desen: bilinmeyen değer geçerli aralığın dışındadır).</para></summary>
+        public const int CONTROLLER_UNKNOWN = 0;
+
+        /// <summary>Kumanda bağlı ve izleniyor — el pozu ölçümdür.</summary>
+        public const int CONTROLLER_OK = 1;
+
+        /// <summary>Bağlı ama pozu geçersiz (görüş dışı / uykuda).</summary>
+        public const int CONTROLLER_UNTRACKED = 2;
+
+        /// <summary>Hiç bağlı değil: pili bitti ya da kapandı. Gönderen son geçerli eli kafaya
+        /// göreli tutmaya devam eder ve pozu <c>FLAG_HAND_*_STALE</c> ile bayat işaretler (§6.3).</summary>
+        public const int CONTROLLER_LOST = 3;
 
         // ---- Faz değerleri (§10.1). Telde string taşınır; bilinmeyen değer PAUSED sayılır. ----
 

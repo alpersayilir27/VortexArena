@@ -194,7 +194,10 @@ namespace VortexArena.Protocol
         public byte itemL;
         public byte itemR;
 
-        /// <summary>Kavrama bitleri: <c>FLAG_GRIP_LINKED</c> | <c>FLAG_PRIMARY_RIGHT</c> (§6.3).</summary>
+        /// <summary>Snapshot'a kopyalanan istemci bitleri: <c>FLAG_GRIP_LINKED</c> |
+        /// <c>FLAG_PRIMARY_RIGHT</c> | <c>FLAG_HAND_L_STALE</c> | <c>FLAG_HAND_R_STALE</c> (§6.3).
+        /// Ad kavramadan gelir ama içerik yalnız kavrama değildir — süzgeç
+        /// <see cref="SnapshotEntry.GRIP_FLAG_MASK"/>.</summary>
         public byte gripFlags;
 
         public PoseData head;
@@ -235,8 +238,8 @@ namespace VortexArena.Protocol
     /// Snapshot oyuncu girdisi: [u8 playerId][u8 flags][u8 itemL][u8 itemR][head][handL][handR]
     /// = <b>88 B</b> (§6.3).
     /// <para><b>flags: tek bayt, iki yazar</b> (otorite bölünmesinin tel karşılığı) — bit0
-    /// <b>sunucunun</b>dur (otoriter <c>alive</c>), bit1-2 istemcinin <c>gripFlags</c>'inden
-    /// kopyalanır. Bit3-7 rezerv: sıfır yazılır, okuyucu yok sayar.</para>
+    /// <b>sunucunun</b>dur (otoriter <c>alive</c>), bit1-5 istemcinin <c>gripFlags</c>'inden
+    /// kopyalanır. Bit6-7 rezerv: sıfır yazılır, okuyucu yok sayar.</para>
     /// </summary>
     public struct SnapshotEntry
     {
@@ -252,12 +255,45 @@ namespace VortexArena.Protocol
         public const byte FLAG_PRIMARY_RIGHT = 1 << 2;
 
         /// <summary>
+        /// İstemciden kopya: sol el pozu <b>ölçülmüş değil</b> — gönderen son geçerli pozu
+        /// <b>kafaya göreli</b> tutuyor (el arena uzayında donmaz, gövdeyle taşınır).
+        /// <para>Kumandanın pili bittiğinde rig el anchor'ını koşulsuz yazar ve okuma
+        /// <c>(0,0,0)</c> döner; akışı kesmek ya da eli sıfırlamak seçenek DEĞİLDİR (paket sabit
+        /// uzunluklu — "eli olmayan oyuncu" diye bir tel durumu yok; sıfır poz eli oyuncunun
+        /// ayağının dibine koyar), bu yüzden son geçerli poz tutulup burada işaretlenir.</para>
+        /// <para>⚠️ Bayrağın işi alıcının <b>yorumudur</b>: bayat el bir ölçüm değil tahmindir —
+        /// nişan/temas teşhisi ona dayandırılmaz, admin bunu operatöre gösterir.</para>
+        /// </summary>
+        public const byte FLAG_HAND_L_STALE = 1 << 3;
+
+        /// <inheritdoc cref="FLAG_HAND_L_STALE"/>
+        public const byte FLAG_HAND_R_STALE = 1 << 4;
+
+        /// <summary>
+        /// İstemciden kopya: gönderenin gövdesi bir <b>iç engelin İÇİNDE</b> (§10.9) — gövdenin
+        /// %30'u, kafanın tamamı ya da silahın tamamı engel hacmine girmiş.
+        /// <para>⚠️ <b>Ölçüm istemcinin, SONUÇ sunucunun:</b> bu bit yalnız "gövdem içeride" der;
+        /// can eritmeyi sunucu kendi tikinde ve kendi saatiyle yapar (<c>hit_report</c>'un hasar
+        /// modelinin aynısı — ölçüm istemcide, otorite sunucuda). İstemci bu bitle kendine hasar
+        /// yazdıramaz, yalnız cezanın <b>başlamasını</b> bildirir.</para>
+        /// <para>⚠️ Bayrak <b>durumdur, olay değil</b>: her pakette yeniden gönderilir. Kaybolan bir
+        /// paket 50 ms sonra kendini onarır — kenar tetikli bir bildirimde kaybolan "çıktım"
+        /// oyuncuyu sonsuza kadar duvarda bırakırdı.</para>
+        /// </summary>
+        public const byte FLAG_IN_OBSTACLE = 1 << 5;
+
+        /// <summary>
         /// İstemciden kopyalanmasına izin verilen bitler. <b>Varlık sebebi bir bekçidir:</b> sunucu
         /// <c>PoseUpdate.gripFlags</c>'i bu maskeyle süzüp snapshot'a yazar, böylece istemci bit0'ı
         /// (<see cref="FLAG_ALIVE"/> — kendini canlı ilan etmeyi) set EDEMEZ. Maskesiz kopyalama
         /// ölü bir oyuncunun kendini diriltmesi olurdu.
+        /// <para>Maskedeki beş bit de <b>doğrulanmadan</b> kopyalanır: kavrama, bayat el ve engel
+        /// ihlali eşya baytlarıyla aynı türden <b>istemci-otoriter ÖLÇÜM bilgisidir</b>
+        /// (§6.6/§10.3/§10.9). Sunucunun yazdığı bitler maskenin DIŞINDA kalır.</para>
         /// </summary>
-        public const byte GRIP_FLAG_MASK = FLAG_GRIP_LINKED | FLAG_PRIMARY_RIGHT;
+        public const byte GRIP_FLAG_MASK =
+            FLAG_GRIP_LINKED | FLAG_PRIMARY_RIGHT | FLAG_HAND_L_STALE | FLAG_HAND_R_STALE |
+            FLAG_IN_OBSTACLE;
 
         public byte playerId;
         public byte flags;

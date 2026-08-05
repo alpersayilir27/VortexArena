@@ -106,7 +106,30 @@ Hem `255.255.255.255` hem her arayüzün subnet-broadcast adresine gönderilir:
 ```
 `scenes` = build listesinden runtime'da toplanır (`SceneUtility.GetScenePathByBuildIndex`) → admin katalog doğrulaması bunu kullanır.
 
-**`status`** — her 5 sn: `{ "type":"status", "scene":"Arena12x12", "battery":0.87, "fps":71.6, "rosterVersion":42, "rttMs":14, "jitterMs":3.2, "lossPct":0.4 }`
+**`status`** — her 5 sn: `{ "type":"status", "scene":"Arena12x12", "battery":0.87, "ctrlL":1, "ctrlR":3, "fps":71.6, "rosterVersion":42, "rttMs":14, "jitterMs":3.2, "lossPct":0.4 }`
+
+**`ctrlL`/`ctrlR`** = sol/sağ **kumandanın durumu** (`ArenaProtocol.CONTROLLER_*`). Değerler:
+
+| Değer | Sabit | Anlam |
+|---|---|---|
+| `0` | `CONTROLLER_UNKNOWN` | Bildirilmedi (admin kaydı, bildirmeyen istemci) |
+| `1` | `CONTROLLER_OK` | Bağlı ve izleniyor |
+| `2` | `CONTROLLER_UNTRACKED` | Bağlı ama pozu geçersiz (görüş dışı / uykuda) |
+| `3` | `CONTROLLER_LOST` | Hiç bağlı değil — pil bitti ya da kapandı |
+
+⚠️ **`0` neden "bilinmiyor":** JSON'da atanmamış `int` `0`'dır; `0`'ı `OK` yapmak bu alanı hiç
+doldurmayan her kaydı (admin, eski istemci) sağlıklı gösterirdi. `battery = -1` sözleşmesiyle aynı
+desen — "bilinmiyor" değeri geçerli ölçümlerin aralığının dışında durur.
+
+⚠️ **Kumandanın pil YÜZDESİ telde YOKTUR ve eklenmez.** Quest'te OpenXR altında okunamıyor
+(`OVRInput.GetControllerBatteryPercentRemaining` kullanımdan kalktı ve daima `0` döner; Unity OpenXR
+sağlayıcısı bu veriyi hiç yayınlamaz). Okunamayan bir sayıyı telde taşımak sahada **"%0 yazıyor ama
+kumanda çalışıyor"** olarak okunurdu; taşınan şey bu yüzden bir yüzde değil, bir **durumdur**.
+`battery` alanı **gözlüğün** pilidir, kumandanın değil.
+
+⚠️ Bu iki alan `rttMs`/`fps`'in aksine **roster yayını TETİKLER** ve `PlayerInfo`'da da taşınır
+(§5.3): kesikli bir durumdur, sürekli değişen bir sayı değil — bir oyuncunun kumandası düştüğünde
+operatörün bunu bir sonraki roster değişikliğine kadar beklememesi gerekir.
 
 > **`rttMs`/`jitterMs`/`lossPct` (v5)** — ağ telemetrisi; **ölçen taraf İSTEMCİDİR** (§6.7), sunucu yalnız taşır. `-1` = bilinmiyor (`0` değil: 0 ms gerçekten mümkün bir ölçüm gibi okunur). Ayrı bir kanal açılmadı çünkü bu mesaj zaten 5 sn'de bir gidiyor ve operatör göstergesi için o ritim fazlasıyla yeterli.
 > ⚠️ **Bu üç alan `PlayerInfo`'ya GİRMEZ** (yani `lobby_state` roster'ında taşınmaz). Sürekli değişen sayılar oldukları için sunucudaki "görünen bir alan gerçekten değişti mi" kapısını her `status`'ta açar ve **her status'u bir tam roster yayınına** çevirirler — çözülmüş bir hata geri gelir. `fps` tam bu sebeple `PlayerInfo`'da yok; izlenecek emsal odur. Adminlere ayrı ve kaybı zararsız bir kanaldan gider: `net_stats` (§5.3).
@@ -206,7 +229,7 @@ göre kurar. `phase`/`phaseReason`/`modeState` anlamları §10.1'de.
 { "type":"lobby_state", "version":42, "players":[
   { "playerId":3, "number":7, "name":"ertu", "role":"player", "team":"red",
     "ready":true, "connection":"connected", "reconnectSeconds":0,
-    "battery":0.87, "scene":"Arena12x12",
+    "battery":0.87, "ctrlL":1, "ctrlR":3, "scene":"Arena12x12",
     "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7,
     "inMatch":true, "calibrated":true, "calibrationSource":"anchor", "bodyScale":1.04 } ] }
 ```
@@ -239,6 +262,12 @@ Admin olmayan istemciler bu alanları yok sayabilir.
 `score` = **bireysel** maç skoru (`rules.scoring == "player"` olan modlarda anlamlı; takım
 skoru `match_state.scoreRed`/`scoreBlue`'da kalır — §10.5). Bireysel skorun değiştiği an =
 öldürmenin olduğu an = roster'ın zaten tazelendiği an, bu yüzden ayrı bir mesaj tipi yoktur.
+
+`ctrlL`/`ctrlR` = o başlığın sol/sağ **kumanda durumu**; değer tablosu ve `0`'ın neden "bilinmiyor"
+olduğu §5.1'dedir. Burada taşınmasının sebebi kalibrasyon alanlarınınkiyle aynıdır: kesikli bir
+durumdur ve değiştiği an roster'ın zaten tazelendiği andır — telemetri sayılarının (`fps`/`rttMs`)
+`PlayerInfo`'ya girmeme gerekçesi buna işlemez. Admin kaydında daima `0` kalır. ⚠️ Bu alanlar
+**kumanda pil yüzdesi DEĞİLDİR ve olamaz** (§5.1); `battery` gözlüğün pilidir.
 
 `calibrated`/`calibrationSource` = başlığın hizalama durumu (§10.6). **Aynı gerekçeyle ayrı bir
 `calibration_changed` mesajı YOKTUR:** durumun değiştiği an roster'ın zaten tazelendiği andır
@@ -412,6 +441,14 @@ Pozlar **arena uzayında**. `seq` sarmalanır (u16); eski `seq` gelirse paket at
 
 **`itemL`/`itemR`/`gripFlags` (v4)** — elde tutulan eşya (§6.6). Pozla aynı pakette gider çünkü aynı otoriteye aittir: "elimde ne var" da "elim nerede" gibi **istemci-otoriter bir sunum bilgisidir**. Sunucu bu üç baytı **doğrulamaz**, snapshot'a kopyalar (§6.3) — sunucuda eşya tablosu YOKTUR ve eklenmez (§10.3 felsefesi). `gripFlags`'te bit0 gelirse **yok sayılır**: o bit snapshot'ta `FLAG_ALIVE`'dır ve yazarı yalnız sunucudur (istemci kendini canlı ilan edemez).
 
+`gripFlags` **kavrama bitlerinden ibaret değildir**, snapshot'a kopyalanan tüm istemci bitlerini taşır:
+`FLAG_GRIP_LINKED` · `FLAG_PRIMARY_RIGHT` · `FLAG_HAND_L_STALE` · `FLAG_HAND_R_STALE` ·
+`FLAG_IN_OBSTACLE` (§6.3). Sunucu
+gelen baytı `GRIP_FLAG_MASK` ile süzer — **maskenin varlık sebebi bir bekçidir**, bit0'ı elemek: beşi
+de maskeye dahildir ve **doğrulanmadan** kopyalanır, çünkü beşi de eşya baytlarıyla aynı türden
+**istemci-otoriter sunum bilgisidir** (§6.6 / §10.3). Maskeye yeni bir bit eklemek onu tel üzerinde
+istemcinin yazdığı bir alan yapar; sunucunun yazdığı bitler maskenin DIŞINDA kalır.
+
 ⚠️ **İskelet akışı (§6.9) bu paketin yerine GEÇMEZ.** Gövde ayrı bir kanaldan gelir ama poz kanalı durur: silahın ele oturması, eşya baytları ve vuruş bildirimi ham anchor pozundan besleniyor. İki kanalın kadansı da ayrıdır (20 Hz ↔ `SKELETON_RATE_HZ`) — iskeletin gecikmesi silahın gecikmesi olmasın diye. "İskelet zaten el eklemini taşıyor, poz kanalı silinsin" **yapılmaz**: blob opaktır (alıcı içinden tek bir eklemi ucuza okuyamaz) ve o eklem elin fiziksel pozu değil retarget edilmiş bilek kemiğidir.
 
 ⚠️ **Poz kanalı FİZİKSEL gerçeği taşır.** `handL`/`handR` ham rig anchor'larıdır — eşyaya "yapıştırılmış" düzeltilmiş poz DEĞİL. Çift elli silahta boş elin kabzaya oturtulması bir **sunum** kararıdır ve alıcı tarafta yapılır (§6.6). Bu kanal bir kez bulanırsa (düzeltilmiş poz taşımaya başlarsa) sonraki her tüketici — yakın dövüş, elle etkileşim, admin teşhisi — o bulanıklığı miras alır.
@@ -430,7 +467,22 @@ oyuncu başına: [u8 playerId][u8 flags][u8 itemL][u8 itemR][head 28][handL 28][
 | 0 | `FLAG_ALIVE` | **sunucu** | Oyuncu hayatta (otoriter durum) |
 | 1 | `FLAG_GRIP_LINKED` | istemci (`gripFlags`'ten kopya) | İki el **aynı** eşyayı tutuyor |
 | 2 | `FLAG_PRIMARY_RIGHT` | istemci (aynı) | Ana el sağ (yalnız `GRIP_LINKED` iken anlamlı) |
-| 3–7 | rezerv | — | Sıfır yazılır, okuyucu yok sayar |
+| 3 | `FLAG_HAND_L_STALE` | istemci (aynı) | Sol el pozu **ölçülmüş değil**: gönderen son geçerli pozu tutuyor |
+| 4 | `FLAG_HAND_R_STALE` | istemci (aynı) | Sağ el için aynısı |
+| 5 | `FLAG_IN_OBSTACLE` | istemci (aynı) | Gönderen bir **iç engelin içinde** (§10.9). Sunucu bunu can eritmeye, admin halkayı kırmızı yakıp söndürmeye çevirir |
+| 6–7 | rezerv | — | Sıfır yazılır, okuyucu yok sayar |
+
+**Bayat el bitleri (`3`/`4`) neden var:** kumandanın pili biterse rig el anchor'ını **koşulsuz** yazar
+ve okuma `(0,0,0)` döner — yani sıfır poz eli oyuncunun ayağının dibine koyar, üstelik gövde çözümünü
+de (dolayısıyla `0x07`'nin kökünü) zehirler. Gönderen bunu tel dışında çözemez: paket **sabit
+uzunlukludur** (95 B / 88 B), "eli olmayan oyuncu" diye bir tel durumu YOKTUR ve eklenmez — akışı
+kesmek ya da eli sıfırlamak seçenek değildir. Bunun yerine gönderen **son geçerli eli kafaya göreli**
+tutmaya devam eder (el arena uzayında donmaz, oyuncunun gövdesiyle taşınır; donsaydı oyuncu yürüdükçe
+eli geride kalırdı) ve durumu bu bitle bildirir.
+
+⚠️ **Bayrağın işi alıcının YORUMUDUR:** taze olmayan el bir ölçüm değil bir **tahmindir**. Nişan
+teşhisi, temas/yakın dövüş kararı ve "şu oyuncu neye bakıyor" türü çıkarımlar ona dayandırılmaz;
+admin bunu operatöre gösterir (kumandası düşen oyuncu sahada fark edilsin diye).
 
 İstemci kendi pozunu snapshot'tan ÇİZMEZ (yerelden çizer); uzak oyuncuları `INTERP_DELAY_MS` tamponuyla interpole eder. Admin'e de aynı snapshot gider (gözlemci avatarları/işaretçileri bundan beslenir).
 
