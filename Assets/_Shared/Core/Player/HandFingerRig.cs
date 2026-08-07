@@ -52,6 +52,20 @@ namespace VortexArena.Core.Player
         private readonly Quaternion[] _bindLocalRotations = new Quaternion[FingerCount * JointsPerFinger];
         private readonly Vector3[] _bendAxes = new Vector3[FingerCount * JointsPerFinger];
 
+        /// <summary>Bu elin bilek kemiği.</summary>
+        public Transform Wrist { get; private set; }
+
+        /// <summary>
+        /// İzleme/kavrama uzayındaki bir el pozunu bu iskeletin bileğine çeviren düzeltme:
+        /// <c>wrist.rotation = palmPose.rotation * WristCorrection</c>.
+        /// <para>⚠️ Burada <b>saklanır</b>, yeniden ölçülmez: kaynağı
+        /// <see cref="HandGripConvention.TryMeasureBoneBasis"/> ve o ölçüm <b>bind pozunda</b>
+        /// yapılmak zorunda (aşağıdaki kurulum uyarısı). İkinci bir yerde tekrar ölçmek, o yerin
+        /// bind pozunda koştuğu garantisini de tekrar vermeyi gerektirirdi — ve o garanti er geç
+        /// verilmeden kopyalanırdı.</para>
+        /// </summary>
+        public Quaternion WristCorrection { get; private set; } = Quaternion.identity;
+
         /// <summary>
         /// Gövde kökünden bileği adıyla bulup <see cref="TryBuild"/>'e verir — kemik adı bilgisi
         /// bu sınıfın dışına sızmasın diye.
@@ -116,6 +130,9 @@ namespace VortexArena.Core.Player
             }
 
             palmNormalWorld = palmNormalWorld.normalized;
+
+            rig.Wrist = wrist;
+            rig.WristCorrection = HandGripConvention.Correction(rightHand, boneBasis);
 
             for (int finger = 0; finger < FingerCount; finger++)
             {

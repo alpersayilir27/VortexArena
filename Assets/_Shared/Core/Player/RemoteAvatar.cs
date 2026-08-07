@@ -1101,8 +1101,11 @@ namespace VortexArena.Core.Player
             }
 
             // §10.8: kafanın ÜSTÜNE asılan iki şey de çizilen kafayı takip etmeli. Ham poz
-            // kullanılsaydı 1.3 ölçekte etiket, gövdenin kafasının yarım metre altında yüzerdi —
-            // eşyayla aynı kusur (bu döngüde ham pozdan sürülen her şeyi kapsar).
+            // kullanılsaydı 1.3 ölçekte etiket, gövdenin kafasının yarım metre altında yüzerdi.
+            // ⚠️ Eşya için aynı düzeltme YAPILMAZ ve gerekmez: onun yeri ana elin fiziksel pozudur
+            // (atış ışını da oradan çıkıyor) ve çizilen elin eşyaya oturmasını RemoteHandPoser
+            // kolu çözerek sağlıyor — ölçek düzeltmesini oraya da eklemek onu iki kez uygulamak
+            // olurdu.
             Pose headDrawn = headWorld;
             if (character != null)
             {
@@ -1541,6 +1544,71 @@ namespace VortexArena.Core.Player
             }
 
             return idleHandPose.IsEmpty ? HandPoseProfile.Idle : idleHandPose;
+        }
+
+        /// <summary>
+        /// Bu elin <b>avuç</b> hedefi: elde eşya varsa o eşyanın kavrama noktası, yoksa
+        /// <c>false</c>. Uzak elin bileğini eşyaya oturtan taraf (<see cref="RemoteHandPoser"/>)
+        /// bunu okur.
+        /// <para>
+        /// ⚠️ <b>Yön: eşya otorite, el takipçi.</b> Eşyanın yeri ana elin FİZİKSEL pozundan
+        /// geliyor (<see cref="ApplyItemPoses"/>) ve bu böyle kalmalı — atış ışını da o ham pozdan
+        /// çıkıyor. Buradan dönen hedef, çizilen bileği o eşyaya <i>çekmek</i> içindir; ters yön
+        /// (eşyayı çizilen bileğe taşımak) sol/sağ simetrisini bozar ve silahı oyuncunun nişan
+        /// aldığı yerden kaydırır.
+        /// </para>
+        /// <para>
+        /// ⚠️ Ana ve ikincil kavramanın <b>uzayı terstir</b> (<see cref="ItemDefinition"/>):
+        /// <c>primaryGrip</c> "el → eşya" olduğu için avuç noktası
+        /// <see cref="ItemDefinition.PrimaryGripPointOnItem"/> ile ters bileşimden çıkar,
+        /// <c>secondaryGrip</c> zaten eşya-yereldir ve düz okunur. Aynı asimetri
+        /// <see cref="ApplySecondaryGripSnap"/> ve <c>ItemGripSockets</c> içinde de yazılı.
+        /// </para>
+        /// <para>⚠️ <c>TransformPoint</c> DEĞİL elle bileşim: kavrama ofsetleri METREdir ve
+        /// eşyanın görsel ölçeğiyle büyümemeli (projede tekrarlanan kural).</para>
+        /// </summary>
+        public bool TryResolveGripPalm(bool rightHand, out Pose palm)
+        {
+            palm = default;
+
+            Transform item;
+            ItemDefinition definition;
+            bool isPrimaryHand;
+
+            if (_shownGripLinked)
+            {
+                item = _shownPrimaryRight ? _itemInstanceR : _itemInstanceL;
+                definition = _shownPrimaryRight ? _itemDefR : _itemDefL;
+                isPrimaryHand = rightHand == _shownPrimaryRight;
+            }
+            else
+            {
+                item = rightHand ? _itemInstanceR : _itemInstanceL;
+                definition = rightHand ? _itemDefR : _itemDefL;
+                isPrimaryHand = true;
+            }
+
+            if (item == null || definition == null)
+            {
+                return false;
+            }
+
+            Quaternion itemRotation = item.rotation;
+
+            if (isPrimaryHand)
+            {
+                palm = new Pose(
+                    item.position + itemRotation * definition.PrimaryGripPointOnItem,
+                    itemRotation * Quaternion.Inverse(definition.PrimaryGripRotation));
+                return true;
+            }
+
+            // Ön kabzayı saran el: iki elli tutuşta eşya ZATEN ikinci ele bakıyor
+            // (ItemGripSolver), burada yalnız o elin bileği soketin üstüne getiriliyor.
+            palm = new Pose(
+                item.position + itemRotation * definition.SecondaryGripPosition,
+                itemRotation * definition.SecondaryGripRotation);
+            return true;
         }
 
         /// <summary>Kavrama matematiğinin TEK uygulaması <see cref="ItemGripSolver"/>'dadır; burası

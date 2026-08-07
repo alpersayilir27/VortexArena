@@ -24,13 +24,13 @@ Kalan iş **asset/prefab tarafında** ve başlıkta doğrulamada.
 eşiğinin altında kalır, çözücü sessizce tek elli davranır.
 
 Her `WPN_*` prefabında, `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` ile:
-1. `Primary` satırında **El Ekle** → eli kabzaya oturt ve **elin gireceği açıyla döndür**.
-2. Parmakları hiyerarşiden bük: avuç kabzayı saracak, işaret parmağı tetiğe ulaşacak biçimde.
+1. **Tezgâhı Aç** → `El_Primary`'yi kabzaya oturt ve **elin gireceği açıyla döndür** (silah sabit).
+2. Parmakları Hierarchy'den bük: avuç kabzayı saracak, işaret parmağı tetiğe ulaşacak biçimde.
    ⚠️ Tüfekte **işaret parmağı `Free` bırakılır** — kilitli parmak ateş ederken kıpırdamaz ve oyuncu
    tetiği çektiğini elinde göremez.
-3. **Bake** → tanım alanları + parmak pozu yazılır, sol el aynalanır, el gizlenir.
-4. `Secondary` satırında aynısını ön kabza için yap.
-5. **Camgöbeği tel küre el modelinin bileğiyle ÇAKIŞMALI** — çakışmıyorsa bake gitmemiştir.
+3. **Kaydet** → tanım alanları + parmak pozu yazılır, sol el aynalanır.
+4. **Ön kabza eli**'ni seçip ön kabzaya taşı, tekrar Kaydet.
+5. **Camgöbeği tel küre tezgâhtaki elin bileğiyle ÇAKIŞMALI** — çakışmıyorsa kayıt gitmemiştir.
 
 Silahlar: `WPN_AK47` · `WPN_M4A1` · `WPN_M16` · `WPN_G36C` · `WPN_FAMAS` · `WPN_SCARL`.
 

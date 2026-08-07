@@ -4,8 +4,16 @@ using VortexArena.Core.Combat;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// El düğümü ↔ kavrama alanları dönüşümünün <b>TEK</b> uygulaması: bake bu yönü, "El Ekle"
-    /// tohumlaması ters yönü kullanır.
+    /// Avuç düğümü ↔ kavrama alanları dönüşümünün <b>TEK</b> uygulaması: <c>Kaydet</c> bu yönü,
+    /// tezgâhın kurulumu ters yönü kullanır (<see cref="GripPoseStudio"/>).
+    /// <para>
+    /// ⚠️ <b>Referans AVUÇTUR, el modelinin bileği DEĞİLDİR.</b> Kavrama alanları kumanda anchor'ı
+    /// çerçevesinde tanımlı (<c>ItemGripSolver</c> onları <c>HandGripPivot.Resolve</c> çıktısıyla
+    /// bileştiriyor); ISDK el modelinin kök transformu ise bilek çerçevesindedir ve ikisi arasında
+    /// sabit bir dönüş vardır. Buraya bilek verilirse o dönüş sessizce tanıma yazılır ve silah
+    /// oyunda o kadar dönük çıkar — çeviriyi tezgâh el modelini kurarken
+    /// <c>HandGripConvention.Correction</c> ile bir kez yapar, bu sınıf saf uzay bileşimidir.
+    /// </para>
     /// <para>
     /// ⚠️ <b>İki kavrama noktasının uzayı TERSTİR</b> (<see cref="ItemDefinition"/>): <c>primaryGrip</c>
     /// "el → eşya" (eşyanın avuca göre pozu), <c>secondaryGrip</c> ise "eşya → el" (ön kabza
@@ -22,18 +30,20 @@ namespace VortexArena.Core.Editor
     public static class ItemHandGripBake
     {
         /// <summary>
-        /// El bileğinin DÜNYA pozundan, o kavrama noktasının tanım alanlarını üretir (bake yönü).
+        /// Avucun (kumanda anchor'ının) DÜNYA pozundan, o kavrama noktasının tanım alanlarını
+        /// üretir (kayıt yönü).
         /// </summary>
         /// <param name="itemRoot">Silahın kökü — ölçünün referansı.</param>
-        /// <param name="wrist">El modelinin bilek eklemi.</param>
+        /// <param name="palm">Avuç düğümü: <c>ItemGripSolver</c>'ın <c>primaryPalm</c> olarak
+        /// aldığı pozun ta kendisi. ⚠️ El modelinin bileği DEĞİL (sınıf başındaki uyarı).</param>
         /// <param name="kind">Hangi kavrama noktası (uzay yönünü bu belirler).</param>
-        public static void FromWrist(Transform itemRoot, Transform wrist, GripSocketKind kind,
+        public static void FromWrist(Transform itemRoot, Transform palm, GripSocketKind kind,
             out Vector3 gripPosition, out Vector3 gripEuler)
         {
-            // Bileğin EŞYAYA göre pozu (ölçeksiz bileşim).
+            // Avucun EŞYAYA göre pozu (ölçeksiz bileşim).
             Quaternion itemInverse = Quaternion.Inverse(itemRoot.rotation);
-            Vector3 handPosition = itemInverse * (wrist.position - itemRoot.position);
-            Quaternion handRotation = itemInverse * wrist.rotation;
+            Vector3 handPosition = itemInverse * (palm.position - itemRoot.position);
+            Quaternion handRotation = itemInverse * palm.rotation;
 
             if (kind == GripSocketKind.Secondary)
             {
@@ -50,8 +60,11 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Tanım alanlarından bileğin EŞYAYA göre pozunu üretir ("El Ekle" tohumlaması) — mevcut
-        /// altı silahın kavraması sıfırdan yazılmasın diye <see cref="FromWrist"/>'in tersi.
+        /// Tanım alanlarından avucun EŞYAYA göre pozunu üretir (tezgâh kurulumu) —
+        /// <see cref="FromWrist"/>'in birebir tersi.
+        /// <para>⚠️ Bu iki yönün tersi olması, "tezgâhı aç → hiç dokunma → Kaydet" kimliğinin
+        /// dayanağıdır: değer değişiyorsa uzay yönlerinden biri terstir ve bakılacak tek yer
+        /// burasıdır.</para>
         /// </summary>
         public static void ToWristLocal(ItemDefinition definition, GripSocketKind kind,
             out Vector3 localPosition, out Quaternion localRotation)

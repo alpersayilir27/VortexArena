@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Oculus.Interaction;
 using Oculus.Interaction.HandGrab;
 using Oculus.Interaction.Input;
 using UnityEngine;
@@ -309,16 +310,15 @@ namespace VortexArena.Core.Combat
         /// </summary>
         private static void Apply(SyntheticHand synthetic, Weapon weapon, HandGrabPose pose)
         {
-            // ⚠️ TransformPoint DEĞİL: kavrama ofsetleri METRE cinsindendir ve transform ölçeğiyle
-            // büyütülmemeli (aynı gerekçe ItemGripSockets.PrimarySocketWorld ve
-            // ItemHandGripBake'te de elle bileşim yaptırıyor). Referans, pozun kendi
-            // RelativeTo'sudur; boşsa silahın kökü.
+            // ⚠️ Burada ÖLÇEKLİ bileşim DOĞRUDUR ve "kavrama ofseti metredir, ölçeklenmez"
+            // kuralının istisnasıdır: bu ofset bizim tanımımızdan değil ISDK'nın
+            // HandGrabPose'undan geliyor ve o, RelativePose'u PoseUtils.DeltaScaled ile — yani
+            // eşyanın ölçeğine BÖLEREK — üretiyor. Ölçeksiz geri bileşim, WPN_* köklerinin 0.8'i
+            // yüzünden bileği eşyadan 1/0.8 kadar uzağa yapıştırırdı (el silahın yanında yüzer).
+            // Sözleşmenin iki ucu ayrışmasın diye ISDK'nın kendi yardımcısı çağrılır.
+            // Referans, pozun kendi RelativeTo'sudur; boşsa eşyanın kökü.
             Transform reference = pose.RelativeTo != null ? pose.RelativeTo : weapon.transform;
-            Pose relative = pose.RelativePose;
-
-            var wrist = new Pose(
-                reference.position + reference.rotation * relative.position,
-                reference.rotation * relative.rotation);
+            Pose wrist = PoseUtils.GlobalPoseScaled(reference, pose.RelativePose);
 
             HandPose handPose = pose.HandPose;
 

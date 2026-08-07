@@ -12,36 +12,44 @@ kavrama · uzak avatarda eşya çizimi + eşikli ön-kabza yapıştırma · havu
 **soket tabanlı kavrama** (`ItemGripSockets`, ISDK `_interactorFilters` kapısı; mesafeden kavrama
 kaldırıldı) · **olayların `serverTick`'te oynatılması** (`RemotePlayerRegistry.TryGetPlaybackTimeMs`).
 
-## 1. Kavrama ayarı — ⚠️ SIRADAKİ İŞ (araç hazır, silahlar bake edilmedi)
+## 1. Kavrama ayarı — ⚠️ SIRADAKİ İŞ (araç hazır, silahların kavraması yazılmadı)
 
-Kavrama artık sayı girerek değil, silahın üstüne oturtulan **el modelinden** yazılıyor. Araç hazır;
-kalan iş altı silahı tek tek bake etmek.
+Kavrama artık sayı girerek değil, sahnedeki **kavrama tezgâhında** yazılıyor: silah orijinde sabit
+durur, sen iki eli kabzalara oturtursun. Araç hazır; kalan iş altı silahı tek tek geçmek.
 
 **İş akışı (editörde, APK build'i gerekmez):**
 
-1. `WPN_*.prefab`'ı aç (prefab kipi yeter) ve seç.
-2. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` → **El Ekle**. El, silahın **mevcut**
-   kavrama değerinden konumlanır — sıfırdan başlamazsın.
-3. Eli kabzaya oturt, parmak kemiklerini bük. Scene view'da avuç → kabza ve işaret parmağı → tetik
-   mesafesi cm olarak yazılır.
-4. **Bake** → bilek `WD_*.asset`'e, parmaklar `GripPoses/Pose_<Kind>_R`'ye yazılır, sol el aynalanır,
-   el modeli gizlenir.
-5. Çift elli silahta aynısını `Secondary` satırından ön kabza için yap.
-6. Kontrol: camgöbeği tel küre (SO'nun dediği) el modelinin bileğiyle **çakışmalı**.
-7. Başlıkta yalnız **hissi** doğrula (nişan alırken rahat mı). Geometri editörde bitiyor.
+1. Proje penceresinden `WPN_*.prefab`'ı seç.
+2. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` → **Tezgâhı Aç**. Eller **mevcut**
+   kavrama değerinden yerleşir — sıfırdan başlamazsın.
+3. `El_Primary`'yi kabzaya oturt/çevir. Scene view'da avuç → kabza ve işaret parmağı → tetik
+   mesafesi cm olarak yazılır; pencere kaydedilecek sayıları canlı gösterir.
+4. Parmakları Hierarchy'den bük (`El_Primary/ElModeli/…/XRHand_*`).
+5. Çift elli silahta **Ön kabza eli**'ni seçip ön kabzaya oturt, parmaklarını da bük.
+6. **Kaydet** → kavrama alanları `WD_*.asset`'e, parmaklar `GripPoses/Pose_<Kind>_R`'ye yazılır ve
+   sol el aynalanır.
+7. Kontrol: camgöbeği tel küre (SO'nun dediği) tezgâhtaki elin bileğiyle **çakışmalı**.
+8. İş bitince **Tezgâhı Kapat**. Başlıkta yalnız **hissi** doğrula (nişan alırken rahat mı);
+   geometri editörde bitiyor.
 
-⚠️ **İlk silahta bir sağlama yap:** El Ekle → hiç dokunmadan Bake → `WD_*.asset`'in değerleri
-DEĞİŞMEMELİ. Tohumlama ile bake birbirinin tersidir; değişiyorsa uzay yönlerinden biri terstir ve
-yeri tek dosyadır (`ItemHandGripBake`).
+⚠️ **İlk silahta bir sağlama yap:** Tezgâhı Aç → hiç dokunmadan Kaydet → `WD_*.asset`'in değerleri
+DEĞİŞMEMELİ. Kurulum (`ToWristLocal`) ile kayıt (`FromWrist`) birbirinin tersidir; değişiyorsa uzay
+yönlerinden biri terstir ve yeri tek dosyadır (`ItemHandGripBake`).
 
 **Bilinmesi gerekenler:**
 
+- ⚠️ **Sabit olan silahtır, taşınan eller** — ölçü "silah ele göre nerede" olduğu için. Her silahın
+  kabzası farklı açıdan tutulur ve kabza–tetik mesafesi aynı değildir; iki el bağımsız ayarlanır.
+- ⚠️ **El modeli ham konmaz:** kökü ISDK bilek çerçevesinde, kavrama alanları kumanda anchor'ı
+  çerçevesindedir; ham bir eli gözle oturtmak aradaki sabit dönüşü tanıma yazar
+  (`Docs/Sistem-Ozeti.md` §7, "gözle düzeltilen şey oyunun okuduğuyla aynı çerçevede olmalı").
 - ⚠️ İki alanın **uzayı terstir**: `primaryGrip` = eşyanın ELE göre pozu, `secondaryGrip` = ön kabza
   noktasının EŞYAYA göre pozu (§6.6). Dönüşümü `ItemHandGripBake` yapıyor — elle Inspector'a
   yazarken yapılan en sık hata buydu ve o yol artık yok.
-- ⚠️ `GripPoses/Pose_*` bake'in **çıktısıdır**, elle düzenlenmez: bir sonraki bake üzerine yazar.
-- ⚠️ `WeaponKitBuilder` kavrama alanlarını **ezmez**; koşu sonunda bake edilmemiş silahları listeler
-  ve eski `GripSocket_*` işaretçilerini siler. `netItemId`/`holdMode` tablodan gelir ve EZİLİR.
+- ⚠️ `GripPoses/Pose_*` kaydın **çıktısıdır**, elle düzenlenmez: bir sonraki kayıt üzerine yazar.
+- ⚠️ `WeaponKitBuilder` kavrama alanlarını **ezmez**; koşu sonunda kavraması yazılmamış silahları
+  listeler, eski `GripSocket_*` işaretçilerini ve prefabta kalmış `Hands/Hand_*` rig'ini siler.
+  `netItemId`/`holdMode` tablodan gelir ve EZİLİR.
 - Aynı ölçü **üç yeri** besliyor: yerel tutuş · uzak oyuncudaki çizim · kavrama soketinin yeri.
   Biri düzelince üçü düzelir; ana soketin yeri türetilir (`PrimaryGripPointOnItem`), elle girilmez.
 - Sıra: önce `primaryGrip` (silah elde doğru dursun), sonra `secondaryGrip`.

@@ -482,14 +482,29 @@ mesafeden kavrama ZORUNLUDUR ve orada da İKİ hat birden durur** — silah orad
 `AlignOnGrab`): çerçeve bir kavrama hedefi değil bir SEÇİM tetikleyicisidir, `AlignOnGrab`
 sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silahta görür
 → `Docs/Sistem-Ozeti.md` §7.
-⚠️ **Kavramanın ELLE yazılan tek kaynağı silahın üstündeki EL MODELİDİR** (`Hands/Hand_<Kind>`):
-`Kavrama Pozu Stüdyosu` → *El Ekle* → eli kabzaya oturt → *Bake*. Bake hem `WD_*.asset`'in kavrama
-alanlarını hem parmak pozu düğümlerini (`GripPoses/Pose_*`) yazar, sol ele aynalar ve eli **gizler**
-— yani o iki çıktıya elle DOKUNULMAZ, bir sonraki bake üzerine yazar. Kavrama alanlarını sayı
-girerek ayarlama yolu (soket işaretçileri) **kaldırıldı ve geri gelmez**: aynı kavramayı iki yerde
-tarif etmek ikisinin sessizce sapması demekti. Poz düğümleri ISDK'nın poz listesine
-(`_handGrabPoses`) **girmez** — girseydi kavrama skoru poz tabanlı olur ve silah alma hissi
-değişirdi. Bake edilmemiş silahta el idle'da kalır; `Build Weapon Prefabs` eksikleri listeler.
+⚠️ **Kavramanın ELLE yazılan tek kaynağı KAVRAMA TEZGÂHIDIR** (`Kavrama Pozu Stüdyosu` →
+*Tezgâhı Aç*): tezgâh açık sahneye **dünya orijininde sabit** bir silah kopyası ve ayrı ayrı
+taşınabilen **iki el** koyar; sen elleri kabzalara oturtursun, *Kaydet* hem `WD_*.asset`'in kavrama
+alanlarını hem parmak pozu düğümlerini (`GripPoses/Pose_*`) yazar ve sol ele aynalar — yani o iki
+çıktıya elle DOKUNULMAZ, bir sonraki kayıt üzerine yazar. Oyunda **silah ele göre gelir**.
+⚠️ **Sabit olan SİLAHTIR, eller hareket eder:** ölçü "silah ele göre nerede" olduğu için silah
+orijinde/dönüşsüzken elin transformu doğrudan o ölçüdür; ayrıca her silahın kabzası farklı açıdan
+tutulur (pompalı alttan, otomatik tüfek yandan) ve kabza–tetik mesafesi de aynı değildir — iki elin
+bağımsız ve aynı referansa göre ayarlanması bu yüzden gerekiyor.
+⚠️ **El HAM KONMAZ, çeviriden geçer:** el modelinin kök transformu **ISDK bilek çerçevesindedir**,
+kavrama alanlarının çerçevesi ise **kumanda anchor'ıdır** — ikisi arasında sabit bir dönüş var ve
+ham bir eli gözle kabzaya oturtmak o dönüşü tanıma yazar (belirtisi: silah oyunda 90° dönük).
+Tezgâhta model o çeviriyi `HandGripConvention.Correction` ile bir kez yer; sürüklediğin düğüm zaten
+anchor çerçevesindedir. Eller `ItemHandGripBake.ToWristLocal` ile, yani kaydın birebir tersiyle
+yerleşir → "aç, dokunma, kaydet" değeri DEĞİŞTİRMEZ; değiştiriyorsa bakılacak tek yer
+`ItemHandGripBake`.
+⚠️ Prefabın içinde el modeli **DURMAZ** (`Hands/Hand_*` eski yapıdır, kayıt ve
+`Build Weapon Prefabs` onu siler): tezgâh silahın kopyasıyla çalışır, prefaba yalnız `GripPoses`
+yazar. Kavrama alanlarını sayı girerek ayarlama yolu (soket işaretçileri) **kaldırıldı ve geri
+gelmez**: aynı kavramayı iki yerde tarif etmek ikisinin sessizce sapması demekti. Poz düğümleri
+ISDK'nın poz listesine (`_handGrabPoses`) **girmez** — girseydi kavrama skoru poz tabanlı olur ve
+silah alma hissi değişirdi. Kavraması yazılmamış silahta el idle'da kalır; `Build Weapon Prefabs`
+eksikleri listeler.
 Çerçeve adımı elle iş istemez, araç her
 `WPN_*` köküne bir `VA_WeaponFrame` örneği koyar (idempotent). **Çözülme efekti de kurulum
 istemez:** araç aynı köke `SimpleWeaponDissolve` koyup `_Shared/Materials/DissolveEffect.mat`'i
@@ -566,9 +581,9 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → `Obstacle` layer'ındaki konveks olmayan collider'ları, trigger'ları, collider'sız damgalı objeleri ve **görünen yüzeyden şişkin** collider'ları (içbükey mesh convex işaretlenmiş → oyuncu boşlukta ceza alır) raporlar. ⚠️ Hiçbir şeyi düzeltmez; iki tespit de sessizce yanlış ceza ürettiği için bu tarama sahne kaydedilmeden koşturulur |
 | `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanlarını kurar: engel uyarı yazısı + hasar vinyeti (`CenterEyeAnchor` altında). İdempotent, **tek seferlik** — rig tüm arenalarda örnek olduğu için her arenaya birden gider. ⚠️ Vinyetin materyalini araç ÜRETİR (shader GUID'i import öncesi bilinemez); çalıştırılmadıkça karartma çalışır ama yazı/vinyet hiç çizilmez |
 | `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
-| `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir). Ayrıca **temizlik ve denetim**: eski `GripSocket_*` işaretçilerini siler, açık kalmış el modellerini kapatır ve **bake edilmemiş silahları** koşu sonunda tek uyarıda listeler |
+| `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir). Ayrıca **temizlik ve denetim**: eski `GripSocket_*` işaretçilerini ve prefabta kalmış `Hands/Hand_*` el rig'ini siler, **kavraması yazılmamış silahları** koşu sonunda tek uyarıda listeler |
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
-| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış: **El Ekle** (silahın üstüne gerçek el modeli, mevcut kavrama değerinden konumlanır) → eli kabzaya oturt, parmakları bük → **Bake**. Scene view'da avuç–kabza ve parmak–tetik mesafesi cm olarak çizilir. ⚠️ **Yazan tek düğme Bake'tir** ve dört işi birden yapar: `WD_*.asset` kavrama alanları + `GripPoses/Pose_*` parmak pozu + sol ele ayna + eli gizle. El modeli SİLİNMEZ, kapatılır (*Göster* ile geri düzenlenir) |
+| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış: **Tezgâhı Aç** (açık sahneye orijinde sabit silah kopyası + iki el) → **elleri** kabzalara oturt/çevir, parmakları Hierarchy'den bük → **Kaydet**. Scene view'da el çerçeveleri + avuç–kabza ve parmak–tetik mesafesi cm olarak çizilir; pencere kaydedilecek sayıları canlı gösterir. ⚠️ **Sabit olan silahtır, taşınan eller** ve el modeli ham konmaz — gerekçe (ISDK bilek çerçevesi ↔ kumanda anchor'ı) "Yeni silah" reçetesinde. ⚠️ **Yazan tek düğme Kaydet'tir**: `WD_*.asset` kavrama alanları + `GripPoses/Pose_*` parmak pozu + sol ele ayna + prefabta kalmış eski `Hands` rig'ini silme. ⚠️ Tezgâh sahneye KAYDEDİLMEZ; Play'e girerken ve sahne değişince kendini kapatır |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |
 | `… > Development > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek) |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` | Sahneye ilgili bileşeni + kurulumunu ekler |

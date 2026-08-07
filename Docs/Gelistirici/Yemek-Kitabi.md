@@ -459,27 +459,50 @@ ikisi de ayrı ayrı ayarlanır.
 
 ### A) Oyuncunun kendi gördüğü el (ISDK sentetik eli)
 
-**Elle yazdığın tek şey el modelidir.** Silahın üstüne gerçek bir el oturtursun, Bake gerisini
-üretir.
+**Silah sabittir, sen ELLERİ oturtursun.** Tezgâh açık sahneye dünya orijininde sabit bir silah
+kopyası ve ayrı ayrı taşınabilen iki el koyar; sen elleri kabzalara oturtursun, Kaydet gerisini
+üretir. Oyunda silah ele göre gelir.
 
-1. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu`'nu aç, silahı seç.
-2. **El Ekle** → `Hands/Hand_Primary` altında el belirir. El, silahın **mevcut** kavrama değerinden
-   konumlanır; yani sıfırdan başlamazsın, var olanı düzeltirsin.
-3. Eli kabzaya oturt (hiyerarşiden sürükle/döndür), parmak kemiklerini bük. Scene view'da avuç →
-   kabza ve işaret parmağı → tetik mesafesi cm olarak yazılır.
-4. **Bake** → dört şey birden olur: bilek `WD_*.asset`'e, parmaklar `GripPoses/Pose_<Kind>_R`'ye
-   yazılır, sol el aynalanır ve el modeli **gizlenir**.
-5. Beğenmezsen **Göster** → düzelt → tekrar Bake. Model silinmez, kapanır.
+1. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu`'nu aç, silah prefabını seç (proje
+   penceresinden `WPN_*` seçmen yeter, alan kendiliğinden dolar).
+2. **Tezgâhı Aç** → sahnede `[VA Kavrama Tezgahı]` belirir: orijinde sabit silah, kabzalarında
+   `El_Primary` (ve çift elliyse `El_Secondary`) **mevcut** kavrama değerinden yerleşmiş hâlde.
+   Yani sıfırdan başlamazsın, var olanı düzeltirsin.
+3. `El_Primary` seçili gelir; normal move/rotate gizmosuyla kabzaya oturt. Scene view'da avuç →
+   kabza ve işaret parmağı → tetik mesafesi cm olarak yazılır, pencerede de kaydedilecek sayılar
+   canlı akar.
+4. Parmakları bük: Hierarchy'den `El_Primary/ElModeli/…/XRHand_*` kemiklerini seç ve **döndür**.
+5. Çift elli silahta **Ön kabza eli** düğmesiyle `El_Secondary`'yi seç ve ön kabzaya oturt; onun
+   parmaklarını da bük.
+6. **Kaydet** → ellerin silaha göre duruşu `WD_*.asset`'e, parmaklar `GripPoses/Pose_<Kind>_R`'ye
+   yazılır ve sol el aynalanır. Tezgâh açık kalır; beğenmezsen düzelt, tekrar Kaydet.
+7. **Tezgâhı Kapat** işi bitince. (Kapatmayı unutsan da tezgâh sahneye kaydedilmez ve Play'e
+   girerken kendini siler.)
 
-Çift elli silahta aynısını `Secondary` satırından ön kabza için yap.
+Silah **tıklanamaz** (kazara sürüklenmesin diye); Hierarchy'den yine seçilir. El modellerinin
+kendisi de tıklanamaz — sürüklemen gereken şey `El_*` düğümüdür, mesh'in altındaki bir kemik değil.
 
-- ⚠️ **`GripPoses` bake'in ÇIKTISIDIR, elle düzenlenmez** — oraya yazılan her şey bir sonraki
-  bake'te üzerine yazılır. Pencere onu yalnız durum olarak gösterir ve oraya yönlendiren bir düğme
-  yoktur: bir `HandGrabPose` seçildiğinde ISDK'nın kendi editörü düğümün altına geçici bir el
-  örnekler, sahnede ikinci bir el belirir ve hangisinin kaynak olduğu belirsizleşir.
-- ⚠️ **Yalnız SAĞ el yazılır**, sol bake'te aynalanır. İki eli ayrı ayrı yazmak aynı kavramanın iki
+- ⚠️ **Sabit olan SİLAHTIR.** Kaydedilen ölçü "silah ele göre nerede duruyor"dur; silah orijinde ve
+  dönüşsüzken elin transformu doğrudan o ölçüdür. Ayrıca her silahın kabzası farklı açıdan tutulur
+  (pompalı alttan, otomatik tüfek yandan) ve kabza–tetik mesafesi de aynı değildir — iki elin ayrı
+  ayrı, aynı referansa göre ayarlanabilmesi bu yüzden gerekiyor.
+- ⚠️ **El modeli HAM konmaz.** Modelin kök transformu ISDK'nın **bilek** çerçevesinde, kavrama
+  alanları ise **kumanda anchor'ı** çerçevesindedir; arada sabit bir dönüş var. Ham bir eli gözle
+  kabzaya oturtmak o dönüşü tanıma yazar ve silah oyunda o kadar dönük çıkar (yaşanan belirti: 90°
+  roll). Tezgâhta model o çeviriyi `HandGripConvention` üzerinden bir kez yiyor; senin sürüklediğin
+  `El_*` düğümü zaten anchor çerçevesinde.
+- ⚠️ **Sağlama:** Tezgâhı Aç → hiç dokunma → Kaydet. `WD_*.asset`'in sayıları **değişmemelidir**
+  (kurulum `ItemHandGripBake.ToWristLocal`, kayıt onun tersi `FromWrist`). Değişiyorsa bir uzay
+  yönü terstir ve bakılacak tek yer `ItemHandGripBake`'tir.
+- ⚠️ **`GripPoses` kaydın ÇIKTISIDIR, elle düzenlenmez** — oraya yazılan her şey bir sonraki kayıtta
+  üzerine yazılır. Bir `HandGrabPose` seçme alışkanlığı da edinme: ISDK'nın kendi editörü düğümün
+  altına geçici bir el örnekler, sahnede ikinci bir el belirir ve hangisinin kaynak olduğu
+  belirsizleşir.
+- ⚠️ **Yalnız SAĞ el yazılır**, sol kayıtta aynalanır. İki eli ayrı ayrı yazmak aynı kavramanın iki
   kez tarif edilmesi olurdu ve ikisi zamanla kaçınılmaz olarak birbirinden sapardı.
-- Bake edilmemiş silahta el **idle** duruşuna düşer + konsola oturum başına bir uyarı gider;
+- ⚠️ Prefabın içinde **el modeli durmaz**: eski `Hands/Hand_*` ağacı kayıt sırasında (ve
+  `Build Weapon Prefabs` koşusunda) silinir.
+- Kavraması yazılmamış silahta el **idle** duruşuna düşer + konsola oturum başına bir uyarı gider;
   `Build Weapon Prefabs` de koşu sonunda eksik silahları tek satırda listeler.
 
 ### B) Başkalarının gördüğü el (karakterin humanoid parmakları)

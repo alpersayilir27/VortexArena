@@ -274,10 +274,11 @@ namespace VortexArena.Core.Editor
 
         private static int _warnings;
 
-        // Eski soket işaretçilerinden (GripSocket_Primary/Secondary) kaçı silindi. Kavramanın
-        // authoring'i el modeline geçti; bu düğümleri artık kimse okumuyor ve prefabda kalmaları
-        // sonraki okuyucuya "burası hâlâ ayarlanabilir" derdi.
-        private static int _legacySocketsRemoved;
+        // Kavramanın eski authoring kalıntılarından (GripSocket_Primary/Secondary işaretçileri ve
+        // Hands/Hand_* el rig'i) kaçı silindi. Authoring kavrama tezgâhına geçti; bu düğümleri
+        // artık kimse okumuyor ve prefabda kalmaları sonraki okuyucuya "burası hâlâ ayarlanabilir"
+        // derdi.
+        private static int _legacyNodesRemoved;
 
         // Bake'i unutulmuş silahlar: kavrama pozu düğümü olmayan (yani oyunda eli idle'da kalacak)
         // WPN'ler. ⚠️ Bu rapor ŞART — bake tek seferlik bir insan adımı ve atlandığında hiçbir hata
@@ -293,7 +294,7 @@ namespace VortexArena.Core.Editor
         public static void BuildAll()
         {
             _warnings = 0;
-            _legacySocketsRemoved = 0;
+            _legacyNodesRemoved = 0;
             _unbakedWeapons.Clear();
 
             int wdNew = 0;
@@ -363,7 +364,7 @@ namespace VortexArena.Core.Editor
                           "WPN " + wpnRebound + " güncellendi, " + wpnFailed + " başarısız · " +
                           "FX_RemoteShot " + (fxCreated ? "üretildi" : "mevcut") + " · " +
                           "WeaponCatalog " + (catalogCreated ? "üretildi" : "güncellendi") + " · " +
-                          "eski soket düğümü " + _legacySocketsRemoved + " silindi · " +
+                          "eski kavrama düğümü " + _legacyNodesRemoved + " silindi · " +
                           _warnings + " uyarı.");
 
                 ReportUnbakedWeapons();
@@ -1327,11 +1328,11 @@ namespace VortexArena.Core.Editor
         /// </para>
         /// <para>
         /// ⚠️ <b>Kavramayı bu araç YAZMAZ ve düğüm de AÇMAZ.</b> Kavramanın tek yazarı
-        /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Kavrama Pozu Stüdyosu</c>'nun Bake'idir: kaynak
-        /// silahın üstündeki el modelidir, çıktı hem tanım alanları hem poz düğümleridir. Araç burada
-        /// yalnız <b>temizlik ve denetim</b> yapar (eski soket işaretçileri, açık kalmış el modelleri,
-        /// bake edilmemiş silah raporu) — boş poz düğümü açmak, kullanıcıyı bake'in üzerine yazacağı
-        /// bir düzenlemeye davet ederdi.
+        /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Kavrama Pozu Stüdyosu</c>'nun Kaydet'idir:
+        /// kaynak sahnedeki tezgâhta silahın sabit bir elin içine oturtulmuş duruşudur, çıktı hem
+        /// tanım alanları hem poz düğümleridir. Araç burada yalnız <b>temizlik ve denetim</b> yapar
+        /// (eski soket işaretçileri, prefabda kalmış el rig'i, kavraması yazılmamış silah raporu) —
+        /// boş poz düğümü açmak, kullanıcıyı kaydın üzerine yazacağı bir düzenlemeye davet ederdi.
         /// </para>
         /// </summary>
         private static void ApplyGripSocketKit(GameObject root, string ctx)
@@ -1415,7 +1416,7 @@ namespace VortexArena.Core.Editor
             BindSocketFilter(handGrab, sockets, ctx);
 
             RemoveLegacySocketNodes(root, ctx);
-            HideHandNodes(root, ctx);
+            RemoveLegacyHandNodes(root, ctx);
             NoteIfUnbaked(root, ctx);
         }
 
@@ -1461,27 +1462,39 @@ namespace VortexArena.Core.Editor
                 }
 
                 Object.DestroyImmediate(node.gameObject, true);
-                _legacySocketsRemoved++;
+                _legacyNodesRemoved++;
                 Debug.Log(Log + ctx + ": eski '" + nodeName + "' işaretçisi silindi — kavrama artık " +
-                          "el modelinden bake ediliyor (Kavrama Pozu Stüdyosu).");
+                          "Kavrama Tezgâhı'nda yazılıyor.");
             }
         }
 
         /// <summary>
-        /// Bake sonrası açık unutulmuş el modellerini kapatır — <b>emniyet</b>.
-        /// <para>⚠️ Açık kalan bir el düğümü arenada havada duran bir el olarak görünür: silah sahnede
-        /// de duruyor (raf/masa, <c>WeaponFrame</c>, <c>VA_WeaponCanvas</c>) ve uzak avatarın elinde
-        /// de. Runtime tarafında da aynı emniyet var (<see cref="ItemHandRig.HideAll"/>); bu, sorunun
-        /// prefabda görünür hâlde kalmaması içindir.</para>
+        /// Prefabın içinde kalmış <c>Hands/Hand_*</c> ağacını siler — <b>ölü veri</b>.
+        /// <para>
+        /// Kavrama artık silahın üstüne oturtulan bir el modelinden değil, sahnedeki kavrama
+        /// tezgâhından yazılıyor (<see cref="GripPoseStudio"/>): tezgâh silahın bir KOPYASIYLA
+        /// çalışıyor ve prefaba yalnız <c>GripPoses</c> düğümlerini yazıyor. Prefabın içinde duran
+        /// eski el rig'inin okuyanı kalmadı.
+        /// </para>
+        /// <para>⚠️ Sessizce BIRAKILMAZ: (1) açık kalırsa arenada havada duran bir el olarak
+        /// görünür — silah sahnede de duruyor (raf/masa, <c>WeaponFrame</c>, <c>VA_WeaponCanvas</c>)
+        /// ve uzak avatarın elinde de; (2) duran bir kopya kavramanın ikinci bir tarifidir ve
+        /// "hangisi geçerli" sorusunu her açanın kafasında yeniden doğurur. Runtime emniyeti
+        /// (<see cref="ItemHandRig.HideAll"/>) hâlâ yerinde — o, henüz temizlenmemiş prefablar
+        /// içindir.</para>
         /// </summary>
-        private static void HideHandNodes(GameObject root, string ctx)
+        private static void RemoveLegacyHandNodes(GameObject root, string ctx)
         {
-            int hidden = ItemHandRig.HideAll(root.transform);
-            if (hidden > 0)
+            Transform node = root.transform.Find(ItemHandRig.RootNodeName);
+            if (node == null)
             {
-                Warn(ctx + ": " + hidden + " el modeli AÇIK bırakılmıştı, kapatıldı — bake'ten sonra " +
-                     "el gizli kalmalı (düzenlemeye devam edeceksen stüdyodan 'Göster').");
+                return;
             }
+
+            Object.DestroyImmediate(node.gameObject, true);
+            _legacyNodesRemoved++;
+            Debug.Log(Log + ctx + ": eski '" + ItemHandRig.RootNodeName + "' el rig'i silindi — " +
+                      "kavrama artık Kavrama Tezgâhı'nda yazılıyor, prefabda el modeli durmaz.");
         }
 
         /// <summary>
@@ -1514,7 +1527,8 @@ namespace VortexArena.Core.Editor
             Debug.LogWarning(Log + "Kavrama pozu YAZILMAMIŞ silahlar: " +
                              string.Join(", ", _unbakedWeapons) + ". Bu silahlarda oyuncunun eli " +
                              "silaha sarılmaz (idle duruşunda kalır). Düzeltme: Tools > VortexArena > " +
-                             "Weapons > Kavrama Pozu Stüdyosu → El Ekle → eli kabzaya oturt → Bake.");
+                             "Weapons > Kavrama Pozu Stüdyosu → Tezgâhı Aç → silahı elin içine " +
+                             "taşı/çevir → Kaydet.");
         }
 
         /// <summary>Kökteki bir bileşeni tam tip adıyla siler (yoksa sessizce geçer).</summary>
