@@ -56,10 +56,22 @@ namespace VortexArena.Core.Combat
         private SyntheticHand _left;
         private SyntheticHand _right;
 
-        /// <summary>El şu an bizim kilidimiz altında mı — serbest bırakma yalnız GEÇİŞTE yapılır
-        /// (bkz. <see cref="Release"/>).</summary>
+        /// <summary>Elin BİLEĞİ şu an silah kavramasına kilitli mi. Parmaklar bundan bağımsız her
+        /// zaman bizim yazdığımızdır (silah pozu ya da idle).</summary>
         private bool _leftLocked;
         private bool _rightLocked;
+
+        /// <summary>Örneklenmiş gevşek el duruşu (el başına, bir kez) — gerekçe
+        /// <see cref="ApplyIdle"/>'da. Sahne değişiminde SIFIRLANMAZ: donanımdan gelir, sahneden değil.</summary>
+        private Quaternion[] _idleLeft;
+        private Quaternion[] _idleRight;
+
+        /// <summary>Parmak sayısı — ISDK garantisi (bkz. <see cref="Apply"/> içindeki serbestlik
+        /// dizisi notu).</summary>
+        private const int FingerCount = 5;
+
+        /// <summary>Bu eşiğin üstünde bir tetik/grip girdisi varken idle örneklenmez.</summary>
+        private const float IdleCaptureInputEpsilon = 0.05f;
 
         private float _nextScanAt;
 
@@ -119,15 +131,20 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            TickHand(OVRInput.Controller.LTouch, false, ref _left, ref _leftLocked);
-            TickHand(OVRInput.Controller.RTouch, true, ref _right, ref _rightLocked);
+            TickHand(OVRInput.Controller.LTouch, false, ref _left, ref _leftLocked, ref _idleLeft);
+            TickHand(OVRInput.Controller.RTouch, true, ref _right, ref _rightLocked, ref _idleRight);
         }
 
         /// <summary>
-        /// Bir elin bir karelik durumu: o eli kullanan silah varsa pozunu uygula, yoksa eli serbest
-        /// bırak.
+        /// Bir elin bir karelik durumu: o eli kullanan silah varsa pozunu, yoksa <b>idle</b> duruşunu
+        /// uygular.
+        /// <para>⚠️ Boştaki el izlemeye BIRAKILMAZ (§6.9 ile aynı gerekçe): parmakların duruşu
+        /// oyuncunun ekranında da uzak ekranlarda da tek bir tanımdan gelmeli. Bırakılsaydı oyuncu
+        /// kendi elini tetiğe basınca kıvrılırken görür, başkaları ise sabit idle duruşunda
+        /// görürdü.</para>
         /// </summary>
-        private void TickHand(OVRInput.Controller hand, bool rightHand, ref SyntheticHand cached, ref bool locked)
+        private void TickHand(OVRInput.Controller hand, bool rightHand, ref SyntheticHand cached,
+            ref bool locked, ref Quaternion[] idle)
         {
             SyntheticHand synthetic = Resolve(ref cached);
             if (synthetic == null)
@@ -138,23 +155,96 @@ namespace VortexArena.Core.Combat
             }
 
             Weapon weapon = FindWeaponUsing(hand, out GripSocketKind kind);
-            if (weapon == null)
-            {
-                Release(synthetic, ref locked);
-                return;
-            }
+            HandGrabPose pose = weapon != null
+                ? ItemGripPoses.Find(weapon.transform, kind, rightHand)
+                : null;
 
-            HandGrabPose pose = ItemGripPoses.Find(weapon.transform, kind, rightHand);
-            if (pose == null)
+            if (weapon != null && pose == null)
             {
-                // Pozu olmayan silahta bugünkü davranış korunur: el kumanda duruşunda kalır.
+                // Pozu olmayan silah: el idle'a düşer (kavrama pozu yazılmamış demektir).
                 WarnMissingPose(weapon, kind, rightHand);
-                Release(synthetic, ref locked);
+            }
+
+            if (pose != null)
+            {
+                Apply(synthetic, weapon, pose);
+                locked = true;
                 return;
             }
 
-            Apply(synthetic, weapon, pose);
-            locked = true;
+            ApplyIdle(synthetic, hand, ref locked, ref idle);
+        }
+
+        /// <summary>
+        /// Boştaki elin duruşu: <b>bileği serbest, parmakları kilitli</b>.
+        /// <para>
+        /// Duruşun kaynağı bir asset DEĞİL, elin kendi <b>gevşek</b> hâlidir: kumanda kipinde
+        /// (<c>controllerDrivenHandPosesType = Natural</c>) hiçbir tuşa basılmıyorken üretilen poz
+        /// zaten "yumruk değil, hafif açık" eldir. Bir kez örneklenip sonsuza dek uygulanır.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Neden yazılmış bir poz asset'i değil:</b> elle yazılacak bir idle, donanımın
+        /// ürettiği elden kaçınılmaz olarak biraz farklı olurdu ve fark tam da oyuncunun kendi
+        /// eline baktığı yerde görünürdü. Örnekleme ayrıca model/SDK değişince kendini günceller —
+        /// projede tekrarlanan "sabit yazma, ölç" kuralı.
+        /// </para>
+        /// <para>⚠️ Bilek KİLİTLENMEZ: boştaki el kumandayı izlemeye devam etmeli, yalnız parmakları
+        /// sabittir.</para>
+        /// </summary>
+        private static void ApplyIdle(SyntheticHand synthetic, OVRInput.Controller hand,
+            ref bool locked, ref Quaternion[] idle)
+        {
+            if (locked)
+            {
+                // Silahtan gelen bilek kilidi bırakılır; parmaklar aşağıda yeniden yazılacağı için
+                // FreeAllJoints çağrılmaz (çağrılsaydı el bir kare izlemeye dönüp titrerdi).
+                synthetic.FreeWrist();
+                locked = false;
+            }
+
+            idle ??= TryCaptureIdle(synthetic, hand);
+            if (idle == null)
+            {
+                return; // temiz örnek henüz alınamadı — bugünkü davranış sürer
+            }
+
+            synthetic.OverrideAllJoints(idle, 1f);
+            for (int i = 0; i < FingerCount; i++)
+            {
+                synthetic.SetFingerFreedom((HandFinger)i, JointFreedom.Locked);
+            }
+        }
+
+        /// <summary>
+        /// Elin gevşek duruşunu bir kez örnekler.
+        /// <para>⚠️ <b>Tetik ya da grip basılıyken örnek ALINMAZ:</b> <c>Natural</c> kipinde
+        /// parmaklar o girdiyle kıvrılıyor ve o anda yakalanan poz kalıcı olarak yanlış olurdu —
+        /// el ömür boyu yarı yumruk dururdu. Temiz bir kare gelene kadar denenir.</para>
+        /// <para>Eklem verisi henüz akmıyorsa (izleme başlamadı) <c>null</c> döner ve bir sonraki
+        /// karede yeniden denenir.</para>
+        /// </summary>
+        private static Quaternion[] TryCaptureIdle(SyntheticHand synthetic, OVRInput.Controller hand)
+        {
+            if (OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, hand) > IdleCaptureInputEpsilon ||
+                OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, hand) > IdleCaptureInputEpsilon)
+            {
+                return null;
+            }
+
+            HandJointId[] ids = FingersMetadata.HAND_JOINT_IDS;
+            var rotations = new Quaternion[ids.Length];
+
+            for (int i = 0; i < ids.Length; i++)
+            {
+                if (!synthetic.GetJointPoseLocal(ids[i], out Pose jointPose))
+                {
+                    return null;
+                }
+
+                rotations[i] = jointPose.rotation;
+            }
+
+            return rotations;
         }
 
         /// <summary>
@@ -245,25 +335,6 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>
-        /// Eli ISDK'ya geri verir.
-        /// <para>
-        /// ⚠️ <b>Yalnız kilitli → serbest GEÇİŞİNDE</b> çağrılır. Her karede koşulsuz çağrılsaydı
-        /// ISDK'nın kendi kilitlerini (poke sınırlama, başka bir interactor'ın kavraması) her karede
-        /// iptal ederdik — belirtisi, silah tutulmuyorken elin yüzeylere gömülmesi olurdu.
-        /// </para>
-        /// </summary>
-        private static void Release(SyntheticHand synthetic, ref bool locked)
-        {
-            if (!locked)
-            {
-                return;
-            }
-
-            synthetic.FreeWrist();
-            synthetic.FreeAllJoints();
-            locked = false;
-        }
 
         // ------------------------------------------------------------ el çözümü (ISDK)
 
