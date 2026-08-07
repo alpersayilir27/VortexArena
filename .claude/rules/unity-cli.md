@@ -79,7 +79,13 @@ User scope'a kayıt YAPMA, `.mcp.json` tek kaynak.
 2. **Unity CLI** (PowerShell): `$env:UNITY_CLI_CHANNEL='beta'; irm https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.ps1 | iex`
    → `%LOCALAPPDATA%\Unity\bin` PATH'e eklenir; `unity --version` ile doğrula, `unity auth login`.
 3. **Git + Git LFS** (repo LFS kullanıyor, manifest'te git URL'li paket var): `git lfs install`.
-4. Projeyi bir kez Unity'de aç → UPM paketleri (`com.unity.pipeline` dahil) manifest'ten otomatik iner.
-5. Claude Code projede ilk açıldığında `.mcp.json`'daki sunucular (`unity-editor-mcp`, `auggie`,
+4. **Defender dışlamaları** — `scripts\defender-exclusions.cmd`, sağ tık → *Yönetici olarak
+   çalıştır*. **Projeyi ilk kez açmadan önce** yapılır: ilk import ve ilk IL2CPP build'i en çok
+   dosya üreten adımlardır. Repo kökünü, Unity kurulumunu, Unity/Hub + paket cache'lerini ve build
+   zincirinin exe'lerini dışlar (yolları kendi konumundan türetir). Geri alma `-Remove`, liste
+   `-List`; ayrıntı ve Dev Drive alternatifi `scripts/README.md`.
+   ⚠️ Dışlanan klasöre indirme yapılmaz — oralar artık taranmıyor.
+5. Projeyi bir kez Unity'de aç → UPM paketleri (`com.unity.pipeline` dahil) manifest'ten otomatik iner.
+6. Claude Code projede ilk açıldığında `.mcp.json`'daki sunucular (`unity-editor-mcp`, `auggie`,
    `UnityMCP`) için **tek seferlik onay** ister.
 

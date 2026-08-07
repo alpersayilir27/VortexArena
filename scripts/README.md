@@ -10,6 +10,7 @@ hedef klasörü silip yeniden yazarlar.
 | `deploy-server.bat` | `Server/VortexArena.Server.App` | `deploy\server\VortexArena.Server.App.exe` | .NET 10 SDK |
 | `deploy-launcher.bat` | `launcher/VortexArena.Launcher` (WPF) | `deploy\launcher\VortexArena.Launcher.exe` | .NET 10 SDK + launcher kapalı |
 | `docs-setup.bat` | — | `..\vortexarena-docs-site\` (repo DIŞI) | Node 22+, git, internet (yalnız kurulumda) |
+| `defender-exclusions.cmd` | `defender-exclusions.ps1` | Windows Defender dışlama listesi | **Yönetici** + Defender'ın etkin olması |
 
 İki Unity betiği aynı `PlayerBuildTool` sınıfını farklı `-executeMethod` ile çağırır ve **aynı
 sahne listesini** kullanır (Build Settings). Fark yalnız platformdur: Windows = admin, Android =
@@ -29,10 +30,61 @@ yazar. Günlük kullanım repo kökündeki **`docs-serve.bat`** (→ http://loca
 - Yazı tipleri **local** (`fontOrigin: local`): internetsiz makinede de doğru görünür.
 - `quartz.config.yaml` kuruluysa **korunur** — elle ayar yaptıysan `docs-setup.bat` ezmez.
 
+## Defender dışlamaları (`defender-exclusions.cmd`)
+
+**Yeni bilgisayarda bir kez**, sağ tık → *Yönetici olarak çalıştır*. Gerçek işi
+`defender-exclusions.ps1` yapar; `.cmd` yalnız yönetici kontrolü + çift tıklanabilirlik içindir.
+
+Neden: IL2CPP build'i on binlerce `.cpp`/`.obj` üretir, `Library/` sürekli yazılıp okunur, shader
+varyantları paralel derlenir. Defender'ın gerçek zamanlı koruması **her dosya açılışında** araya
+girer ve çok çekirdekli derlemenin önünde kuyruk oluşturur; proje büyüklüğüne göre build ve import
+sürelerinde %20-40 bandında kazanç normaldir.
+
+İki tür dışlama yazılır:
+
+- **Yol** (`ExclusionPath`) — repo kökü (`Library/`, `Temp/`, `deploy/`, `Server/`, `launcher/`
+  hepsi içinde), Unity Editor kurulumu, Unity/Hub cache'leri, `.gradle` · `.nuget` · `.dotnet` ·
+  npm cache'leri, kuruluysa IDE klasörleri, kuruluysa `..\vortexarena-docs-site`
+  (`node_modules`, ~365 paket).
+- **İşlem** (`ExclusionProcess`) — build zincirinin exe'leri: `Unity.exe`, `bee_backend.exe`,
+  `il2cpp.exe`, `cl.exe`, `link.exe`, `MSBuild.exe`, `dotnet.exe`, `java.exe`, `adb.exe`…
+
+**Yollar elle yazılmaz, türetilir:** repo kökü betiğin bir üstüdür, Unity Editor kökü Hub'ın
+ikincil kurulum yolundan (`%APPDATA%\UnityHub\secondaryInstallPath.json`) da okunur. Sadece
+diskte **var olan** isteğe bağlı klasörler eklenir — kurulu olmayan bir programın klasörünü
+dışlamak gereksiz bir açıklıktır. Başka bir Unity projesi de dışlanacaksa `-ExtraPath` ile geçilir.
+
+```bat
+defender-exclusions.cmd                              :: kur
+defender-exclusions.cmd -List                        :: yalnız listele (hiçbir şey yazmaz)
+defender-exclusions.cmd -Remove                      :: aynı listeyi geri al
+defender-exclusions.cmd -ExtraPath D:\games\digerproje
+```
+
+İdempotent: var olan dışlama tekrar eklenmez (`= zaten var` satırı). **Üç varyant da yönetici
+ister** — `-List` dahil: Defender yetkisiz oturumda listeyi vermez, yerine
+`N/A: Must be an administrator to view exclusions` döndürür (betik bunu liste sanmaz, adıyla
+söyler).
+
+- ⚠️ **Dışlanan klasörler artık taranmıyor.** Oraya indirme yapma; asset store paketi ya da
+  GitHub'dan çekilen arşiv önce başka bir yere inip kontrol edilir.
+- ⚠️ **İşlem dışlaması yol dışlamasından daha geniş bir kapıdır** — o sürecin *dokunduğu her dosya*
+  taranmaz. Listeye kendi başına exe ekleme; build zinciri dışına çıkarma.
+- Makine kurumsal ilkeyle (Intune / grup ilkesi) yönetiliyorsa komut "erişim reddedildi" verir ve
+  betik bunu adıyla söyler — dışlamalar merkezden tanımlanır, IT'ye danışılır. Defender pasif
+  kipteyse (üçüncü parti antivirüs varsa) betik uyarır: kayıtlar yazılır ama build süresine etkisi
+  olmaz, asıl dışlamalar o ürünün arayüzünden tanımlanmalıdır.
+- **Daha temiz alternatif: Dev Drive.** Windows 11 22H2+ ile gelen ReFS tabanlı birim, "performans
+  modu"nda Defender'ı asenkron çalıştırır — dışlama listesi tutmaya gerek kalmaz.
+  *Ayarlar → Sistem → Depolama → Gelişmiş depolama ayarları → Diskler ve birimler → Dev Drive
+  oluştur.* En az 50 GB gerekir; Unity projesi + `Library/` + `deploy/` için 200-300 GB rahat eder.
+  Yeni disk kurulurken yapılacak iş; repo taşındığında bu betik yeni kökü kendiliğinden bulur
+  (yolu kendi konumundan türetiyor).
+
 ## Çalıştırma ve pencerenin kapanması
 
-Üçü de **çift tıklanabilir**: iş bitince (başarı ya da hata) pencere `pause` ile bekler, çıktı
-okunabilir. Hata durumunda en sonda `=== BASARISIZ (cikis kodu N) ===` satırı basılır — uzun
+Betiklerin hepsi **çift tıklanabilir**: iş bitince (başarı ya da hata) pencere `pause` ile bekler,
+çıktı okunabilir. Hata durumunda en sonda `=== BASARISIZ (cikis kodu N) ===` satırı basılır — uzun
 build log'unda hatayı aramaya gerek yok.
 
 Bekleme yalnız betik çift tıklanarak / `cmd /c betik.bat` diye başlatıldığında devreye girer

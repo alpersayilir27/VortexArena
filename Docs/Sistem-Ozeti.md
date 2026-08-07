@@ -87,6 +87,8 @@ D:\Games\vortexarena\
   scripts\                   deploy-admin-game.bat · deploy-player-apk.bat · deploy-server.bat
                              deploy-launcher.bat
                              docs-setup.bat (doküman sitesini yeni PC'de bir kez kurar)
+                             defender-exclusions.cmd + .ps1 (Defender dışlamaları; yeni PC'de
+                             bir kez, yönetici — build/import süresi için)
   deploy\                    ÜRETİLEN çalıştırılabilirler: admin\ player\ server\ launcher\
                              (git'e girmez)
   dev-targets.json           dev penceresinin adlandırılmış sunucu hedefleri (COMMIT'Lİ;
@@ -1485,6 +1487,13 @@ yığın iziyle düşerdi.
   klasörlerde. Her platform kendi cache'ini bir kez ısıtır; **soğuk cache'te build süresinin büyük
   kısmı shader varyantı derlemektir.** Pratik sonuç: `Library/`'yi silme, ve aynı gün ikisi de
   gerekiyorsa önce admin sonra APK al.
+- **Gerçek zamanlı antivirüs build süresinin görünmeyen kalemidir.** IL2CPP on binlerce
+  `.cpp`/`.obj` üretir, `Library/` sürekli yazılıp okunur; Defender her dosya açılışında araya
+  girip çok çekirdekli derlemenin önünde kuyruk oluşturur (%20-40 bandında fark). Yeni
+  bilgisayarda bir kez `scripts\defender-exclusions.cmd` (yönetici) çalıştırılır: repo kökü,
+  Unity kurulumu, Unity/Hub + paket cache'leri ve build zincirinin exe'leri dışlanır. ⚠️ Dışlanan
+  klasörler taranmaz — oraya indirme yapılmaz. Ayrıntı ve Dev Drive alternatifi:
+  `scripts/README.md`.
 - **APK kurulumu:** `install_game.bat` → `adb install -r -g`. Betik APK'yı **sırayla kendi yanında,
   `deploy\player\` ve `Builds\player\` altında** arar, ilk bulduğunu kurar — bu yüzden repo
   kökündeki kopya da `deploy-player-apk.bat`'in APK yanına bıraktığı kopya da çalışır ve dosya
