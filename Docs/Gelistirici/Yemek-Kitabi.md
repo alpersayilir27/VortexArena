@@ -452,6 +452,48 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 
 ---
 
+## 11.0 Bir silahın EL DURUŞUNU ayarlamak
+
+Elin duruşu **iki ayrı yerde** yaşar, çünkü iki ayrı el rig'i vardır. İkisi de o silaha aittir ve
+ikisi de ayrı ayrı ayarlanır.
+
+### A) Oyuncunun kendi gördüğü el (ISDK sentetik eli)
+
+Kaynak: silah prefabının altındaki `GripPoses/Pose_<Kind>_<L|R>` düğümleri (ISDK `HandGrabPose`).
+
+1. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu`'nu aç, silahı seç.
+2. Düğümü kabzanın üstüne sürükle, parmakları yaz. Araç karşı ele aynalar.
+3. ⚠️ **Düğüm silahın orijininde duruyorsa poz YOK sayılır** (`ItemGripPoses.IsUnplaced`) — araç
+   düğümleri sıfır transformla açar, taşınmamış olan "henüz yazılmadı" demektir.
+4. Poz yazılmamışsa el o silahta **idle** duruşuna düşer ve konsola oturum başına bir uyarı gider.
+
+### B) Başkalarının gördüğü el (karakterin humanoid parmakları)
+
+Kaynak: `Assets/_Shared/Arsenal/Data/WD_<Silah>.asset` → **`handPose`** — beş slider, parmak başına
+kapanma oranı (`0` = açık, `1` = tam kapalı):
+
+| Alan | Ne yapar | Tüfekte makul |
+|---|---|---|
+| `thumb` | başparmak | `0.5` (kabzanın üstüne yatar) |
+| `index` | işaret | `0.35` (tetikte, tam kapanmaz) |
+| `middle` · `ring` · `pinky` | kabzayı saran üçlü | `0.85` – `0.9` |
+
+- **Tümü `0` bırakmak "açık el" demek DEĞİLDİR, "yazılmadı" demektir** → `HandPoseProfile.DefaultGrip`
+  devreye girer. Yani hiçbir şey yapmazsan silah makul bir kavramayla tutulur.
+- Değişiklik **APK gerektirir** (veri istemcide yaşıyor), sunucuda iş yoktur.
+- ⚠️ Sol/sağ diye iki değer YOKTUR ve eklenmez: duruşun ele göre değişmesi tam olarak düzeltilen
+  hataydı (`Docs/Sistem-Ozeti.md` §7, "iki ayrı sensörden doğan iki poz").
+
+**Genel his** (tüm silahlar birden) slider'lardan değil, eklem başına açı tavanlarından gelir:
+`HandFingerRig.FingerMaxAngles` / `ThumbMaxAngles`. Bir silah tuhaf duruyorsa slider, **tüm eller**
+tuhaf duruyorsa tavan.
+
+### Idle (silahsız el)
+
+- Oyuncunun kendi eli: ayar YOK — `HandGripPoser` elin gevşek hâlini bir kez örnekleyip sabitler.
+- Uzak avatar: `RemoteAvatar.prefab` → `idleHandPose` (aynı beş slider). Boş bırakılırsa
+  `HandPoseProfile.Idle` kullanılır.
+
 ## 11.1 Bir arenada silah çerçevesini görünür/görünmez yapmak
 
 **Ne zaman:** çerçeve o arenanın sanat diline uymuyor (ör. silah bir masanın üstünde dursun,
