@@ -283,6 +283,14 @@ tek düzlem + `lifetimeLoss = 1`.
 
 Hasar sayıları istemcide yaşar; sunucuyu yeniden başlatmak yetmez.
 
+### ⚠️ Build/import "sebepsiz" yavaşsa önce Defender dışlamalarına bak
+
+Yeni bilgisayarda `scripts\defender-exclusions.cmd` (yönetici) bir kez çalıştırılır. Gerçek zamanlı
+koruma her dosya açılışında araya girer; IL2CPP on binlerce `.cpp`/`.obj` üretip `Library/`'yi
+sürekli okuduğu için paralel derlemenin önünde kuyruk oluşur — %20-40 bandında fark eder. Kurulu
+mu diye bakmak için: `defender-exclusions.cmd -List` (bu da yönetici ister; Defender listeyi
+yetkisiz oturuma vermez). ⚠️ Dışlanan klasörler taranmıyor, oraya indirme yapma.
+
 ---
 
 ## Doküman

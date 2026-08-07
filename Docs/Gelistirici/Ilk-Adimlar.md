@@ -17,9 +17,21 @@ Sıfırdan çalışır duruma ~15 dakika. Quest gözlüğü **gerekmez** — mas
 | 3 | Projeyi Unity'de bir kez aç | UPM paketleri manifest'ten iner |
 | 4 | **.NET 10 SDK** | Sunucuyu derlemek için |
 | 5 | `scripts\docs-setup.bat` | Bu dokümanı yerel olarak sunmak için (bir kez) |
+| 6 | `scripts\defender-exclusions.cmd` | Sağ tık → **Yönetici olarak çalıştır**. Build/import süresini kısaltır |
 
 Sunucu tarafını hiç derlemeyeceksen 4. adımı atlayabilirsin — ama o zaman **hiç maç kuramazsın**:
 maç verisini yalnız sunucu üretir ve maçı yalnız bir admin başlatır.
+
+**6. adımı atlama.** Windows Defender'ın gerçek zamanlı koruması her dosya açılışında araya girer;
+IL2CPP build'i on binlerce `.cpp`/`.obj` üretip `Library/`'yi sürekli okuduğu için bu, paralel
+derlemenin önünde kuyruk oluşturur — build ve import sürelerinde %20-40 bandında fark eder.
+Betik repo kökünü, Unity kurulumunu, Unity/Hub cache'lerini, paket cache'lerini (`.gradle`,
+`.nuget`, npm) ve build zincirinin exe'lerini dışlar; yolları kendi konumundan türetir, elle
+düzenleme istemez. Geri alma: aynı betik `-Remove` ile.
+
+> ⚠️ Dışlanan klasörler **artık taranmıyor** — oraya indirme yapma. Asset store paketini ya da
+> GitHub'dan çektiğin arşivi önce başka bir yere indirip kontrol et.
+> Ayrıntı, `-List`/`-Remove` kullanımı ve Dev Drive alternatifi: `scripts/README.md`.
 
 ---
 

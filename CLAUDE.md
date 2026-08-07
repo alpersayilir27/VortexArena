@@ -48,7 +48,8 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 `Assets/` (Unity) · `Server/` (.NET 10 sunucu kaynağı) · **`launcher/`** (.NET 10 WPF Windows
 launcher — operatör buradan sunucuyu **mekan seçerek** (`--venue`) ve admin oyununu başlatır;
 mekansız sunucu başlatmaz) · **`scripts/`** (`deploy-admin-game.bat`,
-`deploy-player-apk.bat`, `deploy-server.bat`, `deploy-launcher.bat`, `docs-setup.bat`) ·
+`deploy-player-apk.bat`, `deploy-server.bat`, `deploy-launcher.bat`, `docs-setup.bat`,
+`defender-exclusions.cmd`) ·
 **`docs-serve.bat`** (repo kökü:
 doküman sitesini localhost:1111'de sunar; motor repo DIŞINDA `../vortexarena-docs-site`) ·
 **`deploy/`** (üretilen çalıştırılabilirler:
@@ -585,5 +586,9 @@ Aktif platform hedefe eşit değilse o koşu tam reimport demektir (20-40 dk). �
 cache'ini ısıtmaz (shader/asset/script cache'i platform başınadır) → `Docs/Sistem-Ozeti.md` §7.
 ⚠️ **İki Unity build'i AYNI sahne listesini kullanır** (Build Settings); platforma göre ayrı liste
 tutma — bir arenayı admin bilip oyuncu bilmezse `start_match` sessizce reddedilir.
-Betik yazım tuzakları ve aşama izleyici (`watch-unity-build.ps1`): `scripts/README.md`.
-Çıktı yerleşimi: `deploy/README.md`.
+⚠️ **Yeni geliştirici makinesinde bir kez `scripts\defender-exclusions.cmd`** (yönetici, projeyi
+ilk açmadan önce): Defender'ın gerçek zamanlı koruması IL2CPP/`Library` dosya trafiğinin önünde
+kuyruk oluşturur. Dışlama listesi betikten TÜRETİLİR — elle yol ekleme, gerekiyorsa `-ExtraPath`
+geç; geri alma `-Remove`. ⚠️ Dışlanan klasöre indirme yapılmaz (oralar artık taranmıyor).
+Betik yazım tuzakları, aşama izleyici (`watch-unity-build.ps1`) ve Dev Drive alternatifi:
+`scripts/README.md`. Çıktı yerleşimi: `deploy/README.md`.
