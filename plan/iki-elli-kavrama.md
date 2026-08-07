@@ -23,16 +23,14 @@ Kalan iş **asset/prefab tarafında** ve başlıkta doğrulamada.
 **iki elli çözüm de koşmaz**: ön kabza ekseni (`secondaryGrip − primaryGripPointOnItem`) 1 cm
 eşiğinin altında kalır, çözücü sessizce tek elli davranır.
 
-Her `WPN_*` prefabında:
-1. `GripSocket_Primary` işaretçisini kabzaya sürükle ve **elin gireceği açıyla döndür**.
-2. `GripSocket_Secondary`'yi ön kabzaya taşı.
-3. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` ile parmakları bük: hayalet el sokete
-   oturur, avuç kabzayı saracak, baş parmak tetiğe ulaşacak biçimde ayarla.
+Her `WPN_*` prefabında, `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` ile:
+1. `Primary` satırında **El Ekle** → eli kabzaya oturt ve **elin gireceği açıyla döndür**.
+2. Parmakları hiyerarşiden bük: avuç kabzayı saracak, işaret parmağı tetiğe ulaşacak biçimde.
    ⚠️ Tüfekte **işaret parmağı `Free` bırakılır** — kilitli parmak ateş ederken kıpırdamaz ve oyuncu
    tetiği çektiğini elinde göremez.
-4. Stüdyoda **Karşı Ele Aynala**; aynanın bileğini gerekirse sahnede elle düzelt.
-5. `Tools > VortexArena > Weapons > Write Grip Sockets To Definition`.
-6. **Camgöbeği tel küre sarı dolu küreyle ÇAKIŞMALI** — çakışmıyorsa yazma gitmemiştir.
+3. **Bake** → tanım alanları + parmak pozu yazılır, sol el aynalanır, el gizlenir.
+4. `Secondary` satırında aynısını ön kabza için yap.
+5. **Camgöbeği tel küre el modelinin bileğiyle ÇAKIŞMALI** — çakışmıyorsa bake gitmemiştir.
 
 Silahlar: `WPN_AK47` · `WPN_M4A1` · `WPN_M16` · `WPN_G36C` · `WPN_FAMAS` · `WPN_SCARL`.
 
@@ -40,7 +38,7 @@ Silahlar: `WPN_AK47` · `WPN_M4A1` · `WPN_M16` · `WPN_G36C` · `WPN_FAMAS` · 
 
 ## 3. Doğrulama (başlıkta + iki uçta)
 
-- [ ] Silah ele geldiğinde `GripSocket_Primary` avucun ortasında; el döndükçe kaymıyor.
+- [ ] Silah ele geldiğinde ana kavrama noktası avucun ortasında; el döndükçe kaymıyor.
 - [ ] Boş el ön kabzaya yaklaşınca soket **mavi**, kabul mesafesinde **yeşil** ve büyük.
 - [ ] Grip'e basınca silahın yönü ikinci ele döner; bırakınca ~0.08 sn'de yumuşak geri gelir.
 - [ ] **Bağ yalnız tuşla kopar:** ön kabza tutulduktan sonra grip'e basılı tutarken kol uzatılıp

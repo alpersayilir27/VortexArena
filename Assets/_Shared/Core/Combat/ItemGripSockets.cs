@@ -23,12 +23,11 @@ namespace VortexArena.Core.Combat
     /// gösterge yalnız yerel oyuncunun elindeki/sahnedeki eşyada yaşar.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Editördeki iki gizmo bilerek FARKLI renktedir:</b> sarı dolu küre
-    /// (<see cref="GripSocketMarker"/>) işaretçinin — yani SO'ya yazılmayı bekleyen değerin — yeri,
-    /// camgöbeği tel küre (bu sınıf) <b>SO'nun gerçekte ne dediği</b>, yani oyunun kullandığı yer.
-    /// İkisi üst üste oturmuyorsa <b>SO'ya henüz yazmadın</b>
-    /// (<c>Tools &gt; VortexArena &gt; Weapons &gt; Write Grip Sockets To Definition</c>). İki temsilin sapması
-    /// böylece gözle görünür bir kontrole dönüşür — sessiz bir işaret/uzay hatası olarak kalmaz.
+    /// ⚠️ <b>Camgöbeği tel küre SO'nun GERÇEKTE ne dediğidir</b>, yani oyunun kullandığı yer —
+    /// kavrama ayarlanırken bakılacak referans budur. Silahın üstünde açık bir el modeli varken
+    /// (<c>Hands/Hand_*</c>, Kavrama Pozu Stüdyosu) elin bileği bu kürenin merkezine oturmuyorsa
+    /// <b>bake'e henüz basmadın</b>: iki temsilin sapması böylece gözle görünür bir kontrole
+    /// dönüşür, sessiz bir uzay hatası olarak kalmaz.
     /// </para>
     /// </summary>
     public class ItemGripSockets : MonoBehaviour, IGameObjectFilter
@@ -610,8 +609,7 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// SO'nun GERÇEKTE söylediği soketleri çizer (camgöbeği TEL küre) — kavrama ayarlanırken
-        /// <see cref="GripSocketMarker"/>'ın sarı DOLU küresiyle karşılaştırılacak referans budur
-        /// (renk ayrımının gerekçesi sınıf notunda).
+        /// el modelinin bileğiyle karşılaştırılacak referans budur (gerekçe sınıf notunda).
         /// <para>Edit kipinde de çalışır: tanım <see cref="Definition"/>'ın tembel aramasından
         /// gelir (<c>Awake</c> edit kipinde koşmaz).</para>
         /// </summary>

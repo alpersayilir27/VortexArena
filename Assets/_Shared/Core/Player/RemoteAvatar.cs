@@ -1428,6 +1428,11 @@ namespace VortexArena.Core.Player
                 }
             }
 
+            // ⚠️ Kavrama yazımının el modelleri kapatılır (ItemHandRig). Burada AYRICA gerekiyor:
+            // örnek pasif kuluçkada kurulduğu için Weapon.Awake hiç koşmaz ve oradaki emniyet bu
+            // yola ulaşmaz. Açık kalırsa uzak oyuncunun elinde İKİNCİ bir el çizilirdi.
+            ItemHandRig.HideAll(instance.transform);
+
             // Parçacık sistemleri (namlu alevi/duman/kovan) BIRAKILIR — onları tetikleyen bileşen
             // gitti, kendiliğinden oynamasınlar diye yalnız playOnAwake kapatılır. Yıkılmıyorlar
             // çünkü uzak atış sunumu (RemoteShotFx) çizilen eşyanın namlusunu kullanır.

@@ -316,6 +316,11 @@ namespace VortexArena.Core.Combat
 
         protected virtual void Awake()
         {
+            // ⚠️ Kavrama yazımının el modelleri OYUNDA HİÇ ÇİZİLMEZ (ItemHandRig): bake onları
+            // kapatıyor, burası yalnız emniyet. Açık unutulmuş bir düğüm arenada havada duran bir
+            // el olarak görünürdü — raftaki silahta, kavrama tezgâhında, oyuncunun elinde.
+            ItemHandRig.HideAll(transform);
+
             if (definition == null)
             {
                 // Tanım ZORUNLU: denge sayılarının tek doğruluk kaynağı SO'dur (§10.3).

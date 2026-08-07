@@ -61,9 +61,9 @@ namespace VortexArena.Core.Player
         /// ⚠️ <b>Rotasyon BİLEREK anchor'ın kendisidir</b> ve
         /// <see cref="HandGripConvention.AnchorBasis"/> buraya karıştırılmaz: o baz uzak gövdenin
         /// bileğini humanoid eksene köprülemek için var. İkisi tek sabite bağlanırsa bileği
-        /// düzeltmek silahın duruşunu bozar (ve tersi). Ayrıca mevcut kavrama authoring'i
-        /// (<c>GripSocketAuthoring</c> işaretçileri) anchor ekseninde ölçülmüştür — dönüşü
-        /// değiştirmek altı silahın da kavrama pozunu bir anda geçersiz kılardı.
+        /// düzeltmek silahın duruşunu bozar (ve tersi). Ayrıca kavrama authoring'i (silahın üstüne
+        /// oturtulan el modeli, <c>Kavrama Pozu Stüdyosu</c>) anchor ekseninde ölçülmüştür — dönüşü
+        /// değiştirmek her silahın kavrama pozunu bir anda geçersiz kılardı.
         /// </para>
         /// <para>⚠️ <c>Transform.TransformPoint</c> DEĞİL elle bileşim: ofset METRE cinsindendir,
         /// rig'in ölçeği 1 olmasa bile büyütülmemeli (projede tekrarlanan kural).</para>

@@ -459,13 +459,28 @@ ikisi de ayrı ayrı ayarlanır.
 
 ### A) Oyuncunun kendi gördüğü el (ISDK sentetik eli)
 
-Kaynak: silah prefabının altındaki `GripPoses/Pose_<Kind>_<L|R>` düğümleri (ISDK `HandGrabPose`).
+**Elle yazdığın tek şey el modelidir.** Silahın üstüne gerçek bir el oturtursun, Bake gerisini
+üretir.
 
 1. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu`'nu aç, silahı seç.
-2. Düğümü kabzanın üstüne sürükle, parmakları yaz. Araç karşı ele aynalar.
-3. ⚠️ **Düğüm silahın orijininde duruyorsa poz YOK sayılır** (`ItemGripPoses.IsUnplaced`) — araç
-   düğümleri sıfır transformla açar, taşınmamış olan "henüz yazılmadı" demektir.
-4. Poz yazılmamışsa el o silahta **idle** duruşuna düşer ve konsola oturum başına bir uyarı gider.
+2. **El Ekle** → `Hands/Hand_Primary` altında el belirir. El, silahın **mevcut** kavrama değerinden
+   konumlanır; yani sıfırdan başlamazsın, var olanı düzeltirsin.
+3. Eli kabzaya oturt (hiyerarşiden sürükle/döndür), parmak kemiklerini bük. Scene view'da avuç →
+   kabza ve işaret parmağı → tetik mesafesi cm olarak yazılır.
+4. **Bake** → dört şey birden olur: bilek `WD_*.asset`'e, parmaklar `GripPoses/Pose_<Kind>_R`'ye
+   yazılır, sol el aynalanır ve el modeli **gizlenir**.
+5. Beğenmezsen **Göster** → düzelt → tekrar Bake. Model silinmez, kapanır.
+
+Çift elli silahta aynısını `Secondary` satırından ön kabza için yap.
+
+- ⚠️ **`GripPoses` bake'in ÇIKTISIDIR, elle düzenlenmez** — oraya yazılan her şey bir sonraki
+  bake'te üzerine yazılır. Pencere onu yalnız durum olarak gösterir ve oraya yönlendiren bir düğme
+  yoktur: bir `HandGrabPose` seçildiğinde ISDK'nın kendi editörü düğümün altına geçici bir el
+  örnekler, sahnede ikinci bir el belirir ve hangisinin kaynak olduğu belirsizleşir.
+- ⚠️ **Yalnız SAĞ el yazılır**, sol bake'te aynalanır. İki eli ayrı ayrı yazmak aynı kavramanın iki
+  kez tarif edilmesi olurdu ve ikisi zamanla kaçınılmaz olarak birbirinden sapardı.
+- Bake edilmemiş silahta el **idle** duruşuna düşer + konsola oturum başına bir uyarı gider;
+  `Build Weapon Prefabs` de koşu sonunda eksik silahları tek satırda listeler.
 
 ### B) Başkalarının gördüğü el (karakterin humanoid parmakları)
 
