@@ -6,38 +6,38 @@ using Oculus.Interaction.Input;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Editor
 {
     /// <summary>
     /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Kavrama Pozu Stüdyosu</c> — silahın elde nasıl
-    /// duracağını <b>gözlük takmadan</b> Scene view'da görme aracı: seçili silahın kavrama
-    /// soketlerine ISDK'nın hayalet elini oturtur ve işaretçiyi sürüklerken aynı karede takip
-    /// ettirir.
+    /// duracağını <b>gözlük takmadan</b> ayarlama aracı: silahın üstüne gerçek bir el modeli oturtur,
+    /// sen onu kabzaya yerleştirip parmaklarını bükersin, <b>Bake</b> gerekli veriyi çıkarıp eli
+    /// gizler.
     /// <para>
-    /// <b>Aracın var olma sebebi geri besleme süresidir:</b> kavrama ofseti tek doğru değeri olan
-    /// bir sayı değil, "avuç kabzaya değiyor mu / işaret parmağı tetiğe ulaşıyor mu" sorusunun
-    /// cevabıdır. O soruyu APK build'i + gözlük turuyla sormak her denemeyi dakikalara çıkarıyordu.
+    /// <b>Aracın var olma sebebi geri besleme süresidir:</b> kavrama ofseti tek doğru değeri olan bir
+    /// sayı değil, "avuç kabzaya değiyor mu / işaret parmağı tetiğe ulaşıyor mu" sorusunun cevabıdır.
+    /// O soruyu APK build'i + gözlük turuyla sormak her denemeyi dakikalara çıkarıyordu.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Bu pencere hiçbir şey YAZMAZ — ne <c>WD_*.asset</c>'e ne de silahın duruşuna.</b>
-    /// Kavrama duruşunun tek yazma yolu <c>Tools &gt; VortexArena &gt; Weapons &gt; Write Grip
-    /// Sockets To Definition</c>'dır. İkinci bir yazma yolu aynı ters/düz bileşim matematiğini
-    /// ikinci kez uygulardı ve biri düzeltilip öteki unutulduğunda silah sessizce yanlış dururdu
-    /// (o asimetrinin anlatımı <see cref="ItemDefinition"/> başındadır).
+    /// ⚠️ <b>ELLE YAZILAN TEK ŞEY EL MODELİDİR</b> (<see cref="ItemHandRig"/>). Kavrama alanları
+    /// (<c>WD_*.asset</c>) ve parmak pozu düğümleri (<see cref="ItemGripPoses"/>) bake'in
+    /// <b>ÇIKTISIDIR</b>: pencere onları yalnız durum olarak gösterir, elle düzenlemeye yol açmaz.
+    /// Aynı kavramayı iki yerde tarif etmek — bir sayı alanında ve bir el modelinde — ikisinin
+    /// zamanla birbirinden sapması demekti ve belirtisi "silah bazı yerlerde doğru duruyor" oluyordu.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Hayalet eller sahneye AİT DEĞİLDİR</b> — <see cref="HideFlags.HideAndDontSave"/> ile
-    /// örneklenir, pencere kapanınca yok edilir ve hiyerarşide görünmez. Kavrama pozu bir <i>yazma
-    /// aracıdır</i>, oyun onu okumaz: hayaletin sahneye kaydedilmesi her silahın yanında oyunda da
-    /// çizilen bir el bırakırdı.
+    /// ⚠️ <b>Poz düğümü seçilmez, oraya yönlendiren düğme YOKTUR.</b> Bir <see cref="HandGrabPose"/>
+    /// seçildiğinde ISDK'nın kendi editörü düğümün altına geçici bir hayalet el örnekler
+    /// (<c>HandGrabPoseEditor</c>, <see cref="HideFlags.HideAndDontSave"/>) — sahnede birden fazla el
+    /// belirir ve hangisinin gerçek kaynak olduğu belirsizleşir. Kaynak daima
+    /// <c>Hands/Hand_&lt;Kind&gt;</c>'dır.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Dialog YOK</b> (<c>WeaponKitBuilder</c> / <c>GripSocketAuthoring</c> ile aynı gerekçe):
-    /// modal dialog Unity ana thread'ini kilitler ve CLI/pipeline üzerinden çalıştırıldığında komut
-    /// timeout verir. Sonuç <see cref="Debug.Log"/> ile bildirilir.
+    /// ⚠️ <b>Dialog YOK</b> (<c>WeaponKitBuilder</c> ile aynı gerekçe): modal dialog Unity ana
+    /// thread'ini kilitler ve CLI/pipeline üzerinden çalıştırıldığında komut timeout verir. Sonuç
+    /// <see cref="Debug.Log"/> ile bildirilir.
     /// </para>
     /// </summary>
     internal sealed class GripPoseStudio : EditorWindow
@@ -45,7 +45,7 @@ namespace VortexArena.Core.Editor
         private const string LOG = "[GripPoseStudio]";
 
         /// <summary>
-        /// ISDK'nın hayalet el sağlayıcısı — <b>OpenXR</b> iskeleti için.
+        /// ISDK'nın el modeli sağlayıcısı — <b>OpenXR</b> iskeleti için.
         /// <para>⚠️ <b>Yol sabit tutulur, ISDK'nın <c>HandGhostProviderUtils</c>'ü KULLANILMAZ:</b>
         /// o sınıf <c>Oculus.Interaction.Editor</c> asmdef'indedir ve ona referans vermek bu aracı
         /// ISDK'nın editör derlemesine bağlardı (paket yükseltmelerinde kırılan, çekirdeğin hiç
@@ -72,41 +72,6 @@ namespace VortexArena.Core.Editor
             .GetField("_targetHandPose", BindingFlags.NonPublic | BindingFlags.Instance);
 
         /// <summary>
-        /// Hayalet örneklerinin ad öneki. Domain reload hayalet referanslarını düşürür ama
-        /// <c>DontSave</c> objeleri hayatta kalabilir; ön ek olmadan o yetimleri bir daha kimse
-        /// bulamazdı (görünmezler, sahneye de kaydedilmezler).
-        /// </summary>
-        private const string GHOST_NAME_PREFIX = "VA_GripGhost_";
-
-        /// <summary>Bilek pozunun nereden okunacağı.</summary>
-        private enum PoseSource
-        {
-            /// <summary>Sahnedeki <see cref="GripSocketMarker"/> — henüz SO'ya yazılmamış değer.</summary>
-            Marker = 0,
-
-            /// <summary><see cref="ItemDefinition"/> alanları — oyunun gerçekten kullandığı değer.</summary>
-            Definition = 1
-        }
-
-        /// <summary>Ekranda duran tek bir hayalet el ve ondan türetilen ölçüm noktaları.</summary>
-        private sealed class GhostSlot
-        {
-            public GripSocketKind Kind;
-            public bool RightHand;
-            public HandGhost Ghost;
-
-            /// <summary>
-            /// İşaret parmağının ucu; hayalet rig'inde yoksa <c>null</c> (ölçü sessizce atlanır).
-            /// <para>⚠️ Tetiği çeken parmak <b>işaret</b> parmağıdır — konuşurken "baş parmak
-            /// tetiğe değiyor mu" denmesi ölçünün baş parmağa bağlanmasını gerektirmez.</para>
-            /// </summary>
-            public Transform IndexTip;
-
-            /// <summary>Avucun kabzaya değen noktası (orta parmak boğumu); yoksa bilek kökü.</summary>
-            public Transform Palm;
-        }
-
-        /// <summary>
         /// Kabza düğümünün ad anahtarları (büyük/küçük harf duyarsız, <b>sırayla</b> denenir).
         /// <para>⚠️ Sıra anlamlıdır: daha SPESİFİK anahtar önce gelir, yoksa geniş olan
         /// (<c>guard</c>) yanlış parçayı kapar. Aynı sebeple ön kabza listesinde <c>guard</c>
@@ -121,13 +86,27 @@ namespace VortexArena.Core.Editor
         /// <summary>Tetik düğümünün ad anahtarı.</summary>
         private static readonly string[] TRIGGER_KEYS = { "trigger" };
 
-        private Weapon _target;
-        private PoseSource _source = PoseSource.Marker;
-        private bool _primaryRightHand = true;
-        private bool _secondaryRightHand;
+        /// <summary>Bir el modelinden türetilen ölçüm noktaları.</summary>
+        private sealed class HandMeasure
+        {
+            public GripSocketKind Kind;
+            public Transform Node;
 
-        private readonly List<GhostSlot> _slots = new List<GhostSlot>();
-        private bool _slotsDirty = true;
+            /// <summary>Avucun kabzaya değen noktası (orta parmak boğumu); yoksa bilek kökü.</summary>
+            public Transform Palm;
+
+            /// <summary>
+            /// İşaret parmağının ucu; rig'de yoksa <c>null</c> (ölçü sessizce atlanır).
+            /// <para>⚠️ Tetiği çeken parmak <b>işaret</b> parmağıdır — konuşurken "baş parmak tetiğe
+            /// değiyor mu" denmesi ölçünün baş parmağa bağlanmasını gerektirmez.</para>
+            /// </summary>
+            public Transform IndexTip;
+        }
+
+        private Weapon _target;
+
+        private readonly List<HandMeasure> _measures = new List<HandMeasure>();
+        private bool _measuresDirty = true;
 
         /// <summary>
         /// Anahtar kümesi → hedef silahtaki parça (bulunamadıysa <c>null</c> olarak da kaydedilir).
@@ -143,8 +122,8 @@ namespace VortexArena.Core.Editor
 
         /// <summary>
         /// Sağlayıcı hiç bulunamadığında uyarı bir kez basılsın diye.
-        /// <para>⚠️ Bu yol <c>duringSceneGui</c>'den her karede geçiyor: bayraksız hâlde eksik bir
-        /// asset konsolu saniyede onlarca satırla boğardı.</para>
+        /// <para>⚠️ Bu yol <c>OnGUI</c>'den her karede geçebiliyor: bayraksız hâlde eksik bir asset
+        /// konsolu saniyede onlarca satırla boğardı.</para>
         /// </summary>
         private bool _ghostProviderWarned;
 
@@ -170,36 +149,29 @@ namespace VortexArena.Core.Editor
         {
             GripPoseStudio window = GetWindow<GripPoseStudio>();
             window.titleContent = new GUIContent("Kavrama Pozu");
-            window.minSize = new Vector2(320f, 340f);
+            window.minSize = new Vector2(320f, 300f);
             window.Show();
         }
 
         private void OnEnable()
         {
             SceneView.duringSceneGui += OnSceneGui;
-            AssemblyReloadEvents.beforeAssemblyReload += DestroyGhosts;
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
-
-            SweepOrphanGhosts();
             ResolveTarget();
         }
 
         private void OnDisable()
         {
             SceneView.duringSceneGui -= OnSceneGui;
-            AssemblyReloadEvents.beforeAssemblyReload -= DestroyGhosts;
             EditorApplication.playModeStateChanged -= OnPlayModeChanged;
-
-            DestroyGhosts();
             SceneView.RepaintAll();
         }
 
         private void OnPlayModeChanged(PlayModeStateChange change)
         {
-            // Play'e girerken/çıkarken sahne yeniden yüklenir; elde kalan hayalet referansı
-            // ölü olur ve bir sonraki çizimde null erişim üretirdi.
-            DestroyGhosts();
-            _slotsDirty = true;
+            // Play'e girerken/çıkarken sahne yeniden yüklenir; eldeki transform referansları ölü
+            // olur ve bir sonraki çizimde null erişim üretirdi.
+            _measuresDirty = true;
             Repaint();
         }
 
@@ -211,24 +183,18 @@ namespace VortexArena.Core.Editor
 
         /// <summary>
         /// Hedef = seçimin üstündeki ilk <see cref="Weapon"/>. Ebeveyne bakılır çünkü kullanıcı
-        /// çoğu zaman kavrama işaretçisini ya da <c>Model</c> alt objesini seçili tutar.
+        /// çoğu zaman el modelini ya da <c>Model</c> alt objesini seçili tutar.
         /// </summary>
         private void ResolveTarget()
         {
             GameObject context = Selection.activeGameObject;
-            Weapon found = context == null ? null : context.GetComponentInParent<Weapon>();
-
-            if (found != _target)
-            {
-                _target = found;
-                DestroyGhosts();
-            }
+            _target = context == null ? null : context.GetComponentInParent<Weapon>();
 
             // Parça önbelleği hedefe bağlıdır; seçim her değiştiğinde (aynı silah bile olsa)
             // düşürülür — düğüm adı sahnede değiştirilmiş olabilir ve bayat kayıt sessizce
             // yanlış parçayı ölçerdi.
             _partCache.Clear();
-            _slotsDirty = true;
+            _measuresDirty = true;
 
             // Dal ölçümü de düşürülür: sonda olarak hedefin KENDİ poz düğümü kullanılıyor, yani
             // ölçüm hedefe bağlı bir yoldan geliyor. Yeni hedefte baştan ölçmek, bayat bir sondadan
@@ -244,9 +210,8 @@ namespace VortexArena.Core.Editor
 
             if (EditorApplication.isPlaying)
             {
-                DestroyGhosts();
                 EditorGUILayout.HelpBox(
-                    "Play kipinde hayalet çizilmez — çalışan oyunda elin gerçeği zaten sentetik eldir.",
+                    "Play kipinde kavrama yazılmaz — çalışan oyunda elin gerçeği sentetik eldir.",
                     MessageType.Info);
                 return;
             }
@@ -266,139 +231,773 @@ namespace VortexArena.Core.Editor
             if (definition == null)
             {
                 EditorGUILayout.HelpBox(
-                    "Silahın tanımı (WeaponDefinition) atanmamış — yalnız işaretçi kaynağı kullanılabilir.",
+                    "Silahın tanımı (WeaponDefinition) atanmamış — bake yazacak asset bulamaz.",
                     MessageType.Warning);
             }
 
             EditorGUILayout.Space();
 
-            DrawSourceSection();
+            DrawHandSection(definition);
             EditorGUILayout.Space();
-            DrawHandednessSection(definition);
-            EditorGUILayout.Space();
-            DrawPoseSection(definition);
+            DrawBakedSection(definition);
             EditorGUILayout.Space();
             DrawMissingPartsSection(definition);
             DrawGhostSourceSection();
 
             EditorGUILayout.HelpBox(
-                "Bu pencere hiçbir şey yazmaz. Ayarı kalıcı yapmak için: " +
-                "Tools > VortexArena > Weapons > Write Grip Sockets To Definition.",
+                "Akış: El Ekle → eli kabzaya oturt, parmakları hiyerarşiden bük → Bake. " +
+                "Yazan tek düğme Bake'tir; \"Bake çıktısı\" bölümü salt okunurdur.",
                 MessageType.None);
         }
 
-        private void DrawSourceSection()
+        // ---------------------------------------------------------------- el modeli (bake kaynağı)
+
+        /// <summary>
+        /// Kavramanın <b>elle yazılan tek kaynağı</b>: silahın üstüne oturtulan el modeli.
+        /// </summary>
+        private void DrawHandSection(WeaponDefinition definition)
         {
-            EditorGUILayout.LabelField("Bilek pozu kaynağı", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("El modeli (kavramanın kaynağı)", EditorStyles.boldLabel);
 
-            EditorGUI.BeginChangeCheck();
-            int index = GUILayout.Toolbar((int)_source, new[] { "İşaretçi", "Tanım" });
-            if (EditorGUI.EndChangeCheck())
-            {
-                _source = (PoseSource)index;
-                SceneView.RepaintAll();
-            }
-
-            // Bu ayrım projede zaten sarı (işaretçi) / camgöbeği (tanım) gizmo farkıyla var;
-            // burada tek satırla tekrarlanıyor çünkü iki hayalet çakışmadığında ilk soru bu oluyor.
-            EditorGUILayout.LabelField(
-                "İşaretçi = yazılmayı bekleyen, Tanım = oyunun kullandığı.",
-                EditorStyles.miniLabel);
-        }
-
-        private void DrawHandednessSection(WeaponDefinition definition)
-        {
-            EditorGUILayout.LabelField("Eller", EditorStyles.boldLabel);
-
-            EditorGUI.BeginChangeCheck();
-            _primaryRightHand = EditorGUILayout.Toggle("Ana el sağ", _primaryRightHand);
-
-            bool twoHanded = definition != null && definition.IsTwoHanded;
-            using (new EditorGUI.DisabledScope(!twoHanded))
-            {
-                _secondaryRightHand = EditorGUILayout.Toggle("Ön kabza eli sağ", _secondaryRightHand);
-            }
-
-            if (EditorGUI.EndChangeCheck())
-            {
-                // El değişince hayalet prefabı da değişir (sağ/sol ayrı model) → baştan kurulur.
-                DestroyGhosts();
-                _slotsDirty = true;
-                SceneView.RepaintAll();
-            }
-
-            if (!twoHanded)
-            {
-                EditorGUILayout.LabelField(
-                    "Silah tek elli (holdMode = OneHand) — ön kabza hayaleti çizilmez.",
-                    EditorStyles.miniLabel);
-            }
-        }
-
-        private void DrawPoseSection(WeaponDefinition definition)
-        {
-            EditorGUILayout.LabelField("Parmak pozu", EditorStyles.boldLabel);
-
-            DrawPoseRow(GripSocketKind.Primary, _primaryRightHand);
-
+            DrawHandRow(GripSocketKind.Primary, definition);
             if (definition != null && definition.IsTwoHanded)
             {
-                DrawPoseRow(GripSocketKind.Secondary, _secondaryRightHand);
-            }
-
-            EditorGUILayout.Space();
-
-            if (GUILayout.Button("Tüm Silahlara Düğüm Aç"))
-            {
-                CreateNodesForAllWeapons();
+                DrawHandRow(GripSocketKind.Secondary, definition);
             }
 
             EditorGUILayout.LabelField(
-                "\"Parmakları Düzenle\" pozu seçer; parmak tutamaklarını ISDK'nın kendi " +
-                "HandGrabPose editörü Scene view'da çizer.",
+                "Yalnız SAĞ el yazılır; sol el bake sırasında aynalanır.",
                 EditorStyles.miniLabel);
         }
 
-        private void DrawPoseRow(GripSocketKind kind, bool rightHand)
+        private void DrawHandRow(GripSocketKind kind, WeaponDefinition definition)
         {
-            string title = $"{kind} ({(rightHand ? "sağ" : "sol")})";
-            HandGrabPose node = FindPoseNode(_target, kind, rightHand);
-
-            // Eldeki ilk gerçek düğüm aynı zamanda el dalının sondasıdır (bkz. TryMeasureHandBranch).
-            TryMeasureHandBranch(node);
-
-            EditorGUILayout.LabelField(title, node == null ? "poz yok" : node.name);
+            Transform node = ItemHandRig.Find(_target.transform, kind);
 
             using (new EditorGUILayout.HorizontalScope())
             {
+                string state = node == null
+                    ? "el yok"
+                    : (node.gameObject.activeSelf ? "düzenlemede" : "bake'lenmiş (gizli)");
+                EditorGUILayout.LabelField($"{kind}", state, GUILayout.MinWidth(150f));
+
                 if (node == null)
                 {
-                    if (GUILayout.Button("Poz Düğümü Üret"))
+                    using (new EditorGUI.DisabledScope(definition == null))
                     {
-                        EnsurePoseNode(_target, kind, rightHand, out bool created);
-                        if (created)
+                        if (GUILayout.Button("El Ekle"))
                         {
-                            Debug.Log($"{LOG} '{_target.name}' altında {ItemGripPoses.RootNodeName}/" +
-                                      $"{ItemGripPoses.NodeName(kind, rightHand)} üretildi — parmakları " +
-                                      "\"Parmakları Düzenle\" ile bük.", _target);
+                            AddHandNode(kind, definition);
                         }
-
-                        _slotsDirty = true;
                     }
 
                     return;
                 }
 
-                if (GUILayout.Button("Parmakları Düzenle"))
+                if (GUILayout.Button(node.gameObject.activeSelf ? "Gizle" : "Göster"))
+                {
+                    Undo.RecordObject(node.gameObject, "VortexArena El Görünürlüğü");
+                    node.gameObject.SetActive(!node.gameObject.activeSelf);
+                    MarkDirty(_target);
+                    _measuresDirty = true;
+                    SceneView.RepaintAll();
+                }
+
+                if (GUILayout.Button("Seç"))
                 {
                     Selection.activeGameObject = node.gameObject;
                 }
 
-                if (GUILayout.Button("Karşı Ele Aynala"))
+                using (new EditorGUI.DisabledScope(definition == null))
                 {
-                    MirrorToOppositeHand(kind, rightHand);
+                    if (GUILayout.Button("Bake"))
+                    {
+                        BakeHand(kind, definition);
+                    }
                 }
             }
+        }
+
+        /// <summary>
+        /// El modelini silahın altına kalıcı olarak koyar.
+        /// <para>⚠️ <b>Mevcut kavrama değerinden TOHUMLANIR</b>
+        /// (<see cref="ItemHandGripBake.ToWristLocal"/>): bugüne kadar yazılmış silahların kavraması
+        /// sıfırdan yazılmasın, el doğrudan doğru yerde belirsin. Aynı sebeple parmaklar da varsa
+        /// mevcut poz düğümünden başlar.</para>
+        /// <para>⚠️ Örnek <see cref="HideFlags.None"/> ile kurulur: prefaba KAYDEDİLİR. Geçici bir
+        /// hayalet olsaydı pencere kapanınca kaybolur ve "yarın devam ederim" mümkün olmazdı.</para>
+        /// </summary>
+        private void AddHandNode(GripSocketKind kind, WeaponDefinition definition)
+        {
+            if (!TryGetGhostProvider(out HandGhostProvider provider))
+            {
+                return;
+            }
+
+            Handedness handedness = ItemHandRig.AuthoredHandIsRight ? Handedness.Right : Handedness.Left;
+            HandGhost prototype = provider.GetHand(handedness);
+            if (prototype == null)
+            {
+                Debug.LogWarning($"{LOG} El sağlayıcısında {handedness} el yok — el eklenemedi.", _target);
+                return;
+            }
+
+            Transform handsRoot = EnsureHandsRoot(_target.transform);
+
+            HandGhost instance = Instantiate(prototype, handsRoot);
+            instance.gameObject.name = ItemHandRig.NodeName(kind);
+            instance.gameObject.hideFlags = HideFlags.None;
+
+            ItemHandGripBake.ToWristLocal(definition, kind,
+                out Vector3 localPosition, out Quaternion localRotation);
+            instance.transform.localPosition = localPosition;
+            instance.transform.localRotation = localRotation;
+            instance.transform.localScale = Vector3.one;
+
+            HandGrabPose existing = ItemGripPoses.Find(
+                _target.transform, kind, ItemHandRig.AuthoredHandIsRight);
+            HandPose startPose = existing != null ? existing.HandPose : DefaultHandPose(handedness);
+            if (startPose != null)
+            {
+                instance.SetPose(startPose,
+                    new Pose(instance.transform.position, instance.transform.rotation));
+            }
+
+            Undo.RegisterCreatedObjectUndo(instance.gameObject, "VortexArena El Ekle");
+            MarkDirty(_target);
+            Selection.activeGameObject = instance.gameObject;
+            _measuresDirty = true;
+            SceneView.RepaintAll();
+
+            Debug.Log($"{LOG} '{_target.name}' altına {ItemHandRig.RootNodeName}/" +
+                      $"{ItemHandRig.NodeName(kind)} eklendi ve mevcut kavramadan konumlandırıldı. " +
+                      "Eli/parmakları ayarlayıp Bake'e bas.", instance.gameObject);
+        }
+
+        /// <summary>
+        /// El modelinden kavramayı üretir: bilek → tanım alanları, parmaklar → poz düğümü, sonra
+        /// sola aynalar ve eli <b>gizler</b>.
+        /// <para>⚠️ Gizleme adımı atlanamaz: el düğümü açık kalırsa arenada havada duran bir el
+        /// olarak görünür (raftaki silah, kavrama tezgâhı, uzak avatarın eli). Runtime tarafında
+        /// ayrıca emniyet var (<see cref="ItemHandRig.HideAll"/>) ama o son savunma hattıdır.</para>
+        /// <para>⚠️ Model SİLİNMEZ, yalnız kapatılır — sonra beğenilmezse "Göster" ile geri
+        /// düzenlenebilmeli.</para>
+        /// </summary>
+        private void BakeHand(GripSocketKind kind, WeaponDefinition definition)
+        {
+            Transform node = ItemHandRig.Find(_target.transform, kind);
+            if (node == null)
+            {
+                return;
+            }
+
+            // ⚠️ Bilek = düğümün KENDİ transformu: HandGhost'un HandPuppet'ı aynı GameObject'tedir
+            // (RequireComponent) ve HandPuppet.SetRootPose kendi transformunu bileğe yazıyor.
+            // Alt ağaçtaki ilk puppet'ı almak, prefabda ikinci bir görsel varyant durduğunda
+            // sessizce yanlış iskeleti okurdu.
+            HandPuppet puppet = node.GetComponent<HandPuppet>();
+            if (puppet == null || puppet.JointMaps == null)
+            {
+                Debug.LogError($"{LOG} '{node.name}' üstünde HandPuppet yok — parmak rotasyonları " +
+                               "okunamaz, bake yapılmadı.", node);
+                return;
+            }
+
+            bool rightHand = ItemHandRig.AuthoredHandIsRight;
+            Handedness handedness = rightHand ? Handedness.Right : Handedness.Left;
+
+            // 1) Bilek → tanım. ⚠️ Uzay yönü kavrama noktasına göre değişir (ana elde ters
+            //    bileşim, ikincilde değil); tek uygulaması ItemHandGripBake'tedir.
+            ItemHandGripBake.FromWrist(_target.transform, node, kind,
+                out Vector3 gripPosition, out Vector3 gripEuler);
+
+            var so = new SerializedObject(definition);
+            so.FindProperty(kind == GripSocketKind.Primary
+                ? "primaryGripPosition"
+                : "secondaryGripPosition").vector3Value = gripPosition;
+            so.FindProperty(kind == GripSocketKind.Primary
+                ? "primaryGripEuler"
+                : "secondaryGripEuler").vector3Value = gripEuler;
+            so.ApplyModifiedProperties();
+
+            // 2) Parmaklar → poz düğümü (yazılan el).
+            HandGrabPose target = EnsurePoseNode(_target, kind, rightHand);
+            Undo.RecordObject(target, "VortexArena Kavrama Bake");
+            Undo.RecordObject(target.transform, "VortexArena Kavrama Bake");
+
+            target.transform.SetPositionAndRotation(node.position, node.rotation);
+            if (target.RelativeTo == null)
+            {
+                target.InjectRelativeTo(_target.transform);
+            }
+
+            HandPose pose = target.HandPose ?? new HandPose(handedness);
+            WriteJointRotations(puppet, pose);
+            target.InjectOptionalHandPose(pose);
+
+            // 3) Karşı el — ayna matematiği ISDK'nın kendi API'sinden gelir.
+            MirrorToOppositeHand(kind, rightHand);
+
+            // 4) Gizle.
+            Undo.RecordObject(node.gameObject, "VortexArena Kavrama Bake");
+            node.gameObject.SetActive(false);
+
+            MarkDirty(_target);
+            _measuresDirty = true;
+            SceneView.RepaintAll();
+
+            Debug.Log($"{LOG} '{_target.name}' {kind} kavraması el modelinden yazıldı " +
+                      $"(tanım + {ItemGripPoses.NodeName(kind, rightHand)} + ayna) ve el gizlendi. " +
+                      "Yeniden düzenlemek için Göster'e bas.", _target);
+        }
+
+        /// <summary>
+        /// El modelinin eklem transformlarını <see cref="HandPose.JointRotations"/> sırasına yazar.
+        /// <para>⚠️ Sıra <see cref="FingersMetadata.HAND_JOINT_IDS"/>'dir ve eklem transformu
+        /// <b>ada göre değil KİMLİĞE göre</b> bulunur (<see cref="HandJointMap.id"/>): el
+        /// iskeletinin kemik adları ISDK'nın OpenXR ve OVR dallarında farklı, kimlikler aynıdır.</para>
+        /// </summary>
+        private static void WriteJointRotations(HandPuppet puppet, HandPose pose)
+        {
+            List<HandJointMap> maps = puppet.JointMaps;
+            HandJointId[] ids = FingersMetadata.HAND_JOINT_IDS;
+
+            for (int i = 0; i < ids.Length && i < pose.JointRotations.Length; i++)
+            {
+                HandJointId wanted = ids[i];
+                HandJointMap map = maps.Find(m => m != null && m.id == wanted);
+                if (map != null && map.transform != null)
+                {
+                    pose.JointRotations[i] = map.transform.localRotation;
+                }
+            }
+        }
+
+        private static Transform EnsureHandsRoot(Transform itemRoot)
+        {
+            Transform root = itemRoot.Find(ItemHandRig.RootNodeName);
+            if (root != null)
+            {
+                return root;
+            }
+
+            var go = new GameObject(ItemHandRig.RootNodeName);
+            Undo.RegisterCreatedObjectUndo(go, "VortexArena El Kökü");
+            go.transform.SetParent(itemRoot, false);
+            return go.transform;
+        }
+
+        // ------------------------------------------------------------------------ bake çıktısı
+
+        /// <summary>
+        /// Bake'in ürettiği veriyi <b>salt okunur</b> gösterir.
+        /// <para>⚠️ Buraya düzenleme düğmesi konmaz. Poz düğümüne elle yazılan her şey bir sonraki
+        /// bake'te üzerine yazılır; düğme koymak kullanıcıyı kaybolacak bir işe davet ederdi.</para>
+        /// </summary>
+        private void DrawBakedSection(WeaponDefinition definition)
+        {
+            EditorGUILayout.LabelField("Bake çıktısı (salt okunur)", EditorStyles.boldLabel);
+
+            DrawBakedRow(GripSocketKind.Primary);
+            if (definition != null && definition.IsTwoHanded)
+            {
+                DrawBakedRow(GripSocketKind.Secondary);
+            }
+        }
+
+        private void DrawBakedRow(GripSocketKind kind)
+        {
+            HandGrabPose right = FindPoseNode(_target, kind, true);
+            HandGrabPose left = FindPoseNode(_target, kind, false);
+
+            // Eldeki ilk gerçek düğüm aynı zamanda el dalının sondasıdır (bkz. TryMeasureHandBranch).
+            // ⚠️ `??` KULLANILMAZ: Unity'nin yok edilmiş nesne için özelleştirdiği `==` operatörünü
+            // atlar ve ölü bir referansı "dolu" sayardı.
+            TryMeasureHandBranch(right != null ? right : left);
+
+            string state = right == null && left == null
+                ? "hiç bake edilmedi"
+                : $"sağ: {(right != null ? "var" : "yok")} · sol (ayna): {(left != null ? "var" : "yok")}";
+
+            EditorGUILayout.LabelField($"{ItemGripPoses.NodeName(kind, true)}…", state);
+        }
+
+        // ---------------------------------------------------------------------- poz düğümleri
+
+        /// <summary>
+        /// Adı <see cref="ItemGripPoses"/>'den gelen poz düğümü; <b>poz verisi taşımasa da</b> döner.
+        /// <para>⚠️ <see cref="ItemGripPoses.Find"/> kullanılmaz: o, tüketici tarafı için
+        /// <c>UsesHandPose</c> false olan düğümü "yok" sayar — bake'in ise yarım kalmış bir düğümü
+        /// <b>bulup</b> üzerine yazması gerekir, yoksa her koşuda ikinci bir düğüm üretilirdi.</para>
+        /// </summary>
+        private static HandGrabPose FindPoseNode(Weapon weapon, GripSocketKind kind, bool rightHand)
+        {
+            if (weapon == null)
+            {
+                return null;
+            }
+
+            Transform root = weapon.transform.Find(ItemGripPoses.RootNodeName);
+            if (root == null)
+            {
+                return null;
+            }
+
+            Transform node = root.Find(ItemGripPoses.NodeName(kind, rightHand));
+            return node == null ? null : node.GetComponent<HandGrabPose>();
+        }
+
+        /// <summary>
+        /// Poz düğümünü (ve gerekiyorsa <c>GripPoses</c> kökünü) üretir; varsa yenisini üretmez.
+        /// <para>
+        /// ⚠️ <b>Üretilen <see cref="HandGrabPose"/> hiçbir <c>HandGrabInteractable</c>'ın poz
+        /// listesine EKLENMEZ.</b> Liste dolduğu anda ISDK kavrama adaylığını poz skoruna göre
+        /// hesaplamaya başlar ve bugünkü kavrama hissi (collider mesafesi) sessizce değişirdi. Bu
+        /// düğümler saf VERİDİR; onları yalnız <c>HandGripPoser</c> okur.
+        /// </para>
+        /// <para>
+        /// ⚠️ Düğüm <see cref="HandGrabUtils.CreateHandGrabPose"/> ile üretilir ve o yalnız bir
+        /// GameObject + bileşen kurar. Düğümün ALTINDA el görünüyorsa kaynağı ISDK'nın <b>inspector</b>
+        /// editörüdür (düğüm seçiliyken geçici hayalet örnekler) — prefaba yazılmaz, seçim
+        /// kalkınca yok olur.
+        /// </para>
+        /// </summary>
+        private HandGrabPose EnsurePoseNode(Weapon weapon, GripSocketKind kind, bool rightHand)
+        {
+            HandGrabPose existing = FindPoseNode(weapon, kind, rightHand);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            Transform poseRoot = EnsurePoseRoot(weapon);
+
+            HandGrabPose node = HandGrabUtils.CreateHandGrabPose(poseRoot, weapon.transform);
+            node.gameObject.name = ItemGripPoses.NodeName(kind, rightHand);
+            node.InjectOptionalHandPose(CreateDefaultHandPose(rightHand ? Handedness.Right : Handedness.Left));
+
+            Undo.RegisterCreatedObjectUndo(node.gameObject, "VortexArena Kavrama Pozu");
+            MarkDirty(weapon);
+            return node;
+        }
+
+        private static Transform EnsurePoseRoot(Weapon weapon)
+        {
+            Transform root = weapon.transform.Find(ItemGripPoses.RootNodeName);
+            if (root != null)
+            {
+                return root;
+            }
+
+            var go = new GameObject(ItemGripPoses.RootNodeName);
+            go.transform.SetParent(weapon.transform, false);
+            Undo.RegisterCreatedObjectUndo(go, "VortexArena Kavrama Pozu");
+            return go.transform;
+        }
+
+        /// <summary>
+        /// Yazılan elin pozunu karşı ele aynalar — silah öteki ele geçtiğinde de bir karşılığı olsun
+        /// diye.
+        /// <para>⚠️ Ayna matematiği ELLE YAZILMAZ: ISDK'nın kendi
+        /// <see cref="HandGrabUtils.MirrorHandGrabPose"/>'u kullanılır. İki eli ayrı ayrı yazmak aynı
+        /// kavramanın iki kez tarif edilmesi olurdu ve ikisi zamanla kaçınılmaz olarak saparadı.</para>
+        /// </summary>
+        private void MirrorToOppositeHand(GripSocketKind kind, bool rightHand)
+        {
+            HandGrabPose source = FindPoseNode(_target, kind, rightHand);
+            if (source == null || source.HandPose == null)
+            {
+                Debug.LogWarning($"{LOG} {kind} ({(rightHand ? "sağ" : "sol")}) pozunda el verisi yok — " +
+                                 "aynalanacak bir şey bulunamadı.", _target);
+                return;
+            }
+
+            HandGrabPose mirror = EnsurePoseNode(_target, kind, !rightHand);
+
+            Undo.RecordObject(mirror.transform, "VortexArena Kavrama Pozu Aynala");
+            Undo.RecordObject(mirror, "VortexArena Kavrama Pozu Aynala");
+            HandGrabUtils.MirrorHandGrabPose(source, mirror, _target.transform);
+            MarkDirty(_target);
+        }
+
+        /// <summary>
+        /// ⚠️ Prefab kipinde <see cref="EditorSceneManager.MarkSceneDirty(UnityEngine.SceneManagement.Scene)"/>
+        /// işe yaramaz — prefab stage'in önizleme sahnesi kaydedilmez, kaydedilen ASSET'tir. Bu yüzden
+        /// stage varken kirletilen kök objedir.
+        /// </summary>
+        private static void MarkDirty(Weapon weapon)
+        {
+            PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
+            if (stage != null && stage.IsPartOfPrefabContents(weapon.gameObject))
+            {
+                EditorUtility.SetDirty(stage.prefabContentsRoot);
+                return;
+            }
+
+            EditorSceneManager.MarkSceneDirty(weapon.gameObject.scene);
+        }
+
+        // ------------------------------------------------------------------------- el dalı ölçümü
+
+        /// <summary>
+        /// ISDK'nın hangi el dalında derlendiğini <b>ölçer</b> (bir kez; sonuç alana yazılır).
+        /// <para>
+        /// Yöntem: <see cref="HandGrabPose.HandPose"/> public getter'ı OpenXR dalında
+        /// <c>_targetHandPose</c>'u, OVR dalında <c>_handPose</c>'u döndürüyor. İkisi ayrı nesne
+        /// olduğu için getter'ın döndürdüğü referansı <c>_targetHandPose</c> ile karşılaştırmak dalı
+        /// kesin söyler.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Neden ölçüm, neden <c>#if</c> değil:</b> <c>ISDK_OPENXR_HAND</c> paketin kendi
+        /// asmdef'inde <c>versionDefines</c> ile üretiliyor ve <b>yalnız o assembly'de</b> tanımlı.
+        /// Bizim derlememizde her zaman false çıkardı, yani <c>#if</c> ile yazılan her satır sessizce
+        /// yanlış dalı seçerdi. Aynı sebeple define'ı kendi asmdef'imize kopyalamak da yasak: ISDK'nın
+        /// iç ayrıntısı ikinci bir doğruluk kaynağı olur ve paket değişince kimse fark etmeden sapar.
+        /// </para>
+        /// </summary>
+        private void TryMeasureHandBranch(HandGrabPose probe)
+        {
+            if (_openXrHandBranch.HasValue || probe == null)
+            {
+                return;
+            }
+
+            if (TargetHandPoseField == null)
+            {
+                // Alan hiç yoksa paket sözleşmesi değişmiş demektir; ISDK'nın gittiği yön OpenXR,
+                // yanlışsa sağlayıcı yükleme adımı zaten ötekine düşer.
+                _openXrHandBranch = true;
+                return;
+            }
+
+            HandPose live = probe.HandPose;
+            if (live == null)
+            {
+                return; // sonda geçersiz — ÖLÇÜLMEDİ sayılır, bir sonraki düğümde tekrar denenir
+            }
+
+            _openXrHandBranch = ReferenceEquals(TargetHandPoseField.GetValue(probe), live);
+        }
+
+        /// <summary>
+        /// Ölçülen el dalına ait model sağlayıcısını yükler; o yükleneMEZse ötekine düşer.
+        /// <para>⚠️ Sağlayıcı <b>dala aittir</b>: OpenXR iskeletiyle OVR modelini kurmak eli bozuk
+        /// bir duruşa sokar (eklem sayısı ve sırası aynı değil). Ölçüm yapılamadıysa OpenXR
+        /// varsayılır — paketin <c>versionDefines</c>'ı bu dalı her Unity sürümünde açıyor.</para>
+        /// </summary>
+        private bool TryGetGhostProvider(out HandGhostProvider provider)
+        {
+            string wanted = _openXrHandBranch.GetValueOrDefault(true)
+                ? GHOST_PROVIDER_PATH_OPENXR
+                : GHOST_PROVIDER_PATH_OVR;
+
+            if (_ghostProvider == null || _ghostProviderPath != wanted)
+            {
+                _ghostProvider = AssetDatabase.LoadAssetAtPath<HandGhostProvider>(wanted);
+                _ghostProviderPath = wanted;
+
+                if (_ghostProvider == null)
+                {
+                    string fallback = wanted == GHOST_PROVIDER_PATH_OPENXR
+                        ? GHOST_PROVIDER_PATH_OVR
+                        : GHOST_PROVIDER_PATH_OPENXR;
+
+                    _ghostProvider = AssetDatabase.LoadAssetAtPath<HandGhostProvider>(fallback);
+                    if (_ghostProvider != null)
+                    {
+                        _ghostProviderPath = fallback;
+                    }
+                }
+            }
+
+            provider = _ghostProvider;
+            if (provider != null)
+            {
+                _ghostProviderWarned = false;
+                return true;
+            }
+
+            if (!_ghostProviderWarned)
+            {
+                _ghostProviderWarned = true;
+                Debug.LogWarning($"{LOG} ISDK el sağlayıcısı iki dalda da bulunamadı " +
+                                 $"({GHOST_PROVIDER_PATH_OPENXR} / {GHOST_PROVIDER_PATH_OVR}) — " +
+                                 "paket sürümü değiştiyse yolları bu dosyadaki sabitlerden güncelle.");
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Hangi sağlayıcının kullanıldığını (ve dalın ölçülüp ölçülemediğini) tek satırda yazar.
+        /// <para>⚠️ Bu satır süs değil <b>teşhistir</b>: yanlış dalın sağlayıcısı yüklendiğinde el
+        /// yine kurulur, yalnız iskeleti tutmaz — belirtisi "el garip duruyor" olur ve sebebi hiçbir
+        /// yerde görünmezdi.</para>
+        /// </summary>
+        private void DrawGhostSourceSection()
+        {
+            if (TargetHandPoseField == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "ISDK'nın HandGrabPose sınıfında '_targetHandPose' alanı yok — paket sözleşmesi " +
+                    "değişmiş olabilir. El dalı ölçülemedi, OpenXR varsayıldı.",
+                    MessageType.Warning);
+            }
+
+            string asset = string.IsNullOrEmpty(_ghostProviderPath)
+                ? "(henüz yüklenmedi)"
+                : System.IO.Path.GetFileName(_ghostProviderPath);
+
+            string measured;
+            if (TargetHandPoseField == null || !_openXrHandBranch.HasValue)
+            {
+                measured = "OpenXR (ölçülemedi, varsayıldı)";
+            }
+            else
+            {
+                measured = _openXrHandBranch.Value ? "OpenXR (ölçüldü)" : "OVR (ölçüldü)";
+            }
+
+            EditorGUILayout.HelpBox($"El dalı: {measured} · el modeli: {asset}", MessageType.None);
+        }
+
+        // --------------------------------------------------------------------------- ölçüler
+
+        private void OnSceneGui(SceneView sceneView)
+        {
+            if (EditorApplication.isPlaying || _target == null)
+            {
+                return;
+            }
+
+            if (_measuresDirty)
+            {
+                RebuildMeasures();
+            }
+
+            DrawMeasurements();
+        }
+
+        private void RebuildMeasures()
+        {
+            _measuresDirty = false;
+            _measures.Clear();
+
+            if (_target == null)
+            {
+                return;
+            }
+
+            AddMeasure(GripSocketKind.Primary);
+
+            WeaponDefinition definition = _target.Definition;
+            if (definition != null && definition.IsTwoHanded)
+            {
+                AddMeasure(GripSocketKind.Secondary);
+            }
+        }
+
+        /// <summary>
+        /// Bir el modelinin ölçüm noktalarını rig'inden çözer.
+        /// <para>⚠️ Parmak <b>uçları</b> puppet'ın eklem tablosunda olmayabilir
+        /// (<c>FingersMetadata.HAND_JOINT_IDS</c> uçları taşımaz) — bu yüzden son boğumun
+        /// (<c>HandIndex3</c>) çocuğuna, o da yoksa ada göre aramaya düşülür. Hiçbiri tutmazsa ölçü
+        /// sessizce çizilmez: eksik bir gösterge için hata basmak, aracın asıl işini gürültüye
+        /// boğardı.</para>
+        /// </summary>
+        private void AddMeasure(GripSocketKind kind)
+        {
+            Transform node = ItemHandRig.Find(_target.transform, kind);
+            if (node == null)
+            {
+                return;
+            }
+
+            var measure = new HandMeasure { Kind = kind, Node = node, Palm = node };
+            HandPuppet puppet = node.GetComponent<HandPuppet>();
+
+            if (puppet != null && puppet.JointMaps != null)
+            {
+                Transform indexLast = null;
+                for (int i = 0; i < puppet.JointMaps.Count; i++)
+                {
+                    HandJointMap map = puppet.JointMaps[i];
+                    if (map == null || map.transform == null)
+                    {
+                        continue;
+                    }
+
+                    if (map.id == HandJointId.HandIndexTip)
+                    {
+                        measure.IndexTip = map.transform;
+                    }
+                    else if (map.id == HandJointId.HandIndex3)
+                    {
+                        indexLast = map.transform;
+                    }
+                    else if (map.id == HandJointId.HandMiddle1)
+                    {
+                        // ⚠️ "Avuç" olarak bilek kökü DEĞİL orta parmağın boğumu alınır: bilek
+                        // kavrama noktasının tam üstündedir, yani ondan ölçülen mesafe tanımı gereği
+                        // sıfıra yakındır ve hiçbir soruyu cevaplamaz. Kabzaya değen yer burasıdır.
+                        measure.Palm = map.transform;
+                    }
+                }
+
+                if (measure.IndexTip == null && indexLast != null)
+                {
+                    measure.IndexTip = indexLast.childCount > 0 ? indexLast.GetChild(0) : indexLast;
+                }
+            }
+
+            if (measure.IndexTip == null)
+            {
+                measure.IndexTip = FindByName(node, "index", "null", "tip");
+            }
+
+            _measures.Add(measure);
+        }
+
+        /// <summary>Alt ağaçta adı <paramref name="required"/> ve seçeneklerden birini içeren ilk transform.</summary>
+        private static Transform FindByName(Transform root, string required, string optionA, string optionB)
+        {
+            Transform[] all = root.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < all.Length; i++)
+            {
+                string name = all[i].name.ToLowerInvariant();
+                if (name.Contains(required) && (name.Contains(optionA) || name.Contains(optionB)))
+                {
+                    return all[i];
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Ölçüleri çizer.
+        /// <para>⚠️ <b>Ölçülerin hedefi kavrama noktası DEĞİL silahın gerçek geometrisidir.</b> El
+        /// modelinin bileği zaten kavrama noktasının üstünde duruyor; oraya olan her mesafe tanımı
+        /// gereği neredeyse sabittir (ölçülen şey elin kendi boyu olur, kavramanın kalitesi değil).
+        /// Bu yüzden hedef, ada göre bulunan kabza/ön kabza/tetik düğümüdür.</para>
+        /// <para>⚠️ Yüzey mesafesi <see cref="Renderer.bounds"/> (dünya AABB) üzerinden alınır, yani
+        /// mesh'e tam oturmayan bir YAKLAŞIMDIR. Kabza ve tetik gibi küçük parçalarda kutu yeterince
+        /// dardır; sayı zaten mutlak bir değer için değil, el sürüklenirken <b>değişimi izlemek</b>
+        /// için var.</para>
+        /// <para>⚠️ Hedef parça bulunamazsa ölçü <b>hiç çizilmez</b>; eksiklik pencerede yazılı
+        /// (<see cref="DrawMissingPartsSection"/>).</para>
+        /// </summary>
+        private void DrawMeasurements()
+        {
+            GUIStyle style = LabelStyle();
+
+            for (int i = 0; i < _measures.Count; i++)
+            {
+                HandMeasure measure = _measures[i];
+
+                if (measure.Node == null)
+                {
+                    // El silinmiş: liste bayat, bir sonraki karede yeniden kurulur.
+                    _measuresDirty = true;
+                    continue;
+                }
+
+                // Bake'lenmiş (gizli) el ölçülmez: ekranda görünmeyen bir şeyin yanına sayı yazmak
+                // kullanıcıya hâlâ düzenlenebilir bir el varmış izlenimi verirdi.
+                if (!measure.Node.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                Handles.color = Color.white;
+
+                Renderer gripPart = FindWeaponPart(
+                    measure.Kind == GripSocketKind.Primary ? GRIP_KEYS : FOREGRIP_KEYS);
+
+                if (measure.Palm != null && gripPart != null)
+                {
+                    Vector3 palm = measure.Palm.position;
+                    Vector3 surface = gripPart.bounds.ClosestPoint(palm);
+                    Handles.DrawDottedLine(palm, surface, 3f);
+                    Handles.Label(
+                        Vector3.Lerp(palm, surface, 0.5f) + Vector3.up * 0.01f,
+                        $"avuç → {GripPartLabel(measure.Kind)} yüzeyi: {Centimeters(palm, surface)}",
+                        style);
+                }
+
+                // ⚠️ Tetik ölçüsü YALNIZ ana el için çizilir: ön kabzayı tutan el tetiği çekmez,
+                // orada bu sayı anlamsız (ve yanıltıcı) olurdu.
+                if (measure.Kind != GripSocketKind.Primary || measure.IndexTip == null)
+                {
+                    continue;
+                }
+
+                Renderer trigger = FindWeaponPart(TRIGGER_KEYS);
+                if (trigger != null)
+                {
+                    Vector3 index = measure.IndexTip.position;
+                    Vector3 triggerSurface = trigger.bounds.ClosestPoint(index);
+                    Handles.DrawDottedLine(index, triggerSurface, 3f);
+                    Handles.Label(
+                        Vector3.Lerp(index, triggerSurface, 0.5f),
+                        $"işaret parmağı ucu → tetik: {Centimeters(index, triggerSurface)}",
+                        style);
+                }
+            }
+
+            // İki kavrama noktası arası eksen: iki elli çözümün silahı hizaladığı eksen budur
+            // (ItemGripSolver ana noktaya oturur, ön kabzaya bakar). Eller gizliyken de çizilir,
+            // çünkü kaynağı tanımın kendisidir.
+            if (TryGetGripWorldPose(_target, GripSocketKind.Primary, out Pose primary) &&
+                TryGetGripWorldPose(_target, GripSocketKind.Secondary, out Pose secondary))
+            {
+                Handles.color = Color.cyan;
+                Handles.DrawLine(primary.position, secondary.position);
+                Handles.Label(
+                    Vector3.Lerp(primary.position, secondary.position, 0.5f),
+                    $"kavrama ekseni: {Centimeters(primary.position, secondary.position)}",
+                    style);
+            }
+        }
+
+        /// <summary>
+        /// Tanımdaki kavrama noktasının DÜNYA pozu.
+        /// <para>⚠️ <c>TransformPoint</c> KULLANILMAZ: kavrama ofseti metre cinsindendir ve araya
+        /// giren transformların ölçeği ona bulaşmamalı (aynı gerekçe <c>Weapon.ApplyCanonicalGrip</c>
+        /// ve <c>ItemGripSockets.PrimarySocketWorld</c> içinde de elle bileşim yaptırıyor).</para>
+        /// <para>⚠️ Primary <b>ters</b> okunur: SO'daki <c>primaryGrip</c> "el → eşya" yönündedir.
+        /// Secondary zaten eşya-yereldir ve düz okunur (asimetrinin anlatımı
+        /// <see cref="ItemDefinition"/> başındadır).</para>
+        /// </summary>
+        private static bool TryGetGripWorldPose(Weapon weapon, GripSocketKind kind, out Pose pose)
+        {
+            pose = default;
+
+            ItemDefinition definition = weapon == null ? null : weapon.Definition;
+            if (definition == null)
+            {
+                return false;
+            }
+
+            Vector3 localPosition;
+            Quaternion localRotation;
+
+            if (kind == GripSocketKind.Primary)
+            {
+                localPosition = definition.PrimaryGripPointOnItem;
+                localRotation = Quaternion.Inverse(definition.PrimaryGripRotation);
+            }
+            else
+            {
+                localPosition = definition.SecondaryGripPosition;
+                localRotation = definition.SecondaryGripRotation;
+            }
+
+            Transform root = weapon.transform;
+            pose = new Pose(
+                root.position + root.rotation * localPosition,
+                root.rotation * localRotation);
+            return true;
         }
 
         /// <summary>
@@ -437,734 +1036,6 @@ namespace VortexArena.Core.Editor
             EditorGUILayout.Space();
         }
 
-        /// <summary>
-        /// Hangi hayalet sağlayıcısının kullanıldığını (ve dalın ölçülüp ölçülemediğini) tek satırda
-        /// yazar.
-        /// <para>⚠️ Bu satır süs değil <b>teşhistir</b>: yanlış dalın sağlayıcısı yüklendiğinde el
-        /// yine çizilir, yalnız iskeleti tutmaz — belirtisi "hayalet garip duruyor" olur ve sebebi
-        /// hiçbir yerde görünmezdi.</para>
-        /// </summary>
-        private void DrawGhostSourceSection()
-        {
-            if (TargetHandPoseField == null)
-            {
-                EditorGUILayout.HelpBox(
-                    "ISDK'nın HandGrabPose sınıfında '_targetHandPose' alanı yok — paket sözleşmesi " +
-                    "değişmiş olabilir. El dalı ölçülemedi, OpenXR varsayıldı.",
-                    MessageType.Warning);
-            }
-
-            string asset = string.IsNullOrEmpty(_ghostProviderPath)
-                ? "(henüz yüklenmedi)"
-                : System.IO.Path.GetFileName(_ghostProviderPath);
-
-            string measured;
-            if (TargetHandPoseField == null || !_openXrHandBranch.HasValue)
-            {
-                measured = "OpenXR (ölçülemedi, varsayıldı)";
-            }
-            else
-            {
-                measured = _openXrHandBranch.Value ? "OpenXR (ölçüldü)" : "OVR (ölçüldü)";
-            }
-
-            EditorGUILayout.HelpBox($"El dalı: {measured} · hayalet: {asset}", MessageType.None);
-        }
-
-        // ------------------------------------------------------------------------- el dalı ölçümü
-
-        /// <summary>
-        /// ISDK'nın hangi el dalında derlendiğini <b>ölçer</b> (bir kez; sonuç alana yazılır).
-        /// <para>
-        /// Yöntem: <see cref="HandGrabPose.HandPose"/> public getter'ı OpenXR dalında
-        /// <c>_targetHandPose</c>'u, OVR dalında <c>_handPose</c>'u döndürüyor. İkisi ayrı nesne
-        /// olduğu için getter'ın döndürdüğü referansı <c>_targetHandPose</c> ile karşılaştırmak dalı
-        /// kesin söyler.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Neden ölçüm, neden <c>#if</c> değil:</b> <c>ISDK_OPENXR_HAND</c> paketin kendi
-        /// asmdef'inde <c>versionDefines</c> ile üretiliyor ve <b>yalnız o assembly'de</b> tanımlı.
-        /// Bizim derlememizde her zaman false çıkardı, yani <c>#if</c> ile yazılan her satır sessizce
-        /// yanlış dalı seçerdi. Aynı sebeple define'ı kendi asmdef'imize kopyalamak da yasak: ISDK'nın
-        /// iç ayrıntısı ikinci bir doğruluk kaynağı olur ve paket değişince kimse fark etmeden sapar.
-        /// </para>
-        /// </summary>
-        private void TryMeasureHandBranch(HandGrabPose probe)
-        {
-            if (_openXrHandBranch.HasValue || probe == null)
-            {
-                return;
-            }
-
-            if (TargetHandPoseField == null)
-            {
-                // Alan hiç yoksa paket sözleşmesi değişmiş demektir; ISDK'nın gittiği yön OpenXR,
-                // yanlışsa sağlayıcı yükleme adımı zaten ötekine düşer.
-                _openXrHandBranch = true;
-                _slotsDirty = true;
-                return;
-            }
-
-            HandPose live = probe.HandPose;
-            if (live == null)
-            {
-                return; // sonda geçersiz — ÖLÇÜLMEDİ sayılır, bir sonraki düğümde tekrar denenir
-            }
-
-            _openXrHandBranch = ReferenceEquals(TargetHandPoseField.GetValue(probe), live);
-
-            // Dal değişimi hayaletin rig'ini değiştirir: eldeki örnekler baştan kurulur.
-            _slotsDirty = true;
-        }
-
-        // ---------------------------------------------------------------------- poz düğümleri
-
-        /// <summary>
-        /// Adı <see cref="ItemGripPoses"/>'den gelen poz düğümü; <b>poz verisi taşımasa da</b>
-        /// döner.
-        /// <para>⚠️ <see cref="ItemGripPoses.Find"/> kullanılmaz: o, tüketici tarafı için
-        /// <c>UsesHandPose</c> false olan düğümü "yok" sayar. Stüdyonun ise henüz parmakları
-        /// bükülmemiş bir düğümü <b>bulup</b> göstermesi gerekir, yoksa "Poz Düğümü Üret" her
-        /// tıklamada ikinci bir düğüm üretirdi.</para>
-        /// </summary>
-        private static HandGrabPose FindPoseNode(Weapon weapon, GripSocketKind kind, bool rightHand)
-        {
-            if (weapon == null)
-            {
-                return null;
-            }
-
-            Transform root = weapon.transform.Find(ItemGripPoses.RootNodeName);
-            if (root == null)
-            {
-                return null;
-            }
-
-            Transform node = root.Find(ItemGripPoses.NodeName(kind, rightHand));
-            return node == null ? null : node.GetComponent<HandGrabPose>();
-        }
-
-        /// <summary>
-        /// Poz düğümünü (ve gerekiyorsa <c>GripPoses</c> kökünü) üretir; varsa yenisini üretmez.
-        /// <para>
-        /// ⚠️ <b>Üretilen <see cref="HandGrabPose"/> hiçbir <c>HandGrabInteractable</c>'ın poz
-        /// listesine EKLENMEZ.</b> Liste dolduğu anda ISDK kavrama adaylığını poz skoruna göre
-        /// hesaplamaya başlar ve bugünkü kavrama hissi sessizce değişir (aynı gerekçeyle silah
-        /// kitine <c>HandGrabPose</c> çocuğu eklenmiyor). Bu düğümler saf VERİDİR; onları yalnız
-        /// <c>HandGripPoser</c> okur.
-        /// </para>
-        /// <para>
-        /// ⚠️ Boş bir <see cref="HandPose"/> atanmaz — parametresiz kurucu iskeleti <b>sol</b> el
-        /// varsayımıyla doldurur, <c>HandPose(Handedness)</c> kurucusu ise eklem dizisini sıfır
-        /// quaternion'larla bırakır. İkisi de hayaleti çizilemez hâle sokar; bu yüzden varsayılan
-        /// poz ilgili elin bind iskeletinden kurulur.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Mevcut düğüm YERLEŞTİRİLMEMİŞSE sokete taşınır.</b> <c>WeaponKitBuilder</c> düğümleri
-        /// silahın orijininde, sıfır transformla açıyor ve o hâldeki bir düğümü <c>HandGripPoser</c>
-        /// bilerek yok sayıyor (<see cref="ItemGripPoses.Find"/>). Burada dokunmasaydık kitin açtığı
-        /// düğüm orijinde kalır, bu düğme her basışta "zaten var" der ve poz HİÇ devreye girmezdi —
-        /// belirtisi "araç çalışıyor ama el sarılmıyor" olurdu. Elle yerleştirilmiş bir düğüme ise
-        /// dokunulmaz: taşıma yalnız birim pozdaki düğüm için yapılır.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Kullanılamaz hâldeki poz de onarılır</b> (<see cref="NeedsPoseRepair"/>): düğüm var
-        /// ama canlı pozu boş olabilir (poz ISDK'nın dala göre değişen <b>öteki</b> alanına yazılmışsa
-        /// getter onu hiç görmez). Onarım kapısı olmasaydı düğüm "zaten var" sayıldığı için hiç
-        /// düzelmez, kullanıcının tek çaresi onu elle silmek olurdu. Kullanılabilir bir poz varsa
-        /// DOKUNULMAZ — elle bükülmüş parmaklar silinmesin.
-        /// </para>
-        /// </summary>
-        private HandGrabPose EnsurePoseNode(Weapon weapon, GripSocketKind kind, bool rightHand, out bool created)
-        {
-            created = false;
-
-            HandGrabPose existing = FindPoseNode(weapon, kind, rightHand);
-            if (existing != null)
-            {
-                TryMeasureHandBranch(existing);
-
-                if (NeedsPoseRepair(existing))
-                {
-                    Undo.RecordObject(existing, "VortexArena Kavrama Pozu");
-                    existing.InjectOptionalHandPose(
-                        CreateDefaultHandPose(rightHand ? Handedness.Right : Handedness.Left));
-                    MarkDirty(weapon);
-
-                    Debug.Log($"{LOG} '{weapon.name}' altındaki " +
-                              $"{ItemGripPoses.NodeName(kind, rightHand)} düğümünde kullanılabilir poz " +
-                              "yok — varsayılan poz yazıldı, parmakları tekrar bük.", existing);
-                }
-
-                // ⚠️ "Yerleştirilmemiş" ölçüsü BURADA TEKRARLANMAZ: kuralın tek tanımı
-                // ItemGripPoses'tadır ve tüketici (HandGripPoser) de onu kullanır. İkinci bir eşik
-                // yazılsaydı, stüdyonun "yerleşik" saydığı bir düğümü runtime yok sayabilirdi.
-                if (ItemGripPoses.IsUnplaced(existing) &&
-                    TryGetSocketWorldPose(weapon, kind, out Pose existingSocket))
-                {
-                    Undo.RecordObject(existing.transform, "VortexArena Kavrama Pozu");
-                    existing.transform.SetPositionAndRotation(existingSocket.position, existingSocket.rotation);
-                    MarkDirty(weapon);
-
-                    Debug.Log($"{LOG} '{weapon.name}' altındaki " +
-                              $"{ItemGripPoses.NodeName(kind, rightHand)} düğümü silahın orijininde " +
-                              "duruyordu (silah kiti öyle açar) — sokete taşındı.", existing);
-                }
-
-                return existing;
-            }
-
-            Transform poseRoot = EnsurePoseRoot(weapon);
-
-            HandGrabPose node = HandGrabUtils.CreateHandGrabPose(poseRoot, weapon.transform);
-            node.gameObject.name = ItemGripPoses.NodeName(kind, rightHand);
-            node.InjectOptionalHandPose(CreateDefaultHandPose(rightHand ? Handedness.Right : Handedness.Left));
-
-            // Düğüm sokete oturtulur: ISDK'nın kendi HandGrabPose editörü de kendi hayaletini
-            // düğümün transformuna çizer, ikisi ayrı yerde durursa hangisinin doğru olduğu
-            // belirsizleşir.
-            if (TryGetSocketWorldPose(weapon, kind, out Pose socket))
-            {
-                node.transform.SetPositionAndRotation(socket.position, socket.rotation);
-            }
-
-            Undo.RegisterCreatedObjectUndo(node.gameObject, "VortexArena Kavrama Pozu");
-            MarkDirty(weapon);
-
-            created = true;
-            return node;
-        }
-
-        private static Transform EnsurePoseRoot(Weapon weapon)
-        {
-            Transform root = weapon.transform.Find(ItemGripPoses.RootNodeName);
-            if (root != null)
-            {
-                return root;
-            }
-
-            var go = new GameObject(ItemGripPoses.RootNodeName);
-            go.transform.SetParent(weapon.transform, false);
-            Undo.RegisterCreatedObjectUndo(go, "VortexArena Kavrama Pozu");
-            return go.transform;
-        }
-
-        /// <summary>
-        /// Aynı soketin karşı el pozunu üretir/günceller. Sağ elle yazılan tüfek pozu, silah sol
-        /// ele geçtiğinde de bir karşılığı olsun diye.
-        /// </summary>
-        private void MirrorToOppositeHand(GripSocketKind kind, bool rightHand)
-        {
-            HandGrabPose source = FindPoseNode(_target, kind, rightHand);
-            if (source == null || source.HandPose == null)
-            {
-                Debug.LogWarning($"{LOG} {kind} ({(rightHand ? "sağ" : "sol")}) pozunda el verisi yok — " +
-                                 "aynalanacak bir şey bulunamadı.", _target);
-                return;
-            }
-
-            HandGrabPose mirror = EnsurePoseNode(_target, kind, !rightHand, out bool _);
-
-            Undo.RecordObject(mirror.transform, "VortexArena Kavrama Pozu Aynala");
-            Undo.RecordObject(mirror, "VortexArena Kavrama Pozu Aynala");
-            HandGrabUtils.MirrorHandGrabPose(source, mirror, _target.transform);
-            MarkDirty(_target);
-
-            _slotsDirty = true;
-            SceneView.RepaintAll();
-
-            Debug.Log($"{LOG} {source.name} → {mirror.name} aynalandı. Ayna en iyi tahmindir: " +
-                      "karşı elin bileği sahnede elle düzeltilebilir.", mirror);
-        }
-
-        /// <summary>
-        /// Açık sahnedeki (ya da prefab kipindeki) her silaha eksik poz düğümlerini açar.
-        /// İdempotenttir; var olan düğüme dokunmaz.
-        /// </summary>
-        private void CreateNodesForAllWeapons()
-        {
-            Weapon[] weapons = CollectWeapons();
-            if (weapons.Length == 0)
-            {
-                Debug.LogWarning($"{LOG} Ortada hiç Weapon yok — sahneyi (ya da bir WPN_* prefabını) aç.");
-                return;
-            }
-
-            int createdCount = 0;
-            for (int i = 0; i < weapons.Length; i++)
-            {
-                Weapon weapon = weapons[i];
-
-                EnsurePoseNode(weapon, GripSocketKind.Primary, _primaryRightHand, out bool primaryCreated);
-                if (primaryCreated)
-                {
-                    createdCount++;
-                }
-
-                WeaponDefinition definition = weapon.Definition;
-                if (definition == null || !definition.IsTwoHanded)
-                {
-                    continue;
-                }
-
-                EnsurePoseNode(weapon, GripSocketKind.Secondary, _secondaryRightHand, out bool secondaryCreated);
-                if (secondaryCreated)
-                {
-                    createdCount++;
-                }
-            }
-
-            _slotsDirty = true;
-            Debug.Log($"{LOG} {weapons.Length} silah gezildi, {createdCount} yeni poz düğümü açıldı " +
-                      "(var olanlara dokunulmadı).");
-        }
-
-        private static Weapon[] CollectWeapons()
-        {
-            PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
-            if (stage != null)
-            {
-                return stage.prefabContentsRoot.GetComponentsInChildren<Weapon>(true);
-            }
-
-            return FindObjectsByType<Weapon>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        }
-
-        /// <summary>
-        /// ⚠️ Prefab kipinde <see cref="EditorSceneManager.MarkSceneDirty(Scene)"/> işe yaramaz —
-        /// prefab stage'in önizleme sahnesi kaydedilmez, kaydedilen ASSET'tir. Bu yüzden stage
-        /// varken kirletilen kök objedir.
-        /// </summary>
-        private static void MarkDirty(Weapon weapon)
-        {
-            PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
-            if (stage != null && stage.IsPartOfPrefabContents(weapon.gameObject))
-            {
-                EditorUtility.SetDirty(stage.prefabContentsRoot);
-                return;
-            }
-
-            EditorSceneManager.MarkSceneDirty(weapon.gameObject.scene);
-        }
-
-        // -------------------------------------------------------------------------- hayaletler
-
-        private void OnSceneGui(SceneView sceneView)
-        {
-            if (EditorApplication.isPlaying)
-            {
-                DestroyGhosts();
-                return;
-            }
-
-            if (_target == null)
-            {
-                DestroyGhosts();
-                return;
-            }
-
-            if (_slotsDirty)
-            {
-                RebuildSlots();
-            }
-
-            // ⚠️ Duruş HER çizimde tazelenir: kullanıcının asıl beklentisi işaretçiyi sürüklerken
-            // elin AYNI karede takip etmesi. Olay tabanlı bir tazeleme (yalnız değişimde) sürükleme
-            // sırasında bir kare geriden gelirdi.
-            RefreshGhostPoses();
-            DrawMeasurements();
-        }
-
-        private void RebuildSlots()
-        {
-            _slotsDirty = false;
-            DestroyGhosts();
-
-            if (_target == null || !TryGetGhostProvider(out HandGhostProvider provider))
-            {
-                return;
-            }
-
-            CreateSlot(provider, GripSocketKind.Primary, _primaryRightHand);
-
-            WeaponDefinition definition = _target.Definition;
-            if (definition != null && definition.IsTwoHanded)
-            {
-                CreateSlot(provider, GripSocketKind.Secondary, _secondaryRightHand);
-            }
-        }
-
-        private void CreateSlot(HandGhostProvider provider, GripSocketKind kind, bool rightHand)
-        {
-            if (!TryGetSocketWorldPose(_target, kind, out Pose _))
-            {
-                // Soket çözülemiyorsa hayalet de kurulmaz — el sahnenin orijininde asılı kalırdı.
-                return;
-            }
-
-            Handedness handedness = rightHand ? Handedness.Right : Handedness.Left;
-            HandGhost prototype = provider.GetHand(handedness);
-            if (prototype == null)
-            {
-                return;
-            }
-
-            HandGhost ghost = Instantiate(prototype);
-            ghost.gameObject.name = $"{GHOST_NAME_PREFIX}{kind}";
-            ghost.gameObject.hideFlags = HideFlags.HideAndDontSave;
-
-            // Prefab kipinde önizleme sahnesi ayrıdır: hayalet aktif sahnede kalırsa prefab
-            // penceresinde HİÇ çizilmez (ve kullanıcı aracı bozuk sanır).
-            SceneManager.MoveGameObjectToScene(ghost.gameObject, _target.gameObject.scene);
-
-            var slot = new GhostSlot
-            {
-                Kind = kind,
-                RightHand = rightHand,
-                Ghost = ghost
-            };
-
-            ResolveMeasurePoints(slot);
-            _slots.Add(slot);
-        }
-
-        private void RefreshGhostPoses()
-        {
-            for (int i = _slots.Count - 1; i >= 0; i--)
-            {
-                GhostSlot slot = _slots[i];
-                if (slot.Ghost == null)
-                {
-                    _slots.RemoveAt(i);
-                    _slotsDirty = true;
-                    continue;
-                }
-
-                if (!TryGetSocketWorldPose(_target, slot.Kind, out Pose socket))
-                {
-                    continue;
-                }
-
-                HandGrabPose posed = ItemGripPoses.Find(_target.transform, slot.Kind, slot.RightHand);
-                TryMeasureHandBranch(posed);
-
-                HandPose handPose = posed != null
-                    ? posed.HandPose
-                    : DefaultHandPose(slot.RightHand ? Handedness.Right : Handedness.Left);
-
-                slot.Ghost.SetPose(handPose, socket);
-            }
-        }
-
-        private void DestroyGhosts()
-        {
-            for (int i = 0; i < _slots.Count; i++)
-            {
-                if (_slots[i].Ghost != null)
-                {
-                    DestroyImmediate(_slots[i].Ghost.gameObject);
-                }
-            }
-
-            _slots.Clear();
-        }
-
-        /// <summary>
-        /// Domain reload'dan sağ çıkmış yetim hayaletleri toplar. <c>DontSave</c> objeleri sahneye
-        /// yazılmaz ama bellekte kalabilir; görünmez oldukları için elle silinemezler.
-        /// </summary>
-        private static void SweepOrphanGhosts()
-        {
-            HandGhost[] ghosts = FindObjectsByType<HandGhost>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            for (int i = 0; i < ghosts.Length; i++)
-            {
-                if (ghosts[i] != null && ghosts[i].gameObject.name.StartsWith(GHOST_NAME_PREFIX))
-                {
-                    DestroyImmediate(ghosts[i].gameObject);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Ölçülen el dalına ait hayalet sağlayıcısını yükler; o yükleneMEZse ötekine düşer.
-        /// <para>⚠️ Sağlayıcı <b>dala aittir</b>: OpenXR iskeletiyle OVR hayaletini çizmek eli
-        /// bozuk bir duruşa sokar (eklem sayısı ve sırası aynı değil). Ölçüm yapılamadıysa OpenXR
-        /// varsayılır — paketin <c>versionDefines</c>'ı bu dalı her Unity sürümünde açıyor.</para>
-        /// </summary>
-        private bool TryGetGhostProvider(out HandGhostProvider provider)
-        {
-            string wanted = _openXrHandBranch.GetValueOrDefault(true)
-                ? GHOST_PROVIDER_PATH_OPENXR
-                : GHOST_PROVIDER_PATH_OVR;
-
-            if (_ghostProvider == null || _ghostProviderPath != wanted)
-            {
-                _ghostProvider = AssetDatabase.LoadAssetAtPath<HandGhostProvider>(wanted);
-                _ghostProviderPath = wanted;
-
-                if (_ghostProvider == null)
-                {
-                    string fallback = wanted == GHOST_PROVIDER_PATH_OPENXR
-                        ? GHOST_PROVIDER_PATH_OVR
-                        : GHOST_PROVIDER_PATH_OPENXR;
-
-                    _ghostProvider = AssetDatabase.LoadAssetAtPath<HandGhostProvider>(fallback);
-                    if (_ghostProvider != null)
-                    {
-                        _ghostProviderPath = fallback;
-                    }
-                }
-            }
-
-            provider = _ghostProvider;
-            if (provider != null)
-            {
-                _ghostProviderWarned = false;
-                return true;
-            }
-
-            if (!_ghostProviderWarned)
-            {
-                _ghostProviderWarned = true;
-                Debug.LogWarning($"{LOG} ISDK hayalet sağlayıcısı iki dalda da bulunamadı " +
-                                 $"({GHOST_PROVIDER_PATH_OPENXR} / {GHOST_PROVIDER_PATH_OVR}) — " +
-                                 "paket sürümü değiştiyse yolları bu dosyadaki sabitlerden güncelle.");
-            }
-
-            return false;
-        }
-
-        // ------------------------------------------------------------------------ soket pozu
-
-        /// <summary>
-        /// Seçili kaynağa göre soketin DÜNYA pozu.
-        /// <para>⚠️ <c>TransformPoint</c> KULLANILMAZ: kavrama ofseti metre cinsindendir ve araya
-        /// giren transformların ölçeği ona bulaşmamalı (aynı gerekçe
-        /// <c>GripSocketAuthoring.LocalPose</c> ve <c>Weapon.ApplyCanonicalGrip</c> içinde de elle
-        /// bileşim yaptırıyor). Bu yüzden yalnız konum farkı + dönüş bileşimi.</para>
-        /// <para>⚠️ Tanım kaynağında Primary <b>ters</b> okunur: SO'daki <c>primaryGrip</c>
-        /// "el → eşya" yönündedir, işaretçi ise "eşya → el". Secondary zaten eşya-yereldir ve düz
-        /// okunur (asimetrinin anlatımı <see cref="ItemDefinition"/> başındadır).</para>
-        /// </summary>
-        private bool TryGetSocketWorldPose(Weapon weapon, GripSocketKind kind, out Pose pose)
-        {
-            pose = default;
-            if (weapon == null)
-            {
-                return false;
-            }
-
-            Vector3 localPosition;
-            Quaternion localRotation;
-
-            if (_source == PoseSource.Marker)
-            {
-                GripSocketMarker marker = FindMarker(weapon, kind);
-                if (marker == null)
-                {
-                    return false;
-                }
-
-                pose = new Pose(marker.transform.position, marker.transform.rotation);
-                return true;
-            }
-
-            ItemDefinition definition = weapon.Definition;
-            if (definition == null)
-            {
-                return false;
-            }
-
-            if (kind == GripSocketKind.Primary)
-            {
-                localPosition = definition.PrimaryGripPointOnItem;
-                localRotation = Quaternion.Inverse(definition.PrimaryGripRotation);
-            }
-            else
-            {
-                localPosition = definition.SecondaryGripPosition;
-                localRotation = definition.SecondaryGripRotation;
-            }
-
-            Transform root = weapon.transform;
-            pose = new Pose(
-                root.position + root.rotation * localPosition,
-                root.rotation * localRotation);
-            return true;
-        }
-
-        private static GripSocketMarker FindMarker(Weapon weapon, GripSocketKind kind)
-        {
-            GripSocketMarker[] markers = weapon.GetComponentsInChildren<GripSocketMarker>(true);
-            for (int i = 0; i < markers.Length; i++)
-            {
-                if (markers[i].Kind == kind)
-                {
-                    return markers[i];
-                }
-            }
-
-            return null;
-        }
-
-        // --------------------------------------------------------------------------- ölçüler
-
-        /// <summary>
-        /// Hayaletin ölçüm noktalarını rig'inden çözer.
-        /// <para>⚠️ Parmak <b>uçları</b> puppet'ın eklem tablosunda YOKTUR
-        /// (<c>FingersMetadata.HAND_JOINT_IDS</c> uçları taşımaz) — bu yüzden son boğumun
-        /// (<c>HandIndex3</c>) çocuğuna, o da yoksa ada göre aramaya düşülür. Hiçbiri tutmazsa
-        /// ölçü sessizce çizilmez: eksik bir gösterge için hata basmak, aracın asıl işini
-        /// (hayaleti göstermek) gürültüye boğardı.</para>
-        /// </summary>
-        private static void ResolveMeasurePoints(GhostSlot slot)
-        {
-            var puppet = slot.Ghost.GetComponentInChildren<HandPuppet>(true);
-            slot.Palm = slot.Ghost.Root != null ? slot.Ghost.Root : slot.Ghost.transform;
-
-            if (puppet == null)
-            {
-                return;
-            }
-
-            Transform indexLast = null;
-            for (int i = 0; i < puppet.JointMaps.Count; i++)
-            {
-                HandJointMap map = puppet.JointMaps[i];
-                if (map == null || map.transform == null)
-                {
-                    continue;
-                }
-
-                if (map.id == HandJointId.HandIndexTip)
-                {
-                    slot.IndexTip = map.transform;
-                }
-                else if (map.id == HandJointId.HandIndex3)
-                {
-                    indexLast = map.transform;
-                }
-                else if (map.id == HandJointId.HandMiddle1)
-                {
-                    // ⚠️ "Avuç" olarak bilek kökü DEĞİL orta parmağın boğumu alınır: bilek zaten
-                    // soketin tam üstüne oturtuluyor, yani ondan ölçülen mesafe tanımı gereği
-                    // sıfırdır ve hiçbir soruyu cevaplamaz. Kabzaya değen yer avucun bu noktasıdır.
-                    slot.Palm = map.transform;
-                }
-            }
-
-            if (slot.IndexTip == null && indexLast != null)
-            {
-                slot.IndexTip = indexLast.childCount > 0 ? indexLast.GetChild(0) : indexLast;
-            }
-
-            if (slot.IndexTip == null)
-            {
-                slot.IndexTip = FindByName(slot.Ghost.transform, "index", "null", "tip");
-            }
-        }
-
-        /// <summary>Alt ağaçta adı <paramref name="required"/> ve seçeneklerden birini içeren ilk transform.</summary>
-        private static Transform FindByName(Transform root, string required, string optionA, string optionB)
-        {
-            Transform[] all = root.GetComponentsInChildren<Transform>(true);
-            for (int i = 0; i < all.Length; i++)
-            {
-                string name = all[i].name.ToLowerInvariant();
-                if (name.Contains(required) && (name.Contains(optionA) || name.Contains(optionB)))
-                {
-                    return all[i];
-                }
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// Ölçüleri çizer.
-        /// <para>⚠️ <b>Ölçülerin hedefi SOKET DEĞİL silahın gerçek geometrisidir.</b> Hayaletin
-        /// bileği <c>SetPose</c> ile soketin tam üstüne oturuyor; sokete olan her mesafe bu yüzden
-        /// tanımı gereği neredeyse sabittir (ölçülen şey elin kendi boyu olur, kavramanın kalitesi
-        /// değil) ve işaretçi sürüklenirken sayı kıpırdamazdı. Bu yüzden hedef, ada göre bulunan
-        /// kabza/ön kabza/tetik düğümüdür.</para>
-        /// <para>⚠️ Yüzey mesafesi <see cref="Renderer.bounds"/> (dünya AABB) üzerinden alınır, yani
-        /// mesh'e tam oturmayan bir YAKLAŞIMDIR. Kabza ve tetik gibi küçük parçalarda kutu yeterince
-        /// dardır; sayı zaten mutlak bir değer için değil, işaretçi sürüklenirken <b>değişimi
-        /// izlemek</b> için var.</para>
-        /// <para>⚠️ Hedef parça bulunamazsa ölçü <b>hiç çizilmez</b> — sokete düşülmez, çünkü
-        /// düzeltilmek istenen yanlış ölçünün ta kendisi odur. Eksiklik pencerede yazılı
-        /// (<see cref="DrawMissingPartsSection"/>).</para>
-        /// </summary>
-        private void DrawMeasurements()
-        {
-            if (_slots.Count == 0)
-            {
-                return;
-            }
-
-            GUIStyle style = LabelStyle();
-
-            for (int i = 0; i < _slots.Count; i++)
-            {
-                GhostSlot slot = _slots[i];
-
-                // Soket çözülemiyorsa hayaletin duruşu bir önceki kareden kalmadır; onun üstünden
-                // ölçü çizmek bayat bir sayı gösterirdi.
-                if (slot.Ghost == null || !TryGetSocketWorldPose(_target, slot.Kind, out Pose _))
-                {
-                    continue;
-                }
-
-                Handles.color = Color.white;
-
-                Renderer gripPart = FindWeaponPart(
-                    slot.Kind == GripSocketKind.Primary ? GRIP_KEYS : FOREGRIP_KEYS);
-
-                if (slot.Palm != null && gripPart != null)
-                {
-                    Vector3 palm = slot.Palm.position;
-                    Vector3 surface = gripPart.bounds.ClosestPoint(palm);
-                    Handles.DrawDottedLine(palm, surface, 3f);
-                    Handles.Label(
-                        Vector3.Lerp(palm, surface, 0.5f) + Vector3.up * 0.01f,
-                        $"avuç → {GripPartLabel(slot.Kind)} yüzeyi: {Centimeters(palm, surface)}",
-                        style);
-                }
-
-                // ⚠️ Tetik ölçüsü YALNIZ ana soket için çizilir: ön kabzayı tutan el tetiği çekmez,
-                // orada bu sayı anlamsız (ve yanıltıcı) olurdu.
-                if (slot.Kind != GripSocketKind.Primary || slot.IndexTip == null)
-                {
-                    continue;
-                }
-
-                Renderer trigger = FindWeaponPart(TRIGGER_KEYS);
-                if (trigger != null)
-                {
-                    Vector3 index = slot.IndexTip.position;
-                    Vector3 triggerSurface = trigger.bounds.ClosestPoint(index);
-                    Handles.DrawDottedLine(index, triggerSurface, 3f);
-                    Handles.Label(
-                        Vector3.Lerp(index, triggerSurface, 0.5f),
-                        $"işaret parmağı ucu → tetik: {Centimeters(index, triggerSurface)}",
-                        style);
-                }
-            }
-
-            // İki soket arası eksen: iki elli çözümün silahı hizaladığı eksen budur
-            // (ItemGripSolver ana sokete oturur, ön kabzaya bakar).
-            if (TryGetSocketWorldPose(_target, GripSocketKind.Primary, out Pose primary) &&
-                TryGetSocketWorldPose(_target, GripSocketKind.Secondary, out Pose secondary))
-            {
-                Handles.color = Color.cyan;
-                Handles.DrawLine(primary.position, secondary.position);
-                Handles.Label(
-                    Vector3.Lerp(primary.position, secondary.position, 0.5f),
-                    $"soket ekseni: {Centimeters(primary.position, secondary.position)}",
-                    style);
-            }
-        }
-
         private static string GripPartLabel(GripSocketKind kind)
         {
             return kind == GripSocketKind.Primary ? "kabza" : "ön kabza";
@@ -1173,8 +1044,8 @@ namespace VortexArena.Core.Editor
         /// <summary>
         /// Hedef silahın alt ağacında, adında anahtarlardan biri geçen ilk <see cref="Renderer"/>.
         /// Anahtarlar <b>sırayla</b> denenir, ilk tutan kazanır (spesifik olan listede önce durur).
-        /// <para>⚠️ Sonuç — bulunamama dahil — önbelleğe alınır: bu yol <c>duringSceneGui</c>'den
-        /// her karede çağrılıyor.</para>
+        /// <para>⚠️ Sonuç — bulunamama dahil — önbelleğe alınır: bu yol <c>duringSceneGui</c>'den her
+        /// karede çağrılıyor.</para>
         /// </summary>
         private Renderer FindWeaponPart(string[] keywords)
         {
@@ -1231,26 +1102,25 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Ölçüye girmemesi gereken dallar: kavrama pozu düğümleri, kavrama çerçevesi, soket
-        /// işaretçileri ve aracın kendi geçici objeleri.
-        /// <para>⚠️ Bu eleme olmadan araç <b>kendi çizdiği şeyi ölçerdi</b> — çerçeve prefabının
-        /// ya da işaretçinin altında da Renderer var ve adları ("Grip…") aranan anahtarlarla
-        /// çakışıyor.</para>
+        /// Ölçüye girmemesi gereken dallar: kavrama pozu düğümleri, <b>el modelleri</b>, kavrama
+        /// çerçevesi ve editörün geçici objeleri.
+        /// <para>⚠️ Bu eleme olmadan araç <b>kendi çizdiği şeyi ölçerdi</b> — el modelinin ve çerçeve
+        /// prefabının altında da Renderer var ve adları aranan anahtarlarla çakışabiliyor.</para>
         /// </summary>
         private static bool IsMeasurementNoise(Transform node)
         {
-            if (node.name == ItemGripPoses.RootNodeName)
+            if (node.name == ItemGripPoses.RootNodeName || node.name == ItemHandRig.RootNodeName)
             {
                 return true;
             }
 
-            if (node.GetComponent<WeaponFrame>() != null || node.GetComponent<GripSocketMarker>() != null)
+            if (node.GetComponent<WeaponFrame>() != null)
             {
                 return true;
             }
 
-            // Hayaletler silahın altında değil ama aynı elemede tutuluyor: gelecekte biri onları
-            // silahın altına asarsa ölçü sessizce kendine bakmaya başlardı.
+            // ISDK'nın inspector'ı seçili poz düğümünün altına geçici hayalet örnekliyor; o dal
+            // sahneye yazılmaz ama ölçüm sırasında ortadadır.
             return (node.gameObject.hideFlags & HideFlags.DontSave) != 0;
         }
 
@@ -1284,67 +1154,19 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Bir poz düğümünün <b>canlı</b> pozu kullanılamaz hâlde mi — yani varsayılanın yeniden
-        /// yazılması gerekiyor mu.
-        /// <para>
-        /// ⚠️ Ölçü <see cref="HandGrabPose.HandPose"/> <b>public getter'ı</b> üzerinden alınır, alan
-        /// adıyla değil: o getter ISDK'nın kendi derlemesinde doğru dala çözülür ve gerçekte hangi
-        /// pozun okunduğunu yalnız o bilir. Alan adına bakan bir kontrol, adı <c>#if</c> ile ikiye
-        /// ayrılmış bir alanda sessizce yanlış yeri okurdu.
-        /// </para>
-        /// <para>
-        /// "Tamamı sıfır quaternion" da bozuk sayılır: <c>new HandPose(handedness)</c> eklem dizisini
-        /// doldurmadan bırakır ve o dizi puppet'ı çizilemez bir duruşa sokar (ekranda hiç el yoktur,
-        /// hata da yoktur).
-        /// </para>
-        /// <para>⚠️ Tanım <b>tek yerdedir</b>: <c>WeaponKitBuilder</c>'ın onarım kapısı da bunu
-        /// çağırır. İki ayrı ölçüt yazılsaydı biri "bozuk" derken öteki "sağlam" diyebilirdi.</para>
-        /// </summary>
-        internal static bool NeedsPoseRepair(HandGrabPose pose)
-        {
-            if (pose == null)
-            {
-                return false;
-            }
-
-            HandPose live = pose.HandPose;
-            if (live == null)
-            {
-                return true;
-            }
-
-            Quaternion[] rotations = live.JointRotations;
-            if (rotations == null || rotations.Length == 0)
-            {
-                return true;
-            }
-
-            for (int i = 0; i < rotations.Length; i++)
-            {
-                Quaternion rotation = rotations[i];
-                if (rotation.x != 0f || rotation.y != 0f || rotation.z != 0f || rotation.w != 0f)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        /// <summary>
         /// İlgili elin <b>bind</b> iskeletinden kurulmuş poz (ISDK'nın varsayılan duruşu).
         /// <para>⚠️ <c>new HandPose(handedness)</c> tek başına yetmez: o kurucu eklem dizisini
         /// doldurmaz, dizideki quaternion'lar sıfır kalır ve puppet eli çizilemez bir duruşa
-        /// sokar.</para>
+        /// sokar (ekranda hiç el yoktur, hata da yoktur).</para>
         /// <para>
         /// <see cref="HandSkeleton"/> ve <see cref="FingersMetadata"/> burada <b>dala bağlı
-        /// değildir</b>: ISDK iki iskelet tablosunu da yazmış ama namespace'i dala göre
-        /// anahtarlıyor — <c>Oculus.Interaction.Input.HandSkeleton</c> adı hangi dal derlendiyse
-        /// onun tablosuna çözülür. Yani burada ek bir seçim adımı YOK; hayalet sağlayıcısının
-        /// aksine (o bir asset yoludur, ad çözümlemesi onu bulamaz).
+        /// değildir</b>: ISDK iki iskelet tablosunu da yazmış ama namespace'i dala göre anahtarlıyor —
+        /// <c>Oculus.Interaction.Input.HandSkeleton</c> adı hangi dal derlendiyse onun tablosuna
+        /// çözülür. Yani burada ek bir seçim adımı YOK; el sağlayıcısının aksine (o bir asset
+        /// yoludur, ad çözümlemesi onu bulamaz).
         /// </para>
         /// </summary>
-        internal static HandPose CreateDefaultHandPose(Handedness handedness)
+        private static HandPose CreateDefaultHandPose(Handedness handedness)
         {
             var pose = new HandPose(handedness);
             IReadOnlyHandSkeletonJointList joints = handedness == Handedness.Left

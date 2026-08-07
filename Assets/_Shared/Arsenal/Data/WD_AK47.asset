@@ -16,12 +16,18 @@ MonoBehaviour:
   netItemId: 2
   prefab: {fileID: 190416508149715471, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
   holdMode: 1
-  primaryGripPosition: {x: -0, y: 0.059, z: 0.039}
+  primaryGripPosition: {x: 0, y: 0.03776, z: -0.106}
   primaryGripEuler: {x: 0, y: 0, z: 0}
-  secondaryGripPosition: {x: 0, y: 0.0472, z: 0.29584}
+  secondaryGripPosition: {x: 0, y: 0.030208, z: 0.1893376}
   secondaryGripEuler: {x: 0, y: 0, z: 0}
   primaryGripRadius: 0.12
   secondaryGripRadius: 0.12
+  handPose:
+    thumb: 0
+    index: 0
+    middle: 0
+    ring: 0
+    pinky: 0
   tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
   tracerWidth: 0.02
   tracerLifetime: 0.1
@@ -29,6 +35,8 @@ MonoBehaviour:
   weaponId: ak47
   damage: 36
   headshotMultiplier: 4
+  stomachMultiplier: 1.25
+  legMultiplier: 0.75
   fireRateRpm: 600
   range: 45
   baseSpreadDegrees: 0.6
@@ -38,6 +46,8 @@ MonoBehaviour:
   kickDegrees: 2.6
   kickBackMeters: 0.02
   recoilRecoverSpeed: 10
+  hapticAmplitude: 0.8
+  hapticDuration: 0.05
   magazineSize: 30
   spareMagazines: 2
   reserveMode: 0
@@ -52,5 +62,3 @@ MonoBehaviour:
   firePitchBase: 1
   firePitchJitter: 0.05
   fireVolume: 1
-  hapticAmplitude: 0.8
-  hapticDuration: 0.05

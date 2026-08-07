@@ -311,7 +311,7 @@ namespace VortexArena.Core.Combat
         {
             // ⚠️ TransformPoint DEĞİL: kavrama ofsetleri METRE cinsindendir ve transform ölçeğiyle
             // büyütülmemeli (aynı gerekçe ItemGripSockets.PrimarySocketWorld ve
-            // GripSocketAuthoring.LocalPose'ta da elle bileşim yaptırıyor). Referans, pozun kendi
+            // ItemHandGripBake'te de elle bileşim yaptırıyor). Referans, pozun kendi
             // RelativeTo'sudur; boşsa silahın kökü.
             Transform reference = pose.RelativeTo != null ? pose.RelativeTo : weapon.transform;
             Pose relative = pose.RelativePose;

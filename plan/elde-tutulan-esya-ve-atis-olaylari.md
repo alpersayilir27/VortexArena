@@ -12,37 +12,41 @@ kavrama · uzak avatarda eşya çizimi + eşikli ön-kabza yapıştırma · havu
 **soket tabanlı kavrama** (`ItemGripSockets`, ISDK `_interactorFilters` kapısı; mesafeden kavrama
 kaldırıldı) · **olayların `serverTick`'te oynatılması** (`RemotePlayerRegistry.TryGetPlaybackTimeMs`).
 
-## 1. Kavrama pozu ayarı — ⚠️ SIRADAKİ İŞ (araç hazır, sayılar girilmedi)
+## 1. Kavrama ayarı — ⚠️ SIRADAKİ İŞ (araç hazır, silahlar bake edilmedi)
 
-Altı silahın `primaryGripPosition/Euler` ve `secondaryGripPosition/Euler` değerleri **hepsi sıfır**.
-Yani silahlar şu an el anchor'ının tam üstünde, dönüşsüz duruyor ve soketler silah modelinin
-kökünde — kabzada değil. Altyapı ve araç çalışıyor, **sayılar girilmedi**.
+Kavrama artık sayı girerek değil, silahın üstüne oturtulan **el modelinden** yazılıyor. Araç hazır;
+kalan iş altı silahı tek tek bake etmek.
 
 **İş akışı (editörde, APK build'i gerekmez):**
 
-1. Bir `WPN_*.prefab`'ı sahneye bırak (scratch sahne yeter) ve seç.
-2. `GameObject > VortexArena > Grip Socket (Primary)` → silahın altında işaretçi doğar
-   (mevcut SO değerlerinden başlar, yani ayarı sıfırlamaz).
-3. İşaretçiyi **kabzaya sürükle** ve elin gireceği açıyla **döndür** — Scene view'de sarı saydam
-   küre soketi gösterir; yarıçapı Inspector'dan (`radius`) büyüt/küçült.
-4. Çift elli silahta aynısını `Grip Socket (Secondary)` ile ön kabza için yap.
-5. `Tools > VortexArena > Weapons > Write Grip Sockets To Definition` → değerler `WD_*.asset`'e yazılır.
-6. Kontrol: camgöbeği tel küre (SO'nun dediği) sarı küreyle **çakışmalı**. Çakışmıyorsa yazma
-   gitmemiş. İşaretçi sonra silinebilir ya da bırakılabilir — oyun onu okumaz.
-7. Başlıkta yalnız **hissi** doğrula (nişan alırken rahat mı). Geometri editörde bitti.
+1. `WPN_*.prefab`'ı aç (prefab kipi yeter) ve seç.
+2. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` → **El Ekle**. El, silahın **mevcut**
+   kavrama değerinden konumlanır — sıfırdan başlamazsın.
+3. Eli kabzaya oturt, parmak kemiklerini bük. Scene view'da avuç → kabza ve işaret parmağı → tetik
+   mesafesi cm olarak yazılır.
+4. **Bake** → bilek `WD_*.asset`'e, parmaklar `GripPoses/Pose_<Kind>_R`'ye yazılır, sol el aynalanır,
+   el modeli gizlenir.
+5. Çift elli silahta aynısını `Secondary` satırından ön kabza için yap.
+6. Kontrol: camgöbeği tel küre (SO'nun dediği) el modelinin bileğiyle **çakışmalı**.
+7. Başlıkta yalnız **hissi** doğrula (nişan alırken rahat mı). Geometri editörde bitiyor.
+
+⚠️ **İlk silahta bir sağlama yap:** El Ekle → hiç dokunmadan Bake → `WD_*.asset`'in değerleri
+DEĞİŞMEMELİ. Tohumlama ile bake birbirinin tersidir; değişiyorsa uzay yönlerinden biri terstir ve
+yeri tek dosyadır (`ItemHandGripBake`).
 
 **Bilinmesi gerekenler:**
 
 - ⚠️ İki alanın **uzayı terstir**: `primaryGrip` = eşyanın ELE göre pozu, `secondaryGrip` = ön kabza
-  noktasının EŞYAYA göre pozu (§6.6). **Araç bu dönüşümü yapıyor** — elle Inspector'a yazarken
-  yapılan en sık hata buydu.
-- ⚠️ `WeaponKitBuilder` bu alanları **ezmez** (tabloda karşılığı yok) — girilen değerler araç
-  tekrar koşsa da kalır. `netItemId`/`holdMode` ise tablodan gelir ve EZİLİR.
+  noktasının EŞYAYA göre pozu (§6.6). Dönüşümü `ItemHandGripBake` yapıyor — elle Inspector'a
+  yazarken yapılan en sık hata buydu ve o yol artık yok.
+- ⚠️ `GripPoses/Pose_*` bake'in **çıktısıdır**, elle düzenlenmez: bir sonraki bake üzerine yazar.
+- ⚠️ `WeaponKitBuilder` kavrama alanlarını **ezmez**; koşu sonunda bake edilmemiş silahları listeler
+  ve eski `GripSocket_*` işaretçilerini siler. `netItemId`/`holdMode` tablodan gelir ve EZİLİR.
 - Aynı ölçü **üç yeri** besliyor: yerel tutuş · uzak oyuncudaki çizim · kavrama soketinin yeri.
   Biri düzelince üçü düzelir; ana soketin yeri türetilir (`PrimaryGripPointOnItem`), elle girilmez.
 - Sıra: önce `primaryGrip` (silah elde doğru dursun), sonra `secondaryGrip`.
 - Yarıçaplar silah başınadır (`primaryGripRadius`/`secondaryGripRadius`, varsayılan 12 cm) ve
-  işaretçinin `radius` alanından yazılır.
+  Inspector'dan girilir — bake onlara dokunmaz.
 
 ## 2. Tracer + soket görünüm değerleri — playtest ayarı
 
@@ -52,7 +56,7 @@ Karar verilecek: her silahın tracer'ı farklı mı görünecek, yoksa hepsi ayn
 ikisini de destekliyor — alanlar silah başına, değerler şu an aynı).
 
 Soket tarafında ayarlanacaklar: **kavrama yarıçapı silah başınadır** (`primaryGripRadius` /
-`secondaryGripRadius`, varsayılan 12 cm — işaretçinin `radius` alanından yazılır). `ItemGripSockets`
+`secondaryGripRadius`, varsayılan 12 cm — Inspector'dan girilir). `ItemGripSockets`
 sabitleri (kod içinde, tüm eşyalarda ortak): `HoverRadius` (0.30 m) · halka
 yarıçapı/kalınlığı/rengi.
 ⚠️ Ön kabza yarıçapı ana kabzadan **daha cömert** olmalı: ana soket dururken kavranıyor, ön kabza

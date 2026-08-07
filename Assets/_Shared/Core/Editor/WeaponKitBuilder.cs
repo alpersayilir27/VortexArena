@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using Oculus.Interaction.HandGrab;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -275,13 +274,15 @@ namespace VortexArena.Core.Editor
 
         private static int _warnings;
 
-        // Koşu özetinin kavrama pozu satırı: "kaç düğüm üretildi / kaçı zaten vardı / kaçı onarıldı".
-        // Sayaç olmadan araç sessiz kalırdı — sağlam düğüme dokunulmadığı için ikinci koşu hiçbir iz
-        // bırakmaz. Onarım AYRI sayılır: "mevcut" ile aynı kefeye konsaydı, kullanıcı pozunun
-        // sıfırlandığını (parmakları tekrar bükmesi gerektiğini) hiç öğrenemezdi.
-        private static int _posesCreated;
-        private static int _posesExisting;
-        private static int _posesRepaired;
+        // Eski soket işaretçilerinden (GripSocket_Primary/Secondary) kaçı silindi. Kavramanın
+        // authoring'i el modeline geçti; bu düğümleri artık kimse okumuyor ve prefabda kalmaları
+        // sonraki okuyucuya "burası hâlâ ayarlanabilir" derdi.
+        private static int _legacySocketsRemoved;
+
+        // Bake'i unutulmuş silahlar: kavrama pozu düğümü olmayan (yani oyunda eli idle'da kalacak)
+        // WPN'ler. ⚠️ Bu rapor ŞART — bake tek seferlik bir insan adımı ve atlandığında hiçbir hata
+        // basılmaz, belirtisi yalnız "el silaha sarılmıyor" olur.
+        private static readonly List<string> _unbakedWeapons = new List<string>();
 
         private static readonly Dictionary<string, Type> ResolvedTypes = new Dictionary<string, Type>();
 
@@ -292,9 +293,8 @@ namespace VortexArena.Core.Editor
         public static void BuildAll()
         {
             _warnings = 0;
-            _posesCreated = 0;
-            _posesExisting = 0;
-            _posesRepaired = 0;
+            _legacySocketsRemoved = 0;
+            _unbakedWeapons.Clear();
 
             int wdNew = 0;
             int wpnRebound = 0, wpnFailed = 0;
@@ -363,9 +363,10 @@ namespace VortexArena.Core.Editor
                           "WPN " + wpnRebound + " güncellendi, " + wpnFailed + " başarısız · " +
                           "FX_RemoteShot " + (fxCreated ? "üretildi" : "mevcut") + " · " +
                           "WeaponCatalog " + (catalogCreated ? "üretildi" : "güncellendi") + " · " +
-                          "kavrama pozu düğümü " + _posesCreated + " üretildi / " + _posesExisting +
-                          " mevcut (dokunulmadı) / " + _posesRepaired + " onarıldı · " +
+                          "eski soket düğümü " + _legacySocketsRemoved + " silindi · " +
                           _warnings + " uyarı.");
+
+                ReportUnbakedWeapons();
             }
             finally
             {
@@ -1317,19 +1318,20 @@ namespace VortexArena.Core.Editor
         /// <see cref="Weapon"/> tarafında tek bir olay yolu kalır.
         /// </para>
         /// <para>
-        /// Kavrama pozu düğümleri (<c>GripPoses/Pose_&lt;Primary|Secondary&gt;_&lt;R|L&gt;</c>) de burada
-        /// kurulur (<see cref="ApplyGripPoseNodes"/>) ama onlar <b>saf veridir</b>: ISDK'nın kavrama
-        /// adaylığına GİRMEZ, çünkü <c>HandGrabInteractable._handGrabPoses</c> listesi <b>boş bırakılır</b>.
-        /// Liste dolduğu anda ISDK kavramayı poz skoruna göre hesaplamaya başlar ve bugünkü kavrama
-        /// hissi (collider mesafesi) sessizce değişirdi. Aynı sebeple <c>_handAligment</c> alanına da
-        /// dokunulmaz: poz listesi boş kaldığı sürece o alanın etkisi yoktur.
+        /// ⚠️ <c>HandGrabInteractable._handGrabPoses</c> listesi <b>boş bırakılır</b>: liste dolduğu
+        /// anda ISDK kavrama adaylığını poz skoruna göre hesaplamaya başlar ve bugünkü kavrama hissi
+        /// (collider mesafesi) sessizce değişirdi. Aynı sebeple <c>_handAligment</c> alanına da
+        /// dokunulmaz — poz listesi boş kaldığı sürece o alanın etkisi yoktur. Kavrama pozu düğümleri
+        /// (<c>GripPoses/Pose_*</c>) bu listenin dışında, saf VERİ olarak durur ve onları yalnız
+        /// <c>HandGripPoser</c> okur.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Parmak pozunu araç YAZMAZ</b> — yalnız düğümü açar, içini insan
-        /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Kavrama Pozu Stüdyosu</c> ile doldurur: kavrama pozu
-        /// bir ölçü değil bir tasarım kararıdır, gözle ayarlanır. Düğüm zaten varsa araç onun pozuna
-        /// <b>dokunmaz</b> (elle ayarlanmış poz her koşuda silinmesin) — yalnız poz kullanılamaz
-        /// hâldeyse varsayılanı geri yazar.
+        /// ⚠️ <b>Kavramayı bu araç YAZMAZ ve düğüm de AÇMAZ.</b> Kavramanın tek yazarı
+        /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Kavrama Pozu Stüdyosu</c>'nun Bake'idir: kaynak
+        /// silahın üstündeki el modelidir, çıktı hem tanım alanları hem poz düğümleridir. Araç burada
+        /// yalnız <b>temizlik ve denetim</b> yapar (eski soket işaretçileri, açık kalmış el modelleri,
+        /// bake edilmemiş silah raporu) — boş poz düğümü açmak, kullanıcıyı bake'in üzerine yazacağı
+        /// bir düzenlemeye davet ederdi.
         /// </para>
         /// </summary>
         private static void ApplyGripSocketKit(GameObject root, string ctx)
@@ -1412,166 +1414,95 @@ namespace VortexArena.Core.Editor
 
             BindSocketFilter(handGrab, sockets, ctx);
 
-            // ⚠️ Poz düğümleri BİLEREK handGrab'ın _handGrabPoses listesine bağlanmaz (yukarıdaki not):
-            // burada üretilenler kavramanın girdisi değil, kavrandıktan SONRA parmakları süren veridir.
-            ApplyGripPoseNodes(root, ctx);
+            RemoveLegacySocketNodes(root, ctx);
+            HideHandNodes(root, ctx);
+            NoteIfUnbaked(root, ctx);
         }
 
         /// <summary>
-        /// Kavrama pozu düğümlerini kurar (idempotent): <c>GripPoses/Pose_&lt;Kind&gt;_&lt;R|L&gt;</c>.
-        /// Primary her silahta iki el için, Secondary yalnız çift elli silahlarda — poz el başınadır,
-        /// silah iki elin de <b>ana</b> eli olabildiği için sağ/sol ayrı düğümdür.
+        /// Eski authoring akışından kalan <c>GripSocket_Primary/Secondary</c> işaretçi düğümlerini
+        /// siler.
         /// <para>
-        /// Düğüm adları <see cref="ItemGripPoses"/>'ten gelir: üretici (bu araç) ile tüketici
-        /// (<c>HandGripPoser</c> + stüdyo) kendi string'ini taşısaydı bir harflik sapma hata değil
-        /// <b>sessiz bulunamama</b> üretirdi.
+        /// ⚠️ <b>Temizlik burada yapılır, prefab dosyasına elle dokunularak değil:</b> düğüm silmek
+        /// üç YAML kaydını (GameObject + Transform + MonoBehaviour) ve ebeveynin çocuk listesini
+        /// birlikte ilgilendiriyor, ayrıca bu prefabların örnekleri başka prefabların içinde duruyor
+        /// (<c>VA_WeaponCanvas</c>). Unity'nin kendi API'sinden geçmek o bağların hepsini doğru
+        /// çözer.
         /// </para>
         /// <para>
-        /// ⚠️ Mevcut düğümün <b>pozuna</b> dokunulmaz — ses klipleriyle aynı gerekçe: elle ayarlanmış poz
-        /// aracın her koşusunda silinseydi araç kullanılamaz olurdu. Tek istisna onarımdır: poz
-        /// <b>kullanılamaz</b> hâldeyse (bkz. <see cref="RepairGripPoseNode"/>) varsayılanı geri gelir.
+        /// ⚠️ Arama <b>ada göredir</b>, bileşen tipine göre değil: <c>GripSocketMarker</c> tipi
+        /// kaldırıldığı için düğümlerde artık eksik script duruyor ve tipten gitmek onları hiç
+        /// bulamazdı.
         /// </para>
         /// </summary>
-        private static void ApplyGripPoseNodes(GameObject root, string ctx)
+        private static void RemoveLegacySocketNodes(GameObject root, string ctx)
         {
-            Transform rootT = root.transform;
-            Transform posesRoot = rootT.Find(ItemGripPoses.RootNodeName);
-            if (posesRoot == null)
-            {
-                var posesGo = new GameObject(ItemGripPoses.RootNodeName);
-                posesRoot = posesGo.transform;
-                posesRoot.SetParent(rootT, false);
-                posesRoot.localPosition = Vector3.zero;
-                posesRoot.localRotation = Quaternion.identity;
-                posesRoot.localScale = Vector3.one;
-            }
-
-            var weapon = root.GetComponent<Weapon>();
-            WeaponDefinition def = weapon != null ? weapon.Definition : null;
-            if (def == null)
-            {
-                // Tanım olmadan çift ellilik bilinemez; Primary'yi yine de kurmak "hiç kurmamak"tan
-                // iyidir, eksik Secondary bir sonraki koşuda (tanım bağlanınca) gelir.
-                Warn(ctx + ": Weapon.definition boş — çift ellilik okunamadı, yalnız Primary poz " +
-                     "düğümleri kuruldu.");
-            }
-
-            int created = 0;
-            created += EnsureGripPoseNode(posesRoot, rootT, GripSocketKind.Primary, true, ctx) ? 1 : 0;
-            created += EnsureGripPoseNode(posesRoot, rootT, GripSocketKind.Primary, false, ctx) ? 1 : 0;
-            if (def != null && def.IsTwoHanded)
-            {
-                created += EnsureGripPoseNode(posesRoot, rootT, GripSocketKind.Secondary, true, ctx) ? 1 : 0;
-                created += EnsureGripPoseNode(posesRoot, rootT, GripSocketKind.Secondary, false, ctx) ? 1 : 0;
-            }
-
-            if (created > 0)
-            {
-                Debug.Log(Log + ctx + ": " + created + " kavrama pozu düğümü üretildi (bind duruşunda) — " +
-                          "parmakları Kavrama Pozu Stüdyosu'ndan yaz, araç bir daha dokunmaz.");
-            }
+            RemoveLegacySocketNode(root, "GripSocket_Primary", ctx);
+            RemoveLegacySocketNode(root, "GripSocket_Secondary", ctx);
         }
 
-        /// <summary>
-        /// Tek bir poz düğümünü kurar; zaten varsa (ve pozu sağlamsa) hiçbir şeye dokunmadan
-        /// <c>false</c> döner.
-        /// <para>
-        /// Yazılan iki şey: <c>_relativeTo</c> (silahın KÖKÜ — poz ölçüsü ona göre saklanır, aksi hâlde
-        /// düğümün kendi yerel uzayına düşer) ve ilgili elin varsayılan <c>HandPose</c>'u.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Poz SERİALİZE ALAN ADIYLA yazılmaz, ISDK'nın public API'siyle yazılır</b>
-        /// (<see cref="HandGrabPose.InjectOptionalHandPose"/>). <c>HandGrabPose</c> aynı pozu iki ayrı
-        /// alanda taşıyor — <c>_handPose</c> (OVR) ve <c>_targetHandPose</c> (OpenXR) — ve hangisinin
-        /// canlı olduğunu <c>ISDK_OPENXR_HAND</c> belirliyor. O tanım paketin kendi asmdef'inde
-        /// <c>versionDefines</c> ile ve <b>boş ifadeyle</b> üretiliyor: yani ISDK derlenirken HER ZAMAN
-        /// açık, bizim derlememizde ise HİÇ tanımlı değil. Alan adına yazan bir araç bu yüzden ölü
-        /// alanı doldurur; belirti sessizdir — düğüm vardır, <c>Uses Hand Pose</c> işaretlidir, ama
-        /// canlı poz boştur ve el bind duruşunda kalır.
-        /// <b>Kural: <c>#if</c>'li bir ISDK alanına asla alan adıyla yazma, public API'sini çağır</b>
-        /// (define'ı kendi asmdef'imize kopyalamak da yasak: ISDK'nın iç ayrıntısı ikinci bir doğruluk
-        /// kaynağı olur ve paket değişince sessizce sapar).
-        /// </para>
-        /// <para>
-        /// ⚠️ <c>_usesHandPose</c> ayrıca yazılmaz: <c>InjectOptionalHandPose</c> onu pozla birlikte
-        /// kendi kurar. Boş kalsaydı <c>HandGrabPose.UsesHandPose()</c> false döner ve düğüm yalnız bir
-        /// konum işaretçisi olurdu.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Mevcut düğüm ONARILIR ama üzerine yazılmaz:</b> yalnız canlı pozu kullanılamaz hâldeyse
-        /// (<see cref="GripPoseStudio.NeedsPoseRepair"/> — eski koşuların ölü alana yazdığı düğümler)
-        /// varsayılan poz yeniden enjekte edilir. Kullanılabilir bir poz varsa dokunulmaz: elle bükülmüş
-        /// parmaklar aracın her koşusunda silinseydi araç kullanılamaz olurdu.
-        /// </para>
-        /// <para>
-        /// Parmakların kendisi burada AYARLANMAZ — düğüm ISDK'nın bind duruşuyla açılır, içini insan
-        /// <c>Kavrama Pozu Stüdyosu</c>'ndan doldurur.
-        /// </para>
-        /// </summary>
-        private static bool EnsureGripPoseNode(Transform posesRoot, Transform itemRoot,
-            GripSocketKind kind, bool rightHand, string ctx)
+        private static void RemoveLegacySocketNode(GameObject root, string nodeName, string ctx)
         {
-            string nodeName = ItemGripPoses.NodeName(kind, rightHand);
-            Transform existing = posesRoot.Find(nodeName);
-            if (existing != null)
-            {
-                _posesExisting++;
-                RepairGripPoseNode(existing.GetComponent<HandGrabPose>(), rightHand, ctx);
-                return false;
-            }
-
-            var node = new GameObject(nodeName);
-            Transform nodeT = node.transform;
-            nodeT.SetParent(posesRoot, false);
-            nodeT.localPosition = Vector3.zero;
-            nodeT.localRotation = Quaternion.identity;
-            nodeT.localScale = Vector3.one;
-
-            // Tip artık derleme zamanında bağlı (asmdef Oculus.Interaction referanslıyor) — tip adından
-            // gitmeye gerek yok; public API'yi çağırabilmenin ön koşulu da bu referanstır.
-            var pose = node.AddComponent<HandGrabPose>();
-            pose.InjectAllHandGrabPose(itemRoot);
-            pose.InjectOptionalHandPose(DefaultHandPose(rightHand));
-
-            EditorUtility.SetDirty(pose);
-            _posesCreated++;
-            return true;
-        }
-
-        /// <summary>
-        /// Canlı pozu kullanılamaz hâldeki bir düğüme varsayılan pozu yeniden yazar (sağlamsa
-        /// dokunmaz).
-        /// <para>⚠️ Onarım kapısı ŞART: pozu ISDK'nın ölü alanında kalmış bir düğüm "zaten var"
-        /// sayıldığı için sonraki koşularda da hiç düzelmez ve kullanıcının tek çaresi düğümü elle
-        /// silmek olurdu.</para>
-        /// </summary>
-        private static void RepairGripPoseNode(HandGrabPose pose, bool rightHand, string ctx)
-        {
-            if (!GripPoseStudio.NeedsPoseRepair(pose))
+            Transform node = root.transform.Find(nodeName);
+            if (node == null)
             {
                 return;
             }
 
-            pose.InjectOptionalHandPose(DefaultHandPose(rightHand));
-            EditorUtility.SetDirty(pose);
-            _posesRepaired++;
-
-            Debug.Log(Log + ctx + ": " + pose.gameObject.name + " düğümünde kullanılabilir poz yoktu — " +
-                      "varsayılan poz yazıldı (parmakları Kavrama Pozu Stüdyosu'ndan tekrar bük).");
+            Object.DestroyImmediate(node.gameObject, true);
+            _legacySocketsRemoved++;
+            Debug.Log(Log + ctx + ": eski '" + nodeName + "' işaretçisi silindi — kavrama artık el " +
+                      "modelinden bake ediliyor (Kavrama Pozu Stüdyosu).");
         }
 
         /// <summary>
-        /// İlgili elin bind duruşundaki varsayılan pozu.
-        /// <para>⚠️ Poz kurma <b>tek yerde</b> durur (<see cref="GripPoseStudio.CreateDefaultHandPose"/>):
-        /// <c>new HandPose(handedness)</c> eklem dizisini sıfır quaternion'larla bırakıyor ve o pozla
-        /// açılan düğüm hiç çizilmiyor — ikinci bir kurulum yazılsaydı biri o tuzağa düşerdi.</para>
+        /// Bake sonrası açık unutulmuş el modellerini kapatır — <b>emniyet</b>.
+        /// <para>⚠️ Açık kalan bir el düğümü arenada havada duran bir el olarak görünür: silah sahnede
+        /// de duruyor (raf/masa, <c>WeaponFrame</c>, <c>VA_WeaponCanvas</c>) ve uzak avatarın elinde
+        /// de. Runtime tarafında da aynı emniyet var (<see cref="ItemHandRig.HideAll"/>); bu, sorunun
+        /// prefabda görünür hâlde kalmaması içindir.</para>
         /// </summary>
-        private static HandPose DefaultHandPose(bool rightHand)
+        private static void HideHandNodes(GameObject root, string ctx)
         {
-            return GripPoseStudio.CreateDefaultHandPose(
-                rightHand
-                    ? Oculus.Interaction.Input.Handedness.Right
-                    : Oculus.Interaction.Input.Handedness.Left);
+            int hidden = ItemHandRig.HideAll(root.transform);
+            if (hidden > 0)
+            {
+                Warn(ctx + ": " + hidden + " el modeli AÇIK bırakılmıştı, kapatıldı — bake'ten sonra " +
+                     "el gizli kalmalı (düzenlemeye devam edeceksen stüdyodan 'Göster').");
+            }
+        }
+
+        /// <summary>
+        /// Kavrama pozu hiç yazılmamış silahı koşu sonundaki rapora ekler.
+        /// <para>⚠️ <see cref="ItemGripPoses.Find"/> kullanılır (ham arama değil): tüketicinin
+        /// (<c>HandGripPoser</c>) "poz var" saydığı ölçüt odur — yerleştirilmemiş ya da boş bir düğüm
+        /// onun için de yoktur. İkinci bir ölçüt yazılsaydı araç "var" derken oyun "yok" diyebilirdi.</para>
+        /// </summary>
+        private static void NoteIfUnbaked(GameObject root, string ctx)
+        {
+            if (ItemGripPoses.Find(root.transform, GripSocketKind.Primary, true) == null)
+            {
+                _unbakedWeapons.Add(ctx);
+            }
+        }
+
+        /// <summary>
+        /// Bake edilmemiş silahları TEK bir uyarıda listeler (hiç yoksa susar).
+        /// <para>⚠️ Silah başına ayrı uyarı basılmaz: koşu zaten uzun bir log üretiyor ve tek tek
+        /// basılan satırlar aralarında kaybolurdu. Asıl mesele "hangi silahlar eksik" sorusunun tek
+        /// bakışta görünmesi.</para>
+        /// </summary>
+        private static void ReportUnbakedWeapons()
+        {
+            if (_unbakedWeapons.Count == 0)
+            {
+                return;
+            }
+
+            Debug.LogWarning(Log + "Kavrama pozu YAZILMAMIŞ silahlar: " +
+                             string.Join(", ", _unbakedWeapons) + ". Bu silahlarda oyuncunun eli " +
+                             "silaha sarılmaz (idle duruşunda kalır). Düzeltme: Tools > VortexArena > " +
+                             "Weapons > Kavrama Pozu Stüdyosu → El Ekle → eli kabzaya oturt → Bake.");
         }
 
         /// <summary>Kökteki bir bileşeni tam tip adıyla siler (yoksa sessizce geçer).</summary>

@@ -477,10 +477,15 @@ mesafeden kavrama ZORUNLUDUR ve orada da İKİ hat birden durur** — silah orad
 `AlignOnGrab`): çerçeve bir kavrama hedefi değil bir SEÇİM tetikleyicisidir, `AlignOnGrab`
 sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silahta görür
 → `Docs/Sistem-Ozeti.md` §7.
-⚠️ **Kavrama pozu düğümlerini araç açar, İÇİNİ insan doldurur:** düğümler ISDK'nın poz listesine
+⚠️ **Kavramanın ELLE yazılan tek kaynağı silahın üstündeki EL MODELİDİR** (`Hands/Hand_<Kind>`):
+`Kavrama Pozu Stüdyosu` → *El Ekle* → eli kabzaya oturt → *Bake*. Bake hem `WD_*.asset`'in kavrama
+alanlarını hem parmak pozu düğümlerini (`GripPoses/Pose_*`) yazar, sol ele aynalar ve eli **gizler**
+— yani o iki çıktıya elle DOKUNULMAZ, bir sonraki bake üzerine yazar. Kavrama alanlarını sayı
+girerek ayarlama yolu (soket işaretçileri) **kaldırıldı ve geri gelmez**: aynı kavramayı iki yerde
+tarif etmek ikisinin sessizce sapması demekti. Poz düğümleri ISDK'nın poz listesine
 (`_handGrabPoses`) **girmez** — girseydi kavrama skoru poz tabanlı olur ve silah alma hissi
-değişirdi; parmak pozu `Kavrama Pozu Stüdyosu`'nda yazılır, yazılmamış poz (düğüm hâlâ silahın
-orijininde) sessizce yok sayılır → `Docs/Sistem-Ozeti.md` §7. Çerçeve adımı elle iş istemez, araç her
+değişirdi. Bake edilmemiş silahta el idle'da kalır; `Build Weapon Prefabs` eksikleri listeler.
+Çerçeve adımı elle iş istemez, araç her
 `WPN_*` köküne bir `VA_WeaponFrame` örneği koyar (idempotent). **Çözülme efekti de kurulum
 istemez:** araç aynı köke `SimpleWeaponDissolve` koyup `_Shared/Materials/DissolveEffect.mat`'i
 bağlar (yalnız alan BOŞSA — silaha özel materyal bağlanmışsa ezilmez, ikinci seçenek
@@ -556,14 +561,12 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → `Obstacle` layer'ındaki konveks olmayan collider'ları, trigger'ları, collider'sız damgalı objeleri ve **görünen yüzeyden şişkin** collider'ları (içbükey mesh convex işaretlenmiş → oyuncu boşlukta ceza alır) raporlar. ⚠️ Hiçbir şeyi düzeltmez; iki tespit de sessizce yanlış ceza ürettiği için bu tarama sahne kaydedilmeden koşturulur |
 | `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanlarını kurar: engel uyarı yazısı + hasar vinyeti (`CenterEyeAnchor` altında). İdempotent, **tek seferlik** — rig tüm arenalarda örnek olduğu için her arenaya birden gider. ⚠️ Vinyetin materyalini araç ÜRETİR (shader GUID'i import öncesi bilinemez); çalıştırılmadıkça karartma çalışır ama yazı/vinyet hiç çizilmez |
 | `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
-| `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir) |
+| `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir). Ayrıca **temizlik ve denetim**: eski `GripSocket_*` işaretçilerini siler, açık kalmış el modellerini kapatır ve **bake edilmemiş silahları** koşu sonunda tek uyarıda listeler |
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
-| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavrama pozu yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek: soketlere hayalet el oturur, işaretçi sürüklenirken takip eder, baş parmak–soket ve avuç–kabza mesafesini cm olarak çizer. Poz düğümü üretir ve karşı ele aynalar. ⚠️ Hiçbir şey YAZMAZ — kalıcı duruş yine `Write Grip Sockets To Definition` ile yazılır |
-| `… > Weapons > Write Grip Sockets To Definition` | Sahnedeki kavrama işaretçileri sürüklenip ayarlandı → `WD_*.asset`'e yazar (ters/düz bileşimi araç yapar). Yalnız BULUNAN işaretçinin alanlarına dokunur |
+| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış: **El Ekle** (silahın üstüne gerçek el modeli, mevcut kavrama değerinden konumlanır) → eli kabzaya oturt, parmakları bük → **Bake**. Scene view'da avuç–kabza ve parmak–tetik mesafesi cm olarak çizilir. ⚠️ **Yazan tek düğme Bake'tir** ve dört işi birden yapar: `WD_*.asset` kavrama alanları + `GripPoses/Pose_*` parmak pozu + sol ele ayna + eli gizle. El modeli SİLİNMEZ, kapatılır (*Göster* ile geri düzenlenir) |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |
 | `… > Development > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek) |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` | Sahneye ilgili bileşeni + kurulumunu ekler |
-| `GameObject > VortexArena > Grip Socket (Primary/Secondary)` | Seçili silahın altına kavrama işaretçisi üretir (mevcut değerlerden başlatır; aynı türden ikincisini üretmez) |
 | `PlayerBuildTool.BuildWindowsAdmin` · `…BuildQuestPlayer` | Menü değil — batch-mode `-executeMethod` girişleri (`deploy-admin-game.bat` / `deploy-player-apk.bat` çağırır) |
 
 - ⚠️ **`maps.json` elle düzenlenmez** — export ezer. Tek doğruluk kaynağı Unity SO'larıdır.

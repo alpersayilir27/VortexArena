@@ -74,9 +74,8 @@ namespace VortexArena.Core.Player
         // ------------------------------------------------------------------ gizmo
 
         /// <summary>
-        /// Kutunun gerçek (collider'dan okunan) tel kafesi. ⚠️ <c>OnDrawGizmosSelected</c> DEĞİL —
-        /// gerekçe <see cref="VortexArena.Core.Combat.GripSocketMarker"/>'daki ile aynı: kutu
-        /// ayarlanırken çoğu zaman seçili olan başka bir şey oluyor (kemik, karakter kökü) ve
+        /// Kutunun gerçek (collider'dan okunan) tel kafesi. ⚠️ <c>OnDrawGizmosSelected</c> DEĞİL:
+        /// kutu ayarlanırken çoğu zaman seçili olan başka bir şey oluyor (kemik, karakter kökü) ve
         /// kutunun nerede olduğu o anda da görünmeli.
         /// </summary>
         private void OnDrawGizmos()
@@ -88,8 +87,8 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            // ⚠️ Burada Gizmos.matrix KULLANILIR ve bu, GripSocketMarker'daki "matris kullanma"
-            // notunun TERSİDİR — ikisi de kendi yerinde doğru: kavrama ofsetleri hiçbir zaman
+            // ⚠️ Burada Gizmos.matrix KULLANILIR ve bu, kavrama gizmo'larındaki "matris kullanma"
+            // kuralının TERSİDİR — ikisi de kendi yerinde doğru: kavrama ofsetleri hiçbir zaman
             // ölçeklenmiyor (metre cinsinden okunmalı), oysa collider ölçüleri transform ölçeğiyle
             // GERÇEKTEN ölçekleniyor (kemik kökü oyuncunun boyuyla ölçekleniyor). Matrissiz çizilen
             // tel kafes gerçek collider'ı yanlış gösterir ve elle ayar yaparken yanlış yere bakılır.
