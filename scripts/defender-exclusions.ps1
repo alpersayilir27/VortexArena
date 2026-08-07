@@ -101,6 +101,34 @@ if ($durum) {
 }
 
 # ---------------------------------------------------------------------------
+# 1b) Smart App Control - acikken bu betigin yazdigi liste ISE YARAMAZ
+# ---------------------------------------------------------------------------
+$sacDurum = -1
+$sacAnahtar = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' -ErrorAction SilentlyContinue
+if ($sacAnahtar -and ($null -ne $sacAnahtar.VerifiedAndReputablePolicyState)) {
+  $sacDurum = [int]$sacAnahtar.VerifiedAndReputablePolicyState
+}
+if ($sacDurum -eq 1 -or $sacDurum -eq 2) {
+  $sacKip = 'ZORUNLU'
+  if ($sacDurum -eq 2) { $sacKip = 'DEGERLENDIRME' }
+  Write-Host ''
+  Write-Host ('  [UYARI] Smart App Control ' + $sacKip + ' kipte.')
+  Write-Host '          SAC bir Code Integrity politikasidir: Defender dislama listesini'
+  Write-Host '          HIC OKUMAZ ve acikken AV dislamalari da dikkate alinmaz. Yani bu'
+  Write-Host '          betik basariyla calissa bile:'
+  Write-Host '            * Unity Burst, Library\BurstCache\JIT altina IMZASIZ dll uretir;'
+  Write-Host '              SAC onu yuklenirken engeller (CodeIntegrity olayi 3077),'
+  Write-Host '            * kendi imzasiz build ciktilarimiz (deploy\*.exe) engellenebilir,'
+  Write-Host '            * beklenen build/import hiz kazanci gelmez.'
+  Write-Host '          Kendi kaydini gor:'
+  Write-Host '            Get-WinEvent -LogName Microsoft-Windows-CodeIntegrity/Operational -MaxEvents 20'
+  Write-Host '          Cozum: Windows Guvenligi > Uygulama ve tarayici denetimi >'
+  Write-Host '          Akilli Uygulama Denetimi > Kapali.'
+  Write-Host '          DIKKAT: SAC bir kez kapatilinca Windows yeniden kurulmadan GERI'
+  Write-Host '          ACILAMAZ - karar senin.'
+}
+
+# ---------------------------------------------------------------------------
 # 2) -List: yalniz oku, hicbir sey yazma (yonetici gerekmez)
 # ---------------------------------------------------------------------------
 if ($List) {

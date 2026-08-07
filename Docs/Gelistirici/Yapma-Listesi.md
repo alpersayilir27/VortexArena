@@ -291,6 +291,18 @@ sürekli okuduğu için paralel derlemenin önünde kuyruk oluşur — %20-40 ba
 mu diye bakmak için: `defender-exclusions.cmd -List` (bu da yönetici ister; Defender listeyi
 yetkisiz oturuma vermez). ⚠️ Dışlanan klasörler taranmıyor, oraya indirme yapma.
 
+### ⛔ Her güvenlik uyarısını "antivirüs" sanıp dışlama listesine koşma
+
+`Get-MpThreatDetection` **boşsa** olay Defender AV değildir. Unity'de en sık ikinci kaynak **Smart
+App Control**: bir Code Integrity politikasıdır, Defender dışlamalarını **hiç okumaz** ve açıkken
+AV dışlamalarını da geçersiz kılar. Burst `Library/BurstCache/JIT/` altına **imzasız** DLL üretip
+yüklediği için SAC onu engeller — `CodeIntegrity` olayı **3077** + `3118 Smart App Control Block
+Details`; `git pull` sonrası Burst yeniden derledikçe tekrarlar. Aynı politika imzasız
+`deploy\*.exe` çıktılarımızı da engelleyebilir. Teşhis:
+`Get-WinEvent -LogName Microsoft-Windows-CodeIntegrity/Operational -MaxEvents 20`.
+⚠️ Gerçek zamanlı korumayı kapatmak uyarıyı susturur, sebebi gizler. SAC'ı kapatmak çözer ama
+**geri açılamaz** (Windows yeniden kurmak gerekir).
+
 ---
 
 ## Doküman

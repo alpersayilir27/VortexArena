@@ -33,6 +33,13 @@ düzenleme istemez. Geri alma: aynı betik `-Remove` ile.
 > GitHub'dan çektiğin arşivi önce başka bir yere indirip kontrol et.
 > Ayrıntı, `-List`/`-Remove` kullanımı ve Dev Drive alternatifi: `scripts/README.md`.
 
+> ⚠️ **Smart App Control açıksa dışlamalar işe yaramaz.** SAC bir antivirüs ayarı değil, Code
+> Integrity politikasıdır: dışlama listesini okumaz. Unity **Burst**'ün `Library/BurstCache/JIT/`
+> altına ürettiği **imzasız** DLL'i engeller (uyarıyı veren budur; `CodeIntegrity` olayı 3077) ve
+> imzasız `deploy\*.exe` çıktılarımızı da engelleyebilir. Betik açılışta uyarır; kapatması
+> *Windows Güvenliği → Uygulama ve tarayıcı denetimi → Akıllı Uygulama Denetimi*, ⚠️ **geri
+> açılamaz**.
+
 ---
 
 ## 2. Rolünü ve sunucunu seç

@@ -218,6 +218,13 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   - `scripts\deploy-player-apk.bat` → `deploy\player\` (**Unity editörü kapalı olmalı** + Android Build Support modülü; platform değişen koşu 20-40 dk sürer)
   - `scripts\deploy-launcher.bat` → `deploy\launcher\` (self-contained; tek ön koşul .NET 10 SDK)
   - Klasörlerin **tamamını** kopyala — exe'ler tek başına çalışmaz.
+- [ ] ⚠️ **İşletme PC'sinde Smart App Control (Akıllı Uygulama Denetimi) kapalı olmalı.** Ürettiğimiz
+  exe'ler **imzasızdır**; SAC açık bir Windows 11 makinesinde sunucu/launcher/admin başlatılamaz ya
+  da sessizce engellenir (`CodeIntegrity` olayı 3077). Bakmak için:
+  `(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy').VerifiedAndReputablePolicyState`
+  → `0` = kapalı (istenen), `1` = zorunlu, `2` = değerlendirme. Kapatma: *Windows Güvenliği →
+  Uygulama ve tarayıcı denetimi → Akıllı Uygulama Denetimi*. ⚠️ Kapatma **geri alınamaz** (Windows
+  yeniden kurmak gerekir) — kurulumda bilinçli olarak yapılır, sahada panikle değil.
 - [ ] Sunucuyu başlat:
   - İşletmede: **launcher'dan** — *1 · Sunucu* bölümünde exe + **mekan** seçili, **Sunucuyu Başlat**. Launcher mekanı `--venue` ile geçtiği için açılışta soru sorulmaz ve yanlış mekan açılmaz.
   - Alternatif (ya da launcher kurulmadan önce): `deploy\server\VortexArena.Server.App.exe` çift tıkla; mekan konsolda sorulur.

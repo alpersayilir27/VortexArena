@@ -2967,6 +2967,21 @@ konsoluna tek satır sebep yazar.
     türet.** Taşınan her kopya kendi gürültüsünü de taşır ve iki kopya arasındaki fark, kaynağı
     olmayan bir hataya benzer. Ters yönde de sınırı hatırla: fiziksel olarak farklı olabilen şey
     (elin NEREDE olduğu) türetilemez, o ölçülür ve taşınır.
+140. **Windows'ta bir "güvenlik uyarısı" antivirüs demek değildir — Defender dışlaması yalnız AV
+    taramasını susturur, Code Integrity politikasını değil.** İki ayrı bekçi var ve ayrı listelerle
+    çalışıyorlar: Defender AV (`ExclusionPath`/`ExclusionProcess`, `scripts\defender-exclusions.cmd`)
+    ve **Smart App Control** — SAC bir CI politikasıdır, dışlama listesini **hiç okumaz**, üstelik
+    açıkken AV dışlamalarını da geçersiz kılar. Unity'de çarpma noktası kaçınılmaz: **Burst**,
+    `Library/BurstCache/JIT/` altına çalışma anında **imzasız** native DLL üretip yükler; SAC bunu
+    engeller (`CodeIntegrity` olayı **3077** + `3118`), kod/paket her değiştiğinde Burst yeniden
+    derlediği için uyarı tekrarlar ve Burst'lü işler sessizce yavaş yola düşer. Aynı politika
+    imzasız kendi çıktılarımızı da (`deploy\*.exe`) engelleyebilir — işletme PC'si kurulumunda
+    bu yüzden SAC'ın kapalı olduğu doğrulanır (`Docs/Isletme-Kurulum.md` §5).
+    Teşhis sırası: `Get-MpThreatDetection` **boşsa** olay AV değildir →
+    `Get-WinEvent -LogName Microsoft-Windows-CodeIntegrity/Operational`. Genel kural: **belirtiyi
+    susturan ayarı değil, olayı ÜRETEN bileşeni bul** — gerçek zamanlı korumayı kapatmak uyarıyı
+    yok eder, sebebi ve makinenin savunmasını da götürür. ⚠️ SAC kapatmak tek yönlüdür: bir kez
+    kapatılınca Windows yeniden kurulmadan geri açılamaz.
 
 140. **Bir ayarlama aracında GÖZLE DÜZELTİLEN şey, oyunun okuduğuyla AYNI ÇERÇEVEDE olmak
     zorundadır — yoksa aracın kendisi hata üretir.** Kavrama authoring'inde iki farklı el çerçevesi
