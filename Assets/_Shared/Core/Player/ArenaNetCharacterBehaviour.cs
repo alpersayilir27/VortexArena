@@ -186,6 +186,16 @@ namespace VortexArena.Core.Player
         /// <summary>Bu tutma epizodunda uyarı basıldı mı (kare başına log basmamak için).</summary>
         private bool _rootHoldWarned;
 
+        /// <summary>Tutulan kökün KAFAYA göreli pozu — epizot başında bir kez kurulur.</summary>
+        private Pose _heldRootLocalToHead;
+        private bool _hasHeldRootFrame;
+
+        /// <summary>HMD anchor'ı bulunamadığında iki arama arasındaki en kısa süre (sn).</summary>
+        private const float CenterEyeSearchIntervalSeconds = 0.5f;
+
+        private Transform _centerEye;
+        private float _centerEyeSearchTime = float.NegativeInfinity;
+
         private void Awake()
         {
             ResolveReferences();
@@ -458,10 +468,10 @@ namespace VortexArena.Core.Player
                     Debug.LogWarning(
                         "[ArenaNetCharacterBehaviour] Kumanda izlemesi düşükken gövde kökü " +
                         $"{Vector3.Distance(candidate.position, _lastSentRoot.position):F1} m sıçradı — " +
-                        "son kök gönderiliyor. Kumandanın pili bitmiş olabilir.", this);
+                        "kök KAFAYA sabitlenerek gönderiliyor. Kumandanın pili bitmiş olabilir.", this);
                 }
 
-                return _lastSentRoot;
+                return HoldRootRelativeToHead();
             }
 
             // Kabul: ya emniyet silahsız, ya sıçrama yok, ya da tutma tavana vurdu (oyuncu
@@ -471,7 +481,72 @@ namespace VortexArena.Core.Player
             _hasLastSentRoot = true;
             _heldRootSends = 0;
             _rootHoldWarned = false;
+            _hasHeldRootFrame = false;
             return candidate;
+        }
+
+        /// <summary>
+        /// Tutulan kökü DÜNYA uzayında dondurmak yerine <b>kafaya sabitler</b>.
+        /// <para>
+        /// ⚠️ <b>Kapatılan açık:</b> arıza kumandadadır, HMD'de değil — oyuncu o sırada yürümeye
+        /// devam ediyor. Kök dünya uzayında dondurulursa gövde yerinde çakılı kalır, oysa el
+        /// kanalının aynı arızaya verdiği cevap farklıdır: <c>PlayerPoseTracker</c> eli
+        /// <b>kafaya göreli</b> saklayıp yeniden kurar, yani eller kafayla birlikte yürür. İki
+        /// kanal aynı arızada iki ayrı referansa tutunduğu için gövde geride kalırken eller (ve
+        /// elde çizilen silah) oyuncuyla gider — tutma penceresi boyunca (≈1,2 sn) uzak avatar
+        /// ikiye ayrılır. Kökü de kafaya bağlamak iki kanalı aynı referansa oturtur.
+        /// </para>
+        /// <para>⚠️ Yalnız YAW kullanılır: kafa eğildiğinde gövdenin de yatması gerekmez
+        /// (<c>RemoteAvatar.ApplyBody</c> ile aynı sözleşme).</para>
+        /// <para>Kafa da çözülemiyorsa (rig yok) eski davranışa düşülür — dünya uzayında dondurmak,
+        /// hiçbir şey göndermemekten iyidir.</para>
+        /// </summary>
+        private Pose HoldRootRelativeToHead()
+        {
+            if (!TryGetHeadYawPose(out Pose head))
+            {
+                return _lastSentRoot;
+            }
+
+            if (!_hasHeldRootFrame)
+            {
+                _hasHeldRootFrame = true;
+                Quaternion inverse = Quaternion.Inverse(head.rotation);
+                _heldRootLocalToHead = new Pose(
+                    inverse * (_lastSentRoot.position - head.position),
+                    inverse * _lastSentRoot.rotation);
+            }
+
+            return new Pose(
+                head.position + head.rotation * _heldRootLocalToHead.position,
+                head.rotation * _heldRootLocalToHead.rotation);
+        }
+
+        /// <summary>HMD'nin dünya pozu, rotasyonu YAW'a düzleştirilmiş. Arama kısılır: rig yoksa
+        /// (admin gözlemci) kare başına sahne geneli tip araması yapılmasın.</summary>
+        private bool TryGetHeadYawPose(out Pose head)
+        {
+            if (_centerEye == null && Time.unscaledTime - _centerEyeSearchTime >= CenterEyeSearchIntervalSeconds)
+            {
+                _centerEyeSearchTime = Time.unscaledTime;
+                OVRCameraRig rig = FindFirstObjectByType<OVRCameraRig>();
+                _centerEye = rig != null ? rig.centerEyeAnchor : null;
+            }
+
+            if (_centerEye == null)
+            {
+                head = default;
+                return false;
+            }
+
+            Vector3 forward = _centerEye.forward;
+            forward.y = 0f;
+            head = new Pose(
+                _centerEye.position,
+                forward.sqrMagnitude > 1e-6f
+                    ? Quaternion.LookRotation(forward, Vector3.up)
+                    : Quaternion.identity);
+            return true;
         }
 
         /// <inheritdoc cref="INetworkCharacterBehaviour.ReceiveStreamAck"/>

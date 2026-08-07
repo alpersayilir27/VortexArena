@@ -303,7 +303,7 @@ namespace VortexArena.Protocol
         /// <para>⚠️ Oyuncu engelden çıkınca <b>tümden sıfırlanır</b> (kısmi sönüm yok): girip çıkan
         /// oyuncu her girişinde yeniden kör kalıyor, yani kazandığı bir şey yok.</para>
         /// </summary>
-        public const float OBSTACLE_GRACE_SECONDS = 3f;
+        public const float OBSTACLE_GRACE_SECONDS = 1f;
 
         /// <summary>
         /// Tolerans dolduktan sonra <b>tam candan</b> ölüme geçen süre (sn, §10.9). Engelde
@@ -317,12 +317,10 @@ namespace VortexArena.Protocol
         /// Engel ihlalinde saniyelik can kaybı (§10.9) — sunucu <b>kendi tikinde ve kendi
         /// saatiyle</b> uygular.
         /// <para>⚠️ <b>Elle yazılmaz, türetilir:</b> tasarım parametresi süredir
-        /// (<see cref="OBSTACLE_DRAIN_SECONDS"/>), hız onun sonucudur. İkisini ayrı ayrı yazmak
-        /// aynı sayının iki kaynağı olurdu.</para>
         /// <para>⚠️ Bu üç sabitin de <b>tek tüketicisi sunucudur</b>: değiştirmek yeni APK
         /// gerektirmez, sunucu derlemesi yeter.</para>
         /// </summary>
-        public const float OBSTACLE_DAMAGE_PER_SECOND = PLAYER_MAX_HP / OBSTACLE_DRAIN_SECONDS;
+        public const float OBSTACLE_DAMAGE_PER_SECOND = 13f;
 
         /// <summary>
         /// Engelin içindeyken canlanma en fazla bu kadar süre engellenir (sn, §10.9/§10.4).
