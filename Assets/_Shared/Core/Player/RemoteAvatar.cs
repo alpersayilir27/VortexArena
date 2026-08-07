@@ -42,17 +42,13 @@ namespace VortexArena.Core.Player
 
         [Tooltip("Karakter mesh'i — canlı+kalibreli oyuncuda buna HİÇ dokunulmaz. Takım rengi " +
                  "buraya YAZILMAZ (düşmanı işaretlemek duvar arkası avantaj olurdu); yalnız " +
-                 "hayalet durumunda gizlenir ya da hayalet materyaline çevrilir.")]
+                 "hayalet durumunda hayalet materyaline çevrilir.")]
         [SerializeField] private Renderer[] bodyRenderers;
 
         [Header("Hayalet gövde (ölü / kalibresiz)")]
         [Tooltip("Yarı saydam hayalet materyali (VortexArena/AvatarGhost). BOŞSA hayalet " +
                  "görünümü hiç uygulanmaz — ölü oyuncu canlıdan ayırt edilemez.")]
         [SerializeField] private Material ghostMaterial;
-
-        [Tooltip("Ayrı hayalet gövde alt ağacı (Starter robot). BOŞSA karakterin KENDİ mesh'i " +
-                 "hayalet materyaliyle çizilir; ikisi de geçerli kurulumdur.")]
-        [SerializeField] private GameObject ghostRoot;
 
         [Header("Takıma göre gövde")]
         [Tooltip("KIRMIZI takımın gövde alt ağacı (Ch18). Boşsa herkes varsayılan gövdeyi kullanır — " +
@@ -293,12 +289,6 @@ namespace VortexArena.Core.Player
         private bool _characterWarned;
 
         // ── Hayalet gövde ───────────────────────────────────────────────────────────────
-        /// <summary>Ayrı hayalet gövdesinin renderer'ları; <see cref="ghostRoot"/> boşsa null.</summary>
-        private Renderer[] _ghostRenderers;
-
-        /// <summary>Hayaleti canlı iskeletten süren köprü; hayaletle birlikte açılıp kapanır.</summary>
-        private GhostPoseDriver _ghostDriver;
-
         // Materyal takasının geri alınabilmesi için her bodyRenderer'ın ÖZGÜN dizisi ve aynı
         // UZUNLUKTA hayalet dizisi. ⚠️ Uzunluk birebir korunmalı: alt mesh sayısından fazla
         // materyal SON alt mesh'i bir kez daha çizer, eksik olan hiç çizilmez.
@@ -318,6 +308,10 @@ namespace VortexArena.Core.Player
         // Her gövdenin KENDİ kutuları (Awake'te bir kez toplanır) — gerekçe CacheHitColliders'ta.
         private Collider[] _defaultHitColliders;
         private Collider[] _redHitColliders;
+
+        [Tooltip("Eli boş oyuncunun parmak duruşu (§6.9 — telde gitmez, burada çizilir). " +
+                 "Tümü 0 = yazılmamış → gevşek dinlenme duruşu kullanılır.")]
+        [SerializeField] private HandPoseProfile idleHandPose;
 
 
         // ⚠️ Hayalet materyal takası AKTİF gövdeye uygulanır, yani her gövdenin kendi özgün/hayalet
@@ -355,20 +349,28 @@ namespace VortexArena.Core.Player
         {
             CacheHitColliders();
 
+            // ⚠️ BURADA kurulur, prefabda değil: parmak eksenleri BİND POZUNDA ölçülmek zorunda
+            // (HandFingerRig) ve Awake, retargeter'ın iskelete ilk yazışından önceki tek güvenli
+            // andır. Kırmızı gövde için ayrı kurulum YOK — SkeletonPoseMirror karakterin
+            // localRotation'larını kopyaladığı için parmaklar oraya kendiliğinden taşınır.
+            if (character != null)
+            {
+                gameObject.AddComponent<RemoteHandPoser>().Bind(this, character.transform);
+            }
+
             _itemCatalog = NetItemCatalog.Load();
 
             // ⚠️ Sıra önemli: hayalet materyal dizileri İKİ gövde için de kurulacak, yani kırmızı
             // gövdenin renderer'ları o noktada zaten toplanmış olmalı.
             CacheRedBody();
-            CacheGhostTargets();
+            CacheGhostMaterials();
         }
 
         /// <summary>
         /// Kırmızı takım gövdesini BİR kez toplar ve KAPALI doğurur — varsayılan gövde prefabda
         /// açık, takım bilgisi ise ilk <see cref="SetInfo"/> ile geliyor.
-        /// <para>⚠️ Kapsam <see cref="redBodyRoot"/> altıdır, yani hayaletin kendi
-        /// <see cref="GhostPoseDriver"/>'ıyla çakışmaz (<see cref="CacheGhostTargets"/> de
-        /// <see cref="ghostRoot"/> altını tarıyor).</para>
+        /// <para>⚠️ Kapsam <see cref="redBodyRoot"/> altıdır: varsayılan gövdenin renderer'ları
+        /// bu listeye karışmaz, iki gövde ayrı ayrı sürülür.</para>
         /// <para>Alan boşsa hiçbir şey yapılmaz: takım gövdesi kurulmamış bir prefabda davranış
         /// birebir eskisi gibi kalır.</para>
         /// </summary>
@@ -391,32 +393,15 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Hayalet hedeflerini BİR kez toplar: ayrı hayalet gövdesi varsa onun renderer'ları,
-        /// yoksa karakterin kendi mesh'inin materyal dizileri.
+        /// Hayalet materyal dizilerini BİR kez kurar: hayalet AYRI bir model değil, çizilen
+        /// gövdenin KENDİ mesh'inin materyal takasıdır — poz aktarımı hiç olmadığı için gövde
+        /// yapısal olarak kayamaz.
         /// <para>⚠️ <c>sharedMaterials</c> her çağrıda YENİ dizi döndürür — bu yüzden bir kez
         /// okunup saklanır; durum değişiminde okumak kare başına çöp üretmese de, takas edilen
         /// diziyi geri koyabilmek için özgün dizinin saklanması zaten şart.</para>
         /// </summary>
-        private void CacheGhostTargets()
+        private void CacheGhostMaterials()
         {
-            if (ghostRoot != null)
-            {
-                _ghostRenderers = ghostRoot.GetComponentsInChildren<Renderer>(true);
-                SetRenderersEnabled(_ghostRenderers, false); // hayalet kapalı doğar
-
-                // Görünmeyen hayaletin pozunu sürmek boşuna iş — sürücü hayaletle birlikte açılır.
-                _ghostDriver = ghostRoot.GetComponentInChildren<GhostPoseDriver>(true);
-                if (_ghostDriver != null)
-                {
-                    _ghostDriver.enabled = false;
-                }
-            }
-
-            if (_ghostRenderers != null && _ghostRenderers.Length > 0)
-            {
-                return; // ayrı hayalet gövdesi var: karakterin materyallerine HİÇ dokunulmaz
-            }
-
             if (ghostMaterial == null)
             {
                 return;
@@ -735,10 +720,10 @@ namespace VortexArena.Core.Player
         /// karartmak ise sahada "ölü mü canlı mı" sorusunu cevaplamıyordu.
         /// </para>
         /// <para>
-        /// İki kurulum da geçerlidir ve kod tarafı ikisinde de aynıdır: <see cref="ghostRoot"/>
-        /// bağlıysa karakterin mesh'i kapanıp AYRI hayalet gövdesi açılır, bağlı değilse
-        /// karakterin kendi mesh'i hayalet materyaliyle çizilir. Yani hayalet modelini değiştirmek
-        /// bir prefab işidir, kod işi değil.
+        /// ⚠️ Hayalet AYRI bir model DEĞİLDİR: çizilmekte olan gövdenin (varsayılan ya da kırmızı
+        /// takım gövdesi) kendi mesh'i hayalet materyaline takas edilir. Ayrı bir gövdeye poz
+        /// aktarmak gerekmediği için hayaletin kayması yapısal olarak imkansızdır; görünümü
+        /// değiştirmek <c>M_AvatarGhost</c> materyalini değiştirmektir, kod işi değil.
         /// </para>
         /// <para>
         /// ⚠️ <b>Takım rengi CANLI karaktere hâlâ yazılmaz</b> (düşmanı işaretlemek avantaj
@@ -748,8 +733,8 @@ namespace VortexArena.Core.Player
         /// </summary>
         private void ApplyBodyVisual()
         {
-            // ⚠️ Görünürlük de karara girer: hayalet ayrı bir alt ağaçtaysa visualRoot onu
-            // kapatmayabilir (kardeş olabilir), o hâlde poz gelmeden havada asılı kalırdı.
+            // ⚠️ Görünürlük de karara girer: görünmez avatarda (poz gelmemiş) hayalet durumu
+            // UYGULANMAZ — gövde geri geldiğinde durum zaten SetVisible'dan yeniden hesaplanır.
             bool ghost = _visible && (!IsCalibrated || !IsAlive);
 
             if (_ghostStateKnown && ghost == _ghostApplied)
@@ -766,16 +751,7 @@ namespace VortexArena.Core.Player
             _ghostStateKnown = true;
             _ghostApplied = ghost;
 
-            if (_ghostRenderers != null && _ghostRenderers.Length > 0)
-            {
-                SetRenderersEnabled(_ghostRenderers, ghost);
-
-                if (_ghostDriver != null)
-                {
-                    _ghostDriver.enabled = ghost;
-                }
-            }
-            else if (ActiveGhostMaterials != null)
+            if (ActiveGhostMaterials != null)
             {
                 ApplyBodyMaterials(ghost);
             }
@@ -784,9 +760,9 @@ namespace VortexArena.Core.Player
                 WarnMissingGhostSetup();
             }
 
-            // Gövde seçimi hayalet yolundan BAĞIMSIZ uygulanır: hangi yol koşarsa koşsun, pasif
-            // gövde kapalı ve aktif gövde doğru durumda olmalı.
-            SyncBodyRendererEnable(ghost);
+            // Gövde seçimi hayalet durumundan BAĞIMSIZ uygulanır: pasif gövde kapalı, aktif gövde
+            // açık olmalı.
+            SyncBodyRendererEnable();
 
             if (ghost)
             {
@@ -827,18 +803,15 @@ namespace VortexArena.Core.Player
 
         /// <summary>
         /// İki gövdenin renderer'larını doğru duruma getirir.
-        /// <para>⚠️ <b>Aktif gövde hayaletteyken KAPATILMAZ</b> (materyal takası yolunda): mesh
-        /// aynı kalır, yalnız materyali değişir. Kapatılması gereken tek durum ayrı bir hayalet
-        /// gövdesinin devraldığı durumdur.</para>
+        /// <para>⚠️ <b>Aktif gövde hayaletteyken de AÇIKTIR</b>: hayalet o mesh'in materyal
+        /// takasıdır, mesh'in kendisi aynı kalır — kapatılırsa hayalet hiç çizilmezdi.</para>
         /// <para>Pasif gövde HER hâlükârda kapalıdır — iki gövde birden çizilirse oyuncu iç içe
         /// geçmiş iki karakter olarak görünür.</para>
         /// </summary>
-        private void SyncBodyRendererEnable(bool ghost)
+        private void SyncBodyRendererEnable()
         {
-            bool separateGhost = _ghostRenderers != null && _ghostRenderers.Length > 0;
-
             Renderer[] active = ActiveBodyRenderers;
-            SetRenderersEnabled(active, !separateGhost || !ghost);
+            SetRenderersEnabled(active, true);
 
             Renderer[] passive = ReferenceEquals(active, bodyRenderers) ? _redBodyRenderers : bodyRenderers;
             SetRenderersEnabled(passive, false);
@@ -848,7 +821,7 @@ namespace VortexArena.Core.Player
 
         /// <summary>
         /// Kırmızı gövde köprüsünü açar/kapatır: yalnız o gövde AKTİF ve avatar GÖRÜNÜRken sürülür
-        /// (görünmeyen gövdenin pozunu hesaplamak boşuna iş — hayalet sürücüsündeki gerekçenin aynısı).
+        /// (görünmeyen gövdenin pozunu hesaplamak boşuna iş).
         /// <para>⚠️ <see cref="SetVisible"/> bunu ayrıca çağırmak zorunda: canlı ve kalibreli bir
         /// avatarda görünürlük değişimi hayalet durumunu DEĞİŞTİRMEZ, yani
         /// <see cref="ApplyBodyVisual"/> erken döner ve buraya hiç uğramaz. Uğramazsa görünmezken
@@ -862,10 +835,9 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Hayalet rengin yazılacağı renderer'lar: ayrı gövde varsa o, yoksa AKTİF
-        /// gövdenin mesh'i (o hâlde üstünde zaten hayalet materyali duruyordur).</summary>
-        private Renderer[] GhostTargets =>
-            _ghostRenderers != null && _ghostRenderers.Length > 0 ? _ghostRenderers : ActiveBodyRenderers;
+        /// <summary>Hayalet rengin yazılacağı renderer'lar: AKTİF gövdenin mesh'i — hayalet
+        /// durumunda üstünde zaten hayalet materyali duruyordur.</summary>
+        private Renderer[] GhostTargets => ActiveBodyRenderers;
 
         /// <summary>
         /// Hayaletten çıkışta property block SÖKÜLÜR (boşaltılmaz): karakterin özgün materyali
@@ -874,16 +846,13 @@ namespace VortexArena.Core.Player
         /// </summary>
         private void ClearGhostColor()
         {
-            ClearPropertyBlocks(_ghostRenderers);
-
             // İki gövde de temizlenir: hangisinin aktif olduğuna bakmak gerekmez, sökme işlemi
             // ucuz ve pasif gövdede kalmış bir block ileride sessizce geri gelirdi.
             ClearPropertyBlocks(bodyRenderers);
             ClearPropertyBlocks(_redBodyRenderers);
         }
 
-        /// <summary>AKTİF gövdenin mesh'ini hayalet materyaline çevirir ya da geri alır.
-        /// Yalnız ayrı hayalet gövdesi YOKKEN çağrılır.</summary>
+        /// <summary>AKTİF gövdenin mesh'ini hayalet materyaline çevirir ya da geri alır.</summary>
         private void ApplyBodyMaterials(bool ghost)
         {
             WriteMaterials(ActiveBodyRenderers, ghost ? ActiveGhostMaterials : ActiveOriginalMaterials);
@@ -924,8 +893,8 @@ namespace VortexArena.Core.Player
             _ghostSetupWarned = true;
             Debug.LogError(
                 $"[RemoteAvatar] Oyuncu {PlayerId}: hayalet görünümü kurulmamış — RemoteAvatar " +
-                "prefabında 'ghostMaterial' (M_AvatarGhost) bağlanmalı ya da 'ghostRoot' bir " +
-                "hayalet gövdesi göstermeli. Ölü/kalibresiz oyuncu canlıdan ayırt edilemiyor.", this);
+                "prefabında 'ghostMaterial' (M_AvatarGhost) bağlanmalı. Ölü/kalibresiz oyuncu " +
+                "canlıdan ayırt edilemiyor.", this);
         }
 
         private void WriteBaseColor(Renderer[] targets, in Color color)
@@ -1545,6 +1514,30 @@ namespace VortexArena.Core.Player
             }
         }
 
+        /// <summary>
+        /// Bu elin parmak duruşu (§6.9): elde eşya varsa o eşyanın duruşu, yoksa idle.
+        /// <para>
+        /// ⚠️ <b>Duruşun kaynağı EL DEĞİL EŞYADIR</b> — sol/sağ simetrisi buradan geliyor. Elden
+        /// türetilen (izlemeden gelen) bir duruş iki elde kaçınılmaz olarak ayrışır; aynı silahın
+        /// aynı tutuluşu ise tek bir tanımdan okunur.
+        /// </para>
+        /// <para><c>GRIP_LINKED</c>'te iki el de aynı eşyayı tutuyordur, yani ikisi de o eşyanın
+        /// duruşunu alır — ön kabzayı saran el için ayrı bir profil bugün yok.</para>
+        /// </summary>
+        public HandPoseProfile ResolveHandPose(bool rightHand)
+        {
+            ItemDefinition definition = _shownGripLinked
+                ? (_shownPrimaryRight ? _itemDefR : _itemDefL)
+                : (rightHand ? _itemDefR : _itemDefL);
+
+            if (definition != null)
+            {
+                return definition.HandPose;
+            }
+
+            return idleHandPose.IsEmpty ? HandPoseProfile.Idle : idleHandPose;
+        }
+
         /// <summary>Kavrama matematiğinin TEK uygulaması <see cref="ItemGripSolver"/>'dadır; burası
         /// yalnız sonucu transforma yazar (ikinci bir kavrama matematiği iki uçta iki ayrı duruş
         /// demek olurdu).</summary>
@@ -1825,7 +1818,7 @@ namespace VortexArena.Core.Player
             if (redBodyRoot != null)
             {
                 // ⚠️ Kırmızı gövde visualRoot'un KARDEŞİdir — visualRoot onu kapatmaz, poz gelmeden
-                // havada asılı kalırdı (hayalet gövdesindeki tuzağın aynısı).
+                // havada asılı kalırdı.
                 redBodyRoot.SetActive(visible);
             }
 
@@ -1840,8 +1833,8 @@ namespace VortexArena.Core.Player
             RefreshColliders();
             RefreshHeldItemVisibility();
 
-            // Hayalet ayrı bir alt ağaç olabilir (visualRoot onu kapatmaz) — görünürlük kararı
-            // oraya da taşınmalı, yoksa poz gelmeden hayalet havada asılı kalır.
+            // Hayalet kararı _visible'a da bağlı: görünürlük değişince gövdenin materyali ve
+            // rengi yeniden hesaplanmalı, yoksa geri gelen avatar önceki durumunda donar.
             ApplyBodyVisual();
         }
     }

@@ -1044,21 +1044,22 @@ Takımsız modda (FFA) takım diye bir şey olmadığı için hayalet **nötr** 
 oradaki bir kırmızı/mavi var olmayan bir takımı işaret ederdi. Renkler takım renklerinin
 saydamda okunan tonlarıdır (opak gövde için seçilen ton `GhostBaseAlpha` altında griye kaçıyor),
 ikinci bir palet değil. Kalibresizken turuncuya nabız atar ve **kalibresizlik ölümü ezer**.
-Canlı + kalibreli oyuncunun gövdesine HİÇ dokunulmaz. Gövde **ayrı bir modeldir** ve karakterin
-mesh'inden bağımsızdır: `RemoteAvatar.prefab` içinde karakterin KARDEŞİ olan `Ghost` kabının
-altında bir model örneği durur (bugün Starter Assets robotu,
-`ThirdPartyPackages/StarterAssetsRobot/Armature.fbx`), karakter hayalete geçtiğinde kendi mesh'i
-kapanır ve robot açılır; pozu `GhostPoseDriver` karakterin canlı iskeletinden humanoid retarget
-ile sürer. Kardeş olmasının sebebi `visualRoot`'un karakterin KENDİSİ olmasıdır — hayalet onun
-altında olsaydı görünürlük kapandığında sürücü de kapanır, hayalet son pozunda donardı.
-Kurulumu `Tools > VortexArena > Avatars > Hayalet Gövdesini Kur` yapar; `ghostRoot` hiç bağlı
-değilse kod karakterin kendi mesh'ini hayalet materyaline çevirmeye düşer (aynı kod yolu),
-**kırmızı takım ayrı bir MODELLE çizilir** (`RemoteAvatar.redBodyRoot` → `RedTeamBody` kabı,
+Canlı + kalibreli oyuncunun gövdesine HİÇ dokunulmaz. Hayalet **ayrı bir model DEĞİLDİR**: o an
+çizilmekte olan gövdenin (varsayılan mavi karakter ya da kırmızı takım gövdesi) KENDİ mesh'inin
+materyal takasıdır — özgün materyal dizisi renderer başına saklanır, aynı UZUNLUKTA bir hayalet
+dizisiyle değiştirilir, hayaletten çıkışta özgün dizi geri konur ve property block sökülür
+(block'lu renderer SRP Batcher dışında kalır). ⚠️ Uzunluk birebir korunmalı: alt mesh sayısından
+fazla materyal SON alt mesh'i bir kez daha çizer, eksik olan hiç çizilmez. Poz aktarımı YOKTUR ve
+eklenmez — mesh zaten karakterin kendisi olduğu için hayaletin kayması yapısal olarak imkansızdır.
+İki gövdenin de kendi özgün/hayalet dizisi vardır (takım değişiminden sonra takas yanlış
+renderer'a yazılmasın). `ghostMaterial` boşsa hayalet **hiç uygulanmaz** ve bileşen örnek başına
+bir kez HATA basar: ölü oyuncu canlıdan ayırt edilemez.
+**Kırmızı takım ayrı bir MODELLE çizilir** (`RemoteAvatar.redBodyRoot` → `RedTeamBody` kabı,
 altında `_Shared/Avatars/T-Avatars/Ch18_nonPBR.fbx` örneği; kurulumu
 `Tools > VortexArena > Avatars > Takım Gövdesini Kur`): iki gövdeden aynı anda yalnız biri
 çizilir, seçimi `SetInfo`'ya gelen takım dizesi yapar ve takım değişimi avatarı yeniden
 doğurmadan anında uygulanır. **Ağda hiçbir karşılığı yoktur** — takım zaten `lobby_state` ile
-geliyor, model seçimi tamamen istemci görselleştirmesidir. Gövde hayalet gibi karakterin
+geliyor, model seçimi tamamen istemci görselleştirmesidir. Gövde karakterin
 KARDEŞİDİR ve pozu `SkeletonPoseMirror` ile karakterin canlı iskeletinden sürülür — **kemik
 aynası**: iki ağaçta ADI eşleşen kemiklerin yalnız `localRotation`'ı kopyalanır, kalça ise kendi
 BIND pozuna göre aktarılır. ⚠️ İki Mixamo modelinin kemik ADLARI aynı olsa da ORANLARI farklıdır
@@ -1154,6 +1155,9 @@ katmanların göreli hız farkı korunur).
 | `Combat/SimpleWeaponDissolve` | *(her `WPN_*` kökünde; `WeaponKitBuilder` takar ve `DissolveEffect.mat`'i bağlar)* Silah ele geldiğinde **çözülerek belirir**: model geçici olarak çözülme materyaline çevrilir, `_Dissolve` 1→0 sürülür (SmoothStep, `appearSeconds`), sonra özgün materyaller geri konur. **Yalnız beliriş vardır** — bırakışta efekt yoktur, silah anında gider ve yerinde kalan bir kopya bırakmaz. Kapı **`Weapon.HeldChanged`**'dir, çağrı noktaları değil — üç tutma yolu da (rastgele verilen silah, çerçeve klonu, ISDK kavraması) tek yerden karşılansın, yeni bir yol açıldığında sessizce unutulmasın (`WeaponFrame` aynı olayı aynı sebeple dinliyor). Silahın **kendi albedosu** (`_BaseMap`/`_MainTex` + `_BaseColor`/`_Color`) özgün materyalden okunup `MaterialPropertyBlock` ile taşınır: çözülme materyali TEK bir asset ve hangi silaha takıldığını bilmiyor, taşınmasaydı silah düz renkli bir siluet olarak çözülürdü. Materyal `.sharedMaterials` ile takılır (`.materials` her renderer için toplanmayan bir kopya üretirdi). Hedefler `Awake`'te bir kez toplanır: yalnız `MeshRenderer`/`SkinnedMeshRenderer` (namlu alevi/duman ve nişan ışını kendi materyalleriyle çizilir), `WeaponFrame`'in alt ağacı atlanır. ⚠️ `OnDisable` materyalleri geri koyar: obje kapanınca coroutine ölüyor — geri konmasaydı silah bir dahaki çağrılışında yarı çözülmüş belirir, üstelik property block'lu renderer SRP Batcher dışında kalmaya devam ederdi. ⚠️ **Kenar rengi/kalınlığı, desen sıklığı gibi görünüm ayarları bileşende YOKTUR ve eklenmez** — onların tek doğruluk kaynağı **materyaldir** (`_Edge_Color`, `_Edge_Width`, `_NoiseScale`, `_DissolveAxis`, `_DirectionStrength` orada ayarlanır); bileşen yalnız `_Dissolve`'u ve albedoyu yazar, materyalin geri kalanına dokunmaz. Serialize edilen alan bu yüzden yalnız iki tane: `dissolveMaterial` ve `appearSeconds` (süreyi `WeaponKitBuilder` her koşuda prefaba geri yazar). **İki materyal seçeneği var:** `DissolveEffect` (Simple Noise — yumuşak lekeler) ve `VoronoiDissolveEffect` (Voronoi — hücresel, "parçalara ayrılıyor"); ikisi de aynı property setini konuşur, yani bileşende yalnız materyal alanı değişir |
 | `Combat/FrozenGrabTransformer` | Hiçbir şey yapmayan ISDK `ITransformer`'ı: kavranan nesneyi **yerinde dondurur**. Çerçevedeki kaynak silahın `Grabbable._oneGrabTransformer`/`_twoGrabTransformer` alanlarına bağlanır. ⚠️ **Alanları boş bırakmak hareketsizlik değil, SERBEST hareket demektir** — `Grabbable.Start` ikisi de boşsa kendisi bir `GrabFreeTransformer` üretir |
 | `Player/ArenaNetCharacterBehaviour` | Movement SDK'nın ağ katmanı ile ArenaNet arasındaki **tek köprü** (§6.9/6.10). SDK'nın `INetworkCharacterBehaviour`'ını uygular: ürettiği blob'u `0x07` olarak yollar, gelen blob'u `NetworkCharacterHandler.ReceiveData`'ya verir, karakterin kökünü `LateUpdate`'te arena uzayına oturtur. **Rol ayrımının uygulandığı TEK yer**: `HasInputAuthority` yerelde `true` (sensör kaynağı `MetaSourceDataProvider` açık, gövde body tracking'den çözülür ve akar), uzakta `false` (kaynak KAPATILIR — açık bırakılsaydı her uzak avatar aynı yerel sensörü okurdu). ⚠️ Kaynak bileşen prefabdan **silinmez, yalnız kapatılır**: `CharacterRetargeter.Awake` onu kendi GameObject'inden `GetComponent` ile arıyor ve yoksa assert atıyor — tek prefabın hem yerel hem uzak çalışabilmesi bileşenin orada durmasına bağlı. ⚠️ **Kökü SDK değil bu sınıf yazar**: blob'un 0. eklemi gönderenin dünya uzayındadır ve blob opak olduğu için içeriden çevrilemez, o yüzden kök arena uzayında ayrıca taşınır (§6.9). ⚠️ `NetworkTime`/`RenderTime` **sunucunun tik saatinden** gelir (`RemotePlayerRegistry.TryGetServerTimeSeconds`), `Time.unscaledTime`'dan DEĞİL: SDK'nın interpolasyonu gönderenin damgasıyla alıcının render zamanını karşılaştırıyor, iki uç aynı epoch'ta olmazsa gövde 12 Hz basamaklarla oynar. ⚠️ `ReceiveStreamAck` **bilerek boştur** — ack yalnız delta sıkıştırma içindir ve delta kapalıdır (§6.9). ⚠️ **Kök emniyeti (`GuardRootJump`)**: iskelet kökü bir gönderimde `RootJumpLimitMeters` (1,5 m) üstünde sıçrarsa son kök gönderilmeye devam eder ve yeni kök ancak `RootHoldMaxSends` (24) gönderim ısrar edince kabul edilir — emniyet **yalnız bir el tutuluyorken silahlıdır** (kumanda kaybı gövde çözümünü çökertip kökü fırlatıyor, §7 "`OVRCameraRig` el anchor'larını KOŞULSUZ yazar"), `ArenaCalibrator.CalibrationGeneration` değişince saklanan kök düşer: rig'in gerçekten taşındığı an meşru bir sıçramadır |
+| `Combat/HandPoseProfile` | Bir elin parmak duruşu: **beş sayı**, parmak başına kapanma oranı (`0` açık, `1` kapalı) + `Idle`/`DefaultGrip` hazır değerleri. ⚠️ Quaternion DEĞİL oran tutulur, çünkü duruş iki ayrı iskelete uygulanabilmeli ve iki iskeletin kemik eksenleri aynı değil — ham rotasyon taşımak §7'deki "izleme uzayından gelen rotasyon humanoid kemiğe doğrudan yazılmaz" tuzağının parmak ölçeğinde tekrarı olurdu. ⚠️ `IsEmpty` (tümü sıfır) **yazılmamış** sayılır: alanı hiç görmemiş eski bir `WD_*.asset` elin tahta gibi düz kalmasına değil makul bir kavramaya düşsün |
+| `Player/HandFingerRig` | Bir elin parmak zincirlerini (`…Thumb1-4` … `…Pinky1-4`) **bind pozunda bir kez** çözer ve her eklemin bükülme eksenini **ölçer**; sonra `HandPoseProfile`'ı o iskeletin kendi eksenlerinde uygular. ⚠️ Eksen sabit yazılmaz (`HandGripConvention` ile aynı gerekçe: model değişince tek satır bile değişmesin) ve sol/sağ çapraz çarpım sırası **kopyalanmaz** — avuç normali `HandGripConvention.TryMeasureBoneBasis`'ten okunur, o kuralın tek uygulaması orasıdır. ⚠️ Eksen `Cross(avuç normali, kemik yönü)`'dür; tersi yazılırsa parmaklar el sırtına kırılır. Bilek adları (`mixamorig:LeftHand`/`RightHand`) burada durur — tam eşleşmeyle aranır, çünkü parmak kemikleri o adın üstüne ek alır |
+| `Player/RemoteHandPoser` | Uzak avatarın parmaklarını **elindeki eşyaya göre** sürer (§6.9 — parmaklar telde gitmez). Duruşun kaynağı el değil **eşya** olduğu için aynı silah her ekranda aynı tutulur ve sol/sağ farkı oluşmaz. ⚠️ **Execution order 100 ile 30100 ARASINDA olmak zorunda** (bugün 30050): altında SDK iskeleti yazıp parmakları ezer, üstünde `SkeletonPoseMirror` çoktan kopyalamış olur — aradaki pencerede yazınca kırmızı takım gövdesi ve hayalet parmakları **bedavaya** alır, ikinci bir kurulum gerekmez. ⚠️ Prefaba KONMAZ, `RemoteAvatar.Awake` ekler: eksenler bind pozunda ölçülmek zorunda ve prefabdaki bir bileşenin `Awake`'inin iskeletten önce koştuğu garanti değil |
 | `Player/ControllerTracking` | "Bu elin anchor pozuna güvenilir mi" sorusunun **tek cevabı** (statik; `Tick()` kare başına bir kez, idempotent). Ölçüt rig'in kendi aynasıdır: `OVRInput.GetActiveControllerForHand` `None` ise `CONTROLLER_LOST`, aksi hâlde aktif kumandanın `GetControllerPositionValid`'i false ise `CONTROLLER_UNTRACKED`, true ise `CONTROLLER_OK`. **İki ayrı çıkış vardır ve karıştırılmaz:** `IsValid(right)` o karenin **ham** geçerliliğidir (debounce YOK) ve poz yazan kod yolunun kapısıdır — filtrelenmiş bir kapı bir sıfır poza saniyeler boyunca "geçerli" derdi; `GetState(right)` ise 1 sn kararlılık filtresinden geçmiş **göstergedir** (`ArenaProtocol.CONTROLLER_*`, admin satırı) — filtresiz bir gösterge her tracking kırpışmasında yanıp sönerdi. `OVRManager` yokken (admin, gözlüksüz editör) durum `UNKNOWN` ve `IsValid = true`: orada kumanda diye bir şey yok, kapı kapanırsa hiçbir poz akmaz |
 | `Player/HandGripPivot` | "Kumanda anchor'ı verildiğinde oyuncunun **avucu** nerede duruyor" sorusunun tek cevabı: anchor → avuç ofseti (el başına bir `Vector3`, metre) + `Resolve` yardımcısı. **Neden var:** kavramanın referansı anchor idi, oysa oyuncunun gördüğü şey kumanda değil **sentetik eldir** — aradaki birkaç santim, silahı elin içinden geçmiş ya da havada duruyor gösteriyordu. Anchor'a doğrudan bakan her tüketici (`Weapon`, `WeaponGranter`, `ItemGripSockets`, `WeaponFrame`, `RemoteAvatar`) buradan geçer. ⚠️ **Uzak taraf da geçmek ZORUNDA**: telde giden el pozu anchor pozudur (§6.6), ofset iki uçta aynı yerden uygulanmazsa aynı silah iki ekranda iki ayrı duruşta çizilir. ⚠️ **Rotasyon bilerek anchor'ın kendisidir** ve `HandGripConvention.AnchorBasis` buraya karıştırılmaz: ikisi tek sabite bağlanırsa uzak gövdenin bileğini düzeltmek silahın duruşunu bozar (ve tersi); ayrıca mevcut kavrama authoring'i anchor ekseninde ölçülmüştür, dönüşü değiştirmek her silahın kavrama pozunu bir anda geçersiz kılardı. ⚠️ **Ofset bugün SIFIRDIR** (avuç = anchor) ve buraya tahmin edilmiş bir sayı yazılmaz: ölçülmemiş bir ergonomi sabiti hem silahın yerini kumandanın gerçek pozundan koparıyor hem de silah başına yazılan kavrama verisiyle **aynı şeyi iki düğmeden** ayarlıyordu — hangisinin bozuk olduğu ayırt edilemezdi. Silahın elde nerede durduğu tek yerden ayarlanır: `WD_*.asset` → `primaryGripPosition/Euler`. Gerçekten ölçülmüş bir bilek ofseti gerekirse yeri yine burasıdır (`HandGripCalibrationProbe` ölçer); kimlik dönüşümün arkasında kapı bırakmak `ArenaSpace` deseniyle aynıdır |
 | `Player/HandGripConvention` | Anchor (kumanda) uzayındaki el pozunu karakterin el kemiğinin bind eksenine çeviren **statik köprü**. Kemik anatomisi (parmak yönü = hand→MiddleProximal, avuç normali = parmak×başparmak) **modelden çalışma anında ölçülür**, sabit derece yazılmaz: karakter değişince burada tek satır değişmez. Sabit olan tek şey anchor tarafındaki el anatomisidir — **tek ayar noktası** budur ve bugünkü değeri ergonomik bir TAHMİNDİR; kesin değeri `HandGripCalibrationProbe` ölçer. Sol ve sağ ayrı hesaplanır; ortak bir ofset iki eli birden düzeltemez (§7). ⚠️ **Kapsamı daraldı: gövde artık buradan geçmez.** Kol/bilek zinciri Movement SDK retargeting'inden geliyor ve SDK kendi eşlemesini kendi yapıyor; bu köprünün bugünkü tek işi **eşyanın ele oturmasıdır** (kavrama soketi + uzak çizim), çünkü `ItemDefinition.primaryGrip` ölçüsü anchor uzayında alınmış. Buraya gövdeyle ilgili bir tüketici geri eklenirse retargeting ile ikinci bir eşleme kaynağı doğar |
@@ -2672,10 +2676,10 @@ konsoluna tek satır sebep yazar.
     **yuvadan alınır** (aynı kareyi iki kez oynatmamak için) ve iki tüketici aynı kare için
     yarışır — biri o kareyi hiç görmez, gövde ikiye ayrılır. Üstüne her model kendi retarget
     config'ini gerektirir. Doğru hamle **zaten uygulanmış olan sonucu okumaktır**: ikinci model
-    humanoid retarget ile (`HumanPoseHandler`, `GhostPoseDriver`) canlı iskeletten sürülür, ağ
-    yoluna hiç dokunulmaz. ⚠️ Ön koşul kaynak FBX'in **Humanoid** olarak import edilmesidir ve
-    sürücü SDK'nın yazımından SONRA koşmalıdır (yüksek execution order); erken koşan bir sürücü
-    bir kare bayat gövde çizer. Genel kural: bir kaynağın "okundu mu tüketildi mi" olduğunu
+    karakterin CANLI iskeletinden sürülür (`SkeletonPoseMirror` — takım gövdesi), ağ yoluna hiç
+    dokunulmaz. ⚠️ Bunun için kas uzayına girilmez (gerekçe aşağıdaki `HumanPoseHandler`
+    maddesinde); sürücü SDK'nın yazımından SONRA koşmalıdır (yüksek execution order), erken koşan
+    bir sürücü bir kare bayat gövde çizer. Genel kural: bir kaynağın "okundu mu tüketildi mi" olduğunu
     ikinci tüketici yazmadan ÖNCE sor.
 
 117. **`Quaternion.ToAngleAxis` 180°'yi AŞAN bir açı ve işareti dönmüş bir eksen döndürebilir —
@@ -2707,9 +2711,6 @@ konsoluna tek satır sebep yazar.
     oyuncunun boyunu kendiliğinden korur. Kas uzayı yalnız **kemik adları farklı** iskeletler için
     gerekir; orada da hedef kök dünya orijininde bırakılmalı ve `bodyPosition`
     `kaynakHumanScale / hedefHumanScale` ile ölçeklenmelidir.
-    ⚠️ **`GhostPoseDriver` bu tuzağa DÜŞMÜŞ durumdadır ve henüz düzeltilmemiştir** — hayalet gövde
-    prefabda hiç bağlı olmadığı için (`ghostRoot` boş) bugüne kadar hiç koşmadı; `Hayalet Gövdesini
-    Kur` çalıştırıldığı gün hayalet aynı şekilde kayacaktır.
 
 119. **Kalibrasyonun ölçtüğü zemin ile gövde izlemenin varsaydığı zemin AYRI iki düzlemdir; aradaki
     fark doğrudan "ayaklar zeminin altında" olarak görünür.** `AlignRig` dünyayı
@@ -2948,6 +2949,17 @@ konsoluna tek satır sebep yazar.
     ÇİZİLEN kemiğinden al** — telde gelen ölçüm otorite olarak doğrudur (atış, vuruş, hedef
     çözümü ondan gelir) ama çizimin referansı değildir. Ölçüm ile çizim aynı sayı olmak zorunda
     değildir; olmadıklarında hangisinin nerede kullanıldığı yazılı olmalıdır.
+139. **Bir şeyi ÖLÇMEK ile TÜRETMEK arasında seçim varken, iki uçta aynı görünmesi gereken şey
+    türetilir.** Uzak avatarın parmakları izlemeden gelip telde taşınıyordu. Ölçüm gibi görünüyordu
+    ama değildi: kumanda tutan bir elin parmakları zaten gerçek duruşu göstermiyor, üstelik iki el
+    ayrı ayrı ölçüldüğü için **aynı silah sol ve sağ elde farklı tutuluyordu** — oyuncunun gördüğü
+    tutarsızlığın kaynağı buydu. Oysa "bu silah nasıl tutulur" sorusunun cevabı her istemcinin
+    APK'sında zaten var (eşya tanımı) ve tek bir yerden okunduğunda iki el de aynı olur. Kesilen
+    veri kanalın **%61'iydi** (66 eklemin 40'ı), yani doğruluk ile bant genişliği aynı yöne
+    çekiyordu. Genel kural: **bir veri her uçta AYNI çıkmak zorundaysa, onu taşıma — tanımdan
+    türet.** Taşınan her kopya kendi gürültüsünü de taşır ve iki kopya arasındaki fark, kaynağı
+    olmayan bir hataya benzer. Ters yönde de sınırı hatırla: fiziksel olarak farklı olabilen şey
+    (elin NEREDE olduğu) türetilemez, o ölçülür ve taşınır.
 
 ---
 

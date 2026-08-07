@@ -76,6 +76,13 @@ namespace VortexArena.Core.Combat
         [Tooltip("Ön kabza soketinin yarıçapı (m) — yalnız TwoHand'de anlamlı.")]
         [SerializeField] private float secondaryGripRadius = 0.12f;
 
+        // Parmak duruşu tabanda durur çünkü tabanın ölçütü "ağın + UZAK ÇİZİMİN ihtiyacı"dır ve
+        // bu tam olarak uzak çizim verisidir: parmaklar telde gitmiyor (§6.9), uzak avatarı çizen
+        // taraf duruşu ELDEKİ EŞYADAN çözüyor. Beş sayı tutulmasının gerekçesi HandPoseProfile'da.
+        [Tooltip("Bu eşya tutulurken parmakların kapanma oranı (uzak avatarda çizilir). " +
+                 "Tümü 0 = yazılmamış → genel kavrama duruşu kullanılır.")]
+        [SerializeField] private HandPoseProfile handPose;
+
         // Tracer görünümü tabanda durur çünkü tabanın ölçütü "ağın + UZAK ÇİZİMİN ihtiyacı"dır
         // ve tracer tam olarak uzak çizim verisidir: uzak atışı çizen taraf (RemoteShotFx) olayın
         // itemId'sinden başka hiçbir şey bilmez — hasarı, şarjörü, menzili bilmeden mermi izini
@@ -129,6 +136,14 @@ namespace VortexArena.Core.Combat
         public bool IsTwoHanded => holdMode == ItemHoldMode.TwoHand;
 
         /// <summary><b>EŞYANIN</b> ana el anchor'ına göre yerel konumu (metre): el → eşya.</summary>
+        /// <summary>
+        /// Bu eşya tutulurken elin parmak duruşu (§6.9 — telde gitmez, uzak uç kendi sürer).
+        /// <para>Yazılmamışsa <see cref="HandPoseProfile.DefaultGrip"/> döner: alanı hiç
+        /// görmemiş eski bir tanım, elin tahta gibi düz kalmasına değil makul bir kavramaya
+        /// düşsün.</para>
+        /// </summary>
+        public HandPoseProfile HandPose => handPose.IsEmpty ? HandPoseProfile.DefaultGrip : handPose;
+
         public Vector3 PrimaryGripPosition => primaryGripPosition;
 
         /// <summary><b>EŞYANIN</b> ana el anchor'ına göre yerel dönüşü: el → eşya.</summary>

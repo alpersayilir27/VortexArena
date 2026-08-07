@@ -288,15 +288,6 @@ namespace VortexArena.Core.Editor
                 return false;
             }
 
-            // ⚠️ Eski kas-uzayı köprüsü SÖKÜLÜR: kalsaydı kendi LateUpdate'inde AYNI kökü yazmaya
-            // devam eder ve kemik aynasıyla yarışırdı (RemoteAvatar artık onu kapatmıyor, yani
-            // kimse susturmuyor).
-            var legacy = teamRoot.GetComponent<GhostPoseDriver>();
-            if (legacy != null)
-            {
-                Object.DestroyImmediate(legacy);
-            }
-
             var driver = teamRoot.GetComponent<SkeletonPoseMirror>();
             if (driver == null)
             {
