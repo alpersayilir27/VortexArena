@@ -348,11 +348,18 @@ namespace VortexArena.Core.Editor
             instance.gameObject.name = ItemHandRig.NodeName(kind);
             instance.gameObject.hideFlags = HideFlags.None;
 
+            // ⚠️ localPosition'a YAZILMAZ, DÜNYA pozu yazılır. Kavrama ofsetleri metre cinsindendir
+            // ama `Hands` düğümü ölçekli bir kökün (WPN_* kökleri 0.8) altında duruyor: yerel
+            // konuma yazmak ofseti o ölçekle çarpar, el yanlış yere oturur ve bake onu geri
+            // okuyunca tanımdaki sayı sessizce küçülür. Bileşim ItemHandGripBake.FromWrist'in
+            // birebir tersidir — "El Ekle → hiç dokunmadan Bake" değeri DEĞİŞTİRMEMELİDİR.
             ItemHandGripBake.ToWristLocal(definition, kind,
                 out Vector3 localPosition, out Quaternion localRotation);
-            instance.transform.localPosition = localPosition;
-            instance.transform.localRotation = localRotation;
-            instance.transform.localScale = Vector3.one;
+            Transform itemRoot = _target.transform;
+            instance.transform.SetPositionAndRotation(
+                itemRoot.position + itemRoot.rotation * localPosition,
+                itemRoot.rotation * localRotation);
+            NormalizeWorldScale(instance.transform);
 
             HandGrabPose existing = ItemGripPoses.Find(
                 _target.transform, kind, ItemHandRig.AuthoredHandIsRight);
@@ -471,6 +478,30 @@ namespace VortexArena.Core.Editor
                     pose.JointRotations[i] = map.transform.localRotation;
                 }
             }
+        }
+
+        /// <summary>
+        /// El modelinin DÜNYA ölçeğini 1'e sabitler (ebeveynin ölçeğini tersler).
+        /// <para>
+        /// ⚠️ <b>Bu adım aracın işe yaramasının şartıdır.</b> <c>WPN_*</c> köklerinin ölçeği 1
+        /// değildir (bugün 0.8) ve el o kökün altında duruyor — ölçek tersellenmezse el de 0.8'e
+        /// iner. Oysa oyunda oyuncunun eli <b>gerçek boyuttadır</b>, silah ise 0.8'dir: yani ekranda
+        /// gördüğün "avuç kabzayı sarıyor mu" cevabı, gözlükte göreceğinden %25 farklı bir orandan
+        /// verilirdi. Aracın tek işi o soruyu doğru cevaplatmak olduğu için bu telafi kozmetik
+        /// değildir.
+        /// </para>
+        /// <para>Bake bundan etkilenmez (kavrama ofseti dünya metresi, parmak pozu yerel rotasyon —
+        /// ikisi de ölçekten bağımsız); etkilenen şey yalnız GÖZÜN gördüğüdür.</para>
+        /// </summary>
+        private static void NormalizeWorldScale(Transform node)
+        {
+            Transform parent = node.parent;
+            Vector3 parentScale = parent != null ? parent.lossyScale : Vector3.one;
+
+            node.localScale = new Vector3(
+                Mathf.Approximately(parentScale.x, 0f) ? 1f : 1f / parentScale.x,
+                Mathf.Approximately(parentScale.y, 0f) ? 1f : 1f / parentScale.y,
+                Mathf.Approximately(parentScale.z, 0f) ? 1f : 1f / parentScale.z);
         }
 
         private static Transform EnsureHandsRoot(Transform itemRoot)
