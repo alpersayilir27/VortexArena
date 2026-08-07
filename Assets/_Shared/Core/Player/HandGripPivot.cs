@@ -26,23 +26,28 @@ namespace VortexArena.Core.Player
     public static class HandGripPivot
     {
         /// <summary>
-        /// Kumanda anchor'ından SOL avuca (bilek noktasına) ofset — anchor uzayında, METRE.
+        /// Kumanda anchor'ından SOL avuca ofset — anchor uzayında, METRE. <b>SIFIRDIR:</b> avuç,
+        /// kumanda anchor'ının ta kendisi sayılır.
         /// <para>
-        /// ⚠️ Bu değer <b>ERGONOMİK TAHMİNDİR, ölçülmüş değildir</b> (aynı uyarı
-        /// <see cref="HandGripConvention.LeftAnchorFingerDirection"/> ailesinde de var). Silah elin
-        /// içinden geçiyor ya da avuçtan kopuk duruyorsa düzeltilecek yer BURASIDIR.
+        /// ⚠️ <b>Buraya tahmin edilmiş bir sayı YAZILMAZ.</b> Burada duran değer ölçülmemiş bir
+        /// ergonomi tahminiydi ve iki zarar veriyordu: (1) silahın yerini kumandanın gerçek
+        /// pozundan koparıyor, yani "silah tam elimde durmuyor" şikâyetine ikinci, gizli bir terim
+        /// ekliyordu; (2) altı silahın kavrama verisi zaten bu ofsetin ÜSTÜNE ayarlandığı için iki
+        /// ayrı düğme aynı şeyi ayarlıyordu ve hangisinin bozuk olduğu ayırt edilemiyordu.
+        /// Silahın elde nerede durduğu tek yerden ayarlanır: <c>WD_*.asset</c>'teki
+        /// <c>primaryGripPosition/Euler</c> (Kavrama Pozu Stüdyosu).
         /// </para>
         /// <para>
-        /// <b>Nasıl bulunur:</b> başlıkta bir kez <see cref="HandGripCalibrationProbe"/> çalıştırılır;
-        /// prob bileği anchor uzayında örnekleyip doğrudan buraya yapıştırılabilir iki satır basar.
-        /// Tahmin ile ölçüm arasındaki fark birkaç santimdir ama VR'da gözle görülür.
+        /// Gerçekten ölçülmüş bir bilek ofseti gerekirse (<see cref="HandGripCalibrationProbe"/>
+        /// başlıkta çalıştırılıp okunur) yeri yine burasıdır — sınıf tam bu yüzden duruyor.
+        /// Kimlik dönüşümün arkasında bir kapı bırakmak <c>ArenaSpace</c> ile aynı desendir.
         /// </para>
         /// </summary>
-        public static readonly Vector3 LeftPalmOffset = new Vector3(0f, -0.03f, 0.02f);
+        public static readonly Vector3 LeftPalmOffset = Vector3.zero;
 
-        /// <summary>Kumanda anchor'ından SAĞ avuca ofset — gerekçe ve ölçüm yolu
+        /// <summary>Kumanda anchor'ından SAĞ avuca ofset — gerekçe
         /// <see cref="LeftPalmOffset"/>'te.</summary>
-        public static readonly Vector3 RightPalmOffset = new Vector3(0f, -0.03f, 0.02f);
+        public static readonly Vector3 RightPalmOffset = Vector3.zero;
 
         /// <summary>El başına avuç ofseti (anchor uzayı, metre).</summary>
         public static Vector3 PalmOffset(bool rightHand)
