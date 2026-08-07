@@ -319,20 +319,6 @@ namespace VortexArena.Core.Player
         private Collider[] _defaultHitColliders;
         private Collider[] _redHitColliders;
 
-        /// <summary>Çizilen elin kemik adı (Mixamo humanoid). İki gövde de aynı rig'den geliyor,
-        /// bu yüzden tek çift sabit yeter.</summary>
-        private const string LeftWristBoneName = "mixamorig:LeftHand";
-
-        /// <inheritdoc cref="LeftWristBoneName"/>
-        private const string RightWristBoneName = "mixamorig:RightHand";
-
-        private Transform _defaultWristL;
-        private Transform _defaultWristR;
-        private Transform _redWristL;
-        private Transform _redWristR;
-
-        /// <summary>Bilek çözülemedi uyarısı örnek başına bir kez.</summary>
-        private bool _wristWarned;
 
         // ⚠️ Hayalet materyal takası AKTİF gövdeye uygulanır, yani her gövdenin kendi özgün/hayalet
         // dizisi olmak zorunda: tek bir ikili tutulsaydı takım değişiminden sonra takas yanlış
@@ -368,7 +354,6 @@ namespace VortexArena.Core.Player
         private void Awake()
         {
             CacheHitColliders();
-            CacheWristBones();
 
             _itemCatalog = NetItemCatalog.Load();
 
@@ -1023,56 +1008,6 @@ namespace VortexArena.Core.Player
                 : System.Array.Empty<Collider>();
         }
 
-        /// <summary>
-        /// Her gövdenin ÇİZİLEN bileklerini bir kez çözer — elde tutulan eşyanın konumu buradan
-        /// gelir (§6.6).
-        /// <para>
-        /// ⚠️ <b>Neden vuruş kutularıyla aynı gerekçe:</b> iki gövdenin kol uzunlukları farklı,
-        /// yani aynı iskelet pozu iki modelde bileği İKİ AYRI dünya noktasına koyar. Tek set
-        /// paylaşılsaydı kırmızı takımın silahı sistematik olarak elinden kayardı.
-        /// </para>
-        /// <para>Ad araması bilinçli (<c>SkeletonPoseMirror</c> ile aynı desen): prefaba elle
-        /// yazılan bir kemik bağı model yeniden import edilince sessizce boşa düşer, ad ise
-        /// modelin kendi verisinde durur.</para>
-        /// </summary>
-        private void CacheWristBones()
-        {
-            Transform defaultRoot = character != null ? character.transform : transform;
-            _defaultWristL = FindBone(defaultRoot, LeftWristBoneName);
-            _defaultWristR = FindBone(defaultRoot, RightWristBoneName);
-
-            if (redBodyRoot != null)
-            {
-                _redWristL = FindBone(redBodyRoot.transform, LeftWristBoneName);
-                _redWristR = FindBone(redBodyRoot.transform, RightWristBoneName);
-            }
-        }
-
-        private static Transform FindBone(Transform root, string boneName)
-        {
-            Transform[] bones = root.GetComponentsInChildren<Transform>(true);
-            for (int i = 0; i < bones.Length; i++)
-            {
-                if (bones[i] != null && bones[i].name == boneName)
-                {
-                    return bones[i];
-                }
-            }
-
-            return null;
-        }
-
-        /// <summary>Çizilen gövdenin bileği; çözülemediyse <c>null</c>.</summary>
-        private Transform ResolveWrist(bool rightHand)
-        {
-            if (_useRedBody && _redWristL != null && _redWristR != null)
-            {
-                return rightHand ? _redWristR : _redWristL;
-            }
-
-            return rightHand ? _defaultWristR : _defaultWristL;
-        }
-
         private static Collider[] CollectHitColliders(Transform root)
         {
             RemoteHitBox[] boxes = root.GetComponentsInChildren<RemoteHitBox>(true);
@@ -1561,9 +1496,13 @@ namespace VortexArena.Core.Player
         /// Eşyaları ilgili elin avuç pozundan sürer (duruş telde gitmez, §6.6 — kanonik kavrama her
         /// istemcinin APK'sında).
         /// <para>
-        /// ⚠️ Avucun nereden geldiği <see cref="ResolvePalm"/>'de tanımlıdır ve <b>karışık</b>dır:
-        /// konum çizilen bilekten, dönüş telden. Kavrama matematiğinin girdisi yine tek bir
-        /// avuç pozudur — bu ayrım solvera hiç sızmaz.
+        /// ⚠️ <b>Kaynak KUMANDADIR, çizilen bilek DEĞİL</b> (§6.6). İkisi de denenebilir görünür ama
+        /// yön tektir: silah otorite, el takipçidir. Bileği kaynak yapmak iki şeyi birden bozar —
+        /// (1) sol/sağ simetrisi kaybolur, çünkü retarget edilmiş iki bilek kumandalarına göre
+        /// simetrik durmaz, oysa <c>primaryGrip</c> tek bir değerdir ve iki ele aynı uygulanır;
+        /// (2) silah, oyuncunun gerçekte nişan aldığı yerden kayar — atış ışını ham el pozundan
+        /// çıktığı için "gördüğüm silah" ile "merminin geldiği yer" ayrışır.
+        /// Elin silaha oturması <c>RemoteHandPoser</c>'ın işidir.
         /// </para>
         /// <para>
         /// <c>GRIP_LINKED</c> iken TEK örnek vardır ve iki elli çözümle sürülür: ana el
@@ -1578,8 +1517,8 @@ namespace VortexArena.Core.Player
         /// </summary>
         private void ApplyItemPoses(in Pose handLWorld, in Pose handRWorld)
         {
-            Pose palmL = ResolvePalm(handLWorld, false);
-            Pose palmR = ResolvePalm(handRWorld, true);
+            Pose palmL = HandGripPivot.Resolve(handLWorld, false);
+            Pose palmR = HandGripPivot.Resolve(handRWorld, true);
 
             if (_shownGripLinked)
             {
@@ -1604,70 +1543,6 @@ namespace VortexArena.Core.Player
             {
                 ApplyGrip(_itemInstanceR, palmR, _itemDefR, false, Vector3.zero);
             }
-        }
-
-        /// <summary>
-        /// Eşyanın tutunacağı avuç pozu: <b>konum ÇİZİLEN bilekten, dönüş TELDEN</b>.
-        /// <para>
-        /// ⚠️ <b>Konumun kaynağı neden telden gelen el pozu DEĞİL:</b> telde giden poz kumandanın
-        /// pozudur, çizilen el ise <b>body tracking'in</b> retarget edilmiş bileğidir — iki ayrı
-        /// sensör. Aralarındaki fark bir ayar hatası değil, projenin bilinçli kararının
-        /// kaçınılmaz sonucudur: gönderenin gövde ORANLARI kalibre edilmiyor
-        /// (<c>CharacterRetargeter.Calibrate()</c> hiç çağrılmaz, §10.8) — yani model, oyuncunun
-        /// gerçek kol uzunluğunu değil prefabınkini taşır. Kol uzadıkça (nişan alan oyuncu) modelin
-        /// eli kumandaya yetişemez ve fark AÇILIR; kol bükülüyken kapanır. Belirtisi tam da budur:
-        /// aynı oyuncu bazı duruşlarda silahı elinde, bazılarında havada tutuyor görünür. Aynı
-        /// sebep kırmızı takım gövdesi için de geçerlidir (ayrı FBX, ayrı kol uzunluğu).
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Dönüş yine telden gelir ve öyle kalmalı:</b> kavrama verisi
-        /// (<c>primaryGripEuler</c>) kumanda ekseninde yazıldı (<see cref="HandGripPivot"/>);
-        /// bileğin kendi ekseni humanoid eksendir ve oraya geçmek altı silahın kavrama pozunu bir
-        /// anda geçersiz kılardı. Bilek dönüşü zaten kumandayı takip ediyor — ayrışan şey
-        /// ERİŞİM, yönelim değil.
-        /// </para>
-        /// <para>Bilek çözülemezse (kapsül yolu, kemik adı değişmiş model) ham avuca düşülür ve
-        /// gövde ölçeği elle telafi edilir — o yolda çizilen eli veren başka bir kaynak yoktur.</para>
-        /// </summary>
-        private Pose ResolvePalm(in Pose handWorld, bool rightHand)
-        {
-            Pose palm = HandGripPivot.Resolve(handWorld, rightHand);
-
-            Transform wrist = ResolveWrist(rightHand);
-            if (wrist != null)
-            {
-                palm.position = wrist.position;
-                return palm;
-            }
-
-            WarnMissingWrist();
-            if (character != null)
-            {
-                palm.position = character.ScalePointAboutRoot(palm.position);
-            }
-
-            return palm;
-        }
-
-        /// <summary>
-        /// Bilek kemiği bulunamadı — örnek başına bir kez UYARI.
-        /// <para>Hata değil: kapsül yolunda (karaktersiz avatar) bu durum normaldir ve eşya yine
-        /// çizilir. Ama karakter bağlıyken bilek bulunamıyorsa model/rig değişmiş demektir ve
-        /// belirti "silah elde durmuyor" olur — sebebi tahmine bırakılmaz.</para>
-        /// </summary>
-        private void WarnMissingWrist()
-        {
-            if (_wristWarned || character == null)
-            {
-                return;
-            }
-
-            _wristWarned = true;
-            Debug.LogWarning(
-                $"[RemoteAvatar] Oyuncu {PlayerId}: '{LeftWristBoneName}'/'{RightWristBoneName}' " +
-                "kemikleri bulunamadı — elde tutulan eşya çizilen el yerine ham el pozundan " +
-                "sürülüyor ve silah elden kayabilir. Karakter modeli değiştiyse bu iki sabiti " +
-                "yeni rig'in kemik adlarıyla güncelle.", this);
         }
 
         /// <summary>Kavrama matematiğinin TEK uygulaması <see cref="ItemGripSolver"/>'dadır; burası
