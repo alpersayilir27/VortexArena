@@ -947,8 +947,10 @@ sözleşme yazma/okuma arasında sessiz sapma üretirdi),
 `set_calibration` yollar, operatör sıfırlayınca `ArenaCalibrator.Invalidate()` çağırır.
 ⚠️ Sıfırlamayı **`clear_calibration` komutundan** duyar ve **koşulsuz** uygular — yerelde hizalama
 olup olmadığına bakmaz, çünkü silinecek şeyin bir kısmı hizalama değildir (yarım kalmış sekans).
-Roster'daki `calibrated:false` ikinci savunma hattı olarak durur: hello'nun sıfırlamasını ve komutu
-iletmeyen eski bir sunucuyu yakalar),
+⚠️ **Roster'daki `calibrated:false` bir sıfırlama sinyali DEĞİLDİR ve hizalamayı sildirmez:** sunucu
+her `hello`'da o alanı sıfırladığı için (§10.6) değer her yeniden bağlanışta bir kez yayınlanır ve
+başlığın kendi yeniden bildirimiyle yarışır. Roster bu sınıfta yalnız **ayna**dır — bayrağı yazar,
+anchor'a dokunmaz),
 **`BodyScaleState`** (kalıcı tekil — gövde ölçüsünü **operatör düğmesiyle** alır ve `set_body_scale`
 ile bildirir, §10.8. Ölçüm: oyuncunun gözü (`centerEyeAnchor`) ile karakterin göz işaretçisi
 (`LocalBodyAvatar.EyeAnchor`) **aynı karede**, arena uzayında okunup oranlanır; ~0,5 sn örneklenip
@@ -2897,6 +2899,31 @@ konsoluna tek satır sebep yazar.
     Kural: bir şart *"şu kadar süre şunu yap"* biçimindeyse, o sürenin **nerede** geçtiği şartın
     parçasıdır — yasak durumda sayaç ilerlemez, sıfırlanır. Aynı soruyu her bekleme sayacına sor:
     *"bu süreyi oyuncunun bulunmaması gereken bir yerde doldurabilir mi?"*
+136. **Bir alanın telde `false` görünmesi "sıfırlandı" demek DEĞİLDİR — sıfırlama bir KOMUTTUR,
+    bir değer değil.** İstemci roster'daki `calibrated:false`'u operatörün sıfırlaması sayıp kayıtlı
+    `OVRSpatialAnchor`'ı siliyordu. Oysa sunucu aynı alanı her `hello`'da sıfırlıyor (§10.6):
+    sıradan bir ağ dalgalanması bile onu bir kez `false` yayınlıyor ve o yayın, başlığın kendi
+    yeniden bildirimiyle aynı sokette yarışıyor. Bedel **gecikmeli ve sessiz**: rig o an
+    taşınmadığı için oturum düzgün görünüyor, hata ancak bir sonraki `load_match`'te — geri
+    yüklenecek anchor kalmadığında — *"oyuncu herkese metrelerce kaymış görünüyor"* diye ortaya
+    çıkıyor. Üstelik yeniden bildirim sunucuyu "kalibreli" yaptığı için elle kalibrasyon kapısı da
+    kapanıyor, yani oyuncu kendi başına düzeltemiyor. Genel kural: **yıkıcı bir işlemi bir durum
+    alanının anlık DEĞERİNE bağlama, o işlemi isteyen KOMUTA bağla.** Değer birden çok sebepten o
+    hâle gelebilir (protokolün kendi sıfırlaması, yarış, yeniden bağlanma); komutta ise niyet
+    vardır. Ayırt edici soru: *"bu alanı `false` yapan tek şey, benim tetiklemek istediğim olay
+    mı?"* — hayırsa alan bir tetikleyici değil, yalnız bir aynadır.
+137. **Kökü ölçeklenen bir hiyerarşiyi, o hiyerarşinin DIŞINDAN sürülen bir şey takip edemez —
+    ölçek dönüşümü elle tekrarlanır.** Uzak avatarın boyu karakterin köküne yazılan üniform bir
+    ölçekle taşınıyor (`bodyScale`, §10.8); elde çizilen silah ise karakterin altında DEĞİL ayrı
+    bir kapta duruyor ve telden gelen **ham** el pozundan sürülüyor (bilinçli: silah gerçek boyunda
+    kalmalı ve atışın bildirildiği poz ham pozdur). İkisi ölçek `1` iken çakışıyor, ölçek saptığı
+    anda ayrılıyor: çizilen el `kök + ölçek × (ham − kök)` noktasına giderken silah ham pozda
+    kalıyor ve `1.3` ölçekte elin yarım metre uzağında havada duruyor. Belirti *"silah elde değil"*
+    olduğu için teşhis kavrama matematiğine gidiyor — oysa kavrama doğru, ayrılan şey **referans
+    noktası**. Genel kural: **bir dönüşümü (ölçek/ofset/hizalama) hiyerarşinin bir dalına
+    uygularken, aynı veriyi hiyerarşi dışından okuyan tüketicileri say.** Ölçeklenmemesi gereken şey
+    (silahın boyu) ile ölçeğe uyması gereken şey (silahın yeri) aynı kararın iki ayrı yarısıdır;
+    "ölçeklenmez" deyip ikisini birden dışarıda bırakmak ilkini korurken ikincisini bozar.
 
 ---
 

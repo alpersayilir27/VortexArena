@@ -577,8 +577,11 @@ namespace VortexArena.Core.Player
         /// yazdığı ölçekten sonra) — buradan doğrudan transform'a dokunulmaz.</para>
         /// <para>Kendiliğinden doğru davranan üç şey: kırmızı takım gövdesi ve hayalet, kaynağın
         /// <c>localScale</c>'ini zaten izliyor; vuruş kutuları kemiklerde olduğu için ölçekle
-        /// birlikte büyüyüp küçülüyor. Elde çizilen eşya <b>ölçeklenmez</b> — ham el pozundan
-        /// sürülüyor ve silah herkeste gerçek boyunda durmalı.</para>
+        /// birlikte büyüyüp küçülüyor.</para>
+        /// <para>⚠️ <b>Elde çizilen eşya bunların hiçbiri değildir</b> — karakterin altında
+        /// durmuyor, ham el pozundan sürülüyor. Silah gerçek boyunda kalır (<b>ölçeklenmez</b>) ama
+        /// <b>yeri</b> ölçeğe uymak zorundadır, yoksa gövde büyüdükçe elden ayrılır: dönüşüm
+        /// <see cref="ApplyItemPoses"/>'te yapılır.</para>
         /// </summary>
         public void SetBodyScale(float bodyScale)
         {
@@ -1127,8 +1130,17 @@ namespace VortexArena.Core.Player
                 ApplyBody(headWorld);
             }
 
-            UpdateFriendMarker(headWorld);
-            UpdateLabel(headWorld);
+            // §10.8: kafanın ÜSTÜNE asılan iki şey de çizilen kafayı takip etmeli. Ham poz
+            // kullanılsaydı 1.3 ölçekte etiket, gövdenin kafasının yarım metre altında yüzerdi —
+            // eşyayla aynı kusur (bu döngüde ham pozdan sürülen her şeyi kapsar).
+            Pose headDrawn = headWorld;
+            if (character != null)
+            {
+                headDrawn.position = character.ScalePointAboutRoot(headWorld.position);
+            }
+
+            UpdateFriendMarker(headDrawn);
+            UpdateLabel(headDrawn);
         }
 
         /// <summary>
@@ -1497,11 +1509,25 @@ namespace VortexArena.Core.Player
         /// <para>Eşya el KEMİĞİNİN çocuğu yapılmaz, dünya pozu yazılır: karakterli avatarda el
         /// kemiği IK'nın türettiği bir sonuçtur (kol hedefe yetişmeyebilir) ve eşyanın yeri telden
         /// gelen el pozudur — atışın bildirildiği poz da odur.</para>
+        /// <para>
+        /// ⚠️ <b>Ham avuç, gövde ölçeklendiyse ÇİZİLEN avuç değildir</b> (§10.8): ölçek karakterin
+        /// köküne yazılıyor, yani iskelet kök noktası etrafında büyüyor/küçülüyor. Eşya ham pozda
+        /// bırakılırsa gövdeden kopar ve silah elin yanında havada durur — dönüşüm
+        /// <see cref="ArenaNetCharacterBehaviour.ScalePointAboutRoot"/> ile burada yapılır.
+        /// ⚠️ Ölçeklenen <b>yalnız avucun yeri</b>dir; kavrama ofseti (avuç → eşya) metredir ve
+        /// dokunulmaz, yoksa silah da büyürdü.
+        /// </para>
         /// </summary>
         private void ApplyItemPoses(in Pose handLWorld, in Pose handRWorld)
         {
             Pose palmL = HandGripPivot.Resolve(handLWorld, false);
             Pose palmR = HandGripPivot.Resolve(handRWorld, true);
+
+            if (character != null)
+            {
+                palmL.position = character.ScalePointAboutRoot(palmL.position);
+                palmR.position = character.ScalePointAboutRoot(palmR.position);
+            }
 
             if (_shownGripLinked)
             {

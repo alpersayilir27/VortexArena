@@ -15,16 +15,18 @@ namespace VortexArena.Core.Arena
     /// </para>
     /// <para>
     /// İki yön: (1) <see cref="ArenaCalibrator.Calibrated"/> → <c>set_calibration</c> ile sunucuya
-    /// "hizalandım" denir; (2) sunucu sıfırlayınca <see cref="ArenaCalibrator.Invalidate"/>
-    /// çağrılır — hizalama fiilen bozuktur, kayıtlı anchor da silinmelidir (yoksa sonraki
-    /// <c>load_match</c> bozuk hizalamayı sessizce geri yükler).
+    /// "hizalandım" denir; (2) operatör sıfırlayınca <c>clear_calibration</c> komutu gelir ve
+    /// <see cref="ArenaCalibrator.Invalidate"/> çağrılır — hizalama fiilen bozuktur, kayıtlı anchor
+    /// da silinmelidir (yoksa sonraki <c>load_match</c> bozuk hizalamayı sessizce geri yükler).
+    /// Komut <b>koşulsuzdur</b>: operatör hangi aşamadaki oyuncuya basarsa bassın, başlık yarım
+    /// kalmış sekans dahil her şeyi siler (§5.3).
     /// </para>
     /// <para>
-    /// İkinci yönün <b>asıl kapısı</b> <c>clear_calibration</c> komutudur (§5.3) ve
-    /// <b>koşulsuzdur</b>: operatör hangi aşamadaki oyuncuya basarsa bassın, başlık yarım kalmış
-    /// sekans dahil her şeyi siler. Roster'daki <c>calibrated:false</c> ikinci savunma hattıdır —
-    /// tek başına yeterli değildir, çünkü yarım kalmış bir kalibrasyonda o alan <b>zaten</b>
-    /// <c>false</c>'tur ve sıfırlamanın orada görünür bir deltası yoktur (§10.6).
+    /// ⚠️ <b>Silmenin TEK kapısı o komuttur.</b> Roster'daki <c>calibrated:false</c> bir sıfırlama
+    /// SİNYALİ DEĞİLDİR ve öyle okunmaz: sunucu her <c>hello</c>'da o alanı sıfırlıyor (§10.6), yani
+    /// değer her yeniden bağlanışta — sıradan bir ağ dalgalanmasında bile — bir kez <c>false</c>
+    /// yayınlanıyor. Ona bakıp hizalama silinseydi kopup dönen başlık <b>kayıtlı anchor'ını
+    /// kaybederdi</b>. Roster bu sınıfta yalnız <b>ayna</b>dır (<see cref="ApplyServerState"/>).
     /// </para>
     /// <para>
     /// ⚠️ <b>Hiç bağlanılmamışsa kapı AÇIKTIR</b> (<see cref="IsCalibrated"/> = true,
@@ -215,28 +217,28 @@ namespace VortexArena.Core.Arena
             }
         }
 
+        /// <summary>
+        /// Roster'daki değeri yerel aynaya yazar — <b>yalnız bayrak</b>.
+        /// <para>
+        /// ⚠️ <b>Buradan hizalama SİLİNMEZ</b> (<see cref="ArenaCalibrator.Invalidate"/> çağrılmaz,
+        /// <see cref="_localCalibrated"/> düşürülmez). Roster'ın <c>calibrated:false</c> taşıması
+        /// "operatör sıfırladı" demek değildir: sunucu her <c>hello</c>'da alanı sıfırladığı için
+        /// (§10.6) o değer <b>her yeniden bağlanışta</b> bir kez yayınlanıyor ve
+        /// <see cref="HandleConnected"/>'in yeniden bildirimi ile aynı sokette yarışıyor.
+        /// </para>
+        /// <para>
+        /// Silmeyi buraya bağlamanın bedeli sessizdir ve gecikmelidir: rig o an TAŞINMADIĞI için
+        /// oturum düzgün görünür, ama kayıtlı <c>OVRSpatialAnchor</c> gitmiştir — sonraki
+        /// <c>load_match</c>'te geri yüklenecek hizalama kalmaz ve oyuncu <b>herkese metrelerce
+        /// kaymış</b> çizilir. Üstelik yeniden bildirim sunucuyu "kalibreli" yaptığı için
+        /// <see cref="ManualAllowed"/> de kapanır: oyuncu kendi başına düzeltemez.
+        /// </para>
+        /// <para>Sıfırlamanın tek kapısı <c>clear_calibration</c>'dır
+        /// (<see cref="HandleClearCalibration"/>): operatörün niyeti orada açıkça geliyor, burada
+        /// yalnız bir alanın anlık değeri var.</para>
+        /// </summary>
         private void ApplyServerState(bool calibrated, string source)
         {
-            // Sunucu sıfırladı ama yerelde hizalama duruyor → hizalama fiilen bozuktur,
-            // işaretçileri gizle ve KAYITLI ANCHOR'I SİL. Anchor'ı bırakmak, sonraki load_match'te
-            // bozuk hizalamanın geri yüklenmesi olurdu (§10.4). ⚠️ Rig TAŞINMAZ — free-roam kuralı.
-            //
-            // İKİNCİ savunma hattıdır: operatörün sıfırlaması zaten HandleClearCalibration'dan
-            // geçti (§5.3, koşulsuz). Burası roster'ın başka bir yoldan `false` taşıdığı durumları
-            // yakalar — hello'nun sıfırlaması ya da komutu iletmeyen eski bir sunucu.
-            if (!calibrated && _localCalibrated)
-            {
-                _localCalibrated = false;
-                _source = "";
-                ArenaCalibrator calibrator = FindFirstObjectByType<ArenaCalibrator>();
-                if (calibrator != null)
-                {
-                    calibrator.Invalidate();
-                }
-
-                Debug.Log("[CalibrationState] Sunucu kalibrasyonu sıfırladı — yeniden kalibre edin (A basılıyken B×2).");
-            }
-
             if (_serverCalibrated == calibrated)
             {
                 return;
