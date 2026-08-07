@@ -428,7 +428,7 @@ MonoBehaviour:
     - {x: 0.53224766, y: 0.038174573, z: -0.06126136, w: 0.8435059}
     - {x: 0.3662601, y: -0.04444328, z: 0.01386879, w: 0.9293471}
   _ghostProvider: {fileID: 0}
-  _handGhostProvider: {fileID: 0}
+  _handGhostProvider: {fileID: 11400000, guid: 9b9df4f150839de48af887d742aabf53, type: 2}
   _ovrOffsetMode: 0
 --- !u!1 &3554677984174475816
 GameObject:
@@ -5511,7 +5511,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 6375335264808643866}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 90}
 --- !u!114 &6568146494891931385
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5574,7 +5574,7 @@ MonoBehaviour:
     - {x: 0.5322477, y: -0.038174573, z: 0.061261356, w: 0.8435059}
     - {x: 0.36626014, y: 0.044443283, z: -0.01386879, w: 0.9293471}
   _ghostProvider: {fileID: 0}
-  _handGhostProvider: {fileID: 0}
+  _handGhostProvider: {fileID: 11400000, guid: 9b9df4f150839de48af887d742aabf53, type: 2}
   _ovrOffsetMode: 0
 --- !u!1 &8850315422331504695
 GameObject:
@@ -5670,7 +5670,7 @@ MonoBehaviour:
     - {x: 0.4472472, y: -0.031904962, z: 0.06485519, w: 0.89148515}
     - {x: 0.37839127, y: 0.044145208, z: -0.01449375, w: 0.9244789}
   _ghostProvider: {fileID: 0}
-  _handGhostProvider: {fileID: 0}
+  _handGhostProvider: {fileID: 11400000, guid: 9b9df4f150839de48af887d742aabf53, type: 2}
   _ovrOffsetMode: 0
 --- !u!1 &8934774287239012366
 GameObject:
@@ -10602,7 +10602,7 @@ MonoBehaviour:
     - {x: 0.4472472, y: 0.031904962, z: -0.06485517, w: 0.89148515}
     - {x: 0.37839127, y: -0.04414521, z: 0.014493751, w: 0.9244789}
   _ghostProvider: {fileID: 0}
-  _handGhostProvider: {fileID: 0}
+  _handGhostProvider: {fileID: 11400000, guid: 9b9df4f150839de48af887d742aabf53, type: 2}
   _ovrOffsetMode: 0
 --- !u!1001 &2042916927362574390
 PrefabInstance:
