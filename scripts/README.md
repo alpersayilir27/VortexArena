@@ -74,6 +74,34 @@ söyler).
   betik bunu adıyla söyler — dışlamalar merkezden tanımlanır, IT'ye danışılır. Defender pasif
   kipteyse (üçüncü parti antivirüs varsa) betik uyarır: kayıtlar yazılır ama build süresine etkisi
   olmaz, asıl dışlamalar o ürünün arayüzünden tanımlanmalıdır.
+### ⚠️ Dışlamalar Smart App Control'ü susturmaz
+
+**Smart App Control** (Akıllı Uygulama Denetimi) bir antivirüs ayarı değil, bir **Code Integrity
+politikasıdır**: Defender'ın dışlama listesini hiç okumaz ve açıkken AV dışlamaları da dikkate
+alınmaz. Yani bu betik hatasız koşsa bile SAC açık bir makinede ne uyarılar biter ne de hız
+kazancı gelir.
+
+Unity'de somut hâli: **Burst**, `Library/BurstCache/JIT/` altına çalışma anında **imzasız native
+DLL** üretir ve onu yükler. SAC bu yüklemeyi engeller — `CodeIntegrity` olayı **3077** (audit
+değil, blok), yanında `3118 Smart App Control Block Details`. `git pull` kodu/paketi değiştirdiğinde
+Burst yeniden derler, yeni imzasız DLL doğar ve uyarı tekrarlar. Aynı duvar kendi imzasız
+çıktılarımız için de geçerlidir (`deploy\admin\VortexArena.exe`, sunucu, launcher).
+
+Betik bu durumu açılışta **kendisi uyarır**. Elle bakmak için:
+
+```powershell
+(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy').VerifiedAndReputablePolicyState
+:: 0 = kapalı · 1 = zorunlu · 2 = değerlendirme
+Get-WinEvent -LogName Microsoft-Windows-CodeIntegrity/Operational -MaxEvents 20
+```
+
+Kapatma: *Windows Güvenliği → Uygulama ve tarayıcı denetimi → Akıllı Uygulama Denetimi → Kapalı.*
+⚠️ **Tek yönlü kapı:** SAC bir kez kapatılınca Windows yeniden kurulmadan geri açılamaz.
+
+> Teşhis sırası, bir uyarıyı "antivirüs" sanmadan önce: `Get-MpThreatDetection` **boşsa** olay AV
+> değildir — `CodeIntegrity/Operational` log'una bak. Gerçek zamanlı korumayı kapatmak uyarıyı
+> susturur ama sebebi gizler ve makineyi savunmasız bırakır.
+
 - **Daha temiz alternatif: Dev Drive.** Windows 11 22H2+ ile gelen ReFS tabanlı birim, "performans
   modu"nda Defender'ı asenkron çalıştırır — dışlama listesi tutmaya gerek kalmaz.
   *Ayarlar → Sistem → Depolama → Gelişmiş depolama ayarları → Diskler ve birimler → Dev Drive
