@@ -40,11 +40,38 @@ hem bağlamı şişirir hem de sessizce yanlış okunur.
   `editor_status` ile teyit et, sonra in.
 - Birden çok Unity örneği açıksa hedefi `set_active_instance` ile sabitle.
 
+## ⚠️ Shell SON basamaktır — MCP ya da yerleşik araç varken açılmaz
+
+Ölçüt tek cümle: **aynı işi bir MCP tool'u ya da yerleşik bir araç yapabiliyorsa shell
+ÇALIŞTIRILMAZ.** Shell yalnız başka kapısı OLMAYAN işler içindir.
+
+| Yapılacak iş | Doğru kapı | Shell'de YAPMA |
+|---|---|---|
+| Dosya okuma | `Read` | `cat`, `sed -n`, `Get-Content` |
+| Dosya arama (ada göre) | `Glob` | `find`, `ls -R`, `Get-ChildItem -Recurse` |
+| İçerik arama | `Grep` | `grep`, `rg`, `Select-String` |
+| Dosya yazma/düzenleme | `Write` / `Edit` | `echo >`, `sed -i`, `Set-Content` |
+| Prefab/sahne/asset içeriği, bileşen alanları, hiyerarşi | `mcp__UnityMCP__manage_prefabs` · `manage_gameobject` · `manage_asset` · `manage_scriptable_object` | prefab/asset **YAML'ını grep'lemek** |
+| Konsol, seçim, editör durumu, menü öğesi | `mcp__unity-editor-mcp__*` | — |
+| "Bu nasıl çalışıyor / nerede" | `mcp__auggie__codebase-retrieval` | — |
+
+**Shell'in meşru kaldığı yerler:** `git` (MCP karşılığı yok), `adb`, `dotnet`, MCP'nin gerçekten
+düştüğü durumlarda `unity cmd …`.
+
+- ⚠️ **Prefab/asset YAML'ını grep'lemek özellikle yanlıştır:** dosya biçimi (fileID referansları,
+  gömülü prefab örnekleri, stripped transform'lar) sorunun cevabını taşımaz; MCP çözülmüş
+  hiyerarşiyi ve alan değerlerini döner. YAML okumak "hızlı teyit" değil, sessizce yanlış okumanın
+  en olası yoludur.
+- ⚠️ **Geçici python/node betiği YAZILMAZ.** Bir MCP tool'u aynı işi yapıyorsa betik yazmak yalnız
+  ikinci bir (hatalı olabilecek) uygulama üretir.
+- ⚠️ **"Tek satır, shell daha hızlı" bir gerekçe DEĞİLDİR.**
+
 ## Kapsam sınırı
 
-- Bu kural **Unity editörü** işleri içindir. Repo dosyalarını okumak/yazmak/aramak için MCP değil
-  yerleşik araçlar kullanılır (Read/Write/Edit/Grep/Glob); "bu nasıl çalışıyor / nerede" sorularında
-  [[auggie-first-search]].
+- Repo dosyalarını okumak/yazmak/aramak için MCP değil yerleşik araçlar kullanılır
+  (Read/Write/Edit/Grep/Glob); "bu nasıl çalışıyor / nerede" sorularında [[auggie-first-search]].
+  Unity'nin **kendi** verisi (prefab, sahne, asset, bileşen alanı) bunun istisnasıdır: orada kapı
+  MCP'dir, dosyanın kendisi değil.
 - MCP ucuz diye her adımda derleme/konsol alma — toplu doğrulama kuralı aynen geçerli
   ([[batch-build-verification]]).
 - Hangi komut ne yapar, kayıtlar nasıl kurulur, hangi tuzakları var: [[unity-cli]]. Buradaki kural
