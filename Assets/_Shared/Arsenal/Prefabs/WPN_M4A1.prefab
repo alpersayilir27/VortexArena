@@ -398,52 +398,6 @@ MonoBehaviour:
   _ghostProvider: {fileID: 0}
   _handGhostProvider: {fileID: 0}
   _ovrOffsetMode: 0
---- !u!1 &3365654606287766988
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 6964235224133641886}
-  - component: {fileID: 5595115280259052841}
-  m_Layer: 0
-  m_Name: GripSocket_Secondary
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &6964235224133641886
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3365654606287766988}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.071, z: 0.357}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 5791851228620730873}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &5595115280259052841
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3365654606287766988}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ada73ea645d67954bb2a8527e7b8c47b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.GripSocketMarker
-  kind: 1
-  radius: 0.12
 --- !u!1 &4483198934098535525
 GameObject:
   m_ObjectHideFlags: 0
@@ -10650,52 +10604,6 @@ MonoBehaviour:
   _ghostProvider: {fileID: 0}
   _handGhostProvider: {fileID: 0}
   _ovrOffsetMode: 0
---- !u!1 &8160342402672331578
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 4569216788416803723}
-  - component: {fileID: 6665427931092653458}
-  m_Layer: 0
-  m_Name: GripSocket_Primary
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &4569216788416803723
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8160342402672331578}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -0.0018, z: -0.0199}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 5791851228620730873}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &6665427931092653458
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8160342402672331578}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ada73ea645d67954bb2a8527e7b8c47b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.GripSocketMarker
-  kind: 0
-  radius: 0.12
 --- !u!1001 &2209581497495783370
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -10816,12 +10724,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 3557320247793090291, guid: 34d9918439c82da478947f5832aed8b9, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3561297152610754822}
-    - targetCorrespondingSourceObject: {fileID: 3557320247793090291, guid: 34d9918439c82da478947f5832aed8b9, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 4569216788416803723}
-    - targetCorrespondingSourceObject: {fileID: 3557320247793090291, guid: 34d9918439c82da478947f5832aed8b9, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 6964235224133641886}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 34d9918439c82da478947f5832aed8b9, type: 3}
 --- !u!4 &5791851228620730873 stripped

@@ -1434,6 +1434,12 @@ namespace VortexArena.Core.Editor
         /// kaldırıldığı için düğümlerde artık eksik script duruyor ve tipten gitmek onları hiç
         /// bulamazdı.
         /// </para>
+        /// <para>
+        /// ⚠️ Arama <b>TÜM ALT AĞACI</b> gezer, kökün doğrudan çocuklarına bakmakla yetinmez: eski
+        /// araç işaretçiyi silahın köküne koyuyordu ama onları elle model dalına
+        /// (<c>Model/&lt;pack&gt;/…</c>) taşımak serbestti ve gerçekte taşınmışlardı. Yalnız köke
+        /// bakan bir temizlik hiçbir şey bulamaz, üstelik <b>sessizce</b> başarılı görünürdü.
+        /// </para>
         /// </summary>
         private static void RemoveLegacySocketNodes(GameObject root, string ctx)
         {
@@ -1443,16 +1449,22 @@ namespace VortexArena.Core.Editor
 
         private static void RemoveLegacySocketNode(GameObject root, string nodeName, string ctx)
         {
-            Transform node = root.transform.Find(nodeName);
-            if (node == null)
+            // Ters gezinti: aynı adda birden çok düğüm kalmış olabilir (eski araç ikincisini
+            // üretmezdi ama elle kopyalanmış olabilir) ve hepsi gitmeli.
+            Transform[] all = root.GetComponentsInChildren<Transform>(true);
+            for (int i = all.Length - 1; i >= 0; i--)
             {
-                return;
-            }
+                Transform node = all[i];
+                if (node == null || node.name != nodeName)
+                {
+                    continue;
+                }
 
-            Object.DestroyImmediate(node.gameObject, true);
-            _legacySocketsRemoved++;
-            Debug.Log(Log + ctx + ": eski '" + nodeName + "' işaretçisi silindi — kavrama artık el " +
-                      "modelinden bake ediliyor (Kavrama Pozu Stüdyosu).");
+                Object.DestroyImmediate(node.gameObject, true);
+                _legacySocketsRemoved++;
+                Debug.Log(Log + ctx + ": eski '" + nodeName + "' işaretçisi silindi — kavrama artık " +
+                          "el modelinden bake ediliyor (Kavrama Pozu Stüdyosu).");
+            }
         }
 
         /// <summary>
