@@ -40,6 +40,11 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 - **Projeyi ajan DERLEMEZ.** Derleme/build/test/Play kullanıcıya aittir — ajan işi bitirir, neyin
   doğrulanması gerektiğini yazar ve durur; kullanıcı açıkça istemedikçe `recompile`/`build`/
   `run_tests`/`dotnet build` çağrılmaz. → `derleme-kullaniciya-aittir.md`
+- **Shell SON basamaktır.** Aynı işi bir MCP tool'u ya da yerleşik araç (Read/Write/Edit/Grep/Glob)
+  yapabiliyorsa `Bash`/`PowerShell` çalıştırılmaz; Unity'nin kendi verisi (prefab, sahne, asset,
+  bileşen alanı) `mcp__UnityMCP__manage_*` ile okunur — **YAML grep'lenmez**, geçici python betiği
+  yazılmaz. Shell yalnız karşılığı olmayan işler için (`git`, `adb`, `dotnet`) ve MCP gerçekten
+  düştüğünde. → `unity-mcp-first.md`
 - Doğrulama batch'lenir (`batch-build-verification.md`), istisna geldiğinde editör işi Unity CLI
   ile yapılır (`unity-cli.md`).
 
