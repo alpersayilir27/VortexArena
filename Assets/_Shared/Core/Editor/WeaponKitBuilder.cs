@@ -454,6 +454,10 @@ namespace VortexArena.Core.Editor
             SetNumber(so, "firePitchBase", spec.PitchBase, ctx);
             SetNumber(so, "firePitchJitter", PitchJitter, ctx);
             SetNumber(so, "fireVolume", spec.Volume, ctx);
+            // ⚠️ hapticAmplitude / hapticDuration BİLEREK yazılmaz ve bu tabloya alınmaz: vuruş
+            // hissi gözlükle deneyerek ayarlanan bir değerdir, Inspector'da tutulur. Buraya bir
+            // satır eklemek, her koşuda o elle bulunmuş ayarı sessizce ezerdi. Yeni WD asset'i
+            // sınıftaki varsayılanlarla doğar (bkz. WeaponDefinition).
             // "prefab" alanı ADIM 5'te (WPN üretildikten sonra) bağlanır.
 
             so.ApplyModifiedPropertiesWithoutUndo();

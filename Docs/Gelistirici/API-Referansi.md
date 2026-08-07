@@ -58,6 +58,11 @@ Hepsi bağlantı yokken sessizce no-op'tur.
 **Hasar geçerlilik kuralı:** pozitif ve sonlu olmalı. `NaN`/`∞`/negatif hem burada hem sunucuda
 reddedilir (NaN'a düşen can bir daha 0'ın altına inemez → oyuncu ölümsüz kalırdı).
 
+**İsabet göstergesi hazır gelir:** `ReportHit` (dolayısıyla `ReportRaycastHit`/`ReportAreaHit`)
+vuruş noktasında bir X çizer (`HitMarker`) ve onu **yalnız vuran oyuncu görür** — kendi
+göstergeni kurma, aynı vuruşta iki X çizilir. Gösterge *bildirimin yapıldığını* söyler, hasarın
+uygulandığını değil (sunucu vuruşu reddedebilir: dost ateşi kapalı, faz `playing` değil).
+
 ---
 
 ## NetEvents
@@ -393,9 +398,8 @@ kill-feed, kendi öldürme/ölüm sayacın.
 | `COUNTDOWN_SECONDS` | `5` | Maç öncesi geri sayım |
 | `MATCH_END_SECONDS` | `999` | Maç sonu ekranının **emniyet** süresi — kazanan ekranını normalde operatörün seçimi kapatır |
 | `RESPAWN_DELAY` | `5` | Varsayılan canlanma gecikmesi (mod ezebilir) |
-| `REVIVE_HOLD_SECONDS` | `3` | "Sabit dur" canlanmasında bekleme |
+| `REVIVE_HOLD_SECONDS` | `5` | "Sabit dur" canlanmasında bekleme |
 | `REVIVE_HOLD_RADIUS` | `1` | Sabit durma toleransı (m) |
-| `REVIVE_GRACE` | `20` | Sunucunun zorla canlandırma emniyeti |
 | `POSE_RATE_HZ` / `SNAPSHOT_RATE_HZ` | `20` | Poz gönderim/yayın hızı |
 | `INTERP_DELAY_MS` | `100` | Uzak poz interpolasyon gecikmesi |
 | `PLAYER_ID_MAX` | `255` | `playerId` UDP'de `u8` |

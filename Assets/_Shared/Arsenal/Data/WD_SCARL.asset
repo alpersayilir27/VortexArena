@@ -52,3 +52,5 @@ MonoBehaviour:
   firePitchBase: 0.94
   firePitchJitter: 0.05
   fireVolume: 1
+  hapticAmplitude: 0.8
+  hapticDuration: 0.05

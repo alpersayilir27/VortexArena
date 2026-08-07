@@ -332,7 +332,10 @@ Fiziksel oyuncu **ışınlanamaz**. Bu yüzden respawn bir **konum değil, DURUM
 ölüm → respawn{delaySeconds} → ölüm ekranı, ateş yok, avatar hayalet (yarı saydam)
      → süre dolar VE MODUN CANLANMA ŞARTI sağlanır → revive_request (~1 sn'de bir tekrar)
      → sunucu doğrular → health_update{hp:100} → canlı
-     → talep 20 sn (REVIVE_GRACE) gelmezse sunucu ZORLA canlandırır (maç kilitlenmesin)
+
+operatör yolu:
+ölü satır → admin CAN düğmesi → revive_player{playerId} (playerId:0 = tüm ölüler)
+     → MatchDirector kapıları uygular → health_update{hp:100} → canlı
 ```
 
 Şart `ModeRules.Revive`'dan gelir (§3.9) ve istemcide `ModeRuntime.Revive` olarak okunur —
@@ -341,20 +344,34 @@ Fiziksel oyuncu **ışınlanamaz**. Bu yüzden respawn bir **konum değil, DURUM
 | `reviveAnchor` | Şart | Ölüm ekranı |
 |---|---|---|
 | `base` (varsayılan, TDM) | Oyuncu bir **taban bölgesine** (`BaseZone` — arenadaki kırmızı/mavi şerit) fiziken girer | "Tabanına dön ve canlan" |
-| `standstill` | Ölüm anındaki HMD çapasından `REVIVE_HOLD_RADIUS` (1 m) içinde `REVIVE_HOLD_SECONDS` (3 sn) kesintisiz durur | "Canlanmak için sabit dur — N sn" |
-| `none` (turnuva) | **Canlanma yok.** İstemci `revive_request` hiç göndermez, sunucu gelirse reddeder ve `REVIVE_GRACE` çalışmaz. Ölü oyuncuyu yalnız modun başlattığı yeni tur canlandırır — ve yeni tur **herkes tabanına dönene kadar** açılmaz, yani ölü kalma süresinin üst sınırı yoktur (§3.8.2) | "Elendin — takımın turu bitirene kadar bekle" |
+| `standstill` | Ölüm anındaki HMD çapasından `REVIVE_HOLD_RADIUS` (1 m) içinde `REVIVE_HOLD_SECONDS` (5 sn) kesintisiz durur. ⚠️ İç engelin içinde sayaç **ilerlemez**, süre engelden çıkınca sıfırdan başlar | "Canlanmak için sabit dur — N sn" · engeldeyken "Engelden çık ve canlan" |
+| `none` (turnuva) | **Canlanma yok.** İstemci `revive_request` hiç göndermez, sunucu gelirse reddeder. Ölü oyuncuyu modun başlattığı yeni tur canlandırır — ve yeni tur **herkes tabanına dönene kadar** açılmaz, yani ölü kalma süresinin üst sınırı yoktur (§3.8.2). Bu şartı yalnız operatörün elle canlandırması geçer (aşağıda) | "Elendin — takımın turu bitirene kadar bekle" |
 
-⚠️ **Bir canlanma yasağı, canlandırmanın İKİ yolunu birden kapatmadıkça yoktur.** Yollar ayrıdır:
-talep tabanlı (`revive_request` → `HandleReviveRequestAsync`) ve zamanlayıcı tabanlı
-(`REVIVE_GRACE` → `TickLiveLocked`). Yalnız birini kapatmak oyuncuyu 20 sn sonra yine canlandırır.
-Bugün iki yasak var ve ikisi de her iki yolu kapatıyor: **kalibrasyon** (§3.11) ve
-**`reviveAnchor:"none"`**.
+⚠️ **Canlandırmanın İKİ yolu vardır, üçüncüsü yoktur:** oyuncunun `revive_request`'i
+(`MatchDirector.HandleReviveRequestAsync`) ve operatörün `revive_player` komutu
+(`MatchDirector.HandleAdminReviveAsync`, admin satırındaki **CAN** düğmesi). Sunucunun zamanlayıcı
+tabanlı bir canlandırması, yani kendiliğinden işleyen bir emniyet ağı yoktur: şartı sağlamayan
+oyuncu kendiliğinden geri gelmez — bu bilinçli bir üründür, canlanmak oyuncunun kendi işidir;
+takılan oyuncuyu kurtarmak da operatörün işidir.
+
+| Yasak | `revive_request` | Operatörün `revive_player`'ı |
+|---|---|---|
+| **Kalibrasyon** (§3.11) | Uygulanır | **Uygulanır** — kalibresiz oyuncu ateş edemez ve vurulamaz; canlandırmak onu savaşa döndürmez, yalnız tabloda "canlı" gösterir |
+| **Engelin içinde olmak** (engel ihlali, `Docs/ArenaNet-Protokol.md`) | Uygulanır (tavanlı: `OBSTACLE_REVIVE_BLOCK_SECONDS`) | **Uygulanır** — engelin içinde canlanan kör kalır ve tolerans dolar dolmaz yeniden ölür, düğme bir ölüm döngüsü üretirdi |
+| **`reviveAnchor:"none"`** | Uygulanır | **GEÇİLİR** — düğmenin varlık sebebi budur; ⚠️ turnuvada tur sonucunu değiştirir (tur, bir takımın tamamı ölünce biter) ve bu operatörün bilinçli kararıdır |
+| **Canlanma gecikmesi** (`respawnDelay`) | Uygulanır | **GEÇİLİR** — operatör beklemez |
+
+⚠️ **Bir yasak, o durumu değiştiren tüm yolları kapatmadıkça yoktur.** Kalibrasyon ve engel
+yasakları bu yüzden iki yolda birden tekrarlanır; yalnız birine konsalardı tek bir operatör tuşu
+ikisini de delerdi. Üçüncü bir canlandırma yolu eklenirse yasaklar orada da uygulanır.
+Operatör komutu ayrıca faz `playing` ister (başka fazda ölü oyuncu kavramı yoktur), canlandırmayı
+`RevivePlayerLocked` ile yapar ve **skor defterine/`deaths` sayacına dokunmaz**. Reddedilen komut
+istemciye ret göndermez, sunucu konsoluna gerekçesiyle tek satır yazar.
 
 **Taban bölgesi eşleşmesi:** bölge oyuncuya açıktır eğer takımı aynıysa, bölge `Neutral` ise
 (herkese açık joker) ya da oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge
 varsa **herhangi birine** girmek yeter. Kapalı bileşen açık sayılmaz — `BaseZone.Update` koşmadığı
-için `IsPlayerInside` donar, açık sayılsaydı oyuncu bölgeye girse de yalnız `REVIVE_GRACE`'i
-beklerdi.
+için `IsPlayerInside` donar, açık sayılsaydı oyuncu bölgeye girse de hiç canlanamazdı.
 
 ⚠️ **Şartı SUNUCU doğrulamaz** (§10.3 felsefesi: hakemlik değil defter tutar) — karar istemcinindir,
 sunucu faz + ölü + gecikme kontrolüyle yetinir. Şart ölçülemiyorsa (sahnede açık taban bölgesi yok,
@@ -573,7 +590,7 @@ anahtarı (operatör)                          │
 |---|---|---|---|
 | `Teams` | `TwoTeams` | **`None`** | `TwoTeams` |
 | `Scoring` | `Team` | **`Player`** | `Team` (skor = **kazanılan tur**) |
-| `Revive` | `OwnBase` | **`StandStill`** (3 sn / 1 m) | **`None`** (tur içinde canlanma yok) |
+| `Revive` | `OwnBase` | **`StandStill`** (5 sn / 1 m) | **`None`** (tur içinde canlanma yok) |
 | `Weapons` | `WeaponCanvas` (çerçeveden seçilir, kalıcı) | **`RandomGrant`** (grip'e basınca elde rastgele silah) | `WeaponCanvas` (şarjör/yedek şarjör işlesin diye) |
 | `RespawnDelay` | `5` | **`0`** (bekleme yerine sabit durma şartı) | **`0`** (canlanma yok, sayaç göstermek yalan olurdu) |
 | Süre / limit | 300 sn / 30 | 300 sn / 20 | 120 sn (**turun** süresi) / 4 tur |
@@ -811,13 +828,13 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 | `AdminPlayerMarker` | Tek işaretçinin **görünümü** (prefab: `Resources/UI/AdminPlayerMarker`) — halka canvas'ı, halka görseli, ad etiketi. Seçim görseli iki ayrı sprite alanından gelir (`ringNormal`/`ringSelected`): ⚠️ halka sprite'ı çalışırken **ÜRETİLMEZ** — üretilseydi sanatçının prefabta seçtiği görsel her seçim değişiminde ezilirdi. ⚠️ **Bugün ikisi de aynı görseldir** (`Ring_16`), yani seçim yalnız **boyut** artışıyla anlatılıyor (`SelectedScale`); prefab öncesi kod ek olarak halkayı kalınlaştırıyordu. Kalınlık ipucu isteniyorsa `ringSelected`'a daha kalın bir halka sprite'ı konur — kod değişikliği gerekmez |
 | `AdminPlayerMarkers` | Oyuncu başına **zeminde halka + altında ad etiketi** (kuş bakışı isteği). İşaretçiyi `AdminPlayerMarker` prefabından örnekler; konum/renk/seçim bu sınıfta kalır. Halka baş pozunun x/z'sinden arena zeminine indirilir; etiket kameraya döner ve kameranın yukarı vektörünün tersine kaydırılarak her kipte "dairenin altında" okunur. `RemoteAvatar`'a dokunmaz |
 | `AdminHud` | **Kalıcı** ekran-uzayı HUD'ı (`sortingOrder = 4000`; hata ekranı 5000'de üstte kalır): üst orta takım skorları + **ortada istatistik chip'i** (faz/süre de gösterir), sol üst tercihler, sağ üst mod·harita + bağlantı/poz yaşı + **çoklu admin satırı** (kaç admin bağlı · son admin eylemi; tek admin varken boş kalır), yanlarda takım kolonları (**FFA'da tek kolon** — karar veriden gelir), alt orta kamera şeridi + seçili oyuncu, alt sağ ölüm akışı. **Görünüm prefabtan gelir** (`_Shared/App/Resources/UI/AdminHud.prefab`) — sınıfın kendisi yalnız veri bağlama/tazelemedir, yerleşim ve renk elle düzenlenir. Prefab **sahneye konmaz**, `AdminSpectator` onu `Resources.Load` ile yükleyip kendi altına örnekler (gözlemci kalıcı → arayüz de kalıcı, lobi ↔ arena geçişinde yeniden kurulmaz). ⚠️ Prefabtaki ögeler silinirse alan boşalır ve **hata vermeden sessizce çizilmez** |
-| `AdminPlayerRow` | Oyuncu satırı: takım şeridi, ad + `#id`, HP barı, `K/D · batarya · durum`, eylemler POV/**KAL**/TAKIM/KİMLİK/**AT**. `KAL` ve `AT` **iki adımlı onay** ister (oyuncuyu savaş dışı bırakan/atan eylem tek tıkla olmamalı). `KAL` hem gösterge hem düğmedir (`KAL` yeşil / `KAL !` kırmızı — sembol değil renk+ünlem, çünkü TMP varsayılan fontunda ✓/✗ garantisi yok) ve **yalnız sıfırlar** — geri açmayı gözlük yapar (§3.11); kalibresiz satırın kenarlığı kırmızıya döner. ⚠️ **Kalibresiz satırda da basılır:** kırmızı satır iki durumu birden gösterir (hiç kalibre olmamış / elle kalibrasyonun ortasında kalmış) ve düğme ikisini de aynı yere götürür — "zaten kalibresiz" diye elemek operatörü tam da sıfırlaması gereken oyuncudan koparır (§3.11). Satıra tıklamak seçer. **Görünüm prefabtan gelir** (`_Shared/App/Resources/UI/AdminPlayerRow.prefab`); `AdminHud` onu kolona örnekler ve havuzlar. Satır **yüksekliği prefabtan okunur** → sanatçı satırı büyütünce kolon yerleşimi kendiliğinden uyar. ⚠️ Düğmelerin `onClick`'i prefabta BOŞTUR ve doldurulmamalıdır: hedef oyuncu her `Bind` ile değişiyor, kalıcı bir inspector kaydı yanlış oyuncuya komut gönderir (ve iki adımlı onayı atlar) |
+| `AdminPlayerRow` | Oyuncu satırı: takım şeridi, ad + `#id`, HP barı, `K/D · batarya · durum`, eylemler POV/**KAL**/ÖLÇ/**CAN**/TAKIM/KİMLİK/**AT**. `KAL` ve `AT` **iki adımlı onay** ister (oyuncuyu savaş dışı bırakan/atan eylem tek tıkla olmamalı); ⚠️ **`CAN` tek adımlıdır ve onay istemez** — iki adımlı kilit oyuncuyu savaş dışı bırakan komutlar içindir, canlandırma tersidir: oyuncuyu savaşa geri sokar ve yanlışlıkla basılması geri alınabilir bir durumdur. `CAN` yalnız **rolü `player` olan ve ölü** satırda etkindir; `revive_player` gönderir (§3.7) — kalibresiz ya da engelin içindeki oyuncuda sunucu komutu reddeder, yani düğme basılır ama satır canlanmaz (gerekçe sunucu konsolundadır). `KAL` hem gösterge hem düğmedir (`KAL` yeşil / `KAL !` kırmızı — sembol değil renk+ünlem, çünkü TMP varsayılan fontunda ✓/✗ garantisi yok) ve **yalnız sıfırlar** — geri açmayı gözlük yapar (§3.11); kalibresiz satırın kenarlığı kırmızıya döner. ⚠️ **Kalibresiz satırda da basılır:** kırmızı satır iki durumu birden gösterir (hiç kalibre olmamış / elle kalibrasyonun ortasında kalmış) ve düğme ikisini de aynı yere götürür — "zaten kalibresiz" diye elemek operatörü tam da sıfırlaması gereken oyuncudan koparır (§3.11). Satıra tıklamak seçer. **Ad TAKIM RENGİNDE yazılır** (ölüde karartılmış; takımsız/FFA oyuncuda başlık rengi kalır) — aynı renk sahnedeki ad etiketinde ve kuş bakışı işaretçisinde de kullanılır, operatör "bu hangi takım" sorusunu okumadan cevaplasın. `K/D · batarya · kumanda · durum` satırı **zengin metindir** (token başına renk); bayrağı prefab değil kod açar, gerekçesi `EnableStatsRichText`'te. **Görünüm prefabtan gelir** (`_Shared/App/Resources/UI/AdminPlayerRow.prefab`); `AdminHud` onu kolona örnekler ve havuzlar. Satır **yüksekliği prefabtan okunur** → sanatçı satırı büyütünce kolon yerleşimi kendiliğinden uyar. ⚠️ Düğmelerin `onClick`'i prefabta BOŞTUR ve doldurulmamalıdır: hedef oyuncu her `Bind` ile değişiyor, kalıcı bir inspector kaydı yanlış oyuncuya komut gönderir (ve iki adımlı onayı atlar) |
 | `AdminPreferencesPanel` | Eski dashboard'un işi. **MAÇ bölümü ORTAK** (başlıkta yazar): mod/harita seçicileri yerel alana değil `set_selection` ile sunucudaki ortak seçime yazar → tüm adminlerde aynı anda değişir; tıklamada yerel imleç de iyimser ilerletilir, sunucudan gelen değer son sözü söyler. **Harita değişince o arenayı HERKES yükler** (§10.7 sahneleme — sunucu `return_to_lobby` yayar, faz `Lobby` kalır, maç başlamaz); panel ayrıca sahneyi yerel olarak da açar (`SceneRouter.LoadPreview`) ama bu yalnız gecikmeyi gizler. ⚠️ **Mod/harita satırları maç KURULMUŞKEN PASİFTİR** (`AdminRoster.CanChangeSelection`): izin yalnız lobide (maç kurulmamış) ve maç bittiğinde (`finished`, operatör bir sonrakini seçiyor) vardır — koşan maç, yükleme, geri sayım ve **duraklatma** kapalıdır (donmuş maç da kurulmuş maçtır; çıkış yolu `abort_match`). Bölüm başlığı sebebini yazar, tıklanırsa durum satırına uyarı düşer; süre/limit her fazda açıktır. Aynı kural sunucuda da uygulanır ve otorite orasıdır (`MatchDirector.CanChangeSelection`) — buradaki kopya yalnız operatörü boşuna tıklatmamak içindir. Bu bileşen panel **kapalıyken de etkin** olduğu için başka bir operatörün harita değişikliği panel açılmadan da yansır. ⚠️ **Harita listesi mekan süzgeci her değiştiğinde yeniden kurulur** (`AdminSelection.VenueVersion`) — panel bağlantıdan ÖNCE kurulduğu için ilk liste kaçınılmaz olarak süzgeçsizdir ve orada bırakılırsa operatör başka işletmelerin arenalarını görür. Yeniden kurulumda **seçili harita hayatta kalıyorsa imleç onda bırakılır**. Bölüm başlığı ayrıca sunucunun **açık sahnesini** yazar (`SceneRouter.OpenScene`): harita satırı bir sonraki maçın adayı, açık sahne şu an yüklü olandır. **GÖRÜNÜM bölümü YEREL** (halkalar, ad etiketleri, kamera hızı, **çatı**) + bağlantı (yeniden bağlan/kes, bağlı admin sayısı). MAÇ bölümünde ayrıca **Süre** (`ROUND_SECONDS_OPTIONS`: 2.5/5/10/15/20/30 dk · 1 saat) ve **Skor limiti** (eşiğin altında ±1, üstünde ±5) seçicileri vardır — ikisi de ORTAK; **mod değişince o modun `ModeDefinition` varsayılanına dönerler**. Bir de **Dost ateşi** satırı: tek değer + iki düğme, ikisi de aç/kapa yapar (satır deseni diğerleriyle aynı kalsın diye) ve değer AÇIK iken kırmızı vurguyla gösterilir. ⚠️ **Bu satır seçim kilidine takılmaz** — mod/harita gibi maç kuruluyken pasifleşmez, çünkü işin özü tam olarak koşan maçta basılabilmesidir (takım arkadaşlarını vuran oyuncu için operatör maçı iptal etmek zorunda kalmasın). Yerel bir alan tutulmaz: gönderilen istek sunucudakinin tersidir, panel `admin_state.friendlyFire`'ı gösterir — iki operatör sapmasın. Yarı saydam, **scrim YOK**. **Liste tabanlı seçim açılır listedir** (mod/harita → `TMP_Dropdown`): seçenekleri kod doldurur (katalogdan; boş katalogda tek satır "katalog yok"/"harita yok" yazar ve seçici pasifleşir), imleç `SetValueWithoutNotify` ile eşitlenir — `value` ataması `onValueChanged`'i tetikleyeceği için sunucudan gelen her tazeleme yeni bir `set_selection` doğururdu. Şablon hiyerarşisi (viewport/item/scrollbar) prefabtadır ve **kapalı durur**. ⚠️ **Harita listesinin ilk satırı "Lobi"dir:** ayrı bir "LOBİYE DÖN" düğmesi yoktur, satır seçilince `set_selection` değil `return_to_lobby` gider. Lobi haritası katalogdan `AdminContent.ResolveLobbyMap` ile çözülür (`supportedModeIds == ["lobby"]` + mekan süzgeci; sunucudaki `MapTable.ResolveLobbyScene` ile aynı ölçüt, birden çok adayda alfabetik ilki → iki taraf aynı sahneyi seçer) ve **arena listesine karışmaz**. ⚠️ **Harita seçicisinin imleci ortak seçimi değil AÇIK SAHNEYİ izler** (`ApplyOpenScene`, kaynak: `welcome` + `return_to_lobby` + `load_match`): ikisi ayrışır — maç bitip lobiye dönüldüğünde ortak seçim hâlâ son arenayı gösterir, açık sahne lobidir. İmleci ortak seçime bağlamak operatörü **o arenaya geri dönemez** hâle getiriyordu: `TMP_Dropdown` seçili satıra tıklamayı olay saymaz (`value == m_Value` iken `onValueChanged` ateşlenmez), yani sahneleme komutu hiç gönderilemiyordu. Aynı sebeple seçicide **"zaten seçili" erken çıkışı yoktur** (sunucu aynı sahneyi tekrar sahnelemeyi zaten idempotent karşılar). Lobi açıkken **BAŞLAT reddeder** ve sebebini durum satırına yazar — sahnelenmiş arena yoktur, sunucu lobi türünde maç başlatmaz. Sayısal değerler (süre, skor limiti, numara) `[<] değer [>]` adımlayıcı kalır: gezilecek bir listeleri yok, asıl jest komşu değere gitmektir. Maç düğmelerinin altında **tek** DURAKLAT/DEVAM ET düğmesi: hangi komutu göndereceğine yerel bir bayrakla değil sunucudan gelen faza bakarak karar verir (`playing` → `pause_match`, `paused`/`operator` → `resume_match`), diğer her durumda pasiftir — çoklu admin'de duraklatmayı başkası da yapmış olabilir, yerel bayrak iki paneli birbirine ters düşürürdü |
 | `AdminStatsPanel` | Takım toplamları + oyuncu tablosu (ad/takım/**SKOR**/K/D/K-D/HP/batarya/durum/sahne/**PING**) + maç bilgisi. **FFA'da tablo skora göre azalan sıralanır**, başlık lideri yazar. Tablo **kolon kolon** çizilir (TMP fontu eşit genişlikli değil, boşlukla hizalama kayar). ⚠️ Kolon eklemek koda yetmez, prefabta (`AdminHud.prefab`) bir TMP objesi açıp `_columns` dizisine bağlamak gerekir — bağlanmazsa kolon sessizce hiç çizilmez. Protokolde olmayan metrik (hasar/isabet oranı) **gösterilmez**; jitter/kayıp protokolde VAR ama panelde bilinçli olarak yok (operatörün eyleme çevirebileceği sayı ping'dir) |
 | `AdminRoster` | Admin arayüzünün veri katmanı: `lobby_state` (otoriter tam görüntü + `kills/deaths/hp/alive/score`) + `health_update`/`kill_event` (anlık) + `match_state`/`countdown`/`match_end` birleşimi; takım listeleri, takım kipi kararı, ölüm akışı, snapshot yaşı. **`IsFfa` OTORİTER:** maç yüklüyse `ModeRuntime.Teams`, lobide ortak seçimin katalogdaki modu, ikisi de yoksa eski sezgisel yedek ("kimsenin takımı yok"). ⚠️ `respawn` admin'e GELMEZ (yalnız ölen oyuncuya gider) → geri sayım `kill_event` + `RESPAWN_DELAY` ile yerel hesaplanır. **Bağlantı durumu üç değerlidir** (§5.3 `connection`) ve string karşılaştırmasının TEK yeri buradaki `IsConnected`/`IsReconnecting`/`HasLeft` kısayollarıdır — bilinmeyen/boş değer **bağlı** sayılır, yoksa sürüm karışımında roster tümden sönerdi. POV döngüsü, canlı sayacı ve takım kipi sezgisi yalnız `IsConnected` satırları sayar; `left` satırlar tabloda **durur** (maç istatistiği) ama eylem düğmeleri kapalıdır. ⚠️ `reconnectSeconds` **yerelde ilerletilir** (`lobby_state` damgası + `Time.unscaledTime`): roster yayını olay tabanlı olduğu için sunucudan saniyede bir güncelleme gelmez, damgasız okuma sayacı yalnız başka bir roster değişikliğinde ilerletirdi |
 | `AdminSession` | **YEREL** seçimler (kamera kipi, seçili oyuncu, açık panel) + görünüm tercihleri (`PlayerPrefs`'te kalıcı, admin PC'sine özel — halkalar, ad etiketleri, kamera hızı, **çatı kipi**). Tek doğruluk noktası; `Changed` ile HUD/kamera/işaretçiler senkron kalır. `RoofAlphaNow()` tercih + kamera kipinden çatı alfasını türetir |
 | `AdminSelection` | **ORTAK** durumun aynası (`admin_state`, §5.3): mod/harita seçimi, **maç süresi + skor limiti**, çevrimiçi admin sayısı, son admin eyleminin duyurusu, **mekan süzgeci** (`venueId`/`venueScenes` + her değişiminde artan `VenueVersion`), **dost ateşi anahtarının yürürlükteki değeri** (`FriendlyFire` — seçim değil durum, §3.9). Statik durum + statik `Changed` (bileşen kurulum sırası dinleyiciyi ilgilendirmesin); bileşenin kendisi yalnız ağ olayı pompasıdır. Otorite sunucudadır — buraya yerelden yazılmaz |
-| `AdminCommands` | Admin komutlarının tek çıkış kapısı (§5.2) + son işlemin durum metni. "Gönderildi" der, "oldu" demez — kabul/ret sunucuda. `SetSelection` ortak seçimi (mod/harita/süre/limit) değiştirir, maçı başlatmaz; `StartMatch` süre/limit taşır (`0` = mod varsayılanı); `PauseMatch`/`ResumeMatch` koşan maçı dondurur/sürdürür; `SetFriendlyFire` dost ateşi anahtarını çevirir (**faz kapısı yok** — koşan maçta da geçerli, §3.9) |
+| `AdminCommands` | Admin komutlarının tek çıkış kapısı (§5.2) + son işlemin durum metni. "Gönderildi" der, "oldu" demez — kabul/ret sunucuda. `SetSelection` ortak seçimi (mod/harita/süre/limit) değiştirir, maçı başlatmaz; `StartMatch` süre/limit taşır (`0` = mod varsayılanı); `PauseMatch`/`ResumeMatch` koşan maçı dondurur/sürdürür; `SetFriendlyFire` dost ateşi anahtarını çevirir (**faz kapısı yok** — koşan maçta da geçerli, §3.9); `RevivePlayer(playerId)` ölü oyuncuyu elle canlandırır (`playerId:0` = o an ölü olan herkes, §3.7) ve kapıları sunucu uygular — bu komut da "gönderildi" der, "canlandı" demez |
 | `AdminContent` | `Resources.Load<GameCatalog>("GameCatalog")` (asset: `_Shared/Data/Resources/`) → mod/harita listeleri. **Statik** yardımcıdır (`[SerializeField]` taşıyamaz), katalogu bu yüzden `Resources`'tan okur |
 
 ### Editör: `VortexArena.App.Editor` (dev araç seti — yalnız Editor)
@@ -957,7 +974,8 @@ yolu:** `WeaponGranter` silahı doğrudan ele verir (`GrantTo(hand, kind)` — �
 tanım gereği tutuluyordur (ISDK kavraması işletilmez), gerisini `WeaponGrantKind` ayırır —
 `Disposable` (FFA'nın rastgele silahı) tek elli/rezervsiz ve reload'u KAPALIDIR, `Persistent`
 (çerçeveden seçilen silah) tam rezervle gelir, reload'u AÇIKTIR ve ön kabzası tutulabilir) +
-`WeaponDefinition` (SO — hasar/HS çarpanı/RPM/şarjör/reload/spread/recoil/ses profili + verilen
+`WeaponDefinition` (SO — hasar/HS çarpanı/RPM/şarjör/reload/spread/recoil/**haptik (atış başına
+titreşim şiddeti + süresi; biri 0 = o silahta haptik yok)**/ses profili + verilen
 **tek denge kaynağı**, sunucuya export edilmez; el duruşu tabandaki `ItemDefinition.primaryGrip*`'te,
 burada DEĞİL) + `WeaponAudio` (Meta XR spatializer'lı namlu AudioSource:
 ateş/şarjör çıkar-tak/kuru tetik/alma) + `WeaponAnimator` (Animator'sız kod-güdümlü parça
@@ -1007,6 +1025,12 @@ kafa kırmızı · karın turuncu · bacak sarı · gövde yeşil) — seçili o
 PhysX için "static"tir ve her kare kıpırdatmak broadphase'i yeniden kurdurur; 12 kutu × oyuncu
 sayısı bunu Quest'te ölçülebilir yapar. Fizik davranışı için değil BÜTÇE için oradadır
 (yerçekimi kapalı, hiçbir şey avatarı itmez).
+**Kafanın üstündeki ad etiketi TAKIM RENGİNDEDİR** (ölüde karartılır; takımsız/FFA oyuncuda beyaz
+kalır — orada rengin anlatacağı bir şey yok). Aynı renk admin kartında ve kuş bakışı
+işaretçisinde de kullanılır: bir oyuncunun adı nerede yazarsa yazsın aynı renkte okunur.
+Bu, "takım rengi karakter mesh'ine yazılmaz" kuralının istisnası değildir — etiket zaten oyuncunun
+kimliğini yazıyor, kırmızı takım kendi gövdesiyle çiziliyor ve etiket normal `ZTest` ile
+çiziliyor (duvar arkasından okunmaz); renk telde olmayan yeni bir bilgi açmaz, olanı okunur yapar.
 **Ölü ya da kalibresiz uzak oyuncu HAYALETE döner:** yarı saydam, iki yüzü de çizilen
 `VortexArena/AvatarGhost` (`_Shared/Materials/M_AvatarGhost.mat`) — `Cull Off` + `ZWrite Off`
 olduğu için gövdenin içi görünür, `ZTest` normaldir yani duvar arkasından GÖRÜNMEZ. Renk
@@ -1117,7 +1141,9 @@ katmanların göreli hız farkı korunur).
 | `Combat/NetItemCatalog` | `netItemId` → `ItemDefinition` eşlemesi (`Resources`, ilk sorguda sözlük kurar). `Tools > VortexArena > Weapons > Rebuild Net Item Catalog` projedeki TÜM `ItemDefinition`'lardan yazar — silah tablosundan değil, ki yeni bir eşya TÜRÜ (bomba) eklenince sessizce eksik kalmasın. `Resources/` altından çıkarılmaz |
 | `Combat/HeldItems` | Yerel oyuncunun "hangi elde hangi eşya" durumunun tek buluşma noktası (statik). **Yazan** `Weapon`/`WeaponGranter` (`Weapon.ActiveChanged` üzerinden toplanır — çift tabanca mümkün olduğu için bildirim per-instance olamaz), **okuyan** `PlayerPoseTracker`. Hiçbir şey göndermez |
 | `Combat/ShotTracer` | Havuzlu `LineRenderer` mermi izi — ömrü boyunca **sönerek** kaybolur (alfa düşer + çizgi incelir; eskiden ömrün sonunda `enabled=false` ile bir anda kesiliyordu, göz bunu sönme değil "pat" olarak okuyordu). Ayrı bir *sönme süresi* alanı YOK: sönme `tracerLifetime`'ın kendisine yayılır, yoksa iki sayıdan hangisinin diğerini kestiği sessiz bir tuzak olurdu. Üstüne **yol boyunca duman izi**. **İKİ çağıranı vardır ve olmak zorundadır:** atanın kendi izini `Weapon.Fire` çizer (sunucu atış olayını atana geri yollamaz, istemci de kendi `playerId`'sini süzer — §6.5), uzaktakileri `RemoteShotFx`. Havuz ikisi arasında **paylaşılır** (`ShotTracer.Shared`, kendini önyükleyen DDOL tekil): silah başına havuz açmak, silahların sürekli üretilip yok edildiği modlarda materyali + `Update`'i silah sayısınca çoğaltırdı. Görünüm `ItemDefinition`'dan, sıklık `tracerEveryNthRound`'dan — iki yol da aynı alanları okur (ayrı okusalar aynı silah kendi ekranında başka, karşı ekranda başka görünürdü). Sayaç yerelde silah başına, uzakta oyuncu başına (paylaşılan sayaç izleri rastgele namlulara dağıtırdı). Her mermide çizmek lazer ışını gibi durur + konumu fazla ifşa eder; asıl maliyet bayt değil GC/draw call. **Duman `Play`'in İÇİNDEDİR**, ayrı bir giriş noktası değil — ikinci bir `PlaySmoke` kapısı olsa iki çağırandan biri onu unutabilir, yani aynı silah kendi ekranında dumanlı, karşı ekranda dumansız görünürdü. Puf'lar TEK paylaşılan `ParticleSystem`'e manuel `Emit` edilir (sistemin kendi parçacık dizisi zaten havuz; atış başına `TrailRenderer` objesi üretmek Quest'te hem GC hem draw call olurdu) ve namludan isabete doğru **sönümlenir**: alfa düşer, boy büyür, ömür kısalır. Ömür `tracerLifetime`'dan TÜRETİLİR ama birebir değil — 0.06 sn'lik duman tek karelik gri lekedir, o yüzden ×katsayı + kullanılabilir banda kırpma. Eşyaya ayrı duman alanı **eklenmedi**: duman tracer'a biniyor, `tracerEveryNthRound` tracer'ı kapattığında duman da kapanır. Materyal/doku (yumuşak radyal puf) çalışma anında üretilir — hazır duman materyali `Resources/` altında değil ve serialize alan açmak bu tekili sahneye konması gereken bir bileşene çevirirdi |
-| `Combat/ArenaCombat` | **Oyun kodunun ağa açılan tek kapısı** (statik). `ReportShot` / `ReportThrow` / `ReportHit` / `ReportRaycastHit` / `ReportAreaHit` + `TryGetTargetPlayerId` / `IsHeadshot` / `CanFire` / `LocalPlayerId`. ⚠️ `ReportShot`/`ReportThrow` **UDP olay kanalına** (`0x03`) gider, `ReportHit` **WS**'te kalır — kaybı kozmetik olan ile otoriter olanın kanalı ayrıdır (§10.3). Bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektiriyor (arena uzayı, yön≠nokta, `RemoteHitBox` ile hedef çözme, hasarı istemcinin belirlemesi) — bunlar `Weapon` içinde gömülü kalsaydı ikinci bir hasar kaynağı yazan herkes aynı dördünü yeniden keşfederdi. `Weapon` de bu kapıyı kullanır (tek doğruluk kaynağı). Bağlantı yokken sessizce no-op. Reçeteler: `Gelistirici/Yemek-Kitabi.md` |
+| `Combat/HitMarker` | **İsabet göstergesi:** vuruşun değdiği dünya noktasında ~0.3 sn beliren, açılıp sönerek kaybolan bir X. Oyuncunun tek "vurdum" geri bildirimi — can sunucu-otoriter olduğu için (§10.3) ekranda başka hiçbir şey değişmez. **Yalnız vuran görür ve bu bir süzme DEĞİL, yapısaldır:** tek çağıranı `ArenaCombat.ReportHit`'tir ve o metot yalnız hasarı VEREN istemcide koşar; protokolde karşılığı yoktur ve eklenmez (telde bir gösterge mesajı olsaydı vurulan da kendi gövdesinde X görürdü). ⚠️ Gösterge *bildirimin yapıldığını* söyler, hasarın uygulandığını değil — sunucu vuruşu reddedebilir (dost ateşi kapalı, faz `playing` değil). Otoriter sonucu beklemek göstergeyi gidiş-dönüş kadar geciktirirdi ve `health_update` vuruşun NEREYE değdiğini taşımıyor. **Kendini önyükleyen DDOL tekil** (`ShotTracer` kalıbı, `HitMarker.Shared`): sahneye konmaz, yeni arenaya kurulum adımı doğurmaz. X **iki `LineRenderer`** ile çizilir (doku+quad değil): her mesafede keskin, doku üretmez ve `ShotTracer`'ın kanıtlanmış yolunu kullanır — paylaşılan materyal + vertex rengi, yani materyal örneği açılmaz. İki çizgi ayrı olmak zorunda; bir X tek polyline ile birleştirici kenar çizmeden ifade edilemez. Boy **açısaldır** (mesafenin katı, metre bandına kırpılı): sabit metre yakın hedefte ekranı kaplar, uzakta hiç okunmazdı. Kollar kameranın sağ/yukarı eksenlerinden kurulur (ekrana paralel düzlem, stereo tutarlı), kaldırma ise göze doğrudur — yüzeyden kaçmanın doğru yönü bakış ekseni değil o noktadan göze giden vektördür. Renk **takım renklerinden uzak** tutulur (gövdenin üstünde kırmızı/mavi X takım okumasını bozar). ⚠️ İşaret dünyada **sabit** durur, hedefe yapışmaz: vuruşun nerede olduğunu gösterir, hedefin çocuğu olsaydı ölüp yok olan avatarla kaçardı. **Görünümün tamamı `HitMarkerStyle`'dan okunur** — kodda ayar sabiti yoktur, kalan sabitler (havuz boyu, shader zinciri) yapısaldır |
+| `Combat/HitMarkerStyle` | *(`_Shared/Data/Resources/HitMarkerStyle.asset`)* İsabet göstergesinin görünüm ayarı: boy (**açısal** — 1 m'deki kenar uzunluğu + metre bandı), renk/**saydamlık**, kalınlık, ömür, saydamlık ve boy **eğrileri**, kontur (X'in dışındaki ikinci kalın X — açık zeminde okunurluk), çizgi materyali (glow için additive bağla) ve **`markerPrefab`**. `WeaponCatalog` ile aynı gerekçeyle `Resources`'ta: `HitMarker` kendini önyükleyen bir tekildir, bağlanacak referans alanı yoktur. ⚠️ **Asset zorunlu DEĞİL** — yoksa alan başlangıç değerleri kullanılır (`CreateInstance`), yani varsayılanların tek doğruluk kaynağı C# dosyasıdır ve asset onun kopyasıdır. Taşınırsa/adı değişirse gösterge çalışmaya devam eder ama **ayarlar sessizce yok sayılır** (bu yüzden açık bir hata değil, dokümante edilmiş bir kural). `markerPrefab` bağlanırsa çizgi X hiç çizilmez, örnek havuzlanır ve görünümün tamamı prefabın olur — `HitMarker` yalnız yeri, boyu, dönüşü, ömrü yönetir (renk/kontur alanları o yolda okunmaz). ⚠️ Eğri **boş bırakılırsa** koddaki formül yedeği devreye girer: boş bir `AnimationCurve` her yerde 0 döner, yani gösterge tümden görünmez olurdu. Sayılar/renkler/eğriler her karede okunur → Play kipinde canlı ayarlanır; materyal ve prefab havuz düğümü kurulurken bağlanır (ayar değişince düğüm yeniden kurulur) |
+| `Combat/ArenaCombat` | **Oyun kodunun ağa açılan tek kapısı** (statik). `ReportShot` / `ReportThrow` / `ReportHit` / `ReportRaycastHit` / `ReportAreaHit` + `TryGetTargetPlayerId` / `IsHeadshot` / `CanFire` / `LocalPlayerId`. ⚠️ `ReportShot`/`ReportThrow` **UDP olay kanalına** (`0x03`) gider, `ReportHit` **WS**'te kalır — kaybı kozmetik olan ile otoriter olanın kanalı ayrıdır (§10.3). Bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektiriyor (arena uzayı, yön≠nokta, `RemoteHitBox` ile hedef çözme, hasarı istemcinin belirlemesi) — bunlar `Weapon` içinde gömülü kalsaydı ikinci bir hasar kaynağı yazan herkes aynı dördünü yeniden keşfederdi. `Weapon` de bu kapıyı kullanır (tek doğruluk kaynağı). Bağlantı yokken sessizce no-op. **Tek sunum işi burada durur:** `ReportHit` gönderimden sonra `HitMarker`'ı tetikler — kapının kendisiyle aynı gerekçe, yeni bir hasar kaynağı isabet göstergesini bedavaya alsın. Reçeteler: `Gelistirici/Yemek-Kitabi.md` |
 | `Combat/WeaponFrame` | Sahnedeki silahın **çerçevesi** — `VA_WeaponFrame` prefabı olarak her `WPN_*` kökünün çocuğudur (`WeaponKitBuilder` bağlar). Kaynak silahı **dondurur** (Rigidbody kinematik + yerçekimsiz, `Grabbable`/`GrabInteractable`/`HandGrabInteractable`/`DistanceHandGrabInteractable`/`ItemGripSockets` kapatılır) → yakın kavrama tümden kapalıdır, silah **yalnız uzaktan** alınır ve çerçeveden hiç ayrılmaz. ⚠️ **İki mesafe-kavrama bileşeni birden taşır ve ikisini de dinler** (`DistanceGrabInteractable` = kumanda hattı, `DistanceHandGrabInteractable` = el hattı): hangisinin koşacağını ISDK rig'i "el izleniyor mu" sorusuna göre seçiyor (§7). ⚠️ El hattının **`Hand Alignment`'ı `None`'dır**: `AlignOnGrab` ISDK'ya kavrama boyunca sentetik elin bileğini kavranan nesneye kilitletir ve çerçeve yerinde dondurulduğu için oyuncunun eli sahnedeki silaha yapışır (§7). Pointer olaylarında `Select` gelince `WeaponGranter.SelectWeapon(...)` çağrılır — yani oyuncunun eline giden şey kaynağın bir **KLONU**dur. Nişan geri bildirimi **ISDK'nın kendi mesafe-kavrama göstergesinden** gelir (tüp + reticle); çerçevenin kendi `LineRenderer` ışını `isRayVisible` ile **kapalıdır** — ikisi birden açıkken elde iki ışın görünür ve kapatmak menzil bilgisini kaybettirmez, çünkü ISDK'nın aday listesi her adayı `CanBeSelectedBy` ile (yani `WeaponFrame.Filter` ile) süzer: menzil dışındaki çerçeve aday bile olmaz. Aynı zamanda bir `IGameObjectFilter`'dır (mesafe kapısı `_interactorFilters`'a bağlanır). Çerçeve görselinin görünürlüğü `isFrameVisible` ile **örnek başına** (sahneden sahneye) ayarlanır — reçete `Gelistirici/Yemek-Kitabi.md`. ⚠️ **Çerçeve yalnız silah SABİT dururken vardır:** `Weapon.HeldChanged` dinlenir ve silah hangi yoldan tutulursa tutulsun (ele verildi ya da ISDK ile kavrandı) çerçevenin GameObject'i kapanır, bırakılınca geri gelir. Kural olayda durur, çağrı noktalarında değil — "silahı ele alan" birden çok yol var ve her birine ayrı ayrı "çerçeveyi de kapat" eklemek yeni bir yol açıldığında unutulacak bir adım olurdu. Abonelik bu yüzden `Awake`/`OnDestroy`'dadır: `OnDisable`'da olsaydı çerçeve kendini kapattığı anda "bırakıldı" sinyalini duyamaz ve bir daha geri gelmezdi |
 | `Combat/WeaponGranter` | Silahın ele geldiği **tek nokta** (§3.9). **Kendini önyükleyen kalıcı tekil** — sahneye konmaz, bu yüzden yeni arenaya ek kurulum adımı doğurmaz. İki kaynağı vardır: (a) **`RandomGrant`** kuralında grip basılıyken o elde rastgele bir silah durur, bırakılınca **yok olur**, tekrar basınca **yenisi** gelir (`Disposable`); (b) **`WeaponCanvas`** kuralında `WeaponFrame`'in çağırdığı `SelectWeapon` ile seçilen silahın **kalıcı klonu** tutulur — grip bırakılınca yalnız gizlenir, tekrar basınca arenanın neresinde olursa olsun aynı silah aynı mermiyle geri gelir (`Persistent`). Sahnedeki silah **tükenmez**, sınırsız kez seçilir. Seçim ancak başka bir çerçeveden alınarak değişir ve **harita başına** sıfırlanır. **Kaç klon:** seçilen tanım `TwoHand` ise oyuncu başına **tek** (ikinci el ön kabzaya adaydır), `OneHand` ise **el başına bir tane** (çift tabanca; her klon kendi şarjörünü taşır). ⚠️ **"Aynı anda ikinci silah tutulamaz" kuralının yeri `RandomGrant` yoludur** (`TickHand`): bir eldeki silah çift kavramalıysa öteki ele ikinci bir silah verilmez, o el ön kabzaya adaydır — yoksa oyuncu FFA'da iki tüfek tutar ve tüfeği iki elle sabitlemenin hiçbir yolu kalmazdı. ⚠️ **Çerçeve yolunda böyle bir kapı YOKTUR ve eklenmez:** orada kural yapısaldır (çift elli seçimde oyuncu başına zaten TEK klon var), seçim değiştirmek ikinci silah üretmez — yalnız rafta silah değiştirir. Seçime kapı koymak tam da bunu kırar ve belirtisi teşhisi zordur (§7). ⚠️ **Verilen silahta kavrama algısının TEK kaynağı bu sınıftır:** `Disposable` de `Persistent` klon da el anchor'ının değil bu tekilin (DDOL kökü) altında durur ve pozunu `Weapon.ApplyCanonicalGrip` her karede sürer — anchor'ın çocuğu olsaydı iki elli çözümün yazdığı dünya pozu parent dönüşümüyle çakışırdı. Klonun ISDK kavrama bileşenleri bu yüzden **açılmaz** (`PrepareSummonedClone` yalnız `ItemGripSockets`'i açık bırakır: soket görseli çizilsin); ikinci el grip'e basıp avucunu ikincil soketin yarıçapına getirince `Weapon.SetSecondaryHand` ile yazılır. İki algı yolu birden açık olsaydı aynı el iki ayrı kaynaktan "tutuyor" görünürdü. ⚠️ **Ön kabza bağının KURULMASI ile SÜRDÜRÜLMESİ ayrı kurallardır** (`ResolveSecondaryHand`, silah örneğine bağlı bir kilit): kurulma mesafeye bakar (yeşile dönen soket neyi vaat ediyorsa o), **sürdürme yalnız grip tuşuna** — ne mesafe ne açı yoklanır, oyuncu tuşu bırakana kadar bağ durur. Sürdürmeye mesafe kapısı **geri konmaz**: iki elli çözüm silahı ikinci ele doğru taşımaz, yalnız nişanlar, yani soketin avuçtan uzaklığı her zaman *|ellerin arası − silahın kavrama arası|* kadardır ve oyuncu kolunu uzatıp topladıkça bu fark kabul yarıçapını (0.12 m) kendiliğinden aşar — mesafeye bakan bir sürdürme kuralı, nişan alma/eğilme/dönme gibi normal hareketlerde bağı oyuncu tuşu bırakmadan koparır. Kilit silah **örneğine** bağlı olduğu için grip bırakılıp yeni silah gelince kendiliğinden düşer, yani bir silahtan ötekine sızmaz. **Sahne süpürmesi** (arenadaki tezgâhların gizlenmesi — ⚠️ **taban bölgeleri BURAYA AİT DEĞİL**, onlar `BaseZoneVisibility`'dedir) tek bir kapıdan geçer: `ModeDistributesWeapons` = kaynak `random` **ve** ortada **kurulmuş bir maç var**. ⚠️ "Kaynak random mı" sorusu tek başına bu sorunun cevabı DEĞİLDİR (§7): sahnelenen arena lobi profiliyle koşar ve orada kaynak da `random`'dır — kapı yalnız kaynağa baksaydı maç kurulmadan tezgâhlar gizlenir, oyuncu bekleme boyunca ne silah alabilir ne serbest atış yapabilirdi. Ayrım `modeId`'den DEĞİL kuraldan okunur (§10.5): serbest alanı benzersiz kılan bileşim `random` + `fireWhilePaused`'dur, koşan FFA de `random`'dır ama serbest atışı yoktur. **Serbest alanda iki yol birden açıktır:** oyuncu tezgâhtan seçerse o silah gelir (seçildiği anda rastgele verilenler geri alınır), seçmezse loadout'tan rastgele biri. ⚠️ Sahnelemeden FFA'ya geçişte kaynak `random` kaldığı için "kaynak değişti mi" yetmez, "mod dağıtıyor mu" da izlenir — izlenmeseydi sahnelemede seçilen silah maça taşınır ve modun rastgele dağıtımı sessizce delinirdi. ⚠️ **(b) yolunda silahı sahneye koyan bileşen YOKTUR ve yazılmaz** — yerleşim arena kararıdır, harita tasarlanırken elle konur (`BaseZone` gibi prefab örneği olarak); silah konmamış bir arenada bu yol sessizce boş döner. Canlanmada seçim korunup silah `RefillFull` ile tam şarjör + rezervle döner — dolum yeri burasıdır. **İkinci dolum kapısı `countdown` mesajıdır:** her geri sayımın başında eldeki silah dolar. Tek başına canlanma yetmiyor — tur tabanlı modda turu **sağ bitiren** oyuncu canlanmaz ve yarım şarjörle yeni tura girerdi (§3.8.2). Kapı geri sayım olduğu için mod-agnostiktir. Admin'de rig kapalı olduğu için silah verme yolu kendiliğinden kapalı, süpürme ise çalışır. Dağıtım normalde rastgeledir; **yalnız editörde** `SequentialGrant` bayrağı (dev sandbox yazar, `#if UNITY_EDITOR`) onu loadout sırasına çevirir — bütün silahları tek tek gözden geçirmek için. Üretim davranışı değişmez |
 | `Combat/WeaponGrantKind` | `None` / `Disposable` / `Persistent` — silahın **nasıl** verildiği (`Weapon.GrantTo`'nun ikinci argümanı). `Disposable` = FFA'nın rastgele silahı: rezerv yok, reload kapalı. `Persistent` = çerçeveden seçilen silah: tam rezerv, reload AÇIK. ⚠️ **"Tek el/çift el" bu ayrımın parçası DEĞİLDİR** ve buraya geri eklenmez: ikinci eli `WeaponGranter` her iki türde de aynı kuralla çözer (kurulma: grip basılı + avuç ikincil soketin yarıçapında; sürdürme: yalnız grip basılı), yoksa aynı tüfek çerçeveden alındığında iki elle, FFA'da verildiğinde tek elle tutulur — aynı silah iki farklı his üretirdi. **Neden tek bayrak değil:** `IsGranted` üç ayrı kuralı birbirine kilitliyordu ("elde sabit" + "reload kapalı" + "tek el/rezervsiz"); çerçeve silahı yalnız ilkini ister. ⚠️ Serialize EDİLMEZ (çalışma anı durumu), o yüzden "yeni değer sona" kuralı burada bağlayıcı değildir |
@@ -1142,23 +1168,66 @@ yeni sahnedeki çatı `OnEnable`'da devralır → kuş bakışındayken arena de
 bile görünmez. Oyuncu tarafında etkisi YOKTUR — yalnız `AdminSpectator.RefreshRoof()` tetikler.
 **Yapımcıya verilecek tek parça teknik not: [`Cati-Gizleme.md`](Cati-Gizleme.md).**
 
-**`BodyViolationProbe`** (kendini önyükleyen kalıcı tekil; sahneye ve prefaba KONMAZ): yerel
-oyuncunun gövdesi bir **iç engelin içinde** mi diye 20 Hz ölçer ve sonucu `IsViolating`'ten
-yayınlar — cezayı sunucu uygular (`ArenaNet-Protokol.md` §10.9). Üç kuraldan biri yeterlidir:
-gövdenin **%30'u** içeride · **kafa tamamen** içeride · **silah tamamen** içeride. Ölçüm
-**ağırlıklı nokta örneklemesidir**: iskeletten ~23 nokta alınır, her biri antropometrik bir kütle
-oranı taşır (kafa 8.1 · leğen 14.2 · göğüs 21.6 · uyluk 2×10 …) ve içeride kalanların ağırlığı
-toplanır. ⚠️ **Nokta SAYISI sayılmaz:** iki el + bir ayak gövdenin %1.8'i, göğüs tek başına
-%22'sidir — "10 noktadan 3'ü" kuralı ikisini eşitler ve kuralı anlamsızlaştırır. Kafa merkezi
-kemikten değil **HMD'den** gelir (yedi noktalı küre kabuğu), böylece kafa ve silah kuralları body
-tracking hiç başlamasa da çalışır; oran kuralı o hâlde sessizce devre dışı kalır. Eşik girişte
-0.30, çıkışta 0.24 (histerezis) + 0.15 sn minimum süre — tek eşikte sınırda duran oyuncu saniyede
-onlarca kez girip çıkar, halka titrer ve tel bayrağı zıplar. Hedef geometri `Obstacle` layer'ından
-gelir; geniş faz tek bir `OverlapSphereNonAlloc`'tur ve **yakında engel yokken orada durur**.
-⚠️ **Gövdeye collider konarak yapılamazdı:** `Weapon`'ın atış ışını maskesiz ve proje ayarı
-trigger'ları da vuruyor — oyuncu kendi atışını kendi gövdesine yerdi; üstelik trigger "değdi mi"
-der, "ne kadarı içeride" demez. Sunumu da bu bileşen yapar: kırmızı karartma (uyarı bandı 0.15'ten
-itibaren hafif) + nabız titreşimi.
+**`ObstacleViolationProbe`** (kendini önyükleyen kalıcı tekil; sahneye ve prefaba KONMAZ): yerel
+oyuncunun **kafası** bir iç engelin içinde mi diye 20 Hz ölçer ve sonucu `IsViolating`'ten
+yayınlar — cezayı sunucu uygular (`ArenaNet-Protokol.md` §10.9). **Tek kural budur.**
+
+⚠️ **İki ayrı çıktı üretir:** `IsViolating` (yalnız KAFA → tel bayrağı + ceza + karartma) ve
+`IsBodyBlocked` (kafa **ya da izlenen bir el** → yalnız **ateş kapısı**, tele gitmez, bekleme süresi
+yok). Ceza *"görüşüm geometrinin içinde mi"*, ateş kapısı *"gövdemi göstermeden mi ateş ediyorum"*
+sorusudur — bloğun içinde durup silahı dışarı uzatan oyuncu ikincisini ihlal ediyor ama silahı
+tertemiz boşlukta. ⚠️ **İzlenmeyen el hiç sorulmaz** (rig onun anchor'ını rig orijinine yazıyor,
+`ControllerTracking`): kumandası kapanan oyuncu sebepsizce ateş edemez hâle gelirdi.
+⚠️ **Ölçülen kütlenin oranını yargılayan bir kural YOKTUR ve geri eklenmez:** Quest'te alt gövde sensörle ölçülmez, üst gövdeden üretilir (`OVRBody` FullBody =
+generative legs) ve üretilmiş bir uzuv, oyuncu siperin arkasında dururken siperin *içinde*
+çözülebilir — oran kuralı kaçınılmaz olarak dokunulmamış bir cisimden ceza üretir. Kafa merkezi
+kemikten değil **HMD'den** gelir, yani kural body tracking hiç çalışmasa da işler.
+
+Ölçüm yedi noktalı bir küre kabuğudur (merkez + ±x/±y/±z, yarıçap 11 cm). ⚠️ **EŞİK ile RAMPA
+ayrı şeylerdir** ve bu ayrım kuralın çekirdeğidir: giriş = merkez içeride **ya da** yedi noktanın
+≥3'ü içeride (+0.15 sn minimum süre), çıkış = **hiçbir** nokta içeride değil — histerezis ikinci
+bir eşikten değil buradan gelir. Hedef geometri `Obstacle` layer'ından; geniş faz tek bir
+`OverlapSphereNonAlloc`'tur ve **yakında engel yokken orada durur**. ⚠️ **Kafaya collider konarak
+yapılamazdı:** `Weapon`'ın atış ışını maskesiz — oyuncu kendi atışını kendi gövdesine yerdi;
+üstelik trigger "değdi mi" der, "ne kadarı içeride" demez. Nokta-içeride testinin kendisi burada
+değil `ObstacleVolumes`'dedir.
+
+**Karartmayı da bu bileşen sürer ve iki durum vardır, gerekçeleri farklıdır:** kafa içeride →
+**koşulsuz tam siyah** (0.2 sn'de; orada görülecek meşru bir şey yok ve duvar arkasını görmek tam
+olarak istismarın kendisi — kuralın anti-hile ayağı budur, ceza değil), kabuk değiyor ama kafa
+içeride değil → **hafif kararma** (tavan 0.35, nokta sayısıyla rampalı; gerekçesi kalibrasyon
+sapmasıdır, birkaç santimlik hizalama hatası oyuncuyu aniden kör etmesin). ⚠️ **Karartma derinliğe
+BAĞLANMAZ:** yedi noktanın kaçının içeride olduğunu alfaya çevirmek "içerideyim ama görüyorum"
+demektir — kafası yarı gömülü oyuncu duvarın öbür yüzünü okumaya devam eder. Ayrıca nabız
+titreşimi. Teşhis için `LastTrigger`, `HeadInsideLevel`, `FadeAlpha` ve son cevap veren engelin adı
+okunabilir — Dev penceresi Play kipinde bunları çizer.
+
+**`ObstacleWarningOverlay`** (`VA_CameraRig` → `CenterEyeAnchor` altında, `HMD Katmanlarını Kur`
+aracının kurduğu): ihlal boyunca karartmanın üstünde nabız atan uyarı yazısı. Ölçüm yapmaz, probe'un
+durumunu okur; alfası `FadeAlpha`'ya bağlıdır (yazı ekran kararırken gelir, ondan önce belirmez).
+Karartma quad'ından **daha yakın** durduğu için saydam sıralamasında onun üstüne çizilir.
+
+**`DamageVignette`** (aynı yerde): can kaybının kırmızısı. Can düştükçe nabız (tek pakette 25 HP =
+tam nabız, saniyede 2 birim sönüm), can 40'ın altındayken sabit çerçeve; ölüyken çizilmez.
+⚠️ **`ScreenFade`'e kaynak olarak EKLENEMEZ ve eklenmemelidir:** hakem "en yüksek alfa kazanır"
+diyor, yani engel karartması 1.0'dayken hiçbir kırmızı görünmez ve oyuncu kapkaranlık bir ekranda
+canının gittiğini fark etmez. Bu yüzden kendi renderer'ı ve kendi shader'ı vardır
+(`VortexArena/ScreenVignette` — `Overlay` kuyruğu + `ZTest Always`), yani karartmanın **üstüne**
+çizilir. Engele özel değildir: mermiyle gelen hasarda da çalışır. Değeri **abonelikle değil kare
+başına farkla** okur — can yalnız ağ mesajıyla değişiyor, kalıcı tekilin doğuş sırasına bağlı bir
+abonelik ömrü yönetmeye gerek yok.
+
+**`ObstacleVolumes`** (statik): *"bu şey bir iç engelin içinde mi"* sorusunun **tek** cevabı, üç
+biçimde: `Sample` + `Contains` (bir sorgu, çok nokta — kafa ve el ölçümü), `ContainsPoint` (tek
+atışlık, kendi tamponuyla, ölçüm turunu bozmadan — namlu) ve **`OverlapsBox`** (yönlendirilmiş kutu
+— silahın gövdesi; "namlu içeride mi" tek noktadır, "silahın herhangi bir parçası değiyor mu" ise
+bir HACİM sorusudur ve nokta örneklemesiyle cevaplanamaz). ⚠️ `OverlapsBox` konvekslik süzgeci
+uygulamaz ve buna gerek de yoktur: kutu-mesh kesişimi `ClosestPoint`'e dayanmadığı için o API'nin
+"her nokta içeride" yalanı oraya bulaşmaz. ⚠️ **Konvekslik şartının
+gerekçesi burada durur:** `Collider.ClosestPoint` non-convex bir `MeshCollider`'da girdi noktasını
+aynen döndürür → her nokta "içeride" okunur → sahnedeki herkes anında ölmeye başlar; böyle bir
+collider kalıcı olarak elenir ve **bir kez** hata basar. Aynı sebeple içeriden yüzey mesafesi
+**ölçülemez** — derinlik ancak çok nokta örnekleyerek yaklaşıklanır.
 
 **`ScreenFade`** (statik hakem): HMD karartma quad'ını isteyen **iki** sistem var (muhafaza ·
 engel ihlali) ama quad tektir. Kaynaklar alfalarını her karede bildirir, **en yüksek** olan çizilir;
@@ -1166,6 +1235,11 @@ bildirmeyi bırakan kaynak 0.25 sn sonra kendiliğinden düşer (kalp atışı s
 unutmak mümkün değil). ⚠️ Karışım (alfa toplama) bilinçli olarak yok: iki yarı saydam katman üst
 üste binince sonucu hiçbir kaynak istememiş olurdu. Renderer'ın **sahibi** yine `ArenaBoundary`'dir
 (quad onun serialize alanı); hakem yalnız hangi değerin çizileceğini söyler.
+⚠️ **Buraya üçüncü bir GÖRSEL katman eklenmez** (hasar kırmızısı, ölüm efekti, mod göstergesi):
+"en yüksek alfa kazanır" kuralı, tam karartma varken kendisinden düşük olan her katmanı **görünmez
+kılar**. Bu hakem yalnız *"ekran ne kadar kararsın"* sorusunu cevaplar; üstte görünmesi gereken her
+şey kendi renderer'ıyla ve daha yakında/`Overlay` kuyruğunda çizilir (`DamageVignette` ·
+`ObstacleWarningOverlay`).
 
 **`ArenaLayers`** (statik): `Obstacle` layer adının tek yazıldığı yer, maskeyi bir kez çözer ve
 layer tanımsızsa **bir kez hata basar**. Gerekçe: `LayerMask.NameToLayer` tanımsız adda `-1` döner,
@@ -1185,7 +1259,8 @@ geometrisini üreten araçlar + kavrama ayarı:
 | `DimensionMeshReader` | `DimensionMesh'i JSON'a Çevir`: maketi okuyup **kaynak dosyanın üstüne** yazar (hedef sorulmaz, maketin işaretçisinden gelir). Ayak izi çıkarımı: yatay yüzler (`\|normal.y\| > 0.9`) Y seviyesine göre gruplanır, **en alt** grup alınır (prizmada alt yüz kazanır), kenarlar XZ'ye izdüşürülüp kaynaştırılır, **yalnız bir kez geçen** kenar sınır sayılır, halka yürünür ve doğrusal ara köşeler ayıklanır. Noktalar dünya üstünden kök uzayına çevrilir — kolonu sürüklemek/döndürmek doğru yazılır. ⚠️ Kenarlar köşe **indeksiyle değil konumla** anahtarlanır: ProBuilder sert normaller için köşeleri yüz başına ayırıyor, indeksle bakan tespit tüm mesh'i sınır sanar. Kalibrasyon noktaları `DimensionAnchor` küplerinin transformundan okunur; ⚠️ küp yoksa dosyadaki `calibration` **KORUNUR** (sıfırlanmaz — eski bir maketi çevirmek mekanın zemin bandı ölçüsünü silerdi). Yazmadan önce çıktı geri ayrıştırılır; doğrulanamazsa dosyaya **dokunulmaz** |
 | `DimensionMeshBuildStripper` | Menü değil, **build kancası** (`IProcessSceneWithReport`): ölçü maketinin görsel dalını (`Plane` + `Columns`) build'e giden **geçici sahne kopyasından** siler — sahne dosyasına dokunmaz, kök ve `DimensionAnchor` küpleri kalır (kalibrasyon onlara bağlı). ⚠️ Gerekçe boyut değil **bağımlılık**: çokgenler `ProBuilderMesh` taşır ve o bileşen `Unity.ProBuilder`'ı runtime derlemesine sokardı; bu projede ProBuilder yalnız editör tarafıdır. Editör Play kipinde kanca koşmaz, orada görseli `ArenaDimensionMesh.Awake` `Renderer.enabled` ile gizler |
 | `TemplateBasicsLoader` | `Template Temellerini Yükle`: aktif sahneye altyapıyı **prefab örneği** olarak koyar (`VA_ArenaBoundary`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`; seçime bağlı `VA_ModeHud` · taban bölgeleri), `ArenaCalibrator`'ın sahneye bakan alanlarını bağlar, `ArenaBoundary`'nin rig'e bakan alanlarını (`head`/`fadeRenderer`/`warningText`) `VA_CameraRig` içinden bağlar ve mekanın boyut dosyasını `ArenaBoundary.dimensionsJson`'a takar. ⚠️ **Kalibrasyon işaretçisi koymaz ve yerleştirmez** — onların tek kaynağı ölçü maketidir (`DimensionMeshBuilder`); ikinci bir üretici hangisinin geçerli olduğunu belirsizleştirirdi. Taban bölgelerini takım malzemesiyle boyar (tek `VA_BaseZone` prefabı iki takıma da hizmet ediyor; şerit rengini çalışma anında kimse yazmıyor). **İdempotent** — var olan örneği asset yoluyla tanır ve atlar; dolu bir alanın üstüne YAZMAZ |
-| `ObstacleLayerAuditor` | `Engel Hacimlerini Denetle`: açık sahnelerde `Obstacle` layer'ını tarar ve **konveks olmayan** collider'ları, trigger'ları ve collider'sız damgalı objeleri raporlar (dialog + tıklanabilir konsol satırları). **Var olma sebebi tek bir kuraldır ve gözle denetlenemez:** non-convex bir `MeshCollider` bu layer'a girerse `Collider.ClosestPoint` girdi noktasını aynen döndürür → nokta-içeride testi her zaman "içeride" der → **o sahnedeki herkes anında ölmeye başlar**. Çalışma anında `BodyViolationProbe` böyle bir collider'ı eliyor ama o satır ancak Play'e girilince görülür; bu araç aynı soruyu sahne kaydedilmeden önce sorar. ⚠️ Hiçbir şeyi DÜZELTMEZ — otomatik convex işaretlemek sanatçının bilerek yaptığı seçimi sessizce ezerdi |
+| `ObstacleLayerAuditor` | `Engel Hacimlerini Denetle`: açık sahnelerde `Obstacle` layer'ını tarar ve **konveks olmayan** collider'ları, trigger'ları, collider'sız damgalı objeleri ve **görünen yüzeyden şişkin** collider'ları raporlar (dialog + tıklanabilir konsol satırları). Şişkinlik testi çalışma anındaki testin **aynısıdır** (`ClosestPoint` ile nokta-içeride; ikinci bir matematik ikinci bir doğruluk kaynağı olurdu) ve kalan geometrik tuzağı yakalar: konveks işaretlenmiş **içbükey** bir mesh'te hull çukuru doldurur, collider görünenden büyür ve oyuncu **boşlukta** ceza alır — çizilen mesh doğru olduğu için gözle görülmez. Üçgen ağırlık merkezleri yüzeyin **iki yanına** 2 cm taşınır ve ölçüt "ikisi de içeride"dir: tek yana bakmak üçgen sarım yönüne güvenmek olurdu ve yön ters okunsaydı araç HER objeyi şişkin raporlardı. ⚠️ Yalnız `MeshCollider` denetlenir (kaynak: collider'ın kendi mesh'i) — Box/Capsule zaten bilinçli bir kabalaştırmadır ve aracın **kendi önerdiği** çözümdür; onu hata saymak olurdu. Mesh okunamıyorsa (Read/Write kapalı) ya da collider/obje kapalıysa test yapılmaz, obje sorunlu diye raporlanmaz. **Var olma sebebi tek bir kuraldır ve gözle denetlenemez:** non-convex bir `MeshCollider` bu layer'a girerse `Collider.ClosestPoint` girdi noktasını aynen döndürür → nokta-içeride testi her zaman "içeride" der → **o sahnedeki herkes anında ölmeye başlar**. Çalışma anında `ObstacleVolumes` böyle bir collider'ı eliyor ama o satır ancak Play'e girilince görülür; bu araç aynı soruyu sahne kaydedilmeden önce sorar. ⚠️ Hiçbir şeyi DÜZELTMEZ — otomatik convex işaretlemek sanatçının bilerek yaptığı seçimi sessizce ezerdi |
+| `HmdOverlayBuilder` | `HMD Katmanlarını Kur`: `VA_CameraRig.prefab` içindeki `CenterEyeAnchor`'a engel uyarı yazısını (`ObstacleWarningOverlay`) ve hasar vinyetini (`DamageVignette` + `M_DamageVignette`) kurar. **İdempotent.** ⚠️ **Vinyetin materyalini araç ÜRETİR** — shader import edilmeden GUID'i bilinemediği için elle yazılmış bir `.mat` sessizce boş shader referansıyla açılırdı; materyal bir asset olduğu ve prefabtan referanslandığı için de build'den strip edilmez (`Shader.Find` ile çalışma anında üretilseydi Quest'te pembe çizilirdi). ⚠️ **Çizim sırası prefabdaki MESAFEDEN gelir** (yazı 0.42 · vinyet 0.44 · karartma quad'ı 0.5) — sayılar değişirse sıra korunmalı. Araç çalıştırılmadıkça davranış eskisi gibi: karartma çalışır, yazı ve vinyet hiç çizilmez |
 | `BuildElementsConfigurator` | `Configure All Build Elements`: kayıt listelerini **klasör ağacından eşitler** — `Venues/*/Scenes/*/` taranır ve klasör tek doğruluk kaynağı sayılır. **Hepsini Yapılandır** önce aktif sahnenin `MapDefinition`'ını yazar/günceller, sonra eşitler; **Yalnız Senkronize Et** sahne açık olmadan da eşitler (silinmiş bir arenanın kalıntısını temizlemenin yolu budur). Eşitleme: eksik olan **uyarı** üretir (kutuda sahne yok / birden çok sahne var / sahne adı klasör adıyla uyuşmuyor / `Data/<Sahne>.asset` MapDefinition yok ya da yanlış yerde / mekan kökünde `Art,Data,Prefabs,Scenes` dışında klasör), fazla olan **silinir** (Build Settings'te mekan ağacında olmayan ya da diskte bulunmayan satırlar; `GameCatalog.maps` ve `ModeDefinition.maps` içindeki ölü ve artık taranmayan referanslar). `Boot.unity` index 0'da kalır, mekan-dışı sahneler (`_Shared/Scenes/*`) korunur, `Template/` sahneleri listeye hiç girmez. `ModeDefinition.maps` **boşsa** dokunulmaz (boş = kısıtsız); doluysa o modu destekleyen haritalarla birebir eşitlenir — hedef küme boş çıkarsa liste boşaltılmaz (boş liste "kısıtsız" demek olurdu), yalnız uyarı basılır. Sonda `ServerConfigExporter.Export(false)` + **sağlık raporu**: `ArenaBoundary` var mı · `dimensionsJson` dolu mu · muhafaza dünya orijinine yakın mı (arena uzayı = dünya uzayı) · ölçü maketi `EditorOnly` etiketli mi (etiketliyse build'e girmez ve kalibrasyon işaretçileri onunla birlikte silinir). Hiçbiri işi durdurmaz, hepsi rapora satır düşer. Kontroller **aktif sahneye** bakar, yani sahne bir kutuda değilse hiç koşmaz. ⚠️ **MapDefinition kendiliğinden ÜRETİLMEZ:** `supportedModeIds` boş bırakmak "kısıtsız" demek olduğu için üretilen boş bir tanım lobiyi sessizce her modda oynanır kılardı — sahne açılıp modlar araçtan seçilir. Ayrı bir "Arena Id" alanı yoktur: MapDefinition'ın adı sahne adıdır |
 
 ### Sunucu: `Server/VortexArena.Server.Core`
@@ -1197,7 +1272,7 @@ geometrisini üreten araçlar + kavrama ayarı:
 | `StateHost` | UDP kaydı, poz alımı, 20 Hz snapshot yayını (16 girdiden fazlası MTU'ya sığan parçalara bölünür; olay varsa ve sığıyorsa `0x05` ile tek datagramda birleşir), `0x06` RTT echo'su. **Telemetriyi burada üretir:** saniyelik `[state]` satırı — gerçek bayt-sn/paket-sn, tik kayması, uplink jitter + poz/olay kaybı; eşiği aşan oyuncu için ek `[net]` satırı |
 | `PlayerRegistry` | Oyuncu listesi, `playerId` tahsisi (1..255), `devices.json` ile kalıcı **kimlik** (ad + forma numarası), bağlantı durumu ve **maç katılımcısı defteri**. ⚠️ **"Çevrimdışı" diye bir durum YOKTUR** (§2): `Connected` → soket düştü ya da `HEARTBEAT_TIMEOUT` doldu → `Reconnecting` (kayıt durur, maç kapılarına girmez) → `RECONNECT_GRACE` da dolarsa oyuncu **çıkarılır**: koşan maçın katılımcısıysa `Left` olarak maç sonuna kadar durur, değilse kayıt silinir ve playerId havuza döner. **Maç defteri** (`MatchParticipant` → `inMatch`) istatistik satırını bağlantıdan bağımsız kılar: `left` bir kayıt yalnız bu bayrak yüzünden yaşar. ⚠️ Defter **lobiye dönerken** kapanır, `match_end`'de DEĞİL — erken temizlik maç sonu tablosunu tam da okunduğu anda boşaltırdı. ⚠️ `Left` kayıtlar `_players`'ta durduğu için playerId'leri `NextFreePlayerIdLocked` tarafından zaten atlanır; ayrı bir rezervasyon defteri gerekmez. ⚠️ Toplu bayrak yazımı (maç kurulumu/kapanışı) **tek bir** `Updated` yayınlar — kayıt başına yayın N tam roster JSON'u demek olurdu. ⚠️ Soket alanının adı `Socket`'tir; `Connection` **durumu** taşır (aynı isimde iki kavram olamazdı). **Kimlik:** ilk bağlantıda ad 20'lik havuzdan rastgele (kullanılmayanlar arasından), numara 1'den itibaren ilk boş (1..99); `set_identity` ikisini de değiştirir. Adlar tekrar edebilir, **numara tüm KAYITLI cihazlar arasında benzersizdir** — sahiplik sorgusu `_players`'a değil `_devices`'a bakar (hiç bağlanmamış cihaz da numara tutar). Çevrimiçi sahipten numara istenirse reddedilir; çevrimdışı sahip **aynı anda** yeniden numaralanır. **Rol başına kalıcılık farkı:** oyuncu kaydı yukarıdaki iki aşamadan geçer (deviceId kalıcı, geri dönen aynı satıra oturur — ad, numara, takım, `kills/deaths/score` korunur); **admin kaydı ilk adımda tümüyle SİLİNİR** ve `Reconnecting` durumuna hiç girmez (deviceId oturumluk — geri gelen admin yeni bir kimlikle gelir, o satır asla eşleşemezdi; ayrıca her açıp kapatma roster'da hayalet satır ve tükenen playerId bırakırdı) ve admin adı diske yazılmaz. Aynı PC'de iki admin varsa ad " (2)" ile ayrıştırılır. **Atma bunun istisnasıdır** (`RemoveByPlayerId`): kayıt anında silinir ve katılımcılıktan da düşer — kopma satırı bırakır (maç sonu tablosunda görünür), atma bırakmaz; `devices.json`'a dokunulmaz, yani atılan cihaz geri bağlanırsa adını/numarasını korur (§5.4) |
 | `LobbyService` | Roster yayını (`lobby_state`) — **tek yayıncı döngüden**, kirli bayrakla birleştirilerek, her yayında `version` artarak (Tuzaklar: "ateşle-unut yayın sıra garantisi vermez"); `status.rosterVersion` geride kalan istemciye yalnız ona tam snapshot yollatır. Ayrıca ready/takım/kick/`set_identity` + **adminler arası ortak durumun sahibi**: mod/harita seçimi burada yaşar, `set_selection` ile değişir, `admin_state` ile yalnız adminlere yayılır. Her admin komutu "kim ne yaptı" duyurusu üretir |
-| `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş hattı, can/skor, canlanma, zorla canlandırma.** Mod kaydı tek yerde (`RegisterModes()` — yeni mod buraya bir satır). **Skor defteri:** `AddScore(team,…)` (takım) + `AddPlayerScore/ScoreOf/TryGetLeader` (bireysel); modlar skoru YALNIZ buradan yazar. **Mod komutları** (§3.8.2): `TryPauseForMode` / `SetModeState` / `TryStartRound` / `TryCancelCountdownForMode` — modun fazı doğrudan yazmasını (ikinci otorite) ve kendi mesajını yollamasını (ikinci gönderici) gereksiz kılar. **Dost ateşi anahtarının da sahibi burasıdır** (§3.9): açılışta kapalı, yalnız `set_friendly_fire` çevirir, yürürlükteki kural şekline `ApplyRulesLocked` damgalar. ⚠️ **Takımdaş öldürmede `OnKill` çağrılmaz** — skor yazılmaz, `kills`/`deaths` ve kill feed işler |
+| `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş hattı, can/skor, canlanma.** Mod kaydı tek yerde (`RegisterModes()` — yeni mod buraya bir satır). **Skor defteri:** `AddScore(team,…)` (takım) + `AddPlayerScore/ScoreOf/TryGetLeader` (bireysel); modlar skoru YALNIZ buradan yazar. **Mod komutları** (§3.8.2): `TryPauseForMode` / `SetModeState` / `TryStartRound` / `TryCancelCountdownForMode` — modun fazı doğrudan yazmasını (ikinci otorite) ve kendi mesajını yollamasını (ikinci gönderici) gereksiz kılar. **Dost ateşi anahtarının da sahibi burasıdır** (§3.9): açılışta kapalı, yalnız `set_friendly_fire` çevirir, yürürlükteki kural şekline `ApplyRulesLocked` damgalar. ⚠️ **Takımdaş öldürmede `OnKill` çağrılmaz** — skor yazılmaz, `kills`/`deaths` ve kill feed işler. **Canlandırmanın iki yolunun da sahibi burasıdır** (§3.7): `HandleReviveRequestAsync` (oyuncunun talebi) ve `HandleAdminReviveAsync` (operatörün `revive_player` komutu; `playerId:0` = o an ölü olan herkes) — ikisi de canlandırmayı `RevivePlayerLocked` ile yapar. ⚠️ Canlandırma `ResetMatchStateLocked` ile YAPILMAZ: o sunucudaki alanları yazar ama istemciye hiçbir şey göndermez, oyuncu ölüm ekranında donar |
 | `MapTable` | `maps.json` (Unity export'undan) — sunucunun okuduğu tek içerik tablosu. Girdi başına yalnız `sceneName` + `modes`; **arena ÖLÇÜSÜ yoktur** (sunucu metre kullanmaz, §7.30) |
 | `Modes/IGameMode` + `TdmMode` + `FfaMode` | Mod kuralları: skor, kazanma koşulu, tur süresi. Yeni kancalar **varsayılan gövdeyle** eklenir (default interface method) → mevcut modların hiçbiri değişmez; **tüketicisi olmayan kanca EKLENMEZ**. `FfaMode` yüzeyin ilk tüketicisidir: takımsız + bireysel skor + sabit durma canlanması, `MatchDirector`'a tek satır kayıt dışında hiçbir dokunuş yok. `OnRoundStart` ikinci örnektir: Live'a HER girişte çağrılır, tur kavramı olmayan modlar hiç yazmaz |
 | `Modes/TournamentMode` | **Tur tabanlı takım elemesi** (§3.8.2). Kural olarak TDM'den tek farkı `Revive = None`'dır; turun tamamı bu sınıfın iç durumudur (`_round`, `_roundLive`, `_matchOver`). Eleme `OnKill`'de değil **`OnTick` taramasında** ölçülür — takım bağlantı kopmasıyla da boşalır ve o yolda `OnKill` çağrılmaz; tek tarama tek doğruluk kaynağıdır. Süre dolunca **savaşabilir** (canlı **ve** kalibreli) sayısı fazla olan tur alır, eşitse kimseye puan yok. Toplanma kapısı `set_ready` bayrağını yeniden kullanır ve **zaman aşımı yoktur**: tur herkes tabanına girmeden başlamaz, geri sayım her koşulda iptal edilebilir, çıkış operatörün `kick`/`abort_match` komutudur. Bekleme uzarsa 30 sn'de bir konsola teşhis satırı basar (tur başlatmaz). ⚠️ `IsMatchOver`'da `TimeRemaining <= 0` dalı YOKTUR: bu modda o sayaç **turun**dur |
@@ -1655,12 +1730,15 @@ konsoluna tek satır sebep yazar.
     gözlemci kamerasının kuş bakışı kadrajı). Genel kural: **sunucuya yalnız sunucunun
     karar vermek için okuduğu alan gider** — "ileride lazım olur" diye alan taşımak, iki uçta
     sessizce sapan ikinci bir doğruluk kaynağı üretir.
-30. **Kalibrasyon kapısı `REVIVE_GRACE` zorla canlandırmasını da kapsamalı.** "Kalibresiz oyuncu
-    canlanamaz" kuralını yalnız `HandleReviveRequestAsync`'e koymak işe yaramaz:
-    `MatchDirector.TickLiveLocked` talep gelmese de grace süresi dolunca herkesi canlandırıyor,
-    yani oyuncu birkaç saniye sonra kendiliğinden geri gelirdi. İki yer de kapatılmalı. Genel
-    kural: **bir oyuncu durumuna kapı koyarken o durumu değiştiren TÜM yolları ara** — talep
-    tabanlı olan ile zamanlayıcı tabanlı olan ayrı kod yollarıdır.
+30. **Bir durumu değiştiren yol sayısı kadar kapı vardır.** "Kalibresiz oyuncu canlanamaz" gibi bir
+    yasak, o durumu yazan yolların hepsine konmadıkça işlevsizdir. Canlandırmanın iki yolu var
+    (`MatchDirector.HandleReviveRequestAsync` = oyuncunun talebi, `HandleAdminReviveAsync` =
+    operatörün komutu) ve kalibrasyon ile engel yasakları **ikisinde de** tekrarlanır; yalnız birine
+    konsa tek bir operatör tuşu yasağı sessizce delerdi ve hiçbir hata üretmezdi. Bir yasağın
+    yalnız bir yolda geçilmesi ancak **açıkça verilmiş bir karar** olabilir (mod kuralı
+    `reviveAnchor:"none"` operatör yolunda bilerek geçilir), varsayılan değil. Kural: yasak
+    yazmadan önce o durumu (`Alive`/`Hp`) yazan **tüm** çağrıları ara — zamanlayıcı, mod kancası
+    ya da admin komutu fark etmez.
 31. **Arayüzde "kaç px sığar" hesabı elle YAPILMAZ.** Yerleşim Layout Group değil **sabit anchor**
     ile kurulu (öngörülebilir yerleşim) — bedeli: bir satıra düğme eklemek kalanların genişliğini
     sessizce daraltır. Oyuncu satırına `KAL` eklenince düğme başına 94 px'ten ~70 px'e düşüldü ve
@@ -2043,11 +2121,12 @@ konsoluna tek satır sebep yazar.
     (§3.8.2) turlar arası `load_match` **yoktur** → mesaj gitmeyince ölü oyuncu `playing` fazına ölü
     ekranıyla girer ve ateş edemez. Kural: **oyuncunun görebileceği bir durum değişimi telde de
     görünmelidir** — canlandırma `RevivePlayerLocked` (`health_update`) ile yapılır.
-68. **Bir oyuncu durumuna yasak koyarken o durumu değiştiren TÜM yolları kapat.** Canlandırmanın iki
-    yolu var ve ayrı kod yollarıdır: talep tabanlı (`revive_request`) ve zamanlayıcı tabanlı
-    (`REVIVE_GRACE`). `reviveAnchor:"none"` eklenirken yalnız talebi kapatmak "tur içinde canlanma
-    yok" kuralını 20 saniyelik bir gecikmeye çevirirdi — kural işlemez, hata da vermezdi. Aynı tuzağa
-    kalibrasyon yasağında bir kez düşülmüştü (§3.7).
+68. **Otoriter bir yasak yalnız istemci kapısında durmaz.** Canlanma yasaklarının üçü de
+    (kalibrasyon, `reviveAnchor:"none"`, engelin içinde olmak) iki uçta birden uygulanır: istemci
+    talebi hiç göndermez, sunucu gelirse **reddeder** (§3.7). İstemci tarafı sunumdur — ölüm ekranı
+    doğru metni yazsın, ağ boşuna talep tekrarlamasın; kuralı tutan sunucudur. Yalnız istemcide
+    durursa bayat ya da yanlış konuşan bir istemci yasağı deler, yalnız sunucuda durursa oyuncu
+    hiçbir açıklama görmeden reddedilir.
 69. **Aynı değeri tekrar tekrar yazan bir bayrak, yayın tetikliyorsa fan-out'a dönüşür.**
     `PlayerRegistry.SetReady` koşulsuz `Changed` yayınlasa her çağrı bir TAM `lobby_state`
     broadcast'i olurdu; toplanma kapısı bu bayrağı yeniden kullandığı için (§3.8.2) "tabandayım"
@@ -2731,27 +2810,93 @@ konsoluna tek satır sebep yazar.
     atmaz, log basmaz, `false` dönmez: fonksiyon başarıyla çalışmış gibi görünür. Engel ihlali
     tespiti bu teste dayandığı için tek bir non-convex collider `Obstacle` layer'ına girdiğinde
     **o sahnedeki herkes anında ölmeye başlar** ve belirti hiçbir yerde bu collider'ı göstermez.
-    Bu yüzden kural iki yerden bekçilenir: çalışma anında `BodyViolationProbe` böyle bir collider'ı
+    Bu yüzden kural iki yerden bekçilenir: çalışma anında `ObstacleVolumes` böyle bir collider'ı
     kalıcı olarak eler ve bir kez hata basar, editörde `Engel Hacimlerini Denetle` sahneyi tarar.
+    ⚠️ **Konveks olmak yetmez, KONVEKS OLARAK ÇİZİLMİŞ olmak gerekir:** içbükey bir mesh'i
+    `Convex` işaretlemek hatayı sessizce başka bir kılığa sokar — hull çukuru doldurur, collider
+    görünen yüzeyin dışına taşar ve oyuncu **boşlukta** ceza alır. Bunu da aynı editör aracı
+    ("şişkin" raporu) yakalar; gözle görülmez, çünkü çizilen mesh doğrudur.
     ⚠️ Ters yöndeki kaçış da aynı derecede sessizdir: `Physics.CheckSphere` kapalı bir concave
     mesh'in **derinindeki** nokta için `false` döner (yalnız üçgen kesişimine bakar), yani "içeriden
     yüzey mesafesi" hiçbir yöntemle ölçülemez — kürenin tamamının içeride olup olmadığı bu yüzden
     **kabuk noktalarıyla** örneklenir, merkez-yüzey mesafesiyle değil.
 127. **Bir hacmin İÇİNDE olmak, ona DEĞMEKTEN farklı bir sorudur; trigger olayları ikincisini
-    cevaplar.** `OnTriggerEnter`/`Stay` "temas var" der ve temas sayısı hacim oranı DEĞİLDİR: bir
-    parmak ucu da göğsün tamamı da tek bir olaydır. "Gövdenin %30'u içeride" gibi bir kural trigger
-    ile ifade edilemez, ölçülebilmesi için gövdenin **ağırlıklı noktalara** bölünmesi gerekir.
-    ⚠️ Ölçüde nokta SAYISI da yanıltıcıdır: iki el + bir ayak gövdenin %1.8'i, göğüs tek başına
-    %22'sidir — eşit sayılan noktalar kuralı sessizce anlamsızlaştırır.
-128. **Yerel oyuncunun gövdesine collider EKLENEMEZ — atış ışını maskesiz ve trigger'ları da
-    vuruyor.** `Weapon.Fire` `Physics.Raycast(muzzle, dir, out hit, range)` çağırıyor (layer mask
-    yok) ve proje ayarı `Queries Hit Triggers` **açık**; yani yerel gövdeye konan bir collider —
-    trigger olsa bile — oyuncunun kendi kurşununu kendine yedirir. Kendi gövdesiyle ilgili her ölçüm
-    (engel ihlali, temas, yakınlık) bu yüzden collider'sız yöntemlerle yapılır. ⚠️ Aynı sebeple
-    sahneye eklenen **her yeni collider** bir atış hattı kararıdır: mermi ona çarpacaktır. Sanatın
-    collider'ından ayrı, daha geniş bir "mantık hacmi" koymak mermileri objelerin birkaç santim
-    önünde durdurur — bu yüzden engel hacmi ayrı bir collider değil, objenin **kendi** collider'ının
-    layer'ıdır.
+    cevaplar.** `OnTriggerEnter`/`Stay` "temas var" der ve temas **derinlik değildir**: kafasını
+    duvara değdiren oyuncu ile duvarın içinde duran oyuncu trigger için aynı olaydır. "Kafa
+    içeride mi" sorusu bu yüzden temasla değil **kabuk noktalarıyla** ölçülür (merkez + ±x/±y/±z);
+    trigger ile ifade edilebilen tek kural "değdi" olurdu ve o, siperin yanından geçen herkesi
+    cezalandırırdı.
+128. **Yerel oyuncunun gövdesine collider EKLENEMEZ — atış ışını maskesizdir.**
+    `ArenaCombat.TraceShot` menzil boyunca `~0` maskesiyle ışın atıyor (uzak isabet kutuları
+    Default layer'ında), yani yerel gövdeye konan **katı** bir collider oyuncunun kendi kurşununu
+    kendine yedirir. Kendi gövdesiyle ilgili her ölçüm (engel ihlali, temas, yakınlık) bu yüzden
+    collider'sız yöntemlerle yapılır. ⚠️ Aynı sebeple sahneye eklenen **her yeni katı collider** bir
+    atış hattı kararıdır: mermi ona çarpacaktır. Sanatın collider'ından ayrı, daha geniş bir "mantık
+    hacmi" koymak mermileri objelerin birkaç santim önünde durdurur — bu yüzden engel hacmi ayrı bir
+    collider değil, objenin **kendi** collider'ının layer'ıdır. ⚠️ **Trigger'lar atış ışınında
+    bilerek elenir** (`QueryTriggerInteraction.Ignore`): proje ayarı `Queries Hit Triggers` açık ve
+    sahnedeki silahların ISDK kavrama hacimleri trigger'dır — elenmeseydi tezgâhın önünden atılan
+    mermi kavrama hacmine çarpıp dururdu. Yani "trigger koyarsam mermi geçer" **atış için**
+    doğrudur, diğer sorgular için değildir.
+129. **`ProjectSettings/TagManager.asset` elle düzenlenmez — layer'lar Unity'nin kendi arayüzünden
+    (`Edit > Project Settings > Tags and Layers`) yazılır.** Unity boş layer satırını **tire +
+    BOŞLUK** (`- `) olarak serileştirir; düz `-` yazılmış bir satır okuyucuyu düşürür ve **layer
+    listesinin tamamı** kaybolur — yalnız o an eklenen ad değil, dosyada zaten duran adlar da.
+    ⚠️ Belirti hata değil **sessizliktir**: layer'ını adla çözen her sistem (`ArenaRoof` çatı
+    gizleme, `ArenaLayers` engel ihlali) `NameToLayer`'dan `-1` alıp devre dışı kalır, ama sahnedeki
+    objeler sayısal index'lerini koruduğu için hiyerarşi doğru görünmeye devam eder. ⚠️ Dosya bu
+    hâldeyken editör ProjectSettings'i diske geri yazarsa adlar repodan da silinir. Aynı sebeple
+    araçlar layer'ı **index'le değil adla** çözer ve bulamayınca bağırır.
+130. **`Physics.Raycast`, orijini İÇİNDE olduğu collider'ı HİÇ VURMAZ — mermi engeli deler
+    geçer.** Belgelenmiş davranıştır ve hata üretmez: ışın "engel yokmuş gibi" ilerler. Sahadaki
+    karşılığı düpedüz hiledir — oyuncu namlusunu sandığın içine sokar ve arkasındaki oyuncuyu
+    vurur; namlunun ucunu ince bir duvarın öbür yüzüne geçirmek de aynı kapıdır (orijin artık
+    duvarın ötesindedir). Düz bir raycast bunu **hiçbir maske ya da menzil ayarıyla** yakalayamaz:
+    tek çözüm **orijini ayrıca sınamaktır** (nokta engelin içinde mi + namlu gövdesi engelin
+    içinden geçiyor mu). Bu yüzden testin tek adresi `ArenaCombat.IsMuzzleBlocked`'tır: tetikli
+    silahlarda tetiği tümden öldürür, `TraceShot` içinde ise tetiği olmayan hasar kaynakları için
+    ikinci savunma hattı olarak durur — kendi `Physics.Raycast`'ini yazan her yeni hasar kaynağı
+    kuralı kaybeder.
+131. **Quest'te bacaklar ÖLÇÜLMEZ, ÜRETİLİR — türetilmiş bir eklemden kural çıkarılmaz.**
+    `OVRBody` `FullBody` (generative legs) alt gövdeyi üst gövdeden tahmin eder; gözlükte alt
+    gövde sensörü yoktur. Tahmin edilen bacak, oyuncu bel yüksekliğindeki bir siperin **arkasında**
+    dururken siperin **içinde** çözülebilir — ve antropometride bacaklar gövdenin ~%32'sidir, yani
+    "gövdenin %30'u içeride" gibi bir kuralı **tek başlarına** tetiklerler. Belirti "hiç dokunmadan
+    hasar alıyorum"dur ve sebep ne collider'da ne eşiktedir. Engel kuralının yalnız **kafayı**
+    yargılamasının sebebi budur. Genel kural: **ölçülmüş veriye dayanmayan bir eklem, ceza üreten
+    hiçbir hesaba girmez** (aynısı poz geçersizken donan tüm iskelet için de geçerlidir).
+132. **`welcome` oyuncunun `hp`/`alive` durumunu TAŞIMAZ — yeniden bağlanan istemci kendini canlı
+    SANMAZ.** Bağlantı kurulduğunda "canlı + tam can" varsaymak bir tahmindir ve ölüyken kopup
+    dönen oyuncuda yanlıştır: istemci ölüm ekranını kapatır, tetik açılır, mermi düşer, ses ve iz
+    oynar — ama sunucu her `hit_report`'u "atıcı ölü" diye atar. Belirti teşhis edilemez bir
+    *"vuruyorum ama adam ölmüyor"*dur ve **kendiliğinden geçmez**: sunucunun zamanlayıcı tabanlı
+    bir canlandırması yoktur (§3.7) ve istemci ölüm ekranını göstermediği için oyuncu canlanma
+    şartını sağlamaya hiç kalkışmaz — sapma kalıcıdır. Otoriter değer zaten telde: `lobby_state`'in
+    `PlayerInfo.hp`/`alive` alanları. Genel kural: **bilinmeyen bir otoriter durum tahmin edilmez,
+    öğrenilene kadar son bilinen değer korunur.**
+133. **"En yüksek alfa kazanır" bir hakem, ikinci bir GÖRSEL katmanı sessizce yok eder.**
+    `ScreenFade` tek bir quad'ı paylaştırıyor ve kazananı çizip diğerlerini atıyor — bu, aynı soruyu
+    ("ekran ne kadar kararsın") soran kaynaklar için doğru, **farklı** bir şey söyleyen bir katman
+    için felakettir. Can kaybının kırmızısını oraya bir kaynak olarak eklemek, engel karartması
+    1.0'dayken onu tümden görünmez yapar: oyuncu kapkaranlık bir ekranda ölür ve **neden öldüğünü
+    hiç göremez**. Ne hata basar ne de kod yanlış görünür — hakem tam olarak tarif edildiği gibi
+    çalışmaktadır. Kural: **bir hakem yalnız kendi sorusunun cevaplarını sıralar**; üstte görünmesi
+    gereken her şey kendi renderer'ıyla, daha yakında ya da `Overlay` kuyruğunda çizilir.
+134. **Bir eşiği aynı zamanda şiddet rampası olarak kullanmak, kuralı tam da işe yarayacağı anda
+    kapatır.** "Kafanın yedi noktasından kaçı içeride" ölçüsü hem *"ihlal mi"* sorusunu hem
+    karartma alfasını sürüyordu; sonuç, kafasını duvara yarıya kadar sokan oyuncunun **ceza alıp
+    yine de görmeye devam etmesiydi** (5/7 içeride ≈ 0.7 alfa). Rampa doğru geliyordu çünkü
+    yumuşak geçiş istiyorduk — ama yumuşaklığın yeri **ihlalden önceki** banttır, ihlalin içi
+    değil. Kural: **eşik ile şiddet ayrı beslenir**; bir kural tetiklendiyse sonucu koşulsuz
+    uygulanır, tereddüt yalnız tetiklenmeden ÖNCE meşrudur.
+135. **Yasak durumda İLERLEYEN bir sayaç, o durumun yasağını delip geçer — son eylemi kesmek
+    yetmez.** "Engelin içinde canlanma yok" kuralı hem istemcide hem sunucuda duruyordu, ama
+    `standstill` sabit durma sayacı engelin içinde de işliyordu: oyuncu korunaklı yerde bekliyor,
+    dışarı adımını attığı **anda** canlanıyordu — beklemenin tamamını bedavaya getirmiş oluyordu.
+    Kapı doğru çalışıyor, hata da vermiyordu; delinen şey kapı değil **beklemenin anlamıydı**.
+    Kural: bir şart *"şu kadar süre şunu yap"* biçimindeyse, o sürenin **nerede** geçtiği şartın
+    parçasıdır — yasak durumda sayaç ilerlemez, sıfırlanır. Aynı soruyu her bekleme sayacına sor:
+    *"bu süreyi oyuncunun bulunmaması gereken bir yerde doldurabilir mi?"*
 
 ---
 

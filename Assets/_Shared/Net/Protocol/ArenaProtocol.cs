@@ -296,13 +296,43 @@ namespace VortexArena.Protocol
         public const float PLAYER_MAX_HP = 100f;
 
         /// <summary>
+        /// Engelin içinde <b>can erimeye başlamadan önceki</b> tolerans (sn, §10.9).
+        /// <para>Bu süre boyunca oyuncunun ekranı zaten kapkaranlıktır (istemci tarafı): "bedava"
+        /// olan şey görüş değil <b>yalnız candır</b>. Kuralın anti-hile ayağı karartmadır, ceza
+        /// engelin içinde kamp kurmayı engeller — tolerans bu yüzden cömert olabiliyor.</para>
+        /// <para>⚠️ Oyuncu engelden çıkınca <b>tümden sıfırlanır</b> (kısmi sönüm yok): girip çıkan
+        /// oyuncu her girişinde yeniden kör kalıyor, yani kazandığı bir şey yok.</para>
+        /// </summary>
+        public const float OBSTACLE_GRACE_SECONDS = 3f;
+
+        /// <summary>
+        /// Tolerans dolduktan sonra <b>tam candan</b> ölüme geçen süre (sn, §10.9). Engelde
+        /// geçirilebilen toplam süre <see cref="OBSTACLE_GRACE_SECONDS"/> + bu değerdir.
+        /// <para>⚠️ <b>Yaralı oyuncu daha çabuk ölür:</b> erime bir HIZ'dır, sabit bir geri sayım
+        /// değil. "8 saniye" tam candaki süredir, bir garanti değil.</para>
+        /// </summary>
+        public const float OBSTACLE_DRAIN_SECONDS = 5f;
+
+        /// <summary>
         /// Engel ihlalinde saniyelik can kaybı (§10.9) — sunucu <b>kendi tikinde ve kendi
         /// saatiyle</b> uygular.
-        /// <para>⚠️ <b>Ölüm süresi bir sabit DEĞİLDİR</b>, bunun <see cref="PLAYER_MAX_HP"/>'ye
-        /// oranıdır: 100 / 30 ≈ 3.3 sn (4. saniye içinde ölüm). Süreyi değiştirmek isteyen buradaki
-        /// hızı değiştirir; ikinci bir "süre" sabiti eklemek aynı sayının iki kaynağı olurdu.</para>
+        /// <para>⚠️ <b>Elle yazılmaz, türetilir:</b> tasarım parametresi süredir
+        /// (<see cref="OBSTACLE_DRAIN_SECONDS"/>), hız onun sonucudur. İkisini ayrı ayrı yazmak
+        /// aynı sayının iki kaynağı olurdu.</para>
+        /// <para>⚠️ Bu üç sabitin de <b>tek tüketicisi sunucudur</b>: değiştirmek yeni APK
+        /// gerektirmez, sunucu derlemesi yeter.</para>
         /// </summary>
-        public const float OBSTACLE_DAMAGE_PER_SECOND = 30f;
+        public const float OBSTACLE_DAMAGE_PER_SECOND = PLAYER_MAX_HP / OBSTACLE_DRAIN_SECONDS;
+
+        /// <summary>
+        /// Engelin içindeyken canlanma en fazla bu kadar süre engellenir (sn, §10.9/§10.4).
+        /// <para><b>Neden bir tavan var:</b> canlanma kapısı istemcinin bildirdiği bir bayrağa
+        /// bakıyor; yanlış konuşan (susmayan ama sürekli "engeldeyim" diyen) bir istemci oyuncuyu
+        /// kalıcı ölü bırakabilirdi. <see cref="OBSTACLE_FLAG_STALE_MS"/> yalnız <b>susmuş</b>
+        /// istemciyi çözer. Tavan dolunca oyuncu engelde de olsa canlandırılır — ceza zaten anında
+        /// yeniden başlar, yani kural işlevsizleşmez.</para>
+        /// </summary>
+        public const float OBSTACLE_REVIVE_BLOCK_SECONDS = 40f;
 
         /// <summary>
         /// <see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/> bu süredir (ms) tazelenmemişse bayrak
@@ -350,14 +380,9 @@ namespace VortexArena.Protocol
         /// Mod bunu ModeRules.RespawnDelay ile ezebilir (§10.5).</summary>
         public const float RESPAWN_DELAY = 5f;
 
-        /// <summary>Free-roam canlanma: süre dolduktan sonra oyuncu modun canlanma şartını
-        /// sağlayıp revive_request gönderir. Bu süre (ölümden itibaren) dolduğunda sunucu yine de
-        /// canlandırır — takılan/bildirim gönderemeyen istemci kalıcı ölü kalmasın.</summary>
-        public const float REVIVE_GRACE = 20f;
-
         /// <summary>reviveAnchor="standstill" (§10.5): ölü oyuncunun canlanmak için kesintisiz
         /// sabit durması gereken süre.</summary>
-        public const float REVIVE_HOLD_SECONDS = 3f;
+        public const float REVIVE_HOLD_SECONDS = 5f;
 
         /// <summary>reviveAnchor="standstill": ölüm anındaki çapadan bu yarıçapı (metre) aşan
         /// hareket sayacı ve çapayı sıfırlar.</summary>

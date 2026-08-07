@@ -19,7 +19,7 @@ public sealed class FfaMode : IGameMode
     /// arkadaşı saymaz (§10.3/4) ve bu modda herkesin takımı <c>""</c>'tir, yani kapı hiç kapanmaz.
     /// <para><c>RespawnDelay = 0</c> bilinçlidir: bekleme süresi yerine <see cref="ReviveAnchor.StandStill"/>
     /// şartı işler (istemci <c>REVIVE_HOLD_SECONDS</c> boyunca sabit durmayı bekler), yani toplam
-    /// bekleme yine ~3 sn'dir ama oyuncunun elindedir.</para></summary>
+    /// bekleme yine ~5 sn'dir ama oyuncunun elindedir.</para></summary>
     public ModeRules Rules => new()
     {
         Teams = TeamMode.None,

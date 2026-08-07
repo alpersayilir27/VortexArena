@@ -31,15 +31,17 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `EVENT_MAX_ENTRIES_PER_PACKET` | `128` | Tek `0x04` datagramına yazılan en fazla olay (§6.5). 6 + 128×9 = 1158 B < MTU. Taşan olay **atılmaz, sonraki tik'e kayar** — "tik başına en fazla bir batch" değişmezi kopya korumasının dayanağıdır |
 | `EVENT_TICK_HISTORY` | `64` | İstemcinin kopya ayıklama için hatırladığı `0x04` tik sayısı (§6.5) |
 | `PLAYER_MAX_HP` | `100` | Oyuncu tam canı (sunucu-otoriter; §10) |
-| `OBSTACLE_DAMAGE_PER_SECOND` | `30` | Engel ihlalinde saniyelik can kaybı (§10.9). `PLAYER_MAX_HP` ile birlikte ölüm süresini verir: 100 / 30 ≈ **3.3 sn**, yani 4. saniye içinde. ⚠️ Süre bir sabit DEĞİLDİR, bu ikisinin oranıdır — süreyi değiştirmek isteyen buradaki hızı değiştirir |
+| `OBSTACLE_GRACE_SECONDS` | `3` | Engelin içinde **can erimeye başlamadan önceki** tolerans (§10.9). Bu sürede oyuncunun ekranı zaten kapkaranlıktır: bedava olan görüş değil **yalnız candır**. ⚠️ Engelden çıkınca **tümden sıfırlanır** (kısmi sönüm yok) — girip çıkan oyuncu her girişinde yeniden kör kalıyor, yani kazandığı bir şey yok |
+| `OBSTACLE_DRAIN_SECONDS` | `5` | Tolerans dolduktan sonra **tam candan** ölüme geçen süre (§10.9). Engelde geçirilebilen toplam süre `OBSTACLE_GRACE_SECONDS` + bu değerdir (**8 sn**). ⚠️ Yaralı oyuncu daha çabuk ölür: erime bir HIZ'dır, geri sayım değil |
+| `OBSTACLE_DAMAGE_PER_SECOND` | `20` | Engel ihlalinde saniyelik can kaybı (§10.9). ⚠️ **Elle yazılmaz, türetilir:** `PLAYER_MAX_HP / OBSTACLE_DRAIN_SECONDS`. Tasarım parametresi süredir, hız onun sonucudur — ikisini ayrı ayrı yazmak aynı sayının iki kaynağı olurdu. ⚠️ **Üçünün de tek tüketicisi sunucudur** — değerleri değiştirmek yeni APK gerektirmez, sunucu derlemesi yeter |
+| `OBSTACLE_REVIVE_BLOCK_SECONDS` | `40` | Engelin içindeyken canlanmanın en fazla bu kadar ertelenmesi (§10.9/§10.4). Kapı istemcinin bildirdiği bayrağa baktığı için tavansız bırakılamaz: yanlış konuşan bir istemci oyuncuyu kalıcı ölü bırakırdı (`OBSTACLE_FLAG_STALE_MS` yalnız **susmuş** istemciyi çözer). Tavan dolunca oyuncu engelde de olsa canlandırılır — çıkmadıysa ceza anında yeniden başlar, yani kural işlevsizleşmez |
 | `OBSTACLE_FLAG_STALE_MS` | `300` | `FLAG_IN_OBSTACLE` bu süredir tazelenmemişse bayrak **düşürülür** (§10.9). Poz kanalı 20 Hz (50 ms) olduğu için 6 paketlik kayba dayanır; susmuş bir istemci sonsuza kadar ceza almaz |
 | `COUNTDOWN_SECONDS` | `5` | Geri sayımın **varsayılan** uzunluğu (`phaseReason:"countdown"`); admin `start_match.countdownSeconds` ile o maça özel bir değer verebilir (§5.2) |
 | `COUNTDOWN_SECONDS_MIN` / `COUNTDOWN_SECONDS_MAX` | `5` / `30` | `countdownSeconds` kırpma aralığı. **Bu bir arayüz listesi değil, sunucunun uyguladığı kısıttır** — 1 sn'lik geri sayım oyuncuya yerini alacak zaman bırakmaz, 30 sn'den uzun bekleme turnuvada ölü zamandır |
 | `MATCH_END_SECONDS` | `999` | `finished` → otomatik `return_to_lobby`. **Akış değil emniyettir:** kazanan ekranı operatör bir şey seçene kadar durur (harita/lobi seçimi, `start_match`, `abort_match`/`return_to_lobby` — hepsi fazı değiştirdiği için sayacı öldürür, §10.1). Bilerek uzun tutuldu ki turnuvada tur/maç aralarını hakem yönetsin; operatör hiçbir şey yapmazsa maç yine de sonsuza kadar askıda kalmaz |
 | `LOADING_TIMEOUT` | 20 sn | Yükleme kapısında (`phaseReason:"loading"`) tüm `set_ready` beklenmezse yine de geri sayıma geçilir |
 | `RESPAWN_DELAY` | 5 sn | Ölüm → en erken canlanma (`respawn.delaySeconds`) **varsayılanı**; mod `rules.respawnDelay` ile ezebilir (§10.5) |
-| `REVIVE_GRACE` | 20 sn | `revive_request` gelmezse sunucu ölümden bu kadar sonra zorla canlandırır |
-| `REVIVE_HOLD_SECONDS` | 3 sn | `reviveAnchor:"standstill"` (§10.5): ölü oyuncunun canlanmak için kesintisiz sabit durması gereken süre |
+| `REVIVE_HOLD_SECONDS` | 5 sn | `reviveAnchor:"standstill"` (§10.5): ölü oyuncunun canlanmak için kesintisiz sabit durması gereken süre |
 | `REVIVE_HOLD_RADIUS` | 1 m | `reviveAnchor:"standstill"`: ölüm anındaki çapadan bu yarıçapı aşan hareket sayacı sıfırlar |
 | `ROUND_SECONDS_OPTIONS` | `60, 90, 120, 150, 180, 300, 600, 900, 1200, 1800, 3600` | Admin arayüzünün maç süresi seçenekleri (1 · 1.5 · 2 · 2.5 · 3 · 5 · 10 · 15 · 20 · 30 dk · 1 saat). **Protokol kısıtı değil, arayüz listesidir** — sunucu `start_match.roundSeconds`'ta her pozitif değeri kabul eder. Kısa uçtaki değerler tur tabanlı modlar içindir (`tournament`'ta bu alan **turun** süresidir, maçın değil) |
 
@@ -198,6 +200,34 @@ aralığına kırpar ve roster'da yayar.
   hedefe alansız bir `measure_body_scale` iletir (`identify` ile aynı çift yönlü desen) ve ölçümü
   başlık yapıp `set_body_scale` ile döner. ⚠️ **Kalibresiz oyuncuya iletilmez:** ölçü arena zeminine
   göredir, kalibresiz başlıkta zemin bilinmiyor — atlanan hedefler `admin_state.notice` ile bildirilir.
+- **`revive_player`** `{ "type":"revive_player", "playerId":5 }` — ölü oyuncuyu **operatör
+  canlandırır** (§10.4). **`playerId:0` = o an ölü olan TÜM oyuncular** (`clear_calibration` ile aynı
+  toplu-hedef deseni). Sunucuda `MatchDirector` işler (`hp`/`alive` maç durumudur), canlandırmayı
+  `revive_request` ile **aynı kod yolu** yapar: `hp=PLAYER_MAX_HP`, `alive=1`, `health_update{hp:100,
+  attackerId:0}`. **Skor defterine ve `deaths` sayacına dokunmaz** — canlandırma bir düzeltmedir,
+  ölümü geri almaz.
+
+  Komut `revive_request`'in yasaklarından ikisini bilerek geçer, ikisine tabidir:
+
+  | Kapı | Operatör komutunda | Gerekçe |
+  |---|---|---|
+  | Faz `playing` | uygulanır | Başka fazda ölü oyuncu kavramı yoktur; `playing`'e girişte zaten herkes canlanır |
+  | `reviveAnchor:"none"` (turnuva, §10.5) | **GEÇİLİR** | Komutun varlık sebebi: takılan oyuncu her modda kurtarılabilmeli. ⚠️ Tur sonucunu değiştirir (tur, bir takımın tamamı ölünce biter) — operatörün bilinçli kararıdır |
+  | Canlanma gecikmesi (`rules.respawnDelay`) | **GEÇİLİR** | Operatör beklemez, komut anında uygulanır |
+  | Kalibrasyon (§10.6) | uygulanır | Kalibresiz oyuncu ateş edemez ve vurulamaz; canlandırmak onu savaşa döndürmez, yalnız tabloda "canlı" gösterir — yanıltıcı olur |
+  | Engelin içinde (§10.9) | uygulanır | Engelin içinde canlanan oyuncu kör kalır ve tolerans dolar dolmaz yeniden ölmeye başlar; komut bir ölüm döngüsü üretirdi |
+
+  ⚠️ **Geçilen iki kapının gerekçesi ürün kararı, geçilmeyen ikisininki fizikseldir** — mod kuralı ve
+  bekleme süresi operatörün üstlenebileceği şeylerdir, kalibresiz ya da engele gömülü bir oyuncuyu
+  canlandırmak ise gözle görülür bir yalan üretir.
+
+  **Reddedilen komut istemciye ret mesajı GÖNDERMEZ**, sunucu konsoluna gerekçesiyle tek satır yazar
+  (§ Sunucu README konsol tablosu). Operatör satırın canlanmadığını roster'da zaten görür; ayrı bir
+  ret kanalı açmak tek tüketicisi konsol olan bir mesaj tipi üretirdi.
+
+  ⚠️ **`PROTOCOL_VERSION` bu komut için ARTMAZ:** tipi tanımayan bir sunucu mesajı `default` dalında
+  sessizce düşürür, eski admin komutu hiç göndermez. Bedeli, eski sunucuya karşı komutun sessizce
+  hiçbir şey yapmasıdır — admin ile sunucu aynı depodan birlikte dağıtıldığı için kabul edilir.
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
 - **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }` — bir sonraki maçın **ortak** mod/harita/süre/limit/geri sayım seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim maç bitiminde sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
   ⚠️ **`sceneName` yalnız operatör harita/mod imlecini gerçekten oynattığında doldurulur** (süre/limit dokunuşunda boş gider): dolu harita alanı sahnelemeyi tetikler (§10.7), yani süre değiştirmek herkesi bir arenaya taşırdı.
@@ -259,7 +289,14 @@ değildir, ayırt edici alan budur** — arayüzlerde `"7 · ertu"` biçiminde g
 `kills`/`deaths`/`hp`/`alive`/`score` **sunucu-otoriter** maç sayaçlarıdır (§10.2) ve admin gözlemci
 arayüzünün tek doğruluk kaynağıdır: yalnız `kill_event`/`health_update` sayılsa admin yeniden
 bağlandığında tablo sıfırlanırdı. Maç dışında (`paused`/`lobby`) `hp=PLAYER_MAX_HP`, `alive=true`, sayaçlar 0.
-Admin olmayan istemciler bu alanları yok sayabilir.
+
+⚠️ **`hp` ve `alive`'ı OYUNCU istemcisi de kendi satırı için uygular** ve bu zorunludur: `welcome`
+bu ikisini taşımıyor, yani yeniden bağlanan bir istemci sunucudaki durumunu **başka hiçbir yerden**
+öğrenemez. Uygulanmazsa ölüyken kopup dönen oyuncu kendi ekranında canlı ve tam canlı görünür —
+ölüm ekranı kapanır, tetik çalışır, mermi düşer — ama sunucu onun her `hit_report`'unu "atıcı ölü"
+diye atar; belirtisi teşhis edilemez bir *"vuruyorum ama adam ölmüyor"*dur. Roster **boşluğu
+doldurur, akışı ezmez**: `health_update`/`respawn` bir kez geldikten sonra otoriter akış odur
+(iki mesaj ayrı yollardan gidiyor, sıraları garanti değil).
 
 `score` = **bireysel** maç skoru (`rules.scoring == "player"` olan modlarda anlamlı; takım
 skoru `match_state.scoreRed`/`scoreBlue`'da kalır — §10.5). Bireysel skorun değiştiği an =
@@ -451,8 +488,8 @@ de maskeye dahildir ve **doğrulanmadan** kopyalanır, çünkü beşi de eşya b
 **istemci-otoriter sunum bilgisidir** (§6.6 / §10.3). Maskeye yeni bir bit eklemek onu tel üzerinde
 istemcinin yazdığı bir alan yapar; sunucunun yazdığı bitler maskenin DIŞINDA kalır.
 
-⚠️ **`FLAG_IN_OBSTACLE` maskenin içinde olsa da SONUCU sunucu yazar** (§10.9): istemci "gövdem engelin
-içinde" der, cezayı (can eritme) sunucu kendi saatiyle uygular. Bu, `hit_report`'un hasar modelinin
+⚠️ **`FLAG_IN_OBSTACLE` maskenin içinde olsa da SONUCU sunucu yazar** (§10.9): istemci "kafam engelin
+içinde" der, cezayı (tolerans + can eritme) sunucu kendi saatiyle uygular. Bu, `hit_report`'un hasar modelinin
 aynısıdır — ölçümü istemci yapar, otorite sunucudadır.
 
 ⚠️ **İskelet akışı (§6.9) bu paketin yerine GEÇMEZ.** Gövde ayrı bir kanaldan gelir ama poz kanalı durur: silahın ele oturması, eşya baytları ve vuruş bildirimi ham anchor pozundan besleniyor. İki kanalın kadansı da ayrıdır (20 Hz ↔ `SKELETON_RATE_HZ`) — iskeletin gecikmesi silahın gecikmesi olmasın diye. "İskelet zaten el eklemini taşıyor, poz kanalı silinsin" **yapılmaz**: blob opaktır (alıcı içinden tek bir eklemi ucuza okuyamaz) ve o eklem elin fiziksel pozu değil retarget edilmiş bilek kemiğidir.
@@ -952,25 +989,34 @@ Fiziksel oyuncu ışınlanamaz → **respawn = konum değil durum değişimi**:
 1. Ölünce sunucu `respawn{playerId, delaySeconds}` gönderir (`delaySeconds` = `rules.respawnDelay`, §10.5); istemci ölüm ekranı gösterir, silah ateşlemez, avatar **hayalete döner** (yarı saydam; renk oyuncunun kendi takımı, takımsız modda nötr).
 2. `delaySeconds` dolduktan **ve modun canlanma şartı sağlandıktan** sonra istemci `revive_request` gönderir (canlanana dek ~1 sn'de bir tekrarlar). Şart `rules.reviveAnchor` ile seçilir:
    - **`"base"`** (varsayılan, TDM): oyuncu bir **taban bölgesine** (`BaseZone` — arenadaki kırmızı/mavi şerit) fiziken girer. Ölüm ekranı "Tabanına dön ve canlan" der.
-   - **`"standstill"`**: oyuncu ölüm anındaki HMD konumunu çapa alır ve `REVIVE_HOLD_RADIUS` içinde `REVIVE_HOLD_SECONDS` boyunca kesintisiz sabit durur; çapadan çıkınca sayaç ve çapa sıfırlanır. Taban bölgesi olmayan modlar (FFA) bunu kullanır.
-   - **`"none"`**: canlanma **YOKTUR**. İstemci `revive_request` hiç göndermez, sunucu gelirse reddeder ve `REVIVE_GRACE` zorla canlandırması bu kipte **çalışmaz**. Ölü oyuncuyu yalnız modun başlattığı yeni bir tur canlandırır (tur tabanlı eleme, `tournament` §10.5). Ölüm ekranı "canlanmaya N sn" değil "takımın turu bitirene kadar bekle" der.
+   - **`"standstill"`**: oyuncu ölüm anındaki HMD konumunu çapa alır ve `REVIVE_HOLD_RADIUS` içinde `REVIVE_HOLD_SECONDS` boyunca kesintisiz sabit durur; çapadan çıkınca sayaç ve çapa sıfırlanır. Taban bölgesi olmayan modlar (FFA) bunu kullanır. ⚠️ **İç engelin içinde geçen süre sayılmaz** (§10.9): sayaç orada ilerlemez, çapa her karede tazelenir ve süre engelden **çıkıldıktan sonra** sıfırdan başlar — şart "kıpırdama" değil, *meşru bir yerde* kıpırdamamaktır; sayılsaydı engel bir sığınağa dönerdi (içeride bekle, çıkar çıkmaz canlan).
+   - **`"none"`**: canlanma **YOKTUR**. İstemci `revive_request` hiç göndermez, sunucu gelirse reddeder. Ölü oyuncuyu yalnız modun başlattığı yeni bir tur canlandırır (tur tabanlı eleme, `tournament` §10.5). Ölüm ekranı "canlanmaya N sn" değil "takımın turu bitirene kadar bekle" der.
 3. Sunucu doğrular (faz `playing`, oyuncu ölü, gecikme dolmuş, **kalibreli**) → `hp=PLAYER_MAX_HP`, `alive=1` → `health_update{hp:100, attackerId:0}`.
-4. Ölümden `REVIVE_GRACE` geçtiği hâlde talep gelmediyse sunucu **zorla** canlandırır (istemci takılmışsa maç kilitlenmesin).
 
-> **`reviveAnchor` sunucuda DOĞRULANMAZ.** §10.3 felsefesinin aynısı: sunucu hakemlik değil defter tutar. "Tabanda mı / sabit mi durdu" kararı istemcinindir; sunucu faz + ölü + gecikme kontrolüyle yetinir. `REVIVE_GRACE` güvenlik ağı her iki şartta da aynen işler.
+> **`reviveAnchor` sunucuda DOĞRULANMAZ.** §10.3 felsefesinin aynısı: sunucu hakemlik değil defter tutar. "Tabanda mı / sabit mi durdu" kararı istemcinindir; sunucu faz + ölü + gecikme kontrolüyle yetinir.
 
-> ⚠️ **`REVIVE_GRACE`'in İKİ istisnası vardır** ve ikisi de aynı sebeple: bir canlanma yasağı,
-> canlandırmanın **her iki yolunu** birden kapatmadıkça işlevsizdir. Yollar ayrıdır — biri talep
-> tabanlı (`revive_request`), diğeri zamanlayıcı tabanlı (grace döngüsü); yalnız birini kapatmak
-> oyuncuyu 20 sn sonra yine canlandırır.
+**Operatör yolu.** Canlandırmanın **iki yolu vardır**: oyuncunun `revive_request`'i (yukarıdaki üç
+adım) ve operatörün `revive_player`'ı (§5.2). Sunucunun zamanlayıcı tabanlı bir canlandırması —
+yani üçüncü, kendiliğinden işleyen bir emniyet ağı — yoktur: modun şartını sağlamayan oyuncu
+kendiliğinden geri gelmez, onu ya kendi şartı ya operatör canlandırır. Operatör yolu `MatchDirector`
+üzerinden aynı `hp=PLAYER_MAX_HP` / `alive=1` / `health_update{hp:100, attackerId:0}` sonucunu yazar;
+skor defterine ve `deaths` sayacına dokunmaz.
+
+> ⚠️ **Canlanma yasakları İKİ YOLDA da durur — hangisinin hangisini geçtiği bilinçli bir ayrımdır:**
 >
-> 1. **Kalibrasyon** (§10.6): kalibresiz oyuncu ne talep üzerine ne de zorla canlandırılır. Kalibresiz
->    ölü oyuncu **kalibre olana dek ölü kalır**; kalibrasyon gelince grace zaten dolmuş olduğu için
->    ilk tik'te kendiliğinden canlanır.
-> 2. **`reviveAnchor:"none"`** (§10.5): grace döngüsü bu kipte hiç koşmaz. Ölü oyuncuyu yalnız modun
->    başlattığı yeni tur canlandırır — "tur içinde canlanma yok" kuralı buradan gelir.
+> | Yasak | `revive_request` | `revive_player` (operatör) |
+> |---|---|---|
+> | **Kalibrasyon** (§10.6) | Uygulanır — kalibresiz oyuncunun talebi reddedilir, yani **kalibre olana dek ölü kalır**; kalibrasyon gelince gecikme zaten dolmuş olduğu için ilk tekrarlanan talepte canlanır | Uygulanır — kalibresiz oyuncu ateş edemez ve vurulamaz, canlandırmak onu savaşa döndürmez |
+> | **Engelin içinde olmak** (§10.9) | Uygulanır — oyuncu çıkana kadar talep reddedilir. Diğerlerinden farkı yasağın **tavanlı** olmasıdır (`OBSTACLE_REVIVE_BLOCK_SECONDS`): kapı istemcinin bildirdiği bir bayrağa bakıyor, tavansız bırakılırsa yanlış konuşan bir istemci oyuncuyu kalıcı ölü bırakırdı | Uygulanır — engelin içinde canlanan kör kalır ve tolerans dolar dolmaz yeniden ölür, komut bir ölüm döngüsü üretirdi |
+> | **`reviveAnchor:"none"`** (§10.5) | Uygulanır — istemci talebi hiç göndermez, sunucu gelirse reddeder. Ölü oyuncuyu yalnız modun başlattığı yeni tur canlandırır; "tur içinde canlanma yok" kuralı buradan gelir | **GEÇİLİR** — komutun varlık sebebi budur: takılan oyuncu turnuvada da kurtarılabilmeli. Tur sonucunu değiştirmesi operatörün bilinçli kararıdır |
+> | **Canlanma gecikmesi** (`rules.respawnDelay`) | Uygulanır | **GEÇİLİR** — operatör beklemez |
+>
+> ⚠️ Genel kural: **bir oyuncu durumuna yasak koyarken o durumu değiştiren TÜM yolları ara** — bir
+> yasak, tüm yolları kapatmadıkça yoktur. Kalibrasyon ve engel yasakları bu yüzden iki yolda da
+> tekrarlanır; yalnız birine konsaydı operatörün tek tuşu ikisini birden delerdi. Mod kuralının
+> yalnız operatör yolunda geçilmesi bunun istisnası değil, **açıkça verilmiş** bir karardır.
 
-**Taban bölgesi eşleşmesi (istemci):** bir `BaseZone` oyuncuya açıktır eğer takımı oyuncunun takımıyla aynıysa, **ya da** bölge `Neutral` işaretliyse, **ya da** oyuncunun takımı boşsa (takımsız mod). Aynı takıma ait birden çok bölge varsa **herhangi birine** girmek yeter. Sahnede hiç açık bölge yoksa şart aranmaz — oyuncu kalıcı ölü kalmasın (güvenlik ağı yine `REVIVE_GRACE`).
+**Taban bölgesi eşleşmesi (istemci):** bir `BaseZone` oyuncuya açıktır eğer takımı oyuncunun takımıyla aynıysa, **ya da** bölge `Neutral` işaretliyse, **ya da** oyuncunun takımı boşsa (takımsız mod). Aynı takıma ait birden çok bölge varsa **herhangi birine** girmek yeter. Sahnede hiç açık bölge yoksa şart aranmaz. ⚠️ Bu fail-open davranış kritiktir: sunucu tarafında kendiliğinden işleyen bir emniyet ağı yoktur, yani taban bölgesi eksik/yanlış takıma ait bir sahnede oyuncuyu kalıcı ölü kalmaktan kurtaran **yalnız** istemcinin bu davranışıdır — geriye kalan tek çare operatörün elle canlandırmasıdır (`revive_player`, §5.2).
 
 **Konum diye bir alan protokolde YOKTUR.** Ne `load_match` ne `respawn` bir spawn noktası/slotu taşır; sunucu sahne geometrisini bilmez ve rig'i bir yere taşıyan mekanizma yoktur — oyuncu fiziksel olarak nerede duruyorsa orada canlanır. Telde taşınan tüm koordinatların sıfırı sahnenin **dünya orijinidir** (bkz. koordinat uzayı bölümü).
 
@@ -994,7 +1040,7 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
 | `teamMode` | `"two"` \| `"none"` | `"two"` | `"two"`: kırmızı/mavi, sunucu takımları dengeler, slot takım içi. `"none"`: takım yok (`team:""`), slot tek havuzdan |
 | `scoring` | `"team"` \| `"player"` | `"team"` | Skor kime yazılır: `match_state.scoreRed/scoreBlue` mi, `lobby_state → PlayerInfo.score` mü (§10.2) |
 | `friendlyFire` | `true` \| `false` | `false` | `false` = takım arkadaşı vurulamaz (§10.3/4). Boş takım asla takım arkadaşı sayılmaz. ⚠️ **Bir mod kuralı DEĞİL, operatör anahtarıdır** — aşağı bak |
-| `reviveAnchor` | `"base"` \| `"standstill"` \| `"none"` | `"base"` | Canlanma şartı (§10.4/2). `"none"` = tur içinde canlanma yok; `revive_request` reddedilir **ve** `REVIVE_GRACE` çalışmaz |
+| `reviveAnchor` | `"base"` \| `"standstill"` \| `"none"` | `"base"` | Canlanma şartı (§10.4/2). `"none"` = tur içinde canlanma yok; `revive_request` reddedilir — bu kuralı yalnız operatörün `revive_player` komutu bilerek geçer (§5.2) |
 | `weaponSource` | `"weaponcanvas"` \| `"random"` | `"weaponcanvas"` | Silah nereden gelir: `"weaponcanvas"` = sahnedeki **çerçeveler** (silah çerçeveden ayrılmaz ve tükenmez; seçilen silah grip'e basılınca oyuncunun eline **klonlanır**), `"random"` = modun dağıtımı. **Tümüyle istemci sunumu** — sunucuda karşılığı yok (§10.3: silah tablosu yoktur) |
 | `respawnDelay` | saniye | `RESPAWN_DELAY` (5) | `respawn.delaySeconds` ve sunucudaki `revive_request` gecikme eşiği. **`0` geçerli bir değerdir** (anında canlanma) ve varsayılana çekilmez — alan hiç gönderilmezse DTO'nun kendi başlangıcı geçerli olduğu için "yazılmadı" ile "sıfır yazıldı" karışmaz |
 | `fireWhilePaused` | `true` \| `false` | `false` | Faz `playing` değilken silah ateşlenebilir mi. `true` = lobi gibi serbest atış alanı: namlu alevi/ses relay edilir (§10.3) ama **hasar yine yoktur** (`hit_report` kapısı `playing`). Bu alan sayesinde istemcide `if (modeId == "lobby")` zinciri doğmaz |
@@ -1051,7 +1097,7 @@ olmalı, tanınmayan `modeId` reddedilir):
 > istemcide silah loadout'unu, HUD'u ve ateş serbestliğini çözer.
 
 > `ffa` satırı kuralların somut örneğidir: **takım yok** (`team:""` gelir, `winnerPlayerId`
-> dolar), ölünce 5 sn'lik gecikme yerine **sabit durma** şartı işler (`REVIVE_HOLD_SECONDS` = 3 sn,
+> dolar), ölünce 5 sn'lik gecikme yerine **sabit durma** şartı işler (`REVIVE_HOLD_SECONDS` = 5 sn,
 > `REVIVE_HOLD_RADIUS` = 1 m) ve silah sahnedeki çerçevelerden değil **istemcinin dağıtımından** gelir.
 > Dost ateşi anahtarı FFA'yı **hiç etkilemez** — boş takım asla takım arkadaşı sayılmadığı için
 > (§10.3/4) kapı zaten hiç kapanmaz; bu yüzden FFA o alana değer yazmaz.
@@ -1124,7 +1170,9 @@ tuş basışı **eski A noktasıyla** kalibrasyonu tamamlayabilir.
 1. `hit_report`'u **reddedilir** (ateş edemez) — §10.3/2
 2. Ona gelen `hit_report` **reddedilir** (hasar yemez) — §10.3/3
 3. Atış olayı (`0x03`) **relay edilmez** — §10.3
-4. `revive_request`'i reddedilir **ve `REVIVE_GRACE` zorla canlandırması onu atlar** — §10.4
+4. **Canlanamaz** — `revive_request`'i reddedilir ve operatörün `revive_player` komutu da onu
+   canlandırmaz (§10.4). Yasak canlandırmanın iki yolunda birden durur: kalibresiz oyuncuyu
+   "canlı" yapmak onu savaşa döndürmez, yalnız roster'da yanıltıcı gösterirdi.
 5. Maç sayaçları (`hp`/`kills`/`deaths`/`score`) **korunur** — kalibrasyon geri gelince oyuncu
    kaldığı yerden devam eder; bu bir cezalandırma değil, geçici bir dondurmadır.
 
@@ -1271,17 +1319,66 @@ başlığın kendi `set_calibration{false}`'u da aynı sonucu doğurur.
 
 ### 10.9 Engel ihlali (`FLAG_IN_OBSTACLE`)
 
-Arenanın **iç engellerine** (sütun, kasa, sandık, blok) gömülen oyuncu ceza alır: sunucu saniyede
-`OBSTACLE_DAMAGE_PER_SECOND` can eritir, istemci ekranı kızartıp titreşim verir, admin o oyuncunun
-kuş bakışı halkasını kırmızı yakıp söndürür.
+Arenanın **iç engellerine** (sütun, kasa, sandık, blok) **kafasını** sokan oyuncu ceza alır: ekranı
+anında kapkaranlık olur, uyarı yazısı belirir, titreşim başlar; `OBSTACLE_GRACE_SECONDS` sonra
+sunucu saniyede `OBSTACLE_DAMAGE_PER_SECOND` can eritmeye başlar ve admin o oyuncunun kuş bakışı
+halkasını kırmızı yakıp söndürür.
+
+**Girdiler ve sonuçları — CEZA ile ATEŞ KAPISI ayrı sorulardır:**
+
+| Girdi | Ceza (karartma + can) | Ateş kapısı |
+|---|---|---|
+| **Kafa** engelin içinde | ✅ karartma + uyarı yazısı + titreşim + (tolerans sonrası) can erimesi + `FLAG_IN_OBSTACLE` | ✅ tetik ölür |
+| **El** engelin içinde | — | ✅ tetik ölür |
+| **Silahın herhangi bir parçası** engele değiyor | — | ✅ tetik ölür |
+| Kol / gövde / bacak | — | — |
+
+⚠️ **Ceza yalnız kafayı yargılar, ateş kapısı kafa + eli.** Sebep iki sorunun farklı olmasıdır:
+ceza *"görüşüm geometrinin içinde mi"* diye sorar, ateş kapısı *"gövdemi göstermeden mi ateş
+ediyorum"* diye. Bloğun içinde durup silahı dışarı uzatan oyuncu ikincisini ihlal ediyor ama silahı
+tertemiz bir boşlukta — yalnız silaha bakan bir kapı onu göremez. Bu yüzden ateş kapısı
+**oyuncunun kendisinde** durur (`PlayerCombatState.CanFire`), silahta değil.
+
+⚠️ **El kuralı TELE GİTMEZ:** `FLAG_IN_OBSTACLE` yalnız kafayı taşır. El, sunucuda hiçbir şey
+değiştirmez — sunucunun cezasıyla ilgisi yoktur.
+
+⚠️ **Ölçülen kütlenin oranını yargılayan bir kural YOKTUR ve eklenmez.** Quest'te alt gövde sensörle
+ölçülmez, üst gövdeden ÜRETİLİR; üretilmiş bir uzuv oyuncu siperin *arkasında* dururken siperin
+*içinde* çözülebilir — böyle bir kural kaçınılmaz olarak dokunulmamış bir cisimden ceza üretir.
+Aynı sebeple ateş kapısı da **yalnız ölçülmüş** parçaları (HMD + izlenen eller) sorar; izlenmeyen
+el hiç sorulmaz (rig onun anchor'ını rig orijinine yazıyor, yani kumandası kapanan oyuncu sebepsizce
+ateş edemez hâle gelirdi).
+
+⚠️ **Silahın ya da elin engelde olması CAN GÖTÜRMEZ.** Karşılığı tetiğin ölmesidir; en beklenmedik
+ölüm "silahım duvara değdi diye öldüm"dür.
+
+**Ceza iki aşamalıdır** ve ikisinin işi farklıdır:
+
+| Aşama | Süre | Ne olur |
+|---|---|---|
+| Tolerans | `OBSTACLE_GRACE_SECONDS` (3 sn) | Ekran kapkaranlık, can **hiç azalmaz** — oyuncunun çıkacak zamanı var |
+| Erime | `OBSTACLE_DRAIN_SECONDS` (5 sn) | Tam candan ölüme lineer erime; kırmızı vinyet karartmanın üstünde nabız atar |
+
+⚠️ **Anti-hile olan şey KARARTMADIR, ceza değil.** Toleransın cömert olabilmesinin sebebi bu: o üç
+saniyede oyuncu zaten kördür, engelin içinden kimseyi göremez. Ceza engelin içinde **kamp kurmayı**
+engeller. Aynı sebeple tolerans engelden çıkınca **tümden sıfırlanır** — girip çıkan oyuncu her
+girişinde yeniden kör kalıyor, yani kazandığı bir şey yok.
+
+⚠️ **Yaralı oyuncu daha çabuk ölür:** erime bir HIZ'dır, sabit bir geri sayım değil. "8 saniye" tam
+candaki süredir, bir garanti değil.
 
 **Otorite bölünmesi hasar modelinin aynısıdır (§10.3):** ölçümü istemci yapar, sonucu sunucu yazar.
 
 | Taraf | Ne yapar |
 |---|---|
-| İstemci | Kendi gövdesini ölçer, `0x01`'in `gripFlags` bit5'ini set eder (20 Hz) |
-| Sunucu | Biti `PlayerState`'e alır, **kendi tikinde** can eritir, `health_update` yayar, ölümü işler |
+| İstemci | Kafasını ölçer, `0x01`'in `gripFlags` bit5'ini set eder (20 Hz); ekranı karartır, tetiği kapatır |
+| Sunucu | Biti `PlayerState`'e alır, **kendi saatiyle** toleransı ve erimeyi işletir, `health_update` yayar, ölümü işler |
 | Admin | Snapshot bit5'ini okur, halkayı kırmızı yanıp söndürür (yerel çizim) |
+
+⚠️ **Toleransın saati sunucunundur** (`PlayerState.ObstacleSince`). İstemci "ne zamandır
+içerideyim" diye bir süre gönderseydi cezanın başlama anını o belirlerdi; bit yalnız "şu an
+içerideyim" der. Saat ölümde, kalibrasyon kaybında ve engelden çıkışta sıfırlanır — ölüp canlanan
+oyuncu toleransı dolmuş halde bulmaz.
 
 **Sunucu bunu DOĞRULAMAZ ve doğrulayamaz:** sunucuda arena geometrisi yoktur (`maps.json` yalnız
 sahne adı + mod listesi taşır, §11.1). Bu bilinçlidir — hasarı bile istemci hesaplıyor (§10.3,
@@ -1298,13 +1395,58 @@ oyuncu canlı · oyuncu **kalibre** (§10.6) · bayrak taze.
 sapar ve tespit yalancı pozitif üretir — oyuncu durduk yere ölürdü. Kalibresiz oyuncu zaten ateş
 edemez ve hasar yemez; ceza da aynı kapıya girer.
 
+**`health_update` KISILIR (≈4 Hz), tik kadansında gitmez.** Bu hasar olay tabanlı değil süreklidir:
+her tikte yayınlansaydı tek bir engel ölümü yüzlerce WS mesajı üretir ve her biri kurbana **+ her
+admine** giderdi. HUD yuvarlanmış tam sayı çizdiği için kaybedilen bilgi yoktur; **`hp = 0` paketi
+asla kısılmaz.**
+
 **Ölüm çevreseldir:** can 0'a inince `kill_event` **`killerId = 0`** ve `weaponId = "obstacle"` ile
 yayınlanır, `health_update`'in `attackerId`'si `0`'dır. Kurbanın `deaths` sayacı işler,
 **`IGameMode.OnKill` ÇAĞRILMAZ ve skor yazılmaz** — öldüren yoktur (takımdaş öldürmedeki kuralın
 aynısı, §10.2: olay olur, ödülü olmaz).
 
-⚠️ **Bayrak ölüm · canlanma · faz değişimi · harita değişiminde SIFIRLANIR.** Yoksa ölü oyuncunun
-bayrağı canlanma anında hâlâ set olur ve oyuncu doğar doğmaz erir.
+⚠️ **Ölümü yazan kod TEKTİR** (`MatchDirector.KillPlayerLocked`) ve vuruş ölümüyle aynı koddur:
+`Alive`, `DiedAt`, sayaçlar, `kill_event` ve `respawn` orada yazılır. İki ayrı ölüm gövdesi
+yazılırsa (ve bir süre öyleydi) birine eklenen her yeni adım diğerinde sessizce eksik kalır —
+"ölmek" tek cümledir.
+
+⚠️ **Bayrak ölümde SIFIRLANMAZ** ve sıfırlanmamalı: oyuncu hâlâ engelin içindedir ve istemci bunu
+20 Hz bildirmeye devam eder. Sıfırlansaydı engelin içi **kalıcı bir sığınak** olurdu. Yalnız
+**yeniden bağlanmada** temizlenir (bayat bayrak yeni oturuma taşınmasın).
+
+⚠️ **Engelin İÇİNDE canlanma YOKTUR** — oyuncu önce çıkar. Yasak canlandırmanın **her iki yoluna**
+da konur (§10.4): bayrağı düşmemiş oyuncunun `revive_request`'i reddedilir ve operatörün
+`revive_player` komutu da onu canlandırmaz. Kapı olmasaydı oyuncu engelin içinde tam canla canlanır,
+bir sonraki ölüme kadar oradan ateş eder ve döngü hiç bitmezdi; operatör yolunda kapı ayrıca
+düğmeyi bir ölüm döngüsü üretecine çevirirdi (canlanan oyuncu saniyeler içinde yeniden ölür).
+Erteleme `OBSTACLE_REVIVE_BLOCK_SECONDS` ile **tavanlıdır** (gerekçe §1).
+
+⚠️ **`reviveAnchor:"standstill"` sayacı da engelin içinde ilerlemez** (§10.4) ve bu ayrı bir
+kuraldır: yalnız canlanmayı reddetmek yetmez, çünkü sayaç içeride dolarsa oyuncu engelden çıktığı
+**anda** canlanır — beklemenin tamamını korunaklı bir yerde geçirmiş olur. Sayaç çıkışta sıfırdan
+başlar. Ölçüm istemcidedir (şart zaten sunucuda doğrulanmıyor), yani kural istemci sunumudur.
+
+**Görüş kısıtı ve atış kapısı istemci sunumudur, protokolde karşılığı YOKTUR** — ikisi de sahne
+tarafında ölçülür ve sunucuya bildirilmez:
+
+- **Karartma:** kafa içeri girdiği anda ekran 0.2 sn'de **koşulsuz tam siyah** olur (orada görülecek
+  meşru bir şey yoktur; duvar arkasını görmek tam olarak istismarın kendisidir). ⚠️ Karartma
+  **derinliğe bağlanmaz** — "kafanın kaçta kaçı içeride" ölçüsünü alfaya çevirmek "içerideyim ama
+  görüyorum" demektir. Derinlik yalnız ihlalden ÖNCEKİ **değme bandını** (hafif kararma, tavan 0.35)
+  sürer; onun gerekçesi ceza değil kalibrasyon sapmasıdır.
+- **Uyarı yazısı:** karartmanın üstünde nabız atarak "duvarın içindesin, oyun alanına dön" der.
+- **Can kaybının kırmızısı:** karartmanın **üstünde** ayrı bir katmandır. ⚠️ Karartma hakemine
+  (`ScreenFade`) kaynak olarak eklenemez: "en yüksek alfa kazanır" kuralı siyah 1.0'dayken kırmızıyı
+  tümden yutar ve oyuncu canının gittiğini hiç görmez.
+- **Atış kapısı** üç testten geçer, **herhangi biri** tetiği öldürür (cephane gitmez, namlu
+  alevi/sesi oynamaz, ağa `shot_event` gitmez, atış gecikmesi bile ilerlemez):
+  1. **Oyuncunun kendisi:** kafası ya da izlenen bir eli engelin içinde (`CanFire`).
+  2. **Silahın gövdesi:** çizilen geometrinin **yönlendirilmiş kutusu** bir engelle kesişiyor.
+     ⚠️ Namlu bir NOKTA, silah bir HACİMDİR: tüfeği tuğlanın arkasına geçirip yalnız namlu ucunu
+     boşlukta bırakmak nokta testini atlatır.
+  3. **Namlu:** ucu bir engelin içinde ya da namlu gövdesi (30 cm geri) bir engelden geçiyor.
+  Üçüncü test atış ışınında da **ikinci savunma hattı** olarak durur (tetiği olmayan hasar
+  kaynakları için): mermi engelde ölür, `hit_report` hiç gönderilmez.
 
 **Neden ayrı bir mesaj yok:** bayrak zaten 20 Hz giden iki pakete biniyor (`0x01` yukarı, `0x02`/
 `0x05` aşağı), yani ek bant yoktur. Daha önemlisi **durum tabanlıdır, olay tabanlı değil**: kaybolan

@@ -25,7 +25,7 @@ namespace VortexArena.Core.Arena
         /// <para>
         /// ⚠️ Bu layer'daki collider <b>KONVEKS olmak zorundadır</b> (Box/Sphere/Capsule ya da
         /// <c>MeshCollider</c> + <c>Convex</c>) — gerekçe
-        /// <see cref="VortexArena.Core.Player.BodyViolationProbe"/>'da.
+        /// <see cref="VortexArena.Core.Arena.ObstacleVolumes"/>'de.
         /// </para>
         /// </summary>
         public const string ObstacleName = "Obstacle";

@@ -30,12 +30,9 @@ public enum ReviveAnchor
     StandStill,
 
     /// <summary>
-    /// Canlanma YOKTUR (tur tabanlı eleme, <c>tournament</c>). <c>revive_request</c> reddedilir
-    /// <b>ve</b> <see cref="ArenaProtocol.REVIVE_GRACE"/> zorla canlandırması çalışmaz — ölü
-    /// oyuncuyu yalnız modun başlattığı yeni tur canlandırır.
-    /// <para>⚠️ İkisi birden kapatılmadıkça kural işlevsizdir: yollar ayrıdır (talep tabanlı vs
-    /// zamanlayıcı tabanlı) ve yalnız birini kapatmak oyuncuyu 20 sn sonra yine canlandırır
-    /// (§10.4).</para>
+    /// Canlanma YOKTUR (tur tabanlı eleme, <c>tournament</c>). Canlanmanın tek yolu
+    /// <c>revive_request</c>'tir ve bu kipte reddedilir — ölü oyuncuyu yalnız modun başlattığı
+    /// yeni tur canlandırır (§10.4).
     /// </summary>
     None
 }

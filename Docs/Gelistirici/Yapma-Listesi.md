@@ -39,8 +39,9 @@ fiziksel dünyada sabittir, sanal işaretler sahneden gelir.
 ekranından kalibrasyonu sıfırlayabilir ve o an başlık hâlâ kendini hizalı sanıyor olabilir.
 
 Aynı sebeple: bir oyuncu durumuna savaş kapısı eklerken **o durumu değiştiren tüm yolları ara**.
-Kalibrasyonda bu `revive_request` ile birlikte `REVIVE_GRACE` zorla canlandırmasıydı; yalnız
-birincisini kapatmak kuralı işlevsiz bırakıyordu.
+Kalibrasyon yasağı canlandırmanın **iki yolunda birden** duruyor (oyuncunun `revive_request`'i ve
+operatörün `revive_player` komutu); üçüncü bir yol eklenip yasak orada tekrarlanmazsa kural sessizce
+işlevsizleşir — hata da vermez.
 
 ### ⛔ Arena geometrisini dünya orijininden kaydırma
 
@@ -172,8 +173,8 @@ Bileşeni kapatmak görsel taban şeridini ekranda bırakır. Gizlemen gerekiyor
 `BaseZoneVisibility`'dir (kapı takım kipi; `WeaponGranter`'ın silah süpürmesiyle ilgisi yoktur).
 
 İkinci yüzü: **kapalı bir `BaseZone` canlanma için açık sayılmaz.** `Update` koşmadığı için
-`IsPlayerInside` donar — açık sayılsaydı oyuncu bölgeye girse de canlanamaz, yalnız sunucunun
-`REVIVE_GRACE`'ini beklerdi.
+`IsPlayerInside` donar — açık sayılsaydı oyuncu bölgeye girse de hiç canlanamazdı (sunucuda
+kendiliğinden işleyen bir emniyet ağı yok; geriye kalan tek çare operatörün elle canlandırmasıdır).
 
 ### ⛔ `ArenaObstacle`'ı collider sanma
 

@@ -65,6 +65,14 @@ namespace VortexArena.Core.Combat
         [Tooltip("Geri tepme toparlanma hızı.")]
         [SerializeField] private float recoilRecoverSpeed = 10f;
 
+        [Header("Haptik")]
+        [Range(0f, 1f)]
+        [Tooltip("Atış başına kumanda titreşiminin şiddeti (0 = haptik kapalı).")]
+        [SerializeField] private float hapticAmplitude = 0.8f;
+        [Min(0f)]
+        [Tooltip("Atış başına titreşimin süresi (saniye). 0 = haptik kapalı.")]
+        [SerializeField] private float hapticDuration = 0.05f;
+
         [Header("Cephane")]
         [SerializeField] private int magazineSize = 30;
         [Tooltip("Başlangıçtaki yedek şarjör sayısı (rezerv = spareMagazines × magazineSize).")]
@@ -142,6 +150,17 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Geri tepme toparlanma hızı.</summary>
         public float RecoilRecoverSpeed => recoilRecoverSpeed;
+
+        /// <summary>
+        /// Atış başına kumanda titreşiminin şiddeti (0-1). <c>0</c> = haptik kapalı.
+        /// <para>⚠️ Haptik <b>silahın kendi verisidir</b> ve tek yeri burasıdır: darbe
+        /// <see cref="Weapon"/> prefabından değil bu tanımdan okunur, yani aynı silahın sahne
+        /// örneği ile verilen (<c>weaponSource:"random"</c>) klonu aynı hissi verir.</para>
+        /// </summary>
+        public float HapticAmplitude => hapticAmplitude;
+
+        /// <summary>Atış başına titreşimin süresi (saniye). <c>0</c> = haptik kapalı.</summary>
+        public float HapticDuration => hapticDuration;
 
         /// <summary>Şarjör kapasitesi.</summary>
         public int MagazineSize => magazineSize;

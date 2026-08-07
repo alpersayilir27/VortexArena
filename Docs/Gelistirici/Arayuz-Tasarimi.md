@@ -17,7 +17,7 @@ Tüm arayüz prefabları **tek klasörde**: `Assets/_Shared/App/Resources/UI/`
 | Prefab | Ne çizer | Kim kullanır |
 |---|---|---|
 | **`AdminHud.prefab`** | Admin ekranının tamamı: skorlar, chip, takım kolonları, kamera şeridi, ölüm akışı — **ve içinde tercihler + istatistik panelleri** | `AdminSpectator` |
-| **`AdminPlayerRow.prefab`** | Kolonlardaki tek oyuncu satırı (ad, HP barı, POV/KAL/TAKIM/KİMLİK/AT) | `AdminHud` örnekler |
+| **`AdminPlayerRow.prefab`** | Kolonlardaki tek oyuncu satırı (ad, HP barı, POV/KAL/ÖLÇ/CAN/TAKIM/KİMLİK/AT) | `AdminHud` örnekler |
 | **`AdminPlayerMarker.prefab`** | Oyuncunun zemindeki halkası + ad etiketi (dünya uzayı) | `AdminPlayerMarkers` örnekler |
 | **`ConnectionOverlayScreen.prefab`** | Bağlantı hata ekranı — masaüstü (scrim + "Yeniden Bağlan" düğmesi) | `ConnectionOverlay` |
 | **`ConnectionOverlayWorld.prefab`** | Bağlantı hata ekranı — VR (world-space kart, düğmesiz) | `ConnectionOverlay` |
@@ -75,6 +75,15 @@ Ayrıca birkaç teknik not:
   üstünde sürekli asılı durur. Rengini/puntosunu/satır yüksekliğini (`Item`) değiştirmek serbest.
   ⚠️ Listedeki **seçenek metinleri yer tutucudur** ("katalog yok"): gerçek mod/harita adlarını
   çalışırken kod doldurur, prefabta yazdığınız satırlar temizlenir.
+- **Zengin metin (rich text) bayrağını kurcalamayın.** Oyuncu satırındaki `Stats` metni ve
+  istatistik tablosundaki `BATARYA` kolonu, kodun ürettiği `<color=…>` etiketlerini taşır (pil ve
+  kumanda simgeleri token başına renklenir — tek TMP'nin tek rengi olduğu için başka yolu yok).
+  Bayrağı **kod açar**, yani inspector'dan kapatmanız görünümü değiştirmez. ⚠️ Diğer metinlerde
+  bayrak **KAPALI kalmalı**: `Name` ve `OYUNCU` kolonunda oyuncunun kendi yazdığı ad var,
+  `<b>` içeren bir ad biçimi bozardı.
+- **Ad renkleri koddan sürülür.** Oyuncu satırındaki `Name` ve sahnedeki ad etiketleri **takım
+  renginde** yazılır (ölüde karartılmış); prefabtaki renk yalnız tasarım yaparken görebilmeniz
+  içindir. Punto, hizalama ve font kalıcıdır — renk değil.
 - **Satır yüksekliğini değiştirebilirsiniz.** `AdminPlayerRow` prefabının yüksekliğini
   büyütürseniz kolon yerleşimi kendiliğinden uyar (kod yüksekliği prefabtan okur). Satır arası
   boşluk ve kolon başına satır sayısı `AdminHud` bileşeninde alandır (`rowGap`,

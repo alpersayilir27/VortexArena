@@ -99,7 +99,8 @@ public sealed class PlayerState
     /// (MatchDirector'ın skor defteri üzerinden, _gate altında) ve anlamı mod başına değişir.</summary>
     public int Score { get; set; }
 
-    /// <summary>Son ölümün UTC zamanı (RESPAWN_DELAY + REVIVE_GRACE hesabı, §10.4).</summary>
+    /// <summary>Son ölümün UTC zamanı (RESPAWN_DELAY ve engel canlanma tavanı hesabı,
+    /// §10.4/§10.9).</summary>
     public DateTime DiedAt { get; set; }
 
     // ---- Kalibrasyon durumu (§10.6) ----
@@ -168,6 +169,19 @@ public sealed class PlayerState
     /// üretirdi.</para>
     /// </summary>
     public bool InObstacle { get; set; }
+
+    /// <summary>
+    /// §10.9: <see cref="InObstacle"/>'ın <b>kesintisiz</b> olarak ne zamandan beri geçerli olduğu
+    /// (UTC); engelde değilse <c>null</c>. Tolerans süresi buradan ölçülür
+    /// (<see cref="ArenaProtocol.OBSTACLE_GRACE_SECONDS"/>).
+    /// <para>⚠️ <b>Yalnız MatchDirector'ın işidir</b> (kendi <c>_gate</c>'i altında yazılır ve
+    /// okunur): istemcinin bildirdiği bit ile karıştırılmamalı. Bit "şu an içerideyim" der,
+    /// bu alan "ne zamandır" der ve o soruyu <b>yalnız sunucunun saati</b> cevaplayabilir —
+    /// istemciden gelen bir süre, cezayı istemcinin eline verirdi.</para>
+    /// <para>Ölümde, kalibrasyon kaybında ve engelden çıkışta <c>null</c>'a düşer: tolerans her
+    /// yeni girişte baştan başlar.</para>
+    /// </summary>
+    public DateTime? ObstacleSince { get; set; }
 
     // ---- İskelet kanalı (0x07, §6.9) ----
     // ⚠️ PoseGate ALTINDA okunur/yazılır — poz ile aynı kilit, çünkü ikisi de aynı iki thread

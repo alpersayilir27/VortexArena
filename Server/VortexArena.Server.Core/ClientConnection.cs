@@ -197,6 +197,15 @@ public sealed class ClientConnection
                 if (msg != null) await _lobby.HandleClearCalibrationAsync(this, msg);
                 return;
             }
+            // ⚠️ LobbyService'e DEĞİL MatchDirector'a gider: hp/alive maç durumudur ve sahibi
+            // maç yönetmenidir (§10.4).
+            case MessageTypes.RevivePlayer:
+            {
+                if (!RequireAdmin(type)) return;
+                var msg = JsonUtil.Deserialize<RevivePlayerMsg>(json);
+                if (msg != null) await _director.HandleAdminReviveAsync(msg);
+                return;
+            }
             case MessageTypes.Identify:
             {
                 if (!RequireAdmin(type)) return;

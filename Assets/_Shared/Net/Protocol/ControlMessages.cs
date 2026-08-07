@@ -236,6 +236,24 @@ namespace VortexArena.Protocol
         public int playerId;
     }
 
+    /// Operatör ölü bir oyuncuyu elle canlandırır (§10.4). <c>playerId</c> <c>0</c> = o an ölü olan
+    /// TÜM oyuncular — <see cref="ClearCalibrationMsg"/> ile aynı toplu-hedef deseni.
+    /// <para>Komut <c>revive_request</c>'in yasaklarının yalnız bir kısmını taşır: modun canlanma
+    /// şartı (<c>reviveAnchor:"none"</c>, §10.5) ve canlanma gecikmesi <b>GEÇİLİR</b> — düğmenin
+    /// varlık sebebi şartı sağlayamayan oyuncuyu kurtarmaktır ve bekletmek operatörün işi değildir.
+    /// ⚠️ Turnuvada tur sonucunu değiştirir; bu operatörün bilinçli kararıdır.</para>
+    /// <para>Kalibrasyon (§10.6) ve engelin içinde olma (§10.9) kapıları ise <b>UYGULANIR</b>:
+    /// kalibresiz oyuncu ateş edemez ve vurulamaz (canlandırmak onu yalnız tabloda canlı gösterir),
+    /// engelin içinde canlanan oyuncu saniyede 30 HP kaybedip anında yeniden ölür (düğme bir ölüm
+    /// döngüsü üretirdi). Ret istemciye bildirilmez — sunucu konsoluna gerekçesiyle bir satır yazar,
+    /// operatör sonucu roster'da görür.</para>
+    [Serializable]
+    public class RevivePlayerMsg
+    {
+        public string type = MessageTypes.RevivePlayer;
+        public int playerId;
+    }
+
     /// Admin → sunucu yönünde playerId dolu; sunucu → istemci yönünde alansız gider.
     [Serializable]
     public class IdentifyMsg

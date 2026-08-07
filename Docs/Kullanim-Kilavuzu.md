@@ -331,7 +331,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 **Oyuncu seçmek:** yandaki listede bir oyuncuya tıkla — seçili oyuncunun çerçevesi turuncu olur,
 zemindeki halkası büyür. `Tab` ile sıradakine geçersin. Satırdaki küçük düğmeler: **POV** (o oyuncunun
 gözünden izle), **MAVİYE/KIRMIZIYA** (takımını değiştir), **KİMLİK** (o gözlüğün ekranında büyük
-işaret göster), **AT** (bağlantıdan çıkar — güvenlik için **iki kez** basmak gerekir, ilk basışta
+işaret göster), **CAN** (ölü kalan oyuncuyu ayağa kaldır — aşağıdaki bölüm), **AT** (bağlantıdan çıkar — güvenlik için **iki kez** basmak gerekir, ilk basışta
 düğme "EMİN?" olur). ⚠️ **AT o gözlükteki oyunu kapatır** ve **satırı listeden siler**: oyuncu
 birkaç saniye içinde Quest'in kendi menüsünde bulur kendini, geri dönmesi için oyunun elle yeniden
 açılması gerekir. Yani "AT" molaya çıkarmak için değil, o cihazı oturumdan çıkarmak içindir.
@@ -362,12 +362,14 @@ Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt 
 | Kazanan | Puan limitine ilk ulaşan takım; süre biterse önde olan | Puan limitine ilk ulaşan **oyuncu**; süre biterse en yüksek puanlı. Tepede eşitlik varsa berabere | **4 tur** kazanan takım (en fazla 7 tur oynanır) |
 | Silah | Arenaya yerleştirilmiş silahlardan seçilir: oyuncu silaha ~2 metreye kadar yaklaşıp nişan alır, yan tuşa (grip) basınca silahın bir kopyası eline gelir. Silah yerinden kaybolmaz, sınırsız kez alınabilir. ⚠️ Silahların arenaya konması **haritayı yapan kişinin işidir** — konmamış bir arenada oyuncunun eline silah gelmez | Oyuncu kumandanın **yan tuşunu (grip) basılı tutunca** eline rastgele bir silah gelir; bıraktığında silah kaybolur, tekrar bastığında **başka** bir silah gelir | Takım Ölüm Maçı ile aynı (arenadaki silahlardan seçilir) |
 | Şarjör | Boşalınca kendiliğinden dolar | **Dolmaz** — oyuncu silahı bırakıp yenisini çeker | Her **tur başında** herkes tam dolu başlar |
-| Ölünce | 5 saniye bekle, sonra **kendi renkli tabanına yürü** | Tabana gitmek yok: **3 saniye boyunca olduğun yerde kıpırdamadan dur** (1 metreden fazla yürürsen sayaç başa döner) | **Canlanma yok** — tur bitene kadar beklersin, yeni tur herkesi tam canla ayağa kaldırır |
+| Ölünce | 5 saniye bekle, sonra **kendi renkli tabanına yürü** | Tabana gitmek yok: **5 saniye boyunca olduğun yerde kıpırdamadan dur** (1 metreden fazla yürürsen sayaç başa döner) | **Canlanma yok** — tur bitene kadar beklersin, yeni tur herkesi tam canla ayağa kaldırır |
 | Varsayılan süre / puan | 300 sn (5 dk) / 30 | 300 sn (5 dk) / 20 | **Tur başına** 2 dk / 4 tur |
 
 **Herkes Tek'te oyunculara söylenecek iki cümle:**
 1. *"Silah almak için kumandanın yan tuşunu basılı tut — bıraktığında silah kaybolur."*
-2. *"Öldüğünde bir yere yürüme; olduğun yerde 3 saniye kıpırdamadan dur, kendiliğinden canlanacaksın."*
+2. *"Öldüğünde bir yere yürüme; olduğun yerde 5 saniye kıpırdamadan dur, kendiliğinden canlanacaksın.
+   Ekranın kapkara ve 'engelden çık' yazıyorsa bir cismin içindesin — önce dışarı çık, sayaç ondan
+   sonra başlar."*
 
 > Herkes Tek'te arenadaki silahlar ve renkli taban şeritleri **kendiliğinden gizlenir** (şeritler
 > siz modu seçer seçmez, maçı beklemeden) —
@@ -429,6 +431,36 @@ maçı bitirmenin yolu **İPTAL**'dir (ikisi de aynı işi yapar).
 farklı/eski sürüm var. Sunucu penceresinde sebep tek satır olarak yazar; teknik ekibe o satırı
 ilet.
 
+### Ölü kalan oyuncuyu ayağa kaldırmak — **CAN** düğmesi
+
+Normalde oyuncu kendi başına canlanır: modun kuralına göre ya kendi renkli tabanına yürür ya
+olduğu yerde bekler. Bunu yapamayan oyuncu (gözlüğü donmuş, tabanına yürüyemiyor, turnuvada tur
+bitmesini bekliyor) **maçın sonuna kadar ölü kalır.** Onu ayağa kaldıran düğme satırdaki **CAN**'dır.
+
+- [ ] **1.** Ölü satırdaki **CAN** düğmesine bas. **Onay istemez, tek basışta çalışır.**
+- [ ] **2.** Oyuncu tam canla ayağa kalkar: ölüm ekranı kapanır, ateş edebilir. Bulunduğu yerden
+      hiçbir yere taşınmaz — nerede duruyorsa orada canlanır.
+- [ ] **3.** Öldüğü sayılmaya devam eder: skor ve ölüm sayacı değişmez, canlandırmak ölümü silmez.
+
+**Herkesi birden kaldırmak:** yönetim ekranındaki toplu canlandırma düğmesi o an **ölü olan**
+herkesi ayağa kaldırır; canlı oyunculara dokunmaz.
+
+**Bastın ama oyuncu canlanmadıysa — düğme bozuk değildir, iki sebebi vardır:**
+
+- **Oyuncu kalibresiz** (satırı kırmızı, düğmesinde **KAL !** yazıyor). Kalibresiz oyuncu zaten
+  ateş edemez ve vurulamaz; onu "canlı" göstermek sahada hiçbir şeyi değiştirmezdi. Önce
+  kalibrasyonu yaptır (Bölüm 4), sonra CAN'a bas.
+- **Oyuncu bir engelin/duvarın içinde duruyor** (sütun, kasa, blok — halkası kırmızı yanıp
+  sönüyorsa odur). Orada canlansa saniyeler içinde yeniden ölürdü. Oyuncuya **oradan çıkmasını
+  söyle**, sonra CAN'a bas.
+
+Maç koşmuyorken (lobide, maç bitmişken, duraklatılmışken) düğmenin işi yoktur; maç başladığında
+zaten herkes canlı kalkar.
+
+> ⚠️ **Turnuvada dikkat: CAN turun sonucunu değiştirebilir.** Tur, bir takımın **herkesi** ölünce
+> biter — son ölü oyuncuyu kaldırırsan tur bitmez ve oyun devam eder. Turnuvada bu düğmeyi bilinçli
+> kullan: takılan bir oyuncuyu kurtarmak içindir, oyuncunun eleme sonucunu geri almak için değil.
+
 ---
 
 ## 6. Maç sırasında ne oluyor?
@@ -439,13 +471,15 @@ ilet.
   - **Takım Ölüm Maçı:** ölen oyuncu **5 saniye** bekler, sonra **kendi takımının renkli taban
     bölgesine yürüyerek girer** → orada canlanır.
     Oyuncuya söylenecek cümle: **"Kendi renginin olduğu köşeye yürü, orada canlanacaksın."**
-  - **Herkes Tek:** taban yok — oyuncu **öldüğü yerde 3 saniye kıpırdamadan durur** → canlanır.
+  - **Herkes Tek:** taban yok — oyuncu **öldüğü yerde 5 saniye kıpırdamadan durur** → canlanır.
+    Bir engelin (sütun, kasa, blok) içinde öldüyse sayaç **hiç işlemez**: önce dışarı çıkması,
+    5 saniyeyi ondan sonra beklemesi gerekir. Ekranında "Engelden çık ve canlan" yazar.
     Bir metreden fazla yürürse sayaç sıfırlanır. Ekranında kalan saniye yazar.
     Oyuncuya söylenecek cümle: **"Öldüğünde yürüme, olduğun yerde bekle."**
   - **Turnuva:** canlanma **yoktur** — ölen oyuncu turun bitmesini bekler, yeni tur onu tam canla
     ayağa kaldırır. Oyuncuya söylenecek cümle: **"Elendin, takımın turu bitirene kadar izle."**
-  - Takım Ölüm Maçı ve Herkes Tek'te oyuncu şartı yerine getirmezse sistem bir süre sonra onu
-    zaten canlandırır (maç kilitlenmesin diye).
+  - ⚠️ Şartı yerine getirmeyen oyuncu **canlanmaz ve beklemekle de canlanmaz** — canlanmak
+    oyuncunun kendi işidir.
 - Oyuncu arena sınırına yaklaşırsa ekranı hafifçe kararmaya başlar; dışarı çıkarsa tümden kararır ve
   uyarı çıkar → geri içeri girmesi yeterli.
 - Maç, süre dolunca veya skor limitine ulaşılınca biter; kazanan duyurulur ve **kazanan ekranı
@@ -515,14 +549,15 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 | Ateş ediyor ama can azalmıyor | Aynı takımdalar (dost ateşi kapalı) ya da maç henüz başlamadı | Takımları kontrol et; geri sayım bitmiş mi bak. Takım arkadaşlarının birbirini vurabilmesini istiyorsan Tercihler → MAÇ → **Dost ateşi**'ni aç |
 | Turnuvada ekranda **"TOPLANMA 4/6"** yazıyor, yeni tur bir türlü başlamıyor | Bir ya da iki oyuncu kendi tabanına dönmedi (takıldı, koptu, oyundan çıktı) | Ekranda kimin eksik olduğunu bul: listedeki çevrimdışı satırı ya da tabanına yürümeyen oyuncuyu **AT** ile çıkar → kalanlar hazırsa tur hemen başlar. Vazgeçtiysen **İPTAL**. Tur eksik oyuncuyla kendiliğinden başlamaz |
 | Turnuvada geri sayım başlıyor ama hep iptal oluyor | Biri sayım bitmeden tabanından çıkıyor | Oyunculara "sayım bitene kadar kendi renginin köşesinden çıkmayın" de |
-| Ölen oyuncu canlanmıyor | Kendi takımının tabanına girmemiş | Oyuncuya **kendi renginin köşesine yürümesini** söyle |
+| Ölen oyuncu canlanmıyor | Kendi takımının tabanına girmemiş | Oyuncuya **kendi renginin köşesine yürümesini** söyle — **kendiliğinden canlanmaz**, mutlaka tabana girmeli. Şartı yerine getiremiyorsa (gözlüğü donmuş, yürüyemiyor) satırındaki **CAN** düğmesiyle sen kaldır |
+| **CAN** düğmesine bastın, oyuncu yine ölü | Oyuncu kalibresiz ya da bir engelin/duvarın içinde duruyor | Satırı kırmızıysa önce kalibre olsun (Bölüm 4); halkası kırmızı yanıp sönüyorsa oyuncuya **engelin içinden çıkmasını** söyle, sonra CAN'a tekrar bas. İkisi de değilse sunucu penceresindeki son satırı teknik ekibe ilet |
 | Maç başlamıyor | Bağlı oyuncu yok ya da bir gözlükte eski sürüm var | Listede oyuncu var mı bak; varsa sunucu penceresindeki son satırı teknik ekibe ilet |
 | Ses gelmiyor | Gözlüğün sesi kısık | Gözlüğün ses seviyesini aç |
 | Oyuncunun ekranı karardı, uyarı çıktı | Oyun alanının dışına çıkmış | Oyuncuya geri içeri girmesini söyle |
 | Bir oyuncu yanlış yerde görünüyor / "nişan aldığım yere gitmiyor" diyor | O gözlüğün kalibrasyonu kaymış | Satırındaki **KAL** düğmesiyle sıfırla, yeniden kalibre ettir (§4.1) |
 | Bir avatar yanıp sönüyor | O oyuncu kalibresiz — ateş edemez, vurulamaz | Yeniden kalibre olmasını söyle (§4.1); bitince kendiliğinden düzelir |
 | Oyuncu "silahım çalışmıyor" diyor, ekranında kalibrasyon yazısı var | Kalibrasyonu sıfırlanmış | Bölüm 4'teki adımlarla yeniden kalibre olsun (§4.1/4) |
-| Oyuncu öldü ama canlanmıyor | Kalibresiz oyuncu canlanmaz | Önce kalibre olsun; hemen ardından kendiliğinden canlanır |
+| Oyuncu öldü ama canlanmıyor | Kalibresiz oyuncu canlanmaz — **CAN** düğmesi de onu kaldırmaz | Önce kalibre olsun; ardından canlanma şartını yerine getirsin (tabanına girmek / olduğu yerde beklemek) ya da **CAN**'a bas |
 
 ---
 
@@ -578,7 +613,7 @@ Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten
 │  Şarjör bitti             →  Bırak, yenisini çek         │
 │                              (şarjör dolmaz)             │
 │  Öldün                    →  YÜRÜME. Olduğun yerde       │
-│                              3 saniye kıpırdamadan dur   │
+│                              5 saniye kıpırdamadan dur   │
 ├──────────────────────────────────────────────────────────┤
 │  OYUNCUYA — "TURNUVA" MODUNDA                            │
 │                                                          │

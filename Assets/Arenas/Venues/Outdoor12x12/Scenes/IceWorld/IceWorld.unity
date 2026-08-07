@@ -2372,7 +2372,7 @@ GameObject:
   - component: {fileID: 366530136}
   - component: {fileID: 366530135}
   - component: {fileID: 366530134}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Wedge_N
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2413,7 +2413,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 2041863265}
 --- !u!33 &366530135
@@ -3103,7 +3103,7 @@ GameObject:
   - component: {fileID: 587570674}
   - component: {fileID: 587570673}
   - component: {fileID: 587570672}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Block_E_2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3144,7 +3144,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 1901890734}
 --- !u!33 &587570673
@@ -4328,7 +4328,7 @@ GameObject:
   - component: {fileID: 799118956}
   - component: {fileID: 799118955}
   - component: {fileID: 799118954}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Cover_BlockE2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4369,7 +4369,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 1948494082}
 --- !u!33 &799118955
@@ -4744,7 +4744,7 @@ GameObject:
   - component: {fileID: 809387977}
   - component: {fileID: 809387976}
   - component: {fileID: 809387975}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Cover_BlockW1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4785,7 +4785,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 613890558}
 --- !u!33 &809387976
@@ -7168,7 +7168,7 @@ GameObject:
   - component: {fileID: 1223673480}
   - component: {fileID: 1223673479}
   - component: {fileID: 1223673478}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Block_W_2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7209,7 +7209,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 1542657762}
 --- !u!33 &1223673479
@@ -8834,7 +8834,7 @@ GameObject:
   - component: {fileID: 1407808765}
   - component: {fileID: 1407808764}
   - component: {fileID: 1407808763}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Cover_W
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8875,7 +8875,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 1319960499}
 --- !u!33 &1407808764
@@ -9190,7 +9190,7 @@ GameObject:
   - component: {fileID: 1419123363}
   - component: {fileID: 1419123362}
   - component: {fileID: 1419123361}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Block_E_1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9231,7 +9231,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 1094370655}
 --- !u!33 &1419123362
@@ -9810,7 +9810,7 @@ GameObject:
   - component: {fileID: 1510310819}
   - component: {fileID: 1510310818}
   - component: {fileID: 1510310817}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Cover_BlockE1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9851,7 +9851,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 323368277}
 --- !u!33 &1510310818
@@ -10166,7 +10166,7 @@ GameObject:
   - component: {fileID: 1529316519}
   - component: {fileID: 1529316518}
   - component: {fileID: 1529316517}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Cover_BlockW2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10207,7 +10207,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 1185744053}
 --- !u!33 &1529316518
@@ -11748,7 +11748,7 @@ GameObject:
   - component: {fileID: 1834959551}
   - component: {fileID: 1834959550}
   - component: {fileID: 1834959549}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Wedge_S
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11789,7 +11789,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 1550947632}
 --- !u!33 &1834959550
@@ -12423,7 +12423,7 @@ GameObject:
   - component: {fileID: 1851174713}
   - component: {fileID: 1851174712}
   - component: {fileID: 1851174711}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Cover_E
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12464,7 +12464,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 288037238}
 --- !u!33 &1851174712
@@ -14135,7 +14135,7 @@ GameObject:
   - component: {fileID: 2010640414}
   - component: {fileID: 2010640413}
   - component: {fileID: 2010640412}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Block_W_1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14176,7 +14176,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 877706244}
 --- !u!33 &2010640413

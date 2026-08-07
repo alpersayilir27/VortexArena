@@ -240,7 +240,7 @@ namespace VortexArena.Core.Arena
         /// çizer.
         /// <para>
         /// ⚠️ <b>Quad'a doğrudan yazılmaz ve yazılmamalı:</b> aynı renderer'ı isteyen ikinci bir
-        /// sistem var (engel ihlali karartması, <c>BodyViolationProbe</c>). İkisi de kendi değerini
+        /// sistem var (engel ihlali karartması, <c>ObstacleViolationProbe</c>). İkisi de kendi değerini
         /// yazsaydı kare başına birbirini ezerlerdi — belirtisi "sınıra yaklaşırken engele girince
         /// ekran titriyor" olurdu ve sebebi iki ayrı bileşene dağılırdı. Renderer'ın SAHİBİ yine bu
         /// sınıftır (quad onun serialize alanı); hakem yalnız hangi değerin çizileceğini söyler.

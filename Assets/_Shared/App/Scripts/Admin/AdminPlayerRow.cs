@@ -9,10 +9,14 @@ namespace VortexArena.App.Admin
 {
     /// <summary>
     /// Yan panellerdeki tek oyuncu satırı: takım şeridi, ad + <c>#id</c>, HP barı, K/D · batarya ·
-    /// kumanda · durum ve eylem düğmeleri (POV · KAL · ÖLÇ · TAKIM · KİMLİK · AT).
+    /// kumanda · durum ve eylem düğmeleri (POV · KAL · ÖLÇ · TAKIM · KİMLİK · CAN · AT).
+    /// <c>CAN</c> ölü oyuncuyu operatörün elle canlandırmasıdır (§10.4) ve modun canlanma şartını
+    /// geçer — şartı sağlayamayan oyuncu (donmuş istemci, tabanına yürüyemeyen oyuncu) aksi hâlde
+    /// maçın sonuna kadar ölü kalır.
     /// <para>
     /// <b>Görünüm prefabtan gelir:</b> <c>Assets/_Shared/App/Resources/UI/AdminPlayerRow.prefab</c>.
-    /// Bu sınıf yalnız <b>davranış</b>tır — yerleşim/renk/punto prefabta düzenlenir. Alanların
+    /// Bu sınıf yalnız <b>davranış</b>tır — yerleşim, punto ve statik renkler prefabta düzenlenir;
+    /// <b>durum renkleri</b> (takım, can, seçim, kalibrasyon) koddan sürülür. Alanların
     /// hepsi <c>[SerializeField]</c>; prefabta bağlanmayan alan sessizce çizilmez, bu yüzden
     /// prefab düzenlenirken bağlantılar korunmalıdır.
     /// </para>
@@ -54,6 +58,10 @@ namespace VortexArena.App.Admin
 
         /// <summary>Henüz ölçülmemiş oyuncunun ÖLÇ düğmesi.</summary>
         private const string LabelMeasure = "ÖLÇ";
+
+        /// <summary>Canlandırma düğmesi. ⚠️ Diğer etiketlerle aynı kural: sembol/emoji YOK (TMP
+        /// varsayılan fontunda garantisi yok) ve satır dar olduğu için kısa.</summary>
+        private const string LabelRevive = "CAN";
 
         private const float DeadColorScale = 0.5f;
 
@@ -109,6 +117,10 @@ namespace VortexArena.App.Admin
                  "ölçülmemişse 'ÖLÇ', ölçülmüşse çarpan.")]
         [SerializeField] private Button measureButton;
         [SerializeField] private TextMeshProUGUI measureLabel;
+        [Tooltip("Ölü oyuncuyu canlandırır (§10.4). Yalnız ölü OYUNCU satırında etkindir.")]
+        [SerializeField] private Button reviveButton;
+        [Tooltip("Etiketin rengi durumu taşır (kullanılabilir/pasif), bu yüzden koddan sürülür.")]
+        [SerializeField] private TextMeshProUGUI reviveLabel;
         [SerializeField] private Button teamButton;
         [SerializeField] private TextMeshProUGUI teamLabel;
         [SerializeField] private Button identifyButton;
@@ -137,15 +149,44 @@ namespace VortexArena.App.Admin
             _onSelect = onSelect;
             _onPov = onPov;
 
+            EnableStatsRichText();
+
             Wire(selectButton, () => _onSelect?.Invoke(_playerId));
             Wire(povButton, () => _onPov?.Invoke(_playerId));
             Wire(calibButton, PressCalibration);
             // ⚠️ Tek adımlı (onay penceresi YOK): ölçüm geri alınabilir bir eylemdir — yanlışlıkla
             // basılırsa yeniden ölçülür. "AT"/"KAL" gibi savaş dışı bırakan bir komut değildir.
             Wire(measureButton, () => AdminCommands.MeasureBodyScale(_playerId));
+            // ⚠️ Tek adımlı (onay penceresi YOK): iki adımlı kilit ("AT"/"KAL") oyuncuyu savaş dışı
+            // bırakan komutlar içindir. Canlandırma bunun TERSİDİR — oyuncuyu savaşa geri sokar ve
+            // yanlış basış bir sonraki ölümle kendini düzeltir.
+            Wire(reviveButton, () => AdminCommands.RevivePlayer(_playerId));
             Wire(teamButton, ToggleTeam);
             Wire(identifyButton, () => AdminCommands.Identify(_playerId));
             Wire(kickButton, PressKick);
+        }
+
+        /// <summary>
+        /// İstatistik satırının zengin metin kapısı.
+        /// <para>
+        /// ⚠️ <b>Bayrak prefabta değil BURADA açılır:</b> <c>&lt;color=…&gt;</c> etiketlerini bu
+        /// sınıf üretiyor (<see cref="BuildStatsLine"/>), yani bayrak bir görünüm tercihi değil
+        /// üretilen metnin sözleşmesidir. Prefabta kapalı kaldığında kart pil/kumanda yerine
+        /// <c>K:&lt;color=#…&gt;+</c> gibi ham etiket çizer ve bu sessiz bir bozulmadır — arayüzü
+        /// düzenleyen kişi o kutucuğun ne işe yaradığını bilmek zorunda kalmasın.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Yalnız <see cref="statsText"/> içindir.</b> <see cref="nameText"/> zengin metne
+        /// KAPALI kalır: oyuncu adı dışarıdan gelir ve <c>&lt;b&gt;</c> içeren bir ad satırın
+        /// biçimini bozardı (aynı gerekçe <c>UiKit.Text</c>'te de yazılı).
+        /// </para>
+        /// </summary>
+        private void EnableStatsRichText()
+        {
+            if (statsText != null)
+            {
+                statsText.richText = true;
+            }
         }
 
         private static void Wire(Button button, UnityAction action)
@@ -171,6 +212,7 @@ namespace VortexArena.App.Admin
             _team = view.team;
             _calibrated = view.calibrated;
             RefreshMeasureButton(view);
+            RefreshReviveButton(view);
 
             Color team = UiKit.TeamColor(view.team);
             if (stripe != null)
@@ -191,7 +233,16 @@ namespace VortexArena.App.Admin
             float alpha = view.IsConnected ? 1f : view.IsReconnecting ? ReconnectingAlpha : LeftAlpha;
             if (nameText != null)
             {
-                nameText.color = UiKit.WithAlpha(view.alive ? UiKit.Title : UiKit.Muted, alpha);
+                // Ad TAKIM RENGİNDE yazılır. Kolon başlığı takımı zaten söylüyor ama operatör aynı
+                // adı sahnedeki etikette, kuş bakışı işaretçisinde ve kill feed'de de görüyor;
+                // rengin her yerde aynı olması "bu hangi takım" sorusunu okumadan cevaplatır.
+                // ⚠️ Takımsız (FFA) oyuncuda rengin taşıyacağı bilgi YOKTUR — orada başlık rengi
+                // kalır, çünkü nötr gri bir ad yalnız okunaksızlık üretirdi.
+                // Canlılık yine SÖNÜKLÜKLE anlatılır: renk kanalı takıma ayrıldığı için ölü satır
+                // aynı rengin karartılmışını kullanır (şeritle ve işaretçiyle aynı davranış).
+                Color nameColor = IsTeamPlayer(view.team) ? team : UiKit.Title;
+                nameText.color = UiKit.WithAlpha(
+                    view.alive ? nameColor : UiKit.Dim(nameColor, DeadColorScale), alpha);
                 // Numara adın ÖNÜNE yazılır (avatar plakasıyla aynı biçim): adlar benzersiz değil,
                 // operatörün iki "ertu"yu ayırdığı şey numara. 0 = atanmamış → yalnız ad.
                 nameText.text = view.number > 0 ? $"{view.number} · {view.name}" : view.name;
@@ -218,8 +269,7 @@ namespace VortexArena.App.Admin
             {
                 // ⚠️ Satırın TABAN rengi burada, token renkleri zengin metinle: tek TMP'nin tek
                 // `.color`'ı var, oysa pil ve kumanda kendi durumlarına göre ayrı ayrı renklenmeli.
-                // Ön koşul prefabtaki `richText`'in AÇIK olmasıdır (TMP varsayılanı açık); kapatan
-                // biri olursa etiketler düz metin olarak ("<color=#…>") görünür.
+                // Etiketlerin yorumlanmasını sağlayan bayrağı `EnableStatsRichText` açar.
                 statsText.text = BuildStatsLine(view);
                 statsText.color = view.IsConnected ? UiKit.Muted : UiKit.Faint;
             }
@@ -241,6 +291,13 @@ namespace VortexArena.App.Admin
 
             RefreshKickButton();
             RefreshCalibrationButton();
+        }
+
+        /// <summary>Oyuncunun bir takımı var mı — takım rengi yalnız burada anlamlıdır
+        /// (FFA/atanmamış oyuncuda takım anahtarı boş gelir).</summary>
+        private static bool IsTeamPlayer(string team)
+        {
+            return team == "red" || team == "blue";
         }
 
         private static void SetInteractable(Button button, bool value)
@@ -350,6 +407,29 @@ namespace VortexArena.App.Admin
                 measureLabel.text = view.bodyScale > 0f ? $"×{view.bodyScale:0.00}" : LabelMeasure;
                 measureLabel.color = !usable ? UiKit.Faint
                     : view.bodyScale > 0f ? UiKit.Good : UiKit.Muted;
+            }
+        }
+
+        /// <summary>
+        /// CAN düğmesi yalnız CANLANDIRILACAK biri varken etkindir: rolü <c>player</c>, ölü ve
+        /// ayrılmamış. Canlı satırda düğmenin yapacağı bir şey yoktur, ayrılmış satırda ise hedef
+        /// yoktur (§10.2) — tepkisiz bir düğmeye bastırmak "gönderdim ama olmadı" hissi üretir.
+        /// <para>Kalibresiz oyuncuda düğme <b>pasiftir</b> — <see cref="RefreshMeasureButton"/> ile
+        /// aynı gerekçe: sunucu kalibresiz canlandırmayı zaten kesiyor (§10.6), etkin bir düğme
+        /// operatöre gönderilmiş ama işlememiş bir komut hissi verirdi. Sebebi satır ayrıca
+        /// söylüyor: kalibresiz kartın kenarlığı kırmızıdır ve KAL düğmesi ünlemli yanar.</para>
+        /// <para>Engel kapısı (§10.9) burada YOKTUR ve eklenemez: ihlal bayrağı roster'da taşınmıyor.
+        /// O kapıyı yalnız sunucu bilir, reddini kendi konsoluna gerekçesiyle yazar.</para>
+        /// </summary>
+        private void RefreshReviveButton(AdminPlayerView view)
+        {
+            bool usable = view.IsPlayer && !view.alive && view.calibrated && !view.HasLeft;
+            SetInteractable(reviveButton, usable);
+
+            if (reviveLabel != null)
+            {
+                reviveLabel.text = LabelRevive;
+                reviveLabel.color = usable ? UiKit.Good : UiKit.Faint;
             }
         }
 
