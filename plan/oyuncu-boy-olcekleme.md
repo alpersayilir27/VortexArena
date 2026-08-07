@@ -22,7 +22,7 @@ dokümanların tamamı yazıldı. Kalıcı bilgi `Docs/ArenaNet-Protokol.md` (§
 - [ ] Kısa ve uzun iki oyuncu yan yana: avatarlar gözle doğru boyda, **duruşlar bozulmuyor**
       (blob tutarlılığı korunmuş demektir)
 - [ ] Ölçeklenmiş avatarın kafasına nişan alınca vuruş tutuyor (kutular ölçekle birlikte gitti)
-- [ ] Kırmızı takım gövdesi ve hayalet gövde de aynı ölçekte çiziliyor
+- [ ] Kırmızı takım gövdesi de aynı ölçekte çiziliyor
 - [ ] Elde çizilen silah **ölçeklenmiyor** (gerçek boyunda)
 - [ ] **Aynı oyuncu üst üste iki kez ölçülünce aynı çarpan çıkıyor** (yerel karakterin ölçeği 1
       kaldığı için ölçüm tekrarlanabilir olmalı)

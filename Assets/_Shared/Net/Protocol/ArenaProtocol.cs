@@ -80,7 +80,7 @@ namespace VortexArena.Protocol
         /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
         /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
         /// </summary>
-        public const int PROTOCOL_VERSION = 11;
+        public const int PROTOCOL_VERSION = 12;
         public const string APP_ID = "VortexArena";
 
         /// <summary>
