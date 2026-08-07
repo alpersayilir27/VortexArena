@@ -325,18 +325,61 @@ namespace VortexArena.Core.Player
         /// </summary>
         private void ApplyArenaRoot()
         {
-            RemoteSkeletonRegistry registry = RemoteSkeletonRegistry.Instance;
-            if (registry == null || !registry.TryGetInterpolatedRoot(PlayerId, out Pose arenaRoot))
+            if (!TryGetRootWorld(out Pose world))
             {
                 return;
             }
 
-            Pose world = ArenaSpace.ArenaToWorld(arenaRoot);
             _characterRoot.SetPositionAndRotation(world.position, world.rotation);
 
             // ⚠️ Kare başına koşulsuz yazılır: SDK her karede ApplyBodyPose'ta kök ölçeğine
             // dokunuyor, "değiştiyse yaz" guard'ı bir kare sonra bayat kalırdı.
             _characterRoot.localScale = Vector3.one * BodyScale;
+        }
+
+        /// <summary>Karakter kökünün BU KAREdeki dünya pozu (arena uzayından çevrilmiş).
+        /// <para>Transform'dan okunmaz, kaynaktan hesaplanır: transform'a yazan
+        /// <see cref="ApplyArenaRoot"/> bu sınıfın <c>LateUpdate</c>'inde koşuyor ve daha erken
+        /// sıradaki bir okuyucu bir kare bayat değer alırdı. Aynı <c>RenderTime</c> ile aynı
+        /// interpolasyon sorulduğu için burada hesaplamak <b>birebir</b> aynı sonucu verir.</para>
+        /// </summary>
+        private bool TryGetRootWorld(out Pose world)
+        {
+            RemoteSkeletonRegistry registry = RemoteSkeletonRegistry.Instance;
+            if (registry == null || !registry.TryGetInterpolatedRoot(PlayerId, out Pose arenaRoot))
+            {
+                world = default;
+                return false;
+            }
+
+            world = ArenaSpace.ArenaToWorld(arenaRoot);
+            return true;
+        }
+
+        /// <summary>
+        /// Ham (ölçeksiz) bir DÜNYA noktasının, ölçeklenmiş gövdede gerçekte <b>çizildiği</b> yer
+        /// (§10.8).
+        /// <para>
+        /// ⚠️ <b>Gerekçe:</b> <see cref="BodyScale"/> karakterin KÖKÜNE yazılıyor, yani tüm iskelet
+        /// kök NOKTASI etrafında ölçekleniyor. Telden gelen el pozu ise ham ölçüdür (gönderenin
+        /// gerçek eli). İkisi ölçek <c>1</c>'den saptığı anda ayrışır: çizilen el
+        /// <c>kök + ölçek × (ham − kök)</c> noktasındadır, ham poz ise yerinde durur. El pozundan
+        /// sürülen her şey (elde çizilen eşya) bu dönüşümden geçmezse gövdeden kopar — 1.3 ölçekte
+        /// silah elden yarım metre uzakta çizilir.
+        /// </para>
+        /// <para>⚠️ Dönüşüm <b>yalnız konumu</b> taşır. Üniform ölçek yön değiştirmez, ve eşyanın
+        /// kendisi ölçeklenmez: gerçek boyunda bir silah, büyütülmüş bir elin içinde durur
+        /// (<c>RemoteAvatar.SetBodyScale</c>).</para>
+        /// </summary>
+        public Vector3 ScalePointAboutRoot(in Vector3 worldPoint)
+        {
+            float scale = BodyScale;
+            if (scale <= 0f || Mathf.Approximately(scale, 1f) || !TryGetRootWorld(out Pose root))
+            {
+                return worldPoint;
+            }
+
+            return root.position + (worldPoint - root.position) * scale;
         }
 
         /// <inheritdoc cref="INetworkCharacterBehaviour.ReceiveStreamData"/>

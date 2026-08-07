@@ -1198,6 +1198,15 @@ tek yolu kapatmak kuralı işlevsiz bırakırdı.
 bilemez (uygulama yeniden başlamış olabilir); başlık kayıtlı anchor'dan geri yükleyince zaten
 `set_calibration{source:"anchor"}` ile yeniden bildirir.
 
+⚠️ **Bu yüzden roster'daki `calibrated:false` istemci için bir SIFIRLAMA SİNYALİ DEĞİLDİR.** Alan
+her yeniden bağlanışta bir kez `false` yayınlanır — sıradan bir ağ dalgalanmasında bile — ve o yayın
+başlığın kendi yeniden bildirimiyle aynı sokette yarışır. İstemci ona bakıp kayıtlı
+`OVRSpatialAnchor`'ını silerse bedel **gecikmeli ve sessiz** olur: rig o an taşınmadığı için oturum
+düzgün görünür, ama sonraki `load_match`'te geri yüklenecek hizalama kalmaz ve oyuncu herkese
+**metrelerce kaymış** çizilir. Üstelik yeniden bildirim sunucuyu "kalibreli" yaptığı için elle
+kalibrasyon kapısı da kapalıdır — oyuncu kendi başına düzeltemez. **Hizalamayı silen tek şey
+`clear_calibration` komutudur** (§5.2/§5.3); roster istemcide yalnız aynadır.
+
 ⚠️ **`load_match` kalibrasyonu SIFIRLAMAZ** (§10.4). Harita değişimi oyuncu için yalnız bir sahne
 değişimidir; sunucu `calibrated`'i korur. Yanlışlıkla sıfırlanırsa her harita değişimi tüm
 oyuncuları savaş dışı bırakır.
@@ -1316,6 +1325,14 @@ karakterini de ölçekleseydi bir sonraki ölçüm zaten ölçeklenmiş bir refe
 ⚠️ **Kalibrasyon sıfırlanınca `bodyScale` de sıfırlanır.** Ölçü arena zeminine göredir; zemin
 geçersizse ölçü de geçersizdir. Kapı `clear_calibration` değil **kalibrasyonun `false` olması**dır:
 başlığın kendi `set_calibration{false}`'u da aynı sonucu doğurur.
+
+⚠️ **Ölçek karakterin KÖKÜNE yazılır — el pozundan sürülen her şey aynı dönüşümü tekrarlamak
+zorundadır.** İskelet kök NOKTASI etrafında büyür/küçülür, yani çizilen el
+`kök + ölçek × (ham el − kök)` konumundadır; telden gelen ham el pozu ise yerinde durur. Elde
+çizilen eşya ham pozda bırakılırsa gövdeden **kopar** — `1.3` ölçekte silah elin yarım metre
+uzağında, havada çizilir. ⚠️ Taşınan **yalnız konumdur**: eşyanın kendisi ölçeklenmez (silah
+herkeste gerçek boyundadır) ve avuç → eşya kavrama ofseti metre olarak kalır, yani gerçek boyunda
+bir silah büyütülmüş bir elin içinde durur.
 
 ### 10.9 Engel ihlali (`FLAG_IN_OBSTACLE`)
 
