@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Player;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -135,6 +136,12 @@ namespace VortexArena.Core.Combat
         /// ısınması gibi) aynı davranışı isterse kendi kuralında bildirir.
         /// </para>
         /// <para>
+        /// Ayrıca <b>oyuncunun kendisi</b> engelin içindeyse tetik ölür (§10.9,
+        /// <see cref="ObstacleViolationProbe.IsBodyBlocked"/>). Silahın kendi engel kapısı buna
+        /// EK'tir ve onu değiştirmez: biri "gövdemi gösteriyor muyum" sorusunu, öteki "namlum
+        /// nerede" sorusunu cevaplıyor.
+        /// </para>
+        /// <para>
         /// Bağlantı koşulu: bir kez bağlandıysak bağlantı kopukken ateş kilitlenir
         /// (mesajlar zaten sunucuya ulaşmaz). Hiç bağlanılmamışsa (sunucusuz Editor
         /// testi) silah çalışmaya devam eder — sunucusuz yerel test akışı bozulmasın.
@@ -152,6 +159,16 @@ namespace VortexArena.Core.Combat
                 // §10.6: kalibresiz oyuncu ateş edemez. Sunucu zaten hit_report'u reddediyor;
                 // burada da kapatmak "tetiği çektim ama hiçbir şey olmadı" hissini engeller.
                 if (!CalibrationState.IsCalibrated)
+                {
+                    return false;
+                }
+
+                // §10.9: gövdesi (kafası ya da bir eli) engelin İÇİNDE olan oyuncu ateş edemez.
+                // ⚠️ Kapı silahta değil BURADA duruyor çünkü soru silaha ait değil: bloğun içinde
+                // durup silahı dışarı uzatan oyuncu gövdesini hiç göstermeden ateş ediyor ve
+                // silahın kendisi bu sırada tertemiz bir boşlukta. Tek kapı olduğu için yarın
+                // eklenen bomba/ok da aynı kuralı bedavaya alır.
+                if (ObstacleViolationProbe.IsBodyBlocked)
                 {
                     return false;
                 }
@@ -175,6 +192,12 @@ namespace VortexArena.Core.Combat
         private readonly ReviveRequestMsg _reviveMsg = new ReviveRequestMsg();
 
         private bool _hasEverConnected;
+
+        /// <summary>Can/canlılık sunucunun OTORİTER akışından (<c>health_update</c>/<c>respawn</c>)
+        /// ya da roster'dan bir kez öğrenildi mi. Her bağlantıda sıfırlanır
+        /// (<see cref="ApplyAuthoritativeState"/>).</summary>
+        private bool _healthConfirmed;
+
         private bool _awaitingRevive;
         private float _reviveAt;
         private float _nextReviveSendAt;
@@ -308,6 +331,8 @@ namespace VortexArena.Core.Combat
         /// <see cref="ArenaProtocol.REVIVE_HOLD_RADIUS"/>'u aşan her harekette çapayı da sayacı da
         /// sıfırlar. <b>Ölüm gecikmesi dolmadan da işler</b>: oyuncu beklerken sabit durduysa
         /// gecikme biter bitmez canlanır, ikinci bir bekleme dayatılmaz.
+        /// <para>⚠️ <b>Engelin içinde sayaç işlemez</b> (§10.9): orada geçen süre sayılsaydı oyuncu
+        /// engelin içinde bekleyip çıktığı anda canlanır, yani engel bir sığınağa dönerdi.</para>
         /// </summary>
         private void TickHoldAnchor()
         {
@@ -325,6 +350,21 @@ namespace VortexArena.Core.Combat
             }
 
             Vector3 position = head.position;
+
+            // §10.9: engelin İÇİNDEYKEN sayaç İLERLEMEZ — çapa da süre de her karede tazelenir,
+            // yani sabit durma şartı engelden ÇIKTIKTAN sonra sıfırdan başlar. Şart "kıpırdama"
+            // değil "meşru bir yerde kıpırdama"dır: sayaç içeride de işleseydi oyuncu engelin
+            // içinde bekleyip çıktığı anda canlanırdı ve engel bir sığınağa dönüşürdü.
+            // ⚠️ Burada _hasHoldAnchor false YAPILMAZ: o değer "şart ölçülemiyor" demektir ve
+            // IsReviveConditionMet onu ŞART SAĞLANDI diye okur (fail-open) — tam tersini üretirdi.
+            if (ObstacleViolationProbe.IsViolating)
+            {
+                _holdAnchor = position;
+                _holdSince = Time.time;
+                _hasHoldAnchor = true;
+                return;
+            }
+
             if (_hasHoldAnchor &&
                 Vector3.Distance(position, _holdAnchor) <= ArenaProtocol.REVIVE_HOLD_RADIUS)
             {
@@ -338,14 +378,25 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Modun canlanma şartı sağlandı mı (§10.5 <c>reviveAnchor</c>).
         /// <b>Şart ölçülemiyorsa sağlanmış sayılır</b> — sahnede açık taban bölgesi yok, kamera yok
-        /// gibi durumlarda bu sınıf oyuncuyu kalıcı ölü bırakmaz; güvenlik ağı zaten sunucunun
-        /// <c>REVIVE_GRACE</c>'idir.</summary>
+        /// gibi durumlarda bu sınıf oyuncuyu kalıcı ölü bırakmaz. ⚠️ Bu fail-open bir kolaylık
+        /// değil <b>tek emniyettir</b>: sunucuda zamanlayıcı tabanlı bir canlandırma yoktur, ölü
+        /// oyuncuyu ancak buradan giden <c>revive_request</c> ayağa kaldırır — şart ölçülemezken
+        /// susmak oyuncuyu maçın sonuna kadar ölü bırakırdı.</summary>
         private bool IsReviveConditionMet()
         {
             // §10.5 reviveAnchor:"none" — tur tabanlı elemede canlanma YOKTUR. Sunucu zaten
             // reddediyor; burada kapatmak saniyede bir boşuna revive_request yollamayı ve ölüm
             // ekranında hiç gerçekleşmeyecek bir "canlanılıyor" metni göstermeyi engeller.
             if (ModeRuntime.Revive == ModeReviveAnchor.None)
+            {
+                return false;
+            }
+
+            // §10.9: engelin İÇİNDE canlanma yok — sunucu talebi kesin reddediyor. Burada da
+            // kapatmak saniyede bir boşuna istek göndermeyi ve ölüm ekranında hiç gerçekleşmeyecek
+            // bir "canlanılıyor" metni yazmayı engeller. ⚠️ Otorite yine sunucudadır: bu satır
+            // silinse kural işlemeye devam eder, yalnız geri bildirim yalan söyler.
+            if (ObstacleViolationProbe.IsViolating)
             {
                 return false;
             }
@@ -400,6 +451,12 @@ namespace VortexArena.Core.Combat
                 if (ModeRuntime.Revive == ModeReviveAnchor.None)
                 {
                     text = "Elendin — takımın turu bitirene kadar bekle";
+                }
+                else if (ObstacleViolationProbe.IsViolating)
+                {
+                    // §10.9: engelden çıkmadan canlanma yok. Gecikme sayacı göstermek yalan olurdu;
+                    // oyuncunun beklediği şey bir süre değil, kendi hareketi.
+                    text = "Engelden çık ve canlan";
                 }
                 else
                 {
@@ -521,8 +578,8 @@ namespace VortexArena.Core.Combat
         /// girmek yeter.
         /// <para>
         /// Kapalı bileşen açık sayılmaz: <c>BaseZone.Update</c> koşmadığı için
-        /// <c>IsPlayerInside</c> donar; açık saysaydık oyuncu bölgeye girse de canlanamaz,
-        /// yalnız sunucunun <c>REVIVE_GRACE</c>'ini beklerdi.
+        /// <c>IsPlayerInside</c> donar; açık saysaydık oyuncu bölgeye girse de canlanamaz, yani
+        /// hiç canlanamazdı — sunucuda bunu telafi eden bir zamanlayıcı yoktur.
         /// </para>
         /// </summary>
         private void EvaluateZones()
@@ -577,7 +634,8 @@ namespace VortexArena.Core.Combat
                 }
             }
 
-            ResetCombat(phase);
+            // ⚠️ Can/canlılık SIFIRLANMAZ: welcome onları taşımıyor, roster'dan gelecekler.
+            ResetCombat(phase, resetHealth: false);
         }
 
         private void HandleDisconnected()
@@ -588,7 +646,21 @@ namespace VortexArena.Core.Combat
             ResetCombat(PhasePaused);
         }
 
-        /// <summary>Takımı lobide de bilelim (canlanma bölgesi ve arayüz renkleri buna bakar).</summary>
+        /// <summary>
+        /// Roster'daki KENDİ satırımız: takım + <b>otoriter can/canlılık</b>.
+        /// <para>
+        /// ⚠️ <b>Can ve canlılık buradan da uygulanır ve bu bir tercih değil, ZORUNLULUKTUR:</b>
+        /// <c>welcome</c> mesajı bu ikisini taşımıyor (§5.3), yani yeniden bağlanan bir istemci
+        /// sunucudaki durumunu başka hiçbir yerden öğrenemez. Uygulanmasaydı — ve bir süre öyleydi —
+        /// ölüyken kopup dönen oyuncu kendini <b>canlı ve tam canlı</b> sanardı: ölüm ekranı
+        /// kapanır, tetik çalışır, mermi düşer, ses ve iz oynardı; sunucu ise her
+        /// <c>hit_report</c>'u "atıcı ölü" diye atardı. Belirtisi teşhis edilemez bir
+        /// <b>"vuruyorum ama adam ölmüyor"</b>dur.
+        /// </para>
+        /// <para>Roster her değişimde yayınlanır ve <c>status</c> uzlaştırması (§5.1) geride kalan
+        /// istemciye tam bir kopya gönderir — yani bu, ölüm/canlılığın <b>düzenli</b> bir
+        /// senkronizasyon noktasıdır, tek seferlik bir tamir değil.</para>
+        /// </summary>
         private void HandleLobbyState(LobbyStateMsg msg)
         {
             if (msg == null || msg.players == null || PlayerId == 0)
@@ -607,8 +679,45 @@ namespace VortexArena.Core.Combat
                 // Boş takım da uygulanır: takımsız modda sunucu takımları TEMİZLER (§10.5),
                 // eski değeri korumak oyuncuyu yanlış tabana yönlendirirdi.
                 Team = ParseTeam(info.team);
+                ApplyAuthoritativeState(info.hp, info.alive);
                 return;
             }
+        }
+
+        /// <summary>
+        /// Sunucunun bildirdiği can + canlılığı uygular. <b>Ölüm/canlanma kararının yerel karşılığı
+        /// TEK yoldan geçer</b> (<see cref="BeginDeath"/> / <see cref="SetAlive"/>): bu metot ikinci
+        /// bir ölüm mantığı yazmaz, yalnız aynı yolu besler.
+        /// </summary>
+        private void ApplyAuthoritativeState(float hp, bool alive)
+        {
+            // ⚠️ Roster BOŞLUĞU doldurur, akışı EZMEZ. `health_update`/`respawn` bir kez geldikten
+            // sonra otoriter akış odur ve roster ona karışmaz: iki mesaj AYRI yollardan gidiyor
+            // (biri tik outbox'ı, öteki roster yayını), yani sıraları garanti değil — geç kalmış
+            // bir roster kopyası taze bir ölümü geri alabilirdi. Bayrak her bağlantıda sıfırlanır,
+            // yani yeniden bağlanan istemci durumu yine buradan öğrenir.
+            if (_healthConfirmed)
+            {
+                return;
+            }
+
+            _healthConfirmed = true;
+            SetHp(hp);
+
+            if (alive)
+            {
+                if (!IsAlive)
+                {
+                    _awaitingRevive = false;
+                    SetAlive(true);
+                }
+
+                return;
+            }
+
+            // Sunucu "ölü" diyor: gecikme bilgisi roster'da yok, modun varsayılanı kullanılır.
+            // Zaten ölüysek BeginDeath sayacı ezmez (otoriter olmayan çağrı).
+            BeginDeath(ModeRuntime.RespawnDelay, false);
         }
 
         private void HandleLoadMatch(LoadMatchMsg msg)
@@ -653,6 +762,9 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // Otoriter akış başladı: bundan sonra roster kopyası can/canlılığa karışmaz
+            // (gerekçe ApplyAuthoritativeState'te).
+            _healthConfirmed = true;
             SetHp(msg.hp);
 
             if (msg.hp > 0f)
@@ -680,6 +792,7 @@ namespace VortexArena.Core.Combat
             }
 
             // Konum taşınmaz: respawn yalnız bir DURUM + gecikme bildirimidir (§10.4).
+            _healthConfirmed = true;
             BeginDeath(msg.delaySeconds, true);
         }
 
@@ -721,7 +834,18 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        private void ResetCombat(string phase)
+        /// <summary>
+        /// Maç/sahne geçişlerinin yerel sıfırlaması.
+        /// <para>
+        /// ⚠️ <paramref name="resetHealth"/> <b>yalnız sunucunun da gerçekten sıfırladığı</b>
+        /// geçişlerde <c>true</c>'dur (<c>load_match</c>, <c>return_to_lobby</c>, bağlantı kopması).
+        /// <c>welcome</c>'da <b>false</b>'tur ve bu kritiktir: o mesaj can/canlılık taşımıyor
+        /// (§5.3), yani orada "canlı + tam can" varsaymak <b>tahmindir</b> — ölüyken kopup dönen
+        /// oyuncuyu kendi ekranında dirilten tam olarak o tahmindi. Bilinmeyen durum tahmin
+        /// edilmez; roster'dan öğrenilir (<see cref="ApplyAuthoritativeState"/>).
+        /// </para>
+        /// </summary>
+        private void ResetCombat(string phase, bool resetHealth = true)
         {
             Phase = string.IsNullOrEmpty(phase) ? PhasePaused : phase;
             _awaitingRevive = false;
@@ -730,8 +854,14 @@ namespace VortexArena.Core.Combat
             // Maç/sahne değişti: modun yönergesi artık geçersiz. Yazan bileşen (HUD prefabıyla
             // gelen mod raporlayıcısı) yok olmuş olabilir, temizliği ona bırakmayız.
             _modePrompt = "";
-            SetHp(ArenaProtocol.PLAYER_MAX_HP);
-            SetAlive(true);
+
+            _healthConfirmed = resetHealth;
+            if (resetHealth)
+            {
+                SetHp(ArenaProtocol.PLAYER_MAX_HP);
+                SetAlive(true);
+            }
+
             RefreshStatusText();
         }
 

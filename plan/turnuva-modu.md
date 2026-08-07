@@ -31,7 +31,7 @@ henüz konmadı → **sahnede silah yok**. Aşağıdaki listenin silah gerektire
 **Tur akışı (2 oyuncu, farklı takımlar)**
 - [ ] Maç başlıyor, HUD faz satırında **"TUR 1"** yazıyor, skor satırında `KIRMIZI 0 — 0 MAVİ · 1v1`
 - [ ] Ölen oyuncu **canlanmıyor**: ölüm ekranı "Elendin — takımın turu bitirene kadar bekle" diyor
-- [ ] ⚠️ **20 sn beklendiğinde de canlanmıyor** (`REVIVE_GRACE` kapalı — iki yolun ikincisi)
+      ve beklemek canlandırmıyor (`reviveAnchor:"none"` → `revive_request` reddedilir)
 - [ ] Bir takım tümüyle ölünce tur bitiyor, karşı takıma **+1** yazılıyor
 - [ ] Faz `paused`/`mode`'a geçiyor, HUD **"TOPLANMA 0/2"** yazıyor, durum metni "Yeni tur —
       tabanına dön"

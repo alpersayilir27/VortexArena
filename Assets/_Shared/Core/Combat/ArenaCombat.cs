@@ -31,6 +31,12 @@ namespace VortexArena.Core.Combat
     ///
     /// <para><b>Hepsi bağlantı yokken sessizce no-op'tur.</b> Sunucusuz editör oturumunda oyun
     /// kodun aynen çalışır; hiçbir çağrının etrafına <c>if (bağlıysa)</c> yazman gerekmez.</para>
+    ///
+    /// <para><b>Tek sunum işi burada durur: isabet göstergesi</b> (<see cref="HitMarker"/>) —
+    /// bildirilen her vuruşun değdiği noktada vuran oyuncuya bir X çizilir. Kapının içinde
+    /// olmasının sebebi kapının kendisiyle aynı: yeni bir hasar kaynağı (ok, balta, bomba) onu
+    /// bedavaya alsın, "vurdum mu" sorusunun cevabı hasar kaynağına göre değişmesin. Kendi
+    /// göstergeni yazma.</para>
     /// </summary>
     public static class ArenaCombat
     {
@@ -72,6 +78,170 @@ namespace VortexArena.Core.Combat
         /// sunucuda zaten reddedilir, ama yerelde ses/efekt oynatmak oyuncuya yalan söyler.
         /// </summary>
         public static bool CanFire => PlayerCombatState.Instance == null || PlayerCombatState.Instance.CanFire;
+
+        // ------------------------------------------------------------------- atış ışını
+
+        /// <summary>
+        /// Namlunun <b>gerisinden</b> yoklanan mesafe (m): namlu gövdesi bir engelin içinden
+        /// geçiyor mu. Bir tüfek namlusu kadardır — daha uzunu köşeye yaslanmış meşru bir atışı
+        /// engellemeye başlar, daha kısası ince bir siperi ıskalar.
+        /// </summary>
+        private const float BarrelProbeMeters = 0.30f;
+
+        /// <summary>Yutulan atışın iz uzunluğu (m): mermi namludan çıkar çıkmaz ölür.</summary>
+        private const float BlockedTracerMeters = 0.05f;
+
+        /// <summary>
+        /// Bir atışın ışın sonucu: nereye kadar gitti, bir şeye çarptı mı, engel tarafından
+        /// <b>yutuldu</b> mu.
+        /// </summary>
+        public readonly struct ShotTrace
+        {
+            /// <summary>Mermiyi bir iç engel yuttu — <b>hiçbir hedefe hasar yazılmaz</b>.</summary>
+            public readonly bool Blocked;
+
+            /// <summary>Işın bir collider'a çarptı (yalnız <see cref="Blocked"/> değilken anlamlı).</summary>
+            public readonly bool HasHit;
+
+            /// <summary>Çarpma kaydı; <see cref="HasHit"/> false ise anlamsızdır.</summary>
+            public readonly RaycastHit Hit;
+
+            /// <summary>Işının GERÇEKTE gittiği mesafe — iz ve <see cref="ReportShot"/> bunu kullanır.</summary>
+            public readonly float Distance;
+
+            private ShotTrace(bool blocked, bool hasHit, RaycastHit hit, float distance)
+            {
+                Blocked = blocked;
+                HasHit = hasHit;
+                Hit = hit;
+                Distance = distance;
+            }
+
+            internal static ShotTrace BlockedShot() =>
+                new ShotTrace(true, false, default, BlockedTracerMeters);
+
+            internal static ShotTrace HitShot(in RaycastHit hit) =>
+                new ShotTrace(false, true, hit, hit.distance);
+
+            internal static ShotTrace Miss(float range) =>
+                new ShotTrace(false, false, default, range);
+        }
+
+        /// <summary>
+        /// <b>Bir hitscan atışının ışını — ateş eden her şey bunu kullanır.</b> Kendi
+        /// <c>Physics.Raycast</c>'ini yazma: engel kuralı burada durur ve yarın eklenen ok/balta/
+        /// mermi onu bedavaya alır.
+        ///
+        /// <para><b>Neden düz bir raycast yetmiyor:</b> Unity'de <b>ışının orijini bir collider'ın
+        /// içindeyse o collider hiç vurulmaz</b>. Namlusunu sandığın içine sokan oyuncunun mermisi
+        /// bu yüzden sandığı delip geçer ve arkasındaki oyuncuyu vurur — namlunun ucunu ince bir
+        /// duvarın öbür yüzüne geçirmek de aynı kapıdır (orijin artık duvarın ötesindedir). İki
+        /// durumu da yalnızca <b>orijini ayrıca sınamak</b> yakalar.</para>
+        ///
+        /// <para>Engel yuttuğunda iz namluda biter ve <c>hit_report</c> hiç gönderilmez.
+        /// ⚠️ <b>Tetikli silahlar buraya normalde HİÇ GELMEZ:</b> onların kapısı
+        /// <see cref="IsMuzzleBlocked"/>'tır ve tetiği tümden öldürür (cephane gitmez, ses/alev
+        /// oynamaz). Buradaki dal, tetiği olmayan ya da kapıyı bilmeyen bir hasar kaynağı için
+        /// <b>ikinci savunma hattıdır</b>.</para>
+        ///
+        /// <para>⚠️ Ana ışın <b>maskesiz</b> kalır (uzak isabet kutuları Default layer'ındadır) ama
+        /// <b>trigger'ları elemek zorundadır</b>: proje ayarı <c>Queries Hit Triggers</c> açık ve
+        /// sahnedeki silahların ISDK kavrama hacimleri trigger — elenmezse tezgâhın önünden atılan
+        /// mermi kavrama hacmine çarpıp durur.</para>
+        /// </summary>
+        /// <param name="muzzleWorld">Namlu ucunun dünya konumu.</param>
+        /// <param name="direction">Merminin yönü, <b>birim uzunlukta</b> (mesafeler buna dayanır).</param>
+        /// <param name="range">Silahın menzili (m).</param>
+        public static ShotTrace TraceShot(Vector3 muzzleWorld, Vector3 direction, float range)
+        {
+            if (IsMuzzleBlocked(muzzleWorld, direction))
+            {
+                return ShotTrace.BlockedShot();
+            }
+
+            return Physics.Raycast(muzzleWorld, direction, out RaycastHit hit, range,
+                       ~0, QueryTriggerInteraction.Ignore)
+                ? ShotTrace.HitShot(hit)
+                : ShotTrace.Miss(range);
+        }
+
+        /// <summary>
+        /// <b>Namlu bir iç engel tarafından tıkanmış mı</b> — duvar arkasından ateş etmeyi engelleyen
+        /// tek test.
+        ///
+        /// <para>İki soru sorar: <b>(1)</b> namlu ucu bir engelin içinde mi, <b>(2)</b> namlu gövdesi
+        /// (<see cref="BarrelProbeMeters"/> geri) bir engelin içinden geçiyor mu. İkincisi ince siper
+        /// içindir: ucunu öbür yüze geçiren oyuncunun namlu ucu artık boşluktadır, yani birinci test
+        /// onu kaçırır.</para>
+        ///
+        /// <para>⚠️ Geri yoklama <b>yalnız <c>Obstacle</c> maskesine</b> bakar: maskesiz bir ışın
+        /// oyuncunun kendi eline/silahına takılır ve meşru atışları sessizce yutardı.</para>
+        ///
+        /// <para><b>İki tüketicisi vardır ve testin tek yerde durması şarttır:</b> tetik kapısı
+        /// (<c>Weapon</c> — tıkalıyken tetik hiç işlemez, cephane gitmez) ve
+        /// <see cref="TraceShot"/> (tetiği olmayan hasar kaynakları için ikinci savunma hattı).
+        /// İkisi ayrı yazılsaydı biri sapar ve belirti "bazı silahlar duvardan ateş edebiliyor"
+        /// olurdu.</para>
+        /// </summary>
+        /// <param name="muzzleWorld">Namlu ucunun dünya konumu.</param>
+        /// <param name="direction">Merminin yönü, <b>birim uzunlukta</b>.</param>
+        public static bool IsMuzzleBlocked(Vector3 muzzleWorld, Vector3 direction)
+        {
+            if (ObstacleVolumes.ContainsPoint(muzzleWorld))
+            {
+                return true;
+            }
+
+            int obstacleMask = ArenaLayers.ObstacleMask;
+            return obstacleMask != 0 &&
+                   Physics.Raycast(muzzleWorld - direction * BarrelProbeMeters, direction,
+                       BarrelProbeMeters, obstacleMask, QueryTriggerInteraction.Ignore);
+        }
+
+        /// <summary>
+        /// <b>Tetik kapısı: silahın HERHANGİ bir parçası bir iç engele değiyor mu</b> (§10.9).
+        /// Tetikli her silah ateşlemeden önce bunu sormalıdır.
+        ///
+        /// <para><b>Neden namlu testi yetmiyor:</b> namlu bir NOKTA, silah ise bir HACİMDİR. Oyuncu
+        /// tüfeği tuğlanın arkasına iyice geçirip yalnız namlu ucunu boşlukta bırakabiliyor —
+        /// gövdesini hiç göstermeden ateş ediyor ve nokta testi bunu göremiyor. Buradaki kutu testi
+        /// silahın çizilen gövdesini olduğu gibi sorar.</para>
+        ///
+        /// <para>Kutu <b>yönlendirilmiştir</b> (silahın kendi rotasyonu): eksen hizalı bir kutu,
+        /// çapraz tutulan bir tüfekte gövdenin iki katı hacim kaplar ve siperin yanında duran meşru
+        /// atışları da keserdi.</para>
+        ///
+        /// <para>⚠️ <paramref name="bodyRoot"/> <b>silahın geometri kökü olmalıdır</b> (model), silah
+        /// prefabının kökü DEĞİL: kökün altında kavrama çerçevesi gibi silaha ait olmayan görseller
+        /// duruyor ve onları kutuya katmak silahı olduğundan çok daha büyük gösterirdi.</para>
+        /// </summary>
+        /// <param name="bodyRoot">Silah geometrisinin kökü; <c>null</c> ise kutu testi atlanır.</param>
+        /// <param name="localBounds">Silah gövdesinin <paramref name="bodyRoot"/> uzayındaki sınırları.</param>
+        /// <param name="muzzleWorld">Namlu ucunun dünya konumu.</param>
+        /// <param name="direction">Merminin yönü, <b>birim uzunlukta</b>.</param>
+        public static bool IsWeaponBlocked(Transform bodyRoot, in Bounds localBounds,
+            Vector3 muzzleWorld, Vector3 direction)
+        {
+            // Namlu kapısı önce: tek nokta + kısa ışın, kutu sorgusundan ucuz.
+            if (IsMuzzleBlocked(muzzleWorld, direction))
+            {
+                return true;
+            }
+
+            if (bodyRoot == null)
+            {
+                return false;
+            }
+
+            Vector3 scale = bodyRoot.lossyScale;
+            var halfExtents = new Vector3(
+                localBounds.extents.x * Mathf.Abs(scale.x),
+                localBounds.extents.y * Mathf.Abs(scale.y),
+                localBounds.extents.z * Mathf.Abs(scale.z));
+
+            return ObstacleVolumes.OverlapsBox(bodyRoot.TransformPoint(localBounds.center),
+                halfExtents, bodyRoot.rotation);
+        }
 
         // ------------------------------------------------------------- hedef çözme
 
@@ -200,6 +370,12 @@ namespace VortexArena.Core.Combat
         /// </para>
         /// <para>Canı YERELDE DÜŞÜRME: hedefin canı sunucudan geri gelir. Bu bir tercih değil,
         /// mutlak kuraldır — istemcide can tutan hiçbir bileşen yoktur.</para>
+        /// <para><b>İsabet göstergesini bu metot çizer</b> (<see cref="HitMarker"/>): vuruş
+        /// noktasında yalnız VURANIN gördüğü bir X. Ayrıca bir şey çağırma. ⚠️ Gösterge
+        /// <i>bildirimin yapıldığını</i> söyler, hasarın uygulandığını değil — sunucu vuruşu
+        /// reddedebilir (dost ateşi kapalı, faz <c>playing</c> değil, hedef zaten ölü; §10.3).
+        /// Otoriter sonucu beklemek göstergeyi gidiş-dönüş kadar geciktirir ve
+        /// <c>health_update</c> vuruşun NEREYE değdiğini taşımaz.</para>
         /// </summary>
         /// <param name="targetPlayerId"><see cref="TryGetTargetPlayerId"/>'den gelen kimlik.</param>
         /// <param name="worldHitPoint">İsabet noktasının dünya konumu (efekt/istatistik için).</param>
@@ -231,6 +407,12 @@ namespace VortexArena.Core.Combat
             Hit.damage = damage;
             Write(Hit.hitPos, ArenaSpace.WorldToArena(worldHitPoint));
             client.Send(Hit);
+
+            // İsabet göstergesi — bilinçli olarak gönderimden SONRA: bildirilmemiş bir vuruş için
+            // X çizmek oyuncuya yalan söylerdi (CanFire'ın gerekçesiyle aynı). Yalnız vuranın
+            // ekranında koşar (bu metot yalnız hasarı veren istemcide çağrılır) ve telde karşılığı
+            // yoktur.
+            HitMarker.Shared.Play(worldHitPoint);
         }
 
         /// <summary>

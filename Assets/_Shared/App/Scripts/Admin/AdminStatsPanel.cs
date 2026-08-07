@@ -25,8 +25,8 @@ namespace VortexArena.App.Admin
     /// oraya aittir.</para>
     /// <para>⚠️ <b>BATARYA hücresi zengin metin içerir</b> (eşiğin altındaki pil ve kumanda
     /// simgeleri token başına renklenir; tek TMP'nin tek <c>.color</c>'ı olduğu için başka yolu
-    /// yok). Prefabtaki o kolonun <c>richText</c>'i AÇIK kalmalı — kapatılırsa hücrede
-    /// <c>&lt;color=#…&gt;</c> etiketleri düz metin olarak görünür.</para>
+    /// yok). Bayrağı <see cref="EnableBatteryColumnRichText"/> açar — prefabtaki değere
+    /// güvenilmez, gerekçesi orada.</para>
     /// </summary>
     public class AdminStatsPanel : MonoBehaviour
     {
@@ -45,6 +45,9 @@ namespace VortexArena.App.Admin
         /// hepsini yeniden konumlandırmayı gerektirirdi. Sağ kenar bir teşhis kolonu için doğal yer.</remarks>
         private static readonly string[] ColumnTitles =
             { "OYUNCU", "TAKIM", "SKOR", "K", "D", "K/D", "HP", "BATARYA", "DURUM", "SAHNE", "PING" };
+
+        /// <summary>Zengin metin içeren TEK kolon (<see cref="ColumnTitles"/> ile aynı indeks).</summary>
+        private const int BatteryColumn = 7;
 
         // NOT: PanelWidth/PanelHeight/TableTop/ColumnWidths sabitleri KALDIRILDI — hiçbiri
         // okunmuyordu (panel kod tarafından çizildiği dönemden kalmışlar) ve durdukları yerde
@@ -86,7 +89,30 @@ namespace VortexArena.App.Admin
                 _root.SetActive(false); // görünürlüğü Apply() belirler
             }
 
+            EnableBatteryColumnRichText();
             Apply();
+        }
+
+        /// <summary>
+        /// BATARYA kolonunun zengin metin kapısı.
+        /// <para>
+        /// ⚠️ <b>Bayrak prefabta değil BURADA açılır:</b> <c>&lt;color=…&gt;</c> etiketlerini
+        /// <see cref="AdminPlayerRow.FormatBattery"/>/<see cref="AdminPlayerRow.FormatControllers"/>
+        /// üretiyor, yani bayrak bir görünüm tercihi değil üretilen metnin sözleşmesidir.
+        /// Prefabta kapalı kaldığında hücre <c>%73 K:&lt;color=#…&gt;~</c> gibi ham etiket çizer.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Yalnız bu kolon için.</b> Diğer kolonlar zengin metne KAPALI kalmalı: OYUNCU
+        /// kolonunda oyuncunun kendi yazdığı ad var ve <c>&lt;b&gt;</c> içeren bir ad tabloyu
+        /// bozardı.
+        /// </para>
+        /// </summary>
+        private void EnableBatteryColumnRichText()
+        {
+            if (_columns != null && BatteryColumn < _columns.Length && _columns[BatteryColumn] != null)
+            {
+                _columns[BatteryColumn].richText = true;
+            }
         }
 
         private void OnEnable()
@@ -249,7 +275,7 @@ namespace VortexArena.App.Admin
                 // ⚠️ Kumanda AYRI BİR KOLON DEĞİL, batarya hücresinin devamı: kolonlar prefabtaki
                 // TMP objelerinden geliyor (bkz. ColumnTitles) ve yeni kolon prefab işidir. İki
                 // değer karışmaz — kumanda tokeni kendi "K:" önekini taşır ve yüzde değildir.
-                case 7:
+                case BatteryColumn:
                 {
                     string battery = AdminPlayerRow.FormatBattery(view);
                     string controllers = AdminPlayerRow.FormatControllers(view);

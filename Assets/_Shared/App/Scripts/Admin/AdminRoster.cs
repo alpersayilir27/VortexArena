@@ -151,8 +151,9 @@ namespace VortexArena.App.Admin
     /// ⚠ <b><c>respawn</c> admin'e GELMEZ</b>: sunucu onu yalnız ölen oyuncunun bağlantısına
     /// yollar (§10.4). Bu yüzden canlanma geri sayımı <c>kill_event</c> zamanı +
     /// <see cref="ArenaProtocol.RESPAWN_DELAY"/> ile YEREL olarak hesaplanır; oyuncu tabanına
-    /// girmezse gerçek canlanma <see cref="ArenaProtocol.REVIVE_GRACE"/>'e kadar sarkabilir —
-    /// sayaç 0'a inince "TABANDA BEKLENİYOR"a döner, yanlış "canlandı" demez.
+    /// girmezse gerçek canlanma sarkar ve bunun bir üst sınırı YOKTUR (sunucu kimseyi zamanla
+    /// canlandırmaz) — bu yüzden sayaç 0'a inince "TABANDA BEKLENİYOR"a döner, yanlış "canlandı"
+    /// demez.
     /// </para>
     /// </summary>
     public class AdminRoster : MonoBehaviour

@@ -232,10 +232,10 @@ namespace VortexArena.App
                 gripFlags |= SnapshotEntry.FLAG_HAND_R_STALE;
             }
 
-            // §10.9: gövde bir iç engelin içinde. ⚠️ Bu bir ÖLÇÜM bildirimidir, ceza değil —
-            // canı sunucu kendi tikinde eritir. Ölçen taraf (BodyViolationProbe) Core'da kendini
+            // §10.9: kafa bir iç engelin içinde. ⚠️ Bu bir ÖLÇÜM bildirimidir, ceza değil —
+            // canı sunucu kendi tikinde eritir. Ölçen taraf (ObstacleViolationProbe) Core'da kendini
             // önyükleyen bir tekildir; burada yalnız okunur, HeldItems ile aynı seam deseni.
-            if (BodyViolationProbe.IsViolating)
+            if (ObstacleViolationProbe.IsViolating)
             {
                 gripFlags |= SnapshotEntry.FLAG_IN_OBSTACLE;
             }

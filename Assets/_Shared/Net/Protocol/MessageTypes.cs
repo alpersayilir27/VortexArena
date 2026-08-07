@@ -29,6 +29,8 @@ namespace VortexArena.Protocol
         // Gövde ölçümünü başlatır; playerId 0 = herkes (§10.8). Sunucu → istemci yönü de aynı type.
         public const string MeasureBodyScale = "measure_body_scale";
         public const string SetFriendlyFire = "set_friendly_fire"; // dost ateşi anahtarı; faz kapısı YOK, anlık (§5.2)
+        // Ölü oyuncuyu operatör canlandırır; playerId 0 = o an ölü olan TÜM oyuncular (§10.4).
+        public const string RevivePlayer = "revive_player";
 
         // Sunucu → İstemci
         public const string Welcome = "welcome";

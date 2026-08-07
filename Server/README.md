@@ -44,7 +44,7 @@ Açılışta:
   16'dan fazla pozlu oyuncu varsa aynı tik MTU'ya sığan parçalara bölünür (istemcide birleştirme
   gerekmez). Poz akarken konsolda saniyede bir
   `[state] oyuncu N, pozlu N, snapshot N B [(K parça)], hedef N` özeti görünür.
-- Maç tick döngüsü (10 Hz) çalışır: faz makinesi, geri sayım, süre, zorla canlandırma.
+- Maç tick döngüsü (10 Hz) çalışır: faz makinesi, geri sayım, süre.
 - `config/` bulunamazsa exe yanında oluşturulur ve varsayılanlarla doldurulur
   (`server.json`; `maps.json` **üretilmez** — o Unity export'undan gelir).
 - Konsolda bağlanan/kopan cihazlar ve çevrimiçi sayısı akar; **Ctrl+C** temiz kapatır.
@@ -260,20 +260,26 @@ alanları roster ile taşınıyor ve admin istatistik tablosunun sağlama noktas
 | `loading zaman aşımı (20 sn) — hazır olmayanlar: Gözlük 03` | sahne yükleme beklenmedi |
 | `hit_report reddedildi (Gözlük 03 → 5): dost ateşi yok` | §10.3 tutarlılık kontrollerinden biri düştü |
 | `öldürme: Gözlük 03 → Gözlük 05 (ak47) — skor kırmızı 4 : mavi 2` | doğrulanmış öldürme |
-| `canlandı: Gözlük 05` / `zorla canlandırma: Gözlük 05` | `revive_request` / `REVIVE_GRACE` |
+| `canlandı: Gözlük 05` | `revive_request` kabul edildi |
+| `operatör canlandırdı: Gözlük 05` | admin `revive_player` komutu uygulandı (`playerId:0` ise ölü olan her oyuncu için bir satır) |
+| `revive_player reddedildi (Gözlük 05): kalibresiz` | operatör komutunun kapılarından biri düştü — gerekçe satırın sonundadır (`kalibresiz` · `engelin içinde` · `oyuncu zaten canlı` · faz `playing` değil). ⚠️ **İstemciye ret gitmez**, bu satır operatörün tek tanı kanalıdır |
 | `maç sonu — kazanan: blue (kırmızı 12 : mavi 30)` | `match_end` yayınlandı |
 
 Kabul edilen vuruşların hasar satırı **yazılmaz** (saniyede onlarca satır olurdu); yalnız
 öldürme + ret satırları loglanır. Ret satırları da atıcı başına **2 sn'de bir** yazılır (istemciler
 ölü hedefe ateş etmeyi sürdürür); aradaki bastırılan retler yutulmaz, sayıları bir sonraki satırın
 sonuna `(+N bastırıldı)` olarak eklenir. `revive_request` reddi tamamen sessizdir (istemci ~1 sn'de
-bir tekrarlar; takılan istemciyi `REVIVE_GRACE` zorla canlandırma satırı yakalar).
+bir tekrarlar).
 
 **Free-roam respawn:** oyuncu ışınlanamaz → canlanma konum değil DURUM değişimidir. Ölünce
 kurbana `respawn{delaySeconds}` gider (`delaySeconds` = modun `Rules.RespawnDelay`'i);
 oyuncu süre dolduktan sonra **modun canlanma şartını** sağlayıp `revive_request` yollar; sunucu
-doğrulayıp `health_update{hp:100, attackerId:0}` yayınlar. Talep 20 sn (`REVIVE_GRACE`) gelmezse
-sunucu zorla canlandırır (maç kilitlenmesin).
+doğrulayıp `health_update{hp:100, attackerId:0}` yayınlar. ⚠️ **Canlandırmanın iki yolu vardır:**
+bu talep ve operatörün `revive_player` komutu (`MatchDirector.HandleAdminReviveAsync`, aynı
+`health_update` sonucunu yazar, skor/`deaths` sayaçlarına dokunmaz). Sunucunun zamanlayıcı tabanlı
+bir canlandırması yoktur; şartı sağlamayan oyuncuyu operatör kaldırmazsa süresiz ölü kalır.
+Operatör komutu modun canlanma şartını ve gecikmeyi bilerek geçer, **kalibrasyon ve engel
+yasaklarına ise tabidir** (§5.2/§10.4).
 ⚠️ Şartın kendisi (**tabanda mı / sabit mi durdu**) sunucuda **doğrulanmaz** — sunucu hakemlik
 değil defter tutar (§10.3 felsefesi); faz + ölü + gecikme kontrolüyle yetinir.
 

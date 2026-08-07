@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using VortexArena.Core;
+using VortexArena.Core.Player;
 using VortexArena.Protocol;
 
 namespace VortexArena.App.Editor
@@ -163,7 +164,55 @@ namespace VortexArena.App.Editor
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Seçim: " + DevSession.Summary, EditorStyles.miniLabel);
 
+            DrawObstacleDiagnostics();
+
             EditorGUILayout.EndScrollView();
+        }
+
+        /// <summary>
+        /// Engel ihlali ölçümünün canlı okuması (yalnız Play kipinde).
+        /// <para><b>Neden var:</b> ceza sunucudan gelen bir <c>health_update</c> olarak görünüyor —
+        /// "neden hasar alıyorum" sorusunun cevabı oyuncuda değil, ÖLÇÜMDE. Hangi kuralın
+        /// tetiklediği ve hangi engelin cevap verdiği görünmedikçe yalancı pozitif ile gerçek ihlal
+        /// birbirinden ayırt edilemez.</para>
+        /// <para>⚠️ Salt okunurdur ve hiçbir şeyi değiştirmez; ölçümün kendisi
+        /// <c>ObstacleViolationProbe</c>'dadır (kendini önyükleyen tekil, bu pencereye bağlı
+        /// değildir).</para>
+        /// </summary>
+        private void DrawObstacleDiagnostics()
+        {
+            if (!Application.isPlaying)
+            {
+                return;
+            }
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Engel ihlali (canlı)", EditorStyles.boldLabel);
+
+            if (ObstacleViolationProbe.Instance == null)
+            {
+                EditorGUILayout.LabelField("Ölçüm yok (rol admin ya da rig henüz doğmadı).",
+                    EditorStyles.miniLabel);
+                return;
+            }
+
+            EditorGUILayout.LabelField(
+                $"İhlal: {(ObstacleViolationProbe.IsViolating ? "EVET" : "hayır")}   " +
+                $"durum: {ObstacleViolationProbe.LastTrigger}", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField(
+                $"Kafa kabuğu içeride: {ObstacleViolationProbe.HeadInsideLevel:P0}   " +
+                $"karartma: {ObstacleViolationProbe.FadeAlpha:P0}", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField(
+                $"Ateş kapısı (kafa/el): {(ObstacleViolationProbe.IsBodyBlocked ? "KAPALI" : "açık")}",
+                EditorStyles.miniLabel);
+
+            string collider = ObstacleViolationProbe.LastTriggerCollider;
+            EditorGUILayout.LabelField(
+                "Son 'içeride' diyen engel: " + (string.IsNullOrEmpty(collider) ? "—" : collider),
+                EditorStyles.miniLabel);
+
+            // Ölçüm 20 Hz; pencere olay tabanlı çizildiği için elle tazelenir.
+            Repaint();
         }
 
         private void DrawSelection()

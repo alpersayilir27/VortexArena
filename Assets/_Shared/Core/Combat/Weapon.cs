@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Oculus.Interaction;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using VortexArena.Core.Player;
 using Random = UnityEngine.Random;
 
 namespace VortexArena.Core.Combat
@@ -57,6 +58,15 @@ namespace VortexArena.Core.Combat
         private const float TriggerPressThreshold = 0.55f;
         private const float TriggerReleaseThreshold = 0.35f;
 
+        /// <summary>Tıkalı namlu geri bildiriminin en kısa tekrar aralığı (sn).</summary>
+        private const float BlockedCueSeconds = 0.4f;
+
+        /// <summary>Tıkalı namlu darbesinin şiddeti — atış darbesinden hafif, "olmadı" demek için.</summary>
+        private const float BlockedHapticAmplitude = 0.6f;
+
+        /// <summary>Tıkalı namlu darbesinin süresi (sn).</summary>
+        private const float BlockedHapticSeconds = 0.06f;
+
         /// <summary>
         /// İki elle tutuşta geri tepme çarpanının VARSAYILANI.
         /// <para>
@@ -90,8 +100,9 @@ namespace VortexArena.Core.Combat
         [Tooltip("İki elle tutarken geri tepme çarpanı.")]
         [SerializeField] private float twoHandRecoilMultiplier = DefaultTwoHandRecoilMultiplier;
 
-        [Header("Haptik")]
-        [SerializeField] private float hapticAmplitude = 0.6f;
+        // ⚠️ Haptik alanı burada YOKTUR ve geri eklenmez: darbenin şiddeti/süresi silahın kendi
+        // verisidir (WeaponDefinition.HapticAmplitude/HapticDuration). Prefaba serialize edilen
+        // ikinci bir kopya, aynı silahın sahne örneği ile verilen klonunu farklı hissettirirdi.
 
         /// <summary>Arayüz adı: tanımın DisplayName'i, yoksa obje adı.</summary>
         public string WeaponName => definition != null && !string.IsNullOrEmpty(definition.DisplayName)
@@ -223,6 +234,12 @@ namespace VortexArena.Core.Combat
 
         public bool IsReloading { get; private set; }
 
+        /// <summary>
+        /// Silahın <b>herhangi bir parçası</b> şu an bir iç engele değiyor mu (§10.9) — böyleyken
+        /// tetik hiç işlemez. Yalnız tetiğe basılıyken ölçülür, boştaki silahta <c>false</c> kalır.
+        /// </summary>
+        public bool IsWeaponBlocked { get; private set; }
+
         /// <summary>Anlık saçılım yarı açısı (taban + bloom, derece). Çift el çarpanı DAHİL DEĞİL — ham değer.</summary>
         public float CurrentSpreadDegrees => definition != null ? definition.BaseSpreadDegrees + currentBloom : 0f;
 
@@ -266,6 +283,9 @@ namespace VortexArena.Core.Combat
 
         private InputAction attackAction;
         private float nextFireTime;
+        private float nextBlockedCueTime;
+        private Bounds bodyBounds;
+        private bool bodyBoundsResolved;
         private float reloadEndTime;
         private float currentBloom;
         private float currentKick;
@@ -526,11 +546,34 @@ namespace VortexArena.Core.Combat
             // Ateş yetkisi sunucu durumundan gelir (ölüyken / Loading-Countdown-End
             // fazlarında tetik BOŞA basılır: boş şarjör sesi bile çalmaz).
             bool combatAllows = ArenaCombat.CanFire;
-            bool canFire = !IsReloading && CurrentAmmo > 0 && combatAllows && definition != null;
+
+            // §10.9 duvar arkasından ateş kapısı. ⚠️ YALNIZ tetiğe basılıyken yoklanır: karar
+            // sadece ateş anında gerekiyor ve boştaki her silah için kare başına üç physics
+            // sorgusu yapmak (iki elde iki silah × 72 Hz) bedavaya ödenmiş bir maliyet olurdu.
+            IsWeaponBlocked = pressed && muzzle != null &&
+                              ArenaCombat.IsWeaponBlocked(modelPivot, ResolveBodyBounds(),
+                                  muzzle.position, muzzle.forward);
+
+            // İki kapı, tek geri bildirim. Oyuncunun kendi gövdesi kapısı burada DEĞİL
+            // ArenaCombat.CanFire'da uygulanıyor (silaha ait bir soru değil); burada yalnız
+            // "sessizce hiçbir şey olmasın" diye okunuyor — sebebi bilmeden tık sesi çalamayız.
+            bool obstacleBlocked = pressed &&
+                                   (IsWeaponBlocked || ObstacleViolationProbe.IsBodyBlocked);
+
+            bool canFire = !IsReloading && CurrentAmmo > 0 && combatAllows && definition != null &&
+                           !IsWeaponBlocked;
 
             if (pressed && canFire && Time.time >= nextFireTime)
             {
                 Fire();
+            }
+            else if (obstacleBlocked && ArenaCombat.IsAlive && !IsReloading && CurrentAmmo > 0)
+            {
+                // Silah ya da oyuncu bir engele değiyor: mermi HİÇ çıkmaz. ⚠️ Burada Fire()
+                // çağrılmadığı için cephane gitmez, namlu alevi/sesi oynamaz, ağa shot_event
+                // gitmez ve atış gecikmesi (nextFireTime) de ilerlemez — oyuncu duvara ateş
+                // ederek şarjör yakamaz.
+                CueBlockedFire();
             }
             else if (pressedThisFrame && combatAllows && !canFire && !IsReloading && CurrentAmmo == 0)
             {
@@ -539,6 +582,94 @@ namespace VortexArena.Core.Combat
                 weaponAudio?.PlayDry();
                 DryFired?.Invoke();
             }
+        }
+
+        /// <summary>
+        /// Tıkalı namlu geri bildirimi: kuru tetik sesi + kısa darbe.
+        /// <para>⚠️ <b>Kısılır</b> (<see cref="BlockedCueSeconds"/>): tetik basılı tutuluyor olabilir
+        /// ve kare başına bir tık sesi hem duyulmaz hem de ses kanalını doldurur.</para>
+        /// <para><see cref="DryFired"/> yayınlanmaz: o olay "şarjör boş" demek ve HUD'ın reload
+        /// istemi ona bağlı — tıkalı namlu ise dolu bir silahın geçici durumudur.</para>
+        /// </summary>
+        private void CueBlockedFire()
+        {
+            if (Time.unscaledTime < nextBlockedCueTime)
+            {
+                return;
+            }
+
+            nextBlockedCueTime = Time.unscaledTime + BlockedCueSeconds;
+
+            weaponAudio?.PlayDry();
+
+            // Atış darbesiyle aynı yol: coroutine tek, temizliği OnDisable'da — kumandada asılı
+            // kalan bir titreşim bırakmaz.
+            if (hapticRoutine != null)
+            {
+                StopCoroutine(hapticRoutine);
+            }
+
+            hapticRoutine = StartCoroutine(HapticPulse(BlockedHapticAmplitude, BlockedHapticSeconds));
+        }
+
+        /// <summary>
+        /// Silah gövdesinin <see cref="modelPivot"/> uzayındaki sınırları — engel kutusu testinin
+        /// girdisi. <b>Bir kez</b> hesaplanır: mesh'ler silahın ömrü boyunca değişmez ve renderer
+        /// başına 8 köşe dönüşümü her tetik karesinde tekrarlanacak bir iş değildir.
+        /// <para>⚠️ Kaynak <see cref="Mesh.bounds"/>'un YEREL sınırlarıdır, <c>Renderer.bounds</c>
+        /// (dünya AABB'si) DEĞİL: dünya kutusunu yerel uzaya geri çevirmek çapraz duran bir tüfekte
+        /// hacmi neredeyse iki katına çıkarır ve kutu testi siperin yanındaki meşru atışları
+        /// keserdi.</para>
+        /// <para>⚠️ Tarama <see cref="modelPivot"/>'tan başlar, silahın kökünden DEĞİL: kökün altında
+        /// kavrama çerçevesi gibi silaha ait olmayan görseller var.</para>
+        /// </summary>
+        private Bounds ResolveBodyBounds()
+        {
+            if (bodyBoundsResolved || modelPivot == null)
+            {
+                return bodyBounds;
+            }
+
+            bodyBoundsResolved = true;
+
+            Matrix4x4 toPivotSpace = modelPivot.worldToLocalMatrix;
+            MeshFilter[] filters = modelPivot.GetComponentsInChildren<MeshFilter>(false);
+            bool found = false;
+
+            for (int i = 0; i < filters.Length; i++)
+            {
+                Mesh mesh = filters[i].sharedMesh;
+                if (mesh == null)
+                    continue;
+
+                Renderer meshRenderer = filters[i].GetComponent<Renderer>();
+                if (meshRenderer == null || !meshRenderer.enabled)
+                    continue;
+
+                Matrix4x4 toPivot = toPivotSpace * filters[i].transform.localToWorldMatrix;
+                Vector3 center = mesh.bounds.center;
+                Vector3 extents = mesh.bounds.extents;
+
+                for (int c = 0; c < 8; c++)
+                {
+                    var corner = new Vector3(
+                        center.x + ((c & 1) == 0 ? -extents.x : extents.x),
+                        center.y + ((c & 2) == 0 ? -extents.y : extents.y),
+                        center.z + ((c & 4) == 0 ? -extents.z : extents.z));
+
+                    Vector3 point = toPivot.MultiplyPoint3x4(corner);
+                    if (!found)
+                    {
+                        bodyBounds = new Bounds(point, Vector3.zero);
+                        found = true;
+                        continue;
+                    }
+
+                    bodyBounds.Encapsulate(point);
+                }
+            }
+
+            return bodyBounds;
         }
 
         protected virtual void Fire()
@@ -567,24 +698,27 @@ namespace VortexArena.Core.Combat
             if (string.IsNullOrEmpty(WeaponId))
                 WarnMissingWeaponId();
 
-            bool didHit = Physics.Raycast(muzzle.position, direction, out RaycastHit hit, definition.Range);
+            // ⚠️ Işın BURADA atılmaz: engel kuralı (namlu bir iç engelin içinden ateş edemez) tek
+            // kapıdadır — kendi Physics.Raycast'ini yazan her yeni hasar kaynağı o kuralı kaybeder.
+            ArenaCombat.ShotTrace trace = ArenaCombat.TraceShot(muzzle.position, direction, definition.Range);
 
             // Ağ — ATIŞ (§6.4, UDP olay kanalı): her Fire()'da TAM BİR KEZ, isabet olsun olmasın.
             // Uzak taraf bununla namlu alevini/sesini oynatır ve tracer'ı çizer, o yüzden mesafe
-            // ışının GERÇEKTE gittiği yoldur: isabet varsa oraya kadar, yoksa menzil sonu.
+            // ışının GERÇEKTE gittiği yoldur: isabet varsa oraya kadar, engel yuttuysa namlu ucu,
+            // yoksa menzil sonu.
             // ⚠️ Bu bildirim VURUŞTAN (aşağıdaki hit_report) BAĞIMSIZDIR — biri sunum, öteki
             // otoriter durum; kanalları da ayrıdır (Docs/Gelistirici/Yemek-Kitabi.md).
-            ArenaCombat.ReportShot(direction, didHit ? hit.distance : definition.Range,
-                NetItemId, IsMainHandRight);
+            ArenaCombat.ReportShot(direction, trace.Distance, NetItemId, IsMainHandRight);
 
             // Yerel mermi izi. ⚠️ Uzak sunum yolu (RemoteShotFx) atanın kendi izini ÇİZEMEZ ve
             // çizmeyecek: sunucu olayı atana geri yollamaz, istemci de kendi playerId'sini süzer
             // (§6.5). Atanın izini çizecek tek yer burasıdır — atlanırsa "herkes görüyor, ateş
             // eden görmüyor" gibi teşhisi zor bir eksik doğar.
-            DrawLocalTracer(direction, didHit ? hit.distance : definition.Range);
+            DrawLocalTracer(direction, trace.Distance);
 
-            if (didHit)
+            if (trace.HasHit)
             {
+                RaycastHit hit = trace.Hit;
                 if (hitEffectPrefab != null)
                 {
                     GameObject fx = Instantiate(hitEffectPrefab, hit.point + hit.normal * 0.01f,
@@ -606,9 +740,7 @@ namespace VortexArena.Core.Combat
             currentKick = Mathf.Min(currentKick + definition.KickDegrees * recoilScale, definition.KickDegrees * 4f);
             currentKickBack = Mathf.Min(currentKickBack + definition.KickBackMeters * recoilScale, definition.KickBackMeters * 3f);
 
-            if (hapticRoutine != null)
-                StopCoroutine(hapticRoutine);
-            hapticRoutine = StartCoroutine(HapticPulse());
+            TriggerHapticPulse();
         }
 
         /// <summary>
@@ -1115,11 +1247,43 @@ namespace VortexArena.Core.Combat
 
         // --------------------------------------------------------------- haptik
 
-        private IEnumerator HapticPulse()
+        /// <summary>
+        /// Atış darbesini başlatır. Şiddet ve süre <b>silahın tanımından</b> okunur
+        /// (<see cref="WeaponDefinition.HapticAmplitude"/> / <see cref="WeaponDefinition.HapticDuration"/>)
+        /// — kodda sabit bir darbe YOKTUR, her silahın vuruş hissi kendi SO'sundan gelir.
+        /// <para>Değerler her atışta <b>yeniden</b> okunur ve darbeye parametre olarak geçer:
+        /// koşan bir darbenin ortasında tanım değişirse (silah verilip geri alınırsa) yarım kalan
+        /// darbe kendi şiddetiyle biter.</para>
+        /// <para>⚠️ Sıfır şiddet ya da sıfır süre "haptik kapalı" demektir ve darbe hiç
+        /// başlatılmaz: sıfır süreli bir coroutine titreşimi açıp kapatmayı aynı kareye sıkıştırır,
+        /// bu da kumandada asılı kalan bir titreşim bırakabilir.</para>
+        /// </summary>
+        private void TriggerHapticPulse()
+        {
+            if (hapticRoutine != null)
+            {
+                StopCoroutine(hapticRoutine);
+                hapticRoutine = null;
+            }
+
+            float amplitude = definition != null ? Mathf.Clamp01(definition.HapticAmplitude) : 0f;
+            float duration = definition != null ? definition.HapticDuration : 0f;
+
+            if (amplitude <= 0f || duration <= 0f)
+            {
+                // Haptik kapalı. Yarıda kesilen bir darbe kalmış olabilir — titreşimi kapat.
+                SetHeldVibration(0f, 0f);
+                return;
+            }
+
+            hapticRoutine = StartCoroutine(HapticPulse(amplitude, duration));
+        }
+
+        private IEnumerator HapticPulse(float amplitude, float duration)
         {
             // Yalnız silahı FİİLEN tutan el(ler) titrer; None (çözülememiş el) atlanır.
-            SetHeldVibration(1f, hapticAmplitude);
-            yield return new WaitForSeconds(0.05f);
+            SetHeldVibration(1f, amplitude);
+            yield return new WaitForSeconds(duration);
             // Darbe sırasında bırakılan elin titreşimi OVR tarafında kendiliğinden söner;
             // kalıcı temizlik OnDisable'dadır.
             SetHeldVibration(0f, 0f);

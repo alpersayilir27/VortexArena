@@ -223,6 +223,29 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
+        /// Ölü bir oyuncuyu canlandırır; <paramref name="playerId"/> <b>0 = o an ölü olan HERKES</b>
+        /// (§10.4). ⚠️ <c>0</c> ELENMEZ — <see cref="ClearCalibration"/> ile aynı toplu-hedef
+        /// deseni; toplu canlandırma geçerli bir komuttur.
+        /// <para>Modun canlanma şartını (turnuvada "canlanma yok") ve canlanma gecikmesini bilerek
+        /// GEÇER. Kalibresiz ya da engelin içindeki oyuncuyu sunucu yine de canlandırmaz ve sebebi
+        /// kendi konsoluna yazar — arayüz "gönderildi" der, "oldu" demez.</para>
+        /// </summary>
+        public static void RevivePlayer(int playerId)
+        {
+            if (playerId < 0)
+            {
+                return;
+            }
+
+            if (Send(new RevivePlayerMsg { playerId = playerId }))
+            {
+                SetStatus(playerId == 0
+                    ? "Canlandırma gönderildi: tüm ölüler"
+                    : $"Canlandırma gönderildi: oyuncu {playerId}");
+            }
+        }
+
+        /// <summary>
         /// Bir oyuncunun kalibrasyonunu sıfırlar; <paramref name="playerId"/> <b>0 = HERKES</b>
         /// (§10.6). Sıfırlanan oyuncu ateş edemez, hasar yemez, canlanamaz ve diğer oyuncuların
         /// ekranında avatarı parlar — kalibrasyonu geri açmayı YALNIZ başlığın kendisi yapabilir.

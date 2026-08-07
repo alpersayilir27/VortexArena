@@ -28,6 +28,8 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Gözlüksüz test (dev penceresi) | [15](#15-gözlüksüz-test-dev-penceresi) |
 | Bir konumu ağdan paylaşmak | [16](#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı) |
 | Arena ölçüsünü girmek (boyut dosyası) | [17](#17-arena-ölçüsü-boyut-dosyası) |
+| VR'da tıklanabilir dünya-uzayı paneli | [18](#18-vrda-tıklanabilir-bir-dünya-uzayı-paneli) |
+| İsabet göstergesinin (X) görünümü | [19](#19-isabet-göstergesinin-x-görünümünü-değiştirmek) |
 
 ---
 
@@ -48,20 +50,30 @@ public class Yay : MonoBehaviour
     public void Firlat()                            // ← kendi "ateşledi" olayın
     {
         // 1) Ateş edebilir miyiz? (ölüyken / geri sayımda tetik boşa basılır)
+        //    ⚠️ Oyuncunun KENDİSİ engelin içindeyse bu zaten false döner (§10.9) —
+        //    "bloğun içinde durup silahı dışarı uzatma" hilesinin kapısı burasıdır.
         if (!ArenaCombat.CanFire) return;
 
         Vector3 dir = muzzle.forward;
 
-        // 2) Atışı bildir: diğer oyuncular namlu alevini/sesini görsün.
+        // 2) Namlu bir iç engelin içinde mi? Öyleyse ATIŞ HİÇ OLMAZ — ne ses, ne efekt,
+        //    ne cephane, ne ağ olayı (§10.9: duvar arkasından ateş etme kapısı).
+        //    Silahın GÖVDESİNİ de sınamak istiyorsan: ArenaCombat.IsWeaponBlocked(...)
+        //    (yönlendirilmiş kutu; Weapon onu kullanıyor).
+        if (ArenaCombat.IsMuzzleBlocked(muzzle.position, dir)) return;
+
+        // 3) Atışı bildir: diğer oyuncular namlu alevini/sesini görsün.
         //    Hasarla ilgisi yok, sunucu doğrulamaz — yalnız relay eder.
         ArenaCombat.ReportShot(muzzle.position, dir, "yay");
 
-        // 3) Isabet
-        if (!Physics.Raycast(muzzle.position, dir, out RaycastHit hit, range)) return;
+        // 4) Isabet. ⚠️ Kendi Physics.Raycast'ini YAZMA: TraceShot trigger'ları eliyor
+        //    (kavrama hacimleri mermiyi durdururdu) ve engel kuralını ikinci kez uyguluyor.
+        ArenaCombat.ShotTrace iz = ArenaCombat.TraceShot(muzzle.position, dir, range);
+        if (!iz.HasHit) return;
 
         // Hedef bir AĞ OYUNCUSU ise vuruşu bildirir; değilse hiçbir şey olmaz.
         // Dönüş değeri yalnız sunum içindir: gövde efekti mi, duvar efekti mi?
-        ArenaCombat.ReportRaycastHit(hit, damage, "yay");
+        ArenaCombat.ReportRaycastHit(iz.Hit, damage, "yay");
     }
 }
 ```
@@ -71,10 +83,20 @@ Bu kadar. Hiçbir DTO kurmadın, hiçbir koordinat dönüşümü yapmadın, hiç
 > **Neden böyle:** bir vuruşu doğru bildirmek dört şeyi bilmeyi gerektirir — poz *arena uzayına*
 > çevrilmeli, **yön bir nokta değildir** (öteleme düşülmeli), hedef bir `RemoteHitBox` üzerinden
 > çözülmeli ve hasarı istemci belirler. `ArenaCombat` dördünü de kapsar.
+> ⚠️ **Işını kendin atma:** `Physics.Raycast` orijini İÇİNDE olduğu collider'ı hiç vurmaz, yani
+> namlusunu sandığın içine sokan oyuncu sandığı delip arkasındakini vurur. `IsMuzzleBlocked`
+> (tetik kapısı) + `TraceShot` (ışın) ikisi de aynı testi kullanır; kendi raycast'ini yazan
+> kaybeder.
 > `ReportRaycastHit` `false` dönerse hedef ağ oyuncusu değildir (dekor, duvar) —
 > **hasar uygulanmaz ve yapılacak yerel bir şey yoktur**; istemcide can tutan bir yol YOKTUR.
 > Dönüş değerini yalnız sunum için kullan (kan efekti mi, isabet izi mi). Kırılabilir objeler
 > ileride ağsal (sunucu-otoriter) olacak → `plan/agsal-kirilabilir-objeler.md`.
+
+> **İsabet göstergesini yazma, hazır geliyor.** Bildirilen her vuruşta değdiği noktada bir X
+> belirir (`HitMarker`) ve onu **yalnız vuran oyuncu görür** — `ReportHit`'in içinde olduğu için
+> yazdığın her hasar kaynağı onu bedavaya alır. İkinci bir gösterge kurma: aynı vuruşta iki X
+> çizilir. ⚠️ Gösterge *bildirimin yapıldığını* söyler, hasarın uygulandığını değil — sunucu
+> vuruşu reddedebilir (dost ateşi kapalı, faz `playing` değil).
 
 > ⚠️ **Canı yerelde düşürme.** `ReportHit` yalnızca *bildirir*. Hedefin canı sunucudan
 > `health_update` ile geri gelir; yerel oyuncunun canını `PlayerCombatState` (ve ondan beslenen
@@ -399,7 +421,8 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 1. Prefabı `Assets/_Shared/Arsenal/Prefabs/` altına koy.
 2. `WeaponDefinition` SO'sunu `Assets/_Shared/Arsenal/Data/` altına oluştur
    (*Create → VortexArena → Weapon Definition*): `weaponId`, hasar, atış hızı, menzil, saçılım,
-   şarjör, `prefab`.
+   şarjör, haptik (`hapticAmplitude` 0-1 + `hapticDuration` sn — atış başına kumanda titreşimi;
+   ikisinden biri 0 ise o silahta haptik yoktur), `prefab`.
 3. Modun kullanmasını istiyorsan `ModeDefinition.loadout` listesine ekle.
 
 `weaponId` yalnızca **kill feed etiketidir** — sunucu doğrulamaz, istediğini yazabilirsin.
@@ -966,3 +989,55 @@ biri eksikse o sahne ya Quest'te ya editörde tıklanmaz olur.
 devam eder ama **hiçbir işaretçi ona ulaşamaz** — belirti "panel açılıyor, tuşları basmıyor"
 olur. Gerekçe: `Docs/Sistem-Ozeti.md` §7, "world-space canvas'ta düzlemden sapmış bir çocuk"
 ve "ışınla tıklama ile parmakla dokunma ayrı kurulumdur" maddeleri.
+
+---
+
+## 19. İsabet göstergesinin (X) görünümünü değiştirmek
+
+Rakibi vurunca isabet noktasında beliren X'in **hiçbir ayarı kodda değildir**. Hepsi tek bir
+asset'te:
+
+**`Assets/_Shared/Data/Resources/HitMarkerStyle.asset`** → Project penceresinde tıkla, Inspector'da
+ayarla.
+
+⚠️ Asset `Resources/` altından **çıkarılmaz ve adı değiştirilmez**: `HitMarker` onu sahne referansı
+olmadan `Resources.Load` ile bulur. Taşırsan gösterge çalışmayı sürdürür ama koddaki
+varsayılanlara döner, yani yaptığın ayarlar sessizce yok sayılır.
+
+| İstediğin | Alan |
+|---|---|
+| Daha büyük / küçük X | `Size At One Meter` (1 m mesafedeki kenar uzunluğu, m) + `Min/Max Size Meters` |
+| Daha saydam / opak | `Color` alanının **alfası** |
+| Daha kalın / ince çizgi | `Thickness Of Size` (boyun oranı) |
+| Daha uzun / kısa kalsın | `Lifetime Seconds` |
+| Nasıl sönsün, nasıl büyüsün | `Alpha Over Life` / `Size Over Life` eğrileri (yatay eksen = ömrün 0→1'i) |
+| Dışına koyu çerçeve (okunurluk) | `Outline Color` (alfa 0 → kapalı) + `Outline Thickness Scale` |
+| Parlama (glow) | `Line Material` → additive harmanlayan kendi materyalin |
+| Görünümün tamamı benim olsun | `Marker Prefab` → aşağı bak |
+
+> **Play kipinde canlı ayarlanır.** Sayılar, renkler ve eğriler her karede asset'ten okunur:
+> Play'deyken Inspector'da oynattığın değer bir sonraki isabette (çoğu alanda aynı karede) ekrana
+> yansır. ⚠️ `Line Material` ve `Marker Prefab` havuz düğümü kurulurken bağlanır — onların
+> değişimi havuz o düğümü yenilediğinde, yani birkaç isabet sonra geçerli olur.
+
+### Görünümün tamamını kendin yapmak (`Marker Prefab`)
+
+Parçacık, shader, animasyon, ışık — X'in yerine ne istersen. Prefabı bağladığın anda çizgi X hiç
+çizilmez.
+
+1. `GameObject > 3D Object > Quad` (ya da bir `Particle System`) → istediğin materyali/efekti kur.
+2. **1 birim = 1 metre** olacak şekilde kur: ölçek asset'teki boy alanlarından gelir, prefabın
+   kendi ölçeği onunla **çarpılır**.
+3. Kameraya bakan yüz: prefab kameranın dönüşünü **aynen** alır (ekrana paralel). Unity'nin
+   varsayılan Quad'ı bu hâlde kameraya bakar; kendi mesh'in ters duruyorsa çocuğu 180° çevir.
+   Dünyada sabit dursun istiyorsan `Face Camera`'yı kapat.
+4. Prefab olarak kaydet ve `Marker Prefab` alanına sürükle.
+
+> **Bu yolda renk, saydamlık ve sönme SENİN işindir** — `HitMarker` yalnız yeri, boyu, dönüşü ve
+> ömrü yönetir; asset'teki renk/kontur alanları okunmaz. Prefab kendi ömrünü yönetmeye çalışmasın
+> (`Destroy`, `Stop Action: Destroy` koyma): örnek **havuzlanır**, her isabette yeniden kullanılır
+> ve içindeki parçacık sistemleri baştan oynatılır.
+
+> ⚠️ **İkinci bir gösterge kurma.** Silah kodunda kendi efektini `Instantiate` edersen aynı vuruşta
+> iki işaret çizilir; gösterge zaten `ArenaCombat.ReportHit`'in içinden geliyor ve **yalnız vuran
+> oyuncu görüyor** (bkz. [1](#1-kendi-silahımı-yazdım-ateşleyince-ne-çağırayım)).

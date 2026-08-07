@@ -102,6 +102,20 @@ namespace VortexArena.Core.Player
         private const float NameLabelHeightMeters = 0.5f;
 
         /// <summary>
+        /// Takımsız (FFA / henüz atanmamış) oyuncunun ad etiketi rengi. Takım rengi orada bir şey
+        /// ANLATMADIĞI için nötr griye değil beyaza düşülür: gri bir etiket yalnız okunaksızlık
+        /// üretirdi.
+        /// </summary>
+        private static readonly Color NameLabelNeutralColor = Color.white;
+
+        /// <summary>
+        /// Ölü oyuncunun ad etiketindeki karartma çarpanı — gövdedeki
+        /// <see cref="DeadColorScale"/>'den YÜKSEK: metin okunur kalmalı, durumu zaten
+        /// <c>" (ölü)"</c> eki söylüyor, renk yalnız söndürüyor.
+        /// </summary>
+        private const float NameLabelDeadScale = 0.55f;
+
+        /// <summary>
         /// Çift ellide (<c>FLAG_GRIP_LINKED</c>) boş elin kabzaya yapıştırılma yarıçapı (metre).
         /// <para>
         /// ⚠️ Bu bir <b>güzellik ayarı değil paket kaybı emniyetidir</b> (§6.6):
@@ -200,6 +214,12 @@ namespace VortexArena.Core.Player
         /// alanı) türer, ayrı bir tonu vardır (saydamda okunsun diye).
         /// </summary>
         private Color _ghostTeamColor = GhostNeutralColor;
+
+        /// <summary>
+        /// Ad etiketinin rengi — <see cref="_teamColor"/> ile aynı kaynaktan (roster'ın takım
+        /// alanı) türer, takımsız oyuncuda <see cref="NameLabelNeutralColor"/>'a düşer.
+        /// </summary>
+        private Color _labelColor = NameLabelNeutralColor;
 
         // ── Elde tutulan eşya (§6.6) ────────────────────────────────────────────────────
         // Katalog statik önbellekli ama aramayı kare başına yapmamak için burada tutulur.
@@ -480,6 +500,8 @@ namespace VortexArena.Core.Player
             _number = number;
             _teamColor = team == "red" ? TeamRedColor : team == "blue" ? TeamBlueColor : NeutralColor;
             _ghostTeamColor = team == "red" ? GhostRedColor : team == "blue" ? GhostBlueColor : GhostNeutralColor;
+            _labelColor = team == "red" ? TeamRedColor
+                : team == "blue" ? TeamBlueColor : NameLabelNeutralColor;
 
             ApplyRedBody(team == "red");
 
@@ -619,7 +641,20 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Ad etiketi; ölüyken " (ölü)", kalibresizken " (KALİBRESİZ)" eki taşır.</summary>
+        /// <summary>
+        /// Ad etiketi; ölüyken " (ölü)", kalibresizken " (KALİBRESİZ)" eki taşır.
+        /// <para>
+        /// <b>Etiketin RENGİ takımdır</b> (ölüde karartılmış): aynı ad admin kartında ve kuş bakışı
+        /// işaretçisinde de takım renginde yazılıyor, üç yerin tutması "bu kim, hangi takım"
+        /// sorusunu okumadan cevaplatır.
+        /// </para>
+        /// <para>
+        /// ⚠️ Bu, "takım rengi karakter mesh'ine yazılmaz" kuralının istisnası DEĞİLDİR
+        /// (<see cref="SetFriendly"/>): etiket zaten oyuncunun kimliğini yazıyor ve kırmızı takım
+        /// kendi gövdesiyle çiziliyor — renk telde olmayan yeni bir bilgi açmaz, olanı okunur
+        /// yapar. Etiket normal derinlik testiyle çizilir, duvar arkasından okunmaz.
+        /// </para>
+        /// </summary>
         private void ApplyLabelText()
         {
             if (nameLabel != null)
@@ -627,6 +662,10 @@ namespace VortexArena.Core.Player
                 string suffix = !IsCalibrated ? UncalibratedLabelSuffix : IsAlive ? "" : DeadLabelSuffix;
                 string prefix = _number > 0 ? _number + " · " : "";
                 nameLabel.text = prefix + _displayName + suffix;
+                nameLabel.color = IsAlive
+                    ? _labelColor
+                    : new Color(_labelColor.r * NameLabelDeadScale, _labelColor.g * NameLabelDeadScale,
+                        _labelColor.b * NameLabelDeadScale, _labelColor.a);
             }
         }
 

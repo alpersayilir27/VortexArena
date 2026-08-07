@@ -274,9 +274,8 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
   gibi bir protokol sabiti **YOKTUR ve eklenmez**; tek tavan `PLAYER_ID_MAX = 255` ve o bir ürün
   kararı değil `playerId`'nin `u8` olmasıdır. Dev aracı emniyeti gerekiyorsa **yerel** bir sabit
   kullan, protokole sabit ekleme.
-- ⚠️ **Bir oyuncu durumuna savaş kapısı eklerken o durumu değiştiren TÜM yolları ara** — talep
-  tabanlı olan (`revive_request`) ile zamanlayıcı tabanlı olan (`REVIVE_GRACE`) ayrı kod
-  yollarıdır; birini kapatmak kuralı işlevsiz bırakır.
+- ⚠️ **Bir oyuncu durumuna savaş kapısı eklerken o durumu değiştiren TÜM yolları ara** — bir tanesini
+  bile atlamak kuralı işlevsiz bırakır ve hata vermez.
 - ⚠️ **Yeni admin ayarı eklerken önce sor: operatörler arasında ORTAK mı, ekrana mı ait?** —
   ortaksa `AdminSelection` + protokol (`admin_state`), ekrana aitse `AdminSession` (`PlayerPrefs`).
   Çoklu admin sınırsızdır ve hepsi eş yetkilidir.
@@ -363,9 +362,12 @@ taşıyan bileşen `DimensionAnchor`'dır (`AnchorKind`) ve kalibratör önce on
 yalnız maketi olmayan eski sahneler için vardır.
 Elle konan engeller için `ArenaObstacle` (`Core/Arena/`): muhafaza onu engel sayar —
 ⚠️ **collider değildir, fizik yapmaz** (free-roam'da çarpışma yoktur).
-**İç engelin (sütun, kasa, sandık, blok) collider'ı `Obstacle` layer'ına (10) konur** — sözleşme tek
-cümledir: *"bunun içinde olmak ihlaldir"* (oyuncu gömülünce sn'de 30 HP, `Docs/ArenaNet-Protokol.md`
-§10.9). ⚠️ **Bu layer'daki collider KONVEKS olmalı** (Box/Sphere/Capsule ya da `MeshCollider` +
+**İç engelin (sütun, kasa, sandık, blok) collider'ı `Obstacle` layer'ına (10) konur** — sözleşme iki
+cümledir: *"buranın içine KAFA girerse ihlaldir"* (ekran kararır, 3 sn sonra can erimeye başlar,
+8. sn'de ölüm) ve *"buraya KAFA, EL ya da SİLAHIN herhangi bir parçası değiyorsa tetik ölür"*.
+⚠️ **Ceza yalnız kafayı, ateş kapısı kafa+eli+silahı yargılar** — ikisi ayrı sorudur ve el/silah
+kuralı tele hiç gitmez; oran (gövde kütlesi) kuralı YOKTUR (gerekçe: Quest'te bacaklar ölçülmez,
+üretilir) → `Docs/ArenaNet-Protokol.md` §10.9. ⚠️ **Bu layer'daki collider KONVEKS olmalı** (Box/Sphere/Capsule ya da `MeshCollider` +
 `Convex`): non-convex mesh'te nokta-içeride testi daima "evet" der ve sahnedeki herkesi öldürür —
 denetimi `… > Arena > Engel Hacimlerini Denetle` yapar. ⚠️ **Dış duvar, zemin ve tavan bu layer'a
 KONMAZ** (kalibrasyonu kaymış oyuncu durduk yere ölmesin; dış sınırı zaten `ArenaBoundary`
@@ -421,7 +423,7 @@ Sonra `FFA.asset` gibi bir `ModeDefinition` yaz (modId, süre/limit, kural alanl
 Çekirdeğin üç komutu yeter: `TryPauseForMode(modeState)` · `SetModeState` · `TryStartRound()`
 (→ `Docs/Sistem-Ozeti.md` §3.8.2). ⚠️ Tur başında oyuncuyu **`RevivePlayerLocked` ile** canlandır
 (`ResetMatchStateLocked` istemciye haber vermez → ölüm ekranında donar) ve "canlanma yok" kuralını
-**iki yolda birden** kapat (`revive_request` + `REVIVE_GRACE`).
+canlandırmanın tek kapısında kapat (`revive_request`).
 **Silahı mod dağıtan mod** (`weaponSource:"random"`, ör. FFA): sahnede ya da arenada **hiçbir iş
 yoktur**. `WeaponGranter` (`_Shared/Core/Combat/`) kendini önyükleyen kalıcı tekildir — kural
 `RandomGrant` **ve ortada kurulmuş bir maç varken** sahnedeki silahları gizler (⚠️ kapı yalnız
@@ -518,7 +520,16 @@ başlar; `reserveMode=DiscardMagazine` (varsayılan) erken reload'da şarjörde 
 (`PoolRounds` = CS2 havuz alternatifi SO'dan seçilir). Verilen silahta (`random`) reload kapalıdır.
 ⚠️ **Ağa bildirim TEK kapıdan yapılır: `ArenaCombat`** (`_Shared/Core/Combat/`, statik) —
 `ReportShot` · `ReportHit` · `ReportRaycastHit` · `ReportAreaHit` (alan etkisi = hedef başına bir
-`hit_report`) + `TryGetTargetPlayerId` · `GetHitZone` · `IsHeadshot` · `CanFire`. Protokol DTO'su kurma, arena
+`hit_report`) + `TraceShot` · `IsMuzzleBlocked` · `IsWeaponBlocked` · `TryGetTargetPlayerId` ·
+`GetHitZone` · `IsHeadshot` · `CanFire`.
+⚠️ **Hitscan ışını `TraceShot` ile atılır, elle `Physics.Raycast` ile DEĞİL:** engel kuralı
+(`Physics.Raycast` orijini içinde olduğu collider'ı hiç vurmaz) ve trigger elemesi orada duruyor;
+kendi ışınını yazan yeni hasar kaynağı ikisini de kaybeder. ⚠️ **Tetiği olan bir silah ayrıca
+`IsWeaponBlocked` ile kapatılır** (silahın çizilen gövdesinin yönlendirilmiş kutusu + namlu
+testleri) — değiyorken atış hiç olmaz (cephane gitmez, ses/alev oynamaz, ağa olay gitmez);
+`TraceShot`'un mermi yutan dalı yalnız tetiksiz kaynaklar için ikinci savunma hattıdır.
+⚠️ **Oyuncunun kendisi engeldeyken ateş kapısı `ArenaCombat.CanFire`'dadır**, silahta değil: bloğun
+içinde durup silahı dışarı uzatan oyuncunun silahı tertemiz boşluktadır. Protokol DTO'su kurma, arena
 uzayı dönüşümünü elle yazma, `ArenaClient.Send`'i doğrudan çağırma: bir vuruşu doğru bildirmek
 dört ayrı şeyi bilmeyi gerektiriyor (arena uzayı, **yön bir nokta değildir**, `RemoteHitBox` ile
 hedef çözme, hasarı istemcinin belirlemesi) ve `Weapon` da bu kapıyı kullanıyor. Reçeteler:
@@ -541,7 +552,8 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `… > Arena > Template Temellerini Yükle` | Yeni/boş sahneye altyapı prefab ÖRNEKLERİ (`VA_ArenaBoundary`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı `VA_ModeHud`/taban bölgeleri) + kalibratör/muhafaza alanlarının rig'e bağlanması + boyut dosyası bağlama. İdempotent. ⚠️ Kalibrasyon işaretçisi KOYMAZ — onlar maketle gelir |
 | `… > Arena > JSON'dan DimensionMesh Üret` | Mekanın boyut JSON'undan ölçü maketi (taban + kolonlar + kalibrasyon işaretçileri `anchor_a`/`anchor_b`). **Sahne köküne, dönüşsüz** kurar. İdempotent. ⚠️ Her arenada ZORUNLU adım: sahnenin kalibrasyon işaretçileri burada üretilir |
 | `… > Arena > DimensionMesh'i JSON'a Çevir` | Maketin köşeleri/kalibrasyon işaretçileri sahnede düzeltildi → aynı boyut dosyasının ÜSTÜNE yazar (hedefi maketin kendisi söyler). İşaretçi yoksa dosyadaki `calibration` KORUNUR |
-| `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → `Obstacle` layer'ındaki konveks olmayan collider'ları, trigger'ları ve collider'sız damgalı objeleri raporlar. ⚠️ Hiçbir şeyi düzeltmez; non-convex bir collider tespiti sessizce herkesi öldürdüğü için bu tarama sahne kaydedilmeden koşturulur |
+| `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → `Obstacle` layer'ındaki konveks olmayan collider'ları, trigger'ları, collider'sız damgalı objeleri ve **görünen yüzeyden şişkin** collider'ları (içbükey mesh convex işaretlenmiş → oyuncu boşlukta ceza alır) raporlar. ⚠️ Hiçbir şeyi düzeltmez; iki tespit de sessizce yanlış ceza ürettiği için bu tarama sahne kaydedilmeden koşturulur |
+| `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanlarını kurar: engel uyarı yazısı + hasar vinyeti (`CenterEyeAnchor` altında). İdempotent, **tek seferlik** — rig tüm arenalarda örnek olduğu için her arenaya birden gider. ⚠️ Vinyetin materyalini araç ÜRETİR (shader GUID'i import öncesi bilinemez); çalıştırılmadıkça karartma çalışır ama yazı/vinyet hiç çizilmez |
 | `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
 | `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir) |
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |

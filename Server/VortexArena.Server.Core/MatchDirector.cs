@@ -81,7 +81,7 @@ public readonly record struct StageSceneResult(StageOutcome Outcome, string Reas
 /// bu yüzden _gate altından çağrılmaları güvenlidir.</para></summary>
 public sealed class MatchDirector
 {
-    /// <summary>Maç tick'i 10 Hz: countdown/süre/zorla canlandırma çözünürlüğü için yeterli,
+    /// <summary>Maç tick'i 10 Hz: countdown/süre/engel cezası çözünürlüğü için yeterli,
     /// snapshot döngüsünden (20 Hz) bağımsız.</summary>
     private const int TickIntervalMs = 100;
 
@@ -186,6 +186,14 @@ public sealed class MatchDirector
 
     /// <summary>1 Hz işler (countdown geri sayımı + Live'da match_state) için sonraki eşik.</summary>
     private DateTime _nextSecondAt = DateTime.UtcNow;
+
+    /// <summary>Engel hasarının <c>health_update</c> kadansı (ms) — tik kadansı DEĞİL (§10.9,
+    /// gerekçe <see cref="TickObstacleLocked"/>'ta). 4 Hz: 12 HP/sn'de üç HP'lik adımlar.</summary>
+    private const int ObstacleHealthIntervalMs = 250;
+
+    /// <summary>Engel hasarında bir sonraki can bildirimi eşiği. Oyuncu başına DEĞİL, tik
+    /// döngüsüne aittir: aynı anda erimekte olan herkes aynı kadansta bildirilir.</summary>
+    private DateTime _nextObstacleHealthAt = DateTime.UtcNow;
 
     private int _countdownRemaining;
 
@@ -633,33 +641,11 @@ public sealed class MatchDirector
         EnterLiveLocked(outbox, now);
     }
 
-    /// <summary>Süreyi işletir, zorla canlandırmaları uygular, 1 Hz match_state yayınlar.
+    /// <summary>Süreyi işletir, 1 Hz match_state yayınlar.
     /// Dönüş: OnTick/IsMatchOver için kilit dışında kullanılacak mod (yoksa null).</summary>
     private IGameMode? TickLiveLocked(List<Outgoing> outbox, DateTime now, float deltaSeconds)
     {
         _timeRemaining = MathF.Max(0f, _timeRemaining - deltaSeconds);
-
-        // §10.4/4: talep gelmese de REVIVE_GRACE sonunda canlandır (takılan istemci maçı kilitlemesin).
-        // ⚠️ İKİNCİ İSTİSNA (§10.4): reviveAnchor "none" olan modda (tur tabanlı eleme) grace
-        // döngüsü HİÇ koşmaz. Bu satır olmadan "tur içinde canlanma yok" kuralı işlevsizdir —
-        // HandleReviveRequestAsync reddetse bile oyuncu 20 sn sonra buradan canlanırdı.
-        // Canlandırmanın iki yolu var ve bir yasak ikisini birden kapatmadıkça yoktur.
-        if (_rules.Revive != ReviveAnchor.None)
-        {
-            foreach (var player in ConnectedPlayersLocked())
-            {
-                if (player.Alive) continue;
-                // ⚠️ BİRİNCİ İSTİSNA (§10.6): kalibresiz oyuncu ZORLA da canlandırılmaz.
-                // Bu satır olmadan "kalibresiz oyuncu canlanamaz" kuralı işlevsizdir — HandleRevive-
-                // RequestAsync reddetse bile oyuncu birkaç saniye sonra buradan canlanırdı.
-                // Sonucu: kalibresiz ölü oyuncu kalibre olana dek ölü kalır; kalibrasyon gelince
-                // grace zaten dolmuş olduğu için ilk tik'te kendiliğinden canlanır.
-                if (!player.Calibrated) continue;
-                if ((now - player.DiedAt).TotalSeconds < ArenaProtocol.REVIVE_GRACE) continue;
-                RevivePlayerLocked(outbox, player);
-                Console.WriteLine($"[match] zorla canlandırma: {player.Name}");
-            }
-        }
 
         TickObstacleLocked(outbox, now, deltaSeconds);
 
@@ -674,7 +660,7 @@ public sealed class MatchDirector
     /// <summary>
     /// §10.9: iç engelin İÇİNDE olduğunu bildiren oyuncuların canını eritir
     /// (<see cref="ArenaProtocol.OBSTACLE_DAMAGE_PER_SECOND"/> · saniye).
-    /// <para><b>Otorite bölünmesi <c>hit_report</c>'un aynısıdır:</b> ölçümü istemci yapar (gövdesi
+    /// <para><b>Otorite bölünmesi <c>hit_report</c>'un aynısıdır:</b> ölçümü istemci yapar (kafası
     /// engelin içinde mi), <b>sonucu sunucu yazar</b>. Sunucu ihlali DOĞRULAYAMAZ — arena
     /// geometrisi burada yoktur ve getirilmez (ikinci doğruluk kaynağı olurdu). Yapabildiği ve
     /// yaptığı şey <b>sonucu sınırlamaktır</b>: süreyi kendi saatiyle ölçer, bayat bayrağı düşürür,
@@ -682,62 +668,128 @@ public sealed class MatchDirector
     /// <para>⚠️ <b>Kalibrasyon kapısı zorunlu</b> (§10.6): hizalaması kaymış başlıkta sanal engel
     /// gerçeğinden sapar ve tespit yalancı pozitif üretir — oyuncu durduk yere ölürdü.</para>
     /// <para>⚠️ <b>Ölünce bayrak SIFIRLANMAZ ve sıfırlanmamalı:</b> oyuncu hâlâ engelin içindedir
-    /// ve istemci bunu 20 Hz bildirmeye devam eder. Canlanınca ceza kaldığı yerden sürer — doğrusu
-    /// budur, "canlandım ve bir saniye bedava" değil. Bayrağı canlanmada temizlemek oyuncuya engelin
+    /// ve istemci bunu 20 Hz bildirmeye devam eder. Bayrağı canlanmada temizlemek oyuncuya engelin
     /// içinde kalıcı bir sığınak açardı.</para>
+    /// <para><b>Ceza iki aşamalıdır</b> (§10.9): önce <see cref="ArenaProtocol.OBSTACLE_GRACE_SECONDS"/>
+    /// tolerans (can hiç azalmaz), sonra <see cref="ArenaProtocol.OBSTACLE_DRAIN_SECONDS"/> içinde
+    /// tam candan ölüme giden erime. Toleransın saati <b>sunucunundur</b>
+    /// (<see cref="PlayerState.ObstacleSince"/>) — istemciden gelen bir süre cezayı ona teslim
+    /// ederdi.</para>
     /// </summary>
     private void TickObstacleLocked(List<Outgoing> outbox, DateTime now, float deltaSeconds)
     {
         var damage = ArenaProtocol.OBSTACLE_DAMAGE_PER_SECOND * deltaSeconds;
         if (damage <= 0f) return;
 
+        // Can bildirimi tik kadansında DEĞİL, bu aralıkta gider (gerekçe aşağıda).
+        var announce = now >= _nextObstacleHealthAt;
+        if (announce) _nextObstacleHealthAt = now.AddMilliseconds(ObstacleHealthIntervalMs);
+
         foreach (var player in ConnectedPlayersLocked())
         {
-            if (!player.Alive) continue;
-            if (!player.Calibrated) continue;
-            if (!player.InObstacle) continue;
-            // Bayat bayrak = susmuş/donmuş istemci. Bit durum taşıdığı için son paket sonsuza
-            // kadar "duvardayım" demeye devam ederdi (§10.9).
-            if ((now - player.LastPoseAt).TotalMilliseconds >= ArenaProtocol.OBSTACLE_FLAG_STALE_MS)
+            // ⚠️ TEK kapı: cezanın koşullarından herhangi biri düştüğü anda tolerans saati de
+            // sıfırlanır. Ayrı ayrı `continue` edilseydi ölüp canlanan oyuncu toleransı çoktan
+            // dolmuş halde bulur ve canlanır canlanmaz erimeye başlardı.
+            if (!IsObstacleFlagLiveLocked(player, now) || !player.Alive || !player.Calibrated)
+            {
+                player.ObstacleSince = null;
                 continue;
+            }
+
+            player.ObstacleSince ??= now;
+            if ((now - player.ObstacleSince.Value).TotalSeconds < ArenaProtocol.OBSTACLE_GRACE_SECONDS)
+            {
+                // Tolerans: can azalmıyor, bildirim de gitmiyor. Oyuncu bu sürede kör (istemci
+                // ekranı karartıyor) ama cezasız — engelden çıkacak zamanı var.
+                continue;
+            }
 
             player.Hp = MathF.Max(0f, player.Hp - damage);
-            // attackerId = 0: çevresel hasar, saldırı değil (§10.9).
-            QueueHealthUpdateLocked(outbox, player, JsonUtil.Serialize(new HealthUpdateMsg
+
+            // ⚠️ Bildirim KISILIR ve bu bir mikro-optimizasyon değil: bu hasar OLAY tabanlı değil
+            // SÜREKLİ. Her tikte yayınlansaydı tek bir engel ölümü (≈8 sn × tickHz) yüzlerce WS
+            // mesajı üretirdi ve her biri kurbana + HER ADMİNE giderdi. HUD zaten yuvarlanmış tam
+            // sayı çiziyor, bu kadansla kaybedilen bilgi yok. Ölüm paketi ASLA kısılmaz.
+            if (announce || player.Hp <= 0f)
             {
-                playerId = player.PlayerId,
-                hp = player.Hp,
-                attackerId = 0
-            }));
+                // attackerId = 0: çevresel hasar, saldırı değil (§10.9).
+                QueueHealthUpdateLocked(outbox, player, JsonUtil.Serialize(new HealthUpdateMsg
+                {
+                    playerId = player.PlayerId,
+                    hp = player.Hp,
+                    attackerId = 0
+                }));
+            }
 
             if (player.Hp > 0f) continue;
 
-            player.Alive = false;
-            player.DiedAt = now;
-            player.Deaths++;
-            _rosterRefreshFor = player; // deaths + alive değişti → lobby_state tazelenir (§5.3)
-
-            // ⚠️ killerId = 0 ve IGameMode.OnKill ÇAĞRILMAZ: öldüren yok, yani skor da yok.
-            // Takımdaş öldürmedeki kuralın aynısı (§10.2) — olay gerçekleşir, ödülü olmaz.
-            QueueBroadcastLocked(outbox, JsonUtil.Serialize(new KillEventMsg
-            {
-                killerId = 0,
-                victimId = player.PlayerId,
-                weaponId = ArenaProtocol.WEAPON_ID_OBSTACLE
-            }));
-
-            var connection = player.Socket;
-            if (connection != null)
-            {
-                outbox.Add(new Outgoing(connection, JsonUtil.Serialize(new RespawnMsg
-                {
-                    playerId = player.PlayerId,
-                    delaySeconds = _rules.RespawnDelay
-                }), player.Name));
-            }
-
+            // ⚠️ Ölümün TEK yazarı. killer = null → killerId 0 ve IGameMode.OnKill çağrılmaz:
+            // öldüren yok, yani skor da yok (takımdaş öldürmedeki kuralın aynısı, §10.2 — olay
+            // gerçekleşir, ödülü olmaz).
+            KillPlayerLocked(outbox, player, null, ArenaProtocol.WEAPON_ID_OBSTACLE, now);
             Console.WriteLine($"[match] engel ölümü: {player.Name}");
         }
+    }
+
+    /// <summary>
+    /// Oyuncu ŞU AN engelin içinde mi: bayrak set <b>ve</b> taze (§10.9).
+    /// <para>Bayat bayrak = susmuş/donmuş istemci. Bit durum taşıdığı için son paket sonsuza kadar
+    /// "engeldeyim" demeye devam ederdi. Hem ceza hem canlanma kapısı aynı tazelik sorusunu sorar,
+    /// bu yüzden soru <b>tek yerde</b> durur.</para>
+    /// </summary>
+    private static bool IsObstacleFlagLiveLocked(PlayerState player, DateTime now) =>
+        player.InObstacle &&
+        (now - player.LastPoseAt).TotalMilliseconds < ArenaProtocol.OBSTACLE_FLAG_STALE_MS;
+
+    /// <summary>
+    /// Canlanma engelin içinde olduğu için ertelenmeli mi (§10.9). Canlanmanın İKİ yolu var —
+    /// oyuncunun <c>revive_request</c>'i ve operatörün <c>revive_player</c> komutu — ve bu kapı
+    /// <b>ikisinde de</b> uygulanır: bir yasak, o durumu değiştiren tüm yolları kapatmadıkça yoktur.
+    /// <para>⚠️ <b>Erteleme SÜRESİZ DEĞİLDİR</b>
+    /// (<see cref="ArenaProtocol.OBSTACLE_REVIVE_BLOCK_SECONDS"/>): kapı istemcinin bildirdiği bir
+    /// bayrağa bakıyor ve yanlış konuşan bir istemci oyuncuyu kalıcı ölü bırakabilirdi. Tavan
+    /// dolunca canlandırılır — engelden çıkmadıysa ceza zaten anında yeniden başlar.</para>
+    /// </summary>
+    private static bool IsObstacleReviveBlockedLocked(PlayerState player, DateTime now) =>
+        IsObstacleFlagLiveLocked(player, now) &&
+        (now - player.DiedAt).TotalSeconds < ArenaProtocol.OBSTACLE_REVIVE_BLOCK_SECONDS;
+
+    /// <summary>
+    /// <b>Ölümün TEK yazarı</b> (§10.2/§10.9): <c>Alive = false</c> başka hiçbir yerde yazılmaz.
+    /// <para><b>Neden tek kapı:</b> ölüm iki yoldan geliyor — vuruş (<c>hit_report</c>) ve çevresel
+    /// hasar (engel). İkisi de <c>Alive</c>'ı, <c>DiedAt</c>'i, sayaçları, <c>kill_event</c>'i ve
+    /// <c>respawn</c>'ı kendi içinde yazsaydı, birine eklenen her yeni adım (bir bayrağı
+    /// temizlemek, bir kancayı çağırmak, bir mesajı yollamak) diğerinde <b>sessizce eksik
+    /// kalırdı</b>. "Ölmek" tek cümledir ve tek yerde yazılır.</para>
+    /// <para><paramref name="killer"/> <c>null</c> ise ölüm çevreseldir: <c>killerId</c> 0 gider ve
+    /// kimsenin <c>kills</c>'i artmaz. ⚠️ <b>Skoru bu metot YAZMAZ</b> — <c>IGameMode.OnKill</c>
+    /// kilit dışında, <b>çağrı yerinde</b> tetiklenir (§10.2: takımdaş öldürme ve çevresel ölüm
+    /// aynı sebeple skor yazmaz).</para>
+    /// </summary>
+    private void KillPlayerLocked(List<Outgoing> outbox, PlayerState victim, PlayerState? killer,
+        string weaponId, DateTime now)
+    {
+        victim.Alive = false;
+        victim.DiedAt = now;
+        victim.Deaths++;
+        if (killer != null) killer.Kills++;
+        _rosterRefreshFor = victim; // deaths + alive değişti → lobby_state tazelenir (§5.3)
+
+        QueueBroadcastLocked(outbox, JsonUtil.Serialize(new KillEventMsg
+        {
+            killerId = killer?.PlayerId ?? 0,
+            victimId = victim.PlayerId,
+            weaponId = weaponId ?? "" // doğrulanmayan serbest etiket (kill feed / istatistik)
+        }));
+
+        var victimConnection = victim.Socket;
+        if (victimConnection == null) return;
+
+        outbox.Add(new Outgoing(victimConnection, JsonUtil.Serialize(new RespawnMsg
+        {
+            playerId = victim.PlayerId,
+            delaySeconds = _rules.RespawnDelay
+        }), victim.Name));
     }
 
     private void TickEndLocked(List<Outgoing> outbox, DateTime now)
@@ -1325,29 +1377,8 @@ public sealed class MatchDirector
             if (target.Hp <= 0f)
             {
                 killed = true;
-                target.Alive = false;
-                target.DiedAt = now;
-                target.Deaths++;
-                shooter.Kills++;
-                _rosterRefreshFor = target; // K/D + alive değişti → lobby_state tazelenir (§5.3)
-
-                QueueBroadcastLocked(outbox, JsonUtil.Serialize(new KillEventMsg
-                {
-                    killerId = shooter.PlayerId,
-                    victimId = target.PlayerId,
-                    weaponId = weaponId // doğrulanmayan serbest etiket (kill feed / istatistik)
-                }));
-
-                var victimConnection = target.Socket;
-                if (victimConnection != null)
-                {
-                    var respawn = new RespawnMsg
-                    {
-                        playerId = target.PlayerId,
-                        delaySeconds = _rules.RespawnDelay
-                    };
-                    outbox.Add(new Outgoing(victimConnection, JsonUtil.Serialize(respawn), target.Name));
-                }
+                // ⚠️ Ölümün TEK yazarı (§10.2): sayaçlar, kill_event ve respawn oradadır.
+                KillPlayerLocked(outbox, target, shooter, weaponId, now);
             }
 
             mode = _mode;
@@ -1375,9 +1406,13 @@ public sealed class MatchDirector
     /// Koşul tutmazsa SESSİZ yok sayılır — istemci canlanana dek ~1 sn'de bir tekrarlar, loglasak
     /// konsolu doldururdu.
     /// <para><b><see cref="ReviveAnchor"/> burada DOĞRULANMAZ</b> (§10.4 notu): "tabanda mı / sabit
-    /// mi durdu" kararı istemcinindir — sunucu hakemlik değil defter tutar (§10.3 felsefesi).
-    /// <see cref="ArenaProtocol.REVIVE_GRACE"/> zorla canlandırma güvenlik ağı her iki şartta da
-    /// aynen işler — <b>tek istisnası kalibrasyondur</b> (§10.6, bkz. TickLiveLocked).</para></summary>
+    /// mi durdu" kararı istemcinindir — sunucu hakemlik değil defter tutar (§10.3 felsefesi).</para>
+    /// <para>Bu <b>oyuncunun</b> yoludur ve tüm yasakları (kalibrasyon §10.6,
+    /// <c>reviveAnchor:"none"</c> §10.5, gecikme, engel §10.9) taşır. İkinci yol operatörün
+    /// komutudur (<see cref="HandleAdminReviveAsync"/>): o, mod kuralını ve gecikmeyi <b>bilerek</b>
+    /// geçer, ama kalibrasyon ve engel yasakları <b>orada da</b> durur — bir yasak, o durumu
+    /// değiştiren tüm yolları kapatmadıkça yoktur. Yeni bir canlandırma yolu açan, o iki kapıyı
+    /// beraberinde taşımak zorundadır.</para></summary>
     public async Task HandleReviveRequestAsync(PlayerState player)
     {
         var outbox = new List<Outgoing>();
@@ -1388,12 +1423,103 @@ public sealed class MatchDirector
             // burada da kapatmak "eski istemci gönderirse canlanır mı" sorusunu kapatır.
             if (_rules.Revive == ReviveAnchor.None) return;
             if (!player.Calibrated) return; // §10.6: kalibresiz oyuncu canlanamaz
-            if ((DateTime.UtcNow - player.DiedAt).TotalSeconds < _rules.RespawnDelay) return;
+            var now = DateTime.UtcNow;
+            if ((now - player.DiedAt).TotalSeconds < _rules.RespawnDelay) return;
+            // §10.9: engelin İÇİNDE canlanma yok — oyuncu önce çıkacak. İstemci zaten istek
+            // göndermiyor; burada da kapatmak kuralı istemciye emanet etmemek içindir.
+            if (IsObstacleReviveBlockedLocked(player, now)) return;
             RevivePlayerLocked(outbox, player);
             Console.WriteLine($"[match] canlandı: {player.Name}");
         }
         await FlushAsync(outbox);
         FlushRosterRefresh(); // hp/alive değişti → admin tablosu için roster tazelenir (§5.3)
+    }
+
+    /// <summary><c>revive_player</c> (§5.2/§10.4): operatör ölü oyuncuyu ELLE canlandırır.
+    /// <paramref name="msg"/>.<c>playerId</c> <c>0</c> = o an ölü olan tüm oyuncular.
+    /// <para>Şartı sağlayamayan oyuncu (donmuş istemci, tabanına yürüyemeyen oyuncu) maçın sonuna
+    /// kadar ölü kalırdı; bu komut operatörün elindeki tek kurtarma aracıdır. Bu yüzden
+    /// <b>bilinçli olarak iki şey KONTROL EDİLMEZ</b> — eksik değildir, eklenmez:</para>
+    /// <para>1. <c>_rules.Revive == ReviveAnchor.None</c> (turnuva): düğmenin varlık sebebi her modda
+    /// çalışmasıdır. ⚠️ Turnuvada tur bir takımın tamamı ölünce bittiği için komut tur sonucunu
+    /// değiştirir; operatör bunu bilerek basar.</para>
+    /// <para>2. <c>_rules.RespawnDelay</c>: operatör beklemez, komut anında uygulanır.</para>
+    /// <para>Uygulanan kapılar ve gerekçeleri <see cref="TryAdminReviveLocked"/> içinde.</para></summary>
+    public async Task HandleAdminReviveAsync(RevivePlayerMsg msg)
+    {
+        var outbox = new List<Outgoing>();
+        lock (_gate)
+        {
+            if (_phase != Phase.Playing)
+            {
+                // Başka fazda "ölü oyuncu" kavramı yok: playing'e girişte zaten herkes canlanıyor.
+                Console.WriteLine($"[match] operatör canlandırma reddedildi: faz {Describe(_phase, _pauseReason)}.");
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            if (msg.playerId == 0)
+            {
+                foreach (var player in ConnectedPlayersLocked())
+                {
+                    TryAdminReviveLocked(outbox, player, now, bulk: true);
+                }
+            }
+            else if (_registry.TryGetByPlayerId(msg.playerId, out var player))
+            {
+                TryAdminReviveLocked(outbox, player, now, bulk: false);
+            }
+            else
+            {
+                Console.WriteLine($"[match] operatör canlandırma reddedildi: oyuncu {msg.playerId} yok.");
+            }
+        }
+        await FlushAsync(outbox);
+        FlushRosterRefresh(); // hp/alive değişti → admin tablosu için roster tazelenir (§5.3)
+    }
+
+    /// <summary>Operatör komutunun tek oyuncuya uygulanışı; kabul edildiyse <c>true</c>.
+    /// <para>Kalibrasyon (§10.6) ve engel (§10.9) kapıları burada da durur ve gerekçesi
+    /// FİZİKSELDİR: kalibresiz oyuncu ateş edemez ve vurulamaz — canlandırmak onu savaşa döndürmez,
+    /// yalnız tabloda "canlı" gösterir; engelin içinde canlanan oyuncu ise saniyede 30 HP kaybedip
+    /// anında yeniden ölür, yani düğme bir ölüm döngüsü üretirdi.</para>
+    /// <para><paramref name="bulk"/> yalnız LOG davranışını değiştirir: toplu komutta hedef zaten
+    /// "ölü OYUNCULAR"dır, yani canlı olan ve oyuncu olmayan (admin) satırlar bir ret değil eleme
+    /// sayılır ve sessizce atlanır — her bağlı admin için satır basmak operatörün tek tanı kanalı
+    /// olan konsolu şişirirdi. Gerçek retler (kalibresiz, engelin içinde) toplu kipte de yazılır.</para>
+    /// <para>⚠️ Canlandırmayı <see cref="RevivePlayerLocked"/> yapar,
+    /// <c>ResetMatchStateLocked</c> DEĞİL: ikincisi sunucudaki alanları yazar ama istemciye hiçbir
+    /// şey göndermez → oyuncu ölüm ekranında donar. Skor ve <c>deaths</c> sayaçlarına da
+    /// dokunulmaz; canlandırma bir maç defteri düzeltmesi değildir.</para></summary>
+    private bool TryAdminReviveLocked(List<Outgoing> outbox, PlayerState player, DateTime now, bool bulk)
+    {
+        if (player.Role != "player")
+        {
+            if (!bulk) Console.WriteLine($"[match] operatör canlandırma reddedildi: {player.Name} oyuncu değil.");
+            return false;
+        }
+
+        if (player.Alive)
+        {
+            if (!bulk) Console.WriteLine($"[match] operatör canlandırma reddedildi: {player.Name} zaten canlı.");
+            return false;
+        }
+
+        if (!player.Calibrated)
+        {
+            Console.WriteLine($"[match] operatör canlandırma reddedildi: {player.Name} kalibresiz.");
+            return false;
+        }
+
+        if (IsObstacleReviveBlockedLocked(player, now))
+        {
+            Console.WriteLine($"[match] operatör canlandırma reddedildi: {player.Name} engelin içinde.");
+            return false;
+        }
+
+        RevivePlayerLocked(outbox, player);
+        Console.WriteLine($"[match] operatör canlandırdı: {player.Name}");
+        return true;
     }
 
     // ---- Faz geçişleri (hepsi _gate altında çağrılır) ----
@@ -1484,6 +1610,11 @@ public sealed class MatchDirector
         // ölüm ekranında DONAR ve bir daha ateş edemez.
         foreach (var player in ConnectedPlayersLocked())
         {
+            // ⚠️ Engel toleransı da sıfırlanır (§10.9): saati yalnız `playing` tikinde işliyor,
+            // yani duraklamada geçen süre onu sessizce doldururdu ve oyuncu maç devam eder etmez
+            // ilk tikte can kaybetmeye başlardı — üç saniyesini duraklamada harcamış olurdu.
+            player.ObstacleSince = null;
+
             if (player.Alive)
             {
                 ResetMatchStateLocked(player, keepScore: true);
@@ -1827,7 +1958,7 @@ public sealed class MatchDirector
     /// <summary>Reddedilen hit_report: sebep AYNEN korunur ama atıcı başına en fazla
     /// RejectLogIntervalSeconds'da bir satır yazılır (ölü hedefe ateş sürerken konsol boğulmasın).
     /// Bastırılan satırlar yutulmaz: sayıları bir sonraki yazılan satırın sonuna
-    /// "(+N bastırıldı)" olarak eklenir. Faz/öldürme/maç sonu/zorla canlandırma satırları bu
+    /// "(+N bastırıldı)" olarak eklenir. Faz/öldürme/maç sonu/canlanma satırları bu
     /// kısıtlamaya GİRMEZ (nadirdirler).</summary>
     private void RejectHit(PlayerState shooter, int targetPlayerId, string reason)
     {

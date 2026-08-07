@@ -19,8 +19,8 @@ namespace VortexArena.Core
 
         /// <summary>
         /// Canlanma YOKTUR (tur tabanlı eleme — <c>tournament</c>). İstemci <c>revive_request</c>
-        /// hiç göndermez, sunucu gelirse reddeder ve <c>REVIVE_GRACE</c> zorla canlandırması bu
-        /// kipte çalışmaz. Ölü oyuncuyu yalnız modun başlattığı yeni tur canlandırır.
+        /// hiç göndermez, sunucu gelirse reddeder; canlanmanın tek yolu o istek olduğu için ölü
+        /// oyuncuyu yalnız modun başlattığı yeni tur canlandırır.
         /// <para>⚠ Enum'un SONUNA eklendi (serialize edilen enum kuralı) — araya eklemek tüm
         /// <see cref="ModeDefinition"/> asset'lerindeki değerleri kaydırırdı.</para>
         /// </summary>
