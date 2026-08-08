@@ -16,10 +16,10 @@ MonoBehaviour:
   netItemId: 2
   prefab: {fileID: 190416508149715471, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
   holdMode: 1
-  primaryGripPosition: {x: -0.049200002, y: 0.05024, z: 0.1364}
-  primaryGripEuler: {x: -0, y: 0, z: 0}
-  secondaryGripPosition: {x: 0.018319998, y: -0.1748594, z: 0.3490387}
-  secondaryGripEuler: {x: 270, y: 270, z: 0}
+  primaryGripPosition: {x: -0.07, y: 0.0353, z: 0.086}
+  primaryGripEuler: {x: 0, y: 0, z: 0}
+  secondaryGripPosition: {x: 0.1789, y: 0.0059, z: 0.3535}
+  secondaryGripEuler: {x: 338.53928, y: 16.12925, z: 321.5933}
   primaryGripRadius: 0.12
   secondaryGripRadius: 0.12
   handPose:

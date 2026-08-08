@@ -443,10 +443,11 @@ yoktur**. `WeaponGranter` (`_Shared/Core/Combat/`) kendini önyükleyen kalıcı
 `random` + `fireWhilePaused` bileşimi "maç yok" demektir; taban şeritleri ONA AİT DEĞİL — onların
 kapısı takım kipidir, `BaseZoneVisibility`), grip'e basılı tutulan
 her elde `ModeDefinition.loadout`'tan rastgele bir silah tutturur (bırakınca yok olur, tekrar
-basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki duruşu prefabtaki kavrama poz
-düğümünden (`GripPoses/Pose_*`) gelir, çözülemezse `ItemDefinition.primaryGripPosition/Euler`'dan —
-ikisini de Kavrama Pozu Stüdyosu yazar, yani ince ayar tek kayıttan çıkar (verilen silahta soket
-çizilmez — silah zaten elde).
+basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki ROTASYONU
+`ItemDefinition.primaryGripEuler`'dan gelir (elle ayarlanan tek düğme; kimlik = kumandayla birebir
+aynı eksenler — tezgâhtaki el silahı DÖNDÜRMEZ), tutulduğu NOKTA ile el modelinin duruşu prefabtaki
+kavrama poz düğümünden (`GripPoses/Pose_*`) — düğümü Kavrama Pozu Stüdyosu yazar (verilen silahta
+soket çizilmez — silah zaten elde).
 ⚠️ Sahneye bileşen KOYMA: tekil olmasının sebebi her yeni arenaya elle bir kurulum adımı
 eklememektir.
 **Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfeklerin kiti
@@ -496,10 +497,12 @@ kavrama alanlarını yazar; düğümler prefab kaydedilince diske iner. O iki ç
 bir sonraki kayıt üzerine yazar.
 ⚠️ **İki el de AYRI yazılır** (poz düğümleri el başınadır; ayna bir kolaylıktır, tek taraflı
 kavramada eksik tarafı kayıt tamamlar). Ölçünün paydası SİLAHTIR, hareket eden eldir.
-⚠️ **El HAM sürüklenir, çeviri EKLENMEZ:** elin kökü ISDK bilek çerçevesidir ve oyun poz düğümünü
-canlı ölçülen bileğe hizalar (`ItemGripAuthority`) — gözle doğru gördüğün yerleşim doğrudur.
-`HandGripConvention.Correction` yalnız `WD_*` fallback alanları yazılırken, tek yönde kullanılır ve
-authoring döngüsüne GERİ SOKULMAZ: tahmini sabitlerden türeyen o çeviri silahı elde yatık gösterir.
+⚠️ **El HAM sürüklenir, çeviri EKLENMEZ:** elin kökü ISDK bilek çerçevesidir; elin YERİ silahın
+avuca oturacağı noktayı ve el modelinin silah üstündeki duruşunu belirler, silahın rotasyonunu
+DEĞİL (`ItemGripAuthority`: rotasyon = `primaryGripEuler` sabiti, pozisyon = düğüm + canlı bilek
+deltası). `HandGripConvention.Correction` yalnız İKİNCİL `WD_*` alanları yazılırken, tek yönde
+kullanılır ve authoring döngüsüne GERİ SOKULMAZ: tahmini sabitlerden türeyen o çeviri silahı elde
+yatık gösterir.
 Sağlama: "oluştur, dokunma, Kaydet" hiçbir değeri DEĞİŞTİRMEZ; değiştiriyorsa bakılacak tek yer
 `ItemHandGripBake`.
 ⚠️ Eller prefabın İÇİNE KONMAZ (prefab stage sahnesinin ayrı kökleridir) ve prefabın içinde el
@@ -588,7 +591,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
 | `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir). Ayrıca **temizlik ve denetim**: eski `GripSocket_*` işaretçilerini ve prefabta kalmış `Hands/Hand_*` el rig'ini siler, **kavraması yazılmamış silahları** koşu sonunda tek uyarıda listeler |
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
-| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış **prefab kipinde**: `WPN_*`'ı prefab kipinde aç → **Ana/Ön Kabza Ellerini Oluştur** (sağ+sol) → elleri kabzalara oturt/çevir, parmakları elin `GripHandAuthoring` Inspector'ından ya da Hierarchy'den bük → gerekirse **Karşı Ele Aynala** → **Kaydet**. Scene view'da el çerçeveleri + avuç–kabza ve parmak–tetik mesafesi cm olarak çizilir; pencere kaydedilecek sayıları canlı gösterir. ⚠️ **El HAM sürüklenir** (kök = ISDK bilek çerçevesi) ve **iki el ayrı yazılır** — gerekçe "Yeni silah" reçetesinde. ⚠️ **Yazan tek düğme Kaydet'tir**: el başına `GripPoses/Pose_<Kind>_<L\|R>` + SAĞ elden `WD_*.asset` fallback kavrama alanları + tek taraflı kavramada eksik elin aynası + eski `Hands` rig'i / prefaba sızmış tezgâh eli temizliği. ⚠️ Düğümler prefab KAYDEDİLİNCE diske iner (stage kirli işaretlenir); `WD_*` anında yazılır. ⚠️ Eller prefaba GİRMEZ (stage sahnesinin ayrı kökleri, `DontSave`) ve Play'e girerken / stage kapanınca / sahne değişince silinir |
+| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış **prefab kipinde**: `WPN_*`'ı prefab kipinde aç → **Ana/Ön Kabza Ellerini Oluştur** (sağ+sol) → elleri kabzalara oturt/çevir, parmakları elin `GripHandAuthoring` Inspector'ından ya da Hierarchy'den bük → gerekirse **Karşı Ele Aynala** → **Kaydet**. Scene view'a hiçbir şey çizilmez (yardımcı çerçeve/ölçü yok); pencere kaydedilecek sayıları canlı gösterir. ⚠️ **El HAM sürüklenir** (kök = ISDK bilek çerçevesi) ve **iki el ayrı yazılır** — gerekçe "Yeni silah" reçetesinde. ⚠️ **Yazan tek düğme Kaydet'tir**: el başına `GripPoses/Pose_<Kind>_<L\|R>` + SAĞ elden `WD_*.asset` fallback kavrama alanları + tek taraflı kavramada eksik elin aynası + eski `Hands` rig'i / prefaba sızmış tezgâh eli temizliği. ⚠️ Düğümler prefab KAYDEDİLİNCE diske iner (stage kirli işaretlenir); `WD_*` anında yazılır. ⚠️ Eller prefaba GİRMEZ (stage sahnesinin ayrı kökleri, `DontSave`) ve Play'e girerken / stage kapanınca / sahne değişince silinir |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |
 | `… > Development > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek) |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` | Sahneye ilgili bileşeni + kurulumunu ekler |
