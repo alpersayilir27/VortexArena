@@ -28,9 +28,15 @@ namespace VortexArena.Core.Editor
     /// <see cref="HandGripConvention.Correction"/> ile çeviriyordu; o düzeltme <b>ölçülmemiş
     /// ergonomik tahmin</b> sabitlerinden türüyor, yani authoring döngüsüne girdiği anda kullanıcı
     /// gözüyle "düzgün" gördüğü eli tahminin hatası kadar yanlış yere koyuyordu (belirtisi: silah
-    /// oyunda 90° dönük). Bugün oyun tarafı poz düğümünü canlı sentetik bileğe hizalıyor — yani ham
-    /// yerleştirme DOĞRUDUR ve <c>Correction</c> yalnız aşağıdaki <c>WD_*</c> fallback alanlarını
-    /// türetirken, tek yönde kullanılır.
+    /// oyunda 90° dönük). Bugün <c>Correction</c> yalnız İKİNCİL <c>WD_*</c> alanları yazılırken,
+    /// tek yönde kullanılır.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Tezgâhtaki el SİLAHI DÖNDÜRMEZ</b> (<see cref="ItemGripAuthority"/> sözleşmesi):
+    /// silahın kumandaya göre rotasyonu <c>WD_*</c>'daki elle ayarlanan euler'dir (kimlik =
+    /// kumandayla birebir), elin yerleşimi ise (1) el MODELİNİN silah üstündeki duruşunu ve
+    /// (2) silahın hangi NOKTADAN avuca oturacağını belirler. Yani eli kabzada döndürmek oyunda
+    /// yalnız el görselini döndürür, namlunun baktığı yönü değiştirmez.
     /// </para>
     /// <para>
     /// ⚠️ <b>Eller prefabın İÇİNE girmez</b>: her el, prefab stage sahnesinin ayrı bir KÖK objesidir

@@ -443,10 +443,11 @@ yoktur**. `WeaponGranter` (`_Shared/Core/Combat/`) kendini önyükleyen kalıcı
 `random` + `fireWhilePaused` bileşimi "maç yok" demektir; taban şeritleri ONA AİT DEĞİL — onların
 kapısı takım kipidir, `BaseZoneVisibility`), grip'e basılı tutulan
 her elde `ModeDefinition.loadout`'tan rastgele bir silah tutturur (bırakınca yok olur, tekrar
-basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki duruşu prefabtaki kavrama poz
-düğümünden (`GripPoses/Pose_*`) gelir, çözülemezse `ItemDefinition.primaryGripPosition/Euler`'dan —
-ikisini de Kavrama Pozu Stüdyosu yazar, yani ince ayar tek kayıttan çıkar (verilen silahta soket
-çizilmez — silah zaten elde).
+basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki ROTASYONU
+`ItemDefinition.primaryGripEuler`'dan gelir (elle ayarlanan tek düğme; kimlik = kumandayla birebir
+aynı eksenler — tezgâhtaki el silahı DÖNDÜRMEZ), tutulduğu NOKTA ile el modelinin duruşu prefabtaki
+kavrama poz düğümünden (`GripPoses/Pose_*`) — düğümü Kavrama Pozu Stüdyosu yazar (verilen silahta
+soket çizilmez — silah zaten elde).
 ⚠️ Sahneye bileşen KOYMA: tekil olmasının sebebi her yeni arenaya elle bir kurulum adımı
 eklememektir.
 **Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfeklerin kiti
@@ -496,10 +497,12 @@ kavrama alanlarını yazar; düğümler prefab kaydedilince diske iner. O iki ç
 bir sonraki kayıt üzerine yazar.
 ⚠️ **İki el de AYRI yazılır** (poz düğümleri el başınadır; ayna bir kolaylıktır, tek taraflı
 kavramada eksik tarafı kayıt tamamlar). Ölçünün paydası SİLAHTIR, hareket eden eldir.
-⚠️ **El HAM sürüklenir, çeviri EKLENMEZ:** elin kökü ISDK bilek çerçevesidir ve oyun poz düğümünü
-canlı ölçülen bileğe hizalar (`ItemGripAuthority`) — gözle doğru gördüğün yerleşim doğrudur.
-`HandGripConvention.Correction` yalnız `WD_*` fallback alanları yazılırken, tek yönde kullanılır ve
-authoring döngüsüne GERİ SOKULMAZ: tahmini sabitlerden türeyen o çeviri silahı elde yatık gösterir.
+⚠️ **El HAM sürüklenir, çeviri EKLENMEZ:** elin kökü ISDK bilek çerçevesidir; elin YERİ silahın
+avuca oturacağı noktayı ve el modelinin silah üstündeki duruşunu belirler, silahın rotasyonunu
+DEĞİL (`ItemGripAuthority`: rotasyon = `primaryGripEuler` sabiti, pozisyon = düğüm + canlı bilek
+deltası). `HandGripConvention.Correction` yalnız İKİNCİL `WD_*` alanları yazılırken, tek yönde
+kullanılır ve authoring döngüsüne GERİ SOKULMAZ: tahmini sabitlerden türeyen o çeviri silahı elde
+yatık gösterir.
 Sağlama: "oluştur, dokunma, Kaydet" hiçbir değeri DEĞİŞTİRMEZ; değiştiriyorsa bakılacak tek yer
 `ItemHandGripBake`.
 ⚠️ Eller prefabın İÇİNE KONMAZ (prefab stage sahnesinin ayrı kökleridir) ve prefabın içinde el
