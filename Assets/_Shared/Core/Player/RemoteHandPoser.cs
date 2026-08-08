@@ -88,9 +88,19 @@ namespace VortexArena.Core.Player
             }
         }
 
+        /// <summary>
+        /// ⚠️ Kapı <see cref="_avatar"/> ile sınırlı DEĞİL, parmak zincirlerini de kapsar:
+        /// <see cref="Bind"/> zinciri çözemediğinde kendini <c>enabled = false</c> ile kapatıyor,
+        /// ama bu bileşen <see cref="RemoteAvatar"/>'ın <c>Awake</c>'inde <c>AddComponent</c> ile
+        /// ekleniyor ve o anda yazılan <c>enabled</c> her zaman tutmuyor. Tutmadığında burası
+        /// kare başına <c>NullReferenceException</c> basar (saniyede ~90 satır) ve istisna
+        /// <see cref="ApplyGrip"/>'ten ÖNCE atıldığı için uzak eller silaha da hiç oturmaz —
+        /// yani "kapandı" sanılan bileşen sessizce değil, gürültüyle ve iki işi birden bozarak
+        /// koşar. Alanların kendisi kontrol edilince kapanmanın tutup tutmaması önemsizleşir.
+        /// </summary>
         private void LateUpdate()
         {
-            if (_avatar == null)
+            if (_avatar == null || _left == null || _right == null)
             {
                 return;
             }

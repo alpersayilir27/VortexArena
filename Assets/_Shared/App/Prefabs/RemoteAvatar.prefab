@@ -1063,6 +1063,12 @@ MonoBehaviour:
   character: {fileID: 8595517995428222429}
   friendMarker: {fileID: 6756981665450713295}
   visualRoot: {fileID: 3915598790773187048}
+  idleHandPose:
+    thumb: 0
+    index: 0
+    middle: 0
+    ring: 0
+    pinky: 0
 --- !u!54 &5116134805446922281
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -3124,7 +3130,7 @@ MonoBehaviour:
     _retargetingBehavior: 0
     _hideLowerBodyWhenUpperBodyTracking: 0
     _hideLegScale: {x: 0, y: 0, z: 0}
-    _applyRootScale: 1
+    _applyRootScale: 0
     _applyHeadScale: 1
     _currentScale: 1
     _headScaleFactor: 0.95

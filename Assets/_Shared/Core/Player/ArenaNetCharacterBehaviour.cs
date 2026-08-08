@@ -328,22 +328,40 @@ namespace VortexArena.Core.Player
         /// <para>⚠️ SDK'nın <c>ApplyBodyPose</c>'undan SONRA koşmak zorunda: o, 0. eklemi kök
         /// transformuna yazıp gönderenin dünya pozunu buraya taşıyor. <c>LateUpdate</c> tüm
         /// <c>Update</c>'lerden sonra çalıştığı için sıra garantidir.</para>
-        /// <para>⚠️ <b>Ölçeği de BU sınıf yazar</b> (§10.8) ve SDK'nın yazdığını bilerek ezer:
-        /// gönderen <c>Calibrate()</c> çağırmadığı için blob'dan gelen ölçek her zaman <c>1</c>'dir,
-        /// gerçek boy ise ayrı bir alanla (<c>bodyScale</c>) taşınıyor. Tek ölçek yazarı burasıdır —
-        /// iki yazar olsaydı hangi boyun çizildiği kareye göre değişirdi.</para>
+        /// <para>⚠️ <b>Ölçeği de BU sınıf yazar</b> (§10.8): gerçek boy ayrı bir alanla
+        /// (<c>bodyScale</c>) taşınıyor ve tek ölçek yazarı burasıdır — iki yazar olsaydı hangi
+        /// boyun çizildiği kareye göre değişirdi.</para>
+        /// <para>
+        /// ⚠️ <b>Gönderenin kök ölçeğinin <c>1</c> olması <c>Calibrate()</c> çağrılmamasına
+        /// DEĞİL, retargeter'daki <c>ApplyRootScale</c>'in KAPALI olmasına bağlıdır</b> ve o
+        /// bayrak açılırsa buradaki hiçbir satır bozulmadan sistem sessizce yanlışa döner:
+        /// SDK o hâlde karakter kökünü oyuncu/model boy oranıyla ölçekler (<c>ApplyPose</c>) ve
+        /// pozları o ölçekli uzayda yazar, yani <c>_characterRoot.position</c> artık bir dünya
+        /// noktası değil <b>orijine göre ölçeklenmiş</b> bir noktadır. Hata dünya orijininde sıfır,
+        /// orijinden uzakta ise mesafeyle orantılıdır — arenası orijinde olan bir sahnede hiç
+        /// görünmez, 200 m öteye taşınmış bir arenada gövdeyi onlarca metre uzağa fırlatır.
+        /// Gerekçenin tamamı ve ölçüm: <c>Docs/Sistem-Ozeti.md</c> §7.
+        /// </para>
         /// </summary>
         private void ApplyArenaRoot()
         {
             if (!TryGetRootWorld(out Pose world))
             {
+                // ⚠️ İskelet gelmemişken gövde SIFIR ÖLÇEĞE çekilerek gizlenir. Bu, SDK'nın
+                // ApplyRootScale açıkken Setup'ta kendiliğinden yaptığı şeyin yerine geçer: o
+                // bayrak kapatıldığı için (gerekçe yukarıda) gizleme artık bizim işimiz. Kapı
+                // olmazsa poz kanalı avatarı görünür yaptığı anda, iskeleti hiç gelmemiş ya da
+                // akışı susmuş bir oyuncu BIND POZUNDA donmuş bir gövde olarak çizilirdi.
+                // ⚠️ Görünürlüğün genel sahibi RemoteAvatar.SetVisible'dır; burası onunla
+                // yarışmaz, yalnız bu sınıfın zaten TEK yazarı olduğu ölçeği kullanır.
+                _characterRoot.localScale = Vector3.zero;
                 return;
             }
 
             _characterRoot.SetPositionAndRotation(world.position, world.rotation);
 
-            // ⚠️ Kare başına koşulsuz yazılır: SDK her karede ApplyBodyPose'ta kök ölçeğine
-            // dokunuyor, "değiştiyse yaz" guard'ı bir kare sonra bayat kalırdı.
+            // ⚠️ Kare başına koşulsuz yazılır: ölçeğe dokunan ikinci bir yazar çıkarsa (SDK'nın
+            // ApplyRootScale'i geri açılırsa) "değiştiyse yaz" guard'ı bir kare sonra bayat kalır.
             _characterRoot.localScale = Vector3.one * BodyScale;
         }
 
@@ -412,6 +430,9 @@ namespace VortexArena.Core.Player
                 return;
             }
 
+            // ⚠️ Buranın bir DÜNYA noktası olması retargeter'daki ApplyRootScale'in KAPALI
+            // olmasına bağlıdır: açıkken SDK kökü boy oranıyla ölçekler ve bu okuma orijine göre
+            // ölçeklenmiş bir nokta döndürür (gerekçe ApplyArenaRoot'ta, ölçüm Sistem-Ozeti §7).
             Pose arenaRoot = GuardRootJump(ArenaSpace.WorldToArena(
                 new Pose(_characterRoot.position, _characterRoot.rotation)));
 
