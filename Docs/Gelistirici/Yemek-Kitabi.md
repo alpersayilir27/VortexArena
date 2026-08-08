@@ -473,9 +473,8 @@ oturtarak** cevaplarsın; sol ve sağ **ayrı ayrı** çözüldüğü için ikis
    **Ön Kabza Ellerini Oluştur** ikinci çifti getirir (tek elli silahta düğme kapalıdır).
    Eller **mevcut** veriden yerleşir — sırayla: yerleştirilmiş poz düğümü → `WD_*` kavrama alanları
    → kabza parçasının kabaca ortası. Yani sıfırdan başlamazsın, var olanı düzeltirsin.
-3. Eli normal move/rotate gizmosuyla kabzaya oturt. Scene view'da her elin bilek çerçevesi, avuç →
-   kabza ve (yalnız ana elde) işaret parmağı → tetik mesafesi cm olarak çizilir; pencerede
-   kaydedilecek sayılar canlı ve **salt okunur** akar.
+3. Eli normal move/rotate gizmosuyla kabzaya oturt. Scene view'da yardımcı çizim/ölçü yoktur —
+   gözünle değerlendirirsin; pencerede kaydedilecek sayılar canlı ve **salt okunur** akar.
 4. Parmakları bük: eli seç → Inspector'daki `GripHandAuthoring`'den kıvrım/açıklık, istersen eklem
    ince ayarı ve parmak başına **serbestlik**. Aynı işi Hierarchy'den kemiği seçip döndürerek de
    yaparsın — Kaydet her zaman kemiklerin o andaki **gerçek** duruşunu okur.
