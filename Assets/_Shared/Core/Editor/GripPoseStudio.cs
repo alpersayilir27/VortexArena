@@ -512,30 +512,45 @@ namespace VortexArena.Core.Editor
             EditorGUILayout.LabelField("WD_* kavrama alanları (sağ elden türetilir)",
                 EditorStyles.miniBoldLabel);
 
-            DrawGripFieldPreview(weaponRoot, hands, GripSocketKind.Primary);
+            DrawGripFieldPreview(weaponRoot, hands, definition, GripSocketKind.Primary);
             if (definition.IsTwoHanded)
             {
-                DrawGripFieldPreview(weaponRoot, hands, GripSocketKind.Secondary);
+                DrawGripFieldPreview(weaponRoot, hands, definition, GripSocketKind.Secondary);
             }
         }
 
         private void DrawGripFieldPreview(Transform weaponRoot, List<GripHandAuthoring> hands,
-            GripSocketKind kind)
+            WeaponDefinition definition, GripSocketKind kind)
         {
             GripHandAuthoring right = FindHand(hands, kind, true);
-            string prefix = kind == GripSocketKind.Primary ? "primary" : "secondary";
+
+            if (kind == GripSocketKind.Primary)
+            {
+                if (right == null)
+                {
+                    EditorGUILayout.LabelField("primaryGrip*", "(sağ el yok)");
+                    return;
+                }
+
+                Vector3 primaryPosition = ItemHandGripBake.PrimaryPositionFromWrist(weaponRoot,
+                    right.transform.position, definition.PrimaryGripRotation);
+                EditorGUILayout.LabelField("primaryGripPosition", Format(primaryPosition));
+                EditorGUILayout.LabelField("primaryGripEuler",
+                    $"{Format(definition.PrimaryGripRotation.eulerAngles)}  (elle ayar — Kaydet dokunmaz)");
+                return;
+            }
 
             if (right == null || !right.HasBindBoneBasis)
             {
-                EditorGUILayout.LabelField($"{prefix}Grip*", "(sağ el yok / bazı ölçülemedi)");
+                EditorGUILayout.LabelField("secondaryGrip*", "(sağ el yok / bazı ölçülemedi)");
                 return;
             }
 
             ItemHandGripBake.FromWrist(weaponRoot, AnchorProxy(right), kind,
                 out Vector3 position, out Vector3 euler);
 
-            EditorGUILayout.LabelField($"{prefix}GripPosition", Format(position));
-            EditorGUILayout.LabelField($"{prefix}GripEuler", Format(euler));
+            EditorGUILayout.LabelField("secondaryGripPosition", Format(position));
+            EditorGUILayout.LabelField("secondaryGripEuler", Format(euler));
         }
 
         private static string Format(Vector3 value)
@@ -1124,7 +1139,7 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// <c>WD_*</c> kavrama alanlarını SAĞ elin bileğinden türetip yazar.
+        /// <c>WD_*</c> kavrama alanlarını SAĞ elden türetip yazar.
         /// <para>
         /// ⚠️ Bu alanlar artık yerel oyuncunun elini sürmüyor (onu <c>GripPoses/Pose_*</c> yapıyor):
         /// kavrama <b>soketinin</b> yerini ve rig'i olmayan uçların (admin gözlemci, uzak avatarın
@@ -1132,11 +1147,15 @@ namespace VortexArena.Core.Editor
         /// silah elin içinde/dışında durur.
         /// </para>
         /// <para>
-        /// ⚠️ Türetme tek yönlüdür: alanlar <b>kumanda anchor'ı</b> çerçevesinde tanımlı, elin kökü
-        /// ise bilek çerçevesinde — aradaki dönüş <see cref="HandGripConvention.Correction"/>'dır ve
-        /// elin <b>bind</b> duruşunda ölçülmüş bazından hesaplanır (bükülmüş elden ölçmek o duruşu
-        /// tanıma yazardı). Bazı ölçülemeyen elde alan YAZILMAZ: yanlış bir kavrama alanı,
-        /// boş olandan daha zor teşhis edilir.
+        /// ⚠️ <b><c>primaryGripEuler</c>'a DOKUNULMAZ:</b> o alan "silah kumanda anchor'ına göre
+        /// hangi açıda durur" sorusunun TEK ve ELLE ayarlanan cevabıdır (kimlik = kumandayla
+        /// birebir aynı eksenler) — eşyanın rotasyonu tezgâhtaki elden TÜREMEZ, el yalnız el
+        /// modelinin duruşunu tarif eder (<see cref="ItemGripAuthority"/> ile aynı sözleşme).
+        /// <c>primaryGripPosition</c> elin bilek NOKTASINDAN türetilir: fallback uçlarda da elin
+        /// oturduğu kabza noktası avuca gelsin. İkincil alanlar (ön kabza noktası + uzak elin
+        /// duruşu) bugünkü gibi elden yazılır; oradaki anchor çevirisi
+        /// <see cref="HandGripConvention.Correction"/>'dan geçer ve bazı ölçülemeyen elde alan
+        /// YAZILMAZ (yanlış bir kavrama alanı, boş olandan daha zor teşhis edilir).
         /// </para>
         /// </summary>
         private static int WriteGripFields(Transform weaponRoot, WeaponDefinition definition,
@@ -1172,6 +1191,18 @@ namespace VortexArena.Core.Editor
                 return 0;
             }
 
+            if (kind == GripSocketKind.Primary)
+            {
+                // Rotasyon elden TÜREMEZ (yalnız elle ayarlanan euler); pozisyon elin bilek
+                // noktasından, MEVCUT euler'e göre türetilir — gerekçe WriteGripFields'ta.
+                Quaternion gripRotation =
+                    Quaternion.Euler(so.FindProperty("primaryGripEuler").vector3Value);
+                so.FindProperty("primaryGripPosition").vector3Value =
+                    ItemHandGripBake.PrimaryPositionFromWrist(weaponRoot,
+                        right.transform.position, gripRotation);
+                return 1;
+            }
+
             if (!right.HasBindBoneBasis)
             {
                 Debug.LogWarning($"{LOG} {kind}: elin anatomik bazı ölçülemedi — WD kavrama alanları " +
@@ -1182,12 +1213,8 @@ namespace VortexArena.Core.Editor
             ItemHandGripBake.FromWrist(weaponRoot, AnchorProxy(right), kind,
                 out Vector3 gripPosition, out Vector3 gripEuler);
 
-            so.FindProperty(kind == GripSocketKind.Primary
-                ? "primaryGripPosition"
-                : "secondaryGripPosition").vector3Value = gripPosition;
-            so.FindProperty(kind == GripSocketKind.Primary
-                ? "primaryGripEuler"
-                : "secondaryGripEuler").vector3Value = gripEuler;
+            so.FindProperty("secondaryGripPosition").vector3Value = gripPosition;
+            so.FindProperty("secondaryGripEuler").vector3Value = gripEuler;
 
             return 1;
         }
