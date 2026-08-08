@@ -1506,19 +1506,19 @@ namespace VortexArena.Core.Player
                     return;
                 }
 
-                ApplyGrip(item, _shownPrimaryRight ? palmR : palmL, definition,
+                ApplyGrip(item, _shownPrimaryRight ? palmR : palmL, definition, _shownPrimaryRight,
                     true, (_shownPrimaryRight ? palmL : palmR).position);
                 return;
             }
 
             if (_itemInstanceL != null && _itemDefL != null)
             {
-                ApplyGrip(_itemInstanceL, palmL, _itemDefL, false, Vector3.zero);
+                ApplyGrip(_itemInstanceL, palmL, _itemDefL, false, false, Vector3.zero);
             }
 
             if (_itemInstanceR != null && _itemDefR != null)
             {
-                ApplyGrip(_itemInstanceR, palmR, _itemDefR, false, Vector3.zero);
+                ApplyGrip(_itemInstanceR, palmR, _itemDefR, true, false, Vector3.zero);
             }
         }
 
@@ -1597,9 +1597,29 @@ namespace VortexArena.Core.Player
 
             if (isPrimaryHand)
             {
+                // ⚠️ TERS YÖN, İLERİ YÖNLE AYNI KAYNAKTAN beslenmek ZORUNDA: eşyanın pozunu
+                // ApplyGrip poz düğümünden çözülmüş ofsetle yazıyorsa, avuç hedefi tanım
+                // alanlarından hesaplanamaz — aynı karede el silahtan santimlerce ayrışır ve
+                // belirtisi "el silahın yanında yüzüyor" olur. Bu dal isPrimaryHand olduğu için
+                // ana el ZATEN rightHand'dir (iki dalda da öyle kurulur).
+                Vector3 gripPointOnItem;
+                Quaternion primaryGripRotation;
+
+                if (ItemGripAuthority.TryResolvePrimaryGrip(definition, item, rightHand,
+                        out Vector3 gripPosition, out Quaternion gripRotation))
+                {
+                    gripPointOnItem = ItemGripAuthority.GripPointOnItem(gripPosition, gripRotation);
+                    primaryGripRotation = gripRotation;
+                }
+                else
+                {
+                    gripPointOnItem = definition.PrimaryGripPointOnItem;
+                    primaryGripRotation = definition.PrimaryGripRotation;
+                }
+
                 palm = new Pose(
-                    item.position + itemRotation * definition.PrimaryGripPointOnItem,
-                    itemRotation * Quaternion.Inverse(definition.PrimaryGripRotation));
+                    item.position + itemRotation * gripPointOnItem,
+                    itemRotation * Quaternion.Inverse(primaryGripRotation));
                 return true;
             }
 
@@ -1613,12 +1633,36 @@ namespace VortexArena.Core.Player
 
         /// <summary>Kavrama matematiğinin TEK uygulaması <see cref="ItemGripSolver"/>'dadır; burası
         /// yalnız sonucu transforma yazar (ikinci bir kavrama matematiği iki uçta iki ayrı duruş
-        /// demek olurdu).</summary>
+        /// demek olurdu).
+        /// <para>
+        /// ⚠️ Ana kavramanın ölçüsü <b>yerelin kullandığı sıranın aynısıyla</b> çözülür (önce poz
+        /// düğümü, sonra tanım alanları): iki uç ayrı sıra izlerse aynı silah kendi ekranında başka,
+        /// karşı ekranda başka durur. Düğüm yolunun ölçüsü İZLEYENİN kendi bilek deltasından gelir —
+        /// delta kumanda sürümlü el pozlarından türediği için her başlıkta aynıdır, yani uzak
+        /// oyuncununkiyle özdeştir. Rig'i olmayan izleyicide (admin gözlemci) delta ölçülemez ve
+        /// çizim bugünkü yoldan yapılır.
+        /// </para>
+        /// <para><paramref name="primaryRight"/>: eşyayı taşıyan ANA elin sağ olup olmadığı —
+        /// <c>GRIP_LINKED</c> iken <c>FLAG_PRIMARY_RIGHT</c>, aksi hâlde eşyanın durduğu slot. Poz
+        /// düğümleri el başına yazıldığı için bu ayrım zorunludur.</para>
+        /// </summary>
         private static void ApplyGrip(Transform item, in Pose palm, ItemDefinition definition,
-            bool hasSecondary, in Vector3 secondaryPalmPosition)
+            bool primaryRight, bool hasSecondary, in Vector3 secondaryPalmPosition)
         {
-            ItemGripSolver.Solve(definition, palm, hasSecondary, secondaryPalmPosition, 1f,
-                out Vector3 position, out Quaternion rotation);
+            Vector3 position;
+            Quaternion rotation;
+
+            if (ItemGripAuthority.TryResolvePrimaryGrip(definition, item, primaryRight,
+                    out Vector3 gripPosition, out Quaternion gripRotation))
+            {
+                ItemGripSolver.Solve(definition, gripPosition, gripRotation, palm, hasSecondary,
+                    secondaryPalmPosition, 1f, out position, out rotation);
+            }
+            else
+            {
+                ItemGripSolver.Solve(definition, palm, hasSecondary, secondaryPalmPosition, 1f,
+                    out position, out rotation);
+            }
 
             item.SetPositionAndRotation(position, rotation);
         }

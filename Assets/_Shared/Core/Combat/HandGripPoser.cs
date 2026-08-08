@@ -67,6 +67,13 @@ namespace VortexArena.Core.Combat
         private Quaternion[] _idleLeft;
         private Quaternion[] _idleRight;
 
+        /// <summary>Kumanda anchor'ından İZLENEN bileğe delta (anchor uzayı) — el başına, her karede
+        /// tazelenir. Gerekçe <see cref="TryGetAnchorToWrist"/>'te.</summary>
+        private Pose _anchorToWristLeft;
+        private Pose _anchorToWristRight;
+        private bool _hasAnchorToWristLeft;
+        private bool _hasAnchorToWristRight;
+
         /// <summary>Parmak sayısı — ISDK garantisi (bkz. <see cref="Apply"/> içindeki serbestlik
         /// dizisi notu).</summary>
         private const int FingerCount = 5;
@@ -122,7 +129,135 @@ namespace VortexArena.Core.Combat
             _right = null;
             _leftLocked = false;
             _rightLocked = false;
+            _hasAnchorToWristLeft = false;
+            _hasAnchorToWristRight = false;
             _nextScanAt = 0f;
+        }
+
+        // --------------------------------------------------- anchor → izlenen bilek deltası
+
+        /// <summary>
+        /// Kumanda anchor'ından <b>izlenen bileğe</b> olan sabit delta (anchor uzayında, metre);
+        /// ölçülemiyorsa <c>false</c>.
+        /// <para>
+        /// <b>Ne işe yarar:</b> silahın eldeki duruşunun tek yazılı kaynağı prefabtaki kavrama poz
+        /// düğümüdür (<c>GripPoses/Pose_*</c>) ve o düğüm bileği <b>silaha göre</b> tarif eder. Silahın
+        /// dünya pozunu çözen taraf ise elin ANCHOR pozunu biliyor. İki uç arasındaki köprü bu
+        /// deltadır: <c>bilekDünya = anchor ∘ delta</c>. Onsuz kavrama tahmin sabitlerine düşer.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Kanonikliği bozmaz</b> (§6.6): kumanda sürümlü el pozları deterministiktir — aynı
+        /// kumanda, aynı SDK, aynı sonuç. Yani her başlıkta AYNI delta ölçülür; duruş yine telde
+        /// gitmez ve tel formatı değişmez.
+        /// </para>
+        /// <para>
+        /// ⚠️ Ölçü sentetik elin KAYNAĞINDAN alınır (<c>ModifyDataFromSource</c>), sentetik elin
+        /// kendisinden değil: bileği zaten biz kilitliyoruz (<see cref="Apply"/>), kilitli eli okumak
+        /// "silahın nerede olduğunu silahın kendisine sormak" olurdu ve ölçü bir kare içinde kendi
+        /// çıktısına kilitlenirdi.
+        /// </para>
+        /// <para>
+        /// ⚠️ Değer <b>bir kare bayattır</b> (bu bileşen <see cref="DefaultExecutionOrder"/> 100 ile
+        /// silahtan SONRA koşar) ve bu bilinçlidir: delta fiziksel olarak sabit bir ofsettir, bir
+        /// karelik gecikmesi görünmez. Ölçümü öne almak için execution order'ı bozmak, elin bir kare
+        /// gerideki silaha sarılması pahasına olurdu.
+        /// </para>
+        /// </summary>
+        public static bool TryGetAnchorToWrist(bool rightHand, out Pose delta)
+        {
+            delta = default;
+
+            HandGripPoser instance = Instance;
+            if (instance == null)
+            {
+                return false;
+            }
+
+            if (rightHand)
+            {
+                delta = instance._anchorToWristRight;
+                return instance._hasAnchorToWristRight;
+            }
+
+            delta = instance._anchorToWristLeft;
+            return instance._hasAnchorToWristLeft;
+        }
+
+        /// <summary>Bir elin deltasını tazeler; ölçülemezse o elin bayrağını düşürür.</summary>
+        private void RefreshAnchorToWrist(SyntheticHand synthetic, OVRInput.Controller hand, bool rightHand)
+        {
+            bool measured = TryMeasureAnchorToWrist(synthetic, hand, out Pose delta);
+
+            if (rightHand)
+            {
+                _hasAnchorToWristRight = measured;
+                _anchorToWristRight = measured ? delta : default;
+                return;
+            }
+
+            _hasAnchorToWristLeft = measured;
+            _anchorToWristLeft = measured ? delta : default;
+        }
+
+        /// <summary>
+        /// Anchor ile izlenen bilek arasındaki farkı ölçer.
+        /// <para>⚠️ <c>Transform.InverseTransformPoint</c> DEĞİL elle bileşim: sonuç METREdir ve
+        /// rig'in ölçeği 1 olmasa bile büyütülüp küçültülmemeli (projede tekrarlanan kural,
+        /// <c>HandGripPivot</c> ile aynı gerekçe).</para>
+        /// </summary>
+        private static bool TryMeasureAnchorToWrist(SyntheticHand synthetic, OVRInput.Controller hand,
+            out Pose delta)
+        {
+            delta = default;
+
+            // Rig keşfinin TEK yolu: ikinci bir arama açmak iki bileşenin farklı karelerde farklı
+            // rig bulmasına yol açardı (Scan ile aynı gerekçe).
+            Transform anchor = WeaponGranter.ResolveHandAnchor(hand);
+            if (anchor == null || !TryReadSourceWrist(synthetic, out Pose wrist))
+            {
+                return false;
+            }
+
+            Quaternion inverseAnchor = Quaternion.Inverse(anchor.rotation);
+            delta = new Pose(
+                inverseAnchor * (wrist.position - anchor.position),
+                inverseAnchor * wrist.rotation);
+            return true;
+        }
+
+        /// <summary>
+        /// Sentetik elin kaynağındaki <b>ham</b> bilek (kök) pozunu DÜNYA uzayında okur.
+        /// <para>⚠️ Veri izleme uzayındadır; dünyaya çevirmeyi <c>ITrackingToWorldTransformer</c>
+        /// yapar (<c>Hand.GetRootPose</c> ile aynı yol). Çeviri atlanırsa delta, rig'in dünyadaki
+        /// yerine göre sessizce kayar.</para>
+        /// </summary>
+        private static bool TryReadSourceWrist(SyntheticHand synthetic, out Pose wrist)
+        {
+            wrist = default;
+
+            if (synthetic == null)
+            {
+                return false;
+            }
+
+            IDataSource<HandDataAsset> source = synthetic.ModifyDataFromSource;
+            if (source == null)
+            {
+                return false;
+            }
+
+            HandDataAsset data = source.GetData();
+            if (data == null || !data.IsDataValidAndConnected || data.RootPoseOrigin == PoseOrigin.None)
+            {
+                return false;
+            }
+
+            ITrackingToWorldTransformer transformer = data.Config != null
+                ? data.Config.TrackingToWorldTransformer
+                : null;
+
+            wrist = transformer != null ? transformer.ToWorldPose(data.Root) : data.Root;
+            return true;
         }
 
         private void LateUpdate()
@@ -152,8 +287,13 @@ namespace VortexArena.Core.Combat
             {
                 // Rig yok (gözlemci / sahne yüklenmedi): kilit diye bir şey de yok.
                 locked = false;
+                RefreshAnchorToWrist(null, hand, rightHand);
                 return;
             }
+
+            // ⚠️ Delta, pozu uygulamadan ÖNCE ölçülür: aşağıdaki Apply bileği kilitliyor ve ölçünün
+            // kaynağı kilitten etkilenmese de sıra bunu okuyanın kafasında da net kalsın.
+            RefreshAnchorToWrist(synthetic, hand, rightHand);
 
             Weapon weapon = FindWeaponUsing(hand, out GripSocketKind kind);
             HandGrabPose pose = weapon != null
