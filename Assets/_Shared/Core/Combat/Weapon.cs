@@ -513,8 +513,25 @@ namespace VortexArena.Core.Combat
                 _hasLastSecondaryPalm = false;
             }
 
-            ItemGripSolver.Solve(definition, primaryPalm, _hasLastSecondaryPalm, _lastSecondaryPalm,
-                _aimBlend, out Vector3 position, out Quaternion rotation);
+            // Ana kavramanın ölçüsü ÖNCE prefabtaki kavrama poz düğümünden çözülür
+            // (ItemGripAuthority: el başına, canlı bilek deltasıyla); çözülemezse tanım alanlarına
+            // düşülür. ⚠️ Düşme bir hata değil normal bir yoldur — pozu yazılmamış silah, rig'in
+            // olmadığı oturum ve ilk kare oradan geçer ve davranış bugünkünün birebir aynısıdır.
+            bool mainHandRight = HandGripPivot.IsRight(MainHand);
+            Vector3 position;
+            Quaternion rotation;
+
+            if (ItemGripAuthority.TryResolvePrimaryGrip(definition, transform, mainHandRight,
+                    out Vector3 gripPosition, out Quaternion gripRotation))
+            {
+                ItemGripSolver.Solve(definition, gripPosition, gripRotation, primaryPalm,
+                    _hasLastSecondaryPalm, _lastSecondaryPalm, _aimBlend, out position, out rotation);
+            }
+            else
+            {
+                ItemGripSolver.Solve(definition, primaryPalm, _hasLastSecondaryPalm, _lastSecondaryPalm,
+                    _aimBlend, out position, out rotation);
+            }
 
             transform.SetPositionAndRotation(position, rotation);
         }

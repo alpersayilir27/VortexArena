@@ -11,8 +11,16 @@ namespace VortexArena.Core.Editor
     /// çerçevesinde tanımlı (<c>ItemGripSolver</c> onları <c>HandGripPivot.Resolve</c> çıktısıyla
     /// bileştiriyor); ISDK el modelinin kök transformu ise bilek çerçevesindedir ve ikisi arasında
     /// sabit bir dönüş vardır. Buraya bilek verilirse o dönüş sessizce tanıma yazılır ve silah
-    /// oyunda o kadar dönük çıkar — çeviriyi tezgâh el modelini kurarken
-    /// <c>HandGripConvention.Correction</c> ile bir kez yapar, bu sınıf saf uzay bileşimidir.
+    /// oyunda o kadar dönük çıkar — çeviriyi <b>çağıran</b> yapar
+    /// (<see cref="GripPoseStudio"/> kaydederken, elin bind duruşunda ölçülmüş bazından
+    /// <c>HandGripConvention.Correction</c> ile), bu sınıf saf uzay bileşimidir.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Bu alanların tüketicisi daraldı ve öyle kalır:</b> yerel oyuncunun eli/silahı artık
+    /// <c>GripPoses/Pose_*</c> düğümünden sürülüyor. Buradaki sayılar kavrama <b>soketinin</b> yerini
+    /// ve rig'i olmayan uçların (admin gözlemci, uzak avatar çizimi) fallback duruşunu besliyor —
+    /// yani hâlâ yazılır, ama "silah elde ters duruyor" belirtisinin ilk bakılacak yeri artık poz
+    /// düğümüdür.
     /// </para>
     /// <para>
     /// ⚠️ <b>İki kavrama noktasının uzayı TERSTİR</b> (<see cref="ItemDefinition"/>): <c>primaryGrip</c>
@@ -38,6 +46,22 @@ namespace VortexArena.Core.Editor
         /// aldığı pozun ta kendisi. ⚠️ El modelinin bileği DEĞİL (sınıf başındaki uyarı).</param>
         /// <param name="kind">Hangi kavrama noktası (uzay yönünü bu belirler).</param>
         public static void FromWrist(Transform itemRoot, Transform palm, GripSocketKind kind,
+            out Vector3 gripPosition, out Vector3 gripEuler)
+        {
+            FromWrist(itemRoot, new Pose(palm.position, palm.rotation), kind,
+                out gripPosition, out gripEuler);
+        }
+
+        /// <summary>
+        /// Aynı dönüşümün <see cref="Pose"/> alan biçimi — avucun DÜNYA pozu bir transformdan
+        /// gelmiyorsa (türetilmiş anchor-proxy) kullanılır.
+        /// <para>⚠️ Var olma sebebi: kavrama tezgâhında elin kökü artık <b>bilek</b> çerçevesindedir
+        /// ve kumanda anchor'ı ondan <see cref="VortexArena.Core.Player.HandGripConvention"/> ile
+        /// TÜRETİLİR — yani ortada bir transform yoktur. Yalnız bu imza için sahneye geçici bir
+        /// GameObject açmak, ölçünün referansını görünmez bir yan etkiye (o objenin ölçeği/ebeveyni)
+        /// bağlamak olurdu.</para>
+        /// </summary>
+        public static void FromWrist(Transform itemRoot, in Pose palm, GripSocketKind kind,
             out Vector3 gripPosition, out Vector3 gripEuler)
         {
             // Avucun EŞYAYA göre pozu (ölçeksiz bileşim).

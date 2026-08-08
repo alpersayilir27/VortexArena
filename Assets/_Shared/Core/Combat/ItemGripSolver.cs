@@ -85,19 +85,43 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            Solve(def, def.PrimaryGripPosition, def.PrimaryGripRotation, primaryPalm, hasSecondary,
+                  secondaryPalmPosition, aimBlend, out itemPosition, out itemRotation);
+        }
+
+        /// <summary>
+        /// <see cref="Solve(ItemDefinition, in Pose, bool, in Vector3, float, out Vector3, out Quaternion)"/>'un
+        /// ana kavramayı <b>parametreden</b> alan biçimi: ölçü tanımdan değil, prefabtaki kavrama poz
+        /// düğümünden çözülmüş olabilir (<see cref="ItemGripAuthority"/>).
+        /// <para>
+        /// ⚠️ <b>Etkin ofset ile ikincil eksen AYNI kaynaktan türer:</b> ön kabza ekseni ana kavrama
+        /// noktasından ölçülüyor, o nokta hâlâ tanımdan okunsaydı düğümden gelen kavramada eksen
+        /// sessizce kayar ve iki elli nişan silahı yamuk çevirirdi. <paramref name="def"/> yalnız
+        /// <b>ikincil</b> soketin kaynağıdır (ön kabza için poz düğümü yolu bugün yok).
+        /// </para>
+        /// <para>⚠️ Sınıf yine SAFTIR: sahneye bakan tek şey ofseti çözen taraftır, çözücü değil.</para>
+        /// </summary>
+        /// <param name="primaryGripPosition">EŞYANIN ana el anchor'ına göre yerel konumu (m).</param>
+        /// <param name="primaryGripRotation">EŞYANIN ana el anchor'ına göre yerel dönüşü.</param>
+        public static void Solve(ItemDefinition def, in Vector3 primaryGripPosition,
+                                 in Quaternion primaryGripRotation, in Pose primaryPalm,
+                                 bool hasSecondary, in Vector3 secondaryPalmPosition, float aimBlend,
+                                 out Vector3 itemPosition, out Quaternion itemRotation)
+        {
             // Tek elli çözüm HER ZAMAN hesaplanır ve iki elli dalın emniyetleri düştüğünde
             // olduğu gibi döner — "iki el çözümü koşmadı" durumunun tanımlı bir sonucu olsun.
-            Quaternion baseRotation = primaryPalm.rotation * def.PrimaryGripRotation;
+            Quaternion baseRotation = primaryPalm.rotation * primaryGripRotation;
             itemRotation = baseRotation;
-            itemPosition = primaryPalm.position + primaryPalm.rotation * def.PrimaryGripPosition;
+            itemPosition = primaryPalm.position + primaryPalm.rotation * primaryGripPosition;
 
             float blend = Mathf.Clamp01(aimBlend);
-            if (!hasSecondary || blend <= 0f)
+            if (def == null || !hasSecondary || blend <= 0f)
             {
                 return;
             }
 
-            Vector3 axisLocal = def.SecondaryGripPosition - def.PrimaryGripPointOnItem;
+            Vector3 gripPointOnItem = ItemGripAuthority.GripPointOnItem(primaryGripPosition, primaryGripRotation);
+            Vector3 axisLocal = def.SecondaryGripPosition - gripPointOnItem;
             Vector3 to = secondaryPalmPosition - primaryPalm.position;
             if (axisLocal.sqrMagnitude < MinAxisSqr || to.sqrMagnitude < MinReachSqr)
             {
@@ -128,9 +152,9 @@ namespace VortexArena.Core.Combat
             // üstünde kalsın diye. Yani iki elli çözüm yalnız YÖNELİMİ değiştirir, silahı ikinci
             // ele doğru KAYDIRMAZ (kaydırsaydı ana el silahı bırakmış gibi görünürdü).
             // Doğrulama kimliği: delta = identity iken bu satır
-            // 'primaryPalm.position + primaryPalm.rotation * PrimaryGripPosition' ile ÖZDEŞTİR —
-            // PrimaryGripPointOnItem tanım gereği Inverse(R) * (-P) olduğu için (ItemDefinition).
-            itemPosition = primaryPalm.position - itemRotation * def.PrimaryGripPointOnItem;
+            // 'primaryPalm.position + primaryPalm.rotation * primaryGripPosition' ile ÖZDEŞTİR —
+            // gripPointOnItem tanım gereği Inverse(R) * (-P) olduğu için (ItemGripAuthority).
+            itemPosition = primaryPalm.position - itemRotation * gripPointOnItem;
         }
 
         /// <summary>

@@ -19,18 +19,19 @@ Kalan iş **asset/prefab tarafında** ve başlıkta doğrulamada.
 
 ## 2. Altı silahın kavrama duruşunu ve el pozunu YAZ
 
-⚠️ `primaryGripEuler` sıfır + `primaryGripPosition` ≈ 0 olan bir silah kumandanın ekseninde durur ve
-**iki elli çözüm de koşmaz**: ön kabza ekseni (`secondaryGrip − primaryGripPointOnItem`) 1 cm
-eşiğinin altında kalır, çözücü sessizce tek elli davranır.
+⚠️ Kavraması hiç yazılmamış silah (poz düğümü yok **ve** `primaryGrip*` ≈ 0) kumandanın ekseninde
+durur ve **iki elli çözüm de koşmaz**: ön kabza ekseni (`secondaryGrip` − etkin kavrama noktası)
+1 cm eşiğinin altında kalır, çözücü sessizce tek elli davranır.
 
-Her `WPN_*` prefabında, `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` ile:
-1. **Tezgâhı Aç** → `El_Primary`'yi kabzaya oturt ve **elin gireceği açıyla döndür** (silah sabit).
-2. Parmakları Hierarchy'den bük: avuç kabzayı saracak, işaret parmağı tetiğe ulaşacak biçimde.
-   ⚠️ Tüfekte **işaret parmağı `Free` bırakılır** — kilitli parmak ateş ederken kıpırdamaz ve oyuncu
-   tetiği çektiğini elinde göremez.
-3. **Kaydet** → tanım alanları + parmak pozu yazılır, sol el aynalanır.
-4. **Ön kabza eli**'ni seçip ön kabzaya taşı, tekrar Kaydet.
-5. **Camgöbeği tel küre tezgâhtaki elin bileğiyle ÇAKIŞMALI** — çakışmıyorsa kayıt gitmemiştir.
+Her `WPN_*` prefabını **prefab kipinde** açıp `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu`
+ile (tam reçete: `Docs/Gelistirici/Yemek-Kitabi.md` §11.0 A):
+1. **Ana Kabza Ellerini Oluştur** → sağ ve sol eli kabzaya oturt ve **elin gireceği açıyla döndür**.
+2. Parmakları `GripHandAuthoring` Inspector'ından (ya da Hierarchy'den) bük: avuç kabzayı saracak,
+   işaret parmağı tetiğe ulaşacak biçimde. ⚠️ Tüfekte **işaret parmağı `Free` bırakılır** — kilitli
+   parmak ateş ederken kıpırdamaz ve oyuncu tetiği çektiğini elinde göremez.
+3. Çift elli silahta **Ön Kabza Ellerini Oluştur** → aynı işi ön kabzada yap.
+4. **Kaydet** → el başına poz düğümü + sağ elden fallback alanları yazılır; sonra prefabı kaydet.
+5. **Camgöbeği tel küre sağ elin bileğiyle ÇAKIŞMALI** — çakışmıyorsa kayıt gitmemiştir.
 
 Silahlar: `WPN_AK47` · `WPN_M4A1` · `WPN_M16` · `WPN_G36C` · `WPN_FAMAS` · `WPN_SCARL`.
 

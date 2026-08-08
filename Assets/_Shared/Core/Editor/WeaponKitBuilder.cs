@@ -1417,6 +1417,7 @@ namespace VortexArena.Core.Editor
 
             RemoveLegacySocketNodes(root, ctx);
             RemoveLegacyHandNodes(root, ctx);
+            RemoveStudioHandNodes(root, ctx);
             NoteIfUnbaked(root, ctx);
         }
 
@@ -1495,6 +1496,36 @@ namespace VortexArena.Core.Editor
             _legacyNodesRemoved++;
             Debug.Log(Log + ctx + ": eski '" + ItemHandRig.RootNodeName + "' el rig'i silindi — " +
                       "kavrama artık Kavrama Tezgâhı'nda yazılıyor, prefabda el modeli durmaz.");
+        }
+
+        /// <summary>
+        /// Prefabın içine kazara girmiş <b>kavrama tezgâhı eli</b> varsa siler.
+        /// <para>⚠️ Tezgâhın elleri prefab stage sahnesinin ayrı kökleridir ve diske yazılmazlar —
+        /// ama Hierarchy'de sürüklenerek prefabın altına taşınabilirler. O hâlde el modeli prefaba
+        /// girer ve arenada havada duran bir el olarak görünür (silah sahnede de duruyor: raf,
+        /// <c>WeaponFrame</c>, <c>VA_WeaponCanvas</c>). Tezgâhın kendi Kaydet'i de aynı temizliği
+        /// yapıyor; buradaki kopya, elini oraya taşıyıp hiç kaydetmemiş prefablar içindir.</para>
+        /// </summary>
+        private static void RemoveStudioHandNodes(GameObject root, string ctx)
+        {
+            Transform[] all = root.GetComponentsInChildren<Transform>(true);
+            for (int i = all.Length - 1; i >= 0; i--)
+            {
+                Transform node = all[i];
+                // ⚠️ Önek tek yerden gelir (GripPoseStudio): ikinci bir string kopyası, tezgâhın
+                // adlandırması değiştiğinde bu temizliği sessizce işlevsiz bırakırdı.
+                if (node == null || node == root.transform ||
+                    !node.name.StartsWith(GripPoseStudio.HAND_ROOT_PREFIX))
+                {
+                    continue;
+                }
+
+                string nodeName = node.name;
+                Object.DestroyImmediate(node.gameObject, true);
+                _legacyNodesRemoved++;
+                Debug.Log(Log + ctx + ": prefabın içinde kalmış kavrama tezgâhı eli ('" + nodeName +
+                          "') silindi — tezgâhın elleri prefaba KONMAZ, sahnenin ayrı kökleridir.");
+            }
         }
 
         /// <summary>
