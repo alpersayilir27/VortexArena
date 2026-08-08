@@ -69,9 +69,9 @@ D:\Games\vortexarena\
                              Art\{Materials,Textures} + Prefabs\FX_SnowStorm) · Scenes\Arena12x12
                              · Scenes\Lobby12x12
                              + Data\Outdoor12x12_dimensions.json — mekanın boyut dosyası
-    Arenas\Venues\VortexAntep\   Scenes\Hangar (planlı asimetrik arena) · Scenes\LobbyVortexAntep
-                             (aynı fiziksel oda)
-                             + Data\vortexantep_dimensions.json — mekanın boyut dosyası (ölçünün
+    Arenas\Venues\VortexAntep\   Scenes\VortexAntep (asimetrik hangar arenası) ·
+                             Scenes\LobbyVortexAntep (aynı fiziksel oda)
+                             + Data\VortexAntep_dimensions.json — mekanın boyut dosyası (ölçünün
                              TEK kaynağı), ikisi de kullanır
     Modes\TeamDeathmatch\    mod kutusu: {Scripts → VortexArena.Modes.Tdm, Data, UI}
     Modes\FreeForAll\        mod kutusu: {Scripts → VortexArena.Modes.Ffa, Data, UI} — takımsız
