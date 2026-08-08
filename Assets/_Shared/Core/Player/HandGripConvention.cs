@@ -13,12 +13,12 @@ namespace VortexArena.Core.Player
     /// <para>
     /// ⚠️ <b>Kapsamı daraldı: gövde ARTIK BURADAN GEÇMEZ.</b> Kol/bilek zinciri Movement SDK'nın
     /// retargeting'inden geliyor ve SDK kendi eşlemesini kendi yapıyor. Eşyanın eldeki ETKİN duruşu
-    /// da buradan geçmez: onu <c>ItemGripAuthority</c> poz düğümü + canlı ölçülen anchor→bilek
-    /// deltasıyla çözer. Bu köprünün kalan işi <c>ItemDefinition.primaryGrip</c> alanlarının
-    /// <b>yazımıdır</b> (stüdyonun anchor-proxy çevirisi) — o alanlar kavrama soketini ve rig'i
-    /// olmayan uçların fallback çizimini besler, yani buradaki tahmin sabiti yalnız o yolların
-    /// kalitesini etkiler. Buraya gövdeyle ilgili bir tüketici geri eklenirse, retargeting ile
-    /// ikinci bir eşleme kaynağı üretilmiş olur.
+    /// da buradan geçmez: rotasyonu <c>ItemDefinition.primaryGripEuler</c> sabiti, pozisyonu
+    /// <c>ItemGripAuthority</c> (poz düğümü + canlı ölçülen anchor→bilek deltası) verir. Bu
+    /// köprünün kalan işi <c>ItemDefinition.secondaryGrip</c> alanlarının <b>yazımıdır</b>
+    /// (stüdyonun anchor-proxy çevirisi) — yani buradaki tahmin sabiti yalnız ön kabza soketinin
+    /// ve uzak boş elin çizim kalitesini etkiler. Buraya gövdeyle ilgili bir tüketici geri
+    /// eklenirse, retargeting ile ikinci bir eşleme kaynağı üretilmiş olur.
     /// </para>
     /// <para>
     /// <b>Türetme:</b> iki iskeletin de aynı anatomik yöne bakması istenir, yani

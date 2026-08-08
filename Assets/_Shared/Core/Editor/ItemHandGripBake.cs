@@ -23,6 +23,14 @@ namespace VortexArena.Core.Editor
     /// düğümüdür.
     /// </para>
     /// <para>
+    /// ⚠️ <b>Ana kavramanın ROTASYONU artık hiçbir yerden TÜRETİLMEZ:</b> <c>primaryGripEuler</c>
+    /// elle ayarlanan tek düğmedir (kimlik = eşya eksenleri kumanda anchor'ıyla birebir) ve
+    /// <see cref="FromWrist"/>'in ana-el dalını kimse çağırmaz; kayıt yalnız
+    /// <see cref="PrimaryPositionFromWrist"/> ile pozisyonu yazar. Eşyanın rotasyonunu elden
+    /// türetmek, tezgâhtaki elin açısını namlunun yönüne bağlamak demekti
+    /// (<see cref="VortexArena.Core.Combat.ItemGripAuthority"/> ile aynı sözleşme).
+    /// </para>
+    /// <para>
     /// ⚠️ <b>İki kavrama noktasının uzayı TERSTİR</b> (<see cref="ItemDefinition"/>): <c>primaryGrip</c>
     /// "el → eşya" (eşyanın avuca göre pozu), <c>secondaryGrip</c> ise "eşya → el" (ön kabza
     /// noktasının eşyaya göre pozu). Yani ana elde ters bileşim gerekir, ikincil elde gerekmez.
@@ -81,6 +89,27 @@ namespace VortexArena.Core.Editor
             Quaternion itemInHand = Quaternion.Inverse(handRotation);
             gripPosition = itemInHand * -handPosition;
             gripEuler = itemInHand.eulerAngles;
+        }
+
+        /// <summary>
+        /// Ana kavramanın <c>primaryGripPosition</c> alanını elin bilek NOKTASINDAN türetir:
+        /// eşya öyle konumlansın ki bileğin oturduğu kabza noktası avuca (anchor'a) gelsin —
+        /// <c>gripPosition + Q·bilekEşyada = 0</c> eşitliğinden.
+        /// <para>
+        /// ⚠️ Çalışma anındaki <see cref="VortexArena.Core.Combat.ItemGripAuthority"/> aynı denklemi
+        /// canlı ölçülen anchor→bilek deltasıyla çözer; burada rig olmadığı için delta sıfır alınır
+        /// (birkaç santimlik fark yalnız fallback uçlarını etkiler). Rotasyon parametredir ve
+        /// yazılMAZ — tek yazarı <c>WD_*</c>'daki elle ayar.
+        /// </para>
+        /// </summary>
+        /// <param name="gripRotation">Tanımın MEVCUT <c>PrimaryGripRotation</c>'ı (anchor uzayı).</param>
+        public static Vector3 PrimaryPositionFromWrist(Transform itemRoot,
+            in Vector3 wristWorldPosition, in Quaternion gripRotation)
+        {
+            // Bileğin eşyaya göre konumu — ölçeksiz bileşim (metre kuralı, sınıf başındaki uyarı).
+            Vector3 wristOnItem = Quaternion.Inverse(itemRoot.rotation) *
+                                  (wristWorldPosition - itemRoot.position);
+            return -(gripRotation * wristOnItem);
         }
 
         /// <summary>
