@@ -5,22 +5,24 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// "Bu eşya bu elde NASIL durur" sorusunun <b>etkin</b> cevabı: ölçüyü prefabtaki kavrama poz
-    /// düğümünden (<c>GripPoses/Pose_&lt;Kind&gt;_&lt;L|R&gt;</c>) türetir ve
-    /// <see cref="ItemGripSolver"/>'ın beklediği anchor-uzayı sözleşmesine çevirir.
+    /// "Bu eşya bu elde NASIL durur" sorusunun <b>etkin</b> cevabı — iki kaynağın bilinçli
+    /// bileşimi:
     /// <para>
-    /// <b>Neden düğümden türetiliyor:</b> kavramanın ELLE yazıldığı tek yer Kavrama Pozu
-    /// Stüdyosu'dur ve o, eli silahın üstüne oturtarak <i>bileğin silaha göre pozunu</i> yazar.
-    /// <c>WD_*.asset</c>'teki <c>primaryGrip*</c> alanları aynı bilginin <b>anchor uzayına
-    /// çevrilmiş</b> kopyasıdır ve o çeviri ölçülmemiş sabitlere dayanıyordu — sonuç silahın elde
-    /// yatık durmasıydı. Burada çeviri sabitten değil <b>canlı ölçümden</b> gelir
-    /// (<see cref="HandGripPoser.TryGetAnchorToWrist"/>), yani yazılan poz ile çizilen duruş aynı
-    /// tek kaynaktan çıkar.
+    /// <b>ROTASYON tanımın sabitinden gelir</b> (<see cref="ItemDefinition.PrimaryGripRotation"/>,
+    /// anchor uzayı; varsayılan kimlik = eşyanın eksenleri kumanda anchor'ıyla BİREBİR aynı).
+    /// Kavrama poz düğümünün rotasyonu eşyaya HİÇ karışmaz: düğümdeki el, EL MODELİNİN eşya
+    /// üstündeki duruşudur (<c>HandGripPoser</c> bileği ona kilitler) — eşyayı da o elden döndürmek
+    /// "kumandayı uzatınca namlu başka yöne bakıyor" demekti. Kumanda nereye, namlu oraya;
+    /// gerekirse ince ayar tek yerden, <c>WD_*</c>'daki euler'den yapılır.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Sol ve sağ AYRI çözülür.</b> Poz düğümleri el başınadır; tek bir tanımı iki ele aynen
-    /// uygulamak (WD alanlarının yaptığı) sol eli kaçınılmaz olarak yanlış tutturur — kabza
-    /// simetrik değildir.
+    /// <b>POZİSYON düğümden gelir:</b> düğümün bileği eşyanın neresindeyse, eşya öyle ötelenir ki
+    /// o nokta oyuncunun CANLI bileğine (<see cref="HandGripPoser.TryGetAnchorToWrist"/> deltasının
+    /// konumu) otursun — yani el kabzanın üstünde durur, eşya elin içinden kaymaz.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Sol ve sağ AYRI çözülür.</b> Poz düğümleri el başınadır; kabza simetrik olmadığı için
+    /// iki elin bilek noktası eşyanın farklı yerlerine düşer.
     /// </para>
     /// <para>
     /// ⚠️ <b>Protokolde karşılığı YOKTUR ve tel formatı değişmez</b> (§6.6): duruş yine telde
@@ -44,9 +46,10 @@ namespace VortexArena.Core.Combat
         /// </summary>
         /// <remarks>
         /// <para>
-        /// Denklem: poz düğümünün tarif ettiği bilek, canlı bileğe çakışmalı.
-        /// <c>bilekDünya = eşyaDünya ∘ bilekEşyaya</c> ve <c>bilekDünya = anchor ∘ delta</c>
-        /// eşitlenip eşya pozu yalnız bırakılır.
+        /// Denklem: rotasyon sabittir (<c>Q = PrimaryGripRotation</c>); pozisyon, düğümün bilek
+        /// NOKTASI canlı bilek noktasına çakışacak şekilde çözülür —
+        /// <c>gripPosition + Q * bilekEşyada = delta.pozisyon</c> eşitliğinden.
+        /// Düğümün ve deltanın ROTASYONU eşyaya girmez (el modeline girer, buraya değil).
         /// </para>
         /// <para>
         /// ⚠️ <b>Bileğin eşyaya göre pozu ISDK'nın ÖLÇEKLİ bileşimiyle okunur</b>
@@ -88,14 +91,13 @@ namespace VortexArena.Core.Combat
             Transform reference = node.RelativeTo != null ? node.RelativeTo : itemRoot;
             Pose wristWorld = PoseUtils.GlobalPoseScaled(reference, node.RelativePose);
 
-            // Bileğin EŞYAYA göre pozu (metre). Eşya nerede durursa dursun sabittir: wristWorld de
-            // eşyanın kendi hiyerarşisinden çıkıyor, yani bu iki satır eşyanın dünya pozundan
+            // Bileğin EŞYAYA göre KONUMU (metre). Eşya nerede durursa dursun sabittir: wristWorld
+            // da eşyanın kendi hiyerarşisinden çıkıyor, yani bu satırlar eşyanın dünya pozundan
             // bağımsızdır — çağıran istediği anda, silahı taşıdıktan sonra bile aynı sonucu alır.
-            Quaternion inverseItem = Quaternion.Inverse(itemRoot.rotation);
-            Vector3 wristOnItem = inverseItem * (wristWorld.position - itemRoot.position);
-            Quaternion wristRotationOnItem = inverseItem * wristWorld.rotation;
+            Vector3 wristOnItem = Quaternion.Inverse(itemRoot.rotation) *
+                                  (wristWorld.position - itemRoot.position);
 
-            gripRotation = anchorToWrist.rotation * Quaternion.Inverse(wristRotationOnItem);
+            gripRotation = definition.PrimaryGripRotation;
             gripPosition = anchorToWrist.position - gripRotation * wristOnItem;
             return true;
         }
