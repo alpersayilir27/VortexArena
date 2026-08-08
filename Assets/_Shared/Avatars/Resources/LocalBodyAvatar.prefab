@@ -656,7 +656,7 @@ MonoBehaviour:
     _retargetingBehavior: 0
     _hideLowerBodyWhenUpperBodyTracking: 0
     _hideLegScale: {x: 0, y: 0, z: 0}
-    _applyRootScale: 1
+    _applyRootScale: 0
     _applyHeadScale: 1
     _currentScale: 1
     _headScaleFactor: 0.95

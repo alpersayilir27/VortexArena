@@ -3098,6 +3098,35 @@ konsoluna tek satır sebep yazar.
     Stage sahnesinde yardımcı kök tutan araç bu yüzden `EditorApplication.update`'te duran,
     yalnız bayrağı bozulmuş kökü düzelten ucuz bir bekçi taşımak zorundadır. Kavrama stüdyosunda
     bunu `RestoreHandFlags` yapar; "Elleri Oluştur" da bulduğu mevcut eli aynı yoldan diriltir.
+146. **Movement SDK retargeter'ında `ApplyRootScale` KAPALI kalır — açıkken karakter kökünün
+    pozisyonu bir DÜNYA noktası olmaktan çıkar.** Açık olduğunda `CharacterRetargeter.ApplyPose`
+    her karede `transform.localScale = rootScale` yazar (oyuncunun boyu ÷ modelin boyu) ve
+    retarget edilmiş pozları o ölçekli uzayda üretir; sonuç `_characterRoot.position`'ın
+    `gerçekDünyaNoktası ÷ rootScale` olmasıdır — yani **dünya orijini etrafında ölçeklenmiş** bir
+    nokta. `ArenaNetCharacterBehaviour` bu değeri tele koyduğu için uzak gövde yanlış yere çizilir.
+    ⚠️ **Hata dünya orijininde SIFIRDIR ve orijinden uzaklıkla doğru orantılı büyür** (orijin
+    etrafında ölçekleme orijini yerinde bırakır): arenası orijinde olan bir sahnede hiç fark
+    edilmez, `VA_ArenaBoundary`'si 200 m öteye taşınmış bir sahnede aynı ayar gövdeyi onlarca
+    metre uzağa fırlatır. Bu yüzden belirti "yeni harita bozdu" diye okunur — oysa bozan harita
+    değil, haritanın **kaldıraç kolu**dur.
+    **Belirtinin imzası:** kafa/eller doğru yerdedir (ikisi de rig'in ÇOCUĞUDUR, kalibrasyonu
+    miras alır), yalnız gövde kayar → ad etiketi ve elindeki silah görünür, gövde görünmez; vuruş
+    kutuları gövdeyle birlikte gittiği için kimse kimseyi vuramaz. Teşhis tek ölçüdür: aynı
+    oyuncunun `RemoteSkeletonRegistry.TryGetInterpolatedRoot` kökü ile
+    `RemotePlayerRegistry.GetInterpolatedPose` kafası karşılaştırılır. Aradaki fark sabit bir
+    ÖTELEME değil sabit bir ORAN'sa (x ve z'de aynı katsayı, oyuncu yürürken de korunur) sebep
+    ölçektir; oranın tersi doğrudan `rootScale`'i verir.
+    ⚠️ Ayarın kapalı olması bir tercih değil, projenin zaten yazılı olan kuralının önkoşuludur:
+    gövde ORANI kalibre edilmez, boy farkı yalnız `bodyScale` ile ve yalnız UZAK avatara taşınır
+    (§10.8). `ApplyRootScale` açıkken gönderen sessizce kendi oranını uygular ve o kural delinir.
+147. **`Awake` içinde `AddComponent` ile eklenen bir bileşende `enabled = false` HER ZAMAN
+    TUTMAZ — kapanma niyeti alan kontrolüyle de yazılmalıdır.** Kurulumu başarısız olan bir
+    bileşen kendini kapatmakla yetinirse ve kapanma tutmazsa, `Update`/`LateUpdate` yarı kurulmuş
+    alanlara dokunup **kare başına** `NullReferenceException` basar (saniyede ~90 satır: konsol
+    tamponu dolar ve ondan önceki gerçek uyarılar dışarı atılır — yani arıza kendi teşhisini de
+    siler). Daha kötüsü, istisna metodun ORTASINDA atıldığı için geri kalan işler hiç koşmaz:
+    `RemoteHandPoser`'da parmak duruşu düşünce el/kol IK'sı da hiç çalışmaz. Kural: kapıyı
+    "kapandım mı" değil "elimdeki veri geçerli mi" sorusuna bağla.
 
 ---
 
