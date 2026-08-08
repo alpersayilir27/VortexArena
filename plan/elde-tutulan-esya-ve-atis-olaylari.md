@@ -23,8 +23,8 @@ geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitabi.md` §11.0 A.
 1. `WPN_*.prefab`'ı **prefab kipinde** aç (çift tık); stüdyo penceresi stage'i tanır.
 2. **Ana Kabza Ellerini Oluştur** (çift elli silahta ayrıca **Ön Kabza Ellerini Oluştur**). Eller
    mevcut veriden yerleşir — sıfırdan başlamazsın.
-3. Elleri kabzalara oturt/çevir. Scene view'da avuç → kabza ve işaret parmağı → tetik mesafesi cm
-   olarak yazılır; pencere kaydedilecek sayıları canlı gösterir.
+3. Elleri kabzalara oturt/çevir (Scene view'da yardımcı çizim yoktur, gözle değerlendirirsin);
+   pencere kaydedilecek sayıları canlı gösterir.
 4. Parmakları elin `GripHandAuthoring` Inspector'ından (ya da Hierarchy'den kemiği seçip) bük.
 5. İstersen **Karşı Ele Aynala**, sonra aynalanan eli elle düzelt (kabza simetrik değildir).
 6. **Kaydet** → her elin duruşu + parmakları `GripPoses/Pose_<Kind>_<L|R>`'ye, sağ elden türetilen
