@@ -198,7 +198,10 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   ⚠️ **Arena geometrisi DÜNYA ORİJİNİNE göre kurulur** (arena uzayı = dünya uzayı): zemin dünya
   y=0'da, arena merkezi dünya (0,0,0) civarında; `VA_CameraRig`'in kökü de Y=0'da. Sahneyi topluca
   kaydırmak/döndürmek tüm oyuncuların ağ koordinatını kaydırır, zemini yükseltmek herkesi havada
-  gösterir. ⚠️ **Harita değişimi ne
+  gösterir. Orijin yalnız **varsayılan** yerleşimdir: hazır bir environment'ın içinde bir bölge
+  oynatılacaksa `VA_ArenaBoundary` (ve altındaki maket) o bölgenin üstüne taşınır — ağ
+  koordinatları dünya uzayında kaldığı ve tüm build'ler aynı sahneyi taşıdığı için tutarlıdır
+  (→ `Docs/Sistem-Ozeti.md`). ⚠️ **Harita değişimi ne
   oyuncuyu yeniden doğurur ne kalibrasyonu sıfırlar**: `ArenaCalibrator` yeni sahnede kayıtlı
   `OVRSpatialAnchor`'dan hizalamayı geri yükler — ön koşulu bir işletmede hep aynı ölçüde arena
   oynatmaktır (zemin işaretleri sabit kalsın).
@@ -318,7 +321,8 @@ işletmede hep aynı fiziksel alan oynatıldığı için o mekanın **tüm** sah
 olarak sapar. İçerik: `plane` = tabanın sıralı köşeleri (metre, `ArenaBoundary` transformunun
 yerel XZ'si, **kapalı** — ilk noktayı sona tekrarlama), `columns` = her biri kendi sıralı köşe
 halkası olan kolonlar (`{name, height, points}`), `calibration` = zemin bandının iki noktası
-(`{a, b}`).
+(`{a, b}`), `topViewHeight` = admin kuş bakışı kamerasının zeminden yüksekliği (opsiyonel; 0 =
+kameranın kendi varsayılanı).
 ⚠️ **Taban da kolon da TEK halkadır; parçalardan birleştirme (union) YOKTUR ve eklenmez.**
 İçbükeylik için ek bir şey gerekmez — L şekli, yamuk, girintili duvar tek halkayla ifade edilir.
 Birleşim `ArenaBoundary` yüzünden çalışma anında da koşmak zorunda kalırdı ve karşılığını mekan
@@ -355,11 +359,13 @@ değişmez. Gerekçe boyut değil **bağımlılıktır**: çokgenler `ProBuilder
 işaretçilerin Renderer'larına dokunulmaz — onları kalibrasyon sırasında `ArenaCalibrator` yakar).
 Arena sanatı hazır environment'ların içine kurulur ve maket yalnız o sanatın oturacağı fiziksel
 alanı gösterir.
-⚠️ **Maket SAHNEDEN BAĞIMSIZ üretilir**: sahne köküne, dünya orijininde, **dönüşsüz** ve 1
-ölçekte kurulur — hiçbir şeyin altına parent'lanmaz, böylece dosyadaki ölçü sahnede birebir okunur
-(döndürülmüş bir kökün altında 12×12 kare, dünya eksenli kutuda `12×(cos θ + sin θ)` görünür ve
-araç bozuk sanılır). Arenanın üstüne oturtmak isteyen **elle taşır/döndürür**; geri okuma maketin
-KENDİ kökünü referans aldığı için bundan etkilenmez. ⚠️ Maketin **ölçeği değiştirilmez**.
+**Maket `ArenaBoundary`'nin ALTINA üretilir** (yerel konum/dönüş sıfır, ölçek 1): arenayı hazır bir
+environment'ın üstüne oturtmak = **`VA_ArenaBoundary` örneğini** taşımak/döndürmek, maket ve
+kalibrasyon işaretçileri onu izler — environment YERİNDEN OYNATILMAZ. Sahnede muhafaza yoksa maket
+sahne köküne, dünya orijininde ve dönüşsüz kurulur. ⚠️ Maketin **ölçeği değiştirilmez**, ve ölçü
+**dünya eksenli seçim kutusundan okunmaz**: döndürülmüş bir kökün altında 12×12 kare
+`12×(cos θ + sin θ)` görünür ve araç bozuk sanılır — ölçünün okunacağı yer boyut dosyasıdır. Geri
+okuma maketin KENDİ kökünü referans aldığı için taşınmış/döndürülmüş maketten de doğru çevirir.
 ⚠️ **Kalibrasyon işaretçisi TEKTİR ve maketin altındadır** — ikinci bir işaretçi ailesi açma
 (sahneye elle `anchor_a` koymak dahil): hangisinin geçerli olduğu belirsizleşir. Adı her yerde
 `anchor_a`/`anchor_b`'dir (tek sabit: `ArenaCalibrator.AnchorAName`/`AnchorBName`; C# alanı
@@ -562,7 +568,8 @@ hedef çözme, hasarı istemcinin belirlemesi) ve `Weapon` da bu kapıyı kullan
 (ModeDefinition + MapDefinition listesi) — admin tercihler panelinin mod/harita seçicisi bunu
 `Resources.Load<GameCatalog>("GameCatalog")` ile okur, bu yüzden `Resources/` altında kalmalı.
 **Kar/hava efekti (başka arenaya):** `Arenas/Venues/Outdoor12x12/Scenes/IceWorld/Prefabs/FX_SnowStorm.prefab`'ı
-sahneye arena origin'ine (0,0,0) bırak; kendine yeter (`Snow_C_NearField` üstündeki
+sahneye oynanan alanın ortasına bırak (`ArenaBoundary` orijindeyse (0,0,0); bölgeye taşınmışsa
+o bölgenin ortası); kendine yeter (`Snow_C_NearField` üstündeki
 `WeatherVolumeFollow` hedefi boşsa `Camera.main`'i bulur). Arena 12×12 değilse `Snow_A/B/E`
 shape scale'lerini arena boyutu + ~3 m payla ölçekle — geniş kutu bütçeyi görünmeyen alana harcar.
 
@@ -574,7 +581,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 |---|---|
 | `Tools > VortexArena > Build > Configure All Build Elements` | Sahne hazır → **Hepsini Yapılandır**: aktif sahnenin `MapDefinition`'ını yazar, sonra `Venues/*/Scenes/*/` taramasıyla `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json`'ı EŞİTLER (eksik = uyarı, fazla/ölü kayıt = silinir; `Boot.unity` index 0'da, mekan-dışı sahneler dokunulmadan kalır). Arena silindi/taşındı → **Yalnız Senkronize Et** (sahne açık olmasa da koşar). ⚠️ Ayrı "Arena Id" alanı YOKTUR: MapDefinition'ın adı sahne adıdır |
 | `… > Arena > Template Temellerini Yükle` | Yeni/boş sahneye altyapı prefab ÖRNEKLERİ (`VA_ArenaBoundary`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı `VA_ModeHud`/taban bölgeleri) + kalibratör/muhafaza alanlarının rig'e bağlanması + boyut dosyası bağlama. İdempotent. ⚠️ Kalibrasyon işaretçisi KOYMAZ — onlar maketle gelir |
-| `… > Arena > JSON'dan DimensionMesh Üret` | Mekanın boyut JSON'undan ölçü maketi (taban + kolonlar + kalibrasyon işaretçileri `anchor_a`/`anchor_b`). **Sahne köküne, dönüşsüz** kurar. İdempotent. ⚠️ Her arenada ZORUNLU adım: sahnenin kalibrasyon işaretçileri burada üretilir |
+| `… > Arena > JSON'dan DimensionMesh Üret` | Mekanın boyut JSON'undan ölçü maketi (taban + kolonlar + kalibrasyon işaretçileri `anchor_a`/`anchor_b`). **`ArenaBoundary`'nin altına, yerel-kimlikte** kurar (muhafaza yoksa sahne köküne, dünya orijininde ve dönüşsüz). İdempotent. ⚠️ Her arenada ZORUNLU adım: sahnenin kalibrasyon işaretçileri burada üretilir |
 | `… > Arena > DimensionMesh'i JSON'a Çevir` | Maketin köşeleri/kalibrasyon işaretçileri sahnede düzeltildi → aynı boyut dosyasının ÜSTÜNE yazar (hedefi maketin kendisi söyler). İşaretçi yoksa dosyadaki `calibration` KORUNUR |
 | `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → `Obstacle` layer'ındaki konveks olmayan collider'ları, trigger'ları, collider'sız damgalı objeleri ve **görünen yüzeyden şişkin** collider'ları (içbükey mesh convex işaretlenmiş → oyuncu boşlukta ceza alır) raporlar. ⚠️ Hiçbir şeyi düzeltmez; iki tespit de sessizce yanlış ceza ürettiği için bu tarama sahne kaydedilmeden koşturulur |
 | `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanlarını kurar: engel uyarı yazısı + hasar vinyeti (`CenterEyeAnchor` altında). İdempotent, **tek seferlik** — rig tüm arenalarda örnek olduğu için her arenaya birden gider. ⚠️ Vinyetin materyalini araç ÜRETİR (shader GUID'i import öncesi bilinemez); çalıştırılmadıkça karartma çalışır ama yazı/vinyet hiç çizilmez |

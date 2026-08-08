@@ -43,15 +43,20 @@ Kalibrasyon yasağı canlandırmanın **iki yolunda birden** duruyor (oyuncunun 
 operatörün `revive_player` komutu); üçüncü bir yol eklenip yasak orada tekrarlanmazsa kural sessizce
 işlevsizleşir — hata da vermez.
 
-### ⛔ Arena geometrisini dünya orijininden kaydırma
+### ⛔ Arena yerleşimini `ArenaBoundary`'den bağımsız kaydırma
 
-Arena uzayı **dünya uzayıdır**: ağa giden/gelen tüm pozların sıfırı sahnenin dünya sıfırıdır.
-Arenayı bir metre kaydırmak (ya da döndürmek) arenadaki **herkesin** koordinatını o kadar kaydırır
-ve hata ancak iki başlık aynı sahnede buluşunca görünür.
+Arena uzayı **dünya uzayıdır**: ağa giden/gelen tüm pozların sıfırı sahnenin dünya sıfırıdır ve
+telde bunu telafi eden bir origin yoktur. Yerleşimin referansı **`VA_ArenaBoundary`'dir**: varsayılan
+yerleşim dünya orijinidir; hazır bir environment'ın içinde bölge oynatılacaksa boundary (altındaki
+maketiyle) o bölgenin üstüne **bilinçli** taşınır ve kalibrasyon oyuncuları oraya hizalar — bu
+meşrudur. Yasak olan, **sanat ile boundary'yi birbirinden bağımsız** kaydırmak/döndürmektir:
+muhafaza, kalibrasyon işaretçileri ve kadraj boundary'yi izler, sanat izlemez — ayrışırlarsa oyuncu
+fiziksel alanda yanlış yere göre kalibre olur ve hata ancak sahada görünür.
 
-Aynı sebeple zemin **dünya y=0'da** durmalı: uzak avatarların kökü arena koordinatına oturur →
-zemin yukarıdaysa herkes o yükseklik kadar havada durur. `VA_CameraRig`'in kökü de Y=0'dadır
-(tracking origin `Stage` onu fiziksel zemin sayar).
+Aynı sebeple oynanan zemin **boundary'nin Y'sinde** (varsayılan: dünya y=0) durmalı: uzak
+avatarların kökü arena koordinatına oturur → sanat zemini işaretçilerin zemininden yukarıdaysa
+herkes o yükseklik kadar havada durur. `VA_CameraRig`'in sahnedeki kökü de Y=0'dadır
+(tracking origin `Stage` onu fiziksel zemin sayar; kalibrasyon rig'i zaten taşır).
 
 ### ⛔ Muhafazayı susturmak için `ArenaBoundary` bileşenini kapatma
 

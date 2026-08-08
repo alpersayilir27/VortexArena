@@ -108,6 +108,24 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
+        /// Admin kuş bakışı kamerasının zeminden yüksekliği (metre), boyut dosyasından. 0 =
+        /// dosyada yazmıyor, kamera kendi varsayılanını kullanır.
+        /// <para>
+        /// ⚠️ Boyut dosyasını çözen TEK yer bu bileşendir: kamera JSON'u kendisi açmaz, aksi
+        /// hâlde aynı dosya iki kere ayrıştırılır ve ikisi sessizce sapabilirdi
+        /// (<see cref="TryGetCalibrationMarks"/> ile aynı gerekçe).
+        /// </para>
+        /// </summary>
+        public float TopDownHeight
+        {
+            get
+            {
+                EnsurePlan();
+                return activePlan != null ? activePlan.topViewHeight : 0f;
+            }
+        }
+
+        /// <summary>
         /// Mekanın iki kalibrasyon noktasını DÜNYA uzayında verir (zemin seviyesinde, bu
         /// transformun düzleminde). Dosyada nokta yoksa ya da ikisi birbirine çok yakınsa
         /// <c>false</c> döner.

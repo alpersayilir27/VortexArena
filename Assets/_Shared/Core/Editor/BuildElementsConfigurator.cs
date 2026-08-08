@@ -55,11 +55,11 @@ namespace VortexArena.Core.Editor
         private static readonly string[] AllowedVenueFolders = { "Art", "Data", "Prefabs", ScenesFolderName };
 
         /// <summary>
-        /// <see cref="ArenaBoundary"/>'nin dünya orijinine bu kadar metreden uzak durması sağlık
-        /// raporuna yazılır. Sıfır tolerans değil: sanat yerleşirken birkaç santimlik kayma olağan
-        /// ve her açılışta uyarı basmak raporun tamamını okunmaz kılar.
+        /// Boundary/maket hiza denetimlerinin payı (konum m · ölçek bileşeni). Sıfır tolerans
+        /// değil: elle yerleşimde milimetrik kayma olağan ve her açılışta uyarı basmak raporun
+        /// tamamını okunmaz kılar.
         /// </summary>
-        private const float ArenaOriginTolerance = 0.5f;
+        private const float AlignmentTolerance = 0.01f;
 
         [SerializeField] private string displayName = string.Empty;
         [SerializeField] private List<string> selectedModeIds = new List<string>();
@@ -1013,15 +1013,20 @@ namespace VortexArena.Core.Editor
                     report.Add("SAĞLIK: ArenaBoundary.dimensionsJson BOŞ — muhafaza kendini kapatır.");
                 }
 
-                // Arena uzayı = dünya uzayı: muhafaza origin'den uzaktaysa arena zemini de dünya
-                // y=0'da değil demektir ve ağa giden koordinatlar o kadar kaymış olur. Ölçü
-                // muhafazanın KENDİ yerel XZ'sinde tanımlı olduğu için oyun yine "çalışır",
-                // yani bu sessiz bir kurulum hatasıdır — rapora yazılmasının sebebi budur.
-                float offset = boundary.transform.position.magnitude;
-                if (offset > ArenaOriginTolerance)
+                // ⚠️ Boundary'nin KONUMU/DÖNÜŞÜ denetlenmez: varsayılan yerleşim dünya orijinidir
+                // ama hazır bir environment'ın içinde bölge oynatmak için boundary bilinçli olarak
+                // taşınır/döndürülür — mesafe, niyeti ayırt edemeyen bir sinyaldir. ÖLÇEK ise her
+                // durumda hatadır: boyut dosyası metre cinsindendir ve TransformPoint ölçeği de
+                // uygular — 1'den sapan ölçek muhafazayı, işaretçileri ve kadrajı sessizce yanlış
+                // ölçüde kurar.
+                Vector3 scale = boundary.transform.lossyScale;
+                if (Mathf.Abs(scale.x - 1f) > AlignmentTolerance ||
+                    Mathf.Abs(scale.y - 1f) > AlignmentTolerance ||
+                    Mathf.Abs(scale.z - 1f) > AlignmentTolerance)
                 {
-                    report.Add($"SAĞLIK: ArenaBoundary dünya orijininden {offset:0.##} m uzakta — " +
-                               "arena geometrisi dünya orijinine göre kurulur (zemin y=0).");
+                    report.Add($"SAĞLIK: ArenaBoundary ölçeği {scale} — 1 olmalı. Boyut " +
+                               "dosyasındaki metreler bu ölçekle çarpılır; muhafaza ve " +
+                               "kalibrasyon işaretçileri yanlış ölçüde kurulur.");
                 }
             }
 
@@ -1042,9 +1047,21 @@ namespace VortexArena.Core.Editor
                                "Etiketi 'Untagged' yap.");
                 }
 
-                // ⚠️ Maketin NEREDE durduğu kontrol EDİLMEZ: sahneden bağımsız üretiliyor ve
-                // istendiği yere taşınabiliyor. Geri okuma maketin kendi kökünü referans aldığı
-                // için konumu/dönüşü sonucu etkilemez.
+                // Maket, boundary varsa onun ALTINDA ve yerel-kimlikte durmalı ("JSON'dan
+                // DimensionMesh Üret" böyle kurar): ayrışırlarsa gözle görülen ölçü ile
+                // muhafazanın/işaretçilerin gerçekte kurulduğu yer sessizce farklılaşır.
+                // Boundary'siz (eski) sahnede maketin yeri serbesttir — geri okuma maketin
+                // kendi kökünü referans alır.
+                if (boundary != null &&
+                    (maquette.transform.parent != boundary.transform ||
+                     maquette.transform.localPosition.magnitude > AlignmentTolerance ||
+                     Quaternion.Angle(maquette.transform.localRotation, Quaternion.identity) > 0.1f ||
+                     (maquette.transform.localScale - Vector3.one).magnitude > AlignmentTolerance))
+                {
+                    report.Add($"SAĞLIK: '{maquette.name}' maketi ArenaBoundary'nin altında " +
+                               "yerel-kimlikte değil — görülen ölçü ile muhafaza/işaretçiler " +
+                               "ayrışabilir. 'JSON'dan DimensionMesh Üret'i yeniden çalıştır.");
+                }
             }
 
             // ⚠️ Burada "Wall_* kalıntısı" diye bir kontrol YOKTUR ve eklenmez: arenanın gerçek

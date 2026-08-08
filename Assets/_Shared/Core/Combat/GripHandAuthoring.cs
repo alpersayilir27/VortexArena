@@ -1,23 +1,24 @@
+#if UNITY_EDITOR
 using System.Collections.Generic;
 using Oculus.Interaction.HandGrab;
 using Oculus.Interaction.HandGrab.Visuals;
 using Oculus.Interaction.Input;
 using UnityEngine;
-using VortexArena.Core.Combat;
 using VortexArena.Core.Player;
 
-namespace VortexArena.Core.Editor
+namespace VortexArena.Core.Combat
 {
     /// <summary>
     /// Kavrama Pozu Stüdyosu'nun sahneye koyduğu <b>tek elin</b> ayar yüzeyi: hangi kavrama
     /// noktasına ait olduğu, parmak kıvrımı/açıklığı ve parmak serbestliği burada durur.
     /// <para>
-    /// ⚠️ <b>Bu bileşen bilerek EDİTÖR asmdef'indedir</b> (<c>VortexArena.Core.Editor</c>). Normalde
-    /// bir <see cref="MonoBehaviour"/>'ın editör derlemesinde olması tehlikelidir (sahneye/prefaba
-    /// girerse build'de "missing script" olur); burada tehlike yok çünkü bu obje hiçbir zaman
-    /// kaydedilmez: stüdyo elleri <see cref="HideFlags.DontSave"/> ile ve prefab içeriğinin DIŞINDA,
-    /// prefab stage sahnesinin ayrı bir kökü olarak kurar. Runtime asmdef'ine konsaydı, yalnız
-    /// editörde anlamı olan bir bileşen oyunun derlemesine sızmış olurdu.
+    /// ⚠️ <b>Bu bileşen bilerek RUNTIME asmdef'indedir</b> (<c>VortexArena.Core</c>) ve dosyanın
+    /// tamamı <c>#if UNITY_EDITOR</c> sarmalındadır. Editör asmdef'ine konamaz: Unity, editör
+    /// derlemesinde tanımlı bir <see cref="MonoBehaviour"/>'ı bir GameObject'e eklemeyi reddeder
+    /// ("it is an editor script") ve <c>AddComponent</c> sessizce <c>null</c> döner — stüdyo el
+    /// kurarken tam o satırda patlar. Build güvenliği iki yerden gelir: sarmal sayesinde tip
+    /// oyunun derlemesine hiç girmez, objeler de <see cref="HideFlags.DontSave"/> olduğu için
+    /// sahneye/prefaba yazılmaz (yani "missing script" bırakacak bir örnek oluşmaz).
     /// </para>
     /// <para>
     /// ⚠️ <b>Slider'lar KOLAYLIKTIR, doğruluk kaynağı DEĞİLDİR.</b> Kaydet her zaman kemiklerin o
@@ -32,12 +33,12 @@ namespace VortexArena.Core.Editor
     /// </para>
     /// </summary>
     [DisallowMultipleComponent]
-    internal sealed class GripHandAuthoring : MonoBehaviour
+    public sealed class GripHandAuthoring : MonoBehaviour
     {
         private const string LOG = "[GripPoseStudio]";
 
         /// <summary>Parmak sayısı — ISDK sabiti (<c>HandFinger</c> enum'u beş elemanlıdır).</summary>
-        internal const int FingerCount = 5;
+        public const int FingerCount = 5;
 
         /// <summary>Tam kıvrımda eklem başına derece; kaynak <see cref="HandFingerRig"/>'in aynı
         /// tablosudur (başparmak anatomik olarak daha az kıvrılır).</summary>
@@ -49,7 +50,7 @@ namespace VortexArena.Core.Editor
 
         /// <summary>Bir parmağın kullanıcıya açılan ayarları.</summary>
         [System.Serializable]
-        internal sealed class Finger
+        public sealed class Finger
         {
             [Range(0f, 1f)] public float Curl;
             [Range(-1f, 1f)] public float Spread;
@@ -86,13 +87,13 @@ namespace VortexArena.Core.Editor
         [SerializeField, HideInInspector] private Quaternion _bindBoneBasis = Quaternion.identity;
         [SerializeField, HideInInspector] private bool _hasBindBoneBasis;
 
-        internal GripSocketKind Kind => _kind;
-        internal bool RightHand => _rightHand;
-        internal HandPuppet Puppet => _puppet;
-        internal Handedness Handedness => _rightHand ? Handedness.Right : Handedness.Left;
-        internal Finger[] Fingers => _fingers;
-        internal bool HasBindBoneBasis => _hasBindBoneBasis;
-        internal Quaternion BindBoneBasis => _bindBoneBasis;
+        public GripSocketKind Kind => _kind;
+        public bool RightHand => _rightHand;
+        public HandPuppet Puppet => _puppet;
+        public Handedness Handedness => _rightHand ? Handedness.Right : Handedness.Left;
+        public Finger[] Fingers => _fingers;
+        public bool HasBindBoneBasis => _hasBindBoneBasis;
+        public Quaternion BindBoneBasis => _bindBoneBasis;
 
         // ------------------------------------------------------------------------- kurulum
 
@@ -100,7 +101,7 @@ namespace VortexArena.Core.Editor
         /// Eli tanıtır ve iskeletini çözer. ⚠️ <b>El HENÜZ POZA SOKULMADAN, bind duruşundayken</b>
         /// çağrılmalıdır: hem anatomik baz hem bükülme eksenleri buradan ölçülüyor.
         /// </summary>
-        internal void Resolve(HandPuppet puppet, GripSocketKind kind, bool rightHand)
+        public void Resolve(HandPuppet puppet, GripSocketKind kind, bool rightHand)
         {
             _puppet = puppet;
             _kind = kind;
@@ -230,7 +231,7 @@ namespace VortexArena.Core.Editor
         /// Elin O ANKİ duruşunu slider'ların sıfır noktası yapar (poz yüklendikten ya da aynalandıktan
         /// sonra çağrılır) ve slider'ları sıfırlar.
         /// </summary>
-        internal void CaptureBaseline()
+        public void CaptureBaseline()
         {
             if (_joints == null)
             {
@@ -259,7 +260,7 @@ namespace VortexArena.Core.Editor
         // ------------------------------------------------------------------------- uygulama
 
         /// <summary>Slider'ların değerini kemiklere yazar (baz duruşun ÜZERİNE).</summary>
-        internal void ApplyFingers()
+        public void ApplyFingers()
         {
             if (_joints == null)
             {
@@ -326,7 +327,7 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>Slider'ları sıfırlar ve eli baz duruşuna geri koyar.</summary>
-        internal void ResetFingers()
+        public void ResetFingers()
         {
             for (int f = 0; f < _fingers.Length; f++)
             {
@@ -342,7 +343,7 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>Aynalama sonrası karşı elin serbestlik ayarını kaynaktan kopyalar.</summary>
-        internal void CopyFreedomFrom(GripHandAuthoring other)
+        public void CopyFreedomFrom(GripHandAuthoring other)
         {
             if (other == null)
             {
@@ -356,7 +357,7 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>Kaydedilecek serbestlik dizisi (<see cref="HandPose.FingersFreedom"/> sırasında).</summary>
-        internal void WriteFreedom(JointFreedom[] target)
+        public void WriteFreedom(JointFreedom[] target)
         {
             for (int f = 0; f < target.Length && f < _fingers.Length; f++)
             {
@@ -410,3 +411,4 @@ namespace VortexArena.Core.Editor
         }
     }
 }
+#endif

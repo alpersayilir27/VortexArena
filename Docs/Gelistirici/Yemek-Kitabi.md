@@ -25,6 +25,7 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Kendi mod HUD'ını yazmak | [12](#12-kendi-hudını-yazmak) |
 | Yeni mod eklemek | [13](#13-yeni-mod-eklemek) |
 | Yeni arena eklemek | [14](#14-yeni-arena-eklemek) |
+| Hazır bir environment'ın içinde arena bölgesi kurmak | [14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak) |
 | Gözlüksüz test (dev penceresi) | [15](#15-gözlüksüz-test-dev-penceresi) |
 | Bir konumu ağdan paylaşmak | [16](#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı) |
 | Arena ölçüsünü girmek (boyut dosyası) | [17](#17-arena-ölçüsü-boyut-dosyası) |
@@ -716,9 +717,10 @@ sessizce hiçbir şey göstermez**), taban şeritlerini takım rengine boyar ve 
 ⚠️ Kalibrasyon işaretçisi **koymaz**: onlar 3. adımda gelir.
 
 **3. adımın sırası serbest ama kendisi ZORUNLUDUR** — sahnenin `anchor_a`/`anchor_b`
-işaretçileri maketle gelir, maketsiz sahne kalibre edilemez. Maket sahne köküne, dünya orijininde
-ve dönüşsüz kurulur, yani hiçbir şeye bağlı değildir. Arenanın üstüne oturtmak istersen elle
-taşı/döndür; geri okuma maketin kendi kökünü referans aldığı için bundan etkilenmez.
+işaretçileri maketle gelir, maketsiz sahne kalibre edilemez. Maket sahnedeki `ArenaBoundary`'nin
+**altına**, yerel konum/dönüş sıfırda kurulur (muhafaza yoksa sahne köküne, dünya orijininde ve
+dönüşsüz): arenayı yerleştirmek için yalnız `VA_ArenaBoundary` örneğini taşırsın/döndürürsün, maket
+ve işaretçiler onu izler. Geri okuma maketin kendi kökünü referans aldığı için bundan etkilenmez.
 ⚠️ **Ölçeğini değiştirme** — plan metre cinsindendir.
 
 ⚠️ **Maket oynanan geometri DEĞİLDİR:** taban + kolonlar + kalibrasyon işaretçilerinden ibarettir
@@ -772,6 +774,35 @@ Boyut dosyasının biçimi, elle yazma ve yeniden üretme →
 
 > ⚠️ **Sahne adı = katalog anahtarıdır.** `load_match` bu string'i taşır ve Build Settings'teki
 > adla boşluk/harf farkı dahil birebir eşleşmelidir. Sonradan değiştirme.
+
+---
+
+## 14.1 Hazır bir environment'ın içinde arena bölgesi kurmak
+
+Satın alınan/hazır bir sahnenin (kasaba, hangar, istasyon) **bir bölgesinde** oynatmak istiyorsun.
+Fiziksel oda değişmedi: ölçü aynı, kalibrasyon bantları aynı yerde.
+
+| # | Yaptığın |
+|---|---|
+| 1 | Environment'ı **import edildiği yerde bırak** — orijini bozuk olabilir, önemsiz; hiçbir şeyini taşıma |
+| 2 | [Reçete 14](#14-yeni-arena-eklemek)'teki normal altı adımı uygula (altyapı → maket → ölçü düzeltme → sanat → kayıtlar) |
+| 3 | `VA_ArenaBoundary` örneğini oynatmak istediğin bölgenin üstüne **taşı ve döndür** (ölçek **1** kalır). Maket ve `anchor_a`/`anchor_b` onun altındadır, birlikte gelirler |
+| 4 | `BaseZone`'ları, silahları (`WPN_*` örnekleri / `VA_WeaponCanvas`) ve `ArenaObstacle`'ları **elle o bölgeye** yerleştir |
+
+- **Boyut dosyası mekanın AYNI dosyasıdır** (`Venues/<İşletme>/Data/<İşletme>_dimensions.json`):
+  fiziksel oda değişmedi, ikinci bir ölçü dosyası açılmaz.
+- **Birden çok bölge oynatacaksan her bölge ayrı bir arena kutusudur** (kendi sahnesi + kendi
+  `MapDefinition`'ı). Aynı sahnede iki muhafaza olmaz — hangi ölçünün geçerli olduğu belirsizleşir.
+- Kalibresiz açılışta oyuncu **o sahnenin A-B ortasında** başlar, yani taşıdığın bölgenin içinde
+  ([API: ArenaCalibrator](API-Referansi.md#arenacalibrator--kalibresiz-ön-hizalama)).
+
+> **Neden böyle?** Taşınan tek obje muhafaza olduğu için "arena nerede" sorusunun tek bir cevabı
+> kalır: ölçü kutusu, kalibrasyon işaretçileri ve muhafaza mesafesi hep aynı transformdan türer.
+> Environment'ı arenaya taşımak ise tersi olurdu — hazır sahnelerin içinde LOD, ışık probu, bake
+> edilmiş aydınlatma ve navigasyon verisi kendi konumlarına bağlıdır.
+> Ağ koordinatları **dünya uzayındadır** ve muhafaza onların sıfırı DEĞİLDİR
+> ([Reçete 16](#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı)); bölgeyi kaydırmak kimsenin
+> koordinatını bozmaz, çünkü oyuncu da admin de aynı sahneyi yükler.
 
 ---
 
@@ -925,6 +956,7 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
 | `columns[]` | `name` + `height` (0 = `defaultColumnHeight`) + `points` = kolonun kendi sıralı köşe halkası (tabanla aynı uzay, aynı kurallar) |
 | `calibration` | Zemin bandındaki **A** ve **B** işaretlerinin yeri (aynı uzay). Maketin `anchor_a`/`anchor_b` küpleri buradan konumlanır — küpün merkezi noktanın kendisidir, yarısı zeminin altında kalır |
 | `defaultColumnHeight` | `height: 0` bırakılan kolonların yüksekliği |
+| `topViewHeight` | Admin kuş bakışı kamerasının zeminden yüksekliği (opsiyonel; 0 = kameranın varsayılanı). Kamera ortografik olduğu için **kadrajı değiştirmez** — yalnız çatının/yüksek objelerin üstünde kalmasını sağlar |
 
 > ⚠️ **Sıra A → B'dir ve geometrik olarak doğrulanamaz** (iki nokta hangisinin önce alındığını
 > söylemez, mesafe kontrolü simetriktir). Garanti prosedüreldir: başlıkta ilk yakalanan nokta A
@@ -966,20 +998,23 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
    bantlarının yeri. Bunlar da mekan başınadır — aynı odadaki tüm arenalar ve lobi aynı iki
    fiziksel işareti kullanır. Maketin küplerini **elle taşıma**, ölçü buraya yazılır.
 4. **Maketi üret:** `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` → dosyayı seç, **Üret**.
-   `<Mekan>_DimensionMesh` **sahne köküne, dünya orijininde ve dönüşsüz** kurulur: `Plane`
+   `<Mekan>_DimensionMesh` sahnedeki **`ArenaBoundary`'nin altına, yerel sıfırda** kurulur
+   (muhafaza yoksa sahne köküne, dünya orijininde ve dönüşsüz): `Plane`
    (ProBuilder çokgeni) + `Columns/<ad>` (prizmalar) + **sahnenin kalibrasyon işaretçileri**
    `anchor_a` (kırmızı küp) / `anchor_b` (mavi küp). Dosyada 12×12 yazıyorsa sahnede de 12×12
    ölçersin — araç ürettiği ölçüyü ayrıca konsola basar. Araç **idempotenttir**: dosya değişince
    yeniden çalıştır, aynı mekanın eski maketi silinip yenisi kurulur.
 
-   > **Maketi arenanın üstüne oturtmak istersen elle taşı ve döndür** — geri okuma maketin KENDİ
-   > kökünü referans aldığı için taşınmış/döndürülmüş maket de doğru çevrilir.
+   > **Arenayı yerleştirmek = `VA_ArenaBoundary` örneğini taşımak/döndürmek** — maket ve
+   > işaretçiler onun altındadır, birlikte gelirler; geri okuma maketin KENDİ kökünü referans
+   > aldığı için taşınmış/döndürülmüş maket de doğru çevrilir
+   > ([14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak)).
    > ⚠️ Ama **ölçeğini değiştirme**: plan metre cinsindendir, ölçek onu sessizce yalan yapar.
    >
-   > *Neden dönüşsüz kuruluyor:* Inspector, seçim kutusu ve ProBuilder ölçü göstergesi hep **dünya
-   > eksenine hizalı** kutuyu gösterir. Döndürülmüş bir kökün altında kusursuz bir 12×12 kare
-   > `12 × (cos θ + sin θ)` okunur — 48,72°'de **16,93**. Geometri doğru olsa bile okunamayan ölçü
-   > işe yaramaz.
+   > ⚠️ *Ölçüyü seçim kutusundan okuma:* Inspector, seçim kutusu ve ProBuilder ölçü göstergesi hep
+   > **dünya eksenine hizalı** kutuyu gösterir. Döndürülmüş bir kökün altında kusursuz bir 12×12
+   > kare `12 × (cos θ + sin θ)` okunur — 48,72°'de **16,93**, ve araç ölçeği bozuyor sanılır.
+   > Ölçünün okunacağı yer dosyadır; maketin kendi yerel uzayında değer birebirdir.
 5. **Muhafazaya bağla:** dosyayı `ArenaBoundary.dimensionsJson` alanına.
    (`Template Temellerini Yükle` bunu mekan klasöründen çözüp kendisi bağlar; elle kurduysan
    kontrol et.) İşaretçileri `ArenaCalibrator` her `Start`'ta dosyadaki noktalara yeniden oturtur,
