@@ -15,7 +15,7 @@ APK engelin içinden ateş edebilir ve kafası içerideyken görmeye devam eder.
       vinyetini kurar, vinyet materyalini üretir. Çalıştırılmadıkça karartma çalışır ama yazı ve
       kırmızı vinyet hiç çizilmez.
 
-## 2. Sahne işi (elle) — kalan arenalar: `Arena12x12`, `Hangar`
+## 2. Sahne işi (elle) — kalan arenalar: `Arena12x12`, `VortexAntep`
 
 - [ ] **İç engellerin** (sütun, kasa, sandık, blok) collider'ını `Obstacle` layer'ına al.
       ⚠️ Dış duvar, zemin ve tavan **girmez** — kalibrasyonu kaymış oyuncu durduk yere ölmesin.
