@@ -87,6 +87,11 @@ namespace VortexArena.Core.Arena
     /// oyuncu elle (A basılıyken B'ye çift basarak) kalibre etmelidir ve konsola bunu söyleyen
     /// bir uyarı düşer.
     /// </para>
+    /// <para>
+    /// Hizalamasız kalan başlık arenaya <b>tahminen</b> yerleştirilir
+    /// (<see cref="PreAlignWhenTracked"/>) — kalibrasyon sayılmaz, yalnız oyuncunun elle kalibre
+    /// edebilmesi için arenayı görmesini sağlar.
+    /// </para>
     /// </summary>
     public class ArenaCalibrator : MonoBehaviour
     {
@@ -117,6 +122,10 @@ namespace VortexArena.Core.Arena
         [Header("Rig")]
         [Tooltip("Root moved by the alignment. Falls back to the OVRCameraRig transform.")]
         [SerializeField] private Transform rigRoot;
+        [Tooltip("Kalibresiz ön-hizalamada HMD'nin zeminden başlatıldığı yükseklik (m). " +
+                 "Kalibrasyon DEĞİLDİR: kayıtlı hizalaması olmayan bir başlıkta oyuncuyu " +
+                 "arenanın ortasına, ayakta duran bir kafa yüksekliğine yerleştiren tahmindir.")]
+        [SerializeField] private float uncalibratedHeadHeight = 1.8f;
 
         [Header("Capture")]
         [Tooltip("A basılı tutulurken B'ye iki kez basmak için tanınan süre (saniye). İki basış arası bundan uzunsa ikinci basış yeni bir sekansın ilki sayılır.")]
@@ -157,6 +166,15 @@ namespace VortexArena.Core.Arena
 
         /// <summary>Yeniden deneme aralığı (ms).</summary>
         private const int RestoreRetryDelayMs = 1000;
+
+        /// <summary>Ön-hizalamanın izlemeyi beklediği en uzun süre (saniye). Dolduğunda yine de
+        /// uygulanır: editör sandbox'ında HMD hiç yoktur, kafa yerelde sıfırda kalır ve beklemekten
+        /// vazgeçmemek Play testinde kamerayı arenanın dışında bırakırdı.</summary>
+        private const float PreAlignTrackingTimeout = 2f;
+
+        /// <summary>Kafanın "izleniyor" sayılması için gereken en küçük yerel yer değiştirme
+        /// (m², rig köküne göre). HMD verisi gelmeden CenterEyeAnchor sıfırda durur.</summary>
+        private const float PreAlignHeadEpsilonSqr = 1e-4f;
 
         /// <summary>True once the arena has been aligned, manually or from a saved anchor.</summary>
         public bool IsCalibrated => capturedCount >= 2;
@@ -207,6 +225,11 @@ namespace VortexArena.Core.Arena
         private bool realignQueued;
         private Coroutine markerHideRoutine;
 
+        /// <summary>Ön-hizalama bir kez kuyruğa alındı mı. İki tetikleyicisi var (kayıtlı UUID yok /
+        /// geri yükleme tümden düştü) ve ikisi aynı oturumda peş peşe gelebilir — ikinci bir koşu
+        /// rig'i bir daha kaydırırdı.</summary>
+        private bool preAlignStarted;
+
         private Transform RigRoot
         {
             get
@@ -229,6 +252,16 @@ namespace VortexArena.Core.Arena
             }
         }
 
+        private Transform HeadAnchor
+        {
+            get
+            {
+                if (cameraRig == null)
+                    cameraRig = FindFirstObjectByType<OVRCameraRig>();
+                return cameraRig != null ? cameraRig.centerEyeAnchor : null;
+            }
+        }
+
         /// <summary>
         /// Arenanın zemin yüksekliği (dünya uzayı), A işaretçisinden okunur. Öteleme hesabı YOK:
         /// tek sözleşme gereği işaretçinin transform konumu zaten zemin noktasıdır.
@@ -242,6 +275,12 @@ namespace VortexArena.Core.Arena
             PlaceMarkersFromPlan();
             SetMarkersVisible(false);
             TryHookTrackingEvents();
+
+            // Kayıtlı hizalama YOKSA beklemeye gerek yok: geri yükleme hiç denenmeyecek, oyuncu
+            // sahneye ham tracking origin'iyle düşer. Ön-hizalama hemen kuyruğa alınır.
+            if (string.IsNullOrEmpty(PlayerPrefs.GetString(AnchorUuidKey, string.Empty)))
+                StartPreAlign();
+
             _ = RestoreSavedCalibrationAsync();
         }
 
@@ -643,6 +682,127 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
+        /// Ön-hizalamayı bir kez kuyruğa alır. İki çağıranı var: kayıtlı anchor UUID'si hiç
+        /// olmayan bir başlık (<see cref="Start"/>) ve kayıtlı anchor'ın TÜM denemelerde geri
+        /// yüklenememesi (<see cref="RestoreSavedCalibrationAsync"/>).
+        /// </summary>
+        private void StartPreAlign()
+        {
+            if (preAlignStarted)
+                return;
+
+            preAlignStarted = true;
+            StartCoroutine(PreAlignWhenTracked());
+        }
+
+        /// <summary>
+        /// <b>Kalibresiz ön-hizalama</b>: kayıtlı hizalaması olmayan bir başlıkta rig'i, kafası
+        /// arenanın A-B ortasında ve A→B'ye bakar olacak biçimde TAHMİNEN yerleştirir.
+        /// <para>
+        /// <b>Neden var:</b> hizalanmamış bir rig sahneye ham tracking origin'iyle düşüyor ve
+        /// oyuncu çoğu zaman arenanın dışında, yani <see cref="ArenaBoundary"/>'nin tam karartması
+        /// içinde doğuyor — elle kalibre etmesi gereken oyuncu tam da o anda hiçbir şey göremiyor.
+        /// Bu, <c>PlayerPoseTracker</c>'ın "kalibrasyondan önce de poz gönder" tercihiyle aynı
+        /// çizgidedir: doğru olmayan ama <b>işe yarar</b> bir başlangıç, hiç olmamasından iyidir.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Bu bir KALİBRASYON DEĞİLDİR</b> ve öyle sayılmaz: <see cref="capturedCount"/>
+        /// artmaz, <see cref="Calibrated"/> yayınlanmaz, anchor kaydedilmez ve elle kalibrasyon
+        /// kapısı açık kalır. Ölçülmüş hiçbir şey yok — yalnız sahnedeki iki işaretçinin
+        /// dosyadan gelen yeri var. Gerçek hizalama geldiğinde (elle ya da anchor'dan) rig
+        /// oradan mutlak olarak yeniden konumlanır, yani bu tahmin birikmez.
+        /// </para>
+        /// <para>
+        /// Bakış yönü A→B'dir: kayıtlı anchor'ın "A noktasında durur, B'ye bakar" sözleşmesiyle
+        /// aynı — iki yolun aynı yöne bakması, kalibrasyon tamamlandığında oyuncunun kendini
+        /// döndürülmüş hissetmemesi demektir.
+        /// </para>
+        /// <para>
+        /// ⚠️ Taşınan <b>kafa</b>dır, rig kökü değil: kök zemin referansıdır (hizalama onun
+        /// üstünden yükseklik yazar), oyuncu ise ayakta duran bir kafadır. Kökü ortaya koymak
+        /// oyuncuyu HMD ofseti kadar kaymış bırakırdı.
+        /// </para>
+        /// <para>
+        /// İzleme beklenir ama <see cref="PreAlignTrackingTimeout"/> saniyeden fazla değil:
+        /// HMD'siz sandbox'ta kafa yerelde sıfırda kalır ve orada da kamerayı arenaya düşürmek
+        /// istenen davranıştır.
+        /// </para>
+        /// </summary>
+        private IEnumerator PreAlignWhenTracked()
+        {
+            float deadline = Time.unscaledTime + PreAlignTrackingTimeout;
+
+            while (Time.unscaledTime < deadline)
+            {
+                if (!PreAlignStillWanted())
+                    yield break;
+
+                Transform tracked = HeadAnchor;
+                if (tracked != null && tracked.localPosition.sqrMagnitude > PreAlignHeadEpsilonSqr)
+                    break;
+
+                yield return null;
+            }
+
+            if (!PreAlignStillWanted())
+                yield break;
+
+            Transform rig = RigRoot;
+            Transform head = HeadAnchor;
+            if (rig == null || head == null || !rig.gameObject.activeInHierarchy)
+                yield break;
+
+            // İşaretçiler PlaceMarkersFromPlan ile zaten boyut dosyasındaki noktalara oturmuş
+            // durumda; burada yalnız okunurlar. Eksik/aynı işaretçi durumunda ResolveMarkers
+            // uyarıyı zaten bastı — ikincisi gürültü olurdu.
+            if (anchorA == null || anchorB == null || anchorA == anchorB)
+                yield break;
+
+            Vector3 pointA = anchorA.transform.position;
+            Vector3 pointB = anchorB.transform.position;
+
+            Vector3 forward = pointB - pointA;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 1e-6f)
+                yield break;
+            forward.Normalize();
+
+            // Önce yaw (kafanın kendi ekseninde), sonra öteleme: dönüş kafayı yerinde tuttuğu için
+            // iki adım birbirini bozmaz.
+            Vector3 currentForward = head.forward;
+            currentForward.y = 0f;
+            if (currentForward.sqrMagnitude < 1e-6f)
+            {
+                currentForward = rig.forward;
+                currentForward.y = 0f;
+                if (currentForward.sqrMagnitude < 1e-6f)
+                    yield break;
+            }
+
+            float yaw = Vector3.SignedAngle(currentForward, forward, Vector3.up);
+            rig.RotateAround(head.position, Vector3.up, yaw);
+
+            Vector3 mid = (pointA + pointB) * 0.5f;
+            Vector3 targetHead = new Vector3(mid.x, VirtualFloorY + uncalibratedHeadHeight, mid.z);
+            rig.position += targetHead - head.position;
+
+            // Rig meşru olarak taşındı: sıçrama bastırıcıları bunu arıza sanmasın.
+            CalibrationGeneration++;
+            Debug.Log("ArenaCalibrator: kalibrasyon yok — rig arenanın A-B ortasına TAHMİNEN " +
+                      "yerleştirildi. Bu bir kalibrasyon DEĞİLDİR; oyuncu elle hizalamalıdır.");
+        }
+
+        /// <summary>
+        /// Ön-hizalama hâlâ isteniyor mu: gerçek bir hizalama (elle ya da anchor'dan) araya
+        /// girdiyse ya da operatör sıfırladıysa tahmin uygulanmaz — ölçülmüş bir hizalamanın
+        /// üstüne tahmin yazmak onu bozmak olurdu.
+        /// </summary>
+        private bool PreAlignStillWanted()
+        {
+            return !IsCalibrated && !manualCalibrationStarted && !restoreAborted && capturedCount == 0;
+        }
+
+        /// <summary>
         /// Recenter ve tracking geri kazanımı kalibrasyonu bayatlatır: origin kayar ama
         /// rig'in hizalama transform'u eski kalır → arena kayar. Stage tracking origin
         /// sistem recenter'ını zaten kapatır; bu ikinci savunma hattıdır.
@@ -881,6 +1041,10 @@ namespace VortexArena.Core.Arena
                 "(o ana dek gönderilen " +
                 "pozlar arena ile örtüşmez).",
                 this);
+
+            // Elle kalibre edecek oyuncunun önce arenayı GÖRMESİ gerekiyor: hizalanmamış rig onu
+            // muhafazanın karartmasının içinde bırakabilir.
+            StartPreAlign();
         }
 
         /// <summary>Tek deneme; başarılıysa true. Kalıcı olmayan hataları yutup false döner.</summary>

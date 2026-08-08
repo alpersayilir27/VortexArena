@@ -151,6 +151,18 @@ namespace VortexArena.Core.Arena
         /// <summary>Kolonun <c>height</c> alanı 0 bırakılırsa kullanılacak yükseklik (metre).</summary>
         public float defaultColumnHeight = 3f;
 
+        /// <summary>
+        /// Admin kuş bakışı kamerasının zeminden yüksekliği (metre). 0 ya da negatif =
+        /// kameranın kendi varsayılanı kullanılır.
+        /// <para>
+        /// ⚠️ Kamera <b>ortografik</b> olduğu için bu değer KADRAJI değiştirmez (kadraj taban
+        /// halkasının sınırlayıcı kutusundan gelir); tek etkisi kameranın hangi yükseklikte
+        /// durduğu, yani çatının ve yüksek objelerin ÜSTÜNDE kalıp kalmadığıdır. Yüksek tavanlı
+        /// bir mekanda varsayılan yetmezse burası büyütülür.
+        /// </para>
+        /// </summary>
+        public float topViewHeight;
+
         /// <summary>Kullanılabilir bir plan mı (en az bir üçgen).</summary>
         public bool IsValid => Polygon2D.IsValid(plane);
 

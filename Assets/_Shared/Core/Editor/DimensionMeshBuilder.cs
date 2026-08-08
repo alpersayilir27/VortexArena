@@ -22,13 +22,19 @@ namespace VortexArena.Core.Editor
     /// sanatı maketin üstüne kurulur; duvar ÜRETİLMEZ (arenanın duvarları environment'a aittir).
     /// </para>
     /// <para>
-    /// ⚠️ <b>Maket SAHNEDEN BAĞIMSIZ üretilir:</b> kök sahne köküne, dünya orijininde, dönüşsüz ve
-    /// 1 ölçekte kurulur — hiçbir şeyin altına parent'lanmaz. Sebep ölçünün okunabilir kalmasıdır:
-    /// dosyada 12×12 yazıyorsa Inspector'da, ProBuilder ölçü göstergesinde ve seçim kutusunda
-    /// 12×12 görünür. Döndürülmüş bir arena kökünün altında aynı kare
-    /// <c>12 × (cos θ + sin θ)</c> olarak okunur (48,72°'de 16,93) ve araç ölçeği bozuyor sanılır.
-    /// Maketi arenanın üstüne oturtmak isteyen onu ELLE taşır ve döndürür; geri okuma maketin
-    /// KENDİ kökünü referans aldığı için taşınmış/döndürülmüş maket de doğru çevrilir.
+    /// <b>Maket sahnedeki <see cref="ArenaBoundary"/>'nin ALTINA kurulur</b> — yerel konum/dönüş
+    /// sıfır, ölçek 1. Böylece arenayı hazır bir environment'ın üstüne oturtmak <b>tek objeyi</b>
+    /// taşımak/döndürmek olur (muhafaza örneği); maket ve altındaki kalibrasyon işaretçileri onu
+    /// kendiliğinden izler, ikisi zaten çakışık olmak zorundadır (muhafazanın ölçüsü de aynı
+    /// dosyadan gelir). Sahnede muhafaza yoksa maket sahne köküne, dünya orijininde ve dönüşsüz
+    /// kurulur.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Maketin ölçeği değiştirilmez</b> ve döndürülmüş bir kökün altında ölçü <b>dünya
+    /// eksenli kutuda okunmaz</b>: 12×12 bir taban, 48,72° dönmüş bir kökün altında seçim
+    /// kutusunda <c>12 × (cos θ + sin θ)</c> = 16,93 görünür ve araç ölçeği bozuyor sanılır.
+    /// Ölçünün doğru okunduğu yer daima boyut dosyasıdır; geri okuma da maketin KENDİ kökünü
+    /// referans aldığı için taşınmış/döndürülmüş maket doğru çevrilir.
     /// </para>
     /// <para>
     /// ⚠️ <b>Idempotent:</b> sahnede aynı mekanın maketi varsa silinip yeniden üretilir; ikinci
@@ -72,7 +78,9 @@ namespace VortexArena.Core.Editor
 
             /// <summary>
             /// Üretilen tabanın XZ ölçüsü (metre) = dosyadaki halkanın sınırlayıcı kutusu. Maket
-            /// dönüşsüz kurulduğu için sahnede ölçülen değer de budur.
+            /// kendi kökünde dönüşsüz olduğu için maketin YEREL uzayında ölçülen değer de budur
+            /// (kök döndürülmüşse dünya eksenli seçim kutusu daha büyük okunur — bkz. sınıf
+            /// başlığı).
             /// </summary>
             public Vector2 PlaneLocalSize;
 
@@ -123,9 +131,11 @@ namespace VortexArena.Core.Editor
                 "çalışma anında kullanır — ama taban/kolon görseli oyunda çizilmez. Köşeleri " +
                 "ProBuilder ile, işaretçileri sürükleyerek düzeltip 'DimensionMesh'i JSON'a " +
                 "Çevir' ile aynı dosyaya geri yazabilirsin.\n\n" +
-                "Sahne köküne, dünya orijininde ve DÖNÜŞSÜZ kurulur — dosyadaki ölçüyü birebir " +
-                "görürsün. Arenanın üstüne oturtmak istersen elle taşı/döndür; geri okuma maketin " +
-                "kendi kökünü referans aldığı için bundan etkilenmez.",
+                "Sahnede ArenaBoundary varsa maket ONUN ALTINA, yerel sıfırda kurulur: arenayı " +
+                "bir environment'ın üstüne oturtmak için yalnız VA_ArenaBoundary örneğini " +
+                "taşırsın/döndürürsün, maket ve kalibrasyon işaretçileri onu izler. Muhafaza " +
+                "yoksa sahne köküne, dünya orijininde ve dönüşsüz kurulur. Geri okuma maketin " +
+                "kendi kökünü referans aldığı için taşınmış/döndürülmüş maketten de doğru çevirir.",
                 MessageType.Info);
 
             EditorGUILayout.Space();
@@ -202,20 +212,27 @@ namespace VortexArena.Core.Editor
             Undo.SetCurrentGroupName("VortexArena Boyut Maketi");
 
             // ------------------------------------------------------------- kök
-            // ⚠️ Maket SAHNE KÖKÜNE, dünya orijininde ve dönüşsüz kurulur — hiçbir şeyin altına
-            // parent'lanmaz. Sebep ölçünün OKUNABİLİR kalmasıdır: dosyada 12×12 yazıyorsa
-            // Inspector'da, ProBuilder ölçü göstergesinde ve seçim kutusunda 12×12 görünmelidir.
-            // Döndürülmüş bir arena kökünün altında aynı kare dünya eksenine hizalı kutuda
-            // 12×(cos θ + sin θ) olarak okunur (48,72°'de 16,93) ve araç ölçeği bozuyor sanılır.
-            // Maketi arenanın üstüne oturtmak gerekiyorsa ELLE taşınıp döndürülür.
+            // Maket muhafazanın ALTINA, yerel sıfırda kurulur (gerekçe sınıf başlığında): arenanın
+            // yerleşimini taşıyan TEK obje VA_ArenaBoundary örneği olsun, maket ve kalibrasyon
+            // işaretçileri onu izlesin. Muhafaza yoksa yedek yol sahne köküdür.
             DestroyExisting(result.VenueName);
+
+            Transform anchorParent = FindBoundaryParent();
 
             var root = new GameObject(ArenaDimensionMesh.RootNameFor(result.VenueName));
             Undo.RegisterCreatedObjectUndo(root, "Boyut Maketi Kökü");
-            root.transform.SetParent(null, false);
+            root.transform.SetParent(anchorParent, false);
             root.transform.localPosition = Vector3.zero;
             root.transform.localRotation = Quaternion.identity;
             root.transform.localScale = Vector3.one;
+
+            if (anchorParent == null)
+            {
+                result.Warnings.Add(
+                    "Sahnede ArenaBoundary yok — maket sahne köküne, dünya orijininde kuruldu. " +
+                    "Muhafazayı 'Template Temellerini Yükle' ile kurup maketi yeniden üretirsen " +
+                    "arenayı tek objeyi taşıyarak yerleştirebilirsin.");
+            }
 
             // Maket build'e girmek ZORUNDA (kalibrasyon işaretçileri onun altında). Tag açıkça
             // sıfırlanır: eski bir sahnede 'EditorOnly' etiketli bir kök yeniden kullanılırsa
@@ -446,6 +463,22 @@ namespace VortexArena.Core.Editor
             var anchor = mark.AddComponent<DimensionAnchor>();
             anchor.SetKind(kind);
             EditorUtility.SetDirty(anchor);
+        }
+
+        /// <summary>
+        /// Maketin bağlanacağı muhafaza transformu; sahnede <see cref="ArenaBoundary"/> yoksa
+        /// <c>null</c> (maket sahne köküne kurulur).
+        /// <para>
+        /// ⚠️ Muhafaza her arena sahnesinde ZORUNLU ve TEKTİR; ikinci bir tanesi zaten iki farklı
+        /// ölçü demektir. Yine de burada birinciye düşülür ve iş yapılır: maketi üretmeyi
+        /// reddetmek, kurulumun ortasındaki bir sahneyi tümden çıkmaza sokardı.
+        /// </para>
+        /// </summary>
+        private static Transform FindBoundaryParent()
+        {
+            ArenaBoundary boundary =
+                Object.FindFirstObjectByType<ArenaBoundary>(FindObjectsInactive.Include);
+            return boundary != null ? boundary.transform : null;
         }
 
         /// <summary>

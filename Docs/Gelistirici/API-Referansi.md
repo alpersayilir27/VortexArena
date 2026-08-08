@@ -191,7 +191,9 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 
 > ⚠️ Arena geometrisi **dünya orijinine göre** kurulur: zemin dünya y=0'da, arena merkezi dünya
 > (0,0,0) civarında. Sahneyi topluca kaydırmak/döndürmek arenadaki tüm oyuncuların ağ koordinatını
-> kaydırır.
+> kaydırır. Orijin varsayılan yerleşimdir: hazır bir environment'ın içinde bölge oynatılırken
+> `VA_ArenaBoundary` (maketiyle birlikte) o bölgenin üstüne taşınır — koordinatlar dünya uzayında
+> kaldığı ve tüm build'ler aynı sahneyi taşıdığı için tutarlıdır.
 
 ### ArenaBoundary
 
@@ -211,6 +213,7 @@ büyütmek/kaydırmak koordinatları oynatmaz.
 | ✅ `IsOutOfBounds` | Yerel HMD alan dışında mı |
 | ✅ `HalfExtents` | Arena yarı ölçüsü — plandaki çokgenin sınırlayıcı kutusundan gelir (plan yoksa sıfır) |
 | ✅ `LocalCenter` | O kutunun yerel merkezi — admin kuş bakışı kadrajı bunu okur. ⚠️ Ölçü genellikle bir köşeden alınır, yani kutu transformun tam ortasında DEĞİLDİR: kadrajlarken `HalfExtents` tek başına yetmez |
+| ✅ `TopDownHeight` | Admin kuş bakışı kamerasının zeminden yüksekliği (boyut dosyasının `topViewHeight`'ı; 0 = kamera kendi varsayılanını kullanır). Ortografik kamerada kadrajı DEĞİL yalnız çatının/yüksek objelerin üstünde kalmayı belirler. Kamera dosyayı kendisi açmaz — JSON'u çözen tek yer bu bileşendir |
 | ✅ `SetSpectatorMode(bool)` | Muhafazayı susturur (karartma + uyarı kapanır) ama bileşeni ayakta tutar — kuş bakışı kadrajı `HalfExtents`/`LocalCenter`'ı okumaya devam ediyor |
 | ✅ `TryGetCalibrationMarks(out Vector3 a, out Vector3 b)` | Zemin bandının iki noktası, **dünya** uzayında ve zemin seviyesinde. Dosyada nokta yoksa `false`. `ArenaCalibrator` işaretçilerini bununla konumlandırır — boyut dosyasını iki kere çözen ikinci bir okuyucu olmasın diye |
 
@@ -229,7 +232,8 @@ sahnedeki `ArenaObstacle`'lara olan mesafenin **en küçüğü** olur. Dosya kar
 **Arena ölçüsünün tek doğruluk kaynağı** — elle yazılabilir bir JSON dosyası olarak yaşayan saf
 veri sınıfı: `name`, `plane` (tabanın kapalı köşe halkası; ilk nokta sona tekrarlanmaz),
 `columns[]` (`name`/`height`/`points` — her kolon kendi kapalı halkası), `calibration` (`{a, b}` —
-zemin bandının iki noktası), `defaultColumnHeight`.
+zemin bandının iki noktası), `defaultColumnHeight`, `topViewHeight` (admin kuş bakışı kamerasının
+zeminden yüksekliği; 0 = kameranın varsayılanı).
 Koordinatlar metre ve `ArenaBoundary`'yi taşıyan transformun **yerel
 XZ**'sindedir — JSON'daki `y` dünya **Z**'sidir. Dosya **mekan başınadır**; o mekanın bütün
 sahneleri aynı dosyayı gösterir.
@@ -300,13 +304,32 @@ ve **yalnız** `AnchorKind { A, B }` taşır; obje adı tek kaynaktan gelir
 > altındaki `Renderer.enabled`'ı false yapar — obje kapatılmaz (kapalı bir kökün altındaki
 > işaretçiler bulunamazdı) ve işaretçilerin `Renderer`'larına dokunulmaz (görünürlükleri
 > kalibratörün işidir).
-> ⚠️ Kök **sahneden bağımsız** kurulur: dünya orijininde, dönüşsüz, 1 ölçekte. Elle taşınıp
-> döndürülebilir — çıkarım bu kökün yerel uzayına göre yapılır. **Ölçeği değiştirilmez**: plan
+> ⚠️ Kök **`ArenaBoundary`'nin altına**, yerel konum/dönüş sıfır ve 1 ölçekte kurulur (sahnede
+> muhafaza yoksa sahne köküne, dünya orijininde ve dönüşsüz). Arenayı yerleştirmek = muhafazayı
+> taşımak/döndürmek; maket ve işaretçiler onu izler. Çıkarım maketin KENDİ kökünün yerel uzayına
+> göre yapıldığı için taşınmış/döndürülmüş maket de doğru çevrilir. **Ölçeği değiştirilmez**: plan
 > metre cinsindendir.
 
 > ⛔ **Muhafazayı susturmak için bileşeni kapatma** — kapalı bileşen karartmayı son değerinde
 > dondurur **ve planı çözmeyi bırakır** (kuş bakışı kadrajı ona bağlı). Doğrusu
 > `SetSpectatorMode(true)`.
+
+### ArenaCalibrator — kalibresiz ön-hizalama
+
+Kalibrasyonun kendisi (iki nokta → 6DOF hizalama + `OVRSpatialAnchor` kalıcılığı) operatör
+akışıdır; burada yalnız kod yazarken önemli olan yan davranış: kayıtlı hizalaması **olmayan** bir
+başlıkta rig, kafası arenanın A-B ortasında ve A→B'ye bakar olacak biçimde **tahminen**
+yerleştirilir (yükseklik `uncalibratedHeadHeight`, varsayılan 1,8 m, zeminden). Tetikleyici iki
+durumdur: PlayerPrefs'te anchor UUID'si hiç yok, ya da geri yükleme tüm denemelerde düştü.
+
+> ⚠️ **Bu bir kalibrasyon DEĞİLDİR** ve öyle raporlanmaz: yakalama sayacı artmaz, `Calibrated`
+> yayınlanmaz, anchor kaydedilmez, elle kalibrasyon kapısı açık kalır. Amacı görünürlüktür —
+> hizalanmamış rig oyuncuyu `ArenaBoundary` karartmasının içinde bırakırsa elle kalibre etmesi
+> gereken oyuncu hiçbir şey göremez.
+> ⚠️ `CalibrationGeneration` **artar**: taşınma meşrudur, kök sıçraması bastıran emniyetler bunu
+> arıza saymamalıdır.
+> Koşmadığı durumlar: kayıtlı anchor geri yüklendiyse, oyuncu jeste başladıysa, operatör
+> sıfırladıysa, rig kökü kapalıysa (admin gözlemci) ve işaretçiler yok/aynıysa.
 
 ### ArenaObstacle
 
@@ -416,7 +439,7 @@ kill-feed, kendi öldürme/ölüm sayacın.
 |---|---|
 | `Tools > VortexArena > Development > Dev` | Rol · sunucu hedefi · Play başlangıcı · derle. Kısayol **Ctrl+Alt+R** (rol çevirir) |
 | `Tools > VortexArena > Arena > Template Temellerini Yükle` | Aktif sahneye altyapı prefab ÖRNEKLERİ + `ArenaCalibrator` ve `ArenaBoundary`'nin rig alanlarını bağlama + boyut dosyası bağlama; idempotent (`TemplateBasicsLoader`). ⚠️ Kalibrasyon işaretçisi koymaz — onlar maketle gelir |
-| `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` | Boyut dosyasından ölçü maketi (`Plane` + `Columns/*` + kalibrasyon işaretçileri `anchor_a`/`anchor_b`), **sahne köküne dönüşsüz**; idempotent (`DimensionMeshBuilder`). ⚠️ Her arenada zorunlu: sahnenin kalibrasyon işaretçilerinin tek kaynağı budur |
+| `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` | Boyut dosyasından ölçü maketi (`Plane` + `Columns/*` + kalibrasyon işaretçileri `anchor_a`/`anchor_b`), **`ArenaBoundary`'nin altına yerel-kimlikte** (muhafaza yoksa sahne köküne, dönüşsüz); idempotent (`DimensionMeshBuilder`). ⚠️ Her arenada zorunlu: sahnenin kalibrasyon işaretçilerinin tek kaynağı budur |
 | `Tools > VortexArena > Arena > DimensionMesh'i JSON'a Çevir` | Maketi (köşeler + kalibrasyon işaretçileri) okuyup kaynak boyut dosyasının üstüne yazar; doğrulanamayan çıktıda dosyaya dokunmaz, işaretçi yoksa `calibration` korunur (`DimensionMeshReader`) |
 | `Tools > VortexArena > Build > Configure All Build Elements` | **Hepsini Yapılandır**: aktif sahnenin `MapDefinition`'ını yazar, sonra `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json`'ı `Venues/*/Scenes/*/` ağacına göre eşitler (fazla/ölü kayıt silinir, eksik olan uyarı olur) + sağlık raporu. **Yalnız Senkronize Et**: sahne açık olmadan yalnız eşitleme (`BuildElementsConfigurator`) |
 | `Tools > VortexArena > Server > Export Server Config` | `MapDefinition` SO'larından `Server/config/maps.json` — girdi başına yalnız `sceneName` + `modes` (arena ölçüsü sunucuya gitmez). ⚠️ JSON'u elle düzenleme, export ezer |

@@ -557,12 +557,16 @@ namespace VortexArena.Core.Editor
         private static void CreateHandPair(PrefabStage stage, Transform weaponRoot,
             WeaponDefinition definition, GripSocketKind kind)
         {
+            // ⚠️ İki el de BAĞIMSIZ denenir: sağ el kurulamazsa sol elin de hiç kurulmaması,
+            // kullanıcıya "sol el hiç eklenmiyor" gibi görünen ve asıl hatayı gizleyen bir belirti
+            // üretir. Başarısız olan el kendi hata satırını zaten basıyor.
             GripHandAuthoring right = EnsureHand(stage, weaponRoot, definition, kind, true);
-            EnsureHand(stage, weaponRoot, definition, kind, false);
+            GripHandAuthoring left = EnsureHand(stage, weaponRoot, definition, kind, false);
 
-            if (right != null)
+            GripHandAuthoring focus = right != null ? right : left;
+            if (focus != null)
             {
-                Selection.activeGameObject = right.gameObject;
+                Selection.activeGameObject = focus.gameObject;
                 SceneView.lastActiveSceneView?.FrameSelected();
             }
 
@@ -612,6 +616,7 @@ namespace VortexArena.Core.Editor
             GripHandAuthoring existing = FindHand(FindHands(stage.scene), kind, rightHand);
             if (existing != null)
             {
+                HideIsdkComponents(existing.gameObject);
                 return existing;
             }
 
@@ -636,7 +641,23 @@ namespace VortexArena.Core.Editor
 
             HandPuppet puppet = ghost.GetComponent<HandPuppet>();
             var authoring = go.AddComponent<GripHandAuthoring>();
+            if (authoring == null)
+            {
+                // ⚠️ Yarım el BIRAKILMAZ: bileşensiz ghost'u FindHands göremez (kimliği bileşende),
+                // yani ne pencerede listelenir ne "Elleri Temizle" ile silinebilir — sahnede
+                // kaydedilmemiş, sahipsiz bir el modeli olarak kalır ve ilk stage/Play geçişinde
+                // sessizce kaybolur. Kurulamayan eli hemen yok etmek o hayaleti hiç üretmez.
+                DestroyImmediate(go);
+                Debug.LogError($"{LOG} {kind}/{(rightHand ? "sağ" : "sol")} el kurulamadı: " +
+                               "GripHandAuthoring eklenemedi. Sınıf RUNTIME asmdef'inde " +
+                               "(VortexArena.Core, #if UNITY_EDITOR sarmalında) olmalı — Unity " +
+                               "editör asmdef'inde derlenen bir MonoBehaviour'ı AddComponent ile " +
+                               "kabul etmez ve null döner.");
+                return null;
+            }
+
             authoring.Resolve(puppet, kind, rightHand);
+            HideIsdkComponents(go);
 
             // ⚠️ Prefabtaki poz KOPYALANIR, doğrudan verilmez: ISDK'nın puppet'ı verilen pozu
             // yerinde değiştirebiliyor ve kaynak prefabın KENDİ verisi. Kopyalamadan geçirmek, el
@@ -721,6 +742,33 @@ namespace VortexArena.Core.Editor
             for (int i = 0; i < all.Length; i++)
             {
                 all[i].gameObject.hideFlags = HideFlags.DontSave;
+            }
+        }
+
+        /// <summary>
+        /// Elin kökündeki ISDK bileşenlerini (<c>HandGhost</c>, <c>HandPuppet</c> …) Inspector'dan
+        /// gizler: kullanıcı eli seçtiğinde yalnız Transform + <see cref="GripHandAuthoring"/>
+        /// görsün, yüzlerce satırlık Joint Maps listesini hiç açmasın.
+        /// <para>⚠️ Gizleme YALNIZ görseldir: bileşenler yerinde durur, <c>_puppet</c> referansı ve
+        /// ISDK'nın poz uygulaması aynen çalışır. Bileşeni silmek eli çalışmaz yapardı.</para>
+        /// </summary>
+        private static void HideIsdkComponents(GameObject root)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            Component[] components = root.GetComponents<Component>();
+            for (int i = 0; i < components.Length; i++)
+            {
+                Component component = components[i];
+                if (component == null || component is Transform || component is GripHandAuthoring)
+                {
+                    continue;
+                }
+
+                component.hideFlags |= HideFlags.HideInInspector;
             }
         }
 

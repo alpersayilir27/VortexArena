@@ -17,7 +17,8 @@ namespace VortexArena.App.Admin
     /// düğmelerine erişmesi gerekir.</item>
     /// <item><b>Kuş bakışı:</b> ortografik, arena merkezinin üstünde, arena yaw'ına hizalı.
     /// Kadrajın TEK kaynağı sahnedeki <see cref="ArenaBoundary"/>'dir (varsayılan ölçü YOKTUR);
-    /// tekerlek zoom. Sahnede <see cref="ArenaRoof"/> varsa bu kipe girerken çatı gizlenir
+    /// tekerlek zoom. Kameranın yüksekliği de oradan (boyut dosyasının <c>topViewHeight</c>'ı)
+    /// gelir, yazılmamışsa <see cref="DefaultTopDownHeight"/>. Sahnede <see cref="ArenaRoof"/> varsa bu kipe girerken çatı gizlenir
     /// (tercih <c>AdminSession.Roof</c>), çıkarken geri gelir.</item>
     /// </list>
     /// <para>Poz okuması <c>LateUpdate</c>'te yapılır: <c>RemoteAvatar</c> de aynı karede aynı
@@ -35,8 +36,12 @@ namespace VortexArena.App.Admin
         /// <summary>Serbest kipte zeminin altına inilmesin.</summary>
         private const float MinHeight = 0.2f;
 
-        /// <summary>Kuş bakışı kamera yüksekliği (m) — ortografikte yalnız kırpma için anlamlı.</summary>
-        private const float TopDownHeight = 20f;
+        /// <summary>
+        /// Kuş bakışı kamera yüksekliğinin VARSAYILANI (m) — ortografikte yalnız kırpma için
+        /// anlamlı. Mekanın boyut dosyasında <c>topViewHeight</c> yazıyorsa o kazanır: yüksek
+        /// tavanlı bir mekanda 20 m çatının altında kalabilir.
+        /// </summary>
+        private const float DefaultTopDownHeight = 20f;
 
         /// <summary>Kuş bakışı kadraj payı (arena kenarı ekrana yapışmasın).</summary>
         private const float TopDownMargin = 1.08f;
@@ -195,13 +200,13 @@ namespace VortexArena.App.Admin
                 }
             }
 
-            if (!TryResolveArena(out Vector3 center, out float yaw, out Vector2 halfExtents))
+            if (!TryResolveArena(out Vector3 center, out float yaw, out Vector2 halfExtents, out float height))
             {
                 // Kadraj ölçüsü UYDURULMAZ: kamera dünya origin'inin üstünde aşağı bakar ve
                 // ortografik ölçü olduğu gibi kalır (operatör tekerlekle ayarlar).
                 WarnMissingBoundary();
                 transform.SetPositionAndRotation(
-                    Vector3.up * TopDownHeight,
+                    Vector3.up * DefaultTopDownHeight,
                     Quaternion.Euler(90f, 0f, 0f));
                 return;
             }
@@ -212,16 +217,26 @@ namespace VortexArena.App.Admin
             _camera.orthographicSize = Mathf.Max(sizeFromZ, sizeFromX) * TopDownMargin * _zoom;
 
             transform.SetPositionAndRotation(
-                center + Vector3.up * TopDownHeight,
+                center + Vector3.up * height,
                 Quaternion.Euler(90f, yaw, 0f));
         }
 
         /// <summary>
-        /// Arena merkezi/yönü/yarı ölçüsü — TEK kaynağı sahnedeki <see cref="ArenaBoundary"/>'dir.
-        /// <b>Varsayılan ölçü YOKTUR:</b> uydurulan bir arena boyutu doğru sandığın yanlış bir
-        /// kadraj üretir; her arena sahnesinde bu bileşen zorunludur.
+        /// Arena merkezi/yönü/yarı ölçüsü ve kamera yüksekliği — TEK kaynağı sahnedeki
+        /// <see cref="ArenaBoundary"/>'dir. <b>Varsayılan ölçü YOKTUR:</b> uydurulan bir arena
+        /// boyutu doğru sandığın yanlış bir kadraj üretir; her arena sahnesinde bu bileşen
+        /// zorunludur.
+        /// <para>
+        /// Yükseklik istisnadır ve varsayılanı vardır (<see cref="DefaultTopDownHeight"/>):
+        /// kadrajı etkilemediği için "yazılmamış" olması bir kurulum hatası değil, tercih
+        /// yokluğudur.
+        /// </para>
         /// </summary>
-        private bool TryResolveArena(out Vector3 center, out float yaw, out Vector2 halfExtents)
+        private bool TryResolveArena(
+            out Vector3 center,
+            out float yaw,
+            out Vector2 halfExtents,
+            out float height)
         {
             ArenaBoundary boundary = AdminSpectator.Instance != null
                 ? AdminSpectator.Instance.Boundary
@@ -232,6 +247,7 @@ namespace VortexArena.App.Admin
                 center = Vector3.zero;
                 yaw = 0f;
                 halfExtents = Vector2.zero;
+                height = DefaultTopDownHeight;
                 return false;
             }
 
@@ -245,6 +261,9 @@ namespace VortexArena.App.Admin
             center = origin.TransformPoint(new Vector3(localCenter.x, 0f, localCenter.y));
             yaw = origin.eulerAngles.y;
             halfExtents = boundary.HalfExtents;
+
+            float fromPlan = boundary.TopDownHeight;
+            height = fromPlan > 0f ? fromPlan : DefaultTopDownHeight;
             return true;
         }
 

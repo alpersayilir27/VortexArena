@@ -1,6 +1,7 @@
 using Oculus.Interaction.Input;
 using UnityEditor;
 using UnityEngine;
+using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Editor
 {
