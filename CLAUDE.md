@@ -253,6 +253,12 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
   @203.0.0, audio @85.0.0 (spatializer=Meta XR Audio olduğu için gerekli, pinli).
 - Haptik: `OVRInput.SetControllerVibration` (core) — ayrı haptics paketi ekleme.
 - XR loader: OpenXR (mevcut, çalışıyor) — değiştirme.
+- **Movement SDK retargeter'ında `ApplyRootScale` KAPALI kalır** (`LocalBodyAvatar.prefab` ve
+  `RemoteAvatar.prefab`, `NetworkCharacterRetargeter`): açıkken SDK karakter kökünü boy oranıyla
+  ölçekler, `_characterRoot.position` bir dünya noktası olmaktan çıkar ve ağa giden gövde kökü
+  **dünya orijininden uzaklıkla orantılı** olarak kayar (orijindeki arenada görünmez, taşınmış
+  arenada onlarca metre). Boy farkının tek taşıyıcısı `bodyScale`'dir →
+  `Docs/Sistem-Ozeti.md` §7.
 - **Tracking origin = `Stage` (2), tüm sahnelerde; `AllowRecenter = 0`.** `FloorLevel` ile aynı
   zemin seviyesini verir ama OpenXR'da **recentering'i zorla açar** (`OVRManager`:
   `SetAllowRecentering(true)`), `Stage` kapatır — recenter free-roam'da kalibrasyonu bayatlatıp
