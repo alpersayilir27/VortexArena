@@ -53,6 +53,27 @@ düzenleme istemez. Geri alma: aynı betik `-Remove` ile.
 > değiştirmek hiçbir sahneyi ya da asset'i kirletmez ve commit'inde görünmez.
 > Boot sahnesine `[SerializeField]` override koyma; `AppBoot`'ta böyle bir alan yoktur.
 
+### Aynı PC'de player + admin birlikte (Multiplayer Play Mode)
+
+Tek Play ile iki pencere: ana editör gözlükte **player**, sanal oyuncu masaüstünde **admin**.
+İkisi de dev penceresinde seçili hedefe bağlanır (ör. `Local`).
+
+1. Paketi kur: Package Manager > **Add package by name** → `com.unity.multiplayer.playmode`.
+   Paket `Packages/manifest.json`'a girer ve commit'lenir.
+2. `Window > Multiplayer Play Mode` → bir **sanal oyuncu** aç ve ona **`admin` tag'i** ver
+   (tag adları `player` / `admin`; büyük/küçük harf önemsiz).
+3. Ana editörde rolü `player` seç (dev penceresi) ve Play'e **bir kez** bas — sanal oyuncu da
+   Play'e girer.
+
+> ⚠️ **Rol farkı yalnız tag'le verilir.** `EditorPrefs` makine çapında paylaşılır, iki süreç de
+> aynı rol seçimini okur; tag seçimin önüne geçer. Tag'siz süreç `EditorPrefs` seçimiyle kalır.
+
+Admin süreci gözlüğü kapmaz: rol admin çözülünce XR bırakılır (`AdminXrRelease`), HMD player
+sürecine kalır. Aynı sebeple admin Windows build'i de Link'teki gözlükte açılmaz.
+
+Sanal oyuncu **tam bir editör değildir** — yalnız Play penceresi verir; dev penceresi ve diğer
+araçlar ana editörde kalır.
+
 ---
 
 ## 3. Sunucusuz ilk test (en hızlı yol, sınırlı)

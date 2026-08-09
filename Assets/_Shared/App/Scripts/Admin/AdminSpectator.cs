@@ -24,8 +24,8 @@ namespace VortexArena.App.Admin
     /// <list type="bullet">
     /// <item>BB Camera Rig kökü KAPATILIR — üç kamerası da `MainCamera` etiketli olduğu için
     /// `Camera.main` belirsiz kalır ve `RemoteAvatar` ad etiketlerini yanlış kameraya döndürür.
-    /// Masaüstünde XR hiç başlatılmıyor (Standalone `Initialize XR on Startup` KAPALI), yani rig
-    /// zaten işlevsizdir.</item>
+    /// Standalone'da XR açılışta başlar (editörde Link ile player için) ama admin rolü onu
+    /// <see cref="AdminXrRelease"/> ile bırakır, yani rig işlevsizdir.</item>
     /// <item><see cref="ArenaCalibrator"/> ve <see cref="BaseZone"/> bileşenleri kapatılır —
     /// OVRSpatialAnchor/HMD mantığı masaüstünde anlamsız veri ve log üretir.</item>
     /// <item><see cref="ArenaBoundary"/> <b>KAPATILMAZ</b>, `SetSpectatorMode(true)` ile susturulur:

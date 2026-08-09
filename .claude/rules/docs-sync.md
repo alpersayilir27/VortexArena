@@ -23,6 +23,10 @@ güncellenir. Doküman ile kod arasında sapma = tuzak; bu projede tek doğruluk
   işaret girer. Sebep: bu dosya **her oturumda bağlama yükleniyor**, yani oradaki her satır kalıcı
   bir maliyet; ayrıca `Docs/` ile çakışan anlatım ikinci bir doğruluk kaynağı üretir
   (protokol için bu doğrudan "TEK doğruluk kaynağı" kuralını çiğner).
+  **Yeni üst düzey klasör/betik eklenince de aynı kural geçerlidir:** yerleşim listesine ad +
+  tek satırlık işaret girer (`updater/ — updater/README.md` gibi), fazlası girmez. Ne yaptığı,
+  endpoint'leri, portları, kurulum adımları, akışı, ön koşulları → ilgili klasörün README'sine
+  ya da `Docs/`'a. Her oturumda okunması gerekmeyen hiçbir ayrıntı CLAUDE.md'ye yazılmaz.
 - **Sayı ve liste tutma.** "Bugün iki mod var", "tablodaki 6 silah", `dev-targets.json`'un
   içeriğini satır satır yazmak gibi şeyler kaçınılmaz olarak bayatlar ve kimse fark etmez.
   Sayılabilir olanı sayma, **nerede olduğunu göster**. Aynı sebeple `§7.29` gibi **numara
