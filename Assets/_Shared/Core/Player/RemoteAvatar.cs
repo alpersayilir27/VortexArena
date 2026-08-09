@@ -192,6 +192,11 @@ namespace VortexArena.Core.Player
         private Camera _mainCamera;
         private float _cameraRetryTimer;
 
+        /// <summary>[AvatarTanı] teşhis satırının aralığı (sn).</summary>
+        private const float DiagnosticIntervalSeconds = 3f;
+
+        private float _nextDiagnosticAt;
+
         private bool _visible = true;
 
         /// <summary>Bu uzak oyuncu YEREL oyuncuyla aynı takımda mı (dost göstergesini sürer).</summary>
@@ -1039,6 +1044,7 @@ namespace VortexArena.Core.Player
                 !registry.GetInterpolatedPose(PlayerId, out Pose headPose, out Pose handLPose, out Pose handRPose))
             {
                 SetVisible(false); // ilk poz gelene dek gizli
+                LogVisibilityDiagnostics(false, default);
                 return;
             }
 
@@ -1057,6 +1063,8 @@ namespace VortexArena.Core.Player
             Pose headWorld = ArenaSpace.ArenaToWorld(headPose);
             Pose handLWorld = ArenaSpace.ArenaToWorld(handLPose);
             Pose handRWorld = ArenaSpace.ArenaToWorld(handRPose);
+
+            LogVisibilityDiagnostics(true, headWorld);
 
             // §6.6: eşya durumu okunur (örnek kurulumu YALNIZ değişimde) ve eşyalar HAM el
             // pozundan sürülür — yapıştırma düzeltmesinden ÖNCE, çünkü eşyanın yeri ana elin
@@ -1905,6 +1913,61 @@ namespace VortexArena.Core.Player
             }
 
             label.rotation = Quaternion.LookRotation(direction);
+        }
+
+        /// <summary>
+        /// Görünmezlik teşhis satırı (uzak oyuncu başına birkaç saniyede bir): görünürlük
+        /// denkleminin TÜM girdileri tek satırda — poz/iskelet akışı, bayraklar, ölçek, aktif
+        /// gövdenin renderer durumu ve mesh'in GERÇEK yeri (bounds merkezi) ile kökün yeri.
+        /// "Oyuncu görünmüyor" arızasının ayrı sebepleri (poz yok · iskelet yok · ölçek 0 ·
+        /// renderer kapalı/çizilmiyor · mesh kökten kopuk) sahada gözle ayırt edilemiyor; bu satır
+        /// gözlükte logcat'e, admin'de konsola hepsini birden yazar.
+        /// </summary>
+        private void LogVisibilityDiagnostics(bool poseFlowing, in Pose headWorld)
+        {
+            if (Time.unscaledTime < _nextDiagnosticAt)
+            {
+                return;
+            }
+
+            _nextDiagnosticAt = Time.unscaledTime + DiagnosticIntervalSeconds;
+
+            bool skeletonFlowing = false;
+            Vector3 rootPos = Vector3.zero;
+            float rootScale = -1f;
+            Transform root = character != null ? character.CharacterRoot : null;
+            if (root != null)
+            {
+                rootPos = root.position;
+                rootScale = root.localScale.x;
+                RemoteSkeletonRegistry skeletons = RemoteSkeletonRegistry.Instance;
+                skeletonFlowing = skeletons != null && skeletons.TryGetInterpolatedRoot(PlayerId, out _);
+            }
+
+            Renderer[] activeBody = ActiveBodyRenderers;
+            Renderer sample = null;
+            if (activeBody != null)
+            {
+                for (int i = 0; i < activeBody.Length && sample == null; i++)
+                {
+                    sample = activeBody[i];
+                }
+            }
+
+            string bodyName = ReferenceEquals(activeBody, bodyRenderers) ? "varsayılan" : "kırmızı";
+            string rendererInfo = sample == null
+                ? "renderer=YOK"
+                : $"rendAçık={(sample.enabled ? 1 : 0)} rendÇizildi={(sample.isVisible ? 1 : 0)} " +
+                  $"sınırMerkez={FormatPoint(sample.bounds.center)} sınırKökMesafe={Vector3.Distance(sample.bounds.center, rootPos):F1}";
+
+            Debug.Log($"[AvatarTanı] id={PlayerId} poz={(poseFlowing ? 1 : 0)} iskelet={(skeletonFlowing ? 1 : 0)} " +
+                      $"görünür={(_visible ? 1 : 0)} canlı={(IsAlive ? 1 : 0)} kalibre={(IsCalibrated ? 1 : 0)} " +
+                      $"gövde={bodyName} ölçek={rootScale:F2} kök={FormatPoint(rootPos)} kafa={FormatPoint(headWorld.position)} {rendererInfo}");
+        }
+
+        private static string FormatPoint(in Vector3 point)
+        {
+            return $"({point.x:F1}, {point.y:F1}, {point.z:F1})";
         }
 
         private void SetVisible(bool visible)
