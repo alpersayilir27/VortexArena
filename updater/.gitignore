@@ -1,0 +1,8 @@
+# Bu dosya YALNIZ updater/ altini yonetir (repo kurali: .gitignore proje tipi
+# basina ayridir; kok = Unity, Server/ = .NET, launcher/ = WPF).
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
