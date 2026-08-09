@@ -52,20 +52,23 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 
 `Assets/` (Unity) · `Server/` (.NET 10 sunucu kaynağı) · **`launcher/`** (.NET 10 WPF Windows
 launcher — operatör buradan sunucuyu **mekan seçerek** (`--venue`) ve admin oyununu başlatır;
-mekansız sunucu başlatmaz) · **`scripts/`** (`deploy-admin-game.bat`,
-`deploy-player-apk.bat`, `deploy-server.bat`, `deploy-launcher.bat`, `docs-setup.bat`,
+mekansız sunucu başlatmaz) · **`updater/`** (Kotlin Android OTA updater — gözlüğe bir kez
+kurulur, oyun APK'sını sabit URL'den USB'siz indirip günceller; IIS/imza koşulları
+`updater/README.md`) · **`scripts/`** (`deploy-admin-game.bat`,
+`deploy-player-apk.bat`, `deploy-server.bat`, `deploy-launcher.bat`,
+`deploy_android_updater.bat`, `docs-setup.bat`,
 `defender-exclusions.cmd`) ·
 **`docs-serve.bat`** (repo kökü:
 doküman sitesini localhost:1111'de sunar; motor repo DIŞINDA `../vortexarena-docs-site`) ·
 **`deploy/`** (üretilen çalıştırılabilirler:
-`admin/`, `server/`, `launcher/` — **git'e girmez**) · **`dev-targets.json`** (repo kökü,
+`admin/`, `server/`, `launcher/`, `updater/` — **git'e girmez**) · **`dev-targets.json`** (repo kökü,
 **commit'li**: dev penceresinin adlandırılmış sunucu hedefi kataloğu + `defaultTarget`/`defaultRole`;
 bir hedefin `ip`'si **boşsa** adres yazılmaz, keşif zinciri devralır) ·
 `Docs/` · `plan/` · `.claude/rules/`.
 
 **`.gitignore` proje tipi başına ayrıdır** — her biri kendi klasörünü yönetir:
 kök = Unity (+ repo geneli OS/IDE) · `Server/` = .NET 10 · `launcher/` = .NET 10 WPF
-(Windows-only) · `deploy/` = beyaz liste (`*` + yalnız
+(Windows-only) · `updater/` = Android/Gradle · `deploy/` = beyaz liste (`*` + yalnız
 README). ⚠️ Köke Unity deseni eklerken **`/` ile sabitle**: `*.sln`/`*.csproj` sabitlenmezse
 Server'ın gerçek kaynaklarını, `*.app` ise Windows'ta (`core.ignorecase=true`)
 `Server/VortexArena.Server.App/` klasörünü yutar. Alt proje çıktısı (bin/obj)
@@ -611,8 +614,12 @@ hangi araç yapar** ve bağlayıcı yasaklar:
   (okunmayan boru süreci kilitler) — gerekçeler `Docs/Sistem-Ozeti.md` §7 tuzaklar listesinde.
 
 **Dağıtım:** `scripts\deploy-admin-game.bat` (Windows admin) · `deploy-player-apk.bat`
-(Quest oyuncu APK'sı) · `deploy-server.bat` · `deploy-launcher.bat`
-(dördü de çift tıklanabilir; otomasyonda `--no-pause` / `VORTEX_NO_PAUSE=1`).
+(Quest oyuncu APK'sı) · `deploy-server.bat` · `deploy-launcher.bat` ·
+`deploy_android_updater.bat` (Quest OTA updater APK'sı — Unity build'i değil, Gradle;
+editör açık olabilir)
+(hepsi çift tıklanabilir; otomasyonda `--no-pause` / `VORTEX_NO_PAUSE=1`).
+Oyun APK'sını USB'siz yayınlamak: `deploy\player\game.apk` IIS'teki sabit URL'in klasörüne
+kopyalanır, gözlükteki **Vortex Updater** indirip kurar → `updater/README.md`.
 ⚠️ **Her iki Unity build'i için editör kapalı olmalı** (batch-mode proje kilidine takılır; betik
 bunu zorlamaz, takılırsa elle iptal et). Sunucu ve launcher `dotnet publish` ile self-contained
 üretilir — tek ön koşul .NET 10 SDK'dır.
