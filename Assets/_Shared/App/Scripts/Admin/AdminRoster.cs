@@ -98,9 +98,19 @@ namespace VortexArena.App.Admin
         /// <summary>"manual" | "anchor" | "cloud" | "" — doğrulanmayan serbest etiket.</summary>
         public string calibrationSource = "";
 
+        /// <summary>Son elle kalibrasyonda ölçülen zemin sapması (metre, işaretli; §10.6);
+        /// <c>0</c> = ölçüm yok ya da temiz. Mutlak değeri
+        /// <c>ArenaProtocol.CALIB_FLOOR_WARN_METERS</c>'i aşan satır KAL düğmesinde ⚠ ile
+        /// işaretlenir — sapmanın kaynağı gözlüğün bayat alan verisidir.</summary>
+        public float floorOffset;
+
         /// <summary>Gövde ölçeği (§10.8); <b>0 = ölçülmemiş</b>. Satırdaki ÖLÇ düğmesi bunu
         /// gösterir — operatör kimin ölçüldüğünü listeye bakarak görmeli.</summary>
         public float bodyScale;
+
+        /// <summary>Son gövde ölçümünün başarısızlık gerekçesi; boş = sorun yok (§10.8).
+        /// Doluyken ÖLÇ düğmesi çarpan yerine "ÖLÇÜLEMEDİ" yazar — başarılı ölçüm alanı temizler.</summary>
+        public string scaleError = "";
 
         /// <summary>Operatörün ilgilenmesi gereken satır mı: yalnız OYUNCU ve kalibresiz.</summary>
         public bool NeedsCalibration => IsPlayer && !calibrated;
@@ -496,7 +506,9 @@ namespace VortexArena.App.Admin
                 // "kalibresiz" saymamak için burada true'ya sabitlenir (bkz. NeedsCalibration).
                 view.calibrated = view.IsPlayer ? info.calibrated : true;
                 view.calibrationSource = info.calibrationSource ?? "";
+                view.floorOffset = view.IsPlayer ? info.floorOffset : 0f;
                 view.bodyScale = view.IsPlayer ? info.bodyScale : 0f;
+                view.scaleError = view.IsPlayer ? info.scaleError ?? "" : "";
 
                 if (view.alive != info.alive)
                 {

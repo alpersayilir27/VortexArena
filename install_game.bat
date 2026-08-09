@@ -118,23 +118,53 @@ adb devices
 echo.
 
 :va_install
+set "VA_PKG=com.vortex.arena"
+set "VA_INSTALL_LOG=%TEMP%\va_install_log_%RANDOM%.txt"
+
 echo Gozluge kuruluyor, lutfen bekleyin...
-adb install -r -g "%VA_APK%"
-if errorlevel 1 (
+call :va_do_install
+if "%VA_INSTALL_OK%"=="1" goto :va_install_done
+
+findstr /i "INSTALL_FAILED_UPDATE_INCOMPATIBLE" "%VA_INSTALL_LOG%" >nul
+if not errorlevel 1 (
     echo.
-    echo [HATA] Kurulum basarisiz. Kontrol edin:
-    echo   - Gozluk USB ile bagli mi? Kablosuz icin: adb connect ^<gozluk-ip^>:5555
-    echo   - Gelistirici modu acik mi, USB hata ayiklama izni verildi mi?
-    echo   - Birden fazla cihaz bagliysa digerlerini cikarin.
-    echo   - Eski bir kurulum baska bir paket adiyla duruyorsa once onu kaldirin:
-    echo       adb uninstall com.UnityTechnologies.com.unity.template.urpblank
-    pause
-    exit /b 1
+    echo [UYARI] Gozlukteki kurulum farkli bir imzayla imzalanmis - once o kaldiriliyor...
+    echo ^> adb uninstall %VA_PKG%
+    adb uninstall %VA_PKG%
+    echo.
+    echo Tekrar kuruluyor...
+    call :va_do_install
+    if "%VA_INSTALL_OK%"=="1" goto :va_install_done
 )
 
 echo.
+echo [HATA] Kurulum basarisiz. Kontrol edin:
+echo   - Gozluk USB ile bagli mi? Kablosuz icin: adb connect ^<gozluk-ip^>:5555
+echo   - Gelistirici modu acik mi, USB hata ayiklama izni verildi mi?
+echo   - Birden fazla cihaz bagliysa digerlerini cikarin.
+echo   - Eski bir kurulum baska bir paket adiyla duruyorsa once onu kaldirin:
+echo       adb uninstall com.UnityTechnologies.com.unity.template.urpblank
+del "%VA_INSTALL_LOG%" >nul 2>nul
+pause
+exit /b 1
+
+:va_install_done
+del "%VA_INSTALL_LOG%" >nul 2>nul
+echo.
 echo Kurulum tamamlandi.
 pause
+exit /b 0
+
+rem ---------------------------------------------------------------------
+rem  adb install -r -g calistirir, ciktiyi hem ekrana basar hem log dosyasina
+rem  yazar (imza uyusmazligini tespit icin), basari ise VA_INSTALL_OK=1 yapar.
+rem ---------------------------------------------------------------------
+:va_do_install
+set "VA_INSTALL_OK=0"
+adb install -r -g "%VA_APK%" > "%VA_INSTALL_LOG%" 2>&1
+type "%VA_INSTALL_LOG%"
+findstr /i /c:"Success" "%VA_INSTALL_LOG%" >nul
+if not errorlevel 1 set "VA_INSTALL_OK=1"
 exit /b 0
 
 :va_auth_abort

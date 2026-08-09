@@ -58,6 +58,13 @@ namespace VortexArena.App.Admin
         /// </summary>
         public static bool FriendlyFire { get; private set; }
 
+        /// <summary>
+        /// Kalibre modunun YÜRÜRLÜKTEKİ değeri (<c>ArenaProtocol.CALIB_MODE_*</c>, §5.2) —
+        /// <see cref="FriendlyFire"/> ile aynı sınıf: seçim değil anlık durum, seçim kilidine
+        /// girmez. Boş = henüz <c>admin_state</c> gelmedi (arayüz sunucu varsayılanını gösterir).
+        /// </summary>
+        public static string CalibrationMode { get; private set; } = "";
+
         /// <summary>Sunucunun bildirdiği çevrimiçi admin sayısı (kendimiz dahil).</summary>
         public static int AdminCount { get; private set; }
 
@@ -128,7 +135,9 @@ namespace VortexArena.App.Admin
 
             string modeId = msg.modeId ?? "";
             string sceneName = msg.sceneName ?? "";
+            string calibrationMode = msg.calibrationMode ?? "";
             bool changed = modeId != ModeId || sceneName != SceneName ||
+                           calibrationMode != CalibrationMode ||
                            msg.roundSeconds != RoundSeconds || msg.scoreLimit != ScoreLimit ||
                            msg.countdownSeconds != CountdownSeconds ||
                            msg.friendlyFire != FriendlyFire ||
@@ -149,6 +158,7 @@ namespace VortexArena.App.Admin
             ScoreLimit = msg.scoreLimit;
             CountdownSeconds = msg.countdownSeconds;
             FriendlyFire = msg.friendlyFire;
+            CalibrationMode = calibrationMode;
             AdminCount = msg.adminCount;
             VenueId = venueId;
             _venueScenes = venueScenes;

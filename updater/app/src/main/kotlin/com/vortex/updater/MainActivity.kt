@@ -37,6 +37,7 @@ class MainActivity : Activity() {
 
         private const val INSTALL_ACTION = "com.vortex.updater.INSTALL_RESULT"
         private const val REQ_UNINSTALL = 1001
+        private const val REQ_UNINSTALL_FOR_RETRY = 1002
         private const val NET_TIMEOUT_MS = 15000
     }
 
@@ -48,6 +49,10 @@ class MainActivity : Activity() {
     private lateinit var launchButton: Button
 
     private var busy = false
+
+    // Indirilen APK; imza uyusmazligi nedeniyle kurulum reddedilirse eski
+    // paketi kaldirip ayni dosyayi tekrar indirmeden yeniden kurmak icin tutulur.
+    private var pendingApk: File? = null
 
     // Kurulum sonucu sistemden broadcast ile gelir; alici dinamik cunku
     // yalnizca uygulama on plandayken anlami var.
@@ -236,17 +241,30 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQ_UNINSTALL) return
+        if (requestCode != REQ_UNINSTALL && requestCode != REQ_UNINSTALL_FOR_RETRY) return
 
         // Sonuc kodu cihazdan cihaza degisiyor; tek guvenilir olcut paketin
         // gercekten gitmis olmasidir.
         if (getGameVersion() != null) {
             setStatus("Kaldirma tamamlanmadi - islem iptal edildi.")
+            setBusy(false)
             refreshInstalledVersion()
             return
         }
         refreshInstalledVersion()
-        downloadAndInstall()
+
+        if (requestCode == REQ_UNINSTALL_FOR_RETRY) {
+            val apk = pendingApk
+            if (apk == null || !apk.exists()) {
+                setStatus("Eski surum kaldirildi ama indirilen dosya bulunamadi - Guncelle'ye tekrar basin.")
+                setBusy(false)
+                return
+            }
+            setStatus("Eski surum kaldirildi. Tekrar kuruluyor...")
+            installApk(apk)
+        } else {
+            downloadAndInstall()
+        }
     }
 
     // --- Indirme ----------------------------------------------------------
@@ -265,6 +283,7 @@ class MainActivity : Activity() {
                 return@Thread
             }
             setStatus("Indirme tamam (${target.length() / (1024 * 1024)} MB). Kurulum baslatiliyor...")
+            pendingApk = target
             installApk(target)
         }.start()
     }
@@ -382,6 +401,24 @@ class MainActivity : Activity() {
 
             else -> {
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+
+                // Kurulu surum farkli imzayla imzalanmis (ör. gelistirme/CI anahtari
+                // degisti): sistem STATUS_FAILURE_CONFLICT dondurur, mesaj genelde
+                // "INSTALL_FAILED_UPDATE_INCOMPATIBLE" icerir. Eski paketi kaldirip
+                // ayni indirilen dosyayla otomatik tekrar dene.
+                val isSignatureMismatch = status == PackageInstaller.STATUS_FAILURE_CONFLICT ||
+                    (message?.contains("INCOMPATIBLE", ignoreCase = true) == true) ||
+                    (message?.contains("signatures do not match", ignoreCase = true) == true)
+
+                if (isSignatureMismatch && getGameVersion() != null) {
+                    setStatus("Kurulu surumun imzasi farkli - eski surum kaldirilip tekrar kuruluyor...")
+                    val intent2 = Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:$GAME_PACKAGE"))
+                    intent2.putExtra(Intent.EXTRA_RETURN_RESULT, true)
+                    @Suppress("DEPRECATION")
+                    startActivityForResult(intent2, REQ_UNINSTALL_FOR_RETRY)
+                    return
+                }
+
                 setStatus("Kurulum basarisiz (durum $status): ${message ?: "ayrinti yok"}")
                 setBusy(false)
                 refreshInstalledVersion()

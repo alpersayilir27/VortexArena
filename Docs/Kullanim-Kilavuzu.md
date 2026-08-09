@@ -238,8 +238,11 @@ harita değişimi kalibrasyonu bozmaz. (Maç sırasında da aynı adımlarla yen
 
 **Bilmen gerekenler**
 
-- Kalibrasyon gözlükte **saklanır**; aynı gözlük ertesi gün açıldığında genelde kendiliğinden
-  geri gelir.
+- **Uygulama her açıldığında kalibrasyon baştan alınır** — kutudan çıkan ayar budur. Gözlükte
+  saklanan eski hizalamanın açılışta geri yüklenmesini istiyorsan **kalibre modunu** değiştirirsin
+  (§4.3).
+- **Oyun içinde kalibrasyon korunur:** harita değişse de, maç bitip lobiye dönülse de oyuncu
+  yeniden kalibre olmaz. Kalibre modu yalnız **uygulamanın ilk açılışını** ilgilendirir.
 - ⚠️ **Kalibrasyon bir kez alındıktan sonra oyuncu kumandayla onu değiştiremez.** Kombinasyonu
   yapsa da tek titreşim alır ve hiçbir şey olmaz. Bu bilerek böyledir: oyuncunun maç ortasında
   kazara kendi hizalamasını bozmasını engeller. **Yeniden kalibre ettirmek senin işin** →
@@ -290,8 +293,12 @@ sırasında kumandayı yere değdirmek için **eğilmiş** durumdadır.
 - [ ] **2.** Yönetim ekranında o oyuncunun satırındaki **ÖLÇ** düğmesine bas. Onay istemez.
 - [ ] **3.** Düğmenin etiketi ölçülen çarpanı gösterir (`×1.04` gibi) — bu, ölçümün oturduğu
       anlamına gelir. Karakteri o anda herkeste yeniden boyutlanır.
-- [ ] **4.** Ölçüm anında oyuncu hareket ettiyse **hiçbir şey değişmez** (eski değer durur);
-      dik durmasını söyleyip tekrar bas.
+- [ ] **4.** Ölçüm tutmazsa düğmede **ÖLÇÜLEMEDİ** yazar (eski değer olduğu gibi durur) ve
+      ekranın duyuru satırında sebebi görünür. İki sebep vardır:
+      - *"oyuncu hareketli/eğilmiş"* → en sık olan. Dik durmasını söyle ve tekrar bas.
+      - *"gövde pozu yok"* → o gözlük gövde takibi üretemiyor; ölçüm hiç yapılamaz.
+        Aynı oyuncu başkalarının ekranında **donuk bir T-pozunda** duruyorsa teşhis kesindir →
+        §4.4'teki bakım adımlarını uygula.
 
 **Hepsini birden ölçmek için:** TERCİHLER > **"TÜM OYUNCULARI ÖLÇEKLE"**. Herkesin dik durduğu
 bir an seç — maç başlamadan önceki hazırlık en uygunu.
@@ -303,6 +310,71 @@ bir an seç — maç başlamadan önceki hazırlık en uygunu.
   kalibre olunca ÖLÇ'e tekrar basman gerekir.
 - Ölçü gözlükte saklanır: aynı oyuncu ertesi gün bağlandığında boyu kendiliğinden geri gelir.
 - Aynı oyuncuyu **iki kez ölçmek zararsızdır** — aynı sonucu verir.
+
+### 4.3 Kalibre modu — uygulama açılışında ne olsun?
+
+Gözlük kalibrasyonu kendi içinde saklar. **Açılışta o kaydın kullanılıp kullanılmayacağını sen
+seçersin:** TERCİHLER > **KALİBRASYON** bölümündeki üç düğme.
+
+| Düğme | Ne olur | Ne zaman seçilir |
+|---|---|---|
+| **2 ÇAPA** *(varsayılan)* | Uygulama her açıldığında eski kayıt **kullanılmaz**; oyuncu kumandayla A ve B noktalarını yeniden alır | **Güvenli seçim, açık bırak.** Bina çok katlıysa, gözlükler başka odalarda da kullanılıyorsa ya da hizalama sorunları yaşanıyorsa mutlaka bu |
+| **ESKİ KALİBRE** | Uygulama açılırken gözlükteki son kalibrasyon geri yüklenir; oyuncu hiçbir şey yapmadan hazır gelir | Tek katlı, hep aynı odada oynatılan, sorunsuz çalışan bir kurulumda seansı hızlandırır |
+| **ÇAPA BULUTU** | Bugün **hiçbir şey yapmaz** — ileride kullanılmak üzere ayrılmış bir seçenek | Seçme |
+
+**Bilmen gerekenler**
+
+- Ayar **sunucuda** durur: tüm yönetim ekranları aynı değeri gösterir, birinden değiştirmen yeter.
+- ⚠️ **Değişiklik o an bağlı gözlüklere işlemez.** Her gözlük ayarı **bağlandığı anda** bir kez
+  okur. Yeni modu bir gözlüğe uygulatmak istiyorsan o gözlükte uygulamayı kapatıp yeniden aç.
+  Pratik sonuç: modu **seans başlamadan**, gözlükler bağlanmadan önce seç.
+- Mod ne olursa olsun **oyun içinde kalibrasyon korunur** — harita değiştirmek kimseyi yeniden
+  kalibre ettirmez. Seçim yalnız "uygulama açılırken eski kayda güvenilsin mi" sorusudur.
+- **ESKİ KALİBRE'de bir oyuncu yanlış yerde başlarsa** çözüm bellidir: satırındaki **KAL**
+  düğmesiyle sıfırla, elle yeniden kalibre olsun (§4.1). Bu tekrarlıyorsa modu **2 ÇAPA**'ya al.
+
+### 4.4 Bakım — gözlüğün kendi alan verisini temizlemek
+
+Gözlük, içinde bulunduğu ortamın haritasını **kendi başına** çıkarır ve saklar. Bu harita oyuna ait
+değildir; **oyun onu silemez**, yalnız gözlüğün kendi ayarlarından temizlenir. Guardian
+(oyun alanı çizme) kapalı olsa bile bu harita arka planda birikmeye devam eder — aynı gözlük başka
+bir katta veya odada kullanıldığında ortamlar birbirine karışır ve tipik olarak
+**"oyuncunun yeri doğru ama yüksekliği yanlış"** sonucunu verir.
+
+**Şu belirtilerden biri varsa temizlik yap:**
+
+- Yönetim ekranında bir oyuncunun kalibre etiketi turuncu **KAL ?** oldu (aşağıda).
+- Gözlük başka bir kata/odaya götürülüp geri getirildi.
+- Kalibrasyon tuttu ama oyuncu diğer ekranlarda **havada ya da yere gömülü** duruyor; boyu
+  saçmalıyor.
+- Oyuncu diğer ekranlarda sürekli **donuk bir T-pozunda** duruyor (kolları yana açık, hiç
+  kıpırdamıyor ama konumu doğru takip ediyor).
+
+**Zemin sapması uyarısı (KAL ?) ne demek**
+
+Oyuncu elle kalibre olurken sistem iki şeyi karşılaştırır: gözlüğün kendi zemin tahmini ile
+kumandanın gerçekten yere değdiği nokta. Aradaki fark büyükse yönetim ekranında bir duyuru düşer ve
+o oyuncunun satırındaki kalibre etiketi turuncu **KAL ?** olur (kırmızı **KAL !** ile karıştırma —
+o "kalibresiz" demektir ve oyuncu oynayamaz).
+
+- **Kalibrasyon yine de geçerlidir** — ölçüm zemini zaten düzeltiyor, maça devam edebilirsin.
+- **KAL ?** bir **bakım sinyalidir**: o gözlüğün alan verisi bozulmuş demektir. Seans arasında
+  temizle, yoksa aynı gözlükte yükseklik sorunları tekrarlar.
+
+**Temizlik adımları**
+
+- [ ] **1.** Oyuncu gözlüğü çıkarmadan VortexArena uygulamasından çıksın (ya da uygulamayı kapat).
+- [ ] **2.** Gözlüğün kendi **Ayarlar** menüsünü aç → **fiziksel alan / oyun alanı / izleme**
+      ile ilgili bölümü bul → **kayıtlı alan verilerini temizle** seçeneğini uygula.
+      *(Meta menü adlarını sürümden sürüme değiştiriyor; aradığın şey "oyun alanı", "fiziksel
+      alan" ya da "izleme" başlığı altındaki **temizleme/sıfırlama** seçeneğidir.)*
+- [ ] **3.** Gözlüğü arenanın ortasında **birkaç saniye dolaştır** ki ortamı yeniden tanısın.
+- [ ] **4.** VortexArena'yı aç, gözlük bağlansın.
+- [ ] **5.** Oyuncuya §4'teki adımlarla **yeniden kalibrasyon** yaptır, sonra **ÖLÇ**'e bas (§4.2).
+
+> Temizlikten sonra da T-poz sürüyorsa sorun alan verisinde değildir → teknik ekibi ara.
+> T-poz **yalnız başkalarının ekranında** görünür; oyuncunun kendi ekranında hiçbir belirti
+> olmaz, yani "bende bir şey yok" demesi normaldir.
 
 ---
 
@@ -513,8 +585,8 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 - [ ] Maç bitti ve kazanan ekranı duruyorsa: sıradaki haritayı seç (ya da harita listesinden
       **Lobi**) — gözlükler ancak o zaman oradan çıkar.
 - [ ] Gerekiyorsa oyuncu değişimi yap (yeni oyuncu gözlüğü açar, kendiliğinden bağlanır).
-- [ ] Mod/harita seç → **Maçı Başlat**. (Kalibrasyon genelde gözlükte saklı kalır; oyuncular
-      birbirini yanlış yerde görüyorsa tekrar yaptır.)
+- [ ] Mod/harita seç → **Maçı Başlat**. (Kalibrasyon maçlar arasında korunur; yalnız oyuncular
+      birbirini yanlış yerde görüyorsa o oyuncuya tekrar yaptır — §4.1.)
 
 **Gün sonu kapatma sırası** — açılışın tam tersi:
 
@@ -545,6 +617,11 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 | Oyuncular birbirini yanlış yerde görüyor | Kalibrasyon yapılmadı ya da A–B ters alındı | Arenada **yeniden kalibrasyon** yaptır (Bölüm 4) |
 | Oyuncular birbirini **havada / yere gömülü** görüyor | Kalibrasyonda kumandanın **ucu yere değmemiş** (havada yakalanmış) | O oyuncuya kalibrasyonu tekrarlat; kumandayı nasıl tuttuğu önemli değil, **ucu yere değecek** (Bölüm 4). Herkeste aynı sorun varsa teknik ekibi ara |
 | Bir oyuncunun karakteri **olduğundan kısa/uzun** görünüyor | Boyu hiç ölçülmemiş ya da ölçüm eğilmişken alınmış | Oyuncuyu dik durdurup satırındaki **ÖLÇ** düğmesine bas (§4.2) |
+| **ÖLÇ**'e bastın, düğmede **ÖLÇÜLEMEDİ** yazdı | Duyuru satırında sebebi yazar: oyuncu hareketli/eğilmişti **ya da** o gözlük gövde takibi üretemiyor | Önce oyuncuyu dik durdurup tekrar bas. Sebep "gövde pozu yok" ise §4.4'teki temizliği yap |
+| Bir oyuncu diğer ekranlarda **kolları yana açık, donuk** duruyor (T-poz) ama konumu doğru | O gözlükte gövde takibi arızalı — oyuncu görünmez kalmasın diye sistem onu bu şekilde çiziyor | §4.4'teki alan verisi temizliğini yap, sonra yeniden kalibre + **ÖLÇ**. Geçmezse teknik ekibi ara. Oyuncunun kendi ekranında belirti olmaz |
+| Kalibre etiketi turuncu **KAL ?** oldu | Gözlüğün zemin tahmini ile gerçek zemin arasında büyük fark var — o gözlüğün alan verisi bozulmuş | Maça devam edebilirsin (kalibrasyon geçerli). Seans arasında §4.4'teki temizliği yap |
+| Oyuncular uygulamayı her açtığında yeniden kalibre olmak zorunda kalıyor | Kalibre modu **2 ÇAPA** (varsayılan) | Beklenen davranış. Tek katlı, sorunsuz bir kurulumda hızlandırmak istersen TERCİHLER > KALİBRASYON > **ESKİ KALİBRE** (§4.3) |
+| Kalibre modunu değiştirdin ama hiçbir şey değişmedi | Gözlükler ayarı yalnız **bağlanırken** okur | O gözlüklerde uygulamayı kapatıp yeniden aç; modu bundan sonra seans başında seç (§4.3) |
 | Oyun ortasında arena birden kaydı | Gözlüğün konum takibi sıfırlandı | Genelde kendiliğinden düzelir. Düzelmezse o oyuncuya kalibrasyonu tekrarlat |
 | Ateş ediyor ama can azalmıyor | Aynı takımdalar (dost ateşi kapalı) ya da maç henüz başlamadı | Takımları kontrol et; geri sayım bitmiş mi bak. Takım arkadaşlarının birbirini vurabilmesini istiyorsan Tercihler → MAÇ → **Dost ateşi**'ni aç |
 | Turnuvada ekranda **"TOPLANMA 4/6"** yazıyor, yeni tur bir türlü başlamıyor | Bir ya da iki oyuncu kendi tabanına dönmedi (takıldı, koptu, oyundan çıktı) | Ekranda kimin eksik olduğunu bul: listedeki çevrimdışı satırı ya da tabanına yürümeyen oyuncuyu **AT** ile çıkar → kalanlar hazırsa tur hemen başlar. Vazgeçtiysen **İPTAL**. Tur eksik oyuncuyla kendiliğinden başlamaz |

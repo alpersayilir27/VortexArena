@@ -1,4 +1,6 @@
+using Meta.XR.Movement;
 using Meta.XR.Movement.Networking;
+using Meta.XR.Movement.Retargeting;
 using Unity.Collections;
 using UnityEngine;
 using VortexArena.Core.Arena;
@@ -60,6 +62,27 @@ namespace VortexArena.Core.Player
         /// yanlış ölçüm gövdeyi eski yerine SONSUZA DEK çivilerdi — oyuncu gerçekten oraya gitmiş
         /// olabilir ve bu emniyet bir konum otoritesi değildir.</summary>
         private const int RootHoldMaxSends = 24;
+
+        /// <summary>SDK kökü ile HMD'nin zemin izdüşümü arasında kabul edilen en büyük YATAY mesafe
+        /// (metre, arena uzayı). Karakter kökü kalça altı/zemin hizasındadır ve oyuncunun kafasının
+        /// altında durur: eğilen, yatan, koşan oyuncuda bile bu kadar uzağa meşru biçimde düşmez.
+        /// Üstü bir duruş değil, çözümün kaçtığının işaretidir.</summary>
+        private const float SuspectHorizontalMeters = 1.5f;
+
+        /// <summary>Arena uzayında kökün kabul edilen |y| tavanı (metre). Arena sözleşmesi zemini
+        /// y=0'a sabitliyor (<see cref="ArenaSpace"/>) — kök bu kadar yükselip alçalıyorsa zemin
+        /// tahmini kaymıştır (çok katlı mekân, bayat izleme haritası).</summary>
+        private const float SuspectRootHeightMeters = 1.0f;
+
+        /// <summary>SDK bu kadar süredir hiç kare üretmiyorsa akış BAYAT sayılır (sn). Kaynak
+        /// susunca uzak avatar son karesinde donar ve arıza hiçbir yerde görünmez; yedek onu
+        /// görünür bir belirtiye çevirir.</summary>
+        private const float StaleFrameSeconds = 1.0f;
+
+        /// <summary>Histerezis: SDK yoluna dönmek için gereken ARDIŞIK temiz kare sayısı
+        /// (≈1 sn @ 12 Hz). ⚠️ Tek temiz kareyle dönmek iki yolu kare kare değiştirirdi — uzak
+        /// tarafta gövde T-poz ile bozuk poz arasında titrerdi.</summary>
+        private const int RecoverStreakFrames = 12;
 
         /// <summary>
         /// Bu karakterin oyuncusu. Yerel gövdede <see cref="LocalBodyAvatar"/>, uzak gövdede
@@ -146,6 +169,34 @@ namespace VortexArena.Core.Player
         private Transform _characterRoot;
         private bool _initialized;
 
+        /// <summary>SDK retargeter'ı — T-poz yedeğinin serileştirme kapısı (handle + bind pozu
+        /// buradan okunur). Kök/kaynak çözümüyle aynı yerde, <see cref="ResolveReferences"/>'ta dolar.</summary>
+        private NetworkCharacterRetargeter _retargeter;
+
+        /// <summary>T-poz yedeği istendi mi (yalnız yerel gövde; çağıran <see cref="LocalBodyAvatar"/>).
+        /// İstek bir mandaldır — kapısını <see cref="TickTPoseFallback"/> her karede yeniden yargılar.</summary>
+        private bool _tPoseFallbackRequested;
+
+        /// <summary>Yedek karelerinin kadans sayacı (SDK'nın <c>IntervalToSendData</c>'sıyla aynı aralık).</summary>
+        private float _tPoseFallbackElapsed;
+
+        /// <summary>SDK'nın son TEMİZ karesinin yerel saati (<c>0</c> = bu oturumda hiç kare
+        /// gelmedi). Bayatlık ölçüsü budur; sıfırken bayatlık hiç yargılanmaz — "henüz başlamadı"
+        /// ile "sustu" aynı şey değildir, ilkinin cevabı ilk açılış yedeğidir.</summary>
+        private float _lastSdkFrameTime;
+
+        /// <summary>Toparlanma sayacı: üst üste kaç temiz SDK karesi geldi
+        /// (<see cref="RecoverStreakFrames"/>).</summary>
+        private int _saneStreak;
+
+        /// <summary>SDK kökü akıl sağlığı denetiminden düştü mü. Yalnız histerezisle iner —
+        /// bayatlıktan farkı budur (bayatlık ilk kareyle kendiliğinden geçer).</summary>
+        private bool _poseSuspect;
+
+        /// <summary>Bu şüphe epizodunda uyarı basıldı mı (kare başına log basmamak için).
+        /// Toparlanma logu bu bayrağın düşüşüyle eşlenir.</summary>
+        private bool _poseSuspectWarned;
+
         /// <summary>
         /// Sensör kaynağı (<c>MetaSourceDataProvider</c>). ⚠️ <b>Prefabdan SİLİNMEZ, yalnız
         /// kapatılır:</b> <c>CharacterRetargeter.Awake</c> sağlayıcıyı <b>kendi GameObject'inden</b>
@@ -231,12 +282,12 @@ namespace VortexArena.Core.Player
                 retargeter = GetComponentInChildren<NetworkCharacterRetargeter>(true);
             }
 
+            _retargeter = retargeter;
             _characterRoot = retargeter != null ? retargeter.transform : transform;
 
             if (retargeter != null)
             {
-                _sourceProvider = retargeter.GetComponent<Meta.XR.Movement.Retargeting.ISourceDataProvider>()
-                    as Behaviour;
+                _sourceProvider = retargeter.GetComponent<ISourceDataProvider>() as Behaviour;
             }
         }
 
@@ -285,6 +336,182 @@ namespace VortexArena.Core.Player
             _handler.Setup(false);
         }
 
+        /// <summary>
+        /// T-poz yedeğini ister (yalnız yerel gövde; çağıran <see cref="LocalBodyAvatar"/>, tanıma
+        /// süresi dolunca). Body tracking hiç geçerli poz üretmemişse SDK'nın gönderim kapısı
+        /// (<c>AppliedPose</c>) hiç açılmaz ve oyuncu diğer ekranlarda TÜMDEN görünmez kalırdı;
+        /// yedek bunun yerine karakterin bind (T) pozunu, kökü HMD'den türeterek yollar — oyuncu
+        /// konumunu izleyen donuk bir T-pozunda çizilir ve arıza "izlemesi bozuk" diye okunur,
+        /// "oyuncu yok / ağ bozuk" diye değil.
+        /// <para>⚠️ İlk gerçek poz uygulandığı anda (<c>AppliedPose</c> mandalı) SDK yolu devralır
+        /// ve BU istek kalıcı olarak etkisizleşir — iki yol aynı anda asla göndermez. Yedeğin oyun
+        /// içi arıza tetiği ayrıdır ve isteğe bağlı değildir (<see cref="TickTPoseFallback"/>).</para>
+        /// </summary>
+        public void RequestTPoseFallback()
+        {
+            _tPoseFallbackRequested = true;
+        }
+
+        /// <summary>
+        /// Yedek kadansı. Yedeğin İKİ ayrı tetiği vardır ve ikisi de aynı
+        /// <c>IntervalToSendData</c> aralığıyla kare üretir:
+        /// <para>
+        /// <b>(a) İlk açılış</b> — istek var (<see cref="RequestTPoseFallback"/>) ve SDK bu oturumda
+        /// HİÇ poz uygulamadı. ⚠️ Kapı <c>AppliedPose</c>'dur, <c>RetargeterValid</c> DEĞİL:
+        /// <c>_isValid</c> kare kare titrer (görüş kaybı, sahne yüklemesi) ve ona bağlanmak, SDK'nın
+        /// donuk-son-poz gönderdiği meşru karelerin arasına yedek kareleri sokardı.
+        /// <c>AppliedPose</c> ise "bu oturumda en az bir gerçek poz uygulandı" mandalıdır — bir kez
+        /// <c>true</c> olunca bu tetik kendiliğinden ve kalıcı olarak devreden çıkar.
+        /// </para>
+        /// <para>
+        /// <b>(b) Oyun içi arıza</b> — SDK poz uyguluyor ama ürettiği kök akıl sağlığı denetiminden
+        /// düştü (<see cref="_poseSuspect"/>) ya da akış bayatladı (<see cref="StaleFrameSeconds"/>).
+        /// ⚠️ Bu tetik <see cref="_tPoseFallbackRequested"/>'a BAĞLI DEĞİLDİR (kendi kendini kurar)
+        /// ve <c>AppliedPose</c> mandalıyla çelişmez: mandal "kaynak bir kez çalıştı" der, arıza ise
+        /// sonradan çıkar. Karşılığı olmasaydı zemin/boy karışan başlıkta uzak taraf oyuncuyu
+        /// rastgele bir noktada ya da donmuş görürdü — ikisi de sahada "ağ bozuk" diye okunur.
+        /// </para>
+        /// <para>⚠️ İki tetik aynı anda gönderim yapamaz çünkü (a) yalnız <c>AppliedPose</c>
+        /// kapalıyken, (b) yalnız açıkken koşar; ve (b) devredeyken SDK'nın kendi karesi
+        /// <see cref="ReceiveStreamData"/>'da bastırılır — telde tek yol vardır.</para>
+        /// </summary>
+        private void TickTPoseFallback()
+        {
+            if (_retargeter == null)
+            {
+                return;
+            }
+
+            SkeletonRetargeter skeleton = _retargeter.SkeletonRetargeter;
+            if (skeleton == null || !skeleton.IsInitialized ||
+                _retargeter.RetargetingHandle == MSDKUtility.INVALID_HANDLE)
+            {
+                return;
+            }
+
+            bool coldStart = _tPoseFallbackRequested && !skeleton.AppliedPose;
+            bool inFlightFault = skeleton.AppliedPose && (_poseSuspect || IsSdkStreamStale());
+            if (!coldStart && !inFlightFault)
+            {
+                return;
+            }
+
+            _tPoseFallbackElapsed += Time.deltaTime;
+            if (_tPoseFallbackElapsed < _retargeter.IntervalToSendData)
+            {
+                return;
+            }
+
+            _tPoseFallbackElapsed = 0f;
+            SendTPoseFrame();
+        }
+
+        /// <summary>SDK bu süredir hiç TEMİZ kare üretmiyor mu. Hiç kare gelmemişken (<c>0</c>)
+        /// bayat sayılmaz: o durumun cevabı ilk açılış tetiğidir.</summary>
+        private bool IsSdkStreamStale()
+        {
+            return _lastSdkFrameTime > 0f && Time.time - _lastSdkFrameTime > StaleFrameSeconds;
+        }
+
+        /// <summary>
+        /// Tek bir yedek kare serileştirip yollar. Blob'un içeriği karakterin O ANKİ kemik
+        /// transformlarıdır: ilk açılış tetiğinde hiç poz uygulanmadığı için bu prefabın bind (T)
+        /// pozudur, oyun içi arızada SDK'nın son uyguladığı (artık ilerlemeyen) pozdur. İkisinde de
+        /// gövde donuktur ve kökü HMD izler — arıza "izlemesi bozuk" diye okunur. Alıcı tarafta
+        /// sıradan bir <c>0x07</c> karesi gibi çözülür; telde ve sunucuda özel bir durum
+        /// yoktur (§6.9).
+        /// <para>⚠️ Kök karakterden OKUNMAZ: ilk açılışta SDK kökü hiç yazmamıştır (karakter dünya
+        /// orijininde durur), oyun içi arızada ise yazdığı kök zaten güvenilmez olduğu için yedek
+        /// devrededir — yedeğin karakterden kök okuması arızayı aynen tele taşımak olurdu. Kök
+        /// HMD'den türetilir (zemine izdüşüm, yalnız yaw) — gövde oyuncunun gerçek konumunu izler.
+        /// Zemin, arena sözleşmesi gereği dünya y=0'dır (<see cref="ArenaSpace"/>).</para>
+        /// <para>⚠️ 0. eklemin ölçeği 1'e sabitlenir: normal yolda o alanı
+        /// <c>SkeletonRetargeter.RetargetedPose</c> doldurur, ilk açılış yolunda o dizi hiç
+        /// yazılmamıştır (ilk değeri belirsiz bellek) ve alıcı <c>DeserializeData</c>'da bu ölçeği
+        /// karakter köküne aynen uygular.</para>
+        /// <para>⚠️ Kök sıçrama emniyeti (<see cref="GuardRootJump"/>) BİLEREK atlanır: o kapı SDK
+        /// kökünün "kumanda düşünce rig orijinine yazılması" arızasına karşıdır; buradaki kök
+        /// HMD'den türetiliyor ve o arızayı yaşamaz. <c>_lastSentRoot</c>'a da yazılmaz — emniyetin
+        /// referansı SDK yolunun kendi karelerinden kurulur, HMD'den türetilmiş bir kök oraya
+        /// karışırsa iki farklı ölçü aynı eşikle karşılaştırılmış olurdu.</para>
+        /// </summary>
+        private void SendTPoseFrame()
+        {
+            if (!TryGetHeadYawPose(out Pose head))
+            {
+                return;
+            }
+
+            var worldRoot = new Pose(new Vector3(head.position.x, 0f, head.position.z), head.rotation);
+
+            NativeArray<MSDKUtility.NativeTransform> bodyPose =
+                _retargeter.GetCurrentBodyPose(JointType.NoWorldSpace);
+            if (bodyPose.Length == 0)
+            {
+                bodyPose.Dispose();
+                return;
+            }
+
+            MSDKUtility.NativeTransform rootJoint = bodyPose[0];
+            bodyPose[0] = new MSDKUtility.NativeTransform(rootJoint.Orientation, rootJoint.Position, Vector3.one);
+
+            NativeArray<float> facePose = _retargeter.GetCurrentFacePose(true);
+
+            // İndeks listeleri SDK'nın SerializeData'sıyla aynı kaynaktan gelir; BaselineAck = -1 =
+            // tam keyframe — delta bu projede zaten kapalı (§6.9).
+            int[] bodySync = _retargeter.BodyIndicesToSync;
+            int[] faceSync = _retargeter.FaceIndicesToSync;
+            var bodyIndices = new NativeArray<int>(bodySync?.Length ?? 0, Allocator.Temp,
+                NativeArrayOptions.UninitializedMemory);
+            var faceIndices = new NativeArray<int>(faceSync?.Length ?? 0, Allocator.Temp,
+                NativeArrayOptions.UninitializedMemory);
+            if (bodySync != null && bodySync.Length > 0)
+            {
+                bodyIndices.CopyFrom(bodySync);
+            }
+
+            if (faceSync != null && faceSync.Length > 0)
+            {
+                faceIndices.CopyFrom(faceSync);
+            }
+
+            var snapshot = new MSDKUtility.SnapshotData
+            {
+                BaselineAck = -1,
+                Timestamp = NetworkTime,
+                TargetSkeletonPose = bodyPose,
+                TargetSkeletonIndices = bodyIndices,
+                FacePose = facePose,
+                FaceIndices = faceIndices,
+                RecordingCoordinateSpaceSource = new MSDKUtility.CoordinateSpace(
+                    up: new Vector3(0.0f, 1.0f, 0.0f),
+                    forward: new Vector3(0.0f, 0.0f, 1.0f),
+                    right: new Vector3(1.0f, 0.0f, 0.0f),
+                    metersToUnitScale: 1.0f)
+            };
+
+            NativeArray<byte> serialized = default;
+            bool serializedOk = MSDKUtility.SerializeSkeletonAndFace(
+                _retargeter.RetargetingHandle, snapshot, ref serialized);
+
+            if (bodyPose.IsCreated)
+            {
+                bodyPose.Dispose();
+            }
+
+            if (facePose.IsCreated)
+            {
+                facePose.Dispose();
+            }
+
+            if (!serializedOk || !serialized.IsCreated || serialized.Length == 0)
+            {
+                return;
+            }
+
+            SendBlobToRelay(serialized, ArenaSpace.WorldToArena(worldRoot));
+        }
+
         private void Update()
         {
             // Yalnız uzak gövde: ağdan gelen kareyi SDK'nın kuyruğuna koy.
@@ -316,7 +543,12 @@ namespace VortexArena.Core.Player
             if (HasInputAuthority)
             {
                 // Yerel gövde: kök zaten sensörden geliyor (SDK yazdı), ağa bir şey yazmıyoruz —
-                // gönderim SDK'nın kendi LateUpdate'inden ReceiveStreamData ile geliyor.
+                // gönderim SDK'nın kendi LateUpdate'inden ReceiveStreamData ile geliyor. Tek
+                // istisna T-poz yedeğidir: SDK hiç poz uygulayamamışsa gönderim kapısı
+                // (NetworkCharacterHandler.SendData, AppliedPose) hiç açılmaz; oyun içinde de
+                // kökü bozulan ya da susan SDK'nın kareleri bastırılır. İki durumda da kareyi biz
+                // üretiriz (TickTPoseFallback).
+                TickTPoseFallback();
                 return;
             }
 
@@ -416,6 +648,11 @@ namespace VortexArena.Core.Player
         /// (<c>NetworkCharacterHandler.SendData</c> çağırır). Buradan sonrası bizim telimizdir.
         /// <para>⚠️ Kök TAM BU ANDA okunur: SDK pozu bu karede çözdü ve karakterin kökü şu an
         /// gönderenin dünya pozunda. Bir kare sonra okumak gövde ile kökü ayırırdı.</para>
+        /// <para>⚠️ Kare burada bir <b>akıl sağlığı denetiminden</b> geçer. SDK "geçerli" bayrağıyla
+        /// çöp kök üretebilir (zemin/boy karışması) ve o kök tele girdiğinde uzak taraf oyuncuyu
+        /// rastgele bir noktada çizer — sessiz ve teşhis edilemez bir arıza. Düşen kare
+        /// GÖNDERİLMEZ; yerine <see cref="TickTPoseFallback"/> oyuncunun konumunu izleyen donuk bir
+        /// gövde yollar, yani arıza görünür bir belirtiye dönüşür.</para>
         /// </remarks>
         public void ReceiveStreamData(ulong clientId, bool isReliable, NativeArray<byte> bytes)
         {
@@ -424,6 +661,8 @@ namespace VortexArena.Core.Player
                 return;
             }
 
+            // Kanal yokken kök emniyetinin durumu (GuardRootJump) ilerletilmesin — gönderilmeyen
+            // bir kare emniyetin karşılaştırma referansı olamaz.
             ArenaClient client = ArenaClient.Instance;
             if (client == null || client.UdpChannel == null)
             {
@@ -433,11 +672,97 @@ namespace VortexArena.Core.Player
             // ⚠️ Buranın bir DÜNYA noktası olması retargeter'daki ApplyRootScale'in KAPALI
             // olmasına bağlıdır: açıkken SDK kökü boy oranıyla ölçekler ve bu okuma orijine göre
             // ölçeklenmiş bir nokta döndürür (gerekçe ApplyArenaRoot'ta, ölçüm Sistem-Ozeti §7).
-            Pose arenaRoot = GuardRootJump(ArenaSpace.WorldToArena(
-                new Pose(_characterRoot.position, _characterRoot.rotation)));
+            Pose candidate = ArenaSpace.WorldToArena(
+                new Pose(_characterRoot.position, _characterRoot.rotation));
 
-            // Native → yönetilen kopya: tel katmanı BinaryWriter ile yazıyor ve o yalnız byte[]
-            // alıyor. Tampon büyüdüğü yerde kalır, yani ilk birkaç karenin dışında tahsis yok.
+            if (!AcceptSdkFrame(candidate))
+            {
+                // ⚠️ Bastırılan kare emniyetin durumuna HİÇ dokunmaz: GuardRootJump çağrısı bu
+                // yüzden karardan SONRAYA alındı. Çöp bir kök _lastSentRoot'a yazılsaydı emniyet
+                // bir sonraki temiz kareyi "sıçrama" sanardı — kanal yokken de aynı gerekçeyle
+                // duruluyor.
+                return;
+            }
+
+            SendBlobToRelay(bytes, GuardRootJump(candidate));
+        }
+
+        /// <summary>
+        /// SDK karesinin kökü tele girecek kadar makul mü. Ölçünün paydası HMD'dir: karakter kökü
+        /// kalça altı/zemin hizasındadır, yani kafanın zemin izdüşümünün yakınında ve arena zemini
+        /// olan y=0 civarında durmak zorundadır.
+        /// <para>⚠️ HMD pozu çözülemiyorsa denetim ATLANIR ve kare kabul edilir: yargılayacak
+        /// referans yokken kareyi düşürmek gövdeyi tümden susturmak olurdu — üstelik yedek de aynı
+        /// referansa muhtaç, yani yerine bir şey koyamazdı.</para>
+        /// <para>⚠️ Şüpheden çıkış histerezisle olur (<see cref="RecoverStreakFrames"/>): sayaç
+        /// dolana kadar temiz kareler de BASTIRILIR. Toparlanma sırasında iki yolun karışması, uzak
+        /// tarafta kare kare değişen iki farklı gövde demektir.</para>
+        /// </summary>
+        private bool AcceptSdkFrame(in Pose arenaRoot)
+        {
+            if (TryGetHeadYawPose(out Pose head))
+            {
+                Vector3 arenaHead = ArenaSpace.WorldToArena(head.position);
+                float horizontal = Vector2.Distance(
+                    new Vector2(arenaRoot.position.x, arenaRoot.position.z),
+                    new Vector2(arenaHead.x, arenaHead.z));
+
+                if (horizontal > SuspectHorizontalMeters ||
+                    Mathf.Abs(arenaRoot.position.y) > SuspectRootHeightMeters)
+                {
+                    _poseSuspect = true;
+                    _saneStreak = 0;
+                    if (!_poseSuspectWarned)
+                    {
+                        _poseSuspectWarned = true;
+                        Debug.LogWarning(
+                            "[ArenaNetCharacterBehaviour] Gövde kökü akıl sağlığı denetiminden düştü " +
+                            $"(kafaya yatay uzaklık {horizontal:F1} m, kök yüksekliği " +
+                            $"{arenaRoot.position.y:F1} m) — gövde T-poz yedeğine geçti; diğerleri " +
+                            "oyuncuyu konumunu izleyen donuk T-pozda görecek. Zemin/boy çözümü " +
+                            "bozulmuş olabilir (izleme haritası bayat).", this);
+                    }
+
+                    return false;
+                }
+            }
+
+            _lastSdkFrameTime = Time.time;
+
+            if (!_poseSuspect)
+            {
+                return true;
+            }
+
+            _saneStreak++;
+            if (_saneStreak < RecoverStreakFrames)
+            {
+                return false;
+            }
+
+            _poseSuspect = false;
+            _poseSuspectWarned = false;
+            _saneStreak = 0;
+            Debug.Log("[ArenaNetCharacterBehaviour] Gövde kökü yeniden makul — SDK yoluna dönüldü, " +
+                      "T-poz yedeği susuyor.", this);
+            return true;
+        }
+
+        /// <summary>
+        /// Native blob'u yönetilen tampona kopyalayıp iskelet kanalından (§6.9) yollar — SDK
+        /// yolunun (<see cref="ReceiveStreamData"/>) ve T-poz yedeğinin ortak çıkışı.
+        /// <para>Native → yönetilen kopya: tel katmanı <c>BinaryWriter</c> ile yazıyor ve o yalnız
+        /// <c>byte[]</c> alıyor. Tampon büyüdüğü yerde kalır, yani ilk birkaç karenin dışında
+        /// tahsis yok.</para>
+        /// </summary>
+        private void SendBlobToRelay(NativeArray<byte> bytes, in Pose arenaRoot)
+        {
+            ArenaClient client = ArenaClient.Instance;
+            if (client == null || client.UdpChannel == null)
+            {
+                return;
+            }
+
             byte[] managed = _sendScratch;
             if (managed == null || managed.Length < bytes.Length)
             {

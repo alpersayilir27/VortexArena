@@ -4,6 +4,14 @@ namespace VortexArena.Protocol
     public static class ArenaProtocol
     {
         /// <summary>
+        /// v13: <b>kalibre modu + kalibrasyon teşhisi</b> — <c>set_calibration_mode</c> (§5.2),
+        /// <c>admin_state.calibrationMode</c> ve <c>welcome.calibrationMode</c> (§5.3),
+        /// <c>set_calibration.floorOffset</c> → <c>PlayerInfo.floorOffset</c> (§10.6),
+        /// <c>set_body_scale.error</c> → <c>PlayerInfo.scaleError</c> (§10.8).
+        /// <para>⚠️ Değişiklik tümüyle <b>eklemelidir</b>: alanları göndermeyen eski istemcinin zemin
+        /// sapması ve ölçüm gerekçesi operatöre hiç görünmez, <c>welcome.calibrationMode</c>'u
+        /// okumayan başlık modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır.
+        /// Karışık sürümde kaybolan şey bir kural, bozuk bir çizim değil.</para>
         /// v11: <b>engel ihlali</b> — <c>0x01</c>/<c>0x02</c> bayrak baytında bit5
         /// (<see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/>, §6.3) + sunucu tarafında saniyelik can
         /// eritme (<see cref="OBSTACLE_DAMAGE_PER_SECOND"/>, §10.9).
@@ -80,8 +88,35 @@ namespace VortexArena.Protocol
         /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
         /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
         /// </summary>
-        public const int PROTOCOL_VERSION = 12;
+        public const int PROTOCOL_VERSION = 13;
         public const string APP_ID = "VortexArena";
+
+        // ---- Kalibre modu (§5.2/§10.6): başlıkların AÇILIŞTA nasıl hizalanacağı. ----
+        // ⚠️ Kural değerlerinin (§10.5) aksine bilinmeyen/boş değer varsayılana DÜŞMEZ, sunucu onu
+        // reddeder: bu bir kural şekli değil operatör kararıdır — sessizce varsayılana dönmek
+        // operatöre bastığı düğmenin uygulandığını gösterirdi.
+
+        /// <summary>Oyuncu her uygulama açılışında elle 2 çapa kalibrasyonu alır; diskteki
+        /// <c>OVRSpatialAnchor</c> UUID'si hiç okunmaz. Sunucunun açılış varsayılanı.
+        /// <para>⚠️ Mod yalnız AÇILIŞTAKİ geri yüklemeyi kapılar — harita değişimindeki (oturum-içi,
+        /// bellekteki çapa) geri yükleme moddan bağımsız her zaman koşar (§10.6).</para></summary>
+        public const string CALIB_MODE_TWO_ANCHOR = "two_anchor";
+
+        /// <summary>Başlık açılışta kayıtlı <c>OVRSpatialAnchor</c>'dan hizalamayı geri yükler.</summary>
+        public const string CALIB_MODE_SAVED_ANCHOR = "saved_anchor";
+
+        /// <summary>Paylaşılan uzamsal anchor — <b>rezerve</b>. Sunucu KABUL ETMEZ (loglar, durum
+        /// değişmez); arayüzde de pasiftir.</summary>
+        public const string CALIB_MODE_ANCHOR_CLOUD = "anchor_cloud";
+
+        /// <summary>
+        /// <c>set_calibration.floorOffset</c>'in mutlak değeri bunu (metre) aşarsa sunucu adminlere
+        /// duyuru basar (§10.6) — işaret edilen eylem gözlükte alan verisi temizliğidir.
+        /// <para>⚠️ <b>Kapı değil teşhis eşiğidir:</b> sapma ne olursa olsun kalibrasyon kabul
+        /// edilir. Sunucu zemini bilmediği için otomatik düzeltme de yapmaz (ikinci bir hizalama
+        /// otoritesi olurdu); tek çıktı operatöre giden bilgidir.</para>
+        /// </summary>
+        public const float CALIB_FLOOR_WARN_METERS = 0.5f;
 
         /// <summary>
         /// <c>set_body_scale.scale</c> kırpma aralığı (§10.8). Ölçümü istemci yapar ama sonuç

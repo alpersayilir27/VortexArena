@@ -118,6 +118,17 @@ public sealed class PlayerState
     /// <summary>"manual" | "anchor" | "cloud" | "" — doğrulanmayan serbest etiket (§5.1).</summary>
     public string CalibrationSource { get; set; } = "";
 
+    /// <summary>Son ELLE kalibrasyonun bildirdiği zemin sapması (metre, işaretli; §10.6);
+    /// <c>0</c> = ölçüm yok ya da temiz. Sunucu yorumlamaz, yalnız roster'da taşır ve
+    /// <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/> aşılırsa operatörü uyarır.
+    /// <para>Kalibrasyon düştüğünde sıfırlanır — sapma o hizalamaya aitti.</para></summary>
+    public float FloorOffset { get; set; }
+
+    /// <summary>Son gövde ölçümünün başarısızlık gerekçesi, boş = sorun yok (§10.8).
+    /// <para>Başarılı bir ölçüm bu alanı temizler; aksi hâlde bir kez başarısız olan oyuncunun
+    /// satırında uyarı sonsuza kadar kalırdı.</para></summary>
+    public string ScaleError { get; set; } = "";
+
     /// <summary>
     /// Uzak avatara uygulanacak üniform gövde ölçeği (§10.8); <c>0</c> = ölçülmemiş.
     /// <para>Kalibrasyonla AYNI sınıftadır (cihaz durumu, maç sıfırlamalarında korunur) ve aynı
@@ -289,8 +300,11 @@ public sealed class PlayerState
         // §10.6 — admin gözlemci arayüzündeki kalibrasyon tik'i bunu okur.
         calibrated = Calibrated,
         calibrationSource = CalibrationSource,
+        // §10.6 — zemin tahmininin sapması; arayüz eşiği aşan satırı ⚠ ile gösterir.
+        floorOffset = FloorOffset,
         // §10.8 — 0 = ölçülmemiş; okuyan taraf 1 uygular.
-        bodyScale = BodyScale
+        bodyScale = BodyScale,
+        scaleError = ScaleError
     };
 
     private static string ConnectionWire(PlayerConnection connection) => connection switch

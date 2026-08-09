@@ -56,8 +56,18 @@ namespace VortexArena.App.Admin
         private const string LabelUncalibrated = "KAL !";
         private const string LabelConfirm = "EMİN?";
 
+        /// <summary>Kalibreli ama zemin sapması eşiği aşan oyuncu (§10.6) — hizalama geçerli,
+        /// gözlüğün alan verisi bayat. "?" bilinçli: "!" kalibresizliğin işareti
+        /// (<see cref="LabelUncalibrated"/>), sembol/emoji ise etiketlerde yasak — şüphe
+        /// soru işaretiyle anlatılır, o da her fontta var.</summary>
+        private const string LabelFloorDrift = LabelCalibrated + " ?";
+
         /// <summary>Henüz ölçülmemiş oyuncunun ÖLÇ düğmesi.</summary>
         private const string LabelMeasure = "ÖLÇ";
+
+        /// <summary>Son ölçümü başarısız olan oyuncunun ÖLÇ düğmesi (§10.8): çarpan yerine
+        /// başarısızlığın kendisi yazar — operatör "bastım ama bir şey olmadı" sanmasın.</summary>
+        private const string LabelMeasureFailed = "ÖLÇÜLEMEDİ";
 
         /// <summary>Canlandırma düğmesi. ⚠️ Diğer etiketlerle aynı kural: sembol/emoji YOK (TMP
         /// varsayılan fontunda garantisi yok) ve satır dar olduğu için kısa.</summary>
@@ -137,6 +147,11 @@ namespace VortexArena.App.Admin
         private float _calibArmedAt = -1f;
         private bool _calibrated = true;
 
+        /// <summary>Bağlı oyuncunun zemin sapması (§10.6) — KAL düğmesi onay penceresi dolduğunda
+        /// da (<see cref="Tick"/>) yeniden çizildiği için <see cref="_calibrated"/> gibi satırda
+        /// saklanır.</summary>
+        private float _floorOffset;
+
         private RectTransform Rect => _rect != null ? _rect : _rect = (RectTransform)transform;
 
         /// <summary>
@@ -211,6 +226,7 @@ namespace VortexArena.App.Admin
             _playerId = view.playerId;
             _team = view.team;
             _calibrated = view.calibrated;
+            _floorOffset = view.floorOffset;
             RefreshMeasureButton(view);
             RefreshReviveButton(view);
 
@@ -396,6 +412,9 @@ namespace VortexArena.App.Admin
         /// <para>Kalibresiz oyuncuda düğme <b>pasiftir</b>: sunucu o komutu zaten kesiyor (ölçü
         /// arena zeminine göre alınır), tepkisiz bir düğmeye bastırmak "gönderdim ama olmadı"
         /// hissi üretirdi. Ayrılmış satırda da hedef yoktur.</para>
+        /// <para>⚠️ Son ölçüm <b>başarısızsa</b> (<c>scaleError</c> dolu) etiket çarpan yerine
+        /// başarısızlığı yazar ve düğme ETKİN kalır — yapılacak iş tam da yeniden ölçmektir.
+        /// Gerekçenin kendisi duyuru satırındadır; dar kart yalnız "bir sorun var"ı taşır.</para>
         /// </summary>
         private void RefreshMeasureButton(AdminPlayerView view)
         {
@@ -404,8 +423,11 @@ namespace VortexArena.App.Admin
 
             if (measureLabel != null)
             {
-                measureLabel.text = view.bodyScale > 0f ? $"×{view.bodyScale:0.00}" : LabelMeasure;
+                bool failed = !string.IsNullOrEmpty(view.scaleError);
+                measureLabel.text = failed ? LabelMeasureFailed
+                    : view.bodyScale > 0f ? $"×{view.bodyScale:0.00}" : LabelMeasure;
                 measureLabel.color = !usable ? UiKit.Faint
+                    : failed ? UiKit.Bad
                     : view.bodyScale > 0f ? UiKit.Good : UiKit.Muted;
             }
         }
@@ -433,14 +455,29 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>
+        /// KAL düğmesinin durumu. Kalibreli ama <b>zemin sapması eşiği aşan</b> oyuncu ayrı bir
+        /// durumdur (§10.6): hizalama kabul edilmiştir, ama gözlüğün alan verisi bayattır ve
+        /// sahada yapılacak bir iş vardır (veriyi temizleyip yeniden kalibre etmek). Yeşil tik
+        /// bunu gizlerdi; sapma bu yüzden uyarı rengiyle işaretlenir.
+        /// </summary>
         private void RefreshCalibrationButton()
         {
             bool armed = _calibArmedAt >= 0f;
+            bool floorDrift = _calibrated &&
+                              Mathf.Abs(_floorOffset) > ArenaProtocol.CALIB_FLOOR_WARN_METERS;
 
             if (calibLabel != null)
             {
-                calibLabel.text = armed ? LabelConfirm : _calibrated ? LabelCalibrated : LabelUncalibrated;
-                calibLabel.color = armed ? UiKit.OnAccent : _calibrated ? UiKit.Good : UiKit.Bad;
+                calibLabel.text = armed ? LabelConfirm
+                    : !_calibrated ? LabelUncalibrated
+                    : floorDrift ? LabelFloorDrift : LabelCalibrated;
+                // Sapma uyarısı Accent, kalibresizlik Bad: repodaki "uyarı ama hata değil" tonu
+                // Accent'tir (düşük pil, izlenmeyen kumanda) ve iki durum renkten ayrışmalı —
+                // sapmalı oyuncu oynayabilir, kalibresiz oynayamaz.
+                calibLabel.color = armed ? UiKit.OnAccent
+                    : !_calibrated ? UiKit.Bad
+                    : floorDrift ? UiKit.Accent : UiKit.Good;
             }
 
             if (calibButton != null && calibButton.targetGraphic is Image image)

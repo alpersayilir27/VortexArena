@@ -292,15 +292,17 @@ namespace VortexArena.Core.Player
 
         /// <summary>
         /// Kurulumdan sonra gerçekten <b>ağa akan bir gövde</b> oluştu mu — oluşmadıysa tek bir
-        /// eyleme dönük hata basar.
+        /// eyleme dönük hata basar ve <b>T-poz yedeğini</b> devreye sokar
+        /// (<see cref="ArenaNetCharacterBehaviour.RequestTPoseFallback"/>): oyuncu diğer ekranlarda
+        /// görünmez kalmak yerine, konumunu izleyen donuk bir T-pozunda çizilir.
         /// <para>⚠️ Ölçüt sensörün açık olması DEĞİL, retargeter'ın poz uygulamasıdır: ağa giden
         /// iskeleti üreten kapı odur. Yalnız "sağlayıcı açık mı" diye bakılsaydı, açık kalıp
-        /// geçerli veri üretmeyen bir sensör <b>hiç uyarı basmadan</b> oyuncuyu diğerlerinin
-        /// ekranında görünmez bırakırdı.</para>
-        /// <para>⚠️ Arıza <b>yerelde HİÇBİR iz bırakmaz</b> ve bu yüzden bu satır tek sinyaldir:
-        /// oyuncu ellerini rig'den gördüğü için ekranında her şey normal görünür, oysa başkalarının
-        /// ekranından tümden silinmiştir. Kendi başına fark edilmesi imkânsız olan bir arıza için
-        /// sebep tahmine bırakılmaz, açıkça yazılır.</para>
+        /// geçerli veri üretmeyen bir sensör <b>hiç uyarı basmadan</b> oyuncuyu T-poz yedeğine
+        /// düşürürdü.</para>
+        /// <para>⚠️ Arıza <b>yerelde HİÇBİR iz bırakmaz</b> ve bu yüzden bu satır yereldeki tek
+        /// sinyaldir: oyuncu ellerini rig'den gördüğü için ekranında her şey normal görünür —
+        /// arızanın görünür hâli (T-poz) yalnız başkalarının ekranındadır. Kendi başına fark
+        /// edilmesi imkânsız olan bir arıza için sebep tahmine bırakılmaz, açıkça yazılır.</para>
         /// <para>Gerekçe: <c>OVRBody</c> başlatamadığında kendi uyarısını basıp susuyor ve o satır
         /// bu soruya bağlanmıyor; bağı burada açıkça kuruyoruz. Süre tanınmasının sebebi
         /// <see cref="SourceProviderGraceSeconds"/>'da.</para>
@@ -320,16 +322,21 @@ namespace VortexArena.Core.Player
 
             _sourceProviderWarned = true;
 
+            // Oyuncu görünmez kalmasın: gövde bundan sonra T-poz yedeğiyle akar (kök HMD'yi
+            // izler). İlk gerçek poz uygulanırsa yedek kendiliğinden ve kalıcı olarak susar —
+            // hata yine basılır, yedek bir çözüm değil arızanın okunur hâlidir.
+            character.RequestTPoseFallback();
+
             // İki farklı arıza aynı belirtiyi veriyor ama çözümleri ayrı — hangisi olduğu söylenir.
             string cause = character.IsSourceProviderRunning
                 ? "Body tracking açık ama geçerli bir gövde pozu hiç üretmedi"
                 : "Body tracking hiç başlamadı (sebebi konsolda bunun üstündeki [OVRBody] satırı söyler)";
 
             Debug.LogError(
-                $"[LocalBodyAvatar] {cause} — ağa gövde akmayacak, yani diğer oyuncular bu oyuncuyu " +
-                "göremeyecek. ⚠️ Oyuncunun KENDİ ekranında hiçbir belirti olmaz (eller rig'den " +
-                "geliyor); bu satır tek uyarıdır. Sık görülen iki sebep: (1) editörden Link ile " +
-                "koşuluyor ve Meta Quest " +
+                $"[LocalBodyAvatar] {cause} — gövde T-POZ YEDEĞİYLE gönderiliyor: diğer oyuncular " +
+                "bu oyuncuyu, konumunu izleyen DONUK bir T-pozunda görecek. ⚠️ Oyuncunun KENDİ " +
+                "ekranında hiçbir belirti olmaz (eller rig'den geliyor); bu satır tek uyarıdır. " +
+                "Sık görülen iki sebep: (1) editörden Link ile koşuluyor ve Meta Quest " +
                 "Link uygulamasında ilgili geliştirici çalışma zamanı özelliği kapalı, (2) cihazda " +
                 "BODY_TRACKING izni verilmemiş. Düzelttikten sonra oyunu yeniden başlat.", this);
         }
