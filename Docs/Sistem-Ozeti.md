@@ -3181,28 +3181,28 @@ konsoluna tek satır sebep yazar.
     bağlıyor). ⚠️ Yarış sahne kök sırasına bağlı olduğu için **bir arenada çalışıp ötekinde
     çalışmaz**; "diğer haritada oluyordu" bu tuzağı elemez.
 
-149. **Body tracking iskeleti Quest'in KENDİ zemin tahminine basar — A/B kalibrasyonu RİG'i
-    düzeltir, iskeleti DEĞİL.** Kafa ve eller rig'in çocuğudur ve kalibre edilmiş uzayda doğar;
-    `LocalBodyAvatar` karakteri ise sahne kökünde durur ve SDK'nın yazdığı kökte iskeletin bastığı
-    zemin **işletim sisteminin zemin tahminidir**. Guardian kurulmadığı için (yukarıdaki "guardian"
-    maddesi) o tahmin metrelerce şaşabilir ve **oturumdan oturuma değişir** — aynı build aynı
-    haritada bir gün doğru, ertesi gün gömülü çizer; "harita bozdu / build bozdu" diye okunur,
-    oysa değişen yalnız o oturumdaki zemin tahminidir.
-    **Belirtinin imzası:** ad etiketi ve eller doğru yerde, gövde zeminin altında (ya da havada).
-    Alçak bakış açısı (oturan/çömelen oyuncu) zeminden taşan omuz/kafayı görür, ayaktaki oyuncu ve
-    kuş bakışı hiçbir şey görmez — "otururken görünüyor, ayakta kayboluyor" bu maddedir.
-    `[AvatarTanı]` satırında kök y'nin 0'dan belirgin sapması tek başına teşhistir. Ölçek
-    maddesinden (`ApplyRootScale`) ayırt etme: buradaki fark bir ORAN değil ÖTELEMEDİR ve dünya
-    orijininden uzaklıkla büyümez.
-    ⚠️ **Düzeltme kare başına HAM göz-sabitlemesiyle YAPILMAZ:** tele giden kökü her gönderimde
-    "rig'in göz anchor'ı − karakterin göz işaretçisi" vektörüyle ötelemek gövdeyi savurur —
-    karakterin göz işaretçisi HMD'yi body tracking gecikmesiyle izler, kafa her dönüşte/eğilişte
-    ofset vektörü salınır ve bütün gövde uzak tarafta havada yalpalar (etiket ile silah poz
-    kanalından geldiği için doğru kalır; belirti "gövde savruluyor, etiket yerinde"dir).
-    Bir düzeltme üç kısıta uyar: gönderende ve YALNIZ tele giden kökte koşar (yerel karakterin
-    transformuna yazılmaz — o, §10.8 boy ölçümünün referansıdır), ofset ağır alçak geçiren
-    filtreyle/duruk anlarda güncellenir (statik zemin hatasını düzeltir, kafa hareketini içeri
-    almaz) ve `GuardRootJump` emniyeti korunur.
+149. **İskelet kökü göndericinin body tracking çözümünden gelir ve iki ayrı biçimde yanlışlanır —
+    gövdenin YERİ bu yüzden alıcıda poz kanalına sabitlenir.** Kafa ve eller rig'in çocuğudur ve
+    kalibre edilmiş uzayda doğar; `LocalBodyAvatar` karakteri ise sahne kökünde durur ve kökünü
+    body tracking çözümü yazar. İki arıza kipi:
+    **(a) Zemin tahmini:** iskeletin bastığı zemin işletim sisteminin TAHMİNİDİR; guardian
+    kurulmadığı için (yukarıdaki "guardian" maddesi) desimetre mertebesinde şaşar ve **oturumdan
+    oturuma değişir** — gövde gömülü/havada çizilir, "otururken görünüyor, ayakta kayboluyor".
+    **(b) Body tracking o app-açılışında hiç tutmayabilir:** kök spawn pozunda donar, yürüyüşü
+    izlemez ve taşınmış arenada gövde oyuncudan yüzlerce metre uzakta çizilir. `[AvatarTanı]`
+    imzası: `kök` sabit ve `kafa`dan çok uzak, varsayılan gövdenin `sınırMerkez`i kökte; **kırmızı
+    gövde avatar kökünden (poz kanalı) taşındığı için görünür KALIR** — "kırmızılar görünüyor,
+    maviler görünmüyor" tablosunun kaynağı budur, takım değil kanal farkıdır. Ölçek maddesinden
+    (`ApplyRootScale`) ayırt etme: buradaki fark bir ORAN değil ÖTELEMEDİR.
+    **Düzeltme alıcıdadır:** `ArenaNetCharacterBehaviour.UpdateHeadPin` uzak karakterin
+    `EyeAnchor`'ını poz kanalının interpole edilmiş kafasına yumuşatılmış ofsetle sabitler (salt
+    konum; rotasyon iskeletten). Alıcıda olmasının sebebi zaman tabanıdır: iskelet ve poz kanalı
+    aynı `RenderTime` ile örneklenir, referansla iskelet arasında faz farkı yoktur.
+    ⚠️ **Kare başına HAM göz-sabitlemesi GÖNDERİCİDE YAPILMAZ:** göndericide referans taze HMD,
+    iskelet ise gecikmeli retarget çıktısıdır — ofset kafa hareketiyle salınır ve bütün gövde
+    savrulur (etiket ile silah poz kanalından geldiği için doğru kalır; belirti "gövde savruluyor,
+    etiket yerinde"dir). Yerel karakterin transformuna hiçbir düzeltme YAZILMAZ — o, §10.8 boy
+    ölçümünün referansıdır.
 
 ---
 

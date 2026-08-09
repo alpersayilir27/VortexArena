@@ -200,6 +200,22 @@ namespace VortexArena.Core.Player
         private Transform _centerEye;
         private float _centerEyeSearchTime = float.NegativeInfinity;
 
+        /// <summary>Kafa sabitlemesinin (bkz. <see cref="UpdateHeadPin"/>) yumuşatma sabiti (sn).
+        /// Yürüyüşü ~çeyrek saniyelik gecikmeyle izleyecek kadar hızlı, kare gürültüsünü ve
+        /// retarget salınımını yutacak kadar yavaş.</summary>
+        private const float HeadPinSmoothTime = 0.25f;
+
+        /// <summary>Hedef ofset mevcut ofsetten bundan (m) fazla ayrışırsa kayarak değil ATLAYARAK
+        /// gidilir: ilk edinim, yeniden kalibrasyon ve gönderen iskeletinin toptan sıçraması meşru
+        /// ışınlanmalardır — 190 m'lik bir düzeltmeyi çeyrek saniyede kaydırmak gövdeyi arenanın
+        /// içinden akan bir iz olarak gösterirdi.</summary>
+        private const float HeadPinSnapMeters = 1.0f;
+
+        private Vector3 _headPinOffset;
+        private bool _hasHeadPinOffset;
+        private Transform _pinEye;
+        private bool _pinEyeSearched;
+
         private void Awake()
         {
             ResolveReferences();
@@ -367,6 +383,118 @@ namespace VortexArena.Core.Player
             // ⚠️ Kare başına koşulsuz yazılır: ölçeğe dokunan ikinci bir yazar çıkarsa (SDK'nın
             // ApplyRootScale'i geri açılırsa) "değiştiyse yaz" guard'ı bir kare sonra bayat kalır.
             _characterRoot.localScale = Vector3.one * BodyScale;
+
+            // Kafa sabitlemesi HAM ağ kökünün ÜSTÜNE gelir (gerekçe UpdateHeadPin'de). Ofset
+            // edinilememişse kök ham hâliyle kalır — eski davranışa düşüş.
+            UpdateHeadPin(in world);
+            if (_hasHeadPinOffset)
+            {
+                _characterRoot.position = world.position + _headPinOffset;
+            }
+        }
+
+        /// <summary>
+        /// Uzak gövdeyi poz kanalına sabitleyen ofseti günceller: karakterin göz işaretçisi
+        /// (<c>EyeAnchor</c>) poz kanalının interpole edilmiş kafasına çekilir; salt KONUM,
+        /// rotasyona dokunulmaz.
+        /// <para>
+        /// ⚠️ <b>Neden var:</b> iskelet kökü göndericinin body tracking çözümünden gelir ve o çözüm
+        /// iki ayrı biçimde yanlışlanabilir — OS zemin tahmini kalibre edilmiş zeminden santimetre
+        /// mertebesinde sapar (gövde gömülü/havada çizilir), ya da body tracking o app-açılışında
+        /// hiç tutmaz ve kök sahnenin bir noktasında donar (gövde arenadan kilometrelerce uzakta
+        /// çizilir; belirti imzaları <c>Docs/Sistem-Ozeti.md</c> §7). Poz kanalı (HMD/kumanda) her
+        /// iki arızadan da bağımsızdır — gövdenin YERİ bu yüzden ona bağlanır, iskelet kanalı
+        /// duruşu ve uzuvları sürmeye devam eder.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Sabitleme neden ALICIDA:</b> bu sınıfın iki kanalı da AYNI <c>RenderTime</c> ile
+        /// örneklenir (<see cref="TryGetRootWorld"/> ile <c>GetInterpolatedPose</c> aynı gecikmeli
+        /// zamana bakar) — referans ile iskelet arasında faz farkı yoktur. Göndericide aynı işi
+        /// yapmak taze HMD'yi gecikmeli retarget çıktısıyla karşılaştırmak zorundadır ve o faz
+        /// farkı kafa hareketinde bütün gövdeyi savurur (§7'deki "kare başına HAM göz-sabitlemesi
+        /// YAPILMAZ" maddesinin gerekçesi). Yumuşatma (<see cref="HeadPinSmoothTime"/>) kalan kare
+        /// gürültüsünü alır; büyük ayrışma <see cref="HeadPinSnapMeters"/> ile atlanır.
+        /// </para>
+        /// <para>Poz kanalı henüz akmıyorsa SON ofset korunur — sıfırlamak gövdeyi ham ağ köküne
+        /// geri ışınlardı. Göz işaretçisi çözülemiyorsa ofset hiç edinilmez (eski davranış).</para>
+        /// </summary>
+        private void UpdateHeadPin(in Pose rootWorld)
+        {
+            RemotePlayerRegistry poses = RemotePlayerRegistry.Instance;
+            if (poses == null || !poses.GetInterpolatedPose(PlayerId, out Pose headArena, out _, out _))
+            {
+                return;
+            }
+
+            Transform eye = ResolvePinEye();
+            if (eye == null)
+            {
+                return;
+            }
+
+            // Kök şu an HAM ağ pozunda (çağıran önce onu yazdı) → gözün şu anki dünya konumu ham
+            // iskeletin çizeceği yerdir; hedef ofset ikisinin farkıdır.
+            Vector3 headWorld = ArenaSpace.ArenaToWorld(headArena).position;
+            Vector3 target = headWorld - eye.position;
+
+            if (!_hasHeadPinOffset ||
+                (target - _headPinOffset).sqrMagnitude > HeadPinSnapMeters * HeadPinSnapMeters)
+            {
+                _headPinOffset = target;
+                _hasHeadPinOffset = true;
+                return;
+            }
+
+            float k = 1f - Mathf.Exp(-Time.deltaTime / HeadPinSmoothTime);
+            _headPinOffset = Vector3.LerpUnclamped(_headPinOffset, target, k);
+        }
+
+        /// <summary>
+        /// Sabitlemenin karakter tarafındaki referansı: önce adlandırılmış <c>EyeAnchor</c>
+        /// işaretçisi (kafa kemiğinin altında, iki gözün arasında — <c>LocalBodyAvatar</c> ile aynı
+        /// sözleşme, adı §10.8 gereği sabittir), yoksa humanoid kafa kemiği (göz düzlemine göre
+        /// ~10 cm sapma taşır; sabitlemesiz kalmaktan iyidir). Bir kez aranır ve önbelleklenir.
+        /// </summary>
+        private Transform ResolvePinEye()
+        {
+            if (_pinEye != null || _pinEyeSearched)
+            {
+                return _pinEye;
+            }
+
+            _pinEyeSearched = true;
+            _pinEye = FindDeepChild(_characterRoot, "EyeAnchor");
+
+            if (_pinEye == null)
+            {
+                Animator animator = _characterRoot.GetComponent<Animator>();
+                if (animator != null && animator.isHuman)
+                {
+                    _pinEye = animator.GetBoneTransform(HumanBodyBones.Head);
+                }
+            }
+
+            return _pinEye;
+        }
+
+        private static Transform FindDeepChild(Transform parent, string childName)
+        {
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                Transform child = parent.GetChild(i);
+                if (child.name == childName)
+                {
+                    return child;
+                }
+
+                Transform found = FindDeepChild(child, childName);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>Karakter kökünün BU KAREdeki dünya pozu (arena uzayından çevrilmiş).
@@ -411,7 +539,10 @@ namespace VortexArena.Core.Player
                 return worldPoint;
             }
 
-            return root.position + (worldPoint - root.position) * scale;
+            // Gövde kafa sabitlemesiyle ötelenmiş çiziliyor (UpdateHeadPin) — ölçekleme merkezi
+            // ham ağ kökü değil, gövdenin GERÇEKTE çizildiği köktür.
+            Vector3 drawnRoot = _hasHeadPinOffset ? root.position + _headPinOffset : root.position;
+            return drawnRoot + (worldPoint - root.position) * scale;
         }
 
         /// <inheritdoc cref="INetworkCharacterBehaviour.ReceiveStreamData"/>
