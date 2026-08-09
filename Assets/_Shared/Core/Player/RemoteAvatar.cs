@@ -1936,9 +1936,17 @@ namespace VortexArena.Core.Player
             Vector3 rootPos = Vector3.zero;
             float rootScale = -1f;
             Transform root = character != null ? character.CharacterRoot : null;
+            Vector3 pinOffset = Vector3.zero;
+            Vector3 rawRootPos = Vector3.zero;
             if (root != null)
             {
-                rootPos = root.position;
+                // Bu LateUpdate, kökü pinleyen ArenaNetCharacterBehaviour.LateUpdate'ten (sıra 50)
+                // ÖNCE koşar — ham transform o karede SDK ara değeridir; çizilen kök ofsetle bulunur.
+                // Mesh sınırı da aynı pin-öncesi fazdan örneklendiği için sınırKökMesafe HAM kökle
+                // kıyaslanır — pinli kökle kıyaslamak sağlıklı gövdeye ofset boyu mesafe yazardı.
+                pinOffset = character.HeadPinOffsetCurrent;
+                rawRootPos = root.position;
+                rootPos = rawRootPos + pinOffset;
                 rootScale = root.localScale.x;
                 RemoteSkeletonRegistry skeletons = RemoteSkeletonRegistry.Instance;
                 skeletonFlowing = skeletons != null && skeletons.TryGetInterpolatedRoot(PlayerId, out _);
@@ -1958,11 +1966,12 @@ namespace VortexArena.Core.Player
             string rendererInfo = sample == null
                 ? "renderer=YOK"
                 : $"rendAçık={(sample.enabled ? 1 : 0)} rendÇizildi={(sample.isVisible ? 1 : 0)} " +
-                  $"sınırMerkez={FormatPoint(sample.bounds.center)} sınırKökMesafe={Vector3.Distance(sample.bounds.center, rootPos):F1}";
+                  $"sınırMerkez={FormatPoint(sample.bounds.center)} sınırKökMesafe={Vector3.Distance(sample.bounds.center, rawRootPos):F1}";
 
             Debug.Log($"[AvatarTanı] id={PlayerId} poz={(poseFlowing ? 1 : 0)} iskelet={(skeletonFlowing ? 1 : 0)} " +
                       $"görünür={(_visible ? 1 : 0)} canlı={(IsAlive ? 1 : 0)} kalibre={(IsCalibrated ? 1 : 0)} " +
-                      $"gövde={bodyName} ölçek={rootScale:F2} kök={FormatPoint(rootPos)} kafa={FormatPoint(headWorld.position)} {rendererInfo}");
+                      $"gövde={bodyName} ölçek={rootScale:F2} kök={FormatPoint(rootPos)} pin={FormatPoint(pinOffset)} " +
+                      $"kafa={FormatPoint(headWorld.position)} {rendererInfo}");
         }
 
         private static string FormatPoint(in Vector3 point)

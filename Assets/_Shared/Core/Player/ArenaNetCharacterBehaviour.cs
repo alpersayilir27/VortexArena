@@ -147,8 +147,15 @@ namespace VortexArena.Core.Player
         private bool _initialized;
 
         /// <summary>Karakter kökü — yalnız OKUMA için (teşhis/görselleştirme). Kökün tek yazarı
-        /// bu sınıftır (<see cref="ApplyArenaRoot"/>); buradan dönen transforma yazılmaz.</summary>
+        /// bu sınıftır (<see cref="ApplyArenaRoot"/>); buradan dönen transforma yazılmaz.
+        /// <para>⚠️ Sıra 50'den ERKEN okuyan (ör. <c>RemoteAvatar.LateUpdate</c>, sıra 0) o karede
+        /// SDK'nın ham ara değerini görür — çizilen kök için <see cref="HeadPinOffsetCurrent"/>'ı
+        /// üstüne ekle.</para></summary>
         public Transform CharacterRoot => _characterRoot;
+
+        /// <summary>Kafa sabitlemesinin o anki ofseti (teşhis; sıfır = henüz edinilmedi).
+        /// Çizilen kök ≈ ham kök + bu ofset.</summary>
+        public Vector3 HeadPinOffsetCurrent => _hasHeadPinOffset ? _headPinOffset : Vector3.zero;
 
         /// <summary>
         /// Sensör kaynağı (<c>MetaSourceDataProvider</c>). ⚠️ <b>Prefabdan SİLİNMEZ, yalnız
