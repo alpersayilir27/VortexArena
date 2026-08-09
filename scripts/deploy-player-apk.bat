@@ -175,14 +175,14 @@ rem --- 7) Sunucuya yukle (OTA) -----------------------------------------
 rem  APK, sunucudaki yayin ucuna gonderilir (updater_uploader betigi) -
 rem  gozlukteki Vortex Updater ayni adresten indirir. Yukleme hatasi
 rem  build'i BASARISIZ SAYMAZ: apk uretildi, elle de yayinlanabilir.
-set "VA_UPLOAD_URL=http://159.100.20.26:8090/upload"
+set "VA_UPLOAD_URL=http://159.100.20.26:8091/upload"
 echo.
 echo   Sunucuya yukleniyor: %VA_UPLOAD_URL%
 curl -f --connect-timeout 10 -X POST --data-binary "@%VA_OUT%\game.apk" "%VA_UPLOAD_URL%"
 if errorlevel 1 (
   echo.
   echo   [UYARI] Sunucuya yukleme BASARISIZ - gozlukler eski APK'yi gormeye devam eder.
-  echo           Sunucuda updater_uploader_main.py calisiyor mu? 8090 disaridan erisilir mi?
+  echo           Sunucuda updater_uploader_main.py calisiyor mu? 8091 disaridan erisilir mi?
   echo           Elle tekrar denemek icin:
   echo             curl -f -X POST --data-binary "@%VA_OUT%\game.apk" %VA_UPLOAD_URL%
 ) else (
