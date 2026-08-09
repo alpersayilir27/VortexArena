@@ -22,8 +22,9 @@ Bu klasörün alt klasörleri **`scripts/deploy-*.bat` tarafından üretilir ve 
    `deploy\player\install_game.bat` ile **her gözlüğe aynı APK'yı** kur. Rol ve sunucu adresi
    gömülü değildir; oyuncu build'i sunucuyu UDP beacon ile kendi bulur.
    Sonraki oyun güncellemeleri USB'siz yapılabilir: gözlüğe bir kez `install_updater.bat` ile
-   **Vortex Updater** kurulur; yeni `game.apk` IIS klasörüne kopyalanır ve gözlükteki updater
-   indirip kurar (`updater/README.md`).
+   **Vortex Updater** kurulur; `deploy-player-apk.bat` build sonunda APK'yı sunucudaki yayın
+   ucuna (`updater_uploader/`) kendisi yükler, gözlükteki updater oradan indirip kurar
+   (`updater/README.md`).
 5. Launcher'ı aç ve bir kez doldur: **1 · Sunucu** → `deploy\server\VortexArena.Server.App.exe`
    + listeden **mekan**; **2 · Bağlantı** → sunucunun IP'si; **3 · Yönetim oyunu** →
    `deploy\admin\VortexArena.exe`.

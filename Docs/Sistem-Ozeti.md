@@ -838,6 +838,7 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 | `AdminSelection` | **ORTAK** durumun aynası (`admin_state`, §5.3): mod/harita seçimi, **maç süresi + skor limiti**, çevrimiçi admin sayısı, son admin eyleminin duyurusu, **mekan süzgeci** (`venueId`/`venueScenes` + her değişiminde artan `VenueVersion`), **dost ateşi anahtarının yürürlükteki değeri** (`FriendlyFire` — seçim değil durum, §3.9). Statik durum + statik `Changed` (bileşen kurulum sırası dinleyiciyi ilgilendirmesin); bileşenin kendisi yalnız ağ olayı pompasıdır. Otorite sunucudadır — buraya yerelden yazılmaz |
 | `AdminCommands` | Admin komutlarının tek çıkış kapısı (§5.2) + son işlemin durum metni. "Gönderildi" der, "oldu" demez — kabul/ret sunucuda. `SetSelection` ortak seçimi (mod/harita/süre/limit) değiştirir, maçı başlatmaz; `StartMatch` süre/limit taşır (`0` = mod varsayılanı); `PauseMatch`/`ResumeMatch` koşan maçı dondurur/sürdürür; `SetFriendlyFire` dost ateşi anahtarını çevirir (**faz kapısı yok** — koşan maçta da geçerli, §3.9); `RevivePlayer(playerId)` ölü oyuncuyu elle canlandırır (`playerId:0` = o an ölü olan herkes, §3.7) ve kapıları sunucu uygular — bu komut da "gönderildi" der, "canlandı" demez |
 | `AdminContent` | `Resources.Load<GameCatalog>("GameCatalog")` (asset: `_Shared/Data/Resources/`) → mod/harita listeleri. **Statik** yardımcıdır (`[SerializeField]` taşıyamaz), katalogu bu yüzden `Resources`'tan okur |
+| `AdminXrRelease` | Admin rolünde XR'ı **bırakır** (`StopSubsystems` + `DeinitializeLoader`). Neden gerekli: Standalone'da `Initialize XR on Startup` AÇIKTIR (editör Play modu Android sekmesini değil PC ayarını okur → Quest Link ile player denemenin tek yolu odur, Tuzaklar) ve başlayan OpenXR oturumu boştaki HMD'yi kapar — admin süreci gözlüğü elinden alır, gözlemci kamerası gözlüğe çizilir. Rol admin çözülür çözülmez loader bırakılınca oturum aynı PC'de koşan **player** sürecine kalır; Windows admin build'i de Link'teki gözlüğü açmaz. Çağıranlar: `AppBoot.Start` (build + Boot'tan Play) ve `DevSession.ApplySelection` (editörde açık sahneden Play). Android'de ve loader yokken **sessiz no-op** → çift çağrı zararsız |
 
 ### Editör: `VortexArena.App.Editor` (dev araç seti — yalnız Editor)
 
@@ -1688,10 +1689,11 @@ konsoluna tek satır sebep yazar.
     Sebep: **editör Play modu Android sekmesini değil PC/Standalone ayarını okur** (editörün kendisi
     bir PC uygulamasıdır) → kapalıyken Quest Link ile Play'e basmak gözlüğe hiçbir şey göndermez,
     `XRSettings.enabled` false kalır. Kapatılırsa VR'ı denemenin tek yolu her seferinde APK almaktır.
-    Bedeli: Windows admin build'i de açılışta XR başlatmaya çalışır (başlıksız PC'de başlatma
-    sessizce düşer); admin gözlemcinin rig kökünü kapatıp kendi `AudioListener`'ını kurması bu
-    yüzden şarttır. Admin dağıtımında sorun çıkarsa çözüm ayarı topluca kapatmak değil, XR'ı
-    role göre kod tarafında başlatmaktır (player rolünde `InitializeLoader`).
+    Bedeli: admin süreci de (editör ya da Windows build) açılışta XR başlatır ve başlayan OpenXR
+    oturumu Link'teki boş HMD'yi kapar. Çözüm ayarı topluca kapatmak DEĞİL, rol admin çözülünce
+    XR'ı **bırakmaktır**: `AdminXrRelease` (§4) loader'ı durdurup deinitialize eder, gözlük aynı
+    PC'de koşan player sürecine kalır. Admin gözlemcinin rig kökünü kapatıp kendi
+    `AudioListener`'ını kurması yine şarttır (başlıksız PC'de XR zaten hiç başlamaz).
 16. **`Shader.Find` build'de null dönebilir** — hiçbir materyalin referanslamadığı shader
     (`Universal Render Pipeline/Unlit` gibi) strip edilir. Runtime'da üretilen görseller bu yüzden
     UI/TMP shader'ları üzerinden çizilir (world-space canvas + sprite), mesh + Unlit materyal ile
@@ -3127,6 +3129,13 @@ konsoluna tek satır sebep yazar.
     siler). Daha kötüsü, istisna metodun ORTASINDA atıldığı için geri kalan işler hiç koşmaz:
     `RemoteHandPoser`'da parmak duruşu düşünce el/kol IK'sı da hiç çalışmaz. Kural: kapıyı
     "kapandım mı" değil "elimdeki veri geçerli mi" sorusuna bağla.
+148. **`EditorPrefs` Windows'ta MAKİNE çapındadır — aynı projeden açılan ikinci editör süreci dev
+    penceresinin seçimini AYNEN okur.** Multiplayer Play Mode'un sanal oyuncusu ayrı bir süreçtir
+    ama aynı kayıt defterini okur: rolü/hedefi değiştirmek iki pencereyi birden değiştirir, yani
+    "birine player, diğerine admin" seçimle verilemez. Ayrım **MPPM tag'iyle** yapılır (`player` /
+    `admin`); `DevSession` tag'i `EditorPrefs` seçiminin önüne koyar, tag'siz süreç (ana editör)
+    seçimle kalır. Genel kural: **süreç başına ayrışması gereken bir ayar `EditorPrefs`'e
+    yazılmaz** — oraya yazılan şey makinenin tamamına aittir.
 
 ---
 

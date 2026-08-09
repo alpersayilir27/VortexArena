@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using VortexArena.App.Admin;
 using VortexArena.Core;
 using VortexArena.Core.Combat;
 using VortexArena.Net;
@@ -191,6 +192,23 @@ namespace VortexArena.App
             AppSession.Role = Role;
             AppSession.RoleResolved = true;
 
+#if VORTEX_MPPM
+            // Multiplayer Play Mode: EditorPrefs Windows'ta MAKİNE çapında paylaşılır, yani
+            // sanal oyuncu süreci de ana editörün rol seçimini okur — iki pencere aynı rol olur.
+            // Bu yüzden sürece MPPM penceresinden verilen "player"/"admin" TAG'i seçimi ezer;
+            // tag'siz süreç (ana editör) EditorPrefs seçimiyle kalır.
+            string tagRole = RoleFromMppmTags();
+            if (tagRole != null && tagRole != AppSession.Role)
+            {
+                AppSession.Role = tagRole;
+                Debug.Log($"[DevSession] MPPM tag'i rolü ezdi → '{tagRole}' " +
+                          $"(EditorPrefs seçimi '{Role}' ana editörde geçerli kalır).");
+            }
+#endif
+
+            // Rol admin ise XR'ı bırak — HMD aynı PC'deki player sürecine kalsın.
+            AdminXrRelease.Apply();
+
             // Sandbox = sunucusuz. Adresi SİLİYORUZ ki kabuk controller'ları ya da keşif zinciri
             // kazara bağlanmasın: tek bir başarılı bağlantı `_hasEverConnected`'i kalıcı olarak
             // açar ve kalibrasyon kapısı (CalibrationState.IsCalibrated) kapanır — yani sandbox'ın
@@ -359,9 +377,31 @@ namespace VortexArena.App
                 return;
             }
 
-            Debug.Log($"[DevSession] Arena sahnesinden bağlanılıyor: {Ip}:{Port} ({Role}).");
-            ArenaClient.Instance.Connect(Ip.Trim(), Port, Role);
+            // EditorPrefs'teki Role değil AppSession.Role: MPPM tag'i onu ezmiş olabilir.
+            string role = AppSession.Role;
+            Debug.Log($"[DevSession] Arena sahnesinden bağlanılıyor: {Ip}:{Port} ({role}).");
+            ArenaClient.Instance.Connect(Ip.Trim(), Port, role);
         }
+
+#if VORTEX_MPPM
+        /// <summary>
+        /// MPPM tag'lerinden rol: "player" ya da "admin" tag'i taşıyan süreç o rolü alır
+        /// (büyük/küçük harf duyarsız). Tag yoksa null — EditorPrefs seçimi geçerli kalır.
+        /// </summary>
+        private static string RoleFromMppmTags()
+        {
+            foreach (string tag in Unity.Multiplayer.PlayMode.CurrentPlayer.ReadOnlyTags())
+            {
+                string normalized = tag != null ? tag.Trim().ToLowerInvariant() : null;
+                if (normalized == AppSession.RolePlayer || normalized == AppSession.RoleAdmin)
+                {
+                    return normalized;
+                }
+            }
+
+            return null;
+        }
+#endif
     }
 }
 #endif

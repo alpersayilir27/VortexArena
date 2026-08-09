@@ -16,15 +16,23 @@ APK_URL      = "http://159.100.20.26:8090/game.apk"
 
 Adres değişirse burası düzeltilir ve updater yeniden kurulur — gözlükte ayar ekranı yoktur.
 
-## Sunucu tarafı (IIS)
+## Sunucu tarafı (`updater_uploader/`)
 
-- 8090 portunda bir site (ya da sanal dizin) yayınlanır; kök klasörde `game.apk` durur.
-- ⚠️ **IIS `.apk` uzantısını varsayılan MIME listesinde tanımaz ve 404 döner.** MIME eşlemesi
-  eklenir: `.apk` → `application/vnd.android.package-archive`.
-- Yeni sürüm yayınlamak = `deploy\player\game.apk` dosyasını IIS klasörüne **aynı adla**
-  kopyalamak. Sürüm numarası dosya adında taşınmaz, updater tek sabit adrese bakar.
-- Trafik düz HTTP'dir (`usesCleartextTraffic="true"`) — TLS yoktur; adres bilinçli olarak
-  işletme ağının içindeki bir sunucudur.
+- Sunucuda APK klasörüne (ör. `D:\WebHost\player_apk_updater`)
+  `updater_uploader\updater_uploader_main.py` konur ve `python updater_uploader_main.py` ile
+  çalıştırılır. Betik 8090'ı dinler: `POST /upload` gelen APK'yı kendi klasörüne `game.apk`
+  olarak yazar (atomik değiştirme — yarım yükleme mevcut dosyayı bozamaz), `GET /game.apk`
+  (ve `GET /upload`) dosyayı indirtir, başka hiçbir yolu yakalamaz.
+- Yeni sürüm yayınlamak **otomatiktir**: `scripts\deploy-player-apk.bat` build sonunda APK'yı
+  `/upload`'a kendisi POST'lar. Elle yayınlamak da mümkün:
+  `curl -f -X POST --data-binary "@deploy\player\game.apk" http://159.100.20.26:8090/upload`
+  ya da dosyayı klasöre aynı adla kopyalamak.
+- ⚠️ **Aynı portu iki süreç dinleyemez:** bu betik ayaktayken IIS'te 8090'a bağlı site
+  **durdurulmuş** olmalı. Betik indirmeyi de yaptığı için IIS'e gerek yoktur (IIS'in `.apk`
+  MIME eşlemesi derdi de yoktur). Windows Firewall'da 8090'a gelen bağlantı `python.exe` için
+  açık olmalı (IIS'in kuralı http.sys'e aittir, Python'u kapsamaz).
+- Yükleme ucu **anahtarsızdır** — porta erişebilen herkes APK yayınlayabilir (bilinçli tercih).
+- Trafik düz HTTP'dir (`usesCleartextTraffic="true"`) — TLS yoktur.
 
 ## Güncelleme mi, sil-yükle mi
 

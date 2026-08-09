@@ -26,6 +26,10 @@ rem  hedefini sabit geciyor.
 rem
 rem  Unity yolu: UNITY_EXE ortam degiskeni > Hub'daki proje surumu.
 rem
+rem  Build sonunda APK sunucudaki yayin ucuna POST'lanir
+rem  (updater_uploader\updater_uploader_main.py); uc kapaliysa yalniz
+rem  uyari basilir, build basarili sayilir.
+rem
 rem  Kullanim:
 rem    deploy-player-apk.bat             cift tiklanabilir; sonda bekler
 rem    deploy-player-apk.bat --no-pause  otomasyon; beklemeden cikar
@@ -166,6 +170,25 @@ echo.
 echo === TAMAM ===
 echo   %VA_OUT%\game.apk
 powershell -NoProfile -Command "$s=(Get-Item '%VA_OUT%\game.apk').Length/1MB; Write-Host ('  Boyut: {0:N1} MB' -f $s)"
+
+rem --- 7) Sunucuya yukle (OTA) -----------------------------------------
+rem  APK, sunucudaki yayin ucuna gonderilir (updater_uploader betigi) -
+rem  gozlukteki Vortex Updater ayni adresten indirir. Yukleme hatasi
+rem  build'i BASARISIZ SAYMAZ: apk uretildi, elle de yayinlanabilir.
+set "VA_UPLOAD_URL=http://159.100.20.26:8090/upload"
+echo.
+echo   Sunucuya yukleniyor: %VA_UPLOAD_URL%
+curl -f --connect-timeout 10 -X POST --data-binary "@%VA_OUT%\game.apk" "%VA_UPLOAD_URL%"
+if errorlevel 1 (
+  echo.
+  echo   [UYARI] Sunucuya yukleme BASARISIZ - gozlukler eski APK'yi gormeye devam eder.
+  echo           Sunucuda updater_uploader_main.py calisiyor mu? 8090 disaridan erisilir mi?
+  echo           Elle tekrar denemek icin:
+  echo             curl -f -X POST --data-binary "@%VA_OUT%\game.apk" %VA_UPLOAD_URL%
+) else (
+  echo.
+  echo   Sunucuya yuklendi - gozlukteki Vortex Updater artik yeni APK'yi gorur.
+)
 echo.
 echo   Gozluge kurmak icin: gozlugu USB ile bagla, gelistirici modu acik olsun,
 echo   sonra "%VA_OUT%\install_game.bat" dosyasini calistir.

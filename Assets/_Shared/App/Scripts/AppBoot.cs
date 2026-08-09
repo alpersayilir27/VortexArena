@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using VortexArena.App.Admin;
 using VortexArena.Protocol;
 
 namespace VortexArena.App
@@ -42,6 +43,10 @@ namespace VortexArena.App
                 AppSession.RoleResolved = true;
                 ResolveServerEndpoint();
             }
+
+            // Admin masaüstünde XR'ı tutmasın: Standalone'da XR açılışta otomatik başlıyor
+            // (Link'le player için gerekli) ve boştaki HMD'yi kapıyor.
+            AdminXrRelease.Apply();
 
             // Rol ne olursa olsun tek kabuk: Lobby. Admin gözlemci oradan sunucuyu takip eder.
             string sceneName = AppSession.SceneLobby;
