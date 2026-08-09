@@ -499,25 +499,6 @@ Dört şey bunu mümkün kılıyor ve ilk üçü **zaten vardı**:
 demektir ve geri sayım boyunca canlı kalması gerekir — iptal kararının tek dayanağı odur.
 Temizleyen tek yer toplanmanın **başıdır** (`TryPauseForMode`).
 
-⚠️ **Toplanma yönergesi takımı ADIYLA söyler** ("Yeni tur — MAVİ tabanına dön",
-`TournamentRegroupReporter`). Oyuncunun kendi takımını öğrenebileceği başka bir yer YOKTUR: kendi
-gövdesini hiç görmez (§4 `VA_CameraRig`), HUD skor satırı iki takımı da yazar ve iki şerit arenanın
-**zıt uçlarındadır**. Takımı söylemeyen bir yönerge oyuncuyu en yakın şeride yürütür; rakibin
-şeridinde durmak `IsInsideOwnBase`'i açmaz (§3.7 bölge eşleşmesi), yani kapı hiç açılmaz. Bu arıza
-sunucuda yalnız "toplanma bekleniyor" olarak görünür — ne hata basar ne sebebini söyler.
-Raporlayıcı bu yüzden kenarda tek satır log da basar:
-`[Regroup] takım=… kendiTabanında=… açıkTabanVar=… → set_ready(…)`. Üç ayrı arızayı
-(yanlış şerit · taban hiç bulunamadı · bayrak sunucuya ulaşmadı) gözlükte ayırt eden tek şey odur.
-
-Raporlayıcı toplanmayı BEKLEMEZ: **tur içinde ölen oyuncuya da** aynı yönergeyi yazar ("Öldün —
-MAVİ tabanına dön, yeni tur orada başlayacak") — canlanma olmayan modda ölünün tek işi tabana
-yürümektir ve erken yönlendirme toplanmayı kısaltır. `set_ready` yine YALNIZ toplanma/geri sayımda
-gönderilir: bayrağın anlamı (§10.1) tur içinde kirlenmez, sunucu toplanmaya girerken bayrakları
-zaten sıfırlar. Kendi tabanına **GİRİŞ kenarında** iki kumandaya üç kısa darbe verilir
-(`ControllerHaptics.PulseBoth`) — göz o an yönergede olmasa da "doğru yerdesin" onayı elden gelir;
-ölçüt fail-open'lı "hazır sayıldı" değil GERÇEK bölge girişidir (taban bulunamadığında titreşim
-yalan olurdu).
-
 ⚠️ **Tur başında sunucu herkese `health_update` yollar** (`RevivePlayerLocked`). Sunucu içi
 alanları sessizce sıfırlamak yetmez: maç içi tur geçişinde `load_match` yoktur, yani istemcinin
 kendini sıfırlayacağı ikinci bir yol da yoktur — mesaj gitmezse tur içinde ölmüş oyuncu ölüm
@@ -818,7 +799,7 @@ sorunu.**
 | `AppSession` | Oturum: rol + sunucu adresi (`ServerIp`/`ServerPort`/`HasServerEndpoint`) — `AppBoot` yazar, controller'lar okur |
 | `PlayerPoseTracker` | *(`VA_PoseSync` prefabı)* Rig anchor'larını bulur, **dünya→arena** çevirip `IPoseSource` olarak kaydolur (kalibrasyon BEKLENMEZ; hizalanana dek pozlar ofsetli gider). Eller `ResolveHandWorld` ile önce **dünya uzayında** kurulur, arenaya çevirim en sonda yapılır — tutulan pozun saklandığı çerçeve ile üretildiği çerçeve aynı olsun. Kapı `ControllerTracking.IsValid`'dir: geçerli elde canlı anchor okunur ve poz **kafaya göreli** saklanır, geçersizde saklanan kafa-göreli poz o karenin kafasıyla yeniden kurulur (el gövdeyle taşınır, arena uzayında donmaz) ve `GetHeldItems` o el için `SnapshotEntry.FLAG_HAND_*_STALE` yazar (§3.5). Oturumda hiç geçerli örnek alınmamışsa dinlenme ofseti kullanılır (sağ el `(0.20, −0.45, 0.25)`, solda X ters) — açılışta bir kere bile okunmamış bir el aksi hâlde oyuncunun ayağının dibinde çizilirdi. Kumanda durumunu `ArenaClient.ReportControllerState` ile Net'e iter; ⚠️ **ölçüm Core'da, bildirim App'te** çünkü Net Oculus'u referanslamaz |
 | `RemotePlayerSpawner` | *(aynı `VA_PoseSync` prefabı)* Katılan/ayrılan uzak oyuncular için `RemoteAvatar` yaratır/yok eder; her `lobby_state`'te ad/takım/**kalibrasyon** bilgisini besler. Ayrıca roster'da KENDİ id'sini bulup yerel takımı çözer ve her avatara **dost mu** olduğunu bildirir (`SetFriendly`) — takımsız modda (FFA) ve admin gözlemcide yerel takım boştur, kimse dost işaretlenmez |
-| `ModeHudSpawner` | *(`VA_ModeHud` prefabı)* Aktif modun HUD prefabını katalogdan örnekler — **App, mod assembly'lerini referanslamaz** (prefab yalnız `GameObject` olarak taşınır). ⚠️ **HUD modId'ye bağlıdır, sahne ömrüne değil:** mod değişimi sahne değişimi olmadan gelebilir (Tuzaklar, "mod değişimi sahne değişimi değildir") — `load_match` farklı bir mod getirirse mevcut HUD yok edilip yenisi örneklenir. Boş modId bağlı oturumda "maç yok" demektir ve HUD örneklenMEZ; katalogdaki ilk moda düşüş yalnız SUNUCUSUZ editör sandbox'ı içindir |
+| `ModeHudSpawner` | *(`VA_ModeHud` prefabı)* Aktif modun HUD prefabını katalogdan örnekler — **App, mod assembly'lerini referanslamaz** (prefab yalnız `GameObject` olarak taşınır) |
 | `IdentifyOverlay` | Admin `identify` yollayınca o başlıkta büyük kimlik overlay'i. Kalıcı dinleyicidir; kartın kendisi **geçicidir** ve `IdentifyDisplay` prefabından örneklenir (`Resources/UI/IdentifyDisplay`), birkaç saniye sonra yok edilir |
 | `IdentifyDisplay` | O kartın **görünümü** (prefab): world-space canvas + `CanvasGroup` (sönme) + yazı. İçeriği `IdentifyOverlay` yazar, biçimi prefabta |
 | `KickedShutdown` | `kicked` gelince **oyuncu uygulamasını kapatır** (kendini önyükleyen kalıcı tekil; sahnede işi yoktur). Atmanın karşılığı "lobiye dön" değil "oturumdan çık"tır — başlık açık kalırsa operatör panelde düşmüş ama sahada hâlâ oynayan bir oyuncu görür. ~1,5 sn pay (soketin kapanması + log), editörde Play'i durdurur. ⚠️ **Admin kapanmaz** — operatör penceresi sahadaki tek yönetim aracıdır, yalnız bağlantısız duruma düşer. Kapanış dizisi: `Docs/ArenaNet-Protokol.md` §5.4 |
@@ -1599,11 +1580,10 @@ yukarıdaki altı adımdır):
    (`PlayerPoseTracker` + `RemotePlayerSpawner`), `VA_CalibrationManager` (`ArenaCalibrator`),
    `VA_ModeHud` (`ModeHudSpawner`). **Başka bir arenadan kopyalama** (kopya prefab bağını kaybeder,
    rig/kalibrasyon düzeltmeleri o sahneye ulaşmaz). Sonra sahneye bakan referansları elle bağla:
-   `VA_CalibrationManager`'ın `rigRoot`'u ile `ArenaBoundary`'nin `head` alanı → sahnenin
+   `VA_CalibrationManager`'ın `rigRoot`'u ile `ArenaBoundary`/`BaseZone`'un `head` alanı → sahnenin
    `CenterEyeAnchor`'ı. Boş bırakılırsa sahne sessizce çalışmaz; Unity kopuk sahneler-arası
    referansı sessizce null yapar. (`anchorA`/`anchorB` istisnadır: boş bırakılabilir, kalibratör
-   işaretçileri ölçü maketinin `DimensionAnchor` küplerinden çözer. `BaseZone.head` de istisnadır:
-   boşsa HMD'yi bulana kadar her karede kendi çözer.)
+   işaretçileri ölçü maketinin `DimensionAnchor` küplerinden çözer.)
    ⚠️ Ölçü maketi bu yolda da zorunludur: sahnenin `anchor_a`/`anchor_b` işaretçileri onunla gelir,
    maketsiz sahne kalibre edilemez.
 5–6. **`Tools > VortexArena > Build > Configure All Build Elements` → Hepsini Yapılandır** —
@@ -1648,11 +1628,9 @@ konsoluna tek satır sebep yazar.
    yordamı (`CameraRigBBBlockData`) prefabı örnekledikten sonra **otomatik unpack ediyor** — yani
    her arena rig'in birbirinden habersiz donmuş bir kopyasını taşırdı ve tek bir rig düzeltmesi
    (tracking origin, el görselleri, gizleyici listesi) arena sayısı kadar elle iş doğururdu. Rig'e bakan
-   sahne referansları (`ArenaBoundary.head/fadeRenderer/warningText`,
+   sahne referansları (`ArenaBoundary.head/fadeRenderer/warningText`, `BaseZone.head`,
    `WeaponReloadGesture.head`, `ArenaCalibrator.rigRoot`) rig değiştirilirken **yeniden bağlanmalı**;
-   boş kalırlarsa sahne sessizce çalışmaz hâle gelir. (`BaseZone.head` bu listede DEĞİL: boşsa
-   HMD'yi bulana kadar her karede kendi çözer — gerekçe Tuzaklar, "`Camera.main` `Awake`'te null
-   olabilir".)
+   boş kalırlarsa sahne sessizce çalışmaz hâle gelir.
    **Yapay hareket bu yüzden `VA_CameraRig`'de kapatılmıştır ve açılmaz:** Meta'nın paket prefabı
    `OVRComprehensiveInteractionRig` tam bir locomotion yığınıyla gelir — thumbstick'i okuyan
    Slide/Step/Turn yayıncıları, turner interactor'ları, teleport ve bunları uygulayan
@@ -2298,19 +2276,6 @@ konsoluna tek satır sebep yazar.
     `SkeletonRetargeter.ApplyHeadScale` (kafayı 0.95 ile daha az büyütür) taşıyor — yani madde bir
     uygulama talimatı değil **retarget config'i hazırlarken kontrol edilecek bir ölçüttür**: ikinci
     bir başlıktan uzak avatara bak, kafa gövdenin üstünde mi yoksa içinde mi.
-
-82. **Mod değişimi sahne değişimi DEĞİLDİR — moda bağlı kurulum modId'ye bağlanır, sahne ömrüne
-    değil.** `load_match` zaten yüklü bir sahnede oynanacak yeni bir maç için de gelir (sahnelenmiş
-    arenada başlayan maç; aynı haritada arka arkaya iki maç) ve `SceneRouter` aynı sahneyi yeniden
-    yüklemez. "Sahne başına bir kez kur" deseni bu yolda eski modun kurulumunu taşımaya devam eder:
-    HUD'ı mod değişince yenilemeyen bir örnekleyici turnuva maçını TDM HUD'ıyla oynatır — turnuvanın
-    toplanma raporlayıcısı hiç doğmaz, `set_ready` hiç gitmez ve arıza sunucuda yalnız sonsuz
-    "toplanma bekleniyor", gözlükte taban sınıfın "BEKLEME" etiketi olarak görünür (hatasız,
-    sebepsiz). İkinci yüzü fallback'tir: boş/bilinmeyen modId'de "katalogdaki ilk modu" seçmek
-    YANLIŞ modun HUD'ını hatasız örnekler — yanlış HUD, HUD'suzluktan kötüdür (eksik bileşen değil
-    yanlış davranış üretir). Boş modId bağlı bir oturumda "ortada maç yok" demektir (sahnelenmiş
-    arena lobi profiliyle koşar, §10.7); katalogdaki ilk moda düşüş yalnız sunucusuz editör
-    sandbox'ına aittir (`ModeHudSpawner`).
 
 82. **Bilek 30 cm'den bakıldığında `skinWeights` bir görsel ayar değil, DOĞRULUK ayarıdır.**
     `QualitySettings`'te Android varsayılanı **"Mobile" seviyesidir ve `skinWeights: 2`** (PC'de 4),
@@ -3162,19 +3127,6 @@ konsoluna tek satır sebep yazar.
     siler). Daha kötüsü, istisna metodun ORTASINDA atıldığı için geri kalan işler hiç koşmaz:
     `RemoteHandPoser`'da parmak duruşu düşünce el/kol IK'sı da hiç çalışmaz. Kural: kapıyı
     "kapandım mı" değil "elimdeki veri geçerli mi" sorusuna bağla.
-148. **`Camera.main` `Awake`'te null OLABİLİR — tek seferlik çözen alan kalıcı olarak boş kalır.**
-    `Camera.main` yalnız **etkin** ve `MainCamera` etiketli bir kamera kamera kaydına girdikten
-    sonra dolu döner; rig'in kamerası bunu bir sahne objesinin `Awake`'inden SONRA yaparsa
-    `head = Camera.main.transform` satırı sessizce hiçbir şey atamaz ve bir daha **denenmez**.
-    Sonuç bir hata değil, **donmuş bir ölçüdür**: `BaseZone` bu yüzden `IsPlayerInside`'ı ömür boyu
-    `false`'ta tutuyordu — oyuncu şeridin tam üstünde dururken ne canlanabiliyor ne tur toplanmasında
-    hazır sayılıyordu. Arıza teşhis edilemez, çünkü bölge **açık** kaldığı için
-    `PlayerCombatState.HasOpenBaseZone` `true` döner ve "sahnede taban yok" fail-open'ı da devreye
-    girmez. Kural: HMD/kamera gibi geç doğan referanslar **bulunana kadar her karede** çözülür
-    (`BaseZone.ResolveHead`, `PlayerCombatState.ResolveHead`); tek seferlik çözme yalnız alan
-    Inspector'da açıkça bağlıysa güvenlidir (`ArenaBoundary.head` — onu `Template Temellerini Yükle`
-    bağlıyor). ⚠️ Yarış sahne kök sırasına bağlı olduğu için **bir arenada çalışıp ötekinde
-    çalışmaz**; "diğer haritada oluyordu" bu tuzağı elemez.
 
 ---
 
