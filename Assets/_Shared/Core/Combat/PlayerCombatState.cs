@@ -447,10 +447,13 @@ namespace VortexArena.Core.Combat
             else if (!IsAlive)
             {
                 // §10.5 reviveAnchor:"none" — canlanma yok. Gecikme sayacı göstermek yalan olurdu;
-                // oyuncu turun bitmesini bekliyor, bir süreyi değil.
+                // oyuncu turun bitmesini bekliyor, bir süreyi değil. Bu genel bir YEDEKTİR: tur
+                // tabanlı mod kendi yönergesini yazar (mod yönergesi bu metni ezer) ve oyuncuyu
+                // takım adıyla tabanına yönlendirir — taban/takım bilgisi buraya yazılmaz, mod
+                // adına özel metin bu sınıfa girmez (aşağıdaki SetModePrompt sözleşmesi).
                 if (ModeRuntime.Revive == ModeReviveAnchor.None)
                 {
-                    text = "Elendin — takımın turu bitirene kadar bekle";
+                    text = "Öldün — tur bitene kadar bekle";
                 }
                 else if (ObstacleViolationProbe.IsViolating)
                 {
