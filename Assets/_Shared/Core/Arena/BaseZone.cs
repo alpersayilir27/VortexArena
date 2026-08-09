@@ -46,15 +46,9 @@ namespace VortexArena.Core.Arena
         /// <summary>Yerel oyuncunun HMD'si bölgenin içinde mi (bileşen kapalıyken DONAR).</summary>
         public bool IsPlayerInside { get; private set; }
 
-        private void Awake()
-        {
-            if (head == null && Camera.main != null)
-                head = Camera.main.transform;
-        }
-
         private void Update()
         {
-            if (head == null)
+            if (!ResolveHead())
                 return;
 
             Vector3 local = transform.InverseTransformPoint(head.position);
@@ -68,6 +62,34 @@ namespace VortexArena.Core.Arena
                 onPlayerEntered?.Invoke();
             else
                 onPlayerExited?.Invoke();
+        }
+
+        /// <summary>
+        /// HMD transformu; bulunana kadar HER KAREDE yeniden denenir.
+        /// <para>
+        /// ⚠️ <b>Tek seferlik çözme (eski hâli: <c>Awake</c>) yetmez ve sessizce ölür:</b>
+        /// <see cref="Camera.main"/> yalnız <b>etkin</b> ve <c>MainCamera</c> etiketli bir kamera
+        /// kayda girdikten sonra dolu döner; rig'in <c>CenterEyeAnchor</c> kamerası bu bileşenin
+        /// <c>Awake</c>'inden SONRA kaydolursa alan kalıcı olarak <c>null</c> kalır. O hâlde
+        /// <see cref="IsPlayerInside"/> ömür boyu <c>false</c>'ta donar ama
+        /// <c>PlayerCombatState.HasOpenBaseZone</c> <b>true</b> kalır (bileşen açık) — yani
+        /// "bölge yok" fail-open'ı da devreye girmez: oyuncu şeridin tam üstünde dururken hem
+        /// canlanamaz hem tur toplanmasında hazır sayılmaz.
+        /// </para>
+        /// <para>Aynı desen <c>PlayerCombatState.ResolveHead</c>'de de kullanılıyor. Alan Inspector'da
+        /// doluysa hiç aranmaz — <c>ArenaBoundary</c>'de olduğu gibi elle bağlanabilir.</para>
+        /// </summary>
+        private bool ResolveHead()
+        {
+            if (head != null)
+                return true;
+
+            Camera cam = Camera.main;
+            if (cam == null)
+                return false;
+
+            head = cam.transform;
+            return true;
         }
     }
 }
