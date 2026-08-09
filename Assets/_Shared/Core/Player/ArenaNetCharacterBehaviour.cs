@@ -211,10 +211,14 @@ namespace VortexArena.Core.Player
         /// içinden akan bir iz olarak gösterirdi.</summary>
         private const float HeadPinSnapMeters = 1.0f;
 
+        /// <summary>Göz/kafa referansı bulunamadığında yeniden arama aralığı (sn) — tek seferlik
+        /// arama, erken bir karede boş dönerse pin'i sonsuza dek kapatırdı.</summary>
+        private const float PinEyeSearchIntervalSeconds = 1f;
+
         private Vector3 _headPinOffset;
         private bool _hasHeadPinOffset;
         private Transform _pinEye;
-        private bool _pinEyeSearched;
+        private float _pinEyeSearchTime = float.NegativeInfinity;
 
         private void Awake()
         {
@@ -450,20 +454,35 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Sabitlemenin karakter tarafındaki referansı: önce adlandırılmış <c>EyeAnchor</c>
-        /// işaretçisi (kafa kemiğinin altında, iki gözün arasında — <c>LocalBodyAvatar</c> ile aynı
-        /// sözleşme, adı §10.8 gereği sabittir), yoksa humanoid kafa kemiği (göz düzlemine göre
-        /// ~10 cm sapma taşır; sabitlemesiz kalmaktan iyidir). Bir kez aranır ve önbelleklenir.
+        /// Sabitlemenin karakter tarafındaki referansı, üç basamak: (1) adlandırılmış
+        /// <c>EyeAnchor</c> işaretçisi (kafa kemiğinin altında, iki gözün arasında —
+        /// <c>LocalBodyAvatar</c> ile aynı sözleşme; uzak karakterde bugün YOK, ileride eklenirse
+        /// kendiliğinden bu yola geçilir), (2) adı <c>Head</c> ile biten kemik — projedeki Mixamo
+        /// rig'lerinde <c>mixamorig:Head</c>; FBX <b>Generic</b> import edildiği için Mecanim'e
+        /// sorulamaz, (3) humanoid <c>Animator</c> kafa kemiği (başka bir rig'e karşı yedek).
+        /// Kemik/işaretçi referansı göz düzleminden ~10 cm sapar; sabitlemesiz kalmaktan iyidir.
+        /// <para>Bulunamadıkça <see cref="PinEyeSearchIntervalSeconds"/> aralığıyla yeniden
+        /// denenir; bulununca önbellekten döner.</para>
         /// </summary>
         private Transform ResolvePinEye()
         {
-            if (_pinEye != null || _pinEyeSearched)
+            if (_pinEye != null)
             {
                 return _pinEye;
             }
 
-            _pinEyeSearched = true;
-            _pinEye = FindDeepChild(_characterRoot, "EyeAnchor");
+            if (Time.unscaledTime - _pinEyeSearchTime < PinEyeSearchIntervalSeconds)
+            {
+                return null;
+            }
+
+            _pinEyeSearchTime = Time.unscaledTime;
+            _pinEye = FindDeepChild(_characterRoot, "EyeAnchor", suffix: false);
+
+            if (_pinEye == null)
+            {
+                _pinEye = FindDeepChild(_characterRoot, "Head", suffix: true);
+            }
 
             if (_pinEye == null)
             {
@@ -477,17 +496,20 @@ namespace VortexArena.Core.Player
             return _pinEye;
         }
 
-        private static Transform FindDeepChild(Transform parent, string childName)
+        private static Transform FindDeepChild(Transform parent, string childName, bool suffix)
         {
             for (int i = 0; i < parent.childCount; i++)
             {
                 Transform child = parent.GetChild(i);
-                if (child.name == childName)
+                bool match = suffix
+                    ? child.name.EndsWith(childName, System.StringComparison.Ordinal)
+                    : child.name == childName;
+                if (match)
                 {
                     return child;
                 }
 
-                Transform found = FindDeepChild(child, childName);
+                Transform found = FindDeepChild(child, childName, suffix);
                 if (found != null)
                 {
                     return found;

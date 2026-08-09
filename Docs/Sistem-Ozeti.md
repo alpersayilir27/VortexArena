@@ -3194,9 +3194,10 @@ konsoluna tek satır sebep yazar.
     gövde avatar kökünden (poz kanalı) taşındığı için görünür KALIR** — "kırmızılar görünüyor,
     maviler görünmüyor" tablosunun kaynağı budur, takım değil kanal farkıdır. Ölçek maddesinden
     (`ApplyRootScale`) ayırt etme: buradaki fark bir ORAN değil ÖTELEMEDİR.
-    **Düzeltme alıcıdadır:** `ArenaNetCharacterBehaviour.UpdateHeadPin` uzak karakterin
-    `EyeAnchor`'ını poz kanalının interpole edilmiş kafasına yumuşatılmış ofsetle sabitler (salt
-    konum; rotasyon iskeletten). Alıcıda olmasının sebebi zaman tabanıdır: iskelet ve poz kanalı
+    **Düzeltme alıcıdadır:** `ArenaNetCharacterBehaviour.UpdateHeadPin` uzak karakterin göz
+    referansını (`EyeAnchor` işaretçisi; yoksa `*Head` kemiği — uzak karakterde bugün işaretçi yok
+    ve FBX Generic import olduğu için Mecanim'e sorulamaz) poz kanalının interpole edilmiş
+    kafasına yumuşatılmış ofsetle sabitler (salt konum; rotasyon iskeletten). Alıcıda olmasının sebebi zaman tabanıdır: iskelet ve poz kanalı
     aynı `RenderTime` ile örneklenir, referansla iskelet arasında faz farkı yoktur.
     ⚠️ **Kare başına HAM göz-sabitlemesi GÖNDERİCİDE YAPILMAZ:** göndericide referans taze HMD,
     iskelet ise gecikmeli retarget çıktısıdır — ofset kafa hareketiyle salınır ve bütün gövde
