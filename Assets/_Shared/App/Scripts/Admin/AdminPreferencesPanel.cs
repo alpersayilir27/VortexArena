@@ -58,20 +58,14 @@ namespace VortexArena.App.Admin
     /// </summary>
     public class AdminPreferencesPanel : MonoBehaviour
     {
-        private const float PanelWidth = 760f;
-
-        /// <summary>Panel yüksekliği. ⚠️ İçerik <b>elle yığılan</b> bir <c>y</c> ile diziliyor
-        /// (Layout Group yok, UiKit kararı) — yani yeni bir satır eklemek burayı da ilgilendirir.
-        /// KALİBRASYON bölümü eklenince içerik 810 px'e çıkmıştı, yani paneli 10 px'e kadar
-        /// doldurmuştu; bu değer 880'e çekildi ki bir sonraki satır sessizce taşmasın.
-        /// OYUNCU KİMLİĞİ bölümü (+114) ile içerik ~924'e çıktı → 1000.
-        /// DURAKLAT/DEVAM düğmesi (+50) ile ~974: <b>pay bitti.</b>
-        /// Kabaca hesap: başlangıç 78 + her Section 34 + her Cycler 40 + her düğme satırı 50.
-        /// <para>⚠️ 1000 px, 1080p bir ekranda üstten/alttan ~40 px pay bırakır ve içerik artık
-        /// panelin dibinde. <b>Bir satır daha eklenirse panel yükseltilemez</b> — o noktada
-        /// içeriğin kaydırılabilir olması gerekir.</para></summary>
-        private const float PanelHeight = 1000f;
-        private const float RowHeight = 40f;
+        // NOT: PanelWidth/PanelHeight/RowHeight sabitleri KALDIRILDI — hiçbiri okunmuyordu ve
+        // durdukları yerde "yerleşimi kod belirliyor" diye yalan söylüyorlardı. Panel ölçüsü ve
+        // satır yerleşimi AdminHud.prefab'taki PreferencesPanel RectTransform'undadır; içerik
+        // ELLE yığılan y ile dizilir (Layout Group yok, UiKit kararı), yani yeni satır eklemek =
+        // prefabta alttaki her şeyi kaydırmak + paneli büyütmek. Kaba satır maliyeti: Section 34,
+        // döngüleyici 40, düğme satırı 50.
+        // ⚠️ Panel 1080p referansta TAVANDA: üstten/alttan ~17 px pay kaldı — bir satır daha
+        // SIĞMAZ, sonraki ekleme içeriği kaydırılabilir yapmayı gerektirir.
 
         /// <summary>Skor limiti adımlayıcısının eşiği: bu değerin altında ±1, üstünde ±5 adımlar.
         /// İki düğmeli döngüleyiciyle hem düşük limitlerde hassasiyet hem yüksek limitlerde
@@ -160,6 +154,30 @@ namespace VortexArena.App.Admin
         /// <para>Etiketi <b>prefabta sabittir</b> ve koddan yazılmaz: durumu yok (yanındaki
         /// sıfırlama düğmesinin aksine onay penceresi de yok), yani gösterecek bir veri yok.</para></summary>
         [SerializeField] private Button _measureAllButton;
+
+        // Kalibre modu (§5.2 set_calibration_mode): başlıkların AÇILIŞTA nasıl hizalanacağı.
+        // Dost ateşiyle aynı sınıf — anlık komut, seçim kilidine girmez, koşan maçta da değişir.
+        // ⚠️ prev/next DEĞİL, ÜÇ AYRI DÜĞME: üçüncü seçenek (çapa bulutu) görünür ama pasiftir ve
+        // dönen bir imleçte pasif değerin üstünden atlamak zorunda kalırdık — operatör o seçeneğin
+        // var olduğunu hiç görmezdi.
+        [Tooltip("Başlıklar açılışta İKİ ÇAPA ile elle kalibre edilsin (sunucu varsayılanı): " +
+                 "diskteki kayıtlı çapa OKUNMAZ. Anlık komut, tüm adminlere yayılır.")]
+        [SerializeField] private Button _calibModeTwoButton;
+        [SerializeField] private TextMeshProUGUI _calibModeTwoLabel;
+
+        [Tooltip("Başlıklar açılışta cihazda KAYITLI çapadan hizalansın — oyuncu her seansta " +
+                 "yeniden kalibre etmez. Zemin işaretleri yerinden oynamadıysa kullanılır.")]
+        [SerializeField] private Button _calibModeSavedButton;
+        [SerializeField] private TextMeshProUGUI _calibModeSavedLabel;
+
+        [Tooltip("Paylaşılan uzamsal çapa — REZERVE. Düğme hiçbir komut göndermez ve pasiftir; " +
+                 "sunucu bu modu zaten reddeder. Seçenek yalnız görünür olsun diye durur.")]
+        [SerializeField] private Button _calibModeCloudButton;
+        [SerializeField] private TextMeshProUGUI _calibModeCloudLabel;
+
+        /// <summary>Kalibre modu düğmelerinin PASİF zemini — <c>AdminPlayerRow</c>'daki KAL/AT
+        /// düğmeleriyle aynı ton, aktif olan <see cref="UiKit.Accent"/> ile ayrışır.</summary>
+        private static readonly Color CalibModeIdleFill = UiKit.Hex(0x2A303B, 0xFF);
 
         /// <summary>Toplu kalibrasyon sıfırlamanın onay penceresi (sn) — AdminPlayerRow ile aynı
         /// gerekçe: herkesi savaş dışı bırakan bir eylem tek yanlış tıklamayla olmamalı.</summary>
@@ -267,6 +285,12 @@ namespace VortexArena.App.Admin
             Wire(_startButton, StartMatch);
             Wire(_abortButton, AdminCommands.AbortMatch);
             Wire(_pauseButton, TogglePause);
+
+            Wire(_calibModeTwoButton, () => AdminCommands.SetCalibrationMode(ArenaProtocol.CALIB_MODE_TWO_ANCHOR));
+            Wire(_calibModeSavedButton, () => AdminCommands.SetCalibrationMode(ArenaProtocol.CALIB_MODE_SAVED_ANCHOR));
+            // ⚠️ _calibModeCloudButton BAĞLANMAZ: rezerve moddur, sunucu reddeder. Düğme her
+            // tazelemede pasifleştirilir (ApplyCalibrationMode) — bağlanmış ama tepkisiz bir
+            // düğme operatöre komutun gittiğini düşündürürdü.
 
             Wire(_clearAllButton, ArmClearAllCalibration);
             // ⚠️ Onay penceresi YOK (satırdaki ÖLÇ ile aynı gerekçe): ölçüm geri alınabilir bir
@@ -1253,6 +1277,8 @@ namespace VortexArena.App.Admin
 
             _statusText.text = AdminCommands.Status;
 
+            ApplyCalibrationMode();
+
             if (_clearAllLabel != null)
             {
                 bool armed = _clearAllArmedAt >= 0f;
@@ -1282,6 +1308,47 @@ namespace VortexArena.App.Admin
                 ? $" — {AdminSelection.AdminCount} admin bağlı"
                 : "";
             _connectionText.text = $"{state} — {endpoint}{peers}";
+        }
+
+        /// <summary>
+        /// Kalibre modu düğmelerini yürürlükteki değere göre boyar (§5.2).
+        /// <para>Değer sunucudan okunur (yerel imleç yok): komut anlıktır ve başka bir operatör de
+        /// değiştirebilir — "gönderdim" ile "yürürlükte" arasındaki fark ekranda yalan söylemesin.
+        /// Boş değer <c>two_anchor</c> sayılır (sunucunun açılış varsayılanı).</para>
+        /// <para>⚠️ Alanlar prefabta sonradan bağlanır; hepsi null-güvenli okunur — eksik bağ
+        /// panelin geri kalanını çizmemeyi haklı çıkarmaz.</para>
+        /// </summary>
+        private void ApplyCalibrationMode()
+        {
+            string mode = AdminSelection.CalibrationMode;
+            if (string.IsNullOrEmpty(mode))
+            {
+                mode = ArenaProtocol.CALIB_MODE_TWO_ANCHOR;
+            }
+
+            PaintCalibModeButton(_calibModeTwoButton, _calibModeTwoLabel,
+                mode == ArenaProtocol.CALIB_MODE_TWO_ANCHOR, true);
+            PaintCalibModeButton(_calibModeSavedButton, _calibModeSavedLabel,
+                mode == ArenaProtocol.CALIB_MODE_SAVED_ANCHOR, true);
+            // Rezerve seçenek: her tazelemede pasif ve soluk — metni prefabtan gelir, koddan
+            // "yakında" gibi bir şey yazılmaz (durumu renk taşır).
+            PaintCalibModeButton(_calibModeCloudButton, _calibModeCloudLabel, false, false);
+        }
+
+        private static void PaintCalibModeButton(Button button, TextMeshProUGUI label,
+            bool active, bool usable)
+        {
+            SetInteractable(button, usable);
+
+            if (label != null)
+            {
+                label.color = !usable ? UiKit.Faint : active ? UiKit.OnAccent : UiKit.Muted;
+            }
+
+            if (button != null && button.targetGraphic is Image image)
+            {
+                image.color = active ? UiKit.Accent : CalibModeIdleFill;
+            }
         }
 
         /// <summary>Maç sürerken mod/harita satırlarını pasif gösterir (§10.7): seçiciler

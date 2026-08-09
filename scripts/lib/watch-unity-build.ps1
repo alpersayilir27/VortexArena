@@ -63,7 +63,13 @@ $PhaseRules = @(
   @{ Rank = 7; Label = 'Shader varyantlari derleniyor';           Re = 'Compiling shader |Compiled shader |shader variants' }
   @{ Rank = 8; Label = 'IL2CPP / native derleme';  Gate = $true; Re = 'il2cpp\.exe|IL2CPP Conversion|Building native binary|UnityLinker' }
   # Android'e ozgu son asama: IL2CPP bittikten sonra Gradle APK'yi paketler.
-  @{ Rank = 8; Label = 'Gradle / APK paketleniyor'; Gate = $true; Re = 'Gradle|BuildingGradleProject|Packaging APK|assembleRelease|aapt2' }
+  # Desene CIPLAK "Gradle" KOYMA: Windows build'inin logunda da geciyor
+  # (perf-test paketinin metadata JSON'unda "AndroidBuildSystem":"Gradle",
+  # OVRGradleGeneration.cs stack-trace yollari) ve kural Gate'li + ayni gruptaki
+  # dusuk rank'e donus yasak oldugu icin tek yanlis eslesme etiketi build'in
+  # sonuna kadar "Gradle / APK" diye kilitler. Yalniz gercek Gradle CIKTISINDA
+  # gecen isaretler kullanilir.
+  @{ Rank = 8; Label = 'Gradle / APK paketleniyor'; Gate = $true; Re = 'Building Gradle project|Gradle Daemon|> Task :|assembleRelease|assembleDebug|Packaging APK|aapt2|gradleOut' }
   @{ Rank = 9; Label = 'Bitiriyor (rapor + kapanis)'; Gate = $true; Re = '\[PlayerBuildTool\] Build |Total build time|Exiting batchmode' }
 )
 

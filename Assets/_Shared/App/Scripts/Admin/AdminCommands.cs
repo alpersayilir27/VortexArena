@@ -114,6 +114,31 @@ namespace VortexArena.App.Admin
             Send(new SetFriendlyFireMsg { enabled = enabled });
         }
 
+        /// <summary>
+        /// Başlıkların AÇILIŞTA nasıl hizalanacağı (§5.2 <c>set_calibration_mode</c>) —
+        /// <see cref="SetFriendlyFire"/> ile aynı sınıf: <b>anlık komut</b>, <c>set_selection</c>'a
+        /// binmez ve seçim kilidine girmez.
+        /// <para>Değer yerel bir alana YAZILMAZ: sunucu <c>admin_state</c> ile geri yayar
+        /// (tek doğruluk kaynağı — iki operatör sapmaz).</para>
+        /// <para>⚠️ <c>anchor_cloud</c> buradan GÖNDERİLMEZ: rezerve bir değerdir, sunucu da
+        /// reddeder — arayüz o seçeneği pasif tutar.</para>
+        /// </summary>
+        public static void SetCalibrationMode(string mode)
+        {
+            if (Send(new SetCalibrationModeMsg { mode = mode ?? "" }))
+            {
+                SetStatus($"Kalibre modu gönderildi: {CalibrationModeLabel(mode)}");
+            }
+        }
+
+        /// <summary>Kalibre modunun operatöre gösterilen adı; bilinmeyen değer ham geçer.</summary>
+        public static string CalibrationModeLabel(string mode)
+        {
+            return mode == ArenaProtocol.CALIB_MODE_TWO_ANCHOR ? "2 Çapa"
+                : mode == ArenaProtocol.CALIB_MODE_SAVED_ANCHOR ? "Eski Kalibre"
+                : mode ?? "";
+        }
+
         public static void AbortMatch()
         {
             if (Send(new AbortMatchMsg()))

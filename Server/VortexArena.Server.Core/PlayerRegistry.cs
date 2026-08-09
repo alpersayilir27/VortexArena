@@ -169,6 +169,10 @@ public sealed class PlayerRegistry : IDisposable
             // başlamış olabilir). Başlık kayıtlı anchor'dan geri yükleyince yeniden bildirir.
             state.Calibrated = false;
             state.CalibrationSource = "";
+            // Hizalamaya ait teşhis alanları da onunla gider: sapma o hizalamanın, ölçüm hatası da
+            // o oturumun bilgisiydi — taşınırsa operatör çözülmüş bir sorunu görmeye devam eder.
+            state.FloorOffset = 0f;
+            state.ScaleError = "";
             // §10.8: ölçü hizalamaya bağlı olduğu için o da bilinmiyor sayılır. Başlık kendi
             // kaydından ölçeği hemen yeniden bildirir (set_body_scale), yani operatör yeniden
             // ölçmek zorunda kalmaz.
@@ -347,25 +351,37 @@ public sealed class PlayerRegistry : IDisposable
     /// calibration mesajı YOKTUR, durum roster ile taşınır (§5.3).
     /// <para>Admin kalibre olmaz: <c>role != "player"</c> sessizce reddedilir, aksi hâlde admin
     /// arayüzünde kendisi "kalibresiz" diye sayılırdı.</para></summary>
-    public bool SetCalibration(int playerId, bool calibrated, string? source)
+    public bool SetCalibration(int playerId, bool calibrated, string? source, float floorOffset = 0f)
     {
         if (!TryGetByPlayerId(playerId, out var state)) return false;
         if (state.Role != "player") return false;
 
         var nextSource = calibrated ? source ?? "" : "";
+        // Sapma hizalamaya aittir (§10.6): hizalama düşünce o da düşer.
+        var nextOffset = calibrated ? floorOffset : 0f;
         lock (_gate)
         {
             // Değişmediyse yayın YAPMA. Harita değişiminde her başlık kayıtlı anchor'dan geri
             // yükleyip aynı değeri yeniden bildirir; guard olmasa N oyuncu × N alıcı = N² gereksiz
             // lobby_state giderdi (16 oyuncuda 256 mesaj).
-            if (state.Calibrated == calibrated && state.CalibrationSource == nextSource) return false;
+            // ⚠️ Sapma da karşılaştırmaya girer: aynı kaynakla yeniden kalibre olan oyuncunun yeni
+            // sapması yoksa roster'da eski değer kalırdı.
+            if (state.Calibrated == calibrated && state.CalibrationSource == nextSource
+                && Math.Abs(state.FloorOffset - nextOffset) < 0.0001f) return false;
             state.Calibrated = calibrated;
             state.CalibrationSource = nextSource;
+            state.FloorOffset = nextOffset;
 
             // §10.8: hizalama düşünce gövde ölçüsü de düşer — ölçü arena zeminine göre alınmıştı.
             // ⚠️ Kapı burasıdır, clear_calibration DEĞİL: başlığın kendi set_calibration{false}'u
             // da aynı sonucu doğurur ve tek yolu kapatmak kuralı işlevsiz bırakırdı.
-            if (!calibrated) state.BodyScale = 0f;
+            if (!calibrated)
+            {
+                state.BodyScale = 0f;
+                // Ölçüm hatası da o hizalamanın bilgisiydi; bırakılırsa sıfırlanmış bir satır
+                // hâlâ eski gerekçeyi gösterirdi.
+                state.ScaleError = "";
+            }
         }
         Changed?.Invoke(state, PlayerChangeKind.Updated);
         return true;
@@ -379,6 +395,9 @@ public sealed class PlayerRegistry : IDisposable
     /// ölçeğini aynı anda bildiriyor ve iki mesajın sırasına bağlı bir kapı, ölçeği bazen sessizce
     /// düşürürdü. Hizalama gerçekten geçersizse ölçeği <see cref="SetCalibration"/> zaten siler.</para>
     /// <para>Değişmediyse yayın yapılmaz — <see cref="SetCalibration"/> ile aynı gerekçe.</para>
+    /// <para>⚠️ <b>Başarılı ölçüm <see cref="PlayerState.ScaleError"/>'ı da temizler</b> ve bunu
+    /// AYNI yayında yapar: iki ayrı çağrıya bölünseydi tek bir ölçüm iki tam roster yayını
+    /// üretirdi (§10.8).</para>
     /// </summary>
     public bool SetBodyScale(int playerId, float scale)
     {
@@ -388,8 +407,30 @@ public sealed class PlayerRegistry : IDisposable
         var clamped = Math.Clamp(scale, ArenaProtocol.BODY_SCALE_MIN, ArenaProtocol.BODY_SCALE_MAX);
         lock (_gate)
         {
-            if (Math.Abs(state.BodyScale - clamped) < 0.0001f) return false;
+            var scaleChanged = Math.Abs(state.BodyScale - clamped) >= 0.0001f;
+            var errorCleared = state.ScaleError.Length > 0;
+            if (!scaleChanged && !errorCleared) return false;
             state.BodyScale = clamped;
+            state.ScaleError = "";
+        }
+        Changed?.Invoke(state, PlayerChangeKind.Updated);
+        return true;
+    }
+
+    /// <summary>Başarısız gövde ölçümünün gerekçesini yazar (§10.8). <b>Ölçeğe DOKUNMAZ</b> —
+    /// başarısız ölçüm kayıtlı değeri geçersiz kılmaz, yalnız operatöre neden olmadığını söyler.
+    /// <para>Boş gerekçe alanı temizler; değişmediyse yayın yapılmaz
+    /// (<see cref="SetCalibration"/> ile aynı gerekçe).</para></summary>
+    public bool SetScaleError(int playerId, string? error)
+    {
+        if (!TryGetByPlayerId(playerId, out var state)) return false;
+        if (state.Role != "player") return false;
+
+        var next = error ?? "";
+        lock (_gate)
+        {
+            if (state.ScaleError == next) return false;
+            state.ScaleError = next;
         }
         Changed?.Invoke(state, PlayerChangeKind.Updated);
         return true;

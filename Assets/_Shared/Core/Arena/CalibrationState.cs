@@ -63,6 +63,29 @@ namespace VortexArena.Core.Arena
         /// <summary>Son bildirilen kaynak ("manual" | "anchor" | "cloud" | "").</summary>
         public static string Source => _source;
 
+        /// <summary>
+        /// Sunucunun yürürlükteki kalibre modu (<c>ArenaProtocol.CALIB_MODE_*</c>, §10.6); boş =
+        /// hiç <c>welcome</c> alınmadı.
+        /// <para>⚠️ Bağlantı kopunca SIFIRLANMAZ (son bilinen değer kalır): mod bir oturum
+        /// durumu değil operatör kararıdır, kopan ağ onu unutturmaz. Yeni <c>welcome</c> üzerine
+        /// yazar.</para>
+        /// </summary>
+        public static string Mode { get; private set; } = "";
+
+        /// <summary>
+        /// Başlık AÇILIŞTA diskteki <c>OVRSpatialAnchor</c> UUID'sinden hizalamayı geri
+        /// yükleyebilir mi (§10.6).
+        /// <para>
+        /// Boş mod = hiç <c>welcome</c> alınmamış (sunucusuz sandbox) → geliştirme kolaylığı için
+        /// geri yükleme serbest; <c>saved_anchor</c> zaten bunu ister.
+        /// <c>two_anchor</c>'da yalnız <b>DİSK</b> geri yüklemesi kapanır: oturum-içi (bellekteki
+        /// çapa) geri yükleme moddan BAĞIMSIZDIR — harita değişimi onunla taşınır ve o kapı
+        /// kapanırsa her arena geçişinde oyuncu yeniden kalibre etmek zorunda kalırdı.
+        /// </para>
+        /// </summary>
+        public static bool DiskRestoreAllowed =>
+            string.IsNullOrEmpty(Mode) || Mode == ArenaProtocol.CALIB_MODE_SAVED_ANCHOR;
+
         /// <summary>Durum değiştiğinde (ana thread).</summary>
         public static event Action Changed;
 
@@ -135,6 +158,9 @@ namespace VortexArena.Core.Arena
 
             _reportMsg.calibrated = calibrated;
             _reportMsg.source = source ?? "";
+            // Zemin sapması yalnız ÖLÇÜLDÜĞÜNDE anlamlıdır (§10.6): kalibrasyonun düştüğü yolda
+            // ölçüm yoktur ve son ölçümü tekrar göndermek operatöre bayat bir uyarı gösterirdi.
+            _reportMsg.floorOffset = calibrated ? ArenaCalibrator.LastFloorOffsetMeters : 0f;
             client.Send(_reportMsg);
         }
 
@@ -143,6 +169,10 @@ namespace VortexArena.Core.Arena
         private void HandleConnected(WelcomeMsg msg)
         {
             _hasEverConnected = true;
+
+            // Mod bağlantıda BİR KEZ gelir (§10.6): kapıladığı karar — açılışta diskten çapa geri
+            // yüklenecek mi — tam da bu anda veriliyor, sonradan yayılsa uygulanacağı bir an olmazdı.
+            Mode = msg != null ? msg.calibrationMode ?? "" : "";
 
             // Sunucu hello'da kalibrasyonu sıfırlar (§10.6) — yerelde hizalama duruyorsa
             // (ör. bağlantı koptu, anchor'dan geri yüklenmişti) onu yeniden bildir.

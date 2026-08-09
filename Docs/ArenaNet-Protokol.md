@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `12` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı eşyaya göre kendi sürer. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — blob opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
+| `PROTOCOL_VERSION` | `13` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı eşyaya göre kendi sürer. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — blob opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -26,6 +26,8 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `SKELETON_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x08` datagramına yazılan en fazla girdi (§6.10). Asıl kısıt **bayt bütçesidir** (`COMBINED_MAX_BYTES`) — girdiler değişken uzunluklu; bu sayı `count`'un `u8` olmasının tavanıdır |
 | `PLAYER_ID_MAX` | `255` | `playerId` tahsis tavanı. **Ürün kotası değil, tel formatı tavanıdır** — `playerId` UDP paketlerinde `u8`. Eşzamanlı oyuncu/admin sayısına başka sınır YOKTUR (kota ileride lisanslamayla gelecek) |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
+| `CALIB_MODE_TWO_ANCHOR` / `CALIB_MODE_SAVED_ANCHOR` / `CALIB_MODE_ANCHOR_CLOUD` | `"two_anchor"` / `"saved_anchor"` / `"anchor_cloud"` | Kalibre modunun geçerli değerleri (§5.2/§10.6). Sunucu açılış varsayılanı `two_anchor`. ⚠️ `anchor_cloud` **rezervdir** — sunucu kabul etmez, loglayıp durumu değiştirmez; bilinmeyen/boş değer de aynı şekilde reddedilir (sessizce varsayılana düşmez: mod bir operatör kararıdır, tahmin edilmez) |
+| `CALIB_FLOOR_WARN_METERS` | `0.5` | Elle kalibrasyonda bildirilen zemin sapmasının (`set_calibration.floorOffset`) mutlak değeri bunu aşarsa sunucu adminlere duyuru basar (§10.6). Bir kapı değil **teşhis eşiğidir**: kalibrasyon yine kabul edilir, operatör gözlükte alan verisi temizliğine yönlendirilir |
 | `BODY_SCALE_MIN` / `BODY_SCALE_MAX` | `0.5` / `1.6` | `set_body_scale` kırpma aralığı (§10.8). Ölçüm istemcide yapılır ama sonuç **herkesin ekranına** gider; sunucu bu yüzden kırpar — bozuk bir istemci arenaya 4 metrelik bir avatar koyamasın. `0` bu aralığın dışındadır ve "ölçülmemiş" demektir |
 | `SNAPSHOT_MAX_ENTRIES_PER_PACKET` | `16` | Tek snapshot datagramına yazılan en fazla oyuncu; fazlası ek pakete taşar (§6.3). 6 + 16×88 = 1414 B < MTU |
 | `EVENT_MAX_ENTRIES_PER_PACKET` | `128` | Tek `0x04` datagramına yazılan en fazla olay (§6.5). 6 + 128×9 = 1158 B < MTU. Taşan olay **atılmaz, sonraki tik'e kayar** — "tik başına en fazla bir batch" değişmezi kopya korumasının dayanağıdır |
@@ -173,12 +175,26 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 
 **`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** modun canlanma şartını sağladıktan (taban bölgesine girme ya da sabit durma) sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da oyuncu ışınlanamadığı için canlanma bir **konum değişimi değil, durum değişimidir**.
 
-**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye çift basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
+**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual", "floorOffset":0.07 }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye çift basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
 
-**`set_body_scale`** `{ "type":"set_body_scale", "scale":1.04 }` (yalnız player) — başlık **kendi**
+`floorOffset` = elle kalibrasyonda kumanda ucunun **yakalama anındaki tracking-yerel yüksekliği**
+(metre, **işaretli**): sistemin zemin tahmininin gerçek zeminden sapması. Kumanda ucu fiziksel
+zemine değdiği için sıfırdan farklı her değer doğrudan o tahminin hatasıdır. Kayıtlı çapadan geri
+yüklemede `0` gönderilir — orada bir ölçüm yoktur. Sunucu değeri yorumlamaz: roster'a yazar
+(`PlayerInfo.floorOffset`, §5.3) ve `CALIB_FLOOR_WARN_METERS` eşiğini aşarsa operatörü uyarır
+(§10.6). ⚠️ **Bir kapı değildir** — sapma ne olursa olsun kalibrasyon kabul edilir; oyuncuyu
+savaş dışı bırakmak operatörün kararıdır.
+
+**`set_body_scale`** `{ "type":"set_body_scale", "scale":1.04, "error":"" }` (yalnız player) — başlık **kendi**
 gövde ölçeğini bildirir (§10.8). `playerId` taşımaz, bağlantıdan çözülür (`set_calibration` ile aynı
 sözleşme). Ölçümü istemci yapar, sunucu **yorumlamaz**: yalnız `[BODY_SCALE_MIN, BODY_SCALE_MAX]`
 aralığına kırpar ve roster'da yayar.
+
+`error` = ölçüm başarısızsa insan okuyabilir gerekçesi (boş = başarılı ölçüm). **Doluysa `scale`
+YOK SAYILIR ve kayıtlı ölçek DEĞİŞMEZ**: gerekçe adminlere duyurulur ve roster'a yazılır
+(`PlayerInfo.scaleError`, §5.3). Başarısızlığı hiç bildirmemek operatörü *"bastım, bir şey olmadı"*
+durumunda bırakır; başarısız ölçümü ölçek olarak yazmak ise sessizce yanlış bir avatar boyu
+üretirdi (§10.8).
 
 ### 5.2 Yalnız admin → Sunucu
 
@@ -191,6 +207,22 @@ aralığına kırpar ve roster'da yayar.
 - **`set_team`** `{ "type":"set_team", "playerId":5, "team":"blue" }` (`"red"|"blue"`) — hedef oyuncunun takımı. **Faz kapısı YOKTUR:** operatör `playing` dahil her fazda, sunucuya bağlı herkesin takımını değiştirebilir; değişiklik `lobby_state` ile yayılır ve istemcide anında geçerlidir (taban bölgesi, arayüz renkleri). Hedef admin ise reddedilir. Oyuncudan gelen `set_team` loglanıp yok sayılır — **oyuncu kendi takımını seçemez, bunun için protokol mesajı YOKTUR ve eklenmeyecektir.**
 - **`set_friendly_fire`** `{ "type":"set_friendly_fire", "enabled":true }` — dost ateşi anahtarı (§10.5). **Faz kapısı YOKTUR:** operatör `playing` dahil her fazda basabilir ve etkisi anlıktır — gerekçe `set_team` ile aynıdır: operatör sahadaki durumu maçı iptal etmeden düzeltebilmeli. Değer sunucuda yaşar (açılışta `false`), yürürlükteki kural şekline damgalanır ve koşan maçta `rules_update` ile herkese yayılır (§5.3). Maç başlangıcı, harita sahneleme ve lobiye dönüş anahtarı **sıfırlamaz** (süre/limit seçimiyle aynı sözleşme); sıfırlayan tek şey sunucunun yeniden başlatılmasıdır. Oyuncudan gelirse loglanıp yok sayılır.
   ⚠️ **Neden `set_selection` alanı değil:** o mesaj "boş/`0` = dokunulmadı" sözleşmesiyle çalışır ve bir `bool` "dokunulmadı"yı ifade edemez. Aynı sebeple seçim kilidine (§10.7 "ne zaman serbest") de takılmaz — bu bir sonraki maçın seçimi değil, o anın durumudur.
+- **`set_calibration_mode`** `{ "type":"set_calibration_mode", "mode":"two_anchor" }` — oyuncu
+  başlıklarının **açılışta nasıl hizalanacağı** (§10.6). `set_friendly_fire` ile aynı sınıftadır:
+  **anlık bir komuttur**, `set_selection`'a binmez, seçim kilidine girmez ve koşan maçta da
+  değiştirilebilir. Değer sunucuda yaşar (açılışta `CALIB_MODE_TWO_ANCHOR`) ve `admin_state` ile
+  tüm adminlere yayılır.
+
+  | `mode` | Anlam |
+  |---|---|
+  | `"two_anchor"` | Oyuncu her uygulama açılışında elle 2 çapa kalibrasyonu alır; diskteki çapa UUID'si **hiç okunmaz** |
+  | `"saved_anchor"` | Başlık açılışta kayıtlı `OVRSpatialAnchor`'dan hizalamayı geri yükler |
+  | `"anchor_cloud"` | **Rezerve** — sunucu KABUL ETMEZ (loglar, durum değişmez); arayüzde de pasiftir |
+
+  ⚠️ **Bilinmeyen/boş değer REDDEDİLİR** (loglanır, durum değişmez) — kural değerlerinin
+  "bilinmeyen → varsayılana düş" sözleşmesi burada geçerli DEĞİLDİR: bu bir kural şekli değil bir
+  operatör kararıdır ve sessizce varsayılana dönmek, operatöre bastığı düğmenin uygulandığını
+  gösterirdi.
 - **`kick`** `{ "type":"kick", "playerId":5 }` — hedef bağlantı kapatılır ve **o başlıkta uygulama kapanır** (kapanış dizisi §5.4).
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
 - **`clear_calibration`** `{ "type":"clear_calibration", "playerId":5 }` — o oyuncunun kalibrasyonunu **sıfırlar** (§10.6). **`playerId:0` = TÜM oyuncular** (toplu sıfırlama). Admin kalibrasyonu yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez — hizalamanın gerçekten oturduğunu yalnız başlık bilir (§10.6).
@@ -242,6 +274,7 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
 **`welcome`** — hello yanıtı:
 ```json
 { "type":"welcome", "protocolVersion":3, "playerId":3, "udpToken":123456789,
+  "calibrationMode":"two_anchor",
   "match": { "phase":"paused", "phaseReason":"lobby", "modeId":"lobby", "modeState":"",
              "sceneName":"Lobby12x12", "timeRemaining":0, "scoreRed":0, "scoreBlue":0,
              "rules": { "teamMode":"two", "scoring":"team", "friendlyFire":false,
@@ -256,6 +289,12 @@ bekler ve sebebi konsola yazar.
 `match.rules` = o an geçerli kural şekli (§10.5) — geç katılan istemci/admin kendini aynı kurallara
 göre kurar. `phase`/`phaseReason`/`modeState` anlamları §10.1'de.
 
+`calibrationMode` = yürürlükteki kalibre modu (§5.2/§10.6). ⚠️ **Oyuncu bu değeri bağlantıda BİR
+KEZ çeker:** modun kapıladığı tek şey açılıştaki diskten çapa geri yüklemesidir ve o karar
+`welcome` geldiğinde zaten verilmiştir. Bu yüzden **bağlı oyuncuya canlı yayılım YOKTUR** —
+operatörün mod değişikliği yalnız bundan sonra bağlananlara işler; sahadaki karşılığı oyuncu
+başlığının yeniden başlatılmasıdır.
+
 **`lobby_state`** — roster her değiştiğinde **ve maç sayaçları değiştiğinde** (ölüm/canlanma) TAM anlık görüntü:
 ```json
 { "type":"lobby_state", "version":42, "players":[
@@ -263,7 +302,8 @@ göre kurar. `phase`/`phaseReason`/`modeState` anlamları §10.1'de.
     "ready":true, "connection":"connected", "reconnectSeconds":0,
     "battery":0.87, "ctrlL":1, "ctrlR":3, "scene":"Arena12x12",
     "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7,
-    "inMatch":true, "calibrated":true, "calibrationSource":"anchor", "bodyScale":1.04 } ] }
+    "inMatch":true, "calibrated":true, "calibrationSource":"anchor", "floorOffset":0.07,
+    "bodyScale":1.04, "scaleError":"" } ] }
 ```
 
 `version` = **monoton artan** roster sürümü (sunucu ömrü boyunca; sunucu yeniden başlarsa `0`'dan).
@@ -317,6 +357,15 @@ düşmesi değil, hedefe iletilen `clear_calibration`'dır (§5.2). Roster'a ba�
 şudur: yarım kalmış bir elle kalibrasyonda alan **zaten** `false`'tur, yani sıfırlamanın burada
 görünür bir deltası yoktur — dinleyen istemci hiçbir şey olmadığını sanır.
 
+`floorOffset` = son **elle** kalibrasyonda bildirilen zemin sapması (metre, işaretli; §5.1).
+`0` = ölçüm yok ya da temiz. Mutlak değeri `CALIB_FLOOR_WARN_METERS`'i aşan satır arayüzde ⚠ ile
+gösterilir (§10.6). `clear_calibration` bu alanı sıfırlar.
+
+`scaleError` = son gövde ölçümü başarısız olduysa gerekçesi, boş = sorun yok (§5.1/§10.8). Başarılı
+bir ölçüm alanı **temizler**; `clear_calibration` de sıfırlar. Kalibrasyon alanlarıyla aynı
+sınıftadır (kesikli cihaz durumu) ve aynı sebeple roster'da taşınır: değiştiği an roster'ın zaten
+tazelendiği andır.
+
 `bodyScale` = o oyuncunun avatarına uygulanacak **üniform ölçek** (§10.8). **`0` = ölçülmemiş ve
 okuyan taraf `1` uygular** — kural değerleriyle aynı sözleşme, alanı hiç göndermeyen bir uç
 sessizce doğru davranır. Kalibrasyon alanlarıyla aynı sebepten burada taşınır: değiştiği an
@@ -350,8 +399,9 @@ Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken har
 **`ping`** `{ "type":"ping" }` — istemci `status` ile yanıtlar (ayrı pong yok).
 **`identify`** `{ "type":"identify" }` — istemci büyük kimlik overlay'i gösterir (playerId + ad).
 **`measure_body_scale`** `{ "type":"measure_body_scale" }` — istemci gövde ölçüsünü alır ve sonucu
-`set_body_scale` ile döner (§10.8). Yalnız player'a gider; ölçüm başarısız olursa istemci **hiçbir
-şey göndermez** (eski ölçek durur) ve sebebi kendi konsoluna yazar.
+`set_body_scale` ile döner (§10.8). Yalnız player'a gider; ölçüm başarısız olursa istemci yine
+`set_body_scale` yollar ama `error` alanı **dolu** olur — eski ölçek durur, gerekçe operatöre
+gider (§5.1).
 **`clear_calibration`** `{ "type":"clear_calibration" }` — istemci hizalamayı **ve yarım kalmış
 elle kalibrasyon sekansını** siler, kayıtlı `OVRSpatialAnchor`'ı yok eder ve elle kalibrasyon
 kapısını yeniden açar (§10.6). Yalnız player'a gider; alan taşımaz — hedef zaten o bağlantıdır.
@@ -364,12 +414,18 @@ geçersiz sayılır.
 { "type":"admin_state", "modeId":"tdm", "sceneName":"Arena12x12",
   "venueId":"Outdoor12x12", "venueScenes":["Arena12x12","IceWorld","Lobby12x12"],
   "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10, "friendlyFire":false,
+  "calibrationMode":"two_anchor",
   "notice":"Ofis-PC: harita -> Arena12x12", "adminCount":2 }
 ```
-- Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`return_to_lobby`/`kick`/`identify`/`set_team`/`set_friendly_fire`) ve admin bağlanıp ayrıldığında. ⚠️ `pause_match`/`resume_match` için duyuru **yalnız komut gerçekten uygulandıysa** yayılır — reddedilen komut diğer operatörlerin ekranına olmamış bir eylemi yazmamalı.
+- Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`return_to_lobby`/`kick`/`identify`/`set_team`/`set_friendly_fire`/`set_calibration_mode`), oyuncunun bildirdiği
+  zemin sapması eşiği aştığında ya da gövde ölçümü başarısız olduğunda (§10.6/§10.8) ve admin
+  bağlanıp ayrıldığında. ⚠️ `pause_match`/`resume_match` için duyuru **yalnız komut gerçekten uygulandıysa** yayılır — reddedilen komut diğer operatörlerin ekranına olmamış bir eylemi yazmamalı.
 - `modeId`/`sceneName` = ortak seçim. ⚠️ **Hiçbir zaman boş değildir:** sunucu açılışta seçimi **mekanın lobi haritasıyla** tohumlar (`modeId:"lobby"`, `sceneName:<mekanın lobisi>` — §10.7 açık sahnenin açılış değeri), sonrasında da boş alan mevcut değeri koruduğu için seçim bir daha boşalamaz. Böylece ilk `admin_state`'i alan admin de "hiç harita seçilmemiş" bir durum görmez. Admin arayüzü **kendi yerel seçimini değil bunu gösterir**; gelen değer arayüzdeki mod/harita seçicisini günceller. Yani bir operatör haritayı değiştirdiğinde diğerinin ekranı da (paneli açık olmasa bile) o haritaya döner — sahneyi zaten `return_to_lobby` sahnelemesi taşır (§10.7), `admin_state` yalnız seçiciyi hizalar.
 - `roundSeconds`/`scoreLimit`/`countdownSeconds` = bir sonraki maçın ortak parametreleri (`0` = hiç seçilmedi, modun/protokolün varsayılanı kullanılacak). Mod/harita ile aynı kanaldan gider — sebebi §5.2 `set_selection` notunda.
 - `friendlyFire` = dost ateşi anahtarının **o anki** değeri (§5.2). Bir seçim değil **yürürlükteki durum**dur: koşan maçta da geçerli olduğu için diğer alanların "`0`/boş = değişmedi" sözleşmesine girmez ve mod/harita seçicisinin kilidine takılmaz — panelde maç kuruluyken de basılabilir.
+- `calibrationMode` = kalibre modunun **o anki** değeri (§5.2/§10.6). `friendlyFire` ile aynı
+  sınıftadır: bir seçim değil yürürlükteki durumdur, mod/harita seçicisinin kilidine takılmaz.
+  Oyuncuya buradan gitmez — o değeri `welcome`'da bir kez alır.
 - `notice` = son admin eyleminin insan okuyabilir özeti (`"<admin adı>: <eylem>"`), tüm adminlerin durum satırında görünür. Boş olabilir.
 - `adminCount` = o an çevrimiçi admin sayısı.
 - `venueId`/`venueScenes` = sunucunun açılışta seçtiği mekan ve o mekanın sahne adları (§11.1). Oturum boyunca değişmez ama her `admin_state`'te taşınır ki geç bağlanan admin de ilk mesajda hangi arenaları görebileceğini öğrensin. **Admin harita seçicisi kendi yerel kataloğunu bununla süzer**: katalog tüm projeyi tanır, oynatılabilir olana sunucu karar verir. Boş gelirse süzme yapılmaz.
@@ -717,6 +773,26 @@ taşımaz**.
 `blobLength = 0` ile döner ve tüketici onu düşürür — yarım blob'u deserialize etmeye çalışmak bozuk
 iskelet çizmektir. Bu yol sunucunun **uplink** okuyucusudur ve sunucu blob'u olduğu gibi relay
 ettiği için yarım bir kare tek oyuncuyu değil arenadaki **herkesi** bozuk gövdeyle çizerdi.
+
+⚠️ **İzleme bozulduğunda gönderen SUSMAZ — T-poz yedeği devreye girer.** Yedeği üreten
+`ArenaNetCharacterBehaviour`'dur ve **iki** durumda çalışır:
+
+- **(a) Body tracking hiç geçerli poz üretmemişse.** Kaynağı açılmayan/izinsiz başlıkta (Link'te
+  geliştirici özelliği kapalı, `BODY_TRACKING` izni yok) SDK'nın gönderim kapısı hiç açılmaz ve
+  oyuncu diğer ekranlarda tümden görünmez kalırdı — sahada "ağ bozuk" diye okunan bir arıza. Yedeği
+  tanıma süresi dolunca `LocalBodyAvatar` ister; blob karakterin bind (T) pozudur.
+- **(b) Oyun içinde SDK'nın ürettiği kök akıl sağlığı denetiminden düşerse.** Zemin/boy çözümü
+  karışan başlıkta (çok katlı mekân, bayat izleme haritası) SDK "geçerli" bayrağıyla çöp kök
+  üretebilir; kaynak büsbütün de susabilir. İstemci her SDK karesinde kökü **HMD'nin zemin
+  izdüşümüne yatay uzaklığı** ve **kök yüksekliği** ile yargılar, ayrıca akışın **bayatlamasına**
+  bakar (eşikler `ArenaNetCharacterBehaviour`'daki sabitlerdedir). Düşen kare hiç gönderilmez,
+  yerine yedek kare gider; SDK yoluna dönüş **histerezislidir** — ardışık temiz kare sayacı dolana
+  kadar temiz kareler de bastırılır, yoksa uzak tarafta gövde iki yol arasında kare kare titrerdi.
+
+İki durumda da `root` HMD'nin zemine izdüşümünden (yalnız yaw) türetilir, yani donuk gövde
+oyuncunun gerçek konumunu izler ve arıza "izlemesi bozuk" diye okunur. Tel açısından bu sıradan bir
+`0x07`'dir — sunucu ve alıcı için özel bir durum YOKTUR. Yedek ile SDK yolu aynı anda asla
+göndermez.
 
 `seq` sarmalanır (u16); eski `seq` gelirse paket atılır. `0x01` ile aynı "son gelen kazanır"
 kuralıdır — bu bir **durum** kanalıdır, olay değil (karşılaştır §6.4: olayda sıra zorlaması yoktur).
@@ -1235,9 +1311,34 @@ oyuncuları savaş dışı bırakır.
 eder (pozları arena ile örtüşmez ama akar). Bu bilinçlidir: operatörün "avatar kaymış" teşhisini
 koyabilmesi ve parlayan avatarın hareket ettiğini görebilmesi için pozun akıyor olması gerekir.
 
+**Kalibre modu (`set_calibration_mode`, §5.2).** Operatör başlıkların **açılışta** nasıl
+hizalanacağını seçer; değer sunucuda yaşar ve `welcome.calibrationMode` ile taşınır (§5.3).
+
+⚠️ **Modun kapıladığı TEK şey, uygulama açılışındaki diskten çapa geri yüklemesidir.**
+`saved_anchor` bugünkü davranıştır (başlık kayıtlı `OVRSpatialAnchor` UUID'sini okur ve hizalamayı
+geri yükler); `two_anchor`'da o UUID **hiç okunmaz**, oyuncu her açılışta elle 2 çapa kalibrasyonu
+alır. **HARİTA DEĞİŞİMİNDEKİ geri yükleme moddan bağımsız her zaman koşar** — o, oturum içinde
+bellekte duran çapayla yapılır ve `load_match`'in kalibrasyonu sıfırlamaması kuralının (yukarıda)
+uygulanma biçimidir. İkisini tek anahtara bağlamak, `two_anchor` seçili bir işletmede her harita
+değişiminde tüm oyuncuları savaş dışı bırakırdı.
+
+⚠️ **Mod değişimi bağlı oyunculara YAYILMAZ** (§5.3): karar `welcome` anında verilmiştir, sonradan
+gönderilen bir bayrağın uygulanacağı bir an yoktur. Sahadaki karşılığı başlığı yeniden
+başlatmaktır.
+
+**Zemin sağlığı (`floorOffset`, §5.1).** Elle kalibrasyonda başlık kumanda ucunun tracking-yerel
+yüksekliğini bildirir; bu, sistemin zemin tahmininin hatasıdır. `|floorOffset| >
+CALIB_FLOOR_WARN_METERS` ise sunucu **`admin_state.notice` ile duyuru basar** ve değer roster'la
+taşınıp satırın kalibre etiketini turuncu `KAL ?` yapar. Duyurunun işaret ettiği eylem gözlükte **alan verisi temizliğidir**: kayan
+zemin tahmini kalıcıdır, kalibrasyonu tekrarlamak onu düzeltmez.
+⚠️ Eşik bir **kapı değil teşhis eşiğidir** — kalibrasyon kabul edilir, oyuncu savaş dışı kalmaz.
+Sunucu zemini bilmediği için otomatik bir düzeltme de yapmaz (ikinci bir hizalama otoritesi
+olurdu); tek çıktı operatöre giden bilgidir.
+
 **Bulut kalibrasyonu (ileride).** Paylaşılan uzamsal anchor ile toplu hizalama geldiğinde protokol
-değişmez: `source:"cloud"` zaten geçerli bir değer, `clear_calibration{playerId:0}` zaten toplu
-sıfırlama yapıyor. Grup/oturum kimliği taşıyan alanlar **o iş gelene kadar eklenmez**.
+değişmez: `source:"cloud"` zaten geçerli bir değer, `CALIB_MODE_ANCHOR_CLOUD` zaten rezerve ve
+`clear_calibration{playerId:0}` zaten toplu sıfırlama yapıyor. Grup/oturum kimliği taşıyan alanlar
+**o iş gelene kadar eklenmez**.
 
 ### 10.7 Lobi (tür + sahne + profil)
 
@@ -1319,8 +1420,18 @@ karakter kökünün ölçeğine yazar. `0` = ölçülmemiş → `1` uygulanır.
 | Taraf | Ne yapar |
 |---|---|
 | Operatör | `measure_body_scale` ile ölçümü **başlatır** (§5.2); tek oyuncu ya da `playerId:0` ile hepsi |
-| Başlık | Ölçer ve `set_body_scale` ile **bildirir** (§5.1) |
+| Başlık | Ölçer ve `set_body_scale` ile **bildirir** (§5.1) — başarısızlığı da (`error`) |
 | Sunucu | Aralığa kırpar, saklar, yayar. **Hesaplamaz** |
+
+**Ölçüm başarısızlığı geri bildirilir.** Başlık ölçemediğinde (kalibrasyon düşmüş, karakter henüz
+sürülmemiş, göz hizası okunamadı…) sessiz kalmaz: `set_body_scale`'i `error` dolu, `scale`
+önemsiz olarak yollar. Sunucu ölçeği **yazmaz** (kayıtlı değer aynen durur), gerekçeyi roster'a
+(`PlayerInfo.scaleError`) yazar ve adminlere duyurur.
+⚠️ **Gerekçe doğrulanmayan serbest bir metindir** (`weaponId`/`calibrationSource` ile aynı
+sözleşme): sunucuda karşılığı olan bir hata kodu listesi YOKTUR ve eklenmez — tek tüketicisi
+operatörün ekranıdır, yeni bir başarısızlık türü sunucuda iş çıkarmamalıdır.
+⚠️ **Başarılı ölçüm alanı temizler.** Aksi hâlde bir kez başarısız olan oyuncunun satırında uyarı
+sonsuza kadar kalırdı ve operatör sorunun sürdüğünü sanardı.
 
 **Ölçüm zamana değil komuta bağlıdır.** Ölçünün doğru anını (oyuncu ayakta ve dik) makine bilemez;
 operatör bilir. Kalibrasyondan otomatik tetiklenen bir ölçüm, oyuncu kumandayı zemine değdirmek

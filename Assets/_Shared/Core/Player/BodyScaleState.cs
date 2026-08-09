@@ -191,9 +191,10 @@ namespace VortexArena.Core.Player
 
         /// <summary>
         /// Pencere doldu: medyanı al, yayılımı denetle, kırp ve bildir.
-        /// <para>⚠️ Başarısız ölçüm <b>sessizce geçilmez ama gönderilmez de</b>: eski ölçek durur ve
-        /// sebebi konsola yazılır. Yanlış bir boyu yazmak, hiç yazmamaktan kötüdür — sonucu yalnız
-        /// başkaları görür.</para>
+        /// <para>⚠️ Başarısız ölçümde <b>ölçek gönderilmez ama GEREKÇE gider</b> (§10.8): eski ölçek
+        /// durur, sebep hem konsola yazılır hem <c>set_body_scale.error</c> ile operatöre gider.
+        /// Yanlış bir boyu yazmak hiç yazmamaktan kötüdür — sonucu yalnız başkaları görür; ama
+        /// sessiz kalmak da kötüdür, ölçümü isteyen operatör düğmenin işlemediğini sanır.</para>
         /// </summary>
         private void FinishMeasurement()
         {
@@ -203,6 +204,7 @@ namespace VortexArena.Core.Player
                     "[BodyScaleState] Gövde ölçülemedi: gövde pozu yok ya da göz işaretçisi bağlı " +
                     "değil. Resources/LocalBodyAvatar.prefab içindeki 'Eye Anchor' alanı kafa " +
                     "kemiğinin altındaki işaretçiyi göstermeli.", this);
+                ReportError("gövde pozu yok");
                 return;
             }
 
@@ -217,6 +219,7 @@ namespace VortexArena.Core.Player
                     $"%{spread / Mathf.Max(median, 0.0001f) * 100f:F1} (tavan " +
                     $"%{MaxSpreadRatio * 100f:F0}). Oyuncu ölçüm anında hareketli ya da eğilmiş — " +
                     "dik dururken tekrar ölçün.", this);
+                ReportError("oyuncu hareketli/eğilmiş");
                 return;
             }
 
@@ -245,6 +248,27 @@ namespace VortexArena.Core.Player
             }
 
             _reportMsg.scale = scale;
+            // ⚠️ DTO tek örnektir: bayat bir hata alanı bir sonraki BAŞARILI ölçümü kirletirdi
+            // (sunucu doluysa ölçeği yok sayıyor, §10.8).
+            _reportMsg.error = "";
+            client.Send(_reportMsg);
+        }
+
+        /// <summary>
+        /// Ölçüm başarısız: ölçek yerine GEREKÇE gider (§10.8). <c>scale = 0</c> ve dolu
+        /// <c>error</c> sunucuya "kayıtlı ölçeği değiştirme, gerekçeyi operatöre göster" der.
+        /// <para>Kırpma dalı buraya GİRMEZ — kırpılmış ölçüm bir başarıdır, değeri yazılır.</para>
+        /// </summary>
+        private void ReportError(string reason)
+        {
+            ArenaClient client = ArenaClient.Instance;
+            if (client == null || !client.IsConnected)
+            {
+                return; // sunucusuz oturum: bildirilecek kimse yok
+            }
+
+            _reportMsg.scale = 0f;
+            _reportMsg.error = reason;
             client.Send(_reportMsg);
         }
 

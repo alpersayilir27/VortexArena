@@ -53,6 +53,11 @@ public sealed class LobbyService
     /// <summary>Ortak geri sayım seçimi (§5.2); 0 = hiç seçilmedi → COUNTDOWN_SECONDS.</summary>
     private int _selectedCountdownSeconds;
 
+    /// <summary>Kalibre modu (§5.2/§10.6) — <b>seçim değil yürürlükteki durum</b>: dost ateşiyle
+    /// aynı sınıfta, seçim kilidine girmez ve koşan maçta da değişir. Yalnız <c>_selectionGate</c>
+    /// altında okunup yazılır (diğer ortak alanlarla aynı kilit).</summary>
+    private string _calibrationMode = ArenaProtocol.CALIB_MODE_TWO_ANCHOR;
+
     public LobbyService(PlayerRegistry registry, MatchDirector director)
     {
         _registry = registry;
@@ -104,6 +109,10 @@ public sealed class LobbyService
             protocolVersion = ArenaProtocol.PROTOCOL_VERSION,
             playerId = state.PlayerId,
             udpToken = state.UdpToken,
+            // §10.6: oyuncu modu BURADA bir kez alır — kapıladığı karar (açılışta diskten çapa geri
+            // yüklenecek mi) welcome geldiğinde zaten veriliyor, canlı yayılımın uygulanacağı bir
+            // an yok.
+            calibrationMode = CurrentCalibrationMode(),
             match = _director.CurrentMatchInfo()
         };
         await SendSafeAsync(connection, JsonUtil.Serialize(welcome), state.Name);
@@ -230,14 +239,27 @@ public sealed class LobbyService
     // ---- Kalibrasyon durumu (§10.6) ----
 
     /// <summary>set_calibration: başlık KENDİ hizalamasını bildirir (§5.1). Yalnız kendi kaydını
-    /// yazabilir — playerId taşımaz, bağlantıdan çözülür.</summary>
+    /// yazabilir — playerId taşımaz, bağlantıdan çözülür.
+    /// <para>Bildirilen zemin sapması eşiği aşarsa operatör uyarılır (§10.6). ⚠️ Uyarı roster
+    /// değişimine BAĞLANMAZ: aynı sapmayla yeniden kalibre olan oyuncunun kaydı değişmez ama
+    /// operatörün her elle kalibrasyonda sonucu duyması gerekir.</para></summary>
     public void HandleSetCalibration(ClientConnection connection, SetCalibrationMsg msg)
     {
         var state = connection.State;
         if (state == null) return;
-        if (!_registry.SetCalibration(state.PlayerId, msg.calibrated, msg.source)) return;
-        var what = msg.calibrated ? $"kalibre oldu ({msg.source})" : "kalibrasyonunu bıraktı";
-        Console.WriteLine($"[Lobby] set_calibration: {state.Name} {what}.");
+        if (_registry.SetCalibration(state.PlayerId, msg.calibrated, msg.source, msg.floorOffset))
+        {
+            var what = msg.calibrated ? $"kalibre oldu ({msg.source})" : "kalibrasyonunu bıraktı";
+            Console.WriteLine($"[Lobby] set_calibration: {state.Name} {what}.");
+        }
+
+        if (!msg.calibrated || Math.Abs(msg.floorOffset) <= ArenaProtocol.CALIB_FLOOR_WARN_METERS) return;
+        Console.WriteLine($"[Lobby] zemin sapması: {state.Name} {msg.floorOffset:F2} m " +
+                          $"(eşik {ArenaProtocol.CALIB_FLOOR_WARN_METERS:F2} m) — alan verisi temizliği önerilir.");
+        // ⚠️ Notice() ile sarılmaz: o yardımcı "<admin adı>: <eylem>" kurar, burada eylemin sahibi
+        // komut gönderen admin değil oyuncunun başlığıdır.
+        _ = BroadcastAdminStateAsync(
+            $"⚠ {state.Name}: zemin sapması {msg.floorOffset:F2} m — gözlükte alan verisi temizliği önerilir");
     }
 
     /// <summary>
@@ -308,11 +330,25 @@ public sealed class LobbyService
 
     /// <summary>set_body_scale: başlık KENDİ gövde ölçeğini bildirir (§5.1). Yalnız kendi kaydını
     /// yazabilir — playerId taşımaz, bağlantıdan çözülür (set_calibration ile aynı sözleşme).
-    /// <para>Sunucu sayıyı yorumlamaz; kırpma <see cref="PlayerRegistry.SetBodyScale"/>'dedir.</para></summary>
+    /// <para>Sunucu sayıyı yorumlamaz; kırpma <see cref="PlayerRegistry.SetBodyScale"/>'dedir.</para>
+    /// <para>⚠️ <c>error</c> doluysa ölçüm başarısızdır: <c>scale</c> YOK SAYILIR, kayıtlı ölçek
+    /// olduğu gibi durur ve gerekçe roster'a yazılıp operatöre duyurulur (§10.8). Sessizce yutmak
+    /// operatörü "bastım, bir şey olmadı" durumunda bırakırdı.</para></summary>
     public void HandleSetBodyScale(ClientConnection connection, SetBodyScaleMsg msg)
     {
         var state = connection.State;
         if (state == null) return;
+
+        var error = msg.error ?? "";
+        if (error.Length > 0)
+        {
+            _registry.SetScaleError(state.PlayerId, error);
+            Console.WriteLine($"[Lobby] set_body_scale: {state.Name} ölçülemedi — {error}.");
+            // Notice() ile sarılmaz: eylemin sahibi admin değil oyuncunun başlığıdır.
+            _ = BroadcastAdminStateAsync($"⚠ Ölçüm {state.Name}: {error}");
+            return;
+        }
+
         if (!_registry.SetBodyScale(state.PlayerId, msg.scale)) return;
         Console.WriteLine($"[Lobby] set_body_scale: {state.Name} → {state.BodyScale:F3}.");
     }
@@ -565,6 +601,55 @@ public sealed class LobbyService
             : "");
     }
 
+    /// <summary>
+    /// <c>set_calibration_mode</c> (§5.2/§10.6) — başlıkların AÇILIŞTA nasıl hizalanacağı.
+    /// <c>set_friendly_fire</c> ile aynı sınıf: faz kapısı ve seçim kilidi yoktur.
+    /// <para>⚠️ Bilinmeyen/boş değer ve <c>anchor_cloud</c> <b>reddedilir</b> — durum değişmez.
+    /// Kural değerlerinin "bilinmeyeni varsayılana çevir" sözleşmesi burada geçmez: mod bir
+    /// operatör kararıdır, sessizce varsayılana dönmek bastığı düğmenin uygulandığını
+    /// gösterirdi.</para>
+    /// <para>Değer değişmediyse duyuru yayılmaz; <c>admin_state</c> yine gider ki iyimser davranmış
+    /// bir panel sunucunun değerine çekilsin (§5.3 tek doğruluk kaynağı).</para>
+    /// </summary>
+    public async Task HandleSetCalibrationModeAsync(ClientConnection connection, SetCalibrationModeMsg msg)
+    {
+        var mode = msg.mode ?? "";
+        if (mode == ArenaProtocol.CALIB_MODE_ANCHOR_CLOUD)
+        {
+            Console.WriteLine($"[Lobby] set_calibration_mode '{mode}' henüz uygulanmadı — yok sayıldı.");
+            return;
+        }
+        if (mode != ArenaProtocol.CALIB_MODE_TWO_ANCHOR && mode != ArenaProtocol.CALIB_MODE_SAVED_ANCHOR)
+        {
+            Console.WriteLine($"[Lobby] set_calibration_mode geçersiz mod '{mode}' — yok sayıldı.");
+            return;
+        }
+
+        bool changed;
+        lock (_selectionGate)
+        {
+            changed = _calibrationMode != mode;
+            _calibrationMode = mode;
+        }
+        if (changed) Console.WriteLine($"[Lobby] set_calibration_mode: {mode} ({connection.State?.Name}).");
+        await BroadcastAdminStateAsync(changed
+            ? Notice(connection, $"kalibre modu: {CalibrationModeLabel(mode)}")
+            : "");
+    }
+
+    /// <summary>Operatöre gösterilen kalibre modu etiketi (duyuru satırı).</summary>
+    private static string CalibrationModeLabel(string mode) => mode switch
+    {
+        ArenaProtocol.CALIB_MODE_SAVED_ANCHOR => "Eski Kalibre",
+        _ => "2 Çapa"
+    };
+
+    /// <summary>Yürürlükteki kalibre modu (§10.6) — welcome kuruluşu bunu kilit altında okur.</summary>
+    private string CurrentCalibrationMode()
+    {
+        lock (_selectionGate) return _calibrationMode;
+    }
+
     /// <summary>Duyuru satırı: "<admin adı>: <eylem>" — tüm adminlerin durum satırında görünür.</summary>
     private static string Notice(ClientConnection connection, string action) =>
         $"{connection.State?.Name ?? "Admin"}: {action}";
@@ -720,6 +805,9 @@ public sealed class LobbyService
                 // Seçim DEĞİL, yürürlükteki durum (§5.2): anahtar koşan maçta da geçerli olduğu için
                 // seçim kilidine (CanChangeSelection) girmez ve buradan olduğu gibi yayılır.
                 friendlyFire = _director.FriendlyFire,
+                // Dost ateşiyle aynı sınıf (§10.6): seçim değil yürürlükteki durum, seçim kilidine
+                // girmez. Oyuncuya buradan gitmez — o değeri welcome'da bir kez alır.
+                calibrationMode = _calibrationMode,
                 notice = notice,
                 adminCount = _registry.ConnectedAdminCount(),
                 // Mekan bu oturum boyunca sabittir (açılışta seçilir), ama admin_state ile

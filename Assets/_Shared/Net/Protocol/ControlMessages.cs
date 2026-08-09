@@ -137,6 +137,14 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.SetCalibration;
         public bool calibrated;
         public string source = "";
+
+        /// <summary>Elle kalibrasyonda kumanda ucunun yakalama anındaki <b>tracking-yerel</b>
+        /// yüksekliği (metre, işaretli) — sistemin zemin tahmininin gerçek zeminden sapması.
+        /// Kayıtlı çapadan geri yüklemede <c>0</c> (ölçüm yok).
+        /// <para>Sunucu yorumlamaz: roster'a yazar ve
+        /// <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/> eşiğini aşarsa operatörü uyarır
+        /// (§10.6). ⚠️ <b>Bir kapı değildir</b> — sapma ne olursa olsun kalibrasyon kabul edilir.</para></summary>
+        public float floorOffset;
     }
 
     /// Başlığın KENDİ gövde ölçeğini bildirmesi (§10.8). Yalnız player gönderir; <c>playerId</c>
@@ -150,6 +158,14 @@ namespace VortexArena.Protocol
     {
         public string type = MessageTypes.SetBodyScale;
         public float scale;
+
+        /// <summary>Ölçüm başarısızsa insan okuyabilir gerekçesi; boş = başarılı ölçüm.
+        /// <b>Doluysa <see cref="scale"/> YOK SAYILIR ve kayıtlı ölçek değişmez</b> — gerekçe yalnız
+        /// adminlere duyurulur ve roster'a yazılır (<see cref="PlayerInfo.scaleError"/>, §10.8).
+        /// <para>⚠️ Doğrulanmayan serbest metindir (<c>calibrationSource</c> ile aynı sözleşme):
+        /// hata kodu listesi YOKTUR — tek tüketicisi operatörün ekranıdır, yeni bir başarısızlık
+        /// türü sunucuda iş çıkarmamalıdır.</para></summary>
+        public string error = "";
     }
 
     // ---- Yalnız admin → Sunucu ----
@@ -297,6 +313,24 @@ namespace VortexArena.Protocol
         public bool enabled;
     }
 
+    /// <summary>
+    /// Başlıkların <b>AÇILIŞTA</b> nasıl hizalanacağı (§5.2/§10.6) — dost ateşiyle aynı sınıf:
+    /// <b>anlık komut</b>, <c>set_selection</c>'a binmez, seçim kilidine girmez, koşan maçta da
+    /// değişir.
+    /// <para>Değer <c>ArenaProtocol.CALIB_MODE_*</c>; sunucu açılış varsayılanı
+    /// <see cref="ArenaProtocol.CALIB_MODE_TWO_ANCHOR"/>.</para>
+    /// <para>⚠️ Bilinmeyen/boş değer <b>REDDEDİLİR</b> (kural değerlerinin "varsayılana düş"
+    /// sözleşmesi burada geçmez): mod bir kural şekli değil operatör kararıdır.</para>
+    /// <para>⚠️ Modun kapıladığı tek şey açılıştaki diskten çapa geri yüklemesidir; HARİTA
+    /// DEĞİŞİMİNDEKİ geri yükleme moddan bağımsız her zaman koşar (§10.6).</para>
+    /// </summary>
+    [Serializable]
+    public class SetCalibrationModeMsg
+    {
+        public string type = MessageTypes.SetCalibrationMode;
+        public string mode = "";
+    }
+
     // ---- Sunucu → İstemci ----
 
     /// <summary>
@@ -373,6 +407,13 @@ namespace VortexArena.Protocol
         public int protocolVersion;
         public int playerId;
         public uint udpToken;
+
+        /// <summary>Yürürlükteki kalibre modu (<c>ArenaProtocol.CALIB_MODE_*</c>, §10.6).
+        /// <para>⚠️ <b>Oyuncu bu değeri bağlantıda BİR KEZ çeker:</b> modun kapıladığı karar
+        /// (açılışta diskten çapa geri yüklenecek mi) <c>welcome</c> geldiğinde zaten verilmiştir —
+        /// bağlı oyuncuya canlı yayılım YOKTUR ve eklenmez, uygulanacağı bir an olmazdı.</para></summary>
+        public string calibrationMode = "";
+
         public MatchInfo match;
     }
 
@@ -441,6 +482,18 @@ namespace VortexArena.Protocol
         // hasar yemez, canlanamaz; uzak avatarı parlar. Admin'de daima false/"" kalır.
         public bool calibrated;
         public string calibrationSource;
+
+        /// <summary>Son <b>elle</b> kalibrasyonda bildirilen zemin sapması (metre, işaretli;
+        /// §5.1/§10.6); <c>0</c> = ölçüm yok ya da temiz. Mutlak değeri
+        /// <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/>'i aşan satır arayüzde ⚠ ile
+        /// gösterilir. <c>clear_calibration</c> sıfırlar.</summary>
+        public float floorOffset;
+
+        /// <summary>Son gövde ölçümü başarısızsa gerekçesi, boş = sorun yok (§10.8).
+        /// <para>⚠️ <b>Başarılı ölçüm alanı temizler</b> — aksi hâlde bir kez başarısız olan
+        /// oyuncunun satırında uyarı sonsuza kadar kalır ve operatör sorunun sürdüğünü sanardı.
+        /// <c>clear_calibration</c> da sıfırlar.</para></summary>
+        public string scaleError = "";
 
         /// <summary>Uzak avatara uygulanacak üniform gövde ölçeği (§10.8). <b><c>0</c> =
         /// ölçülmemiş → okuyan taraf <c>1</c> uygular</b> (kural değerleriyle aynı sözleşme:
@@ -611,6 +664,13 @@ namespace VortexArena.Protocol
         /// durum</b>dur: koşan maçta da geçerlidir, bu yüzden diğer alanların "0 = seçilmedi"
         /// sözleşmesine girmez.</summary>
         public bool friendlyFire;
+
+        /// <summary>Kalibre modunun O ANKİ değeri (<c>ArenaProtocol.CALIB_MODE_*</c>, §5.2).
+        /// <see cref="friendlyFire"/> ile aynı sınıf: seçim değil <b>yürürlükteki durum</b>, bu
+        /// yüzden "0 = seçilmedi" sözleşmesine ve seçim kilidine girmez.
+        /// <para>Oyuncuya buradan GİTMEZ — o değeri <see cref="WelcomeMsg.calibrationMode"/> ile
+        /// bir kez alır.</para></summary>
+        public string calibrationMode = "";
 
         public string notice;
         public int adminCount;

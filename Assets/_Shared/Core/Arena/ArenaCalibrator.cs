@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using VortexArena.Protocol;
 
 namespace VortexArena.Core.Arena
 {
@@ -206,6 +207,24 @@ namespace VortexArena.Core.Arena
         /// </summary>
         public static int CalibrationGeneration { get; private set; }
 
+        /// <summary>
+        /// Son ELLE kalibrasyonda ölçülen zemin sapması (metre, işaretli) — sistemin zemin
+        /// tahmininin gerçek zeminden ne kadar saptığı. <c>CalibrationState</c> bunu
+        /// <c>set_calibration.floorOffset</c> ile sunucuya taşır (§10.6).
+        /// <para>Kayıtlı çapadan geri yükleme yolunda <c>0</c>: orada bir ölçüm yoktur, son
+        /// ölçümü orada da göndermek operatöre bayat bir uyarı gösterirdi.</para>
+        /// </summary>
+        public static float LastFloorOffsetMeters { get; private set; }
+
+        /// <summary>
+        /// Bu OTURUMDA (uygulama ömrü boyunca) oluşturulmuş çapanın UUID'si; sahne değişiminde
+        /// yaşar, süreç kapanınca gider.
+        /// <para>Diskteki kayıttan ayrı tutulur, çünkü ikisinin kapısı farklıdır: harita
+        /// değişimindeki geri yükleme buradan koşar ve kalibre modundan BAĞIMSIZDIR
+        /// (<see cref="ResolveSavedUuid"/>).</para>
+        /// </summary>
+        private static string sessionAnchorUuid;
+
         private OVRCameraRig cameraRig;
         private OVRSpatialAnchor worldAnchor;
         private Vector3 capturedA;
@@ -278,10 +297,33 @@ namespace VortexArena.Core.Arena
 
             // Kayıtlı hizalama YOKSA beklemeye gerek yok: geri yükleme hiç denenmeyecek, oyuncu
             // sahneye ham tracking origin'iyle düşer. Ön-hizalama hemen kuyruğa alınır.
-            if (string.IsNullOrEmpty(PlayerPrefs.GetString(AnchorUuidKey, string.Empty)))
+            if (string.IsNullOrEmpty(ResolveSavedUuid()))
                 StartPreAlign();
 
             _ = RestoreSavedCalibrationAsync();
+        }
+
+        /// <summary>
+        /// Geri yüklenecek çapanın UUID'si; hiçbiri yoksa boş.
+        /// <para>
+        /// Sıra: (1) <see cref="sessionAnchorUuid"/> — oturum-içi çapa, HARİTA DEĞİŞİMİ bununla
+        /// taşınır ve kalibre modundan BAĞIMSIZDIR; (2) diskteki kayıt, yalnız
+        /// <see cref="CalibrationState.DiskRestoreAllowed"/> ise.
+        /// </para>
+        /// <para>
+        /// ⚠️ Mod yalnız İLK AÇILIŞI kapılar: <c>two_anchor</c>'da disk UUID'si hiç OKUNMAZ ama
+        /// diske YAZILMAYA devam edilir (<see cref="CreateAndSaveAnchorAsync"/>) — operatör modu
+        /// sonradan <c>saved_anchor</c>'a çevirdiğinde en taze kalibrasyon orada hazır dursun.
+        /// </para>
+        /// </summary>
+        private static string ResolveSavedUuid()
+        {
+            if (!string.IsNullOrEmpty(sessionAnchorUuid))
+                return sessionAnchorUuid;
+
+            return CalibrationState.DiskRestoreAllowed
+                ? PlayerPrefs.GetString(AnchorUuidKey, string.Empty)
+                : string.Empty;
         }
 
         /// <summary>
@@ -574,6 +616,7 @@ namespace VortexArena.Core.Arena
             }
 
             capturedCount = 2;
+            MeasureFloorOffset(point);
             if (anchorB != null) anchorB.SetActive(true);
             StartCoroutine(Pulse(1, PointBPulseSeconds));
             Debug.Log($"ArenaCalibrator: 2/2 — B yakalandı, fiziksel {point} → sanal " +
@@ -582,6 +625,37 @@ namespace VortexArena.Core.Arena
             HideMarkersAfterConfirmation();
             RaiseCalibrated(SourceManual);
             _ = CreateAndSaveAnchorAsync();
+        }
+
+        /// <summary>
+        /// Zemin sapmasını ölçer: sistemin zemin tahmininin gerçek zeminden farkı (§10.6).
+        /// <para>
+        /// <c>Stage</c> origin'de sistemin zemin tahmini <b>tracking-yerel y=0</b>'dır. Kumandanın
+        /// ucu fiziksel zemindeyken o noktanın tracking-yerel Y'si, tahminin sapmasının kendisidir:
+        /// pozitif = sistem zemini gerçek zeminin ALTINDA sanıyor.
+        /// </para>
+        /// <para>
+        /// ⚠️ Ölçü <see cref="Transform.InverseTransformPoint"/> ile alınır ve <b>hizalamadan
+        /// ÖNCE</b> okunur: rig o ana dek ön-hizalama ile taşınmış olabilir ve dünya Y'si o
+        /// ötelemeyi de içerirdi. Rig kökü tracking origin olduğu için tersine dönüşüm onu
+        /// hesaptan düşürür.
+        /// </para>
+        /// <para>Eşik bir KAPI DEĞİL teşhistir: sapma ne olursa olsun kalibrasyon kabul edilir,
+        /// tek çıktı operatöre (ve buradaki loga) giden bilgidir.</para>
+        /// </summary>
+        private void MeasureFloorOffset(Vector3 floorPoint)
+        {
+            Transform rig = RigRoot;
+            LastFloorOffsetMeters = rig != null ? rig.InverseTransformPoint(floorPoint).y : 0f;
+
+            if (Mathf.Abs(LastFloorOffsetMeters) > ArenaProtocol.CALIB_FLOOR_WARN_METERS)
+            {
+                Debug.LogWarning(
+                    $"ArenaCalibrator: zemin sapması {LastFloorOffsetMeters:F2} m " +
+                    $"(eşik {ArenaProtocol.CALIB_FLOOR_WARN_METERS:F2} m) — gözlüğün alan verisi " +
+                    "(space setup) bayat. Kalibrasyon yine de kabul edildi; veriyi temizleyip " +
+                    "yeniden kalibre etmek gerekir.", this);
+            }
         }
 
         /// <summary>
@@ -951,6 +1025,9 @@ namespace VortexArena.Core.Arena
                 worldAnchor = null;
                 _ = EraseAnchorAsync(stale);
             }
+            // ⚠️ Oturum-içi kayıt da gider: operatörün sıfırlaması bellekteki yolu kapatmazsa bir
+            // sonraki sahne o çapadan hizalanır ve sıfırlama sessizce geri alınmış olur.
+            sessionAnchorUuid = null;
             PlayerPrefs.DeleteKey(AnchorUuidKey);
             Debug.Log("ArenaCalibrator: calibration reset.");
         }
@@ -991,6 +1068,9 @@ namespace VortexArena.Core.Arena
                 var save = await anchor.SaveAnchorAsync();
                 if (save.Success)
                 {
+                    // Disk kaydı kalibre moduna göre OKUNMAYABİLİR ama her zaman yazılır; oturum
+                    // içi kayıt ise moddan bağımsız okunur (bkz. ResolveSavedUuid).
+                    sessionAnchorUuid = anchor.Uuid.ToString();
                     PlayerPrefs.SetString(AnchorUuidKey, anchor.Uuid.ToString());
                     PlayerPrefs.Save();
                     Debug.Log($"ArenaCalibrator: anchor saved ({anchor.Uuid}).");
@@ -1014,7 +1094,7 @@ namespace VortexArena.Core.Arena
         /// </summary>
         private async Task RestoreSavedCalibrationAsync()
         {
-            string saved = PlayerPrefs.GetString(AnchorUuidKey, string.Empty);
+            string saved = ResolveSavedUuid();
             if (string.IsNullOrEmpty(saved) || !Guid.TryParse(saved, out Guid uuid))
                 return;
 
@@ -1093,6 +1173,8 @@ namespace VortexArena.Core.Arena
                 // İşaretçiler burada GÖSTERİLMEZ: geri yükleme sessizdir (oyuncu bir şey
                 // yapmadı) ve harita değişiminde koştuğu için maçın ortasında ekrana obje
                 // düşmesi olurdu. Onay gerekiyorsa admin ekranındaki kalibrasyon tik'i var.
+                // Bu yolda zemin ÖLÇÜLMEZ: bildirilecek sapma yok (§10.6).
+                LastFloorOffsetMeters = 0f;
                 RaiseCalibrated(SourceAnchor);
                 return true;
             }
