@@ -146,10 +146,6 @@ namespace VortexArena.Core.Player
         private Transform _characterRoot;
         private bool _initialized;
 
-        /// <summary>Karakter kökü — yalnız OKUMA için (teşhis/görselleştirme). Kökün tek yazarı
-        /// bu sınıftır (<see cref="ApplyArenaRoot"/>); buradan dönen transforma yazılmaz.</summary>
-        public Transform CharacterRoot => _characterRoot;
-
         /// <summary>
         /// Sensör kaynağı (<c>MetaSourceDataProvider</c>). ⚠️ <b>Prefabdan SİLİNMEZ, yalnız
         /// kapatılır:</b> <c>CharacterRetargeter.Awake</c> sağlayıcıyı <b>kendi GameObject'inden</b>
@@ -437,12 +433,8 @@ namespace VortexArena.Core.Player
             // ⚠️ Buranın bir DÜNYA noktası olması retargeter'daki ApplyRootScale'in KAPALI
             // olmasına bağlıdır: açıkken SDK kökü boy oranıyla ölçekler ve bu okuma orijine göre
             // ölçeklenmiş bir nokta döndürür (gerekçe ApplyArenaRoot'ta, ölçüm Sistem-Ozeti §7).
-            Pose worldRoot = new Pose(_characterRoot.position, _characterRoot.rotation);
-
-            // İskelet tele konmadan GERÇEK kafaya sabitlenir (gerekçe HeadPinOffset'te).
-            worldRoot.position += HeadPinOffset();
-
-            Pose arenaRoot = GuardRootJump(ArenaSpace.WorldToArena(worldRoot));
+            Pose arenaRoot = GuardRootJump(ArenaSpace.WorldToArena(
+                new Pose(_characterRoot.position, _characterRoot.rotation)));
 
             // Native → yönetilen kopya: tel katmanı BinaryWriter ile yazıyor ve o yalnız byte[]
             // alıyor. Tampon büyüdüğü yerde kalır, yani ilk birkaç karenin dışında tahsis yok.
@@ -455,43 +447,6 @@ namespace VortexArena.Core.Player
 
             NativeArray<byte>.Copy(bytes, 0, managed, 0, bytes.Length);
             client.UdpChannel.SendSkeleton(managed, bytes.Length, arenaRoot);
-        }
-
-        /// <summary>
-        /// İskelet kökünü tele koymadan önce GERÇEK kafaya sabitleyen dünya-uzayı ötelemesi:
-        /// <c>rig'in göz anchor'ı − karakterin göz işaretçisi</c>. Blob'daki eklemler köke göreli
-        /// olduğu için kök bu vektörle ötelenince bütün iskelet TEK PARÇA taşınır, duruş bozulmaz.
-        /// <para>
-        /// ⚠️ <b>Neden var:</b> body tracking iskeleti Quest'in KENDİ zemin tahminine bastırır ve o
-        /// tahmini kimse düzeltmez — A/B kalibrasyonu RİG'i düzeltir (kafa/eller onun çocuğudur),
-        /// sahne kökündeki iskeleti değil. Guardian kurulmayan başlıklarda zemin tahmini metrelerce
-        /// şaşabilir ve oturumdan oturuma değişir; düzeltmesiz kök gövdeyi zeminin altına gömer ya
-        /// da havada çizer (belirti imzası: <c>Docs/Sistem-Ozeti.md</c> §7, "iskelet OS zemin
-        /// tahminine basar" maddesi).
-        /// </para>
-        /// <para>
-        /// İki referans AYNI fiziksel noktadır — oyuncunun gözü: karakterin <c>EyeAnchor</c>'ı kafa
-        /// kemiğinin altında iki gözün arasında durur (§10.8 ölçümünün de referansı), rig'in
-        /// <c>centerEyeAnchor</c>'ı HMD'nin kalibre edilmiş pozudur. Fark, o karedeki toplam
-        /// iskelet kaymasıdır (zemin hatası + kök gezinmesi) ve her gönderimde taze ölçülür —
-        /// tahmin ne kadar bozulursa bozulsun kendini düzeltir. Öteleme SALT konumdur: gövdenin
-        /// yönü izlemeden gelir, döndürülmez.
-        /// </para>
-        /// <para>⚠️ Yerel karakterin transformuna YAZILMAZ — düzeltme yalnız tele gider: yerel
-        /// karakter §10.8 ölçümünün referansıdır ve ona yazmak ölçümü kirletirdi.</para>
-        /// <para>Referanslardan biri çözülemiyorsa öteleme sıfırdır (kök olduğu gibi gider):
-        /// eksik referansla değer uydurmaktansa bilinen davranışa düşülür.</para>
-        /// </summary>
-        private Vector3 HeadPinOffset()
-        {
-            LocalBodyAvatar avatar = LocalBodyAvatar.Instance;
-            Transform characterEye = avatar != null ? avatar.EyeAnchor : null;
-            if (characterEye == null || !TryGetHeadYawPose(out Pose head))
-            {
-                return Vector3.zero;
-            }
-
-            return head.position - characterEye.position;
         }
 
         /// <summary>

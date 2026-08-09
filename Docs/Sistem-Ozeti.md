@@ -1043,11 +1043,6 @@ tabloda), `PlayerCombatState`
 (uzak oyuncu gövdesi ve isabet kutusu; `RemoteAvatar` ayrıca çizdiği silahın **geri tepmesini**
 yerelin eğrisiyle üretir — kavrama örneğin KÖKÜNÜ, geri tepme `Model` ÇOCUĞUNU yazar, bu yüzden
 yarışmazlar; telde geri tepme diye bir alan yoktur ve eklenmeyecek, §6.4.
-`RemoteAvatar` uzak oyuncu başına birkaç saniyede bir **`[AvatarTanı]`** teşhis satırı basar:
-poz/iskelet akışı · görünür/canlı/kalibre bayrakları · kök ölçeği · aktif gövde (varsayılan/kırmızı)
-· renderer'ın açık/çizildi durumu · mesh sınırının merkezi ve **köke uzaklığı**. "Oyuncu
-görünmüyor" arızasının ayrı sebepleri (poz yok · iskelet yok · ölçek 0 · renderer kapalı ·
-mesh kökten kopuk) sahada gözle ayrılamıyor — satır gözlükte logcat'e, admin'de konsola düşer.
 **İsabet kutuları gövde başına 16 parçadır** (kafa · göğüs · karın · leğen · üst kol ×2 · ön kol ×2 ·
 el ×2 · uyluk ×2 · baldır ×2 · ayak ×2), kemiklere asılıdır ve her biri bir `HitZone` taşır
 (bölge = hasar çarpanı, yukarıya bak).
@@ -3180,26 +3175,6 @@ konsoluna tek satır sebep yazar.
     Inspector'da açıkça bağlıysa güvenlidir (`ArenaBoundary.head` — onu `Template Temellerini Yükle`
     bağlıyor). ⚠️ Yarış sahne kök sırasına bağlı olduğu için **bir arenada çalışıp ötekinde
     çalışmaz**; "diğer haritada oluyordu" bu tuzağı elemez.
-
-149. **Body tracking iskeleti Quest'in KENDİ zemin tahminine basar — A/B kalibrasyonu RİG'i
-    düzeltir, iskeleti DEĞİL.** Kafa ve eller rig'in çocuğudur ve kalibre edilmiş uzayda doğar;
-    `LocalBodyAvatar` karakteri ise sahne kökünde durur ve SDK'nın yazdığı kökte iskeletin bastığı
-    zemin **işletim sisteminin zemin tahminidir**. Guardian kurulmadığı için (yukarıdaki "guardian"
-    maddesi) o tahmin metrelerce şaşabilir ve **oturumdan oturuma değişir** — aynı build aynı
-    haritada bir gün doğru, ertesi gün gömülü çizer; "harita bozdu / build bozdu" diye okunur,
-    oysa değişen yalnız o oturumdaki zemin tahminidir.
-    **Belirtinin imzası:** ad etiketi ve eller doğru yerde, gövde zeminin altında (ya da havada).
-    Alçak bakış açısı (oturan/çömelen oyuncu) zeminden taşan omuz/kafayı görür, ayaktaki oyuncu ve
-    kuş bakışı hiçbir şey görmez — "otururken görünüyor, ayakta kayboluyor" bu maddedir.
-    `[AvatarTanı]` satırında kök y'nin 0'dan belirgin sapması tek başına teşhistir. Ölçek
-    maddesinden (`ApplyRootScale`) ayırt etme: buradaki fark bir ORAN değil ÖTELEMEDİR ve dünya
-    orijininden uzaklıkla büyümez.
-    **Düzeltme gönderendedir:** `ArenaNetCharacterBehaviour.HeadPinOffset` — kök tele konmadan önce
-    karakterin göz işaretçisi (`EyeAnchor`) rig'in `centerEyeAnchor`'ına sabitlenir; iki referans
-    aynı fiziksel nokta (oyuncunun gözü) olduğu için fark o karedeki toplam iskelet kaymasını verir
-    ve kök o vektörle ötelenir (salt konum; blob köke göreli olduğundan iskelet tek parça taşınır).
-    ⚠️ Bu sabitleme KALDIRILMAZ ve yerel karakterin transformuna TAŞINMAZ — yerel karakter §10.8
-    boy ölçümünün referansıdır.
 
 ---
 
