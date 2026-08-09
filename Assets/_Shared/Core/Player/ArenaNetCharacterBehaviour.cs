@@ -146,6 +146,10 @@ namespace VortexArena.Core.Player
         private Transform _characterRoot;
         private bool _initialized;
 
+        /// <summary>Karakter kökü — yalnız OKUMA için (teşhis/görselleştirme). Kökün tek yazarı
+        /// bu sınıftır (<see cref="ApplyArenaRoot"/>); buradan dönen transforma yazılmaz.</summary>
+        public Transform CharacterRoot => _characterRoot;
+
         /// <summary>
         /// Sensör kaynağı (<c>MetaSourceDataProvider</c>). ⚠️ <b>Prefabdan SİLİNMEZ, yalnız
         /// kapatılır:</b> <c>CharacterRetargeter.Awake</c> sağlayıcıyı <b>kendi GameObject'inden</b>
