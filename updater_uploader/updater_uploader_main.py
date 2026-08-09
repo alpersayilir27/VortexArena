@@ -1,19 +1,19 @@
 """
-updater_uploader_main.py - oyun APK'sinin yayin ucu (tek dosya, yalniz stdlib).
+updater_uploader_main.py - oyun APK'sinin yukleme ucu (tek dosya, yalniz stdlib).
 
-Sunucuda APK'nin yasayacagi klasorde calistirilir (or. D:\\WebHost\\player_apk_updater);
+Sunucuda APK'nin yasadigi klasorde calistirilir (or. D:\\WebHost\\player_apk_updater);
 hedef dosya her zaman betigin KENDI klasorundeki game.apk'dir.
 
   POST /upload    govdedeki APK'yi game.apk olarak yazar
                   (once .tmp dosyasina iner, sonra atomik degistirilir -
                   yarim kalan yukleme mevcut APK'yi bozamaz)
-  GET  /game.apk  guncel APK'yi indirir (gozlukteki Vortex Updater'in adresi)
-  GET  /upload    ayni dosyayi indirir
+  GET  /upload    "ayakta" der (saglik kontrolu)
   baska her yol   404 - betik baska endpoint yakalamaz
 
-PORT = 8090. Ayni portu iki surec dinleyemez: bu betik ayaktayken IIS'te ayni
-porta bagli site DURDURULMUS olmali. Betik indirmeyi de yaptigi icin IIS'e
-gerek kalmaz (.apk MIME eslemesi derdi de yoktur).
+PORT = 8091. Indirme bu betigin isi DEGILDIR: game.apk'yi ayni klasoru kok
+olarak yayinlayan IIS sitesi (8090) indirtir. Iki surec ayri portlarda
+oldugu icin cakisma yoktur; IIS tarafinda .apk MIME eslemesi gerekir
+(updater/README.md).
 
 Calistirma: python updater_uploader_main.py
 """
@@ -23,9 +23,8 @@ import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PORT = 8090
+PORT = 8091
 UPLOAD_PATH = "/upload"
-DOWNLOAD_PATHS = ("/game.apk", "/upload")
 TARGET_DIR = os.path.dirname(os.path.abspath(__file__))
 TARGET = os.path.join(TARGET_DIR, "game.apk")
 CHUNK = 1024 * 1024
@@ -48,33 +47,11 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    # --- Indirme ---------------------------------------------------------
-
     def do_GET(self):
-        if self.path not in DOWNLOAD_PATHS:
+        if self.path != UPLOAD_PATH:
             self._reply(404, "bilinmeyen yol")
             return
-        if not os.path.isfile(TARGET):
-            self._reply(404, "henuz apk yuklenmedi")
-            return
-        size = os.path.getsize(TARGET)
-        try:
-            with open(TARGET, "rb") as f:
-                self.send_response(200)
-                self.send_header("Content-Type", "application/vnd.android.package-archive")
-                self.send_header("Content-Length", str(size))
-                self.end_headers()
-                while True:
-                    chunk = f.read(CHUNK)
-                    if not chunk:
-                        break
-                    self.wfile.write(chunk)
-            log(f"{self.client_address[0]}: indirdi ({size} bayt)")
-        except (ConnectionError, OSError):
-            # istemci yarida birakti - sunucu icin sorun degil
-            log(f"{self.client_address[0]}: indirme yarida kaldi")
-
-    # --- Yukleme ---------------------------------------------------------
+        self._reply(200, "uploader ayakta - APK'yi bu yola POST edin")
 
     def do_POST(self):
         client = self.client_address[0]
@@ -120,8 +97,9 @@ class Handler(BaseHTTPRequestHandler):
             self._reply(400, "govde APK degil")
             return
 
-        # Atomik degistirme: var olan game.apk tek hamlede yenisiyle degisir,
-        # o an indirme yapan istemci ya eskisini ya yenisini butun olarak alir.
+        # Atomik degistirme: var olan game.apk tek hamlede yenisiyle degisir.
+        # IIS dosyayi o anda servis ediyorsa Windows degistirmeyi kilitleyebilir;
+        # o durumda 503 doner, yukleme tekrar denenir.
         try:
             os.replace(tmp, TARGET)
         except OSError as e:
@@ -145,11 +123,10 @@ def main():
         server = ThreadingHTTPServer(("", PORT), Handler)
     except OSError as e:
         log(f"HATA: {PORT} portu dinlenemiyor: {e}")
-        log("Buyuk olasilikla ayni porta bagli IIS sitesi (ya da eski bir kopya) calisiyor.")
-        log("IIS Manager'da o siteyi durdurun ve betigi yeniden baslatin.")
+        log("Baska bir surec (or. betigin eski bir kopyasi) ayni portu tutuyor olabilir.")
         sys.exit(1)
 
-    log(f"dinleniyor: 0.0.0.0:{PORT}  (POST {UPLOAD_PATH} = yayinla, GET /game.apk = indir)")
+    log(f"dinleniyor: 0.0.0.0:{PORT}  (POST {UPLOAD_PATH})")
     log(f"hedef dosya: {TARGET}")
     try:
         server.serve_forever()
