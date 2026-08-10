@@ -28,7 +28,8 @@ geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitabi.md` §11.0 A.
 4. Parmakları elin `GripHandAuthoring` Inspector'ından (ya da Hierarchy'den kemiği seçip) bük.
 5. İstersen **Karşı Ele Aynala**, sonra aynalanan eli elle düzelt (kabza simetrik değildir).
 6. **Kaydet** → her elin duruşu + parmakları `GripPoses/Pose_<Kind>_<L|R>`'ye, sağ elden türetilen
-   fallback alanları `WD_*.asset`'e yazılır. Sonra **prefabı kaydet** (düğümler stage içeriğidir).
+   fallback alanları `WD_*.asset`'e yazılır; prefab da Kaydet'in sonunda diske iner (ayrı bir
+   "prefabı kaydet" adımı yoktur).
 7. Kontrol: camgöbeği tel küre (SO'nun dediği) sağ elin bileğiyle **çakışmalı**.
 8. Başlıkta yalnız **hissi** doğrula (nişan alırken rahat mı); geometri editörde bitiyor.
 
