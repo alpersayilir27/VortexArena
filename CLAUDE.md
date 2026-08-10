@@ -472,7 +472,15 @@ eklememektir.
 ekle (CS2 istatistikleri + ses profili + "Low Poly AR Weapon Pack 1" modeli — model üretimde
 OKUNMAZ, köken kaydıdır). ⚠️ **Bir satırın `PackPrefab`'ı ve `NetItemId`'si o satırdan
 AYRILMAZ** — pack modelleri jenerik adlı (`AR_B`…), hangisinin hangi gerçek silah olduğu gözle
-eşlendi; kimliği taşımak istiyorsan satırın geri kalanını taşı. ⚠️ **Ses klipleri yalnız alan
+eşlendi; kimliği taşımak istiyorsan satırın geri kalanını taşı.
+**Saçmalı silah** = satıra `Pellets` yaz (XM1014 6, Nova 9): tek tetik çekişi o kadar ışın atar,
+`Damage` **saçma başınadır** ve isabet eden her saçma ayrı `hit_report` üretir. ⚠️ Menzil kimliğini
+`Range` DEĞİL `BaseSpread` taşır (gerekçe `Docs/Sistem-Ozeti.md` §7, "saçmalının mesafe kimliği"
+maddesi). Tek tek fişek dolduran silahta ayrıca `ReserveMode = "PoolRounds"` yaz (erken reload'da
+namludaki fişek yanmasın). `SpareMags` boş bırakılırsa varsayılan kullanılır.
+**Yeni kalibre** = `WeaponKitBuilder.CasingFamilies` sözlüğüne bir satır (kovan prefabı ilk koşuda
+pack'teki mermi modelinden üretilir); ⚠️ aile **görsel** bir ayrımdır, denge kolu değil.
+⚠️ **Ses klipleri yalnız alan
 BOŞSA yazılır** (elle sürüklenen klip korunsun diye): mevcut bir silahın sesini değiştiriyorsan
 önce `WD_*.asset`'teki klip alanlarını boşalt, yoksa değişiklik sessizce inmez. Araç
 `_Shared/Arsenal/Data/WD_*.asset`'i üretir, **mevcut**

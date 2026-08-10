@@ -1055,7 +1055,11 @@ kapısı; `Neutral` = herkese açık),
 silahta tetikler bağımsız; şarjör+yedek şarjör durumu taşır, boş şarjörde **otomatik reload YOK**
 (kuru tetik sesi), reload **bel-altı jestiyle** başlar; `reserveMode=DiscardMagazine`'de erken
 reload'da şarjörde kalan mermi **yanar** (ürün kuralı; `PoolRounds` = CS2 havuzu SO'dan seçilebilir);
-spread atış sürdükçe açılır (bloom) ve boşta toparlar; yerel canlanmada tutulan silah tam dolar;
+spread atış sürdükçe açılır (bloom) ve boşta toparlar; **saçmalıda tek tetik çekişi
+`WeaponDefinition.PelletCount` kadar ışın atar** — hasar saçma başınadır, isabet eden her saçma
+kendi bölge çarpanıyla ayrı bir `hit_report` üretir (protokol §10.3 bunu bekliyor: atış hızı
+denetimi yok), atış OLAYI ise tetik başına bir kez gider (ilk saçmanın yönü/mesafesiyle);
+yerel canlanmada tutulan silah tam dolar;
 vuruş/atış bildirimi `ArenaCombat` üzerinden gider — protokol DTO'su bu sınıfta YOK. **İkinci tutuş
 yolu:** `WeaponGranter` silahı doğrudan ele verir (`GrantTo(hand, kind)` — §3.9); verilen silah
 tanım gereği tutuluyordur (ISDK kavraması işletilmez), gerisini `WeaponGrantKind` ayırır —
@@ -3262,6 +3266,20 @@ konsoluna tek satır sebep yazar.
     ⚠️ Tekile taşırken ikinci bir tuzak açılır: DDOL bir kökün altındaki nesne harita değişiminde
     yok olmaz, o yüzden yeni sahne yüklenince elle gizlenmelidir; ebeveynsiz bırakılırsa da tersi
     olur (aktif sahneyle yok edilir ve havuz elinde ölü referansla kalır).
+152. **Saçmalının mesafe kimliğini SAÇILIM taşır — mesafeyle düşen bir hasar eğrisi YOKTUR ve
+    eklenmez.** CS'te pompalı iki koldan dengelenir: saçmalar dağılır *ve* hasar mesafeyle düşer.
+    Burada yalnız birincisi var, ve bu bilinçli: 9 saçma zaten geometrik bir eğri üretiyor
+    (koni mesafeyle büyür, uzakta gövdeye ancak bir-iki saçma değer), ikinci bir eğri eklemek aynı
+    davranışı iki ayrı yerden ayarlanır yapardı ve biri sessizce bayatlardı. ⚠️ Bunun pratik sonucu:
+    bir pompalının menzilini `range` ile kısmak YANLIŞ ayardır — `range` sert bir duvardır, bir
+    metre ötede hasar tam, bir metre sonra sıfırdır. Ayarlanacak kol `baseSpreadDegrees`'tir.
+    ⚠️ Saçılımın oyuncunun gördüğü değeri `Weapon.twoHandSpreadMultiplier` ile çarpılır (çift elle
+    tutulan silahta ~0.45): tabloya yazılan derece **tek elle** olandır, iki elle tutulan bir
+    pompalıda gerçek koni yarıya iner.
+153. **Aynı hedefe giden saçmalar tek `hit_report`'a TOPLANMAZ.** Her saçma kendi bölge çarpanını
+    taşır (biri kafaya, biri bacağa gidebilir) ve sunucu her raporu ayrı işler. Toplamak, dokuz
+    saçmanın hepsini tek bir bölgeye yazmak demek olurdu. Sunucu bunu zaten bekliyor: `hit_report`
+    tarafında atış hızı denetimi **yok** ve gerekçesi protokolde açıkça "pompalı saçması"dır.
 
 ---
 
