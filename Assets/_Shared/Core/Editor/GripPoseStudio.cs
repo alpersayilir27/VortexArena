@@ -987,10 +987,11 @@ namespace VortexArena.Core.Editor
         /// Tezgâhtaki duruşu kalıcı veriye çevirir: el pozları + parmaklar → <c>GripPoses/Pose_*</c>
         /// (prefab içeriği), silahın bileğe göre duruşu → <c>WD_*.asset</c> kavrama alanları.
         /// <para>
-        /// ⚠️ Yazım <b>açık prefab kipinin KENDİ içeriğine</b> yapılır (<c>prefabContentsRoot</c>) ve
-        /// sahne kirli işaretlenir; headless <c>LoadPrefabContents</c> yolu KULLANILMAZ: aynı prefab
-        /// o an kipte açıkken ikinci bir kopyaya yazmak, kullanıcının ekranındaki hâlin kaydı
-        /// sessizce ezmesiyle biterdi.
+        /// ⚠️ Yazım <b>açık prefab kipinin KENDİ içeriğine</b> yapılır (<c>prefabContentsRoot</c>)
+        /// ve sonunda prefab <b>diske yazılır</b> (<c>SaveAsPrefabAsset</c> + <c>ClearDirtiness</c>);
+        /// headless <c>LoadPrefabContents</c> yolu KULLANILMAZ: aynı prefab o an kipte açıkken
+        /// ikinci bir kopyaya yazmak, kullanıcının ekranındaki hâlin kaydı sessizce ezmesiyle
+        /// biterdi.
         /// </para>
         /// <para>
         /// ⚠️ Poz düğümünün yerel konumu <see cref="Transform.InverseTransformPoint"/> ile
@@ -1033,7 +1034,25 @@ namespace VortexArena.Core.Editor
             int legacy = RemoveLegacyHandRig(weaponRoot);
             legacy += RemoveStrayAuthoringNodes(weaponRoot);
 
-            EditorSceneManager.MarkSceneDirty(stage.scene);
+            // Kaydet = DİSKE İNDİ: WD_* zaten anında yazılıyor (WriteGripFields), poz düğümlerini
+            // kullanıcının ayrıca prefabı kaydetmesine bırakmak iki çıktıyı iki hızda indirir ve
+            // "WD güncel, düğümler kayıp" yarım kavramalar doğurur. Eller stage sahnesinin AYRI
+            // kökleri olduğu için buraya girmez; kaydın bayrak çevirmesini RestoreHandFlags
+            // geri alıyor.
+            PrefabUtility.SaveAsPrefabAsset(stage.prefabContentsRoot, stage.assetPath,
+                out bool prefabWritten);
+            if (prefabWritten)
+            {
+                stage.ClearDirtiness();
+            }
+            else
+            {
+                // Yazılamadıysa (kilitli/salt okunur dosya) stage kirli bırakılır ki değişiklik
+                // sessizce kaybolmasın — Unity kapanışta kayıt sorusunu sorar.
+                EditorSceneManager.MarkSceneDirty(stage.scene);
+                Debug.LogError($"{LOG} Prefab diske YAZILAMADI ({stage.assetPath}) — poz " +
+                               "düğümleri prefab kipinde duruyor, prefabı elle kaydet.");
+            }
 
             string legacyNote = legacy > 0
                 ? $" Prefabta kalmış {legacy} eski el düğümü silindi."
@@ -1041,11 +1060,13 @@ namespace VortexArena.Core.Editor
             string mirrorNote = mirrored > 0
                 ? $" {mirrored} karşı el düğümü ISDK aynasıyla üretildi."
                 : string.Empty;
+            string diskNote = prefabWritten
+                ? " Prefab ve WD_* diske yazıldı."
+                : " ⚠️ Yalnız WD_* diske indi.";
 
             Debug.Log($"{LOG} '{weaponRoot.name}' kavraması yazıldı: {hands.Count} el pozu, " +
-                      $"{gripFields} kavrama alanı çifti.{mirrorNote}{legacyNote} " +
-                      "Prefab kipi KİRLİ işaretlendi — diske yazılması için prefabı kaydet " +
-                      "(Auto Save açıksa kendiliğinden yazılır).", definition);
+                      $"{gripFields} kavrama alanı çifti.{mirrorNote}{legacyNote}{diskNote}",
+                definition);
         }
 
         /// <summary>

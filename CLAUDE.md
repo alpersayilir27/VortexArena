@@ -122,7 +122,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   ⚠️ Prefabtaki **`EyeAnchor`** (kafa kemiğinin altında, iki gözün arasında) ölçümün referansıdır:
   taşınırsa boy sessizce yanlış ölçülür → `Docs/Sistem-Ozeti.md` §7),
   `Data/` (**`Data/Resources/GameCatalog.asset`** —
-  admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ),
+  admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ; aynı gerekçeyle
+  **`Data/Resources/GameSoundBank.asset`** = ortak duyuru sesleri),
   `Scenes/` (Boot, Lobby),
   **`App/Resources/UI/`** (⚠️ **arayüzün TAMAMI burada, prefab olarak** — admin HUD'ı + tercihler
   ve istatistik panelleri, oyuncu satırı, oyuncu halkası, bağlantı ekranının iki varyantı,
@@ -331,6 +332,15 @@ bırakmak "kısıtsız" demektir, sahne o hâlde her modda oynanır).
 listeleri klasör taramasından eşitlenir, elle temizlenmez. ⚠️ **Ölçekleme YOKTUR ve eklenmez:** her işletmenin alanı farklı ölçüde ve çoğu
 kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek bir
 yalancı-doğru üretir.
+**Ortam sesi (ambiyans + oyun müziği):** haritanın `MapDefinition`'ındaki `ambienceClip` alanına bir
+klip sürüklemekle biter — sahne yüklenince `SceneAmbience` (kendini önyükleyen tekil) onu loop'lar,
+harita değişene kadar durdurmaz (maç başı/sonu müziğe dokunmaz) ve tüm başlıklarda **aynı yerden**
+çalar (`sceneElapsed`, geç katılan atlayarak katılır). ⚠️ **Sahneye ses objesi KOYMA** ve klibi ikinci bir yere yazma; klipler
+`Assets/Audio/Ambience/` altında durur ve **`Streaming`** olarak import edilir (uzun klip
+`DecompressOnLoad` ile Quest'in RAM'ini yer). Harita başına ayrı klip normaldir, iki sahne aynı
+klibi paylaşırsa geçişte ses kesilmez. Tüm haritalarda ortak duyuru sesleri (rakip elendi, öldün,
+maç başladı…) buraya DEĞİL `_Shared/Data/Resources/GameSoundBank.asset`'e girer; çalan tek yer
+`GameAudio.Play(GameSoundId)`'dir → `Docs/Sistem-Ozeti.md` §4.
 **Arena ölçüsü:** tek doğruluk kaynağı **boyut dosyasıdır** (`ArenaDimensions` — elle yazılabilir
 JSON) ve dosya **MEKAN başınadır**: `Venues/<İşletme>/Data/<İşletme>_dimensions.json`. Bir
 işletmede hep aynı fiziksel alan oynatıldığı için o mekanın **tüm** sahneleri (arenalar + lobi)
@@ -518,8 +528,8 @@ sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silaht
 `WPN_*`'ı prefab kipinde aç → *Ana/Ön Kabza Ellerini Oluştur* → elleri kabzalara oturt, parmakları
 elin `GripHandAuthoring` Inspector'ından (ya da Hierarchy'den) bük → gerekiyorsa *Karşı Ele Aynala*
 → *Kaydet*. Kaydet el başına poz düğümünü (`GripPoses/Pose_<Kind>_<L|R>`) ve **sağ** elden `WD_*`
-kavrama alanlarını yazar; düğümler prefab kaydedilince diske iner. O iki çıktıya elle DOKUNMA —
-bir sonraki kayıt üzerine yazar.
+kavrama alanlarını yazar ve **ikisini de diske indirir** (prefabı da kendisi kaydeder — ayrı bir
+"prefabı kaydet" adımı yoktur). O iki çıktıya elle DOKUNMA — bir sonraki kayıt üzerine yazar.
 ⚠️ **İki el de AYRI yazılır** (poz düğümleri el başınadır; ayna bir kolaylıktır, tek taraflı
 kavramada eksik tarafı kayıt tamamlar). Ölçünün paydası SİLAHTIR, hareket eden eldir.
 ⚠️ **El HAM sürüklenir, çeviri EKLENMEZ:** elin kökü ISDK bilek çerçevesidir; elin YERİ silahın
@@ -616,7 +626,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
 | `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir). Ayrıca **temizlik ve denetim**: eski `GripSocket_*` işaretçilerini ve prefabta kalmış `Hands/Hand_*` el rig'ini siler, **kavraması yazılmamış silahları** koşu sonunda tek uyarıda listeler |
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
-| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış **prefab kipinde**: `WPN_*`'ı prefab kipinde aç → **Ana/Ön Kabza Ellerini Oluştur** (sağ+sol) → elleri kabzalara oturt/çevir, parmakları elin `GripHandAuthoring` Inspector'ından ya da Hierarchy'den bük → gerekirse **Karşı Ele Aynala** → **Kaydet**. Scene view'a hiçbir şey çizilmez (yardımcı çerçeve/ölçü yok); pencere kaydedilecek sayıları canlı gösterir. ⚠️ **El HAM sürüklenir** (kök = ISDK bilek çerçevesi) ve **iki el ayrı yazılır** — gerekçe "Yeni silah" reçetesinde. ⚠️ **Yazan tek düğme Kaydet'tir**: el başına `GripPoses/Pose_<Kind>_<L\|R>` + SAĞ elden `WD_*.asset` fallback kavrama alanları + tek taraflı kavramada eksik elin aynası + eski `Hands` rig'i / prefaba sızmış tezgâh eli temizliği. ⚠️ Düğümler prefab KAYDEDİLİNCE diske iner (stage kirli işaretlenir); `WD_*` anında yazılır. ⚠️ Eller prefaba GİRMEZ (stage sahnesinin ayrı kökleri, `DontSave`) ve Play'e girerken / stage kapanınca / sahne değişince silinir |
+| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış **prefab kipinde**: `WPN_*`'ı prefab kipinde aç → **Ana/Ön Kabza Ellerini Oluştur** (sağ+sol) → elleri kabzalara oturt/çevir, parmakları elin `GripHandAuthoring` Inspector'ından ya da Hierarchy'den bük → gerekirse **Karşı Ele Aynala** → **Kaydet**. Scene view'a hiçbir şey çizilmez (yardımcı çerçeve/ölçü yok); pencere kaydedilecek sayıları canlı gösterir. ⚠️ **El HAM sürüklenir** (kök = ISDK bilek çerçevesi) ve **iki el ayrı yazılır** — gerekçe "Yeni silah" reçetesinde. ⚠️ **Yazan tek düğme Kaydet'tir**: el başına `GripPoses/Pose_<Kind>_<L\|R>` + SAĞ elden `WD_*.asset` fallback kavrama alanları + tek taraflı kavramada eksik elin aynası + eski `Hands` rig'i / prefaba sızmış tezgâh eli temizliği. ⚠️ Kaydet İKİ çıktıyı da diske yazar (prefabı kendisi kaydeder, `WD_*` anında iner); prefab yazılamazsa stage kirli bırakılır ve hata basılır. ⚠️ Eller prefaba GİRMEZ (stage sahnesinin ayrı kökleri, `DontSave`) ve Play'e girerken / stage kapanınca / sahne değişince silinir |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |
 | `… > Development > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek) |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` | Sahneye ilgili bileşeni + kurulumunu ekler |
