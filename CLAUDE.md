@@ -221,9 +221,14 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   Modlar birbirini REFERANSLAMAZ. Ortak HUD/silah kodu mod kutusunda DEĞİL Core'da durur
   (`ModeHudBase`, `WeaponGranter`) — modlar birbirini göremediği için ikinci mod aksi hâlde aynı
   kodu baştan yazardı. (Kayıtlı modlar `Docs/ArenaNet-Protokol.md` §10.5 tablosunda.)
-- Üçüncü parti: `Assets/ThirdPartyPackages/`. ⚠️ İstisna: `Assets/Low Poly AR Weapon Pack 1/`
-  kökte duruyor; editör AÇIKKEN taşınamaz (OS dosya kilidi). Editör kapalıyken `git mv` ile
-  taşınabilir — sonrasında `WeaponKitBuilder.PackRoot` sabitini güncelle (tek satır).
+- Üçüncü parti: `Assets/ThirdPartyPackages/`. ⚠️ Buradaki klasörler editör AÇIKKEN taşınmaz (OS
+  dosya kilidi); taşıma editör kapalıyken `git mv` ile yapılır ve
+  `WeaponKitBuilder.PackRoot` sabiti güncellenir (tek satır).
+  ⚠️ **`.unitypackage` arşivi `Assets/` altına KOPYALANMAZ** — paket Unity'de içe aktarılır, dosya
+  olarak taşınmaz. Bu yayıncının silah paketleri **aynı GUID'leri paylaşır** (ataşman, materyal,
+  klasör): ikinci bir paket içe aktarıldığında Unity GUID'i yol yerine kabul eder ve varlıkları
+  **ilk paketin klasörüne** yazar. Yani `Low Poly AR Weapon Pack 1/` bugün AR + SMG + ShotGun
+  silahlarının hepsini taşır; yeni bir pack aramadan önce oraya bak.
 
 **Assembly grafiği** (bağımlılık hep aşağı):
 Protocol (saf C#, noEngineReferences) ← Net ← Core ← App, Modes.<X>

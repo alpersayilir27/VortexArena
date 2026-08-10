@@ -712,34 +712,51 @@ namespace VortexArena.Core.Combat
             if (muzzleFlash != null)
                 muzzleFlash.Emit(14);
 
-            Vector2 scatter = Random.insideUnitCircle * spread;
-            Vector3 direction = Quaternion.AngleAxis(scatter.x, muzzle.up) *
-                                Quaternion.AngleAxis(scatter.y, muzzle.right) *
-                                muzzle.forward;
-
             if (string.IsNullOrEmpty(WeaponId))
                 WarnMissingWeaponId();
 
-            // ⚠️ Işın BURADA atılmaz: engel kuralı (namlu bir iç engelin içinden ateş edemez) tek
-            // kapıdadır — kendi Physics.Raycast'ini yazan her yeni hasar kaynağı o kuralı kaybeder.
-            ArenaCombat.ShotTrace trace = ArenaCombat.TraceShot(muzzle.position, direction, definition.Range);
+            // Saçmalı silahta tek tetik çekişi birden çok ışın atar (§10.3 bunu bekliyor: atış hızı
+            // denetimi tam da "pompalı saçması" gibi örüntüler düşmesin diye yok). Normal silahta
+            // sayı 1'dir ve döngü tek turda biter — ayrı bir kod yolu YOKTUR.
+            int pellets = definition.PelletCount;
 
-            // Ağ — ATIŞ (§6.4, UDP olay kanalı): her Fire()'da TAM BİR KEZ, isabet olsun olmasın.
-            // Uzak taraf bununla namlu alevini/sesini oynatır ve tracer'ı çizer, o yüzden mesafe
-            // ışının GERÇEKTE gittiği yoldur: isabet varsa oraya kadar, engel yuttuysa namlu ucu,
-            // yoksa menzil sonu.
-            // ⚠️ Bu bildirim VURUŞTAN (aşağıdaki hit_report) BAĞIMSIZDIR — biri sunum, öteki
-            // otoriter durum; kanalları da ayrıdır (Docs/Gelistirici/Yemek-Kitabi.md).
-            ArenaCombat.ReportShot(direction, trace.Distance, NetItemId, IsMainHandRight);
-
-            // Yerel mermi izi. ⚠️ Uzak sunum yolu (RemoteShotFx) atanın kendi izini ÇİZEMEZ ve
-            // çizmeyecek: sunucu olayı atana geri yollamaz, istemci de kendi playerId'sini süzer
-            // (§6.5). Atanın izini çizecek tek yer burasıdır — atlanırsa "herkes görüyor, ateş
-            // eden görmüyor" gibi teşhisi zor bir eksik doğar.
-            DrawLocalTracer(direction, trace.Distance);
-
-            if (trace.HasHit)
+            for (int p = 0; p < pellets; p++)
             {
+                Vector2 scatter = Random.insideUnitCircle * spread;
+                Vector3 direction = Quaternion.AngleAxis(scatter.x, muzzle.up) *
+                                    Quaternion.AngleAxis(scatter.y, muzzle.right) *
+                                    muzzle.forward;
+
+                // ⚠️ Işın BURADA atılmaz: engel kuralı (namlu bir iç engelin içinden ateş edemez) tek
+                // kapıdadır — kendi Physics.Raycast'ini yazan her yeni hasar kaynağı o kuralı kaybeder.
+                ArenaCombat.ShotTrace trace = ArenaCombat.TraceShot(muzzle.position, direction, definition.Range);
+
+                if (p == 0)
+                {
+                    // Ağ — ATIŞ (§6.4, UDP olay kanalı): her Fire()'da TAM BİR KEZ, isabet olsun
+                    // olmasın. Uzak taraf bununla namlu alevini/sesini oynatır ve tracer'ı çizer, o
+                    // yüzden mesafe ışının GERÇEKTE gittiği yoldur: isabet varsa oraya kadar, engel
+                    // yuttuysa namlu ucu, yoksa menzil sonu.
+                    // ⚠️ Bu bildirim VURUŞTAN (aşağıdaki hit_report) BAĞIMSIZDIR — biri sunum, öteki
+                    // otoriter durum; kanalları da ayrıdır (Docs/Gelistirici/Yemek-Kitabi.md).
+                    // ⚠️ Saçmalıda da TEK KEZ gider (ilk saçmanın yönü/mesafesiyle): saçma başına
+                    // yollamak aynı ateşi 9 kez duyurur ve olay kanalının paket başı sınırını
+                    // (§6.4) tek tetikle doldururdu — uzakta çizilen tek bir namlu alevi zaten
+                    // doğru sunumdur.
+                    ArenaCombat.ReportShot(direction, trace.Distance, NetItemId, IsMainHandRight);
+
+                    // Yerel mermi izi. ⚠️ Uzak sunum yolu (RemoteShotFx) atanın kendi izini ÇİZEMEZ ve
+                    // çizmeyecek: sunucu olayı atana geri yollamaz, istemci de kendi playerId'sini süzer
+                    // (§6.5). Atanın izini çizecek tek yer burasıdır — atlanırsa "herkes görüyor, ateş
+                    // eden görmüyor" gibi teşhisi zor bir eksik doğar.
+                    DrawLocalTracer(direction, trace.Distance);
+                }
+
+                if (!trace.HasHit)
+                {
+                    continue;
+                }
+
                 RaycastHit hit = trace.Hit;
                 if (hitEffectPrefab != null)
                 {
@@ -750,12 +767,16 @@ namespace VortexArena.Core.Combat
 
                 // Bölge çarpanı BURADA uygulanır: hasar istemci-otoriter, sunucu
                 // hit_report.damage'ı aynen işler (protokol §10.3).
+                // ⚠️ Hasar SAÇMA BAŞINADIR — bölünmez: WeaponDefinition.Damage zaten tek saçmanın
+                // hasarıdır (CS2 modeli), toplam hasar isabet eden saçma sayısından doğar.
                 float damage = definition.Damage * definition.GetZoneMultiplier(ArenaCombat.GetHitZone(hit.collider));
 
                 // Hasar HİÇBİR KOŞULDA yerelde uygulanmaz: can sunucu-otoriterdir, geri
                 // health_update ile gelir. Hedef ağ oyuncusu değilse (dekor, duvar) hiçbir şey
                 // olmaz — yukarıda oynatılan çarpma efekti kalır. Kırılabilir objeler ağsal
                 // olduğunda onlar da bu hit_report yoluna girecek.
+                // ⚠️ Aynı hedefe giden saçmalar TEK bir rapora TOPLANMAZ: sunucu her raporu ayrı
+                // işler ve bölge çarpanı saçma başına farklıdır (biri kafaya, biri bacağa gidebilir).
                 ArenaCombat.ReportRaycastHit(hit, damage, WeaponId);
             }
 

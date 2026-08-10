@@ -49,7 +49,7 @@ namespace VortexArena.Core.Editor
         // ------------------------------------------------------------ sabitler
 
         /// <summary>Pack klasörü ileride taşınırsa yalnız bu satır değişir.</summary>
-        private const string PackRoot = "Assets/Low Poly AR Weapon Pack 1";
+        private const string PackRoot = "Assets/ThirdPartyPackages/Low Poly AR Weapon Pack 1";
 
         private const string AudioRoot = "Assets/Audio/Weapons";
 
@@ -79,11 +79,25 @@ namespace VortexArena.Core.Editor
         // doğruluk kaynağı materyalin kendisidir, bileşen yalnız _Dissolve'u sürer.
         private const float DissolveAppearSeconds = 1.2f;
 
-        private const string Casing762Path = PrefabDir + "/Casing_762x39.prefab";
-        private const string Casing556Path = PrefabDir + "/Casing_556x45.prefab";
-        private const string BulletPack762Path = PackRoot + "/Prefabs/Bullets/Bullet_A.prefab";
-        private const string BulletPack556Path = PackRoot + "/Prefabs/Bullets/Bullet_B.prefab";
         private const float CasingMassKg = 0.01f;
+
+        /// <summary>
+        /// Kovan aileleri: <c>WeaponSpec.CasingFamily</c> → (üretilecek kovan prefabı, pack'teki
+        /// mermi modeli). Yeni bir kalibre eklemek = buraya bir satır; kovan prefabı ilk koşuda
+        /// üretilir, sonra dokunulmaz.
+        /// <para>⚠️ Aile <b>görsel</b> bir ayrımdır, denge kolu değil: 1 cm'lik ve iki saniye
+        /// yaşayan bir obje için tabanca kalibrelerini (9x19 · .45 ACP · 5.7x28) tek kovanda
+        /// toplamak bilinçlidir — üçe bölmek üç asset ve üç satır maliyetine görünmeyen bir fark
+        /// üretirdi.</para>
+        /// </summary>
+        private static readonly Dictionary<string, (string CasingPath, string PackBulletPath)> CasingFamilies =
+            new Dictionary<string, (string, string)>
+            {
+                ["762x39"] = (PrefabDir + "/Casing_762x39.prefab", PackRoot + "/Prefabs/Bullets/Bullet_A.prefab"),
+                ["556x45"] = (PrefabDir + "/Casing_556x45.prefab", PackRoot + "/Prefabs/Bullets/Bullet_B.prefab"),
+                ["9x19"] = (PrefabDir + "/Casing_9x19.prefab", PackRoot + "/Prefabs/Bullets/Bullet_SMG_A.prefab"),
+                ["12gauge"] = (PrefabDir + "/Casing_12gauge.prefab", PackRoot + "/Prefabs/Bullets/Bullet_ShotGun_A.prefab"),
+            };
 
         private const string Log = "[BuildWeaponPrefabs] ";
 
@@ -95,11 +109,15 @@ namespace VortexArena.Core.Editor
         // değiştirilen değer bir sonraki koşuda GERİ YAZILIR.
         private const float StomachMultiplier = 1.25f;
         private const float LegMultiplier = 0.75f;
-        private const int SpareMagazines = 2;
         private const float KickBackMeters = 0.02f;
         private const float RecoilRecoverSpeed = 10f;
         private const float PitchJitter = 0.05f;
-        private const string ReserveModeName = "DiscardMagazine";
+
+        /// <summary>Satırında <c>ReserveMode</c> yazmayan silahın rezerv kuralı (ürün varsayılanı).</summary>
+        private const string DefaultReserveModeName = "DiscardMagazine";
+
+        /// <summary>Satırında <c>SpareMags</c> yazmayan silahın yedek şarjör sayısı.</summary>
+        private const int DefaultSpareMagazines = 2;
 
         // ---------------------------------------------------------- silah tablosu
 
@@ -123,10 +141,27 @@ namespace VortexArena.Core.Editor
 
             /// ItemHoldMode adı: "OneHand" (tabanca/bomba) | "TwoHand" (tüfek).
             public string HoldMode;
+            /// ⚠️ Saçmalıda bu sayı <b>SAÇMA BAŞINA</b> hasardır, tetik başına değil
+            /// (CS2 modeli): toplam hasar isabet eden saçma sayısından doğar.
             public int Damage;
+
             public int Rpm;
             public int Magazine;
             public float Reload;
+
+            /// Tek tetik çekişinde atılan ışın sayısı. <b>0 ya da 1 = normal silah</b>; yalnız
+            /// saçmalıda doldurulur (XM1014 6, Nova 9).
+            public int Pellets;
+
+            /// Yedek şarjör sayısı. <b>0 = varsayılan</b> (<see cref="DefaultSpareMagazines"/>).
+            /// CS2'nin rezerv cephanesi şarjör boyuna bölünerek bulunur (P90 100/50 = 2).
+            public int SpareMags;
+
+            /// <c>WeaponReserveMode</c> adı. <b>null = varsayılan</b>
+            /// (<see cref="DefaultReserveModeName"/> = şarjör bazlı). Tek tek fişek dolduran
+            /// silahlarda (pompalı) <c>"PoolRounds"</c> yazılır: erken reload'da namludaki fişek
+            /// yanmaz.
+            public string ReserveMode;
 
             /// Hitscan menzili (metre). ⚠️ Bu bir DENGE kolu DEĞİLDİR: arenaların en uzun
             /// çatışma mesafesi ~20 m, en kısa menzil bile 28 m — yani hiçbir silah arena
@@ -268,6 +303,128 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.032f, SmokeSizeMax = 0.055f, SmokeLifetime = 0.95f, SmokeAlpha = 0.26f,
                 CasingFamily = "556x45",
             },
+            // AR_O — CS2 AUG: değerler CS2 ile birebir (28 hasar / 666 rpm / 30 şarjör / 3.80 s
+            // reload / 0.98 range modifier → AK ile aynı menzil sınıfı). Bullpup + dürbün kimliği
+            // saçılımda: tabanı SCAR-L'den dar, bloom'u en yavaş büyüyenlerden ve geri tepmesi
+            // düşük — bedeli 5.56'nın en düşük DPS'i ve en uzun reload'ı.
+            new WeaponSpec
+            {
+                Name = "AUG", PackPrefab = "AR_O", WeaponId = "aug", DisplayName = "AUG",
+                NetItemId = 7, HoldMode = "TwoHand",
+                Damage = 28, Rpm = 666, Magazine = 30, Reload = 3.80f,
+                Range = 46f, BaseSpread = 0.42f, BloomPerShot = 0.22f,
+                MaxBloom = 2.0f, BloomRecovery = 4.8f, Kick = 1.7f, PitchBase = 0.98f, Volume = 1.0f,
+                FireClips = new[] { "SFX_AUG_Shot_01.wav", "SFX_AUG_Shot_02.wav" },
+                MagOutClip = "SFX_AUG_Reload.wav", DryFireClip = "SFX_AUG_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.87f, 0.60f), FlashColorMax = new Color(1f, 0.58f, 0.24f),
+                FlashSizeMin = 0.033f, FlashSizeMax = 0.060f, FlashLifetime = 0.062f, FlashConeAngle = 22f,
+                SmokeSizeMin = 0.034f, SmokeSizeMax = 0.058f, SmokeLifetime = 1.0f, SmokeAlpha = 0.27f,
+                CasingFamily = "556x45",
+            },
+            // AR_L — CS2 Galil AR: 30 hasar / 666 rpm / 35 şarjör / 3.00 s / 0.98 range modifier.
+            // "Ucuz AK": AK'nın menzil sınıfında ama tek vuruşu zayıf, buna karşılık daha hızlı ve
+            // 35'lik şarjörle en uzun seri. Bedeli 5.56'ların en geniş taban saçılımı.
+            new WeaponSpec
+            {
+                Name = "GALIL", PackPrefab = "AR_L", WeaponId = "galilar", DisplayName = "Galil AR",
+                NetItemId = 8, HoldMode = "TwoHand",
+                Damage = 30, Rpm = 666, Magazine = 35, Reload = 3.00f, SpareMags = 2,
+                Range = 44f, BaseSpread = 0.62f, BloomPerShot = 0.34f,
+                MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.5f, PitchBase = 1.02f, Volume = 1.0f,
+                FireClips = new[] { "SFX_GALIL_Shot_01.wav", "SFX_GALIL_Shot_02.wav" },
+                MagOutClip = "SFX_GALIL_Reload.wav", DryFireClip = "SFX_GALIL_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.78f, 0.42f), FlashColorMax = new Color(1f, 0.42f, 0.12f),
+                FlashSizeMin = 0.045f, FlashSizeMax = 0.082f, FlashLifetime = 0.075f, FlashConeAngle = 30f,
+                SmokeSizeMin = 0.042f, SmokeSizeMax = 0.072f, SmokeLifetime = 1.2f, SmokeAlpha = 0.32f,
+                CasingFamily = "556x45",
+            },
+            // SMG_O — CS2 P90: 26 hasar / 857 rpm / 50 şarjör / 3.40 s / 0.84 range modifier.
+            // 50'lik şarjör + en düşük geri tepme = tarama silahı; bedeli menzil ve mermi başı hasar.
+            new WeaponSpec
+            {
+                Name = "P90", PackPrefab = "SMG_O", WeaponId = "p90", DisplayName = "P90",
+                NetItemId = 9, HoldMode = "TwoHand",
+                Damage = 26, Rpm = 857, Magazine = 50, Reload = 3.40f, SpareMags = 2,
+                Range = 24f, BaseSpread = 0.85f, BloomPerShot = 0.24f,
+                MaxBloom = 2.6f, BloomRecovery = 5.5f, Kick = 1.2f, PitchBase = 1.28f, Volume = 0.92f,
+                FireClips = new[] { "SFX_M4A1S_Shot_01.wav", "SFX_M4A1S_Shot_02.wav" },
+                MagOutClip = "SFX_M4A1S_Reload.wav", DryFireClip = "SFX_M4A1S_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.90f, 0.68f), FlashColorMax = new Color(1f, 0.62f, 0.28f),
+                FlashSizeMin = 0.026f, FlashSizeMax = 0.048f, FlashLifetime = 0.05f, FlashConeAngle = 26f,
+                SmokeSizeMin = 0.028f, SmokeSizeMax = 0.048f, SmokeLifetime = 0.85f, SmokeAlpha = 0.22f,
+                CasingFamily = "9x19",
+            },
+            // SMG_M — CS2 MP9: 26 hasar / 857 rpm / 30 şarjör / 2.10 s / 0.75 range modifier.
+            // Oyundaki EN HIZLI reload ve en kısa menzil: köşe tutan, sık şarjör değiştiren silah.
+            new WeaponSpec
+            {
+                Name = "MP9", PackPrefab = "SMG_M", WeaponId = "mp9", DisplayName = "MP9",
+                NetItemId = 10, HoldMode = "TwoHand",
+                Damage = 26, Rpm = 857, Magazine = 30, Reload = 2.10f, SpareMags = 4,
+                Range = 18f, BaseSpread = 0.90f, BloomPerShot = 0.26f,
+                MaxBloom = 2.8f, BloomRecovery = 5.8f, Kick = 1.1f, PitchBase = 1.38f, Volume = 0.90f,
+                FireClips = new[] { "SFX_M4A1S_Shot_01.wav", "SFX_M4A1S_Shot_02.wav" },
+                MagOutClip = "SFX_M4A1S_Reload.wav", DryFireClip = "SFX_M4A1S_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.92f, 0.72f), FlashColorMax = new Color(1f, 0.66f, 0.32f),
+                FlashSizeMin = 0.024f, FlashSizeMax = 0.044f, FlashLifetime = 0.048f, FlashConeAngle = 28f,
+                SmokeSizeMin = 0.026f, SmokeSizeMax = 0.045f, SmokeLifetime = 0.8f, SmokeAlpha = 0.20f,
+                CasingFamily = "9x19",
+            },
+            // SMG_L — CS2 UMP-45: 35 hasar / 666 rpm / 25 şarjör / 3.50 s / 0.82 range modifier.
+            // SMG'lerin en sert vuranı (bir tüfekten bile yüksek mermi hasarı) ama en yavaşı;
+            // 25'lik şarjör hatayı affetmiyor.
+            new WeaponSpec
+            {
+                Name = "UMP45", PackPrefab = "SMG_L", WeaponId = "ump45", DisplayName = "UMP-45",
+                NetItemId = 11, HoldMode = "TwoHand",
+                Damage = 35, Rpm = 666, Magazine = 25, Reload = 3.50f, SpareMags = 4,
+                Range = 22f, BaseSpread = 0.75f, BloomPerShot = 0.30f,
+                MaxBloom = 2.6f, BloomRecovery = 4.6f, Kick = 1.9f, PitchBase = 1.18f, Volume = 0.96f,
+                FireClips = new[] { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" },
+                MagOutClip = "SFX_AK47_Reload.wav", DryFireClip = "SFX_AK47_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.72f, 0.34f), FlashColorMax = new Color(1f, 0.38f, 0.10f),
+                FlashSizeMin = 0.032f, FlashSizeMax = 0.058f, FlashLifetime = 0.058f, FlashConeAngle = 30f,
+                SmokeSizeMin = 0.032f, SmokeSizeMax = 0.055f, SmokeLifetime = 1.0f, SmokeAlpha = 0.26f,
+                CasingFamily = "9x19",
+            },
+            // ShotGun_C — CS2 XM1014: SAÇMA BAŞINA 20 hasar × 6 saçma / 171 rpm / 7 fişek /
+            // 0.70 range modifier. Yarı otomatik: Nova'dan hızlı ve daha affedici, tek atışı zayıf.
+            // ⚠️ Reload süresi CS'te fişek fişektir; burada tam şarjörün TOPLAM süresi yazılır
+            // (fişek fişek dolum modellenmiyor) — bunun karşılığı `PoolRounds`: erken reload'da
+            // namludaki fişek yanmaz.
+            new WeaponSpec
+            {
+                Name = "XM1014", PackPrefab = "ShotGun_C", WeaponId = "xm1014", DisplayName = "XM1014",
+                NetItemId = 12, HoldMode = "TwoHand",
+                Damage = 20, Rpm = 171, Magazine = 7, Reload = 4.50f, Pellets = 6,
+                SpareMags = 4, ReserveMode = "PoolRounds",
+                Range = 26f, BaseSpread = 5.0f, BloomPerShot = 0.60f,
+                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 3.2f, PitchBase = 0.72f, Volume = 1.0f,
+                FireClips = new[] { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" },
+                MagOutClip = "SFX_AK47_Reload.wav", DryFireClip = "SFX_AK47_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.72f, 0.30f), FlashColorMax = new Color(1f, 0.32f, 0.06f),
+                FlashSizeMin = 0.075f, FlashSizeMax = 0.130f, FlashLifetime = 0.10f, FlashConeAngle = 46f,
+                SmokeSizeMin = 0.075f, SmokeSizeMax = 0.125f, SmokeLifetime = 1.7f, SmokeAlpha = 0.42f,
+                CasingFamily = "12gauge",
+            },
+            // ShotGun_B — CS2 Nova: SAÇMA BAŞINA 26 hasar × 9 saçma / 68 rpm / 8 fişek /
+            // 0.70 range modifier. Pompalı: yakında tek atışta öldürür (9 × 26 = 234), ıskalarsa
+            // bir sonraki atış çok geç gelir.
+            new WeaponSpec
+            {
+                Name = "NOVA", PackPrefab = "ShotGun_B", WeaponId = "nova", DisplayName = "Nova",
+                NetItemId = 13, HoldMode = "TwoHand",
+                Damage = 26, Rpm = 68, Magazine = 8, Reload = 5.00f, Pellets = 9,
+                SpareMags = 4, ReserveMode = "PoolRounds",
+                Range = 25f, BaseSpread = 6.0f, BloomPerShot = 0.60f,
+                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 4.0f, PitchBase = 0.66f, Volume = 1.0f,
+                FireClips = new[] { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" },
+                MagOutClip = "SFX_AK47_Reload.wav", DryFireClip = "SFX_AK47_DryFire.wav",
+                FlashColorMin = new Color(1f, 0.68f, 0.26f), FlashColorMax = new Color(1f, 0.28f, 0.05f),
+                FlashSizeMin = 0.085f, FlashSizeMax = 0.150f, FlashLifetime = 0.115f, FlashConeAngle = 50f,
+                SmokeSizeMin = 0.085f, SmokeSizeMax = 0.140f, SmokeLifetime = 1.9f, SmokeAlpha = 0.46f,
+                CasingFamily = "12gauge",
+            },
         };
 
         private enum BuildOutcome { Rebound, Failed }
@@ -321,8 +478,27 @@ namespace VortexArena.Core.Editor
                 AssetDatabase.SaveAssets();
 
                 // ---- ADIM 2: WPN prefabları (kovan/duman kaynak asset'leri önce, WPN'ler onlara muhtaç).
-                GameObject casing762 = EnsureCasingPrefab(Casing762Path, BulletPack762Path, live);
-                GameObject casing556 = EnsureCasingPrefab(Casing556Path, BulletPack556Path, live);
+                // Yalnız TABLODA GEÇEN aileler üretilir: kullanılmayan bir kalibre için asset
+                // açmak, sonradan "bu kovan neyin?" diye bakılacak ölü bir dosya bırakırdı.
+                var casings = new Dictionary<string, GameObject>();
+                for (int i = 0; i < Specs.Length; i++)
+                {
+                    string family = Specs[i].CasingFamily;
+                    if (string.IsNullOrEmpty(family) || casings.ContainsKey(family))
+                    {
+                        continue;
+                    }
+
+                    if (!CasingFamilies.TryGetValue(family, out var source))
+                    {
+                        Warn(Specs[i].Name + ": '" + family + "' kovan ailesi CasingFamilies'te yok — " +
+                             "kovan bağlanamayacak.");
+                        continue;
+                    }
+
+                    casings[family] = EnsureCasingPrefab(source.CasingPath, source.PackBulletPath, live);
+                }
+
                 Material smokeMaterial = EnsureMuzzleSmokeMaterial();
 
                 for (int i = 0; i < Specs.Length; i++)
@@ -335,7 +511,7 @@ namespace VortexArena.Core.Editor
 
                     try
                     {
-                        switch (BuildWeaponPrefab(Specs[i], defs[i], casing762, casing556, smokeMaterial))
+                        switch (BuildWeaponPrefab(Specs[i], defs[i], casings, smokeMaterial))
                         {
                             case BuildOutcome.Rebound: wpnRebound++; break;
                             default: wpnFailed++; break;
@@ -434,6 +610,7 @@ namespace VortexArena.Core.Editor
             SetNumber(so, "legMultiplier", LegMultiplier, ctx);
             SetNumber(so, "fireRateRpm", spec.Rpm, ctx);
             SetNumber(so, "range", spec.Range, ctx);
+            SetNumber(so, "pelletCount", spec.Pellets > 0 ? spec.Pellets : 1, ctx);
             SetNumber(so, "baseSpreadDegrees", spec.BaseSpread, ctx);
             SetNumber(so, "bloomPerShotDegrees", spec.BloomPerShot, ctx);
             SetNumber(so, "maxBloomDegrees", spec.MaxBloom, ctx);
@@ -442,8 +619,9 @@ namespace VortexArena.Core.Editor
             SetNumber(so, "kickBackMeters", KickBackMeters, ctx);
             SetNumber(so, "recoilRecoverSpeed", RecoilRecoverSpeed, ctx);
             SetNumber(so, "magazineSize", spec.Magazine, ctx);
-            SetNumber(so, "spareMagazines", SpareMagazines, ctx);
-            SetEnumByName(so, "reserveMode", ReserveModeName, ctx);
+            SetNumber(so, "spareMagazines", spec.SpareMags > 0 ? spec.SpareMags : DefaultSpareMagazines, ctx);
+            SetEnumByName(so, "reserveMode",
+                string.IsNullOrEmpty(spec.ReserveMode) ? DefaultReserveModeName : spec.ReserveMode, ctx);
             SetNumber(so, "reloadTime", spec.Reload, ctx);
             // Ses klipleri YALNIZ boşsa doldurulur — WD_<Ad>.asset'te Inspector'dan elle
             // sürüklenen bir klip varsa bu araç bir daha çalıştırılsa da SİLİNMEZ/EZİLMEZ.
@@ -475,7 +653,7 @@ namespace VortexArena.Core.Editor
         /// Prefab yoksa üretilmez, hata basılır: eksik silahın prefabı repoya elle eklenir.
         /// </summary>
         private static BuildOutcome BuildWeaponPrefab(WeaponSpec spec, WeaponDefinition def,
-            GameObject casing762, GameObject casing556, Material smokeMaterial)
+            Dictionary<string, GameObject> casings, Material smokeMaterial)
         {
             string wpnPath = PrefabDir + "/WPN_" + spec.Name + ".prefab";
             string ctx = "WPN_" + spec.Name;
@@ -487,7 +665,7 @@ namespace VortexArena.Core.Editor
                 return BuildOutcome.Failed;
             }
 
-            RebindExistingPrefab(wpnPath, spec, def, casing762, casing556, smokeMaterial, ctx);
+            RebindExistingPrefab(wpnPath, spec, def, casings, smokeMaterial, ctx);
             return BuildOutcome.Rebound;
         }
 
@@ -497,7 +675,7 @@ namespace VortexArena.Core.Editor
         /// model/Muzzle konumuna DOKUNULMAZ (elle ayarlanmış olabilir).
         /// </summary>
         private static void RebindExistingPrefab(string wpnPath, WeaponSpec spec, WeaponDefinition def,
-            GameObject casing762, GameObject casing556, Material smokeMaterial, string ctx)
+            Dictionary<string, GameObject> casings, Material smokeMaterial, string ctx)
         {
             GameObject contents = PrefabUtility.LoadPrefabContents(wpnPath);
             try
@@ -539,7 +717,7 @@ namespace VortexArena.Core.Editor
 
                 if (weapon != null)
                 {
-                    ApplyVfxAndShellKit(contents, spec, casing762, casing556, smokeMaterial, ctx);
+                    ApplyVfxAndShellKit(contents, spec, casings, smokeMaterial, ctx);
                 }
 
                 // Tek çalışan yol burası — soket kiti de burada uygulanmazsa mevcut WPN'ler
@@ -1256,7 +1434,7 @@ namespace VortexArena.Core.Editor
         /// TAŞIMAZ — model/namlu konumu elle ayarlanmıştır, araç onu bozmaz.
         /// </summary>
         private static void ApplyVfxAndShellKit(GameObject root, WeaponSpec spec,
-            GameObject casing762, GameObject casing556, Material smokeMaterial, string ctx)
+            Dictionary<string, GameObject> casings, Material smokeMaterial, string ctx)
         {
             Transform rootT = root.transform;
             Transform flashT = FindDeepChild(rootT, "MuzzleFlash");
@@ -1277,7 +1455,11 @@ namespace VortexArena.Core.Editor
             // hesap silahın alt ağacındaki her Renderer'a bakıyordu; prefabdaki KAPALI çerçeve
             // (VA_WeaponFrame) bayat dünya bounds'u döndürdüğü için ölçü kayıyor, elle yapılan
             // ayar sessizce siliniyordu (Docs/Sistem-Ozeti.md §7).
-            Transform ejectT = rootT.Find("Eject");
+            // ⚠️ Arama DERİN olmak zorunda: `Eject` silahın kökünde değil MODELİN içinde yaşıyor
+            // (kovan çıkışı gövdenin bir noktasıdır, silahın orijininin değil). Yalnız doğrudan
+            // çocuklara bakılırsa mevcut düğüm bulunamaz ve her koşu kökte İKİNCİ bir `Eject`
+            // üretip elle ayarlanmış olanı sessizce devre dışı bırakır.
+            Transform ejectT = FindDeepChild(rootT, "Eject");
             if (ejectT == null)
             {
                 // Yalnız İLK kurulumda kaba bir başlangıç noktası verilir (yoksa silahın
@@ -1296,7 +1478,12 @@ namespace VortexArena.Core.Editor
             }
 
             Component shellEjector = EnsureComponentByTypeName(root, "ShellEjector", ctx);
-            GameObject casingForSpec = spec.CasingFamily == "762x39" ? casing762 : casing556;
+            GameObject casingForSpec = null;
+            if (!string.IsNullOrEmpty(spec.CasingFamily))
+            {
+                casings.TryGetValue(spec.CasingFamily, out casingForSpec);
+            }
+
             BindFields(shellEjector, ctx, ("casingPrefab", casingForSpec), ("ejectPoint", ejectT));
         }
 
