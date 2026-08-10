@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 1c9d6be45c3e26243aaec89e7acfbec9
+guid: afad03405a8b4914c97c78e992bed72e
 PrefabImporter:
   externalObjects: {}
   userData: 
@@ -7,8 +7,8 @@ PrefabImporter:
   assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
-  productId: 276916
-  packageName: Low Poly AR Weapon Pack 1
-  packageVersion: 1.1
+  productId: 313750
+  packageName: Low Poly AR Weapon Pack 3
+  packageVersion: 1.0
   assetPath: Assets/Low Poly AR Weapon Pack 1/Prefabs/Bullets/Bullet_C.prefab
-  uploadId: 721596
+  uploadId: 741608

@@ -22,13 +22,21 @@ MonoBehaviour:
   secondaryGripEuler: {x: 0, y: 0, z: 0}
   primaryGripRadius: 0.12
   secondaryGripRadius: 0.12
-  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
-  tracerWidth: 0.02
+  handPose:
+    thumb: 0
+    index: 0
+    middle: 0
+    ring: 0
+    pinky: 0
+  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.8039216}
+  tracerWidth: 0.01
   tracerLifetime: 0.1
-  tracerEveryNthRound: 3
+  tracerEveryNthRound: 2
   weaponId: scarl
   damage: 32
   headshotMultiplier: 4
+  stomachMultiplier: 1.25
+  legMultiplier: 0.75
   fireRateRpm: 625
   range: 38
   baseSpreadDegrees: 0.45
@@ -38,6 +46,8 @@ MonoBehaviour:
   kickDegrees: 1.6
   kickBackMeters: 0.02
   recoilRecoverSpeed: 10
+  hapticAmplitude: 0.8
+  hapticDuration: 0.05
   magazineSize: 30
   spareMagazines: 2
   reserveMode: 0
@@ -52,5 +62,3 @@ MonoBehaviour:
   firePitchBase: 0.94
   firePitchJitter: 0.05
   fireVolume: 1
-  hapticAmplitude: 0.8
-  hapticDuration: 0.05

@@ -28,10 +28,10 @@ MonoBehaviour:
     middle: 0
     ring: 0
     pinky: 0
-  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
-  tracerWidth: 0.02
+  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.8039216}
+  tracerWidth: 0.01
   tracerLifetime: 0.1
-  tracerEveryNthRound: 3
+  tracerEveryNthRound: 2
   weaponId: ak47
   damage: 36
   headshotMultiplier: 4
