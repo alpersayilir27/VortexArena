@@ -46,6 +46,9 @@ namespace VortexArena.Core.Combat
         [SerializeField] private float fireRateRpm = 700f;
         [Tooltip("Hitscan menzili (metre).")]
         [SerializeField] private float range = 60f;
+        [Tooltip("Tek tetik çekişinde atılan ışın sayısı. 1 = normal silah, >1 = saçmalı " +
+                 "(her saçma AYRI hasar taşır ve ayrı hit_report üretir).")]
+        [SerializeField] private int pelletCount = 1;
 
         [Header("Saçılım (bloom)")]
         [Tooltip("Taban saçılım yarı açısı (derece, tek elle).")]
@@ -129,6 +132,15 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Hitscan menzili (metre).</summary>
         public float Range => range;
+
+        /// <summary>
+        /// Tek tetik çekişinde atılan ışın sayısı (saçmalıda &gt;1). ⚠️ <b>Hasar SAÇMA BAŞINADIR</b>,
+        /// toplam değil: <see cref="Damage"/> × isabet eden saçma sayısı kadar hasar iner. Mesafeyle
+        /// düşen bir hasar eğrisi YOKTUR ve eklenmez — pompalının menzil kimliğini
+        /// <see cref="BaseSpreadDegrees"/> taşır (uzakta koni büyür, saçmaların çoğu ıskalar).
+        /// İkinci bir mesafe eğrisi eklemek aynı davranışı iki yerden ayarlanır yapardı.
+        /// </summary>
+        public int PelletCount => Mathf.Max(1, pelletCount);
 
         /// <summary>Taban saçılım yarı açısı (derece, tek elle).</summary>
         public float BaseSpreadDegrees => baseSpreadDegrees;
