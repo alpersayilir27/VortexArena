@@ -442,12 +442,17 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 > ⚠️ Denge sayıları istemcide yaşadığı için değişiklik **APK build'i ister** — sunucuyu yeniden
 > başlatmak yetmez.
 
-> ⚠️ **Mevcut bir silahın SESİNİ tablodan değiştirdiysen aracı koşmak yetmez.**
-> `WeaponKitBuilder` klip alanlarını yalnız **boşsa** yazar (elle sürüklenen klip korunsun diye),
-> dolayısıyla dolu bir alan sessizce atlanır ve tablo uygulanmamış bir niyet olarak kalır. Önce
-> `WD_<Ad>.asset`'te `fireClips` / `magOutClip` / `dryFireClip` alanlarını boşalt, sonra
-> `Build Weapon Prefabs`'i koş — ve sonucu aracın çıktısından değil **asset'ten** doğrula.
-> Aynı şey diğer alanlar için geçerli DEĞİLDİR: hasar/rpm/menzil/saçılım her koşuda ezilir.
+> ⚠️ **Silah sesi tabloda DEĞİLDİR ve araç ona dokunmaz.** Ses değiştirmek =
+> `Assets/_Shared/Arsenal/Data/WD_<Ad>.asset`'i seç, klibi ilgili alana **sürükle**. Beş yuva var:
+> `fireClips` (dizi — her atışta rastgele biri seçilir), `magOutClip` (reload `t=0`),
+> `magInClip` (reload `t = 0.70 × reloadTime`; boş bırakılırsa o an sessiz kalır ve `magOutClip`
+> tüm reload sesini taşır), `dryFireClip` (boş şarjörde tetik), `pickupClip` (silah alınırken).
+> `Build Weapon Prefabs` koşmak gerekmez — ama koşarsan ateş sesi atanmamış silahları listeler.
+> ⚠️ Ateş klipleri `PlayOneShot` ile çalınır, yani **üst üste biner**: aranan dosya her zaman
+> **tek atış**tır, tarama/loop kaydı saniyede 12 kez çalınıp çorbaya döner. Kuyruğu kısa tut —
+> `pitch` AudioSource'un özelliği olduğu için her yeni atış hâlâ çalan kuyrukları da yeniden
+> perdeler.
+> Aynı şey diğer alanlar için geçerli DEĞİLDİR: hasar/rpm/menzil/saçılım her koşuda tablodan ezilir.
 
 > Sahnedeki silahın **çerçevesi** için elle iş yoktur: `Build Weapon Prefabs` her `WPN_*` köküne
 > `VA_WeaponFrame` örneğini kendisi koyar. Çerçevenin arenada görünüp görünmemesi ayrı bir konudur

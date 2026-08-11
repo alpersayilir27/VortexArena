@@ -22,21 +22,57 @@ namespace VortexArena.Core.Combat
     {
         /// <summary>
         /// Kovan prefabı başına eşzamanlı kovan tavanı. Tavana vurulduğunda en eski kovan
-        /// erkenden geri alınır — o kovan zaten yerde durduğu için gözle fark edilmez.
-        /// <para>⚠️ Havuz artık silah başına DEĞİL <b>prefab başına</b>: aynı kalibreyi taşıyan
-        /// iki silah (iki el) bu tavanı paylaşır. Sayı bu yüzden eski silah-başına tavandan
-        /// (10) yüksek tutuldu.</para>
+        /// erkenden geri alınır.
+        /// <para>⚠️ Havuz silah başına DEĞİL <b>prefab başına</b>: aynı kalibreyi taşıyan TÜM
+        /// silahlar (iki el + o kalibredeki her model) bu tek tavanı paylaşır.</para>
+        /// <para>⚠️ <b>Tavan, kalibreyi paylaşan silah sayısıyla birlikte büyütülmelidir</b> ve
+        /// hesabı şudur: tek silah <c>rpm/60 × <see cref="LifetimeSeconds"/></c> kadar kovanı aynı
+        /// anda havada tutar (666 rpm × 3 sn ≈ 33). Tavan bunun altına düşerse kovan ömrünü
+        /// tamamlamadan geri alınır ve belirti "kovan hiç çıkmıyor"a benzer: kovan doğar, birkaç
+        /// karede yeniden kullanılır, oyuncu yalnız bir titreme görür. Bu YANILTICIDIR — hata
+        /// basılmaz ve silahın kurulumu kusursuz görünür. Çift el + tek kalibrede birden çok model
+        /// oynandığı için tavan tek silahın ihtiyacının iki katına yakın tutulur.</para>
+        /// <para>Maliyet tembeldir: slot ancak gerçekten kullanıldığında instantiate edilir, yani
+        /// bu sayıyı büyütmek hiç ateş edilmeyen bir kalibreye hiçbir şey ödetmez.</para>
         /// </summary>
-        private const int PoolSizePerPrefab = 16;
+        private const int PoolSizePerPrefab = 64;
 
         /// <summary>Kovanın doğuşundan gizlenmesine kadar geçen süre (sn).</summary>
         private const float LifetimeSeconds = 3f;
+
+        /// <summary>
+        /// Kovanın collider'ının KAPALI kaldığı süre (sn) — doğduğu andan itibaren.
+        /// <para>⚠️ <b>Bu gecikme şart.</b> Kovan, silahın kendi collider'ının İÇİNDE doğar: çıkış
+        /// noktası gövdenin bir noktasıdır ve gövde de kavranabilir olduğu için kutu collider
+        /// taşır. İki collider iç içe doğduğunda PhysX onları ayırmak için kovana depenetrasyon
+        /// hızı bindirir; bu hız fırlatma itkisinin (1–2 m/s) kat kat üstüne çıkabilir. Sonuç
+        /// belirtisi <b>"kovan hiç çıkmıyor"</b>dur: kovan doğar, göz kaydedemeden sahneden fırlar
+        /// (zeminin altına geçtiği de ölçüldü). Silahtan silaha değişmesi, çıkış noktasının kutu
+        /// içindeki derinliğine ve o karedeki temas çözümüne bağlı olmasındandır — yani aynı
+        /// kurulum bir silahta çalışır, ötekinde çalışmaz gibi görünür ve hata basılmaz.</para>
+        /// <para>Süre kovanın silahtan çıkması için yeter (2 m/s × 0.08 sn ≈ 16 cm) ve zemine
+        /// varmasından çok kısadır, yani kovan yine yere çarpıp yuvarlanır.</para>
+        /// </summary>
+        private const float ColliderOffSeconds = 0.08f;
+
+        /// <summary>
+        /// Kovanın depenetrasyon hızı tavanı (m/s). Üstteki gecikme ana savunma; bu ikinci hattır
+        /// (kovan yine de bir el/kol/duvar collider'ının içinde doğarsa fırlamasın). Unity'nin
+        /// varsayılanı 10 m/s'dir ve 1 cm'lik bir obje için bu "sahneden kaybol" demektir.
+        /// </summary>
+        private const float MaxDepenetrationSpeed = 1f;
 
         /// <summary>Tek bir kovan prefabının round-robin havuzu.</summary>
         private sealed class PrefabPool
         {
             public readonly Transform[] Items = new Transform[PoolSizePerPrefab];
             public readonly Rigidbody[] Bodies = new Rigidbody[PoolSizePerPrefab];
+
+            /// <summary>Slotun kovanının collider'ları (kapatıp açmak için; alt objelerde olabilir).</summary>
+            public readonly Collider[][] Colliders = new Collider[PoolSizePerPrefab][];
+
+            /// <summary>Collider'ın geri açılacağı an (<c>Time.time</c>); 0 = beklenen bir açılma yok.</summary>
+            public readonly float[] EnableColliderAt = new float[PoolSizePerPrefab];
 
             /// <summary>Slotun gizleneceği an (<c>Time.time</c>).</summary>
             // ⚠️ Coroutine DEĞİL: havuz slotu erken yeniden kullanıldığında eski zamanlayıcı yeni
@@ -119,10 +155,22 @@ namespace VortexArena.Core.Combat
                 GameObject go = Instantiate(casingPrefab, transform);
                 pool.Items[i] = go.transform;
                 pool.Bodies[i] = go.GetComponent<Rigidbody>();
+                pool.Colliders[i] = go.GetComponentsInChildren<Collider>(true);
+
+                if (pool.Bodies[i] != null)
+                {
+                    pool.Bodies[i].maxDepenetrationVelocity = MaxDepenetrationSpeed;
+                }
             }
 
             Transform casing = pool.Items[i];
             Rigidbody body = pool.Bodies[i];
+
+            // ⚠️ Collider'lar KAPALI doğar (gerekçe: ColliderOffSeconds). Sıra önemli: kapatma
+            // SetActive'ten ÖNCE olmalı, yoksa kovan bir kare silahın içinde temas üretir ve
+            // depenetrasyon o tek karede işini yapar.
+            SetCollidersEnabled(pool.Colliders[i], false);
+            pool.EnableColliderAt[i] = Time.time + ColliderOffSeconds;
 
             casing.SetPositionAndRotation(ejectPoint.position, ejectPoint.rotation);
             casing.gameObject.SetActive(true);
@@ -149,10 +197,38 @@ namespace VortexArena.Core.Combat
                 for (int i = 0; i < PoolSizePerPrefab; i++)
                 {
                     Transform item = pool.Items[i];
-                    if (item != null && item.gameObject.activeSelf && now >= pool.ExpireAt[i])
+                    if (item == null || !item.gameObject.activeSelf)
+                    {
+                        continue;
+                    }
+
+                    // Silahın içinden çıkmış: collider geri açılır (bkz. ColliderOffSeconds).
+                    if (pool.EnableColliderAt[i] > 0f && now >= pool.EnableColliderAt[i])
+                    {
+                        SetCollidersEnabled(pool.Colliders[i], true);
+                        pool.EnableColliderAt[i] = 0f;
+                    }
+
+                    if (now >= pool.ExpireAt[i])
                     {
                         item.gameObject.SetActive(false);
                     }
+                }
+            }
+        }
+
+        private static void SetCollidersEnabled(Collider[] colliders, bool value)
+        {
+            if (colliders == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                if (colliders[i] != null)
+                {
+                    colliders[i].enabled = value;
                 }
             }
         }

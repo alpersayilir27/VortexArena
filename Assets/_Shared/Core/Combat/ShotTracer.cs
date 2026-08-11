@@ -10,6 +10,12 @@ namespace VortexArena.Core.Combat
     /// uzak oyuncuların izi için <see cref="RemoteShotFx"/> (§6.4/6.5). İkisi ayrı olmak ZORUNDA:
     /// sunucu atış olayını atana geri yollamaz, istemci de kendi <c>playerId</c>'sini süzer.
     /// <para>
+    /// ⚠️ <b>Bir tetik çekişi tek çizgi DEĞİLDİR</b>: saçmalı silahta (<c>PelletCount &gt; 1</c>)
+    /// yaylımın her saçması kendi izini alır ve hepsi <see cref="Play"/> ile TEK çağrıda çizilir.
+    /// Saçma başına ayrı çağrı YAPILMAZ — duman bütçesi ve çizgi kalınlığı yaylımın tamamına göre
+    /// ölçülüyor, saçma saçma çağrılsa ikisi de saçma sayısınca çoğalırdı.
+    /// </para>
+    /// <para>
     /// ⚠️ <b>Duman ayrı bir giriş noktası DEĞİLDİR</b> ve öyle olmamalı: <see cref="Play"/>'in
     /// içinde, çizginin hemen ardından yayılır. İkinci bir <c>PlaySmoke</c> kapısı açılsaydı iki
     /// çağıranın (yerel/uzak) birini çağırıp diğerini unutması mümkün olurdu — yani aynı silah
@@ -45,11 +51,36 @@ namespace VortexArena.Core.Combat
     public class ShotTracer : MonoBehaviour
     {
         /// <summary>Havuzdaki çizgi sayısı (aynı anda canlı kalabilecek tracer).</summary>
-        // ~53 olay/sn × 0.06 sn ömür ≈ 3-4 eşzamanlı; ömür playtest'te uzatılabildiği için pay var.
-        private const int PoolSize = 24;
+        // ⚠️ Tavanı ORTALAMA olay hızı değil, TEK KAREDEKİ yığılma belirler: saçmalı silahta bir
+        // tetik çekişi aynı karede PelletCount kadar çizgi ister (XM1014 6, Nova 9). Ortalamaya
+        // göre boyutlanmış bir havuzda (~53 olay/sn × 0.1 sn ömür ≈ 5 eşzamanlı) iki oyuncunun
+        // üst üste gelen yaylımı birbirinin çizgilerini keser ve yelpaze eksik/asimetrik çizilir —
+        // belirtisi "bazı saçmaların izi hiç çıkmıyor" olur, yani teşhisi zor. Taban bu yüzden
+        // birkaç TAM yaylımdır: MaxScatterLines × ~4 eşzamanlı yaylım.
+        private const int PoolSize = 48;
 
         /// <summary>Bu mesafeden kısa "atış"a tracer çizilmez (dejenere/eksik mesafe).</summary>
         private const float MinTracerMeters = 0.5f;
+
+        /// <summary>
+        /// Tek yaylımda çizilebilecek en çok çizgi (saçma) sayısı — <b>iki çağıran da</b> saçma
+        /// sayısını buna kırpar.
+        /// <para>Sabit burada durur çünkü ölçüsü <see cref="PoolSize"/> ile aynı bütçeden gelir:
+        /// çağıranlar kendi tavanlarını taşısaydı biri büyütüldüğünde havuz sessizce yetmez
+        /// olurdu. Bugünkü en kalabalık silah 9 saçmalıdır (Nova); pay ileride gelecek daha
+        /// saçmalı bir silah içindir.</para>
+        /// </summary>
+        public const int MaxScatterLines = 12;
+
+        /// <summary>
+        /// Yaylım (saçmalı) atışta çizginin incelme oranı.
+        /// <para>Tek mermilik kalınlık, aynı namludan çıkan 6-9 çizgide namlu dibinde tek bir opak
+        /// huniye dönüşür ve <b>yelpazenin açısı</b> okunmaz olur — oysa saçmalının görsel kimliği
+        /// tam olarak odur. Eşyaya ayrı bir "saçma kalınlığı" alanı EKLENMEZ, ölçü
+        /// <c>tracerWidth</c>'ten türetilir: iki sayı olsaydı playtest'te biri ayarlanıp öteki
+        /// unutulurdu.</para>
+        /// </summary>
+        private const float ScatterWidthScale = 0.6f;
 
         /// <summary>Çizgi materyalinin shader arama zinciri (ilk bulunan kullanılır).</summary>
         // ⚠️ "Sprites/Default" başta duruyor çünkü Graphics Settings'in *Always Included Shaders*
@@ -209,55 +240,111 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bir tracer çizer: çizgi + yol boyunca duman izi. <paramref name="lifetime"/> ve
-        /// <paramref name="width"/> eşyanın tanımından gelir; geçersiz (≤0) değerler güvenli tabana
-        /// çekilir ve duman da o düzeltilmiş değerlerden türetilir.
-        /// Mesafe çok kısaysa hiç çizilmez (return false).
-        /// <para>⚠️ Dönüş değeri <b>çizginin</b> durumudur: duman kurulamasa (shader yok) bile
-        /// çizgi çizildiyse <c>true</c> döner — duman kozmetik bir eklentidir, tracer'ın varlığını
-        /// yönetmez.</para>
+        /// Bir tetik çekişinin TÜM izlerini çizer: <paramref name="count"/> kadar çizgi (saçmalı
+        /// silahta yelpaze, normal silahta tek çizgi) + yaylımın tamamına yayılan <b>tek</b> duman
+        /// bütçesi. Dönüş: gerçekten çizilen çizgi sayısı.
+        /// <para>
+        /// <paramref name="lifetime"/> ve <paramref name="width"/> eşyanın tanımından gelir;
+        /// geçersiz (≤0) değerler güvenli tabana çekilir ve duman da o düzeltilmiş değerlerden
+        /// türetilir. Mesafesi çok kısa olan çizgi atlanır (yaylımın geri kalanı etkilenmez).
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Tek mermilik ayrı bir aşırı yükleme YOKTUR</b> ve eklenmez: normal silah da bu
+        /// yoldan, tek elemanlı bir dizi ile geçer. İki imza olsaydı sönme/duman/havuz davranışının
+        /// tek mermide ve yaylımda sapması an meselesiydi.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Duman saçma başına ÇOĞALTILMAZ.</b> Tek mermilik bütçe her saçmaya ayrı ayrı
+        /// verilseydi 9 saçmalı bir yaylım tek karede ~9 kat puf yayardı: parçacık tavanı
+        /// (<see cref="SmokeMaxParticles"/>) tek atışta dolar, sonraki atışların dumanı sessizce
+        /// düşer ve oyuncunun namlusunun önünde Quest'in fill-rate'ini yiyen opak bir duvar
+        /// belirir. Bütçe bu yüzden yaylımın TAMAMINA aittir ve puf'lar saçmalar arasında sırayla
+        /// dağıtılır — sonuç aynı bütçeyle koni biçimli, tek çizgininkinden daha geniş bir izdir.
+        /// </para>
+        /// <para>
+        /// ⚠️ Çizgiler <b>ortak bir orijinden</b> çıkar (namlu) ve uçları çağıranın verdiği
+        /// noktalardır: saçmaların yönünü/mesafesini bilen taraf çağırandır (yerelde gerçek
+        /// ışınlar, uzakta yeniden üretilmiş yelpaze), burası yalnız çizer.
+        /// </para>
         /// </summary>
-        public bool Play(Vector3 from, Vector3 to, Color color, float width, float lifetime)
+        /// <param name="toPoints">Saçma uçları (dünya uzayı); ilk <paramref name="count"/> tanesi okunur.</param>
+        /// <param name="count">Çizilecek saçma sayısı; <see cref="MaxScatterLines"/>'a kırpılır.</param>
+        public int Play(Vector3 from, Vector3[] toPoints, int count, Color color, float width, float lifetime)
         {
-            Vector3 delta = to - from;
-            float sqrDistance = delta.sqrMagnitude;
-            if (sqrDistance < MinTracerMeters * MinTracerMeters)
+            if (toPoints == null)
             {
-                return false;
+                return 0;
+            }
+
+            count = Mathf.Min(count, Mathf.Min(toPoints.Length, MaxScatterLines));
+            if (count < 1)
+            {
+                return 0;
             }
 
             Material material = EnsureMaterial();
             if (material == null)
             {
-                return false;
-            }
-
-            TracerNode node = TakeNode(material);
-            if (node == null || node.Line == null)
-            {
-                return false;
+                return 0;
             }
 
             float w = width > 0f ? width : 0.02f;
+            if (count > 1)
+            {
+                w *= ScatterWidthScale;
+            }
+
             float life = lifetime > 0f ? lifetime : 0.06f;
+            float now = Time.unscaledTime;
 
-            node.Line.startWidth = w;
-            node.Line.endWidth = w;
-            node.Line.startColor = color;
-            node.Line.endColor = color;
-            node.Line.SetPosition(0, from);
-            node.Line.SetPosition(1, to);
-            node.Line.enabled = true;
+            int drawn = 0;
+            float longestSqr = 0f;
 
-            // Time.unscaledTime: maç duraklatılıp timeScale düşse bile tracer takılı kalmasın.
-            node.StartAt = Time.unscaledTime;
-            node.Duration = life;
-            node.BaseColor = color;
-            node.BaseWidth = w;
-            node.Active = true;
+            for (int i = 0; i < count; i++)
+            {
+                Vector3 to = toPoints[i];
+                float sqrDistance = (to - from).sqrMagnitude;
+                if (sqrDistance < MinTracerMeters * MinTracerMeters)
+                {
+                    // Tek saçma dejenere olabilir (namlu dibindeki hedef, engel yutması) — yaylımın
+                    // geri kalanı bundan etkilenmez.
+                    continue;
+                }
 
-            EmitSmoke(from, delta, Mathf.Sqrt(sqrDistance), color, w, life);
-            return true;
+                TracerNode node = TakeNode(material);
+                if (node == null || node.Line == null)
+                {
+                    continue;
+                }
+
+                node.Line.startWidth = w;
+                node.Line.endWidth = w;
+                node.Line.startColor = color;
+                node.Line.endColor = color;
+                node.Line.SetPosition(0, from);
+                node.Line.SetPosition(1, to);
+                node.Line.enabled = true;
+
+                // Time.unscaledTime: maç duraklatılıp timeScale düşse bile tracer takılı kalmasın.
+                // ⚠️ Yaylımın tamamı AYNI damgayı taşır (döngü içinde yeniden okunmaz): bir tetik
+                // çekişinin izleri birlikte doğup birlikte sönmeli, yoksa kare içi sapma yelpazeyi
+                // sönerken parçalar.
+                node.StartAt = now;
+                node.Duration = life;
+                node.BaseColor = color;
+                node.BaseWidth = w;
+                node.Active = true;
+
+                drawn++;
+                longestSqr = Mathf.Max(longestSqr, sqrDistance);
+            }
+
+            if (drawn > 0)
+            {
+                EmitSmoke(from, toPoints, count, Mathf.Sqrt(longestSqr), color, w, life);
+            }
+
+            return drawn;
         }
 
         /// <summary>
@@ -339,13 +426,21 @@ namespace VortexArena.Core.Combat
         /// üst üste yığıp opak bir leke, uzun atışta ise kopuk noktalar üretirdi.
         /// </para>
         /// <para>
+        /// ⚠️ Bütçe <b>bir tetik çekişine</b> aittir, saçmaya değil (gerekçe
+        /// <see cref="Play"/>'de): puf'lar namludan uca doğru ilerlerken saçmalar arasında
+        /// SIRAYLA dağıtılır, yani aynı bütçe yelpazenin tamamını tarar. Tek saçmada (normal
+        /// silah) sıra tek yola düşer ve davranış eskisiyle aynıdır.
+        /// </para>
+        /// <para>
         /// Zamanlama için ayrı bir iş yoktur: parçacıklar kendi <c>startLifetime</c>'larıyla
         /// ölür, <c>Update</c> onlara dokunmaz. Sistem <c>useUnscaledTime</c> ile koşar —
         /// çizginin ömrü de <c>Time.unscaledTime</c> ekseninde ölçülüyor, ikisi ayrı saatte
         /// koşsa maç duraklatıldığında duman donar, çizgi kaybolurdu.
         /// </para>
         /// </summary>
-        private void EmitSmoke(Vector3 from, Vector3 delta, float distance, Color color, float width, float lifetime)
+        /// <param name="distance">Yaylımdaki EN UZUN yolun uzunluğu (puf sayısının ölçüsü).</param>
+        private void EmitSmoke(
+            Vector3 from, Vector3[] toPoints, int count, float distance, Color color, float width, float lifetime)
         {
             ParticleSystem smoke = EnsureSmoke();
             if (smoke == null)
@@ -376,7 +471,11 @@ namespace VortexArena.Core.Combat
 
                 tint.a = Mathf.Lerp(SmokeAlphaNear, SmokeAlphaFar, t);
 
-                emit.position = from + delta * t + Random.insideUnitSphere * (size * SmokeJitterOfSize);
+                // Saçmalar arasında sırayla: puf namludan uca ilerlerken bir sonraki saçmanın
+                // yoluna geçer, böylece tek bütçe koninin tamamını tarar.
+                Vector3 path = Vector3.Lerp(from, toPoints[i % count], t);
+
+                emit.position = path + Random.insideUnitSphere * (size * SmokeJitterOfSize);
                 emit.startSize = size;
                 emit.startColor = tint;
                 emit.startLifetime = baseLife * Mathf.Lerp(1f, SmokeFarLifetimeScale, t);

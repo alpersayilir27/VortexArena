@@ -120,6 +120,12 @@ namespace VortexArena.Core.Combat
         private readonly Dictionary<int, PlayerFx> _players = new Dictionary<int, PlayerFx>();
         private readonly List<int> _pruneScratch = new List<int>();
 
+        /// <summary>
+        /// Saçmalı silahın yeniden üretilen yaylımının uç noktaları (<see cref="BuildScatter"/>).
+        /// Tek tampon yeter: olaylar ana thread'de, tek tek ve sırayla oynatılıyor.
+        /// </summary>
+        private Vector3[] _scatterPoints;
+
         private float _nextAvatarScan;
         private float _nextPrune;
 
@@ -352,6 +358,14 @@ namespace VortexArena.Core.Combat
         /// <para>⚠️ Her mermiye çizilmez: <c>TracerEveryNthRound</c> oyuncu BAŞINA sayaçla
         /// uygulanır — sayaç paylaşılsa yoğun ateşte tracer'lar rastgele oyunculara dağılır ve
         /// "kim ateş ediyor" okunaksız olurdu.</para>
+        /// <para>
+        /// ⚠️ <b>Saçmalı silahta yaylım BURADA yeniden üretilir</b> (<c>BuildScatter</c>):
+        /// telde tek yön + tek mesafe var (§6.4 — saçma başına olay yollamak aynı ateşi 9 kez
+        /// duyurur ve paket başı sınırını tek tetikle doldururdu), oysa uzaktan bakan oyuncunun
+        /// gördüğü şey pompalının kimliğidir: tek bir ince çizgi yerine açılan bir koni. Eksik olan
+        /// veri <b>kozmetiktir</b> ve alıcı onu kendisi üretebilir; hasar zaten saçma başına ayrı
+        /// <c>hit_report</c> ile, atıcının istemcisinden gidiyor.
+        /// </para>
         /// </summary>
         private void DrawTracer(PlayerFx fx, ItemDefinition item, Vector3 origin, Vector3 worldDir, float distanceMeters)
         {
@@ -368,16 +382,95 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            int count = BuildScatter(item as WeaponDefinition, origin, worldDir, distanceMeters);
+            if (count < 1)
+            {
+                return;
+            }
+
             // Havuz atanın kendi iziyle PAYLAŞILIR (ShotTracer.Shared): yerel ve uzak izlerin
             // görünümü zaten aynı kaynaktan (ItemDefinition) geliyor, havuzu da bölmenin sebebi yok.
             // Duman izi de bu tek çağrının içinde yayılır — ayrı bir adım YOKTUR (ShotTracer sınıf
             // özeti: iki çağırandan birinin dumanı unutması böylece imkânsız).
             ShotTracer.Shared.Play(
                 origin,
-                origin + worldDir * distanceMeters,
+                _scatterPoints,
+                count,
                 item.TracerColor,
                 item.TracerWidth,
                 item.TracerLifetime);
+        }
+
+        /// <summary>
+        /// Yaylımın uç noktalarını <see cref="_scatterPoints"/>'e yazar ve sayısını döndürür.
+        /// Normal silahta (ya da eşya bir silah değilse) tek nokta yazılır ve sonuç eskisiyle
+        /// birebir aynıdır.
+        /// <para>
+        /// <b>İlk saçma TELDEN gelir</b> (yön + mesafe): o, atıcının gerçekten attığı ışındır ve
+        /// dokunulmaz. Kalanların yönü <c>BaseSpreadDegrees</c> konisinden atıcının kullandığı
+        /// dağılımla (<c>insideUnitCircle</c>, <see cref="Weapon"/> ile aynı formül) üretilir —
+        /// yani yelpazenin AÇISI silahın kendi ölçüsüdür, uydurma bir görsel sabit değil.
+        /// ⚠️ Bloom ve iki-el çarpanı telde YOK, o yüzden koni atıcının o anki konisinden bir
+        /// tık dar çizilir: dar taraf doğru taraftır, geniş çizmek saçmaları duvarların ardına
+        /// savurur.
+        /// </para>
+        /// <para>
+        /// ⚠️ Üretilen saçmaların mesafesi <b>ışınla ölçülür</b>, telden gelen mesafe hepsine
+        /// kopyalanmaz: alıcı aynı arenayı yüklüyor, yani aynı geometriyi görüyor. Kopyalansaydı
+        /// atıcı yakın bir hedefi vurduğunda tüm koni o mesafede kesilir (yelpaze düz bir diske
+        /// döner), ıskaladığında ise 26 m'lik dokuz çizgi duvarların İÇİNDEN geçerdi. Işın
+        /// <see cref="ArenaCombat.TraceShot"/> ile atılır — kendi <c>Physics.Raycast</c>'ini yazan
+        /// yol, engel kuralını ve trigger elemesini kaybeder.
+        /// </para>
+        /// <para>
+        /// ⚠️ Yelpaze atıcının ekranındakiyle <b>birebir aynı değildir</b> ve olması da gerekmez:
+        /// saçmaların dağılımı zaten atıcıda da rastgeledir, telde giden şey ise atışın kendisidir.
+        /// Aynı kılmak saçma başına yön+mesafe göndermeyi (tek tetikte 9 kat olay yükü) gerektirirdi
+        /// — tutarlılık burada değil, orijinde aranır (§6.4).
+        /// </para>
+        /// </summary>
+        private int BuildScatter(WeaponDefinition weapon, Vector3 origin, Vector3 worldDir, float distanceMeters)
+        {
+            int pellets = weapon != null ? weapon.PelletCount : 1;
+            pellets = Mathf.Clamp(pellets, 1, ShotTracer.MaxScatterLines);
+
+            if (_scatterPoints == null || _scatterPoints.Length < ShotTracer.MaxScatterLines)
+            {
+                // Tampon bir kez ayrılır ve TAVAN boyunda kalır: olay yolu 53-160/sn ve gelen
+                // silah olaydan olaya değişiyor, boyu silaha göre büyütüp küçültmek atış başına
+                // ayırma demek olurdu.
+                _scatterPoints = new Vector3[ShotTracer.MaxScatterLines];
+            }
+
+            _scatterPoints[0] = origin + worldDir * distanceMeters;
+            if (pellets == 1)
+            {
+                return 1;
+            }
+
+            // Saçılım düzlemi worldDir'e dik iki eksenden kurulur. ⚠️ Referans olarak Vector3.up
+            // KOŞULSUZ kullanılamaz: tam yukarı/aşağı nişan alan bir namluda çapraz çarpım sıfır
+            // vektör verir ve koni tümden çöker.
+            Vector3 reference = Mathf.Abs(worldDir.y) > 0.99f ? Vector3.forward : Vector3.up;
+            Vector3 right = Vector3.Cross(reference, worldDir).normalized;
+            Vector3 up = Vector3.Cross(worldDir, right);
+
+            float spread = weapon.BaseSpreadDegrees;
+            float range = weapon.Range > 0f ? weapon.Range : distanceMeters;
+
+            int count = 1;
+            for (int p = 1; p < pellets; p++)
+            {
+                Vector2 scatter = Random.insideUnitCircle * spread;
+                Vector3 direction = Quaternion.AngleAxis(scatter.x, up) *
+                                    Quaternion.AngleAxis(scatter.y, right) *
+                                    worldDir;
+
+                ArenaCombat.ShotTrace trace = ArenaCombat.TraceShot(origin, direction, range);
+                _scatterPoints[count++] = origin + direction * trace.Distance;
+            }
+
+            return count;
         }
 
         // --------------------------------------------------------------------- orijin

@@ -39,6 +39,7 @@ MonoBehaviour:
   legMultiplier: 0.75
   fireRateRpm: 666
   range: 32
+  pelletCount: 1
   baseSpreadDegrees: 0.65
   bloomPerShotDegrees: 0.28
   maxBloomDegrees: 2.4
@@ -51,14 +52,14 @@ MonoBehaviour:
   magazineSize: 25
   spareMagazines: 2
   reserveMode: 0
-  reloadTime: 3.3
+  reloadTime: 2.38
   fireClips:
-  - {fileID: 8300000, guid: 88b2012708c33cc429cd164a175f10b9, type: 3}
-  - {fileID: 8300000, guid: fb138e940cd8ca14c8314e8f0826607c, type: 3}
-  magOutClip: {fileID: 8300000, guid: aa3e572f5829cf94dbd2f4c2784b90fe, type: 3}
+  - {fileID: 8300000, guid: 80af61d453e2d704fb6fbb0e4d8640eb, type: 3}
+  magOutClip: {fileID: 8300000, guid: 9ccbbc82f8bb45e4b8b329fb60ac809f, type: 3}
   magInClip: {fileID: 0}
-  dryFireClip: {fileID: 8300000, guid: 2c9cefb4765ba1b41a64e95ffb781a76, type: 3}
-  pickupClip: {fileID: 0}
+  perShellReloadAudio: 0
+  dryFireClip: {fileID: 8300000, guid: 2800b6db8e9a8784ea34a81590ae6dcb, type: 3}
+  pickupClip: {fileID: 8300000, guid: c53982eeae2ed2f4888f44165b40dd77, type: 3}
   firePitchBase: 1.03
   firePitchJitter: 0.05
   fireVolume: 1
