@@ -18,7 +18,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 00d909d417dc7724d8310754a176b08c, type: 2}
   - {fileID: 11400000, guid: f465150b6594da646b611327dfaec35a, type: 2}
   maps:
-  - {fileID: 11400000, guid: f64979099ffa12d409e09a698be8ad57, type: 2}
   - {fileID: 11400000, guid: bceb09007c055e248973177e91f29578, type: 2}
   - {fileID: 11400000, guid: a0d89b3444595f049bd3d1ed05c21d8c, type: 2}
   - {fileID: 11400000, guid: c7fac0b075064be08aa75f50faf07984, type: 2}
