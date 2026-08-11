@@ -19,6 +19,7 @@
 | **Mekan boyut maketi**: kod, boyut dosyaları, prefablar, sahneler ve doküman **bitti**. Kalan: doğrulama (maket gidiş-dönüşü · loader'ın ikinci çalıştırması · Play'de karartma rampası · admin paneli) | `mekan-boyut-maketi.md` |
 | **Admin: oyuncuyu canlandır düğmesi** (`revive_player` — operatör ölü oyuncuyu her modda elle canlandırır; canlanmanın tek yolu `revive_request` olduğu için şartı sağlayamayan oyuncunun tek kurtarma yolu budur). Protokol, sunucu, admin istemcisi, satır düğmesi (`CAN`) ve doküman **bitti**. Kalan: HUD'a toplu canlandırma düğmesi + doğrulama listesi | `admin-oyuncu-canlandirma.md` |
 | **Kalibre modu + T-poz sağlamlaştırma + ölçek geri bildirimi**: kod (protokol **v13**, sunucu, istemci, admin paneli üç mod düğmesi) ve doküman **bitti**. Kalan: doğrulama listesi + adb alan-verisi temizliği denemesi. ⚠️ v13 tüm başlıklara yeni APK ister | `kalibre-modu-ve-olcek.md` |
+| **Admin arayüzü görsel yenileme** (Portal Strike stili): paneller ayrı prefaba bölündü (`AdminStatsPanel`/`AdminPreferencesPanel`), geçici tema kiti kuruldu. Kalan: AI ile asset üretimi (brief + envanter + prompt'lar `design.md`'de) + panellerin bu görsellerle montajı | `design.md` |
 
 > Sıradaki büyük iş **bulut kalibrasyonu** (Meta grup / paylaşılan uzamsal anchor ile toplu
 > hizalama). Henüz planlanmadı; altyapısı hazır: `set_calibration.source` `"cloud"` değerini

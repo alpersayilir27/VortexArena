@@ -135,13 +135,21 @@ if exist "%VA_WATCH%" (
   set "VA_RC=!ERRORLEVEL!"
 )
 
+rem  Basarisizlik teshisi lib\explain-build-failure.ps1'e aittir: log'un son 30
+rem  satiri her zaman kapanis gurultusudur (bellek sizinti JSON'u, licensing),
+rem  gercek sebep orada gorunmez; kilit ipucunu de kosulsuz basmak hicbir Unity
+rem  acik degilken yanlis teshise goturuyordu. Yardimci hem sebebi cikarir hem
+rem  kilit ipucunu yalnizca log'da kilit izi varsa basar.
+set "VA_EXPLAIN=%~dp0lib\explain-build-failure.ps1"
 if not "%VA_RC%"=="0" (
   echo.
-  echo [HATA] Build basarisiz ^(exit %VA_RC%^). Log'un son satirlari:
-  powershell -NoProfile -Command "if (Test-Path '%VA_LOG%') { Get-Content '%VA_LOG%' -Tail 30 }"
-  echo.
-  echo        Log'da proje kilidi ^("Multiple Unity instances" / lock^) geciyorsa
-  echo        arka planda Unity.exe yasiyor demektir - kapatip tekrar deneyin.
+  echo [HATA] Build basarisiz ^(exit %VA_RC%^).
+  if exist "!VA_EXPLAIN!" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "!VA_EXPLAIN!" -Log "%VA_LOG%"
+  ) else (
+    echo   [UYARI] Teshis yardimcisi yok: "!VA_EXPLAIN!"
+    powershell -NoProfile -Command "if (Test-Path '%VA_LOG%') { Get-Content '%VA_LOG%' -Tail 30 }"
+  )
   goto :son
 )
 

@@ -494,10 +494,13 @@ yazılır.
    düğümüne, **sağ** elden türetilen fallback alanları `WD_*.asset`'e yazılır
    (⚠️ `primaryGripEuler`'a dokunulmaz — silahın açısı elle ayarlanan o alandır). Bir kavrama
    noktasının yalnız tek eli tezgâhtaysa karşı düğüm ISDK aynasıyla tamamlanır.
-7. Prefabı **kaydet**: `WD_*.asset` anında yazılır ama poz düğümleri prefab kipinin içeriğindedir,
-   yani stage kirli işaretlenir ve diske ancak sen kaydedince iner (Auto Save açıksa kendiliğinden).
+7. Kaydet **iki çıktıyı da diske indirir**: `WD_*.asset` anında, prefab da Kaydet'in sonunda
+   yazılır — ayrı bir "prefabı kaydet" adımı yoktur. Yazma başarısız olursa (kilitli/salt okunur
+   dosya) stage kirli bırakılır, konsola hata basılır ve prefabı elle kaydedersin.
 8. İşin bitince prefab kipinden çık; eller diske hiç yazılmaz ve Play'e girerken / sahne değişince
-   kendilerini siler. Kaydetmeden vazgeçmek için **Elleri Temizle**.
+   kendilerini siler. Kaydetmeden vazgeçmek için **Elleri Temizle**. Prefabı sonra tekrar açıp
+   **Elleri Oluştur**'a basınca eller kayıtlı poz düğümünden aynı yere, aynı parmak duruşuyla
+   geri gelir.
 
 - ⚠️ **El HAM sürüklenir, çeviri YOKTUR.** Elin kökü doğrudan ISDK **bilek** çerçevesidir ve oyun
   tarafı da poz düğümünü canlı sentetik bileğe hizalar — yani gözünle doğru gördüğün yerleşim

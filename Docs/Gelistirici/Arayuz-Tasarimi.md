@@ -16,7 +16,9 @@ Tüm arayüz prefabları **tek klasörde**: `Assets/_Shared/App/Resources/UI/`
 
 | Prefab | Ne çizer | Kim kullanır |
 |---|---|---|
-| **`AdminHud.prefab`** | Admin ekranının tamamı: skorlar, chip, takım kolonları, kamera şeridi, ölüm akışı — **ve içinde tercihler + istatistik panelleri** | `AdminSpectator` |
+| **`AdminHud.prefab`** | Admin ekranının kalıcı katmanı: skorlar, chip, takım kolonları, kamera şeridi, ölüm akışı. Tercihler ve istatistik panelleri içinde **nested prefab örneği** olarak durur | `AdminSpectator` |
+| **`AdminStatsPanel.prefab`** | İstatistik paneli (kart + oyuncu tablosu) — sürücü bileşeni kökünde | `AdminHud` içinde nested örnek |
+| **`AdminPreferencesPanel.prefab`** | Tercihler paneli (mod/harita/süre/kalibrasyon/görünüm) — sürücü bileşeni kökünde | `AdminHud` içinde nested örnek |
 | **`AdminPlayerRow.prefab`** | Kolonlardaki tek oyuncu satırı (ad, HP barı, POV/KAL/ÖLÇ/CAN/TAKIM/KİMLİK/AT) | `AdminHud` örnekler |
 | **`AdminPlayerMarker.prefab`** | Oyuncunun zemindeki halkası + ad etiketi (dünya uzayı) | `AdminPlayerMarkers` örnekler |
 | **`ConnectionOverlayScreen.prefab`** | Bağlantı hata ekranı — masaüstü (scrim + "Yeniden Bağlan" düğmesi) | `ConnectionOverlay` |
@@ -34,12 +36,38 @@ Oyuncu HUD'ları ayrı yerdedir (mod kutularında):
 | `Assets/Modes/FreeForAll/UI/FfaHud.prefab` | FFA oyuncu HUD'ı |
 
 Ortak görseller: `Assets/_Shared/App/UI/Sprites/` — yuvarlak köşe (`RoundedRect_4/8/12/20`,
-9-slice kenarları ayarlı) ve halka (`Ring_16`).
+9-slice kenarları ayarlı), halka (`Ring_16`), pahlı tema kiti ve ikonlar:
+
+| Sprite | Ne işe yarar |
+|---|---|
+| `ChamferRect_20` | Dört köşesi 45° pahlı dolu plaka (panel gövdesi) — 9-slice, border 28 |
+| `ChamferRectBottom_20` | Üst köşeler kare, alt köşeler pahlı (başlık bandı / alt şerit) — 9-slice, border 28 |
+| `ChamferOutline_20` | Aynı oktagonun 3px kenarlığı, içi boş — 9-slice, border 28 |
+| `SlantButton_20` | Paralelkenar düğme/sekme zemini — yatay 9-slice (border sol/sağ 30) |
+| `FadeH_256` / `FadeV_256` | Eriyen beyaz gradyan (takım kenar şeridi, bant parlaması) — `Image.Type: Simple` |
+| `ArrowDown_128` | Aşağı bakan dolu üçgen (başlık chevron'u) |
+| `skull` / `crosshair` / `anchor` / `settings` | İkonlar (ölüm · öldürme · kalibrasyon · ayarlar) |
+| `PanelBG` | Panel kartının **tek parça AI arka planı** (başlık bandı + chevron + takım parlamaları dahil) — `Image.Type: Simple`, karta gerilir; kartın en-boy oranı görsele uydurulur |
+| `BtnDark` / `BtnRed` / `BtnCyan` | AI paralelkenar buton zeminleri (pasif · tehlike · seçili) — Simple, gerilir |
+| `RowPlate` | Çok geniş AI satır/bant plakası — Simple |
+
+AI setinin üretim brief'i (tasarım dili, üretim kuralları, kalan parçaların envanteri ve
+prompt'ları): `plan/design.md`.
+
+Tema kiti ve ikonlar (dişli hariç) **beyaz üretilir** — renk `Image.color` tint'inden verilir,
+böylece tek sprite hem kırmızı hem mavi takım için kullanılır. Ayna görünüm (sağ kenar, ters
+paralelkenar) yeni sprite değil, RectTransform'da `scale.x = -1` ile alınır.
 
 > **Neden `Resources/` altında?** Prefablar **sahneye KONMAZ** — çalışırken `Resources.Load`
 > ile yüklenip örneklenirler. Sahneye konsalardı her yeni arena sahnesine elle bir kurulum adımı
 > doğardı ve bir gün unutulurdu. Bu yüzden `Resources/` klasöründen **çıkarılmamalıdırlar**;
 > taşınırlarsa ilgili arayüz sessizce hiç çizilmez (konsola `… prefabı bulunamadı` hatası düşer).
+
+> **Panelleri KENDİ prefabında düzenleyin** (`AdminStatsPanel.prefab` /
+> `AdminPreferencesPanel.prefab` çift tıklanır): `AdminHud` içindeki örneğin üstünde yapılan
+> değişiklik instance override olarak birikir ve panel prefabındaki sonraki düzeltmelerle
+> çatışır. Örneği **unpack etmeyin** — bağ kopunca panel prefabında yapılan düzeltmeler
+> AdminHud'a bir daha inmez.
 
 ## Düzenlerken nelere dikkat edilir
 

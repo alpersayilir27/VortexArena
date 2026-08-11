@@ -16,3 +16,5 @@ MonoBehaviour:
   displayName: Lobi 12x12
   supportedModeIds:
   - lobby
+  ambienceClip: {fileID: 8300000, guid: 88eb1d7daa77ef842b2564808123bfe5, type: 3}
+  ambienceVolume: 0.35

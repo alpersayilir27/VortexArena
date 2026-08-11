@@ -90,6 +90,12 @@ $ErrorRules = @(
 )
 $LockRule  = 'Multiple Unity instances|another Unity instance is running'
 $InfoRule  = '\[PlayerBuildTool\]'
+# Cok satirli bir Debug.Log mesajinin GOVDESI ilk satirda degil devaminda durur
+# (ornek: "diskte olmayan 1 sahne var" basligi bir satir, sahnenin YOLU digeri).
+# Devam satirlari da basilmazsa ekranda hatanin adi olur ama adresi olmaz.
+# $InfoFollowMax satir kadar izlenir; bos satir ya da yigin izi gelince kesilir.
+$InfoFollowMax = 6
+$StackRule = '^(UnityEngine|UnityEditor|VortexArena|System|Mono|Microsoft)\.|^\(Filename:|^\s*at\s'
 $MaxErrors = 20
 
 # Aktiflik olcumu: baslattigimiz Unity sureci + build zincirinin cocuklari.
@@ -112,6 +118,7 @@ $script:Shaders      = 0
 $script:LastLine     = ''
 $script:LineNo       = 0
 $script:Errors       = New-Object System.Collections.Generic.List[string]
+$script:InfoFollow   = 0
 $script:LockSeen     = $false
 $script:Replay       = $false
 
@@ -284,6 +291,20 @@ function Update-State([string]$line) {
     $text = $line.Trim()
     if ($text.Length -gt 200) { $text = $text.Substring(0, 200) + '...' }
     Write-Note ('  > ' + $text)
+    $script:InfoFollow = $InfoFollowMax
+    return
+  }
+
+  # Onceki [PlayerBuildTool] satirinin devami mi? (yukaridaki $InfoFollowMax notu)
+  if (-not $script:Replay -and $script:InfoFollow -gt 0) {
+    if ($line.Trim() -eq '' -or $line -match $StackRule) {
+      $script:InfoFollow = 0
+    } else {
+      $text = $line.TrimEnd()
+      if ($text.Length -gt 200) { $text = $text.Substring(0, 200) + '...' }
+      Write-Note ('  >   ' + $text.TrimStart())
+      $script:InfoFollow--
+    }
   }
 }
 

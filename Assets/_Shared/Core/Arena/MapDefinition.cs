@@ -23,6 +23,13 @@ namespace VortexArena.Core.Arena
         [Tooltip("Bu haritanın desteklediği modId'ler; boş bırakılırsa tüm modlar sayılır.")]
         [SerializeField] private string[] supportedModeIds = Array.Empty<string>();
 
+        [Header("Ortam sesi")]
+        [Tooltip("Sahne yüklenir yüklenmez loop olarak başlayan ambiyans/müzik. Boş = sessiz.")]
+        [SerializeField] private AudioClip ambienceClip;
+        [Range(0f, 1f)]
+        [Tooltip("Klibin çalma seviyesi. Silah sesleri bastırılmasın diye 0.3-0.5 arası tutulur.")]
+        [SerializeField] private float ambienceVolume = 0.4f;
+
         /// <summary>Build listesindeki sahne adı (katalog anahtarı).</summary>
         public string SceneName => sceneName;
 
@@ -31,6 +38,15 @@ namespace VortexArena.Core.Arena
 
         /// <summary>Desteklenen modId listesi (boş = kısıt yok).</summary>
         public string[] SupportedModeIds => supportedModeIds;
+
+        /// <summary>
+        /// Sahnenin ortam sesi (ambiyans + oyun müziği); atanmamışsa harita sessizdir.
+        /// Sahne yüklendiğinde <c>SceneAmbience</c> okur ve loop'lar — sahnede kurulum adımı YOKTUR.
+        /// </summary>
+        public AudioClip AmbienceClip => ambienceClip;
+
+        /// <summary>Ortam sesinin seviyesi (0..1).</summary>
+        public float AmbienceVolume => ambienceVolume;
 
         /// <summary>
         /// Verilen mod bu haritada oynanabilir mi. Liste boş/eksikse kısıt yok sayılır
