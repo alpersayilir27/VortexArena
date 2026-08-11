@@ -12,9 +12,6 @@ EditorBuildSettings:
     path: Assets/_Shared/Scenes/Lobby.unity
     guid: 1c4fe2cafa667bc4ba8d0b445d2351e7
   - enabled: 1
-    path: Assets/Arenas/Venues/Outdoor12x12/Scenes/Arena12x12/Arena12x12.unity
-    guid: 4a43674b9cafa3c41836aa27188b6efc
-  - enabled: 1
     path: Assets/Arenas/Venues/Outdoor12x12/Scenes/IceWorld/IceWorld.unity
     guid: d028955a3ff573c46b2423eb95b213fb
   - enabled: 1

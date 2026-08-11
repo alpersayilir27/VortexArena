@@ -18,3 +18,5 @@ MonoBehaviour:
   - tdm
   - ffa
   - tournament
+  ambienceClip: {fileID: 8300000, guid: 6337e6f33b9c773428deeef8dca927bb, type: 3}
+  ambienceVolume: 0.45

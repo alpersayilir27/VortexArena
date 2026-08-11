@@ -149,7 +149,9 @@ paylaşımlı kipte okur ve tek satırlık durum gösterir:
   Genel `Unity` adı CPU toplamına bilerek katılmaz: başka bir editör açıkken onun CPU'su takılmış
   bir build'i çalışıyor gösterirdi.
 - **Hata satırları anında ekrana düşer** (proje kilidi, `error CS…`, `Aborting batchmode`) —
-  log'da aramaya gerek yok. `[PlayerBuildTool]` satırları da olduğu gibi basılır.
+  log'da aramaya gerek yok. `[PlayerBuildTool]` satırları da olduğu gibi basılır, **devam
+  satırlarıyla birlikte**: çok satırlı bir `Debug.LogError`'ın gövdesi ilk satırda değil
+  ardındadır (başlık "hangi hata", devam satırı "hangi dosya"), yığın izi başlayınca kesilir.
 - **Süre referansı:** başarılı koşunun süresi log'un yanına (`<log>.last`) yazılır, sonraki koşuda
   başlıkta `~mm:ss` olarak gösterilir ("normalde bu kadar sürüyordu"). İki build'in referansı
   ayrıdır — APK build'i admin build'inden belirgin uzun sürer.
@@ -171,6 +173,33 @@ powershell -NoProfile -File scripts\lib\watch-unity-build.ps1 -ReplayLog deploy\
 
 > Çıktı **ASCII**'dir (konsol kod sayfası Türkçe karakterleri bozuyor). İzleyiciye yeni metin
 > eklerken şapkasız/noktasız harf kullan.
+
+## Build düşünce sebep nasıl basılır (`lib\explain-build-failure.ps1`)
+
+`deploy-admin-game.bat` ve `deploy-player-apk.bat` başarısızlık dalında log'u bu yardımcıya verir;
+o da **sebep satırlarını** (`[PlayerBuildTool]` mesajları + devamı, `error CS…`, `Aborting
+batchmode`, `BuildFailedException`, lisans arızası) log sırasında basar. Hiçbiri eşleşmezse son 30
+satıra düşer.
+
+- ⚠️ **Log'un son satırları sebep DEĞİLDİR.** Unity'nin kapanışı her zaman aynı gürültüdür (bellek
+  sızıntısı JSON'u, licensing/physics cleanup); gerçek hata yüzlerce satır yukarıdadır. Bu yüzden
+  `Get-Content -Tail` yalnız fallback'tir.
+- ⚠️ **Proje kilidi ipucu koşulludur** — yalnız log'da gerçekten kilit izi
+  (`Multiple Unity instances` / `another Unity instance is running`) varsa basılır; yoksa
+  "kilit izi YOK" denir. Koşulsuz basmak, hiçbir Unity açık değilken her hatayı yanlış teşhise
+  götürüyordu. Kilit deseni izleyicininkiyle (`$LockRule`) **aynı tutulur**, yoksa iki araç aynı
+  log için zıt şey söyler.
+- ⚠️ **Yeni desen eklerken dar yaz ve sağlıklı bir log'a karşı dene.** PowerShell `-match`
+  varsayılan olarak harf duyarsızdır: `EXECUTEMETHOD` komut satırındaki `-executeMethod`
+  argümanını, `Licensing::.*Failed` ise çalışan bir Personal lisansın her açılışta bastığı
+  "has failed validation; ignoring" satırını yakalar — yanlış eşleşen her satır gerçek sebebi
+  gürültüye gömer.
+
+Elle çalıştırmak:
+
+```bat
+powershell -NoProfile -File scripts\lib\explain-build-failure.ps1 -Log deploy\admin-build.log
+```
 
 ## Neden bu ön koşullar?
 

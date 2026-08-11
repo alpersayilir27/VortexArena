@@ -144,6 +144,12 @@ public sealed class MatchDirector
 
     private string _modeId = "";
     private string _sceneName = "";
+
+    /// <summary>Açık sahnenin sahnelendiği an (§5.3 <c>sceneElapsed</c>). <b>Yalnız sahne
+    /// DEĞİŞİNCE tazelenir</b> — maçın başlaması/bitmesi ona dokunmaz, çünkü ölçtüğü şey maç değil
+    /// sahnedir: istemcideki ortam sesi harita değişmedikçe kesilmemeli.</summary>
+    private DateTime _sceneStagedUtc = DateTime.UtcNow;
+
     private float _timeRemaining;
     private int _scoreRed;
     private int _scoreBlue;
@@ -230,10 +236,27 @@ public sealed class MatchDirector
         // Durum zaten Paused/Lobby ile başlıyor; lobi profilini de başlangıçta yaz ki ilk welcome
         // (henüz hiç EnterLobbyLocked çalışmadan) doğru sahneyi/modId'yi/kuralı taşısın.
         _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
-        _sceneName = _lobbyScene;
+        SetSceneLocked(_lobbyScene);
         ApplyRulesLocked(ModeRules.LobbyProfile);
         RefreshShotRelayLocked();
     }
+
+    /// <summary>
+    /// Açık sahneyi yazan <b>tek</b> kapı: sahne gerçekten değiştiyse sahneleme damgasını
+    /// (<see cref="_sceneStagedUtc"/>) tazeler. Aynı sahne yeniden yazılırsa damga KORUNUR —
+    /// aynı haritada ikinci bir maç başlatmak istemcideki ortam sesini baştan başlatmamalı.
+    /// </summary>
+    private void SetSceneLocked(string sceneName)
+    {
+        if (string.Equals(_sceneName, sceneName, StringComparison.Ordinal)) return;
+
+        _sceneName = sceneName;
+        _sceneStagedUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>Açık sahnenin kaç saniyedir sahnelendiği (§5.3 <c>sceneElapsed</c>).</summary>
+    private float SceneElapsedLocked =>
+        (float)Math.Max(0d, (DateTime.UtcNow - _sceneStagedUtc).TotalSeconds);
 
     /// <summary>
     /// Kural şeklini yazan TEK kapı: modun/lobinin kuralına operatörün dost ateşi anahtarını
@@ -894,7 +917,7 @@ public sealed class MatchDirector
             ApplyRulesLocked(rules);
             RefreshShotRelayLocked();
             _modeId = mode.ModeId;
-            _sceneName = sceneName;
+            SetSceneLocked(sceneName);
             _roundSeconds = appliedRound;
             _scoreLimit = appliedLimit;
             _countdownSeconds = appliedCountdown;
@@ -924,6 +947,7 @@ public sealed class MatchDirector
                     roundSeconds = _roundSeconds,
                     scoreLimit = _scoreLimit,
                     yourTeam = player.Team,
+                    sceneElapsed = SceneElapsedLocked,
                     rules = rulesInfo
                 };
                 outbox.Add(new Outgoing(connection, JsonUtil.Serialize(load), player.Name));
@@ -940,6 +964,7 @@ public sealed class MatchDirector
                 roundSeconds = _roundSeconds,
                 scoreLimit = _scoreLimit,
                 yourTeam = "",
+                sceneElapsed = SceneElapsedLocked,
                 rules = rulesInfo
             });
             foreach (var admin in _registry.Snapshot())
@@ -1254,7 +1279,7 @@ public sealed class MatchDirector
                 return new StageSceneResult(StageOutcome.Rejected, RejectReasonLocked());
             if (_sceneName == target) return new StageSceneResult(StageOutcome.Unchanged);
 
-            _sceneName = target;
+            SetSceneLocked(target);
             // TÜR lobi olarak kalır: sahne bir arena olsa da henüz maç yoktur (§10.7). Buraya
             // seçili maç modunu yazmak maç HUD'unu ve maç loadout'unu maç başlamadan açardı.
             // Tür ancak start_match ile değişir. Kural şekli de lobi profilinde kalır (serbest
@@ -1271,6 +1296,7 @@ public sealed class MatchDirector
             {
                 modeId = _modeId,
                 sceneName = _sceneName,
+                sceneElapsed = SceneElapsedLocked,
                 rules = _rules.ToInfo()
             }));
         }
@@ -1671,7 +1697,7 @@ public sealed class MatchDirector
         // durumda — kuralı değiştiren her yerin kendi tazelemesini yapması bu yüzden şart.
         RefreshShotRelayLocked();
         _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
-        _sceneName = _lobbyScene;
+        SetSceneLocked(_lobbyScene);
         _timeRemaining = 0f;
         _scoreRed = 0;
         _scoreBlue = 0;
@@ -1694,6 +1720,7 @@ public sealed class MatchDirector
         {
             modeId = _modeId,
             sceneName = _sceneName,
+            sceneElapsed = SceneElapsedLocked,
             rules = _rules.ToInfo()
         };
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(returnMsg));
@@ -1813,6 +1840,7 @@ public sealed class MatchDirector
         modeId = _modeId,
         modeState = _modeState,
         sceneName = _sceneName,
+        sceneElapsed = SceneElapsedLocked,
         timeRemaining = _timeRemaining,
         scoreRed = _scoreRed,
         scoreBlue = _scoreBlue,

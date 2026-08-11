@@ -276,7 +276,8 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
 { "type":"welcome", "protocolVersion":3, "playerId":3, "udpToken":123456789,
   "calibrationMode":"two_anchor",
   "match": { "phase":"paused", "phaseReason":"lobby", "modeId":"lobby", "modeState":"",
-             "sceneName":"Lobby12x12", "timeRemaining":0, "scoreRed":0, "scoreBlue":0,
+             "sceneName":"Lobby12x12", "sceneElapsed":137.4,
+             "timeRemaining":0, "scoreRed":0, "scoreBlue":0,
              "rules": { "teamMode":"two", "scoring":"team", "friendlyFire":false,
                         "reviveAnchor":"base", "weaponSource":"weaponcanvas", "respawnDelay":5.0,
                         "fireWhilePaused":true } } }
@@ -285,6 +286,15 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
 istemci koşulsuz o sahneyi yükler. Sunucu açık sahnesini çözemiyorsa zaten **açılmaz** (§11) — boş
 `sceneName` yalnız bozuk/eski bir sunucudan gelebilir, o durumda istemci kabuk `Lobby` sahnesinde
 bekler ve sebebi konsola yazar.
+
+**`match.sceneElapsed`** = o an açık olan sahnenin **kaç saniyedir sahnelendiği** (saniye, sunucu
+saati). Sahne değiştiği anda sıfırlanır; maçın başlaması/bitmesi onu **sıfırlamaz** — ölçtüğü şey
+maç değil sahnedir. Tek tüketicisi ortam sesinin ortak fazıdır: geç katılan başlık müziği baştan
+değil, herkesin bulunduğu yerden açar (`SceneAmbience`, `Docs/Sistem-Ozeti.md` §4). Klip süresinden
+uzun bir değer normaldir — istemci klip uzunluğuna göre modunu kendisi alır.
+⚠️ Bir **kural/otorite** alanı değildir: kaybı ya da sıfır gelmesi yalnız müziğin baştan
+başlamasıdır, bu yüzden `PROTOCOL_VERSION` **artmaz** (alanı hiç göndermeyen eski sunucuya karşı
+istemci sessizce eski davranışa düşer — `set_selection`/`selection_state` ile aynı sözleşme).
 
 `match.rules` = o an geçerli kural şekli (§10.5) — geç katılan istemci/admin kendini aynı kurallara
 göre kurar. `phase`/`phaseReason`/`modeState` anlamları §10.1'de.
@@ -372,11 +382,12 @@ sessizce doğru davranır. Kalibrasyon alanlarıyla aynı sebepten burada taşı
 roster'ın zaten tazelendiği andır ve **iskelet kanalına girmez** — 12 Hz'de her karede tekrar eden
 bir sabit olurdu.
 
-**`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "rules":{ … } }`
+**`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "sceneElapsed":0, "rules":{ … } }`
 → istemci sahneyi yükler, `status`'ta yeni sahne görünür. Sahne yüklenince istemci `set_ready` (yükleme tamam anlamında) gönderir; herkes hazır olunca sunucu `countdown` başlatır. Bu süre boyunca faz `paused`'dur (`phaseReason` sırayla `loading` → `countdown`); **`load_match`'in gelmesi maçın başladığı anlamına GELMEZ** — maç `phase:"playing"` ile başlar.
 **Oyuncu ışınlanmaz ve kalibrasyon SIFIRLANMAZ** — harita değişimi oyuncu için yalnız bir sahne değişimidir, fiziksel duruşu ve hizalaması kaldığı yerden devam eder (§10.4).
 **Adminlere de gönderilir** (gözlemci sahneyi yüklesin diye) ama `yourTeam:""` ile — admin oynamadığı için takım anlamsızdır ve admin `set_ready` göndermez.
 `rules` = bu maçın kural şekli (§10.5). İstemci kendini **buna** göre kurar: takımsız modda `yourTeam` boş gelir, canlanma şartı `reviveAnchor`'dan okunur. İstemcide `if (modeId == "...")` zinciri YOKTUR — mod eklemek istemci kodunu değiştirmez.
+`sceneElapsed` = sahnenin kaç saniyedir sahnelendiği (§5.3 `welcome.match.sceneElapsed` ile aynı alan). **Yeni bir sahne sahnelenirken `0`'dır**; aynı sahnede ikinci bir maç başlatılırsa sıfırlanmaz, çünkü ölçtüğü şey maç değil sahnedir — ortam sesi harita değişmedikçe kesilmez.
 
 **`countdown`** `{ "type":"countdown", "seconds":5 }` — 0'a inince faz `playing`.
 **`match_state`** — faz/gerekçe değişimlerinde + `playing`'de saniyede 1:
@@ -394,7 +405,7 @@ Fazlar ve alanların anlamı §10.1'de. `phase` yalnız üç değer alır: `paus
 **`respawn`** `{ "type":"respawn", "playerId":5, "delaySeconds":5.0 }` — istemci `delaySeconds` sonra, modun canlanma şartını sağlayınca canlanır (§10.4). Sunucu sahne geometrisini bilmez; canlanma yeri diye bir alan taşınmaz.
 **`match_end`** `{ "type":"match_end", "winnerTeam":"blue", "winnerPlayerId":0, "scoreRed":12, "scoreBlue":30 }`
 Kazanan **iki kanaldan biriyle** ifade edilir (`rules.scoring`, §10.5): takım skorlu modlarda `winnerTeam` (`"red"|"blue"|""`), bireysel skorlu modlarda `winnerPlayerId` (`0` = yok/berabere). Bir mod ikisini de doldurmaz; okuyan istemci dolu olana bakar.
-**`return_to_lobby`** `{ "type":"return_to_lobby", "modeId":"lobby", "sceneName":"Lobby12x12", "rules":{ … } }` — herkesi sunucunun **açık sahnesine** taşır. Şekli `load_match` ile aynıdır (§10.7): `sceneName` o an açık olan sahne, `modeId`/`rules` o sahnenin profili. Adı tarihseldir — yalnız "lobiye dön" değil, operatörün seçtiği arenayı sahnelemek için de kullanılır (§10.7 Sahneleme).
+**`return_to_lobby`** `{ "type":"return_to_lobby", "modeId":"lobby", "sceneName":"Lobby12x12", "sceneElapsed":0, "rules":{ … } }` — herkesi sunucunun **açık sahnesine** taşır. Şekli `load_match` ile aynıdır (§10.7): `sceneName` o an açık olan sahne, `modeId`/`rules` o sahnenin profili. Adı tarihseldir — yalnız "lobiye dön" değil, operatörün seçtiği arenayı sahnelemek için de kullanılır (§10.7 Sahneleme).
 Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken harita seçtiğinde `sceneName` o arenadır. İstemci için ikisi de aynı şeydir — *"lobideyiz, şu sahneyi yükle"* — bu yüzden ayrı bir mesaj tipi YOKTUR. `modeId` her iki durumda da `"lobby"` kalır: sahnenin arena olması fazı değiştirmez.
 **`ping`** `{ "type":"ping" }` — istemci `status` ile yanıtlar (ayrı pong yok).
 **`identify`** `{ "type":"identify" }` — istemci büyük kimlik overlay'i gösterir (playerId + ad).

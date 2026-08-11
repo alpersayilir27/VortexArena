@@ -392,6 +392,13 @@ namespace VortexArena.Protocol
         public string modeState;
 
         public string sceneName;
+
+        /// <summary>Açık sahnenin kaç saniyedir sahnelendiği (§5.3). Sahne değişince sıfırlanır,
+        /// maçın başlaması/bitmesi sıfırlamaz. Tek tüketicisi ortam sesinin ortak fazıdır:
+        /// geç katılan başlık müziği herkesin bulunduğu yerden açar. Alan gelmezse 0 → müzik
+        /// baştan başlar (eski sunucuya karşı zararsız).</summary>
+        public float sceneElapsed;
+
         public float timeRemaining;
         public int scoreRed;
         public int scoreBlue;
@@ -530,6 +537,10 @@ namespace VortexArena.Protocol
         public int scoreLimit;
         public string yourTeam;
 
+        /// <summary>Sahnenin kaç saniyedir sahnelendiği; yeni sahne sahnelenirken 0
+        /// (<see cref="MatchInfo.sceneElapsed"/> ile aynı alan).</summary>
+        public float sceneElapsed;
+
         /// <summary>Bu maçın kural şekli (§10.5); istemci kendini BUNA göre kurar.</summary>
         public ModeRulesInfo rules;
     }
@@ -624,6 +635,10 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.ReturnToLobby;
         public string modeId;
         public string sceneName;
+
+        /// <summary>Sahnenin kaç saniyedir sahnelendiği; yeni sahne sahnelenirken 0
+        /// (<see cref="MatchInfo.sceneElapsed"/> ile aynı alan).</summary>
+        public float sceneElapsed;
 
         /// <summary>Lobi profilinin kural şekli (§10.5); lobide bugünkü varsayılandır.</summary>
         public ModeRulesInfo rules;

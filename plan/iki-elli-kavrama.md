@@ -30,7 +30,7 @@ ile (tam reçete: `Docs/Gelistirici/Yemek-Kitabi.md` §11.0 A):
    işaret parmağı tetiğe ulaşacak biçimde. ⚠️ Tüfekte **işaret parmağı `Free` bırakılır** — kilitli
    parmak ateş ederken kıpırdamaz ve oyuncu tetiği çektiğini elinde göremez.
 3. Çift elli silahta **Ön Kabza Ellerini Oluştur** → aynı işi ön kabzada yap.
-4. **Kaydet** → el başına poz düğümü + sağ elden fallback alanları yazılır; sonra prefabı kaydet.
+4. **Kaydet** → el başına poz düğümü + sağ elden fallback alanları yazılır ve prefab diske iner.
 5. **Camgöbeği tel küre sağ elin bileğiyle ÇAKIŞMALI** — çakışmıyorsa kayıt gitmemiştir.
 
 Silahlar: `WPN_AK47` · `WPN_M4A1` · `WPN_M16` · `WPN_G36C` · `WPN_FAMAS` · `WPN_SCARL`.
