@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55accdfacbb64ab428182bb5c93442d3, type: 3}
+  m_Name: WD_XM1014
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
+  displayName: XM1014
+  netItemId: 12
+  prefab: {fileID: 8917929639311514391, guid: d0d29cfc9232bb043ba0aa817cb7aae8, type: 3}
+  holdMode: 1
+  primaryGripPosition: {x: 0, y: 0, z: 0}
+  primaryGripEuler: {x: 0, y: 0, z: 0}
+  secondaryGripPosition: {x: 0, y: 0, z: 0}
+  secondaryGripEuler: {x: 0, y: 0, z: 0}
+  primaryGripRadius: 0.12
+  secondaryGripRadius: 0.12
+  handPose:
+    thumb: 0
+    index: 0
+    middle: 0
+    ring: 0
+    pinky: 0
+  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
+  tracerWidth: 0.005
+  tracerLifetime: 0.05
+  tracerEveryNthRound: 1
+  weaponId: xm1014
+  damage: 10
+  headshotMultiplier: 2
+  stomachMultiplier: 1.25
+  legMultiplier: 0.75
+  fireRateRpm: 171
+  range: 26
+  pelletCount: 6
+  baseSpreadDegrees: 10
+  bloomPerShotDegrees: 0.6
+  maxBloomDegrees: 1.5
+  bloomRecoveryPerSecond: 2.5
+  kickDegrees: 3.2
+  kickBackMeters: 0.02
+  recoilRecoverSpeed: 10
+  hapticAmplitude: 0.8
+  hapticDuration: 0.05
+  magazineSize: 7
+  spareMagazines: 4
+  reserveMode: 1
+  reloadTime: 4.5
+  fireClips:
+  - {fileID: 8300000, guid: 0af15c3c2ee299d41a4cf26f1c68ac06, type: 3}
+  magOutClip: {fileID: 8300000, guid: 1db2fd87a2fc82e4c8307d6c62c04462, type: 3}
+  magInClip: {fileID: 0}
+  perShellReloadAudio: 1
+  dryFireClip: {fileID: 8300000, guid: 2800b6db8e9a8784ea34a81590ae6dcb, type: 3}
+  pickupClip: {fileID: 8300000, guid: c53982eeae2ed2f4888f44165b40dd77, type: 3}
+  firePitchBase: 1
+  firePitchJitter: 0.05
+  fireVolume: 1

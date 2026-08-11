@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55accdfacbb64ab428182bb5c93442d3, type: 3}
+  m_Name: WD_M4A4
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
+  displayName: M4A4
+  netItemId: 1
+  prefab: {fileID: 1554324386449819339, guid: e8169d0b220f2ea4dadcaca7eaeee099, type: 3}
+  holdMode: 1
+  primaryGripPosition: {x: -0, y: 0.00144, z: 0.01592}
+  primaryGripEuler: {x: 0, y: 0, z: 0}
+  secondaryGripPosition: {x: 0, y: 0.056800004, z: 0.2856}
+  secondaryGripEuler: {x: 0, y: 0, z: 0}
+  primaryGripRadius: 0.12
+  secondaryGripRadius: 0.12
+  handPose:
+    thumb: 0
+    index: 0
+    middle: 0
+    ring: 0
+    pinky: 0
+  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.8039216}
+  tracerWidth: 0.01
+  tracerLifetime: 0.1
+  tracerEveryNthRound: 2
+  weaponId: m4a4
+  damage: 33
+  headshotMultiplier: 4
+  stomachMultiplier: 1.25
+  legMultiplier: 0.75
+  fireRateRpm: 666
+  range: 40
+  pelletCount: 1
+  baseSpreadDegrees: 0.5
+  bloomPerShotDegrees: 0.26
+  maxBloomDegrees: 2.2
+  bloomRecoveryPerSecond: 4.5
+  kickDegrees: 2
+  kickBackMeters: 0.02
+  recoilRecoverSpeed: 10
+  hapticAmplitude: 0.8
+  hapticDuration: 0.05
+  magazineSize: 30
+  spareMagazines: 2
+  reserveMode: 0
+  reloadTime: 2.19
+  fireClips:
+  - {fileID: 8300000, guid: 8756a6f0d5c4dc34d85d11ae177b8349, type: 3}
+  magOutClip: {fileID: 8300000, guid: d55473ab722368d4d9e2925939eb1f5e, type: 3}
+  magInClip: {fileID: 0}
+  perShellReloadAudio: 0
+  dryFireClip: {fileID: 8300000, guid: 2800b6db8e9a8784ea34a81590ae6dcb, type: 3}
+  pickupClip: {fileID: 8300000, guid: c53982eeae2ed2f4888f44165b40dd77, type: 3}
+  firePitchBase: 1
+  firePitchJitter: 0.05
+  fireVolume: 1

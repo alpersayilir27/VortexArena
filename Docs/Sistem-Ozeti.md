@@ -1071,14 +1071,25 @@ titreşim şiddeti + süresi; biri 0 = o silahta haptik yok)**/ses profili + ver
 — tabandaki `ItemDefinition.primaryGrip*` onun fallback'i, denge alanlarının yanında DEĞİL) + `WeaponAudio` (Meta XR spatializer'lı namlu AudioSource:
 ateş/şarjör çıkar-tak/kuru tetik/alma) + `WeaponAnimator` (Animator'sız kod-güdümlü parça
 animasyonu: atışta bolt tepmesi, reload'da `*_Mag` child'ı çıkar-takılır; şarjör seslerini de bu
-zaman çizgisi çalar — görüntü/ses tek kaynaktan) + `WeaponReloadGesture` (silah bel hizasının
+zaman çizgisi çalar — görüntü/ses tek kaynaktan. **Animasyonun süresi sesten gelir:** şarjör
+hareketi `magOutClip` (+ varsa `magInClip`) uzunluğu kadar sürer, silahın reload süresi kadar değil;
+kalan sürede şarjör dinlenme pozunda bekler. Bileşendeki `manualReloadDuration` (0 = otomatik) bunu
+elle ezer, sonuç her hâlde reload süresine kırpılır. `WeaponDefinition.perShellReloadAudio` açıkken
+`MagOutClip` reload boyunca **şarjör kapasitesi kadar kez** eşit aralıkla çalınır (pompalıda fişek
+fişek dolum); aralık reload SÜRESİNDEN türetilir, klip uzunluğundan değil — süre değişince ses
+kendiliğinden uyar, klip ise tek fişeğin sesi olmalıdır) + `WeaponReloadGesture` (silah bel hizasının
 altına inince `TryStartReload`; bel çizgisi = kafa − `waistDropMeters` (0.62 m vars.) — ORAN DEĞİL:
 fark matematiği zemin/kalibrasyon ofsetlerinden etkilenmez; kavradıktan sonra bir kez bel üstüne
 çıkmadan devreye girmez — alçakta duran bir silahı seçer seçmez yanlış tetiklemeyi önler) + `WeaponCatalog` (SO, `_Shared/Data/Resources/` — `weaponId`→tanım araması;
 `Resources.Load` ile okunduğu için klasöründen çıkarılmaz) + `RemoteShotFx` (kendini önyükler,
 sahne kurulumu istemez; UDP atış olayını (§6.4/6.5) tüketip uzak oyuncunun namlu alevi + konumsal
 atış sesini havuzlu çalar, tracer'ı çizer ve silahın **geri tepmesini** tetikler —
-`RemoteAvatar.ApplyShotRecoil`, olayın kendi tik'inin oynatma anında) + `ShellEjector` (`Weapon.Fired` olayına abone; ateşte silahın `Eject`
+`RemoteAvatar.ApplyShotRecoil`, olayın kendi tik'inin oynatma anında. **Saçmalı silahın yelpazesini
+alıcı yeniden üretir** (`BuildScatter`): telde tek yön + tek mesafe var (§6.4), ilk saçma odur ve
+dokunulmaz; kalanlar `baseSpreadDegrees` konisinden atıcının kullandığı dağılımla üretilip
+**yerel ışınla ölçülür** (`ArenaCombat.TraceShot` — telden gelen mesafeyi hepsine kopyalamak
+yelpazeyi düz bir diske çevirir, ıskalanan atışta ise dokuz çizgiyi duvarların içinden geçirirdi).
+Koni atıcınınkinden bir tık dardır (bloom ve iki-el çarpanı telde yok) ve dar taraf doğru taraftır) + `ShellEjector` (`Weapon.Fired` olayına abone; ateşte silahın `Eject`
 noktasından kalibreye göre (`Casing_762x39`/`Casing_556x45`) bir kovan fırlatır — kovanın kendisi
 `CasingPool`'dan gelir, bileşen yalnız "nereden, ne kadar kuvvetle" sorusunu cevaplar;
 `MuzzleFlash` altındaki "Smoke" sub-emitter'ı da dahil tüm bu kit `WeaponKitBuilder` tarafından
@@ -1235,7 +1246,7 @@ katmanların göreli hız farkı korunur).
 | `Combat/HandGripPoser` | Elde tutulan silahın kavrama pozunu ISDK'nın **sentetik eline** uygular — oyuncunun gözlükte gördüğü el budur: bilek `SyntheticHand.LockWristPose` ile kavrama noktasına kilitlenir, parmaklar `OverrideAllJoints` + `SetFingerFreedom` ile pozun şekline girer. **Kendini önyükleyen kalıcı tekil** (`WeaponGranter` kalıbı) — sahneye konmaz, yeni arenaya kurulum adımı doğurmaz; rig yoksa (admin gözlemci, sahne henüz yüklenmedi) sessizce hiçbir şey yapmaz. ⚠️ **Silahın pozuna DOKUNMAZ**: silahın dünya pozunun tek yazarı `Weapon.ApplyCanonicalGrip` + `ItemGripSolver`'dır; iki yazar aynı silahı kendi ekranında başka, karşı ekranda başka gösterirdi. ⚠️ **Yalnız YEREL oyuncuda koşar** — uzak avatarın eli ağdan gelen iskeletten çizilir, bu sınıfın ağ tarafında hiçbir işi yoktur ve **protokolde karşılığı yoktur**. ⚠️ **Bilek kilidi KOŞULSUZDUR**, mesafe/açı kapısı yoktur ve eklenmez: bedeli fiziksel kumanda kavrama noktasından uzaklaşınca elin kolla arasının görsel olarak gerilmesidir, kazancı oyuncu grip tuşunu bırakmadıkça elin silahtan kopmamasıdır — mesafeye bakan bir kapı özellikle ön kabzada eli oyuncu hiçbir şey yapmadan bırakır ve "iki elle tuttum ama ikinci el havada" hissi üretir. Bu bir üründür, eksik değil. ⚠️ **Parmak serbestliği pozun kendi `FingersFreedom` dizisinden okunur**, beş parmağa koşulsuz `Locked` yazılmaz: kilitli bir işaret parmağı ateş ederken kıpırdamaz, yani oyuncu tetiği çektiğini elinde göremez — hangi parmağın serbest kalacağı silah başına bir TASARIM kararıdır ve pozla birlikte yazılır. `[DefaultExecutionOrder(100)]`: `Weapon.LateUpdate` silahın pozunu yazıyor, bilek ona kilitleniyor — daha erken koşan bir kilit bir kare gerideki silaha sarılır ve hızlı harekette titrer. Sentetik el **adla** süzülür (`SyntheticHandData`): rig'in altında mesafeli kavramanın hayalet elleri de aynı tipte, filtresiz arama oyuncunun elini bırakıp odanın öbür ucundaki hayaleti sarardı. Eli serbest bırakmak yalnız **kilitli → serbest geçişinde** yapılır (her karede koşulsuz `FreeWrist` ISDK'nın kendi kilitlerini de iptal ederdi). Pozu olmayan silahta davranış değişmez (el kumanda duruşunda kalır) + oturum başına tek uyarı. ⚠️ **İkinci işi ölçüdür: anchor → izlenen bilek deltasını her karede, el başına ölçer** (`TryGetAnchorToWrist`) — silahın duruşunu çözen taraf (`ItemGripAuthority`) elin ANCHOR pozunu bilir, poz düğümü ise bileği tarif eder; ikisi arasındaki köprü bu deltadır ve onsuz kavrama tahmin sabitlerine düşer. Ölçü sentetik elin **KAYNAĞINDAN** alınır (`ModifyDataFromSource`, izleme uzayı → dünya çevirisi `ITrackingToWorldTransformer` ile), sentetik elin kendisinden DEĞİL: bileği zaten bu sınıf kilitliyor, kilitli eli okumak ölçüyü bir kare içinde kendi çıktısına kilitlerdi. Değer execution order yüzünden **bir kare bayattır** ve bu bilinçlidir — delta fiziksel olarak sabit bir ofsettir, bir karelik gecikmesi görünmez; ölçümü öne almak elin bir kare gerideki silaha sarılması pahasına olurdu. ⚠️ **Boştaki el de bu sınıfın kilidindedir:** silah yokken (ya da silahın kavrama pozu yazılmamışsa) el izlemeye BIRAKILMAZ, `ApplyIdle` gevşek duruşu yazar — bilek serbest, parmaklar kilitli. Gerekçe §6.9 ile aynı: parmakların duruşu oyuncunun ekranında da uzak ekranlarda da tek bir tanımdan gelmeli, yoksa oyuncu kendi elini tetiğe basınca kıvrılırken görür, başkaları sabit görür. ⚠️ Idle duruşu bir **asset değil ÖRNEKtir**: kumanda kipinde hiçbir tuşa basılmıyorken üretilen poz zaten "yumruk değil, hafif açık" eldir ve bir kez örneklenip sonsuza dek uygulanır — tetik/grip basılıyken örnek alınmaz (yarı yumruk bir idle kalıcı olurdu). Elle yazılmış bir idle donanımın ürettiğinden kaçınılmaz olarak saparadı ve fark tam da oyuncunun kendi eline baktığı yerde görünürdü |
 | `Combat/NetItemCatalog` | `netItemId` → `ItemDefinition` eşlemesi (`Resources`, ilk sorguda sözlük kurar). `Tools > VortexArena > Weapons > Rebuild Net Item Catalog` projedeki TÜM `ItemDefinition`'lardan yazar — silah tablosundan değil, ki yeni bir eşya TÜRÜ (bomba) eklenince sessizce eksik kalmasın. `Resources/` altından çıkarılmaz |
 | `Combat/HeldItems` | Yerel oyuncunun "hangi elde hangi eşya" durumunun tek buluşma noktası (statik). **Yazan** `Weapon`/`WeaponGranter` (`Weapon.ActiveChanged` üzerinden toplanır — çift tabanca mümkün olduğu için bildirim per-instance olamaz), **okuyan** `PlayerPoseTracker`. Hiçbir şey göndermez |
-| `Combat/ShotTracer` | Havuzlu `LineRenderer` mermi izi — ömrü boyunca **sönerek** kaybolur (alfa düşer + çizgi incelir; eskiden ömrün sonunda `enabled=false` ile bir anda kesiliyordu, göz bunu sönme değil "pat" olarak okuyordu). Ayrı bir *sönme süresi* alanı YOK: sönme `tracerLifetime`'ın kendisine yayılır, yoksa iki sayıdan hangisinin diğerini kestiği sessiz bir tuzak olurdu. Üstüne **yol boyunca duman izi**. **İKİ çağıranı vardır ve olmak zorundadır:** atanın kendi izini `Weapon.Fire` çizer (sunucu atış olayını atana geri yollamaz, istemci de kendi `playerId`'sini süzer — §6.5), uzaktakileri `RemoteShotFx`. Havuz ikisi arasında **paylaşılır** (`ShotTracer.Shared`, kendini önyükleyen DDOL tekil): silah başına havuz açmak, silahların sürekli üretilip yok edildiği modlarda materyali + `Update`'i silah sayısınca çoğaltırdı. Görünüm `ItemDefinition`'dan, sıklık `tracerEveryNthRound`'dan — iki yol da aynı alanları okur (ayrı okusalar aynı silah kendi ekranında başka, karşı ekranda başka görünürdü). Sayaç yerelde silah başına, uzakta oyuncu başına (paylaşılan sayaç izleri rastgele namlulara dağıtırdı). Her mermide çizmek lazer ışını gibi durur + konumu fazla ifşa eder; asıl maliyet bayt değil GC/draw call. **Duman `Play`'in İÇİNDEDİR**, ayrı bir giriş noktası değil — ikinci bir `PlaySmoke` kapısı olsa iki çağırandan biri onu unutabilir, yani aynı silah kendi ekranında dumanlı, karşı ekranda dumansız görünürdü. Puf'lar TEK paylaşılan `ParticleSystem`'e manuel `Emit` edilir (sistemin kendi parçacık dizisi zaten havuz; atış başına `TrailRenderer` objesi üretmek Quest'te hem GC hem draw call olurdu) ve namludan isabete doğru **sönümlenir**: alfa düşer, boy büyür, ömür kısalır. Ömür `tracerLifetime`'dan TÜRETİLİR ama birebir değil — 0.06 sn'lik duman tek karelik gri lekedir, o yüzden ×katsayı + kullanılabilir banda kırpma. Eşyaya ayrı duman alanı **eklenmedi**: duman tracer'a biniyor, `tracerEveryNthRound` tracer'ı kapattığında duman da kapanır. Materyal/doku (yumuşak radyal puf) çalışma anında üretilir — hazır duman materyali `Resources/` altında değil ve serialize alan açmak bu tekili sahneye konması gereken bir bileşene çevirirdi |
+| `Combat/ShotTracer` | Havuzlu `LineRenderer` mermi izi — ömrü boyunca **sönerek** kaybolur (alfa düşer + çizgi incelir; eskiden ömrün sonunda `enabled=false` ile bir anda kesiliyordu, göz bunu sönme değil "pat" olarak okuyordu). Ayrı bir *sönme süresi* alanı YOK: sönme `tracerLifetime`'ın kendisine yayılır, yoksa iki sayıdan hangisinin diğerini kestiği sessiz bir tuzak olurdu. Üstüne **yol boyunca duman izi**. **İKİ çağıranı vardır ve olmak zorundadır:** atanın kendi izini `Weapon.Fire` çizer (sunucu atış olayını atana geri yollamaz, istemci de kendi `playerId`'sini süzer — §6.5), uzaktakileri `RemoteShotFx`. Havuz ikisi arasında **paylaşılır** (`ShotTracer.Shared`, kendini önyükleyen DDOL tekil): silah başına havuz açmak, silahların sürekli üretilip yok edildiği modlarda materyali + `Update`'i silah sayısınca çoğaltırdı. Görünüm `ItemDefinition`'dan, sıklık `tracerEveryNthRound`'dan — iki yol da aynı alanları okur (ayrı okusalar aynı silah kendi ekranında başka, karşı ekranda başka görünürdü). Sayaç yerelde silah başına, uzakta oyuncu başına (paylaşılan sayaç izleri rastgele namlulara dağıtırdı) ve **tetik çekişini sayar, saçmayı değil** — ayarın anlamı "kaçta bir ATIŞ iz bırakır", "yaylımın kaçta biri çizilir" değil. Her mermide çizmek lazer ışını gibi durur + konumu fazla ifşa eder; asıl maliyet bayt değil GC/draw call. **Bir tetik çekişi tek çizgi değildir:** saçmalı silahta (`PelletCount > 1`) her saçma kendi izini alır ve yaylımın tamamı TEK çağrıda çizilir (tek mermilik ayrı bir imza YOKTUR: normal silah da tek elemanlı diziyle aynı yoldan geçer) — saçma başına ayrı çağrı hem duman bütçesini hem çizgi kalınlığını saçma sayısınca çoğaltırdı. Yaylımda çizgi incelir (`ScatterWidthScale`): tek mermilik kalınlık 6-9 çizgide namlu dibinde opak bir huniye dönüşür ve saçmalının görsel kimliği olan **yelpaze açısı** okunmaz olur; kalınlık eşyada ayrı bir alan DEĞİL `tracerWidth`'ten türetilir (iki sayı olsa biri ayarlanıp öteki unutulurdu). Duman bütçesi de yaylımın **tamamına** aittir, saçmaya değil: puf'lar namludan uca ilerlerken saçmalar arasında sırayla dağıtılır — saçma başına bütçe verilseydi tek yaylım parçacık tavanını doldurur, sonraki atışların dumanı sessizce düşer ve namlunun önünde Quest'in fill-rate'ini yiyen opak bir duvar kalırdı. Havuz tavanını da **ortalama olay hızı değil tek karedeki yığılma** belirler (bir yaylım aynı karede `PelletCount` çizgi ister): ortalamaya göre boyutlanmış bir havuzda üst üste gelen iki yaylım birbirinin çizgilerini keser ve belirti "bazı saçmaların izi hiç çıkmıyor" olur. **Duman `Play`'in İÇİNDEDİR**, ayrı bir giriş noktası değil — ikinci bir `PlaySmoke` kapısı olsa iki çağırandan biri onu unutabilir, yani aynı silah kendi ekranında dumanlı, karşı ekranda dumansız görünürdü. Puf'lar TEK paylaşılan `ParticleSystem`'e manuel `Emit` edilir (sistemin kendi parçacık dizisi zaten havuz; atış başına `TrailRenderer` objesi üretmek Quest'te hem GC hem draw call olurdu) ve namludan isabete doğru **sönümlenir**: alfa düşer, boy büyür, ömür kısalır. Ömür `tracerLifetime`'dan TÜRETİLİR ama birebir değil — 0.06 sn'lik duman tek karelik gri lekedir, o yüzden ×katsayı + kullanılabilir banda kırpma. Eşyaya ayrı duman alanı **eklenmedi**: duman tracer'a biniyor, `tracerEveryNthRound` tracer'ı kapattığında duman da kapanır. Materyal/doku (yumuşak radyal puf) çalışma anında üretilir — hazır duman materyali `Resources/` altında değil ve serialize alan açmak bu tekili sahneye konması gereken bir bileşene çevirirdi |
 | `Combat/CasingPool` | Ateşte fırlayan kovanların TEK havuzu — kendini önyükleyen DDOL tekil (`ShotTracer.Shared` kalıbı, `CasingPool.Shared`); sahneye konmaz, prefaba eklenmez, `ShellEjector` yalnız `Eject(…)` der. ⚠️ **Havuz silah bileşeninde DURAMAZ ve oraya geri taşınmaz:** kovan dünya uzayında silahtan bağımsız yaşar, ama ömrü işleten `Update` silahın üstünde olursa silah yok edildiği anda o sırada açık olan kovan bir daha hiç kapanmaz ve sahnede kalıcılaşır — silah örneği her kavra/bırak döngüsünde yeniden yaratılıp yok edildiği için (`WeaponGranter`, `WeaponFrame`) bu, maç boyunca biriken yüzlerce Rigidbody + Collider demektir. Havuzun ömrü silahın ömründen UZUN olmak zorundadır. Havuz **prefab başınadır** (kalibre başına bir round-robin), silah başına değil: aynı kalibreyi taşıyan iki el tavanı paylaşır. Kovan **havuz kökünün altına** doğar, ebeveynsiz değil — ebeveynsiz doğsaydı aktif sahneye düşer, harita değişiminde yok edilir ve havuz elinde yok edilmiş referansla kalırdı (o slot bir daha kullanılamazdı); kök orijinde/kimlikte olduğu ve konumlar dünya uzayında yazıldığı için ebeveynlik fiziğe hiçbir şey katmaz. Harita değişiminde kovanlar elle gizlenir (DDOL olduğu için kendiliğinden yok olmazlar, yoksa yeni arenaya eski maçın kovanlarıyla girilirdi). Süre kontrolü coroutine DEĞİL `Update`'te `Time.time` ile: slot erken yeniden kullanıldığında eski zamanlayıcı yeni kovanı erken söndürürdü |
 | `Combat/HitMarker` | **İsabet göstergesi:** vuruşun değdiği dünya noktasında ~0.3 sn beliren, açılıp sönerek kaybolan bir X. Oyuncunun tek "vurdum" geri bildirimi — can sunucu-otoriter olduğu için (§10.3) ekranda başka hiçbir şey değişmez. **Yalnız vuran görür ve bu bir süzme DEĞİL, yapısaldır:** tek çağıranı `ArenaCombat.ReportHit`'tir ve o metot yalnız hasarı VEREN istemcide koşar; protokolde karşılığı yoktur ve eklenmez (telde bir gösterge mesajı olsaydı vurulan da kendi gövdesinde X görürdü). ⚠️ Gösterge *bildirimin yapıldığını* söyler, hasarın uygulandığını değil — sunucu vuruşu reddedebilir (dost ateşi kapalı, faz `playing` değil). Otoriter sonucu beklemek göstergeyi gidiş-dönüş kadar geciktirirdi ve `health_update` vuruşun NEREYE değdiğini taşımıyor. **Kendini önyükleyen DDOL tekil** (`ShotTracer` kalıbı, `HitMarker.Shared`): sahneye konmaz, yeni arenaya kurulum adımı doğurmaz. X **iki `LineRenderer`** ile çizilir (doku+quad değil): her mesafede keskin, doku üretmez ve `ShotTracer`'ın kanıtlanmış yolunu kullanır — paylaşılan materyal + vertex rengi, yani materyal örneği açılmaz. İki çizgi ayrı olmak zorunda; bir X tek polyline ile birleştirici kenar çizmeden ifade edilemez. Boy **açısaldır** (mesafenin katı, metre bandına kırpılı): sabit metre yakın hedefte ekranı kaplar, uzakta hiç okunmazdı. Kollar kameranın sağ/yukarı eksenlerinden kurulur (ekrana paralel düzlem, stereo tutarlı), kaldırma ise göze doğrudur — yüzeyden kaçmanın doğru yönü bakış ekseni değil o noktadan göze giden vektördür. Renk **takım renklerinden uzak** tutulur (gövdenin üstünde kırmızı/mavi X takım okumasını bozar). ⚠️ İşaret dünyada **sabit** durur, hedefe yapışmaz: vuruşun nerede olduğunu gösterir, hedefin çocuğu olsaydı ölüp yok olan avatarla kaçardı. **Görünümün tamamı `HitMarkerStyle`'dan okunur** — kodda ayar sabiti yoktur, kalan sabitler (havuz boyu, shader zinciri) yapısaldır |
 | `Combat/HitMarkerStyle` | *(`_Shared/Data/Resources/HitMarkerStyle.asset`)* İsabet göstergesinin görünüm ayarı: boy (**açısal** — 1 m'deki kenar uzunluğu + metre bandı), renk/**saydamlık**, kalınlık, ömür, saydamlık ve boy **eğrileri**, kontur (X'in dışındaki ikinci kalın X — açık zeminde okunurluk), çizgi materyali (glow için additive bağla) ve **`markerPrefab`**. `WeaponCatalog` ile aynı gerekçeyle `Resources`'ta: `HitMarker` kendini önyükleyen bir tekildir, bağlanacak referans alanı yoktur. ⚠️ **Asset zorunlu DEĞİL** — yoksa alan başlangıç değerleri kullanılır (`CreateInstance`), yani varsayılanların tek doğruluk kaynağı C# dosyasıdır ve asset onun kopyasıdır. Taşınırsa/adı değişirse gösterge çalışmaya devam eder ama **ayarlar sessizce yok sayılır** (bu yüzden açık bir hata değil, dokümante edilmiş bir kural). `markerPrefab` bağlanırsa çizgi X hiç çizilmez, örnek havuzlanır ve görünümün tamamı prefabın olur — `HitMarker` yalnız yeri, boyu, dönüşü, ömrü yönetir (renk/kontur alanları o yolda okunmaz). ⚠️ Eğri **boş bırakılırsa** koddaki formül yedeği devreye girer: boş bir `AnimationCurve` her yerde 0 döner, yani gösterge tümden görünmez olurdu. Sayılar/renkler/eğriler her karede okunur → Play kipinde canlı ayarlanır; materyal ve prefab havuz düğümü kurulurken bağlanır (ayar değişince düğüm yeniden kurulur) |
@@ -2169,15 +2180,17 @@ konsoluna tek satır sebep yazar.
     kodu devreden çıkarmaktır.
 
 61. **"Elle atanmışsa ezme" koruması, tabloyu SESSİZCE hiç uygulanmamış bir niyet hâline
-    getirebilir.** `WeaponKitBuilder` ses kliplerini yalnız alan boşsa yazıyor
-    (`SetClipArrayIfEmpty` / `SetObjectRefIfEmpty`) — gerekçesi doğru: Inspector'dan sürüklenen
-    klip bir sonraki koşuda silinmesin. Ama silahlar ilk üretildiğinde alanlar iki ESKİ ortak
-    klip setiyle dolmuştu, dolayısıyla tabloya sonradan yazılan silaha özgü setler
-    (`SFX_<Ad>_Shot_*`) **hiçbir koşuda inmedi**: dosyalar diskte duruyor, tablo onları
-    gösteriyor, asset'ler başka bir şey çalıyordu. Araç uyarı basmaz çünkü "dolu alanı atlamak"
-    onun için normal davranıştır. Ders: koşullu yazan bir alan, tabloyu tek doğruluk kaynağı
-    saymanı engeller — o alanları değiştirdiğinde **önce asset'te boşalt**, sonra aracı koş; ve
-    aracın çıktısına değil ASSET'in kendisine bak.
+    getirir.** `SetObjectRefIfEmpty` gibi koşullu yazan bir alanda gerekçe doğrudur (Inspector'dan
+    sürüklenen değer bir sonraki koşuda silinmesin), ama sonucu şudur: alan bir kez doluysa tabloya
+    sonradan yazılan değer **hiçbir koşuda inmez** — tablo onu gösterir, asset başka bir şey taşır
+    ve araç uyarı basmaz, çünkü "dolu alanı atlamak" onun için normal davranıştır.
+    ⚠️ Ders iki yönlü. (a) Koşullu yazan bir alanı **tek doğruluk kaynağı sayma**: değiştirdiğinde
+    önce asset'te boşalt, sonra aracı koş, ve aracın çıktısına değil ASSET'in kendisine bak.
+    (b) Daha iyisi: o alanı tablodan **tümüyle çıkar**. Ses klipleri bu yüzden artık tabloda
+    değildir (tek kaynak `WD_*.asset` Inspector'ı) — kulakla seçilen bir şeyi koda yazmak, onu
+    kaçınılmaz olarak iki yerden yönetilir yapıyordu. Bedeli yeni silahın **sessiz** doğmasıdır ve
+    o bedel bir uyarıyla ödenir (`ReportSilentWeapons`): koşullu yazmanın sessizliği yerine, açık
+    bir eksiklik raporu. Kalan tek koşullu alan `dissolveMaterial`'dır ve orada kural bilinçlidir.
 
 62. **`Rebuild Net Item Catalog` modal dialog açar — CLI/MCP'den çalıştırılınca komut timeout
     verir.** `NetItemIdGuard` sonda `EditorUtility.DisplayDialog` gösteriyor
@@ -3275,11 +3288,71 @@ konsoluna tek satır sebep yazar.
     metre ötede hasar tam, bir metre sonra sıfırdır. Ayarlanacak kol `baseSpreadDegrees`'tir.
     ⚠️ Saçılımın oyuncunun gördüğü değeri `Weapon.twoHandSpreadMultiplier` ile çarpılır (çift elle
     tutulan silahta ~0.45): tabloya yazılan derece **tek elle** olandır, iki elle tutulan bir
-    pompalıda gerçek koni yarıya iner.
+    pompalıda gerçek koni yarıya iner. Pompalı tanım gereği iki elle tutulduğu için saçmalı
+    satırlarda tabloya bakarak koniyi tahmin etmek, silahı **iki kat dar** sanmaktır — ve saçmalıda
+    dar koni doğrudan "isabet eden saçma sayısı" demek olduğu için hata hasar tarafında ikiye
+    katlanarak görünür.
+    ⚠️ **CS'in denge sayıları arena ölçeğine BİREBİR taşınmaz — özellikle saçmalıda.** CS'te
+    pompalının güçlü olduğu bant (0-5 m) haritanın küçük bir dilimidir ve oraya girmek pahalıdır;
+    12×12 free-roam arenada aynı bant **en sık çatışma mesafesidir**. Sayılar olduğu gibi
+    kopyalanınca silah "riskli yakın dövüş silahı" olmaktan çıkıp arenanın yarısında garantili ölüm
+    olur. ⚠️ Bunun çaresi CS'in mesafe eğrisini eklemek DEĞİLDİR (o eğri ~9.5 m'de bir işler,
+    arenanın en uzun hattı ~17 m — yani hasarı ancak yarıya indirir ve asıl sorun olan temas
+    mesafesine hiç dokunmaz); ayarlanacak kollar **taban hasar** ve **koni açısıdır**.
+    ⚠️ İkinci kalem bölge çarpanıdır: çarpan **saçma başına** uygulanır, yani 4× kafa çarpanı 26
+    hasarlı tek bir saçmayı anında öldürücü yapar ve 9 saçmalık bir konide kaza kurşunu da bu
+    hakkı kazanır. CS'te bunu kask yumuşatıyor, burada zırh yok — bu yüzden saçmalıların kafa
+    çarpanı satır bazında düşürülür (`WeaponSpec.Headshot`).
 153. **Aynı hedefe giden saçmalar tek `hit_report`'a TOPLANMAZ.** Her saçma kendi bölge çarpanını
     taşır (biri kafaya, biri bacağa gidebilir) ve sunucu her raporu ayrı işler. Toplamak, dokuz
     saçmanın hepsini tek bir bölgeye yazmak demek olurdu. Sunucu bunu zaten bekliyor: `hit_report`
     tarafında atış hızı denetimi **yok** ve gerekçesi protokolde açıkça "pompalı saçması"dır.
+154. **Paylaşılan bir havuzun tavanı, o havuzu paylaşan TÜKETİCİ sayısıyla büyür — yoksa yeni
+    tüketici eskilerini sessizce açlığa sokar.** Kovan havuzu kalibre (prefab) başınadır. Aynı
+    kalibreye yeni bir silah eklemek hiçbir şeyi bozmuş gibi görünür: kurulum kusursuz, hata yok,
+    bağlar dolu. Ama tavan aşıldığında kovan ömrünü tamamlamadan geri alınır ve belirti
+    **"kovanı hiç çıkmıyor"** olur — çıkıyordur, sadece birkaç kare sonra yeniden kullanılıyordur.
+    ⚠️ Teşhisi zorlaştıran şey, belirtinin **son eklenen** silahta görünmesidir (test edilen odur),
+    oysa sebep o silahta değil paylaşılan tavandadır — saatler o silahın prefabında aranır.
+    Hesap: bir silah `rpm/60 × ömür` kadar kovanı aynı anda havada tutar; tavan bunun altındaysa
+    fark ömürden kesilir. Kural: kalibreye silah eklerken `CasingPool.PoolSizePerPrefab`'ı gözden
+    geçir, ve paylaşılan bir havuza yeni tüketici eklerken hep aynı soruyu sor.
+155. **Bir collider'ın İÇİNDE doğan dinamik gövde, depenetrasyon hızıyla fırlatılabilir.** Kovan
+    silahın gövdesinden çıkar, gövde de kavranabilir olduğu için kutu collider taşır: yani kovan
+    kaçınılmaz olarak iç içe doğar (ölçümde 13 silahın 12'sinde çıkış noktası kutunun 8–35 mm
+    içinde). PhysX ikisini ayırmak için kovana kendi itkisinin (1–2 m/s) kat kat üstünde hız
+    bindirebilir. Kural: havuzdan çıkan gövdeyi bir başka collider'ın içine doğuruyorsan
+    **collider'ını kısa bir süre kapalı doğur** (`CasingPool.ColliderOffSeconds`) ve ikinci hat
+    olarak `Rigidbody.maxDepenetrationVelocity`'yi kıs — Unity'nin 10 m/s varsayılanı 1 cm'lik bir
+    obje için "sahneden kaybol" demektir. Katman ayırmak da çözer ama her yeni doğuran için katman
+    matrisine bakmayı gerektirir; gecikme kaynağı bilmeden çalışır.
+156. **Unpack edilmiş bir prefabın mesh'i, kaynak paket taşınınca sessizce `null` olur — obje
+    çalışır ama ÇİZİLMEZ.** Kovan prefabları pack'in mermi modelinden unpack edilir, yani
+    `MeshFilter.sharedMesh` pack FBX'ine bir referanstır. Paket klasörü taşındığında (ya da FBX yeni
+    kimlikle yeniden import edildiğinde) referans kopar: `MeshFilter` yerinde durur, `Renderer`
+    açıktır, materyal doludur, collider ve Rigidbody doğru boyuttadır — **yalnız mesh yoktur.**
+    Fizik kusursuz çalıştığı için belirti "obje hiç doğmuyor" gibi okunur ve kimse hata basmaz.
+    ⚠️ **Bu tuzağı kalıcılaştıran şey idempotency'nin yanlış yazılmasıdır:** üretici "asset varsa
+    dokunma" derse kırık asset her koşuda sağlam sayılır ve araç onu bir daha ASLA onarmaz. Kural:
+    idempotent bir üretici *varlığı* değil **sağlamlığı** sorar (`HasRenderableMesh`), kırıksa
+    kaynaktan yeniden üretir — `SaveAsPrefabAsset` aynı yolun üstüne yazdığında asset GUID'i
+    korunur, yani ona bağlı referanslar kopmaz.
+    ⚠️ Gözle tek ipucu: Project penceresinde prefabın önizlemesi modelden **jenerik mavi küpe**
+    döner. Teşhiste "kurulum aynı mı" diye karşılaştırmak buraya asla götürmez — çünkü kurulum
+    gerçekten aynıdır; sorulacak soru "çizilecek bir şey var mı"dır.
+157. **Tetiği açan şey SES DEĞİL, `reloadTime`'dır — üçünü (kural, animasyon, ses) ayrı ayrı
+    ayarlamak "bitti ama sıkamıyorum" hissi üretir.** Reload kilidi tek yerden gelir:
+    `Weapon.TryStartReload` `reloadEndTime = Time.time + definition.ReloadTime` yazar. Ses
+    `PlayOneShot` ile çalar ve biterken kimseye haber vermez; şarjör animasyonu da ayrı bir zaman
+    çizgisidir. Üçü ayrışınca belirti oyuncuya **hep sesin/animasyonun suçu gibi** görünür
+    ("ses bitti, silah elimde hazır duruyor, niye ateş etmiyor") ve teşhis sesi kırpmaya ya da
+    "çalan sesi kesen bir yönetici" yazmaya kayar — ikisi de kilidi bir milisaniye bile
+    kısaltmaz. ⚠️ Klibin sonundaki sessizlik de bir belirti değildir; yalnız `clip.length`'i
+    uzatır. Kural: **silahın kendi reload sesi varsa `reloadTime` o klibin uzunluğudur**
+    (`WeaponKitBuilder` tablosundaki `Reload`), animasyon da süresini aynı klipten türetir
+    (`WeaponAnimator`, `manualReloadDuration` ile ezilebilir) — üçü tek sayıda buluşur. Kendi
+    reload sesi olmayan silahta (paylaşımlı klip, fişek fişek dolan pompalı) sayı bir denge
+    değeridir ve sesle eşleşmez; orada animasyonun erken bitmesi beklenen davranıştır.
 
 ---
 

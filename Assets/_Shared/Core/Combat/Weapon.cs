@@ -312,6 +312,11 @@ namespace VortexArena.Core.Combat
         // dağılır ve hangi namlunun ateş ettiği okunaksız olurdu.
         private int shotCount;
 
+        // Yaylımın saçma uçları (dünya uzayı) — silah başına bir kez ayrılır, atış başına DEĞİL:
+        // tetik yolu otomatik ateşte saniyede ~10 kez koşuyor ve GC dikeni Quest'te doğrudan
+        // görünür. Boy PelletCount'tan gelir (normal silahta 1) ve ShotTracer'ın tavanına kırpılır.
+        private Vector3[] tracerPoints;
+
         private bool weaponIdWarned;
 
         protected virtual void Awake()
@@ -720,6 +725,12 @@ namespace VortexArena.Core.Combat
             // sayı 1'dir ve döngü tek turda biter — ayrı bir kod yolu YOKTUR.
             int pellets = definition.PelletCount;
 
+            // Tracer kapısı yaylımdan ÖNCE, bir kez sorulur: sayaç TETİK ÇEKİŞİNİ sayar, saçmayı
+            // değil. Saçma başına sorulsaydı `tracerEveryNthRound` yaylımın içini eleyip 9 saçmanın
+            // 3'ünü çizerdi — oysa ayarın anlamı "kaçta bir ATIŞ iz bırakır".
+            bool drawTracer = ShouldDrawTracer();
+            int tracerCount = 0;
+
             for (int p = 0; p < pellets; p++)
             {
                 Vector2 scatter = Random.insideUnitCircle * spread;
@@ -744,12 +755,18 @@ namespace VortexArena.Core.Combat
                     // (§6.4) tek tetikle doldururdu — uzakta çizilen tek bir namlu alevi zaten
                     // doğru sunumdur.
                     ArenaCombat.ReportShot(direction, trace.Distance, NetItemId, IsMainHandRight);
+                }
 
-                    // Yerel mermi izi. ⚠️ Uzak sunum yolu (RemoteShotFx) atanın kendi izini ÇİZEMEZ ve
-                    // çizmeyecek: sunucu olayı atana geri yollamaz, istemci de kendi playerId'sini süzer
-                    // (§6.5). Atanın izini çizecek tek yer burasıdır — atlanırsa "herkes görüyor, ateş
-                    // eden görmüyor" gibi teşhisi zor bir eksik doğar.
-                    DrawLocalTracer(direction, trace.Distance);
+                // Yerel mermi izinin ucu. ⚠️ Uzak sunum yolu (RemoteShotFx) atanın kendi izini
+                // ÇİZEMEZ ve çizmeyecek: sunucu olayı atana geri yollamaz, istemci de kendi
+                // playerId'sini süzer (§6.5). Atanın izini çizecek tek yer burasıdır — atlanırsa
+                // "herkes görüyor, ateş eden görmüyor" gibi teşhisi zor bir eksik doğar.
+                // ⚠️ Uç noktalar BURADA toplanır (çizim yaylım bitince, tek çağrıda): atanın
+                // ekranında her saçma KENDİ ışınının gerçekten gittiği yere kadar çizilir —
+                // saçılım vektörü de mesafesi de zaten elde, uzaktaki gibi yeniden üretilmez.
+                if (drawTracer && tracerCount < tracerPoints.Length)
+                {
+                    tracerPoints[tracerCount++] = muzzle.position + direction * trace.Distance;
                 }
 
                 if (!trace.HasHit)
@@ -780,6 +797,11 @@ namespace VortexArena.Core.Combat
                 ArenaCombat.ReportRaycastHit(hit, damage, WeaponId);
             }
 
+            if (tracerCount > 0)
+            {
+                DrawLocalTracer(tracerCount);
+            }
+
             currentKick = Mathf.Min(currentKick + definition.KickDegrees * recoilScale, definition.KickDegrees * 4f);
             currentKickBack = Mathf.Min(currentKickBack + definition.KickBackMeters * recoilScale, definition.KickBackMeters * 3f);
 
@@ -788,7 +810,7 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Atanın KENDİ mermi izi — çizgi ve yol boyunca duman (uzaktakini
-        /// <see cref="RemoteShotFx"/> çizer). Duman ayrı bir çağrı DEĞİLDİR: <c>Play</c>'in
+        /// <see cref="RemoteShotFx"/> çizer). Duman ayrı bir çağrı DEĞİLDİR: çizim çağrısının
         /// içindedir, yani burada unutulması mümkün değil.
         /// <para>Sıklık ve görünüm uzak izle <b>aynı kaynaktan</b> okunur
         /// (<see cref="ItemDefinition"/>): iki taraf ayrı ayarlansa aynı silah kendi ekranında
@@ -796,23 +818,45 @@ namespace VortexArena.Core.Combat
         /// (<see cref="ShotTracer.Shared"/>) — silah başına havuz açmak, silahların sürekli
         /// üretilip yok edildiği modlarda (<c>weaponSource:"random"</c>) materyali ve Update
         /// döngüsünü silah sayısınca çoğaltırdı.</para>
-        /// <para><c>direction</c> birim uzunluktadır (<c>muzzle.forward</c>'ın döndürülmüşü), bu
-        /// yüzden bitiş noktası doğrudan <c>× mesafe</c> ile bulunur.</para>
+        /// <para>⚠️ <b>Saçmalı silahta her saçmanın kendi izi çizilir</b> ve hepsi TEK çağrıyla
+        /// gider (<see cref="ShotTracer.Play"/>): duman bütçesi ile çizgi kalınlığı
+        /// yaylımın tamamına göre ölçülüyor, saçma başına ayrı çağrı ikisini de saçma sayısınca
+        /// çoğaltırdı.</para>
         /// </summary>
-        private void DrawLocalTracer(in Vector3 direction, float distanceMeters)
+        /// <param name="pointCount"><see cref="tracerPoints"/>'in dolu eleman sayısı.</param>
+        private void DrawLocalTracer(int pointCount)
+        {
+            ShotTracer.Shared.Play(
+                muzzle.position,
+                tracerPoints,
+                pointCount,
+                definition.TracerColor,
+                definition.TracerWidth,
+                definition.TracerLifetime);
+        }
+
+        /// <summary>
+        /// Bu tetik çekişi iz bırakacak mı — sayacı ilerletir ve <c>tracerEveryNthRound</c>
+        /// kapısını uygular. Olumluysa yaylımın uç tamponu da hazırlanır.
+        /// <para>⚠️ Sayaç <b>tetik çekişini</b> sayar, saçmayı değil: ayarın anlamı "kaçta bir
+        /// atış iz bırakır"dır, "yaylımın kaçta biri çizilir" değil. Saçma başına sayılsaydı 9
+        /// saçmalı bir silahta ayar hem sıklığı hem yelpazenin bütünlüğünü aynı anda bozardı.</para>
+        /// </summary>
+        private bool ShouldDrawTracer()
         {
             shotCount++;
 
             int everyNth = definition.TracerEveryNthRound;
             if (everyNth < 1 || shotCount % everyNth != 0)
-                return;
+                return false;
 
-            ShotTracer.Shared.Play(
-                muzzle.position,
-                muzzle.position + direction * distanceMeters,
-                definition.TracerColor,
-                definition.TracerWidth,
-                definition.TracerLifetime);
+            // Tampon ilk izde kurulur ve silah boyunca yaşar. Boy PelletCount'tan gelir; tavan
+            // ShotTracer'ındır (havuz bütçesi orada tanımlı, çağıran kendi tavanını taşımaz).
+            int capacity = Mathf.Clamp(definition.PelletCount, 1, ShotTracer.MaxScatterLines);
+            if (tracerPoints == null || tracerPoints.Length != capacity)
+                tracerPoints = new Vector3[capacity];
+
+            return true;
         }
 
         // ------------------------------------------------------------ silah verme

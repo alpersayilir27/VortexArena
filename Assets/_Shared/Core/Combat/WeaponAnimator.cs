@@ -18,10 +18,10 @@ namespace VortexArena.Core.Combat
     /// </summary>
     public class WeaponAnimator : MonoBehaviour
     {
-        /// <summary>Reload ilerlemesinde şarjörün kaybolduğu faz sonu.</summary>
+        /// <summary>ANİMASYON ilerlemesinde şarjörün kaybolduğu faz sonu (tek klipli silahta).</summary>
         private const float MagOutPhaseEnd = 0.35f;
 
-        /// <summary>Reload ilerlemesinde şarjörün geri gelmeye başladığı faz başı.</summary>
+        /// <summary>ANİMASYON ilerlemesinde şarjörün geri gelmeye başladığı faz başı (tek klipli).</summary>
         private const float MagInPhaseStart = 0.7f;
 
         [SerializeField] private Weapon weapon;
@@ -34,6 +34,12 @@ namespace VortexArena.Core.Combat
         [SerializeField] private float magTiltDegrees = 25f;
         [Tooltip("Boltun atışta geriye kayma mesafesi (metre).")]
         [SerializeField] private float boltBackMeters = 0.03f;
+        [Min(0f)]
+        [Tooltip("Şarjör animasyonunun süresi (saniye). 0 = OTOMATİK: süre şarjör seslerinden " +
+                 "türetilir (magOutClip + magInClip). >0 = elle verilen bu süre kullanılır. " +
+                 "İki durumda da silahın reload süresini AŞAMAZ; kalan sürede şarjör dinlenme " +
+                 "pozunda bekler.")]
+        [SerializeField] private float manualReloadDuration;
 
         private Transform _mag;
         private Vector3 _magRestPosition;
@@ -51,6 +57,24 @@ namespace VortexArena.Core.Combat
         private float _reloadDuration;
         private bool _magPulled;
         private bool _magInserted;
+
+        /// <summary>Bu reload'da çalınacak dolum sesi adedi (1 = tek klip, pompalıda kapasite).</summary>
+        private int _shellTotal;
+
+        /// <summary>Bu reload'da şimdiye kadar çalınan dolum sesi adedi.</summary>
+        private int _shellsPlayed;
+
+        /// <summary>Dolum sesleri arası saniye; 0 = tekrar yok.</summary>
+        private float _shellInterval;
+
+        /// <summary>Şarjör animasyonunun süresi (saniye) — reload süresinden KISA olabilir.</summary>
+        private float _animDuration;
+
+        /// <summary>Animasyon başından itibaren şarjörün tamamen indiği an (saniye).</summary>
+        private float _magOutEnd;
+
+        /// <summary>Animasyon başından itibaren şarjörün geri gelmeye başladığı an (saniye).</summary>
+        private float _magInStart;
 
         private void Start()
         {
@@ -152,11 +176,27 @@ namespace VortexArena.Core.Combat
                 _mag.gameObject.SetActive(true);
             }
 
+            // Fişek fişek dolan silahta (WeaponDefinition.PerShellReloadAudio) aynı klip reload
+            // süresine yayılarak kapasite kadar kez çalar; aralık süreden TÜRETİLİR, klip
+            // uzunluğundan değil — reload süresi değişince ses kendiliğinden uyar.
+            WeaponDefinition definition = weapon != null ? weapon.Definition : null;
+            ResolveReloadTimeline(definition);
+            _shellTotal = 1;
+            _shellInterval = 0f;
+            if (definition != null && definition.PerShellReloadAudio &&
+                definition.MagOutClip != null && definition.MagazineSize > 1)
+            {
+                _shellTotal = definition.MagazineSize;
+                _shellInterval = _reloadDuration / _shellTotal;
+            }
+
             // t=0'da çalınır: tek-klip modunda (MagInClip yok) bu klip tüm reload sesini taşır.
             if (weaponAudio != null)
             {
                 weaponAudio.PlayMagOut();
             }
+
+            _shellsPlayed = 1;
         }
 
         private void TickReload()
@@ -166,12 +206,15 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            float f = Mathf.Clamp01((Time.time - _reloadStartTime) / _reloadDuration);
+            float elapsed = Time.time - _reloadStartTime;
+            TickShellAudio(elapsed);
 
-            if (f < MagOutPhaseEnd)
+            // Zaman çizgisi SANİYE cinsindendir: animasyon reload'dan kısa olabilir ve bitince
+            // şarjör dinlenme pozunda bekler (aşağıdaki son satır 1'e sabitlenir).
+            if (elapsed < _magOutEnd)
             {
                 // Şarjör aşağı + öne eğilerek kayar (doğrusal).
-                ApplyMagOffset(f / MagOutPhaseEnd);
+                ApplyMagOffset(elapsed / Mathf.Max(0.0001f, _magOutEnd));
                 return;
             }
 
@@ -184,7 +227,7 @@ namespace VortexArena.Core.Combat
                 }
             }
 
-            if (f < MagInPhaseStart)
+            if (elapsed < _magInStart)
             {
                 return;
             }
@@ -205,8 +248,78 @@ namespace VortexArena.Core.Combat
             }
 
             // Aşağıdaki pozdan dinlenme pozuna ters interpolasyon (SmoothStep).
-            float t = Mathf.SmoothStep(0f, 1f, (f - MagInPhaseStart) / (1f - MagInPhaseStart));
+            float t = Mathf.SmoothStep(0f, 1f,
+                Mathf.Clamp01((elapsed - _magInStart) / Mathf.Max(0.0001f, _animDuration - _magInStart)));
             ApplyMagOffset(1f - t);
+        }
+
+        /// <summary>
+        /// Şarjör animasyonunun süresini ve faz sınırlarını (saniye) belirler.
+        /// Sıra: <see cref="manualReloadDuration"/> → şarjör klipleri → reload süresi. Sonuç her
+        /// hâlde reload süresine kırpılır (animasyon oyun kuralından uzun süremez); kısa kalması
+        /// beklenen durumdur, kalan sürede şarjör dinlenme pozunda bekler.
+        /// </summary>
+        private void ResolveReloadTimeline(WeaponDefinition definition)
+        {
+            float outLength = definition != null && definition.MagOutClip != null
+                ? definition.MagOutClip.length
+                : 0f;
+            float inLength = definition != null && definition.MagInClip != null
+                ? definition.MagInClip.length
+                : 0f;
+
+            if (manualReloadDuration > 0f)
+            {
+                SetTimelineFromDefaults(Mathf.Min(manualReloadDuration, _reloadDuration));
+                return;
+            }
+
+            // Fişek fişek dolan silahta klip TEK fişeğin sesidir (bkz. PerShellReloadAudio) —
+            // animasyonun ölçüsü o klip değil, reload'un tamamıdır.
+            if (outLength <= 0f || (definition != null && definition.PerShellReloadAudio))
+            {
+                SetTimelineFromDefaults(_reloadDuration);
+                return;
+            }
+
+            if (inLength > 0f)
+            {
+                // İki klipli silah: şarjör magOut klibi boyunca iner, magIn klibi boyunca döner.
+                _animDuration = Mathf.Max(0.05f, Mathf.Min(outLength + inLength, _reloadDuration));
+                float scale = _animDuration / (outLength + inLength);
+                _magOutEnd = outLength * scale;
+                _magInStart = _magOutEnd;
+                return;
+            }
+
+            // Tek klipli silah: klip tüm reload sesini taşır, animasyon ona oturur.
+            SetTimelineFromDefaults(Mathf.Min(outLength, _reloadDuration));
+        }
+
+        /// <summary>Verilen süreyi varsayılan faz oranlarıyla (0.35 / 0.7) zaman çizgisine yayar.</summary>
+        private void SetTimelineFromDefaults(float duration)
+        {
+            _animDuration = Mathf.Max(0.05f, duration);
+            _magOutEnd = _animDuration * MagOutPhaseEnd;
+            _magInStart = _animDuration * MagInPhaseStart;
+        }
+
+        /// <summary>
+        /// Fişek fişek dolum sesi: kalan sesleri eşit aralıkla çalar. Kare atlansa da adet
+        /// korunur (while ile birikmiş aralıklar kapatılır); ilk ses reload başında çalındı.
+        /// </summary>
+        private void TickShellAudio(float elapsed)
+        {
+            if (_shellInterval <= 0f || weaponAudio == null)
+            {
+                return;
+            }
+
+            while (_shellsPlayed < _shellTotal && elapsed >= _shellsPlayed * _shellInterval)
+            {
+                weaponAudio.PlayMagOut();
+                _shellsPlayed++;
+            }
         }
 
         private void HandleReloadCompleted()
@@ -214,6 +327,7 @@ namespace VortexArena.Core.Combat
             _reloading = false;
             _magPulled = false;
             _magInserted = false;
+            _shellsPlayed = _shellTotal;
 
             if (_mag == null)
             {

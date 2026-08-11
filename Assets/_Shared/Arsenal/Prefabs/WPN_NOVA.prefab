@@ -263,7 +263,7 @@ ParticleSystem:
     startLifetime:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 1
+      scalar: 1.9
       minScalar: 5
       maxCurve:
         serializedVersion: 2
@@ -370,7 +370,7 @@ ParticleSystem:
       serializedVersion: 2
       minMaxState: 0
       minColor: {r: 1, g: 1, b: 1, a: 1}
-      maxColor: {r: 0.6, g: 0.6, b: 0.6, a: 0.28}
+      maxColor: {r: 0.6, g: 0.6, b: 0.6, a: 0.46}
       maxGradient:
         serializedVersion: 2
         key0: {r: 1, g: 1, b: 1, a: 1}
@@ -434,8 +434,8 @@ ParticleSystem:
     startSize:
       serializedVersion: 2
       minMaxState: 3
-      scalar: 0.06
-      minScalar: 0.035
+      scalar: 0.14
+      minScalar: 0.085
       maxCurve:
         serializedVersion: 2
         m_Curve:
@@ -5100,7 +5100,7 @@ ParticleSystem:
     startLifetime:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 0.065
+      scalar: 0.115
       minScalar: 0.03
       maxCurve:
         serializedVersion: 2
@@ -5206,8 +5206,8 @@ ParticleSystem:
     startColor:
       serializedVersion: 2
       minMaxState: 2
-      minColor: {r: 1, g: 0.85, b: 0.55, a: 1}
-      maxColor: {r: 1, g: 0.55, b: 0.22, a: 1}
+      minColor: {r: 1, g: 0.68, b: 0.26, a: 1}
+      maxColor: {r: 1, g: 0.28, b: 0.05, a: 1}
       maxGradient:
         serializedVersion: 2
         key0: {r: 1, g: 1, b: 1, a: 1}
@@ -5271,8 +5271,8 @@ ParticleSystem:
     startSize:
       serializedVersion: 2
       minMaxState: 3
-      scalar: 0.068
-      minScalar: 0.038
+      scalar: 0.15
+      minScalar: 0.085
       maxCurve:
         serializedVersion: 2
         m_Curve:
@@ -5649,7 +5649,7 @@ ParticleSystem:
     serializedVersion: 6
     enabled: 1
     type: 4
-    angle: 26
+    angle: 50
     length: 5
     boxThickness: {x: 0, y: 0, z: 0}
     radiusThickness: 1
@@ -9877,7 +9877,7 @@ Transform:
   m_GameObject: {fileID: 8471290950430256843}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.04, y: 0.03, z: 0.2}
+  m_LocalPosition: {x: 0.027, y: 0.0435, z: 0.1444}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -9921,7 +9921,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.8, y: 0.8, z: 0.8}
   m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 966157442967515198}
@@ -9940,7 +9940,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1c7490561178280499e244c777d8310b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Weapon
-  definition: {fileID: 11400000, guid: dc384828f17138049a24328b7e07b1ff, type: 2}
+  definition: {fileID: 11400000, guid: 5eca3b2d226a8e6429680e472ae49813, type: 2}
   muzzle: {fileID: 6736509847464023705}
   modelPivot: {fileID: 966157442967515198}
   grabbable: {fileID: 1131620721654260830}
@@ -10034,11 +10034,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WeaponAudio
   source: {fileID: 2276784808772685029}
-  fireClips:
-  - {fileID: 8300000, guid: 957e1de72b1bcb9439dd45fbb67829ef, type: 3}
-  - {fileID: 8300000, guid: 2545763209f6cc5499df8408ec5485d6, type: 3}
-  dryFireClip: {fileID: 0}
-  firePitchJitter: 0.05
 --- !u!114 &5652387009388169266
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10080,6 +10075,7 @@ MonoBehaviour:
   magDropMeters: 0.12
   magTiltDegrees: 25
   boltBackMeters: 0.03
+  manualReloadDuration: 0
 --- !u!114 &3109032755980589899
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10110,7 +10106,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b7f03cfd1f346dd4f828e910379a3daa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.ShellEjector
-  casingPrefab: {fileID: 4067445884326180951, guid: 0eca1aaf064fe094cb274454d8f15cd1, type: 3}
+  casingPrefab: {fileID: 4169504324275161866, guid: dbcb1caaf9729b3419b8d0ce251a6958, type: 3}
   ejectPoint: {fileID: 3385865646860297416}
   ejectForceMin: 1.2
   ejectForceMax: 2

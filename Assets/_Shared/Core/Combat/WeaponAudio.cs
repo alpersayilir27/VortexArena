@@ -7,11 +7,17 @@ namespace VortexArena.Core.Combat
     /// spatializer'ı (Meta XR Audio) ile konumlandırılır: atışlar hem atıcı hem
     /// yakındaki oyuncular için arenada doğru yerden duyulur.
     /// <para>
-    /// Klip/pitch/volume değerleri <see cref="Configure"/> ile verilen
-    /// <see cref="WeaponDefinition"/>'dan okunur; tanım yoksa (ya da ilgili klip alanı
-    /// boşsa) Inspector'daki yedeklere düşülür. Şarjör sesleri (<see cref="PlayMagOut"/> /
-    /// <see cref="PlayMagIn"/>) reload başlangıcında DEĞİL, WeaponAnimator'ın zaman
-    /// çizgisinde çalınır — bu sınıf zamanlama tutmaz, yalnız çalar.
+    /// ⚠️ <b>Klip/pitch/volume'ün TEK kaynağı <see cref="WeaponDefinition"/>'dır</b>
+    /// (<c>WD_&lt;Ad&gt;.asset</c>, <see cref="Configure"/> ile bağlanır) — bu bileşende klip alanı
+    /// YOKTUR ve eklenmez. Eskiden "tanım atanmazsa" diye Inspector yedekleri vardı; onlar
+    /// ulaşılamaz koddu (<see cref="Weapon"/> tanımsız silahı hata basıp KİLİTLER, yani ateş hiç
+    /// edilmez ve buraya sıra gelmez) ama Inspector'da ikinci bir "Fire Clips" listesi göstererek
+    /// sesin hangi asset'ten geldiğini belirsizleştiriyordu. Ses değişikliği daima
+    /// <c>WD_&lt;Ad&gt;.asset</c>'te yapılır.
+    /// </para>
+    /// <para>
+    /// Şarjör sesleri (<see cref="PlayMagOut"/> / <see cref="PlayMagIn"/>) reload başlangıcında
+    /// DEĞİL, WeaponAnimator'ın zaman çizgisinde çalınır — bu sınıf zamanlama tutmaz, yalnız çalar.
     /// </para>
     /// </summary>
     public class WeaponAudio : MonoBehaviour
@@ -19,19 +25,12 @@ namespace VortexArena.Core.Combat
         [Tooltip("Namludaki 3D AudioSource (spatialize açık).")]
         [SerializeField] private AudioSource source;
 
-        [Header("Yedekler (tanım atanmazsa)")]
-        [Tooltip("Ateş klipleri; her atışta rastgele biri seçilir.")]
-        [SerializeField] private AudioClip[] fireClips;
-        [SerializeField] private AudioClip dryFireClip;
-        [Range(0f, 0.2f)]
-        [Tooltip("Atış başına rastgele pitch sapması (otomatik ateş robotik durmasın).")]
-        [SerializeField] private float firePitchJitter = 0.05f;
-
         private WeaponDefinition definition;
 
         /// <summary>
         /// Ses değerlerinin kaynağını bağlar (<see cref="Weapon"/> Awake'te çağırır).
-        /// null verilebilir — o zaman yalnız Inspector yedekleri kullanılır.
+        /// null verilebilir ve o zaman bu bileşen TÜMÜYLE sessizdir — tanımsız silah zaten
+        /// <see cref="Weapon"/> tarafından kilitleniyor, yani bu durum bir arıza göstergesidir.
         /// </summary>
         public void Configure(WeaponDefinition definition)
         {
@@ -40,18 +39,23 @@ namespace VortexArena.Core.Combat
 
         public void PlayFire()
         {
-            AudioClip[] clips = definition != null && definition.FireClips != null && definition.FireClips.Length > 0
-                ? definition.FireClips
-                : fireClips;
-            if (source == null || clips == null || clips.Length == 0)
+            if (source == null || definition == null)
                 return;
 
-            float pitchBase = definition != null ? definition.FirePitchBase : 1f;
-            float jitter = definition != null ? definition.FirePitchJitter : firePitchJitter;
-            float volume = definition != null ? definition.FireVolume : 1f;
+            AudioClip[] clips = definition.FireClips;
+            if (clips == null || clips.Length == 0)
+                return;
 
-            source.pitch = pitchBase + Random.Range(-jitter, jitter);
-            source.PlayOneShot(clips[Random.Range(0, clips.Length)], volume);
+            // ⚠️ Seçilen eleman NULL olabilir: dizinin boyu doldurulmuş ama bir yuvası boş
+            // bırakılmış olabilir (Inspector'da sık). O atış sessiz geçer — dizi boyuna bakıp
+            // "klip var" saymak, yarısı boş bir listede atışların yarısını sessizleştirirdi.
+            AudioClip clip = clips[Random.Range(0, clips.Length)];
+            if (clip == null)
+                return;
+
+            source.pitch = definition.FirePitchBase +
+                           Random.Range(-definition.FirePitchJitter, definition.FirePitchJitter);
+            source.PlayOneShot(clip, definition.FireVolume);
         }
 
         public void PlayMagOut()
@@ -66,7 +70,7 @@ namespace VortexArena.Core.Combat
 
         public void PlayDry()
         {
-            PlayClip(definition != null && definition.DryFireClip != null ? definition.DryFireClip : dryFireClip);
+            PlayClip(definition != null ? definition.DryFireClip : null);
         }
 
         public void PlayPickup()

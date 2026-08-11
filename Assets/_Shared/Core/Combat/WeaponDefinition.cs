@@ -93,6 +93,10 @@ namespace VortexArena.Core.Combat
         [SerializeField] private AudioClip magOutClip;
         [Tooltip("Şarjör takma sesi (WeaponAnimator zaman çizgisi çalar).")]
         [SerializeField] private AudioClip magInClip;
+        [Tooltip("Pompalı gibi TEK TEK fişek dolduran silah: MagOutClip reload boyunca şarjör " +
+                 "kapasitesi kadar kez, eşit aralıkla çalınır (klip tek fişeğin sesi olmalı). " +
+                 "Kapalıyken klip reload başında bir kez çalar.")]
+        [SerializeField] private bool perShellReloadAudio;
         [SerializeField] private AudioClip dryFireClip;
         [SerializeField] private AudioClip pickupClip;
         [Tooltip("Ateş sesinin taban pitch'i.")]
@@ -194,6 +198,12 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Şarjör takma sesi.</summary>
         public AudioClip MagInClip => magInClip;
+
+        /// <summary>
+        /// Açıkken <see cref="MagOutClip"/> reload süresine yayılarak <see cref="MagazineSize"/>
+        /// kez çalınır (fişek fişek dolum). Klip tek fişeğin sesi olmalıdır.
+        /// </summary>
+        public bool PerShellReloadAudio => perShellReloadAudio;
 
         /// <summary>Boş tetik sesi.</summary>
         public AudioClip DryFireClip => dryFireClip;

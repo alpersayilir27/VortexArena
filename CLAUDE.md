@@ -475,14 +475,26 @@ AYRILMAZ** — pack modelleri jenerik adlı (`AR_B`…), hangisinin hangi gerçe
 eşlendi; kimliği taşımak istiyorsan satırın geri kalanını taşı.
 **Saçmalı silah** = satıra `Pellets` yaz (XM1014 6, Nova 9): tek tetik çekişi o kadar ışın atar,
 `Damage` **saçma başınadır** ve isabet eden her saçma ayrı `hit_report` üretir. ⚠️ Menzil kimliğini
-`Range` DEĞİL `BaseSpread` taşır (gerekçe `Docs/Sistem-Ozeti.md` §7, "saçmalının mesafe kimliği"
-maddesi). Tek tek fişek dolduran silahta ayrıca `ReserveMode = "PoolRounds"` yaz (erken reload'da
+`Range` DEĞİL `BaseSpread` taşır ve satıra ayrıca **düşük bir `Headshot`** yazılır (4× çarpan saçma
+BAŞINA uygulandığı için tek saçma anında öldürür); ⚠️ **CS'in saçmalı sayıları arenaya birebir
+kopyalanmaz** ve tablodaki koni açısı iki elle tutuşta yarıya iner — gerekçelerin tamamı
+`Docs/Sistem-Ozeti.md` §7, "saçmalının mesafe kimliği" maddesinde.
+Tek tek fişek dolduran silahta ayrıca `ReserveMode = "PoolRounds"` yaz (erken reload'da
 namludaki fişek yanmasın). `SpareMags` boş bırakılırsa varsayılan kullanılır.
 **Yeni kalibre** = `WeaponKitBuilder.CasingFamilies` sözlüğüne bir satır (kovan prefabı ilk koşuda
 pack'teki mermi modelinden üretilir); ⚠️ aile **görsel** bir ayrımdır, denge kolu değil.
-⚠️ **Ses klipleri yalnız alan
-BOŞSA yazılır** (elle sürüklenen klip korunsun diye): mevcut bir silahın sesini değiştiriyorsan
-önce `WD_*.asset`'teki klip alanlarını boşalt, yoksa değişiklik sessizce inmez. Araç
+⚠️ **Ses klipleri bu tablodan GELMEZ ve araç onlara hiç dokunmaz** — beş klip alanının
+(`fireClips` · `magOutClip` · `magInClip` · `dryFireClip` · `pickupClip`) tek doğruluk kaynağı
+`WD_<Ad>.asset`'in Inspector'ıdır, klip oraya elle sürüklenir (gerekçe haptik alanlarıyla aynı:
+kulakla seçilen şey koda yazılmaz). Sonucu: **yeni silah sessiz doğar** — koşu sonunda
+"Ateş sesi ATANMAMIŞ silahlar" uyarısı onu listeler. ⚠️ **Silaha kendi reload sesi bağlanınca
+tablodaki `Reload` o klibin uzunluğuna çekilir** — tetiği açan tek şey `reloadTime`'dır, ses değil;
+ayrışırsa oyuncu "ses bitti ama sıkamıyorum" hisseder (gerekçe `Docs/Sistem-Ozeti.md` §7).
+⚠️ **Tek tek fişek dolduran silahta
+`perShellReloadAudio` işaretlenir** (o da Inspector'da, araç dokunmaz): `magOutClip` reload boyunca
+şarjör kapasitesi kadar kez çalar, yani oraya bağlanan klip TEK fişeğin sesi olmalıdır — tam reload
+klibi bağlanırsa ses kapasite kadar üst üste biner. ⚠️ Tablodaki `PitchBase`'in 1.00'dan sapması
+yalnız **ödünç klibi maskelemek** içindir; silaha kendi sesi bağlanınca 1.00'a geri alınır. Araç
 `_Shared/Arsenal/Data/WD_*.asset`'i üretir, **mevcut**
 `_Shared/Arsenal/Prefabs/WPN_*.prefab`'ı yerinde günceller ve
 **`_Shared/Data/Resources/WeaponCatalog.asset`**'i tazeler (RemoteShotFx `weaponId`→profil
@@ -492,7 +504,8 @@ altından köke alıyordu, oysa geri tepmenin nişanı da kaldırması `Muzzle`'
 kalmasına bağlı). Yeni gövde mevcut bir `WPN_*` kopyalanarak kurulur: `Model` altındaki pack
 modelini ve `definition`'ı değiştir, sonra aracı çalıştır. Ses/VFX/kovan
 kiti de aynı tablodan (`WeaponSpec`) gelir: silaha özgü ateş/reload/dry-fire klipleri
-(`Assets/Audio/Weapons/SFX_<Ad>_*.wav`), namlu alevi (renk/boyut/ömür/koni açısı) + `MuzzleFlash`
+(silah başına klasör: `Assets/Audio/Weapons/<Ad>/SFX_<Ad>_*`; birden çok silahın paylaştığı klip
+`Weapons/Shared/SFX_Shared_*`), namlu alevi (renk/boyut/ömür/koni açısı) + `MuzzleFlash`
 altında sub-emitter'lı namlu dumanı (`Smoke`), ve kalibreye göre (762x39/556x45) paylaşılan
 `Casing_*.prefab`'a bağlı `ShellEjector` (ateşte kovan fırlatan, `Weapon.Fired`'a abone bileşen —
 `Docs/Sistem-Ozeti.md` §4). ⚠️ **Kovanın çıkış noktası (`Eject`) elle ayarlanır ve araç onu

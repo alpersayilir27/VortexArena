@@ -51,8 +51,6 @@ namespace VortexArena.Core.Editor
         /// <summary>Pack klasörü ileride taşınırsa yalnız bu satır değişir.</summary>
         private const string PackRoot = "Assets/ThirdPartyPackages/Low Poly AR Weapon Pack 1";
 
-        private const string AudioRoot = "Assets/Audio/Weapons";
-
         private const string DataDir = "Assets/_Shared/Arsenal/Data";
         private const string PrefabDir = "Assets/_Shared/Arsenal/Prefabs";
         private const string FxDir = "Assets/_Shared/FX";
@@ -102,7 +100,12 @@ namespace VortexArena.Core.Editor
         private const string Log = "[BuildWeaponPrefabs] ";
 
         // Tüm silahlarda ortak sayılar (tablo başlığındaki varsayılanlar).
-        private const float HeadshotMultiplier = 4f;
+        //
+        // ⚠️ Kafa çarpanı satır bazında EZİLEBİLİR (`WeaponSpec.Headshot`) ve saçmalılarda ezilir:
+        // çarpan saçma BAŞINA uygulandığı için 4×, 26 hasarlı tek bir saçmayı anında öldürücü
+        // yapardı — 9 saçmalık bir konide 8 m'den gelen kaza kurşunu da dahil. CS'te bunu kask
+        // yumuşatıyor, burada zırh YOK.
+        private const float DefaultHeadshotMultiplier = 4f;
 
         // Bölge çarpanları (CS2 modeli): kollar GÖVDE sayılır, yani 1× ayrı bir sabit istemez.
         // ⚠️ Denge sayılarının tek doğruluk kaynağı bu tablodur — WD_*.asset'te Inspector'dan
@@ -145,6 +148,11 @@ namespace VortexArena.Core.Editor
             /// (CS2 modeli): toplam hasar isabet eden saçma sayısından doğar.
             public int Damage;
 
+            /// Kafa vuruşu çarpanı. <b>0 = varsayılan</b>
+            /// (<see cref="DefaultHeadshotMultiplier"/>). Yalnız saçmalılarda doldurulur —
+            /// gerekçe o sabitin yanında.
+            public float Headshot;
+
             public int Rpm;
             public int Magazine;
             public float Reload;
@@ -163,23 +171,27 @@ namespace VortexArena.Core.Editor
             /// yanmaz.
             public string ReserveMode;
 
-            /// Hitscan menzili (metre). ⚠️ Bu bir DENGE kolu DEĞİLDİR: arenaların en uzun
-            /// çatışma mesafesi ~20 m, en kısa menzil bile 28 m — yani hiçbir silah arena
-            /// içinde menzile takılmaz. Sıralama CS'in "range modifier" kimliğini korur
-            /// (uzun namlu daha uzağa) ve daha büyük mekanlar açıldığında anlam kazanır.
-            /// Mesafeyle gerçekten hissedilen fark SAÇILIMDAN gelir (bkz. BaseSpread).
+            /// Hitscan menzili (metre). ⚠️ Bu bir DENGE kolu DEĞİLDİR ve öyle kullanılmaz:
+            /// mesafe duvarı keskindir (bir santim ötede hasar SIFIR), yani sürekli bir eğrinin
+            /// yerini tutamaz — ayarlanacak silah varsa kolu <see cref="BaseSpread"/>'dir.
+            /// Sıralama CS'in "range modifier" kimliğini korur (uzun namlu daha uzağa) ve daha
+            /// büyük mekanlar açıldığında anlam kazanır. Bugünkü band 18-50 m; 12×12 arenanın en
+            /// uzun hattı ~17 m olduğu için duvara pratikte yalnız en kısa menzilli silahlar,
+            /// yalnız daha büyük mekanlarda değer. Mesafeyle gerçekten hissedilen fark
+            /// SAÇILIMDAN gelir (bkz. <see cref="BaseSpread"/>).
             public float Range;
             public float BaseSpread;
             public float BloomPerShot;
             public float MaxBloom;
             public float BloomRecovery;
             public float Kick;
-            public string[] FireClips;
-            public string MagOutClip;
-            public float PitchBase;
-            public float Volume;
 
-            public string DryFireClip;   // artık silaha özel (eskiden paylaşılan DryFireClipName sabiti vardı)
+            /// Ateş sesinin perdesi. ⚠️ 1.00'dan sapma yalnız **ödünç klibi maskelemek** için
+            /// vardır (ör. pompalıya AK sesini kalınlaştırarak vermek): o silaha kendi ses dosyası
+            /// bağlandığında bu değer 1.00'a geri alınır, yoksa gerçek ses yanlış perdeden çalar.
+            public float PitchBase;
+
+            public float Volume;
             public Color FlashColorMin;
             public Color FlashColorMax;
             public float FlashSizeMin;
@@ -199,21 +211,24 @@ namespace VortexArena.Core.Editor
         // "silahın modeli değişsin" demektir — istatistikleri taşımak için satırın geri
         // kalanını taşı, PackPrefab/NetItemId'yi değil.
         //
-        // Denge kaynağı: CS:GO/CS2'de karşılığı olanlar (AK-47, M4A1, FAMAS) doğrudan oradan;
-        // olmayanlar (SCAR-L, G36C) PUBG + gerçek hayat teknik verisinden; M16 CS'te yok,
-        // gerçek M16A4 (uzun namlu, 5.56) üzerinden M4'ün "nişancı" varyantı olarak kuruldu.
+        // Denge kaynağı: CS:GO/CS2'de karşılığı olanlar (AK-47, M4A4/M4A1, FAMAS) doğrudan oradan;
+        // olmayanlar (SCAR-L, G36C) PUBG + gerçek hayat teknik verisinden.
+        //
+        // ⚠️ Reload süresi (`Reload`) silahın reload SESİNİN uzunluğudur: tetiğin açılma anı
+        // (`Weapon.reloadEndTime`) ile ses ve şarjör animasyonu aynı anda bitsin diye. Klip
+        // değişirse bu sayı da değişir — yoksa animasyon erken biter ve oyuncu "bitti ama
+        // sıkamıyorum" hisseder. Kendi reload sesi olmayan silahlarda (AK-47, pompalılar) sayı
+        // denge değeridir ve sesle eşleşmez.
         private static readonly WeaponSpec[] Specs =
         {
-            // AR_A_1 — CS:GO M4A4/M4A1 gövdesi: dengeli, orta geri tepme, en yaygın 5.56.
+            // AR_M — CS:GO M4A4 gövdesi: dengeli, orta geri tepme, en yaygın 5.56.
             new WeaponSpec
             {
-                Name = "M4A1", PackPrefab = "AR_A_1", WeaponId = "m4a1", DisplayName = "M4A1",
+                Name = "M4A4", PackPrefab = "AR_M", WeaponId = "m4a4", DisplayName = "M4A4",
                 NetItemId = 1, HoldMode = "TwoHand",
-                Damage = 33, Rpm = 666, Magazine = 30, Reload = 3.07f,
+                Damage = 33, Rpm = 666, Magazine = 30, Reload = 2.19f,
                 Range = 40f, BaseSpread = 0.50f, BloomPerShot = 0.26f,
                 MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 2.0f, PitchBase = 1.00f, Volume = 1.0f,
-                FireClips = new[] { "SFX_M4A4_Shot_01.wav", "SFX_M4A4_Shot_02.wav" },
-                MagOutClip = "SFX_M4A4_Reload.wav", DryFireClip = "SFX_M4A4_DryFire.wav",
                 FlashColorMin = new Color(1f, 0.92f, 0.72f), FlashColorMax = new Color(1f, 0.65f, 0.32f),
                 FlashSizeMin = 0.035f, FlashSizeMax = 0.065f, FlashLifetime = 0.06f, FlashConeAngle = 24f,
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.25f,
@@ -228,8 +243,6 @@ namespace VortexArena.Core.Editor
                 Damage = 36, Rpm = 600, Magazine = 30, Reload = 2.43f,
                 Range = 45f, BaseSpread = 0.60f, BloomPerShot = 0.32f,
                 MaxBloom = 2.6f, BloomRecovery = 4.0f, Kick = 2.6f, PitchBase = 1.00f, Volume = 1.0f,
-                FireClips = new[] { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" },
-                MagOutClip = "SFX_AK47_Reload.wav", DryFireClip = "SFX_AK47_DryFire.wav",
                 FlashColorMin = new Color(1f, 0.55f, 0.15f), FlashColorMax = new Color(1f, 0.22f, 0.05f),
                 FlashSizeMin = 0.05f, FlashSizeMax = 0.09f, FlashLifetime = 0.09f, FlashConeAngle = 34f,
                 SmokeSizeMin = 0.05f, SmokeSizeMax = 0.09f, SmokeLifetime = 1.4f, SmokeAlpha = 0.35f,
@@ -242,11 +255,9 @@ namespace VortexArena.Core.Editor
             {
                 Name = "SCARL", PackPrefab = "AR_C", WeaponId = "scarl", DisplayName = "SCAR-L",
                 NetItemId = 3, HoldMode = "TwoHand",
-                Damage = 32, Rpm = 625, Magazine = 30, Reload = 2.90f,
+                Damage = 32, Rpm = 625, Magazine = 30, Reload = 2.06f,
                 Range = 38f, BaseSpread = 0.45f, BloomPerShot = 0.20f,
-                MaxBloom = 1.8f, BloomRecovery = 5.0f, Kick = 1.6f, PitchBase = 0.94f, Volume = 1.0f,
-                FireClips = new[] { "SFX_AUG_Shot_01.wav", "SFX_AUG_Shot_02.wav" },
-                MagOutClip = "SFX_AUG_Reload.wav", DryFireClip = "SFX_AUG_DryFire.wav",
+                MaxBloom = 1.8f, BloomRecovery = 5.0f, Kick = 1.6f, PitchBase = 1.00f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.85f, 0.55f), FlashColorMax = new Color(1f, 0.55f, 0.22f),
                 FlashSizeMin = 0.038f, FlashSizeMax = 0.068f, FlashLifetime = 0.065f, FlashConeAngle = 26f,
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.28f,
@@ -258,11 +269,9 @@ namespace VortexArena.Core.Editor
             {
                 Name = "G36C", PackPrefab = "AR_D", WeaponId = "g36c", DisplayName = "G36C",
                 NetItemId = 4, HoldMode = "TwoHand",
-                Damage = 29, Rpm = 750, Magazine = 30, Reload = 2.70f,
+                Damage = 29, Rpm = 750, Magazine = 30, Reload = 2.43f,
                 Range = 28f, BaseSpread = 0.70f, BloomPerShot = 0.30f,
-                MaxBloom = 2.6f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.10f, Volume = 0.95f,
-                FireClips = new[] { "SFX_GALIL_Shot_01.wav", "SFX_GALIL_Shot_02.wav" },
-                MagOutClip = "SFX_GALIL_Reload.wav", DryFireClip = "SFX_GALIL_DryFire.wav",
+                MaxBloom = 2.6f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.00f, Volume = 0.95f,
                 FlashColorMin = new Color(1f, 0.80f, 0.45f), FlashColorMax = new Color(1f, 0.45f, 0.15f),
                 FlashSizeMin = 0.042f, FlashSizeMax = 0.075f, FlashLifetime = 0.07f, FlashConeAngle = 28f,
                 SmokeSizeMin = 0.04f, SmokeSizeMax = 0.07f, SmokeLifetime = 1.1f, SmokeAlpha = 0.30f,
@@ -275,29 +284,24 @@ namespace VortexArena.Core.Editor
             {
                 Name = "FAMAS", PackPrefab = "AR_E", WeaponId = "famas", DisplayName = "FAMAS",
                 NetItemId = 5, HoldMode = "TwoHand",
-                Damage = 30, Rpm = 666, Magazine = 25, Reload = 3.30f,
+                Damage = 30, Rpm = 666, Magazine = 25, Reload = 2.38f,
                 Range = 32f, BaseSpread = 0.65f, BloomPerShot = 0.28f,
                 MaxBloom = 2.4f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.03f, Volume = 1.0f,
-                FireClips = new[] { "SFX_FAMAS_Shot_01.wav", "SFX_FAMAS_Shot_02.wav" },
-                MagOutClip = "SFX_FAMAS_Reload.wav", DryFireClip = "SFX_FAMAS_DryFire.wav",
                 FlashColorMin = new Color(1f, 0.88f, 0.58f), FlashColorMax = new Color(1f, 0.52f, 0.18f),
                 FlashSizeMin = 0.03f, FlashSizeMax = 0.055f, FlashLifetime = 0.06f, FlashConeAngle = 20f,
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.28f,
                 CasingFamily = "556x45",
             },
-            // AR_A_2 — M16 (SUSTURUCUSUZ): CS'te karşılığı yok, gerçek M16A4 üzerinden kuruldu.
-            // 20" namlu = en dar taban saçılım + en uzun menzil, bedeli en hızlı bozulan seri
-            // atış (en yüksek bloom, en yavaş toparlanma) ve en uzun reload. Tek tek nişan alana
-            // ödül, tarayana ceza. Ses M4 ailesiyle ORTAK ama pitch düşük — aynı silah, uzun namlu.
+            // AR_A_1 — M4A1: M4A4'ün "nişancı" varyantı. En dar taban saçılım + en uzun menzil,
+            // bedeli en hızlı bozulan seri atış (en yüksek bloom, en yavaş toparlanma). Tek tek
+            // nişan alana ödül, tarayana ceza. Reload sesi M4A4 ile ORTAK ama pitch düşük.
             new WeaponSpec
             {
-                Name = "M16", PackPrefab = "AR_A_2", WeaponId = "m16", DisplayName = "M16",
+                Name = "M4A1", PackPrefab = "AR_A_1", WeaponId = "m4a1", DisplayName = "M4A1",
                 NetItemId = 6, HoldMode = "TwoHand",
-                Damage = 31, Rpm = 700, Magazine = 30, Reload = 3.40f,
+                Damage = 31, Rpm = 700, Magazine = 30, Reload = 2.19f,
                 Range = 50f, BaseSpread = 0.35f, BloomPerShot = 0.34f,
                 MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.3f, PitchBase = 0.93f, Volume = 1.0f,
-                FireClips = new[] { "SFX_M4A4_Shot_01.wav", "SFX_M4A4_Shot_02.wav" },
-                MagOutClip = "SFX_M4A4_Reload.wav", DryFireClip = "SFX_M4A4_DryFire.wav",
                 FlashColorMin = new Color(1f, 0.90f, 0.74f), FlashColorMax = new Color(0.95f, 0.60f, 0.28f),
                 FlashSizeMin = 0.032f, FlashSizeMax = 0.058f, FlashLifetime = 0.062f, FlashConeAngle = 19f,
                 SmokeSizeMin = 0.032f, SmokeSizeMax = 0.055f, SmokeLifetime = 0.95f, SmokeAlpha = 0.26f,
@@ -311,11 +315,9 @@ namespace VortexArena.Core.Editor
             {
                 Name = "AUG", PackPrefab = "AR_O", WeaponId = "aug", DisplayName = "AUG",
                 NetItemId = 7, HoldMode = "TwoHand",
-                Damage = 28, Rpm = 666, Magazine = 30, Reload = 3.80f,
+                Damage = 28, Rpm = 666, Magazine = 30, Reload = 2.19f,
                 Range = 46f, BaseSpread = 0.42f, BloomPerShot = 0.22f,
                 MaxBloom = 2.0f, BloomRecovery = 4.8f, Kick = 1.7f, PitchBase = 0.98f, Volume = 1.0f,
-                FireClips = new[] { "SFX_AUG_Shot_01.wav", "SFX_AUG_Shot_02.wav" },
-                MagOutClip = "SFX_AUG_Reload.wav", DryFireClip = "SFX_AUG_DryFire.wav",
                 FlashColorMin = new Color(1f, 0.87f, 0.60f), FlashColorMax = new Color(1f, 0.58f, 0.24f),
                 FlashSizeMin = 0.033f, FlashSizeMax = 0.060f, FlashLifetime = 0.062f, FlashConeAngle = 22f,
                 SmokeSizeMin = 0.034f, SmokeSizeMax = 0.058f, SmokeLifetime = 1.0f, SmokeAlpha = 0.27f,
@@ -328,11 +330,9 @@ namespace VortexArena.Core.Editor
             {
                 Name = "GALIL", PackPrefab = "AR_L", WeaponId = "galilar", DisplayName = "Galil AR",
                 NetItemId = 8, HoldMode = "TwoHand",
-                Damage = 30, Rpm = 666, Magazine = 35, Reload = 3.00f, SpareMags = 2,
+                Damage = 30, Rpm = 666, Magazine = 35, Reload = 2.25f, SpareMags = 2,
                 Range = 44f, BaseSpread = 0.62f, BloomPerShot = 0.34f,
                 MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.5f, PitchBase = 1.02f, Volume = 1.0f,
-                FireClips = new[] { "SFX_GALIL_Shot_01.wav", "SFX_GALIL_Shot_02.wav" },
-                MagOutClip = "SFX_GALIL_Reload.wav", DryFireClip = "SFX_GALIL_DryFire.wav",
                 FlashColorMin = new Color(1f, 0.78f, 0.42f), FlashColorMax = new Color(1f, 0.42f, 0.12f),
                 FlashSizeMin = 0.045f, FlashSizeMax = 0.082f, FlashLifetime = 0.075f, FlashConeAngle = 30f,
                 SmokeSizeMin = 0.042f, SmokeSizeMax = 0.072f, SmokeLifetime = 1.2f, SmokeAlpha = 0.32f,
@@ -344,11 +344,9 @@ namespace VortexArena.Core.Editor
             {
                 Name = "P90", PackPrefab = "SMG_O", WeaponId = "p90", DisplayName = "P90",
                 NetItemId = 9, HoldMode = "TwoHand",
-                Damage = 26, Rpm = 857, Magazine = 50, Reload = 3.40f, SpareMags = 2,
+                Damage = 26, Rpm = 857, Magazine = 50, Reload = 2.80f, SpareMags = 2,
                 Range = 24f, BaseSpread = 0.85f, BloomPerShot = 0.24f,
-                MaxBloom = 2.6f, BloomRecovery = 5.5f, Kick = 1.2f, PitchBase = 1.28f, Volume = 0.92f,
-                FireClips = new[] { "SFX_M4A1S_Shot_01.wav", "SFX_M4A1S_Shot_02.wav" },
-                MagOutClip = "SFX_M4A1S_Reload.wav", DryFireClip = "SFX_M4A1S_DryFire.wav",
+                MaxBloom = 2.6f, BloomRecovery = 5.5f, Kick = 1.2f, PitchBase = 1.00f, Volume = 0.92f,
                 FlashColorMin = new Color(1f, 0.90f, 0.68f), FlashColorMax = new Color(1f, 0.62f, 0.28f),
                 FlashSizeMin = 0.026f, FlashSizeMax = 0.048f, FlashLifetime = 0.05f, FlashConeAngle = 26f,
                 SmokeSizeMin = 0.028f, SmokeSizeMax = 0.048f, SmokeLifetime = 0.85f, SmokeAlpha = 0.22f,
@@ -360,11 +358,9 @@ namespace VortexArena.Core.Editor
             {
                 Name = "MP9", PackPrefab = "SMG_M", WeaponId = "mp9", DisplayName = "MP9",
                 NetItemId = 10, HoldMode = "TwoHand",
-                Damage = 26, Rpm = 857, Magazine = 30, Reload = 2.10f, SpareMags = 4,
+                Damage = 26, Rpm = 857, Magazine = 30, Reload = 2.14f, SpareMags = 4,
                 Range = 18f, BaseSpread = 0.90f, BloomPerShot = 0.26f,
-                MaxBloom = 2.8f, BloomRecovery = 5.8f, Kick = 1.1f, PitchBase = 1.38f, Volume = 0.90f,
-                FireClips = new[] { "SFX_M4A1S_Shot_01.wav", "SFX_M4A1S_Shot_02.wav" },
-                MagOutClip = "SFX_M4A1S_Reload.wav", DryFireClip = "SFX_M4A1S_DryFire.wav",
+                MaxBloom = 2.8f, BloomRecovery = 5.8f, Kick = 1.1f, PitchBase = 1.00f, Volume = 0.90f,
                 FlashColorMin = new Color(1f, 0.92f, 0.72f), FlashColorMax = new Color(1f, 0.66f, 0.32f),
                 FlashSizeMin = 0.024f, FlashSizeMax = 0.044f, FlashLifetime = 0.048f, FlashConeAngle = 28f,
                 SmokeSizeMin = 0.026f, SmokeSizeMax = 0.045f, SmokeLifetime = 0.8f, SmokeAlpha = 0.20f,
@@ -377,49 +373,60 @@ namespace VortexArena.Core.Editor
             {
                 Name = "UMP45", PackPrefab = "SMG_L", WeaponId = "ump45", DisplayName = "UMP-45",
                 NetItemId = 11, HoldMode = "TwoHand",
-                Damage = 35, Rpm = 666, Magazine = 25, Reload = 3.50f, SpareMags = 4,
+                Damage = 35, Rpm = 666, Magazine = 25, Reload = 2.14f, SpareMags = 4,
                 Range = 22f, BaseSpread = 0.75f, BloomPerShot = 0.30f,
-                MaxBloom = 2.6f, BloomRecovery = 4.6f, Kick = 1.9f, PitchBase = 1.18f, Volume = 0.96f,
-                FireClips = new[] { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" },
-                MagOutClip = "SFX_AK47_Reload.wav", DryFireClip = "SFX_AK47_DryFire.wav",
+                MaxBloom = 2.6f, BloomRecovery = 4.6f, Kick = 1.9f, PitchBase = 1.00f, Volume = 0.96f,
                 FlashColorMin = new Color(1f, 0.72f, 0.34f), FlashColorMax = new Color(1f, 0.38f, 0.10f),
                 FlashSizeMin = 0.032f, FlashSizeMax = 0.058f, FlashLifetime = 0.058f, FlashConeAngle = 30f,
                 SmokeSizeMin = 0.032f, SmokeSizeMax = 0.055f, SmokeLifetime = 1.0f, SmokeAlpha = 0.26f,
                 CasingFamily = "9x19",
             },
-            // ShotGun_C — CS2 XM1014: SAÇMA BAŞINA 20 hasar × 6 saçma / 171 rpm / 7 fişek /
-            // 0.70 range modifier. Yarı otomatik: Nova'dan hızlı ve daha affedici, tek atışı zayıf.
+            // ShotGun_C — CS2 XM1014 gövdesi: 171 rpm / 7 fişek. Yarı otomatik: Nova'dan hızlı ve
+            // daha affedici, tek atışı zayıf.
             // ⚠️ Reload süresi CS'te fişek fişektir; burada tam şarjörün TOPLAM süresi yazılır
             // (fişek fişek dolum modellenmiyor) — bunun karşılığı `PoolRounds`: erken reload'da
             // namludaki fişek yanmaz.
+            // ⚠️ Hasar ve saçılım CS'ten SAPAR (CS: 20 hasar, ~5° koni, 0.70 range modifier) ve
+            // sapmanın sebebi arena ölçeğidir — gerekçe aşağıdaki NOVA satırında, tek yerde.
             new WeaponSpec
             {
                 Name = "XM1014", PackPrefab = "ShotGun_C", WeaponId = "xm1014", DisplayName = "XM1014",
                 NetItemId = 12, HoldMode = "TwoHand",
-                Damage = 20, Rpm = 171, Magazine = 7, Reload = 4.50f, Pellets = 6,
+                Damage = 10, Headshot = 2f, Rpm = 171, Magazine = 7, Reload = 4.50f, Pellets = 6,
                 SpareMags = 4, ReserveMode = "PoolRounds",
-                Range = 26f, BaseSpread = 5.0f, BloomPerShot = 0.60f,
-                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 3.2f, PitchBase = 0.72f, Volume = 1.0f,
-                FireClips = new[] { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" },
-                MagOutClip = "SFX_AK47_Reload.wav", DryFireClip = "SFX_AK47_DryFire.wav",
+                Range = 26f, BaseSpread = 10.0f, BloomPerShot = 0.60f,
+                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 3.2f, PitchBase = 1.00f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.72f, 0.30f), FlashColorMax = new Color(1f, 0.32f, 0.06f),
                 FlashSizeMin = 0.075f, FlashSizeMax = 0.130f, FlashLifetime = 0.10f, FlashConeAngle = 46f,
                 SmokeSizeMin = 0.075f, SmokeSizeMax = 0.125f, SmokeLifetime = 1.7f, SmokeAlpha = 0.42f,
                 CasingFamily = "12gauge",
             },
-            // ShotGun_B — CS2 Nova: SAÇMA BAŞINA 26 hasar × 9 saçma / 68 rpm / 8 fişek /
-            // 0.70 range modifier. Pompalı: yakında tek atışta öldürür (9 × 26 = 234), ıskalarsa
-            // bir sonraki atış çok geç gelir.
+            // ShotGun_B — CS2 Nova gövdesi: 68 rpm / 8 fişek. Pompalı: temas mesafesinde tek atışta
+            // öldürür, ıskalarsa bir sonraki atış çok geç gelir.
+            //
+            // ⚠️ SAÇMALILARIN DENGE SAYILARI CS'TEN BİLİNÇLİ SAPAR (Nova'da CS: 26 hasar, ~6° koni,
+            // 0.70 range modifier; burada 13 hasar, 12° koni, mesafe eğrisi yok). Sebep ARENA
+            // ÖLÇEĞİDİR ve CS'in eğrisini eklemek bunu çözmez: CS'in pompalısı "3 m ender bir
+            // mesafedir" varsayımıyla ayarlıdır (0.70 katsayısı ~9.5 m'de bir işler), oysa 12×12
+            // free-roam arenada en uzun hat ~17 m — yani CS formülü Nova'yı arenanın öbür ucunda
+            // ancak yarıya indirir, temas mesafesindeki hasara hiç dokunmaz. Hasarın mesafeyle
+            // hissedilmesini burada SAÇILIM sağlıyor (Docs/Sistem-Ozeti.md §7): koni büyüdükçe
+            // gövdeye değen saçma sayısı düşüyor, yani sayıların ayarlandığı yer taban hasar +
+            // koni açısıdır. ⚠️ `Range` bu ayarın kolu DEĞİLDİR (alanın kendi notuna bak): keskin
+            // bir mesafe duvarı, sürekli bir eğrinin yerini tutmaz.
+            //
+            // ⚠️ TABLODAKİ DERECE TEK ELLEDİR: iki elle tutulan silahta `twoHandSpreadMultiplier`
+            // (0.45) ile ÇARPILIR, yani buradaki 12° sahada 5.4°'lik bir koni demektir. Pompalı
+            // tanım gereği iki elle tutulduğu için saçmalı satırlarda GERÇEK değer daima yarıdır —
+            // koni açısını tabloya bakarak tahmin etmek, silahı iki kat dar sanmaktır.
             new WeaponSpec
             {
                 Name = "NOVA", PackPrefab = "ShotGun_B", WeaponId = "nova", DisplayName = "Nova",
                 NetItemId = 13, HoldMode = "TwoHand",
-                Damage = 26, Rpm = 68, Magazine = 8, Reload = 5.00f, Pellets = 9,
+                Damage = 13, Headshot = 2f, Rpm = 68, Magazine = 8, Reload = 5.00f, Pellets = 9,
                 SpareMags = 4, ReserveMode = "PoolRounds",
-                Range = 25f, BaseSpread = 6.0f, BloomPerShot = 0.60f,
-                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 4.0f, PitchBase = 0.66f, Volume = 1.0f,
-                FireClips = new[] { "SFX_AK47_Shot_01.wav", "SFX_AK47_Shot_02.wav" },
-                MagOutClip = "SFX_AK47_Reload.wav", DryFireClip = "SFX_AK47_DryFire.wav",
+                Range = 25f, BaseSpread = 12.0f, BloomPerShot = 0.60f,
+                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 4.0f, PitchBase = 1.00f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.68f, 0.26f), FlashColorMax = new Color(1f, 0.28f, 0.05f),
                 FlashSizeMin = 0.085f, FlashSizeMax = 0.150f, FlashLifetime = 0.115f, FlashConeAngle = 50f,
                 SmokeSizeMin = 0.085f, SmokeSizeMax = 0.140f, SmokeLifetime = 1.9f, SmokeAlpha = 0.46f,
@@ -544,6 +551,7 @@ namespace VortexArena.Core.Editor
                           _warnings + " uyarı.");
 
                 ReportUnbakedWeapons();
+                ReportSilentWeapons(defs);
             }
             finally
             {
@@ -605,7 +613,8 @@ namespace VortexArena.Core.Editor
             SetNumber(so, "netItemId", spec.NetItemId, ctx);
             SetEnumByName(so, "holdMode", spec.HoldMode, ctx);
             SetNumber(so, "damage", spec.Damage, ctx);
-            SetNumber(so, "headshotMultiplier", HeadshotMultiplier, ctx);
+            SetNumber(so, "headshotMultiplier",
+                spec.Headshot > 0f ? spec.Headshot : DefaultHeadshotMultiplier, ctx);
             SetNumber(so, "stomachMultiplier", StomachMultiplier, ctx);
             SetNumber(so, "legMultiplier", LegMultiplier, ctx);
             SetNumber(so, "fireRateRpm", spec.Rpm, ctx);
@@ -623,14 +632,14 @@ namespace VortexArena.Core.Editor
             SetEnumByName(so, "reserveMode",
                 string.IsNullOrEmpty(spec.ReserveMode) ? DefaultReserveModeName : spec.ReserveMode, ctx);
             SetNumber(so, "reloadTime", spec.Reload, ctx);
-            // Ses klipleri YALNIZ boşsa doldurulur — WD_<Ad>.asset'te Inspector'dan elle
-            // sürüklenen bir klip varsa bu araç bir daha çalıştırılsa da SİLİNMEZ/EZİLMEZ.
-            // Sesi değiştirmek için: Assets/_Shared/Arsenal/Data/WD_<Ad>.asset'i seç, ilgili
-            // alana (Fire Clips / Mag Out Clip / Dry Fire Clip) yeni bir AudioClip sürükle.
-            SetClipArrayIfEmpty(so, "fireClips", spec.FireClips, ctx);
-            SetObjectRefIfEmpty(so, "magOutClip", LoadClip(spec.MagOutClip, ctx), ctx);
-            SetObjectRefIfEmpty(so, "dryFireClip", LoadClip(spec.DryFireClip, ctx), ctx);
-            // magInClip / pickupClip: spec'te karşılığı yok — hiç dokunulmaz (elle atanmışsa kalır).
+            // ⚠️ SES KLİPLERİ BU TABLODAN GELMEZ ve bu araç onlara HİÇ dokunmaz — beş klip alanının
+            // (fireClips · magOutClip · magInClip · dryFireClip · pickupClip) tek doğruluk kaynağı
+            // WD_<Ad>.asset'in Inspector'ıdır, klip oraya elle sürüklenir.
+            // Gerekçe haptik alanlarınınkiyle aynıdır (aşağı bak): ses kulakla seçilen bir şeydir,
+            // dosya adını koda yazmak onu iki yerden yönetilir yapar. Tabloda tutulduğunda kural
+            // "yalnız alan boşsa yaz" olmak zorundaydı — yani bir sesi değiştirmek için önce
+            // asset'teki alanı boşaltmak gerekiyordu ve bunu bilmeyen "değişiklik inmedi" sanıyordu.
+            // Bedeli: yeni silah SESSİZ doğar. Onu ReportSilentWeapons koşu sonunda listeler.
             SetNumber(so, "firePitchBase", spec.PitchBase, ctx);
             SetNumber(so, "firePitchJitter", PitchJitter, ctx);
             SetNumber(so, "fireVolume", spec.Volume, ctx);
@@ -826,13 +835,28 @@ namespace VortexArena.Core.Editor
         /// Kovan prefabı yoksa üretir (varsa dokunmaz): pack'teki mermi modelini
         /// unpack eder, küçük bir Rigidbody + bounds'a göre BoxCollider ekler.
         /// Fiziksel doğruluk hedeflenmez — kısa ömürlü, havuzlanan bir FX objesidir.
+        /// <para>⚠️ <b>"Varsa dokunmaz" YETMEZ, mevcut olanın SAĞLAM olduğu da doğrulanır.</b>
+        /// Kovan prefabı pack modelinden unpack edilir, yani mesh'i pack'in FBX'ine bir referanstır;
+        /// pack klasörü taşındığında (ya da FBX yeni kimlikle yeniden import edildiğinde) o referans
+        /// kopar ve prefab <b>mesh'siz</b> kalır. Belirti sinsi: kovan fırlar, fizik çalışır, hata
+        /// basılmaz — sadece <b>çizilmez</b>, yani "kovan çıkmıyor" diye okunur. Koşulsuz erken
+        /// dönülürse araç o prefabı bir daha hiç onarmaz; kırık asset her koşuda sağlam sayılır.
+        /// Tek ipucu Project penceresindeki önizlemenin jenerik mavi küpe dönmesidir.</para>
         /// </summary>
         private static GameObject EnsureCasingPrefab(string path, string sourcePackPath, List<GameObject> live)
         {
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (existing != null)
             {
-                return existing;
+                if (HasRenderableMesh(existing))
+                {
+                    return existing;
+                }
+
+                // Kırık: aşağıdaki üretim yolu aynı yolun ÜSTÜNE yazar. SaveAsPrefabAsset asset
+                // GUID'ini korur, yani WPN prefablarındaki casingPrefab bağları kopmaz.
+                Warn("Kovan prefabı '" + path + "' mesh'siz (pack taşınmış olabilir) — " +
+                     "kaynaktan yeniden üretiliyor.");
             }
 
             var sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePackPath);
@@ -865,6 +889,24 @@ namespace VortexArena.Core.Editor
             }
 
             return AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        }
+
+        /// <summary>
+        /// Prefabın çizilebilir en az bir mesh'i var mı: <c>MeshFilter</c> zinciri kopmuşsa
+        /// (mesh <c>null</c>) obje sahnede vardır, fiziği çalışır ama GÖRÜNMEZ.
+        /// </summary>
+        private static bool HasRenderableMesh(GameObject go)
+        {
+            var filters = go.GetComponentsInChildren<MeshFilter>(true);
+            for (int i = 0; i < filters.Length; i++)
+            {
+                if (filters[i].sharedMesh != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -1371,62 +1413,6 @@ namespace VortexArena.Core.Editor
             p.objectReferenceValue = value;
         }
 
-        /// <summary>
-        /// <see cref="SetClipArray"/> gibi ama dizi zaten AYNI UZUNLUKTA ve TAMAMEN DOLUYSA
-        /// dokunmaz — kullanıcının Inspector'dan elle seçtiği klipler korunur.
-        /// </summary>
-        private static void SetClipArrayIfEmpty(SerializedObject so, string field, string[] clipNames, string ctx)
-        {
-            SerializedProperty p = FindProp(so, field, ctx);
-            if (p == null)
-            {
-                return;
-            }
-
-            if (!p.isArray)
-            {
-                Warn(ctx + ": '" + field + "' dizi değil.");
-                return;
-            }
-
-            bool alreadyFilled = p.arraySize == clipNames.Length;
-            for (int i = 0; alreadyFilled && i < p.arraySize; i++)
-            {
-                if (p.GetArrayElementAtIndex(i).objectReferenceValue == null)
-                {
-                    alreadyFilled = false;
-                }
-            }
-
-            if (alreadyFilled)
-            {
-                return; // elle atanmış — dokunma
-            }
-
-            p.arraySize = clipNames.Length;
-            for (int i = 0; i < clipNames.Length; i++)
-            {
-                p.GetArrayElementAtIndex(i).objectReferenceValue = LoadClip(clipNames[i], ctx);
-            }
-        }
-
-        /// <summary>AudioRoot altından klip yükler; ad null ise sessizce null döner.</summary>
-        private static AudioClip LoadClip(string fileName, string ctx)
-        {
-            if (string.IsNullOrEmpty(fileName))
-            {
-                return null;
-            }
-
-            string path = AudioRoot + "/" + fileName;
-            var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
-            if (clip == null)
-            {
-                Warn(ctx + ": ses dosyası yok: " + path);
-            }
-
-            return clip;
-        }
 
         /// <summary>
         /// Namlu alevi/duman/kovan kitini bir WPN kökü üzerinde kurar
@@ -1735,6 +1721,49 @@ namespace VortexArena.Core.Editor
         /// basılan satırlar aralarında kaybolurdu. Asıl mesele "hangi silahlar eksik" sorusunun tek
         /// bakışta görünmesi.</para>
         /// </summary>
+        /// <summary>
+        /// Ateş sesi atanmamış silahları tek uyarıda listeler. ⚠️ Bu rapor ŞART: klipler bu araçtan
+        /// gelmediği için (bkz. <see cref="EnsureDefinition"/>) yeni bir silah <b>sessiz</b> doğar ve
+        /// belirtisi yalnız "ateş sesi duyulmuyor"dur — hiçbir yerde hata basılmaz.
+        /// </summary>
+        private static void ReportSilentWeapons(WeaponDefinition[] defs)
+        {
+            var silent = new List<string>();
+            for (int i = 0; i < defs.Length; i++)
+            {
+                if (defs[i] == null)
+                {
+                    continue;
+                }
+
+                AudioClip[] clips = defs[i].FireClips;
+                bool hasAny = false;
+                for (int c = 0; clips != null && c < clips.Length; c++)
+                {
+                    if (clips[c] != null)
+                    {
+                        hasAny = true;
+                        break;
+                    }
+                }
+
+                if (!hasAny)
+                {
+                    silent.Add(defs[i].name);
+                }
+            }
+
+            if (silent.Count == 0)
+            {
+                return;
+            }
+
+            Debug.LogWarning(Log + "Ateş sesi ATANMAMIŞ silahlar: " + string.Join(", ", silent) +
+                             ". Bu silahlar sessiz ateş eder. Düzeltme: Assets/_Shared/Arsenal/Data/" +
+                             "WD_<Ad>.asset'i seç ve Fire Clips / Mag Out Clip / Dry Fire Clip / " +
+                             "Pickup Clip alanlarına klip sürükle (klipler bu araçtan gelmez).");
+        }
+
         private static void ReportUnbakedWeapons()
         {
             if (_unbakedWeapons.Count == 0)
