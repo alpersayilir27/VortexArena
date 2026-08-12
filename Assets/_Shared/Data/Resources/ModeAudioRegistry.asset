@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a42deed9737d98743be0b95a20e524e7, type: 3}
+  m_Name: ModeAudioRegistry
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Audio.ModeAudioRegistry
+  rules:
+  - modeId: 
+    sceneName: 
+    trigger: 0
+    clips:
+    - {fileID: 8300000, guid: 39676e7217468394c9ac712044057eff, type: 3}
+    - {fileID: 8300000, guid: 133fb915f3f366e4e81b95cbcf1e9e70, type: 3}
+    - {fileID: 8300000, guid: 9a83ade5412763c4db3face8ca6b048d, type: 3}
+    volume: 1
+    warningSeconds: 5
+  - modeId: tournament
+    sceneName: 
+    trigger: 1
+    clips:
+    - {fileID: 8300000, guid: d5d3648d32213874b984af2af1a46844, type: 3}
+    volume: 1
+    warningSeconds: 5
+  - modeId: 
+    sceneName: 
+    trigger: 2
+    clips:
+    - {fileID: 8300000, guid: d5d3648d32213874b984af2af1a46844, type: 3}
+    volume: 1
+    warningSeconds: 5

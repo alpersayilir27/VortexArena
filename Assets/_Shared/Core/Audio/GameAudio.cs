@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using VortexArena.Core.Combat;
 using VortexArena.Net;
 using VortexArena.Protocol;
@@ -26,6 +27,11 @@ namespace VortexArena.Core.Audio
     /// Yeni bir ses eklemek: <see cref="GameSoundId"/>'ye SONA bir değer +
     /// <see cref="GameSoundBank"/>'e bir alan + tetikleyen yerde <see cref="Play"/>.
     /// </para>
+    /// <para>
+    /// <b>Moda/haritaya göre değişen</b> sesler bankadan DEĞİL
+    /// <see cref="ModeAudioRegistry"/>'den gelir ve <see cref="PlayModeEvent"/> ile çalar.
+    /// Aynı an için ikisi de doluysa <b>kayıt bankayı ezer</b> — sesler üst üste binmesin.
+    /// </para>
     /// </summary>
     [DisallowMultipleComponent]
     public class GameAudio : MonoBehaviour
@@ -38,6 +44,13 @@ namespace VortexArena.Core.Audio
         /// <summary>Son bilinen faz — <c>match_state</c> tekrar tekrar geldiği için sesin yalnız
         /// GEÇİŞTE çalması buna bağlı.</summary>
         private string _lastPhase = "";
+
+        /// <summary>Bir önceki <c>match_state</c>'in kalan süresi; <c>-1</c> = henüz örnek yok.
+        /// Uyarı sesi eşiğin GEÇİLDİĞİ örnekte çalsın diye tutulur.</summary>
+        private float _lastTimeRemaining = -1f;
+
+        /// <summary>Süre uyarısı bu tur/maç için çaldı mı — her <c>playing</c> geçişinde sıfırlanır.</summary>
+        private bool _warningFired;
 
         /// <summary>Tüm duyuru seslerinin ortak çarpanı (0..1).</summary>
         public float MasterVolume
@@ -56,6 +69,19 @@ namespace VortexArena.Core.Audio
             {
                 Instance.PlayInternal(id, volumeScale);
             }
+        }
+
+        /// <summary>
+        /// Moda/haritaya özel sesi çalar: <see cref="ModeAudioRegistry"/>'de aktif mod + aktif
+        /// sahne için o tetikleyiciye yazılmış kural varsa kliplerinden biri rastgele seçilir.
+        /// <para>Dönüş <c>false</c> = o an için kural/klip yok (çağıran isterse ortak bankaya
+        /// düşebilir). Tekil henüz yoksa da <c>false</c> döner.</para>
+        /// </summary>
+        public static bool PlayModeEvent(ModeAudioEvent trigger)
+        {
+            return Instance != null &&
+                   TryResolve(trigger, out ModeAudioRegistry.Rule rule) &&
+                   Instance.PlayRule(rule);
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -167,22 +193,109 @@ namespace VortexArena.Core.Audio
             }
 
             string phase = msg.phase ?? "";
-            if (string.Equals(phase, _lastPhase, StringComparison.Ordinal))
+            bool playing = string.Equals(phase, ArenaProtocol.PHASE_PLAYING, StringComparison.Ordinal);
+
+            if (!string.Equals(phase, _lastPhase, StringComparison.Ordinal))
+            {
+                // ⚠️ İlk mesajda (_lastPhase boş) ses çalınmaz: koşan bir maça sonradan bağlanan
+                // başlık "maç başladı" duymamalı.
+                bool started = _lastPhase.Length > 0 && playing;
+                _lastPhase = phase;
+
+                if (started)
+                {
+                    // Tur tabanlı modda her tur buradan geçer → uyarı her tur yeniden kurulur.
+                    _warningFired = false;
+                    _lastTimeRemaining = -1f;
+
+                    // Moda/haritaya özel giriş sesi ortak bankayı EZER (üst üste binmesin).
+                    if (!PlayModeEvent(ModeAudioEvent.RoundStart))
+                    {
+                        Play(GameSoundId.MatchStart);
+                    }
+                }
+            }
+
+            if (playing)
+            {
+                TickTimeWarning(msg.timeRemaining);
+            }
+        }
+
+        /// <summary>
+        /// Kalan süre uyarı eşiğini geçtiğinde sesi bir kez çalar. Süre <b>sunucu otoritesidir</b>
+        /// ve <c>match_state</c> ile 1 Hz gelir; burada yalnız okunur, istemcide sayaç işletilmez.
+        /// </summary>
+        private void TickTimeWarning(float timeRemaining)
+        {
+            float previous = _lastTimeRemaining;
+            _lastTimeRemaining = timeRemaining;
+
+            // İlk örnekte eşik "geçilmiş" sayılmaz: son saniyelerinde bir maça bağlanan başlık
+            // durduk yere "son 5 saniye" duymamalı.
+            if (_warningFired || previous < 0f)
             {
                 return;
             }
 
-            // ⚠️ İlk mesajda (_lastPhase boş) ses çalınmaz: koşan bir maça sonradan bağlanan
-            // başlık "maç başladı" duymamalı.
-            bool started = _lastPhase.Length > 0 &&
-                           string.Equals(phase, ArenaProtocol.PHASE_PLAYING, StringComparison.Ordinal);
-
-            _lastPhase = phase;
-
-            if (started)
+            if (!TryResolveWarning(out ModeAudioRegistry.Rule rule))
             {
-                Play(GameSoundId.MatchStart);
+                return;
             }
+
+            // 1 Hz örneklemede eşik saniyesi ~N.0 olarak gelir; yarım saniyelik pay o örneği
+            // kaçırıp uyarıyı bir saniye geç çalmamak içindir.
+            float threshold = rule.WarningSeconds + 0.5f;
+            if (previous > threshold && timeRemaining <= threshold)
+            {
+                _warningFired = true;
+                PlayRule(rule);
+            }
+        }
+
+        /// <summary>
+        /// Süre uyarısının kuralı: önce tur, sonra maç. <b>Modun tur tabanlı olup olmadığını
+        /// KAYIT söyler</b>, <c>modeState</c> değil — modun ara durumunu çekirdek yorumlamaz
+        /// (Docs/ArenaNet-Protokol.md §10.1).
+        /// </summary>
+        private static bool TryResolveWarning(out ModeAudioRegistry.Rule rule)
+        {
+            return TryResolve(ModeAudioEvent.RoundEndWarning, out rule) ||
+                   TryResolve(ModeAudioEvent.MatchEndWarning, out rule);
+        }
+
+        /// <summary>Aktif mod + aktif sahne için kuralı çözer.</summary>
+        private static bool TryResolve(ModeAudioEvent trigger, out ModeAudioRegistry.Rule rule)
+        {
+            ModeAudioRegistry registry = ModeAudioRegistry.Load();
+            if (registry == null)
+            {
+                rule = null;
+                return false;
+            }
+
+            return registry.TryResolve(trigger, ModeRuntime.ModeId,
+                SceneManager.GetActiveScene().name, out rule);
+        }
+
+        /// <summary>
+        /// Kuralın kliplerinden birini çalar; klip yoksa <c>false</c>.
+        /// <para>⚠️ Çalmadan önce duyuru kanalı <b>susturulur</b>: bunlar konuşma replikleri ve
+        /// üst üste binen iki replik ikisini birden anlaşılmaz kılar — son duyuru kazanır.
+        /// (Bir istemcide aynı anda iki replik doğuramaz; bu, kuralı yapısal kılan bir emniyet.
+        /// Aynı odada çalan İKİ İSTEMCİ'nin sesi buradan engellenemez.)</para>
+        /// </summary>
+        private bool PlayRule(ModeAudioRegistry.Rule rule)
+        {
+            AudioClip clip = rule != null ? rule.PickClip() : null;
+            if (clip == null || _source == null)
+            {
+                return false;
+            }
+
+            _source.Stop();
+            _source.PlayOneShot(clip, Mathf.Clamp01(rule.Volume * _masterVolume));
+            return true;
         }
 
         private void HandleMatchEnd(MatchEndMsg msg)

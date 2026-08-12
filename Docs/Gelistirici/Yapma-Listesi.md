@@ -181,6 +181,18 @@ Bileşeni kapatmak görsel taban şeridini ekranda bırakır. Gizlemen gerekiyor
 `IsPlayerInside` donar — açık sayılsaydı oyuncu bölgeye girse de hiç canlanamazdı (sunucuda
 kendiliğinden işleyen bir emniyet ağı yok; geriye kalan tek çare operatörün elle canlandırmasıdır).
 
+### ⛔ Taban bölgesinin boyutunu sayı alanıyla ayarlamaya çalışma
+
+`BaseZone`'da ölçü alanı YOKTUR: algılama alanı **altındaki şeridin kapladığı dikdörtgendir**
+(bölgenin kendi yerel XZ'sinde ölçülür, yükseklik yok sayılır). Bölgeyi büyütmek, daraltmak,
+döndürmek ya da kaydırmak istiyorsan **şerit mesh'ini** öyle yap; sonucu bölgeyi seçince çizilen
+Gizmo'dan gör. Sayı alanı olsaydı görselle sessizce sapardı — oyuncu kırmızının üstünde dururken
+canlanamaz olurdu ve hiçbir yerde uyarı çıkmazdı.
+
+⚠️ Aynı sebeple **şeridi silme, Renderer'sız bölge bırakma**: ölçü alınamayan bölge bir kez hata
+basıp kendini kapatır ve "açık taban yok" fail-open'ı devreye girer — belirtisi "taban çalışmıyor"
+değil, herkesin arenanın her yerinde canlanmasıdır.
+
 ### ⛔ `ArenaObstacle`'ı collider sanma
 
 Fizik YAPMAZ, collider EKLEMEZ, hiçbir şeyi durdurmaz. Free-roam'da oyuncuyu durduran şey gerçek

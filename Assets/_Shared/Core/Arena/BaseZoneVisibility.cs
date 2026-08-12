@@ -22,13 +22,16 @@ namespace VortexArena.Core.Arena
     /// bildirmemişse (eski sunucu / bağlantı yok) <see cref="ModeRuntime"/>'ın takım kipine düşülür.
     /// </para>
     /// <para>
-    /// <b>Duvar arkasından görünürlük (x-ray):</b> şerit görünür olduğunda, oyuncunun <b>KENDİ</b>
-    /// takımının şeridine ikinci bir materyal slotu eklenir (<c>M_BaseZoneXRay</c>,
-    /// <c>VortexArena/BaseZoneXRay</c> shader'ı). O materyal <c>ZTest Greater</c> ile çizildiği için
-    /// yalnız şeridin ÖNÜNDE başka geometri olan piksellerde görünür: arena dekorla dolsa bile ölen
-    /// oyuncu canlanmak için nereye yürüyeceğini görür. Aynı mesh'in ikinci çizimi olduğu için ne
-    /// yeni GameObject ne URP renderer feature ne de yeni katman gerekir.
+    /// <b>Duvar arkasından görünürlük (x-ray):</b> şerit görünür olduğunda ve yerel oyuncu
+    /// <b>ÖLÜYKEN</b>, oyuncunun <b>KENDİ</b> takımının şeridine ikinci bir materyal slotu eklenir
+    /// (<c>M_BaseZoneXRay</c>, <c>VortexArena/BaseZoneXRay</c> shader'ı). O materyal
+    /// <c>ZTest Greater</c> ile çizildiği için yalnız şeridin ÖNÜNDE başka geometri olan
+    /// piksellerde görünür: arena dekorla dolsa bile ölen oyuncu canlanmak için nereye yürüyeceğini
+    /// görür. Aynı mesh'in ikinci çizimi olduğu için ne yeni GameObject ne URP renderer feature ne
+    /// de yeni katman gerekir.
     /// <list type="bullet">
+    /// <item><b>Hayattaki oyuncuda hiç eklenmez</b> — canlanma noktasını duvar arkasından görmeye
+    /// hayattayken ihtiyaç yok; <see cref="PlayerCombatState.LocalAliveChanged"/> tetikler.</item>
     /// <item><b>Rakip taban asla çizilmez</b> — slot hiç eklenmez.</item>
     /// <item>Takım <see cref="Team.Neutral"/> ise (takım atanmadı, admin gözlemci) hiç eklenmez.</item>
     /// <item>Takım rengi <b>şeridin kendi materyalinden</b> okunur — ikinci bir renk tanımı doğmasın.</item>
@@ -109,6 +112,7 @@ namespace VortexArena.Core.Arena
             ModeSelection.Changed += Apply;
             ModeRuntime.Changed += Apply;
             PlayerCombatState.LocalTeamChanged += HandleLocalTeamChanged;
+            PlayerCombatState.LocalAliveChanged += HandleLocalAliveChanged;
             Apply();
         }
 
@@ -123,6 +127,7 @@ namespace VortexArena.Core.Arena
             ModeSelection.Changed -= Apply;
             ModeRuntime.Changed -= Apply;
             PlayerCombatState.LocalTeamChanged -= HandleLocalTeamChanged;
+            PlayerCombatState.LocalAliveChanged -= HandleLocalAliveChanged;
 
             ClearXRay();
 
@@ -133,6 +138,13 @@ namespace VortexArena.Core.Arena
         {
             // Takım değişimi yalnız x-ray'i ilgilendiriyor ama Apply zaten idempotent: ayrı bir
             // dar yol açmak ikinci bir uygulama noktası olurdu.
+            Apply();
+        }
+
+        private void HandleLocalAliveChanged(bool alive)
+        {
+            // Ölüm/canlanma da yalnız x-ray'i ilgilendiriyor — HandleLocalTeamChanged ile aynı
+            // gerekçeyle Apply()'a yönlendirilir, ayrı bir dar yol açılmaz.
             Apply();
         }
 
@@ -243,9 +255,20 @@ namespace VortexArena.Core.Arena
 
         // ------------------------------------------------------------------------- x-ray
 
-        /// <summary>Yerel oyuncunun takımına ait şeritlere duvar-arkası çizim slotunu ekler.</summary>
+        /// <summary>Yerel oyuncunun takımına ait şeritlere duvar-arkası çizim slotunu ekler.
+        /// Yalnız oyuncu <b>ÖLÜYKEN</b> anlamlıdır — hayattaki oyuncunun canlanma noktasını duvar
+        /// arkasından görmeye ihtiyacı yok.</summary>
         private void ApplyXRay()
         {
+            // ⚠️ Instance null olabilir: bu bileşen de kendini önyükleyen bir kalıcı tekil ve
+            // bootstrap sırası PlayerCombatState'ten önce gelebilir. O durumda alive sayılır —
+            // PlayerCombatState'in kendi başlangıç değeriyle aynı (IsAlive = true) — ve Instance
+            // doğup canlılık netleşince LocalAliveChanged tetiklenip Apply() yeniden değerlendirir.
+            if (PlayerCombatState.Instance == null || PlayerCombatState.Instance.IsAlive)
+            {
+                return;
+            }
+
             Team local = ArenaCombat.LocalTeam;
             if (local == Team.Neutral)
             {

@@ -1,3 +1,6 @@
+> ⛔ **Önce kapı:** `UnityMCP` ayakta değilse **Unity verisine dayanan** iş yapılmaz (tek çıktı
+> **"MCP'yi çalıştır."**); doküman işi dokunmadığı için sürer → [[unitymcp-zorunlu]]
+
 # Kural: Kod değişince doküman da değişir (aynı commit)
 
 Temel bir kodda (protokol, ağ akışı, maç kuralı, bileşen sorumluluğu, klasör/asmdef yapısı,

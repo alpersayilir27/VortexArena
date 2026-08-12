@@ -29,9 +29,9 @@ MonoBehaviour:
     ring: 0
     pinky: 0
   tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
-  tracerWidth: 0.01
+  tracerWidth: 0.005
   tracerLifetime: 0.1
-  tracerEveryNthRound: 2
+  tracerEveryNthRound: 1
   weaponId: galilar
   damage: 30
   headshotMultiplier: 4

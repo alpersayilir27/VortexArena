@@ -1,3 +1,6 @@
+> ⛔ **Önce kapı:** `UnityMCP` ayakta değilse **Unity verisine dayanan** iş yapılmaz (tek çıktı
+> **"MCP'yi çalıştır."**); dokunmayan iş sürer → [[unitymcp-zorunlu]]
+
 # Kural: Editör doğrulaması Unity CLI (Pipeline) üzerinden
 
 Derleme/konsol/build/test doğrulaması **Unity CLI** ile yapılır (`unity`, `%LOCALAPPDATA%\Unity\bin`).

@@ -1,3 +1,6 @@
+> ⛔ **Önce kapı:** `UnityMCP` ayakta değilse **Unity verisine dayanan** iş yapılmaz (tek çıktı
+> **"MCP'yi çalıştır."**); dokunmayan iş sürer → [[unitymcp-zorunlu]]
+
 # Kural: Geliştirici makinesi HER ZAMAN Windows
 
 Bu projede geliştirme makinesi istisnasız **Windows**'tur (Quest APK'sı da Windows'tan build
