@@ -133,6 +133,7 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 | ✅ `CanFire` | `bool` | |
 | ✅ `HpChanged` / `AliveChanged` / `StatusChanged` | olay | `float` / `bool` / `string` |
 | ✅ `LocalTeamChanged` | **statik** olay | `Team` — yalnız değer değişince. Statik olmasının sebebi: dinleyicileri kendini önyükleyen kalıcı tekiller ve `Instance`'tan önce doğabiliyorlar |
+| ✅ `LocalAliveChanged` | **statik** olay | `bool` — `AliveChanged` ile aynı anda, aynı statik-olma gerekçesiyle (`LocalTeamChanged`) |
 
 > ⛔ Bu sınıf hasar uygulamaz, skor tutmaz, faz değiştirmez — ve **hiçbir koşulda rig'i taşımaz.**
 
@@ -343,6 +344,12 @@ yaklaşınca uyarı alır. Ölçü `Size` alanından gelir, transform scale'inde
 
 Arenadaki kırmızı/mavi şerit. Ölen oyuncu buraya fiziken girince canlanır (`reviveAnchor:"base"`).
 
+**Alanı çizilen şerit belirler:** bölgenin altındaki Renderer'ların (gizlenmiş olanlar dahil)
+kapladığı dikdörtgen, bölgenin kendi yerel XZ'sinde ölçülür — Inspector'da ölçü alanı yoktur.
+Bölgeyi büyütmek/döndürmek/kaydırmak = şerit mesh'ini büyütmek/döndürmek/kaydırmak. Ölçü `Awake`'te
+bir kez alınır (şerit statiktir), yükseklik yok sayılır ve dikdörtgen pivota göre kaymış olabilir
+(merkez varsayılmaz). Editörde bölgeyi seçince algılama dikdörtgeni Gizmo olarak çizilir.
+
 | Üye | Açıklama |
 |---|---|
 | ✅ `BaseZone.Team` | Bölgeyi kim kullanabilir; `Team.Neutral` = **herkes** |
@@ -355,6 +362,10 @@ oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge k
 
 > ⚠️ Gizlemek gerekiyorsa **bileşeni** kapat (`zone.enabled = false`) ve görsel şeridi ayrıca
 > gizle. Kapalı bölge canlanma için açık sayılmaz.
+
+> ⛔ **Şeridi silme, Renderer'sız bırakma.** Ölçü alınamayan bölge bir kez hata basıp kendini
+> kapatır (açık başarısızlık); `PlayerCombatState` bunu "açık taban yok" diye okur ve fail-open'ı
+> devreye girer — belirti "taban çalışmıyor" değil, herkesin her yerde canlanmasıdır.
 
 ---
 

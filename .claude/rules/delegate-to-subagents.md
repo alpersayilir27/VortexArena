@@ -1,3 +1,6 @@
+> ⛔ **Önce kapı:** `UnityMCP` ayakta değilse **Unity verisine dayanan** iş (ve onu yapacak
+> alt-ajan) açılmaz; dokunmayan iş sürer → [[unitymcp-zorunlu]]
+
 # Kural: Ağır uygulama işini alt-ajana ver, ana bağlamı yalın tut
 
 Ağır uygulama işi (yeni script/bileşen, editor tool'u, çok dosyaya yayılan tekrarlı refactor,

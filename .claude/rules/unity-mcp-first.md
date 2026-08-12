@@ -1,3 +1,6 @@
+> ⛔ **Önce kapı:** `UnityMCP` ayakta değilse **Unity verisine dayanan** iş yapılmaz (tek çıktı
+> **"MCP'yi çalıştır."**); dokunmayan iş sürer → [[unitymcp-zorunlu]]
+
 # Kural: Unity işinde önce MCP tool'u, shell en son basamak
 
 Editörle ilgili **her** iş (konsol logu, derleme, sahne/hiyerarşi, asset/prefab, build, test, menü

@@ -1,3 +1,6 @@
+> ⛔ **Önce kapı:** `UnityMCP` ayakta değilse **Unity verisine dayanan** iş yapılmaz (tek çıktı
+> **"MCP'yi çalıştır."**); dokunmayan iş sürer → [[unitymcp-zorunlu]]
+
 # Kural: Derleme/build kullanıcıya aittir — ajan projeyi DERLEMEZ
 
 Bu projede **Unity derlemesini, build'ini ve testini ajan çalıştırmaz.** İş bitince ajan yalnız

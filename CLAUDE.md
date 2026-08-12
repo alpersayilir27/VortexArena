@@ -1,5 +1,15 @@
 # VortexArena — Proje Talimatları (CLAUDE.md)
 
+> # ⛔ HER ŞEYDEN ÖNCE: UnityMCP kapısı
+> İlk iş **`UnityMCP` ayakta mı** kontrolüdür (`mcp__UnityMCP__manage_editor` →
+> `telemetry_status`). Düşerse önce sebebi ayır (`Unity.exe` var mı — varsa köprü arızasıdır,
+> sessizce esnetme). Editör kapalıysa **kararı ajan verir:** iş Unity verisine (prefab/sahne/asset/
+> bileşen/konsol) dokunuyorsa tek çıktı **"MCP'yi çalıştır."**tır, tahmin yürütülmez;
+> dokunmuyorsa (git · `Docs/` · `Server/` · `launcher/` · `scripts/` · saf soru) **sorulmadan devam
+> edilir**, cevabın başına tek satır not düşülür. Kullanıcı *"zorla devam et"* derse kural düşer:
+> iş yapılır, varsayımlar açıkça yazılır ve "Unity açılınca doğrulanacaklar" listesiyle biter.
+> → `unitymcp-zorunlu.md`
+
 Free-roam VR PvP arena ürünü (işletmelere kurulum / LBE; Meta Quest 3 & 3S, Unity 6000.3.20f1, URP).
 Oyuncular fiziksel alanda 1:1 yürür; farklı boyutlarda arenalar (12x12, işletmeye özel),
 farklı oyun modları/haritalar/silahlar. VR build = player, Windows build = admin (yönetim + izleme).
@@ -166,7 +176,9 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   Bir arenanın ağa bağlanması için sahnede şunlar olmalı:
   `BaseZone`×2 (**taban bölgesi** = kırmızı/mavi şerit; ölen oyuncu buraya girince canlanır,
   `Team.Neutral` = herkese açık; şerit oyuncunun **kendi** takımına duvar arkasından da görünür —
-  `BaseZoneVisibility` çalışma anında ekler, sahnede/prefabda kurulum adımı YOKTUR ve eklenmez),
+  `BaseZoneVisibility` çalışma anında ekler, sahnede/prefabda kurulum adımı YOKTUR ve eklenmez;
+  ⚠️ bölgenin sınırı **çizilen şeridin kendisidir** — ayrı ölçü alanı yoktur, şeritsiz bölge
+  kendini kapatır),
   mekanın **ölçü maketi** (`<Mekan>_DimensionMesh` — kalibrasyon işaretçileri onun altındadır,
   aşağıya bak) ve **altyapı prefabları** (`_Shared/App/Prefabs/`):
   **`VA_ArenaBoundary`** (`ArenaBoundary` = muhafaza; ölçüsü **zorunlu** olarak bağlı boyut
@@ -340,7 +352,11 @@ harita değişene kadar durdurmaz (maç başı/sonu müziğe dokunmaz) ve tüm b
 `DecompressOnLoad` ile Quest'in RAM'ini yer). Harita başına ayrı klip normaldir, iki sahne aynı
 klibi paylaşırsa geçişte ses kesilmez. Tüm haritalarda ortak duyuru sesleri (rakip elendi, öldün,
 maç başladı…) buraya DEĞİL `_Shared/Data/Resources/GameSoundBank.asset`'e girer; çalan tek yer
-`GameAudio.Play(GameSoundId)`'dir → `Docs/Sistem-Ozeti.md` §4.
+`GameAudio.Play(GameSoundId)`'dir. **Moda/haritaya göre değişen** duyurular (tur başlangıcı, "son 5
+saniye") ikisine de DEĞİL `_Shared/Data/Resources/ModeAudioRegistry.asset`'e bir kural satırı olarak
+girer — mod + harita + an + klip listesi; klipler `Assets/Audio/Announce/` altındadır. Yeni bir an
+gerekiyorsa `ModeAudioEvent`'e **sona** değer eklenir, istemciye `if (modeId == …)` zinciri
+YAZILMAZ. → `Docs/Sistem-Ozeti.md` §4.
 **Arena ölçüsü:** tek doğruluk kaynağı **boyut dosyasıdır** (`ArenaDimensions` — elle yazılabilir
 JSON) ve dosya **MEKAN başınadır**: `Venues/<İşletme>/Data/<İşletme>_dimensions.json`. Bir
 işletmede hep aynı fiziksel alan oynatıldığı için o mekanın **tüm** sahneleri (arenalar + lobi)
@@ -641,6 +657,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
 | `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış **prefab kipinde**: `WPN_*`'ı prefab kipinde aç → **Ana/Ön Kabza Ellerini Oluştur** (sağ+sol) → elleri kabzalara oturt/çevir, parmakları elin `GripHandAuthoring` Inspector'ından ya da Hierarchy'den bük → gerekirse **Karşı Ele Aynala** → **Kaydet**. Scene view'a hiçbir şey çizilmez (yardımcı çerçeve/ölçü yok); pencere kaydedilecek sayıları canlı gösterir. ⚠️ **El HAM sürüklenir** (kök = ISDK bilek çerçevesi) ve **iki el ayrı yazılır** — gerekçe "Yeni silah" reçetesinde. ⚠️ **Yazan tek düğme Kaydet'tir**: el başına `GripPoses/Pose_<Kind>_<L\|R>` + SAĞ elden `WD_*.asset` fallback kavrama alanları + tek taraflı kavramada eksik elin aynası + eski `Hands` rig'i / prefaba sızmış tezgâh eli temizliği. ⚠️ Kaydet İKİ çıktıyı da diske yazar (prefabı kendisi kaydeder, `WD_*` anında iner); prefab yazılamazsa stage kirli bırakılır ve hata basılır. ⚠️ Eller prefaba GİRMEZ (stage sahnesinin ayrı kökleri, `DontSave`) ve Play'e girerken / stage kapanınca / sahne değişince silinir |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |
+| `… > Audio > Mod Sesleri` | Moda/haritaya göre değişen duyuru sesi eklenecek/değiştirilecek → `ModeAudioRegistry.asset`'i seçer (yoksa oluşturur). ⚠️ Düzenleme yeri **Inspector**'dır, menü yalnız kaydı bulur; mod ve harita orada **katalogdan seçilir** (elle yazılan ad kuralı sessizce eşleşmez hâle getirir) |
 | `… > Development > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek) |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` | Sahneye ilgili bileşeni + kurulumunu ekler |
 | `PlayerBuildTool.BuildWindowsAdmin` · `…BuildQuestPlayer` | Menü değil — batch-mode `-executeMethod` girişleri (`deploy-admin-game.bat` / `deploy-player-apk.bat` çağırır) |

@@ -1,3 +1,6 @@
+> ⛔ **Önce kapı:** `UnityMCP` ayakta değilse **Unity verisine dayanan** iş yapılmaz (tek çıktı
+> **"MCP'yi çalıştır."**); dokunmayan iş sürer → [[unitymcp-zorunlu]]
+
 # Kural: Bağlam/kod aramasında birincil araç auggie
 
 `mcp__auggie__codebase-retrieval` (Augment indeksi) **birincil arama aracıdır**. "Bu nasıl

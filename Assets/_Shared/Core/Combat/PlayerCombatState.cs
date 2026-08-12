@@ -127,6 +127,16 @@ namespace VortexArena.Core.Combat
         public static event Action<CoreTeam> LocalTeamChanged;
 
         /// <summary>
+        /// Yerel oyuncunun canlılığı değişti (ölüm/canlanma); yalnız DEĞER değişince tetiklenir.
+        /// <para>
+        /// ⚠️ <see cref="AliveChanged"/> ile aynı anda çağrılır ama <b>statiktir</b> — gerekçesi
+        /// <see cref="LocalTeamChanged"/> ile birebir aynıdır: dinleyicisi (<c>BaseZoneVisibility</c>)
+        /// kendini önyükleyen kalıcı bir tekil ve <see cref="Instance"/>'tan ÖNCE doğabiliyor.
+        /// </para>
+        /// </summary>
+        public static event Action<bool> LocalAliveChanged;
+
+        /// <summary>
         /// Silah tetiği çekilebilir mi: hayatta + (faz <c>playing</c> <b>veya</b> modun serbest
         /// atışı açık — <see cref="ModeRuntime.FireWhilePaused"/>, §10.5).
         /// <para>
@@ -889,6 +899,7 @@ namespace VortexArena.Core.Combat
 
             IsAlive = alive;
             AliveChanged?.Invoke(alive);
+            LocalAliveChanged?.Invoke(alive);
         }
 
         /// <summary>Protokoldeki "red"/"blue" değerini enum'a çevirir; <b>boş/tanımsız girdi

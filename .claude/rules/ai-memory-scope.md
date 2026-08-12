@@ -1,3 +1,6 @@
+> ⛔ **Önce kapı:** `UnityMCP` ayakta değilse **Unity verisine dayanan** iş yapılmaz (tek çıktı
+> **"MCP'yi çalıştır."**); dokunmayan iş sürer → [[unitymcp-zorunlu]]
+
 # Kural: AI hafızası yalnızca proje scope'unda
 
 Bu projede AI'ın aldığı **hiçbir not kullanıcının bilgisayarına kaydedilmez.** Hatırlanması

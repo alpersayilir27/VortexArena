@@ -563,6 +563,10 @@ seçip hedeflere ateş edebilirler.
   → `BaseZoneVisibility`): admin TDM/turnuva seçtiyse şeritler durur, FFA seçtiyse maç başlamadan
   kaybolur. Aktif kural bu sırada hâlâ lobi profilidir — değişen yalnız sunumdur. Kapının silah
   kaynağı OLMAMASININ sebebi de bu: lobide silah her hâlükârda rastgeledir.
+- **Duvar arkasından taban görünürlüğü (x-ray) yalnız yerel oyuncu ÖLÜYKEN açılır:** şerit kendisi
+  takım kipine göre görünür kalsa da, ikinci (duvar arkası) materyal slotu `PlayerCombatState.IsAlive`
+  `false` olmadıkça hiç eklenmez ve canlanınca söker. Hayattaki oyuncunun kendi tabanını haritanın
+  her yerinden görmesine gerek yok — ihtiyaç yalnız ölüm ekranında, canlanma noktasını bulurken var.
 - **Silah gelir** çünkü `modeId` boş değil `"lobby"`dir — istemci loadout'u
   `GameCatalog.FindMode(ModeRuntime.ModeId)` ile çözüyor. Lobinin kaynağı
   `weaponSource:"random"`: grip'e basılı tutulan elde rastgele bir silah durur, bırakınca yok olur.
@@ -1049,7 +1053,17 @@ için poz/pozisyon/rotasyon dönüşümleri kimliktir. Çağrı yerleri yine ond
 yerde tanımlı kalsın. `WorldToArenaDirection` istisnadır: yönü **normalize eder** ve sıfır/NaN
 girdide `Vector3.forward` döner, çünkü protokol her olayda bir birim yön taşır),
 `BaseZone` (**taban bölgesi** — kırmızı/mavi şerit, canlanma
-kapısı; `Neutral` = herkese açık),
+kapısı; `Neutral` = herkese açık. **Algılama alanı çizilen şeridin kendisidir:** bölgenin
+altındaki Renderer'ların — kapalı olanlar dahil, çünkü `BaseZoneVisibility` şeridi gizleyebilir —
+kendi yerel kutularının köşeleri bölgenin YEREL uzayına taşınıp XZ dikdörtgeni ölçülür, elle
+girilen bir ölçü alanı YOKTUR ve eklenmez. Sayı alanı görselden sessizce sapardı: oyuncu şeridin
+üstünde dururken canlanamaz olurdu ve hata hiçbir yerde görünmezdi. Ölçü `Awake`'te bir kez
+alınır (şerit statiktir), yükseklik yok sayılır (HMD şeridin metrelerce üstündedir) ve dikdörtgen
+pivota göre kaymış olabildiği için merkez varsayılmaz. ⚠️ `Renderer.bounds` (dünya eksenli AABB)
+kullanılmaz — döndürülmüş şeritte kutu şişer ve bölge şeridin dışına taşar. Altında hiç Renderer
+yoksa bir kez hata basıp kendini kapatır; kapalı bileşeni `PlayerCombatState` "açık taban yok"
+diye okur ve fail-open'ı devreye girer. Editörde seçiliyken dikdörtgen Gizmo olarak çizilir —
+ölçü görselden geldiği için denetim yolu gözle bakmaktır),
 `MapDefinition` / `ModeDefinition` / `GameCatalog` (içerik SO'ları),
 `Weapon` (ISDK ile tutulan hitscan tüfek; tetik **silahı tutan elin** kumandasından okunur — çift
 silahta tetikler bağımsız; şarjör+yedek şarjör durumu taşır, boş şarjörde **otomatik reload YOK**
@@ -1233,7 +1247,7 @@ katmanların göreli hız farkı korunur).
 
 | Sınıf | Görevi |
 |---|---|
-| `Arena/BaseZoneVisibility` | Taban şeritlerinin (`BaseZone`) görünür/etkin olup olmadığına karar veren **tek yer**. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz. Kapı **takım kipidir**: takımlı modda (TDM/turnuva) şeritler durur — biri canlanma kapısı, diğeri tur arası toplanma kapısıdır; takımsızda (FFA) gizlenir, çünkü orada canlanma şartı sabit durmaktır ve renkli şerit olmayan bir kuralı anlatırdı. Hangi mod? **Öncelik `ModeSelection`** (seçili mod): admin lobide bir arena sahnelediğinde herkes o arenaya geçer ama aktif kural hâlâ lobi profilidir, yani koşan kurala bakan bir kapı "hangi maç kurulacak" sorusunu göremezdi. Seçim bilinmiyorsa `ModeRuntime`'ın takım kipine düşer. **Bileşen kapatılır** + Renderer'lı doğrudan çocuklar gizlenir. ⚠️ **Yalnız kendi kapattığını geri açar** — aynı bileşenleri `AdminSpectator` de kapatıyor. Eskiden bu iş `WeaponGranter`'ın süpürmesindeydi ve kapısı `weaponSource`'tu; FFA'da ikisi birlikte değiştiği için doğru görünüyordu, lobinin silahı rastgeleye alınınca lobideki tabanlar da kayboldu. **İkinci işi duvar-arkası görünürlüktür (x-ray):** şeritler görünürken oyuncunun **kendi** takımının şerit renderer'ına ikinci bir materyal slotu eklenir (`M_BaseZoneXRay` → `VortexArena/BaseZoneXRay`, `ZTest Greater`) — aynı mesh bir kez daha çizilir ve yalnız **önünde başka geometri olan** piksellerde görünür, yani arena dekorla dolsa da ölen oyuncu canlanma noktasını görür. Yeni GameObject / URP renderer feature / katman gerekmez, arena başına kurulum adımı doğmaz. ⚠️ **Rakip taban hiçbir koşulda çizilmez** (slot eklenmez) ve takım `Neutral` ise (takım atanmadı, admin gözlemci) hiç eklenmez; takım rengi **şeridin kendi materyalinden** okunur, ikinci bir renk tanımı yoktur. Slotu **çalışma anında** ekler çünkü `TemplateBasicsLoader` her renderer'a tek `sharedMaterial` yazıyor — asset'e konan ikinci slot o araç her çalıştığında silinirdi; ayrıca çalışma anı yolu mevcut tüm arenaları sahne düzenlemesi olmadan kapsar. Takım değişimini `PlayerCombatState.LocalTeamChanged` ile dinler |
+| `Arena/BaseZoneVisibility` | Taban şeritlerinin (`BaseZone`) görünür/etkin olup olmadığına karar veren **tek yer**. **Kendini önyükleyen kalıcı tekil** — sahneye konmaz. Kapı **takım kipidir**: takımlı modda (TDM/turnuva) şeritler durur — biri canlanma kapısı, diğeri tur arası toplanma kapısıdır; takımsızda (FFA) gizlenir, çünkü orada canlanma şartı sabit durmaktır ve renkli şerit olmayan bir kuralı anlatırdı. Hangi mod? **Öncelik `ModeSelection`** (seçili mod): admin lobide bir arena sahnelediğinde herkes o arenaya geçer ama aktif kural hâlâ lobi profilidir, yani koşan kurala bakan bir kapı "hangi maç kurulacak" sorusunu göremezdi. Seçim bilinmiyorsa `ModeRuntime`'ın takım kipine düşer. **Bileşen kapatılır** + Renderer'lı doğrudan çocuklar gizlenir. ⚠️ **Yalnız kendi kapattığını geri açar** — aynı bileşenleri `AdminSpectator` de kapatıyor. Eskiden bu iş `WeaponGranter`'ın süpürmesindeydi ve kapısı `weaponSource`'tu; FFA'da ikisi birlikte değiştiği için doğru görünüyordu, lobinin silahı rastgeleye alınınca lobideki tabanlar da kayboldu. **İkinci işi duvar-arkası görünürlüktür (x-ray):** şeritler görünürken **ve yerel oyuncu ÖLÜYKEN**, oyuncunun **kendi** takımının şerit renderer'ına ikinci bir materyal slotu eklenir (`M_BaseZoneXRay` → `VortexArena/BaseZoneXRay`, `ZTest Greater`) — aynı mesh bir kez daha çizilir ve yalnız **önünde başka geometri olan** piksellerde görünür, yani arena dekorla dolsa da ölen oyuncu canlanma noktasını görür. Hayattaki oyuncuda hiç eklenmez — canlanma noktasını görmeye hayattayken ihtiyaç yok. Yeni GameObject / URP renderer feature / katman gerekmez, arena başına kurulum adımı doğmaz. ⚠️ **Rakip taban hiçbir koşulda çizilmez** (slot eklenmez) ve takım `Neutral` ise (takım atanmadı, admin gözlemci) hiç eklenmez; takım rengi **şeridin kendi materyalinden** okunur, ikinci bir renk tanımı yoktur. Slotu **çalışma anında** ekler çünkü `TemplateBasicsLoader` her renderer'a tek `sharedMaterial` yazıyor — asset'e konan ikinci slot o araç her çalıştığında silinirdi; ayrıca çalışma anı yolu mevcut tüm arenaları sahne düzenlemesi olmadan kapsar. Takım değişimini `PlayerCombatState.LocalTeamChanged`, canlılık değişimini `PlayerCombatState.LocalAliveChanged` ile dinler — ikisi de statiktir çünkü bu bileşen de kendini önyükleyen bir tekil ve `PlayerCombatState.Instance`'tan önce doğabilir |
 | `ModeSelection` | **Henüz başlamamış** maçın seçili modu (`selection_state`, §5.3) — yalnız sunum. `ModeRuntime` ile karıştırılmaz: orası **koşan** maçın kuralıdır. Statik `HasValue`/`ModeId`/`IsTeamless` + `Changed`; besleyicisi `ModeRuntimePump`. ⚠️ Hiçbir kuralı/HUD'ı/loadout'u değiştirmez (maç türü `start_match`'i bekler) ve **tüketicisi olmayan alan eklenmez** — bugün tek tüketicisi `BaseZoneVisibility` |
 | `ModeRuntime` (+ `ModeRuntimePump`) | Aktif maçın kurallarının **tek okuma noktası** (§3.9). `load_match.rules` / `welcome.match.rules` / `return_to_lobby.rules` besler, **`rules_update` maç ortasında tazeler** (bugün tek tetikleyicisi dost ateşi anahtarı — §3.9); kurallar telde yoksa (`rules == null`) `ModeDefinition` önizlemesi fallback olarak devralır. Lobiye dönüşte SIFIRLANMAZ, **lobi profili uygulanır** (`modeId:"lobby"`, §3.8.1) — lobideki silah seçimi loadout'unu bu anahtarla buluyor. Statik durum + statik `Changed`; pompa kendini önyükler (`BeforeSceneLoad` + `DontDestroyOnLoad`). Tüketiciler: `PlayerCombatState`, `ModeHudBase`, `AdminRoster` |
 | `UI/ModeHudBase` | Mod HUD'larının **takım-agnostik** tabanı: faz/süre, geri sayım, can barı, ölüm ekranı + durum metni, kill-feed (ad çözümü `lobby_state`'ten), kendi öldürme/ölüm sayacın, maç sonu satırı. **Takıma ait hiçbir şey burada değil** — skor satırı (`ScoreLine`) ve kazanan metni (`WinnerLine`) alt sınıfın işi. Core'da durur çünkü modlar birbirini referanslamaz. `PhaseLabel`/`ModeStateLabel` `virtual`'dır: tur tabanlı mod "MAÇ" yerine "TUR 3", mod duraklamasında da "TOPLANMA 2/6" yazabilsin diye — taban `modeState`'i **yorumlamaz** |
@@ -1393,6 +1407,39 @@ ve ilk mesajda hiç çalmaz: koşan bir maça sonradan bağlanan başlık "maç 
 Yeni ses eklemek = `GameSoundId`'ye **sona** bir değer + bankaya bir alan + tetikleyen yerde
 `Play` (enum serialize edildiği için araya ekleme mevcut asset'in eşlemesini kaydırır).
 
+**`ModeAudioRegistry`** (`Resources/ModeAudioRegistry`): bankanın tersi — **moda ve haritaya göre
+değişen** duyuru sesleri. Bir kural satırı dört şeyi bağlar: `modeId` (boş = her mod) · `sceneName`
+(boş = her harita) · `ModeAudioEvent` · **klip listesi** (biri rastgele seçilir, tek klip de
+geçerlidir) + seviye ve uyarı eşiği. ⚠️ **Seçimde bir önceki klip elenir** (liste ikiden az dolu
+klip taşımıyorsa): tur başına tek duyuru çalan bir sistemde saf rastgelelik "hep aynı ses" olarak
+duyulur, iki klipte sonucun sırayla çalmaya inmesi bilinçli. ⚠️ **Duyuru kanalı çalmadan önce
+susturulur** — bunlar konuşma replikleri, üst üste binen ikisi birden anlaşılmaz olur; son duyuru
+kazanır. Bu emniyet **tek istemcinin içindedir**: aynı odada iki başlık (ör. admin PC + gözlük, ya
+da Multiplayer Play Mode'daki iki sanal oyuncu) çalıyorsa her biri kendi rastgele seçimini yapar ve
+sesler dışarıdan üst üste duyulur — kodun engelleyebileceği bir şey değildir. Eşleşenler arasından **en spesifik kural** kazanır (mod
+eşleşmesi 2, harita 1 puan — aynı arena birden çok modda oynandığı için mod ağır basar), eşitlikte
+listedeki ilki. Çalan yer yine `GameAudio`'dur (`PlayModeEvent`); aynı an için hem kayıtta hem
+bankada klip varsa **kayıt bankayı ezer**, yoksa iki duyuru üst üste binerdi.
+
+Tetikleyiciler ve nereden sürüldükleri:
+
+| `ModeAudioEvent` | Ne zaman | Kaynak |
+|---|---|---|
+| `RoundStart` | Faz `playing`'e geçti — tek turlu modda maç başı, turnuvada **her tur** başı (ikisi de aynı geçiştir) | `match_state.phase` |
+| `RoundEndWarning` | Turun bitmesine `warningSeconds` kaldı | `match_state.timeRemaining` |
+| `MatchEndWarning` | Maçın bitmesine `warningSeconds` kaldı; tur kuralı eşleşmezse **devralır** | `match_state.timeRemaining` |
+
+⚠️ **Modun tur tabanlı olup olmadığını kayıt söyler, `modeState` değil:** modun ara durumunu
+çekirdek yorumlamaz (`Docs/ArenaNet-Protokol.md` §10.1), o yüzden uyarı kuralı önce
+`RoundEndWarning`, bulunamazsa `MatchEndWarning` olarak çözülür — "her modda son 5 saniye" tek bir
+`MatchEndWarning` satırıyla kurulur. ⚠️ **Süre sunucu otoritesidir ve istemcide sayaç
+İŞLETİLMEZ:** uyarı `match_state`'in 1 Hz'lik `timeRemaining` örneklerinde **eşiğin geçildiği**
+örnekte bir kez çalar (eşiğe yarım saniye pay eklenir, yoksa N. saniyelik örnek kaçar ve uyarı bir
+saniye geç gelirdi) ve her `playing` geçişinde yeniden kurulur. ⚠️ **İlk örnekte eşik "geçilmiş"
+sayılmaz** — son saniyelerinde bir maça bağlanan başlık durduk yere "son 5 saniye" duymamalı.
+Protokolde bu işin karşılığı **yoktur ve eklenmedi**: `timeRemaining` zaten telde, ayrı bir olay
+mesajı ikinci bir doğruluk kaynağı olurdu.
+
 ### Editör: `VortexArena.Core.Editor` (içerik araçları — yalnız Editor)
 
 Menü öğelerinin tam listesi ve "ne zaman çalıştırılır" tablosu `CLAUDE.md`'de; burada arena
@@ -1409,6 +1456,7 @@ geometrisini üreten araçlar + kavrama ayarı:
 | `ObstacleLayerAuditor` | `Engel Hacimlerini Denetle`: açık sahnelerde `Obstacle` layer'ını tarar ve **konveks olmayan** collider'ları, trigger'ları, collider'sız damgalı objeleri ve **görünen yüzeyden şişkin** collider'ları raporlar (dialog + tıklanabilir konsol satırları). Şişkinlik testi çalışma anındaki testin **aynısıdır** (`ClosestPoint` ile nokta-içeride; ikinci bir matematik ikinci bir doğruluk kaynağı olurdu) ve kalan geometrik tuzağı yakalar: konveks işaretlenmiş **içbükey** bir mesh'te hull çukuru doldurur, collider görünenden büyür ve oyuncu **boşlukta** ceza alır — çizilen mesh doğru olduğu için gözle görülmez. Üçgen ağırlık merkezleri yüzeyin **iki yanına** 2 cm taşınır ve ölçüt "ikisi de içeride"dir: tek yana bakmak üçgen sarım yönüne güvenmek olurdu ve yön ters okunsaydı araç HER objeyi şişkin raporlardı. ⚠️ Yalnız `MeshCollider` denetlenir (kaynak: collider'ın kendi mesh'i) — Box/Capsule zaten bilinçli bir kabalaştırmadır ve aracın **kendi önerdiği** çözümdür; onu hata saymak olurdu. Mesh okunamıyorsa (Read/Write kapalı) ya da collider/obje kapalıysa test yapılmaz, obje sorunlu diye raporlanmaz. **Var olma sebebi tek bir kuraldır ve gözle denetlenemez:** non-convex bir `MeshCollider` bu layer'a girerse `Collider.ClosestPoint` girdi noktasını aynen döndürür → nokta-içeride testi her zaman "içeride" der → **o sahnedeki herkes anında ölmeye başlar**. Çalışma anında `ObstacleVolumes` böyle bir collider'ı eliyor ama o satır ancak Play'e girilince görülür; bu araç aynı soruyu sahne kaydedilmeden önce sorar. ⚠️ Hiçbir şeyi DÜZELTMEZ — otomatik convex işaretlemek sanatçının bilerek yaptığı seçimi sessizce ezerdi |
 | `HmdOverlayBuilder` | `HMD Katmanlarını Kur`: `VA_CameraRig.prefab` içindeki `CenterEyeAnchor`'a engel uyarı yazısını (`ObstacleWarningOverlay`) ve hasar vinyetini (`DamageVignette` + `M_DamageVignette`) kurar. **İdempotent.** ⚠️ **Vinyetin materyalini araç ÜRETİR** — shader import edilmeden GUID'i bilinemediği için elle yazılmış bir `.mat` sessizce boş shader referansıyla açılırdı; materyal bir asset olduğu ve prefabtan referanslandığı için de build'den strip edilmez (`Shader.Find` ile çalışma anında üretilseydi Quest'te pembe çizilirdi). ⚠️ **Çizim sırası prefabdaki MESAFEDEN gelir** (yazı 0.42 · vinyet 0.44 · karartma quad'ı 0.5) — sayılar değişirse sıra korunmalı. Araç çalıştırılmadıkça davranış eskisi gibi: karartma çalışır, yazı ve vinyet hiç çizilmez |
 | `BuildElementsConfigurator` | `Configure All Build Elements`: kayıt listelerini **klasör ağacından eşitler** — `Venues/*/Scenes/*/` taranır ve klasör tek doğruluk kaynağı sayılır. **Hepsini Yapılandır** önce aktif sahnenin `MapDefinition`'ını yazar/günceller, sonra eşitler; **Yalnız Senkronize Et** sahne açık olmadan da eşitler (silinmiş bir arenanın kalıntısını temizlemenin yolu budur). Eşitleme: eksik olan **uyarı** üretir (kutuda sahne yok / birden çok sahne var / sahne adı klasör adıyla uyuşmuyor / `Data/<Sahne>.asset` MapDefinition yok ya da yanlış yerde / mekan kökünde `Art,Data,Prefabs,Scenes` dışında klasör), fazla olan **silinir** (Build Settings'te mekan ağacında olmayan ya da diskte bulunmayan satırlar; `GameCatalog.maps` ve `ModeDefinition.maps` içindeki ölü ve artık taranmayan referanslar). `Boot.unity` index 0'da kalır, mekan-dışı sahneler (`_Shared/Scenes/*`) korunur, `Template/` sahneleri listeye hiç girmez. `ModeDefinition.maps` **boşsa** dokunulmaz (boş = kısıtsız); doluysa o modu destekleyen haritalarla birebir eşitlenir — hedef küme boş çıkarsa liste boşaltılmaz (boş liste "kısıtsız" demek olurdu), yalnız uyarı basılır. Sonda `ServerConfigExporter.Export(false)` + **sağlık raporu**: `ArenaBoundary` var mı · `dimensionsJson` dolu mu · muhafaza dünya orijinine yakın mı (arena uzayı = dünya uzayı) · ölçü maketi `EditorOnly` etiketli mi (etiketliyse build'e girmez ve kalibrasyon işaretçileri onunla birlikte silinir). Hiçbiri işi durdurmaz, hepsi rapora satır düşer. Kontroller **aktif sahneye** bakar, yani sahne bir kutuda değilse hiç koşmaz. ⚠️ **MapDefinition kendiliğinden ÜRETİLMEZ:** `supportedModeIds` boş bırakmak "kısıtsız" demek olduğu için üretilen boş bir tanım lobiyi sessizce her modda oynanır kılardı — sahne açılıp modlar araçtan seçilir. Ayrı bir "Arena Id" alanı yoktur: MapDefinition'ın adı sahne adıdır |
+| `ModeAudioRegistryEditor` (+ `ModeAudioRegistryMenu`) | `ModeAudioRegistry`'nin Inspector yüzü: mod ve harita **`GameCatalog`'dan seçilir**, elle yazılmaz. ⚠️ **Var olma sebebi bu iki alanın serbest string olmasıdır** — yanlış yazılan bir modId derlemeyi kırmaz, kural yalnızca hiç eşleşmez ve sahada "ses çalmıyor" diye görünür. Satır başına denetim: klip listesi boşsa (kural sessiz), harita o modu desteklemiyorsa (`supportedModeIds`), aynı mod/harita/tetikleyici üçlüsü yukarıda da varsa (eşit spesiflikte ilki kazanır → bu satır ölü). Eşik alanı yalnız uyarı tetikleyicilerinde çizilir. ⚠️ `Kural Ekle` yeni satırın **her alanını tek tek kurar**: `InsertArrayElementAtIndex` bir öncekinin değerlerini kopyalar, kurulmasa yeni kural eski kliplerle sessizce yanlış doğardı. ⚠️ **Ses önizleme düğmesi YOKTUR ve eklenmez** — editörde klip çalmanın tek yolu `UnityEditor.AudioUtil` refleksiyonudur, o internal olduğu için sürüm atlayınca sessizce kırılır. Menü öğesi (`Audio > Mod Sesleri`) kaydı yalnız **bulur ve seçer** (yoksa oluşturur); ikinci bir düzenleme yüzeyi açmaması bilinçli |
 
 ### Sunucu: `Server/VortexArena.Server.Core`
 
@@ -1688,6 +1736,9 @@ yukarıdaki altı adımdır):
    kolon/kasa varsa üstlerine `ArenaObstacle` ekle.
 3. Taban bölgeleri: iki `BaseZone` (Red/Blue, karşı kenarlarda; `Neutral` = herkese açık).
    Ölen oyuncu bunlardan birine fiziken girince canlanır — rig ASLA taşınmaz.
+   Bölgenin sınırı **altına konan şeridin kapladığı alandır** (ayrı bir ölçü alanı yoktur):
+   bölgeyi büyütmek/döndürmek = şerit mesh'ini büyütmek/döndürmek, denetimi bölgeyi seçince
+   çizilen Gizmo'dan yaparsın.
    ⚠️ Geometriyi **dünya orijinine** oturt: zemin dünya y=0'da, arena merkezi dünya (0,0,0)
    civarında. Arena uzayı dünya uzayıdır, yani sahneyi topluca kaydırmak/döndürmek arenadaki tüm
    oyuncuların ağ koordinatını kaydırır.
@@ -3389,6 +3440,18 @@ konsoluna tek satır sebep yazar.
     (`WeaponAnimator`, `manualReloadDuration` ile ezilebilir) — üçü tek sayıda buluşur. Kendi
     reload sesi olmayan silahta (paylaşımlı klip, fişek fişek dolan pompalı) sayı bir denge
     değeridir ve sesle eşleşmez; orada animasyonun erken bitmesi beklenen davranıştır.
+158. **Taban bölgesinin algılama alanı GÖRSELDEN türer — şeridin mesh'i/ölçeği bölgenin
+    kuralıdır.** `BaseZone` sınırını altındaki Renderer'ların yerel kutu köşelerinden, kendi
+    yerel XZ'sinde ölçer; elle girilen bir ölçü alanı yoktur. Sonucu iki yönlüdür: şeridi
+    ölçeklemek/döndürmek/kaydırmak canlanma alanını da aynen değiştirir, ve şeridi silmek ya
+    da altında Renderer bırakmamak bölgeyi **kapatır** (bir kez hata basar, `enabled = false`;
+    `PlayerCombatState` bunu "açık taban yok" diye okuyup fail-open'a düşer, yani ölen oyuncu
+    arenanın her yerinde canlanabilir hâle gelir — belirti "taban çalışmıyor" değil "canlanma
+    çok kolay"dır). Bir ölçü ALANI olsaydı belirti daha sinsi olurdu: görselle sayı sessizce
+    sapar, oyuncu kırmızının üstünde dururken canlanamazdı ve hiçbir yerde uyarı çıkmazdı.
+    ⚠️ Ölçüde `Renderer.bounds` (dünya eksenli AABB) kullanılmaz — döndürülmüş şeritte kutu
+    şişip bölge şeridin dışına taşardı; köşeler tek tek bölgenin yerel uzayına taşınır.
+    ⚠️ Ölçü `Awake`'te bir kez alınır: şerit çalışma anında hareket ettirilmez/ölçeklenmez.
 
 ---
 
