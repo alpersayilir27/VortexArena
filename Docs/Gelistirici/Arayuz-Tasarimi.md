@@ -27,6 +27,7 @@ Tüm arayüz prefabları **tek klasörde**: `Assets/_Shared/App/Resources/UI/`
 | **`LoadingOverlayWorld.prefab`** | Sahne geçişi yükleme ekranı — VR (world-space kart, **scrim YOK**) | `LoadingOverlay` |
 | **`AmmoHud.prefab`** | VR'da sağ altta cephane göstergesi | `AmmoHud` |
 | **`IdentifyDisplay.prefab`** | `identify` komutunda göz hizasında beliren "SEN BUSUN" kartı | `IdentifyOverlay` |
+| **`MatchResultOverlay.prefab`** | Maç sonu ekranı: sonuç kartı (KAZANDIN/KAYBETTİN/BERABERE) + genel skor tablosu. İkisi aynı prefabta iki paneldir ve **ikisi de `AdminStatsPanel`'in kart kabuğunu** kullanır (`StatsPanel` → `Fill`) | `MatchResultOverlay` |
 
 Oyuncu HUD'ları ayrı yerdedir (mod kutularında):
 
@@ -133,6 +134,23 @@ Ayrıca birkaç teknik not:
 - **İlerleme barının `Fill`'ine dokunurken:** dolum `anchorMax.x` ile sürülür
   (`UiKit.SetBarFill` deseni). Pivot `(0, 0.5)` ve offsetler 0 kalmalı; `Fill`'i ortalarsanız ya da
   `Image.Type`'ını `Filled` yaparsanız bar sessizce hep boş görünür.
+- **`MatchResultOverlay`'in iki paneli aynı prefabta durur** (`ResultPanel` ve `ScoreboardPanel`) ve
+  hangisinin ne zaman açılacağını kod belirler — prefabta ikisinin de açık/kapalı olması yalnız
+  tasarım kolaylığıdır (çalışırken ikisi de kapatılıp sırayla açılır). Panelin **oyun içi HUD'dan
+  büyük** olması bilinçlidir: kök 1400×860 birim, ölçek 0,0007 (≈0,98 m) ve `HudFollow` mesafesi
+  1,5 m — mod HUD'ı 900×520 / 0,0005 / 1,1 m'dir. Küçültürseniz maç sonu ekranı HUD'la karışır.
+- **Her iki panel de `AdminStatsPanel`'in kart kabuğunu taşır** (`StatsPanel` → `Fill`; `PanelBG`
+  arka planı + `ChamferRect_20` dolgu, 1265×705). ⚠️ **Kartın en-boy oranını değiştirmeyin** —
+  `PanelBG` tek parça bir görseldir (başlık bandı, chevron, takım parlamaları görselin içinde) ve
+  oran bozulunca sanat gerilir. Kolon ekleyip çıkarmak yerine mevcut kolonların genişliğini
+  değiştirin.
+- **Skor tablosu kolonları `Header0..5` / `Column0..5` çiftleridir** ve sıraları koddaki
+  `ColumnOrder` ile eşleşmek zorundadır (OYUNCU · TAKIM · SKOR · K · D · K/D). Bir kolonu
+  **silerseniz** kod onu sessizce atlar; yenisini eklemek prefab + kod işidir.
+  ⚠️ `Header3`/`Header4`'ün metni **bilerek boştur** — K ve D başlıkları `IconKills`/`IconDeaths`
+  (crosshair/skull) ikonlarıyla anlatılır, admin kartındaki gibi.
+- **`Headline` otomatik küçülür** (`enableAutoSizing`, 44→30) ve **sarmaz**: kazanan + skor tek
+  satırda taşınıyor, sarmasına izin verilirse alttaki takım özetinin üstüne biner.
 - **`AdminHud`'ın `sortingOrder`'ı 4000, yükleme ekranınınki 4500, bağlantı ekranınınki 5000.**
   Bu sıra bilinçlidir: yükleme HUD'ın üstünü, bağlantı hatası ise her şeyin üstünü kaplamalı.
   Canvas bileşeninde değiştirmeyin.

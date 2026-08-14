@@ -194,10 +194,11 @@ namespace VortexArena.Protocol
         public byte itemL;
         public byte itemR;
 
-        /// <summary>Snapshot'a kopyalanan istemci bitleri: <c>FLAG_GRIP_LINKED</c> |
-        /// <c>FLAG_PRIMARY_RIGHT</c> | <c>FLAG_HAND_L_STALE</c> | <c>FLAG_HAND_R_STALE</c> (§6.3).
-        /// Ad kavramadan gelir ama içerik yalnız kavrama değildir — süzgeç
-        /// <see cref="SnapshotEntry.GRIP_FLAG_MASK"/>.</summary>
+        /// <summary>Snapshot'a kopyalanan istemci bitleri (§6.3). Ad kavramadan gelir ama içerik
+        /// yalnız kavrama değildir: kavrama, bayat el ve <b>ihlal ölçümleri</b> de buradan taşınır.
+        /// <para>⚠️ <b>Kopyalanan bitlerin listesi burada TEKRARLANMAZ</b> — tek doğruluk kaynağı
+        /// <see cref="SnapshotEntry.GRIP_FLAG_MASK"/>'tir. İki yerde sayılsaydı maske genişlediğinde
+        /// biri sessizce eksik kalırdı.</para></summary>
         public byte gripFlags;
 
         public PoseData head;
@@ -239,7 +240,9 @@ namespace VortexArena.Protocol
     /// = <b>88 B</b> (§6.3).
     /// <para><b>flags: tek bayt, iki yazar</b> (otorite bölünmesinin tel karşılığı) — bit0
     /// <b>sunucunun</b>dur (otoriter <c>alive</c>), bit1-5 istemcinin <c>gripFlags</c>'inden
-    /// kopyalanır. Bit6-7 rezerv: sıfır yazılır, okuyucu yok sayar.</para>
+    /// kopyalanır, bit6 yine <b>sunucunun</b>dur (doğma koruması), bit7 yine istemciden kopyalanır
+    /// (alan dışı). <b>Bayt DOLUDUR</b> — rezerv bit kalmadı; dokuzuncu bir durum bu bayta
+    /// sığmaz.</para>
     /// </summary>
     public struct SnapshotEntry
     {
@@ -283,17 +286,43 @@ namespace VortexArena.Protocol
         public const byte FLAG_IN_OBSTACLE = 1 << 5;
 
         /// <summary>
+        /// Sunucu yazar: oyuncu <b>DOĞMA KORUMASI</b> altında — hasar almıyor (§10.4).
+        /// <para>⚠️ <b>Süre telde taşınmaz</b> (<c>ModeRulesInfo</c>'da karşılığı yoktur): kapı
+        /// sunucudadır ve istemcinin sayıyla yapacağı bir iş yok — kalkanı bu bit sürüyor. Sayıyı
+        /// da yollamak ikinci bir doğruluk kaynağı olurdu.</para>
+        /// <para>⚠️ Bayrak <b>durumdur, olay değil</b>: her snapshot'ta yeniden geliyor, yani koruma
+        /// bitince ek bir mesaj olmadan kendiliğinden söner — istemcide sayaç tutulmaz.</para>
+        /// <para>⚠️ <see cref="GRIP_FLAG_MASK"/>'e GİRMEZ: istemci kendini korumalı ilan edemez
+        /// (<see cref="FLAG_ALIVE"/> ile aynı gerekçe).</para>
+        /// </summary>
+        public const byte FLAG_SPAWN_PROTECTED = 1 << 6;
+
+        /// <summary>
+        /// İstemciden kopya: gönderenin <b>kafası muhafazanın güvenli alanının DIŞINDA</b>
+        /// (<c>ArenaBoundary.IsOutOfBounds</c>, §10.9).
+        /// <para>⚠️ <b>Ölçüm istemcinin, sonuç okuyanın:</b> <see cref="FLAG_IN_OBSTACLE"/>'ın
+        /// deseninin aynısı — bit yalnız "alanın dışındayım" der.</para>
+        /// <para>⚠️ <b>Ceza ÜRETMEZ:</b> sunucu bunu can eritmeye çevirmez ve çevirmeyecek;
+        /// kalibrasyonu birkaç santim kaymış oyuncu durduk yere ölürdü. Tek tüketicisi admin
+        /// görünürlüğü (kuş bakışı halkası) ve ihlal defteridir (§5.3 <c>violation</c>).</para>
+        /// <para>⚠️ Bayrak <b>durumdur, olay değil</b>: her pakette yeniden gönderilir, kaybolan bir
+        /// paket 50 ms sonra kendini onarır — kenar tetikli bir bildirimde kaybolan "geri girdim"
+        /// oyuncuyu adminde sonsuza kadar ihlalde bırakırdı.</para>
+        /// </summary>
+        public const byte FLAG_OUT_OF_BOUNDS = 1 << 7;
+
+        /// <summary>
         /// İstemciden kopyalanmasına izin verilen bitler. <b>Varlık sebebi bir bekçidir:</b> sunucu
         /// <c>PoseUpdate.gripFlags</c>'i bu maskeyle süzüp snapshot'a yazar, böylece istemci bit0'ı
         /// (<see cref="FLAG_ALIVE"/> — kendini canlı ilan etmeyi) set EDEMEZ. Maskesiz kopyalama
         /// ölü bir oyuncunun kendini diriltmesi olurdu.
-        /// <para>Maskedeki beş bit de <b>doğrulanmadan</b> kopyalanır: kavrama, bayat el ve engel
-        /// ihlali eşya baytlarıyla aynı türden <b>istemci-otoriter ÖLÇÜM bilgisidir</b>
+        /// <para>Maskedeki bitler <b>doğrulanmadan</b> kopyalanır: kavrama, bayat el, engel ihlali
+        /// ve alan dışı eşya baytlarıyla aynı türden <b>istemci-otoriter ÖLÇÜM bilgisidir</b>
         /// (§6.6/§10.3/§10.9). Sunucunun yazdığı bitler maskenin DIŞINDA kalır.</para>
         /// </summary>
         public const byte GRIP_FLAG_MASK =
             FLAG_GRIP_LINKED | FLAG_PRIMARY_RIGHT | FLAG_HAND_L_STALE | FLAG_HAND_R_STALE |
-            FLAG_IN_OBSTACLE;
+            FLAG_IN_OBSTACLE | FLAG_OUT_OF_BOUNDS;
 
         public byte playerId;
         public byte flags;

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1426f3e989e9dc8438a88550f4934cea, type: 3}
   m_Name: IceWorld_Outdoor12x16
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.MapDefinition
-  sceneName: IceWorld_Outdoor12x12
+  sceneName: IceWorld_Outdoor12x16
   displayName: Ice World
   supportedModeIds:
   - tdm

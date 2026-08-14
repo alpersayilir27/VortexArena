@@ -82,13 +82,22 @@ namespace VortexArena.Core.UI
         private void OnEnable()
         {
             Weapon.ActiveChanged += HandleActiveChanged;
+            GameplayHudGate.HiddenChanged += HandleHudGate;
             HandleActiveChanged();
         }
 
         private void OnDisable()
         {
             Weapon.ActiveChanged -= HandleActiveChanged;
+            GameplayHudGate.HiddenChanged -= HandleHudGate;
             UnsubscribeAll();
+        }
+
+        /// <summary>Maç sonu ekranı açıldı/kapandı (<see cref="GameplayHudGate"/>): cephane
+        /// göstergesi de oyun içi HUD'dır, ekranı ona bırakır.</summary>
+        private void HandleHudGate(bool hidden)
+        {
+            Refresh();
         }
 
         // ------------------------------------------------------------ abonelikler
@@ -142,6 +151,12 @@ namespace VortexArena.Core.UI
 
             _builder.Length = 0;
             bool any = false;
+
+            if (GameplayHudGate.Hidden)
+            {
+                _label.gameObject.SetActive(false);
+                return;
+            }
 
             foreach (Weapon weapon in Weapon.Active)
             {

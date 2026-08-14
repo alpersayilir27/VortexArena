@@ -43,12 +43,6 @@ namespace VortexArena.App.Admin
         /// <summary>Ölü işaretçinin renk çarpanı (RemoteAvatar ile aynı).</summary>
         private const float DeadColorScale = 0.35f;
 
-        /// <summary>Engel ihlalinde halkanın yanıp sönme frekansı (Hz).</summary>
-        private const float ObstacleBlinkHz = 3f;
-
-        /// <summary>Yanıp sönmenin "kısık" yarısındaki renk çarpanı — halka kaybolmasın, kararsın.</summary>
-        private const float ObstacleBlinkDim = 0.3f;
-
         private class Marker
         {
             public GameObject root;
@@ -162,8 +156,18 @@ namespace VortexArena.App.Admin
                 bool selected = kv.Key == selectedId;
                 AdminPlayerView view = roster != null ? roster.Find(kv.Key) : null;
                 bool alive = view != null ? view.alive : registry.IsAlive(kv.Key);
-                Color color = alive && registry.IsInObstacle(kv.Key)
-                    ? ObstacleColor()
+
+                // Ölü oyuncuda ihlal çizilmez: ceza zaten durmuştur (sunucu `Alive` kapısı, §10.9)
+                // ve ölü bir oyuncunun kafası nerede olursa olsun operatörün yapacağı bir şey yok.
+                AdminViolationKind violation = alive
+                    ? AdminViolations.Of(kv.Key)
+                    : AdminViolationKind.None;
+
+                // ⚠️ İhlal rengi SEÇİM VURGUSUNU EZER ve bu kural geri alınmaz: seçim bir tercih,
+                // ihlal bir uyarıdır — üstelik seçim zaten üç ayrı yerde anlatılıyor (büyüyen
+                // halka, kalın sprite, alt şeritteki ad), oysa ihlalin tek görünür kanalı budur.
+                Color color = violation != AdminViolationKind.None
+                    ? AdminViolations.Blink(violation)
                     : ResolveColor(view, selected, alive);
 
                 // Halka: zeminde yatar (x=90). Daire olduğu için yaw önemsiz.
@@ -173,6 +177,9 @@ namespace VortexArena.App.Admin
 
                 if (marker.ringImage != null)
                 {
+                    // ⚠️ Renk YALNIZ Image.color ile sürülür: halka bir uGUI Image, yani
+                    // CanvasRenderer üzerinden çizilir ve MaterialPropertyBlock/shader parametresi
+                    // orada HİÇ uygulanmaz — o yol denenmez.
                     marker.ringImage.color = color;
                 }
 
@@ -209,7 +216,7 @@ namespace VortexArena.App.Admin
                 if (marker.labelText != null)
                 {
                     marker.labelText.color = ResolveLabelColor(view, alive);
-                    marker.labelText.text = BuildLabel(kv.Key, view, alive);
+                    marker.labelText.text = BuildLabel(kv.Key, view, alive, violation);
                 }
             }
         }
@@ -281,27 +288,6 @@ namespace VortexArena.App.Admin
             return alive ? team : UiKit.Dim(team, DeadColorScale);
         }
 
-        /// <summary>
-        /// §10.9 engel ihlali: halka <b>kırmızı</b> ve saniyede <see cref="ObstacleBlinkHz"/> kez
-        /// yanıp söner.
-        /// <para>
-        /// ⚠️ <b>Öncelik ihlaldedir</b> (seçim ve takım rengini EZER): ihlal bir uyarıdır, seçim bir
-        /// tercihtir — operatörün göremediği uyarı işe yaramaz. Ölü oyuncuda hiç çizilmez: ceza
-        /// zaten durmuştur (sunucu <c>Alive</c> kapısı, §10.9).
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Yanıp sönme fazı SENKRONLANMAZ ve gerekmez.</b> Telde giden tek şey boolean'dır;
-        /// her admin ekranı kendi saatinde yanar. İki operatörün halkalarının aynı anda yanması
-        /// hiçbir karar değiştirmez, karşılığında protokole bir zaman damgası sokardı.
-        /// </para>
-        /// </summary>
-        private static Color ObstacleColor()
-        {
-            // Bir periyot = yarısı açık yarısı kısık; 3 Hz için saniyede 6 yarı periyot.
-            bool on = Mathf.Repeat(Time.unscaledTime * ObstacleBlinkHz, 1f) < 0.5f;
-            return on ? UiKit.Bad : UiKit.Dim(UiKit.Bad, ObstacleBlinkDim);
-        }
-
         private static Color ResolveColor(AdminPlayerView view, bool selected, bool alive)
         {
             if (selected)
@@ -313,7 +299,14 @@ namespace VortexArena.App.Admin
             return alive ? team : UiKit.Dim(team, DeadColorScale);
         }
 
-        private static string BuildLabel(int playerId, AdminPlayerView view, bool alive)
+        /// <summary>
+        /// Ad etiketi. İhlal türü etiketin SONUNA yazıyla eklenir: renk ve frekans iki durumu
+        /// birbirinden ayırır ama ezber ister — "DUVAR" / "ALAN DIŞI" ezber gerektirmez.
+        /// <para>Etiketin görünürlüğü çağıranın <c>labelsVisible</c> kapısına tabidir; ad
+        /// etiketleri kapalıyken ihlali halkanın rengi taşır.</para>
+        /// </summary>
+        private static string BuildLabel(int playerId, AdminPlayerView view, bool alive,
+            AdminViolationKind violation)
         {
             string name = view != null && !string.IsNullOrEmpty(view.name)
                 ? view.name
@@ -324,9 +317,12 @@ namespace VortexArena.App.Admin
                 return $"{name} (ölü)";
             }
 
-            return view != null
+            string label = view != null
                 ? $"{name}  {Mathf.RoundToInt(view.hp)}"
                 : name;
+
+            string violationLabel = AdminViolations.Label(violation);
+            return string.IsNullOrEmpty(violationLabel) ? label : $"{label}  {violationLabel}";
         }
     }
 }

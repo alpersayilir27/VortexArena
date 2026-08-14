@@ -89,6 +89,10 @@ namespace VortexArena.App.Admin
         [SerializeField] private TextMeshProUGUI selectedText;
         [SerializeField] private TextMeshProUGUI killFeedText;
 
+        [Tooltip("İhlal akışı (§10.9) — kill feed'den AYRI bir metin alanı olmalıdır: " +
+                 "kill feed maçın hikâyesi, bu operatörün iş listesidir.")]
+        [SerializeField] private TextMeshProUGUI violationFeedText;
+
         [Header("Düğmeler")]
         [SerializeField] private Button preferencesButton;
         [SerializeField] private Button statsChipButton;
@@ -233,6 +237,7 @@ namespace VortexArena.App.Admin
             RefreshColumns(roster);
             RefreshBottomBar(roster);
             RefreshKillFeed(roster);
+            RefreshViolationFeed(roster);
         }
 
         private void RefreshTopBar(AdminRoster roster)
@@ -588,6 +593,36 @@ namespace VortexArena.App.Admin
             }
 
             killFeedText.text = _sb.ToString();
+        }
+
+        /// <summary>
+        /// İhlal akışı (§10.9). ⚠️ Kill feed'in İÇİNE yazılmaz ve alanı onunla paylaşmaz: ikisi
+        /// farklı sorulara cevap veriyor (maçta ne oldu / operatörün şimdi ne yapması gerekiyor)
+        /// ve tek bir listede ikisi de okunmaz olur.
+        /// <para>Alan prefabta bağlanmamış olabilir — o durumda akış sessizce çizilmez, HUD'ın
+        /// geri kalanı çalışmaya devam eder (panellerdeki eksik bağ deseninin aynısı).</para>
+        /// </summary>
+        private void RefreshViolationFeed(AdminRoster roster)
+        {
+            if (violationFeedText == null)
+            {
+                return;
+            }
+
+            IReadOnlyList<string> feed = roster.ViolationFeed;
+            if (feed.Count == 0)
+            {
+                violationFeedText.text = "";
+                return;
+            }
+
+            _sb.Clear();
+            for (int i = 0; i < feed.Count; i++)
+            {
+                _sb.AppendLine(feed[i]);
+            }
+
+            violationFeedText.text = _sb.ToString();
         }
 
         private static void TickRows(List<AdminPlayerRow> rows)

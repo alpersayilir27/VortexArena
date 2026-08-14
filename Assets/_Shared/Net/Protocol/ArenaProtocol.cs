@@ -4,6 +4,13 @@ namespace VortexArena.Protocol
     public static class ArenaProtocol
     {
         /// <summary>
+        /// v14: <b>ihlal görünürlüğü</b> — <c>0x01</c>/<c>0x02</c> bayrak baytında bit7
+        /// (<see cref="SnapshotEntry.FLAG_OUT_OF_BOUNDS"/>, §6.3) + yalnız adminlere giden
+        /// <c>violation</c> mesajı (§5.3) ve <see cref="VIOLATION_MIN_SECONDS"/>.
+        /// <para>⚠️ <b>Tel formatı DEĞİŞMEDİ</b> (bit rezervden alındı, <c>PoseUpdate.SIZE</c> ve
+        /// <c>SnapshotEntry.SIZE</c> aynı) — <b>değişen davranıştır</b>: eski APK'lı oyuncu
+        /// alan-dışı bitini hiç göndermez, yani alandan çıktığı adminde <b>sessizce görünmez</b>.
+        /// Eksik bilgi bozuk çizimden daha sinsi olduğu için tüm başlıklara yeni APK gerekir.</para>
         /// v13: <b>kalibre modu + kalibrasyon teşhisi</b> — <c>set_calibration_mode</c> (§5.2),
         /// <c>admin_state.calibrationMode</c> ve <c>welcome.calibrationMode</c> (§5.3),
         /// <c>set_calibration.floorOffset</c> → <c>PlayerInfo.floorOffset</c> (§10.6),
@@ -88,7 +95,7 @@ namespace VortexArena.Protocol
         /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
         /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
         /// </summary>
-        public const int PROTOCOL_VERSION = 13;
+        public const int PROTOCOL_VERSION = 14;
         public const string APP_ID = "VortexArena";
 
         // ---- Kalibre modu (§5.2/§10.6): başlıkların AÇILIŞTA nasıl hizalanacağı. ----
@@ -384,6 +391,28 @@ namespace VortexArena.Protocol
         /// kurala çevirmez, yalnız iki ucun aynı dizeyi yazmasını garanti eder.</para>
         /// </summary>
         public const string WEAPON_ID_OBSTACLE = "obstacle";
+
+        // ---- İhlal defteri (§5.3/§10.9): violation mesajının `kind` değerleri. Telde string
+        // taşınır; tanımadığı türü okuyan taraf satırı ham gösterir, mesajı düşürmez. ----
+
+        /// <summary>Kafa bir iç engelin içinde (<see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/>) —
+        /// <b>ceza üreten</b> tek ihlal türü; can erimesi buna bağlıdır.</summary>
+        public const string VIOLATION_KIND_OBSTACLE = "obstacle";
+
+        /// <summary>Kafa muhafazanın güvenli alanının dışında
+        /// (<see cref="SnapshotEntry.FLAG_OUT_OF_BOUNDS"/>). ⚠️ <b>Ceza üretmez</b>: kalibrasyonu
+        /// birkaç santim kaymış oyuncu durduk yere ölmesin diye kural görünürlükte kalır, müdahale
+        /// kararı operatöründür.</summary>
+        public const string VIOLATION_KIND_OUT_OF_BOUNDS = "out_of_bounds";
+
+        /// <summary>
+        /// Bundan kısa süren temaslar ihlal <b>akışına (feed)</b> hiç yazılmaz (sn, §10.9): sınır
+        /// çizgisinde salınan bir oyuncu saniyede üç satır üretir ve operatörün iş listesini
+        /// okunamaz hâle getirirdi.
+        /// <para>⚠️ <b>Eşik yalnız feed içindir:</b> halka (snapshot biti) ve engel cezası ilk
+        /// kareden itibaren çalışır — kısa temas görünmez değil, yalnız log'a girmez.</para>
+        /// </summary>
+        public const float VIOLATION_MIN_SECONDS = 0.5f;
 
         /// <summary>Countdown fazının VARSAYILAN uzunluğu (saniye, tam sayı — countdown mesajı
         /// saniye sayar). Admin start_match.countdownSeconds ile o maça özel bir değer verebilir

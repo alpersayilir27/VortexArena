@@ -103,6 +103,13 @@ public sealed class PlayerState
     /// §10.4/§10.9).</summary>
     public DateTime DiedAt { get; set; }
 
+    /// <summary>Doğma korumasının bittiği UTC an; geçmişte ya da <see cref="DateTime.MinValue"/>
+    /// ise koruma yok (§10.4). Süreyi modun <c>SpawnProtectionSeconds</c>'ı belirler.
+    /// <para>Yazarı MatchDirector'dır (kendi <c>_gate</c>'i altında, canlanma/ölüm kapılarında);
+    /// okuyanı <c>hit_report</c> kapısı ve snapshot yazıcısıdır. StateHost bunu <see cref="Alive"/>
+    /// ile aynı gerekçeyle kilitsiz okur — bir tik gecikme snapshot için önemsizdir.</para></summary>
+    public DateTime SpawnProtectedUntil { get; set; } = DateTime.MinValue;
+
     // ---- Kalibrasyon durumu (§10.6) ----
     // MAÇ DURUMU DEĞİL cihaz durumudur: yazarı MatchDirector değil PlayerRegistry'dir
     // (SetCalibration, registry'nin kendi _gate'i altında) ve maç sıfırlamalarında KORUNUR.
@@ -193,6 +200,29 @@ public sealed class PlayerState
     /// yeni girişte baştan başlar.</para>
     /// </summary>
     public DateTime? ObstacleSince { get; set; }
+
+    /// <summary>
+    /// §10.9: gönderen kendi kafasını muhafazanın <b>güvenli alanının DIŞINDA</b> ölçtü
+    /// (<c>gripFlags</c> bit7 = <see cref="SnapshotEntry.FLAG_OUT_OF_BOUNDS"/>).
+    /// <para>⚠️ <b>Bu da bir ÖLÇÜMDÜR</b> ama <see cref="InObstacle"/>'ın aksine <b>ceza
+    /// üretmez</b>: can eritmez, canlanmayı engellemez, hiçbir maç kapısını kapatmaz. Sebep
+    /// engel kuralında dış duvarın <c>Obstacle</c> layer'ına konmama gerekçesinin aynısıdır —
+    /// kalibrasyonu birkaç santim kaymış oyuncu durduk yere ölürdü. Tek tüketicisi admin
+    /// görünürlüğü (kuş bakışı halkası) ve ihlal defteridir
+    /// (<see cref="OutOfBoundsTally"/>); müdahale kararı operatörün.</para>
+    /// <para>⚠️ Tazeliği yine <b>pozun tazeliğidir</b> (<see cref="LastPoseAt"/> +
+    /// <see cref="ArenaProtocol.OBSTACLE_FLAG_STALE_MS"/>): bayrak her poz paketinde yeniden
+    /// geliyor, bu yüzden ayrı bir zaman damgası açılmaz.</para>
+    /// <para>Yazarı UDP recv thread'i (PoseGate altında), okuyucusu MatchDirector (kendi _gate'i
+    /// altında, PoseGate ALMADAN) — <see cref="InObstacle"/> ile birebir aynı desen.</para>
+    /// </summary>
+    public bool OutOfBounds { get; set; }
+
+    /// <summary>Engel ihlallerinin admin defteri (§10.9).</summary>
+    public ViolationTally ObstacleTally { get; } = new();
+
+    /// <summary>Alan-dışı ihlallerinin admin defteri (§10.9).</summary>
+    public ViolationTally OutOfBoundsTally { get; } = new();
 
     // ---- İskelet kanalı (0x07, §6.9) ----
     // ⚠️ PoseGate ALTINDA okunur/yazılır — poz ile aynı kilit, çünkü ikisi de aynı iki thread
@@ -322,4 +352,27 @@ public sealed class PlayerState
         var elapsed = (DateTime.UtcNow - DisconnectedAt).TotalSeconds;
         return (int)Math.Max(0d, Math.Ceiling(ArenaProtocol.RECONNECT_GRACE - elapsed));
     }
+}
+
+/// <summary>Bir ihlal TÜRÜNÜN admin defteri (§10.9). Cezadan AYRIDIR: ceza saati
+/// <see cref="PlayerState.ObstacleSince"/>'dır ve oyuncu ölünce/kalibresiz kalınca sıfırlanır —
+/// defter ise operatörün gördüğü kayıttır, o koşullardan etkilenmez.
+/// <para>⚠️ Tür başına AYRI ALAN AÇILMAZ: iki ihlal türü de aynı kenar mantığını kullanıyor,
+/// dört alanı ikişer kez yazmak ikisinin sessizce sapması demekti. Tek tip, iki örnek.</para>
+/// <para>Yazarı ve okuyucusu yalnız <c>MatchDirector</c>'dır (kendi <c>_gate</c>'i altında);
+/// alanlar tek başına atomik olmadığı için başka bir kilitten dokunulmaz.</para></summary>
+public sealed class ViolationTally
+{
+    /// <summary>İhlalin başladığı an; null = ihlal yok.</summary>
+    public DateTime? Since { get; set; }
+
+    /// <summary>Adminlere "başladı" mesajı gönderildi mi
+    /// (<see cref="ArenaProtocol.VIOLATION_MIN_SECONDS"/> eşiği geçildi). Eşiğin altında kalan
+    /// temas deftere hiç girmez — bitişinde de mesaj çıkmaz.</summary>
+    public bool Announced { get; set; }
+
+    public int Count { get; set; }
+    public float TotalSeconds { get; set; }
+
+    public void Reset() { Since = null; Announced = false; Count = 0; TotalSeconds = 0f; }
 }

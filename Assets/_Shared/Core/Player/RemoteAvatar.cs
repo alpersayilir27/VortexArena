@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Rendering;
 using VortexArena.Core.Arena;
 using VortexArena.Core.Combat;
 using VortexArena.Net;
@@ -19,6 +20,12 @@ namespace VortexArena.Core.Player
     /// etiketine " (ölü)" eklenir ve vuruş kutuları kapatılır (ölüye ateş edilemez). <b>Aynı
     /// hayalet görünümü kalibresiz oyuncuda da kullanılır</b> ve orada turuncuya nabız atar —
     /// kalibresizlik ölümü EZER.
+    /// </para>
+    /// <para>
+    /// <b>Doğma koruması kalkanı</b> (§10.4) hayaletin aksine materyal takası DEĞİLDİR: karakter
+    /// normal çizilmeye devam eder, kalkan onun ÜSTÜNE binen ikinci bir renderer'dır (kabuk).
+    /// Kalkan yalnız SUNUMDUR — kimin ne kadar korunduğuna ve hasarın geçip geçmeyeceğine sunucu
+    /// karar verir.
     /// </para>
     /// <para>
     /// <b>Elde tutulan eşya</b> (§6.6): snapshot'tan gelen <c>itemL</c>/<c>itemR</c> baytları
@@ -49,6 +56,12 @@ namespace VortexArena.Core.Player
         [Tooltip("Yarı saydam hayalet materyali (VortexArena/AvatarGhost). BOŞSA hayalet " +
                  "görünümü hiç uygulanmaz — ölü oyuncu canlıdan ayırt edilemez.")]
         [SerializeField] private Material ghostMaterial;
+
+        [Header("Doğma koruması kalkanı")]
+        [Tooltip("Kalkan materyali (VortexArena/CharacterShieldV2) — İKİ TAKIM İÇİN DE aynısı. " +
+                 "BOŞSA kalkan hiç çizilmez — korunan oyuncu normal görünür (koruma yine işler). " +
+                 "Kabarcığın kalınlığı, rengi ve hareketi MATERYALDEN ayarlanır; burada kod işi yok.")]
+        [SerializeField] private Material shieldMaterial;
 
         [Header("Takıma göre gövde")]
         [Tooltip("KIRMIZI takımın gövde alt ağacı (Ch18). Boşsa herkes varsayılan gövdeyi kullanır — " +
@@ -185,6 +198,13 @@ namespace VortexArena.Core.Player
         /// <summary>Sunucuya göre bu oyuncunun hizalaması geçerli mi (§10.6; roster'dan gelir).</summary>
         public bool IsCalibrated { get; private set; } = true;
 
+        /// <summary>
+        /// Son snapshot'taki doğma koruması bayrağı (§10.4; kayıt yoksa false).
+        /// <para>⚠️ Bu yalnız SUNUM içindir: korumanın süresi de hasarı kesme kararı da sunucunundur
+        /// (<c>hit_report</c> kapısı). İstemci burada yalnız bayrağı izler, sayaç tutmaz.</para>
+        /// </summary>
+        public bool IsSpawnProtected { get; private set; }
+
         // GC üretmemek için alan olarak tutulur (SetInfo her lobby_state'te çağrılabilir).
         private MaterialPropertyBlock _propertyBlock;
 
@@ -295,6 +315,52 @@ namespace VortexArena.Core.Player
         private Material[][] _bodyOriginalMaterials;
         private Material[][] _bodyGhostMaterials;
 
+        // ── Kalkan kabuğu (§10.4) ───────────────────────────────────────────────────────
+        // Aktif gövdenin her renderer'ının altında duran, AYNI mesh'i AYNI kemiklerle çizen ikinci
+        // renderer. ⚠️ Kalkan materyali gövdenin dizisine EKLENEMEZ: dizi alt mesh sayısını aşınca
+        // Unity fazla materyalleri yalnız SON alt mesh'e uygular, yani iki alt mesh taşıyan Ch15
+        // gövdesinin bir yarısı kalkansız kalırdı. Materyal TAKASI da bir seçenek değil — takas
+        // ederken karakterin kendisi hiç çizilmezdi, oysa korunan oyuncu görünmeye devam etmeli.
+        private Renderer[] _bodyShieldShells;
+        private Renderer[] _redShieldShells;
+
+        /// <summary>Kabuk objesinin adı — hiyerarşide gövdenin altında tek başına durur.</summary>
+        private const string ShieldShellName = "ShieldShell";
+
+        /// <summary>Kalkan materyalinin açılış/kapanış çarpanı (<c>CharacterShieldV2</c>'de <c>_Fade</c>).</summary>
+        private static readonly int ShieldFadeId = Shader.PropertyToID("_Fade");
+
+        /// <summary>Kalkanın doğduğu andaki parlama tavanı (1 = normal).</summary>
+        private const float ShieldBirthFlash = 1.8f;
+
+        /// <summary>Doğuş parlamasının normale oturma süresi (sn).</summary>
+        private const float ShieldBirthSeconds = 0.25f;
+
+        /// <summary>Koruma bittikten sonra kalkanın erime süresi (sn).</summary>
+        private const float ShieldReleaseSeconds = 0.3f;
+
+        /// <summary>Kabuğun sınır kutusuna eklenen pay (m) — shader'daki şişirmenin karşılığı.</summary>
+        private const float ShieldBoundsPadding = 0.2f;
+
+        /// <summary>
+        /// Kalkanın görsel şiddeti: 0 = kalkan yok, 1 = normal, 1 üstü = doğuş parlaması.
+        /// <para>⚠️ Bu bir koruma sayacı DEĞİLDİR ve öyle kullanılmaz — korumanın açık olup
+        /// olmadığını yalnız snapshot bayrağı söyler (<see cref="IsSpawnProtected"/>). Buradaki
+        /// süreler bayrak DÜŞTÜKTEN SONRAKİ görsel kuyruktur; bayrak açıkken değer 1'de sabitlenir,
+        /// yani istemci korumayı ne uzatabilir ne kısaltabilir.</para>
+        /// </summary>
+        private float _shieldFade;
+
+        /// <summary>Kabuklara en son yazılan <c>_Fade</c> — değişmediği karelerde yazılmaz.</summary>
+        private float _shieldFadeWritten = -1f;
+
+        /// <summary>
+        /// Kabukların property block'u — gövdenin <c>_BaseColor</c> bloğundan AYRI tutulur.
+        /// <para>⚠️ Tek blok paylaşılamaz: <see cref="MaterialPropertyBlock"/> renderer başına
+        /// bütün olarak uygulanır, yani gövdeye yazılan hayalet rengi kabuğa da giderdi.</para>
+        /// </summary>
+        private MaterialPropertyBlock _shieldBlock;
+
         // ── Takıma göre gövde ───────────────────────────────────────────────────────────
         /// <summary>Kırmızı takım gövdesinin renderer'ları; <see cref="redBodyRoot"/> boşsa null.</summary>
         private Renderer[] _redBodyRenderers;
@@ -314,9 +380,9 @@ namespace VortexArena.Core.Player
         [SerializeField] private HandPoseProfile idleHandPose;
 
 
-        // ⚠️ Hayalet materyal takası AKTİF gövdeye uygulanır, yani her gövdenin kendi özgün/hayalet
-        // dizisi olmak zorunda: tek bir ikili tutulsaydı takım değişiminden sonra takas yanlış
-        // renderer'a (ve yanlış submesh sayısıyla) yazılırdı.
+        // ⚠️ Materyal takası AKTİF gövdeye uygulanır, yani her gövdenin kendi özgün/hayalet dizisi
+        // olmak zorunda: tek bir takım tutulsaydı takım değişiminden sonra takas yanlış renderer'a
+        // (ve yanlış submesh sayısıyla) yazılırdı.
         private Material[][] _redOriginalMaterials;
         private Material[][] _redGhostMaterials;
 
@@ -338,12 +404,39 @@ namespace VortexArena.Core.Player
                 ? _redGhostMaterials
                 : _bodyGhostMaterials;
 
-        // Uygulanmış hayalet durumu — kare başına gereksiz materyal/renderer trafiği olmasın.
-        private bool _ghostApplied;
-        private bool _ghostStateKnown;
+        /// <summary>
+        /// Çizilmekte olan gövdenin kalkan kabukları.
+        /// <para>⚠️ Kabuk gövde başınadır (iki gövdenin mesh'i ve kemikleri ayrı) ama MATERYAL
+        /// ortaktır: kalkan takımı DEĞİL "bu oyuncuya şu an dokunulamaz"ı anlatır. Takım renginde
+        /// bir kalkan, takım renginde çizilen hayaletle karışırdı — ikisi ayrı bilgi, ayrı renk.</para>
+        /// </summary>
+        private Renderer[] ActiveShieldShells =>
+            _useRedBody && _redBodyRenderers != null && _redBodyRenderers.Length > 0
+                ? _redShieldShells
+                : _bodyShieldShells;
+
+        /// <summary>
+        /// Gövdenin çizim durumu. Hayalet ile kalkan farklı mekanizmalar kullansa da (materyal
+        /// takası ↔ üste binen kabuk) iki ayrı bayrak değil tek bir durum tutulur — iki bayrak
+        /// birbirini ezme sırasını çağıran tarafa bırakırdı ve gövde bir karede hem hayalet hem
+        /// kalkanlı çizilebilirdi.
+        /// </summary>
+        private enum BodyVisual
+        {
+            Normal,
+            Ghost,
+            Shield
+        }
+
+        // Uygulanmış görünüm — kare başına gereksiz materyal/renderer trafiği olmasın.
+        private BodyVisual _bodyVisual;
+        private bool _bodyVisualKnown;
 
         /// <summary>Kurulumsuz hayalet uyarısı örnek başına bir kez.</summary>
         private bool _ghostSetupWarned;
+
+        /// <summary>Kurulumsuz kalkan uyarısı örnek başına bir kez.</summary>
+        private bool _shieldSetupWarned;
 
         private void Awake()
         {
@@ -364,6 +457,11 @@ namespace VortexArena.Core.Player
             // gövdenin renderer'ları o noktada zaten toplanmış olmalı.
             CacheRedBody();
             CacheGhostMaterials();
+
+            // ⚠️ Kabuklar CacheRedBody'den SONRA kurulur: _redBodyRenderers
+            // GetComponentsInChildren<Renderer>(true) ile toplanıyor ve kabuk o listeye sızarsa
+            // gövde açma/kapama ile hayalet takası kabuğa da uygulanırdı.
+            CacheShieldShells();
         }
 
         /// <summary>
@@ -393,61 +491,204 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Hayalet materyal dizilerini BİR kez kurar: hayalet AYRI bir model değil, çizilen
+        /// Hayalet materyal takas dizilerini BİR kez kurar: hayalet AYRI bir model değil, çizilen
         /// gövdenin KENDİ mesh'inin materyal takasıdır — poz aktarımı hiç olmadığı için gövde
         /// yapısal olarak kayamaz.
         /// <para>⚠️ <c>sharedMaterials</c> her çağrıda YENİ dizi döndürür — bu yüzden bir kez
         /// okunup saklanır; durum değişiminde okumak kare başına çöp üretmese de, takas edilen
         /// diziyi geri koyabilmek için özgün dizinin saklanması zaten şart.</para>
+        /// <para>⚠️ Özgün diziler <b>her hâlükârda</b> saklanır: hayalet materyali bağlı olmayan bir
+        /// prefabda gövde materyalsiz kalmamalı ve kalkan yine çizilebilmeli.</para>
         /// </summary>
         private void CacheGhostMaterials()
         {
-            if (ghostMaterial == null)
-            {
-                return;
-            }
-
-            // ⚠️ İKİ gövde için de kurulur: hayalete geçiş takımdan bağımsız olabilir, yani takım
+            // ⚠️ İKİ gövde için de kurulur: hayalete geçiş takımdan bağımsız, yani takım
             // gövdesindeyken ölen oyuncunun takas edeceği dizi hazır olmalı.
-            BuildGhostMaterials(bodyRenderers, out _bodyOriginalMaterials, out _bodyGhostMaterials);
-            BuildGhostMaterials(_redBodyRenderers, out _redOriginalMaterials, out _redGhostMaterials);
+            _bodyOriginalMaterials = CaptureOriginalMaterials(bodyRenderers);
+            _redOriginalMaterials = CaptureOriginalMaterials(_redBodyRenderers);
+
+            _bodyGhostMaterials = BuildSwapMaterials(_bodyOriginalMaterials, ghostMaterial);
+            _redGhostMaterials = BuildSwapMaterials(_redOriginalMaterials, ghostMaterial);
         }
 
-        /// <summary>Bir gövdenin özgün materyal dizilerini saklar ve aynı UZUNLUKTA hayalet
-        /// dizilerini üretir (uzunluk kuralının gerekçesi alan yorumlarında).</summary>
-        private void BuildGhostMaterials(Renderer[] renderers, out Material[][] original,
-                                         out Material[][] ghost)
+        /// <summary>
+        /// Kalkan kabuklarını BİR kez kurar: her gövdenin her renderer'ının altına, aynı mesh'i aynı
+        /// kemiklerle çizen kapalı bir ikinci renderer.
+        /// <para>⚠️ Bu, "ikinci modeli karakterin iskeletine bağlama" yasağı DEĞİLDİR: o yasak
+        /// <b>farklı bir FBX'in</b> mesh'ini karakterin kemiklerine bağlamakla ilgilidir (kemik
+        /// oranları farklı → deforme gövde). Kabuk AYNI mesh'i AYNI kemiklerle çiziyor, yani
+        /// gövdeden sapması yapısal olarak imkânsız.</para>
+        /// <para>Materyal bağlı değilse kabuk hiç kurulmaz — kalkan çizilmez, koruma sunucuda
+        /// işlemeye devam eder.</para>
+        /// </summary>
+        private void CacheShieldShells()
         {
-            original = null;
-            ghost = null;
+            _bodyShieldShells = BuildShieldShells(bodyRenderers, shieldMaterial);
+            _redShieldShells = BuildShieldShells(_redBodyRenderers, shieldMaterial);
+        }
 
+        /// <summary>Bir gövdenin özgün materyal dizilerini saklar (takasın geri alınabilmesi için
+        /// tek kaynak).</summary>
+        private static Material[][] CaptureOriginalMaterials(Renderer[] renderers)
+        {
             if (renderers == null || renderers.Length == 0)
             {
-                return;
+                return null;
             }
 
-            original = new Material[renderers.Length][];
-            ghost = new Material[renderers.Length][];
-
+            var original = new Material[renderers.Length][];
             for (int i = 0; i < renderers.Length; i++)
             {
                 Renderer target = renderers[i];
-                if (target == null)
+                if (target != null)
+                {
+                    original[i] = target.sharedMaterials;
+                }
+            }
+
+            return original;
+        }
+
+        /// <summary>
+        /// Özgün dizilerle aynı UZUNLUKTA, tek bir materyalle doldurulmuş takas dizileri üretir;
+        /// materyal bağlı değilse <c>null</c> (o görünüm hiç uygulanmaz).
+        /// <para>⚠️ Uzunluk özgün diziden kopyalanır: dizi uzunluğu alt mesh sayısından sapınca son
+        /// alt mesh iki kez ya da hiç çizilmez.</para>
+        /// </summary>
+        private static Material[][] BuildSwapMaterials(Material[][] original, Material swap)
+        {
+            if (original == null || swap == null)
+            {
+                return null;
+            }
+
+            var built = new Material[original.Length][];
+            for (int i = 0; i < original.Length; i++)
+            {
+                Material[] sourceMaterials = original[i];
+                if (sourceMaterials == null)
                 {
                     continue;
                 }
 
-                Material[] sourceMaterials = target.sharedMaterials;
-                original[i] = sourceMaterials;
-
-                var ghosts = new Material[sourceMaterials.Length];
-                for (int m = 0; m < ghosts.Length; m++)
+                var swapped = new Material[sourceMaterials.Length];
+                for (int m = 0; m < swapped.Length; m++)
                 {
-                    ghosts[m] = ghostMaterial;
+                    swapped[m] = swap;
                 }
 
-                ghost[i] = ghosts;
+                built[i] = swapped;
             }
+
+            return built;
+        }
+
+        /// <summary>
+        /// Bir gövdenin kalkan kabuklarını üretir (kaynak dizisiyle aynı sırada); materyal bağlı
+        /// değilse <c>null</c> — o gövdede kalkan hiç çizilmez.
+        /// </summary>
+        private static Renderer[] BuildShieldShells(Renderer[] sources, Material shieldMaterial)
+        {
+            if (sources == null || sources.Length == 0 || shieldMaterial == null)
+            {
+                return null;
+            }
+
+            var shells = new Renderer[sources.Length];
+            for (int i = 0; i < sources.Length; i++)
+            {
+                shells[i] = BuildShieldShell(sources[i], shieldMaterial);
+            }
+
+            return shells;
+        }
+
+        /// <summary>
+        /// Tek bir gövde renderer'ının kabuğunu kurar: kaynağın ALTINDA, kimlik dönüşümlü bir çocuk
+        /// ve kaynağın mesh'ini aynı kemiklerle çizen bir renderer. Kabuk KAPALI doğar.
+        /// <para>⚠️ Gölge kapatılır: saydam kalkanın opak gölge düşürmesi onu katı bir gövde gibi
+        /// gösterirdi (<c>AvatarGhost</c> shader'ının gölge pass'i taşımamasıyla aynı gerekçe).</para>
+        /// <para>⚠️ Kabuk gövdenin mesh'ini <b>olduğu gibi</b> çizer; şişirme (kabarcık kalınlığı)
+        /// <c>CharacterShieldV2</c> shader'ının vertex adımında yapılır. Mesh çoğaltarak şişirme
+        /// yolu geri gelmez: karakter FBX'lerinde Read/Write kapalı, açmak Quest'te model başına
+        /// ikinci bir mesh kopyası demek ve aynı kalınlık iki ayrı yerden ayarlanır olurdu.</para>
+        /// <para>Desteklenmeyen renderer türü (ne skinned ne mesh) ya da mesh'siz kaynak atlanır —
+        /// eksik olan yalnız o parçanın kalkanıdır.</para>
+        /// </summary>
+        private static Renderer BuildShieldShell(Renderer source, Material shieldMaterial)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            var skinned = source as SkinnedMeshRenderer;
+            MeshFilter sourceFilter = null;
+            if (skinned == null && source is MeshRenderer)
+            {
+                sourceFilter = source.GetComponent<MeshFilter>();
+            }
+
+            Mesh sourceMesh = skinned != null
+                ? skinned.sharedMesh
+                : sourceFilter != null ? sourceFilter.sharedMesh : null;
+            if (sourceMesh == null)
+            {
+                return null;
+            }
+
+            Mesh shellMesh = sourceMesh;
+
+            var shellObject = new GameObject(ShieldShellName)
+            {
+                // Kaynağın katmanı kopyalanır: kabuk gövdeyle aynı kültür/kesme kurallarına tabi.
+                layer = source.gameObject.layer
+            };
+
+            Transform shell = shellObject.transform;
+            shell.SetParent(source.transform, false);
+            shell.localPosition = Vector3.zero;
+            shell.localRotation = Quaternion.identity;
+            shell.localScale = Vector3.one;
+
+            Renderer shellRenderer;
+            if (skinned != null)
+            {
+                var shellSkinned = shellObject.AddComponent<SkinnedMeshRenderer>();
+                shellSkinned.sharedMesh = shellMesh;
+                shellSkinned.bones = skinned.bones;
+                shellSkinned.rootBone = skinned.rootBone;
+                shellSkinned.quality = skinned.quality;
+
+                // ⚠️ Sınır kutusu bir tutam GENİŞLETİLİR: kabuğun köşeleri shader'da normalleri
+                // yönünde ötelendiği için çizilen hacim gövdeninkinden büyük. Kaynağın kutusu aynen
+                // kopyalansaydı kabarcığın kenarı, gövde daha ekranın içindeyken kesilirdi.
+                Bounds shellBounds = skinned.localBounds;
+                shellBounds.Expand(ShieldBoundsPadding);
+                shellSkinned.localBounds = shellBounds;
+
+                shellSkinned.updateWhenOffscreen = skinned.updateWhenOffscreen;
+                shellRenderer = shellSkinned;
+            }
+            else
+            {
+                shellObject.AddComponent<MeshFilter>().sharedMesh = shellMesh;
+                shellRenderer = shellObject.AddComponent<MeshRenderer>();
+            }
+
+            // ⚠️ Materyal dizisi alt mesh sayısı kadar doldurulur — eksik dizide kalan alt mesh'ler
+            // hiç çizilmez, fazlası son alt mesh'i bir kez daha çizerdi.
+            var materials = new Material[Mathf.Max(1, shellMesh.subMeshCount)];
+            for (int m = 0; m < materials.Length; m++)
+            {
+                materials[m] = shieldMaterial;
+            }
+
+            shellRenderer.sharedMaterials = materials;
+            shellRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            shellRenderer.receiveShadows = false;
+            shellRenderer.enabled = false;
+            return shellRenderer;
         }
 
         /// <summary>Spawner kurar; poz okumaları bu id ile yapılır.</summary>
@@ -526,9 +767,9 @@ namespace VortexArena.Core.Player
             ClearPropertyBlocks(passive);
             WriteMaterials(passive, useRed ? _bodyOriginalMaterials : _redOriginalMaterials);
 
-            // Hayalet durumu YENİ aktif gövdeye baştan uygulansın: o gövde şimdiye kadar hiç
+            // Görünüm durumu YENİ aktif gövdeye baştan uygulansın: o gövde şimdiye kadar hiç
             // dokunulmamış hâlde duruyordu.
-            _ghostStateKnown = false;
+            _bodyVisualKnown = false;
 
             // ⚠️ Vuruş kutusu seti de gövdeyle BİRLİKTE değişmeli: kutular kemiklere asılı ve iki
             // modelin kemik oranları farklı. Burada çağrılmazsa admin takım değiştirdiğinde oyuncu
@@ -712,7 +953,18 @@ namespace VortexArena.Core.Player
 
         /// <summary>
         /// Gövde görünümü: canlı + kalibreli = <b>hiç dokunulmaz</b> (karakter olduğu gibi çizilir),
-        /// ölü ya da kalibresiz = <b>hayalet</b>.
+        /// ölü ya da kalibresiz = <b>hayalet</b>, doğma koruması altında = <b>kalkan</b> (§10.4).
+        /// <para>
+        /// ⚠️ Kalkan hayaletten FARKLI bir mekanizmadır: gövdenin materyaline hiç dokunmaz, aktif
+        /// gövdenin üstüne binen ikinci bir renderer'la çizilir (<see cref="SyncShieldShells"/>) —
+        /// korunan oyuncu normal görünmeye devam etmeli. İkisi yine de tek durumdan sürülür, yani
+        /// aynı karede birbirini ezmeleri imkansızdır (<see cref="ResolveBodyVisual"/>).
+        /// </para>
+        /// <para>
+        /// ⚠️ Kalkan materyali gövdenin materyal dizisine EKLENEMEZ: dizi alt mesh sayısını aştığında
+        /// Unity fazla materyalleri yalnız SON alt mesh'e uygular, yani iki alt mesh taşıyan gövdenin
+        /// bir yarısı kalkansız kalırdı.
+        /// </para>
         /// <para>
         /// ⚠️ <b>Neden materyal takası, alfa DEĞİL:</b> karakterin materyali URP Lit ve OPAK
         /// (<c>_Surface: 0</c>, <c>_ZWrite: 1</c>) — opak malzemede <c>_BaseColor.a</c> yazmanın
@@ -733,14 +985,12 @@ namespace VortexArena.Core.Player
         /// </summary>
         private void ApplyBodyVisual()
         {
-            // ⚠️ Görünürlük de karara girer: görünmez avatarda (poz gelmemiş) hayalet durumu
-            // UYGULANMAZ — gövde geri geldiğinde durum zaten SetVisible'dan yeniden hesaplanır.
-            bool ghost = _visible && (!IsCalibrated || !IsAlive);
+            BodyVisual visual = ResolveBodyVisual();
 
-            if (_ghostStateKnown && ghost == _ghostApplied)
+            if (_bodyVisualKnown && visual == _bodyVisual)
             {
                 // Durum aynı: yalnız renk tazelenir — kalibresiz nabız her kare buraya uğrar.
-                if (ghost)
+                if (visual == BodyVisual.Ghost)
                 {
                     ApplyGhostColor();
                 }
@@ -748,30 +998,61 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            _ghostStateKnown = true;
-            _ghostApplied = ghost;
+            _bodyVisualKnown = true;
+            _bodyVisual = visual;
 
-            if (ActiveGhostMaterials != null)
-            {
-                ApplyBodyMaterials(ghost);
-            }
-            else if (ghost)
+            if (visual == BodyVisual.Ghost && ActiveGhostMaterials == null)
             {
                 WarnMissingGhostSetup();
             }
+            else if (visual == BodyVisual.Shield && (ActiveShieldShells == null || ActiveShieldShells.Length == 0))
+            {
+                WarnMissingShieldSetup();
+            }
 
-            // Gövde seçimi hayalet durumundan BAĞIMSIZ uygulanır: pasif gövde kapalı, aktif gövde
+            ApplyBodyMaterials(visual);
+
+            // Gövde seçimi görünüm durumundan BAĞIMSIZ uygulanır: pasif gövde kapalı, aktif gövde
             // açık olmalı.
             SyncBodyRendererEnable();
 
-            if (ghost)
+            if (visual == BodyVisual.Ghost)
             {
                 ApplyGhostColor();
             }
             else
             {
+                // ⚠️ Kalkanda da property block SÖKÜLÜR: kalkanın rengi materyalin KENDİSİNDEDİR,
+                // üstüne _BaseColor yazmak hayaletin takım tonunu kalkana sızdırırdı.
                 ClearGhostColor();
             }
+        }
+
+        /// <summary>
+        /// Gövdenin çizim durumunu seçer.
+        /// <para>⚠️ Görünürlük de karara girer: görünmez avatarda (poz gelmemiş) hiçbir takas
+        /// UYGULANMAZ — gövde geri geldiğinde durum zaten <see cref="SetVisible"/>'dan yeniden
+        /// hesaplanır.</para>
+        /// <para>⚠️ <b>Hayalet kalkanı EZER</b> ve sıra tersine çevrilmez: ölü/kalibresiz gövde zaten
+        /// tehdit değil, onu kalkanlı göstermek "bu adam korunuyor" diye okunurdu.</para>
+        /// <para>Kalkan, koruma bayrağı düştükten sonra <see cref="_shieldFade"/> sıfırlanana kadar
+        /// bir tutam daha çizilir (<see cref="TickShieldFade"/>): koruma tek karede yok olsaydı
+        /// oyuncu "bitti" anını değil "kayboldu"yu görürdü. ⚠️ Bu kuyruk yalnız GÖRSELDİR — hasar
+        /// kapısı sunucudadır ve kuyruk boyunca oyuncu çoktan vurulabilir durumdadır.</para>
+        /// </summary>
+        private BodyVisual ResolveBodyVisual()
+        {
+            if (!_visible)
+            {
+                return BodyVisual.Normal;
+            }
+
+            if (!IsCalibrated || !IsAlive)
+            {
+                return BodyVisual.Ghost;
+            }
+
+            return IsSpawnProtected || _shieldFade > 0f ? BodyVisual.Shield : BodyVisual.Normal;
         }
 
         /// <summary>
@@ -816,7 +1097,31 @@ namespace VortexArena.Core.Player
             Renderer[] passive = ReferenceEquals(active, bodyRenderers) ? _redBodyRenderers : bodyRenderers;
             SetRenderersEnabled(passive, false);
 
+            SyncShieldShells();
             RefreshRedBodyDriver();
+        }
+
+        /// <summary>
+        /// Kalkan kabuklarını gövde durumuna göre açar/kapatır (§10.4).
+        /// <para>Pasif gövdenin kabukları HER hâlükârda kapalıdır — iki gövde birden kalkanlı
+        /// çizilseydi oyuncu iç içe geçmiş iki kalkan olarak görünürdü
+        /// (<see cref="SyncBodyRendererEnable"/> gerekçesinin aynısı).</para>
+        /// <para>Kabuk gövdenin ALTINDA durduğu için avatar gizlendiğinde ayrıca kapatılması
+        /// gerekmez: <see cref="SetVisible"/> görsel kökü tümden kapatıyor ve
+        /// <see cref="ResolveBodyVisual"/> görünmez avatarda zaten <see cref="BodyVisual.Normal"/>
+        /// döndürüyor.</para>
+        /// </summary>
+        private void SyncShieldShells()
+        {
+            Renderer[] active = ActiveShieldShells;
+            SetRenderersEnabled(active, _bodyVisual == BodyVisual.Shield);
+
+            // ⚠️ Yazılmış değer UNUTULUR: takım değişiminde kabuk takımı da değişiyor ve yeni
+            // kabuklara hiç _Fade yazılmamış olurdu (materyalin varsayılanıyla çizilirlerdi).
+            _shieldFadeWritten = -1f;
+
+            Renderer[] passive = ReferenceEquals(active, _bodyShieldShells) ? _redShieldShells : _bodyShieldShells;
+            SetRenderersEnabled(passive, false);
         }
 
         /// <summary>
@@ -852,14 +1157,23 @@ namespace VortexArena.Core.Player
             ClearPropertyBlocks(_redBodyRenderers);
         }
 
-        /// <summary>AKTİF gövdenin mesh'ini hayalet materyaline çevirir ya da geri alır.</summary>
-        private void ApplyBodyMaterials(bool ghost)
+        /// <summary>
+        /// AKTİF gövdenin mesh'ini istenen görünümün materyallerine çevirir.
+        /// <para>Takas dizisi kurulmamışsa (hayalet materyali bağlanmamış) ÖZGÜN diziye düşülür:
+        /// eksik olan yalnız görsel katmandır, gövdenin materyalsiz kalması değil.</para>
+        /// <para>⚠️ Yalnız <b>hayalet</b> takas yapar; diğer her durumda gövde ÖZGÜN materyalleriyle
+        /// çizilir. Kalkan gövdenin materyaline hiç dokunmaz — üstüne binen ayrı bir kabuktur
+        /// (<see cref="SyncShieldShells"/>), yani korunan oyuncu normal görünmeye devam eder.</para>
+        /// </summary>
+        private void ApplyBodyMaterials(BodyVisual visual)
         {
-            WriteMaterials(ActiveBodyRenderers, ghost ? ActiveGhostMaterials : ActiveOriginalMaterials);
+            Material[][] target = visual == BodyVisual.Ghost ? ActiveGhostMaterials : ActiveOriginalMaterials;
+
+            WriteMaterials(ActiveBodyRenderers, target ?? ActiveOriginalMaterials);
         }
 
         /// <summary>Saklanmış materyal dizilerini renderer'lara yazar (dizi sırası
-        /// <see cref="BuildGhostMaterials"/> ile birebir aynıdır).</summary>
+        /// <see cref="CaptureOriginalMaterials"/> ile birebir aynıdır).</summary>
         private static void WriteMaterials(Renderer[] targets, Material[][] materials)
         {
             if (targets == null || materials == null)
@@ -895,6 +1209,27 @@ namespace VortexArena.Core.Player
                 $"[RemoteAvatar] Oyuncu {PlayerId}: hayalet görünümü kurulmamış — RemoteAvatar " +
                 "prefabında 'ghostMaterial' (M_AvatarGhost) bağlanmalı. Ölü/kalibresiz oyuncu " +
                 "canlıdan ayırt edilemiyor.", this);
+        }
+
+        /// <summary>
+        /// Kalkan istendi ama aktif gövdenin kabuğu kurulamamış — örnek başına bir kez UYARI basar.
+        /// <para>⚠️ Hayaletin aksine <b>hata değil uyarı</b>: eksik olan yalnız görseldir, korumayı
+        /// zaten sunucu uyguluyor (§10.4) ve "ölüyü canlıdan ayırt edememe" gibi bir sonuç
+        /// doğmuyor — korunan oyuncu normal görünür.</para>
+        /// </summary>
+        private void WarnMissingShieldSetup()
+        {
+            if (_shieldSetupWarned)
+            {
+                return;
+            }
+
+            _shieldSetupWarned = true;
+            Debug.LogWarning(
+                $"[RemoteAvatar] Oyuncu {PlayerId}: doğma koruması kalkanı çizilemiyor — çizilen " +
+                "gövde için kalkan kabuğu kurulamadı. RemoteAvatar prefabında 'shieldMaterial' " +
+                "bağlanmalı ve o gövdenin 'bodyRenderers' (kırmızıda 'redBodyRoot') listesi dolu " +
+                "olmalı. Koruma işliyor, yalnız görsel çizilmiyor.", this);
         }
 
         private void WriteBaseColor(Renderer[] targets, in Color color)
@@ -1044,6 +1379,8 @@ namespace VortexArena.Core.Player
 
             SetVisible(true);
             UpdateAlive(registry);
+            UpdateSpawnProtection(registry);
+            TickShieldFade();
 
             // Nabız yalnız KALİBRESİZKEN sürülür — kalibreli avatarda her kare MPB yazmak
             // boşuna iş olurdu (renk değişmiyor, durum olay tabanlı tazeleniyor).
@@ -1171,6 +1508,94 @@ namespace VortexArena.Core.Player
             ApplyBodyVisual();
             RefreshColliders();
             RefreshHeldItemVisibility();
+        }
+
+        /// <summary>
+        /// §10.4: snapshot'ın doğma koruması bayrağını okur; değiştiyse gövde görünümünü tazeler.
+        /// <para>⚠️ Korumanın NE ZAMAN BİTECEĞİ istemcide sayılmaz: sürenin sahibi sunucudur ve
+        /// bayrak her snapshot'ta yeniden geliyor. Aşağıdaki doğuş/sönüş süreleri bir sayaç değil,
+        /// bayrağın DEĞİŞTİĞİ ana takılmış görsel bir kuyruktur (<see cref="TickShieldFade"/>) —
+        /// korumayı ne uzatır ne kısaltır.</para>
+        /// <para>Etiket ve vuruş kutuları buradan TAZELENMEZ: koruma ne ad etiketine yazılır (durum
+        /// gövdeden okunur) ne de kutuları kapatır — atış meşrudur, hasarı sunucu düşürür.</para>
+        /// </summary>
+        private void UpdateSpawnProtection(RemotePlayerRegistry registry)
+        {
+            bool spawnProtected = registry.IsSpawnProtected(PlayerId);
+            if (spawnProtected == IsSpawnProtected)
+            {
+                return;
+            }
+
+            IsSpawnProtected = spawnProtected;
+
+            // Koruma AÇILDIĞI karede kalkan parlayarak doğar; kapanışta değere dokunulmaz, erimeyi
+            // TickShieldFade sürdürür.
+            if (spawnProtected)
+            {
+                _shieldFade = ShieldBirthFlash;
+            }
+
+            ApplyBodyVisual();
+        }
+
+        /// <summary>
+        /// Kalkanın görsel şiddetini sürer ve kabuklara yazar: doğuşta parlama normale oturur,
+        /// koruma bitince değer sıfıra erir ve kalkan bırakılır.
+        /// <para>⚠️ Hayalet/görünmezlik kalkanı BEKLETMEDEN düşürür: ölen oyuncunun üstünde eriyen
+        /// bir kalkan "hâlâ korunuyor" diye okunurdu (ölüm zaten korumayı da iptal ediyor).</para>
+        /// <para>⚠️ <c>_Fade</c> yalnız DEĞİŞTİĞİNDE yazılır: kalkan 5 sn boyunca 1'de sabit kalıyor
+        /// ve her kare property block yazmak kabuk başına boşuna trafik olurdu.</para>
+        /// </summary>
+        private void TickShieldFade()
+        {
+            float previous = _shieldFade;
+
+            if (!_visible || !IsAlive || !IsCalibrated)
+            {
+                _shieldFade = 0f;
+            }
+            else if (IsSpawnProtected)
+            {
+                // Parlamadan normale in; koruma sürerken taban değer 1'dir.
+                float step = (ShieldBirthFlash - 1f) / Mathf.Max(ShieldBirthSeconds, 0.0001f);
+                _shieldFade = Mathf.Max(1f, _shieldFade - step * Time.deltaTime);
+            }
+            else if (_shieldFade > 0f)
+            {
+                float step = 1f / Mathf.Max(ShieldReleaseSeconds, 0.0001f);
+                _shieldFade = Mathf.Max(0f, _shieldFade - step * Time.deltaTime);
+            }
+
+            // Kalkan tam söndü → görünüm durumu artık Normal; ApplyBodyVisual kabukları kapatır.
+            if (previous > 0f && _shieldFade <= 0f)
+            {
+                ApplyBodyVisual();
+                return;
+            }
+
+            if (_bodyVisual != BodyVisual.Shield || Mathf.Approximately(_shieldFade, _shieldFadeWritten))
+            {
+                return;
+            }
+
+            _shieldFadeWritten = _shieldFade;
+            _shieldBlock ??= new MaterialPropertyBlock();
+            _shieldBlock.SetFloat(ShieldFadeId, _shieldFade);
+
+            Renderer[] shells = ActiveShieldShells;
+            if (shells == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < shells.Length; i++)
+            {
+                if (shells[i] != null)
+                {
+                    shells[i].SetPropertyBlock(_shieldBlock);
+                }
+            }
         }
 
         /// <summary>

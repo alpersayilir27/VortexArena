@@ -778,6 +778,43 @@ namespace VortexArena.Protocol
         public NetStatsEntry[] players;
     }
 
+    /// <summary>
+    /// Tek bir fiziksel ihlalin <b>başlangıcı ya da bitişi</b> (§5.3/§10.9). Yalnız
+    /// <c>role=admin</c> bağlantılara gider — <see cref="HealthUpdateMsg"/>'ın dar yayın
+    /// gerekçesiyle aynı sınıf: tüketicisi tek bir ekrandır, herkese yayınlamak oyuncu sayısıyla
+    /// büyüyen bir fan-out üretirdi.
+    /// <para><b>Kaynağı SUNUCUDUR</b>, admin istemcisinin kenar türetmesi değil: iki operatör aynı
+    /// listeyi görür, süre tek saatle ölçülür ve maç sonu istatistiği aynı defterden çıkar.</para>
+    /// <para>⚠️ <b>Kenar tetiklidir</b> — durum taşıyan snapshot bitlerinin (<c>FLAG_IN_OBSTACLE</c>
+    /// / <c>FLAG_OUT_OF_BOUNDS</c>) aksine her tikte tekrarlanmaz. Kaybolan bir mesaj yalnız
+    /// <b>log kaybıdır</b>: halka snapshot bitinden beslendiği için görsel bozulmaz. Ayrım
+    /// bilinçlidir — feed operatörün iş listesi, halka anlık durumdur.</para>
+    /// <para>⚠️ <see cref="ArenaProtocol.VIOLATION_MIN_SECONDS"/>'ten kısa temaslar hiç
+    /// bildirilmez.</para>
+    /// </summary>
+    [Serializable]
+    public class ViolationMsg
+    {
+        public string type = MessageTypes.Violation;
+        public int playerId;
+
+        /// <summary><c>ArenaProtocol.VIOLATION_KIND_*</c>.</summary>
+        public string kind;
+
+        /// <summary><c>true</c> = ihlal başladı, <c>false</c> = bitti.</summary>
+        public bool active;
+
+        /// <summary><c>active == false</c> iken o ihlalin süresi (sn); <c>active == true</c> iken
+        /// <c>0</c> — süre henüz bilinmiyor.</summary>
+        public float seconds;
+
+        /// <summary>Oyuncunun bu maçtaki o TÜRDEN ihlal sayısı.</summary>
+        public int count;
+
+        /// <summary>Aynı türden toplam süre (sn) — maç sonu istatistiği.</summary>
+        public float totalSeconds;
+    }
+
     // ---- UDP beacon (§4; WS mesajı değildir, alıcı app alanını doğrular) ----
 
     [Serializable]

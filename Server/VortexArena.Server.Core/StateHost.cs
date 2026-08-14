@@ -311,6 +311,9 @@ public sealed class StateHost
             // çünkü okuyucusu MatchDirector'dır ve o PoseGate'i ALMAZ — 88 B'lik bir struct'ı
             // kilitsiz okumak tearing demektir, tek bool okumak değildir.
             state.InObstacle = (pose.gripFlags & SnapshotEntry.FLAG_IN_OBSTACLE) != 0;
+            // Alan-dışı aynı gerekçeyle ayrı alana çıkarılır. ⚠️ Bu bit CEZA ÜRETMEZ (§10.9);
+            // yalnız admin görünürlüğünü ve ihlal defterini besler.
+            state.OutOfBounds = (pose.gripFlags & SnapshotEntry.FLAG_OUT_OF_BOUNDS) != 0;
         }
     }
 
@@ -513,6 +516,9 @@ public sealed class StateHost
             targets.Clear();
             skeletonEntries.Clear();
             var onlinePlayers = 0;
+            // ⚠️ Duvar saati tik başına BİR kez okunur, oyuncu başına değil: aynı snapshot'taki
+            // girdilerin farklı anlara göre yargılanması için sebep yok ve UtcNow ucuz değil.
+            var nowUtc = DateTime.UtcNow;
             foreach (var state in _registry.Snapshot())
             {
                 if (!state.IsConnected) continue;
@@ -522,6 +528,10 @@ public sealed class StateHost
                 // flags bit0 = alive (§10.2): MatchDirector kilidi altında yazılır, burada kilitsiz
                 // okunur (bool okuması atomik; bir tik gecikme snapshot için önemsiz).
                 var alive = state.Alive;
+                // flags bit6 = doğma koruması (§10.4): MatchDirector kilidi altında yazılır, burada
+                // kilitsiz okunur (bir tik gecikme snapshot için önemsiz). ⚠️ `alive` ile AND'lenir:
+                // ölü oyuncunun korumalı görünmesi anlamsız ve kalkanı hayaletin üstüne çizerdi.
+                var spawnProtected = alive && nowUtc < state.SpawnProtectedUntil;
                 lock (state.PoseGate)
                 {
                     // İskelet girdisi (§6.10): poz ile AYNI kilit, AYRI kadans. Poz kapısından ÖNCE
@@ -551,10 +561,12 @@ public sealed class StateHost
                         // (§6.2/6.3) — sunucuda eşya tablosu YOKTUR.
                         itemL = pose.itemL,
                         itemR = pose.itemR,
-                        // ⚠️ flags TEK BAYT ama İKİ YAZARLI: bit0 sunucunun (otoriter alive), bit1-2
-                        // istemcinin. GRIP_FLAG_MASK ŞART — maskesiz kopyalanırsa istemci bit0'ı
-                        // set ederek kendini canlı ilan eder (ölü oyuncu kendini diriltir).
+                        // ⚠️ flags TEK BAYT ama İKİ YAZARLI: bit0 ve bit6 sunucunun (otoriter alive
+                        // + doğma koruması), bit1-5 ve bit7 istemcinin. GRIP_FLAG_MASK ŞART — maskesiz
+                        // kopyalanırsa istemci bit0'ı set ederek kendini canlı ilan eder (ölü
+                        // oyuncu kendini diriltir); aynı gerekçeyle bit6 de maskenin dışındadır.
                         flags = (byte)((alive ? SnapshotEntry.FLAG_ALIVE : 0)
+                                       | (spawnProtected ? SnapshotEntry.FLAG_SPAWN_PROTECTED : 0)
                                        | (pose.gripFlags & SnapshotEntry.GRIP_FLAG_MASK)),
                         head = pose.head,
                         handL = pose.handL,

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Core;
+using VortexArena.Core.Audio;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -136,6 +137,30 @@ namespace VortexArena.App.Admin
         /// <summary>Ölüm anı (<c>Time.unscaledTime</c>); -1 = ölmedi/bilinmiyor.</summary>
         public float diedAt = -1f;
 
+        // ---- İhlal defteri (§10.9): SUNUCU sayar, admin yalnız yazar ----
+        // ⚠️ Bu sayaçlar yerelde ARTIRILMAZ. Otorite sunucudadır: süre tek saatle ölçülür ve iki
+        // operatör aynı sayıyı görür. Kenar tetikli `violation` mesajı zaten güncel toplamı
+        // taşıyor, yani kaybolan bir mesaj bir sonrakinde kendini onarır — yerelde saymak ise
+        // kaybolan mesajı kalıcı bir sapmaya çevirirdi.
+
+        /// <summary>Bu maçtaki engel ihlali sayısı (kafa iç engelin içinde).</summary>
+        public int obstacleCount;
+
+        /// <summary>Engel içinde geçirilen toplam süre (sn).</summary>
+        public float obstacleSeconds;
+
+        /// <summary>Bu maçtaki alan dışı ihlali sayısı.</summary>
+        public int outOfBoundsCount;
+
+        /// <summary>Alan dışında geçirilen toplam süre (sn).</summary>
+        public float outOfBoundsSeconds;
+
+        /// <summary>İki türün toplamı — istatistik tablosunun tek hücresi için.</summary>
+        public int ViolationCount => obstacleCount + outOfBoundsCount;
+
+        /// <inheritdoc cref="ViolationCount"/>
+        public float ViolationSeconds => obstacleSeconds + outOfBoundsSeconds;
+
         public bool IsPlayer => role == AppSession.RolePlayer;
 
         public float HpNormalized => Mathf.Clamp01(hp / ArenaProtocol.PLAYER_MAX_HP);
@@ -171,6 +196,16 @@ namespace VortexArena.App.Admin
         /// <summary>Ölüm akışında tutulan en fazla satır.</summary>
         public const int KillFeedMaxLines = 8;
 
+        /// <summary>İhlal akışında tutulan en fazla satır.</summary>
+        public const int ViolationFeedMaxLines = 8;
+
+        /// <summary>Aynı uyarı sesinin iki çalışı arasındaki en az süre (sn).
+        /// <para>⚠️ Throttle <b>tüm oyuncular için ORTAKTIR</b>, oyuncu başına değil: üç kişilik bir
+        /// kalabalık sınırda salınırken oyuncu başına bir sayaç sesi kesintisiz bir sirene çevirir
+        /// ve operatör onu ilk dakikada kapatır. Politika burada durur —
+        /// <see cref="GameAudio"/> bir çalma aracıdır, ne zaman çalınacağını bilmez.</para></summary>
+        private const float ViolationSoundCooldown = 3f;
+
         public static AdminRoster Instance { get; private set; }
 
         /// <summary>Roster/skor/faz verisi değiştiğinde (ana thread).</summary>
@@ -181,7 +216,12 @@ namespace VortexArena.App.Admin
         private readonly List<AdminPlayerView> _blue = new List<AdminPlayerView>();
         private readonly List<AdminPlayerView> _all = new List<AdminPlayerView>();
         private readonly List<string> _killFeed = new List<string>();
+        private readonly List<string> _violationFeed = new List<string>();
         private readonly List<int> _removeScratch = new List<int>();
+
+        /// <summary>Son ihlal uyarı sesinin anı (<c>Time.unscaledTime</c>);
+        /// bkz. <see cref="ViolationSoundCooldown"/>.</summary>
+        private float _lastViolationSoundAt = float.NegativeInfinity;
 
         /// <summary>Kırmızı takım (yalnız role=player, playerId sırasında).</summary>
         public IReadOnlyList<AdminPlayerView> Red => _red;
@@ -193,6 +233,10 @@ namespace VortexArena.App.Admin
         public IReadOnlyList<AdminPlayerView> Players => _all;
 
         public IReadOnlyList<string> KillFeed => _killFeed;
+
+        /// <summary>İhlal akışı (§10.9) — <b>kill feed'den ayrı</b> ve öyle kalır: kill feed maçın
+        /// hikâyesi, bu liste operatörün iş listesidir; birleştirilirse ikisi de okunmaz olur.</summary>
+        public IReadOnlyList<string> ViolationFeed => _violationFeed;
 
         /// <summary>Bağlı admin sayısı (kendimiz dahil) — istatistik panelinde gösterilir.</summary>
         public int AdminCount { get; private set; }
@@ -322,6 +366,7 @@ namespace VortexArena.App.Admin
             NetEvents.OnHealthUpdate += HandleHealthUpdate;
             NetEvents.OnKillEvent += HandleKillEvent;
             NetEvents.OnNetStats += HandleNetStats;
+            NetEvents.OnViolation += HandleViolation;
         }
 
         private void OnDisable()
@@ -337,6 +382,7 @@ namespace VortexArena.App.Admin
             NetEvents.OnHealthUpdate -= HandleHealthUpdate;
             NetEvents.OnKillEvent -= HandleKillEvent;
             NetEvents.OnNetStats -= HandleNetStats;
+            NetEvents.OnViolation -= HandleViolation;
         }
 
         // -------------------------------------------------------------- sorgular
@@ -434,6 +480,7 @@ namespace VortexArena.App.Admin
         {
             _players.Clear();
             _killFeed.Clear();
+            _violationFeed.Clear();
             AdminCount = 0;
             Rebuild();
         }
@@ -605,6 +652,7 @@ namespace VortexArena.App.Admin
             WinnerPlayerId = 0;
             TimeRemaining = 0f;
             _killFeed.Clear();
+            _violationFeed.Clear();
 
             foreach (KeyValuePair<int, AdminPlayerView> kv in _players)
             {
@@ -612,6 +660,14 @@ namespace VortexArena.App.Admin
                 kv.Value.alive = true;
                 kv.Value.diedAt = -1f;
                 kv.Value.score = 0; // sunucu da lobiye dönerken sıfırlıyor (§10.2)
+
+                // İhlal defteri de skorla birlikte sıfırlanır — sunucudaki defterin aynısı (§10.9);
+                // bırakılsaydı yeni maçın ilk `violation` mesajına kadar eski maçın sayısı durur ve
+                // operatör onu yeni maçınki sanardı.
+                kv.Value.obstacleCount = 0;
+                kv.Value.obstacleSeconds = 0f;
+                kv.Value.outOfBoundsCount = 0;
+                kv.Value.outOfBoundsSeconds = 0f;
             }
 
             Raise();
@@ -722,6 +778,76 @@ namespace VortexArena.App.Admin
             }
 
             Raise();
+        }
+
+        /// <summary>
+        /// Fiziksel ihlalin başlangıcı/bitişi (§10.9). Kaynağı SUNUCUDUR — bu sınıf kenar
+        /// türetmez, süreyi ölçmez, saymaz; gelen defteri aynen yazar.
+        /// <para>⚠️ Mesaj <b>kenar tetiklidir</b>: kaybolan bir satır yalnız log kaybıdır, halka
+        /// snapshot bitinden beslendiği için görsel bozulmaz (<c>AdminViolations.Of</c>). Kısa
+        /// temaslar (<see cref="ArenaProtocol.VIOLATION_MIN_SECONDS"/> altı) sunucuda zaten
+        /// elenmiştir — burada ikinci bir eşik YOKTUR, olsaydı iki uç sessizce sapardı.</para>
+        /// </summary>
+        private void HandleViolation(ViolationMsg msg)
+        {
+            if (msg == null)
+            {
+                return;
+            }
+
+            AdminPlayerView view = Find(msg.playerId);
+            if (view != null)
+            {
+                // Sayaçlar sunucunun toplamıdır, yerel artırma YOK (bkz. alan dokümanları).
+                if (msg.kind == ArenaProtocol.VIOLATION_KIND_OBSTACLE)
+                {
+                    view.obstacleCount = msg.count;
+                    view.obstacleSeconds = msg.totalSeconds;
+                }
+                else if (msg.kind == ArenaProtocol.VIOLATION_KIND_OUT_OF_BOUNDS)
+                {
+                    view.outOfBoundsCount = msg.count;
+                    view.outOfBoundsSeconds = msg.totalSeconds;
+                }
+            }
+
+            // Tanınmayan tür ham etiketiyle yazılır (AdminViolations.Label) — satırı yutmak
+            // gerçekten olmuş bir olayı operatörden gizlerdi.
+            string label = AdminViolations.Label(msg.kind);
+            string line = msg.active
+                ? $"{NameOf(msg.playerId)} — {label}"
+                : $"{NameOf(msg.playerId)} — {label} bitti ({msg.seconds:0.0} sn)";
+
+            _violationFeed.Add(line);
+            while (_violationFeed.Count > ViolationFeedMaxLines)
+            {
+                _violationFeed.RemoveAt(0);
+            }
+
+            PlayViolationSound(msg);
+            Raise();
+        }
+
+        /// <summary>
+        /// İhlal uyarı sesi — yalnız ihlalin BAŞLANGICINDA. Bitiş operatörden bir eylem
+        /// beklemiyor; onu da seslendirmek her ihlali iki kez duyurur.
+        /// <para>Sesin kapısı ekran tercihidir (<see cref="AdminSession.ViolationSound"/>): iki
+        /// operatörden biri sesi kapatınca diğerininki çalmaya devam eder.</para>
+        /// </summary>
+        private void PlayViolationSound(ViolationMsg msg)
+        {
+            if (!msg.active || !AdminSession.ViolationSound)
+            {
+                return;
+            }
+
+            if (Time.unscaledTime - _lastViolationSoundAt < ViolationSoundCooldown)
+            {
+                return;
+            }
+
+            _lastViolationSoundAt = Time.unscaledTime;
+            GameAudio.Play(GameSoundId.AdminViolation);
         }
 
         // ---------------------------------------------------------------- iç işler

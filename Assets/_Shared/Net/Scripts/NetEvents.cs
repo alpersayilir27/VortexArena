@@ -66,6 +66,12 @@ namespace VortexArena.Net
         /// <para>Kaybı zararsızdır — bir sonraki saniye yenisi gelir, uzlaştırma yoktur.</para></summary>
         public static event Action<NetStatsMsg> OnNetStats;
 
+        /// <summary>Yalnız admin bağlantılarına gelir (§5.3): bir oyuncunun fiziksel ihlali başladı
+        /// ya da bitti (engel / alan dışı). Defteri sunucu tutar, bu yalnız kenar bildirimidir.
+        /// <para>Kaybı zararsızdır — ihlalin görsel karşılığı (kuş bakışı halkası) snapshot
+        /// bitlerinden besleniyor, kaybolan mesaj yalnız bir feed satırı eksiltir.</para></summary>
+        public static event Action<ViolationMsg> OnViolation;
+
         internal static void RaiseConnected(WelcomeMsg msg) { OnConnected?.Invoke(msg); }
         internal static void RaiseDisconnected() { OnDisconnected?.Invoke(); }
         internal static void RaiseConnectionStateChanged(ArenaConnectionState state) { OnConnectionStateChanged?.Invoke(state); }
@@ -89,5 +95,6 @@ namespace VortexArena.Net
         internal static void RaiseSelectionState(SelectionStateMsg msg) { OnSelectionState?.Invoke(msg); }
         internal static void RaiseRulesUpdate(RulesUpdateMsg msg) { OnRulesUpdate?.Invoke(msg); }
         internal static void RaiseNetStats(NetStatsMsg msg) { OnNetStats?.Invoke(msg); }
+        internal static void RaiseViolation(ViolationMsg msg) { OnViolation?.Invoke(msg); }
     }
 }

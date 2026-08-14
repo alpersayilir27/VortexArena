@@ -51,5 +51,6 @@ namespace VortexArena.Protocol
         public const string SelectionState = "selection_state"; // HERKESE: seçili modun takım kipi (§5.3)
         public const string RulesUpdate = "rules_update"; // HERKESE: koşan maçın kural şekli değişti (§5.3)
         public const string NetStats = "net_stats"; // yalnız adminlere: oyuncu başına ping/jitter/kayıp
+        public const string Violation = "violation"; // yalnız adminlere: ihlal defterinin kenar bildirimi (§5.3)
     }
 }

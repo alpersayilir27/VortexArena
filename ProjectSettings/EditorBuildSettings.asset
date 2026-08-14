@@ -23,6 +23,18 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Arenas/Venues/VortexAntep/Scenes/Military_VortexAntep/Military_VortexAntep.unity
     guid: 0f5efaad0b68f224b93de5d3fa3b14fc
+  - enabled: 1
+    path: Assets/Arenas/Venues/Outdoor12x12/Scenes/IceWorld_Outdoor12x12/IceWorld_Outdoor12x12.unity
+    guid: e9f880dff98a5f947834e7a51dedf656
+  - enabled: 1
+    path: Assets/Arenas/Venues/Outdoor12x12/Scenes/Lobby_Outdoor12x12/Lobby_Outdoor12x12.unity
+    guid: 7cf2ea16f0cbb134bb359d4c6b5e2785
+  - enabled: 1
+    path: Assets/Arenas/Venues/Outdoor14x16/Scenes/IceWorld_Outdoor14x16/IceWorld_Outdoor14x16.unity
+    guid: df1f58b4f3668064783141e52fa6d636
+  - enabled: 1
+    path: Assets/Arenas/Venues/Outdoor14x16/Scenes/Lobby_Outdoor14x16/Lobby_Outdoor14x16.unity
+    guid: 2887948de3263f74ca5bed53086b3fc7
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

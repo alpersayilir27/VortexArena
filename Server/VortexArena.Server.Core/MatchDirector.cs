@@ -583,6 +583,12 @@ public sealed class MatchDirector
                     TickEndLocked(outbox, now);
                     break;
             }
+
+            // ⚠️ İhlal defteri switch'in DIŞINDA, yani her fazda koşar (gerekçe
+            // TickViolationFeedLocked'ta): ceza yalnız `playing`'de işler ama operatör lobide ve
+            // geri sayımda arenadan çıkan oyuncuyu da görmelidir.
+            TickViolationFeedLocked(outbox, now);
+
             modeToStart = _matchStartPending ? _mode : null;
             modeToRoundStart = _roundStartPending ? _mode : null;
             _matchStartPending = false;
@@ -755,14 +761,17 @@ public sealed class MatchDirector
     }
 
     /// <summary>
-    /// Oyuncu ŞU AN engelin içinde mi: bayrak set <b>ve</b> taze (§10.9).
-    /// <para>Bayat bayrak = susmuş/donmuş istemci. Bit durum taşıdığı için son paket sonsuza kadar
-    /// "engeldeyim" demeye devam ederdi. Hem ceza hem canlanma kapısı aynı tazelik sorusunu sorar,
-    /// bu yüzden soru <b>tek yerde</b> durur.</para>
+    /// Oyuncunun bildirdiği durum bitleri hâlâ TAZE mi (§10.9).
+    /// <para>Bayat bayrak = susmuş/donmuş istemci. Bitler durum taşıdığı için son paket sonsuza
+    /// kadar "engeldeyim"/"alan dışındayım" demeye devam ederdi. Ceza, canlanma kapısı <b>ve</b>
+    /// ihlal defteri aynı tazelik sorusunu sorar, bu yüzden soru <b>tek yerde</b> durur.</para>
     /// </summary>
-    private static bool IsObstacleFlagLiveLocked(PlayerState player, DateTime now) =>
-        player.InObstacle &&
+    private static bool IsPoseFreshLocked(PlayerState player, DateTime now) =>
         (now - player.LastPoseAt).TotalMilliseconds < ArenaProtocol.OBSTACLE_FLAG_STALE_MS;
+
+    /// <summary>Oyuncu ŞU AN engelin içinde mi: bayrak set <b>ve</b> taze (§10.9).</summary>
+    private static bool IsObstacleFlagLiveLocked(PlayerState player, DateTime now) =>
+        player.InObstacle && IsPoseFreshLocked(player, now);
 
     /// <summary>
     /// Canlanma engelin içinde olduğu için ertelenmeli mi (§10.9). Canlanmanın İKİ yolu var —
@@ -776,6 +785,115 @@ public sealed class MatchDirector
     private static bool IsObstacleReviveBlockedLocked(PlayerState player, DateTime now) =>
         IsObstacleFlagLiveLocked(player, now) &&
         (now - player.DiedAt).TotalSeconds < ArenaProtocol.OBSTACLE_REVIVE_BLOCK_SECONDS;
+
+    /// <summary>
+    /// İhlal defterini işletir ve kenarlarını adminlere yayar (§10.9): iki tür de (engel ·
+    /// alan dışı) <b>aynı kod yolundan</b> geçer — tür başına <c>if</c> zinciri yazılmaz, tek
+    /// fark "canlı mı" sorusunu besleyen bayraktır.
+    /// <para>⚠️ <b>Defter FAZDAN BAĞIMSIZDIR</b> ve bu yüzden <c>TickLiveLocked</c>'ın içinde
+    /// DEĞİL, tik döngüsünün faz koşulundan bağımsız bölümünde durur: operatör lobide ve geri
+    /// sayımda arenadan çıkan oyuncuyu da görmelidir. Ceza (<see cref="TickObstacleLocked"/>)
+    /// yalnız <c>playing</c>'de işler — <b>defter ceza değildir</b>.</para>
+    /// <para>⚠️ <b>Defter ceza kapılarına da bağlı DEĞİLDİR:</b> <c>Alive</c>/<c>Calibrated</c>
+    /// burada sorulmaz. Cezanın o koşulları var çünkü ceza can eritir; defter yalnız kayıt tutar
+    /// ve kalibresiz bir oyuncunun alan dışına çıkması operatörün tam da görmesi gereken şeydir.</para>
+    /// </summary>
+    private void TickViolationFeedLocked(List<Outgoing> outbox, DateTime now)
+    {
+        // ⚠️ Erken çıkış TAM DEĞİL: admin bağlı değilken mesaj serileştirilmez (kimse bakmıyorsa
+        // boşa paket üretilmez — net_stats döngüsündeki gerekçenin aynısı), ama kenar durumu
+        // YİNE DE ilerler. İlerlemeseydi sonradan bağlanan admin yarım kalmış bir ihlali sonsuza
+        // kadar açık bulur ve defterdeki süre o boşluğu yutardı.
+        var anyAdmin = HasConnectedAdminLocked();
+
+        foreach (var player in _registry.Snapshot())
+        {
+            if (player.Role != "player") continue;
+
+            if (!player.IsConnected)
+            {
+                // Kopan/çıkarılan oyuncunun açık ihlali SESSİZCE kapanır: bitiş satırı operatöre
+                // bir şey anlatmaz ve süreye bağlantının kopuk geçtiği boşluk yazılırdı.
+                CloseViolationLocked(player.ObstacleTally);
+                CloseViolationLocked(player.OutOfBoundsTally);
+                continue;
+            }
+
+            // Tazelik iki tür için de aynı soru; bir kez sorulur (bkz. IsPoseFreshLocked).
+            var fresh = IsPoseFreshLocked(player, now);
+            TickViolationKindLocked(outbox, player, player.ObstacleTally, player.InObstacle && fresh,
+                ArenaProtocol.VIOLATION_KIND_OBSTACLE, now, anyAdmin);
+            TickViolationKindLocked(outbox, player, player.OutOfBoundsTally, player.OutOfBounds && fresh,
+                ArenaProtocol.VIOLATION_KIND_OUT_OF_BOUNDS, now, anyAdmin);
+        }
+    }
+
+    /// <summary>
+    /// Tek bir oyuncunun tek bir ihlal TÜRÜNÜN kenar mantığı (§10.9). <paramref name="live"/> o
+    /// türün "şu an ihlalde mi" cevabıdır — çağıran taraf hangi bayrağa baktığını bilir, bu metot
+    /// bilmez.
+    /// <para>⚠️ <see cref="ArenaProtocol.VIOLATION_MIN_SECONDS"/>'in altında kalan temas deftere
+    /// <b>hiç girmez</b>: ne mesaj çıkar ne <c>Count</c> artar. Sınır çizgisinde salınan oyuncu
+    /// aksi hâlde saniyede üç satır üretir ve feed'i okunamaz hâle getirirdi. Eşik yalnız feed
+    /// içindir — halkayı snapshot biti sürüyor ve o ilk kareden itibaren yanar.</para>
+    /// </summary>
+    private void TickViolationKindLocked(List<Outgoing> outbox, PlayerState player, ViolationTally tally,
+        bool live, string kind, DateTime now, bool anyAdmin)
+    {
+        if (live)
+        {
+            tally.Since ??= now;
+            if (tally.Announced) return;
+            if ((now - tally.Since.Value).TotalSeconds < ArenaProtocol.VIOLATION_MIN_SECONDS) return;
+
+            tally.Announced = true;
+            tally.Count++;
+            if (anyAdmin)
+            {
+                QueueAdminBroadcastLocked(outbox, JsonUtil.Serialize(new ViolationMsg
+                {
+                    playerId = player.PlayerId,
+                    kind = kind,
+                    active = true,
+                    // Süre henüz bilinmiyor; başlangıç satırı yalnız "başladı" der (§5.3).
+                    seconds = 0f,
+                    count = tally.Count,
+                    totalSeconds = tally.TotalSeconds
+                }));
+            }
+            return;
+        }
+
+        if (tally.Since == null) return;
+
+        if (tally.Announced)
+        {
+            var seconds = (float)(now - tally.Since.Value).TotalSeconds;
+            tally.TotalSeconds += seconds;
+            if (anyAdmin)
+            {
+                QueueAdminBroadcastLocked(outbox, JsonUtil.Serialize(new ViolationMsg
+                {
+                    playerId = player.PlayerId,
+                    kind = kind,
+                    active = false,
+                    seconds = seconds,
+                    count = tally.Count,
+                    totalSeconds = tally.TotalSeconds
+                }));
+            }
+        }
+
+        CloseViolationLocked(tally);
+    }
+
+    /// <summary>Açık ihlali mesajsız kapatır. Sayaçlara DOKUNMAZ: defterin biriktirdiği
+    /// sayı/süre maç boyunca yaşar, kapanan yalnız o anki ihlaldir.</summary>
+    private static void CloseViolationLocked(ViolationTally tally)
+    {
+        tally.Since = null;
+        tally.Announced = false;
+    }
 
     /// <summary>
     /// <b>Ölümün TEK yazarı</b> (§10.2/§10.9): <c>Alive = false</c> başka hiçbir yerde yazılmaz.
@@ -794,6 +912,9 @@ public sealed class MatchDirector
     {
         victim.Alive = false;
         victim.DiedAt = now;
+        // Ölen oyuncunun korunuyor görünmesi anlamsızdır: snapshot bit6 telde kalırsa istemci
+        // kalkanı hayaletin üstüne çizerdi (§10.4).
+        victim.SpawnProtectedUntil = DateTime.MinValue;
         victim.Deaths++;
         if (killer != null) killer.Kills++;
         _rosterRefreshFor = victim; // deaths + alive değişti → lobby_state tazelenir (§5.3)
@@ -1312,7 +1433,8 @@ public sealed class MatchDirector
     // (§6.4/6.5). Buradaki tek payı ShotRelayOpen bayrağıdır — 10 atış/sn/oyuncu otoriter WS
     // kanalını boğuyordu; hasar (hit_report) bilinçli olarak WS'te KALDI (§10.3).
 
-    /// <summary>hit_report hattı (§10.3, sırayla): faz → atıcı → hedef → takım → hasar sayısı.
+    /// <summary>hit_report hattı (§10.3, sırayla): faz → atıcı → hedef → doğma koruması → takım →
+    /// hasar sayısı.
     /// Herhangi biri düşerse tek satır log + sessiz ret (istemciye yanıt yok).
     /// <para>Bunlar HİLE denetimi değil, durum tutarlılığı kontrolleridir — ürün gözetimli özel
     /// alanda çalıştığı için hile koruması bilinçli olarak yoktur (§10.3). Hasarı istemci hesaplar
@@ -1370,6 +1492,14 @@ public sealed class MatchDirector
             if (!target.Calibrated)
             {
                 RejectHit(shooter, msg.targetPlayerId, "hedef kalibresiz");
+                return;
+            }
+            // §10.4: doğma koruması — canlanan oyuncu SpawnProtectionSeconds boyunca hasar almaz.
+            // ⚠️ Kapı SUNUCUDA: istemci korumayı yalnız çizer (snapshot bit6), atış kararını buna
+            // dayandırmaz — atıcının ekranında kalkan bir kare geç sönse bile vuruş burada düşer.
+            if (DateTime.UtcNow < target.SpawnProtectedUntil)
+            {
+                RejectHit(shooter, msg.targetPlayerId, "hedef doğma koruması altında");
                 return;
             }
             teamKill = AreTeammates(shooter, target);
@@ -1643,11 +1773,18 @@ public sealed class MatchDirector
 
             if (player.Alive)
             {
+                // ResetMatchStateLocked doğma korumasını da MinValue'ya çeker — aşağıdaki
+                // ölü dalıyla birlikte, `playing`'e giren HERKES korumasız başlar.
                 ResetMatchStateLocked(player, keepScore: true);
                 continue;
             }
 
-            RevivePlayerLocked(outbox, player); // hp = MAX, alive = 1, health_update yayını
+            // ⚠️ Maçın/turun BAŞLAMASI doğma koruması VERMEZ (§10.4) ve bu bilinçlidir: koruma
+            // ölüp dönen oyuncuyu doğduğu karede vurulmaktan korumak içindir, oysa maç başında
+            // herkes aynı anda ve geri sayımla başlıyor — koruma orada yalnız maçın ilk
+            // saniyelerini hasarsız kılardı. Kapı canlı ve ölü dalda AYNI: biri korumalı diğeri
+            // korumasız başlasa aynı maçta iki farklı kural olurdu.
+            RevivePlayerLocked(outbox, player, spawnProtect: false); // hp = MAX, alive = 1, health_update
             player.DiedAt = DateTime.MinValue;
         }
 
@@ -1753,11 +1890,20 @@ public sealed class MatchDirector
         player.Hp = ArenaProtocol.PLAYER_MAX_HP;
         player.Alive = true;
         player.DiedAt = DateTime.MinValue;
+        // Bayat damga bırakılmaz (§10.4): bu metot maç kurma ve lobiye dönüş yollarından da
+        // geliniyor, yani koruması dolmamış bir oyuncu kalkanını lobiye taşırdı. Koruma yalnız
+        // ÖLÜP canlanan oyuncuya verilir (StampSpawnProtectionLocked) ve bu yolların hiçbiri
+        // öyle bir canlanma değildir — yani burada temizlenen damga geri konmaz.
+        player.SpawnProtectedUntil = DateTime.MinValue;
         _rosterRefreshFor = player;
         if (keepScore) return;
         player.Kills = 0;
         player.Deaths = 0;
         player.Score = 0;
+        // İhlal defteri maç defteridir: kills/deaths ile aynı yerde sıfırlanır, yani tur başında
+        // (keepScore) KORUNUR — operatörün gördüğü sayı maç boyuncadır, tur boyunca değil.
+        player.ObstacleTally.Reset();
+        player.OutOfBoundsTally.Reset();
     }
 
     /// <summary>Dost ateşi kararının TEK yeri. <b>Boş takım asla takım arkadaşı sayılmaz:</b>
@@ -1766,10 +1912,24 @@ public sealed class MatchDirector
     private static bool AreTeammates(PlayerState a, PlayerState b) =>
         !string.IsNullOrEmpty(a.Team) && a.Team == b.Team;
 
-    private void RevivePlayerLocked(List<Outgoing> outbox, PlayerState player)
+    /// <summary>Doğma korumasının TEK yazıcısı (§10.4); yalnız <see cref="RevivePlayerLocked"/>
+    /// çağırır, yani koruma bir ÖLÜMÜN karşılığıdır — maç/tur başlangıcı koruma vermez.
+    /// <para>⚠️ Kural koruma öngörmüyorsa (ya da <paramref name="protect"/> <c>false</c> ise) damga
+    /// <see cref="DateTime.MinValue"/>'ya ÇEKİLİR, dokunulmadan bırakılmaz: mod ortasında koruması
+    /// olan bir maçtan olmayanına geçildiğinde bayat damga oyuncuyu sebepsiz dokunulmaz
+    /// yapardı.</para></summary>
+    private void StampSpawnProtectionLocked(PlayerState player, bool protect = true) =>
+        player.SpawnProtectedUntil = protect && _rules.SpawnProtectionSeconds > 0f
+            ? DateTime.UtcNow.AddSeconds(_rules.SpawnProtectionSeconds)
+            : DateTime.MinValue;
+
+    /// <summary><paramref name="spawnProtect"/> yalnız maç/tur başlangıcında <c>false</c> geçilir
+    /// (§10.4): orada canlanma bir ÖLÜMÜN karşılığı değil, maçın kurulmasıdır.</summary>
+    private void RevivePlayerLocked(List<Outgoing> outbox, PlayerState player, bool spawnProtect = true)
     {
         player.Hp = ArenaProtocol.PLAYER_MAX_HP;
         player.Alive = true;
+        StampSpawnProtectionLocked(player, spawnProtect);
         _rosterRefreshFor = player;
         // attackerId=0: canlanma bir saldırı sonucu değildir (§10.4/3).
         // Hedefli gönderim (§10.3): canlanan oyuncu + adminler.
@@ -1895,6 +2055,27 @@ public sealed class MatchDirector
             outbox.Add(new Outgoing(connection, json, player.Name));
         }
     }
+
+    /// <summary>
+    /// Yalnız <b>bağlı adminlere</b> kuyruklar (§5.3). <see cref="QueueHealthUpdateLocked"/> ile
+    /// aynı sınıftan bir dar yayındır: mesajın tek tüketicisi operatör ekranıdır, oyunculara
+    /// göndermek kimsenin okumadığı paketleri oyuncu sayısıyla çarpmak olurdu.
+    /// </summary>
+    private void QueueAdminBroadcastLocked(List<Outgoing> outbox, string json)
+    {
+        foreach (var player in _registry.Snapshot())
+        {
+            if (!player.IsConnected || player.Role != "admin") continue;
+            var connection = player.Socket;
+            if (connection == null) continue;
+            outbox.Add(new Outgoing(connection, json, player.Name));
+        }
+    }
+
+    /// <summary>Bağlı bir admin var mı — <b>serileştirmeden ÖNCE</b> sorulur: kimse bakmıyorken
+    /// JSON üretmek boşa iştir (bkz. <see cref="TickViolationFeedLocked"/>).</summary>
+    private bool HasConnectedAdminLocked() =>
+        _registry.Snapshot().Any(p => p.IsConnected && p.Role == "admin" && p.Socket != null);
 
     private void QueueReadyClearLocked(PlayerState player)
     {

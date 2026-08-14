@@ -5,8 +5,9 @@ namespace VortexArena.Server.Core.Modes;
 /// yazar; takım yoktur. Maç, bir oyuncu skor limitine ulaşınca ya da süre bitince biter; süre
 /// bitiminde en yüksek skorlu oyuncu kazanır, tepede eşitlik varsa berabere
 /// (§10.5 <see cref="ScoreKind.Player"/>).
-/// <para>Kurallar TDM varsayılanından beş noktada ayrılır (§10.5): takım yok, skor bireysel,
-/// canlanma "sabit dur", silahı mod dağıtır, canlanma gecikmesi 0. Geri kalan her şey
+/// <para>Kurallar TDM varsayılanından şu noktalarda ayrılır (§10.5): takım yok, skor bireysel,
+/// canlanma "sabit dur", silahı mod dağıtır, canlanma gecikmesi 0, doğma koruması açık. Geri
+/// kalan her şey
 /// <see cref="ModeRules"/> varsayılanıdır — yani bu modun eklenmesi TDM'in tek satırını bile
 /// değiştirmez.</para></summary>
 public sealed class FfaMode : IGameMode
@@ -19,14 +20,18 @@ public sealed class FfaMode : IGameMode
     /// arkadaşı saymaz (§10.3/4) ve bu modda herkesin takımı <c>""</c>'tir, yani kapı hiç kapanmaz.
     /// <para><c>RespawnDelay = 0</c> bilinçlidir: bekleme süresi yerine <see cref="ReviveAnchor.StandStill"/>
     /// şartı işler (istemci <c>REVIVE_HOLD_SECONDS</c> boyunca sabit durmayı bekler), yani toplam
-    /// bekleme yine ~5 sn'dir ama oyuncunun elindedir.</para></summary>
+    /// bekleme yine ~5 sn'dir ama oyuncunun elindedir.</para>
+    /// <para>Doğma koruması burada da açıktır (§10.4): canlanma yeri sabit bir taban değil
+    /// oyuncunun durduğu yerdir, yani canlanan oyuncu doğduğu karede rakiplerin arasında
+    /// olabilir.</para></summary>
     public ModeRules Rules => new()
     {
         Teams = TeamMode.None,
         Scoring = ScoreKind.Player,
         Revive = ReviveAnchor.StandStill,
         Weapons = WeaponSource.RandomGrant,
-        RespawnDelay = 0f
+        RespawnDelay = 0f,
+        SpawnProtectionSeconds = 5f
     };
 
     public int DefaultRoundSeconds => 300;

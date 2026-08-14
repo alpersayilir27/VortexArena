@@ -68,7 +68,19 @@ namespace VortexArena.Core.Arena
         /// <summary>Bu bileşenin <see cref="ScreenFade"/>'deki kaynak kimliği.</summary>
         private const string FadeSourceId = "boundary";
 
-        /// <summary>True while the HMD is outside the allowed area.</summary>
+        /// <summary>
+        /// Sahnedeki muhafaza — <b>ilk etkinleşen örnek</b>. Sahnede tek muhafaza vardır
+        /// (<c>VA_ArenaBoundary</c> prefab örneği), bu yüzden "hangisi" sorusu doğmaz.
+        /// <para>Tüketicileri alan-dışı durumunu okuyanlardır (poz bildirimi, ateş kapısı);
+        /// muhafazasız/plansız sahnede <c>null</c> ya da kilitli <c>false</c> döner — ölçüyü
+        /// bilmeden "dışarıda" demek yanlış bilgi olurdu.</para>
+        /// </summary>
+        public static ArenaBoundary Active { get; private set; }
+
+        /// <summary>True while the HMD is outside the allowed area.
+        /// <para>⚠️ Gözlemci kipinde (<see cref="SetSpectatorMode"/>) ve plansız muhafazada
+        /// <c>false</c>'a KİLİTLİDİR — admin'in HMD'si yoktur, ölçüsü bilinmeyen arenada da
+        /// "dışarıda" demek uydurma olurdu.</para></summary>
         public bool IsOutOfBounds { get; private set; }
 
         /// <summary>
@@ -175,11 +187,23 @@ namespace VortexArena.Core.Arena
 
         private void Awake()
         {
+            // İlk örnek sahiplenir: ikinci bir muhafaza sahneye kaçarsa sessizce devralıp
+            // ölçüyü değiştirmesin (sahne kurulumu hatası, davranış kayması değil).
+            Active ??= this;
+
             propertyBlock = new MaterialPropertyBlock();
             if (head == null && Camera.main != null)
                 head = Camera.main.transform;
             if (warningText != null)
                 warningText.gameObject.SetActive(false);
+        }
+
+        private void OnDestroy()
+        {
+            if (Active == this)
+            {
+                Active = null;
+            }
         }
 
         private void OnEnable()

@@ -1059,6 +1059,7 @@ MonoBehaviour:
   bodyRenderers:
   - {fileID: 3858937266322927765}
   ghostMaterial: {fileID: 2100000, guid: 7f3b26d84e9a41c5b0d7e83a2c96f158, type: 2}
+  shieldMaterial: {fileID: 2100000, guid: c8a4f019d6b2470e91d3c5ea7f28b641, type: 2}
   redBodyRoot: {fileID: 1351621414267931348}
   character: {fileID: 8595517995428222429}
   friendMarker: {fileID: 6756981665450713295}
