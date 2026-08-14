@@ -4,6 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using VortexArena.Net;
+using VortexArena.Protocol;
 
 namespace VortexArena.App.Admin
 {
@@ -11,55 +12,47 @@ namespace VortexArena.App.Admin
     /// İstatistikler paneli (skor bandının ortasındaki chip ya da <c>I</c> tuşu açar).
     /// Kart yarı saydamdır, arkasına scrim koyulmaz — canlı sahne izlenmeye devam eder.
     ///
-    /// <para><b>Tablo neden kolon kolon çiziliyor:</b> TMP varsayılan fontu eşit genişlikli
-    /// DEĞİL, tek metin bloğunda boşlukla hizalama kayar. Bu yüzden her kolon kendi TMP'sidir ve
-    /// satırlar <c>\n</c> ile birleştirilir — hizalama font metriğinden bağımsız kalır.</para>
+    /// <para><b>Neden satır tabanlı:</b> panel yalnız okunan bir tablo değil, operatörün oturup
+    /// <i>kayıt işi</i> yaptığı ekrandır (ad düzeltme, gövde ölçümü, kalibrasyon yeniden yükleme).
+    /// Metin kolonlarında bir oyuncuya dokunmanın yolu yoktu ve TMP varsayılan fontu eşit genişlikli
+    /// olmadığı için hizalama da kolon başına ayrı TMP gerektiriyordu. Her oyuncu artık kendi
+    /// satırıdır (<see cref="AdminStatsRow"/>): hizalama yerleşimden gelir, eylem satırın üstündedir
+    /// ve liste ScrollRect ile kaydırılır — <b>kap YOKTUR</b>, herkes çizilir.</para>
     ///
     /// <para><b>Uydurma metrik yok:</b> yalnız protokolde gerçekten taşınan veriler gösterilir
-    /// (K/D/HP sunucudan — §5.3 <c>lobby_state</c>; batarya/sahne <c>status</c>'tan; <b>ping</b>
+    /// (K/D/skor sunucudan — §5.3 <c>lobby_state</c>; batarya/kumanda <c>status</c>'tan; <b>ping</b>
     /// istemcinin ölçüp bildirdiği RTT — §6.7 <c>net_stats</c>). <b>Hasar ve isabet oranı protokolde
-    /// YOK, bu yüzden tabloda da yok.</b></para>
-    /// <para><b>Jitter ve paket kaybı bilinçli olarak tabloda DEĞİL</b> — ikisi de ölçülüyor ve
-    /// <c>net_stats</c> ile geliyor, ama operatörün eyleme çevirebileceği tek sayı ping'dir. Hacim
-    /// (bayt/sn, paket/sn) hiç gelmiyor: o sayılar sunucu konsolundadır (<c>[state]</c> satırı) ve
-    /// oraya aittir.</para>
-    /// <para>⚠️ <b>BATARYA hücresi zengin metin içerir</b> (eşiğin altındaki pil ve kumanda
-    /// simgeleri token başına renklenir; tek TMP'nin tek <c>.color</c>'ı olduğu için başka yolu
-    /// yok). Bayrağı <see cref="EnableBatteryColumnRichText"/> açar — prefabtaki değere
-    /// güvenilmez, gerekçesi orada.</para>
+    /// YOK, bu yüzden panelde de yok.</b> Jitter ve paket kaybı ölçülüyor ama gösterilmiyor:
+    /// operatörün eyleme çevirebileceği tek sayı ping'dir.</para>
+    ///
+    /// <para>⚠️ <b>HP, SAHNE ve İHLAL satırda bilinçli olarak YOKTUR</b> — gerekçesi
+    /// <see cref="AdminStatsRow"/> sınıf dokümanındadır; "eksik" sanıp geri koyma.</para>
+    ///
+    /// <para>⚠️ <b>Kalibrasyon SIFIRLAMA (<c>clear_calibration</c>) bu panelde YOKTUR ve
+    /// eklenmez.</b> Buradaki KALİBRE düğmeleri gözlükteki kayıttan <i>yeniden yükleme</i>dir;
+    /// sıfırlama yan paneldeki oyuncu kartında (KAL) ve tercihler panelindedir. İkisi zıt işlerdir
+    /// (biri savaş dışı bırakır, diğeri oyuncuyu oyuna geri sokmayı dener) ve aynı ekranda yan yana
+    /// durmaları operatörü yanıltır.</para>
+    ///
+    /// <para><b>Görünüm prefabtan gelir</b> (<c>_Shared/App/Resources/UI/AdminStatsPanel.prefab</c>);
+    /// bu sınıf yalnız veri yazar ve satırları <see cref="UiKit.Block"/> ile yerleştirir.</para>
     /// </summary>
     public class AdminStatsPanel : MonoBehaviour
     {
         private const float RefreshInterval = 0.5f;
 
-        /// <summary>Kolon sırası — soldan sağa. <b>Tek işi <see cref="CellText"/>'in <c>switch</c>
-        /// sırasını ve <see cref="_columns"/>'un beklenen uzunluğunu belgelemektir</b>; başlık
-        /// metinleri ve genişlikler PREFABTA yaşar.
-        /// <para>⚠️ Buraya kolon eklemek YETMEZ: prefabta da bir TMP objesi açıp <c>_columns</c>
-        /// dizisine bağlamak gerekir, yoksa yeni kolon sessizce hiç çizilmez (dizi prefabtan gelir,
-        /// buradaki uzunluk yalnız yeni örneklerin varsayılanıdır).</para>
-        /// <para><c>SKOR</c> bireysel maç skorudur (§10.2) ve <c>K</c> ile aynı şey DEĞİLDİR: skoru
-        /// mod yazar, öldürme başına 1 olmak zorunda değil.</para></summary>
-        /// <remarks>PING <b>sona</b> eklendi, BATARYA'nın yanına değil: prefabtaki kolonlar
-        /// <c>Header0..N</c>/<c>Column0..N</c> çiftleri hâlinde ve araya girmek mevcut dört objenin
-        /// hepsini yeniden konumlandırmayı gerektirirdi. Sağ kenar bir teşhis kolonu için doğal yer.</remarks>
-        private static readonly string[] ColumnTitles =
-            { "OYUNCU", "TAKIM", "SKOR", "K", "D", "K/D", "HP", "BATARYA", "DURUM", "SAHNE", "PING",
-              "İHLAL" };
-
-        /// <summary>Zengin metin içeren TEK kolon (<see cref="ColumnTitles"/> ile aynı indeks).</summary>
-        private const int BatteryColumn = 7;
-
-        // NOT: PanelWidth/PanelHeight/TableTop/ColumnWidths sabitleri KALDIRILDI — hiçbiri
-        // okunmuyordu (panel kod tarafından çizildiği dönemden kalmışlar) ve durdukları yerde
-        // "yerleşimi kod belirliyor" diye yalan söylüyorlardı. Kart ölçüsü ve kolon genişlikleri
-        // prefabın kendi RectTransform'larındadır; tek doğruluk kaynağı orasıdır.
+        /// <summary>Uyarı penceresinin kendiliğinden kapanma süresi (sn). Operatör kapatmayı
+        /// unutursa pencere listenin üstünde kalıcı olarak durmasın.</summary>
+        private const float PopupSeconds = 6f;
 
         /// <summary>FFA sıralaması için tampon — her tazelemede yeni liste ayırmamak adına.</summary>
         private readonly List<AdminPlayerView> _sorted = new List<AdminPlayerView>();
 
-        // ⚠️ Alanlar [SerializeField] — görünüm PREFABTAN gelir
-        // (`_Shared/App/Resources/UI/AdminStatsPanel.prefab`). Bu sınıf yalnız veri yazar.
+        /// <summary>Satır havuzu: örnekler yok edilmez, fazlası gizlenir (<see cref="AdminHud"/>
+        /// ile aynı desen) — her tazelemede Instantiate/Destroy yapmak GC ve düzen sıçraması üretir.</summary>
+        private readonly List<AdminStatsRow> _rows = new List<AdminStatsRow>();
+
+        // ⚠️ Alanlar [SerializeField] — görünüm PREFABTAN gelir. Bu sınıf yalnız veri yazar.
 
         [Tooltip("Açılıp kapanan kart — panel kapalıyken bu obje devre dışı bırakılır.")]
         [SerializeField] private GameObject _root;
@@ -68,57 +61,87 @@ namespace VortexArena.App.Admin
         [SerializeField] private TextMeshProUGUI _teamSummary;
         [SerializeField] private TextMeshProUGUI _matchSummary;
 
-        [Tooltip("Tablo kolonları — ColumnTitles ile AYNI SIRADA ve aynı sayıda olmalı.")]
-        [SerializeField] private TextMeshProUGUI[] _columns = new TextMeshProUGUI[ColumnTitles.Length];
+        [Header("Oyuncu listesi")]
+        [SerializeField] private AdminStatsRow _rowPrefab;
+        [Tooltip("ScrollRect'in content'i — satırlar buranın altına kurulur, yüksekliği koddan sürülür.")]
+        [SerializeField] private RectTransform _rowContainer;
+        [SerializeField] private ScrollRect _scroll;
+        [SerializeField] private float _rowGap = 6f;
+
+        [Header("Toplu eylemler")]
+        [SerializeField] private Button _calibrateAllButton;
+        [SerializeField] private Button _measureAllButton;
+
+        [Header("Uyarı penceresi")]
+        [SerializeField] private GameObject _popupRoot;
+        [SerializeField] private TextMeshProUGUI _popupText;
+        [SerializeField] private Button _popupCloseButton;
 
         private readonly StringBuilder _sb = new StringBuilder();
 
         private float _nextRefresh;
         private bool _dirty = true;
 
+        /// <summary>Görünür (bağlı) satır sayısı — <see cref="Tick"/> ve toplu eylemler yalnız
+        /// bunlarla ilgilenir.</summary>
+        private int _visibleRows;
+
+        /// <summary>Satır yüksekliği prefabtan okunur (yedeği <see cref="AdminStatsRow.Height"/>);
+        /// sanatçı satırı büyütürse liste yerleşimi uyar.</summary>
+        private float _rowHeight = -1f;
+
+        /// <summary>Uyarı penceresinin kapanma anı (<c>Time.unscaledTime</c>); &lt; 0 = kapalı.</summary>
+        private float _popupUntil = -1f;
+
+        private float RowHeight
+        {
+            get
+            {
+                if (_rowHeight > 1f)
+                {
+                    return _rowHeight;
+                }
+
+                float fromPrefab = _rowPrefab != null
+                    ? ((RectTransform)_rowPrefab.transform).rect.height
+                    : 0f;
+                _rowHeight = fromPrefab > 1f ? fromPrefab : AdminStatsRow.Height;
+                return _rowHeight;
+            }
+        }
+
         private void Start()
         {
-            if (_closeButton != null)
-            {
-                // Prefabta kalıcı onClick kaydı YOKTUR (bkz. AdminPreferencesPanel.WireButtons).
-                _closeButton.onClick.RemoveAllListeners();
-                _closeButton.onClick.AddListener(AdminSession.ClosePanel);
-            }
+            // Prefabta kalıcı onClick kaydı YOKTUR (bkz. AdminPreferencesPanel.WireButtons).
+            Wire(_closeButton, AdminSession.ClosePanel);
+            Wire(_calibrateAllButton, ReloadAllCalibrations);
+            Wire(_measureAllButton, () => AdminCommands.MeasureBodyScale(0));
+            Wire(_popupCloseButton, HidePopup);
 
             if (_root != null)
             {
                 _root.SetActive(false); // görünürlüğü Apply() belirler
             }
 
-            EnableBatteryColumnRichText();
+            HidePopup();
             Apply();
         }
 
-        /// <summary>
-        /// BATARYA kolonunun zengin metin kapısı.
-        /// <para>
-        /// ⚠️ <b>Bayrak prefabta değil BURADA açılır:</b> <c>&lt;color=…&gt;</c> etiketlerini
-        /// <see cref="AdminPlayerRow.FormatBattery"/>/<see cref="AdminPlayerRow.FormatControllers"/>
-        /// üretiyor, yani bayrak bir görünüm tercihi değil üretilen metnin sözleşmesidir.
-        /// Prefabta kapalı kaldığında hücre <c>%73 K:&lt;color=#…&gt;~</c> gibi ham etiket çizer.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Yalnız bu kolon için.</b> Diğer kolonlar zengin metne KAPALI kalmalı: OYUNCU
-        /// kolonunda oyuncunun kendi yazdığı ad var ve <c>&lt;b&gt;</c> içeren bir ad tabloyu
-        /// bozardı.
-        /// </para>
-        /// </summary>
-        private void EnableBatteryColumnRichText()
+        private static void Wire(Button button, UnityEngine.Events.UnityAction action)
         {
-            if (_columns != null && BatteryColumn < _columns.Length && _columns[BatteryColumn] != null)
+            if (button == null)
             {
-                _columns[BatteryColumn].richText = true;
+                return;
             }
+
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(action);
         }
 
         private void OnEnable()
         {
             AdminSession.Changed += MarkDirty;
+            AdminRoster.CalibrationResult += HandleCalibrationResult;
 
             if (AdminRoster.Instance != null)
             {
@@ -129,6 +152,7 @@ namespace VortexArena.App.Admin
         private void OnDisable()
         {
             AdminSession.Changed -= MarkDirty;
+            AdminRoster.CalibrationResult -= HandleCalibrationResult;
 
             if (AdminRoster.Instance != null)
             {
@@ -148,6 +172,18 @@ namespace VortexArena.App.Admin
             {
                 _dirty = false;
                 Apply();
+            }
+
+            // Onay pencereleri ve kalibrasyon zaman aşımı KARE başına ilerler: tazeleme aralığına
+            // bırakılsalardı sayaç yarım saniyelik adımlarla seğirirdi.
+            for (int i = 0; i < _visibleRows && i < _rows.Count; i++)
+            {
+                _rows[i].Tick();
+            }
+
+            if (_popupUntil >= 0f && Time.unscaledTime >= _popupUntil)
+            {
+                HidePopup();
             }
         }
 
@@ -169,6 +205,14 @@ namespace VortexArena.App.Admin
             if (_root.activeSelf != open)
             {
                 _root.SetActive(open);
+
+                // Panel her açılışta listenin BAŞINDAN başlar: kaydırma konumu oturumlar arası
+                // taşınırsa operatör paneli açtığında boş bir alt boşluğa bakıyor olabilir
+                // (aradaki oyuncular çıkmış, liste kısalmıştır).
+                if (open && _scroll != null)
+                {
+                    _scroll.verticalNormalizedPosition = 1f;
+                }
             }
 
             AdminRoster roster = AdminRoster.Instance;
@@ -178,13 +222,13 @@ namespace VortexArena.App.Admin
             }
 
             RefreshSummary(roster);
-            RefreshTable(OrderedPlayers(roster));
+            RefreshRows(OrderedPlayers(roster));
             RefreshMatchInfo(roster);
         }
 
         /// <summary>
-        /// Tablo sırası: takımlı modda roster sırası (playerId) korunur — operatör oyuncuyu hep
-        /// aynı satırda arar. FFA'da tek sıralama ölçütü skordur, bu yüzden tablo skora göre
+        /// Liste sırası: takımlı modda roster sırası (playerId) korunur — operatör oyuncuyu hep
+        /// aynı satırda arar. FFA'da tek sıralama ölçütü skordur, bu yüzden liste skora göre
         /// AZALAN dizilir (eşitlikte playerId ile kararlı kalır).
         /// </summary>
         private IReadOnlyList<AdminPlayerView> OrderedPlayers(AdminRoster roster)
@@ -235,93 +279,58 @@ namespace VortexArena.App.Admin
             _teamSummary.text = _sb.ToString();
         }
 
-        /// <summary>⚠️ Tabloda bağlantı durumuna göre SÜZME YOKTUR ve eklenmez (§10.2): oyundan
-        /// çıkarılmış (<c>left</c>) satır maç sonu tablosunda görünmeli — sunucu onu tam da bunun
-        /// için maç bitene kadar roster'da tutuyor.</summary>
-        private void RefreshTable(IReadOnlyList<AdminPlayerView> players)
+        /// <summary>
+        /// Satır havuzunu listeye uydurur ve yerleştirir.
+        /// <para>⚠️ Bağlantı durumuna göre SÜZME YOKTUR ve eklenmez (§10.2): oyundan çıkarılmış
+        /// (<c>left</c>) satır maç sonu tablosunda görünmeli — sunucu onu tam da bunun için maç
+        /// bitene kadar roster'da tutuyor.</para>
+        /// <para>⚠️ Satır SAYISI da kapanmaz: yan paneldeki kolonların aksine burada kırpma yoktur,
+        /// content yüksekliği sürülür ve fazlasını ScrollRect kaydırır. Kırpılan bir istatistik
+        /// tablosu operatörün aradığı oyuncuyu gizlerdi.</para>
+        /// </summary>
+        private void RefreshRows(IReadOnlyList<AdminPlayerView> players)
         {
-            for (int c = 0; c < _columns.Length; c++)
+            if (_rowContainer == null)
             {
-                _sb.Clear();
+                return;
+            }
 
-                for (int i = 0; i < players.Count; i++)
+            int count = players != null ? players.Count : 0;
+
+            while (_rows.Count < count)
+            {
+                if (_rowPrefab == null)
                 {
-                    if (i > 0)
-                    {
-                        _sb.AppendLine();
-                    }
-
-                    _sb.Append(CellText(players[i], c));
+                    Debug.LogWarning("[AdminStatsPanel] _rowPrefab atanmadı; oyuncu satırları çizilemiyor.");
+                    break;
                 }
 
-                _columns[c].text = _sb.ToString();
+                AdminStatsRow row = Instantiate(_rowPrefab, _rowContainer);
+                row.Initialize(HandleRowSelected, ShowPopup);
+                _rows.Add(row);
             }
-        }
 
-        private static string CellText(AdminPlayerView view, int column)
-        {
-            switch (column)
+            count = Mathf.Min(count, _rows.Count);
+            _visibleRows = count;
+
+            float height = RowHeight;
+            for (int i = 0; i < _rows.Count; i++)
             {
-                case 0: return $"{view.name} #{view.playerId}";
-                case 1: return view.team == "red" ? "kırmızı" : view.team == "blue" ? "mavi" : "-";
-                case 2: return view.score.ToString();
-                case 3: return view.kills.ToString();
-                case 4: return view.deaths.ToString();
-                case 5: return view.deaths > 0
-                    ? (view.kills / (float)view.deaths).ToString("0.00")
-                    : view.kills.ToString("0.00");
-                case 6: return Mathf.RoundToInt(view.hp).ToString();
-                // Pil eşikleri/renkleri ve kumanda simgeleri satır kartıyla TEK kaynaktan gelir
-                // (AdminPlayerRow) — aynı gözlük iki yerde farklı renkte görünmemeli.
-                // ⚠️ Kumanda AYRI BİR KOLON DEĞİL, batarya hücresinin devamı: kolonlar prefabtaki
-                // TMP objelerinden geliyor (bkz. ColumnTitles) ve yeni kolon prefab işidir. İki
-                // değer karışmaz — kumanda tokeni kendi "K:" önekini taşır ve yüzde değildir.
-                case BatteryColumn:
+                if (i >= count)
                 {
-                    string battery = AdminPlayerRow.FormatBattery(view);
-                    string controllers = AdminPlayerRow.FormatControllers(view);
-                    return string.IsNullOrEmpty(controllers) ? battery : $"{battery} {controllers}";
+                    _rows[i].SetVisible(false);
+                    continue;
                 }
-                case 8: return StateText(view);
-                case 9: return string.IsNullOrEmpty(view.scene) ? "-" : view.scene;
-                // §6.7: -1 = ölçüm yok (henüz yoklama dönmedi ya da gözlükte eski sürüm var).
-                // 0 yazmak "0 ms ping" gibi okunurdu, bu yüzden "-".
-                case 10: return view.rttMs < 0 ? "-" : $"{view.rttMs} ms";
-                // §10.9 ihlal defteri: SAYI + toplam SÜRE tek hücrede. İki türün (duvar / alan
-                // dışı) toplamıdır — kırılım kartın taşıyamayacağı kadar geniş, operatörün maç
-                // sonunda oyuncuyla konuşurken sorduğu soru ise "kaç kez ve ne kadar"dır.
-                // ⚠️ Sayaçlar SUNUCUDAN gelir (AdminRoster.HandleViolation); hiç ihlal etmemiş
-                // oyuncu "-" ile geçilir, "0 · 0.0 sn" tabloyu okunmaz sayı gürültüsüyle doldurur.
-                case 11: return view.ViolationCount <= 0
-                    ? "-"
-                    : $"{view.ViolationCount} · {view.ViolationSeconds:0.0} sn";
-                // Prefabta ColumnTitles'tan FAZLA kolon bağlanmışsa boş kalsın — eskiden burada
-                // `default: scene` vardı ve yeni kolon eklenince sessizce sahne adını tekrarlardı.
-                default: return "";
-            }
-        }
 
-        /// <summary>⚠️ "çevrimdışı" diye bir durum YOKTUR (§2) — satır ya geri bekleniyor
-        /// (sayaçla) ya oyundan çıkarılmıştır.</summary>
-        private static string StateText(AdminPlayerView view)
-        {
-            if (view.IsReconnecting)
-            {
-                return $"yeniden bağlanıyor ({view.ReconnectSecondsLeft} sn)";
+                _rows[i].SetVisible(true);
+                _rows[i].Place(i * (height + _rowGap), height);
+                _rows[i].Bind(players[i], players[i].playerId == AdminSession.SelectedPlayerId);
             }
 
-            if (view.HasLeft)
-            {
-                return "ayrıldı";
-            }
-
-            if (!view.alive)
-            {
-                float remaining = view.RespawnRemaining;
-                return remaining > 0.1f ? $"ölü ({Mathf.CeilToInt(remaining)} sn)" : "tabanda bekliyor";
-            }
-
-            return view.ready ? "hazır" : "bekliyor";
+            // Content yüksekliği koddan sürülür: ContentSizeFitter/Layout Group KULLANILMIYOR
+            // (UiKit yerleşim kuralı) — kaydırma çubuğunun aralığı yalnız buradan gelir.
+            _rowContainer.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
+                count > 0 ? count * (height + _rowGap) : 0f);
         }
 
         private void RefreshMatchInfo(AdminRoster roster)
@@ -365,6 +374,87 @@ namespace VortexArena.App.Admin
         {
             int total = Mathf.Max(0, Mathf.CeilToInt(seconds));
             return $"{total / 60:00}:{total % 60:00}";
+        }
+
+        // ------------------------------------------------------------- toplu eylem
+
+        /// <summary>
+        /// Herkesin kalibrasyonunu gözlükteki kayıttan yeniden yükletir.
+        /// <para>⚠️ <b>Sıra önemli:</b> önce satırlar yükleme kipine alınır, SONRA komut gider.
+        /// Ters sırada, sonucu ışık hızıyla dönen bir başlığın yanıtı satır daha kipe girmeden
+        /// gelirdi ve sonuç görünmeden yutulurdu.</para>
+        /// <para>Onay penceresi YOKTUR: yeniden yükleme kimseyi savaş dışı bırakmaz, tutmazsa
+        /// oyuncu eskisi gibi kalır — geri alınabilir bir denemedir (sıfırlamanın tersine).</para>
+        /// </summary>
+        private void ReloadAllCalibrations()
+        {
+            for (int i = 0; i < _visibleRows && i < _rows.Count; i++)
+            {
+                _rows[i].BeginCalibrationLoad();
+            }
+
+            AdminCommands.ReloadCalibration(0);
+        }
+
+        // ------------------------------------------------------------- geri çağrı
+
+        private void HandleRowSelected(int playerId)
+        {
+            AdminSession.SelectedPlayerId = playerId;
+        }
+
+        /// <summary>Sonucu <b>yalnız ilgili satıra</b> verir: mesaj bir olaydır, listeyi yeniden
+        /// çizmeye gerek yok.</summary>
+        private void HandleCalibrationResult(CalibrationResultMsg msg)
+        {
+            if (msg == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _visibleRows && i < _rows.Count; i++)
+            {
+                if (_rows[i].PlayerId == msg.playerId)
+                {
+                    _rows[i].ApplyCalibrationResult(msg.ok, msg.error);
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Başarısız bir kalibrasyon yüklemesinin gerekçesini gösterir (dar düğme yalnız "HATA"
+        /// taşıyabiliyor).
+        /// <para>⚠️ Arkasına scrim KOYULMAZ ve panel kilitlenmez — bu paneldeki genel kural:
+        /// canlı sahne izlenmeye devam eder ve operatör pencere açıkken de çalışabilir.</para>
+        /// </summary>
+        private void ShowPopup(int playerId, string error)
+        {
+            if (_popupRoot == null)
+            {
+                return;
+            }
+
+            if (_popupText != null)
+            {
+                AdminRoster roster = AdminRoster.Instance;
+                string who = roster != null ? roster.NameOf(playerId) : $"Oyuncu {playerId}";
+                _popupText.text = $"{who} · {error}";
+                _popupText.color = UiKit.Bad;
+            }
+
+            _popupRoot.SetActive(true);
+            _popupUntil = Time.unscaledTime + PopupSeconds;
+        }
+
+        private void HidePopup()
+        {
+            _popupUntil = -1f;
+
+            if (_popupRoot != null && _popupRoot.activeSelf)
+            {
+                _popupRoot.SetActive(false);
+            }
         }
     }
 }

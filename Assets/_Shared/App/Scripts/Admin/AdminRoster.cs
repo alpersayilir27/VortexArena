@@ -113,6 +113,11 @@ namespace VortexArena.App.Admin
         /// Doluyken ÖLÇ düğmesi çarpan yerine "ÖLÇÜLEMEDİ" yazar — başarılı ölçüm alanı temizler.</summary>
         public string scaleError = "";
 
+        /// <summary>Son kalibrasyon YENİDEN YÜKLEME denemesinin başarısızlık gerekçesi; boş = sorun
+        /// yok (§5.3). Başarılı bir kalibrasyon alanı temizler — doluyken satır operatöre neden
+        /// yüklenemediğini gösterebilir (dar düğme yalnız "HATA" taşır).</summary>
+        public string calibrationError = "";
+
         /// <summary>Operatörün ilgilenmesi gereken satır mı: yalnız OYUNCU ve kalibresiz.</summary>
         public bool NeedsCalibration => IsPlayer && !calibrated;
 
@@ -210,6 +215,18 @@ namespace VortexArena.App.Admin
 
         /// <summary>Roster/skor/faz verisi değiştiğinde (ana thread).</summary>
         public event Action Changed;
+
+        /// <summary>
+        /// Bir oyuncunun kalibrasyon yeniden yükleme denemesinin sonucu (§5.3). Bir <b>OLAYDIR</b>,
+        /// durum değil: yalnız o an yanıt bekleyen satır ilgilenir ve sonucu kısa süre gösterip
+        /// boş duruma döner.
+        /// <para>⚠️ Bu yüzden <see cref="Changed"/> tetiklenmez — roster verisi değişmedi; tazeleme
+        /// tetiklemek yalnız tüm listeyi boşuna yeniden çizerdi.</para>
+        /// <para><b>Statiktir</b> çünkü dinleyicisi (istatistik paneli) roster'dan bağımsız
+        /// açılıp kapanıyor; örnek üstünden abone olmak paneli <see cref="Instance"/>'ın oluşma
+        /// sırasına bağlardı.</para>
+        /// </summary>
+        public static event Action<CalibrationResultMsg> CalibrationResult;
 
         private readonly Dictionary<int, AdminPlayerView> _players = new Dictionary<int, AdminPlayerView>();
         private readonly List<AdminPlayerView> _red = new List<AdminPlayerView>();
@@ -367,6 +384,7 @@ namespace VortexArena.App.Admin
             NetEvents.OnKillEvent += HandleKillEvent;
             NetEvents.OnNetStats += HandleNetStats;
             NetEvents.OnViolation += HandleViolation;
+            NetEvents.OnCalibrationResult += HandleCalibrationResult;
         }
 
         private void OnDisable()
@@ -383,6 +401,7 @@ namespace VortexArena.App.Admin
             NetEvents.OnKillEvent -= HandleKillEvent;
             NetEvents.OnNetStats -= HandleNetStats;
             NetEvents.OnViolation -= HandleViolation;
+            NetEvents.OnCalibrationResult -= HandleCalibrationResult;
         }
 
         // -------------------------------------------------------------- sorgular
@@ -556,6 +575,7 @@ namespace VortexArena.App.Admin
                 view.floorOffset = view.IsPlayer ? info.floorOffset : 0f;
                 view.bodyScale = view.IsPlayer ? info.bodyScale : 0f;
                 view.scaleError = view.IsPlayer ? info.scaleError ?? "" : "";
+                view.calibrationError = view.IsPlayer ? info.calibrationError ?? "" : "";
 
                 if (view.alive != info.alive)
                 {
@@ -826,6 +846,23 @@ namespace VortexArena.App.Admin
 
             PlayViolationSound(msg);
             Raise();
+        }
+
+        /// <summary>
+        /// Kalibrasyon yeniden yükleme sonucunu (§5.3) dinleyicilere geçirir.
+        /// <para>⚠️ <see cref="Raise"/> ÇAĞRILMAZ: roster verisi değişmedi — kalıcı durumu
+        /// (<see cref="AdminPlayerView.calibrated"/>, <see cref="AdminPlayerView.calibrationError"/>)
+        /// zaten bir sonraki <c>lobby_state</c> yazar. Bu mesaj yalnız "denemem ne oldu" sorusunun
+        /// cevabıdır ve tek muhatabı o an bekleyen satırdır.</para>
+        /// </summary>
+        private void HandleCalibrationResult(CalibrationResultMsg msg)
+        {
+            if (msg == null)
+            {
+                return;
+            }
+
+            CalibrationResult?.Invoke(msg);
         }
 
         /// <summary>

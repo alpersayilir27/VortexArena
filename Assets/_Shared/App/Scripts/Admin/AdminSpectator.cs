@@ -15,7 +15,7 @@ namespace VortexArena.App.Admin
     /// <para><b>Neden kendini önyükler:</b> admin artık Lobby ve TÜM arena sahnelerinde geziniyor.
     /// Sahneye elle konan bir bileşen, yeni arena eklerken unutulacak bir adım olurdu
     /// (arena sahneleri kendine yeten kutulardır). Bu yüzden `ConnectionOverlay` deseni:
-    /// `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` + `DontDestroyOnLoad` tekil.</para>
+    /// `DontDestroyOnLoad` tekil, kurulumu `AppSingletons`'tan gelir.</para>
     ///
     /// <para><b>Rol ne zaman biliniyor:</b> `AppBoot.Start()` bu kancadan SONRA koşar, yani
     /// önyüklemede rol henüz çözülmemiş olabilir. Bu yüzden karar <see cref="Update"/> içinde
@@ -51,8 +51,10 @@ namespace VortexArena.App.Admin
         private AdminSpectatorCamera _cameraDriver;
         private bool _active;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Bootstrap()
+        /// <summary>Tekili kurar. ⚠️ Oturum kararı (<b>hangi rolde gerekli</b>)
+        /// <see cref="AppSingletons"/>'a aittir; buradaki tek kapı bu sınıfın kendi VARLIK
+        /// koşuludur.</summary>
+        internal static void Install()
         {
             if (Instance != null)
             {

@@ -559,6 +559,24 @@ namespace VortexArena.Net
                         break;
                     }
 
+                    case MessageTypes.ReloadCalibration:
+                    {
+                        // Operatör kayıtlı çapadan hizalamayı yeniden yükletti (§10.6). Sunucu
+                        // yalnız player'a yollar, alansız: hedef zaten bu bağlantı. Kalibresiz
+                        // hedef ATLANMAZ — komut tam da onun için var. Anchor/rig dokunduğu için
+                        // ana thread.
+                        _mainThreadActions.Enqueue(NetEvents.RaiseReloadCalibration);
+                        break;
+                    }
+
+                    case MessageTypes.CalibrationResult:
+                    {
+                        // Sunucu yalnız admin bağlantılarına yollar; player'a gelirse dinleyen yoktur.
+                        CalibrationResultMsg msg = JsonUtility.FromJson<CalibrationResultMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseCalibrationResult(msg));
+                        break;
+                    }
+
                     case MessageTypes.AdminState:
                     {
                         // Sunucu yalnız admin bağlantılarına yollar; player'a gelirse zaten dinleyen yok.

@@ -39,6 +39,23 @@ namespace VortexArena.App
         public static string Role = RolePlayer;
         public static bool RoleResolved;
 
+        /// <summary>
+        /// Bu oturum bir <b>silah kavrama kalibrasyonu</b> oturumu mu.
+        /// <para>
+        /// ⚠️ <b>Bunu okuyan TEK yer <see cref="AppSingletons"/>'tır</b> — ağ/maç tekillerinin
+        /// kurulup kurulmayacağına orada, tek noktada karar verilir. Kapıyı tekillere dağıtma:
+        /// yeni bir oturum türü eklemek o an N dosyayı tek tek düzenlemeye döner ve biri
+        /// atlandığında hata vermez, yalnız o tekil beklenmedik bir yerde belirir.
+        /// </para>
+        /// <para>
+        /// ⚠️ Kapı <b>rolde</b> durur, sahne adında değil: sahne adına bakmak, sahne yeniden
+        /// adlandırıldığında sessizce açılan bir kapı olurdu. Rol Boot'tan ÖNCE yazılır
+        /// (<c>DevSession</c>, <c>BeforeSceneLoad</c>), yani <c>AfterSceneLoad</c> önyüklemeleri
+        /// koştuğunda değer kesin bilinir.
+        /// </para>
+        /// </summary>
+        public static bool IsWeaponCalibration => Role == RoleWeapon;
+
         /// <summary>Launcher'ın `--server-ip` ile geçtiği adres. Boşsa adres bilinmiyor.</summary>
         public static string ServerIp = "";
 

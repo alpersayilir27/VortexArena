@@ -26,6 +26,9 @@ namespace VortexArena.Protocol
         public const string ReturnToLobby = "return_to_lobby"; // sunucu → istemci yönü de aynı type
         public const string SetSelection = "set_selection"; // ortak mod/harita seçimi (maçı başlatmaz)
         public const string ClearCalibration = "clear_calibration"; // kalibrasyonu sıfırla; playerId 0 = herkes (§10.6)
+        // Kayıtlı çapadan hizalamayı yeniden yükletir; playerId 0 = herkes (§10.6).
+        // Sunucu → istemci yönü de aynı type.
+        public const string ReloadCalibration = "reload_calibration";
         // Gövde ölçümünü başlatır; playerId 0 = herkes (§10.8). Sunucu → istemci yönü de aynı type.
         public const string MeasureBodyScale = "measure_body_scale";
         public const string SetFriendlyFire = "set_friendly_fire"; // dost ateşi anahtarı; faz kapısı YOK, anlık (§5.2)
@@ -52,5 +55,7 @@ namespace VortexArena.Protocol
         public const string RulesUpdate = "rules_update"; // HERKESE: koşan maçın kural şekli değişti (§5.3)
         public const string NetStats = "net_stats"; // yalnız adminlere: oyuncu başına ping/jitter/kayıp
         public const string Violation = "violation"; // yalnız adminlere: ihlal defterinin kenar bildirimi (§5.3)
+        // Yalnız adminlere: reload_calibration düğmesinin cevabı — olay, durum değil (§5.3).
+        public const string CalibrationResult = "calibration_result";
     }
 }

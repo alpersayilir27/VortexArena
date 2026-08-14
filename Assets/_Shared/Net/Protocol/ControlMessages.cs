@@ -145,6 +145,18 @@ namespace VortexArena.Protocol
         /// <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/> eşiğini aşarsa operatörü uyarır
         /// (§10.6). ⚠️ <b>Bir kapı değildir</b> — sapma ne olursa olsun kalibrasyon kabul edilir.</para></summary>
         public float floorOffset;
+
+        /// <summary>Kayıtlı hizalama yeniden YÜKLENEMEDİYSE insan okuyabilir gerekçesi; boş =
+        /// sorun yok. Sözleşmesi <see cref="SetBodyScaleMsg.error"/> ile birebir aynıdır:
+        /// <b>doluysa <see cref="calibrated"/>/<see cref="source"/>/<see cref="floorOffset"/> YOK
+        /// SAYILIR ve sunucudaki kayıtlı kalibrasyon aynen durur</b> — gerekçe yalnız adminlere
+        /// duyurulur ve roster'a yazılır (<see cref="PlayerInfo.calibrationError"/>, §10.6).
+        /// <para>Bugünkü tek üreticisi operatörün <see cref="ReloadCalibrationMsg"/> komutudur:
+        /// denemenin düştüğünü söyleyen kanal budur.</para>
+        /// <para>⚠️ Doğrulanmayan serbest metindir (<see cref="source"/> ile aynı sözleşme): hata
+        /// kodu listesi YOKTUR — tek tüketicisi operatörün ekranıdır, yeni bir başarısızlık türü
+        /// sunucuda iş çıkarmamalıdır.</para></summary>
+        public string error = "";
     }
 
     /// Başlığın KENDİ gövde ölçeğini bildirmesi (§10.8). Yalnız player gönderir; <c>playerId</c>
@@ -237,6 +249,24 @@ namespace VortexArena.Protocol
     public class ClearCalibrationMsg
     {
         public string type = MessageTypes.ClearCalibration;
+        public int playerId;
+    }
+
+    /// Kayıtlı çapadan hizalamanın yeniden yüklenmesini BAŞLATIR (§10.6). Admin → sunucu yönünde
+    /// <c>playerId</c> dolu (<c>0</c> = TÜM oyuncular), sunucu → istemci yönünde alansız gider —
+    /// <see cref="IdentifyMsg"/> ile aynı çift yönlü desen.
+    /// <para>Sunucu hiçbir şey hesaplamaz, yalnız iletir; sonucu başlık <c>set_calibration</c> ile
+    /// döner (başarıda <c>calibrated:true, source:"anchor"</c>, başarısızlıkta dolu
+    /// <see cref="SetCalibrationMsg.error"/>) ve sunucu onu <see cref="CalibrationResultMsg"/> ile
+    /// adminlere yayar.</para>
+    /// <para>⚠️ <b><see cref="MeasureBodyScaleMsg"/>'in aksine kalibresiz hedef ATLANMAZ:</b>
+    /// komutun var olma sebebi tam da hizalaması olmayan/bozulmuş oyuncudur.</para>
+    /// <para>⚠️ Admin bununla <c>calibrated</c>'i <c>true</c> YAPMAZ — yalnız denemeyi başlatır,
+    /// işareti yine başlık koyar (§10.6 asimetrik yazar tablosu).</para>
+    [Serializable]
+    public class ReloadCalibrationMsg
+    {
+        public string type = MessageTypes.ReloadCalibration;
         public int playerId;
     }
 
@@ -501,6 +531,13 @@ namespace VortexArena.Protocol
         /// oyuncunun satırında uyarı sonsuza kadar kalır ve operatör sorunun sürdüğünü sanardı.
         /// <c>clear_calibration</c> da sıfırlar.</para></summary>
         public string scaleError = "";
+
+        /// <summary>Son <b>kayıtlı hizalamayı yeniden yükleme</b> denemesi başarısızsa gerekçesi,
+        /// boş = sorun yok (§10.6).
+        /// <para>⚠️ <b>Başarılı kalibrasyon alanı temizler</b> (<see cref="scaleError"/> ile aynı
+        /// gerekçe: bir kez başarısız olan oyuncunun satırında uyarı sonsuza kadar kalır ve
+        /// operatör sorunun sürdüğünü sanardı). <c>clear_calibration</c> da sıfırlar.</para></summary>
+        public string calibrationError = "";
 
         /// <summary>Uzak avatara uygulanacak üniform gövde ölçeği (§10.8). <b><c>0</c> =
         /// ölçülmemiş → okuyan taraf <c>1</c> uygular</b> (kural değerleriyle aynı sözleşme:
@@ -813,6 +850,36 @@ namespace VortexArena.Protocol
 
         /// <summary>Aynı türden toplam süre (sn) — maç sonu istatistiği.</summary>
         public float totalSeconds;
+    }
+
+    /// <summary>
+    /// Operatörün <see cref="ReloadCalibrationMsg"/> düğmesinin CEVABI (§5.3/§10.6). Yalnız
+    /// <c>role=admin</c> bağlantılara gider — <see cref="NetStatsMsg"/>/<see cref="ViolationMsg"/>
+    /// ile aynı sınıf: tüketicisi tek bir ekrandır.
+    /// <para>⚠️ <b>Bu bir OLAYDIR, durum değildir.</b> Durumu roster taşır
+    /// (<see cref="PlayerInfo.calibrated"/> / <see cref="PlayerInfo.calibrationError"/>); bu mesaj
+    /// yalnız "az önce basılan düğme ne oldu" sorusunu cevaplar.</para>
+    /// <para>⚠️ <b>Sunucu bekleyen istek defteri TUTMAZ:</b> başlıktan gelen her
+    /// <c>set_calibration{calibrated:true}</c> ve her <c>set_calibration{error}</c> bir sonuç satırı
+    /// üretir; hangi satırın hangi düğmeye ait olduğunu ADMIN ARAYÜZÜ bilir (bekleyen satırı yoksa
+    /// yok sayar). Defter tutmak sunucuya, tek tüketicisi bir ekran olan bir zaman aşımı
+    /// sorumluluğu yüklerdi.</para>
+    /// <para>Sonucun <c>lobby_state</c> ile taşınmama gerekçesi: zaten kalibreli bir oyuncuda
+    /// BAŞARILI yeniden yükleme roster'da hiçbir alanı değiştirmez (yayın guard'ı, §5.3) — düğme
+    /// sonsuza kadar "yükleniyor" kalırdı.</para>
+    /// </summary>
+    [Serializable]
+    public class CalibrationResultMsg
+    {
+        public string type = MessageTypes.CalibrationResult;
+        public int playerId;
+
+        /// <summary><c>true</c> = başlık kayıtlı çapadan hizalamayı geri yükledi.</summary>
+        public bool ok;
+
+        /// <summary><c>ok == false</c> iken insan okuyabilir gerekçe; doğrulanmayan serbest metin
+        /// (<see cref="SetCalibrationMsg.error"/> ile aynı değer).</summary>
+        public string error = "";
     }
 
     // ---- UDP beacon (§4; WS mesajı değildir, alıcı app alanını doğrular) ----
