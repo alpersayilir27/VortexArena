@@ -1493,7 +1493,23 @@ canlandın · maç başladı ·
 kırmızı/mavi takım kazandı · berabere · geri sayım). Hangi ağ olayının hangi sesi tetiklediği `GameAudio`'da, klipler
 banka SO'sunda durur; boş bırakılan klip sessizce atlanır. Tetiklemenin tek kapısı
 `GameAudio.Play(GameSoundId)`'dir ve tekil yokken de güvenlidir (no-op) → çağıran taraf koşul
-yazmaz. Bankada **admin tarafına ait tek bir ses** de vardır (`AdminViolation`): bir oyuncunun
+yazmaz. ⚠️ **Duyurular tek kanaldan SIRAYLA çalar ve birbirini KESMEZ** — bankadan da kayıttan da
+gelseler (`Announce`): kanal doluyken gelen duyuru kuyruğa girer, sırası gelince çalar. Gerekçe
+nedenselliktir: duyurular bir zincir anlatıyor ("rakip elendi" → "tur sona erdi, mevzilerinize
+dönün") ve ilk halkayı kesmek oyuncuya turun NEDEN bittiğini hiç söylememek olur. **Sıra = geliş
+sırasıdır, öncelik tablosu yoktur:** sunucu olayları zaten nedensel sırada yolluyor (önce
+`kill_event`, sonra o ölümün bitirdiği turun `match_state`'i) ve WS sırayı koruyor — ikinci bir
+sıralama tarifi o sırayı sessizce bozardı. ⚠️ Kanalın meşguliyeti `AudioSource.isPlaying`'den DEĞİL
+klip uzunluğundan ölçülür: aynı kaynakta anlık işaretler de çalıyor, `isPlaying` onları da sayardı
+ve her bip sıradaki repliği geciktirirdi. ⚠️ **Kuyrukta bayatlayan duyuru hiç çalmaz** (birkaç
+saniyelik ömür) ve kuyruğun bir tavanı vardır (taşarsa **yeni gelen** düşer, sıradaki değil) — geç
+çalan duyuru yanlış duyurudur. ⚠️ **İstisna anlık işaretlerdir** (geri sayım bip'i, admin ihlal
+uyarısı): anlamları zamanlamalarında olduğu için kuyruğa hiç girmez, bekleyeni de geciktirmezler.
+Ölçüt "kısa mı" değil **"geç çalarsa yalan olur mu"**dur; `GameSoundId`'ye eklenen yeni bir ses
+varsayılan olarak DUYURU sayılır (kuyruğa girer) — tersi olsaydı yeni her replik kimse fark etmeden
+bir öncekini keserdi. ⚠️ Kesmenin meşru olduğu **tek yer bağlantı kopuşudur**: bekleyen duyuru artık
+var olmayan bir maçı anlatıyor. Bankada **admin tarafına ait tek bir ses** de vardır
+(`AdminViolation`): bir oyuncunun
 fiziksel ihlali başladığında yalnız admin PC'sinde çalar — oyuncunun uyarısı zaten kendi
 ekranındadır (§10.9). ⚠️ **Ne zaman çalacağının politikası `AdminRoster`'dadır, burada değil**
 (tercih kapısı + en az kaç saniyede bir): `GameAudio` bir çalma aracıdır, kural taşımaz — kuralı
@@ -1529,11 +1545,13 @@ değişen** duyuru sesleri. Bir kural satırı dört şeyi bağlar: `modeId` (bo
 (boş = her harita) · `ModeAudioEvent` · **klip listesi** (biri rastgele seçilir, tek klip de
 geçerlidir) + seviye ve uyarı eşiği. ⚠️ **Seçimde bir önceki klip elenir** (liste ikiden az dolu
 klip taşımıyorsa): tur başına tek duyuru çalan bir sistemde saf rastgelelik "hep aynı ses" olarak
-duyulur, iki klipte sonucun sırayla çalmaya inmesi bilinçli. ⚠️ **Duyuru kanalı çalmadan önce
-susturulur** — bunlar konuşma replikleri, üst üste binen ikisi birden anlaşılmaz olur; son duyuru
-kazanır. Bu emniyet **tek istemcinin içindedir**: aynı odada iki başlık (ör. admin PC + gözlük, ya
-da Multiplayer Play Mode'daki iki sanal oyuncu) çalıyorsa her biri kendi rastgele seçimini yapar ve
-sesler dışarıdan üst üste duyulur — kodun engelleyebileceği bir şey değildir. Eşleşenler arasından **en spesifik kural** kazanır (mod
+duyulur, iki klipte sonucun sırayla çalmaya inmesi bilinçli. ⚠️ **Kayıttan gelen duyurunun bankadan
+gelene karşı ayrıcalığı YOKTUR**: ikisi de aynı duyuru kanalına geliş sırasıyla girer (yukarıdaki
+kuyruk). Aşağıdaki "kayıt bankayı ezer" bir **seçim** kuralıdır — aynı AN için iki klip varsa
+hangisinin çalacağını söyler, çalmakta olanı kesme yetkisi değildir. Kanal **tek istemcinin
+içindedir**: aynı odada iki başlık (ör. admin PC + gözlük, ya da Multiplayer Play Mode'daki iki
+sanal oyuncu) çalıyorsa her biri kendi sırasını kendi işletir ve sesler dışarıdan üst üste duyulur —
+kodun engelleyebileceği bir şey değildir. Eşleşenler arasından **en spesifik kural** kazanır (mod
 eşleşmesi 2, harita 1 puan — aynı arena birden çok modda oynandığı için mod ağır basar), eşitlikte
 listedeki ilki. Çalan yer yine `GameAudio`'dur (`PlayModeEvent`); aynı an için hem kayıtta hem
 bankada klip varsa **kayıt bankayı ezer**, yoksa iki duyuru üst üste binerdi.
