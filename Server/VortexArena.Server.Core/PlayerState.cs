@@ -136,6 +136,12 @@ public sealed class PlayerState
     /// satırında uyarı sonsuza kadar kalırdı.</para></summary>
     public string ScaleError { get; set; } = "";
 
+    /// <summary>Son <c>reload_calibration</c> denemesinin başarısızlık gerekçesi, boş = sorun yok
+    /// (§10.6).
+    /// <para>Başarılı bir kalibrasyon bu alanı temizler (<see cref="ScaleError"/> ile aynı gerekçe);
+    /// aksi hâlde bir kez başarısız olan oyuncunun satırında uyarı sonsuza kadar kalırdı.</para></summary>
+    public string CalibrationError { get; set; } = "";
+
     /// <summary>
     /// Uzak avatara uygulanacak üniform gövde ölçeği (§10.8); <c>0</c> = ölçülmemiş.
     /// <para>Kalibrasyonla AYNI sınıftadır (cihaz durumu, maç sıfırlamalarında korunur) ve aynı
@@ -334,7 +340,9 @@ public sealed class PlayerState
         floorOffset = FloorOffset,
         // §10.8 — 0 = ölçülmemiş; okuyan taraf 1 uygular.
         bodyScale = BodyScale,
-        scaleError = ScaleError
+        scaleError = ScaleError,
+        // §10.6 — son yeniden yükleme denemesinin gerekçesi; boş = sorun yok.
+        calibrationError = CalibrationError
     };
 
     private static string ConnectionWire(PlayerConnection connection) => connection switch

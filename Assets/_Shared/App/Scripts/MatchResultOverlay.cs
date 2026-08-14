@@ -24,8 +24,11 @@ namespace VortexArena.App
     /// YOKTUR; tek sayaç sonuç kartından skor tablosuna geçiştir.
     /// </para>
     /// <para>
-    /// <b>Skor tablosu <c>AdminStatsPanel</c>'in kartıdır</b> — aynı tasarım, aynı kolon sözleşmesi,
-    /// yalnız operatöre ait teşhis kolonları (HP · BATARYA · DURUM · SAHNE · PING) olmadan.
+    /// <b>Skor tablosu <c>AdminStatsPanel</c> ile KART KABUĞUNU paylaşır, yerleşimini DEĞİL.</b>
+    /// Buradaki tablo salt okunur kolonlardır; admin paneli ise oyuncu başına eylem düğmeleri taşıyan
+    /// satırlardan kuruludur (<c>AdminStatsRow</c>). Ayrım kitleden gelir: oyuncu maç bitince
+    /// <b>sonucu</b> okur, operatör ise canlı bir <b>iş listesi</b> yönetir — o listenin düğmeleri
+    /// oyuncunun ekranında ne anlam taşır ne de basılabilir olmalıdır.
     /// Kolonlar tek tek TMP'dir ve satırlar <c>\n</c> ile birleştirilir: TMP varsayılan fontu eşit
     /// genişlikli DEĞİL, tek metin bloğunda boşlukla hizalama kayardı.
     /// </para>
@@ -53,13 +56,13 @@ namespace VortexArena.App
 
         /// <summary>Kolon sırası — soldan sağa; <see cref="CellText"/>'in <c>switch</c> sırasını ve
         /// <see cref="boardColumns"/>'un beklenen uzunluğunu belgeler. Başlık metinleri ve
-        /// genişlikler PREFABTA yaşar (<c>AdminStatsPanel</c> ile aynı sözleşme).
+        /// genişlikler PREFABTA yaşar (repo genelindeki arayüz sözleşmesi: kod yalnız veri yazar).
         /// <para>⚠️ Buraya kolon eklemek YETMEZ: prefabta da bir TMP objesi açıp diziye bağlamak
         /// gerekir, yoksa yeni kolon sessizce hiç çizilmez.</para>
         /// <para>⚠️ <c>K</c> ve <c>D</c> başlıkları prefabta METİN DEĞİL İKONDUR (crosshair /
         /// skull) — admin kartındaki gibi; ilgili <c>Header</c> objelerinin metni bilerek boştur.</para>
-        /// <para>⚠️ Operatöre ait teşhis kolonları (HP · BATARYA · DURUM · SAHNE · PING) burada
-        /// YOKTUR ve eklenmez: maç sonunda oyuncuya canlı cihaz durumu gösterilmez, o tablo
+        /// <para>⚠️ Operatöre ait teşhis alanları (batarya · kumanda · ping · durum) burada
+        /// YOKTUR ve eklenmez: maç sonunda oyuncuya canlı cihaz durumu gösterilmez, o bilgi
         /// admin'in.</para></summary>
         private static readonly string[] ColumnOrder = { "OYUNCU", "TAKIM", "SKOR", "K", "D", "K/D" };
 
@@ -105,8 +108,9 @@ namespace VortexArena.App
         private Stage _stage = Stage.Hidden;
         private float _scoreboardAt;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Bootstrap()
+        /// <summary>Tekili kurar. ⚠️ <b>Koşulsuzdur</b> — "bu oturumda gerekli mi" kararı
+        /// <see cref="AppSingletons"/>'a aittir (gerekçe orada).</summary>
+        internal static void Install()
         {
             if (_instance != null)
             {
@@ -360,8 +364,11 @@ namespace VortexArena.App
             }
         }
 
-        /// <summary>Hücre metinleri <c>AdminStatsPanel.CellText</c> ile birebir aynıdır — aynı
-        /// oyuncu iki tabloda farklı görünmemeli.</summary>
+        /// <summary>Hücre metinleri admin satırındaki karşılıklarıyla (<c>AdminStatsRow</c>) aynı
+        /// biçimi kullanır — aynı oyuncu iki tabloda farklı görünmemeli. ⚠️ Ortak bir yardımcıya
+        /// çıkarılmaz: bu sınıf <c>PlayerInfo</c> (tel DTO'su) okur, admin satırı ise
+        /// <c>AdminPlayerView</c> (istemci aynası); ortak imza ikisinden birini kendi doğal
+        /// kaynağından koparırdı.</summary>
         private static string CellText(PlayerInfo info, int column)
         {
             switch (column)

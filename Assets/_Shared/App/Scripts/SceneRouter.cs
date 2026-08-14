@@ -63,8 +63,9 @@ namespace VortexArena.App
         /// <summary>Geçiş öncesindeki arka plan yükleme önceliği — bitince geri konur.</summary>
         private ThreadPriority _previousLoadingPriority = ThreadPriority.BelowNormal;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Bootstrap()
+        /// <summary>Tekili kurar. ⚠️ <b>Koşulsuzdur</b> — "bu oturumda gerekli mi" kararı
+        /// <see cref="AppSingletons"/>'a aittir (gerekçe orada).</summary>
+        internal static void Install()
         {
             if (Instance != null)
             {

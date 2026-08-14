@@ -173,6 +173,7 @@ public sealed class PlayerRegistry : IDisposable
             // o oturumun bilgisiydi — taşınırsa operatör çözülmüş bir sorunu görmeye devam eder.
             state.FloorOffset = 0f;
             state.ScaleError = "";
+            state.CalibrationError = "";
             // §10.8: ölçü hizalamaya bağlı olduğu için o da bilinmiyor sayılır. Başlık kendi
             // kaydından ölçeği hemen yeniden bildirir (set_body_scale), yani operatör yeniden
             // ölçmek zorunda kalmaz.
@@ -367,11 +368,18 @@ public sealed class PlayerRegistry : IDisposable
             // lobby_state giderdi (16 oyuncuda 256 mesaj).
             // ⚠️ Sapma da karşılaştırmaya girer: aynı kaynakla yeniden kalibre olan oyuncunun yeni
             // sapması yoksa roster'da eski değer kalırdı.
+            // ⚠️ Hata temizliği de değişim sayılır (SetBodyScale'in errorCleared deseni): kayıtlı
+            // hizalamayı yeniden yükleyip aynı değeri bildiren oyuncuda tek gerçek delta bu alandır
+            // ve guard'a girmezse operatörün satırında düzelmiş bir uyarı asılı kalırdı.
+            var errorCleared = calibrated && state.CalibrationError.Length > 0;
             if (state.Calibrated == calibrated && state.CalibrationSource == nextSource
-                && Math.Abs(state.FloorOffset - nextOffset) < 0.0001f) return false;
+                && Math.Abs(state.FloorOffset - nextOffset) < 0.0001f && !errorCleared) return false;
             state.Calibrated = calibrated;
             state.CalibrationSource = nextSource;
             state.FloorOffset = nextOffset;
+            // Gerekçe hizalamaya aittir: başarılı bildirim onu geçersiz kılar, düşen hizalamada da
+            // taşınmaz.
+            state.CalibrationError = "";
 
             // §10.8: hizalama düşünce gövde ölçüsü de düşer — ölçü arena zeminine göre alınmıştı.
             // ⚠️ Kapı burasıdır, clear_calibration DEĞİL: başlığın kendi set_calibration{false}'u
@@ -432,6 +440,25 @@ public sealed class PlayerRegistry : IDisposable
         {
             if (state.ScaleError == next) return false;
             state.ScaleError = next;
+        }
+        Changed?.Invoke(state, PlayerChangeKind.Updated);
+        return true;
+    }
+
+    /// <summary>Başarısız <c>reload_calibration</c> denemesinin gerekçesini yazar (§10.6).
+    /// <b>Kalibrasyona DOKUNMAZ</b> — düşen bir deneme kayıtlı hizalamayı geçersiz kılmaz, yalnız
+    /// operatöre neden olmadığını söyler (<see cref="SetScaleError"/> ile birebir aynı sözleşme).
+    /// <para>Boş gerekçe alanı temizler; değişmediyse yayın yapılmaz.</para></summary>
+    public bool SetCalibrationError(int playerId, string? error)
+    {
+        if (!TryGetByPlayerId(playerId, out var state)) return false;
+        if (state.Role != "player") return false;
+
+        var next = error ?? "";
+        lock (_gate)
+        {
+            if (state.CalibrationError == next) return false;
+            state.CalibrationError = next;
         }
         Changed?.Invoke(state, PlayerChangeKind.Updated);
         return true;
