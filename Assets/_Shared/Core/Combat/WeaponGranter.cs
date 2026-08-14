@@ -470,7 +470,7 @@ namespace VortexArena.Core.Combat
             // silah bir kare dünyanın orijininde görünürdü.
             if (TryResolvePalm(hand, out Pose palm))
             {
-                SolveInitialGrip(definition, instance.transform, hand, palm,
+                SolveInitialGrip(definition, hand, palm,
                     out Vector3 position, out Quaternion rotation);
                 instance.transform.SetPositionAndRotation(position, rotation);
             }
@@ -712,8 +712,10 @@ namespace VortexArena.Core.Combat
             }
 
             // TransformPoint DEĞİL: soket ofseti METRE cinsindendir, ölçeklenmez.
+            // Yakalama el başına yazıldığı için soket noktası SORAN elin kaydından okunur.
             Transform item = weapon.transform;
-            Vector3 socket = item.position + item.rotation * definition.SecondaryGripPosition;
+            Vector3 socket = item.position +
+                             item.rotation * definition.SecondaryGripPosition(HandGripPivot.IsRight(hand));
             float radius = definition.SecondaryGripRadius;
             return (palm.position - socket).sqrMagnitude <= radius * radius;
         }
@@ -872,7 +874,7 @@ namespace VortexArena.Core.Combat
             // devralır).
             if (TryResolvePalm(hand, out Pose palm))
             {
-                SolveInitialGrip(_selected, weapon.transform, hand, palm,
+                SolveInitialGrip(_selected, hand, palm,
                     out Vector3 position, out Quaternion rotation);
                 weapon.transform.SetPositionAndRotation(position, rotation);
             }
@@ -1247,24 +1249,31 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Verilen/çağrılan silahın <b>ilk kare</b> pozu: <c>Weapon.ApplyCanonicalGrip</c> ile AYNI
-        /// kaynak sırasını izler — önce prefabtaki kavrama poz düğümü (<see cref="ItemGripAuthority"/>),
-        /// çözülemezse tanım alanları.
-        /// <para>⚠️ Sıra iki yerde de aynı olmak ZORUNDA: burada tanıma, LateUpdate'te düğüme
+        /// kaynak sırasını izler — önce canlı bilek deltasıyla çözülen yakalanmış kavrama
+        /// (<see cref="ItemGripAuthority"/>), çözülemezse tanımın kendi ölçüsü.
+        /// <para>⚠️ Sıra iki yerde de aynı olmak ZORUNDA: burada tanıma, LateUpdate'te yakalamaya
         /// bakılsaydı silah verildiği karede bir duruşta belirir, bir sonraki karede öteki duruşa
         /// zıplardı.</para>
+        /// <para>⚠️ İkincil el bu karede YOKTUR (<c>hasSecondary: false</c>) ama imza yine de bir el
+        /// ister: ön kabza ölçüsü artık el başınadır. Ana elin TERSİ verilir — silah iki elle
+        /// tutulacaksa ön kabzayı saracak el odur.</para>
         /// </summary>
-        private static void SolveInitialGrip(ItemDefinition definition, Transform itemRoot,
+        private static void SolveInitialGrip(ItemDefinition definition,
             OVRInput.Controller hand, in Pose palm, out Vector3 position, out Quaternion rotation)
         {
-            if (ItemGripAuthority.TryResolvePrimaryGrip(definition, itemRoot, HandGripPivot.IsRight(hand),
+            bool mainHandRight = HandGripPivot.IsRight(hand);
+            bool secondaryRight = !mainHandRight;
+
+            if (ItemGripAuthority.TryResolvePrimaryGrip(definition, mainHandRight,
                     out Vector3 gripPosition, out Quaternion gripRotation))
             {
-                ItemGripSolver.Solve(definition, gripPosition, gripRotation, palm, false, Vector3.zero,
-                    0f, out position, out rotation);
+                ItemGripSolver.Solve(definition, secondaryRight, gripPosition, gripRotation, palm,
+                    false, Vector3.zero, 0f, out position, out rotation);
                 return;
             }
 
-            ItemGripSolver.Solve(definition, palm, false, Vector3.zero, 0f, out position, out rotation);
+            ItemGripSolver.Solve(definition, mainHandRight, secondaryRight, palm, false, Vector3.zero,
+                0f, out position, out rotation);
         }
 
         /// <summary>BB rig'i (aktif olan) bulur; bulunamazsa saniyede bir yeniden dener.

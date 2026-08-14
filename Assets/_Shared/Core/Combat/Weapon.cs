@@ -18,8 +18,8 @@ namespace VortexArena.Core.Combat
     /// kanonik kavrama sürdüğü için onunla yarışmaz).
     /// <para>
     /// <b>KAVRAMA KANONİKTİR</b> (§6.6): silah tutulduğu sürece kökü ana elin anchor'ından +
-    /// <see cref="ItemDefinition.PrimaryGripPosition"/>/<see cref="ItemDefinition.PrimaryGripRotation"/>'dan
-    /// sürülür (<see cref="LateUpdate"/>). ISDK'nın <c>*GrabFreeTransformer</c>'ları bu yüzden
+    /// tanımdaki <b>yakalanmış</b> kavramadan sürülür (<see cref="ItemDefinition.PrimaryGripPosition(bool)"/>;
+    /// dönüş kimliktir, <see cref="ItemDefinition.PrimaryGripRotation"/>) (<see cref="LateUpdate"/>). ISDK'nın <c>*GrabFreeTransformer</c>'ları bu yüzden
     /// <c>WPN_*</c> prefablarından kaldırıldı: kavramanın ALGILANMASI Grabbable/GrabInteractable'da,
     /// silahı TAŞIMA işi burada. Gerekçe ağdadır — duruş telde gitmez, uzak taraf silahı "elin pozu ×
     /// sabit kavrama ofseti" olarak çizer; serbest kavrama (keyfi ofset) o eşitliği bozar ve namlusundan
@@ -518,27 +518,43 @@ namespace VortexArena.Core.Combat
                 _hasLastSecondaryPalm = false;
             }
 
-            // Ana kavramanın ölçüsü ÖNCE prefabtaki kavrama poz düğümünden çözülür
-            // (ItemGripAuthority: el başına, canlı bilek deltasıyla); çözülemezse tanım alanlarına
-            // düşülür. ⚠️ Düşme bir hata değil normal bir yoldur — pozu yazılmamış silah, rig'in
-            // olmadığı oturum ve ilk kare oradan geçer ve davranış bugünkünün birebir aynısıdır.
+            // Ana kavramanın ölçüsü ÖNCE canlı bilek deltasıyla düzeltilir (ItemGripAuthority: el
+            // başına); ölçülemezse tanımın ham yakalamasına düşülür. ⚠️ Düşme bir hata değil normal
+            // bir yoldur — rig'in olmadığı oturum ve ilk kare oradan geçer.
             bool mainHandRight = HandGripPivot.IsRight(MainHand);
+            bool secondaryRight = SecondaryHandIsRight(mainHandRight);
             Vector3 position;
             Quaternion rotation;
 
-            if (ItemGripAuthority.TryResolvePrimaryGrip(definition, transform, mainHandRight,
+            if (ItemGripAuthority.TryResolvePrimaryGrip(definition, mainHandRight,
                     out Vector3 gripPosition, out Quaternion gripRotation))
             {
-                ItemGripSolver.Solve(definition, gripPosition, gripRotation, primaryPalm,
-                    _hasLastSecondaryPalm, _lastSecondaryPalm, _aimBlend, out position, out rotation);
+                ItemGripSolver.Solve(definition, secondaryRight, gripPosition, gripRotation,
+                    primaryPalm, _hasLastSecondaryPalm, _lastSecondaryPalm, _aimBlend,
+                    out position, out rotation);
             }
             else
             {
-                ItemGripSolver.Solve(definition, primaryPalm, _hasLastSecondaryPalm, _lastSecondaryPalm,
-                    _aimBlend, out position, out rotation);
+                ItemGripSolver.Solve(definition, mainHandRight, secondaryRight, primaryPalm,
+                    _hasLastSecondaryPalm, _lastSecondaryPalm, _aimBlend, out position, out rotation);
             }
 
             transform.SetPositionAndRotation(position, rotation);
+        }
+
+        /// <summary>
+        /// Ön kabzayı saran elin SAĞ olup olmadığı; ikinci el henüz yoksa <b>ana elin tersi</b>.
+        /// <para>⚠️ <c>HandGripPivot.IsRight(None)</c> "sağ" der (kontrolcü çözülemeyen oturumlar
+        /// için makul bir varsayım), oysa burada None "ikinci el yok" demektir: doğrudan çağrılsaydı
+        /// iki eli de sağ sayan bir ölçü çıkar ve sağ elle tutulan tüfeğin ön kabza ekseni SAĞ
+        /// kaydından okunurdu.</para>
+        /// </summary>
+        private bool SecondaryHandIsRight(bool mainHandRight)
+        {
+            OVRInput.Controller secondary = SecondaryHand;
+            return secondary == OVRInput.Controller.None
+                ? !mainHandRight
+                : HandGripPivot.IsRight(secondary);
         }
 
         // ------------------------------------------------------------------ tetik

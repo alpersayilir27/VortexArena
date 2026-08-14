@@ -1,5 +1,6 @@
 using Oculus.Interaction;
 using UnityEngine;
+using VortexArena.Core.Player;
 
 namespace VortexArena.Core.Combat
 {
@@ -24,10 +25,14 @@ namespace VortexArena.Core.Combat
     /// </para>
     /// <para>
     /// ⚠️ <b>Camgöbeği tel küre SO'nun GERÇEKTE ne dediğidir</b>, yani oyunun kullandığı yer —
-    /// kavrama ayarlanırken bakılacak referans budur. Silahın üstünde açık bir el modeli varken
-    /// (<c>Hands/Hand_*</c>, Kavrama Pozu Stüdyosu) elin bileği bu kürenin merkezine oturmuyorsa
-    /// <b>bake'e henüz basmadın</b>: iki temsilin sapması böylece gözle görünür bir kontrole
-    /// dönüşür, sessiz bir uzay hatası olarak kalmaz.
+    /// kavramanın nereye yakalandığı gözle buradan denetlenir. Küre kabzanın üstünde değilse
+    /// yakalama o el için yazılmamış (ya da öteki elin kaydına düşülmüş) demektir: iki temsilin
+    /// sapması böylece görünür bir kontrole dönüşür, sessiz bir uzay hatası olarak kalmaz.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Soketin yeri EL BAŞINADIR</b> (<see cref="ItemDefinition.GetGrip"/>): kabza simetrik
+    /// olmadığı için sol ve sağ elin bilek noktası eşyanın farklı yerine düşer — tek nokta tutulsaydı
+    /// kapı ellerden biri için sistematik olarak kaymış olurdu.
     /// </para>
     /// </summary>
     public class ItemGripSockets : MonoBehaviour, IGameObjectFilter
@@ -186,8 +191,12 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            Vector3 primaryWorld = PrimarySocketWorld(def);
-            Vector3 secondaryWorld = SecondarySocketWorld(def);
+            // ⚠️ Çizim SAĞ elin kaydından beslenir, kapı ise soran elin kendi kaydından: gösterge
+            // TEK bir işarettir, iki halka çizmek oyuncuya "iki ayrı kavrama noktası var" derdi.
+            // İki kayıt arasındaki fark soket yarıçapının içinde kaldığı sürece okuma bozulmaz;
+            // aşıyorsa kavrama o el için hiç yakalanmamış demektir (küre kabzadan uzakta durur).
+            Vector3 primaryWorld = PrimarySocketWorld(def, true);
+            Vector3 secondaryWorld = SecondarySocketWorld(def, true);
 
             // ⚠️ Verilen silahta ANA soket kendiliğinden gizlenir (IsSocketOpen: silah tutuluyor →
             // ana soket kapalı) ama İKİNCİL soket ÇİZİLİR: yoksa FFA'da eline tüfek verilen oyuncu
@@ -258,14 +267,18 @@ namespace VortexArena.Core.Combat
             float primaryRadius = def.PrimaryGripRadius;
             float secondaryRadius = def.SecondaryGripRadius;
 
+            // Soket SORAN elin kendi kaydından okunur: kabza simetrik değil, tek kayıtla ölçmek
+            // ellerden birini kabzanın birkaç santim yanından yargılardı.
+            bool rightHand = HandGripPivot.IsRight(hand);
+
             if (IsSocketOpen(false, hand) &&
-                (handPosition - PrimarySocketWorld(def)).sqrMagnitude <= primaryRadius * primaryRadius)
+                (handPosition - PrimarySocketWorld(def, rightHand)).sqrMagnitude <= primaryRadius * primaryRadius)
             {
                 return true;
             }
 
             if (IsSocketOpen(true, hand) &&
-                (handPosition - SecondarySocketWorld(def)).sqrMagnitude <= secondaryRadius * secondaryRadius)
+                (handPosition - SecondarySocketWorld(def, rightHand)).sqrMagnitude <= secondaryRadius * secondaryRadius)
             {
                 return true;
             }
@@ -279,16 +292,18 @@ namespace VortexArena.Core.Combat
         /// Soketin dünya konumu. ⚠️ <c>TransformPoint</c> DEĞİL: kavrama ofseti METRE cinsindendir
         /// ve transform ölçeğiyle büyütülmemeli (<c>Weapon.ApplyCanonicalGrip</c> ile
         /// <c>RemoteAvatar.ApplySecondaryGripSnap</c> de aynı sebeple elle bileşim yapıyor).
+        /// <para>⚠️ <paramref name="rightHand"/> zorunludur: soketin yeri el başınadır (sınıf
+        /// notundaki gerekçe). El bilgisi olmayan yollarda (gizmo, çizim) sağ el kaydı kullanılır.</para>
         /// </summary>
-        private Vector3 PrimarySocketWorld(ItemDefinition def)
+        private Vector3 PrimarySocketWorld(ItemDefinition def, bool rightHand)
         {
-            return transform.position + transform.rotation * def.PrimaryGripPointOnItem;
+            return transform.position + transform.rotation * def.PrimaryGripPointOnItem(rightHand);
         }
 
-        /// <summary>Ön kabza soketinin dünya konumu (bkz. <see cref="PrimarySocketWorld"/> uyarısı).</summary>
-        private Vector3 SecondarySocketWorld(ItemDefinition def)
+        /// <summary>Ön kabza soketinin dünya konumu (bkz. <see cref="PrimarySocketWorld"/> uyarıları).</summary>
+        private Vector3 SecondarySocketWorld(ItemDefinition def, bool rightHand)
         {
-            return transform.position + transform.rotation * def.SecondaryGripPosition;
+            return transform.position + transform.rotation * def.SecondaryGripPosition(rightHand);
         }
 
         /// <summary>
@@ -612,6 +627,8 @@ namespace VortexArena.Core.Combat
         /// el modelinin bileğiyle karşılaştırılacak referans budur (gerekçe sınıf notunda).
         /// <para>Edit kipinde de çalışır: tanım <see cref="Definition"/>'ın tembel aramasından
         /// gelir (<c>Awake</c> edit kipinde koşmaz).</para>
+        /// <para>⚠️ Çizilen küre SAĞ elin kaydıdır (edit kipinde soran bir el yok) — sol elin kaydı
+        /// birkaç santim yanda durur, ikisini birden çizmek referansı okunamaz hale getirirdi.</para>
         /// </summary>
         private void OnDrawGizmos()
         {
@@ -624,13 +641,13 @@ namespace VortexArena.Core.Combat
             }
 
             Gizmos.color = new Color(0.25f, 0.9f, 1f, 0.9f);
-            Gizmos.DrawWireSphere(PrimarySocketWorld(def), def.PrimaryGripRadius);
+            Gizmos.DrawWireSphere(PrimarySocketWorld(def, true), def.PrimaryGripRadius);
 
             // Tek elli eşyada ön kabza soketi HİÇ açılmaz (bkz. IsSocketOpen) — çizmek de yanlış
             // olurdu: sıfır olan secondaryGrip yüzünden kabzanın üstünde hayalet bir küre görünürdü.
             if (def.IsTwoHanded)
             {
-                Gizmos.DrawWireSphere(SecondarySocketWorld(def), def.SecondaryGripRadius);
+                Gizmos.DrawWireSphere(SecondarySocketWorld(def, true), def.SecondaryGripRadius);
             }
         }
     }
