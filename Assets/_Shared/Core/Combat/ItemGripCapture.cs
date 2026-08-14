@@ -15,11 +15,21 @@ namespace VortexArena.Core.Combat
     /// Yakalama da aynı simetrik yolla (elle ters bileşim) alınır — iki uç tek sözleşmede kalsın.
     /// </para>
     /// <para>
-    /// ⚠️ <b><see cref="euler"/> eşyayı DÖNDÜRMEZ.</b> Silahın eldeki dönüşü kimliktir (eşyanın
-    /// eksenleri kumanda anchor'ıyla birebir aynıdır, bkz.
-    /// <see cref="ItemDefinition.PrimaryGripRotation"/>); buradaki dönüş yalnız EL MODELİNİN bilek
-    /// dönüşüdür (<c>HandGripPoser</c> sentetik elin bileğini ona kilitler). Yakalanan dönüşü
-    /// eşyaya da uygulamak "kumandayı uzatınca namlu başka yöne bakıyor" demekti.
+    /// ⚠️ <b>Taşıdığı soru "el eşyanın NERESİNDE durur"dur — "hangi AÇIYLA" değil.</b> Eşyanın
+    /// eldeki dönüşü kimliktir (eksenleri kumanda anchor'ıyla birebir aynı, bkz.
+    /// <see cref="ItemDefinition.PrimaryGripRotation"/>) ve elin bileğine de dönüş YAZILMAZ:
+    /// <c>HandGripPoser</c> sentetik elin yalnız KONUMUNU kilitler, dönüşü kumandayla birlikte
+    /// serbest döner. Böylece kumanda nereye bakıyorsa el ve namlu oraya bakar, ikisi tek parça
+    /// gibi durur.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Bu yüzden <see cref="euler"/> ANA kabzada hiçbir şeyi sürmez</b> ve onu tüketen bir
+    /// yol eklenmemelidir: elin açısını yakalamadan almak, oyuncunun kalibrasyon anındaki bilek
+    /// eğikliğini kalıcı hale getirir — kumandayı dosdoğru ileri tutarken el yamuk görünür ve
+    /// silah, dosdoğru duruyor olmasına rağmen yamuk tutuluyormuş gibi okunur. Alan yine de
+    /// yazılır ve saklanır: ön kabzada uzak avatarın ikinci el hedefi onu okuyor
+    /// (<see cref="ItemDefinition.SecondaryGripRotation"/>), ve iki aşamanın aynı kaydı yazması
+    /// aracın tek bir yakalama yolu olmasını sağlıyor.
     /// </para>
     /// </summary>
     [Serializable]
@@ -34,8 +44,9 @@ namespace VortexArena.Core.Combat
         [Tooltip("Elin (ISDK bileğinin) EŞYAYA göre yerel konumu (metre, ölçeksiz).")]
         public Vector3 position;
 
-        [Tooltip("Elin (ISDK bileğinin) EŞYAYA göre yerel dönüşü (derece, Euler). Yalnız el " +
-                 "modelini sürer; eşyayı döndürmez.")]
+        [Tooltip("Elin (ISDK bileğinin) EŞYAYA göre yerel dönüşü (derece, Euler). Ana kabzada " +
+                 "hiçbir şeyi sürmez (el kumandayla döner); ön kabzada uzak avatarın ikinci el " +
+                 "hedefi okur.")]
         public Vector3 euler;
 
         /// <summary>Bu kayıt VR'da yakalandı mı (yakalanmamışsa alanları okunmaz).</summary>

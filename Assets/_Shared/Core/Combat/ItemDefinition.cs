@@ -171,10 +171,12 @@ namespace VortexArena.Core.Combat
         /// Eşyanın ana el anchor'ına göre dönüşü — <b>her zaman KİMLİK</b>.
         /// <para>⚠️ <b>Ayarlanabilir bir kavrama dönüşü alanı YOKTUR ve eklenmez:</b> eşyanın
         /// eksenleri kumanda anchor'ının eksenleriyle birebir aynıdır — kumanda nereye bakıyorsa
-        /// namlu oraya bakar. Yakalanan kavramanın dönüşü yalnız EL MODELİNİ sürer
-        /// (<see cref="ItemGripCapture"/>); eşyaya da uygulansaydı oyuncu kumandayı uzattığında
-        /// namlunun başka yöne baktığını görürdü ve nişan alma, elle ayarlanmış bir sayıya bağlı
-        /// hale gelirdi.</para>
+        /// namlu oraya bakar. Aksi hâlde nişan alma, elle ayarlanmış (ya da yakalama anında
+        /// oyuncunun bileği ne kadar eğikse o kadar eğik çıkan) bir sayıya bağlı hale gelirdi.</para>
+        /// <para>⚠️ Aynı gerekçe <b>ELİN dönüşü</b> için de geçerlidir ve orada da uygulanır:
+        /// <c>HandGripPoser</c> sentetik elin yalnız konumunu kilitler, bileğin dönüşü kumandayla
+        /// birlikte serbest döner. El ile eşya aynı dönüşte olduğu için ikisi tek parça gibi durur;
+        /// yakalamadan gelen bir bilek açısı ise eli kumandadan koparır.</para>
         /// </summary>
         public static Quaternion PrimaryGripRotation => Quaternion.identity;
 
