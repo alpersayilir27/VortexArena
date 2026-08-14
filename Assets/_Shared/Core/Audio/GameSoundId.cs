@@ -38,5 +38,10 @@ namespace VortexArena.Core.Audio
 
         /// <summary>Maç berabere bitti — kazanan takım da kazanan oyuncu da yok.</summary>
         MatchDraw = 8,
+
+        /// <summary>Yerel oyuncu kendi TAKIM ARKADAŞINI öldürdü (dost ateşi açıkken).
+        /// <para>⚠️ <see cref="EnemyEliminated"/>'in yerine geçer, ona ek DEĞİL: bir öldürme
+        /// olayında ikisinden yalnız biri çalar.</para></summary>
+        TeammateEliminated = 9,
     }
 }

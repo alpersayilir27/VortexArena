@@ -1,6 +1,5 @@
 using UnityEngine;
 using VortexArena.Core.Arena;
-using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Player
 {
@@ -18,7 +17,9 @@ namespace VortexArena.Core.Player
     ///
     /// <para>⚠️ <b>Karartma ve titreşim bu ikisinin de değil, TEMASIN çıktısıdır</b>
     /// (<see cref="HeadInsideLevel"/> &gt; 0): ceza eşiğini beklemezler, gerekçesi
-    /// <see cref="ReportPresentation"/>'da.</para>
+    /// <see cref="ReportPresentation"/>'da. ⚠️ <b>Ayrıca maç fazından ve canlılıktan da
+    /// bağımsızdırlar</b> — aynı gerekçe: görüşün katı cismin içinde olması her durumda aynı
+    /// şeydir. Faz/canlılık kapıları <b>yalnız cezaya</b> aittir ve onları sunucu uygular.</para>
     ///
     /// <para><b>Neden ceza yalnız kafaya bakıyor:</b> cezanın işi görüşün katı geometrinin içine
     /// girmesini cezalandırmaktır — el, kol ve gövde bunu yapmaz. Ölçülen kütlenin oranını
@@ -423,12 +424,19 @@ namespace VortexArena.Core.Player
         /// <para>⚠️ <b>Hasarın kırmızısı BURADA değildir.</b> <see cref="ScreenFade"/> hakemi "en
         /// yüksek alfa kazanır" diyor; siyah 1.0'dayken hiçbir kırmızı onu geçemez. Can kaybının
         /// görselini <see cref="DamageVignette"/> quad'ın ÜSTÜNDE ayrı bir katman olarak çizer.</para>
-        /// <para>Ölüyken susulur: ölüm ekranı zaten kendi sunumunu yapıyor.</para>
+        /// <para>⚠️ <b>Kapıda faz da canlılık da YOKTUR ve geri eklenmez:</b> karartma hangi
+        /// harita, hangi mod, hangi faz (lobi · yükleme · geri sayım · oyun · maç sonu) olursa
+        /// olsun ve oyuncu ölü de olsa çalışır. Gerekçe eşik tartışmasının aynısı: gözlerin katı
+        /// bir cismin içinde olması her durumda aynı şeydir ve maç başlamadan ya da ölüyken duvarın
+        /// öbür yüzünü okumak da istismarın kendisidir. Ölüyken susturmak ayrıca canlanmayı
+        /// engelleyen kapıyla (engelin içinde canlanma yok, §10.9) çelişirdi: oyuncu neden
+        /// canlanmadığını göremezdi. Faz/canlılık <b>yalnız cezanın</b> kapısıdır ve orası
+        /// sunucudadır (<c>MatchDirector.TickObstacleLocked</c>) — burada ikinci bir kopyası
+        /// tutulmaz.</para>
         /// </summary>
         private void ReportPresentation()
         {
-            bool alive = ArenaCombat.IsAlive;
-            bool contact = alive && HeadInsideLevel > 0f;
+            bool contact = HeadInsideLevel > 0f;
 
             if (contact)
             {

@@ -399,6 +399,8 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Kamera: Serbest** (`2`) | Arenada özgürce dolaşırsın: **W A S D** yürü, **Q/E** in-çık, **sağ fare tuşunu basılı tutup** bakış çevir, **Shift** hızlı | Bir köşeye yakından bakmak |
 | **İstatistik** | Skorun ortasındaki kutuya bas (veya `I`) | Oyuncu başına öldürme/ölüm/can/batarya **ve PING** tablosu |
 | **Tercihler** | Sol üstteki düğme (veya `P`) | Mod/harita seçimi + başlat/iptal, görünüm ayarları, bağlantı |
+| **Tam ekran / Pencereli** | `F11`, ya da Tercihler panelinin başlığında **KAPAT**'ın yanındaki düğme | Yönetim penceresini tüm ekrana yay veya küçült. Seçimin bu bilgisayarda **hatırlanır**: uygulama bir dahaki açılışta aynı kiple gelir |
+| **Oyundan çık** | Tercihler → **BAĞLANTI** satırının sağındaki **OYUNDAN ÇIK** | Yönetim uygulamasını kapatır. Güvenlik için **iki kez** basmak gerekir (ilk basışta düğme "EMİN? ÇIK" olur). Sunucuyu ve maçı **kapatmaz** — o ayrı bir penceredir |
 
 **Oyuncu seçmek:** yandaki listede bir oyuncuya tıkla — seçili oyuncunun çerçevesi turuncu olur,
 zemindeki halkası büyür. `Tab` ile sıradakine geçersin. Satırdaki küçük düğmeler: **POV** (o oyuncunun
@@ -627,7 +629,7 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 **Gün sonu kapatma sırası** — açılışın tam tersi:
 
 - [ ] **1.** Gözlüklerdeki uygulamayı kapat, gözlükleri şarja tak.
-- [ ] **2.** Yönetim oyununu kapat (pencereyi kapat veya launcher'da **Durdur**).
+- [ ] **2.** Yönetim oyununu kapat (Tercihler → **OYUNDAN ÇIK**, pencereyi kapat veya launcher'da **Durdur**).
 - [ ] **3.** Launcher'ı kapat. *(Launcher'ı kapatmak sunucuyu kapatmaz — o ayrı bir penceredir.)*
 - [ ] **4.** **En son** sunucu penceresini kapat (Ctrl + C veya pencereyi kapat).
 

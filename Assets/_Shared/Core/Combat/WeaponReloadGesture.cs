@@ -3,43 +3,58 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Bel-altı reload jesti: elde tutulan silah bel hizasının altına indirilip kısa
-    /// süre orada tutulunca <c>Weapon.TryStartReload</c> çağrılır. Reload'ın gerçekten
-    /// başlayıp başlamayacağı (dolu şarjör, yedek yok, ölü oyuncu...) tamamen
+    /// Bel-altı reload jesti: elde tutulan silah aşağı doğrultulup bel hizasının altına
+    /// indirilip kısa süre orada tutulunca <c>Weapon.TryStartReload</c> çağrılır. Reload'ın
+    /// gerçekten başlayıp başlamayacağı (dolu şarjör, yedek yok, ölü oyuncu...) tamamen
     /// Weapon.TryStartReload'un kuralıdır — bu bileşen yalnız jesti TANIR.
     /// <para>
-    /// Bel çizgisi KAFADAN SABİT DÜŞÜŞLE bulunur: <c>waistY = headY − waistDropMeters</c>.
-    /// Karşılaştırma kafa−silah FARKI üzerinden yapıldığı için zemin/kalibrasyon ofsetleri
-    /// (Quest zemin yüksekliği yanlış kurulmuş olsa bile) iki değere aynı biner ve jesti
-    /// ETKİLEMEZ — oran (headY×k) yaklaşımı bu yüzden terk edildi: zemin ofseti oranı
-    /// bozup jesti ayak seviyesine indiriyordu. Arena uzayına çevirmeye de gerek yoktur
-    /// (fark uzay-bağımsızdır); dünya Y'leri doğrudan kullanılır.
+    /// ⚠️ <b>Ölçülen nokta ELDİR</b> (kumanda anchor'ı), silahın kökü DEĞİL: kök avuçtan
+    /// <c>gripPosition</c> kadar namlu boyunca ileridedir (silahtan silaha 0–34 cm) ve o ofset
+    /// silahın açısıyla dikey yönde süzülür — kökü ölçmek, aynı jesti bir silahta göbek
+    /// hizasında bir başkasında diz hizasında yakalamak demekti.
     /// </para>
     /// <para>
-    /// Silah kavrandıktan sonra bir kez bel ÜSTÜNE çıkmadan jest kurulmaz (armed) —
+    /// ⚠️ <b>Hiçbir eşik metre cinsinden SABİT değildir</b>: bel çizgisi ZEMİN ile GÖZ arasının
+    /// oranıdır (<see cref="WaistRatio"/>) — gövdenin ortasının biraz üstü. Zemin rig'in
+    /// tracking space'idir (origin <c>Stage</c>), yani ölçü oyuncunun boyuna kendiliğinden uyar;
+    /// kısa oyuncu kolunu az, uzun oyuncu çok indirir ama ikisi de "beline kadar" indirir.
+    /// Kafadan sabit düşüş (<c>headY − 0.62</c>) bu yüzden terk edildi.
+    /// </para>
+    /// <para>
+    /// İkinci koşul <b>silahın aşağı doğrultulmasıdır</b> ve bu <b>KUMANDADAN</b> okunur
+    /// (<c>anchor.forward</c>): silah zaten kumanda doğrultusundadır, silahın kendi
+    /// transformuna bakmak aynı bilgiyi model başına sapan bir yoldan öğrenmek olurdu.
+    /// ⚠️ Sapmanın kaynağı <c>ItemDefinition.primaryGripEuler</c>'dir: sıfırdan farklı bir
+    /// euler yazılmış silahta namlu kumandanın ilerisiyle çakışmaz (bugün yalnız AK47), o
+    /// silahta jest o açı kadar erken/geç tanınır.
+    /// </para>
+    /// <para>
+    /// Silah kavrandıktan sonra el bir kez göğüs hizasına çıkmadan jest kurulmaz (armed) —
     /// yerden/kılıftan almada yanlış tetikleme böyle önlenir.
+    /// </para>
+    /// <para>
+    /// Rig çözülemediğinde (admin gözlemci, editör oturumu, el tanınmadı) jest HİÇ tanınmaz:
+    /// eli olmayan oturumda "el nerede" sorusunun doğru cevabı yoktur, uydurmak yerine susar.
     /// </para>
     /// </summary>
     public class WeaponReloadGesture : MonoBehaviour
     {
-        /// <summary>Camera.main bulunamadığında yeniden deneme aralığı (her karede aranmaz).</summary>
-        private const float CameraRetryIntervalSeconds = 1f;
+        /// <summary>Bel çizgisi: zemin ile göz arasının bu oranı (0.5 = tam orta).</summary>
+        private const float WaistRatio = 0.55f;
+
+        /// <summary>Jestin yeniden kurulması için elin çıkması gereken oran (aynı ölçek).</summary>
+        private const float RearmRatio = 0.72f;
+
+        /// <summary>Kumandanın ileri ekseni yatayın en az bu kadar altına bakmalı: sin(35°).</summary>
+        private const float MinDownSin = 0.574f;
+
+        /// <summary>Jestin kesintisiz sürmesi gereken süre (saniye).</summary>
+        private const float DwellSeconds = 0.2f;
+
+        /// <summary>Göz yüksekliği bunun altındaysa ölçü henüz oturmamıştır (rig'in ilk kareleri).</summary>
+        private const float MinEyeHeight = 0.5f;
 
         [SerializeField] private Weapon weapon;
-        [Tooltip("Baş referansı; boşsa Camera.main kullanılır.")]
-        [SerializeField] private Transform head;
-        [Tooltip("Bel çizgisi = kafa yüksekliği − bu değer (metre). Büyüt = bel aşağı iner.")]
-        [SerializeField] private float waistDropMeters = 0.62f;
-        [Tooltip("Jest için silahın bel çizgisinin ne kadar ALTINA inmesi gerektiği (metre).")]
-        [SerializeField] private float belowOffsetMeters = 0.05f;
-        [Tooltip("Jestin yeniden kurulması için bel çizgisinin ne kadar ÜSTÜNE çıkılacağı (metre).")]
-        [SerializeField] private float rearmOffsetMeters = 0.15f;
-        [Tooltip("Silahın bel altında kesintisiz kalması gereken süre (saniye).")]
-        [SerializeField] private float dwellSeconds = 0.2f;
-
-        // head alanı boşsa Camera.main tembel çözülür; null ise 1 sn'de bir yeniden denenir.
-        private Transform _resolvedHead;
-        private float _headRetryTimer;
 
         private bool _armed;
         private float _dwell;
@@ -48,24 +63,32 @@ namespace VortexArena.Core.Combat
         {
             if (weapon == null || !weapon.IsHeld)
             {
-                _armed = false;
-                _dwell = 0f;
+                Disarm();
                 return;
             }
 
-            Transform headRef = ResolveHead();
-            if (headRef == null)
+            // Elin KENDİSİ: silahın kökü değil, silahı tutan kumandanın anchor'ı.
+            Transform anchor = WeaponGranter.ResolveHandAnchor(weapon.MainHand);
+            if (anchor == null ||
+                !WeaponGranter.TryResolveEyeAndFloor(out float eyeY, out float floorY))
             {
+                Disarm();
                 return;
             }
 
-            float waistY = headRef.position.y - waistDropMeters;
-            float weaponY = transform.position.y;
+            float eyeHeight = eyeY - floorY;
+            if (eyeHeight < MinEyeHeight)
+            {
+                Disarm();
+                return;
+            }
+
+            float handY = anchor.position.y;
 
             if (!_armed)
             {
-                // Jest ancak silah bir kez bel üstüne çıktıktan sonra kurulur.
-                if (weaponY > waistY + rearmOffsetMeters)
+                // Jest ancak el bir kez göğüs hizasına çıktıktan sonra kurulur.
+                if (handY > floorY + eyeHeight * RearmRatio)
                 {
                     _armed = true;
                 }
@@ -73,15 +96,17 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            if (weaponY < waistY - belowOffsetMeters)
+            bool belowWaist = handY < floorY + eyeHeight * WaistRatio;
+            bool pointingDown = -anchor.forward.y >= MinDownSin;
+
+            if (belowWaist && pointingDown)
             {
                 _dwell += Time.deltaTime;
-                if (_dwell >= dwellSeconds)
+                if (_dwell >= DwellSeconds)
                 {
                     // Sonuç önemsenmez: Weapon reddederse jest sıfırlanır, oyuncu tekrar dener.
                     weapon.TryStartReload();
-                    _armed = false;
-                    _dwell = 0f;
+                    Disarm();
                 }
 
                 return;
@@ -90,32 +115,10 @@ namespace VortexArena.Core.Combat
             _dwell = 0f;
         }
 
-        private Transform ResolveHead()
+        private void Disarm()
         {
-            if (head != null)
-            {
-                return head;
-            }
-
-            if (_resolvedHead != null)
-            {
-                return _resolvedHead;
-            }
-
-            _headRetryTimer -= Time.deltaTime;
-            if (_headRetryTimer > 0f)
-            {
-                return null;
-            }
-
-            _headRetryTimer = CameraRetryIntervalSeconds;
-            Camera main = Camera.main;
-            if (main != null)
-            {
-                _resolvedHead = main.transform;
-            }
-
-            return _resolvedHead;
+            _armed = false;
+            _dwell = 0f;
         }
     }
 }

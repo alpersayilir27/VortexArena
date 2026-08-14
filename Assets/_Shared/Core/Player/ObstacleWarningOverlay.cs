@@ -1,5 +1,4 @@
 using UnityEngine;
-using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Player
 {
@@ -61,7 +60,11 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            bool show = ObstacleViolationProbe.IsViolating && ArenaCombat.IsAlive;
+            // ⚠️ Kapıda faz da canlılık da YOKTUR: yazı karartmanın AÇIKLAMASIDIR, karartma ise
+            // her durumda çalışıyor (gerekçe ObstacleViolationProbe.ReportPresentation). Ölüyken
+            // susturmak, kapkaranlık bir ekranı sebepsiz bırakırdı — üstelik engelin içinde
+            // canlanma yok (§10.9), yani oyuncunun okuması gereken tek yönerge tam da budur.
+            bool show = ObstacleViolationProbe.IsViolating;
             if (!show)
             {
                 SetVisible(false);

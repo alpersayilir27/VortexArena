@@ -53,6 +53,15 @@ namespace VortexArena.Core.Audio
         /// <summary>Süre uyarısı bu tur/maç için çaldı mı — her <c>playing</c> geçişinde sıfırlanır.</summary>
         private bool _warningFired;
 
+        /// <summary>
+        /// Son roster (§5.3) — <b>tek tüketicisi öldürülen oyuncunun takımıdır</b>
+        /// (<see cref="IsTeammate"/>). <c>kill_event</c> takım taşımaz ve taşımayacak: takım zaten
+        /// <c>lobby_state</c> ile geliyor, ikinci bir kanal ikinci bir doğruluk kaynağı olurdu.
+        /// <para>⚠️ Roster her değişimde tam olarak yeniden yayınlanıyor (takım değişimi dahil),
+        /// yani burada tutulan kopya bayatlamaz — bir sonraki <c>set_team</c> onu tazeler.</para>
+        /// </summary>
+        private LobbyStateMsg _roster;
+
         /// <summary>Tüm duyuru seslerinin ortak çarpanı (0..1).</summary>
         public float MasterVolume
         {
@@ -121,6 +130,8 @@ namespace VortexArena.Core.Audio
             NetEvents.OnMatchState += HandleMatchState;
             NetEvents.OnMatchEnd += HandleMatchEnd;
             NetEvents.OnCountdown += HandleCountdown;
+            NetEvents.OnLobbyState += HandleLobbyState;
+            NetEvents.OnDisconnected += HandleDisconnected;
         }
 
         private void OnDestroy()
@@ -135,6 +146,8 @@ namespace VortexArena.Core.Audio
             NetEvents.OnMatchState -= HandleMatchState;
             NetEvents.OnMatchEnd -= HandleMatchEnd;
             NetEvents.OnCountdown -= HandleCountdown;
+            NetEvents.OnLobbyState -= HandleLobbyState;
+            NetEvents.OnDisconnected -= HandleDisconnected;
 
             Instance = null;
         }
@@ -173,8 +186,84 @@ namespace VortexArena.Core.Audio
             // killerId == victimId: intihar/çevresel ölüm (§10.9) — öldüren yoktur, duyuru da yok.
             if (msg.killerId == local && msg.killerId != msg.victimId)
             {
-                Play(GameSoundId.EnemyEliminated);
+                Play(IsTeammate(msg.victimId)
+                    ? GameSoundId.TeammateEliminated
+                    : GameSoundId.EnemyEliminated);
             }
+        }
+
+        /// <summary>
+        /// Öldürülen oyuncu yerel oyuncunun TAKIM ARKADAŞI mı — dost ateşi açıkken (§10.5
+        /// <c>set_friendly_fire</c>) duyurunun hangisi olacağını bu belirler.
+        /// <para>
+        /// ⚠️ Soru <b>"dost ateşi açık mı"</b> DEĞİLDİR: dost ateşi kapalıyken sunucu takımdaş
+        /// hasarını zaten yazmaz, yani böyle bir <c>kill_event</c> hiç doğmaz. Kapıyı
+        /// <see cref="ModeRuntime.FriendlyFire"/>'a bağlamak, operatör anahtarı ile olayın geliş
+        /// anı arasındaki her sapmada duyuruyu yanlış tarafa düşürürdü.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Bilinmiyorsa "rakip" denir</b> (takımsız mod, yerel takım henüz
+        /// <see cref="Team.Neutral"/>, kurban roster'da yok): olmayan bir dost ateşini duyurmak,
+        /// gerçek bir öldürmeyi sessiz bırakmaktan daha yanıltıcıdır.
+        /// </para>
+        /// </summary>
+        private bool IsTeammate(int victimId)
+        {
+            if (ModeRuntime.IsTeamless)
+            {
+                return false;
+            }
+
+            Team local = ArenaCombat.LocalTeam;
+            return local != Team.Neutral && RosterTeam(victimId) == local;
+        }
+
+        /// <summary>
+        /// Roster'daki oyuncunun takımı; kayıt yoksa <see cref="Team.Neutral"/>.
+        /// <para>Protokoldeki <c>"red"</c>/<c>"blue"</c> dışındaki her değer (boş dahil)
+        /// <see cref="Team.Neutral"/>'dır — takımsız modda sunucu takımları TEMİZLER (§10.5).</para>
+        /// </summary>
+        private Team RosterTeam(int playerId)
+        {
+            if (_roster?.players == null)
+            {
+                return Team.Neutral;
+            }
+
+            for (int i = 0; i < _roster.players.Length; i++)
+            {
+                PlayerInfo info = _roster.players[i];
+                if (info == null || info.playerId != playerId)
+                {
+                    continue;
+                }
+
+                if (string.Equals(info.team, "red", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Team.Red;
+                }
+
+                return string.Equals(info.team, "blue", StringComparison.OrdinalIgnoreCase)
+                    ? Team.Blue
+                    : Team.Neutral;
+            }
+
+            return Team.Neutral;
+        }
+
+        private void HandleLobbyState(LobbyStateMsg msg)
+        {
+            if (msg != null && msg.players != null)
+            {
+                _roster = msg;
+            }
+        }
+
+        /// <summary>Kopuşta roster düşer: yeni oturumda oyuncu kimlikleri baştan dağıtılır ve
+        /// bayat bir kopya kurbanı yanlış takımda gösterirdi.</summary>
+        private void HandleDisconnected()
+        {
+            _roster = null;
         }
 
         private void HandleRespawn(RespawnMsg msg)
@@ -201,6 +290,7 @@ namespace VortexArena.Core.Audio
                 // ⚠️ İlk mesajda (_lastPhase boş) ses çalınmaz: koşan bir maça sonradan bağlanan
                 // başlık "maç başladı" duymamalı.
                 bool started = _lastPhase.Length > 0 && playing;
+                bool roundEnded = IsRoundEnd(_lastPhase, phase, msg.phaseReason);
                 _lastPhase = phase;
 
                 if (started)
@@ -215,12 +305,41 @@ namespace VortexArena.Core.Audio
                         Play(GameSoundId.MatchStart);
                     }
                 }
+                else if (roundEnded)
+                {
+                    // Ortak bankada karşılığı YOKTUR: tur bitişi tur tabanlı modlara özgüdür,
+                    // kuralı olmayan modda sessiz kalması doğrudur.
+                    PlayModeEvent(ModeAudioEvent.RoundEnd);
+                }
             }
 
             if (playing)
             {
                 TickTimeWarning(msg.timeRemaining);
             }
+        }
+
+        /// <summary>
+        /// Bu geçiş bir tur bitişi mi: <c>playing</c> → <c>paused</c> + <c>phaseReason == "mode"</c>.
+        /// <para>
+        /// ⚠️ <b>Ölçüt <c>modeId</c> DEĞİL fazdır</b> — istemcide <c>if (modeId == "tournament")</c>
+        /// zinciri yazılmaz (§10.5). "Mod duraklatma istedi" çekirdeğin tek tur-arası sinyalidir;
+        /// hangi modun bunu kullandığını <see cref="ModeAudioRegistry"/>'deki kural söyler, kod değil.
+        /// </para>
+        /// <para>
+        /// ⚠️ <c>modeState</c> <b>ayrıştırılmaz</b> (<c>"regroup:2/6"</c>): serbest bir stringdir ve
+        /// çekirdek onu yorumlamaz (§10.1) — modun yazdığı metni değiştirmesi sesi susturmamalı.
+        /// </para>
+        /// <para>
+        /// İlk <c>match_state</c>'te (<paramref name="previousPhase"/> boş) tetiklenmez: turlar
+        /// arasında bağlanan başlık kaçırdığı turun duyurusunu duymamalı.
+        /// </para>
+        /// </summary>
+        private static bool IsRoundEnd(string previousPhase, string phase, string phaseReason)
+        {
+            return string.Equals(previousPhase, ArenaProtocol.PHASE_PLAYING, StringComparison.Ordinal) &&
+                   string.Equals(phase, ArenaProtocol.PHASE_PAUSED, StringComparison.Ordinal) &&
+                   string.Equals(phaseReason, ArenaProtocol.PAUSE_REASON_MODE, StringComparison.Ordinal);
         }
 
         /// <summary>

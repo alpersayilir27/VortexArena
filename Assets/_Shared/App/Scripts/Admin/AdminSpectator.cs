@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Player;
 
 namespace VortexArena.App.Admin
 {
@@ -125,6 +126,14 @@ namespace VortexArena.App.Admin
             }
 
             _active = true;
+
+            // Rakip ad etiketlerini gizleyen kural bir OYUN kuralıdır (RemoteAvatar): operatör
+            // sahada kimin nerede olduğunu görmek zorunda, o yüzden gözlemci muaf.
+            RemoteAvatar.SpectatorMode = true;
+
+            // Pencere kipi operatörün son seçimine oturur (F11 / tercihler paneli). Rol admin
+            // OLMADAN yapılmaz: oyuncu istemcisi Quest'te koşar, orada pencere diye bir şey yok.
+            AdminSession.ApplyScreenMode();
 
             gameObject.AddComponent<AdminRoster>();
             // Adminler arası ortak seçim (mod/harita) — birden çok operatör aynı ekranı görsün.
@@ -256,7 +265,7 @@ namespace VortexArena.App.Admin
 
         /// <summary>
         /// Genel kısayollar: 1/2/3 kamera kipi · Tab sonraki oyuncu · F seçiliye POV ·
-        /// P tercihler · I istatistikler · Esc açık paneli kapat.
+        /// P tercihler · I istatistikler · F11 tam ekran/pencereli · Esc açık paneli kapat.
         /// Kamera içi girdi (WASD/QE/fare/tekerlek) <see cref="AdminSpectatorCamera"/>'da.
         /// </summary>
         private void ReadShortcuts()
@@ -299,6 +308,13 @@ namespace VortexArena.App.Admin
             if (keyboard.iKey.wasPressedThisFrame)
             {
                 AdminSession.TogglePanel(AdminPanelKind.Stats);
+            }
+
+            // Pencere kipi: alışılmış kısayol. Kip değişimini AdminSession uygular ve yayar —
+            // burada Screen'e dokunulmaz, yoksa tercih ile pencerenin hâli ayrışır.
+            if (keyboard.f11Key.wasPressedThisFrame)
+            {
+                AdminSession.ToggleScreenMode();
             }
 
             if (keyboard.escapeKey.wasPressedThisFrame)

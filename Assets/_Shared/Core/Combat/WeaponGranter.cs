@@ -1196,6 +1196,34 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
+        /// Gövde ölçüsünün iki referansı — <b>göz</b> ve <b>ZEMİN</b> dünya Y'leri; rig yoksa
+        /// <c>false</c>.
+        /// <para>
+        /// Zemin rig'in tracking space'idir: tracking origin <c>Stage</c> olduğu için o düzlemin
+        /// yerel Y'si sıfırdır, yani oyuncunun fiziksel zeminidir. İkisi birlikte "bu oyuncunun
+        /// gözü zeminden kaç metre yukarıda" sorusunu cevaplar ve boya göre oranlanan her ölçü
+        /// (bkz. <see cref="WeaponReloadGesture"/>) buradan beslenir.
+        /// </para>
+        /// <para>⚠️ Rig keşfi yine <see cref="ResolveRig"/>'tir — ikinci bir arama yolu açılmaz
+        /// (gerekçe <see cref="ResolveHandAnchor"/>).</para>
+        /// </summary>
+        public static bool TryResolveEyeAndFloor(out float eyeY, out float floorY)
+        {
+            eyeY = 0f;
+            floorY = 0f;
+
+            OVRCameraRig rig = Instance != null ? Instance.ResolveRig() : null;
+            if (rig == null || rig.centerEyeAnchor == null || rig.trackingSpace == null)
+            {
+                return false;
+            }
+
+            eyeY = rig.centerEyeAnchor.position.y;
+            floorY = rig.trackingSpace.position.y;
+            return true;
+        }
+
+        /// <summary>
         /// Elin AVUÇ pozu (<see cref="ResolveHandAnchor"/> + <see cref="HandGripPivot"/>); rig ya da
         /// el çözülemezse <c>false</c>.
         /// <para>

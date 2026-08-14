@@ -70,6 +70,7 @@ namespace VortexArena.App.Admin
         private const string KeyViolationSound = Prefix + "ViolationSound";
         private const string KeyFreeSpeed = Prefix + "FreeSpeed";
         private const string KeyRoof = Prefix + "Roof";
+        private const string KeyFullScreen = Prefix + "FullScreen";
 
         /// <summary>Serbest kip taban hızı sınırları (m/sn) — tercih slider'ı bu aralıkta.</summary>
         public const float FreeSpeedMin = 1f;
@@ -87,6 +88,7 @@ namespace VortexArena.App.Admin
         private static bool _violationSound = true;
         private static float _freeSpeed = 4f;
         private static AdminRoofMode _roof = AdminRoofMode.HideInTopDown;
+        private static bool _fullScreen = true;
         private static bool _loaded;
 
         /// <summary>
@@ -235,6 +237,59 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
+        /// Admin penceresi tam ekran mı (aksi hâlde pencereli).
+        /// <para>
+        /// ⚠️ <b>Tek kapı budur:</b> yazan taraf (tercih paneli, F11) <c>Screen</c>'e dokunmaz —
+        /// setter tercihi kaydeder, ekrana uygular ve <see cref="Changed"/> ile herkesi tazeler.
+        /// İkinci bir yerden <c>Screen.fullScreenMode</c> yazılırsa tercih ile pencerenin gerçek
+        /// hâli sessizce ayrışır ve panel yanlış değeri gösterir.
+        /// </para>
+        /// <para>
+        /// ⚠️ Pencereli kip <c>Windowed</c>, tam ekran <c>FullScreenWindow</c>'dur (kenarlıksız):
+        /// <c>ExclusiveFullScreen</c> çözünürlük değiştirir ve alt-tab'da admin'i saniyelerce
+        /// kaybettirir — operatör aynı PC'de launcher/sunucu penceresine geçip duruyor.
+        /// </para>
+        /// </summary>
+        public static bool FullScreen
+        {
+            get { Load(); return _fullScreen; }
+            set
+            {
+                Load();
+                if (_fullScreen == value)
+                {
+                    return;
+                }
+
+                _fullScreen = value;
+                PlayerPrefs.SetInt(KeyFullScreen, value ? 1 : 0);
+                ApplyScreenMode();
+                Raise();
+            }
+        }
+
+        /// <summary>Tam ekran ↔ pencereli (F11 ve tercih paneli aynı kapıdan geçer).</summary>
+        public static void ToggleScreenMode()
+        {
+            FullScreen = !FullScreen;
+        }
+
+        /// <summary>
+        /// Kayıtlı tercihi pencereye uygular. Setter zaten çağırır; ayrıca <b>admin etkinleşirken</b>
+        /// bir kez çağrılır ki uygulama, build'in açılış kipiyle değil operatörün son seçimiyle
+        /// açılsın. Editörde <c>Screen</c> yazımı yok sayılır (oyun görünümü kendi kipindedir).
+        /// </summary>
+        public static void ApplyScreenMode()
+        {
+            Load();
+            FullScreenMode mode = _fullScreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
+            if (Screen.fullScreenMode != mode)
+            {
+                Screen.fullScreenMode = mode;
+            }
+        }
+
+        /// <summary>
         /// Çatıya uygulanacak alfa (1 = normal, 0 = çizilmez, gölge kalır). Tercih + o anki
         /// kamera kipinden türetilir; <c>ArenaRoof.ApplyAll</c> bunu alır.
         /// </summary>
@@ -300,6 +355,11 @@ namespace VortexArena.App.Admin
             _violationSound = PlayerPrefs.GetInt(KeyViolationSound, 1) != 0;
             _freeSpeed = Mathf.Clamp(PlayerPrefs.GetFloat(KeyFreeSpeed, 4f), FreeSpeedMin, FreeSpeedMax);
             _roof = (AdminRoofMode)PlayerPrefs.GetInt(KeyRoof, (int)AdminRoofMode.HideInTopDown);
+
+            // ⚠️ Varsayılan SABİT bir değer değil, pencerenin O ANKİ hâlidir: hiç seçim yapmamış
+            // bir kurulumda tercih, build'in açılış kipini (Player Settings) ezmemeli — ilk
+            // dokunuştan sonra seçim kalıcıdır.
+            _fullScreen = PlayerPrefs.GetInt(KeyFullScreen, Screen.fullScreen ? 1 : 0) != 0;
         }
 
         private static void Raise()
