@@ -1,5 +1,6 @@
 {
   "maps": [
+    { "sceneName": "DustB_Outdoor14x16", "venue": "Outdoor14x16", "modes": ["ffa", "tdm", "tournament"] },
     { "sceneName": "IceWorld_Outdoor12x12", "venue": "Outdoor12x12", "modes": ["ffa", "tdm", "tournament"] },
     { "sceneName": "IceWorld_Outdoor12x16", "venue": "Outdoor12x16", "modes": ["ffa", "tdm", "tournament"] },
     { "sceneName": "IceWorld_Outdoor14x16", "venue": "Outdoor14x16", "modes": ["ffa", "tdm", "tournament"] },

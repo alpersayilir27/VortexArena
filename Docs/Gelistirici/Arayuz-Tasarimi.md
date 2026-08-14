@@ -17,9 +17,10 @@ Tüm arayüz prefabları **tek klasörde**: `Assets/_Shared/App/Resources/UI/`
 | Prefab | Ne çizer | Kim kullanır |
 |---|---|---|
 | **`AdminHud.prefab`** | Admin ekranının kalıcı katmanı: skorlar, chip, takım kolonları, kamera şeridi, ölüm akışı. Tercihler ve istatistik panelleri içinde **nested prefab örneği** olarak durur | `AdminSpectator` |
-| **`AdminStatsPanel.prefab`** | İstatistik paneli (kart + oyuncu tablosu) — sürücü bileşeni kökünde | `AdminHud` içinde nested örnek |
+| **`AdminStatsPanel.prefab`** | İstatistik paneli: kart + takım özeti + **oyuncu satırı listesi** (kaydırılabilir) + maç bilgisi + alttaki toplu eylem şeridi (TÜMÜNÜ KALİBRE ET / TÜMÜNÜ ÖLÇEKLENDİR) + kendi kapanan uyarı penceresi — sürücü bileşeni kökünde | `AdminHud` içinde nested örnek |
 | **`AdminPreferencesPanel.prefab`** | Tercihler paneli (mod/harita/süre/kalibrasyon/görünüm/bağlantı) — sürücü bileşeni kökünde. Başlık çubuğunda `KAPAT`'ın yanında **pencere kipi** düğmesi (`ScreenMode`), bağlantı satırının sağında **`QuitGame`** durur. ⚠️ Panel 1080p referansta **tavandadır** (alttan ~22 px pay): yeni bir tam satır SIĞMAZ — sonraki ekleme içeriği kaydırılabilir yapmayı gerektirir, bu ikisi de bu yüzden var olan satırların boş yerine kondu | `AdminHud` içinde nested örnek |
 | **`AdminPlayerRow.prefab`** | Kolonlardaki tek oyuncu satırı (ad, HP barı, POV/KAL/ÖLÇ/CAN/TAKIM/KİMLİK/AT) | `AdminHud` örnekler |
+| **`AdminStatsRow.prefab`** | İstatistik panelindeki tek oyuncu satırı (takım şeridi, ad + `#id`, K/D/K-D hücreleri, ayrıntı şeridi, İSİM/AT/ÖLÇ/KALİBRE düğmeleri + satır içi ad yazı kutusu). `AdminPlayerRow` ile karıştırmayın: o dar yan panel kartı, bu geniş liste satırıdır | `AdminStatsPanel` örnekler ve havuzlar |
 | **`AdminPlayerMarker.prefab`** | Oyuncunun zemindeki halkası + ad etiketi (dünya uzayı) | `AdminPlayerMarkers` örnekler |
 | **`ConnectionOverlayScreen.prefab`** | Bağlantı hata ekranı — masaüstü (scrim + "Yeniden Bağlan" düğmesi) | `ConnectionOverlay` |
 | **`ConnectionOverlayWorld.prefab`** | Bağlantı hata ekranı — VR (world-space kart, düğmesiz) | `ConnectionOverlay` |
@@ -105,7 +106,7 @@ Ayrıca birkaç teknik not:
   ⚠️ Listedeki **seçenek metinleri yer tutucudur** ("katalog yok"): gerçek mod/harita adlarını
   çalışırken kod doldurur, prefabta yazdığınız satırlar temizlenir.
 - **Zengin metin (rich text) bayrağını kurcalamayın.** Oyuncu satırındaki `Stats` metni ve
-  istatistik tablosundaki `BATARYA` kolonu, kodun ürettiği `<color=…>` etiketlerini taşır (pil ve
+  istatistik satırının ayrıntı şeridi, kodun ürettiği `<color=…>` etiketlerini taşır (pil ve
   kumanda simgeleri token başına renklenir — tek TMP'nin tek rengi olduğu için başka yolu yok).
   Bayrağı **kod açar**, yani inspector'dan kapatmanız görünümü değiştirmez. ⚠️ Diğer metinlerde
   bayrak **KAPALI kalmalı**: `Name` ve `OYUNCU` kolonunda oyuncunun kendi yazdığı ad var,
@@ -117,6 +118,15 @@ Ayrıca birkaç teknik not:
   büyütürseniz kolon yerleşimi kendiliğinden uyar (kod yüksekliği prefabtan okur). Satır arası
   boşluk ve kolon başına satır sayısı `AdminHud` bileşeninde alandır (`rowGap`,
   `maxRowsPerColumn`).
+- **Aynısı istatistik listesi için de geçerli:** `AdminStatsRow` prefabının yüksekliğini
+  büyütürseniz liste yerleşimi kendiliğinden uyar (kod yüksekliği prefabtan okur), satır arası
+  boşluk `AdminStatsPanel` bileşenindeki `_rowGap` alanıdır. Liste kaydırılabilir olduğu için satır
+  sayısı sınırı yoktur — satırı büyütmek kimseyi listeden düşürmez.
+- ⚠️ **Panel prefabının KÖK objesini KAPATMAYIN** (`AdminStatsPanel`, `AdminPreferencesPanel`).
+  Paneli açan tuş ve sunucudan gelen tazeleme kökteki bileşenin kendi `Start`/`Update`'inde
+  koşuyor; kök kapalıyken panel **hiçbir tuşla açılmaz** ve hata da vermez. Gizlenecek olan içteki
+  kart objesidir (bileşenin `_root` alanına bağlı olan) — çalışırken kod zaten onu açıp kapatıyor, prefabta hangi hâlde
+  bıraktığınız yalnız tasarım kolaylığıdır.
 - **`AdminHud.rowPrefab` alanı doluysa bırakın.** Kopması hâlinde `AdminPlayerRow.prefab`'ı
   inspector'da o alana sürükleyin — yoksa oyuncu satırları hiç çizilmez.
 - **Seçili oyuncunun halkası:** `AdminPlayerMarker` bileşeninde `ringNormal` ve `ringSelected`

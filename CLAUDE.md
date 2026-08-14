@@ -137,7 +137,7 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `Scenes/` (Boot, Lobby + **`WeaponCalibration`** — kavrama yakalama tezgâhı; ⚠️ Build
   Settings'e KONMAZ, rol yalnız editörde anlamlıdır),
   **`App/Resources/UI/`** (⚠️ **arayüzün TAMAMI burada, prefab olarak** — admin HUD'ı + tercihler
-  ve istatistik panelleri, oyuncu satırı, oyuncu halkası, bağlantı ekranının iki varyantı,
+  ve istatistik panelleri, oyuncu satırları, oyuncu halkası, bağlantı ekranının iki varyantı,
   yükleme ekranının iki varyantı, cephane göstergesi, kimlik kartı, maç sonu ekranı (sonuç kartı +
   skor tablosu). Kodda görsel kurulum YOKTUR ve yazılmaz: sınıflar yalnız veri
   yazar. `Resources/` altından ÇIKARILMAZ — sahneye konmuyorlar, `Resources.Load` ile

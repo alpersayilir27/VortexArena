@@ -45,6 +45,10 @@ namespace VortexArena.App.Admin
         /// <summary>Zamana bağlı alanların tazeleme aralığı (sn).</summary>
         private const float RefreshInterval = 0.25f;
 
+        /// <summary>Skorların ortasındaki chip'in SABİT etiketi. Chip bir düğmedir; üstünde ne
+        /// yaptığı yazar, maçın fazı değil.</summary>
+        private const string ChipLabelText = "İSTATİSTİK";
+
         [Header("Oyuncu satırı")]
         [Tooltip("Kolonlara örneklenecek satır prefabı (Resources/UI/AdminPlayerRow).")]
         [SerializeField] private AdminPlayerRow rowPrefab;
@@ -261,14 +265,25 @@ namespace VortexArena.App.Admin
 
             if (chipText != null)
             {
-                chipText.text = ChipLabel(roster);
+                // ⚠️ Chip bir DÜĞMEDİR ve üstünde ne yaptığı yazar — faz adı DEĞİL.
+                // Faz metni ("LOBİ", kazanan…) buradan kaldırıldı: operatör hangi haritanın açık
+                // olduğunu zaten sahneden görüyor ve düğmenin etiketi değişken olduğunda
+                // "istatistikler nerede" sorusu her fazda yeniden soruluyordu. Kaybolmaması gereken
+                // tek şey SÜRE/GERİ SAYIMdır; o da sağ üst maç satırına taşındı (RefreshMatchInfo).
+                chipText.text = ChipLabelText;
             }
 
             RefreshMatchInfo(roster, ffa);
             RefreshConnection(roster);
         }
 
-        private static string ChipLabel(AdminRoster roster)
+        /// <summary>
+        /// Maç satırının sonuna eklenen ZAMAN bilgisi — geri sayım, kalan süre ya da kazanan.
+        /// <para>Faz ADI bilinçli olarak yazılmaz (lobide boş döner): operatör hangi haritanın açık
+        /// olduğunu sahneden görüyor, "LOBİ" yazısı yalnız yer kaplıyordu. Yazılan tek şey
+        /// <b>kendiliğinden bilinemeyecek</b> olandır — kaç saniye kaldığı.</para>
+        /// </summary>
+        private static string StatusSuffix(AdminRoster roster)
         {
             if (roster.PhaseReason == ArenaProtocol.PAUSE_REASON_COUNTDOWN && roster.CountdownSeconds > 0)
             {
@@ -285,7 +300,13 @@ namespace VortexArena.App.Admin
                 return $"{FormatTime(roster.TimeRemaining)} · LIVE";
             }
 
-            return PhaseLabel(roster.Phase, roster.PhaseReason);
+            // Duraklatma bir OPERATÖR kararıdır ve maçın koştuğunu sanmak pahalıdır → yazılır.
+            // Lobi ve yükleme yazılmaz: ikisi de sahneden zaten görülüyor.
+            return PhaseLabel(roster.Phase, roster.PhaseReason) is { Length: > 0 } label &&
+                   roster.Phase == ArenaProtocol.PHASE_PAUSED &&
+                   roster.PhaseReason != ArenaProtocol.PAUSE_REASON_LOBBY
+                ? label
+                : "";
         }
 
         private void RefreshMatchInfo(AdminRoster roster, bool ffa)
@@ -305,7 +326,12 @@ namespace VortexArena.App.Admin
                 ? $"{activeScene} (önizleme)"
                 : string.IsNullOrEmpty(roster.SceneName) ? "-" : roster.SceneName;
             string mode = string.IsNullOrEmpty(roster.ModeId) ? "-" : AdminContent.ModeDisplayName(roster.ModeId);
-            matchInfoText.text = ffa ? $"{mode} · {map} · herkes tek" : $"{mode} · {map}";
+            string line = ffa ? $"{mode} · {map} · herkes tek" : $"{mode} · {map}";
+
+            // Süre/geri sayım chip'ten buraya taşındı (bkz. StatusSuffix): chip artık sabit bir
+            // düğme etiketi taşıyor ve zaman bilgisinin kaybolmaması gerekiyor.
+            string status = StatusSuffix(roster);
+            matchInfoText.text = status.Length > 0 ? $"{line} · {status}" : line;
         }
 
         private void RefreshConnection(AdminRoster roster)
