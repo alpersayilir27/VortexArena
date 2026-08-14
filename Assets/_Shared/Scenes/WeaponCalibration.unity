@@ -433,7 +433,7 @@ Transform:
   m_GameObject: {fileID: 1338157863}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.2, z: 0.55}
+  m_LocalPosition: {x: 0, y: 0.27, z: 0.55}
   m_LocalScale: {x: 0.01, y: 0.01, z: 0.01}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -449,12 +449,12 @@ TextMesh:
   m_GameObject: {fileID: 1338157863}
   m_Text: CountdownText
   m_OffsetZ: 0
-  m_CharacterSize: 0.14
+  m_CharacterSize: 0.28
   m_LineSpacing: 1
   m_Anchor: 4
   m_Alignment: 1
   m_TabSize: 4
-  m_FontSize: 96
+  m_FontSize: 160
   m_FontStyle: 0
   m_RichText: 1
   m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
@@ -537,7 +537,7 @@ Transform:
   m_GameObject: {fileID: 1649073399}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -0.2, z: 0.55}
+  m_LocalPosition: {x: 0, y: -0.22, z: 0.55}
   m_LocalScale: {x: 0.01, y: 0.01, z: 0.01}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -657,12 +657,12 @@ TextMesh:
   m_GameObject: {fileID: 1694237360}
   m_Text: StepText
   m_OffsetZ: 0
-  m_CharacterSize: 0.05
+  m_CharacterSize: 0.1
   m_LineSpacing: 1
   m_Anchor: 4
   m_Alignment: 1
   m_TabSize: 4
-  m_FontSize: 72
+  m_FontSize: 144
   m_FontStyle: 0
   m_RichText: 1
   m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}

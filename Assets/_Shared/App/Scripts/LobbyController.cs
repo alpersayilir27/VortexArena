@@ -78,6 +78,16 @@ namespace VortexArena.App
 
         private void Awake()
         {
+            if (AppSession.IsWeaponCalibration)
+            {
+                // ⚠️ Silah kalibrasyonunda bu kabuk HİÇ koşmaz: bağlanacak sunucu yoktur, yani
+                // ekranda tek yazacağı şey "sunucu bulunamadı"dır ve ölçüm ekranının önünü kapatır.
+                // Kapı BURADA da durur (yalnız yönlendirmede değil) çünkü Lobby'ye yanlış bir
+                // yoldan düşülmesi hâlâ mümkündür ve o hâlde de popup çıkmamalıdır.
+                gameObject.SetActive(false);
+                return;
+            }
+
             if (!AppSession.RoleResolved)
             {
                 // Lobby sahnesi Boot'suz oynatıldı (Editor testi) — bu sahne player kabuğudur.

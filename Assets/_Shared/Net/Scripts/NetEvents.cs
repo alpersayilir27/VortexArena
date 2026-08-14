@@ -42,6 +42,22 @@ namespace VortexArena.Net
         /// olduğu için sıfırlama yalnız bu olaydan duyulur (§5.3).</para></summary>
         public static event Action OnClearCalibration;
 
+        /// <summary>Operatör bu başlığa kayıtlı çapadan hizalamayı yeniden yükletti (§10.6) —
+        /// yalnız player'a gelir. <c>CalibrationState</c> dinler, <c>ArenaCalibrator</c>'a yükletir
+        /// ve sonucu <c>set_calibration</c> ile döner.
+        /// <para>Mesajın sunucu → istemci yönünde alanı yoktur, bu yüzden olay da parametresizdir:
+        /// hedef zaten bu bağlantıdır (<c>identify</c> ile aynı desen).</para>
+        /// <para>⚠️ <c>OnClearCalibration</c>'ın zıddı DEĞİLDİR: o hizalamayı siler, bu onu geri
+        /// getirmeyi <b>dener</b> — "hizalandım" işaretini yine başlık koyar.</para></summary>
+        public static event Action OnReloadCalibration;
+
+        /// <summary>Yalnız admin bağlantılarına gelir (§5.3): bir oyuncunun kayıtlı hizalamayı
+        /// yeniden yükleme denemesi sonuçlandı. <b>Olaydır, durum değildir</b> — durumu roster
+        /// taşır; bu yalnız operatörün bastığı düğmenin cevabıdır.
+        /// <para>Sunucu bekleyen istek defteri tutmaz: hangi sonucun hangi düğmeye ait olduğunu
+        /// dinleyen arayüz bilir (bekleyen satırı yoksa yok sayar).</para></summary>
+        public static event Action<CalibrationResultMsg> OnCalibrationResult;
+
         /// <summary>Uzak bir oyuncunun atış/atma olayı (UDP 0x04 EventBatch, §6.5) — v4'te WS
         /// <c>shot_fired</c>'ın yerini aldı. <c>ArenaClient</c> DEĞİL <c>UdpStateChannel</c>
         /// yayınlar, ama diğerleri gibi ANA thread'de. Kendi olaylarımız kanalda süzülür.</summary>
@@ -91,6 +107,8 @@ namespace VortexArena.Net
         internal static void RaiseKicked(KickedMsg msg) { OnKicked?.Invoke(msg); }
         internal static void RaiseMeasureBodyScale() { OnMeasureBodyScale?.Invoke(); }
         internal static void RaiseClearCalibration() { OnClearCalibration?.Invoke(); }
+        internal static void RaiseReloadCalibration() { OnReloadCalibration?.Invoke(); }
+        internal static void RaiseCalibrationResult(CalibrationResultMsg msg) { OnCalibrationResult?.Invoke(msg); }
         internal static void RaiseAdminState(AdminStateMsg msg) { OnAdminState?.Invoke(msg); }
         internal static void RaiseSelectionState(SelectionStateMsg msg) { OnSelectionState?.Invoke(msg); }
         internal static void RaiseRulesUpdate(RulesUpdateMsg msg) { OnRulesUpdate?.Invoke(msg); }

@@ -242,16 +242,37 @@ public sealed class LobbyService
     /// yazabilir — playerId taşımaz, bağlantıdan çözülür.
     /// <para>Bildirilen zemin sapması eşiği aşarsa operatör uyarılır (§10.6). ⚠️ Uyarı roster
     /// değişimine BAĞLANMAZ: aynı sapmayla yeniden kalibre olan oyuncunun kaydı değişmez ama
-    /// operatörün her elle kalibrasyonda sonucu duyması gerekir.</para></summary>
+    /// operatörün her elle kalibrasyonda sonucu duyması gerekir.</para>
+    /// <para>⚠️ <c>error</c> doluysa kayıtlı hizalama yeniden YÜKLENEMEDİ: <c>calibrated</c>/
+    /// <c>source</c>/<c>floorOffset</c> YOK SAYILIR, kayıtlı kalibrasyon olduğu gibi durur ve
+    /// gerekçe roster'a yazılıp operatöre duyurulur (§10.6, <c>set_body_scale.error</c> ile birebir
+    /// aynı sözleşme).</para></summary>
     public void HandleSetCalibration(ClientConnection connection, SetCalibrationMsg msg)
     {
         var state = connection.State;
         if (state == null) return;
+
+        var error = msg.error ?? "";
+        if (error.Length > 0)
+        {
+            _registry.SetCalibrationError(state.PlayerId, error);
+            Console.WriteLine($"[Lobby] set_calibration: {state.Name} yeniden yüklenemedi — {error}.");
+            _ = BroadcastCalibrationResultAsync(state.PlayerId, false, error);
+            // Notice() ile sarılmaz: eylemin sahibi admin değil oyuncunun başlığıdır.
+            _ = BroadcastAdminStateAsync($"⚠ Kalibrasyon {state.Name}: {error}");
+            return;
+        }
+
         if (_registry.SetCalibration(state.PlayerId, msg.calibrated, msg.source, msg.floorOffset))
         {
             var what = msg.calibrated ? $"kalibre oldu ({msg.source})" : "kalibrasyonunu bıraktı";
             Console.WriteLine($"[Lobby] set_calibration: {state.Name} {what}.");
         }
+
+        // ⚠️ SetCalibration dönüşüne BAĞLANMAZ: zaten kalibreli bir oyuncuda dönüş `false` gelir
+        // (roster'da değişen bir şey yok) ve operatörün düğmesinin cevabı tam da o durumda gerekir —
+        // aksi hâlde başarılı bir yeniden yükleme sonsuza kadar "yükleniyor" görünürdü (§5.3).
+        if (msg.calibrated) _ = BroadcastCalibrationResultAsync(state.PlayerId, true, "");
 
         if (!msg.calibrated || Math.Abs(msg.floorOffset) <= ArenaProtocol.CALIB_FLOOR_WARN_METERS) return;
         Console.WriteLine($"[Lobby] zemin sapması: {state.Name} {msg.floorOffset:F2} m " +
@@ -324,6 +345,78 @@ public sealed class LobbyService
         var reach = target.Socket != null ? "iletildi" : "bağlantısı yok, yalnız kayıt sıfırlandı";
         Console.WriteLine($"[Lobby] clear_calibration: {target.Name} (playerId {target.PlayerId}) — {reach}, {connection.State?.Name}.");
         await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kalibrasyonu sıfırlandı"));
+    }
+
+    /// <summary>
+    /// reload_calibration: admin bir oyuncunun (playerId 0 = HERKES) başlığına gözlükte KAYITLI
+    /// çapadan hizalamayı yeniden yükletir (§5.2). Sunucu hiçbir şey hesaplamaz — hedefe alansız bir
+    /// reload_calibration iletir, denemeyi başlık yapıp <c>set_calibration</c> ile döner
+    /// (identify/measure_body_scale ile aynı çift yönlü desen).
+    /// <para>⚠️ <b>Admin bununla "kalibre oldu" DEMİŞ OLMAZ</b> (§10.6 asimetrik yazar tablosu):
+    /// yalnız denemeyi başlatır, işareti yine başlık koyar.</para>
+    /// <para>⚠️ <b>Kalibresiz hedef ATLANMAZ</b> — measure_body_scale'deki kalibrasyon kapısının
+    /// buradaki karşılığı YOKTUR ve konmaz: komutun var olma sebebi tam da hizalaması olmayan ya da
+    /// bozulmuş oyuncudur, kapı onu var olduğu tek durumda işlevsiz bırakırdı.</para>
+    /// </summary>
+    public async Task HandleReloadCalibrationAsync(ClientConnection connection, ReloadCalibrationMsg msg)
+    {
+        // Sunucu → istemci yönünde alan taşınmaz: hedef zaten o bağlantıdır.
+        var payload = JsonUtil.Serialize(new ReloadCalibrationMsg());
+
+        if (msg.playerId == 0)
+        {
+            var sent = 0;
+            foreach (var state in _registry.Snapshot())
+            {
+                if (state.Role != "player" || state.Socket == null) continue;
+                await SendSafeAsync(state.Socket, payload, state.Name);
+                sent++;
+            }
+
+            Console.WriteLine($"[Lobby] reload_calibration: {sent} oyuncu — {connection.State?.Name}.");
+            await BroadcastAdminStateAsync(Notice(connection, $"{sent} oyuncunun kalibrasyonu yeniden yükleniyor"));
+            return;
+        }
+
+        if (!_registry.TryGetByPlayerId(msg.playerId, out var target) || target.Socket == null)
+        {
+            Console.WriteLine($"[Lobby] reload_calibration: playerId {msg.playerId} bulunamadı/bağlantısı yok.");
+            return;
+        }
+        if (target.Role != "player")
+        {
+            Console.WriteLine($"[Lobby] reload_calibration: {target.Name} admin — kalibrasyon yok, yok sayıldı.");
+            return;
+        }
+
+        await SendSafeAsync(target.Socket, payload, target.Name);
+        Console.WriteLine($"[Lobby] reload_calibration: {target.Name} (playerId {target.PlayerId}) — {connection.State?.Name}.");
+        await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kalibrasyonu yeniden yükleniyor"));
+    }
+
+    /// <summary>Yeniden yükleme denemesinin sonucunu YALNIZ bağlı adminlere yollar (§5.3).
+    /// <para>Bir OLAYDIR, durum değil: durumu roster taşır. Sunucu bekleyen istek defteri tutmaz —
+    /// başlıktan gelen her başarı/hata bildirimi bir satır üretir, eşlemeyi admin arayüzü yapar.</para></summary>
+    public async Task BroadcastCalibrationResultAsync(int playerId, bool ok, string error)
+    {
+        try
+        {
+            var admins = _registry.ConnectedAdminConnections();
+            // Kimse bakmıyorsa serileştirme bile yapılmaz: tek tüketicisi operatör ekranıdır.
+            if (admins.Count == 0) return;
+            var json = JsonUtil.Serialize(new CalibrationResultMsg
+            {
+                playerId = playerId,
+                ok = ok,
+                error = error ?? ""
+            });
+            foreach (var connection in admins)
+                await SendSafeAsync(connection, json, "(admin)");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Lobby] calibration_result yayını hatası: {ex.Message}");
+        }
     }
 
     // ---- Gövde ölçeği (§10.8) ----

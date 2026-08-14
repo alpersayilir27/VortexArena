@@ -28,8 +28,9 @@ namespace VortexArena.App
         private Camera _camera;
         private float _expireTime;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Bootstrap()
+        /// <summary>Tekili kurar. ⚠️ <b>Koşulsuzdur</b> — "bu oturumda gerekli mi" kararı
+        /// <see cref="AppSingletons"/>'a aittir (gerekçe orada).</summary>
+        internal static void Install()
         {
             if (_instance != null)
             {

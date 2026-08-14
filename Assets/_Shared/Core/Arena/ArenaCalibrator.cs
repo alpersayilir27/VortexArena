@@ -240,6 +240,11 @@ namespace VortexArena.Core.Arena
         /// o pencerede gelen sıfırlama yok sayılırsa deneme başarıya ulaşıp arenayı yeniden
         /// hizalar — operatör sıfırladı sanırken oyuncu kalibre kalırdı (§10.6).</summary>
         private bool restoreAborted;
+
+        /// <summary>Operatörün başlattığı (<see cref="RequestReload"/>) bir yeniden yükleme uçuşta
+        /// mı. İkinci bir istek beklemeye alınmaz, doğrudan gerekçesiyle reddedilir: iki koşu aynı
+        /// çapayı iki kez uygular ve admin düğmesi hangi sonucun kendisine ait olduğunu bilemezdi.</summary>
+        private bool forcedReloadRunning;
         private bool trackingEventsHooked;
         private bool realignQueued;
         private Coroutine markerHideRoutine;
@@ -315,13 +320,21 @@ namespace VortexArena.Core.Arena
         /// diske YAZILMAYA devam edilir (<see cref="CreateAndSaveAnchorAsync"/>) — operatör modu
         /// sonradan <c>saved_anchor</c>'a çevirdiğinde en taze kalibrasyon orada hazır dursun.
         /// </para>
+        /// <para>
+        /// ⚠️ <paramref name="operatorRequest"/> mod kapısını <b>bilerek deler</b>: kalibre modunun
+        /// kapıladığı tek şey uygulama AÇILIŞINDAKİ diskten geri yüklemedir (§10.6) ve operatörün
+        /// <c>reload_calibration</c>'ı bir açılış değildir — düğmenin sözü tam olarak "cihazdaki
+        /// kayıttan yükle"dir. Kapı burada da uygulansaydı komut <c>two_anchor</c> işletmelerinde
+        /// hiç iş görmezdi: hizalaması oturum ortasında bozulan oyuncu için tek çıkış yolu elle 2
+        /// çapa sekansı olurdu — oysa düğme tam da onu gereksiz kılmak için var.
+        /// </para>
         /// </summary>
-        private static string ResolveSavedUuid()
+        private static string ResolveSavedUuid(bool operatorRequest = false)
         {
             if (!string.IsNullOrEmpty(sessionAnchorUuid))
                 return sessionAnchorUuid;
 
-            return CalibrationState.DiskRestoreAllowed
+            return operatorRequest || CalibrationState.DiskRestoreAllowed
                 ? PlayerPrefs.GetString(AnchorUuidKey, string.Empty)
                 : string.Empty;
         }
@@ -1087,32 +1100,142 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
+        /// Operatörün <c>reload_calibration</c> komutu (§10.6): kayıtlı çapadan hizalamayı YENİDEN
+        /// yükletir ve sonucu bildirir. <paramref name="onResult"/> ana thread'de ve <b>tam bir
+        /// kez</b> çağrılır; boş string = başarılı.
+        /// <para>⚠️ Operatörün açık isteği oyuncunun yarım kalmış sekansını ve eski bir iptali
+        /// <b>yener</b> (<see cref="restoreAborted"/> temizlenir,
+        /// <see cref="manualCalibrationStarted"/> guard'ı atlanır): komutun var olma sebebi tam da
+        /// hizalaması bozulmuş oyuncudur. Açılıştaki normal koşunun davranışı DEĞİŞMEZ — o guard'lar
+        /// orada aynen durur.</para>
+        /// <para>Statiktir çünkü çağıranı (<c>CalibrationState</c>) kalıcı bir tekildir ve sahnedeki
+        /// kalibratörü tanımaz; kalibratör her sahnede yeniden doğar.</para>
+        /// </summary>
+        public static void RequestReload(Action<string> onResult)
+        {
+            ArenaCalibrator calibrator = FindFirstObjectByType<ArenaCalibrator>();
+            if (calibrator == null)
+            {
+                onResult?.Invoke("sahnede kalibratör yok");
+                return;
+            }
+
+            calibrator.BeginForcedReload(onResult);
+        }
+
+        private void BeginForcedReload(Action<string> onResult)
+        {
+            if (forcedReloadRunning)
+            {
+                // İkinci bir koşu aynı çapayı ikinci kez uygulardı; operatör sonucu beklesin.
+                onResult?.Invoke("yükleme zaten sürüyor");
+                return;
+            }
+
+            // ⚠️ Mod kapısı DELİNİR (operatorRequest): kalibre modu yalnız açılıştaki geri
+            // yüklemeyi kapılar, operatörün isteği açılış değildir (§10.6).
+            string saved = ResolveSavedUuid(true);
+            if (string.IsNullOrEmpty(saved) || !Guid.TryParse(saved, out _))
+            {
+                // Sessizce başarılı sayılmaz (§10.6): yükleyecek bir hizalama yoksa operatörün
+                // bunu bilmesi gerekir.
+                onResult?.Invoke("cihazda kayıtlı kalibrasyon yok");
+                return;
+            }
+
+            forcedReloadRunning = true;
+            restoreAborted = false;
+            _ = RestoreSavedCalibrationAsync(true, onResult);
+        }
+
+        /// <summary>Operatör isteğinin sonucunu TAM BİR KEZ bildirir. Açılış koşusunda
+        /// (<paramref name="forced"/> <c>false</c>) hiçbir şey yapmaz — o koşunun bir sahibi
+        /// yoktur.</summary>
+        private void FinishForcedReload(bool forced, Action<string> onResult, string error)
+        {
+            if (!forced)
+                return;
+
+            forcedReloadRunning = false;
+            onResult?.Invoke(error);
+        }
+
+        /// <summary>Tek denemenin sonucu.</summary>
+        private enum RestoreOutcome
+        {
+            /// <summary>Rig hizalandı.</summary>
+            Aligned,
+
+            /// <summary>Geçici hata — bir sonraki deneme koşabilir.</summary>
+            Retry,
+
+            /// <summary>Deneme sahipsiz kaldı: sahne değişti ya da araya oyuncunun/operatörün kendi
+            /// eylemi girdi. Yeniden denenmez.</summary>
+            Abandoned
+        }
+
+        /// <summary>
         /// Kayıtlı kalibrasyonu geri yükler (harita değişiminde de bu yol koşar). Yükleme
         /// geçici olarak başarısız olabildiği için <see cref="RestoreAttempts"/> kez denenir;
         /// her <c>await</c> sonrası bileşenin hâlâ yaşadığı denetlenir — sahne bu arada
         /// değişmiş olabilir ve ölü bir kalibratör yeni sahnenin rig'ine dokunmamalıdır.
+        /// <para><paramref name="forced"/> = operatörün açık isteği
+        /// (<see cref="RequestReload"/>): oyuncunun yarım sekansı ve eski bir iptal koşuyu
+        /// durdurmaz, ve başarısızlıkta <see cref="StartPreAlign"/> ÇAĞRILMAZ — ön-hizalama açılış
+        /// yolunun işidir, oyunun ortasında rig'i tahminen taşımak operatörün istediği şey
+        /// değildir.</para>
+        /// <para>⚠️ <paramref name="onResult"/> <b>her</b> çıkış dalında çağrılmalıdır (bileşenin
+        /// <c>await</c> sırasında yok olduğu dal dahil): eksik kalan tek dal, admin düğmesini zaman
+        /// aşımına kadar asılı bırakır.</para>
         /// </summary>
-        private async Task RestoreSavedCalibrationAsync()
+        private async Task RestoreSavedCalibrationAsync(bool forced = false, Action<string> onResult = null)
         {
-            string saved = ResolveSavedUuid();
+            // Operatör isteğinde disk kaydı kalibre modundan bağımsız okunur (bkz. ResolveSavedUuid).
+            string saved = ResolveSavedUuid(forced);
             if (string.IsNullOrEmpty(saved) || !Guid.TryParse(saved, out Guid uuid))
+            {
+                FinishForcedReload(forced, onResult, "cihazda kayıtlı kalibrasyon yok");
                 return;
+            }
 
             for (int attempt = 1; attempt <= RestoreAttempts; attempt++)
             {
+                if (this == null)
+                {
+                    FinishForcedReload(forced, onResult, "sahne değişti");
+                    return;
+                }
+
                 // Oyuncu kendi jestiyle öne geçtiyse ya da operatör sıfırladıysa geri yükleme
                 // düşer: kayıtlı anchor zaten silindi, onu geri getirmek sıfırlamayı geri almak olurdu.
-                if (this == null || manualCalibrationStarted || restoreAborted)
+                // ⚠️ Operatörün açık isteğinde bu kapı YOKTUR (§10.6).
+                if (!forced && (manualCalibrationStarted || restoreAborted))
                     return;
 
-                if (await TryRestoreOnceAsync(uuid, attempt))
+                RestoreOutcome outcome = await TryRestoreOnceAsync(uuid, attempt, forced);
+                if (outcome == RestoreOutcome.Aligned)
+                {
+                    FinishForcedReload(forced, onResult, "");
                     return;
+                }
+
+                if (outcome == RestoreOutcome.Abandoned)
+                {
+                    FinishForcedReload(forced, onResult, "sahne değişti");
+                    return;
+                }
 
                 if (attempt < RestoreAttempts)
                     await Task.Delay(RestoreRetryDelayMs);
             }
 
-            if (this == null || restoreAborted)
+            if (this == null)
+            {
+                FinishForcedReload(forced, onResult, "sahne değişti");
+                return;
+            }
+
+            if (!forced && restoreAborted)
                 return;
 
             Debug.LogWarning(
@@ -1122,45 +1245,53 @@ namespace VortexArena.Core.Arena
                 "pozlar arena ile örtüşmez).",
                 this);
 
+            if (forced)
+            {
+                FinishForcedReload(true, onResult, $"kayıtlı çapa {RestoreAttempts} denemede yüklenemedi");
+                return;
+            }
+
             // Elle kalibre edecek oyuncunun önce arenayı GÖRMESİ gerekiyor: hizalanmamış rig onu
             // muhafazanın karartmasının içinde bırakabilir.
             StartPreAlign();
         }
 
-        /// <summary>Tek deneme; başarılıysa true. Kalıcı olmayan hataları yutup false döner.</summary>
-        private async Task<bool> TryRestoreOnceAsync(Guid uuid, int attempt)
+        /// <summary>Tek deneme. Kalıcı olmayan hataları yutup <see cref="RestoreOutcome.Retry"/>
+        /// döner.</summary>
+        private async Task<RestoreOutcome> TryRestoreOnceAsync(Guid uuid, int attempt, bool forced)
         {
             try
             {
                 var unbound = new List<OVRSpatialAnchor.UnboundAnchor>();
                 var load = await OVRSpatialAnchor.LoadUnboundAnchorsAsync(new[] { uuid }, unbound);
-                if (this == null) return true; // sahne değişti: bu kalibratörün işi bitti
+                if (this == null) return RestoreOutcome.Abandoned; // sahne değişti: bu kalibratörün işi bitti
                 if (!load.Success || unbound.Count == 0)
                 {
                     Debug.Log($"ArenaCalibrator: kayıtlı anchor yüklenemedi ({load.Status}), deneme {attempt}.");
-                    return false;
+                    return RestoreOutcome.Retry;
                 }
 
                 OVRSpatialAnchor.UnboundAnchor unboundAnchor = unbound[0];
                 if (!unboundAnchor.Localized && !await unboundAnchor.LocalizeAsync())
                 {
-                    if (this == null) return true;
+                    if (this == null) return RestoreOutcome.Abandoned;
                     Debug.Log($"ArenaCalibrator: kayıtlı anchor localize edilemedi, deneme {attempt}.");
-                    return false;
+                    return RestoreOutcome.Retry;
                 }
 
-                if (this == null) return true;
+                if (this == null) return RestoreOutcome.Abandoned;
 
                 // The user beat the restore to it; keep their manual calibration.
                 // ⚠️ Operatörün sıfırlaması da burada durdurulur: son await'ten sonra gelmiş
                 // olabilir ve hizalamayı uygulamak sıfırlamayı sessizce geri alırdı (§10.6).
-                if (manualCalibrationStarted || restoreAborted)
-                    return true;
+                // Operatörün yeniden yükleme isteğinde ikisi de geçilir — istek onlardan sonra geldi.
+                if (!forced && (manualCalibrationStarted || restoreAborted))
+                    return RestoreOutcome.Abandoned;
 
                 if (!unboundAnchor.TryGetPose(out Pose pose))
                 {
                     Debug.Log($"ArenaCalibrator: kayıtlı anchor pozu okunamadı, deneme {attempt}.");
-                    return false;
+                    return RestoreOutcome.Retry;
                 }
 
                 AlignRigToAnchorPose(pose.position, pose.rotation);
@@ -1176,12 +1307,12 @@ namespace VortexArena.Core.Arena
                 // Bu yolda zemin ÖLÇÜLMEZ: bildirilecek sapma yok (§10.6).
                 LastFloorOffsetMeters = 0f;
                 RaiseCalibrated(SourceAnchor);
-                return true;
+                return RestoreOutcome.Aligned;
             }
             catch (Exception e)
             {
                 Debug.LogException(e, this);
-                return false;
+                return RestoreOutcome.Retry;
             }
         }
 
