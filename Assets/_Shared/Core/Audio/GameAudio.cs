@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using VortexArena.Core.Combat;
@@ -33,14 +34,72 @@ namespace VortexArena.Core.Audio
     /// <see cref="ModeAudioRegistry"/>'den gelir ve <see cref="PlayModeEvent"/> ile çalar.
     /// Aynı an için ikisi de doluysa <b>kayıt bankayı ezer</b> — sesler üst üste binmesin.
     /// </para>
+    /// <para>
+    /// <b>Duyurular tek bir kanaldan SIRAYLA çalar</b> (bankadan da kayıttan da gelseler): bunlar
+    /// konuşma replikleridir, üst üste binen ikisi birden anlaşılmaz olur. Kanal doluyken gelen
+    /// duyuru öncekini KESMEZ, kuyruğa girer ve sırası gelince çalar — bkz. <see cref="Announce"/>.
+    /// İstisna <see cref="IsInstant"/>'tır: anlamı zamanlamasında olan işaretler (geri sayım
+    /// bip'i) beklemez.
+    /// </para>
     /// </summary>
     [DisallowMultipleComponent]
     public class GameAudio : MonoBehaviour
     {
+        /// <summary>
+        /// Kuyrukta en fazla kaç duyuru bekleyebilir; taşarsa <b>yeni gelen düşer</b>.
+        /// <para>Eski olanı atmak yanlış olurdu: sıradaki duyuru zaten olmuş bir olayı anlatıyor
+        /// (öldürme, tur bitişi) ve onu atlamak oyuncuyu bilgisiz bırakır. Tavanın kendisi bir
+        /// emniyettir — normal maçta kuyruk ikiyi geçmez.</para>
+        /// </summary>
+        private const int AnnouncementQueueLimit = 4;
+
+        /// <summary>
+        /// Bir duyurunun kuyrukta bekleyebileceği en uzun süre (sn); geçerse <b>hiç çalmaz</b>.
+        /// <para>Gerekçe: geç çalan duyuru yanlış duyurudur — "rakip elendi" repliğini turlar arası
+        /// toplanmanın ortasında duymak oyuncuyu o an olan bir şey sanmaya iter.</para>
+        /// </summary>
+        private const float AnnouncementTtlSeconds = 4f;
+
+        /// <summary>İki replik arasındaki nefes payı (sn): bitişik çalan iki cümle tek cümle gibi
+        /// duyuluyor.</summary>
+        private const float AnnouncementGapSeconds = 0.1f;
+
+        /// <summary>Sırasını bekleyen tek bir duyuru: klibi, seviyesi ve <b>bayatlama anı</b>.
+        /// <para>Seviye kuyruğa girerken hesaplanır (o anki <see cref="MasterVolume"/> ile): duyuru
+        /// olayın anına aittir, sırada beklerken operatörün çevirdiği bir düğmeye değil.</para>
+        /// </summary>
+        private readonly struct PendingAnnouncement
+        {
+            public readonly AudioClip Clip;
+            public readonly float Volume;
+            public readonly float ExpiresAt;
+
+            public PendingAnnouncement(AudioClip clip, float volume, float expiresAt)
+            {
+                Clip = clip;
+                Volume = volume;
+                ExpiresAt = expiresAt;
+            }
+        }
+
         public static GameAudio Instance { get; private set; }
 
         private AudioSource _source;
         private float _masterVolume = 1f;
+
+        /// <summary>
+        /// Sırasını bekleyen duyurular (FIFO). <b>Sıra = geliş sırasıdır</b> ve doğrusu budur:
+        /// sunucu olayları zaten nedensel sırada yolluyor (önce <c>kill_event</c>, sonra o ölümün
+        /// bitirdiği turun <c>match_state</c>'i), WS sırayı koruyor. Öncelik tablosu yazmak bu
+        /// sırayı ikinci bir yerden tekrar tarif etmek olurdu.
+        /// </summary>
+        private readonly Queue<PendingAnnouncement> _announcements = new Queue<PendingAnnouncement>();
+
+        /// <summary>Duyuru kanalının boşalacağı an (<see cref="Time.unscaledTime"/>).
+        /// <para>Kanalın meşguliyeti <c>AudioSource.isPlaying</c>'den DEĞİL klip uzunluğundan
+        /// ölçülür: aynı kaynakta anlık işaretler de (bip) çalıyor ve <c>isPlaying</c> onları da
+        /// sayardı — o zaman her bip sıradaki repliği geciktirirdi.</para></summary>
+        private float _channelFreeAt;
 
         /// <summary>Son bilinen faz — <c>match_state</c> tekrar tekrar geldiği için sesin yalnız
         /// GEÇİŞTE çalması buna bağlı.</summary>
@@ -166,7 +225,126 @@ namespace VortexArena.Core.Audio
                 return;
             }
 
-            _source.PlayOneShot(clip, Mathf.Clamp01(bank.Volume * _masterVolume * Mathf.Max(0f, volumeScale)));
+            float volume = Mathf.Clamp01(bank.Volume * _masterVolume * Mathf.Max(0f, volumeScale));
+
+            if (IsInstant(id))
+            {
+                _source.PlayOneShot(clip, volume);
+                return;
+            }
+
+            Announce(clip, volume);
+        }
+
+        /// <summary>
+        /// Bu ses bir duyuru (replik) DEĞİL, <b>anlamı zamanlamasında olan anlık bir işaret</b> mi?
+        /// Anlık olanlar kuyruğa girmez, sıra beklemez ve bekleyeni geciktirmez.
+        /// <para>
+        /// ⚠️ <b>Varsayılan "duyuru"dur</b> (<c>false</c>): <see cref="GameSoundId"/>'ye sona
+        /// eklenen yeni bir ses kendiliğinden kuyruğa girer. Tersi olsaydı yeni her replik, o gün
+        /// kimse fark etmeden bir öncekini keserdi.
+        /// </para>
+        /// <para>
+        /// Ölçüt "kısa mı" değil <b>"geç çalarsa yalan olur mu"</b>dur: geri sayımın bip'i saniyenin
+        /// kendisidir, bir replik bitene kadar beklerse yanlış saniyeyi işaretler. İhlal uyarısı da
+        /// operatörün <i>şu anda</i> bakması gereken yeri söyler.
+        /// </para>
+        /// </summary>
+        private static bool IsInstant(GameSoundId id)
+        {
+            return id == GameSoundId.CountdownTick || id == GameSoundId.AdminViolation;
+        }
+
+        /// <summary>
+        /// Duyuruyu kanala verir: kanal boşsa hemen çalar, doluysa <b>kuyruğa girer</b> —
+        /// çalmakta olanı ASLA kesmez.
+        /// <para>
+        /// ⚠️ <b>Kesmemek bilinçli bir karardır:</b> duyurular nedensel bir zincir anlatıyor
+        /// ("rakip elendi" → "tur sona erdi, mevzilerinize dönün") ve zincirin ilk halkasını kesmek
+        /// oyuncuya <i>neden</i> turun bittiğini hiç söylememek demek. Son duyuruyu kazandıran eski
+        /// kural 1v1'de tam bunu yapıyordu: sunucu ölümü işledikten ~100 ms sonra turu kapatıyor,
+        /// öldürme repliği daha ilk hecesindeyken kesiliyordu.
+        /// </para>
+        /// <para>
+        /// Dönüş <c>false</c> = ses hiç çalmayacak (klip yok ya da kuyruk taştı); çağıran isterse
+        /// yedeğine düşebilir.
+        /// </para>
+        /// </summary>
+        private bool Announce(AudioClip clip, float volume)
+        {
+            if (clip == null || _source == null)
+            {
+                return false;
+            }
+
+            float now = Time.unscaledTime;
+            if (_announcements.Count == 0 && now >= _channelFreeAt)
+            {
+                StartAnnouncement(clip, volume, now);
+                return true;
+            }
+
+            if (_announcements.Count >= AnnouncementQueueLimit)
+            {
+                return false;
+            }
+
+            _announcements.Enqueue(new PendingAnnouncement(clip, volume, now + AnnouncementTtlSeconds));
+            return true;
+        }
+
+        /// <summary>Duyuruyu başlatır ve kanalı klip boyunca (+ nefes payı) meşgul işaretler.</summary>
+        private void StartAnnouncement(AudioClip clip, float volume, float now)
+        {
+            _source.PlayOneShot(clip, volume);
+            _channelFreeAt = now + clip.length + AnnouncementGapSeconds;
+        }
+
+        /// <summary>
+        /// Kuyruk pompası: kanal boşaldığında sıradaki repliği başlatır, bayatlamışları atar.
+        /// <para>⚠️ Kuyruk yalnız burada ilerler — obje devre dışı bırakılırsa duyurular durur
+        /// (bugün kimse bırakmıyor: tekil kendi kalıcı objesini kuruyor).</para>
+        /// </summary>
+        private void Update()
+        {
+            if (_announcements.Count == 0)
+            {
+                return;
+            }
+
+            float now = Time.unscaledTime;
+            if (now < _channelFreeAt)
+            {
+                return;
+            }
+
+            while (_announcements.Count > 0)
+            {
+                PendingAnnouncement next = _announcements.Dequeue();
+                if (next.Clip == null || now > next.ExpiresAt)
+                {
+                    continue;
+                }
+
+                StartAnnouncement(next.Clip, next.Volume, now);
+                return;
+            }
+        }
+
+        /// <summary>
+        /// Kuyruğu boşaltır ve çalmakta olan repliği susturur — <b>oturum bittiğinde</b>.
+        /// <para>Kesmenin meşru olduğu tek yer burasıdır: bağlantı kopunca sıradaki duyuru artık
+        /// var olmayan bir maçı anlatıyor.</para>
+        /// </summary>
+        private void ClearAnnouncements()
+        {
+            _announcements.Clear();
+            _channelFreeAt = 0f;
+
+            if (_source != null)
+            {
+                _source.Stop();
+            }
         }
 
         private void HandleKillEvent(KillEventMsg msg)
@@ -260,10 +438,12 @@ namespace VortexArena.Core.Audio
         }
 
         /// <summary>Kopuşta roster düşer: yeni oturumda oyuncu kimlikleri baştan dağıtılır ve
-        /// bayat bir kopya kurbanı yanlış takımda gösterirdi.</summary>
+        /// bayat bir kopya kurbanı yanlış takımda gösterirdi. Bekleyen duyurular da düşer —
+        /// artık var olmayan bir maçı anlatıyorlar.</summary>
         private void HandleDisconnected()
         {
             _roster = null;
+            ClearAnnouncements();
         }
 
         private void HandleRespawn(RespawnMsg msg)
@@ -399,23 +579,20 @@ namespace VortexArena.Core.Audio
         }
 
         /// <summary>
-        /// Kuralın kliplerinden birini çalar; klip yoksa <c>false</c>.
-        /// <para>⚠️ Çalmadan önce duyuru kanalı <b>susturulur</b>: bunlar konuşma replikleri ve
-        /// üst üste binen iki replik ikisini birden anlaşılmaz kılar — son duyuru kazanır.
-        /// (Bir istemcide aynı anda iki replik doğuramaz; bu, kuralı yapısal kılan bir emniyet.
-        /// Aynı odada çalan İKİ İSTEMCİ'nin sesi buradan engellenemez.)</para>
+        /// Kuralın kliplerinden birini duyuru kanalına verir; klip yoksa (ya da kuyruk taştıysa)
+        /// <c>false</c>.
+        /// <para>⚠️ Kayıttan gelen duyurunun bankadan gelene karşı bir <b>ayrıcalığı yoktur</b>:
+        /// ikisi de aynı kuyruğa, geliş sırasıyla girer (<see cref="Announce"/>). "Kayıt bankayı
+        /// ezer" kuralı bir SEÇİM kuralıdır — aynı AN için iki klip varsa hangisinin çalacağını
+        /// söyler, çalmakta olanı kesme yetkisi değildir.</para>
+        /// <para>Dönüş <c>true</c> = "çalacak", ille de "şu an çalıyor" değil: sırası gelince
+        /// çalar. Çağıranın yedeğe düşme kararı için aradaki fark önemsizdir, ikisi de sesin
+        /// duyulacağı anlamına gelir.</para>
         /// </summary>
         private bool PlayRule(ModeAudioRegistry.Rule rule)
         {
             AudioClip clip = rule != null ? rule.PickClip() : null;
-            if (clip == null || _source == null)
-            {
-                return false;
-            }
-
-            _source.Stop();
-            _source.PlayOneShot(clip, Mathf.Clamp01(rule.Volume * _masterVolume));
-            return true;
+            return clip != null && Announce(clip, Mathf.Clamp01(rule.Volume * _masterVolume));
         }
 
         private void HandleMatchEnd(MatchEndMsg msg)

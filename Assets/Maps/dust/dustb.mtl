@@ -1,0 +1,648 @@
+# Blender 5.2.0 LTS MTL File: 'dust b.blend'
+# www.blender.org
+
+newmtl aztec_scaffolding_system
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd aztec_scaffolding_system_color_tga_ecfb7527.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl barricade001
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd barricade001_color_tga_f8b2fc23.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl blend_blacktopsand_01
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd blacktop_ext_01c_color_tga_6a0ecf73.png
+
+newmtl bombsite_letter_b
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd bombsite_letter_b_color_tga_29c1b8c3.png
+map_d bombsite_letter_b_color_tga_29c1b8c3.png
+
+newmtl car004b_01
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd car004b_01_color_tga_aa2d80d4.png
+map_Bump -bm 1.000000 car004b_01_rough_tga_2b8e2c6b.png
+
+newmtl composite_debris
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd composite_debris_color_tga_5494ea18.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl concrete_ext_07
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd concrete_ext_07_color_tga_dc92695a.png
+
+newmtl cs_dust_arch_window
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd cs_dust_arch_window_color_tga_2af73c8c.png
+map_d cs_dust_arch_window_color_tga_2af73c8c.png
+
+newmtl curbs001
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd curbs001_color_tga_6dc991b2.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl dome_star_window
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dome_star_window_color_tga_e0847071.png
+
+newmtl dust_aid_pallet
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dust_aid_pallet_color_tga_4667e848.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl dust_arch_small
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dust_arch_small_color_tga_2d86d198.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl dust_bombsite_gap
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dust_bombsite_gap_color_tga_d816e694.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl dust_food_crates
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dust_food_crates_color_tga_a2bd2ae8.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl dust_metal_box
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dust_metal_box_color_tga_4e3232fb.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl dust_metal_door
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dust_metal_door_color_tga_eb3841d1.png
+map_Bump -bm 1.000000 dust_metal_door_normal_tga_953c5c6b.png
+
+newmtl dust_metal_door.001
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dust_metal_door_color_tga_eb3841d1.png
+map_Bump -bm 1.000000 dust_metal_door_normal_tga_953c5c6b.png
+
+newmtl dust_palacewall01
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dust_palacewall01_color_tga_e14b540e.png
+
+newmtl dust_palacewall01_nospec
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dust_palacewall01_color_tga_e14b540e.png
+
+newmtl dust_poster3
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd dust_poster3_color_tga_c05ed811.png
+map_d dust_poster3_color_tga_c05ed811.png
+
+newmtl dutile1
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dutile1_color_tga_bd3e0073.png
+
+newmtl holes32_01
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd holes32_01_color_tga_4a2e3058.png
+map_d holes32_01_color_tga_4a2e3058.png
+
+newmtl holes64_01
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd holes64_01_color_tga_5f5984f2.png
+map_d holes64_01_color_tga_5f5984f2.png
+
+newmtl hpe_plaster_blue_wall
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd hpe_plaster_blue_wall_color_tga_20049834.png
+
+newmtl hpe_plaster_decal_decay_03
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd hpe_plaster_decal_decay_03_color_tga_360eb2d3.png
+map_d hpe_plaster_decal_decay_03_color_tga_360eb2d3.png
+
+newmtl hpe_plaster_decal_decay_04
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd hpe_plaster_decal_decay_04_color_tga_503bbe3b.png
+map_d hpe_plaster_decal_decay_04_color_tga_503bbe3b.png
+
+newmtl light_shop_off
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd light_shop_color_tga_618094aa.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl mall_trees_barks01
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd mall_trees_barks01_color_tga_4f0d24d8.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl mall_trees_branches02
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd mall_trees_branches02_color_tga_ba4eabdd.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl marblefloor06
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd marblefloor06_color_tga_26b2216a.png
+
+newmtl marketwall03
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd marketwall03_color_tga_5eb11b0e.png
+
+newmtl palace_bigdome
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd palace_bigdome_color_tga_1314211a.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl palace_pillars
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd palace_pillars_color_tga_be731bff.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl prodpipestain01
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd prodpipestain01_color_tga_5c4e1f10.png
+map_d prodpipestain01_color_tga_5c4e1f10.png
+
+newmtl rebar
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd rebar_color_tga_32cf454b.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl residbwall03
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd residbwall03_color_tga_8d3fbd7a.png
+
+newmtl residbwall03a
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd residbwall03a_color_tga_b801b9b4.png
+
+newmtl residbwall03c_bottom
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd residbwall03c_bottom_color_tga_6335065.png
+
+newmtl residbwall03c_top
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd residbwall03c_top_color_tga_99a26896.png
+
+newmtl residwall01
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd residwall01_color_tga_bd303528.png
+
+newmtl residwall01a
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd residwall01a_color_tga_428b34ec.png
+
+newmtl sandtrim2a
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd sandtrim2a_color_tga_5c544be.png
+
+newmtl sign_stop
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd sign_stop_color_tga_bf61ea6d.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl sitebwall05
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd sitebwall05_color_tga_2d2744b0.png
+
+newmtl sitebwall08
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd sitebwall08_color_tga_a55bf19c.png
+
+newmtl sitebwall10
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd sitebwall10_color_tga_e1230e00.png
+
+newmtl sitebwall13
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd sitebwall13_color_tga_abb35a95.png
+
+newmtl stonestep01
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd stonestep01_color_tga_e387420d.png
+
+newmtl stonestep02
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd stonestep02_color_tga_fcb39680.png
+
+newmtl stonestep04
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd stonestep04_color_tga_ba94529c.png
+
+newmtl stonewall02b
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd stonewall02b_color_tga_8d9ba62d.png
+
+newmtl telephone_pole001
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd telephone_pole001_color_tga_2d1893e5.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl templewall03
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd templewall03_color_tga_6f9ab8ae.png
+
+newmtl tilefloor01
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd tilefloor01_color_tga_c1f1cdcf.png
+
+newmtl tilefloor02
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd tilefloor02_color_tga_a7eb8e45.png
+
+newmtl urban_palm_trunkdust_animated
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd urban_palm_trunkdust_color_tga_683c122b.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl urban_trees_branches03_animated
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd urban_trees_branches03_color_tga_bb9144d4.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl wall_stain001
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd wall_stain001_color_tga_90a797b9.png
+map_d wall_stain001_color_tga_90a797b9.png
+
+newmtl wcrate_64x64_dirt
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd wcrate_64x64_dirt_color_tga_dc6b46c5.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl window_palace
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd window_palace_color_tga_95eeb195.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl window_palace_interior
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd window_palace_interior_color_tga_339b5f7c.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
+
+newmtl wirepipe
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd wirepipe_color_tga_67c096ab.png
+map_Bump -bm 1.000000 default_normal_tga_7be39f77.png
