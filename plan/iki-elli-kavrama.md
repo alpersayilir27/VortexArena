@@ -26,10 +26,11 @@ davranır.
 `Tools > VortexArena > Development > Dev` → **Rol: Silah** → silahı seç → Play
 (tam reçete: `Docs/Gelistirici/Yemek-Kitabi.md` §11.0):
 
-1. Kumandaları **bırak** (ölçüm el takibiyle yapılır).
+1. Tercihen kumandaları **bırak**: parmaklarının kabzaya nereye oturduğunu ancak el takibiyle
+   görürsün. Zorunlu değil — kumanda kipinde de ölçülecek bir bilek vardır.
 2. Sırayla dört ölçü: ana kabza sağ → ana kabza sol → ön kabza sağ → ön kabza sol.
-3. Her aşamada eli tutacağın yere getir, **pinch** yap, 5 sn'lik sayaç boyunca elini açıp kabzayı
-   sar; sayaç bitince ölçü `WD_*.asset`'e iner.
+3. Her aşamada eli tutacağın yere getir, sayacı başlat (**pinch** ya da **kumanda tetiği**),
+   5 sn'lik sayaç boyunca elini açıp kabzayı sar; sayaç bitince ölçü `WD_*.asset`'e iner.
 4. Dördü de yakalanmalı: eksik el öteki elin kaydına düşer ve o el silahı yanlış tutar.
 
 Kapsam: `WeaponKitBuilder` tablosundaki **tüm** `WPN_*`'lar; hangilerinin eksik olduğunu

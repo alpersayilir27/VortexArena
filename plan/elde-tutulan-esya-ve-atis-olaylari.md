@@ -22,7 +22,8 @@ Kavrama sayı girerek değil **gözlükle** ölçülüyor: silahı gerçek elinl
 
 1. `Tools > VortexArena > Development > Dev` → **Rol: Silah** → ölçülecek `WD_*`'ı seç → Play.
 2. Kumandaları **bırak** — ölçüm el takibiyle yapılır.
-3. Silah kafanın karşısında donar; ona yaklaş, elini tutacağın yere getir ve **pinch** yap.
+3. Silah kafanın karşısında donar; ona yaklaş, elini tutacağın yere getir ve sayacı başlat
+   (**pinch** ya da **kumanda tetiği** — ikisi de geçerli).
 4. 5 sn'lik sayaç boyunca elini açıp kabzayı sar; sayaç bitince ölçü yazılır ve sıra bir sonraki
    aşamaya geçer.
 5. Dört aşama: ana kabza sağ → ana kabza sol → ön kabza sağ → ön kabza sol.
@@ -37,7 +38,7 @@ Kavrama sayı girerek değil **gözlükle** ölçülüyor: silahı gerçek elinl
   kaydına düşer — çalışır ama yanlış tutar.
 - ⚠️ **Silahın dönüşü ayarlanmaz** (kimlik = kumanda anchor'ı). Silah elde yatık görünüyorsa
   bakılacak yer kavrama kaydı değil, prefabtaki `Model` yerleşimidir.
-- ⚠️ Sayaç pinch bırakılınca iptal olmaz; ölçülen el **sayaç bittiğindeki** eldir.
+- ⚠️ Sayaç girdi bırakılınca iptal olmaz; ölçülen el **sayaç bittiğindeki** eldir.
 - ⚠️ `WeaponKitBuilder` kavrama kayıtlarını **ezmez**; koşu sonunda kavraması yakalanmamış silahları
   listeler, eski `GripSocket_*` işaretçilerini, `GripPoses` ağacını ve prefabta kalmış
   `Hands/Hand_*` rig'ini siler. `netItemId`/`holdMode` tablodan gelir ve EZİLİR.

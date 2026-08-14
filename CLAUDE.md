@@ -557,10 +557,14 @@ sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silaht
 ⚠️ **Kavrama ELLE YAZILMAZ, gözlükle YAKALANIR:** `Tools > VortexArena > Development > Dev` →
 rol **Silah** + `WD_*` seç → Play (doğrudan `WeaponCalibration` sahnesi açılır, sunucuya
 bağlanılmaz). Silah kafanın karşısında donar, sen ona yaklaşırsın; elini tutacağın yere getirip
-**pinch** yaparsın, 5 sn'lik geri sayım bitince bileğin **silaha göre** pozu `WD_*.asset`'e yazılır.
+**pinch** (baş + işaret parmağının UÇLARINI değdirmek) **ya da kumanda tetiği** ile sayacı
+başlatırsın; 5 sn'lik geri sayım bitince bileğin **silaha göre** pozu `WD_*.asset`'e yazılır.
 Sıra sabittir: ana kabza sağ → ana kabza sol → ön kabza sağ → ön kabza sol.
-⚠️ **Kumanda değil EL TAKİBİ gerekir** (kumandaları bırak). ⚠️ **Sayaç pinch bırakılınca İPTAL
-OLMAZ ve edilmez** — sayacın var olma sebebi tam olarak pinch'ten sonra elini açıp kabzayı sarmandır.
+⚠️ **Başlatma girdisi ölçünün parçası DEĞİLDİR** — ölçü, sayaç bittiğinde okunan bileğin pozudur ve
+o bilek iki kipte de aynı kaynaktan gelir. Tek girdiye bağlama: el izlemesi o an akmadığında araç
+tümden başlatılamaz olur. El takibi yine de **tercih edilir** (parmaklarının kabzaya nereye
+oturduğunu görürsün), kumanda kipi geçerli bir yedektir. ⚠️ **Sayaç girdi bırakılınca İPTAL OLMAZ
+ve edilmez** — var olma sebebi tam olarak, başlattıktan sonra elini açıp kabzayı sarmandır.
 ⚠️ **Kayıt EL BAŞINADIR** (`primaryGripRight/Left`, `secondaryGripRight/Left`): kabza simetrik
 olmadığı için iki elin bileği silahın farklı yerlerine düşer, tek kayıttan aynalamak sol eli silahın
 içine sokar. Dördü de **aynı uzaydadır** (bileğin eşyaya göre yerel pozu, METRE ve ölçeksiz);
