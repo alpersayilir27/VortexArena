@@ -7,8 +7,16 @@ namespace VortexArena.Core.Arena
     /// <summary>
     /// Free-roam arena guard for a physical play space. The player moves 1:1 with their real body;
     /// this component watches the HMD position in the arena's local space and fades the screen —
-    /// gently as the player nears the edge, to black once they step outside — plus shows a warning.
+    /// gently as the player nears the edge, to <b>full black</b> the moment they step outside —
+    /// plus shows a warning and pulses the controllers.
     /// Attach to an object positioned inside the arena, aligned with the arena's rotation.
+    /// <para>
+    /// <b>Alanın dışı, engelin içiyle AYNI sunumdur</b> (<c>ObstacleViolationProbe</c>): tam
+    /// karartma + nabız titreşimi + karartmanın üstünde uyarı yazısı. İkisi de tek bir kuralın iki
+    /// yüzü — <i>görüş oynanabilir alanın dışındaysa ekran kapanır</i> — ve ikisi de aynı iki
+    /// hakemden geçer (<see cref="ScreenFade"/>, <see cref="ControllerHaptics"/>).
+    /// ⚠️ Fark <b>cezadadır, sunumda değil</b>: alan dışı CAN GÖTÜRMEZ (§10.9), engel götürür.
+    /// </para>
     /// <para>
     /// <b>Arena ölçüsünün TEK kaynağı <see cref="dimensionsJson"/>'dur</b> (boyut dosyası,
     /// <see cref="ArenaDimensions"/> olarak çözülür). Alan dikdörtgen bile olsa dört köşeli bir
@@ -58,15 +66,26 @@ namespace VortexArena.Core.Arena
         [SerializeField] private float warnDistance = 1f;
         [Tooltip("Fade alpha reached exactly AT the boundary (approach warning ceiling).")]
         [SerializeField] private float warnFadeAlpha = 0.35f;
-        [Tooltip("Meters past the boundary at which the blackout is fully opaque.")]
-        [SerializeField] private float fadeOutsideDistance = 0.3f;
-        [SerializeField] private float maxFadeAlpha = 0.96f;
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private MaterialPropertyBlock propertyBlock;
 
         /// <summary>Bu bileşenin <see cref="ScreenFade"/>'deki kaynak kimliği.</summary>
         private const string FadeSourceId = "boundary";
+
+        /// <summary>Bu bileşenin <see cref="ControllerHaptics"/>'teki kaynak kimliği.</summary>
+        private const string HapticSourceId = "boundary";
+
+        /// <summary>
+        /// Sınır aşıldığında çizilen karartma. ⚠️ <b>Ayarlanabilir DEĞİLDİR</b> — ne bir tavan alanı
+        /// (0.96 gibi) ne de dışarıda ikinci bir mesafe rampası geri eklenir: alanın dışı, engelin
+        /// içiyle aynı sorudur. Orada görülecek meşru bir şey yoktur ve yüzde birkaçlık bir
+        /// saydamlık bile perdenin öbür yüzünü <b>okunabilir</b> bırakır — arenanın dışından içeri
+        /// bakmak tam olarak istismarın kendisidir. Değer engel karartmasıyla birebir aynıdır
+        /// (<c>ObstacleViolationProbe</c>), çünkü ikisi tek bir kural: <i>görüş oyun alanının
+        /// dışındaysa ekran kapanır.</i>
+        /// </summary>
+        private const float OutsideFadeAlpha = 1f;
 
         /// <summary>
         /// Sahnedeki muhafaza — <b>ilk etkinleşen örnek</b>. Sahnede tek muhafaza vardır
@@ -244,6 +263,8 @@ namespace VortexArena.Core.Arena
         {
             if (spectatorMode)
             {
+                // ⚠️ Titreşim de bildirilmez ve bu doğru olandır: hakemin kalp atışı sözleşmesi
+                // gereği susan kaynak kendiliğinden düşer (admin'in kumandası zaten yok).
                 return; // muhafaza susuyor
             }
 
@@ -257,6 +278,7 @@ namespace VortexArena.Core.Arena
                 // ⚠️ Kendi alfası 0 ama çizim yine YAPILIR: quad'ın öbür kaynağı (engel ihlali)
                 // muhafazanın kurulum hatasından etkilenmemeli.
                 DrawFade(0f);
+                ReportHaptics(false);
                 if (warningText != null && warningText.gameObject.activeSelf)
                     warningText.gameObject.SetActive(false);
                 return;
@@ -265,6 +287,7 @@ namespace VortexArena.Core.Arena
             if (head == null)
             {
                 DrawFade(0f);
+                ReportHaptics(false);
                 return;
             }
 
@@ -273,9 +296,30 @@ namespace VortexArena.Core.Arena
             IsOutOfBounds = edgeDistance < 0f;
 
             DrawFade(FadeAlphaFor(edgeDistance));
+            ReportHaptics(IsOutOfBounds);
             if (warningText != null && warningText.gameObject.activeSelf != IsOutOfBounds)
                 warningText.gameObject.SetActive(IsOutOfBounds);
         }
+
+        /// <summary>
+        /// Alan dışındayken kumandaların nabız titreşimi — <b>karartmayla aynı kapıdan</b>: kararan
+        /// ekran tek başına "ne oldu" sorusunu doğuruyor, nabız ona "alanın dışındasın, geri dön"
+        /// cevabını veriyor.
+        /// <para>
+        /// ⚠️ Kapı <b>yaklaşma rampası değil, sınırın kendisidir</b>: rampa bir uyarıdır ve
+        /// oyuncunun alan içinde kalmasına izin verir; titreşim ise ihlalin karşılığıdır. Aynı
+        /// ayrım karartmada da var (rampa ≠ tam karartma).
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Motor doğrudan sürülmez</b> (<see cref="OVRInput.SetControllerVibration"/>
+        /// çağrılmaz): aynı titreşimi engel ihlali de istiyor ve ikisi aynı anda doğru olabiliyor —
+        /// muhafaza sahnedeki <see cref="ArenaObstacle"/>'ları da alan dışı sayar. Hakem
+        /// (<see cref="ControllerHaptics"/>) <see cref="ScreenFade"/> ile birebir aynı sözleşmeyi
+        /// uygular; nabzın frekansı ve genliği orada durur, burada tekrarlanmaz.
+        /// </para>
+        /// </summary>
+        private void ReportHaptics(bool outside) =>
+            ControllerHaptics.ReportPulse(HapticSourceId, outside);
 
         /// <summary>
         /// Muhafazanın karartma isteğini <see cref="ScreenFade"/>'e bildirir ve <b>kazananı</b>
@@ -302,26 +346,32 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Karartma alfası: içeride yaklaşma rampası, dışarıda tam karartmaya giden rampa.
+        /// Karartma alfası: <b>içeride</b> yaklaşma rampası, <b>dışarıda</b> kademesiz tam
+        /// karartma.
         /// <para>
-        /// İki dal sınırda (<paramref name="edgeDistance"/> = 0) aynı değeri —
-        /// <see cref="warnFadeAlpha"/> — verdiği için geçiş SÜREKLİDİR. Bu, kaldırılan yarı saydam
-        /// duvarın yerini alan tek uyarı kanalıdır: oyuncu sınırı geçmeden önce uyarılmalı, aksi
-        /// hâlde gerçek duvara çarptıktan sonra haberi olurdu.
+        /// Yaklaşma rampası (<see cref="warnDistance"/> → <see cref="warnFadeAlpha"/>) kaldırılan
+        /// yarı saydam duvarın yerini alan tek uyarı kanalıdır: oyuncu sınırı geçmeden önce
+        /// uyarılmalı, aksi hâlde gerçek duvara çarptıktan sonra haberi olurdu.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Sınırda geçiş bilinçli olarak SÜREKSİZDİR:</b> sınır aşıldığı an alfa
+        /// <see cref="OutsideFadeAlpha"/>'ya sıçrar, dışarıda ikinci bir rampa YOKTUR.
+        /// Gerekçe engel karartmasının aynısı — dış rampa birkaç kare boyunca yarı saydam bir perde
+        /// çizer, yani alanın dışına çıkan oyuncu içeriyi <b>okuyabilir</b> kalır ve arenanın
+        /// dışından içeri bakmak tam olarak istismarın kendisidir. Bedeli, sınır çizgisine tam
+        /// oturan bir kafanın izleme titremesiyle 0.35 ile 1.0 arasında gidip gelmesidir; karşılığı
+        /// dışarıdan görüşün tümden kapanmasıdır.
         /// </para>
         /// </summary>
         private float FadeAlphaFor(float edgeDistance)
         {
-            if (edgeDistance >= 0f)
+            if (edgeDistance < 0f)
             {
-                float warn = warnDistance > 0f ? Mathf.Clamp01(1f - edgeDistance / warnDistance) : 0f;
-                return warn * warnFadeAlpha;
+                return OutsideFadeAlpha;
             }
 
-            float outside = fadeOutsideDistance > 0f
-                ? Mathf.Clamp01(-edgeDistance / fadeOutsideDistance)
-                : 1f;
-            return Mathf.Lerp(warnFadeAlpha, maxFadeAlpha, outside);
+            float warn = warnDistance > 0f ? Mathf.Clamp01(1f - edgeDistance / warnDistance) : 0f;
+            return warn * warnFadeAlpha;
         }
 
         // -------------------------------------------------------------- mesafe hesabı

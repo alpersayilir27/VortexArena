@@ -191,6 +191,8 @@ namespace VortexArena.Core.Audio
             NetEvents.OnCountdown += HandleCountdown;
             NetEvents.OnLobbyState += HandleLobbyState;
             NetEvents.OnDisconnected += HandleDisconnected;
+            NetEvents.OnLoadMatch += HandleLoadMatch;
+            NetEvents.OnReturnToLobby += HandleReturnToLobby;
         }
 
         private void OnDestroy()
@@ -207,6 +209,8 @@ namespace VortexArena.Core.Audio
             NetEvents.OnCountdown -= HandleCountdown;
             NetEvents.OnLobbyState -= HandleLobbyState;
             NetEvents.OnDisconnected -= HandleDisconnected;
+            NetEvents.OnLoadMatch -= HandleLoadMatch;
+            NetEvents.OnReturnToLobby -= HandleReturnToLobby;
 
             Instance = null;
         }
@@ -446,6 +450,41 @@ namespace VortexArena.Core.Audio
             ClearAnnouncements();
         }
 
+        /// <summary>
+        /// Yeni bir maç kuruldu (operatör <c>start_match</c>): önceki maçın duyuruları düşer.
+        /// <para>
+        /// ⚠️ <b>Koşan bir maçın üstüne basılan "başlat" da buradan geçer</b> ve asıl gerekçe odur:
+        /// biten turun repliği ("tur sona erdi, mevzilerinize dönün") sırada beklerken ya da
+        /// çalarken operatör maçı yeniden kurabiliyor — o replik artık var olmayan bir turu
+        /// anlatır. Faz kapısı (<see cref="IsRoundEnd"/>) bunu yakalayamaz: ses zaten <b>daha
+        /// önce</b>, turun gerçekten bittiği anda doğmuştur.
+        /// </para>
+        /// <para>
+        /// Faz geçmişi de sıfırlanır: yeni maçın ilk <c>match_state</c>'i her zaman bir duraklama
+        /// olduğu için (<c>loading</c>) bu, maç başlangıcı sesini geciktirmez — yalnız iki AYRI
+        /// maçın fazları arasında bir geçiş okunmasını yapısal olarak imkânsız kılar.
+        /// </para>
+        /// </summary>
+        private void HandleLoadMatch(LoadMatchMsg msg)
+        {
+            ResetForNewMatch();
+        }
+
+        /// <summary>Lobiye dönüldü (§10.7) — maç yok, bekleyen duyurunun anlatacağı bir şey de yok.</summary>
+        private void HandleReturnToLobby(ReturnToLobbyMsg msg)
+        {
+            ResetForNewMatch();
+        }
+
+        /// <summary>Duyuru kanalını ve faz geçmişini yeni bir maça hazırlar.</summary>
+        private void ResetForNewMatch()
+        {
+            ClearAnnouncements();
+            _lastPhase = "";
+            _lastTimeRemaining = -1f;
+            _warningFired = false;
+        }
+
         private void HandleRespawn(RespawnMsg msg)
         {
             int local = ArenaCombat.LocalPlayerId;
@@ -509,6 +548,13 @@ namespace VortexArena.Core.Audio
         /// <para>
         /// ⚠️ <c>modeState</c> <b>ayrıştırılmaz</b> (<c>"regroup:2/6"</c>): serbest bir stringdir ve
         /// çekirdek onu yorumlamaz (§10.1) — modun yazdığı metni değiştirmesi sesi susturmamalı.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Gerekçeyi aramanın asıl sebebi operatördür:</b> duraklamanın tek kaynağı mod
+        /// değil. Koşan maçın üstüne <c>start_match</c> (gerekçe <c>loading</c>), elle duraklatma
+        /// (<c>operator</c>), <c>abort_match</c>/<c>return_to_lobby</c> (<c>lobby</c>) — üçü de
+        /// <c>playing</c> → <c>paused</c> geçişidir ve hiçbirinde tur DOĞAL yoldan bitmemiştir.
+        /// Yalnız faza bakan bir kapı üçünde de "tur sona erdi" derdi.
         /// </para>
         /// <para>
         /// İlk <c>match_state</c>'te (<paramref name="previousPhase"/> boş) tetiklenmez: turlar

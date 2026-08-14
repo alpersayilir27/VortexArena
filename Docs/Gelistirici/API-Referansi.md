@@ -200,7 +200,12 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 ### ArenaBoundary
 
 Fiziksel sınır uyarısını sürer: kenara `warnDistance` kala karartma quad'ında hafif bir rampa
-başlar (`warnFadeAlpha`), sınır aşılınca tam karartmaya gider + uyarı yazısı. Sahneye
+başlar (`warnFadeAlpha`), sınır aşıldığı **an** ekran kademesiz olarak **tam siyah** olur + uyarı
+yazısı belirir + kumandalar nabız atar. ⚠️ Sınır aşıldıktan sonra ikinci bir mesafe rampası (ve
+ayarlanabilir bir karartma tavanı) **YOKTUR**: alanın dışı, engelin içiyle aynı sorudur — yüzde
+birkaçlık saydamlık bile perdenin öbür yüzünü okunabilir bırakır ve dışarıdan içeri bakmak
+istismarın kendisidir. Titreşim `ControllerHaptics` hakeminden geçer, motor doğrudan sürülmez.
+Sahneye
 **`VA_ArenaBoundary`** prefabının örneği olarak konur ve sahnede **bir tane** olmalı. **Ağ koordinatlarının sıfırı bu bileşende DEĞİLDİR** (o dünya orijinidir): muhafazayı
 büyütmek/kaydırmak koordinatları oynatmaz.
 
@@ -217,7 +222,7 @@ büyütmek/kaydırmak koordinatları oynatmaz.
 | ✅ `HalfExtents` | Arena yarı ölçüsü — plandaki çokgenin sınırlayıcı kutusundan gelir (plan yoksa sıfır) |
 | ✅ `LocalCenter` | O kutunun yerel merkezi — admin kuş bakışı kadrajı bunu okur. ⚠️ Ölçü genellikle bir köşeden alınır, yani kutu transformun tam ortasında DEĞİLDİR: kadrajlarken `HalfExtents` tek başına yetmez |
 | ✅ `TopDownHeight` | Admin kuş bakışı kamerasının zeminden yüksekliği (boyut dosyasının `topViewHeight`'ı; 0 = kamera kendi varsayılanını kullanır). Ortografik kamerada kadrajı DEĞİL yalnız çatının/yüksek objelerin üstünde kalmayı belirler. Kamera dosyayı kendisi açmaz — JSON'u çözen tek yer bu bileşendir |
-| ✅ `SetSpectatorMode(bool)` | Muhafazayı susturur (karartma + uyarı kapanır) ama bileşeni ayakta tutar — kuş bakışı kadrajı `HalfExtents`/`LocalCenter`'ı okumaya devam ediyor |
+| ✅ `SetSpectatorMode(bool)` | Muhafazayı susturur (karartma + uyarı + titreşim kapanır) ama bileşeni ayakta tutar — kuş bakışı kadrajı `HalfExtents`/`LocalCenter`'ı okumaya devam ediyor |
 | ✅ `TryGetCalibrationMarks(out Vector3 a, out Vector3 b)` | Zemin bandının iki noktası, **dünya** uzayında ve zemin seviyesinde. Dosyada nokta yoksa `false`. `ArenaCalibrator` işaretçilerini bununla konumlandırır — boyut dosyasını iki kere çözen ikinci bir okuyucu olmasın diye |
 
 Ölçünün **tek kaynağı** `dimensionsJson` alanına bağlanan boyut dosyasıdır (`ArenaDimensions`);
