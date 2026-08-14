@@ -220,11 +220,11 @@ namespace VortexArena.Core.Combat
         /// <summary>Ateş sesi seviyesi (0-1).</summary>
         public float FireVolume => fireVolume;
 
-        // ⚠️ GrantedHoldPosition/GrantedHoldRotation KALDIRILDI (v4 refactor'ünün geçici köprüsüydü).
-        // Duruşun tek adı ItemDefinition.PrimaryGripPosition/PrimaryGripRotation'dır ve tek olmak
-        // ZORUNDA: "verilen silahın duruşu" ile "uzak tarafta çizilen duruş" aynı ölçüdür, ikinci
-        // bir ad kaçınılmaz olarak birinin güncellenip diğerinin unutulmasıyla sonuçlanırdı.
-        // Kavrama artık sahne silahı ile verilen silah için tek kural (Weapon.ApplyCanonicalGrip).
+        // ⚠️ Duruş için burada ALAN YOKTUR ve açılmaz: tek adı ItemDefinition'daki yakalanmış
+        // kavramadır (GetGrip / PrimaryGripPosition(bool)) ve tek olmak ZORUNDA — "verilen silahın
+        // duruşu" ile "uzak tarafta çizilen duruş" aynı ölçüdür, ikinci bir ad kaçınılmaz olarak
+        // birinin güncellenip diğerinin unutulmasıyla sonuçlanır. Sahne silahı ile verilen silah da
+        // tek kuraldan geçer (Weapon.ApplyCanonicalGrip).
 
         /// <summary>İki atış arası en kısa süre (saniye).</summary>
         public float SecondsPerShot => 60f / Mathf.Max(1f, fireRateRpm);

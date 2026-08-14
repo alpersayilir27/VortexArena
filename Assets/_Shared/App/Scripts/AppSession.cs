@@ -15,8 +15,26 @@ namespace VortexArena.App
         public const string RolePlayer = "player";
         public const string RoleAdmin = "admin";
 
+        /// <summary>
+        /// Silah kavraması yakalama rolü — <b>yalnız editör</b>. Ne oyuncu ne gözlemcidir:
+        /// build'e girmez, sunucuya bağlanmaz, maç/kalibrasyon akışına hiç katılmaz; tek işi
+        /// gözlükte el takibiyle silahın kavrama pozunu yazmaktır.
+        /// <para>⚠️ Sahnesi (<see cref="SceneWeaponCalibration"/>) <b>Build Settings'e KONMAZ</b> —
+        /// oynanan bir içerik değildir ve katalogda yeri yoktur. Play'e
+        /// <c>EditorSceneManager.playModeStartScene</c> ile doğrudan o sahneden girilir
+        /// (<c>DevBootstrap</c>). Bunun sonucu: <see cref="AppBoot"/> bu rolü yükleyemez ve
+        /// yüklemeye ÇALIŞMAZ — Boot'a düşülmesi zaten yanlış bir yoldan gelindiği anlamına gelir.</para>
+        /// </summary>
+        public const string RoleWeapon = "weapon";
+
         public const string SceneBoot = "Boot";
         public const string SceneLobby = "Lobby";
+
+        /// <summary>
+        /// Silah kavrama kalibrasyonunun boş sahnesi. ⚠️ Build Settings'te YOKTUR ve eklenmez
+        /// (gerekçe <see cref="RoleWeapon"/>); editörde asset adından bulunur.
+        /// </summary>
+        public const string SceneWeaponCalibration = "WeaponCalibration";
 
         public static string Role = RolePlayer;
         public static bool RoleResolved;

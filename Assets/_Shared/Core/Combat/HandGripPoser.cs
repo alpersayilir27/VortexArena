@@ -1,6 +1,4 @@
 using System.Collections.Generic;
-using Oculus.Interaction;
-using Oculus.Interaction.HandGrab;
 using Oculus.Interaction.Input;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -8,9 +6,9 @@ using UnityEngine.SceneManagement;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Elde tutulan silahın kavrama pozunu ISDK'nın <b>sentetik eline</b> uygular: parmaklar silaha
-    /// sarılır, bilek kavrama noktasına kilitlenir. Oyuncunun gözlükte gördüğü el budur
-    /// (<c>OVRHandVisualLeft/Right</c> bu sentetik elden sürülüyor).
+    /// Elde tutulan silahın <b>yakalanmış</b> kavramasını ISDK'nın <b>sentetik eline</b> uygular:
+    /// bilek kavrama noktasına kilitlenir, parmaklar izlemeye/kumandaya bırakılır. Oyuncunun
+    /// gözlükte gördüğü el budur (<c>OVRHandVisualLeft/Right</c> bu sentetik elden sürülüyor).
     /// <para>
     /// ⚠️ <b>Silahın pozuna DOKUNMAZ.</b> Silahın dünya pozunun tek yazarı
     /// <c>Weapon.ApplyCanonicalGrip</c> + <see cref="ItemGripSolver"/>'dır; bu sınıf yalnız ELİ sürer.
@@ -53,6 +51,21 @@ namespace VortexArena.Core.Combat
         private const string SyntheticHandNodeName = "SyntheticHandData";
 
         public static HandGripPoser Instance { get; private set; }
+
+        /// <summary>
+        /// Poz UYGULAMASI askıya alındı mı (el çözümü ve delta ölçümü koşmaya devam eder).
+        /// <para>
+        /// ⚠️ <b>Kavrama kalibrasyonu bunu açmak ZORUNDA:</b> orada sentetik el HAM izlemeyi
+        /// göstermeli — idle kilidi parmakları dondurur, yani oyuncu pinch yaptığını elinde
+        /// göremez ve ölçtüğü kavramanın gerçekten o duruş olduğuna güvenemez.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>El çözümünü ve <see cref="TryGetAnchorToWrist"/> ölçümünü DURDURMAZ</b>: askıdayken
+        /// de bilek okunabilmeli (<see cref="TryGetTrackedWrist"/>), yoksa kalibrasyon ikinci bir
+        /// okuma yolu açmak zorunda kalır ve iki uç sessizce sapardı.
+        /// </para>
+        /// </summary>
+        public static bool Suspended { get; set; }
 
         private SyntheticHand _left;
         private SyntheticHand _right;
@@ -140,8 +153,8 @@ namespace VortexArena.Core.Combat
         /// Kumanda anchor'ından <b>izlenen bileğe</b> olan sabit delta (anchor uzayında, metre);
         /// ölçülemiyorsa <c>false</c>.
         /// <para>
-        /// <b>Ne işe yarar:</b> silahın eldeki duruşunun tek yazılı kaynağı prefabtaki kavrama poz
-        /// düğümüdür (<c>GripPoses/Pose_*</c>) ve o düğüm bileği <b>silaha göre</b> tarif eder. Silahın
+        /// <b>Ne işe yarar:</b> silahın eldeki duruşunun tek yazılı kaynağı tanımdaki yakalanmış
+        /// kavramadır (<see cref="ItemGripCapture"/>) ve o, bileği <b>silaha göre</b> tarif eder. Silahın
         /// dünya pozunu çözen taraf ise elin ANCHOR pozunu biliyor. İki uç arasındaki köprü bu
         /// deltadır: <c>bilekDünya = anchor ∘ delta</c>. Onsuz kavrama tahmin sabitlerine düşer.
         /// </para>
@@ -181,6 +194,47 @@ namespace VortexArena.Core.Combat
 
             delta = instance._anchorToWristLeft;
             return instance._hasAnchorToWristLeft;
+        }
+
+        /// <summary>
+        /// İzlenen bileğin <b>DÜNYA</b> pozu; okunamıyorsa <c>false</c>.
+        /// <para>
+        /// ⚠️ <b>Kavrama kalibrasyonunun ölçtüğü bilek ile oyunun kullandığı bilek AYNI kaynaktan
+        /// okunmak zorunda</b> (aynı sentetik el, aynı izleme→dünya çevirisi): ikinci bir okuma yolu
+        /// açmak, iki ucun sessizce sapması ve yakalanan kavramanın oyunda birkaç santim kaymış
+        /// olarak uygulanması demekti.
+        /// </para>
+        /// <para><see cref="Suspended"/> iken de çalışır — el çözümü ve ölçüm askıdan bağımsızdır,
+        /// yalnız poz UYGULAMASI atlanır.</para>
+        /// </summary>
+        public static bool TryGetTrackedWrist(bool rightHand, out Pose worldWrist)
+        {
+            worldWrist = default;
+
+            HandGripPoser instance = Instance;
+            if (instance == null)
+            {
+                return false;
+            }
+
+            return TryReadSourceWrist(rightHand ? instance._right : instance._left, out worldWrist);
+        }
+
+        /// <summary>
+        /// Önbellekteki sentetik el (rig yoksa / henüz bağlanmadıysa <c>null</c>).
+        /// <para>El çözümünün TEK yolu bu sınıftır (<see cref="Scan"/>); ihtiyacı olan taraf
+        /// (kalibrasyon, elin kendi <c>IHand</c>'ini okuyanlar) kendi aramasını açmasın diye
+        /// buradan verilir.</para>
+        /// </summary>
+        public static SyntheticHand GetSynthetic(bool rightHand)
+        {
+            HandGripPoser instance = Instance;
+            if (instance == null)
+            {
+                return null;
+            }
+
+            return rightHand ? instance._right : instance._left;
         }
 
         /// <summary>Bir elin deltasını tazeler; ölçülemezse o elin bayrağını düşürür.</summary>
@@ -274,10 +328,11 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// Bir elin bir karelik durumu: o eli kullanan silah varsa pozunu, yoksa <b>idle</b> duruşunu
         /// uygular.
-        /// <para>⚠️ Boştaki el izlemeye BIRAKILMAZ (§6.9 ile aynı gerekçe): parmakların duruşu
-        /// oyuncunun ekranında da uzak ekranlarda da tek bir tanımdan gelmeli. Bırakılsaydı oyuncu
-        /// kendi elini tetiğe basınca kıvrılırken görür, başkaları ise sabit idle duruşunda
-        /// görürdü.</para>
+        /// <para>⚠️ <b>Boştaki el ile silah tutan el burada AYRIŞIR:</b> boş el örneklenmiş idle'a
+        /// kilitlenir (elinde hiçbir şey yokken kumandanın tuşlarına basmak parmakları oynatmasın),
+        /// silah tutan elin parmakları ise serbest bırakılır — kavrama ve tetik zaten kumandadan
+        /// geliyor. İkisini aynı kurala bağlamak, ya boş eli tuşlarla oynatır ya silahı tutan eli
+        /// dondururdu.</para>
         /// </summary>
         private void TickHand(OVRInput.Controller hand, bool rightHand, ref SyntheticHand cached,
             ref bool locked, ref Quaternion[] idle)
@@ -291,24 +346,37 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // ⚠️ Delta, pozu uygulamadan ÖNCE ölçülür: aşağıdaki Apply bileği kilitliyor ve ölçünün
-            // kaynağı kilitten etkilenmese de sıra bunu okuyanın kafasında da net kalsın.
+            // ⚠️ Delta, pozu uygulamadan ÖNCE ve ASKIDAN BAĞIMSIZ ölçülür: kalibrasyon askıdayken de
+            // bilek okuyabilmeli (Suspended notu), ölçünün kaynağı zaten kilitten etkilenmiyor.
             RefreshAnchorToWrist(synthetic, hand, rightHand);
 
-            Weapon weapon = FindWeaponUsing(hand, out GripSocketKind kind);
-            HandGrabPose pose = weapon != null
-                ? ItemGripPoses.Find(weapon.transform, kind, rightHand)
-                : null;
-
-            if (weapon != null && pose == null)
+            if (Suspended)
             {
-                // Pozu olmayan silah: el idle'a düşer (kavrama pozu yazılmamış demektir).
+                // Askıda el HAM izlemeye bırakılır: kalan kilit çözülmezse parmaklar donuk kalır ve
+                // kalibrasyonu yapan kişi kendi pinch'ini göremez.
+                if (locked)
+                {
+                    synthetic.FreeWrist();
+                    locked = false;
+                }
+
+                synthetic.FreeAllJoints();
+                return;
+            }
+
+            Weapon weapon = FindWeaponUsing(hand, out GripSocketKind kind);
+            ItemDefinition definition = weapon != null ? weapon.Definition : null;
+            bool hasGrip = definition != null && definition.HasGrip(kind, rightHand);
+
+            if (weapon != null && !hasGrip)
+            {
+                // Kavraması yakalanmamış silah: el idle'a düşer.
                 WarnMissingPose(weapon, kind, rightHand);
             }
 
-            if (pose != null)
+            if (hasGrip)
             {
-                Apply(synthetic, weapon, pose);
+                Apply(synthetic, weapon.transform, definition.GetGrip(kind, rightHand));
                 locked = true;
                 return;
             }
@@ -421,8 +489,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Pozu sentetik ele yazar: bilek dünya pozuna kilitlenir, parmak eklemleri pozun
-        /// rotasyonlarını alır.
+        /// Yakalanmış kavramayı sentetik ele yazar: <b>yalnız BİLEK</b> silahın üstündeki noktaya
+        /// kilitlenir.
         /// <para>
         /// ⚠️ <b>Kilit KOŞULSUZDUR</b> — mesafe/açı kapısı yoktur ve eklenmez. Takas bilinçli:
         /// bedeli, fiziksel kumanda silahın kavrama noktasından uzaklaştığında elin kolla arasının
@@ -431,47 +499,34 @@ namespace VortexArena.Core.Combat
         /// yapmadan bırakır ve "silahı iki elle tuttum ama ikinci el havada" hissi üretir.
         /// </para>
         /// <para>
-        /// ⚠️ <b><see cref="SyntheticHand.OverrideAllJoints"/> TEK BAŞINA hiçbir şey yapmaz:</b>
-        /// yalnız hedef rotasyonları saklar; eklem serbestlik seviyesi <c>Free</c> kaldığı sürece
-        /// ISDK izlenen parmakları aynen geçirir. Parmakların gerçekten sarılması için serbestlik
-        /// seviyesinin de yazılması gerekir (ISDK'nın kendi <c>HandGrabStateVisual.UpdateFingers</c>'ı
-        /// da bu ikiliyi birlikte kullanır).
+        /// ⚠️ <b>PARMAKLARA POZ YAZILMAZ</b> (<c>OverrideAllJoints</c> çağrılmaz): parmak duruşu
+        /// artık authored bir veri değildir. Kumanda kipinde
+        /// (<c>controllerDrivenHandPosesType = Natural</c>) grip tuşu parmakları zaten kapatır,
+        /// tetik parmağı da ateş ederken kendi kıvrılır — yazılmış bir duruş bunların ikisini de
+        /// öldürür ve el silahın üstünde donuk kalırdı.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Serbestlik POZUN KENDİSİNDEN okunur</b> (<see cref="HandPose.FingersFreedom"/>), beş
-        /// parmağa koşulsuz <see cref="JointFreedom.Locked"/> YAZILMAZ. Sebep tetik parmağıdır: kilitli
-        /// bir işaret parmağı ateş ederken kıpırdamaz, yani oyuncu tetiği çektiğini elinde göremez.
-        /// Hangi parmağın kilitli, hangisinin serbest olacağı silah başına bir TASARIM kararıdır ve
-        /// pozla birlikte yazılır — koda gömülürse tüm silahlar aynı ele mahkûm olurdu.
-        /// ISDK'nın varsayılanı (<c>FingersMetadata.DefaultFingersFreedom</c>) baş+işaret
-        /// <c>Locked</c>, orta+yüzük <c>Constrained</c>, serçe <c>Free</c>'dir; tüfeklerde işaret
-        /// parmağı <c>Free</c> yapılır.
+        /// ⚠️ <b>Beş parmağa açıkça <see cref="JointFreedom.Free"/> yazmak ZORUNLUDUR</b> ve
+        /// silinemez: <see cref="ApplyIdle"/> boştaki elin parmaklarını <c>Locked</c> bırakıyor ve
+        /// serbestlik seviyesi sentetik elde <b>kalıcıdır</b>. Yazılmazsa el, silahı kavradığı anda
+        /// idle'dan devraldığı kilitle donar — belirtisi "kumandayı sıkıyorum, parmaklar kıpırdamıyor".
         /// </para>
         /// </summary>
-        private static void Apply(SyntheticHand synthetic, Weapon weapon, HandGrabPose pose)
+        /// <param name="grip">Bileğin EŞYAYA göre yerel pozu (metre, ölçeksiz).</param>
+        private static void Apply(SyntheticHand synthetic, Transform item, in ItemGripCapture grip)
         {
-            // ⚠️ Burada ÖLÇEKLİ bileşim DOĞRUDUR ve "kavrama ofseti metredir, ölçeklenmez"
-            // kuralının istisnasıdır: bu ofset bizim tanımımızdan değil ISDK'nın
-            // HandGrabPose'undan geliyor ve o, RelativePose'u PoseUtils.DeltaScaled ile — yani
-            // eşyanın ölçeğine BÖLEREK — üretiyor. Ölçeksiz geri bileşim, WPN_* köklerinin 0.8'i
-            // yüzünden bileği eşyadan 1/0.8 kadar uzağa yapıştırırdı (el silahın yanında yüzer).
-            // Sözleşmenin iki ucu ayrışmasın diye ISDK'nın kendi yardımcısı çağrılır.
-            // Referans, pozun kendi RelativeTo'sudur; boşsa eşyanın kökü.
-            Transform reference = pose.RelativeTo != null ? pose.RelativeTo : weapon.transform;
-            Pose wrist = PoseUtils.GlobalPoseScaled(reference, pose.RelativePose);
-
-            HandPose handPose = pose.HandPose;
+            // ⚠️ TransformPoint DEĞİL elle bileşim: yakalama METREdir ve eşyanın görsel ölçeğiyle
+            // (WPN_* kökleri 0.8) büyütülmemeli — ölçekli bileşim bileği silahtan 1/0.8 kadar uzağa
+            // koyar ve el silahın yanında yüzer.
+            var wrist = new Pose(
+                item.position + item.rotation * grip.position,
+                item.rotation * grip.Rotation);
 
             synthetic.LockWristPose(wrist, 1f, SyntheticHand.WristLockMode.Full, true);
-            synthetic.OverrideAllJoints(handPose.JointRotations, 1f);
 
-            // Serbestlik dizisi ISDK garantisiyle beş elemanlıdır (FingersMetadata.DefaultFingersFreedom
-            // boş/null diziyi getter'da tazeliyor); yine de dizinin kendi uzunluğu geziliyor —
-            // ileride parmak sayısı değişirse burası sessizce taşmasın.
-            JointFreedom[] freedom = handPose.FingersFreedom;
-            for (int i = 0; i < freedom.Length; i++)
+            for (int i = 0; i < FingerCount; i++)
             {
-                synthetic.SetFingerFreedom((HandFinger)i, freedom[i]);
+                synthetic.SetFingerFreedom((HandFinger)i, JointFreedom.Free);
             }
         }
 
@@ -560,7 +615,7 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Pozu olmayan silah için oturum başına <b>BİR</b> uyarı.
+        /// Kavraması yakalanmamış silah için oturum başına <b>BİR</b> uyarı.
         /// <para>
         /// ⚠️ Döngüde koşulsuz loglamak kare başına iki satır üretir (saniyede ~140) ve konsolu
         /// boğardı; anahtar (tanım + kavrama noktası + el) olduğu için her eksik poz yine tek tek
@@ -576,9 +631,9 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            Debug.LogWarning($"[HandGripPoser] '{weaponName}' silahında " +
-                             $"'{ItemGripPoses.RootNodeName}/{ItemGripPoses.NodeName(kind, rightHand)}' " +
-                             "kavrama pozu yok; el kumanda duruşunda kalıyor.");
+            Debug.LogWarning($"[HandGripPoser] '{weaponName}' silahının " +
+                             $"'{kind}' kavraması {(rightHand ? "SAĞ" : "SOL")} el için " +
+                             "yakalanmamış; el kumanda duruşunda kalıyor.");
         }
     }
 }
