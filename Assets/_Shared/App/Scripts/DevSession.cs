@@ -304,6 +304,22 @@ namespace VortexArena.App
             {
                 // Kalibrasyon sahnesinin ne sunucuyla ne mod kurallarıyla işi var: silah
                 // karşıda sabit durur, tek iş el pozunu yazmaktır.
+                //
+                // ⚠️ Ama önce NEREDE olduğumuz doğrulanır: Play'in kalibrasyon sahnesinden
+                // başlaması `playModeStartScene`'e bağlıdır ve o yol düştüğünde (sahne bulunamadı,
+                // atama başka bir kancayla ezildi) Unity sessizce AÇIK sahneden başlar. Sessiz
+                // düşüş burada yakalanmazsa kullanıcı kalibrasyon yerine bambaşka bir sahnede
+                // bulur kendini ve ekranda sebebini söyleyen hiçbir şey olmaz.
+                string active = SceneManager.GetActiveScene().name;
+                if (active != AppSession.SceneWeaponCalibration)
+                {
+                    Debug.LogError(
+                        $"[DevSession] Rol 'weapon' ama açık sahne '{active}' — kalibrasyon " +
+                        $"'{AppSession.SceneWeaponCalibration}' sahnesinden koşmak ZORUNDA. Play'i " +
+                        "durdurun; Unity'nin derlemesi bitmiş olmalı ve o sahne projede " +
+                        "durmalı, sonra Dev penceresinden yeniden Play'e basın.");
+                }
+
                 return;
             }
 

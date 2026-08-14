@@ -46,13 +46,20 @@ namespace VortexArena.App
 
             if (AppSession.Role == AppSession.RoleWeapon)
             {
-                // Emniyet kapısı: normal akışta buraya HİÇ gelinmez — silah rolünde Play
-                // doğrudan kalibrasyon sahnesinden başlar ve o sahne Build Settings'te yoktur,
-                // yani Boot onu yükleyemez. Buraya düşüldüyse rol yanlış bir yoldan gelmiştir;
-                // sessizce donmaktansa oyuncu gibi Lobby'ye devam ediyoruz.
-                Debug.LogWarning(
-                    "[AppBoot] Rol 'weapon' — silah kalibrasyon rolü yalnız editörde, Dev " +
-                    "penceresinden koşar; Boot bu rolü yönlendiremez, oyuncu gibi devam ediliyor.");
+                // Emniyet kapısı: normal akışta buraya HİÇ gelinmez — silah rolünde Play doğrudan
+                // kalibrasyon sahnesinden başlar ve o sahne Build Settings'te yoktur, yani Boot onu
+                // yükleyemez.
+                // ⚠️ Buradan Lobby'ye DEVAM EDİLMEZ: devam edilirse kullanıcı kalibrasyon yerine
+                // "sunucu bulunamadı" ekranını görür ve sebebin rol yönlendirmesi olduğunu anlaması
+                // için hiçbir ipucu kalmaz. Yanlış ekrana götürmektense burada durup nedeni söylemek
+                // teşhis edilebilir tek davranıştır.
+                Debug.LogError(
+                    "[AppBoot] Rol 'weapon' ama Play kalibrasyon sahnesinden başlamadı — Boot bu " +
+                    "rolü yönlendiremez ve Lobby'ye GİDİLMİYOR. Play'i durdurun, Unity'nin " +
+                    $"derlemesinin bittiğinden ve '{AppSession.SceneWeaponCalibration}' sahnesinin " +
+                    "projede olduğundan emin olun, sonra Tools > VortexArena > Development > Dev " +
+                    "penceresinden yeniden Play'e basın.");
+                return;
             }
 
             // Admin masaüstünde XR'ı tutmasın: Standalone'da XR açılışta otomatik başlıyor
