@@ -37,6 +37,11 @@ namespace VortexArena.Core.Combat
         /// temizleyen tampondur — kaydı bitiren pinch bir sonraki aşamayı başlatmasın.</summary>
         private const float SavedSeconds = 1.2f;
 
+        /// <summary>Kumanda tetiğinin "basıldı" sayıldığı eşik. Sayacı BAŞLATMAK için kullanılır,
+        /// ölçüye girmez — bu yüzden yüksek tutulur: yarım çekilmiş bir tetik sayacı istemeden
+        /// başlatmasın.</summary>
+        private const float TriggerThreshold = 0.7f;
+
         /// <summary>Silahın kafanın ÖNÜNDE duracağı yatay mesafe (m) — kolun rahat uzandığı yer.</summary>
         private const float PlacementForward = 0.45f;
 
@@ -332,25 +337,45 @@ namespace VortexArena.Core.Combat
             SetWaitingHud();
         }
 
-        /// <summary>Pinch bekler. Tetik <b>yükselen kenardır</b>: aşamaya elin pinch'i basılı
-        /// hâlde girmesi (bir önceki kaydın pinch'i) yeni bir sayaç başlatmasın.</summary>
+        /// <summary>
+        /// Başlatma girdisini bekler. Tetik <b>yükselen kenardır</b>: aşamaya girdi basılı hâlde
+        /// girmesi (bir önceki kaydın pinch'i) yeni bir sayaç başlatmasın.
+        /// <para>
+        /// ⚠️ <b>İki girdi de kabul edilir: pinch VEYA kumanda tetiği.</b> Sayacı başlatan şey
+        /// ölçünün kendisi DEĞİLDİR — ölçü, sayaç bittiğinde okunan bileğin pozudur ve o bilek her
+        /// iki kipte de aynı kaynaktan gelir (<see cref="HandGripPoser.TryGetTrackedWrist"/>).
+        /// Tek girdiye bağlamak, el izlemesi o an akmadığında aracı tümden başlatılamaz yapardı ve
+        /// kullanıcının elinde hiçbir teşhis kalmazdı.
+        /// </para>
+        /// <para>
+        /// ⚠️ İpucu satırı <b>hangi girdinin canlı olduğunu</b> yazar: "el görünmüyor" ile "pinch
+        /// algılanmıyor" ayrı arızalardır ve ekranda ayrılmazlarsa ikisi de "çalışmıyor" olarak
+        /// görünür.
+        /// </para>
+        /// </summary>
         private void TickWaitingPinch()
         {
             Step step = Steps[(int)_stage];
 
             SyntheticHand hand = HandGripPoser.GetSynthetic(step.RightHand);
-            if (hand == null || !hand.IsConnected)
-            {
-                _pinchWasDown = false;
-                WriteHint("El izlenmiyor — kumandaları bırakın");
-                return;
-            }
+            bool handLive = hand != null && hand.IsConnected;
 
-            WriteHint("Elini silahın üstünde tutacağın yere getir, sonra pinch yap");
+            OVRInput.Controller controller = step.RightHand
+                ? OVRInput.Controller.RTouch
+                : OVRInput.Controller.LTouch;
 
-            bool pinching = hand.GetIndexFingerIsPinching();
-            bool rising = pinching && !_pinchWasDown;
-            _pinchWasDown = pinching;
+            bool pinching = handLive && hand.GetIndexFingerIsPinching();
+            bool triggering = OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, controller) > TriggerThreshold;
+
+            WriteHint(handLive
+                ? "BAŞLAT: baş parmağınla işaret parmağının UÇLARINI birbirine değdir (pinch) — " +
+                  "ya da kumanda tetiğine bas"
+                : "El izlenmiyor (kumanda kipi) — BAŞLAT: kumanda tetiğine bas. Elle ölçmek için " +
+                  "kumandaları bırak ve ellerini gözlüğün görüş alanına getir");
+
+            bool down = pinching || triggering;
+            bool rising = down && !_pinchWasDown;
+            _pinchWasDown = down;
 
             if (!rising)
             {
@@ -462,10 +487,14 @@ namespace VortexArena.Core.Combat
             WriteStep(Steps[(int)_stage].Label);
         }
 
+        /// <summary>Bekleme başlığı. ⚠️ Sayaç alanına <c>"PINCH"</c> YAZILMAZ: başlatma girdisi
+        /// pinch VEYA kumanda tetiğidir (<see cref="TickWaitingPinch"/>) ve tek girdinin adını
+        /// yazmak, öteki kipteki kullanıcıya "bu araç bende çalışmıyor" dedirtir. Hangi girdinin
+        /// canlı olduğunu ipucu satırı her karede söyler.</summary>
         private void SetWaitingHud()
         {
-            WriteCountdown("PINCH", WaitColor);
-            WriteHint("Elini silahın üstünde tutacağın yere getir, sonra pinch yap");
+            WriteCountdown("BAŞLAT", WaitColor);
+            WriteHint("Elini silahın üstünde tutacağın yere getir");
         }
 
         // ⚠️ HUD yazıları null-güvenli tek kapıdan geçer (`?.` ile DEĞİL): `?.` Unity'nin kendi
