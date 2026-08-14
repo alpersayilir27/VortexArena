@@ -67,6 +67,7 @@ namespace VortexArena.App.Admin
         private const string Prefix = "VortexArena.Admin.";
         private const string KeyMarkers = Prefix + "Markers";
         private const string KeyNameplates = Prefix + "Nameplates";
+        private const string KeyViolationSound = Prefix + "ViolationSound";
         private const string KeyFreeSpeed = Prefix + "FreeSpeed";
         private const string KeyRoof = Prefix + "Roof";
 
@@ -83,6 +84,7 @@ namespace VortexArena.App.Admin
 
         private static AdminMarkerVisibility _markers = AdminMarkerVisibility.TopDownOnly;
         private static bool _nameplates = true;
+        private static bool _violationSound = true;
         private static float _freeSpeed = 4f;
         private static AdminRoofMode _roof = AdminRoofMode.HideInTopDown;
         private static bool _loaded;
@@ -167,6 +169,30 @@ namespace VortexArena.App.Admin
 
                 _nameplates = value;
                 PlayerPrefs.SetInt(KeyNameplates, value ? 1 : 0);
+                Raise();
+            }
+        }
+
+        /// <summary>
+        /// Fiziksel ihlal başladığında uyarı sesi çalsın mı (§10.9). <b>Varsayılan açık:</b>
+        /// operatör ekrana bakmıyor olabilir ve ihlalin tek işi ona ulaşmaktır.
+        /// <para>⚠️ Bu bir EKRAN tercihidir, <c>AdminSelection</c>'a (yani <c>admin_state</c>'e)
+        /// GİRMEZ: iki operatörün hoparlörünü birbirine bağlamak yönetimi kolaylaştırmaz —
+        /// biri sesi kapatınca diğerininki çalmaya devam etmeli.</para>
+        /// </summary>
+        public static bool ViolationSound
+        {
+            get { Load(); return _violationSound; }
+            set
+            {
+                Load();
+                if (_violationSound == value)
+                {
+                    return;
+                }
+
+                _violationSound = value;
+                PlayerPrefs.SetInt(KeyViolationSound, value ? 1 : 0);
                 Raise();
             }
         }
@@ -271,6 +297,7 @@ namespace VortexArena.App.Admin
             _loaded = true;
             _markers = (AdminMarkerVisibility)PlayerPrefs.GetInt(KeyMarkers, (int)AdminMarkerVisibility.TopDownOnly);
             _nameplates = PlayerPrefs.GetInt(KeyNameplates, 1) != 0;
+            _violationSound = PlayerPrefs.GetInt(KeyViolationSound, 1) != 0;
             _freeSpeed = Mathf.Clamp(PlayerPrefs.GetFloat(KeyFreeSpeed, 4f), FreeSpeedMin, FreeSpeedMax);
             _roof = (AdminRoofMode)PlayerPrefs.GetInt(KeyRoof, (int)AdminRoofMode.HideInTopDown);
         }

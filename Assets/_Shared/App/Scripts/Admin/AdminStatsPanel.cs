@@ -44,7 +44,8 @@ namespace VortexArena.App.Admin
         /// <c>Header0..N</c>/<c>Column0..N</c> çiftleri hâlinde ve araya girmek mevcut dört objenin
         /// hepsini yeniden konumlandırmayı gerektirirdi. Sağ kenar bir teşhis kolonu için doğal yer.</remarks>
         private static readonly string[] ColumnTitles =
-            { "OYUNCU", "TAKIM", "SKOR", "K", "D", "K/D", "HP", "BATARYA", "DURUM", "SAHNE", "PING" };
+            { "OYUNCU", "TAKIM", "SKOR", "K", "D", "K/D", "HP", "BATARYA", "DURUM", "SAHNE", "PING",
+              "İHLAL" };
 
         /// <summary>Zengin metin içeren TEK kolon (<see cref="ColumnTitles"/> ile aynı indeks).</summary>
         private const int BatteryColumn = 7;
@@ -286,6 +287,14 @@ namespace VortexArena.App.Admin
                 // §6.7: -1 = ölçüm yok (henüz yoklama dönmedi ya da gözlükte eski sürüm var).
                 // 0 yazmak "0 ms ping" gibi okunurdu, bu yüzden "-".
                 case 10: return view.rttMs < 0 ? "-" : $"{view.rttMs} ms";
+                // §10.9 ihlal defteri: SAYI + toplam SÜRE tek hücrede. İki türün (duvar / alan
+                // dışı) toplamıdır — kırılım kartın taşıyamayacağı kadar geniş, operatörün maç
+                // sonunda oyuncuyla konuşurken sorduğu soru ise "kaç kez ve ne kadar"dır.
+                // ⚠️ Sayaçlar SUNUCUDAN gelir (AdminRoster.HandleViolation); hiç ihlal etmemiş
+                // oyuncu "-" ile geçilir, "0 · 0.0 sn" tabloyu okunmaz sayı gürültüsüyle doldurur.
+                case 11: return view.ViolationCount <= 0
+                    ? "-"
+                    : $"{view.ViolationCount} · {view.ViolationSeconds:0.0} sn";
                 // Prefabta ColumnTitles'tan FAZLA kolon bağlanmışsa boş kalsın — eskiden burada
                 // `default: scene` vardı ve yeni kolon eklenince sessizce sahne adını tekrarlardı.
                 default: return "";

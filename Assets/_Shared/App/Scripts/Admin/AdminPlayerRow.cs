@@ -152,6 +152,12 @@ namespace VortexArena.App.Admin
         /// saklanır.</summary>
         private float _floorOffset;
 
+        /// <summary>Kenarlığın ihlal DIŞINDAKİ rengi (seçim / kalibresizlik / normal).
+        /// <para>⚠️ Saklanması zorunlu: ihlal yanıp sönerken kenarlığa her karede yazıyoruz ve
+        /// ihlal bitince geri dönülecek bir renk gerekiyor — <see cref="Bind"/> ancak bir sonraki
+        /// tazelemede koşar, o ana kadar satır kırmızı donmuş görünürdü.</para></summary>
+        private Color _baseBorderColor = UiKit.Border;
+
         private RectTransform Rect => _rect != null ? _rect : _rect = (RectTransform)transform;
 
         /// <summary>
@@ -236,12 +242,14 @@ namespace VortexArena.App.Admin
                 stripe.color = view.alive ? team : UiKit.Dim(team, DeadColorScale);
             }
 
+            // Kalibresiz satır seçili olmasa da kırmızı kenarlıkla ayrışır: operatör
+            // listeye baktığında ilgilenmesi gereken satırı hemen görmeli (§10.6).
+            _baseBorderColor = selected ? UiKit.Accent
+                : view.NeedsCalibration ? UiKit.Bad : UiKit.Border;
+
             if (border != null)
             {
-                // Kalibresiz satır seçili olmasa da kırmızı kenarlıkla ayrışır: operatör
-                // listeye baktığında ilgilenmesi gereken satırı hemen görmeli (§10.6).
-                border.color = selected ? UiKit.Accent
-                    : view.NeedsCalibration ? UiKit.Bad : UiKit.Border;
+                border.color = _baseBorderColor;
             }
 
             // Sönüklük kademeli: bağlı 1.0, geri beklenen 0.7, ayrılmış 0.45. Ayrım görsel olarak
@@ -322,6 +330,34 @@ namespace VortexArena.App.Admin
             {
                 button.interactable = value;
             }
+        }
+
+        /// <summary>
+        /// Kenarlığın ihlal vurgusu (§10.9). Kuş bakışı halkaları varsayılan olarak yalnız kuş
+        /// bakışında çizilir (<see cref="AdminMarkerVisibility.TopDownOnly"/>), yani POV/serbest
+        /// kipteki operatör ihlali başka hiçbir yerde göremez — satır o boşluğu kapatır.
+        /// <para>
+        /// <b>Kenarlık önceliği: ihlal &gt; seçim &gt; kalibresiz &gt; normal.</b> İhlal seçimin
+        /// önündedir çünkü seçim zaten iki yerde daha anlatılıyor (halka boyu, alt şerit) ve ihlal
+        /// operatörün <i>şu an</i> ilgilenmesi gereken şeydir; kalibresizlik sahada tek seferlik
+        /// bir iştir, ihlal ise sürüyor.
+        /// </para>
+        /// <para>⚠️ İhlal bitince <see cref="_baseBorderColor"/>'a GERİ DÖNÜLÜR — dönülmezse satır
+        /// bir sonraki <see cref="Bind"/>'a kadar kırmızı donar.</para>
+        /// <para>Renk yanıp söndüğü için tazeleme aralığına (<c>0.25 sn</c>) bırakılmaz: kare
+        /// başına tek bayrak okuması + tek renk ataması yapar.</para>
+        /// </summary>
+        private void Update()
+        {
+            if (border == null)
+            {
+                return;
+            }
+
+            AdminViolationKind violation = AdminViolations.Of(_playerId);
+            border.color = violation != AdminViolationKind.None
+                ? AdminViolations.Blink(violation)
+                : _baseBorderColor;
         }
 
         /// <summary>Onay pencereleri doldu mu (HUD her karede çağırır).</summary>
@@ -580,7 +616,13 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>Satırın durum metni. ⚠️ "çevrimdışı" diye bir durum YOKTUR (§2): kopan cihaz
-        /// ya geri bekleniyor ya oyundan çıkarılmıştır — sayaç operatöre hangisi olduğunu söyler.</summary>
+        /// ya geri bekleniyor ya oyundan çıkarılmıştır — sayaç operatöre hangisi olduğunu söyler.
+        /// <para>Canlı oyuncunun İHLALİ "HAZIR"/"bekliyor"un önüne geçer (§10.9): dar kartta tek
+        /// durum yuvası var ve ikisinden operatörün eyleme çevirebileceği olan ihlaldir. Satır
+        /// yalnız tazeleme aralığında yeniden yazılır — ihlalin canlı kanalı kenarlıktır
+        /// (<see cref="Update"/>), bu yazı onun türünü söyler.</para>
+        /// <para>⚠️ Ölü/kopmuş satırda gösterilmez: kenarlık ve halka ile aynı kural — ceza
+        /// durmuştur, operatörün yapacağı bir şey yoktur.</para></summary>
         private static string BuildState(AdminPlayerView view)
         {
             if (view.IsReconnecting)
@@ -599,6 +641,12 @@ namespace VortexArena.App.Admin
                 return remaining > 0.1f
                     ? $"ÖLÜ {Mathf.CeilToInt(remaining)} sn"
                     : "TABANDA BEKLENİYOR";
+            }
+
+            string violation = AdminViolations.Label(AdminViolations.Of(view.playerId));
+            if (!string.IsNullOrEmpty(violation))
+            {
+                return violation;
             }
 
             return view.ready ? "HAZIR" : "bekliyor";

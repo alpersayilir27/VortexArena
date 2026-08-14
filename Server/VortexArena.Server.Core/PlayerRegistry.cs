@@ -195,6 +195,7 @@ public sealed class PlayerRegistry : IDisposable
                 // bunu zaten kapatıyor; alan yine de temizlenir ki "yeniden bağlandı ama hâlâ
                 // duvarda görünüyor" gibi bir ara durum hiç doğmasın.
                 state.InObstacle = false;
+                state.OutOfBounds = false;
             }
         }
 

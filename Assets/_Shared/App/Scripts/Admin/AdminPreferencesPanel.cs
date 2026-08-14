@@ -214,6 +214,15 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _nameplatesPrev;
         [SerializeField] private Button _nameplatesNext;
 
+        // İhlal uyarı sesi (§10.9). Ad etiketleri satırının aynı deseni: iki düğme de aynı işi
+        // yapar (aç/kapa), satır biçimi diğerleriyle bozulmasın diye.
+        // ⚠️ GÖRÜNÜM bölümünde durur çünkü YALNIZ BU EKRANA aittir — ortak bir maç ayarı değil
+        // (AdminSession, PlayerPrefs); bir operatörün sesi kapatması diğerininkini susturmaz.
+        [Tooltip("Fiziksel ihlal başlayınca uyarı sesi çalsın mı (yalnız bu admin PC'sinde).")]
+        [SerializeField] private TextMeshProUGUI _violationSoundValue;
+        [SerializeField] private Button _violationSoundPrev;
+        [SerializeField] private Button _violationSoundNext;
+
         [SerializeField] private TextMeshProUGUI _speedValue;
         [SerializeField] private Button _speedPrev;
         [SerializeField] private Button _speedNext;
@@ -306,6 +315,8 @@ namespace VortexArena.App.Admin
             Wire(_markersNext, NextMarkers);
             Wire(_nameplatesPrev, ToggleNameplates);
             Wire(_nameplatesNext, ToggleNameplates);
+            Wire(_violationSoundPrev, ToggleViolationSound);
+            Wire(_violationSoundNext, ToggleViolationSound);
             Wire(_speedPrev, SpeedDown);
             Wire(_speedNext, SpeedUp);
             Wire(_roofPrev, PrevRoof);
@@ -1120,6 +1131,11 @@ namespace VortexArena.App.Admin
             AdminSession.Nameplates = !AdminSession.Nameplates;
         }
 
+        private static void ToggleViolationSound()
+        {
+            AdminSession.ViolationSound = !AdminSession.ViolationSound;
+        }
+
         private static void SpeedDown() { AdminSession.FreeSpeed -= 0.5f; }
         private static void SpeedUp() { AdminSession.FreeSpeed += 0.5f; }
 
@@ -1291,6 +1307,13 @@ namespace VortexArena.App.Admin
             _markersValue.text = AdminSession.Markers == AdminMarkerVisibility.Off ? "kapalı"
                 : AdminSession.Markers == AdminMarkerVisibility.TopDownOnly ? "kuş bakışı" : "her zaman";
             _nameplatesValue.text = AdminSession.Nameplates ? "açık" : "kapalı";
+
+            // Prefabı güncellenmemiş bir kurulumda alan boş olabilir (bkz. _countdownValue).
+            if (_violationSoundValue != null)
+            {
+                _violationSoundValue.text = AdminSession.ViolationSound ? "açık" : "kapalı";
+            }
+
             _speedValue.text = $"{AdminSession.FreeSpeed:0.0} m/sn";
             _roofValue.text = AdminSession.Roof == AdminRoofMode.Visible ? "görünür"
                 : AdminSession.Roof == AdminRoofMode.HideInTopDown ? "kuş bakışında gizli" : "hep gizli";

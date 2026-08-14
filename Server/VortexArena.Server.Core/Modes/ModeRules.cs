@@ -90,6 +90,16 @@ public sealed record ModeRules
     /// </summary>
     public bool FireWhilePaused { get; init; }
 
+    /// <summary>
+    /// Canlanan oyuncunun hasar almadığı süre (sn); <c>0</c> = koruma yok (§10.4). Varsayılan
+    /// <c>0</c> olduğu için bu alanı yazmayan hiçbir modun davranışı değişmez.
+    /// <para>⚠️ <b>Telde GİTMEZ</b> (<see cref="ToInfo"/>'ya girmez): istemcinin süreyle yapacağı
+    /// bir iş yok — korumayı snapshot bit6'dan
+    /// (<see cref="SnapshotEntry.FLAG_SPAWN_PROTECTED"/>) okur ve yalnız çizer. Sayıyı da yollamak
+    /// ikinci bir doğruluk kaynağı olurdu.</para>
+    /// </summary>
+    public float SpawnProtectionSeconds { get; init; }
+
     /// <summary>Bugünkü TDM davranışı — yeni mod bir alanı belirtmezse buraya düşer.</summary>
     public static readonly ModeRules TeamDefault = new();
 

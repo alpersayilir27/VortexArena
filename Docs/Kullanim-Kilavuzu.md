@@ -533,6 +533,41 @@ zaten herkes canlı kalkar.
 > biter — son ölü oyuncuyu kaldırırsan tur bitmez ve oyun devam eder. Turnuvada bu düğmeyi bilinçli
 > kullan: takılan bir oyuncuyu kurtarmak içindir, oyuncunun eleme sonucunu geri almak için değil.
 
+### Kural dışı duran oyuncuyu görmek — halka renkleri ve ihlal listesi
+
+Oyuncunun fiziksel olarak olmaması gereken iki yer vardır: **bir engelin içi** (sütun, kasa, blok)
+ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranından anlar.
+
+| Ne görüyorsun | Ne demek | Ne yapman gerekiyor |
+|---|---|---|
+| Halkası **kırmızı**, hızlı yanıp sönüyor, adının yanında **DUVAR** | Kafası bir engelin **içinde**. Ekranı kapkaranlık; 3 saniye sonra canı erimeye başlar ve 8. saniyede ölür | Hemen sesle uyar: **"Duvardan çık."** Ölmesi normaldir, sistem bunun için var |
+| Halkası **turuncu**, daha yavaş yanıp sönüyor, adının yanında **ALAN DIŞI** | Oyun alanının **dışına** çıkmış. Ekranı kararır ve **ateş edemez**; canı gitmez | Sesle içeri çağır. Tekrar tekrar oluyorsa kalibrasyonu kaymış olabilir (Bölüm 4.1) |
+| Halkası normal renkte | Kural dışı bir durum yok | — |
+
+- **İkisi aynı anda olursa halka kırmızı kalır** — canı giden durum daha acildir.
+- **Halkalar yalnız kuş bakışında (`3`) çizilir.** POV veya serbest kipteyken oyuncu listesindeki
+  **satır kenarlığı** aynı şekilde yanıp söner, yani ihlali orada da görürsün.
+- Sağ alttaki **ihlal listesi** kim, ne zaman, ne kadar süre kural dışı kaldığını yazar
+  (ölüm listesinden ayrıdır — o maçın hikâyesi, bu senin iş listen). **Yarım saniyeden kısa
+  temaslar yazılmaz**: sınır çizgisinde gidip gelen bir oyuncu listeyi doldurup okunmaz hâle
+  getirirdi. Halka yine de yanar.
+- **İhlal başlayınca kısa bir uyarı sesi çalar** — ekrana bakmıyorken de haberin olsun diye.
+  Sesi kapatmak istersen **Tercihler** (`P`) → **GÖRÜNÜM** bölümünde **İhlal sesi** satırı vardır.
+  Bu satır **yalnız senin ekranına aittir**: sen kapatınca diğer operatörün sesi susmaz, o da
+  kendi ekranından kapatır.
+- **Ses kalabalıkta sirene dönmez:** aynı anda kaç kişi kural dışına çıkarsa çıksın en fazla
+  birkaç saniyede bir çalar. Yani duyduğun her ses "en az bir kişi" demektir, "tam bir kişi"
+  demek değildir — kimin olduğunu ihlal listesinden ve halkalardan görürsün. Sesin bitişi ayrıca
+  duyurulmaz; ihlalin bittiğini listeden okursun.
+- Maç sonunda istatistik panelinin **İHLAL** kolonunda oyuncu başına **kaç kez ve toplam kaç saniye**
+  kural dışı kaldığı durur (hiç ihlal etmemiş oyuncuda `-`). Oyuncuyla konuşurken elindeki somut
+  veri budur; lobiye dönünce skorla birlikte sıfırlanır.
+- ⚠️ **Ceza vermek senin kararın.** Sistem alan dışına çıkanı öldürmez — kalibrasyonu birkaç santim
+  kaymış bir gözlük yüzünden oyuncu durduk yere ölmesin diye böyle. Israrla tekrarlayan oyuncuyu
+  uyarırsın, gerekirse **AT**'arsın.
+- Hiç kimsenin halkası yanmıyorsa ve arenada engel olduğunu biliyorsan bir sorun yoktur — halka
+  yalnız gerçekten ihlal varken yanar.
+
 ---
 
 ## 6. Maç sırasında ne oluyor?
@@ -552,8 +587,9 @@ zaten herkes canlı kalkar.
     ayağa kaldırır. Oyuncuya söylenecek cümle: **"Elendin, takımın turu bitirene kadar izle."**
   - ⚠️ Şartı yerine getirmeyen oyuncu **canlanmaz ve beklemekle de canlanmaz** — canlanmak
     oyuncunun kendi işidir.
-- Oyuncu arena sınırına yaklaşırsa ekranı hafifçe kararmaya başlar; dışarı çıkarsa tümden kararır ve
-  uyarı çıkar → geri içeri girmesi yeterli.
+- Oyuncu arena sınırına yaklaşırsa ekranı hafifçe kararmaya başlar; dışarı çıkarsa tümden kararır,
+  uyarı çıkar ve **ateş edemez** → geri içeri girmesi yeterli, silahı anında geri çalışır. Dışarıda
+  kalmak **can götürmez**; onu senin görmen için ekranında işaretlenir (aşağıdaki bölüm).
 - Maç, süre dolunca veya skor limitine ulaşılınca biter; kazanan duyurulur ve **kazanan ekranı
   sen bir şey seçene kadar ekranda kalır.** Kendiliğinden lobiye dönülmez: sıradaki haritayı seç
   (herkes oraya geçer), harita listesinden **Lobi**'yi seç ya da **İPTAL**'e bas. Böylece maç

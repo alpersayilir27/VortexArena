@@ -13,10 +13,14 @@ MonoBehaviour:
   m_Name: GameSoundBank
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Audio.GameSoundBank
   enemyEliminated: {fileID: 0}
-  localDeath: {fileID: 0}
+  localDeathClips:
+  - {fileID: 8300000, guid: d1675afb7fca4bdd934532a3267dab4e, type: 3}
+  - {fileID: 8300000, guid: 8d6dd0c19d4c4d5ca0b177a74e78d4bf, type: 3}
+  - {fileID: 8300000, guid: 1e3253ccca914201b1def4d9b1eb67b6, type: 3}
   localRespawn: {fileID: 0}
   matchStart: {fileID: 0}
-  matchWin: {fileID: 0}
-  matchLose: {fileID: 0}
+  teamRedWon: {fileID: 8300000, guid: 04fbfcea31aa418aaaba9026129af016, type: 3}
+  teamBlueWon: {fileID: 8300000, guid: 4ddde4a5faf6423e8676a416899734b5, type: 3}
+  matchDraw: {fileID: 8300000, guid: 0bc2da387299437a9bb97d50498c3b91, type: 3}
   countdownTick: {fileID: 0}
   volume: 1

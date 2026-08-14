@@ -600,6 +600,14 @@ namespace VortexArena.Net
                         break;
                     }
 
+                    case MessageTypes.Violation:
+                    {
+                        // Sunucu yalnız admin bağlantılarına yollar; player'a gelirse dinleyen yoktur.
+                        ViolationMsg msg = JsonUtility.FromJson<ViolationMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseViolation(msg));
+                        break;
+                    }
+
                     case MessageTypes.Kicked:
                         HandleKicked(JsonUtility.FromJson<KickedMsg>(json));
                         break;

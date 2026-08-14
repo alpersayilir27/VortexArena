@@ -18,6 +18,11 @@ namespace VortexArena.Net
         /// <summary>Bu süre boyunca snapshot'ta görünmeyen oyuncu ayrılmış sayılır (ms).</summary>
         private const int LEFT_TIMEOUT_MS = 1500;
 
+        /// <summary>Yerel oyuncunun kendi durum bitlerinin bayatlama süresi (ms) — 20 Hz snapshot'ta
+        /// birkaç kayıp/parçalanmış pakete dayanacak kadar geniş, "koruma bitti"yi geciktirmeyecek
+        /// kadar dar.</summary>
+        private const int LOCAL_FLAG_STALE_MS = 500;
+
         /// <summary>Oyuncu başına saklanan örnek sayısı (20 Hz'de ~3.2 sn geçmiş).</summary>
         private const int RING_SIZE = 64;
 
@@ -101,6 +106,12 @@ namespace VortexArena.Net
 
         private int _lastSnapshotMs;
 
+        // Yerel oyuncunun kendi durum bitleri (§10.4). Ağ thread'i yazar, ana thread okur ve
+        // ⚠️ bilerek _gate DIŞINDADIR: tek bir bayrak için 20 Hz'de kilit almak, ana thread'i poz
+        // alım yolunun arkasında bekletirdi (PlayerState.Alive'ın sunucudaki deseninin aynısı).
+        private volatile bool _localSpawnProtected;
+        private volatile int _localFlagsRecvMs;
+
         /// <summary>Son snapshot'ın alındığı Environment.TickCount değeri (tanılama).</summary>
         public int LastSnapshotMs
         {
@@ -169,7 +180,11 @@ namespace VortexArena.Net
                     SnapshotEntry se = snap.players[i];
                     if (se.playerId == localPlayerId)
                     {
-                        continue; // kendi pozumuz — sunucu echo'su yok sayılır
+                        // Poz yok sayılır (sunucu echo'su) ama DURUM biti okunur: oyuncunun kendi
+                        // doğma koruması yalnız burada geçiyor (§10.4).
+                        _localSpawnProtected = (se.flags & SnapshotEntry.FLAG_SPAWN_PROTECTED) != 0;
+                        _localFlagsRecvMs = recvTickMs;
+                        continue;
                     }
 
                     if (!_entries.TryGetValue(se.playerId, out RemoteEntry entry))
@@ -491,6 +506,82 @@ namespace VortexArena.Net
         }
 
         /// <summary>
+        /// §10.9: oyuncu son snapshot'ta muhafazanın güvenli alanının <b>dışında</b> mıydı
+        /// (<see cref="SnapshotEntry.FLAG_OUT_OF_BOUNDS"/>). Tek tüketicisi admin gözlemcidir —
+        /// ihlal eden oyuncunun kuş bakışı halkası yanıp söner.
+        /// <para>Kaydı/örneği olmayan id için <c>false</c> döner (<see cref="IsInObstacle"/> ile
+        /// aynı yön): bilinmeyen bir durumu ihlal saymak, ağ boşluğunda operatöre var olmayan bir
+        /// olay gösterirdi.</para>
+        /// <para>⚠️ Bayrak <b>durumdur</b>: her snapshot'ta yeniden geliyor, yani oyuncu alana geri
+        /// girince ek bir mesaj olmadan kendiliğinden söner.</para>
+        /// <para>⚠️ Bu bit <b>ceza taşımaz</b> — engel ihlalinin aksine can eritmez; okuyan taraf
+        /// onu yalnız operatöre gösterir.</para>
+        /// </summary>
+        public bool IsOutOfBounds(int playerId)
+        {
+            lock (_gate)
+            {
+                if (!_entries.TryGetValue(playerId, out RemoteEntry entry) || entry.count == 0)
+                {
+                    return false;
+                }
+
+                int last = entry.nextIndex - 1;
+                if (last < 0)
+                {
+                    last += RING_SIZE;
+                }
+
+                return (entry.ring[last].flags & SnapshotEntry.FLAG_OUT_OF_BOUNDS) != 0;
+            }
+        }
+
+        /// <summary>
+        /// §10.4: oyuncu son snapshot'ta <b>doğma koruması</b> altında mıydı
+        /// (<see cref="SnapshotEntry.FLAG_SPAWN_PROTECTED"/>). Tüketicisi uzak avatarın kalkan
+        /// görünümüdür — atış kararı buna DAYANDIRILMAZ, hasar kapısı sunucudadır.
+        /// <para>⚠️ <b>Kendi id'miz buraya GİRMEZ</b> (yerel poz halkaya alınmıyor); oyuncunun kendi
+        /// koruması <see cref="IsLocalSpawnProtected"/>'dedir.</para>
+        /// <para>Kaydı/örneği olmayan id için <c>false</c> döner: bilinmeyen bir durumu koruma
+        /// saymak, olmayan bir kalkanı çizmek olurdu (<see cref="IsInObstacle"/> ile aynı yön,
+        /// <see cref="IsAlive"/>'ın TERSİ).</para>
+        /// <para>⚠️ Bayrak <b>durumdur, olay değil</b>: her snapshot'ta yeniden geliyor, yani
+        /// koruma bitince ek bir mesaj olmadan kendiliğinden söner — istemcide sayaç tutulmaz.</para>
+        /// </summary>
+        public bool IsSpawnProtected(int playerId)
+        {
+            lock (_gate)
+            {
+                if (!_entries.TryGetValue(playerId, out RemoteEntry entry) || entry.count == 0)
+                {
+                    return false;
+                }
+
+                int last = entry.nextIndex - 1;
+                if (last < 0)
+                {
+                    last += RING_SIZE;
+                }
+
+                return (entry.ring[last].flags & SnapshotEntry.FLAG_SPAWN_PROTECTED) != 0;
+            }
+        }
+
+        /// <summary>
+        /// §10.4: <b>yerel</b> oyuncu doğma koruması altında mı — kendi snapshot girdimizin bit'i.
+        /// <para>⚠️ Bunun ayrı bir kapı olmasının sebebi yapısaldır: kendi girdimizin POZU halkaya
+        /// alınmaz (sunucu echo'su yok sayılır), oysa DURUM bitleri yalnız snapshot'ta taşınıyor.
+        /// Ayrı bir kapı olmasaydı oyuncu kendi korumasını hiçbir yerden öğrenemezdi — kalkan
+        /// yalnız BAŞKALARININ gövdesine çiziliyor, kendi gövdesi hiç çizilmiyor.</para>
+        /// <para>⚠️ Bu bir izin DEĞİL bir göstergedir: istemci buna bakıp ateş/hasar kararı vermez.</para>
+        /// <para>Bayrak <b>bayatlarsa</b> (snapshot kesildi, kendi girdimiz gelmiyor) <c>false</c>'a
+        /// düşer — parçalanmış snapshot'ta (§6.3) kendi girdimiz o datagramda olmayabileceği için
+        /// "bu pakette yoktum" tek başına "koruma bitti" sayılmaz.</para>
+        /// </summary>
+        public bool IsLocalSpawnProtected =>
+            _localSpawnProtected && Environment.TickCount - _localFlagsRecvMs <= LOCAL_FLAG_STALE_MS;
+
+        /// <summary>
         /// §6.6: oyuncunun <b>son bilinen</b> eşya durumu. Oyuncu yoksa false.
         /// <para>⚠️ <c>gripLinked</c> olmadan "aynı id iki slotta" tek başına çift elle tutmak
         /// demek DEĞİLDİR — çift tabanca meşru bir durumdur (§6.6 çözüm tablosu).
@@ -543,6 +634,9 @@ namespace VortexArena.Net
         private void HandleDisconnected()
         {
             _leftScratch.Clear();
+
+            // Kendi durum bitimiz de bayat: kopuk bağlantıda "korunuyorsun" yazmaya devam etmesin.
+            _localSpawnProtected = false;
 
             lock (_gate)
             {

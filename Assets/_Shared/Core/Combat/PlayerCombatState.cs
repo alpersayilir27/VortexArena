@@ -96,6 +96,17 @@ namespace VortexArena.Core.Combat
         public string StatusText { get; private set; } = "";
 
         /// <summary>
+        /// §10.4: yerel oyuncu doğma koruması altında mı — sunucunun snapshot bit'i, yerel sayaç
+        /// DEĞİL. Kaynağı <see cref="RemotePlayerRegistry.IsLocalSpawnProtected"/>'dir.
+        /// <para>⚠️ Bu bir <b>gösterge</b>dir, bir izin değil: hasar kapısı sunucudadır ve buna
+        /// bakılarak ateş/hasar kararı verilmez. Oyuncunun kendi kalkanı çizilemediği için
+        /// (kalkan yalnız uzak avatarlara çiziliyor, kendi gövdesi hiç çizilmiyor) korumanın
+        /// oyuncuya ulaştığı TEK yol bu bayrak ve ona bağlı durum metnidir.</para>
+        /// </summary>
+        public bool IsSpawnProtected =>
+            RemotePlayerRegistry.Instance != null && RemotePlayerRegistry.Instance.IsLocalSpawnProtected;
+
+        /// <summary>
         /// Sahnede oyuncuya AÇIK (kendi takımı ya da <c>Neutral</c>) en az bir taban bölgesi var mı.
         /// <para>Yalnız takip açıkken anlamlıdır — bkz. <see cref="RequestBaseTracking"/>.</para>
         /// </summary>
@@ -490,6 +501,12 @@ namespace VortexArena.Core.Combat
                         text = !HasOpenBaseZone || IsInsideOwnBase ? "Canlanılıyor..." : "Tabanına dön ve canlan";
                     }
                 }
+            }
+            else if (IsSpawnProtected)
+            {
+                // §10.4: koruma canlıyken ve yalnız canlanmadan hemen sonra geçerli — bu yüzden
+                // ölüm dalının ARDINDAN gelir, onu ezmez.
+                text = "Yeniden doğma koruması — hasar almıyorsun";
             }
 
             if (text == StatusText)

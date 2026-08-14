@@ -19,9 +19,10 @@ namespace VortexArena.Core.Audio
     /// Ses <b>2D</b>'dir: duyuru oyuncunun kafasının içinde duyulur, arenada bir yeri yoktur.
     /// </para>
     /// <para>
-    /// Oyuncuya özel sesler (öldürme/ölüm/kazanma) yerel oyuncu kimliği çözülemiyorsa —
+    /// Oyuncuya özel sesler (öldürme/ölüm/canlanma) yerel oyuncu kimliği çözülemiyorsa —
     /// admin gözlemci ya da henüz bağlanmamış istemci — sessizce atlanır; faz sesleri
-    /// (maç başladı, geri sayım) operatörde de çalar.
+    /// (maç başladı, geri sayım) operatörde de çalar. <b>Maç sonucu duyurusu oyuncuya özel
+    /// DEĞİLDİR</b> ("kırmızı takım kazandı"): herkeste aynı çalar, admin dahil.
     /// </para>
     /// <para>
     /// Yeni bir ses eklemek: <see cref="GameSoundId"/>'ye SONA bir değer +
@@ -307,30 +308,30 @@ namespace VortexArena.Core.Audio
 
             _lastPhase = ArenaProtocol.PHASE_FINISHED;
 
-            int local = ArenaCombat.LocalPlayerId;
-            if (local <= 0)
-            {
-                // Admin gözlemci: kazanan "kendisi" olmadığı için kaybetme sesi çalmamalı.
-                return;
-            }
-
-            bool won;
+            // ⚠️ Sonuç duyurusu oyuncuya DEĞİL maça aittir ("kırmızı takım kazandı"), bu yüzden
+            // dinleyene göre değişmez ve yerel oyuncu kimliği aranmaz: admin gözlemcide de çalar.
             if (!string.IsNullOrEmpty(msg.winnerTeam))
             {
-                won = string.Equals(msg.winnerTeam, TeamWire(ArenaCombat.LocalTeam),
-                    StringComparison.OrdinalIgnoreCase);
-            }
-            else if (msg.winnerPlayerId > 0)
-            {
-                won = msg.winnerPlayerId == local;
-            }
-            else
-            {
-                // Berabere / kazanan yok → duyuru yok.
+                if (string.Equals(msg.winnerTeam, "red", StringComparison.OrdinalIgnoreCase))
+                {
+                    Play(GameSoundId.TeamRedWon);
+                }
+                else if (string.Equals(msg.winnerTeam, "blue", StringComparison.OrdinalIgnoreCase))
+                {
+                    Play(GameSoundId.TeamBlueWon);
+                }
+
                 return;
             }
 
-            Play(won ? GameSoundId.MatchWin : GameSoundId.MatchLose);
+            if (msg.winnerPlayerId > 0)
+            {
+                // Bireysel skorlu mod (ffa): kazanan bir OYUNCU'dur, takım duyurusunun karşılığı
+                // yok — o modun sonuç sesi maç sonu ekranından okunur.
+                return;
+            }
+
+            Play(GameSoundId.MatchDraw);
         }
 
         private void HandleCountdown(CountdownMsg msg)
@@ -338,17 +339,6 @@ namespace VortexArena.Core.Audio
             if (msg != null && msg.seconds > 0)
             {
                 Play(GameSoundId.CountdownTick);
-            }
-        }
-
-        /// <summary>Enum'u protokoldeki takım anahtarına çevirir; takımsız = boş string.</summary>
-        private static string TeamWire(Team team)
-        {
-            switch (team)
-            {
-                case Team.Red: return "red";
-                case Team.Blue: return "blue";
-                default: return "";
             }
         }
     }

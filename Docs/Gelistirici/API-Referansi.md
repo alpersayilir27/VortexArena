@@ -31,7 +31,7 @@ Hepsi bağlantı yokken sessizce no-op'tur.
 
 | Üye | Tip | Açıklama |
 |---|---|---|
-| ✅ `CanFire` | `bool` | **Ateş etmeden önce bunu sor.** Hayatta + faz Lobby/Live + bağlantı açık. Hiç bağlanılmadıysa `true` (yerel test bozulmasın) |
+| ✅ `CanFire` | `bool` | **Ateş etmeden önce bunu sor.** Hayatta + faz Lobby/Live + bağlantı açık + oyuncunun kendisi engelde değil + **alanın dışında değil**. Hiç bağlanılmadıysa `true` (yerel test bozulmasın). ⚠️ Alan-dışı kapısı tamamen yereldir, protokolde karşılığı yoktur: alanın dışına çıkıp içeri ateş etmek geriye kalan tek fiziksel hile yoluydu |
 | ✅ `IsAlive` | `bool` | Yerel oyuncu hayatta mı (sunucu-otoriter) |
 | ✅ `LocalHp` | `float` | Yerel can, `0..100` |
 | ✅ `LocalPlayerId` | `int` | Sunucu kimliği; bağlanmadıysa `0` |
@@ -89,6 +89,7 @@ Statik olmalarının sebebi: dinleyicinin bağlantının ne zaman kurulduğunu b
 | ✅ `OnKicked` | `KickedMsg` | Bağlantıdan atıldık |
 | ⛔ `OnRulesUpdate` | `RulesUpdateMsg` | Koşan maçın kural şekli değişti (bugün: operatör dost ateşini çevirdi). **Sen dinleme** — `ModeRuntimePump` uygular, sen `ModeRuntime`'dan okursun |
 | ⛔ `OnAdminState` | `AdminStateMsg` | Yalnız admin arayüzü içindir |
+| ⛔ `OnViolation` | `ViolationMsg` | Bir oyuncunun engel/alan-dışı ihlali başladı ya da bitti. **Yalnız admin bağlantısına gelir** ve kenar tetiklidir — halka/işaretçi buna DEĞİL snapshot bitlerine bağlanır (kaybolan mesaj yalnız log kaybıdır) |
 
 > ⚠️ **`OnDisable`'da abonelikten çık.** Statik olay, ölü nesneyi tutar → `MissingReferenceException`.
 
@@ -211,7 +212,8 @@ büyütmek/kaydırmak koordinatları oynatmaz.
 
 | Üye | Açıklama |
 |---|---|
-| ✅ `IsOutOfBounds` | Yerel HMD alan dışında mı |
+| ✅ `Active` | *(statik)* Sahnedeki muhafaza örneği — yoksa `null`. Alan-dışı durumunu tele koyan poz gönderimi ve ateş kapısı bunu okur; ölçüm bileşende kalır, ikinci bir hesap açılmaz |
+| ✅ `IsOutOfBounds` | Yerel HMD alan dışında mı. ⚠️ Gözlemci kipinde ve **plansız** muhafazada `false`'a kilitlidir: ölçüyü bilmeden "dışarıda" demek sessiz bir yalancı pozitif olurdu |
 | ✅ `HalfExtents` | Arena yarı ölçüsü — plandaki çokgenin sınırlayıcı kutusundan gelir (plan yoksa sıfır) |
 | ✅ `LocalCenter` | O kutunun yerel merkezi — admin kuş bakışı kadrajı bunu okur. ⚠️ Ölçü genellikle bir köşeden alınır, yani kutu transformun tam ortasında DEĞİLDİR: kadrajlarken `HalfExtents` tek başına yetmez |
 | ✅ `TopDownHeight` | Admin kuş bakışı kamerasının zeminden yüksekliği (boyut dosyasının `topViewHeight`'ı; 0 = kamera kendi varsayılanını kullanır). Ortografik kamerada kadrajı DEĞİL yalnız çatının/yüksek objelerin üstünde kalmayı belirler. Kamera dosyayı kendisi açmaz — JSON'u çözen tek yer bu bileşendir |
@@ -404,6 +406,11 @@ Tabandan **hazır** gelenler: faz/süre, geri sayım, can + can barı, ölüm ek
 kill-feed, kendi öldürme/ölüm sayacın.
 
 > ⚠️ Takıma ait hiçbir şey tabanda değildir (bazı modlarda takım yoktur) — renk ve kolon alt sınıfın işi.
+
+> **Maç sonu ekranı (KAZANDIN/KAYBETTİN + skor tablosu) moda ait DEĞİLDİR** ve yeni mod için
+> yapılacak hiçbir iş yoktur: `MatchResultOverlay` mod-agnostiktir, maç bitince HUD'ı kendisi
+> gizler. `WinnerLine`/`EndScoreLine` yine de yazılır — onlar HUD'ın kendi satırlarıdır (ekran
+> kapandığında görünen değerler).
 
 > ⚠️ Yaşam döngüsü metotlarını override edersen `base.` çağır.
 

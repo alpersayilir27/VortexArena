@@ -60,6 +60,12 @@ namespace VortexArena.Core.UI
         private readonly StringBuilder _sb = new StringBuilder();
 
         private PlayerCombatState _combat;
+
+        /// <summary>HUD'ın kendi canvas'ı — maç sonu ekranı açıkken YALNIZ bu bileşen kapatılır.
+        /// ⚠️ Obje <b>devre dışı bırakılmaz</b>: kapanan obje <c>OnDisable</c>'da ağ olaylarından
+        /// çıkar ve kendini geri açacak mesajı (<c>load_match</c>) bir daha duymazdı.</summary>
+        private Canvas _canvas;
+
         private string _combatStatus = "";
         private string _countdownLabel = "";
         private bool _countdownActive;
@@ -92,8 +98,10 @@ namespace VortexArena.Core.UI
             NetEvents.OnKillEvent += HandleKillEvent;
             NetEvents.OnMatchEnd += HandleMatchEnd;
             NetEvents.OnReturnToLobby += HandleReturnToLobby;
+            GameplayHudGate.HiddenChanged += ApplyHudGate;
 
             TryBindCombat();
+            ApplyHudGate(GameplayHudGate.Hidden);
         }
 
         protected virtual void OnDisable()
@@ -104,8 +112,25 @@ namespace VortexArena.Core.UI
             NetEvents.OnKillEvent -= HandleKillEvent;
             NetEvents.OnMatchEnd -= HandleMatchEnd;
             NetEvents.OnReturnToLobby -= HandleReturnToLobby;
+            GameplayHudGate.HiddenChanged -= ApplyHudGate;
 
             UnbindCombat();
+        }
+
+        /// <summary>Maç sonu ekranı açıldı/kapandı: oyun içi HUD çizimden çıkar ya da geri gelir
+        /// (<see cref="GameplayHudGate"/>). Metin yazmaya devam eder — ekran kapanınca HUD zaten
+        /// güncel değerlerle geri gelsin.</summary>
+        private void ApplyHudGate(bool hidden)
+        {
+            if (_canvas == null)
+            {
+                _canvas = GetComponent<Canvas>();
+            }
+
+            if (_canvas != null)
+            {
+                _canvas.enabled = !hidden;
+            }
         }
 
         protected virtual void Start()

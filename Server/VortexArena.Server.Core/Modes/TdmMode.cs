@@ -4,13 +4,16 @@ namespace VortexArena.Server.Core.Modes;
 /// <summary>Team Deathmatch: her doğrulanmış öldürme, ÖLDÜRENİN takımına +1 puan yazar.
 /// Maç, bir takım skor limitine ulaşınca ya da süre bitince biter; süre bitiminde yüksek skor
 /// kazanır, eşitlikte berabere (<see cref="MatchOutcome.Draw"/>).
-/// <para>Kurallar tümüyle varsayılandır (<see cref="ModeRules.TeamDefault"/>): iki takım, takım
-/// skoru, dost ateşi kapalı, kendi tabanında canlanma, sahnede duran silah.</para></summary>
+/// <para>Kurallar varsayılandan yalnız doğma korumasıyla ayrılır
+/// (<see cref="ModeRules.TeamDefault"/>): iki takım, takım skoru, dost ateşi kapalı, kendi
+/// tabanında canlanma, sahnede duran silah.</para></summary>
 public sealed class TdmMode : IGameMode
 {
     public string ModeId => "tdm";
 
-    public ModeRules Rules => ModeRules.TeamDefault;
+    /// <summary>⚠️ Doğma koruması TDM'de zorunludur (§10.4): canlanma kendi tabanında olduğu için
+    /// tabanı gözleyen bir rakip canlanan oyuncuyu doğduğu karede vurabilirdi.</summary>
+    public ModeRules Rules => ModeRules.TeamDefault with { SpawnProtectionSeconds = 5f };
 
     public int DefaultRoundSeconds => 300;
 

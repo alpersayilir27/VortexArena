@@ -22,13 +22,21 @@ namespace VortexArena.Core.Audio
         /// <summary>Faz <c>playing</c>'e geçti (maç başladı / turdan devam edildi).</summary>
         MatchStart = 3,
 
-        /// <summary>Maç bitti, yerel oyuncu kazanan tarafta.</summary>
-        MatchWin = 4,
+        /// <summary>Maç bitti, kazanan KIRMIZI takım.</summary>
+        TeamRedWon = 4,
 
-        /// <summary>Maç bitti, yerel oyuncu kazanan tarafta değil.</summary>
-        MatchLose = 5,
+        /// <summary>Maç bitti, kazanan MAVİ takım.</summary>
+        TeamBlueWon = 5,
 
         /// <summary>Geri sayımın her saniyesi.</summary>
         CountdownTick = 6,
+
+        /// <summary>Bir oyuncunun fiziksel ihlali başladı (§10.9) — <b>yalnız admin PC'sinde</b>
+        /// çalar; oyuncunun uyarısı zaten kendi ekranındadır. Sesin kapısı ve en fazla ne sıklıkta
+        /// çalacağı <c>AdminRoster</c>'dadır: bu enum yalnız hangi klibin çalacağını söyler.</summary>
+        AdminViolation = 7,
+
+        /// <summary>Maç berabere bitti — kazanan takım da kazanan oyuncu da yok.</summary>
+        MatchDraw = 8,
     }
 }

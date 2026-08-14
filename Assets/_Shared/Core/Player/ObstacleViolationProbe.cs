@@ -13,8 +13,12 @@ namespace VortexArena.Core.Player
     /// <b>sunucu</b> eritir. Bu sınıf can/skor/ölüm bilmez.</para>
     ///
     /// <para><b>İKİ ayrı çıktı üretir ve karıştırılmamalıdır:</b> <see cref="IsViolating"/>
-    /// (yalnız KAFA → tel bayrağı + ceza + karartma) ve <see cref="IsBodyBlocked"/> (kafa <b>ya da
+    /// (yalnız KAFA → tel bayrağı + ceza) ve <see cref="IsBodyBlocked"/> (kafa <b>ya da
     /// bir el</b> → yalnız ateş kapısı, tele gitmez).</para>
+    ///
+    /// <para>⚠️ <b>Karartma ve titreşim bu ikisinin de değil, TEMASIN çıktısıdır</b>
+    /// (<see cref="HeadInsideLevel"/> &gt; 0): ceza eşiğini beklemezler, gerekçesi
+    /// <see cref="ReportPresentation"/>'da.</para>
     ///
     /// <para><b>Neden ceza yalnız kafaya bakıyor:</b> cezanın işi görüşün katı geometrinin içine
     /// girmesini cezalandırmaktır — el, kol ve gövde bunu yapmaz. Ölçülen kütlenin oranını
@@ -75,25 +79,13 @@ namespace VortexArena.Core.Player
         /// </summary>
         private const int EnterPointCount = 3;
 
-        /// <summary>
-        /// <b>Değme bandının</b> karartma tavanı: kabuk yüzeye değiyor ama kafa içeride değil.
-        /// ⚠️ Bu bandın varlık sebebi kalibrasyon sapmasıdır — birkaç santimlik hizalama hatası ani
-        /// bir siyah değil hafif bir kararma üretsin (dış duvarların layer'a alınmamasıyla aynı
-        /// gerekçe).
-        /// </summary>
-        private const float GrazeFadeAlpha = 0.35f;
-
-        /// <summary>Karartmanın hedefe varma süresi (sn) — "anında ama sarsmadan".</summary>
-        private const float FadeInSeconds = 0.2f;
-
-        /// <summary>Karartmanın kalkma süresi (sn). Girişten uzun tutulmaz: geri çekilen oyuncuyu
-        /// bir an daha kör bırakmanın kimseye faydası yok.</summary>
+        /// <summary>Karartmanın kalkma süresi (sn). ⚠️ <b>Girişin karşılığı YOKTUR</b> — karartma
+        /// temasta kademesiz iner (gerekçe <see cref="ReportPresentation"/>); rampa yalnız çıkışta
+        /// vardır ve orada da konfor içindir: sınırda gidip gelen kafa, ölçüm kadansıyla siyah/açık
+        /// arasında çırpınırdı.</summary>
         private const float FadeOutSeconds = 0.25f;
 
-        /// <summary>Değme bandının rengi — kırmızı, "geri çekil" demek için.</summary>
-        private static readonly Color WarnColor = new Color(0.55f, 0.04f, 0.04f);
-
-        /// <summary>İhlal karartmasının rengi: görüşün kapanması bir uyarı değil, <b>görülecek bir
+        /// <summary>Karartmanın rengi: görüşün kapanması bir uyarı değil, <b>görülecek bir
         /// şey olmadığı</b> içindir.</summary>
         private static readonly Color BlackoutColor = new Color(0.02f, 0.01f, 0.01f);
 
@@ -121,9 +113,9 @@ namespace VortexArena.Core.Player
 
         /// <summary>
         /// Kafa kabuğunun ne kadarı geometrinin içinde (0..1): yedi noktanın içeride olanlarının
-        /// oranı. ⚠️ <b>İhlalin ŞİDDETİ DEĞİLDİR</b> — karartma içerideyken koşulsuz tam siyahtır;
-        /// bu değer yalnız <b>değme bandını</b> (ihlalden önceki hafif kararma) sürer. İkisini tek
-        /// rampaya bağlamak "içerideyim ama görüyorum" demektir.
+        /// oranı. ⚠️ <b>Bir ŞİDDET ölçüsü DEĞİLDİR ve alfaya çevrilmez</b> — karartmanın kapısı
+        /// bu değerin sıfırdan büyük olup olmadığıdır, büyüklüğü değil. Oranı rampaya bağlamak
+        /// "içerideyim ama görüyorum" demektir. Kalan tüketicisi teşhistir (Dev penceresi).
         /// </summary>
         public static float HeadInsideLevel { get; private set; }
 
@@ -160,7 +152,8 @@ namespace VortexArena.Core.Player
             /// <summary>Kafa hiçbir engele değmiyor.</summary>
             None,
 
-            /// <summary>Kabuk yüzeye değiyor ama kafa içeride sayılmıyor (ceza yok).</summary>
+            /// <summary>Kabuk yüzeye değiyor ama kafa içeride sayılmıyor: <b>karartma var, ceza
+            /// yok</b>.</summary>
             Grazing,
 
             /// <summary>Kafa içeride — ihlal.</summary>
@@ -270,9 +263,10 @@ namespace VortexArena.Core.Player
             bool centerInside = EvaluateHead(headCenter, count, out int inside);
             HeadInsideLevel = inside / (float)HeadSampleCount;
 
-            // ⚠️ EŞİK ile RAMPA ayrı şeylerdir. Giriş: merkez içeride ya da kabuğun üçte biri
-            // içeride. Çıkış: HİÇBİR nokta içeride değil — histerezis ikinci bir eşikten değil
-            // buradan gelir, çünkü "girdim" ile "tamamen çıktım" doğal olarak farklı sorulardır.
+            // ⚠️ Bu eşik YALNIZ CEZAYA aittir; karartma onu beklemez (gerekçe: ReportPresentation).
+            // Giriş: merkez içeride ya da kabuğun üçte biri içeride. Çıkış: HİÇBİR nokta içeride
+            // değil — histerezis ikinci bir eşikten değil buradan gelir, çünkü "girdim" ile
+            // "tamamen çıktım" doğal olarak farklı sorulardır.
             bool rule = IsViolating
                 ? inside > 0
                 : centerInside || inside >= EnterPointCount;
@@ -406,15 +400,26 @@ namespace VortexArena.Core.Player
         // ------------------------------------------------------------------ sunum
 
         /// <summary>
-        /// Karartma + titreşim. <b>İki durum vardır ve gerekçeleri farklıdır:</b>
-        /// <list type="number">
-        /// <item><b>Kafa içeride → KOŞULSUZ TAM SİYAH.</b> Derinliğe bağlanmaz: gözler katı bir
-        /// cismin içindeyken görülecek meşru bir şey yoktur ve o an duvar arkasını görmek tam olarak
-        /// istismarın kendisidir. Bu kuralın anti-hile ayağı budur — ceza değil.</item>
-        /// <item><b>Kabuk değiyor → hafif kararma</b> (<see cref="GrazeFadeAlpha"/>'ya kadar
-        /// rampalı). Gerekçesi kalibrasyon sapmasıdır, ceza değildir: birkaç santimlik hizalama
-        /// hatası oyuncuyu aniden kör etmesin.</item>
-        /// </list>
+        /// Karartma + titreşim.
+        ///
+        /// <para><b>Karartmanın ve TİTREŞİMİN tek kapısı TEMASTIR:</b> kafa kabuğunun yedi noktasından
+        /// <b>herhangi biri</b> geometrinin içindeyse (<see cref="HeadInsideLevel"/> &gt; 0) ekran
+        /// aynı karede, rampasız, tam siyah olur. ⚠️ Kapı <see cref="IsViolating"/> DEĞİLDİR ve
+        /// oraya geri bağlanmaz: ceza eşiği (nokta sayısı + 0.15 sn) bilerek toleranslıdır ve o
+        /// tolerans görüşe uygulandığında oyuncunun kafasını bloğun içine <b>görecek kadar</b>
+        /// sokmasına izin verir — istismarın kendisi tam olarak budur. Ceza *"bu adam duvarda mı
+        /// duruyor"* sorusudur, karartma *"gözler katı bir cismin içinde mi"*; ikincisinde
+        /// tereddüt edilecek bir şey yoktur.</para>
+        ///
+        /// <para>⚠️ <b>Rampa da, değme bandı da (kısmi kararma) yoktur:</b> ikisi de birkaç kare
+        /// boyunca yarı saydam bir perde çizer, yani duvarın öbür yüzü <b>okunabilir</b> kalır.
+        /// Kalibrasyon sapmasının bedeli olan ani kararma bilinçli olarak kabul edilir; dış duvar,
+        /// zemin ve tavan zaten <c>Obstacle</c> layer'ında değildir.</para>
+        ///
+        /// <para>Rampa yalnız <b>çıkışta</b> vardır (<see cref="FadeOutSeconds"/>): sınırda gidip
+        /// gelen kafa, ölçüm kadansıyla (20 Hz) siyah/açık arasında çırpınırdı ve VR'da bu bir
+        /// strobe demektir.</para>
+        ///
         /// <para>⚠️ <b>Hasarın kırmızısı BURADA değildir.</b> <see cref="ScreenFade"/> hakemi "en
         /// yüksek alfa kazanır" diyor; siyah 1.0'dayken hiçbir kırmızı onu geçemez. Can kaybının
         /// görselini <see cref="DamageVignette"/> quad'ın ÜSTÜNDE ayrı bir katman olarak çizer.</para>
@@ -423,30 +428,25 @@ namespace VortexArena.Core.Player
         private void ReportPresentation()
         {
             bool alive = ArenaCombat.IsAlive;
-            float target = 0f;
-            Color color = WarnColor;
+            bool contact = alive && HeadInsideLevel > 0f;
 
-            if (alive)
+            if (contact)
             {
-                if (IsViolating)
-                {
-                    target = 1f;
-                    color = BlackoutColor;
-                }
-                else if (HeadInsideLevel > 0f)
-                {
-                    target = HeadInsideLevel * GrazeFadeAlpha;
-                }
+                _fadeAlpha = 1f;
+            }
+            else
+            {
+                _fadeAlpha = Mathf.MoveTowards(
+                    _fadeAlpha, 0f, Time.unscaledDeltaTime / FadeOutSeconds);
             }
 
-            float seconds = target > _fadeAlpha ? FadeInSeconds : FadeOutSeconds;
-            _fadeAlpha = Mathf.MoveTowards(_fadeAlpha, target, Time.unscaledDeltaTime / seconds);
             FadeAlpha = _fadeAlpha;
 
-            ScreenFade.Report(FadeSourceId, _fadeAlpha, color);
+            ScreenFade.Report(FadeSourceId, _fadeAlpha, BlackoutColor);
 
-            bool pulse = alive && IsViolating &&
-                         Mathf.Repeat(Time.unscaledTime * HapticPulseHz, 1f) < 0.5f;
+            // Titreşim karartmayla AYNI kapıdan (temas) beslenir: kararan ekran tek başına "ne oldu"
+            // sorusunu doğuruyor, nabız ona "duvardasın, geri çekil" cevabını veriyor.
+            bool pulse = contact && Mathf.Repeat(Time.unscaledTime * HapticPulseHz, 1f) < 0.5f;
             SetHaptics(pulse);
         }
 

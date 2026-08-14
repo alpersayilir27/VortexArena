@@ -137,7 +137,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   `Scenes/` (Boot, Lobby),
   **`App/Resources/UI/`** (⚠️ **arayüzün TAMAMI burada, prefab olarak** — admin HUD'ı + tercihler
   ve istatistik panelleri, oyuncu satırı, oyuncu halkası, bağlantı ekranının iki varyantı,
-  yükleme ekranının iki varyantı, cephane göstergesi, kimlik kartı. Kodda görsel kurulum YOKTUR ve yazılmaz: sınıflar yalnız veri
+  yükleme ekranının iki varyantı, cephane göstergesi, kimlik kartı, maç sonu ekranı (sonuç kartı +
+  skor tablosu). Kodda görsel kurulum YOKTUR ve yazılmaz: sınıflar yalnız veri
   yazar. `Resources/` altından ÇIKARILMAZ — sahneye konmuyorlar, `Resources.Load` ile
   yükleniyorlar; taşınırsa ilgili arayüz sessizce hiç çizilmez) ve **`App/UI/Sprites/`**
   (yuvarlak köşe + halka görselleri, 9-slice). → `Docs/Gelistirici/Arayuz-Tasarimi.md`
@@ -453,7 +454,7 @@ mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafınd
 (IGameMode) + `MatchDirector.RegisterModes()`'a bir satır + `Docs/ArenaNet-Protokol.md`'ye modId ekle.
 Üç ek adım:
 1. **`IGameMode.Rules`** — modun şekli (`ModeRules`: takım kipi, skor kanalı, canlanma şartı, silah
-   kaynağı, canlanma gecikmesi). Bugünkü TDM davranışı için `ModeRules.TeamDefault` tek satırdır;
+   kaynağı, canlanma gecikmesi, doğma koruması). Bugünkü TDM davranışı için `ModeRules.TeamDefault` tek satırdır;
    yalnız FARKLI olan alanı yaz. Bu kural `load_match.rules` ile istemciye gider ve `ModeRuntime`
    üzerinden okunur → **istemcide `if (modeId == …)` zinciri YAZILMAZ**
    (Docs/ArenaNet-Protokol.md §10.5).

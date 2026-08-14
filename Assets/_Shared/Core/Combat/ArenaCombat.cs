@@ -74,10 +74,24 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// <b>Tetiğe basılabilir mi.</b> Hayatta + faz Lobby/Live + (bir kez bağlanıldıysa) bağlantı
-        /// açık. Her ateş eden şey bunu kontrol ETMELİDİR: ölüyken ya da geri sayımda atılan atış
-        /// sunucuda zaten reddedilir, ama yerelde ses/efekt oynatmak oyuncuya yalan söyler.
+        /// açık + oyuncu arenanın İÇİNDE (<see cref="IsOutsideArena"/>). Her ateş eden şey bunu
+        /// kontrol ETMELİDİR: ölüyken ya da geri sayımda atılan atış sunucuda zaten reddedilir, ama
+        /// yerelde ses/efekt oynatmak oyuncuya yalan söyler.
+        /// <para>İki kapı iki ayrı soruyu sorar: ilki <b>sunucu-otoriter durumdur</b> (can, faz),
+        /// ikincisi tümüyle <b>yerel bir fizik kuralıdır</b> — protokolde karşılığı yoktur.</para>
         /// </summary>
-        public static bool CanFire => PlayerCombatState.Instance == null || PlayerCombatState.Instance.CanFire;
+        public static bool CanFire =>
+            (PlayerCombatState.Instance == null || PlayerCombatState.Instance.CanFire) && !IsOutsideArena;
+
+        /// <summary>Yerel oyuncu muhafazanın güvenli alanının DIŞINDA mı — ateş kapısı.
+        /// <para>Silahı engele sokma yolu zaten kapalı olduğu için (§10.9) alanın dışına çıkıp içeri
+        /// ateş etmek geriye kalan tek fiziksel hile yoludur. Kapı tamamen YERELDİR: protokolde
+        /// karşılığı yoktur, sunucu bunu doğrulamaz.</para>
+        /// <para>⚠️ Muhafaza yoksa ya da plansızsa kapı AÇIK kalır (fail-open): ölçüyü bilmeden
+        /// oyuncunun tetiğini kilitlemek, boyut dosyası bağlanmamış bir sahnede kimsenin ateş
+        /// edememesi demek olurdu.</para></summary>
+        public static bool IsOutsideArena =>
+            ArenaBoundary.Active != null && ArenaBoundary.Active.IsOutOfBounds;
 
         // ------------------------------------------------------------------- atış ışını
 

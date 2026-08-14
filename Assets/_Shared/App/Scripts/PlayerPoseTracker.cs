@@ -239,6 +239,14 @@ namespace VortexArena.App
             {
                 gripFlags |= SnapshotEntry.FLAG_IN_OBSTACLE;
             }
+
+            // §10.9: kafa muhafazanın güvenli alanının dışında. ⚠️ Bu da bir ÖLÇÜM bildirimidir ve
+            // FLAG_IN_OBSTACLE'ın aksine CEZA ÜRETMEZ — yalnız admin görünürlüğü içindir.
+            ArenaBoundary boundary = ArenaBoundary.Active;
+            if (boundary != null && boundary.IsOutOfBounds)
+            {
+                gripFlags |= SnapshotEntry.FLAG_OUT_OF_BOUNDS;
+            }
         }
     }
 }
