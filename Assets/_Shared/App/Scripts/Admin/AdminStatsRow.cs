@@ -620,9 +620,18 @@ namespace VortexArena.App.Admin
             string state = StateText(view);
 
             // Kumanda tokeni hiç bilgi taşımıyorsa (iki el de "bildirilmedi") satır onunla şişmez.
-            return string.IsNullOrEmpty(controllers)
+            string line = string.IsNullOrEmpty(controllers)
                 ? $"SKOR {view.score} · {battery} · {ping} · {state}"
                 : $"SKOR {view.score} · {battery} · {controllers} · {ping} · {state}";
+
+            // ⚠️ Son yeniden yükleme denemesinin gerekçesi satırda KALICI durur (§10.6): uyarı
+            // penceresi birkaç saniye sonra kendini kapatıyor ve kapandığında hiçbir iz kalmasaydı
+            // operatör "bir şey oldu ama neydi" sorusuyla baş başa kalırdı. Alanı SUNUCU tutuyor,
+            // yani sonradan bağlanan ikinci operatör de aynı gerekçeyi görür; başarılı bir
+            // kalibrasyon onu temizlediği için satır kendi kendini toparlar.
+            return string.IsNullOrEmpty(view.calibrationError)
+                ? line
+                : $"{line} · <color=#{ColorUtility.ToHtmlStringRGB(UiKit.Bad)}>{view.calibrationError}</color>";
         }
 
         /// <summary>⚠️ "çevrimdışı" diye bir durum YOKTUR (§2) — satır ya geri bekleniyor
