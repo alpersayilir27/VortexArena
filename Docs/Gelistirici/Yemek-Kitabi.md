@@ -468,8 +468,11 @@ namlu oraya. Yakaladığın pozun rotasyonu silaha hiç karışmaz, yalnız el m
 üstüne oturtur. Silah elde yatık görünüyorsa sebebi kavrama kaydı değil, `Model`'in prefabtaki
 yerleşimidir.
 
-⚠️ **Ölçüm için EL TAKİBİ gerekir** — kumandaları bırak. Kumanda tutulurken ölçülecek bir bilek
-yoktur; HUD "el izlenmiyor" der ve sayaç hiç başlamaz.
+⚠️ **El takibi ZORUNLU değil, tercih edilendir.** Kumanda tutulurken de ölçülecek bir bilek vardır
+(rig kumanda pozundan sentetik el üretir, `controllerDrivenHandPosesType = Natural`) ve oyun oyunda
+da aynı bileği okur — yani kumandayla yakalanan kavrama tutarlıdır. Kumandaları bırakmanın kazancı
+görünürlüktür: parmaklarının kabzaya nereye oturduğunu gözünle görürsün. HUD hangi kipte olduğunu
+her karede yazar.
 
 **Akış (editörde, APK build'i gerekmez):**
 
@@ -480,13 +483,21 @@ yoktur; HUD "el izlenmiyor" der ve sayaç hiç başlamaz.
    silah kafanın **karşısında** belirir ve **donar** — sen ona yaklaşırsın, o seni izlemez.
 3. HUD üç satır yazar: geri sayım · hangi aşamadasın · yönerge. Sıra **sabittir**:
    **1/4 ana kabza sağ → 2/4 ana kabza sol → 3/4 ön kabza sağ → 4/4 ön kabza sol.**
-4. Elini silahı tutacağın yere getir ve **pinch** yap → tepede **5 saniyelik** geri sayım başlar.
+4. Elini silahı tutacağın yere getir ve sayacı başlat → tepede **5 saniyelik** geri sayım başlar.
    Sayım sürerken elini aç ve kabzayı normal tuttuğun gibi sar.
+   **Başlatmanın iki yolu var ve ikisi de geçerlidir:** **pinch** (baş parmağınla işaret parmağının
+   UÇLARINI birbirine değdirmek) ya da **kumanda tetiği**. HUD'un yönerge satırı o an hangisinin
+   canlı olduğunu yazar.
 5. Sayaç bitince ölçü alınır, `WD_*.asset`'e yazılır ve diske kaydedilir; HUD onaylar ve bir sonraki
    aşamaya geçer. Dördü bitince iş biter — Play'i durdur.
 
-- ⚠️ **Sayaç pinch'i bırakınca İPTAL OLMAZ** ve edilmemeli: sayacın var olma sebebi tam olarak
-  pinch'ten sonra elini açıp kabzayı sarmandır. Ölçülen şey pinch anındaki el değil, **sayaç
+- ⚠️ **Başlatma girdisi ölçünün parçası DEĞİLDİR:** ölçü, sayaç bittiğinde okunan bileğin pozudur ve
+  o bilek iki kipte de aynı kaynaktan gelir (`HandGripPoser.TryGetTrackedWrist`). Kumanda kipinde
+  yakalanan kavrama oyunla **tutarlıdır** — oyuncu zaten kumanda tutuyor ve oyun aynı bileği okuyor.
+  El takibinin üstünlüğü ölçünün doğruluğu değil **görünürlüğüdür**: parmaklarının kabzaya nereye
+  oturduğunu gözünle görürsün.
+- ⚠️ **Sayaç girdi bırakılınca İPTAL OLMAZ** ve edilmemeli: sayacın var olma sebebi tam olarak
+  başlattıktan sonra elini açıp kabzayı sarmandır. Ölçülen şey başlatma anındaki el değil, **sayaç
   bittiğindeki** eldir.
 - ⚠️ **Kayıt EL BAŞINADIR** ve dört kaydın dördü de ayrı ölçülür: kabza simetrik değildir (tetik,
   şarjör, kurma kolu tek taraftadır), tek kayıttan aynalamak sol eli silahın **içine** sokar. Bir
