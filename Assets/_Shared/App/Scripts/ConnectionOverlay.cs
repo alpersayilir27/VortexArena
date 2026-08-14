@@ -19,11 +19,11 @@ namespace VortexArena.App
     ///
     /// **Görünüm prefabtan gelir, SAHNEDEN değil:** iki varyant vardır —
     /// `Resources/UI/ConnectionOverlayScreen` (masaüstü) ve `…World` (VR); hangisinin
-    /// yükleneceğine <see cref="Bootstrap"/> karar verir. Prefab sahneye KONMAZ: konsaydı
+    /// yükleneceğine <see cref="Install"/> karar verir. Prefab sahneye KONMAZ: konsaydı
     /// yeni arena eklerken unutulacak bir adım olurdu (arena sahneleri kendine yeten
-    /// kutulardır). Bu yüzden `ArenaClient` deseni korunur —
-    /// `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` ile kendini önyükler, prefabı
-    /// `Resources.Load` ile alır ve `DontDestroyOnLoad` tekil olarak yaşar.
+    /// kutulardır). Bu yüzden `ArenaClient` deseni korunur — prefabı `Resources.Load` ile alır ve
+    /// `DontDestroyOnLoad` tekil olarak yaşar; **hangi oturumda doğacağına `AppSingletons` karar
+    /// verir** (kalibrasyon gibi sunucusuz oturumlarda hiç doğmaz).
     /// Bu sınıf yalnız **veri yazar ve görünürlüğü sürer**; yerleşim/renk/punto prefabta.
     ///
     /// **Neden grace süresi:** kopuş anlıksa (WS yeniden bağlanma backoff'u 1→2→5 sn) ekranın
@@ -87,7 +87,7 @@ namespace VortexArena.App
         private static ConnectionOverlay _instance;
 
         /// <summary>Prefabın <c>Resources</c> yolları (uzantısız) — VR world-space / masaüstü
-        /// screen-space iki ayrı prefabtır, hangisinin yükleneceğine <see cref="Bootstrap"/>
+        /// screen-space iki ayrı prefabtır, hangisinin yükleneceğine <see cref="Install"/>
         /// karar verir.</summary>
         public const string WorldResourcePath = "UI/ConnectionOverlayWorld";
 
@@ -140,8 +140,9 @@ namespace VortexArena.App
 
         // ------------------------------------------------------------ önyükleme
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Bootstrap()
+        /// <summary>Tekili kurar. ⚠️ <b>Koşulsuzdur</b> — "bu oturumda gerekli mi" kararı
+        /// <see cref="AppSingletons"/>'a aittir (gerekçe orada).</summary>
+        internal static void Install()
         {
             if (_instance != null)
             {

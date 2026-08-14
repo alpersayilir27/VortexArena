@@ -177,7 +177,7 @@ Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı g�
 
 **`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** modun canlanma şartını sağladıktan (taban bölgesine girme ya da sabit durma) sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da oyuncu ışınlanamadığı için canlanma bir **konum değişimi değil, durum değişimidir**.
 
-**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual", "floorOffset":0.07 }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye çift basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
+**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual", "floorOffset":0.07, "error":"" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye çift basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
 
 `floorOffset` = elle kalibrasyonda kumanda ucunun **yakalama anındaki tracking-yerel yüksekliği**
 (metre, **işaretli**): sistemin zemin tahmininin gerçek zeminden sapması. Kumanda ucu fiziksel
@@ -186,6 +186,14 @@ yüklemede `0` gönderilir — orada bir ölçüm yoktur. Sunucu değeri yorumla
 (`PlayerInfo.floorOffset`, §5.3) ve `CALIB_FLOOR_WARN_METERS` eşiğini aşarsa operatörü uyarır
 (§10.6). ⚠️ **Bir kapı değildir** — sapma ne olursa olsun kalibrasyon kabul edilir; oyuncuyu
 savaş dışı bırakmak operatörün kararıdır.
+
+`error` = **hizalama yeniden yüklenemedi** (boş = sorun yok). Sözleşmesi `set_body_scale.error` ile
+birebir aynıdır: doluysa `calibrated`/`source`/`floorOffset` **YOK SAYILIR**, sunucudaki kayıtlı
+kalibrasyon **aynen durur** ve gerekçe roster'a yazılıp (`PlayerInfo.calibrationError`, §5.3)
+adminlere duyurulur. Bugünkü tek üreticisi operatörün `reload_calibration` komutudur (§5.2/§10.6):
+denemenin düştüğünü söyleyen kanal budur. ⚠️ **Doğrulanmayan serbest metindir** —
+`calibrationSource` ile aynı sözleşme: hata kodu listesi YOKTUR ve eklenmez, tek tüketicisi
+operatörün ekranıdır ve yeni bir başarısızlık türü sunucuda iş çıkarmamalıdır.
 
 **`set_body_scale`** `{ "type":"set_body_scale", "scale":1.04, "error":"" }` (yalnız player) — başlık **kendi**
 gövde ölçeğini bildirir (§10.8). `playerId` taşımaz, bağlantıdan çözülür (`set_calibration` ile aynı
@@ -229,6 +237,15 @@ durumunda bırakır; başarısız ölçümü ölçek olarak yazmak ise sessizce 
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
 - **`clear_calibration`** `{ "type":"clear_calibration", "playerId":5 }` — o oyuncunun kalibrasyonunu **sıfırlar** (§10.6). **`playerId:0` = TÜM oyuncular** (toplu sıfırlama). Admin kalibrasyonu yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez — hizalamanın gerçekten oturduğunu yalnız başlık bilir (§10.6).
   ⚠️ **Sunucu komutu hedefe KOŞULSUZ iletir** (`identify`/`measure_body_scale` ile aynı çift yönlü desen, §5.3): roster'daki `calibrated` zaten `false` olsa bile hedef başlığa alansız bir `clear_calibration` gider. Sebep, sıfırlanacak her şeyin roster'da görünmemesidir — **yarım kalmış elle kalibrasyon** (A alındı, B alınmadı) yalnız başlıkta yaşar ve telde hiçbir izi yoktur. Sunucu "değer zaten `false`, değişen bir şey yok" diye erken dönseydi komut tam da düzeltmek için var olduğu durumda hiçbir iş yapmazdı (§10.6).
+- **`reload_calibration`** `{ "type":"reload_calibration", "playerId":5 }` — o oyuncunun başlığına
+  **gözlükte KAYITLI çapadan hizalamayı yeniden yükletir** (§10.6). **`playerId:0` = TÜM oyuncular.**
+  Sunucu bir şey hesaplamaz; hedefe **alansız** bir `reload_calibration` iletir (`identify` /
+  `measure_body_scale` ile aynı çift yönlü desen) ve sonucu başlık `set_calibration` ile döner:
+  başarıda `calibrated:true, source:"anchor"`, başarısızlıkta dolu `error` (§5.1). Operatörün
+  bastığı düğmenin cevabı ayrıca `calibration_result` ile adminlere gider (§5.3).
+  ⚠️ **`measure_body_scale`'in aksine kalibresiz hedef ATLANMAZ:** komutun var olma sebebi tam da
+  hizalaması olmayan ya da bozulmuş oyuncudur — kalibrasyon kapısı komutu var olduğu durumda
+  işlevsiz bırakırdı.
 - **`measure_body_scale`** `{ "type":"measure_body_scale", "playerId":5 }` — o oyuncunun gövde
   ölçüsünü **şimdi aldırır** (§10.8). **`playerId:0` = TÜM oyuncular.** Sunucu bir şey hesaplamaz;
   hedefe alansız bir `measure_body_scale` iletir (`identify` ile aynı çift yönlü desen) ve ölçümü
@@ -315,7 +332,7 @@ başlığının yeniden başlatılmasıdır.
     "battery":0.87, "ctrlL":1, "ctrlR":3, "scene":"Arena12x12",
     "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7,
     "inMatch":true, "calibrated":true, "calibrationSource":"anchor", "floorOffset":0.07,
-    "bodyScale":1.04, "scaleError":"" } ] }
+    "bodyScale":1.04, "scaleError":"", "calibrationError":"" } ] }
 ```
 
 `version` = **monoton artan** roster sürümü (sunucu ömrü boyunca; sunucu yeniden başlarsa `0`'dan).
@@ -373,6 +390,11 @@ görünür bir deltası yoktur — dinleyen istemci hiçbir şey olmadığını 
 `0` = ölçüm yok ya da temiz. Mutlak değeri `CALIB_FLOOR_WARN_METERS`'i aşan satır arayüzde ⚠ ile
 gösterilir (§10.6). `clear_calibration` bu alanı sıfırlar.
 
+`calibrationError` = son **kayıtlı hizalamayı yeniden yükleme** denemesi başarısız olduysa gerekçesi,
+boş = sorun yok (§5.1/§10.6). ⚠️ **Başarılı bir kalibrasyon alanı temizler** (`scaleError` ile aynı
+gerekçe: bir kez başarısız olan oyuncunun satırında uyarı sonsuza kadar kalırdı ve operatör sorunun
+sürdüğünü sanardı); `clear_calibration` de sıfırlar.
+
 `scaleError` = son gövde ölçümü başarısız olduysa gerekçesi, boş = sorun yok (§5.1/§10.8). Başarılı
 bir ölçüm alanı **temizler**; `clear_calibration` de sıfırlar. Kalibrasyon alanlarıyla aynı
 sınıftadır (kesikli cihaz durumu) ve aynı sebeple roster'da taşınır: değiştiği an roster'ın zaten
@@ -420,6 +442,10 @@ elle kalibrasyon sekansını** siler, kayıtlı `OVRSpatialAnchor`'ı yok eder v
 kapısını yeniden açar (§10.6). Yalnız player'a gider; alan taşımaz — hedef zaten o bağlantıdır.
 ⚠️ **Rig TAŞINMAZ:** free-roam'da oyuncu fiziksel olarak neredeyse orada kalır, yalnız hizalama
 geçersiz sayılır.
+**`reload_calibration`** `{ "type":"reload_calibration" }` — istemci **kayıtlı çapadan hizalamayı
+yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
+`set_calibration{calibrated:true, source:"anchor"}`, başarısızlıkta `set_calibration{error:"…"}`
+(§5.1). Yalnız player'a gider; alan taşımaz — hedef zaten o bağlantıdır.
 **`kicked`** `{ "type":"kicked", "reason":"" }` — istemci bağlantıyı kapatır ve **oyuncu başlığında uygulama kapanır**; kapanış dizisi ve gerekçeleri §5.4'te.
 
 **`admin_state`** — **yalnız `role=admin` bağlantılara**; adminler arası ortak durumun tek doğruluk kaynağı:
@@ -431,7 +457,8 @@ geçersiz sayılır.
   "notice":"Ofis-PC: harita -> Arena12x12", "adminCount":2 }
 ```
 - Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`return_to_lobby`/`kick`/`identify`/`set_team`/`set_friendly_fire`/`set_calibration_mode`), oyuncunun bildirdiği
-  zemin sapması eşiği aştığında ya da gövde ölçümü başarısız olduğunda (§10.6/§10.8) ve admin
+  zemin sapması eşiği aştığında, gövde ölçümü ya da kayıtlı hizalamanın yeniden yüklenmesi
+  başarısız olduğunda (§10.6/§10.8) ve admin
   bağlanıp ayrıldığında. ⚠️ `pause_match`/`resume_match` için duyuru **yalnız komut gerçekten uygulandıysa** yayılır — reddedilen komut diğer operatörlerin ekranına olmamış bir eylemi yazmamalı.
 - `modeId`/`sceneName` = ortak seçim. ⚠️ **Hiçbir zaman boş değildir:** sunucu açılışta seçimi **mekanın lobi haritasıyla** tohumlar (`modeId:"lobby"`, `sceneName:<mekanın lobisi>` — §10.7 açık sahnenin açılış değeri), sonrasında da boş alan mevcut değeri koruduğu için seçim bir daha boşalamaz. Böylece ilk `admin_state`'i alan admin de "hiç harita seçilmemiş" bir durum görmez. Admin arayüzü **kendi yerel seçimini değil bunu gösterir**; gelen değer arayüzdeki mod/harita seçicisini günceller. Yani bir operatör haritayı değiştirdiğinde diğerinin ekranı da (paneli açık olmasa bile) o haritaya döner — sahneyi zaten `return_to_lobby` sahnelemesi taşır (§10.7), `admin_state` yalnız seçiciyi hizalar.
 - `roundSeconds`/`scoreLimit`/`countdownSeconds` = bir sonraki maçın ortak parametreleri (`0` = hiç seçilmedi, modun/protokolün varsayılanı kullanılacak). Mod/harita ile aynı kanaldan gider — sebebi §5.2 `set_selection` notunda.
@@ -521,6 +548,25 @@ geçersiz sayılır.
 - ⚠️ `VIOLATION_MIN_SECONDS`'tan kısa temaslar için **hiç gönderilmez** (§1) — ne başlangıç ne
   bitiş satırı. Sayaçlara da girmez: akışta görünmeyen bir ihlalin istatistikte belirmesi
   operatöre iki farklı gerçek anlatırdı.
+
+**`calibration_result`** — yalnız adminlere; operatörün `reload_calibration` düğmesinin **cevabı**:
+
+```json
+{ "type":"calibration_result", "playerId":5, "ok":true, "error":"" }
+```
+
+- `ok:true` = başlık kayıtlı çapadan hizalamayı geri yükledi; `ok:false` ise `error` insan
+  okuyabilir gerekçedir (§5.1 ile aynı serbest metin).
+- Hedef kuralı `net_stats`/`violation` ile aynıdır: bunu okuyan tek şey operatörün ekranıdır.
+- ⚠️ **Bu bir OLAYDIR, durum değildir.** Roster'daki `calibrated`/`calibrationError` alanları durumu
+  taşır; bu mesaj yalnız *"az önce basılan düğme ne oldu"* sorusunu cevaplar.
+- ⚠️ **Sunucu bekleyen istek defteri TUTMAZ.** Başlıktan gelen **her** `set_calibration{calibrated:true}`
+  ve **her** `set_calibration{error}` bir sonuç satırı yayınlar; hangi satırın hangi düğmeye ait
+  olduğunu **admin arayüzü** bilir (bekleyen satırı yoksa yok sayar). Defter tutmak sunucuya, tek
+  tüketicisi bir ekran olan bir zaman aşımı sorumluluğu yüklerdi.
+- ⚠️ Sonuç neden `lobby_state` ile taşınmıyor: zaten kalibreli bir oyuncuda **başarılı** yeniden
+  yükleme roster'da hiçbir alanı değiştirmez (§5.3 yayın guard'ı), yani operatörün düğmesi sonsuza
+  kadar "yükleniyor" kalırdı.
 
 ### 5.4 Atma (kick) kapanış dizisi
 
@@ -1432,6 +1478,37 @@ zemin tahmini kalıcıdır, kalibrasyonu tekrarlamak onu düzeltmez.
 ⚠️ Eşik bir **kapı değil teşhis eşiğidir** — kalibrasyon kabul edilir, oyuncu savaş dışı kalmaz.
 Sunucu zemini bilmediği için otomatik bir düzeltme de yapmaz (ikinci bir hizalama otoritesi
 olurdu); tek çıktı operatöre giden bilgidir.
+
+**Kayıtlı hizalamayı yeniden yükletme (`reload_calibration`).** Operatör bir oyuncunun (ya da
+`playerId:0` ile herkesin) başlığına, gözlükte **kayıtlı çapadan** hizalamayı yeniden yükletir
+(§5.2). Sahadaki karşılığı, hizalaması kaymış ya da hiç kurulmamış bir oyuncuyu başlığı yeniden
+başlatmadan / oyunu kesmeden toparlamaktır.
+
+| Kim | Ne yapar |
+|---|---|
+| Operatör | Denemeyi **başlatır** (`reload_calibration`) |
+| Başlık | Kayıtlı çapayı yükleyip rig'i hizalamayı **dener ve sonucu bildirir** (`set_calibration`, başarısızsa dolu `error`) |
+| Sunucu | Yalnız **iletir**; hesaplamaz, doğrulamaz, sonucu `calibration_result` ile adminlere yayar |
+
+⚠️ **Bu komut "admin `calibrated`'i `true` yapamaz" kuralını ÇİĞNEMEZ:** admin yalnız *denemeyi*
+başlatır, "hizalandım" işaretini yine **başlık** koyar (`set_calibration`). Otorite değişmez —
+yukarıdaki asimetrik yazar tablosu aynen geçerlidir.
+
+⚠️ **Kayıtlı çapa YOKSA deneme BAŞARISIZDIR ve öyle bildirilir** (hiç kalibre olunmamış ya da
+`clear_calibration` UUID'yi silmiş olabilir). Sessizce başarılı sayılmaz: sunucunun hizalı sandığı
+ama fiilen kaymış bir oyuncuya ateş ve hasar açmak, bu sistemin önlemek için var olduğu durumdur.
+
+⚠️ **Sonucun kanalı `lobby_state` DEĞİL `calibration_result`'tır** (§5.3): zaten kalibreli bir
+oyuncuda başarılı yeniden yükleme roster'da hiçbir alanı değiştirmez (yayın guard'ı), yani
+operatörün düğmesi sonsuza kadar "yükleniyor" kalırdı. Başarısızlığın gerekçesi ayrıca roster'da
+taşınır (`PlayerInfo.calibrationError`) — o, olayın değil **durumun** kaydıdır.
+
+⚠️ **Kalibre modu bu komutu KAPILAMAZ.** `two_anchor` seçiliyken başlık diskteki çapa UUID'sini
+*açılışta* okumaz (yukarıdaki mod maddesi) — ama operatörün isteği bir açılış değildir ve komut
+diski moddan bağımsız okur. Kapı burada da uygulansaydı komut `two_anchor` işletmelerinde hiç iş
+görmezdi: hizalaması oturum ortasında bozulan oyuncunun tek çıkış yolu elle 2 çapa sekansı olurdu,
+oysa düğme tam da onu gereksiz kılmak için vardır. Modun kapıladığı şey **başlığın kendi
+başlangıç davranışıdır**, operatörün elindeki kurtarma yolu değil.
 
 **Bulut kalibrasyonu (ileride).** Paylaşılan uzamsal anchor ile toplu hizalama geldiğinde protokol
 değişmez: `source:"cloud"` zaten geçerli bir değer, `CALIB_MODE_ANCHOR_CLOUD` zaten rezerve ve

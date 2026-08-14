@@ -12,10 +12,10 @@ namespace VortexArena.App
     ///
     /// **Görünüm prefabtan gelir, SAHNEDEN değil:** iki varyant vardır —
     /// `Resources/UI/LoadingOverlayScreen` (masaüstü) ve `…World` (VR); hangisinin
-    /// yükleneceğine <see cref="Bootstrap"/> karar verir. <see cref="ConnectionOverlay"/> ile
+    /// yükleneceğine <see cref="Install"/> karar verir. <see cref="ConnectionOverlay"/> ile
     /// birebir aynı desen: prefab sahneye KONMAZ (konsaydı yeni arena eklerken unutulacak bir
-    /// adım olurdu), `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` ile kendini önyükler,
-    /// prefabı `Resources.Load` ile alır ve `DontDestroyOnLoad` tekil olarak yaşar.
+    /// adım olurdu), prefabı `Resources.Load` ile alır ve `DontDestroyOnLoad` tekil olarak yaşar;
+    /// **hangi oturumda doğacağına `AppSingletons` karar verir**.
     /// Bu sınıf yalnız **veri yazar ve görünürlüğü sürer**; yerleşim/renk/punto prefabta.
     ///
     /// **Neden açılışta önyüklenir, ilk gösterimde değil:** prefabı tam geçiş anında
@@ -87,8 +87,9 @@ namespace VortexArena.App
 
         // ------------------------------------------------------------ önyükleme
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Bootstrap()
+        /// <summary>Tekili kurar. ⚠️ <b>Koşulsuzdur</b> — "bu oturumda gerekli mi" kararı
+        /// <see cref="AppSingletons"/>'a aittir (gerekçe orada).</summary>
+        internal static void Install()
         {
             if (_instance != null)
             {
@@ -138,7 +139,10 @@ namespace VortexArena.App
         /// </summary>
         public static void Show(string sceneName)
         {
-            Bootstrap(); // erken çağrılırsa (ilk sahne yüklemesinden önce) yine de doğsun
+            // Erken çağrılırsa (ilk sahne yüklemesinden önce, yani AppSingletons koşmadan) yine de
+            // doğsun. ⚠️ Bu, oturum kapısını DELMEZ: yükleme ekranını isteyen tek şey sahne
+            // yönlendirmesidir ve o tekil kurulmadığı oturumda burayı çağıran da olmaz.
+            Install();
             if (_instance == null)
             {
                 return;

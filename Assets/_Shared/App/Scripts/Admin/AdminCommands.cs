@@ -291,6 +291,33 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
+        /// Bir oyuncunun kalibrasyonunu gözlükte KAYITLI çapa verisinden yeniden yükletir;
+        /// <paramref name="playerId"/> <b>0 = TÜM oyuncular</b>. Sunucu hesap yapmaz, komutu
+        /// başlığa iletir; hizalamayı başlık geri yükler ve sonucu <c>calibration_result</c> ile
+        /// bildirir.
+        /// <para>⚠️ <b><see cref="ClearCalibration"/> ile TAMAMEN AYRI bir komuttur ve onun tersi
+        /// DEĞİLDİR:</b> sıfırlama kalibrasyonu siler ve oyuncuyu savaş dışı bırakır; bu komut
+        /// silmez, gözlükteki kayıttan hizalamayı geri kurmayı dener. İkisini karıştırmak sahada
+        /// oynayan bir oyuncuyu durduk yere oyun dışı bırakır.</para>
+        /// <para>Yeniden yükleme <b>geri alınabilir bir denemedir</b>: tutmazsa oyuncu zaten eskisi
+        /// gibi kalır, bu yüzden onay penceresi yoktur.</para>
+        /// </summary>
+        public static void ReloadCalibration(int playerId)
+        {
+            if (playerId < 0)
+            {
+                return;
+            }
+
+            if (Send(new ReloadCalibrationMsg { playerId = playerId }))
+            {
+                SetStatus(playerId == 0
+                    ? "Tüm kalibrasyonların yeniden yüklenmesi gönderildi."
+                    : $"Kalibrasyon yeniden yükleme gönderildi: oyuncu {playerId}");
+            }
+        }
+
+        /// <summary>
         /// Bir oyuncunun gövde ölçüsünü ALDIRIR; <paramref name="playerId"/> <b>0 = HERKES</b>
         /// (§10.8). Sunucu hesap yapmaz, komutu başlığa iletir; ölçümü başlık yapıp
         /// <c>set_body_scale</c> ile döner ve sonuç roster'dan herkese yayılır.

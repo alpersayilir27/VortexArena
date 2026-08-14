@@ -121,6 +121,7 @@ namespace VortexArena.Core.Arena
             NetEvents.OnConnected += HandleConnected;
             NetEvents.OnLobbyState += HandleLobbyState;
             NetEvents.OnClearCalibration += HandleClearCalibration;
+            NetEvents.OnReloadCalibration += HandleReloadCalibration;
         }
 
         private void OnDestroy()
@@ -134,6 +135,7 @@ namespace VortexArena.Core.Arena
             NetEvents.OnConnected -= HandleConnected;
             NetEvents.OnLobbyState -= HandleLobbyState;
             NetEvents.OnClearCalibration -= HandleClearCalibration;
+            NetEvents.OnReloadCalibration -= HandleReloadCalibration;
 
             Instance = null;
         }
@@ -158,6 +160,10 @@ namespace VortexArena.Core.Arena
 
             _reportMsg.calibrated = calibrated;
             _reportMsg.source = source ?? "";
+            // ⚠️ DTO tek örnektir: bayat bir gerekçe bir sonraki BAŞARILI bildirimi kirletirdi
+            // (sunucu error doluysa hizalamayı yok sayıyor, §10.6) — BodyScaleState.Report'taki
+            // aynı tuzak.
+            _reportMsg.error = "";
             // Zemin sapması yalnız ÖLÇÜLDÜĞÜNDE anlamlıdır (§10.6): kalibrasyonun düştüğü yolda
             // ölçüm yoktur ve son ölçümü tekrar göndermek operatöre bayat bir uyarı gösterirdi.
             _reportMsg.floorOffset = calibrated ? ArenaCalibrator.LastFloorOffsetMeters : 0f;
@@ -214,6 +220,47 @@ namespace VortexArena.Core.Arena
 
             Debug.Log("[CalibrationState] Operatör kalibrasyonu sıfırladı — yeniden kalibre edin (A basılıyken B×2).");
             Raise();
+        }
+
+        /// <summary>
+        /// Operatör kayıtlı çapadan hizalamayı yeniden yükletti (§10.6). Sıfırlamanın zıddı
+        /// DEĞİLDİR: burada hiçbir şey silinmez, kalibratöre yalnız <b>yeniden deneme</b> yaptırılır
+        /// ve "hizalandım" işaretini yine başlık koyar.
+        /// </summary>
+        private void HandleReloadCalibration()
+        {
+            ArenaCalibrator.RequestReload(HandleReloadResult);
+        }
+
+        /// <summary>
+        /// Yeniden yükleme denemesinin sonucu (boş gerekçe = başarılı).
+        /// <para>⚠️ <b>Başarıda hiçbir şey gönderilmez:</b> başarılı yükleme zaten
+        /// <see cref="ArenaCalibrator.Calibrated"/> olayından geçip <see cref="Report"/> ile
+        /// bildiriliyor — buradan ikinci bir bildirim çift sonuç satırı üretirdi (§5.3).</para>
+        /// <para>Başarısızlıkta gerekçe <c>set_calibration.error</c> ile gider ve
+        /// <see cref="_localCalibrated"/>/<see cref="_source"/> <b>olduğu gibi</b> taşınır: durum
+        /// değişmedi, deneme düştü. <c>floorOffset</c> <c>0</c>'dır — ölçüm yok.</para>
+        /// </summary>
+        private void HandleReloadResult(string error)
+        {
+            if (string.IsNullOrEmpty(error))
+            {
+                return;
+            }
+
+            ArenaClient client = ArenaClient.Instance;
+            if (client == null || !client.IsConnected)
+            {
+                return; // sunucusuz oturum: bildirilecek kimse yok
+            }
+
+            Debug.LogWarning($"[CalibrationState] Kayıtlı hizalama yeniden yüklenemedi — {error}.", this);
+
+            _reportMsg.calibrated = _localCalibrated;
+            _reportMsg.source = _source ?? "";
+            _reportMsg.floorOffset = 0f;
+            _reportMsg.error = error;
+            client.Send(_reportMsg);
         }
 
         /// <summary>
