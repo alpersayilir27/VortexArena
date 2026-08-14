@@ -16,6 +16,9 @@ namespace VortexArena.App.Editor
     /// Sahne asset'i <b>Build Settings'ten</b> aranır (dosya adı <c>Boot</c>); sabit yol gömmüyoruz
     /// ki sahne taşındığında araç kırılmasın.</para>
     ///
+    /// <para><b>Silah rolü:</b> başlangıç seçimine bakılmaksızın Play kalibrasyon sahnesinden
+    /// koşar; o sahne Build Settings'te olmadığı için <c>AssetDatabase</c>'ten aranır.</para>
+    ///
     /// <para><b>Hiçbir süreç öldürülmez — sunucuya HİÇ dokunulmaz.</b> Sunucu üretimde de ayrı
     /// bir makinede sürekli açık durur ve bu projede <b>tamamen elle</b> yönetilir: editör
     /// sunucuyu ne başlatır ne durdurur, editör kapanırken de öldürmez. Aksi hâlde elle
@@ -47,6 +50,15 @@ namespace VortexArena.App.Editor
         /// </summary>
         private static void ApplyPlayModeStartScene()
         {
+            if (DevSession.Enabled && DevSession.Role == AppSession.RoleWeapon)
+            {
+                // "Başlangıç" seçimi bu rolde YOK SAYILIR: kalibrasyonun tek girişi kendi
+                // sahnesidir — Boot'tan koşmak onu Lobby'ye götürür, açık sahneden koşmak ise
+                // o an hangi sahne açıksa oraya (arena/prefab stage) düşürürdü.
+                ApplyWeaponCalibrationStartScene();
+                return;
+            }
+
             if (!DevSession.Enabled || !DevSession.StartFromBoot)
             {
                 EditorSceneManager.playModeStartScene = null;
@@ -65,6 +77,41 @@ namespace VortexArena.App.Editor
             }
 
             EditorSceneManager.playModeStartScene = boot;
+        }
+
+        /// <summary>
+        /// Play'i silah kalibrasyon sahnesinden başlatır.
+        /// <para>⚠️ Sahne <b>Build Settings'ten DEĞİL</b> <c>AssetDatabase</c>'ten aranır: bu
+        /// sahne bilerek Build Settings'te değildir (oynanan bir içerik değil, editör aracıdır)
+        /// — Boot'taki aramanın aynısını yapmak burada hep "bulunamadı" derdi.</para>
+        /// </summary>
+        private static void ApplyWeaponCalibrationStartScene()
+        {
+            string[] guids = AssetDatabase.FindAssets($"t:SceneAsset {AppSession.SceneWeaponCalibration}");
+            SceneAsset scene = null;
+            for (int i = 0; i < guids.Length && scene == null; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (string.IsNullOrEmpty(path) ||
+                    !string.Equals(Path.GetFileNameWithoutExtension(path),
+                        AppSession.SceneWeaponCalibration, System.StringComparison.Ordinal))
+                {
+                    continue; // arama adı "içerir" gibi eşleştiği için tam ad doğrulaması şart
+                }
+
+                scene = AssetDatabase.LoadAssetAtPath<SceneAsset>(path);
+            }
+
+            if (scene == null)
+            {
+                Debug.LogWarning(
+                    $"[DevBootstrap] '{AppSession.SceneWeaponCalibration}' sahnesi projede " +
+                    "bulunamadı — Play açık sahneden başlayacak ve silah kalibrasyonu koşmaz.");
+                EditorSceneManager.playModeStartScene = null;
+                return;
+            }
+
+            EditorSceneManager.playModeStartScene = scene;
         }
 
         /// <summary>
@@ -104,16 +151,14 @@ namespace VortexArena.App.Editor
         // ----------------------------------------------------------------- kısayol
 
         /// <summary>
-        /// <c>Ctrl+Alt+R</c> — rolü player ↔ admin arasında çevirir. Kısayol kimliği ASCII
-        /// tutulur (Shortcut Manager kimlikleri kullanıcı ayarlarına yazılır).
+        /// <c>Ctrl+Alt+R</c> — rolü player → admin → weapon → player sırasıyla çevirir. Kısayol
+        /// kimliği ASCII tutulur (Shortcut Manager kimlikleri kullanıcı ayarlarına yazılır).
         /// </summary>
         [Shortcut("VortexArena/Dev: Rol Degistir", null, KeyCode.R,
             ShortcutModifiers.Action | ShortcutModifiers.Alt)]
         private static void ToggleRole()
         {
-            DevSession.Role = DevSession.Role == AppSession.RolePlayer
-                ? AppSession.RoleAdmin
-                : AppSession.RolePlayer;
+            DevSession.Role = NextRole(DevSession.Role);
 
             string message = $"Rol: {DevSession.Role}";
 
@@ -123,6 +168,17 @@ namespace VortexArena.App.Editor
             Debug.Log($"[DevBootstrap] {message} (Ctrl+Alt+R). Seçim: {DevSession.Summary}");
 
             RepaintOpenDevWindows();
+        }
+
+        /// <summary>Rol halkasının bir sonraki adımı; tanınmayan değer admin'den devam eder.</summary>
+        private static string NextRole(string role)
+        {
+            if (role == AppSession.RolePlayer)
+            {
+                return AppSession.RoleAdmin;
+            }
+
+            return role == AppSession.RoleWeapon ? AppSession.RolePlayer : AppSession.RoleWeapon;
         }
 
         /// <summary>Açık dev pencerelerini tazeler; pencere kapalıysa hiçbir şey yapmaz.</summary>

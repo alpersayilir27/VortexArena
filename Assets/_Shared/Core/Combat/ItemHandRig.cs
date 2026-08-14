@@ -6,10 +6,9 @@ namespace VortexArena.Core.Combat
     /// Silah prefabındaki <b>el modellerinin</b> yerinin ve adının TEK tanımı — kavramanın
     /// <b>elle yazılan</b> tek kaynağı bu düğümlerdir.
     /// <para>
-    /// Yerleşim iki seviyedir: <c>&lt;silah kökü&gt;/Hands/Hand_&lt;Kind&gt;</c>. Aynı desen
-    /// <see cref="ItemGripPoses"/>'ta da var ve gerekçesi aynı: üretici (editör aracı) ile
-    /// tüketici kendi string'ini taşısaydı bir harflik sapma hata üretmez, yalnız düğüm sessizce
-    /// <b>bulunamaz</b> olurdu.
+    /// Yerleşim iki seviyedir: <c>&lt;silah kökü&gt;/Hands/Hand_&lt;Kind&gt;</c>. Ad tek yerde
+    /// durur çünkü üretici (editör aracı) ile tüketici kendi string'ini taşısaydı bir harflik
+    /// sapma hata üretmez, yalnız düğüm sessizce <b>bulunamaz</b> olurdu.
     /// </para>
     /// <para>
     /// ⚠️ <b>Yalnız SAĞ el yazılır.</b> Sol el bake sırasında aynalanarak üretilir
@@ -47,7 +46,8 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// Silahın altındaki el düğümünü bulur; yoksa <c>null</c>.
         /// <para>⚠️ Ağaç TARANMAZ (<c>GetComponentsInChildren</c> değil): arama tam iki seviye
-        /// <see cref="Transform.Find"/> ile iner — aynı gerekçe <see cref="ItemGripPoses.Find"/>'da.
+        /// <see cref="Transform.Find"/> ile iner — ağacı taramak, silahın başka bir yerine
+        /// düşmüş aynı adlı bir düğümü de "doğru" sayardı.
         /// <c>Transform.Find</c> pasif çocukları da bulur, yani gizlenmiş el düğümü de bulunur
         /// (bake'ten sonra düğüm kapalıdır ve yeniden düzenlenebilmelidir).</para>
         /// </summary>

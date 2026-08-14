@@ -34,8 +34,8 @@ namespace VortexArena.Core.Player
         /// pozundan koparıyor, yani "silah tam elimde durmuyor" şikâyetine ikinci, gizli bir terim
         /// ekliyordu; (2) altı silahın kavrama verisi zaten bu ofsetin ÜSTÜNE ayarlandığı için iki
         /// ayrı düğme aynı şeyi ayarlıyordu ve hangisinin bozuk olduğu ayırt edilemiyordu.
-        /// Silahın elde nerede durduğu tek yerden ayarlanır: <c>WD_*.asset</c>'teki
-        /// <c>primaryGripPosition/Euler</c> (Kavrama Pozu Stüdyosu).
+        /// Silahın elde nerede durduğu tek yerden gelir: <c>WD_*.asset</c>'e yakalanmış kavrama
+        /// kaydı (<see cref="VortexArena.Core.Combat.ItemGripCapture"/>).
         /// </para>
         /// <para>
         /// Gerçekten ölçülmüş bir bilek ofseti gerekirse (<see cref="HandGripCalibrationProbe"/>
@@ -61,9 +61,9 @@ namespace VortexArena.Core.Player
         /// ⚠️ <b>Rotasyon BİLEREK anchor'ın kendisidir</b> ve
         /// <see cref="HandGripConvention.AnchorBasis"/> buraya karıştırılmaz: o baz uzak gövdenin
         /// bileğini humanoid eksene köprülemek için var. İkisi tek sabite bağlanırsa bileği
-        /// düzeltmek silahın duruşunu bozar (ve tersi). Ayrıca kavrama authoring'i (silahın üstüne
-        /// oturtulan el modeli, <c>Kavrama Pozu Stüdyosu</c>) anchor ekseninde ölçülmüştür — dönüşü
-        /// değiştirmek her silahın kavrama pozunu bir anda geçersiz kılardı.
+        /// düzeltmek silahın duruşunu bozar (ve tersi). Ayrıca yakalanan kavrama kayıtları anchor
+        /// ekseninde ölçülmüştür — dönüşü değiştirmek her silahın kavramasını bir anda geçersiz
+        /// kılardı.
         /// </para>
         /// <para>⚠️ <c>Transform.TransformPoint</c> DEĞİL elle bileşim: ofset METRE cinsindendir,
         /// rig'in ölçeği 1 olmasa bile büyütülmemeli (projede tekrarlanan kural).</para>
