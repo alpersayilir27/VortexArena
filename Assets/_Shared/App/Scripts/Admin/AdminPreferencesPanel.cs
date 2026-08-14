@@ -65,7 +65,9 @@ namespace VortexArena.App.Admin
         // prefabta alttaki her şeyi kaydırmak + paneli büyütmek. Kaba satır maliyeti: Section 34,
         // döngüleyici 40, düğme satırı 50.
         // ⚠️ Panel 1080p referansta TAVANDA: üstten/alttan ~17 px pay kaldı — bir satır daha
-        // SIĞMAZ, sonraki ekleme içeriği kaydırılabilir yapmayı gerektirir.
+        // SIĞMAZ, sonraki ekleme içeriği kaydırılabilir yapmayı gerektirir. Pencere kipi ve
+        // OYUNDAN ÇIK düğmeleri bu yüzden yeni satır açmaz: ilki başlık çubuğunun (KAPAT'ın
+        // solundaki), ikincisi bağlantı satırının boş kalan sağ ucuna kondu.
 
         /// <summary>Skor limiti adımlayıcısının eşiği: bu değerin altında ±1, üstünde ±5 adımlar.
         /// İki düğmeli döngüleyiciyle hem düşük limitlerde hassasiyet hem yüksek limitlerde
@@ -90,6 +92,13 @@ namespace VortexArena.App.Admin
         [SerializeField] private GameObject _root;
 
         [SerializeField] private Button _closeButton;
+
+        /// <summary>Tam ekran ↔ pencereli düğmesi. ⚠️ <b>Başlık çubuğunda, KAPAT'ın yanında
+        /// durur</b> — GÖRÜNÜM bölümünde değil: pencere kipi bir sahne tercihi değil pencere
+        /// süsüdür ve bulunacağı yer klasik pencere köşesidir (F11 ile aynı iş).</summary>
+        [SerializeField] private Button _screenModeButton;
+
+        [SerializeField] private TextMeshProUGUI _screenModeLabel;
 
         [Header("MAÇ bölümü (ortak)")]
 
@@ -189,6 +198,19 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _reconnectButton;
         [SerializeField] private Button _disconnectButton;
 
+        /// <summary>Admin uygulamasını kapatır — <b>iki adımlı onay</b> ile
+        /// (<see cref="ArmQuit"/>). Bağlantı satırının yanında durur: ikisi de oturumu bitiren
+        /// eylemlerdir ve operatör onları aynı yerde arar.</summary>
+        [SerializeField] private Button _quitButton;
+
+        [SerializeField] private TextMeshProUGUI _quitLabel;
+
+        /// <summary>Çıkışın onay penceresi (sn) — toplu kalibrasyon sıfırlamayla aynı gerekçe:
+        /// koşan bir maçın ortasında yanlış tıklamayla kapanan admin, operatörü sahaya kör
+        /// bırakır ve geri alınamaz.</summary>
+        private const float QuitConfirmSeconds = 3f;
+        private float _quitArmedAt = -1f;
+
         // ---- Oyuncu kimliği (§2): SEÇİLİ oyuncunun adı + forma numarası ----
         // Hedef ayrı bir seçiciyle DEĞİL AdminSession.SelectedPlayerId ile belirlenir: satıra
         // tıklamak zaten seçim jestidir, ikinci bir liste iki ayrı "seçili oyuncu" kavramı üretirdi.
@@ -279,6 +301,7 @@ namespace VortexArena.App.Admin
         private void WireButtons()
         {
             Wire(_closeButton, AdminSession.ClosePanel);
+            Wire(_screenModeButton, AdminSession.ToggleScreenMode);
 
             WireDropdown(_modeDropdown, SelectMode);
             WireDropdown(_mapDropdown, SelectMap);
@@ -324,6 +347,7 @@ namespace VortexArena.App.Admin
 
             Wire(_reconnectButton, AdminCommands.Reconnect);
             Wire(_disconnectButton, AdminCommands.Disconnect);
+            Wire(_quitButton, ArmQuit);
         }
 
         private static void Wire(Button button, UnityEngine.Events.UnityAction action)
@@ -405,6 +429,12 @@ namespace VortexArena.App.Admin
                 _dirty = true;
             }
 
+            if (_quitArmedAt >= 0f && Time.unscaledTime - _quitArmedAt > QuitConfirmSeconds)
+            {
+                _quitArmedAt = -1f;
+                _dirty = true;
+            }
+
             if (_dirty)
             {
                 _dirty = false;
@@ -425,6 +455,36 @@ namespace VortexArena.App.Admin
             _clearAllArmedAt = -1f;
             AdminCommands.ClearCalibration(0);
             _dirty = true;
+        }
+
+        /// <summary>
+        /// Admin uygulamasını kapatır — iki adımlı onay (<see cref="ArmClearAllCalibration"/>
+        /// deseni). ⚠️ Sunucuya "kapanıyorum" diye bir şey söylenmez ve söylenmemeli: admin
+        /// gözlemcidir, gidişi maçı etkilemez (soket kapanınca sunucu zaten düşürür).
+        /// </summary>
+        private void ArmQuit()
+        {
+            if (_quitArmedAt < 0f)
+            {
+                _quitArmedAt = Time.unscaledTime;
+                _dirty = true;
+                return;
+            }
+
+            _quitArmedAt = -1f;
+            _dirty = true;
+            Quit();
+        }
+
+        private static void Quit()
+        {
+#if UNITY_EDITOR
+            // Editörde Application.Quit() no-op'tur; oynatmayı durdurmak aynı anlama gelir
+            // (KickedShutdown ile aynı sözleşme).
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
 
         private void MarkDirty()
@@ -1264,6 +1324,8 @@ namespace VortexArena.App.Admin
             SyncMapDropdown();
 
             ApplySelectionLock();
+            ApplyScreenModeButton();
+            ApplyQuitButton();
 
             // 0 = arayüz bir değer bilmiyor → sunucu modun varsayılanını kullanacak.
             _durationValue.text = _roundSeconds > 0
@@ -1331,6 +1393,49 @@ namespace VortexArena.App.Admin
                 ? $" — {AdminSelection.AdminCount} admin bağlı"
                 : "";
             _connectionText.text = $"{state} — {endpoint}{peers}";
+        }
+
+        /// <summary>
+        /// Pencere kipi düğmesini <b>yürürlükteki</b> kiple boyar: tam ekranda vurgulu
+        /// (<see cref="UiKit.Accent"/>), pencerelide sönük — kalibre modu düğmeleriyle aynı dil.
+        /// <para>Metin YÜRÜRLÜKTEKİ kipi yazar, tıklayınca ne olacağını değil (panelin geri kalanı
+        /// da durum gösterir); kısayol etikete yazılır ki operatör F11'i bir kez görsün.</para>
+        /// <para>Değer <see cref="AdminSession"/>'dan okunur — F11 ile değiştiğinde panel
+        /// <c>Changed</c> ile tazelendiği için düğme kendiliğinden doğru kalır.</para>
+        /// </summary>
+        private void ApplyScreenModeButton()
+        {
+            bool full = AdminSession.FullScreen;
+
+            if (_screenModeLabel != null)
+            {
+                _screenModeLabel.text = full ? "TAM EKRAN · F11" : "PENCERELİ · F11";
+                _screenModeLabel.color = full ? UiKit.OnAccent : UiKit.Muted;
+            }
+
+            if (_screenModeButton != null && _screenModeButton.targetGraphic is Image image)
+            {
+                image.color = full ? UiKit.Accent : CalibModeIdleFill;
+            }
+        }
+
+        /// <summary>Çıkış düğmesi: onay penceresi açıkken metin ve renk uyarır (toplu kalibrasyon
+        /// sıfırlamayla aynı desen).</summary>
+        private void ApplyQuitButton()
+        {
+            if (_quitLabel == null)
+            {
+                return;
+            }
+
+            bool armed = _quitArmedAt >= 0f;
+            _quitLabel.text = armed ? "EMİN? ÇIK" : "OYUNDAN ÇIK";
+            _quitLabel.color = armed ? UiKit.OnAccent : UiKit.Bad;
+
+            if (_quitButton != null && _quitButton.targetGraphic is Image image)
+            {
+                image.color = armed ? UiKit.Bad : CalibModeIdleFill;
+            }
         }
 
         /// <summary>

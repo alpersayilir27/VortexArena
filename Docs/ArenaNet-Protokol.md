@@ -1594,6 +1594,10 @@ halkasını kırmızı yakıp söndürür.
 | **Kafa** alanın dışında | ✅ uyarı yazısı + `FLAG_OUT_OF_BOUNDS`; **can gitmez** | ✅ (muhafazanın kendi karartması) | ✅ tetik ölür |
 | Kol / gövde / bacak | — | — | — |
 
+⚠️ **Tablonun üç sütunu üç ayrı kapıdan geçer.** "Ceza" sütunu faz `playing` + canlı + kalibre
+ister (sunucuda); "Karartma + titreşim" ve ateş kapısı **hiçbirini istemez** — her harita, her mod,
+her faz ve ölü/diri fark etmeksizin çalışırlar.
+
 ⚠️ **Ceza yalnız kafayı yargılar, ateş kapısı kafa + eli.** Sebep iki sorunun farklı olmasıdır:
 ceza *"görüşüm geometrinin içinde mi"* diye sorar, ateş kapısı *"gövdemi göstermeden mi ateş
 ediyorum"* diye. Bloğun içinde durup silahı dışarı uzatan oyuncu ikincisini ihlal ediyor ama silahı
@@ -1695,7 +1699,12 @@ tarafında ölçülür ve sunucuya bildirilmez:
 
 - **Karartma:** kafa kabuğunun **herhangi bir noktası** geometriye değdiği anda ekran **kademesiz**
   olarak tam siyah olur (orada görülecek meşru bir şey yoktur; duvar arkasını görmek tam olarak
-  istismarın kendisidir). ⚠️ **Kapısı ceza eşiği DEĞİL TEMASTIR** ve oraya bağlanmaz: ceza eşiği
+  istismarın kendisidir). ⚠️ **FAZDAN, MODDAN, HARİTADAN ve CANLILIKTAN bağımsızdır** ve bu bir
+  ihmal değil kuraldır: lobide, yüklemede, geri sayımda, maç sonunda ve oyuncu ölüyken de çalışır.
+  Cezanın kapıları (faz `playing` · canlı · kalibre) **yalnız can eritmeye** aittir ve sunucudadır;
+  karartma bir ceza değil bir **görüş kısıtıdır** — maç başlamadan duvarın öbür yüzünü okumak da
+  aynı istismardır. Ölüyken susturmak ayrıca "engelin içinde canlanma yok" kapısıyla çelişirdi:
+  oyuncu neden canlanmadığını göremezdi. ⚠️ **Kapısı ceza eşiği DEĞİL TEMASTIR** ve oraya bağlanmaz: ceza eşiği
   (nokta sayısı + minimum süre) bilerek toleranslıdır ve aynı toleransı görüşe uygulamak, oyuncunun
   kafasını bloğun içine **görecek kadar** sokmasına izin verir. ⚠️ Aynı sebeple ne giriş rampası ne
   de kısmi kararma (**değme bandı**) vardır — ikisi de birkaç kare boyunca yarı saydam bir perde
@@ -1707,6 +1716,7 @@ tarafında ölçülür ve sunucuya bildirilmez:
   Kararan ekran tek başına *"ne oldu"* sorusunu doğuruyor; nabız ona *"duvardasın, geri çekil"*
   cevabını verir. ⚠️ Sürekli titreşim uyarı olmaktan çıkar, bu yüzden nabızdır.
 - **Uyarı yazısı:** karartmanın üstünde nabız atarak "duvarın içindesin, oyun alanına dön" der.
+  Karartmanın açıklaması olduğu için **onunla aynı kapıdadır**: faz ve canlılık sorulmaz.
 - **Can kaybının kırmızısı:** karartmanın **üstünde** ayrı bir katmandır. ⚠️ Karartma hakemine
   (`ScreenFade`) kaynak olarak eklenemez: "en yüksek alfa kazanır" kuralı siyah 1.0'dayken kırmızıyı
   tümden yutar ve oyuncu canının gittiğini hiç görmez.

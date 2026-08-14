@@ -29,6 +29,16 @@ namespace VortexArena.Core.Audio
         /// Maçın bitmesine <see cref="ModeAudioRegistry.Rule.WarningSeconds"/> kaldı.
         /// <see cref="RoundEndWarning"/> için eşleşen kural yoksa devralır.
         /// </summary>
-        MatchEndWarning = 2
+        MatchEndWarning = 2,
+
+        /// <summary>
+        /// Tur bitti ve <b>arkasından yenisi geliyor</b>: mod duraklatma istedi (faz
+        /// <c>playing</c> → <c>paused</c>, <c>phaseReason == "mode"</c>). Tur tabanlı modda
+        /// (turnuva) turlar arası toplanmanın başlangıcıdır.
+        /// <para>⚠️ <b>Maçı bitiren tur bu tetikleyiciyi ÇALDIRMAZ</b>: orada faz doğrudan
+        /// <c>finished</c>'a gider ve duyuruyu maç sonucu (<see cref="GameSoundId"/>) devralır —
+        /// "mevzilerinize dönün" denecek bir sonraki tur yok.</para>
+        /// </summary>
+        RoundEnd = 3
     }
 }

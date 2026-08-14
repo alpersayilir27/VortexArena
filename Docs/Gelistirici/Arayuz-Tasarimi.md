@@ -18,7 +18,7 @@ Tüm arayüz prefabları **tek klasörde**: `Assets/_Shared/App/Resources/UI/`
 |---|---|---|
 | **`AdminHud.prefab`** | Admin ekranının kalıcı katmanı: skorlar, chip, takım kolonları, kamera şeridi, ölüm akışı. Tercihler ve istatistik panelleri içinde **nested prefab örneği** olarak durur | `AdminSpectator` |
 | **`AdminStatsPanel.prefab`** | İstatistik paneli (kart + oyuncu tablosu) — sürücü bileşeni kökünde | `AdminHud` içinde nested örnek |
-| **`AdminPreferencesPanel.prefab`** | Tercihler paneli (mod/harita/süre/kalibrasyon/görünüm) — sürücü bileşeni kökünde | `AdminHud` içinde nested örnek |
+| **`AdminPreferencesPanel.prefab`** | Tercihler paneli (mod/harita/süre/kalibrasyon/görünüm/bağlantı) — sürücü bileşeni kökünde. Başlık çubuğunda `KAPAT`'ın yanında **pencere kipi** düğmesi (`ScreenMode`), bağlantı satırının sağında **`QuitGame`** durur. ⚠️ Panel 1080p referansta **tavandadır** (alttan ~22 px pay): yeni bir tam satır SIĞMAZ — sonraki ekleme içeriği kaydırılabilir yapmayı gerektirir, bu ikisi de bu yüzden var olan satırların boş yerine kondu | `AdminHud` içinde nested örnek |
 | **`AdminPlayerRow.prefab`** | Kolonlardaki tek oyuncu satırı (ad, HP barı, POV/KAL/ÖLÇ/CAN/TAKIM/KİMLİK/AT) | `AdminHud` örnekler |
 | **`AdminPlayerMarker.prefab`** | Oyuncunun zemindeki halkası + ad etiketi (dünya uzayı) | `AdminPlayerMarkers` örnekler |
 | **`ConnectionOverlayScreen.prefab`** | Bağlantı hata ekranı — masaüstü (scrim + "Yeniden Bağlan" düğmesi) | `ConnectionOverlay` |

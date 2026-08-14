@@ -36,3 +36,10 @@ MonoBehaviour:
     - {fileID: 8300000, guid: d5d3648d32213874b984af2af1a46844, type: 3}
     volume: 1
     warningSeconds: 5
+  - modeId: tournament
+    sceneName: 
+    trigger: 3
+    clips:
+    - {fileID: 8300000, guid: d8c8a724d04b03247bba90f03f513260, type: 3}
+    volume: 1
+    warningSeconds: 0

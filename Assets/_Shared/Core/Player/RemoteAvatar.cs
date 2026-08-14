@@ -15,6 +15,10 @@ namespace VortexArena.Core.Player
     /// takım rengi MaterialPropertyBlock ile _BaseColor'a yazılır (URP Lit).
     /// RemotePlayerSpawner tarafından Instantiate + Initialize ile kurulur.
     /// <para>
+    /// <b>Ad etiketi yalnız TAKIMDAŞA çizilir</b> — rakibin adı hiçbir mod/harita/fazda görünmez,
+    /// takımsız modda (FFA) hiç kimseninki görünmez: <see cref="ShouldShowNameLabel"/>.
+    /// </para>
+    /// <para>
     /// Snapshot'taki alive bayrağı okunur — ölü oyuncu <b>hayalet gövdeye</b> döner (yarı saydam,
     /// iki yüzü de çizilen <c>VortexArena/AvatarGhost</c>; rengi oyuncunun KENDİ takımı), ad
     /// etiketine " (ölü)" eklenir ve vuruş kutuları kapatılır (ölüye ateş edilemez). <b>Aynı
@@ -74,8 +78,10 @@ namespace VortexArena.Core.Player
                  "kafa/el/kapsül yolu kullanılır.")]
         [SerializeField] private ArenaNetCharacterBehaviour character;
 
-        [Tooltip("YEREL oyuncuyla aynı takımdayken görünen dost göstergesi (kafanın üstündeki küp).")]
-        [SerializeField] private GameObject friendMarker;
+        // ⚠️ Kafanın üstünde dost/takımdaş göstergesi (küp, halka, ok…) YOKTUR ve eklenmez:
+        // bakana göre değişen bir işaret, oyuncunun kafasını arenanın her yerinden okunur yapıyordu.
+        // Takım kimliği zaten iki yerden okunur — ad etiketinin RENGİ ve kırmızı takımın AYRI gövdesi
+        // (redBodyRoot); ikisi de normal derinlik testiyle çizilir, yani duvar arkası avantajı doğmaz.
 
         [Tooltip("İlk poz gelene dek gizlenecek görsel kök. Boşsa teamRenderers listesi kullanılır.")]
         [SerializeField] private GameObject visualRoot;
@@ -104,10 +110,7 @@ namespace VortexArena.Core.Player
         /// </summary>
         private const float DeadColorScale = 0.35f;
 
-        /// <summary>Dost göstergesinin kafa merkezinin üstündeki yüksekliği (metre).</summary>
-        private const float FriendMarkerHeightMeters = 0.32f;
-
-        /// <summary>Ad etiketinin kafa merkezinin üstündeki yüksekliği (metre) — göstergenin üstünde.</summary>
+        /// <summary>Ad etiketinin kafa merkezinin üstündeki yüksekliği (metre).</summary>
         private const float NameLabelHeightMeters = 0.5f;
 
         /// <summary>
@@ -205,6 +208,18 @@ namespace VortexArena.Core.Player
         /// </summary>
         public bool IsSpawnProtected { get; private set; }
 
+        /// <summary>
+        /// Bu istemci bir <b>gözlemci</b> mi (admin). Yalnız <c>AdminSpectator</c> yazar; oyuncu
+        /// build'inde HİÇBİR yerden yazılmaz.
+        /// <para>Tek etkisi ad etiketi kapısını atlamaktır (<see cref="ShouldShowNameLabel"/>):
+        /// rakip etiketini gizleme kuralı bir <b>oyun</b> kuralıdır — operatör sahada kimin nerede
+        /// olduğunu görmek zorundadır ve zaten kuş bakışı işaretçilerinde adları okuyor.</para>
+        /// <para>⚠️ Statiktir çünkü <see cref="RemoteAvatar"/> Core'dadır ve rolü bilen
+        /// <c>AppSession</c> App katmanındadır (bağımlılık hep aşağı akar); aynı desen
+        /// <c>ArenaBoundary.SetSpectatorMode</c>'da da kullanılıyor.</para>
+        /// </summary>
+        public static bool SpectatorMode { get; set; }
+
         // GC üretmemek için alan olarak tutulur (SetInfo her lobby_state'te çağrılabilir).
         private MaterialPropertyBlock _propertyBlock;
 
@@ -214,9 +229,6 @@ namespace VortexArena.Core.Player
 
         private bool _visible = true;
 
-        /// <summary>Bu uzak oyuncu YEREL oyuncuyla aynı takımda mı (dost göstergesini sürer).</summary>
-        private bool _isFriendly;
-
         // Ad/numara/renk SetInfo'da saklanır; ölüm görünümü bunların üstüne uygulanır.
         private string _displayName = "";
 
@@ -224,6 +236,14 @@ namespace VortexArena.Core.Player
         private int _number;
 
         private Color _teamColor = NeutralColor;
+
+        /// <summary>
+        /// Bu oyuncunun takımı (roster'ın <c>team</c> alanından; boş/tanımsız = <see cref="Team.Neutral"/>).
+        /// <para>Rengin yanı sıra AYRI tutulur çünkü ad etiketinin kapısı bir renk sorusu değil bir
+        /// <b>kimlik</b> sorusudur: "bu avatar yerel oyuncuyla aynı takımda mı"
+        /// (<see cref="ShouldShowNameLabel"/>).</para>
+        /// </summary>
+        private Team _team = Team.Neutral;
 
         /// <summary>
         /// Hayalet gövdenin rengi — <see cref="_teamColor"/> ile AYNI kaynaktan (roster'ın takım
@@ -725,6 +745,7 @@ namespace VortexArena.Core.Player
         {
             _displayName = displayName ?? "";
             _number = number;
+            _team = team == "red" ? Team.Red : team == "blue" ? Team.Blue : Team.Neutral;
             _teamColor = team == "red" ? TeamRedColor : team == "blue" ? TeamBlueColor : NeutralColor;
             _ghostTeamColor = team == "red" ? GhostRedColor : team == "blue" ? GhostBlueColor : GhostNeutralColor;
             _labelColor = team == "red" ? TeamRedColor
@@ -733,6 +754,7 @@ namespace VortexArena.Core.Player
             ApplyRedBody(team == "red");
 
             ApplyLabelText();
+            RefreshLabelVisibility();
             ApplyTeamColor();
             ApplyBodyVisual();
         }
@@ -827,51 +849,6 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Bu uzak oyuncu YEREL oyuncuyla aynı takımda mı — kafanın üstündeki dost göstergesi
-        /// buna göre açılır.
-        /// <para>
-        /// Takım rengi karakter mesh'ine UYGULANMAZ: herkes aynı modeli kullanıyor ve ayrımı
-        /// yapan tek şey bu göstergedir. Düşmanda hiçbir işaret olmaması bilinçlidir — düşmanı
-        /// da işaretlemek arenada duvar arkasından okunabilen bir avantaj üretirdi.
-        /// </para>
-        /// <para>⚠️ <b>Modelin kendisi bunun İSTİSNASIDIR:</b> kırmızı takım ayrı bir gövdeyle çizilir
-        /// (<see cref="redBodyRoot"/>), yani takım kimliği bakışla okunur. Renk kuralıyla çelişmez: renk
-        /// bakana göre değişen dost/düşman bilgisidir ve MaterialPropertyBlock ile duvar arkasından da
-        /// okunabilecek bir işaret üretirdi; model ise oyuncunun kendi özelliğidir, herkeste aynı görünür
-        /// ve normal ZTest ile çizilir.</para>
-        /// </summary>
-        public void SetFriendly(bool friendly)
-        {
-            if (_isFriendly == friendly)
-            {
-                return;
-            }
-
-            _isFriendly = friendly;
-            RefreshFriendMarker();
-        }
-
-        /// <summary>Göstergeyi kafanın üstünde tutar — kafa KEMİĞİNE bağlanmaz, çünkü IK her
-        /// karede kemiği yeniden yerleştiriyor ve gösterge onunla birlikte eğilmemeli.</summary>
-        private void UpdateFriendMarker(in Pose headWorld)
-        {
-            if (friendMarker == null || !friendMarker.activeSelf)
-            {
-                return;
-            }
-
-            friendMarker.transform.position = headWorld.position + Vector3.up * FriendMarkerHeightMeters;
-        }
-
-        private void RefreshFriendMarker()
-        {
-            if (friendMarker != null)
-            {
-                friendMarker.SetActive(_visible && _isFriendly);
-            }
-        }
-
-        /// <summary>
         /// Ad etiketi; ölüyken " (ölü)", kalibresizken " (KALİBRESİZ)" eki taşır.
         /// <para>
         /// <b>Etiketin RENGİ takımdır</b> (ölüde karartılmış): aynı ad admin kartında ve kuş bakışı
@@ -879,8 +856,8 @@ namespace VortexArena.Core.Player
         /// sorusunu okumadan cevaplatır.
         /// </para>
         /// <para>
-        /// ⚠️ Bu, "takım rengi karakter mesh'ine yazılmaz" kuralının istisnası DEĞİLDİR
-        /// (<see cref="SetFriendly"/>): etiket zaten oyuncunun kimliğini yazıyor ve kırmızı takım
+        /// ⚠️ Bu, "takım rengi karakter mesh'ine yazılmaz" kuralının istisnası DEĞİLDİR:
+        /// etiket zaten oyuncunun kimliğini yazıyor ve kırmızı takım
         /// kendi gövdesiyle çiziliyor — renk telde olmayan yeni bir bilgi açmaz, olanı okunur
         /// yapar. Etiket normal derinlik testiyle çizilir, duvar arkasından okunmaz.
         /// </para>
@@ -896,6 +873,60 @@ namespace VortexArena.Core.Player
                     ? _labelColor
                     : new Color(_labelColor.r * NameLabelDeadScale, _labelColor.g * NameLabelDeadScale,
                         _labelColor.b * NameLabelDeadScale, _labelColor.a);
+            }
+        }
+
+        /// <summary>
+        /// <b>Ad etiketi kimlere çizilir:</b> yalnız yerel oyuncunun TAKIMDAŞLARINA.
+        /// <para>
+        /// Kural mod/harita/faz'dan bağımsızdır ve üç kapısı vardır:
+        /// takımsız modda (<see cref="ModeRuntime.IsTeamless"/>, ör. FFA) <b>hiç kimsenin</b>
+        /// etiketi çizilmez — orada herkes rakiptir; yerel takım
+        /// <see cref="Team.Neutral"/> ise (henüz <c>load_match</c> gelmedi ya da takım temizlendi)
+        /// de çizilmez — "bilmiyorum" durumunda göstermek tam da sızdıran durumdur; kalanında
+        /// takım eşitliği aranır.
+        /// </para>
+        /// <para>
+        /// ⚠️ Kapı <b>çizim anında</b> sorulur (<see cref="UpdateLabel"/>), bir olaya abone
+        /// olunarak değil: yerel takım koşan maçta değişebiliyor (<c>set_team</c>) ve mod
+        /// <c>load_match</c> ile değişiyor — kaçırılan tek bir olay rakip adını kalıcı olarak
+        /// ekranda bırakırdı.
+        /// </para>
+        /// <para>
+        /// ⚠️ Etiketin RENGİNİN takım olması (<see cref="ApplyLabelText"/>) bu kuralla çelişmez:
+        /// çizilen her etiket zaten bir takımdaşındır, renk yalnız admin kartı ve kuş bakışı
+        /// işaretçisiyle aynı okumayı verir.
+        /// </para>
+        /// <para>Tek istisna gözlemcidir (<see cref="SpectatorMode"/>).</para>
+        /// </summary>
+        private bool ShouldShowNameLabel()
+        {
+            if (SpectatorMode)
+            {
+                return true;
+            }
+
+            if (ModeRuntime.IsTeamless)
+            {
+                return false;
+            }
+
+            Team local = ArenaCombat.LocalTeam;
+            return local != Team.Neutral && _team == local;
+        }
+
+        /// <summary>Etiketin çizilip çizilmeyeceğini tazeler (görünürlük + rakip kapısı).</summary>
+        private void RefreshLabelVisibility()
+        {
+            if (nameLabel == null)
+            {
+                return;
+            }
+
+            bool show = _visible && ShouldShowNameLabel();
+            if (nameLabel.enabled != show)
+            {
+                nameLabel.enabled = show;
             }
         }
 
@@ -1059,7 +1090,7 @@ namespace VortexArena.Core.Player
         /// Hayaletin rengi oyuncunun KENDİ takımıdır (kırmızı takım kırmızı, mavi takım mavi);
         /// kalibresizken turuncuya nabız atar.
         /// <para>
-        /// ⚠️ Renk <b>dost/düşman DEĞİL</b> (<see cref="_isFriendly"/> buraya girmez): dost/düşman
+        /// ⚠️ Renk <b>dost/düşman DEĞİL</b>: dost/düşman
         /// bakana göre değişir, yani aynı ölü oyuncu iki başlıkta iki ayrı renkte görünürdü ve
         /// admin ekranında herkes tek renge düşerdi. Takım ise oyuncunun kendi özelliğidir —
         /// herkeste aynı okunur. Duvar arkası avantajı doğmaz: hayalet <c>ZTest</c>'i normaldir
@@ -1449,7 +1480,6 @@ namespace VortexArena.Core.Player
                 headDrawn.position = character.ScalePointAboutRoot(headWorld.position);
             }
 
-            UpdateFriendMarker(headDrawn);
             UpdateLabel(headDrawn);
         }
 
@@ -2304,6 +2334,13 @@ namespace VortexArena.Core.Player
                 return;
             }
 
+            // ⚠️ Rakip kapısı HER KARE sorulur — gerekçe ShouldShowNameLabel'da.
+            RefreshLabelVisibility();
+            if (!nameLabel.enabled)
+            {
+                return;
+            }
+
             nameLabel.transform.position = headWorld.position + Vector3.up * NameLabelHeightMeters;
 
             if (_mainCamera == null)
@@ -2366,12 +2403,8 @@ namespace VortexArena.Core.Player
 
             RefreshRedBodyDriver();
 
-            if (nameLabel != null)
-            {
-                nameLabel.enabled = visible;
-            }
+            RefreshLabelVisibility();
 
-            RefreshFriendMarker();
             RefreshColliders();
             RefreshHeldItemVisibility();
 
