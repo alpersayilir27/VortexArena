@@ -518,11 +518,27 @@ namespace VortexArena.Core.Combat
             // ⚠️ TransformPoint DEĞİL elle bileşim: yakalama METREdir ve eşyanın görsel ölçeğiyle
             // (WPN_* kökleri 0.8) büyütülmemeli — ölçekli bileşim bileği silahtan 1/0.8 kadar uzağa
             // koyar ve el silahın yanında yüzer.
-            var wrist = new Pose(
-                item.position + item.rotation * grip.position,
-                item.rotation * grip.Rotation);
+            // ⚠️ Poz DÜNYA uzayındadır ve öyle verilmek zorunda (`worldPose: true`): sentetik el
+            // izleme uzayında çalışır, çeviriyi `LockWristPose` yapar. Doğrudan
+            // `LockWristPosition` çağrılırsa çeviri ATLANIR ve el, rig'in dünyadaki yerine göre
+            // sessizce kayar. Dönüş alanı bu yüzden doldurulur ama KULLANILMAZ — kip yalnız
+            // konumu alıyor.
+            var wrist = new Pose(item.position + item.rotation * grip.position, item.rotation);
 
-            synthetic.LockWristPose(wrist, 1f, SyntheticHand.WristLockMode.Full, true);
+            // ⚠️ YALNIZ KONUM kilitlenir (WristLockMode.Position), DÖNÜŞ kilitlenmez ve
+            // kilitlenmeyecek. Sebep: eşyanın dönüşü zaten kumanda anchor'ının dönüşüdür
+            // (ItemDefinition.PrimaryGripRotation = kimlik). Bileğe ayrıca yakalanmış bir dönüş
+            // yazmak, eli kumandadan KOPARIR: oyuncu kumandayı dosdoğru ileri tutarken elini
+            // yakalama anındaki açıyla yamuk görür ve silah — dosdoğru duruyor olsa bile — yamuk
+            // tutuluyormuş gibi okunur. Kilit kalkınca el kumandayla birlikte döner, silah da
+            // aynı dönüşte olduğu için ikisi tek parça gibi durur: kumanda nereye, el ve namlu
+            // oraya.
+            //
+            // ⚠️ Bunun sonucu: elin silah üstündeki AÇISI kalibrasyondan gelmez, donanımın
+            // anchor→bilek sözleşmesinden gelir ve her başlıkta aynıdır. Yakalamanın taşıdığı şey
+            // "el silahın NERESİNDE durur" sorusudur; "hangi açıyla" sorusunun cevabı ayarlanabilir
+            // bir sayı değildir (aynı gerekçe ItemDefinition.PrimaryGripRotation'da).
+            synthetic.LockWristPose(wrist, 1f, SyntheticHand.WristLockMode.Position, true);
 
             for (int i = 0; i < FingerCount; i++)
             {
