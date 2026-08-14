@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace VortexArena.Core.Combat
 {
@@ -40,30 +39,25 @@ namespace VortexArena.Core.Combat
         [Tooltip("OneHand (tabanca/bomba) / TwoHand (tüfek).")]
         [SerializeField] private ItemHoldMode holdMode = ItemHoldMode.OneHand;
 
-        // ⚠️ İKİ KAVRAMA ALANI İKİ AYRI UZAYDA — karıştırmak sessiz bir işaret hatası üretir:
-        //   primaryGrip   = EŞYANIN, ana elin anchor'ına göre yerel pozu  (el → eşya)
-        //   secondaryGrip = ÖN KABZA NOKTASININ, eşyaya göre yerel pozu   (eşya → el)
-        // Sebep asimetri değil, yazılabilirlik: eşyanın dünya pozu ana elden türetilir, ön kabza
-        // ise eşyanın ÜSTÜNDE sabit bir noktadır ("namlu boyunca 25 cm ileride"). İkincisini de
-        // "ele göre" ifade etmek aynı bilgiyi ters bileşimle yazdırmak olurdu.
+        // ⚠️ DÖRT KAYIT DA AYNI UZAYDADIR: her biri elin (ISDK bileğinin) EŞYAYA göre yerel pozudur
+        // (eşya → el). Eski "ana kavrama el → eşya, ikincil eşya → el" asimetrisi kalktı; yakalama
+        // tek yönde ölçüldüğü için ikinci bir uzay tarif etmek yalnız işaret hatası üretirdi.
+        // ⚠️ Kayıt EL BAŞINADIR: kabza simetrik olmadığı için iki elin bileği eşyanın farklı
+        // yerlerine düşer — tek kayıt tutup aynalamak sol eli silahın içine sokardı.
         // Buradaki YARIÇAPLAR duruşun parçası DEĞİL, KAPI ölçüsüdür: kavramanın nerede kabul
         // edildiğini söylerler, eşyanın elde nasıl duracağını değil.
         [Header("Kavrama (kanonik)")]
-        [Tooltip("EŞYANIN ana el anchor'ına göre yerel konumu (m). Prefabın kökü zaten kabza " +
-                 "hizasındaysa sıfır bırakılır; VR'da rahat duruş için burada ince ayar yapılır.")]
-        [FormerlySerializedAs("grantedHoldPosition")]
-        [SerializeField] private Vector3 primaryGripPosition = Vector3.zero;
+        [Tooltip("SAĞ elin ana kabzadaki yakalanmış pozu (eşyaya göre yerel).")]
+        [SerializeField] private ItemGripCapture primaryGripRight;
 
-        [Tooltip("Ana elin kavrama dönüşü (derece, Euler).")]
-        [FormerlySerializedAs("grantedHoldEuler")]
-        [SerializeField] private Vector3 primaryGripEuler = Vector3.zero;
+        [Tooltip("SOL elin ana kabzadaki yakalanmış pozu (eşyaya göre yerel).")]
+        [SerializeField] private ItemGripCapture primaryGripLeft;
 
-        [Tooltip("Ön kabza noktasının EŞYAYA göre yerel konumu (m) — yalnız TwoHand'de anlamlı. " +
-                 "İkinci elin gideceği yer burasıdır.")]
-        [SerializeField] private Vector3 secondaryGripPosition = Vector3.zero;
+        [Tooltip("SAĞ elin ön kabzadaki yakalanmış pozu — yalnız TwoHand'de anlamlı.")]
+        [SerializeField] private ItemGripCapture secondaryGripRight;
 
-        [Tooltip("İkinci elin ön kabzadaki dönüşü, EŞYAYA göre yerel (derece, Euler).")]
-        [SerializeField] private Vector3 secondaryGripEuler = Vector3.zero;
+        [Tooltip("SOL elin ön kabzadaki yakalanmış pozu — yalnız TwoHand'de anlamlı.")]
+        [SerializeField] private ItemGripCapture secondaryGripLeft;
 
         // ⚠️ [Range] KOYULMAZ — dosyanın başındaki netItemId uyarısındaki tuzağın aynısı: Range
         // drawer'ı değeri kendi varsayılan sınırlarına sessizce clamp'ler VE asset'i dirty yapar,
@@ -76,12 +70,11 @@ namespace VortexArena.Core.Combat
         [Tooltip("Ön kabza soketinin yarıçapı (m) — yalnız TwoHand'de anlamlı.")]
         [SerializeField] private float secondaryGripRadius = 0.12f;
 
-        // Parmak duruşu tabanda durur çünkü tabanın ölçütü "ağın + UZAK ÇİZİMİN ihtiyacı"dır ve
-        // bu tam olarak uzak çizim verisidir: parmaklar telde gitmiyor (§6.9), uzak avatarı çizen
-        // taraf duruşu ELDEKİ EŞYADAN çözüyor. Beş sayı tutulmasının gerekçesi HandPoseProfile'da.
-        [Tooltip("Bu eşya tutulurken parmakların kapanma oranı (uzak avatarda çizilir). " +
-                 "Tümü 0 = yazılmamış → genel kavrama duruşu kullanılır.")]
-        [SerializeField] private HandPoseProfile handPose;
+        // ⚠️ Eşya başına PARMAK DURUŞU ALANI YOKTUR ve eklenmez: parmaklar artık authored bir veri
+        // değil, izlemeden/kumandadan gelen canlı bir ölçüdür (yerelde SyntheticHand serbest
+        // bırakılır). Uzak avatar parmakları telde almadığı için yine sentezler, ama kaynağı eşya
+        // başına yazılmış bir profil değil tek bir kavrama duruşudur (HandPoseProfile.DefaultGrip):
+        // yazılan bir profil, yakalanan kavramayla sessizce çelişebilecek ikinci bir tarif olurdu.
 
         // Tracer görünümü tabanda durur çünkü tabanın ölçütü "ağın + UZAK ÇİZİMİN ihtiyacı"dır
         // ve tracer tam olarak uzak çizim verisidir: uzak atışı çizen taraf (RemoteShotFx) olayın
@@ -135,45 +128,137 @@ namespace VortexArena.Core.Combat
         /// <summary>Çift elli mi (kısayol).</summary>
         public bool IsTwoHanded => holdMode == ItemHoldMode.TwoHand;
 
-        /// <summary><b>EŞYANIN</b> ana el anchor'ına göre yerel konumu (metre): el → eşya.</summary>
         /// <summary>
-        /// Bu eşya tutulurken elin parmak duruşu (§6.9 — telde gitmez, uzak uç kendi sürer).
-        /// <para>Yazılmamışsa <see cref="HandPoseProfile.DefaultGrip"/> döner: alanı hiç
-        /// görmemiş eski bir tanım, elin tahta gibi düz kalmasına değil makul bir kavramaya
-        /// düşsün.</para>
+        /// İstenen kavrama noktasının, istenen elin <b>yakalanmış</b> kaydı.
+        /// <para>⚠️ İstenen el yazılmamışsa <b>ÖTEKİ elin kaydına düşülür</b> (ikisi de yoksa
+        /// <c>default</c>): tek elle yakalanmış bir silah, öteki elde silahı orijine yapıştırmak
+        /// yerine yaklaşık ama makul bir duruşta tutulsun. ⚠️ Düşme yalnız <b>okuma</b> içindir —
+        /// "yazılmış mı" sorusunun cevabı <see cref="HasGrip"/>'tir ve o DÜŞMEZ, yoksa eksik el
+        /// hiçbir raporda görünmezdi.</para>
         /// </summary>
-        public HandPoseProfile HandPose => handPose.IsEmpty ? HandPoseProfile.DefaultGrip : handPose;
+        public ItemGripCapture GetGrip(GripSocketKind kind, bool rightHand)
+        {
+            bool secondary = kind == GripSocketKind.Secondary;
+            ItemGripCapture own = secondary
+                ? (rightHand ? secondaryGripRight : secondaryGripLeft)
+                : (rightHand ? primaryGripRight : primaryGripLeft);
 
-        public Vector3 PrimaryGripPosition => primaryGripPosition;
+            if (own.IsCaptured)
+            {
+                return own;
+            }
 
-        /// <summary><b>EŞYANIN</b> ana el anchor'ına göre yerel dönüşü: el → eşya.</summary>
-        public Quaternion PrimaryGripRotation => Quaternion.Euler(primaryGripEuler);
+            ItemGripCapture other = secondary
+                ? (rightHand ? secondaryGripLeft : secondaryGripRight)
+                : (rightHand ? primaryGripLeft : primaryGripRight);
+
+            return other.IsCaptured ? other : default;
+        }
+
+        /// <summary>Bu kavrama noktası <b>bu el için</b> yakalanmış mı (öteki ele DÜŞMEZ —
+        /// gerekçe <see cref="GetGrip"/>'te).</summary>
+        public bool HasGrip(GripSocketKind kind, bool rightHand)
+        {
+            if (kind == GripSocketKind.Secondary)
+            {
+                return (rightHand ? secondaryGripRight : secondaryGripLeft).IsCaptured;
+            }
+
+            return (rightHand ? primaryGripRight : primaryGripLeft).IsCaptured;
+        }
 
         /// <summary>
-        /// <b>ÖN KABZA NOKTASININ EŞYAYA göre</b> yerel konumu (metre): eşya → el. Yalnız
-        /// <see cref="IsTwoHanded"/> iken anlamlı.
-        /// <para>⚠️ <see cref="PrimaryGripPosition"/> ile <b>uzayı terstir</b> — ikinci elin dünya
-        /// pozu <c>eşyaTransformu.TransformPoint(SecondaryGripPosition)</c> ile bulunur, ters
-        /// bileşimle DEĞİL. Ön kabza eşyanın üstünde sabit bir noktadır; bu yüzden eşya-yereldir.</para>
+        /// Eşyanın ana el anchor'ına göre dönüşü — <b>her zaman KİMLİK</b>.
+        /// <para>⚠️ <b>Ayarlanabilir bir kavrama dönüşü alanı YOKTUR ve eklenmez:</b> eşyanın
+        /// eksenleri kumanda anchor'ının eksenleriyle birebir aynıdır — kumanda nereye bakıyorsa
+        /// namlu oraya bakar. Yakalanan kavramanın dönüşü yalnız EL MODELİNİ sürer
+        /// (<see cref="ItemGripCapture"/>); eşyaya da uygulansaydı oyuncu kumandayı uzattığında
+        /// namlunun başka yöne baktığını görürdü ve nişan alma, elle ayarlanmış bir sayıya bağlı
+        /// hale gelirdi.</para>
         /// </summary>
-        public Vector3 SecondaryGripPosition => secondaryGripPosition;
+        public static Quaternion PrimaryGripRotation => Quaternion.identity;
+
+        /// <summary>
+        /// <b>EŞYANIN</b> ana el anchor'ına göre yerel konumu (metre): <c>itemPos =
+        /// palm.pos + palm.rot * bu değer</c>.
+        /// <para>Türetme (bilek ≡ anchor varsayımıyla): yakalama <c>handPos = itemPos + itemRot * H</c>
+        /// dediğine göre <c>itemPos = handPos - itemRot * H</c>, yani ofset <c>-H</c>'dir.
+        /// Canlı bilek deltası ölçülebiliyorsa aynı ölçü <see cref="ItemGripAuthority"/>'de
+        /// deltayla düzeltilir; burası o yolun fallback'idir.</para>
+        /// </summary>
+        public Vector3 PrimaryGripPosition(bool rightHand)
+        {
+            return -GetGrip(GripSocketKind.Primary, rightHand).position;
+        }
 
         /// <summary>
         /// Ana kavrama noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — soket çiziminin ve
         /// yakınlık ölçümünün ihtiyacı budur.
-        /// <para>⚠️ <b>Bu bir TÜRETİLMİŞ değerdir, ayrı bir alan DEĞİL</b> ve öyle kalmalı:
-        /// <see cref="PrimaryGripPosition"/> "el → eşya" yönünde ifade edilir (kanonik kavramanın
-        /// ihtiyacı o), soket ise eşyanın üstünde bir noktadır — aynı ölçünün ters yönü. İkinci bir
-        /// serialize alan açılırsa aynı nokta iki yerde yaşar ve biri güncellenip diğeri unutulur.</para>
-        /// <para>Türetme: <c>item.TransformPoint(s) == hand.position</c> koşulundan
-        /// <c>s = Inverse(R) * (-P)</c>.</para>
+        /// <para>⚠️ <b>Ayrı bir alan DEĞİL, yakalanan kaydın kendisidir:</b> yakalama zaten
+        /// "bilek eşyanın neresinde" sorusunu cevaplıyor. İkinci bir serialize alan açılırsa aynı
+        /// nokta iki yerde yaşar ve biri güncellenip diğeri unutulur.</para>
         /// </summary>
-        public Vector3 PrimaryGripPointOnItem =>
-            Quaternion.Inverse(PrimaryGripRotation) * (-primaryGripPosition);
+        public Vector3 PrimaryGripPointOnItem(bool rightHand)
+        {
+            return GetGrip(GripSocketKind.Primary, rightHand).position;
+        }
 
-        /// <summary>İkinci elin ön kabzadaki dönüşü, <b>eşyaya göre yerel</b>
-        /// (bkz. <see cref="SecondaryGripPosition"/> uyarısı).</summary>
-        public Quaternion SecondaryGripRotation => Quaternion.Euler(secondaryGripEuler);
+        /// <summary>
+        /// Ön kabza noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — yalnız
+        /// <see cref="IsTwoHanded"/> iken anlamlı. İkinci elin dünya hedefi
+        /// <c>item.position + item.rotation * bu değer</c> ile bulunur (⚠️ <c>TransformPoint</c>
+        /// DEĞİL: ölçü metredir, eşyanın görsel ölçeğiyle büyümez).
+        /// </summary>
+        public Vector3 SecondaryGripPosition(bool rightHand)
+        {
+            return GetGrip(GripSocketKind.Secondary, rightHand).position;
+        }
+
+        /// <summary>İkinci elin ön kabzadaki bilek dönüşü, <b>eşyaya göre yerel</b>. Eşyayı
+        /// döndürmez (bkz. <see cref="ItemGripCapture"/>), yalnız o elin modelini oturtur.</summary>
+        public Quaternion SecondaryGripRotation(bool rightHand)
+        {
+            return GetGrip(GripSocketKind.Secondary, rightHand).Rotation;
+        }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// Yakalanan kavramayı ilgili alana yazar — <b>kalibrasyon aracının tek yazma kapısı</b>
+        /// (alanlar private kalsın diye vardır; ikinci bir yazıcı, dört alanın hangisinin hangi el
+        /// olduğunu ikinci kez tarif etmek olurdu).
+        /// <para>⚠️ <c>EditorUtility.SetDirty</c>/<c>SaveAssets</c> ÇAĞRILMAZ: çağıran genelde
+        /// birden çok alanı arka arkaya yazıyor ve kaydı tek Undo/tek dirty adımında toplamak
+        /// istiyor.</para>
+        /// </summary>
+        /// <param name="itemLocal">Bileğin EŞYAYA göre yerel pozu (metre, ölçeksiz).</param>
+        public void EditorSetGrip(GripSocketKind kind, bool rightHand, in Pose itemLocal)
+        {
+            ItemGripCapture capture = ItemGripCapture.From(itemLocal);
+
+            if (kind == GripSocketKind.Secondary)
+            {
+                if (rightHand)
+                {
+                    secondaryGripRight = capture;
+                }
+                else
+                {
+                    secondaryGripLeft = capture;
+                }
+
+                return;
+            }
+
+            if (rightHand)
+            {
+                primaryGripRight = capture;
+            }
+            else
+            {
+                primaryGripLeft = capture;
+            }
+        }
+#endif
 
         /// <summary>
         /// Ana kavrama soketinin yarıçapı (metre): grip basışının KABUL edildiği mesafe.

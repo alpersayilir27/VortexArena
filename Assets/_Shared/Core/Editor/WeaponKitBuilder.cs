@@ -80,6 +80,23 @@ namespace VortexArena.Core.Editor
         private const float CasingMassKg = 0.01f;
 
         /// <summary>
+        /// Prefabın içinde kalmış <b>kavrama poz düğümü</b> ağacının adı — ölü veri, silinir
+        /// (bkz. <see cref="RemoveLegacyGripPoseNodes"/>).
+        /// <para>⚠️ Adın tanımı BURADADIR çünkü tek okuyucu bu temizliktir: düğümü üreten taraf
+        /// yok, tüketen taraf yok. Sabiti runtime'a taşımak, hiçbir şeyin okumadığı bir adı ortak
+        /// koda koymak olurdu.</para>
+        /// </summary>
+        private const string LegacyGripPoseRootName = "GripPoses";
+
+        /// <summary>
+        /// Prefabın içine kazara sürüklenmiş <b>authoring eli</b> köklerinin ad öneki
+        /// (bkz. <see cref="RemoveStudioHandNodes"/>).
+        /// <para>⚠️ Gerekçesi <see cref="LegacyGripPoseRootName"/> ile aynı: öneki üreten taraf
+        /// artık yok, tanım tek yerde — bu temizlikte — durur.</para>
+        /// </summary>
+        private const string LegacyAuthoringHandPrefix = "[VA El_";
+
+        /// <summary>
         /// Kovan aileleri: <c>WeaponSpec.CasingFamily</c> → (üretilecek kovan prefabı, pack'teki
         /// mermi modeli). Yeni bir kalibre eklemek = buraya bir satır; kovan prefabı ilk koşuda
         /// üretilir, sonra dokunulmaz.
@@ -731,7 +748,7 @@ namespace VortexArena.Core.Editor
 
                 // Tek çalışan yol burası — soket kiti de burada uygulanmazsa mevcut WPN'ler
                 // filtresiz (yani mesafeden kavranabilir) kalırdı.
-                ApplyGripSocketKit(contents, ctx);
+                ApplyGripSocketKit(contents, def, ctx);
                 ApplyWeaponFrameKit(contents, ctx);
                 ApplyDissolveKit(contents, ctx);
 
@@ -1495,20 +1512,17 @@ namespace VortexArena.Core.Editor
         /// ⚠️ <c>HandGrabInteractable._handGrabPoses</c> listesi <b>boş bırakılır</b>: liste dolduğu
         /// anda ISDK kavrama adaylığını poz skoruna göre hesaplamaya başlar ve bugünkü kavrama hissi
         /// (collider mesafesi) sessizce değişirdi. Aynı sebeple <c>_handAligment</c> alanına da
-        /// dokunulmaz — poz listesi boş kaldığı sürece o alanın etkisi yoktur. Kavrama pozu düğümleri
-        /// (<c>GripPoses/Pose_*</c>) bu listenin dışında, saf VERİ olarak durur ve onları yalnız
-        /// <c>HandGripPoser</c> okur.
+        /// dokunulmaz — poz listesi boş kaldığı sürece o alanın etkisi yoktur.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Kavramayı bu araç YAZMAZ ve düğüm de AÇMAZ.</b> Kavramanın tek yazarı
-        /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Kavrama Pozu Stüdyosu</c>'nun Kaydet'idir:
-        /// kaynak sahnedeki tezgâhta silahın sabit bir elin içine oturtulmuş duruşudur, çıktı hem
-        /// tanım alanları hem poz düğümleridir. Araç burada yalnız <b>temizlik ve denetim</b> yapar
-        /// (eski soket işaretçileri, prefabda kalmış el rig'i, kavraması yazılmamış silah raporu) —
-        /// boş poz düğümü açmak, kullanıcıyı kaydın üzerine yazacağı bir düzenlemeye davet ederdi.
+        /// ⚠️ <b>Kavramayı bu araç YAZMAZ.</b> Kavramanın tek kaynağı başlıkta el takibiyle
+        /// yakalanan pozdur ve o poz doğrudan <c>WD_*.asset</c>'e yazılır (prefabda karşılığı olan
+        /// bir düğüm YOKTUR — düğüm açmak, kaydın ikinci bir tarifini üretirdi). Araç burada yalnız
+        /// <b>temizlik ve denetim</b> yapar: eski soket işaretçileri, prefabda kalmış el rig'i ve
+        /// poz düğümleri, kavraması yakalanmamış silah raporu.
         /// </para>
         /// </summary>
-        private static void ApplyGripSocketKit(GameObject root, string ctx)
+        private static void ApplyGripSocketKit(GameObject root, ItemDefinition definition, string ctx)
         {
             // Tip Core'da yaşıyor (derleme zamanında bağlı) — tip adıyla arama gerekmez.
             ItemGripSockets sockets = root.GetComponent<ItemGripSockets>();
@@ -1590,8 +1604,9 @@ namespace VortexArena.Core.Editor
 
             RemoveLegacySocketNodes(root, ctx);
             RemoveLegacyHandNodes(root, ctx);
+            RemoveLegacyGripPoseNodes(root, ctx);
             RemoveStudioHandNodes(root, ctx);
-            NoteIfUnbaked(root, ctx);
+            NoteIfUnbaked(definition, ctx);
         }
 
         /// <summary>
@@ -1637,18 +1652,17 @@ namespace VortexArena.Core.Editor
 
                 Object.DestroyImmediate(node.gameObject, true);
                 _legacyNodesRemoved++;
-                Debug.Log(Log + ctx + ": eski '" + nodeName + "' işaretçisi silindi — kavrama artık " +
-                          "Kavrama Tezgâhı'nda yazılıyor.");
+                Debug.Log(Log + ctx + ": eski '" + nodeName + "' işaretçisi silindi — kavrama " +
+                          "başlıkta yakalanıp WD_*.asset'e yazılır, prefabta işaretçi durmaz.");
             }
         }
 
         /// <summary>
         /// Prefabın içinde kalmış <c>Hands/Hand_*</c> ağacını siler — <b>ölü veri</b>.
         /// <para>
-        /// Kavrama artık silahın üstüne oturtulan bir el modelinden değil, sahnedeki kavrama
-        /// tezgâhından yazılıyor (<see cref="GripPoseStudio"/>): tezgâh silahın bir KOPYASIYLA
-        /// çalışıyor ve prefaba yalnız <c>GripPoses</c> düğümlerini yazıyor. Prefabın içinde duran
-        /// eski el rig'inin okuyanı kalmadı.
+        /// Kavrama silahın üstüne oturtulan bir el modelinden değil, başlıkta el takibiyle yakalanan
+        /// pozdan geliyor ve tanıma (<c>WD_*.asset</c>) yazılıyor. Prefabın içinde duran el
+        /// rig'inin okuyanı yok.
         /// </para>
         /// <para>⚠️ Sessizce BIRAKILMAZ: (1) açık kalırsa arenada havada duran bir el olarak
         /// görünür — silah sahnede de duruyor (raf/masa, <c>WeaponFrame</c>, <c>VA_WeaponCanvas</c>)
@@ -1668,16 +1682,37 @@ namespace VortexArena.Core.Editor
             Object.DestroyImmediate(node.gameObject, true);
             _legacyNodesRemoved++;
             Debug.Log(Log + ctx + ": eski '" + ItemHandRig.RootNodeName + "' el rig'i silindi — " +
-                      "kavrama artık Kavrama Tezgâhı'nda yazılıyor, prefabda el modeli durmaz.");
+                      "kavrama WD_*.asset'e yazılır, prefabda el modeli durmaz.");
         }
 
         /// <summary>
-        /// Prefabın içine kazara girmiş <b>kavrama tezgâhı eli</b> varsa siler.
-        /// <para>⚠️ Tezgâhın elleri prefab stage sahnesinin ayrı kökleridir ve diske yazılmazlar —
-        /// ama Hierarchy'de sürüklenerek prefabın altına taşınabilirler. O hâlde el modeli prefaba
-        /// girer ve arenada havada duran bir el olarak görünür (silah sahnede de duruyor: raf,
-        /// <c>WeaponFrame</c>, <c>VA_WeaponCanvas</c>). Tezgâhın kendi Kaydet'i de aynı temizliği
-        /// yapıyor; buradaki kopya, elini oraya taşıyıp hiç kaydetmemiş prefablar içindir.</para>
+        /// Prefabın içinde kalmış <c>GripPoses/…</c> ağacını siler — <b>ölü veri</b>.
+        /// <para>
+        /// Kavrama tanımın kendi alanlarında yaşıyor; prefabtaki poz düğümlerinin okuyanı yok.
+        /// ⚠️ Sessizce BIRAKILMAZ: duran bir düğüm kavramanın ikinci bir tarifidir ve "hangisi
+        /// geçerli" sorusunu prefabı her açanın kafasında yeniden doğurur.
+        /// </para>
+        /// </summary>
+        private static void RemoveLegacyGripPoseNodes(GameObject root, string ctx)
+        {
+            Transform node = root.transform.Find(LegacyGripPoseRootName);
+            if (node == null)
+            {
+                return;
+            }
+
+            Object.DestroyImmediate(node.gameObject, true);
+            _legacyNodesRemoved++;
+            Debug.Log(Log + ctx + ": eski '" + LegacyGripPoseRootName + "' poz düğümü silindi — " +
+                      "kavrama WD_*.asset'e yazılır, prefabta poz durmaz.");
+        }
+
+        /// <summary>
+        /// Prefabın içine kazara girmiş <b>authoring eli</b> varsa siler.
+        /// <para>⚠️ Bu eller prefab stage sahnesinin ayrı kökleridir ve diske yazılmazlar — ama
+        /// Hierarchy'de sürüklenerek prefabın altına taşınabilirler. O hâlde el modeli prefaba girer
+        /// ve arenada havada duran bir el olarak görünür (silah sahnede de duruyor: raf,
+        /// <c>WeaponFrame</c>, <c>VA_WeaponCanvas</c>).</para>
         /// </summary>
         private static void RemoveStudioHandNodes(GameObject root, string ctx)
         {
@@ -1685,10 +1720,8 @@ namespace VortexArena.Core.Editor
             for (int i = all.Length - 1; i >= 0; i--)
             {
                 Transform node = all[i];
-                // ⚠️ Önek tek yerden gelir (GripPoseStudio): ikinci bir string kopyası, tezgâhın
-                // adlandırması değiştiğinde bu temizliği sessizce işlevsiz bırakırdı.
                 if (node == null || node == root.transform ||
-                    !node.name.StartsWith(GripPoseStudio.HAND_ROOT_PREFIX))
+                    !node.name.StartsWith(LegacyAuthoringHandPrefix))
                 {
                     continue;
                 }
@@ -1696,31 +1729,26 @@ namespace VortexArena.Core.Editor
                 string nodeName = node.name;
                 Object.DestroyImmediate(node.gameObject, true);
                 _legacyNodesRemoved++;
-                Debug.Log(Log + ctx + ": prefabın içinde kalmış kavrama tezgâhı eli ('" + nodeName +
-                          "') silindi — tezgâhın elleri prefaba KONMAZ, sahnenin ayrı kökleridir.");
+                Debug.Log(Log + ctx + ": prefabın içinde kalmış authoring eli ('" + nodeName +
+                          "') silindi — o eller prefaba KONMAZ, sahnenin ayrı kökleridir.");
             }
         }
 
         /// <summary>
-        /// Kavrama pozu hiç yazılmamış silahı koşu sonundaki rapora ekler.
-        /// <para>⚠️ <see cref="ItemGripPoses.Find"/> kullanılır (ham arama değil): tüketicinin
-        /// (<c>HandGripPoser</c>) "poz var" saydığı ölçüt odur — yerleştirilmemiş ya da boş bir düğüm
-        /// onun için de yoktur. İkinci bir ölçüt yazılsaydı araç "var" derken oyun "yok" diyebilirdi.</para>
+        /// Kavraması hiç yakalanmamış silahı koşu sonundaki rapora ekler.
+        /// <para>⚠️ Ölçüt <see cref="ItemDefinition.HasGrip"/>'tir, <c>GetGrip</c> değil: okuma yolu
+        /// eksik eli ÖTEKİ elin kaydına düşürür, yani <c>GetGrip</c> ile bakılsaydı yarım yakalanmış
+        /// silah "tamam" görünürdü. Sorulan el SAĞDIR — silah en az bir elden yakalanmışsa öteki el
+        /// düşme yoluyla makul bir duruş alır; hiç yakalanmamışsa sağ el de boştur.</para>
         /// </summary>
-        private static void NoteIfUnbaked(GameObject root, string ctx)
+        private static void NoteIfUnbaked(ItemDefinition definition, string ctx)
         {
-            if (ItemGripPoses.Find(root.transform, GripSocketKind.Primary, true) == null)
+            if (definition == null || !definition.HasGrip(GripSocketKind.Primary, true))
             {
                 _unbakedWeapons.Add(ctx);
             }
         }
 
-        /// <summary>
-        /// Bake edilmemiş silahları TEK bir uyarıda listeler (hiç yoksa susar).
-        /// <para>⚠️ Silah başına ayrı uyarı basılmaz: koşu zaten uzun bir log üretiyor ve tek tek
-        /// basılan satırlar aralarında kaybolurdu. Asıl mesele "hangi silahlar eksik" sorusunun tek
-        /// bakışta görünmesi.</para>
-        /// </summary>
         /// <summary>
         /// Ateş sesi atanmamış silahları tek uyarıda listeler. ⚠️ Bu rapor ŞART: klipler bu araçtan
         /// gelmediği için (bkz. <see cref="EnsureDefinition"/>) yeni bir silah <b>sessiz</b> doğar ve
@@ -1771,11 +1799,10 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            Debug.LogWarning(Log + "Kavrama pozu YAZILMAMIŞ silahlar: " +
+            Debug.LogWarning(Log + "Kavraması YAKALANMAMIŞ silahlar: " +
                              string.Join(", ", _unbakedWeapons) + ". Bu silahlarda oyuncunun eli " +
                              "silaha sarılmaz (idle duruşunda kalır). Düzeltme: Tools > VortexArena > " +
-                             "Weapons > Kavrama Pozu Stüdyosu → Tezgâhı Aç → silahı elin içine " +
-                             "taşı/çevir → Kaydet.");
+                             "Development > Dev → rol: Silah → silahı seç → Play (el takibi gerekir).");
         }
 
         /// <summary>Kökteki bir bileşeni tam tip adıyla siler (yoksa sessizce geçer).</summary>

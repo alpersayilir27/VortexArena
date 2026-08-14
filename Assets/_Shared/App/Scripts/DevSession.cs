@@ -62,6 +62,10 @@ namespace VortexArena.App
     /// basışta loadout'un bir sonrakisi. Testin kendisi "hepsini tek tek gözden geçirmek"
     /// olduğu için rastgelelik burada bir engeldi; üretimdeki rastgele dağıtım DEĞİŞMEZ.</para>
     ///
+    /// <para><b>Silah rolü (<c>weapon</c>):</b> iki işin de dışındadır — rol yazılır, adres
+    /// silinir ve orada biter. Ne bağlanır, ne sandbox kuralı uygular, ne XR bırakır; Play
+    /// doğrudan kalibrasyon sahnesinden başlar (<c>DevBootstrap</c>).</para>
+    ///
     /// <para><b>Kapatmak:</b> dev penceresindeki "Dev enjeksiyonu" onayı kapatılırsa bu sınıf
     /// hiçbir şey yapmaz ve üretim yolu birebir koşar (beacon keşfini editörde denemek için).
     /// Adres alanı boş bırakılırsa da adres YAZILMAZ, keşif zinciri devralır.</para>
@@ -104,13 +108,37 @@ namespace VortexArena.App
             set => EditorPrefs.SetBool(KeyEnabled, value);
         }
 
-        /// <summary>"player" | "admin".</summary>
+        /// <summary>
+        /// "player" | "admin" | "weapon". Tanınmayan değer admin'e düşer: eski/bozuk bir
+        /// EditorPrefs kaydı yüzünden Play'in sessizce yanlış role girmesindense her zaman
+        /// aynı bilinen role düşsün.
+        /// </summary>
         public static string Role
         {
-            get => EditorPrefs.GetString(KeyRole, AppSession.RoleAdmin) == AppSession.RolePlayer
-                ? AppSession.RolePlayer
-                : AppSession.RoleAdmin;
+            get
+            {
+                string stored = EditorPrefs.GetString(KeyRole, AppSession.RoleAdmin);
+                if (stored == AppSession.RolePlayer || stored == AppSession.RoleWeapon)
+                {
+                    return stored;
+                }
+
+                return AppSession.RoleAdmin;
+            }
             set => EditorPrefs.SetString(KeyRole, value);
+        }
+
+        /// <summary>
+        /// Kalibre edilecek silahın asset YOLU (<c>Assets/…/WD_AK47.asset</c>).
+        /// <para>⚠️ Değer burada İKİNCİ KEZ tanımlanmaz: anahtarın sahibi kalibrasyon
+        /// bileşeninin yanındaki <see cref="WeaponGripCalibrationSession"/>'dır (Core) — silahı
+        /// okuyan taraf orası. Aynı seçimi iki ayrı <c>EditorPrefs</c> sarmalayıcısıyla tutmak,
+        /// birinin sessizce bayatlaması demekti; burası yalnız pencereye açılan kapıdır.</para>
+        /// </summary>
+        public static string WeaponAssetPath
+        {
+            get => WeaponGripCalibrationSession.SelectedWeaponPath;
+            set => WeaponGripCalibrationSession.SelectedWeaponPath = value;
         }
 
         /// <summary>Dev penceresinde seçili hedefin adı (yalnız UI durumu).</summary>
@@ -164,6 +192,15 @@ namespace VortexArena.App
         {
             get
             {
+                if (Role == AppSession.RoleWeapon)
+                {
+                    // Bu rolde başlangıç/hedef/sandbox seçimlerinin hiçbiri okunmaz — özet de
+                    // onları göstermez ki geçersiz bir ayar geçerliymiş gibi durmasın.
+                    string weapon = System.IO.Path.GetFileNameWithoutExtension(WeaponAssetPath);
+                    return $"weapon · {(string.IsNullOrEmpty(weapon) ? "(silah seçilmedi)" : weapon)} " +
+                           "· kalibrasyon sahnesi";
+                }
+
                 string start = StartFromBoot ? "Boot'tan" : "açık sahneden";
                 if (Sandbox)
                 {
@@ -206,6 +243,22 @@ namespace VortexArena.App
             }
 #endif
 
+            if (AppSession.Role == AppSession.RoleWeapon)
+            {
+                // Adres siliniyor: kalibrasyon sahnesinde bağlanacak bir şey yok, ama boş
+                // bırakılan adres keşif zincirine yem olur ve tek bir başarılı bağlantı bile
+                // kalibrasyon/faz kapılarını açıp kapatarak kavrama denemesini bozardı.
+                AppSession.ServerIp = "";
+                AppSession.ServerPort = 0;
+
+                // ⚠️ AdminXrRelease.Apply() BURADA ÇAĞRILMAZ: bu rol gözlükte, el takibiyle
+                // koşar — XR bırakılırsa kavranacak el hiç doğmaz.
+                Debug.Log($"[DevSession] Dev seçimi uygulandı → {Summary}. " +
+                          "Sunucuya bağlanılmaz; silahı seçmek için: " +
+                          "Tools > VortexArena > Development > Dev (rol: Ctrl+Alt+R).");
+                return;
+            }
+
             // Rol admin ise XR'ı bırak — HMD aynı PC'deki player sürecine kalsın.
             AdminXrRelease.Apply();
 
@@ -244,6 +297,13 @@ namespace VortexArena.App
         {
             if (!Enabled)
             {
+                return;
+            }
+
+            if (Role == AppSession.RoleWeapon)
+            {
+                // Kalibrasyon sahnesinin ne sunucuyla ne mod kurallarıyla işi var: silah
+                // karşıda sabit durur, tek iş el pozunu yazmaktır.
                 return;
             }
 

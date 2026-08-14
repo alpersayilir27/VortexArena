@@ -44,6 +44,17 @@ namespace VortexArena.App
                 ResolveServerEndpoint();
             }
 
+            if (AppSession.Role == AppSession.RoleWeapon)
+            {
+                // Emniyet kapısı: normal akışta buraya HİÇ gelinmez — silah rolünde Play
+                // doğrudan kalibrasyon sahnesinden başlar ve o sahne Build Settings'te yoktur,
+                // yani Boot onu yükleyemez. Buraya düşüldüyse rol yanlış bir yoldan gelmiştir;
+                // sessizce donmaktansa oyuncu gibi Lobby'ye devam ediyoruz.
+                Debug.LogWarning(
+                    "[AppBoot] Rol 'weapon' — silah kalibrasyon rolü yalnız editörde, Dev " +
+                    "penceresinden koşar; Boot bu rolü yönlendiremez, oyuncu gibi devam ediliyor.");
+            }
+
             // Admin masaüstünde XR'ı tutmasın: Standalone'da XR açılışta otomatik başlıyor
             // (Link'le player için gerekli) ve boştaki HMD'yi kapıyor.
             AdminXrRelease.Apply();
