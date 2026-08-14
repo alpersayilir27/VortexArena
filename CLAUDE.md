@@ -571,8 +571,11 @@ içine sokar. Dördü de **aynı uzaydadır** (bileğin eşyaya göre yerel pozu
 okuma yolu eksik eli öteki elin kaydına düşürür.
 ⚠️ **Silahın eldeki DÖNÜŞÜ AYARLANMAZ — kumanda anchor'ının dönüşüdür (KİMLİK).**
 `ItemDefinition.PrimaryGripRotation` statik `identity`'dir; euler/dönüş alanı **YOKTUR ve eklenmez**
-(kumanda nereye, namlu oraya). Yakalanan pozun rotasyonu silaha hiç karışmaz, yalnız el modelinin
-bileğini silahın üstüne oturtur. ⚠️ Silah tutulurken **parmaklara poz yazılmaz** (izlemeden/
+(kumanda nereye, namlu oraya). ⚠️ **Aynı kural ELİN dönüşü için de geçerlidir:** sentetik elin
+yalnız KONUMU kilitlenir (`WristLockMode.Position`), bileğin dönüşü kumandayla birlikte serbest
+döner — yakalamadan gelen bir bilek açısı eli kumandadan koparır ve kumanda dosdoğru ileriyken
+silah yamuk tutuluyormuş gibi görünür. Yakalamanın taşıdığı soru "el silahın NERESİNDE durur"dur,
+"hangi açıyla" değil. ⚠️ Silah tutulurken **parmaklara poz yazılmaz** (izlemeden/
 kumandadan gelirler); eşya başına parmak duruşu diye bir veri YOKTUR ve eklenmez.
 ⚠️ Kavrama **sayı girerek** ayarlanmaz (ikinci bir işaretçi/alan açma): aynı kavramayı iki yerde
 tarif etmek ikisinin sessizce sapması demektir. Yarıçaplar (`primaryGripRadius`/`secondaryGripRadius`)

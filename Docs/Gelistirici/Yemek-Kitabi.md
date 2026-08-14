@@ -429,8 +429,8 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 `weaponId` yalnızca **kill feed etiketidir** — sunucu doğrulamaz, istediğini yazabilirsin.
 
 > Silahın eldeki **rotasyonu ayarlanmaz: kumanda anchor'ının rotasyonudur (kimlik)** — kumandayı
-> uzatınca namlu ileri bakar. **Tutulma noktasını ve el modelinin bileğini** `WD_*`'a yakalanan
-> kavrama kayıtları belirler (§11.0); dördü de el başınadır (`primaryGripRight/Left`,
+> uzatınca namlu ileri bakar; el de kumandayla birlikte döner. **Tutulma NOKTASINI** `WD_*`'a
+> yakalanan kavrama kayıtları belirler (§11.0); dördü de el başınadır (`primaryGripRight/Left`,
 > `secondaryGripRight/Left`). ⚠️ **Ölçü TEK yerden okunur:** aynı kayıt yerel duruşu, uzak
 > oyuncudaki çizimi ve soketin yerini birlikte besliyor.
 > Çerçeveden seçilen silah (`weaponSource:"weaponcanvas"`), modun verdiği silah
@@ -464,9 +464,11 @@ elinin (ISDK **bileğinin**) silaha göre pozunu `WD_*.asset`'e yazar. Ayarlanac
 bir hayalet el ve bir euler düğmesi **yoktur**.
 
 ⚠️ **Silahın eldeki DÖNÜŞÜ ayarlanamaz — kumanda anchor'ının dönüşüdür (kimlik):** kumanda nereye,
-namlu oraya. Yakaladığın pozun rotasyonu silaha hiç karışmaz, yalnız el modelinin bileğini silahın
-üstüne oturtur. Silah elde yatık görünüyorsa sebebi kavrama kaydı değil, `Model`'in prefabtaki
-yerleşimidir.
+namlu oraya. **Elin dönüşü de öyle:** sentetik elin yalnız KONUMU kavrama noktasına kilitlenir,
+bileği kumandayla birlikte döner. Yani yakaladığın şey "el silahın NERESİNDE durur"dur, "hangi
+açıyla" değil — açı yakalamadan gelseydi kalibrasyon anındaki bilek eğikliğin kalıcı olurdu ve
+kumandayı dosdoğru ileri tutarken silah yamuk tutuluyormuş gibi görünürdü. Silah elde yatık
+görünüyorsa sebebi kavrama kaydı değil, `Model`'in prefabtaki yerleşimidir.
 
 ⚠️ **El takibi ZORUNLU değil, tercih edilendir.** Kumanda tutulurken de ölçülecek bir bilek vardır
 (rig kumanda pozundan sentetik el üretir, `controllerDrivenHandPosesType = Natural`) ve oyun oyunda
