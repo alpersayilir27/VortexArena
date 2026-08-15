@@ -925,9 +925,17 @@ Rol `admin` değilse **hiçbiri çalışmaz** (`AdminSpectator` kendini yok eder
 ### İstemci: `VortexArena.Core` (oyun kodu)
 
 `ArenaBoundary` (`VA_ArenaBoundary` prefabıyla gelir; muhafaza: kenara/kolona olan mesafeden
-karartma + uyarı — kenara `warnDistance`
-kala hafif bir rampa başlar (`warnFadeAlpha`), sınır aşılınca tam karartmaya gider; iki dal sınırda
-aynı değeri verdiği için geçiş süreklidir. ⚠️ **Yarı saydam duvar göstergesi KALDIRILDI**
+karartma + uyarı + titreşim — kenara `warnDistance`
+kala hafif bir rampa başlar (`warnFadeAlpha`), sınır aşıldığı **an** ekran kademesiz olarak **tam
+siyah** olur ve kumandalar 2 Hz nabız atar. ⚠️ **Alan dışının sunumu engel ihlaliyle AYNIDIR**
+(`ObstacleViolationProbe`): tam karartma + nabız + karartmanın üstünde uyarı yazısı. İkisi tek bir
+kuralın iki yüzü — *görüş oynanabilir alanın dışındaysa ekran kapanır* — ve fark **cezadadır,
+sunumda değil**: alan dışı can götürmez, engel götürür. ⚠️ Bu yüzden **sınırda geçiş bilinçli
+olarak SÜREKSİZDİR** ve dışarıda ikinci bir mesafe rampası (ya da ayarlanabilir bir karartma
+tavanı) YOKTUR: yüzde birkaçlık saydamlık bile perdenin öbür yüzünü okunabilir bırakır ve arenanın
+dışından içeri bakmak istismarın kendisidir. Bedeli, sınır çizgisine tam oturan bir kafanın izleme
+titremesiyle rampa tavanı ile tam siyah arasında gidip gelmesidir. ⚠️ **Yarı saydam duvar
+göstergesi KALDIRILDI**
 (`wallRenderers`/`minWallAlpha`/`maxWallAlpha` yok): arenanın duvarları environment sanatına ait ve
 mekanizma oraya taşınamıyordu — alfa yazımı yalnız Transparent malzemede iş görür, üstelik alfa
 düşünce Renderer'ı kapatıyordu. Uyarı bu yüzden HMD'ye bağlı karartma quad'ına taşındı, arena
@@ -947,7 +955,7 @@ tek yerde — bu bileşende — kalır. ⚠️ **Gözlemci kipindeki muhafaza `I
 kilitler** (admin zaten poz göndermez), **plansız muhafaza da öyle**: ölçüyü bilmeden "dışarıda"
 demek sessiz bir yalancı pozitif olurdu — bayrak o sahnede hiç yanmaz.
 ⚠️ Dosya bağlı değilse ya da okunamıyorsa **açık başarısızlık**: bir kez `Debug.LogError` basılır ve
-muhafaza tümden susar (karartma ve alan-dışı uyarısı çalışmaz). Gerekçe: ölçüsü
+muhafaza tümden susar (karartma, titreşim ve alan-dışı uyarısı çalışmaz). Gerekçe: ölçüsü
 bilinmeyen bir arenada doğru bir muhafaza zaten üretilemez, kapalı başarısızlık (ör. her karede
 ekranı karartmak) işletmede oyunu tümden oynanamaz kılardı — bu bir KURULUM hatasıdır, editörde/
 QA'da yakalanmalıdır. Arena origin'i bu bileşende DEĞİLDİR, devre dışı bırakılabilir),
@@ -1420,7 +1428,9 @@ içindir — sınırda gidip gelen kafa, ölçüm kadansıyla (20 Hz) siyah/aç�
 Kalibrasyon sapmasının bedeli olan ani kararma bilinçli olarak kabul edilir; dış duvar, zemin ve
 tavan zaten `Obstacle` layer'ında değildir. **Kumandaların nabız titreşimi de aynı kapıdan
 beslenir** (2 Hz, temas boyunca): kararan ekran tek başına *"ne oldu"* sorusunu doğuruyor, nabız ona
-*"duvardasın, geri çekil"* cevabını veriyor — sürekli titreşim ise uyarı olmaktan çıkardı. Teşhis
+*"duvardasın, geri çekil"* cevabını veriyor — sürekli titreşim ise uyarı olmaktan çıkardı.
+⚠️ Titreşim motoru **doğrudan sürülmez**, `ControllerHaptics` hakeminden geçer (aşağıda): aynı
+titreşimi muhafaza da istiyor. Teşhis
 için `LastTrigger`, `HeadInsideLevel`, `FadeAlpha` ve son cevap veren
 engelin adı okunabilir — Dev penceresi Play kipinde bunları çizer.
 
@@ -1464,6 +1474,18 @@ unutmak mümkün değil). ⚠️ Karışım (alfa toplama) bilinçli olarak yok:
 kılar**. Bu hakem yalnız *"ekran ne kadar kararsın"* sorusunu cevaplar; üstte görünmesi gereken her
 şey kendi renderer'ıyla ve daha yakında/`Overlay` kuyruğunda çizilir (`DamageVignette` ·
 `ObstacleWarningOverlay`).
+
+**`ControllerHaptics`** (statik hakem — `ScreenFade`'in titreşim ikizi): kumanda titreşimini isteyen
+de **iki** sistem var (engel ihlali · alan dışı) ve ikisi aynı anda doğru olabiliyor — muhafaza
+sahnedeki `ArenaObstacle`'ları da alan-dışı sayıyor. Sözleşme birebir aynıdır: kaynak her karede
+bildirir, **en yüksek genlik** kazanır, susan kaynak 0.25 sn sonra düşer. ⚠️ **Kaynaklar
+`OVRInput.SetControllerVibration`'ı doğrudan ÇAĞIRMAZ:** biri "kapat" dediği anda ötekinin
+titreşimini de kapatırdı ve belirtisi "duvarda dururken titreşim kesik kesik geliyor" olurdu.
+⚠️ Nabzın frekansı (2 Hz) ve genliği hakemde durur, kaynakta tekrarlanmaz — iki ayrı sayı üst üste
+binen iki kaynakta iki ayrı faz demektir. ⚠️ Hakemin **kendi döngüsü YOKTUR**, yalnız bildirim
+geldiğinde hesaplar: en az bir kaynağın her karede bildirdiği garanti edilmiştir
+(`ObstacleViolationProbe` kendini önyükleyen kalıcı tekildir ve koşulsuz bildirir). Susan bir hakem
+son yazdığı titreşimi açık bırakırdı.
 
 **`ArenaLayers`** (statik): `Obstacle` layer adının tek yazıldığı yer, maskeyi bir kez çözer ve
 layer tanımsızsa **bir kez hata basar**. Gerekçe: `LayerMask.NameToLayer` tanımsız adda `-1` döner,
@@ -1514,8 +1536,14 @@ saniyelik ömür) ve kuyruğun bir tavanı vardır (taşarsa **yeni gelen** dü�
 uyarısı): anlamları zamanlamalarında olduğu için kuyruğa hiç girmez, bekleyeni de geciktirmezler.
 Ölçüt "kısa mı" değil **"geç çalarsa yalan olur mu"**dur; `GameSoundId`'ye eklenen yeni bir ses
 varsayılan olarak DUYURU sayılır (kuyruğa girer) — tersi olsaydı yeni her replik kimse fark etmeden
-bir öncekini keserdi. ⚠️ Kesmenin meşru olduğu **tek yer bağlantı kopuşudur**: bekleyen duyuru artık
-var olmayan bir maçı anlatıyor. Bankada **admin tarafına ait tek bir ses** de vardır
+bir öncekini keserdi. ⚠️ Kesmenin meşru olduğu yer, duyurunun anlattığı **maçın ortadan kalkmasıdır**
+— kanal üç olayda birden boşaltılır: bağlantı kopuşu, `load_match` ve `return_to_lobby`. Sonuncu
+ikisi asıl önemli olanlar: **koşan bir maçın üstüne basılan "başlat" da `load_match` üretir**, yani
+biten turun repliği sırada beklerken (ya da çalarken) operatör maçı yeniden kurabiliyor. Faz kapısı
+bunu yakalayamaz — ses zaten **daha önce**, turun gerçekten bittiği anda doğmuştur. Aynı olayda faz
+geçmişi de sıfırlanır, böylece iki AYRI maçın fazları arasında bir geçiş okunması yapısal olarak
+imkânsız olur (yeni maçın ilk `match_state`'i her zaman bir duraklama olduğu için maç başlangıcı
+sesi bundan etkilenmez). Bankada **admin tarafına ait tek bir ses** de vardır
 (`AdminViolation`): bir oyuncunun
 fiziksel ihlali başladığında yalnız admin PC'sinde çalar — oyuncunun uyarısı zaten kendi
 ekranındadır (§10.9). ⚠️ **Ne zaman çalacağının politikası `AdminRoster`'dadır, burada değil**
@@ -1575,7 +1603,10 @@ Tetikleyiciler ve nereden sürüldükleri:
 ⚠️ **Tur bitişinin ölçütü `modeId` DEĞİL fazdır:** `RoundEnd`, `playing` → `paused` +
 `phaseReason == "mode"` geçişinde çalar; "mod duraklatma istedi" çekirdeğin tek tur-arası
 sinyalidir, o yüzden istemcide `if (modeId == "tournament")` zinciri doğmaz — hangi modun bu
-sinyali kullandığını kayıttaki kural söyler. ⚠️ **`modeState` ayrıştırılmaz** (`"regroup:2/6"`):
+sinyali kullandığını kayıttaki kural söyler. ⚠️ **Gerekçe aranmasının asıl sebebi operatördür:**
+duraklamanın tek kaynağı mod değil — koşan maçın üstüne `start_match` (`loading`), elle duraklatma
+(`operator`), `abort_match`/`return_to_lobby` (`lobby`) da `playing` → `paused` geçişidir ve
+hiçbirinde tur DOĞAL yoldan bitmemiştir. Yalnız faza bakan bir kapı üçünde de "tur sona erdi" derdi. ⚠️ **`modeState` ayrıştırılmaz** (`"regroup:2/6"`):
 serbest bir stringdir ve çekirdek onu yorumlamaz (`Docs/ArenaNet-Protokol.md` §10.1) — modun
 yazdığı metni değiştirmesi sesi susturmamalı. ⚠️ **Maçı bitiren tur bu tetikleyiciyi
 ÇALDIRMAZ:** orada faz doğrudan `finished`'a gider ve duyuruyu maç sonucu devralır, "mevzilerinize

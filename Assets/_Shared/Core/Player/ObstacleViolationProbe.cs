@@ -93,8 +93,10 @@ namespace VortexArena.Core.Player
         /// <summary><see cref="ScreenFade"/> kaynak kimliği.</summary>
         private const string FadeSourceId = "obstacle";
 
-        /// <summary>Titreşim nabzının frekansı (Hz) — sürekli titreşim uyarı olmaktan çıkar.</summary>
-        private const float HapticPulseHz = 2f;
+        /// <summary><see cref="ControllerHaptics"/> kaynak kimliği. ⚠️ Nabzın frekansı ve genliği
+        /// burada DEĞİL hakemde durur: aynı hissi isteyen ikinci kaynak (muhafaza) ile üst üste
+        /// bindiğinde iki ayrı sayı iki ayrı faz demek olurdu.</summary>
+        private const string HapticSourceId = "obstacle";
 
         /// <summary>Rig bulunamadığında iki arama arasındaki en kısa süre (sn).</summary>
         private const float RigSearchIntervalSeconds = 0.5f;
@@ -176,8 +178,6 @@ namespace VortexArena.Core.Player
 
         /// <summary>Çizilen karartma (yumuşatılmış).</summary>
         private float _fadeAlpha;
-
-        private bool _hapticsOn;
 
         // ------------------------------------------------------------------ önyükleme
 
@@ -454,21 +454,12 @@ namespace VortexArena.Core.Player
 
             // Titreşim karartmayla AYNI kapıdan (temas) beslenir: kararan ekran tek başına "ne oldu"
             // sorusunu doğuruyor, nabız ona "duvardasın, geri çekil" cevabını veriyor.
-            bool pulse = contact && Mathf.Repeat(Time.unscaledTime * HapticPulseHz, 1f) < 0.5f;
-            SetHaptics(pulse);
-        }
-
-        private void SetHaptics(bool on)
-        {
-            if (on == _hapticsOn)
-            {
-                return;
-            }
-
-            _hapticsOn = on;
-            float amplitude = on ? 0.5f : 0f;
-            OVRInput.SetControllerVibration(0.6f, amplitude, OVRInput.Controller.LTouch);
-            OVRInput.SetControllerVibration(0.6f, amplitude, OVRInput.Controller.RTouch);
+            // ⚠️ Motor DOĞRUDAN sürülmez: aynı titreşimi isteyen ikinci bir kaynak var (arena
+            // sınırının dışına çıkma, ArenaBoundary) ve ikisi aynı anda doğru olabiliyor —
+            // hakem ScreenFade'deki sözleşmenin aynısını uyguluyor.
+            // ⚠️ Bildirim KOŞULSUZDUR (temas yokken de 0 bildirilir): hakem yalnız bir bildirim
+            // geldiğinde yeniden hesaplıyor, yani her karede bildiren bu tekil onun kalp atışıdır.
+            ControllerHaptics.ReportPulse(HapticSourceId, contact);
         }
     }
 }
