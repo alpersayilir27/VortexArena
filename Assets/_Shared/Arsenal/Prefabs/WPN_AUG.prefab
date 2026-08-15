@@ -10089,11 +10089,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponReloadGesture
   weapon: {fileID: 6448011580628502469}
-  head: {fileID: 0}
-  waistDropMeters: 0.62
-  belowOffsetMeters: 0.05
-  rearmOffsetMeters: 0.15
-  dwellSeconds: 0.2
 --- !u!114 &4228379385896417134
 MonoBehaviour:
   m_ObjectHideFlags: 0

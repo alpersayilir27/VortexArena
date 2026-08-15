@@ -28,6 +28,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 8d80aec57ee4c0f49b93d3a6d371eb55, type: 2}
   - {fileID: 11400000, guid: 772b54b8ff5d3644a819f48f6bab904e, type: 2}
   - {fileID: 11400000, guid: 6cc4c092706ce374f866eec3740ddd8b, type: 2}
+  - {fileID: 11400000, guid: 5fc0b8092fdde894987110c4118b1730, type: 2}
+  - {fileID: 11400000, guid: ac9362031f143684ea4fb6eb94eeb62b, type: 2}
   loadout:
   - {fileID: 11400000, guid: 1004acbfc90c5854d995bbfd4f73b494, type: 2}
   - {fileID: 11400000, guid: d42e84326e961f542ba86d57e9a71d20, type: 2}
@@ -35,4 +37,5 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 1518aa11b38b11c4c9ab387c384b2e28, type: 2}
   - {fileID: 11400000, guid: 3fac3cc2036001d40a6c64c3f00632d2, type: 2}
   - {fileID: 11400000, guid: 379b9af2cf125564a940fa2e72d865c6, type: 2}
+  - {fileID: 11400000, guid: 2a46ffc73fdd330489a1b532eeb2ef69, type: 2}
   hudPrefab: {fileID: 2488338122132002829, guid: b7c4e1a90f3d48e4ab25c6d7f81a3e52, type: 3}

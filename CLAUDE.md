@@ -285,6 +285,9 @@ Aynısı `ModeTeamMode`/`ModeScoreKind`/
   **dünya orijininden uzaklıkla orantılı** olarak kayar (orijindeki arenada görünmez, taşınmış
   arenada onlarca metre). Boy farkının tek taşıyıcısı `bodyScale`'dir →
   `Docs/Sistem-Ozeti.md` §7.
+- **`VA_CameraRig`'in near-clip'i `0.05`'tir ve BÜYÜTÜLMEZ** (üç göz kamerasında da aynı): engel
+  karartmasının görüş açıklığı bu sayıdan türer ve tavanı kafa yarıçapıdır — büyütmek, kırpılan
+  duvarın içini okunabilir bırakır → `Docs/Sistem-Ozeti.md` §7.
 - **Tracking origin = `Stage` (2), tüm sahnelerde; `AllowRecenter = 0`.** `FloorLevel` ile aynı
   zemin seviyesini verir ama OpenXR'da **recentering'i zorla açar** (`OVRManager`:
   `SetAllowRecentering(true)`), `Stage` kapatır — recenter free-roam'da kalibrasyonu bayatlatıp
@@ -577,9 +580,18 @@ döner — yakalamadan gelen bir bilek açısı eli kumandadan koparır ve kuman
 silah yamuk tutuluyormuş gibi görünür. Yakalamanın taşıdığı soru "el silahın NERESİNDE durur"dur,
 "hangi açıyla" değil. ⚠️ Silah tutulurken **parmaklara poz yazılmaz** (izlemeden/
 kumandadan gelirler); eşya başına parmak duruşu diye bir veri YOKTUR ve eklenmez.
-⚠️ Kavrama **sayı girerek** ayarlanmaz (ikinci bir işaretçi/alan açma): aynı kavramayı iki yerde
-tarif etmek ikisinin sessizce sapması demektir. Yarıçaplar (`primaryGripRadius`/`secondaryGripRadius`)
-bunun dışındadır — onlar duruşun değil **soket kapısının** ölçüsüdür.
+⚠️ Kavrama için **ikinci bir işaretçi/alan AÇILMAZ** (prefaba grip düğümü, `Weapon`'a ikinci bir
+`Transform` alanı): aynı kavramayı iki yerde tarif etmek ikisinin sessizce sapması demektir.
+Yakalanmış kaydın **kendisini** ince ayar etmek serbesttir ve yolu tektir: `WPN_*`'i seç →
+Inspector'da `ItemGripSockets` → Scene View'daki yeşil halkayı tutamaktan sürükle (ya da vektör
+alanına yaz). ⚠️ Bu yol **yalnız ÖN KABZAYI** düzenler; **ana kabza sahnede ne çizilir ne
+düzenlenir** (silahın elde nasıl duracağını o belirlediği için gözle santim düzeltmesi silahı
+elden koparır — tek yolu gözlüktür). Değer doğrudan `WD_*.asset`'e yazılır, prefaba hiçbir şey
+eklenmez. ⚠️ Tutamak **yalnız konumu**
+sürer — dönüş yukarıdaki kimlik kuralına tabidir. Yarıçaplar
+(`primaryGripRadius`/`secondaryGripRadius`) zaten bunun dışındadır — onlar duruşun değil **soket
+kapısının** ölçüsüdür. ⚠️ Soket küresi **kırmızı** çiziliyorsa kayıt hiç yakalanmamıştır (nokta
+silahın kökünde durur) — ince ayarla düzeltilecek bir şey yok, yazılacak bir kayıt var.
 ⚠️ Prefabın içinde el modeli DURMAZ ve kavrama poz düğümü BULUNMAZ (`Hands/Hand_*`, `GripPoses/*`;
 `Build Weapon Prefabs` ikisini de siler). Kavraması yakalanmamış silahta el idle'da kalır;
 `Build Weapon Prefabs` eksikleri listeler.
@@ -661,6 +673,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanlarını kurar: engel uyarı yazısı + hasar vinyeti (`CenterEyeAnchor` altında). İdempotent, **tek seferlik** — rig tüm arenalarda örnek olduğu için her arenaya birden gider. ⚠️ Vinyetin materyalini araç ÜRETİR (shader GUID'i import öncesi bilinemez); çalıştırılmadıkça karartma çalışır ama yazı/vinyet hiç çizilmez |
 | `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
 | `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir). Ayrıca **temizlik ve denetim**: eski `GripSocket_*` işaretçilerini, `GripPoses` ağacını ve prefabta kalmış `Hands/Hand_*` el rig'ini siler, **kavraması YAKALANMAMIŞ silahları** koşu sonunda tek uyarıda listeler |
+| Inspector: `WPN_*` seç → `ItemGripSockets` | **ÖN KABZA** noktası santim mertebesinde kayık → Scene View'daki halkayı tutamaktan sürükle (halka **oyundakiyle aynı yarıçap ve renktedir**: düzenlenen el yeşil/ready, öteki el mavi/hover; kabul yarıçapı yalnız soluk referans halkası). El seçimi bileşenin Inspector'ından yapılır ve **kişiseldir** (EditorPrefs, prefabı kirletmez). ⚠️ **Ana kabza ne çizilir ne düzenlenir** (gözlükle yakalanır) ve tek elli eşyada araç tümden sessizdir. Değer `WD_*.asset`'e yazılır — ⚠️ prefaba düğüm EKLEMEZ, tek doğruluk kaynağı yakalanmış kayıttır. Parmak duruşunu ölçmez: onun yeri gözlüktür |
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |
 | `… > Audio > Mod Sesleri` | Moda/haritaya göre değişen duyuru sesi eklenecek/değiştirilecek → `ModeAudioRegistry.asset`'i seçer (yoksa oluşturur). ⚠️ Düzenleme yeri **Inspector**'dır, menü yalnız kaydı bulur; mod ve harita orada **katalogdan seçilir** (elle yazılan ad kuralı sessizce eşleşmez hâle getirir) |

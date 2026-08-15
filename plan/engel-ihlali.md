@@ -36,6 +36,14 @@ Lobi sahnelerinde bu iş gerekmez: hasar kapısı fazdır (`playing`), lobide ma
 
 - [ ] `dotnet build` (Server) + Unity derlemesi + `HMD Katmanlarını Kur` + yeni APK
 - [ ] Kafayı engele sok → ekran **0.2 sn'de tam siyah**, uyarı yazısı nabızla görünür
+- [ ] Bloğa **yavaşça** yaklaş → ekran, bloğun yüzeyi kırpılmaya başlamadan ÖNCE siyah;
+      duvarın içi/arkası hiçbir anda görünmüyor. **Dört ana yönde ve köşegende ayrı ayrı dene**
+      (eski kusur yön-bağımlıydı: köşegende sızıntı en genişti)
+- [ ] Aynısını hızlı bir kafa dönüşüyle (bloğa doğru savrularak) tekrarla → açık kalan tek kare yok
+- [ ] Bloğun **yanından** yürüyerek geç (kafa cisme değmiyor) → ekran KARARMIYOR
+      (yalancı pozitif kontrolü; açıklık tavanı kafa yarıçapıdır)
+- [ ] Elde silah tutarken silahın gövdesi kırpılmıyor (near-clip 0.10 → 0.05 düştü) ve uzak
+      geometride z-fighting yok
 - [ ] Yarım sok (kabuk değiyor, merkez dışarıda) → hafif kızarma, yazı YOK, ceza YOK
 - [ ] İçeride kal → **3 sn hiç can gitmez**, sonra kırmızı vinyet siyahın üstünde nabız atar ve
       5 sn'de ölüm (toplam ~8 sn)

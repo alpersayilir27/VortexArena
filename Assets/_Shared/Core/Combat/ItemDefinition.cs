@@ -260,6 +260,42 @@ namespace VortexArena.Core.Combat
                 primaryGripLeft = capture;
             }
         }
+
+        /// <summary>
+        /// Bir kavrama kaydını <b>yazılmamış</b> hale döndürür (<c>captured = false</c>) —
+        /// <see cref="EditorSetGrip"/> ile aynı kapının silme yönü.
+        /// <para>⚠️ Alanı sıfır poza çekmek YETMEZ: sıfır poz geçerli bir kavramadır
+        /// (<see cref="ItemGripCapture"/>), yani "hepsi sıfır = yazılmamış" kestirmesi burada
+        /// sessizce yanlış olurdu — bayrağın kendisi düşürülür ki okuma yolu öteki elin kaydına
+        /// düşebilsin ve araçlar eksik kavramayı raporlayabilsin.</para>
+        /// </summary>
+        public void EditorClearGrip(GripSocketKind kind, bool rightHand)
+        {
+            ItemGripCapture empty = default;
+
+            if (kind == GripSocketKind.Secondary)
+            {
+                if (rightHand)
+                {
+                    secondaryGripRight = empty;
+                }
+                else
+                {
+                    secondaryGripLeft = empty;
+                }
+
+                return;
+            }
+
+            if (rightHand)
+            {
+                primaryGripRight = empty;
+            }
+            else
+            {
+                primaryGripLeft = empty;
+            }
+        }
 #endif
 
         /// <summary>
