@@ -1,5 +1,6 @@
 {
   "maps": [
+    { "sceneName": "Dust_B_Outdoor14x16", "venue": "Outdoor14x16", "modes": ["ffa", "tdm", "tournament"] },
     { "sceneName": "IceWorld_Outdoor12x12", "venue": "Outdoor12x12", "modes": ["ffa", "tdm", "tournament"] },
     { "sceneName": "IceWorld_Outdoor12x16", "venue": "Outdoor12x16", "modes": ["ffa", "tdm", "tournament"] },
     { "sceneName": "IceWorld_Outdoor14x16", "venue": "Outdoor14x16", "modes": ["ffa", "tdm", "tournament"] },
@@ -7,6 +8,7 @@
     { "sceneName": "Lobby_Outdoor12x16", "venue": "Outdoor12x16", "modes": ["lobby"] },
     { "sceneName": "Lobby_Outdoor14x16", "venue": "Outdoor14x16", "modes": ["lobby"] },
     { "sceneName": "Lobby_VortexAntep", "venue": "VortexAntep", "modes": ["lobby"] },
-    { "sceneName": "Military_VortexAntep", "venue": "VortexAntep", "modes": ["ffa", "tdm", "tournament"] }
+    { "sceneName": "Military_VortexAntep", "venue": "VortexAntep", "modes": ["ffa", "tdm", "tournament"] },
+    { "sceneName": "Mirage_A_Outdoor14x16", "venue": "Outdoor14x16", "modes": ["ffa", "tdm", "tournament"] }
   ]
 }

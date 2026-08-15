@@ -3196,7 +3196,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8455591924629767172, guid: e2e2ac91ad92d7a4aa2040aaf4254a90, type: 3}
       propertyPath: m_Name
-      value: WPN_M16_BLUE
+      value: WPN_M4A1_BLUE
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -13484,7 +13484,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1554324386449819339, guid: e8169d0b220f2ea4dadcaca7eaeee099, type: 3}
       propertyPath: m_Name
-      value: WPN_M4A1_RED
+      value: WPN_M4A4_RED
       objectReference: {fileID: 0}
     - target: {fileID: 8915795193496911649, guid: e8169d0b220f2ea4dadcaca7eaeee099, type: 3}
       propertyPath: m_LocalScale.x
@@ -14815,7 +14815,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1554324386449819339, guid: e8169d0b220f2ea4dadcaca7eaeee099, type: 3}
       propertyPath: m_Name
-      value: WPN_M4A1_BLUE
+      value: WPN_M4A4_BLUE
       objectReference: {fileID: 0}
     - target: {fileID: 8915795193496911649, guid: e8169d0b220f2ea4dadcaca7eaeee099, type: 3}
       propertyPath: m_LocalScale.y
@@ -19562,7 +19562,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8455591924629767172, guid: e2e2ac91ad92d7a4aa2040aaf4254a90, type: 3}
       propertyPath: m_Name
-      value: WPN_M16_RED
+      value: WPN_M4A1_RED
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
