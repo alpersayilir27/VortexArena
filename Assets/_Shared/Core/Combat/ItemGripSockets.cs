@@ -51,8 +51,15 @@ namespace VortexArena.Core.Combat
         /// </summary>
         private const float HoverRadius = 0.30f;
 
-        /// <summary>Prosedürel halka yedeğinin yarıçapı (m) — playtest değeri.</summary>
-        private const float RingRadius = 0.035f;
+        /// <summary>
+        /// Prosedürel halka yedeğinin yarıçapı (m) — playtest değeri.
+        /// <para>Editör tutamağı (<c>ItemGripSocketsEditor</c>) da BUNU çizer: sahnede ayarlarken
+        /// gördüğün halka ile gözlükte gördüğün halka aynı büyüklükte olmazsa, doğru yere konmuş
+        /// gibi duran bir nokta başlıkta kabzanın yanında görünür. ⚠️ Kavrama YARIÇAPI
+        /// (<see cref="ItemDefinition.PrimaryGripRadius"/>) bu DEĞİLDİR — o, hiç çizilmeyen kabul
+        /// mesafesidir ve halkadan kat kat büyüktür.</para>
+        /// </summary>
+        public const float RingRadius = 0.035f;
 
         /// <summary>Halka köşe sayısı (yumuşaklık ↔ vertex bütçesi).</summary>
         private const int RingSegments = 20;
@@ -64,15 +71,15 @@ namespace VortexArena.Core.Combat
         private const float HoverAlpha = 0.35f;
 
         /// <summary>Ready durumunda ölçek: büyüme "şimdi bas" okumasını gözle ayırır.</summary>
-        private const float ReadyScale = 1.35f;
+        public const float ReadyScale = 1.35f;
 
         /// <summary>Hover rengi (mavi): "burada bir yer var".</summary>
-        private static readonly Color HoverColor = new Color(0.45f, 0.85f, 1f, 1f);
+        public static readonly Color HoverColor = new Color(0.45f, 0.85f, 1f, 1f);
 
         /// <summary>Ready rengi (yeşil): "şimdi bas". ⚠️ Renk ayrımı alfa/ölçek farkının
         /// ÜSTÜNE gelir, onun yerine değil — VR'da yalnız parlaklık değişimi kabul mesafesine
         /// girildiğini yeterince okutmuyor.</summary>
-        private static readonly Color ReadyColor = new Color(0.35f, 0.95f, 0.45f, 1f);
+        public static readonly Color ReadyColor = new Color(0.35f, 0.95f, 0.45f, 1f);
 
         /// <summary>Halka materyalinin shader arama zinciri (ilk bulunan kullanılır).</summary>
         // ⚠️ Zincir ShotTracer'daki ile BİREBİR aynı ve "Sprites/Default" başta duruyor: o shader
@@ -146,6 +153,31 @@ namespace VortexArena.Core.Combat
 
                 return _weapon != null && _weapon.Definition != null ? _weapon.Definition : definition;
             }
+        }
+
+        /// <summary>
+        /// Bu eşyada GEÇERLİ olan tanım — soketin okuduğu kaydın kendisi.
+        /// <para>Editör tutamağı (<c>ItemGripSocketsEditor</c>) düzenleyeceği asset'i buradan
+        /// çözer: yukarıdaki öncelik kuralı (<see cref="Weapon"/> kazanır) ikinci bir yerde
+        /// tekrar yazılsaydı, tutamak bir asset'i düzenlerken soket başka birini okuyabilirdi.</para>
+        /// </summary>
+        public ItemDefinition ResolvedDefinition => Definition;
+
+        /// <summary>
+        /// Bir kavrama noktasının DÜNYA konumu.
+        /// <para>⚠️ <b><see cref="Transform.TransformPoint"/> DEĞİL:</b> kayıt metredir ve
+        /// <c>WPN_*</c> kökleri 0.8 ölçekli — <c>TransformPoint</c> ölçeği ikinci kez uygular
+        /// (gerekçe <see cref="ItemGripCapture"/>). Tersi <see cref="WorldToItemLocal"/>.</para>
+        /// </summary>
+        public static Vector3 ItemLocalToWorld(Transform item, Vector3 itemLocal)
+        {
+            return item.position + item.rotation * itemLocal;
+        }
+
+        /// <summary><see cref="ItemLocalToWorld"/>'ün tersi — aynı ölçeksiz sözleşme.</summary>
+        public static Vector3 WorldToItemLocal(Transform item, Vector3 world)
+        {
+            return Quaternion.Inverse(item.rotation) * (world - item.position);
         }
 
         private void Awake()
@@ -297,13 +329,13 @@ namespace VortexArena.Core.Combat
         /// </summary>
         private Vector3 PrimarySocketWorld(ItemDefinition def, bool rightHand)
         {
-            return transform.position + transform.rotation * def.PrimaryGripPointOnItem(rightHand);
+            return ItemLocalToWorld(transform, def.PrimaryGripPointOnItem(rightHand));
         }
 
         /// <summary>Ön kabza soketinin dünya konumu (bkz. <see cref="PrimarySocketWorld"/> uyarıları).</summary>
         private Vector3 SecondarySocketWorld(ItemDefinition def, bool rightHand)
         {
-            return transform.position + transform.rotation * def.SecondaryGripPosition(rightHand);
+            return ItemLocalToWorld(transform, def.SecondaryGripPosition(rightHand));
         }
 
         /// <summary>
@@ -640,15 +672,29 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            Gizmos.color = new Color(0.25f, 0.9f, 1f, 0.9f);
-            Gizmos.DrawWireSphere(PrimarySocketWorld(def, true), def.PrimaryGripRadius);
-
-            // Tek elli eşyada ön kabza soketi HİÇ açılmaz (bkz. IsSocketOpen) — çizmek de yanlış
-            // olurdu: sıfır olan secondaryGrip yüzünden kabzanın üstünde hayalet bir küre görünürdü.
+            // ⚠️ ANA KABZA ÇİZİLMEZ: o kayıt gözlükle yakalanır ve sahnede düzenlenmez
+            // (ItemGripSocketsEditor da yalnız ön kabzayı sürer) — düzenlenemeyen bir noktayı
+            // çizmek, sahnede sürüklenebilir sanılan ama sürüklenmeyen bir işaret bırakır.
+            // ⚠️ Tek elli eşyada ön kabza soketi de HİÇ açılmaz (bkz. IsSocketOpen) — çizmek yine
+            // yanlış olurdu: sıfır olan secondaryGrip yüzünden kabzanın üstünde hayalet bir küre
+            // görünürdü. Yani tabancada bu gizmo tümden sessizdir.
             if (def.IsTwoHanded)
             {
+                Gizmos.color = SocketGizmoColor(def, GripSocketKind.Secondary);
                 Gizmos.DrawWireSphere(SecondarySocketWorld(def, true), def.SecondaryGripRadius);
             }
+        }
+
+        /// <summary>
+        /// Soket küresinin rengi: <b>hiçbir el için yazılmamış</b> kayıt kırmızı çizilir.
+        /// <para>Gerekçe: yakalanmamış kavrama sıfır poza düşer, yani küre eşyanın KÖKÜNDE durur —
+        /// camgöbeği çizilirse bu "yanlış ayarlanmış" gibi okunur ve ince ayarla düzeltilmeye
+        /// çalışılır. Oysa doğru cevap kaydı hiç yazmamış olmaktır; renk o iki durumu ayırır.</para>
+        /// </summary>
+        private static Color SocketGizmoColor(ItemDefinition def, GripSocketKind kind)
+        {
+            bool written = def.HasGrip(kind, true) || def.HasGrip(kind, false);
+            return written ? new Color(0.25f, 0.9f, 1f, 0.9f) : new Color(1f, 0.35f, 0.25f, 0.9f);
         }
     }
 }
