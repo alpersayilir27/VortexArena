@@ -48,7 +48,7 @@ Ortak görseller: `Assets/_Shared/App/UI/Sprites/` — yuvarlak köşe (`Rounded
 | `SlantButton_20` | Paralelkenar düğme/sekme zemini — yatay 9-slice (border sol/sağ 30) |
 | `FadeH_256` / `FadeV_256` | Eriyen beyaz gradyan (takım kenar şeridi, bant parlaması) — `Image.Type: Simple` |
 | `ArrowDown_128` | Aşağı bakan dolu üçgen (başlık chevron'u) |
-| `skull` / `crosshair` / `anchor` / `settings` | İkonlar (ölüm · öldürme · kalibrasyon · ayarlar) |
+| `skull` / `crosshair` / `calibrate` / `scale` / `settings` | İkonlar (ölüm · öldürme · kalibrasyon · gövde ölçeği · ayarlar). Ekranda 24–30 px çizilirler: **kalın gövdeli** üretilir (kıl çizgi bu boyutta örneklemeye düşer, noktalı görünür), import'ta mipmap açık + max 128 px |
 | `PanelBG` | Panel kartının **tek parça AI arka planı** (başlık bandı + chevron + takım parlamaları dahil) — `Image.Type: Simple`, karta gerilir; kartın en-boy oranı görsele uydurulur |
 | `BtnDark` / `BtnRed` / `BtnCyan` | AI paralelkenar buton zeminleri (pasif · tehlike · seçili) — Simple, gerilir |
 | `RowPlate` | Çok geniş AI satır/bant plakası — Simple |
