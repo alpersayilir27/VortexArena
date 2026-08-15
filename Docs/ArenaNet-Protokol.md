@@ -1670,7 +1670,7 @@ halkasını kırmızı yakıp söndürür.
 | **Kafa kabuğu** engele değiyor ama ceza eşiğinin altında | — | ✅ tam siyah + nabız | — |
 | **El** engelin içinde | — | — | ✅ tetik ölür |
 | **Silahın herhangi bir parçası** engele değiyor | — | — | ✅ tetik ölür |
-| **Kafa** alanın dışında | ✅ uyarı yazısı + `FLAG_OUT_OF_BOUNDS`; **can gitmez** | ✅ (muhafazanın kendi karartması) | ✅ tetik ölür |
+| **Kafa** alanın dışında | ✅ uyarı yazısı + `FLAG_OUT_OF_BOUNDS`; **can gitmez** | ✅ tam siyah + nabız (muhafazanın kendi karartması) | ✅ tetik ölür |
 | Kol / gövde / bacak | — | — | — |
 
 ⚠️ **Tablonun üç sütunu üç ayrı kapıdan geçer.** "Ceza" sütunu faz `playing` + canlı + kalibre
@@ -1794,6 +1794,10 @@ tarafında ölçülür ve sunucuya bildirilmez:
 - **Titreşim:** karartmayla **aynı kapıdan** (temas boyunca, 2 Hz nabız) iki kumandaya birden gider.
   Kararan ekran tek başına *"ne oldu"* sorusunu doğuruyor; nabız ona *"duvardasın, geri çekil"*
   cevabını verir. ⚠️ Sürekli titreşim uyarı olmaktan çıkar, bu yüzden nabızdır.
+  ⚠️ **Titreşimi isteyen İKİ kaynak var** (engel ihlali · alan dışı) ve ikisi aynı anda doğru
+  olabilir; motoru doğrudan süren yoktur, ikisi de `ControllerHaptics` hakeminden geçer —
+  `ScreenFade` ile birebir aynı sözleşme (kare başına bildirim, en yüksek genlik kazanır, susan
+  kaynak kendiliğinden düşer).
 - **Uyarı yazısı:** karartmanın üstünde nabız atarak "duvarın içindesin, oyun alanına dön" der.
   Karartmanın açıklaması olduğu için **onunla aynı kapıdadır**: faz ve canlılık sorulmaz.
 - **Can kaybının kırmızısı:** karartmanın **üstünde** ayrı bir katmandır. ⚠️ Karartma hakemine
@@ -1829,7 +1833,10 @@ zaten kapalı olduğu için **alanın dışına çıkıp içeri ateş etmek geri
 yoludur**. Ceza değil bir kapıdır: oyuncu içeri girdiği anda tetik geri gelir.
 
 **Arenanın DIŞ duvarları ve zemini CEZA sistemine GİRMEZ.** Dış sınırı istemci tarafındaki muhafaza
-ölçer (karartma + uyarı + tetik kapanması, **hasar yok**) ve sonucu yalnız bir bayrak olarak taşır.
+ölçer (**tam karartma + nabız + uyarı + tetik kapanması, hasar yok**) ve sonucu yalnız bir bayrak
+olarak taşır. ⚠️ **Sunum engel ihlaliyle AYNIDIR, ayrım cezadadır:** ikisi de görüşü kapatır ve
+kumandayı titretir, ama can yalnız engelde erir. Sınırı geçen oyuncunun ekranı kademesiz olarak
+tam siyah olur (yaklaşma rampası sınıra kadar sürer; dışarıda ikinci bir rampa yoktur).
 Gerekçe yine kalibrasyondur: dış duvar oyuncunun her an dibinde olduğu için kayan bir hizalamada
 sürekli yalancı ihlal üretirdi — görünürlük buna dayanır, can eritme dayanmaz. Hangi geometrinin
 ihlal sayılacağı **sunucuya hiç bildirilmez** — o karar tümüyle sahne tarafındadır (`Obstacle`
