@@ -28,11 +28,12 @@ namespace VortexArena.App.Admin
     /// <para>⚠️ <b>HP, SAHNE ve İHLAL satırda bilinçli olarak YOKTUR</b> — gerekçesi
     /// <see cref="AdminStatsRow"/> sınıf dokümanındadır; "eksik" sanıp geri koyma.</para>
     ///
-    /// <para>⚠️ <b>Kalibrasyon SIFIRLAMA (<c>clear_calibration</c>) bu panelde YOKTUR ve
-    /// eklenmez.</b> Buradaki KALİBRE düğmeleri gözlükteki kayıttan <i>yeniden yükleme</i>dir;
-    /// sıfırlama yan paneldeki oyuncu kartında (KAL) ve tercihler panelindedir. İkisi zıt işlerdir
-    /// (biri savaş dışı bırakır, diğeri oyuncuyu oyuna geri sokmayı dener) ve aynı ekranda yan yana
-    /// durmaları operatörü yanıltır.</para>
+    /// <para><b>Alt bardaki iki kalibrasyon düğmesi zıt işlerdir:</b> <c>TÜMÜNÜ KALİBRE ET</c>
+    /// kayıtlı çapadan <i>yeniden yükleme</i>dir (oyuncuyu oyuna geri sokmayı dener),
+    /// <c>TÜM KALİBRASYONLARI SIFIRLA</c> ise herkesi savaş dışı bırakır. Yan yana durdukları için
+    /// ayrımı <b>görünüm ve sürtünme</b> taşır: sıfırlama kırmızı yazılır ve iki adımlı onay ister,
+    /// yeniden yüklemede onay yoktur (geri alınabilir). Oyuncu başına sıfırlama yan paneldeki
+    /// oyuncu kartındadır (<see cref="AdminPlayerRow"/>, KAL).</para>
     ///
     /// <para><b>Görünüm prefabtan gelir</b> (<c>_Shared/App/Resources/UI/AdminStatsPanel.prefab</c>);
     /// bu sınıf yalnız veri yazar ve satırları <see cref="UiKit.Block"/> ile yerleştirir.</para>
@@ -44,6 +45,14 @@ namespace VortexArena.App.Admin
         /// <summary>Uyarı penceresinin kendiliğinden kapanma süresi (sn). Operatör kapatmayı
         /// unutursa pencere listenin üstünde kalıcı olarak durmasın.</summary>
         private const float PopupSeconds = 6f;
+
+        /// <summary>Toplu sıfırlamanın onay penceresi (sn): ilk basıştan sonra bu kadar süre içinde
+        /// ikinci basış gelmezse düğme dinlenme haline döner.</summary>
+        private const float ClearAllConfirmSeconds = 3f;
+
+        /// <summary>Alt bardaki düğmelerin ortak dinlenme zemini — sıfırlama düğmesi yalnız onay
+        /// bekliyorken bunun yerine <see cref="UiKit.Bad"/> ile dolar.</summary>
+        private static readonly Color ClearAllIdleFill = UiKit.Hex(0x334557, 0xF2);
 
         /// <summary>FFA sıralaması için tampon — her tazelemede yeni liste ayırmamak adına.</summary>
         private readonly List<AdminPlayerView> _sorted = new List<AdminPlayerView>();
@@ -71,6 +80,8 @@ namespace VortexArena.App.Admin
         [Header("Toplu eylemler")]
         [SerializeField] private Button _calibrateAllButton;
         [SerializeField] private Button _measureAllButton;
+        [SerializeField] private Button _clearAllButton;
+        [SerializeField] private TextMeshProUGUI _clearAllLabel;
 
         [Header("Uyarı penceresi")]
         [SerializeField] private GameObject _popupRoot;
@@ -92,6 +103,10 @@ namespace VortexArena.App.Admin
 
         /// <summary>Uyarı penceresinin kapanma anı (<c>Time.unscaledTime</c>); &lt; 0 = kapalı.</summary>
         private float _popupUntil = -1f;
+
+        /// <summary>Toplu sıfırlamanın ilk basış anı (<c>Time.unscaledTime</c>); &lt; 0 = onay
+        /// beklenmiyor.</summary>
+        private float _clearAllArmedAt = -1f;
 
         private float RowHeight
         {
@@ -116,6 +131,7 @@ namespace VortexArena.App.Admin
             Wire(_closeButton, AdminSession.ClosePanel);
             Wire(_calibrateAllButton, ReloadAllCalibrations);
             Wire(_measureAllButton, () => AdminCommands.MeasureBodyScale(0));
+            Wire(_clearAllButton, ArmClearAllCalibration);
             Wire(_popupCloseButton, HidePopup);
 
             if (_root != null)
@@ -185,6 +201,12 @@ namespace VortexArena.App.Admin
             {
                 HidePopup();
             }
+
+            if (_clearAllArmedAt >= 0f && Time.unscaledTime - _clearAllArmedAt > ClearAllConfirmSeconds)
+            {
+                _clearAllArmedAt = -1f;
+                _dirty = true;
+            }
         }
 
         private void MarkDirty()
@@ -214,6 +236,16 @@ namespace VortexArena.App.Admin
                     _scroll.verticalNormalizedPosition = 1f;
                 }
             }
+
+            // Kapalı panelde yarım kalmış onay penceresi taşınmaz: operatör paneli kapatıp
+            // açtığında düğme "EMİN?" halinde beklerse tek tıklama herkesin kalibrasyonunu siler.
+            if (!open)
+            {
+                _clearAllArmedAt = -1f;
+            }
+
+            // Roster'dan ÖNCE: sıfırlama düğmesi oyuncu listesi gelmemişken de doğru görünmeli.
+            ApplyClearAllButton();
 
             AdminRoster roster = AdminRoster.Instance;
             if (!open || roster == null)
@@ -394,6 +426,47 @@ namespace VortexArena.App.Admin
             }
 
             AdminCommands.ReloadCalibration(0);
+        }
+
+        /// <summary>
+        /// Herkesin kalibrasyonunu sıfırlar — <b>iki adımlı</b>, <see cref="AdminPlayerRow"/>'un
+        /// yıkıcı düğmeleriyle aynı sözleşme: ilk basış onay penceresini açar, pencere açıkken gelen
+        /// ikinci basış komutu gönderir.
+        /// <para>Sürtünmenin gerekçesi komşusuyla karşıtlığıdır: yanındaki yeniden yükleme geri
+        /// alınabilir bir denemedir, bu ise tek tıklamayla sahadaki herkesi savaş dışı bırakır ve
+        /// kalibrasyonu yalnız başlıklar geri açabilir (§10.6).</para>
+        /// </summary>
+        private void ArmClearAllCalibration()
+        {
+            if (_clearAllArmedAt < 0f)
+            {
+                _clearAllArmedAt = Time.unscaledTime;
+                _dirty = true;
+                return;
+            }
+
+            _clearAllArmedAt = -1f;
+            AdminCommands.ClearCalibration(0);
+            _dirty = true;
+        }
+
+        /// <summary>Sıfırlama düğmesinin etiketini ve zeminini onay durumuna göre boyar: dinlenmede
+        /// kırmızı yazı + alt barın ortak zemini, onay beklerken tam ters (kırmızı zemin) — operatör
+        /// ikinci basışın ne yapacağını düğmeye bakarak görür.</summary>
+        private void ApplyClearAllButton()
+        {
+            bool armed = _clearAllArmedAt >= 0f;
+
+            if (_clearAllLabel != null)
+            {
+                _clearAllLabel.text = armed ? "EMİN? HERKESİ SIFIRLA" : "TÜM KALİBRASYONLARI SIFIRLA";
+                _clearAllLabel.color = armed ? UiKit.OnAccent : UiKit.Bad;
+            }
+
+            if (_clearAllButton != null && _clearAllButton.targetGraphic is Image image)
+            {
+                image.color = armed ? UiKit.Bad : ClearAllIdleFill;
+            }
         }
 
         // ------------------------------------------------------------- geri çağrı

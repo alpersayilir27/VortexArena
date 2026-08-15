@@ -156,9 +156,13 @@ iki oyuncuyu ayırt eden şey numaradır. Hangi kimliğin hangi fiziksel gözlü
 yönetim ekranındaki **"Bu cihazı tanıt"** düğmesini kullan: o gözlüğün ekranında büyük bir uyarı
 belirir.
 
-İsmi veya numarayı değiştirmek istersen: listeden oyuncuya tıkla, **Tercihler** panelini aç ve
-**OYUNCU KİMLİĞİ** bölümünden düzenleyip **KİMLİĞİ UYGULA**'ya bas. Verdiğin numara o an bağlı
-başka bir oyuncudaysa değişiklik kabul edilmez ve durum satırında sebebi yazar.
+İsmi değiştirmek istersen: **İstatistik** panelini aç (`I`), o oyuncunun satırındaki **İSİM**
+(kalem) düğmesine bas — ad okunur yazıdan yazı kutusuna döner. Yeni adı yaz ve **Enter**'a bas (ya da
+yanındaki onay düğmesine); vazgeçersen iptal düğmesi satırı eski adına döndürür. Yeni ad o
+gözlükte kalıcıdır, ertesi gün bağlandığında da geçerlidir.
+
+**Forma numarası değiştirilemez** — onu sunucu atar (1'den başlayarak ilk boş sayı) ve o gözlüğün
+numarası olarak kalır. İki oyuncuyu ayırt eden şey numaradır, bu yüzden elle karıştırılamaz.
 
 ### 3.2 Bağlanmazsa — gizli IP paneli: **sağ kumandada joystick'e 1 saniye bas**
 
@@ -275,9 +279,23 @@ kalibrasyonu bozulmuştur. **Maçı durdurmana gerek yok:**
       Bitince tik kendiliğinden yeşile döner.
 - [ ] **5.** Oyuncu **kaldığı yerden devam eder** — canı, öldürme sayısı ve skoru sıfırlanmaz.
 
-**Maç öncesi hepsini birden aldırmak için:** TERCİHLER > KALİBRASYON >
-**"TÜM KALİBRASYONLARI SIFIRLA"** (iki kez basılır). Herkes aynı anda kalibresiz olur ve
-sırayla §4'teki adımları yapar.
+**Herkese birden uygulanan düğmeler İSTATİSTİK panelindedir** (`I`), listenin altındaki şeritte.
+Soldan sağa üç tanedir:
+
+| Düğme | Ne yapar | Ne zaman basılır |
+|---|---|---|
+| **TÜM KALİBRASYONLARI SIFIRLA** (kırmızı yazılı, küçük) | Bağlı olan **herkesi kalibresiz** bırakır: sahadaki herkes aynı anda ateş edemez, vurulamaz ve canlanamaz hâle gelir; her biri §4'teki adımlarla yeniden kalibre olana kadar oynanmaz | Seans sonunda yeni gruba geçerken; zemindeki **A/B bantları yerinden oynadıysa ya da yenilendiyse**; herkesin birden kaydığı bir durumda temiz sayfa açmak için |
+| **TÜMÜNÜ KALİBRE ET** | Kimseyi kalibresiz yapmaz: bağlı olan **herkesin** gözlüğüne, orada kayıtlı hizalamayı yeniden yükletmeyi dener. Tutmayan oyuncu eskisi gibi kalır, kimse oyun dışı kalmaz | Zemin işaretleri yerinde dururken birkaç kişi kaymış görünüyorsa — herkesi tek tek kalibre ettirmeden dener. Onay istemez, çünkü kimseye zarar vermez |
+| **TÜMÜNÜ ÖLÇEKLENDİR** | Herkesin boyunu birden ölçer (§4.2) | Herkesin dik durduğu bir an; maç öncesi hazırlık en uygunu |
+
+**Sıfırlama düğmesi iki adımda çalışır:** bir kez basınca üstünde **EMİN? HERKESİ SIFIRLA** yazar.
+**3 saniye içinde** ikinci kez basarsan komut gider; basmazsan düğme kendiliğinden eski hâline döner
+ve hiçbir şey olmaz. Yanına dokunup geçmek yeterli değildir — bilerek iki kez basman gerekir.
+
+⚠️ **Bu düğmeye maçın ortasında basma.** Tek tıklamayla sahadaki **herkes** oyun dışı kalır ve
+salondaki bütün oyuncuların sırayla yeniden kalibre olmasını beklemek zorunda kalırsın. Tek bir
+oyuncu kaymışsa doğru yer o oyuncunun satırındaki **KAL** düğmesidir (yukarıdaki adımlar); herkesi
+hizaya sokmayı deniyorsan önce **TÜMÜNÜ KALİBRE ET**'i dene — o kimseyi oyun dışı bırakmaz.
 
 > **Neden tik'i elle geri açamıyorsun:** hizalamanın gerçekten düzeldiğini yalnız gözlüğün
 > kendisi bilir. Sen "tamam" diyebilseydin, aslında hâlâ kaymış bir oyuncu ateş etmeye ve
@@ -300,8 +318,9 @@ sırasında kumandayı yere değdirmek için **eğilmiş** durumdadır.
         Aynı oyuncu başkalarının ekranında **donuk bir T-pozunda** duruyorsa teşhis kesindir →
         §4.4'teki bakım adımlarını uygula.
 
-**Hepsini birden ölçmek için:** TERCİHLER > **"TÜM OYUNCULARI ÖLÇEKLE"**. Herkesin dik durduğu
-bir an seç — maç başlamadan önceki hazırlık en uygunu.
+**Hepsini birden ölçmek için:** İSTATİSTİK paneli (`I`) > listenin altındaki şeritte, sağdaki
+**TÜMÜNÜ ÖLÇEKLENDİR** düğmesi. Herkesin dik durduğu bir an seç — maç başlamadan önceki hazırlık
+en uygunu.
 
 **Bilmen gerekenler**
 

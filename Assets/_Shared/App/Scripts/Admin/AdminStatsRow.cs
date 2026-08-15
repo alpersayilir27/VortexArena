@@ -264,8 +264,7 @@ namespace VortexArena.App.Admin
             if (nameText != null && !_editing)
             {
                 // ⚠️ Düzenleme kipindeyken ada DOKUNULMAZ: roster saniyede birkaç kez tazeleniyor ve
-                // operatörün yazdığı metnin üstüne yazmak onu sessizce kaybettirir
-                // (AdminPreferencesPanel'deki kimlik alanlarında da aynı tuzak).
+                // operatörün yazdığı metnin üstüne yazmak onu sessizce kaybettirir.
                 // Ad TAKIM RENGİNDE yazılır — aynı oyuncu sahnede, kill feed'de ve burada aynı
                 // renkte görünsün; takımsız oyuncuda renk bilgi taşımaz, başlık rengi kalır.
                 Color nameColor = IsTeamPlayer(view.team) ? team : UiKit.Title;
@@ -454,8 +453,8 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Yeni adı gönderir. Numara <c>0</c> geçilir = "numarayı DEĞİŞTİRME" (§5.1);
-        /// bu satırın işi ad, numara tercihler panelindedir.</summary>
+        /// <summary>Yeni adı gönderir. Numara <c>0</c> geçilir = "numarayı DEĞİŞTİRME" (§5.1):
+        /// forma numarasını sunucu atar ve onu elle değiştiren bir arayüz YOKTUR.</summary>
         private void ApplyNameEdit()
         {
             if (!_editing)
