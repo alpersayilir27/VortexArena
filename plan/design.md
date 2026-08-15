@@ -118,11 +118,61 @@ pure black background, no text, no icons, same style as the panel
 Açılır liste zemini için ayrı görsel GEREKMEZ (düz koyu renk yeter); buton zeminleri
 `BtnDark`/`BtnCyan`'dan gelir.
 
+### Faz 4 — İkonlar (istatistik paneli)
+
+İkonlar **saf beyaz silüet** olarak üretilir, renk motorda `Image.color` tint'inden verilir
+(skull ile aynı kural). Ekranda 24–30 px çizildikleri için **kalın gövdeli** olmalılar: ince
+çizgili bir ikon bu boyutta örneklemeye düşer ve noktalı/kırık görünür. Import: Sprite/Single,
+mipmap açık, Trilinear, max 128 px, sıkıştırmasız (montaj kod tarafında).
+
+| Dosya adı | Ekrandaki boyut | Üretim boyutu | Ne | Nerede |
+|---|---|---|---|---|
+| `calibrate.png` | 30×30 | 512×512 (1:1) | Kalibrasyon: köşe parantezli hedef çerçevesi, ortasında dolu elmas | `AdminStatsPanel` → `BottomBar/CalibrateAll/Icon` (sol kenar) |
+| `scale.png` | 30×30 | 512×512 (1:1) | Gövde ölçeği: dikey çift başlı ok, uçlarında kısa çubuk | `AdminStatsPanel` → `BottomBar/MeasureAll/Icon` (sağ kenar — iki düğme aynalıdır) |
+| `crosshair.png` | 24×24 | 512×512 (1:1) | Öldürme: kalın halkalı nişangâh, dört kalın tik, ortada dolu nokta | Tablo başlıkları (`IconKills`) + admin kartı — aynı adla üstüne yazılırsa GUID korunur, referanslar kendiliğinden yenilenir |
+
+Ortak kurallar: tek parça, ortalanmış, tuvalin ~%80'ini dolduran, **kalın** (en ince çizgi
+tuval genişliğinin en az %8'i), düz karşıdan, gölge/parıltı/gradyan YOK, yazı YOK, saf beyaz
+(`#FFFFFF`) üstüne saf siyah zemin (ya da doğrudan şeffaf PNG). Yeni ikonlar mevcutlarla **aynı
+oturumda**, aynı kalınlık ve aynı köşe dilinde üretilir. İkonun kendisi RENKSİZ üretilir — ton
+motorda verilir.
+
+**`calibrate.png` prompt'u:**
+```
+Flat 2D game UI icon, pure solid white silhouette on a pure black background,
+a square viewfinder frame made of four thick L-shaped corner brackets, with a
+solid filled diamond (or map-pin) marker exactly in the center, very bold
+uniform stroke thickness, minimal geometric shapes, centered, icon fills
+about 80% of the frame, straight-on orthographic view, no gradients, no
+shadows, no glow, no outline, no text, no letters, single-color pictogram
+```
+
+**`scale.png` prompt'u:**
+```
+Flat 2D game UI icon, pure solid white silhouette on a pure black background,
+a simple standing human figure (round head, solid body) on the left, and a
+tall vertical double-headed arrow with a short horizontal end bar at top and
+bottom on the right, showing height measurement, very bold uniform stroke
+thickness, minimal geometric shapes, centered, icon fills about 80% of the
+frame, straight-on orthographic view, no gradients, no shadows, no glow, no
+text, no letters, single-color pictogram
+```
+
+**`crosshair.png` prompt'u:**
+```
+Flat 2D game UI icon, pure solid white silhouette on a pure black background,
+a bold gun crosshair reticle: one thick ring, four thick tick marks pointing
+outward at top, bottom, left and right, and a solid filled dot in the center,
+very bold uniform stroke thickness, minimal geometric shapes, centered, icon
+fills about 80% of the frame, straight-on orthographic view, no gradients, no
+shadows, no glow, no thin lines, no text, single-color pictogram
+```
+
 ### Var olanlar (ÜRETME)
 
-`skull` (ölüm) · `crosshair` (öldürme) · `anchor` (kalibrasyon) · `settings` (dişli dekor) —
-hepsi beyaz, motor içinde renklendiriliyor. İleride istenirse aynı tarzda (saf beyaz, siyah
-zeminde, tek parça): göz (POV), kuş (kuş bakışı), mikrofon, çarpı (at/kick), çift ok (takım değiş).
+`skull` (ölüm) · `crosshair` (öldürme) · `calibrate` · `scale` · `settings` (dişli dekor) —
+beyaz, motor içinde renklendiriliyor. İleride istenirse aynı tarzda (saf beyaz, siyah zeminde,
+tek parça, kalın): göz (POV), kuş (kuş bakışı), mikrofon, çarpı (at/kick), çift ok (takım değiş).
 
 ## 5. Teslim
 
