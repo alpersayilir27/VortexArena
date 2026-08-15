@@ -58,16 +58,17 @@ namespace VortexArena.App.Admin
     /// </summary>
     public class AdminPreferencesPanel : MonoBehaviour
     {
-        // NOT: PanelWidth/PanelHeight/RowHeight sabitleri KALDIRILDI — hiçbiri okunmuyordu ve
-        // durdukları yerde "yerleşimi kod belirliyor" diye yalan söylüyorlardı. Panel ölçüsü ve
-        // satır yerleşimi AdminHud.prefab'taki PreferencesPanel RectTransform'undadır; içerik
+        // NOT: Yerleşimi KOD BELİRLEMEZ — panel ölçüsü ve satır dizilimi prefabtadır
+        // (`_Shared/App/Resources/UI/AdminPreferencesPanel.prefab` → `PreferencesPanel`). İçerik
         // ELLE yığılan y ile dizilir (Layout Group yok, UiKit kararı), yani yeni satır eklemek =
         // prefabta alttaki her şeyi kaydırmak + paneli büyütmek. Kaba satır maliyeti: Section 34,
         // döngüleyici 40, düğme satırı 50.
-        // ⚠️ Panel 1080p referansta TAVANDA: üstten/alttan ~17 px pay kaldı — bir satır daha
-        // SIĞMAZ, sonraki ekleme içeriği kaydırılabilir yapmayı gerektirir. Pencere kipi ve
-        // OYUNDAN ÇIK düğmeleri bu yüzden yeni satır açmaz: ilki başlık çubuğunun (KAPAT'ın
-        // solundaki), ikincisi bağlantı satırının boş kalan sağ ucuna kondu.
+        // ⚠️ Kartın en-boy oranı kabuğun arka plan görseline (`PanelBG`) bağlıdır: sanat tek
+        // parçadır ve gerildiğinde başlık bandı/parlamaları esner — satır ekleyip paneli
+        // uzatmadan önce AdminStatsPanel ile aynı kabuk kuralına bak
+        // (`Docs/Gelistirici/Arayuz-Tasarimi.md`). Pencere kipi ve OYUNDAN ÇIK düğmeleri bu yüzden
+        // yeni satır açmaz: ilki başlık çubuğunun (KAPAT'ın solundaki), ikincisi bağlantı
+        // satırının ucuna kondu.
 
         /// <summary>Skor limiti adımlayıcısının eşiği: bu değerin altında ±1, üstünde ±5 adımlar.
         /// İki düğmeli döngüleyiciyle hem düşük limitlerde hassasiyet hem yüksek limitlerde
@@ -76,11 +77,6 @@ namespace VortexArena.App.Admin
 
         private const int ScoreLimitMin = 1;
         private const int ScoreLimitMax = 999;
-
-        /// <summary>MAÇ bölümünün normal başlığı; kilitliyken <see cref="MatchSectionLockedTitle"/>
-        /// ile değişir ki operatör düğmelerin neden pasif olduğunu görsün.</summary>
-        private const string MatchSectionTitle = "MAÇ (TÜM ADMİNLERDE ORTAK)";
-        private const string MatchSectionLockedTitle = "MAÇ (SÜRÜYOR — HARİTA/MOD KİLİTLİ)";
 
         // ⚠️ Alanlar [SerializeField] — görünüm PREFABTAN gelir
         // (`_Shared/App/Resources/UI/AdminPreferencesPanel.prefab`). Bu sınıf yalnız veri
@@ -110,10 +106,6 @@ namespace VortexArena.App.Admin
         /// <summary>Harita seçici — seçenekleri seçili moda + mekan süzgecine göre
         /// <see cref="RefreshMapList"/> her çalıştığında yeniden kurulur.</summary>
         [SerializeField] private TMP_Dropdown _mapDropdown;
-
-        // MAÇ bölümünün kilitlenebilir parçası (§10.7): harita seçmek TÜM istemcilere sahne
-        // yükletiyor, bu yüzden maç sürerken iki seçici de pasifleşir ve başlık sebebini yazar.
-        [SerializeField] private TextMeshProUGUI _matchSectionLabel;
 
         [SerializeField] private TextMeshProUGUI _durationValue;
         [SerializeField] private Button _durationPrev;
@@ -155,14 +147,6 @@ namespace VortexArena.App.Admin
         [SerializeField] private TextMeshProUGUI _statusText;
 
         [Header("Kalibrasyon")]
-        [SerializeField] private Button _clearAllButton;
-        [SerializeField] private TextMeshProUGUI _clearAllLabel;
-
-        /// <summary>Tüm oyuncuların gövde ölçüsünü aldırır (§10.8) — satırdaki ÖLÇ düğmesinin
-        /// toplu hâli. Toplu eylemlerin yeri burasıdır, HUD'ın üst barı değil.
-        /// <para>Etiketi <b>prefabta sabittir</b> ve koddan yazılmaz: durumu yok (yanındaki
-        /// sıfırlama düğmesinin aksine onay penceresi de yok), yani gösterecek bir veri yok.</para></summary>
-        [SerializeField] private Button _measureAllButton;
 
         // Kalibre modu (§5.2 set_calibration_mode): başlıkların AÇILIŞTA nasıl hizalanacağı.
         // Dost ateşiyle aynı sınıf — anlık komut, seçim kilidine girmez, koşan maçta da değişir.
@@ -188,11 +172,6 @@ namespace VortexArena.App.Admin
         /// düğmeleriyle aynı ton, aktif olan <see cref="UiKit.Accent"/> ile ayrışır.</summary>
         private static readonly Color CalibModeIdleFill = UiKit.Hex(0x2A303B, 0xFF);
 
-        /// <summary>Toplu kalibrasyon sıfırlamanın onay penceresi (sn) — AdminPlayerRow ile aynı
-        /// gerekçe: herkesi savaş dışı bırakan bir eylem tek yanlış tıklamayla olmamalı.</summary>
-        private const float ClearAllConfirmSeconds = 3f;
-        private float _clearAllArmedAt = -1f;
-
         [Header("Bağlantı")]
         [SerializeField] private TextMeshProUGUI _connectionText;
         [SerializeField] private Button _reconnectButton;
@@ -205,27 +184,10 @@ namespace VortexArena.App.Admin
 
         [SerializeField] private TextMeshProUGUI _quitLabel;
 
-        /// <summary>Çıkışın onay penceresi (sn) — toplu kalibrasyon sıfırlamayla aynı gerekçe:
-        /// koşan bir maçın ortasında yanlış tıklamayla kapanan admin, operatörü sahaya kör
-        /// bırakır ve geri alınamaz.</summary>
+        /// <summary>Çıkışın onay penceresi (sn): koşan bir maçın ortasında yanlış tıklamayla
+        /// kapanan admin, operatörü sahaya kör bırakır ve geri alınamaz.</summary>
         private const float QuitConfirmSeconds = 3f;
         private float _quitArmedAt = -1f;
-
-        // ---- Oyuncu kimliği (§2): SEÇİLİ oyuncunun adı + forma numarası ----
-        // Hedef ayrı bir seçiciyle DEĞİL AdminSession.SelectedPlayerId ile belirlenir: satıra
-        // tıklamak zaten seçim jestidir, ikinci bir liste iki ayrı "seçili oyuncu" kavramı üretirdi.
-        [Header("Oyuncu kimliği")]
-        [SerializeField] private TMP_InputField _identityNameField;
-        [SerializeField] private TextMeshProUGUI _identityNumberValue;
-        [SerializeField] private TextMeshProUGUI _identityTargetText;
-        [SerializeField] private Button _identityNumberPrev;
-        [SerializeField] private Button _identityNumberNext;
-        [SerializeField] private Button _applyIdentityButton;
-
-        /// <summary>Alanların hangi oyuncu için doldurulduğu — seçim değişince yeniden doldurulur.
-        /// Operatör yazarken roster tazelenip yazdığını EZMESİN diye aynı oyuncuda tekrar dolmaz.</summary>
-        private int _identityBoundPlayerId;
-        private int _identityNumber;
 
         [Header("GÖRÜNÜM bölümü (yalnız bu ekran)")]
         [SerializeField] private TextMeshProUGUI _markersValue;
@@ -294,8 +256,8 @@ namespace VortexArena.App.Admin
         /// <para>
         /// ⚠️ <b>Prefabta kalıcı (persistent) <c>onClick</c>/<c>onValueChanged</c> kaydı YOKTUR ve
         /// olmamalıdır.</b> Buradaki geri çağrıların çoğu koşullu (kilitli satır, iki adımlı onay,
-        /// faza göre değişen komut); inspector'dan bağlanan bir kayıt o koşulları atlar — ör. "TÜM
-        /// KALİBRASYONLARI SIFIRLA" onay penceresini atlayıp doğrudan herkesi sıfırlardı.
+        /// faza göre değişen komut); inspector'dan bağlanan bir kayıt o koşulları atlar — ör.
+        /// "OYUNDAN ÇIK" onay penceresini atlayıp admin'i tek tıklamayla kapatırdı.
         /// </para>
         /// </summary>
         private void WireButtons()
@@ -323,16 +285,6 @@ namespace VortexArena.App.Admin
             // ⚠️ _calibModeCloudButton BAĞLANMAZ: rezerve moddur, sunucu reddeder. Düğme her
             // tazelemede pasifleştirilir (ApplyCalibrationMode) — bağlanmış ama tepkisiz bir
             // düğme operatöre komutun gittiğini düşündürürdü.
-
-            Wire(_clearAllButton, ArmClearAllCalibration);
-            // ⚠️ Onay penceresi YOK (satırdaki ÖLÇ ile aynı gerekçe): ölçüm geri alınabilir bir
-            // eylemdir, kimseyi savaş dışı bırakmaz. Kalibresizler sunucuda elenir ve kaç kişinin
-            // atlandığı duyuru satırında görünür.
-            Wire(_measureAllButton, () => AdminCommands.MeasureBodyScale(0));
-
-            Wire(_applyIdentityButton, ApplyIdentity);
-            Wire(_identityNumberPrev, IdentityNumberDown);
-            Wire(_identityNumberNext, IdentityNumberUp);
 
             Wire(_markersPrev, PrevMarkers);
             Wire(_markersNext, NextMarkers);
@@ -384,9 +336,9 @@ namespace VortexArena.App.Admin
             // harita değişikliği panel açılmasa da yerel önizlemeye yansır.
             AdminSelection.Changed += HandleSharedSelectionChanged;
 
-            // Açık sahne değişti (§10.7 sahneleme / maç yükleme) → bölüm başlığındaki "AÇIK:"
-            // satırı tazelensin. Sahne komutu ortak seçimden bağımsız gelebilir (maç sonu
-            // lobiye dönüş), o yüzden AdminSelection.Changed'e güvenilmez.
+            // Açık sahne değişti (§10.7 sahneleme / maç yükleme) → harita seçicisinin imleci ona
+            // taşınsın. Sahne komutu ortak seçimden bağımsız gelebilir (maç sonu lobiye dönüş),
+            // o yüzden AdminSelection.Changed'e güvenilmez.
             NetEvents.OnReturnToLobby += HandleOpenSceneChanged;
             NetEvents.OnLoadMatch += HandleOpenSceneChanged;
 
@@ -423,12 +375,6 @@ namespace VortexArena.App.Admin
         private void Update()
         {
             // Onay penceresi kendiliğinden kapanır (AdminPlayerRow.Tick deseni).
-            if (_clearAllArmedAt >= 0f && Time.unscaledTime - _clearAllArmedAt > ClearAllConfirmSeconds)
-            {
-                _clearAllArmedAt = -1f;
-                _dirty = true;
-            }
-
             if (_quitArmedAt >= 0f && Time.unscaledTime - _quitArmedAt > QuitConfirmSeconds)
             {
                 _quitArmedAt = -1f;
@@ -442,24 +388,9 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Tüm oyuncuların kalibrasyonunu sıfırlar — iki adımlı onay (§10.6).</summary>
-        private void ArmClearAllCalibration()
-        {
-            if (_clearAllArmedAt < 0f)
-            {
-                _clearAllArmedAt = Time.unscaledTime;
-                _dirty = true;
-                return;
-            }
-
-            _clearAllArmedAt = -1f;
-            AdminCommands.ClearCalibration(0);
-            _dirty = true;
-        }
-
         /// <summary>
-        /// Admin uygulamasını kapatır — iki adımlı onay (<see cref="ArmClearAllCalibration"/>
-        /// deseni). ⚠️ Sunucuya "kapanıyorum" diye bir şey söylenmez ve söylenmemeli: admin
+        /// Admin uygulamasını kapatır — iki adımlı onay (AdminPlayerRow'daki yıkıcı düğmelerle aynı
+        /// desen). ⚠️ Sunucuya "kapanıyorum" diye bir şey söylenmez ve söylenmemeli: admin
         /// gözlemcidir, gidişi maçı etkilemez (soket kapanınca sunucu zaten düşürür).
         /// </summary>
         private void ArmQuit()
@@ -551,7 +482,7 @@ namespace VortexArena.App.Admin
             _lobbyOpen = false;
 
             // Listede yoksa (başka bir modun arenası sahnelenmiş) imleç bırakılır — seçici boş
-            // kalmasın; hangi sahnenin açık olduğunu bölüm başlığı zaten yazar.
+            // kalmasın.
             int index = IndexOfMap(sceneName);
             if (index >= 0)
             {
@@ -889,8 +820,8 @@ namespace VortexArena.App.Admin
         /// <c>set_selection</c>'ın echo'su bu yüzden önizlemeyi tekrar tetiklemez.
         /// Seçicide karşılığı olmayan bir seçim gelirse imleç yerinde bırakılır. Bu <b>normal</b>
         /// bir durumdur, sürüm farkı değil: sunucu açılışta ortak seçimi mekanın **lobi**
-        /// haritasıyla tohumlar (§5.3) ve lobi ne mod seçicisinde ne harita seçicisinde vardır —
-        /// o an açık olanı bölüm başlığı yazar (<see cref="ApplySelectionLock"/>).
+        /// haritasıyla tohumlar (§5.3) ve o seçim mod seçicisinde karşılık bulmaz — seçicinin
+        /// imleci zaten ortak seçimi değil AÇIK SAHNEYİ izler (<see cref="ApplyOpenScene"/>).
         /// </summary>
         private void HandleSharedSelectionChanged()
         {
@@ -1212,91 +1143,6 @@ namespace VortexArena.App.Admin
             AdminSpectator.RefreshRoof(); // tercih anında görünsün, kip değişimini bekleme
         }
 
-        // ------------------------------------------------------------ oyuncu kimliği (§2)
-
-        private void IdentityNumberDown()
-        {
-            StepIdentityNumber(-1);
-        }
-
-        private void IdentityNumberUp()
-        {
-            StepIdentityNumber(1);
-        }
-
-        /// <summary>Numarayı 1..99 arasında döndürür. <c>0</c> ("değiştirme") adımlamada ATLANIR:
-        /// numarayı korumak isteyen operatör alanı hiç kurcalamaz, sıfıra inmesi gerekmez.</summary>
-        private void StepIdentityNumber(int delta)
-        {
-            int next = _identityNumber + delta;
-            if (next < ArenaProtocol.PLAYER_NUMBER_MIN)
-            {
-                next = ArenaProtocol.PLAYER_NUMBER_MAX;
-            }
-            else if (next > ArenaProtocol.PLAYER_NUMBER_MAX)
-            {
-                next = ArenaProtocol.PLAYER_NUMBER_MIN;
-            }
-
-            _identityNumber = next;
-            MarkDirty();
-        }
-
-        /// <summary>Seçili oyuncuya ad + numara gönderir. ⚠️ Yerel roster GÜNCELLENMEZ — otorite
-        /// sunucudadır: kabul edilirse değişiklik <c>lobby_state</c> ile geri gelir, reddedilirse
-        /// hiç gelmez ve sebebi durum satırında (<c>admin_state.notice</c>) görünür.</summary>
-        private void ApplyIdentity()
-        {
-            int playerId = AdminSession.SelectedPlayerId;
-            if (playerId <= 0)
-            {
-                return;
-            }
-
-            AdminCommands.SetIdentity(playerId, _identityNameField != null ? _identityNameField.text : "",
-                _identityNumber);
-        }
-
-        /// <summary>Alanları SEÇİLİ oyuncudan doldurur. ⚠️ Aynı oyuncuda ikinci kez DOLDURMAZ:
-        /// roster sürekli tazelendiği için her tazelemede doldurmak operatörün o an yazdığı adı
-        /// ezerdi. Yeniden doldurma yalnız seçim değişince olur.</summary>
-        private void RefreshIdentityFields()
-        {
-            int playerId = AdminSession.SelectedPlayerId;
-            AdminRoster roster = AdminRoster.Instance;
-            AdminPlayerView view = roster != null ? roster.Find(playerId) : null;
-
-            if (view == null)
-            {
-                if (_identityBoundPlayerId != 0)
-                {
-                    _identityBoundPlayerId = 0;
-                    _identityNumber = 0;
-                    if (_identityNameField != null)
-                    {
-                        _identityNameField.text = "";
-                    }
-                }
-
-                _identityTargetText.text = "oyuncu seçilmedi";
-                _identityNumberValue.text = "-";
-                return;
-            }
-
-            if (_identityBoundPlayerId != playerId)
-            {
-                _identityBoundPlayerId = playerId;
-                _identityNumber = view.number;
-                if (_identityNameField != null)
-                {
-                    _identityNameField.text = view.name ?? "";
-                }
-            }
-
-            _identityTargetText.text = $"#{view.playerId} · {view.name}";
-            _identityNumberValue.text = _identityNumber > 0 ? _identityNumber.ToString() : "yok";
-        }
-
         // ------------------------------------------------------------------ tazeleme
 
         private void Apply()
@@ -1357,15 +1203,6 @@ namespace VortexArena.App.Admin
 
             ApplyCalibrationMode();
 
-            if (_clearAllLabel != null)
-            {
-                bool armed = _clearAllArmedAt >= 0f;
-                _clearAllLabel.text = armed ? "EMİN? HERKESİ SIFIRLA" : "TÜM KALİBRASYONLARI SIFIRLA";
-                _clearAllLabel.color = armed ? UiKit.OnAccent : UiKit.Bad;
-            }
-
-            RefreshIdentityFields();
-
             _markersValue.text = AdminSession.Markers == AdminMarkerVisibility.Off ? "kapalı"
                 : AdminSession.Markers == AdminMarkerVisibility.TopDownOnly ? "kuş bakışı" : "her zaman";
             _nameplatesValue.text = AdminSession.Nameplates ? "açık" : "kapalı";
@@ -1419,8 +1256,8 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Çıkış düğmesi: onay penceresi açıkken metin ve renk uyarır (toplu kalibrasyon
-        /// sıfırlamayla aynı desen).</summary>
+        /// <summary>Çıkış düğmesi: onay penceresi açıkken metin ve renk uyarır
+        /// (<see cref="AdminPlayerRow"/>'un yıkıcı düğmeleriyle aynı desen).</summary>
         private void ApplyQuitButton()
         {
             if (_quitLabel == null)
@@ -1480,8 +1317,8 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>Maç sürerken mod/harita satırlarını pasif gösterir (§10.7): seçiciler
-        /// açılmaz, değerler sönükleşir, bölüm başlığı sebebini yazar. Süre/limit satırları
-        /// AÇIK kalır — onlar bir sonraki maçın parametreleridir, kimseye sahne yükletmezler.</summary>
+        /// açılmaz, değerleri sönükleşir. Süre/limit satırları AÇIK kalır — onlar bir sonraki
+        /// maçın parametreleridir, kimseye sahne yükletmezler.</summary>
         private void ApplySelectionLock()
         {
             bool open = CanChangeSelection;
@@ -1494,20 +1331,6 @@ namespace VortexArena.App.Admin
             Color valueColor = open ? UiKit.Title : UiKit.Faint;
             SetCaptionColor(_modeDropdown, valueColor);
             SetCaptionColor(_mapDropdown, valueColor);
-
-            if (_matchSectionLabel != null)
-            {
-                // Başlığa AÇIK SAHNE yazılır: harita satırı "bir sonraki maçın adayı"dır, sunucunun
-                // açık sahnesi ise gerçekten yüklü olandır (§10.7) ve ikisi maç sonrası ayrışır
-                // (herkes lobiye döner, imleç son arenada kalır). Operatör hangisinin ne olduğunu
-                // tahmin etmek zorunda kalmasın.
-                string openScene = SceneRouter.Instance != null ? SceneRouter.Instance.OpenScene : "";
-                string title = open ? MatchSectionTitle : MatchSectionLockedTitle;
-                _matchSectionLabel.text = string.IsNullOrEmpty(openScene)
-                    ? title
-                    : $"{title} · AÇIK: {openScene}";
-                _matchSectionLabel.color = open ? UiKit.Faint : UiKit.Bad;
-            }
 
             ApplyPauseButton();
         }
