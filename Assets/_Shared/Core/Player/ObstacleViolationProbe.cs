@@ -15,8 +15,9 @@ namespace VortexArena.Core.Player
     /// (yalnız KAFA → tel bayrağı + ceza) ve <see cref="IsBodyBlocked"/> (kafa <b>ya da
     /// bir el</b> → yalnız ateş kapısı, tele gitmez).</para>
     ///
-    /// <para>⚠️ <b>Karartma ve titreşim bu ikisinin de değil, TEMASIN çıktısıdır</b>
-    /// (<see cref="HeadInsideLevel"/> &gt; 0): ceza eşiğini beklemezler, gerekçesi
+    /// <para>⚠️ <b>Karartma ve titreşim bu ikisinin de değil, GÖRÜŞÜN çıktısıdır</b> — kafa
+    /// geometriye değiyor (<see cref="HeadInsideLevel"/> &gt; 0) <b>ya da</b> göz noktası bir engel
+    /// yüzeyine kameranın kırpma mesafesinden yakın: ceza eşiğini beklemezler, gerekçesi
     /// <see cref="ReportPresentation"/>'da. ⚠️ <b>Ayrıca maç fazından ve canlılıktan da
     /// bağımsızdırlar</b> — aynı gerekçe: görüşün katı cismin içinde olması her durumda aynı
     /// şeydir. Faz/canlılık kapıları <b>yalnız cezaya</b> aittir ve onları sunucu uygular.</para>
@@ -104,6 +105,39 @@ namespace VortexArena.Core.Player
         /// <summary>Kafa kabuğunun nokta sayısı (merkez + ±x/±y/±z).</summary>
         private const int HeadSampleCount = 7;
 
+        /// <summary>
+        /// Kırpma düzleminin <b>KÖŞESİ</b>, merkezinin kaç katı uzaklıktadır. Kırpma göz noktasından
+        /// <c>nearClipPlane</c> kadar ileride başlar ama düzlem bir dikdörtgendir: 90° görüş açısı ve
+        /// kare en-boy oranında köşe <c>near·√3 ≈ 1.73×</c> uzağa düşer. Karartma köşeyi de kapatmak
+        /// zorundadır — ⚠️ çevresel görüşte kalan bir şerit hilenin tamamını geri verir.
+        /// </summary>
+        private const float NearPlaneCornerFactor = 1.8f;
+
+        /// <summary>
+        /// Stereo payı (m): her göz, ölçümün yapıldığı <b>merkez</b> göz noktasından yarım IPD kadar
+        /// yandadır, yani yan duvara merkezden bu kadar daha yakındır.
+        /// </summary>
+        private const float StereoEyeMargin = 0.035f;
+
+        /// <summary>Kamera çözülemezse varsayılan kırpma mesafesi (m).</summary>
+        private const float DefaultNearClip = 0.05f;
+
+        /// <summary>
+        /// Görüş açıklığının alt sınırı (m): kırpma düzlemi ne kadar küçük olursa olsun karartma bir
+        /// izleme titremesi kadar erken gelmelidir.
+        /// </summary>
+        private const float MinEyeClearance = 0.05f;
+
+        /// <summary>
+        /// Görüş açıklığının üst sınırı (m) = <see cref="HeadRadius"/>. ⚠️ <b>Tavan bir emniyet
+        /// değil, bir SÖZLEŞMEDİR:</b> karartmanın kapısı en fazla "kafam cisme değiyor" anıdır.
+        /// Bundan büyük bir açıklık, oyuncunun bloğun <b>yanından</b> geçerken ekranını karartırdı;
+        /// yani kırpma mesafesi tek başına büyütülerek çözülemez — kameranın
+        /// <c>nearClipPlane</c>'i de bu tavanın altında kalacak kadar küçük tutulur
+        /// (<c>VA_CameraRig</c>).
+        /// </summary>
+        private const float MaxEyeClearance = HeadRadius;
+
         // ------------------------------------------------------------------ durum
 
         public static ObstacleViolationProbe Instance { get; private set; }
@@ -116,8 +150,8 @@ namespace VortexArena.Core.Player
 
         /// <summary>
         /// Kafa kabuğunun ne kadarı geometrinin içinde (0..1): yedi noktanın içeride olanlarının
-        /// oranı. ⚠️ <b>Bir ŞİDDET ölçüsü DEĞİLDİR ve alfaya çevrilmez</b> — karartmanın kapısı
-        /// bu değerin sıfırdan büyük olup olmadığıdır, büyüklüğü değil. Oranı rampaya bağlamak
+        /// oranı. ⚠️ <b>Bir ŞİDDET ölçüsü DEĞİLDİR ve alfaya çevrilmez</b> — karartmanın kapılarından
+        /// biri bu değerin sıfırdan büyük olup olmadığıdır, büyüklüğü değil. Oranı rampaya bağlamak
         /// "içerideyim ama görüyorum" demektir. Kalan tüketicisi teşhistir (Dev penceresi).
         /// </summary>
         public static float HeadInsideLevel { get; private set; }
@@ -176,6 +210,9 @@ namespace VortexArena.Core.Player
         private OVRCameraRig _rig;
         private float _rigSearchTime = float.NegativeInfinity;
 
+        /// <summary>HMD kamerası — görüş açıklığı onun kırpma mesafesinden türer.</summary>
+        private Camera _headCamera;
+
         /// <summary>Çizilen karartma (yumuşatılmış).</summary>
         private float _fadeAlpha;
 
@@ -220,25 +257,25 @@ namespace VortexArena.Core.Player
 
         private void LateUpdate()
         {
+            // ⚠️ Kafa her KAREDE çözülür: karartmanın kapısı da (görüş açıklığı) onu okuyor ve o
+            // kapı 20 Hz'e bırakılamaz — gerekçe ReportPresentation'da.
+            Transform head = ResolveHead();
+
             _sampleAccumulator += Time.unscaledDeltaTime;
-            if (_sampleAccumulator < SampleInterval)
+            if (_sampleAccumulator >= SampleInterval)
             {
-                // Karartma her KAREDE bildirilir (hakemin kalp atışı sözleşmesi), ölçüm 20 Hz.
-                ReportPresentation();
-                return;
+                float elapsed = _sampleAccumulator;
+                _sampleAccumulator = 0f;
+                Evaluate(head, elapsed);
             }
 
-            float elapsed = _sampleAccumulator;
-            _sampleAccumulator = 0f;
-
-            Evaluate(elapsed);
-            ReportPresentation();
+            // Karartma her KAREDE bildirilir (hakemin kalp atışı sözleşmesi), ceza ölçümü 20 Hz.
+            ReportPresentation(head);
         }
 
         /// <summary>Bir ölçüm turu: geniş faz → kafa kabuğu → eşik + histerezis.</summary>
-        private void Evaluate(float elapsed)
+        private void Evaluate(Transform head, float elapsed)
         {
-            Transform head = ResolveHead();
             if (head == null)
             {
                 // Oyuncu değiliz (admin) ya da rig henüz yok: ölçüm yapılamaz, ihlal de yoktur.
@@ -395,7 +432,28 @@ namespace VortexArena.Core.Player
 
             _rigSearchTime = Time.unscaledTime;
             _rig = FindFirstObjectByType<OVRCameraRig>();
+            _headCamera = null; // rig değişti: kamera da yeniden çözülmeli (harita geçişi)
             return _rig != null ? _rig.centerEyeAnchor : null;
+        }
+
+        /// <summary>
+        /// Görüşün kapanacağı yarıçap (m): göz noktası bir engel yüzeyine bundan yakınsa ekran
+        /// kapanır.
+        /// <para>⚠️ <b>Kameranın kendi kırpma mesafesinden TÜRETİLİR, sabit yazılmaz:</b> kırpmayı
+        /// yapan ile kırpmadan önce kararmayı isteyen aynı sayıya bakmalıdır. İki ayrı yerde
+        /// yazılsaydı biri değiştiğinde sızıntı sessizce geri gelirdi — ve belirtisi yine
+        /// "engelin içini görüyorum" olurdu.</para>
+        /// </summary>
+        private float EyeClearance()
+        {
+            if (_headCamera == null && _rig != null && _rig.centerEyeAnchor != null)
+            {
+                _headCamera = _rig.centerEyeAnchor.GetComponent<Camera>();
+            }
+
+            float near = _headCamera != null ? _headCamera.nearClipPlane : DefaultNearClip;
+            return Mathf.Clamp(
+                near * NearPlaneCornerFactor + StereoEyeMargin, MinEyeClearance, MaxEyeClearance);
         }
 
         // ------------------------------------------------------------------ sunum
@@ -403,9 +461,21 @@ namespace VortexArena.Core.Player
         /// <summary>
         /// Karartma + titreşim.
         ///
-        /// <para><b>Karartmanın ve TİTREŞİMİN tek kapısı TEMASTIR:</b> kafa kabuğunun yedi noktasından
-        /// <b>herhangi biri</b> geometrinin içindeyse (<see cref="HeadInsideLevel"/> &gt; 0) ekran
-        /// aynı karede, rampasız, tam siyah olur. ⚠️ Kapı <see cref="IsViolating"/> DEĞİLDİR ve
+        /// <para><b>Karartmanın ve TİTREŞİMİN kapısı TEMAS ya da YAKINLIKTIR</b> — ikisi de aynı
+        /// soruyu sorar: <i>gözler katı bir cismin içini görebiliyor mu?</i>
+        /// <list type="number">
+        /// <item><b>Temas:</b> kafa kabuğunun yedi noktasından <b>herhangi biri</b> geometrinin
+        /// içinde (<see cref="HeadInsideLevel"/> &gt; 0).</item>
+        /// <item><b>Görüş açıklığı:</b> göz noktası bir engel yüzeyine <see cref="EyeClearance"/>
+        /// metreden yakın. ⚠️ <b>İkincisi olmadan birincisi GEÇ KALIR ve bu bir ayar değil, bir
+        /// geometri gerçeğidir:</b> kamera geometriyi göz noktasında değil, onun
+        /// <c>nearClipPlane</c> kadar ÖNÜNDEKİ düzlemde kırpar. Kabuk noktaları ise kafa
+        /// merkezinden (gözün ~6 cm ARKASI) dünya eksenlerinde uzanır, yani bakış yönünde göz
+        /// noktasını en fazla birkaç santim geçer — köşegen yönde hiç geçmez. Aradaki bant tam
+        /// olarak "duvar kırpıldı ama ekran hâlâ açık" bandıdır ve blokların içi oradan
+        /// okunur.</item>
+        /// </list>
+        /// Kapı <see cref="IsViolating"/> DEĞİLDİR ve
         /// oraya geri bağlanmaz: ceza eşiği (nokta sayısı + 0.15 sn) bilerek toleranslıdır ve o
         /// tolerans görüşe uygulandığında oyuncunun kafasını bloğun içine <b>görecek kadar</b>
         /// sokmasına izin verir — istismarın kendisi tam olarak budur. Ceza *"bu adam duvarda mı
@@ -434,9 +504,9 @@ namespace VortexArena.Core.Player
         /// sunucudadır (<c>MatchDirector.TickObstacleLocked</c>) — burada ikinci bir kopyası
         /// tutulmaz.</para>
         /// </summary>
-        private void ReportPresentation()
+        private void ReportPresentation(Transform head)
         {
-            bool contact = HeadInsideLevel > 0f;
+            bool contact = HeadInsideLevel > 0f || IsEyeAgainstGeometry(head);
 
             if (contact)
             {
@@ -460,6 +530,28 @@ namespace VortexArena.Core.Player
             // ⚠️ Bildirim KOŞULSUZDUR (temas yokken de 0 bildirilir): hakem yalnız bir bildirim
             // geldiğinde yeniden hesaplıyor, yani her karede bildiren bu tekil onun kalp atışıdır.
             ControllerHaptics.ReportPulse(HapticSourceId, contact);
+        }
+
+        /// <summary>
+        /// Göz noktası bir engel yüzeyine <see cref="EyeClearance"/>'tan yakın mı — karartmanın
+        /// <b>kırpmayı önceleyen</b> kapısı.
+        /// <para>⚠️ <b>Ceza ölçümünün kadansına (20 Hz) bağlanamaz</b> ve her karede koşar: 50 ms,
+        /// hızlı dönen bir kafanın açıklık bandını tümden geçmesine yeter ve o karelerde ekran açık
+        /// kalır. Maliyeti kare başına <b>bir</b> küçük küre sorgusudur (açıklık ≤ 11 cm), yani
+        /// gövde ölçümünün 1.2 m'lik sorgusunun yanında ihmal edilebilir.</para>
+        /// <para>⚠️ Sonuç bir ORAN değil, bir <b>eşiktir</b>: mesafeyi alfaya çeviren bir rampa
+        /// YOKTUR ve eklenmez — yarı saydam bir perde duvarın öbür yüzünü okunabilir bırakır
+        /// (gerekçenin tamamı yukarıda).</para>
+        /// </summary>
+        private bool IsEyeAgainstGeometry(Transform head)
+        {
+            if (head == null)
+            {
+                return false; // oyuncu değiliz (admin) ya da rig henüz yok
+            }
+
+            float clearance = EyeClearance();
+            return ObstacleVolumes.DistanceToSurface(head.position, clearance) < clearance;
         }
     }
 }

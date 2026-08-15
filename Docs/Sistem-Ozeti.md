@@ -1136,13 +1136,20 @@ elle ezer, sonuç her hâlde reload süresine kırpılır. `WeaponDefinition.per
 fişek dolum); aralık reload SÜRESİNDEN türetilir, klip uzunluğundan değil — süre değişince ses
 kendiliğinden uyar, klip ise tek fişeğin sesi olmalıdır) + `WeaponReloadGesture` (el bel hizasının
 altına inip silah aşağı doğrultulunca `TryStartReload`; **ölçülen nokta EL'dir** — silahı tutan
-kumandanın anchor'ı, silahın kökü değil — ve **bel çizgisi metre değil ORANDIR**: zemin ile göz
-arasının %55'i, yani ölçü oyuncunun boyuna kendiliğinden uyar. Zemin rig'in tracking space'i,
-göz `centerEyeAnchor` — ikisini `WeaponGranter.TryResolveEyeAndFloor` verir. İkinci koşul silahın
-aşağı doğrultulmasıdır ve KUMANDADAN okunur (`anchor.forward`, yatayın 35° altı); kavradıktan
+kumandanın anchor'ı, silahın kökü değil — ve **bel çizgisi metre değil ORANDIR**: elin **göze göre
+düşüşü**, ayakta göz yüksekliğinin %38'ini (dik duruşta kemer hizası) aşmalıdır. ⚠️ Ölçünün iki
+parçası karıştırılamaz: referans nokta **canlı** gözdür (`centerEyeAnchor`, kafayla birlikte iner),
+ölçek ise **ayakta** boydur (`StandingHeightState`) — bu yüzden eğilmek/çömelmek jesti ne
+kolaylaştırır ne kendiliğinden tetikler. `StandingHeightState` kendini önyükleyen kalıcı tekildir,
+ölçüyü öğrenir (tavan anında yükselir, aşağı 3 cm/dk sızar), cihazda SAKLAMAZ ve her `hello`'da
+sıfırlar: işletme gözlüğü elden ele geçer. İkinci koşul silahın aşağı doğrultulmasıdır ve KUMANDADAN okunur (`anchor.forward`, yatayın 25°
+altı — ölçü dünya uzayında, yani kafa dönüşünden bağımsız); kavradıktan
 sonra el bir kez göğüs hizasına çıkmadan devreye girmez — alçakta duran bir silahı seçer seçmez
-yanlış tetiklemeyi önler. Eşiklerin tamamı kodda sabittir, prefabda ayar alanı YOKTUR: aynı jest
-her silahta aynı hissetsin diye) + `WeaponCatalog` (SO, `_Shared/Data/Resources/` — `weaponId`→tanım araması;
+yanlış tetiklemeyi önler; kurulma çizgisi bel çizgisinden **türetilir** (+%10), bağımsız bir sabit
+değildir. Duruş 0.15 sn korunmalıdır ve sayaç koşul bozulunca sıfırlanmaz, **sızar** (eşiğin
+kenarındaki tek karelik izleme gürültüsü jesti öldürmesin). Reload gerçekten başlarsa tek darbelik
+haptik onay gider — jest tanındığı için değil, `TryStartReload` KABUL ettiği için. Eşiklerin
+tamamı kodda sabittir, prefabda ayar alanı YOKTUR: aynı jest her silahta aynı hissetsin diye) + `WeaponCatalog` (SO, `_Shared/Data/Resources/` — `weaponId`→tanım araması;
 `Resources.Load` ile okunduğu için klasöründen çıkarılmaz) + `RemoteShotFx` (kendini önyükler,
 sahne kurulumu istemez; UDP atış olayını (§6.4/6.5) tüketip uzak oyuncunun namlu alevi + konumsal
 atış sesini havuzlu çalar, tracer'ı çizer ve silahın **geri tepmesini** tetikler —
@@ -1343,7 +1350,7 @@ katmanların göreli hız farkı korunur).
 | `UI/ModeHudBase` | Mod HUD'larının **takım-agnostik** tabanı: faz/süre, geri sayım, can barı, ölüm ekranı + durum metni, kill-feed (ad çözümü `lobby_state`'ten), kendi öldürme/ölüm sayacın, maç sonu satırı. **Takıma ait hiçbir şey burada değil** — skor satırı (`ScoreLine`) ve kazanan metni (`WinnerLine`) alt sınıfın işi. Core'da durur çünkü modlar birbirini referanslamaz. `PhaseLabel`/`ModeStateLabel` `virtual`'dır: tur tabanlı mod "MAÇ" yerine "TUR 3", mod duraklamasında da "TOPLANMA 2/6" yazabilsin diye — taban `modeState`'i **yorumlamaz** |
 | `Combat/ItemDefinition` | Elde tutulabilen her şeyin (silah, ileride bomba) **dar** tabanı: `netItemId` (telde giden kimlik, §6.6), prefab, `holdMode`, kanonik kavrama pozları, tracer görünümü. Davranış alanı (hasar/şarjör/fitil) **girmez** — `RemoteAvatar` eşyayı ne YAPTIĞINI bilmeden çizer; Net katmanının "oyun bilgisi içermez" ilkesinin sunumdaki karşılığı. Kavrama **dört `ItemGripCapture` kaydıdır** (`primaryGripRight/Left`, `secondaryGripRight/Left`; her biri `captured` + konum + euler) ve ⚠️ **dördü de AYNI uzaydadır: elin (ISDK bileğinin) EŞYAYA göre yerel pozu, METRE ve ölçeksiz.** Ters uzaylı bir çift tutmak (biri "el → eşya", öteki "eşya → el") iki alandan birinin er geç ters yazılması demekti. ⚠️ **Kayıt EL BAŞINADIR:** kabza simetrik olmadığı için iki elin bileği eşyanın farklı yerlerine düşer, tek kayıt tutup aynalamak sol eli silahın içine sokardı; okuma yolu (`GetGrip`) eksik eli öteki elin kaydına düşürür, yani `HasGrip` bir el eksik diye düşmez. ⚠️ **Eşyanın eldeki ROTASYONU AYARLANMAZ:** `PrimaryGripRotation` **statiktir ve `identity`'dir** — kumanda nereye, namlu oraya; ayarlanabilir bir dönüş alanı YOKTUR ve eklenmez. ⚠️ **ELİN dönüşü de yakalamadan gelmez** — sentetik elin yalnız konumu kilitlenir, bileği kumandayla birlikte döner; yakalanan `euler` bu yüzden ana kabzada hiçbir şeyi sürmez (ön kabzada uzak avatarın ikinci el hedefi okur). Soket çizimi ana noktanın eşyaya göre yerini ister ve o `PrimaryGripPointOnItem` olarak **kaydın kendisinden türetilir**, ayrı bir alan olarak tutulmaz — aynı nokta iki yerde yaşasa biri güncellenip diğeri unutulurdu. Yarıçaplar (`primaryGripRadius`/`secondaryGripRadius`) duruşun değil **soket kapısının** ölçüsüdür ve Inspector'dan girilir |
 | `Combat/ItemGripSolver` | Kanonik kavramanın **matematiği** — saf statik, sahne bağımlılığı yok. Girdi: eşya tanımı + ana **avuç** pozu (`HandGripPivot`) + varsa ikinci elin avuç konumu + `aimBlend`; çıktı eşyanın dünya pozu. Ana kavrama ofsetini **parametreden de** alır: çağıran onu önce `ItemGripAuthority` ile çözer, çözemezse `PrimaryGripPosition(bool)`'a düşer — ikisi **aynı kayıttan** beslendiği için iki yol arasında sapma olamaz; ⚠️ o hâlde **ikincil eksen de aynı ofsetten** türer (`GripPointOnItem`), yoksa iki elli nişan silahı yamuk çevirirdi. **Tek el:** eşya ana avucun kavrama ofsetinden sürülür. **İki el:** tek elli çözümden başlanır ve eşyanın *ana kavrama → ön kabza* ekseni ikinci elin avucuna çevrilir (`FromToRotation`) — **ulaşılabilirlik bandı** ile ağırlıklandırılmış: `120°`'ye kadar birebir takip, `120°→160°` arası `SmoothStep` ile 1→0, `160°` sonrası ikinci el yok sayılır ve silah ana elin duruşunda kalır. ⚠️ Bant **kavramayı kesmez** (ön kabza bağı yalnız grip tuşuna bakar), yalnız silahın ne kadar DÖNECEĞİNİ söyler. ⚠️ Sert bir tavan (clamp) buraya geri konmaz: tavan savrulmanın yalnız büyüklüğünü kırpar, oysa sorun `FromToRotation`'ın ters-paralelde tanımsızlaşmasıdır — ağırlık o bölgede zaten `0` olduğu için savrulmanın kendisi görünmez olur ve geçiş sürekli kalır (bandın iki yakasında zıplama yok) — yani ikinci el eşyayı **taşımaz, nişanlar**: ana kavrama noktası her karede ana avucun tam üstünde kalır (konum dönüşten SONRA ve ters yönde kurulur; `delta = identity` iken sonuç tek elli formülle **özdeştir**). ⚠️ **Yerel ve uzak uç AYNI fonksiyonu koşar** — duruş telde gitmediği için (§6.6) ikinci bir uygulama aynı silahı iki ekranda iki ayrı duruşta çizerdi. Emniyetler: ön kabza ekseni 1 cm'den kısaysa (ikincil soket hiç yazılmamış) ya da iki avuç arası 5 cm'den yakınsa iki el çözümü **hiç koşmaz**. ⚠️ **Yumuşatma çözücüde DEĞİL** (`StepAimBlend` ayrı, 0.08 sn): saf kalması iki uçta koşabilmesinin ön koşulu; uzakta yumuşatma zaten telin interpolasyonundan gelir ve orada `aimBlend` sabit `1`'dir |
-| `Combat/ItemGripSockets` | Kavrama noktalarını **soket** yapar: el yaklaşınca (`0.30 m`) gösterge belirir, soketin üstünde (`0.12 m`) grip'e basılınca kavrama doğar. Mesafe **anchor'dan değil AVUÇtan** ölçülür (`HandGripPivot`) — oyuncunun gördüğü şey kumanda değil sentetik eldir. Renk durumu okutur: hover **mavi**, kabul mesafesinde **yeşil** + %35 büyük (yalnız parlaklık farkı VR'da yeterince okunmuyordu). ⚠️ **Verilen silahta ANA soket kendiliğinden gizlidir** (silah tutuluyor → ana soket kapalı) **ama İKİNCİL soket ÇİZİLİR**: yoksa FFA'da eline tüfek verilen oyuncu ön kabzayı nereden tutacağını hiç göremezdi. Kapı ISDK'nın **kendi** uzatma noktasıdır — bileşen bir `IGameObjectFilter`'dır ve **iki** yakın-kavrama bileşeninin birden `_interactorFilters`'ına yazılır — `GrabInteractable` (kumanda hattı) ve `HandGrabInteractable` (el hattı); ikisini de `WeaponKitBuilder` bağlar. Yani kavramanın ALGISI ISDK'da kalır ve tel yolu (`Grabbable` → `Weapon` → `HeldItems`) hiç değişmez. Çizim ile kapı **aynı** açıklık kuralını kullanır (`IsSocketOpen`): ana soket eşya tutulmuyorsa açık, ön kabza yalnız tutuluyor + çift elli + soran el ana el değilken açık — tek elli eşyada ön kabza hiç açılmaz, bu ikinci elin aynı tabancayı kavramasını da engeller. Gösterge `WeaponCatalog.GripSocketPrefab`, yoksa prosedürel halka. Kavrama yarıçapı **silah başınadır** (`ItemDefinition.primary/secondaryGripRadius`) — tabanca kabzası ile tüfek ön kabzası aynı büyüklükte değil; hover (0.30 m) global sabit ama etkin değeri `Max(hover, yarıçap)`, yoksa yarıçap hover'ı geçtiğinde oyuncu soketi hiç görmeden kavrardı. ⚠️ El çözülemezse **fail-open** (editörde kavrama mümkün kalsın) ve bu tek seferlik loglanır — sessiz bırakılsa özellik "çalışıyor gibi görünüp" hiçbir şey yapmazdı |
+| `Combat/ItemGripSockets` | Kavrama noktalarını **soket** yapar: el yaklaşınca (`0.30 m`) gösterge belirir, soketin üstünde (`0.12 m`) grip'e basılınca kavrama doğar. Mesafe **anchor'dan değil AVUÇtan** ölçülür (`HandGripPivot`) — oyuncunun gördüğü şey kumanda değil sentetik eldir. Renk durumu okutur: hover **mavi**, kabul mesafesinde **yeşil** + %35 büyük (yalnız parlaklık farkı VR'da yeterince okunmuyordu). ⚠️ **Verilen silahta ANA soket kendiliğinden gizlidir** (silah tutuluyor → ana soket kapalı) **ama İKİNCİL soket ÇİZİLİR**: yoksa FFA'da eline tüfek verilen oyuncu ön kabzayı nereden tutacağını hiç göremezdi. Kapı ISDK'nın **kendi** uzatma noktasıdır — bileşen bir `IGameObjectFilter`'dır ve **iki** yakın-kavrama bileşeninin birden `_interactorFilters`'ına yazılır — `GrabInteractable` (kumanda hattı) ve `HandGrabInteractable` (el hattı); ikisini de `WeaponKitBuilder` bağlar. Yani kavramanın ALGISI ISDK'da kalır ve tel yolu (`Grabbable` → `Weapon` → `HeldItems`) hiç değişmez. Çizim ile kapı **aynı** açıklık kuralını kullanır (`IsSocketOpen`): ana soket eşya tutulmuyorsa açık, ön kabza yalnız tutuluyor + çift elli + soran el ana el değilken açık — tek elli eşyada ön kabza hiç açılmaz, bu ikinci elin aynı tabancayı kavramasını da engeller. Gösterge `WeaponCatalog.GripSocketPrefab`, yoksa prosedürel halka. Kavrama yarıçapı **silah başınadır** (`ItemDefinition.primary/secondaryGripRadius`) — tabanca kabzası ile tüfek ön kabzası aynı büyüklükte değil; hover (0.30 m) global sabit ama etkin değeri `Max(hover, yarıçap)`, yoksa yarıçap hover'ı geçtiğinde oyuncu soketi hiç görmeden kavrardı. ⚠️ El çözülemezse **fail-open** (editörde kavrama mümkün kalsın) ve bu tek seferlik loglanır — sessiz bırakılsa özellik "çalışıyor gibi görünüp" hiçbir şey yapmazdı. **Edit kipinde YALNIZ ÖN KABZA çizilir** (tel küre) ve bileşenin kendi Inspector'ı (`ItemGripSocketsEditor`) oraya bir **konum tutamağı** koyar: noktayı sürüklemek değeri doğrudan `WD_*.asset`'e yazar (Undo'lu). ⚠️ **Ana kabza sahnede ne çizilir ne düzenlenir** — o kayıt silahın elde nasıl duracağını belirler (eşyanın pozu ondan türetilir, §6.6), yani birkaç santimlik "gözle iyi duruyor" düzeltmesi silahı elden koparır; tek yolu gözlüktür. Düzenlenemeyen bir noktayı çizmek de sahnede sürüklenebilir sanılan ama sürüklenmeyen bir işaret bırakırdı. Tek elli eşyada (ön kabza soketi hiç açılmaz) araç tümden sessizdir. ⚠️ **Tutamağın halkası oyundaki göstergenin AYNISIDIR** — yarıçap ve renkler bu sınıftan okunur (`RingRadius`, `ReadyColor`, `HoverColor`), editörde ikinci bir palet/ölçü tanımlanmaz: ayarlarken görülen halka gözlüktekinden büyük olsaydı doğru yerde duran bir nokta başlıkta kabzanın yanında çıkardı. Kabul yarıçapı (`primary/secondaryGripRadius`, halkanın kat kat üstünde) yalnız **soluk bir referans halkası** olarak çizilir — oyunda hiç çizilmez, göstergenin kendisi değildir. ⚠️ Çizim `OnSceneGUI`'de değil `SceneView.duringSceneGui`'de yapılır ve her karede `Handles.matrix`/`zTest` sıfırlanır: birincisi editör takipçisine bağlı olduğu için sessizce hiç koşmayabiliyor, ikincisi global statik olduğu için aynı objedeki başka bir editör (ISDK `HandGrabInteractable`) onu bozuk bırakabiliyor — iki durumun da belirtisi "tutamak hiç çıkmıyor"dur ve hata vermez. ⚠️ **Prefaba işaretçi düğüm eklemez ve eklenmemeli** — kavramanın tek yazılı kaynağı yakalanmış kayıttır; tutamak eski `GripSocket_*` akışının ergonomisini veriyi bölmeden geri getirir. ⚠️ Tutamak **yalnız konumu** sürer (dönüş kimliktir, §7) ve **VR yakalamasının yerine geçmez**: parmakların kabzaya nasıl oturduğunu yalnız gözlük söyler, tutamak santimlik düzeltme ve hiç yakalanmamış silaha makul başlangıç içindir. ⚠️ **Küre kırmızıysa kayıt hiç yazılmamıştır** (nokta eşyanın kökünde durur) — bu ayar hatası değil kurulum eksiğidir, ikisini gözle ayırmak için renk farklıdır |
 | `Combat/ItemHandRig` | Prefabta kalmış **eski el rig'inin** (`<silah kökü>/Hands/Hand_<Primary\|Secondary>`) yerinin ve adının tek tanımı (statik). ⚠️ **Bu düğümlere hiçbir şey YAZILMAZ ve okunmaz:** kavrama `WD_*`'a yakalanır, el modeli prefabın içinde durmaz. Sınıfın iki işi de **temizlik/emniyettir**: adı, düğümü silen editör yoluna (`WeaponKitBuilder`) tek yerden verir; `HideAll` (`Weapon.Awake` + `RemoteAvatar.SterilizeVisual`) henüz temizlenmemiş bir prefabda düğümü kapatır, yoksa arenada havada bir el görünürdü |
 | `Combat/WeaponGripCalibration` | Kavramanın **ölçüldüğü** yer (dosyanın tamamı `#if UNITY_EDITOR`; yazdığı şey bir asset'tir): kalibrasyon sahnesinin kökünde durur, seçili `WD_*`'ın prefabını **pasif bir kök altında** örnekler, tüm `MonoBehaviour`/`Collider`/`Rigidbody`/`AudioSource`'unu siler (silah bir oyuncak değil bir **ölçü hedefidir** — kavranmaz, ateş etmez) ve kafanın karşısına **bir kez** koyup DONDURUR; oyuncu ona fiziksel olarak yaklaşır. ⚠️ **Ölçünün paydası silahtır**, hareket eden eldir: silah kafayı izleseydi ölçüm kendi hedefinin peşinden koşardı. Sıra sabittir (ana kabza sağ → sol → ön kabza sağ → sol) ve HUD'daki `n/4` de o tablodan türer. Başlatma girdisi (pinch **veya** kumanda tetiği) → **5 sn geri sayım** → bileğin silaha göre yerel pozu `ItemDefinition.EditorSetGrip` ile yazılır ve asset kaydedilir. ⚠️ **Sayaç girdi bırakılınca İPTAL OLMAZ**: var olma sebebi tam olarak oyuncunun başlattıktan sonra elini açıp kabzayı sarmasıdır. ⚠️ **Başlatma girdisi ölçünün parçası DEĞİLDİR** — ölçülen şey ISDK bileğidir ve kaynağı iki kipte de `HandGripPoser.TryGetTrackedWrist`'tir (oyunun kullandığı bilek ile aynı okuma yolu, §7); bu yüzden kumandayla yakalanan kavrama da tutarlıdır. Tek girdiye bağlamak, el izlemesi akmadığında aracı tümden başlatılamaz yapardı; el takibinin üstünlüğü doğruluk değil **görünürlüktür** (parmakların kabzaya nereye oturduğu gözle görülür) ve ipucu satırı hangi kipin canlı olduğunu yazar. Koşarken `HandGripPoser.Suspended` açıktır: sentetik el ham izlemeye bırakılır, yoksa oyuncu kendi elini kilitli parmaklarla görürdü |
 | `Combat/WeaponGripCalibrationHud` | O aracın gözlükteki üç satırı (geri sayım · aşama · yönerge), `CenterEyeAnchor` altındaki `TextMesh`'lere yazar. **Kodda görsel kurulum yoktur** — yer/boy/renk/hiza sahnede ayarlanır. ⚠️ Boş referans **sessiz no-op**'tur: HUD bir kolaylıktır, ön koşul değil; HUD'suz sahnede de ölçüm alınır ve sonuç konsola düşer |
@@ -1390,7 +1397,7 @@ oyuncunun **kafası** bir iç engelin içinde mi diye 20 Hz ölçer ve sonucu `I
 yayınlar — cezayı sunucu uygular (`ArenaNet-Protokol.md` §10.9). **Tek kural budur.**
 
 ⚠️ **İki ayrı çıktı üretir:** `IsViolating` (yalnız KAFA → tel bayrağı + ceza; ⚠️ **karartma buna
-DEĞİL temasa bağlıdır**, aşağıda) ve
+DEĞİL temasa ve görüş açıklığına bağlıdır**, aşağıda) ve
 `IsBodyBlocked` (kafa **ya da izlenen bir el** → yalnız **ateş kapısı**, tele gitmez, bekleme süresi
 yok). Ceza *"görüşüm geometrinin içinde mi"*, ateş kapısı *"gövdemi göstermeden mi ateş ediyorum"*
 sorusudur — bloğun içinde durup silahı dışarı uzatan oyuncu ikincisini ihlal ediyor ama silahı
@@ -1410,8 +1417,29 @@ yapılamazdı:** `Weapon`'ın atış ışını maskesiz — oyuncu kendi atış�
 üstelik trigger "değdi mi" der, "ne kadarı içeride" demez. Nokta-içeride testinin kendisi burada
 değil `ObstacleVolumes`'dedir.
 
-**Karartmayı da bu bileşen sürer ve kapısı TEMASTIR:** yedi noktadan **herhangi biri** geometrinin
-içindeyse ekran aynı karede, **rampasız**, tam siyah olur. ⚠️ **Karartma FAZDAN, MODDAN, HARİTADAN
+**Karartmayı da bu bileşen sürer ve İKİ kapısı vardır — ikisi de aynı soruyu sorar** (*gözler katı
+bir cismin içini görebiliyor mu*), ikisinden biri açılınca ekran aynı karede, **rampasız**, tam
+siyah olur:
+
+1. **Temas** — kabuğun yedi noktasından **herhangi biri** geometrinin içinde.
+2. **Görüş açıklığı** — göz noktası bir engel **yüzeyine** açıklık mesafesinden yakın
+   (`ObstacleVolumes.DistanceToSurface`). ⚠️ **Bu kapı olmadan birincisi GEÇ KALIR ve bu bir ayar
+   değil, bir geometri gerçeğidir:** kamera geometriyi göz noktasında değil, onun `nearClipPlane`
+   kadar **önündeki** düzlemde kırpar; kabuk noktaları ise kafa merkezinden (gözün ~6 cm arkası)
+   **dünya eksenlerinde** uzanır, yani bakış yönünde göz noktasını en fazla birkaç santim geçer —
+   köşegen yönde hiç geçmez. Aradaki bant tam olarak *"duvar kırpıldı ama ekran hâlâ açık"*
+   bandıdır ve blokların içi oradan okunur.
+   ⚠️ **Açıklık kameranın kendi kırpma mesafesinden TÜRETİLİR, sabit yazılmaz**
+   (`near × 1.8 + 0.035`, kırpma düzleminin köşesi merkezinden `√3` kat uzakta + yarım IPD),
+   **tavanı kafa yarıçapıdır (11 cm)**: kırpmayı yapan ile kırpmadan önce kararmayı isteyen aynı
+   sayıya bakmazsa sızıntı sessizce geri gelir. Tavan bir emniyet değil bir sözleşmedir —
+   karartmanın kapısı en fazla *"kafam cisme değiyor"* anıdır, daha genişi oyuncunun bloğun
+   **yanından** geçerken ekranını karartırdı. ⚠️ Bunun doğrudan sonucu: **rig'in near-clip'i bu
+   tavanın altında kalacak kadar küçük tutulur** (`VA_CameraRig` → 0.05; §7 tuzaklar).
+   ⚠️ Bu kapı **ceza ölçümünün 20 Hz kadansına bağlanamaz ve her karede koşar** — 50 ms, hızlı
+   dönen bir kafanın açıklık bandını tümden geçmesine yeter.
+
+⚠️ **Karartma FAZDAN, MODDAN, HARİTADAN
 ve CANLILIKTAN bağımsızdır** — lobide, yüklemede, geri sayımda, maç sonunda ve oyuncu ölüyken de
 çalışır. Faz/canlılık **yalnız cezanın** kapısıdır ve orası sunucudadır
 (`MatchDirector.TickObstacleLocked`); istemcide ikinci bir kopyası tutulmaz. Gerekçe eşik
@@ -1451,11 +1479,15 @@ canının gittiğini fark etmez. Bu yüzden kendi renderer'ı ve kendi shader'ı
 başına farkla** okur — can yalnız ağ mesajıyla değişiyor, kalıcı tekilin doğuş sırasına bağlı bir
 abonelik ömrü yönetmeye gerek yok.
 
-**`ObstacleVolumes`** (statik): *"bu şey bir iç engelin içinde mi"* sorusunun **tek** cevabı, üç
+**`ObstacleVolumes`** (statik): *"bu şey bir iç engelin içinde mi"* sorusunun **tek** cevabı, dört
 biçimde: `Sample` + `Contains` (bir sorgu, çok nokta — kafa ve el ölçümü), `ContainsPoint` (tek
-atışlık, kendi tamponuyla, ölçüm turunu bozmadan — namlu) ve **`OverlapsBox`** (yönlendirilmiş kutu
+atışlık, kendi tamponuyla, ölçüm turunu bozmadan — namlu), **`OverlapsBox`** (yönlendirilmiş kutu
 — silahın gövdesi; "namlu içeride mi" tek noktadır, "silahın herhangi bir parçası değiyor mu" ise
-bir HACİM sorusudur ve nokta örneklemesiyle cevaplanamaz). ⚠️ `OverlapsBox` konvekslik süzgeci
+bir HACİM sorusudur ve nokta örneklemesiyle cevaplanamaz) ve **`DistanceToSurface`** (en yakın
+engel **yüzeyine** uzaklık, tavanlı — karartmanın görüş açıklığı kapısı). ⚠️ Sonuncusu ayrı bir
+soru olarak durur çünkü *"içeride mi"* **görüşün** kapatılması için geç bir cevaptır: kamera
+geometriyi göz noktasının `nearClipPlane` kadar önünde kırpar, yani katı cismin içi göz henüz
+dışarıdayken okunur (§7 tuzaklar). ⚠️ `OverlapsBox` konvekslik süzgeci
 uygulamaz ve buna gerek de yoktur: kutu-mesh kesişimi `ClosestPoint`'e dayanmadığı için o API'nin
 "her nokta içeride" yalanı oraya bulaşmaz. ⚠️ **Konvekslik şartının
 gerekçesi burada durur:** `Collider.ClosestPoint` non-convex bir `MeshCollider`'da girdi noktasını
@@ -1476,7 +1508,8 @@ kılar**. Bu hakem yalnız *"ekran ne kadar kararsın"* sorusunu cevaplar; üstt
 `ObstacleWarningOverlay`).
 
 **`ControllerHaptics`** (statik hakem — `ScreenFade`'in titreşim ikizi): kumanda titreşimini isteyen
-de **iki** sistem var (engel ihlali · alan dışı) ve ikisi aynı anda doğru olabiliyor — muhafaza
+birden çok sistem var (engel ihlali · alan dışı · onay darbesi) ve aynı anda birden fazlası doğru
+olabiliyor — muhafaza
 sahnedeki `ArenaObstacle`'ları da alan-dışı sayıyor. Sözleşme birebir aynıdır: kaynak her karede
 bildirir, **en yüksek genlik** kazanır, susan kaynak 0.25 sn sonra düşer. ⚠️ **Kaynaklar
 `OVRInput.SetControllerVibration`'ı doğrudan ÇAĞIRMAZ:** biri "kapat" dediği anda ötekinin
@@ -1486,6 +1519,11 @@ binen iki kaynakta iki ayrı faz demektir. ⚠️ Hakemin **kendi döngüsü YOK
 geldiğinde hesaplar: en az bir kaynağın her karede bildirdiği garanti edilmiştir
 (`ObstacleViolationProbe` kendini önyükleyen kalıcı tekildir ve koşulsuz bildirir). Susan bir hakem
 son yazdığı titreşimi açık bırakırdı.
+⚠️ **Tek atımlık onay darbesi (`PulseBoth`) de bir kaynaktır**, ayrı bir yol değil: kalıp çağıranın
+üstünde bir coroutine olarak koşar ama her karede hakeme bildirir. Motora doğrudan yazan bir darbe,
+hakem bir sonraki kararını verene kadar kumandayı açık bırakır ya da "aynı genliği zaten yazdım"
+elemesine takılıp hiç duyulmazdı. Genliği nabzınkinden yüksektir: nabız bir uyarı, darbe bir
+onaydır ve ikisi aynı anda doğru olabilir.
 
 **`ArenaLayers`** (statik): `Obstacle` layer adının tek yazıldığı yer, maskeyi bir kez çözer ve
 layer tanımsızsa **bir kez hata basar**. Gerekçe: `LayerMask.NameToLayer` tanımsız adda `-1` döner,
@@ -3652,14 +3690,26 @@ konsoluna tek satır sebep yazar.
     göre bir jest ölçülecekse referans **elin kendisidir** (`WeaponGranter.ResolveHandAnchor`);
     ölçünün paydası eşya olduğunda eşik silah başına sessizce kayar.
 
-162. **Gövdeye göre bir eşik METREYLE yazılmaz — zemin ile göz arasının ORANI yazılır.** Kafadan
+162. **Gövdeye göre bir eşik METREYLE yazılmaz — ORAN yazılır; ve o oranın REFERANS NOKTASI ile
+    ÖLÇEĞİ aynı kaynaktan alınmaz.** Kafadan
     sabit düşüş (`headY − 0.62`) 1.60 m'lik oyuncuda göbeği, 1.90 m'likte kalçayı gösterir: aynı
     jest iki oyuncuda iki ayrı hareket olur. Oranın kafadan sabit düşüşe yenildiği eski gerekçe
     **zemini bilmemekti** (`headY × k` dünya sıfırını zemin sanıyor, kalibrasyon ofseti oranı
     bozuyordu) — cevabı oranı bırakmak değil zemini doğru yerden okumaktır: tracking origin
     `Stage` olduğu için rig'in `trackingSpace`'i tam olarak oyuncunun fiziksel zeminidir
     (`WeaponGranter.TryResolveEyeAndFloor`). Zemin bilindiğinde oran hem boydan hem kalibrasyon
-    ofsetinden bağımsızdır.
+    ofsetinden bağımsızdır. ⚠️ Ama oran tek başına yetmez: **referans noktası ile ÖLÇEĞİ ayrı ayrı
+    seçilir ve ikisi aynı kaynaktan alınamaz.** Ölçek **canlı** göz yüksekliği olursa eşik, ona
+    ulaşmak için yapılan hareketle birlikte iner — kafa öne eğilince payda 40–55 cm düşer, sarkan
+    kol düşmüş eşiğin altında kalır ve gövdeye göre yazılmış jest oyuncu hiçbir şey yapmadan
+    tetiklenir. Referans **zemin** olursa (mutlak çizgi) aynı sonuç başka yoldan gelir: eğilen
+    oyuncunun eli zaten o çizginin altındadır. Doğrusu ikisini ayırmaktır — referans **canlı
+    gözdür** (kafayla birlikte iner, yani eğilmek elin göze göre düşüşünü değiştirmez), ölçek
+    **ayakta boydur** (`StandingHeightState`, duruştan bağımsız). ⚠️ O boy oyuncuya sorulmaz,
+    öğrenilir ve asimetrik güncellenir (tavan anında yükselir, aşağı çok yavaş sızar): fazla
+    yüksek bir tahmin jesti yalnız zorlaştırır, fazla düşük bir tahmin onu kendiliğinden tetikler.
+    ⚠️ Cihazda da saklanmaz — işletme gözlüğü elden ele geçer, saklanan boy bir sonraki oyuncuya
+    yanlış paydayla başlar.
 
 163. **Sahnede `ArenaBoundary` TEKTİR ve ölçü dosyası MEKAN KLASÖRÜNÜ izler — ikisi de sessizce
     bozulur.** `ArenaBoundary.Active` sahibini `Active ??= this` ile, yani **ilk uyanan** olarak
@@ -3714,6 +3764,27 @@ konsoluna tek satır sebep yazar.
     her arayüz ögesine zaman aşımı konur — başlık kapalı, donmuş ya da ağdan düşmüşse cevap hiç
     gelmez ve düğme sonsuza kadar "yükleniyor"da asılı kalır; operatör paneli yeniden başlatmadan
     o oyuncuya bir daha komut gönderemez.
+
+167. **Kamera geometriyi GÖZ NOKTASINDA değil, onun `nearClipPlane` kadar ÖNÜNDE kırpar — "içeride
+    mi" diye soran her görüş kuralı bu mesafe kadar GEÇ KALIR.** Engel karartmasının kapısı kafa
+    kabuğunun geometriye değmesiydi; kabuğun yedi noktası kafa MERKEZİNDEN (gözün ~6 cm arkası)
+    **dünya eksenlerinde** uzanıyor, yani bakış yönündeki erişimi oyuncunun hangi yöne baktığına
+    göre değişir: eksene paralel bakışta göz noktasını 5 cm geçer, küp köşegenine bakışta
+    (`0.11·cos54.7° = 6.4 cm < 6 cm ofset`) hiç geçmez. Kırpma ise yönden bağımsız olarak sabit
+    mesafede başlar. Aradaki bant tam olarak *"duvar kırpıldı ama ekran hâlâ açık"* bandıdır:
+    oyuncu bloğun içini, arkasını, sağını solunu okur — ve karartma "çalışıyor" göründüğü için
+    aranan yer kural mantığı olur, oysa kusur **ölçüm noktasının kırpma noktasıyla aynı olmaması**.
+    Kural iki parçalıdır: (1) görüş kapısı **yüzeye olan gerçek uzaklıkla** kurulur
+    (`ObstacleVolumes.DistanceToSurface`), nokta örneklemesiyle değil — nokta kümesi yön-bağımlıdır
+    ve **hiçbir sayıda nokta bunu düzeltmez**; (2) açıklık **kameranın kendi `nearClipPlane`'inden
+    türetilir**, sabit yazılmaz — iki sayı ayrı yerlerde yaşarsa biri değiştiğinde sızıntı sessizce
+    geri gelir. ⚠️ Açıklığın tavanı vardır (kafa yarıçapı) ve bu, kırpma mesafesine bir **üst
+    sınır** koyar: karartmayı büyüterek telafi etmek, oyuncunun bloğun **yanından** geçerken
+    ekranını karartır. Yani near-clip serbest bir görsel ayar DEĞİLDİR — `VA_CameraRig`'de `0.05`'te
+    durur ve büyütülmez. ⚠️ Kapı ayrıca ceza ölçümünün kadansına (20 Hz) bağlanamaz: 50 ms, hızlı
+    dönen bir kafanın açıklık bandını tümden geçmesine yeter, o karelerde ekran açık kalır.
+    ⚠️ Kırpma düzlemi bir NOKTA değil bir DİKDÖRTGENDİR — köşesi merkezinden `√3` kat uzaktadır ve
+    hesap onu da kapsamalıdır (çevresel görüşte kalan bir şerit hilenin tamamını geri verir).
 
 ---
 

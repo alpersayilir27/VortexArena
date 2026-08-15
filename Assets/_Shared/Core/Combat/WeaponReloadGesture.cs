@@ -1,4 +1,5 @@
 using UnityEngine;
+using VortexArena.Core.Player;
 
 namespace VortexArena.Core.Combat
 {
@@ -14,23 +15,35 @@ namespace VortexArena.Core.Combat
     /// hizasında bir başkasında diz hizasında yakalamak demekti.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Hiçbir eşik metre cinsinden SABİT değildir</b>: bel çizgisi ZEMİN ile GÖZ arasının
-    /// oranıdır (<see cref="WaistRatio"/>) — gövdenin ortasının biraz üstü. Zemin rig'in
-    /// tracking space'idir (origin <c>Stage</c>), yani ölçü oyuncunun boyuna kendiliğinden uyar;
-    /// kısa oyuncu kolunu az, uzun oyuncu çok indirir ama ikisi de "beline kadar" indirir.
-    /// Kafadan sabit düşüş (<c>headY − 0.62</c>) bu yüzden terk edildi.
+    /// ⚠️ <b>Hiçbir eşik metre cinsinden SABİT değildir</b>: ölçü elin <b>GÖZE göre düşüşüdür</b>
+    /// ve eşiği <b>ayakta göz yüksekliğinin</b> oranıdır (<see cref="WaistDropRatio"/>) — dik
+    /// duran oyuncuda tam olarak kemer hizası. Kısa oyuncu kolunu az, uzun oyuncu çok indirir ama
+    /// ikisi de "beline kadar" indirir. Kafadan sabit düşüş (<c>headY − 0.62</c>) bu yüzden terk
+    /// edildi.
+    /// </para>
+    /// <para>
+    /// ⚠️ Ölçünün iki parçası da bilinçlidir ve <b>karıştırılamaz</b>: referans nokta <b>CANLI</b>
+    /// gözdür (kafayla birlikte iner), ölçek ise <b>AYAKTA</b> boydur
+    /// (<see cref="StandingHeightState"/>, duruştan bağımsız). Zemine göre sabit bir çizgi
+    /// çizilseydi eğilen oyuncunun sarkan kolu çizginin altında kalır ve reload kendiliğinden
+    /// başlardı; ölçek canlı göz yüksekliği olsaydı eşik oyuncu eğildikçe onunla birlikte iner ve
+    /// aynı şey olurdu. Bu hâliyle eğilmek elin göze göre düşüşünü DEĞİŞTİRMEZ.
     /// </para>
     /// <para>
     /// İkinci koşul <b>silahın aşağı doğrultulmasıdır</b> ve bu <b>KUMANDADAN</b> okunur
     /// (<c>anchor.forward</c>): silah zaten kumanda doğrultusundadır, silahın kendi
     /// transformuna bakmak aynı bilgiyi model başına sapan bir yoldan öğrenmek olurdu.
-    /// ⚠️ Sapmanın kaynağı <c>ItemDefinition.primaryGripEuler</c>'dir: sıfırdan farklı bir
-    /// euler yazılmış silahta namlu kumandanın ilerisiyle çakışmaz (bugün yalnız AK47), o
-    /// silahta jest o açı kadar erken/geç tanınır.
+    /// ⚠️ Ölçü dünya uzayındadır, yani <b>kafa dönüşünden bağımsızdır</b>: aşağı bakmak bu koşulu
+    /// ne kolaylaştırır ne zorlaştırır.
     /// </para>
     /// <para>
     /// Silah kavrandıktan sonra el bir kez göğüs hizasına çıkmadan jest kurulmaz (armed) —
     /// yerden/kılıftan almada yanlış tetikleme böyle önlenir.
+    /// </para>
+    /// <para>
+    /// Reload <b>gerçekten başladıysa</b> tek darbelik haptik onay verilir. ⚠️ Jest tanındığı için
+    /// değil, <c>TryStartReload</c> kabul ettiği için titrer: reddedilen jestin titremesi oyuncuya
+    /// "doldu" derdi ve o yanlış bilgi ancak tetiği çekince ortaya çıkardı.
     /// </para>
     /// <para>
     /// Rig çözülemediğinde (admin gözlemci, editör oturumu, el tanınmadı) jest HİÇ tanınmaz:
@@ -39,20 +52,37 @@ namespace VortexArena.Core.Combat
     /// </summary>
     public class WeaponReloadGesture : MonoBehaviour
     {
-        /// <summary>Bel çizgisi: zemin ile göz arasının bu oranı (0.5 = tam orta).</summary>
-        private const float WaistRatio = 0.55f;
+        /// <summary>
+        /// Bel çizgisi: elin GÖZÜN bu kadar altına inmesi gerekir — ayakta göz yüksekliğinin oranı
+        /// olarak. Dik duran oyuncuda "zemin ile gözün %62'si"nin tam karşılığıdır (1 − 0.62):
+        /// antropometride kemer ≈ boyun %60'ı, göz ≈ %93'ü → kemer/göz ≈ 0.64. Daha küçük bir
+        /// düşüş kemeri değil göbeği gösterir ve jest kendiliğinden tetiklenmeye başlar.
+        /// </summary>
+        private const float WaistDropRatio = 0.38f;
 
-        /// <summary>Jestin yeniden kurulması için elin çıkması gereken oran (aynı ölçek).</summary>
-        private const float RearmRatio = 0.72f;
+        /// <summary>
+        /// Jestin yeniden kurulması için elin bel çizgisinin bu kadar ÜSTÜNE çıkması gerekir
+        /// (aynı ölçek). ⚠️ Bağımsız bir oran DEĞİL, <see cref="WaistDropRatio"/>'dan türetilir:
+        /// iki eşik ayrı ayrı yazılsaydı bel yükseltilirken kurulma bandı unutulur ve band ters
+        /// dönebilirdi.
+        /// </summary>
+        private const float RearmMargin = 0.10f;
 
-        /// <summary>Kumandanın ileri ekseni yatayın en az bu kadar altına bakmalı: sin(35°).</summary>
-        private const float MinDownSin = 0.574f;
+        /// <summary>Kumandanın ileri ekseni yatayın en az bu kadar altına bakmalı: sin(25°).
+        /// Elini kemerine indiren oyuncunun bileği nötrken namlu ~20–30° aşağıdadır; daha dik bir
+        /// eşik jesti bileği kırmaya bağlar.</summary>
+        private const float MinDownSin = 0.423f;
 
-        /// <summary>Jestin kesintisiz sürmesi gereken süre (saniye).</summary>
-        private const float DwellSeconds = 0.2f;
+        /// <summary>Jestin sürmesi gereken süre (saniye).</summary>
+        private const float DwellSeconds = 0.15f;
 
-        /// <summary>Göz yüksekliği bunun altındaysa ölçü henüz oturmamıştır (rig'in ilk kareleri).</summary>
-        private const float MinEyeHeight = 0.5f;
+        /// <summary>
+        /// Koşul bozulduğunda sayaç <b>sıfırlanmaz, sızar</b> — bu, sızıntının süreye oranıdır.
+        /// ⚠️ Sıfırlamak eşiğin kenarındaki tek karelik izleme gürültüsünü jesti öldürecek kadar
+        /// büyütür; sızıntıyla o gürültü yutulur, duruştan gerçekten çıkan oyuncunun sayacı ise
+        /// <c>DwellSeconds / DwellDecayRate</c> saniyede temizlenir.
+        /// </summary>
+        private const float DwellDecayRate = 2f;
 
         [SerializeField] private Weapon weapon;
 
@@ -70,25 +100,20 @@ namespace VortexArena.Core.Combat
             // Elin KENDİSİ: silahın kökü değil, silahı tutan kumandanın anchor'ı.
             Transform anchor = WeaponGranter.ResolveHandAnchor(weapon.MainHand);
             if (anchor == null ||
-                !WeaponGranter.TryResolveEyeAndFloor(out float eyeY, out float floorY))
+                !WeaponGranter.TryResolveEyeAndFloor(out float eyeY, out float _) ||
+                !StandingHeightState.TryGet(out float standingEye))
             {
                 Disarm();
                 return;
             }
 
-            float eyeHeight = eyeY - floorY;
-            if (eyeHeight < MinEyeHeight)
-            {
-                Disarm();
-                return;
-            }
-
-            float handY = anchor.position.y;
+            // Elin GÖZE göre düşüşü: referans nokta kafayla birlikte iner, ölçeği ise ayakta boydur.
+            float drop = eyeY - anchor.position.y;
 
             if (!_armed)
             {
                 // Jest ancak el bir kez göğüs hizasına çıktıktan sonra kurulur.
-                if (handY > floorY + eyeHeight * RearmRatio)
+                if (drop < standingEye * (WaistDropRatio - RearmMargin))
                 {
                     _armed = true;
                 }
@@ -96,7 +121,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            bool belowWaist = handY < floorY + eyeHeight * WaistRatio;
+            bool belowWaist = drop > standingEye * WaistDropRatio;
             bool pointingDown = -anchor.forward.y >= MinDownSin;
 
             if (belowWaist && pointingDown)
@@ -104,15 +129,22 @@ namespace VortexArena.Core.Combat
                 _dwell += Time.deltaTime;
                 if (_dwell >= DwellSeconds)
                 {
-                    // Sonuç önemsenmez: Weapon reddederse jest sıfırlanır, oyuncu tekrar dener.
-                    weapon.TryStartReload();
+                    // Dönüş değeri YALNIZ haptik onay içindir: Weapon reddedebilir (dolu şarjör,
+                    // yedek yok, ölü oyuncu) ve reddedilen jestin titremesi "oldu" der. Jest her
+                    // hâlde sıfırlanır, oyuncu tekrar dener.
+                    if (weapon.TryStartReload())
+                    {
+                        ControllerHaptics.PulseBoth(this, 1);
+                    }
+
                     Disarm();
                 }
 
                 return;
             }
 
-            _dwell = 0f;
+            // ⚠️ Sıfırlama DEĞİL sızıntı (gerekçe DwellDecayRate).
+            _dwell = Mathf.Max(0f, _dwell - Time.deltaTime * DwellDecayRate);
         }
 
         private void Disarm()

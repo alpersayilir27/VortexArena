@@ -42,6 +42,7 @@ namespace VortexArena.Core.Arena
         private static readonly Bounds[] CandidateBounds = new Bounds[MaxCandidates];
         private static readonly Collider[] PointCandidates = new Collider[MaxCandidates];
         private static readonly Collider[] BoxCandidates = new Collider[MaxCandidates];
+        private static readonly Collider[] ClearanceCandidates = new Collider[MaxCandidates];
 
         /// <summary>Konveks olmadığı için elenen collider'lar — uyarı bir kez basılsın diye.</summary>
         private static readonly HashSet<int> Rejected = new HashSet<int>();
@@ -148,6 +149,65 @@ namespace VortexArena.Core.Arena
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Noktanın en yakın engel <b>YÜZEYİNE</b> uzaklığı (m), <paramref name="maxDistance"/> ile
+        /// tavanlanmış: o yarıçapta hiç engel yoksa <paramref name="maxDistance"/> döner, nokta bir
+        /// engelin <b>içindeyse</b> <c>0</c>.
+        ///
+        /// <para><b>Neden ayrı bir soru:</b> <see cref="Contains(Vector3,int)"/> "içeride mi" der ve
+        /// bu, <b>görüşün</b> kapatılması için geç bir cevaptır — kameranın kırpma düzlemi göz
+        /// noktasının birkaç santim ÖNÜNDEDİR, yani geometri göz henüz dışarıdayken kırpılmaya
+        /// başlar ve katı cismin içi okunur. Kırpmadan önce karar verebilmenin tek yolu yüzeye olan
+        /// gerçek uzaklıktır (tüketicisi <c>ObstacleViolationProbe</c>'un karartma kapısı).</para>
+        ///
+        /// <para>⚠️ Ölçüm <b>yalnız dışarıdan</b> anlamlıdır: <see cref="Collider.ClosestPoint"/>
+        /// içerideki bir nokta için noktanın kendisini döner, yani içeride sonuç kaçınılmaz olarak
+        /// <c>0</c>'dır. Bu bir kayıp değil, aranan cevaptır — içerisi zaten en yakın hâldir.</para>
+        ///
+        /// <para>⚠️ <see cref="LastHit"/>'e <b>yazmaz</b>: o alan "içeride diyen son collider"
+        /// teşhisidir ve her karede koşan bir yakınlık ölçümü onu sürekli ezerdi.</para>
+        ///
+        /// <para>Kendi tamponu vardır: <see cref="Sample"/>'ın önbelleğine dokunmaz (gövde ölçümünün
+        /// turu bozulamaz — sınıf özetindeki "tamponlar AYRIDIR" sözleşmesi).</para>
+        /// </summary>
+        public static float DistanceToSurface(Vector3 point, float maxDistance)
+        {
+            int mask = ArenaLayers.ObstacleMask;
+            if (mask == 0)
+            {
+                return maxDistance; // layer tanımsız — ArenaLayers zaten bir kez bağırdı
+            }
+
+            int count = Physics.OverlapSphereNonAlloc(point, maxDistance, ClearanceCandidates, mask,
+                QueryTriggerInteraction.Ignore);
+            if (count > MaxCandidates)
+            {
+                count = MaxCandidates;
+            }
+
+            float nearest = maxDistance;
+            for (int i = 0; i < count; i++)
+            {
+                Collider collider = ClearanceCandidates[i];
+                if (collider == null || !IsUsable(collider))
+                {
+                    continue;
+                }
+
+                float distance = Vector3.Distance(collider.ClosestPoint(point), point);
+                if (distance < nearest)
+                {
+                    nearest = distance;
+                    if (nearest <= 0f)
+                    {
+                        break; // içerideyiz — daha yakını yok
+                    }
+                }
+            }
+
+            return nearest;
         }
 
         /// <summary>

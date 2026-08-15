@@ -17,21 +17,21 @@ MonoBehaviour:
   prefab: {fileID: 190416508149715471, guid: 0a53823472b8eef4bb558f7e5f4b5b61, type: 3}
   holdMode: 1
   primaryGripRight:
-    captured: 1
-    position: {x: 0.042426158, y: -0.09155202, z: -0.103681855}
-    euler: {x: 335.9105, y: 359.19037, z: 266.11865}
+    captured: 0
+    position: {x: 0, y: 0, z: 0}
+    euler: {x: 0, y: 0, z: 0}
   primaryGripLeft:
-    captured: 1
-    position: {x: -0.043457855, y: -0.047519803, z: -0.1279867}
-    euler: {x: 358.59116, y: 359.74628, z: 85.66552}
+    captured: 0
+    position: {x: 0, y: 0, z: 0}
+    euler: {x: 0, y: 0, z: 0}
   secondaryGripRight:
     captured: 1
-    position: {x: 0.07302251, y: 0.0016593933, z: 0.23845662}
-    euler: {x: 1.8819897, y: 318.5692, z: 209.00266}
+    position: {x: 0, y: 0, z: 0.3}
+    euler: {x: 1.8819957, y: 318.56918, z: 209.00266}
   secondaryGripLeft:
     captured: 1
-    position: {x: -0.064307466, y: -0.025315762, z: 0.2801776}
-    euler: {x: 347.7082, y: 45.655235, z: 156.3309}
+    position: {x: 0, y: 0, z: 0.3}
+    euler: {x: 347.7082, y: 45.65521, z: 156.3309}
   primaryGripRadius: 0.12
   secondaryGripRadius: 0.12
   tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.8039216}

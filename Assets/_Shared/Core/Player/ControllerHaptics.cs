@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -27,6 +28,11 @@ namespace VortexArena.Core.Player
     /// kendini önyükleyen kalıcı bir tekildir ve koşulsuz bildirir. Susan bir hakem son yazdığı
     /// titreşimi açık bırakırdı.
     /// </para>
+    /// <para>
+    /// <b>Tek atımlık kalıplar da kaynaktır</b> (<see cref="PulseBoth"/>): kalıbı motora doğrudan
+    /// yazan bir yol YOKTUR — hakemin arkasından yazılan titreşim, hakem bir sonraki kararını
+    /// verene kadar açık kalır ya da hiç duyulmaz.
+    /// </para>
     /// </summary>
     public static class ControllerHaptics
     {
@@ -42,6 +48,22 @@ namespace VortexArena.Core.Player
 
         /// <summary>Titreşimin frekans parametresi — cihaz ayarı, kaynağın kararı değil.</summary>
         private const float VibrationFrequency = 0.6f;
+
+        /// <summary>Onay darbesinin genliği. Nabızdan YÜKSEKTİR: nabız bir uyarı, darbe bir onaydır
+        /// ve ikisi aynı anda doğru olabilir (engelin dibindeki taban şeridi) — hakem en yükseği
+        /// seçtiği için onay uyarının altında kaybolmaz.</summary>
+        private const float BurstAmplitude = 0.8f;
+
+        private const float BurstOnSeconds = 0.12f;
+        private const float BurstGapSeconds = 0.08f;
+
+        /// <summary>Tüm darbeler tek kaynaktır: iç içe binen iki darbe "aynı anda iki titreşim"
+        /// değil, ikincisinin birincisini yenilemesidir.</summary>
+        private const string BurstSourceId = "burst";
+
+        /// <summary>Koşan darbenin kuşağı — yeni darbe eskisini iptal eder (eski coroutine kendi
+        /// bitişinde <see cref="Report"/>'a 0 yazıp yenisini susturmasın).</summary>
+        private static int _burstGeneration;
 
         private struct Entry
         {
@@ -66,6 +88,55 @@ namespace VortexArena.Core.Player
         {
             bool on = active && Mathf.Repeat(Time.unscaledTime * PulseHz, 1f) < 0.5f;
             Report(sourceId, on ? PulseAmplitude : 0f);
+        }
+
+        /// <summary>
+        /// <b>Tek atımlık onay darbesi</b>: iki kumandaya <paramref name="pulses"/> kısa darbe
+        /// ("doğru yerdesin" gibi bir OLAY bildirimi — nabız gibi süren bir durum değil).
+        /// <para>
+        /// ⚠️ <b>Motoru doğrudan sürmez</b>, her karede <see cref="Report"/>'a yazan sıradan bir
+        /// kaynaktır: hakem "aynı genliği zaten yazdım" diye tekrar yazmayı atladığı için motoru
+        /// arkasından süren bir darbe ya sessizce yutulur ya da hakem sustuğunda kumandayı açık
+        /// bırakırdı. OVRInput'un süre parametresi olmadığı için kalıp bir coroutine ister; statik
+        /// sınıfın kendi GameObject'i olmadığından onu <paramref name="host"/> üstünde koşturur —
+        /// host yok/kapalıysa sessizce hiçbir şey yapmaz (titreşim geri bildirimdir, kritik değil).
+        /// </para>
+        /// </summary>
+        /// <param name="host">Coroutine'i koşturacak, sahnede yaşayan bileşen.</param>
+        /// <param name="pulses">Darbe sayısı.</param>
+        public static void PulseBoth(MonoBehaviour host, int pulses = 3)
+        {
+            if (host == null || !host.isActiveAndEnabled || pulses <= 0)
+            {
+                return;
+            }
+
+            _burstGeneration++;
+            host.StartCoroutine(BurstRoutine(pulses, _burstGeneration));
+        }
+
+        private static IEnumerator BurstRoutine(int pulses, int generation)
+        {
+            const float period = BurstOnSeconds + BurstGapSeconds;
+            float total = pulses * period - BurstGapSeconds; // son darbeden sonra boşluk yok
+            float start = UnityEngine.Time.unscaledTime;
+
+            while (generation == _burstGeneration)
+            {
+                float elapsed = UnityEngine.Time.unscaledTime - start;
+                if (elapsed >= total)
+                {
+                    break;
+                }
+
+                Report(BurstSourceId, Mathf.Repeat(elapsed, period) < BurstOnSeconds ? BurstAmplitude : 0f);
+                yield return null;
+            }
+
+            if (generation == _burstGeneration)
+            {
+                Report(BurstSourceId, 0f);
+            }
         }
 
         /// <summary>
