@@ -17,10 +17,10 @@ Tüm arayüz prefabları **tek klasörde**: `Assets/_Shared/App/Resources/UI/`
 | Prefab | Ne çizer | Kim kullanır |
 |---|---|---|
 | **`AdminHud.prefab`** | Admin ekranının kalıcı katmanı: skorlar, chip, takım kolonları, kamera şeridi, ölüm akışı. Tercihler ve istatistik panelleri içinde **nested prefab örneği** olarak durur | `AdminSpectator` |
-| **`AdminStatsPanel.prefab`** | İstatistik paneli: kart + takım özeti + **oyuncu satırı listesi** (kaydırılabilir) + maç bilgisi + alttaki toplu eylem şeridi (TÜMÜNÜ KALİBRE ET / TÜMÜNÜ ÖLÇEKLENDİR) + kendi kapanan uyarı penceresi — sürücü bileşeni kökünde | `AdminHud` içinde nested örnek |
-| **`AdminPreferencesPanel.prefab`** | Tercihler paneli (mod/harita/süre/kalibrasyon/görünüm/bağlantı) — sürücü bileşeni kökünde. Başlık çubuğunda `KAPAT`'ın yanında **pencere kipi** düğmesi (`ScreenMode`), bağlantı satırının sağında **`QuitGame`** durur. ⚠️ Panel 1080p referansta **tavandadır** (alttan ~22 px pay): yeni bir tam satır SIĞMAZ — sonraki ekleme içeriği kaydırılabilir yapmayı gerektirir, bu ikisi de bu yüzden var olan satırların boş yerine kondu | `AdminHud` içinde nested örnek |
+| **`AdminStatsPanel.prefab`** | İstatistik paneli: kart + takım özeti + **oyuncu satırı listesi** (kaydırılabilir) + maç bilgisi + alttaki toplu eylem şeridi — soldan sağa `Fill/BottomBar/ClearAllCalibration` (herkesin kalibrasyonunu sıfırlar; küçük, kırmızı yazılı ve iki adımlı onaylı), `Fill/BottomBar/CalibrateAll` (herkesin kayıtlı hizalamasını yeniden yükletir), `Fill/BottomBar/MeasureAll` (herkesin gövde ölçüsü) + kendi kapanan uyarı penceresi — sürücü bileşeni kökünde | `AdminHud` içinde nested örnek |
+| **`AdminPreferencesPanel.prefab`** | Tercihler paneli (mod/harita/süre/kalibrasyon/görünüm/bağlantı) — sürücü bileşeni kökünde; kart kabuğu `AdminStatsPanel` ile aynıdır (`PreferencesPanel` → `Fill`; `PanelBG` arka planı + `ChamferRect_20` dolgu). Kalibrasyon bölümü yalnız **kalibre modu** düğmelerini taşır (iki çapa / kayıtlı çapa / bulut-rezerve); toplu eylemler (kalibrasyon sıfırlama · kalibrasyonu yeniden yükletme · gövde ölçümü) `AdminStatsPanel`'in alt şeridinde, oyuncu adı ise `AdminStatsRow`'dadır. Başlık çubuğunda `KAPAT`'ın yanında **pencere kipi** düğmesi (`ScreenMode`), bağlantı satırının sağında **`QuitGame`** durur. ⚠️ Panel 1080p referansta **tavandadır** (alttan ~22 px pay): yeni bir tam satır SIĞMAZ — sonraki ekleme içeriği kaydırılabilir yapmayı gerektirir, bu ikisi de bu yüzden var olan satırların boş yerine kondu | `AdminHud` içinde nested örnek |
 | **`AdminPlayerRow.prefab`** | Kolonlardaki tek oyuncu satırı (ad, HP barı, POV/KAL/ÖLÇ/CAN/TAKIM/KİMLİK/AT) | `AdminHud` örnekler |
-| **`AdminStatsRow.prefab`** | İstatistik panelindeki tek oyuncu satırı (takım şeridi, ad + `#id`, K/D/K-D hücreleri, ayrıntı şeridi, İSİM/AT/ÖLÇ/KALİBRE düğmeleri + satır içi ad yazı kutusu). `AdminPlayerRow` ile karıştırmayın: o dar yan panel kartı, bu geniş liste satırıdır | `AdminStatsPanel` örnekler ve havuzlar |
+| **`AdminStatsRow.prefab`** | İstatistik panelindeki tek oyuncu satırı (takım şeridi, ad + `#id`, K/D/K-D hücreleri, ayrıntı şeridi, İSİM/AT/ÖLÇ/KALİBRE düğmeleri + satır içi ad yazı kutusu). Oyuncunun adı **yalnız burada** düzenlenir. `AdminPlayerRow` ile karıştırmayın: o dar yan panel kartı, bu geniş liste satırıdır | `AdminStatsPanel` örnekler ve havuzlar |
 | **`AdminPlayerMarker.prefab`** | Oyuncunun zemindeki halkası + ad etiketi (dünya uzayı) | `AdminPlayerMarkers` örnekler |
 | **`ConnectionOverlayScreen.prefab`** | Bağlantı hata ekranı — masaüstü (scrim + "Yeniden Bağlan" düğmesi) | `ConnectionOverlay` |
 | **`ConnectionOverlayWorld.prefab`** | Bağlantı hata ekranı — VR (world-space kart, düğmesiz) | `ConnectionOverlay` |
@@ -88,7 +88,8 @@ görsel efekt (Shadow, Outline) eklemek.
 2. **Düğme `onClick` kayıtlarını inspector'dan doldurmayın.** Prefablarda bilerek boştur;
    davranış çalışırken koddan bağlanır (`WireButtons` / `Initialize`). Inspector'dan eklenen
    kalıcı bir kayıt, kodun koşullarını atlar — ör. oyuncu satırındaki "AT" düğmesi iki adımlı
-   onayı atlayıp doğrudan atardı, ya da "TÜM KALİBRASYONLARI SIFIRLA" onay penceresini geçerdi.
+   onayı atlayıp doğrudan atardı, ya da tercihler panelindeki **OYUNDAN ÇIK** ilk basışta
+   uygulamayı kapatırdı ("EMİN? ÇIK" adımını yazan `AdminPreferencesPanel.ArmQuit` hiç koşmazdı).
 
 3. **Metinleri yazmayın, yer tutucu sayın.** `ScoreRed`, `KillFeed`, `Name` gibi ögelerin
    içeriği çalışırken koddan yazılır; prefabtaki yazı yalnız tasarım yaparken görebilmeniz
@@ -111,6 +112,10 @@ Ayrıca birkaç teknik not:
   Bayrağı **kod açar**, yani inspector'dan kapatmanız görünümü değiştirmez. ⚠️ Diğer metinlerde
   bayrak **KAPALI kalmalı**: `Name` ve `OYUNCU` kolonunda oyuncunun kendi yazdığı ad var,
   `<b>` içeren bir ad biçimi bozardı.
+- **Toplu sıfırlama düğmesinin metnini ve rengini kod sürer.** `BottomBar/ClearAllCalibration`'ın
+  etiketi iki adımlı onayla değişiyor (boştaki hâli ↔ onay bekleyen hâli) ve rengini de
+  `AdminStatsPanel` yazıyor; prefabtaki metin ile renk yalnız tasarım yaparken düğmeyi görebilmeniz
+  içindir. Punto, hizalama, font ve düğmenin ölçüsü prefabta kalıcıdır — metin ve renk değil.
 - **Ad renkleri koddan sürülür.** Oyuncu satırındaki `Name` ve sahnedeki ad etiketleri **takım
   renginde** yazılır (ölüde karartılmış); prefabtaki renk yalnız tasarım yaparken görebilmeniz
   içindir. Punto, hizalama ve font kalıcıdır — renk değil.
