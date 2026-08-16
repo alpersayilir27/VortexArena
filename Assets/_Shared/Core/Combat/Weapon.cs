@@ -55,7 +55,7 @@ namespace VortexArena.Core.Combat
     /// </para>
     /// <para>
     /// <b>ÖN KABZA kapısı ve göstergesi de bu sınıftadır</b> — ayrı bir bileşen YOKTUR:
-    /// <see cref="IsHandOnSecondaryGrip"/> "bu elin bileği ön kabza soketinin (kabul küresinin) içinde
+    /// <see cref="IsHandOnSecondaryGrip"/> "bu elin kumandası ön kabza soketinin (kabul küresinin) içinde
     /// mi" sorusunun tek cevabıdır (granter ikinci eli buna göre bağlar),
     /// <see cref="TickSecondaryGripIndicator"/> aynı küreyi katalogdaki soket prefabıyla çizer.
     /// </para>
@@ -540,26 +540,14 @@ namespace VortexArena.Core.Combat
                 _hasLastSecondaryPalm = false;
             }
 
-            // Ana kavramanın ölçüsü ÖNCE canlı bilek deltasıyla anchor uzayına çevrilir
-            // (ItemGripAuthority: el başına); kavrama yazılmamışsa tanımın kendi ölçüsüne düşülür
-            // (bilek ≡ anchor varsayımı). ⚠️ Düşme bir hata değil normal bir yoldur.
+            // Kayıt ANCHOR uzayındadır (ItemGripPose): ölçü doğrudan tanımdan okunur, delta yok.
+            // Yazılmamış kayıt kimliktir → silah kumandanın üstünde ve onunla hizalı durur.
             bool mainHandRight = HandGripPivot.IsRight(MainHand);
             bool secondaryRight = SecondaryHandIsRight(mainHandRight);
-            Vector3 position;
-            Quaternion rotation;
 
-            if (ItemGripAuthority.TryResolvePrimaryGrip(definition, mainHandRight,
-                    out Vector3 gripPosition, out Quaternion gripRotation))
-            {
-                ItemGripSolver.Solve(definition, secondaryRight, gripPosition, gripRotation,
-                    primaryPalm, _hasLastSecondaryPalm, _lastSecondaryPalm, _aimBlend,
-                    out position, out rotation);
-            }
-            else
-            {
-                ItemGripSolver.Solve(definition, mainHandRight, secondaryRight, primaryPalm,
-                    _hasLastSecondaryPalm, _lastSecondaryPalm, _aimBlend, out position, out rotation);
-            }
+            ItemGripSolver.Solve(definition, mainHandRight, secondaryRight, primaryPalm,
+                _hasLastSecondaryPalm, _lastSecondaryPalm, _aimBlend,
+                out Vector3 position, out Quaternion rotation);
 
             transform.SetPositionAndRotation(position, rotation);
         }
@@ -1158,7 +1146,7 @@ namespace VortexArena.Core.Combat
         // ------------------------------------------- ön kabza: kapı + gösterge
 
         /// <summary>
-        /// Ön kabza soketinin GÖRÜNÜR olduğu mesafe (m; bileğin soket merkezine uzaklığı) —
+        /// Ön kabza soketinin GÖRÜNÜR olduğu mesafe (m; kumanda anchor'ının soket merkezine uzaklığı) —
         /// playtest değeri, tüm silahlarda aynı.
         /// <para>⚠️ Kabul yarıçapı ise silah başınadır (<see cref="ItemDefinition.SecondaryGripRadius"/>)
         /// ve bu sabiti AŞABİLİR; etkin görünme mesafesi bu yüzden
@@ -1167,7 +1155,7 @@ namespace VortexArena.Core.Combat
         /// </summary>
         private const float SecondaryGripHoverRadius = 0.30f;
 
-        /// <summary>Soketin alfası — yaklaşırken (%70 saydam) ve bilek içerideyken (biraz daha dolu:
+        /// <summary>Soketin alfası — yaklaşırken (%70 saydam) ve kumanda içerideyken (biraz daha dolu:
         /// "içindesin, bas" okunsun; renk ve boyut DEĞİŞMEZ, küre kabul hacminin kendisidir).</summary>
         private const float IndicatorHoverAlpha = 0.30f;
         private const float IndicatorReadyAlpha = 0.50f;
@@ -1192,9 +1180,9 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Ön kabza noktasının DÜNYA konumu — <paramref name="rightHand"/> elin kaydından
-        /// (kayıt el başınadır: kabza simetrik olmadığı için iki elin bileği farklı yere düşer).
-        /// Kayıt <b>bileğin</b> eşyaya göre pozudur, yani bu nokta ön kabzayı saran elin BİLEĞİNİN
-        /// duracağı yerdir; soket küresi de buraya merkezlenir.
+        /// (kayıt el başınadır: kabza simetrik olmadığı için iki elin kumandası farklı yere düşer).
+        /// Kayıt kumanda <b>anchor'ının</b> eşyaya göre pozudur, yani bu nokta ön kabzayı saran elin
+        /// ANCHOR'ININ duracağı yerdir; soket küresi de buraya merkezlenir.
         /// <para>⚠️ <see cref="Transform.TransformPoint"/> DEĞİL elle bileşim: kayıt metredir ve
         /// <c>WPN_*</c> kökleri 0.8 ölçekli — <c>TransformPoint</c> ölçeği ikinci kez uygular
         /// (<see cref="ItemGripPose"/>). Kapı, soket ve <c>RemoteAvatar</c> aynı bileşimi kullanır.</para>
@@ -1209,7 +1197,7 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bu elin BİLEĞİ ön kabza soketinin (kabul küresinin) içinde mi — ikinci elin
+        /// Bu elin kumanda ANCHOR'I ön kabza soketinin (kabul küresinin) içinde mi — ikinci elin
         /// <b>KURULMA</b> kapısı.
         /// <para>
         /// <b>Tek kural, iki okuyucu:</b> <see cref="WeaponGranter"/> ikinci eli buna göre bağlar
@@ -1218,11 +1206,11 @@ namespace VortexArena.Core.Combat
         /// reddedilebilirdi.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Ölçülen nokta BİLEKTİR, kumanda anchor'ı değil</b> (<see cref="TryResolveWrist"/>):
-        /// kavrama kaydı bileğin eşyaya göre pozudur (stüdyoda ISDK bilek çerçevesiyle yazılır), yani
-        /// soketin merkezi bir BİLEK noktasıdır. Anchor'la ölçmek, elin tam yazıldığı yerde dururken
-        /// bile aradaki anchor→bilek deltası kadar (santimlerce) uzaktan yargılamak olurdu — kabul
-        /// yarıçapı o farkı yutmuyorsa oyuncu "elim tam yerinde ama tutmuyor" hisseder.
+        /// ⚠️ <b>Ölçülen nokta kumanda ANCHOR'IDIR</b> (<see cref="TryResolveAnchor"/>) — kavrama
+        /// kaydıyla AYNI çerçeve (<see cref="ItemGripPose"/>: kayıt anchor uzayında). Bileği ölçmek,
+        /// kumandanın tam yazıldığı yerde dururken bile aradaki anchor→bilek deltası kadar
+        /// (santimlerce) uzaktan yargılamak olurdu — kabul yarıçapı o farkı yutmuyorsa oyuncu "elim
+        /// tam yerinde ama tutmuyor" hisseder.
         /// </para>
         /// <para>⚠️ Bu yalnız kurulma kapısıdır; bağın SÜRDÜRÜLMESİ mesafeye bakmaz (gerekçe
         /// <c>WeaponGranter.ResolveSecondaryHand</c>'de).</para>
@@ -1238,42 +1226,40 @@ namespace VortexArena.Core.Combat
                 return false;
             }
 
-            if (!TryResolveWrist(hand, out Vector3 wrist))
+            if (!TryResolveAnchor(hand, out Vector3 anchor))
             {
                 return false;
             }
 
             float radius = definition.SecondaryGripRadius;
             Vector3 socket = SecondaryGripWorld(HandGripPivot.IsRight(hand));
-            return (wrist - socket).sqrMagnitude <= radius * radius;
+            return (anchor - socket).sqrMagnitude <= radius * radius;
         }
 
         /// <summary>
-        /// Elin BİLEĞİNİN dünya konumu: kumanda anchor'ı ∘ anchor→bilek deltası
-        /// (<see cref="ItemGripAuthority.ResolveAnchorToWrist"/> — canlı ölçüm, yoksa ölçülmüş sabit,
-        /// o da yoksa kimlik = anchor). Rig ya da el çözülemezse <c>false</c>.
-        /// <para>Kavrama kaydıyla AYNI çerçeve: kayıt bileği tarif ediyor, karşılaştırılan nokta da
-        /// bilek olmalı — aksi hâlde soket, elin tam yazıldığı yerinde bile "dışarıda" der.</para>
+        /// Elin kumanda anchor'ının dünya konumu (<see cref="WeaponGranter.ResolveHandAnchor"/> — rig
+        /// keşfinin tek yolu). Rig ya da el çözülemezse <c>false</c>.
+        /// <para>Kavrama kaydıyla AYNI çerçeve: kayıt anchor'ı tarif ediyor, karşılaştırılan nokta da
+        /// anchor olmalı — aksi hâlde soket, kumandanın tam yazıldığı yerinde bile "dışarıda" der.</para>
         /// </summary>
-        private static bool TryResolveWrist(OVRInput.Controller hand, out Vector3 wrist)
+        private static bool TryResolveAnchor(OVRInput.Controller hand, out Vector3 position)
         {
             Transform anchor = WeaponGranter.ResolveHandAnchor(hand);
             if (anchor == null)
             {
-                wrist = default;
+                position = default;
                 return false;
             }
 
-            Pose delta = ItemGripAuthority.ResolveAnchorToWrist(HandGripPivot.IsRight(hand));
-            wrist = anchor.position + anchor.rotation * delta.position;
+            position = anchor.position;
             return true;
         }
 
         /// <summary>
         /// Ön kabza soketinin bir karelik durumu: silah tutuluyor, iki elli ve ikinci el henüz
-        /// bağlı değilken BOŞ elin bileği ön kabzaya yaklaşınca soket küresi belirir (açık mavi,
-        /// %70 saydam), bilek kürenin İÇİNE girince biraz dolgunlaşır ("bas"), ikinci el bağlanınca
-        /// kaybolur.
+        /// bağlı değilken BOŞ elin kumandası ön kabzaya yaklaşınca soket küresi belirir (açık mavi,
+        /// %70 saydam), kumanda anchor'ı kürenin İÇİNE girince biraz dolgunlaşır ("bas"), ikinci el
+        /// bağlanınca kaybolur.
         /// <para>
         /// <b>Küre = kabul hacmi.</b> Prefab 1 m çapında tasarlanır ve burada kabul yarıçapının iki
         /// katına ölçeklenir; yani oyuncunun gördüğü küre ile <see cref="IsHandOnSecondaryGrip"/>'in
@@ -1329,7 +1315,7 @@ namespace VortexArena.Core.Combat
             }
 
             OVRInput.Controller free = FreeHand();
-            if (free == OVRInput.Controller.None || !TryResolveWrist(free, out Vector3 wrist))
+            if (free == OVRInput.Controller.None || !TryResolveAnchor(free, out Vector3 anchor))
             {
                 // Rig yok (admin gözlemci, editör oturumu) ya da ana el çözülemedi: gösterilecek el yok.
                 HideIndicator();
@@ -1337,7 +1323,7 @@ namespace VortexArena.Core.Combat
             }
 
             Vector3 socket = SecondaryGripWorld(HandGripPivot.IsRight(free));
-            float distance = Vector3.Distance(wrist, socket);
+            float distance = Vector3.Distance(anchor, socket);
             float radius = definition.SecondaryGripRadius;
 
             if (distance > Mathf.Max(SecondaryGripHoverRadius, radius))

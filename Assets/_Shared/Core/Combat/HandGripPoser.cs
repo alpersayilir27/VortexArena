@@ -139,7 +139,6 @@ namespace VortexArena.Core.Combat
         /// <summary>Pozu eksik silahlar için "oturum başına bir kez" uyarı kaydı.</summary>
         private readonly HashSet<string> _warned = new HashSet<string>();
 
-#if UNITY_EDITOR
         /// <summary>
         /// Ölçülen anchor→bilek deltasının "oturdu" sayılması için gereken ardışık kare sayısı.
         /// <para>İlk kareler izleme ısınırken gürültülüdür; tek kareye bakıp loglamak
@@ -155,7 +154,6 @@ namespace VortexArena.Core.Combat
         private readonly Pose[] _deltaLogPrevious = new Pose[2];
         private readonly int[] _deltaLogStreak = new int[2];
         private readonly bool[] _deltaLogged = new bool[2];
-#endif
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -209,11 +207,11 @@ namespace VortexArena.Core.Combat
         /// Kumanda anchor'ından <b>izlenen bileğe</b> olan sabit delta (anchor uzayında, metre);
         /// ölçülemiyorsa <c>false</c>.
         /// <para>
-        /// <b>Ne işe yarar:</b> silahın eldeki duruşunun tek yazılı kaynağı tanımdaki kavrama
-        /// kaydıdır (<see cref="ItemGripPose"/>) ve o, <b>BİLEĞİ</b> silaha göre tarif eder. Silahın
-        /// dünya pozunu çözen taraf ise elin ANCHOR pozunu biliyor. İki uç arasındaki köprü bu
-        /// deltadır: <c>bilekDünya = anchor ∘ delta</c>. Onsuz kavrama, ölçülmüş sabite düşer
-        /// (<see cref="HandGripConvention.AnchorToWrist"/>).
+        /// <b>Ne işe yarar:</b> kavrama kaydı (<see cref="ItemGripPose"/>) kumanda ANCHOR'ını silaha
+        /// göre tarif eder; ön kabzada sentetik ele verilecek olan ise BİLEK. Köprü bu deltadır:
+        /// <c>bilekDünya = anchor ∘ delta</c> (<see cref="ItemGripAuthority.WristFromAnchor"/>). Onsuz
+        /// kilit ölçülmüş sabite düşer (<see cref="HandGripConvention.AnchorToWrist"/>); silahın kendi
+        /// duruşu deltayı HİÇ okumaz.
         /// </para>
         /// <para>
         /// ⚠️ <b>Kanonikliği bozmaz</b> (§6.6): kumanda sürümlü el pozları deterministiktir — aynı
@@ -253,25 +251,24 @@ namespace VortexArena.Core.Combat
         {
             bool measured = TryMeasureAnchorToWrist(state.Synthetic, hand, out Pose delta);
 
-#if UNITY_EDITOR
             LogMeasuredDelta(rightHand, measured, delta);
-#endif
 
             state.HasAnchorToWrist = measured;
             state.AnchorToWrist = measured ? delta : default;
         }
 
-#if UNITY_EDITOR
         /// <summary>
         /// Delta ilk kez KARARLI ölçüldüğünde el başına <b>bir</b> satır basar — çıktı doğrudan
         /// <see cref="HandGripConvention.LeftAnchorToWrist"/> ailesine yapıştırılır.
         /// <para>
-        /// <b>Neden log:</b> o sabit rig'i olmayan izleyicinin (admin gözlemci) ve ilk karelerin tek
-        /// kaynağı ve <b>ölçülmeden</b> yazılamaz. Ölçen tek yer burası olduğu için değeri de burası
-        /// söyler; ikinci bir ölçüm aracı açmak iki ucun sapması demek olurdu.
+        /// <b>Neden log:</b> o sabit stüdyodaki hayalet elin (kumanda köküne göre nereye çizileceği)
+        /// ve rig'in henüz veri akıtmadığı ilk karelerin tek kaynağı ve <b>ölçülmeden</b> yazılamaz.
+        /// Ölçen tek yer burası olduğu için değeri de burası söyler; ikinci bir ölçüm aracı açmak iki
+        /// ucun sapması demek olurdu.
         /// </para>
-        /// <para>⚠️ Yalnız editörde: sahadaki başlıkta bu satırı okuyan kimse yok ve sabit zaten
-        /// APK'ya derlenmiş olarak gidiyor.</para>
+        /// <para>Build'de de basılır (oturum başına iki satır): Link'siz geliştirici değeri başlıkta
+        /// koşan APK'dan <c>adb logcat -s Unity</c> ile okur — editörde koşmayan bir ölçüm, Link
+        /// kullanmayan geliştiriciye sabiti hiç vermezdi.</para>
         /// </summary>
         private void LogMeasuredDelta(bool rightHand, bool measured, in Pose delta)
         {
@@ -307,9 +304,9 @@ namespace VortexArena.Core.Combat
             string field = rightHand ? "RightAnchorToWrist" : "LeftAnchorToWrist";
             Debug.Log($"[HandGripPoser] anchor→bilek ({(rightHand ? "SAĞ" : "SOL")}) ölçüldü: " +
                       $"pos ({p.x:F4}, {p.y:F4}, {p.z:F4}) euler ({e.x:F2}, {e.y:F2}, {e.z:F2}) → " +
-                      $"HandGripConvention.{field}'e yapıştır (rig'siz izleyicinin fallback'i).");
+                      $"HandGripConvention.{field}'e yapıştır (stüdyodaki hayalet elin ve rig'siz " +
+                      "kilidin fallback'i).");
         }
-#endif
 
         /// <summary>
         /// Anchor ile izlenen bilek arasındaki farkı ölçer.
@@ -427,7 +424,7 @@ namespace VortexArena.Core.Combat
             if (kind == GripSocketKind.Secondary)
             {
                 LockToSecondaryGrip(synthetic, weapon.transform,
-                    definition.GetGrip(kind, rightHand));
+                    definition.GetGrip(kind, rightHand), rightHand);
                 state.WristLocked = true;
             }
             else
@@ -444,6 +441,12 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// Ön kabzayı saran elin bileğini eşyanın üstündeki kayda <b>TAM</b> (konum + dönüş)
         /// kilitler — o el eşyaya yapışır.
+        /// <para>
+        /// Kayıt kumanda ANCHOR'ının eşyaya göre pozudur (<see cref="ItemGripPose"/>); sentetik ele
+        /// verilecek olan ise BİLEK. Köprü <see cref="ItemGripAuthority.WristFromAnchor"/>'dır
+        /// (<c>wrist = item ∘ kayıt ∘ delta</c>, delta bu bileşenin canlı ölçümü). Delta yanlışsa
+        /// bozulan şey silahın yönü değil, elin ön kabzada birkaç santim/derece kaymış durmasıdır.
+        /// </para>
         /// <para>
         /// ⚠️ <b>Kilit KOŞULSUZDUR</b> — mesafe/açı kapısı yoktur ve eklenmez. Takas bilinçli:
         /// bedeli, fiziksel kumanda ön kabzadan uzaklaştığında elin kolla arasının görsel olarak
@@ -463,14 +466,16 @@ namespace VortexArena.Core.Combat
         /// sessizce kayar.
         /// </para>
         /// </summary>
-        /// <param name="grip">Bileğin EŞYAYA göre yerel pozu (metre, ölçeksiz).</param>
+        /// <param name="grip">Kumanda anchor'ının EŞYAYA göre yerel pozu (metre, ölçeksiz).</param>
+        /// <param name="rightHand">Kilitlenen el sağ mı (delta el başına ölçülür).</param>
         private static void LockToSecondaryGrip(SyntheticHand synthetic, Transform item,
-            in ItemGripPose grip)
+            in ItemGripPose grip, bool rightHand)
         {
-            var wrist = new Pose(
+            var anchor = new Pose(
                 item.position + item.rotation * grip.position,
                 item.rotation * grip.Rotation);
 
+            Pose wrist = ItemGripAuthority.WristFromAnchor(rightHand, anchor);
             synthetic.LockWristPose(wrist, 1f, SyntheticHand.WristLockMode.Full, true);
         }
 

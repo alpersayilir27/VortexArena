@@ -23,7 +23,7 @@ namespace VortexArena.Core.Combat
         [SerializeField] private WeaponDefinition[] definitions = Array.Empty<WeaponDefinition>();
         [Tooltip("Uzak oyuncu atışlarının FX düğümü (RemoteShotFx havuzunda çoğaltılır); boşsa sade ses fallback'i üretilir.")]
         [SerializeField] private GameObject remoteShotFxPrefab;
-        [Tooltip("Ön kabza SOKETİ — boş elin bileği ön kabzaya yaklaşınca Weapon bunu kavrama kaydına koyar ve " +
+        [Tooltip("Ön kabza SOKETİ — boş elin kumandası ön kabzaya yaklaşınca Weapon bunu kavrama kaydına koyar ve " +
                  "kabul yarıçapının iki katına ölçekler (prefab 1 m ÇAP sözleşmesiyle tasarlanır; görülen küre = " +
                  "kabul hacmi). Tüm silahlar aynı sanatı paylaşır. Boşsa soket çizilmez, kavrama yine çalışır. " +
                  "Silah kiti koşusu (Configure All Build Elements) varsayılan küreyi üretip yalnız alan BOŞSA bağlar.")]
