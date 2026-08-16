@@ -1905,11 +1905,13 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Kavraması hiç yazılmamış silahı koşu sonundaki rapora ekler.
+        /// Kavraması eksik silahı koşu sonundaki rapora ekler.
         /// <para>⚠️ Ölçüt <see cref="ItemDefinition.HasGrip"/>'tir, <c>GetGrip</c> değil: okuma yolu
         /// eksik eli ÖTEKİ elin kaydına düşürür, yani <c>GetGrip</c> ile bakılsaydı yarım yazılmış
-        /// silah "tamam" görünürdü. Sorulan el SAĞDIR — silah en az bir elden yazılmışsa öteki el
-        /// düşme yoluyla makul bir duruş alır; hiç yazılmamışsa sağ el de boştur.</para>
+        /// silah "tamam" görünürdü. Ana kabzada sorulan el SAĞDIR — silah en az bir elden yazılmışsa
+        /// öteki el düşme yoluyla makul bir duruş alır; hiç yazılmamışsa sağ el de boştur. Çift elli
+        /// silahta ÖN KABZA da aranır (<see cref="ItemDefinition.HasSecondaryGrip"/>): yazılmamış ön
+        /// kabza oyunda soketsiz ve tutulamaz kalır, listede görünmezse kimse fark etmez.</para>
         /// </summary>
         private static void NoteIfUnbaked(ItemDefinition definition, string ctx)
         {
@@ -1925,7 +1927,9 @@ namespace VortexArena.Core.Editor
         /// </summary>
         private static bool IsUnbaked(ItemDefinition definition)
         {
-            return definition == null || !definition.HasGrip(GripSocketKind.Primary, true);
+            return definition == null
+                   || !definition.HasGrip(GripSocketKind.Primary, true)
+                   || (definition.IsTwoHanded && !definition.HasSecondaryGrip);
         }
 
         /// <summary>"Ateş sesi atanmamış" ölçütü — <see cref="IsUnbaked"/> ile aynı gerekçe.</summary>
@@ -1984,7 +1988,7 @@ namespace VortexArena.Core.Editor
 
             if (unbaked.Count > 0)
             {
-                problems.Add("kavraması yazılmamış: " + string.Join(", ", unbaked));
+                problems.Add("kavraması eksik (ana/ön kabza): " + string.Join(", ", unbaked));
             }
 
             if (silent.Count > 0)
@@ -2041,11 +2045,12 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            Debug.LogWarning(Log + "Kavraması YAZILMAMIŞ silahlar: " +
-                             string.Join(", ", _unbakedWeapons) + ". Bu silahlarda oyuncunun eli " +
-                             "silaha sarılmaz (idle duruşunda kalır). Düzeltme: Tools > VortexArena > " +
+            Debug.LogWarning(Log + "Kavraması EKSİK silahlar (ana kabza yazılmamış ya da çift ellide ön " +
+                             "kabza yazılmamış): " + string.Join(", ", _unbakedWeapons) +
+                             ". Ana kabza yoksa oyuncunun eli silaha sarılmaz (idle kalır); ön kabza " +
+                             "yoksa soket çizilmez ve ikinci el bağlanmaz. Düzeltme: Tools > VortexArena > " +
                              "Weapons > Kavrama Pozu Stüdyosu → WPN_* prefabını prefab kipinde aç → " +
-                             "Elleri Oluştur → Kaydet.");
+                             "Ana Kabza + Ön Kabza Ellerini Oluştur → yerleştir → Kaydet.");
         }
 
         /// <summary>Kökteki bir bileşeni tam tip adıyla siler (yoksa sessizce geçer).</summary>

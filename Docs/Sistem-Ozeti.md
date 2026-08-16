@@ -1134,6 +1134,13 @@ büyürdü); görsel ile kural ayrı sayılara bağlansaydı "içindeyim ama tut
 silahınki (küre için önemsiz, tasarlanmış bir sanat yönünü silahtan alır); prefabtan
 collider/Rigidbody sökülür (ışına ve kavramaya takılmasın). Prefab yoksa bir kez uyarır ve çizmez —
 kapı yine çalışır. Ana kabzanın soketi YOKTUR (silah ana ele verilerek geliyor).
+⚠️ **Ön kabza kaydı yazılmamış silahta soket ÇİZİLMEZ ve kapı KAPALIDIR**
+(`ItemDefinition.HasSecondaryGrip`; `Weapon` tanım başına bir kez uyarır): yazılmamış kayıt
+`GetGrip`'te sıfıra, yani eşyanın KÖKÜNE düşer ve kök çoğu silahta ana elin bileğinin dibindedir —
+kapı açık kalsa küre ana elin üstünde belirir, ikinci el "kabzada" tutamaz ve bu bir hata olarak
+değil "gösterge yanlış yerde" olarak görünürdü. Aynı kapı çözücüde (`ItemGripSolver` tek elli kalır)
+ve uzak avatarda (`RemoteAvatar` boş eli köke yapıştırmaz) da vardır; çare stüdyoda ön kabza ellerini
+yazmaktır, koda dokunulmaz.
 Uzak avatarda çizilmez: `RemoteAvatar.SterilizeVisual` kopyadaki MonoBehaviour'ları yok ediyor) +
 `WeaponDefinition` (SO — hasar/HS çarpanı/RPM/şarjör/reload/spread/recoil/**haptik (atış başına
 titreşim şiddeti + süresi; biri 0 = o silahta haptik yok)**/ses profili + verilen
