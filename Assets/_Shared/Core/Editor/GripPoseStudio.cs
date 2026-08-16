@@ -761,8 +761,8 @@ namespace VortexArena.Core.Editor
                     TryGetGhostProvider(out HandGhostProvider existingProvider))
                 {
                     HandGhost prototypeForExisting = existingProvider.GetHand(existing.Handedness);
-                    Pose offset = ResolveGhostOffset(prototypeForExisting, rightHand, out bool measured);
-                    existing.SetGhostOffset(offset, measured);
+                    Pose offset = ResolveGhostOffset(prototypeForExisting, rightHand, out bool measureds);
+                    existing.SetGhostOffset(offset, measureds);
                 }
 
                 ApplyGhostOffset(existing);
