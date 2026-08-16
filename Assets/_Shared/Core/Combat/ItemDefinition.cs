@@ -39,10 +39,12 @@ namespace VortexArena.Core.Combat
         [Tooltip("OneHand (tabanca/bomba) / TwoHand (tüfek).")]
         [SerializeField] private ItemHoldMode holdMode = ItemHoldMode.OneHand;
 
-        // ⚠️ DÖRT KAYIT DA AYNI UZAYDADIR: her biri elin (ISDK bileğinin) EŞYAYA göre yerel pozudur
-        // (eşya → el). Tek yönde yazıldıkları için ikinci bir uzay tarif etmek yalnız işaret hatası
-        // üretirdi.
-        // ⚠️ Kayıt EL BAŞINADIR: kabza simetrik olmadığı için iki elin bileği eşyanın farklı
+        // ⚠️ DÖRT KAYIT DA AYNI UZAYDADIR: her biri elin KUMANDA ANCHOR'ININ EŞYAYA göre yerel
+        // pozudur (eşya → anchor; ItemGripPose). Tek yönde yazıldıkları için ikinci bir uzay tarif
+        // etmek yalnız işaret hatası üretirdi. Anchor = telde giden el pozu = çözücünün bildiği poz,
+        // yani hiçbir okuyucu delta ölçmek zorunda değildir ve kimlik kayıt "kumandayla hizalı silah"
+        // demektir.
+        // ⚠️ Kayıt EL BAŞINADIR: kabza simetrik olmadığı için iki elin kumandası eşyanın farklı
         // yerlerine düşer — tek kayıt tutup aynalamak sol eli silahın içine sokardı.
         // ⚠️ Kayıtlar stüdyoda yazılır (editör), gözlükle yakalanmaz: yakalanan kaydın dönüşü
         // oyuncunun o anki bilek eğikliğiydi ve artık dönüş EŞYAYI döndürdüğü için doğrudan
@@ -50,16 +52,16 @@ namespace VortexArena.Core.Combat
         // Buradaki YARIÇAPLAR duruşun parçası DEĞİL, KAPI ölçüsüdür: kavramanın nerede kabul
         // edildiğini söylerler, eşyanın elde nasıl duracağını değil.
         [Header("Kavrama (kanonik)")]
-        [Tooltip("SAĞ elin ana kabzadaki pozu (eşyaya göre yerel) + parmak preset'i.")]
+        [Tooltip("SAĞ elin kumanda anchor'ının ana kabzadaki pozu (eşyaya göre yerel) + parmak preset'i.")]
         [SerializeField] private ItemGripPose primaryGripRight;
 
-        [Tooltip("SOL elin ana kabzadaki pozu (eşyaya göre yerel) + parmak preset'i.")]
+        [Tooltip("SOL elin kumanda anchor'ının ana kabzadaki pozu (eşyaya göre yerel) + parmak preset'i.")]
         [SerializeField] private ItemGripPose primaryGripLeft;
 
-        [Tooltip("SAĞ elin ön kabzadaki pozu — yalnız TwoHand'de anlamlı.")]
+        [Tooltip("SAĞ elin kumanda anchor'ının ön kabzadaki pozu — yalnız TwoHand'de anlamlı.")]
         [SerializeField] private ItemGripPose secondaryGripRight;
 
-        [Tooltip("SOL elin ön kabzadaki pozu — yalnız TwoHand'de anlamlı.")]
+        [Tooltip("SOL elin kumanda anchor'ının ön kabzadaki pozu — yalnız TwoHand'de anlamlı.")]
         [SerializeField] private ItemGripPose secondaryGripLeft;
 
         // ⚠️ [Range] KOYULMAZ — dosyanın başındaki netItemId uyarısındaki tuzağın aynısı: Range
@@ -68,9 +70,9 @@ namespace VortexArena.Core.Combat
         // Alt sınır property'de uygulanıyor.
         // ⚠️ ANA kabza için yarıçap YOKTUR: silah ana ele verilerek/çağrılarak geliyor, oyuncunun
         // elini ana kabzaya götürmesi diye bir adım yok — okuyanı olmayan ölçü bayatlar.
-        [Tooltip("Ön kabza SOKETİNİN yarıçapı (m): boş elin bileği bu kürenin içindeyken grip'e basılınca " +
-                 "ikinci el ön kabzaya bağlanır; oyuncunun gördüğü küre de tam bu yarıçapla çizilir " +
-                 "(0.10 = 20 cm çap). Yalnız TwoHand'de anlamlı. Silah başına ayarlanır.")]
+        [Tooltip("Ön kabza SOKETİNİN yarıçapı (m): boş elin kumanda anchor'ı bu kürenin içindeyken grip'e " +
+                 "basılınca ikinci el ön kabzaya bağlanır; oyuncunun gördüğü küre de tam bu yarıçapla " +
+                 "çizilir (0.10 = 20 cm çap). Yalnız TwoHand'de anlamlı. Silah başına ayarlanır.")]
         [SerializeField] private float secondaryGripRadius = 0.10f;
 
         // ⚠️ Parmak duruşu için AYRI bir alan YOKTUR ve açılmaz: duruş kavrama kaydının PARÇASIDIR
@@ -182,12 +184,11 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// <b>EŞYANIN</b> ana el anchor'ına göre dönüşü (bilek ≡ anchor varsayımıyla).
-        /// <para>⚠️ <b>Dönüş artık kimlik DEĞİL, kayıttan gelir:</b> eşya ele göre durur — el nasıl
+        /// <b>EŞYANIN</b> ana el anchor'ına göre dönüşü — kaydın tersi, delta yok (kayıt zaten anchor
+        /// uzayında). Yazılmamış kayıtta kimlik: eşya kumandayla hizalı durur.
+        /// <para>⚠️ <b>Dönüş kimlik DEĞİL, kayıttan gelir:</b> eşya ele göre durur — el nasıl
         /// tutuyorsa silah öyle tutulur. Bileğin kendisi ana elde kilitlenmediği için el kumandayla
         /// birlikte serbest döner ve silah ona uyar; kavramanın açısını taşıyan tek yer kayıttır.</para>
-        /// <para>Canlı bilek deltası ölçülebiliyorsa aynı ölçü <see cref="ItemGripAuthority"/>'de
-        /// deltayla düzeltilir; burası o yolun fallback'idir.</para>
         /// </summary>
         public Quaternion PrimaryGripRotation(bool rightHand)
         {
@@ -197,10 +198,9 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// <b>EŞYANIN</b> ana el anchor'ına göre yerel konumu (metre): <c>itemPos =
         /// palm.pos + palm.rot * bu değer</c>.
-        /// <para>Türetme (bilek ≡ anchor varsayımıyla): kayıt bileğin eşyaya göre pozudur, aranan
-        /// da onun tersidir (<see cref="ItemGripPose.InverseLocalPose"/>).
-        /// Canlı bilek deltası ölçülebiliyorsa aynı ölçü <see cref="ItemGripAuthority"/>'de
-        /// deltayla düzeltilir; burası o yolun fallback'idir.</para>
+        /// <para>Türetme: kayıt anchor'ın eşyaya göre pozudur, aranan da onun tersidir
+        /// (<see cref="ItemGripPose.InverseLocalPose"/>). Yazılmamış kayıtta sıfır: eşya kumandanın
+        /// tam üstünde durur.</para>
         /// </summary>
         public Vector3 PrimaryGripPosition(bool rightHand)
         {
@@ -208,9 +208,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Ana kavrama noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — uzak elin avuç hedefi
+        /// Ana kavrama noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — uzak elin anchor hedefi
         /// (<c>RemoteAvatar.TryResolveGripPalm</c>) bunu okur.
-        /// <para>⚠️ <b>Ayrı bir alan DEĞİL, kaydın kendisidir:</b> kayıt zaten "bilek eşyanın
+        /// <para>⚠️ <b>Ayrı bir alan DEĞİL, kaydın kendisidir:</b> kayıt zaten "kumanda eşyanın
         /// neresinde" sorusunu cevaplıyor. İkinci bir serialize alan açılırsa aynı nokta iki yerde
         /// yaşar ve biri güncellenip diğeri unutulur.</para>
         /// </summary>
@@ -246,9 +246,10 @@ namespace VortexArena.Core.Combat
             return GetGrip(GripSocketKind.Secondary, rightHand).position;
         }
 
-        /// <summary>İkinci elin ön kabzadaki bilek dönüşü, <b>eşyaya göre yerel</b>. Eşyayı
-        /// döndürmez (onu ana kabza kaydı yapar); bu kayıt ön kabzayı saran elin bileğini
-        /// oturtur — o el eşyaya YAPIŞIR (<c>HandGripPoser</c> tam kilit uygular).</summary>
+        /// <summary>İkinci elin ön kabzadaki <b>anchor</b> dönüşü, <b>eşyaya göre yerel</b>. Eşyayı
+        /// döndürmez (onu ana kabza kaydı yapar); bu kayıt ön kabzayı saran elin kumandasını oturtur —
+        /// sentetik bilek onun anchor→bilek deltası kadar ötesine kilitlenir ve el eşyaya YAPIŞIR
+        /// (<c>HandGripPoser</c>).</summary>
         public Quaternion SecondaryGripRotation(bool rightHand)
         {
             return GetGrip(GripSocketKind.Secondary, rightHand).Rotation;
@@ -263,12 +264,12 @@ namespace VortexArena.Core.Combat
         /// birden çok alanı arka arkaya yazıyor ve kaydı tek Undo/tek dirty adımında toplamak
         /// istiyor.</para>
         /// </summary>
-        /// <param name="wristInItem">Bileğin EŞYAYA göre yerel pozu (metre, ölçeksiz).</param>
+        /// <param name="anchorInItem">Kumanda anchor'ının EŞYAYA göre yerel pozu (metre, ölçeksiz).</param>
         /// <param name="preset">O slotta elin parmak duruşu.</param>
-        public void EditorSetGrip(GripSocketKind kind, bool rightHand, in Pose wristInItem,
+        public void EditorSetGrip(GripSocketKind kind, bool rightHand, in Pose anchorInItem,
             HandGripPreset preset)
         {
-            ItemGripPose capture = ItemGripPose.From(wristInItem, preset);
+            ItemGripPose capture = ItemGripPose.From(anchorInItem, preset);
 
             if (kind == GripSocketKind.Secondary)
             {
@@ -332,7 +333,7 @@ namespace VortexArena.Core.Combat
 #endif
 
         /// <summary>
-        /// Ön kabza soketinin yarıçapı (metre): boş elin BİLEĞİ bu kürenin içindeyken grip basışı
+        /// Ön kabza soketinin yarıçapı (metre): boş elin kumanda ANCHOR'I bu kürenin içindeyken grip basışı
         /// ikinci eli ön kabzaya bağlar (<c>Weapon.IsHandOnSecondaryGrip</c>) ve oyuncunun gördüğü
         /// soket küresi tam bu yarıçapla çizilir (görsel = kabul hacmi) — yalnız
         /// <see cref="IsTwoHanded"/> iken anlamlı.

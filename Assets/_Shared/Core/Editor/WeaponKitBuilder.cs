@@ -77,7 +77,7 @@ namespace VortexArena.Core.Editor
         /// <para>
         /// <b>Sözleşme: prefab 1 m ÇAPINDA tasarlanır</b> (Unity küre primitifinin ölçüsü);
         /// <c>Weapon</c> onu kabul yarıçapının iki katına ölçekler — yani çizilen küre TAM OLARAK
-        /// kabul hacmidir: bilek kürenin içindeyken grip ikinci eli bağlar, dışındayken bağlamaz.
+        /// kabul hacmidir: kumanda anchor'ı kürenin içindeyken grip ikinci eli bağlar, dışındayken bağlamaz.
         /// Görsel ile kural ayrı sayılara bağlansaydı oyuncuya "içindesin" denen yerde kavrama
         /// reddedilebilirdi.
         /// </para>

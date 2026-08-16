@@ -55,8 +55,13 @@ namespace VortexArena.App.Admin
         /// <para>⚠️ <b>Zorunludur:</b> başlık kapanmış ya da donmuşsa <c>calibration_result</c> HİÇ
         /// gelmez ve düğme sonsuza kadar "YÜKLENİYOR" olarak asılı kalırdı — operatör hem sonucu
         /// öğrenemez hem tekrar deneyemez.</para>
+        /// <para>⚠️ <b>Başlığın deneme penceresinden BELİRGİN olarak uzun tutulur</b>
+        /// (<c>ArenaCalibrator.RestoreAttempts</c> × <c>RestoreRetryDelayMs</c> ≈ 10 sn, artı her
+        /// denemenin kendi yükleme/localize beklemesi): kısa kalırsa düğme "yanıt gelmedi" der,
+        /// gerçek sonuç saniyeler sonra gelir ve operatör başarılı bir yüklemeyi başarısız
+        /// sanar. Orada pencere uzarsa burası da uzar.</para>
         /// </summary>
-        private const float LoadTimeoutSeconds = 15f;
+        private const float LoadTimeoutSeconds = 25f;
 
         // ⚠️ Etiketlerde sembol/emoji YOK: TMP varsayılan fontunda garantisi yok, eksik glif □
         // çizilir (AdminPlayerRow ve UiKit'te aynı kural). Durum renkle + ünlem işaretiyle anlatılır.

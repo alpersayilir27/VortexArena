@@ -429,8 +429,8 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 `weaponId` yalnızca **kill feed etiketidir** — sunucu doğrulamaz, istediğini yazabilirsin.
 
 > Silahın elde **nerede ve hangi açıyla** durduğunu `WD_*`'taki kavrama kayıtları belirler (§11.0);
-> dördü de el başınadır (`primaryGripRight/Left`, `secondaryGripRight/Left`) ve her biri bileğin
-> pozu + parmak preset'ini taşır. Ana elde silah ele uyar (bilek serbest kalır), ön kabzada el
+> dördü de el başınadır (`primaryGripRight/Left`, `secondaryGripRight/Left`) ve her biri **kumanda
+> anchor'ının** pozu + parmak preset'ini taşır. Ana elde silah ele uyar (bilek serbest kalır), ön kabzada el
 > silaha yapışır. ⚠️ **Ölçü TEK yerden okunur:** aynı kayıt yerel duruşu, uzak oyuncudaki çizimi ve
 > ön kabza kapısının/göstergesinin yerini birlikte besliyor.
 > Çerçeveden seçilen silah (`weaponSource:"weaponcanvas"`), modun verdiği silah
@@ -462,15 +462,16 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 
 ## 11.0 Bir silahın kavramasını YAZMAK
 
-Kavrama **stüdyoda, gözlük takmadan yazılır**: hayalet eli Scene View'da silahın kabzasına
-oturtursun, araç elin (ISDK **bileğinin**) silaha göre pozunu + o elin parmak preset'ini
-`WD_*.asset`'e yazar. Prefaba hiçbir şey yazılmaz — kavramanın tek yeri `WD_*`'tır.
+Kavrama **stüdyoda, gözlük takmadan yazılır**: **kumanda çerçevesini** Scene View'da silahın
+kabzasına oturtursun, araç o çerçevenin (kumanda anchor'ının) silaha göre pozunu + o elin parmak
+preset'ini `WD_*.asset`'e yazar. Çerçevenin çocuğu olan ISDK hayalet eli elin gerçekte silahı nasıl
+saracağını gösterir. Prefaba hiçbir şey yazılmaz — kavramanın tek yeri `WD_*`'tır.
 
-⚠️ **Sözleşme "silah ele göre"dir, "el silaha göre" değil.** Ana elde eşya `bilek ∘ Inverse(kayıt)`
-ile durur: stüdyoda eli kabzada **döndürmek oyunda SİLAHI döndürür** ve elin bileği kilitlenmez
-(izlemeden/kumandadan gelir). Ön kabzada kural terstir — ikinci elin bileği `item ∘ kayıt` pozuna
-**tam** kilitlenir, yani el silaha yapışır. Ayrıca ayarlanabilir bir "silah dönüşü" alanı yoktur:
-dönüş kaydın kendisidir.
+⚠️ **Sözleşme "silah ele göre"dir, "el silaha göre" değil.** Ana elde eşya `anchor ∘ Inverse(kayıt)`
+ile durur: çerçeveyi **yalnız taşırsan** silah kumandayla hizalı kalır, **çevirirsen oyunda SİLAH
+döner** ve elin bileği kilitlenmez (izlemeden/kumandadan gelir). Ön kabzada kural terstir — ikinci
+elin bileği kaydın pozuna **tam** kilitlenir, yani el silaha yapışır. Ayrıca ayarlanabilir bir
+"silah dönüşü" alanı yoktur: dönüş kaydın kendisidir.
 
 **Akış (prefab kipinde, Play gerekmez):**
 
@@ -478,9 +479,10 @@ dönüş kaydın kendisidir.
 2. `_Shared/Arsenal/Prefabs/WPN_*.prefab`'ı **prefab kipinde** aç (Project'te çift tık). Pencere
    stage'i kendiliğinden tanır.
 3. **Ana Kabza Ellerini Oluştur** (iki elli silahta ayrıca **Ön Kabza Ellerini Oluştur**) → sağ ve
-   sol hayalet eller sahnede belirir. Kayıt zaten varsa eller **o kayıttan** doğar; yoksa kabza
-   parçasının üstüne makul bir başlangıçla konur.
-4. Elleri Scene View'da sürükle/çevir: avuç kabzaya otursun, işaret parmağı tetiğe ulaşsın.
+   sol kumanda çerçeveleri (ve çocukları olan hayalet eller) sahnede belirir. Kayıt zaten varsa
+   çerçeveler **o kayıttan** doğar; yoksa kabza parçasının üstüne makul bir başlangıçla konur.
+4. Çerçeveleri Scene View'da sürükle/çevir (gizmo'daki mavi ok kumandanın ilerisidir; hayalet elin
+   mesh'ine tıklamak da çerçeveyi seçer): avuç kabzaya otursun, işaret parmağı tetiğe ulaşsın.
 5. Elin Inspector'ından (`GripHandAuthoring`) **parmak preset'ini** seç: `Idle` · `Firing` (işaret
    tetikte) · `Grip` (sarma). Değişiklik Scene View'da anında görünür. Varsayılan ana kabzada
    `Firing`, ön kabzada `Grip`'tir. Üçü de sabit duruştur — oyunda gördüğün el tezgâhtaki elin
@@ -505,20 +507,24 @@ dönüş kaydın kendisidir.
   silah kiti koşusu da sonunda **"kavraması EKSİK silahlar"**ı listeler — ana kabzası yazılmamış
   olanlar VE çift elli olup ön kabzası yazılmamış olanlar (`Configure All Build Elements`
   penceresindeki Hazırlık satırı aynı listeyi gösterir).
-- Ön kabza noktası da stüdyoda, ön kabza elinin bileğiyle yazılır — Scene View'da ayrı bir
-  tutamak/gizmo YOKTUR (kayıt tek yerde yaşasın). Oyunda boş elin bileği o noktaya yaklaşınca
+- Ön kabza noktası da stüdyoda, ön kabza elinin kumanda çerçevesiyle yazılır — Scene View'da ayrı bir
+  tutamak/gizmo YOKTUR (kayıt tek yerde yaşasın). Oyunda boş elin kumandası o noktaya yaklaşınca
   beliren soket küresi (`WeaponCatalog.secondaryGripIndicatorPrefab`, `Weapon` sürer; yarıçapı
   `WD_*`'daki `secondaryGripRadius`, varsayılan 20 cm çap) kaydın oyundaki yerini gösterir ve
-  kabul hacminin kendisidir: bilek kürenin içindeyken grip ikinci eli bağlar. Küre kabzadan uzakta
+  kabul hacminin kendisidir: kumanda kürenin içindeyken grip ikinci eli bağlar. Küre kabzadan uzakta
   çıkıyorsa kayıt o el için yanlış yazılmış demektir. **Ön kabza kaydı hiç yazılmamışsa** küre HİÇ
   çıkmaz ve ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`; konsola tanım başına bir uyarı
   gider) — yazılmamış kayıt eşyanın köküne düşerdi, o da ana elin dibidir.
 - ⚠️ Silah elde yatık görünüyorsa iki aday var: kavrama kaydının dönüşü ya da `Model`'in prefabtaki
   yerleşimi. Stüdyoda el ile silah birlikte göründüğü için ayrımı orada yaparsın.
-- **Admin ekranında** uzak silahlar dönük çiziliyorsa sebep kavrama değil, anchor→bilek deltasının
-  sabitidir: rig'i olmayan izleyici canlı ölçüm yapamaz ve `HandGripConvention.Left/RightAnchorToWrist`
-  sabitine düşer. O sabit editör Play'inde `HandGripPoser`'ın bir kez bastığı kararlı ölçümden
-  kopyalanır.
+- **Admin ekranı ayrı bir teşhis yeri değildir:** kayıt telde giden el poz uzayında olduğu için
+  rig'i olmayan izleyici uzak silahları oyuncuyla birebir aynı çizer. Silah adminde dönükse
+  oyuncuda da dönüktür, bakılacak yer kayıttır.
+- **Stüdyodaki hayalet el silahı garip sarıyorsa** (kayıt doğru göründüğü hâlde) bakılacak yer
+  `HandGripConvention.Left/RightAnchorToWrist` sabitidir: editörde canlı ölçüm yoktur ve sabit
+  kimlikken hayalet el kumandanın tam üstüne çizilir. Sabit editör Play'inde `HandGripPoser`'ın bir
+  kez bastığı kararlı ölçümden kopyalanır ve **kaydı etkilemez** — yalnız stüdyodaki görüntüyü ve
+  rig'in ilk karelerindeki ön kabza kilidini düzeltir.
 
 ### Başkalarının gördüğü el (uzak avatarın parmakları)
 
