@@ -121,10 +121,10 @@ namespace VortexArena.Core.Editor
 
         // --------------------------------------------------------------------------- pencere
 
-        // Öncelik 24: 23'ü NetItemIdGuard'ın "Rebuild Net Item Catalog"u kullanıyor. Aynı sayı
-        // Unity'de hata üretmez ama iki öğenin sırası belirsizleşir — menü sırası okuyanın kafasında
-        // "hangisi önce" sorusu doğurmasın.
-        [MenuItem("Tools/VortexArena/Weapons/Kavrama Pozu Stüdyosu", false, 24)]
+        // Weapons menüsündeki TEK öğe: silah kiti ve net eşya kataloğu Configure All Build
+        // Elements'in eşitlemesinde koşuyor, ayrı düğmeleri yok. Stüdyo bir yazım penceresidir —
+        // kavrama insan gözüyle yazılır, o yüzden menüde kalır.
+        [MenuItem("Tools/VortexArena/Weapons/Kavrama Pozu Stüdyosu", false, 20)]
         private static void Open()
         {
             GripPoseStudio window = GetWindow<GripPoseStudio>();

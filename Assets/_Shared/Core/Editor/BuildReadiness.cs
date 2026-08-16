@@ -7,10 +7,11 @@ namespace VortexArena.Core.Editor
     /// Build almadan önce çalıştırılmış olması gereken editör araçlarının durumunu TEK listede
     /// toplar (<see cref="BuildElementsConfigurator"/> penceresinin "Hazırlık" bölümü).
     /// <para>
-    /// ⚠️ <b>Denetimler HİÇBİR ŞEY YAZMAZ.</b> Tetiği kullanıcı çeker: yazan araçlar paylaşımlı
-    /// asset'lere dokunuyor (rig prefabı, WPN prefabları, katalog asset'leri) ve her arena
-    /// senkronunda onları yeniden serialize etmek gürültülü diff ile merge çakışması üretirdi.
-    /// Bu yüzden "Hepsini Yapılandır" / "Yalnız Senkronize Et" davranışı bu bölümden etkilenmez.
+    /// ⚠️ <b>Denetimler HİÇBİR ŞEY YAZMAZ.</b> Yazma iki yoldan olur: silah kiti ve net eşya
+    /// kataloğu her eşitlemede kendiliğinden koşar (<c>BuildElementsConfigurator.SyncWeaponKit</c>;
+    /// satırları düğmesizdir, kalan ✗ insan adımıdır — kavrama, ateş sesi, netItemId), rig
+    /// prefabına yazan HMD katmanları ise düğmeyle, kullanıcı isteyince (paylaşımlı rig prefabını
+    /// her eşitlemede yeniden serialize etmek merge gürültüsü olurdu).
     /// </para>
     /// <para>
     /// ⚠️ <b>Denetimin mantığı burada DEĞİL, aracın kendi dosyasındadır</b> (sabitleri kim
@@ -63,17 +64,19 @@ namespace VortexArena.Core.Editor
                     "Kur",
                     HmdOverlayBuilder.BuildOverlays),
 
+                // Düğmesiz: ikisi de her eşitlemede koşuyor (SyncWeaponKit). Burada kalan ✗ aracın
+                // düzeltemeyeceği insan adımıdır — satır onu okutur, düğme yalan söylerdi.
                 Check(
                     "Net eşya kataloğu",
                     NetItemIdGuard.IsCatalogUpToDate,
-                    "Yaz",
-                    NetItemIdGuard.Rebuild),
+                    null,
+                    null),
 
                 Check(
                     "Silah kiti",
                     WeaponKitBuilder.AreWeaponsReady,
-                    "Üret",
-                    WeaponKitBuilder.BuildAll),
+                    null,
+                    null),
 
                 Check(
                     "Sunucu harita tablosu (maps.json)",
