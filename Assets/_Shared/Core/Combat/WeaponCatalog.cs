@@ -4,7 +4,7 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Tüm silah tanımlarının kataloğu + uzak atış FX prefabı.
+    /// Tüm silah tanımlarının kataloğu + uzak atış FX prefabı + ön kabza göstergesi prefabı.
     /// GameCatalog gibi Resources'ta yaşamak ZORUNDADIR
     /// (`Assets/_Shared/Data/Resources/WeaponCatalog.asset`): tüketiciler sahne/prefab
     /// referansı taşımadan <c>Resources.Load</c> ile okur. Admin/oyuncu ayrımı yoktur —
@@ -23,8 +23,10 @@ namespace VortexArena.Core.Combat
         [SerializeField] private WeaponDefinition[] definitions = Array.Empty<WeaponDefinition>();
         [Tooltip("Uzak oyuncu atışlarının FX düğümü (RemoteShotFx havuzunda çoğaltılır); boşsa sade ses fallback'i üretilir.")]
         [SerializeField] private GameObject remoteShotFxPrefab;
-        [Tooltip("Kavrama soketi göstergesi (ItemGripSockets çoğaltır); boşsa prosedürel halka yedeği çizilir.")]
-        [SerializeField] private GameObject gripSocketPrefab;
+        [Tooltip("Ön kabza göstergesi — boş el ön kabzaya yaklaşınca Weapon bunu kavrama noktasına koyar " +
+                 "(tüm silahlar aynı sanatı paylaşır). Boşsa gösterge çizilmez, kavrama yine çalışır. " +
+                 "'Build Weapon Prefabs' varsayılan halkayı üretip yalnız alan BOŞSA bağlar.")]
+        [SerializeField] private GameObject secondaryGripIndicatorPrefab;
 
         /// <summary>Katalogdaki silah tanımları.</summary>
         public WeaponDefinition[] Definitions => definitions;
@@ -32,8 +34,12 @@ namespace VortexArena.Core.Combat
         /// <summary>Uzak atış FX prefabı (null olabilir).</summary>
         public GameObject RemoteShotFxPrefab => remoteShotFxPrefab;
 
-        /// <summary>Kavrama soketi göstergesi prefabı (null olabilir → prosedürel halka).</summary>
-        public GameObject GripSocketPrefab => gripSocketPrefab;
+        /// <summary>
+        /// Ön kabza göstergesinin prefabı (null olabilir → gösterge çizilmez). Sanat buradadır;
+        /// yerini/ölçeğini/rengini <c>Weapon</c> sürer: bir <c>LineRenderer</c> taşıyorsa rengi ona,
+        /// yoksa ilk Renderer'ın materyaline (<c>_BaseColor</c>/<c>_Color</c>) yazılır.
+        /// </summary>
+        public GameObject SecondaryGripIndicatorPrefab => secondaryGripIndicatorPrefab;
 
         /// <summary>weaponId ile tanım bulur (büyük/küçük harf duyarsız); yoksa/boşsa null.</summary>
         public WeaponDefinition FindByWeaponId(string id)

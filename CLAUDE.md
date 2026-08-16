@@ -489,8 +489,8 @@ yoktur**. `WeaponGranter` (`_Shared/Core/Combat/`) kendini önyükleyen kalıcı
 kapısı takım kipidir, `BaseZoneVisibility`), grip'e basılı tutulan
 her elde `ModeDefinition.loadout`'tan rastgele bir silah tutturur (bırakınca yok olur, tekrar
 basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki duruşu (konum + dönüş) `WD_*`'daki
-**stüdyoda yazılmış kavramadan** gelir — silah ele göre durur (verilen silahta soket çizilmez —
-silah zaten elde).
+**stüdyoda yazılmış kavramadan** gelir — silah ele göre durur (ana kabza için gösterge yoktur —
+silah zaten elde; çift elli silahta boş el ön kabzaya yaklaşınca ön kabza göstergesi belirir).
 ⚠️ Sahneye bileşen KOYMA: tekil olmasının sebebi her yeni arenaya elle bir kurulum adımı
 eklememektir.
 **Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfeklerin kiti
@@ -537,18 +537,28 @@ altında sub-emitter'lı namlu dumanı (`Smoke`), ve kalibreye göre (762x39/556
 `Docs/Sistem-Ozeti.md` §4). ⚠️ **Kovanın çıkış noktası (`Eject`) elle ayarlanır ve araç onu
 TAŞIMAZ** — `Muzzle` ile aynı kural; yalnız hiç yoksa kaba bir başlangıçla üretilir (gerekçe
 `Docs/Sistem-Ozeti.md` §7). Gerekiyorsa
-`ModeDefinition.loadout`'a eklenir. Kavrama **soketi** kurulum istemez: araç prefaba
-`ItemGripSockets`'ı koyar ve **İKİ** yakın-kavrama bileşeninin birden filtre listesine bağlar —
-`GrabInteractable` (kumanda hattı) ve `HandGrabInteractable` (el hattı; ikincisini araç üretir).
+`ModeDefinition.loadout`'a eklenir. Kökteki **İKİ** yakın-kavrama bileşeni araç tarafından korunur ve
+**filtresiz** bırakılır — `GrabInteractable` (kumanda hattı) ve `HandGrabInteractable` (el hattı;
+ikincisini araç üretir); araç `_interactorFilters` listesini her koşuda BOŞALTIR (kökte kavrama
+kapısı bileşeni YOKTUR ve eklenmez — eski soket bileşeni kaldırıldı, dolu bir listenin eksik girişi
+ISDK'nın `Start` denetiminde patlar ve silah kavranamaz olur).
 ⚠️ **İkisi birden tutulur ve biri silinmez:** hangisinin koşacağını ISDK rig'i "el izleniyor mu"
 sorusuna göre seçiyor (`OVRManager.controllerDrivenHandPosesType`) — tek hat bırakmak o anahtarın
 her değişiminde silahı sessizce kavranamaz yapar → `Docs/Sistem-Ozeti.md` §7.
 ⚠️ **`WPN_*` KÖKÜNE mesafeden kavrama GERİ EKLENMEZ** (araç `DistanceGrabInteractable` ve
-`DistanceHandGrabInteractable`'ı bilerek siler: kökte mesafeden kavrama soket
-tasarımının zıddıdır ve soket kapısı el çözülemediğinde fail-open olduğu için silah bazı
-oturumlarda odanın öbür ucundan kavranabilir kalırdı →
+`DistanceHandGrabInteractable`'ı bilerek siler: silah çerçeveden seçilir, kök uzaktan kavranırsa
+çerçeve atlanır ve silah odanın öbür ucundan alınabilir olur →
 `Docs/Sistem-Ozeti.md` §7). Yasak yalnız kök içindir: **çerçeve prefabında (`VA_WeaponFrame`)
 mesafeden kavrama ZORUNLUDUR ve orada da İKİ hat birden durur** — silah oradan alınır.
+**Ön kabza kapısı ve göstergesi `Weapon`'ın kendisindedir** — ayrı bir bileşen/gizmo YOKTUR ve
+eklenmez: `Weapon.IsHandOnSecondaryGrip` (boş elin avucu `WD_*`'daki `secondaryGripRadius`
+içinde mi) tek kuraldır, granter ikinci eli buna göre bağlar, gösterge de aynı ölçüyle yeşile döner.
+Göstergenin **sanatı prefabdadır** (`WeaponCatalog.secondaryGripIndicatorPrefab`; varsayılan halkayı
+`Build Weapon Prefabs` **yalnız yoksa** üretir — `_Shared/Arsenal/Prefabs/VA_GripIndicator.prefab` +
+`_Shared/Materials/M_GripIndicator.mat` — ve kataloğa **yalnız alan boşsa** bağlar): sanatı
+değiştirmek = o prefabı düzenlemek ya da kataloğa başka bir prefab bağlamak, koda dokunulmaz.
+Gösterge yalnız **tutulan çift elli silahta, ikinci el bağlanana kadar** ve yalnız yerel oyuncuda
+çizilir; ana kabzanın göstergesi yoktur.
 ⚠️ **Çerçevenin el hattında `Hand Alignment` = `None`'dır ve öyle kalır** (varsayılan
 `AlignOnGrab`): çerçeve bir kavrama hedefi değil bir SEÇİM tetikleyicisidir, `AlignOnGrab`
 sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silahta görür
@@ -587,12 +597,9 @@ sabiti → yoksa kimlik). Sabit **ölçülüp yapıştırılır**: editör Play'
 ölçüyü bir kez loglar; rig'i olmayan izleyici (admin) yalnız bu sabiti kullanabilir — boşsa admin
 uzak silahları deltanın dönüşü kadar yanlış çizer.
 ⚠️ Kavrama için **ikinci bir işaretçi/alan AÇILMAZ** (prefaba grip düğümü, `Weapon`'a ikinci bir
-`Transform` alanı): aynı kavramayı iki yerde tarif etmek ikisinin sessizce sapması demektir.
-`ItemGripSockets`'ın Scene View tutamağı (yeşil halka) yalnız **ön kabzanın konumunu** ince ayar
-eder ve doğrudan `WD_*`'a yazar; ana kabza orada çizilmez/düzenlenmez — yolu stüdyodur. Yarıçaplar
-(`primaryGripRadius`/`secondaryGripRadius`) duruşun değil **soket kapısının** ölçüsüdür. ⚠️ Soket
-küresi **kırmızı** çiziliyorsa kayıt hiç yazılmamıştır — ince ayarla düzeltilecek bir şey yok,
-stüdyoda yazılacak bir kayıt var.
+`Transform` alanı, Scene View tutamağı/gizmo'su): aynı kavramayı iki yerde tarif etmek ikisinin
+sessizce sapması demektir — ön kabzanın yeri de stüdyoda, elin bileğiyle yazılır. `WD_*`'daki
+`secondaryGripRadius` duruşun değil **ön kabza kapısının** ölçüsüdür (ana kabza için yarıçap YOKTUR).
 ⚠️ Prefabın içinde el modeli DURMAZ ve kavrama poz düğümü BULUNMAZ (`Hands/Hand_*`, `GripPoses/*`;
 `Build Weapon Prefabs` ikisini de siler). Kavraması yazılmamış silahta el idle'da kalır;
 `Build Weapon Prefabs` eksikleri listeler.
@@ -673,8 +680,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → `Obstacle` layer'ındaki konveks olmayan collider'ları, trigger'ları, collider'sız damgalı objeleri ve **görünen yüzeyden şişkin** collider'ları (içbükey mesh convex işaretlenmiş → oyuncu boşlukta ceza alır) raporlar. ⚠️ Hiçbir şeyi düzeltmez; iki tespit de sessizce yanlış ceza ürettiği için bu tarama sahne kaydedilmeden koşturulur |
 | `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanlarını kurar: **iki uyarı yazısı** (engelin içi + alanın dışı) + hasar vinyeti (`CenterEyeAnchor` altında, yani kafaya kilitli). İdempotent, **tek seferlik** — rig tüm arenalarda örnek olduğu için her arenaya birden gider. ⚠️ Uyarı yazısının **yeri, boyu ve fontu** buradan gelir: prefabta elle kaydırılan/büyütülen bir örnek her koşuda geri yazılır, ayar `HmdOverlayBuilder` sabitlerinde değiştirilir. ⚠️ Vinyetin materyalini araç ÜRETİR (shader GUID'i import öncesi bilinemez); çalıştırılmadıkça karartma çalışır ama yazı/vinyet hiç çizilmez |
 | `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
-| `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir). Ayrıca **temizlik ve denetim**: eski `GripSocket_*` işaretçilerini, `GripPoses` ağacını ve prefabta kalmış `Hands/Hand_*` el rig'ini siler, **kavraması YAZILMAMIŞ silahları** koşu sonunda tek uyarıda listeler |
-| Inspector: `WPN_*` seç → `ItemGripSockets` | **ÖN KABZA** noktası santim mertebesinde kayık → Scene View'daki halkayı tutamaktan sürükle (halka **oyundakiyle aynı yarıçap ve renktedir**: düzenlenen el yeşil/ready, öteki el mavi/hover; kabul yarıçapı yalnız soluk referans halkası). El seçimi bileşenin Inspector'ından yapılır ve **kişiseldir** (EditorPrefs, prefabı kirletmez). ⚠️ **Ana kabza ne çizilir ne düzenlenir** (yolu `Kavrama Pozu Stüdyosu`) ve tek elli eşyada araç tümden sessizdir. Değer `WD_*.asset`'e yazılır (slotun preset'i korunur) — ⚠️ prefaba düğüm EKLEMEZ, tek doğruluk kaynağı stüdyoda yazılmış kayıttır. Parmak duruşuna dokunmaz: onun yeri stüdyodaki preset seçimidir |
+| `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir). Ayrıca **temizlik ve denetim**: kökteki eksik script bileşenlerini ve `_interactorFilters` girişlerini, eski `GripSocket_*` işaretçilerini, `GripPoses` ağacını ve prefabta kalmış `Hands/Hand_*` el rig'ini siler, **kavraması YAZILMAMIŞ silahları** koşu sonunda tek uyarıda listeler. Ön kabza göstergesinin varsayılan halkasını (`VA_GripIndicator.prefab` + `M_GripIndicator.mat`) **yalnız yoksa** üretir ve `WeaponCatalog.secondaryGripIndicatorPrefab`'a **yalnız boşsa** bağlar |
 | `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış **prefab kipinde**: `WPN_*`'ı prefab kipinde aç → **Ana/Ön Kabza Ellerini Oluştur** (sağ+sol) → hayalet elleri kabzalara sürükle/çevir → elin Inspector'ından **parmak preset'ini** seç (Idle · Firing · Grip) → gerekirse **Karşı Ele Aynala** → **Kaydet**. Kök = ISDK **bilek** çerçevesi, kayıt bileğin eşyaya göre pozu + preset, doğrudan `WD_*.asset`'e; **prefaba hiçbir şey yazılmaz** (poz düğümü yok). ⚠️ Ana elde eli çevirmek oyunda SİLAHI çevirir; ön kabzada el silaha yapışır. ⚠️ Eller prefaba GİRMEZ (stage sahnesinin ayrı kökleri, `DontSave`) ve Play'e girerken / stage kapanınca / sahne değişince silinir |
 | `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |
