@@ -2728,6 +2728,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8793413136304363014}
+  - component: {fileID: 6066758023832643965}
   m_Layer: 0
   m_Name: MatchBar
   m_TagString: Untagged
@@ -2758,6 +2759,28 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 24}
   m_SizeDelta: {x: 720, y: 96}
   m_Pivot: {x: 0.5, y: 0}
+--- !u!114 &6066758023832643965
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6873699992463910025}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 419c089b37d3ff64b9f23fbd610aae69, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.App::VortexArena.App.Admin.AdminMatchControls
+  preferences: {fileID: 6915915959054409556}
+  startButton: {fileID: 6591638329242678111}
+  startIcon: {fileID: 955433198373476932}
+  pauseButton: {fileID: 7293057495652332825}
+  pauseIcon: {fileID: 6849138125188896546}
+  abortButton: {fileID: 994846797141695241}
+  abortIcon: {fileID: 5013966699901251835}
+  playSprite: {fileID: 21300000, guid: be937dcfe85f63c47844c38d12d933db, type: 3}
+  pauseSprite: {fileID: 21300000, guid: 1d66bdb1bf71fa94298aa9f5697e55b1, type: 3}
+  statusText: {fileID: 2352025791925416165}
 --- !u!1 &7115816171387108517
 GameObject:
   m_ObjectHideFlags: 0
@@ -3369,7 +3392,7 @@ MonoBehaviour:
   m_ReferencePixelsPerUnit: 100
   m_ScaleFactor: 1
   m_ReferenceResolution: {x: 1920, y: 1080}
-  m_ScreenMatchMode: 0
+  m_ScreenMatchMode: 1
   m_MatchWidthOrHeight: 0.5
   m_PhysicalUnit: 3
   m_FallbackScreenDPI: 96
@@ -4352,3 +4375,14 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8825635309797554951, guid: 950843b61a706634fbf18380acd796b4, type: 3}
   m_PrefabInstance: {fileID: 6422918659831170680}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &6915915959054409556 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 493300914893068588, guid: 950843b61a706634fbf18380acd796b4, type: 3}
+  m_PrefabInstance: {fileID: 6422918659831170680}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d846ac17adb3964d86a07a88f8fc6ce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.App::VortexArena.App.Admin.AdminPreferencesPanel

@@ -13,7 +13,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 **Fiziksel alan**
 
 - [ ] Serbest (engelsiz) oyun alanını ölç: oyun alanı = ölçülen alan − **0.5 m güvenlik payı** (her duvardan).
-- [ ] Hazır 12×12 arenayı (`Outdoor12x12` mekanı) olduğu gibi kullanacaksan alan en az **12.5 × 12.5 m** olmalı; daha küçük/asimetrik alanlarda o işletmeye özel arena kurulur (Bölüm 2).
+- [ ] Hazır bir 12×12 arenayı olduğu gibi kullanacaksan alan en az **12.5 × 12.5 m** olmalı; daha küçük/asimetrik alanlarda o işletmeye özel arena kurulur (Bölüm 2).
 - [ ] Zemin düz, kaygan değil, seviye farkı ve kablo/eşik yok; alan içinde sütun, sabit mobilya, cam yüzey yok.
 - [ ] Aydınlatma homojen ve gölgesiz; doğrudan güneş ışığı, güçlü spot ve ayna/parlak yansıtıcı yüzey yok (inside-out takip bozulur, lensler zarar görür).
 - [ ] Tavan yüksekliği yeterli (kollar yukarıda serbest hareket edebilmeli).
@@ -68,7 +68,7 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
       vardır, "eni-boyu şu kadar" diye kısa bir kip yoktur. Oyun alanı = ölçülen alan − 0.5 m
       güvenlik payı. Odanın içindeki kolon/direkleri de not al (merkez + genişlik/derinlik).
 - [ ] **Alanın ölçüsünü boyut dosyasına gir.** Bu dosya işletmenin **tek** ölçü kaynağıdır: hem sahnedeki ölçü maketi, hem oyuncuya çıkan "alan dışına çıktın" uyarısı, hem de yöneticinin kuş bakışı görüntüsü buradan beslenir. Ölçüyü ikinci bir yere yazmazsın.
-  > **Dosya nerede:** `Assets/Arenas/Venues/<İşletme>/Data/<İşletme>_dimensions.json` (örnek: `VortexAntep/Data/VortexAntep_dimensions.json`). Düz metin dosyasıdır — sahadan aldığın metreleri **Unity açmadan** girip güncelleyebilirsin.
+  > **Dosya nerede:** `Assets/Arenas/Venues/<İşletme>/Data/<İşletme>_dimensions.json` — klasör adı işletmenin adıdır. Düz metin dosyasıdır — sahadan aldığın metreleri **Unity açmadan** girip güncelleyebilirsin.
   > **Dosya İŞLETME başınadır**, arena başına değil: aynı fiziksel odada kaç arena ve lobi oynatılırsa oynatılsın hepsi bu tek dosyayı gösterir. İkinci bir kopya çıkarma — kaçınılmaz olarak birbirinden sapar.
   > **İçine ne yazarsın:** `plane` = alanın çevresini dolaşarak sırayla yazdığın köşeler; `columns` = her kolonun kendi köşe listesi (`points`) + yüksekliği; `calibration` = zemine yapıştıracağın **A ve B** bantlarının yeri (Bölüm 3). **Alan tam kare olsa bile dört köşe** yazılır; girintili/L şeklinde bir alan da aynı tek listeye sığar.
   > Ayrıntılı reçete: `Docs/Gelistirici/Yemek-Kitabi.md`.
@@ -210,7 +210,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   (`Assets/Arenas/Venues/<İşletme>/`).
 
   `lobbyScene` = lobi sahnesi. **Normalde BOŞ bırakılır** — seçilen mekanın lobi haritası otomatik
-  bulunur. Yalnız bir mekanda birden çok lobi varsa doldurulur. Maç koşmadığı sürece oyuncular orada bekler: birbirlerini görürler, **kalibrasyonlarını orada yaparlar**, duran silahlardan birini seçip hedef tahtalarına ateş edebilirler — birbirlerine hasar veremeden. Doldurulacaksa değer, odanın ölçüsüne uyan lobi olmalıdır (12×12 → `Lobby12x12`, işletmeye özel ölçü → o işletmenin kendi lobisi) ve seçilen mekanda bulunmalıdır. Mekanda hiç lobi haritası yoksa oyuncular kabuk bekleme ekranında kalır ve kalibrasyonu arenada yapmak zorunda kalırlar.
+  bulunur. Yalnız bir mekanda birden çok lobi varsa doldurulur. Maç koşmadığı sürece oyuncular orada bekler: birbirlerini görürler, **kalibrasyonlarını orada yaparlar**, duran silahlardan birini seçip hedef tahtalarına ateş edebilirler — birbirlerine hasar veremeden. Doldurulacaksa değer, o mekanın kendi lobi haritasının adı olmalıdır ve seçilen mekanda bulunmalıdır. Mekanda hiç lobi haritası yoksa oyuncular kabuk bekleme ekranında kalır ve kalibrasyonu arenada yapmak zorunda kalırlar.
 - [ ] `Server/config/maps.json` dosyasının Bölüm 2'deki export'tan geldiğini doğrula (silah tablosu yoktur — hasarı istemci bildirir).
 - [ ] **Dağıtım paketlerini üret** (ofiste, geliştirme makinesinde):
   - `scripts\deploy-server.bat` → `deploy\server\` (self-contained; işletme PC'sine .NET kurmak gerekmez)

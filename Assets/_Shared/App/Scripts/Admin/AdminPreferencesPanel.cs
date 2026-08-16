@@ -72,7 +72,7 @@ namespace VortexArena.App.Admin
         // NOT: Yerleşimi KOD BELİRLEMEZ — panel ölçüsü, sekme çubuğu ve satır dizilimi prefabtadır
         // (`_Shared/App/Resources/UI/AdminPreferencesPanel.prefab` → `PreferencesPanel`). Satırlar
         // sayfa köklerinin (`Page_Mac`, `Page_Gorunum`, `Page_Baglanti`) altında ELLE yığılan y ile
-        // dizilir (Layout Group yok, UiKit kararı; satır adımı 44 px), yani yeni satır eklemek =
+        // dizilir (Layout Group yok, UiKit kararı; satır adımı 66 px), yani yeni satır eklemek =
         // prefabta o sayfada alttaki her şeyi kaydırmak.
         // ⚠️ Kartın en-boy oranı kabuğun arka plan görseline (`PanelBG`) bağlıdır: sanat tek
         // parçadır ve gerildiğinde başlık bandı/parlamaları esner — satır ekleyip paneli
@@ -118,6 +118,18 @@ namespace VortexArena.App.Admin
         [Tooltip("Sekme sayfaları (satırların kökleri) — aynı sırada; yalnız etkin sekmenin " +
                  "sayfası açık kalır.")]
         [SerializeField] private GameObject[] _tabPages = new GameObject[3];
+
+        [Header("Düğme zeminleri (görsel)")]
+
+        [Tooltip("PASİF düğme zemini. Bunun ve VURGULU'nun İKİSİ birden bağlıysa düğmeler " +
+                 "sprite değiştirir (tint beyaz kalır); biri boşsa renk tintine düşülür.")]
+        [SerializeField] private Sprite _buttonIdleSprite;
+
+        [Tooltip("SEÇİLİ/ETKİN düğme zemini (aktif sekme, yürürlükteki kalibre kipi, tam ekran).")]
+        [SerializeField] private Sprite _buttonActiveSprite;
+
+        [Tooltip("YIKICI eylemin kurulmuş hâli (çıkış onayı). Boşsa vurgulu zemin kullanılır.")]
+        [SerializeField] private Sprite _buttonDangerSprite;
 
         /// <summary>Açık sekme. Oturum içinde kalıcıdır (panel kapanıp açılınca aynı sayfa gelir)
         /// ama <c>PlayerPrefs</c>'e YAZILMAZ: hangi sayfada çalışıldığı bir ekran tercihi değil,
@@ -187,8 +199,9 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _calibModeCloudButton;
         [SerializeField] private TextMeshProUGUI _calibModeCloudLabel;
 
-        /// <summary>Kalibre modu düğmelerinin PASİF zemini — <c>AdminPlayerRow</c>'daki KAL/AT
-        /// düğmeleriyle aynı ton, aktif olan <see cref="UiKit.Accent"/> ile ayrışır.</summary>
+        /// <summary>Düğmelerin PASİF zemin rengi — <c>AdminPlayerRow</c>'daki KAL/AT düğmeleriyle
+        /// aynı ton, aktif olan <see cref="UiKit.Accent"/> ile ayrışır. Zemin görselleri
+        /// bağlanmadığında <see cref="PaintButtonBackground"/> buna düşer.</summary>
         private static readonly Color CalibModeIdleFill = UiKit.Hex(0x2A303B, 0xFF);
 
         [Header("Bağlantı")]
@@ -1256,7 +1269,7 @@ namespace VortexArena.App.Admin
 
             if (_screenModeButton != null && _screenModeButton.targetGraphic is Image image)
             {
-                image.color = full ? UiKit.Accent : CalibModeIdleFill;
+                PaintButtonBackground(image, full, UiKit.Accent);
             }
         }
 
@@ -1275,7 +1288,7 @@ namespace VortexArena.App.Admin
 
             if (_quitButton != null && _quitButton.targetGraphic is Image image)
             {
-                image.color = armed ? UiKit.Bad : CalibModeIdleFill;
+                PaintButtonBackground(image, armed, UiKit.Bad, _buttonDangerSprite);
             }
         }
 
@@ -1304,7 +1317,7 @@ namespace VortexArena.App.Admin
             PaintCalibModeButton(_calibModeCloudButton, _calibModeCloudLabel, false, false);
         }
 
-        private static void PaintCalibModeButton(Button button, TextMeshProUGUI label,
+        private void PaintCalibModeButton(Button button, TextMeshProUGUI label,
             bool active, bool usable)
         {
             SetInteractable(button, usable);
@@ -1316,8 +1329,38 @@ namespace VortexArena.App.Admin
 
             if (button != null && button.targetGraphic is Image image)
             {
-                image.color = active ? UiKit.Accent : CalibModeIdleFill;
+                PaintButtonBackground(image, active, UiKit.Accent);
             }
+        }
+
+        /// <summary>
+        /// Düğme zeminini duruma göre boyar — panelde "seçili/pasif" ayrımı olan HER düğme buradan
+        /// geçer (sekmeler, kalibre kipi, pencere kipi, çıkış).
+        /// <para><b>Görünüm prefabta kalır:</b> zemin görselleri <see cref="_buttonIdleSprite"/> /
+        /// <see cref="_buttonActiveSprite"/> alanlarına Inspector'dan bağlanır, kod yalnız hangisinin
+        /// çizileceğini seçer. İkisi birden bağlıysa sprite değişir ve tint beyaza alınır (görsel
+        /// kendi rengini taşır); <b>biri bile boşsa</b> eskisi gibi düz renk tinti uygulanır —
+        /// yarım bağ, sahnede yanlış renkli bir görsel bırakmasın.</para>
+        /// </summary>
+        private void PaintButtonBackground(Image image, bool active, Color activeTint,
+            Sprite activeSprite = null)
+        {
+            if (image == null)
+            {
+                return;
+            }
+
+            Sprite on = activeSprite != null ? activeSprite : _buttonActiveSprite;
+
+            if (_buttonIdleSprite != null && on != null)
+            {
+                image.sprite = active ? on : _buttonIdleSprite;
+                image.type = Image.Type.Sliced;
+                image.color = Color.white;
+                return;
+            }
+
+            image.color = active ? activeTint : CalibModeIdleFill;
         }
 
         /// <summary>Maç sürerken mod/harita satırlarını pasif gösterir (§10.7): seçiciler
@@ -1338,9 +1381,8 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>Sekme çubuğunu ve sayfaları etkin sekmeye göre boyar/açar — kalibre modu
-        /// düğmeleriyle aynı dil (aktif zemin <see cref="UiKit.Accent"/>, pasif
-        /// <see cref="CalibModeIdleFill"/>). Diziler prefabta eksik bağlanmış olabilir; hepsi
-        /// null-güvenli okunur.</summary>
+        /// düğmeleriyle aynı dil (zemin <see cref="PaintButtonBackground"/>'dan gelir). Diziler
+        /// prefabta eksik bağlanmış olabilir; hepsi null-güvenli okunur.</summary>
         private void ApplyTabs()
         {
             var active = (int)_tab;
@@ -1349,7 +1391,7 @@ namespace VortexArena.App.Admin
             {
                 if (_tabButtons[i] != null && _tabButtons[i].targetGraphic is Image image)
                 {
-                    image.color = i == active ? UiKit.Accent : CalibModeIdleFill;
+                    PaintButtonBackground(image, i == active, UiKit.Accent);
                 }
 
                 if (i < _tabLabels.Length && _tabLabels[i] != null)

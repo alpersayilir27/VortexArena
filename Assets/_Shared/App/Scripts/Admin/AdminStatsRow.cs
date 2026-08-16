@@ -41,7 +41,7 @@ namespace VortexArena.App.Admin
         /// <summary>Satır yüksekliğinin <b>yedek</b> değeri (px). Gerçek yükseklik prefabın
         /// <see cref="RectTransform"/>'undan okunur (<see cref="AdminStatsPanel"/>) — sanatçı
         /// satırı büyütürse liste yerleşimi kendiliğinden uyar.</summary>
-        public const float Height = 64f;
+        public const float Height = 69f;
 
         /// <summary>"AT" düğmesinin onay penceresi (sn) — <see cref="AdminPlayerRow"/> ile aynı.</summary>
         private const float ConfirmSeconds = 3f;

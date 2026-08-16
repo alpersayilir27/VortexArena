@@ -49,7 +49,7 @@ Açılışta:
   (`server.json`; `maps.json` **üretilmez** — o Unity export'undan gelir).
 - Konsolda bağlanan/kopan cihazlar ve çevrimiçi sayısı akar; **Ctrl+C** temiz kapatır.
 
-Açılış başlığında `Modlar : tdm, ffa, tournament` ve `Haritalar : Arena12x12` satırları kayıtlı mod/harita
+Açılış başlığında `Modlar : tdm, ffa, tournament` ve `Haritalar : …` satırları kayıtlı mod/harita
 tablosunu özetler (`maps.json` yoksa `Haritalar : yok (doğrulama kapalı)`); `Lobi :` satırı
 yapılandırılmış lobi sahnesini gösterir ve o sahne `maps.json`'da yoksa uyarır; `Hasar : istemci
 bildirir` satırı sunucuda silah tablosu ve hile denetimi olmadığını hatırlatır (§10.3).
@@ -123,8 +123,8 @@ sorar** — normal saha kullanımı budur:
 
 ```
 Hangi mekan açılsın?
-  1) Outdoor12x12  (3 harita)
-  2) VortexAntep   (2 harita)
+  1) <mekan adı>   (3 harita)
+  2) <mekan adı>   (2 harita)
 Seçim [1-2]:
 ```
 
@@ -162,7 +162,7 @@ işlenir; ateş serbestliği lobi türünün kuralıdır, `rules.fireWhilePaused
 **maps.json** — harita tablosu (§10.1): `start_match`'te `sceneName`'in bilinen bir harita olup
 olmadığı ve o haritanın modu destekleyip desteklemediği buradan doğrulanır.
 ```json
-{ "maps": [ { "sceneName": "Arena12x12", "venue": "Outdoor12x12", "modes": ["ffa", "tdm"] } ] }
+{ "maps": [ { "sceneName": "<Arena>", "venue": "<Mekan>", "modes": ["ffa", "tdm"] } ] }
 ```
 `modes` boş bırakılırsa harita tüm modları kabul eder. **Dosya yoksa oluşturulmaz** (sunucunun
 uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması devre dışı kalır ve açılış
@@ -252,8 +252,8 @@ alanları roster ile taşınıyor ve admin istatistik tablosunun sağlama noktas
 | Satır | Anlamı |
 |---|---|
 | `durum paused/lobby → paused/loading` | her durum değişiminde (ayrıca herkese `match_state` yayınlanır) |
-| `start_match: mod 'tdm', sahne 'Arena12x12' (12×12), 2 oyuncu (kırmızı 1 / mavi 1)` | maç kuruldu (boyut yalnız harita tablodaysa) |
-| `start_match reddedildi: …` | doğrulama düştü, durum değişmedi (ör. `'Arena12x12' harita tablosunda yok`, `'lobby' modu kayıtlı değil`) |
+| `start_match: mod 'tdm', sahne '<Arena>' (12×12), 2 oyuncu (kırmızı 1 / mavi 1)` | maç kuruldu (boyut yalnız harita tablodaysa) |
+| `start_match reddedildi: …` | doğrulama düştü, durum değişmedi (ör. `'<Arena>' harita tablosunda yok`, `'lobby' modu kayıtlı değil`) |
 | `pause_match yok sayıldı: faz paused` | duraklatma yalnız koşan maçta iş yapar (§5.2) |
 | `resume_match reddedildi: durum paused/countdown` | yalnız operatörün duraklattığı maç sürdürülür — her duraklamayı sahibi kaldırır |
 | `takım dengeleme: 1 oyuncu 'blue' takımına taşındı` | boş takım kalmasın diye |

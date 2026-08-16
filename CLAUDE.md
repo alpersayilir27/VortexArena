@@ -24,8 +24,6 @@ Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN
 > Kurallar `.claude/rules/` altındadır. Sıradaki planlanmış işler: `plan/` (biten iş dokümanı silinir). Protokol: `Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı).
 > Sistemin tek sayfalık haritası (ne var, ağ nasıl çalışır, nasıl kullanılır): `Docs/Sistem-Ozeti.md`.
 > Sahadaki operatörün günlük kullanım kılavuzu (teknik olmayan dille): `Docs/Kullanim-Kilavuzu.md`.
-> Çatılı arena yapan geliştiriciye tek parça teknik not (bileşen + katman + editör aracı + tuzaklar):
-> `Docs/Cati-Gizleme.md`.
 
 ## Çalışma tarzı (detay `.claude/rules/`)
 
@@ -149,12 +147,12 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   (referans arena). Üçüncü bir kök açma — mekansız arena diye bir şey yoktur.
   - `Assets/Arenas/Venues/<İşletme>/Scenes/<SahneAdı>/` — arena kutusu: `<SahneAdı>.unity` +
     `Data/<SahneAdı>.asset` (MapDefinition) (+ yalnız o sahneye ait sanat/prefab varsa `Art/`,
-    `Prefabs/`; ör. `Outdoor12x12/Scenes/IceWorld/`).
+    `Prefabs/`).
     ⚠️ **Klasör adı = sahne dosyası adı = MapDefinition asset adı** — üçünü de aynı yaz. Sahne adı
     zaten katalog anahtarıdır (`load_match` string'i), böylece klasöre bakan anahtarı görür ve isim
     sapması imkansızlaşır. Mekanın **tüm** sahnelerinin paylaştığı sanat/prefab/veri ise mekan
     kökündeki `Art/` · `Prefabs/` · `Data/` klasörlerine girer (ör.
-    `VortexAntep/Data/VortexAntep_dimensions.json` = mekanın fiziksel ölçüsü, hem arena hem lobi
+    `<İşletme>/Data/<İşletme>_dimensions.json` = mekanın fiziksel ölçüsü, hem arena hem lobi
     kullanır). ⚠️ Mekan kökünde `Art`, `Data`, `Prefabs`, `Scenes` dışında klasör AÇMA.
   - ⚠️ **Boş klasör açma** (ne sihirbaz ne elle): git klasör tutmaz, dosya tutar → klonda kaybolur,
     geriye yetim `.meta` kalır ve Unity klasörü hayalet olarak geri üretir. Klasör, içine ilk dosya
@@ -229,8 +227,8 @@ kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
   (`GameObject > VortexArena > Arena Roof`) — altındaki tüm Renderer'lar çatı sayılır, `ArenaRoof`
   katmanı (user layer 8) damgalanır ve admin kuş bakışına geçince çatı çizilmez (gölgesi kalır).
   Katman yalnız "hangi geometri gizlenecek" sorusunu sahnede görünür kılar; davranış Renderer
-  listesinden gelir. Açık tavanlı arenalarda bu adım hiç yapılmaz.
-  → tam reçete, editör aracının davranışı, tuzaklar ve sorun giderme: **`Docs/Cati-Gizleme.md`**
+  listesinden gelir. Açık tavanlı arenalarda bu adım hiç yapılmaz
+  (bileşenin davranışı ve tuzakları `Docs/Sistem-Ozeti.md` §4).
 - `Assets/Modes/<Mod>/` — mod kutuları: `{Scripts (VortexArena.Modes.<Ad>.asmdef), Data, UI}`.
   Modlar birbirini REFERANSLAMAZ. Ortak HUD/silah kodu mod kutusunda DEĞİL Core'da durur
   (`ModeHudBase`, `WeaponGranter`) — modlar birbirini göremediği için ikinci mod aksi hâlde aynı
@@ -573,6 +571,11 @@ oranı `HandPoseProfile`): stüdyodaki hayalet el, oyuncunun sentetik eli ve uza
 aynı sayıları okur; eklem dönüşleri ISDK'nın varsayılan iskeletinden **ölçülür**, sabit yazılmaz.
 Yeni preset = enum'a SONA değer + `HandGripPresets`'e bir satır; eşya başına serbest parmak verisi
 YOKTUR ve eklenmez.
+⚠️ **Parmaklar HİÇBİR ZAMAN donanımdan sürülmez** (kumandanın tetiği/kabzası ya da el izlemesi bir
+parmağı kıpırdatmaz): her el her karede tek bir preset'tedir (boşta `Idle`, eşya tutarken slotun
+preset'i), beş parmak sentetik elde kilitlidir ve `JointFreedom.Free` bir parmak için bile geri
+gelmez. Preset'ler arası geçiş (silahı alınca kapanma, bırakınca açılma) tek süreyle yumuşatılır
+(`HandGripPresets.TransitionSeconds`), yerel el ve uzak avatar aynı süreyi kullanır.
 ⚠️ **Kayıt EL BAŞINADIR** (`primaryGripRight/Left`, `secondaryGripRight/Left`): kabza simetrik
 olmadığı için iki elin bileği silahın farklı yerlerine düşer. *Karşı Ele Aynala* yalnız
 BAŞLANGIÇTIR (eşyanın YZ düzlemine göre), son söz değil. Dördü de **aynı uzaydadır** (bileğin
@@ -651,7 +654,7 @@ hedef çözme, hasarı istemcinin belirlemesi) ve `Weapon` da bu kapıyı kullan
 İçerik kataloğu: **`_Shared/Data/Resources/GameCatalog.asset`**
 (ModeDefinition + MapDefinition listesi) — admin tercihler panelinin mod/harita seçicisi bunu
 `Resources.Load<GameCatalog>("GameCatalog")` ile okur, bu yüzden `Resources/` altında kalmalı.
-**Kar/hava efekti (başka arenaya):** `Arenas/Venues/Outdoor12x12/Scenes/IceWorld/Prefabs/FX_SnowStorm.prefab`'ı
+**Kar/hava efekti (başka arenaya):** karlı bir arena kutusunun `Prefabs/FX_SnowStorm.prefab`'ını
 sahneye oynanan alanın ortasına bırak (`ArenaBoundary` orijindeyse (0,0,0); bölgeye taşınmışsa
 o bölgenin ortası); kendine yeter (`Snow_C_NearField` üstündeki
 `WeatherVolumeFollow` hedefi boşsa `Camera.main`'i bulur). Arena 12×12 değilse `Snow_A/B/E`

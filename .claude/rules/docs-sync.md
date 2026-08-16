@@ -30,6 +30,22 @@ güncellenir. Doküman ile kod arasında sapma = tuzak; bu projede tek doğruluk
   tek satırlık işaret girer (`updater/ — updater/README.md` gibi), fazlası girmez. Ne yaptığı,
   endpoint'leri, portları, kurulum adımları, akışı, ön koşulları → ilgili klasörün README'sine
   ya da `Docs/`'a. Her oturumda okunması gerekmeyen hiçbir ayrıntı CLAUDE.md'ye yazılmaz.
+- ## ⚠️ Dokümanda İŞLETME VERİSİ geçmez — sahne, mekan, harita adı dahil
+
+  Hiçbir doküman gerçek bir sahne/mekan/harita adı yazmaz (`IceWorld_Outdoor12x12`,
+  `VortexAntep`, `Lobby_...`): örnekte de, JSON'da da, konsol çıktısı taklidinde de, repo
+  haritasında da. Yeri **placeholder**'dır — `<Arena>` · `<Lobi>` · `<Mekan>` · `<İşletme>` ·
+  `<SahneAdı>` (CLAUDE.md'nin yerleşim bölümüyle aynı yazım).
+
+  **Neden:** (1) O adlar müşteri/işletme verisidir ve dokümanın işi ürünü anlatmaktır, kimin
+  hangi salonu oynattığını değil. (2) Sahne adı **katalog anahtarıdır** — bir arena silinince ya
+  da mekan klasörü yeniden düzenlenince dokümandaki her örnek sessizce yalan olur; kopyalayan
+  kişi `start_match`'in neden reddedildiğini anlamaz. (3) Tek doğruluk kaynağı `maps.json`'ı
+  üreten Unity SO'larıdır; doküman ikinci bir liste tutamaz.
+
+  Aynı kural klasör örneklerinde de geçerli: `Venues/<İşletme>/Data/<İşletme>_dimensions.json`
+  yazılır, gerçek bir işletmenin dosyası "örnek" diye gösterilmez.
+
 - **Sayı ve liste tutma.** "Bugün iki mod var", "tablodaki 6 silah", `dev-targets.json`'un
   içeriğini satır satır yazmak gibi şeyler kaçınılmaz olarak bayatlar ve kimse fark etmez.
   Sayılabilir olanı sayma, **nerede olduğunu göster**. Aynı sebeple `§7.29` gibi **numara

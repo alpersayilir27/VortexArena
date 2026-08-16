@@ -67,8 +67,8 @@ onu uygula (bilgi kartında yazar).
 
 ```
 Hangi mekan açılsın?
-  1) Outdoor12x12  (3 harita)
-  2) VortexAntep   (2 harita)
+  1) <mekan adı>   (3 harita)
+  2) <mekan adı>   (2 harita)
 Seçim [1-2]:
 ```
 
@@ -84,8 +84,8 @@ Seçim [1-2]:
 Mekan      : <İşletmenin adı>
 Aktif alan : <seçtiğin mekan>
 Modlar     : tdm, ffa, tournament
-Haritalar  : Arena12x12, IceWorld, Lobby12x12
-Lobi       : Lobby12x12
+Haritalar  : <o mekanın arenaları ve lobisi>
+Lobi       : <o mekanın lobi haritası>
 ```
 
 - [ ] **Bu üç satırı görüyorsan sistem hazırdır:** `Mekan`, `Modlar`, `Haritalar`.

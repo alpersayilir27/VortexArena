@@ -1,4 +1,4 @@
-# Outdoor12x12 — ortak sanat
+# Outdoor12x16 — ortak sanat
 
 Bu mekanın **tüm** arenalarının (ve lobisinin) paylaştığı malzeme/doku/mesh buraya girer.
 

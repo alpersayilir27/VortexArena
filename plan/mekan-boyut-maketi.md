@@ -9,7 +9,8 @@ kalıcı bilgi `CLAUDE.md` · `Docs/Sistem-Ozeti.md` (§4 bileşen sözlüğü, 
 
 - Bir arena sahnesini aç: konsolda `ArenaBoundary` hatası **olmamalı**, gizmo taban halkasını ve
   kolon prizmalarını çizmeli.
-- `JSON'dan DimensionMesh Üret` → maket **sahne kökünde**, dünya orijininde, dönüşsüz; kolon sayısı
+- `JSON'dan DimensionMesh Üret` → maket **`ArenaBoundary`'nin altında**, yerel-kimlikte (muhafaza
+  yoksa sahne kökünde, dünya orijininde ve dönüşsüz); kolon sayısı
   dosyayla aynı, `Plane` ölçüsü dosyadaki ölçüyle birebir; `anchor_a` (kırmızı) / `anchor_b` (mavi)
   küpleri `calibration` noktalarında. Maketin **kökü ve kalibrasyon küpleri build'e girer**
   (kalibrasyon onlara bağlı); yalnız görsel dalı (`Plane` + `Columns`) `DimensionMeshBuildStripper`

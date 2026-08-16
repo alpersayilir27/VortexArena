@@ -1,4 +1,4 @@
-# Outdoor12x12 — ortak prefablar
+# Outdoor12x16 — ortak prefablar
 
 Bu mekanın **tüm** arenalarının (ve lobisinin) paylaştığı prefablar buraya girer.
 

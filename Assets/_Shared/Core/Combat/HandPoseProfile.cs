@@ -97,5 +97,34 @@ namespace VortexArena.Core.Combat
                 default: return pinky;
             }
         }
+
+        /// <summary>
+        /// İki duruş arasında parmak parmak doğrusal karışım — duruş geçişinin (boş el ↔ kavrama)
+        /// uzak avatardaki adımı (<c>RemoteHandPoser</c>); süre ve eğri
+        /// <see cref="HandGripPresets.TransitionSeconds"/> / <see cref="HandGripPresets.Ease"/>'ten
+        /// gelir, burada yalnız karıştırılır.
+        /// </summary>
+        public static HandPoseProfile Lerp(in HandPoseProfile a, in HandPoseProfile b, float t)
+        {
+            t = Mathf.Clamp01(t);
+            return new HandPoseProfile
+            {
+                thumb = Mathf.Lerp(a.thumb, b.thumb, t),
+                index = Mathf.Lerp(a.index, b.index, t),
+                middle = Mathf.Lerp(a.middle, b.middle, t),
+                ring = Mathf.Lerp(a.ring, b.ring, t),
+                pinky = Mathf.Lerp(a.pinky, b.pinky, t),
+            };
+        }
+
+        /// <summary>Beş oran da eşit mi (geçiş hedefinin değişip değişmediğini anlamak için).</summary>
+        public bool Approximately(in HandPoseProfile other)
+        {
+            return Mathf.Approximately(thumb, other.thumb) &&
+                   Mathf.Approximately(index, other.index) &&
+                   Mathf.Approximately(middle, other.middle) &&
+                   Mathf.Approximately(ring, other.ring) &&
+                   Mathf.Approximately(pinky, other.pinky);
+        }
     }
 }
