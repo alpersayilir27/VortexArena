@@ -22,7 +22,8 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
 1. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` → pencereyi aç.
 2. `WPN_*` prefabını **prefab kipinde** aç.
 3. **Ana Kabza Ellerini Oluştur** (+ iki elli silahta **Ön Kabza Ellerini Oluştur**).
-4. Hayalet elleri Scene View'da kabzalara oturt; elin Inspector'ından parmak preset'ini seç
+4. Kumanda çerçevelerini (hayalet el onların çocuğudur) Scene View'da kabzalara oturt; elin
+   Inspector'ından parmak preset'ini seç
    (ana kabza `Firing`, ön kabza `Grip`). Gerekirse **Karşı Ele Aynala** ile başlat.
 5. **Kaydet** → dört kayıt `WD_*.asset`'e iner. **Elleri Temizle**.
 6. Başlıkta yalnız **hissi** doğrula (nişan alırken rahat mı).
@@ -32,7 +33,8 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
 - ⚠️ **Dört kaydın dördü de ayrı yazılır** (`primaryGripRight/Left`, `secondaryGripRight/Left`):
   kabza simetrik değildir, aynalama yalnız başlangıçtır. Eksik el öteki elin kaydına düşer —
   çalışır ama yanlış tutar.
-- ⚠️ **Ana elde eli çevirmek SİLAHI çevirir** (`item = bilek ∘ Inverse(kayıt)`); ön kabzada el
+- ⚠️ **Ana elde kökü çevirmek SİLAHI çevirir** (`item = anchor ∘ Inverse(kayıt)`), yalnız taşımak
+  silahı kumandayla hizalı bırakır; ön kabzada el
   silaha yapışır. Silah elde yatık görünüyorsa iki aday var: kaydın dönüşü ya da prefabtaki `Model`
   yerleşimi.
 - ⚠️ Eller prefabın içine sürüklenmez (stage'in ayrı kökleri) — kaçak el arenada havada görünür.
@@ -42,13 +44,14 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
 - Aynı kayıt **üç yeri** besliyor: yerel tutuş · uzak oyuncudaki çizim (parmaklar dahil: preset
   oradan okunur) · ön kabza kapısının/göstergesinin yeri. Biri düzelince üçü düzelir.
 - Ön kabza soket yarıçapı silah başınadır (`secondaryGripRadius`, varsayılan 0.10 = 20 cm çap;
-  görülen küre = kabul hacmi, ölçülen nokta boş elin BİLEĞİDİR) ve Inspector'dan girilir — stüdyo
-  ona dokunmaz.
+  görülen küre = kabul hacmi, ölçülen nokta boş elin KUMANDA ANCHOR'IDIR) ve Inspector'dan girilir —
+  stüdyo ona dokunmaz.
 
 ## 1b. `HandGripConvention.*AnchorToWrist` sabitini ölç ve yapıştır
 
-Rig'i olmayan izleyici (admin gözlemci) anchor→bilek deltasını canlı ölçemez ve bu sabite düşer;
-sabit kimlik kaldığı sürece admin ekranında uzak silahlar deltanın dönüşü kadar yanlış çizilir.
+Sabit **yalnız görsel eli** ilgilendirir (kavrama kaydı anchor uzayındadır, silahın yönü ondan
+etkilenmez): kimlik kaldığı sürece stüdyodaki hayalet el kumandanın tam üstünde çizilir ve rig'in
+veri akıtmadığı ilk karelerde ön kabza kilidi o kadar kayar.
 
 1. Editörde **player** rolüyle Play, iki kumandayı da normal tut.
 2. `HandGripPoser` kararlı ölçümü el başına bir kez loglar (30 kare / 2 mm / 0.5°).
@@ -64,7 +67,7 @@ ikisini de destekliyor — alanlar silah başına, değerler şu an aynı).
 Ön kabza tarafında ayarlanacaklar: **soket yarıçapı silah başınadır** (`secondaryGripRadius`,
 varsayılan 0.10 = 20 cm çap — Inspector'dan girilir; görülen küre = kabul hacmi). `Weapon`
 sabitleri (kod içinde, tüm silahlarda ortak): `SecondaryGripHoverRadius` (0.30 m — kürenin
-görünmeye başladığı bilek uzaklığı) · `IndicatorHoverAlpha`/`IndicatorReadyAlpha` · `IndicatorColor`.
+görünmeye başladığı kumanda uzaklığı) · `IndicatorHoverAlpha`/`IndicatorReadyAlpha` · `IndicatorColor`.
 Kürenin sanatı (`VA_GripIndicator.prefab` + `M_GripIndicator.mat`: renk/materyal) prefabtır, orada
 düzenlenir; **1 m çap sözleşmesi** korunur (ölçeği `Weapon` verir).
 ⚠️ Ön kabza silah ana elde SALLANIRKEN tutuluyor: hareketli bir hedefe 10 cm dar geliyorsa önce

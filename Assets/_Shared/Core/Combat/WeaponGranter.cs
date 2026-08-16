@@ -105,7 +105,7 @@ namespace VortexArena.Core.Combat
         /// Kurulma mesafeye bakar (<see cref="Weapon.IsHandOnSecondaryGrip"/> — oyuncuya gösterilen
         /// soket küresi neyi vaat ediyorsa o), sürdürme <b>yalnız grip tuşuna</b>. Sürdürme de mesafeye
         /// baksaydı bağ oyuncu tuşu bırakmadan kopardı: iki elli çözüm silahı ikinci ele doğru
-        /// KAYDIRMAZ, yalnız nişanlar — yani soket ile bilek arasındaki fark her zaman
+        /// KAYDIRMAZ, yalnız nişanlar — yani soket ile kumanda arasındaki fark her zaman
         /// <i>|ellerin arası − silahın kavrama arası|</i> kadardır ve oyuncu kolunu uzatıp
         /// topladıkça bu fark tek başına kabul yarıçapını (~0.10 m) aşar.
         /// </para>
@@ -411,7 +411,7 @@ namespace VortexArena.Core.Combat
         /// Bir elin bir karelik durumu: grip basılıysa elde silah olsun, değilse olmasın.
         /// <para>
         /// ⚠️ <b>Öteki eldeki silah ÇİFT ELLİYSE bu ele ikinci bir silah VERİLMEZ</b>; o el ön
-        /// kabzaya adaydır (grip basılı + bilek ön kabza soketinin içinde). Aksi hâlde oyuncu FFA'da
+        /// kabzaya adaydır (grip basılı + kumanda ön kabza soketinin içinde). Aksi hâlde oyuncu FFA'da
         /// iki tüfek tutar ve tüfeği iki elle sabitlemenin hiçbir yolu kalmazdı.
         /// </para>
         /// </summary>
@@ -1194,8 +1194,8 @@ namespace VortexArena.Core.Combat
         /// el çözülemezse <c>false</c>.
         /// <para>
         /// ⚠️ <b>Avuç noktasını hesaplayan tek yer burasıdır</b> ve avuca bakan her tüketici
-        /// (kanonik kavrama, çerçeve mesafesi) buradan geçer (ön kabza soketi avuca değil BİLEĞE
-        /// bakar — kayıt bilek uzayındadır, bkz. <c>Weapon.TryResolveWrist</c>):
+        /// (kanonik kavrama, çerçeve mesafesi, ön kabza soketi) buradan geçer — avuç bugün anchor'ın
+        /// kendisidir (<see cref="HandGripPivot"/>), kavrama kaydı da anchor uzayındadır:
         /// ikinci bir yol açılırsa ofset iki yerde yaşar ve biri güncellenip öteki unutulur.
         /// </para>
         /// </summary>
@@ -1214,11 +1214,9 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Verilen/çağrılan silahın <b>ilk kare</b> pozu: <c>Weapon.ApplyCanonicalGrip</c> ile AYNI
-        /// kaynak sırasını izler — önce canlı bilek deltasıyla anchor uzayına çevrilen kavrama
-        /// kaydı (<see cref="ItemGripAuthority"/>), çözülemezse tanımın kendi ölçüsü.
-        /// <para>⚠️ Sıra iki yerde de aynı olmak ZORUNDA: burada tanıma, LateUpdate'te deltayla
-        /// çevrilmiş kayda bakılsaydı silah verildiği karede bir duruşta belirir, bir sonraki
-        /// karede öteki duruşa zıplardı.</para>
+        /// çözücü ve aynı kaynak (tanımdaki anchor-uzaylı kayıt, <see cref="ItemGripSolver"/>).
+        /// <para>⚠️ İki yer aynı formülü koşmak ZORUNDA: burada başka bir ölçüye bakılsaydı silah
+        /// verildiği karede bir duruşta belirir, bir sonraki karede öteki duruşa zıplardı.</para>
         /// <para>⚠️ İkincil el bu karede YOKTUR (<c>hasSecondary: false</c>) ama imza yine de bir el
         /// ister: ön kabza ölçüsü el başınadır. Ana elin TERSİ verilir — silah iki elle
         /// tutulacaksa ön kabzayı saracak el odur.</para>
@@ -1228,14 +1226,6 @@ namespace VortexArena.Core.Combat
         {
             bool mainHandRight = HandGripPivot.IsRight(hand);
             bool secondaryRight = !mainHandRight;
-
-            if (ItemGripAuthority.TryResolvePrimaryGrip(definition, mainHandRight,
-                    out Vector3 gripPosition, out Quaternion gripRotation))
-            {
-                ItemGripSolver.Solve(definition, secondaryRight, gripPosition, gripRotation, palm,
-                    false, Vector3.zero, 0f, out position, out rotation);
-                return;
-            }
 
             ItemGripSolver.Solve(definition, mainHandRight, secondaryRight, palm, false, Vector3.zero,
                 0f, out position, out rotation);

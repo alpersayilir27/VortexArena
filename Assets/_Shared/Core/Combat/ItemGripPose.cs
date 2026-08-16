@@ -4,19 +4,33 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Bir kavrama kaydı: elin (ISDK <b>BİLEĞİNİN</b>) eşyaya göre yerel pozu + o elin parmak
-    /// preset'i. Kavramanın tek yazılı kaynağı budur ve tanımın (<see cref="ItemDefinition"/>)
-    /// içinde yaşar — prefabda kavrama düğümü YOKTUR.
+    /// Bir kavrama kaydı: elin <b>KUMANDA ANCHOR'ININ</b> (<c>OVRCameraRig.left/rightHandAnchor</c> —
+    /// telde giden el pozunun ta kendisi) eşyaya göre yerel pozu + o elin parmak preset'i.
+    /// Kavramanın tek yazılı kaynağı budur ve tanımın (<see cref="ItemDefinition"/>) içinde yaşar —
+    /// prefabda kavrama düğümü YOKTUR.
     /// <para>
-    /// <b>Kayıt editörde, stüdyoda yazılır</b> (hayalet el silahın kabzasına oturtulur), gözlükle
-    /// yakalanmaz. Gerekçe: yakalanan kayıt kaçınılmaz olarak o anki bilek eğikliğini içeriyordu ve
-    /// o eğiklik artık eşyanın kendi dönüşünü sürdüğü için doğrudan namluya taşınırdı.
+    /// <b>Kayıt editörde, stüdyoda yazılır</b> (kumanda kökü silahın kabzasına oturtulur, hayalet el
+    /// ona bağlı çizilir), gözlükle yakalanmaz. Gerekçe: yakalanan kayıt kaçınılmaz olarak o anki bilek
+    /// eğikliğini içeriyordu ve o eğiklik eşyanın kendi dönüşünü sürdüğü için doğrudan namluya
+    /// taşınırdı.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Taşıdığı soru "el eşyanın NERESİNDE ve HANGİ AÇIYLA durur"dur — ikisi de anlamlıdır.</b>
-    /// ANA kabzada kayıt <i>eşyayı döndürür</i> (<c>item = bilek ∘ Inverse(kayıt)</c>: el nasıl
-    /// tutuyorsa silah öyle durur, bilek serbest kalır); ÖN kabzada kayıt <i>bileği oturtur</i>
-    /// (sentetik el <c>item ∘ kayıt</c> pozuna tam kilitlenir, el ön kabzaya yapışır).
+    /// ⚠️ <b>Uzay ANCHOR'dur, BİLEK DEĞİL.</b> Eşyanın dünya pozunu çözen taraf
+    /// (<see cref="ItemGripSolver"/>) da tel de (§6.6) elin ANCHOR pozunu bilir; kayıt aynı uzayda
+    /// olduğu için aradaki hiçbir yerde ölçülmüş bir delta gerekmez ve rig'i olmayan izleyici (admin
+    /// gözlemci) silahı oyuncuyla BİREBİR aynı çizer. Bunun görünür sonucu: <b>kimlik dönüşlü bir
+    /// kayıt = kumandayla hizalı silah</b>. Stüdyoda kökü yalnız taşımak silahın yönüne dokunmaz —
+    /// kayıt bilek uzayında tutulsaydı "hiç döndürmedim" bile anchor→bilek deltası kadar (onlarca
+    /// derece) dönük bir silah üretirdi. Bilek yalnız GÖRSELİN işidir: sentetik elin bileği ön kabzada
+    /// <c>anchor ∘ delta</c>'ya kilitlenir (<c>HandGripPoser</c>), stüdyodaki hayalet el kökten aynı
+    /// deltayla ötelenerek çizilir (<c>HandGripConvention.AnchorToWrist</c>).
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Taşıdığı soru "kumanda eşyanın NERESİNDE ve HANGİ AÇIYLA durur"dur — ikisi de anlamlıdır.</b>
+    /// ANA kabzada kayıt <i>eşyayı döndürür</i> (<c>item = anchor ∘ Inverse(kayıt)</c>: el nasıl
+    /// tutuyorsa silah öyle durur, el serbest kalır); ÖN kabzada kayıt <i>ikinci eli oturtur</i>
+    /// (ikinci elin anchor'ı <c>item ∘ kayıt</c>, sentetik bilek onun deltası kadar ötesine tam
+    /// kilitlenir — el ön kabzaya yapışır).
     /// </para>
     /// <para>
     /// ⚠️ <b><see cref="position"/> METREdir ve eşyanın GÖRSEL ÖLÇEĞİYLE BÜYÜTÜLMEZ.</b> Geri
@@ -29,17 +43,18 @@ namespace VortexArena.Core.Combat
     [Serializable]
     public struct ItemGripPose
     {
-        // ⚠️ Ayrı bir "yazıldı" bayrağı ZORUNLU: sıfır poz geçerli bir kavrama olabilir (bileği
-        // tam eşyanın orijininde olan bir tutuş), yani "hepsi sıfır = yazılmamış" kestirmesi burada
-        // sessizce yanlış olurdu. Bayrak, hiç yazılmamış asset'lerde false deserialize edilir.
+        // ⚠️ Ayrı bir "yazıldı" bayrağı ZORUNLU: sıfır poz geçerli bir kavramadır (kumanda tam eşyanın
+        // orijininde, eşya kumandayla hizalı — bugünkü varsayılan duruş), yani "hepsi sıfır =
+        // yazılmamış" kestirmesi burada sessizce yanlış olurdu. Bayrak, hiç yazılmamış asset'lerde
+        // false deserialize edilir.
         [Tooltip("Bu kavrama stüdyoda yazıldı mı. false = hiç yazılmamış (alanların içeriği anlamsız).")]
         public bool authored;
 
-        [Tooltip("Elin (ISDK bileğinin) EŞYAYA göre yerel konumu (metre, ölçeksiz).")]
+        [Tooltip("Kumanda anchor'ının EŞYAYA göre yerel konumu (metre, ölçeksiz).")]
         public Vector3 position;
 
-        [Tooltip("Elin (ISDK bileğinin) EŞYAYA göre yerel dönüşü (derece, Euler). Ana kabzada " +
-                 "eşyayı döndürür, ön kabzada bileği oturtur.")]
+        [Tooltip("Kumanda anchor'ının EŞYAYA göre yerel dönüşü (derece, Euler). Ana kabzada eşyayı " +
+                 "döndürür (kimlik = kumandayla hizalı silah), ön kabzada ikinci eli oturtur.")]
         public Vector3 euler;
 
         [Tooltip("Bu slotta elin parmak duruşu (Idle / Firing / Grip).")]
@@ -48,15 +63,16 @@ namespace VortexArena.Core.Combat
         /// <summary>Bu kayıt yazıldı mı (yazılmamışsa alanları okunmaz).</summary>
         public bool IsAuthored => authored;
 
-        /// <summary>Bileğin eşyaya göre yerel dönüşü.</summary>
+        /// <summary>Anchor'ın eşyaya göre yerel dönüşü.</summary>
         public Quaternion Rotation => Quaternion.Euler(euler);
 
-        /// <summary>Bileğin eşyaya göre yerel pozu (konum + dönüş) — tek parça okumak için.</summary>
+        /// <summary>Anchor'ın eşyaya göre yerel pozu (konum + dönüş) — tek parça okumak için.</summary>
         public Pose LocalPose => new Pose(position, Rotation);
 
         /// <summary>
-        /// Aynı ölçünün ters yönü: <b>EŞYANIN BİLEĞE göre</b> pozu. Ana el bunu kullanır —
-        /// <c>item = bilek ∘ InverseLocalPose</c>.
+        /// Aynı ölçünün ters yönü: <b>EŞYANIN ANCHOR'a göre</b> pozu. Ana el bunu kullanır —
+        /// <c>item = anchor ∘ InverseLocalPose</c>. Yazılmamış (<c>default</c>) kayıtta kimliktir:
+        /// eşya kumandanın tam üstünde ve onunla hizalı durur.
         /// </summary>
         public Pose InverseLocalPose
         {
@@ -70,16 +86,16 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// Stüdyoda yazılmış bir pozdan kayıt üretir (<see cref="authored"/> = <c>true</c>).
         /// </summary>
-        /// <param name="wristInItem">Bileğin EŞYAYA göre yerel pozu — metre, ölçeksiz
+        /// <param name="anchorInItem">Kumanda anchor'ının EŞYAYA göre yerel pozu — metre, ölçeksiz
         /// (bkz. sınıf uyarısı).</param>
         /// <param name="preset">O slotta elin parmak duruşu.</param>
-        public static ItemGripPose From(in Pose wristInItem, HandGripPreset preset)
+        public static ItemGripPose From(in Pose anchorInItem, HandGripPreset preset)
         {
             return new ItemGripPose
             {
                 authored = true,
-                position = wristInItem.position,
-                euler = wristInItem.rotation.eulerAngles,
+                position = anchorInItem.position,
+                euler = anchorInItem.rotation.eulerAngles,
                 preset = preset,
             };
         }
