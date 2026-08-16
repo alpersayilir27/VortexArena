@@ -72,7 +72,7 @@ namespace VortexArena.App.Admin
         // NOT: Yerleşimi KOD BELİRLEMEZ — panel ölçüsü, sekme çubuğu ve satır dizilimi prefabtadır
         // (`_Shared/App/Resources/UI/AdminPreferencesPanel.prefab` → `PreferencesPanel`). Satırlar
         // sayfa köklerinin (`Page_Mac`, `Page_Gorunum`, `Page_Baglanti`) altında ELLE yığılan y ile
-        // dizilir (Layout Group yok, UiKit kararı; satır adımı 66 px), yani yeni satır eklemek =
+        // dizilir (Layout Group yok, UiKit kararı; satır adımı 70 px), yani yeni satır eklemek =
         // prefabta o sayfada alttaki her şeyi kaydırmak.
         // ⚠️ Kartın en-boy oranı kabuğun arka plan görseline (`PanelBG`) bağlıdır: sanat tek
         // parçadır ve gerildiğinde başlık bandı/parlamaları esner — satır ekleyip paneli
