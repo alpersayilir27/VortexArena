@@ -52,10 +52,31 @@ namespace VortexArena.Core.Combat
         [Tooltip("Bu elin parmak duruşu — kayda giden tek parmak bilgisi budur.")]
         [SerializeField] private HandGripPreset _preset = HandGripPreset.Firing;
 
+        // Hayalet elin köke (kumandaya) göre yerel pozu ve kaynağı (ölçülmüş sabit mi, iskeletten
+        // tahmin mi). Kayda GİRMEZ; yalnız görsel çocuğun nereye oturtulacağıdır ve elle kaydırılmış
+        // çocuğu geri getirmek için saklanır (DontSave obje domain reload'ı yaşar → SerializeField).
+        [SerializeField] private Vector3 _ghostOffsetPosition;
+        [SerializeField] private Quaternion _ghostOffsetRotation = Quaternion.identity;
+        [SerializeField] private bool _ghostOffsetMeasured;
+
         public GripSocketKind Kind => _kind;
         public bool RightHand => _rightHand;
         public Handedness Handedness => _rightHand ? Handedness.Right : Handedness.Left;
         public HandPuppet Puppet => _puppet;
+
+        /// <summary>Hayalet elin kumanda köküne göre yerel pozu (anchor→bilek); stüdyo yazar.</summary>
+        public Pose GhostOffset => new Pose(_ghostOffsetPosition, _ghostOffsetRotation);
+
+        /// <summary>Ofset ölçülmüş sabitten mi geldi (<c>false</c> = iskeletten tahmin, görsel yaklaşık).</summary>
+        public bool GhostOffsetMeasured => _ghostOffsetMeasured;
+
+        /// <summary>Stüdyonun hayalet ofsetini yazdığı tek kapı.</summary>
+        public void SetGhostOffset(in Pose offset, bool measured)
+        {
+            _ghostOffsetPosition = offset.position;
+            _ghostOffsetRotation = offset.rotation;
+            _ghostOffsetMeasured = measured;
+        }
 
         /// <summary>
         /// Elin parmak duruşu. Yazınca kemiklere anında uygulanır — tezgâhta seçilen preset ile
