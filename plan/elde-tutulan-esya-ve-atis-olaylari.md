@@ -1,6 +1,6 @@
 # Elde tutulan eşya + atış olayları — KALAN İŞLER
 
-> **Faz 0–3 + soket kavrama + olay zamanlaması BİTTİ** (`PROTOCOL_VERSION` 4). Kalıcı bilgi
+> **Faz 0–3 + ön kabza kapısı/göstergesi + olay zamanlaması BİTTİ** (`PROTOCOL_VERSION` 4). Kalıcı bilgi
 > dokümana taşındı: tel formatı + kurallar `Docs/ArenaNet-Protokol.md` §6.2–§6.6 · akış/bileşenler
 > `Docs/Sistem-Ozeti.md` §3.5, §3.5b, §3.6, §4 · tuzaklar §7 · editör aracı `CLAUDE.md`.
 > Bu dosya yalnız **yapılmamış** olanı tutar; hepsi bitince silinir.
@@ -9,8 +9,9 @@ Biten iş özeti (bir daha yapılmayacak, referans için): eşya durumu telde (`
 + kavrama bitleri) · UDP atış/atma olay kanalı (`0x03`/`0x04`, `shot_fired` WS'ten kaldırıldı) ·
 oktahedral yön sıkıştırma · `ItemDefinition` tabanı + `NetItemCatalog` + kimlik bekçisi · kanonik
 kavrama · uzak avatarda eşya çizimi + eşikli ön-kabza yapıştırma · havuzlu tracer ·
-**soket tabanlı kavrama** (`ItemGripSockets`, ISDK `_interactorFilters` kapısı; mesafeden kavrama
-kaldırıldı) · **olayların `serverTick`'te oynatılması** (`RemotePlayerRegistry.TryGetPlaybackTimeMs`).
+**ön kabza kapısı + göstergesi** (`Weapon.IsHandOnSecondaryGrip` / `TickSecondaryGripIndicator`,
+sanat `WeaponCatalog.secondaryGripIndicatorPrefab`; kökte mesafeden kavrama yok) ·
+**olayların `serverTick`'te oynatılması** (`RemotePlayerRegistry.TryGetPlaybackTimeMs`).
 
 ## 1. 13 silahın kavramasını YAZ — ⚠️ SIRADAKİ İŞ
 
@@ -39,10 +40,9 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
   listeler, eski `GripSocket_*` işaretçilerini, `GripPoses` ağacını, prefabta kalmış `Hands/Hand_*`
   rig'ini ve sızmış `[VA El_*]` köklerini siler. `netItemId`/`holdMode` tablodan gelir ve EZİLİR.
 - Aynı kayıt **üç yeri** besliyor: yerel tutuş · uzak oyuncudaki çizim (parmaklar dahil: preset
-  oradan okunur) · kavrama soketinin yeri. Biri düzelince üçü düzelir; ana soketin yeri türetilir
-  (`PrimaryGripPointOnItem`), elle girilmez.
-- Yarıçaplar silah başınadır (`primaryGripRadius`/`secondaryGripRadius`, varsayılan 12 cm) ve
-  Inspector'dan girilir — stüdyo onlara dokunmaz.
+  oradan okunur) · ön kabza kapısının/göstergesinin yeri. Biri düzelince üçü düzelir.
+- Ön kabza kabul yarıçapı silah başınadır (`secondaryGripRadius`, varsayılan 12 cm) ve
+  Inspector'dan girilir — stüdyo ona dokunmaz.
 
 ## 1b. `HandGripConvention.*AnchorToWrist` sabitini ölç ve yapıştır
 
@@ -53,23 +53,23 @@ sabit kimlik kaldığı sürece admin ekranında uzak silahlar deltanın dönü�
 2. `HandGripPoser` kararlı ölçümü el başına bir kez loglar (30 kare / 2 mm / 0.5°).
 3. İki satırı `HandGripConvention.LeftAnchorToWrist` / `RightAnchorToWrist`'e yapıştır.
 
-## 2. Tracer + soket görünüm değerleri — playtest ayarı
+## 2. Tracer + ön kabza göstergesi görünüm değerleri — playtest ayarı
 
 `ItemDefinition`'daki `tracerColor` / `tracerWidth` / `tracerLifetime` / `tracerEveryNthRound`
 (varsayılan 3) sahada gözle ayarlanır. Dokümana sayı yazılmaz.
 Karar verilecek: her silahın tracer'ı farklı mı görünecek, yoksa hepsi aynı mı kalacak (altyapı
 ikisini de destekliyor — alanlar silah başına, değerler şu an aynı).
 
-Soket tarafında ayarlanacaklar: **kavrama yarıçapı silah başınadır** (`primaryGripRadius` /
-`secondaryGripRadius`, varsayılan 12 cm — Inspector'dan girilir). `ItemGripSockets`
-sabitleri (kod içinde, tüm eşyalarda ortak): `HoverRadius` (0.30 m) · halka
-yarıçapı/kalınlığı/rengi.
-⚠️ Ön kabza yarıçapı ana kabzadan **daha cömert** olmalı: ana soket dururken kavranıyor, ön kabza
-ise silah zaten ana elde SALLANIRKEN. Hareketli bir hedefe 12 cm dar geliyorsa önce bu sayıyı
-büyüt — kod değişikliği değil, silah başına bir ayar.
-İsteğe bağlı: `WeaponCatalog.gripSocketPrefab`'a düzgün bir gösterge prefabı koymak — boş kalırsa
-prosedürel halka çiziliyor, yani **iş yapılmadan da çalışıyor**. Prefab konursa gösterge eşyanın
-dönüşünü alır (halka yedeği kameraya döner) — uzamsal bir işaret çizmek isteniyorsa yolu bu.
+Ön kabza tarafında ayarlanacaklar: **kabul yarıçapı silah başınadır** (`secondaryGripRadius`,
+varsayılan 12 cm — Inspector'dan girilir). `Weapon` sabitleri (kod içinde, tüm silahlarda ortak):
+`SecondaryGripHoverRadius` (0.30 m) · gösterge renkleri/büyüme oranı. Halkanın kendisi
+(`VA_GripIndicator.prefab`: yarıçap/kalınlık/materyal) prefabtır, orada düzenlenir.
+⚠️ Ön kabza silah ana elde SALLANIRKEN tutuluyor: hareketli bir hedefe 12 cm dar geliyorsa önce bu
+sayıyı büyüt — kod değişikliği değil, silah başına bir ayar.
+İsteğe bağlı: `WeaponCatalog.secondaryGripIndicatorPrefab`'a tasarlanmış bir gösterge bağlamak —
+varsayılan halka `Build Weapon Prefabs` ile üretilip bağlanıyor, yani **iş yapılmadan da çalışıyor**.
+Gösterge her hâlde kameraya çevrilir (bir noktayı işaretliyor); yön anlatan uzamsal bir işaret
+gerekirse `Weapon.IndicatorRotation` o zaman değişir.
 
 ## 3. İki elli yerel nişan kuralı — his kararı
 
@@ -85,8 +85,9 @@ tarafında yeniden uygular. Yani playtest'te serbestçe değiştirilebilir, prot
   `RemoteShotFx` `KIND_THROW`'u şu an sessizce atıyor (yorumla işaretli) — tüketiciyi orada aç.
 - Her istemci aynı balistiği **yerel simüle eder** (yerçekimi tek kuvvet → deterministik, akış
   gerekmez). Patlama mevcut yoldan: `ArenaCombat.ReportAreaHit` → hedef başına bir `hit_report`.
-- Soket tarafında iş: `ItemGripSockets` `Weapon` taşımayan eşya için serialize `definition`
-  yedeğiyle çalışıyor (alan hazır). Bomba tek elli olduğu için ön kabza soketi hiç açılmaz.
+- Kavrama tarafında iş yok: bomba tek elli, ön kabza kapısı/göstergesi (`Weapon` içinde) çift
+  elli olmayan eşyada zaten hiç açılmaz; bombanın kendi bileşeni gerekirse aynı `secondaryGripRadius`
+  sözleşmesini okur.
 - Kırılabilir objelere hasar bu planın DIŞINDA (`agsal-kirilabilir-objeler.md`);
   ⚠️ `hit_report`'a bu plandan alan **eklenmedi ve eklenmez** — spekülatif tel alanı kalıcı borçtur.
 

@@ -432,7 +432,7 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 > dördü de el başınadır (`primaryGripRight/Left`, `secondaryGripRight/Left`) ve her biri bileğin
 > pozu + parmak preset'ini taşır. Ana elde silah ele uyar (bilek serbest kalır), ön kabzada el
 > silaha yapışır. ⚠️ **Ölçü TEK yerden okunur:** aynı kayıt yerel duruşu, uzak oyuncudaki çizimi ve
-> soketin yerini birlikte besliyor.
+> ön kabza kapısının/göstergesinin yerini birlikte besliyor.
 > Çerçeveden seçilen silah (`weaponSource:"weaponcanvas"`), modun verdiği silah
 > (`weaponSource:"random"`) ve elde ISDK ile kavranan eşya **aynı yolu** kullanır; ayrım yoktur.
 
@@ -500,9 +500,10 @@ dönüş kaydın kendisidir.
   birebir tekrarlanır. Silah başına serbest parmak verisi yoktur ve eklenmez.
 - Kavraması yazılmamış silahta el `Idle`'da kalır + konsola oturum başına bir uyarı gider;
   `Build Weapon Prefabs` de koşu sonunda **"kavraması YAZILMAMIŞ silahlar"**ı listeler.
-- Ön kabza noktasında santimlik bir düzeltme yetiyorsa stüdyoya girmene gerek yok: sahnedeki/
-  prefabtaki `ItemGripSockets` tutamağı (yeşil halka) o noktayı doğrudan `WD_*`'a yazar ve preset'e
-  dokunmaz. **Ana kabza orada çizilmez** — onun yolu stüdyodur.
+- Ön kabza noktası da stüdyoda, ön kabza elinin bileğiyle yazılır — Scene View'da ayrı bir
+  tutamak/gizmo YOKTUR (kayıt tek yerde yaşasın). Oyunda boş el o noktaya yaklaşınca beliren
+  gösterge (`WeaponCatalog.secondaryGripIndicatorPrefab`, `Weapon` sürer) kaydın oyundaki
+  yerini gösterir; kabzadan uzakta çıkıyorsa kayıt o el için yanlış yazılmış demektir.
 - ⚠️ Silah elde yatık görünüyorsa iki aday var: kavrama kaydının dönüşü ya da `Model`'in prefabtaki
   yerleşimi. Stüdyoda el ile silah birlikte göründüğü için ayrımı orada yaparsın.
 - **Admin ekranında** uzak silahlar dönük çiziliyorsa sebep kavrama değil, anchor→bilek deltasının
@@ -559,7 +560,7 @@ silahın **kavrama kaydıdır**, parmak değil.
 ## 11.2 Silah yerde/masada dursun, oyuncu eğilip ELLE alsın
 
 **Ne zaman:** o sahnede silah bir çerçeve kaynağı değil, yerde duran normal bir nesne olsun
-istiyorsun (oyuncu yaklaşıp soketinden kavrasın, uzaktan seçme olmasın).
+istiyorsun (oyuncu yaklaşıp elle kavrasın, uzaktan seçme olmasın).
 
 ⚠️ **`isFrameVisible` bunu YAPMAZ** — o yalnız çerçeve modelini gizler (§11.1). Kapatman gereken
 şey görsel değil, `WeaponFrame`'in **kendisidir**:
@@ -569,7 +570,7 @@ istiyorsun (oyuncu yaklaşıp soketinden kavrasın, uzaktan seçme olmasın).
 3. Sahneyi kaydet.
 
 Böylece `WeaponFrame.Awake` hiç koşmaz: silah donmaz (`Rigidbody` fizikli kalır), kendi
-`Grabbable`/`GrabInteractable`/`HandGrabInteractable`/`ItemGripSockets`'i açık kalır → normal
+`Grabbable`/`GrabInteractable`/`HandGrabInteractable`'ı açık kalır → normal
 yakın kavrama çalışır (iki kavrama hattı da açık kaldığı için el izleme ayarından bağımsızdır).
 Çerçeve görseli prefabda zaten pasif durduğu için kendiliğinden görünmez.
 
@@ -797,7 +798,7 @@ bir **admin** başlatmalıdır. Kurallar telde gelmezse (`rules == null`) `ModeD
 
 ### Sunucusuz sandbox — silah/namlu/ses denemenin kısa yolu
 
-Silah duruşu, namlu alevi, kavrama soketi, ses gibi **tümüyle yerel** şeyleri denerken sunucu
+Silah duruşu, namlu alevi, ön kabza göstergesi, ses gibi **tümüyle yerel** şeyleri denerken sunucu
 açmak, admin'den harita seçmek ve elle kalibrasyon almak gerekmez:
 
 1. Test edeceğin arena (ya da mekan lobisi) sahnesini aç.

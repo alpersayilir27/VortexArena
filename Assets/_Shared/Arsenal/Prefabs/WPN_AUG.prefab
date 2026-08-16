@@ -9901,7 +9901,6 @@ GameObject:
   - component: {fileID: 5946073227055967394}
   - component: {fileID: 3109032755980589899}
   - component: {fileID: 4228379385896417134}
-  - component: {fileID: 2387489580514037589}
   - component: {fileID: 6405509962350841723}
   - component: {fileID: 499934206987740582}
   m_Layer: 0
@@ -10046,8 +10045,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5a1bc992571301d4a9602ac95ef4c71a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.GrabInteractable
-  _interactorFilters:
-  - {fileID: 2387489580514037589}
+  _interactorFilters: []
   _maxInteractors: -1
   _maxSelectingInteractors: -1
   _data: {fileID: 0}
@@ -10106,19 +10104,6 @@ MonoBehaviour:
   ejectForceMin: 1.2
   ejectForceMax: 2
   ejectTorque: 6
---- !u!114 &2387489580514037589
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8917929639311514391}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d94524308e74a8c40be55f688321acec, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.ItemGripSockets
-  definition: {fileID: 0}
 --- !u!114 &6405509962350841723
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10145,8 +10130,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e9a7676b01585ce43908639a27765dfc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.HandGrab.HandGrabInteractable
-  _interactorFilters:
-  - {fileID: 2387489580514037589}
+  _interactorFilters: []
   _maxInteractors: -1
   _maxSelectingInteractors: -1
   _data: {fileID: 0}

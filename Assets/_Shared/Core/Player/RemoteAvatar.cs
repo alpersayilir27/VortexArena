@@ -2033,7 +2033,7 @@ namespace VortexArena.Core.Player
         /// eşyaya göre yerel pozu. Yani ana el için de ön kabza için de hedef düz ileri yönde,
         /// <c>item.position + item.rotation * nokta</c> ile bulunur — ikinci bir uzay tarif etmek
         /// yalnız işaret hatası üretirdi. Aynı bileşim <see cref="ApplySecondaryGripSnap"/> ve
-        /// <c>ItemGripSockets</c> içinde de yazılı.
+        /// <c>Weapon.SecondaryGripWorld</c> içinde de yazılı.
         /// </para>
         /// <para>
         /// ⚠️ <b>Dönen poz ANCHOR çerçevesindedir</b>, bilek çerçevesinde değil: bunu okuyan

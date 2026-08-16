@@ -121,7 +121,7 @@ namespace VortexArena.Core.Combat
         /// <para>
         /// <see cref="ItemDefinition.PrimaryGripPointOnItem(bool)"/>'ın parametreli ikizidir ve türetmesi
         /// birebir aynıdır (<c>item.TransformPoint(s) == hand.position</c> koşulundan
-        /// <c>s = Inverse(R) * (-P)</c>). ⚠️ Ters yön hesapları (uzak elin avuç hedefi, soket çizimi)
+        /// <c>s = Inverse(R) * (-P)</c>). ⚠️ Ters yön hesapları (uzak elin avuç hedefi)
         /// etkin kavrama çözüldüğünde <b>bunu</b> kullanmak zorundadır: biri canlı deltadan, öteki
         /// tanımın ham kaydından beslenirse el ile silah aynı karede birbirinden ayrışır.
         /// </para>
