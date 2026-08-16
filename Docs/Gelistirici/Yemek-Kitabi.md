@@ -502,14 +502,17 @@ dönüş kaydın kendisidir.
   (`HandGripPresets`), yani tezgâhta gördüğün parmak duruşu oyundaki sentetik elde ve uzak avatarda
   birebir tekrarlanır. Silah başına serbest parmak verisi yoktur ve eklenmez.
 - Kavraması yazılmamış silahta el `Idle`'da kalır + konsola oturum başına bir uyarı gider;
-  silah kiti koşusu da sonunda **"kavraması YAZILMAMIŞ silahlar"**ı listeler
-  (`Configure All Build Elements` penceresindeki Hazırlık satırı aynı listeyi gösterir).
+  silah kiti koşusu da sonunda **"kavraması EKSİK silahlar"**ı listeler — ana kabzası yazılmamış
+  olanlar VE çift elli olup ön kabzası yazılmamış olanlar (`Configure All Build Elements`
+  penceresindeki Hazırlık satırı aynı listeyi gösterir).
 - Ön kabza noktası da stüdyoda, ön kabza elinin bileğiyle yazılır — Scene View'da ayrı bir
   tutamak/gizmo YOKTUR (kayıt tek yerde yaşasın). Oyunda boş elin bileği o noktaya yaklaşınca
   beliren soket küresi (`WeaponCatalog.secondaryGripIndicatorPrefab`, `Weapon` sürer; yarıçapı
   `WD_*`'daki `secondaryGripRadius`, varsayılan 20 cm çap) kaydın oyundaki yerini gösterir ve
   kabul hacminin kendisidir: bilek kürenin içindeyken grip ikinci eli bağlar. Küre kabzadan uzakta
-  çıkıyorsa kayıt o el için yanlış yazılmış demektir.
+  çıkıyorsa kayıt o el için yanlış yazılmış demektir. **Ön kabza kaydı hiç yazılmamışsa** küre HİÇ
+  çıkmaz ve ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`; konsola tanım başına bir uyarı
+  gider) — yazılmamış kayıt eşyanın köküne düşerdi, o da ana elin dibidir.
 - ⚠️ Silah elde yatık görünüyorsa iki aday var: kavrama kaydının dönüşü ya da `Model`'in prefabtaki
   yerleşimi. Stüdyoda el ile silah birlikte göründüğü için ayrımı orada yaparsın.
 - **Admin ekranında** uzak silahlar dönük çiziliyorsa sebep kavrama değil, anchor→bilek deltasının

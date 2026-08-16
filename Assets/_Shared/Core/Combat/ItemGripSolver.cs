@@ -124,7 +124,9 @@ namespace VortexArena.Core.Combat
             itemPosition = primaryPalm.position + primaryPalm.rotation * primaryGripPosition;
 
             float blend = Mathf.Clamp01(aimBlend);
-            if (def == null || !hasSecondary || blend <= 0f)
+            // Yazılmamış ön kabza eşyanın köküne düşer (ItemDefinition.HasSecondaryGrip): o eksenle
+            // çözmek silahı ana elin dibine "nişanlamak" olurdu — tek elli sonuç kalır.
+            if (def == null || !def.HasSecondaryGrip || !hasSecondary || blend <= 0f)
             {
                 return;
             }
