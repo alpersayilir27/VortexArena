@@ -25,12 +25,13 @@ namespace VortexArena.Core.Editor
     /// <c>OVRCameraRig.left/rightHandAnchor</c>'ın silah üstündeki yerini temsil eder ve kayıt bu kökün
     /// eşyaya göre pozudur (<see cref="ItemGripPose"/>: anchor uzayı, telle aynı). Kökün +Z'si
     /// kumandanın ilerisidir: kök silahla hizalıyken (kimlik) silah oyunda kumandayla hizalı gelir,
-    /// yani <b>kökü döndürmeden yalnız taşımak silahın yönüne dokunmaz</b>. ISDK hayalet eli kökün
-    /// ÇOCUĞUDUR ve köke göre <see cref="HandGripConvention.AnchorToWrist"/> sabitiyle ötelenir
-    /// (kumandayı tutan elin bileği nerede duruyorsa orada) — sabit ölçülmemişse (kimlik) hayalet el
-    /// kökün tam üstünde ve onunla aynı eksende çizilir; bu KAYDI BOZMAZ, yalnız elin görseli gerçek
-    /// elden birkaç santim/derece sapar. Kayıt bilek uzayında tutulsaydı "eli hiç döndürmedim" bile
-    /// anchor→bilek deltası kadar (onlarca derece) dönük bir silah üretirdi.
+    /// yani <b>kökü döndürmeden yalnız taşımak silahın yönüne dokunmaz</b>. Kökün altında iki
+    /// KİLİTLİ görsel çocuk durur: <b>Quest 3 kumanda modeli</b> (kimlik pozda — oyunda anchor'ın altında
+    /// tam böyle durur, silah ONA göre hizalanır) ve <b>ISDK hayalet eli</b> (köke göre anchor→bilek
+    /// pozunda: ölçülmüş sabit <see cref="HandGripConvention.AnchorToWrist"/> varsa o, yoksa hayaletin
+    /// kendi iskeletinden tahmin — <see cref="ResolveGhostOffset"/>). Hayalet KAYDA GİRMEZ; tahminde
+    /// yalnız elin görseli gerçek elden biraz sapar. Kayıt bilek uzayında tutulsaydı "eli hiç
+    /// döndürmedim" bile anchor→bilek deltası kadar (onlarca derece) dönük bir silah üretirdi.
     /// </para>
     /// <para>
     /// ⚠️ <b>Ana kabzada tezgâhtaki kök SİLAHI DÖNDÜRÜR</b>: runtime ana eli
@@ -86,6 +87,23 @@ namespace VortexArena.Core.Editor
         /// <summary>Aynı sağlayıcının <b>OVR</b> iskeleti karşılığı.</summary>
         private const string GHOST_PROVIDER_PATH_OVR =
             "Packages/com.meta.xr.sdk.interaction/Runtime/Prefabs/HandGrab/GhostProvider.asset";
+
+        /// <summary>
+        /// Kumanda kökünün altına konan KUMANDA MODELİNİN kaynağı: Meta core SDK'nın kumanda prefabı ve
+        /// içindeki Quest 3 (Touch Plus) modelleri. Model, oyunda anchor'ın altında kimlik pozda durduğu
+        /// için (<c>OVRControllerHelper</c> hiçbir ofset uygulamaz) tezgâhta da köke kimlikle konur —
+        /// yani gördüğün kumanda tam olarak oyunda izlenen kumandadır: silah ona göre hizalanır.
+        /// </summary>
+        private const string CONTROLLER_PREFAB_PATH = "Packages/com.meta.xr.sdk.core/Prefabs/OVRControllerPrefab.prefab";
+        private const string CONTROLLER_MODEL_RIGHT = "MetaQuestTouchPlus_Right";
+        private const string CONTROLLER_MODEL_LEFT = "MetaQuestTouchPlus_Left";
+
+        /// <summary>Kökün altındaki iki görsel çocuğun adları (kimlik: yeniden bulunmak için).</summary>
+        private const string GHOST_NAME = "Hand";
+        private const string CONTROLLER_NAME = "Controller";
+
+        /// <summary>Kumanda modeli bulunamadığında uyarı bir kez basılsın diye.</summary>
+        private static bool _controllerModelWarned;
 
         /// <summary>
         /// Kabza düğümünün ad anahtarları (büyük/küçük harf duyarsız, <b>sırayla</b> denenir).
@@ -445,22 +463,37 @@ namespace VortexArena.Core.Editor
             DrawGhostSourceSection();
 
             EditorGUILayout.HelpBox(
-                "Yazan tek düğme Kaydet'tir. Sürüklediğin kök KUMANDADIR (kökün mavi oku = kumandanın " +
-                "ilerisi; hayalet el ona bağlı çizilir): kökü yalnız TAŞIRSAN silah oyunda kumandayla " +
-                "hizalı gelir, kökü ÇEVİRİRSEN ana elde SİLAH çevrilir; ön kabzada el silaha yapışır. " +
-                "Parmaklar preset'ten gelir (elin Inspector'ı).",
+                "Yazan tek düğme Kaydet'tir. Sürüklediğin kök KUMANDADIR — altındaki kumanda modeli " +
+                "oyunda izlenen kumandanın ta kendisidir, silahı ONA göre hizala (mavi ok = kumandanın " +
+                "ilerisi). Kökü yalnız TAŞIRSAN silah oyunda kumandayla hizalı gelir, kökü ÇEVİRİRSEN ana " +
+                "elde SİLAH çevrilir; ön kabzada el silaha yapışır. Hayalet el ve kumanda modeli " +
+                "kilitlidir (taşınmaz) — kayıt kökten okunur. Parmaklar preset'ten gelir.",
                 MessageType.None);
 
-            if (HandGripConvention.AnchorToWrist(true).Equals(Pose.identity) &&
-                HandGripConvention.AnchorToWrist(false).Equals(Pose.identity))
+            if (AnyGhostEstimated(hands))
             {
                 EditorGUILayout.HelpBox(
-                    "anchor→bilek sabiti ölçülmemiş (HandGripConvention.*AnchorToWrist = kimlik): hayalet " +
-                    "el kumanda kökünün tam üstünde çizilir, gerçek elin duracağı yerde değil. Kayıt " +
-                    "bundan etkilenmez; elin silahı nasıl sardığını doğru görmek için HandGripPoser'ın " +
-                    "başlıkta bastığı iki satırı (editör Play'i ya da APK'da adb logcat) sabite yapıştır.",
+                    "Hayalet el TAHMİNLE çizildi (anchor→bilek sabiti ölçülmemiş: " +
+                    "HandGripConvention.*AnchorToWrist = kimlik). Elin kumandaya göre duruşu yaklaşıktır, " +
+                    "kumanda modeli ise kesindir — hizayı ona göre yap. Kayıt bundan etkilenmez. Tam el " +
+                    "için HandGripPoser'ın başlıkta bastığı iki satırı (editör Play'i ya da APK'da " +
+                    "adb logcat -s Unity) sabite yapıştır.",
                     MessageType.Info);
             }
+        }
+
+        /// <summary>Tezgâhta hayalet ofseti tahminle kurulmuş (ölçülmemiş) yaşayan el var mı.</summary>
+        private static bool AnyGhostEstimated(List<GripHandAuthoring> hands)
+        {
+            for (int i = 0; i < hands.Count; i++)
+            {
+                if (hands[i] != null && !hands[i].GhostOffsetMeasured)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void DrawHandList(List<GripHandAuthoring> hands)
@@ -714,6 +747,10 @@ namespace VortexArena.Core.Editor
             {
                 // Unity'nin kayıt yan etkisiyle gizlenmiş (HideAndDontSave) bir el burada
                 // hiyerarşiye geri döner — "Elleri Oluştur" aynı zamanda kayıp elleri diriltir.
+                // Görsel çocuklar (hayalet el, kumanda modeli) da yerlerine oturtulur: elle kaydırılmış
+                // bir çocuk kayda girmez, ama kullanıcıyı yanıltır — buradan geri gelir.
+                ApplyGhostOffset(existing);
+                EnsureControllerModel(existing.gameObject, existing.RightHand);
                 MarkDontSave(existing.gameObject);
                 HideIsdkComponents(GhostOf(existing));
                 return existing;
@@ -752,18 +789,21 @@ namespace VortexArena.Core.Editor
                 return null;
             }
 
-            // Hayalet el: kökün çocuğu, köke göre anchor→bilek sabiti kadar ötede. Sabit kimlikse el
-            // kökün tam üstünde durur — kaydı bozmaz, yalnız görsel gerçek elden sapar (pencere bunu
-            // ayrıca söylüyor).
+            // Hayalet el: kökün çocuğu, köke göre anchor→bilek pozunda (ResolveGhostOffset: ölçülmüş
+            // sabit, yoksa iskeletten tahmin). Kaydı hiç etkilemez, yalnız görseldir.
             HandGhost ghost = Instantiate(prototype, root.transform);
             GameObject handGo = ghost.gameObject;
-            handGo.name = "Hand";
-            Pose wristOffset = HandGripConvention.AnchorToWrist(rightHand);
-            handGo.transform.localPosition = wristOffset.position;
-            handGo.transform.localRotation = wristOffset.rotation;
+            handGo.name = GHOST_NAME;
             handGo.transform.localScale = Vector3.one;
 
             HandPuppet puppet = ghost.GetComponent<HandPuppet>();
+
+            // ⚠️ Ofset PRESET UYGULANMADAN ölçülür (bind pozu): tahmin başparmak kökünün yerini okuyor,
+            // preset o kemiği kıvırınca ölçü o karenin duruşunu içerirdi.
+            Pose ghostOffset = ResolveGhostOffset(puppet, handGo.transform, rightHand, out bool measured);
+            authoring.SetGhostOffset(ghostOffset, measured);
+            ApplyGhostOffset(authoring);
+            EnsureControllerModel(root, rightHand);
 
             ItemGripPose recorded = definition.GetGrip(kind, rightHand);
             HandGripPreset preset = definition.HasGrip(kind, rightHand)
@@ -771,7 +811,7 @@ namespace VortexArena.Core.Editor
                 : HandGripPresets.DefaultFor(kind);
 
             // Kök doğrudan yerleştirilir (puppet'ın SetRootPose'u DEĞİL: o hayalet elin kendi
-            // transformunu yazar, oysa hayalet artık kökün altında ve yerel ofseti sabittir).
+            // transformunu yazar, oysa hayalet kökün altında ve yerel ofseti sabittir).
             // ⚠️ Parmak pozu ISDK'nın HandGhost.SetPose'u ile DEĞİL doğrudan puppet üzerinden verilir:
             // SetPose bir HandPose nesnesi ister ve o nesnenin taşıdığı eklem dizisi bizde ikinci
             // bir parmak kaynağı olurdu — parmakların tek kaynağı preset tablosudur.
@@ -795,6 +835,122 @@ namespace VortexArena.Core.Editor
 
             var ghost = hand.GetComponentInChildren<HandGhost>(true);
             return ghost != null ? ghost.gameObject : null;
+        }
+
+        /// <summary>
+        /// Hayalet elin kumanda köküne göre yerel pozu (anchor→bilek).
+        /// <para>
+        /// <b>Ölçülmüş sabit varsa o</b> (<see cref="HandGripConvention.AnchorToWrist"/>, kimlik değilse):
+        /// başlıkta <c>HandGripPoser</c>'ın logladığı değer, tek gerçek. <b>Yoksa TAHMİN</b> — el
+        /// kökün tam üstünde ve aynı eksende çizilseydi ISDK bilek çerçevesi kumandayla aynı eksende
+        /// olmadığı için "yan yatmış" bir el görünür, kullanıcı da onu düzeltmek için KÖKÜ çevirir ve
+        /// oyunda silahı döndürürdü. Tahminin iki parçası: dönüş = anchor uzayındaki el anatomisi
+        /// (<see cref="HandGripConvention.AnchorBasis"/> — uzak avatarın da kullandığı kabul) ⇐ hayaletin
+        /// KENDİ iskeletinden ölçülen kemik bazı (<see cref="HandGripConvention.Correction"/>); konum =
+        /// avuç merkezi kumandanın üstünde sayılır (<c>HandGripPivot</c>: avuç ≡ anchor) ve avuç merkezi
+        /// OpenXR tanımıyla orta parmak metakarpının ortasıdır (bilek→orta parmak kökünün yarısı).
+        /// </para>
+        /// <para>⚠️ Tahmin KAYDA GİRMEZ: kayıt kökün pozudur, bu yalnız hayaletin nerede çizileceğidir.
+        /// Sabit ölçülüp yapıştırılınca tahmin hiç okunmaz.</para>
+        /// </summary>
+        private static Pose ResolveGhostOffset(HandPuppet puppet, Transform ghostRoot, bool rightHand,
+            out bool measured)
+        {
+            Pose constant = HandGripConvention.AnchorToWrist(rightHand);
+            measured = !constant.Equals(Pose.identity);
+            if (measured)
+            {
+                return constant;
+            }
+
+            if (puppet == null || ghostRoot == null ||
+                !TryFindJoint(puppet, HandJointId.HandMiddle1, out Transform middleProximal) ||
+                !TryFindJoint(puppet, HandJointId.HandThumb2, out Transform thumbProximal) ||
+                !HandGripConvention.TryMeasureBoneBasis(ghostRoot, middleProximal, thumbProximal, rightHand,
+                    out Quaternion boneBasis))
+            {
+                return Pose.identity;
+            }
+
+            Quaternion rotation = HandGripConvention.Correction(rightHand, boneBasis);
+            Vector3 middleLocal = ghostRoot.InverseTransformPoint(middleProximal.position);
+            Vector3 palmLocal = middleLocal * 0.5f;
+            return new Pose(-(rotation * palmLocal), rotation);
+        }
+
+        private static bool TryFindJoint(HandPuppet puppet, HandJointId id, out Transform joint)
+        {
+            joint = null;
+            List<HandJointMap> maps = puppet != null ? puppet.JointMaps : null;
+            for (int i = 0; maps != null && i < maps.Count; i++)
+            {
+                if (maps[i] != null && maps[i].id == id && maps[i].transform != null)
+                {
+                    joint = maps[i].transform;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>Hayalet eli kökün altında kaydedilmiş ofsetine oturtur (elle kaydırılmışsa geri getirir).</summary>
+        private static void ApplyGhostOffset(GripHandAuthoring hand)
+        {
+            GameObject ghost = GhostOf(hand);
+            if (ghost == null)
+            {
+                return;
+            }
+
+            Pose offset = hand.GhostOffset;
+            ghost.transform.localPosition = offset.position;
+            ghost.transform.localRotation = offset.rotation;
+            ghost.transform.localScale = Vector3.one;
+        }
+
+        /// <summary>
+        /// Kökün altına Quest 3 kumanda modelini koyar (yoksa) — kimlik pozda: oyunda anchor'ın altında
+        /// tam böyle durur, yani silahı hizalarken bakılacak GERÇEK referans budur (hayalet el ölçülmemiş
+        /// sabitte tahminle çizilir, kumanda modeli değil).
+        /// <para>Modelin <c>Animator</c>'ı sökülür (tuş animasyonu tezgâhta anlamsız); mesh ve ölçek
+        /// prefabtakiyle aynı kalır. Bulunamazsa bir kez uyarır — el yine kurulur.</para>
+        /// </summary>
+        private static void EnsureControllerModel(GameObject root, bool rightHand)
+        {
+            if (root == null || root.transform.Find(CONTROLLER_NAME) != null)
+            {
+                return;
+            }
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(CONTROLLER_PREFAB_PATH);
+            Transform source = prefab != null
+                ? prefab.transform.Find(rightHand ? CONTROLLER_MODEL_RIGHT : CONTROLLER_MODEL_LEFT)
+                : null;
+            if (source == null)
+            {
+                if (!_controllerModelWarned)
+                {
+                    _controllerModelWarned = true;
+                    Debug.LogWarning($"{LOG} Kumanda modeli bulunamadı ('{CONTROLLER_PREFAB_PATH}' → " +
+                                     $"{CONTROLLER_MODEL_RIGHT}/{CONTROLLER_MODEL_LEFT}); kök yalnız gizmo ve " +
+                                     "hayalet elle çizilir.");
+                }
+
+                return;
+            }
+
+            GameObject model = Instantiate(source.gameObject, root.transform);
+            model.name = CONTROLLER_NAME;
+            model.transform.localPosition = source.localPosition;
+            model.transform.localRotation = source.localRotation;
+            model.transform.localScale = source.localScale;
+
+            var animator = model.GetComponent<Animator>();
+            if (animator != null)
+            {
+                DestroyImmediate(animator);
+            }
         }
 
         /// <summary>
@@ -850,13 +1006,18 @@ namespace VortexArena.Core.Editor
         /// <summary>
         /// ⚠️ <see cref="HideFlags.DontSave"/> tüm alt ağaca yazılır: prefab kipi kaydedilirken tek
         /// bir el parçası bile dosyaya girmesin. Bayrak GameObject başınadır, kökte olması yetmez.
+        /// <para>Kökün ALTINDAKİLER ayrıca <see cref="HideFlags.NotEditable"/> olur: hayalet el ve
+        /// kumanda modeli görsel çocuklardır, kayda kökün pozu girer — çocuğu sürüklemek kaydı
+        /// değiştirmez ve "kaydettim ama değişmedi" üretir; kilit o yolu baştan kapatır.</para>
         /// </summary>
         private static void MarkDontSave(GameObject root)
         {
             Transform[] all = root.GetComponentsInChildren<Transform>(true);
             for (int i = 0; i < all.Length; i++)
             {
-                all[i].gameObject.hideFlags = HideFlags.DontSave;
+                all[i].gameObject.hideFlags = all[i].gameObject == root
+                    ? HideFlags.DontSave
+                    : HideFlags.DontSave | HideFlags.NotEditable;
             }
         }
 
