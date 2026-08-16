@@ -14,9 +14,10 @@ namespace VortexArena.Core.Combat
     /// kurallarına bağımlı hale gelir.
     /// </para>
     /// <para>
-    /// <b>Duruş telde gitmez</b> (Docs/ArenaNet-Protokol.md §6.6): eşyanın ele göre konumu/dönüşü
-    /// buradaki kavrama alanlarından, yani her istemcinin APK'sından gelir. Ön koşulu kanonik
-    /// kavramadır — serbest kavrama (keyfi ofset) uzak tarafta yanlış duruş demektir.
+    /// <b>Duruş telde gitmez</b> (Docs/ArenaNet-Protokol.md §6.6): eşyanın ele göre konumu buradaki
+    /// kavrama alanlarından, yani her istemcinin APK'sından gelir; dönüşü her zaman ana kumandanın
+    /// dönüşüdür (<see cref="ItemGripSolver"/>). Ön koşulu kanonik kavramadır — serbest kavrama
+    /// (keyfi ofset) uzak tarafta yanlış duruş demektir.
     /// </para>
     /// </summary>
     public abstract class ItemDefinition : ScriptableObject
@@ -40,15 +41,13 @@ namespace VortexArena.Core.Combat
         [SerializeField] private ItemHoldMode holdMode = ItemHoldMode.OneHand;
 
         // ⚠️ DÖRT KAYIT DA AYNI UZAYDADIR: her biri elin KUMANDA ANCHOR'ININ EŞYAYA göre yerel
-        // pozudur (eşya → anchor; ItemGripPose). Tek yönde yazıldıkları için ikinci bir uzay tarif
-        // etmek yalnız işaret hatası üretirdi. Anchor = telde giden el pozu = çözücünün bildiği poz,
-        // yani hiçbir okuyucu delta ölçmek zorunda değildir ve kimlik kayıt "kumandayla hizalı silah"
-        // demektir.
+        // KONUMUDUR (eşya → anchor; ItemGripPose — dönüş yoktur, silah her zaman kumandayla
+        // hizalıdır). Tek yönde yazıldıkları için ikinci bir uzay tarif etmek yalnız işaret hatası
+        // üretirdi. Anchor = telde giden el pozu = çözücünün bildiği poz, yani hiçbir okuyucu delta
+        // ölçmek zorunda değildir.
         // ⚠️ Kayıt EL BAŞINADIR: kabza simetrik olmadığı için iki elin kumandası eşyanın farklı
         // yerlerine düşer — tek kayıt tutup aynalamak sol eli silahın içine sokardı.
-        // ⚠️ Kayıtlar stüdyoda yazılır (editör), gözlükle yakalanmaz: yakalanan kaydın dönüşü
-        // oyuncunun o anki bilek eğikliğiydi ve artık dönüş EŞYAYI döndürdüğü için doğrudan
-        // namluya taşınırdı.
+        // ⚠️ Kayıtlar stüdyoda yazılır (editör), gözlükle yakalanmaz.
         // Buradaki YARIÇAPLAR duruşun parçası DEĞİL, KAPI ölçüsüdür: kavramanın nerede kabul
         // edildiğini söylerler, eşyanın elde nasıl duracağını değil.
         [Header("Kavrama (kanonik)")]
@@ -184,27 +183,16 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// <b>EŞYANIN</b> ana el anchor'ına göre dönüşü — kaydın tersi, delta yok (kayıt zaten anchor
-        /// uzayında). Yazılmamış kayıtta kimlik: eşya kumandayla hizalı durur.
-        /// <para>⚠️ <b>Dönüş kimlik DEĞİL, kayıttan gelir:</b> eşya ele göre durur — el nasıl
-        /// tutuyorsa silah öyle tutulur. Bileğin kendisi ana elde kilitlenmediği için el kumandayla
-        /// birlikte serbest döner ve silah ona uyar; kavramanın açısını taşıyan tek yer kayıttır.</para>
-        /// </summary>
-        public Quaternion PrimaryGripRotation(bool rightHand)
-        {
-            return GetGrip(GripSocketKind.Primary, rightHand).InverseLocalPose.rotation;
-        }
-
-        /// <summary>
         /// <b>EŞYANIN</b> ana el anchor'ına göre yerel konumu (metre): <c>itemPos =
-        /// palm.pos + palm.rot * bu değer</c>.
-        /// <para>Türetme: kayıt anchor'ın eşyaya göre pozudur, aranan da onun tersidir
-        /// (<see cref="ItemGripPose.InverseLocalPose"/>). Yazılmamış kayıtta sıfır: eşya kumandanın
-        /// tam üstünde durur.</para>
+        /// palm.pos + palm.rot * bu değer</c>; dönüş her zaman anchor'ın kendisidir
+        /// (<see cref="ItemGripSolver"/>).
+        /// <para>Türetme: kayıt anchor'ın eşyaya göre konumudur, aranan da onun tersidir (eksi işaret —
+        /// eşya kumandayla hizalı olduğu için başka dönüşüm yok). Yazılmamış kayıtta sıfır: eşya
+        /// kumandanın tam üstünde durur.</para>
         /// </summary>
         public Vector3 PrimaryGripPosition(bool rightHand)
         {
-            return GetGrip(GripSocketKind.Primary, rightHand).InverseLocalPose.position;
+            return -GetGrip(GripSocketKind.Primary, rightHand).position;
         }
 
         /// <summary>
@@ -222,13 +210,13 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// Ön kabza kaydı <b>en az bir el için yazılmış</b> mı (yalnız <see cref="IsTwoHanded"/> iken
         /// anlamlı; tek elli eşyada daima <c>false</c>). Ön kabzayı okuyan HER yol
-        /// (<c>Weapon</c> soketi ve kapısı, <c>ItemGripSolver</c>, <c>RemoteAvatar</c>) önce buna bakar.
+        /// (<c>Weapon</c> soketi ve kapısı, <c>HandGripPoser</c>, <c>RemoteAvatar</c>) önce buna bakar.
         /// <para>⚠️ <b>Yazılmamış ön kabza EŞYANIN KÖKÜDÜR:</b> <see cref="GetGrip"/> iki el de yoksa
         /// <c>default</c> (sıfır poz) döner, yani <see cref="SecondaryGripPosition"/> kökü verir. O nokta
         /// çoğu silahta ana elin bileğinin dibinde durur — kapı burada açık kalsaydı soket küresi ana
         /// elin üstünde belirir, ikinci el "kabzada" tutamaz ve hata olarak değil "gösterge yanlış
         /// yerde çıkıyor" olarak görünürdü. Bu yüzden yazılmamış ön kabza <b>yoktur</b>: soket
-        /// çizilmez, ikinci el bağlanmaz, iki elli çözüm koşmaz ve <c>Weapon</c> bunu bir kez uyarır.
+        /// çizilmez, ikinci el bağlanmaz ve <c>Weapon</c> bunu bir kez uyarır.
         /// Kaydı yazan tek yer stüdyodur (<c>Kavrama Pozu Stüdyosu</c>).</para>
         /// </summary>
         public bool HasSecondaryGrip =>
@@ -246,15 +234,6 @@ namespace VortexArena.Core.Combat
             return GetGrip(GripSocketKind.Secondary, rightHand).position;
         }
 
-        /// <summary>İkinci elin ön kabzadaki <b>anchor</b> dönüşü, <b>eşyaya göre yerel</b>. Eşyayı
-        /// döndürmez (onu ana kabza kaydı yapar); bu kayıt ön kabzayı saran elin kumandasını oturtur —
-        /// sentetik bilek onun anchor→bilek deltası kadar ötesine kilitlenir ve el eşyaya YAPIŞIR
-        /// (<c>HandGripPoser</c>).</summary>
-        public Quaternion SecondaryGripRotation(bool rightHand)
-        {
-            return GetGrip(GripSocketKind.Secondary, rightHand).Rotation;
-        }
-
 #if UNITY_EDITOR
         /// <summary>
         /// Kavramayı ilgili alana yazar — <b>stüdyonun tek yazma kapısı</b> (alanlar private kalsın
@@ -264,9 +243,9 @@ namespace VortexArena.Core.Combat
         /// birden çok alanı arka arkaya yazıyor ve kaydı tek Undo/tek dirty adımında toplamak
         /// istiyor.</para>
         /// </summary>
-        /// <param name="anchorInItem">Kumanda anchor'ının EŞYAYA göre yerel pozu (metre, ölçeksiz).</param>
+        /// <param name="anchorInItem">Kumanda anchor'ının EŞYAYA göre yerel konumu (metre, ölçeksiz).</param>
         /// <param name="preset">O slotta elin parmak duruşu.</param>
-        public void EditorSetGrip(GripSocketKind kind, bool rightHand, in Pose anchorInItem,
+        public void EditorSetGrip(GripSocketKind kind, bool rightHand, in Vector3 anchorInItem,
             HandGripPreset preset)
         {
             ItemGripPose capture = ItemGripPose.From(anchorInItem, preset);

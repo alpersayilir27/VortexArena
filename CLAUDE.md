@@ -488,8 +488,8 @@ yoktur**. `WeaponGranter` (`_Shared/Core/Combat/`) kendini önyükleyen kalıcı
 `random` + `fireWhilePaused` bileşimi "maç yok" demektir; taban şeritleri ONA AİT DEĞİL — onların
 kapısı takım kipidir, `BaseZoneVisibility`), grip'e basılı tutulan
 her elde `ModeDefinition.loadout`'tan rastgele bir silah tutturur (bırakınca yok olur, tekrar
-basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki duruşu (konum + dönüş) `WD_*`'daki
-**stüdyoda yazılmış kavramadan** gelir — silah ele göre durur (ana kabza için gösterge yoktur —
+basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki YERİ `WD_*`'daki
+**stüdyoda yazılmış kavramadan** gelir, dönüşü ise her zaman kumandanınkidir (ana kabza için gösterge yoktur —
 silah zaten elde; çift elli silahta boş el ön kabzaya yaklaşınca ön kabza göstergesi belirir).
 ⚠️ Sahneye bileşen KOYMA: tekil olmasının sebebi her yeni arenaya elle bir kurulum adımı
 eklememektir.
@@ -573,21 +573,26 @@ sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silaht
 → `Docs/Sistem-Ozeti.md` §7.
 ⚠️ **Kavrama gözlük takmadan, STÜDYODA yazılır:** `Tools > VortexArena > Weapons > Kavrama Pozu
 Stüdyosu` → `WPN_*` prefabını **prefab kipinde** aç → *Ana Kabza Ellerini Oluştur* (+ TwoHand'de
-*Ön Kabza Ellerini Oluştur*) → **kumanda çerçevelerini** Scene View'da kabzaya sürükle/çevir →
-**Kaydet**. Sürüklenen kök (`[VA El_*]`) kumandanın (anchor) çerçevesidir; altında iki KİLİTLİ görsel
-çocuk durur — Quest 3 kumanda modeli (kimlik pozda: oyunda izlenen kumandanın kendisi, silah ONA göre
-hizalanır) ve ISDK hayalet eli (köke göre `HandGripConvention.AnchorToWrist` sabiti; sabit ölçülmemişse
-iskeletten tahmin — kayda girmez). ⚠️ **Çocukları TAŞIMA** (kilitli, kayıt kökten okunur).
-Kayıt `WD_*.asset`'e gider (`ItemGripPose`: **anchor'ın** eşyaya göre yerel pozu + parmak preset'i);
-prefaba HİÇBİR ŞEY yazılmaz. Eller sahnenin ayrı kökleridir (`[VA El_*]`, `DontSave`) — prefabın
-altına sürüklenmez; silah kiti koşusu kaçak eli siler.
-⚠️ **Sözleşme "silah ele göre"dir, "el silaha göre" DEĞİL:** ana elde eşya `anchor ∘ Inverse(kayıt)`
-ile durur — stüdyoda kökü kabzada döndürmek oyunda SİLAHI döndürür, elin bileği kilitlenmez
-(izlemeden/kumandadan gelir). Ön kabzada ise ikinci elin bileği `item ∘ kayıt ∘ delta`ya **tam**
-kilitlenir (el yerine yapışır). Ayarlanabilir bir "silah dönüşü" alanı YOKTUR — dönüş kayıttır.
-⚠️ **Kimlik kayıt = kumandayla hizalı silah:** kökü yalnız TAŞIMAK silahın yönüne dokunmaz, dönüş
-ancak kökü ÇEVİRİNCE gelir (yazılmamış kayıt da kimliktir — silah kumandanın üstünde ve onunla
-hizalı durur).
+*Ön Kabza Ellerini Oluştur*) → **kumanda çerçevelerini** Scene View'da kabzaya TAŞI → **Kaydet**.
+Taşınan kök (`[VA El_*]`) kumandanın (anchor) çerçevesidir ve **yalnız TAŞINIR**: silahla hizalı
+tutulur (çevirsen de geri hizalanır), çünkü dönüşün oyunda karşılığı yoktur. Kökün altında iki
+KİLİTLİ görsel çocuk durur — Quest 3 kumanda modeli (kimlik pozda: oyunda anchor'ın altında tam
+böyle durur, kökü kumanda kabzada gerçekte tutulduğu yere gelecek biçimde taşı) ve ISDK hayalet eli
+(köke göre `HandGripConvention.AnchorToWrist` sabiti; sabit ölçülmemişse iskeletten tahmin — kayda
+girmez). ⚠️ **Çocukları TAŞIMA** (kilitli, kayıt kökten okunur).
+Kayıt `WD_*.asset`'e gider (`ItemGripPose`: **anchor'ın** eşyaya göre yerel KONUMU + parmak
+preset'i); prefaba HİÇBİR ŞEY yazılmaz. Eller sahnenin ayrı kökleridir (`[VA El_*]`, `DontSave`) —
+prefabın altına sürüklenmez; silah kiti koşusu kaçak eli siler.
+⚠️ **Silahın dönüşü HER ZAMAN ana kumandanın dönüşüdür** ve kayıt DÖNÜŞ TAŞIMAZ (`itemRot =
+anchor.rot`, `itemPos = anchor.pos + anchor.rot * (−kayıt)`): ikinci el silahı çevirmez, silahın
+eksenini ön kabzaya döndüren bir **"iki elli nişan" YOKTUR ve eklenmez** — olsaydı ikinci el
+kabzayı tuttuğu anda silah kumandadan sapar, oyuncu bunu "el konumuna göre silah bozuk geliyor"
+diye yaşardı. Ayarlanabilir bir "silah dönüşü" alanı da yoktur; silah elde yatık görünüyorsa
+bakılacak tek yer `Model`'in prefabtaki yerleşimidir.
+⚠️ **Sözleşme "silah ele göre"dir, "el silaha göre" DEĞİL:** ana elde eşya kumandaya asılır, elin
+bileği kilitlenmez (izlemeden/kumandadan gelir). Ön kabzada ise ikinci elin **yalnız GÖRSELİ**
+sokete çekilir (`HandGripPoser`: kumanda `item ∘ kayıt` konumunda ve eşyayla hizalı, bilek onun
+anchor→bilek deltası ötesinde); bağın öteki tek sonucu saçılım/geri tepme çarpanıdır.
 ⚠️ **Parmak duruşu SLIDER'LA YAZILMAZ, preset'ten seçilir** (`HandGripPreset`: `Idle` hafif açık ·
 `Firing` işaret tetikte · `Grip` sarma; varsayılan ana kabza=Firing, ön kabza=Grip; boş el=Idle).
 Elin Inspector'ındaki (`GripHandAuthoring`) açılır kutudan seçilir, Scene View'da anında görünür,
@@ -698,7 +703,7 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 | `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → `Obstacle` layer'ındaki konveks olmayan collider'ları, trigger'ları, collider'sız damgalı objeleri ve **görünen yüzeyden şişkin** collider'ları (içbükey mesh convex işaretlenmiş → oyuncu boşlukta ceza alır) raporlar. ⚠️ Hiçbir şeyi düzeltmez; iki tespit de sessizce yanlış ceza ürettiği için bu tarama sahne kaydedilmeden koşturulur |
 | `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanlarını kurar: **iki uyarı yazısı** (engelin içi + alanın dışı) + hasar vinyeti (`CenterEyeAnchor` altında, yani kafaya kilitli). İdempotent, **tek seferlik** — rig tüm arenalarda örnek olduğu için her arenaya birden gider. ⚠️ Uyarı yazısının **yeri, boyu ve fontu** buradan gelir: prefabta elle kaydırılan/büyütülen bir örnek her koşuda geri yazılır, ayar `HmdOverlayBuilder` sabitlerinde değiştirilir. ⚠️ Vinyetin materyalini araç ÜRETİR (shader GUID'i import öncesi bilinemez); çalıştırılmadıkça karartma çalışır ama yazı/vinyet hiç çizilmez |
 | `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
-| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış **prefab kipinde**: `WPN_*`'ı prefab kipinde aç → **Ana/Ön Kabza Ellerini Oluştur** (sağ+sol) → kumanda çerçevelerini kabzalara sürükle/çevir → elin Inspector'ından **parmak preset'ini** seç (Idle · Firing · Grip) → gerekirse **Karşı Ele Aynala** → **Kaydet**. Kök = **kumanda (anchor)** çerçevesi (gizmo: mavi ok = kumandanın ilerisi), ISDK hayalet eli onun çocuğu; kayıt anchor'ın eşyaya göre pozu + preset, doğrudan `WD_*.asset`'e; **prefaba hiçbir şey yazılmaz** (poz düğümü yok). ⚠️ Kökü yalnız taşımak silahı kumandayla hizalı bırakır, kökü çevirmek ana elde SİLAHI çevirir; ön kabzada el silaha yapışır. ⚠️ Eller prefaba GİRMEZ (stage sahnesinin ayrı kökleri, `DontSave`) ve Play'e girerken / stage kapanınca / sahne değişince silinir |
+| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış **prefab kipinde**: `WPN_*`'ı prefab kipinde aç → **Ana/Ön Kabza Ellerini Oluştur** (sağ+sol) → kumanda çerçevelerini kabzalara TAŞI → elin Inspector'ından **parmak preset'ini** seç (Idle · Firing · Grip) → gerekirse **Karşı Ele Aynala** → **Kaydet**. Kök = **kumanda (anchor)** çerçevesi (gizmo: mavi ok = kumandanın ilerisi), altında kilitli Quest 3 kumanda modeli + ISDK hayalet eli; kayıt anchor'ın eşyaya göre KONUMU + preset, doğrudan `WD_*.asset`'e; **prefaba hiçbir şey yazılmaz** (poz düğümü yok). ⚠️ Kök YALNIZ TAŞINIR — silahla hizalı tutulur, çevirmenin oyunda karşılığı yoktur (silah her zaman kumandayla hizalı); ön kabzada yalnız elin görseli sokete yapışır. ⚠️ Eller prefaba GİRMEZ (stage sahnesinin ayrı kökleri, `DontSave`) ve Play'e girerken / stage kapanınca / sahne değişince silinir |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |
 | `… > Audio > Mod Sesleri` | Moda/haritaya göre değişen duyuru sesi eklenecek/değiştirilecek → `ModeAudioRegistry.asset`'i seçer (yoksa oluşturur). ⚠️ Düzenleme yeri **Inspector**'dır, menü yalnız kaydı bulur; mod ve harita orada **katalogdan seçilir** (elle yazılan ad kuralı sessizce eşleşmez hâle getirir) |
 | `… > Development > Dev` (`Ctrl+Alt+R`) | Rol seçimi (**player · admin**), hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek). ⚠️ Silah kavraması bu pencerenin işi DEĞİLDİR — o iş prefab kipinde, `Kavrama Pozu Stüdyosu`nda yapılır |

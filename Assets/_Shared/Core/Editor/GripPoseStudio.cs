@@ -16,29 +16,29 @@ namespace VortexArena.Core.Editor
     /// duracağını <b>gözlük takmadan</b> ayarlama tezgâhı.
     /// <para>
     /// <b>Akış:</b> <c>WPN_*</c> prefabını PREFAB KİPİNDE aç (çift tık) → stüdyo penceresi stage'i
-    /// kendiliğinden tanır → <b>Elleri Oluştur</b> → hayalet eller sahnede belirir → elleri
-    /// kabzalara sürükle/çevir, parmak duruşunu elin Inspector'ından preset olarak seç → istersen
-    /// <b>Karşı Ele Aynala</b> → <b>Kaydet</b>.
+    /// kendiliğinden tanır → <b>Elleri Oluştur</b> → kumanda kökleri (altlarında kumanda modeli +
+    /// hayalet el) sahnede belirir → kökleri kabzalara TAŞI, parmak duruşunu elin Inspector'ından
+    /// preset olarak seç → istersen <b>Karşı Ele Aynala</b> → <b>Kaydet</b>.
     /// </para>
     /// <para>
     /// ⚠️ <b>Kullanıcının sürüklediği kök KUMANDA (anchor) çerçevesidir</b> — <c>[VA El_*]</c> kökü
     /// <c>OVRCameraRig.left/rightHandAnchor</c>'ın silah üstündeki yerini temsil eder ve kayıt bu kökün
-    /// eşyaya göre pozudur (<see cref="ItemGripPose"/>: anchor uzayı, telle aynı). Kökün +Z'si
-    /// kumandanın ilerisidir: kök silahla hizalıyken (kimlik) silah oyunda kumandayla hizalı gelir,
-    /// yani <b>kökü döndürmeden yalnız taşımak silahın yönüne dokunmaz</b>. Kökün altında iki
-    /// KİLİTLİ görsel çocuk durur: <b>Quest 3 kumanda modeli</b> (kimlik pozda — oyunda anchor'ın altında
-    /// tam böyle durur, silah ONA göre hizalanır) ve <b>ISDK hayalet eli</b> (köke göre anchor→bilek
-    /// pozunda: ölçülmüş sabit <see cref="HandGripConvention.AnchorToWrist"/> varsa o, yoksa hayaletin
-    /// kendi iskeletinden tahmin — <see cref="ResolveGhostOffset"/>). Hayalet KAYDA GİRMEZ; tahminde
-    /// yalnız elin görseli gerçek elden biraz sapar. Kayıt bilek uzayında tutulsaydı "eli hiç
-    /// döndürmedim" bile anchor→bilek deltası kadar (onlarca derece) dönük bir silah üretirdi.
+    /// eşyaya göre KONUMUDUR (<see cref="ItemGripPose"/>: anchor uzayı, telle aynı; dönüş yok).
+    /// <b>Silah oyunda HER ZAMAN kumandayla hizalıdır</b> — kök çevrilse bile silahın yönü değişmez;
+    /// bu yüzden kökler silahla hizalı tutulur (<see cref="KeepRootsAligned"/>), yalnız TAŞINIR.
+    /// Kökün altında iki KİLİTLİ görsel çocuk durur: <b>Quest 3 kumanda modeli</b> (kimlik pozda —
+    /// oyunda anchor'ın altında tam böyle durur; silah ona göre nereye oturacaksa kökü oraya taşı) ve
+    /// <b>ISDK hayalet eli</b> (köke göre anchor→bilek pozunda: ölçülmüş sabit
+    /// <see cref="HandGripConvention.AnchorToWrist"/> varsa o, yoksa hayaletin kendi iskeletinden
+    /// tahmin — <see cref="ResolveGhostOffset"/>). Hayalet KAYDA GİRMEZ; tahminde yalnız elin görseli
+    /// gerçek elden biraz sapar.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Ana kabzada tezgâhtaki kök SİLAHI DÖNDÜRÜR</b>: runtime ana eli
-    /// <c>item = anchor ∘ Inverse(kayıt)</c> ile çözüyor, yani "silah ele göre durur, el silaha göre
-    /// değil". Burada kökü kabzada çevirmek oyunda namlunun baktığı yönü değiştirir. ÖN kabzada ise
-    /// tersi geçerlidir: ikinci elin kumandası <c>item ∘ kayıt</c>'a, sentetik bilek onun deltası
-    /// kadar ötesine kilitlenir, yani el silaha yapışır.
+    /// ⚠️ Kayıt bir dönüş taşısaydı kökü çeviren (ya da yanlış eksende çizilen bir hayalet eli
+    /// düzeltmeye çalışan) herkes oyunda silahı kumandadan saptırırdı — belirtisi "el konumuna göre
+    /// silah bozuk geliyor"dur. ÖN kabzada da dönüş yoktur: ikinci elin kumandası silahla hizalı sayılır,
+    /// sentetik bilek onun deltası kadar ötesine kilitlenir (el silaha yapışır); silah ikinci ele göre
+    /// dönmez.
     /// </para>
     /// <para>
     /// ⚠️ <b>Eller prefabın İÇİNE girmez</b>: her el, prefab stage sahnesinin ayrı bir KÖK objesidir
@@ -234,9 +234,10 @@ namespace VortexArena.Core.Editor
 
         /// <summary>
         /// Unity'nin prefab kaydının gizlediği elleri hiyerarşiye geri getirir (bkz.
-        /// <see cref="InstallCleanupHooks"/> içindeki gerekçe). Her editör tikinde koşar; bu
-        /// yüzden ucuz olmak zorundadır — bayrağı bozulmamış ele HİÇ yazmaz, hiyerarşiyi yalnız
-        /// gerçekten bir şey düzelttiğinde tazeler.
+        /// <see cref="InstallCleanupHooks"/> içindeki gerekçe) ve kökleri silahla hizalı tutar
+        /// (<see cref="KeepRootsAligned"/>). Her editör tikinde koşar; bu yüzden ucuz olmak
+        /// zorundadır — bayrağı bozulmamış ele HİÇ yazmaz, hiyerarşiyi yalnız gerçekten bir şey
+        /// düzelttiğinde tazeler.
         /// </summary>
         private static void RestoreHandFlags()
         {
@@ -247,6 +248,12 @@ namespace VortexArena.Core.Editor
             }
 
             List<GripHandAuthoring> hands = FindHands(stage.scene);
+            Transform weaponRoot = StageWeaponRoot(stage);
+            if (weaponRoot != null)
+            {
+                KeepRootsAligned(weaponRoot, hands);
+            }
+
             bool restored = false;
             for (int i = 0; i < hands.Count; i++)
             {
@@ -464,10 +471,11 @@ namespace VortexArena.Core.Editor
 
             EditorGUILayout.HelpBox(
                 "Yazan tek düğme Kaydet'tir. Sürüklediğin kök KUMANDADIR — altındaki kumanda modeli " +
-                "oyunda izlenen kumandanın ta kendisidir, silahı ONA göre hizala (mavi ok = kumandanın " +
-                "ilerisi). Kökü yalnız TAŞIRSAN silah oyunda kumandayla hizalı gelir, kökü ÇEVİRİRSEN ana " +
-                "elde SİLAH çevrilir; ön kabzada el silaha yapışır. Hayalet el ve kumanda modeli " +
-                "kilitlidir (taşınmaz) — kayıt kökten okunur. Parmaklar preset'ten gelir.",
+                "oyunda izlenen kumandanın ta kendisidir. Silah oyunda HER ZAMAN kumandayla hizalıdır: " +
+                "kökü yalnız TAŞI (döndürmek bir şey değiştirmez, kök silahla hizalı tutulur), kumandayı " +
+                "kabzada gerçekte durduğu yere koy. Ön kabzada el silaha yapışır, silah ikinci ele göre " +
+                "dönmez. Hayalet el ve kumanda modeli kilitlidir (taşınmaz) — kayıt kökten okunur. " +
+                "Parmaklar preset'ten gelir.",
                 MessageType.None);
 
             if (AnyGhostEstimated(hands))
@@ -475,7 +483,7 @@ namespace VortexArena.Core.Editor
                 EditorGUILayout.HelpBox(
                     "Hayalet el TAHMİNLE çizildi (anchor→bilek sabiti ölçülmemiş: " +
                     "HandGripConvention.*AnchorToWrist = kimlik). Elin kumandaya göre duruşu yaklaşıktır, " +
-                    "kumanda modeli ise kesindir — hizayı ona göre yap. Kayıt bundan etkilenmez. Tam el " +
+                    "kumanda modeli ise kesindir — yerleşimi ona göre yap. Kayıt bundan etkilenmez. Tam el " +
                     "için HandGripPoser'ın başlıkta bastığı iki satırı (editör Play'i ya da APK'da " +
                     "adb logcat -s Unity) sabite yapıştır.",
                     MessageType.Info);
@@ -557,15 +565,14 @@ namespace VortexArena.Core.Editor
                     continue;
                 }
 
-                Pose local = AnchorInItem(weaponRoot, hand.transform);
+                Vector3 local = AnchorInItem(weaponRoot, hand.transform);
                 string state = definition.HasGrip(hand.Kind, hand.RightHand)
                     ? "yazılmış"
                     : "yazılmamış";
 
                 EditorGUILayout.LabelField(
                     $"{hand.Kind} · {(hand.RightHand ? "sağ" : "sol")}",
-                    $"{Format(local.position)}  {Format(local.rotation.eulerAngles)}  " +
-                    $"{HandGripPresets.Label(hand.Preset)}  ({state})");
+                    $"{Format(local)}  {HandGripPresets.Label(hand.Preset)}  ({state})");
             }
         }
 
@@ -852,8 +859,8 @@ namespace VortexArena.Core.Editor
         /// <b>Ölçülmüş sabit varsa o</b> (<see cref="HandGripConvention.AnchorToWrist"/>, kimlik değilse):
         /// başlıkta <c>HandGripPoser</c>'ın logladığı değer, tek gerçek. <b>Yoksa TAHMİN</b> — el
         /// kökün tam üstünde ve aynı eksende çizilseydi ISDK bilek çerçevesi kumandayla aynı eksende
-        /// olmadığı için "yan yatmış" bir el görünür, kullanıcı da onu düzeltmek için KÖKÜ çevirir ve
-        /// oyunda silahı döndürürdü. Tahminin iki parçası: dönüş = anchor uzayındaki el anatomisi
+        /// olmadığı için "yan yatmış" bir el görünür ve kullanıcı yerleşimi ona göre yapardı; oysa
+        /// gerçek el kumandayı başka açıyla tutuyor. Tahminin iki parçası: dönüş = anchor uzayındaki el anatomisi
         /// (<see cref="HandGripConvention.AnchorBasis"/> — uzak avatarın da kullandığı kabul) ⇐ hayaletin
         /// KENDİ iskeletinden ölçülen kemik bazı (<see cref="HandGripConvention.Correction"/>); konum =
         /// avuç merkezi kumandanın üstünde sayılır (<c>HandGripPivot</c>: avuç ≡ anchor) ve avuç merkezi
@@ -965,10 +972,9 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Kumanda kökünün başlangıç duruşu — üç kaynak, <b>sırayla</b>:
+        /// Kumanda kökünün başlangıç pozu — konum üç kaynaktan, <b>sırayla</b>:
         /// (1) tanımdaki kayıt, (2) kabza parçasının kabaca ortası, (3) silahın biraz üstü.
-        /// (2) ve (3)'te dönüş silahınkidir (kimlik kayıt): kök silahla hizalı doğar, yani "oluştur →
-        /// yalnız taşı → Kaydet" silahı oyunda kumandayla hizalı bırakır.
+        /// Dönüş HER ZAMAN silahınkidir (kayıt dönüş taşımaz; oyunda silah kumandayla hizalıdır).
         /// <para>⚠️ (1) kaydın birebir tersidir: "elleri oluştur → hiç dokunma → Kaydet" yazılı
         /// değeri DEĞİŞTİRMEZ. O kimlik bozulursa uzay yönlerinden biri ters demektir ve bakılacak
         /// tek yer bu dosyadaki <see cref="AnchorInItem"/> ile buradaki geri bileşimdir.</para>
@@ -980,10 +986,8 @@ namespace VortexArena.Core.Editor
         {
             if (definition.HasGrip(kind, rightHand))
             {
-                Pose local = definition.GetGrip(kind, rightHand).LocalPose;
-                return new Pose(
-                    weaponRoot.position + weaponRoot.rotation * local.position,
-                    weaponRoot.rotation * local.rotation);
+                Vector3 local = definition.GetGrip(kind, rightHand).position;
+                return new Pose(weaponRoot.position + weaponRoot.rotation * local, weaponRoot.rotation);
             }
 
             // ⚠️ Önbellek YOK ve gerekmiyor: bu tarama el kurulurken kavrama noktası başına BİR kez
@@ -999,19 +1003,38 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Kumanda kökünün eşyaya göre yerel pozu — kaydın <b>tek</b> hesap yolu
-        /// (<see cref="ItemGripPose"/>: anchor uzayı).
+        /// Kumanda kökünün eşyaya göre yerel KONUMU — kaydın <b>tek</b> hesap yolu
+        /// (<see cref="ItemGripPose"/>: anchor uzayı, dönüş yok).
         /// <para>⚠️ <see cref="Transform.InverseTransformPoint"/> KULLANILMAZ: kayıt METREdir ve
         /// eşyanın görsel ölçeğiyle (<c>WPN_*</c> köklerinde 0.8) küçültülmemeli. Geri bileşim de
         /// aynı simetrik yolla yazılır (<see cref="ResolveStartPose"/>) — iki uç tek sözleşmede
         /// kalsın.</para>
         /// </summary>
-        private static Pose AnchorInItem(Transform weaponRoot, Transform handRoot)
+        private static Vector3 AnchorInItem(Transform weaponRoot, Transform handRoot)
         {
-            Quaternion inverse = Quaternion.Inverse(weaponRoot.rotation);
-            return new Pose(
-                inverse * (handRoot.position - weaponRoot.position),
-                inverse * handRoot.rotation);
+            return Quaternion.Inverse(weaponRoot.rotation) * (handRoot.position - weaponRoot.position);
+        }
+
+        /// <summary>
+        /// Kökleri silahla hizalı tutar: kayıt dönüş taşımadığı için köke verilen dönüşün oyunda
+        /// karşılığı YOKTUR — kullanıcı çevirse bile kök geri hizalanır ki tezgâhta görülen ile
+        /// oyunda olan ayrışmasın. Her editör tikinde koşar, yalnız sapan köke yazar.
+        /// </summary>
+        private static void KeepRootsAligned(Transform weaponRoot, List<GripHandAuthoring> hands)
+        {
+            for (int i = 0; i < hands.Count; i++)
+            {
+                GripHandAuthoring hand = hands[i];
+                if (hand == null)
+                {
+                    continue;
+                }
+
+                if (Quaternion.Angle(hand.transform.rotation, weaponRoot.rotation) > 0.01f)
+                {
+                    hand.transform.rotation = weaponRoot.rotation;
+                }
+            }
         }
 
         /// <summary>
@@ -1068,8 +1091,8 @@ namespace VortexArena.Core.Editor
         /// ⚠️ <b>ISDK'nın <c>MirrorHandGrabPose</c>'u KULLANILMAZ:</b> o, aynalanacak bir yüzey
         /// (<c>Grabbable</c> collider'ı) bulamadığında "best guess" adı altında keyfi bir dönüş
         /// uyguluyor — bizim tezgâhta hiç yüzey yok, yani her aynalama o tahmine düşerdi. Burada
-        /// yapılan matematik tek satırdır ve gözle doğrulanabilir: <c>p=(x,y,z) → (−x,y,z)</c>,
-        /// <c>q=(qx,qy,qz,qw) → (qx,−qy,−qz,qw)</c>.
+        /// yapılan matematik tek satırdır ve gözle doğrulanabilir: <c>p=(x,y,z) → (−x,y,z)</c>
+        /// (dönüş yok — kök zaten silahla hizalı).
         /// </para>
         /// <para>
         /// ⚠️ Aynalama bir <b>BAŞLANGIÇTIR</b>, son söz değil: silah kabzası sagital düzlemde
@@ -1099,10 +1122,8 @@ namespace VortexArena.Core.Editor
                 return false;
             }
 
-            Pose local = AnchorInItem(weaponRoot, source.transform);
-            var mirroredPosition = new Vector3(-local.position.x, local.position.y, local.position.z);
-            var mirroredRotation = new Quaternion(
-                local.rotation.x, -local.rotation.y, -local.rotation.z, local.rotation.w);
+            Vector3 local = AnchorInItem(weaponRoot, source.transform);
+            var mirroredPosition = new Vector3(-local.x, local.y, local.z);
 
             GripHandAuthoring opposite = EnsureHand(stage, weaponRoot, definition,
                 source.Kind, !source.RightHand);
@@ -1113,7 +1134,7 @@ namespace VortexArena.Core.Editor
 
             opposite.transform.SetPositionAndRotation(
                 weaponRoot.position + weaponRoot.rotation * mirroredPosition,
-                weaponRoot.rotation * mirroredRotation);
+                weaponRoot.rotation);
             opposite.transform.localScale = Vector3.one;
             opposite.Preset = source.Preset;
 
@@ -1185,7 +1206,7 @@ namespace VortexArena.Core.Editor
                     continue;
                 }
 
-                Pose local = AnchorInItem(weaponRoot, hand.transform);
+                Vector3 local = AnchorInItem(weaponRoot, hand.transform);
                 definition.EditorSetGrip(hand.Kind, hand.RightHand, local, hand.Preset);
                 written++;
             }

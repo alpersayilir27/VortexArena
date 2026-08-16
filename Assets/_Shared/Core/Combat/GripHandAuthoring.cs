@@ -27,10 +27,10 @@ namespace VortexArena.Core.Combat
     /// </para>
     /// <para>
     /// ⚠️ Bu objenin <b>transformu KUMANDA (anchor) çerçevesidir</b> — <c>OVRCameraRig</c> el
-    /// anchor'ının silah üstündeki yeri; kayıt da bu uzaydadır (<see cref="ItemGripPose"/>). +Z
-    /// kumandanın ilerisidir: kök silahla hizalıyken silah oyunda kumandayla hizalı gelir. ISDK
-    /// hayalet eli bu kökün ÇOCUĞUDUR (<see cref="Puppet"/>) ve köke göre ölçülmüş anchor→bilek
-    /// sabitiyle durur; kayda giren şey kökün pozudur, çocuğun değil.
+    /// anchor'ının silah üstündeki yeri; kayda giren şey bu kökün KONUMUDUR (<see cref="ItemGripPose"/>:
+    /// dönüş yok, silah oyunda her zaman kumandayla hizalıdır — kök de silahla hizalı tutulur, yalnız
+    /// taşınır). ISDK hayalet eli ve kumanda modeli bu kökün ÇOCUKLARIDIR (<see cref="Puppet"/>);
+    /// kayda giren şey kökün konumudur, çocukların değil.
     /// </para>
     /// </summary>
     [DisallowMultipleComponent]
@@ -130,9 +130,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Kumanda kökünün gizmosu: mavi ok = kumandanın ilerisi (kök silahla hizalıyken namlu yönü),
-        /// yeşil = yukarı, kırmızı = sağ, ortada küçük küre. Kökün kendisinde renderer yoktur — bu
-        /// gizmo olmasa kullanıcı neyi sürüklediğini göremezdi.
+        /// Kumanda kökünün gizmosu: mavi ok = kumandanın ilerisi (= namlu yönü; kök silahla hizalı
+        /// tutulur), yeşil = yukarı, kırmızı = sağ, ortada küçük küre. Kökün kendisinde renderer
+        /// yoktur — bu gizmo olmasa kullanıcı neyi sürüklediğini göremezdi.
         /// </summary>
         private void OnDrawGizmos()
         {
