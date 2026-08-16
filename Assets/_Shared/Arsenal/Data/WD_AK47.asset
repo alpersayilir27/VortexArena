@@ -18,12 +18,12 @@ MonoBehaviour:
   holdMode: 1
   primaryGripRight:
     authored: 1
-    position: {x: 0.068632536, y: -0.0967, z: -0.0708}
+    position: {x: 0.0379, y: -0.0038, z: -0.0502}
     euler: {x: -0, y: 0, z: 0}
     preset: 1
   primaryGripLeft:
     authored: 1
-    position: {x: -0.068632536, y: -0.0967, z: -0.0708}
+    position: {x: -0.0379, y: -0.0038, z: -0.0502}
     euler: {x: -0, y: 0, z: 0}
     preset: 1
   secondaryGripRight:
