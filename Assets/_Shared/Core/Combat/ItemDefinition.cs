@@ -220,8 +220,24 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
+        /// Ön kabza kaydı <b>en az bir el için yazılmış</b> mı (yalnız <see cref="IsTwoHanded"/> iken
+        /// anlamlı; tek elli eşyada daima <c>false</c>). Ön kabzayı okuyan HER yol
+        /// (<c>Weapon</c> soketi ve kapısı, <c>ItemGripSolver</c>, <c>RemoteAvatar</c>) önce buna bakar.
+        /// <para>⚠️ <b>Yazılmamış ön kabza EŞYANIN KÖKÜDÜR:</b> <see cref="GetGrip"/> iki el de yoksa
+        /// <c>default</c> (sıfır poz) döner, yani <see cref="SecondaryGripPosition"/> kökü verir. O nokta
+        /// çoğu silahta ana elin bileğinin dibinde durur — kapı burada açık kalsaydı soket küresi ana
+        /// elin üstünde belirir, ikinci el "kabzada" tutamaz ve hata olarak değil "gösterge yanlış
+        /// yerde çıkıyor" olarak görünürdü. Bu yüzden yazılmamış ön kabza <b>yoktur</b>: soket
+        /// çizilmez, ikinci el bağlanmaz, iki elli çözüm koşmaz ve <c>Weapon</c> bunu bir kez uyarır.
+        /// Kaydı yazan tek yer stüdyodur (<c>Kavrama Pozu Stüdyosu</c>).</para>
+        /// </summary>
+        public bool HasSecondaryGrip =>
+            IsTwoHanded && (secondaryGripRight.IsAuthored || secondaryGripLeft.IsAuthored);
+
+        /// <summary>
         /// Ön kabza noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — yalnız
-        /// <see cref="IsTwoHanded"/> iken anlamlı. İkinci elin dünya hedefi
+        /// <see cref="HasSecondaryGrip"/> iken anlamlı (yazılmamışsa sıfır = eşyanın kökü döner;
+        /// çağıran önce o kapıya bakar). İkinci elin dünya hedefi
         /// <c>item.position + item.rotation * bu değer</c> ile bulunur (⚠️ <c>TransformPoint</c>
         /// DEĞİL: ölçü metredir, eşyanın görsel ölçeğiyle büyümez).
         /// </summary>

@@ -2108,6 +2108,13 @@ namespace VortexArena.Core.Player
             // (ItemGripSolver), burada yalnız o elin bileği soketin üstüne getiriliyor.
             // ⚠️ Kayıt SORULAN elden okunur: bu dala yalnız !isPrimaryHand iken girilir, yani
             // ön kabzayı saran el sorulan elin ta kendisidir.
+            // ⚠️ Yazılmamış ön kabza eşyanın köküdür (ItemDefinition.HasSecondaryGrip) — el oraya
+            // çekilmez, teldeki pozunda kalır.
+            if (!definition.HasSecondaryGrip)
+            {
+                return false;
+            }
+
             var wristWorld = new Pose(
                 item.position + itemRotation * definition.SecondaryGripPosition(rightHand),
                 itemRotation * definition.SecondaryGripRotation(rightHand));
@@ -2189,7 +2196,9 @@ namespace VortexArena.Core.Player
 
             Transform item = _shownPrimaryRight ? _itemInstanceR : _itemInstanceL;
             ItemDefinition definition = _shownPrimaryRight ? _itemDefR : _itemDefL;
-            if (item == null || definition == null)
+            // Yazılmamış ön kabza eşyanın köküdür (ItemDefinition.HasSecondaryGrip) — boş el oraya
+            // yapıştırılmaz.
+            if (item == null || definition == null || !definition.HasSecondaryGrip)
             {
                 return;
             }
