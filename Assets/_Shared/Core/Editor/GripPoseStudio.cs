@@ -748,7 +748,16 @@ namespace VortexArena.Core.Editor
                 // Unity'nin kayıt yan etkisiyle gizlenmiş (HideAndDontSave) bir el burada
                 // hiyerarşiye geri döner — "Elleri Oluştur" aynı zamanda kayıp elleri diriltir.
                 // Görsel çocuklar (hayalet el, kumanda modeli) da yerlerine oturtulur: elle kaydırılmış
-                // bir çocuk kayda girmez, ama kullanıcıyı yanıltır — buradan geri gelir.
+                // bir çocuk kayda girmez, ama kullanıcıyı yanıltır — buradan geri gelir. Ofseti hiç
+                // yazılmamış (kimlik + ölçülmemiş) bir el varsa ofset prototipten yeniden çözülür.
+                if (!existing.GhostOffsetMeasured && existing.GhostOffset.Equals(Pose.identity) &&
+                    TryGetGhostProvider(out HandGhostProvider existingProvider))
+                {
+                    HandGhost prototypeForExisting = existingProvider.GetHand(existing.Handedness);
+                    Pose offset = ResolveGhostOffset(prototypeForExisting, rightHand, out bool measured);
+                    existing.SetGhostOffset(offset, measured);
+                }
+
                 ApplyGhostOffset(existing);
                 EnsureControllerModel(existing.gameObject, existing.RightHand);
                 MarkDontSave(existing.gameObject);
@@ -798,9 +807,9 @@ namespace VortexArena.Core.Editor
 
             HandPuppet puppet = ghost.GetComponent<HandPuppet>();
 
-            // ⚠️ Ofset PRESET UYGULANMADAN ölçülür (bind pozu): tahmin başparmak kökünün yerini okuyor,
-            // preset o kemiği kıvırınca ölçü o karenin duruşunu içerirdi.
-            Pose ghostOffset = ResolveGhostOffset(puppet, handGo.transform, rightHand, out bool measured);
+            // Ofset PROTOTİPTEN (bind pozu) ölçülür: tahmin başparmak kökünün yerini okuyor, canlı
+            // örnekte preset o kemiği kıvırınca ölçü o karenin duruşunu içerirdi.
+            Pose ghostOffset = ResolveGhostOffset(prototype, rightHand, out bool measured);
             authoring.SetGhostOffset(ghostOffset, measured);
             ApplyGhostOffset(authoring);
             EnsureControllerModel(root, rightHand);
@@ -853,8 +862,7 @@ namespace VortexArena.Core.Editor
         /// <para>⚠️ Tahmin KAYDA GİRMEZ: kayıt kökün pozudur, bu yalnız hayaletin nerede çizileceğidir.
         /// Sabit ölçülüp yapıştırılınca tahmin hiç okunmaz.</para>
         /// </summary>
-        private static Pose ResolveGhostOffset(HandPuppet puppet, Transform ghostRoot, bool rightHand,
-            out bool measured)
+        private static Pose ResolveGhostOffset(HandGhost prototype, bool rightHand, out bool measured)
         {
             Pose constant = HandGripConvention.AnchorToWrist(rightHand);
             measured = !constant.Equals(Pose.identity);
@@ -863,6 +871,9 @@ namespace VortexArena.Core.Editor
                 return constant;
             }
 
+            // Ölçü PROTOTİP (asset, bind pozu) üstünden alınır — canlı örnek preset'le kıvrılmış olabilir.
+            HandPuppet puppet = prototype != null ? prototype.GetComponent<HandPuppet>() : null;
+            Transform ghostRoot = prototype != null ? prototype.transform : null;
             if (puppet == null || ghostRoot == null ||
                 !TryFindJoint(puppet, HandJointId.HandMiddle1, out Transform middleProximal) ||
                 !TryFindJoint(puppet, HandJointId.HandThumb2, out Transform thumbProximal) ||

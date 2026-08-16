@@ -574,8 +574,10 @@ sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silaht
 ⚠️ **Kavrama gözlük takmadan, STÜDYODA yazılır:** `Tools > VortexArena > Weapons > Kavrama Pozu
 Stüdyosu` → `WPN_*` prefabını **prefab kipinde** aç → *Ana Kabza Ellerini Oluştur* (+ TwoHand'de
 *Ön Kabza Ellerini Oluştur*) → **kumanda çerçevelerini** Scene View'da kabzaya sürükle/çevir →
-**Kaydet**. Sürüklenen kök (`[VA El_*]`) kumandanın (anchor) çerçevesidir; ISDK hayalet eli onun
-ÇOCUĞUDUR ve köke göre `HandGripConvention.AnchorToWrist` sabitiyle ötelenir.
+**Kaydet**. Sürüklenen kök (`[VA El_*]`) kumandanın (anchor) çerçevesidir; altında iki KİLİTLİ görsel
+çocuk durur — Quest 3 kumanda modeli (kimlik pozda: oyunda izlenen kumandanın kendisi, silah ONA göre
+hizalanır) ve ISDK hayalet eli (köke göre `HandGripConvention.AnchorToWrist` sabiti; sabit ölçülmemişse
+iskeletten tahmin — kayda girmez). ⚠️ **Çocukları TAŞIMA** (kilitli, kayıt kökten okunur).
 Kayıt `WD_*.asset`'e gider (`ItemGripPose`: **anchor'ın** eşyaya göre yerel pozu + parmak preset'i);
 prefaba HİÇBİR ŞEY yazılmaz. Eller sahnenin ayrı kökleridir (`[VA El_*]`, `DontSave`) — prefabın
 altına sürüklenmez; silah kiti koşusu kaçak eli siler.
