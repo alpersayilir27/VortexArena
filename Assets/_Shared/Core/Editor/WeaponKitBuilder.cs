@@ -10,10 +10,18 @@ using Object = UnityEngine.Object;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Build Weapon Prefabs</c> — tablodaki silahların kitini
-    /// üretir/günceller: <c>WD_&lt;Ad&gt;.asset</c> (WeaponDefinition), mevcut
-    /// <c>WPN_&lt;Ad&gt;.prefab</c>'ların bağları/VFX'i, <c>FX_RemoteShot.prefab</c> ve
+    /// <b>Silah kiti</b> — tablodaki silahların kitini üretir/günceller: <c>WD_&lt;Ad&gt;.asset</c>
+    /// (WeaponDefinition), mevcut <c>WPN_&lt;Ad&gt;.prefab</c>'ların bağları/VFX'i,
+    /// <c>FX_RemoteShot.prefab</c>, ön kabza göstergesi (<c>VA_GripIndicator.prefab</c>) ve
     /// <c>Resources/WeaponCatalog.asset</c>.
+    /// <para>
+    /// <b>Ayrı bir menü öğesi YOKTUR:</b> <c>Tools &gt; VortexArena &gt; Build &gt; Configure All Build
+    /// Elements</c> her eşitlemede (<c>BuildElementsConfigurator.SyncAll</c> — "Hepsini Yapılandır" ve
+    /// "Yalnız Senkronize Et") <see cref="BuildAll"/>'ı koşar; "Hazırlık" bölümü de durumunu
+    /// (<see cref="AreWeaponsReady"/>) gösterir. Yani tabloya silah eklemek / kiti tazelemek =
+    /// o pencerede senkronize etmek. Koşu idempotenttir; her koşuda değişmeyen asset'ler aynı
+    /// içerikle yeniden yazılır (diff üretmez).
+    /// </para>
     /// <para>
     /// <b>WPN prefabı YOKTAN üretilmez:</b> gövde (model hiyerarşisi, Muzzle/MuzzleFlash/Eject
     /// yerleşimi) elle ayarlanan bir şeydir ve prefab repoda yaşar; araç onu yerinde
@@ -135,7 +143,7 @@ namespace VortexArena.Core.Editor
                 ["12gauge"] = (PrefabDir + "/Casing_12gauge.prefab", PackRoot + "/Prefabs/Bullets/Bullet_ShotGun_A.prefab"),
             };
 
-        private const string Log = "[BuildWeaponPrefabs] ";
+        private const string Log = "[WeaponKit] ";
 
         // Tüm silahlarda ortak sayılar (tablo başlığındaki varsayılanlar).
         //
@@ -489,11 +497,15 @@ namespace VortexArena.Core.Editor
 
         private static readonly Dictionary<string, Type> ResolvedTypes = new Dictionary<string, Type>();
 
-        // ------------------------------------------------------------ menüler
+        // ------------------------------------------------------------ giriş
 
-        /// <summary>Tam akış: WD asset'leri → WPN prefablarının güncellenmesi → FX → katalog → ikinci geçiş.</summary>
-        [MenuItem("Tools/VortexArena/Weapons/Build Weapon Prefabs", false, 20)]
-        public static void BuildAll()
+        /// <summary>
+        /// Tam akış: WD asset'leri → WPN prefablarının güncellenmesi → FX + gösterge → katalog →
+        /// ikinci geçiş. Tek satırlık özet döner (eşitleme raporuna girer); ayrıntı konsoldadır.
+        /// <para>Çağıran <c>BuildElementsConfigurator.SyncAll</c>'dır (ve "Hazırlık" satırı);
+        /// menü öğesi yoktur.</para>
+        /// </summary>
+        public static string BuildAll()
         {
             _warnings = 0;
             _legacyNodesRemoved = 0;
@@ -504,6 +516,7 @@ namespace VortexArena.Core.Editor
             bool fxCreated = false;
             bool indicatorCreated = false;
             bool catalogCreated = false;
+            string summary;
 
             EnsureFolder(DataDir);
             EnsureFolder(PrefabDir);
@@ -583,13 +596,14 @@ namespace VortexArena.Core.Editor
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
 
-                Debug.Log(Log + "Bitti: WD " + wdNew + " yeni / " + (Specs.Length - wdNew) + " güncellendi · " +
+                summary = "silah kiti: WD " + wdNew + " yeni / " + (Specs.Length - wdNew) + " güncellendi · " +
                           "WPN " + wpnRebound + " güncellendi, " + wpnFailed + " başarısız · " +
                           "FX_RemoteShot " + (fxCreated ? "üretildi" : "mevcut") + " · " +
                           "VA_GripIndicator " + (indicatorCreated ? "üretildi" : "mevcut") + " · " +
                           "WeaponCatalog " + (catalogCreated ? "üretildi" : "güncellendi") + " · " +
                           "eski kavrama düğümü " + _legacyNodesRemoved + " silindi · " +
-                          _warnings + " uyarı.");
+                          _warnings + " uyarı.";
+                Debug.Log(Log + summary);
 
                 ReportUnbakedWeapons();
                 ReportSilentWeapons(defs);
@@ -604,22 +618,8 @@ namespace VortexArena.Core.Editor
                     }
                 }
             }
-        }
 
-        /// <summary>Yalnız ADIM 4+5: kataloğu ve WD.prefab bağlarını tazeler; prefab üretmez.</summary>
-        [MenuItem("Tools/VortexArena/Weapons/Build Weapon Prefabs (Yalnız Kataloğu Tazele)", false, 21)]
-        public static void RefreshCatalogOnly()
-        {
-            _warnings = 0;
-
-            bool catalogCreated = UpdateCatalog();
-            LinkDefinitionPrefabs();
-
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-
-            Debug.Log(Log + "Katalog tazelendi (WeaponCatalog " + (catalogCreated ? "üretildi" : "güncellendi") + ") · " +
-                      _warnings + " uyarı.");
+            return summary;
         }
 
         // ------------------------------------------------- ADIM 1: WD asset'leri
@@ -1174,7 +1174,7 @@ namespace VortexArena.Core.Editor
                 else
                 {
                     Warn("WeaponCatalog: VA_GripIndicator.prefab yok — secondaryGripIndicatorPrefab boş " +
-                         "kaldı (ön kabza göstergesi çizilmez; tam 'Build Weapon Prefabs' üretir).");
+                         "kaldı (ön kabza göstergesi çizilmez; tam kit koşusu üretir).");
                 }
             }
 

@@ -13,7 +13,9 @@ namespace VortexArena.Core.Editor
     /// <c>Tools &gt; VortexArena &gt; Build &gt; Configure All Build Elements</c> — arena klasör
     /// ağacını <b>tek doğruluk kaynağı</b> sayıp kayıt yerlerini ona EŞİTLER: Build Settings,
     /// <c>GameCatalog.maps</c>, dolu <c>ModeDefinition.maps</c> listeleri ve
-    /// <c>Server/config/maps.json</c>.
+    /// <c>Server/config/maps.json</c>. Aynı eşitleme <b>silah kitini</b> (WD asset'leri, WPN
+    /// prefab bağları, FX/gösterge prefabları, <c>WeaponCatalog</c>) ve <b>net eşya kataloğunu</b> da
+    /// koşar (<see cref="SyncWeaponKit"/>) — build'e giren, tablodan türeyen her şey tek düğmede.
     /// <para>
     /// <b>Neden eşitleme, ekleme değil:</b> yalnız ekleyen bir araç silinen arenanın satırını
     /// Build Settings'te ve katalog listelerinde "Missing" olarak bırakır; APK build'i
@@ -282,11 +284,12 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Build öncesi çalıştırılmış olması gereken diğer araçların durumu.
+        /// Build öncesi bakılan hazırlık satırları.
         /// <para>
-        /// ⚠️ Buradaki denetimler <b>yazmaz</b>, yalnız okur: tetiği kullanıcı çeker. Aksi hâlde
-        /// her arena senkronu paylaşımlı prefabları (rig, WPN) yeniden serialize eder ve git
-        /// diff'i her seferinde gürültüyle dolardı.
+        /// ⚠️ Buradaki denetimler <b>yazmaz</b>, yalnız okur. Düğmesi olan satırlar (rig prefabına
+        /// yazan HMD katmanları gibi) tetiği kullanıcıya bırakır; silah kiti ve net eşya kataloğu ise
+        /// zaten her eşitlemede koşuyor (<see cref="SyncWeaponKit"/>) — onların satırı yalnız durum
+        /// gösterir, kalan ✗ insan adımıdır (kavrama/ses/kimlik).
         /// </para>
         /// </summary>
         private void DrawReadiness()
@@ -357,7 +360,8 @@ namespace VortexArena.Core.Editor
 
             EditorGUILayout.HelpBox(
                 "\"Yalnız Senkronize Et\" aktif sahneye DOKUNMAZ ve sahne açık olmasa da çalışır — " +
-                "silinen bir arenanın Build Settings / katalog kalıntısını temizlemenin yolu budur.",
+                "silinen bir arenanın Build Settings / katalog kalıntısını temizlemenin yolu budur. " +
+                "İki düğme de silah kitini (WD/WPN/katalog/gösterge) ve net eşya kataloğunu birlikte koşar.",
                 MessageType.Info);
         }
 
@@ -665,6 +669,8 @@ namespace VortexArena.Core.Editor
 
             AssetDatabase.SaveAssets();
 
+            SyncWeaponKit(report);
+
             ServerConfigExportResult export = ServerConfigExporter.Export(false);
             report.Add("export: " + (export != null ? export.Summary : "sonuç alınamadı"));
             if (export != null && export.Warnings != null)
@@ -682,6 +688,46 @@ namespace VortexArena.Core.Editor
                 string.Equals(boxName, sceneName, StringComparison.Ordinal))
             {
                 RunHealthChecks(report);
+            }
+        }
+
+        /// <summary>
+        /// Silah kiti + net eşya kataloğu — <b>her eşitlemede</b> koşar, ayrı düğmesi/menüsü yoktur.
+        /// <para>
+        /// <b>Neden burada:</b> "build öğeleri" yalnız arenalar değil; WPN prefabları, WD asset'leri,
+        /// silah/eşya katalogları ve ön kabza göstergesi de build'e giren, tablodan türeyen
+        /// içeriktir. Ayrı bir menü öğesi "çalıştırmayı unutulan araç" demekti — sonucu sahada
+        /// "silah kavranmıyor / eşya çizilmiyor" olarak çıkan sessiz bir eksik. Tek eşitleme
+        /// düğmesi hepsini kapsar.
+        /// </para>
+        /// <para>
+        /// ⚠️ Kit koşusu idempotenttir: değişmeyen asset aynı içerikle yazılır, diff üretmez.
+        /// İnsan adımı isteyen eksikler (kavraması yazılmamış / ateş sesi atanmamış silah, atanmamış
+        /// <c>netItemId</c>) burada DÜZELMEZ — rapora ve "Hazırlık" satırlarına düşer.
+        /// </para>
+        /// <para>⚠️ İstisna yutulur: silah kitindeki bir sözleşme kayması arena eşitlemesini
+        /// durdurmasın — hata rapora satır olarak girer.</para>
+        /// </summary>
+        private static void SyncWeaponKit(List<string> report)
+        {
+            try
+            {
+                report.Add(WeaponKitBuilder.BuildAll());
+            }
+            catch (Exception e)
+            {
+                report.Add("silah kiti HATA: " + e.Message + " (ayrıntı konsolda)");
+                Debug.LogException(e);
+            }
+
+            try
+            {
+                report.Add(NetItemIdGuard.Rebuild());
+            }
+            catch (Exception e)
+            {
+                report.Add("net eşya kataloğu HATA: " + e.Message + " (ayrıntı konsolda)");
+                Debug.LogException(e);
             }
         }
 

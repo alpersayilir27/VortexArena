@@ -494,7 +494,8 @@ silah zaten elde; çift elli silahta boş el ön kabzaya yaklaşınca ön kabza 
 ⚠️ Sahneye bileşen KOYMA: tekil olmasının sebebi her yeni arenaya elle bir kurulum adımı
 eklememektir.
 **Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfeklerin kiti
-`Tools > VortexArena > Weapons > Build Weapon Prefabs` ile üretilir — `WeaponKitBuilder` tablosuna satır
+`Tools > VortexArena > Build > Configure All Build Elements` (Hepsini Yapılandır / Yalnız Senkronize
+Et — silah kiti her eşitlemede koşar) ile üretilir — `WeaponKitBuilder` tablosuna satır
 ekle (CS2 istatistikleri + ses profili + "Low Poly AR Weapon Pack 1" modeli — model üretimde
 OKUNMAZ, köken kaydıdır). ⚠️ **Bir satırın `PackPrefab`'ı ve `NetItemId`'si o satırdan
 AYRILMAZ** — pack modelleri jenerik adlı (`AR_B`…), hangisinin hangi gerçek silah olduğu gözle
@@ -554,7 +555,7 @@ mesafeden kavrama ZORUNLUDUR ve orada da İKİ hat birden durur** — silah orad
 eklenmez: `Weapon.IsHandOnSecondaryGrip` (boş elin avucu `WD_*`'daki `secondaryGripRadius`
 içinde mi) tek kuraldır, granter ikinci eli buna göre bağlar, gösterge de aynı ölçüyle yeşile döner.
 Göstergenin **sanatı prefabdadır** (`WeaponCatalog.secondaryGripIndicatorPrefab`; varsayılan halkayı
-`Build Weapon Prefabs` **yalnız yoksa** üretir — `_Shared/Arsenal/Prefabs/VA_GripIndicator.prefab` +
+silah kiti koşusu **yalnız yoksa** üretir — `_Shared/Arsenal/Prefabs/VA_GripIndicator.prefab` +
 `_Shared/Materials/M_GripIndicator.mat` — ve kataloğa **yalnız alan boşsa** bağlar): sanatı
 değiştirmek = o prefabı düzenlemek ya da kataloğa başka bir prefab bağlamak, koda dokunulmaz.
 Gösterge yalnız **tutulan çift elli silahta, ikinci el bağlanana kadar** ve yalnız yerel oyuncuda
@@ -568,7 +569,7 @@ Stüdyosu` → `WPN_*` prefabını **prefab kipinde** aç → *Ana Kabza Ellerin
 *Ön Kabza Ellerini Oluştur*) → hayalet elleri Scene View'da kabzaya sürükle/çevir → **Kaydet**.
 Kayıt `WD_*.asset`'e gider (`ItemGripPose`: bileğin eşyaya göre yerel pozu + parmak preset'i);
 prefaba HİÇBİR ŞEY yazılmaz. Eller sahnenin ayrı kökleridir (`[VA El_*]`, `DontSave`) — prefabın
-altına sürüklenmez; `Build Weapon Prefabs` kaçak eli siler.
+altına sürüklenmez; silah kiti koşusu kaçak eli siler.
 ⚠️ **Sözleşme "silah ele göre"dir, "el silaha göre" DEĞİL:** ana elde eşya `bilek ∘ Inverse(kayıt)`
 ile durur — stüdyoda eli kabzada döndürmek oyunda SİLAHI döndürür, elin bileği kilitlenmez
 (izlemeden/kumandadan gelir). Ön kabzada ise ikinci elin bileği `item ∘ kayıt`a **tam** kilitlenir
@@ -601,8 +602,8 @@ uzak silahları deltanın dönüşü kadar yanlış çizer.
 sessizce sapması demektir — ön kabzanın yeri de stüdyoda, elin bileğiyle yazılır. `WD_*`'daki
 `secondaryGripRadius` duruşun değil **ön kabza kapısının** ölçüsüdür (ana kabza için yarıçap YOKTUR).
 ⚠️ Prefabın içinde el modeli DURMAZ ve kavrama poz düğümü BULUNMAZ (`Hands/Hand_*`, `GripPoses/*`;
-`Build Weapon Prefabs` ikisini de siler). Kavraması yazılmamış silahta el idle'da kalır;
-`Build Weapon Prefabs` eksikleri listeler.
+silah kiti koşusu ikisini de siler). Kavraması yazılmamış silahta el idle'da kalır;
+koşu sonunda eksikler listelenir.
 Çerçeve adımı elle iş istemez, araç her
 `WPN_*` köküne bir `VA_WeaponFrame` örneği koyar (idempotent). **Çözülme efekti de kurulum
 istemez:** araç aynı köke `SimpleWeaponDissolve` koyup `_Shared/Materials/DissolveEffect.mat`'i
@@ -673,16 +674,14 @@ hangi araç yapar** ve bağlayıcı yasaklar:
 
 | Araç | Ne zaman |
 |---|---|
-| `Tools > VortexArena > Build > Configure All Build Elements` | Sahne hazır → **Hepsini Yapılandır**: aktif sahnenin `MapDefinition`'ını yazar, sonra `Venues/*/Scenes/*/` taramasıyla `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json`'ı EŞİTLER (eksik = uyarı, fazla/ölü kayıt = silinir; `Boot.unity` index 0'da, mekan-dışı sahneler dokunulmadan kalır). Arena silindi/taşındı → **Yalnız Senkronize Et** (sahne açık olmasa da koşar). ⚠️ Ayrı "Arena Id" alanı YOKTUR: MapDefinition'ın adı sahne adıdır. **Hazırlık** bölümü build öncesi denetimleri gösterir (yalnız okur) ve aşağıdaki araçları tek tıkla çalıştırır |
+| `Tools > VortexArena > Build > Configure All Build Elements` | Sahne hazır → **Hepsini Yapılandır**: aktif sahnenin `MapDefinition`'ını yazar, sonra `Venues/*/Scenes/*/` taramasıyla `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json`'ı EŞİTLER (eksik = uyarı, fazla/ölü kayıt = silinir; `Boot.unity` index 0'da, mekan-dışı sahneler dokunulmadan kalır). Arena silindi/taşındı → **Yalnız Senkronize Et** (sahne açık olmasa da koşar). ⚠️ Ayrı "Arena Id" alanı YOKTUR: MapDefinition'ın adı sahne adıdır. **Hazırlık** bölümü build öncesi denetimleri gösterir (yalnız okur) ve aşağıdaki araçları tek tıkla çalıştırır. ⚠️ Aynı eşitleme **silah kitini** (`WeaponKitBuilder`: `WD_*` asset'leri, `WPN_*` bağları + temizliği, FX/ön kabza göstergesi, `WeaponCatalog`) ve **net eşya kataloğunu** (`netItemId` doğrulaması + `NetItemCatalog.asset`) da koşar — idempotent; ayrı bir menü öğesi çalıştırılması unutulan bir araç olurdu ve sonucu sahada "silah kavranmıyor" diye çıkardı. Hazırlık'ta kalan ✗ **insan adımıdır** (kavraması yazılmamış / ateş sesi atanmamış silah, atanmamış `netItemId`) |
 | `… > Arena > Template Temellerini Yükle` | Yeni/boş sahneye altyapı prefab ÖRNEKLERİ (`VA_ArenaBoundary`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı `VA_ModeHud`/taban bölgeleri) + kalibratör/muhafaza alanlarının rig'e bağlanması + boyut dosyası bağlama. İdempotent. ⚠️ Kalibrasyon işaretçisi KOYMAZ — onlar maketle gelir |
 | `… > Arena > JSON'dan DimensionMesh Üret` | Mekanın boyut JSON'undan ölçü maketi (taban + kolonlar + kalibrasyon işaretçileri `anchor_a`/`anchor_b`). **`ArenaBoundary`'nin altına, yerel-kimlikte** kurar (muhafaza yoksa sahne köküne, dünya orijininde ve dönüşsüz). İdempotent. ⚠️ Her arenada ZORUNLU adım: sahnenin kalibrasyon işaretçileri burada üretilir |
 | `… > Arena > DimensionMesh'i JSON'a Çevir` | Maketin köşeleri/kalibrasyon işaretçileri sahnede düzeltildi → aynı boyut dosyasının ÜSTÜNE yazar (hedefi maketin kendisi söyler). İşaretçi yoksa dosyadaki `calibration` KORUNUR |
 | `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → `Obstacle` layer'ındaki konveks olmayan collider'ları, trigger'ları, collider'sız damgalı objeleri ve **görünen yüzeyden şişkin** collider'ları (içbükey mesh convex işaretlenmiş → oyuncu boşlukta ceza alır) raporlar. ⚠️ Hiçbir şeyi düzeltmez; iki tespit de sessizce yanlış ceza ürettiği için bu tarama sahne kaydedilmeden koşturulur |
 | `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanlarını kurar: **iki uyarı yazısı** (engelin içi + alanın dışı) + hasar vinyeti (`CenterEyeAnchor` altında, yani kafaya kilitli). İdempotent, **tek seferlik** — rig tüm arenalarda örnek olduğu için her arenaya birden gider. ⚠️ Uyarı yazısının **yeri, boyu ve fontu** buradan gelir: prefabta elle kaydırılan/büyütülen bir örnek her koşuda geri yazılır, ayar `HmdOverlayBuilder` sabitlerinde değiştirilir. ⚠️ Vinyetin materyalini araç ÜRETİR (shader GUID'i import öncesi bilinemez); çalıştırılmadıkça karartma çalışır ama yazı/vinyet hiç çizilmez |
 | `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
-| `… > Weapons > Build Weapon Prefabs` | `WeaponKitBuilder` tablosuna silah eklendi / ses-VFX-kovan kiti tazelenecek (idempotent; *Yalnız Kataloğu Tazele* varyantı da var). ⚠️ WPN prefabı ÜRETMEZ, **mevcudu** yerinde günceller — gövde/`Muzzle`/**`Eject`** yerleşimi elle ayarlanır ve araç onlara DOKUNMAZ (`Eject` yalnız hiç yoksa üretilir). Ayrıca **temizlik ve denetim**: kökteki eksik script bileşenlerini ve `_interactorFilters` girişlerini, eski `GripSocket_*` işaretçilerini, `GripPoses` ağacını ve prefabta kalmış `Hands/Hand_*` el rig'ini siler, **kavraması YAZILMAMIŞ silahları** koşu sonunda tek uyarıda listeler. Ön kabza göstergesinin varsayılan halkasını (`VA_GripIndicator.prefab` + `M_GripIndicator.mat`) **yalnız yoksa** üretir ve `WeaponCatalog.secondaryGripIndicatorPrefab`'a **yalnız boşsa** bağlar |
 | `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış **prefab kipinde**: `WPN_*`'ı prefab kipinde aç → **Ana/Ön Kabza Ellerini Oluştur** (sağ+sol) → hayalet elleri kabzalara sürükle/çevir → elin Inspector'ından **parmak preset'ini** seç (Idle · Firing · Grip) → gerekirse **Karşı Ele Aynala** → **Kaydet**. Kök = ISDK **bilek** çerçevesi, kayıt bileğin eşyaya göre pozu + preset, doğrudan `WD_*.asset`'e; **prefaba hiçbir şey yazılmaz** (poz düğümü yok). ⚠️ Ana elde eli çevirmek oyunda SİLAHI çevirir; ön kabzada el silaha yapışır. ⚠️ Eller prefaba GİRMEZ (stage sahnesinin ayrı kökleri, `DontSave`) ve Play'e girerken / stage kapanınca / sahne değişince silinir |
-| `… > Weapons > Rebuild Net Item Catalog` | Yeni eşya (silah/bomba) eklendi ya da `netItemId` değişti → kimlikleri doğrular (atanmış + tekil) ve `Resources/NetItemCatalog.asset`'i projedeki TÜM `ItemDefinition`'lardan yeniden yazar. ⚠️ Doğrulama düşerse katalog yazılmaz |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |
 | `… > Audio > Mod Sesleri` | Moda/haritaya göre değişen duyuru sesi eklenecek/değiştirilecek → `ModeAudioRegistry.asset`'i seçer (yoksa oluşturur). ⚠️ Düzenleme yeri **Inspector**'dır, menü yalnız kaydı bulur; mod ve harita orada **katalogdan seçilir** (elle yazılan ad kuralı sessizce eşleşmez hâle getirir) |
 | `… > Development > Dev` (`Ctrl+Alt+R`) | Rol seçimi (**player · admin**), hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek). ⚠️ Silah kavraması bu pencerenin işi DEĞİLDİR — o iş prefab kipinde, `Kavrama Pozu Stüdyosu`nda yapılır |
