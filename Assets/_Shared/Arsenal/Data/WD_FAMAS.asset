@@ -17,23 +17,26 @@ MonoBehaviour:
   prefab: {fileID: 6511540988315402901, guid: 135285a2988f2dd459c81b87ac254f34, type: 3}
   holdMode: 1
   primaryGripRight:
-    captured: 0
+    authored: 0
     position: {x: 0, y: 0, z: 0}
     euler: {x: -0, y: 0, z: 0}
+    preset: 0
   primaryGripLeft:
-    captured: 0
+    authored: 0
     position: {x: 0, y: 0, z: 0}
     euler: {x: -0, y: 0, z: 0}
+    preset: 0
   secondaryGripRight:
-    captured: 1
+    authored: 0
     position: {x: 0, y: -0.02, z: 0.2}
     euler: {x: -0, y: 0, z: 0}
+    preset: 0
   secondaryGripLeft:
-    captured: 1
+    authored: 0
     position: {x: 0, y: -0.02, z: 0.2}
     euler: {x: -0, y: 0, z: 0}
-  primaryGripRadius: 0.12
-  secondaryGripRadius: 0.12
+    preset: 0
+  secondaryGripRadius: 0.1
   tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.8039216}
   tracerWidth: 0.005
   tracerLifetime: 0.1

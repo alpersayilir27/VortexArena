@@ -55,9 +55,9 @@ namespace VortexArena.Core.Combat
     /// </para>
     /// <para>
     /// <b>ÖN KABZA kapısı ve göstergesi de bu sınıftadır</b> — ayrı bir bileşen YOKTUR:
-    /// <see cref="IsHandOnSecondaryGrip"/> "bu elin avucu ön kabzanın kabul yarıçapında mı" sorusunun
-    /// tek cevabıdır (granter ikinci eli buna göre bağlar), <see cref="TickSecondaryGripIndicator"/>
-    /// aynı ölçüyle boş elin yaklaştığı ön kabzaya katalogdaki gösterge prefabını koyar.
+    /// <see cref="IsHandOnSecondaryGrip"/> "bu elin bileği ön kabza soketinin (kabul küresinin) içinde
+    /// mi" sorusunun tek cevabıdır (granter ikinci eli buna göre bağlar),
+    /// <see cref="TickSecondaryGripIndicator"/> aynı küreyi katalogdaki soket prefabıyla çizer.
     /// </para>
     /// </summary>
     public class Weapon : MonoBehaviour
@@ -1158,32 +1158,28 @@ namespace VortexArena.Core.Combat
         // ------------------------------------------- ön kabza: kapı + gösterge
 
         /// <summary>
-        /// Ön kabza göstergesinin GÖRÜNÜR olduğu mesafe (m) — playtest değeri, tüm silahlarda aynı.
+        /// Ön kabza soketinin GÖRÜNÜR olduğu mesafe (m; bileğin soket merkezine uzaklığı) —
+        /// playtest değeri, tüm silahlarda aynı.
         /// <para>⚠️ Kabul yarıçapı ise silah başınadır (<see cref="ItemDefinition.SecondaryGripRadius"/>)
         /// ve bu sabiti AŞABİLİR; etkin görünme mesafesi bu yüzden
         /// <c>Mathf.Max(SecondaryGripHoverRadius, radius)</c>'tur — yarıçap görünmeyi geçerse
-        /// "önce ipucu görünür, sonra kavranır" sırası tersine döner ve gösterge işlevsiz kalır.</para>
+        /// "önce soket görünür, sonra kavranır" sırası tersine döner ve soket işlevsiz kalır.</para>
         /// </summary>
         private const float SecondaryGripHoverRadius = 0.30f;
 
-        /// <summary>Kabul mesafesine girince göstergenin büyüme oranı — "şimdi bas" okumasını gözle ayırır.</summary>
-        private const float IndicatorReadyScale = 1.35f;
+        /// <summary>Soketin alfası — yaklaşırken (%70 saydam) ve bilek içerideyken (biraz daha dolu:
+        /// "içindesin, bas" okunsun; renk ve boyut DEĞİŞMEZ, küre kabul hacminin kendisidir).</summary>
+        private const float IndicatorHoverAlpha = 0.30f;
+        private const float IndicatorReadyAlpha = 0.50f;
 
-        /// <summary>Yaklaşma durumunda alfa: gösterge "burada bir yer var" der, "şimdi bas" demez.</summary>
-        private const float IndicatorHoverAlpha = 0.35f;
+        /// <summary>Soketin rengi: açık mavi. Alfa çalışma anında sürülür (yukarıdaki iki sabit).</summary>
+        private static readonly Color IndicatorColor = new Color(0.55f, 0.82f, 1f, 1f);
 
-        /// <summary>Yaklaşma rengi (mavi): "burada bir yer var".</summary>
-        private static readonly Color IndicatorHoverColor = new Color(0.45f, 0.85f, 1f, 1f);
-
-        /// <summary>Kabul rengi (yeşil): "şimdi bas". Renk ayrımı alfa/ölçek farkının ÜSTÜNE gelir —
-        /// VR'da yalnız parlaklık değişimi kabul mesafesine girildiğini yeterince okutmuyor.</summary>
-        private static readonly Color IndicatorReadyColor = new Color(0.35f, 0.95f, 0.45f, 1f);
-
-        /// <summary>Gösterge prefabı katalogda yoksa OTURUM başına bir uyarı (silah başına değil).</summary>
+        /// <summary>Soket prefabı katalogda yoksa OTURUM başına bir uyarı (silah başına değil).</summary>
         private static bool indicatorPrefabWarned;
 
-        // Bu silahın gösterge örneği (tembel; yalnız yaklaşan bir el olunca doğar) ve rengi
-        // sürülecek yüzeyi: halka prefabında LineRenderer, tasarlanmış bir sanatta materyal.
+        // Bu silahın soket örneği (tembel; yalnız yaklaşan bir el olunca doğar) ve alfası
+        // sürülecek yüzeyi: küre prefabında materyal, LineRenderer'lı bir sanatta çizgi rengi.
         private Transform indicator;
         private LineRenderer indicatorLine;
         private Material indicatorMaterial;
@@ -1191,9 +1187,11 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// Ön kabza noktasının DÜNYA konumu — <paramref name="rightHand"/> elin kaydından
         /// (kayıt el başınadır: kabza simetrik olmadığı için iki elin bileği farklı yere düşer).
+        /// Kayıt <b>bileğin</b> eşyaya göre pozudur, yani bu nokta ön kabzayı saran elin BİLEĞİNİN
+        /// duracağı yerdir; soket küresi de buraya merkezlenir.
         /// <para>⚠️ <see cref="Transform.TransformPoint"/> DEĞİL elle bileşim: kayıt metredir ve
         /// <c>WPN_*</c> kökleri 0.8 ölçekli — <c>TransformPoint</c> ölçeği ikinci kez uygular
-        /// (<see cref="ItemGripPose"/>). Kapı, gösterge ve <c>RemoteAvatar</c> aynı bileşimi kullanır.</para>
+        /// (<see cref="ItemGripPose"/>). Kapı, soket ve <c>RemoteAvatar</c> aynı bileşimi kullanır.</para>
         /// </summary>
         public Vector3 SecondaryGripWorld(bool rightHand)
         {
@@ -1203,18 +1201,20 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bu elin AVUCU ön kabzanın kabul yarıçapında mı — ikinci elin <b>KURULMA</b> kapısı.
+        /// Bu elin BİLEĞİ ön kabza soketinin (kabul küresinin) içinde mi — ikinci elin
+        /// <b>KURULMA</b> kapısı.
         /// <para>
         /// <b>Tek kural, iki okuyucu:</b> <see cref="WeaponGranter"/> ikinci eli buna göre bağlar
-        /// (grip basılı + bu <c>true</c> → el ön kabzaya kilitlenir), gösterge de yeşile buna göre
-        /// döner. İki ayrı ölçü olsaydı oyuncuya "şimdi bas" diye büyütülen gösterge sessizce
+        /// (grip basılı + bu <c>true</c> → el ön kabzaya kilitlenir), soket de "içeride" alfasına
+        /// buna göre geçer. İki ayrı ölçü olsaydı oyuncuya "içindesin" denen yerde kavrama sessizce
         /// reddedilebilirdi.
         /// </para>
         /// <para>
-        /// ⚠️ Mesafe ANCHOR'dan değil AVUÇtan ölçülür (<see cref="WeaponGranter.TryResolvePalm"/>):
-        /// oyuncunun gördüğü şey kumanda değil sentetik eldir; anchor'a göre ölçülen kabul mesafesi
-        /// elin birkaç santim ötesinde başlar ve gösterge "elimin içinde ama yeşile dönmüyor" diye
-        /// okunur.
+        /// ⚠️ <b>Ölçülen nokta BİLEKTİR, kumanda anchor'ı değil</b> (<see cref="TryResolveWrist"/>):
+        /// kavrama kaydı bileğin eşyaya göre pozudur (stüdyoda ISDK bilek çerçevesiyle yazılır), yani
+        /// soketin merkezi bir BİLEK noktasıdır. Anchor'la ölçmek, elin tam yazıldığı yerde dururken
+        /// bile aradaki anchor→bilek deltası kadar (santimlerce) uzaktan yargılamak olurdu — kabul
+        /// yarıçapı o farkı yutmuyorsa oyuncu "elim tam yerinde ama tutmuyor" hisseder.
         /// </para>
         /// <para>⚠️ Bu yalnız kurulma kapısıdır; bağın SÜRDÜRÜLMESİ mesafeye bakmaz (gerekçe
         /// <c>WeaponGranter.ResolveSecondaryHand</c>'de).</para>
@@ -1226,29 +1226,57 @@ namespace VortexArena.Core.Combat
                 return false;
             }
 
-            if (!WeaponGranter.TryResolvePalm(hand, out Pose palm))
+            if (!TryResolveWrist(hand, out Vector3 wrist))
             {
                 return false;
             }
 
             float radius = definition.SecondaryGripRadius;
             Vector3 socket = SecondaryGripWorld(HandGripPivot.IsRight(hand));
-            return (palm.position - socket).sqrMagnitude <= radius * radius;
+            return (wrist - socket).sqrMagnitude <= radius * radius;
         }
 
         /// <summary>
-        /// Ön kabza göstergesinin bir karelik durumu: silah tutuluyor, iki elli ve ikinci el henüz
-        /// bağlı değilken BOŞ elin avucu ön kabzaya yaklaştıkça gösterge belirir (mavi, soluk),
-        /// kabul yarıçapına girince yeşile döner ve büyür ("şimdi bas"); ikinci el bağlanınca kaybolur.
+        /// Elin BİLEĞİNİN dünya konumu: kumanda anchor'ı ∘ anchor→bilek deltası
+        /// (<see cref="ItemGripAuthority.ResolveAnchorToWrist"/> — canlı ölçüm, yoksa ölçülmüş sabit,
+        /// o da yoksa kimlik = anchor). Rig ya da el çözülemezse <c>false</c>.
+        /// <para>Kavrama kaydıyla AYNI çerçeve: kayıt bileği tarif ediyor, karşılaştırılan nokta da
+        /// bilek olmalı — aksi hâlde soket, elin tam yazıldığı yerinde bile "dışarıda" der.</para>
+        /// </summary>
+        private static bool TryResolveWrist(OVRInput.Controller hand, out Vector3 wrist)
+        {
+            Transform anchor = WeaponGranter.ResolveHandAnchor(hand);
+            if (anchor == null)
+            {
+                wrist = default;
+                return false;
+            }
+
+            Pose delta = ItemGripAuthority.ResolveAnchorToWrist(HandGripPivot.IsRight(hand));
+            wrist = anchor.position + anchor.rotation * delta.position;
+            return true;
+        }
+
+        /// <summary>
+        /// Ön kabza soketinin bir karelik durumu: silah tutuluyor, iki elli ve ikinci el henüz
+        /// bağlı değilken BOŞ elin bileği ön kabzaya yaklaşınca soket küresi belirir (açık mavi,
+        /// %70 saydam), bilek kürenin İÇİNE girince biraz dolgunlaşır ("bas"), ikinci el bağlanınca
+        /// kaybolur.
         /// <para>
-        /// <b>Gösterge YALNIZ ön kabza içindir.</b> Ana kabzanın göstergesi yoktur: silah zaten ana
-        /// elde doğuyor (verilen/çağrılan silah) ya da çerçeveden seçiliyor — ana kabza için
-        /// oyuncunun elini bir yere götürmesi gerekmiyor.
+        /// <b>Küre = kabul hacmi.</b> Prefab 1 m çapında tasarlanır ve burada kabul yarıçapının iki
+        /// katına ölçeklenir; yani oyuncunun gördüğü küre ile <see cref="IsHandOnSecondaryGrip"/>'in
+        /// yargıladığı hacim AYNI şeydir. Görsel ile kural ayrı sayılara bağlansaydı "içindeyim ama
+        /// tutmuyor" hissi doğardı.
+        /// </para>
+        /// <para>
+        /// <b>Soket YALNIZ ön kabza içindir.</b> Ana kabzanın soketi yoktur: silah zaten ana elde
+        /// doğuyor (verilen/çağrılan silah) ya da çerçeveden seçiliyor — ana kabza için oyuncunun
+        /// elini bir yere götürmesi gerekmiyor.
         /// </para>
         /// <para>
         /// <b>Sanat prefabdadır</b> (<see cref="WeaponCatalog.SecondaryGripIndicatorPrefab"/>, tüm
-        /// silahlar aynı göstergeyi paylaşır); bu sınıf yalnız yerini, ölçeğini ve rengini sürer.
-        /// Prefab yoksa gösterge çizilmez ve bir kez uyarılır — kapı yine çalışır (kavrama göstergesiz
+        /// silahlar aynı soketi paylaşır); bu sınıf yalnız yerini, ölçeğini ve alfasını sürer.
+        /// Prefab yoksa soket çizilmez ve bir kez uyarılır — kapı yine çalışır (kavrama soketsiz
         /// de kabul edilir).
         /// </para>
         /// <para>
@@ -1272,7 +1300,7 @@ namespace VortexArena.Core.Combat
             }
 
             OVRInput.Controller free = FreeHand();
-            if (free == OVRInput.Controller.None || !WeaponGranter.TryResolvePalm(free, out Pose palm))
+            if (free == OVRInput.Controller.None || !TryResolveWrist(free, out Vector3 wrist))
             {
                 // Rig yok (admin gözlemci, editör oturumu) ya da ana el çözülemedi: gösterilecek el yok.
                 HideIndicator();
@@ -1280,7 +1308,7 @@ namespace VortexArena.Core.Combat
             }
 
             Vector3 socket = SecondaryGripWorld(HandGripPivot.IsRight(free));
-            float distance = Vector3.Distance(palm.position, socket);
+            float distance = Vector3.Distance(wrist, socket);
             float radius = definition.SecondaryGripRadius;
 
             if (distance > Mathf.Max(SecondaryGripHoverRadius, radius))
@@ -1294,18 +1322,20 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            bool ready = distance <= radius;
+            bool inside = distance <= radius;
 
             indicator.gameObject.SetActive(true);
-            indicator.SetPositionAndRotation(socket, IndicatorRotation());
+            // Dönüş silahınki: küre için önemsiz, tasarlanmış bir soket sanatı ise yönünü silahtan alır.
+            indicator.SetPositionAndRotation(socket, transform.rotation);
 
-            // ⚠️ Ölçek DÜNYA ölçüsüdür: gösterge silahın altında duruyor ve WPN kökleri 0.8 ölçekli —
-            // yerel ölçek düz yazılsa halka silahtan silaha farklı büyüklükte görünürdü.
+            // ⚠️ Ölçek DÜNYA ölçüsüdür ve kabul küresinin ta kendisidir: prefab 1 m çap sözleşmesiyle
+            // gelir, çap = 2 × yarıçap. Silah 0.8 ölçekli olduğu için ebeveyn ölçeği geri alınır —
+            // yerel ölçek düz yazılsa küre silahtan silaha farklı büyüklükte görünürdü.
             float parentScale = Mathf.Max(1e-4f, transform.lossyScale.x);
-            indicator.localScale = Vector3.one * ((ready ? IndicatorReadyScale : 1f) / parentScale);
+            indicator.localScale = Vector3.one * (2f * radius / parentScale);
 
-            Color color = ready ? IndicatorReadyColor : IndicatorHoverColor;
-            color.a = ready ? 1f : IndicatorHoverAlpha;
+            Color color = IndicatorColor;
+            color.a = inside ? IndicatorReadyAlpha : IndicatorHoverAlpha;
 
             if (indicatorLine != null)
             {
@@ -1330,23 +1360,11 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Gösterge KAMERAYA çevrilir: bir NOKTAYI işaretliyor ve nokta işareti bakana dönük okunur —
-        /// halka silahın dönüşünü alsaydı düzlemine kenarından bakan oyuncu halka yerine bir çizgi
-        /// görürdü (<c>LineAlignment.View</c> bunu çözmez: o yalnız şeridin kalınlığını çevirir).
-        /// Kamera yoksa silahın dönüşü.
-        /// </summary>
-        private Quaternion IndicatorRotation()
-        {
-            Camera camera = Camera.main;
-            return camera != null
-                ? Quaternion.LookRotation(camera.transform.forward, camera.transform.up)
-                : transform.rotation;
-        }
-
-        /// <summary>
-        /// Gösterge örneğini katalogdaki prefabtan üretir (bir kez, silahın altına). Prefabtan fizik
-        /// sökülür: collider bırakılırsa gösterge hem ateş ışınına hem kavramaya takılır — oyuncuya
+        /// Soket örneğini katalogdaki prefabtan üretir (bir kez, silahın altına). Prefabtan fizik
+        /// sökülür: collider bırakılırsa soket hem ateş ışınına hem kavramaya takılır — oyuncuya
         /// yardım etmesi gereken şey nişanı bozardı.
+        /// <para>Alfa sürülecek yüzey: ilk Renderer'ın materyal ÖRNEĞİ (küre); Renderer yok ama
+        /// LineRenderer varsa onun çizgi rengi.</para>
         /// </summary>
         private bool EnsureIndicator()
         {
@@ -1364,7 +1382,8 @@ namespace VortexArena.Core.Combat
                     indicatorPrefabWarned = true;
                     Debug.LogWarning("[Weapon] WeaponCatalog.secondaryGripIndicatorPrefab boş — ön kabza " +
                                      "göstergesi çizilmeyecek (kavrama yine çalışır). " +
-                                     "'Build Weapon Prefabs' göstergeyi üretip bağlar.");
+                                     "Silah kiti koşusu (Tools > VortexArena > Build > Configure All " +
+                                     "Build Elements) göstergeyi üretip bağlar.");
                 }
 
                 return false;
@@ -1603,7 +1622,8 @@ namespace VortexArena.Core.Combat
             missingNetItemIdWarned = true;
             Debug.LogWarning($"[Weapon] '{weapon.name}' tanımında netItemId yok (0); elde tutulan " +
                              "eşya AĞA BİLDİRİLMEZ ve uzak oyuncularda çizilmez. Tanıma 1-255 " +
-                             "arası kararlı bir kimlik ver (Tools > VortexArena > Weapons > Rebuild Net Item Catalog).",
+                             "arası kararlı bir kimlik ver; katalog Tools > VortexArena > Build > " +
+                             "Configure All Build Elements eşitlemesinde tazelenir.",
                 weapon);
         }
 
