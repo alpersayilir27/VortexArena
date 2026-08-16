@@ -428,10 +428,10 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 
 `weaponId` yalnızca **kill feed etiketidir** — sunucu doğrulamaz, istediğini yazabilirsin.
 
-> Silahın elde **nerede ve hangi açıyla** durduğunu `WD_*`'taki kavrama kayıtları belirler (§11.0);
-> dördü de el başınadır (`primaryGripRight/Left`, `secondaryGripRight/Left`) ve her biri **kumanda
-> anchor'ının** pozu + parmak preset'ini taşır. Ana elde silah ele uyar (bilek serbest kalır), ön kabzada el
-> silaha yapışır. ⚠️ **Ölçü TEK yerden okunur:** aynı kayıt yerel duruşu, uzak oyuncudaki çizimi ve
+> Silahın elde **nerede** durduğunu `WD_*`'taki kavrama kayıtları belirler (§11.0); dördü de el
+> başınadır (`primaryGripRight/Left`, `secondaryGripRight/Left`) ve her biri **kumanda anchor'ının**
+> konumu + parmak preset'ini taşır — **dönüş taşımaz, silah her zaman kumandayla hizalıdır.** Ana
+> elde silah ele uyar (bilek serbest kalır), ön kabzada elin görseli silaha yapışır. ⚠️ **Ölçü TEK yerden okunur:** aynı kayıt yerel duruşu, uzak oyuncudaki çizimi ve
 > ön kabza kapısının/göstergesinin yerini birlikte besliyor.
 > Çerçeveden seçilen silah (`weaponSource:"weaponcanvas"`), modun verdiği silah
 > (`weaponSource:"random"`) ve elde ISDK ile kavranan eşya **aynı yolu** kullanır; ayrım yoktur.
@@ -463,17 +463,18 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 ## 11.0 Bir silahın kavramasını YAZMAK
 
 Kavrama **stüdyoda, gözlük takmadan yazılır**: **kumanda çerçevesini** Scene View'da silahın
-kabzasına oturtursun, araç o çerçevenin (kumanda anchor'ının) silaha göre pozunu + o elin parmak
-preset'ini `WD_*.asset`'e yazar. Çerçevenin altında iki **kilitli** görsel çocuk durur: **Quest 3
-kumanda modeli** (oyunda izlenen kumandanın kendisi — silahı buna göre hizala) ve ISDK hayalet eli
-(elin gerçekte silahı nasıl saracağını gösterir; sabit ölçülmemişse yaklaşıktır). Prefaba hiçbir şey
-yazılmaz — kavramanın tek yeri `WD_*`'tır.
+kabzasına oturtursun, araç o çerçevenin (kumanda anchor'ının) silaha göre **konumunu** + o elin
+parmak preset'ini `WD_*.asset`'e yazar. Çerçevenin altında iki **kilitli** görsel çocuk durur:
+**Quest 3 kumanda modeli** (oyunda anchor'ın altında tam böyle durur — çerçeveyi, kumanda kabzada
+gerçekte tutulduğu yere gelecek biçimde taşı) ve ISDK hayalet eli (elin gerçekte silahı nasıl
+saracağını gösterir; sabit ölçülmemişse yaklaşıktır). Prefaba hiçbir şey yazılmaz — kavramanın tek
+yeri `WD_*`'tır.
 
-⚠️ **Sözleşme "silah ele göre"dir, "el silaha göre" değil.** Ana elde eşya `anchor ∘ Inverse(kayıt)`
-ile durur: çerçeveyi **yalnız taşırsan** silah kumandayla hizalı kalır, **çevirirsen oyunda SİLAH
-döner** ve elin bileği kilitlenmez (izlemeden/kumandadan gelir). Ön kabzada kural terstir — ikinci
-elin bileği kaydın pozuna **tam** kilitlenir, yani el silaha yapışır. Ayrıca ayarlanabilir bir
-"silah dönüşü" alanı yoktur: dönüş kaydın kendisidir.
+⚠️ **Silahın dönüşü HER ZAMAN ana kumandanın dönüşüdür; kayıt dönüş taşımaz.** Çerçeve bu yüzden
+yalnız **taşınır** — çevirirsen araç onu silahla hizalı hâline geri alır, çünkü dönüşün oyunda
+karşılığı yoktur. Ana elde eşya kumandaya asılır ve elin bileği kilitlenmez (izlemeden/kumandadan
+gelir). Ön kabzada kayıt yalnız ikinci elin **görselinin** yapışacağı yeri söyler; silahı ne kaydırır
+ne döndürür — "iki elli nişan" yoktur ve eklenmez. Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
 
 **Akış (prefab kipinde, Play gerekmez):**
 
@@ -483,7 +484,7 @@ elin bileği kaydın pozuna **tam** kilitlenir, yani el silaha yapışır. Ayrı
 3. **Ana Kabza Ellerini Oluştur** (iki elli silahta ayrıca **Ön Kabza Ellerini Oluştur**) → sağ ve
    sol kumanda çerçeveleri (ve çocukları olan hayalet eller) sahnede belirir. Kayıt zaten varsa
    çerçeveler **o kayıttan** doğar; yoksa kabza parçasının üstüne makul bir başlangıçla konur.
-4. Çerçeveleri Scene View'da sürükle/çevir (gizmo'daki mavi ok kumandanın ilerisidir; hayalet elin
+4. Çerçeveleri Scene View'da **taşı** (gizmo'daki mavi ok kumandanın ilerisidir; hayalet elin
    ya da kumanda modelinin mesh'ine tıklamak da çerçeveyi seçer — çocuklar kilitlidir, taşınmaz):
    kumanda kabzada gerçekte tutulduğu gibi dursun, avuç kabzaya otursun, işaret parmağı tetiğe ulaşsın.
 5. Elin Inspector'ından (`GripHandAuthoring`) **parmak preset'ini** seç: `Idle` · `Firing` (işaret
@@ -518,11 +519,11 @@ elin bileği kaydın pozuna **tam** kilitlenir, yani el silaha yapışır. Ayrı
   çıkıyorsa kayıt o el için yanlış yazılmış demektir. **Ön kabza kaydı hiç yazılmamışsa** küre HİÇ
   çıkmaz ve ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`; konsola tanım başına bir uyarı
   gider) — yazılmamış kayıt eşyanın köküne düşerdi, o da ana elin dibidir.
-- ⚠️ Silah elde yatık görünüyorsa iki aday var: kavrama kaydının dönüşü ya da `Model`'in prefabtaki
-  yerleşimi. Stüdyoda el ile silah birlikte göründüğü için ayrımı orada yaparsın.
+- ⚠️ Silah elde yatık görünüyorsa tek aday var: `Model`'in prefabtaki yerleşimi. Kayıt dönüş
+  taşımadığı için silah kumandayla hizalıdır; yatıklık modelin kendi eksenlerinden gelir.
 - **Admin ekranı ayrı bir teşhis yeri değildir:** kayıt telde giden el poz uzayında olduğu için
-  rig'i olmayan izleyici uzak silahları oyuncuyla birebir aynı çizer. Silah adminde dönükse
-  oyuncuda da dönüktür, bakılacak yer kayıttır.
+  rig'i olmayan izleyici uzak silahları oyuncuyla birebir aynı çizer. Silah adminde yanlış
+  duruyorsa oyuncuda da yanlıştır.
 - **Stüdyodaki hayalet el silahı garip sarıyorsa** (kumanda modeli doğru dururken) bakılacak yer
   `HandGripConvention.Left/RightAnchorToWrist` sabitidir: editörde canlı ölçüm yoktur ve sabit
   kimlikken hayalet el iskeletten TAHMİNLE çizilir (pencere bunu söyler). Sabit, `HandGripPoser`'ın
