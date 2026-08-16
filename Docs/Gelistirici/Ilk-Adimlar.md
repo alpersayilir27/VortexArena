@@ -46,8 +46,8 @@ düzenleme istemez. Geri alma: aynı betik `-Remove` ile.
 
 `Tools > VortexArena > Development > Dev` penceresini aç.
 
-- **Rol:** `player` (VR oyuncusu), `admin` (masaüstü gözlemci) ya da `weapon` (silah kavraması
-  yakalama — `Docs/Gelistirici/Yemek-Kitabi.md`). Kısayol: **Ctrl+Alt+R**, üçünü sırayla döndürür.
+- **Rol:** `player` (VR oyuncusu) ya da `admin` (masaüstü gözlemci). Kısayol: **Ctrl+Alt+R**, ikisini
+  çevirir.
 - **Hedef:** sunucu adresi. Liste `dev-targets.json`'dan gelir (`Local`, `Keşif (beacon)`, örnek PC).
 
 > ⚠️ **Rol ve IP'yi sahneye yazma.** Bu değerler `EditorPrefs`'te kişisel kalır — böylece rol

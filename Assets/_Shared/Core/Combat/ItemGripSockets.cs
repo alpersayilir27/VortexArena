@@ -167,7 +167,7 @@ namespace VortexArena.Core.Combat
         /// Bir kavrama noktasının DÜNYA konumu.
         /// <para>⚠️ <b><see cref="Transform.TransformPoint"/> DEĞİL:</b> kayıt metredir ve
         /// <c>WPN_*</c> kökleri 0.8 ölçekli — <c>TransformPoint</c> ölçeği ikinci kez uygular
-        /// (gerekçe <see cref="ItemGripCapture"/>). Tersi <see cref="WorldToItemLocal"/>.</para>
+        /// (gerekçe <see cref="ItemGripPose"/>). Tersi <see cref="WorldToItemLocal"/>.</para>
         /// </summary>
         public static Vector3 ItemLocalToWorld(Transform item, Vector3 itemLocal)
         {

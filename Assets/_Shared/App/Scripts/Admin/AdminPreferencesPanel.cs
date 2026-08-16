@@ -10,8 +10,19 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Tercihler paneli — eski dashboard'un işi buraya taşındı: <b>maç kontrolü</b> (mod/harita
-    /// seçimi, başlat/iptal, duraklat/devam), <b>görünüm tercihleri</b> ve <b>bağlantı</b>.
+    /// Tercihler paneli — operatörün ayar kutusu. <b>Üç sekmesi</b> vardır
+    /// (<see cref="AdminPreferencesTab"/>): <b>MAÇ</b> (ortak: mod/harita/süre/skor limiti/geri
+    /// sayım/dost ateşi + kalibre modu), <b>GÖRÜNÜM</b> (yalnız bu ekran) ve <b>BAĞLANTI</b>
+    /// (oturum). Aynı anda tek sayfa açıktır; sekme seçimi oturum içinde kalıcıdır
+    /// (<see cref="_tab"/>) ve diske YAZILMAZ — panelin hangi sekmede açıldığı bir tercih değil,
+    /// o anki işin bağlamıdır.
+    /// <para>
+    /// ⚠️ <b>Maçı süren düğmeler (BAŞLAT · DURAKLAT/DEVAM · İPTAL) bu panelde DEĞİL, HUD'ın alt
+    /// ortasındadır</b> (<see cref="AdminMatchControls"/>): panel kapalıyken de basılabilmeleri
+    /// gerekir. Seçim durumu (mod/harita/süre/limit/geri sayım, lobi açık mı) burada yaşamaya
+    /// devam eder — tek doğruluk kaynağı budur ve şerit başlatmayı
+    /// <see cref="StartSelectedMatch"/> ile bu panele sorar.
+    /// </para>
     /// <para>
     /// Kart yarı saydamdır ve <b>arkasına scrim koyulmaz</b> — panel açıkken canlı sahne
     /// izlenmeye devam eder (kullanıcının açık isteği). Maç/oyun DURMAZ; otorite sunucudadır.
@@ -58,17 +69,17 @@ namespace VortexArena.App.Admin
     /// </summary>
     public class AdminPreferencesPanel : MonoBehaviour
     {
-        // NOT: Yerleşimi KOD BELİRLEMEZ — panel ölçüsü ve satır dizilimi prefabtadır
-        // (`_Shared/App/Resources/UI/AdminPreferencesPanel.prefab` → `PreferencesPanel`). İçerik
-        // ELLE yığılan y ile dizilir (Layout Group yok, UiKit kararı), yani yeni satır eklemek =
-        // prefabta alttaki her şeyi kaydırmak + paneli büyütmek. Kaba satır maliyeti: Section 34,
-        // döngüleyici 40, düğme satırı 50.
+        // NOT: Yerleşimi KOD BELİRLEMEZ — panel ölçüsü, sekme çubuğu ve satır dizilimi prefabtadır
+        // (`_Shared/App/Resources/UI/AdminPreferencesPanel.prefab` → `PreferencesPanel`). Satırlar
+        // sayfa köklerinin (`Page_Mac`, `Page_Gorunum`, `Page_Baglanti`) altında ELLE yığılan y ile
+        // dizilir (Layout Group yok, UiKit kararı; satır adımı 44 px), yani yeni satır eklemek =
+        // prefabta o sayfada alttaki her şeyi kaydırmak.
         // ⚠️ Kartın en-boy oranı kabuğun arka plan görseline (`PanelBG`) bağlıdır: sanat tek
         // parçadır ve gerildiğinde başlık bandı/parlamaları esner — satır ekleyip paneli
         // uzatmadan önce AdminStatsPanel ile aynı kabuk kuralına bak
-        // (`Docs/Gelistirici/Arayuz-Tasarimi.md`). Pencere kipi ve OYUNDAN ÇIK düğmeleri bu yüzden
-        // yeni satır açmaz: ilki başlık çubuğunun (KAPAT'ın solundaki), ikincisi bağlantı
-        // satırının ucuna kondu.
+        // (`Docs/Gelistirici/Arayuz-Tasarimi.md`). Sekmeler tam da bunun için var: kart sabit
+        // ölçüde kalır, içerik sayfalara bölünür. Pencere kipi düğmesi başlık çubuğunda (KAPAT'ın
+        // solunda) durur, OYUNDAN ÇIK ise BAĞLANTI sekmesindedir.
 
         /// <summary>Skor limiti adımlayıcısının eşiği: bu değerin altında ±1, üstünde ±5 adımlar.
         /// İki düğmeli döngüleyiciyle hem düşük limitlerde hassasiyet hem yüksek limitlerde
@@ -95,6 +106,23 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _screenModeButton;
 
         [SerializeField] private TextMeshProUGUI _screenModeLabel;
+
+        [Header("Sekmeler")]
+
+        [Tooltip("Sekme düğmeleri — sıra AdminPreferencesTab ile aynı: MAÇ, GÖRÜNÜM, BAĞLANTI.")]
+        [SerializeField] private Button[] _tabButtons = new Button[3];
+
+        [Tooltip("Sekme etiketleri — _tabButtons ile aynı sırada.")]
+        [SerializeField] private TextMeshProUGUI[] _tabLabels = new TextMeshProUGUI[3];
+
+        [Tooltip("Sekme sayfaları (satırların kökleri) — aynı sırada; yalnız etkin sekmenin " +
+                 "sayfası açık kalır.")]
+        [SerializeField] private GameObject[] _tabPages = new GameObject[3];
+
+        /// <summary>Açık sekme. Oturum içinde kalıcıdır (panel kapanıp açılınca aynı sayfa gelir)
+        /// ama <c>PlayerPrefs</c>'e YAZILMAZ: hangi sayfada çalışıldığı bir ekran tercihi değil,
+        /// o anki işin bağlamıdır.</summary>
+        private AdminPreferencesTab _tab = AdminPreferencesTab.Match;
 
         [Header("MAÇ bölümü (ortak)")]
 
@@ -131,20 +159,11 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _friendlyFirePrev;
         [SerializeField] private Button _friendlyFireNext;
 
-        [SerializeField] private Button _startButton;
-
-        // ⚠️ Ayrı bir "LOBİYE DÖN" düğmesi YOKTUR ve geri eklenmez: lobi artık harita seçicisinin
-        // ilk satırıdır (<see cref="LobbyRowLabel"/>). İkisi birden dururken operatör aynı işi iki
+        // ⚠️ Ayrı bir "LOBİYE DÖN" düğmesi YOKTUR ve geri eklenmez: lobi harita seçicisinin ilk
+        // satırıdır (<see cref="LobbyRowLabel"/>). İkisi birden dururken operatör aynı işi iki
         // yerden yapabiliyordu ve satır kilitliyken düğme açık kalıyordu — kural tek kapıdan geçsin.
-        // Koşan maçı bitirip lobiye dönmenin yolu İPTAL'dir (sunucuda ikisi de aynı iştir).
-        [SerializeField] private Button _abortButton;
-
-        /// <summary>Duraklat/devam düğmesi — etiketi ve gönderdiği komut faza göre değişir
-        /// (<see cref="ApplyPauseButton"/>).</summary>
-        [SerializeField] private Button _pauseButton;
-
-        [SerializeField] private TextMeshProUGUI _pauseLabel;
-        [SerializeField] private TextMeshProUGUI _statusText;
+        // Koşan maçı bitirip lobiye dönmenin yolu İPTAL'dir (sunucuda ikisi de aynı iştir) ve o
+        // düğme HUD'ın maç şeridindedir (<see cref="AdminMatchControls"/>).
 
         [Header("Kalibrasyon")]
 
@@ -264,6 +283,7 @@ namespace VortexArena.App.Admin
         {
             Wire(_closeButton, AdminSession.ClosePanel);
             Wire(_screenModeButton, AdminSession.ToggleScreenMode);
+            WireTabs();
 
             WireDropdown(_modeDropdown, SelectMode);
             WireDropdown(_mapDropdown, SelectMap);
@@ -275,10 +295,6 @@ namespace VortexArena.App.Admin
             Wire(_countdownNext, CountdownUp);
             Wire(_friendlyFirePrev, ToggleFriendlyFire);
             Wire(_friendlyFireNext, ToggleFriendlyFire);
-
-            Wire(_startButton, StartMatch);
-            Wire(_abortButton, AdminCommands.AbortMatch);
-            Wire(_pauseButton, TogglePause);
 
             Wire(_calibModeTwoButton, () => AdminCommands.SetCalibrationMode(ArenaProtocol.CALIB_MODE_TWO_ANCHOR));
             Wire(_calibModeSavedButton, () => AdminCommands.SetCalibrationMode(ArenaProtocol.CALIB_MODE_SAVED_ANCHOR));
@@ -300,6 +316,30 @@ namespace VortexArena.App.Admin
             Wire(_reconnectButton, AdminCommands.Reconnect);
             Wire(_disconnectButton, AdminCommands.Disconnect);
             Wire(_quitButton, ArmQuit);
+        }
+
+        /// <summary>Sekme düğmelerini kendi indekslerine bağlar. ⚠️ İndeks döngü değişkeninden
+        /// DEĞİL yerel bir kopyadan okunur: lambda değişkeni yakalar, hepsi son sekmeye
+        /// bağlanırdı.</summary>
+        private void WireTabs()
+        {
+            for (int i = 0; i < _tabButtons.Length; i++)
+            {
+                if (_tabButtons[i] == null)
+                {
+                    continue;
+                }
+
+                var tab = (AdminPreferencesTab)i;
+                _tabButtons[i].onClick.RemoveAllListeners();
+                _tabButtons[i].onClick.AddListener(() => SelectTab(tab));
+            }
+        }
+
+        private void SelectTab(AdminPreferencesTab tab)
+        {
+            _tab = tab;
+            Apply();
         }
 
         private static void Wire(Button button, UnityEngine.Events.UnityAction action)
@@ -328,7 +368,9 @@ namespace VortexArena.App.Admin
         private void OnEnable()
         {
             AdminSession.Changed += MarkDirty;
-            AdminCommands.StatusChanged += MarkDirty;
+            // ⚠️ AdminCommands.StatusChanged'e ABONE OLUNMAZ: durum satırı bu panelde değil HUD'ın
+            // maç şeridindedir (AdminMatchControls). Panelin gösterdiği hiçbir alan komut durumuna
+            // bağlı değil — abonelik her komutta boşuna bir tam tazeleme doğururdu.
             NetEvents.OnConnectionStateChanged += HandleConnectionState;
 
             // Ortak seçim başka bir admin'den değişmiş olabilir. Bu bileşen panel KAPALIYKEN de
@@ -359,7 +401,6 @@ namespace VortexArena.App.Admin
         private void OnDisable()
         {
             AdminSession.Changed -= MarkDirty;
-            AdminCommands.StatusChanged -= MarkDirty;
             NetEvents.OnConnectionStateChanged -= HandleConnectionState;
             AdminSelection.Changed -= HandleSharedSelectionChanged;
             NetEvents.OnReturnToLobby -= HandleOpenSceneChanged;
@@ -492,10 +533,15 @@ namespace VortexArena.App.Admin
 
         // ------------------------------------------------------------------ eylemler
 
-        /// <summary>Maçı başlatır. ⚠️ <b>Lobi açıkken reddedilir:</b> sahnelenmiş bir arena yoktur
-        /// ve sunucu lobi türünde maç başlatmaz (§10.7) — sessizce reddedilen bir komut yollamak
-        /// yerine sebebi durum satırına yazılır.</summary>
-        private void StartMatch()
+        /// <summary>
+        /// Panelde seçili mod/harita/süre/limit/geri sayım ile maçı başlatır.
+        /// <para>Çağıran: <see cref="AdminMatchControls"/> (HUD'ın maç şeridi). Düğme panelde
+        /// değildir ama seçim durumu buradadır — komut bu yüzden buradan gider.</para>
+        /// <para>⚠️ <b>Lobi açıkken reddedilir:</b> sahnelenmiş bir arena yoktur ve sunucu lobi
+        /// türünde maç başlatmaz (§10.7) — sessizce reddedilen bir komut yollamak yerine sebebi
+        /// durum satırına yazılır.</para>
+        /// </summary>
+        public void StartSelectedMatch()
         {
             if (_lobbyOpen)
             {
@@ -507,51 +553,12 @@ namespace VortexArena.App.Admin
                 _countdownSeconds);
         }
 
-        private const string PauseLabel = "DURAKLAT";
-        private const string ResumeLabel = "DEVAM ET";
-
-        /// <summary>
-        /// Faz <c>playing</c> ise duraklatır, operatörün duraklattığı maçta ise sürdürür.
-        /// <para>
-        /// Karar YEREL bir bayrağa değil sunucudan gelen faza bakar: çoklu admin var (CLAUDE.md) ve
-        /// duraklatmayı başkası da yapmış olabilir. Yerel bayrak tutulsaydı iki panel birbirine
-        /// ters düşerdi.
-        /// </para>
-        /// </summary>
-        private static void TogglePause()
-        {
-            if (IsOperatorPaused)
-            {
-                AdminCommands.ResumeMatch();
-            }
-            else
-            {
-                AdminCommands.PauseMatch();
-            }
-        }
-
-        /// <summary>Maç koşuyor mu (§10.1: tek cevap <c>phase == playing</c>).</summary>
-        private static bool IsMatchLive
-        {
-            get
-            {
-                AdminRoster roster = AdminRoster.Instance;
-                return roster != null && roster.Phase == ArenaProtocol.PHASE_PLAYING;
-            }
-        }
-
-        /// <summary>Maç OPERATÖR tarafından duraklatılmış mı. Modun/geri sayımın duraklaması
-        /// buraya girmez — sunucu onları <c>resume_match</c> ile kaldırtmaz (§5.2).</summary>
-        private static bool IsOperatorPaused
-        {
-            get
-            {
-                AdminRoster roster = AdminRoster.Instance;
-                return roster != null &&
-                       roster.Phase == ArenaProtocol.PHASE_PAUSED &&
-                       roster.PhaseReason == ArenaProtocol.PAUSE_REASON_OPERATOR;
-            }
-        }
+        /// <summary>BAŞLAT şu an anlamlı mı: sahnelenmiş bir arena var (lobi açık değil), maç
+        /// kurulmamış (<see cref="CanChangeSelection"/>) ve mod+harita seçili. Yalnız arayüz
+        /// kapısıdır — otorite sunucudadır.</summary>
+        public bool CanStartMatch => !_lobbyOpen && CanChangeSelection &&
+                                     !string.IsNullOrEmpty(SelectedModeId) &&
+                                     !string.IsNullOrEmpty(SelectedSceneName);
 
         private string SelectedModeId =>
             _modeIndex >= 0 && _modeIndex < _modes.Count ? _modes[_modeIndex].ModeId : "";
@@ -1169,6 +1176,7 @@ namespace VortexArena.App.Admin
             SyncDropdown(_modeDropdown, _modeIndex, _modes.Count);
             SyncMapDropdown();
 
+            ApplyTabs();
             ApplySelectionLock();
             ApplyScreenModeButton();
             ApplyQuitButton();
@@ -1179,8 +1187,7 @@ namespace VortexArena.App.Admin
                 : "mod varsayılanı";
             _scoreLimitValue.text = _scoreLimit > 0 ? _scoreLimit.ToString() : "mod varsayılanı";
 
-            // Prefabı güncellenmemiş bir kurulumda alan boş olabilir; eksik bağ sessizce çizilmez
-            // (panelin geri kalanı çalışmaya devam eder).
+            // Eksik bağ sessizce çizilmez (panelin geri kalanı çalışmaya devam eder).
             if (_countdownValue != null)
             {
                 _countdownValue.text = _countdownSeconds > 0
@@ -1199,15 +1206,12 @@ namespace VortexArena.App.Admin
                 _friendlyFireValue.color = friendlyFire ? UiKit.Bad : UiKit.Title;
             }
 
-            _statusText.text = AdminCommands.Status;
-
             ApplyCalibrationMode();
 
             _markersValue.text = AdminSession.Markers == AdminMarkerVisibility.Off ? "kapalı"
                 : AdminSession.Markers == AdminMarkerVisibility.TopDownOnly ? "kuş bakışı" : "her zaman";
             _nameplatesValue.text = AdminSession.Nameplates ? "açık" : "kapalı";
 
-            // Prefabı güncellenmemiş bir kurulumda alan boş olabilir (bkz. _countdownValue).
             if (_violationSoundValue != null)
             {
                 _violationSoundValue.text = AdminSession.ViolationSound ? "açık" : "kapalı";
@@ -1331,24 +1335,35 @@ namespace VortexArena.App.Admin
             Color valueColor = open ? UiKit.Title : UiKit.Faint;
             SetCaptionColor(_modeDropdown, valueColor);
             SetCaptionColor(_mapDropdown, valueColor);
-
-            ApplyPauseButton();
         }
 
-        /// <summary>Duraklat/devam düğmesini fazla hizalar: koşan maçta "DURAKLAT", operatörün
-        /// duraklattığı maçta "DEVAM ET", diğer her durumda pasif (lobide, yüklemede, geri sayımda
-        /// ve bitmiş maçta duraklatılacak/sürdürülecek bir şey yok — sunucu da reddeder).</summary>
-        private void ApplyPauseButton()
+        /// <summary>Sekme çubuğunu ve sayfaları etkin sekmeye göre boyar/açar — kalibre modu
+        /// düğmeleriyle aynı dil (aktif zemin <see cref="UiKit.Accent"/>, pasif
+        /// <see cref="CalibModeIdleFill"/>). Diziler prefabta eksik bağlanmış olabilir; hepsi
+        /// null-güvenli okunur.</summary>
+        private void ApplyTabs()
         {
-            if (_pauseButton == null) return;
+            var active = (int)_tab;
 
-            bool paused = IsOperatorPaused;
-            SetInteractable(_pauseButton, paused || IsMatchLive);
-
-            if (_pauseLabel != null)
+            for (int i = 0; i < _tabButtons.Length; i++)
             {
-                _pauseLabel.text = paused ? ResumeLabel : PauseLabel;
-                _pauseLabel.color = paused ? UiKit.Good : UiKit.Title;
+                if (_tabButtons[i] != null && _tabButtons[i].targetGraphic is Image image)
+                {
+                    image.color = i == active ? UiKit.Accent : CalibModeIdleFill;
+                }
+
+                if (i < _tabLabels.Length && _tabLabels[i] != null)
+                {
+                    _tabLabels[i].color = i == active ? UiKit.OnAccent : UiKit.Muted;
+                }
+            }
+
+            for (int i = 0; i < _tabPages.Length; i++)
+            {
+                if (_tabPages[i] != null && _tabPages[i].activeSelf != (i == active))
+                {
+                    _tabPages[i].SetActive(i == active);
+                }
             }
         }
 

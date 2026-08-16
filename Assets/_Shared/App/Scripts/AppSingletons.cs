@@ -32,8 +32,14 @@ namespace VortexArena.App
     /// <para>
     /// <b>Kapsam:</b> yalnız <c>VortexArena.App</c> tekilleri. Core'un kendi tekilleri
     /// (<c>HandGripPoser</c>, <c>WeaponGranter</c>, <c>ObstacleViolationProbe</c> …) buraya
-    /// GİRMEZ — Core, App'i referanslamaz ve oturum rolünü bilmez; onların susturulması kendi
-    /// bayrakları üzerinden olur (ör. <c>HandGripPoser.Suspended</c>).
+    /// GİRMEZ — Core, App'i referanslamaz ve oturum rolünü bilmez.
+    /// </para>
+    ///
+    /// <para>
+    /// Bugün her oturum türü (player, admin) aynı listeyi kurar; kapı bu yüzden koşulsuzdur.
+    /// Sunucusuz bir oturum türü gelirse koşul <b>buraya</b>, tek satır olarak girer — tekillere
+    /// dağıtılmaz. Rol bu noktada KESİN bilinir: <c>DevSession</c>/<c>AppBoot</c> rolü
+    /// <c>BeforeSceneLoad</c>'da yazar.
     /// </para>
     /// </summary>
     internal static class AppSingletons
@@ -41,16 +47,6 @@ namespace VortexArena.App
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            // Rol bu noktada KESİN bilinir: DevSession/AppBoot rolü BeforeSceneLoad'da yazar.
-            if (AppSession.IsWeaponCalibration)
-            {
-                // Silah kavrama kalibrasyonu: ne sunucu var, ne maç, ne sahne yönlendirmesi.
-                // Ağ arayüzü doğsaydı bağlanacak bir sunucu bulamaz ve ölçüm ekranının önünü
-                // "sunucu bulunamadı" kartıyla kapatırdı; SceneRouter sahneyi altımızdan alabilir,
-                // AdminSpectator da ölçülecek eli taşıyan rig'i kapatırdı.
-                return;
-            }
-
             InstallNetworkSingletons();
         }
 

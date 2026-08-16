@@ -769,9 +769,9 @@ Eşleme tablosu Unity tarafındadır (`ItemDefinition.netItemId`, katalog `NetIt
 
 ⚠️ "Aynı id iki slotta" tek başına **çift elle tutmak demek DEĞİLDİR** (çift tabanca meşru bir durum) — ayrımı yalnız `FLAG_GRIP_LINKED` taşır.
 
-**Duruş telde gitmez.** Eşyanın ele göre duruşu her istemcinin **kendi APK'sındaki** eşya verisinden gelir: **dönüş** kimliktir (`ItemDefinition.PrimaryGripRotation` statik `identity` — eşya eksenleri kumanda anchor'ıyla birebir; ayarlanabilir bir dönüş alanı yoktur), **konum** el başına **yakalanmış kavramadan** (`ItemGripAuthority` çözer: kaydın bilek noktası canlı bileğe oturur), çözülemezse aynı kaydın fallback okumasından (`ItemDefinition.PrimaryGripPosition`); ön kabza her hâlde `secondaryGrip` kaydıdır. ⚠️ **Yakalanan kavrama da tel formatını DEĞİŞTİRMEZ:** iki uç aynı `WD_*`'ı okur ve kaydı canlı bileğe hizalayan delta kumanda sürümlü el pozlarından türediği için her başlıkta aynıdır — ölçüyü telde taşımak gerekmez. Ön koşulu **kanonik kavramadır**: her eşyanın eline denk gelen noktası sabittir (serbest kavrama = keyfi ofset = uzak tarafta yanlış duruş). Aynı sebeple namlu yönü de telde gitmez — `muzzle` çocuğu prefabdadır.
+**Duruş telde gitmez.** Eşyanın ele göre duruşu her istemcinin **kendi APK'sındaki** eşya verisinden gelir: el başına yazılmış kavrama kaydından (`ItemGripPose` — bileğin eşyaya göre pozu; **dönüş de kayıttandır**, yani eşya ele göre durur), `ItemGripAuthority` onu anchor uzayına çevirerek çözer; çözülemezse aynı kaydın fallback okumasından (`ItemDefinition.PrimaryGripPosition`/`PrimaryGripRotation`); ön kabza her hâlde `secondaryGrip` kaydıdır. ⚠️ **Kavrama kaydı tel formatını DEĞİŞTİRMEZ:** iki uç aynı `WD_*`'ı okur ve bilek↔anchor köprüsünü kuran delta kumanda sürümlü el pozlarından türediği için her başlıkta aynıdır — ölçüyü telde taşımak gerekmez. Ön koşulu **kanonik kavramadır**: her eşyanın eline denk gelen noktası sabittir (serbest kavrama = keyfi ofset = uzak tarafta yanlış duruş). Aynı sebeple namlu yönü de telde gitmez — `muzzle` çocuğu prefabdadır.
 
-⚠️ **Uzak uçta eşyanın KONUMU çizilen bilekten okunur, telden gelen el pozundan değil** (dönüş yine telden gelir). Sebep iki poz kanalının **iki ayrı sensörden** doğmasıdır: `handL`/`handR` kumandanın pozudur, çizilen el ise iskelet blob'undaki **body tracking** bileğidir. İkisinin çakışması ancak modelin kol uzunluğu oyuncununkine eşitse mümkündür — ve bu proje gövde oranlarını **bilerek kalibre etmez** (§10.8: `Calibrate()` blob'un eklem sıkıştırmasını bozardı). Yani model prefab oranlarını taşır: kol uzandıkça (nişan alan oyuncu) modelin eli kumandaya yetişemez ve fark açılır, kol büküldükçe kapanır. Eşya ham el pozunda bırakılırsa aynı oyuncu bazı duruşlarda silahı elinde, bazılarında havada tutuyor görünür. Konumu çizilen bileğe bağlamak bu farkı **tanım gereği** sıfırlar ve takım gövdesinin ayrı kol uzunluğunu da kendiliğinden kapsar. ⚠️ **Dönüş bileğe TAŞINMAZ:** kavrama verisi kumanda ekseninde yazıldı, humanoid bileğin eksenine geçmek tüm silahların kavrama pozunu bir anda geçersiz kılardı — ayrışan şey erişim, yönelim değil.
+⚠️ **Uzak uçta eşyanın KONUMU çizilen bilekten okunur, telden gelen el pozundan değil** (dönüş yine telden gelir). Sebep iki poz kanalının **iki ayrı sensörden** doğmasıdır: `handL`/`handR` kumandanın pozudur, çizilen el ise iskelet blob'undaki **body tracking** bileğidir. İkisinin çakışması ancak modelin kol uzunluğu oyuncununkine eşitse mümkündür — ve bu proje gövde oranlarını **bilerek kalibre etmez** (§10.8: `Calibrate()` blob'un eklem sıkıştırmasını bozardı). Yani model prefab oranlarını taşır: kol uzandıkça (nişan alan oyuncu) modelin eli kumandaya yetişemez ve fark açılır, kol büküldükçe kapanır. Eşya ham el pozunda bırakılırsa aynı oyuncu bazı duruşlarda silahı elinde, bazılarında havada tutuyor görünür. Konumu çizilen bileğe bağlamak bu farkı **tanım gereği** sıfırlar ve takım gövdesinin ayrı kol uzunluğunu da kendiliğinden kapsar. ⚠️ **Dönüş çizilen bileğe TAŞINMAZ:** kavrama ISDK bileği ↔ kumanda anchor'ı çerçevesinde çözülüyor, humanoid bileğin bind eksenine geçmek tüm silahların duruşunu bir anda geçersiz kılardı — ayrışan şey erişim, yönelim değil.
 
 ⚠️ **Bu, poz kanalının otoritesini değiştirmez:** atış yönü, `hit_report` ve hedef çözümü hâlâ ham el pozundan gelir (§6.4/§10.3). Ham poz **fiziksel ölçümdür** ve orada doğru olan odur; bilek yalnız **çizimin** referansıdır.
 
@@ -852,11 +852,13 @@ APK'sındadır (§6.6 — hangi eşya, hangi el, kavrama bağlı mı). İzlemede
 tutan bir elde gerçek parmak duruşunu zaten göstermiyor; onu telde taşımak, alıcının **daha iyi
 bildiği** bir şeyi bant genişliğiyle satın almaktı.
 
-Alıcı parmakları **kendi** sentezler: eşya tutan elde `HandPoseProfile.DefaultGrip`, boş elde idle
-duruşu (`RemoteAvatar.idleHandPose`, boşsa `HandPoseProfile.Idle`). Böylece aynı el her ekranda aynı
-çizilir ve sol/sağ farkı kalmaz — duruşun kaynağı ölçüm değil **tanımdır**. ⚠️ Eşya başına yazılan
-bir parmak duruşu YOKTUR ve eklenmez: telde karşılığı olmadığı gibi, ayarlanabilir olması her silaha
-ikinci bir elle-ayar düğmesi doğururdu.
+Alıcı parmakları **kendi** sentezler: eşya tutan elde o slotun **parmak preset'i**
+(`HandGripPresets.Profile(definition.GripPreset(slot, rightHand))` — kavrama kaydının taşıdığı
+`Idle`/`Firing`/`Grip` seçimi), boş elde idle duruşu (`RemoteAvatar.idleHandPose`, boşsa
+`HandPoseProfile.Idle`). Böylece aynı el her ekranda aynı çizilir ve sol/sağ farkı kalmaz — duruşun
+kaynağı ölçüm değil **tanımdır**. ⚠️ Eşya başına **serbest** parmak verisi YOKTUR ve eklenmez:
+duruş bir preset seçimidir, parmak başına ayar telde karşılığı olmadığı gibi her silaha ikinci bir
+elle-ayar yüzeyi doğururdu.
 
 ⚠️ **Gönderen ile alıcının eklem listesi AYNI olmak ZORUNDADIR** (`NetworkCharacterRetargeter`'ın
 `_bodyIndicesToSend`/`_bodyIndicesToSync` alanları, iki prefabta birden). Listeler ayrışırsa blob
@@ -1329,6 +1331,7 @@ olmalı, tanınmayan `modeId` reddedilir):
 > | Geri sayımda biri tabandan çıkarsa? | Geri sayım **iptal edilir**, faz `paused`/`mode`'a döner ve sayaç sıfırdan başlar. Kural "tabanda **bekle**"dir, "tabana uğra" değil. ⚠️ İptalin **istisnası yoktur**: geri sayım her koşulda geri alınabilir |
 > | Toplanma takılırsa ne olur? | Çıkış operatöründür: takılan oyuncuyu **atar** (`kick`) ya da `abort_match` yapar. Atılan/kopan oyuncu toplamdan düştüğü için kalanlar hazırsa tur o an başlar — sayım her tikte çevrimiçi oyunculardan yeniden yapılır. Bekleme uzarsa sunucu konsoluna 30 sn'de bir "toplanma bekleniyor (h/t) — tabanına dönmeyenler: …" satırı düşer; bu bir **teşhis** satırıdır, tur başlatmaz |
 > | Cephane? | Şarjör + yedek şarjör (`weaponSource:"weaponcanvas"`), **her tur başında herkes tam dolu** — istemci geri sayımda doldurur. Sunucunun bundan haberi yoktur (§10.3: silah tablosu yok) |
+> | Taraflar yarıda değişir mi? | **Hayır, taraf değişimi (side swap) YOKTUR.** Free-roam'da taraf değiştirmek oyuncuların fiziksel olarak karşı tabana yürümesi demektir ve arena simetrik olmadığı sürece karşılığı da azdır. İstenirse ayrı bir iş olarak planlanır |
 
 > ⚠️ **`lobby` bu tabloda YOKTUR ve olmayacaktır.** Lobi bir **tür**dür ama `IGameMode` değildir
 > (§10.7): sunucuda kaydı olmadığı için `start_match{"lobby"}` "bilinmeyen mod" diye reddedilir —

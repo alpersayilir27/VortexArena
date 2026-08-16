@@ -11,13 +11,13 @@ namespace VortexArena.Core.Player
     /// yazılmazsa bilek ters çizilir (ölçüldü: sol 115.4°, sağ 128.1° sapma).
     /// </para>
     /// <para>
-    /// ⚠️ <b>Kapsamı daraldı: gövde ARTIK BURADAN GEÇMEZ.</b> Kol/bilek zinciri Movement SDK'nın
-    /// retargeting'inden geliyor ve SDK kendi eşlemesini kendi yapıyor. Eşyanın eldeki ETKİN duruşu
-    /// da buradan geçmez: rotasyonu <c>ItemDefinition.primaryGripEuler</c> sabiti, pozisyonu
-    /// <c>ItemGripAuthority</c> (poz düğümü + canlı ölçülen anchor→bilek deltası) verir. Bu
-    /// köprünün kalan işi <c>ItemDefinition.secondaryGrip</c> alanlarının <b>yazımıdır</b>
-    /// (stüdyonun anchor-proxy çevirisi) — yani buradaki tahmin sabiti yalnız ön kabza soketinin
-    /// ve uzak boş elin çizim kalitesini etkiler. Buraya gövdeyle ilgili bir tüketici geri
+    /// ⚠️ <b>Kapsamı dardır: gövde BURADAN GEÇMEZ.</b> Kol/bilek zinciri Movement SDK'nın
+    /// retargeting'inden geliyor ve SDK kendi eşlemesini kendi yapıyor. Eşyanın eldeki ETKİN
+    /// duruşunun köprüsü de burası DEĞİL <see cref="VortexArena.Core.Combat.ItemGripAuthority"/>'dir:
+    /// kavrama kaydı BİLEK uzayında yazılıyor, silahın dünya pozunu çözen taraf ise ANCHOR pozunu
+    /// biliyor; aradaki delta canlı ölçülüyor. Buradaki
+    /// <see cref="LeftAnchorToWrist"/>/<see cref="RightAnchorToWrist"/> o ölçümün <b>rig'siz</b>
+    /// fallback'idir (admin gözlemci, ilk kareler). Buraya gövdeyle ilgili bir tüketici geri
     /// eklenirse, retargeting ile ikinci bir eşleme kaynağı üretilmiş olur.
     /// </para>
     /// <para>
@@ -58,6 +58,33 @@ namespace VortexArena.Core.Player
         public static readonly Vector3 RightAnchorFingerDirection = new Vector3(0f, -0.42f, 0.91f);
         public static readonly Vector3 RightAnchorPalmNormal = new Vector3(-0.87f, 0.50f, 0f);
 
+        /// <summary>
+        /// Kumanda anchor'ından ISDK bileğine <b>ölçülmüş</b> delta (anchor uzayında, metre) —
+        /// canlı ölçüm yokken kullanılan sabit.
+        /// <para>
+        /// ⚠️ <b>KİMLİKLE başlar, yani "henüz ölçülmedi" demektir.</b> Değer tahmin edilmez,
+        /// başlıkta ölçülür: <c>HandGripPoser</c> deltayı kararlı ölçtüğü ilk anda editör konsoluna
+        /// el başına bir satır basar ve o satır buraya YAPIŞTIRILIR. Ölçülene kadar rig'siz izleyici
+        /// bileği anchor'la aynı yerde varsayar — kavrama birkaç santim kayar ama hiçbir şey
+        /// kırılmaz.
+        /// </para>
+        /// <para>
+        /// <b>Tüketicisi:</b> <see cref="VortexArena.Core.Combat.ItemGripAuthority.ResolveAnchorToWrist"/> —
+        /// yani rig'i olmayan oturum (admin gözlemci) ve rig'in henüz veri akıtmadığı ilk kareler.
+        /// Rig varken canlı ölçüm kazanır, bu sabit hiç okunmaz.
+        /// </para>
+        /// </summary>
+        public static readonly Pose LeftAnchorToWrist = Pose.identity;
+
+        /// <inheritdoc cref="LeftAnchorToWrist"/>
+        public static readonly Pose RightAnchorToWrist = Pose.identity;
+
+        /// <summary>El başına ölçülmüş anchor→bilek deltası (bkz. <see cref="LeftAnchorToWrist"/>).</summary>
+        public static Pose AnchorToWrist(bool rightHand)
+        {
+            return rightHand ? RightAnchorToWrist : LeftAnchorToWrist;
+        }
+
         /// <summary>Yön vektörünün "anlamlı" sayılması için gereken en küçük kare uzunluk.</summary>
         private const float MinDirectionSqrMagnitude = 1e-8f;
 
@@ -77,8 +104,8 @@ namespace VortexArena.Core.Player
         /// el→orta parmak, başparmak yönü el→başparmak, avuç normali ikisinin çapraz çarpımı.
         /// <para>
         /// ⚠️ Çapraz çarpımın sırası ELE GÖRE değişir (aynada simetrik iki iskelet, aynı sıra ters
-        /// normal verirdi): SOL'da <c>Cross(thumb, finger)</c>, SAĞ'da <c>Cross(finger, thumb)</c>.
-        /// Bu kuralın projedeki TEK uygulaması burasıdır — başka yere kopyalanmaz.
+        /// normal verirdi); kuralın tek yazıldığı yer aşağıdaki <see cref="Vector3"/> aşırı
+        /// yüklemesidir ve bu sürüm ona delege eder — başka yere kopyalanmaz.
         /// </para>
         /// <para>
         /// ⚠️ <b>Bind pozunda çağrılmalıdır</b> (çözücü kemiklere yazmadan ÖNCE): poz bozulduktan
@@ -101,19 +128,41 @@ namespace VortexArena.Core.Player
                 return false;
             }
 
-            Vector3 fingerDirection = hand.InverseTransformDirection(
-                middleProximal.position - hand.position);
-            Vector3 thumbDirection = hand.InverseTransformDirection(
-                thumbProximal.position - hand.position);
+            return TryMeasureBoneBasis(
+                hand.InverseTransformDirection(middleProximal.position - hand.position),
+                hand.InverseTransformDirection(thumbProximal.position - hand.position),
+                rightHand,
+                out basis);
+        }
 
-            if (fingerDirection.sqrMagnitude < MinDirectionSqrMagnitude ||
-                thumbDirection.sqrMagnitude < MinDirectionSqrMagnitude)
+        /// <summary>
+        /// Aynı ölçüm, yönler <b>hazır</b> verildiğinde (el-YEREL uzayda): kemik <see cref="Transform"/>'u
+        /// olmayan iskeletler de (ISDK'nın veri iskeleti, <c>HandGripPresets</c>) bu kapıdan geçsin
+        /// diye ayrılmıştır.
+        /// <para>
+        /// ⚠️ Çapraz çarpımın <b>sıra kuralı yalnız BURADA</b> yazılıdır (SOL'da
+        /// <c>Cross(thumb, finger)</c>, SAĞ'da <c>Cross(finger, thumb)</c>) ve
+        /// <see cref="TryMeasureBoneBasis(Transform, Transform, Transform, bool, out Quaternion)"/>
+        /// buna delege eder: iki kopya olsaydı biri düzeltilip öteki unutulur ve bir elin avuç
+        /// normali sessizce ters kalırdı.
+        /// </para>
+        /// </summary>
+        public static bool TryMeasureBoneBasis(
+            Vector3 fingerDirectionLocal,
+            Vector3 thumbDirectionLocal,
+            bool rightHand,
+            out Quaternion basis)
+        {
+            basis = Quaternion.identity;
+
+            if (fingerDirectionLocal.sqrMagnitude < MinDirectionSqrMagnitude ||
+                thumbDirectionLocal.sqrMagnitude < MinDirectionSqrMagnitude)
             {
                 return false;
             }
 
-            fingerDirection = fingerDirection.normalized;
-            thumbDirection = thumbDirection.normalized;
+            Vector3 fingerDirection = fingerDirectionLocal.normalized;
+            Vector3 thumbDirection = thumbDirectionLocal.normalized;
 
             Vector3 palmNormal = rightHand
                 ? Vector3.Cross(fingerDirection, thumbDirection)

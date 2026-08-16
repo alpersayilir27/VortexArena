@@ -220,8 +220,8 @@ namespace VortexArena.Core.Combat
         /// <summary>Ateş sesi seviyesi (0-1).</summary>
         public float FireVolume => fireVolume;
 
-        // ⚠️ Duruş için burada ALAN YOKTUR ve açılmaz: tek adı ItemDefinition'daki yakalanmış
-        // kavramadır (GetGrip / PrimaryGripPosition(bool)) ve tek olmak ZORUNDA — "verilen silahın
+        // ⚠️ Duruş için burada ALAN YOKTUR ve açılmaz: tek adı ItemDefinition'daki kavrama kaydıdır
+        // (GetGrip / PrimaryGripPosition(bool) / GripPreset) ve tek olmak ZORUNDA — "verilen silahın
         // duruşu" ile "uzak tarafta çizilen duruş" aynı ölçüdür, ikinci bir ad kaçınılmaz olarak
         // birinin güncellenip diğerinin unutulmasıyla sonuçlanır. Sahne silahı ile verilen silah da
         // tek kuraldan geçer (Weapon.ApplyCanonicalGrip).

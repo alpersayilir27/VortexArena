@@ -27,8 +27,8 @@ namespace VortexArena.Core.Arena
         [Tooltip("Sahne yüklenir yüklenmez loop olarak başlayan ambiyans/müzik. Boş = sessiz.")]
         [SerializeField] private AudioClip ambienceClip;
         [Range(0f, 1f)]
-        [Tooltip("Klibin çalma seviyesi. Silah sesleri bastırılmasın diye 0.3-0.5 arası tutulur.")]
-        [SerializeField] private float ambienceVolume = 0.4f;
+        [Tooltip("Klibin çalma seviyesi. Silah sesleri bastırılmasın diye 0.15-0.25 arası tutulur.")]
+        [SerializeField] private float ambienceVolume = 0.2f;
 
         /// <summary>Build listesindeki sahne adı (katalog anahtarı).</summary>
         public string SceneName => sceneName;

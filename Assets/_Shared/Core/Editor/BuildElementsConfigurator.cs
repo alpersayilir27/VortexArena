@@ -68,6 +68,7 @@ namespace VortexArena.Core.Editor
         [NonSerialized] private ScanResult scan;
         [NonSerialized] private string loadedForScenePath = null;
         [NonSerialized] private List<string> lastReport;
+        [NonSerialized] private List<BuildReadiness.ReadinessRow> readiness;
         private Vector2 scroll;
 
         [MenuItem("Tools/VortexArena/Build/Configure All Build Elements", false, 40)]
@@ -89,6 +90,12 @@ namespace VortexArena.Core.Editor
         {
             availableModeIds = CollectModeIds(ResolveCatalog(null));
             scan = Scan();
+
+            // ⚠️ Hazırlık denetimleri BURADA toplanır, OnGUI'de değil: OnGUI kare başına birkaç kez
+            // koşar ve denetimler prefab/asset okuyor. Pencere her odaklandığında Refresh çağrıldığı
+            // için liste yeterince taze kalır.
+            readiness = BuildReadiness.Collect();
+
             SyncActiveSceneFields();
             Repaint();
         }
@@ -145,6 +152,8 @@ namespace VortexArena.Core.Editor
             DrawScanTable();
             EditorGUILayout.Space();
             DrawActiveScene();
+            EditorGUILayout.Space();
+            DrawReadiness();
             EditorGUILayout.Space();
             DrawButtons();
             DrawLastReport();
@@ -270,6 +279,58 @@ namespace VortexArena.Core.Editor
                       "Lobi sahnesinde yalnız 'lobby' seçilmelidir."
                     : "Seçili: " + string.Join(" · ", selectedModeIds),
                 MessageType.Info);
+        }
+
+        /// <summary>
+        /// Build öncesi çalıştırılmış olması gereken diğer araçların durumu.
+        /// <para>
+        /// ⚠️ Buradaki denetimler <b>yazmaz</b>, yalnız okur: tetiği kullanıcı çeker. Aksi hâlde
+        /// her arena senkronu paylaşımlı prefabları (rig, WPN) yeniden serialize eder ve git
+        /// diff'i her seferinde gürültüyle dolardı.
+        /// </para>
+        /// </summary>
+        private void DrawReadiness()
+        {
+            EditorGUILayout.LabelField("Hazırlık", EditorStyles.boldLabel);
+
+            if (readiness == null || readiness.Count == 0)
+            {
+                return;
+            }
+
+            // ⚠️ Eylem döngü BİTTİKTEN sonra koşar: araç sonunda Refresh() çağrılıyor ve liste
+            // yenisiyle değişiyor — döngünün ortasında çalıştırılırsa aynı karede çizilen satır
+            // sayısı değişir ve GUILayout layout/repaint uyuşmazlığı verir.
+            BuildReadiness.ReadinessRow pending = default;
+            bool hasPending = false;
+
+            List<BuildReadiness.ReadinessRow> rows = readiness;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                BuildReadiness.ReadinessRow row = rows[i];
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(row.Ok ? "✓" : "✗", GUILayout.Width(16f));
+                    EditorGUILayout.LabelField(row.Title, EditorStyles.boldLabel, GUILayout.Width(210f));
+                    EditorGUILayout.LabelField(row.Detail, EditorStyles.miniLabel);
+
+                    if (!string.IsNullOrEmpty(row.ActionLabel) && row.Action != null &&
+                        GUILayout.Button(row.ActionLabel, GUILayout.Width(90f)))
+                    {
+                        pending = row;
+                        hasPending = true;
+                    }
+                }
+            }
+
+            if (!hasPending)
+            {
+                return;
+            }
+
+            pending.Action();
+            RunAndLog(new List<string> { "hazırlık: " + pending.Title + " çalıştırıldı" });
         }
 
         private void DrawButtons()

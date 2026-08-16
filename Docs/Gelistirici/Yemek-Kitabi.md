@@ -428,11 +428,11 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 
 `weaponId` yalnızca **kill feed etiketidir** — sunucu doğrulamaz, istediğini yazabilirsin.
 
-> Silahın eldeki **rotasyonu ayarlanmaz: kumanda anchor'ının rotasyonudur (kimlik)** — kumandayı
-> uzatınca namlu ileri bakar; el de kumandayla birlikte döner. **Tutulma NOKTASINI** `WD_*`'a
-> yakalanan kavrama kayıtları belirler (§11.0); dördü de el başınadır (`primaryGripRight/Left`,
-> `secondaryGripRight/Left`). ⚠️ **Ölçü TEK yerden okunur:** aynı kayıt yerel duruşu, uzak
-> oyuncudaki çizimi ve soketin yerini birlikte besliyor.
+> Silahın elde **nerede ve hangi açıyla** durduğunu `WD_*`'taki kavrama kayıtları belirler (§11.0);
+> dördü de el başınadır (`primaryGripRight/Left`, `secondaryGripRight/Left`) ve her biri bileğin
+> pozu + parmak preset'ini taşır. Ana elde silah ele uyar (bilek serbest kalır), ön kabzada el
+> silaha yapışır. ⚠️ **Ölçü TEK yerden okunur:** aynı kayıt yerel duruşu, uzak oyuncudaki çizimi ve
+> soketin yerini birlikte besliyor.
 > Çerçeveden seçilen silah (`weaponSource:"weaponcanvas"`), modun verdiği silah
 > (`weaponSource:"random"`) ve elde ISDK ile kavranan eşya **aynı yolu** kullanır; ayrım yoktur.
 
@@ -457,69 +457,64 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 
 ---
 
-## 11.0 Bir silahın kavramasını YAKALAMAK
+## 11.0 Bir silahın kavramasını YAZMAK
 
-Kavrama **elle yazılmaz, gözlükle ölçülür**: silahı gerçek elinle tutar gibi tutarsın, araç o anda
-elinin (ISDK **bileğinin**) silaha göre pozunu `WD_*.asset`'e yazar. Ayarlanacak bir sayı, sürüklenecek
-bir hayalet el ve bir euler düğmesi **yoktur**.
+Kavrama **stüdyoda, gözlük takmadan yazılır**: hayalet eli Scene View'da silahın kabzasına
+oturtursun, araç elin (ISDK **bileğinin**) silaha göre pozunu + o elin parmak preset'ini
+`WD_*.asset`'e yazar. Prefaba hiçbir şey yazılmaz — kavramanın tek yeri `WD_*`'tır.
 
-⚠️ **Silahın eldeki DÖNÜŞÜ ayarlanamaz — kumanda anchor'ının dönüşüdür (kimlik):** kumanda nereye,
-namlu oraya. **Elin dönüşü de öyle:** sentetik elin yalnız KONUMU kavrama noktasına kilitlenir,
-bileği kumandayla birlikte döner. Yani yakaladığın şey "el silahın NERESİNDE durur"dur, "hangi
-açıyla" değil — açı yakalamadan gelseydi kalibrasyon anındaki bilek eğikliğin kalıcı olurdu ve
-kumandayı dosdoğru ileri tutarken silah yamuk tutuluyormuş gibi görünürdü. Silah elde yatık
-görünüyorsa sebebi kavrama kaydı değil, `Model`'in prefabtaki yerleşimidir.
+⚠️ **Sözleşme "silah ele göre"dir, "el silaha göre" değil.** Ana elde eşya `bilek ∘ Inverse(kayıt)`
+ile durur: stüdyoda eli kabzada **döndürmek oyunda SİLAHI döndürür** ve elin bileği kilitlenmez
+(izlemeden/kumandadan gelir). Ön kabzada kural terstir — ikinci elin bileği `item ∘ kayıt` pozuna
+**tam** kilitlenir, yani el silaha yapışır. Ayrıca ayarlanabilir bir "silah dönüşü" alanı yoktur:
+dönüş kaydın kendisidir.
 
-⚠️ **El takibi ZORUNLU değil, tercih edilendir.** Kumanda tutulurken de ölçülecek bir bilek vardır
-(rig kumanda pozundan sentetik el üretir, `controllerDrivenHandPosesType = Natural`) ve oyun oyunda
-da aynı bileği okur — yani kumandayla yakalanan kavrama tutarlıdır. Kumandaları bırakmanın kazancı
-görünürlüktür: parmaklarının kabzaya nereye oturduğunu gözünle görürsün. HUD hangi kipte olduğunu
-her karede yazar.
+**Akış (prefab kipinde, Play gerekmez):**
 
-**Akış (editörde, APK build'i gerekmez):**
+1. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` ile pencereyi aç.
+2. `_Shared/Arsenal/Prefabs/WPN_*.prefab`'ı **prefab kipinde** aç (Project'te çift tık). Pencere
+   stage'i kendiliğinden tanır.
+3. **Ana Kabza Ellerini Oluştur** (iki elli silahta ayrıca **Ön Kabza Ellerini Oluştur**) → sağ ve
+   sol hayalet eller sahnede belirir. Kayıt zaten varsa eller **o kayıttan** doğar; yoksa kabza
+   parçasının üstüne makul bir başlangıçla konur.
+4. Elleri Scene View'da sürükle/çevir: avuç kabzaya otursun, işaret parmağı tetiğe ulaşsın.
+5. Elin Inspector'ından (`GripHandAuthoring`) **parmak preset'ini** seç: `Idle` · `Firing` (işaret
+   tetikte serbest) · `Grip` (sarma). Değişiklik Scene View'da anında görünür. Varsayılan ana
+   kabzada `Firing`, ön kabzada `Grip`'tir.
+6. İstersen **Karşı Ele Aynala** ile öteki eli başlat, sonra elle düzelt.
+7. **Kaydet** (pencereden ya da elin Inspector'ından) → yaşayan **her el** `WD_*.asset`'e yazılır
+   (Undo'lu). **Elleri Temizle** tezgâhı toplar.
 
-1. `Tools > VortexArena > Development > Dev` → **Rol: Silah** (kısayol `Ctrl+Alt+R` üç rolü
-   döndürür) → listeden ölçülecek `WD_*`'ı seç. Hedef/sandbox/başlangıç seçimleri bu rolde sönük
-   çizilir: sunucuya bağlanılmaz.
-2. **Play**. Doğrudan `WeaponCalibration` sahnesi açılır (Boot/Lobby akışı hiç koşmaz). Seçilen
-   silah kafanın **karşısında** belirir ve **donar** — sen ona yaklaşırsın, o seni izlemez.
-3. HUD üç satır yazar: geri sayım · hangi aşamadasın · yönerge. Sıra **sabittir**:
-   **1/4 ana kabza sağ → 2/4 ana kabza sol → 3/4 ön kabza sağ → 4/4 ön kabza sol.**
-4. Elini silahı tutacağın yere getir ve sayacı başlat → tepede **5 saniyelik** geri sayım başlar.
-   Sayım sürerken elini aç ve kabzayı normal tuttuğun gibi sar.
-   **Başlatmanın iki yolu var ve ikisi de geçerlidir:** **pinch** (baş parmağınla işaret parmağının
-   UÇLARINI birbirine değdirmek) ya da **kumanda tetiği**. HUD'un yönerge satırı o an hangisinin
-   canlı olduğunu yazar.
-5. Sayaç bitince ölçü alınır, `WD_*.asset`'e yazılır ve diske kaydedilir; HUD onaylar ve bir sonraki
-   aşamaya geçer. Dördü bitince iş biter — Play'i durdur.
-
-- ⚠️ **Başlatma girdisi ölçünün parçası DEĞİLDİR:** ölçü, sayaç bittiğinde okunan bileğin pozudur ve
-  o bilek iki kipte de aynı kaynaktan gelir (`HandGripPoser.TryGetTrackedWrist`). Kumanda kipinde
-  yakalanan kavrama oyunla **tutarlıdır** — oyuncu zaten kumanda tutuyor ve oyun aynı bileği okuyor.
-  El takibinin üstünlüğü ölçünün doğruluğu değil **görünürlüğüdür**: parmaklarının kabzaya nereye
-  oturduğunu gözünle görürsün.
-- ⚠️ **Sayaç girdi bırakılınca İPTAL OLMAZ** ve edilmemeli: sayacın var olma sebebi tam olarak
-  başlattıktan sonra elini açıp kabzayı sarmandır. Ölçülen şey başlatma anındaki el değil, **sayaç
-  bittiğindeki** eldir.
-- ⚠️ **Kayıt EL BAŞINADIR** ve dört kaydın dördü de ayrı ölçülür: kabza simetrik değildir (tetik,
-  şarjör, kurma kolu tek taraftadır), tek kayıttan aynalamak sol eli silahın **içine** sokar. Bir
-  eli atlarsan oyun onu öteki elin kaydına düşürür — çalışır ama o el yanlış tutar.
-- ⚠️ Sahnedeki silah bir oyuncak değil bir **ölçü hedefidir**: kavranamaz, ateş etmez, ses çıkarmaz
-  (bileşenleri sökülür). Onu tutmaya çalışma, sadece elini doğru yere koy.
-- ⚠️ **Parmakların duruşu ölçülmez ve yazılmaz.** Oyunda silah tutan elde parmaklar izlemeden/
-  kumandadan gelir (grip parmakları kapatır, tetik parmağı serbest kalır); silah başına parmak
-  ayarı diye bir veri yoktur.
-- Kavraması yakalanmamış silahta el kumandanın ekseninde kalır + konsola oturum başına bir uyarı
-  gider; `Build Weapon Prefabs` de koşu sonunda **"kavraması YAKALANMAMIŞ silahlar"**ı listeler.
-- Yakalama diske `AssetDatabase` ile yazıldığı için bu rol **yalnız editörde** anlamlıdır ve
-  `WeaponCalibration` sahnesi hiçbir build'e girmez.
+- ⚠️ **Aynalama yalnız BAŞLANGIÇTIR**, son söz değil: kabza simetrik değildir (tetik, şarjör, kurma
+  kolu tek taraftadır) ve kayıt el başınadır. Bir eli hiç yazmazsan oyun onu öteki elin kaydına
+  düşürür — çalışır ama o el yanlış tutar.
+- ⚠️ **Eller prefabın İÇİNE sürüklenmez.** Her el, stage sahnesinin ayrı bir kök objesidir
+  (`[VA El_*]`, diske yazılmaz). Prefabın altına asılan bir el ilk kaydetmede silahın içine girer ve
+  arenada **havada el** olarak çizilir; `Build Weapon Prefabs` böyle bir kaçağı siler.
+- Eller Play'e girerken, prefab kipi kapanınca ya da sahne değişince kendiliğinden silinir. Play
+  kipinde kayıt yazılmaz.
+- ⚠️ **Parmak duruşu slider'la ayarlanmaz, preset'ten seçilir.** Üç preset tek kaynaktan sürülür
+  (`HandGripPresets`), yani tezgâhta gördüğün parmak duruşu oyundaki sentetik elde ve uzak avatarda
+  birebir tekrarlanır. Silah başına serbest parmak verisi yoktur ve eklenmez.
+- Kavraması yazılmamış silahta el `Idle`'da kalır + konsola oturum başına bir uyarı gider;
+  `Build Weapon Prefabs` de koşu sonunda **"kavraması YAZILMAMIŞ silahlar"**ı listeler.
+- Ön kabza noktasında santimlik bir düzeltme yetiyorsa stüdyoya girmene gerek yok: sahnedeki/
+  prefabtaki `ItemGripSockets` tutamağı (yeşil halka) o noktayı doğrudan `WD_*`'a yazar ve preset'e
+  dokunmaz. **Ana kabza orada çizilmez** — onun yolu stüdyodur.
+- ⚠️ Silah elde yatık görünüyorsa iki aday var: kavrama kaydının dönüşü ya da `Model`'in prefabtaki
+  yerleşimi. Stüdyoda el ile silah birlikte göründüğü için ayrımı orada yaparsın.
+- **Admin ekranında** uzak silahlar dönük çiziliyorsa sebep kavrama değil, anchor→bilek deltasının
+  sabitidir: rig'i olmayan izleyici canlı ölçüm yapamaz ve `HandGripConvention.Left/RightAnchorToWrist`
+  sabitine düşer. O sabit editör Play'inde `HandGripPoser`'ın bir kez bastığı kararlı ölçümden
+  kopyalanır.
 
 ### Başkalarının gördüğü el (uzak avatarın parmakları)
 
 Parmaklar telde gitmez (`Docs/ArenaNet-Protokol.md` §6.9), yani uzak avatarın parmakları
-**sentezlenir**: eşya tutan elde `HandPoseProfile.DefaultGrip`, boş elde `RemoteAvatar.prefab` →
-`idleHandPose` (boşsa `HandPoseProfile.Idle`). ⚠️ Eşya başına yazılan bir parmak duruşu **yoktur ve
-eklenmez** — silah başına ikinci bir elle-ayar düğmesi doğururdu.
+**sentezlenir**: eşya tutan elde **o slotun preset'i** (`WD_*`'ta yazılı olan), boş elde
+`RemoteAvatar.prefab` → `idleHandPose` (boşsa `HandPoseProfile.Idle`). Yani stüdyoda seçtiğin preset
+yalnız senin elini değil, herkesin gördüğü eli de sürer. ⚠️ Eşya başına serbest parmak verisi
+**yoktur ve eklenmez** — silah başına ikinci bir elle-ayar yüzeyi doğururdu.
 
 **Genel his** (tüm silahlar birden) eklem başına açı tavanlarından gelir:
 `HandFingerRig.FingerMaxAngles` / `ThumbMaxAngles`. Tek bir silah tuhaf duruyorsa bakılacak yer o

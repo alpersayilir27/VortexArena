@@ -1978,28 +1978,40 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Bu elin parmak duruşu (§6.9): elde eşya varsa tek bir kavrama duruşu, yoksa idle.
+        /// Bu elin parmak duruşu (§6.9): elde eşya varsa o SLOTUN preset'i, yoksa idle.
         /// <para>
-        /// ⚠️ <b>Parmaklar EŞYA BAŞINA YAZILMAZ</b> ve bu duruş bir tanım alanından okunmaz: parmak
-        /// izlemeden gelen canlı bir ölçüdür, ama telde GİTMEZ (§6.6) — uzak avatarda sentezlemekten
-        /// başka seçenek yok. Sentezin kaynağı eşya başına yazılmış bir profil olsaydı, yakalanan
-        /// kavramayla sessizce çelişebilecek ikinci bir tarif doğardı; bu yüzden tutulan HER eşyada
-        /// tek bir kavrama duruşu kullanılır.
+        /// ⚠️ <b>Duruş telde GİTMEZ</b> (§6.6) — uzak avatarda sentezlemekten başka seçenek yok.
+        /// Kaynağı kavrama kaydının kendi preset'idir (<c>ItemGripPose.preset</c>), yani yerel
+        /// oyuncunun sentetik eline yazılanla AYNI beş sayı: ikinci bir tarif olsaydı aynı silah
+        /// kendi ekranında başka, karşı ekranda başka tutulurdu.
         /// </para>
         /// <para>⚠️ Boş elin yolu ayrıdır ve öyle kalır: orada duruş bir kavrama değil, sahne
         /// başına ayarlanabilen bir dinlenme pozudur.</para>
-        /// <para><c>GRIP_LINKED</c>'te iki el de aynı eşyayı tutuyordur, yani ikisi de kavrama
-        /// duruşunu alır — ön kabzayı saran el için ayrı bir duruş bugün yok.</para>
+        /// <para><c>GRIP_LINKED</c>'te iki el aynı eşyayı tutuyordur ama <b>AYNI duruşta
+        /// değildir</b>: ana el kendi slotunun preset'ini (tetik), ön kabzayı saran el
+        /// <see cref="GripSocketKind.Secondary"/> preset'ini (sarma) alır.</para>
         /// </summary>
         public HandPoseProfile ResolveHandPose(bool rightHand)
         {
-            ItemDefinition definition = _shownGripLinked
-                ? (_shownPrimaryRight ? _itemDefR : _itemDefL)
-                : (rightHand ? _itemDefR : _itemDefL);
+            ItemDefinition definition;
+            GripSocketKind kind;
+
+            if (_shownGripLinked)
+            {
+                definition = _shownPrimaryRight ? _itemDefR : _itemDefL;
+                kind = rightHand == _shownPrimaryRight
+                    ? GripSocketKind.Primary
+                    : GripSocketKind.Secondary;
+            }
+            else
+            {
+                definition = rightHand ? _itemDefR : _itemDefL;
+                kind = GripSocketKind.Primary;
+            }
 
             if (definition != null)
             {
-                return HandPoseProfile.DefaultGrip;
+                return HandGripPresets.Profile(definition.GripPreset(kind, rightHand));
             }
 
             return idleHandPose.IsEmpty ? HandPoseProfile.Idle : idleHandPose;
@@ -2017,11 +2029,17 @@ namespace VortexArena.Core.Player
         /// aldığı yerden kaydırır.
         /// </para>
         /// <para>
-        /// ⚠️ İki kavrama noktası da <b>AYNI uzaydadır</b> (<see cref="ItemDefinition"/>): bileğin
+        /// ⚠️ İki kavrama kaydı da <b>AYNI uzaydadır</b> (<see cref="ItemDefinition"/>): bileğin
         /// eşyaya göre yerel pozu. Yani ana el için de ön kabza için de hedef düz ileri yönde,
         /// <c>item.position + item.rotation * nokta</c> ile bulunur — ikinci bir uzay tarif etmek
         /// yalnız işaret hatası üretirdi. Aynı bileşim <see cref="ApplySecondaryGripSnap"/> ve
         /// <c>ItemGripSockets</c> içinde de yazılı.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Dönen poz ANCHOR çerçevesindedir</b>, bilek çerçevesinde değil: bunu okuyan
+        /// <see cref="RemoteHandPoser"/> düzeltmesini anchor uzayı için ölçüyor. Ana el dalında
+        /// çeviri <see cref="ItemGripAuthority"/>'de zaten yapılmış olarak gelir, ön kabza dalında
+        /// açıkça yapılır.
         /// </para>
         /// <para>
         /// ⚠️ Nokta <b>el başına</b> okunur (<see cref="ItemDefinition.GetGrip"/>): kabza simetrik
@@ -2077,7 +2095,7 @@ namespace VortexArena.Core.Player
                 else
                 {
                     gripPointOnItem = definition.PrimaryGripPointOnItem(rightHand);
-                    primaryGripRotation = ItemDefinition.PrimaryGripRotation;
+                    primaryGripRotation = definition.PrimaryGripRotation(rightHand);
                 }
 
                 palm = new Pose(
@@ -2090,9 +2108,16 @@ namespace VortexArena.Core.Player
             // (ItemGripSolver), burada yalnız o elin bileği soketin üstüne getiriliyor.
             // ⚠️ Kayıt SORULAN elden okunur: bu dala yalnız !isPrimaryHand iken girilir, yani
             // ön kabzayı saran el sorulan elin ta kendisidir.
-            palm = new Pose(
+            var wristWorld = new Pose(
                 item.position + itemRotation * definition.SecondaryGripPosition(rightHand),
                 itemRotation * definition.SecondaryGripRotation(rightHand));
+
+            // ⚠️ BİLEK → ANCHOR çevirisi zorunlu: kayıt bilek uzayındadır, oysa bu metodun çıktısını
+            // okuyan RemoteHandPoser onu ANCHOR çerçevesi sayar (HandFingerRig.WristCorrection
+            // anchor uzayı için ölçüldü). Çeviri atlanırsa uzak el, anchor→bilek deltası kadar
+            // kaymış ve dönmüş çizilir. Ana el dalında gerek YOK: orada ölçü zaten anchor uzayında
+            // çözülüyor (ItemGripAuthority).
+            palm = ItemGripAuthority.WristToAnchor(rightHand, wristWorld);
             return true;
         }
 
@@ -2100,12 +2125,12 @@ namespace VortexArena.Core.Player
         /// yalnız sonucu transforma yazar (ikinci bir kavrama matematiği iki uçta iki ayrı duruş
         /// demek olurdu).
         /// <para>
-        /// ⚠️ Ana kavramanın ölçüsü <b>yerelin kullandığı sıranın aynısıyla</b> çözülür (önce poz
-        /// düğümü, sonra tanım alanları): iki uç ayrı sıra izlerse aynı silah kendi ekranında başka,
-        /// karşı ekranda başka durur. Düğüm yolunun ölçüsü İZLEYENİN kendi bilek deltasından gelir —
-        /// delta kumanda sürümlü el pozlarından türediği için her başlıkta aynıdır, yani uzak
-        /// oyuncununkiyle özdeştir. Rig'i olmayan izleyicide (admin gözlemci) delta ölçülemez ve
-        /// çizim bugünkü yoldan yapılır.
+        /// ⚠️ Ana kavramanın ölçüsü <b>yerelin kullandığı sıranın aynısıyla</b> çözülür (önce
+        /// deltayla anchor uzayına çevrilmiş kayıt, sonra tanımın kendi ölçüsü): iki uç ayrı sıra
+        /// izlerse aynı silah kendi ekranında başka, karşı ekranda başka durur. Delta İZLEYENİN
+        /// kendi ölçümünden gelir — kumanda sürümlü el pozlarından türediği için her başlıkta
+        /// aynıdır, yani uzak oyuncununkiyle özdeştir. Rig'i olmayan izleyicide (admin gözlemci)
+        /// delta ölçülemez ve <c>HandGripConvention</c>'daki ölçülmüş sabite düşülür.
         /// </para>
         /// <para><paramref name="primaryRight"/>: eşyayı taşıyan ANA elin sağ olup olmadığı —
         /// <c>GRIP_LINKED</c> iken <c>FLAG_PRIMARY_RIGHT</c>, aksi hâlde eşyanın durduğu slot.
@@ -2147,9 +2172,10 @@ namespace VortexArena.Core.Player
         /// silah doğru durur ama boş el birkaç santim yanında yüzer.
         /// </para>
         /// <para>⚠️ İkinci elin hedefi <b>düz ileri yönde</b> bulunur (ters bileşimle değil):
-        /// yakalama bileğin eşyaya göre yerel pozudur, eşyanın dünya pozu ise ana elden
+        /// kayıt bileğin eşyaya göre yerel pozudur, eşyanın dünya pozu ise ana elden
         /// türetilmiştir — ön kabza o eşyanın üstünde sabit bir noktadır. Buradaki bir işaret/ters
-        /// çevirme hatası sessizce yanlış duruş üretir.</para>
+        /// çevirme hatası sessizce yanlış duruş üretir. Sonuç <b>anchor</b> çerçevesine çevrilir:
+        /// gösterim pozları teldeki anchor pozlarıdır.</para>
         /// <para>⚠️ Kayıt ön kabzayı saran elin kendi kaydıdır ve o el ana elin TERSİDİR
         /// (<c>GRIP_LINKED</c> tanım gereği iki ayrı el demektir); kabza simetrik olmadığı için
         /// ana elin kaydını kullanmak boş eli silahın öte yanına oturturdu.</para>
@@ -2173,20 +2199,25 @@ namespace VortexArena.Core.Player
             bool secondaryRight = !_shownPrimaryRight;
 
             Quaternion itemRotation = item.rotation;
-            Vector3 handPosition = item.position +
-                                   itemRotation * definition.SecondaryGripPosition(secondaryRight);
-            Quaternion handRotation = itemRotation * definition.SecondaryGripRotation(secondaryRight);
+            var wristWorld = new Pose(
+                item.position + itemRotation * definition.SecondaryGripPosition(secondaryRight),
+                itemRotation * definition.SecondaryGripRotation(secondaryRight));
+
+            // ⚠️ BİLEK → ANCHOR: kayıt bilek uzayındadır, gösterim pozları ise teldeki ANCHOR
+            // pozlarıdır (yarıçap karşılaştırması da onlarla yapılıyor). Çeviri atlanırsa hem
+            // yakınlık kapısı yanlış ölçer hem de yapıştırılan el delta kadar kayar.
+            Pose anchorPose = ItemGripAuthority.WristToAnchor(secondaryRight, wristWorld);
 
             if (_shownPrimaryRight)
             {
-                if (IsWithinSnapRadius(displayHandL.position, handPosition))
+                if (IsWithinSnapRadius(displayHandL.position, anchorPose.position))
                 {
-                    displayHandL = new Pose(handPosition, handRotation);
+                    displayHandL = anchorPose;
                 }
             }
-            else if (IsWithinSnapRadius(displayHandR.position, handPosition))
+            else if (IsWithinSnapRadius(displayHandR.position, anchorPose.position))
             {
-                displayHandR = new Pose(handPosition, handRotation);
+                displayHandR = anchorPose;
             }
         }
 

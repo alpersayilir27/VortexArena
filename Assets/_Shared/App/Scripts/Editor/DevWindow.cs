@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using UnityEditor;
 using UnityEngine;
 using VortexArena.Core;
@@ -11,11 +10,7 @@ namespace VortexArena.App.Editor
 {
     /// <summary>
     /// <c>Tools &gt; VortexArena &gt; Development &gt; Dev</c> — geliştirici kontrol paneli: rol, sunucu hedefi,
-    /// Play başlangıcı, <b>sunucusuz sandbox</b> kipi ve <b>silah kavrama kalibrasyonu</b>.
-    ///
-    /// <para><b>Rol seçimi neyin çizileceğini de belirler:</b> <c>weapon</c> rolünde sunucuya
-    /// hiç gidilmediği için hedef/sandbox/başlangıç seçimleri devre dışı kalır ve yerine tek
-    /// bir silah seçici çıkar.</para>
+    /// Play başlangıcı ve <b>sunucusuz sandbox</b> kipi.
     ///
     /// <para><b>Sunucuya hiç dokunmaz</b> — ne başlatır, ne durdurur, ne derler: sunucu her zaman
     /// elle çalıştırılır.</para>
@@ -37,7 +32,7 @@ namespace VortexArena.App.Editor
 
         private const string CustomTargetLabel = "Özel…";
 
-        private static readonly string[] RoleLabels = { "Player", "Admin", "Silah" };
+        private static readonly string[] RoleLabels = { "Player", "Admin" };
         private static readonly string[] StartLabels = { "Boot'tan", "Açık sahneden" };
 
         [SerializeField] private Vector2 scroll;
@@ -50,11 +45,6 @@ namespace VortexArena.App.Editor
         /// profili de listelenir (admin seçicisinin aksine) — lobi silahlarını denemek için meşru bir
         /// sandbox seçimidir.</summary>
         [NonSerialized] private string[] modeIds = Array.Empty<string>();
-
-        /// <summary>Silah rolünün seçicisi: projedeki tüm <c>WeaponDefinition</c> asset yolları
-        /// (dosya adına göre alfabetik) ve onlara birebir karşılık gelen etiketler.</summary>
-        [NonSerialized] private string[] weaponPaths = Array.Empty<string>();
-        [NonSerialized] private string[] weaponLabels = Array.Empty<string>();
 
         [MenuItem("Tools/VortexArena/Development/Dev", false, 80)]
         private static void Open()
@@ -88,7 +78,6 @@ namespace VortexArena.App.Editor
             targetLabels[targets.Count] = CustomTargetLabel;
 
             RefreshModeCache();
-            RefreshWeaponCache();
         }
 
         /// <summary>Katalogdaki modId'leri okur. Katalog <c>Resources</c> altındadır ve editörde
@@ -117,36 +106,6 @@ namespace VortexArena.App.Editor
         }
 
         /// <summary>
-        /// Silah seçicisinin kaynağı: projedeki <c>WeaponDefinition</c> asset'leri. Kaynak
-        /// katalog DEĞİL <c>AssetDatabase</c>'dir — kalibrasyon bir içerik seçimi değil bir
-        /// authoring işidir, henüz hiçbir moda/loadout'a girmemiş silah da kalibre edilebilmeli.
-        /// </summary>
-        private void RefreshWeaponCache()
-        {
-            string[] guids = AssetDatabase.FindAssets("t:VortexArena.Core.Combat.WeaponDefinition");
-            var paths = new List<string>(guids.Length);
-            for (int i = 0; i < guids.Length; i++)
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-                if (!string.IsNullOrEmpty(path))
-                {
-                    paths.Add(path);
-                }
-            }
-
-            paths.Sort((a, b) => string.Compare(
-                Path.GetFileNameWithoutExtension(a), Path.GetFileNameWithoutExtension(b),
-                StringComparison.OrdinalIgnoreCase));
-
-            weaponPaths = paths.ToArray();
-            weaponLabels = new string[weaponPaths.Length];
-            for (int i = 0; i < weaponPaths.Length; i++)
-            {
-                weaponLabels[i] = Path.GetFileNameWithoutExtension(weaponPaths[i]);
-            }
-        }
-
-        /// <summary>
         /// İlk açılışta (hiç hedef seçilmemişken) <c>dev-targets.json</c>'daki varsayılanları
         /// uygular. Sonraki açılışlarda kişisel seçim korunur — "Özel" bile
         /// (<see cref="CustomTargetName"/> sentinel'i sayesinde) sıfırlanmaz.
@@ -158,13 +117,6 @@ namespace VortexArena.App.Editor
             if (string.IsNullOrEmpty(DevSession.SandboxModeId) && modeIds.Length > 0)
             {
                 DevSession.SandboxModeId = modeIds[0];
-            }
-
-            // Aynı gerekçe silah seçimi için de geçerli: seçilmemiş silah, Play'e basınca boş
-            // bir kalibrasyon sahnesi demek olurdu.
-            if (string.IsNullOrEmpty(DevSession.WeaponAssetPath) && weaponPaths.Length > 0)
-            {
-                DevSession.WeaponAssetPath = weaponPaths[0];
             }
 
             if (!string.IsNullOrEmpty(DevSession.TargetName))
@@ -269,31 +221,13 @@ namespace VortexArena.App.Editor
 
             // ---- rol
             EditorGUI.BeginChangeCheck();
-            int roleIndex = RadioRow("Rol", RoleLabels, IndexFromRole(DevSession.Role),
-                "kısayol: Ctrl+Alt+R");
+            int roleIndex = RadioRow("Rol", RoleLabels,
+                DevSession.Role == AppSession.RolePlayer ? 0 : 1, "kısayol: Ctrl+Alt+R");
             if (EditorGUI.EndChangeCheck())
             {
-                DevSession.Role = RoleFromIndex(roleIndex);
+                DevSession.Role = roleIndex == 0 ? AppSession.RolePlayer : AppSession.RoleAdmin;
             }
 
-            bool weaponRole = DevSession.Role == AppSession.RoleWeapon;
-            if (weaponRole)
-            {
-                DrawWeapon();
-            }
-
-            // Silah rolünde aşağıdaki üç seçimin hiçbiri okunmaz. Gizlemek yerine DEVRE DIŞI
-            // çiziyoruz: kaybolan alan "ayar kayboldu mu" sorusu doğuruyor, sönük alan ise
-            // seçimin hâlâ durduğunu ama bu rolde yok sayıldığını doğrudan gösteriyor.
-            using (new EditorGUI.DisabledScope(weaponRole))
-            {
-                DrawServerSelection();
-            }
-        }
-
-        /// <summary>Sunucuya bağlanan rollerin (player/admin) seçimleri: sandbox, hedef, başlangıç.</summary>
-        private void DrawServerSelection()
-        {
             // ---- sunucusuz sandbox
             EditorGUI.BeginChangeCheck();
             bool sandbox = EditorGUILayout.ToggleLeft(
@@ -338,71 +272,6 @@ namespace VortexArena.App.Editor
                     "\"Açık sahneden\" yapın.",
                     MessageType.Warning);
             }
-        }
-
-        /// <summary>
-        /// Silah rolünün tek seçimi: <b>kalibre edilecek silah</b>. Seçim asset YOLU olarak
-        /// yazılır (ad değil): asset yeniden adlandırılırsa yol da değişir ve seçim bir sonraki
-        /// tazelemede listeden düşer — sessizce başka bir silaha kaymaz.
-        /// </summary>
-        private void DrawWeapon()
-        {
-            if (weaponPaths.Length == 0)
-            {
-                EditorGUILayout.HelpBox(
-                    "Projede hiç WeaponDefinition asset'i bulunamadı — kalibre edilecek silah yok. " +
-                    "Silah kiti '_Shared/Arsenal/Data/WD_*.asset' üretir; ürettikten sonra " +
-                    "\"Tazele\"ye basın.",
-                    MessageType.Warning);
-
-                if (GUILayout.Button("Tazele", GUILayout.Width(60f)))
-                {
-                    RefreshWeaponCache();
-                }
-            }
-            else
-            {
-                int current = Array.IndexOf(weaponPaths, DevSession.WeaponAssetPath);
-
-                EditorGUILayout.BeginHorizontal();
-                EditorGUI.BeginChangeCheck();
-                int picked = EditorGUILayout.Popup(
-                    new GUIContent("Silah", "Kavrama pozu bu silahın WD_*.asset'ine yazılır"),
-                    Mathf.Max(0, current), weaponLabels);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    DevSession.WeaponAssetPath = weaponPaths[picked];
-                }
-
-                // Liste OnEnable'da kurulur; yeni silah üretildiğinde pencereyi kapatıp açmak
-                // gerekmesin diye tazeleme burada da duruyor (hedef satırındaki düğme bu rolde
-                // devre dışı).
-                if (GUILayout.Button("Tazele", GUILayout.Width(60f)))
-                {
-                    RefreshWeaponCache();
-                    current = Array.IndexOf(weaponPaths, DevSession.WeaponAssetPath);
-                }
-
-                EditorGUILayout.EndHorizontal();
-
-                if (current < 0)
-                {
-                    EditorGUILayout.HelpBox(
-                        "Kayıtlı silah artık projede yok (silinmiş ya da yeniden adlandırılmış) — " +
-                        "yukarıdan yeniden seçin.",
-                        MessageType.Warning);
-                }
-            }
-
-            EditorGUILayout.HelpBox(
-                "Play'e basınca boş kalibrasyon sahnesi açılır (Boot/Lobby yok, sunucuya " +
-                "bağlanılmaz). Silah karşınızda sabit durur. Sırayla ana kabza sağ → ana kabza " +
-                "sol → ön kabza sağ → ön kabza sol: elinizi silahın üstünde uygun yere getirip " +
-                "PINCH yapın, tepedeki 5 saniyelik geri sayım bitince el pozu WD_*.asset'e " +
-                "yazılır. Kumanda değil EL TAKİBİ gerekir — kumandaları bırakın.",
-                MessageType.Info);
-
-            EditorGUILayout.Space();
         }
 
         /// <summary>
@@ -503,29 +372,6 @@ namespace VortexArena.App.Editor
         }
 
         // ---------------------------------------------------------------- yardımcı
-
-        /// <summary>Radyo indeksi → rol. <see cref="RoleLabels"/> ile aynı sırada olmak
-        /// ZORUNDA; dönüşüm tek yerde dursun diye ayrı metot.</summary>
-        private static string RoleFromIndex(int index)
-        {
-            switch (index)
-            {
-                case 0: return AppSession.RolePlayer;
-                case 2: return AppSession.RoleWeapon;
-                default: return AppSession.RoleAdmin;
-            }
-        }
-
-        /// <summary>Rol → radyo indeksi (<see cref="RoleFromIndex"/>'in tersi).</summary>
-        private static int IndexFromRole(string role)
-        {
-            if (role == AppSession.RolePlayer)
-            {
-                return 0;
-            }
-
-            return role == AppSession.RoleWeapon ? 2 : 1;
-        }
 
         /// <summary>
         /// Etiket + yatay radyo düğmesi satırı. Seçili olmayan bir düğmeye basıldığında yeni

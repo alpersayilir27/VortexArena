@@ -409,17 +409,18 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Çıkar (kick)** | Oyuncuyu atar — **o gözlükteki oyun kapanır** | Yanlışlıkla bağlanan/oyunda olmaması gereken cihaz |
 | **Mod seçimi** | Oyun türü: **Takım Ölüm Maçı** (kırmızı-mavi), **Herkes Tek** (takım yok, herkes herkese karşı) veya **Turnuva** (turlar hâlinde takım elemesi). Satıra bas, liste aşağı açılır, seçeceğine tıkla | Her maç öncesi — aşağıdaki "Üç oyun modu" kutusuna bak |
 | **Harita seçimi** | Hangi arenada oynanacağı — mod seçimiyle aynı açılır liste. Listenin **ilk satırı "Lobi"dir**: seçersen herkes lobiye döner | Her maç öncesi — sadece seçili modla uyumlu haritalar listelenir |
-| **Maçı Başlat** | Herkesi arenaya alır, geri sayımı başlatır | Herkes bağlı ve hazır olduğunda |
-| **Maçı İptal** | Maçı erken bitirir, herkesi lobiye döndürür | Acil durum, oyuncu değişimi, yanlış harita |
-| **Dost ateşi** | Takım arkadaşının da vurulup vurulamayacağını belirler (Tercihler → MAÇ bölümü). **Kapalı** (varsayılan): takım arkadaşına ateş etsen de canı azalmaz. **Açık**: azalır. Satırdaki iki düğmeden hangisine bassan aç/kapa yapar; açıkken değer kırmızı yanar | Diğer satırların aksine **maç sırasında da değiştirilebilir** — maçı iptal etmen gerekmez, etkisi anında geçer. Takım arkadaşını öldürmek **puan kazandırmaz** (ceza da yoktur, öldürme listesinde yine görünür). Ayar sunucu kapanana kadar kalır: maç bitince, harita değişince kendiliğinden kapanmaz |
+| **Maçı Başlat** (ekranın **alt ortasındaki yeşil ▶**) | Herkesi arenaya alır, geri sayımı başlatır | Herkes bağlı ve hazır olduğunda. Düğme yalnız bir arena açıkken ve maç kurulmamışken yanar; lobideyken sönüktür |
+| **Maçı İptal** (alt ortadaki **kırmızı ■**) | Maçı erken bitirir, herkesi lobiye döndürür | Acil durum, oyuncu değişimi, yanlış harita. Lobide sönüktür (iptal edilecek maç yok) |
+| **Duraklat / Devam et** (alt ortadaki **⏸** — duraklattığında **▶** olur) | Koşan maçı dondurur, aynı düğme kaldığı yerden sürdürür | Aşağıdaki "Maçı geçici olarak durdurmak" bölümü |
+| **Dost ateşi** | Takım arkadaşının da vurulup vurulamayacağını belirler (Tercihler → **MAÇ** sekmesi). **Kapalı** (varsayılan): takım arkadaşına ateş etsen de canı azalmaz. **Açık**: azalır. Satırdaki iki düğmeden hangisine bassan aç/kapa yapar; açıkken değer kırmızı yanar | Diğer satırların aksine **maç sırasında da değiştirilebilir** — maçı iptal etmen gerekmez, etkisi anında geçer. Takım arkadaşını öldürmek **puan kazandırmaz** (ceza da yoktur, öldürme listesinde yine görünür). Ayar sunucu kapanana kadar kalır: maç bitince, harita değişince kendiliğinden kapanmaz |
 | **Skor ve öldürme akışı** | Ortada canlı skor + faz/süre, sağ altta "kim kimi vurdu" listesi | Maç sırasında takip |
-| **Kamera: Kuş bakışı** (`3`) | Arenayı yukarıdan görürsün; her oyuncunun **etrafında renkli halka, altında adı** yazar | Kimin nerede olduğunu görmek, güvenlik takibi — **varsayılan görünüm** |
-| **Kamera: POV** (`1`) | Seçili oyuncunun **kendi gözünden** izlersin | "Bu oyuncu ne görüyor / neden takıldı?" |
-| **Kamera: Serbest** (`2`) | Arenada özgürce dolaşırsın: **W A S D** yürü, **Q/E** in-çık, **sağ fare tuşunu basılı tutup** bakış çevir, **Shift** hızlı | Bir köşeye yakından bakmak |
+| **Kamera: Kuş bakışı** (sağ üstteki **KUŞ BAKIŞI** düğmesi ya da `3`) | Arenayı yukarıdan görürsün; her oyuncunun **etrafında renkli halka, altında adı** yazar | Kimin nerede olduğunu görmek, güvenlik takibi — **varsayılan görünüm** |
+| **Kamera: POV** (oyuncu kartındaki **POV** düğmesi; seçili oyuncu için `1` ya da `F`) | O oyuncunun **kendi gözünden** izlersin — karttaki POV'a basmak hem oyuncuyu seçer hem gözünden bakmaya geçer. Sağ üstte ayrı bir POV düğmesi yoktur; hangi oyuncuya baktığın düğmelerin altında **POV · ad** olarak yazar | "Bu oyuncu ne görüyor / neden takıldı?" |
+| **Kamera: Serbest** (sağ üstteki **SERBEST** düğmesi ya da `2`) | Arenada özgürce dolaşırsın: **W A S D** yürü, **Q/E** in-çık, **sağ fare tuşunu basılı tutup** bakış çevir, **Shift** hızlı | Bir köşeye yakından bakmak |
 | **İstatistik** | Skorun ortasındaki kutuya bas (veya `I`) | Oyuncu başına öldürme/ölüm/can/batarya **ve PING** tablosu |
-| **Tercihler** | Sol üstteki düğme (veya `P`) | Mod/harita seçimi + başlat/iptal, görünüm ayarları, bağlantı |
-| **Tam ekran / Pencereli** | `F11`, ya da Tercihler panelinin başlığında **KAPAT**'ın yanındaki düğme | Yönetim penceresini tüm ekrana yay veya küçült. Seçimin bu bilgisayarda **hatırlanır**: uygulama bir dahaki açılışta aynı kiple gelir |
-| **Oyundan çık** | Tercihler → **BAĞLANTI** satırının sağındaki **OYUNDAN ÇIK** | Yönetim uygulamasını kapatır. Güvenlik için **iki kez** basmak gerekir (ilk basışta düğme "EMİN? ÇIK" olur). Sunucuyu ve maçı **kapatmaz** — o ayrı bir penceredir |
+| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **üç sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
+| **Tam ekran / Pencereli** | `F11`, ya da Tercihler panelinin başlığında **X**'in yanındaki düğme | Yönetim penceresini tüm ekrana yay veya küçült. Seçimin bu bilgisayarda **hatırlanır**: uygulama bir dahaki açılışta aynı kiple gelir |
+| **Oyundan çık** | Tercihler → **BAĞLANTI** sekmesindeki **OYUNDAN ÇIK** | Yönetim uygulamasını kapatır. Güvenlik için **iki kez** basmak gerekir (ilk basışta düğme "EMİN? ÇIK" olur). Sunucuyu ve maçı **kapatmaz** — o ayrı bir penceredir |
 
 **Oyuncu seçmek:** yandaki listede bir oyuncuya tıkla — seçili oyuncunun çerçevesi turuncu olur,
 zemindeki halkası büyür. `Tab` ile sıradakine geçersin. Satırdaki küçük düğmeler: **POV** (o oyuncunun
@@ -499,15 +500,15 @@ kimseye puan yazmaz. **4 turu kazanan maçı kazanır** (bu yüzden en fazla 7 t
 
 - [ ] Listede **tüm oyuncular çevrimiçi** görünüyor mu? (Eksik varsa o gözlüğü kontrol et.)
 - [ ] Takımlar istediğin gibi mi? (Değilse satırdaki takım düğmesiyle ata.)
-- [ ] **Tercihler**'i aç, **Mod** ve **Harita**'yı seç (satıra bas → liste açılır → tıkla).
-- [ ] **BAŞLAT**'a bas.
+- [ ] **Tercihler**'i aç, **MAÇ** sekmesinde **Mod** ve **Harita**'yı seç (satıra bas → liste açılır → tıkla).
+- [ ] Ekranın alt ortasındaki yeşil **▶ BAŞLAT**'a bas (paneli kapatman gerekmez, düğme panelin altında görünür).
 - [ ] Tüm gözlükler arenayı yükler → **5 saniye geri sayım** → maç başlar.
 - [ ] Oyuncular arenaya girdikten sonra **kalibrasyonu yaptır** (Bölüm 4).
 
 > ⚠️ **BAŞLAT'a bastıktan sonra harita/mod satırları kilitlenir** ve maç bitene (ya da **İPTAL**'e
 > basana) kadar sönük durur — yükleme ve geri sayım sırasında da. Sebebi: harita seçmek **tüm
 > gözlüklere** sahne yükletir, kurulmakta olan maçın altından çekilirse oyuncular yarı yüklü kalır.
-> Yanlış harita seçtiysen **İPTAL** → doğru haritayı seç → **BAŞLAT**.
+> Yanlış harita seçtiysen alt ortadaki kırmızı **■ İPTAL** → doğru haritayı seç → **▶ BAŞLAT**.
 
 **Herkesi lobiye almak:** harita listesini aç, ilk satırdaki **Lobi**'yi seç — tüm gözlükler lobi
 sahnesine döner. Ayrı bir "Lobiye Dön" düğmesi yoktur. Maç koşarken bu satır da kilitlidir; koşan
@@ -517,8 +518,8 @@ maçı bitirmenin yolu **İPTAL**'dir (ikisi de aynı işi yapar).
 > maç bitince) satır **Lobi**'ye döner — arena adı orada kalmaz. Aynı arenayı tekrar açmak için
 > listeden yeniden seç, herkes ona geçer.
 >
-> **Lobi açıkken BAŞLAT çalışmaz** ve durum satırına *"Lobi açık — önce bir arena seç"* yazar:
-> lobide maç başlamaz. Önce arenayı seç (herkes yükler), sonra BAŞLAT.
+> **Lobi açıkken BAŞLAT sönüktür**, basarsan düğmelerin üstündeki durum satırına *"Lobi açık — önce
+> bir arena seç"* yazar: lobide maç başlamaz. Önce arenayı seç (herkes yükler), sonra BAŞLAT.
 
 **Maç başlamıyorsa** en sık iki sebep: (1) hiç bağlı oyuncu yok, (2) gözlüklerden birinde
 farklı/eski sürüm var. Sunucu penceresinde sebep tek satır olarak yazar; teknik ekibe o satırı
@@ -573,7 +574,7 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
   temaslar yazılmaz**: sınır çizgisinde gidip gelen bir oyuncu listeyi doldurup okunmaz hâle
   getirirdi. Halka yine de yanar.
 - **İhlal başlayınca kısa bir uyarı sesi çalar** — ekrana bakmıyorken de haberin olsun diye.
-  Sesi kapatmak istersen **Tercihler** (`P`) → **GÖRÜNÜM** bölümünde **İhlal sesi** satırı vardır.
+  Sesi kapatmak istersen **Tercihler** (`P`) → **GÖRÜNÜM** sekmesinde **İhlal sesi** satırı vardır.
   Bu satır **yalnız senin ekranına aittir**: sen kapatınca diğer operatörün sesi susmaz, o da
   kendi ekranından kapatır.
 - **Ses kalabalıkta sirene dönmez:** aynı anda kaç kişi kural dışına çıkarsa çıksın en fazla
@@ -619,11 +620,11 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
 **Maçı geçici olarak durdurmak (DURAKLAT)**
 
 Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düştü, seyirciyle konuşulacak —
-**Tercihler → DURAKLAT**:
+ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile İPTAL'in arasında):
 
 - Süre durur, kimse kimseye hasar veremez, **skorlar olduğu gibi kalır.**
 - Oyuncular arenada kalır, hiçbir yere ışınlanmaz; maç bittiği sanılmaz.
-- Aynı düğme **DEVAM ET**'e döner; bastığında maç **kaldığı yerden** sürer.
+- Aynı düğme yeşil **▶ DEVAM ET**'e döner; bastığında maç **kaldığı yerden** sürer.
 - Maçı gerçekten bitirmek istiyorsan duraklatma değil **İPTAL** kullan.
 - ⚠️ **Duraklatılmış maçta harita/mod değiştirilemez** — donmuş da olsa maç kuruludur. Önce
   **İPTAL**, sonra yeni harita.
@@ -648,7 +649,7 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 **Gün sonu kapatma sırası** — açılışın tam tersi:
 
 - [ ] **1.** Gözlüklerdeki uygulamayı kapat, gözlükleri şarja tak.
-- [ ] **2.** Yönetim oyununu kapat (Tercihler → **OYUNDAN ÇIK**, pencereyi kapat veya launcher'da **Durdur**).
+- [ ] **2.** Yönetim oyununu kapat (Tercihler → **BAĞLANTI** → **OYUNDAN ÇIK**, pencereyi kapat veya launcher'da **Durdur**).
 - [ ] **3.** Launcher'ı kapat. *(Launcher'ı kapatmak sunucuyu kapatmaz — o ayrı bir penceredir.)*
 - [ ] **4.** **En son** sunucu penceresini kapat (Ctrl + C veya pencereyi kapat).
 
@@ -663,7 +664,7 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 | Yönetim ekranı turuncu hata kartı gösteriyor | Sunucuya ulaşamıyor | Sunucu penceresi açık mı? Launcher'daki **Sunucu IP** doğru mu? Sonra **Yeniden Bağlan** |
 | Yönetim ekranında arena görünüyor ama oyuncu yok | Henüz kimse bağlanmadı ya da gözlükler kalibre değil | Oyuncu listesi boşsa gözlükleri kontrol et (Bölüm 3). Liste doluysa ama halkalar yoksa **kalibrasyon** yaptır (Bölüm 4) |
 | POV kipinde "poz yok" yazıyor | O gözlükten konum bilgisi gelmiyor (kalibre değil ya da ağ koptu) | O oyuncuya kalibrasyonu tekrar yaptır; sağ üstteki nokta kırmızıysa bağlantı sorunu var |
-| Fareyle bakış çevirmiyorum | Serbest kipte bakış **sağ tuş basılıyken** çalışır (imleç serbest kalsın diye) | `2` ile serbest kipe geç, sağ tuşu basılı tutarak fareyi oynat |
+| Fareyle bakış çevirmiyorum | Serbest kipte bakış **sağ tuş basılıyken** çalışır (imleç serbest kalsın diye) | Sağ üstteki **SERBEST** (ya da `2`) ile serbest kipe geç, sağ tuşu basılı tutarak fareyi oynat |
 | Yönetim ekranı "Sunucu adresi yok" diyor | Oyun launcher'sız, doğrudan açılmış | Oyunu kapat, **Launcher**'dan **Yönetimi Başlat** ile aç |
 | Launcher "Admin exe bulunamadı" diyor | Oyun dosyası taşınmış/silinmiş | Launcher > **3 · Yönetim oyunu > Gözat** ile `deploy\admin\VortexArena.exe` dosyasını yeniden seç. Dosya yoksa teknik ekibi ara |
 | Launcher "Mekan seçilmedi" diyor, sunucu açılmıyor | İşletme listede seçili değil | **1 · Sunucu** bölümündeki listeden işletmenin adına tıkla. Liste boşsa **Yenile**'ye bas; yine boşsa teknik ekibi ara |
@@ -677,7 +678,7 @@ Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düş
 | **ÖLÇ**'e bastın, düğmede **ÖLÇÜLEMEDİ** yazdı | Duyuru satırında sebebi yazar: oyuncu hareketli/eğilmişti **ya da** o gözlük gövde takibi üretemiyor | Önce oyuncuyu dik durdurup tekrar bas. Sebep "gövde pozu yok" ise §4.4'teki temizliği yap |
 | Bir oyuncu diğer ekranlarda **kolları yana açık, donuk** duruyor (T-poz) ama konumu doğru | O gözlükte gövde takibi arızalı — oyuncu görünmez kalmasın diye sistem onu bu şekilde çiziyor | §4.4'teki alan verisi temizliğini yap, sonra yeniden kalibre + **ÖLÇ**. Geçmezse teknik ekibi ara. Oyuncunun kendi ekranında belirti olmaz |
 | Kalibre etiketi turuncu **KAL ?** oldu | Gözlüğün zemin tahmini ile gerçek zemin arasında büyük fark var — o gözlüğün alan verisi bozulmuş | Maça devam edebilirsin (kalibrasyon geçerli). Seans arasında §4.4'teki temizliği yap |
-| Oyuncular uygulamayı her açtığında yeniden kalibre olmak zorunda kalıyor | Kalibre modu **2 ÇAPA** (varsayılan) | Beklenen davranış. Tek katlı, sorunsuz bir kurulumda hızlandırmak istersen TERCİHLER > KALİBRASYON > **ESKİ KALİBRE** (§4.3) |
+| Oyuncular uygulamayı her açtığında yeniden kalibre olmak zorunda kalıyor | Kalibre modu **2 ÇAPA** (varsayılan) | Beklenen davranış. Tek katlı, sorunsuz bir kurulumda hızlandırmak istersen TERCİHLER > MAÇ > KALİBRASYON > **ESKİ KALİBRE** (§4.3) |
 | Kalibre modunu değiştirdin ama hiçbir şey değişmedi | Gözlükler ayarı yalnız **bağlanırken** okur | O gözlüklerde uygulamayı kapatıp yeniden aç; modu bundan sonra seans başında seç (§4.3) |
 | Oyun ortasında arena birden kaydı | Gözlüğün konum takibi sıfırlandı | Genelde kendiliğinden düzelir. Düzelmezse o oyuncuya kalibrasyonu tekrarlat |
 | Ateş ediyor ama can azalmıyor | Aynı takımdalar (dost ateşi kapalı) ya da maç henüz başlamadı | Takımları kontrol et; geri sayım bitmiş mi bak. Takım arkadaşlarının birbirini vurabilmesini istiyorsan Tercihler → MAÇ → **Dost ateşi**'ni aç |

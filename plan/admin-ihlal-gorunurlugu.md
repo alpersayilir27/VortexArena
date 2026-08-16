@@ -14,17 +14,6 @@ alanın dışına çıkıp içeri ateş etmek artık mümkün değil.
 
 ## 1. Prefab bağları (Unity, elle)
 
-`AdminHud.prefab` → **`violationFeedText`** bağlandı (`ViolationFeed`, kill feed'in üstünde,
-`UiKit.Accent`). Kalanlar:
-
-- [ ] **`AdminPreferencesPanel.prefab`** → GÖRÜNÜM bölümüne **"İhlal sesi"** satırı:
-      `Çatı` satırının (`Label_`/`Prev_`/`Value_`/`Next_`) dördünü çoğalt, adları `*_Ihlal sesi`
-      yap, hepsini **40 px aşağı** al (`Çatı` y = −884 → yeni satır y = −924; `Fill` yüksekliği
-      1042, yer var), `Label_` metnini `İhlal sesi` yap ve bileşendeki
-      `_violationSoundValue` / `_violationSoundPrev` / `_violationSoundNext` alanlarına bağla.
-      ⚠️ Bağlanmazsa **ses yine çalışır** (varsayılan açık), yalnız panelden kapatılamaz.
-- [ ] **`AdminStatsPanel.prefab`** → `_columns` dizisine 12. eleman (`İHLAL` başlığı + kolon TMP'si).
-      ⚠️ Bağlanmazsa kolon sessizce çizilmez, tablo bozulmaz (mevcut PING deseni).
 - [ ] **`_Shared/Data/Resources/GameSoundBank.asset`** → `adminViolation` klibi
       (`Assets/Audio/Announce/` altına kısa bir uyarı sesi). ⚠️ Atanmazsa uyarı sessizdir.
 

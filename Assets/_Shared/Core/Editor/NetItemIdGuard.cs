@@ -38,7 +38,24 @@ namespace VortexArena.Core.Editor
         private const string CatalogPath = "Assets/_Shared/Data/Resources/NetItemCatalog.asset";
 
         [MenuItem("Tools/VortexArena/Weapons/Rebuild Net Item Catalog", false, 23)]
-        private static void Validate()
+        private static void ValidateMenu()
+        {
+            Validate(true);
+        }
+
+        /// <summary>
+        /// Kataloğu dialogsuz yeniden yazar — build hazırlık panelinin kullandığı giriş.
+        /// <para>⚠️ Dialog burada AÇILMAZ: pencereden tetiklenen bir dialog CLI/otomasyon
+        /// çağrısında ana thread'i kilitler (aynı gerekçe <c>ServerConfigExporter.Export(false)</c>
+        /// için de geçerlidir); sonuç zaten konsola yazılıyor.</para>
+        /// </summary>
+        internal static void Rebuild()
+        {
+            Validate(false);
+        }
+
+        /// <param name="showDialog">Bitişte özet dialogu gösterilsin mi (elle çağrıda evet).</param>
+        private static void Validate(bool showDialog)
         {
             // Alt sınıflar (WeaponDefinition, ileride ThrowableDefinition) da t:ItemDefinition
             // süzgecine düşer — filtreyi türetilmiş tiplerle çoğaltmaya gerek yok.
@@ -83,7 +100,11 @@ namespace VortexArena.Core.Editor
                 sb.AppendLine("Tüm netItemId'ler atanmış ve tekil.");
                 sb.Append(RebuildCatalog(byId));
                 Debug.Log($"[NetItemIdGuard] {sb}");
-                EditorUtility.DisplayDialog("VortexArena — Rebuild Net Item Catalog", sb.ToString(), "Tamam");
+                if (showDialog)
+                {
+                    EditorUtility.DisplayDialog("VortexArena — Rebuild Net Item Catalog", sb.ToString(), "Tamam");
+                }
+
                 return;
             }
 
@@ -123,7 +144,94 @@ namespace VortexArena.Core.Editor
             sb.AppendLine();
             sb.Append("⚠️ Katalog YAZILMADI — önce yukarıdakileri düzelt.");
 
-            EditorUtility.DisplayDialog("VortexArena — Rebuild Net Item Catalog", sb.ToString(), "Tamam");
+            if (showDialog)
+            {
+                EditorUtility.DisplayDialog("VortexArena — Rebuild Net Item Catalog", sb.ToString(), "Tamam");
+            }
+        }
+
+        /// <summary>
+        /// Katalog projedeki eşyalarla uyumlu mu — <b>HİÇBİR ŞEY YAZMAZ</b> (build hazırlık
+        /// panelinin okuduğu denetim). Ölçüt üçtür: her <see cref="ItemDefinition"/>'ın kimliği
+        /// atanmış, kimlikler tekil ve katalogdaki kayıt sayısı taranan eşya sayısıyla eşit.
+        /// <para>
+        /// ⚠️ Sayı karşılaştırması kaba ama <b>sessiz kalmayan</b> ölçüttür: yeni bir eşya eklenip
+        /// araç çalıştırılmadığında katalog eksik kalır ve belirtisi yalnız "uzak oyuncuda eşya
+        /// çizilmiyor" olur.
+        /// </para>
+        /// </summary>
+        internal static bool IsCatalogUpToDate(out string detail)
+        {
+            string[] guids = AssetDatabase.FindAssets("t:ItemDefinition");
+
+            var byId = new Dictionary<byte, string>();
+            int unassigned = 0;
+            int conflicts = 0;
+            int checkedCount = 0;
+
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                ItemDefinition def = AssetDatabase.LoadAssetAtPath<ItemDefinition>(path);
+                if (def == null)
+                {
+                    continue;
+                }
+
+                checkedCount++;
+
+                if (!def.HasNetItemId)
+                {
+                    unassigned++;
+                    continue;
+                }
+
+                if (byId.ContainsKey(def.NetItemId))
+                {
+                    conflicts++;
+                    continue;
+                }
+
+                byId[def.NetItemId] = path;
+            }
+
+            if (unassigned > 0)
+            {
+                detail = $"{unassigned} eşyanın netItemId'si atanmamış — uzak oyuncularda çizilmezler.";
+                return false;
+            }
+
+            if (conflicts > 0)
+            {
+                detail = $"{conflicts} netItemId çakışması — uzak oyuncularda yanlış eşya çizilir.";
+                return false;
+            }
+
+            var catalog = AssetDatabase.LoadAssetAtPath<NetItemCatalog>(CatalogPath);
+            if (catalog == null)
+            {
+                detail = $"'{CatalogPath}' YOK — uzak oyuncuların elinde hiçbir eşya çizilmez.";
+                return false;
+            }
+
+            int recorded = 0;
+            ItemDefinition[] items = catalog.Items;
+            for (int i = 0; items != null && i < items.Length; i++)
+            {
+                if (items[i] != null)
+                {
+                    recorded++;
+                }
+            }
+
+            if (recorded != checkedCount)
+            {
+                detail = $"katalogda {recorded} kayıt, projede {checkedCount} eşya.";
+                return false;
+            }
+
+            detail = $"{checkedCount} eşya, kimlikler tekil.";
+            return true;
         }
 
         /// <summary>

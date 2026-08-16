@@ -67,7 +67,7 @@ namespace VortexArena.Core.Combat
         /// Eşyanın dünya pozunu çözer.
         /// </summary>
         /// <param name="def">Eşya tanımı (kavrama ofsetlerinin kaynağı).</param>
-        /// <param name="primaryRight">Ana el SAĞ mı — yakalama el başına yazıldığı için zorunlu.</param>
+        /// <param name="primaryRight">Ana el SAĞ mı — kayıt el başına yazıldığı için zorunlu.</param>
         /// <param name="secondaryRight">Ön kabzayı saran elin SAĞ olup olmadığı. İkinci el henüz
         /// yoksa ana elin tersi verilir: ölçü o hâlde zaten kullanılmıyor ama iki uç aynı değeri
         /// üretsin.</param>
@@ -91,23 +91,24 @@ namespace VortexArena.Core.Combat
             }
 
             Solve(def, secondaryRight, def.PrimaryGripPosition(primaryRight),
-                  ItemDefinition.PrimaryGripRotation, primaryPalm, hasSecondary,
+                  def.PrimaryGripRotation(primaryRight), primaryPalm, hasSecondary,
                   secondaryPalmPosition, aimBlend, out itemPosition, out itemRotation);
         }
 
         /// <summary>
         /// <see cref="Solve(ItemDefinition, bool, bool, in Pose, bool, in Vector3, float, out Vector3, out Quaternion)"/>'un
-        /// ana kavramayı <b>parametreden</b> alan biçimi: ölçü ham yakalamadan değil, canlı bilek
-        /// deltasıyla düzeltilmiş olabilir (<see cref="ItemGripAuthority"/>).
+        /// ana kavramayı <b>parametreden</b> alan biçimi: ölçü tanımın kaydından (bilek ≡ anchor
+        /// varsayımı) değil, canlı bilek deltasıyla düzeltilmiş olabilir
+        /// (<see cref="ItemGripAuthority"/>).
         /// <para>
         /// ⚠️ <b>Etkin ofset ile ikincil eksen AYNI kaynaktan türer:</b> ön kabza ekseni ana kavrama
-        /// noktasından ölçülüyor, o nokta hâlâ ham yakalamadan okunsaydı düzeltilmiş kavramada eksen
+        /// noktasından ölçülüyor, o nokta hâlâ tanımın ham kaydından okunsaydı düzeltilmiş kavramada eksen
         /// sessizce kayar ve iki elli nişan silahı yamuk çevirirdi. <paramref name="def"/> yalnız
         /// <b>ikincil</b> soketin kaynağıdır.
         /// </para>
         /// <para>⚠️ Sınıf yine SAFTIR: sahneye bakan tek şey ofseti çözen taraftır, çözücü değil.</para>
         /// </summary>
-        /// <param name="secondaryRight">Ön kabzayı saran elin SAĞ olup olmadığı (yakalama el başına).</param>
+        /// <param name="secondaryRight">Ön kabzayı saran elin SAĞ olup olmadığı (kayıt el başına).</param>
         /// <param name="primaryGripPosition">EŞYANIN ana el anchor'ına göre yerel konumu (m).</param>
         /// <param name="primaryGripRotation">EŞYANIN ana el anchor'ına göre yerel dönüşü.</param>
         public static void Solve(ItemDefinition def, bool secondaryRight,

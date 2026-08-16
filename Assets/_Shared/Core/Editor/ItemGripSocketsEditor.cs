@@ -10,23 +10,23 @@ namespace VortexArena.Core.Editor
     /// <see cref="ItemDefinition"/> asset'ine (<c>WD_*.asset</c>) yazılır.
     /// <para>
     /// ⚠️ <b>Prefaba işaretçi düğüm KOYMAZ ve koymamalı.</b> Kavramanın tek yazılı kaynağı
-    /// <c>WD_*.asset</c>'teki <see cref="ItemGripCapture"/> kaydıdır — ön kabza noktasını bir de
+    /// <c>WD_*.asset</c>'teki <see cref="ItemGripPose"/> kaydıdır — ön kabza noktasını bir de
     /// prefab çocuğu olarak tutmak aynı noktayı iki yerde tarif etmek olurdu ve uzak avatar
     /// (<c>RemoteAvatar</c>) ile kavrama kapısı (<c>ItemGripSockets.Filter</c>) asset'i okuduğu
     /// için ikisi sessizce sapardı. Bu araç, o eski akışın (<c>GripSocket_*</c> işaretçileri)
     /// ergonomisini veriyi bölmeden geri getirir: tutamak sahnededir, veri tekildir.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Bu araç VR yakalamasının yerine GEÇMEZ, tamamlar.</b> Parmakların kabzaya nasıl
-    /// oturduğunu yalnız gözlük söyler (<c>Tools &gt; VortexArena &gt; Development &gt; Dev</c> →
-    /// rol <c>weapon</c>). Tutamak, yakalanmış bir kaydı santim mertebesinde düzeltmek ve hiç
-    /// yakalanmamış bir silaha makul bir başlangıç vermek içindir; ikisi de aynı dört alanı yazar.
+    /// ⚠️ <b>Bu araç Kavrama Pozu Stüdyosu'nun yerine GEÇMEZ, tamamlar.</b> Elin kabzada nasıl
+    /// durduğunu stüdyo yazar (<c>Tools &gt; VortexArena &gt; Weapons &gt; Kavrama Pozu
+    /// Stüdyosu</c>). Tutamak, stüdyoda yazılmış bir kaydı santim mertebesinde düzeltmek ve hiç
+    /// yazılmamış bir silaha makul bir başlangıç vermek içindir; ikisi de aynı dört alanı yazar.
     /// </para>
     /// <para>
-    /// ⚠️ Tutamak yalnız <b>konumu</b> sürer, kaydın dönüşü korunur: eşyanın eldeki dönüşü zaten
-    /// kimliktir (<see cref="ItemDefinition.PrimaryGripRotation"/>) ve bileğin açısı da
-    /// kumandayla serbest döner — sürüklenerek "hangi açı" sorusuna cevap üretmek, olmayan bir
-    /// ayarı varmış gibi gösterirdi.
+    /// ⚠️ Tutamak yalnız <b>konumu</b> sürer, kaydın dönüşü korunur: kaydın dönüşü anlamlıdır
+    /// (ana kabzada eşyayı döndürür, ön kabzada bileği oturtur) ve o açı stüdyoda hayalet eli
+    /// çevirerek, gözle ayarlanır. Bir küreyi sürükleyerek dönüş üretmek, ayarlandığı yerin
+    /// dışında sessizce ikinci bir kaynak açardı.
     /// </para>
     /// </summary>
     [CustomEditor(typeof(ItemGripSockets))]
@@ -42,7 +42,7 @@ namespace VortexArena.Core.Editor
         // ötekinin sessizce sapması demektir. Yalnız "yazılmamış" durumunun oyunda karşılığı yok —
         // tek yerel renk odur.
 
-        /// <summary>Hiç yakalanmamış kaydın rengi: nokta eşyanın orijininde durur ve bu bir
+        /// <summary>Hiç yazılmamış kaydın rengi: nokta eşyanın orijininde durur ve bu bir
         /// KURULUM eksiğidir, ince ayar meselesi değil.</summary>
         private static readonly Color MissingColor = new Color(1f, 0.35f, 0.25f, 0.9f);
 
@@ -79,7 +79,8 @@ namespace VortexArena.Core.Editor
             {
                 EditorGUILayout.HelpBox(
                     "Eşya tek elli (HoldMode = OneHand): ön kabza soketi hiç açılmaz, bu yüzden " +
-                    "düzenlenecek bir şey yok. Ana kabza gözlükle yakalanır (Dev penceresi → rol 'weapon').",
+                    "düzenlenecek bir şey yok. Ana kabza stüdyoda yazılır (Tools > VortexArena > " +
+                    "Weapons > Kavrama Pozu Stüdyosu).",
                     MessageType.Info);
                 return;
             }
@@ -93,7 +94,7 @@ namespace VortexArena.Core.Editor
             EditorGUILayout.HelpBox(
                 "Noktayı Scene View'daki yeşil halkanın tutamağından sürükle — değer anında " +
                 def.name + " asset'ine yazılır (Ctrl+Z geri alır, Ctrl+S kaydeder). " +
-                "Parmak duruşunu bu araç ölçmez: onun yeri gözlüktür (Dev penceresi → rol 'weapon').",
+                "Parmak duruşunu bu araç yazmaz: onun yeri stüdyodaki preset seçimidir.",
                 MessageType.Info);
         }
 
@@ -127,8 +128,8 @@ namespace VortexArena.Core.Editor
                     def.HasGrip(kind, !right)
                         ? "Bu el için kayıt YOK — gösterilen nokta ÖTEKİ elin kaydıdır. Sürüklersen " +
                           "bu ele ait kayıt olarak yazılır."
-                        : "Bu kavrama hiç yakalanmamış — nokta eşyanın orijininde duruyor. Sürükleyerek " +
-                          "kabzanın üstüne getir ya da gözlükle yakala.",
+                        : "Bu kavrama hiç yazılmamış — nokta eşyanın orijininde duruyor. Sürükleyerek " +
+                          "kabzanın üstüne getir ya da stüdyoda yaz.",
                     MessageType.Warning);
             }
 
@@ -152,7 +153,7 @@ namespace VortexArena.Core.Editor
 
             using (new EditorGUI.DisabledScope(!def.HasGrip(kind, right)))
             {
-                if (GUILayout.Button("Seçili kaydı sil (yakalanmamış yap)"))
+                if (GUILayout.Button("Seçili kaydı sil (yazılmamış yap)"))
                 {
                     Undo.RecordObject(def, "Kavrama kaydı silindi");
                     def.EditorClearGrip(kind, right);
@@ -289,8 +290,9 @@ namespace VortexArena.Core.Editor
         /// Bu araç <b>yalnız ÖN KABZAYI</b> düzenler ve ana kabzayı sahnede hiç çizmez.
         /// <para>Gerekçe: ana kabza silahın elde nasıl duracağını belirler (eşyanın pozu ondan
         /// türetilir, §6.6) — orada bir kaç santimlik "gözle iyi duruyor" düzeltmesi silahı elden
-        /// koparır; o kaydın yeri gözlüktür. Ön kabza ise yalnız ikinci elin nereye konacağını
-        /// söyler, yani gözle ayarlanmaya elverişli olan tek kavramadır.</para>
+        /// koparır; o kaydın yeri stüdyodur, çünkü orada el modeli de görünür. Ön kabza ise yalnız
+        /// ikinci elin nereye konacağını söyler, yani bir küreyi sürükleyerek ayarlanmaya elverişli
+        /// olan tek kavramadır.</para>
         /// </summary>
         private static GripSocketKind ActiveKind(ItemDefinition def)
         {
@@ -310,15 +312,17 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Noktayı asset'e yazar. ⚠️ Kaydın DÖNÜŞÜ korunur (yakalamadan gelen bilek açısı), yalnız
-        /// konum değişir — tutamağın cevaplayabildiği soru "el eşyanın neresinde" sorusudur.
+        /// Noktayı asset'e yazar. ⚠️ Kaydın DÖNÜŞÜ ve PRESET'i korunur, yalnız konum değişir —
+        /// tutamağın cevaplayabildiği soru "el eşyanın neresinde" sorusudur; açı ve parmak duruşu
+        /// stüdyoda ayarlanır ve buradan geçen bir yazım onları sıfırlamamalı.
         /// </summary>
         private static void WritePoint(ItemDefinition def, GripSocketKind kind, bool right, Vector3 itemLocal)
         {
             Quaternion rotation = def.GetGrip(kind, right).Rotation;
+            HandGripPreset preset = def.GripPreset(kind, right);
 
             Undo.RecordObject(def, "Kavrama noktası");
-            def.EditorSetGrip(kind, right, new Pose(itemLocal, rotation));
+            def.EditorSetGrip(kind, right, new Pose(itemLocal, rotation), preset);
             EditorUtility.SetDirty(def);
         }
     }

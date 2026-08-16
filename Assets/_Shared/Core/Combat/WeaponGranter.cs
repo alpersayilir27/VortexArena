@@ -1249,13 +1249,13 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Verilen/çağrılan silahın <b>ilk kare</b> pozu: <c>Weapon.ApplyCanonicalGrip</c> ile AYNI
-        /// kaynak sırasını izler — önce canlı bilek deltasıyla çözülen yakalanmış kavrama
-        /// (<see cref="ItemGripAuthority"/>), çözülemezse tanımın kendi ölçüsü.
-        /// <para>⚠️ Sıra iki yerde de aynı olmak ZORUNDA: burada tanıma, LateUpdate'te yakalamaya
-        /// bakılsaydı silah verildiği karede bir duruşta belirir, bir sonraki karede öteki duruşa
-        /// zıplardı.</para>
+        /// kaynak sırasını izler — önce canlı bilek deltasıyla anchor uzayına çevrilen kavrama
+        /// kaydı (<see cref="ItemGripAuthority"/>), çözülemezse tanımın kendi ölçüsü.
+        /// <para>⚠️ Sıra iki yerde de aynı olmak ZORUNDA: burada tanıma, LateUpdate'te deltayla
+        /// çevrilmiş kayda bakılsaydı silah verildiği karede bir duruşta belirir, bir sonraki
+        /// karede öteki duruşa zıplardı.</para>
         /// <para>⚠️ İkincil el bu karede YOKTUR (<c>hasSecondary: false</c>) ama imza yine de bir el
-        /// ister: ön kabza ölçüsü artık el başınadır. Ana elin TERSİ verilir — silah iki elle
+        /// ister: ön kabza ölçüsü el başınadır. Ana elin TERSİ verilir — silah iki elle
         /// tutulacaksa ön kabzayı saracak el odur.</para>
         /// </summary>
         private static void SolveInitialGrip(ItemDefinition definition,
