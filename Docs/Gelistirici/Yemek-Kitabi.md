@@ -444,14 +444,17 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 > `fireClips` (dizi — her atışta rastgele biri seçilir), `magOutClip` (reload `t=0`),
 > `magInClip` (reload `t = 0.70 × reloadTime`; boş bırakılırsa o an sessiz kalır ve `magOutClip`
 > tüm reload sesini taşır), `dryFireClip` (boş şarjörde tetik), `pickupClip` (silah alınırken).
-> `Build Weapon Prefabs` koşmak gerekmez — ama koşarsan ateş sesi atanmamış silahları listeler.
+> Silah kiti koşusu (`Configure All Build Elements`) klibe dokunmaz — yalnız ateş sesi atanmamış
+> silahları koşu sonunda listeler.
 > ⚠️ Ateş klipleri `PlayOneShot` ile çalınır, yani **üst üste biner**: aranan dosya her zaman
 > **tek atış**tır, tarama/loop kaydı saniyede 12 kez çalınıp çorbaya döner. Kuyruğu kısa tut —
 > `pitch` AudioSource'un özelliği olduğu için her yeni atış hâlâ çalan kuyrukları da yeniden
 > perdeler.
 > Aynı şey diğer alanlar için geçerli DEĞİLDİR: hasar/rpm/menzil/saçılım her koşuda tablodan ezilir.
 
-> Sahnedeki silahın **çerçevesi** için elle iş yoktur: `Build Weapon Prefabs` her `WPN_*` köküne
+> Sahnedeki silahın **çerçevesi** için elle iş yoktur: silah kiti koşusu
+> (`Tools > VortexArena > Build > Configure All Build Elements` — Hepsini Yapılandır / Yalnız
+> Senkronize Et, silah kiti her eşitlemede koşar) her `WPN_*` köküne
 > `VA_WeaponFrame` örneğini kendisi koyar. Çerçevenin arenada görünüp görünmemesi ayrı bir konudur
 > → bir sonraki reçete.
 
@@ -492,18 +495,21 @@ dönüş kaydın kendisidir.
   düşürür — çalışır ama o el yanlış tutar.
 - ⚠️ **Eller prefabın İÇİNE sürüklenmez.** Her el, stage sahnesinin ayrı bir kök objesidir
   (`[VA El_*]`, diske yazılmaz). Prefabın altına asılan bir el ilk kaydetmede silahın içine girer ve
-  arenada **havada el** olarak çizilir; `Build Weapon Prefabs` böyle bir kaçağı siler.
+  arenada **havada el** olarak çizilir; silah kiti koşusu böyle bir kaçağı siler.
 - Eller Play'e girerken, prefab kipi kapanınca ya da sahne değişince kendiliğinden silinir. Play
   kipinde kayıt yazılmaz.
 - ⚠️ **Parmak duruşu slider'la ayarlanmaz, preset'ten seçilir.** Üç preset tek kaynaktan sürülür
   (`HandGripPresets`), yani tezgâhta gördüğün parmak duruşu oyundaki sentetik elde ve uzak avatarda
   birebir tekrarlanır. Silah başına serbest parmak verisi yoktur ve eklenmez.
 - Kavraması yazılmamış silahta el `Idle`'da kalır + konsola oturum başına bir uyarı gider;
-  `Build Weapon Prefabs` de koşu sonunda **"kavraması YAZILMAMIŞ silahlar"**ı listeler.
+  silah kiti koşusu da sonunda **"kavraması YAZILMAMIŞ silahlar"**ı listeler
+  (`Configure All Build Elements` penceresindeki Hazırlık satırı aynı listeyi gösterir).
 - Ön kabza noktası da stüdyoda, ön kabza elinin bileğiyle yazılır — Scene View'da ayrı bir
-  tutamak/gizmo YOKTUR (kayıt tek yerde yaşasın). Oyunda boş el o noktaya yaklaşınca beliren
-  gösterge (`WeaponCatalog.secondaryGripIndicatorPrefab`, `Weapon` sürer) kaydın oyundaki
-  yerini gösterir; kabzadan uzakta çıkıyorsa kayıt o el için yanlış yazılmış demektir.
+  tutamak/gizmo YOKTUR (kayıt tek yerde yaşasın). Oyunda boş elin bileği o noktaya yaklaşınca
+  beliren soket küresi (`WeaponCatalog.secondaryGripIndicatorPrefab`, `Weapon` sürer; yarıçapı
+  `WD_*`'daki `secondaryGripRadius`, varsayılan 20 cm çap) kaydın oyundaki yerini gösterir ve
+  kabul hacminin kendisidir: bilek kürenin içindeyken grip ikinci eli bağlar. Küre kabzadan uzakta
+  çıkıyorsa kayıt o el için yanlış yazılmış demektir.
 - ⚠️ Silah elde yatık görünüyorsa iki aday var: kavrama kaydının dönüşü ya da `Model`'in prefabtaki
   yerleşimi. Stüdyoda el ile silah birlikte göründüğü için ayrımı orada yaparsın.
 - **Admin ekranında** uzak silahlar dönük çiziliyorsa sebep kavrama değil, anchor→bilek deltasının

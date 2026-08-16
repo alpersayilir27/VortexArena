@@ -41,8 +41,9 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
   rig'ini ve sızmış `[VA El_*]` köklerini siler. `netItemId`/`holdMode` tablodan gelir ve EZİLİR.
 - Aynı kayıt **üç yeri** besliyor: yerel tutuş · uzak oyuncudaki çizim (parmaklar dahil: preset
   oradan okunur) · ön kabza kapısının/göstergesinin yeri. Biri düzelince üçü düzelir.
-- Ön kabza kabul yarıçapı silah başınadır (`secondaryGripRadius`, varsayılan 12 cm) ve
-  Inspector'dan girilir — stüdyo ona dokunmaz.
+- Ön kabza soket yarıçapı silah başınadır (`secondaryGripRadius`, varsayılan 0.10 = 20 cm çap;
+  görülen küre = kabul hacmi, ölçülen nokta boş elin BİLEĞİDİR) ve Inspector'dan girilir — stüdyo
+  ona dokunmaz.
 
 ## 1b. `HandGripConvention.*AnchorToWrist` sabitini ölç ve yapıştır
 
@@ -60,16 +61,17 @@ sabit kimlik kaldığı sürece admin ekranında uzak silahlar deltanın dönü�
 Karar verilecek: her silahın tracer'ı farklı mı görünecek, yoksa hepsi aynı mı kalacak (altyapı
 ikisini de destekliyor — alanlar silah başına, değerler şu an aynı).
 
-Ön kabza tarafında ayarlanacaklar: **kabul yarıçapı silah başınadır** (`secondaryGripRadius`,
-varsayılan 12 cm — Inspector'dan girilir). `Weapon` sabitleri (kod içinde, tüm silahlarda ortak):
-`SecondaryGripHoverRadius` (0.30 m) · gösterge renkleri/büyüme oranı. Halkanın kendisi
-(`VA_GripIndicator.prefab`: yarıçap/kalınlık/materyal) prefabtır, orada düzenlenir.
-⚠️ Ön kabza silah ana elde SALLANIRKEN tutuluyor: hareketli bir hedefe 12 cm dar geliyorsa önce bu
-sayıyı büyüt — kod değişikliği değil, silah başına bir ayar.
-İsteğe bağlı: `WeaponCatalog.secondaryGripIndicatorPrefab`'a tasarlanmış bir gösterge bağlamak —
-varsayılan halka `Build Weapon Prefabs` ile üretilip bağlanıyor, yani **iş yapılmadan da çalışıyor**.
-Gösterge her hâlde kameraya çevrilir (bir noktayı işaretliyor); yön anlatan uzamsal bir işaret
-gerekirse `Weapon.IndicatorRotation` o zaman değişir.
+Ön kabza tarafında ayarlanacaklar: **soket yarıçapı silah başınadır** (`secondaryGripRadius`,
+varsayılan 0.10 = 20 cm çap — Inspector'dan girilir; görülen küre = kabul hacmi). `Weapon`
+sabitleri (kod içinde, tüm silahlarda ortak): `SecondaryGripHoverRadius` (0.30 m — kürenin
+görünmeye başladığı bilek uzaklığı) · `IndicatorHoverAlpha`/`IndicatorReadyAlpha` · `IndicatorColor`.
+Kürenin sanatı (`VA_GripIndicator.prefab` + `M_GripIndicator.mat`: renk/materyal) prefabtır, orada
+düzenlenir; **1 m çap sözleşmesi** korunur (ölçeği `Weapon` verir).
+⚠️ Ön kabza silah ana elde SALLANIRKEN tutuluyor: hareketli bir hedefe 10 cm dar geliyorsa önce
+`secondaryGripRadius`'u büyüt — kod değişikliği değil, silah başına bir ayar (küre de büyür).
+İsteğe bağlı: `WeaponCatalog.secondaryGripIndicatorPrefab`'a tasarlanmış bir soket sanatı bağlamak —
+varsayılan küre silah kiti koşusuyla (`Configure All Build Elements`) üretilip bağlanıyor, yani **iş
+yapılmadan da çalışıyor**. Soket silahın dönüşünü alır (küre için önemsiz).
 
 ## 3. İki elli yerel nişan kuralı — his kararı
 

@@ -26,9 +26,10 @@ düşer ve sabit kimlik kaldığı sürece uzak silahları deltanın dönüşü 
 
 ---
 
-## 1c. `Build Weapon Prefabs`'ı bir kez çalıştır (prefab temizliği + gösterge)
+## 1c. Silah kitini bir kez koştur (prefab temizliği + gösterge)
 
-`Tools > VortexArena > Weapons > Build Weapon Prefabs` — 13 `WPN_*` kökündeki eksik script kaydını ve
+`Tools > VortexArena > Build > Configure All Build Elements` (Hepsini Yapılandır / Yalnız Senkronize
+Et — silah kiti her eşitlemede koşar) — 13 `WPN_*` kökündeki eksik script kaydını ve
 `_interactorFilters` girişlerini temizler (kalırsa ISDK `Start`'ta assert atar, silah kavranamaz),
 `VA_GripIndicator.prefab` + `M_GripIndicator.mat`'ı üretir ve kataloğa bağlar. Sonuçta değişen
 prefab/asset'ler commit'e girer.
@@ -50,7 +51,7 @@ prefab/asset'ler commit'e girer.
 4. **Kaydet** → dördü `WD_*.asset`'e iner.
 
 Kapsam: `WeaponKitBuilder` tablosundaki **tüm** `WPN_*`'lar; hangilerinin eksik olduğunu
-`Build Weapon Prefabs` koşusunun sonundaki uyarı listeler.
+silah kiti koşusunun sonundaki uyarı listeler.
 
 ---
 
@@ -61,8 +62,10 @@ Kapsam: `WeaponKitBuilder` tablosundaki **tüm** `WPN_*`'lar; hangilerinin eksik
       kumandayla serbestçe dönüyor, kilitlenmiyor.
 - [ ] Stüdyoda **oluştur → hiçbir şeye dokunma → Kaydet** kayıtlı değeri değiştirmiyor (kimlik
       testi).
-- [ ] Boş el ön kabzaya yaklaşınca gösterge (`VA_GripIndicator`) **mavi**, kabul mesafesinde
-      **yeşil** ve büyük; ikinci el bağlanınca kayboluyor. Ana kabzada gösterge YOK.
+- [ ] Boş elin bileği ön kabzaya yaklaşınca soket küresi (`VA_GripIndicator`, 20 cm çap, açık mavi
+      %70 saydam) beliriyor; bilek kürenin içine girince biraz dolgunlaşıyor ve o anda grip ikinci
+      eli bağlıyor (kürenin dışında bağlamıyor); ikinci el bağlanınca küre kayboluyor. Ana kabzada
+      soket YOK.
 - [ ] Grip'e basınca silahın yönü ikinci ele döner; bırakınca ~0.08 sn'de yumuşak geri gelir.
 - [ ] **Bağ yalnız tuşla kopar:** ön kabza tutulduktan sonra grip'e basılı tutarken kol uzatılıp
       toplanınca, silah yukarı/aşağı/yana çevrilince ve gövde döndürülünce bağ **kopmuyor**;

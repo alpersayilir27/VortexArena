@@ -27,7 +27,7 @@ namespace VortexArena.Core.Combat
         // ⚠️ [Range(1,255)] KOYULMAZ. Unity'nin Range drawer'ı IntSlider ile çizerken 0'ı sessizce
         // min'e (1) clamp'ler VE asset'i dirty yapar — Inspector'da açılan her tanım netItemId=1
         // olurdu, yani tüm silahlar birbiriyle çakışırdı. Sınır denetimi HasNetItemId'de ve asıl
-        // koruma editör bekçisindedir (Tools > VortexArena > Weapons > Rebuild Net Item Catalog).
+        // koruma editör bekçisindedir (her Configure All Build Elements eşitlemesinde koşar).
         [Tooltip("Ağ kimliği (1-255; 0 = atanmamış). Snapshot'ta bu bayt gider; katalog dizi " +
                  "indeksi DEĞİLDİR — elle, kararlı verilir. Çakışmayı bekçi yakalar.")]
         [SerializeField] private int netItemId = 0;
@@ -68,10 +68,10 @@ namespace VortexArena.Core.Combat
         // Alt sınır property'de uygulanıyor.
         // ⚠️ ANA kabza için yarıçap YOKTUR: silah ana ele verilerek/çağrılarak geliyor, oyuncunun
         // elini ana kabzaya götürmesi diye bir adım yok — okuyanı olmayan ölçü bayatlar.
-        [Tooltip("Ön kabzanın kabul yarıçapı (m): boş elin avucu bu mesafeye girip grip'e basınca ikinci el " +
-                 "ön kabzaya bağlanır; gösterge de bu mesafede yeşile döner. Yalnız TwoHand'de anlamlı. " +
-                 "Silah başına ayarlanır — tüfek ön kabzaları aynı büyüklükte değil.")]
-        [SerializeField] private float secondaryGripRadius = 0.12f;
+        [Tooltip("Ön kabza SOKETİNİN yarıçapı (m): boş elin bileği bu kürenin içindeyken grip'e basılınca " +
+                 "ikinci el ön kabzaya bağlanır; oyuncunun gördüğü küre de tam bu yarıçapla çizilir " +
+                 "(0.10 = 20 cm çap). Yalnız TwoHand'de anlamlı. Silah başına ayarlanır.")]
+        [SerializeField] private float secondaryGripRadius = 0.10f;
 
         // ⚠️ Parmak duruşu için AYRI bir alan YOKTUR ve açılmaz: duruş kavrama kaydının PARÇASIDIR
         // (ItemGripPose.preset), yani slot başına yaşar. Ayrı bir alan olsaydı "bu elin pozu" ile
@@ -116,7 +116,7 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Kimlik atanmış mı. ⚠️ Asıl korumayı bu property DEĞİL editör bekçisi sağlar
-        /// (<c>Tools &gt; VortexArena &gt; Weapons &gt; Rebuild Net Item Catalog</c>): çakışan/eksik id derlemede
+        /// (<c>Configure All Build Elements</c> eşitlemesinin net eşya kataloğu koşusu): çakışan/eksik id derlemede
         /// patlamaz, sahada "elinde yanlış eşya çizildi" olarak görünür.
         /// </summary>
         public bool HasNetItemId => netItemId >= 1 && netItemId <= 255;
@@ -316,9 +316,10 @@ namespace VortexArena.Core.Combat
 #endif
 
         /// <summary>
-        /// Ön kabzanın kabul yarıçapı (metre): boş elin avucu bu mesafedeyken grip basışı ikinci eli
-        /// ön kabzaya bağlar (<c>Weapon.IsHandOnSecondaryGrip</c>) — yalnız <see cref="IsTwoHanded"/>
-        /// iken anlamlı.
+        /// Ön kabza soketinin yarıçapı (metre): boş elin BİLEĞİ bu kürenin içindeyken grip basışı
+        /// ikinci eli ön kabzaya bağlar (<c>Weapon.IsHandOnSecondaryGrip</c>) ve oyuncunun gördüğü
+        /// soket küresi tam bu yarıçapla çizilir (görsel = kabul hacmi) — yalnız
+        /// <see cref="IsTwoHanded"/> iken anlamlı.
         /// <para>⚠️ <b>Alt sınır 1 cm'dir ve öyle kalmalı:</b> sıfır (ya da eksi) yarıçap ön kabzayı
         /// matematiksel olarak kavranamaz yapar — sahada bu bir hata olarak DEĞİL "ikinci el
         /// tutmuyor" olarak görünür, yani teşhisi pahalı. Ayarlanmamış/sıfırlanmış bir asset bu

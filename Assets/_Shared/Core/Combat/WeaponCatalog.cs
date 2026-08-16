@@ -23,9 +23,10 @@ namespace VortexArena.Core.Combat
         [SerializeField] private WeaponDefinition[] definitions = Array.Empty<WeaponDefinition>();
         [Tooltip("Uzak oyuncu atışlarının FX düğümü (RemoteShotFx havuzunda çoğaltılır); boşsa sade ses fallback'i üretilir.")]
         [SerializeField] private GameObject remoteShotFxPrefab;
-        [Tooltip("Ön kabza göstergesi — boş el ön kabzaya yaklaşınca Weapon bunu kavrama noktasına koyar " +
-                 "(tüm silahlar aynı sanatı paylaşır). Boşsa gösterge çizilmez, kavrama yine çalışır. " +
-                 "'Build Weapon Prefabs' varsayılan halkayı üretip yalnız alan BOŞSA bağlar.")]
+        [Tooltip("Ön kabza SOKETİ — boş elin bileği ön kabzaya yaklaşınca Weapon bunu kavrama kaydına koyar ve " +
+                 "kabul yarıçapının iki katına ölçekler (prefab 1 m ÇAP sözleşmesiyle tasarlanır; görülen küre = " +
+                 "kabul hacmi). Tüm silahlar aynı sanatı paylaşır. Boşsa soket çizilmez, kavrama yine çalışır. " +
+                 "Silah kiti koşusu (Configure All Build Elements) varsayılan küreyi üretip yalnız alan BOŞSA bağlar.")]
         [SerializeField] private GameObject secondaryGripIndicatorPrefab;
 
         /// <summary>Katalogdaki silah tanımları.</summary>
@@ -35,9 +36,11 @@ namespace VortexArena.Core.Combat
         public GameObject RemoteShotFxPrefab => remoteShotFxPrefab;
 
         /// <summary>
-        /// Ön kabza göstergesinin prefabı (null olabilir → gösterge çizilmez). Sanat buradadır;
-        /// yerini/ölçeğini/rengini <c>Weapon</c> sürer: bir <c>LineRenderer</c> taşıyorsa rengi ona,
-        /// yoksa ilk Renderer'ın materyaline (<c>_BaseColor</c>/<c>_Color</c>) yazılır.
+        /// Ön kabza soketinin prefabı (null olabilir → soket çizilmez). Sanat buradadır;
+        /// yerini/ölçeğini/alfasını <c>Weapon</c> sürer: ilk Renderer'ın materyaline
+        /// (<c>_BaseColor</c>/<c>_Color</c>), Renderer yoksa <c>LineRenderer</c>'ın çizgi rengine yazılır.
+        /// <para>⚠️ <b>1 m çap sözleşmesi:</b> prefab birim ölçüde tasarlanır, <c>Weapon</c> onu
+        /// <c>2 × secondaryGripRadius</c>'a ölçekler — böylece çizilen küre kabul hacminin kendisidir.</para>
         /// </summary>
         public GameObject SecondaryGripIndicatorPrefab => secondaryGripIndicatorPrefab;
 

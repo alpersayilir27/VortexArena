@@ -7,9 +7,15 @@ using VortexArena.Core.Combat;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Rebuild Net Item Catalog</c> — tüm <see cref="ItemDefinition"/>
-    /// asset'lerinin <c>netItemId</c>'lerinin atanmış ve TEKİL olduğunu doğrular (§6.6), sonra
+    /// Net eşya kataloğu bekçisi — tüm <see cref="ItemDefinition"/> asset'lerinin
+    /// <c>netItemId</c>'lerinin atanmış ve TEKİL olduğunu doğrular (§6.6), sonra
     /// <c>Resources/NetItemCatalog.asset</c>'i projede BULUNAN eşyalardan yeniden yazar.
+    /// <para>
+    /// <b>Ayrı bir menü öğesi YOKTUR:</b> <c>Tools &gt; VortexArena &gt; Build &gt; Configure All Build
+    /// Elements</c> her eşitlemede (<c>BuildElementsConfigurator.SyncAll</c>) bunu koşar ve
+    /// "Hazırlık" bölümü durumunu gösterir. Eşya eklemek/kimlik değiştirmek = o pencerede
+    /// senkronize etmek; unutulacak ikinci bir düğme yok.
+    /// </para>
     /// <para>
     /// <b>Katalog neden silah tablosundan değil projeden türetiliyor:</b> <c>WeaponKitBuilder</c>
     /// yalnız tüfekleri bilir. Bomba (<c>ThrowableDefinition</c>) ya da başka bir eşya tipi
@@ -25,8 +31,8 @@ namespace VortexArena.Core.Editor
     /// ⚠️ <b>Asıl korumayı taban sınıf değil bu bekçi sağlar.</b> Çakışan ya da atanmamış bir kimlik
     /// derlemede patlamaz, bir istisna atmaz, Inspector'da kırmızı görünmez — sahada "oyuncunun
     /// elinde yanlış eşya çizildi" (ya da hiç çizilmedi) olarak, hem de yalnız uzak istemcilerde
-    /// görünür: atıcının kendi ekranında her şey doğrudur. Bu yüzden kimlik değişince ya da yeni
-    /// eşya eklenince bu araç ELLE çalıştırılır.
+    /// görünür: atıcının kendi ekranında her şey doğrudur. Bu yüzden her eşitlemede koşar ve
+    /// sonucu rapora yazar.
     /// </para>
     /// <para>
     /// Kimlik telde giden bir bayt olduğu için katalog dizi indeksi kullanılmaz (dizi sırası
@@ -37,25 +43,13 @@ namespace VortexArena.Core.Editor
     {
         private const string CatalogPath = "Assets/_Shared/Data/Resources/NetItemCatalog.asset";
 
-        [MenuItem("Tools/VortexArena/Weapons/Rebuild Net Item Catalog", false, 23)]
-        private static void ValidateMenu()
-        {
-            Validate(true);
-        }
-
         /// <summary>
-        /// Kataloğu dialogsuz yeniden yazar — build hazırlık panelinin kullandığı giriş.
-        /// <para>⚠️ Dialog burada AÇILMAZ: pencereden tetiklenen bir dialog CLI/otomasyon
-        /// çağrısında ana thread'i kilitler (aynı gerekçe <c>ServerConfigExporter.Export(false)</c>
-        /// için de geçerlidir); sonuç zaten konsola yazılıyor.</para>
+        /// Kataloğu doğrulayıp yeniden yazar; tek satırlık özet döner (eşitleme raporuna girer).
+        /// <para>⚠️ Dialog AÇILMAZ: pencereden tetiklenen bir dialog CLI/otomasyon çağrısında ana
+        /// thread'i kilitler (aynı gerekçe <c>ServerConfigExporter.Export(false)</c> için de
+        /// geçerlidir); ayrıntı konsola yazılır.</para>
         /// </summary>
-        internal static void Rebuild()
-        {
-            Validate(false);
-        }
-
-        /// <param name="showDialog">Bitişte özet dialogu gösterilsin mi (elle çağrıda evet).</param>
-        private static void Validate(bool showDialog)
+        internal static string Rebuild()
         {
             // Alt sınıflar (WeaponDefinition, ileride ThrowableDefinition) da t:ItemDefinition
             // süzgecine düşer — filtreyi türetilmiş tiplerle çoğaltmaya gerek yok.
@@ -100,12 +94,7 @@ namespace VortexArena.Core.Editor
                 sb.AppendLine("Tüm netItemId'ler atanmış ve tekil.");
                 sb.Append(RebuildCatalog(byId));
                 Debug.Log($"[NetItemIdGuard] {sb}");
-                if (showDialog)
-                {
-                    EditorUtility.DisplayDialog("VortexArena — Rebuild Net Item Catalog", sb.ToString(), "Tamam");
-                }
-
-                return;
+                return $"net eşya kataloğu: {checkedCount} eşya, kimlikler tekil — yazıldı.";
             }
 
             for (int i = 0; i < unassigned.Count; i++)
@@ -143,11 +132,10 @@ namespace VortexArena.Core.Editor
 
             sb.AppendLine();
             sb.Append("⚠️ Katalog YAZILMADI — önce yukarıdakileri düzelt.");
+            Debug.LogWarning($"[NetItemIdGuard] {sb}");
 
-            if (showDialog)
-            {
-                EditorUtility.DisplayDialog("VortexArena — Rebuild Net Item Catalog", sb.ToString(), "Tamam");
-            }
+            return $"net eşya kataloğu YAZILMADI: {unassigned.Count} atanmamış, {conflicts.Count} çakışan " +
+                   "netItemId (ayrıntı konsolda).";
         }
 
         /// <summary>

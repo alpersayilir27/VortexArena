@@ -17,7 +17,7 @@ namespace VortexArena.Core.Combat
     /// <para>
     /// ⚠️ <b>Dizi sırası kimlik DEĞİLDİR.</b> Kimlik her tanımın kendi <c>netItemId</c> alanıdır;
     /// buradaki sıralama serbesttir ve değişmesi hiçbir şeyi kaydırmaz. Tekilliği
-    /// <c>Tools &gt; VortexArena &gt; Weapons &gt; Rebuild Net Item Catalog</c> bekçisi korur.
+    /// <c>Configure All Build Elements</c> eşitlemesinde koşan net eşya kataloğu bekçisi korur.
     /// </para>
     /// Tüm sorgular null/boş girişe dayanıklıdır (eksik asset referansı akışı kırmasın).
     /// </summary>
