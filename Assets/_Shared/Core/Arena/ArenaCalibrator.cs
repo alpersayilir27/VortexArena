@@ -162,11 +162,18 @@ namespace VortexArena.Core.Arena
 
         /// <summary>Kayıtlı anchor yüklenemezse kaç kez daha denenir. Sahne yüklendiği anda
         /// anchor servisi her zaman hazır olmuyor; tek denemede pes etmek harita değişiminde
-        /// kalibrasyonu boşuna kaybettirirdi.</summary>
-        private const int RestoreAttempts = 3;
+        /// kalibrasyonu boşuna kaybettirirdi.
+        /// <para>⚠️ <see cref="RestoreRetryDelayMs"/> ile birlikte ~10 saniyelik bir pencere
+        /// yapar ve o pencere KISALTILMAZ: başlık yeni takıldığında çapanın localize olması
+        /// odanın yeniden tanınmasını bekler (Link'te PC runtime'ının çapa altyapısı ayrıca geç
+        /// hazır olur). Birkaç saniyelik pencere bu yüzden aslında geçici olan hatayı kalıcı
+        /// gösterir ve oyuncuyu boşuna elle kalibrasyona gönderir. Denemeyi sıklaştırmak da
+        /// çözmez — beklenen şey servis değil izlemedir, o yüzden sayı değil ARALIK uzun.</para>
+        /// </summary>
+        private const int RestoreAttempts = 6;
 
         /// <summary>Yeniden deneme aralığı (ms).</summary>
-        private const int RestoreRetryDelayMs = 1000;
+        private const int RestoreRetryDelayMs = 2000;
 
         /// <summary>Ön-hizalamanın izlemeyi beklediği en uzun süre (saniye). Dolduğunda yine de
         /// uygulanır: editör sandbox'ında HMD hiç yoktur, kafa yerelde sıfırda kalır ve beklemekten

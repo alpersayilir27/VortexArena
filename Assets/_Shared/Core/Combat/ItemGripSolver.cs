@@ -97,16 +97,14 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// <see cref="Solve(ItemDefinition, bool, bool, in Pose, bool, in Vector3, float, out Vector3, out Quaternion)"/>'un
-        /// ana kavramayı <b>parametreden</b> alan biçimi: ölçü tanımın kaydından (bilek ≡ anchor
-        /// varsayımı) değil, canlı bilek deltasıyla düzeltilmiş olabilir
-        /// (<see cref="ItemGripAuthority"/>).
+        /// ana kavramayı <b>parametreden</b> alan biçimi (matematiğin tek yazıldığı yer; üstteki
+        /// biçim tanımın anchor-uzaylı kaydını okuyup buraya verir).
         /// <para>
-        /// ⚠️ <b>Etkin ofset ile ikincil eksen AYNI kaynaktan türer:</b> ön kabza ekseni ana kavrama
-        /// noktasından ölçülüyor, o nokta hâlâ tanımın ham kaydından okunsaydı düzeltilmiş kavramada eksen
-        /// sessizce kayar ve iki elli nişan silahı yamuk çevirirdi. <paramref name="def"/> yalnız
-        /// <b>ikincil</b> soketin kaynağıdır.
+        /// ⚠️ <b>Ana ofset ile ikincil eksen AYNI kaynaktan türer:</b> ön kabza ekseni ana kavrama
+        /// noktasından ölçülüyor; iki ölçü ayrı yerlerden gelseydi eksen sessizce kayar ve iki elli
+        /// nişan silahı yamuk çevirirdi. <paramref name="def"/> yalnız <b>ikincil</b> soketin kaynağıdır.
         /// </para>
-        /// <para>⚠️ Sınıf yine SAFTIR: sahneye bakan tek şey ofseti çözen taraftır, çözücü değil.</para>
+        /// <para>⚠️ Sınıf SAFTIR: sahneye bakan tek şey avuç pozunu çözen taraftır, çözücü değil.</para>
         /// </summary>
         /// <param name="secondaryRight">Ön kabzayı saran elin SAĞ olup olmadığı (kayıt el başına).</param>
         /// <param name="primaryGripPosition">EŞYANIN ana el anchor'ına göre yerel konumu (m).</param>

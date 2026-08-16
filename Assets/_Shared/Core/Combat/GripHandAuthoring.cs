@@ -26,16 +26,21 @@ namespace VortexArena.Core.Combat
     /// olurdu.
     /// </para>
     /// <para>
-    /// ⚠️ Bu objenin <b>transformu ISDK BİLEK çerçevesidir</b> ve başka hiçbir şeye çevrilmez:
-    /// kayıt da bilek uzayında tutulur (<see cref="ItemGripPose"/>). Anchor (kumanda) uzayına
-    /// köprü runtime'ın işidir (<see cref="ItemGripAuthority"/>) — authoring döngüsüne ölçülmemiş
-    /// bir düzeltme sokmak, kullanıcının gözüyle "düzgün" gördüğü eli o düzeltmenin hatası kadar
-    /// yanlış yere koyardı.
+    /// ⚠️ Bu objenin <b>transformu KUMANDA (anchor) çerçevesidir</b> — <c>OVRCameraRig</c> el
+    /// anchor'ının silah üstündeki yeri; kayıt da bu uzaydadır (<see cref="ItemGripPose"/>). +Z
+    /// kumandanın ilerisidir: kök silahla hizalıyken silah oyunda kumandayla hizalı gelir. ISDK
+    /// hayalet eli bu kökün ÇOCUĞUDUR (<see cref="Puppet"/>) ve köke göre ölçülmüş anchor→bilek
+    /// sabitiyle durur; kayda giren şey kökün pozudur, çocuğun değil.
     /// </para>
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class GripHandAuthoring : MonoBehaviour
     {
+        /// <summary>Kök gizmosunun kumanda ileri okunun uzunluğu (m) — silah ölçeğinde okunur olsun.</summary>
+        private const float GizmoForwardLength = 0.08f;
+        private const float GizmoSideLength = 0.03f;
+        private const float GizmoOriginRadius = 0.008f;
+
         [SerializeField] private GripSocketKind _kind;
         [SerializeField] private bool _rightHand = true;
 
@@ -101,6 +106,26 @@ namespace VortexArena.Core.Combat
         private void OnValidate()
         {
             ApplyPreset();
+        }
+
+        /// <summary>
+        /// Kumanda kökünün gizmosu: mavi ok = kumandanın ilerisi (kök silahla hizalıyken namlu yönü),
+        /// yeşil = yukarı, kırmızı = sağ, ortada küçük küre. Kökün kendisinde renderer yoktur — bu
+        /// gizmo olmasa kullanıcı neyi sürüklediğini göremezdi.
+        /// </summary>
+        private void OnDrawGizmos()
+        {
+            Transform t = transform;
+            Vector3 origin = t.position;
+
+            Gizmos.color = new Color(0.25f, 0.55f, 1f, 1f);
+            Gizmos.DrawRay(origin, t.forward * GizmoForwardLength);
+            Gizmos.color = new Color(0.35f, 0.9f, 0.35f, 1f);
+            Gizmos.DrawRay(origin, t.up * GizmoSideLength);
+            Gizmos.color = new Color(1f, 0.4f, 0.4f, 1f);
+            Gizmos.DrawRay(origin, t.right * GizmoSideLength);
+            Gizmos.color = new Color(1f, 1f, 1f, 0.9f);
+            Gizmos.DrawWireSphere(origin, GizmoOriginRadius);
         }
     }
 }
