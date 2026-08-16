@@ -33,7 +33,7 @@ MonoBehaviour:
     preset: 2
   secondaryGripLeft:
     authored: 1
-    position: {x: -0.0859, y: 0.0167, z: 0.3164}
+    position: {x: -0.0086, y: 0.0167, z: 0.2358}
     euler: {x: -0, y: 0, z: 0}
     preset: 2
   secondaryGripRadius: 0.1
