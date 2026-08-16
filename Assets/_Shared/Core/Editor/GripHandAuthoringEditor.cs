@@ -35,8 +35,9 @@ namespace VortexArena.Core.Editor
             EditorGUILayout.LabelField(
                 $"{hand.Kind} · {(hand.RightHand ? "sağ" : "sol")} el", EditorStyles.boldLabel);
             EditorGUILayout.LabelField(
-                "Bu objenin transformu KUMANDA (anchor) çerçevesidir — Scene'de sürükle/çevir; " +
-                "mavi ok kumandanın ilerisi, hayalet el köke bağlı çizilir.",
+                "Bu objenin transformu KUMANDA (anchor) çerçevesidir — Scene'de yalnız TAŞI (dönüş " +
+                "kaydedilmez, silah her zaman kumandayla hizalıdır); kumanda modeli ve hayalet el " +
+                "köke bağlı çizilir.",
                 EditorStyles.miniLabel);
 
             EditorGUILayout.Space();
@@ -88,9 +89,9 @@ namespace VortexArena.Core.Editor
             }
 
             EditorGUILayout.HelpBox(
-                "Scene'de yalnız kumanda kökünün YERİNİ ve AÇISINI ayarlarsın; parmaklar preset'ten " +
-                "gelir. Kökü yalnız taşırsan silah oyunda kumandayla hizalı gelir; ana elde kökü " +
-                "çevirmek SİLAHI çevirir, ön kabzada el silaha yapışır.",
+                "Scene'de yalnız kumanda kökünün YERİNİ ayarlarsın (dönüş yok — silah oyunda her zaman " +
+                "kumandayla hizalıdır, kök silahla hizalı tutulur); parmaklar preset'ten gelir. Ön " +
+                "kabzada el silaha yapışır, silah ikinci ele göre dönmez.",
                 MessageType.None);
         }
     }

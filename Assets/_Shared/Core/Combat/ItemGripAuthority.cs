@@ -69,18 +69,5 @@ namespace VortexArena.Core.Combat
                 anchorWorld.rotation * delta.rotation);
         }
 
-        /// <summary>
-        /// Ana kavrama noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — aynı ölçünün ters yönü.
-        /// <para>
-        /// <see cref="ItemDefinition.PrimaryGripPointOnItem(bool)"/>'ın parametreli ikizidir ve türetmesi
-        /// birebir aynıdır (<c>item.TransformPoint(s) == hand.position</c> koşulundan
-        /// <c>s = Inverse(R) * (-P)</c>). <see cref="ItemGripSolver"/> iki elli çözümde ön kabza eksenini
-        /// bu noktadan ölçer.
-        /// </para>
-        /// </summary>
-        public static Vector3 GripPointOnItem(in Vector3 gripPosition, in Quaternion gripRotation)
-        {
-            return Quaternion.Inverse(gripRotation) * (-gripPosition);
-        }
     }
 }

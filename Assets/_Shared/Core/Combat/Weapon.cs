@@ -18,10 +18,10 @@ namespace VortexArena.Core.Combat
     /// kanonik kavrama sürdüğü için onunla yarışmaz).
     /// <para>
     /// <b>KAVRAMA KANONİKTİR</b> (§6.6): silah tutulduğu sürece kökü ana elin anchor'ından +
-    /// tanımdaki <b>stüdyoda yazılmış</b> kavramadan sürülür — konum
-    /// <see cref="ItemDefinition.PrimaryGripPosition(bool)"/>, <b>dönüş de kayıttan</b>
-    /// (<see cref="ItemDefinition.PrimaryGripRotation(bool)"/>: el nasıl tutuyorsa silah öyle
-    /// durur) (<see cref="LateUpdate"/>). ISDK'nın <c>*GrabFreeTransformer</c>'ları bu yüzden
+    /// tanımdaki <b>stüdyoda yazılmış</b> kavrama konumundan sürülür
+    /// (<see cref="ItemDefinition.PrimaryGripPosition(bool)"/>); <b>dönüşü her zaman ana kumandanın
+    /// dönüşüdür</b> — kayıt dönüş taşımaz, ikinci el silahı çevirmez
+    /// (<see cref="LateUpdate"/>, <see cref="ItemGripSolver"/>). ISDK'nın <c>*GrabFreeTransformer</c>'ları bu yüzden
     /// <c>WPN_*</c> prefablarından kaldırıldı: kavramanın ALGILANMASI Grabbable/GrabInteractable'da,
     /// silahı TAŞIMA işi burada. Gerekçe ağdadır — duruş telde gitmez, uzak taraf silahı "elin pozu ×
     /// sabit kavrama ofseti" olarak çizer; serbest kavrama (keyfi ofset) o eşitliği bozar ve namlusundan
@@ -171,8 +171,8 @@ namespace VortexArena.Core.Combat
         /// kaynak (verildi mi / kavrandı mı) fark etmez.</para>
         /// <para>⚠️ Kapı <see cref="SecondaryHand"/> DEĞİL bu alandır: kontrolcü çözülemeyen
         /// oturumlarda (editör) <c>SecondaryHand</c> <c>None</c> döner, oysa iki kavrama noktası
-        /// varlığını sürdürür — o durumda telde çift el bildirmek doğrudur (yalnız iki elli POZ
-        /// çözülemez, ona <c>SecondaryHand</c> bakar).</para>
+        /// varlığını sürdürür — o durumda telde çift el bildirmek doğrudur (yalnız ikinci elin
+        /// görseli/soketi çözülemez, ona <c>SecondaryHand</c> bakar).</para>
         /// </summary>
         public bool IsTwoHanded => HasSecondaryGrip;
 
@@ -191,7 +191,7 @@ namespace VortexArena.Core.Combat
         /// fiilen boştur (<c>WeaponGranter.PrepareSummonedClone</c> kavrama bileşenlerini kapatıyor).
         /// </para>
         /// <para>⚠️ Ana elle AYNI çıkarsa <c>None</c> döner: silahı tek elin iki kaynaktan tuttuğu
-        /// bir durumda iki elli çözüm sıfır uzunlukta bir eksene nişan alırdı.</para>
+        /// bir durumda aynı el hem ana hem ön kabzada sayılır, poser onu ön kabzaya kilitlerdi.</para>
         /// </summary>
         public OVRInput.Controller SecondaryHand
         {
@@ -306,14 +306,9 @@ namespace VortexArena.Core.Combat
         private int reserveRounds;
 
         // VERİLEN silahta ön kabzayı tutan ikinci el — tek yazarı WeaponGranter (SetSecondaryHand).
+        // ⚠️ İkinci el silahın POZUNU etkilemez (ne konumu ne dönüşü): yalnız görsel yapışma
+        // (HandGripPoser) + saçılım/geri tepme çarpanı. Silah her zaman ana kumandayla hizalıdır.
         private OVRInput.Controller _grantedSecondaryHand = OVRInput.Controller.None;
-
-        // İki elli çözümün ağırlığı ve ikinci elin SON bilinen avuç konumu. Konum saklanır çünkü
-        // ikinci el bırakıldığı anda çözüm kapansaydı silah zıplardı: ağırlık sıfıra inerken poz
-        // hâlâ o son noktadan çözülür (ItemGripSolver.StepAimBlend).
-        private float _aimBlend;
-        private Vector3 _lastSecondaryPalm;
-        private bool _hasLastSecondaryPalm;
 
         // tracerEveryNthRound sayacı — silah BAŞINA tutulur (uzak tarafta RemoteShotFx aynısını
         // oyuncu başına tutuyor): sayaç paylaşılsaydı çift tabancada izler iki silaha rastgele
@@ -479,24 +474,24 @@ namespace VortexArena.Core.Combat
         // -------------------------------------------------------- kanonik kavrama
 
         /// <summary>
-        /// §6.6 <b>KANONİK KAVRAMA</b>: silah tutulduğu sürece kökü ana elin anchor'ından +
-        /// tanımın SABİT kavrama kaydından (konum <b>ve dönüş</b>) sürülür — kavradığı andaki keyfi
-        /// ofset korunmaz.
+        /// §6.6 <b>KANONİK KAVRAMA</b>: silah tutulduğu sürece kökü ana elin anchor'ından + tanımın
+        /// SABİT kavrama konumundan sürülür — kavradığı andaki keyfi ofset korunmaz.
+        /// <para>
+        /// ⚠️ <b>Silahın dönüşü HER ZAMAN ana kumandanın dönüşüdür</b> (<see cref="ItemGripSolver"/>):
+        /// kayıt yalnız konum taşır, ikinci el (<see cref="SecondaryHand"/>) silahın pozuna hiç
+        /// dokunmaz — o yalnız görsel yapışma (<c>HandGripPoser</c>) ve saçılım/geri tepme çarpanıdır.
+        /// Silahı ikinci ele doğru çeviren bir "iki elli nişan" YOKTUR ve eklenmez: ikinci el kabzayı
+        /// tuttuğu anda silah kumandadan sapardı ("el konumuna göre silah bozuk").
+        /// </para>
         /// <para>
         /// <b>Neden zorunlu:</b> duruş telde gitmez; uzak taraf silahı "elin pozu × sabit kavrama
         /// ofseti" olarak çizer. Serbest kavrama o eşitliği bozar ve iki uçta iki ayrı duruş doğar.
         /// </para>
         /// <para>
-        /// <b>VERİLEN silahın İKİ türü de buradan sürülür</b> (Disposable dahil): iki elli çözüm
-        /// eşyanın pozunu her karede yeniden hesapladığı için Disposable örnek de artık anchor'ın
-        /// ÇOCUĞU değil <see cref="WeaponGranter"/>'ın DDOL kökünün altındadır. ⚠️ İki değişiklik
-        /// birbirine bağlıdır: anchor'ın altındaki bir örneğe dünya pozu yazmak parent dönüşümüyle
-        /// çakışır ve silah katlanarak uzaklaşır.
-        /// </para>
-        /// <para>
-        /// <b>İki elli nişan</b> (<see cref="SecondaryHand"/>): ana kavrama noktası ana avuçta
-        /// kalır, silahın ekseni ikinci elin avucuna döner — matematiği
-        /// <see cref="ItemGripSolver"/>'dadır (uzak taraf AYNI fonksiyonu koşar, §6.6).
+        /// <b>VERİLEN silahın İKİ türü de buradan sürülür</b> (Disposable dahil): örnek anchor'ın
+        /// ÇOCUĞU değil <see cref="WeaponGranter"/>'ın DDOL kökünün altındadır ve pozu her karede
+        /// buradan yazılır. ⚠️ İki şey birbirine bağlıdır: anchor'ın altındaki bir örneğe dünya pozu
+        /// yazmak parent dönüşümüyle çakışır ve silah katlanarak uzaklaşır.
         /// </para>
         /// <para>
         /// Rig yoksa (admin gözlemci, editör oturumu, sahne henüz yüklenmemiş) hiçbir şey yapılmaz —
@@ -515,9 +510,6 @@ namespace VortexArena.Core.Combat
 
             if (!IsGranted && heldPoints.Count == 0)
             {
-                // Bırakılan silahın nişan ağırlığı taşınmaz: tekrar alındığında tek elli başlasın.
-                _aimBlend = 0f;
-                _hasLastSecondaryPalm = false;
                 return;
             }
 
@@ -526,45 +518,12 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            bool wantTwoHand = false;
-            if (IsTwoHanded && WeaponGranter.TryResolvePalm(SecondaryHand, out Pose secondaryPalm))
-            {
-                wantTwoHand = true;
-                _lastSecondaryPalm = secondaryPalm.position;
-                _hasLastSecondaryPalm = true;
-            }
-
-            _aimBlend = ItemGripSolver.StepAimBlend(_aimBlend, wantTwoHand, Time.deltaTime);
-            if (_aimBlend <= 0f)
-            {
-                _hasLastSecondaryPalm = false;
-            }
-
-            // Kayıt ANCHOR uzayındadır (ItemGripPose): ölçü doğrudan tanımdan okunur, delta yok.
-            // Yazılmamış kayıt kimliktir → silah kumandanın üstünde ve onunla hizalı durur.
-            bool mainHandRight = HandGripPivot.IsRight(MainHand);
-            bool secondaryRight = SecondaryHandIsRight(mainHandRight);
-
-            ItemGripSolver.Solve(definition, mainHandRight, secondaryRight, primaryPalm,
-                _hasLastSecondaryPalm, _lastSecondaryPalm, _aimBlend,
+            // Kayıt ANCHOR uzayındadır (ItemGripPose): konum doğrudan tanımdan okunur, delta yok.
+            // Yazılmamış kayıt sıfırdır → silah kumandanın tam üstünde durur.
+            ItemGripSolver.Solve(definition, HandGripPivot.IsRight(MainHand), primaryPalm,
                 out Vector3 position, out Quaternion rotation);
 
             transform.SetPositionAndRotation(position, rotation);
-        }
-
-        /// <summary>
-        /// Ön kabzayı saran elin SAĞ olup olmadığı; ikinci el henüz yoksa <b>ana elin tersi</b>.
-        /// <para>⚠️ <c>HandGripPivot.IsRight(None)</c> "sağ" der (kontrolcü çözülemeyen oturumlar
-        /// için makul bir varsayım), oysa burada None "ikinci el yok" demektir: doğrudan çağrılsaydı
-        /// iki eli de sağ sayan bir ölçü çıkar ve sağ elle tutulan tüfeğin ön kabza ekseni SAĞ
-        /// kaydından okunurdu.</para>
-        /// </summary>
-        private bool SecondaryHandIsRight(bool mainHandRight)
-        {
-            OVRInput.Controller secondary = SecondaryHand;
-            return secondary == OVRInput.Controller.None
-                ? !mainHandRight
-                : HandGripPivot.IsRight(secondary);
         }
 
         // ------------------------------------------------------------------ tetik

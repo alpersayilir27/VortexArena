@@ -442,10 +442,11 @@ namespace VortexArena.Core.Combat
         /// Ön kabzayı saran elin bileğini eşyanın üstündeki kayda <b>TAM</b> (konum + dönüş)
         /// kilitler — o el eşyaya yapışır.
         /// <para>
-        /// Kayıt kumanda ANCHOR'ının eşyaya göre pozudur (<see cref="ItemGripPose"/>); sentetik ele
-        /// verilecek olan ise BİLEK. Köprü <see cref="ItemGripAuthority.WristFromAnchor"/>'dır
-        /// (<c>wrist = item ∘ kayıt ∘ delta</c>, delta bu bileşenin canlı ölçümü). Delta yanlışsa
-        /// bozulan şey silahın yönü değil, elin ön kabzada birkaç santim/derece kaymış durmasıdır.
+        /// Kayıt kumanda ANCHOR'ının eşyaya göre KONUMUDUR (<see cref="ItemGripPose"/>; dönüş yok —
+        /// ön kabzadaki kumanda eşyayla hizalı sayılır); sentetik ele verilecek olan ise BİLEK. Köprü
+        /// <see cref="ItemGripAuthority.WristFromAnchor"/>'dır (<c>wrist = (item ∘ kayıt) ∘ delta</c>,
+        /// delta bu bileşenin canlı ölçümü). Delta yanlışsa bozulan şey silahın yönü değil, elin ön
+        /// kabzada birkaç santim/derece kaymış durmasıdır.
         /// </para>
         /// <para>
         /// ⚠️ <b>Kilit KOŞULSUZDUR</b> — mesafe/açı kapısı yoktur ve eklenmez. Takas bilinçli:
@@ -466,14 +467,13 @@ namespace VortexArena.Core.Combat
         /// sessizce kayar.
         /// </para>
         /// </summary>
-        /// <param name="grip">Kumanda anchor'ının EŞYAYA göre yerel pozu (metre, ölçeksiz).</param>
+        /// <param name="grip">Kumanda anchor'ının EŞYAYA göre yerel konumu (metre, ölçeksiz).</param>
         /// <param name="rightHand">Kilitlenen el sağ mı (delta el başına ölçülür).</param>
         private static void LockToSecondaryGrip(SyntheticHand synthetic, Transform item,
             in ItemGripPose grip, bool rightHand)
         {
-            var anchor = new Pose(
-                item.position + item.rotation * grip.position,
-                item.rotation * grip.Rotation);
+            // Kayıt dönüş taşımaz: ön kabzadaki kumanda eşyayla hizalı sayılır.
+            var anchor = new Pose(item.position + item.rotation * grip.position, item.rotation);
 
             Pose wrist = ItemGripAuthority.WristFromAnchor(rightHand, anchor);
             synthetic.LockWristPose(wrist, 1f, SyntheticHand.WristLockMode.Full, true);

@@ -104,10 +104,10 @@ namespace VortexArena.Core.Combat
         /// ⚠️ <b>Bağın KURULMASI ile SÜRDÜRÜLMESİ ayrı kurallardır</b> ve bu alan ayrımın kendisidir.
         /// Kurulma mesafeye bakar (<see cref="Weapon.IsHandOnSecondaryGrip"/> — oyuncuya gösterilen
         /// soket küresi neyi vaat ediyorsa o), sürdürme <b>yalnız grip tuşuna</b>. Sürdürme de mesafeye
-        /// baksaydı bağ oyuncu tuşu bırakmadan kopardı: iki elli çözüm silahı ikinci ele doğru
-        /// KAYDIRMAZ, yalnız nişanlar — yani soket ile kumanda arasındaki fark her zaman
-        /// <i>|ellerin arası − silahın kavrama arası|</i> kadardır ve oyuncu kolunu uzatıp
-        /// topladıkça bu fark tek başına kabul yarıçapını (~0.10 m) aşar.
+        /// baksaydı bağ oyuncu tuşu bırakmadan kopardı: silahın pozu yalnız ANA kumandadan gelir
+        /// (<see cref="ItemGripSolver"/>) ve ikinci ele doğru ne kayar ne döner — yani soket ile
+        /// kumanda arasındaki fark her zaman <i>|ellerin arası − silahın kavrama arası|</i> kadardır ve
+        /// oyuncu kolunu uzatıp topladıkça bu fark tek başına kabul yarıçapını (~0.10 m) aşar.
         /// </para>
         /// </summary>
         private Weapon _secondaryLatchWeapon;
@@ -462,7 +462,7 @@ namespace VortexArena.Core.Combat
 
             // ⚠️ Örnek el anchor'ının DEĞİL bu tekilin (DDOL kökü) altına kurulur ve pozunu her
             // karede Weapon.ApplyCanonicalGrip sürer — Persistent klonla AYNI desen. Anchor'ın
-            // çocuğu olsaydı iki elli çözümün yazdığı dünya pozu parent dönüşümüyle çakışırdı.
+            // çocuğu olsaydı kanonik kavramanın yazdığı dünya pozu parent dönüşümüyle çakışırdı.
             GameObject instance = Instantiate(definition.Prefab, transform, false);
             instance.name = definition.Prefab.name;
 
@@ -650,18 +650,19 @@ namespace VortexArena.Core.Combat
         /// Ön kabza bağının bir karelik cevabı: bu el şu an <paramref name="weapon"/>'ın ikincil
         /// soketini tutuyor mu.
         /// <para>
-        /// <b>İki ayrı kural:</b> bağ <b>KURULURKEN</b> avuç ön kabzanın kabul yarıçapında olmalı
-        /// (<see cref="Weapon.IsHandOnSecondaryGrip"/> — kural silahta yaşar, gösterge de aynı
-        /// ölçüyle yeşile döner) — gösterge oyuncuya tam bunu vaat ediyor. Bağ
+        /// <b>İki ayrı kural:</b> bağ <b>KURULURKEN</b> kumanda ön kabzanın kabul yarıçapında olmalı
+        /// (<see cref="Weapon.IsHandOnSecondaryGrip"/> — kural silahta yaşar, soket küresi de aynı
+        /// ölçüyle dolgunlaşır) — küre oyuncuya tam bunu vaat ediyor. Bağ
         /// <b>SÜRERKEN</b> tek şart grip tuşunun basılı kalmasıdır: ne mesafe ne açı yoklanır.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Sürdürmeye mesafe kapısı GERİ KONMAZ.</b> İki elli çözüm silahı ikinci ele doğru
-        /// taşımaz, yalnız o yöne <i>nişanlar</i> (<see cref="ItemGripSolver"/>): soketin avuçtan
-        /// uzaklığı, oyuncunun iki avucu arası ile silahın iki kavrama noktası arası farkına eşittir
+        /// ⚠️ <b>Sürdürmeye mesafe kapısı GERİ KONMAZ.</b> Silahın pozu yalnız ANA kumandadan gelir
+        /// (<see cref="ItemGripSolver"/>), ikinci ele doğru ne kayar ne döner: soketin kumandadan
+        /// uzaklığı, oyuncunun iki kumandası arası ile silahın iki kavrama noktası arası farkına eşittir
         /// ve oyuncu kolunu uzatıp topladıkça bu fark kabul yarıçapını kendiliğinden aşar. Yani
         /// mesafeye bakan bir sürdürme kuralı, oyuncu tuşu bırakmadan bağı koparır — nişan alma,
-        /// eğilme, dönme gibi normal hareketlerde.
+        /// eğilme, dönme gibi normal hareketlerde. Bağın tek görünür sonucu ikinci elin görselinin ön
+        /// kabzaya yapışması ve saçılım/geri tepme çarpanıdır.
         /// </para>
         /// <para>
         /// Kilit silah <b>örneğine</b> bağlıdır: silah yok edilip yenisi verildiğinde (grip
@@ -1217,18 +1218,11 @@ namespace VortexArena.Core.Combat
         /// çözücü ve aynı kaynak (tanımdaki anchor-uzaylı kayıt, <see cref="ItemGripSolver"/>).
         /// <para>⚠️ İki yer aynı formülü koşmak ZORUNDA: burada başka bir ölçüye bakılsaydı silah
         /// verildiği karede bir duruşta belirir, bir sonraki karede öteki duruşa zıplardı.</para>
-        /// <para>⚠️ İkincil el bu karede YOKTUR (<c>hasSecondary: false</c>) ama imza yine de bir el
-        /// ister: ön kabza ölçüsü el başınadır. Ana elin TERSİ verilir — silah iki elle
-        /// tutulacaksa ön kabzayı saracak el odur.</para>
         /// </summary>
         private static void SolveInitialGrip(ItemDefinition definition,
             OVRInput.Controller hand, in Pose palm, out Vector3 position, out Quaternion rotation)
         {
-            bool mainHandRight = HandGripPivot.IsRight(hand);
-            bool secondaryRight = !mainHandRight;
-
-            ItemGripSolver.Solve(definition, mainHandRight, secondaryRight, palm, false, Vector3.zero,
-                0f, out position, out rotation);
+            ItemGripSolver.Solve(definition, HandGripPivot.IsRight(hand), palm, out position, out rotation);
         }
 
         /// <summary>BB rig'i (aktif olan) bulur; bulunamazsa saniyede bir yeniden dener.
