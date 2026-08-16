@@ -73,8 +73,8 @@ veri üretir, ama duvarlar çizilmeye devam etmeli.
 | Bileşen | Ne zaman | Nasıl |
 |---|---|---|
 | **`ArenaObstacle`** | Sahneye elle konmuş bir engel (kolon, kasa, direk) muhafaza uyarısına girecekse | Engel objesine ekle, `size` alanına zemindeki ölçüsünü yaz (X = genişlik, Y = derinlik). ⚠️ **Collider EKLEMEZ, fizik yapmaz** — tek işi `ArenaBoundary`'nin oyuncuyu engele yaklaşırken uyarmasıdır. Plandan üretilen kolonlara aracın kendisi ekler |
-| **`ArenaRoof`** | Arenanın çatısı varsa | Çatı hiyerarşisinin köküne: `GameObject > VortexArena > Arena Roof`. Admin kuş bakışına geçince çatı çizilmez (gölgesi kalır). Açık tavanlı arenada hiç yapılmaz → [Çatı Gizleme](../Cati-Gizleme.md) |
-| **`FX_SnowStorm`** | Kar/hava efekti isteniyorsa | `Arenas/Venues/Outdoor12x12/Scenes/IceWorld/Prefabs/` altındaki prefabı arena orijinine (0,0,0) bırak. 12×12 değilse `Snow_A/B/E` shape scale'lerini arena boyutu + ~3 m payla ölçekle |
+| **`ArenaRoof`** | Arenanın çatısı varsa | Çatı hiyerarşisinin köküne: `GameObject > VortexArena > Arena Roof`. Admin kuş bakışına geçince çatı çizilmez (gölgesi kalır). Açık tavanlı arenada hiç yapılmaz |
+| **`FX_SnowStorm`** | Kar/hava efekti isteniyorsa | Karlı bir arena kutusunun `Prefabs/` klasöründeki prefabı arena orijinine (0,0,0) bırak. 12×12 değilse `Snow_A/B/E` shape scale'lerini arena boyutu + ~3 m payla ölçekle |
 | **`ProximityWarning`** | Çarpışma önleme isteniyorsa | Elle eklenir; `head` ve `haloMaterial` (`_Shared/FX/M_ProximityHalo`) Inspector'dan verilir |
 | **`NetIdentity`** | Dinamik obje senkronu gerekiyorsa | `GameObject > VortexArena > Network Parent` — benzersiz `sceneId` damgalar |
 

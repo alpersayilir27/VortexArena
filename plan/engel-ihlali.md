@@ -9,13 +9,7 @@ Kod, protokol ve doküman **yazıldı**. Sistemin anlatımı dokümanlarda:
 ⚠️ **Protokol v11** — tel formatı **değişmedi**, ama istemci davranışı değişti: karışık sürümde eski
 APK engelin içinden ateş edebilir ve kafası içerideyken görmeye devam eder. Yeni APK gerekir.
 
-## 1. Tek seferlik editör adımı
-
-- [ ] `Tools > VortexArena > Arena > HMD Katmanlarını Kur` — rig prefabına uyarı yazısını ve hasar
-      vinyetini kurar, vinyet materyalini üretir. Çalıştırılmadıkça karartma çalışır ama yazı ve
-      kırmızı vinyet hiç çizilmez.
-
-## 2. Sahne işi (elle) — kalan arenalar: `Arena12x12`, `VortexAntep`
+## 1. Sahne işi (elle) — her arena kutusunda tek tek
 
 - [ ] **İç engellerin** (sütun, kasa, sandık, blok) collider'ını `Obstacle` layer'ına al.
       ⚠️ Dış duvar, zemin ve tavan **girmez** — kalibrasyonu kaymış oyuncu durduk yere ölmesin.
@@ -26,15 +20,18 @@ APK engelin içinden ateş edebilir ve kafası içerideyken görmeye devam eder.
 
 Lobi sahnelerinde bu iş gerekmez: hasar kapısı fazdır (`playing`), lobide maç yoktur.
 
-## 3. VFX (asset yok)
+⚠️ Hangi arenada yapıldığı sahne açılmadan görülemez (layer değeri yalnız sahne objesinde durur):
+her `Venues/<İşletme>/Scenes/<Arena>/` kutusunu açıp denetimi koştur.
+
+## 2. VFX (asset yok)
 
 - [ ] Engel yüzeyindeki kesişim efekti — **havuzlanmış tek** partikül sistemi, ihlal başına
       `Instantiate` YOK. Karartma, uyarı yazısı, vinyet ve titreşim koddan geliyor; eksik olan
       yalnız partikül.
 
-## 4. Doğrulama (kullanıcı koşar)
+## 3. Doğrulama (kullanıcı koşar)
 
-- [ ] `dotnet build` (Server) + Unity derlemesi + `HMD Katmanlarını Kur` + yeni APK
+- [ ] `dotnet build` (Server) + Unity derlemesi + yeni APK
 - [ ] Kafayı engele sok → ekran **0.2 sn'de tam siyah**, uyarı yazısı nabızla görünür
 - [ ] Bloğa **yavaşça** yaklaş → ekran, bloğun yüzeyi kırpılmaya başlamadan ÖNCE siyah;
       duvarın içi/arkası hiçbir anda görünmüyor. **Dört ana yönde ve köşegende ayrı ayrı dene**

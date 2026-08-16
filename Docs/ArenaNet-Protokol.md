@@ -110,11 +110,11 @@ Hem `255.255.255.255` hem her arayüzün subnet-broadcast adresine gönderilir:
 ```json
 { "type": "hello", "protocolVersion": 1, "role": "player",
   "deviceId": "...", "deviceName": "...", "appVersion": "0.1.0",
-  "currentScene": "Lobby", "scenes": ["Boot","Lobby","Arena12x12","IceWorld"] }
+  "currentScene": "Lobby", "scenes": ["Boot","Lobby","<Arena>","<Arena2>"] }
 ```
 `scenes` = build listesinden runtime'da toplanır (`SceneUtility.GetScenePathByBuildIndex`) → admin katalog doğrulaması bunu kullanır.
 
-**`status`** — her 5 sn: `{ "type":"status", "scene":"Arena12x12", "battery":0.87, "ctrlL":1, "ctrlR":3, "fps":71.6, "rosterVersion":42, "rttMs":14, "jitterMs":3.2, "lossPct":0.4 }`
+**`status`** — her 5 sn: `{ "type":"status", "scene":"<Arena>", "battery":0.87, "ctrlL":1, "ctrlR":3, "fps":71.6, "rosterVersion":42, "rttMs":14, "jitterMs":3.2, "lossPct":0.4 }`
 
 **`ctrlL`/`ctrlR`** = sol/sağ **kumandanın durumu** (`ArenaProtocol.CONTROLLER_*`). Değerler:
 
@@ -208,7 +208,7 @@ durumunda bırakır; başarısız ölçümü ölçek olarak yazmak ise sessizce 
 
 ### 5.2 Yalnız admin → Sunucu
 
-- **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }`
+- **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"<Arena>", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }`
   `roundSeconds`/`scoreLimit`/`countdownSeconds` **o maça özeldir**: `≤ 0` ya da eksikse modun kendi varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`, geri sayımda `COUNTDOWN_SECONDS`) kullanılır. Operatörün arayüzde seçtiği değerler buradan geçer; `ROUND_SECONDS_OPTIONS` yalnız arayüz listesidir, sunucu her pozitif değeri kabul eder.
   `countdownSeconds` sunucuda `[COUNTDOWN_SECONDS_MIN, COUNTDOWN_SECONDS_MAX]` aralığına **kırpılır** ve maç boyunca **her** geri sayımda kullanılır — tur tabanlı modlarda (`tournament`, §10.5) turlar arasındaki geri sayım da budur. Oyuncu istemcisine ayrı bir alan olarak GİTMEZ: `countdown{seconds}` zaten her saniye gerçek değeri taşır.
 - **`abort_match`** `{ "type":"abort_match" }`
@@ -280,7 +280,7 @@ durumunda bırakır; başarısız ölçümü ölçek olarak yazmak ise sessizce 
   sessizce düşürür, eski admin komutu hiç göndermez. Bedeli, eski sunucuya karşı komutun sessizce
   hiçbir şey yapmasıdır — admin ile sunucu aynı depodan birlikte dağıtıldığı için kabul edilir.
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
-- **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }` — bir sonraki maçın **ortak** mod/harita/süre/limit/geri sayım seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim maç bitiminde sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
+- **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"<Arena>", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }` — bir sonraki maçın **ortak** mod/harita/süre/limit/geri sayım seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim maç bitiminde sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
   ⚠️ **`sceneName` yalnız operatör harita/mod imlecini gerçekten oynattığında doldurulur** (süre/limit dokunuşunda boş gider): dolu harita alanı sahnelemeyi tetikler (§10.7), yani süre değiştirmek herkesi bir arenaya taşırdı.
   **Neden maç parametreleri de ortak:** iki operatör aynı ekranı görmezse biri 5 dk sandığı maçı 30 dk başlatır. Süre/limit *operasyonel* durumdur, görünüm tercihi değil (§5.3 son madde).
   ⚠️ **`sceneName` yalnız bir not değil, anlık bir sahne komutudur:** harita değiştiğinde sunucu o arenayı **sahneler** — TÜM istemciler (oyuncular + adminler) oraya geçer (§10.7). Bu yüzden **`modeId`/`sceneName` yalnız MAÇ KURULMAMIŞKEN kabul edilir**, yani tam iki durumda: `finished` (maç bitti, sıradaki seçilebilmeli) ve `paused` + `phaseReason:"lobby"`. Diğer her durumda ikisi de **düşürülür** — `playing` ama aynı zamanda `paused` + `loading`/`countdown`/`operator`/`mode`: BAŞLAT'a basıldığı andan itibaren maç kuruludur, kurulmakta olanın (yükleme/geri sayım) ya da donmuş olanın (operatör/mod duraklatması) altından sahne çekilemez. Düşürülen alanlar için komutun süre/limit kısmı yine işlenir (onlar sahne yüklemez), konsola sebep yazılır ve `admin_state` mevcut seçimle geri yayınlanır — iyimser davranan panelin imleci sunucunun değerine çekilsin. Kurulmuş bir maçın haritasını değiştirmek diye bir şey yoktur; önce `abort_match`, sonra yeni harita `start_match` ile gelir.
@@ -295,7 +295,7 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
 { "type":"welcome", "protocolVersion":3, "playerId":3, "udpToken":123456789,
   "calibrationMode":"two_anchor",
   "match": { "phase":"paused", "phaseReason":"lobby", "modeId":"lobby", "modeState":"",
-             "sceneName":"Lobby12x12", "sceneElapsed":137.4,
+             "sceneName":"<Lobi>", "sceneElapsed":137.4,
              "timeRemaining":0, "scoreRed":0, "scoreBlue":0,
              "rules": { "teamMode":"two", "scoring":"team", "friendlyFire":false,
                         "reviveAnchor":"base", "weaponSource":"weaponcanvas", "respawnDelay":5.0,
@@ -329,7 +329,7 @@ başlığının yeniden başlatılmasıdır.
 { "type":"lobby_state", "version":42, "players":[
   { "playerId":3, "number":7, "name":"ertu", "role":"player", "team":"red",
     "ready":true, "connection":"connected", "reconnectSeconds":0,
-    "battery":0.87, "ctrlL":1, "ctrlR":3, "scene":"Arena12x12",
+    "battery":0.87, "ctrlL":1, "ctrlR":3, "scene":"<Arena>",
     "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7,
     "inMatch":true, "calibrated":true, "calibrationSource":"anchor", "floorOffset":0.07,
     "bodyScale":1.04, "scaleError":"", "calibrationError":"" } ] }
@@ -406,7 +406,7 @@ sessizce doğru davranır. Kalibrasyon alanlarıyla aynı sebepten burada taşı
 roster'ın zaten tazelendiği andır ve **iskelet kanalına girmez** — 12 Hz'de her karede tekrar eden
 bir sabit olurdu.
 
-**`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"Arena12x12", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "sceneElapsed":0, "rules":{ … } }`
+**`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"<Arena>", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "sceneElapsed":0, "rules":{ … } }`
 → istemci sahneyi yükler, `status`'ta yeni sahne görünür. Sahne yüklenince istemci `set_ready` (yükleme tamam anlamında) gönderir; herkes hazır olunca sunucu `countdown` başlatır. Bu süre boyunca faz `paused`'dur (`phaseReason` sırayla `loading` → `countdown`); **`load_match`'in gelmesi maçın başladığı anlamına GELMEZ** — maç `phase:"playing"` ile başlar.
 **Oyuncu ışınlanmaz ve kalibrasyon SIFIRLANMAZ** — harita değişimi oyuncu için yalnız bir sahne değişimidir, fiziksel duruşu ve hizalaması kaldığı yerden devam eder (§10.4).
 **Adminlere de gönderilir** (gözlemci sahneyi yüklesin diye) ama `yourTeam:""` ile — admin oynamadığı için takım anlamsızdır ve admin `set_ready` göndermez.
@@ -429,7 +429,7 @@ Fazlar ve alanların anlamı §10.1'de. `phase` yalnız üç değer alır: `paus
 **`respawn`** `{ "type":"respawn", "playerId":5, "delaySeconds":5.0 }` — istemci `delaySeconds` sonra, modun canlanma şartını sağlayınca canlanır (§10.4). Sunucu sahne geometrisini bilmez; canlanma yeri diye bir alan taşınmaz.
 **`match_end`** `{ "type":"match_end", "winnerTeam":"blue", "winnerPlayerId":0, "scoreRed":12, "scoreBlue":30 }`
 Kazanan **iki kanaldan biriyle** ifade edilir (`rules.scoring`, §10.5): takım skorlu modlarda `winnerTeam` (`"red"|"blue"|""`), bireysel skorlu modlarda `winnerPlayerId` (`0` = yok/berabere). Bir mod ikisini de doldurmaz; okuyan istemci dolu olana bakar.
-**`return_to_lobby`** `{ "type":"return_to_lobby", "modeId":"lobby", "sceneName":"Lobby12x12", "sceneElapsed":0, "rules":{ … } }` — herkesi sunucunun **açık sahnesine** taşır. Şekli `load_match` ile aynıdır (§10.7): `sceneName` o an açık olan sahne, `modeId`/`rules` o sahnenin profili. Adı tarihseldir — yalnız "lobiye dön" değil, operatörün seçtiği arenayı sahnelemek için de kullanılır (§10.7 Sahneleme).
+**`return_to_lobby`** `{ "type":"return_to_lobby", "modeId":"lobby", "sceneName":"<Lobi>", "sceneElapsed":0, "rules":{ … } }` — herkesi sunucunun **açık sahnesine** taşır. Şekli `load_match` ile aynıdır (§10.7): `sceneName` o an açık olan sahne, `modeId`/`rules` o sahnenin profili. Adı tarihseldir — yalnız "lobiye dön" değil, operatörün seçtiği arenayı sahnelemek için de kullanılır (§10.7 Sahneleme).
 Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken harita seçtiğinde `sceneName` o arenadır. İstemci için ikisi de aynı şeydir — *"lobideyiz, şu sahneyi yükle"* — bu yüzden ayrı bir mesaj tipi YOKTUR. `modeId` her iki durumda da `"lobby"` kalır: sahnenin arena olması fazı değiştirmez.
 **`ping`** `{ "type":"ping" }` — istemci `status` ile yanıtlar (ayrı pong yok).
 **`identify`** `{ "type":"identify" }` — istemci büyük kimlik overlay'i gösterir (playerId + ad).
@@ -450,11 +450,11 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
 
 **`admin_state`** — **yalnız `role=admin` bağlantılara**; adminler arası ortak durumun tek doğruluk kaynağı:
 ```json
-{ "type":"admin_state", "modeId":"tdm", "sceneName":"Arena12x12",
-  "venueId":"Outdoor12x12", "venueScenes":["Arena12x12","IceWorld","Lobby12x12"],
+{ "type":"admin_state", "modeId":"tdm", "sceneName":"<Arena>",
+  "venueId":"<Mekan>", "venueScenes":["<Arena>","<Arena2>","<Lobi>"],
   "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10, "friendlyFire":false,
   "calibrationMode":"two_anchor",
-  "notice":"Ofis-PC: harita -> Arena12x12", "adminCount":2 }
+  "notice":"Ofis-PC: harita -> <Arena>", "adminCount":2 }
 ```
 - Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`return_to_lobby`/`kick`/`identify`/`set_team`/`set_friendly_fire`/`set_calibration_mode`), oyuncunun bildirdiği
   zemin sapması eşiği aştığında, gövde ölçümü ya da kayıtlı hizalamanın yeniden yüklenmesi
@@ -1347,10 +1347,9 @@ olmalı, tanınmayan `modeId` reddedilir):
 > **`weaponSource` sunucuyu hiç ilgilendirmez** (§10.3: silah tablosu yok) — telde yalnız
 > istemciye "silahı nasıl vereceksin" diye taşınır.
 
-> ⚠️ **Bu değerin eski adı `"rack"`ti ve yeniden adlandırma `PROTOCOL_VERSION`'ı ARTIRMADI.**
-> Sebep yukarıdaki ayrıştırma kuralıdır: değer `"random"` DEĞİLSE varsayılana düşülür ve varsayılan
-> bu değerin kendisidir. Yani karışık sürüm iki yönde de doğru davranır — yeni sunucunun
-> `"weaponcanvas"`ını eski istemci, eski sunucunun `"rack"`ini yeni istemci aynı yere çözer.
+> ⚠️ **Bu alanın adını değiştirmek `PROTOCOL_VERSION`'ı artırmaz:** değer `"random"` DEĞİLSE
+> varsayılana düşülür ve varsayılan `"weaponcanvas"`ın kendisidir, yani tanınmayan bir yazım
+> karışık sürümde iki yönde de doğru yere çözülür.
 > ⚠️ **Bu serbestlik ÜÇÜNCÜ bir kaynak türü eklenince biter:** o zaman açık bir eşleşme dalı
 > gerekir ve onu tanımayan eski istemci sessizce varsayılana düşer (yanlış silah davranışı) —
 > `PROTOCOL_VERSION` o değişiklikte artar.
@@ -1882,8 +1881,8 @@ Bu yüzden sunucu açılırken **hangi mekanın oynatılacağı seçilir** ve o 
 
 ```
 Hangi mekan açılsın?
-  1) Outdoor12x12  (3 harita)
-  2) VortexAntep   (2 harita)
+  1) <Mekan>   (3 harita)
+  2) <Mekan2>  (2 harita)
 Seçim [1-2]:
 ```
 

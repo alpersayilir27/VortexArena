@@ -5,8 +5,9 @@ namespace VortexArena.Core.Player
 {
     /// <summary>
     /// Uzak avatarın elini <b>elindeki eşyaya oturtur</b>: parmakları eşyanın duruşundan sürer
-    /// (§6.9 — parmaklar telde gitmez) ve kolu, bileği eşyanın kavrama noktasına götürecek biçimde
-    /// çözer (<see cref="TwoBoneIk"/>).
+    /// (§6.9 — parmaklar telde gitmez; boşta <c>Idle</c>, eşya tutarken slotun preset'i, ikisi
+    /// arasında <see cref="HandGripPresets.TransitionSeconds"/>'lik yumuşak geçiş) ve kolu, bileği
+    /// eşyanın kavrama noktasına götürecek biçimde çözer (<see cref="TwoBoneIk"/>).
     /// <para>
     /// <b>Kolun neden sürülmesi gerekiyor:</b> eşya, ana elin <b>kumanda anchor'ı</b> pozundan
     /// çiziliyor (<c>RemoteAvatar.ApplyItemPoses</c>); uzakta çizilen el ise retarget edilmiş
@@ -46,11 +47,66 @@ namespace VortexArena.Core.Player
     [DefaultExecutionOrder(30050)]
     public class RemoteHandPoser : MonoBehaviour
     {
+        /// <summary>
+        /// Bir elin parmak duruşu geçişi — yerel elin (<c>HandGripPoser</c>) uzak aynası: hedef
+        /// duruş değişince o anki gösterilen duruştan yenisine
+        /// <see cref="HandGripPresets.TransitionSeconds"/> boyunca gidilir. Uzak avatarın parmakları
+        /// da böylece silah alınınca kapanır, bırakınca açılır — anında zıplamaz ve yerel elle aynı
+        /// hızda hareket eder.
+        /// </summary>
+        private struct PoseBlend
+        {
+            private HandPoseProfile _from;
+            private HandPoseProfile _target;
+            private HandPoseProfile _shown;
+            private float _progress;
+            private bool _started;
+
+            /// <summary>Hedefi verir, bir karelik ilerlemeyi uygular ve bu karede çizilecek duruşu döner.</summary>
+            public HandPoseProfile Step(in HandPoseProfile target, float deltaTime)
+            {
+                if (!_started)
+                {
+                    // İlk kare: geçiş yok, doğrudan hedefte başla (avatar doğduğunda parmaklar
+                    // boştan kapanıyormuş gibi görünmesin).
+                    _started = true;
+                    _from = target;
+                    _target = target;
+                    _shown = target;
+                    _progress = 1f;
+                    return _shown;
+                }
+
+                if (!target.Approximately(_target))
+                {
+                    _from = _shown;
+                    _target = target;
+                    _progress = 0f;
+                }
+
+                if (_progress < 1f)
+                {
+                    _progress = HandGripPresets.TransitionSeconds > 0f
+                        ? Mathf.Min(1f, _progress + deltaTime / HandGripPresets.TransitionSeconds)
+                        : 1f;
+                    _shown = HandPoseProfile.Lerp(_from, _target, HandGripPresets.Ease(_progress));
+                }
+                else
+                {
+                    _shown = _target;
+                }
+
+                return _shown;
+            }
+        }
+
         private RemoteAvatar _avatar;
         private HandFingerRig _left;
         private HandFingerRig _right;
         private TwoBoneIk _leftArm;
         private TwoBoneIk _rightArm;
+        private PoseBlend _leftBlend;
+        private PoseBlend _rightBlend;
 
         /// <summary>
         /// Karakterin parmak zincirlerini bind pozunda çözer. Çözülemezse bileşen kendini kapatır:
@@ -105,8 +161,9 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            _left.Apply(_avatar.ResolveHandPose(false));
-            _right.Apply(_avatar.ResolveHandPose(true));
+            float dt = Time.deltaTime;
+            _left.Apply(_leftBlend.Step(_avatar.ResolveHandPose(false), dt));
+            _right.Apply(_rightBlend.Step(_avatar.ResolveHandPose(true), dt));
 
             ApplyGrip(_left, _leftArm, false);
             ApplyGrip(_right, _rightArm, true);

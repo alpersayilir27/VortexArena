@@ -90,7 +90,9 @@ namespace VortexArena.App
         // ------------------------------------------------------------- canvas/kök
 
         /// <summary>
-        /// Ekran-uzayı overlay canvas'ı kurar (1920x1080 referans, yarı yarıya eşleme).
+        /// Ekran-uzayı overlay canvas'ı kurar (1920x1080 referans, <c>Expand</c> eşleme:
+        /// arayüz 16:9 için tasarlanır — <c>AdminHud.prefab</c>'ın canvas'ıyla aynı kural — ve
+        /// başka bir oranda kırpılmak yerine kenarda boşluk bırakır).
         /// <paramref name="sortingOrder"/> ekranlar arası öncelik: admin HUD 4000,
         /// bağlantı hata ekranı 5000 (hata her zaman üstte kalmalı).
         /// </summary>
@@ -103,8 +105,7 @@ namespace VortexArena.App
             var scaler = root.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
 
             root.AddComponent<GraphicRaycaster>();
             return canvas;

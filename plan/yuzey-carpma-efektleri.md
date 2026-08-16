@@ -6,7 +6,7 @@ title: Yüzey çarpma efektleri
 
 Mermi neye çarptıysa **o yüzeyin** parçacığı ve sesi çıkar: kar duvarda kar püskürür, tahtada
 talaş, metalde kıvılcım. Bugün efekt yüzeye değil **silaha** bağlı (`Weapon.hitEffectPrefab`,
-altı `WPN_*` prefabının hepsinde aynı `FX_HitSpark`) ve atış başına `Instantiate`/`Destroy`
+`WPN_*` prefablarının hepsinde aynı `FX_HitSpark`) ve atış başına `Instantiate`/`Destroy`
 yapıyor.
 
 ## Verilmiş kararlar
@@ -67,8 +67,8 @@ ikinci bir doğruluk kaynağı olurdu.
       `FX_HitSpark.prefab` `default` yüzeyin prefabı olarak kalır.
 - [ ] `RemoteShotFx`: tracer'ın ucunda aynı ışını atıp `SurfaceImpactFx.Play` çağır. Işın
       `distanceMeters + ε` uzunluğunda; isabet yoksa efekt yok (mermi boşluğa gitti).
-- [ ] Yüzey seti + prefabları: kar, tahta, metal, beton, toprak, `default`. `IceWorld`'ün
-      materyalleri kütüphaneye eşlenir.
+- [ ] Yüzey seti + prefabları: kar, tahta, metal, beton, toprak, `default`. Oynanan arenaların
+      environment materyalleri kütüphaneye eşlenir.
 - [ ] Oyuncuya isabet: kütüphaneye `body` tanımı, `RemoteHitBox` taşıyan collider ona eşlenir —
       kan/darbe efekti ayrı bir kod yolu açmadan gelir.
 

@@ -17,11 +17,7 @@ Bu dosya yalnız **elde kalan doğrulamayı** tutuyor; hepsi geçince silinir.
       `AdminPreferencesPanel`
 - [x] `dotnet build Server/` temiz (0 uyarı, 0 hata)
 
-## 2. Tercihler paneli (prefab elle düzenlendi — `AdminHud.prefab`)
-
-⚠️ Panelde bu iş sırasında bir **kusur düzeltildi**: "Geri sayim" satırı "Skor limiti" ile birebir
-aynı koordinattaydı (üst üste biniyorlardı). Satırlar 40 px aralıkla yeniden dizildi, altındaki her
-şey 80 px kaydı, kart 1000 → 1040 px büyüdü.
+## 2. Tercihler paneli (`AdminHud.prefab`)
 
 - [ ] MAÇ bölümünde satırlar üst üste binmiyor: Mod · Harita · Süre · Skor limiti · Geri sayim ·
       **Dost atesi**

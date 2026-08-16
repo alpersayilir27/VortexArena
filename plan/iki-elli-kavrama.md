@@ -65,8 +65,9 @@ Kapsam: `WeaponKitBuilder` tablosundaki **tüm** `WPN_*`'lar; hangilerinin eksik
 - [ ] **Sol el kaydı ayrı doğrulanır:** aynı silah sol elde de kabzada duruyor, içine gömülmüyor.
 - [ ] **Ön kabzada ikinci el silaha yapışık kalıyor:** grip basılıyken kol uzatılıp toplanınca el
       silahtan kopmuyor (kolun gerilmesi beklenen davranıştır).
-- [ ] **Tetik çekilince işaret parmağı kıpırdıyor** (`Firing` preset'inde işaret serbest, kalan
-      dördü kabzayı sarıyor); boş elde parmaklar `Idle` duruşunda.
+- [ ] **Parmaklar donanımdan OYNAMIYOR:** tetik/kabza basılınca ya da parmak kumandaya değince
+      hiçbir parmak kıpırdamıyor; boş elde parmaklar `Idle` duruşunda, silahı alınca el
+      `Idle`'dan slotun preset'ine yumuşakça kapanıyor (~0.15 s), bırakınca geri açılıyor.
 - [ ] Uzak avatarın parmakları o slotun preset'iyle çiziliyor (stüdyoda `Grip` seçilen ön kabza elde
       uzakta da sarılı).
 - [ ] İkinci admin ekranında **uzak** oyuncunun silahının duruşu sapmıyor (iki uç aynı kaydı okuyup

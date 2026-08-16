@@ -479,8 +479,10 @@ dönüş kaydın kendisidir.
    parçasının üstüne makul bir başlangıçla konur.
 4. Elleri Scene View'da sürükle/çevir: avuç kabzaya otursun, işaret parmağı tetiğe ulaşsın.
 5. Elin Inspector'ından (`GripHandAuthoring`) **parmak preset'ini** seç: `Idle` · `Firing` (işaret
-   tetikte serbest) · `Grip` (sarma). Değişiklik Scene View'da anında görünür. Varsayılan ana
-   kabzada `Firing`, ön kabzada `Grip`'tir.
+   tetikte) · `Grip` (sarma). Değişiklik Scene View'da anında görünür. Varsayılan ana kabzada
+   `Firing`, ön kabzada `Grip`'tir. Üçü de sabit duruştur — oyunda gördüğün el tezgâhtaki elin
+   aynısıdır, hiçbir parmak kumandadan/el izlemesinden oynamaz; silahı alınca el `Idle`'dan bu
+   duruşa yumuşakça kapanır, bırakınca geri açılır.
 6. İstersen **Karşı Ele Aynala** ile öteki eli başlat, sonra elle düzelt.
 7. **Kaydet** (pencereden ya da elin Inspector'ından) → yaşayan **her el** `WD_*.asset`'e yazılır
    (Undo'lu). **Elleri Temizle** tezgâhı toplar.
@@ -870,8 +872,7 @@ Vector3 dunyaPos = ArenaSpace.ArenaToWorld(gelenPoz);
 ## 17. Arena ölçüsü: boyut dosyası
 
 Ölçü bir **boyut dosyasına** yazılır (`ArenaDimensions` — elle düzenlenebilir JSON) ve dosya
-**MEKAN başınadır**: `Venues/<İşletme>/Data/<İşletme>_dimensions.json`, ör.
-`Arenas/Venues/VortexAntep/Data/VortexAntep_dimensions.json`. Bir işletmede hep aynı fiziksel alan
+**MEKAN başınadır**: `Venues/<İşletme>/Data/<İşletme>_dimensions.json`. Bir işletmede hep aynı fiziksel alan
 oynatıldığı için o mekanın **tüm** sahneleri (arenalar + lobi) `ArenaBoundary.dimensionsJson`
 alanında **aynı** dosyayı gösterir — sahne başına kopya kaçınılmaz olarak sapar. İçerik **çalışma
 anında** okunur.
@@ -894,7 +895,7 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
 
 ```json
 {
-  "name": "VortexAntep",
+  "name": "<İşletme>",
   "plane": [
     { "x": 0.00, "y": 0.00 },
     { "x": 8.32, "y": 0.00 },

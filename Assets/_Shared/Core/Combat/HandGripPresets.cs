@@ -6,13 +6,22 @@ namespace VortexArena.Core.Combat
 {
     /// <summary>
     /// Parmak preset'lerinin (<see cref="HandGripPreset"/>) tek dağıtım kapısı: oranları
-    /// (<see cref="HandPoseProfile"/>), ISDK sentetik eli için eklem dönüşlerini ve o elin
-    /// serbestlik dizisini üretir.
+    /// (<see cref="HandPoseProfile"/>), ISDK sentetik eli için eklem dönüşlerini ve duruşlar
+    /// arası geçişin süresini/eğrisini verir.
     /// <para>
     /// <b>Neden tek kapı:</b> aynı üç duruş üç ayrı iskelette çiziliyor (yerel sentetik el,
     /// stüdyodaki hayalet el, uzak avatarın Mixamo eli). Her biri kendi eksenini kendi bind
     /// pozundan ölçüyor ama "ne kadar kapanacağı" tek yerden geliyor — stüdyoda görülen el ile
     /// oyunda görülen elin aynı olmasının şartı bu.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Parmaklar HİÇBİR ZAMAN donanımdan sürülmez</b> — ne kumandanın tetiğinden/kabzasından
+    /// ne el izlemesinden. Bir elin parmak duruşu her karede yalnız bir preset'tir (boşta
+    /// <see cref="HandGripPreset.Idle"/>, eşya tutarken slotun preset'i) ve preset'ler arası geçiş
+    /// <see cref="TransitionSeconds"/> içinde yumuşatılır. Serbest bırakılan bir parmak
+    /// (<c>JointFreedom.Free</c>) diye bir kavram bu sınıfta YOKTUR ve geri gelmez: tek bir parmağı
+    /// bile donanıma bırakmak, stüdyoda görülen el ile oyunda görülen elin o parmakta ayrışması
+    /// demektir.
     /// </para>
     /// <para>
     /// ⚠️ <b>Eklem dönüşleri SABİT YAZILMAZ, ISDK'nın kendi iskeletinden ÖLÇÜLÜR</b>
@@ -78,31 +87,26 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Preset'in parmak serbestlik dizisi (uzunluk 5, <see cref="HandFinger"/> sırasında).
+        /// Bir preset'ten ötekine geçişin süresi (saniye) — boş elin <see cref="HandGripPreset.Idle"/>'dan
+        /// kavrama duruşuna kapanması ve bırakınca geri açılması bu kadar sürer.
         /// <para>
-        /// <b><see cref="HandGripPreset.Firing"/>'de işaret parmağı <see cref="JointFreedom.Free"/>
-        /// kalır</b>: tetik parmağının kıvrımı yazılmış bir duruş değil, kumandanın analog
-        /// girdisidir — kilitlenirse oyuncu ateş ederken parmağının kıpırdamadığını görür. Kalan
-        /// dört parmak kabzayı sardığı için kilitlidir.
+        /// ⚠️ <b>Tek sayı, iki uç:</b> yerel sentetik el (<see cref="HandGripPoser"/>) ve uzak
+        /// avatarın eli (<c>RemoteHandPoser</c>) aynı süreyi kullanır — aynı kavrama iki ekranda
+        /// farklı hızda kapanmasın. Süre kısa tutulur: silah zaten ele anında geliyor
+        /// (<c>Weapon.ApplyCanonicalGrip</c>), parmaklar ondan görünür biçimde geç kalırsa el bir
+        /// an silahın içinden geçer.
         /// </para>
-        /// <para>⚠️ Her çağrıda <b>YENİ dizi</b> döner: serbestlik seviyesi sentetik elde kalıcıdır
-        /// ve çağıranlardan biri paylaşılan diziyi düzeltseydi öteki elin duruşu sessizce
-        /// değişirdi.</para>
         /// </summary>
-        public static JointFreedom[] Freedom(HandGripPreset preset)
+        public const float TransitionSeconds = 0.15f;
+
+        /// <summary>
+        /// Geçiş eğrisi: <c>0..1</c> ilerlemeyi yumuşatılmış (smoothstep) karışım oranına çevirir.
+        /// İki uç da aynı eğriyi kullanır (<see cref="TransitionSeconds"/> ile aynı gerekçe).
+        /// </summary>
+        public static float Ease(float progress)
         {
-            var freedom = new JointFreedom[FingerCount];
-            for (int i = 0; i < FingerCount; i++)
-            {
-                freedom[i] = JointFreedom.Locked;
-            }
-
-            if (preset == HandGripPreset.Firing)
-            {
-                freedom[(int)HandFinger.Index] = JointFreedom.Free;
-            }
-
-            return freedom;
+            float t = Mathf.Clamp01(progress);
+            return t * t * (3f - 2f * t);
         }
 
         /// <summary>

@@ -19,7 +19,6 @@ hareket yoktur. Meta Quest 3/3S, Unity 6000.3.20f1, URP. Ağ tarafı kendi .NET 
 | Sistemi bütün olarak anlamak istiyorum | [Sistem Özeti](Sistem-Ozeti.md) — ne var, nasıl çalışıyor, hangi bileşen ne yapıyor |
 | İşletmede seansı ben yöneteceğim | [Kullanım Kılavuzu](Kullanim-Kilavuzu.md) — teknik olmayan dille operatör kılavuzu |
 | Yeni bir işletmeye kurulum yapacağım | [İşletme Kurulumu](Isletme-Kurulum.md) — donanım, ağ, kalibrasyon, smoke test |
-| Çatılı bir arena yapıyorum | [Çatı Gizleme](Cati-Gizleme.md) |
 
 ---
 
