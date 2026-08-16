@@ -26,6 +26,15 @@ düşer ve sabit kimlik kaldığı sürece uzak silahları deltanın dönüşü 
 
 ---
 
+## 1c. `Build Weapon Prefabs`'ı bir kez çalıştır (prefab temizliği + gösterge)
+
+`Tools > VortexArena > Weapons > Build Weapon Prefabs` — 13 `WPN_*` kökündeki eksik script kaydını ve
+`_interactorFilters` girişlerini temizler (kalırsa ISDK `Start`'ta assert atar, silah kavranamaz),
+`VA_GripIndicator.prefab` + `M_GripIndicator.mat`'ı üretir ve kataloğa bağlar. Sonuçta değişen
+prefab/asset'ler commit'e girer.
+
+---
+
 ## 2. 13 silahın kavramasını YAZ
 
 ⚠️ Kavraması yazılmamış silahta el `Idle`'da kalır ve **iki elli çözüm de koşmaz**: ön kabza ekseni
@@ -52,7 +61,8 @@ Kapsam: `WeaponKitBuilder` tablosundaki **tüm** `WPN_*`'lar; hangilerinin eksik
       kumandayla serbestçe dönüyor, kilitlenmiyor.
 - [ ] Stüdyoda **oluştur → hiçbir şeye dokunma → Kaydet** kayıtlı değeri değiştirmiyor (kimlik
       testi).
-- [ ] Boş el ön kabzaya yaklaşınca soket **mavi**, kabul mesafesinde **yeşil** ve büyük.
+- [ ] Boş el ön kabzaya yaklaşınca gösterge (`VA_GripIndicator`) **mavi**, kabul mesafesinde
+      **yeşil** ve büyük; ikinci el bağlanınca kayboluyor. Ana kabzada gösterge YOK.
 - [ ] Grip'e basınca silahın yönü ikinci ele döner; bırakınca ~0.08 sn'de yumuşak geri gelir.
 - [ ] **Bağ yalnız tuşla kopar:** ön kabza tutulduktan sonra grip'e basılı tutarken kol uzatılıp
       toplanınca, silah yukarı/aşağı/yana çevrilince ve gövde döndürülünce bağ **kopmuyor**;
@@ -76,6 +86,6 @@ Kapsam: `WeaponKitBuilder` tablosundaki **tüm** `WPN_*`'lar; hangilerinin eksik
       geliyor (eski silaha kilitlenme yok). Çift elli seçimde elde her zaman **tek** silah kalıyor.
 - [ ] FFA'da bir elde çift elli silah varken öteki ele ikinci bir silah **verilmiyor** (o el ön
       kabzaya aday oluyor).
-- [ ] FFA'da (`random`) verilen tüfeğin ön kabzası tutulabiliyor ve ikincil soket çiziliyor.
+- [ ] FFA'da (`random`) verilen tüfeğin ön kabzası tutulabiliyor ve göstergesi çiziliyor.
 - [ ] Tek elli yol: bir `WD_*` kopyasında `holdMode = OneHand` → iki elde iki klon, ayrı şarjör.
       (Kayıtlı silahların hepsi `TwoHand` olduğu için bu yol başka türlü görünmez.)

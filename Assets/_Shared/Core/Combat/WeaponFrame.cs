@@ -22,7 +22,7 @@ namespace VortexArena.Core.Combat
     /// verirdi.
     /// </para>
     /// <para>
-    /// <b>Kapı ISDK'nın kendi uzatma noktasıdır</b> (<see cref="ItemGripSockets"/> ile aynı desen):
+    /// <b>Kapı ISDK'nın kendi uzatma noktasıdır</b>:
     /// bu bileşen bir <see cref="IGameObjectFilter"/>'dır ve çerçevenin mesafe-kavrama
     /// bileşenlerinin <c>_interactorFilters</c> listesine yazılır — mesafe kapısını
     /// <see cref="Filter"/> uygular, seçimin ALGISI ISDK'da kalır.
@@ -49,7 +49,7 @@ namespace VortexArena.Core.Combat
     public class WeaponFrame : MonoBehaviour, IGameObjectFilter
     {
         /// <summary>Nişan ışını materyalinin shader arama zinciri (ilk bulunan kullanılır).</summary>
-        // ⚠️ Zincir ItemGripSockets/ShotTracer'daki ile BİREBİR aynı ve "Sprites/Default" başta
+        // ⚠️ Zincir ShotTracer'daki ile BİREBİR aynı ve "Sprites/Default" başta
         // duruyor: o shader Graphics Settings'in *Always Included Shaders* listesinde varsayılan
         // olarak bulunur → build'de kesin paketlenir (çalışma anında Shader.Find ile bulunan,
         // hiçbir materyalde referanslanmayan shader STRIPLENİR ve gösterge sahada sessizce
@@ -290,9 +290,9 @@ namespace VortexArena.Core.Combat
         /// Çerçevedeki silahı yerine çiviler: fizik kapatılır, YAKIN kavrama yolları tümden kapanır.
         /// <para>
         /// Karar: çerçevedeki silah <b>YALNIZ uzaktan</b> seçilir. Bu yüzden
-        /// <see cref="Grabbable"/>/<see cref="GrabInteractable"/> ile birlikte
-        /// <see cref="ItemGripSockets"/> de kapatılır — soket halkası çizilseydi "buradan tut" diye
-        /// yalan söylerdi (kapı zaten kapalı olduğu için hiçbir kavrama kabul edilmezdi).
+        /// <see cref="Grabbable"/>/<see cref="GrabInteractable"/> kapatılır. Ön kabza göstergesi için
+        /// ayrıca bir şey yapılmaz: <see cref="Weapon"/> onu yalnız TUTULAN silahta çizer, çerçevedeki
+        /// kaynak tutulmadığı için gösterge orada kendiliğinden yoktur.
         /// </para>
         /// <para>
         /// ⚠️ Tarama YALNIZ parent silahın ağacında yapılır ve <b>çerçevenin kendi alt ağacı ATLANIR</b>:
@@ -327,8 +327,7 @@ namespace VortexArena.Core.Combat
                 // ⚠️ Kumanda ve el hattı BİRLİKTE kapatılır: biri açık kalırsa sahnedeki donmuş
                 // silah çerçeveyi atlayarak doğrudan kavranabilir hale gelir.
                 if (behaviour is Grabbable || behaviour is GrabInteractable ||
-                    behaviour is HandGrabInteractable || behaviour is DistanceHandGrabInteractable ||
-                    behaviour is ItemGripSockets)
+                    behaviour is HandGrabInteractable || behaviour is DistanceHandGrabInteractable)
                 {
                     behaviour.enabled = false;
                 }
@@ -707,9 +706,8 @@ namespace VortexArena.Core.Combat
         /// <c>WeaponGranter.TickHand</c>'dir (rastgele dağıtım yolu, öteki el).
         /// </para>
         /// <para>
-        /// ⚠️ <b>El/anchor çözülemezse FAIL-OPEN</b> (izin verilir), gerekçesi
-        /// <c>ItemGripSockets.Filter</c>'daki ile birebir aynı: bu bir emniyet kapısı değil bir HİS
-        /// kapısıdır — editör oturumunda kontrolcü çözülemez ve fail-close olsaydı silah editörde
+        /// ⚠️ <b>El/anchor çözülemezse FAIL-OPEN</b> (izin verilir): bu bir emniyet kapısı değil bir
+        /// HİS kapısıdır — editör oturumunda kontrolcü çözülemez ve fail-close olsaydı silah editörde
         /// hiç seçilemez, yani sahne testi imkânsız hale gelirdi.
         /// </para>
         /// </summary>

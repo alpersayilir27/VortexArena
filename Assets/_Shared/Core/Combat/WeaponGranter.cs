@@ -102,8 +102,8 @@ namespace VortexArena.Core.Combat
         /// Ön kabza <b>kilidi</b>: hangi silahın ikincil soketine hangi el bağlandı.
         /// <para>
         /// ⚠️ <b>Bağın KURULMASI ile SÜRDÜRÜLMESİ ayrı kurallardır</b> ve bu alan ayrımın kendisidir.
-        /// Kurulma mesafeye bakar (<see cref="IsPalmOnSecondarySocket"/> — oyuncuya yeşile dönen
-        /// soket neyi vaat ediyorsa o), sürdürme <b>yalnız grip tuşuna</b>. Sürdürme de mesafeye
+        /// Kurulma mesafeye bakar (<see cref="Weapon.IsHandOnSecondaryGrip"/> — oyuncuya yeşile dönen
+        /// gösterge neyi vaat ediyorsa o), sürdürme <b>yalnız grip tuşuna</b>. Sürdürme de mesafeye
         /// baksaydı bağ oyuncu tuşu bırakmadan kopardı: iki elli çözüm silahı ikinci ele doğru
         /// KAYDIRMAZ, yalnız nişanlar — yani soket ile avuç arasındaki fark her zaman
         /// <i>|ellerin arası − silahın kavrama arası|</i> kadardır ve oyuncu kolunu uzatıp
@@ -499,7 +499,7 @@ namespace VortexArena.Core.Combat
         /// </para>
         /// <para>
         /// ⚠️ Çerçeve klonunun karşılığı <see cref="PrepareSummonedClone"/>'dur ve kavrama tarafında
-        /// AYNI kapıyı uygular; farkı yalnız soket göstergesini açık bırakmasıdır. İkinci elin
+        /// AYNI kapıyı uygular; farkı collider'lara dokunmamasıdır. İkinci elin
         /// algısı iki yolda da granter'ındır (<see cref="Weapon.SetSecondaryHand"/>).
         /// </para>
         /// </summary>
@@ -650,8 +650,9 @@ namespace VortexArena.Core.Combat
         /// Ön kabza bağının bir karelik cevabı: bu el şu an <paramref name="weapon"/>'ın ikincil
         /// soketini tutuyor mu.
         /// <para>
-        /// <b>İki ayrı kural:</b> bağ <b>KURULURKEN</b> avuç soketin kabul yarıçapında olmalı
-        /// (<see cref="IsPalmOnSecondarySocket"/>) — gösterge oyuncuya tam bunu vaat ediyor. Bağ
+        /// <b>İki ayrı kural:</b> bağ <b>KURULURKEN</b> avuç ön kabzanın kabul yarıçapında olmalı
+        /// (<see cref="Weapon.IsHandOnSecondaryGrip"/> — kural silahta yaşar, gösterge de aynı
+        /// ölçüyle yeşile döner) — gösterge oyuncuya tam bunu vaat ediyor. Bağ
         /// <b>SÜRERKEN</b> tek şart grip tuşunun basılı kalmasıdır: ne mesafe ne açı yoklanır.
         /// </para>
         /// <para>
@@ -672,7 +673,7 @@ namespace VortexArena.Core.Combat
         {
             bool latched = _secondaryLatchWeapon == weapon && _secondaryLatchHand == hand;
             bool linked = gripHeld && weapon != null &&
-                          (latched || IsPalmOnSecondarySocket(weapon, hand));
+                          (latched || weapon.IsHandOnSecondaryGrip(hand));
 
             if (linked)
             {
@@ -689,35 +690,6 @@ namespace VortexArena.Core.Combat
             }
 
             return OVRInput.Controller.None;
-        }
-
-        /// <summary>
-        /// Bu elin AVUCU silahın ikincil soketinin kabul yarıçapında mı — ön kabza kavramasının
-        /// <b>KURULMA</b> kapısı (sürdürme kapısı değil, bkz. <see cref="ResolveSecondaryHand"/>).
-        /// Ölçü <see cref="ItemGripSockets"/>'in çizim/kapı ölçüsüyle aynıdır
-        /// (<c>SecondaryGripRadius</c>): oyuncuya "şimdi bas" diye yeşile dönen soket sessizce
-        /// reddedilmesin.
-        /// </summary>
-        private static bool IsPalmOnSecondarySocket(Weapon weapon, OVRInput.Controller hand)
-        {
-            ItemDefinition definition = weapon != null ? weapon.Definition : null;
-            if (definition == null || !definition.IsTwoHanded)
-            {
-                return false;
-            }
-
-            if (!TryResolvePalm(hand, out Pose palm))
-            {
-                return false;
-            }
-
-            // TransformPoint DEĞİL: soket ofseti METRE cinsindendir, ölçeklenmez.
-            // Yakalama el başına yazıldığı için soket noktası SORAN elin kaydından okunur.
-            Transform item = weapon.transform;
-            Vector3 socket = item.position +
-                             item.rotation * definition.SecondaryGripPosition(HandGripPivot.IsRight(hand));
-            float radius = definition.SecondaryGripRadius;
-            return (palm.position - socket).sqrMagnitude <= radius * radius;
         }
 
         private void ApplySelection(WeaponDefinition definition)
@@ -960,8 +932,7 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Klonu ele hazırlar: fizik ve <b>kavramanın TAMAMI kapatılır</b>, yalnız soket GÖRSELİ
-        /// (<see cref="ItemGripSockets"/>) açık kalır.
+        /// Klonu ele hazırlar: fizik ve <b>kavramanın TAMAMI kapatılır</b>.
         /// <para>
         /// ⚠️ <b>Kavrama bileşenleri bilerek AÇILMAZ:</b> verilen silahta ikinci elin algısının TEK
         /// kaynağı granter'ın grip yoklamasıdır (<see cref="Weapon.SetSecondaryHand"/>). ISDK hattı
@@ -969,9 +940,9 @@ namespace VortexArena.Core.Combat
         /// <c>GRIP_LINKED</c> iki ayrı yoldan yazılır ve biri bırakınca durum yarım kalırdı.
         /// </para>
         /// <para>
-        /// <see cref="ItemGripSockets"/> AÇIK kalır çünkü o bir kavrama yolu değil bir GÖSTERGEDİR:
-        /// oyuncunun ön kabzayı nereden tutacağını görmesi gerekir (kapı işlevi verilen silahta
-        /// artık boşa çalışır, çizim işlevi değil).
+        /// Ön kabza göstergesi için burada iş YOKTUR: onu <see cref="Weapon"/>'ın kendisi sürer
+        /// (<c>TickSecondaryGripIndicator</c>) ve yalnız tutulan silahta çizer — klon ele gelince
+        /// kendiliğinden devreye girer.
         /// </para>
         /// </summary>
         private static void PrepareSummonedClone(GameObject instance)
@@ -980,16 +951,9 @@ namespace VortexArena.Core.Combat
             for (int i = 0; i < behaviours.Length; i++)
             {
                 MonoBehaviour behaviour = behaviours[i];
-                if (behaviour is ItemGripSockets)
-                {
-                    // ⚠️ Açıkça AÇILIR: klon prefabtan doğarken içindeki WeaponFrame'in Awake'i
-                    // çoktan koşmuş ve göstergeyi kapatmış olur (kaynak silahtaki doğru davranış
-                    // klonda yanlış davranıştır).
-                    behaviour.enabled = true;
-                }
-                else if (behaviour is Grabbable || behaviour is GrabInteractable ||
-                         behaviour is HandGrabInteractable ||
-                         behaviour is DistanceGrabInteractable || behaviour is DistanceHandGrabInteractable)
+                if (behaviour is Grabbable || behaviour is GrabInteractable ||
+                    behaviour is HandGrabInteractable ||
+                    behaviour is DistanceGrabInteractable || behaviour is DistanceHandGrabInteractable)
                 {
                     behaviour.enabled = false;
                 }
@@ -1107,9 +1071,9 @@ namespace VortexArena.Core.Combat
         /// <see cref="InteractorControllerDecorator"/> ile kurar. Çözülemezse
         /// <see cref="OVRInput.Controller.None"/> döner (editör fallback işareti).
         /// <para>
-        /// ⚠️ <b>El çözümünün TEK yeri burasıdır</b> ve kopyalanmaz: üç tüketicisi var
-        /// (<see cref="Weapon"/>, <see cref="ItemGripSockets"/>, <see cref="WeaponFrame"/>) ve
-        /// kopyalandığı sürece biri düzeltilip diğerleri unutuluyordu. Burada durmasının sebebi de
+        /// ⚠️ <b>El çözümünün TEK yeri burasıdır</b> ve kopyalanmaz: iki tüketicisi var
+        /// (<see cref="Weapon"/>, <see cref="WeaponFrame"/>) ve
+        /// kopyalandığı sürece biri düzeltilip diğeri unutuluyordu. Burada durmasının sebebi de
         /// rig keşfiyle aynı: el ve anchor aynı kapıdan çözülsün.
         /// </para>
         /// </summary>
@@ -1230,7 +1194,7 @@ namespace VortexArena.Core.Combat
         /// el çözülemezse <c>false</c>.
         /// <para>
         /// ⚠️ <b>Avuç noktasını hesaplayan tek yer burasıdır</b> ve avuca bakan her tüketici
-        /// (kanonik kavrama, soket mesafesi, çerçeve mesafesi, ön kabza kapısı) buradan geçer:
+        /// (kanonik kavrama, ön kabza kapısı ve göstergesi, çerçeve mesafesi) buradan geçer:
         /// ikinci bir yol açılırsa ofset iki yerde yaşar ve biri güncellenip öteki unutulur.
         /// </para>
         /// </summary>

@@ -65,12 +65,12 @@ namespace VortexArena.Core.Combat
         // ⚠️ [Range] KOYULMAZ — dosyanın başındaki netItemId uyarısındaki tuzağın aynısı: Range
         // drawer'ı değeri kendi varsayılan sınırlarına sessizce clamp'ler VE asset'i dirty yapar,
         // yani Inspector'da açılan her tanım farkında olmadan başka bir yarıçapla commit'lenir.
-        // Alt sınır property'lerde uygulanıyor.
-        [Tooltip("Ana kavrama soketinin yarıçapı (m): grip basışının KABUL edildiği mesafe. " +
-                 "Silah başına ayarlanır — tabanca kabzası ile tüfek ön kabzası aynı büyüklükte değil.")]
-        [SerializeField] private float primaryGripRadius = 0.12f;
-
-        [Tooltip("Ön kabza soketinin yarıçapı (m) — yalnız TwoHand'de anlamlı.")]
+        // Alt sınır property'de uygulanıyor.
+        // ⚠️ ANA kabza için yarıçap YOKTUR: silah ana ele verilerek/çağrılarak geliyor, oyuncunun
+        // elini ana kabzaya götürmesi diye bir adım yok — okuyanı olmayan ölçü bayatlar.
+        [Tooltip("Ön kabzanın kabul yarıçapı (m): boş elin avucu bu mesafeye girip grip'e basınca ikinci el " +
+                 "ön kabzaya bağlanır; gösterge de bu mesafede yeşile döner. Yalnız TwoHand'de anlamlı. " +
+                 "Silah başına ayarlanır — tüfek ön kabzaları aynı büyüklükte değil.")]
         [SerializeField] private float secondaryGripRadius = 0.12f;
 
         // ⚠️ Parmak duruşu için AYRI bir alan YOKTUR ve açılmaz: duruş kavrama kaydının PARÇASIDIR
@@ -208,8 +208,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Ana kavrama noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — soket çiziminin ve
-        /// yakınlık ölçümünün ihtiyacı budur.
+        /// Ana kavrama noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — uzak elin avuç hedefi
+        /// (<c>RemoteAvatar.TryResolveGripPalm</c>) bunu okur.
         /// <para>⚠️ <b>Ayrı bir alan DEĞİL, kaydın kendisidir:</b> kayıt zaten "bilek eşyanın
         /// neresinde" sorusunu cevaplıyor. İkinci bir serialize alan açılırsa aynı nokta iki yerde
         /// yaşar ve biri güncellenip diğeri unutulur.</para>
@@ -316,17 +316,13 @@ namespace VortexArena.Core.Combat
 #endif
 
         /// <summary>
-        /// Ana kavrama soketinin yarıçapı (metre): grip basışının KABUL edildiği mesafe.
-        /// <para>⚠️ <b>Alt sınır 1 cm'dir ve öyle kalmalı:</b> sıfır (ya da eksi) yarıçap soketi
-        /// matematiksel olarak kavranamaz yapar — sahada bu bir hata olarak DEĞİL "silah alınamıyor"
-        /// olarak görünür, yani teşhisi pahalı. Ayarlanmamış/sıfırlanmış bir asset bu sayede yine
-        /// çalışır kalır.</para>
-        /// </summary>
-        public float PrimaryGripRadius => Mathf.Max(0.01f, primaryGripRadius);
-
-        /// <summary>
-        /// Ön kabza soketinin yarıçapı (metre) — yalnız <see cref="IsTwoHanded"/> iken anlamlı.
-        /// Alt sınır gerekçesi <see cref="PrimaryGripRadius"/>'te.
+        /// Ön kabzanın kabul yarıçapı (metre): boş elin avucu bu mesafedeyken grip basışı ikinci eli
+        /// ön kabzaya bağlar (<c>Weapon.IsHandOnSecondaryGrip</c>) — yalnız <see cref="IsTwoHanded"/>
+        /// iken anlamlı.
+        /// <para>⚠️ <b>Alt sınır 1 cm'dir ve öyle kalmalı:</b> sıfır (ya da eksi) yarıçap ön kabzayı
+        /// matematiksel olarak kavranamaz yapar — sahada bu bir hata olarak DEĞİL "ikinci el
+        /// tutmuyor" olarak görünür, yani teşhisi pahalı. Ayarlanmamış/sıfırlanmış bir asset bu
+        /// sayede yine çalışır kalır.</para>
         /// </summary>
         public float SecondaryGripRadius => Mathf.Max(0.01f, secondaryGripRadius);
 
