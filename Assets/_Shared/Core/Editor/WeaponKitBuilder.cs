@@ -72,31 +72,39 @@ namespace VortexArena.Core.Editor
         private const string WeaponFramePrefabPath = PrefabDir + "/VA_WeaponFrame.prefab";
 
         /// <summary>
-        /// Ön kabza göstergesinin SANATI — tüm silahların paylaştığı tek prefab; <c>Weapon</c> onu
-        /// boş elin yaklaştığı ön kabzaya koyar (<c>WeaponCatalog.secondaryGripIndicatorPrefab</c>).
+        /// Ön kabza SOKETİNİN sanatı — tüm silahların paylaştığı tek prefab; <c>Weapon</c> onu boş
+        /// elin yaklaştığı ön kabza noktasına koyar (<c>WeaponCatalog.secondaryGripIndicatorPrefab</c>).
+        /// <para>
+        /// <b>Sözleşme: prefab 1 m ÇAPINDA tasarlanır</b> (Unity küre primitifinin ölçüsü);
+        /// <c>Weapon</c> onu kabul yarıçapının iki katına ölçekler — yani çizilen küre TAM OLARAK
+        /// kabul hacmidir: bilek kürenin içindeyken grip ikinci eli bağlar, dışındayken bağlamaz.
+        /// Görsel ile kural ayrı sayılara bağlansaydı oyuncuya "içindesin" denen yerde kavrama
+        /// reddedilebilirdi.
+        /// </para>
         /// <para>Bu araç prefabı <b>yalnız yoksa</b> üretir (<see cref="EnsureGripIndicatorPrefab"/>:
-        /// ince bir halka) ve kataloğa <b>yalnız alan boşsa</b> bağlar — sanatçı halkayı yerinde
-        /// değiştirebilir ya da kataloğa başka bir prefab bağlayabilir, araç ikisini de ezmez.</para>
+        /// yarı saydam açık mavi küre) ve kataloğa <b>yalnız alan boşsa</b> bağlar — sanatçı küreyi
+        /// yerinde değiştirebilir ya da kataloğa başka bir prefab bağlayabilir, araç ikisini de
+        /// ezmez.</para>
         /// </summary>
         private const string GripIndicatorPrefabPath = PrefabDir + "/VA_GripIndicator.prefab";
         private const string GripIndicatorMaterialDir = "Assets/_Shared/Materials";
         private const string GripIndicatorMaterialPath = GripIndicatorMaterialDir + "/M_GripIndicator.mat";
 
-        // Varsayılan halkanın ölçüleri (yalnız ilk üretimde okunur; sonrası prefabın kendisidir).
-        // Yarıçap "kabul mesafesi" DEĞİLDİR (o WD_*'da, silah başına ve çok daha büyüktür) — bu,
-        // oyuncunun elini götüreceği NOKTAYI işaretleyen görselin büyüklüğüdür.
-        private const float GripIndicatorRingRadius = 0.035f;
-        private const int GripIndicatorRingSegments = 20;
-        private const float GripIndicatorRingWidth = 0.004f;
+        /// <summary>
+        /// Varsayılan soket küresinin rengi: açık mavi, %70 saydam (yalnız ilk üretimde yazılır;
+        /// sonrası materyalin kendisidir). Çalışma anında <c>Weapon</c> alfayı sürer (yaklaşma /
+        /// içeride), rengin kendisine dokunmaz.
+        /// </summary>
+        private static readonly Color GripIndicatorColor = new Color(0.55f, 0.82f, 1f, 0.30f);
 
-        /// <summary>Halka materyalinin shader arama zinciri (ilk bulunan). "Sprites/Default" başta:
-        /// vertex rengini çarpar (LineRenderer.startColor işler) ve materyal ASSET olarak durduğu
-        /// için build'e kesin girer.</summary>
+        /// <summary>Küre materyalinin shader arama zinciri (ilk bulunan). URP Unlit başta: saydam
+        /// yüzey ayarları bilinen özellik adlarıyla yazılır (<c>_Surface</c>/<c>_Blend</c>…), materyal
+        /// ASSET olarak durduğu için shader build'e kesin girer.</summary>
         private static readonly string[] GripIndicatorShaderCandidates =
         {
-            "Sprites/Default",
             "Universal Render Pipeline/Unlit",
-            "Unlit/Color",
+            "Universal Render Pipeline/Lit",
+            "Sprites/Default",
         };
 
         /// <summary>Silah ele gelirken oynayan çözülme materyali — her WPN köküne takılan
@@ -873,17 +881,21 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Ön kabza göstergesinin prefabını YOKSA üretir (varsa dokunmaz): tek bir
-        /// <see cref="LineRenderer"/> halka (yerel XY düzleminde, kapalı, ince şerit).
+        /// Ön kabza soketinin prefabını YOKSA üretir (varsa dokunmaz): Unity'nin küre primitifi
+        /// (1 m çap — sözleşme <see cref="GripIndicatorPrefabPath"/>'te), collider'sız, yarı saydam
+        /// açık mavi materyalle.
         /// <para>
-        /// <b>Neden prefab:</b> gösterge SANATTIR ve sanatın yeri prefabtır — <c>Weapon</c> yalnız
-        /// yerini, ölçeğini ve rengini sürer. Halka başlangıçtır: sanatçı bu prefabı yerinde
-        /// değiştirebilir (araç bir daha dokunmaz) ya da kataloğa bambaşka bir prefab bağlayabilir.
-        /// Renk çalışma anında yazıldığı için burada BEYAZ bırakılır.
+        /// <b>Neden prefab:</b> soket SANATTIR ve sanatın yeri prefabtır — <c>Weapon</c> yalnız
+        /// yerini, ölçeğini (kabul yarıçapının iki katı) ve alfasını sürer. Küre başlangıçtır:
+        /// sanatçı bu prefabı yerinde değiştirebilir (araç bir daha dokunmaz) ya da kataloğa
+        /// bambaşka bir prefab bağlayabilir — yeter ki 1 m çap sözleşmesini korusun.
         /// </para>
+        /// <para>⚠️ Collider'ı burada SÖKÜLÜR (primitif BoxCollider/SphereCollider ile gelir): soket
+        /// ateş ışınına ve kavramaya takılmamalı; <c>Weapon</c> de örneği kurarken aynı sökmeyi yapar,
+        /// prefabta temiz durması "neden çift bakılıyor" sorusunu doğurmasın diye kaynak da temizdir.</para>
         /// <para>⚠️ Materyal ASSET olarak üretilir (<see cref="GripIndicatorMaterialPath"/>), çalışma
         /// anında <c>Shader.Find</c> ile DEĞİL: hiçbir asset'in referanslamadığı shader build'den
-        /// striplenir ve gösterge sahada sessizce çizilmez.</para>
+        /// striplenir ve soket sahada sessizce çizilmez.</para>
         /// </summary>
         private static bool EnsureGripIndicatorPrefab(List<GameObject> live)
         {
@@ -895,44 +907,27 @@ namespace VortexArena.Core.Editor
             Material material = EnsureGripIndicatorMaterial();
             if (material == null)
             {
-                Warn("VA_GripIndicator: halka için shader bulunamadı (Sprites/Default dahil) — gösterge " +
-                     "prefabı üretilemedi, katalogda alan boş kalır (gösterge çizilmez).");
+                Warn("VA_GripIndicator: küre için shader bulunamadı (URP Unlit/Lit, Sprites/Default) — " +
+                     "soket prefabı üretilemedi, katalogda alan boş kalır (soket çizilmez).");
                 return false;
             }
 
-            var root = new GameObject("VA_GripIndicator");
+            GameObject root = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            root.name = "VA_GripIndicator";
             live.Add(root);
 
-            var line = root.AddComponent<LineRenderer>();
-            line.sharedMaterial = material;
-            // Yerel uzay + loop: halka köşeleri bir kez yazılır, çalışma anında yalnız kök taşınır.
-            line.useWorldSpace = false;
-            line.loop = true;
-            line.numCapVertices = 0;
-            line.numCornerVertices = 0;
-            line.textureMode = LineTextureMode.Stretch;
-            // Şeridin KALINLIĞI kameraya baksın (ince bant yandan yok olmasın). Halkanın DÜZLEMİ ise
-            // çalışma anında kökün kameraya çevrilmesiyle çözülür (Weapon.IndicatorRotation).
-            line.alignment = LineAlignment.View;
-            line.startWidth = GripIndicatorRingWidth;
-            line.endWidth = GripIndicatorRingWidth;
-            line.startColor = Color.white;
-            line.endColor = Color.white;
-            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            line.receiveShadows = false;
-            line.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
-            line.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
-
-            var points = new Vector3[GripIndicatorRingSegments];
-            for (int i = 0; i < GripIndicatorRingSegments; i++)
+            Collider collider = root.GetComponent<Collider>();
+            if (collider != null)
             {
-                float angle = i / (float)GripIndicatorRingSegments * Mathf.PI * 2f;
-                points[i] = new Vector3(Mathf.Cos(angle) * GripIndicatorRingRadius,
-                    Mathf.Sin(angle) * GripIndicatorRingRadius, 0f);
+                Object.DestroyImmediate(collider);
             }
 
-            line.positionCount = points.Length;
-            line.SetPositions(points);
+            var renderer = root.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
 
             PrefabUtility.SaveAsPrefabAsset(root, GripIndicatorPrefabPath, out bool saved);
             Object.DestroyImmediate(root);
@@ -947,7 +942,14 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>Halka materyali yoksa üretir (varsa dokunmaz); shader bulunamazsa <c>null</c>.</summary>
+        /// <summary>
+        /// Küre materyali yoksa üretir (varsa dokunmaz); shader bulunamazsa <c>null</c>.
+        /// <para>URP shader'larında saydamlık <c>_Surface</c>/<c>_Blend</c>/<c>_SrcBlend</c>/
+        /// <c>_DstBlend</c>/<c>_ZWrite</c> özellikleri + <c>_SURFACE_TYPE_TRANSPARENT</c> anahtarı +
+        /// Transparent kuyruğu ile kurulur (Inspector'daki "Surface Type = Transparent" seçiminin
+        /// yazdığı değerlerin aynısı). Var olmayan özelliğe yazmak sessiz geçer, yani zincirdeki
+        /// yedek shader'lar (Sprites/Default) da aynı koddan geçer.</para>
+        /// </summary>
         private static Material EnsureGripIndicatorMaterial()
         {
             var existing = AssetDatabase.LoadAssetAtPath<Material>(GripIndicatorMaterialPath);
@@ -969,6 +971,25 @@ namespace VortexArena.Core.Editor
 
             EnsureFolder(GripIndicatorMaterialDir);
             var material = new Material(shader) { name = "M_GripIndicator" };
+
+            // Saydam yüzey (URP): Surface=Transparent, Blend=Alpha, ZWrite kapalı.
+            material.SetFloat("_Surface", 1f);
+            material.SetFloat("_Blend", 0f);
+            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            material.SetFloat("_SrcBlendAlpha", (float)UnityEngine.Rendering.BlendMode.One);
+            material.SetFloat("_DstBlendAlpha", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            material.SetFloat("_ZWrite", 0f);
+            material.SetFloat("_AlphaClip", 0f);
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.SetOverrideTag("RenderType", "Transparent");
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+
+            // Renk: URP _BaseColor; eski/yedek shader'da _Color. İkisine de yazılır (var olmayan
+            // özellik sessizce yutulur).
+            material.SetColor("_BaseColor", GripIndicatorColor);
+            material.SetColor("_Color", GripIndicatorColor);
+
             AssetDatabase.CreateAsset(material, GripIndicatorMaterialPath);
             return material;
         }

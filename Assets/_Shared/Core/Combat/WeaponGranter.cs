@@ -102,12 +102,12 @@ namespace VortexArena.Core.Combat
         /// Ön kabza <b>kilidi</b>: hangi silahın ikincil soketine hangi el bağlandı.
         /// <para>
         /// ⚠️ <b>Bağın KURULMASI ile SÜRDÜRÜLMESİ ayrı kurallardır</b> ve bu alan ayrımın kendisidir.
-        /// Kurulma mesafeye bakar (<see cref="Weapon.IsHandOnSecondaryGrip"/> — oyuncuya yeşile dönen
-        /// gösterge neyi vaat ediyorsa o), sürdürme <b>yalnız grip tuşuna</b>. Sürdürme de mesafeye
+        /// Kurulma mesafeye bakar (<see cref="Weapon.IsHandOnSecondaryGrip"/> — oyuncuya gösterilen
+        /// soket küresi neyi vaat ediyorsa o), sürdürme <b>yalnız grip tuşuna</b>. Sürdürme de mesafeye
         /// baksaydı bağ oyuncu tuşu bırakmadan kopardı: iki elli çözüm silahı ikinci ele doğru
-        /// KAYDIRMAZ, yalnız nişanlar — yani soket ile avuç arasındaki fark her zaman
+        /// KAYDIRMAZ, yalnız nişanlar — yani soket ile bilek arasındaki fark her zaman
         /// <i>|ellerin arası − silahın kavrama arası|</i> kadardır ve oyuncu kolunu uzatıp
-        /// topladıkça bu fark tek başına kabul yarıçapını (0.12 m) aşar.
+        /// topladıkça bu fark tek başına kabul yarıçapını (~0.10 m) aşar.
         /// </para>
         /// </summary>
         private Weapon _secondaryLatchWeapon;
@@ -411,7 +411,7 @@ namespace VortexArena.Core.Combat
         /// Bir elin bir karelik durumu: grip basılıysa elde silah olsun, değilse olmasın.
         /// <para>
         /// ⚠️ <b>Öteki eldeki silah ÇİFT ELLİYSE bu ele ikinci bir silah VERİLMEZ</b>; o el ön
-        /// kabzaya adaydır (grip basılı + avuç ikincil soketin yarıçapında). Aksi hâlde oyuncu FFA'da
+        /// kabzaya adaydır (grip basılı + bilek ön kabza soketinin içinde). Aksi hâlde oyuncu FFA'da
         /// iki tüfek tutar ve tüfeği iki elle sabitlemenin hiçbir yolu kalmazdı.
         /// </para>
         /// </summary>
@@ -1194,7 +1194,8 @@ namespace VortexArena.Core.Combat
         /// el çözülemezse <c>false</c>.
         /// <para>
         /// ⚠️ <b>Avuç noktasını hesaplayan tek yer burasıdır</b> ve avuca bakan her tüketici
-        /// (kanonik kavrama, ön kabza kapısı ve göstergesi, çerçeve mesafesi) buradan geçer:
+        /// (kanonik kavrama, çerçeve mesafesi) buradan geçer (ön kabza soketi avuca değil BİLEĞE
+        /// bakar — kayıt bilek uzayındadır, bkz. <c>Weapon.TryResolveWrist</c>):
         /// ikinci bir yol açılırsa ofset iki yerde yaşar ve biri güncellenip öteki unutulur.
         /// </para>
         /// </summary>

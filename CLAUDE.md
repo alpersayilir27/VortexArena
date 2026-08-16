@@ -551,15 +551,18 @@ her değişiminde silahı sessizce kavranamaz yapar → `Docs/Sistem-Ozeti.md` �
 çerçeve atlanır ve silah odanın öbür ucundan alınabilir olur →
 `Docs/Sistem-Ozeti.md` §7). Yasak yalnız kök içindir: **çerçeve prefabında (`VA_WeaponFrame`)
 mesafeden kavrama ZORUNLUDUR ve orada da İKİ hat birden durur** — silah oradan alınır.
-**Ön kabza kapısı ve göstergesi `Weapon`'ın kendisindedir** — ayrı bir bileşen/gizmo YOKTUR ve
-eklenmez: `Weapon.IsHandOnSecondaryGrip` (boş elin avucu `WD_*`'daki `secondaryGripRadius`
-içinde mi) tek kuraldır, granter ikinci eli buna göre bağlar, gösterge de aynı ölçüyle yeşile döner.
-Göstergenin **sanatı prefabdadır** (`WeaponCatalog.secondaryGripIndicatorPrefab`; varsayılan halkayı
-silah kiti koşusu **yalnız yoksa** üretir — `_Shared/Arsenal/Prefabs/VA_GripIndicator.prefab` +
-`_Shared/Materials/M_GripIndicator.mat` — ve kataloğa **yalnız alan boşsa** bağlar): sanatı
+**Ön kabza SOKETİ (kapı + görsel) `Weapon`'ın kendisindedir** — ayrı bir bileşen/gizmo YOKTUR ve
+eklenmez: `Weapon.IsHandOnSecondaryGrip` (boş elin **bileği** ön kabza kaydının etrafındaki
+`secondaryGripRadius` küresinin içinde mi — kayıt bilek uzayında olduğu için ölçülen nokta da
+bilektir, kumanda anchor'ı DEĞİL) tek kuraldır; granter ikinci eli buna göre bağlar, oyuncunun
+gördüğü küre de **tam bu yarıçapla** çizilir (görsel = kabul hacmi; varsayılan 0.10 = 20 cm çap).
+Soketin **sanatı prefabdadır** (`WeaponCatalog.secondaryGripIndicatorPrefab`; varsayılan yarı saydam
+açık mavi küreyi silah kiti koşusu **yalnız yoksa** üretir — `_Shared/Arsenal/Prefabs/VA_GripIndicator.prefab`
++ `_Shared/Materials/M_GripIndicator.mat` — ve kataloğa **yalnız alan boşsa** bağlar): sanatı
 değiştirmek = o prefabı düzenlemek ya da kataloğa başka bir prefab bağlamak, koda dokunulmaz.
-Gösterge yalnız **tutulan çift elli silahta, ikinci el bağlanana kadar** ve yalnız yerel oyuncuda
-çizilir; ana kabzanın göstergesi yoktur.
+⚠️ **Prefab 1 m çapında tasarlanır** — `Weapon` onu kabul yarıçapının iki katına ölçekler; sözleşme
+bozulursa görülen küre ile kabul hacmi ayrışır. Soket yalnız **tutulan çift elli silahta, ikinci el
+bağlanana kadar** ve yalnız yerel oyuncuda çizilir; ana kabzanın soketi yoktur.
 ⚠️ **Çerçevenin el hattında `Hand Alignment` = `None`'dır ve öyle kalır** (varsayılan
 `AlignOnGrab`): çerçeve bir kavrama hedefi değil bir SEÇİM tetikleyicisidir, `AlignOnGrab`
 sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silahta görür

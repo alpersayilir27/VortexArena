@@ -160,10 +160,10 @@ namespace VortexArena.Core.Combat
             {
                 // ⚠️ Uyarı değil HATA: hiçbir kavrama bileşeni yoksa çerçeve sahnede görünür ama
                 // silah HİÇ alınamaz — belirtisi "kavrama bozuk" diye okunur, oysa eksik olan
-                // prefabdaki bir bileşendir. Kiti tazelemek (Build Weapon Prefabs) düzeltir.
+                // prefabdaki bir bileşendir. Kiti tazelemek (Configure All Build Elements) düzeltir.
                 Debug.LogError($"[WeaponFrame] '{name}' üzerinde ne DistanceGrabInteractable ne " +
                                "DistanceHandGrabInteractable var; bu çerçeveden silah alınamaz. " +
-                               "Tools > VortexArena > Weapons > Build Weapon Prefabs çalıştırılmalı.", this);
+                               "Tools > VortexArena > Build > Configure All Build Elements çalıştırılmalı.", this);
             }
 
             if (grabCollider == null)

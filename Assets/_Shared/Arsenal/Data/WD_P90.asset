@@ -16,18 +16,27 @@ MonoBehaviour:
   netItemId: 9
   prefab: {fileID: 8917929639311514391, guid: dd099ecc35fb1f843b4bf661c6d5b8e4, type: 3}
   holdMode: 1
-  primaryGripPosition: {x: 0, y: 0, z: 0}
-  primaryGripEuler: {x: 0, y: 0, z: 0}
-  secondaryGripPosition: {x: 0, y: 0, z: 0}
-  secondaryGripEuler: {x: 0, y: 0, z: 0}
-  primaryGripRadius: 0.12
-  secondaryGripRadius: 0.12
-  handPose:
-    thumb: 0
-    index: 0
-    middle: 0
-    ring: 0
-    pinky: 0
+  primaryGripRight:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    euler: {x: 0, y: 0, z: 0}
+    preset: 0
+  primaryGripLeft:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    euler: {x: 0, y: 0, z: 0}
+    preset: 0
+  secondaryGripRight:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    euler: {x: 0, y: 0, z: 0}
+    preset: 0
+  secondaryGripLeft:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    euler: {x: 0, y: 0, z: 0}
+    preset: 0
+  secondaryGripRadius: 0.1
   tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
   tracerWidth: 0.005
   tracerLifetime: 0.1
