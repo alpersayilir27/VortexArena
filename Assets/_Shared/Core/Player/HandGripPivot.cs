@@ -34,8 +34,8 @@ namespace VortexArena.Core.Player
         /// pozundan koparıyor, yani "silah tam elimde durmuyor" şikâyetine ikinci, gizli bir terim
         /// ekliyordu; (2) altı silahın kavrama verisi zaten bu ofsetin ÜSTÜNE ayarlandığı için iki
         /// ayrı düğme aynı şeyi ayarlıyordu ve hangisinin bozuk olduğu ayırt edilemiyordu.
-        /// Silahın elde nerede durduğu tek yerden gelir: <c>WD_*.asset</c>'e yakalanmış kavrama
-        /// kaydı (<see cref="VortexArena.Core.Combat.ItemGripCapture"/>).
+        /// Silahın elde nerede durduğu tek yerden gelir: <c>WD_*.asset</c>'e stüdyoda yazılmış
+        /// kavrama kaydı (<see cref="VortexArena.Core.Combat.ItemGripPose"/>).
         /// </para>
         /// <para>
         /// Gerçekten ölçülmüş bir bilek ofseti gerekirse (<see cref="HandGripCalibrationProbe"/>

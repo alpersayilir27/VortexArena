@@ -23,10 +23,12 @@ namespace VortexArena.App.Admin
     /// <list type="bullet">
     /// <item>En tepe orta: takım skorları; <b>skorların ortasındaki chip istatistikler düğmesi</b>
     /// (aynı zamanda faz + kalan süre göstergesi).</item>
-    /// <item>Sol üst: tercihler düğmesi. Sağ üst: mod · harita + bağlantı durumu.</item>
+    /// <item>Sol üst: tercihler düğmesi. Sağ üst: kamera kipi düğmeleri (SERBEST · KUŞ BAKIŞI) +
+    /// seçili oyuncu; solunda mod · harita + bağlantı durumu.</item>
     /// <item>Yan paneller: takım oyuncuları — takımlıda sol kırmızı / sağ mavi, <b>FFA'da tek
     /// kolon</b> (karar veriden gelir: hiçbir çevrimiçi oyuncunun takımı yoksa FFA).</item>
-    /// <item>Alt orta: kamera kipi şeridi + seçili oyuncu. Alt sağ: ölüm akışı.</item>
+    /// <item>Alt orta: maç kontrolleri (<see cref="AdminMatchControls"/>: başlat/duraklat/iptal +
+    /// durum satırı). Alt sağ: ölüm akışı.</item>
     /// </list></para>
     ///
     /// <para><b>sortingOrder = 4000:</b> bağlantı hata ekranı 5000'de kalır ve gerektiğinde HUD'ın
@@ -84,8 +86,12 @@ namespace VortexArena.App.Admin
         [SerializeField] private TextMeshProUGUI redOverflow;
         [SerializeField] private TextMeshProUGUI blueOverflow;
 
-        [Header("Alt şerit")]
-        [Tooltip("Kamera kipi düğmelerinin ZEMİNLERİ — sıra: POV, SERBEST, KUŞ BAKIŞI.")]
+        [Header("Kamera kipi (sağ üst)")]
+        [Tooltip("Kamera kipi düğmelerinin ZEMİNLERİ — sıra AdminCameraMode ile aynı: " +
+                 "POV, SERBEST, KUŞ BAKIŞI. ⚠️ POV yuvası (0) BOŞ bırakılır — POV'a oyuncu " +
+                 "kartındaki düğmeden (HandleRowPov) ve klavyeden girilir; şeritte POV düğmesi " +
+                 "yoktur. Dizi yine de enum indeksli kalır: kaydırmak SERBEST/KUŞ BAKIŞI'nı " +
+                 "yanlış kipe bağlardı.")]
         [SerializeField] private Image[] modeButtons = new Image[3];
         [Tooltip("Kamera kipi düğmelerinin ETİKETLERİ — modeButtons ile aynı sırada.")]
         [SerializeField] private TextMeshProUGUI[] modeLabels = new TextMeshProUGUI[3];
@@ -239,7 +245,7 @@ namespace VortexArena.App.Admin
 
             RefreshTopBar(roster);
             RefreshColumns(roster);
-            RefreshBottomBar(roster);
+            RefreshCameraBar(roster);
             RefreshKillFeed(roster);
             RefreshViolationFeed(roster);
         }
@@ -560,7 +566,10 @@ namespace VortexArena.App.Admin
                 headerHeight + 6f + count * (height + rowGap), 4f, 24f);
         }
 
-        private void RefreshBottomBar(AdminRoster roster)
+        /// <summary>Kamera kipi düğmelerini ve seçili oyuncu satırını boyar. ⚠️ Dizide POV yuvası
+        /// (0) boştur — o kipe yalnız oyuncu kartından ve klavyeden girilir; döngü null-güvenli
+        /// olduğu için boş yuva sessizce atlanır.</summary>
+        private void RefreshCameraBar(AdminRoster roster)
         {
             var active = (int)AdminSession.CameraMode;
             for (int i = 0; i < modeButtons.Length; i++)
@@ -593,9 +602,16 @@ namespace VortexArena.App.Admin
 
             bool hasPose = RemotePlayerRegistry.Instance != null &&
                            RemotePlayerRegistry.Instance.GetInterpolatedPose(selectedId, out _, out _, out _);
-            selectedText.text = AdminSession.CameraMode == AdminCameraMode.Pov && !hasPose
-                ? $"{name} — poz yok"
-                : name;
+
+            // POV kipi ada ÖN EK olarak yazılır: şeritte POV düğmesi olmadığı için operatörün o
+            // kipte olduğunu okuyabileceği tek yer burasıdır.
+            if (AdminSession.CameraMode != AdminCameraMode.Pov)
+            {
+                selectedText.text = name;
+                return;
+            }
+
+            selectedText.text = hasPose ? $"POV · {name}" : $"POV · {name} — poz yok";
         }
 
         private void RefreshKillFeed(AdminRoster roster)

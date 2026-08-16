@@ -15,8 +15,8 @@ namespace VortexArena.Core.Editor
     /// <c>WPN_&lt;Ad&gt;.prefab</c>'ların bağları/VFX'i, <c>FX_RemoteShot.prefab</c> ve
     /// <c>Resources/WeaponCatalog.asset</c>.
     /// <para>
-    /// <b>WPN prefabı YOKTAN üretilmez:</b> gövde (model hiyerarşisi, Muzzle/MuzzleFlash yerleşimi,
-    /// kavrama pozları) elle ayarlanan bir şeydir ve prefab repoda yaşar; araç onu yerinde
+    /// <b>WPN prefabı YOKTAN üretilmez:</b> gövde (model hiyerarşisi, Muzzle/MuzzleFlash/Eject
+    /// yerleşimi) elle ayarlanan bir şeydir ve prefab repoda yaşar; araç onu yerinde
     /// günceller. Prefab yoksa hata basılır — sessizce yanlış yerleşimli bir silah üretmek
     /// (ör. Muzzle'ı Model'in altından köke almak) geri tepmeyi ve nişanı bozuyordu.
     /// </para>
@@ -84,17 +84,10 @@ namespace VortexArena.Core.Editor
         /// (bkz. <see cref="RemoveLegacyGripPoseNodes"/>).
         /// <para>⚠️ Adın tanımı BURADADIR çünkü tek okuyucu bu temizliktir: düğümü üreten taraf
         /// yok, tüketen taraf yok. Sabiti runtime'a taşımak, hiçbir şeyin okumadığı bir adı ortak
-        /// koda koymak olurdu.</para>
+        /// koda koymak olurdu. (Stüdyo elinin öneki bunun tersidir: onu ÜRETEN taraf yaşıyor, bu
+        /// yüzden tanımı orada — <see cref="GripPoseStudio.HAND_ROOT_PREFIX"/> — durur.)</para>
         /// </summary>
         private const string LegacyGripPoseRootName = "GripPoses";
-
-        /// <summary>
-        /// Prefabın içine kazara sürüklenmiş <b>authoring eli</b> köklerinin ad öneki
-        /// (bkz. <see cref="RemoveStudioHandNodes"/>).
-        /// <para>⚠️ Gerekçesi <see cref="LegacyGripPoseRootName"/> ile aynı: öneki üreten taraf
-        /// artık yok, tanım tek yerde — bu temizlikte — durur.</para>
-        /// </summary>
-        private const string LegacyAuthoringHandPrefix = "[VA El_";
 
         /// <summary>
         /// Kovan aileleri: <c>WeaponSpec.CasingFamily</c> → (üretilecek kovan prefabı, pack'teki
@@ -461,8 +454,8 @@ namespace VortexArena.Core.Editor
         // derdi.
         private static int _legacyNodesRemoved;
 
-        // Bake'i unutulmuş silahlar: kavrama pozu düğümü olmayan (yani oyunda eli idle'da kalacak)
-        // WPN'ler. ⚠️ Bu rapor ŞART — bake tek seferlik bir insan adımı ve atlandığında hiçbir hata
+        // Kavraması yazılmamış silahlar (oyunda eli idle'da kalacak WPN'ler). ⚠️ Bu rapor ŞART —
+        // stüdyoda kavrama yazmak tek seferlik bir insan adımı ve atlandığında hiçbir hata
         // basılmaz, belirtisi yalnız "el silaha sarılmıyor" olur.
         private static readonly List<string> _unbakedWeapons = new List<string>();
 
@@ -675,7 +668,7 @@ namespace VortexArena.Core.Editor
         /// <summary>
         /// Mevcut WPN_&lt;Ad&gt;.prefab'ı yerinde günceller (<see cref="RebindExistingPrefab"/>):
         /// definition bağları + namlu alevi/duman/kovan kiti + kavrama soketi kiti. Gövdeye
-        /// (model, Muzzle/MuzzleFlash konumu, kavrama pozları) DOKUNULMAZ — onlar elle ayarlanır.
+        /// (model, Muzzle/MuzzleFlash/Eject konumu) DOKUNULMAZ — onlar elle ayarlanır.
         /// Prefab yoksa üretilmez, hata basılır: eksik silahın prefabı repoya elle eklenir.
         /// </summary>
         private static BuildOutcome BuildWeaponPrefab(WeaponSpec spec, WeaponDefinition def,
@@ -1515,11 +1508,11 @@ namespace VortexArena.Core.Editor
         /// dokunulmaz — poz listesi boş kaldığı sürece o alanın etkisi yoktur.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Kavramayı bu araç YAZMAZ.</b> Kavramanın tek kaynağı başlıkta el takibiyle
-        /// yakalanan pozdur ve o poz doğrudan <c>WD_*.asset</c>'e yazılır (prefabda karşılığı olan
+        /// ⚠️ <b>Kavramayı bu araç YAZMAZ.</b> Kavramanın tek kaynağı Kavrama Pozu Stüdyosu'nda
+        /// yazılan pozdur ve o poz doğrudan <c>WD_*.asset</c>'e yazılır (prefabda karşılığı olan
         /// bir düğüm YOKTUR — düğüm açmak, kaydın ikinci bir tarifini üretirdi). Araç burada yalnız
         /// <b>temizlik ve denetim</b> yapar: eski soket işaretçileri, prefabda kalmış el rig'i ve
-        /// poz düğümleri, kavraması yakalanmamış silah raporu.
+        /// poz düğümleri, kavraması yazılmamış silah raporu.
         /// </para>
         /// </summary>
         private static void ApplyGripSocketKit(GameObject root, ItemDefinition definition, string ctx)
@@ -1653,16 +1646,15 @@ namespace VortexArena.Core.Editor
                 Object.DestroyImmediate(node.gameObject, true);
                 _legacyNodesRemoved++;
                 Debug.Log(Log + ctx + ": eski '" + nodeName + "' işaretçisi silindi — kavrama " +
-                          "başlıkta yakalanıp WD_*.asset'e yazılır, prefabta işaretçi durmaz.");
+                          "stüdyoda WD_*.asset'e yazılır, prefabta işaretçi durmaz.");
             }
         }
 
         /// <summary>
         /// Prefabın içinde kalmış <c>Hands/Hand_*</c> ağacını siler — <b>ölü veri</b>.
         /// <para>
-        /// Kavrama silahın üstüne oturtulan bir el modelinden değil, başlıkta el takibiyle yakalanan
-        /// pozdan geliyor ve tanıma (<c>WD_*.asset</c>) yazılıyor. Prefabın içinde duran el
-        /// rig'inin okuyanı yok.
+        /// Kavrama, prefabın içinde duran bir el modelinden değil, stüdyoda yazılan pozdan geliyor
+        /// ve tanıma (<c>WD_*.asset</c>) yazılıyor. Prefabın içinde duran el rig'inin okuyanı yok.
         /// </para>
         /// <para>⚠️ Sessizce BIRAKILMAZ: (1) açık kalırsa arenada havada duran bir el olarak
         /// görünür — silah sahnede de duruyor (raf/masa, <c>WeaponFrame</c>, <c>VA_WeaponCanvas</c>)
@@ -1721,7 +1713,7 @@ namespace VortexArena.Core.Editor
             {
                 Transform node = all[i];
                 if (node == null || node == root.transform ||
-                    !node.name.StartsWith(LegacyAuthoringHandPrefix))
+                    !node.name.StartsWith(GripPoseStudio.HAND_ROOT_PREFIX))
                 {
                     continue;
                 }
@@ -1735,18 +1727,101 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Kavraması hiç yakalanmamış silahı koşu sonundaki rapora ekler.
+        /// Kavraması hiç yazılmamış silahı koşu sonundaki rapora ekler.
         /// <para>⚠️ Ölçüt <see cref="ItemDefinition.HasGrip"/>'tir, <c>GetGrip</c> değil: okuma yolu
-        /// eksik eli ÖTEKİ elin kaydına düşürür, yani <c>GetGrip</c> ile bakılsaydı yarım yakalanmış
-        /// silah "tamam" görünürdü. Sorulan el SAĞDIR — silah en az bir elden yakalanmışsa öteki el
-        /// düşme yoluyla makul bir duruş alır; hiç yakalanmamışsa sağ el de boştur.</para>
+        /// eksik eli ÖTEKİ elin kaydına düşürür, yani <c>GetGrip</c> ile bakılsaydı yarım yazılmış
+        /// silah "tamam" görünürdü. Sorulan el SAĞDIR — silah en az bir elden yazılmışsa öteki el
+        /// düşme yoluyla makul bir duruş alır; hiç yazılmamışsa sağ el de boştur.</para>
         /// </summary>
         private static void NoteIfUnbaked(ItemDefinition definition, string ctx)
         {
-            if (definition == null || !definition.HasGrip(GripSocketKind.Primary, true))
+            if (IsUnbaked(definition))
             {
                 _unbakedWeapons.Add(ctx);
             }
+        }
+
+        /// <summary>
+        /// "Kavraması yazılmamış" ölçütü — koşu sonu raporu ile hazırlık denetiminin TEK kaynağı.
+        /// İkinci bir yerde tekrarlansaydı ölçüt bir gün sessizce ayrışırdı.
+        /// </summary>
+        private static bool IsUnbaked(ItemDefinition definition)
+        {
+            return definition == null || !definition.HasGrip(GripSocketKind.Primary, true);
+        }
+
+        /// <summary>"Ateş sesi atanmamış" ölçütü — <see cref="IsUnbaked"/> ile aynı gerekçe.</summary>
+        private static bool IsSilent(WeaponDefinition definition)
+        {
+            AudioClip[] clips = definition != null ? definition.FireClips : null;
+            for (int i = 0; clips != null && i < clips.Length; i++)
+            {
+                if (clips[i] != null)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Tablodaki silahların kiti eksiksiz mi — <b>HİÇBİR ŞEY YAZMAZ</b> (build hazırlık
+        /// panelinin okuduğu denetim). Koşu sonundaki iki raporun (kavraması yazılmamış · ateş sesi
+        /// atanmamış) aynı ölçütlerini WD asset'lerini diskten okuyarak uygular; WD hiç yoksa araç
+        /// bu silah için hiç çalışmamış demektir.
+        /// </summary>
+        internal static bool AreWeaponsReady(out string detail)
+        {
+            var missing = new List<string>();
+            var unbaked = new List<string>();
+            var silent = new List<string>();
+
+            for (int i = 0; i < Specs.Length; i++)
+            {
+                string path = DataDir + "/WD_" + Specs[i].Name + ".asset";
+                var def = AssetDatabase.LoadAssetAtPath<WeaponDefinition>(path);
+                if (def == null)
+                {
+                    missing.Add(Specs[i].Name);
+                    continue;
+                }
+
+                if (IsUnbaked(def))
+                {
+                    unbaked.Add(Specs[i].Name);
+                }
+
+                if (IsSilent(def))
+                {
+                    silent.Add(Specs[i].Name);
+                }
+            }
+
+            var problems = new List<string>();
+            if (missing.Count > 0)
+            {
+                problems.Add("WD asset'i yok: " + string.Join(", ", missing));
+            }
+
+            if (unbaked.Count > 0)
+            {
+                problems.Add("kavraması yazılmamış: " + string.Join(", ", unbaked));
+            }
+
+            if (silent.Count > 0)
+            {
+                problems.Add("ateş sesi atanmamış: " + string.Join(", ", silent));
+            }
+
+            if (problems.Count > 0)
+            {
+                detail = string.Join(" · ", problems);
+                return false;
+            }
+
+            detail = $"{Specs.Length} silah: kavrama ve ateş sesi tamam.";
+            return true;
         }
 
         /// <summary>
@@ -1764,18 +1839,7 @@ namespace VortexArena.Core.Editor
                     continue;
                 }
 
-                AudioClip[] clips = defs[i].FireClips;
-                bool hasAny = false;
-                for (int c = 0; clips != null && c < clips.Length; c++)
-                {
-                    if (clips[c] != null)
-                    {
-                        hasAny = true;
-                        break;
-                    }
-                }
-
-                if (!hasAny)
+                if (IsSilent(defs[i]))
                 {
                     silent.Add(defs[i].name);
                 }
@@ -1799,10 +1863,11 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            Debug.LogWarning(Log + "Kavraması YAKALANMAMIŞ silahlar: " +
+            Debug.LogWarning(Log + "Kavraması YAZILMAMIŞ silahlar: " +
                              string.Join(", ", _unbakedWeapons) + ". Bu silahlarda oyuncunun eli " +
                              "silaha sarılmaz (idle duruşunda kalır). Düzeltme: Tools > VortexArena > " +
-                             "Development > Dev → rol: Silah → silahı seç → Play (el takibi gerekir).");
+                             "Weapons > Kavrama Pozu Stüdyosu → WPN_* prefabını prefab kipinde aç → " +
+                             "Elleri Oluştur → Kaydet.");
         }
 
         /// <summary>Kökteki bir bileşeni tam tip adıyla siler (yoksa sessizce geçer).</summary>

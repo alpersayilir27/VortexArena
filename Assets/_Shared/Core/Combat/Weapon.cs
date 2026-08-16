@@ -18,8 +18,10 @@ namespace VortexArena.Core.Combat
     /// kanonik kavrama sürdüğü için onunla yarışmaz).
     /// <para>
     /// <b>KAVRAMA KANONİKTİR</b> (§6.6): silah tutulduğu sürece kökü ana elin anchor'ından +
-    /// tanımdaki <b>yakalanmış</b> kavramadan sürülür (<see cref="ItemDefinition.PrimaryGripPosition(bool)"/>;
-    /// dönüş kimliktir, <see cref="ItemDefinition.PrimaryGripRotation"/>) (<see cref="LateUpdate"/>). ISDK'nın <c>*GrabFreeTransformer</c>'ları bu yüzden
+    /// tanımdaki <b>stüdyoda yazılmış</b> kavramadan sürülür — konum
+    /// <see cref="ItemDefinition.PrimaryGripPosition(bool)"/>, <b>dönüş de kayıttan</b>
+    /// (<see cref="ItemDefinition.PrimaryGripRotation(bool)"/>: el nasıl tutuyorsa silah öyle
+    /// durur) (<see cref="LateUpdate"/>). ISDK'nın <c>*GrabFreeTransformer</c>'ları bu yüzden
     /// <c>WPN_*</c> prefablarından kaldırıldı: kavramanın ALGILANMASI Grabbable/GrabInteractable'da,
     /// silahı TAŞIMA işi burada. Gerekçe ağdadır — duruş telde gitmez, uzak taraf silahı "elin pozu ×
     /// sabit kavrama ofseti" olarak çizer; serbest kavrama (keyfi ofset) o eşitliği bozar ve namlusundan
@@ -459,7 +461,8 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// §6.6 <b>KANONİK KAVRAMA</b>: silah tutulduğu sürece kökü ana elin anchor'ından +
-        /// tanımın SABİT kavrama ofsetinden sürülür — kavradığı andaki keyfi ofset korunmaz.
+        /// tanımın SABİT kavrama kaydından (konum <b>ve dönüş</b>) sürülür — kavradığı andaki keyfi
+        /// ofset korunmaz.
         /// <para>
         /// <b>Neden zorunlu:</b> duruş telde gitmez; uzak taraf silahı "elin pozu × sabit kavrama
         /// ofseti" olarak çizer. Serbest kavrama o eşitliği bozar ve iki uçta iki ayrı duruş doğar.
@@ -518,9 +521,9 @@ namespace VortexArena.Core.Combat
                 _hasLastSecondaryPalm = false;
             }
 
-            // Ana kavramanın ölçüsü ÖNCE canlı bilek deltasıyla düzeltilir (ItemGripAuthority: el
-            // başına); ölçülemezse tanımın ham yakalamasına düşülür. ⚠️ Düşme bir hata değil normal
-            // bir yoldur — rig'in olmadığı oturum ve ilk kare oradan geçer.
+            // Ana kavramanın ölçüsü ÖNCE canlı bilek deltasıyla anchor uzayına çevrilir
+            // (ItemGripAuthority: el başına); kavrama yazılmamışsa tanımın kendi ölçüsüne düşülür
+            // (bilek ≡ anchor varsayımı). ⚠️ Düşme bir hata değil normal bir yoldur.
             bool mainHandRight = HandGripPivot.IsRight(MainHand);
             bool secondaryRight = SecondaryHandIsRight(mainHandRight);
             Vector3 position;

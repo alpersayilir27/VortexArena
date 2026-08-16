@@ -19,4 +19,4 @@ MonoBehaviour:
   - ffa
   - tournament
   ambienceClip: {fileID: 0}
-  ambienceVolume: 0.45
+  ambienceVolume: 0.225

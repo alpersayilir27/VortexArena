@@ -460,7 +460,8 @@ kill-feed, kendi öldürme/ölüm sayacın.
 
 | Menü | Ne yapar |
 |---|---|
-| `Tools > VortexArena > Development > Dev` | Rol (player · admin · **weapon**) · sunucu hedefi · Play başlangıcı · derle. Kısayol **Ctrl+Alt+R** (üç rolü sırayla çevirir). `weapon` = silah kavraması yakalama, seçilen `WD_*` ile `WeaponCalibration` sahnesi |
+| `Tools > VortexArena > Development > Dev` | Rol (player · admin) · sunucu hedefi · Play başlangıcı · sunucusuz sandbox. Kısayol **Ctrl+Alt+R** (iki rolü çevirir) |
+| `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` | Silahın elde nasıl duracağını **gözlüksüz** yazar (`GripPoseStudio`). `WPN_*`'ı prefab kipinde aç → *Ana/Ön Kabza Ellerini Oluştur* → hayalet elleri kabzalara oturt → elin Inspector'ından parmak preset'i → **Kaydet**. Kayıt `WD_*.asset`'e gider (bileğin eşyaya göre pozu + preset); prefaba hiçbir şey yazılmaz, eller stage'in ayrı kökleridir |
 | `Tools > VortexArena > Arena > Template Temellerini Yükle` | Aktif sahneye altyapı prefab ÖRNEKLERİ + `ArenaCalibrator` ve `ArenaBoundary`'nin rig alanlarını bağlama + boyut dosyası bağlama; idempotent (`TemplateBasicsLoader`). ⚠️ Kalibrasyon işaretçisi koymaz — onlar maketle gelir |
 | `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` | Boyut dosyasından ölçü maketi (`Plane` + `Columns/*` + kalibrasyon işaretçileri `anchor_a`/`anchor_b`), **`ArenaBoundary`'nin altına yerel-kimlikte** (muhafaza yoksa sahne köküne, dönüşsüz); idempotent (`DimensionMeshBuilder`). ⚠️ Her arenada zorunlu: sahnenin kalibrasyon işaretçilerinin tek kaynağı budur |
 | `Tools > VortexArena > Arena > DimensionMesh'i JSON'a Çevir` | Maketi (köşeler + kalibrasyon işaretçileri) okuyup kaynak boyut dosyasının üstüne yazar; doğrulanamayan çıktıda dosyaya dokunmaz, işaretçi yoksa `calibration` korunur (`DimensionMeshReader`) |

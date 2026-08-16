@@ -12,40 +12,46 @@ kavrama · uzak avatarda eşya çizimi + eşikli ön-kabza yapıştırma · havu
 **soket tabanlı kavrama** (`ItemGripSockets`, ISDK `_interactorFilters` kapısı; mesafeden kavrama
 kaldırıldı) · **olayların `serverTick`'te oynatılması** (`RemotePlayerRegistry.TryGetPlaybackTimeMs`).
 
-## 1. Kavrama yakalama — ⚠️ SIRADAKİ İŞ (araç hazır, 13 silahın kavraması yakalanmadı)
+## 1. 13 silahın kavramasını YAZ — ⚠️ SIRADAKİ İŞ
 
-Kavrama sayı girerek değil **gözlükle** ölçülüyor: silahı gerçek elinle tutar gibi tutarsın, ölçü
-`WD_*.asset`'e iner. Kalan iş silahları tek tek geçmek. Tam reçete:
-`Docs/Gelistirici/Yemek-Kitabi.md` §11.0.
+Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitabi.md` §11.0.
 
-**İş akışı (editörde, APK build'i gerekmez):**
+**İş akışı (editörde, prefab kipinde; Play ve APK gerekmez):**
 
-1. `Tools > VortexArena > Development > Dev` → **Rol: Silah** → ölçülecek `WD_*`'ı seç → Play.
-2. Kumandaları **bırak** — ölçüm el takibiyle yapılır.
-3. Silah kafanın karşısında donar; ona yaklaş, elini tutacağın yere getir ve sayacı başlat
-   (**pinch** ya da **kumanda tetiği** — ikisi de geçerli).
-4. 5 sn'lik sayaç boyunca elini açıp kabzayı sar; sayaç bitince ölçü yazılır ve sıra bir sonraki
-   aşamaya geçer.
-5. Dört aşama: ana kabza sağ → ana kabza sol → ön kabza sağ → ön kabza sol.
+1. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` → pencereyi aç.
+2. `WPN_*` prefabını **prefab kipinde** aç.
+3. **Ana Kabza Ellerini Oluştur** (+ iki elli silahta **Ön Kabza Ellerini Oluştur**).
+4. Hayalet elleri Scene View'da kabzalara oturt; elin Inspector'ından parmak preset'ini seç
+   (ana kabza `Firing`, ön kabza `Grip`). Gerekirse **Karşı Ele Aynala** ile başlat.
+5. **Kaydet** → dört kayıt `WD_*.asset`'e iner. **Elleri Temizle**.
 6. Başlıkta yalnız **hissi** doğrula (nişan alırken rahat mı).
 
 **Bilinmesi gerekenler:**
 
-- ⚠️ **Ölçünün paydası silahtır, taşınan eldir** — ölçü "el silaha göre nerede" olduğu için silah
-  dondurulur ve oyuncu ona yaklaşır.
-- ⚠️ **Dört kaydın dördü de ayrı ölçülür** (`primaryGripRight/Left`, `secondaryGripRight/Left`):
-  kabza simetrik değildir, tek kayıttan aynalamak sol eli silahın içine sokar. Eksik el öteki elin
-  kaydına düşer — çalışır ama yanlış tutar.
-- ⚠️ **Silahın dönüşü ayarlanmaz** (kimlik = kumanda anchor'ı). Silah elde yatık görünüyorsa
-  bakılacak yer kavrama kaydı değil, prefabtaki `Model` yerleşimidir.
-- ⚠️ Sayaç girdi bırakılınca iptal olmaz; ölçülen el **sayaç bittiğindeki** eldir.
-- ⚠️ `WeaponKitBuilder` kavrama kayıtlarını **ezmez**; koşu sonunda kavraması yakalanmamış silahları
-  listeler, eski `GripSocket_*` işaretçilerini, `GripPoses` ağacını ve prefabta kalmış
-  `Hands/Hand_*` rig'ini siler. `netItemId`/`holdMode` tablodan gelir ve EZİLİR.
-- Aynı kayıt **üç yeri** besliyor: yerel tutuş · uzak oyuncudaki çizim · kavrama soketinin yeri.
-  Biri düzelince üçü düzelir; ana soketin yeri türetilir (`PrimaryGripPointOnItem`), elle girilmez.
+- ⚠️ **Dört kaydın dördü de ayrı yazılır** (`primaryGripRight/Left`, `secondaryGripRight/Left`):
+  kabza simetrik değildir, aynalama yalnız başlangıçtır. Eksik el öteki elin kaydına düşer —
+  çalışır ama yanlış tutar.
+- ⚠️ **Ana elde eli çevirmek SİLAHI çevirir** (`item = bilek ∘ Inverse(kayıt)`); ön kabzada el
+  silaha yapışır. Silah elde yatık görünüyorsa iki aday var: kaydın dönüşü ya da prefabtaki `Model`
+  yerleşimi.
+- ⚠️ Eller prefabın içine sürüklenmez (stage'in ayrı kökleri) — kaçak el arenada havada görünür.
+- ⚠️ `WeaponKitBuilder` kavrama kayıtlarını **ezmez**; koşu sonunda kavraması yazılmamış silahları
+  listeler, eski `GripSocket_*` işaretçilerini, `GripPoses` ağacını, prefabta kalmış `Hands/Hand_*`
+  rig'ini ve sızmış `[VA El_*]` köklerini siler. `netItemId`/`holdMode` tablodan gelir ve EZİLİR.
+- Aynı kayıt **üç yeri** besliyor: yerel tutuş · uzak oyuncudaki çizim (parmaklar dahil: preset
+  oradan okunur) · kavrama soketinin yeri. Biri düzelince üçü düzelir; ana soketin yeri türetilir
+  (`PrimaryGripPointOnItem`), elle girilmez.
 - Yarıçaplar silah başınadır (`primaryGripRadius`/`secondaryGripRadius`, varsayılan 12 cm) ve
-  Inspector'dan girilir — yakalama onlara dokunmaz.
+  Inspector'dan girilir — stüdyo onlara dokunmaz.
+
+## 1b. `HandGripConvention.*AnchorToWrist` sabitini ölç ve yapıştır
+
+Rig'i olmayan izleyici (admin gözlemci) anchor→bilek deltasını canlı ölçemez ve bu sabite düşer;
+sabit kimlik kaldığı sürece admin ekranında uzak silahlar deltanın dönüşü kadar yanlış çizilir.
+
+1. Editörde **player** rolüyle Play, iki kumandayı da normal tut.
+2. `HandGripPoser` kararlı ölçümü el başına bir kez loglar (30 kare / 2 mm / 0.5°).
+3. İki satırı `HandGripConvention.LeftAnchorToWrist` / `RightAnchorToWrist`'e yapıştır.
 
 ## 2. Tracer + soket görünüm değerleri — playtest ayarı
 

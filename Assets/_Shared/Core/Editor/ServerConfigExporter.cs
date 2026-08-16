@@ -36,6 +36,10 @@ namespace VortexArena.Core.Editor
     {
         private const string MapsFileName = "maps.json";
 
+        /// <summary>Sunucunun okuduğu config klasörü (repo kökü altında <c>Server/config</c>).</summary>
+        private static string ConfigDirectory =>
+            Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Server", "config"));
+
         /// <summary>Menü girişi — dialoglu (elle) export.</summary>
         [MenuItem("Tools/VortexArena/Server/Export Server Config", false, 60)]
         private static void ExportMenu()
@@ -55,7 +59,7 @@ namespace VortexArena.Core.Editor
         {
             var result = new ServerConfigExportResult();
 
-            string configDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Server", "config"));
+            string configDir = ConfigDirectory;
             result.MapsPath = Path.Combine(configDir, MapsFileName);
 
             List<MapDefinition> maps = CollectMaps(result);
@@ -89,6 +93,57 @@ namespace VortexArena.Core.Editor
             }
 
             return result;
+        }
+
+        // -------------------------------------------------------------- denetim
+
+        /// <summary>
+        /// Diskteki <c>maps.json</c> projedeki haritalarla aynı mı — <b>HİÇBİR ŞEY YAZMAZ</b>
+        /// (build hazırlık panelinin okuduğu denetim).
+        /// <para>
+        /// ⚠️ Karşılaştırma <b>ayrıştırma değil, üretilecek içeriğin kendisidir</b>: export zaten
+        /// deterministik (sıralı, LF, BOM'suz) yazıyor, yani "aynı bayt mı" sorusu tam olarak
+        /// "export bu dosyayı değiştirir mi" sorusudur. Elle yazılmış bir JSON okuyucu ikinci
+        /// (ve sapabilen) bir biçim yorumu olurdu.
+        /// </para>
+        /// <para>
+        /// Uyarılar da hazırlık sorunudur (ör. Build Settings'te olmayan sahne): dosya güncel olsa
+        /// bile uyarı varsa satır TEMİZ sayılmaz.
+        /// </para>
+        /// </summary>
+        internal static bool IsMapsJsonUpToDate(out string detail)
+        {
+            string path = Path.Combine(ConfigDirectory, MapsFileName);
+            if (!File.Exists(path))
+            {
+                detail = $"'{MapsFileName}' YOK — sunucu hiçbir haritayı tanımaz, start_match reddedilir.";
+                return false;
+            }
+
+            var probe = new ServerConfigExportResult();
+            List<MapDefinition> maps = CollectMaps(probe);
+
+            if (maps.Count == 0)
+            {
+                detail = "Projede export edilebilir harita yok — export dosyaya dokunmaz.";
+                return false;
+            }
+
+            if (!string.Equals(BuildMapsJson(maps), File.ReadAllText(path), StringComparison.Ordinal))
+            {
+                detail = $"'{MapsFileName}' projeden ayrışmış ({maps.Count} harita bekleniyor) — export ezecek.";
+                return false;
+            }
+
+            if (probe.Warnings.Count > 0)
+            {
+                detail = $"{maps.Count} harita yazılı ama {probe.Warnings.Count} uyarı var " +
+                         "(uyarıları görmek için export'u çalıştır).";
+                return false;
+            }
+
+            detail = $"{maps.Count} harita güncel.";
+            return true;
         }
 
         // -------------------------------------------------------------- toplama
