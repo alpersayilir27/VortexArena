@@ -63,6 +63,34 @@ namespace VortexArena.Core.Editor
         /// (bkz. <see cref="ApplyWeaponFrameKit"/>). Bu araç onu üretmez, yalnız bağlar.</summary>
         private const string WeaponFramePrefabPath = PrefabDir + "/VA_WeaponFrame.prefab";
 
+        /// <summary>
+        /// Ön kabza göstergesinin SANATI — tüm silahların paylaştığı tek prefab; <c>Weapon</c> onu
+        /// boş elin yaklaştığı ön kabzaya koyar (<c>WeaponCatalog.secondaryGripIndicatorPrefab</c>).
+        /// <para>Bu araç prefabı <b>yalnız yoksa</b> üretir (<see cref="EnsureGripIndicatorPrefab"/>:
+        /// ince bir halka) ve kataloğa <b>yalnız alan boşsa</b> bağlar — sanatçı halkayı yerinde
+        /// değiştirebilir ya da kataloğa başka bir prefab bağlayabilir, araç ikisini de ezmez.</para>
+        /// </summary>
+        private const string GripIndicatorPrefabPath = PrefabDir + "/VA_GripIndicator.prefab";
+        private const string GripIndicatorMaterialDir = "Assets/_Shared/Materials";
+        private const string GripIndicatorMaterialPath = GripIndicatorMaterialDir + "/M_GripIndicator.mat";
+
+        // Varsayılan halkanın ölçüleri (yalnız ilk üretimde okunur; sonrası prefabın kendisidir).
+        // Yarıçap "kabul mesafesi" DEĞİLDİR (o WD_*'da, silah başına ve çok daha büyüktür) — bu,
+        // oyuncunun elini götüreceği NOKTAYI işaretleyen görselin büyüklüğüdür.
+        private const float GripIndicatorRingRadius = 0.035f;
+        private const int GripIndicatorRingSegments = 20;
+        private const float GripIndicatorRingWidth = 0.004f;
+
+        /// <summary>Halka materyalinin shader arama zinciri (ilk bulunan). "Sprites/Default" başta:
+        /// vertex rengini çarpar (LineRenderer.startColor işler) ve materyal ASSET olarak durduğu
+        /// için build'e kesin girer.</summary>
+        private static readonly string[] GripIndicatorShaderCandidates =
+        {
+            "Sprites/Default",
+            "Universal Render Pipeline/Unlit",
+            "Unlit/Color",
+        };
+
         /// <summary>Silah ele gelirken oynayan çözülme materyali — her WPN köküne takılan
         /// <see cref="SimpleWeaponDissolve"/>'a bağlanır (bkz. <see cref="ApplyDissolveKit"/>).
         /// Bu araç onu üretmez, yalnız bağlar.</summary>
@@ -474,6 +502,7 @@ namespace VortexArena.Core.Editor
             int wdNew = 0;
             int wpnRebound = 0, wpnFailed = 0;
             bool fxCreated = false;
+            bool indicatorCreated = false;
             bool catalogCreated = false;
 
             EnsureFolder(DataDir);
@@ -541,8 +570,9 @@ namespace VortexArena.Core.Editor
                     }
                 }
 
-                // ---- ADIM 3: uzak atış FX prefabı (varsa dokunulmaz).
+                // ---- ADIM 3: uzak atış FX prefabı + ön kabza göstergesi (varsa dokunulmaz).
                 fxCreated = EnsureRemoteShotFx(live);
+                indicatorCreated = EnsureGripIndicatorPrefab(live);
 
                 // ---- ADIM 4: WeaponCatalog.
                 catalogCreated = UpdateCatalog();
@@ -556,6 +586,7 @@ namespace VortexArena.Core.Editor
                 Debug.Log(Log + "Bitti: WD " + wdNew + " yeni / " + (Specs.Length - wdNew) + " güncellendi · " +
                           "WPN " + wpnRebound + " güncellendi, " + wpnFailed + " başarısız · " +
                           "FX_RemoteShot " + (fxCreated ? "üretildi" : "mevcut") + " · " +
+                          "VA_GripIndicator " + (indicatorCreated ? "üretildi" : "mevcut") + " · " +
                           "WeaponCatalog " + (catalogCreated ? "üretildi" : "güncellendi") + " · " +
                           "eski kavrama düğümü " + _legacyNodesRemoved + " silindi · " +
                           _warnings + " uyarı.");
@@ -667,7 +698,7 @@ namespace VortexArena.Core.Editor
 
         /// <summary>
         /// Mevcut WPN_&lt;Ad&gt;.prefab'ı yerinde günceller (<see cref="RebindExistingPrefab"/>):
-        /// definition bağları + namlu alevi/duman/kovan kiti + kavrama soketi kiti. Gövdeye
+        /// definition bağları + namlu alevi/duman/kovan kiti + kavrama kiti. Gövdeye
         /// (model, Muzzle/MuzzleFlash/Eject konumu) DOKUNULMAZ — onlar elle ayarlanır.
         /// Prefab yoksa üretilmez, hata basılır: eksik silahın prefabı repoya elle eklenir.
         /// </summary>
@@ -739,9 +770,9 @@ namespace VortexArena.Core.Editor
                     ApplyVfxAndShellKit(contents, spec, casings, smokeMaterial, ctx);
                 }
 
-                // Tek çalışan yol burası — soket kiti de burada uygulanmazsa mevcut WPN'ler
-                // filtresiz (yani mesafeden kavranabilir) kalırdı.
-                ApplyGripSocketKit(contents, def, ctx);
+                // Tek çalışan yol burası — kavrama kiti de burada uygulanmazsa mevcut WPN'ler
+                // mesafeden kavranabilir kalırdı.
+                ApplyGripKit(contents, def, ctx);
                 ApplyWeaponFrameKit(contents, ctx);
                 ApplyDissolveKit(contents, ctx);
 
@@ -839,6 +870,107 @@ namespace VortexArena.Core.Editor
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Ön kabza göstergesinin prefabını YOKSA üretir (varsa dokunmaz): tek bir
+        /// <see cref="LineRenderer"/> halka (yerel XY düzleminde, kapalı, ince şerit).
+        /// <para>
+        /// <b>Neden prefab:</b> gösterge SANATTIR ve sanatın yeri prefabtır — <c>Weapon</c> yalnız
+        /// yerini, ölçeğini ve rengini sürer. Halka başlangıçtır: sanatçı bu prefabı yerinde
+        /// değiştirebilir (araç bir daha dokunmaz) ya da kataloğa bambaşka bir prefab bağlayabilir.
+        /// Renk çalışma anında yazıldığı için burada BEYAZ bırakılır.
+        /// </para>
+        /// <para>⚠️ Materyal ASSET olarak üretilir (<see cref="GripIndicatorMaterialPath"/>), çalışma
+        /// anında <c>Shader.Find</c> ile DEĞİL: hiçbir asset'in referanslamadığı shader build'den
+        /// striplenir ve gösterge sahada sessizce çizilmez.</para>
+        /// </summary>
+        private static bool EnsureGripIndicatorPrefab(List<GameObject> live)
+        {
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(GripIndicatorPrefabPath) != null)
+            {
+                return false; // varsa dokunma
+            }
+
+            Material material = EnsureGripIndicatorMaterial();
+            if (material == null)
+            {
+                Warn("VA_GripIndicator: halka için shader bulunamadı (Sprites/Default dahil) — gösterge " +
+                     "prefabı üretilemedi, katalogda alan boş kalır (gösterge çizilmez).");
+                return false;
+            }
+
+            var root = new GameObject("VA_GripIndicator");
+            live.Add(root);
+
+            var line = root.AddComponent<LineRenderer>();
+            line.sharedMaterial = material;
+            // Yerel uzay + loop: halka köşeleri bir kez yazılır, çalışma anında yalnız kök taşınır.
+            line.useWorldSpace = false;
+            line.loop = true;
+            line.numCapVertices = 0;
+            line.numCornerVertices = 0;
+            line.textureMode = LineTextureMode.Stretch;
+            // Şeridin KALINLIĞI kameraya baksın (ince bant yandan yok olmasın). Halkanın DÜZLEMİ ise
+            // çalışma anında kökün kameraya çevrilmesiyle çözülür (Weapon.IndicatorRotation).
+            line.alignment = LineAlignment.View;
+            line.startWidth = GripIndicatorRingWidth;
+            line.endWidth = GripIndicatorRingWidth;
+            line.startColor = Color.white;
+            line.endColor = Color.white;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            line.receiveShadows = false;
+            line.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            line.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+
+            var points = new Vector3[GripIndicatorRingSegments];
+            for (int i = 0; i < GripIndicatorRingSegments; i++)
+            {
+                float angle = i / (float)GripIndicatorRingSegments * Mathf.PI * 2f;
+                points[i] = new Vector3(Mathf.Cos(angle) * GripIndicatorRingRadius,
+                    Mathf.Sin(angle) * GripIndicatorRingRadius, 0f);
+            }
+
+            line.positionCount = points.Length;
+            line.SetPositions(points);
+
+            PrefabUtility.SaveAsPrefabAsset(root, GripIndicatorPrefabPath, out bool saved);
+            Object.DestroyImmediate(root);
+
+            if (!saved)
+            {
+                Debug.LogError(Log + "VA_GripIndicator: SaveAsPrefabAsset başarısız: " + GripIndicatorPrefabPath);
+                return false;
+            }
+
+            Debug.Log(Log + "VA_GripIndicator.prefab üretildi (" + GripIndicatorPrefabPath + ").");
+            return true;
+        }
+
+        /// <summary>Halka materyali yoksa üretir (varsa dokunmaz); shader bulunamazsa <c>null</c>.</summary>
+        private static Material EnsureGripIndicatorMaterial()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(GripIndicatorMaterialPath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            Shader shader = null;
+            for (int i = 0; i < GripIndicatorShaderCandidates.Length && shader == null; i++)
+            {
+                shader = Shader.Find(GripIndicatorShaderCandidates[i]);
+            }
+
+            if (shader == null)
+            {
+                return null;
+            }
+
+            EnsureFolder(GripIndicatorMaterialDir);
+            var material = new Material(shader) { name = "M_GripIndicator" };
+            AssetDatabase.CreateAsset(material, GripIndicatorMaterialPath);
+            return material;
         }
 
         /// <summary>
@@ -1022,6 +1154,27 @@ namespace VortexArena.Core.Editor
                 else
                 {
                     Warn("WeaponCatalog: FX_RemoteShot.prefab yok — remoteShotFxPrefab olduğu gibi bırakıldı.");
+                }
+            }
+
+            // Ön kabza göstergesi: YALNIZ alan boşsa bağlanır (sanatçının bağladığı başka bir prefab
+            // ezilmesin — FX alanından farkı budur, gerekçe GripIndicatorPrefabPath'te).
+            var indicatorProp = so.FindProperty("secondaryGripIndicatorPrefab");
+            if (indicatorProp == null)
+            {
+                Warn("WeaponCatalog: 'secondaryGripIndicatorPrefab' alanı yok (sözleşme kayması?).");
+            }
+            else if (indicatorProp.objectReferenceValue == null)
+            {
+                var indicator = AssetDatabase.LoadAssetAtPath<GameObject>(GripIndicatorPrefabPath);
+                if (indicator != null)
+                {
+                    indicatorProp.objectReferenceValue = indicator;
+                }
+                else
+                {
+                    Warn("WeaponCatalog: VA_GripIndicator.prefab yok — secondaryGripIndicatorPrefab boş " +
+                         "kaldı (ön kabza göstergesi çizilmez; tam 'Build Weapon Prefabs' üretir).");
                 }
             }
 
@@ -1484,13 +1637,17 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Kavrama soketi kitini bir WPN kökü üzerinde kurar (idempotent): <see cref="ItemGripSockets"/>
-        /// bileşeni + ISDK'nın <b>İKİ</b> yakın-kavrama bileşeninin <c>_interactorFilters</c>
-        /// listesine bağlanması.
+        /// Kavrama kitini bir WPN kökü üzerinde kurar (idempotent): ISDK'nın <b>İKİ</b> yakın-kavrama
+        /// bileşeni (kumanda + el hattı) korunur ve filtresiz bırakılır, mesafeden kavrama kökten
+        /// silinir, eski kavrama kalıntıları temizlenir.
         /// <para>
-        /// Filtre ISDK'nın tasarlanmış uzatma noktasıdır (<c>Interactable&lt;,&gt;.CanBeSelectedBy</c>
-        /// her filtreyi sorar): kavramanın ALGISI ISDK'da kalır, biz yalnız "izin var mı" sorusuna
-        /// cevap veririz.
+        /// ⚠️ <b>Kökte kavrama FİLTRESİ YOKTUR ve bağlanmaz</b> (<c>_interactorFilters</c> boş):
+        /// eski soket kapısı bileşeni kaldırıldı — silah ana ele verilerek/çağrılarak geliyor, ana
+        /// kabza için oyuncunun elini bir yere götürmesi gerekmiyor; ön kabzanın kapısı ve
+        /// göstergesi <see cref="Weapon"/>'ın kendisindedir (<c>IsHandOnSecondaryGrip</c>). Bu araç
+        /// listeyi her koşuda BOŞALTIR: kaldırılan bileşenin filtre listesinde bıraktığı boş (missing)
+        /// giriş ISDK'nın <c>Start</c> denetiminde (<c>AssertCollectionItems</c>) patlar ve silah
+        /// kavranamaz olurdu. Aynı sebeple kökte kalmış eksik script bileşenleri de silinir.
         /// </para>
         /// <para>
         /// ⚠️ <b>Neden iki bileşen:</b> <c>GrabInteractable</c> (kumanda hattı) ile
@@ -1515,25 +1672,25 @@ namespace VortexArena.Core.Editor
         /// poz düğümleri, kavraması yazılmamış silah raporu.
         /// </para>
         /// </summary>
-        private static void ApplyGripSocketKit(GameObject root, ItemDefinition definition, string ctx)
+        private static void ApplyGripKit(GameObject root, ItemDefinition definition, string ctx)
         {
-            // Tip Core'da yaşıyor (derleme zamanında bağlı) — tip adıyla arama gerekmez.
-            ItemGripSockets sockets = root.GetComponent<ItemGripSockets>();
-            if (sockets == null)
+            // Kaldırılan soket bileşeninin (ve başka bir eski scriptin) kökte bıraktığı eksik
+            // script kayıtları: bileşen artık derlenmediği için tipten bulunamaz, Unity'nin kendi
+            // temizliğiyle silinir.
+            int missing = GameObjectUtility.RemoveMonoBehavioursWithMissingScript(root);
+            if (missing > 0)
             {
-                sockets = root.AddComponent<ItemGripSockets>();
+                Debug.Log(Log + ctx + ": kökte " + missing + " eksik script bileşeni silindi.");
             }
 
-            // Soket tasarımı "eli soketin üstüne getir" demektir; mesafeden kavrama bunun tam zıddı.
-            // Filtreye güvenip bileşeni bırakmak YETMEZ: ItemGripSockets.Filter el çözülemediğinde
-            // FAIL-OPEN'dır (bkz. WarnFailOpen) ve o oturumlarda silah odanın öbür ucundan
-            // kavranabilir kalırdı. Kapı "kapalı" demiyor, "çoğu zaman kapalı" diyor.
+            // Kökte mesafeden kavrama YOK: silah çerçeveden seçilir (VA_WeaponFrame), kökün kendisi
+            // uzaktan kavranırsa çerçeve atlanır ve silah odanın öbür ucundan alınabilir olurdu.
             // ⚠️ İki hat da silinir: hangisinin koşacağını rig seçiyor, biri unutulursa yasak
             // yarım kalır ve silah bazı yapılandırmalarda uzaktan kavranabilir olur.
             RemoveRootComponent(root, "Oculus.Interaction.DistanceGrabInteractable", ctx,
-                "soket tasarımında mesafeden kavrama yok");
+                "kökte mesafeden kavrama yok (çerçeveden seçilir)");
             RemoveRootComponent(root, "Oculus.Interaction.HandGrab.DistanceHandGrabInteractable", ctx,
-                "soket tasarımında mesafeden kavrama yok (el hattı)");
+                "kökte mesafeden kavrama yok (el hattı; çerçeveden seçilir)");
 
             // Mesafe kavraması gidince asset'te duran sağlayıcı da gider: kalan tek tüketicisi
             // HandGrabInteractable'dır ve o, alan boşsa kendi örneğini ÇALIŞMA ANINDA ekliyor.
@@ -1553,12 +1710,12 @@ namespace VortexArena.Core.Editor
             Component grabInteractable = FindComponentByTypeFullName(root, "Oculus.Interaction.GrabInteractable");
             if (grabInteractable == null)
             {
-                Warn(ctx + ": kökte Oculus.Interaction.GrabInteractable yok — kumanda hattının soket " +
-                     "filtresi bağlanamadı (silah mesafe/soket ayrımı olmadan kavranır).");
+                Warn(ctx + ": kökte Oculus.Interaction.GrabInteractable yok — kumanda hattı eksik " +
+                     "(silah yalnız el hattından kavranır).");
             }
             else
             {
-                BindSocketFilter(grabInteractable, sockets, ctx);
+                ClearInteractorFilters(grabInteractable, ctx);
             }
 
             // El hattı araç tarafından ÜRETİLİR (kumanda hattının aksine): yeni bir silah eklendiğinde
@@ -1593,7 +1750,7 @@ namespace VortexArena.Core.Editor
                      "kavranamaz).");
             }
 
-            BindSocketFilter(handGrab, sockets, ctx);
+            ClearInteractorFilters(handGrab, ctx);
 
             RemoveLegacySocketNodes(root, ctx);
             RemoveLegacyHandNodes(root, ctx);
@@ -1884,30 +2041,31 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Bir ISDK interactable'ının <c>_interactorFilters</c> listesini soket bileşenine
-        /// sabitler (idempotent).
-        /// <para>Silahın başka bir interactor filtresi yok ve olması da beklenmiyor: liste tek
-        /// elemana indirilir.</para>
+        /// Bir ISDK interactable'ının <c>_interactorFilters</c> listesini BOŞALTIR (idempotent).
+        /// <para>Kökte kavrama filtresi yoktur (gerekçe <see cref="ApplyGripKit"/>'te). Liste
+        /// boşaltılmazsa kaldırılan soket bileşeninden kalan eksik giriş ISDK'nın <c>Start</c>
+        /// denetiminde patlar ve silah kavranamaz olur — hata mesajı ise silahı değil bir
+        /// koleksiyonu işaret eder.</para>
         /// </summary>
-        private static void BindSocketFilter(Component interactable, Object filter, string ctx)
+        private static void ClearInteractorFilters(Component interactable, string ctx)
         {
             var so = new SerializedObject(interactable);
             SerializedProperty filters = so.FindProperty("_interactorFilters");
             if (filters == null || !filters.isArray)
             {
                 Warn(ctx + ": " + interactable.GetType().Name + " üzerinde '_interactorFilters' alanı yok " +
-                     "ya da dizi değil (ISDK sözleşme kayması?) — soket filtresi bağlanamadı.");
+                     "ya da dizi değil (ISDK sözleşme kayması?) — filtre listesi denetlenemedi.");
                 return;
             }
 
-            if (filters.arraySize == 1 && filters.GetArrayElementAtIndex(0).objectReferenceValue == filter)
+            if (filters.arraySize == 0)
             {
-                return; // zaten bağlı — idempotent
+                return; // zaten boş — idempotent
             }
 
-            filters.arraySize = 1;
-            filters.GetArrayElementAtIndex(0).objectReferenceValue = filter;
+            filters.arraySize = 0;
             so.ApplyModifiedPropertiesWithoutUndo();
+            Debug.Log(Log + ctx + ": " + interactable.GetType().Name + " filtre listesi boşaltıldı.");
         }
 
         /// <summary>
@@ -1928,10 +2086,10 @@ namespace VortexArena.Core.Editor
         /// kuralının aynısı).
         /// </para>
         /// <para>
-        /// ⚠️ Bu, <see cref="ApplyGripSocketKit"/>'in mesafe-kavrama silme adımlarıyla (kumanda ve
+        /// ⚠️ Bu, <see cref="ApplyGripKit"/>'in mesafe-kavrama silme adımlarıyla (kumanda ve
         /// el hattı) ÇELİŞMEZ: o adımlar <see cref="FindComponentByTypeFullName"/> kullanıyor ve o metot yalnız
         /// KÖKÜN bileşenlerine bakıyor (çocuklara inmiyor). Yasak <c>WPN_*</c> kökü içindir —
-        /// soketli yakın kavramanın zıddı olduğu için; çerçeve ayrı bir objedir ve soket kullanmaz.
+        /// çerçeve ayrı bir objedir ve seçim oradan yapılır.
         /// İnseydi araç kendi eklediği çerçevenin kavramasını siler ve silah hiç alınamaz olurdu.
         /// </para>
         /// </summary>

@@ -53,6 +53,12 @@ namespace VortexArena.Core.Combat
     /// anchor'ının ÇOCUĞU DEĞİLDİR) ve pozu her karede kanonik kavramayla sürülür; ikinci el ön
     /// kabzayı tutabilir (<see cref="SecondaryHand"/>).
     /// </para>
+    /// <para>
+    /// <b>ÖN KABZA kapısı ve göstergesi de bu sınıftadır</b> — ayrı bir bileşen YOKTUR:
+    /// <see cref="IsHandOnSecondaryGrip"/> "bu elin avucu ön kabzanın kabul yarıçapında mı" sorusunun
+    /// tek cevabıdır (granter ikinci eli buna göre bağlar), <see cref="TickSecondaryGripIndicator"/>
+    /// aynı ölçüyle boş elin yaklaştığı ön kabzaya katalogdaki gösterge prefabını koyar.
+    /// </para>
     /// </summary>
     public class Weapon : MonoBehaviour
     {
@@ -396,6 +402,7 @@ namespace VortexArena.Core.Combat
             GrantKind = WeaponGrantKind.None;
             _grantedSecondaryHand = OVRInput.Controller.None;
             triggerHeld = false;
+            HideIndicator();
             if (wasHeld)
                 HeldChanged?.Invoke(false);
 
@@ -455,6 +462,18 @@ namespace VortexArena.Core.Combat
         protected virtual void LateUpdate()
         {
             ApplyCanonicalGrip();
+            TickSecondaryGripIndicator();
+        }
+
+        protected virtual void OnDestroy()
+        {
+            // Gösterge için alınan materyal ÖRNEĞİ (renderer.material) silahla birlikte gider —
+            // bırakılsa sahne değişimine kadar sızardı.
+            if (indicatorMaterial != null)
+            {
+                Destroy(indicatorMaterial);
+                indicatorMaterial = null;
+            }
         }
 
         // -------------------------------------------------------- kanonik kavrama
@@ -1132,9 +1151,269 @@ namespace VortexArena.Core.Combat
         }
 
         // ⚠️ El çözümü BURADA DEĞİL: interactor'dan OVR kontrolcüsü çıkarmanın tek yeri
-        // WeaponGranter.ResolveController(evt) / ResolveControllerFromGameObject(go). Üç ayrı
-        // tüketicisi var (bu sınıf, ItemGripSockets, WeaponFrame) ve kopyalandığında biri
-        // düzeltilip diğerleri unutuluyordu.
+        // WeaponGranter.ResolveController(evt) / ResolveControllerFromGameObject(go). İki ayrı
+        // tüketicisi var (bu sınıf, WeaponFrame) ve kopyalandığında biri düzeltilip diğeri
+        // unutuluyordu.
+
+        // ------------------------------------------- ön kabza: kapı + gösterge
+
+        /// <summary>
+        /// Ön kabza göstergesinin GÖRÜNÜR olduğu mesafe (m) — playtest değeri, tüm silahlarda aynı.
+        /// <para>⚠️ Kabul yarıçapı ise silah başınadır (<see cref="ItemDefinition.SecondaryGripRadius"/>)
+        /// ve bu sabiti AŞABİLİR; etkin görünme mesafesi bu yüzden
+        /// <c>Mathf.Max(SecondaryGripHoverRadius, radius)</c>'tur — yarıçap görünmeyi geçerse
+        /// "önce ipucu görünür, sonra kavranır" sırası tersine döner ve gösterge işlevsiz kalır.</para>
+        /// </summary>
+        private const float SecondaryGripHoverRadius = 0.30f;
+
+        /// <summary>Kabul mesafesine girince göstergenin büyüme oranı — "şimdi bas" okumasını gözle ayırır.</summary>
+        private const float IndicatorReadyScale = 1.35f;
+
+        /// <summary>Yaklaşma durumunda alfa: gösterge "burada bir yer var" der, "şimdi bas" demez.</summary>
+        private const float IndicatorHoverAlpha = 0.35f;
+
+        /// <summary>Yaklaşma rengi (mavi): "burada bir yer var".</summary>
+        private static readonly Color IndicatorHoverColor = new Color(0.45f, 0.85f, 1f, 1f);
+
+        /// <summary>Kabul rengi (yeşil): "şimdi bas". Renk ayrımı alfa/ölçek farkının ÜSTÜNE gelir —
+        /// VR'da yalnız parlaklık değişimi kabul mesafesine girildiğini yeterince okutmuyor.</summary>
+        private static readonly Color IndicatorReadyColor = new Color(0.35f, 0.95f, 0.45f, 1f);
+
+        /// <summary>Gösterge prefabı katalogda yoksa OTURUM başına bir uyarı (silah başına değil).</summary>
+        private static bool indicatorPrefabWarned;
+
+        // Bu silahın gösterge örneği (tembel; yalnız yaklaşan bir el olunca doğar) ve rengi
+        // sürülecek yüzeyi: halka prefabında LineRenderer, tasarlanmış bir sanatta materyal.
+        private Transform indicator;
+        private LineRenderer indicatorLine;
+        private Material indicatorMaterial;
+
+        /// <summary>
+        /// Ön kabza noktasının DÜNYA konumu — <paramref name="rightHand"/> elin kaydından
+        /// (kayıt el başınadır: kabza simetrik olmadığı için iki elin bileği farklı yere düşer).
+        /// <para>⚠️ <see cref="Transform.TransformPoint"/> DEĞİL elle bileşim: kayıt metredir ve
+        /// <c>WPN_*</c> kökleri 0.8 ölçekli — <c>TransformPoint</c> ölçeği ikinci kez uygular
+        /// (<see cref="ItemGripPose"/>). Kapı, gösterge ve <c>RemoteAvatar</c> aynı bileşimi kullanır.</para>
+        /// </summary>
+        public Vector3 SecondaryGripWorld(bool rightHand)
+        {
+            return definition == null
+                ? transform.position
+                : transform.position + transform.rotation * definition.SecondaryGripPosition(rightHand);
+        }
+
+        /// <summary>
+        /// Bu elin AVUCU ön kabzanın kabul yarıçapında mı — ikinci elin <b>KURULMA</b> kapısı.
+        /// <para>
+        /// <b>Tek kural, iki okuyucu:</b> <see cref="WeaponGranter"/> ikinci eli buna göre bağlar
+        /// (grip basılı + bu <c>true</c> → el ön kabzaya kilitlenir), gösterge de yeşile buna göre
+        /// döner. İki ayrı ölçü olsaydı oyuncuya "şimdi bas" diye büyütülen gösterge sessizce
+        /// reddedilebilirdi.
+        /// </para>
+        /// <para>
+        /// ⚠️ Mesafe ANCHOR'dan değil AVUÇtan ölçülür (<see cref="WeaponGranter.TryResolvePalm"/>):
+        /// oyuncunun gördüğü şey kumanda değil sentetik eldir; anchor'a göre ölçülen kabul mesafesi
+        /// elin birkaç santim ötesinde başlar ve gösterge "elimin içinde ama yeşile dönmüyor" diye
+        /// okunur.
+        /// </para>
+        /// <para>⚠️ Bu yalnız kurulma kapısıdır; bağın SÜRDÜRÜLMESİ mesafeye bakmaz (gerekçe
+        /// <c>WeaponGranter.ResolveSecondaryHand</c>'de).</para>
+        /// </summary>
+        public bool IsHandOnSecondaryGrip(OVRInput.Controller hand)
+        {
+            if (definition == null || !definition.IsTwoHanded)
+            {
+                return false;
+            }
+
+            if (!WeaponGranter.TryResolvePalm(hand, out Pose palm))
+            {
+                return false;
+            }
+
+            float radius = definition.SecondaryGripRadius;
+            Vector3 socket = SecondaryGripWorld(HandGripPivot.IsRight(hand));
+            return (palm.position - socket).sqrMagnitude <= radius * radius;
+        }
+
+        /// <summary>
+        /// Ön kabza göstergesinin bir karelik durumu: silah tutuluyor, iki elli ve ikinci el henüz
+        /// bağlı değilken BOŞ elin avucu ön kabzaya yaklaştıkça gösterge belirir (mavi, soluk),
+        /// kabul yarıçapına girince yeşile döner ve büyür ("şimdi bas"); ikinci el bağlanınca kaybolur.
+        /// <para>
+        /// <b>Gösterge YALNIZ ön kabza içindir.</b> Ana kabzanın göstergesi yoktur: silah zaten ana
+        /// elde doğuyor (verilen/çağrılan silah) ya da çerçeveden seçiliyor — ana kabza için
+        /// oyuncunun elini bir yere götürmesi gerekmiyor.
+        /// </para>
+        /// <para>
+        /// <b>Sanat prefabdadır</b> (<see cref="WeaponCatalog.SecondaryGripIndicatorPrefab"/>, tüm
+        /// silahlar aynı göstergeyi paylaşır); bu sınıf yalnız yerini, ölçeğini ve rengini sürer.
+        /// Prefab yoksa gösterge çizilmez ve bir kez uyarılır — kapı yine çalışır (kavrama göstergesiz
+        /// de kabul edilir).
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Uzak avatarlarda çizilmez</b> ve bunun için bir şey yapmak gerekmez:
+        /// <c>RemoteAvatar.SterilizeVisual</c> kopyadaki tüm MonoBehaviour'ları (bu sınıf dahil) yok
+        /// eder — gösterge yalnız yerel oyuncunun elindeki silahta yaşar.
+        /// </para>
+        /// <para>
+        /// ⚠️ <see cref="LateUpdate"/>'te ve <see cref="ApplyCanonicalGrip"/>'ten SONRA çağrılır: silahın
+        /// bu karedeki pozu yazılmadan ölçülen mesafe bir kare geriden gelir ve gösterge hızlı
+        /// harekette silahtan kopuk görünür.
+        /// </para>
+        /// </summary>
+        private void TickSecondaryGripIndicator()
+        {
+            if (definition == null || !definition.IsTwoHanded || !IsHeld ||
+                SecondaryHand != OVRInput.Controller.None)
+            {
+                HideIndicator();
+                return;
+            }
+
+            OVRInput.Controller free = FreeHand();
+            if (free == OVRInput.Controller.None || !WeaponGranter.TryResolvePalm(free, out Pose palm))
+            {
+                // Rig yok (admin gözlemci, editör oturumu) ya da ana el çözülemedi: gösterilecek el yok.
+                HideIndicator();
+                return;
+            }
+
+            Vector3 socket = SecondaryGripWorld(HandGripPivot.IsRight(free));
+            float distance = Vector3.Distance(palm.position, socket);
+            float radius = definition.SecondaryGripRadius;
+
+            if (distance > Mathf.Max(SecondaryGripHoverRadius, radius))
+            {
+                HideIndicator();
+                return;
+            }
+
+            if (!EnsureIndicator())
+            {
+                return;
+            }
+
+            bool ready = distance <= radius;
+
+            indicator.gameObject.SetActive(true);
+            indicator.SetPositionAndRotation(socket, IndicatorRotation());
+
+            // ⚠️ Ölçek DÜNYA ölçüsüdür: gösterge silahın altında duruyor ve WPN kökleri 0.8 ölçekli —
+            // yerel ölçek düz yazılsa halka silahtan silaha farklı büyüklükte görünürdü.
+            float parentScale = Mathf.Max(1e-4f, transform.lossyScale.x);
+            indicator.localScale = Vector3.one * ((ready ? IndicatorReadyScale : 1f) / parentScale);
+
+            Color color = ready ? IndicatorReadyColor : IndicatorHoverColor;
+            color.a = ready ? 1f : IndicatorHoverAlpha;
+
+            if (indicatorLine != null)
+            {
+                indicatorLine.startColor = color;
+                indicatorLine.endColor = color;
+            }
+            else if (indicatorMaterial != null)
+            {
+                indicatorMaterial.color = color;
+            }
+        }
+
+        /// <summary>Ana elin karşısındaki el; ana el çözülemediyse <c>None</c>.</summary>
+        private OVRInput.Controller FreeHand()
+        {
+            switch (MainHand)
+            {
+                case OVRInput.Controller.LTouch: return OVRInput.Controller.RTouch;
+                case OVRInput.Controller.RTouch: return OVRInput.Controller.LTouch;
+                default: return OVRInput.Controller.None;
+            }
+        }
+
+        /// <summary>
+        /// Gösterge KAMERAYA çevrilir: bir NOKTAYI işaretliyor ve nokta işareti bakana dönük okunur —
+        /// halka silahın dönüşünü alsaydı düzlemine kenarından bakan oyuncu halka yerine bir çizgi
+        /// görürdü (<c>LineAlignment.View</c> bunu çözmez: o yalnız şeridin kalınlığını çevirir).
+        /// Kamera yoksa silahın dönüşü.
+        /// </summary>
+        private Quaternion IndicatorRotation()
+        {
+            Camera camera = Camera.main;
+            return camera != null
+                ? Quaternion.LookRotation(camera.transform.forward, camera.transform.up)
+                : transform.rotation;
+        }
+
+        /// <summary>
+        /// Gösterge örneğini katalogdaki prefabtan üretir (bir kez, silahın altına). Prefabtan fizik
+        /// sökülür: collider bırakılırsa gösterge hem ateş ışınına hem kavramaya takılır — oyuncuya
+        /// yardım etmesi gereken şey nişanı bozardı.
+        /// </summary>
+        private bool EnsureIndicator()
+        {
+            if (indicator != null)
+            {
+                return true;
+            }
+
+            WeaponCatalog catalog = WeaponCatalog.Load();
+            GameObject prefab = catalog != null ? catalog.SecondaryGripIndicatorPrefab : null;
+            if (prefab == null)
+            {
+                if (!indicatorPrefabWarned)
+                {
+                    indicatorPrefabWarned = true;
+                    Debug.LogWarning("[Weapon] WeaponCatalog.secondaryGripIndicatorPrefab boş — ön kabza " +
+                                     "göstergesi çizilmeyecek (kavrama yine çalışır). " +
+                                     "'Build Weapon Prefabs' göstergeyi üretip bağlar.");
+                }
+
+                return false;
+            }
+
+            GameObject instance = Instantiate(prefab, transform);
+            instance.name = "[GripIndicator]";
+
+            Collider[] colliders = instance.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                Destroy(colliders[i]);
+            }
+
+            Rigidbody[] bodies = instance.GetComponentsInChildren<Rigidbody>(true);
+            for (int i = 0; i < bodies.Length; i++)
+            {
+                Destroy(bodies[i]);
+            }
+
+            indicator = instance.transform;
+            indicatorLine = instance.GetComponentInChildren<LineRenderer>(true);
+
+            if (indicatorLine == null)
+            {
+                // Materyal örneği BİR KEZ burada alınır (her karede .material yeni bir örnek üretirdi).
+                // Renk özelliği yoksa sessizce geçilir: gösterge yalnız ölçek/aktiflikle konuşur.
+                var renderer = instance.GetComponentInChildren<Renderer>(true);
+                if (renderer != null)
+                {
+                    Material material = renderer.material;
+                    if (material != null &&
+                        (material.HasProperty("_BaseColor") || material.HasProperty("_Color")))
+                    {
+                        indicatorMaterial = material;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private void HideIndicator()
+        {
+            if (indicator != null && indicator.gameObject.activeSelf)
+            {
+                indicator.gameObject.SetActive(false);
+            }
+        }
 
         // ------------------------------------------------------- canlanma dolumu
 

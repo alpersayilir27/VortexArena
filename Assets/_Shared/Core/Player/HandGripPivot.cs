@@ -9,7 +9,7 @@ namespace VortexArena.Core.Player
     /// <c>rightHandAnchor</c> idi, oysa oyuncunun gördüğü şey kumanda değil <b>sentetik eldir</b> —
     /// anchor ile avuç arasındaki birkaç santimlik fark, silahı elin içinden geçmiş ya da havada
     /// duruyor gösteriyor. Bu sınıf o farkı tek yerde tanımlar; anchor'a doğrudan bakan her tüketici
-    /// (<see cref="VortexArena.Core.Combat.Weapon"/>, <c>WeaponGranter</c>, <c>ItemGripSockets</c>,
+    /// (<see cref="VortexArena.Core.Combat.Weapon"/>, <c>WeaponGranter</c>,
     /// <c>WeaponFrame</c>, <see cref="RemoteAvatar"/>) buradan geçer.
     /// </para>
     /// <para>
