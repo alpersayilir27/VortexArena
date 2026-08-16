@@ -563,6 +563,10 @@ değiştirmek = o prefabı düzenlemek ya da kataloğa başka bir prefab bağlam
 ⚠️ **Prefab 1 m çapında tasarlanır** — `Weapon` onu kabul yarıçapının iki katına ölçekler; sözleşme
 bozulursa görülen küre ile kabul hacmi ayrışır. Soket yalnız **tutulan çift elli silahta, ikinci el
 bağlanana kadar** ve yalnız yerel oyuncuda çizilir; ana kabzanın soketi yoktur.
+⚠️ **Ön kabza kaydı yazılmamış silahta soket ÇİZİLMEZ ve ikinci el BAĞLANMAZ**
+(`ItemDefinition.HasSecondaryGrip`; yazılmamış kayıt eşyanın köküne düşer, `Weapon` bir kez uyarır)
+— "küre ana elde çıkıyor / ikinci el tutmuyor" görüldüğünde bakılacak yer koddaki kapı değil o silahın
+`WD_*`'ındaki kayıttır; çare stüdyoda ön kabza ellerini yazmaktır.
 ⚠️ **Çerçevenin el hattında `Hand Alignment` = `None`'dır ve öyle kalır** (varsayılan
 `AlignOnGrab`): çerçeve bir kavrama hedefi değil bir SEÇİM tetikleyicisidir, `AlignOnGrab`
 sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silahta görür

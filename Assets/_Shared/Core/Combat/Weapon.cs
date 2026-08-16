@@ -1178,6 +1178,12 @@ namespace VortexArena.Core.Combat
         /// <summary>Soket prefabı katalogda yoksa OTURUM başına bir uyarı (silah başına değil).</summary>
         private static bool indicatorPrefabWarned;
 
+        /// <summary>
+        /// Ön kabza kaydı yazılmamış tanımlar — her biri için OTURUM başına bir uyarı (silah her
+        /// kavrayışta yeniden klonlandığı için örnek başına uyarı spam olurdu).
+        /// </summary>
+        private static readonly HashSet<ItemDefinition> unauthoredSecondaryWarned = new HashSet<ItemDefinition>();
+
         // Bu silahın soket örneği (tembel; yalnız yaklaşan bir el olunca doğar) ve alfası
         // sürülecek yüzeyi: küre prefabında materyal, LineRenderer'lı bir sanatta çizgi rengi.
         private Transform indicator;
@@ -1192,6 +1198,8 @@ namespace VortexArena.Core.Combat
         /// <para>⚠️ <see cref="Transform.TransformPoint"/> DEĞİL elle bileşim: kayıt metredir ve
         /// <c>WPN_*</c> kökleri 0.8 ölçekli — <c>TransformPoint</c> ölçeği ikinci kez uygular
         /// (<see cref="ItemGripPose"/>). Kapı, soket ve <c>RemoteAvatar</c> aynı bileşimi kullanır.</para>
+        /// <para>⚠️ Yalnız <see cref="ItemDefinition.HasSecondaryGrip"/> iken anlamlı — yazılmamış
+        /// kayıtta bu nokta eşyanın köküdür (çağıranlar önce o kapıya bakar).</para>
         /// </summary>
         public Vector3 SecondaryGripWorld(bool rightHand)
         {
@@ -1218,10 +1226,14 @@ namespace VortexArena.Core.Combat
         /// </para>
         /// <para>⚠️ Bu yalnız kurulma kapısıdır; bağın SÜRDÜRÜLMESİ mesafeye bakmaz (gerekçe
         /// <c>WeaponGranter.ResolveSecondaryHand</c>'de).</para>
+        /// <para>⚠️ <b>Ön kabza kaydı yazılmamışsa kapı KAPALIDIR</b>
+        /// (<see cref="ItemDefinition.HasSecondaryGrip"/>): yazılmamış kayıt eşyanın köküne düşer ve o
+        /// nokta çoğu silahta ana elin dibindedir — kapı açık kalsa ikinci el ön kabzaya değil ana elin
+        /// üstüne "bağlanır"dı. Uyarıyı <see cref="TickSecondaryGripIndicator"/> basar.</para>
         /// </summary>
         public bool IsHandOnSecondaryGrip(OVRInput.Controller hand)
         {
-            if (definition == null || !definition.IsTwoHanded)
+            if (definition == null || !definition.HasSecondaryGrip)
             {
                 return false;
             }
@@ -1296,6 +1308,23 @@ namespace VortexArena.Core.Combat
                 SecondaryHand != OVRInput.Controller.None)
             {
                 HideIndicator();
+                return;
+            }
+
+            if (!definition.HasSecondaryGrip)
+            {
+                // Yazılmamış ön kabza = ön kabza YOK (ItemDefinition.HasSecondaryGrip): soket eşyanın
+                // köküne, yani ana elin dibine çizilirdi. Sessiz kalınmaz — bu bir içerik hatasıdır
+                // ve tek çaresi stüdyodur.
+                HideIndicator();
+                if (unauthoredSecondaryWarned.Add(definition))
+                {
+                    Debug.LogWarning($"[Weapon] '{definition.name}' iki elli ama ÖN KABZA KAYDI YAZILMAMIŞ — " +
+                                     "soket çizilmez, ikinci el bağlanmaz. Kavrama Pozu Stüdyosu'nda " +
+                                     "(WPN prefabı prefab kipinde) 'Ön Kabza Ellerini Oluştur' → yerleştir → " +
+                                     "Kaydet.", definition);
+                }
+
                 return;
             }
 
