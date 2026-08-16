@@ -1937,10 +1937,12 @@ namespace VortexArena.Core.Player
         /// Elin silaha oturması <c>RemoteHandPoser</c>'ın işidir.
         /// </para>
         /// <para>
-        /// <c>GRIP_LINKED</c> iken TEK örnek vardır ve yalnız ANA el (<c>FLAG_PRIMARY_RIGHT</c>) onu
-        /// taşır; öteki el eşyanın pozuna dokunmaz (görseli sokete yapışır,
-        /// <see cref="ApplySecondaryGripSnap"/>). Çözücü yerelin kullandığının <b>aynısıdır</b>
-        /// (<see cref="ItemGripSolver"/>): silah her zaman ana kumandayla hizalıdır.
+        /// <c>GRIP_LINKED</c> iken TEK örnek vardır ve iki elli çözümle sürülür: ana el
+        /// (<c>FLAG_PRIMARY_RIGHT</c>) eşyayı taşır, öteki elin avuç KONUMU eşyanın YÖNELİMİNİ
+        /// çeker (o elin dönüşü hiç okunmaz). Çözücü yerelin kullandığının <b>aynısıdır</b>
+        /// (<see cref="ItemGripSolver"/>); <c>aimBlend</c> burada sabit <c>1</c>'dir — yumuşatma
+        /// telin kendi interpolasyonundan geliyor, ikinci bir zaman sabiti uzak duruşu yerelden
+        /// geciktirirdi.
         /// </para>
         /// <para>⚠️ Eşya el kemiğinin ÇOCUĞU yapılmaz, dünya pozu yazılır: kemik yalnız konumu
         /// <b>okunan</b> bir referanstır. Çocuk yapılsaydı kemiğin ölçeği ve ara dönüşümleri
@@ -1960,18 +1962,19 @@ namespace VortexArena.Core.Player
                     return;
                 }
 
-                ApplyGrip(item, _shownPrimaryRight ? palmR : palmL, definition, _shownPrimaryRight);
+                ApplyGrip(item, _shownPrimaryRight ? palmR : palmL, definition, _shownPrimaryRight,
+                    true, (_shownPrimaryRight ? palmL : palmR).position);
                 return;
             }
 
             if (_itemInstanceL != null && _itemDefL != null)
             {
-                ApplyGrip(_itemInstanceL, palmL, _itemDefL, false);
+                ApplyGrip(_itemInstanceL, palmL, _itemDefL, false, false, Vector3.zero);
             }
 
             if (_itemInstanceR != null && _itemDefR != null)
             {
-                ApplyGrip(_itemInstanceR, palmR, _itemDefR, true);
+                ApplyGrip(_itemInstanceR, palmR, _itemDefR, true, false, Vector3.zero);
             }
         }
 
@@ -2086,8 +2089,9 @@ namespace VortexArena.Core.Player
                 return true;
             }
 
-            // Ön kabzayı saran el: eşya yalnız ana elden sürülür (ItemGripSolver), burada o elin
-            // anchor'ı soketin üstüne getiriliyor — eşyayla hizalı (kayıt dönüş taşımaz).
+            // Ön kabzayı saran el: iki elli tutuşta eşya ZATEN ikinci ele bakıyor (ItemGripSolver),
+            // burada yalnız o elin anchor'ı soketin üstüne getiriliyor — eşyayla hizalı (kayıt
+            // dönüş taşımaz).
             // ⚠️ Kayıt SORULAN elden okunur: bu dala yalnız !isPrimaryHand iken girilir, yani
             // ön kabzayı saran el sorulan elin ta kendisidir.
             // ⚠️ Yazılmamış ön kabza eşyanın köküdür (ItemDefinition.HasSecondaryGrip) — el oraya
@@ -2118,13 +2122,17 @@ namespace VortexArena.Core.Player
         /// <para><paramref name="primaryRight"/>: eşyayı taşıyan ANA elin sağ olup olmadığı —
         /// <c>GRIP_LINKED</c> iken <c>FLAG_PRIMARY_RIGHT</c>, aksi hâlde eşyanın durduğu slot.
         /// Kavrama el başına yazıldığı için bu ayrım zorunludur.</para>
-        /// <para>⚠️ İkincil el buraya GİRMEZ: eşyanın pozu yalnız ana kumandadan gelir; ön kabzayı
-        /// saran elin görseli <see cref="ApplySecondaryGripSnap"/> ile eşyaya çekilir.</para>
+        /// <para>⚠️ İkincil el için AYRI bir "hangi el" parametresi YOKTUR: bir eşyayı aynı el iki
+        /// soketten birden tutamaz, yani ön kabzayı saran el tanım gereği ana elin tersidir.
+        /// Parametre olsaydı çağıran onu ana elle çelişecek biçimde doldurabilirdi. Ondan istenen
+        /// tek şey <b>avuç KONUMUDUR</b> — dönüşü nişana hiçbir yoldan girmez.</para>
         /// </summary>
         private static void ApplyGrip(Transform item, in Pose palm, ItemDefinition definition,
-            bool primaryRight)
+            bool primaryRight, bool hasSecondary, in Vector3 secondaryPalmPosition)
         {
-            ItemGripSolver.Solve(definition, primaryRight, palm, out Vector3 position, out Quaternion rotation);
+            ItemGripSolver.Solve(definition, primaryRight, !primaryRight, palm, hasSecondary,
+                secondaryPalmPosition, 1f, out Vector3 position, out Quaternion rotation);
+
             item.SetPositionAndRotation(position, rotation);
         }
 
@@ -2133,9 +2141,10 @@ namespace VortexArena.Core.Player
         /// eşyanın <c>secondaryGrip</c> noktasına çekilir — ama yalnız gerçek poz o noktaya
         /// <see cref="SecondaryGripSnapRadius"/> kadar yakınsa (paket kaybı emniyeti).
         /// <para>
-        /// ⚠️ <b>Rolü yalnız görseldir:</b> silahın pozu ana elden gelir (<see cref="ApplyItemPoses"/>),
-        /// burası boş elin GÖRSELİNİ soketin tam üstüne oturtur. Yani silahın duruşunu bu metot
-        /// BELİRLEMEZ; kaldırılırsa silah doğru durur ama boş el birkaç santim yanında yüzer.
+        /// ⚠️ <b>Rolü son rötuştur:</b> silah zaten ikinci ele bakıyor (<see cref="ApplyItemPoses"/>
+        /// iki elli çözümü koşuyor), burası yalnız boş elin GÖRSELİNİ soketin tam üstüne oturtur.
+        /// Yani duruşu bu metot BELİRLEMEZ; kaldırılırsa silah doğru durur ama boş el birkaç santim
+        /// yanında yüzer.
         /// </para>
         /// <para>⚠️ İkinci elin hedefi <b>düz ileri yönde</b> bulunur (ters bileşimle değil):
         /// kayıt anchor'ın eşyaya göre yerel konumudur, eşyanın dünya pozu ise ana elden

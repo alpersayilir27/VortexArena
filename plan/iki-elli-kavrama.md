@@ -41,14 +41,15 @@ prefab/asset'ler commit'e girer.
 
 ## 2. 13 silahın kavramasını YAZ
 
-⚠️ Kavraması yazılmamış silahta el `Idle`'da kalır ve **iki elli çözüm de koşmaz**: ön kabza ekseni
-(ikincil kayıt − ana kavrama noktası) 1 cm eşiğinin altında kalır, çözücü sessizce tek elli davranır.
+⚠️ Kavraması yazılmamış silahta el `Idle`'da kalır; ön kabza kaydı yoksa soket hiç çizilmez ve
+ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`).
 
 `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu`, prefab kipinde
 (tam reçete: `Docs/Gelistirici/Yemek-Kitabi.md` §11.0):
 
 1. `WPN_*`'ı prefab kipinde aç → **Ana Kabza Ellerini Oluştur** (+ **Ön Kabza Ellerini Oluştur**);
-   sürüklenen kök kumanda (anchor) çerçevesidir, hayalet el onun çocuğudur.
+   taşınan kök kumanda (anchor) çerçevesidir (yalnız taşınır, dönüşü kaydedilmez), kumanda modeli
+   ile hayalet el onun çocuğudur.
 2. Dört el de yazılmalı: ana kabza sağ/sol, ön kabza sağ/sol. Eksik el öteki elin kaydına düşer ve
    o el silahı yanlış tutar; **Karşı Ele Aynala** yalnız başlangıçtır.
 3. Her elin parmak preset'ini Inspector'dan seç (ana kabza `Firing`, ön kabza `Grip`).

@@ -8,39 +8,191 @@ namespace VortexArena.Core.Combat
     /// <b>Neden ayrı ve saf bir sınıf:</b> aynı duruşu iki taraf da hesaplamak zorunda (duruş telde
     /// gitmez, §6.6). İki ayrı uygulama olsaydı biri düzeltilip öteki unutulur ve aynı silah kendi
     /// ekranında başka, karşı ekranda başka görünürdü. Burada sahne/bileşen bağımlılığı YOKTUR:
-    /// girdi ana elin avuç (kumanda anchor) pozu + tanım, çıktı eşyanın dünya pozu.
+    /// girdi iki avuç pozu + tanım, çıktı eşyanın dünya pozu.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Eşyanın DÖNÜŞÜ HER ZAMAN ana kumandanın dönüşüdür — başka hiçbir şey onu döndürmez.</b>
-    /// Ne kavrama kaydı (yalnız KONUM taşır, <see cref="ItemGripPose"/>), ne ikinci elin konumu/dönüşü,
-    /// ne bileğin duruşu. İkinci el ön kabzaya yalnız GÖRSEL olarak yapışır (<c>HandGripPoser</c>) ve
-    /// saçılım/geri tepmeyi düşürür (<c>Weapon</c>); silahın eksenini ikinci ele çeviren bir "iki elli
-    /// nişan" YOKTUR ve eklenmez — ikinci el kabzayı tuttuğu anda silah kumandadan sapardı ve oyuncu
-    /// bunu "el konumuna göre silah bozuk geliyor" olarak yaşar.
+    /// <b>Tek el:</b> eşyanın dönüşü ana kumandanın dönüşüdür, konumu o dönüşle taşınmış kavrama
+    /// kaydıdır. <b>İki el:</b> tek elli çözümden başlanır ve eşyanın <i>ana kavrama → ön kabza</i>
+    /// ekseni ikinci elin avucuna çevrilir. Yani ikinci el eşyayı TAŞIMAZ, yalnız NİŞANLAR — ana
+    /// kavrama noktası her karede ana avucun tam üstünde kalır.
     /// </para>
     /// <para>
-    /// Denklem: <c>itemRot = palm.rot</c>, <c>itemPos = palm.pos + palm.rot * (−kayıt.position)</c> —
-    /// kayıt kumandanın eşyaya göre yerel konumu olduğu için eşya, kumandayı o noktaya oturtacak
-    /// biçimde geri kaydırılır. Yazılmamış kayıtta sıfır: eşya kumandanın tam üstünde.
+    /// ⚠️ <b>ELİN DÖNÜŞÜ HİÇBİR YERDEN İÇERİ GİRMEZ.</b> Kavrama kaydı yalnız KONUM taşır
+    /// (<see cref="ItemGripPose"/>) ve iki elli nişan ikinci elin yalnız <b>KONUMUNU</b> okur — ne
+    /// ikinci kumandanın dönüşü ne bileğin duruşu hesaba girer. Roll her zaman ana kumandadan gelir
+    /// (<see cref="Quaternion.FromToRotation"/> en kısa yayı seçer, kendi başına roll üretmez).
+    /// Sebep: kayda ya da ikinci elin dönüşüne bağlı bir eksen, oyuncunun elini nasıl çevirdiğine
+    /// göre silahı yamultur ve bu sahada "silah bozuk geliyor" olarak görünür.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Yumuşatma buraya girmez</b> (<see cref="StepAimBlend"/> ayrıdır): çözücü saf kaldığı
+    /// sürece iki uçta aynı fonksiyon koşabilir. Yerelde blend zaman sabitiyle sürülür, uzakta
+    /// zaten telin kendi interpolasyonu var.
     /// </para>
     /// </summary>
     public static class ItemGripSolver
     {
         /// <summary>
+        /// İki elli nişanın <b>tam takip</b> bandının üst sınırı (derece): buraya kadar silah ikinci
+        /// eli birebir izler.
+        /// <para><b>Kavramayla ilgisi YOKTUR</b>: ön kabza bağı yalnız grip tuşuna bakar
+        /// (<c>WeaponGranter.ResolveSecondaryHand</c>), buradaki iki sabit silahın ne kadar
+        /// DÖNECEĞİNİ söyler.</para>
+        /// </summary>
+        private const float AimFullAngleDegrees = 120f;
+
+        /// <summary>
+        /// İki elli nişanın <b>tümden bırakıldığı</b> açı (derece): bu açıdan sonra ikinci el yok
+        /// sayılır, silah ana elin duruşunda kalır. Arada <see cref="ReachWeight"/> yumuşak iner.
+        /// <para>
+        /// ⚠️ <b>Sert bir tavan (clamp) buraya GERİ KONMAZ.</b> Tavan yalnız dönüşün büyüklüğünü
+        /// sınırlar, oysa asıl sorun <see cref="Quaternion.FromToRotation"/>'ın iki vektör
+        /// ters-paralele yaklaşırken <b>tanımsızlaşmasıdır</b>: dönüş ekseni <c>from × to</c>'dur ve
+        /// o çarpım sıfıra giderken ekseninin YÖNÜ en küçük gürültüde işaret değiştirir — silah bir
+        /// anda ters tarafa savrulur. Tavan bunu görmez, yalnız savrulmanın büyüklüğünü kırpar.
+        /// </para>
+        /// <para>
+        /// Bant bunu <b>ağırlığı sıfırlayarak</b> çözer: tekillik bölgesine varıldığında uygulanan
+        /// dönüşün ağırlığı zaten 0'dır, yani eksen orada gürültü olsa da hiçbir görsel etkisi
+        /// kalmaz. Değer, iki elle fiziksel olarak tutulamayacak bir pozun ötesine konur — bandın
+        /// içi bugünkü hissi olduğu gibi bırakır, dışı yumuşakça tek elli duruşa döner.
+        /// </para>
+        /// </summary>
+        private const float AimFadeOutAngleDegrees = 160f;
+
+        /// <summary>Ön kabza ekseni bundan kısaysa (1 cm) yön tanımsızdır: ikincil soket hiç
+        /// yazılmamış demektir, iki el çözümü koşmaz.</summary>
+        private const float MinAxisSqr = 1e-4f;
+
+        /// <summary>İki avuç arası bundan kısaysa (5 cm) hedef yönü gürültüdür — eller üst üsteyken
+        /// silah küçük titremelerle savrulurdu.</summary>
+        private const float MinReachSqr = 0.0025f;
+
+        /// <summary>İkinci el tutulup bırakılırken 0↔1 geçişinin zaman sabiti (saniye).</summary>
+        private const float AimBlendSeconds = 0.08f;
+
+        /// <summary>
         /// Eşyanın dünya pozunu çözer.
         /// </summary>
-        /// <param name="def">Eşya tanımı (kavrama konumunun kaynağı); <c>null</c> ise eşya avuca yapışır.</param>
+        /// <param name="def">Eşya tanımı (kavrama kaydının kaynağı); <c>null</c> ise eşya avuca yapışır.</param>
         /// <param name="primaryRight">Ana el SAĞ mı — kayıt el başına yazıldığı için zorunlu.</param>
+        /// <param name="secondaryRight">Ön kabzayı saran elin SAĞ olup olmadığı. İkinci el henüz
+        /// yoksa ana elin tersi verilir: ölçü o hâlde zaten kullanılmıyor ama iki uç aynı değeri
+        /// üretsin.</param>
         /// <param name="primaryPalm">Ana elin AVUÇ pozu (<c>HandGripPivot.Resolve</c> çıktısı = kumanda anchor'ı).</param>
-        public static void Solve(ItemDefinition def, bool primaryRight, in Pose primaryPalm,
+        /// <param name="hasSecondary">İkinci el ön kabzada mı.</param>
+        /// <param name="secondaryPalmPosition">İkinci elin avuç KONUMU. ⚠️ Dönüşü bilerek İSTENMEZ:
+        /// nişanın kaynağı elin nereye uzandığıdır, nasıl çevrildiği değil.</param>
+        /// <param name="aimBlend">0..1 — çağıranın yumuşatması; 0 iken sonuç tek elli çözümdür.</param>
+        public static void Solve(ItemDefinition def, bool primaryRight, bool secondaryRight,
+                                 in Pose primaryPalm, bool hasSecondary,
+                                 in Vector3 secondaryPalmPosition, float aimBlend,
                                  out Vector3 itemPosition, out Quaternion itemRotation)
         {
+            // Tek elli çözüm HER ZAMAN hesaplanır ve iki elli dalın emniyetleri düştüğünde
+            // olduğu gibi döner — "iki el çözümü koşmadı" durumunun tanımlı bir sonucu olsun.
+            // ⚠️ Taban dönüş ana kumandanın dönüşünün TA KENDİSİDİR: kayıt dönüş taşımadığı için
+            // araya çarpılacak hiçbir şey yok (kayıt yazılmamışsa da sonuç aynı, konum sıfırlanır).
+            itemRotation = primaryPalm.rotation;
+
             // Tanımsız eşyanın kavrama ofseti de yoktur: eşyayı avuca yapıştırmak, dünya orijinine
             // düşürmekten iyidir (eksikliği Weapon.Awake zaten hata olarak basıyor).
-            Vector3 offset = def != null ? def.PrimaryGripPosition(primaryRight) : Vector3.zero;
+            if (def == null)
+            {
+                itemPosition = primaryPalm.position;
+                return;
+            }
 
-            itemRotation = primaryPalm.rotation;
-            itemPosition = primaryPalm.position + primaryPalm.rotation * offset;
+            // Kayıt kumandanın eşyaya göre yerel konumudur; eşya, kumandayı o noktaya oturtacak
+            // biçimde geri kaydırılır (PrimaryGripPosition eksi işareti taşır).
+            Vector3 gripPointOnItem = def.PrimaryGripPointOnItem(primaryRight);
+            itemPosition = primaryPalm.position + itemRotation * def.PrimaryGripPosition(primaryRight);
+
+            float blend = Mathf.Clamp01(aimBlend);
+            // Yazılmamış ön kabza eşyanın köküne düşer (ItemDefinition.HasSecondaryGrip): o eksenle
+            // çözmek silahı ana elin dibine "nişanlamak" olurdu — tek elli sonuç kalır.
+            if (!def.HasSecondaryGrip || !hasSecondary || blend <= 0f)
+            {
+                return;
+            }
+
+            Vector3 axisLocal = def.SecondaryGripPosition(secondaryRight) - gripPointOnItem;
+            Vector3 to = secondaryPalmPosition - primaryPalm.position;
+            if (axisLocal.sqrMagnitude < MinAxisSqr || to.sqrMagnitude < MinReachSqr)
+            {
+                return;
+            }
+
+            Vector3 from = itemRotation * axisLocal;
+
+            // ⚠️ Açı Vector3.Angle ile ÖLÇÜLÜR, Quaternion.ToAngleAxis ile değil. İkincisi çift örtü
+            // (q ile −q aynı dönüştür) yüzünden ters-paralele yaklaşırken 180°'yi AŞAN bir açı ve
+            // İŞARETİ DÖNMÜŞ bir eksen döndürebilir; o eksende uygulanan her dönüş silahı olması
+            // gerekenin tam TERSİ yönde savurur. Vector3.Angle her zaman [0,180]'dedir ve bu
+            // belirsizliği hiç taşımaz.
+            float reach = ReachWeight(Vector3.Angle(from, to));
+            if (reach <= 0f)
+            {
+                // Hedef, kolun ulaşamayacağı yerde. Bu bir KOPMA değildir (ön kabza bağı grip
+                // tuşuna bakar) ve zıplama üretmez: ağırlık bandın içinde zaten sıfıra inmişti.
+                return;
+            }
+
+            Quaternion full = Quaternion.FromToRotation(from, to);
+            Quaternion delta = Quaternion.Slerp(Quaternion.identity, full, blend * reach);
+
+            itemRotation = delta * primaryPalm.rotation;
+
+            // ⚠️ Konum dönüşten SONRA ve ters yönde kurulur: ana kavrama noktası ana avucun tam
+            // üstünde kalsın diye. Yani iki elli çözüm yalnız YÖNELİMİ değiştirir, silahı ikinci
+            // ele doğru KAYDIRMAZ (kaydırsaydı ana el silahı bırakmış gibi görünürdü).
+            // Doğrulama kimliği: delta = identity iken bu satır yukarıdaki tek elli konumla
+            // ÖZDEŞTİR — PrimaryGripPosition tanım gereği −PrimaryGripPointOnItem'dir.
+            itemPosition = primaryPalm.position - itemRotation * gripPointOnItem;
+        }
+
+        /// <summary>
+        /// Hedef yönün <b>ulaşılabilirlik</b> ağırlığı: 1 = ikinci el birebir izlenir, 0 = ikinci el
+        /// yok sayılır (silah ana elin duruşunda kalır). İkisinin arasında <c>SmoothStep</c>.
+        /// <para>
+        /// <b>Neden ağırlık, neden tavan değil:</b> gerekçe <see cref="AimFadeOutAngleDegrees"/>'te.
+        /// Kısaca: tavan savrulmanın büyüklüğünü kırpar, ağırlık savrulmanın kendisini görünmez
+        /// kılar — ve süreklidir, yani bandın iki yakasında silah zıplamaz.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Yerelde ve uzakta AYNI fonksiyon koşar</b> (çözücünün saf olmasının sebebi budur):
+        /// bant çağıranda hesaplansaydı aynı silah kendi ekranında düz, karşı ekranda ters
+        /// görünürdü.
+        /// </para>
+        /// </summary>
+        public static float ReachWeight(float angleDegrees)
+        {
+            if (angleDegrees <= AimFullAngleDegrees)
+            {
+                return 1f;
+            }
+
+            if (angleDegrees >= AimFadeOutAngleDegrees)
+            {
+                return 0f;
+            }
+
+            float t = (angleDegrees - AimFullAngleDegrees) /
+                      (AimFadeOutAngleDegrees - AimFullAngleDegrees);
+            return Mathf.SmoothStep(1f, 0f, t);
+        }
+
+        /// <summary>
+        /// İki elli çözümün ağırlığını hedefe doğru bir adım sürer.
+        /// <para>
+        /// <b>Neden durum çağıranda:</b> çözücünün saf kalması, aynı fonksiyonun yerelde ve uzakta
+        /// koşabilmesinin ön koşulu. Uzak uçta yumuşatma zaten telin interpolasyonundan geliyor,
+        /// orada bu adım hiç çağrılmaz.
+        /// </para>
+        /// </summary>
+        public static float StepAimBlend(float current, bool wantTwoHand, float deltaTime)
+        {
+            return Mathf.MoveTowards(current, wantTwoHand ? 1f : 0f, deltaTime / AimBlendSeconds);
         }
     }
 }
