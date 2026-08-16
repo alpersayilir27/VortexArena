@@ -27,4 +27,4 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 4cbbfae87263a724b9a07e1f59744962, type: 2}
   - {fileID: 11400000, guid: 5eca3b2d226a8e6429680e472ae49813, type: 2}
   remoteShotFxPrefab: {fileID: 6439128782644113794, guid: f04edde40b30f634e8e36f02340ebcbc, type: 3}
-  secondaryGripIndicatorPrefab: {fileID: 6511728755393190870, guid: 20f0de67be17a584d8866d7ccf7c2ae9, type: 3}
+  secondaryGripIndicatorPrefab: {fileID: 1117764985934882557, guid: 20f0de67be17a584d8866d7ccf7c2ae9, type: 3}
