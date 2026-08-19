@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -62,8 +62,8 @@ namespace VortexArena.Core.Editor
         // maviyi ayıran şey bu override'dır.
         // ⚠️ Materyalin `_BaseColor` alanı TAKIM RENGİDİR: BaseZoneVisibility ölen oyuncunun
         // x-ray hayaletinin rengini şeridin materyalinden o alanı okuyarak alıyor.
-        private const string TeamRedMaterial = "Assets/_Shared/Materials/M_BaseZone_Red_Metallic.mat";
-        private const string TeamBlueMaterial = "Assets/_Shared/Materials/M_BaseZone_Blue_Metallic.mat";
+        private const string TeamRedMaterial = "Assets/_Shared/Materials/M_BaseZone_Red_Metallic_V2.mat";
+        private const string TeamBlueMaterial = "Assets/_Shared/Materials/M_BaseZone_Blue_Metallic_V2.mat";
 
         [SerializeField] private bool includeModeHud = true;
         [SerializeField] private bool includeBaseZones = true;

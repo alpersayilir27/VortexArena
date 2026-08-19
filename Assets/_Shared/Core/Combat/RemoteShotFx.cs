@@ -27,7 +27,8 @@ namespace VortexArena.Core.Combat
     /// Sahnede DURMAZ: kendini önyükler ve DontDestroyOnLoad olur. FX düğümleri 8'lik round-robin
     /// havuzda tembel üretilir (<c>WeaponCatalog.RemoteShotFxPrefab</c> varsa o, yoksa sade
     /// AudioSource fallback'i); tracer havuzu <see cref="ShotTracer"/>'da. Admin gözlemci de bu
-    /// olayları alır ve aynı sunumu görür — rol ayrımı YOKTUR.
+    /// olayları alır ve <b>GÖRSEL</b> sunumun tamamını aynı şekilde görür — alev, tracer ve geri
+    /// tepmede rol ayrımı YOKTUR. Tek ayrım SESTEDİR (<see cref="SpectatorAudioFocus"/>).
     /// </para>
     /// </summary>
     public class RemoteShotFx : MonoBehaviour
@@ -65,6 +66,25 @@ namespace VortexArena.Core.Combat
         private const int MaxPlaybackLeadMs = 250;
 
         public static RemoteShotFx Instance { get; private set; }
+
+        /// <summary>
+        /// Gözlemcinin ses odağı: uzak atış sesi <b>hangi</b> oyuncu için çalınacak.
+        /// <list type="bullet">
+        /// <item><c>null</c> — <b>filtre yok</b>: her oyuncunun atışı mesafeye göre duyulur.
+        /// Oyuncu istemcisinin, gözlemcinin POV DIŞINDAKİ kiplerinin ve hiç yazılmamış hâlin
+        /// durumu budur — yani varsayılan davranış değişmez.</item>
+        /// <item><c>n</c> — yalnız o <c>playerId</c>'nin atışı duyulur, diğerleri susar.</item>
+        /// </list>
+        /// <para>⚠️ Core, App'i göremez (asmdef grafiği aşağı akar): değeri <b>App yazar</b> —
+        /// <c>AdminSpectatorCamera</c>, operatörün o karedeki kipine/seçimine göre. Tek yazan
+        /// orasıdır; ikinci bir yazan "kim sustu" sorusunu cevapsız bırakırdı.</para>
+        /// <para>Gerekçe: gözlemcinin kulağı kamerasıyla aynı yere bakar. POV'da izlenen oyuncunun
+        /// silahı duyulur (operatör onun gördüğünü görüyor, duyduğunu duyar) ve sahadaki DİĞER
+        /// oyuncuların atışları susar — hepsi birden çalınca operatör hangi sesin izlediği oyuncuya
+        /// ait olduğunu ayırt edemez. ⚠️ Kural yalnız POV içindir: kuş bakışında/serbest kipte
+        /// atış sesi "nerede çatışma var" sorusunun cevabıdır, orada filtre KURULMAZ.</para>
+        /// </summary>
+        public static int? SpectatorAudioFocus { get; set; }
 
         /// <summary>Havuz düğümü; bileşenler üretim anında önbelleklenir (atış başına GetComponent yok).</summary>
         private sealed class FxNode
@@ -343,7 +363,7 @@ namespace VortexArena.Core.Combat
 
                 // Ses/alev profili silaha özgüdür; eşya bir silah DEĞİLSE (bomba vb.) yalnız atlanır
                 // — tracer aşağıda yine çizilir.
-                PlayShotSound(node, item as WeaponDefinition, origin);
+                PlayShotSound(node, item as WeaponDefinition, origin, evt.playerId);
             }
 
             DrawTracer(fx, item, origin, worldDir, evt.magnitude);
@@ -733,10 +753,22 @@ namespace VortexArena.Core.Combat
             return def;
         }
 
-        /// <summary>def yoksa (silah olmayan/katalog dışı eşya) veya dinleyici yok/uzaksa yalnız flaş kalır.</summary>
-        private static void PlayShotSound(FxNode node, WeaponDefinition def, Vector3 worldPos)
+        /// <summary>
+        /// def yoksa (silah olmayan/katalog dışı eşya), gözlemci odağı dışındaysa ya da dinleyici
+        /// yok/uzaksa yalnız flaş kalır.
+        /// </summary>
+        private static void PlayShotSound(FxNode node, WeaponDefinition def, Vector3 worldPos, int playerId)
         {
             if (def == null || node.Source == null || def.FireClips == null || def.FireClips.Length == 0)
+            {
+                return;
+            }
+
+            // Gözlemci odağı (App yazar): odak varsa yalnız odaktaki oyuncunun atışı duyulur.
+            // ⚠️ Kapı SESE aittir — alev/parçacık ve tracer (çağıranda) her oyuncu için
+            // çizilmeye devam eder: operatör sahada kimin ateş ettiğini GÖRMEK zorundadır.
+            int? focus = SpectatorAudioFocus;
+            if (focus.HasValue && focus.Value != playerId)
             {
                 return;
             }

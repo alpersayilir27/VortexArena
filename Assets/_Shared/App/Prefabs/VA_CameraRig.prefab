@@ -7885,7 +7885,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 1a9c2ab5-f47d-4b56-b745-ee42b6778307
+  instanceId: 99920287-3f3d-4112-83a8-71b50306e08c
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8632,7 +8632,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: 34ef82cc-ca06-481d-ade6-5033d59a2ac8
+  instanceId: 4d25327b-f93d-4ac1-abd2-641d796b4754
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -10396,7 +10396,7 @@ Camera:
     height: 1
   near clip plane: 0.05
   far clip plane: 1000
-  field of view: 90
+  field of view: 110
   orthographic: 0
   orthographic size: 5
   m_Depth: 0
@@ -10603,7 +10603,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 23da016c-7d99-4076-ad1e-0d6e45bbd2eb
+  instanceId: f0091531-5927-49e9-b539-76da131ddbf8
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11567,7 +11567,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: 93c4b7e5-b2e2-4bc3-8989-5c9255beda2e
+  instanceId: 70779588-466d-4801-91a0-c8ecfdbb9d8a
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc
