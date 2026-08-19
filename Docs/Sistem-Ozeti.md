@@ -1202,8 +1202,14 @@ tamamı kodda sabittir, prefabda ayar alanı YOKTUR: aynı jest her silahta ayn�
 **ön kabza soketi prefabı** (`secondaryGripIndicatorPrefab`: sanat buradadır, `Weapon` yalnız
 yerini/ölçeğini/alfasını sürer — ilk Renderer'ın materyaline, Renderer yoksa `LineRenderer`'ın çizgi
 rengine; prefab **1 m çap** sözleşmesiyle tasarlanır, çalışma anında kabul yarıçapının iki katına
-ölçeklenir; varsayılan yarı saydam açık mavi küreyi silah kiti koşusu (`Configure All Build Elements`)
-yalnız yoksa üretir, alan yalnız boşsa bağlanır);
+ölçeklenir; varsayılan küreyi (`_Shared/Arsenal/Prefabs/VA_GripSocket.prefab` +
+`_Shared/Materials/M_GripSocket.mat`) silah kiti koşusu (`Configure All Build Elements`)
+yalnız yoksa üretir, alan yalnız boşsa bağlanır. Kürenin görünümü **materyalin işidir**:
+`_Shared/Shaders/GripSocket.shader` (URP unlit, iki pass — önce iç yüz `Cull Front`, sonra dış yüz
+`Cull Back`, `ZWrite` kapalı; fresnel kenar + prosedürel gürültü/tarama/nabız/titreme, doku
+kullanmaz). ⚠️ Süs çarpanlarının hepsi **1'in etrafında salınır**: kodun sürdüğü alfa
+(yaklaşırken 0.30, içeride 0.50) çarpan olarak taşınır, yani "içerideyim" okuması bozulmaz —
+sabit bir katkı eklenseydi iki durum birbirine yaklaşır ve soket sessizce anlamsızlaşırdı);
 `Resources.Load` ile okunduğu için klasöründen çıkarılmaz) + `RemoteShotFx` (kendini önyükler,
 sahne kurulumu istemez; UDP atış olayını (§6.4/6.5) tüketip uzak oyuncunun namlu alevi + konumsal
 atış sesini havuzlu çalar, tracer'ı çizer ve silahın **geri tepmesini** tetikler —

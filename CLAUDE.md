@@ -557,9 +557,11 @@ etrafındaki `secondaryGripRadius` küresinin içinde mi — kayıt anchor uzay�
 nokta da anchor'dır, bilek DEĞİL) tek kuraldır; granter ikinci eli buna göre bağlar, oyuncunun
 gördüğü küre de **tam bu yarıçapla** çizilir (görsel = kabul hacmi; varsayılan 0.10 = 20 cm çap).
 Soketin **sanatı prefabdadır** (`WeaponCatalog.secondaryGripIndicatorPrefab`; varsayılan yarı saydam
-açık mavi küreyi silah kiti koşusu **yalnız yoksa** üretir — `_Shared/Arsenal/Prefabs/VA_GripIndicator.prefab`
-+ `_Shared/Materials/M_GripIndicator.mat` — ve kataloğa **yalnız alan boşsa** bağlar): sanatı
-değiştirmek = o prefabı düzenlemek ya da kataloğa başka bir prefab bağlamak, koda dokunulmaz.
+açık mavi küreyi silah kiti koşusu **yalnız yoksa** üretir — `_Shared/Arsenal/Prefabs/VA_GripSocket.prefab`
++ `_Shared/Materials/M_GripSocket.mat` (`_Shared/Shaders/GripSocket.shader`) — ve kataloğa **yalnız
+alan boşsa** bağlar): sanatı değiştirmek = o prefabı/materyali düzenlemek ya da kataloğa başka bir
+prefab bağlamak, koda dokunulmaz. ⚠️ Küreyi **kod boyamaz, yalnız alfasını sürer**
+(`Material.color` → shader'da `[MainColor]`); süs (gürültü, tarama, nabız) materyalin işidir.
 ⚠️ **Prefab 1 m çapında tasarlanır** — `Weapon` onu kabul yarıçapının iki katına ölçekler; sözleşme
 bozulursa görülen küre ile kabul hacmi ayrışır. Soket yalnız **tutulan çift elli silahta, ikinci el
 bağlanana kadar** ve yalnız yerel oyuncuda çizilir; ana kabzanın soketi yoktur.

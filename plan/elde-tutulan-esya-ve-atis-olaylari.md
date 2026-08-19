@@ -68,7 +68,7 @@ ikisini de destekliyor — alanlar silah başına, değerler şu an aynı).
 varsayılan 0.10 = 20 cm çap — Inspector'dan girilir; görülen küre = kabul hacmi). `Weapon`
 sabitleri (kod içinde, tüm silahlarda ortak): `SecondaryGripHoverRadius` (0.30 m — kürenin
 görünmeye başladığı kumanda uzaklığı) · `IndicatorHoverAlpha`/`IndicatorReadyAlpha` · `IndicatorColor`.
-Kürenin sanatı (`VA_GripIndicator.prefab` + `M_GripIndicator.mat`: renk/materyal) prefabtır, orada
+Kürenin sanatı (`VA_GripSocket.prefab` + `M_GripSocket.mat`: renk/materyal) prefabtır, orada
 düzenlenir; **1 m çap sözleşmesi** korunur (ölçeği `Weapon` verir).
 ⚠️ Ön kabza silah ana elde SALLANIRKEN tutuluyor: hareketli bir hedefe 10 cm dar geliyorsa önce
 `secondaryGripRadius`'u büyüt — kod değişikliği değil, silah başına bir ayar (küre de büyür).

@@ -1413,7 +1413,7 @@ namespace VortexArena.Core.Combat
             }
 
             GameObject instance = Instantiate(prefab, transform);
-            instance.name = "[GripIndicator]";
+            instance.name = "[GripSocket]";
 
             Collider[] colliders = instance.GetComponentsInChildren<Collider>(true);
             for (int i = 0; i < colliders.Length; i++)

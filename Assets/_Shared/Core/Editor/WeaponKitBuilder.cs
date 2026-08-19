@@ -12,7 +12,7 @@ namespace VortexArena.Core.Editor
     /// <summary>
     /// <b>Silah kiti</b> — tablodaki silahların kitini üretir/günceller: <c>WD_&lt;Ad&gt;.asset</c>
     /// (WeaponDefinition), mevcut <c>WPN_&lt;Ad&gt;.prefab</c>'ların bağları/VFX'i,
-    /// <c>FX_RemoteShot.prefab</c>, ön kabza göstergesi (<c>VA_GripIndicator.prefab</c>) ve
+    /// <c>FX_RemoteShot.prefab</c>, ön kabza göstergesi (<c>VA_GripSocket.prefab</c>) ve
     /// <c>Resources/WeaponCatalog.asset</c>.
     /// <para>
     /// <b>Ayrı bir menü öğesi YOKTUR:</b> <c>Tools &gt; VortexArena &gt; Build &gt; Configure All Build
@@ -81,27 +81,30 @@ namespace VortexArena.Core.Editor
         /// Görsel ile kural ayrı sayılara bağlansaydı oyuncuya "içindesin" denen yerde kavrama
         /// reddedilebilirdi.
         /// </para>
-        /// <para>Bu araç prefabı <b>yalnız yoksa</b> üretir (<see cref="EnsureGripIndicatorPrefab"/>:
+        /// <para>Bu araç prefabı <b>yalnız yoksa</b> üretir (<see cref="EnsureGripSocketPrefab"/>:
         /// yarı saydam açık mavi küre) ve kataloğa <b>yalnız alan boşsa</b> bağlar — sanatçı küreyi
         /// yerinde değiştirebilir ya da kataloğa başka bir prefab bağlayabilir, araç ikisini de
         /// ezmez.</para>
         /// </summary>
-        private const string GripIndicatorPrefabPath = PrefabDir + "/VA_GripIndicator.prefab";
-        private const string GripIndicatorMaterialDir = "Assets/_Shared/Materials";
-        private const string GripIndicatorMaterialPath = GripIndicatorMaterialDir + "/M_GripIndicator.mat";
+        private const string GripSocketPrefabPath = PrefabDir + "/VA_GripSocket.prefab";
+        private const string GripSocketMaterialDir = "Assets/_Shared/Materials";
+        private const string GripSocketMaterialPath = GripSocketMaterialDir + "/M_GripSocket.mat";
 
         /// <summary>
-        /// Varsayılan soket küresinin rengi: açık mavi, %70 saydam (yalnız ilk üretimde yazılır;
-        /// sonrası materyalin kendisidir). Çalışma anında <c>Weapon</c> alfayı sürer (yaklaşma /
-        /// içeride), rengin kendisine dokunmaz.
+        /// Varsayılan soket küresinin rengi: açık mavi (yalnız ilk üretimde yazılır; sonrası
+        /// materyalin kendisidir). Çalışma anında <c>Weapon</c> alfayı sürer (yaklaşma / içeride),
+        /// rengin kendisine dokunmaz.
         /// </summary>
-        private static readonly Color GripIndicatorColor = new Color(0.55f, 0.82f, 1f, 0.30f);
+        private static readonly Color GripSocketColor = new Color(0.55f, 0.82f, 1f, 0.50f);
 
-        /// <summary>Küre materyalinin shader arama zinciri (ilk bulunan). URP Unlit başta: saydam
-        /// yüzey ayarları bilinen özellik adlarıyla yazılır (<c>_Surface</c>/<c>_Blend</c>…), materyal
-        /// ASSET olarak durduğu için shader build'e kesin girer.</summary>
-        private static readonly string[] GripIndicatorShaderCandidates =
+        /// <summary>Küre materyalinin shader arama zinciri (ilk bulunan). Başta projenin kendi soket
+        /// shader'ı (<c>_Shared/Shaders/GripSocket.shader</c>: saydamlık, çift yüz ve süs kendi
+        /// pass'lerinde yazılı); o silinirse URP Unlit'e düşülür ve saydam yüzey ayarları aşağıda
+        /// bilinen özellik adlarıyla kurulur. Materyal ASSET olarak durduğu için shader build'e
+        /// kesin girer.</summary>
+        private static readonly string[] GripSocketShaderCandidates =
         {
+            "VortexArena/GripSocket",
             "Universal Render Pipeline/Unlit",
             "Universal Render Pipeline/Lit",
             "Sprites/Default",
@@ -593,7 +596,7 @@ namespace VortexArena.Core.Editor
 
                 // ---- ADIM 3: uzak atış FX prefabı + ön kabza göstergesi (varsa dokunulmaz).
                 fxCreated = EnsureRemoteShotFx(live);
-                indicatorCreated = EnsureGripIndicatorPrefab(live);
+                indicatorCreated = EnsureGripSocketPrefab(live);
 
                 // ---- ADIM 4: WeaponCatalog.
                 catalogCreated = UpdateCatalog();
@@ -607,7 +610,7 @@ namespace VortexArena.Core.Editor
                 summary = "silah kiti: WD " + wdNew + " yeni / " + (Specs.Length - wdNew) + " güncellendi · " +
                           "WPN " + wpnRebound + " güncellendi, " + wpnFailed + " başarısız · " +
                           "FX_RemoteShot " + (fxCreated ? "üretildi" : "mevcut") + " · " +
-                          "VA_GripIndicator " + (indicatorCreated ? "üretildi" : "mevcut") + " · " +
+                          "VA_GripSocket " + (indicatorCreated ? "üretildi" : "mevcut") + " · " +
                           "WeaponCatalog " + (catalogCreated ? "üretildi" : "güncellendi") + " · " +
                           "eski kavrama düğümü " + _legacyNodesRemoved + " silindi · " +
                           _warnings + " uyarı.";
@@ -882,7 +885,7 @@ namespace VortexArena.Core.Editor
 
         /// <summary>
         /// Ön kabza soketinin prefabını YOKSA üretir (varsa dokunmaz): Unity'nin küre primitifi
-        /// (1 m çap — sözleşme <see cref="GripIndicatorPrefabPath"/>'te), collider'sız, yarı saydam
+        /// (1 m çap — sözleşme <see cref="GripSocketPrefabPath"/>'te), collider'sız, yarı saydam
         /// açık mavi materyalle.
         /// <para>
         /// <b>Neden prefab:</b> soket SANATTIR ve sanatın yeri prefabtır — <c>Weapon</c> yalnız
@@ -893,27 +896,27 @@ namespace VortexArena.Core.Editor
         /// <para>⚠️ Collider'ı burada SÖKÜLÜR (primitif BoxCollider/SphereCollider ile gelir): soket
         /// ateş ışınına ve kavramaya takılmamalı; <c>Weapon</c> de örneği kurarken aynı sökmeyi yapar,
         /// prefabta temiz durması "neden çift bakılıyor" sorusunu doğurmasın diye kaynak da temizdir.</para>
-        /// <para>⚠️ Materyal ASSET olarak üretilir (<see cref="GripIndicatorMaterialPath"/>), çalışma
+        /// <para>⚠️ Materyal ASSET olarak üretilir (<see cref="GripSocketMaterialPath"/>), çalışma
         /// anında <c>Shader.Find</c> ile DEĞİL: hiçbir asset'in referanslamadığı shader build'den
         /// striplenir ve soket sahada sessizce çizilmez.</para>
         /// </summary>
-        private static bool EnsureGripIndicatorPrefab(List<GameObject> live)
+        private static bool EnsureGripSocketPrefab(List<GameObject> live)
         {
-            if (AssetDatabase.LoadAssetAtPath<GameObject>(GripIndicatorPrefabPath) != null)
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(GripSocketPrefabPath) != null)
             {
                 return false; // varsa dokunma
             }
 
-            Material material = EnsureGripIndicatorMaterial();
+            Material material = EnsureGripSocketMaterial();
             if (material == null)
             {
-                Warn("VA_GripIndicator: küre için shader bulunamadı (URP Unlit/Lit, Sprites/Default) — " +
-                     "soket prefabı üretilemedi, katalogda alan boş kalır (soket çizilmez).");
+                Warn("VA_GripSocket: küre için shader bulunamadı (VortexArena/GripSocket, URP Unlit/Lit, " +
+                     "Sprites/Default) — soket prefabı üretilemedi, katalogda alan boş kalır (soket çizilmez).");
                 return false;
             }
 
             GameObject root = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            root.name = "VA_GripIndicator";
+            root.name = "VA_GripSocket";
             live.Add(root);
 
             Collider collider = root.GetComponent<Collider>();
@@ -929,16 +932,16 @@ namespace VortexArena.Core.Editor
             renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
             renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
 
-            PrefabUtility.SaveAsPrefabAsset(root, GripIndicatorPrefabPath, out bool saved);
+            PrefabUtility.SaveAsPrefabAsset(root, GripSocketPrefabPath, out bool saved);
             Object.DestroyImmediate(root);
 
             if (!saved)
             {
-                Debug.LogError(Log + "VA_GripIndicator: SaveAsPrefabAsset başarısız: " + GripIndicatorPrefabPath);
+                Debug.LogError(Log + "VA_GripSocket: SaveAsPrefabAsset başarısız: " + GripSocketPrefabPath);
                 return false;
             }
 
-            Debug.Log(Log + "VA_GripIndicator.prefab üretildi (" + GripIndicatorPrefabPath + ").");
+            Debug.Log(Log + "VA_GripSocket.prefab üretildi (" + GripSocketPrefabPath + ").");
             return true;
         }
 
@@ -948,20 +951,21 @@ namespace VortexArena.Core.Editor
         /// <c>_DstBlend</c>/<c>_ZWrite</c> özellikleri + <c>_SURFACE_TYPE_TRANSPARENT</c> anahtarı +
         /// Transparent kuyruğu ile kurulur (Inspector'daki "Surface Type = Transparent" seçiminin
         /// yazdığı değerlerin aynısı). Var olmayan özelliğe yazmak sessiz geçer, yani zincirdeki
-        /// yedek shader'lar (Sprites/Default) da aynı koddan geçer.</para>
+        /// diğer shader'lar (projenin kendi <c>VortexArena/GripSocket</c>'i — saydamlığı pass'inde
+        /// yazılı, bu özellikleri hiç tanımaz — ve Sprites/Default) da aynı koddan geçer.</para>
         /// </summary>
-        private static Material EnsureGripIndicatorMaterial()
+        private static Material EnsureGripSocketMaterial()
         {
-            var existing = AssetDatabase.LoadAssetAtPath<Material>(GripIndicatorMaterialPath);
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(GripSocketMaterialPath);
             if (existing != null)
             {
                 return existing;
             }
 
             Shader shader = null;
-            for (int i = 0; i < GripIndicatorShaderCandidates.Length && shader == null; i++)
+            for (int i = 0; i < GripSocketShaderCandidates.Length && shader == null; i++)
             {
-                shader = Shader.Find(GripIndicatorShaderCandidates[i]);
+                shader = Shader.Find(GripSocketShaderCandidates[i]);
             }
 
             if (shader == null)
@@ -969,8 +973,8 @@ namespace VortexArena.Core.Editor
                 return null;
             }
 
-            EnsureFolder(GripIndicatorMaterialDir);
-            var material = new Material(shader) { name = "M_GripIndicator" };
+            EnsureFolder(GripSocketMaterialDir);
+            var material = new Material(shader) { name = "M_GripSocket" };
 
             // Saydam yüzey (URP): Surface=Transparent, Blend=Alpha, ZWrite kapalı.
             material.SetFloat("_Surface", 1f);
@@ -987,10 +991,10 @@ namespace VortexArena.Core.Editor
 
             // Renk: URP _BaseColor; eski/yedek shader'da _Color. İkisine de yazılır (var olmayan
             // özellik sessizce yutulur).
-            material.SetColor("_BaseColor", GripIndicatorColor);
-            material.SetColor("_Color", GripIndicatorColor);
+            material.SetColor("_BaseColor", GripSocketColor);
+            material.SetColor("_Color", GripSocketColor);
 
-            AssetDatabase.CreateAsset(material, GripIndicatorMaterialPath);
+            AssetDatabase.CreateAsset(material, GripSocketMaterialPath);
             return material;
         }
 
@@ -1179,7 +1183,7 @@ namespace VortexArena.Core.Editor
             }
 
             // Ön kabza göstergesi: YALNIZ alan boşsa bağlanır (sanatçının bağladığı başka bir prefab
-            // ezilmesin — FX alanından farkı budur, gerekçe GripIndicatorPrefabPath'te).
+            // ezilmesin — FX alanından farkı budur, gerekçe GripSocketPrefabPath'te).
             var indicatorProp = so.FindProperty("secondaryGripIndicatorPrefab");
             if (indicatorProp == null)
             {
@@ -1187,14 +1191,14 @@ namespace VortexArena.Core.Editor
             }
             else if (indicatorProp.objectReferenceValue == null)
             {
-                var indicator = AssetDatabase.LoadAssetAtPath<GameObject>(GripIndicatorPrefabPath);
+                var indicator = AssetDatabase.LoadAssetAtPath<GameObject>(GripSocketPrefabPath);
                 if (indicator != null)
                 {
                     indicatorProp.objectReferenceValue = indicator;
                 }
                 else
                 {
-                    Warn("WeaponCatalog: VA_GripIndicator.prefab yok — secondaryGripIndicatorPrefab boş " +
+                    Warn("WeaponCatalog: VA_GripSocket.prefab yok — secondaryGripIndicatorPrefab boş " +
                          "kaldı (ön kabza göstergesi çizilmez; tam kit koşusu üretir).");
                 }
             }
