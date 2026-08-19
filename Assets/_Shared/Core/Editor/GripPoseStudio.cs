@@ -376,8 +376,6 @@ namespace VortexArena.Core.Editor
                 "parmakları bu silaha göre rigle (eklemi listeden seç, Scene View'da çevir) → " +
                 "(istersen) Aynala → Kaydet.",
                 MessageType.None);
-
-            DrawGhostSourceSection();
         }
 
         private void DrawStageGui(PrefabStage stage, Transform weaponRoot)
@@ -463,28 +461,6 @@ namespace VortexArena.Core.Editor
                     }
                 }
             }
-
-            EditorGUILayout.Space();
-            DrawLiveValues(weaponRoot, definition, hands);
-
-            DrawGhostSourceSection();
-
-            EditorGUILayout.HelpBox(
-                "Yazan tek düğme Kaydet'tir; kayıttan hemen sonra silah kitini de kendisi eşitler " +
-                "(Configure All Build Elements'a gitmene gerek yok). Kit prefabı yeniden yazdığı " +
-                "için tezgâhtaki eller kalkabilir — kayıt diskte, Elleri Oluştur onları aynı yere " +
-                "geri getirir. İKİ ŞEY AYRI YAZILIR: (1) KUMANDA kökü silahın kumandaya göre yerini " +
-                "belirler — silah oyunda HER ZAMAN kumandayla hizalı olduğu için kökü yalnız TAŞI " +
-                "(döndürmek bir şey değiştirmez, kök silahla hizalı tutulur), kumandayı kabzada " +
-                "gerçekte durduğu yere koy. (2) EL MODELİ kumandanın üstünde nerede ve hangi açıda " +
-                "duracağını belirler — taşı ve ÇEVİR (silah kımıldamaz); silah başına ve el başına " +
-                "yazılır, çünkü kimi kabza yandan kimi alttan tutulur. Kumanda modeli kilitlidir " +
-                "(taşınmaz): oyunda izlenen kumandanın ta kendisidir, hizanın referansıdır. Ön kabzada " +
-                "el silaha yapışır, silah ikinci ele göre dönmez. PARMAKLAR da bu silaha özel " +
-                "riglenir: eli seç, listeden eklemi seç, Scene View'da çevir; Kaydet hepsini bench'ten " +
-                "okur.",
-                MessageType.None);
-
         }
 
         private void DrawHandList(List<GripHandAuthoring> hands)
@@ -669,60 +645,10 @@ namespace VortexArena.Core.Editor
             return null;
         }
 
-        /// <summary>Shows the numbers that will be saved, live, next to the on-disk state.
-        /// <para>⚠️ Read-only and stays that way: editable numbers would describe the same grip in
-        /// two places (a field and a transform), which drift apart silently.</para></summary>
-        private void DrawLiveValues(Transform weaponRoot, WeaponDefinition definition,
-            List<GripHandAuthoring> hands)
-        {
-            if (CountLive(hands) == 0)
-            {
-                return;
-            }
-
-            EditorGUILayout.LabelField("Kaydedilecek (salt okunur)", EditorStyles.boldLabel);
-
-            for (int i = 0; i < hands.Count; i++)
-            {
-                GripHandAuthoring hand = hands[i];
-                if (hand == null)
-                {
-                    // ⚠️ The list was gathered at the START of this frame; a hand may have been
-                    // destroyed since (any path that refreshes the stage externally). Drawing a dead
-                    // entry throws MissingReferenceException and blanks the whole window.
-                    continue;
-                }
-
-                Vector3 local = AnchorInItem(weaponRoot, hand.transform);
-                string state = definition.HasGrip(hand.Kind, hand.RightHand)
-                    ? "yazılmış"
-                    : "yazılmamış";
-                int joints = CaptureFingers(hand).Length;
-
-                EditorGUILayout.LabelField(
-                    $"{hand.Kind} · {(hand.RightHand ? "sağ" : "sol")}",
-                    $"{Format(local)}  {joints} eklem  ({state})");
-
-                // Second line: the HAND's own seat on that controller — the half that does not move
-                // the weapon. Shown separately so "silah kaydı" and "el kaydı" never read as one
-                // number.
-                Pose wrist = CaptureWrist(hand);
-                EditorGUILayout.LabelField(
-                    " ",
-                    $"el: {Format(wrist.position)} · {FormatAngles(wrist.rotation.eulerAngles)}",
-                    EditorStyles.miniLabel);
-            }
-        }
-
-        private static string Format(Vector3 value)
-        {
-            return $"({value.x:0.####}, {value.y:0.####}, {value.z:0.####})";
-        }
-
-        private static string FormatAngles(Vector3 euler)
-        {
-            return $"({euler.x:0.#}°, {euler.y:0.#}°, {euler.z:0.#}°)";
-        }
+        // ⚠️ Kaydedilecek değerlerin canlı DÖKÜMÜ bilerek YOKTUR ve geri eklenmez: tezgâhın cevabı
+        // gözle okunur (el kabzayı sarıyor mu), sayı değil — pencereye basılan bir konum/açı listesi
+        // yer kaplıyor ve kimsenin kullanmadığı ikinci bir tarif üretiyordu. Kaydın kendisi zaten
+        // WD_*.asset'in Inspector'ında görülebilir.
 
         // ----------------------------------------------------------------- stage / hands
 
@@ -1461,19 +1387,10 @@ namespace VortexArena.Core.Editor
             return false;
         }
 
-        /// <summary>One line stating which branch's provider is in use. ⚠️ Diagnostics, not
-        /// decoration: with the wrong branch the hand still builds but its skeleton does not hold,
-        /// and the cause would be visible nowhere.</summary>
-        private void DrawGhostSourceSection()
-        {
-            string asset = string.IsNullOrEmpty(_ghostProviderPath)
-                ? "(henüz yüklenmedi)"
-                : System.IO.Path.GetFileName(_ghostProviderPath);
-
-            string branch = IsOpenXrHandBranch ? "OpenXR" : "OVR";
-
-            EditorGUILayout.HelpBox($"El dalı: {branch} · el modeli: {asset}", MessageType.None);
-        }
+        // ⚠️ Hangi dalın sağlayıcısının yüklendiğini gösteren satır pencereden KALDIRILDI ve geri
+        // eklenmez: her koşuda okunan ama hiçbir karar değiştirmeyen bir bilgiydi. Yanlış dal
+        // sessiz de kalmıyor — sağlayıcı iki dalda da bulunamazsa TryGetGhostProvider konsola
+        // uyarı basar, iskeleti tutmayan el de zaten gözle görülür.
 
         // ------------------------------------------------------------------- part search
 

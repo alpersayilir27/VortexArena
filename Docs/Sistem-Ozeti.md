@@ -1366,12 +1366,19 @@ eklenir, `head` ve `haloMaterial` (`_Shared/FX/M_ProximityHalo`) alanları Inspe
 `ControllerModelHider` (`Core/Player` — **`VA_CameraRig` kökünde**; Meta Building Blocks kamera
 rigine BİRDEN FAZLA yerde (`Controller Tracking Left/Right` VE ayrıca
 `OVRComprehensiveInteractionRig` altında) fiziksel Touch controller modeli + el görseli koyuyor.
-Rig kökünden TÜM alt ağacı **bileşen tipiyle** tarar: her `OVRControllerHelper` ile tip adı
-`HandVisual` olan her `MonoBehaviour` adaydır. ⚠️ **Oyuncunun gördüğü el rig'in kendi sentetik
+Rig kökünden TÜM alt ağacı **bileşen tipiyle** tarar: her `OVRControllerHelper`, tip adı
+`HandVisual` olan her `MonoBehaviour` ve tip adı `RayInteractor` olan her `MonoBehaviour` adaydır.
+⚠️ **Işında kapatılan şey interactor DEĞİL, altındaki `Visuals` düğümüdür** (`ControllerRayInteractor`
+ve `HandRayInteractor` — ikisinin de bileşeni aynı tiptir, tek tip ikisini de yakalar): interactor
+ayakta kalır çünkü ISDK'nın dünya arayüzü işaretleme yolu (`PointableCanvasModule`) ona bağlıdır ve
+bu bileşenin işi davranış kapatmak değil GÖRSEL susturmaktır. Arenada ışının işaret edeceği bir şey
+yok — silah çerçevesi kendi göstergesini çiziyor, kavrama grab ile oluyor — yani çizilen ışın
+oyuncunun ekranında yalnız gürültüdür. Düğüm bulunamazsa oturum başına bir **uyarı** basılır (ışın
+görünmeye devam eder). ⚠️ **Oyuncunun gördüğü el rig'in kendi sentetik
 elidir** (`OVRHandVisualLeft/Right` → `SyntheticHandData`); bu bileşenin işi onun ÜSTÜNE binen
 İKİNCİ görselleri susturmaktır, yoksa oyuncu iç içe geçmiş eller ve elinde duran bir kumanda
-modeli görürdü. Kumanda modelleri ile mesafeli kavramanın hayalet el reticle'ları **objesiyle
-kapatılır** (`SetActive(false)`); oyuncunun kendi el görsellerine (`drivenHandVisuals`, **tam ad**
+modeli görürdü. Kumanda modelleri, mesafeli kavramanın hayalet el reticle'ları ve ışın görselleri
+**objesiyle kapatılır** (`SetActive(false)`); oyuncunun kendi el görsellerine (`drivenHandVisuals`, **tam ad**
 eşleşmesi) **hiç dokunulmaz** — ne objesine ne Renderer'ına. `LateUpdate`'te her kare yeniden
 çalışır — kontrolcü bırakılıp-tutulduğunda Meta gizlenenleri yeniden aktifleştiriyor.
 ⚠️ İsim deseniyle çalışan bir gizleme hedefi ıskalar (§7, "rig görselleri isimle değil bileşen
