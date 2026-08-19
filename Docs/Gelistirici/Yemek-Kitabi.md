@@ -470,11 +470,13 @@ gerçekte tutulduğu yere gelecek biçimde taşı) ve ISDK hayalet eli (elin ger
 saracağını gösterir; sabit ölçülmemişse yaklaşıktır). Prefaba hiçbir şey yazılmaz — kavramanın tek
 yeri `WD_*`'tır.
 
-⚠️ **Silahın dönüşü HER ZAMAN ana kumandanın dönüşüdür; kayıt dönüş taşımaz.** Çerçeve bu yüzden
-yalnız **taşınır** — çevirirsen araç onu silahla hizalı hâline geri alır, çünkü dönüşün oyunda
-karşılığı yoktur. Ana elde eşya kumandaya asılır ve elin bileği kilitlenmez (izlemeden/kumandadan
-gelir). Ön kabzada kayıt yalnız ikinci elin **görselinin** yapışacağı yeri söyler; silahı ne kaydırır
-ne döndürür — "iki elli nişan" yoktur ve eklenmez. Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
+⚠️ **Silahı hiçbir elin dönüşü çevirmez; kayıt dönüş taşımaz.** Çerçeve bu yüzden yalnız
+**taşınır** — çevirirsen araç onu silahla hizalı hâline geri alır, çünkü dönüşün oyunda karşılığı
+yoktur. Ana elde eşya kumandaya asılır ve elin bileği kilitlenmez (izlemeden/kumandadan gelir).
+Ön kabza kaydının iki karşılığı vardır: ikinci elin **görseli** oraya yapışır ve iki elli tutuşta
+silahın *ana kavrama → ön kabza* **ekseni o elin avuç KONUMUNA nişanlanır** — silah ikinci ele
+doğru kaymaz (ana kavrama noktası ana avuçta kalır) ve o elin DÖNÜŞÜ hiçbir yoldan silaha geçmez.
+Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
 
 **Akış (prefab kipinde, Play gerekmez):**
 
@@ -520,7 +522,8 @@ ne döndürür — "iki elli nişan" yoktur ve eklenmez. Ayarlanabilir bir "sila
   çıkmaz ve ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`; konsola tanım başına bir uyarı
   gider) — yazılmamış kayıt eşyanın köküne düşerdi, o da ana elin dibidir.
 - ⚠️ Silah elde yatık görünüyorsa tek aday var: `Model`'in prefabtaki yerleşimi. Kayıt dönüş
-  taşımadığı için silah kumandayla hizalıdır; yatıklık modelin kendi eksenlerinden gelir.
+  taşımadığı için silah tek elde kumandayla hizalıdır (iki elli tutuşta yalnız ekseni ikinci elin
+  avucuna nişanlanır); yatıklık modelin kendi eksenlerinden gelir.
 - **Admin ekranı ayrı bir teşhis yeri değildir:** kayıt telde giden el poz uzayında olduğu için
   rig'i olmayan izleyici uzak silahları oyuncuyla birebir aynı çizer. Silah adminde yanlış
   duruyorsa oyuncuda da yanlıştır.
