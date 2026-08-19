@@ -1532,7 +1532,7 @@ namespace VortexArena.Core.Editor
 
             if (p.objectReferenceValue != null)
             {
-                return; // elle atanmış — dokunma
+                return; // assigned by hand - do not touch
             }
 
             p.objectReferenceValue = value;
@@ -1975,7 +1975,7 @@ namespace VortexArena.Core.Editor
 
             if (filters.arraySize == 0)
             {
-                return; // zaten boş — idempotent
+                return; // already empty - idempotent
             }
 
             filters.arraySize = 0;
@@ -2098,7 +2098,7 @@ namespace VortexArena.Core.Editor
 
             if (!throwProp.boolValue)
             {
-                return; // zaten kapalı — idempotent
+                return; // already disabled - idempotent
             }
 
             throwProp.boolValue = false;

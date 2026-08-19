@@ -237,12 +237,12 @@ namespace VortexArena.App.Admin
 
             if (_root != null)
             {
-                _root.SetActive(false); // görünürlüğü Apply() belirler
+                _root.SetActive(false); // visibility is decided by Apply()
             }
 
             AdminContent.CollectModes(_modes);
-            RebuildModeOptions(); // mod listesi katalogdan gelir ve sonra değişmez → bir kez
-            RefreshMapList();     // harita seçeneklerini kendi kurar (mod + mekan süzgeci)
+            RebuildModeOptions(); // mode list comes from the catalog and never changes afterwards -> once
+            RefreshMapList();     // builds the map options itself (mode + venue filter)
             RefreshAudioDeviceList();
             ResetMatchParametersToModeDefaults();
             Apply();
@@ -554,11 +554,11 @@ namespace VortexArena.App.Admin
 
             _modeIndex = index;
             RefreshMapList();
-            _lobbyOpen = false; // mod değişimi de bir arena sahneler (aşağıdaki PublishSelection)
+            _lobbyOpen = false; // a mode change also stages an arena (PublishSelection below)
             // Duration/limit fall back to each mode's own defaults, so a 10-minute TDM setting does
             // not silently carry into a mode meant to run 3 minutes.
             ResetMatchParametersToModeDefaults();
-            PublishSelection(mapChanged: true); // mod değişti → harita listesi başa döndü, seçili harita da değişti
+            PublishSelection(mapChanged: true); // mode changed -> map list reset, so the selected map changed too
         }
 
         // ---- match parameters (SHARED) ----
@@ -634,7 +634,7 @@ namespace VortexArena.App.Admin
                     PublishSelection(mapChanged: false);
                 }
 
-                return; // sınırsız en alt basamak: aşağı basmak bir şey yapmaz
+                return; // unlimited is the bottom step: pressing down does nothing
             }
 
             // ⚠️ The gate is "== ScoreLimitMin", not "<=": 0 ("mode default") is UNKNOWN, not a
@@ -697,11 +697,11 @@ namespace VortexArena.App.Admin
             {
                 if (!GuardSelectionChange())
                 {
-                    Apply(); // imleç açık sahneye geri çekilir
+                    Apply(); // the cursor snaps back to the staged scene
                     return;
                 }
 
-                _lobbyOpen = true; // iyimser: sunucunun return_to_lobby'si aynı değeri doğrulayacak
+                _lobbyOpen = true; // optimistic: the server's return_to_lobby will confirm the same value
                 AdminCommands.ReturnToLobby();
                 Apply();
                 return;
@@ -808,7 +808,7 @@ namespace VortexArena.App.Admin
             string sharedScene = AdminSelection.SceneName;
 
             bool changed = false;
-            bool sceneChanged = false; // önizleme YALNIZ mod/harita değişince tazelenir
+            bool sceneChanged = false; // the preview is refreshed ONLY when the mode/map changes
 
             if (!string.IsNullOrEmpty(sharedMode) && sharedMode != SelectedModeId)
             {
@@ -816,7 +816,7 @@ namespace VortexArena.App.Admin
                 if (index >= 0)
                 {
                     _modeIndex = index;
-                    RefreshMapList(); // mod değişti → uyumlu harita listesi de değişti
+                    RefreshMapList(); // mode changed -> the compatible map list changed as well
                     ResetMatchParametersToModeDefaults();
                     changed = true;
                     sceneChanged = true;
@@ -1101,7 +1101,7 @@ namespace VortexArena.App.Admin
             if (next < 0) next = 2;
             if (next > 2) next = 0;
             AdminSession.Roof = (AdminRoofMode)next;
-            AdminSpectator.RefreshRoof(); // tercih anında görünsün, kip değişimini bekleme
+            AdminSpectator.RefreshRoof(); // let the preference show up immediately, do not wait for a mode change
         }
 
         // -------------------------------------------------------------- audio output
@@ -1202,7 +1202,7 @@ namespace VortexArena.App.Admin
             int deviceIndex = index - 1;
             if (deviceIndex < 0 || deviceIndex >= _audioDevices.Count)
             {
-                Apply(); // "bağlı değil" satırı ya da bayat imleç — dropdown kendi değerini geri alsın
+                Apply(); // the "bağlı değil" row or a stale cursor - let the dropdown revert to its own value
                 return;
             }
 
