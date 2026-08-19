@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace VortexArena.Core.Combat
@@ -41,20 +42,22 @@ namespace VortexArena.Core.Combat
         [SerializeField] private ItemHoldMode holdMode = ItemHoldMode.OneHand;
 
         // ⚠️ DÖRT KAYIT DA AYNI UZAYDADIR: her biri elin KUMANDA ANCHOR'ININ EŞYAYA göre yerel
-        // KONUMUDUR (eşya → anchor; ItemGripPose — dönüş yoktur, silah her zaman kumandayla
-        // hizalıdır). Tek yönde yazıldıkları için ikinci bir uzay tarif etmek yalnız işaret hatası
-        // üretirdi. Anchor = telde giden el pozu = çözücünün bildiği poz, yani hiçbir okuyucu delta
-        // ölçmek zorunda değildir.
+        // KONUMUDUR (eşya → anchor; ItemGripPose — anchor kaydının dönüşü yoktur, silah her zaman
+        // kumandayla hizalıdır). Tek yönde yazıldıkları için ikinci bir uzay tarif etmek yalnız
+        // işaret hatası üretirdi. Anchor = telde giden el pozu = çözücünün bildiği poz, yani hiçbir
+        // okuyucu delta ölçmek zorunda değildir.
+        // ⚠️ Kaydın İKİNCİ yarısı elin GÖRSELİDİR (bilek yerleşimi + parmak rigi) ve eşyanın pozuna
+        // hiç karışmaz: el silaha göre yan/alttan durabilirken silah kumandayla hizalı kalır.
         // ⚠️ Kayıt EL BAŞINADIR: kabza simetrik olmadığı için iki elin kumandası eşyanın farklı
         // yerlerine düşer — tek kayıt tutup aynalamak sol eli silahın içine sokardı.
         // ⚠️ Kayıtlar stüdyoda yazılır (editör), gözlükle yakalanmaz.
         // Buradaki YARIÇAPLAR duruşun parçası DEĞİL, KAPI ölçüsüdür: kavramanın nerede kabul
         // edildiğini söylerler, eşyanın elde nasıl duracağını değil.
         [Header("Kavrama (kanonik)")]
-        [Tooltip("SAĞ elin kumanda anchor'ının ana kabzadaki pozu (eşyaya göre yerel) + parmak preset'i.")]
+        [Tooltip("SAĞ elin kumanda anchor'ının ana kabzadaki pozu (eşyaya göre yerel) + riglenmiş parmak duruşu.")]
         [SerializeField] private ItemGripPose primaryGripRight;
 
-        [Tooltip("SOL elin kumanda anchor'ının ana kabzadaki pozu (eşyaya göre yerel) + parmak preset'i.")]
+        [Tooltip("SOL elin kumanda anchor'ının ana kabzadaki pozu (eşyaya göre yerel) + riglenmiş parmak duruşu.")]
         [SerializeField] private ItemGripPose primaryGripLeft;
 
         [Tooltip("SAĞ elin kumanda anchor'ının ön kabzadaki pozu — yalnız TwoHand'de anlamlı.")]
@@ -75,9 +78,18 @@ namespace VortexArena.Core.Combat
         [SerializeField] private float secondaryGripRadius = 0.10f;
 
         // ⚠️ Parmak duruşu için AYRI bir alan YOKTUR ve açılmaz: duruş kavrama kaydının PARÇASIDIR
-        // (ItemGripPose.preset), yani slot başına yaşar. Ayrı bir alan olsaydı "bu elin pozu" ile
-        // "bu elin parmakları" iki ayrı yerde durur ve biri güncellenip öteki unutulurdu — oysa ön
-        // kabzayı saran el ile tetiği tutan el tanım gereği farklı duruştadır.
+        // (ItemGripPose.fingerJoints), yani slot başına yaşar. Ayrı bir alan olsaydı "bu elin pozu"
+        // ile "bu elin parmakları" iki ayrı yerde durur ve biri güncellenip öteki unutulurdu — oysa
+        // ön kabzayı saran el ile tetiği tutan el tanım gereği farklı duruştadır.
+
+        // ⚠️ Slot başına ÖNBELLEK ([kind, el] = 4 giriş): riglenmiş duruşun ISDK eklem dizisine
+        // çevrilmesi de humanoid el için kapanma oranına indirgenmesi de tahsis eder ve iki yol da
+        // KARE BAŞINA okunuyor (HandGripPoser / RemoteHandPoser). Serialize EDİLMEZ: türetilmiş
+        // veridir, asset'te ikinci bir kopyası olsaydı rig değişip önbellek unutulduğunda oyunda
+        // eski duruş çizilirdi. Editörde yazma kapıları önbelleği düşürür (InvalidateGripCache).
+        [NonSerialized] private Quaternion[][] _gripJointCache;
+        [NonSerialized] private HandPoseProfile[] _gripCurlCache;
+        [NonSerialized] private bool[] _gripCurlResolved;
 
         // Tracer görünümü tabanda durur çünkü tabanın ölçütü "ağın + UZAK ÇİZİMİN ihtiyacı"dır
         // ve tracer tam olarak uzak çizim verisidir: uzak atışı çizen taraf (RemoteShotFx) olayın
@@ -171,15 +183,79 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bu slotta elin parmak duruşu; kayıt yazılmamışsa noktanın varsayılanı
-        /// (<see cref="HandGripPresets.DefaultFor"/>).
+        /// Bu slotun riglenmiş parmak duruşu, <b>yerel sentetik elin</b> (ISDK) beklediği eklem
+        /// dizisi olarak — <c>SyntheticHand.OverrideAllJoints</c> biçiminde. Parmakları riglenmemiş
+        /// bir slot boş elin dizisine düşer.
         /// <para>Duruş kaydın PARÇASIDIR: ana kabzayı tutan el tetikte, ön kabzayı saran el
         /// kapalıdır — ikisi tek bir "eşyanın duruşu" alanına sığmaz.</para>
+        /// <para>⚠️ Dönen dizi <b>ÖNBELLEKLİ ve PAYLAŞIMLIDIR</b> (kare başına okunuyor): çağıran
+        /// onu DEĞİŞTİRMEZ, yalnız okur.</para>
         /// </summary>
-        public HandGripPreset GripPreset(GripSocketKind kind, bool rightHand)
+        public Quaternion[] GripJointRotations(GripSocketKind kind, bool rightHand)
         {
+            _gripJointCache ??= new Quaternion[4][];
+
+            int slot = GripSlot(kind, rightHand);
+            Quaternion[] cached = _gripJointCache[slot];
+            if (cached != null)
+            {
+                return cached;
+            }
+
             ItemGripPose grip = GetGrip(kind, rightHand);
-            return grip.IsAuthored ? grip.preset : HandGripPresets.DefaultFor(kind);
+            cached = grip.HasFingers
+                ? HandPoseLibrary.BuildJointRotations(grip.fingerJoints, rightHand)
+                : HandPoseLibrary.IdleJointRotations(rightHand);
+
+            _gripJointCache[slot] = cached;
+            return cached;
+        }
+
+        /// <summary>
+        /// Aynı slotun <b>uzak avatarın humanoid (Mixamo) eli</b> için karşılığı: parmak başına
+        /// kapanma oranı, riglenmiş duruştan ÖLÇÜLEREK
+        /// (<see cref="HandPoseLibrary.MeasureCurl"/>).
+        /// <para>⚠️ Ham eklem dönüşleri humanoid kemiğe yazılamaz (iki iskeletin eksenleri aynı
+        /// değil — projenin bir kez öğrendiği kural); köprü bu orandır. Oran <b>asset'te
+        /// saklanmaz</b>: türetilmiş veri ikinci bir doğruluk kaynağı olurdu.</para>
+        /// </summary>
+        public HandPoseProfile GripFingerCurl(GripSocketKind kind, bool rightHand)
+        {
+            _gripCurlCache ??= new HandPoseProfile[4];
+            _gripCurlResolved ??= new bool[4];
+
+            int slot = GripSlot(kind, rightHand);
+            if (_gripCurlResolved[slot])
+            {
+                return _gripCurlCache[slot];
+            }
+
+            ItemGripPose grip = GetGrip(kind, rightHand);
+            HandPoseProfile profile = grip.HasFingers
+                ? HandPoseLibrary.MeasureCurl(grip.fingerJoints, rightHand)
+                : HandPoseProfile.Idle;
+
+            _gripCurlCache[slot] = profile;
+            _gripCurlResolved[slot] = true;
+            return profile;
+        }
+
+        /// <summary>Önbellek yeri: [kavrama noktası, el] → <c>0..3</c>.</summary>
+        private static int GripSlot(GripSocketKind kind, bool rightHand)
+        {
+            return (kind == GripSocketKind.Secondary ? 2 : 0) + (rightHand ? 1 : 0);
+        }
+
+        /// <summary>
+        /// Türetilmiş parmak önbelleklerini düşürür — kayıt her değiştiğinde çağrılır.
+        /// <para>⚠️ Dört slotun tamamı düşer: bir elin kaydı silinince öteki el ONA düşebiliyor
+        /// (<see cref="GetGrip"/>), yani tek slotu tazelemek komşusunu bayat bırakırdı.</para>
+        /// </summary>
+        private void InvalidateGripCache()
+        {
+            _gripJointCache = null;
+            _gripCurlCache = null;
+            _gripCurlResolved = null;
         }
 
         /// <summary>
@@ -244,11 +320,15 @@ namespace VortexArena.Core.Combat
         /// istiyor.</para>
         /// </summary>
         /// <param name="anchorInItem">Kumanda anchor'ının EŞYAYA göre yerel konumu (metre, ölçeksiz).</param>
-        /// <param name="preset">O slotta elin parmak duruşu.</param>
+        /// <param name="wristInAnchor">El modelinin kumanda anchor'ına göre yerel pozu (metre,
+        /// ölçeksiz) — elin silaha göre yan/alttan durmasını bu taşır.</param>
+        /// <param name="fingerJoints">O slotta riglenmiş parmak eklemleri (boş olabilir — el o zaman
+        /// boşta duruşunda kalır).</param>
         public void EditorSetGrip(GripSocketKind kind, bool rightHand, in Vector3 anchorInItem,
-            HandGripPreset preset)
+            in Pose wristInAnchor, HandJointRotation[] fingerJoints)
         {
-            ItemGripPose capture = ItemGripPose.From(anchorInItem, preset);
+            ItemGripPose capture = ItemGripPose.From(anchorInItem, wristInAnchor, fingerJoints);
+            InvalidateGripCache();
 
             if (kind == GripSocketKind.Secondary)
             {
@@ -285,6 +365,7 @@ namespace VortexArena.Core.Combat
         public void EditorClearGrip(GripSocketKind kind, bool rightHand)
         {
             ItemGripPose empty = default;
+            InvalidateGripCache();
 
             if (kind == GripSocketKind.Secondary)
             {
@@ -308,6 +389,18 @@ namespace VortexArena.Core.Combat
             {
                 primaryGripLeft = empty;
             }
+        }
+
+        /// <summary>
+        /// Inspector'dan (ya da bir Undo/Revert'ten) gelen her değişiklikte türetilmiş parmak
+        /// önbelleklerini düşürür.
+        /// <para>⚠️ Yazma kapıları önbelleği zaten düşürüyor; bu kapı onların ATLANDIĞI yolları
+        /// kapatır (Undo, prefab revert, asset'i elle düzenleme). Kavrama alanları Inspector'da
+        /// görünür olduğu için "yalnız stüdyo yazar" bir sözleşme değil, bir alışkanlıktır.</para>
+        /// </summary>
+        private void OnValidate()
+        {
+            InvalidateGripCache();
         }
 #endif
 

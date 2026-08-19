@@ -1,152 +1,60 @@
 namespace VortexArena.Protocol
 {
-    /// Protokol sabitleri — tek doğruluk kaynağı: Docs/ArenaNet-Protokol.md §1.
+    /// Protocol constants — single source of truth: Docs/ArenaNet-Protokol.md §1.
     public static class ArenaProtocol
     {
         /// <summary>
-        /// v15: <b>sıfırlamanın ikiye ayrılması</b> — <c>clear_calibration.keepSaved</c> (§5.2):
-        /// komut artık "hizalamayı geçersiz kıl" (<c>true</c>, cihazdaki çapa ve UUID korunur →
-        /// ardından gelen <c>reload_calibration</c> çalışır) ile "cihaz kaydını da sil"
-        /// (<c>false</c>) kiplerine ayrılır (§10.6).
-        /// <para>⚠️ Değişiklik <b>eklemelidir</b> ve varsayılan bilinçli olarak SERT'tir: alanı
-        /// okumayan eski başlık <c>false</c> görüp bugünkü davranışta kalır, yani karışık sürümde
-        /// kaybolan tek şey yumuşak kiptir — operatör o başlıkta sıfırlama sonrası yeniden
-        /// yükleyemez.</para>
-        /// v14: <b>ihlal görünürlüğü</b> — <c>0x01</c>/<c>0x02</c> bayrak baytında bit7
-        /// (<see cref="SnapshotEntry.FLAG_OUT_OF_BOUNDS"/>, §6.3) + yalnız adminlere giden
-        /// <c>violation</c> mesajı (§5.3) ve <see cref="VIOLATION_MIN_SECONDS"/>.
-        /// <para>⚠️ <b>Tel formatı DEĞİŞMEDİ</b> (bit rezervden alındı, <c>PoseUpdate.SIZE</c> ve
-        /// <c>SnapshotEntry.SIZE</c> aynı) — <b>değişen davranıştır</b>: eski APK'lı oyuncu
-        /// alan-dışı bitini hiç göndermez, yani alandan çıktığı adminde <b>sessizce görünmez</b>.
-        /// Eksik bilgi bozuk çizimden daha sinsi olduğu için tüm başlıklara yeni APK gerekir.</para>
-        /// v13: <b>kalibre modu + kalibrasyon teşhisi</b> — <c>set_calibration_mode</c> (§5.2),
-        /// <c>admin_state.calibrationMode</c> ve <c>welcome.calibrationMode</c> (§5.3),
-        /// <c>set_calibration.floorOffset</c> → <c>PlayerInfo.floorOffset</c> (§10.6),
-        /// <c>set_body_scale.error</c> → <c>PlayerInfo.scaleError</c> (§10.8).
-        /// <para>⚠️ Değişiklik tümüyle <b>eklemelidir</b>: alanları göndermeyen eski istemcinin zemin
-        /// sapması ve ölçüm gerekçesi operatöre hiç görünmez, <c>welcome.calibrationMode</c>'u
-        /// okumayan başlık modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır.
-        /// Karışık sürümde kaybolan şey bir kural, bozuk bir çizim değil.</para>
-        /// v11: <b>engel ihlali</b> — <c>0x01</c>/<c>0x02</c> bayrak baytında bit5
-        /// (<see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/>, §6.3) + sunucu tarafında saniyelik can
-        /// eritme (<see cref="OBSTACLE_DAMAGE_PER_SECOND"/>, §10.9).
-        /// <para>⚠️ Değişiklik tümüyle <b>eklemelidir</b>: bayt düzeni değişmedi (bit rezervden
-        /// alındı). Karışık sürümde eski istemci biti hiç göndermez (o oyuncu engelde ceza almaz)
-        /// ve gelen biti yok sayar (admin halkası yanıp sönmez) — kaybolan bir kural, bozuk bir
-        /// çizim değil.</para>
-        /// v10: <b>kumanda durumu</b> — <c>0x01</c>/<c>0x02</c> bayrak baytında bit3/bit4
-        /// (<see cref="SnapshotEntry.FLAG_HAND_L_STALE"/> /
-        /// <see cref="SnapshotEntry.FLAG_HAND_R_STALE"/>, §6.3) + <c>status</c> ve
-        /// <c>PlayerInfo</c> üzerinde <c>ctrlL</c>/<c>ctrlR</c> (§5.1/§5.3).
-        /// <para>⚠️ Değişiklik tümüyle <b>eklemelidir</b>: bayt düzeni değişmedi (bitler rezervden
-        /// alındı), bilmeyen uç bitleri yok sayar ve alanları <see cref="CONTROLLER_UNKNOWN"/>
-        /// okur. Karışık sürümde kaybolan tek şey "bu elin pozu tahmindir" bilgisidir.</para>
-        /// v10 ayrıca <c>clear_calibration</c>'a <b>sunucu → istemci yönü</b> ekler (§5.2/§5.3):
-        /// sıfırlama artık roster'a yazılan bir boole değil, hedef başlığa <b>alansız</b> iletilen
-        /// bir komuttur. Gerekçe §10.6'dadır — yarım kalmış elle kalibrasyonun (A alındı, B
-        /// alınmadı) telde izi yoktur (<c>calibrated</c> zaten <c>false</c>'tur), yani roster
-        /// deltası sıfırlamayı taşıyamaz.
-        /// <para>⚠️ Bu yön de <b>eklemelidir</b>: tanımayan eski istemci mesajı yok sayar ve yarım
-        /// sekansı başlığında tutar. Karışık sürümde bozulan tek şey operatörün o oyuncuyu
-        /// sıfırlayamamasıdır — yine de APK turu tamamlanmalıdır.</para>
-        /// v9: <b>gövde ölçeği</b> — <c>measure_body_scale</c> (§5.2) + <c>set_body_scale</c> (§5.1)
-        /// + <c>PlayerInfo.bodyScale</c> (§5.3/§10.8). Oyuncular arası boy farkı uzak avatara tek
-        /// bir üniform çarpanla taşınır; ölçümü operatör başlatır, başlık ölçer, sunucu yalnız
-        /// kırpıp yayar.
-        /// <para>⚠️ Değişiklik tümüyle <b>eklemelidir</b>: alanı tanımayan eski istemci
-        /// <c>bodyScale</c>'i <c>0</c> okur ve herkesi ölçeksiz çizer. Karışık sürümde bozulan tek
-        /// şey avatar boylarıdır — yine de APK turu tamamlanmalıdır.</para>
-        /// v8: <b>üç değerli bağlantı durumu</b> — <c>PlayerInfo.online</c> (bool) KALDIRILDI,
-        /// yerine <c>connection</c> (<see cref="CONNECTION_CONNECTED"/>/
-        /// <see cref="CONNECTION_RECONNECTING"/>/<see cref="CONNECTION_LEFT"/>) +
-        /// <c>reconnectSeconds</c> + <c>inMatch</c> geldi (§2/§5.3/§10.2).
-        /// <para>⚠️ <b>v8'i kırıcı yapan şey alanın ÇIKARILMASIDIR:</b> eski istemci <c>online</c>
-        /// alanını bulamayınca varsayılan <c>false</c> okur ve TÜM roster'ı "çevrimdışı" çizer;
-        /// yeni istemci eski sunucudan <c>connection</c> alamaz ama boş değer <c>connected</c>
-        /// sayıldığı için o yönde yalnız "yeniden bağlanıyor" satırını kaçırır. Sürüm uyuşmazlığı
-        /// bağlantıyı <b>reddetmez</b> (yalnız uyarı basılır) — APK turu tamamlanmalıdır.</para>
-        /// v7: <b>arena uzayı = dünya uzayı</b> (§3) — arena origin'i artık sahnedeki bir marker
-        /// değil, dünya (0,0,0) ve kimlik rotasyonudur.
-        /// <para>⚠️ <b>v7'yi kırıcı yapan şey tel DÜZENİ değil ANLAMIDIR:</b> baytlar birebir aynı
-        /// kaldı, ama <c>0x01</c>/<c>0x02</c>/<c>0x05</c> pozları, <c>0x03</c> atış yönleri ve
-        /// <c>0x07</c>/<c>0x08</c> iskelet kökleri artık BAŞKA bir çerçevede okunuyor. Eski
-        /// istemci onları kendi marker'ına göre çözer: karışık sürümde iki taraf da birbirini
-        /// metrelerce kaymış, hatta zeminin altında/havada görür. Sürüm uyuşmazlığı bağlantıyı
-        /// <b>reddetmez</b> (yalnız uyarı basılır) — bu yüzden APK turu tamamlanmalıdır ve
-        /// eksik kalırsa belirti "uzak oyuncular rastgele yerlere ışınlanıyor" olur.</para>
-        /// v6: <b>iskelet akışı</b> (<c>0x07</c> §6.9 / <c>0x08</c> §6.10) — gövde artık üç noktadan
-        /// TÜRETİLMİYOR, sahibinin cihazında Meta Movement SDK ile çözülüp retarget edilmiş iskelet
-        /// olarak akıyor. Blob <b>opak</b>tır: sunucu açmaz, doğrulamaz, kopyalar (<c>netItemId</c>
-        /// baytlarıyla aynı gerekçe, §6.6).
-        /// <para>⚠️ <c>0x01 PoseUpdate</c> <b>kaldırılmadı ve kaldırılmaz</b>: silah duruşu, eşya
-        /// baytları ve vuruş bildirimi ham el pozundan besleniyor (§6.2). İskelet onun yerine değil
-        /// YANINA gelir; iki kanalın kadansı da ayrıdır (20 Hz ↔ <see cref="SKELETON_RATE_HZ"/>).</para>
-        /// <para>⚠️ <b>v6'yı kırıcı yapan şey:</b> <c>0x07</c>/<c>0x08</c>'i tanımayan istemci uzak
-        /// oyuncuların GÖVDESİNİ hiç çizemez (eli/kafası yerinde durur) — eski istemcinin gönderdiği
-        /// iskeletsiz akış da yeni istemcide gövdesiz avatar üretir. Tel formatı eklemelidir ama
-        /// görüntü karışık sürümde iki yönde de bozuktur; APK turu tamamlanmalıdır.</para>
-        /// v5: ağ telemetrisi (<c>0x06</c> RTT yoklaması §6.7, <c>status.rttMs/jitterMs/lossPct</c>,
-        /// admin-only <c>net_stats</c>) ve <b>paket birleştirme</b> (<c>0x05</c> §6.8 — snapshot +
-        /// olaylar tek datagramda; <c>0x02</c>/<c>0x04</c> geri düşüş yolu olarak korundu).
-        /// <c>health_update</c> broadcast olmaktan çıkıp <b>kurban + adminler</b>e gitmeye başladı
-        /// (§10.3) — alan düzeni değişmedi.
-        /// <para>⚠️ <b>v5'i kırıcı yapan tek şey <c>0x05</c>'tir:</b> onu tanımayan bir istemci
-        /// birleştirme devreye girdiğinde uzak avatarları ve tracer'ları kaybeder. Diğer üç değişiklik
-        /// tümüyle eklemelidir. Sürüm uyuşmazlığı bağlantıyı <b>reddetmez</b> (yalnız konsola uyarı
-        /// basılır), bu yüzden karışık sürüm sessizce bozuk çizim üretir — APK turu tamamlanmalıdır.</para>
-        /// v4: elde tutulan eşya tele girdi (<c>0x01</c>/<c>0x02</c> byte düzeni; §6.2/6.3/6.6),
-        /// atış olayları WS'ten UDP'ye taşındı (<c>shot_fired</c> <b>kaldırıldı</b> →
-        /// <c>0x03</c>/<c>0x04</c>; §6.4/6.5).
-        /// v3: faz makinesi <c>paused</c>/<c>playing</c>/<c>finished</c>'a indi, <c>phaseReason</c> +
-        /// <c>modeState</c> eklendi, lobi faz olmaktan çıkıp <b>tür</b> oldu, <c>set_team</c> yalnız
-        /// admin (§10.1).
-        /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
-        /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
+        /// Wire version. A mismatch does NOT reject the connection (warning only), so every bump needs
+        /// a full APK round on all headsets. Per-version notes: Docs/ArenaNet-Protokol.md §1.
+        /// <para>v15 <c>clear_calibration.keepSaved</c> (§5.2/§10.6) · v14 out-of-bounds bit + admin
+        /// <c>violation</c> (§5.3/§6.3) · v13 calibration mode + diagnostics (§5.2/§10.6/§10.8) ·
+        /// v12-v9 obstacle bit, controller state, server→client <c>clear_calibration</c>, body scale —
+        /// all additive.</para>
+        /// <para>⚠️ v8 is breaking because <c>PlayerInfo.online</c> was REMOVED: an old client reads it
+        /// as <c>false</c> and draws the whole roster offline (§2/§5.3/§10.2).</para>
+        /// <para>⚠️ v7 is breaking through MEANING, not layout: arena space became world space (§3), so
+        /// mixed versions see each other metres away.</para>
+        /// <para>⚠️ v6 added skeleton streaming (<c>0x07</c>/<c>0x08</c>); <c>0x01 PoseUpdate</c> is NOT
+        /// removed and never will be — weapon pose, item bytes and hit reports feed off raw hand poses
+        /// (§6.2). A client that ignores <c>0x07</c> draws no remote bodies at all.</para>
+        /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
+        /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
         public const int PROTOCOL_VERSION = 15;
         public const string APP_ID = "VortexArena";
 
-        // ---- Kalibre modu (§5.2/§10.6): başlıkların AÇILIŞTA nasıl hizalanacağı. ----
-        // ⚠️ Kural değerlerinin (§10.5) aksine bilinmeyen/boş değer varsayılana DÜŞMEZ, sunucu onu
-        // reddeder: bu bir kural şekli değil operatör kararıdır — sessizce varsayılana dönmek
-        // operatöre bastığı düğmenin uygulandığını gösterirdi.
+        // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----
+        // ⚠️ Unknown/empty is REJECTED here (unlike rule values, §10.5): an operator decision must not
+        // silently fall back to a default.
 
-        /// <summary>Oyuncu her uygulama açılışında elle 2 çapa kalibrasyonu alır; diskteki
-        /// <c>OVRSpatialAnchor</c> UUID'si hiç okunmaz. Sunucunun açılış varsayılanı.
-        /// <para>⚠️ Mod yalnız AÇILIŞTAKİ geri yüklemeyi kapılar — harita değişimindeki (oturum-içi,
-        /// bellekteki çapa) geri yükleme moddan bağımsız her zaman koşar (§10.6).</para></summary>
+        /// <summary>Manual 2-anchor calibration on every app start; the saved anchor UUID is never
+        /// read. Server default. ⚠️ The mode gates STARTUP restore only — the in-session restore on map
+        /// change always runs (§10.6).</summary>
         public const string CALIB_MODE_TWO_ANCHOR = "two_anchor";
 
-        /// <summary>Başlık açılışta kayıtlı <c>OVRSpatialAnchor</c>'dan hizalamayı geri yükler.</summary>
+        /// <summary>Headset restores alignment from the saved <c>OVRSpatialAnchor</c> on start.</summary>
         public const string CALIB_MODE_SAVED_ANCHOR = "saved_anchor";
 
-        /// <summary>Paylaşılan uzamsal anchor — <b>rezerve</b>. Sunucu KABUL ETMEZ (loglar, durum
-        /// değişmez); arayüzde de pasiftir.</summary>
+        /// <summary>Shared spatial anchor — <b>reserved</b>. The server REJECTS it; the UI shows it
+        /// disabled.</summary>
         public const string CALIB_MODE_ANCHOR_CLOUD = "anchor_cloud";
 
-        /// <summary>
-        /// <c>set_calibration.floorOffset</c>'in mutlak değeri bunu (metre) aşarsa sunucu adminlere
-        /// duyuru basar (§10.6) — işaret edilen eylem gözlükte alan verisi temizliğidir.
-        /// <para>⚠️ <b>Kapı değil teşhis eşiğidir:</b> sapma ne olursa olsun kalibrasyon kabul
-        /// edilir. Sunucu zemini bilmediği için otomatik düzeltme de yapmaz (ikinci bir hizalama
-        /// otoritesi olurdu); tek çıktı operatöre giden bilgidir.</para>
-        /// </summary>
+        /// <summary>Warn admins when |<c>set_calibration.floorOffset</c>| exceeds this (metres, §10.6);
+        /// the fix is clearing space data in the headset.
+        /// <para>⚠️ Diagnostic threshold, not a gate: calibration is always accepted and the server
+        /// never auto-corrects (that would be a second alignment authority).</para></summary>
         public const float CALIB_FLOOR_WARN_METERS = 0.5f;
 
-        /// <summary>
-        /// <c>set_body_scale.scale</c> kırpma aralığı (§10.8). Ölçümü istemci yapar ama sonuç
-        /// <b>herkesin ekranına</b> gider; sunucu bu yüzden kırpar — bozuk bir istemci arenaya
-        /// dört metrelik bir avatar koyamasın.
-        /// <para><c>0</c> bu aralığın DIŞINDADIR ve "ölçülmemiş" demektir: okuyan taraf
-        /// <c>1</c> uygular.</para>
-        /// </summary>
+        /// <summary>Clamp range for <c>set_body_scale.scale</c> (§10.8): the client measures but the
+        /// result hits everyone's screen, so the server clamps. <c>0</c> is OUTSIDE this range and
+        /// means "not measured" → readers apply <c>1</c>.</summary>
         public const float BODY_SCALE_MIN = 0.5f;
 
         /// <inheritdoc cref="BODY_SCALE_MIN"/>
         public const float BODY_SCALE_MAX = 1.6f;
 
-        /// <summary>Forma numarası aralığı (§2). <c>0</c> = atanmamış ve bu aralığın dışındadır;
-        /// admin'de daima 0 kalır. Numara TÜM kayıtlı cihazlar arasında benzersizdir.</summary>
+        /// <summary>Jersey number range (§2); <c>0</c> = unassigned (always 0 for admins). Unique
+        /// across all registered devices.</summary>
         public const int PLAYER_NUMBER_MIN = 1;
         public const int PLAYER_NUMBER_MAX = 99;
 
@@ -155,339 +63,249 @@ namespace VortexArena.Protocol
         public const int STATE_PORT = 47822;
         public const string WS_PATH = "/ws";
 
-        // Aralıklar/timeout'lar saniye cinsinden.
+        // Intervals/timeouts in seconds.
         public const float BEACON_INTERVAL = 2f;
         public const float DISCOVERY_TIMEOUT = 5f;
         public const float STATUS_INTERVAL = 5f;
-        /// <summary>Status gelmezse soketin ölü sayılıp kapatıldığı süre (§1/§8). ⚠️ Tek başına
-        /// "oyuncu gitti" DEMEZ: cihaz bunun sonunda yalnız <see cref="CONNECTION_RECONNECTING"/>'e
-        /// düşer, asıl çıkarma kararı <see cref="RECONNECT_GRACE"/>'indir.</summary>
+
+        /// <summary>Socket declared dead after this long without status (§1/§8). ⚠️ Does not mean
+        /// "player left": the device only drops to <see cref="CONNECTION_RECONNECTING"/>; removal is
+        /// <see cref="RECONNECT_GRACE"/>'s call.</summary>
         public const float HEARTBEAT_TIMEOUT = 15f;
 
-        /// <summary>
-        /// Bağlantısı kopan cihazın geri beklendiği süre (§2). Dolunca oyuncu oyundan çıkarılır:
-        /// koşan maçın katılımcısıysa kaydı <see cref="CONNECTION_LEFT"/> olarak maç sonuna kadar
-        /// durur (§10.2), değilse tümden silinir ve <c>playerId</c>'si havuza döner.
-        /// <para>⚠️ Bu süre <b>sunucunun</b> kaydı ne zaman düşüreceğini söyler, istemcinin ne zaman
-        /// pes edeceğini değil: yeniden deneme <see cref="RECONNECT_BACKOFF"/> ile SONSUZDUR (§8).
-        /// Kopuştan çıkarılmaya toplam süre <see cref="HEARTBEAT_TIMEOUT"/> + bu değerdir.</para>
-        /// </summary>
+        /// <summary>How long a disconnected device is waited for (§2). On expiry the player is removed;
+        /// a match participant's record stays as <see cref="CONNECTION_LEFT"/> until the match ends
+        /// (§10.2), otherwise it is deleted and the <c>playerId</c> returns to the pool.
+        /// <para>⚠️ This is when the SERVER drops the record, not when the client gives up — retry is
+        /// infinite (§8). Drop to removal = <see cref="HEARTBEAT_TIMEOUT"/> + this.</para></summary>
         public const float RECONNECT_GRACE = 45f;
 
-        public const float HELLO_TIMEOUT = 10f; // §8: hello'suz bağlantı bu süre içinde kapatılır
+        public const float HELLO_TIMEOUT = 10f; // §8: a connection without hello is closed after this
 
-        // Yeniden bağlanma backoff dizisi; son eleman tavandır.
+        // Reconnect backoff sequence; last element is the ceiling.
         public static readonly float[] RECONNECT_BACKOFF = { 1f, 2f, 5f };
 
         public const int POSE_RATE_HZ = 20;
         public const int SNAPSHOT_RATE_HZ = 20;
         public const int INTERP_DELAY_MS = 100;
 
-        /// <summary>
-        /// İskelet blob'unun gönderim frekansı (§6.9). <b>Poz kanalından AYRI ve daha düşüktür</b>:
-        /// blob poz paketinin birkaç katı büyüklüktedir ve bu ürünün darboğazı bant değil datagram
-        /// sayısıdır (<c>Docs/Sistem-Ozeti.md</c> §3.12).
-        /// <para>Düşük hızın görüntüyü bozmamasının sebebi, alıcıda <b>SDK'nın kendi
-        /// interpolasyonunun</b> koşmasıdır (<c>GetInterpolatedSkeleton</c> render zamanına göre
-        /// örnekler) — 12 Hz akış 72 Hz çizime yumuşak yayılır. Aynı sebeple bu sayı yükseltilerek
-        /// "daha akıcı gövde" alınmaz; yalnız paket sayısı artar.</para>
-        /// </summary>
+        /// <summary>Skeleton blob send rate (§6.9) — lower than the pose channel because the bottleneck
+        /// is datagram count, not bandwidth. It still looks smooth because the receiver runs the SDK's
+        /// own interpolation, so raising it buys packets, not smoothness.</summary>
         public const int SKELETON_RATE_HZ = 12;
 
-        /// <summary>
-        /// Tek oyuncunun iskelet blob'u için kabul edilen en büyük boy (§6.9). Üst sınır bir bütçe
-        /// değil <b>emniyet</b>tir: <c>0x07</c> başlığıyla birlikte tek datagramda kalmalı
-        /// (34 + 1024 = 1058 B &lt; <see cref="COMBINED_MAX_BYTES"/>), çünkü bu kanalda parçalama
-        /// YOKTUR — blob bölünürse alıcı yarım bir kareyi deserialize etmeye çalışır.
-        /// <para>⚠️ Aşan blob <b>gönderilmez</b> (bir kez uyarı basılır): sığmayan paketi yollamak
-        /// IP parçalanmasına güvenmek olurdu ve tek parçanın kaybı tüm kareyi çöpe atardı. Blob bu
-        /// sınırı zorluyorsa çözüm sıkıştırmayı/eklem listesini daraltmaktır (parmak eklemleri
-        /// kumandayla oynanırken gerçek veri taşımaz).</para>
-        /// </summary>
+        /// <summary>Max skeleton blob size for one player (§6.9). Safety, not budget: with the
+        /// <c>0x07</c> header it must fit one datagram, because this channel has NO fragmentation.
+        /// <para>⚠️ An oversized blob is NOT sent (warns once); fix it by tightening the joint list.</para></summary>
         public const int SKELETON_MAX_BLOB_BYTES = 1024;
 
-        /// <summary>
-        /// Tek <c>0x08</c> datagramına yazılan en fazla oyuncu girdisi (§6.10). ⚠️ Asıl kısıt
-        /// <b>bayt bütçesidir</b> (<see cref="COMBINED_MAX_BYTES"/>) — girdiler değişken uzunluklu
-        /// olduğu için sunucu her ikisine birden bakar; bu sayı yalnız <c>count</c> alanının
-        /// <c>u8</c> olmasının makul bir tavanıdır.
-        /// <para>Taşan girdi aynı tik içinde <b>ek datagrama</b> yazılır (snapshot parçalamasının
-        /// aynısı, §6.3): her datagram kendi <c>count</c>'unu, hepsi aynı <c>serverTick</c>'i taşır.
-        /// İstemcide birleştirme mantığı gerekmez — her girdi bağımsız uygulanır.</para>
-        /// </summary>
+        /// <summary>Max entries per <c>0x08</c> datagram (§6.10). ⚠️ The real limit is the byte budget
+        /// (<see cref="COMBINED_MAX_BYTES"/>); overflow spills into another datagram in the same tick
+        /// and each entry applies independently (no reassembly).</summary>
         public const int SKELETON_MAX_ENTRIES_PER_PACKET = 16;
 
-        /// <summary>
-        /// <c>playerId</c> tahsis tavanı. <b>Ürün kotası DEĞİL, tel formatı tavanıdır</b> —
-        /// playerId UDP paketlerinde <c>u8</c> taşınır (0 ayrılmıştır). Eşzamanlı oyuncu/admin
-        /// sayısına başka bir sınır yoktur; kota ileride lisanslama katmanıyla gelecek.
-        /// </summary>
+        /// <summary><c>playerId</c> ceiling. <b>Wire-format limit, NOT a product quota</b> — playerId is
+        /// a <c>u8</c> (0 reserved). Concurrent player/admin counts have no other limit.</summary>
         public const int PLAYER_ID_MAX = 255;
 
-        /// <summary>
-        /// Atılan istemcinin bağlantısı bu <b>kapanış çerçevesi sebebiyle</b> kapatılır (§5.4).
-        /// İkinci emniyet: `kicked` JSON'u kapanışa yetişemezse istemci kopuşu sıradan bir
-        /// kesinti sanıp yeniden bağlanırdı — atılan oyuncu kendiliğinden geri gelirdi.
-        /// </summary>
+        /// <summary>Close-frame reason used when kicking (§5.4). Second line of defence: if the `kicked`
+        /// JSON loses the race with the close, the client would reconnect by itself.</summary>
         public const string KICK_CLOSE_REASON = "kicked";
 
-        /// <summary>
-        /// Tek snapshot datagramına yazılan en fazla oyuncu girdisi. Fazlası aynı tik içinde
-        /// ek datagramlara taşar (§6.3) — 6 + 16×88 = 1414 B, MTU 1500'ün altında kalır.
-        /// İstemcide birleştirme mantığı gerekmez: her paket kendi girdilerini bağımsız uygular.
-        /// </summary>
+        /// <summary>Max entries per snapshot datagram; overflow spills into extra datagrams in the same
+        /// tick (§6.3, 1414 B &lt; MTU). Each packet applies its own entries independently.</summary>
         public const int SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16;
 
-        /// <summary>
-        /// Tek <c>0x04</c> EventBatch datagramına yazılan en fazla olay (§6.5) —
-        /// 6 + 128×9 = 1158 B, MTU 1500'ün altında kalır.
-        /// <para>⚠️ Taşan olay <b>ATILMAZ, sonraki tik'in batch'ine kayar</b>: "tik başına en fazla
-        /// bir batch" değişmezi istemcideki kopya korumasının dayanağıdır (kimlik <c>serverTick</c>).
-        /// Aynı tik için ikinci bir batch üretilirse istemci onu birebir tekrar sanıp düşürür.</para>
-        /// </summary>
+        /// <summary>Max events per <c>0x04</c> EventBatch datagram (§6.5, 1158 B &lt; MTU).
+        /// <para>⚠️ Overflow shifts to the next tick's batch instead of being dropped: "one batch per
+        /// tick" is what the client's duplicate guard (keyed on <c>serverTick</c>) relies on.</para></summary>
         public const int EVENT_MAX_ENTRIES_PER_PACKET = 128;
 
-        /// <summary>
-        /// İstemcinin kopya ayıklama için hatırladığı <c>0x04</c> tik sayısı (§6.5). Halka tampon:
-        /// yalnız birebir tekrar düşürülür, eski tik'li ama görülmemiş batch OYNATILIR.
-        /// <para>⚠️ <c>0x05</c> (§6.8) de <b>aynı</b> halkayı kullanır — ayrı bir halka açılırsa aynı
-        /// tik iki kez oynar (çift tracer + çift ses).</para>
-        /// </summary>
+        /// <summary>Ticks remembered for <c>0x04</c> duplicate rejection (§6.5); only exact repeats are
+        /// dropped. ⚠️ <c>0x05</c> (§6.8) uses the SAME ring — a separate one would replay a tick twice
+        /// (double tracer + double sound).</summary>
         public const int EVENT_TICK_HISTORY = 64;
 
-        /// <summary>
-        /// <c>0x05</c> birleşik datagramının (§6.8) üst sınırı. Sunucu snapshot + olayları yalnız bu
-        /// boyutun altında kalıyorsa tek pakette birleştirir; aşarsa <c>0x02</c>+<c>0x04</c>'e düşer.
-        /// <para>MTU 1500 iken 1200 seçildi: LAN'da tünel/VPN yok ama sahada 1500'den küçük MTU
-        /// görülebiliyor ve birleştirme bir <b>optimizasyon</b>dur — parçalanma riskine karşılık
-        /// alınacak bir kazanç değil. Sınırın altında kalmayan tik zaten eski yolla çalışır.</para>
-        /// </summary>
+        /// <summary>Size cap of the combined <c>0x05</c> datagram (§6.8); over it the server falls back
+        /// to <c>0x02</c>+<c>0x04</c>. Chosen under MTU 1500 because combining is an optimisation, not
+        /// worth a fragmentation risk.</summary>
         public const int COMBINED_MAX_BYTES = 1200;
 
-        /// <summary>
-        /// Lobi türünün <c>modeId</c>'si (§10.7). <b>Kayıtlı bir maç modu DEĞİLDİR</b> — sunucuda
-        /// <c>IGameMode</c> karşılığı yoktur, <c>start_match</c> ile başlatılamaz (yani "lobi türü
-        /// seçiliyken maç başlamaz" kuralı buradan gelir, ayrı bir kontrol yoktur). İstemci bununla
-        /// silah loadout'unu, HUD'unu ve ateş serbestliğini (<c>rules.fireWhilePaused</c>) çözer.
-        /// </summary>
+        /// <summary><c>modeId</c> of the lobby kind (§10.7). <b>NOT a registered match mode</b> — no
+        /// <c>IGameMode</c> on the server, so <c>start_match</c> cannot start it (that is where the "no
+        /// match starts in lobby" rule comes from). The client resolves loadout, HUD and
+        /// <c>rules.fireWhilePaused</c> from it.</summary>
         public const string LOBBY_MODE_ID = "lobby";
 
-        // ---- Bağlantı durumu (§2/§5.3). Telde string taşınır; bilinmeyen/boş değer CONNECTED
-        // sayılır — böylece ileride dördüncü bir durum eklemek PROTOCOL_VERSION artırmaz.
-        // ⚠️ "Çevrimdışı" diye bir değer YOKTUR ve eklenmez: kopan cihaz ya geri beklenir
-        // (reconnecting) ya da oyundan çıkarılır (left). ----
+        // ---- Connection state (§2/§5.3). Carried as a string; unknown/empty reads as CONNECTED so a
+        // fourth state later does not bump PROTOCOL_VERSION.
+        // ⚠️ There is NO "offline" value and none will be added: a dropped device is either waited for
+        // (reconnecting) or removed (left). ----
 
-        /// <summary>Soket canlı; oyuncu tüm maç kapılarına girer.</summary>
+        /// <summary>Socket alive; the player passes every match gate.</summary>
         public const string CONNECTION_CONNECTED = "connected";
 
-        /// <summary>Soket düştü, cihaz <see cref="RECONNECT_GRACE"/> boyunca geri bekleniyor.
-        /// Kayıt durur ama maç kapılarına GİRMEZ (yükleme kapısı beklemez, vurulamaz, canlanmaz,
-        /// snapshot'ta yer almaz).</summary>
+        /// <summary>Socket dropped, awaited for <see cref="RECONNECT_GRACE"/>. The record stays but
+        /// passes NO match gate (not waited for, not hittable, not revivable, not in snapshots).</summary>
         public const string CONNECTION_RECONNECTING = "reconnecting";
 
-        /// <summary>Süre doldu, oyuncu oyundan çıkarıldı. Kayıt yalnız koşan maçın katılımcısıysa
-        /// (<c>PlayerInfo.inMatch</c>) maç sonuna kadar durur (§10.2).</summary>
+        /// <summary>Grace expired, player removed. The record survives only while it belongs to the
+        /// running match (<c>PlayerInfo.inMatch</c>), until that match ends (§10.2).</summary>
         public const string CONNECTION_LEFT = "left";
 
-        // ---- Kumanda durumu (§5.1/§5.3): status ve PlayerInfo'daki ctrlL/ctrlR. ----
-        // ⚠️ Taşınan şey bir YÜZDE DEĞİL DURUMDUR: kumandanın pil yüzdesi Quest'te OpenXR altında
-        // okunamıyor (OVRInput.GetControllerBatteryPercentRemaining kullanımdan kalktı ve daima 0
-        // döner, Unity OpenXR sağlayıcısı bu veriyi hiç yayınlamaz) — okunamayan bir sayıyı telde
-        // taşımak sahada "%0 yazıyor ama kumanda çalışıyor" olarak okunurdu. PlayerInfo.battery
-        // GÖZLÜĞÜN pilidir.
+        // ---- Controller state (§5.1/§5.3): ctrlL/ctrlR on status and PlayerInfo. ----
+        // ⚠️ A STATE, not a percentage: controller battery is unreadable on Quest under OpenXR, and an
+        // unreadable number would show on site as "0% but the controller works". PlayerInfo.battery is
+        // the HEADSET's battery.
 
-        /// <summary>Bildirilmedi: admin kaydı ya da bu alanı doldurmayan istemci.
-        /// <para>⚠️ <b><c>0</c> bilerek "bilinmiyor"dur</b> — JSON'da atanmamış <c>int</c> <c>0</c>
-        /// olduğu için <c>0</c>'ı "sağlıklı" saymak bildirmeyen her kaydı sağlıklı gösterirdi
-        /// (<c>battery = -1</c> ile aynı desen: bilinmeyen değer geçerli aralığın dışındadır).</para></summary>
+        /// <summary>Not reported: an admin record, or a client that omits the field. ⚠️ <c>0</c>
+        /// deliberately means "unknown" — an unset JSON <c>int</c> is <c>0</c>, so treating it as
+        /// healthy would mark every silent record healthy.</summary>
         public const int CONTROLLER_UNKNOWN = 0;
 
-        /// <summary>Kumanda bağlı ve izleniyor — el pozu ölçümdür.</summary>
+        /// <summary>Connected and tracked — the hand pose is a measurement.</summary>
         public const int CONTROLLER_OK = 1;
 
-        /// <summary>Bağlı ama pozu geçersiz (görüş dışı / uykuda).</summary>
+        /// <summary>Connected but the pose is invalid (out of view / asleep).</summary>
         public const int CONTROLLER_UNTRACKED = 2;
 
-        /// <summary>Hiç bağlı değil: pili bitti ya da kapandı. Gönderen son geçerli eli kafaya
-        /// göreli tutmaya devam eder ve pozu <c>FLAG_HAND_*_STALE</c> ile bayat işaretler (§6.3).</summary>
+        /// <summary>Not connected. The sender keeps the last valid hand relative to the head and marks
+        /// the pose stale with <c>FLAG_HAND_*_STALE</c> (§6.3).</summary>
         public const int CONTROLLER_LOST = 3;
 
-        // ---- Faz değerleri (§10.1). Telde string taşınır; bilinmeyen değer PAUSED sayılır. ----
+        // ---- Phase values (§10.1). Carried as a string; unknown reads as PAUSED. ----
 
-        /// <summary>Maç koşmuyor: lobi, yükleme, geri sayım, duraklatma. Hasar KAPALI.</summary>
+        /// <summary>Match not running: lobby, loading, countdown, pause. Damage OFF.</summary>
         public const string PHASE_PAUSED = "paused";
 
-        /// <summary>Maç koşuyor. <b>Hasarın işlendiği TEK faz</b> (§10.3).</summary>
+        /// <summary>Match running. <b>The ONLY phase that processes damage</b> (§10.3).</summary>
         public const string PHASE_PLAYING = "playing";
 
-        /// <summary>Maç bitti, skorlar kesin. Hasar KAPALI.</summary>
+        /// <summary>Match over, scores final. Damage OFF.</summary>
         public const string PHASE_FINISHED = "finished";
 
-        // ---- phaseReason değerleri (§10.1): yalnız PHASE_PAUSED iken doludur. ----
+        // ---- phaseReason values (§10.1): only set while PHASE_PAUSED. ----
 
-        /// <summary>Lobi türü açık, maç kurulmadı.</summary>
+        /// <summary>Lobby kind loaded, no match set up.</summary>
         public const string PAUSE_REASON_LOBBY = "lobby";
 
-        /// <summary>Sahne yükleme kapısı: tüm oyuncuların set_ready'si bekleniyor.</summary>
+        /// <summary>Scene loading gate: waiting for every player's set_ready.</summary>
         public const string PAUSE_REASON_LOADING = "loading";
 
-        /// <summary>Geri sayım (COUNTDOWN_SECONDS).</summary>
+        /// <summary>Countdown (COUNTDOWN_SECONDS).</summary>
         public const string PAUSE_REASON_COUNTDOWN = "countdown";
 
-        /// <summary>Operatör koşan maçı duraklattı.</summary>
+        /// <summary>Operator paused a running match.</summary>
         public const string PAUSE_REASON_OPERATOR = "operator";
 
-        /// <summary>Mod duraklatma istedi; gerekçesi <c>modeState</c>'tedir (ör. turnuva toplanması).</summary>
+        /// <summary>The mode asked for a pause; its reason is in <c>modeState</c>.</summary>
         public const string PAUSE_REASON_MODE = "mode";
 
-        // ---- Maç akışı + savaş (Docs/ArenaNet-Protokol.md §10) ----
+        // ---- Match flow + combat (Docs/ArenaNet-Protokol.md §10) ----
 
-        /// <summary>Oyuncu tam canı; sunucu-otoriter (health_update bunu aşamaz).</summary>
+        /// <summary>Full player health; server-authoritative (health_update cannot exceed it).</summary>
         public const float PLAYER_MAX_HP = 100f;
 
-        /// <summary>
-        /// Engelin içinde <b>can erimeye başlamadan önceki</b> tolerans (sn, §10.9).
-        /// <para>Bu süre boyunca oyuncunun ekranı zaten kapkaranlıktır (istemci tarafı): "bedava"
-        /// olan şey görüş değil <b>yalnız candır</b>. Kuralın anti-hile ayağı karartmadır, ceza
-        /// engelin içinde kamp kurmayı engeller — tolerans bu yüzden cömert olabiliyor.</para>
-        /// <para>⚠️ Oyuncu engelden çıkınca <b>tümden sıfırlanır</b> (kısmi sönüm yok): girip çıkan
-        /// oyuncu her girişinde yeniden kör kalıyor, yani kazandığı bir şey yok.</para>
-        /// </summary>
+        /// <summary>Grace inside an obstacle before health drains (s, §10.9). The screen is already
+        /// black during it, so what is free is health, not vision — hence it can be generous.
+        /// <para>⚠️ Fully resets on leaving (no partial decay): re-entering blinds the player again.</para></summary>
         public const float OBSTACLE_GRACE_SECONDS = 1f;
 
-        /// <summary>
-        /// Tolerans dolduktan sonra <b>tam candan</b> ölüme geçen süre (sn, §10.9). Engelde
-        /// geçirilebilen toplam süre <see cref="OBSTACLE_GRACE_SECONDS"/> + bu değerdir.
-        /// <para>⚠️ <b>Yaralı oyuncu daha çabuk ölür:</b> erime bir HIZ'dır, sabit bir geri sayım
-        /// değil. "8 saniye" tam candaki süredir, bir garanti değil.</para>
-        /// </summary>
+        /// <summary>Time from FULL health to death after the grace (s, §10.9). ⚠️ A wounded player dies
+        /// sooner: the drain is a RATE, not a fixed countdown.</summary>
         public const float OBSTACLE_DRAIN_SECONDS = 5f;
 
-        /// <summary>
-        /// Engel ihlalinde saniyelik can kaybı (§10.9) — sunucu <b>kendi tikinde ve kendi
-        /// saatiyle</b> uygular.
-        /// <para>⚠️ <b>Elle yazılmaz, türetilir:</b> tasarım parametresi süredir
-        /// <para>⚠️ Bu üç sabitin de <b>tek tüketicisi sunucudur</b>: değiştirmek yeni APK
-        /// gerektirmez, sunucu derlemesi yeter.</para>
-        /// </summary>
+        /// <summary>Health lost per second on obstacle violation (§10.9), applied on the server's own
+        /// tick. ⚠️ Derived from the two durations above, not hand-tuned. ⚠️ All three are consumed
+        /// ONLY by the server: changing them needs a server build, not a new APK.</summary>
         public const float OBSTACLE_DAMAGE_PER_SECOND = 13f;
 
-        /// <summary>
-        /// Engelin içindeyken canlanma en fazla bu kadar süre engellenir (sn, §10.9/§10.4).
-        /// <para><b>Neden bir tavan var:</b> canlanma kapısı istemcinin bildirdiği bir bayrağa
-        /// bakıyor; yanlış konuşan (susmayan ama sürekli "engeldeyim" diyen) bir istemci oyuncuyu
-        /// kalıcı ölü bırakabilirdi. <see cref="OBSTACLE_FLAG_STALE_MS"/> yalnız <b>susmuş</b>
-        /// istemciyi çözer. Tavan dolunca oyuncu engelde de olsa canlandırılır — ceza zaten anında
-        /// yeniden başlar, yani kural işlevsizleşmez.</para>
-        /// </summary>
+        /// <summary>Max time revival stays blocked inside an obstacle (s, §10.9/§10.4). The ceiling
+        /// exists because the gate trusts a client flag: a client that keeps claiming "I'm in an
+        /// obstacle" could keep a player dead forever (<see cref="OBSTACLE_FLAG_STALE_MS"/> only
+        /// handles a SILENT one). The penalty restarts immediately, so the rule keeps its teeth.</summary>
         public const float OBSTACLE_REVIVE_BLOCK_SECONDS = 40f;
 
-        /// <summary>
-        /// <see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/> bu süredir (ms) tazelenmemişse bayrak
-        /// düşürülür ve ceza durur (§10.9).
-        /// <para>Poz kanalı <see cref="POSE_RATE_HZ"/> (50 ms) olduğu için altı paketlik kayba
-        /// dayanır. <b>Varlık sebebi:</b> bayrak durum taşır — susmuş ya da donmuş bir istemcinin
-        /// son paketi sonsuza kadar "duvardayım" demeye devam ederdi.</para>
-        /// </summary>
+        /// <summary>Clear <see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/> and stop the penalty when it is
+        /// not refreshed within this (ms, §10.9). It exists because the flag carries state: a frozen
+        /// client's last packet would say "in the wall" forever.</summary>
         public const int OBSTACLE_FLAG_STALE_MS = 300;
 
-        /// <summary>
-        /// Engel ölümünün <c>kill_event.weaponId</c> etiketi (§10.9). O olayda
-        /// <c>killerId</c> <b>0</b>'dır (öldüren yok) — etiket yalnız kill feed'in "duvarda kaldı"
-        /// satırını normal bir öldürmeden ayırt etmesi içindir.
-        /// <para>⚠️ <c>weaponId</c> doğrulanmayan serbest bir etikettir (§10.3); bu sabit onu bir
-        /// kurala çevirmez, yalnız iki ucun aynı dizeyi yazmasını garanti eder.</para>
-        /// </summary>
+        /// <summary><c>kill_event.weaponId</c> tag for obstacle deaths (§10.9; <c>killerId</c> is 0), so
+        /// the kill feed can tell it apart from a real kill. ⚠️ <c>weaponId</c> is a free, unvalidated
+        /// label (§10.3); this constant only keeps both ends writing the same string.</summary>
         public const string WEAPON_ID_OBSTACLE = "obstacle";
 
-        // ---- İhlal defteri (§5.3/§10.9): violation mesajının `kind` değerleri. Telde string
-        // taşınır; tanımadığı türü okuyan taraf satırı ham gösterir, mesajı düşürmez. ----
+        // ---- Violation feed (§5.3/§10.9): `kind` values. Carried as a string; an unknown kind is
+        // shown raw rather than dropped. ----
 
-        /// <summary>Kafa bir iç engelin içinde (<see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/>) —
-        /// <b>ceza üreten</b> tek ihlal türü; can erimesi buna bağlıdır.</summary>
+        /// <summary>Head inside an inner obstacle — the only kind that carries a penalty.</summary>
         public const string VIOLATION_KIND_OBSTACLE = "obstacle";
 
-        /// <summary>Kafa muhafazanın güvenli alanının dışında
-        /// (<see cref="SnapshotEntry.FLAG_OUT_OF_BOUNDS"/>). ⚠️ <b>Ceza üretmez</b>: kalibrasyonu
-        /// birkaç santim kaymış oyuncu durduk yere ölmesin diye kural görünürlükte kalır, müdahale
-        /// kararı operatöründür.</summary>
+        /// <summary>Head outside the boundary's safe area. ⚠️ <b>No penalty</b>: a player whose
+        /// calibration drifted a few centimetres must not die for it, so the rule stays a visibility
+        /// signal and the operator decides.</summary>
         public const string VIOLATION_KIND_OUT_OF_BOUNDS = "out_of_bounds";
 
-        /// <summary>
-        /// Bundan kısa süren temaslar ihlal <b>akışına (feed)</b> hiç yazılmaz (sn, §10.9): sınır
-        /// çizgisinde salınan bir oyuncu saniyede üç satır üretir ve operatörün iş listesini
-        /// okunamaz hâle getirirdi.
-        /// <para>⚠️ <b>Eşik yalnız feed içindir:</b> halka (snapshot biti) ve engel cezası ilk
-        /// kareden itibaren çalışır — kısa temas görünmez değil, yalnız log'a girmez.</para>
-        /// </summary>
+        /// <summary>Contacts shorter than this never enter the violation feed (s, §10.9) — a player
+        /// oscillating on the line would produce three rows a second. ⚠️ Feed-only: the ring (snapshot
+        /// bit) and the obstacle penalty run from the first frame.</summary>
         public const float VIOLATION_MIN_SECONDS = 0.5f;
 
-        /// <summary>Countdown fazının VARSAYILAN uzunluğu (saniye, tam sayı — countdown mesajı
-        /// saniye sayar). Admin start_match.countdownSeconds ile o maça özel bir değer verebilir
-        /// (§5.2); tur tabanlı modlarda (tournament) turlar arasındaki geri sayım da odur.</summary>
+        /// <summary>DEFAULT countdown length (whole seconds). Overridable per match via
+        /// start_match.countdownSeconds (§5.2); also the between-round countdown in round-based
+        /// modes.</summary>
         public const int COUNTDOWN_SECONDS = 5;
 
-        /// <summary>start_match.countdownSeconds kırpma aralığı (§5.2). <b>Arayüz listesi değil,
-        /// sunucunun uyguladığı kısıttır:</b> 1 sn'lik geri sayım oyuncuya yerini alacak zaman
-        /// bırakmaz, 30 sn'den uzun bekleme tur tabanlı modda ölü zamandır.</summary>
+        /// <summary>Clamp range for start_match.countdownSeconds (§5.2). <b>Server-enforced, not a UI
+        /// list:</b> 1 s leaves no time to take position, over 30 s is dead time in a round-based
+        /// mode.</summary>
         public const int COUNTDOWN_SECONDS_MIN = 5;
 
         /// <inheritdoc cref="COUNTDOWN_SECONDS_MIN"/>
         public const int COUNTDOWN_SECONDS_MAX = 30;
 
-        /// <summary>End fazı: match_end sonrası otomatik return_to_lobby'ye kadar geçen süre.
-        /// <para>⚠️ <b>Pratikte bu bir emniyettir, akış değil:</b> kazanan ekranını kapatan şey
-        /// operatörün harita/lobi seçimi (ya da BAŞLAT/İPTAL) olsun diye bilerek uzun tutuldu —
-        /// hepsi fazı değiştirdiği için sayacı öldürür (§10.1). Operatör hiçbir şey yapmazsa maç
-        /// yine de sonsuza kadar askıda kalmaz.</para></summary>
+        /// <summary>End phase: match_end to the automatic return_to_lobby. ⚠️ A safety net, not part of
+        /// the flow: the winner screen is meant to be closed by the operator's map/lobby choice (or
+        /// START/CANCEL), all of which change the phase and kill this timer (§10.1).</summary>
         public const int MATCH_END_SECONDS = 999;
 
-        /// <summary>Loading fazında tüm oyuncuların "sahne yüklendi" (set_ready) bildirimi
-        /// beklenir; bu süre dolunca eksik olsa da Countdown'a geçilir.</summary>
+        /// <summary>Loading waits for every player's set_ready; on timeout it moves to Countdown
+        /// anyway.</summary>
         public const float LOADING_TIMEOUT = 20f;
 
-        /// <summary>Ölüm → en erken canlanma süresinin VARSAYILANI (respawn.delaySeconds).
-        /// Mod bunu ModeRules.RespawnDelay ile ezebilir (§10.5).</summary>
+        /// <summary>DEFAULT death → earliest revive delay (respawn.delaySeconds); a mode may override it
+        /// via ModeRules.RespawnDelay (§10.5).</summary>
         public const float RESPAWN_DELAY = 5f;
 
-        /// <summary>reviveAnchor="standstill" (§10.5): ölü oyuncunun canlanmak için kesintisiz
-        /// sabit durması gereken süre.</summary>
+        /// <summary>reviveAnchor="standstill" (§10.5): uninterrupted standstill needed to revive.</summary>
         public const float REVIVE_HOLD_SECONDS = 5f;
 
-        /// <summary>reviveAnchor="standstill": ölüm anındaki çapadan bu yarıçapı (metre) aşan
-        /// hareket sayacı ve çapayı sıfırlar.</summary>
+        /// <summary>reviveAnchor="standstill": moving beyond this radius (m) from the death anchor
+        /// resets both the timer and the anchor.</summary>
         public const float REVIVE_HOLD_RADIUS = 1f;
 
-        /// <summary>
-        /// Admin arayüzünün maç süresi seçenekleri (saniye): 1 · 1.5 · 2 · 2.5 · 3 · 5 · 10 · 15 ·
-        /// 20 · 30 dk · 1 saat.
-        /// <para><b>Protokol kısıtı DEĞİL, arayüz listesidir</b> — sunucu start_match.roundSeconds
-        /// alanında her pozitif değeri kabul eder (§5.2).</para>
-        /// <para>Kısa uçtaki değerler tur tabanlı modlar içindir: <c>tournament</c>'ta bu alan
-        /// <b>turun</b> süresidir, maçın değil (§10.5).</para>
-        /// </summary>
+        /// <summary>Match duration options for the admin UI (seconds, 1 min … 1 h). <b>A UI list, not a
+        /// protocol limit</b> — the server accepts any positive roundSeconds (§5.2). The short values
+        /// serve round-based modes, where this field is the ROUND length (§10.5).</summary>
         public static readonly int[] ROUND_SECONDS_OPTIONS = { 60, 90, 120, 150, 180, 300, 600, 900, 1200, 1800, 3600 };
 
-        /// <summary>
-        /// <c>scoreLimit</c> alanının <b>SINIRSIZ</b> değeri (§5.2): maçın skor/tur limiti YOKTUR,
-        /// bitişi süre ya da operatörün <c>abort_match</c>'i belirler.
-        /// <para><b>Neden ayrı bir değer:</b> o alanda <c>0</c> zaten "operatör seçmedi → modun
-        /// varsayılanı" demek, yani sınırsızı ifade edemez. Sunucudaki kapıların tamamı
-        /// "limit &gt; 0 mı" diye sorduğu için negatif değer her modda kendiliğinden limitsizdir;
-        /// tek yeni iş <b>ifade edilebilir</b> olması.</para>
-        /// <para>⚠️ Tur tabanlı modda (<c>tournament</c>, §10.5) bununla <b>tur tavanı da</b> kalkar:
-        /// best-of tavanı (<c>2 × limit − 1</c>) limitten türüyor.</para>
-        /// </summary>
+        /// <summary>The UNLIMITED value of <c>scoreLimit</c> (§5.2): no score/round limit, the match
+        /// ends on time or on <c>abort_match</c>. A separate value is needed because <c>0</c> already
+        /// means "operator did not choose"; every server gate asks "limit &gt; 0", so negatives are
+        /// already unlimited.
+        /// <para>⚠️ In round-based modes this also removes the round ceiling (<c>2 × limit − 1</c>,
+        /// §10.5).</para></summary>
         public const int SCORE_LIMIT_UNLIMITED = -1;
 
-        /// <summary><c>scoreLimit</c>'in tek normalize kapısı: pozitif değer ve <c>0</c> aynen kalır,
-        /// HER negatif değer <see cref="SCORE_LIMIT_UNLIMITED"/> olur — telde tek bir "sınırsız"
-        /// yazımı olsun diye (iki uç da bu kapıdan geçirir).</summary>
+        /// <summary>The single normalisation gate for <c>scoreLimit</c>: positives and <c>0</c> pass
+        /// through, EVERY negative becomes <see cref="SCORE_LIMIT_UNLIMITED"/> so the wire carries one
+        /// spelling of "unlimited".</summary>
         public static int NormalizeScoreLimit(int scoreLimit) =>
             scoreLimit < 0 ? SCORE_LIMIT_UNLIMITED : scoreLimit;
 
-        // NOT: atış hızı toleransı gibi bir sabit YOKTUR ve eklenmez (§10.3). Sunucuda atış hızı
-        // denetimi ve silah tablosu yoktur — hasarı istemci hesaplar, sunucu aynen uygular. Ürün
-        // gözetimli özel alanda çalıştığı için hile koruması bilinçli olarak eklenmez.
+        // NOTE: there is NO fire-rate tolerance constant and none will be added (§10.3). The server has
+        // no rate checking and no weapon table — the client computes damage, the server applies it
+        // verbatim; the product runs in supervised venues, so anti-cheat is deliberately left out.
     }
 }

@@ -1,5 +1,5 @@
-// ⚠️ `using System;` EKLENMEZ: bu dosya UnityEngine.Random kullanıyor, System de bir Random
-// tipi taşıyor → ad çakışması. System.Environment tam adıyla çağrılır.
+// ⚠️ Never add `using System;` here: this file uses UnityEngine.Random and System has its own
+// Random → name clash. System.Environment is called fully qualified.
 using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Core.Arena;
@@ -9,98 +9,72 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Core.Combat
 {
-    /// <summary>
-    /// Uzak oyuncuların atış sunumu: sunucunun 20 Hz batch'lediği olay kanalını
-    /// (<c>NetEvents.OnRemoteFireEvent</c>, §6.4/6.5) dinler; namlu alevi + mekânsal ses oynatır
-    /// ve <see cref="ShotTracer"/> ile mermi izini (çizgi + duman) çizer. Kendi atışımız buradan ASLA gelmez
-    /// (kanal atanı süzer, §6.5); yerel atış FX'i Weapon/WeaponAudio'da kalır.
-    /// <para>
-    /// ⚠️ <b>Olayda namlu KONUMU yoktur</b> ve bu kasıtlıdır (§6.4 "Orijin neden gönderilmiyor"):
-    /// tracer, alıcının ÇİZDİĞİ silahın namlusundan çıkmalıdır. Mutlak bir namlu konumu telde
-    /// gelse alıcı silahı interpole edilmiş el pozundan çizdiği için tracer çizilen namludan
-    /// kaymış başlardı — atıcının gerçeğine daha sadık, gözle daha bozuk. <b>Tutarlılık ></b>
-    /// <b>sadakat.</b> Orijin bu yüzden yerelde çözülür: uzak avatarın o elde ÇİZDİĞİ eşya örneği
-    /// (<c>RemoteAvatar.GetHeldItemVisual</c>) → onun <c>Muzzle</c> çocuğu → (yoksa) elin pozu →
-    /// (yoksa) kafanın pozu.
-    /// </para>
-    /// <para>
-    /// Sahnede DURMAZ: kendini önyükler ve DontDestroyOnLoad olur. FX düğümleri 8'lik round-robin
-    /// havuzda tembel üretilir (<c>WeaponCatalog.RemoteShotFxPrefab</c> varsa o, yoksa sade
-    /// AudioSource fallback'i); tracer havuzu <see cref="ShotTracer"/>'da. Admin gözlemci de bu
-    /// olayları alır ve <b>GÖRSEL</b> sunumun tamamını aynı şekilde görür — alev, tracer ve geri
-    /// tepmede rol ayrımı YOKTUR. Tek ayrım ses SEVİYESİNDEDİR: gözlemci POV'da izlemediği
-    /// oyuncuların atışını kısık duyar (<see cref="SpectatorAudioFocus"/>).
-    /// </para>
-    /// </summary>
+    /// <summary>Shot presentation for REMOTE players: listens to the server's 20 Hz event channel
+    /// (<c>NetEvents.OnRemoteFireEvent</c>, §6.4/6.5), plays muzzle flash + spatial audio and draws
+    /// the trail through <see cref="ShotTracer"/>. Our own shot NEVER arrives here (the channel
+    /// filters the shooter, §6.5); local shot FX stays in Weapon/WeaponAudio.
+    /// <para>⚠️ The event carries NO muzzle POSITION, on purpose (§6.4): the tracer must leave the
+    /// muzzle of the gun the RECEIVER draws. An absolute position on the wire would start the
+    /// tracer offset from the drawn muzzle, because the receiver draws the gun from an interpolated
+    /// hand pose — more faithful to the shooter, worse to the eye. CONSISTENCY BEATS FIDELITY. So
+    /// the origin is resolved locally: held item visual (<c>RemoteAvatar.GetHeldItemVisual</c>) →
+    /// its <c>Muzzle</c> child → hand pose → head pose.</para>
+    /// <para>Never placed in a scene: self-bootstraps and goes DontDestroyOnLoad. FX nodes are
+    /// created lazily in an 8-slot round-robin pool (<c>WeaponCatalog.RemoteShotFxPrefab</c>, else
+    /// a plain AudioSource fallback); the tracer pool lives in <see cref="ShotTracer"/>. The admin
+    /// spectator receives the same events and sees the whole VISUAL presentation identically — no
+    /// role split for flash, tracer or recoil. The only difference is audio LEVEL: shots of players
+    /// not being watched in POV are attenuated
+    /// (<see cref="SpectatorAudioFocus"/>).</para></summary>
     public class RemoteShotFx : MonoBehaviour
     {
-        /// <summary>Havuzdaki FX düğümü sayısı (aynı anda canlı kalabilecek atış efekti).</summary>
+        /// <summary>FX nodes in the pool (max simultaneously live shot effects).</summary>
         private const int PoolSize = 8;
 
-        /// <summary>Bu mesafeden (metre) uzak atışlarda ses çalınmaz, yalnız flaş kalır.</summary>
+        /// <summary>Beyond this distance (m) no sound is played, only the flash.</summary>
         private const float MaxAudibleDistanceMeters = 40f;
 
-        /// <summary>
-        /// Gözlemci odağı dışındaki oyuncuların atış sesi bu çarpanla kısılır
-        /// (<see cref="SpectatorAudioFocus"/>). ⚠️ <b>Sıfır DEĞİL:</b> odak dışını tümden
-        /// susturmak POV'u sağırlaştırır — operatör arenanın öbür ucundaki çatışmayı duyamaz ve
-        /// "orada bir şey oluyor" bilgisini ancak kip değiştirerek geri alır. Kısılmış ses o
-        /// bilgiyi bırakır, izlenen oyuncuyu yine de baskın kılar.
-        /// </summary>
+        /// <summary>Attenuation applied to shots outside the spectator focus
+        /// (<see cref="SpectatorAudioFocus"/>). ⚠️ NOT zero: full silence would deafen the POV and
+        /// the operator would lose "something is happening over there"; attenuation keeps that
+        /// information while the watched player still dominates.</summary>
         private const float UnfocusedVolumeScale = 0.3f;
 
-        /// <summary>Fallback AudioSource'un sönümlenme mesafesi.</summary>
         private const float FallbackMaxDistanceMeters = 60f;
 
-        /// <summary>Atış başına yayılan parçacık sayısı.</summary>
         private const int ParticlesPerShot = 14;
 
-        /// <summary>Eşya prefabında namlu ucunu tutan çocuğun adı (WeaponKitBuilder bunu kökte kurar).</summary>
+        /// <summary>Name of the muzzle child in the item prefab (WeaponKitBuilder creates it).</summary>
         private const string MuzzleChildName = "Muzzle";
 
-        /// <summary>Avatar dizininin yenilenme aralığı (sn) — sahne taraması bu sıklıktan hızlı yapılmaz.</summary>
         private const float AvatarScanIntervalSeconds = 0.5f;
 
-        /// <summary>Oyuncu kaydı temizleme aralığı (sn) ve kaydın bayatlama süresi (sn).</summary>
         private const float PruneIntervalSeconds = 5f;
         private const float PlayerStaleSeconds = 10f;
 
-        /// <summary>Oynatma sırası bekleyen olay tavanı; aşılırsa en eskisi HEMEN oynatılır (atılmaz).</summary>
+        /// <summary>Pending event cap; on overflow the oldest is played NOW, never dropped.</summary>
         private const int MaxPendingEvents = 128;
 
-        /// <summary>
-        /// Bir olayın oynatılmak için bekleyebileceği en uzun süre (ms). Bozuk/atlamalı bir
-        /// tik→zaman eşlemesi olayı süresiz bekletmesin diye tavan: INTERP_DELAY_MS'in iki
-        /// katından fazlası, yani sağlıklı durumda hiç devreye girmez.
-        /// </summary>
+        /// <summary>Longest an event may wait before playback (ms). A cap so a broken tick→time
+        /// mapping cannot hold it forever; more than twice INTERP_DELAY_MS, so it never triggers in
+        /// a healthy session.</summary>
         private const int MaxPlaybackLeadMs = 250;
 
         public static RemoteShotFx Instance { get; private set; }
 
-        /// <summary>
-        /// Gözlemcinin ses odağı: uzak atış sesinde <b>hangi</b> oyuncu öne çıkacak.
-        /// <list type="bullet">
-        /// <item><c>null</c> — <b>odak yok</b>: her oyuncunun atışı mesafeye göre tam sesle
-        /// duyulur. Oyuncu istemcisinin, gözlemcinin POV DIŞINDAKİ kiplerinin ve hiç yazılmamış
-        /// hâlin durumu budur — yani varsayılan davranış değişmez.</item>
-        /// <item><c>n</c> — o <c>playerId</c> tam sesle, <b>diğerleri kısık</b>
-        /// (<see cref="UnfocusedVolumeScale"/>) duyulur.</item>
-        /// </list>
-        /// <para>⚠️ Odak SUSTURMAZ, KISAR: hiçbir atış tümden düşürülmez. Susturmak POV'daki
-        /// operatörü sahanın geri kalanına sağır ederdi; kısmak izlenen oyuncuyu baskın kılarken
-        /// "arenanın öbür ucunda çatışma var" bilgisini bırakır.</para>
-        /// <para>⚠️ Core, App'i göremez (asmdef grafiği aşağı akar): değeri <b>App yazar</b> —
-        /// <c>AdminSpectatorCamera</c>, operatörün o karedeki kipine/seçimine göre. Tek yazan
-        /// orasıdır; ikinci bir yazan "kim kısıldı" sorusunu cevapsız bırakırdı.</para>
-        /// <para>Gerekçe: gözlemcinin kulağı kamerasıyla aynı yere bakar. POV'da izlenen oyuncunun
-        /// silahı öne çıkar (operatör onun gördüğünü görüyor, duyduğunu duyar) — hepsi eşit sesle
-        /// çalınca hangi sesin izlenen oyuncuya ait olduğu ayırt edilemez. ⚠️ Odak yalnız POV
-        /// içindir: kuş bakışında/serbest kipte atış sesi "nerede çatışma var" sorusunun
-        /// cevabıdır, orada hiçbir oyuncu kısılmaz.</para>
-        /// </summary>
+        /// <summary>Spectator audio focus: WHICH player's shots stand out. <c>null</c> = no focus,
+        /// every shot plays at full volume by distance (player clients, non-POV spectator modes and
+        /// the unset state); <c>n</c> = that <c>playerId</c> full volume, everyone else attenuated
+        /// by <see cref="UnfocusedVolumeScale"/>.
+        /// <para>⚠️ Focus ATTENUATES, never mutes: silencing would deafen the operator to the rest
+        /// of the arena.</para>
+        /// <para>⚠️ Core cannot see App (the asmdef graph flows down), so APP writes this value —
+        /// <c>AdminSpectatorCamera</c>, from the operator's current mode/selection. It is the only
+        /// writer; a second one would leave "who is attenuated" unanswerable.</para>
+        /// <para>⚠️ Focus is for POV only: in top-down/free mode a shot sound answers "where is the
+        /// fight", so nobody is attenuated there.</para></summary>
         public static int? SpectatorAudioFocus { get; set; }
 
-        /// <summary>Havuz düğümü; bileşenler üretim anında önbelleklenir (atış başına GetComponent yok).</summary>
         private sealed class FxNode
         {
             public Transform Root;
@@ -108,11 +82,9 @@ namespace VortexArena.Core.Combat
             public ParticleSystem Particles;
         }
 
-        /// <summary>
-        /// Oyuncu başına sunum durumu: avatar + el başına çözülmüş namlu + tracer sayacı.
-        /// Olay yolu 53-160/sn olduğu için her şey burada ÖNBELLEKLENİR (olay başına sahne
-        /// taraması/GetComponentsInChildren kabul edilemez).
-        /// </summary>
+        /// <summary>Per-player presentation state: avatar, per-hand resolved muzzle, tracer
+        /// counter. The event path runs 53-160/s, so everything is CACHED here — a scene scan or
+        /// GetComponentsInChildren per event is unacceptable.</summary>
         private sealed class PlayerFx
         {
             public RemoteAvatar Avatar;
@@ -120,23 +92,23 @@ namespace VortexArena.Core.Combat
             public Transform MuzzleL;
             public Transform MuzzleR;
 
-            // Namlu önbelleğinin ANAHTARI, eşya örneğinin kendisidir (RemoteAvatar.GetHeldItemVisual'ın
-            // döndürdüğü kök). Eşya değişince referans da değişir → önbellek kendiliğinden geçersizleşir
-            // ve bayat namlu asla kullanılmaz. Aramanın BAŞARISIZ olduğu durum da aynı anahtarla
-            // önbelleklenir (Muzzle=null saklanır), yoksa her atışta boşuna hiyerarşi taraması olurdu.
+            // The muzzle cache KEY is the item instance itself (the root GetHeldItemVisual
+            // returns): a changed item changes the reference, so the cache invalidates itself and a
+            // stale muzzle can never be used. A FAILED lookup is cached under the same key
+            // (Muzzle=null), otherwise every shot would rescan the hierarchy for nothing.
             public Transform MuzzleSourceL;
             public Transform MuzzleSourceR;
 
-            /// <summary>Bu oyuncu için "eşyada Muzzle yok" uyarısı bir kez basıldı mı.</summary>
+            /// <summary>Has the "item has no Muzzle" warning been logged once for this player.</summary>
             public bool MuzzleWarned;
 
-            /// <summary>Bu oyuncudan gelen atış sayısı (tracerEveryNthRound sayacı).</summary>
+            /// <summary>Shots received from this player (tracerEveryNthRound counter).</summary>
             public int ShotCount;
 
             public float LastEventTime;
         }
 
-        /// <summary>Oynatma zamanı gelmemiş olay (playAtMs = Environment.TickCount ekseni).</summary>
+        /// <summary>Event not yet due (playAtMs is on the Environment.TickCount axis).</summary>
         private struct PendingShot
         {
             public RemoteFireEvent evt;
@@ -146,24 +118,22 @@ namespace VortexArena.Core.Combat
         private readonly FxNode[] _pool = new FxNode[PoolSize];
         private int _nextNode;
 
-        // ⚠️ YALNIZ ANA THREAD dokunur, kilit yok: NetEvents.OnRemoteFireEvent ana thread'de
-        // yayınlanıyor (UdpStateChannel olayı ağ thread'inden _mainThreadActions kuyruğuyla
-        // taşıyor), boşaltan da Update. Buraya ağ thread'inden yazan bir yol EKLENMEZ.
+        // ⚠️ MAIN THREAD ONLY, no lock: NetEvents.OnRemoteFireEvent is raised on the main thread
+        // (UdpStateChannel hands it over through _mainThreadActions) and Update drains it. Never
+        // add a path that writes here from the network thread.
         private readonly List<PendingShot> _pending = new List<PendingShot>();
 
         private readonly Dictionary<int, PlayerFx> _players = new Dictionary<int, PlayerFx>();
         private readonly List<int> _pruneScratch = new List<int>();
 
-        /// <summary>
-        /// Saçmalı silahın yeniden üretilen yaylımının uç noktaları (<see cref="BuildScatter"/>).
-        /// Tek tampon yeter: olaylar ana thread'de, tek tek ve sırayla oynatılıyor.
-        /// </summary>
+        /// <summary>Endpoints of the regenerated pellet spread (<see cref="BuildScatter"/>). One
+        /// buffer is enough: events play one at a time on the main thread.</summary>
         private Vector3[] _scatterPoints;
 
         private float _nextAvatarScan;
         private float _nextPrune;
 
-        // netItemId başına tek "katalogda yok" uyarısı (log taşmasın).
+        // One "not in catalog" warning per netItemId (keep the log clean).
         private readonly HashSet<byte> _warnedItemIds = new HashSet<byte>();
         private bool _warnedNoPrefab;
 
@@ -184,15 +154,15 @@ namespace VortexArena.Core.Combat
         {
             if (Instance != null && Instance != this)
             {
-                // İkinci kopya (sahneye elle konmuş olabilir) kendini yok eder.
+                // A second copy destroys itself.
                 Destroy(gameObject);
                 return;
             }
 
             Instance = this;
 
-            // Kalıcı tekiliz: OnEnable/OnDisable yerine Awake/OnDestroy'da abone oluruz,
-            // böylece obje devre dışı bırakılsa bile sunucu olayları kaçmaz.
+            // Persistent singleton: subscribe in Awake/OnDestroy, not OnEnable/OnDisable, so
+            // server events are not missed while the object is disabled.
             NetEvents.OnRemoteFireEvent += HandleFireEvent;
             NetEvents.OnDisconnected += HandleDisconnected;
         }
@@ -209,19 +179,15 @@ namespace VortexArena.Core.Combat
             Instance = null;
         }
 
-        /// <summary>
-        /// Kopuşta bekleyen olaylar DÜŞÜRÜLÜR: yeniden bağlanınca eski oturumun tracer'ları
-        /// oynamamalı ve yeni oturumda sunucunun tik ekseni sıfırdan başlayabileceği için
-        /// hesaplanmış oynatma zamanları da anlamsızdır.
-        /// </summary>
+        /// <summary>Pending events are DROPPED on disconnect: the old session's tracers must not
+        /// play after reconnecting, and the server tick axis may restart from zero, which makes the
+        /// computed playback times meaningless.</summary>
         private void HandleDisconnected()
         {
             _pending.Clear();
         }
 
-        /// <summary>
-        /// Vadesi gelen atış olaylarını oynatır (sıra korunarak, tek geçişte sıkıştırarak).
-        /// </summary>
+        /// <summary>Plays due shot events, preserving order and compacting in one pass.</summary>
         private void Update()
         {
             int count = _pending.Count;
@@ -230,8 +196,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // TickCount farkı int çıkarma ile — ~24.9 günlük sarmalamaya dayanıklı
-            // (RemotePlayerRegistry.Update aynı deseni kullanıyor).
+            // TickCount difference via int subtraction: survives the ~24.9 day wrap.
             int now = System.Environment.TickCount;
 
             int write = 0;
@@ -255,35 +220,24 @@ namespace VortexArena.Core.Combat
             _pending.RemoveRange(write, count - write);
         }
 
-        /// <summary>
-        /// Gelen atış olayının ZAMANLAMASI (§6.5): ucuz redler burada yapılır, sonra olay kendi
-        /// <c>serverTick</c>'inin oynatma zamanına kadar bekletilir.
-        /// <para>
-        /// Olay, kendi <c>serverTick</c>'inde <b>alıcının interpolasyon saatiyle</b> oynatılır
-        /// (<c>RemotePlayerRegistry.TryGetPlaybackTimeMs</c>). Sebebi: uzak pozlar bilerek
-        /// <c>INTERP_DELAY_MS</c> geriden çizilir, ama sunucu snapshot'ı (0x02) ile olay batch'ini
-        /// (0x04) AYNI tik'te yayınlar → olay geldiği anda oynatılsa alev/ses/tracer elin
-        /// <b>100 ms öncesindeki</b> konumundan çıkardı (kol 2 m/s ise ~20 cm kayma). Doğrusu,
-        /// avatarın eli o tik'e ULAŞANA kadar beklemektir.
-        /// </para>
-        /// <para>
-        /// Bu yüzden 20 Hz batch'lemesi algılanan gecikmeye <b>EKLENMEZ</b>: ≤50 ms'lik batch
-        /// beklemesi 100 ms'lik interp tamponunun içinde erir.
-        /// </para>
-        /// <para>
-        /// Eşleme yoksa (henüz snapshot gelmemiş ya da tik halkadan düşmüş kadar eski) olay
-        /// <b>hemen</b> oynatılır: geciken tracer kabul edilebilir, kaybolan tracer edilemez.
-        /// </para>
-        /// <para>
-        /// ⚠️ Geçmiş pozu örneklemeye GEREK YOKTUR ve o kapı bilerek açılmadı: orijin telden gelen
-        /// bir konum değil, o karede ÇİZİLMİŞ silahın namlusudur (§6.4 "tutarlılık > sadakat").
-        /// Olay doğru anda oynayınca çizili namlu zaten o tik'in namlusudur.
-        /// </para>
-        /// </summary>
+        /// <summary>TIMING of an incoming shot event (§6.5): cheap rejects happen here, then the
+        /// event waits until its own <c>serverTick</c> is due on the receiver's interpolation clock
+        /// (<c>RemotePlayerRegistry.TryGetPlaybackTimeMs</c>).
+        /// <para>Remote poses are deliberately drawn <c>INTERP_DELAY_MS</c> behind, but the server
+        /// broadcasts the snapshot (0x02) and the event batch (0x04) on the SAME tick. Playing on
+        /// arrival would fire flash/sound/tracer from where the hand was 100 ms ago (~20 cm off at
+        /// 2 m/s). So we wait until the avatar's hand REACHES that tick.</para>
+        /// <para>The 20 Hz batching therefore ADDS NO perceived latency: a ≤50 ms batch wait
+        /// dissolves inside the 100 ms interpolation buffer.</para>
+        /// <para>With no mapping (no snapshot yet, or a tick too old for the ring) the event plays
+        /// IMMEDIATELY: a late tracer is acceptable, a lost one is not.</para>
+        /// <para>⚠️ Sampling a historical pose is NOT needed and that door stays shut: the origin
+        /// is the muzzle of the gun DRAWN this frame, not a wire position (§6.4). Playing at the
+        /// right moment already makes the drawn muzzle that tick's muzzle.</para></summary>
         private void HandleFireEvent(RemoteFireEvent evt)
         {
-            // Ucuz redler kuyruktan ÖNCE: oynatılmayacak olay hiç beklemeye girmesin.
-            // KIND_THROW (fırlatılan cismin sunumu) Faz 4'ün işi — burada sessizce atlanır.
+            // Cheap rejects BEFORE queuing so an event that will not play never waits.
+            // KIND_THROW belongs to a later phase and is silently skipped here.
             if (evt.kind != FireEventEntry.KIND_SHOT)
             {
                 return;
@@ -300,7 +254,7 @@ namespace VortexArena.Core.Combat
             if (registry == null || !registry.TryGetPlaybackTimeMs(evt.serverTick, out int playAtMs) ||
                 now - playAtMs >= 0)
             {
-                // Eşleme yok ya da oynatma zamanı çoktan geçmiş → beklemenin anlamı kalmadı.
+                // No mapping, or already due → waiting is pointless.
                 PlayFireEvent(evt);
                 return;
             }
@@ -312,8 +266,8 @@ namespace VortexArena.Core.Combat
 
             if (_pending.Count >= MaxPendingEvents)
             {
-                // Tavan: en eskisini oynat ve çıkar. Sessizce ATILMAZ — kaybolan tracer teşhis
-                // edilemez, 100 ms erken oynatılan tracer görünür ve zararsızdır.
+                // Cap reached: play the oldest and remove it. NEVER dropped silently — a missing
+                // tracer is undiagnosable, one playing 100 ms early is visible and harmless.
                 PendingShot oldest = _pending[0];
                 _pending.RemoveAt(0);
                 PlayFireEvent(oldest.evt);
@@ -322,10 +276,8 @@ namespace VortexArena.Core.Combat
             _pending.Add(new PendingShot { evt = evt, playAtMs = playAtMs });
         }
 
-        /// <summary>
-        /// Tek uzak atış olayının SUNUMU (§6.5): orijin çözümü, namlu alevi, mekânsal ses, tracer.
-        /// Zamanlama <see cref="HandleFireEvent"/>'in işidir — buraya vadesi gelmiş olay gelir.
-        /// </summary>
+        /// <summary>PRESENTATION of one remote shot (§6.5): origin, muzzle flash, spatial audio,
+        /// tracer. Timing belongs to <see cref="HandleFireEvent"/>; only due events reach here.</summary>
         private void PlayFireEvent(in RemoteFireEvent evt)
         {
             Vector3 worldDir = ArenaToWorldDirection(evt.arenaDirection);
@@ -343,11 +295,9 @@ namespace VortexArena.Core.Combat
 
             ItemDefinition item = ResolveItem(evt.itemId);
 
-            // Geri tepme, orijin çözümünden ÖNCE tetiklenir: aşağıdaki erken çıkış (hiç poz yok)
-            // sunumun görsel kalanını düşürür ama silahın sarsılmaması için bir sebep değildir.
-            // Zamanlama zaten doğru — olay kendi serverTick'inin interpolasyon anında buraya
-            // ulaşıyor (HandleFireEvent bekletir), yani kick avatarın eli o tik'e vardığında başlar.
-            // Silah OLMAYAN eşyada (bomba vb.) desen tutmaz: geri tepme diye bir şey yoktur.
+            // Recoil fires BEFORE origin resolution: the early return below (no pose at all) drops
+            // the rest of the visuals but is no reason for the gun not to kick. Non-weapon items
+            // have no recoil.
             if (item is WeaponDefinition recoilWeapon)
             {
                 RemoteAvatar avatar = ResolveAvatar(fx, evt.playerId, now);
@@ -359,8 +309,7 @@ namespace VortexArena.Core.Combat
 
             if (!TryResolveOrigin(fx, evt, now, out Vector3 origin))
             {
-                // Ne namlu, ne el, ne kafa: oyuncunun hiç pozu yok (henüz snapshot gelmemiş) →
-                // efektin nereye konacağı bilinmiyor, olay sessizce düşer.
+                // No muzzle, hand or head pose yet: we do not know where to put the effect.
                 return;
             }
 
@@ -375,8 +324,8 @@ namespace VortexArena.Core.Combat
                     node.Particles.Emit(ParticlesPerShot);
                 }
 
-                // Ses/alev profili silaha özgüdür; eşya bir silah DEĞİLSE (bomba vb.) yalnız atlanır
-                // — tracer aşağıda yine çizilir.
+                // The audio/flash profile is weapon-specific; a non-weapon item just skips it,
+                // the tracer below is still drawn.
                 PlayShotSound(node, item as WeaponDefinition, origin, evt.playerId);
             }
 
@@ -386,27 +335,23 @@ namespace VortexArena.Core.Combat
 
         // --------------------------------------------------------------------- tracer
 
-        /// <summary>
-        /// Mermi izini (çizgi + yol boyunca duman) çizer. <c>magnitude</c> KIND_SHOT'ta vuruş
-        /// MESAFESİDİR (metre), bu yüzden bitiş noktası <c>origin + yön × mesafe</c>'dir (§6.4).
-        /// <para>⚠️ Her mermiye çizilmez: <c>TracerEveryNthRound</c> oyuncu BAŞINA sayaçla
-        /// uygulanır — sayaç paylaşılsa yoğun ateşte tracer'lar rastgele oyunculara dağılır ve
-        /// "kim ateş ediyor" okunaksız olurdu.</para>
-        /// <para>
-        /// ⚠️ <b>Saçmalı silahta yaylım BURADA yeniden üretilir</b> (<c>BuildScatter</c>):
-        /// telde tek yön + tek mesafe var (§6.4 — saçma başına olay yollamak aynı ateşi 9 kez
-        /// duyurur ve paket başı sınırını tek tetikle doldururdu), oysa uzaktan bakan oyuncunun
-        /// gördüğü şey pompalının kimliğidir: tek bir ince çizgi yerine açılan bir koni. Eksik olan
-        /// veri <b>kozmetiktir</b> ve alıcı onu kendisi üretebilir; hasar zaten saçma başına ayrı
-        /// <c>hit_report</c> ile, atıcının istemcisinden gidiyor.
-        /// </para>
-        /// </summary>
+        /// <summary>Draws the trail. For KIND_SHOT <c>magnitude</c> is the hit DISTANCE (m), so the
+        /// endpoint is <c>origin + dir × distance</c> (§6.4).
+        /// <para>⚠️ Not drawn for every round: <c>TracerEveryNthRound</c> is counted PER PLAYER — a
+        /// shared counter would scatter tracers across random players under heavy fire and make
+        /// "who is shooting" unreadable.</para>
+        /// <para>⚠️ A shotgun spread is REGENERATED here (<c>BuildScatter</c>): the wire carries
+        /// one direction + one distance (§6.4 — per-pellet events would announce the same shot 9
+        /// times and fill the per-packet limit on a single trigger), yet what a distant player sees
+        /// is the shotgun's identity: a cone, not one thin line. The missing data is COSMETIC and
+        /// the receiver can produce it; damage already travels as a separate <c>hit_report</c> per
+        /// pellet from the shooter's client.</para></summary>
         private void DrawTracer(PlayerFx fx, ItemDefinition item, Vector3 origin, Vector3 worldDir, float distanceMeters)
         {
             if (item == null)
             {
-                // Eşya çözülemedi → görünüm parametresi de yok. Uydurma bir tracer çizmek
-                // yanlış kalibre/renk demektir; flaş+ses yeterli.
+                // Unresolved item → no look parameters. An invented tracer means the wrong
+                // calibre/colour; flash + sound is enough.
                 return;
             }
 
@@ -422,10 +367,9 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Havuz atanın kendi iziyle PAYLAŞILIR (ShotTracer.Shared): yerel ve uzak izlerin
-            // görünümü zaten aynı kaynaktan (ItemDefinition) geliyor, havuzu da bölmenin sebebi yok.
-            // Duman izi de bu tek çağrının içinde yayılır — ayrı bir adım YOKTUR (ShotTracer sınıf
-            // özeti: iki çağırandan birinin dumanı unutması böylece imkânsız).
+            // The pool is SHARED with the shooter's own trail (ShotTracer.Shared): both look up
+            // the same ItemDefinition, so there is no reason to split it. Smoke is emitted inside
+            // this single call — there is no separate step (see the ShotTracer summary).
             ShotTracer.Shared.Play(
                 origin,
                 _scatterPoints,
@@ -435,34 +379,25 @@ namespace VortexArena.Core.Combat
                 item.TracerLifetime);
         }
 
-        /// <summary>
-        /// Yaylımın uç noktalarını <see cref="_scatterPoints"/>'e yazar ve sayısını döndürür.
-        /// Normal silahta (ya da eşya bir silah değilse) tek nokta yazılır ve sonuç eskisiyle
-        /// birebir aynıdır.
-        /// <para>
-        /// <b>İlk saçma TELDEN gelir</b> (yön + mesafe): o, atıcının gerçekten attığı ışındır ve
-        /// dokunulmaz. Kalanların yönü <c>BaseSpreadDegrees</c> konisinden atıcının kullandığı
-        /// dağılımla (<c>insideUnitCircle</c>, <see cref="Weapon"/> ile aynı formül) üretilir —
-        /// yani yelpazenin AÇISI silahın kendi ölçüsüdür, uydurma bir görsel sabit değil.
-        /// ⚠️ Bloom ve iki-el çarpanı telde YOK, o yüzden koni atıcının o anki konisinden bir
-        /// tık dar çizilir: dar taraf doğru taraftır, geniş çizmek saçmaları duvarların ardına
-        /// savurur.
-        /// </para>
-        /// <para>
-        /// ⚠️ Üretilen saçmaların mesafesi <b>ışınla ölçülür</b>, telden gelen mesafe hepsine
-        /// kopyalanmaz: alıcı aynı arenayı yüklüyor, yani aynı geometriyi görüyor. Kopyalansaydı
-        /// atıcı yakın bir hedefi vurduğunda tüm koni o mesafede kesilir (yelpaze düz bir diske
-        /// döner), ıskaladığında ise 26 m'lik dokuz çizgi duvarların İÇİNDEN geçerdi. Işın
-        /// <see cref="ArenaCombat.TraceShot"/> ile atılır — kendi <c>Physics.Raycast</c>'ini yazan
-        /// yol, engel kuralını ve trigger elemesini kaybeder.
-        /// </para>
-        /// <para>
-        /// ⚠️ Yelpaze atıcının ekranındakiyle <b>birebir aynı değildir</b> ve olması da gerekmez:
-        /// saçmaların dağılımı zaten atıcıda da rastgeledir, telde giden şey ise atışın kendisidir.
-        /// Aynı kılmak saçma başına yön+mesafe göndermeyi (tek tetikte 9 kat olay yükü) gerektirirdi
-        /// — tutarlılık burada değil, orijinde aranır (§6.4).
-        /// </para>
-        /// </summary>
+        /// <summary>Writes the spread endpoints into <see cref="_scatterPoints"/> and returns the
+        /// count. A normal (or non-weapon) item writes a single point.
+        /// <para>The FIRST pellet comes FROM THE WIRE (direction + distance): that is the ray the
+        /// shooter really fired and it is untouched. The rest are generated from the
+        /// <c>BaseSpreadDegrees</c> cone with the shooter's own distribution
+        /// (<c>insideUnitCircle</c>, same formula as <see cref="Weapon"/>), so the fan ANGLE is the
+        /// weapon's own figure, not an invented visual constant. ⚠️ Bloom and the two-hand factor
+        /// are not on the wire, so the cone is drawn slightly narrower than the shooter's: narrow
+        /// is the safe side, drawing it wide throws pellets behind walls.</para>
+        /// <para>⚠️ Generated pellet distances are MEASURED BY RAY, never copied from the wire
+        /// distance: the receiver loads the same arena and sees the same geometry. Copying would
+        /// cut the whole cone at the shooter's hit distance (a flat disc) on a close hit, and send
+        /// nine 26 m lines THROUGH walls on a miss. The ray goes through
+        /// <see cref="ArenaCombat.TraceShot"/> — a hand-written <c>Physics.Raycast</c> loses the
+        /// obstacle rule and the trigger filter.</para>
+        /// <para>⚠️ The fan is NOT identical to the shooter's screen and does not need to be:
+        /// pellet scatter is random on the shooter too. Matching it would require per-pellet
+        /// direction + distance on the wire; consistency is sought at the ORIGIN, not here
+        /// (§6.4).</para></summary>
         private int BuildScatter(WeaponDefinition weapon, Vector3 origin, Vector3 worldDir, float distanceMeters)
         {
             int pellets = weapon != null ? weapon.PelletCount : 1;
@@ -470,9 +405,8 @@ namespace VortexArena.Core.Combat
 
             if (_scatterPoints == null || _scatterPoints.Length < ShotTracer.MaxScatterLines)
             {
-                // Tampon bir kez ayrılır ve TAVAN boyunda kalır: olay yolu 53-160/sn ve gelen
-                // silah olaydan olaya değişiyor, boyu silaha göre büyütüp küçültmek atış başına
-                // ayırma demek olurdu.
+                // Allocated once at the CAP size: the weapon changes from event to event, so
+                // resizing per weapon would mean an allocation per shot.
                 _scatterPoints = new Vector3[ShotTracer.MaxScatterLines];
             }
 
@@ -482,9 +416,9 @@ namespace VortexArena.Core.Combat
                 return 1;
             }
 
-            // Saçılım düzlemi worldDir'e dik iki eksenden kurulur. ⚠️ Referans olarak Vector3.up
-            // KOŞULSUZ kullanılamaz: tam yukarı/aşağı nişan alan bir namluda çapraz çarpım sıfır
-            // vektör verir ve koni tümden çöker.
+            // Spread plane from two axes perpendicular to worldDir. ⚠️ Vector3.up cannot be the
+            // unconditional reference: aiming straight up/down makes the cross product zero and
+            // collapses the cone.
             Vector3 reference = Mathf.Abs(worldDir.y) > 0.99f ? Vector3.forward : Vector3.up;
             Vector3 right = Vector3.Cross(reference, worldDir).normalized;
             Vector3 up = Vector3.Cross(worldDir, right);
@@ -507,20 +441,18 @@ namespace VortexArena.Core.Combat
             return count;
         }
 
-        // --------------------------------------------------------------------- orijin
+        // --------------------------------------------------------------------- origin
 
-        /// <summary>
-        /// Efektin/tracer'ın başlangıç noktası (§6.4): çizilen silahın namlusu → elin pozu →
-        /// kafanın pozu. Hiçbiri yoksa false.
-        /// </summary>
+        /// <summary>Start point of the effect/tracer (§6.4): drawn muzzle → hand pose → head pose.
+        /// False if none exists.</summary>
         private bool TryResolveOrigin(PlayerFx fx, in RemoteFireEvent evt, float now, out Vector3 origin)
         {
             origin = default;
 
             RemotePlayerRegistry registry = RemotePlayerRegistry.Instance;
 
-            // out değişkenleri ÖNCE ilan edilir: çağrı kısa devre yaparsa (registry yok) derleyici
-            // onları "atanmamış" sayar ve aşağıdaki kullanım derlenmezdi.
+            // Declared up front: if the call short-circuits (no registry) the compiler would treat
+            // them as unassigned below.
             Pose headArena = Pose.identity;
             Pose handLArena = Pose.identity;
             Pose handRArena = Pose.identity;
@@ -532,8 +464,8 @@ namespace VortexArena.Core.Combat
             if (hasPose)
             {
                 Pose handArena = evt.rightHand ? handRArena : handLArena;
-                // Tam sıfır = hiç doldurulmamış poz (interpolasyon kimlik döndürmüş); elin arena
-                // uzayında gerçekten sıfırda olması pratikte imkânsız (zemin merkezi).
+                // Exact zero = never-filled pose (interpolation returned identity); a hand really
+                // sitting at the arena origin is not possible in practice.
                 if (handArena.position.sqrMagnitude > 1e-6f)
                 {
                     handWorld = ArenaSpace.ArenaToWorld(handArena.position);
@@ -563,22 +495,17 @@ namespace VortexArena.Core.Combat
             return false;
         }
 
-        /// <summary>
-        /// Olayın elinde ÇİZİLMİŞ eşya örneğinin <c>Muzzle</c> çocuğunu bulur (el başına
-        /// önbelleklenir; örnek değişince kendiliğinden yenilenir).
-        /// <para>
-        /// Eşya örneği <b>sözleşmeli API'den</b> gelir (<see cref="RemoteAvatar.GetHeldItemVisual"/>),
-        /// sahne aramasından DEĞİL: tracer'ın <b>çizilen</b> namludan çıkması (§6.4 "tutarlılık >
-        /// sadakat") ancak alıcının o eli için gerçekten Instantiate ettiği örnek sorulursa garanti
-        /// olur. Çift tabancada doğru örneği <c>rightHand</c> seçer; çift elli tutuşta (GRIP_LINKED)
-        /// tek örnek vardır ve hangi el sorulursa o döner.
-        /// </para>
-        /// <para>
-        /// ⚠️ Namlunun kendisi hâlâ ADA göre aranıyor (kapsam tek eşya örneği) — prefabda
-        /// <c>Muzzle</c> yeniden adlandırılırsa sunum sessizce el pozuna düşer. Bu yüzden
-        /// bulunamadığında oyuncu başına <b>tek</b> uyarı basılır (olay yolu 53-160/sn, spam yasak).
-        /// </para>
-        /// </summary>
+        /// <summary>Finds the <c>Muzzle</c> child of the item instance DRAWN in that hand (cached
+        /// per hand; refreshes itself when the instance changes).
+        /// <para>The instance comes from the contract API
+        /// (<see cref="RemoteAvatar.GetHeldItemVisual"/>), NOT from a scene search: only asking for
+        /// the instance the receiver actually instantiated guarantees the tracer leaves the DRAWN
+        /// muzzle (§6.4). With dual pistols <c>rightHand</c> picks the right one; in a two-handed
+        /// grip (GRIP_LINKED) there is a single instance and either hand returns it.</para>
+        /// <para>⚠️ The muzzle itself is still found BY NAME (scoped to one item instance) —
+        /// renaming <c>Muzzle</c> in the prefab silently drops the presentation to the hand pose,
+        /// so a single warning per player is logged (the event path runs 53-160/s, no
+        /// spam).</para></summary>
         private Transform ResolveMuzzle(PlayerFx fx, in RemoteFireEvent evt, float now)
         {
             RemoteAvatar avatar = ResolveAvatar(fx, evt.playerId, now);
@@ -590,11 +517,11 @@ namespace VortexArena.Core.Combat
             Transform itemVisual = avatar.GetHeldItemVisual(evt.rightHand);
             if (itemVisual == null)
             {
-                return null; // o elde eşya çizilmemiş → el pozuna düşülür
+                return null; // no item drawn in that hand → fall back to the hand pose
             }
 
-            // Önbellek anahtarı örneğin KENDİSİ: aynı örnek → aynı namlu (arama tekrarlanmaz),
-            // farklı örnek → eşya değişmiş, yeniden aranır.
+            // Cache key is the instance itself: same instance → same muzzle, different instance →
+            // the item changed and we search again.
             Transform source = evt.rightHand ? fx.MuzzleSourceR : fx.MuzzleSourceL;
             if (source == itemVisual)
             {
@@ -625,9 +552,8 @@ namespace VortexArena.Core.Combat
             return found;
         }
 
-        // GetComponentsInChildren KULLANILMAZ: dizi ayırır. Elle özyineleme allocation'sız
-        // (yalnız Transform.name bir string üretir — bu arama eşya değişiminde bir kez koşar).
-        // Kapsam tek eşya örneği olduğu için İLK eşleşme alınır: eşyanın bir namlusu vardır.
+        // GetComponentsInChildren is NOT used: it allocates an array. Manual recursion allocates
+        // nothing and runs once per item change. The FIRST match wins — an item has one muzzle.
         private static Transform FindMuzzle(Transform parent)
         {
             int count = parent.childCount;
@@ -649,12 +575,10 @@ namespace VortexArena.Core.Combat
             return null;
         }
 
-        /// <summary>
-        /// <c>playerId</c> → <see cref="RemoteAvatar"/>. Avatarların statik bir kaydı YOK ve onları
-        /// üreten <c>RemotePlayerSpawner</c> App katmanındadır (Core onu göremez), bu yüzden dizin
-        /// sahne taramasıyla kurulur — tarama <see cref="AvatarScanIntervalSeconds"/>'ten sık
-        /// yapılmaz (FindObjectsByType dizi ayırır, olay yolu 53-160/sn).
-        /// </summary>
+        /// <summary><c>playerId</c> → <see cref="RemoteAvatar"/>. There is no static avatar
+        /// registry and their spawner lives in App (Core cannot see it), so the index is built by a
+        /// scene scan — never more often than <see cref="AvatarScanIntervalSeconds"/>, since
+        /// FindObjectsByType allocates and the event path runs 53-160/s.</summary>
         private RemoteAvatar ResolveAvatar(PlayerFx fx, int playerId, float now)
         {
             if (fx.Avatar != null)
@@ -682,8 +606,7 @@ namespace VortexArena.Core.Combat
                 if (target.Avatar != avatar)
                 {
                     target.Avatar = avatar;
-                    // Yeni avatar = yeni hiyerarşi: namlu önbelleği geçersiz. (Anahtar eşya örneği
-                    // olduğu için zaten kendiliğinden düşerdi; yine de açıkça temizlenir.)
+                    // New avatar = new hierarchy: clear the muzzle cache explicitly.
                     target.MuzzleL = null;
                     target.MuzzleR = null;
                     target.MuzzleSourceL = null;
@@ -694,7 +617,7 @@ namespace VortexArena.Core.Combat
             return fx.Avatar;
         }
 
-        // ------------------------------------------------------------------ oyuncu kaydı
+        // ---------------------------------------------------------------- player records
 
         private PlayerFx GetOrCreatePlayer(int playerId)
         {
@@ -707,12 +630,10 @@ namespace VortexArena.Core.Combat
             return fx;
         }
 
-        /// <summary>
-        /// Ayrılan oyuncuların kaydını (tracer sayacı dahil) düşürür: avatarı yok edilmiş ve bir
-        /// süredir olay göndermeyen girişler silinir. Registry'nin <c>OnRemoteLeft</c>'ine abone
-        /// olmak yerine bunun tercih edilme sebebi, sunumun oyuncu YAŞAM DÖNGÜSÜNE bağlanmaması —
-        /// avatar hiç üretilmemiş olsa da (spawner yok/prefab boş) sayaç yine temizlenir.
-        /// </summary>
+        /// <summary>Drops records (tracer counter included) of players whose avatar is gone and
+        /// who have sent no event for a while. Preferred over subscribing to the registry's
+        /// <c>OnRemoteLeft</c> so the presentation does not depend on the player LIFECYCLE: the
+        /// counter is cleaned even if an avatar was never spawned.</summary>
         private void PrunePlayers(float now)
         {
             if (now < _nextPrune)
@@ -737,24 +658,19 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        // ------------------------------------------------------------------- yardımcılar
+        // ---------------------------------------------------------------------- helpers
 
-        /// <summary>
-        /// Arena uzayındaki bir YÖNÜ dünyaya çevirir. Arena uzayı dünya uzayıyla çakışık olduğu
-        /// için (<see cref="ArenaSpace"/>) yön dönüşümü de kimliktir.
-        /// <para>Yardımcı buna rağmen duruyor: çağrı yerlerinde "bu değer <b>arena</b> uzayından
-        /// geldi" bilgisini görünür tutuyor.</para>
-        /// </summary>
+        /// <summary>Converts an arena-space DIRECTION to world. Arena space coincides with world
+        /// space (<see cref="ArenaSpace"/>) so this is the identity; the helper exists to keep "this
+        /// value came from ARENA space" visible at the call sites.</summary>
         private static Vector3 ArenaToWorldDirection(Vector3 arenaDirection)
         {
             return ArenaSpace.ArenaToWorld(arenaDirection);
         }
 
-        /// <summary>
-        /// Olayın <c>itemId</c>'sini (§6.6) eşya tanımına çözer. Sunum profilinin tek kaynağı bu
-        /// bayttır — snapshot'taki <c>itemL/itemR</c> durum baytları kaybolsa da olay kendi
-        /// kendine yeter (§6.4).
-        /// </summary>
+        /// <summary>Resolves the event's <c>itemId</c> (§6.6) to an item definition. That byte is
+        /// the only source of the presentation profile, so the event is self-sufficient even if the
+        /// snapshot's <c>itemL/itemR</c> bytes are lost (§6.4).</summary>
         private ItemDefinition ResolveItem(byte itemId)
         {
             NetItemCatalog catalog = NetItemCatalog.Load();
@@ -767,10 +683,8 @@ namespace VortexArena.Core.Combat
             return def;
         }
 
-        /// <summary>
-        /// def yoksa (silah olmayan/katalog dışı eşya) ya da dinleyici yok/uzaksa yalnız flaş
-        /// kalır; gözlemci odağı dışındaki oyuncu susmaz, kısılır.
-        /// </summary>
+        /// <summary>With no definition (non-weapon/uncatalogued item) or no/distant listener only
+        /// the flash remains; a player outside the spectator focus is attenuated, not muted.</summary>
         private static void PlayShotSound(FxNode node, WeaponDefinition def, Vector3 worldPos, int playerId)
         {
             if (def == null || node.Source == null || def.FireClips == null || def.FireClips.Length == 0)
@@ -796,9 +710,9 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Gözlemci odağı (App yazar): odak dışındaki oyuncular SUSMAZ, kısılır — alev/parçacık
-            // ve tracer (çağıranda) zaten herkes için çizilir, operatör kimin ateş ettiğini GÖRMEK
-            // zorundadır; kısılmış ses de "orada çatışma var" bilgisini duyulur tutar.
+            // Spectator focus (written by App): players outside it are attenuated, never muted —
+            // flash and tracer are drawn for everyone anyway, and attenuated audio keeps the
+            // "there is a fight over there" information audible.
             int? focus = SpectatorAudioFocus;
             float volume = def.FireVolume;
             if (focus.HasValue && focus.Value != playerId)
@@ -810,7 +724,6 @@ namespace VortexArena.Core.Combat
             node.Source.PlayOneShot(clip, volume);
         }
 
-        /// <summary>Round-robin: sıradaki (en eski) düğümü döndürür; henüz yoksa tembel üretir.</summary>
         private FxNode TakeNode(WeaponCatalog catalog)
         {
             FxNode node = _pool[_nextNode];
@@ -831,7 +744,7 @@ namespace VortexArena.Core.Combat
 
             if (prefab != null)
             {
-                // DDOL kökümüzün altında yaşar — sahne geçişinde havuz yok olmaz.
+                // Lives under our DDOL root, so the pool survives scene changes.
                 go = Instantiate(prefab, transform);
             }
             else

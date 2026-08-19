@@ -9,24 +9,44 @@ namespace VortexArena.Core.Combat
     /// Elin duruşunu ISDK'nın <b>sentetik eline</b> yazar. Oyuncunun gözlükte gördüğü el budur
     /// (<c>OVRHandVisualLeft/Right</c> bu sentetik elden sürülüyor).
     /// <para>
-    /// <b>Üç durum, üç davranış:</b>
+    /// <b>Bilek HER DURUMDA kilitlidir</b> — ne izlemeden ne Meta'nın kumandadan sentezlediği
+    /// "doğal" el pozundan gelir:
     /// <list type="bullet">
-    /// <item><b>Boş el:</b> bilek serbest, parmaklar <see cref="HandGripPreset.Idle"/>.</item>
-    /// <item><b>Ana el:</b> bilek <b>SERBEST</b> (el izlemeden/kumandadan gelir, silah ona uyar —
-    /// eşyayı ana kavrama kaydı döndürüyor), parmaklar slotun preset'i.</item>
-    /// <item><b>Ön kabza:</b> bilek <b>TAM</b> kilitlenir (konum + dönüş) — o el eşyaya yapışır,
-    /// parmaklar slotun preset'i.</item>
+    /// <item><b>Boş el:</b> bilek <b>KUMANDAYA</b> kilitlenir
+    /// (<see cref="ItemGripAuthority.WristFromAnchor"/> — anchor + ofset). El kumandanın rijit bir
+    /// parçası gibi davranır.</item>
+    /// <item><b>Eşya tutan el</b> (ana kabza da ön kabza da): bilek <b>EŞYAYA</b> kilitlenir
+    /// (kaydın anchor'ı + ofset) — el silaha yapışır ve silah nereye dönerse onunla döner.</item>
     /// </list>
+    /// ⚠️ <b>Ana el de EŞYADAN türetilir ve bu bilinçlidir:</b> iki elli tutuşta silahın dönüşü ana
+    /// kumandanınki değildir (ön kabzadaki ele nişanlanır), yani ana el kumandaya kilitli kalsaydı
+    /// oyuncu silahı ön kabzadan çevirdiğinde el yerinde kalır ve silahın dışında görünürdü.
+    /// Tek elli tutuşta bu bir şey değiştirmez: çözücünün kimliği gereği eşyadan türetilen anchor
+    /// KONUMU zaten kumanda anchor'ının kendisidir, eşyadan gelen tek şey dönüştür.
+    /// Ofset, kavraması yazılmış slotta <b>o slotun kendi el yerleşimidir</b> (stüdyoda <c>Hand</c>
+    /// modeli taşınıp çevrilerek yazılır: kimi silah yandan, kimi alttan tutulur), yazılmamışta
+    /// paylaşılan tanım. Silahın kumandaya göre yeri bundan ETKİLENMEZ.
+    /// Parmaklar boş elde boşta duruşunda (<see cref="HandPoseLibrary.IdleJointRotations"/>), eşya
+    /// tutan elde o slot için riglenmiş duruştadır.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Bileği serbest bırakmak GERİ GELMEZ.</b> Serbestken bilek Meta'nın kumandadan
+    /// sentezlediği el pozundan geliyordu; o pozun anchor'a göre ofseti bizde yazılı değil, silah ise
+    /// anchor'dan konumlanıyor — yani el ile silah iki ayrı referanstan çiziliyordu ve stüdyoda
+    /// yazılan kavrama oyunda birkaç santim kaymış görünüyordu. Ofseti kilitle birlikte kendimiz
+    /// tanımlayınca tezgâh ile oyun <b>kurgu gereği</b> aynı oluyor ve ölçülecek bir sabit kalmıyor.
+    /// Bedeli, elin kumandaya rijit bağlı olmasıdır (doğal bilek oynaması yok) — parmaklar zaten
+    /// donanımdan sürülmediği için tutarlı olan da budur.
     /// </para>
     /// <para>
     /// ⚠️ <b>Parmaklar HİÇBİR durumda donanımdan sürülmez</b> — ne kumandanın tetiği/kabzası ne el
     /// izlemesi bir parmağı kıpırdatır. Beş parmak her karede kilitlidir
-    /// (<c>JointFreedom.Locked</c>) ve duruş yalnız bir preset'tir; iki preset arasındaki geçiş
-    /// (boş el ↔ kavrama, ana kabza ↔ ön kabza) <see cref="HandGripPresets.TransitionSeconds"/>
-    /// içinde eklem eklem yumuşatılır (<see cref="HandState"/>). Bir parmağı bile serbest bırakmak,
-    /// stüdyoda görülen el ile oyunda görülen elin o parmakta ayrışması demektir; boş elin
-    /// parmaklarını donanımdan örneklemek de aynı sebeple YOKTUR (üç preset tek kaynaktan gelir:
-    /// <see cref="HandGripPresets"/>).
+    /// (<c>JointFreedom.Locked</c>) ve duruş her karede ya boş elin dizisidir ya da tutulan eşyanın
+    /// o slot için stüdyoda riglenmiş dizisi; ikisi arasındaki geçiş (boş el ↔ kavrama, ana kabza ↔
+    /// ön kabza) <see cref="HandPoseLibrary.TransitionSeconds"/> içinde eklem eklem yumuşatılır
+    /// (<see cref="HandState"/>). Bir parmağı bile serbest bırakmak, stüdyoda görülen el ile oyunda
+    /// görülen elin o parmakta ayrışması demektir; boş elin parmaklarını donanımdan örneklemek de
+    /// aynı sebeple YOKTUR.
     /// </para>
     /// <para>
     /// ⚠️ <b>Silahın pozuna DOKUNMAZ.</b> Silahın dünya pozunun tek yazarı
@@ -81,22 +101,30 @@ namespace VortexArena.Core.Combat
         /// <b>Geçiş neden burada, ISDK'da değil:</b> <c>SyntheticHand</c> yalnız serbest↔kilitli
         /// geçişini yumuşatır (kendi lock eğrisi); kilitliyken hedef dönüşü değiştirmek ANINDA
         /// uygulanır. Boş el ile kavrama arasında (ya da ana kabza ↔ ön kabza) el o yüzden burada,
-        /// <see cref="HandGripPresets.TransitionSeconds"/> boyunca <see cref="From"/>'dan hedefe
+        /// <see cref="HandPoseLibrary.TransitionSeconds"/> boyunca <see cref="From"/>'dan hedefe
         /// eklem eklem slerp'lenerek götürülür; sentetik ele her karede bu ARA dizi yazılır.
         /// </para>
-        /// <para>⚠️ Preset değişince başlangıç noktası o anki GÖSTERİLEN dizidir, önceki preset'in
+        /// <para>⚠️ Hedef değişince başlangıç noktası o anki GÖSTERİLEN dizidir, önceki hedefin
         /// dizisi değil: geçişin ortasında yeni bir hedef gelirse el zıplamadan yön değiştirir.</para>
         /// </summary>
         private sealed class HandState
         {
             public SyntheticHand Synthetic;
 
-            /// <summary>Elin BİLEĞİ şu an ön kabzaya kilitli mi. Parmaklar bundan bağımsız her zaman
-            /// bizim yazdığımızdır (slotun preset'i ya da idle).</summary>
+            /// <summary>Elin BİLEĞİ şu an kilitli mi (kumandaya ya da eşyaya). Yalnız kumanda
+            /// anchor'ı hiç çözülemediğinde düşer — o hâlde ortada çizilecek bir el de yoktur.</summary>
             public bool WristLocked;
 
-            /// <summary>Şu anki hedef duruş.</summary>
-            public HandGripPreset Target = HandGripPreset.Idle;
+            /// <summary>
+            /// Şu anki hedef dizi — <b>referansıyla</b> tutulur ve <b>referansıyla</b> karşılaştırılır.
+            /// <para>⚠️ Bu yüzden hedef diziler önbellekli/paylaşımlı olmak ZORUNDA
+            /// (<see cref="ItemDefinition.GripJointRotations"/>,
+            /// <see cref="HandPoseLibrary.IdleJointRotations"/>): kare başına yeni dizi üreten bir
+            /// kaynak, her karede "hedef değişti" sayılır ve geçiş hiç bitmezdi. Eklem eklem
+            /// karşılaştırma da alternatif değil — 19 quaternion'u kare başına iki el için
+            /// kıyaslamak, referans kimliği zaten garantiliyken bedava değil.</para>
+            /// </summary>
+            public Quaternion[] Target;
 
             /// <summary>Geçişin başladığı andaki gösterilen dizi (kopya).</summary>
             public readonly Quaternion[] From = new Quaternion[FingersMetadata.HAND_JOINT_IDS.Length];
@@ -107,22 +135,15 @@ namespace VortexArena.Core.Combat
             /// <summary><c>0..1</c> geçiş ilerlemesi (1 = hedefe oturmuş).</summary>
             public float Progress = 1f;
 
-            /// <summary>Kumanda anchor'ından İZLENEN bileğe delta (anchor uzayı) — her karede
-            /// tazelenir. Gerekçe <see cref="TryGetAnchorToWrist"/>'te.</summary>
-            public Pose AnchorToWrist;
-            public bool HasAnchorToWrist;
-
             /// <summary>Yeni sahne / ilk kurulum: her şey idle'a ve "oturmuş" durumuna döner.</summary>
             public void Reset(bool rightHand)
             {
                 Synthetic = null;
                 WristLocked = false;
-                HasAnchorToWrist = false;
-                AnchorToWrist = default;
-                Target = HandGripPreset.Idle;
                 Progress = 1f;
 
-                Quaternion[] idle = HandGripPresets.JointRotations(HandGripPreset.Idle, rightHand);
+                Quaternion[] idle = HandPoseLibrary.IdleJointRotations(rightHand);
+                Target = idle;
                 for (int i = 0; i < Shown.Length && i < idle.Length; i++)
                 {
                     Shown[i] = idle[i];
@@ -138,22 +159,6 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Pozu eksik silahlar için "oturum başına bir kez" uyarı kaydı.</summary>
         private readonly HashSet<string> _warned = new HashSet<string>();
-
-        /// <summary>
-        /// Ölçülen anchor→bilek deltasının "oturdu" sayılması için gereken ardışık kare sayısı.
-        /// <para>İlk kareler izleme ısınırken gürültülüdür; tek kareye bakıp loglamak
-        /// <c>HandGripConvention</c>'a yapıştırılacak sayıyı yanlış verirdi.</para>
-        /// </summary>
-        private const int DeltaLogStableFrames = 30;
-
-        /// <summary>Kararlılık eşikleri: 2 mm ve 0.5° altındaki oynama ölçüm gürültüsüdür.</summary>
-        private const float DeltaLogPositionEpsilon = 0.002f;
-        private const float DeltaLogAngleEpsilon = 0.5f;
-
-        /// <summary>El başına (0 = sol, 1 = sağ) kararlılık takibi ve "bir kez basıldı" kaydı.</summary>
-        private readonly Pose[] _deltaLogPrevious = new Pose[2];
-        private readonly int[] _deltaLogStreak = new int[2];
-        private readonly bool[] _deltaLogged = new bool[2];
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -201,174 +206,6 @@ namespace VortexArena.Core.Combat
             _nextScanAt = 0f;
         }
 
-        // --------------------------------------------------- anchor → izlenen bilek deltası
-
-        /// <summary>
-        /// Kumanda anchor'ından <b>izlenen bileğe</b> olan sabit delta (anchor uzayında, metre);
-        /// ölçülemiyorsa <c>false</c>.
-        /// <para>
-        /// <b>Ne işe yarar:</b> kavrama kaydı (<see cref="ItemGripPose"/>) kumanda ANCHOR'ını silaha
-        /// göre tarif eder; ön kabzada sentetik ele verilecek olan ise BİLEK. Köprü bu deltadır:
-        /// <c>bilekDünya = anchor ∘ delta</c> (<see cref="ItemGripAuthority.WristFromAnchor"/>). Onsuz
-        /// kilit ölçülmüş sabite düşer (<see cref="HandGripConvention.AnchorToWrist"/>); silahın kendi
-        /// duruşu deltayı HİÇ okumaz.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Kanonikliği bozmaz</b> (§6.6): kumanda sürümlü el pozları deterministiktir — aynı
-        /// kumanda, aynı SDK, aynı sonuç. Yani her başlıkta AYNI delta ölçülür; duruş yine telde
-        /// gitmez ve tel formatı değişmez.
-        /// </para>
-        /// <para>
-        /// ⚠️ Ölçü sentetik elin KAYNAĞINDAN alınır (<c>ModifyDataFromSource</c>), sentetik elin
-        /// kendisinden değil: ön kabzada bileği zaten biz kilitliyoruz
-        /// (<see cref="LockToSecondaryGrip"/>), kilitli eli okumak "silahın nerede olduğunu silahın
-        /// kendisine sormak" olurdu ve ölçü bir kare içinde kendi çıktısına kilitlenirdi.
-        /// </para>
-        /// <para>
-        /// ⚠️ Değer <b>bir kare bayattır</b> (bu bileşen <see cref="DefaultExecutionOrder"/> 100 ile
-        /// silahtan SONRA koşar) ve bu bilinçlidir: delta fiziksel olarak sabit bir ofsettir, bir
-        /// karelik gecikmesi görünmez. Ölçümü öne almak için execution order'ı bozmak, elin bir kare
-        /// gerideki silaha sarılması pahasına olurdu.
-        /// </para>
-        /// </summary>
-        public static bool TryGetAnchorToWrist(bool rightHand, out Pose delta)
-        {
-            delta = default;
-
-            HandGripPoser instance = Instance;
-            if (instance == null)
-            {
-                return false;
-            }
-
-            HandState state = rightHand ? instance._right : instance._left;
-            delta = state.AnchorToWrist;
-            return state.HasAnchorToWrist;
-        }
-
-        /// <summary>Bir elin deltasını tazeler; ölçülemezse o elin bayrağını düşürür.</summary>
-        private void RefreshAnchorToWrist(HandState state, OVRInput.Controller hand, bool rightHand)
-        {
-            bool measured = TryMeasureAnchorToWrist(state.Synthetic, hand, out Pose delta);
-
-            LogMeasuredDelta(rightHand, measured, delta);
-
-            state.HasAnchorToWrist = measured;
-            state.AnchorToWrist = measured ? delta : default;
-        }
-
-        /// <summary>
-        /// Delta ilk kez KARARLI ölçüldüğünde el başına <b>bir</b> satır basar — çıktı doğrudan
-        /// <see cref="HandGripConvention.LeftAnchorToWrist"/> ailesine yapıştırılır.
-        /// <para>
-        /// <b>Neden log:</b> o sabit stüdyodaki hayalet elin (kumanda köküne göre nereye çizileceği)
-        /// ve rig'in henüz veri akıtmadığı ilk karelerin tek kaynağı ve <b>ölçülmeden</b> yazılamaz.
-        /// Ölçen tek yer burası olduğu için değeri de burası söyler; ikinci bir ölçüm aracı açmak iki
-        /// ucun sapması demek olurdu.
-        /// </para>
-        /// <para>Build'de de basılır (oturum başına iki satır): Link'siz geliştirici değeri başlıkta
-        /// koşan APK'dan <c>adb logcat -s Unity</c> ile okur — editörde koşmayan bir ölçüm, Link
-        /// kullanmayan geliştiriciye sabiti hiç vermezdi.</para>
-        /// </summary>
-        private void LogMeasuredDelta(bool rightHand, bool measured, in Pose delta)
-        {
-            int slot = rightHand ? 1 : 0;
-
-            if (!measured || _deltaLogged[slot])
-            {
-                if (!measured)
-                {
-                    _deltaLogStreak[slot] = 0;
-                }
-
-                return;
-            }
-
-            Pose previous = _deltaLogPrevious[slot];
-            _deltaLogPrevious[slot] = delta;
-
-            bool stable = _deltaLogStreak[slot] > 0 &&
-                          (delta.position - previous.position).magnitude < DeltaLogPositionEpsilon &&
-                          Quaternion.Angle(delta.rotation, previous.rotation) < DeltaLogAngleEpsilon;
-
-            _deltaLogStreak[slot] = stable ? _deltaLogStreak[slot] + 1 : 1;
-            if (_deltaLogStreak[slot] < DeltaLogStableFrames)
-            {
-                return;
-            }
-
-            _deltaLogged[slot] = true;
-
-            Vector3 p = delta.position;
-            Vector3 e = delta.rotation.eulerAngles;
-            string field = rightHand ? "RightAnchorToWrist" : "LeftAnchorToWrist";
-            Debug.Log($"[HandGripPoser] anchor→bilek ({(rightHand ? "SAĞ" : "SOL")}) ölçüldü: " +
-                      $"pos ({p.x:F4}, {p.y:F4}, {p.z:F4}) euler ({e.x:F2}, {e.y:F2}, {e.z:F2}) → " +
-                      $"HandGripConvention.{field}'e yapıştır (stüdyodaki hayalet elin ve rig'siz " +
-                      "kilidin fallback'i).");
-        }
-
-        /// <summary>
-        /// Anchor ile izlenen bilek arasındaki farkı ölçer.
-        /// <para>⚠️ <c>Transform.InverseTransformPoint</c> DEĞİL elle bileşim: sonuç METREdir ve
-        /// rig'in ölçeği 1 olmasa bile büyütülüp küçültülmemeli (projede tekrarlanan kural,
-        /// <c>HandGripPivot</c> ile aynı gerekçe).</para>
-        /// </summary>
-        private static bool TryMeasureAnchorToWrist(SyntheticHand synthetic, OVRInput.Controller hand,
-            out Pose delta)
-        {
-            delta = default;
-
-            // Rig keşfinin TEK yolu: ikinci bir arama açmak iki bileşenin farklı karelerde farklı
-            // rig bulmasına yol açardı (Scan ile aynı gerekçe).
-            Transform anchor = WeaponGranter.ResolveHandAnchor(hand);
-            if (anchor == null || !TryReadSourceWrist(synthetic, out Pose wrist))
-            {
-                return false;
-            }
-
-            Quaternion inverseAnchor = Quaternion.Inverse(anchor.rotation);
-            delta = new Pose(
-                inverseAnchor * (wrist.position - anchor.position),
-                inverseAnchor * wrist.rotation);
-            return true;
-        }
-
-        /// <summary>
-        /// Sentetik elin kaynağındaki <b>ham</b> bilek (kök) pozunu DÜNYA uzayında okur.
-        /// <para>⚠️ Veri izleme uzayındadır; dünyaya çevirmeyi <c>ITrackingToWorldTransformer</c>
-        /// yapar (<c>Hand.GetRootPose</c> ile aynı yol). Çeviri atlanırsa delta, rig'in dünyadaki
-        /// yerine göre sessizce kayar.</para>
-        /// </summary>
-        private static bool TryReadSourceWrist(SyntheticHand synthetic, out Pose wrist)
-        {
-            wrist = default;
-
-            if (synthetic == null)
-            {
-                return false;
-            }
-
-            IDataSource<HandDataAsset> source = synthetic.ModifyDataFromSource;
-            if (source == null)
-            {
-                return false;
-            }
-
-            HandDataAsset data = source.GetData();
-            if (data == null || !data.IsDataValidAndConnected || data.RootPoseOrigin == PoseOrigin.None)
-            {
-                return false;
-            }
-
-            ITrackingToWorldTransformer transformer = data.Config != null
-                ? data.Config.TrackingToWorldTransformer
-                : null;
-
-            wrist = transformer != null ? transformer.ToWorldPose(data.Root) : data.Root;
-            return true;
-        }
-
         private void LateUpdate()
         {
             if (Instance != this)
@@ -382,12 +219,14 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Bir elin bir karelik durumu.
-        /// <para>⚠️ <b>Ana el ile ön kabza burada AYRIŞIR:</b> ana elin bileği SERBEST kalır (eşya
-        /// ele uyar), ön kabzayı saran elin bileği TAM kilitlenir (el eşyaya yapışır). İkisini aynı
-        /// kurala bağlamak, ya silahı elden koparır ya ikinci eli havada bırakır.</para>
-        /// <para>Parmaklar üç durumda da bizim yazdığımızdır: boş elde
-        /// <see cref="HandGripPreset.Idle"/>, eşya tutan elde slotun kendi preset'i — hedef her
-        /// karede <see cref="ApplyFingers"/>'a verilir, geçişi o yumuşatır.</para>
+        /// <para>⚠️ <b>Kilit hedefini KAVRAMANIN VARLIĞI belirler, kavrama NOKTASI değil:</b> eşya
+        /// tutan el (ana kabza ya da ön kabza fark etmez) EŞYAYA, boş el KUMANDAYA kilitlenir. İkisi
+        /// de ofseti aynı kapıdan alır (<see cref="ItemGripAuthority"/>), yani el hiçbir durumda
+        /// "başka bir yerden" gelmez — ofsetin kendisi slot başına yazılabilir
+        /// (<see cref="ItemGripPose.Wrist"/>), yazılmamışsa paylaşılan tanıma düşer.</para>
+        /// <para>Parmaklar da her durumda bizim yazdığımızdır: boş elde boşta duruşu, eşya tutan elde
+        /// slotun kendi riglenmiş duruşu — hedef her karede <see cref="ApplyFingers"/>'a verilir,
+        /// geçişi o yumuşatır.</para>
         /// </summary>
         private void TickHand(OVRInput.Controller hand, bool rightHand, HandState state)
         {
@@ -396,13 +235,8 @@ namespace VortexArena.Core.Combat
             {
                 // Rig yok (gözlemci / sahne yüklenmedi): kilit diye bir şey de yok.
                 state.WristLocked = false;
-                RefreshAnchorToWrist(state, hand, rightHand);
                 return;
             }
-
-            // ⚠️ Delta, pozu uygulamadan ÖNCE ölçülür ve kaynağı sentetik elin GİRDİSİDİR: kilitli
-            // eli okumak, silahın nerede olduğunu silahın kendisine sormak olurdu.
-            RefreshAnchorToWrist(state, hand, rightHand);
 
             Weapon weapon = FindWeaponUsing(hand, out GripSocketKind kind);
             ItemDefinition definition = weapon != null ? weapon.Definition : null;
@@ -414,39 +248,83 @@ namespace VortexArena.Core.Combat
                 WarnMissingPose(weapon, kind, rightHand);
             }
 
-            if (!hasGrip)
-            {
-                FreeWristIfLocked(state);
-                ApplyFingers(state, HandGripPreset.Idle, rightHand);
-                return;
-            }
+            // Elin kumanda üstündeki yerleşimi kavramanın PARÇASIDIR: kavraması yazılmış slot kendi
+            // yerleşimini getirir (ön kabzayı yandan saran el ile kabzayı avuçlayan el aynı açıda
+            // duramaz), boş el paylaşılan tanıma düşer.
+            ItemGripPose grip = hasGrip ? definition.GetGrip(kind, rightHand) : default;
+            Pose anchorToWrist = hasGrip
+                ? ItemGripAuthority.ResolveAnchorToWrist(grip, rightHand)
+                : ItemGripAuthority.ResolveAnchorToWrist(rightHand);
 
-            if (kind == GripSocketKind.Secondary)
+            if (hasGrip)
             {
-                LockToSecondaryGrip(synthetic, weapon.transform,
-                    definition.GetGrip(kind, rightHand), rightHand);
+                LockToItemGrip(synthetic, weapon.transform, grip, anchorToWrist);
                 state.WristLocked = true;
             }
             else
             {
-                // ⚠️ ANA elde bilek KİLİTLENMEZ: eşyanın dönüşü artık kavrama kaydından geliyor,
-                // yani silah zaten ele uyuyor (Weapon.ApplyCanonicalGrip). Bileği ayrıca kilitlemek
-                // eli kumandadan koparır ve iki yazar aynı şeyi sürer.
-                FreeWristIfLocked(state);
+                LockToController(synthetic, hand, anchorToWrist, state);
             }
 
-            ApplyFingers(state, definition.GripPreset(kind, rightHand), rightHand);
+            ApplyFingers(state, hasGrip
+                ? definition.GripJointRotations(kind, rightHand)
+                : HandPoseLibrary.IdleJointRotations(rightHand));
         }
 
         /// <summary>
-        /// Ön kabzayı saran elin bileğini eşyanın üstündeki kayda <b>TAM</b> (konum + dönüş)
-        /// kilitler — o el eşyaya yapışır.
+        /// <b>Boş elin</b> bileğini <b>kumandaya</b> kilitler: anchor + tanımlı ofset
+        /// (<see cref="ItemGripAuthority.WristFromAnchor"/>). Eşya tutan el buraya uğramaz —
+        /// o <see cref="LockToItemGrip"/>'ten geçer.
         /// <para>
-        /// Kayıt kumanda ANCHOR'ının eşyaya göre KONUMUDUR (<see cref="ItemGripPose"/>; dönüş yok —
-        /// ön kabzadaki kumanda eşyayla hizalı sayılır); sentetik ele verilecek olan ise BİLEK. Köprü
-        /// <see cref="ItemGripAuthority.WristFromAnchor"/>'dır (<c>wrist = (item ∘ kayıt) ∘ delta</c>,
-        /// delta bu bileşenin canlı ölçümü). Delta yanlışsa bozulan şey silahın yönü değil, elin ön
-        /// kabzada birkaç santim/derece kaymış durmasıdır.
+        /// ⚠️ <b>Bu kilit, elin Meta'nın sentezlediği "doğal" el pozundan gelmesini bilerek
+        /// engeller.</b> O poz anchor'a göre bizde yazılı olmayan bir ofset taşıyor; silah ise
+        /// anchor'dan konumlanıyor. İki referans = tezgâhta yazılan kavramanın oyunda kaymış
+        /// görünmesi. Kilitle birlikte el ile silah tek referanstan çıkıyor ve stüdyodaki hayalet el
+        /// aynı ofseti okuduğu için tezgâh ile oyun kurgu gereği aynı oluyor.
+        /// </para>
+        /// <para>⚠️ Anchor çözülemezse kilit BIRAKILIR (rig henüz yok): kilitli bırakmak eli son
+        /// bilinen yerde dondururdu.</para>
+        /// <para>⚠️ Poz DÜNYA uzayındadır ve öyle verilmek zorunda (<c>worldPose: true</c>) —
+        /// gerekçe <see cref="LockToItemGrip"/>'te.</para>
+        /// </summary>
+        private static void LockToController(SyntheticHand synthetic, OVRInput.Controller hand,
+            in Pose anchorToWrist, HandState state)
+        {
+            // Rig keşfinin TEK yolu: ikinci bir arama açmak iki bileşenin farklı karelerde farklı
+            // rig bulmasına yol açardı (Scan ile aynı gerekçe).
+            Transform anchor = WeaponGranter.ResolveHandAnchor(hand);
+            if (anchor == null)
+            {
+                FreeWristIfLocked(state);
+                return;
+            }
+
+            Pose wrist = ItemGripAuthority.WristFromAnchor(
+                new Pose(anchor.position, anchor.rotation), anchorToWrist);
+            synthetic.LockWristPose(wrist, 1f, SyntheticHand.WristLockMode.Full, true);
+            state.WristLocked = true;
+        }
+
+        /// <summary>
+        /// Eşya tutan elin bileğini eşyanın üstündeki kayda <b>TAM</b> (konum + dönüş) kilitler —
+        /// o el eşyaya yapışır. <b>İki kavrama noktası için de aynı yol</b>: ana kabza da ön kabza da
+        /// buradan geçer.
+        /// <para>
+        /// ⚠️ <b>Ana el neden KUMANDAYA değil EŞYAYA kilitleniyor:</b> iki elli tutuşta silahın
+        /// dönüşü ana kumandanınki DEĞİLDİR — <see cref="ItemGripSolver"/> onu ön kabzadaki ele
+        /// nişanlar. Ana el kumandaya kilitli kalsaydı, oyuncu ön kabzadan silahı çevirdiğinde silah
+        /// döner ama arka el dönmez ve el silahın dışında kalırdı. Eşyadan türetmek bunu kurgu gereği
+        /// kapatır ve <b>tek elli tutuşta hiçbir şeyi değiştirmez</b>: çözücü kimliği gereği
+        /// <c>item.position + item.rotation * kayıt</c> her zaman ana kumanda anchor'ının TA
+        /// KENDİSİDİR (<c>itemPosition = palm.position − itemRotation * kayıt</c>), yani elin
+        /// KONUMU her hâlükârda kumandada kalır — eşyadan gelen tek şey DÖNÜŞTÜR.
+        /// </para>
+        /// <para>
+        /// Kayıt kumanda ANCHOR'ının eşyaya göre KONUMUDUR (<see cref="ItemGripPose"/>; anchor
+        /// yarısında dönüş yok — kumanda eşyayla hizalı sayılır); sentetik ele verilecek olan ise
+        /// BİLEK. Köprü <see cref="ItemGripAuthority.WristFromAnchor"/>'dır
+        /// (<c>wrist = (item ∘ kayıt) ∘ delta</c>, delta o slotun el yerleşimi). Delta yanlışsa
+        /// bozulan şey silahın yönü değil, elin kabzada birkaç santim/derece kaymış durmasıdır.
         /// </para>
         /// <para>
         /// ⚠️ <b>Kilit KOŞULSUZDUR</b> — mesafe/açı kapısı yoktur ve eklenmez. Takas bilinçli:
@@ -454,6 +332,10 @@ namespace VortexArena.Core.Combat
         /// gerilmesidir; kazancı, oyuncu grip tuşunu bırakmadıkça elin silahtan kopmamasıdır.
         /// Mesafeye bakan bir kapı eli oyuncu hiçbir şey yapmadan bırakır ve "silahı iki elle
         /// tuttum ama ikinci el havada" hissi üretir.
+        /// </para>
+        /// <para>
+        /// ⚠️ Uyarı ana el için <b>okunmaz</b>: orada kilidin konumu zaten kumandadadır (yukarıdaki
+        /// kimlik), yani gerilecek bir mesafe hiç doğmaz.
         /// </para>
         /// <para>
         /// ⚠️ <c>TransformPoint</c> DEĞİL elle bileşim: kayıt METREdir ve eşyanın görsel ölçeğiyle
@@ -467,21 +349,24 @@ namespace VortexArena.Core.Combat
         /// sessizce kayar.
         /// </para>
         /// </summary>
-        /// <param name="grip">Kumanda anchor'ının EŞYAYA göre yerel konumu (metre, ölçeksiz).</param>
-        /// <param name="rightHand">Kilitlenen el sağ mı (delta el başına ölçülür).</param>
-        private static void LockToSecondaryGrip(SyntheticHand synthetic, Transform item,
-            in ItemGripPose grip, bool rightHand)
+        /// <param name="grip">Kavrama kaydı — kumanda anchor'ının EŞYAYA göre yerel konumu (metre,
+        /// ölçeksiz).</param>
+        /// <param name="anchorToWrist">O slotun el yerleşimi (yazılmamışsa paylaşılan tanım).</param>
+        private static void LockToItemGrip(SyntheticHand synthetic, Transform item,
+            in ItemGripPose grip, in Pose anchorToWrist)
         {
-            // Kayıt dönüş taşımaz: ön kabzadaki kumanda eşyayla hizalı sayılır.
+            // Anchor kaydı dönüş taşımaz: kabzadaki kumanda eşyayla hizalı sayılır. Elin o kumandanın
+            // üstündeki açısı ayrı bir alandır (anchorToWrist) ve tam burada devreye girer: kimi
+            // kabza yandan, kimi alttan tutuluyor.
             var anchor = new Pose(item.position + item.rotation * grip.position, item.rotation);
 
-            Pose wrist = ItemGripAuthority.WristFromAnchor(rightHand, anchor);
+            Pose wrist = ItemGripAuthority.WristFromAnchor(anchor, anchorToWrist);
             synthetic.LockWristPose(wrist, 1f, SyntheticHand.WristLockMode.Full, true);
         }
 
-        /// <summary>Ön kabzadan kalan bilek kilidini bırakır (parmaklara dokunmaz — çağıran onları
-        /// hemen ardından yazıyor; <c>FreeAllJoints</c> çağrılsaydı el bir kare izlemeye dönüp
-        /// titrerdi).</summary>
+        /// <summary>Bilek kilidini bırakır — <b>tek çağıranı</b> anchor'ın hiç çözülemediği hâldir
+        /// (rig yok). Parmaklara dokunmaz: çağıran onları hemen ardından yazıyor ve
+        /// <c>FreeAllJoints</c> çağrılsaydı el bir kare izlemeye dönüp titrerdi.</summary>
         private static void FreeWristIfLocked(HandState state)
         {
             if (!state.WristLocked)
@@ -494,12 +379,12 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Elin parmaklarını hedef preset'e götürür ve sentetik ele yazar.
+        /// Elin parmaklarını hedef eklem dizisine götürür ve sentetik ele yazar.
         /// <para>
         /// <b>Geçiş:</b> hedef değiştiği karede o anki gösterilen dizi <see cref="HandState.From"/>'a
         /// kopyalanır ve ilerleme sıfırlanır; sonraki karelerde dizi
-        /// <see cref="HandGripPresets.TransitionSeconds"/> boyunca hedefe slerp'lenir
-        /// (<see cref="HandGripPresets.Ease"/>). Oturmuş durumda (ilerleme 1) hedef dizi aynen yazılır.
+        /// <see cref="HandPoseLibrary.TransitionSeconds"/> boyunca hedefe slerp'lenir
+        /// (<see cref="HandPoseLibrary.Ease"/>). Oturmuş durumda (ilerleme 1) hedef dizi aynen yazılır.
         /// </para>
         /// <para>
         /// ⚠️ <b>Beş parmak HER KAREDE kilitlenir</b> (<c>JointFreedom.Locked</c>) ve bu
@@ -509,31 +394,32 @@ namespace VortexArena.Core.Combat
         /// kıpırdamaya başlar. Değişmeyen seviyeyi yeniden yazmak ISDK'da ucuzdur (karşılaştırıp
         /// geçer).
         /// </para>
-        /// <para>⚠️ <see cref="HandGripPresets.JointRotations"/>'ın dizisi ÖNBELLEKLİDİR ve
-        /// paylaşılır: değiştirilmez, yalnız okunur — ara dizi <see cref="HandState.Shown"/>'dur.</para>
+        /// <para>⚠️ Hedef dizi ÖNBELLEKLİDİR ve paylaşılır (<see cref="HandState.Target"/>):
+        /// değiştirilmez, yalnız okunur — ara dizi <see cref="HandState.Shown"/>'dur.</para>
         /// </summary>
-        private static void ApplyFingers(HandState state, HandGripPreset target, bool rightHand)
+        private static void ApplyFingers(HandState state, Quaternion[] goal)
         {
             SyntheticHand synthetic = state.Synthetic;
             Quaternion[] shown = state.Shown;
 
-            if (target != state.Target)
+            // Referans kıyası: hedef diziler slot başına önbellekli olduğu için kimlik yeterli
+            // (gerekçe HandState.Target'ta).
+            if (!ReferenceEquals(goal, state.Target))
             {
-                state.Target = target;
+                state.Target = goal;
                 state.Progress = 0f;
                 System.Array.Copy(shown, state.From, shown.Length);
             }
 
-            Quaternion[] goal = HandGripPresets.JointRotations(target, rightHand);
             int count = Mathf.Min(shown.Length, goal.Length);
 
             if (state.Progress < 1f)
             {
-                state.Progress = HandGripPresets.TransitionSeconds > 0f
-                    ? Mathf.Min(1f, state.Progress + Time.deltaTime / HandGripPresets.TransitionSeconds)
+                state.Progress = HandPoseLibrary.TransitionSeconds > 0f
+                    ? Mathf.Min(1f, state.Progress + Time.deltaTime / HandPoseLibrary.TransitionSeconds)
                     : 1f;
 
-                float t = HandGripPresets.Ease(state.Progress);
+                float t = HandPoseLibrary.Ease(state.Progress);
                 for (int i = 0; i < count; i++)
                 {
                     shown[i] = Quaternion.Slerp(state.From[i], goal[i], t);

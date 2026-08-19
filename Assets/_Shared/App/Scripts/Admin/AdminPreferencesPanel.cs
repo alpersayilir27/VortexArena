@@ -9,100 +9,58 @@ using VortexArena.Protocol;
 
 namespace VortexArena.App.Admin
 {
-    /// <summary>
-    /// Tercihler paneli — operatörün ayar kutusu. <b>Üç sekmesi</b> vardır
-    /// (<see cref="AdminPreferencesTab"/>): <b>MAÇ</b> (ortak: mod/harita/süre/skor limiti/geri
-    /// sayım/dost ateşi + kalibre modu), <b>GÖRÜNÜM</b> (yalnız bu ekran) ve <b>BAĞLANTI</b>
-    /// (oturum). Aynı anda tek sayfa açıktır; sekme seçimi oturum içinde kalıcıdır
-    /// (<see cref="_tab"/>) ve diske YAZILMAZ — panelin hangi sekmede açıldığı bir tercih değil,
-    /// o anki işin bağlamıdır.
-    /// <para>
-    /// ⚠️ <b>Maçı süren düğmeler (BAŞLAT · DURAKLAT/DEVAM · İPTAL) bu panelde DEĞİL, HUD'ın alt
-    /// ortasındadır</b> (<see cref="AdminMatchControls"/>): panel kapalıyken de basılabilmeleri
-    /// gerekir. Seçim durumu (mod/harita/süre/limit/geri sayım, lobi açık mı) burada yaşamaya
-    /// devam eder — tek doğruluk kaynağı budur ve şerit başlatmayı
-    /// <see cref="StartSelectedMatch"/> ile bu panele sorar.
-    /// </para>
-    /// <para>
-    /// Kart yarı saydamdır ve <b>arkasına scrim koyulmaz</b> — panel açıkken canlı sahne
-    /// izlenmeye devam eder (kullanıcının açık isteği). Maç/oyun DURMAZ; otorite sunucudadır.
-    /// </para>
-    /// <para>
-    /// <b>MAÇ bölümü ORTAKtır (çoklu admin).</b> Mod/harita seçicileri yerel bir alana yazmaz:
-    /// <c>set_selection</c> ile sunucudaki ortak seçimi değiştirir, sunucu da onu tüm adminlere
-    /// <c>admin_state</c> ile geri yayar (<see cref="AdminSelection"/>). Bu yüzden bir operatör
-    /// haritayı değiştirdiğinde diğerinin paneli — <b>kapalı olsa bile</b>, bu bileşen HUD kökünde
-    /// hep etkin olduğu için — yeni değere döner ve yerel önizlemesi o arenayı açar. Tıklama
-    /// anında yerel imleç de ilerletilir (iyimser güncelleme); sunucudan gelen değer son sözü söyler.
-    /// <br/><b>GÖRÜNÜM bölümü YERELdir</b> — her operatörün kendi ekranı (bkz. <see cref="AdminSession"/>).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Harita seçmek OYUNCULARI DA taşır (§10.7 sahneleme).</b> Sunucu lobideyken seçilen
-    /// arenayı <c>return_to_lobby</c> ile tüm istemcilere yükletir — burası "bir sonraki maçın
-    /// notu" değil anlık bir sahne komutudur. Bunun doğrudan sonucu: <b>mod/harita ancak maç
-    /// KURULMAMIŞKEN değiştirilebilir</b> (<see cref="CanChangeSelection"/>) — koşan maçta,
-    /// yüklemede, geri sayımda ve duraklatmada seçiciler pasiftir. Süre/limit her fazda açık kalır,
-    /// onlar sahne yüklemez.
-    /// </para>
-    /// <para>
-    /// <b>Lobi ayrı bir düğme değil, harita seçicisinin ilk satırıdır</b> (<see cref="LobbyRowLabel"/>):
-    /// seçilince <c>set_selection</c> değil <c>return_to_lobby</c> gider. Aynı kilit ona da uygulanır,
-    /// yani kurulmuş bir maçı lobiye çevirmenin yolu İPTAL'dir (sunucuda ikisi de aynı iştir).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Harita seçicisinin imleci ORTAK SEÇİMİ değil AÇIK SAHNEYİ izler</b>
-    /// (<see cref="ApplyOpenScene"/>). İkisi ayrışır: maç bitip ya da lobiye dönülüp herkes lobiye
-    /// alındığında sunucudaki ortak seçim hâlâ son arenayı gösterir, açık sahne ise lobidir. İmleç
-    /// ortak seçime bağlanırsa seçici o arenayı gösterirken lobi açık olur — ve operatör <b>o
-    /// arenaya geri dönemez</b>: <see cref="TMP_Dropdown"/> seçili satıra tıklamayı olay saymaz
-    /// (<c>value == m_Value</c> iken <c>onValueChanged</c> hiç ateşlenmez), yani sahneleme komutu
-    /// hiç gönderilemez. Aynı sebeple seçicide <b>"zaten seçili" erken çıkışı yoktur</b>.
-    /// </para>
-    /// <para>
-    /// <b>Liste seçimi dropdown, sayı adımlayıcı:</b> mod/harita gibi <b>liste tabanlı</b> seçimler
-    /// <c>TMP_Dropdown</c>'dır — seçenek sayısı katalogla büyüyor ve ok tuşlarıyla gezmek operatörü
-    /// aradığı haritaya varana kadar tıklatıyordu. Süre/skor limiti gibi <b>sayısal</b> değerler
-    /// <c>[-] değer [+]</c> adımlayıcı kalır: onların gezilecek bir listesi yok, asıl jest komşu
-    /// değere gitmektir. Dropdown'ın şablon hiyerarşisi (viewport, item, scrollbar) prefabta durur;
-    /// bu sınıf yalnız seçenekleri doldurur ve imleci eşitler.
-    /// </para>
+    /// <summary>Operator preferences panel with three tabs (<see cref="AdminPreferencesTab"/>):
+    /// MAÇ (shared match settings), GÖRÜNÜM (this screen only) and BAĞLANTI (session). The tab
+    /// choice lives for the session but never goes to disk — it is task context, not a preference.
+    /// The card is translucent with no scrim: the live scene stays visible and nothing pauses.
+    /// <para>⚠️ Match buttons (BAŞLAT · DURAKLAT/DEVAM · İPTAL) live in the HUD strip
+    /// (<see cref="AdminMatchControls"/>) so they work with the panel closed; the selection state
+    /// stays here as the single source (<see cref="StartSelectedMatch"/>).</para>
+    /// <para>MAÇ is SHARED across admins: selectors send <c>set_selection</c> and the server
+    /// broadcasts <c>admin_state</c> back (<see cref="AdminSelection"/>). This component stays
+    /// active while the panel is hidden, so another operator's change still lands; the local cursor
+    /// advances optimistically and the server value wins. GÖRÜNÜM is LOCAL
+    /// (<see cref="AdminSession"/>).</para>
+    /// <para>⚠️ Picking a map MOVES THE PLAYERS TOO (§10.7 staging) — it is an immediate scene
+    /// command. Mode/map therefore change only while no match is set up
+    /// (<see cref="CanChangeSelection"/>); duration/limit stay free since they load no scene.</para>
+    /// <para>The lobby is the first row of the map selector (<see cref="LobbyRowLabel"/>), sending
+    /// <c>return_to_lobby</c>. The same lock applies, so İPTAL is the way out of a set-up
+    /// match.</para>
+    /// <para>⚠️ The map cursor follows the OPEN SCENE, not the shared selection
+    /// (<see cref="ApplyOpenScene"/>): they diverge after a match ends, and bound to the selection
+    /// the operator could never restage that arena, since <see cref="TMP_Dropdown"/> fires no
+    /// <c>onValueChanged</c> for the selected row. Hence also no "already selected" early-out.</para>
+    /// <para>List choices are dropdowns, numbers are steppers: mode/map grow with the catalog, while
+    /// duration/limit have no list to browse. The dropdown template lives in the prefab; this class
+    /// only fills options and syncs the cursor.</para>
     /// </summary>
     public class AdminPreferencesPanel : MonoBehaviour
     {
-        // NOT: Yerleşimi KOD BELİRLEMEZ — panel ölçüsü, sekme çubuğu ve satır dizilimi prefabtadır
-        // (`_Shared/App/Resources/UI/AdminPreferencesPanel.prefab` → `PreferencesPanel`). Satırlar
-        // sayfa köklerinin (`Page_Mac`, `Page_Gorunum`, `Page_Baglanti`) altında ELLE yığılan y ile
-        // dizilir (Layout Group yok, UiKit kararı; satır adımı 70 px), yani yeni satır eklemek =
-        // prefabta o sayfada alttaki her şeyi kaydırmak.
-        // ⚠️ Kartın en-boy oranı kabuğun arka plan görseline (`PanelBG`) bağlıdır: sanat tek
-        // parçadır ve gerildiğinde başlık bandı/parlamaları esner — satır ekleyip paneli
-        // uzatmadan önce AdminStatsPanel ile aynı kabuk kuralına bak
-        // (`Docs/Gelistirici/Arayuz-Tasarimi.md`). Sekmeler tam da bunun için var: kart sabit
-        // ölçüde kalır, içerik sayfalara bölünür. Pencere kipi düğmesi başlık çubuğunda (KAPAT'ın
-        // solunda) durur, OYUNDAN ÇIK ise BAĞLANTI sekmesindedir.
+        // ⚠️ Layout is NOT decided in code: panel size, tab bar and row stacking live in
+        // `_Shared/App/Resources/UI/AdminPreferencesPanel.prefab`. Rows are hand-stacked by y under
+        // the page roots (no Layout Group, 70 px step), so adding a row means shifting everything
+        // below it in the prefab. The card aspect is tied to the `PanelBG` art, which stretches
+        // badly — tabs exist precisely so the card stays a fixed size. See
+        // `Docs/Gelistirici/Arayuz-Tasarimi.md`.
 
-        /// <summary>Skor limiti adımlayıcısının eşiği: bu değerin altında ±1, üstünde ±5 adımlar.
-        /// İki düğmeli döngüleyiciyle hem düşük limitlerde hassasiyet hem yüksek limitlerde
-        /// makul hız verir (ayrı bir dört düğmeli widget'a gerek kalmaz).</summary>
+        /// <summary>Score-limit stepper threshold: ±1 below, ±5 above. Gives precision at low
+        /// limits and speed at high ones without a four-button widget.</summary>
         private const int ScoreLimitFineThreshold = 20;
 
         private const int ScoreLimitMin = 1;
         private const int ScoreLimitMax = 999;
 
-        /// <summary>Skor limiti adımlayıcısının EN ALT basamağı: <b>sınırsız</b>
-        /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>). <c>1</c>'den bir kez daha aşağı
-        /// basmak buraya iner, yukarı basmak <c>1</c>'e döner.
-        /// <para>Neden listenin ucunda ve neden ayrı bir onay kutusu değil: "kaç tur" sorusunun
-        /// cevabı bu — sınırsız o sorunun bir değeri, yanına asılan ikinci bir anahtar değil (ayrı
-        /// bir kutu, sayı hâlâ görünürken hangisinin geçerli olduğunu belirsiz bırakırdı).
-        /// Turnuvada sınırsız = galibiyet limiti YOK + tur tavanı YOK: turlar operatör İPTAL'e
-        /// basana kadar sürer.</para></summary>
+        /// <summary>Bottom rung of the score-limit stepper: unlimited
+        /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>), one step below <c>1</c>.
+        /// <para>It sits at the end of the range rather than in a separate checkbox because it is a
+        /// value of the "how many rounds" question, not a second switch — a checkbox next to a
+        /// visible number leaves it unclear which one applies. In tournament mode unlimited means no
+        /// win limit and no round cap: rounds run until the operator hits İPTAL.</para></summary>
         private const int ScoreLimitUnlimited = ArenaProtocol.SCORE_LIMIT_UNLIMITED;
 
-        // ⚠️ Alanlar [SerializeField] — görünüm PREFABTAN gelir
-        // (`_Shared/App/Resources/UI/AdminPreferencesPanel.prefab`). Bu sınıf yalnız veri
-        // yazar; yerleşim/renk/punto prefabta düzenlenir. Prefabta bağlanmayan alan sessizce
-        // çizilmez, bu yüzden öge SİLİNMEZ (gizlenecekse devre dışı bırakılır).
+        // ⚠️ Fields are [SerializeField]: the look comes from the prefab and this class only writes
+        // data. An unbound field silently draws nothing, so never delete an element — disable it.
 
         [Header("Panel kökü")]
         [Tooltip("Açılıp kapanan kart — panel kapalıyken bu obje devre dışı bırakılır.")]
@@ -110,9 +68,9 @@ namespace VortexArena.App.Admin
 
         [SerializeField] private Button _closeButton;
 
-        /// <summary>Tam ekran ↔ pencereli düğmesi. ⚠️ <b>Başlık çubuğunda, KAPAT'ın yanında
-        /// durur</b> — GÖRÜNÜM bölümünde değil: pencere kipi bir sahne tercihi değil pencere
-        /// süsüdür ve bulunacağı yer klasik pencere köşesidir (F11 ile aynı iş).</summary>
+        /// <summary>Fullscreen ↔ windowed toggle. ⚠️ Lives in the title bar next to KAPAT, not in
+        /// GÖRÜNÜM: window mode is window chrome, expected at the window corner (same job as
+        /// F11).</summary>
         [SerializeField] private Button _screenModeButton;
 
         [SerializeField] private TextMeshProUGUI _screenModeLabel;
@@ -141,20 +99,18 @@ namespace VortexArena.App.Admin
         [Tooltip("YIKICI eylemin kurulmuş hâli (çıkış onayı). Boşsa vurgulu zemin kullanılır.")]
         [SerializeField] private Sprite _buttonDangerSprite;
 
-        /// <summary>Açık sekme. Oturum içinde kalıcıdır (panel kapanıp açılınca aynı sayfa gelir)
-        /// ama <c>PlayerPrefs</c>'e YAZILMAZ: hangi sayfada çalışıldığı bir ekran tercihi değil,
-        /// o anki işin bağlamıdır.</summary>
+        /// <summary>Open tab. Persists for the session but never to <c>PlayerPrefs</c>: which page
+        /// is open is task context, not a screen preference.</summary>
         private AdminPreferencesTab _tab = AdminPreferencesTab.Match;
 
         [Header("MAÇ bölümü (ortak)")]
 
-        /// <summary>Mod seçici. ⚠️ Seçeneklerini KOD doldurur (katalogdan) — prefabtaki liste
-        /// yalnız şablondur ve çalışırken temizlenir. Gösterilen metin dropdown'ın kendi
-        /// <c>captionText</c>'idir, bu sınıf ona metin YAZMAZ.</summary>
+        /// <summary>Mode selector. ⚠️ Options are filled by CODE from the catalog; the prefab list
+        /// is a template and is cleared at runtime. Caption text is the dropdown's own.</summary>
         [SerializeField] private TMP_Dropdown _modeDropdown;
 
-        /// <summary>Harita seçici — seçenekleri seçili moda + mekan süzgecine göre
-        /// <see cref="RefreshMapList"/> her çalıştığında yeniden kurulur.</summary>
+        /// <summary>Map selector — options are rebuilt from the selected mode plus the venue filter
+        /// on every <see cref="RefreshMapList"/>.</summary>
         [SerializeField] private TMP_Dropdown _mapDropdown;
 
         [SerializeField] private TextMeshProUGUI _durationValue;
@@ -165,35 +121,28 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _scoreLimitPrev;
         [SerializeField] private Button _scoreLimitNext;
 
-        // Geri sayım uzunluğu (§5.2 countdownSeconds). Tur tabanlı modlarda (tournament) turlar
-        // ARASINDAKİ geri sayım da budur — oyuncular tabanlarında toplandıktan sonra bu kadar
-        // beklenir. Diğer modlarda maç başında bir kez işler.
+        // Countdown length (§5.2 countdownSeconds). In round-based modes this is also the
+        // BETWEEN-rounds countdown; elsewhere it runs once at match start.
         [SerializeField] private TextMeshProUGUI _countdownValue;
         [SerializeField] private Button _countdownPrev;
         [SerializeField] private Button _countdownNext;
 
-        // Dost ateşi (§5.2 set_friendly_fire). ⚠️ Diğer satırların aksine bu bir SEÇİM DEĞİL, anlık
-        // komuttur: koşan maçta da geçerlidir ve etkisi bir sonraki mermide görülür. Bu yüzden
-        // ApplySelectionLock onu kapsamaz — maç kuruluyken de basılabilir olması işin özü
-        // (takım arkadaşlarını vuran oyuncu için operatör maçı iptal etmek zorunda kalmasın).
-        // İki düğme de aynı işi yapar (aç/kapa), satır deseni diğerleriyle aynı kalsın diye.
+        // Friendly fire (§5.2 set_friendly_fire). ⚠️ Not a SELECTION but an immediate command that
+        // applies mid-match, so ApplySelectionLock skips it — being pressable during a live match is
+        // the whole point. Both buttons toggle, keeping the row pattern.
         [SerializeField] private TextMeshProUGUI _friendlyFireValue;
         [SerializeField] private Button _friendlyFirePrev;
         [SerializeField] private Button _friendlyFireNext;
 
-        // ⚠️ Ayrı bir "LOBİYE DÖN" düğmesi YOKTUR ve geri eklenmez: lobi harita seçicisinin ilk
-        // satırıdır (<see cref="LobbyRowLabel"/>). İkisi birden dururken operatör aynı işi iki
-        // yerden yapabiliyordu ve satır kilitliyken düğme açık kalıyordu — kural tek kapıdan geçsin.
-        // Koşan maçı bitirip lobiye dönmenin yolu İPTAL'dir (sunucuda ikisi de aynı iştir) ve o
-        // düğme HUD'ın maç şeridindedir (<see cref="AdminMatchControls"/>).
+        // ⚠️ No separate "LOBİYE DÖN" button and none is added back: the lobby is the first row of
+        // the map selector, so the rule has one gate. Ending a running match is İPTAL.
 
         [Header("Kalibrasyon")]
 
-        // Kalibre modu (§5.2 set_calibration_mode): başlıkların AÇILIŞTA nasıl hizalanacağı.
-        // Dost ateşiyle aynı sınıf — anlık komut, seçim kilidine girmez, koşan maçta da değişir.
-        // ⚠️ prev/next DEĞİL, ÜÇ AYRI DÜĞME: üçüncü seçenek (çapa bulutu) görünür ama pasiftir ve
-        // dönen bir imleçte pasif değerin üstünden atlamak zorunda kalırdık — operatör o seçeneğin
-        // var olduğunu hiç görmezdi.
+        // Calibration mode (§5.2 set_calibration_mode): how headsets align at launch. Immediate
+        // command like friendly fire, not under the selection lock.
+        // ⚠️ THREE separate buttons, not prev/next: the third option is visible but disabled, and a
+        // cycling cursor would skip it, hiding its existence.
         [Tooltip("Başlıklar açılışta İKİ ÇAPA ile elle kalibre edilsin (sunucu varsayılanı): " +
                  "diskteki kayıtlı çapa OKUNMAZ. Anlık komut, tüm adminlere yayılır.")]
         [SerializeField] private Button _calibModeTwoButton;
@@ -209,9 +158,8 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _calibModeCloudButton;
         [SerializeField] private TextMeshProUGUI _calibModeCloudLabel;
 
-        /// <summary>Düğmelerin PASİF zemin rengi — <c>AdminPlayerRow</c>'daki KAL/AT düğmeleriyle
-        /// aynı ton, aktif olan <see cref="UiKit.Accent"/> ile ayrışır. Zemin görselleri
-        /// bağlanmadığında <see cref="PaintButtonBackground"/> buna düşer.</summary>
+        /// <summary>Idle button background, distinct from the active <see cref="UiKit.Accent"/>.
+        /// Used by <see cref="PaintButtonBackground"/> when no sprites are bound.</summary>
         private static readonly Color CalibModeIdleFill = UiKit.Hex(0x2A303B, 0xFF);
 
         [Header("Bağlantı")]
@@ -219,15 +167,14 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _reconnectButton;
         [SerializeField] private Button _disconnectButton;
 
-        /// <summary>Admin uygulamasını kapatır — <b>iki adımlı onay</b> ile
-        /// (<see cref="ArmQuit"/>). Bağlantı satırının yanında durur: ikisi de oturumu bitiren
-        /// eylemlerdir ve operatör onları aynı yerde arar.</summary>
+        /// <summary>Quits the admin app behind a two-step confirm (<see cref="ArmQuit"/>). Sits next
+        /// to the connection row: both end the session and are looked for in the same place.</summary>
         [SerializeField] private Button _quitButton;
 
         [SerializeField] private TextMeshProUGUI _quitLabel;
 
-        /// <summary>Çıkışın onay penceresi (sn): koşan bir maçın ortasında yanlış tıklamayla
-        /// kapanan admin, operatörü sahaya kör bırakır ve geri alınamaz.</summary>
+        /// <summary>Quit confirm window (s): a misclick mid-match would close the admin and leave
+        /// the operator blind, with no undo.</summary>
         private const float QuitConfirmSeconds = 3f;
         private float _quitArmedAt = -1f;
 
@@ -240,10 +187,9 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _nameplatesPrev;
         [SerializeField] private Button _nameplatesNext;
 
-        // İhlal uyarı sesi (§10.9). Ad etiketleri satırının aynı deseni: iki düğme de aynı işi
-        // yapar (aç/kapa), satır biçimi diğerleriyle bozulmasın diye.
-        // ⚠️ GÖRÜNÜM bölümünde durur çünkü YALNIZ BU EKRANA aittir — ortak bir maç ayarı değil
-        // (AdminSession, PlayerPrefs); bir operatörün sesi kapatması diğerininkini susturmaz.
+        // Violation alert sound (§10.9). Both buttons toggle, keeping the row pattern.
+        // ⚠️ Lives in GÖRÜNÜM because it belongs to THIS SCREEN only (AdminSession/PlayerPrefs):
+        // one operator muting it does not mute another's.
         [Tooltip("Fiziksel ihlal başlayınca uyarı sesi çalsın mı (yalnız bu admin PC'sinde).")]
         [SerializeField] private TextMeshProUGUI _violationSoundValue;
         [SerializeField] private Button _violationSoundPrev;
@@ -257,13 +203,9 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _roofPrev;
         [SerializeField] private Button _roofNext;
 
-        /// <summary>
-        /// Sesin çıkacağı cihaz seçicisi (yalnız bu ekran — <see cref="AdminSession"/>).
-        /// Mod/harita gibi <b>liste tabanlı</b> olduğu için adımlayıcı değil dropdown'dır:
-        /// bir PC'de bağlı çıkış sayısı bilinmez ve ok tuşlarıyla gezmek operatörü tıklatırdı.
-        /// <para>⚠️ Seçenekleri KOD doldurur (Windows'tan okunur) — prefabtaki liste yalnız
-        /// şablondur ve çalışırken temizlenir.</para>
-        /// </summary>
+        /// <summary>Audio output device selector (this screen only — <see cref="AdminSession"/>);
+        /// a dropdown because the endpoint count is unknown per PC. ⚠️ Options are filled by CODE
+        /// from Windows; the prefab list is a template and is cleared at runtime.</summary>
         [SerializeField] private TMP_Dropdown _audioDeviceDropdown;
 
         private readonly List<ModeDefinition> _modes = new List<ModeDefinition>();
@@ -271,24 +213,22 @@ namespace VortexArena.App.Admin
         private int _modeIndex;
         private int _mapIndex;
 
-        /// <summary>Windows'tan okunan çıkış uçları. ⚠️ <b>Önbelleklenmez, panel her açılışta
-        /// tazeler</b> (<see cref="RefreshAudioDeviceList"/>): operatör kulaklığı maç sürerken
-        /// takıyor ve bayat bir liste ona olmayan bir cihazı seçtirirdi.</summary>
+        /// <summary>Output endpoints read from Windows. ⚠️ Not cached — refreshed on every panel
+        /// open, because a stale list would offer a device that no longer exists.</summary>
         private readonly List<AudioOutputDevice> _audioDevices = new List<AudioOutputDevice>();
 
-        /// <summary>Bir sonraki maçın süresi/limiti (ORTAK — set_selection ile gider).
-        /// Mod değişince o modun <see cref="ModeDefinition"/> varsayılanına döner.</summary>
+        /// <summary>Next match duration/limit (SHARED, sent with set_selection). Resets to the
+        /// mode's <see cref="ModeDefinition"/> defaults when the mode changes.</summary>
         private int _roundSeconds;
         private int _scoreLimit;
 
-        /// <summary>Geri sayım uzunluğu (sn); <c>0</c> = protokol varsayılanı (§5.2).</summary>
+        /// <summary>Countdown length (s); <c>0</c> = protocol default (§5.2).</summary>
         private int _countdownSeconds;
 
         private bool _dirty = true;
 
-        /// <summary>Harita listesinin hangi mekan süzgeciyle kurulduğu
-        /// (<see cref="AdminSelection.VenueVersion"/>). <c>-1</c> = hiç süzülmedi: panel
-        /// bağlantıdan önce kurulduğu için ilk liste kaçınılmaz olarak süzgeçsizdir.</summary>
+        /// <summary>Which venue filter built the current map list. <c>-1</c> = never filtered: the
+        /// panel is built before connecting, so the first list is unavoidably unfiltered.</summary>
         private int _appliedVenueVersion = -1;
 
         private void Start()
@@ -297,26 +237,21 @@ namespace VortexArena.App.Admin
 
             if (_root != null)
             {
-                _root.SetActive(false); // görünürlüğü Apply() belirler
+                _root.SetActive(false); // visibility is decided by Apply()
             }
 
             AdminContent.CollectModes(_modes);
-            RebuildModeOptions(); // mod listesi katalogdan gelir ve sonra değişmez → bir kez
-            RefreshMapList();     // harita seçeneklerini kendi kurar (mod + mekan süzgeci)
+            RebuildModeOptions(); // mode list comes from the catalog and never changes afterwards -> once
+            RefreshMapList();     // builds the map options itself (mode + venue filter)
             RefreshAudioDeviceList();
             ResetMatchParametersToModeDefaults();
             Apply();
         }
 
-        /// <summary>
-        /// Prefabtaki düğme ve seçicilere davranışı bağlar.
-        /// <para>
-        /// ⚠️ <b>Prefabta kalıcı (persistent) <c>onClick</c>/<c>onValueChanged</c> kaydı YOKTUR ve
-        /// olmamalıdır.</b> Buradaki geri çağrıların çoğu koşullu (kilitli satır, iki adımlı onay,
-        /// faza göre değişen komut); inspector'dan bağlanan bir kayıt o koşulları atlar — ör.
-        /// "OYUNDAN ÇIK" onay penceresini atlayıp admin'i tek tıklamayla kapatırdı.
-        /// </para>
-        /// </summary>
+        /// <summary>Wires behaviour onto the prefab's buttons and selectors. ⚠️ The prefab must
+        /// carry NO persistent <c>onClick</c>/<c>onValueChanged</c> entries: most callbacks here are
+        /// conditional, and an inspector-bound entry skips those conditions — e.g. quitting the
+        /// admin in one click.</summary>
         private void WireButtons()
         {
             Wire(_closeButton, AdminSession.ClosePanel);
@@ -336,9 +271,8 @@ namespace VortexArena.App.Admin
 
             Wire(_calibModeTwoButton, () => AdminCommands.SetCalibrationMode(ArenaProtocol.CALIB_MODE_TWO_ANCHOR));
             Wire(_calibModeSavedButton, () => AdminCommands.SetCalibrationMode(ArenaProtocol.CALIB_MODE_SAVED_ANCHOR));
-            // ⚠️ _calibModeCloudButton BAĞLANMAZ: rezerve moddur, sunucu reddeder. Düğme her
-            // tazelemede pasifleştirilir (ApplyCalibrationMode) — bağlanmış ama tepkisiz bir
-            // düğme operatöre komutun gittiğini düşündürürdü.
+            // ⚠️ _calibModeCloudButton is NOT wired: reserved mode, the server rejects it. A wired
+            // but inert button would make the operator think the command went through.
 
             Wire(_markersPrev, PrevMarkers);
             Wire(_markersNext, NextMarkers);
@@ -357,9 +291,9 @@ namespace VortexArena.App.Admin
             Wire(_quitButton, ArmQuit);
         }
 
-        /// <summary>Sekme düğmelerini kendi indekslerine bağlar. ⚠️ İndeks döngü değişkeninden
-        /// DEĞİL yerel bir kopyadan okunur: lambda değişkeni yakalar, hepsi son sekmeye
-        /// bağlanırdı.</summary>
+        /// <summary>Binds tab buttons to their indices. ⚠️ The index comes from a local copy, not
+        /// the loop variable: a lambda captures the variable and all buttons would open the last
+        /// tab.</summary>
         private void WireTabs()
         {
             for (int i = 0; i < _tabButtons.Length; i++)
@@ -379,8 +313,8 @@ namespace VortexArena.App.Admin
         {
             _tab = tab;
 
-            // Cihaz listesi GÖRÜNÜM sayfasına geçerken tazelenir: panel açıkken takılan bir
-            // kulaklık için operatörün paneli kapatıp açması gerekmesin.
+            // Device list refreshes when entering GÖRÜNÜM, so a headset plugged in while the panel
+            // is open does not require closing and reopening it.
             if (tab == AdminPreferencesTab.View)
             {
                 RefreshAudioDeviceList();
@@ -415,30 +349,27 @@ namespace VortexArena.App.Admin
         private void OnEnable()
         {
             AdminSession.Changed += MarkDirty;
-            // ⚠️ AdminCommands.StatusChanged'e ABONE OLUNMAZ: durum satırı bu panelde değil HUD'ın
-            // maç şeridindedir (AdminMatchControls). Panelin gösterdiği hiçbir alan komut durumuna
-            // bağlı değil — abonelik her komutta boşuna bir tam tazeleme doğururdu.
+            // ⚠️ AdminCommands.StatusChanged is NOT subscribed: the status line lives in the HUD
+            // match strip and no field here depends on command status — subscribing would force a
+            // full refresh on every command.
             NetEvents.OnConnectionStateChanged += HandleConnectionState;
 
-            // Ortak seçim başka bir admin'den değişmiş olabilir. Bu bileşen panel KAPALIYKEN de
-            // etkindir (HUD kökünde durur, yalnız kartı gizlenir) — bu yüzden diğer operatörün
-            // harita değişikliği panel açılmasa da yerel önizlemeye yansır.
+            // The shared selection may change from another admin. This component stays active while
+            // the panel is hidden (only the card is), so their map change still previews here.
             AdminSelection.Changed += HandleSharedSelectionChanged;
 
-            // Açık sahne değişti (§10.7 sahneleme / maç yükleme) → harita seçicisinin imleci ona
-            // taşınsın. Sahne komutu ortak seçimden bağımsız gelebilir (maç sonu lobiye dönüş),
-            // o yüzden AdminSelection.Changed'e güvenilmez.
+            // Open scene changed (§10.7) → move the map cursor. The scene command can arrive
+            // independently of the shared selection (end-of-match lobby return), so
+            // AdminSelection.Changed cannot be trusted for it.
             NetEvents.OnReturnToLobby += HandleOpenSceneChanged;
             NetEvents.OnLoadMatch += HandleOpenSceneChanged;
 
-            // Bağlanma/yeniden bağlanma: welcome açık sahneyi taşır. Gerekli, çünkü panel sonradan
-            // bağlanan bir admin'de sahne komutlarını KAÇIRMIŞ olur — maç bitip lobiye dönülmüş bir
-            // sunucuya bağlanan operatör, ortak seçim hâlâ son arenayı gösterdiği için seçicide o
-            // arenayı görür ve onu tekrar seçemezdi (seçili satır olay üretmez).
+            // (Re)connect: welcome carries the open scene. Needed because a late-joining admin MISSED
+            // the scene commands — the shared selection would still name the last arena and the
+            // operator could not reselect it (a selected row fires no event).
             NetEvents.OnConnected += HandleWelcome;
 
-            // Faz değişimi harita/mod seçicilerini kilitleyip açıyor (§10.7) — maç başlayınca
-            // düğmeler bir sonraki tıklamayı beklemeden pasifleşmeli.
+            // Phase changes lock and unlock the mode/map selectors (§10.7).
             if (AdminRoster.Instance != null)
             {
                 AdminRoster.Instance.Changed += MarkDirty;
@@ -462,7 +393,7 @@ namespace VortexArena.App.Admin
 
         private void Update()
         {
-            // Onay penceresi kendiliğinden kapanır (AdminPlayerRow.Tick deseni).
+            // The confirm window closes itself (AdminPlayerRow.Tick pattern).
             if (_quitArmedAt >= 0f && Time.unscaledTime - _quitArmedAt > QuitConfirmSeconds)
             {
                 _quitArmedAt = -1f;
@@ -476,11 +407,9 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>
-        /// Admin uygulamasını kapatır — iki adımlı onay (AdminPlayerRow'daki yıkıcı düğmelerle aynı
-        /// desen). ⚠️ Sunucuya "kapanıyorum" diye bir şey söylenmez ve söylenmemeli: admin
-        /// gözlemcidir, gidişi maçı etkilemez (soket kapanınca sunucu zaten düşürür).
-        /// </summary>
+        /// <summary>Quits the admin app behind a two-step confirm (same pattern as the destructive
+        /// buttons in AdminPlayerRow). ⚠️ Nothing is announced to the server: the admin is an
+        /// observer and its exit does not affect the match (the socket close is enough).</summary>
         private void ArmQuit()
         {
             if (_quitArmedAt < 0f)
@@ -498,8 +427,8 @@ namespace VortexArena.App.Admin
         private static void Quit()
         {
 #if UNITY_EDITOR
-            // Editörde Application.Quit() no-op'tur; oynatmayı durdurmak aynı anlama gelir
-            // (KickedShutdown ile aynı sözleşme).
+            // Application.Quit() is a no-op in the editor; stopping play means the same thing
+            // (same contract as KickedShutdown).
             UnityEditor.EditorApplication.isPlaying = false;
 #else
             Application.Quit();
@@ -516,7 +445,7 @@ namespace VortexArena.App.Admin
             _dirty = true;
         }
 
-        /// <summary>Sunucu sahne komutu yolladı — açık sahne değişti (§10.7).</summary>
+        /// <summary>Server sent a scene command — the open scene changed (§10.7).</summary>
         private void HandleOpenSceneChanged(ReturnToLobbyMsg msg)
         {
             ApplyOpenScene(msg != null ? msg.sceneName : "");
@@ -527,30 +456,23 @@ namespace VortexArena.App.Admin
             ApplyOpenScene(msg != null ? msg.sceneName : "");
         }
 
-        /// <summary>Bağlanıldı — <c>welcome</c> sunucunun o anki açık sahnesini taşır (§10.7).</summary>
+        /// <summary>Connected — <c>welcome</c> carries the server's current open scene (§10.7).</summary>
         private void HandleWelcome(WelcomeMsg msg)
         {
             ApplyOpenScene(msg != null && msg.match != null ? msg.match.sceneName : "");
         }
 
-        /// <summary>
-        /// Harita seçicisinin imlecini sunucunun <b>AÇIK SAHNESİNE</b> taşır.
-        /// <para>
-        /// ⚠️ <b>Bu, ortak seçimden (<c>admin_state</c>) ayrı bir kaynaktır ve seçici için doğru
-        /// olanıdır.</b> İkisi ayrışır: maç bitip ya da lobiye dönülüp herkes lobiye alındığında
-        /// sunucudaki ortak seçim hâlâ son arenayı gösterir, açık sahne ise lobidir. İmleç ortak
-        /// seçime bağlansaydı seçici "Arena12x12" gösterirken lobi açık olurdu — ve operatör aynı
-        /// arenayı tekrar seçemezdi: <see cref="TMP_Dropdown"/> zaten <b>seçili satıra tıklamayı
-        /// olay saymaz</b> (<c>value == m_Value</c> ise <c>onValueChanged</c> hiç ateşlenmez), yani
-        /// sahneleme komutu hiç gönderilemezdi. Sunucu aynı arenayı tekrar sahnelemeyi bilerek
-        /// destekliyor (§10.7: ölçüt "seçim değişti mi" değil "açık sahne bu mu") — istemcinin de
-        /// bunu engellememesi gerekir.
-        /// </para>
-        /// <para>
-        /// Yerel iyimser önizleme (<see cref="PreviewSelectedMap"/>) buraya UĞRAMAZ
-        /// (<c>SceneRouter.LoadPreview</c> açık sahneyi değiştirmez), yani imleç sunucu onaylamadan
-        /// önce oynamaz ve geri sekmez.
-        /// </para>
+        /// <summary>Moves the map cursor to the server's OPEN SCENE.
+        /// <para>⚠️ This is a different source from the shared selection (<c>admin_state</c>) and
+        /// the correct one for the selector. They diverge when a match ends and everyone returns to
+        /// the lobby: the shared selection still names the last arena. Bound to the shared
+        /// selection the operator could not restage that arena, because
+        /// <see cref="TMP_Dropdown"/> fires no <c>onValueChanged</c> for the already-selected row.
+        /// The server deliberately supports restaging the same arena (§10.7: the test is "is this
+        /// the open scene", not "did the selection change"), so the client must not block it.</para>
+        /// <para>The optimistic local preview does not pass through here
+        /// (<c>SceneRouter.LoadPreview</c> leaves the open scene alone), so the cursor never jumps
+        /// ahead of the server and snaps back.</para>
         /// </summary>
         private void ApplyOpenScene(string sceneName)
         {
@@ -569,8 +491,8 @@ namespace VortexArena.App.Admin
 
             _lobbyOpen = false;
 
-            // Listede yoksa (başka bir modun arenası sahnelenmiş) imleç bırakılır — seçici boş
-            // kalmasın.
+            // Not in the list (another mode's arena is staged) → leave the cursor put so the
+            // selector is never blank.
             int index = IndexOfMap(sceneName);
             if (index >= 0)
             {
@@ -578,16 +500,14 @@ namespace VortexArena.App.Admin
             }
         }
 
-        // ------------------------------------------------------------------ eylemler
+        // ------------------------------------------------------------------- actions
 
-        /// <summary>
-        /// Panelde seçili mod/harita/süre/limit/geri sayım ile maçı başlatır.
-        /// <para>Çağıran: <see cref="AdminMatchControls"/> (HUD'ın maç şeridi). Düğme panelde
-        /// değildir ama seçim durumu buradadır — komut bu yüzden buradan gider.</para>
-        /// <para>⚠️ <b>Lobi açıkken reddedilir:</b> sahnelenmiş bir arena yoktur ve sunucu lobi
-        /// türünde maç başlatmaz (§10.7) — sessizce reddedilen bir komut yollamak yerine sebebi
-        /// durum satırına yazılır.</para>
-        /// </summary>
+        /// <summary>Starts a match with the panel's selected mode/map/duration/limit/countdown.
+        /// Called by <see cref="AdminMatchControls"/>: the button is elsewhere but the selection
+        /// state lives here.
+        /// <para>⚠️ Rejected while the lobby is open: no arena is staged and the server does not
+        /// start a match on a lobby map (§10.7), so the reason is written to the status line instead
+        /// of sending a command that is silently refused.</para></summary>
         public void StartSelectedMatch()
         {
             if (_lobbyOpen)
@@ -600,9 +520,9 @@ namespace VortexArena.App.Admin
                 _countdownSeconds);
         }
 
-        /// <summary>BAŞLAT şu an anlamlı mı: sahnelenmiş bir arena var (lobi açık değil), maç
-        /// kurulmamış (<see cref="CanChangeSelection"/>) ve mod+harita seçili. Yalnız arayüz
-        /// kapısıdır — otorite sunucudadır.</summary>
+        /// <summary>Is BAŞLAT meaningful now: an arena is staged (lobby not open), no match set up
+        /// (<see cref="CanChangeSelection"/>), mode and map selected. UI gate only — the server has
+        /// authority.</summary>
         public bool CanStartMatch => !_lobbyOpen && CanChangeSelection &&
                                      !string.IsNullOrEmpty(SelectedModeId) &&
                                      !string.IsNullOrEmpty(SelectedSceneName);
@@ -616,18 +536,12 @@ namespace VortexArena.App.Admin
         private ModeDefinition SelectedMode =>
             _modeIndex >= 0 && _modeIndex < _modes.Count ? _modes[_modeIndex] : null;
 
-        /// <summary>
-        /// Mod seçicisinden seçim geldi (<c>onValueChanged</c>).
-        /// <para>
-        /// ⚠️ Açılır liste <b>ilk iş olarak kapatılır</b>: hemen ardından harita önizlemesi
-        /// yükleniyor (<see cref="PreviewSelectedMap"/>) ve açık kalan bir liste sahne değişirken
-        /// ekranda asılı kalırdı.
-        /// </para>
-        /// <para>
-        /// Seçim uygulanmazsa (maç sürüyor, indeks bayat) <see cref="Apply"/> çağrılır: dropdown
-        /// kendi değerini zaten değiştirdi, imleci geri çekecek olan odur.
-        /// </para>
-        /// </summary>
+        /// <summary>Mode selected (<c>onValueChanged</c>).
+        /// <para>⚠️ The dropdown is closed FIRST: a map preview loads right after
+        /// (<see cref="PreviewSelectedMap"/>) and an open list would hang on screen across the scene
+        /// change.</para>
+        /// <para>If the selection is refused (match running, stale index) <see cref="Apply"/> pulls
+        /// the cursor back — the dropdown already moved its own value.</para></summary>
         private void SelectMode(int index)
         {
             HideDropdown(_modeDropdown);
@@ -640,34 +554,34 @@ namespace VortexArena.App.Admin
 
             _modeIndex = index;
             RefreshMapList();
-            _lobbyOpen = false; // mod değişimi de bir arena sahneler (aşağıdaki PublishSelection)
-            // Süre/limit her modun kendi varsayılanına döner: 10 dakikalık bir TDM ayarı,
-            // 3 dakikalık olması gereken bir moda sessizce taşınmasın.
+            _lobbyOpen = false; // a mode change also stages an arena (PublishSelection below)
+            // Duration/limit fall back to each mode's own defaults, so a 10-minute TDM setting does
+            // not silently carry into a mode meant to run 3 minutes.
             ResetMatchParametersToModeDefaults();
-            PublishSelection(mapChanged: true); // mod değişti → harita listesi başa döndü, seçili harita da değişti
+            PublishSelection(mapChanged: true); // mode changed -> map list reset, so the selected map changed too
         }
 
-        // ---- maç parametreleri (ORTAK) ----
+        // ---- match parameters (SHARED) ----
 
-        /// <summary>Seçili modun <see cref="ModeDefinition"/> varsayılanlarına döner. Katalog
-        /// yoksa protokol/mod tarafındaki değerler zaten sunucuda geçerlidir; burada yalnız
-        /// arayüzün gösterdiği sayı sıfırlanır.</summary>
+        /// <summary>Falls back to the selected mode's <see cref="ModeDefinition"/> defaults. With no
+        /// catalog the server's own values already apply; this only resets the displayed
+        /// number.</summary>
         private void ResetMatchParametersToModeDefaults()
         {
             ModeDefinition mode = SelectedMode;
             _roundSeconds = mode != null && mode.RoundSeconds > 0 ? mode.RoundSeconds : 0;
             _scoreLimit = mode != null ? Mathf.Clamp(mode.ScoreLimit, ScoreLimitMin, ScoreLimitMax) : 0;
-            // Geri sayımın ModeDefinition'da karşılığı YOKTUR ve eklenmez: mod şekli değil maç
-            // parametresidir (§5.2). 0 = protokol varsayılanı.
+            // ⚠️ Countdown has no ModeDefinition field and gets none: it is a match parameter, not
+            // mode shape (§5.2). 0 = protocol default.
             _countdownSeconds = 0;
         }
 
         private void DurationPrev() { StepDuration(-1); }
         private void DurationNext() { StepDuration(1); }
 
-        /// <summary>Süre seçenekleri arasında döner (§1 <c>ROUND_SECONDS_OPTIONS</c>). Mevcut
-        /// değer listede yoksa (modun kendi varsayılanı listede olmayabilir) en yakın seçenekten
-        /// devam eder — operatör iki tıkta kaybolmaz.</summary>
+        /// <summary>Cycles the duration options (§1 <c>ROUND_SECONDS_OPTIONS</c>). If the current
+        /// value is not in the list (a mode default need not be) it continues from the nearest
+        /// option, so the operator is not lost after two clicks.</summary>
         private void StepDuration(int delta)
         {
             int[] options = ArenaProtocol.ROUND_SECONDS_OPTIONS;
@@ -704,15 +618,14 @@ namespace VortexArena.App.Admin
         private void ScoreLimitDown() { StepScoreLimit(-1); }
         private void ScoreLimitUp() { StepScoreLimit(1); }
 
-        /// <summary>Skor limiti adımlayıcısı: düşük değerlerde ±1, eşiğin üstünde ±5; en altta
-        /// <b>sınırsız</b> basamağı (<see cref="ScoreLimitUnlimited"/>).
-        /// <para>Sınırsız yalnız <c>ScoreLimitMin</c>'den bir adım daha aşağıda durur — yani oraya
-        /// kazara düşülmez, listenin ucuna kadar inmek gerekir; oradan yukarı basmak da doğrudan
-        /// <c>ScoreLimitMin</c>'e döner (sınırsızın "bir eksiği" yoktur).</para></summary>
+        /// <summary>Score-limit stepper: ±1 below the threshold, ±5 above, with the unlimited rung
+        /// (<see cref="ScoreLimitUnlimited"/>) at the bottom. Unlimited sits one step below
+        /// <c>ScoreLimitMin</c>, so it is never hit by accident, and stepping up from it returns
+        /// straight to <c>ScoreLimitMin</c>.</summary>
         private void StepScoreLimit(int direction)
         {
-            // Sınırsız basamağı sayı ekseninin parçası DEĞİLDİR (−1 aritmetiğe girse 0/−2 gibi
-            // anlamsız değerler üretirdi) — giriş ve çıkışı ayrı iki daldır.
+            // The unlimited rung is NOT part of the number axis (−1 in arithmetic would produce
+            // 0/−2), so entering and leaving it are separate branches.
             if (_scoreLimit < 0)
             {
                 if (direction > 0)
@@ -721,12 +634,11 @@ namespace VortexArena.App.Admin
                     PublishSelection(mapChanged: false);
                 }
 
-                return; // sınırsız en alt basamak: aşağı basmak bir şey yapmaz
+                return; // unlimited is the bottom step: pressing down does nothing
             }
 
-            // ⚠️ Kapı "== ScoreLimitMin", "<= " DEĞİL: 0 ("mod varsayılanı") sayı ekseninde değil
-            // BİLİNMEYEN durumdur — oradan aşağı basmak eskisi gibi alt sınıra çıkar, sınırsıza
-            // düşmez (operatör seçmediği bir kurala kazara geçmesin).
+            // ⚠️ The gate is "== ScoreLimitMin", not "<=": 0 ("mode default") is UNKNOWN, not a
+            // point on the axis — stepping down from it goes to the minimum, not to unlimited.
             if (direction < 0 && _scoreLimit == ScoreLimitMin)
             {
                 _scoreLimit = ScoreLimitUnlimited;
@@ -735,7 +647,7 @@ namespace VortexArena.App.Admin
             }
 
             int step = _scoreLimit >= ScoreLimitFineThreshold ? 5 : 1;
-            // Aşağı inerken eşiğin ALTINA düşmemek için adımı da eşiğe göre yeniden hesapla.
+            // Recompute the step against the threshold so stepping down does not overshoot it.
             if (direction < 0 && _scoreLimit - step < ScoreLimitFineThreshold)
             {
                 step = _scoreLimit > ScoreLimitFineThreshold ? _scoreLimit - ScoreLimitFineThreshold : 1;
@@ -748,13 +660,10 @@ namespace VortexArena.App.Admin
         private void CountdownDown() { StepCountdown(-1); }
         private void CountdownUp() { StepCountdown(1); }
 
-        /// <summary>
-        /// Geri sayım adımlayıcısı: ±1 sn, <c>[COUNTDOWN_SECONDS_MIN, COUNTDOWN_SECONDS_MAX]</c>
-        /// aralığında. Aralık bir arayüz listesi değil, sunucunun da uyguladığı kısıttır (§5.2) —
-        /// panelin gösteremediği bir değeri sunucu zaten kırpardı.
-        /// <para>0 ("varsayılan") durumundan ilk dokunuşta alt sınıra çıkılır; geri dönüş yolu
-        /// mod değiştirmektir (skor limiti seçicisiyle aynı sözleşme).</para>
-        /// </summary>
+        /// <summary>Countdown stepper: ±1 s within
+        /// <c>[COUNTDOWN_SECONDS_MIN, COUNTDOWN_SECONDS_MAX]</c>. The range is the server's
+        /// constraint, not a UI list (§5.2). From 0 ("default") the first touch jumps to the
+        /// minimum; the way back is changing mode, same contract as the score limit.</summary>
         private void StepCountdown(int direction)
         {
             _countdownSeconds = Mathf.Clamp(_countdownSeconds + direction,
@@ -762,35 +671,24 @@ namespace VortexArena.App.Admin
             PublishSelection(mapChanged: false);
         }
 
-        /// <summary>
-        /// Dost ateşini açar/kapatır (§5.2). <c>PublishSelection</c> KULLANILMAZ: bu değer ortak
-        /// seçimin parçası değil, sunucu oturumunun anlık ayarıdır ve <c>set_selection</c>'ın
-        /// "0/boş = değiştirme" sözleşmesine sığmaz.
-        /// <para>Yerel bir alan tutulmaz — istenen durum sunucudakinin tersidir ve panel sunucunun
-        /// <c>admin_state</c> ile geri yaydığı değeri gösterir (iki operatör sapmasın).</para>
-        /// </summary>
+        /// <summary>Toggles friendly fire (§5.2). ⚠️ Not via <c>PublishSelection</c>: this is a live
+        /// session setting, not part of the shared selection, and does not fit
+        /// <c>set_selection</c>'s "0/empty = leave alone" contract.
+        /// <para>No local field is kept — the wanted state is the inverse of the server's, and the
+        /// panel shows the value broadcast back via <c>admin_state</c> so two operators cannot
+        /// diverge.</para></summary>
         private void ToggleFriendlyFire()
         {
             AdminCommands.SetFriendlyFire(!AdminSelection.FriendlyFire);
         }
 
-        /// <summary>
-        /// Harita seçicisinden seçim geldi — gerekçeler <see cref="SelectMode"/>.
-        /// <para>
-        /// ⚠️ <b>İlk satır bir arena DEĞİL, lobidir</b> (<see cref="LobbyRowLabel"/>): eski
-        /// "LOBİYE DÖN" düğmesinin yerini aldı ve seçilince <c>set_selection</c> değil
-        /// <c>return_to_lobby</c> gider. İmleç orada <b>KALIR</b> — seçici "açık sahne"yi gösterir
-        /// (<see cref="ApplyOpenScene"/>), yani lobiye dönüldüğünde lobiyi göstermesi doğrudur.
-        /// Aksi hâlde seçici hâlâ eski arenayı gösterirdi ve operatör o arenaya geri dönemezdi:
-        /// seçili satıra tıklamak <c>onValueChanged</c>'i ateşlemez.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>"Zaten seçili" diye erken çıkış YOKTUR.</b> Operatör bir satıra bastıysa komut
-        /// gider; sunucu aynı sahneyi tekrar sahnelemeyi zaten idempotent karşılıyor (§10.7).
-        /// Buraya bir eşitlik kapısı koymak, açık sahne ile imlecin ayrıştığı her durumda
-        /// (maç sonu, lobiye dönüş) operatörü kilitler.
-        /// </para>
-        /// </summary>
+        /// <summary>Map selected — rationale in <see cref="SelectMode"/>.
+        /// <para>⚠️ The first row is the LOBBY, not an arena (<see cref="LobbyRowLabel"/>): it sends
+        /// <c>return_to_lobby</c> instead of <c>set_selection</c> and the cursor STAYS there,
+        /// because the selector shows the open scene (<see cref="ApplyOpenScene"/>).</para>
+        /// <para>⚠️ There is no "already selected" early-out. If the operator pressed a row the
+        /// command goes; the server handles restaging idempotently (§10.7). An equality gate would
+        /// lock the operator out whenever cursor and open scene diverge.</para></summary>
         private void SelectMap(int index)
         {
             HideDropdown(_mapDropdown);
@@ -799,11 +697,11 @@ namespace VortexArena.App.Admin
             {
                 if (!GuardSelectionChange())
                 {
-                    Apply(); // imleç açık sahneye geri çekilir
+                    Apply(); // the cursor snaps back to the staged scene
                     return;
                 }
 
-                _lobbyOpen = true; // iyimser: sunucunun return_to_lobby'si aynı değeri doğrulayacak
+                _lobbyOpen = true; // optimistic: the server's return_to_lobby will confirm the same value
                 AdminCommands.ReturnToLobby();
                 Apply();
                 return;
@@ -829,17 +727,13 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>
-        /// Mod/harita seçimi şu an değiştirilebilir mi (§10.7)? Harita seçmek TÜM istemcilere sahne
-        /// yükletiyor — <b>maç KURULMUŞ olduğu her durumda</b> bu yapılamaz (koşan maç, yükleme,
-        /// geri sayım, duraklatma); ölçüt <see cref="AdminRoster.CanChangeSelection"/>. Seçiciler
-        /// zaten pasifleştiriliyor (<see cref="ApplySelectionLock"/>); bu kapı ikinci emniyettir ve
-        /// reddi operatöre görünür kılar.
-        /// <para>⚠️ <b>Lobi satırı da bu kapıdan geçer</b> — o da bir sahne komutudur; kurulmuş bir
-        /// maçı lobiye çevirmenin yolu İPTAL'dir.</para>
-        /// <para>Otorite yine sunucudadır: aynı kural <c>set_selection</c> işlenirken de uygulanır,
-        /// arayüz yalnız operatörü boşuna tıklatmamak için önden bilir.</para>
-        /// </summary>
+        /// <summary>Can mode/map change right now (§10.7)? Picking a map loads a scene on ALL
+        /// clients, so it is refused whenever a match is set up (running, loading, countdown,
+        /// paused) — the test is <see cref="AdminRoster.CanChangeSelection"/>. The selectors are
+        /// already disabled (<see cref="ApplySelectionLock"/>); this is the second guard and makes
+        /// the refusal visible. The server enforces the same rule.
+        /// <para>⚠️ The lobby row passes through this gate too — it is also a scene command, and
+        /// İPTAL is the way out of a set-up match.</para></summary>
         private static bool GuardSelectionChange()
         {
             if (CanChangeSelection)
@@ -851,8 +745,8 @@ namespace VortexArena.App.Admin
             return false;
         }
 
-        /// <summary>Maç kurulmamış mı? <see cref="AdminRoster"/> henüz yoksa (bağlanmadan önceki
-        /// ilk kareler) engellenmez — sunucu zaten son sözü söylüyor.</summary>
+        /// <summary>Is no match set up? Not blocked while <see cref="AdminRoster"/> is still missing
+        /// (first frames before connecting) — the server has the last word anyway.</summary>
         private static bool CanChangeSelection
         {
             get
@@ -862,23 +756,18 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>
-        /// Yerel imleci sunucuya bildirir (<c>set_selection</c>) ve iyimser olarak hemen uygular:
-        /// önizleme + arayüz beklemeden tepki versin. Sunucu değişikliği tüm adminlere yayınca
-        /// <see cref="HandleSharedSelectionChanged"/> aynı değeri görür ve iş yapmaz — döngü olmaz.
-        /// Bağlantı yoksa komut sessizce düşer, yerel önizleme yine de çalışır.
-        /// <para>
-        /// ⚠️ <b>Harita alanı bir sonraki maçın notu değil, ANLIK bir sahne komutudur (§10.7):</b>
-        /// sunucu lobideyken seçilen arenayı <c>return_to_lobby</c> ile tüm istemcilere yükletir.
-        /// Mod/harita bu yüzden yalnız <see cref="CanChangeSelection"/> doğruyken gönderilir;
-        /// süre/limit her fazda serbesttir (sahne yüklemezler).
-        /// </para>
-        /// </summary>
-        /// <param name="mapChanged">Operatör mod/harita imlecini gerçekten oynattı mı.
-        /// <b>Mod/harita alanları YALNIZ o zaman doldurulur</b> (§5.2): sunucu harita alanı dolu
-        /// gelen her <c>set_selection</c>'da sahneleme dener, yani süre/limit dokunuşunda da
-        /// doldurmak herkesi seçili arenaya taşırdı. Yerel önizleme de aynı kapıdan geçer —
-        /// yoksa sunucu kimseyi taşımadığı hâlde operatör tek başına o arenaya düşerdi.</param>
+        /// <summary>Publishes the local cursor (<c>set_selection</c>) and applies it optimistically
+        /// so preview and UI react without waiting. When the server broadcasts it back,
+        /// <see cref="HandleSharedSelectionChanged"/> sees the same value and does nothing, so there
+        /// is no loop. Without a connection the command drops silently and the preview still runs.
+        /// <para>⚠️ The map field is an IMMEDIATE scene command, not a note for the next match
+        /// (§10.7): mode/map are only sent while <see cref="CanChangeSelection"/> is true, whereas
+        /// duration/limit are free in every phase.</para></summary>
+        /// <param name="mapChanged">Did the operator actually move the mode/map cursor. ⚠️ The
+        /// mode/map fields are filled ONLY then (§5.2): the server tries to stage on any
+        /// <c>set_selection</c> carrying a map, so filling them on a duration touch would move
+        /// everyone. The local preview passes the same gate, else the operator alone would drop
+        /// into that arena.</param>
         private void PublishSelection(bool mapChanged)
         {
             bool sendSelection = mapChanged && CanChangeSelection;
@@ -895,24 +784,20 @@ namespace VortexArena.App.Admin
             Apply();
         }
 
-        /// <summary>
-        /// Sunucudan gelen ortak seçim (başka bir admin değiştirmiş olabilir): imleçleri ona
-        /// taşır ve yerel önizlemeyi açar. Zaten aynıysa hiçbir şey yapmaz — kendi gönderdiğimiz
-        /// <c>set_selection</c>'ın echo'su bu yüzden önizlemeyi tekrar tetiklemez.
-        /// Seçicide karşılığı olmayan bir seçim gelirse imleç yerinde bırakılır. Bu <b>normal</b>
-        /// bir durumdur, sürüm farkı değil: sunucu açılışta ortak seçimi mekanın **lobi**
-        /// haritasıyla tohumlar (§5.3) ve o seçim mod seçicisinde karşılık bulmaz — seçicinin
-        /// imleci zaten ortak seçimi değil AÇIK SAHNEYİ izler (<see cref="ApplyOpenScene"/>).
-        /// </summary>
+        /// <summary>Shared selection arrived from the server (possibly from another admin): move the
+        /// cursors and open the local preview. A no-op when unchanged, so the echo of our own
+        /// <c>set_selection</c> does not re-trigger the preview. A selection with no matching row
+        /// leaves the cursor put — this is normal, not a version skew: the server seeds the shared
+        /// selection with the venue's lobby map at startup (§5.3), and the cursor follows the OPEN
+        /// SCENE anyway (<see cref="ApplyOpenScene"/>).</summary>
         private void HandleSharedSelectionChanged()
         {
             _dirty = true;
 
-            // Mekan süzgeci SEÇİMDEN ÖNCE uygulanır ve seçimden BAĞIMSIZDIR: harita listesi
-            // bağlantıdan önce kuruldu (Initialize), yani o an süzgeç boştu ve listede başka
-            // işletmelerin arenaları da vardı. Sunucu mekanı ilk admin_state ile bildirir —
-            // burada süzülmezse operatör mod düğmesine dokunana kadar oynatılamayacak arenalar
-            // görünür kalırdı (seçtiğinde sunucu sahnelemeyi reddeder).
+            // The venue filter is applied BEFORE and independently of the selection: the map list
+            // was built before connecting, so it still holds other venues' arenas. The server
+            // announces the venue with the first admin_state; without filtering here, unplayable
+            // arenas would stay visible until the operator touched the mode button.
             if (_appliedVenueVersion != AdminSelection.VenueVersion)
             {
                 _appliedVenueVersion = AdminSelection.VenueVersion;
@@ -923,7 +808,7 @@ namespace VortexArena.App.Admin
             string sharedScene = AdminSelection.SceneName;
 
             bool changed = false;
-            bool sceneChanged = false; // önizleme YALNIZ mod/harita değişince tazelenir
+            bool sceneChanged = false; // the preview is refreshed ONLY when the mode/map changes
 
             if (!string.IsNullOrEmpty(sharedMode) && sharedMode != SelectedModeId)
             {
@@ -931,16 +816,16 @@ namespace VortexArena.App.Admin
                 if (index >= 0)
                 {
                     _modeIndex = index;
-                    RefreshMapList(); // mod değişti → uyumlu harita listesi de değişti
+                    RefreshMapList(); // mode changed -> the compatible map list changed as well
                     ResetMatchParametersToModeDefaults();
                     changed = true;
                     sceneChanged = true;
                 }
             }
 
-            // ⚠️ Lobi sahnesi buraya DÜŞMEZ ve düşmemeli: seçicinin lobiyi gösterip göstermeyeceğine
-            // ortak seçim değil AÇIK SAHNE karar verir (<see cref="ApplyOpenScene"/>). İkisi
-            // ayrışır — maç bitip lobiye dönüldüğünde ortak seçim hâlâ son arenayı gösterir.
+            // ⚠️ The lobby scene must NOT land here: whether the selector shows the lobby is decided
+            // by the OPEN SCENE, not the shared selection (ApplyOpenScene). They diverge after a
+            // match ends, when the shared selection still names the last arena.
             if (!string.IsNullOrEmpty(sharedScene) && !AdminContent.IsLobbyScene(sharedScene) &&
                 sharedScene != SelectedSceneName)
             {
@@ -953,17 +838,17 @@ namespace VortexArena.App.Admin
                 }
             }
 
-            // Parametreler moddan SONRA uygulanır: mod değişimi yerel varsayılana çekiyor, son
-            // sözü sunucunun bildirdiği ortak değer söylemeli (0 = sunucuda hiç seçilmemiş).
+            // Parameters are applied AFTER the mode: a mode change pulls them to local defaults, and
+            // the server's shared value must have the last word (0 = never chosen).
             if (AdminSelection.RoundSeconds > 0 && AdminSelection.RoundSeconds != _roundSeconds)
             {
                 _roundSeconds = AdminSelection.RoundSeconds;
                 changed = true;
             }
 
-            // ⚠️ Limitte kapı "> 0" DEĞİL "!= 0": sunucudan gelen negatif değer "seçilmedi" değil
-            // SINIRSIZ seçimidir (§5.2) ve pozitiflik kapısında sessizce yutulurdu — diğer
-            // operatörün seçtiği sınırsız bu panelde hiç görünmezdi.
+            // ⚠️ The limit gate is "!= 0", not "> 0": a negative value from the server means
+            // UNLIMITED, not "unset" (§5.2), and a positivity gate would swallow another operator's
+            // unlimited choice.
             if (AdminSelection.ScoreLimit != 0 && AdminSelection.ScoreLimit != _scoreLimit)
             {
                 _scoreLimit = AdminSelection.ScoreLimit < 0
@@ -1018,10 +903,10 @@ namespace VortexArena.App.Admin
             return -1;
         }
 
-        /// <summary>Harita listesini seçili moda + sunucunun bildirdiği mekana göre yeniden kurar.
-        /// <b>Seçili harita hayatta kalıyorsa imleç onda bırakılır</b> — liste mekan süzgeci
-        /// geldiğinde de yeniden kuruluyor ve o an operatörün seçimini başa atmak, panelin
-        /// gösterdiği haritayı görünür bir sebep olmadan değiştirmek olurdu.</summary>
+        /// <summary>Rebuilds the map list from the selected mode plus the server's venue. If the
+        /// selected map survives, the cursor stays on it: the list also rebuilds when the venue
+        /// filter arrives, and resetting to the top would change the shown map for no visible
+        /// reason.</summary>
         private void RefreshMapList()
         {
             string modeId = _modeIndex >= 0 && _modeIndex < _modes.Count ? _modes[_modeIndex].ModeId : "";
@@ -1029,8 +914,8 @@ namespace VortexArena.App.Admin
 
             AdminContent.CollectMaps(modeId, _maps);
 
-            // Lobi satırı listeyle BİRLİKTE tazelenir: mekan süzgeci değiştiğinde (VenueVersion)
-            // arenalar gibi lobi de değişir — her işletmenin kendi lobisi var (§10.7).
+            // The lobby row refreshes WITH the list: when the venue filter changes the lobby changes
+            // too, since each venue has its own (§10.7).
             _lobbyMap = AdminContent.ResolveLobbyMap();
 
             int index = string.IsNullOrEmpty(previous) ? -1 : IndexOfMap(previous);
@@ -1039,40 +924,39 @@ namespace VortexArena.App.Admin
             RebuildMapOptions();
         }
 
-        // --------------------------------------------------------------- seçiciler
+        // --------------------------------------------------------------- selectors
 
-        /// <summary>Katalog boşken seçicide görünen metin. O durumda seçici pasifleşir
-        /// (<see cref="ApplySelectionLock"/>) — açılıp tek satırlık bir liste gösteren seçici
-        /// operatörü "tıkladım, bir şey olmadı" diye bırakırdı.</summary>
+        /// <summary>Caption shown when the catalog is empty; the selector is disabled then
+        /// (<see cref="ApplySelectionLock"/>), since a dropdown that opens to one row leaves the
+        /// operator wondering whether the click registered.</summary>
         private const string NoModesLabel = "katalog yok";
 
         private const string NoMapsLabel = "harita yok";
 
-        /// <summary>Harita seçicisinin ilk satırı — eski "LOBİYE DÖN" düğmesinin yerini aldı.
-        /// Seçilince <c>return_to_lobby</c> gider (<see cref="SelectMap"/>).</summary>
+        /// <summary>First row of the map selector; selecting it sends <c>return_to_lobby</c>
+        /// (<see cref="SelectMap"/>).</summary>
         private const string LobbyRowLabel = "Lobi";
 
-        /// <summary>Lobi satırı listenin BAŞINDA durur ve orada kalır. Sona konsaydı indeksi
-        /// mod/mekan değiştikçe kayardı; başta duran satırın yeri sabittir ve operatörün kas
-        /// hafızası bozulmaz.</summary>
+        /// <summary>⚠️ The lobby row stays at the TOP of the list: at the bottom its index would
+        /// shift with mode/venue, breaking the operator's muscle memory.</summary>
         private const int LobbyRowIndex = 0;
 
-        /// <summary>Bu mekanın lobi haritası (§10.7) — katalogda yoksa ya da mekan süzgeci onu
-        /// dışarıda bırakıyorsa null, o zaman lobi satırı hiç çizilmez.</summary>
+        /// <summary>This venue's lobby map (§10.7); null when the catalog lacks it or the venue
+        /// filter excludes it, in which case no lobby row is drawn.</summary>
         private MapDefinition _lobbyMap;
 
-        /// <summary>Sunucunun açık sahnesi lobi mi (<see cref="ApplyOpenScene"/>). Doğruysa harita
-        /// seçicisi lobi satırını gösterir ve BAŞLAT reddeder — sahnelenmiş arena yoktur.</summary>
+        /// <summary>Is the server's open scene the lobby (<see cref="ApplyOpenScene"/>). If so the
+        /// selector shows the lobby row and BAŞLAT refuses — no arena is staged.</summary>
         private bool _lobbyOpen;
 
         private bool HasLobbyRow => _lobbyMap != null;
 
-        /// <summary>Seçici indeksinden <see cref="_maps"/> indeksine geçiş farkı: lobi satırı
-        /// varken liste bir kayar.</summary>
+        /// <summary>Offset from selector index to <see cref="_maps"/> index: the lobby row shifts
+        /// the list by one.</summary>
         private int MapRowOffset => HasLobbyRow ? 1 : 0;
 
-        /// <summary>Seçenek metinlerinin kurulduğu tampon — <see cref="TMP_Dropdown.AddOptions(List{string})"/>
-        /// içeriği kendi listesine kopyaladığı için paylaşılabilir.</summary>
+        /// <summary>Scratch buffer for option labels — shareable because
+        /// <see cref="TMP_Dropdown.AddOptions(List{string})"/> copies into its own list.</summary>
         private readonly List<string> _optionScratch = new List<string>();
 
         private void RebuildModeOptions()
@@ -1104,8 +988,8 @@ namespace VortexArena.App.Admin
             SyncMapDropdown();
         }
 
-        /// <summary>Harita seçicisini yerel imlece çeker — lobi satırı listeyi kaydırdığı için
-        /// <see cref="SyncDropdown"/> doğrudan kullanılamaz.</summary>
+        /// <summary>Pulls the map selector to the local cursor; <see cref="SyncDropdown"/> cannot be
+        /// used directly because the lobby row shifts the list.</summary>
         private void SyncMapDropdown()
         {
             int count = Mathf.Max(1, _maps.Count + MapRowOffset);
@@ -1118,7 +1002,7 @@ namespace VortexArena.App.Admin
 
             if (_maps.Count == 0)
             {
-                // Yalnız lobi satırı (ya da "harita yok") var: imleç zaten tek yerde durabilir.
+                // Only the lobby row (or "no maps"): the cursor has one place to be.
                 SyncDropdown(_mapDropdown, 0, count);
                 return;
             }
@@ -1126,8 +1010,8 @@ namespace VortexArena.App.Admin
             SyncDropdown(_mapDropdown, _mapIndex + MapRowOffset, count);
         }
 
-        /// <summary>Seçenekleri yazar. Liste boşsa tek bir açıklama satırı konur ki seçicinin
-        /// başlığı hiçbir zaman boş kalmasın.</summary>
+        /// <summary>Writes the options. An empty list gets one explanatory row so the caption is
+        /// never blank.</summary>
         private static void FillDropdown(TMP_Dropdown dropdown, List<string> options, string emptyLabel)
         {
             if (dropdown == null)
@@ -1139,15 +1023,10 @@ namespace VortexArena.App.Admin
             dropdown.AddOptions(options.Count > 0 ? options : new List<string> { emptyLabel });
         }
 
-        /// <summary>
-        /// Seçicinin imlecini yerel indekse çeker (tek doğruluk kaynağı yine sunucu → yerel liste).
-        /// <para>
-        /// ⚠️ <b><see cref="TMP_Dropdown.SetValueWithoutNotify"/> kullanılır:</b> <c>value</c>
-        /// ataması <c>onValueChanged</c>'i tetikler, yani sunucudan gelen her <c>admin_state</c>
-        /// tazelemesi yeni bir <c>set_selection</c> doğurur ve iki admin birbirini sonsuza kadar
-        /// tetiklerdi.
-        /// </para>
-        /// </summary>
+        /// <summary>Pulls a selector's cursor to the local index.
+        /// <para>⚠️ Uses <see cref="TMP_Dropdown.SetValueWithoutNotify"/>: assigning <c>value</c>
+        /// fires <c>onValueChanged</c>, so every <c>admin_state</c> refresh would emit a new
+        /// <c>set_selection</c> and two admins would trigger each other forever.</para></summary>
         private static void SyncDropdown(TMP_Dropdown dropdown, int index, int count)
         {
             if (dropdown == null)
@@ -1162,18 +1041,13 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>
-        /// Seçili arenayı bu ekranda hemen açar — <b>iyimser</b> bir yükleme.
-        /// <para>
-        /// ⚠️ Bu artık "yalnız admin görür" demek DEĞİLDİR: sunucu lobideyken seçilen haritayı
-        /// <c>return_to_lobby</c> ile tüm istemcilere yükletiyor (§10.7 sahneleme) ve o mesaj
-        /// admin'e de geliyor. Buradaki yerel yükleme yalnız <b>gecikmeyi gizler</b> (ve sunucusuz
-        /// dev oturumunda tek yol odur); sunucu aynı sahneyi söylediğinde
-        /// <see cref="SceneRouter"/> zaten o sahnede olduğumuzu görüp ikinci kez yüklemez.
-        /// </para>
-        /// Maç sürüyorsa dokunulmaz — sahne otoritesi sunucudadır.
-        /// <para>⚠️ Lobi açıkken de dokunulmaz: lobiye dönüşü <c>return_to_lobby</c> sürer, burada
-        /// arena önizlemek operatörü tek başına arenaya düşürürdü.</para>
+        /// <summary>Opens the selected arena on this screen immediately — an OPTIMISTIC load.
+        /// <para>⚠️ This is not "admin only": the server stages the picked map to every client
+        /// (§10.7). The local load only hides the latency (and is the only path in a serverless dev
+        /// session); when the server names the same scene <see cref="SceneRouter"/> sees we are
+        /// already there and does not reload.</para>
+        /// <para>Skipped while a match runs (the server owns scene authority) and ⚠️ while the lobby
+        /// is open, where previewing an arena would drop this operator alone into it.</para>
         /// </summary>
         private void PreviewSelectedMap()
         {
@@ -1219,38 +1093,37 @@ namespace VortexArena.App.Admin
         private static void PrevRoof() { StepRoof(-1); }
         private static void NextRoof() { StepRoof(1); }
 
-        /// <summary>Çatı kipi: görünür → kuş bakışında gizli → hep gizli (halkalarla aynı desen).</summary>
+        /// <summary>Roof mode: visible → hidden in top view → always hidden (same pattern as the
+        /// player rings).</summary>
         private static void StepRoof(int delta)
         {
             var next = (int)AdminSession.Roof + delta;
             if (next < 0) next = 2;
             if (next > 2) next = 0;
             AdminSession.Roof = (AdminRoofMode)next;
-            AdminSpectator.RefreshRoof(); // tercih anında görünsün, kip değişimini bekleme
+            AdminSpectator.RefreshRoof(); // let the preference show up immediately, do not wait for a mode change
         }
 
-        // ------------------------------------------------------------------ ses çıkışı
+        // -------------------------------------------------------------- audio output
 
-        /// <summary>Seçicinin ilk satırı: hiçbir şeye dokunma, Windows ne diyorsa o. Başta durur
-        /// ve orada kalır — cihazlar takılıp çıktıkça listenin sonu kayar, başı kaymaz.</summary>
+        /// <summary>First row: leave it to Windows. Stays at the top — devices come and go, so the
+        /// end of the list shifts but the start does not.</summary>
         private const string AudioSystemDefaultLabel = "sistem varsayılanı";
 
         private const int AudioSystemDefaultRowIndex = 0;
 
-        /// <summary>Kayıtlı seçim şu an bağlı değilken listeye eklenen satır. Tercih silinmediği
-        /// için (kulaklık geri takılabilir) durumun ekranda görünür olması gerekir — imleci
-        /// sessizce "sistem varsayılanı"na çekmek operatöre seçimini kaybettiğini düşündürürdü.</summary>
+        /// <summary>Row added when the saved device is not currently connected. The preference is
+        /// kept (the headset may come back), so the state must be visible — silently snapping to
+        /// "system default" would look like the choice was lost.</summary>
         private const string AudioMissingDeviceLabel = "seçili cihaz bağlı değil";
 
-        /// <summary>Kayıtlı cihaz listede yok — o zaman sona bir uyarı satırı eklenir ve imleç
-        /// oraya oturur.</summary>
+        /// <summary>Saved device missing from the list — a warning row is appended and the cursor
+        /// sits on it.</summary>
         private bool _audioDeviceMissing;
 
-        /// <summary>
-        /// Cihaz listesini Windows'tan yeniden okur ve seçeneklerini kurar. Panel açılışında ve
-        /// GÖRÜNÜM sayfasına geçişte çağrılır; <b>her karede değil</b> — uç numaralandırması COM
-        /// çağrısıdır ve tazelemesi ucuz olsa da bedavası yoktur.
-        /// </summary>
+        /// <summary>Re-reads the device list from Windows and rebuilds the options. Called on panel
+        /// open and when entering GÖRÜNÜM, never per frame — endpoint enumeration is a COM
+        /// call.</summary>
         private void RefreshAudioDeviceList()
         {
             WindowsAudioDevices.Collect(_audioDevices);
@@ -1287,8 +1160,8 @@ namespace VortexArena.App.Admin
             return -1;
         }
 
-        /// <summary>İmleci kayıtlı tercihe çeker (satır 0 = sistem varsayılanı, sonra cihazlar,
-        /// en sonda varsa "bağlı değil" satırı).</summary>
+        /// <summary>Pulls the cursor to the saved preference (row 0 = system default, then devices,
+        /// then the "not connected" row if present).</summary>
         private void SyncAudioDeviceDropdown()
         {
             int count = 1 + _audioDevices.Count + (_audioDeviceMissing ? 1 : 0);
@@ -1310,12 +1183,10 @@ namespace VortexArena.App.Admin
             SyncDropdown(_audioDeviceDropdown, index >= 0 ? index + 1 : AudioSystemDefaultRowIndex, count);
         }
 
-        /// <summary>
-        /// Ses çıkışı seçildi. Tek yaptığı tercihi yazmaktır — Windows'a dokunmak
-        /// <see cref="AdminSession.AudioOutputDeviceId"/> setter'ının işidir (tek kapı).
-        /// <para>⚠️ "Bağlı değil" satırı seçilemez bir bilgi satırıdır: tıklanırsa imleç
-        /// <see cref="Apply"/> ile yerine çekilir, tercih değişmez.</para>
-        /// </summary>
+        /// <summary>Audio output selected. Only writes the preference; touching Windows is the job
+        /// of the <see cref="AdminSession.AudioOutputDeviceId"/> setter (single gate).
+        /// <para>⚠️ The "not connected" row is informational: clicking it snaps the cursor back via
+        /// <see cref="Apply"/> and changes no preference.</para></summary>
         private void SelectAudioDevice(int index)
         {
             HideDropdown(_audioDeviceDropdown);
@@ -1331,7 +1202,7 @@ namespace VortexArena.App.Admin
             int deviceIndex = index - 1;
             if (deviceIndex < 0 || deviceIndex >= _audioDevices.Count)
             {
-                Apply(); // "bağlı değil" satırı ya da bayat imleç — dropdown kendi değerini geri alsın
+                Apply(); // the "bağlı değil" row or a stale cursor - let the dropdown revert to its own value
                 return;
             }
 
@@ -1340,7 +1211,7 @@ namespace VortexArena.App.Admin
             Apply();
         }
 
-        // ------------------------------------------------------------------ tazeleme
+        // ------------------------------------------------------------------- refresh
 
         private void Apply()
         {
@@ -1354,8 +1225,8 @@ namespace VortexArena.App.Admin
             {
                 _root.SetActive(open);
 
-                // Panel her AÇILIŞTA ses cihazlarını yeniden okur — liste oturum boyunca değişir
-                // (kulaklık takılır, HDMI ekran uyanır). Kapanışta iş yapılmaz.
+                // Re-read audio devices on every panel OPEN: the list changes during a session
+                // (headset plugged in, HDMI display wakes). Nothing to do on close.
                 if (open)
                 {
                     RefreshAudioDeviceList();
@@ -1367,9 +1238,8 @@ namespace VortexArena.App.Admin
                 return;
             }
 
-            // Seçicilerin GÖSTERDİĞİ metin dropdown'ın kendi captionText'idir (seçenekler
-            // RebuildModeOptions/RebuildMapOptions'ta yazıldı); burada yalnız imleç eşitlenir —
-            // ortak seçimi başka bir admin de değiştirmiş olabilir.
+            // The visible text is the dropdown's own captionText (options were written in
+            // RebuildModeOptions/RebuildMapOptions); only the cursor is synced here.
             SyncDropdown(_modeDropdown, _modeIndex, _modes.Count);
             SyncMapDropdown();
 
@@ -1378,14 +1248,14 @@ namespace VortexArena.App.Admin
             ApplyScreenModeButton();
             ApplyQuitButton();
 
-            // 0 = arayüz bir değer bilmiyor → sunucu modun varsayılanını kullanacak.
+            // 0 = UI knows no value → the server uses the mode default.
             _durationValue.text = _roundSeconds > 0
                 ? AdminCommands.FormatDuration(_roundSeconds)
                 : "mod varsayılanı";
-            // Üç durum: sayı · sınırsız · mod varsayılanı (0 = arayüz bir değer bilmiyor).
+            // Three states: number · unlimited · mode default (0 = UI knows no value).
             _scoreLimitValue.text = AdminCommands.FormatScoreLimit(_scoreLimit);
 
-            // Eksik bağ sessizce çizilmez (panelin geri kalanı çalışmaya devam eder).
+            // An unbound field draws nothing; the rest of the panel keeps working.
             if (_countdownValue != null)
             {
                 _countdownValue.text = _countdownSeconds > 0
@@ -1395,12 +1265,11 @@ namespace VortexArena.App.Admin
 
             if (_friendlyFireValue != null)
             {
-                // Değer sunucudan okunur (yerel imleç yok): anahtar koşan maçta da değişebildiği
-                // için "gönderdim" ile "yürürlükte" arasındaki fark operatöre yalan söylemesin.
+                // Read from the server, no local cursor: the switch can change mid-match, so "sent"
+                // must not be shown as "in effect".
                 bool friendlyFire = AdminSelection.FriendlyFire;
                 _friendlyFireValue.text = friendlyFire ? "AÇIK" : "kapalı";
-                // Açıkken vurgulu: takım arkadaşının vurulabildiği bir maç, ekranda fark edilmeden
-                // geçmemesi gereken bir durumdur.
+                // Highlighted when on: a match where teammates can be shot must not go unnoticed.
                 _friendlyFireValue.color = friendlyFire ? UiKit.Bad : UiKit.Title;
             }
 
@@ -1421,8 +1290,8 @@ namespace VortexArena.App.Admin
 
             SyncAudioDeviceDropdown();
 
-            // Windows dışında (ve hiç çıkış ucu bulunamadığında) seçilecek bir şey yok: açılıp tek
-            // satır gösteren bir seçici operatörü "tıkladım, bir şey olmadı" diye bırakır.
+            // Off Windows (and with no endpoints found) there is nothing to pick: a dropdown that
+            // opens to one row leaves the operator wondering whether the click registered.
             SetInteractable(_audioDeviceDropdown,
                 WindowsAudioDevices.Supported && _audioDevices.Count > 0);
 
@@ -1434,21 +1303,19 @@ namespace VortexArena.App.Admin
                 : client.IsConnected ? "bağlı"
                 : client.State == ArenaConnectionState.Connecting ? "bağlanılıyor" : "bağlı değil";
 
-            // Bağlı admin sayısı: operatör yalnız olmadığını bilmeli (komutlar eş yetkilidir).
+            // Connected admin count: the operator must know they are not alone (all admins are
+            // equally authoritative).
             string peers = AdminSelection.AdminCount > 1
                 ? $" — {AdminSelection.AdminCount} admin bağlı"
                 : "";
             _connectionText.text = $"{state} — {endpoint}{peers}";
         }
 
-        /// <summary>
-        /// Pencere kipi düğmesini <b>yürürlükteki</b> kiple boyar: tam ekranda vurgulu
-        /// (<see cref="UiKit.Accent"/>), pencerelide sönük — kalibre modu düğmeleriyle aynı dil.
-        /// <para>Metin YÜRÜRLÜKTEKİ kipi yazar, tıklayınca ne olacağını değil (panelin geri kalanı
-        /// da durum gösterir); kısayol etikete yazılır ki operatör F11'i bir kez görsün.</para>
-        /// <para>Değer <see cref="AdminSession"/>'dan okunur — F11 ile değiştiğinde panel
-        /// <c>Changed</c> ile tazelendiği için düğme kendiliğinden doğru kalır.</para>
-        /// </summary>
+        /// <summary>Paints the window-mode button with the CURRENT mode: accented in fullscreen,
+        /// dim when windowed (same language as the calibration-mode buttons). The label states the
+        /// current mode, not what a click will do, and carries the F11 shortcut. The value comes
+        /// from <see cref="AdminSession"/>, so F11 keeps the button correct via
+        /// <c>Changed</c>.</summary>
         private void ApplyScreenModeButton()
         {
             bool full = AdminSession.FullScreen;
@@ -1465,8 +1332,8 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Çıkış düğmesi: onay penceresi açıkken metin ve renk uyarır
-        /// (<see cref="AdminPlayerRow"/>'un yıkıcı düğmeleriyle aynı desen).</summary>
+        /// <summary>Quit button: text and colour warn while the confirm window is open (same pattern
+        /// as the destructive buttons in <see cref="AdminPlayerRow"/>).</summary>
         private void ApplyQuitButton()
         {
             if (_quitLabel == null)
@@ -1484,14 +1351,12 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>
-        /// Kalibre modu düğmelerini yürürlükteki değere göre boyar (§5.2).
-        /// <para>Değer sunucudan okunur (yerel imleç yok): komut anlıktır ve başka bir operatör de
-        /// değiştirebilir — "gönderdim" ile "yürürlükte" arasındaki fark ekranda yalan söylemesin.
-        /// Boş değer <c>two_anchor</c> sayılır (sunucunun açılış varsayılanı).</para>
-        /// <para>⚠️ Alanlar prefabta sonradan bağlanır; hepsi null-güvenli okunur — eksik bağ
-        /// panelin geri kalanını çizmemeyi haklı çıkarmaz.</para>
-        /// </summary>
+        /// <summary>Paints the calibration-mode buttons from the current value (§5.2). Read from the
+        /// server, no local cursor: the command is immediate and another operator can change it, so
+        /// "sent" must not be shown as "in effect". An empty value means <c>two_anchor</c> (the
+        /// server's startup default).
+        /// <para>⚠️ Fields are bound late in the prefab and read null-safely — a missing binding must
+        /// not stop the rest of the panel from drawing.</para></summary>
         private void ApplyCalibrationMode()
         {
             string mode = AdminSelection.CalibrationMode;
@@ -1504,8 +1369,8 @@ namespace VortexArena.App.Admin
                 mode == ArenaProtocol.CALIB_MODE_TWO_ANCHOR, true);
             PaintCalibModeButton(_calibModeSavedButton, _calibModeSavedLabel,
                 mode == ArenaProtocol.CALIB_MODE_SAVED_ANCHOR, true);
-            // Rezerve seçenek: her tazelemede pasif ve soluk — metni prefabtan gelir, koddan
-            // "yakında" gibi bir şey yazılmaz (durumu renk taşır).
+            // Reserved option: disabled and dim on every refresh. Its label comes from the prefab;
+            // the code writes no text, the colour carries the state.
             PaintCalibModeButton(_calibModeCloudButton, _calibModeCloudLabel, false, false);
         }
 
@@ -1525,15 +1390,13 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>
-        /// Düğme zeminini duruma göre boyar — panelde "seçili/pasif" ayrımı olan HER düğme buradan
-        /// geçer (sekmeler, kalibre kipi, pencere kipi, çıkış).
-        /// <para><b>Görünüm prefabta kalır:</b> zemin görselleri <see cref="_buttonIdleSprite"/> /
-        /// <see cref="_buttonActiveSprite"/> alanlarına Inspector'dan bağlanır, kod yalnız hangisinin
-        /// çizileceğini seçer. İkisi birden bağlıysa sprite değişir ve tint beyaza alınır (görsel
-        /// kendi rengini taşır); <b>biri bile boşsa</b> eskisi gibi düz renk tinti uygulanır —
-        /// yarım bağ, sahnede yanlış renkli bir görsel bırakmasın.</para>
-        /// </summary>
+        /// <summary>Paints a button background by state — every button with a selected/idle
+        /// distinction goes through here (tabs, calibration mode, window mode, quit).
+        /// <para>The look stays in the prefab: backgrounds are bound to
+        /// <see cref="_buttonIdleSprite"/> / <see cref="_buttonActiveSprite"/> and the code only
+        /// picks one. With both bound the sprite swaps and the tint goes white; if either is empty
+        /// it falls back to a flat colour tint, so a half binding never leaves a mis-tinted
+        /// sprite.</para></summary>
         private void PaintButtonBackground(Image image, bool active, Color activeTint,
             Sprite activeSprite = null)
         {
@@ -1555,15 +1418,14 @@ namespace VortexArena.App.Admin
             image.color = active ? activeTint : CalibModeIdleFill;
         }
 
-        /// <summary>Maç sürerken mod/harita satırlarını pasif gösterir (§10.7): seçiciler
-        /// açılmaz, değerleri sönükleşir. Süre/limit satırları AÇIK kalır — onlar bir sonraki
-        /// maçın parametreleridir, kimseye sahne yükletmezler.</summary>
+        /// <summary>Disables the mode/map rows while a match is set up (§10.7). Duration/limit stay
+        /// enabled — they are next-match parameters and load no scene.</summary>
         private void ApplySelectionLock()
         {
             bool open = CanChangeSelection;
 
-            // Liste boşken de pasif: açılıp yalnız "katalog yok" gösteren bir seçici, seçilecek
-            // bir şey varmış gibi görünür. Lobi satırı tek başına da seçilebilir bir şeydir.
+            // Disabled on an empty list too: a dropdown that only shows "no catalog" looks like
+            // there is something to pick. The lobby row alone still counts as pickable.
             SetInteractable(_modeDropdown, open && _modes.Count > 0);
             SetInteractable(_mapDropdown, open && (_maps.Count > 0 || HasLobbyRow));
 
@@ -1572,9 +1434,9 @@ namespace VortexArena.App.Admin
             SetCaptionColor(_mapDropdown, valueColor);
         }
 
-        /// <summary>Sekme çubuğunu ve sayfaları etkin sekmeye göre boyar/açar — kalibre modu
-        /// düğmeleriyle aynı dil (zemin <see cref="PaintButtonBackground"/>'dan gelir). Diziler
-        /// prefabta eksik bağlanmış olabilir; hepsi null-güvenli okunur.</summary>
+        /// <summary>Paints the tab bar and shows the active page — same language as the
+        /// calibration-mode buttons (background via <see cref="PaintButtonBackground"/>). The arrays
+        /// may be under-bound in the prefab, so all reads are null-safe.</summary>
         private void ApplyTabs()
         {
             var active = (int)_tab;
@@ -1601,7 +1463,7 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Düğme ve seçici için ortak (<see cref="Selectable"/> ikisinin de tabanı).</summary>
+        /// <summary>Shared by buttons and dropdowns (<see cref="Selectable"/> is the base of both).</summary>
         private static void SetInteractable(Selectable selectable, bool value)
         {
             if (selectable != null)
@@ -1610,9 +1472,8 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Seçicinin başlık metnini soldurur. <see cref="Selectable"/>'ın kendi
-        /// <c>disabledColor</c>'ı yalnız zemini tintler — metin de sönmezse kilitli satır
-        /// açık görünmeye devam eder.</summary>
+        /// <summary>Dims a dropdown's caption. <see cref="Selectable"/>'s own <c>disabledColor</c>
+        /// only tints the background, so without this a locked row still looks enabled.</summary>
         private static void SetCaptionColor(TMP_Dropdown dropdown, Color color)
         {
             if (dropdown != null && dropdown.captionText != null)
