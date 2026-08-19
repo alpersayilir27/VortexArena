@@ -35,9 +35,16 @@ namespace VortexArena.Core.Combat
     /// <para>
     /// ⚠️ Bu objenin <b>transformu KUMANDA (anchor) çerçevesidir</b> — <c>OVRCameraRig</c> el
     /// anchor'ının silah üstündeki yeri; kayda giren şey bu kökün KONUMUDUR (<see cref="ItemGripPose"/>:
-    /// dönüş yok, silah oyunda her zaman kumandayla hizalıdır — kök de silahla hizalı tutulur, yalnız
-    /// taşınır). ISDK hayalet eli ve kumanda modeli bu kökün ÇOCUKLARIDIR (<see cref="Puppet"/>);
-    /// kayda giren şey kökün konumudur, çocukların değil.
+    /// anchor kaydının dönüşü yok, silah oyunda her zaman kumandayla hizalıdır — kök de silahla hizalı
+    /// tutulur, yalnız taşınır). ISDK hayalet eli ve kumanda modeli bu kökün ÇOCUKLARIDIR
+    /// (<see cref="Puppet"/>).
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Hayalet elin kendi yerel pozu da kayda girer</b> (<c>ItemGripPose.Wrist</c>): elin
+    /// kumandanın üstünde nerede ve hangi AÇIDA duracağı silah ve el başına yazılır — kimi kabza
+    /// yandan, kimi alttan tutuluyor. Kumanda modeli bunun dışındadır ve kilitlidir (kimlik pozunda
+    /// durur, hizanın referansıdır). Eli çevirmek silahın duruşunu ETKİLEMEZ: silahın yerini kök,
+    /// elin yerini el söyler.
     /// </para>
     /// </summary>
     [DisallowMultipleComponent]
@@ -56,10 +63,11 @@ namespace VortexArena.Core.Combat
         // puppet referansı kaybolur ve parmak eklemleri artık bulunamazdı.
         [SerializeField] private HandPuppet _puppet;
 
-        // ⚠️ Hayalet elin köke (kumandaya) göre pozu BURADA SAKLANMAZ: tek kaynağı
-        // ItemGripAuthority.ResolveAnchorToWrist'tir ve stüdyo eli her tazelediğinde oradan okur.
-        // Kopyası burada dursaydı, ofsetin tanımı değiştiğinde tezgâhta duran eller eski değeri
-        // taşımaya devam ederdi (obje DontSave'dir ama domain reload'ı yaşar).
+        // ⚠️ Hayalet elin köke (kumandaya) göre pozu BURADA SAKLANMAZ: o poz hayalet elin KENDİ
+        // transformunda yaşar (kullanıcı onu Scene View'da taşıyıp çeviriyor) ve Kaydet oradan
+        // okunuyor — parmaklarla birebir aynı gerekçe. Buraya bir kopyası konsaydı tezgâhta görülen
+        // el ile kaydedilen el sessizce ayrışırdı. El ilk kurulduğunda nereye oturacağını kayıt
+        // (ItemGripPose.Wrist), kayıt yoksa ItemGripAuthority.ResolveAnchorToWrist söyler.
 
         public GripSocketKind Kind => _kind;
         public bool RightHand => _rightHand;

@@ -6,15 +6,24 @@ namespace VortexArena.Core.Combat
     /// <summary>
     /// Bir kavrama kaydı: elin <b>KUMANDA ANCHOR'ININ</b> (<c>OVRCameraRig.left/rightHandAnchor</c> —
     /// telde giden el pozunun ta kendisi) eşyaya göre yerel <b>KONUMU</b> + o el için <b>bu silaha
-    /// özel riglenmiş parmak duruşu</b>. Kavramanın tek yazılı kaynağı budur ve tanımın
-    /// (<see cref="ItemDefinition"/>) içinde yaşar — prefabda kavrama düğümü YOKTUR.
+    /// özel riglenmiş parmak duruşu</b> + <b>el modelinin kumanda üstündeki yerleşimi</b>. Kavramanın
+    /// tek yazılı kaynağı budur ve tanımın (<see cref="ItemDefinition"/>) içinde yaşar — prefabda
+    /// kavrama düğümü YOKTUR.
     /// <para>
-    /// ⚠️ <b>DÖNÜŞ YOKTUR ve eklenmez.</b> Eşyanın dönüşü her zaman ana kumandanın dönüşüdür
-    /// (<see cref="ItemGripSolver"/>): kayıt yalnız "kumanda eşyanın NERESİNDE durur" der. Kayıt bir
-    /// dönüş taşısaydı stüdyoda kökü çeviren (ya da yanlış eksende çizilen bir hayalet eli düzeltmeye
-    /// çalışan) herkes oyunda silahı kumandadan saptırırdı — sahada belirtisi "el konumuna göre silah
-    /// bozuk geliyor"dur ve teşhisi pahalıdır. Ön kabzada da aynı: ikinci elin kumandası eşyayla
-    /// hizalı sayılır, sentetik bilek onun anchor→bilek deltası kadar ötesine kilitlenir.
+    /// ⚠️ <b>ANCHOR kaydının (<see cref="position"/>) DÖNÜŞÜ YOKTUR ve eklenmez.</b> Eşyanın dönüşü
+    /// her zaman ana kumandanın dönüşüdür (<see cref="ItemGripSolver"/>): o alan yalnız "kumanda
+    /// eşyanın NERESİNDE durur" der. Bir dönüş taşısaydı stüdyoda kökü çeviren herkes oyunda silahı
+    /// kumandadan saptırırdı — sahada belirtisi "el konumuna göre silah bozuk geliyor"dur ve teşhisi
+    /// pahalıdır. Ön kabzada da aynı: ikinci elin kumandası eşyayla hizalı sayılır, sentetik bilek
+    /// onun anchor→bilek deltası kadar ötesine kilitlenir.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Bilek dönüşü (<see cref="wristRotation"/>) bunun İSTİSNASI DEĞİL, BAŞKA BİR ŞEYİDİR:</b>
+    /// eşyanın nereye gideceğini değil, <b>el modelinin kumandanın üstünde nasıl duracağını</b>
+    /// söyler. İkisi bilerek ayrı: silah her zaman kumandayla hizalı kalır, el ise silaha göre yan
+    /// (ya da alttan) durabilir — çoğu kabza ile ön kabza aynı eli aynı açıyla kabul etmiyor. Bu
+    /// alanları değiştirmek eşyanın pozunu HİÇBİR ŞEKİLDE etkilemez; okuyanı tek bir yerdir
+    /// (<c>ItemGripAuthority.ResolveAnchorToWrist</c>).
     /// </para>
     /// <para>
     /// <b>Kayıt editörde, stüdyoda yazılır</b> (kumanda kökü silahın kabzasına oturtulur), gözlükle
@@ -52,6 +61,22 @@ namespace VortexArena.Core.Combat
                  "(el boşta duruşunda kalır).")]
         public HandJointRotation[] fingerJoints;
 
+        // ⚠️ Bileğin de ayrı bir "yazıldı" bayrağı var ve ZORUNLU: bu alanlar kavrama kaydından SONRA
+        // eklendi, yani diskteki eski kayıtlarda anahtarları hiç yok ve wristRotation (0,0,0,0) olarak
+        // deserialize ediliyor — geçersiz bir quaternion. Bayrak düşükken okuma yolu paylaşılan
+        // varsayılan ofsete düşer (HandPoseLibrary.AnchorToWrist), yani eski silahlar bu alan
+        // yazılana kadar bugünkü ellerini aynen korur.
+        [Tooltip("El modelinin bu slottaki yerleşimi stüdyoda yazıldı mı. false = yazılmamış " +
+                 "(paylaşılan varsayılan ofset kullanılır).")]
+        public bool wristAuthored;
+
+        [Tooltip("El modelinin (ISDK bileğinin) KUMANDA ANCHOR'ına göre yerel konumu (metre).")]
+        public Vector3 wristPosition;
+
+        [Tooltip("El modelinin KUMANDA ANCHOR'ına göre yerel dönüşü — elin silaha göre yan/alttan " +
+                 "durmasını bu taşır. Eşyanın pozunu ETKİLEMEZ.")]
+        public Quaternion wristRotation;
+
         /// <summary>Bu kayıt yazıldı mı (yazılmamışsa alanları okunmaz).</summary>
         public bool IsAuthored => authored;
 
@@ -59,19 +84,36 @@ namespace VortexArena.Core.Combat
         public bool HasFingers => fingerJoints != null && fingerJoints.Length > 0;
 
         /// <summary>
-        /// Stüdyoda yazılmış bir konum + parmak duruşundan kayıt üretir
+        /// El modelinin yerleşimi bu slotta yazılmış mı.
+        /// <para>⚠️ Bayrağın yanında dönüşün <b>geçerliliği</b> de sınanır: bayrak elle
+        /// (asset'te/merge'de) açılmış ama dönüş sıfır kalmış bir kayıt, eli görünmez/bozuk bir
+        /// dönüşle çizerdi — bu sınama onu sessizce varsayılana düşürür.</para>
+        /// </summary>
+        public bool HasWrist =>
+            wristAuthored && Quaternion.Dot(wristRotation, wristRotation) > 0.0001f;
+
+        /// <summary>Yazılmış el yerleşimi (yalnız <see cref="HasWrist"/> iken anlamlı).</summary>
+        public Pose Wrist => new Pose(wristPosition, wristRotation);
+
+        /// <summary>
+        /// Stüdyoda yazılmış bir konum + el yerleşimi + parmak duruşundan kayıt üretir
         /// (<see cref="authored"/> = <c>true</c>).
         /// </summary>
         /// <param name="anchorInItem">Kumanda anchor'ının EŞYAYA göre yerel konumu — metre, ölçeksiz
         /// (bkz. sınıf uyarısı).</param>
+        /// <param name="wristInAnchor">El modelinin kumanda anchor'ına göre yerel pozu.</param>
         /// <param name="fingerJoints">O slotta riglenmiş parmak eklemleri (boş olabilir).</param>
-        public static ItemGripPose From(in Vector3 anchorInItem, HandJointRotation[] fingerJoints)
+        public static ItemGripPose From(in Vector3 anchorInItem, in Pose wristInAnchor,
+            HandJointRotation[] fingerJoints)
         {
             return new ItemGripPose
             {
                 authored = true,
                 position = anchorInItem,
                 fingerJoints = fingerJoints,
+                wristAuthored = true,
+                wristPosition = wristInAnchor.position,
+                wristRotation = wristInAnchor.rotation,
             };
         }
     }

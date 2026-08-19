@@ -40,9 +40,11 @@ ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`).
    ile hayalet el onun çocuğudur.
 2. Dört el de yazılmalı: ana kabza sağ/sol, ön kabza sağ/sol. Eksik el öteki elin kaydına düşer ve
    o el silahı yanlış tutar; **Karşı Ele Aynala** yalnız başlangıçtır.
-3. Her elin parmaklarını o silaha göre rigle: penceredeki parmak listesinden eklemi seç, Scene
+3. Her elin **modelini** o kumandanın üstüne oturt (*El Modeli* düğmesi → taşı ve **çevir**): kimi
+   kabza yandan, kimi alttan tutuluyor. Silahın duruşu bundan etkilenmez.
+4. Her elin parmaklarını o silaha göre rigle: penceredeki parmak listesinden eklemi seç, Scene
    View'da çevir (metakarpallar listede yoktur ve riglenmez).
-4. **Kaydet** → dördü `WD_*.asset`'e iner; silah kiti kendiliğinden eşitlenir (eller tezgâhtan
+5. **Kaydet** → dördü `WD_*.asset`'e iner; silah kiti kendiliğinden eşitlenir (eller tezgâhtan
    kalkarsa *Elleri Oluştur* kayıttan aynı yere getirir).
 
 Kapsam: `WeaponKitBuilder` tablosundaki **tüm** `WPN_*`'lar; hangilerinin eksik olduğunu
@@ -53,8 +55,9 @@ silah kiti koşusunun sonundaki uyarı listeler.
 ## 3. Doğrulama (başlıkta + iki uçta)
 
 - [ ] Silah ele geldiğinde ana kavrama noktası avucun ortasında; el döndükçe kaymıyor.
-- [ ] Stüdyoda kök çevrilmiş olsa bile silah tek elde kumandayla hizalı geliyor (kayıt dönüş
-      taşımaz). Ana elin bileği kumandayla serbestçe dönüyor, kilitlenmiyor.
+- [ ] Stüdyoda kumanda kökü çevrilmiş olsa bile silah tek elde kumandayla hizalı geliyor (anchor
+      kaydı dönüş taşımaz); buna karşılık **el modelini** çevirmek yalnız eli çeviriyor, silahı
+      değil.
 - [ ] Stüdyoda **oluştur → hiçbir şeye dokunma → Kaydet** kayıtlı değeri değiştirmiyor (kimlik
       testi).
 - [ ] Boş elin kumandası ön kabzaya yaklaşınca soket küresi (`VA_GripSocket`, 20 cm çap, açık mavi
@@ -76,7 +79,10 @@ silah kiti koşusunun sonundaki uyarı listeler.
 - [ ] **Parmaklar donanımdan OYNAMIYOR:** tetik/kabza basılınca ya da parmak kumandaya değince
       hiçbir parmak kıpırdamıyor; boş elde parmaklar boşta duruşunda, silahı alınca el o slot için
       riglenmiş duruşa yumuşakça kapanıyor (~0.15 s), bırakınca geri açılıyor.
-- [ ] **Tezgâh = gözlük:** stüdyoda riglediğin duruş başlıkta birebir aynı görünüyor (kemik kemik).
+- [ ] **Tezgâh = gözlük:** stüdyoda yerleştirdiğin el ve riglediğin duruş başlıkta birebir aynı
+      görünüyor (elin kumandaya göre yeri/açısı + kemik kemik parmaklar).
+- [ ] **Yerleşimi yazılmamış silah bugünkü elini koruyor:** el yerleşimi hiç yazılmamış bir `WD_*`
+      ile oynayınca el eskisi gibi duruyor (paylaşılan varsayılana düşüyor, konsola uyarı gitmiyor).
 - [ ] Uzak avatarın parmakları o slotun duruşuna yakın çiziliyor (ön kabzayı saran el uzakta da
       sarılı) — uzakta ölçü kemik kemik değil parmak başına kapanma oranıdır.
 - [ ] İkinci admin ekranında **uzak** oyuncunun silahının duruşu sapmıyor (iki uç aynı kaydı okuyup

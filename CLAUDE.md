@@ -287,7 +287,9 @@ Proje **Input System-only** — `StandaloneInputModule` kullanılmaz.
   ⚠️ **`Grabbable._throwWhenUnselected` GERİ AÇILMAZ.**
 - ⚠️ **Kavrama için ikinci bir işaretçi/alan AÇILMAZ** (prefaba grip düğümü, `Weapon`'a ikinci
   `Transform`, Scene View gizmo'su): kayıt yalnız `WD_*`'a yazılır, prefaba HİÇBİR ŞEY yazılmaz.
-  ⚠️ Kayıt **DÖNÜŞ TAŞIMAZ** ve el başınadır; eller prefaba GİRMEZ.
+  ⚠️ Kaydın **ANCHOR yarısı DÖNÜŞ TAŞIMAZ** (silah her zaman kumandayla hizalı) — kaydın el yarısı
+  (`ItemGripPose.wrist*`: el modelinin kumanda üstündeki konumu + **dönüşü**) bunun istisnası değil,
+  ayrı bir şeydir ve silahın pozuna KARIŞMAZ. Kayıt el başınadır; eller prefaba GİRMEZ.
   ⚠️ **Parmak duruşu SİLAH BAŞINA riglenir** (stüdyoda kemik çevrilir, kayıt `ItemGripPose`
   `fingerJoints`); slider/sayısal alan YOKTUR ve **hiçbir zaman donanımdan sürülmez**. ⚠️ Ortak
   "sıkma/kabza" preset tablosu GERİ GELMEZ — paylaşılan tek duruş boş elinkidir
@@ -322,7 +324,7 @@ Ne yaptıklarının ayrıntısı `Docs/Sistem-Ozeti.md` §4'te.
 | `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → konveks olmayan/trigger/collider'sız ve **görünen yüzeyden şişkin** collider'ları raporlar. ⚠️ Hiçbir şeyi düzeltmez; sahne kaydedilmeden koştur |
 | `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanları (iki uyarı yazısı + hasar vinyeti). **Tek seferlik**, tüm arenalara birden gider. ⚠️ Yazının yeri/boyu/fontu `HmdOverlayBuilder` sabitlerinden gelir, prefabta elle kaydırılan örnek geri yazılır. ⚠️ Çalıştırılmadıkça yazı/vinyet hiç çizilmez |
 | `… > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırır) |
-| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / gözlüksüz denetlenecek. Akış **prefab kipinde**. ⚠️ Kök YALNIZ TAŞINIR; parmak eklemleri (metakarpal hariç) YALNIZ ÇEVRİLİR — kayıt `WD_*`'a gider, prefaba hiçbir şey yazılmaz. ⚠️ Eller prefaba GİRMEZ. ⚠️ Kaydet parmakları kemiklerden okur ve silah kitini kendisi eşitler — ayrıca *Yalnız Senkronize Et*'e basma; elin Inspector'ına kaydet düğmesi ve eklem seçicisi geri eklenmez (seçici pencerededir) |
+| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / gözlüksüz denetlenecek. Akış **prefab kipinde**. ⚠️ Kumanda kökü YALNIZ TAŞINIR; el modeli (`Hand`) taşınır **ve çevrilir** (silahın duruşunu değiştirmez); parmak eklemleri (metakarpal hariç) YALNIZ ÇEVRİLİR — kayıt `WD_*`'a gider, prefaba hiçbir şey yazılmaz. ⚠️ Eller prefaba GİRMEZ. ⚠️ Kaydet el yerleşimini ve parmakları tezgâhtan okur, silah kitini kendisi eşitler — ayrıca *Yalnız Senkronize Et*'e basma; elin Inspector'ına kaydet düğmesi ve eklem seçicisi geri eklenmez (seçici pencerededir) |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takım gövdesi (model örneği + `SkeletonPoseMirror` + `redBodyRoot`; ölçüler bind pozundan hesaplanır, koda yazılmaz). İdempotent; model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak |
 | `… > Audio > Mod Sesleri` | Moda/haritaya göre değişen duyuru sesi → `ModeAudioRegistry.asset`'i seçer. ⚠️ Düzenleme yeri **Inspector**'dır; mod ve harita orada **katalogdan seçilir** |
 | `… > Development > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox**. ⚠️ Silah kavraması bu pencerenin işi DEĞİLDİR |

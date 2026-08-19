@@ -18,8 +18,9 @@ namespace VortexArena.Core.Editor
     /// per attempt.
     /// <para>Flow: open a <c>WPN_*</c> prefab in PREFAB MODE → the window picks up the stage →
     /// <b>Elleri Oluştur</b> → controller roots appear (controller model + ghost hand beneath) → MOVE
-    /// the roots onto the grips, then RIG the fingers per weapon (pick a joint in the window's finger
-    /// list, rotate it in Scene View) → optionally <b>Karşı Ele Aynala</b> → <b>Kaydet</b>.</para>
+    /// the roots onto the grips, SEAT the hand model on its controller (move + rotate — the weapon
+    /// does not follow), then RIG the fingers per weapon (pick a joint in the window's finger list,
+    /// rotate it in Scene View) → optionally <b>Karşı Ele Aynala</b> → <b>Kaydet</b>.</para>
     /// <para>⚠️ There are no finger PRESETS: the pose is authored bone by bone for THIS weapon,
     /// because a shared "trigger/wrap" table cannot fit grips whose geometry differs — on some
     /// weapons it left the fingers inside the body. The record holds the joints
@@ -29,12 +30,17 @@ namespace VortexArena.Core.Editor
     /// root's POSITION relative to the item (<see cref="ItemGripPose"/>: anchor space, no rotation).
     /// In game the weapon is ALWAYS aligned with the controller, so the roots are kept aligned
     /// (<see cref="KeepRootsAligned"/>) and only MOVED.</para>
-    /// <para>Two LOCKED visual children hang under the root: the Quest 3 controller model (identity
-    /// pose — exactly how it sits under the anchor in game, so it is the real alignment reference)
-    /// and the ISDK ghost hand, seated at the anchor→wrist offset
-    /// (<see cref="ItemGripAuthority.ResolveAnchorToWrist"/> — <see cref="ApplyGhostOffset"/>).
-    /// ⚠️ That offset is the SAME value the game locks the real wrist to, which is what makes the
-    /// bench and the headset show the same hand; the studio must not compute one of its own.</para>
+    /// <para>Two children hang under the root. The Quest 3 controller model is LOCKED at identity —
+    /// exactly how it sits under the anchor in game, so it is the alignment reference. The ISDK ghost
+    /// hand is AUTHORABLE: its local pose is where the hand model sits on that controller, it is
+    /// saved per weapon per hand (<see cref="CaptureWrist"/>), and a slot that has none falls back to
+    /// the shared definition (<see cref="ItemGripAuthority.ResolveAnchorToWrist(bool)"/> —
+    /// <see cref="ApplyGhostOffset"/>). ⚠️ Whatever ends up there is the SAME value the game locks the
+    /// real wrist to, which is what makes the bench and the headset show the same hand; the studio
+    /// must not compute one of its own.</para>
+    /// <para>⚠️ Moving/rotating the ghost NEVER moves the weapon — that is the whole point of keeping
+    /// it a separate child: some weapons are held from the side, some from below, while the weapon's
+    /// own placement on the controller must stay put.</para>
     /// <para>⚠️ If the record carried a rotation, anyone rotating the root would skew the weapon off
     /// the controller in game. The front grip carries none either: the second hand's controller is
     /// taken as weapon-aligned and the synthetic wrist locks its delta beyond it.</para>
@@ -186,10 +192,13 @@ namespace VortexArena.Core.Editor
         /// <summary>Moves a selection that landed on a hand's CHILD (ghost mesh, controller model) up
         /// to the controller root — the only transform whose POSE gets recorded (rationale in
         /// <see cref="InstallCleanupHooks"/>).
-        /// <para>⚠️ Drivable finger joints are the ONE exception and the selection stays on them: the
-        /// finger rig is authored by rotating exactly those bones, and their rotations are read back
-        /// at save time (<see cref="CaptureFingers"/>). Everything else under the root is still
-        /// bounced, so "dragged thing == recorded thing" holds for the placement too.</para></summary>
+        /// <para>⚠️ Two things under the root are AUTHORED and the selection stays on them: the
+        /// riggable finger joints (rotated bone by bone) and the ghost hand's own root — the hand
+        /// model's seat on the controller, which differs per grip (some weapons are held from the
+        /// side, some from below). Both are read back at save time
+        /// (<see cref="CaptureFingers"/> / <see cref="CaptureWrist"/>). Everything else — the
+        /// controller model, the ghost's meshes — is still bounced, so "dragged thing == recorded
+        /// thing" holds for the placement too.</para></summary>
         private static void RedirectSelectionToHandRoot()
         {
             GameObject active = Selection.activeGameObject;
@@ -199,7 +208,7 @@ namespace VortexArena.Core.Editor
             }
 
             var owner = active.GetComponentInParent<GripHandAuthoring>();
-            if (owner == null || IsDrivableJoint(owner, active.transform))
+            if (owner == null || IsAuthoredNode(owner, active.transform))
             {
                 return;
             }
@@ -207,9 +216,16 @@ namespace VortexArena.Core.Editor
             Selection.activeGameObject = owner.gameObject;
         }
 
-        /// <summary>Is this transform one of the hand's riggable finger joints.</summary>
-        private static bool IsDrivableJoint(GripHandAuthoring hand, Transform candidate)
+        /// <summary>Is this transform one of the hand's authored nodes — a riggable finger joint or
+        /// the ghost hand's root.</summary>
+        private static bool IsAuthoredNode(GripHandAuthoring hand, Transform candidate)
         {
+            GameObject ghost = GhostOf(hand);
+            if (ghost != null && ghost.transform == candidate)
+            {
+                return true;
+            }
+
             List<HandJointMap> joints = hand.DrivableJoints();
             for (int i = 0; i < joints.Count; i++)
             {
@@ -356,8 +372,9 @@ namespace VortexArena.Core.Editor
 
             EditorGUILayout.HelpBox(
                 "Akış: prefabı prefab kipinde aç → Elleri Oluştur → kumanda köklerini kabzalara oturt " +
-                "(hayalet el köke bağlı çizilir) → parmakları bu silaha göre rigle (eklemi listeden " +
-                "seç, Scene View'da çevir) → (istersen) Aynala → Kaydet.",
+                "→ el modelini kumandanın üstünde yerleştir (taşı/çevir — silah kımıldamaz) → " +
+                "parmakları bu silaha göre rigle (eklemi listeden seç, Scene View'da çevir) → " +
+                "(istersen) Aynala → Kaydet.",
                 MessageType.None);
 
             DrawGhostSourceSection();
@@ -456,13 +473,16 @@ namespace VortexArena.Core.Editor
                 "Yazan tek düğme Kaydet'tir; kayıttan hemen sonra silah kitini de kendisi eşitler " +
                 "(Configure All Build Elements'a gitmene gerek yok). Kit prefabı yeniden yazdığı " +
                 "için tezgâhtaki eller kalkabilir — kayıt diskte, Elleri Oluştur onları aynı yere " +
-                "geri getirir. Sürüklediğin kök KUMANDADIR — altındaki kumanda modeli " +
-                "oyunda izlenen kumandanın ta kendisidir. Silah oyunda HER ZAMAN kumandayla hizalıdır: " +
-                "kökü yalnız TAŞI (döndürmek bir şey değiştirmez, kök silahla hizalı tutulur), kumandayı " +
-                "kabzada gerçekte durduğu yere koy. Ön kabzada el silaha yapışır, silah ikinci ele göre " +
-                "dönmez. Hayalet elin gövdesi ve kumanda modeli kilitlidir (taşınmaz) — konum kökten " +
-                "okunur. PARMAKLAR bu silaha özel riglenir: eli seç, listeden eklemi seç, Scene View'da " +
-                "çevir; Kaydet parmakları kemiklerden okur.",
+                "geri getirir. İKİ ŞEY AYRI YAZILIR: (1) KUMANDA kökü silahın kumandaya göre yerini " +
+                "belirler — silah oyunda HER ZAMAN kumandayla hizalı olduğu için kökü yalnız TAŞI " +
+                "(döndürmek bir şey değiştirmez, kök silahla hizalı tutulur), kumandayı kabzada " +
+                "gerçekte durduğu yere koy. (2) EL MODELİ kumandanın üstünde nerede ve hangi açıda " +
+                "duracağını belirler — taşı ve ÇEVİR (silah kımıldamaz); silah başına ve el başına " +
+                "yazılır, çünkü kimi kabza yandan kimi alttan tutulur. Kumanda modeli kilitlidir " +
+                "(taşınmaz): oyunda izlenen kumandanın ta kendisidir, hizanın referansıdır. Ön kabzada " +
+                "el silaha yapışır, silah ikinci ele göre dönmez. PARMAKLAR da bu silaha özel " +
+                "riglenir: eli seç, listeden eklemi seç, Scene View'da çevir; Kaydet hepsini bench'ten " +
+                "okur.",
                 MessageType.None);
 
         }
@@ -500,10 +520,27 @@ namespace VortexArena.Core.Editor
                         $"{hand.Kind} · {(hand.RightHand ? "sağ" : "sol")}",
                         GUILayout.Width(140f));
 
-                    if (GUILayout.Button("Seç"))
+                    // Two selectable things, two different answers: the controller root places the
+                    // WEAPON, the hand model places the HAND on that controller. The buttons exist
+                    // because a click in Scene View always lands on the root (the meshes bounce
+                    // there), so the hand model would otherwise be reachable only via the hierarchy.
+                    if (GUILayout.Button(new GUIContent("Kumanda",
+                            "Kumanda kökü — silahın kumandaya göre yeri buradan yazılır (yalnız taşı).")))
                     {
                         Selection.activeGameObject = hand.gameObject;
                         SceneView.lastActiveSceneView?.FrameSelected();
+                    }
+
+                    GameObject ghost = GhostOf(hand);
+                    using (new EditorGUI.DisabledScope(ghost == null))
+                    {
+                        if (GUILayout.Button(new GUIContent("El Modeli",
+                                "Hayalet el — elin kumanda üstündeki yeri ve AÇISI (taşı + çevir). " +
+                                "Silahın duruşunu değiştirmez.")))
+                        {
+                            Selection.activeGameObject = ghost;
+                            SceneView.lastActiveSceneView?.FrameSelected();
+                        }
                     }
                 }
 
@@ -546,11 +583,24 @@ namespace VortexArena.Core.Editor
                     DrawFingerRow(FINGER_LABELS[finger], fingers[finger], drivable);
                 }
 
-                if (GUILayout.Button("Parmakları Sıfırla (boş el duruşu)"))
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    // null = kayıt yok → boş elin duruşu.
-                    hand.ApplyPose(null);
-                    SceneView.RepaintAll();
+                    if (GUILayout.Button(new GUIContent("Parmakları Sıfırla",
+                            "Parmakları boş elin duruşuna döndürür.")))
+                    {
+                        // null = kayıt yok → boş elin duruşu.
+                        hand.ApplyPose(null);
+                        SceneView.RepaintAll();
+                    }
+
+                    if (GUILayout.Button(new GUIContent("El Yerleşimini Sıfırla",
+                            "El modelini kumandanın üstündeki paylaşılan varsayılan yerine " +
+                            "döndürür (silahın duruşuna dokunmaz).")))
+                    {
+                        // default kayıt = "yerleşim yazılmamış" → paylaşılan tanım.
+                        ApplyGhostOffset(hand, default);
+                        SceneView.RepaintAll();
+                    }
                 }
             }
         }
@@ -652,12 +702,26 @@ namespace VortexArena.Core.Editor
                 EditorGUILayout.LabelField(
                     $"{hand.Kind} · {(hand.RightHand ? "sağ" : "sol")}",
                     $"{Format(local)}  {joints} eklem  ({state})");
+
+                // Second line: the HAND's own seat on that controller — the half that does not move
+                // the weapon. Shown separately so "silah kaydı" and "el kaydı" never read as one
+                // number.
+                Pose wrist = CaptureWrist(hand);
+                EditorGUILayout.LabelField(
+                    " ",
+                    $"el: {Format(wrist.position)} · {FormatAngles(wrist.rotation.eulerAngles)}",
+                    EditorStyles.miniLabel);
             }
         }
 
         private static string Format(Vector3 value)
         {
             return $"({value.x:0.####}, {value.y:0.####}, {value.z:0.####})";
+        }
+
+        private static string FormatAngles(Vector3 euler)
+        {
+            return $"({euler.x:0.#}°, {euler.y:0.#}°, {euler.z:0.#}°)";
         }
 
         // ----------------------------------------------------------------- stage / hands
@@ -805,10 +869,11 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>Builds the hand for one grip point (returns the existing one if present).
-        /// <para>⚠️ The root is the CONTROLLER frame and the ghost hand is its CHILD: what gets
-        /// recorded is the root's pose (<see cref="AnchorInItem"/>), and the ghost hangs off it by
-        /// <see cref="ItemGripAuthority.ResolveAnchorToWrist"/>. Dragged thing == recorded thing; a
-        /// dragged child is redirected to the root
+        /// <para>⚠️ The root is the CONTROLLER frame and the ghost hand is its CHILD; BOTH are part of
+        /// the record and mean different things: the root's item-local position decides where the
+        /// WEAPON sits on the controller (<see cref="AnchorInItem"/>), the ghost's local pose decides
+        /// where the HAND MODEL sits on that controller (<see cref="CaptureWrist"/>). Every other
+        /// child is a pure visual and a click on it is redirected to the root
         /// (<see cref="RedirectSelectionToHandRoot"/>).</para>
         /// <para>⚠️ Local scale is pinned to 1: the hand is a scene root, not under the prefab, so
         /// the weapon's own 0.8 scale never leaks into it — otherwise "does the palm wrap the grip"
@@ -820,18 +885,14 @@ namespace VortexArena.Core.Editor
             if (existing != null)
             {
                 // A hand hidden by Unity's save side effect returns to the hierarchy here, so
-                // "Elleri Oluştur" also revives lost hands. The visual children are re-seated too: a
-                // hand-dragged child never enters the record but misleads the user. The ghost offset
-                // is read fresh from the shared definition, so a hand built under an older rule
-                // heals itself instead of keeping that rule's pose until the bench is cleared.
-                ApplyGhostOffset(existing);
+                // "Elleri Oluştur" also revives lost hands.
                 EnsureControllerModel(existing.gameObject, existing.RightHand);
                 MarkDontSave(existing);
                 HideIsdkComponents(GhostOf(existing));
-                // ⚠️ The finger rig is NOT re-applied here: an existing hand may be mid-rig, and
-                // resetting its bones to the on-disk pose would read as "I rig and it keeps
-                // snapping back". A hand that has left the bench comes back through the branch
-                // below, which does apply the record.
+                // ⚠️ Neither the finger rig NOR the ghost's seat is re-applied here: an existing hand
+                // may be mid-edit, and resetting it to the on-disk pose would read as "I adjust it and
+                // it keeps snapping back". A hand that has left the bench comes back through the
+                // branch below, which does apply the record.
                 return existing;
             }
 
@@ -868,8 +929,8 @@ namespace VortexArena.Core.Editor
                 return null;
             }
 
-            // Ghost hand: child of the root at the shared anchor→wrist offset (ApplyGhostOffset).
-            // Visual only — the record is the ROOT's position, never the ghost's.
+            // Ghost hand: child of the root, seated at this slot's own anchor→wrist offset — or at
+            // the shared definition when the slot has none yet (ApplyGhostOffset).
             HandGhost ghost = Instantiate(prototype, root.transform);
             GameObject handGo = ghost.gameObject;
             handGo.name = GHOST_NAME;
@@ -877,11 +938,11 @@ namespace VortexArena.Core.Editor
 
             HandPuppet puppet = ghost.GetComponent<HandPuppet>();
 
-            authoring.Resolve(puppet, kind, rightHand);
-            ApplyGhostOffset(authoring);
-            EnsureControllerModel(root, rightHand);
-
             ItemGripPose recorded = definition.GetGrip(kind, rightHand);
+
+            authoring.Resolve(puppet, kind, rightHand);
+            ApplyGhostOffset(authoring, recorded);
+            EnsureControllerModel(root, rightHand);
 
             // The root is placed directly, not via the puppet's SetRootPose (that writes the ghost's
             // own transform, but the ghost is a child with a fixed local offset).
@@ -910,15 +971,32 @@ namespace VortexArena.Core.Editor
             return ghost != null ? ghost.gameObject : null;
         }
 
-        /// <summary>Seats the ghost hand under the controller root at the SAME anchor→wrist offset the
-        /// game locks the real wrist to (<see cref="ItemGripAuthority.ResolveAnchorToWrist"/>), and
-        /// restores it if it was dragged by hand.
+        /// <summary>Seats the ghost hand under the controller root at the offset the game will lock
+        /// the real wrist to: the record's own seat if this slot has one, otherwise the shared
+        /// definition (<c>ItemGripAuthority.ResolveAnchorToWrist</c>).
         /// <para>⚠️ <b>The bench must not compute an offset of its own.</b> Bench and game agreeing is
         /// not a coincidence to be maintained by two matching formulas — it is the single value both
         /// read. The studio used to estimate this itself (an anatomical guess composed from
         /// <c>HandGripConvention.AnchorBasis</c>) and it landed ~70° off around the finger axis, so
-        /// the ghost came out visibly rolled while the controller model beside it was exact.</para></summary>
-        private static void ApplyGhostOffset(GripHandAuthoring hand)
+        /// the ghost came out visibly rolled while the controller model beside it was exact.</para>
+        /// <para>⚠️ Called ONLY while building a hand (and by the explicit reset button) — never on a
+        /// hand already on the bench. The ghost's seat is authored by dragging that very object, so
+        /// re-seating it every tick would read as "I move the hand and it keeps snapping back"; this
+        /// is the same rule the finger rig follows.</para></summary>
+        private static void ApplyGhostOffset(GripHandAuthoring hand, in ItemGripPose recorded)
+        {
+            if (hand == null)
+            {
+                return;
+            }
+
+            SeatGhost(hand, ItemGripAuthority.ResolveAnchorToWrist(recorded, hand.RightHand));
+        }
+
+        /// <summary>Writes a seat straight onto the ghost (the mirror and the reset button reach the
+        /// ghost through here). ⚠️ Scale is pinned to 1: the seat is in metres and a scaled ghost
+        /// would answer "does the palm wrap the grip" at the wrong ratio.</summary>
+        private static void SeatGhost(GripHandAuthoring hand, in Pose offset)
         {
             GameObject ghost = GhostOf(hand);
             if (ghost == null)
@@ -926,10 +1004,26 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            Pose offset = ItemGripAuthority.ResolveAnchorToWrist(hand.RightHand);
             ghost.transform.localPosition = offset.position;
             ghost.transform.localRotation = offset.rotation;
             ghost.transform.localScale = Vector3.one;
+        }
+
+        /// <summary>Reads the hand model's seat on the controller off the bench, in the form the
+        /// record stores (the ghost's LOCAL pose under the controller root).
+        /// <para>⚠️ Local, and the root's scale is pinned to 1, so this is plain metres — the same
+        /// space <c>HandGripPoser</c> composes onto the anchor. Falls back to the shared definition
+        /// when the ghost is missing, so a half-built hand cannot write a zero pose that would draw
+        /// the hand inside the controller.</para></summary>
+        private static Pose CaptureWrist(GripHandAuthoring hand)
+        {
+            GameObject ghost = GhostOf(hand);
+            if (ghost == null)
+            {
+                return ItemGripAuthority.ResolveAnchorToWrist(hand != null && hand.RightHand);
+            }
+
+            return new Pose(ghost.transform.localPosition, ghost.transform.localRotation);
         }
 
         /// <summary>Places the Quest 3 controller model under the root (if missing) at identity: that
@@ -1006,7 +1100,8 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>Local POSITION of the controller root relative to the item — the ONLY way the
-        /// record is computed (<see cref="ItemGripPose"/>: anchor space, no rotation).
+        /// record's ANCHOR half is computed (<see cref="ItemGripPose"/>: anchor space, no rotation;
+        /// the hand half comes from <see cref="CaptureWrist"/>).
         /// <para>⚠️ <see cref="Transform.InverseTransformPoint"/> is NOT used: the record is in
         /// METRES and must not be shrunk by the item's visual scale (0.8 on <c>WPN_*</c> roots). The
         /// recomposition in <see cref="ResolveStartPose"/> mirrors this, keeping both ends on one
@@ -1040,10 +1135,11 @@ namespace VortexArena.Core.Editor
         /// hand part reaches the file on a prefab save; the flag is per GameObject, the root alone
         /// is not enough.
         /// <para>Everything BELOW the root also gets <see cref="HideFlags.NotEditable"/> — EXCEPT the
-        /// riggable finger joints. The ghost mesh and the controller model are visual children while
-        /// the record is the root's pose, so dragging one of THOSE would produce "I saved but nothing
-        /// changed"; the finger bones are the opposite case — they ARE the record's finger half and
-        /// must stay selectable and rotatable.</para></summary>
+        /// two AUTHORED nodes: the ghost hand's root (its seat on the controller) and the riggable
+        /// finger joints. The controller model and the ghost's meshes are pure visuals while the
+        /// record is the root's pose, so dragging one of THOSE would produce "I saved but nothing
+        /// changed"; the ghost root and the finger bones are the opposite case — they ARE the
+        /// record's hand half and must stay selectable, movable and rotatable.</para></summary>
         private static void MarkDontSave(GripHandAuthoring hand)
         {
             if (hand == null)
@@ -1053,6 +1149,13 @@ namespace VortexArena.Core.Editor
 
             GameObject root = hand.gameObject;
             var editable = new HashSet<Transform>();
+
+            GameObject ghost = GhostOf(hand);
+            if (ghost != null)
+            {
+                editable.Add(ghost.transform);
+            }
+
             List<HandJointMap> joints = hand.DrivableJoints();
             for (int i = 0; i < joints.Count; i++)
             {
@@ -1107,12 +1210,16 @@ namespace VortexArena.Core.Editor
 
         /// <summary>Mirrors a hand's placement to the OPPOSITE hand (across the item-space YZ plane),
         /// building it if missing. The finger rig is COPIED joint by joint: ISDK's left and right
-        /// ghosts are mirror duplicates of one skeleton, so the same local rotations produce the
-        /// mirrored pose — which is why this is a copy and not a negation.
+        /// ghosts share one joint convention, so the same local rotations produce the mirrored pose —
+        /// which is why that half is a copy and not a negation.
+        /// <para>The hand model's SEAT is genuinely reflected, because it lives in the controller
+        /// root's frame and that frame is weapon-aligned on both hands:
+        /// <c>p=(x,y,z) → (−x,y,z)</c> and <c>q=(x,y,z,w) → (x,−y,−z,w)</c> (reflection across the
+        /// plane whose normal is X). Identity maps to identity, so a hand that was never re-seated
+        /// mirrors to the same default.</para>
         /// <para>⚠️ ISDK's <c>MirrorHandGrabPose</c> is NOT used: with no surface to mirror against
         /// (a <c>Grabbable</c> collider) it applies an arbitrary "best guess" rotation, and this
-        /// bench has no surface at all. The maths here is one verifiable line:
-        /// <c>p=(x,y,z) → (−x,y,z)</c>, no rotation, since the root is already weapon-aligned.</para>
+        /// bench has no surface at all. The maths here is two verifiable lines.</para>
         /// <para>⚠️ Mirroring is a STARTING POINT, not the final word: a grip is roughly symmetric
         /// in the sagittal plane but trigger, magazine and charging handle are one-sided.</para>
         /// </summary>
@@ -1141,6 +1248,12 @@ namespace VortexArena.Core.Editor
             Vector3 local = AnchorInItem(weaponRoot, source.transform);
             var mirroredPosition = new Vector3(-local.x, local.y, local.z);
 
+            Pose wrist = CaptureWrist(source);
+            var mirroredWrist = new Pose(
+                new Vector3(-wrist.position.x, wrist.position.y, wrist.position.z),
+                new Quaternion(wrist.rotation.x, -wrist.rotation.y, -wrist.rotation.z,
+                    wrist.rotation.w));
+
             GripHandAuthoring opposite = EnsureHand(stage, weaponRoot, definition,
                 source.Kind, !source.RightHand);
             if (opposite == null)
@@ -1152,6 +1265,7 @@ namespace VortexArena.Core.Editor
                 weaponRoot.position + weaponRoot.rotation * mirroredPosition,
                 weaponRoot.rotation);
             opposite.transform.localScale = Vector3.one;
+            SeatGhost(opposite, mirroredWrist);
             opposite.ApplyPose(CaptureFingers(source));
 
             Selection.activeGameObject = opposite.gameObject;
@@ -1163,11 +1277,12 @@ namespace VortexArena.Core.Editor
         // ----------------------------------------------------------------------- saving
 
         /// <summary>Turns the bench placement into persistent data: for every live hand, the
-        /// controller root's item-local position + the ghost's riggable finger joints →
-        /// <c>WD_*.asset</c>.
-        /// <para>⚠️ This is the ONLY writer of the finger rig — the hand's own Inspector has no save
-        /// button (<see cref="GripHandAuthoringEditor"/>). Whatever the bones look like at this
-        /// moment is what lands on disk, so there is no "which of the two is current" question.</para>
+        /// controller root's item-local position + the ghost hand's seat on that controller + its
+        /// riggable finger joints → <c>WD_*.asset</c>.
+        /// <para>⚠️ This is the ONLY writer of the hand half (seat + finger rig) — the hand's own
+        /// Inspector has no save button (<see cref="GripHandAuthoringEditor"/>). Whatever the bench
+        /// looks like at this moment is what lands on disk, so there is no "which of the two is
+        /// current" question.</para>
         /// <para>⚠️ Nothing is written into the prefab contents and the prefab is not saved: the
         /// record lives only in the definition, and the hands are separate stage-scene roots anyway.</para>
         /// <para>⚠️ Never writes in Play mode: the record goes to disk via <c>AssetDatabase</c> and a
@@ -1199,7 +1314,8 @@ namespace VortexArena.Core.Editor
                 }
 
                 Vector3 local = AnchorInItem(weaponRoot, hand.transform);
-                definition.EditorSetGrip(hand.Kind, hand.RightHand, local, CaptureFingers(hand));
+                definition.EditorSetGrip(hand.Kind, hand.RightHand, local, CaptureWrist(hand),
+                    CaptureFingers(hand));
                 written++;
             }
 

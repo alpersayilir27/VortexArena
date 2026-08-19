@@ -13,12 +13,15 @@ namespace VortexArena.Core.Combat
     /// "doğal" el pozundan gelir:
     /// <list type="bullet">
     /// <item><b>Boş el ve ana el:</b> bilek <b>KUMANDAYA</b> kilitlenir
-    /// (<see cref="ItemGripAuthority.WristFromAnchor"/> — anchor + tanımlı ofset). El kumandanın
-    /// rijit bir parçası gibi davranır; silah da anchor'dan konumlandığı için ikisi tek referanstan
+    /// (<see cref="ItemGripAuthority.WristFromAnchor"/> — anchor + ofset). El kumandanın rijit bir
+    /// parçası gibi davranır; silah da anchor'dan konumlandığı için ikisi tek referanstan
     /// çıkar.</item>
-    /// <item><b>Ön kabza:</b> bilek <b>EŞYAYA</b> kilitlenir (kaydın anchor'ı + aynı ofset) — o el
-    /// silaha yapışır.</item>
+    /// <item><b>Ön kabza:</b> bilek <b>EŞYAYA</b> kilitlenir (kaydın anchor'ı + ofset) — o el silaha
+    /// yapışır.</item>
     /// </list>
+    /// Ofset, kavraması yazılmış slotta <b>o slotun kendi el yerleşimidir</b> (stüdyoda <c>Hand</c>
+    /// modeli taşınıp çevrilerek yazılır: kimi silah yandan, kimi alttan tutulur), yazılmamışta
+    /// paylaşılan tanım. Silahın kumandaya göre yeri bundan ETKİLENMEZ.
     /// Parmaklar boş elde boşta duruşunda (<see cref="HandPoseLibrary.IdleJointRotations"/>), eşya
     /// tutan elde o slot için riglenmiş duruştadır.
     /// </para>
@@ -213,8 +216,10 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// Bir elin bir karelik durumu.
         /// <para>⚠️ <b>İki kilit hedefi ayrışır:</b> ön kabzayı saran elin bileği EŞYAYA kilitlenir
-        /// (el silaha yapışır), geri kalan her durumda KUMANDAYA. İkisi de aynı ofseti kullanır
-        /// (<see cref="ItemGripAuthority"/>), yani el hiçbir durumda "başka bir yerden" gelmez.</para>
+        /// (el silaha yapışır), geri kalan her durumda KUMANDAYA. İkisi de ofseti aynı kapıdan alır
+        /// (<see cref="ItemGripAuthority"/>), yani el hiçbir durumda "başka bir yerden" gelmez —
+        /// ofsetin kendisi slot başına yazılabilir (<see cref="ItemGripPose.Wrist"/>), yazılmamışsa
+        /// paylaşılan tanıma düşer.</para>
         /// <para>Parmaklar da her durumda bizim yazdığımızdır: boş elde boşta duruşu, eşya tutan elde
         /// slotun kendi riglenmiş duruşu — hedef her karede <see cref="ApplyFingers"/>'a verilir,
         /// geçişi o yumuşatır.</para>
@@ -239,15 +244,22 @@ namespace VortexArena.Core.Combat
                 WarnMissingPose(weapon, kind, rightHand);
             }
 
+            // Elin kumanda üstündeki yerleşimi kavramanın PARÇASIDIR: kavraması yazılmış slot kendi
+            // yerleşimini getirir (ön kabzayı yandan saran el ile kabzayı avuçlayan el aynı açıda
+            // duramaz), boş el paylaşılan tanıma düşer.
+            ItemGripPose grip = hasGrip ? definition.GetGrip(kind, rightHand) : default;
+            Pose anchorToWrist = hasGrip
+                ? ItemGripAuthority.ResolveAnchorToWrist(grip, rightHand)
+                : ItemGripAuthority.ResolveAnchorToWrist(rightHand);
+
             if (hasGrip && kind == GripSocketKind.Secondary)
             {
-                LockToSecondaryGrip(synthetic, weapon.transform,
-                    definition.GetGrip(kind, rightHand), rightHand);
+                LockToSecondaryGrip(synthetic, weapon.transform, grip, anchorToWrist);
                 state.WristLocked = true;
             }
             else
             {
-                LockToController(synthetic, hand, rightHand, state);
+                LockToController(synthetic, hand, anchorToWrist, state);
             }
 
             ApplyFingers(state, hasGrip
@@ -271,7 +283,7 @@ namespace VortexArena.Core.Combat
         /// gerekçe <see cref="LockToSecondaryGrip"/>'te.</para>
         /// </summary>
         private static void LockToController(SyntheticHand synthetic, OVRInput.Controller hand,
-            bool rightHand, HandState state)
+            in Pose anchorToWrist, HandState state)
         {
             // Rig keşfinin TEK yolu: ikinci bir arama açmak iki bileşenin farklı karelerde farklı
             // rig bulmasına yol açardı (Scan ile aynı gerekçe).
@@ -283,7 +295,7 @@ namespace VortexArena.Core.Combat
             }
 
             Pose wrist = ItemGripAuthority.WristFromAnchor(
-                rightHand, new Pose(anchor.position, anchor.rotation));
+                new Pose(anchor.position, anchor.rotation), anchorToWrist);
             synthetic.LockWristPose(wrist, 1f, SyntheticHand.WristLockMode.Full, true);
             state.WristLocked = true;
         }
@@ -317,15 +329,18 @@ namespace VortexArena.Core.Combat
         /// sessizce kayar.
         /// </para>
         /// </summary>
-        /// <param name="grip">Kumanda anchor'ının EŞYAYA göre yerel konumu (metre, ölçeksiz).</param>
-        /// <param name="rightHand">Kilitlenen el sağ mı (delta el başına ölçülür).</param>
+        /// <param name="grip">Kavrama kaydı — kumanda anchor'ının EŞYAYA göre yerel konumu (metre,
+        /// ölçeksiz).</param>
+        /// <param name="anchorToWrist">O slotun el yerleşimi (yazılmamışsa paylaşılan tanım).</param>
         private static void LockToSecondaryGrip(SyntheticHand synthetic, Transform item,
-            in ItemGripPose grip, bool rightHand)
+            in ItemGripPose grip, in Pose anchorToWrist)
         {
-            // Kayıt dönüş taşımaz: ön kabzadaki kumanda eşyayla hizalı sayılır.
+            // Anchor kaydı dönüş taşımaz: ön kabzadaki kumanda eşyayla hizalı sayılır. Elin o
+            // kumandanın üstündeki açısı ayrı bir alandır (anchorToWrist) ve tam burada devreye girer:
+            // ön kabza yandan da alttan da tutulabiliyor.
             var anchor = new Pose(item.position + item.rotation * grip.position, item.rotation);
 
-            Pose wrist = ItemGripAuthority.WristFromAnchor(rightHand, anchor);
+            Pose wrist = ItemGripAuthority.WristFromAnchor(anchor, anchorToWrist);
             synthetic.LockWristPose(wrist, 1f, SyntheticHand.WristLockMode.Full, true);
         }
 
