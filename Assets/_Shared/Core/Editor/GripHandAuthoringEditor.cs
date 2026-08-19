@@ -5,8 +5,14 @@ using VortexArena.Core.Combat;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// <see cref="GripHandAuthoring"/>'in Inspector yüzü: parmak duruşu preset'i ve üç düğme
-    /// (aynala / eli kaldır / kaydet).
+    /// <see cref="GripHandAuthoring"/>'in Inspector yüzü: parmak duruşu preset'i ve iki düğme
+    /// (aynala / eli kaldır).
+    /// <para>
+    /// ⚠️ <b>Kaydet düğmesi burada YOKTUR ve geri eklenmez:</b> yazan tek düğme stüdyo
+    /// penceresindedir (<see cref="GripPoseStudio"/>). İkinci bir kaydet düğmesi aynı işi iki
+    /// yerden koştururdu; kayıt artık silah kitini de tetiklediği için (prefab kipi içeriği yeniden
+    /// yüklenir) hangi düğmenin neyi koşturduğu belirsizleşirdi.
+    /// </para>
     /// <para>
     /// ⚠️ <b>Undo kaydı TUTULMAZ.</b> Bu objeler <see cref="HideFlags.DontSave"/>'dir ve pencere,
     /// stage ya da Play geçişinde yok edilirler; onlara yazılan bir Undo adımı sahne geçmişine ölü
@@ -81,17 +87,11 @@ namespace VortexArena.Core.Editor
                 }
             }
 
-            // Kaydet burada da durur: eli Scene'de ayarlayan kullanıcı, kaydetmek için pencereye
-            // gidip geri dönmek zorunda kalmasın (odak kayması sürüklemeyi bölüyor).
-            if (GUILayout.Button("Kaydet (tüm eller)", GUILayout.Height(26f)))
-            {
-                GripPoseStudio.SaveAll();
-            }
-
             EditorGUILayout.HelpBox(
                 "Scene'de yalnız kumanda kökünün YERİNİ ayarlarsın (dönüş yok — silah oyunda her zaman " +
                 "kumandayla hizalıdır, kök silahla hizalı tutulur); parmaklar preset'ten gelir. Ön " +
-                "kabzada el silaha yapışır, silah ikinci ele göre dönmez.",
+                "kabzada el silaha yapışır, silah ikinci ele göre dönmez. Kaydet stüdyo " +
+                "penceresindedir.",
                 MessageType.None);
         }
     }

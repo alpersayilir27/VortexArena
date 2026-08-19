@@ -25,7 +25,8 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
 4. Kumanda çerçevelerini (hayalet el onların çocuğudur) Scene View'da kabzalara oturt; elin
    Inspector'ından parmak preset'ini seç
    (ana kabza `Firing`, ön kabza `Grip`). Gerekirse **Karşı Ele Aynala** ile başlat.
-5. **Kaydet** → dört kayıt `WD_*.asset`'e iner. **Elleri Temizle**.
+5. **Kaydet** → dört kayıt `WD_*.asset`'e iner ve silah kiti kendiliğinden eşitlenir (ayrı bir
+   senkronize adımı yok; tezgâhtan kalkan eller *Elleri Oluştur* ile kayıttan geri gelir).
 6. Başlıkta yalnız **hissi** doğrula (nişan alırken rahat mı).
 
 **Bilinmesi gerekenler:**
