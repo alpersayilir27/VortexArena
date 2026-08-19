@@ -171,7 +171,7 @@ Proje **Input System-only** — `StandaloneInputModule` kullanılmaz.
 (`Team.cs` gibi). Sahne adı = katalog anahtarı (`load_match` string'i) → birebir eşleşme.
 ⚠️ **Serialize edilen enum'a yeni değer SONA eklenir** (Unity sayısal indeks saklar): `Team`,
 `HitZone` (`Body` sıfırda kalır), `ModeTeamMode`, `ModeScoreKind`, `ModeReviveAnchor`,
-`ModeWeaponSource`, `ModeAudioEvent`, `HandGripPreset`.
+`ModeWeaponSource`, `ModeAudioEvent`.
 
 **Paylaşımlı-mı-modül-mü:** "İkinci bir mod/arena bunu aynen kullanır mı?" → evet=_Shared, hayır=kutu.
 
@@ -288,9 +288,11 @@ Proje **Input System-only** — `StandaloneInputModule` kullanılmaz.
 - ⚠️ **Kavrama için ikinci bir işaretçi/alan AÇILMAZ** (prefaba grip düğümü, `Weapon`'a ikinci
   `Transform`, Scene View gizmo'su): kayıt yalnız `WD_*`'a yazılır, prefaba HİÇBİR ŞEY yazılmaz.
   ⚠️ Kayıt **DÖNÜŞ TAŞIMAZ** ve el başınadır; eller prefaba GİRMEZ.
-  ⚠️ **Parmak duruşu slider'la yazılmaz, preset'ten seçilir** ve **hiçbir zaman donanımdan
-  sürülmez**; eşya başına serbest parmak verisi YOKTUR (yeni preset = enum'a SONA değer +
-  `HandGripPresets`'e bir satır).
+  ⚠️ **Parmak duruşu SİLAH BAŞINA riglenir** (stüdyoda kemik çevrilir, kayıt `ItemGripPose`
+  `fingerJoints`); slider/sayısal alan YOKTUR ve **hiçbir zaman donanımdan sürülmez**. ⚠️ Ortak
+  "sıkma/kabza" preset tablosu GERİ GELMEZ — paylaşılan tek duruş boş elinkidir
+  (`HandPoseProfile.Idle`). ⚠️ **Metakarpal riglenmez** ve uzak humanoid ele ham eklem dönüşü
+  DEĞİL, ondan ölçülen kapanma oranı gider (`HandPoseLibrary`).
 - ⚠️ **Silah ses klipleri `WeaponKitBuilder` tablosundan GELMEZ** — tek doğruluk kaynağı
   `WD_*.asset`'in Inspector'ıdır (klip elle sürüklenir). ⚠️ Silaha kendi reload sesi bağlanınca
   tablodaki `Reload` o klibin uzunluğuna çekilir. ⚠️ Tek tek fişek dolduran silahta
@@ -320,7 +322,7 @@ Ne yaptıklarının ayrıntısı `Docs/Sistem-Ozeti.md` §4'te.
 | `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → konveks olmayan/trigger/collider'sız ve **görünen yüzeyden şişkin** collider'ları raporlar. ⚠️ Hiçbir şeyi düzeltmez; sahne kaydedilmeden koştur |
 | `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanları (iki uyarı yazısı + hasar vinyeti). **Tek seferlik**, tüm arenalara birden gider. ⚠️ Yazının yeri/boyu/fontu `HmdOverlayBuilder` sabitlerinden gelir, prefabta elle kaydırılan örnek geri yazılır. ⚠️ Çalıştırılmadıkça yazı/vinyet hiç çizilmez |
 | `… > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırır) |
-| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / gözlüksüz denetlenecek. Akış **prefab kipinde**. ⚠️ Kök YALNIZ TAŞINIR, çocukları taşınmaz; kayıt `WD_*`'a gider, prefaba hiçbir şey yazılmaz. ⚠️ Eller prefaba GİRMEZ. ⚠️ Kaydet silah kitini kendisi eşitler — ayrıca *Yalnız Senkronize Et*'e basma; elin Inspector'ına kaydet düğmesi geri eklenmez |
+| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / gözlüksüz denetlenecek. Akış **prefab kipinde**. ⚠️ Kök YALNIZ TAŞINIR; parmak eklemleri (metakarpal hariç) YALNIZ ÇEVRİLİR — kayıt `WD_*`'a gider, prefaba hiçbir şey yazılmaz. ⚠️ Eller prefaba GİRMEZ. ⚠️ Kaydet parmakları kemiklerden okur ve silah kitini kendisi eşitler — ayrıca *Yalnız Senkronize Et*'e basma; elin Inspector'ına kaydet düğmesi ve eklem seçicisi geri eklenmez (seçici pencerededir) |
 | `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takım gövdesi (model örneği + `SkeletonPoseMirror` + `redBodyRoot`; ölçüler bind pozundan hesaplanır, koda yazılmaz). İdempotent; model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak |
 | `… > Audio > Mod Sesleri` | Moda/haritaya göre değişen duyuru sesi → `ModeAudioRegistry.asset`'i seçer. ⚠️ Düzenleme yeri **Inspector**'dır; mod ve harita orada **katalogdan seçilir** |
 | `… > Development > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox**. ⚠️ Silah kavraması bu pencerenin işi DEĞİLDİR |

@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using Oculus.Interaction.HandGrab.Visuals;
 using Oculus.Interaction.Input;
 using UnityEngine;
@@ -7,7 +8,7 @@ namespace VortexArena.Core.Combat
 {
     /// <summary>
     /// Kavrama Pozu Stüdyosu'nun sahneye koyduğu <b>tek elin</b> kimliği ve ayar yüzeyi: hangi
-    /// kavrama noktasına ait olduğu, hangi el olduğu ve parmak preset'i.
+    /// kavrama noktasına ait olduğu, hangi el olduğu ve hayalet elin puppet'ı.
     /// <para>
     /// ⚠️ <b>Bu bileşen bilerek RUNTIME asmdef'indedir</b> (<c>VortexArena.Core</c>) ve dosyanın
     /// tamamı <c>#if UNITY_EDITOR</c> sarmalındadır. Editör asmdef'ine konamaz: Unity, editör
@@ -18,12 +19,18 @@ namespace VortexArena.Core.Combat
     /// sahneye/prefaba yazılmaz (yani "missing script" bırakacak bir örnek oluşmaz).
     /// </para>
     /// <para>
-    /// ⚠️ <b>Parmaklar burada AYARLANMAZ, preset'ten gelir.</b> Eklem dizisinin tek kaynağı
-    /// <see cref="HandGripPresets"/>'tir ve stüdyoda görülen el ile oyundaki sentetik el
-    /// <b>aynı diziyi</b> ISDK'nın aynı JointMap yolundan uygular — yani tezgâhta görülen parmak
-    /// duruşu oyunda birebir tekrarlanır. Parmak/eklem slider'ı eklemek bu kimliği bozardı:
-    /// tezgâhta ayarlanan ama kayda giremeyen bir duruş, oyunda hiç görülmeyecek bir ince ayar
-    /// olurdu.
+    /// ⚠️ <b>Parmaklar ELİN KEMİKLERİNDE yaşar, bu bileşende DEĞİL.</b> Riglenen duruş hayalet elin
+    /// eklem <see cref="Transform"/>'larının kendisidir; kullanıcı onları Scene View'da çevirir,
+    /// Kaydet onları oradan okur (<c>GripPoseStudio</c>). Bileşene ikinci bir "duruş" alanı
+    /// EKLENMEZ: iki kopya, tezgâhta görülen el ile kaydedilen elin sessizce ayrışması demektir —
+    /// oysa bu aracın bütün işi ikisinin aynı olması. Aynı sebeple duruşu bu bileşenden
+    /// <b>kaydeden</b> bir düğme de yoktur: yazan tek düğme stüdyo penceresindedir.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Metakarpallar riglenmez</b> (<see cref="HandPoseLibrary.IsDrivable"/>): OpenXR dalında
+    /// sentetik el, proksimal eklemlerin dönüşünü bilek uzayında beklediği için metakarpı çevirmek
+    /// tezgâhta doğru, oyunda kaymış bir el üretirdi. Gerekçenin tamamı
+    /// <see cref="HandPoseLibrary"/>'de.
     /// </para>
     /// <para>
     /// ⚠️ Bu objenin <b>transformu KUMANDA (anchor) çerçevesidir</b> — <c>OVRCameraRig</c> el
@@ -46,11 +53,8 @@ namespace VortexArena.Core.Combat
 
         // ⚠️ [SerializeField] ve bilerek öyle: obje DontSave olduğu için diske hiç yazılmaz ama
         // DOMAIN RELOAD'ı (script derlemesi) yaşar. Serialize edilmeseydi her derlemeden sonra
-        // puppet referansı kaybolur ve preset değişimi sessizce hiçbir şey yapmazdı.
+        // puppet referansı kaybolur ve parmak eklemleri artık bulunamazdı.
         [SerializeField] private HandPuppet _puppet;
-
-        [Tooltip("Bu elin parmak duruşu — kayda giden tek parmak bilgisi budur.")]
-        [SerializeField] private HandGripPreset _preset = HandGripPreset.Firing;
 
         // Hayalet elin köke (kumandaya) göre yerel pozu ve kaynağı (ölçülmüş sabit mi, iskeletten
         // tahmin mi). Kayda GİRMEZ; yalnız görsel çocuğun nereye oturtulacağıdır ve elle kaydırılmış
@@ -79,54 +83,56 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Elin parmak duruşu. Yazınca kemiklere anında uygulanır — tezgâhta seçilen preset ile
-        /// ekranda görülen el arasında bir "uygula" adımı kalmasın.
+        /// Eli tanıtır. Stüdyo el kurarken bir kez çağırır; parmak duruşunu ayrıca
+        /// <see cref="ApplyPose"/> yazar.
         /// </summary>
-        public HandGripPreset Preset
-        {
-            get => _preset;
-            set
-            {
-                _preset = value;
-                ApplyPreset();
-            }
-        }
-
-        /// <summary>
-        /// Eli tanıtır ve parmaklarını preset'e sokar. Stüdyo el kurarken bir kez çağırır.
-        /// </summary>
-        public void Resolve(HandPuppet puppet, GripSocketKind kind, bool rightHand,
-            HandGripPreset preset)
+        public void Resolve(HandPuppet puppet, GripSocketKind kind, bool rightHand)
         {
             _puppet = puppet;
             _kind = kind;
             _rightHand = rightHand;
-            _preset = preset;
-            ApplyPreset();
         }
 
         /// <summary>
-        /// Preset'in eklem dizisini puppet'a yazar.
-        /// <para>⚠️ Puppet yoksa SESSİZ geçer: el kurulumu sırasında bileşen puppet çözülmeden
-        /// önce de <c>OnValidate</c> ile buraya düşebiliyor ve orada hata basmak, gerçek bir sorunu
-        /// olmayan her el kurulumunda konsola satır atardı.</para>
+        /// Kayıtlı bir parmak duruşunu hayalet elin kemiklerine yazar (kayıt boşsa boş elin duruşu).
+        /// Stüdyo eli KURARKEN çağırır — el tezgâha son kaydedildiği duruşta gelsin.
+        /// <para>⚠️ Kurulmuş bir elde yeniden çağrılmaz: kullanıcının o an çevirdiği kemikleri
+        /// diskteki duruşa geri atmak, "riglemeye çalışıyorum ama parmaklar sıfırlanıyor" olurdu.</para>
+        /// <para>⚠️ Puppet yoksa SESSİZ geçer: el kurulumunun ortasında bileşen puppet çözülmeden
+        /// önce de buraya düşebiliyor ve orada hata basmak, gerçek bir sorunu olmayan her el
+        /// kurulumunda konsola satır atardı.</para>
         /// </summary>
-        public void ApplyPreset()
+        public void ApplyPose(HandJointRotation[] joints)
         {
             if (_puppet == null)
             {
                 return;
             }
 
-            _puppet.SetJointRotations(HandGripPresets.JointRotations(_preset, _rightHand));
+            _puppet.SetJointRotations(HandPoseLibrary.BuildJointRotations(joints, _rightHand));
         }
 
-        // Inspector'dan (ya da bir preset alanına elle dokunulduğunda) değişen duruş Scene View'da
-        // anında görünsün. ⚠️ Repaint BURADAN çağrılmaz: SceneView editör API'sidir ve bu dosya
-        // runtime asmdef'indedir — çağıran taraf (GripHandAuthoringEditor) tazeler.
-        private void OnValidate()
+        /// <summary>
+        /// Bu elin <b>riglenebilir</b> parmak eklemleri (metakarpallar hariç — gerekçe sınıf
+        /// uyarısında). Stüdyo bunları hem seçime açar hem kayda alır; puppet yoksa boş dizi.
+        /// </summary>
+        public List<HandJointMap> DrivableJoints()
         {
-            ApplyPreset();
+            var result = new List<HandJointMap>();
+            List<HandJointMap> maps = _puppet != null ? _puppet.JointMaps : null;
+
+            for (int i = 0; maps != null && i < maps.Count; i++)
+            {
+                HandJointMap map = maps[i];
+                if (map == null || map.transform == null || !HandPoseLibrary.IsDrivable(map.id))
+                {
+                    continue;
+                }
+
+                result.Add(map);
+            }
+
+            return result;
         }
 
         /// <summary>

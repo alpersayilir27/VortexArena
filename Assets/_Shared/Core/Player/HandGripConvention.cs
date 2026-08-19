@@ -140,7 +140,7 @@ namespace VortexArena.Core.Player
 
         /// <summary>
         /// Aynı ölçüm, yönler <b>hazır</b> verildiğinde (el-YEREL uzayda): kemik <see cref="Transform"/>'u
-        /// olmayan iskeletler de (ISDK'nın veri iskeleti, <c>HandGripPresets</c>) bu kapıdan geçsin
+        /// olmayan iskeletler de (ISDK'nın veri iskeleti, <c>HandPoseLibrary</c>) bu kapıdan geçsin
         /// diye ayrılmıştır.
         /// <para>
         /// ⚠️ Çapraz çarpımın <b>sıra kuralı yalnız BURADA</b> yazılıdır (SOL'da

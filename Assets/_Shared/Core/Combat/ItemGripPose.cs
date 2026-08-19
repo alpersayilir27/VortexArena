@@ -5,9 +5,9 @@ namespace VortexArena.Core.Combat
 {
     /// <summary>
     /// Bir kavrama kaydı: elin <b>KUMANDA ANCHOR'ININ</b> (<c>OVRCameraRig.left/rightHandAnchor</c> —
-    /// telde giden el pozunun ta kendisi) eşyaya göre yerel <b>KONUMU</b> + o elin parmak preset'i.
-    /// Kavramanın tek yazılı kaynağı budur ve tanımın (<see cref="ItemDefinition"/>) içinde yaşar —
-    /// prefabda kavrama düğümü YOKTUR.
+    /// telde giden el pozunun ta kendisi) eşyaya göre yerel <b>KONUMU</b> + o el için <b>bu silaha
+    /// özel riglenmiş parmak duruşu</b>. Kavramanın tek yazılı kaynağı budur ve tanımın
+    /// (<see cref="ItemDefinition"/>) içinde yaşar — prefabda kavrama düğümü YOKTUR.
     /// <para>
     /// ⚠️ <b>DÖNÜŞ YOKTUR ve eklenmez.</b> Eşyanın dönüşü her zaman ana kumandanın dönüşüdür
     /// (<see cref="ItemGripSolver"/>): kayıt yalnız "kumanda eşyanın NERESİNDE durur" der. Kayıt bir
@@ -43,25 +43,35 @@ namespace VortexArena.Core.Combat
                  "zaman kumandayla hizalıdır.")]
         public Vector3 position;
 
-        [Tooltip("Bu slotta elin parmak duruşu (Idle / Firing / Grip).")]
-        public HandGripPreset preset;
+        // ⚠️ Parmak duruşu SEÇİLMEZ, RİGLENİR: bu dizi stüdyoda elle çevrilmiş parmak eklemlerinin
+        // kaydıdır ve silah başınadır (hazır bir "sıkma/kabza" tablosu YOKTUR — kabzaların geometrisi
+        // birbirini tutmadığı için ortak tablo bazı silahlarda parmakları gövdenin içinde bırakıyordu).
+        // ⚠️ Dizi BOŞ olabilir: konumu yazılmış ama parmakları henüz riglenmemiş bir slot geçerlidir
+        // ve o el boş elin duruşunda kalır (HandPoseLibrary.IdleJointRotations).
+        [Tooltip("Bu slotta elin riglenmiş parmak duruşu — eklem başına yerel dönüş. Boş = riglenmemiş " +
+                 "(el boşta duruşunda kalır).")]
+        public HandJointRotation[] fingerJoints;
 
         /// <summary>Bu kayıt yazıldı mı (yazılmamışsa alanları okunmaz).</summary>
         public bool IsAuthored => authored;
 
+        /// <summary>Bu slotun parmakları riglendi mi (konum yazılmış olsa bile boş olabilir).</summary>
+        public bool HasFingers => fingerJoints != null && fingerJoints.Length > 0;
+
         /// <summary>
-        /// Stüdyoda yazılmış bir konumdan kayıt üretir (<see cref="authored"/> = <c>true</c>).
+        /// Stüdyoda yazılmış bir konum + parmak duruşundan kayıt üretir
+        /// (<see cref="authored"/> = <c>true</c>).
         /// </summary>
         /// <param name="anchorInItem">Kumanda anchor'ının EŞYAYA göre yerel konumu — metre, ölçeksiz
         /// (bkz. sınıf uyarısı).</param>
-        /// <param name="preset">O slotta elin parmak duruşu.</param>
-        public static ItemGripPose From(in Vector3 anchorInItem, HandGripPreset preset)
+        /// <param name="fingerJoints">O slotta riglenmiş parmak eklemleri (boş olabilir).</param>
+        public static ItemGripPose From(in Vector3 anchorInItem, HandJointRotation[] fingerJoints)
         {
             return new ItemGripPose
             {
                 authored = true,
                 position = anchorInItem,
-                preset = preset,
+                fingerJoints = fingerJoints,
             };
         }
     }

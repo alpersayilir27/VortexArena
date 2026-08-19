@@ -18,8 +18,12 @@ namespace VortexArena.Core.Editor
     /// per attempt.
     /// <para>Flow: open a <c>WPN_*</c> prefab in PREFAB MODE → the window picks up the stage →
     /// <b>Elleri Oluştur</b> → controller roots appear (controller model + ghost hand beneath) → MOVE
-    /// the roots onto the grips, pick the finger preset in the hand's Inspector → optionally
-    /// <b>Karşı Ele Aynala</b> → <b>Kaydet</b>.</para>
+    /// the roots onto the grips, then RIG the fingers per weapon (pick a joint in the window's finger
+    /// list, rotate it in Scene View) → optionally <b>Karşı Ele Aynala</b> → <b>Kaydet</b>.</para>
+    /// <para>⚠️ There are no finger PRESETS: the pose is authored bone by bone for THIS weapon,
+    /// because a shared "trigger/wrap" table cannot fit grips whose geometry differs — on some
+    /// weapons it left the fingers inside the body. The record holds the joints
+    /// (<see cref="HandJointRotation"/>); the only shared pose left is the idle hand.</para>
     /// <para>⚠️ The root the user drags is the CONTROLLER (anchor) frame: <c>[VA El_*]</c> represents
     /// where <c>OVRCameraRig.left/rightHandAnchor</c> sits on the weapon, and the record is that
     /// root's POSITION relative to the item (<see cref="ItemGripPose"/>: anchor space, no rotation).
@@ -88,6 +92,11 @@ namespace VortexArena.Core.Editor
         /// <summary>Name keys for the front-grip node (the forward hand in a two-handed hold).</summary>
         private static readonly string[] FOREGRIP_KEYS =
             { "handguard", "barrelguard", "foregrip", "forend", "guard" };
+
+        /// <summary>Finger names in <c>HandFinger</c> order — the order
+        /// <c>FingersMetadata.FINGER_TO_JOINTS</c> is indexed by.</summary>
+        private static readonly string[] FINGER_LABELS =
+            { "Başparmak", "İşaret", "Orta", "Yüzük", "Serçe" };
 
         /// <summary>Target picked while no stage is open (only used by "open prefab").</summary>
         [SerializeField] private GameObject _prefab;
@@ -174,9 +183,13 @@ namespace VortexArena.Core.Editor
             };
         }
 
-        /// <summary>Moves a selection that landed on a hand's CHILD (ghost mesh, joint) up to the
-        /// controller root — the only transform that gets recorded (rationale in
-        /// <see cref="InstallCleanupHooks"/>).</summary>
+        /// <summary>Moves a selection that landed on a hand's CHILD (ghost mesh, controller model) up
+        /// to the controller root — the only transform whose POSE gets recorded (rationale in
+        /// <see cref="InstallCleanupHooks"/>).
+        /// <para>⚠️ Drivable finger joints are the ONE exception and the selection stays on them: the
+        /// finger rig is authored by rotating exactly those bones, and their rotations are read back
+        /// at save time (<see cref="CaptureFingers"/>). Everything else under the root is still
+        /// bounced, so "dragged thing == recorded thing" holds for the placement too.</para></summary>
         private static void RedirectSelectionToHandRoot()
         {
             GameObject active = Selection.activeGameObject;
@@ -186,10 +199,27 @@ namespace VortexArena.Core.Editor
             }
 
             var owner = active.GetComponentInParent<GripHandAuthoring>();
-            if (owner != null)
+            if (owner == null || IsDrivableJoint(owner, active.transform))
             {
-                Selection.activeGameObject = owner.gameObject;
+                return;
             }
+
+            Selection.activeGameObject = owner.gameObject;
+        }
+
+        /// <summary>Is this transform one of the hand's riggable finger joints.</summary>
+        private static bool IsDrivableJoint(GripHandAuthoring hand, Transform candidate)
+        {
+            List<HandJointMap> joints = hand.DrivableJoints();
+            for (int i = 0; i < joints.Count; i++)
+            {
+                if (joints[i].transform == candidate)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>Restores hands that Unity's prefab save hid (rationale in
@@ -226,10 +256,10 @@ namespace VortexArena.Core.Editor
                     continue;
                 }
 
-                MarkDontSave(go);
+                MarkDontSave(hands[i]);
                 HideIsdkComponents(GhostOf(hands[i]));
                 // If the flip reached component flags too, keep the two components the user needs
-                // (Transform + preset) unlocked and visible in the Inspector.
+                // (Transform + the authoring component) unlocked and visible in the Inspector.
                 hands[i].hideFlags &= ~(HideFlags.HideInInspector | HideFlags.NotEditable);
                 hands[i].transform.hideFlags &= ~(HideFlags.HideInInspector | HideFlags.NotEditable);
                 restored = true;
@@ -326,8 +356,8 @@ namespace VortexArena.Core.Editor
 
             EditorGUILayout.HelpBox(
                 "Akış: prefabı prefab kipinde aç → Elleri Oluştur → kumanda köklerini kabzalara oturt " +
-                "(hayalet el köke bağlı çizilir), parmak duruşunu preset'ten seç → (istersen) Aynala → " +
-                "Kaydet.",
+                "(hayalet el köke bağlı çizilir) → parmakları bu silaha göre rigle (eklemi listeden " +
+                "seç, Scene View'da çevir) → (istersen) Aynala → Kaydet.",
                 MessageType.None);
 
             DrawGhostSourceSection();
@@ -430,8 +460,9 @@ namespace VortexArena.Core.Editor
                 "oyunda izlenen kumandanın ta kendisidir. Silah oyunda HER ZAMAN kumandayla hizalıdır: " +
                 "kökü yalnız TAŞI (döndürmek bir şey değiştirmez, kök silahla hizalı tutulur), kumandayı " +
                 "kabzada gerçekte durduğu yere koy. Ön kabzada el silaha yapışır, silah ikinci ele göre " +
-                "dönmez. Hayalet el ve kumanda modeli kilitlidir (taşınmaz) — kayıt kökten okunur. " +
-                "Parmaklar preset'ten gelir.",
+                "dönmez. Hayalet elin gövdesi ve kumanda modeli kilitlidir (taşınmaz) — konum kökten " +
+                "okunur. PARMAKLAR bu silaha özel riglenir: eli seç, listeden eklemi seç, Scene View'da " +
+                "çevir; Kaydet parmakları kemiklerden okur.",
                 MessageType.None);
 
             if (AnyGhostEstimated(hands))
@@ -471,6 +502,14 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
+            // Which hand's finger rig to expand: the one the current selection belongs to (the root
+            // itself or one of its bones). ⚠️ The picker is drawn for ONE hand only — four hands ×
+            // five fingers would push the save button off the window.
+            GameObject active = Selection.activeGameObject;
+            GripHandAuthoring focused = active != null
+                ? active.GetComponentInParent<GripHandAuthoring>()
+                : null;
+
             for (int i = 0; i < hands.Count; i++)
             {
                 GripHandAuthoring hand = hands[i];
@@ -491,7 +530,117 @@ namespace VortexArena.Core.Editor
                         SceneView.lastActiveSceneView?.FrameSelected();
                     }
                 }
+
+                if (hand == focused)
+                {
+                    DrawFingerRig(hand);
+                }
             }
+        }
+
+        /// <summary>Finger rig picker for ONE hand: a button per riggable joint that selects the bone
+        /// and switches the Scene View to the rotate tool.
+        /// <para>⚠️ It lives in the WINDOW, not the hand's Inspector: selecting a joint replaces the
+        /// Inspector with that bone's Transform, so an Inspector-side picker would close itself on
+        /// the first click and there would be no way to reach the second joint.</para>
+        /// <para>⚠️ It only SELECTS — no numeric field, no slider. The pose lives in the bones and is
+        /// read back from them at save time (<see cref="CaptureFingers"/>); a second numeric
+        /// description of the same rotation would raise "which one is current".</para></summary>
+        private static void DrawFingerRig(GripHandAuthoring hand)
+        {
+            List<HandJointMap> drivable = hand.DrivableJoints();
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                if (drivable.Count == 0)
+                {
+                    EditorGUILayout.LabelField(
+                        "(hayalet elin eklemleri okunamadı — eli yeniden oluştur)",
+                        EditorStyles.miniLabel);
+                    return;
+                }
+
+                EditorGUILayout.LabelField(
+                    "Parmak rigi — eklemi seç, Scene View'da çevir (kayda o hâli girer)",
+                    EditorStyles.miniLabel);
+
+                HandJointId[][] fingers = FingersMetadata.FINGER_TO_JOINTS;
+                for (int finger = 0; finger < fingers.Length && finger < FINGER_LABELS.Length; finger++)
+                {
+                    DrawFingerRow(FINGER_LABELS[finger], fingers[finger], drivable);
+                }
+
+                if (GUILayout.Button("Parmakları Sıfırla (boş el duruşu)"))
+                {
+                    // null = kayıt yok → boş elin duruşu.
+                    hand.ApplyPose(null);
+                    SceneView.RepaintAll();
+                }
+            }
+        }
+
+        /// <summary>One finger's row: its name plus a numbered button per riggable joint (1 =
+        /// closest to the wrist). Metacarpals never show up — they are not riggable.</summary>
+        private static void DrawFingerRow(string label, HandJointId[] chain,
+            List<HandJointMap> drivable)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField(label, GUILayout.Width(90f));
+
+                int shown = 0;
+                for (int j = 0; chain != null && j < chain.Length; j++)
+                {
+                    HandJointMap map = FindMap(drivable, chain[j]);
+                    if (map == null)
+                    {
+                        continue;
+                    }
+
+                    shown++;
+                    bool selected = Selection.activeGameObject == map.transform.gameObject;
+                    Color previous = GUI.backgroundColor;
+                    if (selected)
+                    {
+                        GUI.backgroundColor = new Color(0.45f, 0.75f, 1f);
+                    }
+
+                    var content = new GUIContent(shown.ToString(), chain[j].ToString());
+                    if (GUILayout.Button(content, EditorStyles.miniButton, GUILayout.Width(26f)))
+                    {
+                        Selection.activeGameObject = map.transform.gameObject;
+                        // ⚠️ Switch to the rotate tool: a bone dragged with the move tool tears the
+                        // hand apart, and the record carries rotations only.
+                        Tools.current = Tool.Rotate;
+                        Tools.pivotRotation = PivotRotation.Local;
+                        SceneView.RepaintAll();
+                    }
+
+                    GUI.backgroundColor = previous;
+                }
+
+                if (shown == 0)
+                {
+                    EditorGUILayout.LabelField("(eklem yok)", EditorStyles.miniLabel);
+                }
+
+                GUILayout.FlexibleSpace();
+            }
+        }
+
+        /// <summary>The joint map for one id in a hand's riggable set; <c>null</c> if it has none
+        /// (a metacarpal, or a joint the branch does not expose).</summary>
+        private static HandJointMap FindMap(List<HandJointMap> drivable, HandJointId id)
+        {
+            for (int i = 0; i < drivable.Count; i++)
+            {
+                if (drivable[i].id == id)
+                {
+                    return drivable[i];
+                }
+            }
+
+            return null;
         }
 
         /// <summary>Shows the numbers that will be saved, live, next to the on-disk state.
@@ -522,10 +671,11 @@ namespace VortexArena.Core.Editor
                 string state = definition.HasGrip(hand.Kind, hand.RightHand)
                     ? "yazılmış"
                     : "yazılmamış";
+                int joints = CaptureFingers(hand).Length;
 
                 EditorGUILayout.LabelField(
                     $"{hand.Kind} · {(hand.RightHand ? "sağ" : "sol")}",
-                    $"{Format(local)}  {HandGripPresets.Label(hand.Preset)}  ({state})");
+                    $"{Format(local)}  {joints} eklem  ({state})");
             }
         }
 
@@ -707,8 +857,12 @@ namespace VortexArena.Core.Editor
 
                 ApplyGhostOffset(existing);
                 EnsureControllerModel(existing.gameObject, existing.RightHand);
-                MarkDontSave(existing.gameObject);
+                MarkDontSave(existing);
                 HideIsdkComponents(GhostOf(existing));
+                // ⚠️ The finger rig is NOT re-applied here: an existing hand may be mid-rig, and
+                // resetting its bones to the on-disk pose would read as "I rig and it keeps
+                // snapping back". A hand that has left the bench comes back through the branch
+                // below, which does apply the record.
                 return existing;
             }
 
@@ -762,21 +916,19 @@ namespace VortexArena.Core.Editor
             EnsureControllerModel(root, rightHand);
 
             ItemGripPose recorded = definition.GetGrip(kind, rightHand);
-            HandGripPreset preset = definition.HasGrip(kind, rightHand)
-                ? recorded.preset
-                : HandGripPresets.DefaultFor(kind);
 
             // The root is placed directly, not via the puppet's SetRootPose (that writes the ghost's
             // own transform, but the ghost is a child with a fixed local offset).
-            // ⚠️ Finger pose goes through the puppet, NOT ISDK's HandGhost.SetPose: SetPose wants a
-            // HandPose object whose joint array would be a second finger source — the only source is
-            // the preset table.
+            // ⚠️ The finger pose goes through the puppet, NOT ISDK's HandGhost.SetPose: SetPose wants
+            // a HandPose object whose joint array would be a second finger source — the only source
+            // is the record itself (and an empty record means the idle hand).
             Pose start = ResolveStartPose(weaponRoot, definition, kind, rightHand);
             root.transform.SetPositionAndRotation(start.position, start.rotation);
 
-            authoring.Resolve(puppet, kind, rightHand, preset);
+            authoring.Resolve(puppet, kind, rightHand);
+            authoring.ApplyPose(recorded.fingerJoints);
             HideIsdkComponents(handGo);
-            MarkDontSave(root);
+            MarkDontSave(authoring);
             NotifyHandsChanged();
             return authoring;
         }
@@ -974,17 +1126,41 @@ namespace VortexArena.Core.Editor
         /// <summary>⚠️ <see cref="HideFlags.DontSave"/> is written across the whole subtree so no
         /// hand part reaches the file on a prefab save; the flag is per GameObject, the root alone
         /// is not enough.
-        /// <para>Everything BELOW the root also gets <see cref="HideFlags.NotEditable"/>: the ghost
-        /// and controller model are visual children while the record is the root's pose, so dragging
-        /// a child would produce "I saved but nothing changed".</para></summary>
-        private static void MarkDontSave(GameObject root)
+        /// <para>Everything BELOW the root also gets <see cref="HideFlags.NotEditable"/> — EXCEPT the
+        /// riggable finger joints. The ghost mesh and the controller model are visual children while
+        /// the record is the root's pose, so dragging one of THOSE would produce "I saved but nothing
+        /// changed"; the finger bones are the opposite case — they ARE the record's finger half and
+        /// must stay selectable and rotatable.</para></summary>
+        private static void MarkDontSave(GripHandAuthoring hand)
         {
+            if (hand == null)
+            {
+                return;
+            }
+
+            GameObject root = hand.gameObject;
+            var editable = new HashSet<Transform>();
+            List<HandJointMap> joints = hand.DrivableJoints();
+            for (int i = 0; i < joints.Count; i++)
+            {
+                editable.Add(joints[i].transform);
+            }
+
             Transform[] all = root.GetComponentsInChildren<Transform>(true);
             for (int i = 0; i < all.Length; i++)
             {
-                all[i].gameObject.hideFlags = all[i].gameObject == root
+                Transform node = all[i];
+                bool open = node.gameObject == root || editable.Contains(node);
+                node.gameObject.hideFlags = open
                     ? HideFlags.DontSave
                     : HideFlags.DontSave | HideFlags.NotEditable;
+
+                if (open)
+                {
+                    // Unity's save-time flip can also land on the COMPONENT flags; a joint whose
+                    // Transform stays NotEditable is selectable but its handles do nothing.
+                    node.hideFlags &= ~(HideFlags.HideInInspector | HideFlags.NotEditable);
+                }
             }
         }
 
@@ -1017,7 +1193,9 @@ namespace VortexArena.Core.Editor
         // ------------------------------------------------------------------- mirroring
 
         /// <summary>Mirrors a hand's placement to the OPPOSITE hand (across the item-space YZ plane),
-        /// building it if missing. The preset is copied from the source.
+        /// building it if missing. The finger rig is COPIED joint by joint: ISDK's left and right
+        /// ghosts are mirror duplicates of one skeleton, so the same local rotations produce the
+        /// mirrored pose — which is why this is a copy and not a negation.
         /// <para>⚠️ ISDK's <c>MirrorHandGrabPose</c> is NOT used: with no surface to mirror against
         /// (a <c>Grabbable</c> collider) it applies an arbitrary "best guess" rotation, and this
         /// bench has no surface at all. The maths here is one verifiable line:
@@ -1061,7 +1239,7 @@ namespace VortexArena.Core.Editor
                 weaponRoot.position + weaponRoot.rotation * mirroredPosition,
                 weaponRoot.rotation);
             opposite.transform.localScale = Vector3.one;
-            opposite.Preset = source.Preset;
+            opposite.ApplyPose(CaptureFingers(source));
 
             Selection.activeGameObject = opposite.gameObject;
             SceneView.RepaintAll();
@@ -1072,7 +1250,11 @@ namespace VortexArena.Core.Editor
         // ----------------------------------------------------------------------- saving
 
         /// <summary>Turns the bench placement into persistent data: for every live hand, the
-        /// controller root's item-local pose + preset → <c>WD_*.asset</c>.
+        /// controller root's item-local position + the ghost's riggable finger joints →
+        /// <c>WD_*.asset</c>.
+        /// <para>⚠️ This is the ONLY writer of the finger rig — the hand's own Inspector has no save
+        /// button (<see cref="GripHandAuthoringEditor"/>). Whatever the bones look like at this
+        /// moment is what lands on disk, so there is no "which of the two is current" question.</para>
         /// <para>⚠️ Nothing is written into the prefab contents and the prefab is not saved: the
         /// record lives only in the definition, and the hands are separate stage-scene roots anyway.</para>
         /// <para>⚠️ Never writes in Play mode: the record goes to disk via <c>AssetDatabase</c> and a
@@ -1104,7 +1286,7 @@ namespace VortexArena.Core.Editor
                 }
 
                 Vector3 local = AnchorInItem(weaponRoot, hand.transform);
-                definition.EditorSetGrip(hand.Kind, hand.RightHand, local, hand.Preset);
+                definition.EditorSetGrip(hand.Kind, hand.RightHand, local, CaptureFingers(hand));
                 written++;
             }
 
@@ -1125,6 +1307,32 @@ namespace VortexArena.Core.Editor
             // çizmeye devam eder (MissingReferenceException) — kit, kare bittikten sonra koşar.
             EditorApplication.delayCall += RunWeaponKit;
             return true;
+        }
+
+        /// <summary>Reads the hand's riggable finger joints off the ghost skeleton, in the form the
+        /// record stores (joint NAME + local rotation — <see cref="HandJointRotation"/>).
+        /// <para>⚠️ The rotation taken is <c>HandJointMap.TrackedRotation</c>, i.e. the bone's local
+        /// rotation with the map's own <c>RotationOffset</c> UNDONE. That is the space
+        /// <c>HandPuppet.SetJointRotations</c> and <c>SyntheticHand.OverrideAllJoints</c> both
+        /// consume; storing the raw <c>localRotation</c> would apply the offset a second time on the
+        /// way back and the bench pose would not reproduce in game.</para>
+        /// <para>⚠️ Metacarpals are excluded (<see cref="HandPoseLibrary.IsDrivable"/>) — rationale in
+        /// <see cref="HandPoseLibrary"/>. Returns an empty array when the ghost has no puppet, which
+        /// the record reads as "not rigged" and the hand falls back to the idle pose.</para></summary>
+        private static HandJointRotation[] CaptureFingers(GripHandAuthoring hand)
+        {
+            List<HandJointMap> joints = hand != null
+                ? hand.DrivableJoints()
+                : new List<HandJointMap>();
+
+            var captured = new HandJointRotation[joints.Count];
+            for (int i = 0; i < joints.Count; i++)
+            {
+                captured[i] = HandJointRotation.From(
+                    joints[i].id.ToString(), joints[i].TrackedRotation);
+            }
+
+            return captured;
         }
 
         /// <summary>Weapon kit sync run right after a save, so the user does not have to open

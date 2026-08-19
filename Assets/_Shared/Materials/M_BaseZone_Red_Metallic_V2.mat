@@ -25,18 +25,26 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
+    - _BandSoftness: 0.1
+    - _BandSpacing: 1.6
+    - _BandWidth: 0.16
     - _DepthGlow: 0.35
     - _DetailScale: 2.6
     - _DetailStrength: 0.45
     - _EdgeGlow: 5
     - _EdgeWidth: 0.1
+    - _FlowGlow: 0.35
+    - _FlowScale: 0.35
     - _FlowSpeed: 0.35
+    - _FlowStrength: 0.55
     - _FresnelPower: 4
     - _FresnelStrength: 0.35
     - _GlowFlowSpeed: 0.12
     - _GlowIntensity: 20
     - _Metallic: 1
     - _ReflectionStrength: 1
+    - _RippleStrength: 0.05
+    - _ScrollSpeed: 0.55
     - _Smoothness: 1
     - _SpecularStrength: 0.1
     - _SwirlStrength: 0.6
@@ -50,5 +58,6 @@ Material:
     - _BaseColor: {r: 0.30188674, g: 0, b: 0, a: 1}
     - _MirrorColor: {r: 0.53773576, g: 0, b: 0, a: 1}
     - _ReflectionColor: {r: 0.42452827, g: 0, b: 0, a: 1}
+    - _ScrollDir: {r: 0, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

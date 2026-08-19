@@ -221,7 +221,7 @@ namespace VortexArena.Core.Combat
         public float FireVolume => fireVolume;
 
         // ⚠️ Duruş için burada ALAN YOKTUR ve açılmaz: tek adı ItemDefinition'daki kavrama kaydıdır
-        // (GetGrip / PrimaryGripPosition(bool) / GripPreset) ve tek olmak ZORUNDA — "verilen silahın
+        // (GetGrip / PrimaryGripPosition(bool) / GripJointRotations) ve tek olmak ZORUNDA — "verilen silahın
         // duruşu" ile "uzak tarafta çizilen duruş" aynı ölçüdür, ikinci bir ad kaçınılmaz olarak
         // birinin güncellenip diğerinin unutulmasıyla sonuçlanır. Sahne silahı ile verilen silah da
         // tek kuraldan geçer (Weapon.ApplyCanonicalGrip).

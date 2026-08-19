@@ -52,7 +52,8 @@ ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`).
    ile hayalet el onun çocuğudur.
 2. Dört el de yazılmalı: ana kabza sağ/sol, ön kabza sağ/sol. Eksik el öteki elin kaydına düşer ve
    o el silahı yanlış tutar; **Karşı Ele Aynala** yalnız başlangıçtır.
-3. Her elin parmak preset'ini Inspector'dan seç (ana kabza `Firing`, ön kabza `Grip`).
+3. Her elin parmaklarını o silaha göre rigle: penceredeki parmak listesinden eklemi seç, Scene
+   View'da çevir (metakarpallar listede yoktur ve riglenmez).
 4. **Kaydet** → dördü `WD_*.asset`'e iner; silah kiti kendiliğinden eşitlenir (eller tezgâhtan
    kalkarsa *Elleri Oluştur* kayıttan aynı yere getirir).
 
@@ -85,10 +86,11 @@ silah kiti koşusunun sonundaki uyarı listeler.
 - [ ] **Ön kabzada ikinci el silaha yapışık kalıyor:** grip basılıyken kol uzatılıp toplanınca el
       silahtan kopmuyor (kolun gerilmesi beklenen davranıştır).
 - [ ] **Parmaklar donanımdan OYNAMIYOR:** tetik/kabza basılınca ya da parmak kumandaya değince
-      hiçbir parmak kıpırdamıyor; boş elde parmaklar `Idle` duruşunda, silahı alınca el
-      `Idle`'dan slotun preset'ine yumuşakça kapanıyor (~0.15 s), bırakınca geri açılıyor.
-- [ ] Uzak avatarın parmakları o slotun preset'iyle çiziliyor (stüdyoda `Grip` seçilen ön kabza elde
-      uzakta da sarılı).
+      hiçbir parmak kıpırdamıyor; boş elde parmaklar boşta duruşunda, silahı alınca el o slot için
+      riglenmiş duruşa yumuşakça kapanıyor (~0.15 s), bırakınca geri açılıyor.
+- [ ] **Tezgâh = gözlük:** stüdyoda riglediğin duruş başlıkta birebir aynı görünüyor (kemik kemik).
+- [ ] Uzak avatarın parmakları o slotun duruşuna yakın çiziliyor (ön kabzayı saran el uzakta da
+      sarılı) — uzakta ölçü kemik kemik değil parmak başına kapanma oranıdır.
 - [ ] İkinci admin ekranında **uzak** oyuncunun silahının duruşu sapmıyor (iki uç aynı kaydı okuyup
       aynı formülle çiziyor).
 - [ ] **Raf değişimi:** elde tüfek varken başka bir çerçeveye nişan alıp grip'e basınca yeni silah

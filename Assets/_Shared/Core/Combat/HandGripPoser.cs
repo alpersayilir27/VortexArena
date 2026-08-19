@@ -11,22 +11,23 @@ namespace VortexArena.Core.Combat
     /// <para>
     /// <b>Üç durum, üç davranış:</b>
     /// <list type="bullet">
-    /// <item><b>Boş el:</b> bilek serbest, parmaklar <see cref="HandGripPreset.Idle"/>.</item>
+    /// <item><b>Boş el:</b> bilek serbest, parmaklar boşta duruşunda
+    /// (<see cref="HandPoseLibrary.IdleJointRotations"/>).</item>
     /// <item><b>Ana el:</b> bilek <b>SERBEST</b> (el izlemeden/kumandadan gelir, silah ona uyar —
-    /// eşyayı ana kavrama kaydı döndürüyor), parmaklar slotun preset'i.</item>
+    /// eşyayı ana kavrama kaydı döndürüyor), parmaklar o slot için riglenmiş duruş.</item>
     /// <item><b>Ön kabza:</b> bilek <b>TAM</b> kilitlenir (konum + dönüş) — o el eşyaya yapışır,
-    /// parmaklar slotun preset'i.</item>
+    /// parmaklar o slot için riglenmiş duruş.</item>
     /// </list>
     /// </para>
     /// <para>
     /// ⚠️ <b>Parmaklar HİÇBİR durumda donanımdan sürülmez</b> — ne kumandanın tetiği/kabzası ne el
     /// izlemesi bir parmağı kıpırdatır. Beş parmak her karede kilitlidir
-    /// (<c>JointFreedom.Locked</c>) ve duruş yalnız bir preset'tir; iki preset arasındaki geçiş
-    /// (boş el ↔ kavrama, ana kabza ↔ ön kabza) <see cref="HandGripPresets.TransitionSeconds"/>
-    /// içinde eklem eklem yumuşatılır (<see cref="HandState"/>). Bir parmağı bile serbest bırakmak,
-    /// stüdyoda görülen el ile oyunda görülen elin o parmakta ayrışması demektir; boş elin
-    /// parmaklarını donanımdan örneklemek de aynı sebeple YOKTUR (üç preset tek kaynaktan gelir:
-    /// <see cref="HandGripPresets"/>).
+    /// (<c>JointFreedom.Locked</c>) ve duruş her karede ya boş elin dizisidir ya da tutulan eşyanın
+    /// o slot için stüdyoda riglenmiş dizisi; ikisi arasındaki geçiş (boş el ↔ kavrama, ana kabza ↔
+    /// ön kabza) <see cref="HandPoseLibrary.TransitionSeconds"/> içinde eklem eklem yumuşatılır
+    /// (<see cref="HandState"/>). Bir parmağı bile serbest bırakmak, stüdyoda görülen el ile oyunda
+    /// görülen elin o parmakta ayrışması demektir; boş elin parmaklarını donanımdan örneklemek de
+    /// aynı sebeple YOKTUR.
     /// </para>
     /// <para>
     /// ⚠️ <b>Silahın pozuna DOKUNMAZ.</b> Silahın dünya pozunun tek yazarı
@@ -81,10 +82,10 @@ namespace VortexArena.Core.Combat
         /// <b>Geçiş neden burada, ISDK'da değil:</b> <c>SyntheticHand</c> yalnız serbest↔kilitli
         /// geçişini yumuşatır (kendi lock eğrisi); kilitliyken hedef dönüşü değiştirmek ANINDA
         /// uygulanır. Boş el ile kavrama arasında (ya da ana kabza ↔ ön kabza) el o yüzden burada,
-        /// <see cref="HandGripPresets.TransitionSeconds"/> boyunca <see cref="From"/>'dan hedefe
+        /// <see cref="HandPoseLibrary.TransitionSeconds"/> boyunca <see cref="From"/>'dan hedefe
         /// eklem eklem slerp'lenerek götürülür; sentetik ele her karede bu ARA dizi yazılır.
         /// </para>
-        /// <para>⚠️ Preset değişince başlangıç noktası o anki GÖSTERİLEN dizidir, önceki preset'in
+        /// <para>⚠️ Hedef değişince başlangıç noktası o anki GÖSTERİLEN dizidir, önceki hedefin
         /// dizisi değil: geçişin ortasında yeni bir hedef gelirse el zıplamadan yön değiştirir.</para>
         /// </summary>
         private sealed class HandState
@@ -92,11 +93,19 @@ namespace VortexArena.Core.Combat
             public SyntheticHand Synthetic;
 
             /// <summary>Elin BİLEĞİ şu an ön kabzaya kilitli mi. Parmaklar bundan bağımsız her zaman
-            /// bizim yazdığımızdır (slotun preset'i ya da idle).</summary>
+            /// bizim yazdığımızdır (slotun riglenmiş duruşu ya da boş elin duruşu).</summary>
             public bool WristLocked;
 
-            /// <summary>Şu anki hedef duruş.</summary>
-            public HandGripPreset Target = HandGripPreset.Idle;
+            /// <summary>
+            /// Şu anki hedef dizi — <b>referansıyla</b> tutulur ve <b>referansıyla</b> karşılaştırılır.
+            /// <para>⚠️ Bu yüzden hedef diziler önbellekli/paylaşımlı olmak ZORUNDA
+            /// (<see cref="ItemDefinition.GripJointRotations"/>,
+            /// <see cref="HandPoseLibrary.IdleJointRotations"/>): kare başına yeni dizi üreten bir
+            /// kaynak, her karede "hedef değişti" sayılır ve geçiş hiç bitmezdi. Eklem eklem
+            /// karşılaştırma da alternatif değil — 19 quaternion'u kare başına iki el için
+            /// kıyaslamak, referans kimliği zaten garantiliyken bedava değil.</para>
+            /// </summary>
+            public Quaternion[] Target;
 
             /// <summary>Geçişin başladığı andaki gösterilen dizi (kopya).</summary>
             public readonly Quaternion[] From = new Quaternion[FingersMetadata.HAND_JOINT_IDS.Length];
@@ -119,10 +128,10 @@ namespace VortexArena.Core.Combat
                 WristLocked = false;
                 HasAnchorToWrist = false;
                 AnchorToWrist = default;
-                Target = HandGripPreset.Idle;
                 Progress = 1f;
 
-                Quaternion[] idle = HandGripPresets.JointRotations(HandGripPreset.Idle, rightHand);
+                Quaternion[] idle = HandPoseLibrary.IdleJointRotations(rightHand);
+                Target = idle;
                 for (int i = 0; i < Shown.Length && i < idle.Length; i++)
                 {
                     Shown[i] = idle[i];
@@ -385,9 +394,9 @@ namespace VortexArena.Core.Combat
         /// <para>⚠️ <b>Ana el ile ön kabza burada AYRIŞIR:</b> ana elin bileği SERBEST kalır (eşya
         /// ele uyar), ön kabzayı saran elin bileği TAM kilitlenir (el eşyaya yapışır). İkisini aynı
         /// kurala bağlamak, ya silahı elden koparır ya ikinci eli havada bırakır.</para>
-        /// <para>Parmaklar üç durumda da bizim yazdığımızdır: boş elde
-        /// <see cref="HandGripPreset.Idle"/>, eşya tutan elde slotun kendi preset'i — hedef her
-        /// karede <see cref="ApplyFingers"/>'a verilir, geçişi o yumuşatır.</para>
+        /// <para>Parmaklar üç durumda da bizim yazdığımızdır: boş elde boşta duruşu, eşya tutan elde
+        /// slotun kendi riglenmiş duruşu — hedef her karede <see cref="ApplyFingers"/>'a verilir,
+        /// geçişi o yumuşatır.</para>
         /// </summary>
         private void TickHand(OVRInput.Controller hand, bool rightHand, HandState state)
         {
@@ -417,7 +426,7 @@ namespace VortexArena.Core.Combat
             if (!hasGrip)
             {
                 FreeWristIfLocked(state);
-                ApplyFingers(state, HandGripPreset.Idle, rightHand);
+                ApplyFingers(state, HandPoseLibrary.IdleJointRotations(rightHand));
                 return;
             }
 
@@ -435,7 +444,7 @@ namespace VortexArena.Core.Combat
                 FreeWristIfLocked(state);
             }
 
-            ApplyFingers(state, definition.GripPreset(kind, rightHand), rightHand);
+            ApplyFingers(state, definition.GripJointRotations(kind, rightHand));
         }
 
         /// <summary>
@@ -494,12 +503,12 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Elin parmaklarını hedef preset'e götürür ve sentetik ele yazar.
+        /// Elin parmaklarını hedef eklem dizisine götürür ve sentetik ele yazar.
         /// <para>
         /// <b>Geçiş:</b> hedef değiştiği karede o anki gösterilen dizi <see cref="HandState.From"/>'a
         /// kopyalanır ve ilerleme sıfırlanır; sonraki karelerde dizi
-        /// <see cref="HandGripPresets.TransitionSeconds"/> boyunca hedefe slerp'lenir
-        /// (<see cref="HandGripPresets.Ease"/>). Oturmuş durumda (ilerleme 1) hedef dizi aynen yazılır.
+        /// <see cref="HandPoseLibrary.TransitionSeconds"/> boyunca hedefe slerp'lenir
+        /// (<see cref="HandPoseLibrary.Ease"/>). Oturmuş durumda (ilerleme 1) hedef dizi aynen yazılır.
         /// </para>
         /// <para>
         /// ⚠️ <b>Beş parmak HER KAREDE kilitlenir</b> (<c>JointFreedom.Locked</c>) ve bu
@@ -509,31 +518,32 @@ namespace VortexArena.Core.Combat
         /// kıpırdamaya başlar. Değişmeyen seviyeyi yeniden yazmak ISDK'da ucuzdur (karşılaştırıp
         /// geçer).
         /// </para>
-        /// <para>⚠️ <see cref="HandGripPresets.JointRotations"/>'ın dizisi ÖNBELLEKLİDİR ve
-        /// paylaşılır: değiştirilmez, yalnız okunur — ara dizi <see cref="HandState.Shown"/>'dur.</para>
+        /// <para>⚠️ Hedef dizi ÖNBELLEKLİDİR ve paylaşılır (<see cref="HandState.Target"/>):
+        /// değiştirilmez, yalnız okunur — ara dizi <see cref="HandState.Shown"/>'dur.</para>
         /// </summary>
-        private static void ApplyFingers(HandState state, HandGripPreset target, bool rightHand)
+        private static void ApplyFingers(HandState state, Quaternion[] goal)
         {
             SyntheticHand synthetic = state.Synthetic;
             Quaternion[] shown = state.Shown;
 
-            if (target != state.Target)
+            // Referans kıyası: hedef diziler slot başına önbellekli olduğu için kimlik yeterli
+            // (gerekçe HandState.Target'ta).
+            if (!ReferenceEquals(goal, state.Target))
             {
-                state.Target = target;
+                state.Target = goal;
                 state.Progress = 0f;
                 System.Array.Copy(shown, state.From, shown.Length);
             }
 
-            Quaternion[] goal = HandGripPresets.JointRotations(target, rightHand);
             int count = Mathf.Min(shown.Length, goal.Length);
 
             if (state.Progress < 1f)
             {
-                state.Progress = HandGripPresets.TransitionSeconds > 0f
-                    ? Mathf.Min(1f, state.Progress + Time.deltaTime / HandGripPresets.TransitionSeconds)
+                state.Progress = HandPoseLibrary.TransitionSeconds > 0f
+                    ? Mathf.Min(1f, state.Progress + Time.deltaTime / HandPoseLibrary.TransitionSeconds)
                     : 1f;
 
-                float t = HandGripPresets.Ease(state.Progress);
+                float t = HandPoseLibrary.Ease(state.Progress);
                 for (int i = 0; i < count; i++)
                 {
                     shown[i] = Quaternion.Slerp(state.From[i], goal[i], t);

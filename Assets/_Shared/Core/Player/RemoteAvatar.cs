@@ -1689,13 +1689,17 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>This hand's finger pose (§6.9): the SLOT's preset when holding an item, otherwise
-        /// idle.
-        /// <para>⚠️ <b>The pose is NOT sent on the wire</b> (§6.6), so it is synthesised from the grip
-        /// record's own preset — the SAME numbers the local synthetic hand uses; a second description
-        /// would hold the same weapon differently on each screen. The empty hand keeps its separate path
+        /// <summary>This hand's finger pose (§6.9): the SLOT's authored finger rig when holding an
+        /// item, otherwise idle.
+        /// <para>⚠️ <b>The pose is NOT sent on the wire</b> (§6.6), so it is derived from the grip
+        /// record itself — the SAME rig the local synthetic hand applies; a second description would
+        /// hold the same weapon differently on each screen. The empty hand keeps its separate path
         /// (a tunable rest pose, not a grip).</para>
-        /// <para>Under <c>GRIP_LINKED</c> the two hands differ: the primary takes its slot's preset
+        /// <para>⚠️ The remote hand is HUMANOID (Mixamo), so it takes CURL RATIOS, not the authored
+        /// joint quaternions: raw rotations from another skeleton are never written onto humanoid
+        /// bones (<c>Docs/Sistem-Ozeti.md</c> §7). The bridge is
+        /// <c>ItemDefinition.GripFingerCurl</c>, which measures the ratios off the very same rig.</para>
+        /// <para>Under <c>GRIP_LINKED</c> the two hands differ: the primary takes its own slot
         /// (trigger), the foregrip hand takes <see cref="GripSocketKind.Secondary"/> (wrap).</para></summary>
         public HandPoseProfile ResolveHandPose(bool rightHand)
         {
@@ -1717,7 +1721,7 @@ namespace VortexArena.Core.Player
 
             if (definition != null)
             {
-                return HandGripPresets.Profile(definition.GripPreset(kind, rightHand));
+                return definition.GripFingerCurl(kind, rightHand);
             }
 
             return idleHandPose.IsEmpty ? HandPoseProfile.Idle : idleHandPose;
