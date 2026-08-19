@@ -22,9 +22,10 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
 1. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` → pencereyi aç.
 2. `WPN_*` prefabını **prefab kipinde** aç.
 3. **Ana Kabza Ellerini Oluştur** (+ iki elli silahta **Ön Kabza Ellerini Oluştur**).
-4. Kumanda çerçevelerini (hayalet el onların çocuğudur) Scene View'da kabzalara oturt; sonra
-   parmakları o silaha göre **rigle** (penceredeki parmak listesinden eklemi seç → Scene View'da
-   çevir). Gerekirse **Karşı Ele Aynala** ile başlat (parmakları da kopyalar).
+4. Kumanda çerçevelerini Scene View'da kabzalara oturt; el modelini o kumandanın üstüne yerleştir
+   (*El Modeli* → taşı ve **çevir**; silah kımıldamaz); sonra parmakları o silaha göre **rigle**
+   (penceredeki parmak listesinden eklemi seç → Scene View'da çevir). Gerekirse **Karşı Ele Aynala**
+   ile başlat (el yerleşimini ve parmakları da taşır).
 5. **Kaydet** → dört kayıt `WD_*.asset`'e iner ve silah kiti kendiliğinden eşitlenir (ayrı bir
    senkronize adımı yok; tezgâhtan kalkan eller *Elleri Oluştur* ile kayıttan geri gelir).
 6. Başlıkta yalnız **hissi** doğrula (nişan alırken rahat mı).
@@ -34,10 +35,10 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
 - ⚠️ **Dört kaydın dördü de ayrı yazılır** (`primaryGripRight/Left`, `secondaryGripRight/Left`):
   kabza simetrik değildir, aynalama yalnız başlangıçtır. Eksik el öteki elin kaydına düşer —
   çalışır ama yanlış tutar.
-- ⚠️ **Ana elde kökü çevirmek SİLAHI çevirir** (`item = anchor ∘ Inverse(kayıt)`), yalnız taşımak
-  silahı kumandayla hizalı bırakır; ön kabzada el
-  silaha yapışır. Silah elde yatık görünüyorsa iki aday var: kaydın dönüşü ya da prefabtaki `Model`
-  yerleşimi.
+- ⚠️ **Kumanda kökü yalnız TAŞINIR** — çevirmenin oyunda karşılığı yoktur ve araç kökü silahla
+  hizalı hâline geri alır (`item = anchor ∘ Inverse(kayıt)`); ön kabzada el silaha yapışır. Silah
+  elde yatık görünüyorsa tek aday prefabtaki `Model` yerleşimidir. **El** yatık görünüyorsa aday
+  başkadır: o slotun el yerleşimi (stüdyoda `Hand`'i çevirerek düzeltilir).
 - ⚠️ Eller prefabın içine sürüklenmez (stage'in ayrı kökleri) — kaçak el arenada havada görünür.
 - ⚠️ `WeaponKitBuilder` kavrama kayıtlarını **ezmez**; koşu sonunda kavraması yazılmamış silahları
   listeler, eski `GripSocket_*` işaretçilerini, `GripPoses` ağacını, prefabta kalmış `Hands/Hand_*`

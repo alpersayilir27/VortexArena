@@ -26,6 +26,12 @@ namespace VortexArena.Core.Combat
     /// ölçülecek bir şey kalmıyor.
     /// </para>
     /// <para>
+    /// <b>Delta SLOT BAŞINA yazılabilir</b> (<see cref="ItemGripPose.Wrist"/>): elin silahın üstünde
+    /// nasıl duracağı kabzadan kabzaya değişir (kimi ön kabza yandan, kimi alttan tutulur), oysa
+    /// silahın kumandaya göre yeri değişmez. Yazılmamış slot paylaşılan tanıma düşer — yani bu
+    /// sınıf hâlâ tek kapıdır, yalnız cevabı artık "kavraması yazılmışsa onun, değilse ortak olan"dır.
+    /// </para>
+    /// <para>
     /// ⚠️ <b>Ölçek tuzağı burada YOKTUR:</b> kayıt zaten ölçeksiz metredir
     /// (<see cref="ItemGripPose"/>), yani hiçbir yerde eşyanın görsel ölçeğiyle (<c>WPN_*</c>
     /// kökleri 0.8) çarpılmaz ve ölçekli/ölçeksiz bileşim ayrımı yapmak gerekmez.
@@ -54,17 +60,31 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bir DÜNYA anchor pozundan aynı elin BİLEK pozunu üretir (<c>wrist = anchor ∘ delta</c>).
-        /// <para>Ön kabza kilidi (<c>HandGripPoser</c>) buradan geçer: kayıt anchor'ı söyler, sentetik
-        /// ele ise bilek verilir. Elle bileşim (<c>TransformPoint</c> DEĞİL): delta metredir.</para>
+        /// Bir kavrama kaydının kendi el yerleşimi — yazılmamışsa paylaşılan tanım
+        /// (<see cref="ResolveAnchorToWrist(bool)"/>).
+        /// <para>⚠️ <b>Düşme sessizdir ve öyle kalmalı:</b> el yerleşimi kavrama kaydından sonra
+        /// eklendi, yani diskteki her eski kayıt bu yolla bugünkü elini aynen koruyor. Burada uyarı
+        /// basmak, hiçbir şeyi bozulmamış 13 silahın hepsi için konsola satır atmak olurdu; eksik
+        /// yerleşim zaten stüdyoda görülüyor.</para>
         /// </summary>
-        public static Pose WristFromAnchor(bool rightHand, in Pose anchorWorld)
+        public static Pose ResolveAnchorToWrist(in ItemGripPose grip, bool rightHand)
         {
-            Pose delta = ResolveAnchorToWrist(rightHand);
-            return new Pose(
-                anchorWorld.position + anchorWorld.rotation * delta.position,
-                anchorWorld.rotation * delta.rotation);
+            return grip.HasWrist ? grip.Wrist : ResolveAnchorToWrist(rightHand);
         }
 
+        /// <summary>
+        /// Bir DÜNYA anchor pozundan aynı elin BİLEK pozunu üretir (<c>wrist = anchor ∘ delta</c>).
+        /// <para>Bilek kilitlerinin ikisi de (<c>HandGripPoser</c>) buradan geçer: kayıt anchor'ı
+        /// söyler, sentetik ele ise bilek verilir. Elle bileşim (<c>TransformPoint</c> DEĞİL): delta
+        /// metredir.</para>
+        /// </summary>
+        /// <param name="anchorToWrist">Kullanılacak delta — slotun kendi yerleşimi ya da paylaşılan
+        /// tanım (<c>ResolveAnchorToWrist</c>).</param>
+        public static Pose WristFromAnchor(in Pose anchorWorld, in Pose anchorToWrist)
+        {
+            return new Pose(
+                anchorWorld.position + anchorWorld.rotation * anchorToWrist.position,
+                anchorWorld.rotation * anchorToWrist.rotation);
+        }
     }
 }

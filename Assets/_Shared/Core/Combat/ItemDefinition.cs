@@ -42,10 +42,12 @@ namespace VortexArena.Core.Combat
         [SerializeField] private ItemHoldMode holdMode = ItemHoldMode.OneHand;
 
         // ⚠️ DÖRT KAYIT DA AYNI UZAYDADIR: her biri elin KUMANDA ANCHOR'ININ EŞYAYA göre yerel
-        // KONUMUDUR (eşya → anchor; ItemGripPose — dönüş yoktur, silah her zaman kumandayla
-        // hizalıdır). Tek yönde yazıldıkları için ikinci bir uzay tarif etmek yalnız işaret hatası
-        // üretirdi. Anchor = telde giden el pozu = çözücünün bildiği poz, yani hiçbir okuyucu delta
-        // ölçmek zorunda değildir.
+        // KONUMUDUR (eşya → anchor; ItemGripPose — anchor kaydının dönüşü yoktur, silah her zaman
+        // kumandayla hizalıdır). Tek yönde yazıldıkları için ikinci bir uzay tarif etmek yalnız
+        // işaret hatası üretirdi. Anchor = telde giden el pozu = çözücünün bildiği poz, yani hiçbir
+        // okuyucu delta ölçmek zorunda değildir.
+        // ⚠️ Kaydın İKİNCİ yarısı elin GÖRSELİDİR (bilek yerleşimi + parmak rigi) ve eşyanın pozuna
+        // hiç karışmaz: el silaha göre yan/alttan durabilirken silah kumandayla hizalı kalır.
         // ⚠️ Kayıt EL BAŞINADIR: kabza simetrik olmadığı için iki elin kumandası eşyanın farklı
         // yerlerine düşer — tek kayıt tutup aynalamak sol eli silahın içine sokardı.
         // ⚠️ Kayıtlar stüdyoda yazılır (editör), gözlükle yakalanmaz.
@@ -318,12 +320,14 @@ namespace VortexArena.Core.Combat
         /// istiyor.</para>
         /// </summary>
         /// <param name="anchorInItem">Kumanda anchor'ının EŞYAYA göre yerel konumu (metre, ölçeksiz).</param>
+        /// <param name="wristInAnchor">El modelinin kumanda anchor'ına göre yerel pozu (metre,
+        /// ölçeksiz) — elin silaha göre yan/alttan durmasını bu taşır.</param>
         /// <param name="fingerJoints">O slotta riglenmiş parmak eklemleri (boş olabilir — el o zaman
         /// boşta duruşunda kalır).</param>
         public void EditorSetGrip(GripSocketKind kind, bool rightHand, in Vector3 anchorInItem,
-            HandJointRotation[] fingerJoints)
+            in Pose wristInAnchor, HandJointRotation[] fingerJoints)
         {
-            ItemGripPose capture = ItemGripPose.From(anchorInItem, fingerJoints);
+            ItemGripPose capture = ItemGripPose.From(anchorInItem, wristInAnchor, fingerJoints);
             InvalidateGripCache();
 
             if (kind == GripSocketKind.Secondary)
