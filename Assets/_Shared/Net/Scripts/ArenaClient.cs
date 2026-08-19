@@ -550,12 +550,16 @@ namespace VortexArena.Net
 
                     case MessageTypes.ClearCalibration:
                     {
-                        // Operatör kalibrasyonu sıfırladı (§10.6). Sunucu yalnız player'a yollar,
-                        // alansız: hedef zaten bu bağlantı. ⚠️ Roster'daki `calibrated` alanına
-                        // BAKILMAZ — yarım kalmış bir kalibrasyonda o alan zaten `false`'tur, yani
-                        // sıfırlamanın orada görünür bir deltası yoktur (§5.3). Sahne/anchor
-                        // dokunduğu için ana thread.
-                        _mainThreadActions.Enqueue(NetEvents.RaiseClearCalibration);
+                        // Operatör kalibrasyonu sıfırladı (§10.6). Sunucu yalnız player'a yollar;
+                        // `playerId` taşınmaz (hedef zaten bu bağlantı) ama `keepSaved` taşınır:
+                        // yumuşak kipte cihazdaki çapa korunur, sert kipte silinir. Alan yoksa
+                        // `false` okunur = sert. ⚠️ Roster'daki `calibrated` alanına BAKILMAZ —
+                        // yarım kalmış bir kalibrasyonda o alan zaten `false`'tur, yani sıfırlamanın
+                        // orada görünür bir deltası yoktur (§5.3). Sahne/anchor dokunduğu için
+                        // ana thread.
+                        ClearCalibrationMsg msg = JsonUtility.FromJson<ClearCalibrationMsg>(json);
+                        bool keepSaved = msg != null && msg.keepSaved;
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseClearCalibration(keepSaved));
                         break;
                     }
 

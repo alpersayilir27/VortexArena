@@ -292,9 +292,19 @@ public sealed class LobbyService
     /// hizalamanın oturduğunu yalnız o bilir.
     /// <para>
     /// İki iş birden yapılır: (1) roster'daki <c>calibrated</c> düşürülür, (2) hedef başlığa
-    /// <b>alansız</b> bir <c>clear_calibration</c> iletilir (<c>identify</c> ile aynı çift yönlü
-    /// desen). İkincisi olmadan sıfırlama eksik kalır — hizalamayı, kayıtlı anchor'ı ve yarım kalmış
-    /// elle kalibrasyon sekansını silen taraf başlığın kendisidir.
+    /// <c>clear_calibration</c> iletilir. İkincisi olmadan sıfırlama eksik kalır — hizalamayı,
+    /// kayıtlı anchor'ı ve yarım kalmış elle kalibrasyon sekansını silen taraf başlığın kendisidir.
+    /// </para>
+    /// <para>
+    /// İletilen payload <c>playerId</c> TAŞIMAZ (hedef zaten o bağlantıdır) ama <c>keepSaved</c>
+    /// taşır: operatörün seçtiği kip başlığa ulaşmalıdır — <c>true</c> yalnız hizalamayı geçersiz
+    /// kılar (cihazdaki çapa kalır, ardından gelen <c>reload_calibration</c> çalışır), <c>false</c>
+    /// cihaz kaydını da sildirir.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Roster tarafı iki kipte de AYNIDIR</b> (<see cref="PlayerRegistry.SetCalibration"/> ile
+    /// <c>calibrated:false</c>): kip yalnız başlığın cihazındaki kaydı ilgilendirir, sunucu için
+    /// fark yoktur.
     /// </para>
     /// <para>
     /// ⚠️ <b>İletim oyuncunun durumuna BAĞLANMAZ.</b> <see cref="PlayerRegistry.SetCalibration"/>
@@ -307,8 +317,17 @@ public sealed class LobbyService
     /// </summary>
     public async Task HandleClearCalibrationAsync(ClientConnection connection, ClearCalibrationMsg msg)
     {
-        // Sunucu → istemci yönünde alan taşınmaz: hedef zaten o bağlantıdır.
-        var payload = JsonUtil.Serialize(new ClearCalibrationMsg());
+        // Sunucu → istemci yönünde `playerId` taşınmaz (hedef zaten o bağlantıdır), `keepSaved`
+        // taşınır: kipi seçen operatördür, başlık onu tele bakarak öğrenir.
+        var payload = JsonUtil.Serialize(new ClearCalibrationMsg { keepSaved = msg.keepSaved });
+        // İki kip konsolda ve admin duyurusunda ayırt edilir: operatör hangi düğmeye bastığını
+        // sonuç satırından da görebilmeli.
+        var kindAll = msg.keepSaved
+            ? "hizalamalar geçersiz kılındı (cihaz kayıtları duruyor)"
+            : "hizalamalar sıfırlandı, cihaz kayıtları da silindi";
+        var kindOne = msg.keepSaved
+            ? "hizalaması geçersiz kılındı (cihaz kaydı duruyor)"
+            : "kalibrasyonu sıfırlandı, cihaz kaydı da silindi";
 
         if (msg.playerId == 0)
         {
@@ -324,8 +343,9 @@ public sealed class LobbyService
                 sent++;
             }
 
-            Console.WriteLine($"[Lobby] clear_calibration: TÜM oyuncular ({sent} başlığa iletildi) — {connection.State?.Name}.");
-            await BroadcastAdminStateAsync(Notice(connection, $"tüm kalibrasyonlar sıfırlandı ({sent} oyuncu)"));
+            Console.WriteLine($"[Lobby] clear_calibration: TÜM oyuncular — {kindAll} " +
+                              $"({sent} başlığa iletildi) — {connection.State?.Name}.");
+            await BroadcastAdminStateAsync(Notice(connection, $"tüm {kindAll} ({sent} oyuncu)"));
             return;
         }
 
@@ -346,8 +366,9 @@ public sealed class LobbyService
             await SendSafeAsync(target.Socket, payload, target.Name);
         }
         var reach = target.Socket != null ? "iletildi" : "bağlantısı yok, yalnız kayıt sıfırlandı";
-        Console.WriteLine($"[Lobby] clear_calibration: {target.Name} (playerId {target.PlayerId}) — {reach}, {connection.State?.Name}.");
-        await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kalibrasyonu sıfırlandı"));
+        Console.WriteLine($"[Lobby] clear_calibration: {target.Name} (playerId {target.PlayerId}) — " +
+                          $"{kindOne}, {reach}, {connection.State?.Name}.");
+        await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} {kindOne}"));
     }
 
     /// <summary>

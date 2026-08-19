@@ -4,6 +4,14 @@ namespace VortexArena.Protocol
     public static class ArenaProtocol
     {
         /// <summary>
+        /// v15: <b>sıfırlamanın ikiye ayrılması</b> — <c>clear_calibration.keepSaved</c> (§5.2):
+        /// komut artık "hizalamayı geçersiz kıl" (<c>true</c>, cihazdaki çapa ve UUID korunur →
+        /// ardından gelen <c>reload_calibration</c> çalışır) ile "cihaz kaydını da sil"
+        /// (<c>false</c>) kiplerine ayrılır (§10.6).
+        /// <para>⚠️ Değişiklik <b>eklemelidir</b> ve varsayılan bilinçli olarak SERT'tir: alanı
+        /// okumayan eski başlık <c>false</c> görüp bugünkü davranışta kalır, yani karışık sürümde
+        /// kaybolan tek şey yumuşak kiptir — operatör o başlıkta sıfırlama sonrası yeniden
+        /// yükleyemez.</para>
         /// v14: <b>ihlal görünürlüğü</b> — <c>0x01</c>/<c>0x02</c> bayrak baytında bit7
         /// (<see cref="SnapshotEntry.FLAG_OUT_OF_BOUNDS"/>, §6.3) + yalnız adminlere giden
         /// <c>violation</c> mesajı (§5.3) ve <see cref="VIOLATION_MIN_SECONDS"/>.
@@ -95,7 +103,7 @@ namespace VortexArena.Protocol
         /// v2: <c>set_name</c> kaldırıldı (→ <c>set_identity</c>), <c>lobby_state.version</c> +
         /// <c>status.rosterVersion</c> + <c>PlayerInfo.number</c> eklendi (§1).
         /// </summary>
-        public const int PROTOCOL_VERSION = 14;
+        public const int PROTOCOL_VERSION = 15;
         public const string APP_ID = "VortexArena";
 
         // ---- Kalibre modu (§5.2/§10.6): başlıkların AÇILIŞTA nasıl hizalanacağı. ----

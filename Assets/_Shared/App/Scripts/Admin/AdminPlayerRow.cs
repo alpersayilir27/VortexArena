@@ -415,8 +415,14 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Kalibrasyonu sıfırlar — iki adımlı, "AT" ile aynı gerekçe: oyuncuyu savaş dışı bırakan
-        /// bir eylem tek yanlış tıklamayla olmamalı.
+        /// Oyuncunun hizalamasını geçersiz kılar — iki adımlı, "AT" ile aynı gerekçe: oyuncuyu
+        /// savaş dışı bırakan bir eylem tek yanlış tıklamayla olmamalı.
+        /// <para>
+        /// ⚠️ Satır seviyesinde <b>yalnız YUMUŞAK kip vardır</b> (<c>keepSaved: true</c>): gözlükteki
+        /// kayıtlı çapa korunur, böylece ardından "KALİBRE ET" oyuncuyu tek tıkla geri sokar.
+        /// Cihazdaki kaydı yok eden sert kip bir mekan bakımıdır (zemin bantları taşındığında) ve
+        /// yalnız toplu düğmeden yapılır (<see cref="AdminStatsPanel"/>).
+        /// </para>
         /// <para>
         /// ⚠️ <b>Satır kalibresiz görünürken de komut gönderilir</b> ve bu kapı geri konmaz: kırmızı
         /// satır tek bir durum değil İKİ durum gösterir — hiç kalibre olmamış oyuncu ve elle
@@ -437,7 +443,7 @@ namespace VortexArena.App.Admin
             }
 
             _calibArmedAt = -1f;
-            AdminCommands.ClearCalibration(_playerId);
+            AdminCommands.ClearCalibration(_playerId, keepSaved: true);
             RefreshCalibrationButton();
         }
 
