@@ -538,6 +538,14 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
   aynı eklem sözleşmesini paylaşır), el yerleşimi ise gerçekten aynalanır (x tersine döner, dönüş
   Y/Z ekseninde ters işaretlenir). Yine başlangıçtır, kabzanın tek taraflı parçaları elle
   düzeltilir.
+- **Aynı el başka bir silahta zaten yazılıysa: Kopya Al.** El satırındaki üçüncü düğme, o elin
+  **görselini** — kumanda üstündeki yerleşim + parmak rigi — seçtiğin silahtan aynen alır, yani 5.
+  ve 6. adımı tekrar etmen gerekmez. ⚠️ **Silahın kumandaya göre yeri kopyalanmaz** (4. adım her
+  silahın kendi geometrisidir; başka silahtan almak silahı elde kaydırırdı). Listede yalnız **aynı
+  kavrama noktasının aynı eli** yazılmış silahlar çıkar — sağ el için sol el kaydı kaynak olmaz —
+  ve hiç yoksa menü boş açılmaz, kapalı bir satır gösterir. Kaydın iki yarısı da yazılır: kaynağın
+  yerleşimi ya da parmakları eksikse o yarı paylaşılan varsayılana döner (menü satırı hangisinin
+  eksik olduğunu söyler). Kopya diske inmez — kalıcı olması için **Kaydet**.
 - Kavraması yazılmamış silahta el boşta duruşunda kalır + konsola oturum başına bir uyarı gider;
   silah kiti koşusu da sonunda **"kavraması EKSİK silahlar"**ı listeler — ana kabzası yazılmamış
   olanlar VE çift elli olup ön kabzası yazılmamış olanlar (`Configure All Build Elements`

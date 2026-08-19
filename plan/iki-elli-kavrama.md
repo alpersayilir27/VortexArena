@@ -47,6 +47,10 @@ ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`).
 5. **Kaydet** → dördü `WD_*.asset`'e iner; silah kiti kendiliğinden eşitlenir (eller tezgâhtan
    kalkarsa *Elleri Oluştur* kayıttan aynı yere getirir).
 
+Aynı el başka bir silahta yazılıysa **Kopya Al** 3. ve 4. adımı devralır (el satırındaki üçüncü
+düğme: yerleşim + parmak rigi aynen gelir). ⚠️ Silahın kumandaya göre yeri kopyalanmaz — o her
+silahta elle konur.
+
 Kapsam: `WeaponKitBuilder` tablosundaki **tüm** `WPN_*`'lar; hangilerinin eksik olduğunu
 silah kiti koşusunun sonundaki uyarı listeler.
 
@@ -84,6 +88,10 @@ silah kiti koşusunun sonundaki uyarı listeler.
       riglenmiş duruşa yumuşakça kapanıyor (~0.15 s), bırakınca geri açılıyor.
 - [ ] **Tezgâh = gözlük:** stüdyoda yerleştirdiğin el ve riglediğin duruş başlıkta birebir aynı
       görünüyor (elin kumandaya göre yeri/açısı + kemik kemik parmaklar).
+- [ ] **Kopya Al doğru kaynağı gösteriyor:** menüde yalnız o kavrama noktasının o eli yazılmış
+      başka silahlar çıkıyor (silahın kendisi çıkmıyor, sağ el için sol el kaydı çıkmıyor); hiç
+      yoksa kapalı satır geliyor. Seçince el o silahtaki gibi oturuyor + parmaklar o duruşa geçiyor,
+      **silahın kumandaya göre yeri kımıldamıyor**; Kaydet'e basmadan kapatılırsa kayıt değişmiyor.
 - [ ] **Yerleşimi yazılmamış silah bugünkü elini koruyor:** el yerleşimi hiç yazılmamış bir `WD_*`
       ile oynayınca el eskisi gibi duruyor (paylaşılan varsayılana düşüyor, konsola uyarı gitmiyor).
 - [ ] Uzak avatarın parmakları o slotun duruşuna yakın çiziliyor (ön kabzayı saran el uzakta da

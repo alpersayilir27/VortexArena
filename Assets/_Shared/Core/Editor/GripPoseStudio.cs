@@ -413,7 +413,7 @@ namespace VortexArena.Core.Editor
                 }
             }
 
-            DrawHandList(hands);
+            DrawHandList(definition, hands);
 
             // ⚠️ State updates ONLY on the Layout event: OnGUI runs at least twice per frame
             // (Layout + Repaint) and drawing a DIFFERENT number of controls in the two passes breaks
@@ -463,7 +463,7 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        private void DrawHandList(List<GripHandAuthoring> hands)
+        private void DrawHandList(WeaponDefinition definition, List<GripHandAuthoring> hands)
         {
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Tezgâhtaki eller", EditorStyles.boldLabel);
@@ -518,6 +518,13 @@ namespace VortexArena.Core.Editor
                             SceneView.lastActiveSceneView?.FrameSelected();
                         }
                     }
+
+                    if (GUILayout.Button(new GUIContent("Kopya Al",
+                            "Bu elin görselini (kumanda üstündeki yerleşimi + parmak rigi) başka " +
+                            "bir silahtan aynen alır. Silahın kumandaya göre yerine DOKUNMAZ.")))
+                    {
+                        ShowCopyMenu(hand, definition, GUILayoutUtility.GetLastRect());
+                    }
                 }
 
                 if (hand == focused)
@@ -525,6 +532,124 @@ namespace VortexArena.Core.Editor
                     DrawFingerRig(hand);
                 }
             }
+        }
+
+        // ------------------------------------------------------------------ copy from weapon
+
+        /// <summary>Drops down the list of weapons this hand's LOOK can be copied from.
+        /// <para>⚠️ Only definitions that have <b>this very slot</b> (same grip point, same hand)
+        /// authored are listed, and a weapon whose record holds neither a seat nor a finger rig is
+        /// left out too: an entry that copies nothing would read as "I picked it and nothing
+        /// happened". A slot with no source at all shows a disabled line instead of an empty
+        /// menu — an empty dropdown looks like a broken button.</para>
+        /// <para>⚠️ The current weapon is excluded: "copy from myself" would silently mean "revert
+        /// to the last save", which is a different operation and not what the button says.</para></summary>
+        private static void ShowCopyMenu(GripHandAuthoring hand, WeaponDefinition current, Rect from)
+        {
+            if (hand == null)
+            {
+                return;
+            }
+
+            GripSocketKind kind = hand.Kind;
+            bool rightHand = hand.RightHand;
+            List<ItemDefinition> sources = CollectCopySources(kind, rightHand, current);
+
+            var menu = new GenericMenu();
+            if (sources.Count == 0)
+            {
+                menu.AddDisabledItem(new GUIContent(
+                    $"(bu eli yazılmış başka silah yok: {kind} · {(rightHand ? "sağ" : "sol")})"));
+                menu.DropDown(from);
+                return;
+            }
+
+            for (int i = 0; i < sources.Count; i++)
+            {
+                ItemDefinition source = sources[i];
+                ItemGripPose grip = source.GetGrip(kind, rightHand);
+
+                // The suffix says what the source actually carries, so nobody copies a "default
+                // seat" or an "idle hand" by accident and then hunts for the difference.
+                string suffix = grip.HasWrist
+                    ? (grip.HasFingers ? "" : " · parmakları riglenmemiş")
+                    : " · yerleşimi yazılmamış";
+
+                menu.AddItem(new GUIContent(source.name + suffix), false,
+                    () => CopyHandFrom(hand, source));
+            }
+
+            menu.DropDown(from);
+        }
+
+        /// <summary>Every definition on disk whose <paramref name="kind"/>/<paramref name="rightHand"/>
+        /// slot is authored AND holds something to copy, sorted by asset name.
+        /// <para>⚠️ <c>t:ItemDefinition</c> (not <c>t:WeaponDefinition</c>): the record lives on the
+        /// base, so a throwable authored the same way is a valid source — the hand does not care
+        /// what the item does.</para>
+        /// <para>⚠️ <see cref="ItemDefinition.HasGrip"/>, never <c>GetGrip</c>, decides membership:
+        /// the read path falls back to the OTHER hand, so a weapon with only a right hand written
+        /// would show up as a left-hand source and hand over a mirrored-looking pose.</para></summary>
+        private static List<ItemDefinition> CollectCopySources(GripSocketKind kind, bool rightHand,
+            ItemDefinition exclude)
+        {
+            var result = new List<ItemDefinition>();
+            string[] guids = AssetDatabase.FindAssets("t:ItemDefinition");
+
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                var definition = AssetDatabase.LoadAssetAtPath<ItemDefinition>(path);
+                if (definition == null || definition == exclude ||
+                    !definition.HasGrip(kind, rightHand))
+                {
+                    continue;
+                }
+
+                ItemGripPose grip = definition.GetGrip(kind, rightHand);
+                if (!grip.HasWrist && !grip.HasFingers)
+                {
+                    continue;
+                }
+
+                result.Add(definition);
+            }
+
+            result.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+            return result;
+        }
+
+        /// <summary>Copies the source's LOOK for this slot onto the bench hand: the hand model's
+        /// seat on the controller + the rigged finger joints.
+        /// <para>⚠️ The controller root is NOT touched. That root is where the WEAPON sits on the
+        /// controller and it is this weapon's own geometry — taking it from another weapon would
+        /// move the gun in the hand, and the tell in game ("the weapon comes in crooked") is far
+        /// from the button that caused it.</para>
+        /// <para>⚠️ BOTH halves are written, even when the source has only one: the copy makes this
+        /// hand exactly that weapon's hand, so a source with no seat re-seats to the shared default
+        /// (the menu labels say which half is missing). Half-copying would leave a hand that
+        /// matches neither weapon.</para>
+        /// <para>⚠️ Nothing goes to disk here — the bench is what changed, and <b>Kaydet</b> stays
+        /// the single writer (<see cref="SaveHands"/>).</para></summary>
+        private static void CopyHandFrom(GripHandAuthoring hand, ItemDefinition source)
+        {
+            // The menu fires after the GUI event, so both ends can be gone by now (a hand destroyed
+            // in the meantime, an asset deleted) — that is a no-op, not an error.
+            if (hand == null || source == null)
+            {
+                return;
+            }
+
+            ItemGripPose grip = source.GetGrip(hand.Kind, hand.RightHand);
+            ApplyGhostOffset(hand, grip);
+            hand.ApplyPose(grip.fingerJoints);
+
+            Debug.Log($"{LOG} {hand.Kind}/{(hand.RightHand ? "sağ" : "sol")} elin görseli " +
+                      $"'{source.name}' kaydından kopyalandı (yerleşim + parmaklar). Silahın " +
+                      "kumandaya göre yeri değişmedi — kalıcı olması için Kaydet.", source);
+
+            SceneView.RepaintAll();
+            NotifyHandsChanged();
         }
 
         /// <summary>Finger rig picker for ONE hand: a button per riggable joint that selects the bone
