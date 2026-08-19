@@ -7885,7 +7885,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 99920287-3f3d-4112-83a8-71b50306e08c
+  instanceId: fcd473aa-a809-4b70-9666-4c233a3e37e6
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8632,7 +8632,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: 4d25327b-f93d-4ac1-abd2-641d796b4754
+  instanceId: 24f52505-b317-4361-8d22-2cb179a11922
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -10603,7 +10603,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: f0091531-5927-49e9-b539-76da131ddbf8
+  instanceId: 4dcf9d60-f27a-4272-8b3f-16200635b0f2
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11567,7 +11567,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: 70779588-466d-4801-91a0-c8ecfdbb9d8a
+  instanceId: f053e3a4-2269-4e89-a52c-9c0f2f68c89f
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc
