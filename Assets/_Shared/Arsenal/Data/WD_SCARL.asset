@@ -18,7 +18,7 @@ MonoBehaviour:
   holdMode: 1
   primaryGripRight:
     authored: 1
-    position: {x: 0.0079, y: -0.052535992, z: -0.042996906}
+    position: {x: 0.0315, y: -0.067, z: -0.016}
     fingerJoints:
     - joint: HandThumb1
       rotation: {x: 0.13296233, y: -0.6895032, z: 0.6561665, w: 0.27631867}
@@ -54,7 +54,7 @@ MonoBehaviour:
       rotation: {x: 0.2032925, y: 0.057711117, z: 0.012861747, w: 0.97733116}
   primaryGripLeft:
     authored: 1
-    position: {x: -0.0079, y: -0.052535992, z: -0.042996906}
+    position: {x: -0.0315, y: -0.067, z: -0.016}
     fingerJoints:
     - joint: HandThumb1
       rotation: {x: 0.13296233, y: -0.6895032, z: 0.6561665, w: 0.27631867}

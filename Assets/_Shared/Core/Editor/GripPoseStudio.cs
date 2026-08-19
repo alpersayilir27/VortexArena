@@ -32,9 +32,11 @@ namespace VortexArena.Core.Editor
     /// <para>Two LOCKED visual children hang under the root: the Quest 3 controller model (identity
     /// pose — exactly how it sits under the anchor in game, so it is the real alignment reference)
     /// and the ISDK ghost hand (at the anchor→wrist pose: the measured
-    /// <see cref="HandGripConvention.AnchorToWrist"/> if present, otherwise estimated from the
-    /// ghost's own skeleton — <see cref="ResolveGhostOffset"/>). ⚠️ The ghost never enters the
-    /// record; an estimate only shifts the visual slightly.</para>
+    /// <see cref="HandGripConvention.AnchorToWrist"/> if present, otherwise controller-aligned with a
+    /// translation only — <see cref="ResolveGhostOffset"/>). ⚠️ The ghost never enters the record,
+    /// and the finger rotations authored on it are local to the wrist — so this offset shifts the
+    /// visual and nothing else. ⚠️ It carries NO guessed rotation and must not grow one back
+    /// (rationale in <see cref="ResolveGhostOffset"/>).</para>
     /// <para>⚠️ If the record carried a rotation, anyone rotating the root would skew the weapon off
     /// the controller in game. The front grip carries none either: the second hand's controller is
     /// taken as weapon-aligned and the synthetic wrist locks its delta beyond it.</para>
@@ -468,11 +470,13 @@ namespace VortexArena.Core.Editor
             if (AnyGhostEstimated(hands))
             {
                 EditorGUILayout.HelpBox(
-                    "Hayalet el TAHMİNLE çizildi (anchor→bilek sabiti ölçülmemiş: " +
-                    "HandGripConvention.*AnchorToWrist = kimlik). Elin kumandaya göre duruşu yaklaşıktır, " +
-                    "kumanda modeli ise kesindir — yerleşimi ona göre yap. Kayıt bundan etkilenmez. Tam el " +
-                    "için HandGripPoser'ın başlıkta bastığı iki satırı (editör Play'i ya da APK'da " +
-                    "adb logcat -s Unity) sabite yapıştır.",
+                    "Hayalet el KUMANDAYLA HİZALI çizildi (anchor→bilek sabiti ölçülmemiş: " +
+                    "HandGripConvention.*AnchorToWrist = kimlik) — yani elin kumandaya göre gerçek " +
+                    "eğimi burada YOK, yalnız avuç merkezi kumandanın üstüne ötelendi. Kesin olan " +
+                    "kumanda modelidir, yerleşimi ona göre yap. Kayıt ve parmak rigi bundan " +
+                    "etkilenmez (parmak dönüşleri bileğe göreli). Gerçek eğim için HandGripPoser'ın " +
+                    "başlıkta bastığı iki satırı (editör Play'i ya da APK'da adb logcat -s Unity) " +
+                    "sabite yapıştır.",
                     MessageType.Info);
             }
         }
@@ -845,9 +849,13 @@ namespace VortexArena.Core.Editor
             {
                 // A hand hidden by Unity's save side effect returns to the hierarchy here, so
                 // "Elleri Oluştur" also revives lost hands. The visual children are re-seated too: a
-                // hand-dragged child never enters the record but misleads the user. A hand with no
-                // offset written (identity + unmeasured) has it re-resolved from the prototype.
-                if (!existing.GhostOffsetMeasured && existing.GhostOffset.Equals(Pose.identity) &&
+                // hand-dragged child never enters the record but misleads the user.
+                // ⚠️ An UNMEASURED offset is re-resolved every time, not just when it is identity:
+                // the offset is stored on the hand (it survives domain reloads), so a hand built
+                // under an older rule would keep that rule's ghost pose until the user thought to
+                // clear the bench. Re-resolving costs nothing and makes the bench self-healing; a
+                // MEASURED offset is left alone because it is the truth, not a fallback.
+                if (!existing.GhostOffsetMeasured &&
                     TryGetGhostProvider(out HandGhostProvider existingProvider))
                 {
                     HandGhost prototypeForExisting = existingProvider.GetHand(existing.Handedness);
@@ -948,18 +956,20 @@ namespace VortexArena.Core.Editor
         /// <summary>Local pose of the ghost hand relative to the controller root (anchor→wrist).
         /// <para>Uses the measured constant when present
         /// (<see cref="HandGripConvention.AnchorToWrist"/>, if not identity): the value
-        /// <c>HandGripPoser</c> logs on the headset is the only truth. Otherwise it ESTIMATES —
-        /// drawing the hand at the root's own axes would show a sideways hand (the ISDK wrist frame
-        /// is not controller-aligned) and the user would place the weapon against that. The estimate
-        /// has two parts: rotation = hand anatomy in anchor space
-        /// (<see cref="HandGripConvention.AnchorBasis"/>, the same convention the remote avatar uses)
-        /// composed with the bone basis measured from the ghost's OWN skeleton
-        /// (<see cref="HandGripConvention.Correction"/>); position = palm centre taken to be on the
-        /// controller (<c>HandGripPivot</c>: palm ≡ anchor), where palm centre is the OpenXR
-        /// definition (half of wrist→middle-finger root).</para>
-        /// <para>⚠️ The estimate never enters the record — that is the root's pose; this is only
-        /// where the ghost is drawn. Once the constant is measured and pasted in, the estimate is
-        /// never read.</para></summary>
+        /// <c>HandGripPoser</c> logs on the headset is the only truth. Otherwise it falls back to a
+        /// <b>translation only</b> — the palm centre is placed on the controller
+        /// (<c>HandGripPivot</c>: palm ≡ anchor), palm centre being the OpenXR definition (half of
+        /// wrist→middle-finger root).</para>
+        /// <para>⚠️ <b>The fallback carries NO ROTATION and must not grow one back.</b> It used to
+        /// twist the ghost by an anatomical GUESS (<c>HandGripConvention.AnchorBasis</c> composed
+        /// with the ghost's own bone basis) — an unmeasured constant that landed ~70° off around the
+        /// finger axis, i.e. the hand came out visibly rolled while the controller model beside it
+        /// was exact. A guess is worse than nothing here for two reasons: the user aligns the weapon
+        /// against what they SEE, and since the finger rig is authored on these very bones, a twisted
+        /// wrist means rigging inside a frame that does not exist in game. Unrotated is not "right"
+        /// either — it is HONEST and stable: the record never carries the ghost pose, and the finger
+        /// rotations are local to the wrist, so neither is affected by this offset. The real fix is
+        /// pasting the measured constant, and then this branch is never read.</para></summary>
         private static Pose ResolveGhostOffset(HandGhost prototype, bool rightHand, out bool measured)
         {
             Pose constant = HandGripConvention.AnchorToWrist(rightHand);
@@ -969,22 +979,17 @@ namespace VortexArena.Core.Editor
                 return constant;
             }
 
-            // Measured on the PROTOTYPE (asset, bind pose) — a live instance may be folded by a preset.
+            // Measured on the PROTOTYPE (asset, bind pose) — a live instance is folded by its rig.
             HandPuppet puppet = prototype != null ? prototype.GetComponent<HandPuppet>() : null;
             Transform ghostRoot = prototype != null ? prototype.transform : null;
             if (puppet == null || ghostRoot == null ||
-                !TryFindJoint(puppet, HandJointId.HandMiddle1, out Transform middleProximal) ||
-                !TryFindJoint(puppet, HandJointId.HandThumb2, out Transform thumbProximal) ||
-                !HandGripConvention.TryMeasureBoneBasis(ghostRoot, middleProximal, thumbProximal, rightHand,
-                    out Quaternion boneBasis))
+                !TryFindJoint(puppet, HandJointId.HandMiddle1, out Transform middleProximal))
             {
                 return Pose.identity;
             }
 
-            Quaternion rotation = HandGripConvention.Correction(rightHand, boneBasis);
-            Vector3 middleLocal = ghostRoot.InverseTransformPoint(middleProximal.position);
-            Vector3 palmLocal = middleLocal * 0.5f;
-            return new Pose(-(rotation * palmLocal), rotation);
+            Vector3 palmLocal = ghostRoot.InverseTransformPoint(middleProximal.position) * 0.5f;
+            return new Pose(-palmLocal, Quaternion.identity);
         }
 
         private static bool TryFindJoint(HandPuppet puppet, HandJointId id, out Transform joint)
