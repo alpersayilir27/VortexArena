@@ -10718,8 +10718,6 @@ MonoBehaviour:
   dimensionsJson: {fileID: 4900000, guid: 9f90cfe7fdb63dd439c6a603eace9f11, type: 3}
   warnDistance: 1
   warnFadeAlpha: 0.35
-  fadeOutsideDistance: 0.3
-  maxFadeAlpha: 0.96
 --- !u!1001 &941973757
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -21741,8 +21739,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BaseZone
   team: 0
   head: {fileID: 1221461639}
-  halfExtentX: 0.5
-  halfExtentZ: 6
   onPlayerEntered:
     m_PersistentCalls:
       m_Calls: []
@@ -21815,7 +21811,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: d1d57d8b916aff14d9273b083fcae187, type: 2}
+  - {fileID: 2100000, guid: 189a6848ef3678944818278c930cf401, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -21887,8 +21883,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BaseZone
   team: 1
   head: {fileID: 1221461639}
-  halfExtentX: 0.5
-  halfExtentZ: 6
   onPlayerEntered:
     m_PersistentCalls:
       m_Calls: []
@@ -21961,7 +21955,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: a9a94af7dbbd9374bba6d9eba872b89f, type: 2}
+  - {fileID: 2100000, guid: 5a6f2b524af60694bae66fb2d27520cf, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

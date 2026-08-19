@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Combat;
 using VortexArena.Net;
 
 namespace VortexArena.App.Admin
@@ -35,6 +36,13 @@ namespace VortexArena.App.Admin
 
         /// <summary>Serbest kipte zeminin altına inilmesin.</summary>
         private const float MinHeight = 0.2f;
+
+        /// <summary>
+        /// POV kamerasının baş pozundan ileri kaydırma miktarı (m): kafaya takılı aksesuarlar
+        /// (şapka, gözlük) kadrajın içinde kalmasın. Büyütürken dikkat — fazlası kamerayı duvarın
+        /// içine sokar.
+        /// </summary>
+        private const float PovForwardOffset = 0.1f;
 
         /// <summary>
         /// Kuş bakışı kamera yüksekliğinin VARSAYILANI (m) — ortografikte yalnız kırpma için
@@ -84,6 +92,8 @@ namespace VortexArena.App.Admin
                 _appliedMode = mode;
             }
 
+            ApplyAudioFocus(mode);
+
             switch (mode)
             {
                 case AdminCameraMode.Pov:
@@ -115,6 +125,33 @@ namespace VortexArena.App.Admin
             }
         }
 
+        // ------------------------------------------------------------------- ses odağı
+
+        /// <summary>
+        /// Gözlemcinin kulağını kamerasıyla aynı yere bakar hâle getirir
+        /// (<see cref="RemoteShotFx.SpectatorAudioFocus"/>).
+        /// <para><b>Yalnız POV'da</b> odak vardır: izlenen oyuncunun silahı tam sesle, sahadaki
+        /// diğer oyuncuların atışları kısık çalar — hepsi eşit sesle çalınca operatör hangi sesin
+        /// izlediği oyuncuya ait olduğunu ayırt edemez. ⚠️ Kısılır, SUSTURULMAZ: POV'daki operatör
+        /// arenanın öbür ucundaki çatışmayı duymaya devam etmeli.</para>
+        /// <para>⚠️ <b>Kuş bakışı ve serbest kipte odak YOKTUR</b> (<c>null</c>): o kiplerde
+        /// operatör sahanın tamamına bakıyor, kimseyi öne çıkarmanın anlamı yok. Aynı sebeple
+        /// POV'da <b>oyuncu seçilmemişse</b> (kamera son konumunda donuktur) odak kurulmaz:
+        /// öne çıkarılacak kimse yok.</para>
+        /// <para>⚠️ Soru her karede sorulur, <c>AdminSession.Changed</c>'e abone olunarak DEĞİL:
+        /// odağı besleyen iki değer de (kip + seçili oyuncu) koşan maçta değişiyor ve kaçırılan
+        /// tek bir olay operatöre kalıcı olarak YANLIŞ oyuncunun silahını duyurur. Aynı gerekçe
+        /// <c>RemoteAvatar</c> ad etiketlerinde de geçerli.</para>
+        /// <para>⚠️ Yazan TEK yer burasıdır. Gözlemci kamerası yalnız admin rolünde kurulur, yani
+        /// oyuncu istemcisinde odak hiç yazılmaz (null = filtre yok) ve orada her atış duyulur.</para>
+        /// </summary>
+        private static void ApplyAudioFocus(AdminCameraMode mode)
+        {
+            int selected = AdminSession.SelectedPlayerId;
+            RemoteShotFx.SpectatorAudioFocus =
+                mode == AdminCameraMode.Pov && selected != 0 ? selected : (int?)null;
+        }
+
         // ------------------------------------------------------------------- POV
 
         private void DrivePov()
@@ -128,7 +165,10 @@ namespace VortexArena.App.Admin
             }
 
             Pose world = ArenaSpace.ArenaToWorld(head);
-            transform.SetPositionAndRotation(world.position, world.rotation);
+            // Kamera baş pozunun biraz ÖNÜNDE durur: aksesuar (şapka, gözlük) kafa kemiğine
+            // takılı olduğu için tam baş noktasında kadrajı kapatıyor.
+            Vector3 position = world.position + world.rotation * Vector3.forward * PovForwardOffset;
+            transform.SetPositionAndRotation(position, world.rotation);
         }
 
         // --------------------------------------------------------------- serbest
