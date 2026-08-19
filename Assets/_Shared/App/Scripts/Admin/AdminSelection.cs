@@ -42,7 +42,9 @@ namespace VortexArena.App.Admin
         /// modun varsayılanı kullanılacak (§5.2).</summary>
         public static int RoundSeconds { get; private set; }
 
-        /// <summary>Ortak seçim: bir sonraki maçın skor limiti; <c>0</c> = modun varsayılanı.</summary>
+        /// <summary>Ortak seçim: bir sonraki maçın skor/tur limiti; <c>0</c> = modun varsayılanı,
+        /// <c>ArenaProtocol.SCORE_LIMIT_UNLIMITED</c> = <b>sınırsız</b> (§5.2). ⚠️ Üç değerli
+        /// olduğu için okuyan taraf <c>&gt; 0</c> değil <c>!= 0</c> diye sorar.</summary>
         public static int ScoreLimit { get; private set; }
 
         /// <summary>Ortak seçim: geri sayımın uzunluğu (sn); <c>0</c> = protokol varsayılanı
