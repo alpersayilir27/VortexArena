@@ -77,7 +77,10 @@ public sealed class TournamentMode : IGameMode
     /// <summary>⚠️ <b>TURUN</b> süresi (saniye), maçın değil.</summary>
     public int DefaultRoundSeconds => 120;
 
-    /// <summary>Maçı kazanmak için gereken TUR sayısı → best-of-7.</summary>
+    /// <summary>Maçı kazanmak için gereken TUR sayısı → best-of-7.
+    /// <para>Operatör bunu ezebilir (§5.2) ve <b>sınırsız</b> da seçebilir
+    /// (<c>ArenaProtocol.SCORE_LIMIT_UNLIMITED</c>): o maçta galibiyet limiti de tur tavanı da
+    /// işlemez, turlar <c>abort_match</c>'e kadar sürer.</para></summary>
     public int DefaultScoreLimit => 4;
 
     public void OnMatchStart(MatchDirector director)
@@ -90,8 +93,11 @@ public sealed class TournamentMode : IGameMode
         _outcome = MatchOutcome.Draw;
         _stage = RoundStage.None;
 
+        var limit = director.ScoreLimit;
         Console.WriteLine($"[tournament] maç başladı — tur {director.RoundSeconds} sn, " +
-                          $"{director.ScoreLimit} tur galibiyet (en fazla {MaxRounds(director.ScoreLimit)} tur).");
+                          (limit > 0
+                              ? $"{limit} tur galibiyet (en fazla {MaxRounds(limit)} tur)."
+                              : "SINIRSIZ (galibiyet limiti ve tur tavanı yok; bitişi operatör verir)."));
     }
 
     public void OnRoundStart(MatchDirector director)
@@ -214,28 +220,34 @@ public sealed class TournamentMode : IGameMode
                           $"{(winnerTeam.Length > 0 ? winnerTeam + " +1" : "puan yok")} " +
                           $"(kırmızı {director.ScoreRed} : mavi {director.ScoreBlue}).");
 
+        // Sınırsız maç (operatör seçimi, §5.2): ne galibiyet limiti ne tur tavanı işler — turlar
+        // operatör maçı iptal edene kadar birbirini izler. Kapı TEK yerdedir çünkü iki kural da
+        // aynı sayıdan türüyor; birini açık bırakmak "sınırsız" maçı sessizce bitirirdi.
         var limit = director.ScoreLimit;
-        if (limit > 0 && director.ScoreRed >= limit)
+        if (limit > 0)
         {
-            Decide(MatchOutcome.Team("red"), "skor limiti");
-            return;
-        }
-        if (limit > 0 && director.ScoreBlue >= limit)
-        {
-            Decide(MatchOutcome.Team("blue"), "skor limiti");
-            return;
-        }
+            if (director.ScoreRed >= limit)
+            {
+                Decide(MatchOutcome.Team("red"), "skor limiti");
+                return;
+            }
+            if (director.ScoreBlue >= limit)
+            {
+                Decide(MatchOutcome.Team("blue"), "skor limiti");
+                return;
+            }
 
-        // Tur tavanı: berabere biten turlar yüzünden kimse limite ulaşamayabilir — maç sonsuza
-        // kadar sürmesin. Tavanda yüksek skor kazanır, eşitse berabere.
-        if (_round >= MaxRounds(limit))
-        {
-            var red = director.ScoreRed;
-            var blue = director.ScoreBlue;
-            Decide(red > blue ? MatchOutcome.Team("red")
-                : blue > red ? MatchOutcome.Team("blue")
-                : MatchOutcome.Draw, "tur tavanı");
-            return;
+            // Tur tavanı: berabere biten turlar yüzünden kimse limite ulaşamayabilir — LİMİTLİ maç
+            // sonsuza kadar sürmesin. Tavanda yüksek skor kazanır, eşitse berabere.
+            if (_round >= MaxRounds(limit))
+            {
+                var red = director.ScoreRed;
+                var blue = director.ScoreBlue;
+                Decide(red > blue ? MatchOutcome.Team("red")
+                    : blue > red ? MatchOutcome.Team("blue")
+                    : MatchOutcome.Draw, "tur tavanı");
+                return;
+            }
         }
 
         _round++;
@@ -354,8 +366,9 @@ public sealed class TournamentMode : IGameMode
         Console.WriteLine($"[tournament] maç kararı ({reason}) — {_round}. turda bitti.");
     }
 
-    /// <summary>Best-of tavanı: <c>2 × limit − 1</c> tur. Limit yoksa tavan da yoktur (maçı
-    /// operatör bitirir).</summary>
+    /// <summary>Best-of tavanı: <c>2 × limit − 1</c> tur. Limit yoksa (sınırsız maç) tavan da
+    /// yoktur — maçı operatör bitirir. ⚠️ Yalnız <b>metin üretmek</b> için limitsiz de çağrılabilir;
+    /// karar kapısı <see cref="EndRound"/>'da <c>limit &gt; 0</c> ile zaten kapalıdır.</summary>
     private static int MaxRounds(int scoreLimit) =>
         scoreLimit > 0 ? 2 * scoreLimit - 1 : int.MaxValue;
 }

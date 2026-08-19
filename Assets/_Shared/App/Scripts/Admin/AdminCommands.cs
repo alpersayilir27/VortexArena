@@ -25,6 +25,10 @@ namespace VortexArena.App.Admin
         /// Maçı başlatır. <paramref name="roundSeconds"/>/<paramref name="scoreLimit"/> o maça
         /// özeldir; <c>0</c> gönderilirse sunucu modun varsayılanını kullanır (§5.2) — yani
         /// operatör bir şey seçmediyse davranış bugünküyle birebir aynıdır.
+        /// <para><paramref name="scoreLimit"/> ayrıca <b>sınırsız</b> olabilir
+        /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>): o maçta hiçbir skor/tur limiti
+        /// işlemez. ⚠️ Bu yüzden negatif değer <c>0</c>'a KIRPILMAZ — kırpılsa sınırsız seçimi
+        /// sessizce "mod varsayılanı"na dönerdi.</para>
         /// </summary>
         public static void StartMatch(string modeId, string sceneName, int roundSeconds = 0,
             int scoreLimit = 0, int countdownSeconds = 0)
@@ -40,20 +44,28 @@ namespace VortexArena.App.Admin
                 modeId = modeId,
                 sceneName = sceneName,
                 roundSeconds = Mathf.Max(0, roundSeconds),
-                scoreLimit = Mathf.Max(0, scoreLimit),
+                scoreLimit = ArenaProtocol.NormalizeScoreLimit(scoreLimit),
                 countdownSeconds = Mathf.Max(0, countdownSeconds)
             };
 
             if (Send(msg))
             {
-                string parameters = msg.roundSeconds > 0 || msg.scoreLimit > 0 || msg.countdownSeconds > 0
+                string parameters = msg.roundSeconds > 0 || msg.scoreLimit != 0 || msg.countdownSeconds > 0
                     ? $" ({(msg.roundSeconds > 0 ? FormatDuration(msg.roundSeconds) : "mod süresi")}" +
-                      $" · {(msg.scoreLimit > 0 ? "limit " + msg.scoreLimit : "mod limiti")}" +
+                      $" · {(msg.scoreLimit != 0 ? "limit " + FormatScoreLimit(msg.scoreLimit) : "mod limiti")}" +
                       $"{(msg.countdownSeconds > 0 ? " · geri sayım " + msg.countdownSeconds + " sn" : "")})"
                     : "";
                 SetStatus($"Maç isteği gönderildi: {modeId} · {sceneName}{parameters}");
             }
         }
+
+        /// <summary>Skor/tur limitini operatörün okuduğu biçime çevirir: <c>sınırsız</c> ·
+        /// <c>mod varsayılanı</c> · sayı. Üç durumun TEK yazımı burada durur — panel, istatistik
+        /// özeti ve durum satırı aynı kaynaktan okur.</summary>
+        public static string FormatScoreLimit(int scoreLimit) =>
+            scoreLimit > 0 ? scoreLimit.ToString()
+            : scoreLimit < 0 ? "sınırsız"
+            : "mod varsayılanı";
 
         /// <summary>Saniyeyi operatörün okuduğu biçime çevirir ("2.5 dk", "1 saat").</summary>
         public static string FormatDuration(int seconds)
@@ -82,12 +94,16 @@ namespace VortexArena.App.Admin
         /// <para>Durum satırı burada yazılmaz; sunucunun yayınladığı duyuru zaten gelecek.</para>
         /// <para>Süre/limit de bu kanaldan gider: parametreler yerel kalsaydı bir operatörün
         /// 5 dk sandığı maç diğerinin seçtiği 30 dk ile başlardı. <c>0</c> = "bu alanı değiştirme".</para>
+        /// <para>⚠️ <paramref name="scoreLimit"/> bu sözleşmenin istisnasıdır: negatif değer
+        /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>) "dokunulmadı" değil <b>sınırsız
+        /// seçildi</b> demektir, bu yüzden ne kırpılır ne de boş komut sayılır.</para>
         /// </summary>
         public static void SetSelection(string modeId, string sceneName, int roundSeconds = 0,
             int scoreLimit = 0, int countdownSeconds = 0)
         {
+            int limit = ArenaProtocol.NormalizeScoreLimit(scoreLimit);
             if (string.IsNullOrEmpty(modeId) && string.IsNullOrEmpty(sceneName) &&
-                roundSeconds <= 0 && scoreLimit <= 0 && countdownSeconds <= 0)
+                roundSeconds <= 0 && limit == 0 && countdownSeconds <= 0)
             {
                 return;
             }
@@ -97,7 +113,7 @@ namespace VortexArena.App.Admin
                 modeId = modeId ?? "",
                 sceneName = sceneName ?? "",
                 roundSeconds = Mathf.Max(0, roundSeconds),
-                scoreLimit = Mathf.Max(0, scoreLimit),
+                scoreLimit = limit,
                 countdownSeconds = Mathf.Max(0, countdownSeconds)
             });
         }

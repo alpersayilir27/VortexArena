@@ -460,6 +460,24 @@ namespace VortexArena.Protocol
         /// </summary>
         public static readonly int[] ROUND_SECONDS_OPTIONS = { 60, 90, 120, 150, 180, 300, 600, 900, 1200, 1800, 3600 };
 
+        /// <summary>
+        /// <c>scoreLimit</c> alanının <b>SINIRSIZ</b> değeri (§5.2): maçın skor/tur limiti YOKTUR,
+        /// bitişi süre ya da operatörün <c>abort_match</c>'i belirler.
+        /// <para><b>Neden ayrı bir değer:</b> o alanda <c>0</c> zaten "operatör seçmedi → modun
+        /// varsayılanı" demek, yani sınırsızı ifade edemez. Sunucudaki kapıların tamamı
+        /// "limit &gt; 0 mı" diye sorduğu için negatif değer her modda kendiliğinden limitsizdir;
+        /// tek yeni iş <b>ifade edilebilir</b> olması.</para>
+        /// <para>⚠️ Tur tabanlı modda (<c>tournament</c>, §10.5) bununla <b>tur tavanı da</b> kalkar:
+        /// best-of tavanı (<c>2 × limit − 1</c>) limitten türüyor.</para>
+        /// </summary>
+        public const int SCORE_LIMIT_UNLIMITED = -1;
+
+        /// <summary><c>scoreLimit</c>'in tek normalize kapısı: pozitif değer ve <c>0</c> aynen kalır,
+        /// HER negatif değer <see cref="SCORE_LIMIT_UNLIMITED"/> olur — telde tek bir "sınırsız"
+        /// yazımı olsun diye (iki uç da bu kapıdan geçirir).</summary>
+        public static int NormalizeScoreLimit(int scoreLimit) =>
+            scoreLimit < 0 ? SCORE_LIMIT_UNLIMITED : scoreLimit;
+
         // NOT: atış hızı toleransı gibi bir sabit YOKTUR ve eklenmez (§10.3). Sunucuda atış hızı
         // denetimi ve silah tablosu yoktur — hasarı istemci hesaplar, sunucu aynen uygular. Ürün
         // gözetimli özel alanda çalıştığı için hile koruması bilinçli olarak eklenmez.
