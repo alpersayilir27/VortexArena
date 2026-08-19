@@ -5,8 +5,16 @@ namespace VortexArena.Core.Player
 {
     /// <summary>
     /// Rig'in GÖRSEL temsillerini ayıklar: <b>oyuncu gözlükte yalnız rig'in sentetik ellerini
-    /// görür</b> — kumanda modeli çizilmez, mesafeli kavramanın hayalet elleri çizilmez, gövde/kol
-    /// hiç yoktur.
+    /// görür</b> — kumanda modeli çizilmez, mesafeli kavramanın hayalet elleri çizilmez, <b>işaret
+    /// ışını (ray) çizilmez</b>, gövde/kol hiç yoktur.
+    /// <para>
+    /// ⚠️ <b>Işında kapatılan şey INTERACTOR değil onun <c>Visuals</c> düğümüdür.</b>
+    /// (<c>ControllerRayInteractor</c> ve <c>HandRayInteractor</c> altında.) Interactor'ın kendisi
+    /// ayakta kalır: ISDK'nın UI işaretleme yolu (<c>PointableCanvasModule</c>) ona bağlı ve bu
+    /// bileşenin işi davranış kapatmak değil GÖRSEL susturmaktır. Arena tarafında ışının çizecek bir
+    /// hedefi yok — silah çerçevesi kendi göstergesini çiziyor, kavrama yakın/mesafeli grab ile
+    /// oluyor — yani çizilen ışın oyuncunun ekranında yalnız gürültüdür.
+    /// </para>
     /// <para>
     /// ⚠️ <b>Oyuncunun gördüğü el buradan GELMEZ ve buraya DOKUNULMAZ:</b> o el ISDK'nın sentetik
     /// elidir (<c>OVRHandVisualLeft</c>/<c>OVRHandVisualRight</c> → <c>SyntheticHandData</c>) ve
@@ -65,6 +73,23 @@ namespace VortexArena.Core.Player
         private const string HandVisualTypeName = "HandVisual";
 
         /// <summary>
+        /// Taranacak üçüncü tip: ISDK'nın işaret ışını interactor'ı (hem kumanda hem el dalında
+        /// <b>aynı</b> tiptir — <c>ControllerRayInteractor</c> ve <c>HandRayInteractor</c> objeleri
+        /// ayrı ama bileşenleri aynı, yani tek tip ikisini de yakalar).
+        /// <para>⚠️ Tip yine ADIYLA aranır: doğrudan yazmak Core asmdef'ine
+        /// <c>Oculus.Interaction</c> referansı eklemek olurdu.</para>
+        /// </summary>
+        private const string RayInteractorTypeName = "RayInteractor";
+
+        /// <summary>
+        /// Işın interactor'ının altındaki görsel kapsayıcı — kapatılan tek şey budur.
+        /// <para>⚠️ Interactor'ın KENDİSİ kapatılmaz (sınıf açıklaması): görsel gürültüyü almak için
+        /// davranışı söküp atmak, ileride bir dünya arayüzüne işaret etmek gerektiğinde sebebi
+        /// bulunamayacak bir kayıp olurdu.</para>
+        /// </summary>
+        private const string RayVisualsNodeName = "Visuals";
+
+        /// <summary>
         /// Tüm rig'i yeniden tarama aralığı (sn). ⚠️ <b>Her kare taranmaz:</b> rig yüzlerce bileşen
         /// taşıyor ve tüm alt ağacı her karede gezmek Quest'te ölçülebilir bir maliyettir. Yeni bir
         /// görsel ancak rig yeniden kurulunca ortaya çıkar (insan zaman ölçeğinde nadir); Meta'nın
@@ -97,6 +122,9 @@ namespace VortexArena.Core.Player
 
         /// <summary>"Oyuncunun eli bulunamadı" hatası oturum başına bir kez.</summary>
         private static bool erroredNoDrivenHandVisual;
+
+        /// <summary>"Işının görsel düğümü bulunamadı" uyarısı oturum başına bir kez.</summary>
+        private static bool warnedNoRayVisuals;
 
         private void LateUpdate()
         {
@@ -163,6 +191,8 @@ namespace VortexArena.Core.Player
 
             int handVisualsSeen = 0;
             int handVisualsDriven = 0;
+            int raysSeen = 0;
+            int rayVisualsFound = 0;
 
             for (int i = 0; i < scanBuffer.Count; i++)
             {
@@ -172,15 +202,30 @@ namespace VortexArena.Core.Player
                     continue;
                 }
 
-                bool isHandVisual = mb.GetType().Name == HandVisualTypeName;
-                if (!isHandVisual && !(mb is OVRControllerHelper))
+                string typeName = mb.GetType().Name;
+                bool isHandVisual = typeName == HandVisualTypeName;
+                bool isRayInteractor = typeName == RayInteractorTypeName;
+                if (!isHandVisual && !isRayInteractor && !(mb is OVRControllerHelper))
                 {
                     continue;
                 }
 
                 GameObject target = mb.gameObject;
 
-                if (isHandVisual)
+                if (isRayInteractor)
+                {
+                    // Kapatılan interactor DEĞİL, altındaki görsel kapsayıcı.
+                    raysSeen++;
+                    Transform visuals = mb.transform.Find(RayVisualsNodeName);
+                    if (visuals == null)
+                    {
+                        continue;
+                    }
+
+                    rayVisualsFound++;
+                    target = visuals.gameObject;
+                }
+                else if (isHandVisual)
                 {
                     handVisualsSeen++;
                     if (IsPlayerHand(target.name))
@@ -199,6 +244,11 @@ namespace VortexArena.Core.Player
             if (handVisualsSeen > 0 && handVisualsDriven == 0)
             {
                 ErrorNoDrivenHandVisual();
+            }
+
+            if (raysSeen > 0 && rayVisualsFound == 0)
+            {
+                WarnNoRayVisuals();
             }
         }
 
@@ -244,6 +294,29 @@ namespace VortexArena.Core.Player
                 "gerçek adlara bakıp listeyi güncelle (beklenen: OVRHandVisualLeft / " +
                 "OVRHandVisualRight). ⚠️ Listeye benzer adlı OVRLeftHandVisual/OVRRightHandVisual " +
                 "yazma — onlar mesafeli kavrama hayaletidir ve gizli kalmalıdır.", this);
+        }
+
+        /// <summary>
+        /// Rig'de ışın interactor'ı var ama hiçbirinin altında görsel kapsayıcı bulunamadı →
+        /// <b>ışın çizilmeye devam eder.</b>
+        /// <para>⚠️ Hata değil UYARI: oyun çalışır, yalnız oyuncu elinden çıkan bir çizgi görür.
+        /// Sebebi tek bir şey olabilir — ISDK düğümü yeniden adlandırmıştır; bakılacak yer
+        /// <see cref="RayVisualsNodeName"/>.</para>
+        /// </summary>
+        private void WarnNoRayVisuals()
+        {
+            if (warnedNoRayVisuals)
+            {
+                return;
+            }
+
+            warnedNoRayVisuals = true;
+            Debug.LogWarning(
+                $"[ControllerModelHider] Rig'de ışın interactor'ı bulundu ama hiçbirinin altında " +
+                $"'{RayVisualsNodeName}' düğümü yok — işaret ışını GİZLENEMEDİ ve oyuncunun " +
+                "elinden çıkan çizgi görünmeye devam edecek. ISDK düğümü yeniden adlandırmış " +
+                "olabilir: interactor'ın altındaki gerçek görsel düğüm adına bakıp sabiti güncelle.",
+                this);
         }
     }
 }
