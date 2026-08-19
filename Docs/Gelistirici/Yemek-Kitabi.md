@@ -424,9 +424,15 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
    (*Create → VortexArena → Weapon Definition*): `weaponId`, hasar, atış hızı, menzil, saçılım,
    şarjör, haptik (`hapticAmplitude` 0-1 + `hapticDuration` sn — atış başına kumanda titreşimi;
    ikisinden biri 0 ise o silahta haptik yoktur), `prefab`.
-3. Modun kullanmasını istiyorsan `ModeDefinition.loadout` listesine ekle.
+3. `Tools > VortexArena > Build > Configure All Build Elements` → **Yalnız Senkronize Et**.
 
 `weaponId` yalnızca **kill feed etiketidir** — sunucu doğrulamaz, istediğini yazabilirsin.
+
+> ⚠️ **`ModeDefinition.loadout` ELLE DÜZENLENMEZ** — eşitleme onu `WeaponCatalog`'a göre geri
+> yazar. Rastgele silah veren modların havuzu **arsenalin tamamıdır**; mod başına silah kısıtı
+> diye bir şey yoktur ve elle kırpılan liste bir sonraki koşuda dolar. Kısıt gerçekten
+> gerekirse önce onu taşıyacak alan tasarlanır. `weaponSource:"weaponcanvas"` modlarında
+> `loadout` zaten hiç okunmaz — sahnede hangi silahın duracağını arena belirler.
 
 > Silahın elde **nerede** durduğunu `WD_*`'taki kavrama kayıtları belirler (§11.0); dördü de el
 > başınadır (`primaryGripRight/Left`, `secondaryGripRight/Left`) ve her biri üç şey taşır:

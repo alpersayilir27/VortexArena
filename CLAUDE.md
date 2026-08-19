@@ -278,7 +278,8 @@ Proje **Input System-only** — `StandaloneInputModule` kullanılmaz.
   `VA_WeaponCanvas`'ın İÇİ için de geçerlidir. Tek satırlık denetim: `Weapon` bileşenini doğrudan
   serialize eden dosyalar yalnız `_Shared/Arsenal/Prefabs/WPN_*.prefab` olmalıdır.
   ⚠️ Sahnede hangi silahın duracağını `ModeDefinition.loadout` DEĞİL **arena** belirler
-  (`loadout` yalnız `random` modlarında okunur).
+  (`loadout` yalnız `random` modlarında okunur). ⚠️ **`loadout` ELLE DÜZENLENMEZ** — eşitleme onu
+  `WeaponCatalog`'a göre yazar (havuz = arsenalin tamamı); mod başına silah kısıtı YOKTUR.
 - ⚠️ **`WPN_*` KÖKÜNE mesafeden kavrama GERİ EKLENMEZ** (`DistanceGrabInteractable` /
   `DistanceHandGrabInteractable` — araç bilerek siler). Yasak yalnız kök içindir: **çerçeve
   prefabında (`VA_WeaponFrame`) mesafeden kavrama ZORUNLUDUR.** ⚠️ Kökteki İKİ yakın-kavrama hattı
@@ -317,7 +318,7 @@ Ne yaptıklarının ayrıntısı `Docs/Sistem-Ozeti.md` §4'te.
 
 | Araç | Ne zaman |
 |---|---|
-| `Tools > VortexArena > Build > Configure All Build Elements` | Sahne hazır → **Hepsini Yapılandır** (aktif sahnenin `MapDefinition`'ı + `GameCatalog` + `ModeDefinition.maps` + Build Settings + `maps.json` + **silah kiti** + **net eşya kataloğu**, tek geçişte, idempotent). Arena silindi/taşındı → **Yalnız Senkronize Et**. **Hazırlık** bölümü build öncesi denetimleri gösterir (yalnız okur). ⚠️ Ayrı "Arena Id" alanı YOKTUR. ⚠️ Hazırlık'ta kalan ✗ **insan adımıdır** |
+| `Tools > VortexArena > Build > Configure All Build Elements` | Sahne hazır → **Hepsini Yapılandır** (aktif sahnenin `MapDefinition`'ı + `GameCatalog` + `ModeDefinition.maps` + Build Settings + `maps.json` + **silah kiti** + **rastgele silah havuzları** (`ModeDefinition.loadout`) + **net eşya kataloğu**, tek geçişte, idempotent). Arena silindi/taşındı → **Yalnız Senkronize Et**. **Hazırlık** bölümü build öncesi denetimleri gösterir (yalnız okur). ⚠️ Ayrı "Arena Id" alanı YOKTUR. ⚠️ Hazırlık'ta kalan ✗ **insan adımıdır** |
 | `… > Arena > Template Temellerini Yükle` | Yeni/boş sahneye altyapı prefab ÖRNEKLERİ + rig bağları + boyut dosyası bağlama. İdempotent. ⚠️ Kalibrasyon işaretçisi KOYMAZ — onlar maketle gelir |
 | `… > Arena > JSON'dan DimensionMesh Üret` | Boyut JSON'undan ölçü maketi + kalibrasyon işaretçileri. ⚠️ Her arenada ZORUNLU adım |
 | `… > Arena > DimensionMesh'i JSON'a Çevir` | Maket sahnede düzeltildi → aynı boyut dosyasının ÜSTÜNE yazar. İşaretçi yoksa `calibration` KORUNUR |
