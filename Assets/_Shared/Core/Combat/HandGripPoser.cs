@@ -44,7 +44,9 @@ namespace VortexArena.Core.Combat
     /// (<c>JointFreedom.Locked</c>) ve duruş her karede ya boş elin dizisidir ya da tutulan eşyanın
     /// o slot için stüdyoda riglenmiş dizisi; ikisi arasındaki geçiş (boş el ↔ kavrama, ana kabza ↔
     /// ön kabza) <see cref="HandPoseLibrary.TransitionSeconds"/> içinde eklem eklem yumuşatılır
-    /// (<see cref="HandState"/>). Bir parmağı bile serbest bırakmak, stüdyoda görülen el ile oyunda
+    /// (<see cref="HandState"/>) — <b>elin kumanda üstündeki yerleşimi de aynı süreyi ve aynı eğriyi
+    /// paylaşır</b>, yani el silaha bir anda geçmez, duruşuna kayarak girer. Bir parmağı bile
+    /// serbest bırakmak, stüdyoda görülen el ile oyunda
     /// görülen elin o parmakta ayrışması demektir; boş elin parmaklarını donanımdan örneklemek de
     /// aynı sebeple YOKTUR.
     /// </para>
@@ -135,12 +137,96 @@ namespace VortexArena.Core.Combat
             /// <summary><c>0..1</c> geçiş ilerlemesi (1 = hedefe oturmuş).</summary>
             public float Progress = 1f;
 
+            /// <summary>Bileğin ANCHOR'a göre hedef ofseti — geçişin varış noktası.</summary>
+            public Pose WristGoal;
+
+            /// <summary>Geçişin başladığı andaki gösterilen ofset.</summary>
+            public Pose WristFrom;
+
+            /// <summary>Bileğin bu karede kullanılan (ara) ofseti.</summary>
+            public Pose WristShown;
+
+            /// <summary><c>0..1</c> bilek geçişinin ilerlemesi (1 = oturmuş).</summary>
+            public float WristProgress = 1f;
+
+            /// <summary>Bu el hiç oturtuldu mu — ilk kare geçişsizdir (aşağıya bkz.).</summary>
+            public bool WristSeated;
+
+            /// <summary>
+            /// Bileğin anchor→bilek ofsetini hedefe <b>yumuşakça</b> götürür ve o karede
+            /// kullanılacak ara ofseti döndürür.
+            /// <para>
+            /// ⚠️ <b>Karışım ANCHOR uzayında yapılır, dünya uzayında DEĞİL.</b> Bileğin dünya pozu
+            /// her karede kumandayla birlikte hareket ediyor; onu karıştırmak eli gerçek elin
+            /// arkasından sürüklerdi (izleme gecikmesi). Karışan tek şey <b>ofset</b>, yani "el
+            /// kumandanın neresinde durur" — el kumandayı hiç geciktirmeden takip etmeye devam
+            /// ederken duruşu değişir.
+            /// </para>
+            /// <para>
+            /// Bunun karşılığı: eşyaya geçerken anchor ÇERÇEVESİ de değişiyor (kumanda → eşya) ama
+            /// o sıçrama değildir — çözücü kimliği gereği eşyadan türetilen anchor konumu kumanda
+            /// anchor'ının ta kendisidir (<c>LockToItemGrip</c>), tek elli tutuşta dönüşü de
+            /// öyle. Yani geçişte gözle görülen tek fark bu ofsettir.
+            /// </para>
+            /// <para>⚠️ <b>İlk kare geçişsizdir</b> (<see cref="WristSeated"/>): el sahneye/rig'e ilk
+            /// düştüğünde gösterilecek bir "önceki duruş" yoktur — sıfırdan karıştırmak eli
+            /// orijinden süzülerek geldirirdi.</para>
+            /// <para>⚠️ Hedef değişince başlangıç noktası o anki GÖSTERİLEN ofsettir: geçişin
+            /// ortasında silah bırakılırsa el zıplamadan yön değiştirir (parmaklarla aynı kural).</para>
+            /// </summary>
+            public Pose StepWrist(in Pose goal)
+            {
+                if (!WristSeated)
+                {
+                    WristSeated = true;
+                    WristGoal = goal;
+                    WristFrom = goal;
+                    WristShown = goal;
+                    WristProgress = 1f;
+                    return WristShown;
+                }
+
+                // ⚠️ Vector3/Quaternion karşılaştırması YAKLAŞIKTIR ve burada istenen de odur: hedef
+                // ya paylaşılan sabitten ya da asset'ten geliyor, yani karede değişmiyor — kesin
+                // eşitlik arasaydık kayan nokta gürültüsü geçişi her karede baştan başlatabilirdi.
+                if (WristGoal.position != goal.position || WristGoal.rotation != goal.rotation)
+                {
+                    WristFrom = WristShown;
+                    WristGoal = goal;
+                    WristProgress = 0f;
+                }
+
+                if (WristProgress < 1f)
+                {
+                    WristProgress = HandPoseLibrary.TransitionSeconds > 0f
+                        ? Mathf.Min(1f, WristProgress + Time.deltaTime / HandPoseLibrary.TransitionSeconds)
+                        : 1f;
+
+                    float t = HandPoseLibrary.Ease(WristProgress);
+                    WristShown = new Pose(
+                        Vector3.Lerp(WristFrom.position, WristGoal.position, t),
+                        Quaternion.Slerp(WristFrom.rotation, WristGoal.rotation, t));
+                }
+                else
+                {
+                    WristShown = WristGoal;
+                }
+
+                return WristShown;
+            }
+
             /// <summary>Yeni sahne / ilk kurulum: her şey idle'a ve "oturmuş" durumuna döner.</summary>
             public void Reset(bool rightHand)
             {
                 Synthetic = null;
                 WristLocked = false;
                 Progress = 1f;
+
+                // ⚠️ Bilek "hiç oturtulmadı"ya döner, ofsetin kendisi SIFIRLANMAZ: yeni sahnede el
+                // ilk karede hedefine doğrudan oturur (yeni rig, yeni el — araya geçiş koymak eli
+                // sahne açılışında süzülerek getirirdi).
+                WristSeated = false;
+                WristProgress = 1f;
 
                 Quaternion[] idle = HandPoseLibrary.IdleJointRotations(rightHand);
                 Target = idle;
@@ -227,6 +313,11 @@ namespace VortexArena.Core.Combat
         /// <para>Parmaklar da her durumda bizim yazdığımızdır: boş elde boşta duruşu, eşya tutan elde
         /// slotun kendi riglenmiş duruşu — hedef her karede <see cref="ApplyFingers"/>'a verilir,
         /// geçişi o yumuşatır.</para>
+        /// <para>⚠️ <b>Yerleşim de parmaklarla AYNI SÜREDE yumuşatılır</b>
+        /// (<c>HandState.StepWrist</c>, <see cref="HandPoseLibrary.TransitionSeconds"/>): elin
+        /// kumanda üstündeki yeri/açısı silah başına yazıldığı için silah ele gelince ofset büyük
+        /// bir sıçramayla değişirdi. İkisinin tek süreyi paylaşması şart — parmakları bir hızda,
+        /// bileği başka hızda hareket eden bir el bozuk görünür.</para>
         /// </summary>
         private void TickHand(OVRInput.Controller hand, bool rightHand, HandState state)
         {
@@ -251,10 +342,13 @@ namespace VortexArena.Core.Combat
             // Elin kumanda üstündeki yerleşimi kavramanın PARÇASIDIR: kavraması yazılmış slot kendi
             // yerleşimini getirir (ön kabzayı yandan saran el ile kabzayı avuçlayan el aynı açıda
             // duramaz), boş el paylaşılan tanıma düşer.
+            // ⚠️ Ofset doğrudan kullanılmaz, geçişten geçirilir: silah ele geldiğinde (ya da
+            // bırakıldığında) elin duruşu ANINDA değişirdi — kayıtlar silah başına yazıldığı için
+            // aradaki fark büyük olabiliyor (kimi kabza yandan, kimi alttan tutuluyor).
             ItemGripPose grip = hasGrip ? definition.GetGrip(kind, rightHand) : default;
-            Pose anchorToWrist = hasGrip
+            Pose anchorToWrist = state.StepWrist(hasGrip
                 ? ItemGripAuthority.ResolveAnchorToWrist(grip, rightHand)
-                : ItemGripAuthority.ResolveAnchorToWrist(rightHand);
+                : ItemGripAuthority.ResolveAnchorToWrist(rightHand));
 
             if (hasGrip)
             {
