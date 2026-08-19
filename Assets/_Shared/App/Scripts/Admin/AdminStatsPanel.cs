@@ -381,7 +381,11 @@ namespace VortexArena.App.Admin
                            // Süre/limit o maça özel olabildiği için (§5.2) operatör seçtiği
                            // değerin gerçekten uygulandığını buradan doğrular.
                            (roster.RoundSeconds > 0 ? $" · raund {AdminCommands.FormatDuration(roster.RoundSeconds)}" : "") +
-                           (roster.ScoreLimit > 0 ? $" · skor limiti {roster.ScoreLimit}" : ""));
+                           // Limit üç değerlidir (§5.2): sınırsız maçta da yazılır — operatör
+                           // "limit satırı yok" ile "limit sınırsız"ı ayırt edebilmeli.
+                           (roster.ScoreLimit != 0
+                               ? $" · skor limiti {AdminCommands.FormatScoreLimit(roster.ScoreLimit)}"
+                               : ""));
             _sb.Append($"Sunucu: {endpoint} · poz akışı " +
                        (age >= 0f ? $"{age:0.0} sn önce" : "yok") +
                        $" · bağlı admin {roster.AdminCount}");

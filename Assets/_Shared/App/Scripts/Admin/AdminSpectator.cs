@@ -137,6 +137,11 @@ namespace VortexArena.App.Admin
             // OLMADAN yapılmaz: oyuncu istemcisi Quest'te koşar, orada pencere diye bir şey yok.
             AdminSession.ApplyScreenMode();
 
+            // Ses çıkışı da operatörün son seçimine oturur. Aynı gerekçe: uygulama, işletmenin
+            // hoparlörü yerine sistemin o günkü varsayılanıyla açılmasın. Rol admin OLMADAN
+            // yapılmaz — oyuncu istemcisinde Quest'in tek bir ses yolu vardır.
+            AdminSession.ApplyAudioOutput();
+
             gameObject.AddComponent<AdminRoster>();
             // Adminler arası ortak seçim (mod/harita) — birden çok operatör aynı ekranı görsün.
             gameObject.AddComponent<AdminSelection>();

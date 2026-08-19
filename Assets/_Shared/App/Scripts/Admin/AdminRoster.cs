@@ -333,7 +333,10 @@ namespace VortexArena.App.Admin
 
         public string ModeId { get; private set; } = "";
         public string SceneName { get; private set; } = "";
+        /// <summary>Koşan maçın skor/tur limiti (<c>load_match</c>): <c>&gt; 0</c> = limit,
+        /// <c>ArenaProtocol.SCORE_LIMIT_UNLIMITED</c> = sınırsız, <c>0</c> = maç yok.</summary>
         public int ScoreLimit { get; private set; }
+
         public int RoundSeconds { get; private set; }
 
         /// <summary>Son snapshot'tan bu yana geçen süre (sn); hiç snapshot yoksa -1.</summary>

@@ -89,6 +89,16 @@ namespace VortexArena.App.Admin
         private const int ScoreLimitMin = 1;
         private const int ScoreLimitMax = 999;
 
+        /// <summary>Skor limiti adımlayıcısının EN ALT basamağı: <b>sınırsız</b>
+        /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>). <c>1</c>'den bir kez daha aşağı
+        /// basmak buraya iner, yukarı basmak <c>1</c>'e döner.
+        /// <para>Neden listenin ucunda ve neden ayrı bir onay kutusu değil: "kaç tur" sorusunun
+        /// cevabı bu — sınırsız o sorunun bir değeri, yanına asılan ikinci bir anahtar değil (ayrı
+        /// bir kutu, sayı hâlâ görünürken hangisinin geçerli olduğunu belirsiz bırakırdı).
+        /// Turnuvada sınırsız = galibiyet limiti YOK + tur tavanı YOK: turlar operatör İPTAL'e
+        /// basana kadar sürer.</para></summary>
+        private const int ScoreLimitUnlimited = ArenaProtocol.SCORE_LIMIT_UNLIMITED;
+
         // ⚠️ Alanlar [SerializeField] — görünüm PREFABTAN gelir
         // (`_Shared/App/Resources/UI/AdminPreferencesPanel.prefab`). Bu sınıf yalnız veri
         // yazar; yerleşim/renk/punto prefabta düzenlenir. Prefabta bağlanmayan alan sessizce
@@ -247,10 +257,24 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _roofPrev;
         [SerializeField] private Button _roofNext;
 
+        /// <summary>
+        /// Sesin çıkacağı cihaz seçicisi (yalnız bu ekran — <see cref="AdminSession"/>).
+        /// Mod/harita gibi <b>liste tabanlı</b> olduğu için adımlayıcı değil dropdown'dır:
+        /// bir PC'de bağlı çıkış sayısı bilinmez ve ok tuşlarıyla gezmek operatörü tıklatırdı.
+        /// <para>⚠️ Seçenekleri KOD doldurur (Windows'tan okunur) — prefabtaki liste yalnız
+        /// şablondur ve çalışırken temizlenir.</para>
+        /// </summary>
+        [SerializeField] private TMP_Dropdown _audioDeviceDropdown;
+
         private readonly List<ModeDefinition> _modes = new List<ModeDefinition>();
         private readonly List<MapDefinition> _maps = new List<MapDefinition>();
         private int _modeIndex;
         private int _mapIndex;
+
+        /// <summary>Windows'tan okunan çıkış uçları. ⚠️ <b>Önbelleklenmez, panel her açılışta
+        /// tazeler</b> (<see cref="RefreshAudioDeviceList"/>): operatör kulaklığı maç sürerken
+        /// takıyor ve bayat bir liste ona olmayan bir cihazı seçtirirdi.</summary>
+        private readonly List<AudioOutputDevice> _audioDevices = new List<AudioOutputDevice>();
 
         /// <summary>Bir sonraki maçın süresi/limiti (ORTAK — set_selection ile gider).
         /// Mod değişince o modun <see cref="ModeDefinition"/> varsayılanına döner.</summary>
@@ -279,6 +303,7 @@ namespace VortexArena.App.Admin
             AdminContent.CollectModes(_modes);
             RebuildModeOptions(); // mod listesi katalogdan gelir ve sonra değişmez → bir kez
             RefreshMapList();     // harita seçeneklerini kendi kurar (mod + mekan süzgeci)
+            RefreshAudioDeviceList();
             ResetMatchParametersToModeDefaults();
             Apply();
         }
@@ -325,6 +350,7 @@ namespace VortexArena.App.Admin
             Wire(_speedNext, SpeedUp);
             Wire(_roofPrev, PrevRoof);
             Wire(_roofNext, NextRoof);
+            WireDropdown(_audioDeviceDropdown, SelectAudioDevice);
 
             Wire(_reconnectButton, AdminCommands.Reconnect);
             Wire(_disconnectButton, AdminCommands.Disconnect);
@@ -352,6 +378,14 @@ namespace VortexArena.App.Admin
         private void SelectTab(AdminPreferencesTab tab)
         {
             _tab = tab;
+
+            // Cihaz listesi GÖRÜNÜM sayfasına geçerken tazelenir: panel açıkken takılan bir
+            // kulaklık için operatörün paneli kapatıp açması gerekmesin.
+            if (tab == AdminPreferencesTab.View)
+            {
+                RefreshAudioDeviceList();
+            }
+
             Apply();
         }
 
@@ -670,9 +704,36 @@ namespace VortexArena.App.Admin
         private void ScoreLimitDown() { StepScoreLimit(-1); }
         private void ScoreLimitUp() { StepScoreLimit(1); }
 
-        /// <summary>Skor limiti adımlayıcısı: düşük değerlerde ±1, eşiğin üstünde ±5.</summary>
+        /// <summary>Skor limiti adımlayıcısı: düşük değerlerde ±1, eşiğin üstünde ±5; en altta
+        /// <b>sınırsız</b> basamağı (<see cref="ScoreLimitUnlimited"/>).
+        /// <para>Sınırsız yalnız <c>ScoreLimitMin</c>'den bir adım daha aşağıda durur — yani oraya
+        /// kazara düşülmez, listenin ucuna kadar inmek gerekir; oradan yukarı basmak da doğrudan
+        /// <c>ScoreLimitMin</c>'e döner (sınırsızın "bir eksiği" yoktur).</para></summary>
         private void StepScoreLimit(int direction)
         {
+            // Sınırsız basamağı sayı ekseninin parçası DEĞİLDİR (−1 aritmetiğe girse 0/−2 gibi
+            // anlamsız değerler üretirdi) — giriş ve çıkışı ayrı iki daldır.
+            if (_scoreLimit < 0)
+            {
+                if (direction > 0)
+                {
+                    _scoreLimit = ScoreLimitMin;
+                    PublishSelection(mapChanged: false);
+                }
+
+                return; // sınırsız en alt basamak: aşağı basmak bir şey yapmaz
+            }
+
+            // ⚠️ Kapı "== ScoreLimitMin", "<= " DEĞİL: 0 ("mod varsayılanı") sayı ekseninde değil
+            // BİLİNMEYEN durumdur — oradan aşağı basmak eskisi gibi alt sınıra çıkar, sınırsıza
+            // düşmez (operatör seçmediği bir kurala kazara geçmesin).
+            if (direction < 0 && _scoreLimit == ScoreLimitMin)
+            {
+                _scoreLimit = ScoreLimitUnlimited;
+                PublishSelection(mapChanged: false);
+                return;
+            }
+
             int step = _scoreLimit >= ScoreLimitFineThreshold ? 5 : 1;
             // Aşağı inerken eşiğin ALTINA düşmemek için adımı da eşiğe göre yeniden hesapla.
             if (direction < 0 && _scoreLimit - step < ScoreLimitFineThreshold)
@@ -900,9 +961,14 @@ namespace VortexArena.App.Admin
                 changed = true;
             }
 
-            if (AdminSelection.ScoreLimit > 0 && AdminSelection.ScoreLimit != _scoreLimit)
+            // ⚠️ Limitte kapı "> 0" DEĞİL "!= 0": sunucudan gelen negatif değer "seçilmedi" değil
+            // SINIRSIZ seçimidir (§5.2) ve pozitiflik kapısında sessizce yutulurdu — diğer
+            // operatörün seçtiği sınırsız bu panelde hiç görünmezdi.
+            if (AdminSelection.ScoreLimit != 0 && AdminSelection.ScoreLimit != _scoreLimit)
             {
-                _scoreLimit = Mathf.Clamp(AdminSelection.ScoreLimit, ScoreLimitMin, ScoreLimitMax);
+                _scoreLimit = AdminSelection.ScoreLimit < 0
+                    ? ScoreLimitUnlimited
+                    : Mathf.Clamp(AdminSelection.ScoreLimit, ScoreLimitMin, ScoreLimitMax);
                 changed = true;
             }
 
@@ -1163,6 +1229,117 @@ namespace VortexArena.App.Admin
             AdminSpectator.RefreshRoof(); // tercih anında görünsün, kip değişimini bekleme
         }
 
+        // ------------------------------------------------------------------ ses çıkışı
+
+        /// <summary>Seçicinin ilk satırı: hiçbir şeye dokunma, Windows ne diyorsa o. Başta durur
+        /// ve orada kalır — cihazlar takılıp çıktıkça listenin sonu kayar, başı kaymaz.</summary>
+        private const string AudioSystemDefaultLabel = "sistem varsayılanı";
+
+        private const int AudioSystemDefaultRowIndex = 0;
+
+        /// <summary>Kayıtlı seçim şu an bağlı değilken listeye eklenen satır. Tercih silinmediği
+        /// için (kulaklık geri takılabilir) durumun ekranda görünür olması gerekir — imleci
+        /// sessizce "sistem varsayılanı"na çekmek operatöre seçimini kaybettiğini düşündürürdü.</summary>
+        private const string AudioMissingDeviceLabel = "seçili cihaz bağlı değil";
+
+        /// <summary>Kayıtlı cihaz listede yok — o zaman sona bir uyarı satırı eklenir ve imleç
+        /// oraya oturur.</summary>
+        private bool _audioDeviceMissing;
+
+        /// <summary>
+        /// Cihaz listesini Windows'tan yeniden okur ve seçeneklerini kurar. Panel açılışında ve
+        /// GÖRÜNÜM sayfasına geçişte çağrılır; <b>her karede değil</b> — uç numaralandırması COM
+        /// çağrısıdır ve tazelemesi ucuz olsa da bedavası yoktur.
+        /// </summary>
+        private void RefreshAudioDeviceList()
+        {
+            WindowsAudioDevices.Collect(_audioDevices);
+
+            string selected = AdminSession.AudioOutputDeviceId;
+            _audioDeviceMissing = !string.IsNullOrEmpty(selected) && IndexOfAudioDevice(selected) < 0;
+
+            _optionScratch.Clear();
+            _optionScratch.Add(AudioSystemDefaultLabel);
+            for (int i = 0; i < _audioDevices.Count; i++)
+            {
+                _optionScratch.Add(_audioDevices[i].Name);
+            }
+
+            if (_audioDeviceMissing)
+            {
+                _optionScratch.Add(AudioMissingDeviceLabel);
+            }
+
+            FillDropdown(_audioDeviceDropdown, _optionScratch, AudioSystemDefaultLabel);
+            SyncAudioDeviceDropdown();
+        }
+
+        private int IndexOfAudioDevice(string id)
+        {
+            for (int i = 0; i < _audioDevices.Count; i++)
+            {
+                if (_audioDevices[i].Id == id)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        /// <summary>İmleci kayıtlı tercihe çeker (satır 0 = sistem varsayılanı, sonra cihazlar,
+        /// en sonda varsa "bağlı değil" satırı).</summary>
+        private void SyncAudioDeviceDropdown()
+        {
+            int count = 1 + _audioDevices.Count + (_audioDeviceMissing ? 1 : 0);
+            string selected = AdminSession.AudioOutputDeviceId;
+
+            if (string.IsNullOrEmpty(selected))
+            {
+                SyncDropdown(_audioDeviceDropdown, AudioSystemDefaultRowIndex, count);
+                return;
+            }
+
+            if (_audioDeviceMissing)
+            {
+                SyncDropdown(_audioDeviceDropdown, count - 1, count);
+                return;
+            }
+
+            int index = IndexOfAudioDevice(selected);
+            SyncDropdown(_audioDeviceDropdown, index >= 0 ? index + 1 : AudioSystemDefaultRowIndex, count);
+        }
+
+        /// <summary>
+        /// Ses çıkışı seçildi. Tek yaptığı tercihi yazmaktır — Windows'a dokunmak
+        /// <see cref="AdminSession.AudioOutputDeviceId"/> setter'ının işidir (tek kapı).
+        /// <para>⚠️ "Bağlı değil" satırı seçilemez bir bilgi satırıdır: tıklanırsa imleç
+        /// <see cref="Apply"/> ile yerine çekilir, tercih değişmez.</para>
+        /// </summary>
+        private void SelectAudioDevice(int index)
+        {
+            HideDropdown(_audioDeviceDropdown);
+
+            if (index == AudioSystemDefaultRowIndex)
+            {
+                AdminSession.AudioOutputDeviceId = "";
+                RefreshAudioDeviceList();
+                Apply();
+                return;
+            }
+
+            int deviceIndex = index - 1;
+            if (deviceIndex < 0 || deviceIndex >= _audioDevices.Count)
+            {
+                Apply(); // "bağlı değil" satırı ya da bayat imleç — dropdown kendi değerini geri alsın
+                return;
+            }
+
+            AdminSession.AudioOutputDeviceId = _audioDevices[deviceIndex].Id;
+            RefreshAudioDeviceList();
+            Apply();
+        }
+
         // ------------------------------------------------------------------ tazeleme
 
         private void Apply()
@@ -1176,6 +1353,13 @@ namespace VortexArena.App.Admin
             if (_root.activeSelf != open)
             {
                 _root.SetActive(open);
+
+                // Panel her AÇILIŞTA ses cihazlarını yeniden okur — liste oturum boyunca değişir
+                // (kulaklık takılır, HDMI ekran uyanır). Kapanışta iş yapılmaz.
+                if (open)
+                {
+                    RefreshAudioDeviceList();
+                }
             }
 
             if (!open)
@@ -1198,7 +1382,8 @@ namespace VortexArena.App.Admin
             _durationValue.text = _roundSeconds > 0
                 ? AdminCommands.FormatDuration(_roundSeconds)
                 : "mod varsayılanı";
-            _scoreLimitValue.text = _scoreLimit > 0 ? _scoreLimit.ToString() : "mod varsayılanı";
+            // Üç durum: sayı · sınırsız · mod varsayılanı (0 = arayüz bir değer bilmiyor).
+            _scoreLimitValue.text = AdminCommands.FormatScoreLimit(_scoreLimit);
 
             // Eksik bağ sessizce çizilmez (panelin geri kalanı çalışmaya devam eder).
             if (_countdownValue != null)
@@ -1233,6 +1418,13 @@ namespace VortexArena.App.Admin
             _speedValue.text = $"{AdminSession.FreeSpeed:0.0} m/sn";
             _roofValue.text = AdminSession.Roof == AdminRoofMode.Visible ? "görünür"
                 : AdminSession.Roof == AdminRoofMode.HideInTopDown ? "kuş bakışında gizli" : "hep gizli";
+
+            SyncAudioDeviceDropdown();
+
+            // Windows dışında (ve hiç çıkış ucu bulunamadığında) seçilecek bir şey yok: açılıp tek
+            // satır gösteren bir seçici operatörü "tıkladım, bir şey olmadı" diye bırakır.
+            SetInteractable(_audioDeviceDropdown,
+                WindowsAudioDevices.Supported && _audioDevices.Count > 0);
 
             ArenaClient client = ArenaClient.Instance;
             string endpoint = AppSession.HasServerEndpoint
