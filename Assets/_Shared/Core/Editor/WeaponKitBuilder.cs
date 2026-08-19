@@ -46,7 +46,11 @@ namespace VortexArena.Core.Editor
         private const string FxPrefabPath = FxDir + "/FX_RemoteShot.prefab";
         private const string SmokeMaterialPath = FxDir + "/M_MuzzleSmoke.mat";
         private const string CatalogDir = "Assets/_Shared/Data/Resources";
-        private const string CatalogPath = CatalogDir + "/WeaponCatalog.asset";
+
+        /// <summary>Silah kataloğunun yeri — <c>internal</c>, çünkü eşitlemenin sonraki adımı
+        /// (<c>BuildElementsConfigurator.SyncModeLoadouts</c>) kataloğu bu koşunun ÇIKTISI olarak
+        /// okur; yol orada tekrar yazılsaydı ikinci bir doğruluk kaynağı olurdu.</summary>
+        internal const string CatalogPath = CatalogDir + "/WeaponCatalog.asset";
 
         /// <summary>Weapon frame prefab — placed under every WPN as an INSTANCE
         /// (<see cref="ApplyWeaponFrameKit"/>). The tool only binds it, never creates it.</summary>
