@@ -383,10 +383,24 @@ public sealed class MatchDirector
         get { lock (_gate) return _roundSeconds; }
     }
 
+    /// <summary>Koşan maçın skor/tur limiti. <c>&gt; 0</c> = limit; <c>&lt;= 0</c> = <b>limit
+    /// YOK</b> (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> operatör seçimi, <c>0</c> maç
+    /// yokken sıfırlanmış hâl).
+    /// <para>⚠️ Modlar bunu her zaman <c>limit &gt; 0</c> kapısıyla okur — sınırsız maçta hiçbir
+    /// limit dalı çalışmasın diye. Kapıyı atlayan bir kıyas (<c>score &gt;= limit</c>) sınırsız
+    /// maçı ilk puanda bitirirdi.</para></summary>
     public int ScoreLimit
     {
         get { lock (_gate) return _scoreLimit; }
     }
+
+    /// <summary>Limitin konsol/duyuru metni: <c>sınırsız</c> · <c>mod limiti</c> · sayı. Operatörün
+    /// gördüğü tek yazım burada durur ki sunucu penceresi ile admin paneli aynı şeyi demesin
+    /// diye ikinci bir yazıma düşülmesin.</summary>
+    public static string DescribeScoreLimit(int scoreLimit) =>
+        scoreLimit > 0 ? scoreLimit.ToString()
+        : scoreLimit < 0 ? "sınırsız"
+        : "mod limiti";
 
 
     /// <summary>Koşan maçın kural şekli (§10.5); maç yokken TDM varsayılanı.</summary>
@@ -947,9 +961,12 @@ public sealed class MatchDirector
     /// <summary>start_match doğrulaması + kişisel load_match yayını (§10.1). Doğrulama geçmezse
     /// faz DEĞİŞMEZ, konsola sebep yazılır.
     /// <para><paramref name="roundSeconds"/>/<paramref name="scoreLimit"/>/
-    /// <paramref name="countdownSeconds"/> O MAÇA özeldir: <c>≤ 0</c> ise modun (geri sayımda
+    /// <paramref name="countdownSeconds"/> O MAÇA özeldir: <c>0</c> ise modun (geri sayımda
     /// protokolün) varsayılanı kullanılır (§5.2). Operatör raundu kısaltıp uzatabilsin diye
-    /// <see cref="IGameMode"/> üzerindeki sayılar kilit değil varsayılandır.</para></summary>
+    /// <see cref="IGameMode"/> üzerindeki sayılar kilit değil varsayılandır.</para>
+    /// <para><paramref name="scoreLimit"/> ayrıca <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>
+    /// olabilir: <b>sınırsız</b> maç — hiçbir limit dalı çalışmaz, bitişi süre ya da operatörün
+    /// <c>abort_match</c>'i belirler (tur tabanlı modda tur tavanı da kalkar).</para></summary>
     public async Task StartMatchAsync(string? modeId, string? sceneName, int roundSeconds = 0,
         int scoreLimit = 0, int countdownSeconds = 0)
     {
@@ -1022,7 +1039,13 @@ public sealed class MatchDirector
         var teamless = rules.Teams == TeamMode.None;
         // Admin verdiyse o maça özel değer, vermediyse modun varsayılanı (§5.2).
         var appliedRound = roundSeconds > 0 ? roundSeconds : mode.DefaultRoundSeconds;
-        var appliedLimit = scoreLimit > 0 ? scoreLimit : mode.DefaultScoreLimit;
+        // Limit ÜÇ değerlidir (§5.2): dolu değer o maça özeldir, 0 modun varsayılanına düşer,
+        // SCORE_LIMIT_UNLIMITED ise "limit yok" demektir ve varsayılanı TETİKLEMEZ. Sentinel telde
+        // olduğu gibi taşınır (0'a çevrilmez): load_match/admin_state onu geri yayıyor ve
+        // operatörün panelinde "mod varsayılanı" ile "sınırsız" ayırt edilebilir kalmalı.
+        var appliedLimit = scoreLimit > 0 ? scoreLimit
+            : scoreLimit < 0 ? ArenaProtocol.SCORE_LIMIT_UNLIMITED
+            : mode.DefaultScoreLimit;
         // Geri sayım aralığı bir arayüz listesi değil, sunucunun kısıtıdır (§5.2): 0 = varsayılan,
         // dolu değer kırpılır. Kırpma burada yapılır ki tek yazar olsun.
         var appliedCountdown = countdownSeconds > 0
@@ -1107,7 +1130,8 @@ public sealed class MatchDirector
         // Dost ateşi satıra bilerek yazılır: anahtar oturum boyunca yaşadığı ve maç ortasında da
         // değişebildiği için, hangi maçın hangi kuralla oynandığı sonradan yalnız buradan okunur.
         Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}', " +
-                          $"{appliedRound} sn / limit {appliedLimit} / geri sayım {appliedCountdown} sn, " +
+                          $"{appliedRound} sn / limit {DescribeScoreLimit(appliedLimit)} / " +
+                          $"geri sayım {appliedCountdown} sn, " +
                           $"dost ateşi {(FriendlyFire ? "AÇIK" : "kapalı")}, " +
                           $"{players.Count} oyuncu ({teamInfo}).");
         await FlushAsync(outbox);

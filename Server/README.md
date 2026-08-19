@@ -286,7 +286,10 @@ değil defter tutar (§10.3 felsefesi); faz + ölü + gecikme kontrolüyle yetin
 **Maç parametreleri:** `start_match.roundSeconds`/`scoreLimit`/`countdownSeconds` doluysa o maç bu
 değerlerle koşar, boş/`0` ise modun varsayılanı (`DefaultRoundSeconds`/`DefaultScoreLimit`) —
 geri sayımda protokolün varsayılanı (`COUNTDOWN_SECONDS` = 5) — kullanılır. Yani modun
-sayıları **kilit değil varsayılandır** — operatör raundu kısaltıp uzatabilir. Seçim mod/harita ile
+sayıları **kilit değil varsayılandır** — operatör raundu kısaltıp uzatabilir.
+`scoreLimit` ayrıca `SCORE_LIMIT_UNLIMITED` (`-1`) olabilir: **sınırsız** maç — varsayılana
+düşmez, hiçbir limit dalı çalışmaz (kapıların tamamı `limit > 0` diye sorar) ve tur tabanlı modda
+tur tavanı da kalkar. Konsol satırı bu maçlarda `limit sınırsız` yazar. Seçim mod/harita ile
 aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki operatör sapmaz.
 `countdownSeconds` sunucuda **5–30 sn** aralığına kırpılır ve maçın HER geri sayımında kullanılır
 (tur tabanlı modda turlar arasındaki bekleme de odur).
@@ -297,7 +300,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 |---|---|---|---|
 | `tdm` | `Modes/TdmMode.cs` | Tümüyle varsayılan (`ModeRules.TeamDefault`): iki takım, takım skoru, kendi tabanında canlanma, sahnede duran silah, 5 sn gecikme | 300 sn / 30 |
 | `ffa` | `Modes/FfaMode.cs` | Takımsız · bireysel skor · sabit durarak canlanma · silahı mod dağıtır · gecikme 0 | 300 sn / 20 |
-| `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından tek farkı: **canlanma yok** (`Revive = None`, gecikme 0). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur |
+| `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından tek farkı: **canlanma yok** (`Revive = None`, gecikme 0). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
 
 > `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;
 > eşitlikte `TryGetLeader` false döndüğü için maç berabere biter. Oyuncusuz başlatılan maçta
@@ -307,11 +310,13 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > **turun** süresidir, `scoreLimit` maçı kazanmak için gereken tur sayısıdır (tavan
 > `2 × limit − 1` tur). Bir takımın tüm çevrimiçi oyuncuları ölünce tur biter; süre dolarsa
 > **savaşabilir** (canlı **ve** kalibreli) sayısı fazla olan takım alır, eşitse kimseye puan yok.
+> `scoreLimit` **sınırsız** seçilirse (`SCORE_LIMIT_UNLIMITED`) ne galibiyet limiti ne tur tavanı
+> işler: turlar `abort_match`'e kadar sürer.
 > Turlar arasında faz `paused`/`mode` olur (`modeState:"regroup:2/6"`), oyuncular fiziksel olarak
 > kendi taban bölgelerine yürüyüp `set_ready{true}` yollar ve herkes toplanınca geri sayım başlar
-> (mod 60 sn sonra emniyet için yine başlatır). **Geri sayım sırasında tabanından çıkan olursa
-> geri sayım iptal edilir ve toplanmaya dönülür** — kural "tabanda bekle"dir; zaman aşımıyla
-> başlamış geri sayım ise iptal edilmez. Çekirdek bunu dört API ile destekler —
+> — **toplanmanın zaman aşımı YOKTUR**, çıkışı operatörün `kick`/`abort_match`'idir. **Geri sayım
+> sırasında tabanından çıkan olursa geri sayım iptal edilir ve toplanmaya dönülür** — kural
+> "tabanda bekle"dir ve iptalin **istisnası yoktur**. Çekirdek bunu dört API ile destekler —
 > `TryPauseForMode` / `SetModeState` / `TryStartRound` / `TryCancelCountdownForMode` — ve
 > `modeState`'i **hiç ayrıştırmaz**. Konsolda `[tournament]` satırları tur akışını anlatır.
 

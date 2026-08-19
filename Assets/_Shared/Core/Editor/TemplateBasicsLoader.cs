@@ -56,8 +56,14 @@ namespace VortexArena.Core.Editor
         private const string FadeQuadName = "OutOfBoundsFade";
         private const string WarningTextName = "BoundaryWarningText";
 
-        private const string TeamRedMaterial = "Assets/Materials/M_TeamRed.mat";
-        private const string TeamBlueMaterial = "Assets/Materials/M_TeamBlue.mat";
+        // Taban şeridinin görünüşünün TEK doğruluk kaynağı burasıdır: şerit rengi çalışma anında
+        // boyanmadığı için materyal bölge kurulurken instance override olarak yazılır
+        // (ApplyTeamMaterial). Prefaba yazmak işe yaramaz — VA_BaseZone tek prefabtır, kırmızıyla
+        // maviyi ayıran şey bu override'dır.
+        // ⚠️ Materyalin `_BaseColor` alanı TAKIM RENGİDİR: BaseZoneVisibility ölen oyuncunun
+        // x-ray hayaletinin rengini şeridin materyalinden o alanı okuyarak alıyor.
+        private const string TeamRedMaterial = "Assets/_Shared/Materials/M_BaseZone_Red_Metallic.mat";
+        private const string TeamBlueMaterial = "Assets/_Shared/Materials/M_BaseZone_Blue_Metallic.mat";
 
         [SerializeField] private bool includeModeHud = true;
         [SerializeField] private bool includeBaseZones = true;

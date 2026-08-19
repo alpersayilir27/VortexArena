@@ -126,6 +126,7 @@ namespace VortexArena.Core.Audio
             NetEvents.OnConnected += HandleConnected;
             NetEvents.OnLoadMatch += HandleLoadMatch;
             NetEvents.OnReturnToLobby += HandleReturnToLobby;
+            AudioSettings.OnAudioConfigurationChanged += HandleAudioConfigurationChanged;
 
             ApplyScene(SceneManager.GetActiveScene().name);
         }
@@ -141,8 +142,37 @@ namespace VortexArena.Core.Audio
             NetEvents.OnConnected -= HandleConnected;
             NetEvents.OnLoadMatch -= HandleLoadMatch;
             NetEvents.OnReturnToLobby -= HandleReturnToLobby;
+            AudioSettings.OnAudioConfigurationChanged -= HandleAudioConfigurationChanged;
 
             Instance = null;
+        }
+
+        /// <summary>
+        /// Ses cihazı ya da yapılandırması değişti (hoparlör takıldı/çıkarıldı, operatör admin
+        /// panelinden başka bir çıkış seçti). Unity bu anda ses motorunu yeniden kurar ve
+        /// <b>çalan tüm <c>AudioSource</c>'ları durdurur.</b>
+        /// <para>
+        /// ⚠️ Ortam sesi kendiliğinden geri gelmez ve <b>bu sessizlik fark edilmez</b>: sapma
+        /// denetimi "çalmıyor" diye erken çıkar (<see cref="CorrectDrift"/>), yeni klip ise ancak
+        /// harita değişince seçilir — yani ses, maç boyunca susmuş kalırdı. Klip yerinde
+        /// olduğundan burada elle sürdürülür ve ortak faza geri oturtulur (geç katılan başlık
+        /// gibi: atlayarak devam eder, baştan başlamaz).
+        /// </para>
+        /// </summary>
+        private void HandleAudioConfigurationChanged(bool deviceWasChanged)
+        {
+            if (_active == null || _active.clip == null)
+            {
+                return;
+            }
+
+            if (!_active.isPlaying)
+            {
+                _active.Play();
+            }
+
+            SeekToEpoch(_active);
+            _nextDriftCheck = Time.realtimeSinceStartup + DriftCheckSeconds;
         }
 
         private void Update()

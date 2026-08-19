@@ -182,7 +182,7 @@ namespace VortexArena.Protocol
 
     // ---- Yalnız admin → Sunucu ----
 
-    /// start_match (§5.2). roundSeconds/scoreLimit/countdownSeconds O MAÇA özeldir: ≤0 ya da
+    /// start_match (§5.2). roundSeconds/scoreLimit/countdownSeconds O MAÇA özeldir: 0 ya da
     /// eksikse modun varsayılanı (IGameMode.DefaultRoundSeconds/DefaultScoreLimit) — geri sayımda
     /// protokol varsayılanı (COUNTDOWN_SECONDS) — kullanılır.
     [Serializable]
@@ -192,6 +192,10 @@ namespace VortexArena.Protocol
         public string modeId;
         public string sceneName;
         public int roundSeconds;
+
+        /// <summary>Skor/tur limiti: <c>&gt; 0</c> = o değer, <c>0</c> = modun varsayılanı,
+        /// <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = <b>sınırsız</b> (limit yok; tur
+        /// tabanlı modda tur tavanı da yok). ⚠️ Üç değerli olduğu için <c>≤ 0</c> ile okunmaz.</summary>
         public int scoreLimit;
 
         /// <summary>Geri sayımın uzunluğu (sn); sunucuda [COUNTDOWN_SECONDS_MIN,
@@ -318,6 +322,11 @@ namespace VortexArena.Protocol
         public string modeId;
         public string sceneName;
         public int roundSeconds;
+
+        /// <summary>Skor/tur limiti seçimi: <c>&gt; 0</c> = o değer, <c>0</c> = mevcut değeri koru,
+        /// <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = <b>sınırsız</b> seçildi.
+        /// <para>⚠️ "Sınırsız" bir seçimdir, dokunulmamışlık değil — bu yüzden sunucudaki kapı
+        /// <c>&gt; 0</c> değil <c>!= 0</c> diye sorar.</para></summary>
         public int scoreLimit;
 
         /// <summary>Geri sayım uzunluğu (sn); <c>0</c> = mevcut değeri koru (diğer alanlarla
@@ -571,7 +580,12 @@ namespace VortexArena.Protocol
         public string modeId;
         public string sceneName;
         public int roundSeconds;
+
+        /// <summary>Bu maçta YÜRÜRLÜKTEKİ skor/tur limiti (sunucu çözdü, artık "0 = varsayılan"
+        /// yoktur): <c>&gt; 0</c> = o değer, <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> =
+        /// sınırsız.</summary>
         public int scoreLimit;
+
         public string yourTeam;
 
         /// <summary>Sahnenin kaç saniyedir sahnelendiği; yeni sahne sahnelenirken 0
@@ -707,6 +721,9 @@ namespace VortexArena.Protocol
 
         /// <summary>Bir sonraki maçın ortak parametreleri; 0 = hiç seçilmedi (mod varsayılanı).</summary>
         public int roundSeconds;
+
+        /// <summary>Ortak skor/tur limiti seçimi; <c>0</c> = hiç seçilmedi (mod varsayılanı),
+        /// <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = sınırsız seçildi.</summary>
         public int scoreLimit;
 
         /// <summary>Geri sayım uzunluğu (sn); 0 = hiç seçilmedi (COUNTDOWN_SECONDS).</summary>

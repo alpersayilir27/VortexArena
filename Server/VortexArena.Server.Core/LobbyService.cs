@@ -48,6 +48,9 @@ public sealed class LobbyService
     /// varsayılanı kullanılacak. Mod/harita ile AYNI kanaldan gider: parametreler yerel kalsaydı
     /// bir operatörün 5 dk sandığı maç diğerinin seçtiği 30 dk ile başlardı.</summary>
     private int _selectedRoundSeconds;
+
+    /// <summary>Ortak skor/tur limiti seçimi: <c>0</c> = seçilmedi (modun varsayılanı),
+    /// <c>&gt; 0</c> = o değer, <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = sınırsız.</summary>
     private int _selectedScoreLimit;
 
     /// <summary>Ortak geri sayım seçimi (§5.2); 0 = hiç seçilmedi → COUNTDOWN_SECONDS.</summary>
@@ -581,9 +584,9 @@ public sealed class LobbyService
             };
         }
 
-        var parameters = roundSeconds > 0 || scoreLimit > 0
+        var parameters = roundSeconds > 0 || scoreLimit != 0
             ? $", {(roundSeconds > 0 ? roundSeconds + " sn" : "mod süresi")} / " +
-              $"{(scoreLimit > 0 ? "limit " + scoreLimit : "mod limiti")}"
+              $"{(scoreLimit != 0 ? "limit " + MatchDirector.DescribeScoreLimit(scoreLimit) : "mod limiti")}"
             : "";
         Console.WriteLine($"[Lobby] set_selection: mod '{modeId}', harita '{sceneName}'{parameters} ({connection.State?.Name}).");
 
@@ -596,7 +599,10 @@ public sealed class LobbyService
     /// <summary>true = seçim gerçekten değişti. Boş/null string ve <c>0</c> sayı mevcut değeri
     /// korur (§5.2) — arayüz yalnız değiştirdiği alanı doldurabilsin.
     /// <para>⚠️ Bu koruma aynı zamanda "seçim asla boşalmaz" garantisidir: kurucudaki lobi
-    /// tohumundan sonra hiçbir komut mod/haritayı boşa çekemez.</para></summary>
+    /// tohumundan sonra hiçbir komut mod/haritayı boşa çekemez.</para>
+    /// <para>⚠️ <paramref name="scoreLimit"/> bu sözleşmenin İSTİSNASIDIR: <c>0</c> yine
+    /// "dokunulmadı" ama negatif değer bir SEÇİMDİR (sınırsız, §5.2), bu yüzden kapısı
+    /// pozitiflik değil sıfırdan farklılıktır.</para></summary>
     private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit,
         int countdownSeconds)
     {
@@ -618,9 +624,13 @@ public sealed class LobbyService
                 _selectedRoundSeconds = roundSeconds;
                 changed = true;
             }
-            if (scoreLimit > 0 && _selectedScoreLimit != scoreLimit)
+            // ⚠️ Limitte kapı "> 0" DEĞİL "!= 0": SCORE_LIMIT_UNLIMITED (sınırsız) da bir seçimdir
+            // ve negatif olduğu için pozitiflik kapısında sessizce düşerdi. Normalize her negatifi
+            // tek yazıma indirir, yoksa "-2" gelen bir istemci seçimi değiştirmiş sayılırdı.
+            var normalizedLimit = ArenaProtocol.NormalizeScoreLimit(scoreLimit);
+            if (normalizedLimit != 0 && _selectedScoreLimit != normalizedLimit)
             {
-                _selectedScoreLimit = scoreLimit;
+                _selectedScoreLimit = normalizedLimit;
                 changed = true;
             }
             if (countdownSeconds > 0 && _selectedCountdownSeconds != countdownSeconds)

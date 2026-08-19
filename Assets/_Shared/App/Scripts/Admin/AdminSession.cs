@@ -71,6 +71,7 @@ namespace VortexArena.App.Admin
         private const string KeyFreeSpeed = Prefix + "FreeSpeed";
         private const string KeyRoof = Prefix + "Roof";
         private const string KeyFullScreen = Prefix + "FullScreen";
+        private const string KeyAudioDevice = Prefix + "AudioDevice";
 
         /// <summary>Serbest kip taban hızı sınırları (m/sn) — tercih slider'ı bu aralıkta.</summary>
         public const float FreeSpeedMin = 1f;
@@ -89,6 +90,7 @@ namespace VortexArena.App.Admin
         private static float _freeSpeed = 4f;
         private static AdminRoofMode _roof = AdminRoofMode.HideInTopDown;
         private static bool _fullScreen = true;
+        private static string _audioDevice = "";
         private static bool _loaded;
 
         /// <summary>
@@ -290,6 +292,93 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
+        /// Sesin çıkacağı Windows cihazının uç kimliği; <c>""</c> = <b>sistem varsayılanı</b>
+        /// (hiçbir şeye dokunulmaz). Operatör admin PC'sine bağlı birden çok hoparlör/kulaklık
+        /// arasından seçebilsin diye vardır.
+        /// <para>
+        /// ⚠️ <b>Bu bir EKRAN tercihidir</b> (<c>PlayerPrefs</c>), ihlal sesiyle aynı gerekçe:
+        /// iki operatörün hoparlörünü birbirine bağlamak yönetimi kolaylaştırmaz. <c>AdminSelection</c>'a
+        /// (yani <c>admin_state</c>'e) GİRMEZ.
+        /// </para>
+        /// <para>
+        /// ⚠️ Saklanan şey <b>kimliktir, ad değil</b>: cihaz adları sürücü güncellemesiyle değişir,
+        /// uç kimliği kalır. Ad yalnız panelde gösterilir ve her açılışta yeniden okunur.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Tek kapı budur</b> (<see cref="FullScreen"/> ile aynı sözleşme): yazan taraf
+        /// Windows'a dokunmaz — setter tercihi kaydeder, cihazı uygular ve <see cref="Changed"/>
+        /// ile herkesi tazeler.
+        /// </para>
+        /// </summary>
+        public static string AudioOutputDeviceId
+        {
+            get { Load(); return _audioDevice; }
+            set
+            {
+                Load();
+                string id = value ?? "";
+                if (_audioDevice == id)
+                {
+                    return;
+                }
+
+                _audioDevice = id;
+                PlayerPrefs.SetString(KeyAudioDevice, id);
+                ApplyAudioOutput();
+                Raise();
+            }
+        }
+
+        /// <summary>
+        /// Kayıtlı ses cihazını Windows'un varsayılan çıkışı yapar. Setter zaten çağırır; ayrıca
+        /// <b>admin etkinleşirken</b> bir kez çağrılır ki uygulama operatörün son seçimiyle açılsın
+        /// (<see cref="ApplyScreenMode"/> ile aynı desen).
+        /// <para>
+        /// ⚠️ <b>Unity'de ses çıkış cihazı seçen bir API YOKTUR</b> — <c>AudioSettings</c> yalnız
+        /// hız/tampon/hoparlör kipi verir, cihaz listelemez. Ses motoru her zaman <b>Windows'un
+        /// varsayılan cihazını</b> kullanır; bu yüzden seçim, cihazın kendisini varsayılan yaparak
+        /// uygulanır (<see cref="WindowsAudioDevices"/>). Doğrudan sonucu: <b>değişiklik sistem
+        /// geneldir</b> — admin PC'sindeki diğer uygulamalar da o cihaza geçer. Adanmış bir
+        /// operatör makinesinde istenen davranış budur.
+        /// </para>
+        /// <para>
+        /// ⚠️ Cihaz gerçekten değiştiğinde <c>AudioSettings.Reset</c> ses motorunu yeniden kurar ve
+        /// <b>çalan tüm <c>AudioSource</c>'lar durur</b> (Unity'nin kendi cihaz izleyicisi de aynı
+        /// şeyi yapar). Ortam sesi bu yüzden kendini geri başlatır — bkz.
+        /// <c>VortexArena.Core.Audio.SceneAmbience</c>. Zaten yürürlükte olan cihaz seçilirse
+        /// hiçbir şey yapılmaz: gereksiz bir sıfırlama sesi boşuna kesintiye uğratırdı.
+        /// </para>
+        /// <para>Seçilen cihaz artık bağlı değilse tercih <b>SİLİNMEZ</b> — kulaklık geri
+        /// takıldığında seçim yaşasın; yalnız bir uyarı düşülür.</para>
+        /// </summary>
+        public static void ApplyAudioOutput()
+        {
+            Load();
+
+            if (string.IsNullOrEmpty(_audioDevice) || !WindowsAudioDevices.Supported)
+            {
+                return; // sistem varsayılanı geçerli
+            }
+
+            if (WindowsAudioDevices.GetDefaultId() == _audioDevice)
+            {
+                return;
+            }
+
+            if (!WindowsAudioDevices.SetDefault(_audioDevice))
+            {
+                Debug.LogWarning(
+                    "[AdminSession] Seçili ses çıkış cihazı ayarlanamadı (bağlı değil olabilir) — " +
+                    "sistem varsayılanı kullanılıyor. Tercih korundu.");
+                return;
+            }
+
+            // Motor yeni varsayılana otursun. Yapılandırma DEĞİŞTİRİLMEZ, aynısı geri verilir:
+            // amaç ayar değiştirmek değil, cihazı yeniden seçtirmek.
+            AudioSettings.Reset(AudioSettings.GetConfiguration());
+        }
+
+        /// <summary>
         /// Çatıya uygulanacak alfa (1 = normal, 0 = çizilmez, gölge kalır). Tercih + o anki
         /// kamera kipinden türetilir; <c>ArenaRoof.ApplyAll</c> bunu alır.
         /// </summary>
@@ -355,6 +444,10 @@ namespace VortexArena.App.Admin
             _violationSound = PlayerPrefs.GetInt(KeyViolationSound, 1) != 0;
             _freeSpeed = Mathf.Clamp(PlayerPrefs.GetFloat(KeyFreeSpeed, 4f), FreeSpeedMin, FreeSpeedMax);
             _roof = (AdminRoofMode)PlayerPrefs.GetInt(KeyRoof, (int)AdminRoofMode.HideInTopDown);
+
+            // Varsayılan BOŞ: hiç seçim yapmamış bir kurulumda Windows'un varsayılanına
+            // dokunulmaz (tam ekran tercihiyle aynı gerekçe — ilk dokunuşa kadar sessiz kal).
+            _audioDevice = PlayerPrefs.GetString(KeyAudioDevice, "");
 
             // ⚠️ Varsayılan SABİT bir değer değil, pencerenin O ANKİ hâlidir: hiç seçim yapmamış
             // bir kurulumda tercih, build'in açılış kipini (Player Settings) ezmemeli — ilk

@@ -418,7 +418,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Kamera: POV** (oyuncu kartındaki **POV** düğmesi; seçili oyuncu için `1` ya da `F`) | O oyuncunun **kendi gözünden** izlersin — karttaki POV'a basmak hem oyuncuyu seçer hem gözünden bakmaya geçer. Sağ üstte ayrı bir POV düğmesi yoktur; hangi oyuncuya baktığın düğmelerin altında **POV · ad** olarak yazar | "Bu oyuncu ne görüyor / neden takıldı?" |
 | **Kamera: Serbest** (sağ üstteki **SERBEST** düğmesi ya da `2`) | Arenada özgürce dolaşırsın: **W A S D** yürü, **Q/E** in-çık, **sağ fare tuşunu basılı tutup** bakış çevir, **Shift** hızlı | Bir köşeye yakından bakmak |
 | **İstatistik** | Skorun ortasındaki kutuya bas (veya `I`) | Oyuncu başına öldürme/ölüm/can/batarya **ve PING** tablosu |
-| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **üç sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
+| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **üç sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı, ses çıkışı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
 | **Tam ekran / Pencereli** | `F11`, ya da Tercihler panelinin başlığında **X**'in yanındaki düğme | Yönetim penceresini tüm ekrana yay veya küçült. Seçimin bu bilgisayarda **hatırlanır**: uygulama bir dahaki açılışta aynı kiple gelir |
 | **Oyundan çık** | Tercihler → **BAĞLANTI** sekmesindeki **OYUNDAN ÇIK** | Yönetim uygulamasını kapatır. Güvenlik için **iki kez** basmak gerekir (ilk basışta düğme "EMİN? ÇIK" olur). Sunucuyu ve maçı **kapatmaz** — o ayrı bir penceredir |
 
@@ -434,6 +434,31 @@ değildir: aynı gözlük oyunu tekrar açarsa adıyla ve numarasıyla geri geli
 
 **Panel açıkken oyun durmaz:** Tercihler/İstatistik panelleri yarı saydamdır, arkada sahneyi
 görmeye devam edersin. `Esc` ile kapatırsın.
+
+**Sesi başka bir hoparlörden verme**
+
+Yönetim bilgisayarına birden çok ses cihazı bağlıysa (masa hoparlörü, salonun ses sistemi,
+kulaklık) sesin hangisinden çıkacağını kendin seçebilirsin:
+
+- [ ] **Tercihler** (`P`) → **GÖRÜNÜM** sekmesi → **Ses çıkışı** satırına bas, liste açılır.
+- [ ] Listeden cihazı seç. En üstteki **sistem varsayılanı** satırı "karışma, Windows ne diyorsa o"
+      demektir.
+- [ ] Ses hemen yeni cihazdan gelmeye başlar; ortam müziği kaldığı yerden devam eder.
+
+Bilmen gereken üç şey:
+
+- **Seçim bu bilgisayarda hatırlanır** — yönetim uygulamasını kapatıp açtığında aynı cihazdan
+  çalmaya devam eder, her seansta yeniden seçmen gerekmez.
+- ⚠️ **Bu ayar bilgisayarın tamamını etkiler.** Aslında yaptığı şey Windows'un **varsayılan ses
+  cihazını** değiştirmektir: aynı bilgisayardaki diğer programların sesi de o cihaza geçer.
+  Yönetim bilgisayarı yalnız bu iş için kullanıldığından bu istenen davranıştır; ortak kullanılan
+  bir bilgisayardaysan bunu bilerek seç.
+- **Cihaz takılı değilse** satırda **"seçili cihaz bağlı değil"** yazar. Bu bir hata değildir:
+  seçimin silinmez, o an ses sistem varsayılanından çalar. Cihazı geri taktığında seçim hâlâ
+  duruyor olur: yönetim uygulaması bir sonraki açılışında yine ondan çalar, aynı seansta hemen
+  dönmesini istiyorsan listeden bir kez daha seç. Cihazı listede hiç göremiyorsan Windows'ta açık
+  ve bağlı olduğundan emin ol, sonra GÖRÜNÜM sekmesinden çıkıp geri gel — liste her seferinde
+  yenilenir.
 
 **PING kolonu ne demek:** o gözlükle sunucu arasındaki gecikme (milisaniye). **Düşük iyidir.**
 Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt ettirir:
@@ -495,6 +520,13 @@ kimseye puan yazmaz. **4 turu kazanan maçı kazanır** (bu yüzden en fazla 7 t
 > Süre ve tur sayısını Tercihler'den değiştirebilirsin: **Süre** turnuvada **turun** süresidir
 > (maçın değil), **Skor limiti** ise maçı kazanmak için gereken tur sayısıdır. Geri sayım
 > uzunluğu da ayarlanabilir (5–30 saniye).
+>
+> **Sınırsız turnuva:** skor limitinde **[−]**'ye `1`'in de altına inersen değer **sınırsız**
+> olur. O maçta kimse "maçı kazandı" diye ilan edilmez ve tur tavanı da yoktur — turlar sen
+> **İPTAL**'e basana kadar birbirini izler (her turun arasında yine toplanma + geri sayım vardır).
+> Sahada turu hakem yönetiyorsa kullanacağın ayar budur; bitirmeyi unutursan maç kendiliğinden
+> kapanmaz. Geri dönmek için aynı satırda **[+]**'ya bas (`1` tura döner) ya da modu değiştir
+> (mod değişimi limiti o modun varsayılanına çeker).
 
 **Maç başlatma sırası**
 
@@ -612,7 +644,8 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
 - Oyuncu arena sınırına yaklaşırsa ekranı hafifçe kararmaya başlar; dışarı çıkarsa tümden kararır,
   uyarı çıkar ve **ateş edemez** → geri içeri girmesi yeterli, silahı anında geri çalışır. Dışarıda
   kalmak **can götürmez**; onu senin görmen için ekranında işaretlenir (aşağıdaki bölüm).
-- Maç, süre dolunca veya skor limitine ulaşılınca biter; kazanan duyurulur ve **kazanan ekranı
+- Maç, süre dolunca veya skor limitine ulaşılınca biter (skor limiti **sınırsız** seçildiyse ikinci
+  yol yoktur — bitirmek sana kalır); kazanan duyurulur ve **kazanan ekranı
   sen bir şey seçene kadar ekranda kalır.** Kendiliğinden lobiye dönülmez: sıradaki haritayı seç
   (herkes oraya geçer), harita listesinden **Lobi**'yi seç ya da **İPTAL**'e bas. Böylece maç
   sonunu konuşmak, ödül vermek ya da sıradaki turu anlatmak için istediğin kadar vaktin olur.
