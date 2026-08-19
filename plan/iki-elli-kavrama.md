@@ -63,8 +63,8 @@ silah kiti koşusunun sonundaki uyarı listeler.
 ## 3. Doğrulama (başlıkta + iki uçta)
 
 - [ ] Silah ele geldiğinde ana kavrama noktası avucun ortasında; el döndükçe kaymıyor.
-- [ ] Stüdyoda kök **çevrilmeden yalnız taşınmışsa** silah kumandayla hizalı geliyor; kök çevrilmişse
-      silah oyunda o kadar dönük duruyor. Ana elin bileği kumandayla serbestçe dönüyor, kilitlenmiyor.
+- [ ] Stüdyoda kök çevrilmiş olsa bile silah tek elde kumandayla hizalı geliyor (kayıt dönüş
+      taşımaz). Ana elin bileği kumandayla serbestçe dönüyor, kilitlenmiyor.
 - [ ] Stüdyoda **oluştur → hiçbir şeye dokunma → Kaydet** kayıtlı değeri değiştirmiyor (kimlik
       testi).
 - [ ] Boş elin kumandası ön kabzaya yaklaşınca soket küresi (`VA_GripIndicator`, 20 cm çap, açık mavi

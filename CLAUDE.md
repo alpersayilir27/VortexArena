@@ -583,16 +583,20 @@ girmez). ⚠️ **Çocukları TAŞIMA** (kilitli, kayıt kökten okunur).
 Kayıt `WD_*.asset`'e gider (`ItemGripPose`: **anchor'ın** eşyaya göre yerel KONUMU + parmak
 preset'i); prefaba HİÇBİR ŞEY yazılmaz. Eller sahnenin ayrı kökleridir (`[VA El_*]`, `DontSave`) —
 prefabın altına sürüklenmez; silah kiti koşusu kaçak eli siler.
-⚠️ **Silahın dönüşü HER ZAMAN ana kumandanın dönüşüdür** ve kayıt DÖNÜŞ TAŞIMAZ (`itemRot =
-anchor.rot`, `itemPos = anchor.pos + anchor.rot * (−kayıt)`): ikinci el silahı çevirmez, silahın
-eksenini ön kabzaya döndüren bir **"iki elli nişan" YOKTUR ve eklenmez** — olsaydı ikinci el
-kabzayı tuttuğu anda silah kumandadan sapar, oyuncu bunu "el konumuna göre silah bozuk geliyor"
-diye yaşardı. Ayarlanabilir bir "silah dönüşü" alanı da yoktur; silah elde yatık görünüyorsa
-bakılacak tek yer `Model`'in prefabtaki yerleşimidir.
+⚠️ **Silahı hiçbir elin DÖNÜŞÜ çevirmez** ve kayıt DÖNÜŞ TAŞIMAZ (tek elde `itemRot = anchor.rot`,
+`itemPos = anchor.pos + anchor.rot * (−kayıt)`) — kayda bir dönüş girerse stüdyoda kökü çeviren
+herkes oyunda silahı kumandadan saptırır. **İki elli tutuşta silah NİŞANLANIR**
+(`ItemGripSolver`): ana kavrama noktası her karede ana avucun üstünde kalır, silahın
+*ana kavrama → ön kabza* EKSENİ ikinci elin avucuna döner — yani ikinci el silahı **taşımaz,
+yalnız nişanlar**. ⚠️ Nişanın girdisi ikinci elin **YALNIZ AVUÇ KONUMUDUR**; o elin (ya da
+bileğin) dönüşü hiçbir yoldan silaha geçmez, roll her zaman ana kumandadan gelir. Ayarlanabilir
+bir "silah dönüşü" alanı da yoktur; silah elde yatık görünüyorsa bakılacak tek yer `Model`'in
+prefabtaki yerleşimidir.
 ⚠️ **Sözleşme "silah ele göre"dir, "el silaha göre" DEĞİL:** ana elde eşya kumandaya asılır, elin
-bileği kilitlenmez (izlemeden/kumandadan gelir). Ön kabzada ise ikinci elin **yalnız GÖRSELİ**
-sokete çekilir (`HandGripPoser`: kumanda `item ∘ kayıt` konumunda ve eşyayla hizalı, bilek onun
-anchor→bilek deltası ötesinde); bağın öteki tek sonucu saçılım/geri tepme çarpanıdır.
+bileği kilitlenmez (izlemeden/kumandadan gelir). Ön kabzada ikinci elin **görseli** sokete çekilir
+(`HandGripPoser`: kumanda `item ∘ kayıt` konumunda ve eşyayla hizalı, bilek onun anchor→bilek
+deltası ötesinde); bağın görünür sonuçları bununla birlikte üçtür — silahın o ele nişanlanması ve
+saçılım/geri tepme çarpanının düşmesi.
 ⚠️ **Parmak duruşu SLIDER'LA YAZILMAZ, preset'ten seçilir** (`HandGripPreset`: `Idle` hafif açık ·
 `Firing` işaret tetikte · `Grip` sarma; varsayılan ana kabza=Firing, ön kabza=Grip; boş el=Idle).
 Elin Inspector'ındaki (`GripHandAuthoring`) açılır kutudan seçilir, Scene View'da anında görünür,
