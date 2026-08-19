@@ -72,6 +72,9 @@ silah kiti koşusunun sonundaki uyarı listeler.
       yöne **atlamıyor**; takibi yumuşakça bırakıp ana elin duruşuna dönüyor ve el geri gelince
       aynı yumuşaklıkla tekrar nişanlıyor (`ItemGripSolver.ReachWeight` bandı).
 - [ ] Ana kavrama noktası iki elli tutuşta da ana avuçta duruyor (silah ikinci ele kaymıyor).
+- [ ] **İki elli tutuşta ARKA el de silahla dönüyor:** ön kabzadan silah yukarı/aşağı çevrilince arka
+      el kabzanın üstünde kalıyor, silahın dışında kalmıyor; elin konumu yine kumandada duruyor
+      (silah ele göre kaymıyor).
 - [ ] Silahı önce sol elle tutarsan primary sol olur (el ataması sabit değil).
 - [ ] **Sol el kaydı ayrı doğrulanır:** aynı silah sol elde de kabzada duruyor, içine gömülmüyor.
 - [ ] **Ön kabzada ikinci el silaha yapışık kalıyor:** grip basılıyken kol uzatılıp toplanınca el

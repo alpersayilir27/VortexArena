@@ -479,6 +479,11 @@ kavramanın tek yeri `WD_*`'tır.
 yoktur. **Elin dönüşü bunun istisnası değil, başka bir şeyidir:** el modelini çevirmek silahı
 kımıldatmaz, yalnız elin kumanda üstündeki açısını yazar (kimi kabza yandan, kimi alttan tutulur).
 Ana elde eşya kumandaya asılır.
+
+⚠️ **Silah ele gelince el modeli SİLAHIN çerçevesine geçer** (iki elde de): tezgâhta yazdığın
+yerleşim, tutulduğu sürece silaha göre korunur. Bu yüzden oyuncu silahı ön kabzadan çevirdiğinde
+arka el de onunla döner — el kumandaya kilitli kalsaydı silah elin dışına çıkardı. Tek elli tutuşta
+fark yoktur (silahın dönüşü zaten kumandanınkidir); elin KONUMU her durumda kumandada kalır.
 Ön kabza kaydının iki karşılığı vardır: ikinci elin **görseli** oraya yapışır ve iki elli tutuşta
 silahın *ana kavrama → ön kabza* **ekseni o elin avuç KONUMUNA nişanlanır** — silah ikinci ele
 doğru kaymaz (ana kavrama noktası ana avuçta kalır) ve o elin DÖNÜŞÜ hiçbir yoldan silaha geçmez.

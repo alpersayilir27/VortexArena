@@ -12,13 +12,17 @@ namespace VortexArena.Core.Combat
     /// <b>Bilek HER DURUMDA kilitlidir</b> — ne izlemeden ne Meta'nın kumandadan sentezlediği
     /// "doğal" el pozundan gelir:
     /// <list type="bullet">
-    /// <item><b>Boş el ve ana el:</b> bilek <b>KUMANDAYA</b> kilitlenir
+    /// <item><b>Boş el:</b> bilek <b>KUMANDAYA</b> kilitlenir
     /// (<see cref="ItemGripAuthority.WristFromAnchor"/> — anchor + ofset). El kumandanın rijit bir
-    /// parçası gibi davranır; silah da anchor'dan konumlandığı için ikisi tek referanstan
-    /// çıkar.</item>
-    /// <item><b>Ön kabza:</b> bilek <b>EŞYAYA</b> kilitlenir (kaydın anchor'ı + ofset) — o el silaha
-    /// yapışır.</item>
+    /// parçası gibi davranır.</item>
+    /// <item><b>Eşya tutan el</b> (ana kabza da ön kabza da): bilek <b>EŞYAYA</b> kilitlenir
+    /// (kaydın anchor'ı + ofset) — el silaha yapışır ve silah nereye dönerse onunla döner.</item>
     /// </list>
+    /// ⚠️ <b>Ana el de EŞYADAN türetilir ve bu bilinçlidir:</b> iki elli tutuşta silahın dönüşü ana
+    /// kumandanınki değildir (ön kabzadaki ele nişanlanır), yani ana el kumandaya kilitli kalsaydı
+    /// oyuncu silahı ön kabzadan çevirdiğinde el yerinde kalır ve silahın dışında görünürdü.
+    /// Tek elli tutuşta bu bir şey değiştirmez: çözücünün kimliği gereği eşyadan türetilen anchor
+    /// KONUMU zaten kumanda anchor'ının kendisidir, eşyadan gelen tek şey dönüştür.
     /// Ofset, kavraması yazılmış slotta <b>o slotun kendi el yerleşimidir</b> (stüdyoda <c>Hand</c>
     /// modeli taşınıp çevrilerek yazılır: kimi silah yandan, kimi alttan tutulur), yazılmamışta
     /// paylaşılan tanım. Silahın kumandaya göre yeri bundan ETKİLENMEZ.
@@ -215,11 +219,11 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Bir elin bir karelik durumu.
-        /// <para>⚠️ <b>İki kilit hedefi ayrışır:</b> ön kabzayı saran elin bileği EŞYAYA kilitlenir
-        /// (el silaha yapışır), geri kalan her durumda KUMANDAYA. İkisi de ofseti aynı kapıdan alır
-        /// (<see cref="ItemGripAuthority"/>), yani el hiçbir durumda "başka bir yerden" gelmez —
-        /// ofsetin kendisi slot başına yazılabilir (<see cref="ItemGripPose.Wrist"/>), yazılmamışsa
-        /// paylaşılan tanıma düşer.</para>
+        /// <para>⚠️ <b>Kilit hedefini KAVRAMANIN VARLIĞI belirler, kavrama NOKTASI değil:</b> eşya
+        /// tutan el (ana kabza ya da ön kabza fark etmez) EŞYAYA, boş el KUMANDAYA kilitlenir. İkisi
+        /// de ofseti aynı kapıdan alır (<see cref="ItemGripAuthority"/>), yani el hiçbir durumda
+        /// "başka bir yerden" gelmez — ofsetin kendisi slot başına yazılabilir
+        /// (<see cref="ItemGripPose.Wrist"/>), yazılmamışsa paylaşılan tanıma düşer.</para>
         /// <para>Parmaklar da her durumda bizim yazdığımızdır: boş elde boşta duruşu, eşya tutan elde
         /// slotun kendi riglenmiş duruşu — hedef her karede <see cref="ApplyFingers"/>'a verilir,
         /// geçişi o yumuşatır.</para>
@@ -252,9 +256,9 @@ namespace VortexArena.Core.Combat
                 ? ItemGripAuthority.ResolveAnchorToWrist(grip, rightHand)
                 : ItemGripAuthority.ResolveAnchorToWrist(rightHand);
 
-            if (hasGrip && kind == GripSocketKind.Secondary)
+            if (hasGrip)
             {
-                LockToSecondaryGrip(synthetic, weapon.transform, grip, anchorToWrist);
+                LockToItemGrip(synthetic, weapon.transform, grip, anchorToWrist);
                 state.WristLocked = true;
             }
             else
@@ -268,8 +272,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bileği <b>kumandaya</b> kilitler: anchor + tanımlı ofset
-        /// (<see cref="ItemGripAuthority.WristFromAnchor"/>).
+        /// <b>Boş elin</b> bileğini <b>kumandaya</b> kilitler: anchor + tanımlı ofset
+        /// (<see cref="ItemGripAuthority.WristFromAnchor"/>). Eşya tutan el buraya uğramaz —
+        /// o <see cref="LockToItemGrip"/>'ten geçer.
         /// <para>
         /// ⚠️ <b>Bu kilit, elin Meta'nın sentezlediği "doğal" el pozundan gelmesini bilerek
         /// engeller.</b> O poz anchor'a göre bizde yazılı olmayan bir ofset taşıyor; silah ise
@@ -280,7 +285,7 @@ namespace VortexArena.Core.Combat
         /// <para>⚠️ Anchor çözülemezse kilit BIRAKILIR (rig henüz yok): kilitli bırakmak eli son
         /// bilinen yerde dondururdu.</para>
         /// <para>⚠️ Poz DÜNYA uzayındadır ve öyle verilmek zorunda (<c>worldPose: true</c>) —
-        /// gerekçe <see cref="LockToSecondaryGrip"/>'te.</para>
+        /// gerekçe <see cref="LockToItemGrip"/>'te.</para>
         /// </summary>
         private static void LockToController(SyntheticHand synthetic, OVRInput.Controller hand,
             in Pose anchorToWrist, HandState state)
@@ -301,14 +306,25 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Ön kabzayı saran elin bileğini eşyanın üstündeki kayda <b>TAM</b> (konum + dönüş)
-        /// kilitler — o el eşyaya yapışır.
+        /// Eşya tutan elin bileğini eşyanın üstündeki kayda <b>TAM</b> (konum + dönüş) kilitler —
+        /// o el eşyaya yapışır. <b>İki kavrama noktası için de aynı yol</b>: ana kabza da ön kabza da
+        /// buradan geçer.
         /// <para>
-        /// Kayıt kumanda ANCHOR'ının eşyaya göre KONUMUDUR (<see cref="ItemGripPose"/>; dönüş yok —
-        /// ön kabzadaki kumanda eşyayla hizalı sayılır); sentetik ele verilecek olan ise BİLEK. Köprü
-        /// <see cref="ItemGripAuthority.WristFromAnchor"/>'dır (<c>wrist = (item ∘ kayıt) ∘ delta</c>,
-        /// delta tanımlı ofsettir). Delta yanlışsa bozulan şey silahın yönü değil, elin ön
-        /// kabzada birkaç santim/derece kaymış durmasıdır.
+        /// ⚠️ <b>Ana el neden KUMANDAYA değil EŞYAYA kilitleniyor:</b> iki elli tutuşta silahın
+        /// dönüşü ana kumandanınki DEĞİLDİR — <see cref="ItemGripSolver"/> onu ön kabzadaki ele
+        /// nişanlar. Ana el kumandaya kilitli kalsaydı, oyuncu ön kabzadan silahı çevirdiğinde silah
+        /// döner ama arka el dönmez ve el silahın dışında kalırdı. Eşyadan türetmek bunu kurgu gereği
+        /// kapatır ve <b>tek elli tutuşta hiçbir şeyi değiştirmez</b>: çözücü kimliği gereği
+        /// <c>item.position + item.rotation * kayıt</c> her zaman ana kumanda anchor'ının TA
+        /// KENDİSİDİR (<c>itemPosition = palm.position − itemRotation * kayıt</c>), yani elin
+        /// KONUMU her hâlükârda kumandada kalır — eşyadan gelen tek şey DÖNÜŞTÜR.
+        /// </para>
+        /// <para>
+        /// Kayıt kumanda ANCHOR'ının eşyaya göre KONUMUDUR (<see cref="ItemGripPose"/>; anchor
+        /// yarısında dönüş yok — kumanda eşyayla hizalı sayılır); sentetik ele verilecek olan ise
+        /// BİLEK. Köprü <see cref="ItemGripAuthority.WristFromAnchor"/>'dır
+        /// (<c>wrist = (item ∘ kayıt) ∘ delta</c>, delta o slotun el yerleşimi). Delta yanlışsa
+        /// bozulan şey silahın yönü değil, elin kabzada birkaç santim/derece kaymış durmasıdır.
         /// </para>
         /// <para>
         /// ⚠️ <b>Kilit KOŞULSUZDUR</b> — mesafe/açı kapısı yoktur ve eklenmez. Takas bilinçli:
@@ -316,6 +332,10 @@ namespace VortexArena.Core.Combat
         /// gerilmesidir; kazancı, oyuncu grip tuşunu bırakmadıkça elin silahtan kopmamasıdır.
         /// Mesafeye bakan bir kapı eli oyuncu hiçbir şey yapmadan bırakır ve "silahı iki elle
         /// tuttum ama ikinci el havada" hissi üretir.
+        /// </para>
+        /// <para>
+        /// ⚠️ Uyarı ana el için <b>okunmaz</b>: orada kilidin konumu zaten kumandadadır (yukarıdaki
+        /// kimlik), yani gerilecek bir mesafe hiç doğmaz.
         /// </para>
         /// <para>
         /// ⚠️ <c>TransformPoint</c> DEĞİL elle bileşim: kayıt METREdir ve eşyanın görsel ölçeğiyle
@@ -332,12 +352,12 @@ namespace VortexArena.Core.Combat
         /// <param name="grip">Kavrama kaydı — kumanda anchor'ının EŞYAYA göre yerel konumu (metre,
         /// ölçeksiz).</param>
         /// <param name="anchorToWrist">O slotun el yerleşimi (yazılmamışsa paylaşılan tanım).</param>
-        private static void LockToSecondaryGrip(SyntheticHand synthetic, Transform item,
+        private static void LockToItemGrip(SyntheticHand synthetic, Transform item,
             in ItemGripPose grip, in Pose anchorToWrist)
         {
-            // Anchor kaydı dönüş taşımaz: ön kabzadaki kumanda eşyayla hizalı sayılır. Elin o
-            // kumandanın üstündeki açısı ayrı bir alandır (anchorToWrist) ve tam burada devreye girer:
-            // ön kabza yandan da alttan da tutulabiliyor.
+            // Anchor kaydı dönüş taşımaz: kabzadaki kumanda eşyayla hizalı sayılır. Elin o kumandanın
+            // üstündeki açısı ayrı bir alandır (anchorToWrist) ve tam burada devreye girer: kimi
+            // kabza yandan, kimi alttan tutuluyor.
             var anchor = new Pose(item.position + item.rotation * grip.position, item.rotation);
 
             Pose wrist = ItemGripAuthority.WristFromAnchor(anchor, anchorToWrist);
