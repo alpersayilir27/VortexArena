@@ -659,7 +659,7 @@ namespace VortexArena.App.Admin
                 kv.Value.hp = ArenaProtocol.PLAYER_MAX_HP;
                 kv.Value.alive = true;
                 kv.Value.diedAt = -1f;
-                kv.Value.score = 0; // sunucu da lobiye dönerken sıfırlıyor (§10.2)
+                kv.Value.score = 0; // the server resets it too when returning to the lobby (§10.2)
 
                 // The violation ledger resets with the score, mirroring the server's (§10.9): left
                 // alone, the old match's count would linger until the new match's first `violation`
