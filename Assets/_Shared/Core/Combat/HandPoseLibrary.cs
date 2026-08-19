@@ -96,6 +96,84 @@ namespace VortexArena.Core.Combat
         private static readonly Quaternion[][] BindCache = new Quaternion[2][];
         private static readonly Hinge[][] HingeCache = new Hinge[2][];
         private static readonly Quaternion[][] IdleCache = new Quaternion[2][];
+        private static readonly Pose[] WristCache = new Pose[2];
+        private static readonly bool[] WristResolved = new bool[2];
+
+        /// <summary>
+        /// Kumanda anchor'ından elin BİLEĞİNE ofset (anchor uzayı, metre) — <b>ölçülen değil,
+        /// TANIMLANAN</b> bir değer: avuç merkezi kumandanın üstüne oturur, el kumandayla hizalıdır.
+        /// <para>
+        /// <b>Neden tanım:</b> oyunda görülen el ISDK'nın sentetik elidir ve bileği, kilitlenmezse,
+        /// Meta'nın kumandadan sentezlediği "doğal" el pozundan gelir — yani bizim hiçbir yerde
+        /// bilmediğimiz bir ofset. Silah ise anchor'dan konumlanıyor (kavrama kaydı anchor
+        /// uzayındadır). İki ayrı referans, tezgâhta çizilen el ile oyunda görülen elin ayrışması
+        /// demekti ve aradaki farkı kapatmanın tek yolu o ofseti başlıkta ölçüp koda yapıştırmaktı.
+        /// Ofseti kendimiz tanımlayınca ölçülecek bir şey kalmıyor: <b>tezgâh ile oyun kurgu gereği
+        /// aynı</b> oluyor. Parmaklar zaten donanımdan sürülmüyor, el izleme kullanılmıyor — Meta'nın
+        /// el tarafına kalan son bağımlılık buydu.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Sayı SABİT YAZILMAZ, iskeletten hesaplanır</b> (avuç merkezi = bilek→orta parmak
+        /// proksimalinin yarısı, OpenXR tanımı): el modeli değiştiğinde burada tek satır değişmesin
+        /// diye — projede tekrarlanan "sabit yazma, ölç" kuralı.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Dönüş KİMLİKTİR ve tahminle doldurulmaz.</b> Anatomik bir eğim eklemek ölçülmemiş
+        /// bir sabit uydurmaktır; bir kez denendi ve parmak ekseni etrafında ~70° saptı.
+        /// </para>
+        /// </summary>
+        public static Pose AnchorToWrist(bool rightHand)
+        {
+            int hand = rightHand ? 1 : 0;
+            if (WristResolved[hand])
+            {
+                return WristCache[hand];
+            }
+
+            WristResolved[hand] = true;
+            WristCache[hand] = MeasurePalmCentre(rightHand);
+            return WristCache[hand];
+        }
+
+        /// <summary>
+        /// Avuç merkezini iskeletten ölçer ve bileği o kadar GERİ öteler (avuç kumandanın üstüne
+        /// gelsin). İskelet okunamazsa kimlik — bilek kumandanın tam üstünde varsayılır.
+        /// </summary>
+        private static Pose MeasurePalmCentre(bool rightHand)
+        {
+            HandSkeleton skeleton = rightHand
+                ? HandSkeleton.DefaultRightSkeleton
+                : HandSkeleton.DefaultLeftSkeleton;
+
+            HandSkeletonJoint[] joints = skeleton != null ? skeleton.joints : null;
+            if (joints == null)
+            {
+                return Pose.identity;
+            }
+
+            int root = RootIndex(joints);
+            HandJointId[] middle = ChainOf((int)HandFinger.Middle);
+
+            // ⚠️ Orta parmağın PROKSİMALİ istenir, metakarpı değil: zincir daima
+            // "… proksimal, orta boğum, uç boğum, uç" ile bittiği için yeri sondan dördüncüdür
+            // (metakarpı olan ve olmayan ISDK dallarında da doğru eleman gelsin).
+            if (root < 0 || middle == null || middle.Length < 4)
+            {
+                return Pose.identity;
+            }
+
+            ResolveHandSpace(joints, out Vector3[] handPos, out Quaternion[] handRot);
+
+            int proximal = (int)middle[middle.Length - 4];
+            if (proximal < 0 || proximal >= handPos.Length)
+            {
+                return Pose.identity;
+            }
+
+            Vector3 palmLocal =
+                Quaternion.Inverse(handRot[root]) * (handPos[proximal] - handPos[root]) * 0.5f;
+            return new Pose(-palmLocal, Quaternion.identity);
+        }
 
         /// <summary>
         /// Bir duruştan ötekine geçişin süresi (saniye) — boş elin kavrama duruşuna kapanması ve

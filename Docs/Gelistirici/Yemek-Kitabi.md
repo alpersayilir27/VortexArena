@@ -540,15 +540,12 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
 - **Admin ekranı ayrı bir teşhis yeri değildir:** kayıt telde giden el poz uzayında olduğu için
   rig'i olmayan izleyici uzak silahları oyuncuyla birebir aynı çizer. Silah adminde yanlış
   duruyorsa oyuncuda da yanlıştır.
-- **Stüdyodaki hayalet el silahı garip sarıyorsa** (kumanda modeli doğru dururken) bakılacak yer
-  `HandGripConvention.Left/RightAnchorToWrist` sabitidir: editörde canlı ölçüm yoktur ve sabit
-  kimlikken hayalet el **kumandayla hizalı** çizilir (yalnız avuç merkezi kumandanın üstüne
-  ötelenir) — yani elin gerçek eğimi tezgâhta YOKTUR, pencere bunu söyler. ⚠️ Bu eğim **tahminle
-  doldurulmaz**; parmak rigini bu bozmaz (parmak dönüşleri bileğe görelidir), kaydı da bozmaz.
-  Sabit, `HandGripPoser`'ın
-  başlıkta bir kez bastığı kararlı ölçümden kopyalanır (editör Play'i ya da APK'da
-  `adb logcat -s Unity`) ve **kaydı etkilemez** — yalnız stüdyodaki el görüntüsünü ve rig'in ilk
-  karelerindeki ön kabza kilidini düzeltir. Hizayı hayalet ele değil kumanda modeline göre yap.
+- **Tezgâhtaki el ile oyundaki el AYNIDIR ve bu kurgu gereğidir:** elin bileği oyunda her karede
+  kumandaya kilitleniyor (`HandPoseLibrary.AnchorToWrist` — avuç merkezi kumandanın üstünde, dönüş
+  kimlik) ve stüdyo hayalet eli **aynı** değerden çiziyor. Yani Meta'nın kumandadan sentezlediği
+  "doğal" el pozu devrede değil; ölçülecek/yapıştırılacak bir sabit de yok.
+  ⚠️ Elin kumandaya göre eğimini merak edip buraya anatomik bir tahmin **eklenmez** — bir kez
+  denendi ve parmak ekseni etrafında ~70° saptı.
 
 ### Başkalarının gördüğü el (uzak avatarın parmakları)
 

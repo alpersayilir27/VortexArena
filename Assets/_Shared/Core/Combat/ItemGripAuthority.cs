@@ -12,17 +12,18 @@ namespace VortexArena.Core.Combat
     /// (admin gözlemci) silahı oyuncuyla birebir aynı çizer.
     /// </para>
     /// <para>
-    /// Delta yalnız <b>ELİN GÖRSELİ</b> için gerekir: ön kabzayı saran sentetik elin bileği kaydın
-    /// (anchor) deltası kadar ötesine kilitlenir (<c>HandGripPoser</c>), stüdyodaki hayalet el kökten
-    /// aynı deltayla ötelenerek çizilir (<c>GripPoseStudio</c>). Yani delta yanlışsa/ölçülmemişse
-    /// bozulan şey silahın yönü DEĞİL, elin silaha göre birkaç santim/derece kaymış görünmesidir.
+    /// Delta yalnız <b>ELİN GÖRSELİ</b> için gerekir: sentetik elin bileği her karede buraya
+    /// kilitlenir (<c>HandGripPoser</c>) ve stüdyodaki hayalet el kökten aynı deltayla ötelenerek
+    /// çizilir (<c>GripPoseStudio</c>) — iki uç <b>aynı</b> sayıyı okuduğu için tezgâhta görülen el
+    /// ile oyunda görülen el kurgu gereği aynıdır.
     /// </para>
     /// <para>
-    /// <b>Delta üç basamakta çözülür</b> (<see cref="ResolveAnchorToWrist"/>): canlı ölçüm
-    /// (<see cref="HandGripPoser.TryGetAnchorToWrist"/>) → ölçülmüş sabit
-    /// (<see cref="HandGripConvention.AnchorToWrist"/>) → kimlik. Delta kumanda sürümlü el
-    /// pozlarından türediği için deterministiktir: aynı kumanda, aynı SDK, aynı sonuç — yani her
-    /// başlıkta AYNI değer ölçülür.
+    /// ⚠️ <b>Delta ÖLÇÜLMEZ, TANIMLANIR</b> (<see cref="HandPoseLibrary.AnchorToWrist"/>) ve buraya
+    /// bir ölçüm basamağı GERİ EKLENMEZ. Bilek kilitlenmeseydi Meta'nın kumandadan sentezlediği
+    /// "doğal" el pozundan gelirdi; o poz bizim hiçbir yerde bilmediğimiz bir ofset taşıyor, silah
+    /// ise anchor'dan konumlanıyor — iki ayrı referans, tezgâh ile oyunun ayrışması demekti ve
+    /// kapatmanın tek yolu o ofseti başlıkta ölçüp koda yapıştırmaktı. Ofsetin sahibi biz olunca
+    /// ölçülecek bir şey kalmıyor.
     /// </para>
     /// <para>
     /// ⚠️ <b>Ölçek tuzağı burada YOKTUR:</b> kayıt zaten ölçeksiz metredir
@@ -41,19 +42,15 @@ namespace VortexArena.Core.Combat
     public static class ItemGripAuthority
     {
         /// <summary>
-        /// Kumanda anchor'ından ISDK bileğine delta (anchor uzayında, metre): canlı ölçüm varsa o,
-        /// yoksa ölçülmüş sabit, o da yoksa kimlik.
-        /// <para>
-        /// ⚠️ Kimliğe düşmek silahı bozmaz (kayıt anchor uzayında): yalnız ön kabzadaki sentetik el
-        /// ya da stüdyodaki hayalet el, kumandanın tam üstünde ve onunla aynı eksende çizilir — açık
-        /// bir bozulma değil, kabul edilmiş bir yaklaşıklık.
-        /// </para>
+        /// Kumanda anchor'ından ISDK bileğine delta (anchor uzayında, metre) — tek kaynak
+        /// <see cref="HandPoseLibrary.AnchorToWrist"/>.
+        /// <para>⚠️ Bu ara katman <b>gereksiz görünse de duruyor</b>: deltayı okuyan iki taraf var
+        /// (yerel bilek kilidi ve stüdyo) ve ikisinin de aynı kapıdan geçmesi, ileride ofsetin
+        /// tanımı değiştiğinde bir tarafın unutulmamasının garantisi.</para>
         /// </summary>
         public static Pose ResolveAnchorToWrist(bool rightHand)
         {
-            return HandGripPoser.TryGetAnchorToWrist(rightHand, out Pose live)
-                ? live
-                : HandGripConvention.AnchorToWrist(rightHand);
+            return HandPoseLibrary.AnchorToWrist(rightHand);
         }
 
         /// <summary>

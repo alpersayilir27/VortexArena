@@ -31,12 +31,10 @@ namespace VortexArena.Core.Editor
     /// (<see cref="KeepRootsAligned"/>) and only MOVED.</para>
     /// <para>Two LOCKED visual children hang under the root: the Quest 3 controller model (identity
     /// pose — exactly how it sits under the anchor in game, so it is the real alignment reference)
-    /// and the ISDK ghost hand (at the anchor→wrist pose: the measured
-    /// <see cref="HandGripConvention.AnchorToWrist"/> if present, otherwise controller-aligned with a
-    /// translation only — <see cref="ResolveGhostOffset"/>). ⚠️ The ghost never enters the record,
-    /// and the finger rotations authored on it are local to the wrist — so this offset shifts the
-    /// visual and nothing else. ⚠️ It carries NO guessed rotation and must not grow one back
-    /// (rationale in <see cref="ResolveGhostOffset"/>).</para>
+    /// and the ISDK ghost hand, seated at the anchor→wrist offset
+    /// (<see cref="ItemGripAuthority.ResolveAnchorToWrist"/> — <see cref="ApplyGhostOffset"/>).
+    /// ⚠️ That offset is the SAME value the game locks the real wrist to, which is what makes the
+    /// bench and the headset show the same hand; the studio must not compute one of its own.</para>
     /// <para>⚠️ If the record carried a rotation, anyone rotating the root would skew the weapon off
     /// the controller in game. The front grip carries none either: the second hand's controller is
     /// taken as weapon-aligned and the synthetic wrist locks its delta beyond it.</para>
@@ -467,32 +465,6 @@ namespace VortexArena.Core.Editor
                 "çevir; Kaydet parmakları kemiklerden okur.",
                 MessageType.None);
 
-            if (AnyGhostEstimated(hands))
-            {
-                EditorGUILayout.HelpBox(
-                    "Hayalet el KUMANDAYLA HİZALI çizildi (anchor→bilek sabiti ölçülmemiş: " +
-                    "HandGripConvention.*AnchorToWrist = kimlik) — yani elin kumandaya göre gerçek " +
-                    "eğimi burada YOK, yalnız avuç merkezi kumandanın üstüne ötelendi. Kesin olan " +
-                    "kumanda modelidir, yerleşimi ona göre yap. Kayıt ve parmak rigi bundan " +
-                    "etkilenmez (parmak dönüşleri bileğe göreli). Gerçek eğim için HandGripPoser'ın " +
-                    "başlıkta bastığı iki satırı (editör Play'i ya da APK'da adb logcat -s Unity) " +
-                    "sabite yapıştır.",
-                    MessageType.Info);
-            }
-        }
-
-        /// <summary>Is any live hand using an estimated (unmeasured) ghost offset.</summary>
-        private static bool AnyGhostEstimated(List<GripHandAuthoring> hands)
-        {
-            for (int i = 0; i < hands.Count; i++)
-            {
-                if (hands[i] != null && !hands[i].GhostOffsetMeasured)
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private void DrawHandList(List<GripHandAuthoring> hands)
@@ -835,7 +807,7 @@ namespace VortexArena.Core.Editor
         /// <summary>Builds the hand for one grip point (returns the existing one if present).
         /// <para>⚠️ The root is the CONTROLLER frame and the ghost hand is its CHILD: what gets
         /// recorded is the root's pose (<see cref="AnchorInItem"/>), and the ghost hangs off it by
-        /// <see cref="HandGripConvention.AnchorToWrist"/>. Dragged thing == recorded thing; a
+        /// <see cref="ItemGripAuthority.ResolveAnchorToWrist"/>. Dragged thing == recorded thing; a
         /// dragged child is redirected to the root
         /// (<see cref="RedirectSelectionToHandRoot"/>).</para>
         /// <para>⚠️ Local scale is pinned to 1: the hand is a scene root, not under the prefab, so
@@ -849,20 +821,9 @@ namespace VortexArena.Core.Editor
             {
                 // A hand hidden by Unity's save side effect returns to the hierarchy here, so
                 // "Elleri Oluştur" also revives lost hands. The visual children are re-seated too: a
-                // hand-dragged child never enters the record but misleads the user.
-                // ⚠️ An UNMEASURED offset is re-resolved every time, not just when it is identity:
-                // the offset is stored on the hand (it survives domain reloads), so a hand built
-                // under an older rule would keep that rule's ghost pose until the user thought to
-                // clear the bench. Re-resolving costs nothing and makes the bench self-healing; a
-                // MEASURED offset is left alone because it is the truth, not a fallback.
-                if (!existing.GhostOffsetMeasured &&
-                    TryGetGhostProvider(out HandGhostProvider existingProvider))
-                {
-                    HandGhost prototypeForExisting = existingProvider.GetHand(existing.Handedness);
-                    Pose offset = ResolveGhostOffset(prototypeForExisting, rightHand, out bool measureds);
-                    existing.SetGhostOffset(offset, measureds);
-                }
-
+                // hand-dragged child never enters the record but misleads the user. The ghost offset
+                // is read fresh from the shared definition, so a hand built under an older rule
+                // heals itself instead of keeping that rule's pose until the bench is cleared.
                 ApplyGhostOffset(existing);
                 EnsureControllerModel(existing.gameObject, existing.RightHand);
                 MarkDontSave(existing);
@@ -907,8 +868,8 @@ namespace VortexArena.Core.Editor
                 return null;
             }
 
-            // Ghost hand: child of the root at the anchor→wrist pose (ResolveGhostOffset: measured
-            // constant, else estimated from the skeleton). Visual only, never affects the record.
+            // Ghost hand: child of the root at the shared anchor→wrist offset (ApplyGhostOffset).
+            // Visual only — the record is the ROOT's position, never the ghost's.
             HandGhost ghost = Instantiate(prototype, root.transform);
             GameObject handGo = ghost.gameObject;
             handGo.name = GHOST_NAME;
@@ -916,10 +877,7 @@ namespace VortexArena.Core.Editor
 
             HandPuppet puppet = ghost.GetComponent<HandPuppet>();
 
-            // The offset is measured from the PROTOTYPE (bind pose): the estimate reads the thumb
-            // root, and on a live instance the preset would fold that bone into the measurement.
-            Pose ghostOffset = ResolveGhostOffset(prototype, rightHand, out bool measured);
-            authoring.SetGhostOffset(ghostOffset, measured);
+            authoring.Resolve(puppet, kind, rightHand);
             ApplyGhostOffset(authoring);
             EnsureControllerModel(root, rightHand);
 
@@ -933,7 +891,6 @@ namespace VortexArena.Core.Editor
             Pose start = ResolveStartPose(weaponRoot, definition, kind, rightHand);
             root.transform.SetPositionAndRotation(start.position, start.rotation);
 
-            authoring.Resolve(puppet, kind, rightHand);
             authoring.ApplyPose(recorded.fingerJoints);
             HideIsdkComponents(handGo);
             MarkDontSave(authoring);
@@ -953,63 +910,14 @@ namespace VortexArena.Core.Editor
             return ghost != null ? ghost.gameObject : null;
         }
 
-        /// <summary>Local pose of the ghost hand relative to the controller root (anchor→wrist).
-        /// <para>Uses the measured constant when present
-        /// (<see cref="HandGripConvention.AnchorToWrist"/>, if not identity): the value
-        /// <c>HandGripPoser</c> logs on the headset is the only truth. Otherwise it falls back to a
-        /// <b>translation only</b> — the palm centre is placed on the controller
-        /// (<c>HandGripPivot</c>: palm ≡ anchor), palm centre being the OpenXR definition (half of
-        /// wrist→middle-finger root).</para>
-        /// <para>⚠️ <b>The fallback carries NO ROTATION and must not grow one back.</b> It used to
-        /// twist the ghost by an anatomical GUESS (<c>HandGripConvention.AnchorBasis</c> composed
-        /// with the ghost's own bone basis) — an unmeasured constant that landed ~70° off around the
-        /// finger axis, i.e. the hand came out visibly rolled while the controller model beside it
-        /// was exact. A guess is worse than nothing here for two reasons: the user aligns the weapon
-        /// against what they SEE, and since the finger rig is authored on these very bones, a twisted
-        /// wrist means rigging inside a frame that does not exist in game. Unrotated is not "right"
-        /// either — it is HONEST and stable: the record never carries the ghost pose, and the finger
-        /// rotations are local to the wrist, so neither is affected by this offset. The real fix is
-        /// pasting the measured constant, and then this branch is never read.</para></summary>
-        private static Pose ResolveGhostOffset(HandGhost prototype, bool rightHand, out bool measured)
-        {
-            Pose constant = HandGripConvention.AnchorToWrist(rightHand);
-            measured = !constant.Equals(Pose.identity);
-            if (measured)
-            {
-                return constant;
-            }
-
-            // Measured on the PROTOTYPE (asset, bind pose) — a live instance is folded by its rig.
-            HandPuppet puppet = prototype != null ? prototype.GetComponent<HandPuppet>() : null;
-            Transform ghostRoot = prototype != null ? prototype.transform : null;
-            if (puppet == null || ghostRoot == null ||
-                !TryFindJoint(puppet, HandJointId.HandMiddle1, out Transform middleProximal))
-            {
-                return Pose.identity;
-            }
-
-            Vector3 palmLocal = ghostRoot.InverseTransformPoint(middleProximal.position) * 0.5f;
-            return new Pose(-palmLocal, Quaternion.identity);
-        }
-
-        private static bool TryFindJoint(HandPuppet puppet, HandJointId id, out Transform joint)
-        {
-            joint = null;
-            List<HandJointMap> maps = puppet != null ? puppet.JointMaps : null;
-            for (int i = 0; maps != null && i < maps.Count; i++)
-            {
-                if (maps[i] != null && maps[i].id == id && maps[i].transform != null)
-                {
-                    joint = maps[i].transform;
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>Seats the ghost hand at its stored offset under the root (restoring it if it was
-        /// dragged by hand).</summary>
+        /// <summary>Seats the ghost hand under the controller root at the SAME anchor→wrist offset the
+        /// game locks the real wrist to (<see cref="ItemGripAuthority.ResolveAnchorToWrist"/>), and
+        /// restores it if it was dragged by hand.
+        /// <para>⚠️ <b>The bench must not compute an offset of its own.</b> Bench and game agreeing is
+        /// not a coincidence to be maintained by two matching formulas — it is the single value both
+        /// read. The studio used to estimate this itself (an anatomical guess composed from
+        /// <c>HandGripConvention.AnchorBasis</c>) and it landed ~70° off around the finger axis, so
+        /// the ghost came out visibly rolled while the controller model beside it was exact.</para></summary>
         private static void ApplyGhostOffset(GripHandAuthoring hand)
         {
             GameObject ghost = GhostOf(hand);
@@ -1018,7 +926,7 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            Pose offset = hand.GhostOffset;
+            Pose offset = ItemGripAuthority.ResolveAnchorToWrist(hand.RightHand);
             ghost.transform.localPosition = offset.position;
             ghost.transform.localRotation = offset.rotation;
             ghost.transform.localScale = Vector3.one;

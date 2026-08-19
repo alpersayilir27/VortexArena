@@ -15,18 +15,6 @@ Kalan iş **asset tarafında** ve başlıkta doğrulamada.
 ⚠️ Ön koşul `OVRManager.controllerDrivenHandPosesType ≠ None` (prefabda `Natural`) — kapalıyken prob
 **hatasız ama yanlış** bir sabit basar (bind pozu).
 
-### 1b. `HandGripConvention.*AnchorToWrist` sabitini de yapıştır
-
-Anchor→bilek deltası rig varken canlı ölçülür; sabit **yalnız görsel eli** ilgilendirir — kavrama
-kaydı anchor uzayında olduğu için silahın yönü bundan etkilenmez. Sabit kimlik kaldığı sürece
-stüdyodaki hayalet el kumandanın tam üstünde çizilir (elin silahı nasıl sardığı gerçeğinden sapar)
-ve rig'in veri akıtmadığı ilk karelerde ön kabza kilidi aynı kadar kayar.
-
-1. Editörde **player** rolüyle Play (Link) ya da başlıkta APK, iki kumandayı da normal tut.
-2. `HandGripPoser` kararlı ölçümü el başına **bir kez** loglar (30 kare / 2 mm / 0.5°) — editör
-   konsolu ya da `adb logcat -s Unity`.
-3. İki satırı `LeftAnchorToWrist` / `RightAnchorToWrist`'e yapıştır.
-
 ---
 
 ## 1c. Silah kitini bir kez koştur (prefab temizliği + gösterge)
