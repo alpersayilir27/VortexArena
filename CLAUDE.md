@@ -1,745 +1,347 @@
 # VortexArena — Proje Talimatları (CLAUDE.md)
 
+## ⚠️ Bu dosyanın kuralı — TALİMAT dosyasıdır, anlatım değil
+
+Bu dosya HER oturumda bağlama yüklenir: her satırı kalıcı bir maliyettir ve `Docs/` ile
+çakışan her anlatım ikinci bir doğruluk kaynağı üretir.
+
+**Test:** yazacağın cümle *"şunu şöyle yap/yapma"* mı, *"sistem şöyle çalışıyor"* mu?
+İkincisinin yeri `Docs/`'tur; buraya en fazla tek satırlık işaret girer.
+**Kalıp:** yasağın tek satırı burada kalır, gerekçesinin paragrafı `Docs/Sistem-Ozeti.md`'ye gider.
+**Tavan:** bu dosya 400 satırı aşmaz. Aşıyorsa eklenecek şey değil, çıkarılacak şey vardır.
+
 > # ⛔ HER ŞEYDEN ÖNCE: UnityMCP kapısı
 > İlk iş **`UnityMCP` ayakta mı** kontrolüdür (`mcp__UnityMCP__manage_editor` →
-> `telemetry_status`). Düşerse önce sebebi ayır (`Unity.exe` var mı — varsa köprü arızasıdır,
-> sessizce esnetme). Editör kapalıysa **kararı ajan verir:** iş Unity verisine (prefab/sahne/asset/
-> bileşen/konsol) dokunuyorsa tek çıktı **"MCP'yi çalıştır."**tır, tahmin yürütülmez;
-> dokunmuyorsa (git · `Docs/` · `Server/` · `launcher/` · `scripts/` · saf soru) **sorulmadan devam
-> edilir**, cevabın başına tek satır not düşülür. Kullanıcı *"zorla devam et"* derse kural düşer:
-> iş yapılır, varsayımlar açıkça yazılır ve "Unity açılınca doğrulanacaklar" listesiyle biter.
-> → `unitymcp-zorunlu.md`
+> `telemetry_status`). Düşerse önce sebebi ayır (`Unity.exe` varsa köprü arızasıdır — sessizce
+> esnetme, kullanıcıya söyle). Editör kapalıysa kararı ajan verir: iş Unity verisine
+> (prefab/sahne/asset/bileşen/konsol) dokunuyorsa tek çıktı **"MCP'yi çalıştır."**tır ve tahmin
+> yürütülmez; dokunmuyorsa (git · `Docs/` · `Server/` · `launcher/` · `scripts/` · saf soru)
+> sorulmadan devam edilir, cevabın başına tek satır not düşülür. Kullanıcı *"zorla devam et"*
+> derse kural düşer: varsayımlar açıkça yazılır, iş "Unity açılınca doğrulanacaklar" listesiyle
+> biter. → `.claude/rules/unity-erisim.md`
 
 Free-roam VR PvP arena ürünü (işletmelere kurulum / LBE; Meta Quest 3 & 3S, Unity 6000.3.20f1, URP).
 Oyuncular fiziksel alanda 1:1 yürür; farklı boyutlarda arenalar (12x12, işletmeye özel),
 farklı oyun modları/haritalar/silahlar. VR build = player, Windows build = admin (yönetim + izleme).
 Online haberleşme: kendi .NET sunucumuz (`Server/`, standalone exe, offline LAN) — Mirror/NGO YOK.
 
-> **Dokümanı okumanın yolu: repo kökünde `docs-serve.bat` → http://localhost:1111** (Quartz;
-> içerik doğrudan `Docs/`, kaydedince tarayıcı yenilenir. Yeni PC'de bir kez `scripts/docs-setup.bat`;
-> motor repo DIŞINDA `../vortexarena-docs-site`, git'e girmez).
-> **Oyun tarafını yazan geliştirici için giriş kapısı: `Docs/Gelistirici/`** (İlk Adımlar ·
-> **Yemek Kitabı** = reçeteler · API Referansı · Sahne Kurulumu · **Arayüz Tasarımı** = 2D/UI
-> nerede, hangisi prefab · Yapma Listesi).
-> Kurallar `.claude/rules/` altındadır. Sıradaki planlanmış işler: `plan/` (biten iş dokümanı silinir). Protokol: `Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı).
-> Sistemin tek sayfalık haritası (ne var, ağ nasıl çalışır, nasıl kullanılır): `Docs/Sistem-Ozeti.md`.
-> Sahadaki operatörün günlük kullanım kılavuzu (teknik olmayan dille): `Docs/Kullanim-Kilavuzu.md`.
+## Doküman giriş kapıları
+
+| Soru | Yer |
+|---|---|
+| Dokümanı okumak | repo kökünde `docs-serve.bat` → http://localhost:1111 (yeni PC'de bir kez `scripts/docs-setup.bat`) |
+| Sistem nasıl çalışıyor, hangi bileşen ne yapar, tuzaklar | `Docs/Sistem-Ozeti.md` (§2 repo · §3 ağ · §4 bileşen · §5-6 kullanım · §7 Tuzaklar) |
+| Ağ mesajı/sabit/port/doğrulama | `Docs/ArenaNet-Protokol.md` — **TEK doğruluk kaynağı** |
+| Oyun tarafını yazan geliştirici | `Docs/Gelistirici/` (İlk Adımlar · **Yemek Kitabı** = reçeteler · API Referansı · Sahne Kurulumu · Arayüz Tasarımı · Yapma Listesi) |
+| Sahadaki operatör (teknik olmayan dil) | `Docs/Kullanim-Kilavuzu.md` |
+| Sıradaki planlanmış işler | `plan/` (biten iş dokümanı **silinir**) |
+| Çalışma kuralları | `.claude/rules/` |
 
 ## Çalışma tarzı (detay `.claude/rules/`)
 
-- **Arama = önce auggie.** `mcp__auggie__codebase-retrieval` birincil bağlam aracıdır: "X nerede /
-  bu nasıl çalışıyor / neyi etkiler" sorularında ilk durak; dönen sonuç Read/Grep ile teyit edilir
-  (indeks bayat olabilir). Tam simge/string biliniyorsa doğrudan Grep. → `auggie-first-search.md`
-- **Kod değişti = doküman değişti.** Temel kodda (protokol, ağ akışı, maç kuralı, mimari, editor
-  tool'u, sunucu config'i) değişiklik AYNI commit'te dokümana yazılır; ağ davranışında sıra
-  **önce `Docs/ArenaNet-Protokol.md`, sonra kod**. Hangi değişiklik hangi dokümana gider tablosu →
-  `docs-sync.md`
-- **Editörde rol/adres dev penceresinden seçilir.** `Tools > VortexArena > Development > Dev` (rolü çevirmek için
-  `Ctrl+Alt+R`): hedef listesi `dev-targets.json`'dan gelir (commit'li), seçimin kendisi
-  `EditorPrefs`'te kişisel kalır → rol/IP değiştirmek hiçbir sahne/asset kirletmez.
-  ⚠️ Boot.unity'ye (ya da başka bir sahneye) rol/IP için **[SerializeField] override KOYULMAZ** —
-  `AppBoot`'ta böyle bir alan yoktur ve eklenmez: her rol değişimi sahneyi kirletir.
-  Aynı PC'de player + admin birlikte = Multiplayer Play Mode: sanal oyuncuya `admin`/`player`
-  tag'i ver — tag EditorPrefs rol seçimini ezer, admin rolü XR'ı bırakır (`AdminXrRelease`)
-  → `Docs/Gelistirici/Ilk-Adimlar.md`.
-- **Ağır uygulama işi alt-ajana devredilir** — kullanıcının istemesi beklenmez. Ajanlar
-  Opus 5 + medium effort ile koşar (`subagent_type: "uygulayici"`, tanımı
-  `.claude/agents/uygulayici.md`). → `delegate-to-subagents.md`
-- **AI notu kullanıcının makinesine YAZILMAZ.** Harness bir hafıza dizini
-  (`~/.claude/.../memory/`) verse bile kullanılmaz: git'e girmediği için takım göremez.
-  Hatırlanacak her şey repoda. → `ai-memory-scope.md`
-- **Projeyi ajan DERLEMEZ.** Derleme/build/test/Play kullanıcıya aittir — ajan işi bitirir, neyin
-  doğrulanması gerektiğini yazar ve durur; kullanıcı açıkça istemedikçe `recompile`/`build`/
-  `run_tests`/`dotnet build` çağrılmaz. → `derleme-kullaniciya-aittir.md`
+- **Arama = önce auggie.** `mcp__auggie__codebase-retrieval` birincil bağlam aracıdır; dönen sonuç
+  Read/Grep ile teyit edilir (indeks bayat olabilir). Tam simge biliniyorsa doğrudan Grep.
+  → `is-akisi.md`
+- **Kod değişti = doküman değişti** (AYNI commit). Ağ davranışında sıra **önce
+  `Docs/ArenaNet-Protokol.md`, sonra kod**. Hangi değişiklik hangi dokümana gider → `docs-sync.md`
+- **AI notu kullanıcının makinesine YAZILMAZ** (harness bir hafıza dizini verse bile): git'e
+  girmeyen not takımda yoktur. Hatırlanacak her şey repoda. → `docs-sync.md`
+- **Ağır uygulama işi alt-ajana devredilir** — kullanıcının istemesi beklenmez
+  (`subagent_type: "uygulayici"`). Kararı verilmemiş iş devredilmez. → `is-akisi.md`
+- **Projeyi ajan DERLEMEZ.** Derleme/build/test/Play kullanıcıya aittir; kullanıcı açıkça
+  istemedikçe `recompile`/`build`/`run_tests`/`dotnet build` çağrılmaz. Doğrulama batch'lenir.
+  → `is-akisi.md`
 - **Shell SON basamaktır.** Aynı işi bir MCP tool'u ya da yerleşik araç (Read/Write/Edit/Grep/Glob)
-  yapabiliyorsa `Bash`/`PowerShell` çalıştırılmaz; Unity'nin kendi verisi (prefab, sahne, asset,
-  bileşen alanı) `mcp__UnityMCP__manage_*` ile okunur — **YAML grep'lenmez**, geçici python betiği
-  yazılmaz. Shell yalnız karşılığı olmayan işler için (`git`, `adb`, `dotnet`) ve MCP gerçekten
-  düştüğünde. → `unity-mcp-first.md`
-- Doğrulama batch'lenir (`batch-build-verification.md`), istisna geldiğinde editör işi Unity CLI
-  ile yapılır (`unity-cli.md`).
+  yapabiliyorsa `Bash`/`PowerShell` çalıştırılmaz; Unity'nin kendi verisi `manage_*` ile okunur —
+  **YAML grep'lenmez**, geçici python betiği yazılmaz. Geliştirme makinesi HER ZAMAN Windows.
+  → `unity-erisim.md`
+- **Editörde rol/adres dev penceresinden seçilir** (`Tools > VortexArena > Development > Dev`,
+  `Ctrl+Alt+R`): hedef kataloğu `dev-targets.json` (commit'li), seçim `EditorPrefs`'te kişisel.
+  ⚠️ Boot.unity'ye (ya da başka bir sahneye) rol/IP için **[SerializeField] override KOYULMAZ** —
+  `AppBoot`'ta böyle bir alan yoktur ve eklenmez. Aynı PC'de player + admin = Multiplayer Play
+  Mode, sanal oyuncuya `admin`/`player` tag'i → `Docs/Gelistirici/Ilk-Adimlar.md`
 
 ## Repo üst düzey yerleşim
 
-`Assets/` (Unity) · `Server/` (.NET 10 sunucu kaynağı) · **`launcher/`** (.NET 10 WPF Windows
-launcher — operatör buradan sunucuyu **mekan seçerek** (`--venue`) ve admin oyununu başlatır;
-mekansız sunucu başlatmaz) · **`updater/`** (Quest OTA güncelleyici — `updater/README.md`) ·
-**`updater_uploader/`** (sunucudaki APK yayın ucu — `updater/README.md`) ·
-**`scripts/`** (`deploy-admin-game.bat`,
-`deploy-player-apk.bat`, `deploy-server.bat`, `deploy-launcher.bat`,
-`deploy_android_updater.bat`, `docs-setup.bat`,
-`defender-exclusions.cmd`) ·
-**`docs-serve.bat`** (repo kökü:
-doküman sitesini localhost:1111'de sunar; motor repo DIŞINDA `../vortexarena-docs-site`) ·
-**`deploy/`** (üretilen çalıştırılabilirler:
-`admin/`, `server/`, `launcher/`, `updater/` — **git'e girmez**) · **`dev-targets.json`** (repo kökü,
-**commit'li**: dev penceresinin adlandırılmış sunucu hedefi kataloğu + `defaultTarget`/`defaultRole`;
-bir hedefin `ip`'si **boşsa** adres yazılmaz, keşif zinciri devralır) ·
-`Docs/` · `plan/` · `.claude/rules/`.
+`Assets/` (Unity) · `Server/` (.NET 10 sunucu) · `launcher/` (.NET 10 WPF; operatör sunucuyu
+**mekan seçerek** (`--venue`) ve admin oyununu buradan başlatır) · `updater/` + `updater_uploader/`
+(Quest OTA — `updater/README.md`) · `scripts/` (`deploy-*.bat`, `docs-setup.bat`,
+`defender-exclusions.cmd` — ayrıntı `scripts/README.md`) · `docs-serve.bat` ·
+`deploy/` (üretilen çalıştırılabilirler, **git'e girmez** — `deploy/README.md`) ·
+`dev-targets.json` (kökte, commit'li) · `Docs/` · `plan/` · `.claude/rules/`.
 
-**`.gitignore` proje tipi başına ayrıdır** — her biri kendi klasörünü yönetir:
-kök = Unity (+ repo geneli OS/IDE) · `Server/` = .NET 10 · `launcher/` = .NET 10 WPF
-(Windows-only) · `updater/` = Android/Gradle · `deploy/` = beyaz liste (`*` + yalnız
-README). ⚠️ Köke Unity deseni eklerken **`/` ile sabitle**: `*.sln`/`*.csproj` sabitlenmezse
-Server'ın gerçek kaynaklarını, `*.app` ise Windows'ta (`core.ignorecase=true`)
-`Server/VortexArena.Server.App/` klasörünü yutar. Alt proje çıktısı (bin/obj)
-kökte DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
+**`.gitignore` proje tipi başına ayrıdır** (kök = Unity · `Server/` · `launcher/` · `updater/` ·
+`deploy/` = beyaz liste). ⚠️ Köke Unity deseni eklerken **`/` ile sabitle** (`*.sln`/`*.csproj`/
+`*.app` sabitlenmezse Server'ın kaynaklarını/klasörünü yutar). Alt proje çıktısı (bin/obj) kökte
+DEĞİL, ilgili klasörün kendi dosyasında ignore edilir.
 
 ## Asset mimarisi (feature-first + asmdef)
 
-- `Assets/_Shared/` — ortak. Ortak KOD yalnız bir asmdef altında: `Core/` (VortexArena.Core),
-  `Net/Protocol` (VortexArena.Protocol — saf C#, server aynı dosyaları derler), `Net/Scripts`
-  (VortexArena.Net), `App/Scripts` (VortexArena.App — `Admin/` alt klasörü aynı asmdef'te:
-  admin gözlemci; `UiKit.cs` arayüz paleti + EventSystem garantisi — görünüm prefablarda).
-  Kod-dışı: `Arsenal/` (silah prefab+SO, `VA_WeaponFrame`),
-  `FX/`, `Shaders/` + `Materials/` (paylaşılan shader/materyal — ör. `DissolveEffect`;
-  **`Materials/Resources/M_BaseZoneXRay.mat`** koddan `Resources.Load` ile alınır ve hiçbir
-  sahneden referansı yoktur → `Resources/` altından ÇIKARILMAZ, yoksa shader build'den strip
-  edilir ve taban şeridi Quest'te pembe çizilir),
-  `Environments/`, `Avatars/` (gövde avatarı modeli ve yerel gövde
-  prefabı. Yerel gövde (`Avatars/Resources/LocalBodyAvatar.prefab`) ile uzak avatar
-  (`_Shared/App/Prefabs/RemoteAvatar.prefab`) **iki AYRI prefabtır**; ikisinin de AĞ GÖVDESİ aynı
-  FBX'tir (`ThirdPartyPackages/MixamoCharacters/Ch15_nonPBR.fbx`), **aynı retarget config'ini ve
-  aynı kod yolunu** paylaşırlar — tek davranış farkı
-  `ArenaNetCharacterBehaviour.HasInputAuthority`'dir (yerelde gövde body tracking'den çözülür,
-  uzakta ağdan gelen iskelet uygulanır).
-  ⚠️ **Uzak avatar ayrıca KIRMIZI takımın gövdesini taşır** (`RemoteAvatar.redBodyRoot` →
-  `T-Avatars/Ch18_nonPBR.fbx`): iki gövdeden aynı anda yalnız biri çizilir, seçim takıma göredir
-  ve **yalnız istemci görselleştirmesidir** — takım zaten `lobby_state` ile geliyor, protokolde ve
-  sunucuda karşılığı YOKTUR ve eklenmez. Kırmızı gövde ağdan DEĞİL, karakterin canlı iskeletinden
-  `SkeletonPoseMirror` (kemik aynası: ada göre eşleşen kemiklerin `localRotation`'ı) ile sürülür;
-  ⚠️ **ikinci modelin mesh'i karakterin iskeletine BAĞLANMAZ** (Mixamo modellerinin kemik adları
-  aynı, oranları farklı → deforme gövde) ve ⚠️ **kırmızı gövde karakterin ALTINA asılmaz, KARDEŞİ
-  olur** (aşağıdaki retarget kuralının aynısı).
-  ⚠️ **Poz aktarımında `HumanPoseHandler` KULLANILMAZ** — `GetHumanPose` dünya uzayında verip
-  `SetHumanPose` köke göreli uyguladığı için gövde metrelerce kayar
-  (`Docs/Sistem-Ozeti.md` §7 "Tuzaklar", `HumanPoseHandler` maddesi).
-  Yeni takım modeli = `TeamBodyBuilder`'daki yol sabitini değiştirip aracı tekrar çalıştırmak;
-  tek koşul **kemik adlarının karakterinkiyle eşleşmesidir** (aynı Mixamo rig'i).
-  **`LocalBodyAvatar.prefab`** kendini önyükleyen tekil tarafından
-  `Resources.Load` ile yüklendiği için `Resources/` altından ÇIKARILMAZ ve ADI DEĞİŞMEZ —
-  taşınırsa oyuncu ağa gövde göndermez, yani onu kimse göremez.
-  ⚠️ **Yerel gövde HİÇ ÇİZİLMEZ ve ona görsel iş yaptırılmaz** — oyuncunun gözlükte gördüğü eller
-  rig'in sentetik elleridir (`VA_CameraRig`). Prefab yalnız ağ kaynağıdır; "görünmüyorsa
-  gereksizdir" refleksi tam da bu yüzden tehlikelidir, sileni etkilemez ama başkaları onu göremez.
-  ⚠️ **Gövde oranı KALİBRE EDİLMEZ** (`CharacterRetargeter.Calibrate()` çağrılmaz ve o yol geri
-  gelmez): gönderenin oranını değiştirmek blob'un eklem uzunluğu sıkıştırmasıyla uyuşmaz ve uzak
-  avatarı bozuk duruşlara sokar. Boy farkı tek bir üniform çarpanla taşınır (`bodyScale`,
-  `Docs/ArenaNet-Protokol.md` §10.8): ölçümü **operatör** başlatır, `BodyScaleState` ölçer ve
-  ölçek YALNIZ uzak avatara uygulanır — yerel karakter ölçek-1 kalır, ölçümün referansı odur.
-  ⚠️ Prefabtaki **`EyeAnchor`** (kafa kemiğinin altında, iki gözün arasında) ölçümün referansıdır:
-  taşınırsa boy sessizce yanlış ölçülür → `Docs/Sistem-Ozeti.md` §7),
-  `Data/` (**`Data/Resources/GameCatalog.asset`** —
-  admin arayüzü `Resources.Load` ile okuduğu için klasörden ÇIKARILMAZ; aynı gerekçeyle
-  **`Data/Resources/GameSoundBank.asset`** = ortak duyuru sesleri),
-  `Scenes/` (Boot, Lobby),
-  **`App/Resources/UI/`** (⚠️ **arayüzün TAMAMI burada, prefab olarak** — admin HUD'ı + tercihler
-  ve istatistik panelleri, oyuncu satırları, oyuncu halkası, bağlantı ekranının iki varyantı,
-  yükleme ekranının iki varyantı, cephane göstergesi, kimlik kartı, maç sonu ekranı (sonuç kartı +
-  skor tablosu). Kodda görsel kurulum YOKTUR ve yazılmaz: sınıflar yalnız veri
-  yazar. `Resources/` altından ÇIKARILMAZ — sahneye konmuyorlar, `Resources.Load` ile
-  yükleniyorlar; taşınırsa ilgili arayüz sessizce hiç çizilmez) ve **`App/UI/Sprites/`**
-  (yuvarlak köşe + halka görselleri, 9-slice). → `Docs/Gelistirici/Arayuz-Tasarimi.md`
-  ⚠️ Ayrı bir admin dashboard sahnesi YOKTUR ve açılmaz — admin
-  oyuncularla aynı sahnede duran bir gözlemcidir.
-  ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
-- `Assets/Arenas/` altında **yalnız iki kök vardır**: `Venues/` (oynanan içerik) ve `Template/`
-  (referans arena). Üçüncü bir kök açma — mekansız arena diye bir şey yoktur.
-  - `Assets/Arenas/Venues/<İşletme>/Scenes/<SahneAdı>/` — arena kutusu: `<SahneAdı>.unity` +
-    `Data/<SahneAdı>.asset` (MapDefinition) (+ yalnız o sahneye ait sanat/prefab varsa `Art/`,
-    `Prefabs/`).
-    ⚠️ **Klasör adı = sahne dosyası adı = MapDefinition asset adı** — üçünü de aynı yaz. Sahne adı
-    zaten katalog anahtarıdır (`load_match` string'i), böylece klasöre bakan anahtarı görür ve isim
-    sapması imkansızlaşır. Mekanın **tüm** sahnelerinin paylaştığı sanat/prefab/veri ise mekan
-    kökündeki `Art/` · `Prefabs/` · `Data/` klasörlerine girer (ör.
-    `<İşletme>/Data/<İşletme>_dimensions.json` = mekanın fiziksel ölçüsü, hem arena hem lobi
-    kullanır). ⚠️ Mekan kökünde `Art`, `Data`, `Prefabs`, `Scenes` dışında klasör AÇMA.
-  - ⚠️ **Boş klasör açma** (ne sihirbaz ne elle): git klasör tutmaz, dosya tutar → klonda kaybolur,
-    geriye yetim `.meta` kalır ve Unity klasörü hayalet olarak geri üretir. Klasör, içine ilk dosya
-    girdiğinde açılır.
-  - ⚠️ **İşletme klasörü kutu DEĞİL, kutuların kabıdır** — bir işletmede birden çok arena oynatılır;
-    hepsi `Venues/<İşletme>/Scenes/` altında yan yana durur (arenalar ve lobi aynı seviyede).
-  - Her mekanın **kendi lobi kutusu** olur (`<İşletme>/Scenes/<LobiSahnesi>/`) ve o kutudaki `MapDefinition`'ın
-    `supportedModeIds`'i `["lobby"]`'dir — sunucu açık sahneyi bununla bulur (§10.7).
-  ⚠️ **Klasör = MEKAN.** Export haritanın mekanını yoldan türetir (`Venues/<İşletme>/…` → o işletme)
-  ve sunucu açılışta hangi mekanı oynatacağını sorar; o oturumda yalnız o mekanın haritaları
-  başlatılabilir ve adminlere yalnız onlar görünür. Yani **bir arenayı yanlış klasöre koymak onu
-  yanlış işletmeye yazar** — `MapDefinition`'da mekan alanı YOKTUR ve eklenmez (ikinci,
-  unutulabilir bir doğruluk kaynağı olurdu). Mekan klasörü dışındaki haritalar export'a HİÇ
-  girmez (uyarı basılır) → `Docs/ArenaNet-Protokol.md` §11.1
-  `Template/Scenes/Default12x12` yalnız **referans** olarak durur; yeni arena boş sahneden başlar ve
-  `Template Temellerini Yükle` ile donatılır (sahne kopyalayan sihirbaz YOKTUR).
-  ⚠️ `Template/` altındaki haritalar **oynanmaz**: export edilmez, Build Settings'e ve
-  `GameCatalog`'a girmez (yoksa sunucu açılışında sahte bir mekan olarak listelenirlerdi).
-  Arena = sahne + MapDefinition; arena-özel kod YAZILMAZ (marker bileşenleri Core'dan gelir).
-  Bir arenanın ağa bağlanması için sahnede şunlar olmalı:
-  `BaseZone`×2 (**taban bölgesi** = kırmızı/mavi şerit; ölen oyuncu buraya girince canlanır,
-  `Team.Neutral` = herkese açık; şerit oyuncunun **kendi** takımına duvar arkasından da görünür —
-  `BaseZoneVisibility` çalışma anında ekler, sahnede/prefabda kurulum adımı YOKTUR ve eklenmez;
-  ⚠️ bölgenin sınırı **çizilen şeridin kendisidir** — ayrı ölçü alanı yoktur, şeritsiz bölge
-  kendini kapatır),
-  mekanın **ölçü maketi** (`<Mekan>_DimensionMesh` — kalibrasyon işaretçileri onun altındadır,
-  aşağıya bak) ve **altyapı prefabları** (`_Shared/App/Prefabs/`):
-  **`VA_ArenaBoundary`** (`ArenaBoundary` = muhafaza; ölçüsü **zorunlu** olarak bağlı boyut
-  dosyasından gelir — `dimensionsJson` boşsa muhafaza hata basıp kendini kapatır),
-  **`VA_CameraRig`** (kamera rig'i + `OVRComprehensiveInteractionRig` + `ControllerModelHider`,
-  tracking origin `Stage`). ⚠️ **Oyuncu kendi gövdesinden HİÇBİR ŞEY görmez; gördüğü eller
-  RİG'İN SENTETİK ELLERİDİR** (`OVRHandVisualLeft/Right` → ISDK `SyntheticHand`).
-  `LocalBodyAvatar` (kendini önyükleyen tekil, sahneye ve rig'e KONMAZ) yalnız **ağ kaynağıdır**,
-  tüm renderer'ları kapalıdır; obje YIKILMAZ, yoksa diğer oyuncular onu göremez.
-  ⚠️ **Sentetik ellerin görünmesi `OVRManager.controllerDrivenHandPosesType`'a bağlıdır**
-  (prefabda `Natural`) — `None` yapılırsa kumanda tutulurken el verisi hiç üretilmez, `HandVisual`
-  mesh'i kendi kapatır ve oyuncu HİÇBİR el görmez. Kumanda modelleri ve mesafeli kavramanın
-  hayalet elleri `ControllerModelHider` ile gizlenir; ⚠️ **oyuncunun kendi el görsellerine
-  DOKUNULMAZ** (`drivenHandVisuals` listesi tam ad eşleştirir — liste saparsa gerçek eller de
-  hayalet sayılıp kapanır ve oyuncu ellerini kaybeder) → `Docs/Sistem-Ozeti.md` §4.
-  ⚠️ **Karakter rig'in (ya da başka bir şeyin) ALTINA asılmaz** — retarget çıktısı dünya
-  uzayındadır, dolu bir ebeveyn dönüşümü ikinci kez uygulanır. Uzak tarafta kökü
-  `ArenaNetCharacterBehaviour` açıkça yazar → `Docs/Sistem-Ozeti.md` §7, "retarget avatarı hareket
-  eden kökün altına konmaz" maddesi.
-  **`VA_PoseSync`** (`PlayerPoseTracker` + `RemotePlayerSpawner`),
-  **`VA_CalibrationManager`** (`ArenaCalibrator`), **`VA_ModeHud`** (`ModeHudSpawner`).
-  ⚠️ **Altyapı sahneye PREFAB ÖRNEĞİ olarak konur — kopyalanmaz, unpack edilmez:** kopya konursa
-  rig/kalibrasyon kurulumundaki tek bir düzeltme arena sayısı kadar elle iş doğurur. Aynı sebeple
-  sahneye **Building Blocks rig'i ya da ayrı bir `OVRComprehensiveInteractionRig` EKLENMEZ**: BB
-  kurulumu prefabı otomatik unpack eder (`CameraRigBBBlockData`) ve ikisi de zaten `VA_CameraRig`
-  içindedir. ⚠️ **`VA_CameraRig`'de yapay hareket KAPALIDIR ve açılmaz** (kumandayla yürüme,
-  eksende dönme, adımlama, ışınlanma): free-roam'da hareket yalnız fizikseldir. Rig'e locomotion
-  geri gelirse sebebi neredeyse her zaman sahneye elle eklenmiş bir BB rig'idir →
-  `Docs/Sistem-Ozeti.md` §7, "rig'i/kamerayı asla taşıma" maddesi.
-  `VA_CalibrationManager`'ın `anchorA`/`anchorB`/`rigRoot` alanları sahneye baktığı için
-  örnek üstünde doldurulur (prefab asset'inde boş durur — normaldir); `anchorA`/`anchorB` boş
-  kalırsa kalibratör işaretçileri önce **`DimensionAnchor` bileşeninden** (maketin küpleri),
-  o da yoksa **adlarından** (`anchor_a`/`anchor_b`) çözer.
-  **Admin gözlemci için ek adım YOKTUR** — `AdminSpectator`
-  kendini önyükler ve sahneyi devralır (rig'i kapatır, `ArenaBoundary`'yi susturur).
-  ⚠️ **Arena geometrisi DÜNYA ORİJİNİNE göre kurulur** (arena uzayı = dünya uzayı): zemin dünya
-  y=0'da, arena merkezi dünya (0,0,0) civarında; `VA_CameraRig`'in kökü de Y=0'da. Sahneyi topluca
-  kaydırmak/döndürmek tüm oyuncuların ağ koordinatını kaydırır, zemini yükseltmek herkesi havada
-  gösterir. Orijin yalnız **varsayılan** yerleşimdir: hazır bir environment'ın içinde bir bölge
-  oynatılacaksa `VA_ArenaBoundary` (ve altındaki maket) o bölgenin üstüne taşınır — ağ
-  koordinatları dünya uzayında kaldığı ve tüm build'ler aynı sahneyi taşıdığı için tutarlıdır
-  (→ `Docs/Sistem-Ozeti.md`). ⚠️ **Harita değişimi ne
-  oyuncuyu yeniden doğurur ne kalibrasyonu sıfırlar**: `ArenaCalibrator` yeni sahnede kayıtlı
-  `OVRSpatialAnchor`'dan hizalamayı geri yükler — ön koşulu bir işletmede hep aynı ölçüde arena
-  oynatmaktır (zemin işaretleri sabit kalsın).
-  **Çatılı arenada tek isteğe bağlı adım:** çatı kökünde `ArenaRoof`
-  (`GameObject > VortexArena > Arena Roof`) — altındaki tüm Renderer'lar çatı sayılır, `ArenaRoof`
-  katmanı (user layer 8) damgalanır ve admin kuş bakışına geçince çatı çizilmez (gölgesi kalır).
-  Katman yalnız "hangi geometri gizlenecek" sorusunu sahnede görünür kılar; davranış Renderer
-  listesinden gelir. Açık tavanlı arenalarda bu adım hiç yapılmaz
-  (bileşenin davranışı ve tuzakları `Docs/Sistem-Ozeti.md` §4).
-- `Assets/Modes/<Mod>/` — mod kutuları: `{Scripts (VortexArena.Modes.<Ad>.asmdef), Data, UI}`.
-  Modlar birbirini REFERANSLAMAZ. Ortak HUD/silah kodu mod kutusunda DEĞİL Core'da durur
-  (`ModeHudBase`, `WeaponGranter`) — modlar birbirini göremediği için ikinci mod aksi hâlde aynı
-  kodu baştan yazardı. (Kayıtlı modlar `Docs/ArenaNet-Protokol.md` §10.5 tablosunda.)
-- Üçüncü parti: `Assets/ThirdPartyPackages/`. ⚠️ Buradaki klasörler editör AÇIKKEN taşınmaz (OS
-  dosya kilidi); taşıma editör kapalıyken `git mv` ile yapılır ve
-  `WeaponKitBuilder.PackRoot` sabiti güncellenir (tek satır).
-  ⚠️ **`.unitypackage` arşivi `Assets/` altına KOPYALANMAZ** — paket Unity'de içe aktarılır, dosya
-  olarak taşınmaz. Bu yayıncının silah paketleri **aynı GUID'leri paylaşır** (ataşman, materyal,
-  klasör): ikinci bir paket içe aktarıldığında Unity GUID'i yol yerine kabul eder ve varlıkları
-  **ilk paketin klasörüne** yazar. Yani `Low Poly AR Weapon Pack 1/` bugün AR + SMG + ShotGun
-  silahlarının hepsini taşır; yeni bir pack aramadan önce oraya bak.
+**`Assets/_Shared/`** — ortak. Ortak KOD yalnız bir asmdef altında: `Core/` (VortexArena.Core) ·
+`Net/Protocol` (VortexArena.Protocol — saf C#, server aynı dosyaları derler) · `Net/Scripts`
+(VortexArena.Net) · `App/Scripts` (VortexArena.App; `Admin/` alt klasörü aynı asmdef'te).
+Kod-dışı: `Arsenal/` (silah prefab+SO, `VA_WeaponFrame`) · `FX/` · `Shaders/` + `Materials/` ·
+`Environments/` · `Avatars/` · `Data/` · `Scenes/` (Boot, Lobby) · `App/Resources/UI/` ·
+`App/UI/Sprites/`.
+
+- ⚠️ `_Shared` köküne asmdef'siz gevşek script koyMA (Assembly-CSharp'a düşer, kimse göremez).
+- ⚠️ **`Resources/` altındaki şu asset'ler oradan ÇIKARILMAZ ve ADI DEĞİŞMEZ** (hepsi koddan
+  `Resources.Load` ile alınır, hiçbirinin sahneden referansı yoktur; taşınırsa ilgili şey sessizce
+  hiç çalışmaz/çizilmez): `Materials/Resources/M_BaseZoneXRay.mat` ·
+  `Avatars/Resources/LocalBodyAvatar.prefab` · `Data/Resources/GameCatalog.asset` ·
+  `Data/Resources/GameSoundBank.asset` · `Data/Resources/ModeAudioRegistry.asset` ·
+  `Data/Resources/WeaponCatalog.asset` · `App/Resources/UI/*`.
+- ⚠️ **Arayüzün TAMAMI `App/Resources/UI/` altında, prefab olarak.** Kodda görsel kurulum YOKTUR
+  ve yazılmaz: sınıflar yalnız veri yazar. → `Docs/Gelistirici/Arayuz-Tasarimi.md`
+- ⚠️ Ayrı bir admin dashboard sahnesi YOKTUR ve açılmaz — admin oyuncularla aynı sahnede duran bir
+  gözlemcidir (`AdminSpectator` kendini önyükler, ek kurulum adımı yoktur).
+
+**Gövde avatarı** (yerel `Avatars/Resources/LocalBodyAvatar.prefab` + uzak
+`App/Prefabs/RemoteAvatar.prefab` — iki AYRI prefab, aynı FBX/retarget/kod yolu):
+- ⚠️ **Yerel gövde HİÇ ÇİZİLMEZ ve ona görsel iş yaptırılmaz** — yalnız ağ kaynağıdır; obje
+  YIKILMAZ, silinirse oyuncuyu kimse göremez. Oyuncunun gördüğü eller rig'in sentetik elleridir.
+- ⚠️ **Poz aktarımında `HumanPoseHandler` KULLANILMAZ** (gövde metrelerce kayar).
+- ⚠️ **Gövde oranı KALİBRE EDİLMEZ** (`CharacterRetargeter.Calibrate()` çağrılmaz ve geri gelmez);
+  boy farkının tek taşıyıcısı `bodyScale`'dir ve YALNIZ uzak avatara uygulanır.
+- ⚠️ Prefabtaki **`EyeAnchor`** boy ölçümünün referansıdır — taşınırsa boy sessizce yanlış ölçülür.
+- ⚠️ **Kırmızı takım gövdesi yalnız istemci görselleştirmesidir** — protokolde ve sunucuda karşılığı
+  YOKTUR ve eklenmez. ⚠️ İkinci modelin mesh'i karakterin iskeletine BAĞLANMAZ ve kırmızı gövde
+  karakterin ALTINA asılmaz, **KARDEŞİ** olur (`SkeletonPoseMirror` sürer).
+- ⚠️ **Karakter rig'in (ya da başka bir şeyin) ALTINA asılmaz** — retarget çıktısı dünya uzayındadır.
+- Gerekçelerin tamamı: `Docs/Sistem-Ozeti.md` §4 ve §7.
+
+**`Assets/Arenas/`** — altında **yalnız iki kök vardır**: `Venues/` (oynanan içerik) ve `Template/`
+(referans; oynanmaz, export/Build Settings/`GameCatalog` dışıdır). ⚠️ Üçüncü kök açma — mekansız
+arena diye bir şey yoktur.
+- Arena kutusu: `Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity` +
+  `Data/<SahneAdı>.asset` (+ yalnız o sahneye ait `Art/`, `Prefabs/`).
+  ⚠️ **Klasör adı = sahne dosyası adı = MapDefinition asset adı** (sahne adı katalog anahtarıdır).
+- Mekanın **tüm** sahnelerinin paylaştığı sanat/prefab/veri mekan kökündeki `Art/` · `Prefabs/` ·
+  `Data/` altına girer. ⚠️ Mekan kökünde bu dördü (+`Scenes/`) dışında klasör AÇMA.
+- ⚠️ **Klasör = MEKAN.** Export mekanı yoldan türetir; yanlış klasör arenayı yanlış işletmeye
+  yazar. `MapDefinition`'da mekan alanı YOKTUR ve eklenmez. → `Docs/ArenaNet-Protokol.md` §11.1
+- ⚠️ **Boş klasör açma** (ne araçla ne elle): git klasör tutmaz, klonda kaybolur ve yetim `.meta`
+  kalır. Klasör, içine ilk dosya girdiğinde açılır.
+- ⚠️ İşletme klasörü kutu DEĞİL, kutuların kabıdır (arenalar ve lobi aynı seviyede yan yana).
+- Arena = sahne + MapDefinition; **arena-özel kod YAZILMAZ** (marker bileşenleri Core'dan gelir).
+
+**Sahnede olması gerekenler** (altyapı `_Shared/App/Prefabs/`): `VA_ArenaBoundary` ·
+`VA_CameraRig` · `VA_PoseSync` · `VA_CalibrationManager` · `VA_ModeHud` · `BaseZone`×2 ·
+mekanın ölçü maketi (`<Mekan>_DimensionMesh`). Kurulum reçetesi:
+`Docs/Gelistirici/Yemek-Kitabi.md`, bileşen davranışları `Docs/Sistem-Ozeti.md` §4.
+- ⚠️ **Altyapı sahneye PREFAB ÖRNEĞİ olarak konur — kopyalanmaz, unpack edilmez.** Aynı sebeple
+  sahneye **Building Blocks rig'i ya da ikinci bir `OVRComprehensiveInteractionRig` EKLENMEZ**
+  (BB kurulumu prefabı otomatik unpack eder).
+- ⚠️ **`VA_CameraRig`'de yapay hareket KAPALIDIR ve açılmaz** (yürüme/dönme/adımlama/ışınlanma):
+  free-roam'da hareket yalnız fizikseldir.
+- ⚠️ **Oyuncunun kendi el görsellerine DOKUNULMAZ** (`ControllerModelHider.drivenHandVisuals`
+  listesi saparsa gerçek eller de hayalet sayılıp kapanır) ve ⚠️
+  **`OVRManager.controllerDrivenHandPosesType` `None` YAPILMAZ** (oyuncu hiç el görmez).
+- ⚠️ **Arena geometrisi DÜNYA ORİJİNİNE göre kurulur** (zemin y=0, arena merkezi ~(0,0,0)):
+  sahneyi topluca kaydırmak/döndürmek herkesin ağ koordinatını kaydırır. Hazır bir environment'ın
+  içinde oynanacaksa **environment değil `VA_ArenaBoundary` örneği** taşınır.
+- ⚠️ `ArenaBoundary.dimensionsJson` **zorunludur** — boşsa/okunamıyorsa muhafaza hata basıp kendini
+  kapatır. ⚠️ Bağlanmayan JSON build'e GİRMEZ.
+- ⚠️ `BaseZone`'un sınırı **çizilen şeridin kendisidir** (ayrı ölçü alanı yoktur, şeritsiz bölge
+  kendini kapatır); `Team.Neutral` = herkese açık. Duvar arkası görünürlük (`BaseZoneVisibility`)
+  çalışma anında eklenir — sahnede/prefabda kurulum adımı YOKTUR ve eklenmez.
+- Çatılı arenada tek isteğe bağlı adım: çatı kökünde `ArenaRoof`
+  (`GameObject > VortexArena > Arena Roof`). Açık tavanlı arenada hiç yapılmaz.
+
+**`Assets/Modes/<Mod>/`** — mod kutuları: `{Scripts (VortexArena.Modes.<Ad>.asmdef), Data, UI}`.
+⚠️ Modlar birbirini REFERANSLAMAZ; ortak HUD/silah kodu mod kutusunda DEĞİL Core'da durur
+(`ModeHudBase`, `WeaponGranter`). Kayıtlı modlar: `Docs/ArenaNet-Protokol.md` §10.5.
+
+**`Assets/ThirdPartyPackages/`** — ⚠️ buradaki klasörler editör AÇIKKEN taşınmaz (OS dosya
+kilidi); taşıma editör kapalıyken `git mv` + `WeaponKitBuilder.PackRoot` sabiti (tek satır).
+⚠️ **`.unitypackage` arşivi `Assets/` altına KOPYALANMAZ** — paket Unity'de içe aktarılır; bu
+yayıncının pack'leri aynı GUID'leri paylaştığı için ikinci pack ilk pack'in klasörüne yazar
+(`Docs/Sistem-Ozeti.md` §7). Yeni pack aramadan önce mevcut pack klasörüne bak.
 
 **Assembly grafiği** (bağımlılık hep aşağı):
-Protocol (saf C#, noEngineReferences) ← Net ← Core ← App, Modes.<X>
+`Protocol` (saf C#, noEngineReferences) ← `Net` ← `Core` ← `App`, `Modes.<X>`.
 Net oyun/sahne bilgisi içermez; olay yayınlar, App dinler. Editor asmdef'leri
 `includePlatforms:["Editor"]` + kendi runtime'ını referanslar; `Core.Editor` ayrıca
-`Unity.ProBuilder` referanslar (plandan arena geometrisi üretimi — yalnız editörde,
-runtime'a ProBuilder BULAŞMAZ).
-App ayrıca `Unity.InputSystem` referanslar (gözlemci kamerası klavye/fare + `InputSystemUIInputModule`);
-proje **Input System-only** — `StandaloneInputModule` runtime'da patlar, kullanılmaz.
-⚠️ Core'a URP (`Unity.RenderPipelines.Universal.Runtime`) referansı **geri eklenmez**: tek
-tüketicisi olan overlay kamera kurulumu silindi (gerekçe `Docs/Sistem-Ozeti.md` §7, "URP overlay
-kamerasının near-clip'i XR'da sessizce yok sayılır" maddesi).
+`Unity.ProBuilder` (runtime'a ProBuilder BULAŞMAZ), `App` ayrıca `Unity.InputSystem`.
+Proje **Input System-only** — `StandaloneInputModule` kullanılmaz.
+⚠️ Core'a URP (`Unity.RenderPipelines.Universal.Runtime`) referansı **geri eklenmez**.
 
 **İsimlendirme:** asmdef = `VortexArena.<Katman>`; namespace = asmdef adıyla birebir
-(rootNamespace dolu); global namespace'te tip YOK; serialize edilen ikincil tipler kendi
-dosyasında (`Team.cs` gibi). Sahne adı = katalog anahtarı (`load_match` string'i) → birebir eşleşme.
-⚠️ **Serialize edilen enum'a yeni değer SONA eklenir** — Unity sayısal indeks saklar, başa/ortaya
-ekleme sahnelerdeki değerleri kaydırır. `Team = { Red, Blue, Neutral }`: `Neutral` bu yüzden sonda
-(`BaseZone` bu enum'u serialize ediyor; orada `Neutral` "herkese açık" demektir).
-Aynısı `ModeTeamMode`/`ModeScoreKind`/
-`ModeReviveAnchor`/`ModeWeaponSource` için de geçerli.
+(rootNamespace dolu); global namespace'te tip YOK; serialize edilen ikincil tipler kendi dosyasında
+(`Team.cs` gibi). Sahne adı = katalog anahtarı (`load_match` string'i) → birebir eşleşme.
+⚠️ **Serialize edilen enum'a yeni değer SONA eklenir** (Unity sayısal indeks saklar): `Team`,
+`HitZone` (`Body` sıfırda kalır), `ModeTeamMode`, `ModeScoreKind`, `ModeReviveAnchor`,
+`ModeWeaponSource`, `ModeAudioEvent`, `HandGripPreset`.
 
 **Paylaşımlı-mı-modül-mü:** "İkinci bir mod/arena bunu aynen kullanır mı?" → evet=_Shared, hayır=kutu.
 
 ## XR / Meta politikası
 
-- **Meta-first:** önce Meta Building Blocks + Meta XR SDK; yetmezse Unity XR Interaction Toolkit
-  (XRI kurulu, yedek). Hedef YALNIZ Quest 3/3S. Sahnelerde `VA_CameraRig` prefabı kullanılır
-  (BB rig'i sahneye eklenmez — gerekçe "Asset mimarisi" altında).
-- **Umbrella paket YASAK** (`com.meta.xr.sdk.all` — Meta Project Setup Tool önerse bile ekleme):
-  kullanılmayan voice@85, SDKTelemetry.aar ↔ OVRPlugin.aar Android namespace çakışmasıyla
-  build kırar (vortexcosmos'ta yaşandı). Bireysel paketler: core + interaction + interaction.ovr
-  @203.0.0, audio @85.0.0 (spatializer=Meta XR Audio olduğu için gerekli, pinli).
+- **Meta-first:** önce Meta Building Blocks + Meta XR SDK; yetmezse XRI (kurulu, yedek).
+  Hedef YALNIZ Quest 3/3S. Sahnelerde `VA_CameraRig` prefabı kullanılır.
+- ⚠️ **Umbrella paket YASAK** (`com.meta.xr.sdk.all` — Project Setup Tool önerse bile): Android
+  namespace çakışmasıyla build kırar. Bireysel paketler: core + interaction + interaction.ovr
+  @203.0.0, audio @85.0.0 (pinli, spatializer = Meta XR Audio).
 - Haptik: `OVRInput.SetControllerVibration` (core) — ayrı haptics paketi ekleme.
-- XR loader: OpenXR (mevcut, çalışıyor) — değiştirme.
-- **Movement SDK retargeter'ında `ApplyRootScale` KAPALI kalır** (`LocalBodyAvatar.prefab` ve
-  `RemoteAvatar.prefab`, `NetworkCharacterRetargeter`): açıkken SDK karakter kökünü boy oranıyla
-  ölçekler, `_characterRoot.position` bir dünya noktası olmaktan çıkar ve ağa giden gövde kökü
-  **dünya orijininden uzaklıkla orantılı** olarak kayar (orijindeki arenada görünmez, taşınmış
-  arenada onlarca metre). Boy farkının tek taşıyıcısı `bodyScale`'dir →
-  `Docs/Sistem-Ozeti.md` §7.
-- **`VA_CameraRig`'in near-clip'i `0.05`'tir ve BÜYÜTÜLMEZ** (üç göz kamerasında da aynı): engel
-  karartmasının görüş açıklığı bu sayıdan türer ve tavanı kafa yarıçapıdır — büyütmek, kırpılan
-  duvarın içini okunabilir bırakır → `Docs/Sistem-Ozeti.md` §7.
-- **Tracking origin = `Stage` (2), tüm sahnelerde; `AllowRecenter = 0`.** `FloorLevel` ile aynı
-  zemin seviyesini verir ama OpenXR'da **recentering'i zorla açar** (`OVRManager`:
-  `SetAllowRecentering(true)`), `Stage` kapatır — recenter free-roam'da kalibrasyonu bayatlatıp
-  arenayı kaydırır. `AllowRecenter` alanı tek başına yetmez (yalnız OVR'ın kendi çağrısını keser).
-- **İşletme başlıklarında guardian/alan kurulumu YAPILMAZ** (serbest dolaşım) → sistemin zemin
-  seviyesi tahmindir, bu yüzden zemini kalibrasyon ölçer. **Eğim telafisi yoktur ve eklenmez**
-  (iki nokta düzlem tanımlamaz + eğik dünya VR'da mide bulandırır).
-  Gerekçelerin tamamı `Docs/Sistem-Ozeti.md` §7, "tracking origin" ve "guardian" maddeleri.
+- XR loader: OpenXR — değiştirme.
+- ⚠️ **Movement SDK retargeter'ında `ApplyRootScale` KAPALI kalır** (`LocalBodyAvatar` +
+  `RemoteAvatar`): açıkken ağa giden gövde kökü dünya orijininden uzaklıkla orantılı kayar.
+- ⚠️ **`VA_CameraRig`'in near-clip'i `0.05`'tir ve BÜYÜTÜLMEZ** (üç göz kamerasında da aynı).
+- ⚠️ **Tracking origin = `Stage` (2), tüm sahnelerde; `AllowRecenter = 0`.** `FloorLevel`
+  OpenXR'da recentering'i zorla açar ve kalibrasyonu bayatlatır; `AllowRecenter` alanı tek başına
+  yetmez.
+- ⚠️ **İşletme başlıklarında guardian/alan kurulumu YAPILMAZ** (zemini kalibrasyon ölçer) ve
+  **eğim telafisi yoktur, eklenmez**.
+- Gerekçelerin tamamı: `Docs/Sistem-Ozeti.md` §7.
 
 ## Network — kod yazarken uyulacak kurallar
 
-> Sistemin ağ **anlatımı** burada DEĞİL: mesajlar/sabitler/portlar/doğrulama
-> `Docs/ArenaNet-Protokol.md` (TEK doğruluk kaynağı), akış ve bileşen sorumluluğu
-> `Docs/Sistem-Ozeti.md` §3. Burada yalnız **kod yazarken bağlayıcı olan** maddeler durur.
+> Ağ **anlatımı** burada DEĞİL: mesaj/sabit/port/doğrulama `Docs/ArenaNet-Protokol.md` (TEK
+> doğruluk kaynağı), akış ve bileşen sorumluluğu `Docs/Sistem-Ozeti.md` §3.
 
-- **Otorite bölünmesi kodun nereye yazılacağını belirler.** Pozlar istemci-otoriter (arena
-  uzayında, 20 Hz UDP); can/skor/kural/maç fazı **ve kalibrasyon durumu** sunucu-otoriter. Bir
-  kuralı istemcide "de" uygulamak = ikinci doğruluk kaynağı; istemci sunucuyu bekler.
-- ⚠️ **Rig'i/kamerayı ASLA taşıma** — free-roam'da oyuncu fiziksel. Canlanma ve harita değişimi
+- **Otorite bölünmesi kodun nereye yazılacağını belirler.** Pozlar istemci-otoriter (arena uzayında,
+  20 Hz UDP); can/skor/kural/maç fazı **ve kalibrasyon durumu** sunucu-otoriter. Bir kuralı
+  istemcide "de" uygulamak = ikinci doğruluk kaynağı; istemci sunucuyu bekler.
+- ⚠️ **Rig'i/kamerayı ASLA taşıma** — free-roam'da oyuncu fiziksel; canlanma ve harita değişimi
   konum değil **durum** değişimidir.
 - ⚠️ **İzleme/ağdan gelen rotasyon humanoid kemiğe DOĞRUDAN yazılmaz** — `HandGripConvention`
-  köprüsünden geçer (`Docs/Sistem-Ozeti.md` §7, "izleme/ağ uzayından gelen rotasyon" maddesi).
-- ⚠️ **DTO'lar `_Shared/Net/Protocol/` altında saf C# kalır** — server csproj aynı dosyaları
-  derler, `UnityEngine` girerse server derlemesi kırılır (bilinçli bekçi).
-- ⚠️ **Ağa vuruş bildirimi tek kapıdan: `ArenaCombat`** (`_Shared/Core/Combat/`). Protokol DTO'su
-  kurma, arena uzayı dönüşümünü elle yazma, `ArenaClient.Send`'i doğrudan çağırma.
-- ⚠️ **Eşzamanlı oyuncu/admin KOTASI YOKTUR** (lisanslama geldiğinde eklenecek). `MAX_PLAYERS`
-  gibi bir protokol sabiti **YOKTUR ve eklenmez**; tek tavan `PLAYER_ID_MAX = 255` ve o bir ürün
-  kararı değil `playerId`'nin `u8` olmasıdır. Dev aracı emniyeti gerekiyorsa **yerel** bir sabit
-  kullan, protokole sabit ekleme.
-- ⚠️ **Bir oyuncu durumuna savaş kapısı eklerken o durumu değiştiren TÜM yolları ara** — bir tanesini
-  bile atlamak kuralı işlevsiz bırakır ve hata vermez.
-- ⚠️ **Yeni admin ayarı eklerken önce sor: operatörler arasında ORTAK mı, ekrana mı ait?** —
-  ortaksa `AdminSelection` + protokol (`admin_state`), ekrana aitse `AdminSession` (`PlayerPrefs`).
+  köprüsünden geçer.
+- ⚠️ **DTO'lar `_Shared/Net/Protocol/` altında saf C# kalır** — `UnityEngine` girerse server
+  derlemesi kırılır (bilinçli bekçi).
+- ⚠️ **Ağa vuruş/atış bildirimi TEK kapıdan: `ArenaCombat`** (`_Shared/Core/Combat/`, statik).
+  Protokol DTO'su kurma, arena uzayı dönüşümünü elle yazma, `ArenaClient.Send`'i doğrudan çağırma.
+  Reçeteler: `Docs/Gelistirici/Yemek-Kitabi.md`.
+- ⚠️ **Hitscan ışını `ArenaCombat.TraceShot` ile atılır, elle `Physics.Raycast` ile DEĞİL** (engel
+  kuralı ve trigger elemesi orada). ⚠️ Tetiği olan silah ayrıca `IsWeaponBlocked` ile kapatılır;
+  ⚠️ oyuncunun kendisi engeldeyken kapı `ArenaCombat.CanFire`'dadır, silahta değil.
+- ⚠️ **Eşzamanlı oyuncu/admin KOTASI YOKTUR.** `MAX_PLAYERS` gibi bir protokol sabiti YOKTUR ve
+  eklenmez; tek tavan `PLAYER_ID_MAX = 255` (`playerId` `u8` olduğu için). Dev aracı emniyeti
+  gerekiyorsa **yerel** sabit kullan.
+- ⚠️ **Bir oyuncu durumuna savaş kapısı eklerken o durumu değiştiren TÜM yolları ara** — birini
+  atlamak kuralı sessizce işlevsiz bırakır.
+- ⚠️ **Yeni admin ayarında önce sor: operatörler arasında ORTAK mı, ekrana mı ait?** — ortaksa
+  `AdminSelection` + protokol (`admin_state`), ekrana aitse `AdminSession` (`PlayerPrefs`).
   Çoklu admin sınırsızdır ve hepsi eş yetkilidir.
-- **Protokol değişikliği bir MALİYET KALEMİ DEĞİLDİR.** Tel formatı gerektiğinde değişir:
-  `PROTOCOL_VERSION` artar, tüm başlıklara yeni APK kurulur — bu normal iş akışıdır, plana ayrı bir
-  yük olarak yazılmaz ve **tasarım ondan kaçınmak için eğilmez** (karışık sürüm çalışsın diye ek kod
-  yolu, ya da "tek APK turu olsun" diye kapsam kesme/faz birleştirme yok). Karışık sürümün *bozuk
-  çizim* ürettiği durumlar yine yazılır — bilgi olarak, kısıt olarak değil.
-- Portlar: UDP beacon 47820 · WS kontrol 47821 `/ws` · UDP state 47822 (cosmos 47800/1 ile
-  çakışmaz).
+- **Protokol değişikliği bir MALİYET KALEMİ DEĞİLDİR.** Gerektiğinde `PROTOCOL_VERSION` artar ve
+  tüm başlıklara yeni APK kurulur; **tasarım ondan kaçınmak için eğilmez** (karışık sürüm için ek
+  kod yolu ya da kapsam kesme yok). Karışık sürümün *bozuk çizim* ürettiği durumlar bilgi olarak
+  yazılır, kısıt olarak değil.
+- Portlar: UDP beacon 47820 · WS kontrol 47821 `/ws` · UDP state 47822.
 
-## Yeni içerik ekleme reçeteleri
+## Yeni içerik ekleme — reçete nerede
 
-**Yeni arena — altı adım** (tek düğmeli sihirbaz YOKTUR, kaldırıldı):
-`File > New Scene` → arena kutusuna kaydet
-(`Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity` — klasör adı sahne adıyla AYNI) →
-`Tools > VortexArena > Arena > Template Temellerini Yükle` (altyapı prefab ÖRNEKLERİ) →
-`… > Arena > JSON'dan DimensionMesh Üret` (mekanın ölçü maketi; ⚠️ **atlanamaz** — kalibrasyon
-işaretçileri bu adımda gelir, maketsiz sahne hizalanamaz) → ölçü yanlışsa köşeleri ProBuilder ile
-düzelt + `… > Arena > DimensionMesh'i JSON'a Çevir` → environment/asset yerleşimi (**dünya orijinine**,
-zemin y=0), bake → `… > Build > Configure All Build Elements`.
-⚠️ **Son adım atlanırsa** harita ne katalogda ne `maps.json`'da olur; `start_match` sessizce
-reddedilir. ⚠️ **Son adımı sahne AÇIKKEN çalıştır** — MapDefinition kendiliğinden üretilmez, tarama
-onu yalnız eksik diye bildirir; modları (`supportedModeIds`) araç penceresinden sen seçersin (boş
-bırakmak "kısıtsız" demektir, sahne o hâlde her modda oynanır).
-⚠️ **Arena silinince ya da taşınınca aracı tekrar çalıştır** (*Yalnız Senkronize Et* yeter): kayıt
-listeleri klasör taramasından eşitlenir, elle temizlenmez. ⚠️ **Ölçekleme YOKTUR ve eklenmez:** her işletmenin alanı farklı ölçüde ve çoğu
-kare/dikdörtgen bile değil — orantılı ölçekleme işe yarar bir taslak değil, elle düzeltilecek bir
-yalancı-doğru üretir.
-**Ortam sesi (ambiyans + oyun müziği):** haritanın `MapDefinition`'ındaki `ambienceClip` alanına bir
-klip sürüklemekle biter — sahne yüklenince `SceneAmbience` (kendini önyükleyen tekil) onu loop'lar,
-harita değişene kadar durdurmaz (maç başı/sonu müziğe dokunmaz) ve tüm başlıklarda **aynı yerden**
-çalar (`sceneElapsed`, geç katılan atlayarak katılır). ⚠️ **Sahneye ses objesi KOYMA** ve klibi ikinci bir yere yazma; klipler
-`Assets/Audio/Ambience/` altında durur ve **`Streaming`** olarak import edilir (uzun klip
-`DecompressOnLoad` ile Quest'in RAM'ini yer). Harita başına ayrı klip normaldir, iki sahne aynı
-klibi paylaşırsa geçişte ses kesilmez. Tüm haritalarda ortak duyuru sesleri (rakip elendi, öldün,
-maç başladı…) buraya DEĞİL `_Shared/Data/Resources/GameSoundBank.asset`'e girer; çalan tek yer
-`GameAudio.Play(GameSoundId)`'dir. **Moda/haritaya göre değişen** duyurular (tur başlangıcı, "son 5
-saniye") ikisine de DEĞİL `_Shared/Data/Resources/ModeAudioRegistry.asset`'e bir kural satırı olarak
-girer — mod + harita + an + klip listesi; klipler `Assets/Audio/Announce/` altındadır. Yeni bir an
-gerekiyorsa `ModeAudioEvent`'e **sona** değer eklenir, istemciye `if (modeId == …)` zinciri
-YAZILMAZ. → `Docs/Sistem-Ozeti.md` §4.
-**Arena ölçüsü:** tek doğruluk kaynağı **boyut dosyasıdır** (`ArenaDimensions` — elle yazılabilir
-JSON) ve dosya **MEKAN başınadır**: `Venues/<İşletme>/Data/<İşletme>_dimensions.json`. Bir
-işletmede hep aynı fiziksel alan oynatıldığı için o mekanın **tüm** sahneleri (arenalar + lobi)
-`ArenaBoundary.dimensionsJson` alanında aynı dosyayı gösterir — sahne başına kopya kaçınılmaz
-olarak sapar. İçerik: `plane` = tabanın sıralı köşeleri (metre, `ArenaBoundary` transformunun
-yerel XZ'si, **kapalı** — ilk noktayı sona tekrarlama), `columns` = her biri kendi sıralı köşe
-halkası olan kolonlar (`{name, height, points}`), `calibration` = zemin bandının iki noktası
-(`{a, b}`), `topViewHeight` = admin kuş bakışı kamerasının zeminden yüksekliği (opsiyonel; 0 =
-kameranın kendi varsayılanı).
-⚠️ **Taban da kolon da TEK halkadır; parçalardan birleştirme (union) YOKTUR ve eklenmez.**
-İçbükeylik için ek bir şey gerekmez — L şekli, yamuk, girintili duvar tek halkayla ifade edilir.
-Birleşim `ArenaBoundary` yüzünden çalışma anında da koşmak zorunda kalırdı ve karşılığını mekan
-başına yalnız bir kez verirdi.
-⚠️ **Kolonun `{"points": […]}` sarmalayıcısı zorunlu** (`JsonUtility` iç içe dizi serialize
-etmiyor); `plane` düz `Vector2[]`'dir. ⚠️ **`wallHeight` alanı YOKTUR** — duvar üretimi de
-muhafazanın duvar göstergesi de kaldırıldı, okuyanı olmayan ölçü bayatlar.
-⚠️ **Boyut dosyası ZORUNLUDUR** — bağlı değilse ya da okunamıyorsa `ArenaBoundary` bir kez hata
-basıp muhafazayı tümden kapatır (açık başarısızlık; gerekçe `Docs/Sistem-Ozeti.md` §7).
-⚠️ **Bağlanmayan JSON build'e GİRMEZ** (çalışma anında okunur, `TextAsset` referansı yoksa Unity
-onu paketlemez). ⚠️ **Ölçü üç yeri birden besler** (muhafaza mesafesi · admin kuş bakışı kadrajı ·
-kalibrasyon işaretçilerinin yeri) — ikinci bir yere yazma.
-**Kalibrasyon noktaları (`calibration: {a, b}`)** de bu dosyadadır ve **mekan başınadır**: zemine
-yapıştırılan A/B bantlarının yeri bir ölçüdür, aynı odadaki tüm arenalar ve lobi aynı iki fiziksel
-işareti kullanır. Maketin `anchor_a`/`anchor_b` küpleri **elle taşınmaz** — `ArenaCalibrator`
-her `Start`'ta onları buradan konumlandırır. Sahnede taşımanın kalıcı etkisi yoktur, ölçü
-**dosyaya** yazılır (düzeltmeyi `DimensionMesh'i JSON'a Çevir` ile geri yaz).
-⚠️ **İşaretçinin transform konumu ZEMİN NOKTASIDIR** — küp o noktada merkezlenir, yarısı zeminin
-altında kalır. Görselin tabanını zemine hizalayan bir telafi YOKTUR ve eklenmez: tek bir Y
-sözleşmesi olmazsa dosyadaki ölçü ile sahnedeki konum sessizce sapar.
-⚠️ **Sıra A → B'dir ve geometrik olarak DOĞRULANAMAZ** (iki nokta hangisinin önce alındığını
-söylemez, mesafe kontrolü simetriktir): garanti prosedüreldir — ilk yakalama A sayılır, o anda
-A işaretçisi yanar. Karıştırılırsa arena 180° ters döner. ⚠️ İki nokta arasında en az
-`ArenaDimensions.MinCalibrationSpan` metre olmalı; altındaki çift **yok sayılır** (yaw hatası
-mesafeyle ters orantılı büyür).
-**Ölçü maketi (`<Mekan>_DimensionMesh`)** oynanan geometri DEĞİLDİR: taban + kolonlar +
-`anchor_a`/`anchor_b` işaretçilerinden ibarettir, duvar üretmez. ⚠️ **Maketin kökü ve kalibrasyon
-işaretçileri build'e GİRER** (kalibrasyon onlara bağlı) — bu yüzden `EditorOnly` etiketlenmez;
-**görsel dal (`Plane` + `Columns`) build'e HİÇ girmez**: `DimensionMeshBuildStripper`
-(`IProcessSceneWithReport`) onu build'e giden geçici sahne kopyasından siler, sahne dosyası
-değişmez. Gerekçe boyut değil **bağımlılıktır**: çokgenler `ProBuilderMesh` taşır ve o bileşen
-`Unity.ProBuilder`'ı runtime'a sokardı. Editör Play kipinde her şey sahnededir, orada görseli
-`ArenaDimensionMesh.Awake` yalnız `Renderer.enabled = false` ile gizler (obje kapatılmaz,
-işaretçilerin Renderer'larına dokunulmaz — onları kalibrasyon sırasında `ArenaCalibrator` yakar).
-Arena sanatı hazır environment'ların içine kurulur ve maket yalnız o sanatın oturacağı fiziksel
-alanı gösterir.
-**Maket `ArenaBoundary`'nin ALTINA üretilir** (yerel konum/dönüş sıfır, ölçek 1): arenayı hazır bir
-environment'ın üstüne oturtmak = **`VA_ArenaBoundary` örneğini** taşımak/döndürmek, maket ve
-kalibrasyon işaretçileri onu izler — environment YERİNDEN OYNATILMAZ. Sahnede muhafaza yoksa maket
-sahne köküne, dünya orijininde ve dönüşsüz kurulur. ⚠️ Maketin **ölçeği değiştirilmez**, ve ölçü
-**dünya eksenli seçim kutusundan okunmaz**: döndürülmüş bir kökün altında 12×12 kare
-`12×(cos θ + sin θ)` görünür ve araç bozuk sanılır — ölçünün okunacağı yer boyut dosyasıdır. Geri
-okuma maketin KENDİ kökünü referans aldığı için taşınmış/döndürülmüş maketten de doğru çevirir.
-⚠️ **Kalibrasyon işaretçisi TEKTİR ve maketin altındadır** — ikinci bir işaretçi ailesi açma
-(sahneye elle `anchor_a` koymak dahil): hangisinin geçerli olduğu belirsizleşir. Adı her yerde
-`anchor_a`/`anchor_b`'dir (tek sabit: `ArenaCalibrator.AnchorAName`/`AnchorBName`; C# alanı
-`anchorA` aynı adın camelCase yazımıdır ve serialize anahtarı olduğu için değişmez), kimliğini
-taşıyan bileşen `DimensionAnchor`'dır (`AnchorKind`) ve kalibratör önce onu arar; ad araması
-yalnız maketi olmayan eski sahneler için vardır.
-Elle konan engeller için `ArenaObstacle` (`Core/Arena/`): muhafaza onu engel sayar —
-⚠️ **collider değildir, fizik yapmaz** (free-roam'da çarpışma yoktur).
-**İç engelin (sütun, kasa, sandık, blok) collider'ı `Obstacle` layer'ına (10) konur** — sözleşme iki
-cümledir: *"buranın içine KAFA girerse ihlaldir"* (ekran kararır, 3 sn sonra can erimeye başlar,
-8. sn'de ölüm) ve *"buraya KAFA, EL ya da SİLAHIN herhangi bir parçası değiyorsa tetik ölür"*.
-⚠️ **Ceza yalnız kafayı, ateş kapısı kafa+eli+silahı yargılar** — ikisi ayrı sorudur ve el/silah
-kuralı tele hiç gitmez; oran (gövde kütlesi) kuralı YOKTUR (gerekçe: Quest'te bacaklar ölçülmez,
-üretilir) → `Docs/ArenaNet-Protokol.md` §10.9. ⚠️ **Bu layer'daki collider KONVEKS olmalı** (Box/Sphere/Capsule ya da `MeshCollider` +
-`Convex`): non-convex mesh'te nokta-içeride testi daima "evet" der ve sahnedeki herkesi öldürür —
-denetimi `… > Arena > Engel Hacimlerini Denetle` yapar. ⚠️ **Dış duvar, zemin ve tavan bu layer'a
-KONMAZ** (kalibrasyonu kaymış oyuncu durduk yere ölmesin; dış sınırı zaten `ArenaBoundary`
-uyarıyor). ⚠️ **İkinci bir "mantık hacmi" collider'ı EKLENMEZ** — atış ışını maskesiz olduğu için
-mermi ona çarpar ve objelerin önünde durur; tek doğruluk kaynağı objenin kendi collider'ıdır.
-Layer 11 (`Breakable`) ve 12 (`PlayerHitbox`) sonraki işlere **rezervedir**, başka amaçla açılmaz.
-⚠️ **Arenanın duvarları environment sanatına aittir** ve fiziksel sınırla **çakışmalıdır**:
-muhafazanın yarı saydam duvar göstergesi kaldırıldı, yaklaşma uyarısı artık HMD'ye bağlı karartma
-quad'ından geliyor (`warnFadeAlpha`). Sanat duvarı alandan içeride/dışarıda durursa oyuncu yanlış
-yere göre kalibre olur.
-**Yeni lobi:** lobi de bir arena kutusudur (`Venues/<İşletme>/Scenes/<LobiSahnesi>/`), farkı üç şeydir —
-`MapDefinition.supportedModeIds` **yalnız `["lobby"]`** (boş bırakılırsa "kısıtsız" sayılır!),
-sahnede `BaseZone` ve `VA_ModeHud` YOK, silah kaynağı `random` (sahneden silah alınmaz, grip'e
-basınca elde belirir). **Her mekanın kendi lobisi olur** ve mekanın boyut dosyasını arenayla
-**paylaşır** — fiziksel oda aynı, ikinci bir ölçü dosyası açılmaz. Kurulumu arenayla aynı altı
-adımdır; `Template Temellerini Yükle` penceresinde taban bölgeleri ve `VA_ModeHud` kutuları
-KAPATILIR. `Configure All Build Elements` yeter: sunucu **seçilen mekanın** lobi haritasını kendi
-bulur (`server.json → lobbyScene` yalnız mekanda birden çok lobi varsa doldurulur).
-⚠️ `lobby` **kayıtlı bir mod DEĞİLDİR** — sunucuya `IGameMode` olarak eklenmez (`start_match` onu
-reddeder, "lobi türünde maç başlamaz" kuralı buradan gelir), `ModeDefinition.lobbyProfile`
-işaretlidir ve admin mod seçicisinde görünmez. **Hasarı kapatan şey fazdır** (`hit_report` yalnız
-`playing`) — o kapıya dokunma; **ateşe izin veren şey moddur** (`rules.fireWhilePaused`, lobide
-`lobbyProfile`'dan türetilir). İkisi ayrı olduğu için lobi "hasarsız atış alanı"dır.
-→ `Docs/ArenaNet-Protokol.md` §10.7
+| İstek | Reçete | Atlanırsa |
+|---|---|---|
+| **Yeni arena** (altı adım; tek düğmeli sihirbaz YOK) | `Docs/Gelistirici/Yemek-Kitabi.md` §14 | Son adım (`Configure All Build Elements`) atlanırsa harita ne katalogda ne `maps.json`'da olur → `start_match` sessizce reddedilir |
+| **Arena ölçüsü / boyut dosyası** | Yemek-Kitabı §17 | Dosya bağlı değilse muhafaza kendini kapatır |
+| **Hazır environment içinde arena bölgesi** | Yemek-Kitabı §14.1 | — |
+| **Yeni lobi** (arena kutusudur; `supportedModeIds` = **yalnız** `["lobby"]`, `BaseZone`/`VA_ModeHud` YOK, mekanın boyut dosyasını arenayla PAYLAŞIR) | `Docs/Sistem-Ozeti.md` §3.8.1 + §6.4 | `supportedModeIds` boş bırakılırsa "kısıtsız" sayılır ve lobi her modda oynanır |
+| **Yeni mod** | Yemek-Kitabı §13 + `Docs/Sistem-Ozeti.md` §3.9 | `Export Server Config` atlanırsa `start_match` "harita bu modu desteklemiyor" der |
+| **Yeni silah / hasar kaynağı** | Yemek-Kitabı §11 | Kavrama yazılmazsa el idle'da kalır; ateş sesi atanmazsa silah sessiz doğar (ikisi de koşu sonunda listelenir) |
+| **Silahın kavraması** (gözlüksüz, stüdyoda) | Yemek-Kitabı §11.0 | Ön kabza kaydı yoksa soket çizilmez ve ikinci el bağlanmaz |
+| **Ortam sesi / duyuru sesi** | `Docs/Sistem-Ozeti.md` §4 (`SceneAmbience`, `GameAudio`+`GameSoundBank`, `ModeAudioRegistry`) | — |
+| **Kar/hava efekti** | `Docs/Sistem-Ozeti.md` §6.4 | — |
 
-**Yeni mod:** `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol;
-mevcut moddan JSON kopyala, name değiştir, .meta KOPYALAMA) + server tarafında `Modes/<Ad>Mode.cs`
-(IGameMode) + `MatchDirector.RegisterModes()`'a bir satır + `Docs/ArenaNet-Protokol.md`'ye modId ekle.
-Üç ek adım:
-1. **`IGameMode.Rules`** — modun şekli (`ModeRules`: takım kipi, skor kanalı, canlanma şartı, silah
-   kaynağı, canlanma gecikmesi, doğma koruması). Bugünkü TDM davranışı için `ModeRules.TeamDefault` tek satırdır;
-   yalnız FARKLI olan alanı yaz. Bu kural `load_match.rules` ile istemciye gider ve `ModeRuntime`
-   üzerinden okunur → **istemcide `if (modeId == …)` zinciri YAZILMAZ**
-   (Docs/ArenaNet-Protokol.md §10.5).
-   ⚠️ **`FriendlyFire` bu listede YOKTUR ve moda YAZILMAZ:** dost ateşi bir mod kuralı değil,
-   operatörün canlı anahtarıdır (`set_friendly_fire`; sunucu açılışında kapalı, koşan maçta da
-   değişir). Değeri her kural şekline `MatchDirector.ApplyRulesLocked` damgalar — mod kendi
-   değerini yazarsa anahtar sessizce ezilir. Aynı sebeple **takımdaş öldürmede `OnKill` hiç
-   çağrılmaz** (skor yazılmaz; `kills`/`deaths` işler) — modun bunun için yazacağı bir şey yok.
-2. **HUD = `ModeHudBase` alt sınıfı** (`_Shared/Core/UI/`). Faz/süre, geri sayım, can, ölüm ekranı,
-   kill-feed, kendi sayaçların tabandan gelir; alt sınıf yalnız `ScoreLine`/`WinnerLine` (+ istersen
-   `EndScoreLine`/`OnLobbyStateApplied`) yazar. Takıma ait hiçbir şey tabana koyulmaz.
-3. **Kural önizlemesi** `ModeDefinition` SO'suna girilir (kurallar telde gelmediğinde —
-   `rules == null` — devreye giren fallback) — **otorite sunucudadır, sapmada sunucu kazanır.**
-Sonra `FFA.asset` gibi bir `ModeDefinition` yaz (modId, süre/limit, kural alanları, `maps`,
-`loadout`, `hudPrefab`), `GameCatalog.asset`'e ekle, oynanacak `MapDefinition`'ların
-`supportedModeIds`'ine yeni modId'yi koy ve **`Export Server Config`'i çalıştır** — atlanırsa
-`start_match` "harita bu modu desteklemiyor" diye sessizce reddedilir.
-`IGameMode`'a yeni kanca eklerken **varsayılan gövde** kullan (default interface method) ve
-**tüketicisi olmayan kancayı hiç ekleme**; skor yalnız `MatchDirector` skor defterinden yazılır
-(`AddScore` takım / `AddPlayerScore` bireysel).
-**Tur tabanlı mod** (ör. `tournament`): `Phase` enum'unu BÜYÜTME — turlar modun iç durumudur.
-Çekirdeğin üç komutu yeter: `TryPauseForMode(modeState)` · `SetModeState` · `TryStartRound()`
-(→ `Docs/Sistem-Ozeti.md` §3.8.2). ⚠️ Tur başında oyuncuyu **`RevivePlayerLocked` ile** canlandır
-(`ResetMatchStateLocked` istemciye haber vermez → ölüm ekranında donar) ve "canlanma yok" kuralını
-canlandırmanın tek kapısında kapat (`revive_request`).
-**Silahı mod dağıtan mod** (`weaponSource:"random"`, ör. FFA): sahnede ya da arenada **hiçbir iş
-yoktur**. `WeaponGranter` (`_Shared/Core/Combat/`) kendini önyükleyen kalıcı tekildir — kural
-`RandomGrant` **ve ortada kurulmuş bir maç varken** sahnedeki silahları gizler (⚠️ kapı yalnız
-"kaynak random mı" DEĞİLDİR: sahnelenen arena lobi profiliyle koşar ve orada tezgâhlar açık kalır —
-`random` + `fireWhilePaused` bileşimi "maç yok" demektir; taban şeritleri ONA AİT DEĞİL — onların
-kapısı takım kipidir, `BaseZoneVisibility`), grip'e basılı tutulan
-her elde `ModeDefinition.loadout`'tan rastgele bir silah tutturur (bırakınca yok olur, tekrar
-basınca yenisi gelir; şarjör değiştirme kapalıdır). Silahın eldeki YERİ `WD_*`'daki
-**stüdyoda yazılmış kavramadan** gelir, dönüşü ise her zaman kumandanınkidir (ana kabza için gösterge yoktur —
-silah zaten elde; çift elli silahta boş el ön kabzaya yaklaşınca ön kabza göstergesi belirir).
-⚠️ Sahneye bileşen KOYMA: tekil olmasının sebebi her yeni arenaya elle bir kurulum adımı
-eklememektir.
-**Yeni silah / hasar kaynağı** (mermi, balta, ok, bomba, tuzak): tüfeklerin kiti
-`Tools > VortexArena > Build > Configure All Build Elements` (Hepsini Yapılandır / Yalnız Senkronize
-Et — silah kiti her eşitlemede koşar) ile üretilir — `WeaponKitBuilder` tablosuna satır
-ekle (CS2 istatistikleri + ses profili + "Low Poly AR Weapon Pack 1" modeli — model üretimde
-OKUNMAZ, köken kaydıdır). ⚠️ **Bir satırın `PackPrefab`'ı ve `NetItemId`'si o satırdan
-AYRILMAZ** — pack modelleri jenerik adlı (`AR_B`…), hangisinin hangi gerçek silah olduğu gözle
-eşlendi; kimliği taşımak istiyorsan satırın geri kalanını taşı.
-**Saçmalı silah** = satıra `Pellets` yaz (XM1014 6, Nova 9): tek tetik çekişi o kadar ışın atar,
-`Damage` **saçma başınadır** ve isabet eden her saçma ayrı `hit_report` üretir. ⚠️ Menzil kimliğini
-`Range` DEĞİL `BaseSpread` taşır ve satıra ayrıca **düşük bir `Headshot`** yazılır (4× çarpan saçma
-BAŞINA uygulandığı için tek saçma anında öldürür); ⚠️ **CS'in saçmalı sayıları arenaya birebir
-kopyalanmaz** ve tablodaki koni açısı iki elle tutuşta yarıya iner — gerekçelerin tamamı
-`Docs/Sistem-Ozeti.md` §7, "saçmalının mesafe kimliği" maddesinde.
-Tek tek fişek dolduran silahta ayrıca `ReserveMode = "PoolRounds"` yaz (erken reload'da
-namludaki fişek yanmasın). `SpareMags` boş bırakılırsa varsayılan kullanılır.
-**Yeni kalibre** = `WeaponKitBuilder.CasingFamilies` sözlüğüne bir satır (kovan prefabı ilk koşuda
-pack'teki mermi modelinden üretilir); ⚠️ aile **görsel** bir ayrımdır, denge kolu değil.
-⚠️ **Ses klipleri bu tablodan GELMEZ ve araç onlara hiç dokunmaz** — beş klip alanının
-(`fireClips` · `magOutClip` · `magInClip` · `dryFireClip` · `pickupClip`) tek doğruluk kaynağı
-`WD_<Ad>.asset`'in Inspector'ıdır, klip oraya elle sürüklenir (gerekçe haptik alanlarıyla aynı:
-kulakla seçilen şey koda yazılmaz). Sonucu: **yeni silah sessiz doğar** — koşu sonunda
-"Ateş sesi ATANMAMIŞ silahlar" uyarısı onu listeler. ⚠️ **Silaha kendi reload sesi bağlanınca
-tablodaki `Reload` o klibin uzunluğuna çekilir** — tetiği açan tek şey `reloadTime`'dır, ses değil;
-ayrışırsa oyuncu "ses bitti ama sıkamıyorum" hisseder (gerekçe `Docs/Sistem-Ozeti.md` §7).
-⚠️ **Tek tek fişek dolduran silahta
-`perShellReloadAudio` işaretlenir** (o da Inspector'da, araç dokunmaz): `magOutClip` reload boyunca
-şarjör kapasitesi kadar kez çalar, yani oraya bağlanan klip TEK fişeğin sesi olmalıdır — tam reload
-klibi bağlanırsa ses kapasite kadar üst üste biner. ⚠️ Tablodaki `PitchBase`'in 1.00'dan sapması
-yalnız **ödünç klibi maskelemek** içindir; silaha kendi sesi bağlanınca 1.00'a geri alınır. Araç
-`_Shared/Arsenal/Data/WD_*.asset`'i üretir, **mevcut**
-`_Shared/Arsenal/Prefabs/WPN_*.prefab`'ı yerinde günceller ve
-**`_Shared/Data/Resources/WeaponCatalog.asset`**'i tazeler (RemoteShotFx `weaponId`→profil
-aramasını `Resources.Load` ile yapar — GameCatalog gibi klasöründen ÇIKARILMAZ).
-⚠️ **Araç WPN prefabını YOKTAN ÜRETMEZ** (şablondan kurma yolu silindi: `Muzzle`'ı `Model`'in
-altından köke alıyordu, oysa geri tepmenin nişanı da kaldırması `Muzzle`'ın `Model` ALTINDA
-kalmasına bağlı). Yeni gövde mevcut bir `WPN_*` kopyalanarak kurulur: `Model` altındaki pack
-modelini ve `definition`'ı değiştir, sonra aracı çalıştır. Ses/VFX/kovan
-kiti de aynı tablodan (`WeaponSpec`) gelir: silaha özgü ateş/reload/dry-fire klipleri
-(silah başına klasör: `Assets/Audio/Weapons/<Ad>/SFX_<Ad>_*`; birden çok silahın paylaştığı klip
-`Weapons/Shared/SFX_Shared_*`), namlu alevi (renk/boyut/ömür/koni açısı) + `MuzzleFlash`
-altında sub-emitter'lı namlu dumanı (`Smoke`), ve kalibreye göre (762x39/556x45) paylaşılan
-`Casing_*.prefab`'a bağlı `ShellEjector` (ateşte kovan fırlatan, `Weapon.Fired`'a abone bileşen —
-`Docs/Sistem-Ozeti.md` §4). ⚠️ **Kovanın çıkış noktası (`Eject`) elle ayarlanır ve araç onu
-TAŞIMAZ** — `Muzzle` ile aynı kural; yalnız hiç yoksa kaba bir başlangıçla üretilir (gerekçe
-`Docs/Sistem-Ozeti.md` §7). Gerekiyorsa
-`ModeDefinition.loadout`'a eklenir. Kökteki **İKİ** yakın-kavrama bileşeni araç tarafından korunur ve
-**filtresiz** bırakılır — `GrabInteractable` (kumanda hattı) ve `HandGrabInteractable` (el hattı;
-ikincisini araç üretir); araç `_interactorFilters` listesini her koşuda BOŞALTIR (kökte kavrama
-kapısı bileşeni YOKTUR ve eklenmez — eski soket bileşeni kaldırıldı, dolu bir listenin eksik girişi
-ISDK'nın `Start` denetiminde patlar ve silah kavranamaz olur).
-⚠️ **İkisi birden tutulur ve biri silinmez:** hangisinin koşacağını ISDK rig'i "el izleniyor mu"
-sorusuna göre seçiyor (`OVRManager.controllerDrivenHandPosesType`) — tek hat bırakmak o anahtarın
-her değişiminde silahı sessizce kavranamaz yapar → `Docs/Sistem-Ozeti.md` §7.
-⚠️ **`WPN_*` KÖKÜNE mesafeden kavrama GERİ EKLENMEZ** (araç `DistanceGrabInteractable` ve
-`DistanceHandGrabInteractable`'ı bilerek siler: silah çerçeveden seçilir, kök uzaktan kavranırsa
-çerçeve atlanır ve silah odanın öbür ucundan alınabilir olur →
-`Docs/Sistem-Ozeti.md` §7). Yasak yalnız kök içindir: **çerçeve prefabında (`VA_WeaponFrame`)
-mesafeden kavrama ZORUNLUDUR ve orada da İKİ hat birden durur** — silah oradan alınır.
-**Ön kabza SOKETİ (kapı + görsel) `Weapon`'ın kendisindedir** — ayrı bir bileşen/gizmo YOKTUR ve
-eklenmez: `Weapon.IsHandOnSecondaryGrip` (boş elin **kumanda anchor'ı** ön kabza kaydının
-etrafındaki `secondaryGripRadius` küresinin içinde mi — kayıt anchor uzayında olduğu için ölçülen
-nokta da anchor'dır, bilek DEĞİL) tek kuraldır; granter ikinci eli buna göre bağlar, oyuncunun
-gördüğü küre de **tam bu yarıçapla** çizilir (görsel = kabul hacmi; varsayılan 0.10 = 20 cm çap).
-Soketin **sanatı prefabdadır** (`WeaponCatalog.secondaryGripIndicatorPrefab`; varsayılan yarı saydam
-açık mavi küreyi silah kiti koşusu **yalnız yoksa** üretir — `_Shared/Arsenal/Prefabs/VA_GripSocket.prefab`
-+ `_Shared/Materials/M_GripSocket.mat` (`_Shared/Shaders/GripSocket.shader`) — ve kataloğa **yalnız
-alan boşsa** bağlar): sanatı değiştirmek = o prefabı/materyali düzenlemek ya da kataloğa başka bir
-prefab bağlamak, koda dokunulmaz. ⚠️ Küreyi **kod boyamaz, yalnız alfasını sürer**
-(`Material.color` → shader'da `[MainColor]`); süs (gürültü, tarama, nabız) materyalin işidir.
-⚠️ **Prefab 1 m çapında tasarlanır** — `Weapon` onu kabul yarıçapının iki katına ölçekler; sözleşme
-bozulursa görülen küre ile kabul hacmi ayrışır. Soket yalnız **tutulan çift elli silahta, ikinci el
-bağlanana kadar** ve yalnız yerel oyuncuda çizilir; ana kabzanın soketi yoktur.
-⚠️ **Ön kabza kaydı yazılmamış silahta soket ÇİZİLMEZ ve ikinci el BAĞLANMAZ**
-(`ItemDefinition.HasSecondaryGrip`; yazılmamış kayıt eşyanın köküne düşer, `Weapon` bir kez uyarır)
-— "küre ana elde çıkıyor / ikinci el tutmuyor" görüldüğünde bakılacak yer koddaki kapı değil o silahın
-`WD_*`'ındaki kayıttır; çare stüdyoda ön kabza ellerini yazmaktır.
-⚠️ **Çerçevenin el hattında `Hand Alignment` = `None`'dır ve öyle kalır** (varsayılan
-`AlignOnGrab`): çerçeve bir kavrama hedefi değil bir SEÇİM tetikleyicisidir, `AlignOnGrab`
-sentetik elin bileğini sahnedeki silaha kilitler ve oyuncu elini yerdeki silahta görür
-→ `Docs/Sistem-Ozeti.md` §7.
-⚠️ **Kavrama gözlük takmadan, STÜDYODA yazılır:** `Tools > VortexArena > Weapons > Kavrama Pozu
-Stüdyosu` → `WPN_*` prefabını **prefab kipinde** aç → *Ana Kabza Ellerini Oluştur* (+ TwoHand'de
-*Ön Kabza Ellerini Oluştur*) → **kumanda çerçevelerini** Scene View'da kabzaya TAŞI → **Kaydet**.
-Taşınan kök (`[VA El_*]`) kumandanın (anchor) çerçevesidir ve **yalnız TAŞINIR**: silahla hizalı
-tutulur (çevirsen de geri hizalanır), çünkü dönüşün oyunda karşılığı yoktur. Kökün altında iki
-KİLİTLİ görsel çocuk durur — Quest 3 kumanda modeli (kimlik pozda: oyunda anchor'ın altında tam
-böyle durur, kökü kumanda kabzada gerçekte tutulduğu yere gelecek biçimde taşı) ve ISDK hayalet eli
-(köke göre `HandGripConvention.AnchorToWrist` sabiti; sabit ölçülmemişse iskeletten tahmin — kayda
-girmez). ⚠️ **Çocukları TAŞIMA** (kilitli, kayıt kökten okunur).
-Kayıt `WD_*.asset`'e gider (`ItemGripPose`: **anchor'ın** eşyaya göre yerel KONUMU + parmak
-preset'i); prefaba HİÇBİR ŞEY yazılmaz. Eller sahnenin ayrı kökleridir (`[VA El_*]`, `DontSave`) —
-prefabın altına sürüklenmez; silah kiti koşusu kaçak eli siler.
-⚠️ **Silahı hiçbir elin DÖNÜŞÜ çevirmez** ve kayıt DÖNÜŞ TAŞIMAZ (tek elde `itemRot = anchor.rot`,
-`itemPos = anchor.pos + anchor.rot * (−kayıt)`) — kayda bir dönüş girerse stüdyoda kökü çeviren
-herkes oyunda silahı kumandadan saptırır. **İki elli tutuşta silah NİŞANLANIR**
-(`ItemGripSolver`): ana kavrama noktası her karede ana avucun üstünde kalır, silahın
-*ana kavrama → ön kabza* EKSENİ ikinci elin avucuna döner — yani ikinci el silahı **taşımaz,
-yalnız nişanlar**. ⚠️ Nişanın girdisi ikinci elin **YALNIZ AVUÇ KONUMUDUR**; o elin (ya da
-bileğin) dönüşü hiçbir yoldan silaha geçmez, roll her zaman ana kumandadan gelir. Ayarlanabilir
-bir "silah dönüşü" alanı da yoktur; silah elde yatık görünüyorsa bakılacak tek yer `Model`'in
-prefabtaki yerleşimidir.
-⚠️ **Sözleşme "silah ele göre"dir, "el silaha göre" DEĞİL:** ana elde eşya kumandaya asılır, elin
-bileği kilitlenmez (izlemeden/kumandadan gelir). Ön kabzada ikinci elin **görseli** sokete çekilir
-(`HandGripPoser`: kumanda `item ∘ kayıt` konumunda ve eşyayla hizalı, bilek onun anchor→bilek
-deltası ötesinde); bağın görünür sonuçları bununla birlikte üçtür — silahın o ele nişanlanması ve
-saçılım/geri tepme çarpanının düşmesi.
-⚠️ **Parmak duruşu SLIDER'LA YAZILMAZ, preset'ten seçilir** (`HandGripPreset`: `Idle` hafif açık ·
-`Firing` işaret tetikte · `Grip` sarma; varsayılan ana kabza=Firing, ön kabza=Grip; boş el=Idle).
-Elin Inspector'ındaki (`GripHandAuthoring`) açılır kutudan seçilir, Scene View'da anında görünür,
-slotla birlikte `WD_*`'a yazılır. Üç preset TEK kaynaktan sürülür (`HandGripPresets` — beş kıvrım
-oranı `HandPoseProfile`): stüdyodaki hayalet el, oyuncunun sentetik eli ve uzak avatarın parmakları
-aynı sayıları okur; eklem dönüşleri ISDK'nın varsayılan iskeletinden **ölçülür**, sabit yazılmaz.
-Yeni preset = enum'a SONA değer + `HandGripPresets`'e bir satır; eşya başına serbest parmak verisi
-YOKTUR ve eklenmez.
-⚠️ **Parmaklar HİÇBİR ZAMAN donanımdan sürülmez** (kumandanın tetiği/kabzası ya da el izlemesi bir
-parmağı kıpırdatmaz): her el her karede tek bir preset'tedir (boşta `Idle`, eşya tutarken slotun
-preset'i), beş parmak sentetik elde kilitlidir ve `JointFreedom.Free` bir parmak için bile geri
-gelmez. Preset'ler arası geçiş (silahı alınca kapanma, bırakınca açılma) tek süreyle yumuşatılır
-(`HandGripPresets.TransitionSeconds`), yerel el ve uzak avatar aynı süreyi kullanır.
-⚠️ **Kayıt EL BAŞINADIR** (`primaryGripRight/Left`, `secondaryGripRight/Left`): kabza simetrik
-olmadığı için iki elin kumandası silahın farklı yerlerine düşer. *Karşı Ele Aynala* yalnız
-BAŞLANGIÇTIR (eşyanın YZ düzlemine göre), son söz değil. Dördü de **aynı uzaydadır** (anchor'ın
-eşyaya göre yerel pozu, METRE ve ölçeksiz — `TransformPoint` KULLANILMAZ, `WPN_*` kökü 0.8
-ölçekli); okuma yolu eksik eli öteki elin kaydına düşürür.
-⚠️ **Kayıt da tel de ANCHOR uzayındadır** (§6.6) — silahın duruşu için hiçbir yerde delta ölçülmez
-(`ItemGripSolver` kaydı doğrudan okur) ve rig'i olmayan izleyici (admin) silahı oyuncuyla birebir
-aynı çizer. Anchor→bilek deltası (`ItemGripAuthority.ResolveAnchorToWrist` — canlı ölçüm
-`HandGripPoser` → yoksa `HandGripConvention.*AnchorToWrist` sabiti → yoksa kimlik) yalnız **görsel
-elin** işidir. Sabit **ölçülüp yapıştırılır**: `HandGripPoser` kararlı ölçüyü el başına bir kez
-loglar (editör Play'i ya da APK'da `adb logcat -s Unity`); iki tüketicisi vardır — stüdyodaki hayalet elin kumanda köküne göre çizildiği yer
-(editörde canlı ölçüm yok) ve rig'in veri akıtmadığı ilk karelerde ön kabza kilidi. Boş sabit
-KAYDI BOZMAZ, yalnız görsel eli gerçeğinden birkaç santim/derece kaydırır.
-⚠️ Kavrama için **ikinci bir işaretçi/alan AÇILMAZ** (prefaba grip düğümü, `Weapon`'a ikinci bir
-`Transform` alanı, Scene View tutamağı/gizmo'su): aynı kavramayı iki yerde tarif etmek ikisinin
-sessizce sapması demektir — ön kabzanın yeri de stüdyoda, kumanda çerçevesiyle yazılır. `WD_*`'daki
-`secondaryGripRadius` duruşun değil **ön kabza kapısının** ölçüsüdür (ana kabza için yarıçap YOKTUR).
-⚠️ Prefabın içinde el modeli DURMAZ ve kavrama poz düğümü BULUNMAZ (`Hands/Hand_*`, `GripPoses/*`;
-silah kiti koşusu ikisini de siler). Kavraması yazılmamış silahta el idle'da kalır;
-koşu sonunda eksikler listelenir.
-Çerçeve adımı elle iş istemez, araç her
-`WPN_*` köküne bir `VA_WeaponFrame` örneği koyar (idempotent). **Çözülme efekti de kurulum
-istemez:** araç aynı köke `SimpleWeaponDissolve` koyup `_Shared/Materials/DissolveEffect.mat`'i
-bağlar (yalnız alan BOŞSA — silaha özel materyal bağlanmışsa ezilmez, ikinci seçenek
-`VoronoiDissolveEffect`), silah ele çözülerek gelir; **bırakışta efekt YOKTUR**. ⚠️ Efektin
-**görünüm ayarları (kenar, desen) bileşende değil MATERYALDE** durur ve araç onlara dokunmaz;
-**süresi** ise araçtaki sabitten gelir ve her koşuda prefaba geri yazılır — kalıcı ayar prefabda
-değil `WeaponKitBuilder`'da değiştirilir. Aynı sebeple ⚠️ **`Grabbable._throwWhenUnselected` GERİ AÇILMAZ**
-(araç kapatır): silahın pozunu ISDK değil `ApplyCanonicalGrip` sürdüğü için bırakış hızı uydurmadır
-ve silah elden fırlar. **Silahı sahneye ELLE koyarsın** (`weaponSource:"weaponcanvas"` — TDM ·
-turnuva): yerleşim **arena kararıdır**, harita tasarlanırken yapılır ve bunu yapan bir bileşen
-YOKTUR (silahı üreten raf sistemi kaldırıldı, yerine ikinci bir üretici gelmez — sahnedeki örnek
-ile onu üreten liste iki ayrı doğruluk kaynağı olurdu). ⚠️ Silah sahneye **`WPN_*` prefab ÖRNEĞİ**
-olarak konur (kopyalanmaz, unpack edilmez) — kopya sahneye donar ve silah kitinde yapılan tek bir
-düzeltme arena sayısı kadar elle iş doğurur. Örnekleri bir `WeaponCanvas` prefabında toplayıp onu
-her sahneye `BaseZone` gibi bir örnek olarak koymak yerleşimi tek yerden düzeltilebilir kılar.
-⚠️ **Kural `VA_WeaponCanvas`'ın İÇİ için de geçerlidir** (kartların altındaki silahlar da prefab
-ÖRNEĞİDİR): orada unpack edilmiş bir kopya, kitin sonradan eklediği bileşenleri hiç almaz ve o
-canvas'ı kullanan sahnelerde silah bir gün sessizce alınamaz olur → `Docs/Sistem-Ozeti.md` §7.
-Tek satırlık denetim: `Weapon` bileşenini **doğrudan** serialize eden dosyalar yalnız
-`_Shared/Arsenal/Prefabs/WPN_*.prefab` olmalıdır.
-⚠️ **Bu kaynakta sahnede hangi silahın duracağını `ModeDefinition.loadout` DEĞİL arena belirler** —
-moda silah eklemek arenaları değiştirmez, yeni silah her arenaya tek tek konur; `loadout` yalnız
-`random` modlarında (FFA, lobi) okunur.
-Sahnedeki silah **çerçeve kaynağıdır**: alınmaz ve TÜKENMEZ, `WeaponFrame.maxGrabDistance`
-kadarından seçilince ele klonlanır (menzilin tavanı ISDK'nın 5 m'lik mesafe-kavrama konisidir);
-çerçeve görselini `WeaponFrame.isFrameVisible` ile **örnek başına** (sahneden sahneye) aç/kapat →
-`Docs/Gelistirici/Yemek-Kitabi.md`.
-**Sunucu tarafında iş YOKTUR** ve export
-gerekmez — sunucuda silah tablosu yok, hasarı (**bölge çarpanı** dahil) istemci hesaplayıp
-`hit_report.damage` ile bildirir, sunucu aynen uygular (§10.3); `weaponId` yalnız kill feed
-etiketi, doğrulanmaz. Bölge çarpanları `WeaponDefinition`'da (`GetZoneMultiplier`) ve CS2
-modelindedir: kafa 4× · karın+leğen 1.25× · bacak 0.75× · gövde ve **kollar** 1×.
-⚠️ **`HitZone`'a yeni değer SONA eklenir** (serialize ediliyor) ve `Body` sıfırda kalır —
-atanmamış kutu 1× çarpana düşer. Alan etkisi için etkilenen her hedefe bir `hit_report` yollanır. Denge
-sayıları istemcide (WeaponDefinition SO) yaşadığı için değişiklik APK build'i ister.
-Şarjör kuralı: boş şarjörde otomatik reload YOK; reload silahı **bel altına indirme jestiyle**
-başlar; `reserveMode=DiscardMagazine` (varsayılan) erken reload'da şarjörde kalan mermiyi YAKAR
-(`PoolRounds` = CS2 havuz alternatifi SO'dan seçilir). Verilen silahta (`random`) reload kapalıdır.
-⚠️ **Ağa bildirim TEK kapıdan yapılır: `ArenaCombat`** (`_Shared/Core/Combat/`, statik) —
-`ReportShot` · `ReportHit` · `ReportRaycastHit` · `ReportAreaHit` (alan etkisi = hedef başına bir
-`hit_report`) + `TraceShot` · `IsMuzzleBlocked` · `IsWeaponBlocked` · `TryGetTargetPlayerId` ·
-`GetHitZone` · `IsHeadshot` · `CanFire`.
-⚠️ **Hitscan ışını `TraceShot` ile atılır, elle `Physics.Raycast` ile DEĞİL:** engel kuralı
-(`Physics.Raycast` orijini içinde olduğu collider'ı hiç vurmaz) ve trigger elemesi orada duruyor;
-kendi ışınını yazan yeni hasar kaynağı ikisini de kaybeder. ⚠️ **Tetiği olan bir silah ayrıca
-`IsWeaponBlocked` ile kapatılır** (silahın çizilen gövdesinin yönlendirilmiş kutusu + namlu
-testleri) — değiyorken atış hiç olmaz (cephane gitmez, ses/alev oynamaz, ağa olay gitmez);
-`TraceShot`'un mermi yutan dalı yalnız tetiksiz kaynaklar için ikinci savunma hattıdır.
-⚠️ **Oyuncunun kendisi engeldeyken ateş kapısı `ArenaCombat.CanFire`'dadır**, silahta değil: bloğun
-içinde durup silahı dışarı uzatan oyuncunun silahı tertemiz boşluktadır. Protokol DTO'su kurma, arena
-uzayı dönüşümünü elle yazma, `ArenaClient.Send`'i doğrudan çağırma: bir vuruşu doğru bildirmek
-dört ayrı şeyi bilmeyi gerektiriyor (arena uzayı, **yön bir nokta değildir**, `RemoteHitBox` ile
-hedef çözme, hasarı istemcinin belirlemesi) ve `Weapon` da bu kapıyı kullanıyor. Reçeteler:
-`Docs/Gelistirici/Yemek-Kitabi.md`.
-İçerik kataloğu: **`_Shared/Data/Resources/GameCatalog.asset`**
-(ModeDefinition + MapDefinition listesi) — admin tercihler panelinin mod/harita seçicisi bunu
-`Resources.Load<GameCatalog>("GameCatalog")` ile okur, bu yüzden `Resources/` altında kalmalı.
-**Kar/hava efekti (başka arenaya):** karlı bir arena kutusunun `Prefabs/FX_SnowStorm.prefab`'ını
-sahneye oynanan alanın ortasına bırak (`ArenaBoundary` orijindeyse (0,0,0); bölgeye taşınmışsa
-o bölgenin ortası); kendine yeter (`Snow_C_NearField` üstündeki
-`WeatherVolumeFollow` hedefi boşsa `Camera.main`'i bulur). Arena 12×12 değilse `Snow_A/B/E`
-shape scale'lerini arena boyutu + ~3 m payla ölçekle — geniş kutu bütçeyi görünmeyen alana harcar.
+**Bağlayıcı yasaklar** (gerekçeler `Docs/Sistem-Ozeti.md` §7):
 
-**Editor araçları** (`VortexArena.Core.Editor`, `VortexArena.Net.Editor`, `VortexArena.App.Editor`
-— yalnız Editor). Ne yaptıklarının ayrıntısı `Docs/Sistem-Ozeti.md` §4'te; burada **hangi işi
-hangi araç yapar** ve bağlayıcı yasaklar:
+- ⚠️ **Ölçekleme YOKTUR ve eklenmez** — her işletmenin alanı farklı ölçüde; orantılı ölçekleme
+  yalancı-doğru üretir. ⚠️ Boyut dosyasında **taban da kolon da TEK halkadır**, birleştirme (union)
+  yoktur; `wallHeight` alanı YOKTUR. ⚠️ Ölçü **ikinci bir yere yazılmaz**: dosya MEKAN başınadır,
+  mekanın tüm sahneleri (arenalar + lobi) aynı dosyayı gösterir.
+- ⚠️ **Kalibrasyon işaretçisi TEKTİR ve maketin altındadır** (`anchor_a`/`anchor_b`); sahneye elle
+  ikinci bir işaretçi konmaz, küpler elle taşınmaz (ölçü **dosyaya** yazılır). ⚠️ İşaretçinin
+  transform konumu **zemin noktasıdır**, telafi eklenmez. ⚠️ Sıra **A → B**'dir ve geometrik olarak
+  doğrulanamaz (karıştırılırsa arena 180° döner); iki nokta arası en az
+  `ArenaDimensions.MinCalibrationSpan` metre olmalıdır.
+- ⚠️ **Maketin ölçeği değiştirilmez** ve ölçü dünya eksenli seçim kutusundan okunmaz — okunacağı
+  yer boyut dosyasıdır. Maket `ArenaBoundary`'nin ALTINA üretilir.
+- **İç engelin collider'ı `Obstacle` layer'ına (10) konur.** Sözleşme: *kafa* içeri girerse ihlaldir
+  (karartma → 3 sn sonra can erimesi → 8. sn ölüm), *kafa/el/silah* değiyorsa tetik ölür.
+  ⚠️ Ceza yalnız kafayı, ateş kapısı kafa+el+silahı yargılar; oran (gövde kütlesi) kuralı YOKTUR
+  (`Docs/ArenaNet-Protokol.md` §10.9). ⚠️ Bu layer'daki collider **KONVEKS olmalı**. ⚠️ Dış duvar,
+  zemin ve tavan bu layer'a KONMAZ. ⚠️ İkinci bir "mantık hacmi" collider'ı EKLENMEZ.
+  ⚠️ Layer 11 (`Breakable`) ve 12 (`PlayerHitbox`) sonraki işlere **rezervedir**.
+  `ArenaObstacle` (`Core/Arena/`) ⚠️ collider değildir, fizik yapmaz.
+- ⚠️ **Arenanın duvarları environment sanatına aittir** ve fiziksel sınırla **çakışmalıdır**.
+- ⚠️ **`lobby` kayıtlı bir mod DEĞİLDİR** — sunucuya `IGameMode` olarak eklenmez, admin mod
+  seçicisinde görünmez. **Hasarı kapatan şey fazdır** (`hit_report` yalnız `playing`) — o kapıya
+  dokunma; **ateşe izin veren şey moddur** (`rules.fireWhilePaused`).
+- ⚠️ **`FriendlyFire` `ModeRules`'a YAZILMAZ** — operatörün canlı anahtarıdır
+  (`set_friendly_fire`), değerini `MatchDirector.ApplyRulesLocked` damgalar.
+- ⚠️ **İstemcide `if (modeId == …)` zinciri YAZILMAZ** — kural `load_match.rules` ile gelir ve
+  `ModeRuntime`'dan okunur. ⚠️ `IGameMode`'a kanca eklerken **varsayılan gövde** kullan ve
+  **tüketicisi olmayan kancayı hiç ekleme**; skor yalnız `MatchDirector` defterinden yazılır.
+- ⚠️ **Tur tabanlı modda `Phase` enum'unu BÜYÜTME** (turlar modun iç durumudur); tur başında oyuncu
+  **`RevivePlayerLocked` ile** canlandırılır (`ResetMatchStateLocked` istemciye haber vermez).
+- ⚠️ **`WeaponGranter` sahneye KOYULMAZ** (kendini önyükleyen tekil).
+- ⚠️ **Silah sahneye `WPN_*` prefab ÖRNEĞİ olarak konur** — kopyalanmaz, unpack edilmez; kural
+  `VA_WeaponCanvas`'ın İÇİ için de geçerlidir. Tek satırlık denetim: `Weapon` bileşenini doğrudan
+  serialize eden dosyalar yalnız `_Shared/Arsenal/Prefabs/WPN_*.prefab` olmalıdır.
+  ⚠️ Sahnede hangi silahın duracağını `ModeDefinition.loadout` DEĞİL **arena** belirler
+  (`loadout` yalnız `random` modlarında okunur).
+- ⚠️ **`WPN_*` KÖKÜNE mesafeden kavrama GERİ EKLENMEZ** (`DistanceGrabInteractable` /
+  `DistanceHandGrabInteractable` — araç bilerek siler). Yasak yalnız kök içindir: **çerçeve
+  prefabında (`VA_WeaponFrame`) mesafeden kavrama ZORUNLUDUR.** ⚠️ Kökteki İKİ yakın-kavrama hattı
+  (`GrabInteractable` + `HandGrabInteractable`) **birlikte tutulur, biri silinmez** ve filtresiz
+  bırakılır. ⚠️ Çerçevenin el hattında `Hand Alignment` = `None`'dır ve öyle kalır.
+  ⚠️ **`Grabbable._throwWhenUnselected` GERİ AÇILMAZ.**
+- ⚠️ **Kavrama için ikinci bir işaretçi/alan AÇILMAZ** (prefaba grip düğümü, `Weapon`'a ikinci
+  `Transform`, Scene View gizmo'su): kayıt yalnız `WD_*`'a yazılır, prefaba HİÇBİR ŞEY yazılmaz.
+  ⚠️ Kayıt **DÖNÜŞ TAŞIMAZ** ve el başınadır; eller prefaba GİRMEZ.
+  ⚠️ **Parmak duruşu slider'la yazılmaz, preset'ten seçilir** ve **hiçbir zaman donanımdan
+  sürülmez**; eşya başına serbest parmak verisi YOKTUR (yeni preset = enum'a SONA değer +
+  `HandGripPresets`'e bir satır).
+- ⚠️ **Silah ses klipleri `WeaponKitBuilder` tablosundan GELMEZ** — tek doğruluk kaynağı
+  `WD_*.asset`'in Inspector'ıdır (klip elle sürüklenir). ⚠️ Silaha kendi reload sesi bağlanınca
+  tablodaki `Reload` o klibin uzunluğuna çekilir. ⚠️ Tek tek fişek dolduran silahta
+  `perShellReloadAudio` işaretlenir ve `magOutClip` TEK fişeğin sesi olur (+ tabloya
+  `ReserveMode = "PoolRounds"`). ⚠️ `PitchBase`'in 1.00'dan sapması yalnız ödünç klibi maskeler.
+- ⚠️ **`Muzzle` ve `Eject` elle ayarlanır, araç onları TAŞIMAZ**; araç `WPN_*` prefabını yoktan
+  ÜRETMEZ (yeni gövde mevcut bir `WPN_*` kopyalanarak kurulur).
+- ⚠️ **Saçmalı silahta menzil kimliğini `Range` DEĞİL `BaseSpread` taşır** (+ düşük bir `Headshot`);
+  CS'in saçmalı sayıları arenaya birebir kopyalanmaz.
+- ⚠️ **Silah için sunucu tarafında iş YOKTUR ve export gerekmez** — hasarı (bölge çarpanı dahil)
+  istemci hesaplar, `weaponId` yalnız kill feed etiketidir. Denge sayıları istemcide yaşadığı için
+  değişiklik APK build'i ister.
+- ⚠️ **Sahneye ses objesi KOYMA** ve klibi ikinci bir yere yazma; ortam klipleri
+  `Assets/Audio/Ambience/` altında ve **`Streaming`** import'lu olur.
+
+## Editor araçları
+
+`VortexArena.Core.Editor` · `VortexArena.Net.Editor` · `VortexArena.App.Editor` (yalnız Editor).
+Ne yaptıklarının ayrıntısı `Docs/Sistem-Ozeti.md` §4'te.
 
 | Araç | Ne zaman |
 |---|---|
-| `Tools > VortexArena > Build > Configure All Build Elements` | Sahne hazır → **Hepsini Yapılandır**: aktif sahnenin `MapDefinition`'ını yazar, sonra `Venues/*/Scenes/*/` taramasıyla `GameCatalog` + dolu `ModeDefinition.maps` + Build Settings + `maps.json`'ı EŞİTLER (eksik = uyarı, fazla/ölü kayıt = silinir; `Boot.unity` index 0'da, mekan-dışı sahneler dokunulmadan kalır). Arena silindi/taşındı → **Yalnız Senkronize Et** (sahne açık olmasa da koşar). ⚠️ Ayrı "Arena Id" alanı YOKTUR: MapDefinition'ın adı sahne adıdır. **Hazırlık** bölümü build öncesi denetimleri gösterir (yalnız okur) ve aşağıdaki araçları tek tıkla çalıştırır. ⚠️ Aynı eşitleme **silah kitini** (`WeaponKitBuilder`: `WD_*` asset'leri, `WPN_*` bağları + temizliği, FX/ön kabza göstergesi, `WeaponCatalog`) ve **net eşya kataloğunu** (`netItemId` doğrulaması + `NetItemCatalog.asset`) da koşar — idempotent; ayrı bir menü öğesi çalıştırılması unutulan bir araç olurdu ve sonucu sahada "silah kavranmıyor" diye çıkardı. Hazırlık'ta kalan ✗ **insan adımıdır** (kavraması yazılmamış / ateş sesi atanmamış silah, atanmamış `netItemId`) |
-| `… > Arena > Template Temellerini Yükle` | Yeni/boş sahneye altyapı prefab ÖRNEKLERİ (`VA_ArenaBoundary`, `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı `VA_ModeHud`/taban bölgeleri) + kalibratör/muhafaza alanlarının rig'e bağlanması + boyut dosyası bağlama. İdempotent. ⚠️ Kalibrasyon işaretçisi KOYMAZ — onlar maketle gelir |
-| `… > Arena > JSON'dan DimensionMesh Üret` | Mekanın boyut JSON'undan ölçü maketi (taban + kolonlar + kalibrasyon işaretçileri `anchor_a`/`anchor_b`). **`ArenaBoundary`'nin altına, yerel-kimlikte** kurar (muhafaza yoksa sahne köküne, dünya orijininde ve dönüşsüz). İdempotent. ⚠️ Her arenada ZORUNLU adım: sahnenin kalibrasyon işaretçileri burada üretilir |
-| `… > Arena > DimensionMesh'i JSON'a Çevir` | Maketin köşeleri/kalibrasyon işaretçileri sahnede düzeltildi → aynı boyut dosyasının ÜSTÜNE yazar (hedefi maketin kendisi söyler). İşaretçi yoksa dosyadaki `calibration` KORUNUR |
-| `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → `Obstacle` layer'ındaki konveks olmayan collider'ları, trigger'ları, collider'sız damgalı objeleri ve **görünen yüzeyden şişkin** collider'ları (içbükey mesh convex işaretlenmiş → oyuncu boşlukta ceza alır) raporlar. ⚠️ Hiçbir şeyi düzeltmez; iki tespit de sessizce yanlış ceza ürettiği için bu tarama sahne kaydedilmeden koşturulur |
-| `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanlarını kurar: **iki uyarı yazısı** (engelin içi + alanın dışı) + hasar vinyeti (`CenterEyeAnchor` altında, yani kafaya kilitli). İdempotent, **tek seferlik** — rig tüm arenalarda örnek olduğu için her arenaya birden gider. ⚠️ Uyarı yazısının **yeri, boyu ve fontu** buradan gelir: prefabta elle kaydırılan/büyütülen bir örnek her koşuda geri yazılır, ayar `HmdOverlayBuilder` sabitlerinde değiştirilir. ⚠️ Vinyetin materyalini araç ÜRETİR (shader GUID'i import öncesi bilinemez); çalıştırılmadıkça karartma çalışır ama yazı/vinyet hiç çizilmez |
-| `Tools > VortexArena > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırıyor) |
-| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / elin silahı nasıl sardığı **gözlüksüz** denetlenecek. Akış **prefab kipinde**: `WPN_*`'ı prefab kipinde aç → **Ana/Ön Kabza Ellerini Oluştur** (sağ+sol) → kumanda çerçevelerini kabzalara TAŞI → elin Inspector'ından **parmak preset'ini** seç (Idle · Firing · Grip) → gerekirse **Karşı Ele Aynala** → **Kaydet**. Kök = **kumanda (anchor)** çerçevesi (gizmo: mavi ok = kumandanın ilerisi), altında kilitli Quest 3 kumanda modeli + ISDK hayalet eli; kayıt anchor'ın eşyaya göre KONUMU + preset, doğrudan `WD_*.asset`'e; **prefaba hiçbir şey yazılmaz** (poz düğümü yok). ⚠️ Kök YALNIZ TAŞINIR — silahla hizalı tutulur, çevirmenin oyunda karşılığı yoktur (silah her zaman kumandayla hizalı); ön kabzada yalnız elin görseli sokete yapışır. ⚠️ Eller prefaba GİRMEZ (stage sahnesinin ayrı kökleri, `DontSave`) ve Play'e girerken / stage kapanınca / sahne değişince silinir |
-| `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takımın gövdesini kurar: model ÖRNEĞİ (karakterin KARDEŞİ) + `SkeletonPoseMirror` bağları + `redBodyRoot`. İki FBX'in **bind** pozundan kalça referanslarını ve `heightCalibration`'ı (iskelet kolonu oranı) hesaplayıp yazar — bu yüzden ölçü sabit olarak koda YAZILMAZ. İdempotent. Model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak (aynı fileID gerekçesi). ⚠️ Çalıştırılmadıkça davranış eskisi gibi: herkes tek gövdeyle çizilir |
-| `… > Audio > Mod Sesleri` | Moda/haritaya göre değişen duyuru sesi eklenecek/değiştirilecek → `ModeAudioRegistry.asset`'i seçer (yoksa oluşturur). ⚠️ Düzenleme yeri **Inspector**'dır, menü yalnız kaydı bulur; mod ve harita orada **katalogdan seçilir** (elle yazılan ad kuralı sessizce eşleşmez hâle getirir) |
-| `… > Development > Dev` (`Ctrl+Alt+R`) | Rol seçimi (**player · admin**), hedef seçimi, Play başlangıcı, **sunucusuz sandbox** (sunucu/admin/kalibrasyon olmadan silah denemek). ⚠️ Silah kavraması bu pencerenin işi DEĞİLDİR — o iş prefab kipinde, `Kavrama Pozu Stüdyosu`nda yapılır |
+| `Tools > VortexArena > Build > Configure All Build Elements` | Sahne hazır → **Hepsini Yapılandır** (aktif sahnenin `MapDefinition`'ı + `GameCatalog` + `ModeDefinition.maps` + Build Settings + `maps.json` + **silah kiti** + **net eşya kataloğu**, tek geçişte, idempotent). Arena silindi/taşındı → **Yalnız Senkronize Et**. **Hazırlık** bölümü build öncesi denetimleri gösterir (yalnız okur). ⚠️ Ayrı "Arena Id" alanı YOKTUR. ⚠️ Hazırlık'ta kalan ✗ **insan adımıdır** |
+| `… > Arena > Template Temellerini Yükle` | Yeni/boş sahneye altyapı prefab ÖRNEKLERİ + rig bağları + boyut dosyası bağlama. İdempotent. ⚠️ Kalibrasyon işaretçisi KOYMAZ — onlar maketle gelir |
+| `… > Arena > JSON'dan DimensionMesh Üret` | Boyut JSON'undan ölçü maketi + kalibrasyon işaretçileri. ⚠️ Her arenada ZORUNLU adım |
+| `… > Arena > DimensionMesh'i JSON'a Çevir` | Maket sahnede düzeltildi → aynı boyut dosyasının ÜSTÜNE yazar. İşaretçi yoksa `calibration` KORUNUR |
+| `… > Arena > Engel Hacimlerini Denetle` | Sahneye iç engel eklendi/layer'ı değişti → konveks olmayan/trigger/collider'sız ve **görünen yüzeyden şişkin** collider'ları raporlar. ⚠️ Hiçbir şeyi düzeltmez; sahne kaydedilmeden koştur |
+| `… > Arena > HMD Katmanlarını Kur` | Rig prefabına ekran katmanları (iki uyarı yazısı + hasar vinyeti). **Tek seferlik**, tüm arenalara birden gider. ⚠️ Yazının yeri/boyu/fontu `HmdOverlayBuilder` sabitlerinden gelir, prefabta elle kaydırılan örnek geri yazılır. ⚠️ Çalıştırılmadıkça yazı/vinyet hiç çizilmez |
+| `… > Server > Export Server Config` | Yalnız `maps.json` tazelenecekse (`Configure All Build Elements` bunu zaten çağırır) |
+| `… > Weapons > Kavrama Pozu Stüdyosu` | Silahın kavraması yazılacak / gözlüksüz denetlenecek. Akış **prefab kipinde**. ⚠️ Kök YALNIZ TAŞINIR, çocukları taşınmaz; kayıt `WD_*`'a gider, prefaba hiçbir şey yazılmaz. ⚠️ Eller prefaba GİRMEZ |
+| `… > Avatars > Takım Gövdesini Kur` | `RemoteAvatar.prefab`'a KIRMIZI takım gövdesi (model örneği + `SkeletonPoseMirror` + `redBodyRoot`; ölçüler bind pozundan hesaplanır, koda yazılmaz). İdempotent; model değiştirmek = araçtaki yol sabitini değiştirip tekrar çalıştırmak |
+| `… > Audio > Mod Sesleri` | Moda/haritaya göre değişen duyuru sesi → `ModeAudioRegistry.asset`'i seçer. ⚠️ Düzenleme yeri **Inspector**'dır; mod ve harita orada **katalogdan seçilir** |
+| `… > Development > Dev` (`Ctrl+Alt+R`) | Rol/hedef seçimi, Play başlangıcı, **sunucusuz sandbox**. ⚠️ Silah kavraması bu pencerenin işi DEĞİLDİR |
 | `GameObject > VortexArena > Network Parent` · `Arena Roof` | Sahneye ilgili bileşeni + kurulumunu ekler |
-| `PlayerBuildTool.BuildWindowsAdmin` · `…BuildQuestPlayer` | Menü değil — batch-mode `-executeMethod` girişleri (`deploy-admin-game.bat` / `deploy-player-apk.bat` çağırır) |
+| `PlayerBuildTool.BuildWindowsAdmin` · `…BuildQuestPlayer` | Menü değil — batch-mode `-executeMethod` girişleri |
 
 - ⚠️ **`maps.json` elle düzenlenmez** — export ezer. Tek doğruluk kaynağı Unity SO'larıdır.
-- ⚠️ **Sunucu editörden YÖNETİLMEZ** — dev penceresinin sunucuyla hiç işi yoktur (başlatmaz,
-  durdurmaz, derlemez); sunucu her zaman elle çalıştırılıp elle kapatılır, derleme `dotnet build`
-  ya da `scripts\deploy-server.bat` ile yapılır.
-- ⚠️ Süreç başlatırken **asla `dotnet run`** (yetim süreç portu tutar) ve **çıktıyı borulama**
-  (okunmayan boru süreci kilitler) — gerekçeler `Docs/Sistem-Ozeti.md` §7 tuzaklar listesinde.
+- ⚠️ **Sunucu editörden YÖNETİLMEZ** — dev penceresi sunucuyu başlatmaz/durdurmaz/derlemez.
+- ⚠️ Süreç başlatırken **asla `dotnet run`** ve **çıktıyı borulama**.
 
-**Dağıtım:** `scripts\deploy-admin-game.bat` (Windows admin) · `deploy-player-apk.bat`
-(Quest oyuncu APK'sı) · `deploy-server.bat` · `deploy-launcher.bat` ·
-`deploy_android_updater.bat`
-(hepsi çift tıklanabilir; otomasyonda `--no-pause` / `VORTEX_NO_PAUSE=1`).
-OTA güncelleme akışı (updater + sunucudaki yayın ucu): `updater/README.md`.
-⚠️ **Her iki Unity build'i için editör kapalı olmalı** (batch-mode proje kilidine takılır; betik
-bunu zorlamaz, takılırsa elle iptal et). Sunucu ve launcher `dotnet publish` ile self-contained
-üretilir — tek ön koşul .NET 10 SDK'dır.
-⚠️ **Hedef platform betikte SABİTTİR, aktif platformdan türetilmez** — her betik Unity'yi kendi
-hedefiyle başlatır (`-buildTarget Win64` / `Android`) ve platformu build sonunda geri almaz.
-Aktif platform hedefe eşit değilse o koşu tam reimport demektir (20-40 dk). İki build birbirinin
-cache'ini ısıtmaz (shader/asset/script cache'i platform başınadır) → `Docs/Sistem-Ozeti.md` §7.
-⚠️ **İki Unity build'i AYNI sahne listesini kullanır** (Build Settings); platforma göre ayrı liste
-tutma — bir arenayı admin bilip oyuncu bilmezse `start_match` sessizce reddedilir.
-⚠️ **Yeni geliştirici makinesinde bir kez `scripts\defender-exclusions.cmd`** (yönetici, projeyi
-ilk açmadan önce): Defender'ın gerçek zamanlı koruması IL2CPP/`Library` dosya trafiğinin önünde
-kuyruk oluşturur. Dışlama listesi betikten TÜRETİLİR — elle yol ekleme, gerekiyorsa `-ExtraPath`
-geç; geri alma `-Remove`. ⚠️ Dışlanan klasöre indirme yapılmaz (oralar artık taranmıyor).
-Betik yazım tuzakları, aşama izleyici (`watch-unity-build.ps1`) ve Dev Drive alternatifi:
-`scripts/README.md`. Çıktı yerleşimi: `deploy/README.md`.
+## Dağıtım
+
+`scripts\deploy-admin-game.bat` (Windows admin) · `deploy-player-apk.bat` (Quest oyuncu APK'sı) ·
+`deploy-server.bat` · `deploy-launcher.bat` · `deploy_android_updater.bat` (hepsi çift
+tıklanabilir; otomasyonda `--no-pause` / `VORTEX_NO_PAUSE=1`). Ayrıntı: `scripts/README.md` ·
+`deploy/README.md` · OTA akışı `updater/README.md`.
+
+- ⚠️ **Her iki Unity build'i için editör kapalı olmalı** (batch-mode proje kilidine takılır).
+- ⚠️ **Hedef platform betikte SABİTTİR**, aktif platformdan türetilmez ve build sonunda geri
+  alınmaz; aktif platform hedefe eşit değilse o koşu tam reimport demektir (20-40 dk).
+- ⚠️ **İki Unity build'i AYNI sahne listesini kullanır** — platforma göre ayrı liste tutma.
+- ⚠️ **Yeni geliştirici makinesinde bir kez `scripts\defender-exclusions.cmd`** (yönetici, projeyi
+  ilk açmadan önce). Dışlama listesi betikten TÜRETİLİR — elle yol ekleme (`-ExtraPath` geç).
+  ⚠️ Dışlanan klasöre indirme yapılmaz.

@@ -9,82 +9,61 @@ using Random = UnityEngine.Random;
 
 namespace VortexArena.Core.Combat
 {
-    /// <summary>
-    /// Tutulabilir hitscan VR silahı: dünyada durur (ISDK Grabbable + GrabInteractable),
-    /// yalnız tutulurken ateş eder. Tetik, silahı FİİLEN tutan ANA elin kontrolcüsünden
-    /// okunur (Grabbable pointer olayından el çözülür; çözülemezse Input System
-    /// "Player/Attack" editör fallback'i). İki elle tutuş saçılım ve geri tepmeyi
-    /// çarpanla düşürür; geri tepme <see cref="ModelPivot"/>'a uygulanır (kök transformu
-    /// kanonik kavrama sürdüğü için onunla yarışmaz).
-    /// <para>
-    /// <b>KAVRAMA KANONİKTİR</b> (§6.6): silah tutulduğu sürece kökü ana elin anchor'ından +
-    /// tanımdaki <b>stüdyoda yazılmış</b> kavrama konumundan sürülür
-    /// (<see cref="ItemDefinition.PrimaryGripPosition(bool)"/>); <b>tek elde dönüşü ana kumandanın
-    /// dönüşüdür</b> — kayıt dönüş taşımaz — iki elde ise ikinci elin <b>konumu</b> silahı nişanlar
-    /// (<see cref="LateUpdate"/>, <see cref="ItemGripSolver"/>). ISDK'nın <c>*GrabFreeTransformer</c>'ları bu yüzden
-    /// <c>WPN_*</c> prefablarından kaldırıldı: kavramanın ALGILANMASI Grabbable/GrabInteractable'da,
-    /// silahı TAŞIMA işi burada. Gerekçe ağdadır — duruş telde gitmez, uzak taraf silahı "elin pozu ×
-    /// sabit kavrama ofseti" olarak çizer; serbest kavrama (keyfi ofset) o eşitliği bozar ve namlusundan
-    /// ters tutulan bir AK karşı tarafta düzgün tutuluyor görünürdü.
-    /// </para>
-    /// <para>
-    /// Tüm denge/his/ses değerleri <see cref="WeaponDefinition"/>'dan gelir (ZORUNLU);
-    /// hasar istemci-otoriterdir: headshot çarpanı dahil burada hesaplanır ve
-    /// <see cref="ArenaCombat"/> üzerinden bildirilir (protokol §10.3). Ağa hiçbir mesaj
-    /// doğrudan yazılmaz — tek kapı ArenaCombat'tır.
-    /// </para>
-    /// <para>
-    /// Şarjör bitince otomatik reload YOKTUR — dolum <see cref="TryStartReload"/> ile
-    /// bilinçli başlatılır (ör. <see cref="WeaponReloadGesture"/>'ın bel-altı jesti). Rezerv
-    /// muhasebesi <see cref="WeaponReserveMode"/>'a göre yürür; reload silah bırakılsa
-    /// da tamamlanır. Şarjör seslerini bu sınıf ÇALMAZ (WeaponAnimator zaman çizgisi).
-    /// </para>
-    /// <para>
-    /// İKİNCİ TUTUŞ YOLU — <b>verilen silah</b> (<see cref="GrantTo"/>): silah ISDK kavraması hiç
-    /// işletilmeden, doğrudan bir kumandaya bildirilerek tutulur. İki türü vardır ve farkları
-    /// <see cref="WeaponGrantKind"/>'dadır:
-    /// <list type="bullet">
-    /// <item><b>Disposable</b> (§10.5 <c>weaponSource:"random"</c>): tanım gereği tutuluyordur ve
-    /// reload KAPALIDIR.</item>
-    /// <item><b>Persistent</b> (çerçeveden seçilen silah, <see cref="WeaponFrame"/>): reload açıktır
-    /// ve rezervi vardır.</item>
-    /// </list>
-    /// İki türde de örnek <see cref="WeaponGranter"/>'ın DDOL kökünün altında park eder (el
-    /// anchor'ının ÇOCUĞU DEĞİLDİR) ve pozu her karede kanonik kavramayla sürülür; ikinci el ön
-    /// kabzayı tutabilir (<see cref="SecondaryHand"/>).
-    /// </para>
-    /// <para>
-    /// <b>ÖN KABZA kapısı ve göstergesi de bu sınıftadır</b> — ayrı bir bileşen YOKTUR:
-    /// <see cref="IsHandOnSecondaryGrip"/> "bu elin kumandası ön kabza soketinin (kabul küresinin) içinde
-    /// mi" sorusunun tek cevabıdır (granter ikinci eli buna göre bağlar),
-    /// <see cref="TickSecondaryGripIndicator"/> aynı küreyi katalogdaki soket prefabıyla çizer.
-    /// </para>
-    /// </summary>
+    /// <summary>Holdable hitscan VR weapon: sits in the world (ISDK Grabbable + GrabInteractable)
+    /// and fires only while held. The trigger is read from the MAIN hand's controller (resolved
+    /// from the Grabbable pointer event; falling back to the Input System "Player/Attack" action in
+    /// the Editor). A two-handed hold scales spread and recoil down; recoil is applied to
+    /// <see cref="ModelPivot"/>, so it does not race the canonical grip driving the root.
+    /// <para>THE GRIP IS CANONICAL (§6.6): while held, the root is driven from the main hand anchor
+    /// plus the studio-authored grip position
+    /// (<see cref="ItemDefinition.PrimaryGripPosition(bool)"/>); one-handed the rotation IS the
+    /// main controller's (the record carries no rotation), two-handed the second hand's POSITION
+    /// aims the weapon (<see cref="LateUpdate"/>, <see cref="ItemGripSolver"/>). ISDK's
+    /// <c>*GrabFreeTransformer</c>s are therefore removed from <c>WPN_*</c> prefabs: grab SENSING
+    /// stays in Grabbable/GrabInteractable, CARRYING the weapon happens here. The reason is the
+    /// network — pose does not travel, so the remote side draws the weapon as "hand pose × fixed
+    /// grip offset"; a free grab breaks that equality and a rifle held by the barrel would look
+    /// correctly held on the other screen.</para>
+    /// <para>All balance/feel/audio values come from <see cref="WeaponDefinition"/> (MANDATORY).
+    /// Damage is client-authoritative: zone multiplier included, computed here and reported through
+    /// <see cref="ArenaCombat"/> (§10.3). No message is ever written to the network directly —
+    /// ArenaCombat is the only gate.</para>
+    /// <para>No auto-reload on an empty magazine: reloading starts deliberately via
+    /// <see cref="TryStartReload"/> (e.g. <see cref="WeaponReloadGesture"/>'s below-the-belt
+    /// gesture). Reserve accounting follows <see cref="WeaponReserveMode"/> and a reload completes
+    /// even if the weapon is dropped. This class does NOT play magazine sounds (WeaponAnimator
+    /// does).</para>
+    /// <para>SECOND HOLD PATH — a GRANTED weapon (<see cref="GrantTo"/>): held by telling a
+    /// controller directly, with ISDK grabbing never involved. Two kinds
+    /// (<see cref="WeaponGrantKind"/>): <b>Disposable</b> (§10.5 <c>weaponSource:"random"</c>) is
+    /// held by definition and has reload DISABLED; <b>Persistent</b> (selected from a
+    /// <see cref="WeaponFrame"/>) has reload and a reserve. In both cases the instance parks under
+    /// <see cref="WeaponGranter"/>'s DDOL root (NEVER as a child of the hand anchor) and its pose
+    /// is driven every frame by the canonical grip; a second hand may take the front grip
+    /// (<see cref="SecondaryHand"/>).</para>
+    /// <para>THE FRONT-GRIP gate and its indicator live in this class — there is no separate
+    /// component: <see cref="IsHandOnSecondaryGrip"/> is the single answer to "is this hand's
+    /// controller inside the socket", and <see cref="TickSecondaryGripIndicator"/> draws that same
+    /// sphere from the catalog prefab.</para></summary>
     public class Weapon : MonoBehaviour
     {
-        // Analog tetik histerezisi: eşik çevresindeki titreme tek basışı çift saymasın.
+        // Analog trigger hysteresis: jitter around the threshold must not double-count a press.
         private const float TriggerPressThreshold = 0.55f;
         private const float TriggerReleaseThreshold = 0.35f;
 
-        /// <summary>Tıkalı namlu geri bildiriminin en kısa tekrar aralığı (sn).</summary>
+        /// <summary>Minimum repeat interval of the blocked-muzzle cue (s).</summary>
         private const float BlockedCueSeconds = 0.4f;
 
-        /// <summary>Tıkalı namlu darbesinin şiddeti — atış darbesinden hafif, "olmadı" demek için.</summary>
+        /// <summary>Blocked-muzzle haptic amplitude — lighter than a shot, it just says "no".</summary>
         private const float BlockedHapticAmplitude = 0.6f;
 
-        /// <summary>Tıkalı namlu darbesinin süresi (sn).</summary>
         private const float BlockedHapticSeconds = 0.06f;
 
-        /// <summary>
-        /// İki elle tutuşta geri tepme çarpanının VARSAYILANI.
-        /// <para>
-        /// Uzak replika (<see cref="VortexArena.Core.Player.RemoteAvatar.ApplyShotRecoil"/>) bu
-        /// <b>varsayılanı</b> okur, prefabdaki alanı değil: <see cref="twoHandRecoilMultiplier"/>
-        /// prefaba serialize edilir ve telde GİTMEZ, uzak taraf onu hiçbir yoldan öğrenemez.
-        /// Bir prefabda alan elle değiştirilirse o fark yalnız atanın kendi ekranında görünür —
-        /// karşı taraf geri tepmeyi bu sabitle çizmeye devam eder.
-        /// </para>
-        /// </summary>
+        /// <summary>DEFAULT two-handed recoil multiplier.
+        /// <para>The remote replica (<see cref="VortexArena.Core.Player.RemoteAvatar.ApplyShotRecoil"/>)
+        /// reads this DEFAULT, not the prefab field: <see cref="twoHandRecoilMultiplier"/> is
+        /// serialized per prefab and never travels on the wire. Editing it on a prefab changes only
+        /// the shooter's own screen.</para></summary>
         public const float DefaultTwoHandRecoilMultiplier = 0.35f;
 
         [Header("Tanım")]
@@ -108,91 +87,70 @@ namespace VortexArena.Core.Combat
         [Tooltip("İki elle tutarken geri tepme çarpanı.")]
         [SerializeField] private float twoHandRecoilMultiplier = DefaultTwoHandRecoilMultiplier;
 
-        // ⚠️ Haptik alanı burada YOKTUR ve geri eklenmez: darbenin şiddeti/süresi silahın kendi
-        // verisidir (WeaponDefinition.HapticAmplitude/HapticDuration). Prefaba serialize edilen
-        // ikinci bir kopya, aynı silahın sahne örneği ile verilen klonunu farklı hissettirirdi.
+        // ⚠️ No haptic field here, and none is added back: amplitude/duration are the weapon's own
+        // data (WeaponDefinition.HapticAmplitude/HapticDuration). A serialized second copy would
+        // make the same weapon feel different as a scene instance and as a granted clone.
 
-        /// <summary>Arayüz adı: tanımın DisplayName'i, yoksa obje adı.</summary>
         public string WeaponName => definition != null && !string.IsNullOrEmpty(definition.DisplayName)
             ? definition.DisplayName
             : gameObject.name;
 
-        /// <summary>Protokol silah anahtarı — yalnız kill feed etiketi, sunucu doğrulamaz (§10.3).</summary>
+        /// <summary>Protocol weapon key — a kill feed label only, never validated (§10.3).</summary>
         public string WeaponId => definition != null ? definition.WeaponId : "";
 
-        /// <summary>
-        /// Telde giden eşya kimliği (§6.6); <c>0</c> = tanım yok ya da <c>netItemId</c> atanmamış.
-        /// ⚠️ <see cref="WeaponId"/> ile karıştırma: o bir kill feed <i>etiketi</i> (string, serbest),
-        /// bu bir <i>ağ kimliği</i> (u8) ve uzak tarafın hangi eşyayı çizeceğini o belirler.
-        /// </summary>
+        /// <summary>Item id on the wire (§6.6); <c>0</c> = no definition or unassigned
+        /// <c>netItemId</c>. ⚠️ Do not confuse with <see cref="WeaponId"/>: that is a free-form kill
+        /// feed label, this is the network identity (u8) that decides what the remote side draws.</summary>
         public byte NetItemId => definition != null && definition.HasNetItemId ? definition.NetItemId : (byte)0;
 
-        /// <summary>Silah tanımı (Awake'te doğrulanır; null ise silah kilitlidir).</summary>
         public WeaponDefinition Definition => definition;
 
-        /// <summary>Geri tepmenin uygulandığı görsel pivot (WeaponAnimator da bunu kullanır).</summary>
         public Transform ModelPivot => modelPivot;
 
-        /// <summary>
-        /// <c>weaponSource:"random"</c> modlarında (§10.5) silah doğrudan kumandaya VERİLİR:
-        /// ISDK kavraması hiç işletilmez. <c>None</c> = normal sahne silahı (kavranarak tutulur).
-        /// <para>
-        /// Neden ayrı bir yol: <see cref="Grabbable"/>'ı programla "seçili" hâle getirmek ISDK'nın
-        /// iç durumuna girmek demektir — kırılgan ve sürüm bağımlı. Verilen silah zaten tanım
-        /// gereği tutuluyor, kavrama sistemine hiç sokulmaz.
-        /// </para>
-        /// </summary>
+        /// <summary>In <c>weaponSource:"random"</c> modes (§10.5) the weapon is GRANTED straight to
+        /// a controller with ISDK grabbing never involved. <c>None</c> = a normal scene weapon.
+        /// <para>A separate path because forcing <see cref="Grabbable"/> into a "selected" state
+        /// means reaching into ISDK internals — fragile and version-dependent. A granted weapon is
+        /// held by definition and never enters the grab system.</para></summary>
         public OVRInput.Controller GrantedHand { get; private set; } = OVRInput.Controller.None;
 
-        /// <summary>Verilme TÜRÜ (bkz. <see cref="WeaponGrantKind"/>) — "elde sabit duruyor" ile
-        /// "reload kapalı, rezervsiz" kuralları bu tiple ayrıldı; ikisi artık aynı bayrağa bağlı
-        /// değil.</summary>
+        /// <summary>Grant KIND (<see cref="WeaponGrantKind"/>): "fixed in hand" and "no reload, no
+        /// reserve" are separate rules and no longer share one flag.</summary>
         public WeaponGrantKind GrantKind { get; private set; } = WeaponGrantKind.None;
 
-        /// <summary>Silah verilerek mi tutuluyor (sahne silahında her zaman false).</summary>
         public bool IsGranted => GrantedHand != OVRInput.Controller.None;
 
-        /// <summary>Çerçeveden seçilen KALICI klon mu (reload açık, rezerv var, ön kabza tutulabilir).</summary>
+        /// <summary>Is this the PERSISTENT frame clone (reload on, reserve, front grip allowed).</summary>
         public bool IsPersistentGrant => GrantKind == WeaponGrantKind.Persistent;
 
-        /// <summary>FFA'nın TEK KULLANIMLIK rastgele silahı mı (reload kapalı, rezerv yok).</summary>
+        /// <summary>Is this FFA's DISPOSABLE random weapon (no reload, no reserve).</summary>
         public bool IsDisposableGrant => GrantKind == WeaponGrantKind.Disposable;
 
-        /// <summary>Tutuluyor mu: verilen silah TANIM GEREĞİ tutuluyordur, sahne silahı ISDK'nın
-        /// pointer olaylarından izlenir. Bu <c>||</c> olmadan verilen silah hiç ateş edemezdi.</summary>
+        /// <summary>Held: a granted weapon is held BY DEFINITION, a scene weapon is tracked from
+        /// ISDK pointer events. Without this <c>||</c> a granted weapon could never fire.</summary>
         public bool IsHeld => IsGranted || heldPoints.Count > 0;
 
-        /// <summary>
-        /// İki elle sabitleme: sahne silahında İKİ kavrama noktası, VERİLEN silahta ise ana el +
-        /// granter'ın yazdığı ikinci el (<see cref="SetSecondaryHand"/>).
-        /// <para>⚠️ <b>Disposable silah artık iki elli OLABİLİR</b> (bilinçli değişiklik): FFA'da
-        /// eline tüfek verilen oyuncunun ön kabzayı tutamaması, aynı tüfeği çerçeveden alan
-        /// oyuncudan farklı bir his üretiyordu. Kural artık tek yerde: ikinci eli granter çözer,
-        /// kaynak (verildi mi / kavrandı mı) fark etmez.</para>
-        /// <para>⚠️ Kapı <see cref="SecondaryHand"/> DEĞİL bu alandır: kontrolcü çözülemeyen
-        /// oturumlarda (editör) <c>SecondaryHand</c> <c>None</c> döner, oysa iki kavrama noktası
-        /// varlığını sürdürür — o durumda telde çift el bildirmek doğrudur (yalnız iki elli POZ
-        /// çözülemez, ona <c>SecondaryHand</c> bakar).</para>
-        /// </summary>
+        /// <summary>Two-handed steadying: TWO grab points on a scene weapon, main hand + the
+        /// granter-written second hand on a granted one (<see cref="SetSecondaryHand"/>).
+        /// <para>⚠️ A Disposable weapon MAY be two-handed: not being able to take the front grip on
+        /// an FFA rifle felt different from the same rifle taken from a frame. The rule lives in
+        /// one place — the granter resolves the second hand regardless of source.</para>
+        /// <para>⚠️ The gate is this property, NOT <see cref="SecondaryHand"/>: in sessions where
+        /// the controller cannot be resolved (Editor) <c>SecondaryHand</c> is <c>None</c> while two
+        /// grab points still exist, and reporting two hands on the wire is correct there (only the
+        /// two-handed POSE, which reads <c>SecondaryHand</c>, cannot be solved).</para></summary>
         public bool IsTwoHanded => HasSecondaryGrip;
 
-        /// <summary>İkinci bir kavrama noktası VAR MI (elin çözülüp çözülmediğinden bağımsız).</summary>
         private bool HasSecondaryGrip => IsGranted
             ? _grantedSecondaryHand != OVRInput.Controller.None ||
               (IsPersistentGrant && heldPoints.Count > 0)
             : heldPoints.Count > 1;
 
-        /// <summary>
-        /// Ön kabzayı tutan ikinci elin kontrolcüsü; <c>None</c> = ikinci el yok ya da çözülemedi.
-        /// <para>
-        /// Kaynak silahın türüne göre ayrılır: <b>verilen</b> silahta (Disposable ve Persistent)
-        /// granter yazar — kavrama algısının tek kapısı odur; <b>sahne</b> silahında ikinci ISDK
-        /// kavrama noktasıdır. Persistent klonun ISDK yolu ikinci kaynak olarak duruyor ama bugün
-        /// fiilen boştur (<c>WeaponGranter.PrepareSummonedClone</c> kavrama bileşenlerini kapatıyor).
-        /// </para>
-        /// <para>⚠️ Ana elle AYNI çıkarsa <c>None</c> döner: silahı tek elin iki kaynaktan tuttuğu
-        /// bir durumda iki elli çözüm sıfır uzunlukta bir eksene nişan alırdı.</para>
-        /// </summary>
+        /// <summary>Controller of the second hand on the front grip; <c>None</c> = none or
+        /// unresolved. Source depends on the weapon kind: on a GRANTED weapon the granter writes it
+        /// (the single grab-sensing gate), on a SCENE weapon it is the second ISDK grab point.
+        /// <para>⚠️ Returns <c>None</c> if it equals the main hand: with one hand holding from two
+        /// sources the two-handed solver would aim along a zero-length axis.</para></summary>
         public OVRInput.Controller SecondaryHand
         {
             get
@@ -216,77 +174,63 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>
-        /// Tetik/ana el: VERİLEN silahta silahın verildiği el, sahne silahında İLK kavrayan el.
-        /// <c>None</c> = tutulmuyor ya da kontrolcü çözülemedi (editör fallback'i).
-        /// </summary>
+        /// <summary>Trigger/main hand: the granted hand, or the FIRST hand that grabbed a scene
+        /// weapon. <c>None</c> = not held, or the controller could not be resolved.</summary>
         public OVRInput.Controller MainHand =>
             IsGranted ? GrantedHand
                       : (heldPoints.Count > 0 ? heldPoints[0].ctl : OVRInput.Controller.None);
 
-        /// <summary>
-        /// Ana el sağ mı — §6.4 olay bayrağının ve §6.6 <c>FLAG_PRIMARY_RIGHT</c>'ının kaynağı.
-        /// <para>⚠️ Çözülemeyen el SAĞ sayılır: telde "bilinmeyen el" diye bir değer yok, tek bir
-        /// bit var. Yanlış ele düşen bir tracer, hiç çizilmeyen bir tracer'dan iyidir.</para>
-        /// </summary>
+        /// <summary>Is the main hand the right one — source of the §6.4 event flag and §6.6
+        /// <c>FLAG_PRIMARY_RIGHT</c>.
+        /// <para>⚠️ An unresolved hand counts as RIGHT: the wire has one bit, no "unknown hand"
+        /// value. A tracer on the wrong hand beats a tracer that is never drawn.</para></summary>
         public bool IsMainHandRight => MainHand != OVRInput.Controller.LTouch;
 
         public int CurrentAmmo { get; private set; }
         public int MagazineSize => definition != null ? definition.MagazineSize : 0;
 
-        /// <summary>Rezervdeki toplam mermi (her iki rezerv modunda da tek sayaç).</summary>
         public int ReserveRounds => reserveRounds;
 
-        /// <summary>Rezervin tam şarjör karşılığı (HUD şarjör ikonları için).</summary>
         public int SpareMagazineCount => reserveRounds / Mathf.Max(1, MagazineSize);
 
         public bool IsReloading { get; private set; }
 
-        /// <summary>
-        /// Silahın <b>herhangi bir parçası</b> şu an bir iç engele değiyor mu (§10.9) — böyleyken
-        /// tetik hiç işlemez. Yalnız tetiğe basılıyken ölçülür, boştaki silahta <c>false</c> kalır.
-        /// </summary>
+        /// <summary>Is ANY part of the weapon touching an inner obstacle (§10.9) — the trigger is
+        /// dead while true. Measured only while the trigger is pressed; <c>false</c> when idle.</summary>
         public bool IsWeaponBlocked { get; private set; }
 
-        /// <summary>Anlık saçılım yarı açısı (taban + bloom, derece). Çift el çarpanı DAHİL DEĞİL — ham değer.</summary>
+        /// <summary>Current spread half-angle (base + bloom, degrees). Raw: the two-hand multiplier
+        /// is NOT included.</summary>
         public float CurrentSpreadDegrees => definition != null ? definition.BaseSpreadDegrees + currentBloom : 0f;
 
-        /// <summary>Her atışta (mermi çıktıktan sonra).</summary>
         public event Action Fired;
 
-        /// <summary>Boş şarjörle tetik çekildiğinde.</summary>
         public event Action DryFired;
 
-        /// <summary>Reload başladı; parametre toplam süre (saniye).</summary>
         public event Action<float> ReloadStarted;
 
-        /// <summary>Reload bitti (<see cref="RefillFull"/> ile iptal edildiğinde de yayınlanır).</summary>
+        /// <summary>Reload finished (also raised when <see cref="RefillFull"/> cancels it).</summary>
         public event Action ReloadCompleted;
 
-        /// <summary>Şarjör/rezerv sayısı değişti.</summary>
         public event Action AmmoChanged;
 
-        /// <summary>Tutuluyor durumu 0↔&gt;0 geçişi yaptı.</summary>
         public event Action<bool> HeldChanged;
 
-        /// <summary>
-        /// Sahnedeki etkin silahlar — silah objesine referansı olmayan dinleyiciler
-        /// (ör. AmmoHud) için. OnEnable/OnDisable'da güncellenir; sıranın anlamı yok.
-        /// </summary>
+        /// <summary>Active weapons in the scene, for listeners with no direct reference (e.g.
+        /// AmmoHud). Updated in OnEnable/OnDisable; the order is meaningless.</summary>
         public static readonly List<Weapon> Active = new List<Weapon>();
 
-        /// <summary>Active listesi değişti VEYA bir silahın tutulma durumu değişti.</summary>
         public static event Action ActiveChanged;
 
-        // HeldItems toplayıcısının durumu (§6.6): abonelik bir kez kurulur, uyarılar tek seferlik
-        // (durum değişimi insan hızında olsa da hatalı bir kurulum her kavramada tekrarlanırdı).
+        // HeldItems collector state (§6.6): the hook is installed once and warnings fire once —
+        // a broken setup would otherwise log on every grab.
         private static bool heldItemsHooked;
         private static bool missingNetItemIdWarned;
         private static bool handConflictWarned;
 
-        // Tutan eller SIRALI tutulur: İLK eleman tetik/ana eldir. id = PointerEvent.Identifier
-        // (Unselect/Cancel'da eşleştirme anahtarı), ctl = ele çözülen OVR kontrolcüsü
-        // (None = çözülemedi → tetik Input System fallback'inden okunur).
+        // Holding hands are ORDERED: the FIRST entry is the trigger/main hand. id =
+        // PointerEvent.Identifier (Unselect/Cancel match key), ctl = resolved OVR controller
+        // (None = unresolved → the trigger is read from the Input System fallback).
         private readonly List<(int id, OVRInput.Controller ctl)> heldPoints = new List<(int, OVRInput.Controller)>();
 
         private InputAction attackAction;
@@ -305,41 +249,40 @@ namespace VortexArena.Core.Combat
         private bool aliveSubscribed;
         private int reserveRounds;
 
-        // VERİLEN silahta ön kabzayı tutan ikinci el — tek yazarı WeaponGranter (SetSecondaryHand).
-        // ⚠️ İkinci el silahı TAŞIMAZ, yalnız nişanlar (ItemGripSolver) — ve nişanın kaynağı o elin
-        // yalnız KONUMUDUR; ne ikinci kumandanın dönüşü ne bileğin duruşu silaha geçer.
+        // Second hand on the front grip of a GRANTED weapon; only WeaponGranter writes it.
+        // ⚠️ The second hand does not CARRY the weapon, it only aims it (ItemGripSolver), and the
+        // input is that hand's POSITION alone — no controller or wrist rotation reaches the weapon.
         private OVRInput.Controller _grantedSecondaryHand = OVRInput.Controller.None;
 
-        // İki elli çözümün ağırlığı ve ikinci elin SON bilinen avuç konumu. Konum saklanır çünkü
-        // ikinci el bırakıldığı anda çözüm kapansaydı silah zıplardı: ağırlık sıfıra inerken poz
-        // hâlâ o son noktadan çözülür (ItemGripSolver.StepAimBlend).
+        // Two-handed solve weight and the LAST known second-hand palm position. The position is
+        // kept because closing the solve the instant the hand releases would make the weapon jump:
+        // while the weight falls to zero the pose still solves from that last point.
         private float _aimBlend;
         private Vector3 _lastSecondaryPalm;
         private bool _hasLastSecondaryPalm;
 
-        // tracerEveryNthRound sayacı — silah BAŞINA tutulur (uzak tarafta RemoteShotFx aynısını
-        // oyuncu başına tutuyor): sayaç paylaşılsaydı çift tabancada izler iki silaha rastgele
-        // dağılır ve hangi namlunun ateş ettiği okunaksız olurdu.
+        // tracerEveryNthRound counter, kept PER WEAPON (RemoteShotFx keeps it per player): a shared
+        // counter would scatter trails randomly across dual-wielded guns.
         private int shotCount;
 
-        // Yaylımın saçma uçları (dünya uzayı) — silah başına bir kez ayrılır, atış başına DEĞİL:
-        // tetik yolu otomatik ateşte saniyede ~10 kez koşuyor ve GC dikeni Quest'te doğrudan
-        // görünür. Boy PelletCount'tan gelir (normal silahta 1) ve ShotTracer'ın tavanına kırpılır.
+        // Pellet endpoints (world space), allocated once per weapon and NOT per shot: the trigger
+        // path runs ~10/s on full auto and a GC spike is visible on Quest. Length comes from
+        // PelletCount, clamped to ShotTracer's cap.
         private Vector3[] tracerPoints;
 
         private bool weaponIdWarned;
 
         protected virtual void Awake()
         {
-            // ⚠️ Kavrama yazımının el modelleri OYUNDA HİÇ ÇİZİLMEZ (ItemHandRig): bake onları
-            // kapatıyor, burası yalnız emniyet. Açık unutulmuş bir düğüm arenada havada duran bir
-            // el olarak görünürdü — raftaki silahta, kavrama tezgâhında, oyuncunun elinde.
+            // ⚠️ Grip-authoring hand models are NEVER drawn in game (ItemHandRig); the bake
+            // disables them and this is only a safety net. One left enabled would show as a hand
+            // floating in the arena.
             ItemHandRig.HideAll(transform);
 
             if (definition == null)
             {
-                // Tanım ZORUNLU: denge sayılarının tek doğruluk kaynağı SO'dur (§10.3).
-                // Ateş kilidi ayrıca canFire koşulundadır (definition != null).
+                // The definition is MANDATORY: the SO is the single source of balance numbers
+                // (§10.3). The fire lock is additionally in the canFire condition.
                 Debug.LogError($"[Weapon] '{name}' için WeaponDefinition atanmadı; silah kilitli.", this);
             }
             else
@@ -384,8 +327,8 @@ namespace VortexArena.Core.Combat
 
             TrySubscribeAlive();
 
-            // Toplayıcı abone OLMADAN listeye ekleme: aşağıdaki ActiveChanged bu silahı da
-            // saysın (aksi hâlde ilk silah HeldItems'a hiç yazılmazdı).
+            // Hook the collector BEFORE adding to the list, so the ActiveChanged below counts this
+            // weapon too (otherwise the first weapon would never reach HeldItems).
             EnsureHeldItemsHook();
 
             Active.Add(this);
@@ -397,7 +340,7 @@ namespace VortexArena.Core.Combat
             if (grabbable != null)
                 grabbable.WhenPointerEventRaised -= HandlePointerEvent;
 
-            // ISDK'nin Cancel olayları artık bize ulaşmaz; el listesi burada temizlenir.
+            // ISDK's Cancel events no longer reach us; clear the hand list here.
             bool wasHeld = IsHeld;
             heldPoints.Clear();
             GrantedHand = OVRInput.Controller.None;
@@ -424,19 +367,19 @@ namespace VortexArena.Core.Combat
                 hapticRoutine = null;
             }
 
-            // Güvenli taraf: darbe yarıda kesilmiş olabilir — iki kontrolcüde de titreşimi kes.
+            // The pulse may have been cut mid-way: stop vibration on both controllers.
             OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.LTouch);
             OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.RTouch);
         }
 
         protected virtual void Update()
         {
-            // PlayerCombatState kendini sahne yüklendikten SONRA önyükler; OnEnable
-            // sırasında henüz doğmamış olabilir. Tek seferlik tembel abonelik.
+            // PlayerCombatState bootstraps after scene load, so it may not exist during OnEnable.
+            // One-shot lazy subscription.
             if (!aliveSubscribed)
                 TrySubscribeAlive();
 
-            // Reload silah bırakılmış/yere konmuşken de tamamlanır (süre fiziksel değil).
+            // A reload completes even if the weapon was dropped (the duration is not physical).
             if (IsReloading && Time.time >= reloadEndTime)
                 FinishReload();
 
@@ -459,8 +402,8 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>El izlemesi güncellendikten SONRA sürülür: LateUpdate'te yapılmazsa silah bir
-        /// kare geriden gelir ve nişan hissi bulanıklaşır.</summary>
+        /// <summary>Driven AFTER hand tracking updates: outside LateUpdate the weapon lags one
+        /// frame and aiming feels mushy.</summary>
         protected virtual void LateUpdate()
         {
             ApplyCanonicalGrip();
@@ -469,8 +412,8 @@ namespace VortexArena.Core.Combat
 
         protected virtual void OnDestroy()
         {
-            // Gösterge için alınan materyal ÖRNEĞİ (renderer.material) silahla birlikte gider —
-            // bırakılsa sahne değişimine kadar sızardı.
+            // The indicator's material INSTANCE (renderer.material) dies with the weapon; leaving
+            // it would leak until the next scene change.
             if (indicatorMaterial != null)
             {
                 Destroy(indicatorMaterial);
@@ -478,40 +421,29 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        // -------------------------------------------------------- kanonik kavrama
+        // --------------------------------------------------------- canonical grip
 
-        /// <summary>
-        /// §6.6 <b>KANONİK KAVRAMA</b>: silah tutulduğu sürece kökü ana elin anchor'ından + tanımın
-        /// SABİT kavrama konumundan sürülür — kavradığı andaki keyfi ofset korunmaz.
-        /// <para>
-        /// ⚠️ <b>ELİN DÖNÜŞÜ HİÇBİR YERDEN İÇERİ GİRMEZ</b> (<see cref="ItemGripSolver"/>): kayıt
-        /// yalnız konum taşır, yani tek elde silah <b>her zaman ana kumandayla hizalıdır</b>. İkinci
-        /// el de yalnız KONUMUYLA (nereye uzandığıyla) nişan aldırır — dönüşü hiç okunmaz.
-        /// </para>
-        /// <para>
-        /// <b>Neden zorunlu:</b> duruş telde gitmez; uzak taraf silahı "elin pozu × sabit kavrama
-        /// ofseti" olarak çizer. Serbest kavrama o eşitliği bozar ve iki uçta iki ayrı duruş doğar.
-        /// </para>
-        /// <para>
-        /// <b>VERİLEN silahın İKİ türü de buradan sürülür</b> (Disposable dahil): iki elli çözüm
-        /// eşyanın pozunu her karede yeniden hesapladığı için Disposable örnek de anchor'ın ÇOCUĞU
-        /// değil <see cref="WeaponGranter"/>'ın DDOL kökünün altındadır. ⚠️ İki şey birbirine
-        /// bağlıdır: anchor'ın altındaki bir örneğe dünya pozu yazmak parent dönüşümüyle çakışır ve
-        /// silah katlanarak uzaklaşır.
-        /// </para>
-        /// <para>
-        /// <b>İki elli nişan</b> (<see cref="SecondaryHand"/>): ana kavrama noktası ana avuçta
-        /// kalır, silahın ekseni ikinci elin avucuna döner — matematiği
-        /// <see cref="ItemGripSolver"/>'dadır (uzak taraf AYNI fonksiyonu koşar, §6.6).
-        /// </para>
-        /// <para>
-        /// Rig yoksa (admin gözlemci, editör oturumu, sahne henüz yüklenmemiş) hiçbir şey yapılmaz —
-        /// silah bulunduğu yerde kalır; bırakılınca da öyle (mevcut davranış).
-        /// </para>
-        /// <para>⚠️ Geri tepme <see cref="ModelPivot"/>'a uygulanır ve buraya KARIŞMAZ: kökü el
-        /// sürer, görsel sarsıntı çocukta yaşar. Fizik de yarışmaz — Grabbable tutuş boyunca
-        /// Rigidbody'yi kinematik yapıyor (<c>_kinematicWhileSelected</c>).</para>
-        /// </summary>
+        /// <summary>§6.6 CANONICAL GRIP: while held, the root is driven from the main hand anchor
+        /// plus the definition's FIXED grip position — the arbitrary offset at grab time is not
+        /// kept.
+        /// <para>⚠️ HAND ROTATION NEVER ENTERS (<see cref="ItemGripSolver"/>): the record carries
+        /// position only, so one-handed the weapon is ALWAYS aligned with the main controller. The
+        /// second hand aims by POSITION alone; its rotation is never read.</para>
+        /// <para>Mandatory because pose does not travel: the remote side draws the weapon as "hand
+        /// pose × fixed grip offset", and a free grab breaks that equality.</para>
+        /// <para>BOTH granted kinds are driven here (Disposable included): since the two-handed
+        /// solve recomputes the world pose every frame, even a Disposable instance lives under
+        /// <see cref="WeaponGranter"/>'s DDOL root, never as an anchor child. ⚠️ The two facts are
+        /// linked: writing a world pose to an instance under the anchor collides with the parent
+        /// transform and the weapon drifts away compounding.</para>
+        /// <para>Two-handed aim (<see cref="SecondaryHand"/>): the main grip point stays in the
+        /// main palm while the weapon's axis turns toward the second palm — the maths lives in
+        /// <see cref="ItemGripSolver"/> and the remote side runs the SAME function (§6.6).</para>
+        /// <para>With no rig (admin spectator, Editor session, scene not loaded) nothing happens
+        /// and the weapon stays where it is.</para>
+        /// <para>⚠️ Recoil goes to <see cref="ModelPivot"/> and never interferes here: the hand
+        /// drives the root, the visual kick lives on the child. Physics does not race either —
+        /// Grabbable keeps the Rigidbody kinematic while selected.</para></summary>
         private void ApplyCanonicalGrip()
         {
             if (definition == null)
@@ -521,7 +453,7 @@ namespace VortexArena.Core.Combat
 
             if (!IsGranted && heldPoints.Count == 0)
             {
-                // Bırakılan silahın nişan ağırlığı taşınmaz: tekrar alındığında tek elli başlasın.
+                // A released weapon does not carry its aim weight: it restarts one-handed.
                 _aimBlend = 0f;
                 _hasLastSecondaryPalm = false;
                 return;
@@ -536,8 +468,7 @@ namespace VortexArena.Core.Combat
             if (IsTwoHanded && WeaponGranter.TryResolvePalm(SecondaryHand, out Pose secondaryPalm))
             {
                 wantTwoHand = true;
-                // ⚠️ Yalnız KONUM saklanır: nişanın kaynağı elin nereye uzandığıdır, nasıl
-                // çevrildiği değil (ikinci elin dönüşü silaha hiçbir yoldan geçmez).
+                // ⚠️ POSITION only: aim comes from where the hand reaches, not how it is turned.
                 _lastSecondaryPalm = secondaryPalm.position;
                 _hasLastSecondaryPalm = true;
             }
@@ -548,8 +479,9 @@ namespace VortexArena.Core.Combat
                 _hasLastSecondaryPalm = false;
             }
 
-            // Kayıt ANCHOR uzayındadır (ItemGripPose): konum doğrudan tanımdan okunur, delta yok.
-            // Yazılmamış kayıt sıfırdır → silah kumandanın tam üstünde ve onunla hizalı durur.
+            // The record is in ANCHOR space (ItemGripPose): the position is read straight from the
+            // definition, no delta. An unauthored record is zero → the weapon sits on the
+            // controller, aligned with it.
             bool mainHandRight = HandGripPivot.IsRight(MainHand);
             bool secondaryRight = SecondaryHandIsRight(mainHandRight);
 
@@ -560,12 +492,11 @@ namespace VortexArena.Core.Combat
             transform.SetPositionAndRotation(position, rotation);
         }
 
-        /// <summary>
-        /// Ön kabzayı saran elin SAĞ olup olmadığı; ikinci el henüz yoksa <b>ana elin tersi</b>.
-        /// <para>⚠️ <c>HandGripPivot.IsRight(None)</c> "sağ" der (kontrolcü çözülemeyen oturumlar
-        /// için makul bir varsayım), oysa burada None "ikinci el yok" demektir: doğrudan çağrılsaydı
-        /// iki eli de sağ sayan bir ölçü çıkar ve sağ elle tutulan tüfeğin ön kabza ekseni SAĞ
-        /// kaydından okunurdu.</para>
+        /// <summary>Is the front-grip hand the right one; with no second hand yet, the OPPOSITE of
+        /// the main hand.
+        /// <para>⚠️ <c>HandGripPivot.IsRight(None)</c> answers "right" (a fair assumption when a
+        /// controller cannot be resolved), but here None means "no second hand": calling it directly
+        /// would treat both hands as right and read the front-grip axis from the RIGHT record.</para>
         /// </summary>
         private bool SecondaryHandIsRight(bool mainHandRight)
         {
@@ -575,17 +506,15 @@ namespace VortexArena.Core.Combat
                 : HandGripPivot.IsRight(secondary);
         }
 
-        // ------------------------------------------------------------------ tetik
+        // ----------------------------------------------------------------- trigger
 
         private void TickTrigger()
         {
             bool pressed;
             bool pressedThisFrame;
 
-            // Ana el: VERİLEN silahta silahın verildiği el, sahne silahında ilk kavrayan el.
-            // Ayrım zorunlu: 'Player/Attack' tek bir Button action'dır ve
-            // <XRController>/{PrimaryAction} ile İKİ kumandayı da toplar — iki elde iki
-            // silahla oynanan FFA'da tek tetiğe basmak ikisini birden ateşlerdi.
+            // The distinction is mandatory: 'Player/Attack' is a single Button action bound to
+            // BOTH controllers, so with a weapon in each hand one trigger would fire both.
             OVRInput.Controller mainHand = MainHand;
 
             if (mainHand != OVRInput.Controller.None)
@@ -598,26 +527,26 @@ namespace VortexArena.Core.Combat
             }
             else
             {
-                // Editör fallback'i: kontrolcü çözülemedi, Input System aksiyonu okunur.
+                // Editor fallback: no controller resolved, read the Input System action.
                 pressed = attackAction != null && attackAction.IsPressed();
                 pressedThisFrame = attackAction != null && attackAction.WasPressedThisFrame();
                 triggerHeld = pressed;
             }
 
-            // Ateş yetkisi sunucu durumundan gelir (ölüyken / Loading-Countdown-End
-            // fazlarında tetik BOŞA basılır: boş şarjör sesi bile çalmaz).
+            // Fire permission comes from server state: while dead or in loading/countdown/end
+            // phases the trigger does nothing at all (not even a dry-fire sound).
             bool combatAllows = ArenaCombat.CanFire;
 
-            // §10.9 duvar arkasından ateş kapısı. ⚠️ YALNIZ tetiğe basılıyken yoklanır: karar
-            // sadece ateş anında gerekiyor ve boştaki her silah için kare başına üç physics
-            // sorgusu yapmak (iki elde iki silah × 72 Hz) bedavaya ödenmiş bir maliyet olurdu.
+            // §10.9 shoot-through-cover gate. ⚠️ Polled ONLY while the trigger is pressed: the
+            // answer is needed at fire time, and three physics queries per frame per idle weapon
+            // would be paid for nothing.
             IsWeaponBlocked = pressed && muzzle != null &&
                               ArenaCombat.IsWeaponBlocked(modelPivot, ResolveBodyBounds(),
                                   muzzle.position, muzzle.forward);
 
-            // İki kapı, tek geri bildirim. Oyuncunun kendi gövdesi kapısı burada DEĞİL
-            // ArenaCombat.CanFire'da uygulanıyor (silaha ait bir soru değil); burada yalnız
-            // "sessizce hiçbir şey olmasın" diye okunuyor — sebebi bilmeden tık sesi çalamayız.
+            // Two gates, one cue. The player's own body gate is enforced in ArenaCombat.CanFire,
+            // not here (it is not a weapon question); it is read here only so the cue knows why
+            // nothing happened.
             bool obstacleBlocked = pressed &&
                                    (IsWeaponBlocked || ObstacleViolationProbe.IsBodyBlocked);
 
@@ -630,27 +559,25 @@ namespace VortexArena.Core.Combat
             }
             else if (obstacleBlocked && ArenaCombat.IsAlive && !IsReloading && CurrentAmmo > 0)
             {
-                // Silah ya da oyuncu bir engele değiyor: mermi HİÇ çıkmaz. ⚠️ Burada Fire()
-                // çağrılmadığı için cephane gitmez, namlu alevi/sesi oynamaz, ağa shot_event
-                // gitmez ve atış gecikmesi (nextFireTime) de ilerlemez — oyuncu duvara ateş
-                // ederek şarjör yakamaz.
+                // The weapon or the player touches an obstacle: no round leaves. ⚠️ Fire() is not
+                // called, so no ammo is spent, no flash/sound plays, no shot_event goes out and
+                // nextFireTime does not advance — the player cannot burn a magazine into a wall.
                 CueBlockedFire();
             }
             else if (pressedThisFrame && combatAllows && !canFire && !IsReloading && CurrentAmmo == 0)
             {
-                // Boş şarjör: kuru tetik. Otomatik reload BİLEREK yok — dolum oyuncunun
-                // bilinçli hareketiyle başlar (TryStartReload).
+                // Empty magazine: dry fire. Auto-reload is deliberately absent — reloading starts
+                // from a deliberate player gesture (TryStartReload).
                 weaponAudio?.PlayDry();
                 DryFired?.Invoke();
             }
         }
 
-        /// <summary>
-        /// Tıkalı namlu geri bildirimi: kuru tetik sesi + kısa darbe.
-        /// <para>⚠️ <b>Kısılır</b> (<see cref="BlockedCueSeconds"/>): tetik basılı tutuluyor olabilir
-        /// ve kare başına bir tık sesi hem duyulmaz hem de ses kanalını doldurur.</para>
-        /// <para><see cref="DryFired"/> yayınlanmaz: o olay "şarjör boş" demek ve HUD'ın reload
-        /// istemi ona bağlı — tıkalı namlu ise dolu bir silahın geçici durumudur.</para>
+        /// <summary>Blocked-muzzle cue: dry-fire sound + a short pulse.
+        /// <para>⚠️ Rate limited (<see cref="BlockedCueSeconds"/>): the trigger may be held, and a
+        /// click per frame is both inaudible and channel-flooding.</para>
+        /// <para><see cref="DryFired"/> is NOT raised: that event means "magazine empty" and drives
+        /// the HUD's reload prompt, while a blocked muzzle is a temporary state of a loaded gun.</para>
         /// </summary>
         private void CueBlockedFire()
         {
@@ -663,8 +590,8 @@ namespace VortexArena.Core.Combat
 
             weaponAudio?.PlayDry();
 
-            // Atış darbesiyle aynı yol: coroutine tek, temizliği OnDisable'da — kumandada asılı
-            // kalan bir titreşim bırakmaz.
+            // Same path as the shot pulse: one coroutine, cleaned up in OnDisable, so no vibration
+            // is left hanging on the controller.
             if (hapticRoutine != null)
             {
                 StopCoroutine(hapticRoutine);
@@ -673,17 +600,14 @@ namespace VortexArena.Core.Combat
             hapticRoutine = StartCoroutine(HapticPulse(BlockedHapticAmplitude, BlockedHapticSeconds));
         }
 
-        /// <summary>
-        /// Silah gövdesinin <see cref="modelPivot"/> uzayındaki sınırları — engel kutusu testinin
-        /// girdisi. <b>Bir kez</b> hesaplanır: mesh'ler silahın ömrü boyunca değişmez ve renderer
-        /// başına 8 köşe dönüşümü her tetik karesinde tekrarlanacak bir iş değildir.
-        /// <para>⚠️ Kaynak <see cref="Mesh.bounds"/>'un YEREL sınırlarıdır, <c>Renderer.bounds</c>
-        /// (dünya AABB'si) DEĞİL: dünya kutusunu yerel uzaya geri çevirmek çapraz duran bir tüfekte
-        /// hacmi neredeyse iki katına çıkarır ve kutu testi siperin yanındaki meşru atışları
-        /// keserdi.</para>
-        /// <para>⚠️ Tarama <see cref="modelPivot"/>'tan başlar, silahın kökünden DEĞİL: kökün altında
-        /// kavrama çerçevesi gibi silaha ait olmayan görseller var.</para>
-        /// </summary>
+        /// <summary>Weapon body bounds in <see cref="modelPivot"/> space — input to the obstacle
+        /// box test. Computed ONCE: the meshes never change and 8 corner transforms per renderer is
+        /// not work for every trigger frame.
+        /// <para>⚠️ Built from <see cref="Mesh.bounds"/> (LOCAL), NOT <c>Renderer.bounds</c> (world
+        /// AABB): converting a world box back to local nearly doubles the volume of a diagonally
+        /// held rifle and would cut legitimate shots beside cover.</para>
+        /// <para>⚠️ The scan starts at <see cref="modelPivot"/>, not the weapon root: the root also
+        /// carries visuals that are not the weapon, such as the grab frame.</para></summary>
         private Bounds ResolveBodyBounds()
         {
             if (bodyBoundsResolved || modelPivot == null)
@@ -738,7 +662,7 @@ namespace VortexArena.Core.Combat
             nextFireTime = Time.time + definition.SecondsPerShot;
 
             bool stabilized = IsTwoHanded;
-            // Saçılım atıştan ÖNCEKİ bloom ile hesaplanır; bloom atışla büyür.
+            // Spread uses the PRE-shot bloom; bloom grows with the shot.
             float spread = (definition.BaseSpreadDegrees + currentBloom) * (stabilized ? twoHandSpreadMultiplier : 1f);
             currentBloom = Mathf.Min(currentBloom + definition.BloomPerShotDegrees, definition.MaxBloomDegrees);
             float recoilScale = stabilized ? twoHandRecoilMultiplier : 1f;
@@ -754,14 +678,14 @@ namespace VortexArena.Core.Combat
             if (string.IsNullOrEmpty(WeaponId))
                 WarnMissingWeaponId();
 
-            // Saçmalı silahta tek tetik çekişi birden çok ışın atar (§10.3 bunu bekliyor: atış hızı
-            // denetimi tam da "pompalı saçması" gibi örüntüler düşmesin diye yok). Normal silahta
-            // sayı 1'dir ve döngü tek turda biter — ayrı bir kod yolu YOKTUR.
+            // A shotgun trigger pull casts several rays (§10.3 expects this: there is no rate
+            // check precisely so pellet patterns are not dropped). A normal weapon runs one
+            // iteration — there is NO separate code path.
             int pellets = definition.PelletCount;
 
-            // Tracer kapısı yaylımdan ÖNCE, bir kez sorulur: sayaç TETİK ÇEKİŞİNİ sayar, saçmayı
-            // değil. Saçma başına sorulsaydı `tracerEveryNthRound` yaylımın içini eleyip 9 saçmanın
-            // 3'ünü çizerdi — oysa ayarın anlamı "kaçta bir ATIŞ iz bırakır".
+            // The tracer gate is asked ONCE, before the spread: the counter counts TRIGGER PULLS,
+            // not pellets. Per pellet, `tracerEveryNthRound` would thin the fan itself instead of
+            // meaning "every Nth SHOT leaves a trail".
             bool drawTracer = ShouldDrawTracer();
             int tracerCount = 0;
 
@@ -772,32 +696,31 @@ namespace VortexArena.Core.Combat
                                     Quaternion.AngleAxis(scatter.y, muzzle.right) *
                                     muzzle.forward;
 
-                // ⚠️ Işın BURADA atılmaz: engel kuralı (namlu bir iç engelin içinden ateş edemez) tek
-                // kapıdadır — kendi Physics.Raycast'ini yazan her yeni hasar kaynağı o kuralı kaybeder.
+                // ⚠️ The ray is not cast here by hand: the obstacle rule lives behind one gate, and
+                // any damage source writing its own Physics.Raycast loses it.
                 ArenaCombat.ShotTrace trace = ArenaCombat.TraceShot(muzzle.position, direction, definition.Range);
 
                 if (p == 0)
                 {
-                    // Ağ — ATIŞ (§6.4, UDP olay kanalı): her Fire()'da TAM BİR KEZ, isabet olsun
-                    // olmasın. Uzak taraf bununla namlu alevini/sesini oynatır ve tracer'ı çizer, o
-                    // yüzden mesafe ışının GERÇEKTE gittiği yoldur: isabet varsa oraya kadar, engel
-                    // yuttuysa namlu ucu, yoksa menzil sonu.
-                    // ⚠️ Bu bildirim VURUŞTAN (aşağıdaki hit_report) BAĞIMSIZDIR — biri sunum, öteki
-                    // otoriter durum; kanalları da ayrıdır (Docs/Gelistirici/Yemek-Kitabi.md).
-                    // ⚠️ Saçmalıda da TEK KEZ gider (ilk saçmanın yönü/mesafesiyle): saçma başına
-                    // yollamak aynı ateşi 9 kez duyurur ve olay kanalının paket başı sınırını
-                    // (§6.4) tek tetikle doldururdu — uzakta çizilen tek bir namlu alevi zaten
-                    // doğru sunumdur.
+                    // Network SHOT (§6.4, UDP event channel): EXACTLY ONCE per Fire(), hit or miss.
+                    // The remote side plays the flash/sound and draws the tracer from it, so the
+                    // distance is where the ray REALLY went: to the hit, to the muzzle if an
+                    // obstacle swallowed it, else to max range.
+                    // ⚠️ Independent of the hit_report below — one is presentation, the other
+                    // authoritative state, on separate channels.
+                    // ⚠️ Also ONCE for a shotgun (first pellet's direction/distance): per-pellet
+                    // events would announce the same shot 9 times and fill the per-packet limit
+                    // (§6.4) on a single trigger, while one remote muzzle flash is already correct.
                     ArenaCombat.ReportShot(direction, trace.Distance, NetItemId, IsMainHandRight);
                 }
 
-                // Yerel mermi izinin ucu. ⚠️ Uzak sunum yolu (RemoteShotFx) atanın kendi izini
-                // ÇİZEMEZ ve çizmeyecek: sunucu olayı atana geri yollamaz, istemci de kendi
-                // playerId'sini süzer (§6.5). Atanın izini çizecek tek yer burasıdır — atlanırsa
-                // "herkes görüyor, ateş eden görmüyor" gibi teşhisi zor bir eksik doğar.
-                // ⚠️ Uç noktalar BURADA toplanır (çizim yaylım bitince, tek çağrıda): atanın
-                // ekranında her saçma KENDİ ışınının gerçekten gittiği yere kadar çizilir —
-                // saçılım vektörü de mesafesi de zaten elde, uzaktaki gibi yeniden üretilmez.
+                // Local trail endpoint. ⚠️ RemoteShotFx CANNOT draw the shooter's own trail: the
+                // server does not echo the event back and the client filters its own playerId
+                // (§6.5). This is the only place the shooter's trail is drawn; skipping it gives the
+                // hard-to-diagnose "everyone sees it except the shooter".
+                // ⚠️ Endpoints are collected here and drawn in ONE call after the spread: locally
+                // each pellet is drawn to where ITS ray really went, since scatter and distance are
+                // already known and need no regeneration.
                 if (drawTracer && tracerCount < tracerPoints.Length)
                 {
                     tracerPoints[tracerCount++] = muzzle.position + direction * trace.Distance;
@@ -816,18 +739,17 @@ namespace VortexArena.Core.Combat
                     Destroy(fx, 2f);
                 }
 
-                // Bölge çarpanı BURADA uygulanır: hasar istemci-otoriter, sunucu
-                // hit_report.damage'ı aynen işler (protokol §10.3).
-                // ⚠️ Hasar SAÇMA BAŞINADIR — bölünmez: WeaponDefinition.Damage zaten tek saçmanın
-                // hasarıdır (CS2 modeli), toplam hasar isabet eden saçma sayısından doğar.
+                // The zone multiplier is applied HERE: damage is client-authoritative and the
+                // server applies hit_report.damage verbatim (§10.3).
+                // ⚠️ Damage is PER PELLET and never divided: WeaponDefinition.Damage is already one
+                // pellet's damage (CS2 model); total damage comes from how many pellets connect.
                 float damage = definition.Damage * definition.GetZoneMultiplier(ArenaCombat.GetHitZone(hit.collider));
 
-                // Hasar HİÇBİR KOŞULDA yerelde uygulanmaz: can sunucu-otoriterdir, geri
-                // health_update ile gelir. Hedef ağ oyuncusu değilse (dekor, duvar) hiçbir şey
-                // olmaz — yukarıda oynatılan çarpma efekti kalır. Kırılabilir objeler ağsal
-                // olduğunda onlar da bu hit_report yoluna girecek.
-                // ⚠️ Aynı hedefe giden saçmalar TEK bir rapora TOPLANMAZ: sunucu her raporu ayrı
-                // işler ve bölge çarpanı saçma başına farklıdır (biri kafaya, biri bacağa gidebilir).
+                // Damage is NEVER applied locally: health is server-authoritative and comes back
+                // as health_update. A non-networked target (decor, wall) does nothing beyond the
+                // impact FX above.
+                // ⚠️ Pellets hitting the same target are NOT merged into one report: the server
+                // processes each separately and the zone multiplier differs per pellet.
                 ArenaCombat.ReportRaycastHit(hit, damage, WeaponId);
             }
 
@@ -842,22 +764,16 @@ namespace VortexArena.Core.Combat
             TriggerHapticPulse();
         }
 
-        /// <summary>
-        /// Atanın KENDİ mermi izi — çizgi ve yol boyunca duman (uzaktakini
-        /// <see cref="RemoteShotFx"/> çizer). Duman ayrı bir çağrı DEĞİLDİR: çizim çağrısının
-        /// içindedir, yani burada unutulması mümkün değil.
-        /// <para>Sıklık ve görünüm uzak izle <b>aynı kaynaktan</b> okunur
-        /// (<see cref="ItemDefinition"/>): iki taraf ayrı ayarlansa aynı silah kendi ekranında
-        /// başka, karşı ekranda başka görünürdü. Havuz da paylaşımlıdır
-        /// (<see cref="ShotTracer.Shared"/>) — silah başına havuz açmak, silahların sürekli
-        /// üretilip yok edildiği modlarda (<c>weaponSource:"random"</c>) materyali ve Update
-        /// döngüsünü silah sayısınca çoğaltırdı.</para>
-        /// <para>⚠️ <b>Saçmalı silahta her saçmanın kendi izi çizilir</b> ve hepsi TEK çağrıyla
-        /// gider (<see cref="ShotTracer.Play"/>): duman bütçesi ile çizgi kalınlığı
-        /// yaylımın tamamına göre ölçülüyor, saçma başına ayrı çağrı ikisini de saçma sayısınca
-        /// çoğaltırdı.</para>
-        /// </summary>
-        /// <param name="pointCount"><see cref="tracerPoints"/>'in dolu eleman sayısı.</param>
+        /// <summary>The shooter's OWN trail — line plus smoke (<see cref="RemoteShotFx"/> draws
+        /// remote ones). Smoke is not a separate call; it lives inside the draw call and cannot be
+        /// forgotten.
+        /// <para>Frequency and look come from the SAME source as the remote trail
+        /// (<see cref="ItemDefinition"/>), or the weapon would look different on each screen. The
+        /// pool is shared too (<see cref="ShotTracer.Shared"/>).</para>
+        /// <para>⚠️ Every pellet gets its own trail and all of them go in ONE call
+        /// (<see cref="ShotTracer.Play"/>): smoke budget and line width are scaled per
+        /// volley.</para></summary>
+        /// <param name="pointCount">Filled element count of <see cref="tracerPoints"/>.</param>
         private void DrawLocalTracer(int pointCount)
         {
             ShotTracer.Shared.Play(
@@ -869,13 +785,10 @@ namespace VortexArena.Core.Combat
                 definition.TracerLifetime);
         }
 
-        /// <summary>
-        /// Bu tetik çekişi iz bırakacak mı — sayacı ilerletir ve <c>tracerEveryNthRound</c>
-        /// kapısını uygular. Olumluysa yaylımın uç tamponu da hazırlanır.
-        /// <para>⚠️ Sayaç <b>tetik çekişini</b> sayar, saçmayı değil: ayarın anlamı "kaçta bir
-        /// atış iz bırakır"dır, "yaylımın kaçta biri çizilir" değil. Saçma başına sayılsaydı 9
-        /// saçmalı bir silahta ayar hem sıklığı hem yelpazenin bütünlüğünü aynı anda bozardı.</para>
-        /// </summary>
+        /// <summary>Will this trigger pull leave a trail — advances the counter and applies the
+        /// <c>tracerEveryNthRound</c> gate, preparing the endpoint buffer if it passes.
+        /// <para>⚠️ The counter counts TRIGGER PULLS, not pellets: the setting means "every Nth shot
+        /// leaves a trail", not "every Nth pellet of a spread is drawn".</para></summary>
         private bool ShouldDrawTracer()
         {
             shotCount++;
@@ -884,8 +797,8 @@ namespace VortexArena.Core.Combat
             if (everyNth < 1 || shotCount % everyNth != 0)
                 return false;
 
-            // Tampon ilk izde kurulur ve silah boyunca yaşar. Boy PelletCount'tan gelir; tavan
-            // ShotTracer'ındır (havuz bütçesi orada tanımlı, çağıran kendi tavanını taşımaz).
+            // Allocated on the first trail and kept for the weapon's life. Length from
+            // PelletCount; the cap belongs to ShotTracer (callers do not carry their own).
             int capacity = Mathf.Clamp(definition.PelletCount, 1, ShotTracer.MaxScatterLines);
             if (tracerPoints == null || tracerPoints.Length != capacity)
                 tracerPoints = new Vector3[capacity];
@@ -893,24 +806,17 @@ namespace VortexArena.Core.Combat
             return true;
         }
 
-        // ------------------------------------------------------------ silah verme
+        // --------------------------------------------------------------- granting
 
-        /// <summary>
-        /// Silahı bir kumandaya VERİR (<see cref="WeaponGranter"/> çağırır): tutuş sayılır, ISDK
-        /// kavraması hiç işletilmez.
-        /// <para>
-        /// <b>Cephane davranışı türe göre AYRILIR</b> (<see cref="WeaponGrantKind"/>):
-        /// <list type="bullet">
-        /// <item><c>Disposable</c>: silah dolu şarjörle başlar, rezerv YOKTUR (reload kapalı olduğu
-        /// için yedek şarjör sayacı yalnız HUD'a yalan söylerdi) ve yarım kalmış reload iptal edilir
-        /// — her çağrı yeni bir silahtır.</item>
-        /// <item><c>Persistent</c>: cephaneye <b>HİÇ DOKUNULMAZ</b> ve devam eden reload da iptal
-        /// edilmez. Çerçeve silahı gizlenip tekrar açılan TEK örnek olduğu için "aynı silah aynı
-        /// mermiyle geri gelir" kuralı doğrudan bundan doğar; doldurmak, oyuncuya sonsuz cephane
-        /// veren bir bırak-tut hilesi açardı.</item>
-        /// </list>
-        /// </para>
-        /// </summary>
+        /// <summary>GRANTS the weapon to a controller (called by <see cref="WeaponGranter"/>): it
+        /// counts as held and ISDK grabbing is never involved.
+        /// <para>Ammo behaviour splits by kind (<see cref="WeaponGrantKind"/>). <c>Disposable</c>:
+        /// starts with a full magazine, NO reserve (a spare counter would only lie to the HUD while
+        /// reload is off) and any in-progress reload is cancelled — every call is a new weapon.
+        /// <c>Persistent</c>: ammo is left UNTOUCHED and a running reload is not cancelled. The
+        /// frame weapon is the ONE instance that hides and returns, which is exactly where "the
+        /// same weapon comes back with the same ammo" comes from; refilling would open a
+        /// release-and-hold infinite-ammo exploit.</para></summary>
         public void GrantTo(OVRInput.Controller hand, WeaponGrantKind kind)
         {
             bool wasHeld = IsHeld;
@@ -918,8 +824,8 @@ namespace VortexArena.Core.Combat
             GrantKind = kind;
             triggerHeld = false;
 
-            // İkinci el yeni tutuşa taşınmaz: silah el değiştirmiş olabilir ve granter ön kabzayı
-            // bir sonraki karede yeniden çözer.
+            // The second hand does not carry into a new hold: the weapon may have swapped hands
+            // and the granter re-resolves the front grip next frame.
             _grantedSecondaryHand = OVRInput.Controller.None;
 
             if (kind == WeaponGrantKind.Disposable)
@@ -935,13 +841,11 @@ namespace VortexArena.Core.Combat
             ActiveChanged?.Invoke();
         }
 
-        /// <summary>
-        /// Verilmeyi geri alır (silah artık elde değil). Çerçeve klonu gizlenirken
-        /// <see cref="WeaponGranter"/> çağırır.
-        /// <para>Gizleme (<c>SetActive(false)</c>) zaten <see cref="OnDisable"/>'ı tetikleyip aynı
-        /// temizliği yapıyor; açık API yine de var, çünkü "silahı elden al" niyeti bir yan etkiye
-        /// değil bir çağrıya bağlı olmalı — <c>OnDisable</c>'ın sırasına güvenen kod kırılgandır.</para>
-        /// </summary>
+        /// <summary>Revokes the grant (the weapon is no longer in hand); called by
+        /// <see cref="WeaponGranter"/> while stowing a frame clone.
+        /// <para><c>SetActive(false)</c> already triggers <see cref="OnDisable"/> and the same
+        /// cleanup, but the explicit API exists because "take the weapon away" should be a call, not
+        /// a side effect — code relying on <c>OnDisable</c> ordering is fragile.</para></summary>
         public void Revoke()
         {
             if (!IsGranted)
@@ -960,18 +864,14 @@ namespace VortexArena.Core.Combat
             ActiveChanged?.Invoke();
         }
 
-        /// <summary>
-        /// VERİLEN silahta ön kabzayı tutan eli bildirir (<c>None</c> = ikinci el bıraktı).
-        /// <para>
-        /// ⚠️ <b>Tek çağıranı <see cref="WeaponGranter"/>'dır</b> ve sahne silahında sessiz no-op'tur:
-        /// orada ikinci el ISDK'nın kavrama olaylarından gelir. Verilen silahta kavrama algısının
-        /// TEK kaynağı granter'ın grip yoklamasıdır — iki yol birden açık olsaydı aynı el iki ayrı
-        /// kaynaktan "tutuyor" görünürdü.
-        /// </para>
-        /// <para><see cref="ActiveChanged"/> yalnız DEĞİŞİMDE yayınlanır: olay <c>HeldItems</c>
-        /// toplayıcısını (§6.6 <c>GRIP_LINKED</c>) tazeliyor, koşulsuz yayınlasa grip basılı olan
-        /// her kare bir tam tarama olurdu.</para>
-        /// </summary>
+        /// <summary>Reports the hand on the front grip of a GRANTED weapon (<c>None</c> = released).
+        /// <para>⚠️ <see cref="WeaponGranter"/> is the ONLY caller, and this is a silent no-op on a
+        /// scene weapon, where the second hand comes from ISDK grab events. On a granted weapon the
+        /// granter's grip poll is the single source of grab sensing; both paths open would make one
+        /// hand "hold" from two sources.</para>
+        /// <para><see cref="ActiveChanged"/> is raised only on CHANGE: it refreshes the
+        /// <c>HeldItems</c> collector (§6.6 <c>GRIP_LINKED</c>), and unconditional raising would
+        /// mean a full scan on every frame grip is held.</para></summary>
         public void SetSecondaryHand(OVRInput.Controller hand)
         {
             if (!IsGranted)
@@ -995,14 +895,12 @@ namespace VortexArena.Core.Combat
 
         // ------------------------------------------------------------------ reload
 
-        /// <summary>
-        /// Reload başlatmayı dener; başlattıysa true. Reddetme koşulları: TEK KULLANIMLIK verilen
-        /// silah (§10.5 <c>weaponSource:"random"</c>; çerçeve silahında reload AÇIKTIR ve bel-altı
-        /// jestiyle çalışır), zaten reload'da, tanımsız, şarjör tam, oyuncu ölü, rezerv yetersiz
-        /// (Discard: tam şarjör yok; Pool: havuz boş). Discard modunda şarjör başlangıçta
-        /// ÇIKAR: tetik reload boyunca ölüdür ve şarjörde kalan mermi YANMIŞTIR. Ses
-        /// çalınmaz — şarjör seslerini WeaponAnimator kendi zaman çizgisinde çalar.
-        /// </summary>
+        /// <summary>Tries to start a reload; true if it started. Rejected for: a Disposable granted
+        /// weapon (§10.5; a frame weapon HAS reload, driven by the below-the-belt gesture), already
+        /// reloading, no definition, full magazine, dead player, insufficient reserve (Discard: no
+        /// full magazine; Pool: empty). In Discard mode the magazine is dropped up front: the
+        /// trigger is dead for the duration and remaining rounds are BURNED. No sound is played —
+        /// WeaponAnimator owns the magazine audio timeline.</summary>
         public bool TryStartReload()
         {
             if (IsDisposableGrant || IsReloading || definition == null)
@@ -1017,8 +915,8 @@ namespace VortexArena.Core.Combat
                 if (reserveRounds < definition.MagazineSize)
                     return false;
 
-                // Yeni şarjörün mermileri ŞİMDİ rezervden düşülür; eski şarjördekiler
-                // şarjörle birlikte atılmış sayılır (varsayılan ürün kuralı).
+                // The new magazine is deducted NOW; rounds in the old one count as thrown away
+                // with it (the default product rule).
                 reserveRounds -= definition.MagazineSize;
                 CurrentAmmo = 0;
             }
@@ -1026,7 +924,7 @@ namespace VortexArena.Core.Combat
             {
                 return false;
             }
-            // Pool modunda şarjördeki mermiler korunur (CS2 kuralı), düşüm bitişte yapılır.
+            // Pool mode keeps the rounds in the magazine (CS2 rule) and deducts on completion.
 
             IsReloading = true;
             reloadEndTime = Time.time + definition.ReloadTime;
@@ -1043,7 +941,7 @@ namespace VortexArena.Core.Combat
             {
                 if (definition.ReserveMode == WeaponReserveMode.DiscardMagazine)
                 {
-                    // Yeni şarjörün bedeli reload BAŞLARKEN rezervden düşülmüştü.
+                    // The new magazine was already deducted when the reload started.
                     CurrentAmmo = definition.MagazineSize;
                 }
                 else
@@ -1059,12 +957,10 @@ namespace VortexArena.Core.Combat
             AmmoChanged?.Invoke();
         }
 
-        /// <summary>
-        /// Şarjörü ve rezervi tanımındaki tam değerlere döndürür (canlanma dolumu).
-        /// Devam eden reload iptal edilir ve dinleyiciler kapansın diye
-        /// <see cref="ReloadCompleted"/> yayınlanır. TEK KULLANIMLIK verilen silahta rezerv 0 kalır
-        /// (o modda reload yok); çerçeve silahı tam rezervle döner.
-        /// </summary>
+        /// <summary>Restores magazine and reserve to the definition's full values (revive refill).
+        /// An in-progress reload is cancelled and <see cref="ReloadCompleted"/> is raised so
+        /// listeners close. A Disposable grant keeps reserve 0 (no reload in that mode); a frame
+        /// weapon returns with a full reserve.</summary>
         public void RefillFull()
         {
             if (definition == null)
@@ -1081,7 +977,7 @@ namespace VortexArena.Core.Combat
             AmmoChanged?.Invoke();
         }
 
-        // ------------------------------------------------------------- el takibi
+        // ------------------------------------------------------------ hand tracking
 
         private void HandlePointerEvent(PointerEvent evt)
         {
@@ -1092,7 +988,7 @@ namespace VortexArena.Core.Combat
                     break;
                 case PointerEventType.Unselect:
                 case PointerEventType.Cancel:
-                    // Cancel hover'daki bir interactor'dan da gelebilir; listede yoksa no-op.
+                    // Cancel may come from a hovering interactor too; no-op if not in the list.
                     RemoveHeldPoint(evt.Identifier);
                     break;
             }
@@ -1103,7 +999,7 @@ namespace VortexArena.Core.Combat
             for (int i = 0; i < heldPoints.Count; i++)
             {
                 if (heldPoints[i].id == evt.Identifier)
-                    return; // aynı interactor'dan çift Select (teorik) — kopya ekleme
+                    return; // double Select from one interactor (theoretical) — no duplicate
             }
 
             bool wasHeld = heldPoints.Count > 0;
@@ -1115,9 +1011,9 @@ namespace VortexArena.Core.Combat
                 weaponAudio?.PlayPickup();
             }
 
-            // ⚠️ ActiveChanged KOŞULSUZ yayınlanır (yalnız 0→1 geçişinde değil): ikinci elin
-            // kabzaya girmesi telde bir değişikliktir (§6.6 GRIP_LINKED) ve HeldItems toplayıcısı
-            // bu olaya bağlı. Koşula bağlıyken çift el kavraması ağa hiç yansımıyordu.
+            // ⚠️ ActiveChanged is raised UNCONDITIONALLY (not only on the 0→1 transition): a second
+            // hand joining the grip is a wire change (§6.6 GRIP_LINKED) and the HeldItems collector
+            // depends on this event.
             ActiveChanged?.Invoke();
         }
 
@@ -1130,8 +1026,8 @@ namespace VortexArena.Core.Combat
 
                 heldPoints.RemoveAt(i);
 
-                // Ana el değişti (ya da silah bırakıldı): tetik durumu tazelenir — yeni
-                // ana elin basılı tetiği bir sonraki karede taze basış olarak görülür.
+                // Main hand changed (or the weapon was released): reset the trigger so the new
+                // main hand's held trigger reads as a fresh press next frame.
                 if (i == 0)
                     triggerHeld = false;
 
@@ -1140,63 +1036,58 @@ namespace VortexArena.Core.Combat
                     HeldChanged?.Invoke(false);
                 }
 
-                // Koşulsuz — gerekçe AddHeldPoint'te (ikinci elin bırakılması da telde değişiklik).
+                // Unconditional — rationale in AddHeldPoint.
                 ActiveChanged?.Invoke();
                 return;
             }
         }
 
-        // ⚠️ El çözümü BURADA DEĞİL: interactor'dan OVR kontrolcüsü çıkarmanın tek yeri
-        // WeaponGranter.ResolveController(evt) / ResolveControllerFromGameObject(go). İki ayrı
-        // tüketicisi var (bu sınıf, WeaponFrame) ve kopyalandığında biri düzeltilip diğeri
-        // unutuluyordu.
+        // ⚠️ Hand resolution does NOT live here: the only place an OVR controller is extracted from
+        // an interactor is WeaponGranter.ResolveController / ResolveControllerFromGameObject. It has
+        // two consumers (this class, WeaponFrame) and copies drift.
 
-        // ------------------------------------------- ön kabza: kapı + gösterge
+        // ------------------------------------------------- front grip: gate + indicator
 
-        /// <summary>
-        /// Ön kabza soketinin GÖRÜNÜR olduğu mesafe (m; kumanda anchor'ının soket merkezine uzaklığı) —
-        /// playtest değeri, tüm silahlarda aynı.
-        /// <para>⚠️ Kabul yarıçapı ise silah başınadır (<see cref="ItemDefinition.SecondaryGripRadius"/>)
-        /// ve bu sabiti AŞABİLİR; etkin görünme mesafesi bu yüzden
-        /// <c>Mathf.Max(SecondaryGripHoverRadius, radius)</c>'tur — yarıçap görünmeyi geçerse
-        /// "önce soket görünür, sonra kavranır" sırası tersine döner ve soket işlevsiz kalır.</para>
-        /// </summary>
+        /// <summary>Distance at which the front-grip socket becomes VISIBLE (m, controller anchor
+        /// to socket centre) — a playtest value, identical on all weapons.
+        /// <para>⚠️ The acceptance radius is per weapon
+        /// (<see cref="ItemDefinition.SecondaryGripRadius"/>) and MAY exceed this constant, so the
+        /// effective visibility distance is <c>Mathf.Max(SecondaryGripHoverRadius, radius)</c> — a
+        /// larger radius would invert "visible first, grabbable second" and make the socket
+        /// useless.</para></summary>
         private const float SecondaryGripHoverRadius = 0.30f;
 
-        /// <summary>Soketin alfası — yaklaşırken (%70 saydam) ve kumanda içerideyken (biraz daha dolu:
-        /// "içindesin, bas" okunsun; renk ve boyut DEĞİŞMEZ, küre kabul hacminin kendisidir).</summary>
+        /// <summary>Socket alpha while approaching, and while the controller is inside (slightly
+        /// more solid to read as "you are in, press"; colour and size never change — the sphere IS
+        /// the acceptance volume).</summary>
         private const float IndicatorHoverAlpha = 0.30f;
         private const float IndicatorReadyAlpha = 0.50f;
 
-        /// <summary>Soketin rengi: açık mavi. Alfa çalışma anında sürülür (yukarıdaki iki sabit).</summary>
         private static readonly Color IndicatorColor = new Color(0.55f, 0.82f, 1f, 1f);
 
-        /// <summary>Soket prefabı katalogda yoksa OTURUM başına bir uyarı (silah başına değil).</summary>
+        /// <summary>One warning per SESSION (not per weapon) when the socket prefab is missing.</summary>
         private static bool indicatorPrefabWarned;
 
-        /// <summary>
-        /// Ön kabza kaydı yazılmamış tanımlar — her biri için OTURUM başına bir uyarı (silah her
-        /// kavrayışta yeniden klonlandığı için örnek başına uyarı spam olurdu).
-        /// </summary>
+        /// <summary>Definitions with no front-grip record — one warning per session each (weapons
+        /// are re-cloned on every grab, so a per-instance warning would spam).</summary>
         private static readonly HashSet<ItemDefinition> unauthoredSecondaryWarned = new HashSet<ItemDefinition>();
 
-        // Bu silahın soket örneği (tembel; yalnız yaklaşan bir el olunca doğar) ve alfası
-        // sürülecek yüzeyi: küre prefabında materyal, LineRenderer'lı bir sanatta çizgi rengi.
+        // This weapon's socket instance (lazy: born only when a hand approaches) and the surface
+        // whose alpha is driven: a material on a sphere prefab, the line colour on LineRenderer art.
         private Transform indicator;
         private LineRenderer indicatorLine;
         private Material indicatorMaterial;
 
-        /// <summary>
-        /// Ön kabza noktasının DÜNYA konumu — <paramref name="rightHand"/> elin kaydından
-        /// (kayıt el başınadır: kabza simetrik olmadığı için iki elin kumandası farklı yere düşer).
-        /// Kayıt kumanda <b>anchor'ının</b> eşyaya göre pozudur, yani bu nokta ön kabzayı saran elin
-        /// ANCHOR'ININ duracağı yerdir; soket küresi de buraya merkezlenir.
-        /// <para>⚠️ <see cref="Transform.TransformPoint"/> DEĞİL elle bileşim: kayıt metredir ve
-        /// <c>WPN_*</c> kökleri 0.8 ölçekli — <c>TransformPoint</c> ölçeği ikinci kez uygular
-        /// (<see cref="ItemGripPose"/>). Kapı, soket ve <c>RemoteAvatar</c> aynı bileşimi kullanır.</para>
-        /// <para>⚠️ Yalnız <see cref="ItemDefinition.HasSecondaryGrip"/> iken anlamlı — yazılmamış
-        /// kayıtta bu nokta eşyanın köküdür (çağıranlar önce o kapıya bakar).</para>
-        /// </summary>
+        /// <summary>WORLD position of the front grip, from the <paramref name="rightHand"/> record
+        /// (records are per hand: the grip is not symmetric, so each controller lands somewhere
+        /// different). The record is the controller ANCHOR's pose relative to the item, so this is
+        /// where that hand's anchor will sit; the socket sphere is centred here.
+        /// <para>⚠️ Composed by hand, NOT via <see cref="Transform.TransformPoint"/>: the record is
+        /// in metres and <c>WPN_*</c> roots are 0.8-scaled, so TransformPoint would apply the scale
+        /// twice (<see cref="ItemGripPose"/>). The gate, the socket and <c>RemoteAvatar</c> all use
+        /// this same composition.</para>
+        /// <para>⚠️ Meaningful only while <see cref="ItemDefinition.HasSecondaryGrip"/>; with an
+        /// unauthored record this point is the item root.</para></summary>
         public Vector3 SecondaryGripWorld(bool rightHand)
         {
             return definition == null
@@ -1204,29 +1095,24 @@ namespace VortexArena.Core.Combat
                 : transform.position + transform.rotation * definition.SecondaryGripPosition(rightHand);
         }
 
-        /// <summary>
-        /// Bu elin kumanda ANCHOR'I ön kabza soketinin (kabul küresinin) içinde mi — ikinci elin
-        /// <b>KURULMA</b> kapısı.
-        /// <para>
-        /// <b>Tek kural, iki okuyucu:</b> <see cref="WeaponGranter"/> ikinci eli buna göre bağlar
-        /// (grip basılı + bu <c>true</c> → el ön kabzaya kilitlenir), soket de "içeride" alfasına
-        /// buna göre geçer. İki ayrı ölçü olsaydı oyuncuya "içindesin" denen yerde kavrama sessizce
-        /// reddedilebilirdi.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Ölçülen nokta kumanda ANCHOR'IDIR</b> (<see cref="TryResolveAnchor"/>) — kavrama
-        /// kaydıyla AYNI çerçeve (<see cref="ItemGripPose"/>: kayıt anchor uzayında). Bileği ölçmek,
-        /// kumandanın tam yazıldığı yerde dururken bile aradaki anchor→bilek deltası kadar
-        /// (santimlerce) uzaktan yargılamak olurdu — kabul yarıçapı o farkı yutmuyorsa oyuncu "elim
-        /// tam yerinde ama tutmuyor" hisseder.
-        /// </para>
-        /// <para>⚠️ Bu yalnız kurulma kapısıdır; bağın SÜRDÜRÜLMESİ mesafeye bakmaz (gerekçe
-        /// <c>WeaponGranter.ResolveSecondaryHand</c>'de).</para>
-        /// <para>⚠️ <b>Ön kabza kaydı yazılmamışsa kapı KAPALIDIR</b>
-        /// (<see cref="ItemDefinition.HasSecondaryGrip"/>): yazılmamış kayıt eşyanın köküne düşer ve o
-        /// nokta çoğu silahta ana elin dibindedir — kapı açık kalsa ikinci el ön kabzaya değil ana elin
-        /// üstüne "bağlanır"dı. Uyarıyı <see cref="TickSecondaryGripIndicator"/> basar.</para>
-        /// </summary>
+        /// <summary>Is this hand's controller ANCHOR inside the front-grip socket — the ESTABLISH
+        /// gate for the second hand.
+        /// <para>One rule, two readers: <see cref="WeaponGranter"/> binds the second hand from it
+        /// (grip pressed + this <c>true</c>) and the socket switches to its "inside" alpha from it.
+        /// Two separate measurements would let a grab be refused where the player is told "you are
+        /// in".</para>
+        /// <para>⚠️ The measured point is the controller ANCHOR (<see cref="TryResolveAnchor"/>) —
+        /// the SAME frame as the grip record (<see cref="ItemGripPose"/> is in anchor space).
+        /// Measuring the wrist would judge from centimetres away even with the controller exactly
+        /// where it was authored, and the player would feel "my hand is right there but it will not
+        /// hold".</para>
+        /// <para>⚠️ Establish gate only; MAINTAINING the link ignores distance (rationale in
+        /// <c>WeaponGranter.ResolveSecondaryHand</c>).</para>
+        /// <para>⚠️ With no authored front-grip record the gate is CLOSED
+        /// (<see cref="ItemDefinition.HasSecondaryGrip"/>): an unauthored record falls to the item
+        /// root, which on most weapons sits next to the main hand, so an open gate would "bind" the
+        /// second hand on top of the main one. <see cref="TickSecondaryGripIndicator"/> logs the
+        /// warning.</para></summary>
         public bool IsHandOnSecondaryGrip(OVRInput.Controller hand)
         {
             if (definition == null || !definition.HasSecondaryGrip)
@@ -1244,12 +1130,10 @@ namespace VortexArena.Core.Combat
             return (anchor - socket).sqrMagnitude <= radius * radius;
         }
 
-        /// <summary>
-        /// Elin kumanda anchor'ının dünya konumu (<see cref="WeaponGranter.ResolveHandAnchor"/> — rig
-        /// keşfinin tek yolu). Rig ya da el çözülemezse <c>false</c>.
-        /// <para>Kavrama kaydıyla AYNI çerçeve: kayıt anchor'ı tarif ediyor, karşılaştırılan nokta da
-        /// anchor olmalı — aksi hâlde soket, kumandanın tam yazıldığı yerinde bile "dışarıda" der.</para>
-        /// </summary>
+        /// <summary>World position of the hand's controller anchor
+        /// (<see cref="WeaponGranter.ResolveHandAnchor"/>, the only rig discovery path);
+        /// <c>false</c> if the rig or hand cannot be resolved. Same frame as the grip record, or the
+        /// socket would say "outside" with the controller exactly where it was authored.</summary>
         private static bool TryResolveAnchor(OVRInput.Controller hand, out Vector3 position)
         {
             Transform anchor = WeaponGranter.ResolveHandAnchor(hand);
@@ -1263,39 +1147,26 @@ namespace VortexArena.Core.Combat
             return true;
         }
 
-        /// <summary>
-        /// Ön kabza soketinin bir karelik durumu: silah tutuluyor, iki elli ve ikinci el henüz
-        /// bağlı değilken BOŞ elin kumandası ön kabzaya yaklaşınca soket küresi belirir (açık mavi,
-        /// %70 saydam), kumanda anchor'ı kürenin İÇİNE girince biraz dolgunlaşır ("bas"), ikinci el
-        /// bağlanınca kaybolur.
-        /// <para>
-        /// <b>Küre = kabul hacmi.</b> Prefab 1 m çapında tasarlanır ve burada kabul yarıçapının iki
-        /// katına ölçeklenir; yani oyuncunun gördüğü küre ile <see cref="IsHandOnSecondaryGrip"/>'in
-        /// yargıladığı hacim AYNI şeydir. Görsel ile kural ayrı sayılara bağlansaydı "içindeyim ama
-        /// tutmuyor" hissi doğardı.
-        /// </para>
-        /// <para>
-        /// <b>Soket YALNIZ ön kabza içindir.</b> Ana kabzanın soketi yoktur: silah zaten ana elde
-        /// doğuyor (verilen/çağrılan silah) ya da çerçeveden seçiliyor — ana kabza için oyuncunun
-        /// elini bir yere götürmesi gerekmiyor.
-        /// </para>
-        /// <para>
-        /// <b>Sanat prefabdadır</b> (<see cref="WeaponCatalog.SecondaryGripIndicatorPrefab"/>, tüm
-        /// silahlar aynı soketi paylaşır); bu sınıf yalnız yerini, ölçeğini ve alfasını sürer.
-        /// Prefab yoksa soket çizilmez ve bir kez uyarılır — kapı yine çalışır (kavrama soketsiz
-        /// de kabul edilir).
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Uzak avatarlarda çizilmez</b> ve bunun için bir şey yapmak gerekmez:
-        /// <c>RemoteAvatar.SterilizeVisual</c> kopyadaki tüm MonoBehaviour'ları (bu sınıf dahil) yok
-        /// eder — gösterge yalnız yerel oyuncunun elindeki silahta yaşar.
-        /// </para>
-        /// <para>
-        /// ⚠️ <see cref="LateUpdate"/>'te ve <see cref="ApplyCanonicalGrip"/>'ten SONRA çağrılır: silahın
-        /// bu karedeki pozu yazılmadan ölçülen mesafe bir kare geriden gelir ve gösterge hızlı
-        /// harekette silahtan kopuk görünür.
-        /// </para>
-        /// </summary>
+        /// <summary>One frame of the front-grip socket: while the weapon is held, two-handed and
+        /// the second hand is not bound yet, the sphere appears as the FREE hand's controller
+        /// approaches, gets slightly more solid once the anchor is INSIDE ("press"), and disappears
+        /// once bound.
+        /// <para>The sphere IS the acceptance volume: the prefab is designed at 1 m diameter and
+        /// scaled here to twice the acceptance radius, so what the player sees and what
+        /// <see cref="IsHandOnSecondaryGrip"/> judges are the same thing. Separate numbers would
+        /// produce "I am inside but it will not hold".</para>
+        /// <para>The socket is for the FRONT grip only. The main grip has none: the weapon is born
+        /// in the main hand or selected from a frame, so the player never has to move a hand
+        /// there.</para>
+        /// <para>The art is a prefab (<see cref="WeaponCatalog.SecondaryGripIndicatorPrefab"/>,
+        /// shared by all weapons); this class only drives its position, scale and alpha. Without
+        /// the prefab nothing is drawn and one warning is logged — the gate still works.</para>
+        /// <para>⚠️ Never drawn on remote avatars, and nothing is needed for that:
+        /// <c>RemoteAvatar.SterilizeVisual</c> strips every MonoBehaviour (this class included)
+        /// from the copy.</para>
+        /// <para>⚠️ Called in <see cref="LateUpdate"/> AFTER <see cref="ApplyCanonicalGrip"/>:
+        /// measuring before this frame's pose is written lags one frame and the indicator looks
+        /// detached during fast movement.</para></summary>
         private void TickSecondaryGripIndicator()
         {
             if (definition == null || !definition.IsTwoHanded || !IsHeld ||
@@ -1307,9 +1178,9 @@ namespace VortexArena.Core.Combat
 
             if (!definition.HasSecondaryGrip)
             {
-                // Yazılmamış ön kabza = ön kabza YOK (ItemDefinition.HasSecondaryGrip): soket eşyanın
-                // köküne, yani ana elin dibine çizilirdi. Sessiz kalınmaz — bu bir içerik hatasıdır
-                // ve tek çaresi stüdyodur.
+                // Unauthored front grip = NO front grip: the socket would be drawn at the item
+                // root, i.e. next to the main hand. Not silent — this is a content error whose only
+                // fix is the grip studio.
                 HideIndicator();
                 if (unauthoredSecondaryWarned.Add(definition))
                 {
@@ -1325,7 +1196,7 @@ namespace VortexArena.Core.Combat
             OVRInput.Controller free = FreeHand();
             if (free == OVRInput.Controller.None || !TryResolveAnchor(free, out Vector3 anchor))
             {
-                // Rig yok (admin gözlemci, editör oturumu) ya da ana el çözülemedi: gösterilecek el yok.
+                // No rig (admin spectator, Editor session) or unresolved main hand: no hand to show.
                 HideIndicator();
                 return;
             }
@@ -1348,12 +1219,12 @@ namespace VortexArena.Core.Combat
             bool inside = distance <= radius;
 
             indicator.gameObject.SetActive(true);
-            // Dönüş silahınki: küre için önemsiz, tasarlanmış bir soket sanatı ise yönünü silahtan alır.
+            // Rotation follows the weapon: irrelevant for a sphere, meaningful for authored art.
             indicator.SetPositionAndRotation(socket, transform.rotation);
 
-            // ⚠️ Ölçek DÜNYA ölçüsüdür ve kabul küresinin ta kendisidir: prefab 1 m çap sözleşmesiyle
-            // gelir, çap = 2 × yarıçap. Silah 0.8 ölçekli olduğu için ebeveyn ölçeği geri alınır —
-            // yerel ölçek düz yazılsa küre silahtan silaha farklı büyüklükte görünürdü.
+            // ⚠️ The scale is a WORLD measurement and IS the acceptance sphere: the prefab ships at
+            // 1 m diameter, so diameter = 2 × radius. The parent scale is undone because weapons are
+            // 0.8-scaled; a raw local scale would size the sphere differently per weapon.
             float parentScale = Mathf.Max(1e-4f, transform.lossyScale.x);
             indicator.localScale = Vector3.one * (2f * radius / parentScale);
 
@@ -1371,7 +1242,6 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>Ana elin karşısındaki el; ana el çözülemediyse <c>None</c>.</summary>
         private OVRInput.Controller FreeHand()
         {
             switch (MainHand)
@@ -1382,13 +1252,11 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>
-        /// Soket örneğini katalogdaki prefabtan üretir (bir kez, silahın altına). Prefabtan fizik
-        /// sökülür: collider bırakılırsa soket hem ateş ışınına hem kavramaya takılır — oyuncuya
-        /// yardım etmesi gereken şey nişanı bozardı.
-        /// <para>Alfa sürülecek yüzey: ilk Renderer'ın materyal ÖRNEĞİ (küre); Renderer yok ama
-        /// LineRenderer varsa onun çizgi rengi.</para>
-        /// </summary>
+        /// <summary>Instantiates the socket from the catalog prefab (once, under the weapon).
+        /// Physics is stripped: a leftover collider would catch both the shot ray and grabbing, so
+        /// the thing meant to help the player would ruin their aim.
+        /// <para>Alpha surface: the first Renderer's material INSTANCE, or a LineRenderer's colour
+        /// when there is no Renderer.</para></summary>
         private bool EnsureIndicator()
         {
             if (indicator != null)
@@ -1432,8 +1300,8 @@ namespace VortexArena.Core.Combat
 
             if (indicatorLine == null)
             {
-                // Materyal örneği BİR KEZ burada alınır (her karede .material yeni bir örnek üretirdi).
-                // Renk özelliği yoksa sessizce geçilir: gösterge yalnız ölçek/aktiflikle konuşur.
+                // The material instance is taken ONCE here (.material allocates a new one per
+                // call). With no colour property this is skipped silently.
                 var renderer = instance.GetComponentInChildren<Renderer>(true);
                 if (renderer != null)
                 {
@@ -1457,7 +1325,7 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        // ------------------------------------------------------- canlanma dolumu
+        // ------------------------------------------------------------ revive refill
 
         private void TrySubscribeAlive()
         {
@@ -1470,27 +1338,23 @@ namespace VortexArena.Core.Combat
 
         private void HandleAliveChanged(bool alive)
         {
-            // Tabanında dirilen oyuncu tam cephaneyle başlar (yalnız elindeki silah:
-            // yerdeki silahlar dolmaz, sahiplerini bekler).
+            // A revived player starts with full ammo — only the weapon in hand; scene weapons wait
+            // for their owners.
             if (alive && IsHeld)
                 RefillFull();
         }
 
-        // ------------------------------------------------------------------- ağ
+        // ------------------------------------------------------------------ network
 
-        /// <summary>
-        /// §6.6: YEREL oyuncunun elinde ne olduğunu <see cref="HeldItems"/>'a bildiren TEK yer.
-        /// <para>
-        /// <b>Neden statik ve merkezî:</b> <c>HeldItems</c> oyuncunun TAMAMINI anlatır (iki slot +
-        /// kavrama bitleri), tek bir silahı değil — çift tabanca meşru bir durumdur. Her silah kendi
-        /// durumunu bildirseydi ikinci silah birincinin slotunu ezer ve elde ne olduğu silahların
-        /// rastgele sırasına bağlı kalırdı.
-        /// </para>
-        /// <para>
-        /// ⚠️ Her karede DEĞİL, yalnız <see cref="ActiveChanged"/>'de koşar: "elde ne var" insan
-        /// hızında değişir, <see cref="Active"/>'i kare başına taramanın karşılığı yoktur.
-        /// </para>
-        /// </summary>
+        /// <summary>§6.6: the ONE place that reports what the LOCAL player holds to
+        /// <see cref="HeldItems"/>.
+        /// <para>Static and central because <c>HeldItems</c> describes the WHOLE player (two slots
+        /// + grip bits), not a single weapon — dual wielding is legitimate. Per-weapon reporting
+        /// would let the second weapon overwrite the first's slot, leaving the result dependent on
+        /// arbitrary ordering.</para>
+        /// <para>⚠️ Runs on <see cref="ActiveChanged"/>, NOT every frame: what is in hand changes
+        /// at human speed and scanning <see cref="Active"/> per frame buys
+        /// nothing.</para></summary>
         private static void RefreshHeldItems()
         {
             byte left = 0;
@@ -1509,8 +1373,8 @@ namespace VortexArena.Core.Combat
                 byte id = weapon.NetItemId;
                 if (id == 0)
                 {
-                    // Kimliksiz silah uzak tarafta HİÇ çizilmez; sessiz kalması sahada teşhis
-                    // edilemez bir "elinde bir şey yok" olarak görünürdü.
+                    // An id-less weapon is never drawn remotely; staying silent would show as an
+                    // undiagnosable "empty hands" in the field.
                     WarnMissingNetItemId(weapon);
                     continue;
                 }
@@ -1519,8 +1383,8 @@ namespace VortexArena.Core.Combat
 
                 if (wantsLeft && wantsRight)
                 {
-                    // Çift ellide İKİ slota AYNI id yazılır + GRIP_LINKED: "aynı id iki slotta"
-                    // tek başına çift el demek değildir (çift tabanca), ayrımı yalnız bayrak taşır.
+                    // Two-handed writes the SAME id into BOTH slots + GRIP_LINKED: "same id in two
+                    // slots" alone does not mean two-handed (dual pistols); only the flag does.
                     if (left != 0 || right != 0)
                     {
                         WarnHandConflict(weapon);
@@ -1565,16 +1429,14 @@ namespace VortexArena.Core.Combat
             HeldItems.Report(left, right, gripLinked, primaryRight);
         }
 
-        /// <summary>
-        /// Bu silahı hangi el(ler) tutuyor. VERİLEN silahta ana el + (varsa) ön kabzayı tutan
-        /// ikinci el; sahne silahında eller <see cref="heldPoints"/>'tan gelir.
-        /// <para>⚠️ <b>Verilen silahın iki türü de aynı daldan geçer:</b> ön kabzayı tutan ikinci el
-        /// telde <c>GRIP_LINKED</c> üretmeli, yoksa uzak taraf silahı tek elle tutuyor çizerdi. Kural
-        /// Disposable için de geçerlidir (bkz. <see cref="IsTwoHanded"/> notu).</para>
-        /// <para>⚠️ Çözülemeyen el (<c>None</c>) SAĞ sayılır — telde "bilinmeyen el" diye bir değer
-        /// yok. Ama iki kavrama noktası varsa el çözülemese bile İKİSİ birden işaretlenir: aksi
-        /// hâlde editör oturumunda (kontrolcü çözülemez) çift el kavraması tek elli görünürdü.</para>
-        /// </summary>
+        /// <summary>Which hand(s) hold this weapon: main hand + optional front-grip hand when
+        /// granted, otherwise from <see cref="heldPoints"/>.
+        /// <para>⚠️ Both granted kinds take the same branch: a second hand on the front grip must
+        /// produce <c>GRIP_LINKED</c> on the wire or the remote side draws a one-handed hold. The
+        /// rule applies to Disposable too (see <see cref="IsTwoHanded"/>).</para>
+        /// <para>⚠️ An unresolved hand (<c>None</c>) counts as RIGHT — the wire has no "unknown"
+        /// value. But with two grab points BOTH are marked even when unresolved, otherwise an
+        /// Editor session would report a two-handed hold as one-handed.</para></summary>
         private void GetHeldHands(out bool left, out bool right)
         {
             left = false;
@@ -1591,9 +1453,9 @@ namespace VortexArena.Core.Combat
                     right = true;
                 }
 
-                // Ön kabzayı tutan ikinci el varsa iki el birden işaretlenir (el çözülemese de):
-                // yukarıdaki "None → sağ" kuralı yüzünden ikinci el ana elle çakışabilirdi ve
-                // çift el kavraması telde tek elli görünürdü.
+                // With a second hand on the front grip, mark both (even unresolved): the
+                // "None → right" rule above could otherwise collide the two hands and report a
+                // two-handed hold as one-handed.
                 if (HasSecondaryGrip)
                 {
                     left = true;
@@ -1622,8 +1484,8 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>Toplayıcıyı <see cref="ActiveChanged"/>'e BİR KEZ bağlar (statik olay, statik
-        /// dinleyici: sahne değişse de abonelik kalır, iki kez bağlanmak refresh'i çiftlerdi).</summary>
+        /// <summary>Hooks the collector to <see cref="ActiveChanged"/> ONCE (static event, static
+        /// listener: the hook survives scene changes and a double hook would double the refresh).</summary>
         private static void EnsureHeldItemsHook()
         {
             if (heldItemsHooked)
@@ -1673,19 +1535,15 @@ namespace VortexArena.Core.Combat
                              "kill feed etiketi boş kalacak.", this);
         }
 
-        // --------------------------------------------------------------- haptik
+        // ---------------------------------------------------------------- haptics
 
-        /// <summary>
-        /// Atış darbesini başlatır. Şiddet ve süre <b>silahın tanımından</b> okunur
-        /// (<see cref="WeaponDefinition.HapticAmplitude"/> / <see cref="WeaponDefinition.HapticDuration"/>)
-        /// — kodda sabit bir darbe YOKTUR, her silahın vuruş hissi kendi SO'sundan gelir.
-        /// <para>Değerler her atışta <b>yeniden</b> okunur ve darbeye parametre olarak geçer:
-        /// koşan bir darbenin ortasında tanım değişirse (silah verilip geri alınırsa) yarım kalan
-        /// darbe kendi şiddetiyle biter.</para>
-        /// <para>⚠️ Sıfır şiddet ya da sıfır süre "haptik kapalı" demektir ve darbe hiç
-        /// başlatılmaz: sıfır süreli bir coroutine titreşimi açıp kapatmayı aynı kareye sıkıştırır,
-        /// bu da kumandada asılı kalan bir titreşim bırakabilir.</para>
-        /// </summary>
+        /// <summary>Starts the shot pulse. Amplitude and duration come from the weapon's definition
+        /// — there is no hard-coded pulse; every weapon's feel lives in its own SO.
+        /// <para>The values are re-read on every shot and passed as parameters, so a pulse already
+        /// running finishes with its own amplitude if the definition changes mid-way.</para>
+        /// <para>⚠️ Zero amplitude or zero duration means "haptics off" and no pulse starts: a
+        /// zero-length coroutine squeezes on and off into the same frame and can leave a vibration
+        /// hanging on the controller.</para></summary>
         private void TriggerHapticPulse()
         {
             if (hapticRoutine != null)
@@ -1699,7 +1557,7 @@ namespace VortexArena.Core.Combat
 
             if (amplitude <= 0f || duration <= 0f)
             {
-                // Haptik kapalı. Yarıda kesilen bir darbe kalmış olabilir — titreşimi kapat.
+                // Haptics off; a cut pulse may remain — stop the vibration.
                 SetHeldVibration(0f, 0f);
                 return;
             }
@@ -1709,11 +1567,10 @@ namespace VortexArena.Core.Combat
 
         private IEnumerator HapticPulse(float amplitude, float duration)
         {
-            // Yalnız silahı FİİLEN tutan el(ler) titrer; None (çözülememiş el) atlanır.
+            // Only the hand(s) actually holding vibrate; None (unresolved) is skipped.
             SetHeldVibration(1f, amplitude);
             yield return new WaitForSeconds(duration);
-            // Darbe sırasında bırakılan elin titreşimi OVR tarafında kendiliğinden söner;
-            // kalıcı temizlik OnDisable'dadır.
+            // A hand released mid-pulse stops on the OVR side; permanent cleanup is in OnDisable.
             SetHeldVibration(0f, 0f);
             hapticRoutine = null;
         }
@@ -1724,8 +1581,8 @@ namespace VortexArena.Core.Combat
             {
                 OVRInput.SetControllerVibration(frequency, amplitude, GrantedHand);
 
-                // Ön kabzayı tutan el de titrer: tek elde kalan darbe, iki elle sabitlenmiş bir
-                // silahta tutuşun yarısını hissettirirdi.
+                // The front-grip hand vibrates too: a one-hand-only pulse would feel like half a
+                // two-handed hold.
                 OVRInput.Controller secondary = SecondaryHand;
                 if (secondary != OVRInput.Controller.None)
                 {

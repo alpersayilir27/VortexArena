@@ -11,6 +11,7 @@ okumadıysan ve "silahımı ateşleyince ne çağıracağım?" sorusunun cevabı
 
 | # | Sayfa | Ne verir |
 |---|---|---|
+| 0 | **[Ortam Kurulumu](Ortam-Kurulumu.md)** | Yeni bilgisayarda bir kereye mahsus kurulum: Unity + CLI, .NET SDK, Defender dışlamaları, MCP kayıtları. Diğer sayfaların ön koşulu |
 | 1 | **[İlk Adımlar](Ilk-Adimlar.md)** | Projeyi aç, rolünü seç, sunucusuz test et, gerçek maç kur. ~15 dakika |
 | 2 | **[Yemek Kitabı](Yemek-Kitabi.md)** | "Şunu yapmak istiyorum" → kopyala-yapıştır reçete. **Günlük olarak burayı kullanacaksın** |
 | 3 | **[API Referansı](API-Referansi.md)** | Çağırabileceğin her şey: tip tip, üye üye, ne zaman çağrılır |

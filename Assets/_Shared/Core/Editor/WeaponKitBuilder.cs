@@ -9,54 +9,35 @@ using Object = UnityEngine.Object;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// <b>Silah kiti</b> — tablodaki silahların kitini üretir/günceller: <c>WD_&lt;Ad&gt;.asset</c>
-    /// (WeaponDefinition), mevcut <c>WPN_&lt;Ad&gt;.prefab</c>'ların bağları/VFX'i,
-    /// <c>FX_RemoteShot.prefab</c>, ön kabza göstergesi (<c>VA_GripSocket.prefab</c>) ve
+    /// <summary>Weapon kit builder: produces/updates <c>WD_&lt;Name&gt;.asset</c>
+    /// (WeaponDefinition), the bindings and VFX of existing <c>WPN_&lt;Name&gt;.prefab</c>s,
+    /// <c>FX_RemoteShot.prefab</c>, the front-grip indicator (<c>VA_GripSocket.prefab</c>) and
     /// <c>Resources/WeaponCatalog.asset</c>.
-    /// <para>
-    /// <b>Ayrı bir menü öğesi YOKTUR:</b> <c>Tools &gt; VortexArena &gt; Build &gt; Configure All Build
-    /// Elements</c> her eşitlemede (<c>BuildElementsConfigurator.SyncAll</c> — "Hepsini Yapılandır" ve
-    /// "Yalnız Senkronize Et") <see cref="BuildAll"/>'ı koşar; "Hazırlık" bölümü de durumunu
-    /// (<see cref="AreWeaponsReady"/>) gösterir. Yani tabloya silah eklemek / kiti tazelemek =
-    /// o pencerede senkronize etmek. Koşu idempotenttir; her koşuda değişmeyen asset'ler aynı
-    /// içerikle yeniden yazılır (diff üretmez).
-    /// </para>
-    /// <para>
-    /// <b>WPN prefabı YOKTAN üretilmez:</b> gövde (model hiyerarşisi, Muzzle/MuzzleFlash/Eject
-    /// yerleşimi) elle ayarlanan bir şeydir ve prefab repoda yaşar; araç onu yerinde
-    /// günceller. Prefab yoksa hata basılır — sessizce yanlış yerleşimli bir silah üretmek
-    /// (ör. Muzzle'ı Model'in altından köke almak) geri tepmeyi ve nişanı bozuyordu.
-    /// </para>
-    /// <para>
-    /// <b>Idempotent:</b> tekrar koşulduğunda mevcut asset'ler yerinde güncellenir
-    /// (GUID korunur; SaveAsPrefabAsset var olan yola yazar, CreateAsset yalnız yoksa çağrılır).
-    /// </para>
-    /// <para>
-    /// <b>Dialog YOK:</b> pipeline'ı kilitlememek için EditorUtility.DisplayDialog kullanılmaz;
-    /// tüm çıktı Debug.Log/LogWarning/LogError ile konsola yazılır.
-    /// </para>
-    /// <para>
-    /// <b>Tip çözümü:</b> Bu asmdef yalnız VortexArena.Core'u referanslar. Weapon /
-    /// WeaponAudio / WeaponDefinition derleme zamanında bağlanır (Core/Combat'ta yaşıyorlar);
-    /// WeaponAnimator, WeaponReloadGesture, WeaponCatalog,
-    /// TMPro.TextMeshPro, Oculus Grabbable ve MetaXRAudioSource ise TİP ADIYLA çalışma
-    /// zamanında bulunur — tip/alan bulunamazsa uyarı basılır ve devam edilir
-    /// (sözleşme kayması teşhisi için).
-    /// </para>
-    /// <para>
-    /// <b>Silaha özgü his:</b> her silahın kendi ateş/reload/dry-fire klipleri (Assets/Audio/Weapons),
-    /// silaha özgü namlu alevi (renk/boyut/koni açısı) ve namlu dumanı (MuzzleFlash altında
-    /// "Smoke" alt-parçacık sistemi, sub-emitter ile tetiklenir) üretilir. Ayrıca her WPN'e bir
-    /// <c>Eject</c> noktası + <see cref="ShellEjector"/> bileşeni eklenir ve kalibreye göre
-    /// (762x39/556x45) paylaşılan <c>Casing_*.prefab</c>'a bağlanır — ateşte kovan fırlar.
-    /// </para>
+    /// <para>There is NO separate menu item: <c>Tools &gt; VortexArena &gt; Build &gt; Configure All
+    /// Build Elements</c> runs <see cref="BuildAll"/> on every sync and its "Hazırlık" section shows
+    /// the state (<see cref="AreWeaponsReady"/>). Adding a weapon to the table = syncing there. The
+    /// run is idempotent: unchanged assets are rewritten with identical content (no diff).</para>
+    /// <para>⚠️ WPN prefabs are NEVER created from scratch: the body (model hierarchy,
+    /// Muzzle/MuzzleFlash/Eject placement) is hand-authored and lives in the repo; the tool updates
+    /// it in place. A missing prefab is an error — silently generating a mis-placed weapon (e.g.
+    /// lifting Muzzle out of Model to the root) broke recoil and aim.</para>
+    /// <para>⚠️ No dialogs: <c>EditorUtility.DisplayDialog</c> would lock the pipeline, so all output
+    /// goes to <c>Debug.Log/LogWarning/LogError</c>.</para>
+    /// <para>Type resolution: this asmdef only references VortexArena.Core, so Weapon / WeaponAudio /
+    /// WeaponDefinition bind at compile time while WeaponAnimator, WeaponReloadGesture,
+    /// WeaponCatalog, TMPro.TextMeshPro, Oculus Grabbable and MetaXRAudioSource are found BY TYPE
+    /// NAME at runtime — a missing type/field warns and continues (contract-drift diagnostics).</para>
+    /// <para>Per-weapon feel: each weapon gets its own fire/reload/dry-fire clips
+    /// (Assets/Audio/Weapons), its own muzzle flash (colour/size/cone) and muzzle smoke (a "Smoke"
+    /// sub-particle system under MuzzleFlash, triggered as a sub-emitter). Every WPN also gets an
+    /// <c>Eject</c> point + <see cref="ShellEjector"/> bound to the shared <c>Casing_*.prefab</c> for
+    /// its calibre.</para>
     /// </summary>
     public static class WeaponKitBuilder
     {
-        // ------------------------------------------------------------ sabitler
+        // ----------------------------------------------------------------- constants
 
-        /// <summary>Pack klasörü ileride taşınırsa yalnız bu satır değişir.</summary>
+        /// <summary>If the pack folder moves, only this line changes.</summary>
         private const string PackRoot = "Assets/ThirdPartyPackages/Low Poly AR Weapon Pack 1";
 
         private const string DataDir = "Assets/_Shared/Arsenal/Data";
@@ -67,41 +48,32 @@ namespace VortexArena.Core.Editor
         private const string CatalogDir = "Assets/_Shared/Data/Resources";
         private const string CatalogPath = CatalogDir + "/WeaponCatalog.asset";
 
-        /// <summary>Silah çerçevesi prefabı — her WPN'in altına ÖRNEK olarak konur
-        /// (bkz. <see cref="ApplyWeaponFrameKit"/>). Bu araç onu üretmez, yalnız bağlar.</summary>
+        /// <summary>Weapon frame prefab — placed under every WPN as an INSTANCE
+        /// (<see cref="ApplyWeaponFrameKit"/>). The tool only binds it, never creates it.</summary>
         private const string WeaponFramePrefabPath = PrefabDir + "/VA_WeaponFrame.prefab";
 
-        /// <summary>
-        /// Ön kabza SOKETİNİN sanatı — tüm silahların paylaştığı tek prefab; <c>Weapon</c> onu boş
-        /// elin yaklaştığı ön kabza noktasına koyar (<c>WeaponCatalog.secondaryGripIndicatorPrefab</c>).
-        /// <para>
-        /// <b>Sözleşme: prefab 1 m ÇAPINDA tasarlanır</b> (Unity küre primitifinin ölçüsü);
-        /// <c>Weapon</c> onu kabul yarıçapının iki katına ölçekler — yani çizilen küre TAM OLARAK
-        /// kabul hacmidir: kumanda anchor'ı kürenin içindeyken grip ikinci eli bağlar, dışındayken bağlamaz.
-        /// Görsel ile kural ayrı sayılara bağlansaydı oyuncuya "içindesin" denen yerde kavrama
-        /// reddedilebilirdi.
-        /// </para>
-        /// <para>Bu araç prefabı <b>yalnız yoksa</b> üretir (<see cref="EnsureGripSocketPrefab"/>:
-        /// yarı saydam açık mavi küre) ve kataloğa <b>yalnız alan boşsa</b> bağlar — sanatçı küreyi
-        /// yerinde değiştirebilir ya da kataloğa başka bir prefab bağlayabilir, araç ikisini de
-        /// ezmez.</para>
-        /// </summary>
+        /// <summary>Art of the front-grip SOCKET — one prefab shared by all weapons, placed by
+        /// <c>Weapon</c> at the front-grip point (<c>WeaponCatalog.secondaryGripIndicatorPrefab</c>).
+        /// <para>⚠️ Contract: the prefab is designed 1 m ACROSS (Unity's sphere primitive) and
+        /// <c>Weapon</c> scales it to twice the acceptance radius, so the drawn sphere IS exactly the
+        /// acceptance volume. Binding visual and rule to different numbers would let a grip be
+        /// refused where the player is told they are inside.</para>
+        /// <para>The tool creates the prefab ONLY if missing (<see cref="EnsureGripSocketPrefab"/>:
+        /// translucent light-blue sphere) and binds it to the catalog ONLY if the field is empty, so
+        /// neither an edited sphere nor a different prefab is overwritten.</para></summary>
         private const string GripSocketPrefabPath = PrefabDir + "/VA_GripSocket.prefab";
         private const string GripSocketMaterialDir = "Assets/_Shared/Materials";
         private const string GripSocketMaterialPath = GripSocketMaterialDir + "/M_GripSocket.mat";
 
-        /// <summary>
-        /// Varsayılan soket küresinin rengi: açık mavi (yalnız ilk üretimde yazılır; sonrası
-        /// materyalin kendisidir). Çalışma anında <c>Weapon</c> alfayı sürer (yaklaşma / içeride),
-        /// rengin kendisine dokunmaz.
-        /// </summary>
+        /// <summary>Colour of the default socket sphere, written only on first creation; after that
+        /// the material owns it. At runtime <c>Weapon</c> drives only the alpha.</summary>
         private static readonly Color GripSocketColor = new Color(0.55f, 0.82f, 1f, 0.50f);
 
-        /// <summary>Küre materyalinin shader arama zinciri (ilk bulunan). Başta projenin kendi soket
-        /// shader'ı (<c>_Shared/Shaders/GripSocket.shader</c>: saydamlık, çift yüz ve süs kendi
-        /// pass'lerinde yazılı); o silinirse URP Unlit'e düşülür ve saydam yüzey ayarları aşağıda
-        /// bilinen özellik adlarıyla kurulur. Materyal ASSET olarak durduğu için shader build'e
-        /// kesin girer.</summary>
+        /// <summary>Shader search chain for the sphere material (first hit wins), starting with the
+        /// project's own <c>_Shared/Shaders/GripSocket.shader</c> (transparency, double-sided and
+        /// decoration are written in its passes); if that is gone it falls back to URP Unlit and
+        /// transparency is configured below by known property names. The material is an ASSET, so the
+        /// shader is guaranteed into the build.</summary>
         private static readonly string[] GripSocketShaderCandidates =
         {
             "VortexArena/GripSocket",
@@ -110,41 +82,37 @@ namespace VortexArena.Core.Editor
             "Sprites/Default",
         };
 
-        /// <summary>Silah ele gelirken oynayan çözülme materyali — her WPN köküne takılan
-        /// <see cref="SimpleWeaponDissolve"/>'a bağlanır (bkz. <see cref="ApplyDissolveKit"/>).
-        /// Bu araç onu üretmez, yalnız bağlar.</summary>
+        /// <summary>Dissolve material played as the weapon arrives in the hand — bound to the
+        /// <see cref="SimpleWeaponDissolve"/> on every WPN root (<see cref="ApplyDissolveKit"/>).
+        /// The tool only binds it.</summary>
         private const string DissolveMaterialPath = "Assets/_Shared/Materials/DissolveEffect.mat";
 
-        // Çözülme geçişinin süresi. ⚠️ Prefabda elle değiştirilse bile araç bir sonraki koşuda
-        // GERİ YAZAR (denge sayılarıyla aynı kural) — kalıcı ayar bu satırdır. Sahnede deneme
-        // yaparken Play modunda bileşen üstünden oynanır, beğenilen değer buraya işlenir.
-        // ⚠️ Materyal alanı bu kuralın DIŞINDADIR (yalnız boşsa yazılır): bir silaha başka bir
-        // çözülme materyali bağlamak (ör. VoronoiDissolveEffect) bilinçli bir tercihtir.
-        // ⚠️ Efektin GÖRÜNÜM ayarları (kenar, desen, eksen) burada YOKTUR ve eklenmez: onların tek
-        // doğruluk kaynağı materyalin kendisidir, bileşen yalnız _Dissolve'u sürer.
+        // Dissolve duration. ⚠️ Edited in a prefab it is WRITTEN BACK on the next run (same rule as
+        // the balance numbers) — this line is the permanent setting; experiment in Play mode, then
+        // paste the value here.
+        // ⚠️ The material field is OUTSIDE this rule (written only when empty): binding a different
+        // dissolve material to one weapon is a deliberate choice.
+        // ⚠️ The effect's LOOK (edge, pattern, axis) is not here and is not added: its single source
+        // is the material, the component only drives _Dissolve.
         private const float DissolveAppearSeconds = 1.2f;
 
         private const float CasingMassKg = 0.01f;
 
-        /// <summary>
-        /// Prefabın içinde kalmış <b>kavrama poz düğümü</b> ağacının adı — ölü veri, silinir
-        /// (bkz. <see cref="RemoveLegacyGripPoseNodes"/>).
-        /// <para>⚠️ Adın tanımı BURADADIR çünkü tek okuyucu bu temizliktir: düğümü üreten taraf
-        /// yok, tüketen taraf yok. Sabiti runtime'a taşımak, hiçbir şeyin okumadığı bir adı ortak
-        /// koda koymak olurdu. (Stüdyo elinin öneki bunun tersidir: onu ÜRETEN taraf yaşıyor, bu
-        /// yüzden tanımı orada — <see cref="GripPoseStudio.HAND_ROOT_PREFIX"/> — durur.)</para>
-        /// </summary>
+        /// <summary>Name of the leftover grip-pose node tree inside a prefab — dead data, deleted
+        /// (<see cref="RemoveLegacyGripPoseNodes"/>).
+        /// <para>⚠️ The constant lives HERE because this cleanup is its only reader: nothing produces
+        /// or consumes the node. Moving it to runtime would put a name nobody reads in shared code.
+        /// (The studio hand prefix is the opposite — its PRODUCER is alive, so it is defined at
+        /// <see cref="GripPoseStudio.HAND_ROOT_PREFIX"/>.)</para></summary>
         private const string LegacyGripPoseRootName = "GripPoses";
 
-        /// <summary>
-        /// Kovan aileleri: <c>WeaponSpec.CasingFamily</c> → (üretilecek kovan prefabı, pack'teki
-        /// mermi modeli). Yeni bir kalibre eklemek = buraya bir satır; kovan prefabı ilk koşuda
-        /// üretilir, sonra dokunulmaz.
-        /// <para>⚠️ Aile <b>görsel</b> bir ayrımdır, denge kolu değil: 1 cm'lik ve iki saniye
-        /// yaşayan bir obje için tabanca kalibrelerini (9x19 · .45 ACP · 5.7x28) tek kovanda
-        /// toplamak bilinçlidir — üçe bölmek üç asset ve üç satır maliyetine görünmeyen bir fark
-        /// üretirdi.</para>
-        /// </summary>
+        /// <summary>Casing families: <c>WeaponSpec.CasingFamily</c> → (casing prefab to build, pack
+        /// bullet model). A new calibre = one line here; the prefab is built on the first run and
+        /// then left alone.
+        /// <para>⚠️ A family is a VISUAL distinction, not a balance lever: for a 1 cm object that
+        /// lives two seconds, pooling the pistol calibres (9x19 · .45 ACP · 5.7x28) into one casing
+        /// is deliberate — splitting them would cost three assets for an invisible
+        /// difference.</para></summary>
         private static readonly Dictionary<string, (string CasingPath, string PackBulletPath)> CasingFamilies =
             new Dictionary<string, (string, string)>
             {
@@ -156,86 +124,83 @@ namespace VortexArena.Core.Editor
 
         private const string Log = "[WeaponKit] ";
 
-        // Tüm silahlarda ortak sayılar (tablo başlığındaki varsayılanlar).
+        // Numbers shared by all weapons (table-header defaults).
         //
-        // ⚠️ Kafa çarpanı satır bazında EZİLEBİLİR (`WeaponSpec.Headshot`) ve saçmalılarda ezilir:
-        // çarpan saçma BAŞINA uygulandığı için 4×, 26 hasarlı tek bir saçmayı anında öldürücü
-        // yapardı — 9 saçmalık bir konide 8 m'den gelen kaza kurşunu da dahil. CS'te bunu kask
-        // yumuşatıyor, burada zırh YOK.
+        // ⚠️ The headshot multiplier is OVERRIDABLE per row (`WeaponSpec.Headshot`) and is overridden
+        // for shotguns: the multiplier applies PER PELLET, so 4× would make a single 26-damage pellet
+        // instantly lethal — including a stray one from 8 m in a 9-pellet cone. CS softens this with
+        // helmets; there is NO armour here.
         private const float DefaultHeadshotMultiplier = 4f;
 
-        // Bölge çarpanları (CS2 modeli): kollar GÖVDE sayılır, yani 1× ayrı bir sabit istemez.
-        // ⚠️ Denge sayılarının tek doğruluk kaynağı bu tablodur — WD_*.asset'te Inspector'dan
-        // değiştirilen değer bir sonraki koşuda GERİ YAZILIR.
+        // Zone multipliers (CS2 model): arms count as BODY, so 1× needs no separate constant.
+        // ⚠️ This table is the single source of the balance numbers — a value edited in a
+        // WD_*.asset Inspector is WRITTEN BACK on the next run.
         private const float StomachMultiplier = 1.25f;
         private const float LegMultiplier = 0.75f;
         private const float KickBackMeters = 0.02f;
         private const float RecoilRecoverSpeed = 10f;
         private const float PitchJitter = 0.05f;
 
-        /// <summary>Satırında <c>ReserveMode</c> yazmayan silahın rezerv kuralı (ürün varsayılanı).</summary>
+        /// <summary>Reserve rule for a weapon whose row omits <c>ReserveMode</c>.</summary>
         private const string DefaultReserveModeName = "DiscardMagazine";
 
-        /// <summary>Satırında <c>SpareMags</c> yazmayan silahın yedek şarjör sayısı.</summary>
+        /// <summary>Spare magazine count for a weapon whose row omits <c>SpareMags</c>.</summary>
         private const int DefaultSpareMagazines = 2;
 
-        // ---------------------------------------------------------- silah tablosu
+        // ------------------------------------------------------------ weapon table
 
         private struct WeaponSpec
         {
-            public string Name;        // dosya eki: WD_<Name>, WPN_<Name>
+            public string Name;        // file suffix: WD_<Name>, WPN_<Name>
 
-            /// PackRoot/Prefabs/Weapons/<PackPrefab>.prefab — üretimde ARTIK OKUNMAZ (WPN prefabları
-            /// yerinde güncellenir, modelden yeniden kurulmaz); hangi silahın hangi pack modelinden
-            /// geldiğinin köken kaydı olarak duruyor.
+            /// PackRoot/Prefabs/Weapons/<PackPrefab>.prefab — NO LONGER READ during the build (WPN
+            /// prefabs are updated in place, not rebuilt from the model); kept as a record of which
+            /// pack model each weapon came from.
             public string PackPrefab;
             public string WeaponId;
             public string DisplayName;
 
-            /// ⚠️ Telde giden ağ kimliği (Docs/ArenaNet-Protokol.md §6.6) — snapshot'ta bu bayt
-            /// gider. KARARLI olmak zorundadır: bu tabloda satır sırası değişirse veya bir silah
-            /// silinirse KALAN silahların kimliği DEĞİŞMEMELİDİR (katalog dizi indeksi kimlik
-            /// olarak kullanılmadığının sebebi budur). Yeni silah = kullanılmamış bir sayı;
-            /// silinen silahın sayısı geri kullanılmaz. 0 geçersizdir (§6.6'da "el boş" rezervi).
+            /// ⚠️ Network id on the wire (Docs/ArenaNet-Protokol.md §6.6) — this byte goes in the
+            /// snapshot and must be STABLE: reordering or deleting a row must NOT change the ids of
+            /// the remaining weapons (which is why the catalog array index is not the id). New weapon
+            /// = an unused number; a deleted weapon's number is never reused. 0 is invalid (reserved
+            /// for "empty hand" in §6.6).
             public int NetItemId;
 
-            /// ItemHoldMode adı: "OneHand" (tabanca/bomba) | "TwoHand" (tüfek).
+            /// ItemHoldMode name: "OneHand" (pistol/grenade) | "TwoHand" (rifle).
             public string HoldMode;
-            /// ⚠️ Saçmalıda bu sayı <b>SAÇMA BAŞINA</b> hasardır, tetik başına değil
-            /// (CS2 modeli): toplam hasar isabet eden saçma sayısından doğar.
+
+            /// ⚠️ For shotguns this is damage PER PELLET, not per trigger pull (CS2 model): total
+            /// damage comes from how many pellets connect.
             public int Damage;
 
-            /// Kafa vuruşu çarpanı. <b>0 = varsayılan</b>
-            /// (<see cref="DefaultHeadshotMultiplier"/>). Yalnız saçmalılarda doldurulur —
-            /// gerekçe o sabitin yanında.
+            /// Headshot multiplier. <b>0 = default</b> (<see cref="DefaultHeadshotMultiplier"/>).
+            /// Filled only for shotguns — rationale next to that constant.
             public float Headshot;
 
             public int Rpm;
             public int Magazine;
             public float Reload;
 
-            /// Tek tetik çekişinde atılan ışın sayısı. <b>0 ya da 1 = normal silah</b>; yalnız
-            /// saçmalıda doldurulur (XM1014 6, Nova 9).
+            /// Rays per trigger pull. <b>0 or 1 = normal weapon</b>; filled only for shotguns
+            /// (XM1014 6, Nova 9).
             public int Pellets;
 
-            /// Yedek şarjör sayısı. <b>0 = varsayılan</b> (<see cref="DefaultSpareMagazines"/>).
-            /// CS2'nin rezerv cephanesi şarjör boyuna bölünerek bulunur (P90 100/50 = 2).
+            /// Spare magazines. <b>0 = default</b> (<see cref="DefaultSpareMagazines"/>). CS2's
+            /// reserve ammo divided by magazine size (P90 100/50 = 2).
             public int SpareMags;
 
-            /// <c>WeaponReserveMode</c> adı. <b>null = varsayılan</b>
-            /// (<see cref="DefaultReserveModeName"/> = şarjör bazlı). Tek tek fişek dolduran
-            /// silahlarda (pompalı) <c>"PoolRounds"</c> yazılır: erken reload'da namludaki fişek
-            /// yanmaz.
+            /// <c>WeaponReserveMode</c> name. <b>null = default</b>
+            /// (<see cref="DefaultReserveModeName"/>, magazine based). Shell-by-shell loaders use
+            /// <c>"PoolRounds"</c> so an early reload does not burn the chambered round.
             public string ReserveMode;
 
-            /// Hitscan menzili (metre). ⚠️ Bu bir DENGE kolu DEĞİLDİR ve öyle kullanılmaz:
-            /// mesafe duvarı keskindir (bir santim ötede hasar SIFIR), yani sürekli bir eğrinin
-            /// yerini tutamaz — ayarlanacak silah varsa kolu <see cref="BaseSpread"/>'dir.
-            /// Sıralama CS'in "range modifier" kimliğini korur (uzun namlu daha uzağa) ve daha
-            /// büyük mekanlar açıldığında anlam kazanır. Bugünkü band 18-50 m; 12×12 arenanın en
-            /// uzun hattı ~17 m olduğu için duvara pratikte yalnız en kısa menzilli silahlar,
-            /// yalnız daha büyük mekanlarda değer. Mesafeyle gerçekten hissedilen fark
-            /// SAÇILIMDAN gelir (bkz. <see cref="BaseSpread"/>).
+            /// Hitscan range (metres). ⚠️ NOT a balance lever: the distance wall is sharp (one
+            /// centimetre further and damage is ZERO), so it cannot stand in for a continuous curve —
+            /// the lever is <see cref="BaseSpread"/>. The ordering preserves CS's "range modifier"
+            /// identity (longer barrel reaches further) and starts to matter in larger venues; the
+            /// current band is 18-50 m while a 12×12 arena's longest line is ~17 m. Distance is
+            /// actually felt through SPREAD.
             public float Range;
             public float BaseSpread;
             public float BloomPerShot;
@@ -243,9 +208,9 @@ namespace VortexArena.Core.Editor
             public float BloomRecovery;
             public float Kick;
 
-            /// Ateş sesinin perdesi. ⚠️ 1.00'dan sapma yalnız **ödünç klibi maskelemek** için
-            /// vardır (ör. pompalıya AK sesini kalınlaştırarak vermek): o silaha kendi ses dosyası
-            /// bağlandığında bu değer 1.00'a geri alınır, yoksa gerçek ses yanlış perdeden çalar.
+            /// Fire sound pitch. ⚠️ Deviating from 1.00 exists ONLY to mask a borrowed clip (e.g.
+            /// thickening an AK sample for a shotgun): once the weapon gets its own audio file this
+            /// goes back to 1.00, otherwise the real sound plays at the wrong pitch.
             public float PitchBase;
 
             public float Volume;
@@ -262,23 +227,21 @@ namespace VortexArena.Core.Editor
             public string CasingFamily; // "762x39" | "556x45"
         }
 
-        // ⚠️ MODEL ↔ KİMLİK bağı bu tablodadır ve PackPrefab satırdan AYRILMAZ. Paketin
-        // modelleri jenerik adlarla geliyor (AR_A_1, AR_B …); hangi modelin hangi gerçek
-        // silaha benzediği GÖZLE tespit edildi. Bir satırın PackPrefab'ını değiştirmek
-        // "silahın modeli değişsin" demektir — istatistikleri taşımak için satırın geri
-        // kalanını taşı, PackPrefab/NetItemId'yi değil.
+        // ⚠️ The MODEL ↔ IDENTITY link lives in this table and PackPrefab never leaves its row. The
+        // pack ships generic model names (AR_A_1, AR_B …) and which model resembles which real
+        // weapon was matched BY EYE. Changing a row's PackPrefab means "change this weapon's model";
+        // to move stats, move the rest of the row, not PackPrefab/NetItemId.
         //
-        // Denge kaynağı: CS:GO/CS2'de karşılığı olanlar (AK-47, M4A4/M4A1, FAMAS) doğrudan oradan;
-        // olmayanlar (SCAR-L, G36C) PUBG + gerçek hayat teknik verisinden.
+        // Balance source: weapons with a CS:GO/CS2 counterpart (AK-47, M4A4/M4A1, FAMAS) come
+        // straight from there; the rest (SCAR-L, G36C) from PUBG + real-world data.
         //
-        // ⚠️ Reload süresi (`Reload`) silahın reload SESİNİN uzunluğudur: tetiğin açılma anı
-        // (`Weapon.reloadEndTime`) ile ses ve şarjör animasyonu aynı anda bitsin diye. Klip
-        // değişirse bu sayı da değişir — yoksa animasyon erken biter ve oyuncu "bitti ama
-        // sıkamıyorum" hisseder. Kendi reload sesi olmayan silahlarda (AK-47, pompalılar) sayı
-        // denge değeridir ve sesle eşleşmez.
+        // ⚠️ `Reload` is the length of the weapon's reload SOUND, so the trigger reopens
+        // (`Weapon.reloadEndTime`) exactly when audio and magazine animation end. Change the clip and
+        // this number changes too, otherwise the player feels "the sound finished but I cannot
+        // shoot". For weapons with no reload sound of their own it is a pure balance value.
         private static readonly WeaponSpec[] Specs =
         {
-            // AR_M — CS:GO M4A4 gövdesi: dengeli, orta geri tepme, en yaygın 5.56.
+            // AR_M — CS:GO M4A4 body: balanced, medium recoil, the baseline 5.56.
             new WeaponSpec
             {
                 Name = "M4A4", PackPrefab = "AR_M", WeaponId = "m4a4", DisplayName = "M4A4",
@@ -291,8 +254,8 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.25f,
                 CasingFamily = "556x45",
             },
-            // AR_B — CS:GO AK-47: tek gövde vuruşu en yüksek, kafa vuruşu kralı, en sert geri tepme.
-            // 7.62x39 olduğu için kovan ailesi de diğerlerinden ayrı.
+            // AR_B — CS:GO AK-47: highest single body hit, headshot king, harshest recoil. Being
+            // 7.62x39 it also has its own casing family.
             new WeaponSpec
             {
                 Name = "AK47", PackPrefab = "AR_B", WeaponId = "ak47", DisplayName = "AK-47",
@@ -305,9 +268,9 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.05f, SmokeSizeMax = 0.09f, SmokeLifetime = 1.4f, SmokeAlpha = 0.35f,
                 CasingFamily = "762x39",
             },
-            // AR_C — PUBG SCAR-L: en kolay kontrol edilen 5.56 (en düşük geri tepme + en yavaş
-            // bloom büyümesi + en hızlı toparlanma), bedeli en düşük DPS.
-            // ⚠️ SUSTURUCUSU YOK — eski M4A1-S satırının kısık ses/alev değerleri bilinçle atıldı.
+            // AR_C — PUBG SCAR-L: the easiest 5.56 to control (lowest recoil, slowest bloom growth,
+            // fastest recovery) at the cost of the lowest DPS.
+            // ⚠️ NO suppressor — the muted sound/flash values of the old M4A1-S row are gone by choice.
             new WeaponSpec
             {
                 Name = "SCARL", PackPrefab = "AR_C", WeaponId = "scarl", DisplayName = "SCAR-L",
@@ -320,8 +283,8 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.28f,
                 CasingFamily = "556x45",
             },
-            // AR_D — PUBG G36C: en yüksek atış hızı (750 rpm), en düşük mermi başı hasar,
-            // en kısa menzil. Yakın mesafe baskı silahı.
+            // AR_D — PUBG G36C: highest fire rate (750 rpm), lowest per-bullet damage, shortest
+            // range. A close-quarters suppression weapon.
             new WeaponSpec
             {
                 Name = "G36C", PackPrefab = "AR_D", WeaponId = "g36c", DisplayName = "G36C",
@@ -334,9 +297,9 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.04f, SmokeSizeMax = 0.07f, SmokeLifetime = 1.1f, SmokeAlpha = 0.30f,
                 CasingFamily = "556x45",
             },
-            // AR_E — CS:GO FAMAS: değerler CS:GO ile birebir doğrulandı (30 hasar / 666 rpm /
-            // 25 şarjör / 3.30 s reload). ⚠️ 25'lik şarjör bilinçli — CS:GO'da öyle; diğer beş
-            // silahın 30'undan bu yüzden ayrılıyor. Burst kipi modellenmedi.
+            // AR_E — CS:GO FAMAS: values verified against CS:GO (30 dmg / 666 rpm / 25 mag / 3.30 s).
+            // ⚠️ The 25-round magazine is deliberate (that is CS:GO's), which is why it differs from
+            // the others' 30. Burst mode is not modelled.
             new WeaponSpec
             {
                 Name = "FAMAS", PackPrefab = "AR_E", WeaponId = "famas", DisplayName = "FAMAS",
@@ -349,9 +312,9 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.28f,
                 CasingFamily = "556x45",
             },
-            // AR_A_1 — M4A1: M4A4'ün "nişancı" varyantı. En dar taban saçılım + en uzun menzil,
-            // bedeli en hızlı bozulan seri atış (en yüksek bloom, en yavaş toparlanma). Tek tek
-            // nişan alana ödül, tarayana ceza. Reload sesi M4A4 ile ORTAK ama pitch düşük.
+            // AR_A_1 — M4A1: the "marksman" M4A4. Tightest base spread and longest range, paid for
+            // with the fastest-degrading sustained fire (highest bloom, slowest recovery): rewards
+            // aimed single shots, punishes spraying. Shares M4A4's reload clip at a lower pitch.
             new WeaponSpec
             {
                 Name = "M4A1", PackPrefab = "AR_A_1", WeaponId = "m4a1", DisplayName = "M4A1",
@@ -364,10 +327,10 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.032f, SmokeSizeMax = 0.055f, SmokeLifetime = 0.95f, SmokeAlpha = 0.26f,
                 CasingFamily = "556x45",
             },
-            // AR_O — CS2 AUG: değerler CS2 ile birebir (28 hasar / 666 rpm / 30 şarjör / 3.80 s
-            // reload / 0.98 range modifier → AK ile aynı menzil sınıfı). Bullpup + dürbün kimliği
-            // saçılımda: tabanı SCAR-L'den dar, bloom'u en yavaş büyüyenlerden ve geri tepmesi
-            // düşük — bedeli 5.56'nın en düşük DPS'i ve en uzun reload'ı.
+            // AR_O — CS2 AUG: values match CS2 (28 dmg / 666 rpm / 30 mag / 3.80 s / 0.98 range
+            // modifier → AK's range class). Its bullpup+scope identity lives in the spread: tighter
+            // base than SCAR-L, among the slowest bloom growth and low recoil — paid for with the
+            // lowest 5.56 DPS and the longest reload.
             new WeaponSpec
             {
                 Name = "AUG", PackPrefab = "AR_O", WeaponId = "aug", DisplayName = "AUG",
@@ -380,9 +343,9 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.034f, SmokeSizeMax = 0.058f, SmokeLifetime = 1.0f, SmokeAlpha = 0.27f,
                 CasingFamily = "556x45",
             },
-            // AR_L — CS2 Galil AR: 30 hasar / 666 rpm / 35 şarjör / 3.00 s / 0.98 range modifier.
-            // "Ucuz AK": AK'nın menzil sınıfında ama tek vuruşu zayıf, buna karşılık daha hızlı ve
-            // 35'lik şarjörle en uzun seri. Bedeli 5.56'ların en geniş taban saçılımı.
+            // AR_L — CS2 Galil AR: 30 dmg / 666 rpm / 35 mag / 3.00 s / 0.98 range modifier. The
+            // "cheap AK": AK's range class with a weaker single hit, but faster and with the longest
+            // burst thanks to 35 rounds. Paid for with the widest base spread among the 5.56s.
             new WeaponSpec
             {
                 Name = "GALIL", PackPrefab = "AR_L", WeaponId = "galilar", DisplayName = "Galil AR",
@@ -395,8 +358,8 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.042f, SmokeSizeMax = 0.072f, SmokeLifetime = 1.2f, SmokeAlpha = 0.32f,
                 CasingFamily = "556x45",
             },
-            // SMG_O — CS2 P90: 26 hasar / 857 rpm / 50 şarjör / 3.40 s / 0.84 range modifier.
-            // 50'lik şarjör + en düşük geri tepme = tarama silahı; bedeli menzil ve mermi başı hasar.
+            // SMG_O — CS2 P90: 26 dmg / 857 rpm / 50 mag / 3.40 s / 0.84 range modifier. 50 rounds +
+            // the lowest recoil = a spray weapon; paid for in range and per-bullet damage.
             new WeaponSpec
             {
                 Name = "P90", PackPrefab = "SMG_O", WeaponId = "p90", DisplayName = "P90",
@@ -409,8 +372,8 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.028f, SmokeSizeMax = 0.048f, SmokeLifetime = 0.85f, SmokeAlpha = 0.22f,
                 CasingFamily = "9x19",
             },
-            // SMG_M — CS2 MP9: 26 hasar / 857 rpm / 30 şarjör / 2.10 s / 0.75 range modifier.
-            // Oyundaki EN HIZLI reload ve en kısa menzil: köşe tutan, sık şarjör değiştiren silah.
+            // SMG_M — CS2 MP9: 26 dmg / 857 rpm / 30 mag / 2.10 s / 0.75 range modifier. The fastest
+            // reload and shortest range in the game: an angle-holding, frequently reloading weapon.
             new WeaponSpec
             {
                 Name = "MP9", PackPrefab = "SMG_M", WeaponId = "mp9", DisplayName = "MP9",
@@ -423,9 +386,9 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.026f, SmokeSizeMax = 0.045f, SmokeLifetime = 0.8f, SmokeAlpha = 0.20f,
                 CasingFamily = "9x19",
             },
-            // SMG_L — CS2 UMP-45: 35 hasar / 666 rpm / 25 şarjör / 3.50 s / 0.82 range modifier.
-            // SMG'lerin en sert vuranı (bir tüfekten bile yüksek mermi hasarı) ama en yavaşı;
-            // 25'lik şarjör hatayı affetmiyor.
+            // SMG_L — CS2 UMP-45: 35 dmg / 666 rpm / 25 mag / 3.50 s / 0.82 range modifier. Hardest
+            // hitting SMG (higher per-bullet damage than some rifles) but the slowest; 25 rounds
+            // forgive nothing.
             new WeaponSpec
             {
                 Name = "UMP45", PackPrefab = "SMG_L", WeaponId = "ump45", DisplayName = "UMP-45",
@@ -438,13 +401,13 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.032f, SmokeSizeMax = 0.055f, SmokeLifetime = 1.0f, SmokeAlpha = 0.26f,
                 CasingFamily = "9x19",
             },
-            // ShotGun_C — CS2 XM1014 gövdesi: 171 rpm / 7 fişek. Yarı otomatik: Nova'dan hızlı ve
-            // daha affedici, tek atışı zayıf.
-            // ⚠️ Reload süresi CS'te fişek fişektir; burada tam şarjörün TOPLAM süresi yazılır
-            // (fişek fişek dolum modellenmiyor) — bunun karşılığı `PoolRounds`: erken reload'da
-            // namludaki fişek yanmaz.
-            // ⚠️ Hasar ve saçılım CS'ten SAPAR (CS: 20 hasar, ~5° koni, 0.70 range modifier) ve
-            // sapmanın sebebi arena ölçeğidir — gerekçe aşağıdaki NOVA satırında, tek yerde.
+            // ShotGun_C — CS2 XM1014 body: 171 rpm / 7 shells. Semi-auto: faster and more forgiving
+            // than the Nova, weaker per shot.
+            // ⚠️ CS reloads shell by shell; here the TOTAL time for a full magazine is written (per
+            // shell loading is not modelled) — hence `PoolRounds`, so an early reload does not burn
+            // the chambered shell.
+            // ⚠️ Damage and spread DEVIATE from CS (CS: 20 dmg, ~5° cone, 0.70 range modifier)
+            // because of arena scale — the rationale is stated once, on the NOVA row below.
             new WeaponSpec
             {
                 Name = "XM1014", PackPrefab = "ShotGun_C", WeaponId = "xm1014", DisplayName = "XM1014",
@@ -458,24 +421,23 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.075f, SmokeSizeMax = 0.125f, SmokeLifetime = 1.7f, SmokeAlpha = 0.42f,
                 CasingFamily = "12gauge",
             },
-            // ShotGun_B — CS2 Nova gövdesi: 68 rpm / 8 fişek. Pompalı: temas mesafesinde tek atışta
-            // öldürür, ıskalarsa bir sonraki atış çok geç gelir.
+            // ShotGun_B — CS2 Nova body: 68 rpm / 8 shells. Pump action: a one-shot kill at contact
+            // range, but a miss leaves a very long gap.
             //
-            // ⚠️ SAÇMALILARIN DENGE SAYILARI CS'TEN BİLİNÇLİ SAPAR (Nova'da CS: 26 hasar, ~6° koni,
-            // 0.70 range modifier; burada 13 hasar, 12° koni, mesafe eğrisi yok). Sebep ARENA
-            // ÖLÇEĞİDİR ve CS'in eğrisini eklemek bunu çözmez: CS'in pompalısı "3 m ender bir
-            // mesafedir" varsayımıyla ayarlıdır (0.70 katsayısı ~9.5 m'de bir işler), oysa 12×12
-            // free-roam arenada en uzun hat ~17 m — yani CS formülü Nova'yı arenanın öbür ucunda
-            // ancak yarıya indirir, temas mesafesindeki hasara hiç dokunmaz. Hasarın mesafeyle
-            // hissedilmesini burada SAÇILIM sağlıyor (Docs/Sistem-Ozeti.md §7): koni büyüdükçe
-            // gövdeye değen saçma sayısı düşüyor, yani sayıların ayarlandığı yer taban hasar +
-            // koni açısıdır. ⚠️ `Range` bu ayarın kolu DEĞİLDİR (alanın kendi notuna bak): keskin
-            // bir mesafe duvarı, sürekli bir eğrinin yerini tutmaz.
+            // ⚠️ SHOTGUN BALANCE DELIBERATELY DEVIATES FROM CS (CS Nova: 26 dmg, ~6° cone, 0.70 range
+            // modifier; here 13 dmg, 12° cone, no distance curve). The reason is ARENA SCALE, and
+            // adding CS's curve does not fix it: CS tunes shotguns assuming "3 m is a rare distance"
+            // (its 0.70 coefficient bites around 9.5 m), while a 12×12 free-roam arena's longest line
+            // is ~17 m — so CS's formula only halves the Nova across the arena and never touches
+            // contact-range damage. Here SPREAD carries the distance falloff
+            // (Docs/Sistem-Ozeti.md §7): a wider cone means fewer pellets land, so the tuning knobs
+            // are base damage + cone angle. ⚠️ `Range` is NOT that knob (see its own field note): a
+            // sharp distance wall cannot stand in for a continuous curve.
             //
-            // ⚠️ TABLODAKİ DERECE TEK ELLEDİR: iki elle tutulan silahta `twoHandSpreadMultiplier`
-            // (0.45) ile ÇARPILIR, yani buradaki 12° sahada 5.4°'lik bir koni demektir. Pompalı
-            // tanım gereği iki elle tutulduğu için saçmalı satırlarda GERÇEK değer daima yarıdır —
-            // koni açısını tabloya bakarak tahmin etmek, silahı iki kat dar sanmaktır.
+            // ⚠️ THE ANGLE IN THIS TABLE IS ONE-HANDED: a two-handed hold multiplies it by
+            // `twoHandSpreadMultiplier` (0.45), so 12° here is a 5.4° cone in the field. Shotguns are
+            // two-handed by definition, so the REAL value on shotgun rows is always about half —
+            // reading the cone angle straight off the table makes the weapon look twice as tight.
             new WeaponSpec
             {
                 Name = "NOVA", PackPrefab = "ShotGun_B", WeaponId = "nova", DisplayName = "Nova",
@@ -495,27 +457,23 @@ namespace VortexArena.Core.Editor
 
         private static int _warnings;
 
-        // Kavramanın eski authoring kalıntılarından (GripSocket_Primary/Secondary işaretçileri ve
-        // Hands/Hand_* el rig'i) kaçı silindi. Authoring kavrama tezgâhına geçti; bu düğümleri
-        // artık kimse okumuyor ve prefabda kalmaları sonraki okuyucuya "burası hâlâ ayarlanabilir"
-        // derdi.
+        // How many legacy grip authoring leftovers were deleted (GripSocket_Primary/Secondary markers
+        // and the Hands/Hand_* rig). Authoring moved to the grip studio; nobody reads these nodes and
+        // leaving them tells the next reader "this is still adjustable here".
         private static int _legacyNodesRemoved;
 
-        // Kavraması yazılmamış silahlar (oyunda eli idle'da kalacak WPN'ler). ⚠️ Bu rapor ŞART —
-        // stüdyoda kavrama yazmak tek seferlik bir insan adımı ve atlandığında hiçbir hata
-        // basılmaz, belirtisi yalnız "el silaha sarılmıyor" olur.
+        // Weapons with no authored grip (their hand stays idle in game). ⚠️ This report is
+        // MANDATORY: authoring a grip is a one-off human step and skipping it logs nothing — the
+        // only symptom is "the hand does not wrap the weapon".
         private static readonly List<string> _unbakedWeapons = new List<string>();
 
         private static readonly Dictionary<string, Type> ResolvedTypes = new Dictionary<string, Type>();
 
-        // ------------------------------------------------------------ giriş
+        // --------------------------------------------------------------- entry point
 
-        /// <summary>
-        /// Tam akış: WD asset'leri → WPN prefablarının güncellenmesi → FX + gösterge → katalog →
-        /// ikinci geçiş. Tek satırlık özet döner (eşitleme raporuna girer); ayrıntı konsoldadır.
-        /// <para>Çağıran <c>BuildElementsConfigurator.SyncAll</c>'dır (ve "Hazırlık" satırı);
-        /// menü öğesi yoktur.</para>
-        /// </summary>
+        /// <summary>Full flow: WD assets → WPN prefab updates → FX + indicator → catalog → second
+        /// pass. Returns a one-line summary for the sync report; details go to the console. Called by
+        /// <c>BuildElementsConfigurator.SyncAll</c>; there is no menu item.</summary>
         public static string BuildAll()
         {
             _warnings = 0;
@@ -534,11 +492,11 @@ namespace VortexArena.Core.Editor
             EnsureFolder(FxDir);
             EnsureFolder(CatalogDir);
 
-            // Hata yarıda keserse sahnede çöp GO kalmasın diye tüm geçici instance'lar burada izlenir.
+            // Every temporary instance is tracked here so an early error leaves no junk GameObjects.
             var live = new List<GameObject>();
             try
             {
-                // ---- ADIM 1: WeaponDefinition asset'leri (prefab alanı ADIM 5'te bağlanır).
+                // ---- STEP 1: WeaponDefinition assets (the prefab field is bound in STEP 5).
                 var defs = new WeaponDefinition[Specs.Length];
                 for (int i = 0; i < Specs.Length; i++)
                 {
@@ -547,9 +505,9 @@ namespace VortexArena.Core.Editor
 
                 AssetDatabase.SaveAssets();
 
-                // ---- ADIM 2: WPN prefabları (kovan/duman kaynak asset'leri önce, WPN'ler onlara muhtaç).
-                // Yalnız TABLODA GEÇEN aileler üretilir: kullanılmayan bir kalibre için asset
-                // açmak, sonradan "bu kovan neyin?" diye bakılacak ölü bir dosya bırakırdı.
+                // ---- STEP 2: WPN prefabs (casing/smoke source assets first, the WPNs depend on
+                // them). Only families PRESENT IN THE TABLE are built: creating an asset for an
+                // unused calibre would leave a dead file nobody can explain later.
                 var casings = new Dictionary<string, GameObject>();
                 for (int i = 0; i < Specs.Length; i++)
                 {
@@ -594,14 +552,14 @@ namespace VortexArena.Core.Editor
                     }
                 }
 
-                // ---- ADIM 3: uzak atış FX prefabı + ön kabza göstergesi (varsa dokunulmaz).
+                // ---- STEP 3: remote-shot FX prefab + front-grip indicator (left alone if present).
                 fxCreated = EnsureRemoteShotFx(live);
                 indicatorCreated = EnsureGripSocketPrefab(live);
 
-                // ---- ADIM 4: WeaponCatalog.
+                // ---- STEP 4: WeaponCatalog.
                 catalogCreated = UpdateCatalog();
 
-                // ---- ADIM 5: WD.prefab ← WPN ikinci geçişi.
+                // ---- STEP 5: WD.prefab ← WPN, second pass.
                 LinkDefinitionPrefabs();
 
                 AssetDatabase.SaveAssets();
@@ -633,9 +591,9 @@ namespace VortexArena.Core.Editor
             return summary;
         }
 
-        // ------------------------------------------------- ADIM 1: WD asset'leri
+        // ------------------------------------------------------- STEP 1: WD assets
 
-        /// <summary>WD_&lt;Ad&gt;.asset'i yoksa yaratır, alanları sözleşmedeki adlarla yazar.</summary>
+        /// <summary>Creates WD_&lt;Name&gt;.asset if missing and writes the fields by contract name.</summary>
         private static WeaponDefinition EnsureDefinition(WeaponSpec spec, ref int createdCount)
         {
             string path = DataDir + "/WD_" + spec.Name + ".asset";
@@ -644,7 +602,7 @@ namespace VortexArena.Core.Editor
             var def = AssetDatabase.LoadAssetAtPath<WeaponDefinition>(path);
             if (def == null)
             {
-                // Yolda başka tipte bir asset varsa üstüne yazma — CreateAsset GUID'i öldürür.
+                // Another asset type at this path: do not overwrite — CreateAsset kills its GUID.
                 if (!string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)))
                 {
                     Warn(ctx + ": '" + path + "' yolunda WeaponDefinition olmayan bir asset var — dokunulmadı.");
@@ -660,8 +618,8 @@ namespace VortexArena.Core.Editor
 
             SetString(so, "weaponId", spec.WeaponId, ctx);
             SetString(so, "displayName", spec.DisplayName, ctx);
-            // §6.6: ağ kimliği + kaç elle tutulduğu. Tablo bunların doğruluk kaynağıdır ve her
-            // koşuda EZER — kimliği Inspector'dan elle değiştirmek kalıcı olmaz, tabloyu düzenle.
+            // §6.6: network id + hold mode. The table is their source of truth and OVERWRITES on
+            // every run — editing the id in the Inspector does not stick, edit the table.
             SetNumber(so, "netItemId", spec.NetItemId, ctx);
             SetEnumByName(so, "holdMode", spec.HoldMode, ctx);
             SetNumber(so, "damage", spec.Damage, ctx);
@@ -684,35 +642,33 @@ namespace VortexArena.Core.Editor
             SetEnumByName(so, "reserveMode",
                 string.IsNullOrEmpty(spec.ReserveMode) ? DefaultReserveModeName : spec.ReserveMode, ctx);
             SetNumber(so, "reloadTime", spec.Reload, ctx);
-            // ⚠️ SES KLİPLERİ BU TABLODAN GELMEZ ve bu araç onlara HİÇ dokunmaz — beş klip alanının
-            // (fireClips · magOutClip · magInClip · dryFireClip · pickupClip) tek doğruluk kaynağı
-            // WD_<Ad>.asset'in Inspector'ıdır, klip oraya elle sürüklenir.
-            // Gerekçe haptik alanlarınınkiyle aynıdır (aşağı bak): ses kulakla seçilen bir şeydir,
-            // dosya adını koda yazmak onu iki yerden yönetilir yapar. Tabloda tutulduğunda kural
-            // "yalnız alan boşsa yaz" olmak zorundaydı — yani bir sesi değiştirmek için önce
-            // asset'teki alanı boşaltmak gerekiyordu ve bunu bilmeyen "değişiklik inmedi" sanıyordu.
-            // Bedeli: yeni silah SESSİZ doğar. Onu ReportSilentWeapons koşu sonunda listeler.
+            // ⚠️ AUDIO CLIPS DO NOT COME FROM THIS TABLE and the tool never touches them — the single
+            // source for the five clip fields (fireClips · magOutClip · magInClip · dryFireClip ·
+            // pickupClip) is the WD_<Name>.asset Inspector, where clips are dragged by hand.
+            // Same rationale as the haptic fields below: sound is chosen by ear, and writing file
+            // names in code makes it managed from two places. Kept in the table the rule would have
+            // to be "write only when empty", so changing a sound would first require clearing the
+            // asset field — and anyone not knowing that reads it as "my change did not land".
+            // The cost: a new weapon is born SILENT. ReportSilentWeapons lists it at the end.
             SetNumber(so, "firePitchBase", spec.PitchBase, ctx);
             SetNumber(so, "firePitchJitter", PitchJitter, ctx);
             SetNumber(so, "fireVolume", spec.Volume, ctx);
-            // ⚠️ hapticAmplitude / hapticDuration BİLEREK yazılmaz ve bu tabloya alınmaz: vuruş
-            // hissi gözlükle deneyerek ayarlanan bir değerdir, Inspector'da tutulur. Buraya bir
-            // satır eklemek, her koşuda o elle bulunmuş ayarı sessizce ezerdi. Yeni WD asset'i
-            // sınıftaki varsayılanlarla doğar (bkz. WeaponDefinition).
-            // "prefab" alanı ADIM 5'te (WPN üretildikten sonra) bağlanır.
+            // ⚠️ hapticAmplitude / hapticDuration are deliberately not written and not added to this
+            // table: recoil feel is tuned by wearing the headset and lives in the Inspector. A line
+            // here would silently overwrite that hand-found value on every run. A new WD asset is
+            // born with the class defaults (see WeaponDefinition).
+            // The "prefab" field is bound in STEP 5, after the WPN exists.
 
             so.ApplyModifiedPropertiesWithoutUndo();
             return def;
         }
 
-        // ------------------------------------------------ ADIM 2: WPN prefabları
+        // ---------------------------------------------------- STEP 2: WPN prefabs
 
-        /// <summary>
-        /// Mevcut WPN_&lt;Ad&gt;.prefab'ı yerinde günceller (<see cref="RebindExistingPrefab"/>):
-        /// definition bağları + namlu alevi/duman/kovan kiti + kavrama kiti. Gövdeye
-        /// (model, Muzzle/MuzzleFlash/Eject konumu) DOKUNULMAZ — onlar elle ayarlanır.
-        /// Prefab yoksa üretilmez, hata basılır: eksik silahın prefabı repoya elle eklenir.
-        /// </summary>
+        /// <summary>Updates an existing WPN_&lt;Name&gt;.prefab in place
+        /// (<see cref="RebindExistingPrefab"/>): definition bindings + flash/smoke/casing kit + grip
+        /// kit. ⚠️ The body (model, Muzzle/MuzzleFlash/Eject placement) is NEVER touched — it is
+        /// hand-authored. A missing prefab is an error, not a generation trigger.</summary>
         private static BuildOutcome BuildWeaponPrefab(WeaponSpec spec, WeaponDefinition def,
             Dictionary<string, GameObject> casings, Material smokeMaterial)
         {
@@ -730,11 +686,9 @@ namespace VortexArena.Core.Editor
             return BuildOutcome.Rebound;
         }
 
-        /// <summary>
-        /// WPN içeriğini açıp definition bağlarını tazeler VE silaha özgü namlu alevi/duman/kovan
-        /// kitini (<see cref="ApplyVfxAndShellKit"/>) uygular — aracın TEK üretim yolu budur;
-        /// model/Muzzle konumuna DOKUNULMAZ (elle ayarlanmış olabilir).
-        /// </summary>
+        /// <summary>Opens the WPN contents, refreshes the definition bindings and applies the
+        /// per-weapon flash/smoke/casing kit (<see cref="ApplyVfxAndShellKit"/>) — the tool's ONLY
+        /// build path. Model and Muzzle placement are left untouched.</summary>
         private static void RebindExistingPrefab(string wpnPath, WeaponSpec spec, WeaponDefinition def,
             Dictionary<string, GameObject> casings, Material smokeMaterial, string ctx)
         {
@@ -781,8 +735,8 @@ namespace VortexArena.Core.Editor
                     ApplyVfxAndShellKit(contents, spec, casings, smokeMaterial, ctx);
                 }
 
-                // Tek çalışan yol burası — kavrama kiti de burada uygulanmazsa mevcut WPN'ler
-                // mesafeden kavranabilir kalırdı.
+                // This is the only live path — without the grip kit here, existing WPNs would stay
+                // distance-grabbable.
                 ApplyGripKit(contents, def, ctx);
                 ApplyWeaponFrameKit(contents, ctx);
                 ApplyDissolveKit(contents, ctx);
@@ -795,13 +749,11 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        // ------------------------------------------------ ADIM 3: FX_RemoteShot
+        // ------------------------------------------------- STEP 3: FX_RemoteShot
 
-        /// <summary>
-        /// FX_RemoteShot.prefab yoksa üretir (varsa dokunmaz): bulunan ilk WPN prefabının
-        /// Muzzle'ındaki AudioSource + MetaXRAudioSource köke kopyalanır, MuzzleFlash "Flash"
-        /// adlı child olarak klonlanır. Döner: bu koşuda üretildi mi.
-        /// </summary>
+        /// <summary>Creates FX_RemoteShot.prefab if missing (left alone if present): the AudioSource
+        /// + MetaXRAudioSource from the first WPN's Muzzle are copied to the root and MuzzleFlash is
+        /// cloned as a child named "Flash". Returns whether it was created this run.</summary>
         private static bool EnsureRemoteShotFx(List<GameObject> live)
         {
             if (AssetDatabase.LoadAssetAtPath<GameObject>(FxPrefabPath) != null)
@@ -829,7 +781,7 @@ namespace VortexArena.Core.Editor
             Transform muzzleT = FindDeepChild(srcInst.transform, "Muzzle");
             if (muzzleT != null)
             {
-                // Önce AudioSource (MetaXRAudioSource ona muhtaç), sonra MetaXRAudioSource.
+                // AudioSource first (MetaXRAudioSource depends on it), then MetaXRAudioSource.
                 var src = muzzleT.GetComponent<AudioSource>();
                 if (src != null)
                 {
@@ -841,7 +793,7 @@ namespace VortexArena.Core.Editor
                     Warn("FX_RemoteShot: kaynağın Muzzle'ında AudioSource yok.");
                 }
 
-                // MetaXRAudioSource tipine derleme referansı YOK — tip adı üzerinden kopyala.
+                // No compile-time reference to MetaXRAudioSource — copy it by type name.
                 Component[] comps = muzzleT.GetComponents<Component>();
                 for (int i = 0; i < comps.Length; i++)
                 {
@@ -883,23 +835,19 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>
-        /// Ön kabza soketinin prefabını YOKSA üretir (varsa dokunmaz): Unity'nin küre primitifi
-        /// (1 m çap — sözleşme <see cref="GripSocketPrefabPath"/>'te), collider'sız, yarı saydam
-        /// açık mavi materyalle.
-        /// <para>
-        /// <b>Neden prefab:</b> soket SANATTIR ve sanatın yeri prefabtır — <c>Weapon</c> yalnız
-        /// yerini, ölçeğini (kabul yarıçapının iki katı) ve alfasını sürer. Küre başlangıçtır:
-        /// sanatçı bu prefabı yerinde değiştirebilir (araç bir daha dokunmaz) ya da kataloğa
-        /// bambaşka bir prefab bağlayabilir — yeter ki 1 m çap sözleşmesini korusun.
-        /// </para>
-        /// <para>⚠️ Collider'ı burada SÖKÜLÜR (primitif BoxCollider/SphereCollider ile gelir): soket
-        /// ateş ışınına ve kavramaya takılmamalı; <c>Weapon</c> de örneği kurarken aynı sökmeyi yapar,
-        /// prefabta temiz durması "neden çift bakılıyor" sorusunu doğurmasın diye kaynak da temizdir.</para>
-        /// <para>⚠️ Materyal ASSET olarak üretilir (<see cref="GripSocketMaterialPath"/>), çalışma
-        /// anında <c>Shader.Find</c> ile DEĞİL: hiçbir asset'in referanslamadığı shader build'den
-        /// striplenir ve soket sahada sessizce çizilmez.</para>
-        /// </summary>
+        /// <summary>Creates the front-grip socket prefab if missing (left alone if present): Unity's
+        /// sphere primitive (1 m across — contract in <see cref="GripSocketPrefabPath"/>), no
+        /// collider, translucent light-blue material.
+        /// <para>Why a prefab: the socket is ART and art belongs in a prefab — <c>Weapon</c> only
+        /// drives its position, scale (twice the acceptance radius) and alpha. The sphere is a
+        /// starting point: an artist can edit this prefab in place or bind a different one to the
+        /// catalog, as long as the 1 m contract holds.</para>
+        /// <para>⚠️ The collider is stripped here (primitives ship with one): the socket must not
+        /// catch fire rays or grabs. <c>Weapon</c> strips it again on the instance; keeping the
+        /// source clean avoids "why is this checked twice".</para>
+        /// <para>⚠️ The material is created as an ASSET (<see cref="GripSocketMaterialPath"/>), not
+        /// via runtime <c>Shader.Find</c>: a shader no asset references is stripped from the build
+        /// and the socket silently stops drawing in the field.</para></summary>
         private static bool EnsureGripSocketPrefab(List<GameObject> live)
         {
             if (AssetDatabase.LoadAssetAtPath<GameObject>(GripSocketPrefabPath) != null)
@@ -945,14 +893,12 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>
-        /// Küre materyali yoksa üretir (varsa dokunmaz); shader bulunamazsa <c>null</c>.
-        /// <para>URP shader'larında saydamlık <c>_Surface</c>/<c>_Blend</c>/<c>_SrcBlend</c>/
-        /// <c>_DstBlend</c>/<c>_ZWrite</c> özellikleri + <c>_SURFACE_TYPE_TRANSPARENT</c> anahtarı +
-        /// Transparent kuyruğu ile kurulur (Inspector'daki "Surface Type = Transparent" seçiminin
-        /// yazdığı değerlerin aynısı). Var olmayan özelliğe yazmak sessiz geçer, yani zincirdeki
-        /// diğer shader'lar (projenin kendi <c>VortexArena/GripSocket</c>'i — saydamlığı pass'inde
-        /// yazılı, bu özellikleri hiç tanımaz — ve Sprites/Default) da aynı koddan geçer.</para>
+        /// <summary>Creates the sphere material if missing; <c>null</c> when no shader is found.
+        /// <para>On URP shaders, transparency is set through <c>_Surface</c>/<c>_Blend</c>/
+        /// <c>_SrcBlend</c>/<c>_DstBlend</c>/<c>_ZWrite</c> + the
+        /// <c>_SURFACE_TYPE_TRANSPARENT</c> keyword + the Transparent queue (exactly what the
+        /// Inspector's "Surface Type = Transparent" writes). Writing a non-existent property is a
+        /// silent no-op, so the other shaders in the chain pass through the same code.</para>
         /// </summary>
         private static Material EnsureGripSocketMaterial()
         {
@@ -976,7 +922,7 @@ namespace VortexArena.Core.Editor
             EnsureFolder(GripSocketMaterialDir);
             var material = new Material(shader) { name = "M_GripSocket" };
 
-            // Saydam yüzey (URP): Surface=Transparent, Blend=Alpha, ZWrite kapalı.
+            // Transparent surface (URP): Surface=Transparent, Blend=Alpha, ZWrite off.
             material.SetFloat("_Surface", 1f);
             material.SetFloat("_Blend", 0f);
             material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
@@ -989,8 +935,8 @@ namespace VortexArena.Core.Editor
             material.SetOverrideTag("RenderType", "Transparent");
             material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
 
-            // Renk: URP _BaseColor; eski/yedek shader'da _Color. İkisine de yazılır (var olmayan
-            // özellik sessizce yutulur).
+            // Colour: URP _BaseColor, legacy/fallback _Color. Both are written (a missing property
+            // is swallowed silently).
             material.SetColor("_BaseColor", GripSocketColor);
             material.SetColor("_Color", GripSocketColor);
 
@@ -998,18 +944,15 @@ namespace VortexArena.Core.Editor
             return material;
         }
 
-        /// <summary>
-        /// Kovan prefabı yoksa üretir (varsa dokunmaz): pack'teki mermi modelini
-        /// unpack eder, küçük bir Rigidbody + bounds'a göre BoxCollider ekler.
-        /// Fiziksel doğruluk hedeflenmez — kısa ömürlü, havuzlanan bir FX objesidir.
-        /// <para>⚠️ <b>"Varsa dokunmaz" YETMEZ, mevcut olanın SAĞLAM olduğu da doğrulanır.</b>
-        /// Kovan prefabı pack modelinden unpack edilir, yani mesh'i pack'in FBX'ine bir referanstır;
-        /// pack klasörü taşındığında (ya da FBX yeni kimlikle yeniden import edildiğinde) o referans
-        /// kopar ve prefab <b>mesh'siz</b> kalır. Belirti sinsi: kovan fırlar, fizik çalışır, hata
-        /// basılmaz — sadece <b>çizilmez</b>, yani "kovan çıkmıyor" diye okunur. Koşulsuz erken
-        /// dönülürse araç o prefabı bir daha hiç onarmaz; kırık asset her koşuda sağlam sayılır.
-        /// Tek ipucu Project penceresindeki önizlemenin jenerik mavi küpe dönmesidir.</para>
-        /// </summary>
+        /// <summary>Creates the casing prefab if missing: unpacks the pack's bullet model and adds a
+        /// small Rigidbody + a bounds-fitted BoxCollider. Physical accuracy is not a goal — it is a
+        /// short-lived pooled FX object.
+        /// <para>⚠️ "Skip if present" is NOT enough; the existing one is also checked for HEALTH. The
+        /// casing is unpacked from the pack model, so its mesh is a reference into the pack's FBX;
+        /// if the pack folder moves (or the FBX is reimported with a new id) that reference breaks
+        /// and the prefab is left MESHLESS. The symptom is sneaky: the casing ejects, physics runs,
+        /// nothing is logged — it just is not drawn, which reads as "no casings". An unconditional
+        /// early return would mean the tool never repairs it again.</para></summary>
         private static GameObject EnsureCasingPrefab(string path, string sourcePackPath, List<GameObject> live)
         {
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
@@ -1020,8 +963,8 @@ namespace VortexArena.Core.Editor
                     return existing;
                 }
 
-                // Kırık: aşağıdaki üretim yolu aynı yolun ÜSTÜNE yazar. SaveAsPrefabAsset asset
-                // GUID'ini korur, yani WPN prefablarındaki casingPrefab bağları kopmaz.
+                // Broken: the build path below overwrites the same path. SaveAsPrefabAsset preserves
+                // the asset GUID, so casingPrefab bindings in the WPN prefabs survive.
                 Warn("Kovan prefabı '" + path + "' mesh'siz (pack taşınmış olabilir) — " +
                      "kaynaktan yeniden üretiliyor.");
             }
@@ -1058,10 +1001,9 @@ namespace VortexArena.Core.Editor
             return AssetDatabase.LoadAssetAtPath<GameObject>(path);
         }
 
-        /// <summary>
-        /// Prefabın çizilebilir en az bir mesh'i var mı: <c>MeshFilter</c> zinciri kopmuşsa
-        /// (mesh <c>null</c>) obje sahnede vardır, fiziği çalışır ama GÖRÜNMEZ.
-        /// </summary>
+        /// <summary>Does the prefab have at least one drawable mesh: with a broken
+        /// <c>MeshFilter</c> chain (mesh <c>null</c>) the object exists and its physics run, but it
+        /// is INVISIBLE.</summary>
         private static bool HasRenderableMesh(GameObject go)
         {
             var filters = go.GetComponentsInChildren<MeshFilter>(true);
@@ -1076,10 +1018,8 @@ namespace VortexArena.Core.Editor
             return false;
         }
 
-        /// <summary>
-        /// M_MuzzleFlash.mat'ın kopyası ama Additive yerine Alpha blend — namlu dumanı
-        /// için (parlayan ışık değil, gri/soluk duman görünsün). Yoksa üretir, varsa dokunmaz.
-        /// </summary>
+        /// <summary>A copy of M_MuzzleFlash.mat with Alpha blend instead of Additive, so muzzle smoke
+        /// reads as grey haze rather than glow. Created if missing, left alone if present.</summary>
         private static Material EnsureMuzzleSmokeMaterial()
         {
             var existing = AssetDatabase.LoadAssetAtPath<Material>(SmokeMaterialPath);
@@ -1105,9 +1045,10 @@ namespace VortexArena.Core.Editor
             return smokeMat;
         }
 
-        // ------------------------------------------------ ADIM 4: WeaponCatalog
+        // ------------------------------------------------- STEP 4: WeaponCatalog
 
-        /// <summary>WeaponCatalog.asset'i yoksa yaratır; definitions (tablo sırası) + remoteShotFxPrefab yazar.</summary>
+        /// <summary>Creates WeaponCatalog.asset if missing; writes definitions (table order) +
+        /// remoteShotFxPrefab.</summary>
         private static bool UpdateCatalog()
         {
             Type catalogType = ResolveType("WeaponCatalog");
@@ -1121,7 +1062,7 @@ namespace VortexArena.Core.Editor
             var catalog = AssetDatabase.LoadAssetAtPath(CatalogPath, catalogType) as ScriptableObject;
             if (catalog == null)
             {
-                // Yolda başka tipte bir asset varsa GUID'i korumak için ezme.
+                // Another asset type at this path: do not overwrite, to preserve its GUID.
                 if (!string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(CatalogPath)))
                 {
                     Warn("WeaponCatalog: '" + CatalogPath + "' yolunda farklı tipte bir asset var — dokunulmadı.");
@@ -1182,8 +1123,8 @@ namespace VortexArena.Core.Editor
                 }
             }
 
-            // Ön kabza göstergesi: YALNIZ alan boşsa bağlanır (sanatçının bağladığı başka bir prefab
-            // ezilmesin — FX alanından farkı budur, gerekçe GripSocketPrefabPath'te).
+            // Front-grip indicator: bound ONLY when the field is empty, so an artist-bound prefab is
+            // never overwritten (this is how it differs from the FX field; see GripSocketPrefabPath).
             var indicatorProp = so.FindProperty("secondaryGripIndicatorPrefab");
             if (indicatorProp == null)
             {
@@ -1207,9 +1148,9 @@ namespace VortexArena.Core.Editor
             return created;
         }
 
-        // ------------------------------------------- ADIM 5: WD.prefab ikinci geçişi
+        // -------------------------------------------- STEP 5: WD.prefab second pass
 
-        /// <summary>Her WD'nin 'prefab' alanına ilgili WPN prefabını bağlar.</summary>
+        /// <summary>Binds each WD's 'prefab' field to its WPN prefab.</summary>
         private static void LinkDefinitionPrefabs()
         {
             for (int i = 0; i < Specs.Length; i++)
@@ -1236,16 +1177,16 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        // ------------------------------------------------------------ yardımcılar
+        // ------------------------------------------------------------------ helpers
 
-        /// <summary>Uyarı sayacı + konsol (dialog YOK — pipeline kilitlenmesin).</summary>
+        /// <summary>Warning counter + console (no dialogs, so the pipeline never blocks).</summary>
         private static void Warn(string message)
         {
             _warnings++;
             Debug.LogWarning(Log + message);
         }
 
-        /// <summary>"Assets/..." klasör zincirini eksik halkalarıyla kurar.</summary>
+        /// <summary>Creates an "Assets/..." folder chain, filling in missing links.</summary>
         private static void EnsureFolder(string path)
         {
             if (AssetDatabase.IsValidFolder(path))
@@ -1267,7 +1208,7 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>Adı eşleşen ilk torunu döner (derinlemesine arama).</summary>
+        /// <summary>Returns the first descendant matching the name (deep search).</summary>
         private static Transform FindDeepChild(Transform parent, string name)
         {
             for (int i = 0; i < parent.childCount; i++)
@@ -1288,10 +1229,8 @@ namespace VortexArena.Core.Editor
             return null;
         }
 
-        /// <summary>
-        /// Verilen instance'ın tüm Renderer'larının birleşik bounds'u, kökün worldToLocalMatrix'iyle
-        /// KÖK yerel uzayına çevrilir (8 köşe tek tek dönüştürülür).
-        /// </summary>
+        /// <summary>Combined bounds of all Renderers on the instance, converted into ROOT-local space
+        /// via the root's worldToLocalMatrix (all 8 corners transformed individually).</summary>
         private static Bounds ComputeLocalBounds(Transform root, GameObject instance, string ctx)
         {
             Renderer[] renderers = instance.GetComponentsInChildren<Renderer>(true);
@@ -1305,17 +1244,17 @@ namespace VortexArena.Core.Editor
             {
                 Renderer renderer = renderers[r];
 
-                // ⚠️ KAPALI Renderer'ın `bounds`'u BAYATTIR — Unity onu güncellemez, en son
-                // çizildiği yerdeki DÜNYA kutusunu döndürür. Çerçeve (VA_WeaponFrame) prefabda
-                // varsayılan olarak kapalı durduğu için buraya metrelerce ötede bir kutu sızıyor
-                // ve ölçüyü tümden kaydırıyordu (kovan çıkışı silahın 2.5 m önünde doğuyordu).
+                // ⚠️ A DISABLED Renderer's `bounds` is STALE — Unity does not update it and returns
+                // the WORLD box from where it was last drawn. The frame (VA_WeaponFrame) is disabled
+                // by default in the prefab, so a box metres away leaks in and shifts the whole
+                // measurement.
                 if (!renderer.gameObject.activeInHierarchy)
                 {
                     continue;
                 }
 
-                // Çerçeve silahın GÖVDESİ değil sunum kabıdır: açık olsa da ölçüye girmez,
-                // yoksa "silah ne kadar geniş" sorusunun cevabı çerçevenin boyu olurdu.
+                // The frame is a presentation shell, not the weapon's BODY: even when enabled it
+                // stays out of the measurement, or "how wide is the weapon" answers with the frame.
                 if (renderer.GetComponentInParent<WeaponFrame>(true) != null)
                 {
                     continue;
@@ -1351,10 +1290,9 @@ namespace VortexArena.Core.Editor
             return bounds;
         }
 
-        /// <summary>
-        /// Kısa ("WeaponAnimator") ya da tam ("TMPro.TextMeshPro") tip adını yüklü assembly'lerde
-        /// arar; kısa ad çakışırsa VortexArena.* namespace'i tercih edilir. Bulunanlar cache'lenir.
-        /// </summary>
+        /// <summary>Looks up a short ("WeaponAnimator") or full ("TMPro.TextMeshPro") type name in
+        /// the loaded assemblies; on a short-name collision the VortexArena.* namespace wins. Results
+        /// are cached.</summary>
         private static Type ResolveType(string name)
         {
             if (ResolvedTypes.TryGetValue(name, out Type cached))
@@ -1377,7 +1315,7 @@ namespace VortexArena.Core.Editor
                     }
                     catch
                     {
-                        // dinamik/bozuk assembly — atla
+                        // dynamic/broken assembly — skip
                     }
 
                     if (t != null)
@@ -1419,7 +1357,7 @@ namespace VortexArena.Core.Editor
             return found;
         }
 
-        /// <summary>Aynı kısa ada iki aday çıkarsa VortexArena.* olanı kazanır.</summary>
+        /// <summary>On two candidates for one short name, the VortexArena.* one wins.</summary>
         private static Type PickPreferred(Type current, Type candidate)
         {
             if (current == null)
@@ -1432,7 +1370,8 @@ namespace VortexArena.Core.Editor
             return !currentVa && candidateVa ? candidate : current;
         }
 
-        /// <summary>GetComponent ?? AddComponent — tip adıyla (script henüz yoksa uyarı + null).</summary>
+        /// <summary>GetComponent ?? AddComponent by type name (warns and returns null if the script
+        /// does not exist yet).</summary>
         private static Component EnsureComponentByTypeName(GameObject go, string typeName, string ctx)
         {
             Type type = ResolveType(typeName);
@@ -1446,7 +1385,7 @@ namespace VortexArena.Core.Editor
             return existing != null ? existing : go.AddComponent(type);
         }
 
-        /// <summary>Kök üzerindeki bileşenlerde tam tip adı eşleşmesi arar.</summary>
+        /// <summary>Finds a component on the root by full type name.</summary>
         private static Component FindComponentByTypeFullName(GameObject go, string fullName)
         {
             Component[] comps = go.GetComponents<Component>();
@@ -1461,7 +1400,8 @@ namespace VortexArena.Core.Editor
             return null;
         }
 
-        /// <summary>Bileşen null değilse verilen (alan, referans) çiftlerini SerializedObject ile bağlar.</summary>
+        /// <summary>Binds the given (field, reference) pairs via SerializedObject when the component
+        /// is non-null.</summary>
         private static void BindFields(Component target, string ctx, params (string field, Object value)[] refs)
         {
             if (target == null)
@@ -1478,7 +1418,8 @@ namespace VortexArena.Core.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        /// <summary>FindProperty; alan yoksa uyarı basıp null döner (sözleşme kayması teşhisi).</summary>
+        /// <summary>FindProperty; warns and returns null on a missing field (contract-drift
+        /// diagnostics).</summary>
         private static SerializedProperty FindProp(SerializedObject so, string field, string ctx)
         {
             SerializedProperty p = so.FindProperty(field);
@@ -1499,7 +1440,7 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>Alan float da int de olsa yazar (sözleşmede tip belirtilmedi — ikisine de dayanıklı).</summary>
+        /// <summary>Writes whether the field is float or int (the contract does not fix the type).</summary>
         private static void SetNumber(SerializedObject so, string field, double value, string ctx)
         {
             SerializedProperty p = FindProp(so, field, ctx);
@@ -1522,10 +1463,9 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>
-        /// Obje referansı yazar. <paramref name="value"/> null ise ve <paramref name="allowNull"/>
-        /// kapalıysa mevcut değer korunur (prefabdaki çalışan bağı null ile ezmemek için).
-        /// </summary>
+        /// <summary>Writes an object reference. If <paramref name="value"/> is null and
+        /// <paramref name="allowNull"/> is off, the existing value is kept so a working prefab
+        /// binding is not overwritten with null.</summary>
         private static void SetObjectRef(SerializedObject so, string field, Object value, string ctx, bool allowNull = false)
         {
             SerializedProperty p = FindProp(so, field, ctx);
@@ -1548,7 +1488,7 @@ namespace VortexArena.Core.Editor
             p.objectReferenceValue = value;
         }
 
-        /// <summary>Enum alanını ÜYE ADIYLA yazar — int değeri sözleşmeye gömmemek için.</summary>
+        /// <summary>Writes an enum field BY MEMBER NAME, to keep int values out of the contract.</summary>
         private static void SetEnumByName(SerializedObject so, string field, string memberName, string ctx)
         {
             SerializedProperty p = FindProp(so, field, ctx);
@@ -1574,11 +1514,8 @@ namespace VortexArena.Core.Editor
             p.enumValueIndex = index;
         }
 
-        /// <summary>
-        /// <see cref="SetObjectRef"/> gibi ama HÂLÂ BOŞSA yazar — alanda zaten bir değer varsa
-        /// (Inspector'dan elle sürüklenmiş olabilir) dokunmaz. Ses klibi alanları için: bu araç
-        /// tekrar çalıştırıldığında kullanıcının seçtiği klip SİLİNMESİN diye.
-        /// </summary>
+        /// <summary>Like <see cref="SetObjectRef"/> but writes ONLY when the field is still empty, so
+        /// a hand-dragged value survives a rerun. Used for audio clip fields.</summary>
         private static void SetObjectRefIfEmpty(SerializedObject so, string field, Object value, string ctx)
         {
             SerializedProperty p = FindProp(so, field, ctx);
@@ -1602,11 +1539,9 @@ namespace VortexArena.Core.Editor
         }
 
 
-        /// <summary>
-        /// Namlu alevi/duman/kovan kitini bir WPN kökü üzerinde kurar
-        /// (<see cref="RebindExistingPrefab"/>). Muzzle/MuzzleFlash'ı OLDUĞU YERDE bulur ve
-        /// TAŞIMAZ — model/namlu konumu elle ayarlanmıştır, araç onu bozmaz.
-        /// </summary>
+        /// <summary>Applies the flash/smoke/casing kit on a WPN root
+        /// (<see cref="RebindExistingPrefab"/>). ⚠️ Muzzle/MuzzleFlash are found WHERE THEY ARE and
+        /// never moved — their placement is hand-authored.</summary>
         private static void ApplyVfxAndShellKit(GameObject root, WeaponSpec spec,
             Dictionary<string, GameObject> casings, Material smokeMaterial, string ctx)
         {
@@ -1623,21 +1558,19 @@ namespace VortexArena.Core.Editor
                 Warn(ctx + ": MuzzleFlash/ParticleSystem bulunamadı — namlu alevi/dumanı ayarlanamadı.");
             }
 
-            // ---- Kovan çıkış noktası.
-            // ⚠️ MEVCUT `Eject` TAŞINMAZ — Muzzle/MuzzleFlash ile aynı kural: yeri elle ayarlanır,
-            // araç yalnız bağlar. Burada bir kez hesaplanıp her koşuda yeniden yazılıyordu ve
-            // hesap silahın alt ağacındaki her Renderer'a bakıyordu; prefabdaki KAPALI çerçeve
-            // (VA_WeaponFrame) bayat dünya bounds'u döndürdüğü için ölçü kayıyor, elle yapılan
-            // ayar sessizce siliniyordu (Docs/Sistem-Ozeti.md §7).
-            // ⚠️ Arama DERİN olmak zorunda: `Eject` silahın kökünde değil MODELİN içinde yaşıyor
-            // (kovan çıkışı gövdenin bir noktasıdır, silahın orijininin değil). Yalnız doğrudan
-            // çocuklara bakılırsa mevcut düğüm bulunamaz ve her koşu kökte İKİNCİ bir `Eject`
-            // üretip elle ayarlanmış olanı sessizce devre dışı bırakır.
+            // ---- Casing ejection point.
+            // ⚠️ An EXISTING `Eject` is never moved — same rule as Muzzle/MuzzleFlash: its position
+            // is hand-authored, the tool only binds. Recomputing it every run silently erased that
+            // adjustment, because the measurement walked every Renderer in the subtree and the
+            // DISABLED frame returned stale world bounds (Docs/Sistem-Ozeti.md §7).
+            // ⚠️ The search must be DEEP: `Eject` lives inside the MODEL, not on the weapon root
+            // (ejection is a point on the body). Looking only at direct children would miss it and
+            // every run would add a SECOND `Eject` on the root, silently disabling the authored one.
             Transform ejectT = FindDeepChild(rootT, "Eject");
             if (ejectT == null)
             {
-                // Yalnız İLK kurulumda kaba bir başlangıç noktası verilir (yoksa silahın
-                // orijininde doğardı); sonrası elle ayarlanır ve bir daha dokunulmaz.
+                // Only the FIRST setup gets a rough starting point (otherwise it would spawn at the
+                // weapon origin); after that it is hand-tuned and never touched again.
                 Bounds bounds = ComputeLocalBounds(rootT, root, ctx);
                 var ejectGo = new GameObject("Eject");
                 ejectT = ejectGo.transform;
@@ -1661,65 +1594,52 @@ namespace VortexArena.Core.Editor
             BindFields(shellEjector, ctx, ("casingPrefab", casingForSpec), ("ejectPoint", ejectT));
         }
 
-        /// <summary>
-        /// Kavrama kitini bir WPN kökü üzerinde kurar (idempotent): ISDK'nın <b>İKİ</b> yakın-kavrama
-        /// bileşeni (kumanda + el hattı) korunur ve filtresiz bırakılır, mesafeden kavrama kökten
-        /// silinir, eski kavrama kalıntıları temizlenir.
-        /// <para>
-        /// ⚠️ <b>Kökte kavrama FİLTRESİ YOKTUR ve bağlanmaz</b> (<c>_interactorFilters</c> boş):
-        /// eski soket kapısı bileşeni kaldırıldı — silah ana ele verilerek/çağrılarak geliyor, ana
-        /// kabza için oyuncunun elini bir yere götürmesi gerekmiyor; ön kabzanın kapısı ve
-        /// göstergesi <see cref="Weapon"/>'ın kendisindedir (<c>IsHandOnSecondaryGrip</c>). Bu araç
-        /// listeyi her koşuda BOŞALTIR: kaldırılan bileşenin filtre listesinde bıraktığı boş (missing)
-        /// giriş ISDK'nın <c>Start</c> denetiminde (<c>AssertCollectionItems</c>) patlar ve silah
-        /// kavranamaz olurdu. Aynı sebeple kökte kalmış eksik script bileşenleri de silinir.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Neden iki bileşen:</b> <c>GrabInteractable</c> (kumanda hattı) ile
-        /// <c>HandGrabInteractable</c> (el hattı) birlikte tutulur, çünkü hangisinin koşacağını
-        /// ISDK rig'i seçiyor — interactor grubu "el izleniyor mu" sorusuna göre değişiyor ve o da
-        /// <c>OVRManager.controllerDrivenHandPosesType</c>'a bağlı. Tek bileşen bırakılsa o
-        /// anahtarın her değişimi silahı sessizce kavranamaz yapardı
-        /// (<c>Docs/Sistem-Ozeti.md</c> §7). İkisi de aynı <c>Grabbable</c>'ı besler, yani
-        /// <see cref="Weapon"/> tarafında tek bir olay yolu kalır.
-        /// </para>
-        /// <para>
-        /// ⚠️ <c>HandGrabInteractable._handGrabPoses</c> listesi <b>boş bırakılır</b>: liste dolduğu
-        /// anda ISDK kavrama adaylığını poz skoruna göre hesaplamaya başlar ve bugünkü kavrama hissi
-        /// (collider mesafesi) sessizce değişirdi. Aynı sebeple <c>_handAligment</c> alanına da
-        /// dokunulmaz — poz listesi boş kaldığı sürece o alanın etkisi yoktur.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Kavramayı bu araç YAZMAZ.</b> Kavramanın tek kaynağı Kavrama Pozu Stüdyosu'nda
-        /// yazılan pozdur ve o poz doğrudan <c>WD_*.asset</c>'e yazılır (prefabda karşılığı olan
-        /// bir düğüm YOKTUR — düğüm açmak, kaydın ikinci bir tarifini üretirdi). Araç burada yalnız
-        /// <b>temizlik ve denetim</b> yapar: eski soket işaretçileri, prefabda kalmış el rig'i ve
-        /// poz düğümleri, kavraması yazılmamış silah raporu.
-        /// </para>
+        /// <summary>Applies the grip kit on a WPN root (idempotent): ISDK's TWO near-grab components
+        /// (controller + hand line) are kept and left unfiltered, distance grab is removed from the
+        /// root, and legacy grip leftovers are cleaned up.
+        /// <para>⚠️ There is NO grab filter on the root and none is bound
+        /// (<c>_interactorFilters</c> stays empty): the old socket gate component is gone — the
+        /// weapon is handed to the main hand, and the front grip's gate and indicator live in
+        /// <see cref="Weapon"/> itself (<c>IsHandOnSecondaryGrip</c>). The tool CLEARS the list every
+        /// run, because the missing entry left behind by the removed component throws in ISDK's
+        /// <c>Start</c> check (<c>AssertCollectionItems</c>) and makes the weapon ungrabbable. For
+        /// the same reason leftover missing scripts on the root are deleted.</para>
+        /// <para>⚠️ Why two components: <c>GrabInteractable</c> (controller line) and
+        /// <c>HandGrabInteractable</c> (hand line) are kept together because the ISDK rig chooses
+        /// which one runs, based on "are hands tracked", which follows
+        /// <c>OVRManager.controllerDrivenHandPosesType</c>. Keeping only one would silently make the
+        /// weapon ungrabbable on every flip of that switch (<c>Docs/Sistem-Ozeti.md</c> §7). Both
+        /// feed the same <c>Grabbable</c>, so <see cref="Weapon"/> sees one event path.</para>
+        /// <para>⚠️ <c>HandGrabInteractable._handGrabPoses</c> is left EMPTY: once populated, ISDK
+        /// starts scoring grab candidacy by pose and today's feel (collider distance) would change
+        /// silently. For the same reason <c>_handAligment</c> is untouched — it has no effect while
+        /// the pose list is empty.</para>
+        /// <para>⚠️ This tool does NOT author grips. The only source is the pose written in the grip
+        /// studio, straight into <c>WD_*.asset</c> (there is no corresponding prefab node — adding
+        /// one would create a second description). Here the tool only cleans up and reports.</para>
         /// </summary>
         private static void ApplyGripKit(GameObject root, ItemDefinition definition, string ctx)
         {
-            // Kaldırılan soket bileşeninin (ve başka bir eski scriptin) kökte bıraktığı eksik
-            // script kayıtları: bileşen artık derlenmediği için tipten bulunamaz, Unity'nin kendi
-            // temizliğiyle silinir.
+            // Missing-script records left on the root by the removed socket component (and other old
+            // scripts): the type no longer compiles, so they are removed via Unity's own cleanup.
             int missing = GameObjectUtility.RemoveMonoBehavioursWithMissingScript(root);
             if (missing > 0)
             {
                 Debug.Log(Log + ctx + ": kökte " + missing + " eksik script bileşeni silindi.");
             }
 
-            // Kökte mesafeden kavrama YOK: silah çerçeveden seçilir (VA_WeaponFrame), kökün kendisi
-            // uzaktan kavranırsa çerçeve atlanır ve silah odanın öbür ucundan alınabilir olurdu.
-            // ⚠️ İki hat da silinir: hangisinin koşacağını rig seçiyor, biri unutulursa yasak
-            // yarım kalır ve silah bazı yapılandırmalarda uzaktan kavranabilir olur.
+            // ⚠️ No distance grab on the root: the weapon is picked from the frame
+            // (VA_WeaponFrame), and a distance-grabbable root would skip the frame and let it be
+            // taken from across the room. BOTH lines are removed — the rig decides which one runs,
+            // so leaving one leaves the rule half-enforced.
             RemoveRootComponent(root, "Oculus.Interaction.DistanceGrabInteractable", ctx,
                 "kökte mesafeden kavrama yok (çerçeveden seçilir)");
             RemoveRootComponent(root, "Oculus.Interaction.HandGrab.DistanceHandGrabInteractable", ctx,
                 "kökte mesafeden kavrama yok (el hattı; çerçeveden seçilir)");
 
-            // Mesafe kavraması gidince asset'te duran sağlayıcı da gider: kalan tek tüketicisi
-            // HandGrabInteractable'dır ve o, alan boşsa kendi örneğini ÇALIŞMA ANINDA ekliyor.
-            // Prefabda tutmak sonraki okuyucuya "burada elle ayarlanmış bir hareket var" der.
+            // With distance grab gone the provider asset goes too: its only remaining consumer is
+            // HandGrabInteractable, which adds its own instance AT RUNTIME when the field is empty.
+            // Keeping it would tell the next reader "there is hand-tuned movement here".
             Component moveProvider = FindComponentByTypeFullName(root, "Oculus.Interaction.MoveTowardsTargetProvider");
             if (moveProvider != null)
             {
@@ -1743,8 +1663,8 @@ namespace VortexArena.Core.Editor
                 ClearInteractorFilters(grabInteractable, ctx);
             }
 
-            // El hattı araç tarafından ÜRETİLİR (kumanda hattının aksine): yeni bir silah eklendiğinde
-            // elle kurulum adımı doğmasın diye.
+            // The hand line is CREATED by the tool (unlike the controller line), so adding a weapon
+            // never creates a manual setup step.
             Component handGrab = EnsureComponentByTypeName(
                 root, "Oculus.Interaction.HandGrab.HandGrabInteractable", ctx);
             if (handGrab == null)
@@ -1769,8 +1689,8 @@ namespace VortexArena.Core.Editor
 
             if (body == null)
             {
-                // Rigidbody yoksa HandGrabInteractable Start'ta assert atıp kendini durdurur;
-                // belirtisi "silah bazen alınmıyor" olur, sebebi hiç görünmez.
+                // Without a Rigidbody, HandGrabInteractable asserts in Start and disables itself; the
+                // symptom is "the weapon sometimes cannot be taken" with no visible cause.
                 Warn(ctx + ": kökte Rigidbody yok — HandGrabInteractable çalışamaz (silah el hattında " +
                      "kavranamaz).");
             }
@@ -1784,27 +1704,16 @@ namespace VortexArena.Core.Editor
             NoteIfUnbaked(definition, ctx);
         }
 
-        /// <summary>
-        /// Eski authoring akışından kalan <c>GripSocket_Primary/Secondary</c> işaretçi düğümlerini
-        /// siler.
-        /// <para>
-        /// ⚠️ <b>Temizlik burada yapılır, prefab dosyasına elle dokunularak değil:</b> düğüm silmek
-        /// üç YAML kaydını (GameObject + Transform + MonoBehaviour) ve ebeveynin çocuk listesini
-        /// birlikte ilgilendiriyor, ayrıca bu prefabların örnekleri başka prefabların içinde duruyor
-        /// (<c>VA_WeaponCanvas</c>). Unity'nin kendi API'sinden geçmek o bağların hepsini doğru
-        /// çözer.
-        /// </para>
-        /// <para>
-        /// ⚠️ Arama <b>ada göredir</b>, bileşen tipine göre değil: <c>GripSocketMarker</c> tipi
-        /// kaldırıldığı için düğümlerde artık eksik script duruyor ve tipten gitmek onları hiç
-        /// bulamazdı.
-        /// </para>
-        /// <para>
-        /// ⚠️ Arama <b>TÜM ALT AĞACI</b> gezer, kökün doğrudan çocuklarına bakmakla yetinmez: eski
-        /// araç işaretçiyi silahın köküne koyuyordu ama onları elle model dalına
-        /// (<c>Model/&lt;pack&gt;/…</c>) taşımak serbestti ve gerçekte taşınmışlardı. Yalnız köke
-        /// bakan bir temizlik hiçbir şey bulamaz, üstelik <b>sessizce</b> başarılı görünürdü.
-        /// </para>
+        /// <summary>Deletes the legacy <c>GripSocket_Primary/Secondary</c> marker nodes.
+        /// <para>⚠️ Cleanup happens here, not by hand-editing the prefab file: removing a node
+        /// touches three YAML records (GameObject + Transform + MonoBehaviour) plus the parent's
+        /// child list, and instances of these prefabs live inside other prefabs
+        /// (<c>VA_WeaponCanvas</c>). Going through Unity's API resolves all of that.</para>
+        /// <para>⚠️ The search is BY NAME, not by component type: the <c>GripSocketMarker</c> type is
+        /// gone, so the nodes now carry a missing script and a type search would find nothing.</para>
+        /// <para>⚠️ The search walks the WHOLE SUBTREE, not just the root's direct children: the old
+        /// tool put markers on the weapon root but moving them into the model branch was allowed and
+        /// happened. A root-only cleanup would find nothing and look SILENTLY successful.</para>
         /// </summary>
         private static void RemoveLegacySocketNodes(GameObject root, string ctx)
         {
@@ -1814,8 +1723,7 @@ namespace VortexArena.Core.Editor
 
         private static void RemoveLegacySocketNode(GameObject root, string nodeName, string ctx)
         {
-            // Ters gezinti: aynı adda birden çok düğüm kalmış olabilir (eski araç ikincisini
-            // üretmezdi ama elle kopyalanmış olabilir) ve hepsi gitmeli.
+            // Reverse walk: several nodes may share the name (hand-copied) and all must go.
             Transform[] all = root.GetComponentsInChildren<Transform>(true);
             for (int i = all.Length - 1; i >= 0; i--)
             {
@@ -1832,18 +1740,13 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>
-        /// Prefabın içinde kalmış <c>Hands/Hand_*</c> ağacını siler — <b>ölü veri</b>.
-        /// <para>
-        /// Kavrama, prefabın içinde duran bir el modelinden değil, stüdyoda yazılan pozdan geliyor
-        /// ve tanıma (<c>WD_*.asset</c>) yazılıyor. Prefabın içinde duran el rig'inin okuyanı yok.
-        /// </para>
-        /// <para>⚠️ Sessizce BIRAKILMAZ: (1) açık kalırsa arenada havada duran bir el olarak
-        /// görünür — silah sahnede de duruyor (raf/masa, <c>WeaponFrame</c>, <c>VA_WeaponCanvas</c>)
-        /// ve uzak avatarın elinde de; (2) duran bir kopya kavramanın ikinci bir tarifidir ve
-        /// "hangisi geçerli" sorusunu her açanın kafasında yeniden doğurur. Runtime emniyeti
-        /// (<see cref="ItemHandRig.HideAll"/>) hâlâ yerinde — o, henüz temizlenmemiş prefablar
-        /// içindir.</para>
+        /// <summary>Deletes the leftover <c>Hands/Hand_*</c> tree inside a prefab — DEAD DATA. The
+        /// grip comes from the studio-authored pose in <c>WD_*.asset</c>, not from a hand model in
+        /// the prefab; nothing reads that rig.
+        /// <para>⚠️ Never left in place: (1) if enabled it appears as a hand floating in the arena
+        /// (the weapon also sits in the scene and in the remote avatar's hand); (2) a surviving copy
+        /// is a second description of the grip. The runtime guard
+        /// (<see cref="ItemHandRig.HideAll"/>) remains for prefabs not yet cleaned.</para>
         /// </summary>
         private static void RemoveLegacyHandNodes(GameObject root, string ctx)
         {
@@ -1859,14 +1762,9 @@ namespace VortexArena.Core.Editor
                       "kavrama WD_*.asset'e yazılır, prefabda el modeli durmaz.");
         }
 
-        /// <summary>
-        /// Prefabın içinde kalmış <c>GripPoses/…</c> ağacını siler — <b>ölü veri</b>.
-        /// <para>
-        /// Kavrama tanımın kendi alanlarında yaşıyor; prefabtaki poz düğümlerinin okuyanı yok.
-        /// ⚠️ Sessizce BIRAKILMAZ: duran bir düğüm kavramanın ikinci bir tarifidir ve "hangisi
-        /// geçerli" sorusunu prefabı her açanın kafasında yeniden doğurur.
-        /// </para>
-        /// </summary>
+        /// <summary>Deletes the leftover <c>GripPoses/…</c> tree inside a prefab — DEAD DATA. The
+        /// grip lives in the definition's own fields; nothing reads these nodes. ⚠️ Never left in
+        /// place: a surviving node is a second description of the grip.</summary>
         private static void RemoveLegacyGripPoseNodes(GameObject root, string ctx)
         {
             Transform node = root.transform.Find(LegacyGripPoseRootName);
@@ -1881,13 +1779,10 @@ namespace VortexArena.Core.Editor
                       "kavrama WD_*.asset'e yazılır, prefabta poz durmaz.");
         }
 
-        /// <summary>
-        /// Prefabın içine kazara girmiş <b>authoring eli</b> varsa siler.
-        /// <para>⚠️ Bu eller prefab stage sahnesinin ayrı kökleridir ve diske yazılmazlar — ama
-        /// Hierarchy'de sürüklenerek prefabın altına taşınabilirler. O hâlde el modeli prefaba girer
-        /// ve arenada havada duran bir el olarak görünür (silah sahnede de duruyor: raf,
-        /// <c>WeaponFrame</c>, <c>VA_WeaponCanvas</c>).</para>
-        /// </summary>
+        /// <summary>Deletes an authoring hand that accidentally ended up inside the prefab.
+        /// ⚠️ These hands are separate roots of the prefab stage scene and never hit disk — but they
+        /// can be dragged under the prefab in the Hierarchy, at which point the hand model enters the
+        /// prefab and floats in the arena.</summary>
         private static void RemoveStudioHandNodes(GameObject root, string ctx)
         {
             Transform[] all = root.GetComponentsInChildren<Transform>(true);
@@ -1908,15 +1803,13 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>
-        /// Kavraması eksik silahı koşu sonundaki rapora ekler.
-        /// <para>⚠️ Ölçüt <see cref="ItemDefinition.HasGrip"/>'tir, <c>GetGrip</c> değil: okuma yolu
-        /// eksik eli ÖTEKİ elin kaydına düşürür, yani <c>GetGrip</c> ile bakılsaydı yarım yazılmış
-        /// silah "tamam" görünürdü. Ana kabzada sorulan el SAĞDIR — silah en az bir elden yazılmışsa
-        /// öteki el düşme yoluyla makul bir duruş alır; hiç yazılmamışsa sağ el de boştur. Çift elli
-        /// silahta ÖN KABZA da aranır (<see cref="ItemDefinition.HasSecondaryGrip"/>): yazılmamış ön
-        /// kabza oyunda soketsiz ve tutulamaz kalır, listede görünmezse kimse fark etmez.</para>
-        /// </summary>
+        /// <summary>Adds a weapon with a missing grip to the end-of-run report.
+        /// <para>⚠️ The test is <see cref="ItemDefinition.HasGrip"/>, not <c>GetGrip</c>: the read
+        /// path falls back to the OTHER hand's record, so <c>GetGrip</c> would make a half-authored
+        /// weapon look complete. The hand queried for the main grip is the RIGHT one. On two-handed
+        /// weapons the FRONT grip is checked too
+        /// (<see cref="ItemDefinition.HasSecondaryGrip"/>): an unauthored front grip stays socketless
+        /// and unholdable in game and nobody notices unless it is listed.</para></summary>
         private static void NoteIfUnbaked(ItemDefinition definition, string ctx)
         {
             if (IsUnbaked(definition))
@@ -1925,10 +1818,8 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>
-        /// "Kavraması yazılmamış" ölçütü — koşu sonu raporu ile hazırlık denetiminin TEK kaynağı.
-        /// İkinci bir yerde tekrarlansaydı ölçüt bir gün sessizce ayrışırdı.
-        /// </summary>
+        /// <summary>The "grip not authored" test — the single source for both the end-of-run report
+        /// and the readiness check; duplicated elsewhere it would drift.</summary>
         private static bool IsUnbaked(ItemDefinition definition)
         {
             return definition == null
@@ -1936,7 +1827,7 @@ namespace VortexArena.Core.Editor
                    || (definition.IsTwoHanded && !definition.HasSecondaryGrip);
         }
 
-        /// <summary>"Ateş sesi atanmamış" ölçütü — <see cref="IsUnbaked"/> ile aynı gerekçe.</summary>
+        /// <summary>The "no fire sound assigned" test — same rationale as <see cref="IsUnbaked"/>.</summary>
         private static bool IsSilent(WeaponDefinition definition)
         {
             AudioClip[] clips = definition != null ? definition.FireClips : null;
@@ -1951,12 +1842,10 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>
-        /// Tablodaki silahların kiti eksiksiz mi — <b>HİÇBİR ŞEY YAZMAZ</b> (build hazırlık
-        /// panelinin okuduğu denetim). Koşu sonundaki iki raporun (kavraması yazılmamış · ateş sesi
-        /// atanmamış) aynı ölçütlerini WD asset'lerini diskten okuyarak uygular; WD hiç yoksa araç
-        /// bu silah için hiç çalışmamış demektir.
-        /// </summary>
+        /// <summary>Is every weapon's kit complete — WRITES NOTHING (read by the build readiness
+        /// panel). Applies the same two tests as the end-of-run reports (grip not authored, no fire
+        /// sound) by reading the WD assets from disk; a missing WD means the tool never ran for that
+        /// weapon.</summary>
         internal static bool AreWeaponsReady(out string detail)
         {
             var missing = new List<string>();
@@ -2010,11 +1899,9 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>
-        /// Ateş sesi atanmamış silahları tek uyarıda listeler. ⚠️ Bu rapor ŞART: klipler bu araçtan
-        /// gelmediği için (bkz. <see cref="EnsureDefinition"/>) yeni bir silah <b>sessiz</b> doğar ve
-        /// belirtisi yalnız "ateş sesi duyulmuyor"dur — hiçbir yerde hata basılmaz.
-        /// </summary>
+        /// <summary>Lists weapons with no fire sound in one warning. ⚠️ Mandatory: clips do not come
+        /// from this tool (see <see cref="EnsureDefinition"/>), so a new weapon is born SILENT and
+        /// the only symptom is "no fire sound" with nothing logged anywhere.</summary>
         private static void ReportSilentWeapons(WeaponDefinition[] defs)
         {
             var silent = new List<string>();
@@ -2057,7 +1944,7 @@ namespace VortexArena.Core.Editor
                              "Ana Kabza + Ön Kabza Ellerini Oluştur → yerleştir → Kaydet.");
         }
 
-        /// <summary>Kökteki bir bileşeni tam tip adıyla siler (yoksa sessizce geçer).</summary>
+        /// <summary>Removes a root component by full type name (silent if absent).</summary>
         private static void RemoveRootComponent(GameObject root, string fullName, string ctx, string why)
         {
             Component component = FindComponentByTypeFullName(root, fullName);
@@ -2070,13 +1957,11 @@ namespace VortexArena.Core.Editor
             Debug.Log(Log + ctx + ": " + component.GetType().Name + " kaldırıldı — " + why + ".");
         }
 
-        /// <summary>
-        /// Bir ISDK interactable'ının <c>_interactorFilters</c> listesini BOŞALTIR (idempotent).
-        /// <para>Kökte kavrama filtresi yoktur (gerekçe <see cref="ApplyGripKit"/>'te). Liste
-        /// boşaltılmazsa kaldırılan soket bileşeninden kalan eksik giriş ISDK'nın <c>Start</c>
-        /// denetiminde patlar ve silah kavranamaz olur — hata mesajı ise silahı değil bir
-        /// koleksiyonu işaret eder.</para>
-        /// </summary>
+        /// <summary>CLEARS an ISDK interactable's <c>_interactorFilters</c> list (idempotent). There
+        /// is no grab filter on the root (rationale in <see cref="ApplyGripKit"/>). Left uncleared,
+        /// the missing entry from the removed socket component throws in ISDK's <c>Start</c> check
+        /// and the weapon becomes ungrabbable — with an error pointing at a collection, not the
+        /// weapon.</summary>
         private static void ClearInteractorFilters(Component interactable, string ctx)
         {
             var so = new SerializedObject(interactable);
@@ -2098,34 +1983,25 @@ namespace VortexArena.Core.Editor
             Debug.Log(Log + ctx + ": " + interactable.GetType().Name + " filtre listesi boşaltıldı.");
         }
 
-        /// <summary>
-        /// Silah çerçevesi kitini bir WPN kökü üzerinde kurar (idempotent): <c>VA_WeaponFrame</c>
-        /// prefabının bir ÖRNEĞİ kökün altına konur.
-        /// <para>
-        /// <b>Çerçeve nedir:</b> sahnedeki silah artık yerden alınmaz — çerçevenin içinde durur ve
-        /// oradan hiç ayrılmaz. Oyuncu <c>WeaponFrame.maxGrabDistance</c> mesafesinden nişan alıp
-        /// grip'e basınca silahın bir KLONU eline
-        /// gelir (<see cref="WeaponFrame"/> → <c>WeaponGranter.SelectWeapon</c>). Yani her
-        /// <c>WPN_*</c> prefabı hem "elde tutulan silah" hem "sahnede duran kaynak" olarak
-        /// kullanılır; hangisi olduğunu ÇERÇEVENİN varlığı belirler (klonda çerçeve yok edilir).
-        /// </para>
-        /// <para>
-        /// <b>Neden prefab ÖRNEĞİ (unpack DEĞİL):</b> çerçevede yapılan tek bir düzeltme —
-        /// kavrama menzili, ışın rengi, collider boyu — altı silaha birden insin. Unpack edilseydi
-        /// her değişiklik altı prefabı tek tek açmak demek olurdu (sahneye altyapı prefabı koyma
-        /// kuralının aynısı).
-        /// </para>
-        /// <para>
-        /// ⚠️ Bu, <see cref="ApplyGripKit"/>'in mesafe-kavrama silme adımlarıyla (kumanda ve
-        /// el hattı) ÇELİŞMEZ: o adımlar <see cref="FindComponentByTypeFullName"/> kullanıyor ve o metot yalnız
-        /// KÖKÜN bileşenlerine bakıyor (çocuklara inmiyor). Yasak <c>WPN_*</c> kökü içindir —
-        /// çerçeve ayrı bir objedir ve seçim oradan yapılır.
-        /// İnseydi araç kendi eklediği çerçevenin kavramasını siler ve silah hiç alınamaz olurdu.
-        /// </para>
-        /// </summary>
+        /// <summary>Applies the weapon frame kit on a WPN root (idempotent): an INSTANCE of the
+        /// <c>VA_WeaponFrame</c> prefab is placed under the root.
+        /// <para>What the frame is: a scene weapon is no longer picked up off the floor — it stays
+        /// inside its frame forever. Aiming from <c>WeaponFrame.maxGrabDistance</c> and pressing grip
+        /// puts a CLONE in the hand (<see cref="WeaponFrame"/> →
+        /// <c>WeaponGranter.SelectWeapon</c>). So every <c>WPN_*</c> prefab serves both as "held
+        /// weapon" and "scene source"; the presence of the FRAME decides which (the clone's frame is
+        /// destroyed).</para>
+        /// <para>Why an INSTANCE and not an unpack: one fix in the frame (grab range, ray colour,
+        /// collider size) must reach every weapon at once — same rule as placing infrastructure
+        /// prefabs in a scene.</para>
+        /// <para>⚠️ This does not contradict <see cref="ApplyGripKit"/>'s distance-grab removal:
+        /// those steps use <see cref="FindComponentByTypeFullName"/>, which only looks at the ROOT's
+        /// components. The ban is for the <c>WPN_*</c> root; the frame is a separate object and is
+        /// where selection happens. Recursing would delete the frame's own grab and make the weapon
+        /// unobtainable.</para></summary>
         private static void ApplyWeaponFrameKit(GameObject root, string ctx)
         {
-            // Zaten var mı — pasif çocukları da tarar (çerçeve görseli pasif başlıyor).
+            // Already present? Inactive children are scanned too (the frame visual starts disabled).
             if (root.GetComponentInChildren<WeaponFrame>(true) != null)
             {
                 return; // idempotent
@@ -2156,21 +2032,15 @@ namespace VortexArena.Core.Editor
                       "maxGrabDistance mesafesinden alınır.");
         }
 
-        /// <summary>
-        /// Çözülme kitini bir WPN kökü üzerinde kurar (idempotent):
-        /// <see cref="SimpleWeaponDissolve"/> bileşeni + <c>DissolveEffect.mat</c> bağı. Silah ele
-        /// geldiğinde model kısa bir süre çözülme materyaline çevrilip yoktan var edilir; efekt
-        /// bitince özgün materyaller geri konur.
-        /// <para>
-        /// <b>Neden araçta:</b> bileşen her <c>WPN_*</c> köküne gerekiyor ve elle eklendiğinde yeni
-        /// silahta sessizce unutulurdu — silah eskisi gibi anında belirir, kimse fark etmez.
-        /// <see cref="ApplyWeaponFrameKit"/> ile aynı gerekçe.
-        /// </para>
-        /// <para>
-        /// ⚠️ Materyal alanı yalnız <b>BOŞSA</b> yazılır (ses klipleriyle aynı kural): bir silaha
-        /// elle başka bir çözülme materyali bağlanmışsa araç onu ezmez.
-        /// </para>
-        /// </summary>
+        /// <summary>Applies the dissolve kit on a WPN root (idempotent):
+        /// <see cref="SimpleWeaponDissolve"/> + the <c>DissolveEffect.mat</c> binding. On pickup the
+        /// model briefly switches to the dissolve material and fades in; the original materials are
+        /// restored afterwards.
+        /// <para>Why in the tool: the component is needed on every <c>WPN_*</c> root and added by
+        /// hand it would be silently forgotten on a new weapon (which then just appears instantly and
+        /// nobody notices). Same rationale as <see cref="ApplyWeaponFrameKit"/>.</para>
+        /// <para>⚠️ The material field is written only when EMPTY (same rule as audio clips): a
+        /// hand-bound dissolve material is never overwritten.</para></summary>
         private static void ApplyDissolveKit(GameObject root, string ctx)
         {
             var dissolve = root.GetComponent<SimpleWeaponDissolve>();
@@ -2195,24 +2065,18 @@ namespace VortexArena.Core.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        /// <summary>
-        /// Bırakma anındaki fiziği söker: <c>Grabbable._throwWhenUnselected = false</c>.
-        /// <para>
-        /// ⚠️ <b>Neden zorunlu:</b> ISDK bırakışta silaha elin İZLENEN hızını uygular
-        /// (<c>ThrowWhenUnselected</c>). Ama bu silahın kökü tutuş boyunca ISDK tarafından
-        /// taşınmıyor — <c>Weapon.ApplyCanonicalGrip</c> her kare kanonik kavramadan ışınlıyor
-        /// (§6.6). Işınlanan bir gövdeden türetilen "hız" fiziksel bir büyüklük değil, kare
-        /// farkının artığıdır; bırakınca silah elden fırlıyordu.
-        /// </para>
-        /// <para>
-        /// <c>_kinematicWhileSelected</c> AÇIK bırakılır (varsayılan): tutuş boyunca gövde
-        /// kinematik olduğu için yerçekimi hız biriktirmez, bırakınca silah bulunduğu yerden
-        /// düşer. İkisi birlikte "bırakınca yere düşer, fırlamaz" davranışını verir.
-        /// </para>
-        /// <para>⚠️ Fırlatma gerektiren eşya (bomba) bu kapıdan GEÇMEZ: onun atılışı
-        /// <c>ArenaCombat.ReportThrow</c> ile telde bildirilen kendi balistiğidir, ISDK'nın
-        /// fizik impulsu değil (Faz 4).</para>
-        /// </summary>
+        /// <summary>Strips release physics: <c>Grabbable._throwWhenUnselected = false</c>.
+        /// <para>⚠️ Required because ISDK applies the hand's TRACKED velocity on release. But this
+        /// weapon's root is not carried by ISDK during the hold —
+        /// <c>Weapon.ApplyCanonicalGrip</c> teleports it from the canonical grip every frame (§6.6).
+        /// A "velocity" derived from a teleported body is frame-difference noise, and the weapon flew
+        /// out of the hand on release.</para>
+        /// <para><c>_kinematicWhileSelected</c> stays ON (default): the body is kinematic during the
+        /// hold so gravity accumulates no speed, and on release the weapon drops where it is. Together
+        /// they give "drops on release, never flies".</para>
+        /// <para>⚠️ Throwables (grenades) do NOT go through this gate: their throw is their own
+        /// ballistics reported over the wire via <c>ArenaCombat.ReportThrow</c>, not an ISDK
+        /// impulse.</para></summary>
         private static void ApplyReleasePhysics(GameObject root, string ctx)
         {
             Component grabbable = FindComponentByTypeFullName(root, "Oculus.Interaction.Grabbable");
@@ -2243,7 +2107,7 @@ namespace VortexArena.Core.Editor
                       "fırlamaz (poz kanonik kavramadan sürülüyor, ISDK'nın hız tahmini geçersiz).");
         }
 
-        /// <summary>Namlu alevi particle modüllerini (renk/boyut/ömür/koni açısı) silaha göre ayarlar.</summary>
+        /// <summary>Tunes the muzzle flash particle modules (colour/size/lifetime/cone) per weapon.</summary>
         private static void ConfigureMuzzleFlash(ParticleSystem ps, WeaponSpec spec)
         {
             var main = ps.main;
@@ -2258,11 +2122,9 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>
-        /// MuzzleFlash'ın altında "Smoke" adlı bir child particle sistemi kurar/günceller ve
-        /// flash'ın Sub Emitters modülüne "Birth" tetikleyicisiyle bağlar — Weapon.Fire()'daki
-        /// tek bir muzzleFlash.Emit() çağrısı hem alevi hem dumanı otomatik tetikler.
-        /// </summary>
+        /// <summary>Creates/updates a "Smoke" child particle system under MuzzleFlash and wires it
+        /// into the flash's Sub Emitters module with a "Birth" trigger, so the single
+        /// <c>muzzleFlash.Emit()</c> in <c>Weapon.Fire()</c> drives both flash and smoke.</summary>
         private static void ConfigureMuzzleSmoke(ParticleSystem flashPs, WeaponSpec spec, Material smokeMaterial)
         {
             Transform flashT = flashPs.transform;

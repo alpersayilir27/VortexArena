@@ -10,35 +10,8 @@ Sıfırdan çalışır duruma ~15 dakika. Quest gözlüğü **gerekmez** — mas
 
 ## 1. Kurulum (yeni bilgisayarda bir kez)
 
-| # | Ne | Not |
-|---|---|---|
-| 1 | **Unity Hub + Editor 6000.3.20f1** | Android Build Support + SDK/NDK + OpenJDK modülleriyle |
-| 2 | **Git + Git LFS** | `git lfs install` — repo LFS kullanıyor |
-| 3 | Projeyi Unity'de bir kez aç | UPM paketleri manifest'ten iner |
-| 4 | **.NET 10 SDK** | Sunucuyu derlemek için |
-| 5 | `scripts\docs-setup.bat` | Bu dokümanı yerel olarak sunmak için (bir kez) |
-| 6 | `scripts\defender-exclusions.cmd` | Sağ tık → **Yönetici olarak çalıştır**. Build/import süresini kısaltır |
-
-Sunucu tarafını hiç derlemeyeceksen 4. adımı atlayabilirsin — ama o zaman **hiç maç kuramazsın**:
-maç verisini yalnız sunucu üretir ve maçı yalnız bir admin başlatır.
-
-**6. adımı atlama.** Windows Defender'ın gerçek zamanlı koruması her dosya açılışında araya girer;
-IL2CPP build'i on binlerce `.cpp`/`.obj` üretip `Library/`'yi sürekli okuduğu için bu, paralel
-derlemenin önünde kuyruk oluşturur — build ve import sürelerinde %20-40 bandında fark eder.
-Betik repo kökünü, Unity kurulumunu, Unity/Hub cache'lerini, paket cache'lerini (`.gradle`,
-`.nuget`, npm) ve build zincirinin exe'lerini dışlar; yolları kendi konumundan türetir, elle
-düzenleme istemez. Geri alma: aynı betik `-Remove` ile.
-
-> ⚠️ Dışlanan klasörler **artık taranmıyor** — oraya indirme yapma. Asset store paketini ya da
-> GitHub'dan çektiğin arşivi önce başka bir yere indirip kontrol et.
-> Ayrıntı, `-List`/`-Remove` kullanımı ve Dev Drive alternatifi: `scripts/README.md`.
-
-> ⚠️ **Smart App Control açıksa dışlamalar işe yaramaz.** SAC bir antivirüs ayarı değil, Code
-> Integrity politikasıdır: dışlama listesini okumaz. Unity **Burst**'ün `Library/BurstCache/JIT/`
-> altına ürettiği **imzasız** DLL'i engeller (uyarıyı veren budur; `CodeIntegrity` olayı 3077) ve
-> imzasız `deploy\*.exe` çıktılarımızı da engelleyebilir. Betik açılışta uyarır; kapatması
-> *Windows Güvenliği → Uygulama ve tarayıcı denetimi → Akıllı Uygulama Denetimi*, ⚠️ **geri
-> açılamaz**.
+Araç zincirinin tamamı (Unity + CLI, Git LFS, .NET SDK, Defender dışlamaları, MCP kayıtları)
+tek yerde: **[Ortam Kurulumu](Ortam-Kurulumu.md)**. Kurulum bitince buradan devam et.
 
 ---
 
