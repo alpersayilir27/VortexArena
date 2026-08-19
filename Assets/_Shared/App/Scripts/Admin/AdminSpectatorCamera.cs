@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Combat;
 using VortexArena.Net;
 
 namespace VortexArena.App.Admin
@@ -84,6 +85,8 @@ namespace VortexArena.App.Admin
                 _appliedMode = mode;
             }
 
+            ApplyAudioFocus(mode);
+
             switch (mode)
             {
                 case AdminCameraMode.Pov:
@@ -113,6 +116,32 @@ namespace VortexArena.App.Admin
                 _yaw = euler.y;
                 _pitch = NormalizePitch(euler.x);
             }
+        }
+
+        // ------------------------------------------------------------------- ses odağı
+
+        /// <summary>
+        /// Gözlemcinin kulağını kamerasıyla aynı yere bakar hâle getirir
+        /// (<see cref="RemoteShotFx.SpectatorAudioFocus"/>).
+        /// <para><b>Yalnız POV'da</b> odak vardır: izlenen oyuncunun silahı duyulur, sahadaki diğer
+        /// oyuncuların atışları susar — hepsi birden çalınca operatör hangi sesin izlediği oyuncuya
+        /// ait olduğunu ayırt edemez.</para>
+        /// <para>⚠️ <b>Kuş bakışı ve serbest kipte filtre YOKTUR</b> (odak <c>null</c>): o kiplerde
+        /// operatör sahanın tamamına bakıyor ve atış sesi "nerede çatışma var" sorusunun cevabıdır
+        /// — susturmak kuş bakışını sağırlaştırırdı. Aynı sebeple POV'da <b>oyuncu seçilmemişse</b>
+        /// (kamera son konumunda donuktur) filtre yine kurulmaz: susturacak bir odak yok.</para>
+        /// <para>⚠️ Soru her karede sorulur, <c>AdminSession.Changed</c>'e abone olunarak DEĞİL:
+        /// odağı besleyen iki değer de (kip + seçili oyuncu) koşan maçta değişiyor ve kaçırılan
+        /// tek bir olay operatöre kalıcı olarak YANLIŞ oyuncunun silahını duyurur. Aynı gerekçe
+        /// <c>RemoteAvatar</c> ad etiketlerinde de geçerli.</para>
+        /// <para>⚠️ Yazan TEK yer burasıdır. Gözlemci kamerası yalnız admin rolünde kurulur, yani
+        /// oyuncu istemcisinde odak hiç yazılmaz (null = filtre yok) ve orada her atış duyulur.</para>
+        /// </summary>
+        private static void ApplyAudioFocus(AdminCameraMode mode)
+        {
+            int selected = AdminSession.SelectedPlayerId;
+            RemoteShotFx.SpectatorAudioFocus =
+                mode == AdminCameraMode.Pov && selected != 0 ? selected : (int?)null;
         }
 
         // ------------------------------------------------------------------- POV

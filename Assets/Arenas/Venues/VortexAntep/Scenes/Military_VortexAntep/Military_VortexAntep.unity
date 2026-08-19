@@ -4692,7 +4692,7 @@ PrefabInstance:
     - target: {fileID: 3577230289726291510, guid: d0291bae3cee60c4dbb0542d32d9e7b6, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 7fd390850dcd6934396617a90305d4ea, type: 2}
+      objectReference: {fileID: 2100000, guid: 5a6f2b524af60694bae66fb2d27520cf, type: 2}
     - target: {fileID: 3577230289726291510, guid: d0291bae3cee60c4dbb0542d32d9e7b6, type: 3}
       propertyPath: 'm_Materials.Array.data[1]'
       value: 
@@ -22138,9 +22138,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6205234856749525030, guid: d537c590acfe4764593eb8290ed4076e, type: 3}
       insertIndex: -1
       addedObject: {fileID: 0}
-    - targetCorrespondingSourceObject: {fileID: 4253387552234706983, guid: d537c590acfe4764593eb8290ed4076e, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 0}
     - targetCorrespondingSourceObject: {fileID: 2825491444048432279, guid: d537c590acfe4764593eb8290ed4076e, type: 3}
       insertIndex: -1
       addedObject: {fileID: 0}
@@ -25329,7 +25326,7 @@ PrefabInstance:
     - target: {fileID: 3577230289726291510, guid: d0291bae3cee60c4dbb0542d32d9e7b6, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 0e5410680e0cde4498246e61ae10b745, type: 2}
+      objectReference: {fileID: 2100000, guid: 189a6848ef3678944818278c930cf401, type: 2}
     - target: {fileID: 3577230289726291510, guid: d0291bae3cee60c4dbb0542d32d9e7b6, type: 3}
       propertyPath: 'm_Materials.Array.data[1]'
       value: 
@@ -55653,9 +55650,6 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 0}
     - targetCorrespondingSourceObject: {fileID: 3989389344392161045, guid: 75cd880d2020ffd4a90e24f9b00d146a, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 0}
-    - targetCorrespondingSourceObject: {fileID: 2606387634715508379, guid: 75cd880d2020ffd4a90e24f9b00d146a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 0}
     - targetCorrespondingSourceObject: {fileID: 8132555981460212023, guid: 75cd880d2020ffd4a90e24f9b00d146a, type: 3}
