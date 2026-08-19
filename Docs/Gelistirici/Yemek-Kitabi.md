@@ -430,7 +430,8 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 
 > Silahın elde **nerede** durduğunu `WD_*`'taki kavrama kayıtları belirler (§11.0); dördü de el
 > başınadır (`primaryGripRight/Left`, `secondaryGripRight/Left`) ve her biri **kumanda anchor'ının**
-> konumu + parmak preset'ini taşır — **dönüş taşımaz, silah her zaman kumandayla hizalıdır.** Ana
+> konumu + o silaha özel **riglenmiş parmak duruşunu** taşır — **dönüş taşımaz, silah her zaman
+> kumandayla hizalıdır.** Ana
 > elde silah ele uyar (bilek serbest kalır), ön kabzada elin görseli silaha yapışır. ⚠️ **Ölçü TEK yerden okunur:** aynı kayıt yerel duruşu, uzak oyuncudaki çizimi ve
 > ön kabza kapısının/göstergesinin yerini birlikte besliyor.
 > Çerçeveden seçilen silah (`weaponSource:"weaponcanvas"`), modun verdiği silah
@@ -463,8 +464,9 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 ## 11.0 Bir silahın kavramasını YAZMAK
 
 Kavrama **stüdyoda, gözlük takmadan yazılır**: **kumanda çerçevesini** Scene View'da silahın
-kabzasına oturtursun, araç o çerçevenin (kumanda anchor'ının) silaha göre **konumunu** + o elin
-parmak preset'ini `WD_*.asset`'e yazar. Çerçevenin altında iki **kilitli** görsel çocuk durur:
+kabzasına oturtursun ve elin **parmaklarını o silaha göre riglersin**; araç çerçevenin (kumanda
+anchor'ının) silaha göre **konumunu** + parmak eklemlerinin dönüşlerini `WD_*.asset`'e yazar.
+Çerçevenin altında iki görsel çocuk durur (gövdeleri **kilitli**, parmak kemikleri değil):
 **Quest 3 kumanda modeli** (oyunda anchor'ın altında tam böyle durur — çerçeveyi, kumanda kabzada
 gerçekte tutulduğu yere gelecek biçimde taşı) ve ISDK hayalet eli (elin gerçekte silahı nasıl
 saracağını gösterir; sabit ölçülmemişse yaklaşıktır). Prefaba hiçbir şey yazılmaz — kavramanın tek
@@ -489,11 +491,13 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
 4. Çerçeveleri Scene View'da **taşı** (gizmo'daki mavi ok kumandanın ilerisidir; hayalet elin
    ya da kumanda modelinin mesh'ine tıklamak da çerçeveyi seçer — çocuklar kilitlidir, taşınmaz):
    kumanda kabzada gerçekte tutulduğu gibi dursun, avuç kabzaya otursun, işaret parmağı tetiğe ulaşsın.
-5. Elin Inspector'ından (`GripHandAuthoring`) **parmak preset'ini** seç: `Idle` · `Firing` (işaret
-   tetikte) · `Grip` (sarma). Değişiklik Scene View'da anında görünür. Varsayılan ana kabzada
-   `Firing`, ön kabzada `Grip`'tir. Üçü de sabit duruştur — oyunda gördüğün el tezgâhtaki elin
-   aynısıdır, hiçbir parmak kumandadan/el izlemesinden oynamaz; silahı alınca el `Idle`'dan bu
-   duruşa yumuşakça kapanır, bırakınca geri açılır.
+5. **Parmakları o silaha göre rigle.** Eli seç (ya da penceredeki *Seç*) → pencerede o elin altında
+   **parmak rigi** listesi açılır: parmak başına numaralı düğmeler, `1` bileğe en yakın boğum.
+   Düğmeye basmak o kemiği seçer ve Scene View'ı döndürme aracına alır (`Pivot: Local`); kemiği
+   çevir, avuç kabzaya otursun, işaret parmağı tetiğe değsin. **Parmakları Sıfırla** boş elin
+   duruşuna döndürür. Riglenmemiş el boşta duruşunda kalır — hazır bir "sıkma/kabza" preset'i
+   YOKTUR. Oyunda gördüğün el tezgâhtaki elin aynısıdır, hiçbir parmak kumandadan/el izlemesinden
+   oynamaz; silahı alınca el boşta duruşundan bu duruşa yumuşakça kapanır, bırakınca geri açılır.
 6. İstersen **Karşı Ele Aynala** ile öteki eli başlat, sonra elle düzelt.
 7. **Kaydet** (stüdyo penceresinden; elin Inspector'ında kaydet düğmesi yoktur) → yaşayan **her el**
    `WD_*.asset`'e yazılır (Undo'lu) ve **silah kiti kendiliğinden eşitlenir** — `Configure All Build
@@ -509,10 +513,16 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
   arenada **havada el** olarak çizilir; silah kiti koşusu böyle bir kaçağı siler.
 - Eller Play'e girerken, prefab kipi kapanınca ya da sahne değişince kendiliğinden silinir. Play
   kipinde kayıt yazılmaz.
-- ⚠️ **Parmak duruşu slider'la ayarlanmaz, preset'ten seçilir.** Üç preset tek kaynaktan sürülür
-  (`HandGripPresets`), yani tezgâhta gördüğün parmak duruşu oyundaki sentetik elde ve uzak avatarda
-  birebir tekrarlanır. Silah başına serbest parmak verisi yoktur ve eklenmez.
-- Kavraması yazılmamış silahta el `Idle`'da kalır + konsola oturum başına bir uyarı gider;
+- ⚠️ **Parmak duruşu slider'la/sayıyla ayarlanmaz — kemik çevrilir.** Kayda giren şey kemiklerin
+  Kaydet anındaki hâlidir; aynı duruşu ikinci kez sayı olarak yazacak bir alan yoktur ve
+  eklenmez ("hangisi geçerli" sorusunu doğururdu). Tezgâhta gördüğün parmak duruşu oyundaki
+  sentetik elde birebir tekrarlanır.
+- ⚠️ **Metakarpallar (avuç içindeki ilk kemikler) listede YOKTUR ve riglenmez.** Bilekle birlikte
+  hareket ederler ve sentetik el proksimal eklemleri bilek uzayında beklediği için onları çevirmek
+  tezgâhta doğru, oyunda kaymış bir el üretirdi.
+- ⚠️ **Aynalama parmakları da kopyalar** (sol/sağ hayalet el aynı iskeletin aynasıdır) — yine
+  başlangıçtır, kabzanın tek taraflı parçaları elle düzeltilir.
+- Kavraması yazılmamış silahta el boşta duruşunda kalır + konsola oturum başına bir uyarı gider;
   silah kiti koşusu da sonunda **"kavraması EKSİK silahlar"**ı listeler — ana kabzası yazılmamış
   olanlar VE çift elli olup ön kabzası yazılmamış olanlar (`Configure All Build Elements`
   penceresindeki Hazırlık satırı aynı listeyi gösterir).
@@ -540,14 +550,19 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
 ### Başkalarının gördüğü el (uzak avatarın parmakları)
 
 Parmaklar telde gitmez (`Docs/ArenaNet-Protokol.md` §6.9), yani uzak avatarın parmakları
-**sentezlenir**: eşya tutan elde **o slotun preset'i** (`WD_*`'ta yazılı olan), boş elde
-`RemoteAvatar.prefab` → `idleHandPose` (boşsa `HandPoseProfile.Idle`). Yani stüdyoda seçtiğin preset
-yalnız senin elini değil, herkesin gördüğü eli de sürer. ⚠️ Eşya başına serbest parmak verisi
-**yoktur ve eklenmez** — silah başına ikinci bir elle-ayar yüzeyi doğururdu.
+**sentezlenir**: eşya tutan elde **o slot için riglediğin duruş** (`WD_*`'ta yazılı olan), boş elde
+`RemoteAvatar.prefab` → `idleHandPose` (boşsa `HandPoseProfile.Idle`). Yani stüdyoda riglediğin
+duruş yalnız senin elini değil, herkesin gördüğü eli de sürer.
 
-**Genel his** (tüm silahlar birden) eklem başına açı tavanlarından gelir:
+⚠️ **Uzaktaki el KABACA çizilir ve bu bilinçlidir.** Uzak avatarın eli humanoid (Mixamo) bir
+rig'dir; ISDK eklem dönüşleri ona doğrudan yazılamaz (iki iskeletin kemik eksenleri aynı değil).
+Köprü, riglediğin duruştan **ölçülen** parmak başına kapanma oranıdır — yani uzakta parmakların
+"ne kadar kapalı" olduğu doğrudur, kemik kemik ince ayar değil. İnce ayarın tüketicisi zaten
+oyuncunun kendi eli: uzak oyuncunun eli metrelerce öteden görülüyor.
+
+**Genel his** (tüm silahlar birden, uzak elde) eklem başına açı tavanlarından gelir:
 `HandFingerRig.FingerMaxAngles` / `ThumbMaxAngles`. Tek bir silah tuhaf duruyorsa bakılacak yer o
-silahın **kavrama kaydıdır**, parmak değil.
+silahın **kavrama kaydıdır**, tavanlar değil.
 
 ## 11.1 Bir arenada silah çerçevesini görünür/görünmez yapmak
 

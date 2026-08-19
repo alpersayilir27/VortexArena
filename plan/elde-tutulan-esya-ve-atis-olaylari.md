@@ -22,9 +22,9 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
 1. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` → pencereyi aç.
 2. `WPN_*` prefabını **prefab kipinde** aç.
 3. **Ana Kabza Ellerini Oluştur** (+ iki elli silahta **Ön Kabza Ellerini Oluştur**).
-4. Kumanda çerçevelerini (hayalet el onların çocuğudur) Scene View'da kabzalara oturt; elin
-   Inspector'ından parmak preset'ini seç
-   (ana kabza `Firing`, ön kabza `Grip`). Gerekirse **Karşı Ele Aynala** ile başlat.
+4. Kumanda çerçevelerini (hayalet el onların çocuğudur) Scene View'da kabzalara oturt; sonra
+   parmakları o silaha göre **rigle** (penceredeki parmak listesinden eklemi seç → Scene View'da
+   çevir). Gerekirse **Karşı Ele Aynala** ile başlat (parmakları da kopyalar).
 5. **Kaydet** → dört kayıt `WD_*.asset`'e iner ve silah kiti kendiliğinden eşitlenir (ayrı bir
    senkronize adımı yok; tezgâhtan kalkan eller *Elleri Oluştur* ile kayıttan geri gelir).
 6. Başlıkta yalnız **hissi** doğrula (nişan alırken rahat mı).
@@ -42,8 +42,9 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
 - ⚠️ `WeaponKitBuilder` kavrama kayıtlarını **ezmez**; koşu sonunda kavraması yazılmamış silahları
   listeler, eski `GripSocket_*` işaretçilerini, `GripPoses` ağacını, prefabta kalmış `Hands/Hand_*`
   rig'ini ve sızmış `[VA El_*]` köklerini siler. `netItemId`/`holdMode` tablodan gelir ve EZİLİR.
-- Aynı kayıt **üç yeri** besliyor: yerel tutuş · uzak oyuncudaki çizim (parmaklar dahil: preset
-  oradan okunur) · ön kabza kapısının/göstergesinin yeri. Biri düzelince üçü düzelir.
+- Aynı kayıt **üç yeri** besliyor: yerel tutuş · uzak oyuncudaki çizim (parmaklar dahil — uzak
+  humanoid ele riglenmiş duruştan ölçülen kapanma oranı gider) · ön kabza kapısının/göstergesinin
+  yeri. Biri düzelince üçü düzelir.
 - Ön kabza soket yarıçapı silah başınadır (`secondaryGripRadius`, varsayılan 0.10 = 20 cm çap;
   görülen küre = kabul hacmi, ölçülen nokta boş elin KUMANDA ANCHOR'IDIR) ve Inspector'dan girilir —
   stüdyo ona dokunmaz.

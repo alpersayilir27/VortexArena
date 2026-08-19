@@ -875,13 +875,13 @@ APK'sındadır (§6.6 — hangi eşya, hangi el, kavrama bağlı mı). İzlemede
 tutan bir elde gerçek parmak duruşunu zaten göstermiyor; onu telde taşımak, alıcının **daha iyi
 bildiği** bir şeyi bant genişliğiyle satın almaktı.
 
-Alıcı parmakları **kendi** sentezler: eşya tutan elde o slotun **parmak preset'i**
-(`HandGripPresets.Profile(definition.GripPreset(slot, rightHand))` — kavrama kaydının taşıdığı
-`Idle`/`Firing`/`Grip` seçimi), boş elde idle duruşu (`RemoteAvatar.idleHandPose`, boşsa
-`HandPoseProfile.Idle`). Böylece aynı el her ekranda aynı çizilir ve sol/sağ farkı kalmaz — duruşun
-kaynağı ölçüm değil **tanımdır**. ⚠️ Eşya başına **serbest** parmak verisi YOKTUR ve eklenmez:
-duruş bir preset seçimidir, parmak başına ayar telde karşılığı olmadığı gibi her silaha ikinci bir
-elle-ayar yüzeyi doğururdu.
+Alıcı parmakları **kendi** sentezler: eşya tutan elde o slot için **silaha özel riglenmiş duruş**
+(`ItemDefinition.GripFingerCurl(slot, rightHand)` — kavrama kaydındaki `fingerJoints`'ten
+ölçülür), boş elde idle duruşu (`RemoteAvatar.idleHandPose`, boşsa `HandPoseProfile.Idle`).
+Böylece aynı el her ekranda aynı çizilir ve sol/sağ farkı kalmaz — duruşun kaynağı ölçüm değil
+**tanımdır**. ⚠️ Uzak avatarın eli **humanoid** olduğu için ham eklem dönüşü DEĞİL, o duruştan
+ölçülen **beş kapanma oranı** uygulanır (`HandPoseLibrary.MeasureCurl`); ham rotasyonu humanoid
+kemiğe yazmak projenin bir kez öğrendiği tuzaktır. Oran **asset'te saklanmaz**, kayıttan türetilir.
 
 ⚠️ **Gönderen ile alıcının eklem listesi AYNI olmak ZORUNDADIR** (`NetworkCharacterRetargeter`'ın
 `_bodyIndicesToSend`/`_bodyIndicesToSync` alanları, iki prefabta birden). Listeler ayrışırsa blob
