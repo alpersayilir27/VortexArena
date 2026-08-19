@@ -244,16 +244,31 @@ namespace VortexArena.Protocol
 
     /// Admin bir oyuncunun kalibrasyonunu SIFIRLAR (§10.6). Admin yalnız sıfırlayabilir,
     /// "kalibre oldu" diye işaretleyemez — onu yalnız başlık bilir (SetCalibrationMsg).
-    /// <para>Admin → sunucu yönünde <c>playerId</c> dolu (<c>0</c> = TÜM oyuncular), sunucu →
-    /// istemci yönünde alansız gider — <see cref="IdentifyMsg"/> ile aynı çift yönlü desen.</para>
+    /// <para>Admin → sunucu yönünde <c>playerId</c> dolu (<c>0</c> = TÜM oyuncular); sunucu →
+    /// istemci yönünde <c>playerId</c> taşınmaz (hedef zaten o bağlantıdır) ama
+    /// <see cref="keepSaved"/> <b>aynen iletilir</b> — operatörün seçtiği kip başlığa ulaşmalı.</para>
     /// <para>⚠️ Sunucu komutu hedefe <b>koşulsuz</b> iletir: sıfırlanacak şeylerin hepsi roster'da
     /// görünmez — yarım kalmış elle kalibrasyon (A alındı, B alınmadı) yalnız başlıkta yaşar ve
     /// orada <c>calibrated</c> zaten <c>false</c>'tur (§10.6).</para>
+    /// <para>⚠️ Roster tarafı iki kipte de AYNIDIR (<c>calibrated:false</c>) — kip yalnız başlığın
+    /// cihazındaki kaydı ilgilendirir, sunucu için fark yoktur.</para>
     [Serializable]
     public class ClearCalibrationMsg
     {
         public string type = MessageTypes.ClearCalibration;
         public int playerId;
+
+        /// <summary>
+        /// <b>Yumuşak sıfırlama</b> (<c>true</c>): hizalama geçersiz kılınır (roster <c>false</c>,
+        /// elle kalibrasyon kapısı açılır, yarım sekans silinir, rig'in hizalaması düşer) ama
+        /// cihazdaki <c>OVRSpatialAnchor</c> ve UUID kaydı <b>KORUNUR</b> — ardından gelen
+        /// <c>reload_calibration</c> çalışabilsin.
+        /// <para><b>Sert sıfırlama</b> (<c>false</c>): yukarıdakilerin hepsi + cihazdaki çapa
+        /// silinir ve UUID kaydı kalıcı olarak gider.</para>
+        /// <para>⚠️ <b>Varsayılan SERT'tir</b> (alan yoksa <c>false</c> okunur) ve bu bilinçlidir:
+        /// alanı tanımayan eski bir başlık bugünkü davranışı sürdürür, sürpriz yapmaz.</para>
+        /// </summary>
+        public bool keepSaved;
     }
 
     /// Kayıtlı çapadan hizalamanın yeniden yüklenmesini BAŞLATIR (§10.6). Admin → sunucu yönünde

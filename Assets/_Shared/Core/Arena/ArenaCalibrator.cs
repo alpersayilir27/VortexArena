@@ -44,6 +44,14 @@ namespace VortexArena.Core.Arena
     /// örtüşmez; işletme başına tek arena ölçüsü kuralı bu yüzden vardır.
     /// </para>
     /// <para>
+    /// <b>Operatörün sıfırlaması iki kiplidir</b> (<c>clear_calibration.keepSaved</c>, §5.2/§10.6)
+    /// ve tek kapısı <see cref="ApplyOperatorClear"/>'dır. Yumuşak kipte cihazdaki çapa KORUNUR —
+    /// hizalamanın sessizce geri gelmesini engelleyen şey silme değil
+    /// <see cref="autoRestoreBlocked"/> kapısıdır; böylece operatör sıfırladıktan hemen sonra
+    /// <c>reload_calibration</c> ile aynı çapayı geri yükleyebilir. Sert kipte çapa ve UUID kaydı
+    /// da gider (<see cref="PurgeSavedAnchor"/>).
+    /// </para>
+    /// <para>
     /// <b>İşaretçilerin YERİ sahneden değil boyut dosyasından gelir</b> (<c>calibration.a</c> /
     /// <c>calibration.b</c>): zemine yapıştırılan bantların yeri de bir ölçüdür ve mekan
     /// başınadır. <see cref="Start"/> işaretçileri <see cref="ArenaBoundary"/> üzerinden o
@@ -232,6 +240,27 @@ namespace VortexArena.Core.Arena
         /// </summary>
         private static string sessionAnchorUuid;
 
+        /// <summary>
+        /// Operatör hizalamayı geçersiz kıldı → <b>OTOMATİK</b> geri yükleme (sahne açılışı ve
+        /// harita değişimi) bu uygulama ömrü boyunca kapalı.
+        /// <para>
+        /// ⚠️ Yumuşak sıfırlamanın (<c>clear_calibration.keepSaved</c>) tek dayanağı budur: çapa
+        /// cihazda durduğu için bir sonraki sahne yüklemesi onu geri yükler ve operatörün kararını
+        /// sessizce yok ederdi. Sert kipte çapa zaten silindiği için kapı ikinci savunma hattıdır.
+        /// </para>
+        /// <para>
+        /// Kapıyı <b>operatörün kendi</b> <c>reload_calibration</c>'ı deler
+        /// (<see cref="ResolveSavedUuid"/>'nin <c>operatorRequest</c> yolu) ve meşru bir hizalama
+        /// geldiğinde (<see cref="RaiseCalibrated"/>) kapanmayı bırakır.
+        /// </para>
+        /// <para>
+        /// ⚠️ Süreçle birlikte gider: uygulama yeniden başlatılınca yumuşak sıfırlama geçerliliğini
+        /// yitirir ve <c>saved_anchor</c> modundaki başlık açılışta yine geri yükler. Cihazdaki
+        /// kaydı gerçekten yok etmek isteyen operatör sert komutu kullanır.
+        /// </para>
+        /// </summary>
+        private static bool autoRestoreBlocked;
+
         private OVRCameraRig cameraRig;
         private OVRSpatialAnchor worldAnchor;
         private Vector3 capturedA;
@@ -335,9 +364,19 @@ namespace VortexArena.Core.Arena
         /// hiç iş görmezdi: hizalaması oturum ortasında bozulan oyuncu için tek çıkış yolu elle 2
         /// çapa sekansı olurdu — oysa düğme tam da onu gereksiz kılmak için var.
         /// </para>
+        /// <para>
+        /// ⚠️ Aynı bayrak <see cref="autoRestoreBlocked"/> kapısını da deler: operatör hizalamayı
+        /// geçersiz kıldıktan sonra OTOMATİK geri yükleme kapalıdır, ama operatörün kendi yeniden
+        /// yükleme isteği tam da o kapıyı açmak için gelir.
+        /// </para>
         /// </summary>
         private static string ResolveSavedUuid(bool operatorRequest = false)
         {
+            // Operatör hizalamayı geçersiz kıldı: kendiliğinden koşan hiçbir geri yükleme onu geri
+            // getirmez (yumuşak kipte çapa cihazda duruyor, yani veri hâlâ orada).
+            if (!operatorRequest && autoRestoreBlocked)
+                return string.Empty;
+
             if (!string.IsNullOrEmpty(sessionAnchorUuid))
                 return sessionAnchorUuid;
 
@@ -591,8 +630,13 @@ namespace VortexArena.Core.Arena
             Vector3 point = pointer.position + Vector3.down * floorProbeDropMeters;
 
             // A completed calibration restarts from scratch on the next capture.
+            // ⚠️ Cihazdaki kayıt da silinir: yeni elle kalibrasyon birazdan eski çapanın YERİNE
+            // geçiyor, eskisini bırakmak cihazda yetim çapa biriktirirdi.
             if (capturedCount >= 2)
-                ResetCalibration();
+            {
+                ResetAlignmentState();
+                PurgeSavedAnchor();
+            }
 
             // Sıra sabittir: ilk yakalama A, ikincisi B. İki noktadan hangisinin önce alındığı
             // GEOMETRİK olarak çıkarılamaz (mesafe kontrolü de simetriktir), bu yüzden garanti
@@ -951,18 +995,20 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Hizalamayı geçersiz kılar (§10.6): işaretçiler gizlenir, kayıtlı <c>OVRSpatialAnchor</c>
-        /// SİLİNİR ve elle kalibrasyon kapısı yeniden açılır. Çağıran <c>CalibrationState</c>'tir — operatör
+        /// Hizalamayı geçersiz kılar (§10.6): işaretçiler gizlenir, rig'in hizalaması düşer ve elle
+        /// kalibrasyon kapısı yeniden açılır. Çağıran <see cref="ApplyOperatorClear"/>'dır — operatör
         /// admin ekranından kalibrasyonu sıfırladığında.
         /// <para>
-        /// Anchor'ı bırakmak olmazdı: bir sonraki <c>load_match</c> bozuk hizalamayı sessizce geri
-        /// yüklerdi (§10.4 geri yükleme yolu). ⚠️ <b>Rig TAŞINMAZ</b> — free-roam kuralı gereği
-        /// oyuncu fiziksel olarak neredeyse orada kalır, yalnız hizalama geçersiz sayılır.
+        /// <paramref name="keepSavedAnchor"/> = <c>true</c> ise cihazdaki çapa ve UUID KORUNUR;
+        /// hizalamanın sessizce geri gelmesini o durumda <see cref="autoRestoreBlocked"/> engeller,
+        /// silme değil. <c>false</c> ise <see cref="PurgeSavedAnchor"/> da koşar.
+        /// ⚠️ <b>Rig TAŞINMAZ</b> — free-roam kuralı gereği oyuncu fiziksel olarak neredeyse orada
+        /// kalır, yalnız hizalama geçersiz sayılır.
         /// </para>
         /// <para>
         /// ⚠️ <b>Oyuncunun hangi aşamada olduğuna bakılmaz.</b> Tamamlanmış hizalamanın yanında üç
         /// ara durum daha silinir, çünkü sıfırlama oyuncuyu yarım yolda bırakmamalıdır (§10.6):
-        /// (1) yakalanmış A noktası ve bekleyen çift basış (<see cref="ResetCalibration"/>),
+        /// (1) yakalanmış A noktası ve bekleyen çift basış (<see cref="ResetAlignmentState"/>),
         /// (2) o an basılı tutulan jestin kuyruğu (<see cref="waitingForRelease"/> — sıfırlama
         /// anında A basılıysa oyuncu onu bırakıp baştan başlar; basılı değilse bayrak bir sonraki
         /// karede kendiliğinden düşer), (3) uçuşta olan kayıtlı anchor geri yüklemesi
@@ -970,11 +1016,13 @@ namespace VortexArena.Core.Arena
         /// gelen sıfırlama, yoksa deneme başarıya ulaşıp arenayı yeniden hizalardı).
         /// </para>
         /// </summary>
-        public void Invalidate()
+        public void Invalidate(bool keepSavedAnchor)
         {
             restoreAborted = true;
             waitingForRelease = true;
-            ResetCalibration();
+            ResetAlignmentState();
+            if (!keepSavedAnchor)
+                PurgeSavedAnchor();
         }
 
         /// <summary>
@@ -1010,13 +1058,20 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Kalibrasyonu sıfırlar: tamamlanmış hizalama **ve yarım kalmış sekans** birlikte gider.
+        /// Sıfırlamanın <b>YUMUŞAK</b> yarısı: bu bileşendeki hizalama durumu — tamamlanmış hizalama
+        /// <b>ve yarım kalmış sekans</b> birlikte gider. Cihazdaki kayda DOKUNMAZ
+        /// (o <see cref="PurgeSavedAnchor"/>'ın işidir).
         /// <para>
         /// ⚠️ <b>Ara durumu temizlemek şart:</b> <see cref="capturedCount"/> tek başına
         /// sıfırlansaydı, A'sı alınmış bir oyuncuda <see cref="capturedA"/> ve bekleyen çift basış
         /// sayacı yaşamaya devam ederdi — operatör sıfırladıktan sonraki tek bir B basışı
         /// <b>sıfırlamadan önceki</b> A noktasıyla kalibrasyonu tamamlayabilirdi. Sıfırlama
         /// oyuncuyu hiçbir ara aşamada bırakmaz (§10.6).
+        /// </para>
+        /// <para>
+        /// ⚠️ <b><see cref="worldAnchor"/> bağı BIRAKILIR</b> (obje yok edilir, cihazdaki çapa
+        /// SİLİNMEZ): <see cref="HandleTrackingDisturbed"/> o alandan yeniden hizalıyor, yani bağ
+        /// bırakılmazsa ilk tracking olayında yumuşak sıfırlama sessizce geri alınırdı.
         /// </para>
         /// <para>
         /// ⚠️ <see cref="waitingForRelease"/> buradan sürülmez, <see cref="Invalidate"/>'ten
@@ -1026,7 +1081,7 @@ namespace VortexArena.Core.Arena
         /// kesen sıfırlamaya aittir.
         /// </para>
         /// </summary>
-        private void ResetCalibration()
+        private void ResetAlignmentState()
         {
             capturedCount = 0;
             capturedA = Vector3.zero;
@@ -1043,13 +1098,69 @@ namespace VortexArena.Core.Arena
             {
                 OVRSpatialAnchor stale = worldAnchor;
                 worldAnchor = null;
-                _ = EraseAnchorAsync(stale);
+                Destroy(stale.gameObject);
             }
+            Debug.Log("ArenaCalibrator: hizalama geçersiz kılındı (cihazdaki kayda dokunulmadı).");
+        }
+
+        /// <summary>
+        /// Sıfırlamanın <b>SERT</b> yarısı: cihazdaki <c>OVRSpatialAnchor</c> silinir, oturum-içi ve
+        /// diskteki UUID kaydı gider. Bundan sonra <c>reload_calibration</c>'ın yükleyeceği bir şey
+        /// KALMAZ — çağıranı yalnız açıkça sert kip ister.
+        /// <para>
+        /// ⚠️ Silme <see cref="worldAnchor"/>'a BAĞLANMAZ, UUID'den yapılır: o alan örnek alanıdır,
+        /// her sahne yüklemesinde <c>null</c> başlar ve geri yükleme
+        /// <see cref="RestoreAttempts"/>×<see cref="RestoreRetryDelayMs"/> kadar sürebilir. O
+        /// pencerede gelen sıfırlama, koşul alana bağlansaydı cihazdaki çapayı hiç silmezdi.
+        /// </para>
+        /// <para>Statiktir: sahnede kalibratör olmasa bile operatörün sert sıfırlaması cihaz
+        /// kaydını silmelidir (<see cref="ApplyOperatorClear"/>).</para>
+        /// </summary>
+        private static void PurgeSavedAnchor()
+        {
+            string uuidText = !string.IsNullOrEmpty(sessionAnchorUuid)
+                ? sessionAnchorUuid
+                : PlayerPrefs.GetString(AnchorUuidKey, string.Empty);
+
             // ⚠️ Oturum-içi kayıt da gider: operatörün sıfırlaması bellekteki yolu kapatmazsa bir
             // sonraki sahne o çapadan hizalanır ve sıfırlama sessizce geri alınmış olur.
             sessionAnchorUuid = null;
             PlayerPrefs.DeleteKey(AnchorUuidKey);
-            Debug.Log("ArenaCalibrator: calibration reset.");
+            // ⚠️ Save() şart (yazma yolundaki CreateAndSaveAnchorAsync ile simetrik): silme yalnız
+            // bellekte kalırsa, uygulama düzgün kapanmadan öldürüldüğünde diskteki eski UUID
+            // yaşamaya devam eder ve "sıfırladım" denen başlık bir sonraki açılışta eski
+            // hizalamasını geri yükler.
+            PlayerPrefs.Save();
+
+            if (Guid.TryParse(uuidText, out Guid uuid))
+                _ = EraseSavedAnchorAsync(uuid);
+
+            Debug.Log("ArenaCalibrator: cihazdaki kalibrasyon kaydı silindi.");
+        }
+
+        /// <summary>
+        /// Operatörün sıfırlama komutunun tek giriş kapısı (<c>clear_calibration</c>, §10.6).
+        /// <para><paramref name="keepSaved"/> = <c>true</c> ise yalnız hizalama geçersiz kılınır,
+        /// cihazdaki çapa korunur — ardından gelen <c>reload_calibration</c> çalışabilsin.</para>
+        /// <para>⚠️ Sahnede kalibratör OLMASA bile sert kip cihaz kaydını siler: kalibratör her
+        /// sahnede yeniden doğuyor, komutun sahne yüklemesiyle yarışması sıfırlamayı sessizce
+        /// yutmamalı.</para>
+        /// </summary>
+        public static void ApplyOperatorClear(bool keepSaved)
+        {
+            // Kapı her iki kipte de kapanır: yumuşak kipte tek dayanak budur, sert kipte de çapa
+            // silinene kadar uçuşta olan bir geri yükleme hizalamayı geri getirebilirdi.
+            autoRestoreBlocked = true;
+
+            ArenaCalibrator calibrator = FindFirstObjectByType<ArenaCalibrator>();
+            if (calibrator != null)
+            {
+                calibrator.Invalidate(keepSaved);
+                return;
+            }
+
+            if (!keepSaved)
+                PurgeSavedAnchor();
         }
 
         /// <summary>
@@ -1058,9 +1169,14 @@ namespace VortexArena.Core.Arena
         /// <para>⚠️ Gövde ölçüsü buna BAĞLI DEĞİLDİR (§10.8): ölçümü operatör başlatır. Hizalamadan
         /// otomatik tetiklenen bir ölçüm, oyuncu kumandayı zemine değdirmek için eğilmişken ölçmek
         /// olurdu.</para>
+        /// <para>⚠️ Otomatik geri yükleme kapısı burada açılır: hizalama meşru bir yoldan geri
+        /// geldiğine göre (elle yakalama ya da operatörün yeniden yüklemesi) operatörün
+        /// geçersiz kılma kararı tüketilmiştir — kapı kapalı kalsaydı bir sonraki harita değişimi
+        /// hizalamayı boşuna kaybettirirdi.</para>
         /// </summary>
         private static void RaiseCalibrated(string source)
         {
+            autoRestoreBlocked = false;
             Calibrated?.Invoke(source);
         }
 
@@ -1214,7 +1330,8 @@ namespace VortexArena.Core.Arena
                 }
 
                 // Oyuncu kendi jestiyle öne geçtiyse ya da operatör sıfırladıysa geri yükleme
-                // düşer: kayıtlı anchor zaten silindi, onu geri getirmek sıfırlamayı geri almak olurdu.
+                // düşer: yumuşak sıfırlamada çapa cihazda DURUYOR, yani onu uygulamak operatörün
+                // kararını sessizce geri almak olurdu.
                 // ⚠️ Operatörün açık isteğinde bu kapı YOKTUR (§10.6).
                 if (!forced && (manualCalibrationStarted || restoreAborted))
                     return;
@@ -1307,6 +1424,11 @@ namespace VortexArena.Core.Arena
                 var anchor = go.AddComponent<OVRSpatialAnchor>();
                 unboundAnchor.BindTo(anchor);
                 worldAnchor = anchor;
+                // ⚠️ Oturum-içi kayıt burada da yazılır, yalnız CreateAndSaveAnchorAsync'te değil:
+                // diskten geri yüklenmiş bir başlıkta bu alan boş kalsaydı, harita değişimindeki
+                // geri yükleme kalibre moduna takılırdı — oysa o yol moddan BAĞIMSIZ her zaman
+                // koşar (§10.6, bkz. ResolveSavedUuid).
+                sessionAnchorUuid = uuid.ToString();
                 capturedCount = 2;
                 // İşaretçiler burada GÖSTERİLMEZ: geri yükleme sessizdir (oyuncu bir şey
                 // yapmadı) ve harita değişiminde koştuğu için maçın ortasında ekrana obje
@@ -1323,18 +1445,26 @@ namespace VortexArena.Core.Arena
             }
         }
 
-        private static async Task EraseAnchorAsync(OVRSpatialAnchor anchor)
+        /// <summary>
+        /// Cihazdaki çapayı UUID'sinden siler. Bileşen örneğine (<see cref="worldAnchor"/>) HİÇ
+        /// bakmaz: silme, çapanın bu sahnede bağlanmış olup olmamasından bağımsız çalışmalıdır.
+        /// <para>⚠️ Anchor listesi <c>null</c> geçildiği için UUID listesi dolu olmak zorundadır —
+        /// SDK ikisi birden <c>null</c> ise <c>ArgumentException</c> atar.</para>
+        /// <para>Hata yutulur: sıfırlama zaten yerelde uygulandı, silme düştüğünde operatöre
+        /// yapacak bir şey kalmıyor — konsola bir uyarı düşmesi yeter.</para>
+        /// </summary>
+        private static async Task EraseSavedAnchorAsync(Guid uuid)
         {
             try
             {
-                await anchor.EraseAnchorAsync();
+                var result = await OVRSpatialAnchor.EraseAnchorsAsync(null, new[] { uuid });
+                if (!result.Success)
+                    Debug.LogWarning($"ArenaCalibrator: kayıtlı çapa silinemedi ({result.Status}).");
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"ArenaCalibrator: anchor erase failed ({e.Message}).");
+                Debug.LogWarning($"ArenaCalibrator: kayıtlı çapa silinemedi ({e.Message}).");
             }
-            if (anchor != null)
-                Destroy(anchor.gameObject);
         }
 
         /// <summary>

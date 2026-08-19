@@ -35,12 +35,14 @@ namespace VortexArena.Net
 
         /// <summary>Operatör bu başlığın kalibrasyonunu sıfırladı (§10.6) — yalnız player'a gelir.
         /// <c>CalibrationState</c> dinler ve <c>ArenaCalibrator</c>'ı geçersiz kılar.
-        /// <para>Mesajın sunucu → istemci yönünde alanı yoktur, bu yüzden olay da parametresizdir:
-        /// hedef zaten bu bağlantıdır (<c>identify</c> ile aynı desen).</para>
+        /// <para>Argüman <c>keepSaved</c>'dir: <c>true</c> = yalnız hizalama geçersiz kılınır,
+        /// cihazdaki çapa ve UUID KORUNUR (ardından gelen <c>reload_calibration</c> çalışabilsin);
+        /// <c>false</c> = cihaz kaydı da silinir. Hedef zaten bu bağlantı olduğu için mesajın
+        /// <c>playerId</c>'si iletilmez, ama kip iletilir — bu yüzden olay parametresiz DEĞİLDİR.</para>
         /// <para>⚠️ <b>Roster'daki <c>calibrated</c> alanının yerine geçmez, onu tamamlar:</b> alan
         /// durumu taşır, bu olay komutu. Yarım kalmış elle kalibrasyonda alan zaten <c>false</c>
         /// olduğu için sıfırlama yalnız bu olaydan duyulur (§5.3).</para></summary>
-        public static event Action OnClearCalibration;
+        public static event Action<bool> OnClearCalibration;
 
         /// <summary>Operatör bu başlığa kayıtlı çapadan hizalamayı yeniden yükletti (§10.6) —
         /// yalnız player'a gelir. <c>CalibrationState</c> dinler, <c>ArenaCalibrator</c>'a yükletir
@@ -106,7 +108,7 @@ namespace VortexArena.Net
         internal static void RaiseIdentify(IdentifyMsg msg) { OnIdentify?.Invoke(msg); }
         internal static void RaiseKicked(KickedMsg msg) { OnKicked?.Invoke(msg); }
         internal static void RaiseMeasureBodyScale() { OnMeasureBodyScale?.Invoke(); }
-        internal static void RaiseClearCalibration() { OnClearCalibration?.Invoke(); }
+        internal static void RaiseClearCalibration(bool keepSaved) { OnClearCalibration?.Invoke(keepSaved); }
         internal static void RaiseReloadCalibration() { OnReloadCalibration?.Invoke(); }
         internal static void RaiseCalibrationResult(CalibrationResultMsg msg) { OnCalibrationResult?.Invoke(msg); }
         internal static void RaiseAdminState(AdminStateMsg msg) { OnAdminState?.Invoke(msg); }

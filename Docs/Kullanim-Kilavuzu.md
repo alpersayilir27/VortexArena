@@ -279,23 +279,28 @@ kalibrasyonu bozulmuştur. **Maçı durdurmana gerek yok:**
       Bitince tik kendiliğinden yeşile döner.
 - [ ] **5.** Oyuncu **kaldığı yerden devam eder** — canı, öldürme sayısı ve skoru sıfırlanmaz.
 
-**Herkese birden uygulanan düğmeler İSTATİSTİK panelindedir** (`I`), listenin altındaki şeritte.
-Soldan sağa üç tanedir:
+> **Satırdaki KAL düğmesi gözlükteki kaydı SİLMEZ**, yalnız hizalamayı geçersiz kılar. Yani
+> oyuncunun elle yeniden kalibre olmasını beklemek zorunda değilsin: **TÜMÜNÜ KALİBRE ET**'e
+> basarak onu kayıttan geri kurmayı deneyebilirsin.
+
+**Herkese birden uygulanan düğmeler İSTATİSTİK panelindedir** (`I`), listenin altındaki şeritte:
 
 | Düğme | Ne yapar | Ne zaman basılır |
 |---|---|---|
-| **TÜM KALİBRASYONLARI SIFIRLA** (kırmızı yazılı, küçük) | Bağlı olan **herkesi kalibresiz** bırakır: sahadaki herkes aynı anda ateş edemez, vurulamaz ve canlanamaz hâle gelir; her biri §4'teki adımlarla yeniden kalibre olana kadar oynanmaz | Seans sonunda yeni gruba geçerken; zemindeki **A/B bantları yerinden oynadıysa ya da yenilendiyse**; herkesin birden kaydığı bir durumda temiz sayfa açmak için |
 | **TÜMÜNÜ KALİBRE ET** | Kimseyi kalibresiz yapmaz: bağlı olan **herkesin** gözlüğüne, orada kayıtlı hizalamayı yeniden yükletmeyi dener. Tutmayan oyuncu eskisi gibi kalır, kimse oyun dışı kalmaz | Zemin işaretleri yerinde dururken birkaç kişi kaymış görünüyorsa — herkesi tek tek kalibre ettirmeden dener. Onay istemez, çünkü kimseye zarar vermez |
+| **TÜM HİZALAMALARI SIFIRLA** (kırmızı yazılı, küçük) | Bağlı olan **herkesi kalibresiz** bırakır: sahadaki herkes aynı anda ateş edemez, vurulamaz ve canlanamaz hâle gelir. Gözlüklerdeki kayıtlar **durur**, yani sonrasında **TÜMÜNÜ KALİBRE ET** ile geri kurmayı deneyebilirsin | Herkesin birden kaydığı bir durumda temiz sayfa açmak için; seans sonunda yeni gruba geçerken. Normal kurtarma yolu budur: **tüm hizalamaları sıfırla → tümünü kalibre et** |
+| **CİHAZ KAYITLARINI SİL** (kırmızı yazılı, küçük) | Yukarıdakinin hepsi + gözlüklerde saklanan hizalama kayıtlarını **siler**. Bundan sonra **TÜMÜNÜ KALİBRE ET** iş görmez ("kayıtlı kalibrasyon yok" der); herkes gözlükte **elle A/B** almak zorundadır | Yalnız kayıtlı hizalamanın kendisi yanlışsa: zemindeki **A/B bantları yerinden oynadıysa/yenilendiyse** ya da gözlükler odayı yeniden tanıdıysa. Bakım işidir, seans arasında yapılır |
 | **TÜMÜNÜ ÖLÇEKLENDİR** | Herkesin boyunu birden ölçer (§4.2) | Herkesin dik durduğu bir an; maç öncesi hazırlık en uygunu |
 
-**Sıfırlama düğmesi iki adımda çalışır:** bir kez basınca üstünde **EMİN? HERKESİ SIFIRLA** yazar.
-**3 saniye içinde** ikinci kez basarsan komut gider; basmazsan düğme kendiliğinden eski hâline döner
-ve hiçbir şey olmaz. Yanına dokunup geçmek yeterli değildir — bilerek iki kez basman gerekir.
+**Kırmızı iki düğme iki adımda çalışır:** bir kez basınca üstünde onay yazısı çıkar. **3 saniye
+içinde** ikinci kez basarsan komut gider; basmazsan düğme kendiliğinden eski hâline döner ve hiçbir
+şey olmaz. Yanına dokunup geçmek yeterli değildir — bilerek iki kez basman gerekir.
 
-⚠️ **Bu düğmeye maçın ortasında basma.** Tek tıklamayla sahadaki **herkes** oyun dışı kalır ve
-salondaki bütün oyuncuların sırayla yeniden kalibre olmasını beklemek zorunda kalırsın. Tek bir
-oyuncu kaymışsa doğru yer o oyuncunun satırındaki **KAL** düğmesidir (yukarıdaki adımlar); herkesi
-hizaya sokmayı deniyorsan önce **TÜMÜNÜ KALİBRE ET**'i dene — o kimseyi oyun dışı bırakmaz.
+⚠️ **Kırmızı düğmelere maçın ortasında basma.** Tek tıklamayla sahadaki **herkes** oyun dışı kalır.
+Tek bir oyuncu kaymışsa doğru yer o oyuncunun satırındaki **KAL** düğmesidir (yukarıdaki adımlar);
+herkesi hizaya sokmayı deniyorsan önce **TÜMÜNÜ KALİBRE ET**'i dene — o kimseyi oyun dışı bırakmaz.
+⚠️ **CİHAZ KAYITLARINI SİL en son çaredir:** ardından salondaki her oyuncunun gözlükte tek tek
+A/B kalibrasyonu alması gerekir, yani bir seans molası demektir.
 
 > **Neden tik'i elle geri açamıyorsun:** hizalamanın gerçekten düzeldiğini yalnız gözlüğün
 > kendisi bilir. Sen "tamam" diyebilseydin, aslında hâlâ kaymış bir oyuncu ateş etmeye ve
@@ -344,6 +349,9 @@ seçersin:** TERCİHLER > **KALİBRASYON** bölümündeki üç düğme.
 **Bilmen gerekenler**
 
 - Ayar **sunucuda** durur: tüm yönetim ekranları aynı değeri gösterir, birinden değiştirmen yeter.
+- ⚠️ **ESKİ KALİBRE seçiliyken:** hizalamayı geçersiz kıldığın bir gözlükte uygulama kapatılıp
+  yeniden açılırsa kayıt geri yüklenir ve oyuncu yine eski hizalamasıyla gelir. Kaydın kendisinin
+  yanlış olduğundan eminsen **CİHAZ KAYITLARINI SİL**'i kullan (§4.1).
 - ⚠️ **Değişiklik o an bağlı gözlüklere işlemez.** Her gözlük ayarı **bağlandığı anda** bir kez
   okur. Yeni modu bir gözlüğe uygulatmak istiyorsan o gözlükte uygulamayı kapatıp yeniden aç.
   Pratik sonuç: modu **seans başlamadan**, gözlükler bağlanmadan önce seç.
