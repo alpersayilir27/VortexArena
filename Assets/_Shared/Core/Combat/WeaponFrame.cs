@@ -6,54 +6,38 @@ using VortexArena.Core.Arena;
 
 namespace VortexArena.Core.Combat
 {
-    /// <summary>
-    /// Silahın <b>ÇERÇEVESİ</b>: silah sahnede çerçevenin içinde sabit durur ve oradan hiç ayrılmaz;
-    /// oyuncu ≤<see cref="maxGrabDistance"/> m'den kumandayla nişan alıp grip'e basınca silahın bir
-    /// KLONU eline gelir (klonu <see cref="WeaponGranter"/> üretir ve yönetir).
-    /// <para>
-    /// <b>Yalnız sabit duran silahta vardır:</b> silah hangi yoldan tutulursa tutulsun (verildi ya
-    /// da kavrandı) çerçeve kapanır, bırakılınca geri gelir — <see cref="HandleHeldChanged"/>.
-    /// <para>
-    /// <c>VA_WeaponFrame</c> prefabının KÖKÜNDE durur ve o prefab her <c>WPN_*</c> prefabının
-    /// ÇOCUĞU olarak bulunur. ⚠️ Temsil ettiği silahı <b>parent'ından</b> okur
-    /// (<c>GetComponentInParent&lt;Weapon&gt;()</c> → <see cref="Weapon.Definition"/>); çerçevede
-    /// ayrı bir <see cref="WeaponDefinition"/> alanı YOKTUR ve eklenmez — olsaydı aynı silah iki
-    /// yerde yazılır, biri değiştirilip diğeri unutulunca çerçeve bir silahı gösterip başkasını
-    /// verirdi.
-    /// </para>
-    /// <para>
-    /// <b>Kapı ISDK'nın kendi uzatma noktasıdır</b>:
-    /// bu bileşen bir <see cref="IGameObjectFilter"/>'dır ve çerçevenin mesafe-kavrama
-    /// bileşenlerinin <c>_interactorFilters</c> listesine yazılır — mesafe kapısını
-    /// <see cref="Filter"/> uygular, seçimin ALGISI ISDK'da kalır.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>İKİ mesafe-kavrama bileşeni birden taşınır ve ikisi de dinlenir:</b>
-    /// <see cref="DistanceGrabInteractable"/> (kumanda hattı) ve
-    /// <see cref="DistanceHandGrabInteractable"/> (el hattı). Sebep, hangisinin koşacağına ISDK
-    /// rig'inin karar vermesidir: interactor grubu "el izleniyor mu" sorusuna göre seçiliyor
-    /// (<c>Controller and No Hand</c> ↔ <c>Controller and Hand</c>) ve el izleme
-    /// <c>OVRManager.controllerDrivenHandPosesType</c> ile açılıp kapanıyor. Tek bileşen
-    /// tutulsaydı o anahtarın her değişimi silahı sessizce alınamaz yapardı
-    /// (<c>Docs/Sistem-Ozeti.md</c> §7).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>El hattının <c>Hand Alignment</c>'ı prefabda <c>None</c>'dır ve öyle kalır.</b>
-    /// <c>AlignOnGrab</c> olsaydı ISDK kavrama boyunca sentetik elin bileğini kavranan nesneye
-    /// kilitlerdi (<c>HandGrabStateVisual</c> → <c>SyntheticHand.LockWristPose</c>); çerçeve
-    /// <see cref="FrozenGrabTransformer"/> ile yerinde durduğu için oyuncunun eli sahnedeki silaha
-    /// yapışır, oysa elinde silahın <b>klonu</b> vardır. Çerçeve bir kavrama hedefi değil bir
-    /// SEÇİM tetikleyicisidir: ele dair hiçbir şeyi sürmemelidir.
-    /// </para>
-    /// </summary>
+    /// <summary>The weapon's FRAME: the scene weapon sits frozen inside it and never leaves; aiming
+    /// from ≤<see cref="maxGrabDistance"/> m and pressing grip puts a CLONE in the player's hand
+    /// (built and owned by <see cref="WeaponGranter"/>).
+    /// <para>Exists only while the weapon is frozen in the scene: however it ends up held (granted
+    /// or grabbed) the frame hides, and returns on release —
+    /// <see cref="HandleHeldChanged"/>.</para>
+    /// <para>Lives on the ROOT of the <c>VA_WeaponFrame</c> prefab, which is a CHILD of every
+    /// <c>WPN_*</c> prefab. ⚠️ It reads the weapon it represents from its PARENT
+    /// (<c>GetComponentInParent&lt;Weapon&gt;()</c>); there is NO separate
+    /// <see cref="WeaponDefinition"/> field here and none is added — two places to write the same
+    /// weapon means the frame can show one gun and hand out another.</para>
+    /// <para>The gate is ISDK's own extension point: this component is an
+    /// <see cref="IGameObjectFilter"/> registered in the <c>_interactorFilters</c> list of the
+    /// frame's distance-grab components — <see cref="Filter"/> applies the distance rule, ISDK
+    /// keeps the selection sensing.</para>
+    /// <para>⚠️ BOTH distance-grab components are carried and both are listened to:
+    /// <see cref="DistanceGrabInteractable"/> (controller line) and
+    /// <see cref="DistanceHandGrabInteractable"/> (hand line). The ISDK rig decides which one runs,
+    /// based on <c>OVRManager.controllerDrivenHandPosesType</c>; keeping only one would silently
+    /// make the weapon ungrabbable on every change of that switch (<c>Docs/Sistem-Ozeti.md</c>
+    /// §7).</para>
+    /// <para>⚠️ The hand line's <c>Hand Alignment</c> is <c>None</c> in the prefab and stays that
+    /// way. <c>AlignOnGrab</c> would lock the synthetic wrist to the grabbed object
+    /// (<c>SyntheticHand.LockWristPose</c>), sticking the player's hand to the scene weapon while a
+    /// CLONE is what they actually hold. The frame is a SELECTION trigger, not a grab target: it
+    /// must drive nothing about the hand.</para></summary>
     public class WeaponFrame : MonoBehaviour, IGameObjectFilter
     {
-        /// <summary>Nişan ışını materyalinin shader arama zinciri (ilk bulunan kullanılır).</summary>
-        // ⚠️ Zincir ShotTracer'daki ile BİREBİR aynı ve "Sprites/Default" başta
-        // duruyor: o shader Graphics Settings'in *Always Included Shaders* listesinde varsayılan
-        // olarak bulunur → build'de kesin paketlenir (çalışma anında Shader.Find ile bulunan,
-        // hiçbir materyalde referanslanmayan shader STRIPLENİR ve gösterge sahada sessizce
-        // çizilmez). Vertex rengini çarptığı için LineRenderer.startColor de işler.
+        /// <summary>Shader lookup chain for the aim ray material (first hit wins).</summary>
+        // ⚠️ Same chain as ShotTracer, "Sprites/Default" first: it is in Always Included Shaders,
+        // so it survives the build. A Shader.Find-only shader no material references is STRIPPED
+        // and the ray silently disappears on device.
         private static readonly string[] ShaderCandidates =
         {
             "Sprites/Default",
@@ -61,12 +45,11 @@ namespace VortexArena.Core.Combat
             "Unlit/Color",
         };
 
-        // Fail-open uyarısı OTURUM başına bir kez (örnek başına değil): sahnedeki her silahta bir
-        // çerçeve var, örnek başına olsaydı aynı teşhis satırı onlarca kez düşerdi.
+        // Fail-open warning once per SESSION, not per instance: every scene weapon has a frame.
         private static bool _warnedFailOpen;
 
-        // "Çerçeve modeli yok" uyarısı da OTURUM başına bir kez: eksikse sahnedeki HER silahta
-        // eksiktir (hepsi aynı prefabtan geliyor), örnek başına loglamak aynı satırı çoğaltırdı.
+        // Same for the "no frame art" warning: if it is missing it is missing on EVERY weapon
+        // (they all come from the same prefab).
         private static bool _warnedNoFrameArt;
 
         [Header("Görünüm")]
@@ -109,15 +92,15 @@ namespace VortexArena.Core.Combat
                  "Boşsa GetComponent ile çözülür.")]
         [SerializeField] private BoxCollider grabCollider;
 
-        // Hover eden interactor'lar: id = PointerEvent.Identifier (Unhover/Cancel eşleştirme
-        // anahtarı), ctl = ele çözülen OVR kontrolcüsü (None = çözülemedi → ışın çizilmez).
+        // Hovering interactors: id = PointerEvent.Identifier (Unhover/Cancel match key),
+        // ctl = resolved OVR controller (None = unresolved → no ray).
         private readonly List<(int id, OVRInput.Controller ctl)> _hovering =
             new List<(int, OVRInput.Controller)>();
 
         private Weapon _weapon;
 
-        /// <summary>Çerçeve merkezinin SİLAHIN yerel uzayındaki konumu (Awake'te bir kez hesaplanır;
-        /// kaynak silah dondurulduğu için bir daha değişmez).</summary>
+        /// <summary>Frame centre in the WEAPON's local space (computed once in Awake; the source
+        /// weapon is frozen so it never changes).</summary>
         private Vector3 _centerLocal;
 
         private LineRenderer _rayLeft;
@@ -131,19 +114,17 @@ namespace VortexArena.Core.Combat
             _weapon = GetComponentInParent<Weapon>();
             if (_weapon == null)
             {
-                // Çerçeve tek başına anlamsızdır: neyi temsil ettiğini yalnız parent silahtan
-                // öğrenebiliyor. Sessiz kalsaydı sahnede "hiçbir şey yapmayan boş bir çerçeve"
-                // olarak durur, teşhisi pahalı olurdu.
+                // A frame alone is meaningless: only the parent weapon says what it represents.
+                // Staying silent would leave an inert frame in the scene, expensive to diagnose.
                 Debug.LogWarning($"[WeaponFrame] '{name}' bir Weapon'ın altında değil; çerçeve " +
                                  "kapatıldı. VA_WeaponFrame prefabı WPN_* prefabının ÇOCUĞU olmalı.", this);
                 enabled = false;
                 return;
             }
 
-            // Çerçeve YALNIZ sahnede sabit duran silaha aittir (bkz. HandleHeldChanged).
-            // ⚠️ Abonelik Awake/OnDestroy'da kurulur, OnEnable/OnDisable'da DEĞİL: bu işleyici
-            // çerçevenin kendi GameObject'ini kapatıyor — OnDisable'da abonelikten çıksaydı
-            // "silah bırakıldı" sinyalini hiç duymaz ve çerçeve bir daha geri gelmezdi.
+            // ⚠️ Subscribe in Awake/OnDestroy, NOT OnEnable/OnDisable: this handler disables the
+            // frame's own GameObject, so unsubscribing in OnDisable would lose the "released"
+            // signal and the frame would never come back.
             _weapon.HeldChanged += HandleHeldChanged;
 
             if (distanceGrab == null)
@@ -158,9 +139,9 @@ namespace VortexArena.Core.Combat
 
             if (distanceGrab == null && distanceHandGrab == null)
             {
-                // ⚠️ Uyarı değil HATA: hiçbir kavrama bileşeni yoksa çerçeve sahnede görünür ama
-                // silah HİÇ alınamaz — belirtisi "kavrama bozuk" diye okunur, oysa eksik olan
-                // prefabdaki bir bileşendir. Kiti tazelemek (Configure All Build Elements) düzeltir.
+                // ⚠️ An ERROR, not a warning: with no grab component the frame is visible but the
+                // weapon can NEVER be taken, which reads as "grabbing is broken" while the real
+                // cause is a missing prefab component. Configure All Build Elements fixes it.
                 Debug.LogError($"[WeaponFrame] '{name}' üzerinde ne DistanceGrabInteractable ne " +
                                "DistanceHandGrabInteractable var; bu çerçeveden silah alınamaz. " +
                                "Tools > VortexArena > Build > Configure All Build Elements çalıştırılmalı.", this);
@@ -173,8 +154,7 @@ namespace VortexArena.Core.Combat
 
             FreezeSource();
 
-            // Ölçü BİR KEZ alınır ve iki tüketiciyi birden besler (çerçeve dikdörtgeni + nişan
-            // hacmi): kaynak silah dondurulduğu için bir daha değişmez.
+            // Measured ONCE and feeds both consumers (frame art + aim volume).
             bool measured = MeasureWeaponBounds(out Bounds local);
             _centerLocal = measured ? local.center : Vector3.zero;
 
@@ -184,9 +164,8 @@ namespace VortexArena.Core.Combat
 
         private void OnEnable()
         {
-            // ⚠️ İkisine de abone olunur ve bu ÇİFT SAYIM üretmez: bir karede yalnız bir interactor
-            // grubu koşuyor (gerekçe sınıf açıklamasında), yani aynı olay iki bileşenden birden
-            // gelmez. Gelse bile Identifier ayrı olurdu ve _hovering onları ayrı tutar.
+            // ⚠️ Subscribing to both does NOT double-count: only one interactor group runs per
+            // frame (see the class summary), and distinct Identifiers would keep them apart anyway.
             if (distanceGrab != null)
             {
                 distanceGrab.WhenPointerEventRaised += HandlePointerEvent;
@@ -210,7 +189,7 @@ namespace VortexArena.Core.Combat
                 distanceHandGrab.WhenPointerEventRaised -= HandlePointerEvent;
             }
 
-            // ISDK'nın Unhover/Cancel olayları artık bize ulaşmaz; ışınlar açık kalmasın.
+            // ISDK's Unhover/Cancel no longer reaches us; do not leave rays on.
             _hovering.Clear();
             HideRay(_rayLeft);
             HideRay(_rayRight);
@@ -230,20 +209,13 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>
-        /// <b>Çerçeve yalnız silah sahnede SABİT dururken vardır.</b> Silah hangi yoldan tutulursa
-        /// tutulsun (ele verildi — <see cref="Weapon.GrantTo"/>, ya da ISDK ile kavrandı) çerçeve
-        /// kapanır; bırakılınca geri gelir.
-        /// <para>
-        /// Kural <see cref="Weapon.HeldChanged"/>'e bağlıdır, çağrı noktalarına değil: "silahı ele
-        /// alan" birden çok yol var (<see cref="WeaponGranter"/>'ın iki kipi + doğrudan kavrama) ve
-        /// her birine ayrı ayrı "çerçeveyi de kapat" eklemek, yeni bir yol açıldığında sessizce
-        /// unutulacak bir adım demekti.
-        /// </para>
-        /// <para>
-        /// ⚠️ Yok etmek DEĞİL kapatmak: aynı örnek bırakıldığında çerçevesiyle geri dönmeli.
-        /// Kapatma <c>OnDisable</c> üzerinden nişan ışınlarını ve ISDK aboneliğini de toplar.
-        /// </para>
+        /// <summary>The frame exists only while the weapon is FROZEN in the scene; it hides
+        /// however the weapon becomes held and returns on release.
+        /// <para>Bound to <see cref="Weapon.HeldChanged"/>, not to call sites: several paths put a
+        /// weapon in hand (<see cref="WeaponGranter"/>'s two modes + direct grab) and adding "hide
+        /// the frame" to each would be a step silently forgotten by the next path.</para>
+        /// <para>⚠️ Disable, do NOT destroy: the same instance must come back with its frame.
+        /// Disabling also collects the rays and the ISDK subscription through <c>OnDisable</c>.</para>
         /// </summary>
         private void HandleHeldChanged(bool held)
         {
@@ -254,8 +226,8 @@ namespace VortexArena.Core.Combat
         {
             if (_weapon == null || _detached || !isRayVisible)
             {
-                // Kutu çalışma anında kaldırılmış olabilir (editörde denenir): açık kalan şeridi
-                // de topla, yoksa ışın kapatıldığı hâliyle donar.
+                // The toggle may have been cleared at runtime (Editor tinkering): collect any
+                // live ray, otherwise it freezes on screen.
                 HideRay(_rayLeft);
                 HideRay(_rayRight);
                 return;
@@ -265,12 +237,9 @@ namespace VortexArena.Core.Combat
             TickRay(OVRInput.Controller.RTouch, ref _rayRight);
         }
 
-        /// <summary>
-        /// <see cref="WeaponGranter"/> klon hazırlarken çağırır: çerçevenin görselini ve ışınlarını
-        /// kapatır. Granter zaten çerçeve objesini yok ediyor; bu metot yalnız güvenli tarafta
-        /// durmak için var — yok etme <c>Destroy</c> ile kare sonuna ertelendiği için aradaki
-        /// karelerde elde çerçeve/ışın parlamasın.
-        /// </summary>
+        /// <summary>Called by <see cref="WeaponGranter"/> while preparing a clone: hides the frame
+        /// art and rays. The granter destroys the frame object anyway; since <c>Destroy</c> is
+        /// deferred to end of frame, this stops the frame flashing in hand meanwhile.</summary>
         public void DetachForClone()
         {
             _detached = true;
@@ -284,23 +253,15 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        // ------------------------------------------------------------ kaynak dondurma
+        // ---------------------------------------------------------------- freezing the source
 
-        /// <summary>
-        /// Çerçevedeki silahı yerine çiviler: fizik kapatılır, YAKIN kavrama yolları tümden kapanır.
-        /// <para>
-        /// Karar: çerçevedeki silah <b>YALNIZ uzaktan</b> seçilir. Bu yüzden
-        /// <see cref="Grabbable"/>/<see cref="GrabInteractable"/> kapatılır. Ön kabza göstergesi için
-        /// ayrıca bir şey yapılmaz: <see cref="Weapon"/> onu yalnız TUTULAN silahta çizer, çerçevedeki
-        /// kaynak tutulmadığı için gösterge orada kendiliğinden yoktur.
-        /// </para>
-        /// <para>
-        /// ⚠️ Tarama YALNIZ parent silahın ağacında yapılır ve <b>çerçevenin kendi alt ağacı ATLANIR</b>:
-        /// çerçevenin <see cref="Grabbable"/>'ı ve <see cref="Rigidbody"/>'si uzaktan seçmenin ta
-        /// kendisidir, kapatılırsa silah hiç alınamaz. (Çerçevenin kıpırdamamasını
-        /// <see cref="FrozenGrabTransformer"/> sağlıyor, bileşeni kapatmak değil.)
-        /// </para>
-        /// </summary>
+        /// <summary>Nails the framed weapon in place: physics off, all NEAR grab paths closed —
+        /// a framed weapon is selected FROM A DISTANCE ONLY. The secondary-grip indicator needs no
+        /// handling: <see cref="Weapon"/> draws it only on a HELD weapon.
+        /// <para>⚠️ The scan covers the parent weapon's tree and SKIPS the frame's own subtree: the
+        /// frame's <see cref="Grabbable"/> and <see cref="Rigidbody"/> ARE the distance selection,
+        /// and disabling them makes the weapon unobtainable. (<see cref="FrozenGrabTransformer"/>
+        /// keeps the frame still, not a disabled component.)</para></summary>
         private void FreezeSource()
         {
             Rigidbody[] bodies = _weapon.GetComponentsInChildren<Rigidbody>(true);
@@ -324,8 +285,8 @@ namespace VortexArena.Core.Combat
                     continue;
                 }
 
-                // ⚠️ Kumanda ve el hattı BİRLİKTE kapatılır: biri açık kalırsa sahnedeki donmuş
-                // silah çerçeveyi atlayarak doğrudan kavranabilir hale gelir.
+                // ⚠️ Controller and hand lines are closed TOGETHER: leaving one open lets the
+                // frozen scene weapon be grabbed directly, bypassing the frame.
                 if (behaviour is Grabbable || behaviour is GrabInteractable ||
                     behaviour is HandGrabInteractable || behaviour is DistanceHandGrabInteractable)
                 {
@@ -334,44 +295,33 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>Bu transform çerçevenin alt ağacında mı (çerçevenin kendisi dahil).</summary>
         private bool IsUnderFrame(Transform candidate)
         {
             return candidate != null && candidate.IsChildOf(transform);
         }
 
-        // ---------------------------------------------------------------- çerçeve görseli
+        // ------------------------------------------------------------------------ frame art
 
-        /// <summary>
-        /// Çerçeve <b>MODELİNİ</b> (<see cref="frameVisual"/> altındaki sanat) silahın Renderer
-        /// sınırlarına oturtur: düzlemi silahın en büyük iki eksenine çevirir, o iki ekseni
-        /// kaplayacak kadar ölçekler ve silahın merkezine hizalar.
-        /// <para>
-        /// ⚠️ <b>Neden çalışma anında ve neden elle konmuyor</b> (<see cref="SizeGrabCollider"/>
-        /// ile aynı gerekçe): çerçeve TEK bir prefabtır ve altı ayrı boydaki silahın altında
-        /// duruyor. Her silaha elle çerçeve yerleştirmek, modelin ölçüsü/pivotu her değiştiğinde
-        /// silah sayısı kadar elle iş demekti — ölçüyü <b>silah</b> söyler, prefab değil.
-        /// </para>
-        /// <para>
-        /// ⚠️ <see cref="frameVisual"/> prefabda <b>PASİFTİR</b> ve burada yalnız
-        /// <see cref="isFrameVisible"/> ise açılır. Gerekçe: <c>RemoteAvatar.SterilizeVisual</c>
-        /// kopyadaki tüm MonoBehaviour'ları siler ama GameObject'leri KAPATMAZ (üstelik kopya pasif
-        /// bir kuluçka kökünde kurulduğu için hiçbir <c>Awake</c> koşmaz). Pasif başlamasaydı hem
-        /// uzak oyuncunun elindeki silahta hem de yerel klonda çerçeve görünürdü.
-        /// </para>
-        /// <para>
-        /// İki tarafın da <b>en büyük iki ekseni</b> eşleştirilir (büyük→büyük, küçük→küçük):
-        /// böylece yatan da duran da silah doğru çerçevelenir ve modelin hangi eksende modellendiği
-        /// önemini yitirir. Derinlik ölçeği ikisinin KÜÇÜĞÜNE eşitlenir — düzlemde esneyen bir
-        /// çerçevenin kalınlığı da esnerse ahşap profil sünmüş görünür.
-        /// </para>
-        /// </summary>
+        /// <summary>Fits the frame ART (under <see cref="frameVisual"/>) to the weapon's renderer
+        /// bounds: turns its plane onto the weapon's two largest axes, scales to cover them and
+        /// centres it.
+        /// <para>⚠️ Done at runtime, not by hand (same reason as <see cref="SizeGrabCollider"/>):
+        /// the frame is ONE prefab sitting under weapons of different sizes, so the WEAPON states
+        /// the measurement, not the prefab.</para>
+        /// <para>⚠️ <see cref="frameVisual"/> is INACTIVE in the prefab and only enabled here when
+        /// <see cref="isFrameVisible"/>. <c>RemoteAvatar.SterilizeVisual</c> strips MonoBehaviours
+        /// from the copy but does NOT disable GameObjects (and no <c>Awake</c> runs there), so
+        /// starting active would show the frame on remote-held weapons and on the local
+        /// clone.</para>
+        /// <para>Both sides match their two largest axes (large→large), so a weapon lying down or
+        /// standing up is framed correctly. Depth scale takes the SMALLER of the two: a frame that
+        /// stretched in thickness as well would look like sagging profile.</para></summary>
         private void BuildFrameVisual(bool measured, Bounds local)
         {
             if (!measured)
             {
-                // Renderer yok (ya da hepsi çerçevenin altında): oturtulacak bir ölçü yok — ışının
-                // bir hedefi olsun yeter (merkez silahın kökü sayıldı).
+                // No renderers (or all under the frame): nothing to fit; the ray still has a
+                // target (the weapon root is used as the centre).
                 return;
             }
 
@@ -380,9 +330,8 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // ⚠️ Ölçüm TABAN duruşta yapılmalı: aşağıdaki fit'in girdisi modelin ölçeklenmemiş
-            // kutusudur. Sıfırlanmasaydı ikinci bir çağrı (ya da prefabda elle bırakılmış bir
-            // ölçek) kendi üstüne çarpılır ve çerçeve her seferinde büyürdü.
+            // ⚠️ Measure from the BASE pose: the fit below expects the unscaled box. Without the
+            // reset a second call (or a leftover prefab scale) would compound and grow the frame.
             frameVisual.localPosition = Vector3.zero;
             frameVisual.localRotation = Quaternion.identity;
             frameVisual.localScale = Vector3.one;
@@ -395,7 +344,7 @@ namespace VortexArena.Core.Combat
 
             frameVisual.gameObject.SetActive(true);
 
-            // Düzlem eksenleri: her iki tarafta da "en büyük iki eksen", büyükten küçüğe sıralı.
+            // Plane axes: the two largest on each side, sorted large → small.
             LargestTwoAxes(local.size, out int weaponA, out int weaponB);
             OrderBySize(local.size, ref weaponA, ref weaponB);
             int weaponNormal = 3 - weaponA - weaponB;
@@ -404,9 +353,8 @@ namespace VortexArena.Core.Combat
             OrderBySize(art.size, ref artA, ref artB);
             int artNormal = 3 - artA - artB;
 
-            // Dönüş: modelin (düzlem normali, uzun kenarı) silahın karşılıklarına götürülür.
-            // Silahın eksenleri ÇERÇEVE GÖRSELİNİN EBEVEYN uzayına çevrilir — silah kökü ile
-            // çerçeve kökü aynı uzay olmak zorunda değil.
+            // Rotation maps the art's (plane normal, long edge) onto the weapon's. Weapon axes go
+            // into the frame visual's PARENT space: the two roots need not share a space.
             Transform parent = frameVisual.parent;
             Vector3 targetNormal = ToParentDirection(parent, AxisVector(weaponNormal));
             Vector3 targetUp = ToParentDirection(parent, AxisVector(weaponA));
@@ -415,15 +363,14 @@ namespace VortexArena.Core.Combat
                 Quaternion.LookRotation(targetNormal, targetUp) *
                 Quaternion.Inverse(Quaternion.LookRotation(AxisVector(artNormal), AxisVector(artA)));
 
-            // Ölçek MODELİN kendi eksenlerinde yazılır (localScale dönüşten ÖNCE uygulanır).
+            // Scale is written in the ART's own axes (localScale applies before rotation).
             var scale = Vector3.one;
             scale[artA] = (local.size[weaponA] + framePadding * 2f) / Mathf.Max(art.size[artA], 1e-4f);
             scale[artB] = (local.size[weaponB] + framePadding * 2f) / Mathf.Max(art.size[artB], 1e-4f);
             scale[artNormal] = Mathf.Min(scale[artA], scale[artB]);
 
-            // Konum: modelin ÖLÇÜLEN merkezi silahın merkezine otursun. Model pivotu merkezinde
-            // olmak zorunda değil (bu modelde değil), o yüzden merkez farkı geri alınıyor —
-            // dönüş+ölçek uygulandıktan SONRAKİ hâliyle.
+            // Put the art's MEASURED centre on the weapon's centre. The art pivot need not be
+            // centred, so the offset is undone after rotation+scale.
             Vector3 targetCenter = parent.InverseTransformPoint(_weapon.transform.TransformPoint(local.center));
 
             frameVisual.localRotation = rotation;
@@ -431,7 +378,6 @@ namespace VortexArena.Core.Combat
             frameVisual.localPosition = targetCenter - rotation * Vector3.Scale(scale, art.center);
         }
 
-        /// <summary>İki ekseni BÜYÜKTEN küçüğe sıralar (büyük kenar büyük kenarla eşleşsin).</summary>
         private static void OrderBySize(in Vector3 size, ref int major, ref int minor)
         {
             if (size[minor] > size[major])
@@ -440,7 +386,6 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>Eksen indeksinin (0=X,1=Y,2=Z) birim vektörü.</summary>
         private static Vector3 AxisVector(int axis)
         {
             var v = Vector3.zero;
@@ -448,19 +393,15 @@ namespace VortexArena.Core.Combat
             return v;
         }
 
-        /// <summary>Silahın yerel uzayındaki bir YÖNÜ çerçeve görselinin ebeveyn uzayına çevirir.</summary>
         private Vector3 ToParentDirection(Transform parent, in Vector3 weaponLocalDirection)
         {
             Vector3 world = _weapon.transform.TransformDirection(weaponLocalDirection);
             return parent != null ? parent.InverseTransformDirection(world).normalized : world.normalized;
         }
 
-        /// <summary>
-        /// Çerçeve sanatının sınırlarını <see cref="frameVisual"/>'ın YEREL uzayında ölçer.
-        /// <para>⚠️ Dünya AABB'si (<c>Renderer.bounds</c>) DEĞİL, <c>localBounds</c>'ın köşeleri —
-        /// gerekçesi <see cref="MeasureWeaponBounds"/>'takiyle aynı: döndürülmüş duran bir modelin
-        /// dünya kutusu gerçek boyutundan büyük çıkar ve çerçeve olduğundan geniş ölçeklenirdi.</para>
-        /// </summary>
+        /// <summary>Measures the frame art bounds in <see cref="frameVisual"/>'s LOCAL space.
+        /// ⚠️ Uses the corners of <c>localBounds</c>, NOT the world AABB (<c>Renderer.bounds</c>):
+        /// a rotated model's world box is larger than the model and would oversize the frame.</summary>
         private bool MeasureFrameArtBounds(out Bounds local)
         {
             local = new Bounds();
@@ -501,11 +442,9 @@ namespace VortexArena.Core.Combat
             return any;
         }
 
-        /// <summary>
-        /// Görsel kökünün altında hiç Renderer yoksa bir kez uyarır. <b>Neden loglanıyor:</b>
-        /// çerçeve sessizce hiç çizilmez ama silah yine seçilebilir — yani özellik "çalışıyor gibi
-        /// görünüp" görünmez kalır. Genellikle sebebi çerçeve modelinin prefabtan düşmesidir.
-        /// </summary>
+        /// <summary>Warns once when the art root has no Renderer. Logged because the frame then
+        /// silently never draws while the weapon is still selectable — the feature looks alive but
+        /// is invisible. Usually the art was dropped from the prefab.</summary>
         private static void WarnNoFrameArt()
         {
             if (_warnedNoFrameArt)
@@ -520,23 +459,16 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Nişan hacmini silahın sınırlarına oturtur (<see cref="framePadding"/> payıyla).
-        /// <para>
-        /// ⚠️ <b>Neden çalışma anında:</b> <c>VA_WeaponFrame</c> TEK bir prefabtır ve altı ayrı
-        /// boydaki silahın altında duruyor. Prefabda sabit bir kutu bırakılsaydı kısa silahta
-        /// gereğinden geniş (yanındaki silahı da yutan), uzun silahta dar (namlusuna nişan alınca
-        /// tutmayan) bir hedef olurdu — yani ölçüyü <b>silah</b> söylemeli, prefab değil.
-        /// </para>
-        /// <para>
-        /// Bu kutu <see cref="DistanceGrabInteractable"/>'ın aday hesabının TEK girdisidir: ISDK
-        /// mesafe kavraması <c>Physics.Raycast</c> yapmaz, doğrudan
-        /// <c>Rigidbody.GetComponentsInChildren&lt;Collider&gt;()</c> üstünden koni testi yapar.
-        /// Dolayısıyla katman/maske kurulumu gerekmez ve kutu <b>trigger olabilir</b> (öyledir:
-        /// free-roam'da silahın fiziksel çarpışması yok).
-        /// </para>
-        /// <para>Ölçüsüz kalırsa (Renderer yok) prefabtaki kutuya DOKUNULMAZ — hiç olmamasındansa
-        /// kaba bir hedef iyidir.</para>
-        /// </summary>
+        /// Fits the aim volume to the weapon bounds (plus <see cref="framePadding"/>).
+        /// <para>⚠️ At runtime because <c>VA_WeaponFrame</c> is ONE prefab under weapons of
+        /// different sizes: a fixed box would be too wide on a short gun (swallowing its neighbour)
+        /// and too narrow on a long one. The WEAPON states the measurement.</para>
+        /// <para>This box is the ONLY input to <see cref="DistanceGrabInteractable"/>'s candidate
+        /// test: ISDK distance grab does no <c>Physics.Raycast</c>, it cone-tests the rigidbody's
+        /// colliders directly. So no layer/mask setup is needed and the box MAY be a trigger (it is:
+        /// weapons have no physical collision in free-roam).</para>
+        /// <para>Unmeasured (no renderers) leaves the prefab box untouched — a rough target beats
+        /// none.</para></summary>
         private void SizeGrabCollider(bool measured, Bounds local)
         {
             if (grabCollider == null || !measured)
@@ -544,9 +476,8 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Silahın yerel kutusu ÇERÇEVENİN yerel uzayına çevrilir: ikisi aynı olmak zorunda
-            // değil (prefabda çerçeve kaydırılmış/döndürülmüş olabilir), o yüzden sekiz köşe
-            // taşınıp yeniden kutulanıyor.
+            // The weapon's local box goes into the FRAME's local space (the two need not match),
+            // so all eight corners are transformed and re-boxed.
             Bounds inFrame = default;
             bool any = false;
 
@@ -574,12 +505,9 @@ namespace VortexArena.Core.Combat
             grabCollider.size = inFrame.size + Vector3.one * (framePadding * 2f);
         }
 
-        /// <summary>
-        /// Silahın Renderer'larını SİLAHIN yerel uzayında ölçer (çerçevenin kendi görselleri hariç).
-        /// <para>⚠️ Dünya AABB'si (<c>Renderer.bounds</c>) DEĞİL, <c>localBounds</c>'ın köşeleri
-        /// kullanılır: silah döndürülmüş duruyorsa dünya kutusu gerçek boyutundan büyük çıkar ve
-        /// çerçeve silahtan kat kat geniş olurdu.</para>
-        /// </summary>
+        /// <summary>Measures the weapon's renderers in the WEAPON's local space (frame art
+        /// excluded). ⚠️ Uses <c>localBounds</c> corners, NOT the world AABB: a rotated weapon's
+        /// world box is much larger than the weapon.</summary>
         private bool MeasureWeaponBounds(out Bounds local)
         {
             local = new Bounds();
@@ -620,7 +548,6 @@ namespace VortexArena.Core.Combat
             return any;
         }
 
-        /// <summary>En büyük iki eksenin indeksini döndürür (0=X, 1=Y, 2=Z).</summary>
         private static void LargestTwoAxes(Vector3 size, out int axisA, out int axisB)
         {
             int smallest = 0;
@@ -638,7 +565,7 @@ namespace VortexArena.Core.Combat
             axisB = smallest == 2 ? 1 : 2;
         }
 
-        // -------------------------------------------------------------------- ISDK kapısı
+        // --------------------------------------------------------------------- ISDK gate
 
         private void HandlePointerEvent(PointerEvent evt)
         {
@@ -649,8 +576,8 @@ namespace VortexArena.Core.Combat
                     break;
 
                 case PointerEventType.Select:
-                    // Seçim = "bu silah artık benim": klonu WeaponGranter üretir/gizler, bu bileşenin
-                    // eldeki silahla hiçbir işi yoktur (kaynak silah çerçevede kalmaya devam eder).
+                    // Select = "this weapon is mine now": WeaponGranter builds/hides the clone.
+                    // This component has nothing to do with the held weapon; the source stays framed.
                     WeaponGranter.SelectWeapon(_weapon != null ? _weapon.Definition : null);
                     _hovering.Clear();
                     HideRay(_rayLeft);
@@ -692,33 +619,25 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>
-        /// ISDK kapısı: bu interactor şu an silahı seçebilir mi — yalnız MESAFE sorusu
-        /// (<see cref="maxGrabDistance"/>).
-        /// <para>
-        /// ⚠️ <b>"Elde çift elli silah varken seçim kapansın" diye bir kapı BURAYA EKLENMEZ.</b>
-        /// Çerçeve bir kavrama değil bir <b>seçim</b> tetikleyicisidir ve seçimi değiştirmek ikinci
-        /// bir silah üretmez: çift elli seçimde <c>WeaponGranter</c> oyuncu başına zaten TEK klon
-        /// tutar, yeni tanım eskisinin yerine geçer. Böyle bir kapı rafta silah değiştirmeyi de
-        /// kapatır ve belirtisi teşhis edilmesi zor bir biçimde görünür: <b>ışın çıkar ama seçim
-        /// olmaz</b> — çünkü grip'e basıldığı anda granter eski silahın klonunu ele çağırır ve kapı
-        /// tam o karede kapanır. "Aynı anda ikinci silah tutulamaz" kuralının yeri
-        /// <c>WeaponGranter.TickHand</c>'dir (rastgele dağıtım yolu, öteki el).
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>El/anchor çözülemezse FAIL-OPEN</b> (izin verilir): bu bir emniyet kapısı değil bir
-        /// HİS kapısıdır — editör oturumunda kontrolcü çözülemez ve fail-close olsaydı silah editörde
-        /// hiç seçilemez, yani sahne testi imkânsız hale gelirdi.
-        /// </para>
-        /// </summary>
+        /// <summary>ISDK gate: may this interactor select the weapon right now — a DISTANCE
+        /// question only (<see cref="maxGrabDistance"/>).
+        /// <para>⚠️ NEVER add a "block selection while a two-handed weapon is held" gate here. The
+        /// frame is a SELECTION trigger, and changing the selection spawns no second weapon:
+        /// <c>WeaponGranter</c> keeps exactly ONE clone per player and the new definition replaces
+        /// the old. Such a gate would also block swapping weapons at the rack, with a
+        /// hard-to-diagnose symptom: the ray appears but selection never happens, because pressing
+        /// grip calls the old clone into hand and closes the gate on that very frame. The "no
+        /// second weapon at once" rule belongs in <c>WeaponGranter.TickHand</c>.</para>
+        /// <para>⚠️ FAIL-OPEN when the hand/anchor cannot be resolved: this is a FEEL gate, not a
+        /// safety gate. An Editor session cannot resolve a controller, and failing closed would
+        /// make the weapon unselectable in the Editor, i.e. untestable.</para></summary>
         public bool Filter(GameObject interactorGameObject)
         {
-            // ⚠️ Kalibresiz oyuncu silah ALAMAZ (§10.6) ve kapı BURADA durur, seçim yolunda değil:
-            // aday listesinden düşen çerçeve ışın/reticle de çizdirmez. Seçim tarafına konsaydı
-            // oyuncu nişan alır, grip'e basar ve hiçbir şey olmazdı — bu sınıfın kendi yorumundaki
-            // "ışın çıkar ama seçim olmaz" belirtisinin ta kendisi.
-            // Silahın ele GELMESİ ayrıca WeaponGranter.CanHoldWeapon ile kapalıdır; buradaki kapı
-            // onun yerine geçmez, oyuncuya doğru geri bildirimi verir.
+            // ⚠️ An uncalibrated player cannot take a weapon (§10.6), and the gate lives HERE
+            // rather than on the selection path: a frame dropped from the candidate list draws no
+            // ray/reticle either. On the selection side the player would aim, press grip and see
+            // nothing. Delivery is also closed by WeaponGranter.CanHoldWeapon; this gate does not
+            // replace it, it gives the player correct feedback.
             if (!CalibrationState.IsCalibrated)
             {
                 return false;
@@ -733,37 +652,27 @@ namespace VortexArena.Core.Combat
 
             if (!WeaponGranter.TryResolvePalm(hand, out Pose palm))
             {
-                return true; // rig yok → kapı anlamsız
+                return true; // no rig → the gate is meaningless
             }
 
             return (palm.position - FrameCenterWorld).sqrMagnitude <= maxGrabDistance * maxGrabDistance;
         }
 
-        // ------------------------------------------------------------------ nişan ışını
+        // ----------------------------------------------------------------------- aim ray
 
-        /// <summary>Çerçeve merkezinin dünya konumu (ışının hedefi ve mesafe ölçüsünün kaynağı).</summary>
+        /// <summary>World position of the frame centre (ray target and distance reference).</summary>
         private Vector3 FrameCenterWorld =>
             _weapon != null ? _weapon.transform.TransformPoint(_centerLocal) : transform.position;
 
-        /// <summary>
-        /// Hover eden elin AVUCUNDAN çerçeve merkezine ışın çizer — yalnız el MENZİL İÇİNDEYSE.
-        /// <para>
-        /// ⚠️ <b>Bu ışın varsayılan olarak KAPALIDIR</b> (<see cref="isRayVisible"/>): ISDK'nın
-        /// mesafe kavraması kendi göstergesini çiziyor (tüp + reticle) ve ikisi birden açıkken
-        /// oyuncu elinde iki ışın görüyor.
-        /// </para>
-        /// <para>
-        /// ⚠️ ISDK'nın göstergesi <b>menzil dışında yalan söylemez</b>, o yüzden kapatmak bir şey
-        /// kaybettirmiyor: mesafe kavramasının aday listesi
-        /// <c>InteractableRegistry.List(interactor)</c>'dan geçiyor ve orası her adayı
-        /// <c>CanBeSelectedBy</c> ile — yani <see cref="Filter"/> ile — süzüyor. Menzil dışındaki
-        /// çerçeve aday bile olmaz, dolayısıyla hover göstergesi hiç çıkmaz.
-        /// </para>
-        /// <para>
-        /// Mesafe testi burada yine de tekrarlanır: <see cref="Filter"/> el çözülemediğinde
-        /// FAIL-OPEN'dır (editör oturumu), o durumda ışının kendi kapısı olmalı.
-        /// </para>
-        /// </summary>
+        /// <summary>Draws a ray from the hovering hand's PALM to the frame centre — only while in
+        /// range.
+        /// <para>⚠️ Off by default (<see cref="isRayVisible"/>): ISDK's distance grab draws its own
+        /// indicator (tube + reticle) and enabling both shows the player two rays.</para>
+        /// <para>⚠️ ISDK's indicator does not lie out of range, so turning ours off costs nothing:
+        /// its candidate list filters every entry through <c>CanBeSelectedBy</c>, i.e. through
+        /// <see cref="Filter"/>, so an out-of-range frame is not even a candidate.</para>
+        /// <para>The distance test is still repeated here because <see cref="Filter"/> is FAIL-OPEN
+        /// when the hand cannot be resolved (Editor session).</para></summary>
         private void TickRay(OVRInput.Controller hand, ref LineRenderer ray)
         {
             if (!IsHovering(hand))
@@ -772,8 +681,8 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Mesafe AVUÇtan ölçülür — Filter ile aynı kaynaktan, yoksa ışın kapının izin verdiği
-            // menzilden birkaç santim önce/sonra sönerdi.
+            // Measured from the PALM, the same source as Filter, or the ray would die a few
+            // centimetres off the gate's range.
             if (!WeaponGranter.TryResolvePalm(hand, out Pose palm))
             {
                 HideRay(ray);
@@ -824,7 +733,7 @@ namespace VortexArena.Core.Combat
 
             var line = go.AddComponent<LineRenderer>();
             line.sharedMaterial = material;
-            // Dünya uzayı: uçlardan biri ELDE, öteki çerçevede — ikisi aynı transformun altında değil.
+            // World space: one end is on the HAND, the other on the frame.
             line.useWorldSpace = true;
             line.positionCount = 2;
             line.numCapVertices = 0;
@@ -852,11 +761,10 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        // ---------------------------------------------------------------------- yardımcı
+        // ----------------------------------------------------------------------- helpers
 
-        /// <summary>İki nişan ışınının PAYLAŞTIĞI materyal (renk LineRenderer'ın vertex renginden
-        /// gelir). Çerçevenin kendisi artık çizilmiyor — o bir MODEL ve kendi materyalini taşıyor;
-        /// burası yalnız ışınlar için.</summary>
+        /// <summary>Material SHARED by both aim rays (colour comes from LineRenderer vertex color).
+        /// The frame itself is art carrying its own material; this is for the rays only.</summary>
         private Material EnsureLineMaterial()
         {
             if (_lineMaterial != null)
@@ -886,13 +794,10 @@ namespace VortexArena.Core.Combat
             return null;
         }
 
-        /// <summary>
-        /// Fail-open bir kez loglanır. <b>Neden loglanıyor:</b> el çözülemediğinde mesafe kapısı
-        /// tümüyle devre dışı kalır ve silah arenanın öbür ucundan da seçilebilir — yani özellik
-        /// <i>çalışıyor gibi görünüp</i> hiçbir şey yapmaz.
-        /// <para>Editör oturumunda BEKLENEN durumdur (kumanda yok); başlıkta görülüyorsa BB
-        /// kontrolcü rig'inin <c>InteractorControllerDecorator</c> kurulumu eksiktir.</para>
-        /// </summary>
+        /// <summary>Logs the fail-open once. Logged because with an unresolved hand the distance
+        /// gate is fully disabled and the weapon can be selected from across the arena — the feature
+        /// looks alive but does nothing. EXPECTED in an Editor session (no controller); on device it
+        /// means the rig's <c>InteractorControllerDecorator</c> setup is missing.</summary>
         private static void WarnFailOpen()
         {
             if (_warnedFailOpen)
