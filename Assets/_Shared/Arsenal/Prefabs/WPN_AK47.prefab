@@ -234,7 +234,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SimpleWeaponDissolve
   dissolveMaterial: {fileID: 2100000, guid: 65822b697fd322144a6838c20894a1d7, type: 2}
-  appearSeconds: 0.6
+  appearSeconds: 1.2
 --- !u!114 &4945396200834432473
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1499,6 +1499,16 @@ dosyadaki `[Toggle]` anahtarının varsayılanı bilerek terstir: Unity'de bir `
 varsayılan değeri 1 olsa bile shader keyword'ü AÇILMAZ (keyword yalnız Inspector'da tıklanınca set
 edilir), yani varsayılan davranış keyword'e bağlanırsa koddan ya da araçtan kurulan her materyalde
 sessizce kapalı kalır.
+Logosu **yatayda kayan** bir yazım daha durur (`VortexArena/GlassWallLogoScroll`,
+`_Shared/Shaders/GlassWallLogoScroll.shader`, materyali `_Shared/Materials/M_VortexGlassWall_Scroll.mat`):
+sabit HLSL yazımının birebir aynısıdır, tek farkı `_ScrollSpeed` alanıdır — birimi **saniyede logo
+genişliğidir** (artı = sola, eksi = sağa, 0 = sabit), böylece `_LogoSize` değiştirilince kayma hissi
+bozulmaz. ⚠️ Kayma duvarın KENDİSİNDE periyodiktir: döşeme kipinde `frac`, merkez kipinde duvar
+genişliği kadarlık bir katlama ile sol kenardan çıkan logo sağ kenardan geri girer — bunun görünür
+yan etkisi, merkez kipinde taşacak kadar büyütülmüş bir logonun karşı kenarda da görünmesidir.
+⚠️ Hız alanı mevcut yazımlara EKLENMEZ, ayrı shader olarak durur: sabit logo isteyen duvarlarda
+tek bir alan her materyalde sessizce bir animasyon riski taşırdı. Property adları üç yazımda da
+aynı olduğu için bir materyalin shader'ını çevirmek ayarları korur.
 ⚠️ **Açık bir Shader Graph penceresi varken `.shadergraph` dosyası dışarıdan düzenlenmez:** pencere
 kapanırken kendi (bayat) hâlini diske yazmayı teklif eder ve kabul edilirse dosyadaki iş kaybolur.
 Dosya ayrıca tek bir JSON DEĞİL, arka arkaya dizilmiş JSON objeleridir ve **aralarındaki boş satır
