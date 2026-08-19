@@ -28,12 +28,15 @@ namespace VortexArena.App.Admin
     /// <para>⚠️ <b>HP, SAHNE ve İHLAL satırda bilinçli olarak YOKTUR</b> — gerekçesi
     /// <see cref="AdminStatsRow"/> sınıf dokümanındadır; "eksik" sanıp geri koyma.</para>
     ///
-    /// <para><b>Alt bardaki iki kalibrasyon düğmesi zıt işlerdir:</b> <c>TÜMÜNÜ KALİBRE ET</c>
-    /// kayıtlı çapadan <i>yeniden yükleme</i>dir (oyuncuyu oyuna geri sokmayı dener),
-    /// <c>TÜM KALİBRASYONLARI SIFIRLA</c> ise herkesi savaş dışı bırakır. Yan yana durdukları için
-    /// ayrımı <b>görünüm ve sürtünme</b> taşır: sıfırlama kırmızı yazılır ve iki adımlı onay ister,
-    /// yeniden yüklemede onay yoktur (geri alınabilir). Oyuncu başına sıfırlama yan paneldeki
-    /// oyuncu kartındadır (<see cref="AdminPlayerRow"/>, KAL).</para>
+    /// <para><b>Alt bardaki ÜÇ kalibrasyon düğmesi ayrı işlerdir:</b> <c>TÜMÜNÜ KALİBRE ET</c>
+    /// hizalamayı gözlükteki kayıttan <i>yeniden yükler</i> (oyuncuyu oyuna geri sokmayı dener) ·
+    /// <c>TÜM HİZALAMALARI SIFIRLA</c> herkesi savaş dışı bırakır ama cihazdaki kaydı KORUR,
+    /// yani ardından KALİBRE ET çalışır · <c>CİHAZ KAYITLARINI SİL</c> kaydı da yok eder, yani
+    /// ardından <b>KALİBRE ET ARTIK ÇALIŞMAZ</b> ve oyuncular elle A/B sekansı almak zorunda kalır.
+    /// Yan yana durdukları için ayrımı <b>görünüm ve sürtünme</b> taşır: iki yıkıcı düğme kırmızı
+    /// yazılır ve her biri kendi iki adımlı onayını ister, yeniden yüklemede onay yoktur (geri
+    /// alınabilir). Oyuncu başına geçersiz kılma yan paneldeki oyuncu kartındadır
+    /// (<see cref="AdminPlayerRow"/>, KAL) ve orada yalnız yumuşak kip vardır.</para>
     ///
     /// <para><b>Görünüm prefabtan gelir</b> (<c>_Shared/App/Resources/UI/AdminStatsPanel.prefab</c>);
     /// bu sınıf yalnız veri yazar ve satırları <see cref="UiKit.Block"/> ile yerleştirir.</para>
@@ -82,6 +85,9 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _measureAllButton;
         [SerializeField] private Button _clearAllButton;
         [SerializeField] private TextMeshProUGUI _clearAllLabel;
+        [Tooltip("SERT kip: cihazdaki kayıtlı çapayı da siler — ardından KALİBRE ET çalışmaz.")]
+        [SerializeField] private Button _purgeAllButton;
+        [SerializeField] private TextMeshProUGUI _purgeAllLabel;
 
         [Header("Uyarı penceresi")]
         [SerializeField] private GameObject _popupRoot;
@@ -108,6 +114,11 @@ namespace VortexArena.App.Admin
         /// beklenmiyor.</summary>
         private float _clearAllArmedAt = -1f;
 
+        /// <summary>Cihaz kaydı silmenin ilk basış anı (<c>Time.unscaledTime</c>); &lt; 0 = onay
+        /// beklenmiyor. <see cref="_clearAllArmedAt"/>'ten BAĞIMSIZDIR: iki düğmenin onayı ayrı
+        /// kurulur, biri kurulu diye diğeri tek tıklamayla yıkıcı hale gelmez.</summary>
+        private float _purgeAllArmedAt = -1f;
+
         private float RowHeight
         {
             get
@@ -132,6 +143,7 @@ namespace VortexArena.App.Admin
             Wire(_calibrateAllButton, ReloadAllCalibrations);
             Wire(_measureAllButton, () => AdminCommands.MeasureBodyScale(0));
             Wire(_clearAllButton, ArmClearAllCalibration);
+            Wire(_purgeAllButton, ArmPurgeAllCalibration);
             Wire(_popupCloseButton, HidePopup);
 
             if (_root != null)
@@ -207,6 +219,12 @@ namespace VortexArena.App.Admin
                 _clearAllArmedAt = -1f;
                 _dirty = true;
             }
+
+            if (_purgeAllArmedAt >= 0f && Time.unscaledTime - _purgeAllArmedAt > ClearAllConfirmSeconds)
+            {
+                _purgeAllArmedAt = -1f;
+                _dirty = true;
+            }
         }
 
         private void MarkDirty()
@@ -242,10 +260,12 @@ namespace VortexArena.App.Admin
             if (!open)
             {
                 _clearAllArmedAt = -1f;
+                _purgeAllArmedAt = -1f;
             }
 
-            // Roster'dan ÖNCE: sıfırlama düğmesi oyuncu listesi gelmemişken de doğru görünmeli.
+            // Roster'dan ÖNCE: yıkıcı düğmeler oyuncu listesi gelmemişken de doğru görünmeli.
             ApplyClearAllButton();
+            ApplyPurgeAllButton();
 
             AdminRoster roster = AdminRoster.Instance;
             if (!open || roster == null)
@@ -433,12 +453,14 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Herkesin kalibrasyonunu sıfırlar — <b>iki adımlı</b>, <see cref="AdminPlayerRow"/>'un
-        /// yıkıcı düğmeleriyle aynı sözleşme: ilk basış onay penceresini açar, pencere açıkken gelen
-        /// ikinci basış komutu gönderir.
+        /// Herkesin hizalamasını geçersiz kılar (YUMUŞAK kip) — <b>iki adımlı</b>,
+        /// <see cref="AdminPlayerRow"/>'un yıkıcı düğmeleriyle aynı sözleşme: ilk basış onay
+        /// penceresini açar, pencere açıkken gelen ikinci basış komutu gönderir.
         /// <para>Sürtünmenin gerekçesi komşusuyla karşıtlığıdır: yanındaki yeniden yükleme geri
-        /// alınabilir bir denemedir, bu ise tek tıklamayla sahadaki herkesi savaş dışı bırakır ve
-        /// kalibrasyonu yalnız başlıklar geri açabilir (§10.6).</para>
+        /// alınabilir bir denemedir, bu ise tek tıklamayla sahadaki herkesi savaş dışı bırakır
+        /// (§10.6).</para>
+        /// <para>Gözlükteki KAYIT korunur (<c>keepSaved: true</c>), bu yüzden ardından
+        /// <c>TÜMÜNÜ KALİBRE ET</c> herkesi tek tıkla geri sokar — günlük eylem budur.</para>
         /// </summary>
         private void ArmClearAllCalibration()
         {
@@ -450,24 +472,58 @@ namespace VortexArena.App.Admin
             }
 
             _clearAllArmedAt = -1f;
-            AdminCommands.ClearCalibration(0);
+            AdminCommands.ClearCalibration(0, keepSaved: true);
             _dirty = true;
         }
 
-        /// <summary>Sıfırlama düğmesinin etiketini ve zeminini onay durumuna göre boyar: dinlenmede
-        /// kırmızı yazı + alt barın ortak zemini, onay beklerken tam ters (kırmızı zemin) — operatör
-        /// ikinci basışın ne yapacağını düğmeye bakarak görür.</summary>
-        private void ApplyClearAllButton()
+        /// <summary>
+        /// Gözlüklerdeki KAYITLI çapayı da siler (SERT kip) — <see cref="ArmClearAllCalibration"/>
+        /// ile aynı iki adımlı sözleşme, ama <b>ayrı</b> bir onay penceresi kullanır.
+        /// <para>⚠️ Ardından <c>TÜMÜNÜ KALİBRE ET</c> artık çalışmaz (okuyacağı kayıt kalmaz) ve
+        /// oyuncular elle A/B sekansı almak zorunda kalır — bu bir mekan bakımıdır, zemin bantları
+        /// taşındığında yapılır.</para>
+        /// </summary>
+        private void ArmPurgeAllCalibration()
         {
-            bool armed = _clearAllArmedAt >= 0f;
-
-            if (_clearAllLabel != null)
+            if (_purgeAllArmedAt < 0f)
             {
-                _clearAllLabel.text = armed ? "EMİN? HERKESİ SIFIRLA" : "TÜM KALİBRASYONLARI SIFIRLA";
-                _clearAllLabel.color = armed ? UiKit.OnAccent : UiKit.Bad;
+                _purgeAllArmedAt = Time.unscaledTime;
+                _dirty = true;
+                return;
             }
 
-            if (_clearAllButton != null && _clearAllButton.targetGraphic is Image image)
+            _purgeAllArmedAt = -1f;
+            AdminCommands.ClearCalibration(0, keepSaved: false);
+            _dirty = true;
+        }
+
+        /// <summary>Geçersiz kılma düğmesinin etiketini ve zeminini onay durumuna göre boyar:
+        /// dinlenmede kırmızı yazı + alt barın ortak zemini, onay beklerken tam ters (kırmızı zemin)
+        /// — operatör ikinci basışın ne yapacağını düğmeye bakarak görür.</summary>
+        private void ApplyClearAllButton()
+        {
+            ApplyDestructiveButton(_clearAllButton, _clearAllLabel, _clearAllArmedAt >= 0f,
+                "EMİN? HİZALAMALARI SIFIRLA", "TÜM HİZALAMALARI SIFIRLA");
+        }
+
+        /// <summary>Cihaz kaydı silme düğmesi — <see cref="ApplyClearAllButton"/> ile aynı görünüm
+        /// sözleşmesi, yalnız metni ve kendi onay durumu farklı.</summary>
+        private void ApplyPurgeAllButton()
+        {
+            ApplyDestructiveButton(_purgeAllButton, _purgeAllLabel, _purgeAllArmedAt >= 0f,
+                "EMİN? KAYITLARI SİL", "CİHAZ KAYITLARINI SİL");
+        }
+
+        private static void ApplyDestructiveButton(Button button, TextMeshProUGUI label, bool armed,
+            string armedText, string idleText)
+        {
+            if (label != null)
+            {
+                label.text = armed ? armedText : idleText;
+                label.color = armed ? UiKit.OnAccent : UiKit.Bad;
+            }
+
+            if (button != null && button.targetGraphic is Image image)
             {
                 image.color = armed ? UiKit.Bad : ClearAllIdleFill;
             }

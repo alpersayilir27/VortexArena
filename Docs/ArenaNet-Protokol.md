@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `14` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — blob opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
+| `PROTOCOL_VERSION` | `15` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v15 `clear_calibration`'a **`keepSaved` (bool)** ekler (§5.2/§5.3, davranış §10.6): sıfırlama iki eyleme ayrılır — *hizalamayı geçersiz kıl* (gözlükteki kayıtlı çapa ve UUID korunur, `reload_calibration` çalışmaya devam eder) ve *cihaz kaydını da sil*. ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip): alanı tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz. Karışık sürümde kaybolan şey bozuk çizim değil, operatörün *yumuşak* seçiminin sert uygulanmasıdır — kayıtlı çapa silinir ve o oyuncuda `reload_calibration` bir daha iş görmez. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — blob opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -239,8 +239,22 @@ durumunda bırakır; başarısız ölçümü ölçek olarak yazmak ise sessizce 
   gösterirdi.
 - **`kick`** `{ "type":"kick", "playerId":5 }` — hedef bağlantı kapatılır ve **o başlıkta uygulama kapanır** (kapanış dizisi §5.4).
 - **`identify`** `{ "type":"identify", "playerId":5 }` → o cihazda kimlik overlay'i (cosmos deseni)
-- **`clear_calibration`** `{ "type":"clear_calibration", "playerId":5 }` — o oyuncunun kalibrasyonunu **sıfırlar** (§10.6). **`playerId:0` = TÜM oyuncular** (toplu sıfırlama). Admin kalibrasyonu yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez — hizalamanın gerçekten oturduğunu yalnız başlık bilir (§10.6).
-  ⚠️ **Sunucu komutu hedefe KOŞULSUZ iletir** (`identify`/`measure_body_scale` ile aynı çift yönlü desen, §5.3): roster'daki `calibrated` zaten `false` olsa bile hedef başlığa alansız bir `clear_calibration` gider. Sebep, sıfırlanacak her şeyin roster'da görünmemesidir — **yarım kalmış elle kalibrasyon** (A alındı, B alınmadı) yalnız başlıkta yaşar ve telde hiçbir izi yoktur. Sunucu "değer zaten `false`, değişen bir şey yok" diye erken dönseydi komut tam da düzeltmek için var olduğu durumda hiçbir iş yapmazdı (§10.6).
+- **`clear_calibration`** `{ "type":"clear_calibration", "playerId":5, "keepSaved":true }` — o oyuncunun kalibrasyonunu **sıfırlar** (§10.6). **`playerId:0` = TÜM oyuncular** (toplu sıfırlama). Admin kalibrasyonu yalnız SIFIRLAYABİLİR, "kalibre oldu" diye işaretleyemez — hizalamanın gerçekten oturduğunu yalnız başlık bilir (§10.6).
+
+  `keepSaved` (bool) sıfırlamanın **kapsamını** seçer; operatörün iki ayrı eylemi budur:
+
+  | Kip | Alan | Başlıkta ne olur | Sonrası |
+  |---|---|---|---|
+  | Hizalamayı geçersiz kıl | `keepSaved:true` | Hizalama düşer, yarım kalmış elle kalibrasyon sekansı silinir, elle kalibrasyon kapısı açılır. **Kayıtlı `OVRSpatialAnchor` ve UUID KORUNUR** | `reload_calibration` çalışır — operatör oyuncuyu kayıttan geri kurabilir |
+  | Cihaz kaydını da sil | `keepSaved:false` | Yukarıdakilerin hepsi + kayıtlı çapa cihazdan silinir, UUID kalıcı olarak silinir | `reload_calibration` "cihazda kayıtlı kalibrasyon yok" ile başarısız olur; oyuncu elle A/B sekansı almak zorundadır |
+
+  ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip). Gerekçe geri uyumluluktur: alanı
+  tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz — kural değerlerinin
+  "bilinmeyen → varsayılana düş" sözleşmesiyle aynı sınıftadır.
+  ⚠️ **Sunucu için iki kip AYNIDIR:** roster etkisi (`calibrated:false`, `floorOffset`/`bodyScale`/
+  hata alanlarının sıfırlanması) kipe bakmaz, sunucu alanı yalnız hedefe **iletir**. Fark tümüyle
+  başlıktadır.
+  ⚠️ **Sunucu komutu hedefe KOŞULSUZ iletir** (`identify`/`measure_body_scale` ile aynı çift yönlü desen, §5.3): roster'daki `calibrated` zaten `false` olsa bile hedef başlığa bir `clear_calibration` gider (tek alanı iletilen `keepSaved`'dir). Sebep, sıfırlanacak her şeyin roster'da görünmemesidir — **yarım kalmış elle kalibrasyon** (A alındı, B alınmadı) yalnız başlıkta yaşar ve telde hiçbir izi yoktur. Sunucu "değer zaten `false`, değişen bir şey yok" diye erken dönseydi komut tam da düzeltmek için var olduğu durumda hiçbir iş yapmazdı (§10.6).
 - **`reload_calibration`** `{ "type":"reload_calibration", "playerId":5 }` — o oyuncunun başlığına
   **gözlükte KAYITLI çapadan hizalamayı yeniden yükletir** (§10.6). **`playerId:0` = TÜM oyuncular.**
   Sunucu bir şey hesaplamaz; hedefe **alansız** bir `reload_calibration` iletir (`identify` /
@@ -443,9 +457,12 @@ Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken har
 `set_body_scale` ile döner (§10.8). Yalnız player'a gider; ölçüm başarısız olursa istemci yine
 `set_body_scale` yollar ama `error` alanı **dolu** olur — eski ölçek durur, gerekçe operatöre
 gider (§5.1).
-**`clear_calibration`** `{ "type":"clear_calibration" }` — istemci hizalamayı **ve yarım kalmış
-elle kalibrasyon sekansını** siler, kayıtlı `OVRSpatialAnchor`'ı yok eder ve elle kalibrasyon
-kapısını yeniden açar (§10.6). Yalnız player'a gider; alan taşımaz — hedef zaten o bağlantıdır.
+**`clear_calibration`** `{ "type":"clear_calibration", "keepSaved":true }` — istemci hizalamayı
+**ve yarım kalmış elle kalibrasyon sekansını** siler ve elle kalibrasyon kapısını yeniden açar
+(§10.6). Yalnız player'a gider; `playerId` taşımaz — hedef zaten o bağlantıdır. Tek alanı
+`keepSaved`'dir: `true` gözlükteki kayıtlı `OVRSpatialAnchor`'ı ve UUID'yi **korur**
+(`reload_calibration` çalışmaya devam eder), `false` ikisini de **yok eder**. ⚠️ **Alanın yokluğu
+`false` okunur** (§5.2).
 ⚠️ **Rig TAŞINMAZ:** free-roam'da oyuncu fiziksel olarak neredeyse orada kalır, yalnız hizalama
 geçersiz sayılır.
 **`reload_calibration`** `{ "type":"reload_calibration" }` — istemci **kayıtlı çapadan hizalamayı
@@ -1391,11 +1408,26 @@ kalibre ettirebilmesi gerekir.
 Admin elle işaretleyebilseydi, sunucunun hizalı sandığı ama fiilen kaymış bir oyuncuya ateş ve
 hasar açılırdı — bu sistemin önlemek için var olduğu durumun ta kendisi.
 
-⚠️ **Sıfırlama KOŞULSUZDUR: oyuncunun hangi aşamada olduğuna bakılmaz.** `clear_calibration`
-sunucudaki boole'yi `false` yapmakla kalmaz, hedef başlığa **komut olarak** iletilir (§5.2/§5.3) ve
-başlık üç şeyi birden siler: hizalamayı, kayıtlı `OVRSpatialAnchor`'ı ve **elle kalibrasyon
-sekansının ara durumunu** (alınmış A noktası, beklenen B, çift basış sayacı). Oyuncu hiçbir ara
-aşamada bırakılmaz; sekansa baştan başlar.
+⚠️ **Sıfırlama KOŞULSUZDUR: oyuncunun hangi aşamada olduğuna bakılmaz.** Koşulsuzluk iki kipte de
+geçerlidir. `clear_calibration` sunucudaki boole'yi `false` yapmakla kalmaz, hedef başlığa **komut
+olarak** iletilir (§5.2/§5.3) ve başlık her hâlükârda iki şeyi siler: hizalamayı ve **elle
+kalibrasyon sekansının ara durumunu** (alınmış A noktası, beklenen B, çift basış sayacı). Oyuncu
+hiçbir ara aşamada bırakılmaz; sekansa baştan başlar.
+
+**Kayıtlı çapanın akıbetini `keepSaved` belirler** (§5.2) ve iki kip arasındaki tek fark budur:
+
+- `keepSaved:true` — *hizalamayı geçersiz kıl*. Gözlükteki `OVRSpatialAnchor` ve UUID **korunur**,
+  yani `reload_calibration` (aşağıda) hâlâ okuyacak bir kayıt bulur. Kaydı silmeden "sessizce geri
+  alınmamasını" sağlayan şey başlıktaki bir kapıdır: geçersiz kılmadan sonra **otomatik** geri
+  yükleme (uygulama açılışı + harita değişimi) kapanır — kayıt cihazda durur ama kendiliğinden
+  okunmaz. O kapıyı yalnız operatörün `reload_calibration`'ı ve oyuncunun kendi elle kalibrasyonu
+  açar. Kapı olmasaydı sonraki `load_match` bozuk hizalamayı sessizce geri yüklerdi.
+  ⚠️ **Bu kapı uygulama ömrü kadar yaşar:** başlık yeniden başlatılırsa süreçle birlikte gider ve
+  `saved_anchor` modunda hizalama açılışta geri yüklenir. Bu bir eksiklik değil, iki komut
+  arasındaki farkın kendisidir — cihazdaki kaydı gerçekten yok etmek isteyen operatör sert kipi
+  kullanır.
+- `keepSaved:false` — *cihaz kaydını da sil*. Kayıtlı çapa cihazdan, UUID kalıcı olarak silinir;
+  o oyuncuda `reload_calibration` artık başarısız olur ve tek yol elle A/B sekansıdır.
 
 Bunu üç yerde birden **koşulsuz** tutmak zorunludur, çünkü *yarım kalmış kalibrasyon* telde
 görünmez — A alınmış ama B alınmamış bir başlık henüz `set_calibration{true}` göndermemiştir, yani
@@ -1470,7 +1502,9 @@ hizalanacağını seçer; değer sunucuda yaşar ve `welcome.calibrationMode` il
 ⚠️ **Modun kapıladığı TEK şey, uygulama açılışındaki diskten çapa geri yüklemesidir.**
 `saved_anchor` bugünkü davranıştır (başlık kayıtlı `OVRSpatialAnchor` UUID'sini okur ve hizalamayı
 geri yükler); `two_anchor`'da o UUID **hiç okunmaz**, oyuncu her açılışta elle 2 çapa kalibrasyonu
-alır. **HARİTA DEĞİŞİMİNDEKİ geri yükleme moddan bağımsız her zaman koşar** — o, oturum içinde
+alır. **HARİTA DEĞİŞİMİNDEKİ geri yükleme moddan bağımsız koşar** (tek istisnası operatörün
+geçersiz kılmasıdır: `clear_calibration` sonrasında otomatik geri yükleme kapalıdır, yukarı bak) —
+o, oturum içinde
 bellekte duran çapayla yapılır ve `load_match`'in kalibrasyonu sıfırlamaması kuralının (yukarıda)
 uygulanma biçimidir. İkisini tek anahtara bağlamak, `two_anchor` seçili bir işletmede her harita
 değişiminde tüm oyuncuları savaş dışı bırakırdı.
@@ -1503,9 +1537,11 @@ başlatmadan / oyunu kesmeden toparlamaktır.
 başlatır, "hizalandım" işaretini yine **başlık** koyar (`set_calibration`). Otorite değişmez —
 yukarıdaki asimetrik yazar tablosu aynen geçerlidir.
 
-⚠️ **Kayıtlı çapa YOKSA deneme BAŞARISIZDIR ve öyle bildirilir** (hiç kalibre olunmamış ya da
-`clear_calibration` UUID'yi silmiş olabilir). Sessizce başarılı sayılmaz: sunucunun hizalı sandığı
-ama fiilen kaymış bir oyuncuya ateş ve hasar açmak, bu sistemin önlemek için var olduğu durumdur.
+⚠️ **Kayıtlı çapa YOKSA deneme BAŞARISIZDIR ve öyle bildirilir** — hiç kalibre olunmamış ya da
+`clear_calibration` **sert kipte** (`keepSaved:false`) UUID'yi silmiş olabilir. Yumuşak kip kaydı
+koruduğu için günlük akış *hizalamayı geçersiz kıl → yeniden yükle*'dir ve orada bu başarısızlık
+görülmez. Sessizce başarılı sayılmaz: sunucunun hizalı sandığı ama fiilen kaymış bir oyuncuya ateş
+ve hasar açmak, bu sistemin önlemek için var olduğu durumdur.
 
 ⚠️ **Sonucun kanalı `lobby_state` DEĞİL `calibration_result`'tır** (§5.3): zaten kalibreli bir
 oyuncuda başarılı yeniden yükleme roster'da hiçbir alanı değiştirmez (yayın guard'ı), yani

@@ -16,8 +16,11 @@ namespace VortexArena.Core.Arena
     /// <para>
     /// İki yön: (1) <see cref="ArenaCalibrator.Calibrated"/> → <c>set_calibration</c> ile sunucuya
     /// "hizalandım" denir; (2) operatör sıfırlayınca <c>clear_calibration</c> komutu gelir ve
-    /// <see cref="ArenaCalibrator.Invalidate"/> çağrılır — hizalama fiilen bozuktur, kayıtlı anchor
-    /// da silinmelidir (yoksa sonraki <c>load_match</c> bozuk hizalamayı sessizce geri yükler).
+    /// <see cref="ArenaCalibrator.ApplyOperatorClear"/> çağrılır — hizalama fiilen bozuktur.
+    /// Komutun <c>keepSaved</c> alanı iki kipi ayırır: yumuşak kip cihazdaki çapayı KORUR (operatör
+    /// hemen ardından <c>reload_calibration</c> ile geri yükleyebilsin), sert kip onu da siler.
+    /// Yumuşak kipte hizalamanın sessizce geri gelmemesini <c>ArenaCalibrator</c>'daki otomatik geri
+    /// yükleme kapısı sağlar, silme değil.
     /// Komut <b>koşulsuzdur</b>: operatör hangi aşamadaki oyuncuya basarsa bassın, başlık yarım
     /// kalmış sekans dahil her şeyi siler (§5.3).
     /// </para>
@@ -205,20 +208,30 @@ namespace VortexArena.Core.Arena
         /// </para>
         /// <para>⚠️ Rig TAŞINMAZ — free-roam kuralı: oyuncu fiziksel olarak neredeyse orada kalır,
         /// yalnız hizalama geçersiz sayılır.</para>
+        /// <para>
+        /// <paramref name="keepSaved"/> = <c>true</c> ise cihazdaki çapa ve UUID kaydı KORUNUR:
+        /// operatörün "sıfırla → yeniden yükle" akışında ikinci komutun okuyacağı veriyi birincisi
+        /// yok etmemelidir. <c>false</c> (varsayılan) sert kiptir, cihaz kaydı da gider.
+        /// </para>
+        /// <para>
+        /// ⚠️ Kalibratör sahnede ARANMAZ: iş <see cref="ArenaCalibrator.ApplyOperatorClear"/>'a
+        /// verilir — sahnede kalibratör olmasa bile sert sıfırlamanın cihaz kaydını silmesi ve
+        /// otomatik geri yüklemenin kapanması gerekir.
+        /// </para>
         /// </summary>
-        private void HandleClearCalibration()
+        private void HandleClearCalibration(bool keepSaved)
         {
             _localCalibrated = false;
             _serverCalibrated = false;
             _source = "";
 
-            ArenaCalibrator calibrator = FindFirstObjectByType<ArenaCalibrator>();
-            if (calibrator != null)
-            {
-                calibrator.Invalidate();
-            }
+            ArenaCalibrator.ApplyOperatorClear(keepSaved);
 
-            Debug.Log("[CalibrationState] Operatör kalibrasyonu sıfırladı — yeniden kalibre edin (A basılıyken B×2).");
+            Debug.Log(keepSaved
+                ? "[CalibrationState] Operatör hizalamayı geçersiz kıldı — cihazdaki kayıt duruyor, " +
+                  "yeniden yüklenebilir ya da elle kalibre edilebilir (A basılıyken B×2)."
+                : "[CalibrationState] Operatör kalibrasyonu sıfırladı ve cihaz kaydını sildi — " +
+                  "yeniden kalibre edin (A basılıyken B×2).");
             Raise();
         }
 
@@ -297,7 +310,7 @@ namespace VortexArena.Core.Arena
         /// <summary>
         /// Roster'daki değeri yerel aynaya yazar — <b>yalnız bayrak</b>.
         /// <para>
-        /// ⚠️ <b>Buradan hizalama SİLİNMEZ</b> (<see cref="ArenaCalibrator.Invalidate"/> çağrılmaz,
+        /// ⚠️ <b>Buradan hizalama SİLİNMEZ</b> (<see cref="ArenaCalibrator.ApplyOperatorClear"/> çağrılmaz,
         /// <see cref="_localCalibrated"/> düşürülmez). Roster'ın <c>calibrated:false</c> taşıması
         /// "operatör sıfırladı" demek değildir: sunucu her <c>hello</c>'da alanı sıfırladığı için
         /// (§10.6) o değer <b>her yeniden bağlanışta</b> bir kez yayınlanıyor ve

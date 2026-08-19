@@ -289,20 +289,36 @@ namespace VortexArena.App.Admin
         /// <summary>
         /// Bir oyuncunun kalibrasyonunu sıfırlar; <paramref name="playerId"/> <b>0 = HERKES</b>
         /// (§10.6). Sıfırlanan oyuncu ateş edemez, hasar yemez, canlanamaz ve diğer oyuncuların
-        /// ekranında avatarı parlar — kalibrasyonu geri açmayı YALNIZ başlığın kendisi yapabilir.
+        /// ekranında avatarı parlar — hizalamayı geri açmayı YALNIZ başlığın kendisi yapabilir.
+        /// <para><paramref name="keepSaved"/> komutun iki kipini ayırır:
+        /// <b>true = yumuşak</b> — yalnız o anki hizalama geçersiz kılınır, gözlükteki KAYITLI çapa
+        /// yerinde kalır; <b>false = sert</b> — kayıtlı çapa ve UUID de kalıcı olarak silinir.</para>
+        /// <para>⚠️ <b><see cref="ReloadCalibration"/> ile TAMAMEN AYRI bir komuttur ve onun tersi
+        /// DEĞİLDİR:</b> sıfırlama oyuncuyu savaş dışı bırakır, yeniden yükleme ise gözlükteki
+        /// kayıttan hizalamayı geri kurmayı dener. İkisini karıştırmak sahada oynayan bir oyuncuyu
+        /// durduk yere oyun dışı bırakır.</para>
+        /// <para>⚠️ <b>SERT kip, <see cref="ReloadCalibration"/>'ın okuyacağı veriyi yok eder:</b>
+        /// kayıtlı çapa silindikten sonra "kalibre et" her başlıkta "cihazda kayıtlı kalibrasyon
+        /// yok" ile döner ve oyuncular elle A/B sekansı almak zorunda kalır. Bu yüzden <b>günlük
+        /// eylem YUMUŞAK kiptir</b>; sert kip yalnız zemin bantları taşındığında yapılan bir mekan
+        /// bakımıdır.</para>
         /// </summary>
-        public static void ClearCalibration(int playerId)
+        public static void ClearCalibration(int playerId, bool keepSaved)
         {
             if (playerId < 0)
             {
                 return;
             }
 
-            if (Send(new ClearCalibrationMsg { playerId = playerId }))
+            if (Send(new ClearCalibrationMsg { playerId = playerId, keepSaved = keepSaved }))
             {
                 SetStatus(playerId == 0
-                    ? "Tüm kalibrasyonların sıfırlanması gönderildi."
-                    : $"Kalibrasyon sıfırlama gönderildi: oyuncu {playerId}");
+                    ? (keepSaved
+                        ? "Tüm hizalamaların geçersiz kılınması gönderildi (cihaz kayıtları korunuyor)."
+                        : "Tüm cihaz kalibrasyon kayıtlarının silinmesi gönderildi.")
+                    : (keepSaved
+                        ? $"Hizalama geçersiz kılma gönderildi: oyuncu {playerId} (cihaz kaydı korunuyor)"
+                        : $"Cihaz kalibrasyon kaydının silinmesi gönderildi: oyuncu {playerId}"));
             }
         }
 
