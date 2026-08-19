@@ -5,29 +5,35 @@ using VortexArena.Core.Combat;
 namespace VortexArena.Core.Editor
 {
     /// <summary>
-    /// <see cref="GripHandAuthoring"/>'in Inspector yüzü: parmak duruşu preset'i ve üç düğme
-    /// (aynala / eli kaldır / kaydet).
+    /// <see cref="GripHandAuthoring"/>'in Inspector yüzü: elin kimliği ve üç düğme (parmakları
+    /// sıfırla / aynala / eli kaldır).
+    /// <para>
+    /// ⚠️ <b>Kaydet düğmesi burada YOKTUR ve geri eklenmez:</b> yazan tek düğme stüdyo
+    /// penceresindedir (<see cref="GripPoseStudio"/>). İkinci bir kaydet düğmesi aynı işi iki
+    /// yerden koştururdu; kayıt artık silah kitini de tetiklediği için (prefab kipi içeriği yeniden
+    /// yüklenir) hangi düğmenin neyi koşturduğu belirsizleşirdi.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Parmak eklemi seçicisi de burada DEĞİL stüdyo penceresindedir.</b> Sebep basit:
+    /// bir eklem seçildiği anda Inspector artık bu bileşeni değil o eklemin
+    /// <see cref="Transform"/>'unu gösterir — seçici burada olsaydı ilk tıklamada kendi kendini
+    /// kapatır ve ikinci eklemi seçmenin yolu kalmazdı. Pencere seçimden bağımsız açık kalır.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Parmak slider'ı / sayısal eklem alanı YOKTUR ve eklenmez.</b> Duruş elin kemiklerinde
+    /// yaşıyor ve Scene View'da çevrilerek rigleniyor; aynı duruşu ikinci kez sayı olarak yazmak
+    /// "hangisi geçerli" sorusunu doğururdu. Kayda giren şey her zaman kemiklerin o anki hâlidir.
+    /// </para>
     /// <para>
     /// ⚠️ <b>Undo kaydı TUTULMAZ.</b> Bu objeler <see cref="HideFlags.DontSave"/>'dir ve pencere,
     /// stage ya da Play geçişinde yok edilirler; onlara yazılan bir Undo adımı sahne geçmişine ölü
     /// bir kayıt bırakır ve kullanıcı Ctrl+Z'lediğinde "missing" bir objeyi geri almaya çalışır.
     /// Kaybolacak tek şey ayarlanmamış bir el duruşudur; kalıcı olan her şey Kaydet'ten geçer.
     /// </para>
-    /// <para>
-    /// ⚠️ Parmak slider'ı / eklem ince ayarı YOKTUR ve eklenmez: tezgâhta ayarlanabilen ama kayda
-    /// giremeyen bir duruş, oyunda hiç görülmeyecek bir ince ayar olurdu. Parmakların tek kaynağı
-    /// <see cref="HandGripPresets"/>'tir ve stüdyodaki el ile oyundaki sentetik el aynı diziyi
-    /// uygular.
-    /// </para>
     /// </summary>
     [CustomEditor(typeof(GripHandAuthoring))]
     internal sealed class GripHandAuthoringEditor : UnityEditor.Editor
     {
-        // Etiketler HandGripPresets'ten okunur: enum adlarını burada ikinci kez yazmak, yeni bir
-        // preset eklendiğinde sessizce eskimiş bir liste bırakırdı.
-        private static readonly HandGripPreset[] Presets =
-            (HandGripPreset[])System.Enum.GetValues(typeof(HandGripPreset));
-
         public override void OnInspectorGUI()
         {
             var hand = (GripHandAuthoring)target;
@@ -36,30 +42,21 @@ namespace VortexArena.Core.Editor
                 $"{hand.Kind} · {(hand.RightHand ? "sağ" : "sol")} el", EditorStyles.boldLabel);
             EditorGUILayout.LabelField(
                 "Bu objenin transformu KUMANDA (anchor) çerçevesidir — Scene'de yalnız TAŞI (dönüş " +
-                "kaydedilmez, silah her zaman kumandayla hizalıdır); kumanda modeli ve hayalet el " +
-                "köke bağlı çizilir.",
+                "kaydedilmez, silah her zaman kumandayla hizalıdır). Elin kumanda üstündeki yeri ve " +
+                "açısı AYRI yazılır: alttaki 'Hand' objesini taşı/çevir (silah kımıldamaz).",
                 EditorStyles.miniLabel);
 
             EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Parmak rigi", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                "Eklem seçicisi stüdyo penceresindedir (Kavrama Pozu Stüdyosu). Seçtiğin eklemi " +
+                "Scene View'da döndürme aracıyla çevir; kayda giren şey kemiklerin o anki hâlidir.",
+                EditorStyles.miniLabel);
 
-            string[] labels = new string[Presets.Length];
-            int current = 0;
-            for (int i = 0; i < Presets.Length; i++)
+            if (GUILayout.Button("Parmakları Sıfırla (boş el duruşu)", GUILayout.Height(22f)))
             {
-                labels[i] = HandGripPresets.Label(Presets[i]);
-                if (Presets[i] == hand.Preset)
-                {
-                    current = i;
-                }
-            }
-
-            EditorGUI.BeginChangeCheck();
-            int picked = EditorGUILayout.Popup("Parmak duruşu", current, labels);
-            if (EditorGUI.EndChangeCheck())
-            {
-                // Setter preset'i kemiklere uyguluyor; Scene View kendiliğinden tazelenmediği için
-                // burada elle tazelenir (yoksa seçim değişir, el aynı durur).
-                hand.Preset = Presets[picked];
+                // null = kayıt yok → boş elin duruşu (HandPoseLibrary.IdleJointRotations).
+                hand.ApplyPose(null);
                 SceneView.RepaintAll();
             }
 
@@ -81,17 +78,12 @@ namespace VortexArena.Core.Editor
                 }
             }
 
-            // Kaydet burada da durur: eli Scene'de ayarlayan kullanıcı, kaydetmek için pencereye
-            // gidip geri dönmek zorunda kalmasın (odak kayması sürüklemeyi bölüyor).
-            if (GUILayout.Button("Kaydet (tüm eller)", GUILayout.Height(26f)))
-            {
-                GripPoseStudio.SaveAll();
-            }
-
             EditorGUILayout.HelpBox(
-                "Scene'de yalnız kumanda kökünün YERİNİ ayarlarsın (dönüş yok — silah oyunda her zaman " +
-                "kumandayla hizalıdır, kök silahla hizalı tutulur); parmaklar preset'ten gelir. Ön " +
-                "kabzada el silaha yapışır, silah ikinci ele göre dönmez.",
+                "Scene'de kumanda kökünün YERİNİ ayarlarsın (dönüş yok — silah oyunda her zaman " +
+                "kumandayla hizalıdır, kök silahla hizalı tutulur); el modelini kumandanın üstünde " +
+                "taşıyıp ÇEVİRİRSİN (silahın duruşunu değiştirmez, silah başına yazılır); parmakları " +
+                "da elin kemiklerini çevirerek riglersin. Ön kabzada el silaha yapışır, silah ikinci " +
+                "ele göre dönmez. Kaydet stüdyo penceresindedir.",
                 MessageType.None);
         }
     }

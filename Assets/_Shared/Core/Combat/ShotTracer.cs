@@ -2,91 +2,43 @@ using UnityEngine;
 
 namespace VortexArena.Core.Combat
 {
-    /// <summary>
-    /// Mermi izi (tracer): namludan vuruş noktasına çizilen, ömrü boyunca <b>sönerek kaybolan</b>
-    /// çizgi + o çizgi boyunca dağılan duman izi. Sahnede DURMAZ ve kendi başına bir şey
-    /// dinlemez — yalnız çizer;
-    /// <b>ne çizileceğine iki çağıran karar verir:</b> atanın kendi izi için <see cref="Weapon"/>,
-    /// uzak oyuncuların izi için <see cref="RemoteShotFx"/> (§6.4/6.5). İkisi ayrı olmak ZORUNDA:
-    /// sunucu atış olayını atana geri yollamaz, istemci de kendi <c>playerId</c>'sini süzer.
-    /// <para>
-    /// ⚠️ <b>Bir tetik çekişi tek çizgi DEĞİLDİR</b>: saçmalı silahta (<c>PelletCount &gt; 1</c>)
-    /// yaylımın her saçması kendi izini alır ve hepsi <see cref="Play"/> ile TEK çağrıda çizilir.
-    /// Saçma başına ayrı çağrı YAPILMAZ — duman bütçesi ve çizgi kalınlığı yaylımın tamamına göre
-    /// ölçülüyor, saçma saçma çağrılsa ikisi de saçma sayısınca çoğalırdı.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Duman ayrı bir giriş noktası DEĞİLDİR</b> ve öyle olmamalı: <see cref="Play"/>'in
-    /// içinde, çizginin hemen ardından yayılır. İkinci bir <c>PlaySmoke</c> kapısı açılsaydı iki
-    /// çağıranın (yerel/uzak) birini çağırıp diğerini unutması mümkün olurdu — yani aynı silah
-    /// kendi ekranında dumanlı, karşı ekranda dumansız görünürdü. Tek kapı = iki yolun sunumu
-    /// tanım gereği aynı.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Havuz PAYLAŞIMLIDIR</b> (<see cref="Shared"/>) ve çağıran başına açılmaz: silahlar
-    /// <c>weaponSource:"random"</c> modlarında sürekli üretilip yok ediliyor, silah başına havuz
-    /// materyali + <c>Update</c> döngüsünü silah sayısınca çoğaltırdı.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>HAVUZLU ve round-robin</b>: hedef yük tam ateşte ~53 olay/sn (16 oyuncu × üçte bir
-    /// tracer). Bu hızda <c>Instantiate</c>/<c>Destroy</c> döngüsü Quest'te doğrudan GC dikeni
-    /// demektir; düğümler bir kez üretilir, sonra yalnız yeniden konumlanır. Havuz dolduğunda en
-    /// eski tracer kesilir (yeni atışı düşürmek, bir kare fazla duran çizgiden kötüdür).
-    /// </para>
-    /// <para>
-    /// Duman için ayrı bir havuz YOKTUR: tüm atışlar TEK bir <see cref="ParticleSystem"/>'e
-    /// manuel <c>Emit</c> yapar. Parçacık sistemi kendi parçacık dizisini zaten havuzlar
-    /// (<c>maxParticles</c> tavanı) ve tek sistem = tek draw call — atış başına GameObject
-    /// üreten bir <c>TrailRenderer</c> çözümü Quest'te hem GC hem draw call olarak ödenirdi.
-    /// </para>
-    /// <para>
-    /// Görünüm parametreleri (<c>tracerColor/Width/Lifetime</c>) eşyanın kendisinden gelir
-    /// (<see cref="ItemDefinition"/>) — tracer uzak çizim verisidir, playtest'te oradan ayarlanır.
-    /// Duman aynı üç alandan TÜRETİLİR (aşağıdaki <c>Smoke*</c> sabitleri): eşyaya ayrı duman
-    /// alanları eklenmedi çünkü tabanın ölçütü "ağın + uzak çizimin ihtiyacı" ve duman zaten
-    /// tracer'ın kendisine biniyor — <c>tracerEveryNthRound</c> tracer'ı kapattığında duman da
-    /// kapanır (iki çağıran da sayacı Play'den ÖNCE uyguluyor).
-    /// </para>
-    /// </summary>
+    /// <summary>Shot tracer: a fading line from muzzle to impact plus smoke along it. Draw-only,
+    /// never placed in a scene; <see cref="Weapon"/> drives the local shooter,
+    /// <see cref="RemoteShotFx"/> remote players (§6.4/6.5) — two callers are mandatory, the server
+    /// never echoes a shot back.
+    /// <para>⚠️ One trigger pull is NOT one line: a whole pellet spread goes through a SINGLE
+    /// <see cref="Play"/> call, since smoke budget and width are scaled per volley.</para>
+    /// <para>⚠️ Smoke has NO separate entry point (emitted inside <see cref="Play"/>): a second
+    /// gate would let one caller forget it and smoke would differ between screens.</para>
+    /// <para>⚠️ The pool is SHARED (<see cref="Shared"/>), never per caller: guns are spawned
+    /// and destroyed constantly in <c>weaponSource:"random"</c> modes.</para>
+    /// <para>⚠️ Pooled and round-robin: Instantiate/Destroy at ~53 events/s is a GC spike on
+    /// Quest. When the pool is full the oldest tracer is cut.</para>
+    /// <para>Smoke has no pool: all shots <c>Emit</c> into ONE <see cref="ParticleSystem"/> (one
+    /// draw call). Look comes from <see cref="ItemDefinition"/> and smoke is DERIVED from its three
+    /// tracer fields, so <c>tracerEveryNthRound</c> disables both at once.</para></summary>
     public class ShotTracer : MonoBehaviour
     {
-        /// <summary>Havuzdaki çizgi sayısı (aynı anda canlı kalabilecek tracer).</summary>
-        // ⚠️ Tavanı ORTALAMA olay hızı değil, TEK KAREDEKİ yığılma belirler: saçmalı silahta bir
-        // tetik çekişi aynı karede PelletCount kadar çizgi ister (XM1014 6, Nova 9). Ortalamaya
-        // göre boyutlanmış bir havuzda (~53 olay/sn × 0.1 sn ömür ≈ 5 eşzamanlı) iki oyuncunun
-        // üst üste gelen yaylımı birbirinin çizgilerini keser ve yelpaze eksik/asimetrik çizilir —
-        // belirtisi "bazı saçmaların izi hiç çıkmıyor" olur, yani teşhisi zor. Taban bu yüzden
-        // birkaç TAM yaylımdır: MaxScatterLines × ~4 eşzamanlı yaylım.
+        // ⚠️ Sized by PER-FRAME burst, not average rate: an average-sized pool lets two
+        // overlapping volleys cut each other's lines ("some pellets leave no trail").
         private const int PoolSize = 48;
 
-        /// <summary>Bu mesafeden kısa "atış"a tracer çizilmez (dejenere/eksik mesafe).</summary>
         private const float MinTracerMeters = 0.5f;
 
-        /// <summary>
-        /// Tek yaylımda çizilebilecek en çok çizgi (saçma) sayısı — <b>iki çağıran da</b> saçma
-        /// sayısını buna kırpar.
-        /// <para>Sabit burada durur çünkü ölçüsü <see cref="PoolSize"/> ile aynı bütçeden gelir:
-        /// çağıranlar kendi tavanlarını taşısaydı biri büyütüldüğünde havuz sessizce yetmez
-        /// olurdu. Bugünkü en kalabalık silah 9 saçmalıdır (Nova); pay ileride gelecek daha
-        /// saçmalı bir silah içindir.</para>
-        /// </summary>
+        /// <summary>Max lines (pellets) per volley; BOTH callers clamp to this. Lives here because
+        /// it shares the <see cref="PoolSize"/> budget — caller-owned caps would outgrow the
+        /// pool.</summary>
         public const int MaxScatterLines = 12;
 
-        /// <summary>
-        /// Yaylım (saçmalı) atışta çizginin incelme oranı.
-        /// <para>Tek mermilik kalınlık, aynı namludan çıkan 6-9 çizgide namlu dibinde tek bir opak
-        /// huniye dönüşür ve <b>yelpazenin açısı</b> okunmaz olur — oysa saçmalının görsel kimliği
-        /// tam olarak odur. Eşyaya ayrı bir "saçma kalınlığı" alanı EKLENMEZ, ölçü
-        /// <c>tracerWidth</c>'ten türetilir: iki sayı olsaydı playtest'te biri ayarlanıp öteki
-        /// unutulurdu.</para>
-        /// </summary>
+        /// <summary>Line thinning for spread shots: single-round width turns 6-9 lines into one
+        /// opaque funnel and hides the spread angle. Derived, not a separate item field (two would
+        /// drift).</summary>
         private const float ScatterWidthScale = 0.6f;
 
-        /// <summary>Çizgi materyalinin shader arama zinciri (ilk bulunan kullanılır).</summary>
-        // ⚠️ "Sprites/Default" başta duruyor çünkü Graphics Settings'in *Always Included Shaders*
-        // listesinde varsayılan olarak bulunur → build'de kesin paketlenir (çalışma anında
-        // Shader.Find ile bulunan, hiçbir materyalde referanslanmayan shader STRIPLENİR ve tracer
-        // sahada sessizce çizilmez). Vertex rengini de çarptığı için LineRenderer.startColor işler.
+        /// <summary>Shader lookup chain for the line material (first hit wins).</summary>
+        // ⚠️ "Sprites/Default" first: it is in Always Included Shaders, so it survives the build.
+        // A Shader.Find-only shader no material references is STRIPPED and tracers silently
+        // disappear on device. It also multiplies vertex color, so LineRenderer.startColor works.
         private static readonly string[] ShaderCandidates =
         {
             "Sprites/Default",
@@ -94,12 +46,9 @@ namespace VortexArena.Core.Combat
             "Unlit/Color",
         };
 
-        /// <summary>
-        /// Duman materyalinin shader arama zinciri. Başı çizgiyle AYNI sebeple "Sprites/Default":
-        /// Always Included olduğu için stripleme riski yok, alfa harmanlar ve parçacığın vertex
-        /// rengini çarpar (parçacık başına alfa ancak böyle işler). Parçacığa özel URP shader'ı
-        /// yedekte durur — o listede olmadığı için ilk sıraya KOYULMAZ.
-        /// </summary>
+        /// <summary>Shader lookup chain for smoke. "Sprites/Default" first for the same reason as
+        /// the line, and it multiplies particle vertex color (how per-puff alpha works). The URP
+        /// particle shader stays a fallback: it is not in Always Included Shaders.</summary>
         private static readonly string[] SmokeShaderCandidates =
         {
             "Sprites/Default",
@@ -107,99 +56,69 @@ namespace VortexArena.Core.Combat
             "Particles/Standard Unlit",
         };
 
-        // ------------------------------------------------------------------ duman ayarları
-        //
-        // Hepsi tracer'ın kendi üç alanından (renk/kalınlık/ömür) TÜRETME katsayısıdır; duman
-        // eşyada ayrı alan olarak yaşamaz (sınıf özetindeki gerekçe).
+        // ---------------------------------------------------------- smoke (derived from tracer)
 
-        /// <summary>Duman puf'ları arasındaki hedef mesafe (m): yol bu aralıkla örneklenir.</summary>
         private const float SmokePuffSpacingMeters = 0.75f;
 
-        /// <summary>Atış başına puf sayısının alt/üst sınırı (uzun atış bütçeyi yemesin).</summary>
         private const int SmokePuffsMin = 2;
         private const int SmokePuffsMax = 14;
 
-        /// <summary>
-        /// Sistemin parçacık tavanı. Kaba hesap en kötü hâl üzerinden: ~53 tracer/sn ×
-        /// <see cref="SmokeLifetimeMaxSeconds"/> × 14 puf ≈ 371 eşzamanlı. ⚠️ Tavana vurulduğunda parçacık sistemi <b>YENİ</b>
-        /// emisyonu düşürür (çizgi havuzunun "en eskiyi kes" davranışının tersi) — duman kozmetik
-        /// olduğu için bu kabul edilir, yoksa tavan aşımı eski dumanları kırpardı.
-        /// </summary>
+        /// <summary>Particle cap. ⚠️ At the cap the system drops NEW emission (opposite of the line
+        /// pool's "cut oldest") — accepted because smoke is cosmetic.</summary>
         private const int SmokeMaxParticles = 384;
 
-        /// <summary>
-        /// Duman ömrü = tracer ömrü × bu katsayı, sonra aşağıdaki banda kırpılır.
-        /// <para>⚠️ Katsayı <b>küçük tutulur</b>: duman, sönen çizginin ARDINDA kalan bir tortudur,
-        /// ayrı bir bulut değil. Çizgiden kat kat uzun yaşarsa (ilk denemede 6×) iz çoktan
-        /// gitmişken havada asılı duran gri lekeler kalır — atışla bağı kopar ve "sis" gibi durur.
-        /// Birebir de yapılmaz: çizgiyle tam aynı anda ölen duman, dağıldığını gösteremeden
-        /// kaybolur.</para>
-        /// <para>Kırpma bandı, playtest'te <c>tracerLifetime</c> uçlara çekilse bile dumanı
-        /// kullanılabilir tutar.</para>
-        /// </summary>
+        /// <summary>Smoke lifetime = tracer lifetime × this, clamped to the band below. ⚠️ Keep it
+        /// SMALL: smoke is residue BEHIND the fading line; much longer leaves unexplained grey
+        /// blobs, exactly equal kills the puff before it can be seen dispersing.</summary>
         private const float SmokeLifetimeScale = 2.5f;
         private const float SmokeLifetimeMinSeconds = 0.15f;
         private const float SmokeLifetimeMaxSeconds = 0.5f;
 
-        /// <summary>Puf boyutu = tracer kalınlığı × (namluda Near, isabette Far) katsayısı.</summary>
-        // Yol boyunca BÜYÜR: duman dağıldıkça genişler, bu da "namludan isabete doğru sönümlenme"
-        // okumasının yarısıdır (diğer yarısı aşağıdaki alfa rampası).
+        /// <summary>Puff size = tracer width × (Near at muzzle, Far at impact); grows along path.</summary>
         private const float SmokeSizeNearScale = 3f;
         private const float SmokeSizeFarScale = 8f;
 
-        /// <summary>Puf alfası: namluda yoğun, isabet noktasına doğru sönümlenir.</summary>
         private const float SmokeAlphaNear = 0.4f;
         private const float SmokeAlphaFar = 0.04f;
 
-        /// <summary>
-        /// İsabet ucundaki puf ömrünün namludakine oranı: uzak uç önce ölür, yani iz gözle
-        /// isabetten namluya doğru "yenir". Sönümlenme yönünü tek başına alfa taşımaz.
-        /// </summary>
+        /// <summary>Far-end lifetime vs muzzle end: the far end dies first, so the trail is eaten
+        /// back from impact to muzzle. Alpha alone does not carry that direction.</summary>
         private const float SmokeFarLifetimeScale = 0.55f;
 
-        /// <summary>Yukarı doğru hafif sürüklenme (m/sn) — duman düşmez, yavaşça yükselir.</summary>
+        /// <summary>Slight upward drift (m/s) — smoke rises slowly, never falls.</summary>
         private const float SmokeDriftMetersPerSecond = 0.12f;
 
-        /// <summary>Puf'un ideal yolundan sapma miktarı, kendi boyutunun katı olarak.</summary>
         private const float SmokeJitterOfSize = 0.35f;
 
-        /// <summary>Dumanın tracer renginden aldığı ton payı (kalanı nötr gri).</summary>
-        // Duman parlayan bir iz değil: rengin tamamı alınsa sarı tracer'da "sarı bulut" olurdu.
+        /// <summary>Tracer color bleed into the smoke tint; full tint would give a coloured cloud.</summary>
         private const float SmokeTintFromTracer = 0.25f;
 
-        /// <summary>Duman dokusunun kenar uzunluğu (px) — yumuşak radyal düşüş için yeterli.</summary>
+        /// <summary>Smoke texture edge length (px) — enough for a soft radial falloff.</summary>
         private const int SmokeTextureSize = 32;
 
-        // ------------------------------------------------------------------ sönme (çizgi)
+        // ------------------------------------------------------------------ line fade
 
-        /// <summary>
-        /// Ömrün ilk bu kadarlık kısmında çizgi TAM parlaklıkta durur, sönme ondan sonra başlar.
-        /// <para>⚠️ Sıfır YAPILMAZ: mermi izi önce <b>okunabilir bir çizgi</b> olmalı, sonra
-        /// sönmeli. İlk kareden itibaren sönen bir iz, kısa ömürde (0.1 sn ≈ 7 kare) hiç tam
-        /// parlaklık göstermez ve "soluk bir hayalet" gibi durur.</para>
-        /// </summary>
+        /// <summary>Fraction of the lifetime held at FULL brightness before the fade starts.
+        /// ⚠️ Never zero: at 0.1 s (≈7 frames) a tracer fading from frame one reads as a pale
+        /// ghost, not a line.</summary>
         private const float FadeHoldFraction = 0.25f;
 
-        /// <summary>Sönerken çizginin inceldiği oran (ömrün sonunda kalınlığın kaçta kaçı).</summary>
-        // Yalnız alfa düşseydi iz "silikleşir" ama aynı kalınlıkta durur; incelme onu dağılıyor
-        // gösterir. 1f yazmak inceltmeyi tümden kapatır.
+        /// <summary>Width left at the end of the fade (1f disables thinning). Alpha alone leaves
+        /// the trail equally thick; thinning reads as dispersing.</summary>
         private const float FadeEndWidthScale = 0.55f;
 
-        /// <summary>Havuz düğümü; LineRenderer üretim anında önbelleklenir.</summary>
         private sealed class TracerNode
         {
             public LineRenderer Line;
             public bool Active;
 
-            /// <summary>Sönme eğrisinin ekseni: doğuş anı + toplam ömür (<c>Time.unscaledTime</c>).</summary>
-            // ⚠️ Ayrı bir ExpireAt alanı TUTULMAZ — StartAt+Duration'dan türer ve aynı bilginin
-            // ikinci kopyası, ömür ortada değişirse ikisinin sapmasına açık olurdu.
+            /// <summary>Fade axis: birth time + lifetime (<c>Time.unscaledTime</c>). ⚠️ No ExpireAt
+            /// field — a second copy of the same info would drift.</summary>
             public float StartAt;
             public float Duration;
 
-            /// <summary>Sönmenin başlangıç değerleri (her karede bunlardan yeniden hesaplanır).</summary>
-            // Çizgiden GERİ OKUNMAZ: okunan değer zaten sönmüş olan olurdu ve iz kare kare
-            // katlanarak kaybolurdu (klasik "fade'i kendi çıktısına uygulama" hatası).
+            /// <summary>Fade base values, recomputed from every frame. ⚠️ NEVER read back from the
+            /// line: that value is already faded and the trail would fade compounding.</summary>
             public Color BaseColor;
             public float BaseWidth;
         }
@@ -218,12 +137,9 @@ namespace VortexArena.Core.Combat
 
         private static ShotTracer _shared;
 
-        /// <summary>
-        /// Tüm mermi izlerinin kullandığı TEK havuz; ilk istendiğinde kendini kurar ve
-        /// <c>DontDestroyOnLoad</c> olur (harita değişiminde havuz + materyal yeniden kurulmasın).
-        /// Sahneye konmaz, kimse referans bağlamaz — çağıran yalnız <c>ShotTracer.Shared.Play(…)</c>
-        /// der.
-        /// </summary>
+        /// <summary>The ONE pool every tracer uses; self-bootstraps and goes
+        /// <c>DontDestroyOnLoad</c> so a map change does not rebuild pool + material. Never placed
+        /// in a scene, never referenced.</summary>
         public static ShotTracer Shared
         {
             get
@@ -239,36 +155,19 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>
-        /// Bir tetik çekişinin TÜM izlerini çizer: <paramref name="count"/> kadar çizgi (saçmalı
-        /// silahta yelpaze, normal silahta tek çizgi) + yaylımın tamamına yayılan <b>tek</b> duman
-        /// bütçesi. Dönüş: gerçekten çizilen çizgi sayısı.
-        /// <para>
-        /// <paramref name="lifetime"/> ve <paramref name="width"/> eşyanın tanımından gelir;
-        /// geçersiz (≤0) değerler güvenli tabana çekilir ve duman da o düzeltilmiş değerlerden
-        /// türetilir. Mesafesi çok kısa olan çizgi atlanır (yaylımın geri kalanı etkilenmez).
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Tek mermilik ayrı bir aşırı yükleme YOKTUR</b> ve eklenmez: normal silah da bu
-        /// yoldan, tek elemanlı bir dizi ile geçer. İki imza olsaydı sönme/duman/havuz davranışının
-        /// tek mermide ve yaylımda sapması an meselesiydi.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Duman saçma başına ÇOĞALTILMAZ.</b> Tek mermilik bütçe her saçmaya ayrı ayrı
-        /// verilseydi 9 saçmalı bir yaylım tek karede ~9 kat puf yayardı: parçacık tavanı
-        /// (<see cref="SmokeMaxParticles"/>) tek atışta dolar, sonraki atışların dumanı sessizce
-        /// düşer ve oyuncunun namlusunun önünde Quest'in fill-rate'ini yiyen opak bir duvar
-        /// belirir. Bütçe bu yüzden yaylımın TAMAMINA aittir ve puf'lar saçmalar arasında sırayla
-        /// dağıtılır — sonuç aynı bütçeyle koni biçimli, tek çizgininkinden daha geniş bir izdir.
-        /// </para>
-        /// <para>
-        /// ⚠️ Çizgiler <b>ortak bir orijinden</b> çıkar (namlu) ve uçları çağıranın verdiği
-        /// noktalardır: saçmaların yönünü/mesafesini bilen taraf çağırandır (yerelde gerçek
-        /// ışınlar, uzakta yeniden üretilmiş yelpaze), burası yalnız çizer.
-        /// </para>
-        /// </summary>
-        /// <param name="toPoints">Saçma uçları (dünya uzayı); ilk <paramref name="count"/> tanesi okunur.</param>
-        /// <param name="count">Çizilecek saçma sayısı; <see cref="MaxScatterLines"/>'a kırpılır.</param>
+        /// <summary>Draws ALL trails of one trigger pull: <paramref name="count"/> lines plus ONE
+        /// smoke budget spread over the volley. Returns the lines actually drawn. Invalid (≤0)
+        /// lifetime or width falls back to a safe default; degenerately short lines are skipped.
+        /// <para>⚠️ NO single-round overload: normal guns pass a one-element array. Two signatures
+        /// would let fade/smoke/pool behaviour drift.</para>
+        /// <para>⚠️ Smoke is NOT multiplied per pellet: a per-pellet budget fills
+        /// <see cref="SmokeMaxParticles"/> on one shot (later shots silently lose smoke) and paints
+        /// an opaque fill-rate wall at the muzzle. Puffs are dealt round-robin across
+        /// pellets.</para>
+        /// <para>⚠️ All lines share ONE origin (the muzzle); endpoints come from the caller, the
+        /// only side that knows pellet direction/range. This class only draws.</para></summary>
+        /// <param name="toPoints">Pellet endpoints (world space); first <paramref name="count"/> read.</param>
+        /// <param name="count">Pellets to draw; clamped to <see cref="MaxScatterLines"/>.</param>
         public int Play(Vector3 from, Vector3[] toPoints, int count, Color color, float width, float lifetime)
         {
             if (toPoints == null)
@@ -306,8 +205,7 @@ namespace VortexArena.Core.Combat
                 float sqrDistance = (to - from).sqrMagnitude;
                 if (sqrDistance < MinTracerMeters * MinTracerMeters)
                 {
-                    // Tek saçma dejenere olabilir (namlu dibindeki hedef, engel yutması) — yaylımın
-                    // geri kalanı bundan etkilenmez.
+                    // A degenerate pellet does not affect the rest of the volley.
                     continue;
                 }
 
@@ -325,10 +223,9 @@ namespace VortexArena.Core.Combat
                 node.Line.SetPosition(1, to);
                 node.Line.enabled = true;
 
-                // Time.unscaledTime: maç duraklatılıp timeScale düşse bile tracer takılı kalmasın.
-                // ⚠️ Yaylımın tamamı AYNI damgayı taşır (döngü içinde yeniden okunmaz): bir tetik
-                // çekişinin izleri birlikte doğup birlikte sönmeli, yoksa kare içi sapma yelpazeyi
-                // sönerken parçalar.
+                // Time.unscaledTime so a paused match (timeScale 0) does not freeze tracers.
+                // ⚠️ The whole volley shares ONE stamp (not re-read inside the loop): trails of a
+                // single trigger pull must be born and fade together.
                 node.StartAt = now;
                 node.Duration = life;
                 node.BaseColor = color;
@@ -347,21 +244,11 @@ namespace VortexArena.Core.Combat
             return drawn;
         }
 
-        /// <summary>
-        /// Canlı çizgileri <b>söndürür</b>: alfa düşer, kalınlık incelir; ömrü dolan kapatılır
-        /// (havuz düğümü yok EDİLMEZ, yalnız gizlenir).
-        /// <para>
-        /// ⚠️ İz eskiden ömrünün sonunda <c>enabled = false</c> ile <b>bir anda</b> kayboluyordu —
-        /// göz bunu "sönme" değil "pat diye kesilme" olarak okuyor. Sönme bu yüzden ömrün
-        /// KENDİSİNE yayıldı; ayrı bir sönme süresi alanı açılmadı, çünkü o zaman
-        /// <c>tracerLifetime</c> "iz ne kadar durur" olmaktan çıkıp ikinci bir sayıyla
-        /// pazarlık eden bir değere dönerdi.
-        /// </para>
-        /// <para>
-        /// Maliyet: kare başına yalnız <b>canlı</b> düğümler dokunulur (tipik 3-4 tane) ve
-        /// dokunulan şey vertex rengi/kalınlığı — materyal örneği açılmaz, SRP batch'i bölünmez.
-        /// </para>
-        /// </summary>
+        /// <summary>Fades live lines (alpha down, width thinner) and hides expired ones; pool nodes
+        /// are disabled, never destroyed. The fade spans the lifetime ITSELF — no separate
+        /// fade-duration field, or <c>tracerLifetime</c> would stop meaning "how long the trail
+        /// lasts". Only live nodes are touched, and only vertex color/width (no material instance,
+        /// no SRP break).</summary>
         private void Update()
         {
             float now = Time.unscaledTime;
@@ -398,13 +285,9 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>
-        /// Sönme eğrisi: <paramref name="t"/> 0 (doğuş) → 1 (ömrün sonu) için 1 → 0 çarpanı.
-        /// <para>Doğrusal DEĞİL: kısa bir tam parlaklık payından sonra <c>1 − u²</c> ile hızlanarak
-        /// söner. Doğrusal sönme "kısılan bir lamba" gibi durur; hızlanan sönme mermi izinin
-        /// kendi parlaklık düşüşüne benzer ve son kareler zaten görünmez olduğu için izin
-        /// "bitişi" gözle temiz okunur.</para>
-        /// </summary>
+        /// <summary>Fade curve: 1 → 0 for <paramref name="t"/> 0 (birth) → 1 (end of life). Not
+        /// linear — after a short hold it accelerates with <c>1 − u²</c>, which reads as a tracer
+        /// burning out rather than a dimming lamp.</summary>
         private static float FadeAlphaAt(float t)
         {
             if (t <= FadeHoldFraction)
@@ -416,29 +299,18 @@ namespace VortexArena.Core.Combat
             return 1f - u * u;
         }
 
-        // ---------------------------------------------------------------------- duman
+        // ---------------------------------------------------------------------- smoke
 
-        /// <summary>
-        /// Mermi yolu boyunca duman puf'ları yayar: namluda yoğun/küçük/uzun ömürlü, isabet
-        /// noktasına doğru soluk/geniş/kısa ömürlü — yani iz o yönde sönümlenerek kaybolur.
-        /// <para>
-        /// ⚠️ Puf sayısı MESAFEDEN türetilir, sabit değildir: sabit sayı kısa atışta puf'ları
-        /// üst üste yığıp opak bir leke, uzun atışta ise kopuk noktalar üretirdi.
-        /// </para>
-        /// <para>
-        /// ⚠️ Bütçe <b>bir tetik çekişine</b> aittir, saçmaya değil (gerekçe
-        /// <see cref="Play"/>'de): puf'lar namludan uca doğru ilerlerken saçmalar arasında
-        /// SIRAYLA dağıtılır, yani aynı bütçe yelpazenin tamamını tarar. Tek saçmada (normal
-        /// silah) sıra tek yola düşer ve davranış eskisiyle aynıdır.
-        /// </para>
-        /// <para>
-        /// Zamanlama için ayrı bir iş yoktur: parçacıklar kendi <c>startLifetime</c>'larıyla
-        /// ölür, <c>Update</c> onlara dokunmaz. Sistem <c>useUnscaledTime</c> ile koşar —
-        /// çizginin ömrü de <c>Time.unscaledTime</c> ekseninde ölçülüyor, ikisi ayrı saatte
-        /// koşsa maç duraklatıldığında duman donar, çizgi kaybolurdu.
-        /// </para>
-        /// </summary>
-        /// <param name="distance">Yaylımdaki EN UZUN yolun uzunluğu (puf sayısının ölçüsü).</param>
+        /// <summary>Emits smoke along the bullet path: dense/small/long-lived at the muzzle,
+        /// faint/wide/short-lived toward the impact, so the trail dissipates in that direction.
+        /// <para>⚠️ Puff count DERIVES from distance: a fixed count stacks into an opaque blob on
+        /// short shots and leaves disconnected dots on long ones.</para>
+        /// <para>⚠️ The budget belongs to one trigger pull, not one pellet (see
+        /// <see cref="Play"/>); puffs are dealt round-robin across pellets so one budget sweeps the
+        /// whole fan.</para>
+        /// <para>No timing work here: particles die by <c>startLifetime</c> on
+        /// <c>useUnscaledTime</c>, the same clock the line fade uses.</para></summary>
+        /// <param name="distance">LONGEST path in the volley (drives the puff count).</param>
         private void EmitSmoke(
             Vector3 from, Vector3[] toPoints, int count, float distance, Color color, float width, float lifetime)
         {
@@ -454,25 +326,23 @@ namespace VortexArena.Core.Combat
             float baseLife = Mathf.Clamp(
                 lifetime * SmokeLifetimeScale, SmokeLifetimeMinSeconds, SmokeLifetimeMaxSeconds);
 
-            // Duman parlayan bir iz değil, dağılan bir bulut: rengin çoğu nötr gri, tracer tonu
-            // yalnız tanınacak kadar karışır (alfa aşağıda puf başına verilir).
+            // Mostly neutral grey, just enough tracer tint to be recognisable.
             Color tint = Color.Lerp(new Color(0.62f, 0.62f, 0.64f), color, SmokeTintFromTracer);
 
-            // Struct: döngü boyunca yeniden kullanılır, hiçbir çağrı ayırma yapmaz.
+            // Struct reused across the loop: zero allocations.
             var emit = new ParticleSystem.EmitParams();
 
             for (int i = 0; i < puffs; i++)
             {
-                // t=0 namlu, t=1 isabet. Tek puf ihtimali yok (SmokePuffsMin=2) ama bölme yine de
-                // korunuyor — sabit sonradan düşürülürse burası sessizce NaN üretirdi.
+                // t=0 muzzle, t=1 impact. Guard stays: lowering SmokePuffsMin would give NaN.
                 float t = puffs > 1 ? i / (float)(puffs - 1) : 0f;
 
                 float size = width * Mathf.Lerp(SmokeSizeNearScale, SmokeSizeFarScale, t);
 
                 tint.a = Mathf.Lerp(SmokeAlphaNear, SmokeAlphaFar, t);
 
-                // Saçmalar arasında sırayla: puf namludan uca ilerlerken bir sonraki saçmanın
-                // yoluna geçer, böylece tek bütçe koninin tamamını tarar.
+                // Round-robin across pellets: each puff moves to the next pellet's path, so one
+                // budget sweeps the whole cone.
                 Vector3 path = Vector3.Lerp(from, toPoints[i % count], t);
 
                 emit.position = path + Random.insideUnitSphere * (size * SmokeJitterOfSize);
@@ -486,11 +356,9 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>
-        /// Tüm atışların PAYLAŞTIĞI duman sistemi (tek sistem = tek draw call). Emisyon modülü
-        /// KAPALIDIR: parçacıklar yalnız <see cref="EmitSmoke"/>'un manuel <c>Emit</c>'iyle doğar.
-        /// Kurulum bir kez yapılır; başarısız olursa (shader yok) bir daha denenmez.
-        /// </summary>
+        /// <summary>The smoke system SHARED by all shots (one system = one draw call). The emission
+        /// module is DISABLED: particles are born only from <see cref="EmitSmoke"/>'s manual
+        /// <c>Emit</c>. Set up once; if it fails (no shader) it is never retried.</summary>
         private ParticleSystem EnsureSmoke()
         {
             if (_smoke != null)
@@ -519,29 +387,24 @@ namespace VortexArena.Core.Combat
             main.loop = true;
             main.playOnAwake = false;
             main.maxParticles = SmokeMaxParticles;
-            // Puf'lar dünyada duran bir izdir: kök (bu DDOL objesi) hiç kıpırdamasa da uzay
-            // açıkça World seçilir — Local olsaydı bir gün kök taşındığında tüm izler onunla giderdi.
+            // World is explicit: Local would drag every trail along if the root ever moved.
             main.simulationSpace = ParticleSystemSimulationSpace.World;
-            // Çizginin ömrüyle AYNI saat (Play'deki Time.unscaledTime): maç duraklatılıp timeScale
-            // düşse bile duman çizgiyle birlikte sönmeye devam eder.
+            // Same clock as the line fade (Time.unscaledTime), so a paused match keeps both fading.
             main.useUnscaledTime = true;
             main.gravityModifier = 0f;
-            // Ölçekleme kökten miras alınmaz: puf boyutu metre cinsinden hesaplanıyor.
+            // Puff size is computed in metres, so no scale is inherited from the root.
             main.scalingMode = ParticleSystemScalingMode.Hierarchy;
-            // ⚠️ AlwaysSimulate: kökün kendisi dünya orijininde duruyor, puf'lar ise arenanın her
-            // yerinde. Otomatik culling'de sistem "görüş alanı dışında" sayılıp simülasyonu
-            // duraklatabilir → duman ekranın ortasında donar. Tavan zaten 384 parçacık.
+            // ⚠️ AlwaysSimulate: the root sits at the world origin while puffs are all over the
+            // arena. Automatic culling would call the system off-screen and freeze smoke mid-air.
             main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
 
-            // Emisyon KAPALI: tek kaynak manuel Emit.
             ParticleSystem.EmissionModule emission = ps.emission;
             emission.enabled = false;
 
             ParticleSystem.ShapeModule shape = ps.shape;
             shape.enabled = false;
 
-            // Sönümlenerek kaybolma: alfa rampası. startColor ile ÇARPILIR, yani puf başına
-            // verilen (namluda yoğun → isabette soluk) alfa korunur.
+            // Dissipation ramp. MULTIPLIES startColor, so the per-puff alpha survives.
             ParticleSystem.ColorOverLifetimeModule colorOverLifetime = ps.colorOverLifetime;
             colorOverLifetime.enabled = true;
             var gradient = new Gradient();
@@ -555,7 +418,6 @@ namespace VortexArena.Core.Combat
                 });
             colorOverLifetime.color = new ParticleSystem.MinMaxGradient(gradient);
 
-            // Dağılma: puf söndükçe genişler.
             ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = ps.sizeOverLifetime;
             sizeOverLifetime.enabled = true;
             sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(
@@ -565,25 +427,22 @@ namespace VortexArena.Core.Combat
             renderer.sharedMaterial = material;
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
             renderer.alignment = ParticleSystemRenderSpace.View;
-            // Duman bir ışık kaynağı değil, bir iz: gölge/ışık probu kapalı (Quest bütçesi) —
-            // çizgideki gerekçenin aynısı.
+            // Smoke is a trail, not a light source: shadows/probes off (Quest budget).
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
             renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
             renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
 
-            // playOnAwake kapalı olduğu için simülasyon elle başlatılır; emisyon kapalı olduğundan
-            // sistem hiçbir şey üretmeden boşta koşar ve Emit'i beklemeye hazır durur.
+            // playOnAwake off: start by hand, then idle empty waiting for Emit.
             ps.Play();
 
             _smoke = ps;
             return _smoke;
         }
 
-        /// <summary>
-        /// Duman materyali: çizgininkinden AYRI bir örnek olmak zorunda — dokusu var ve o doku
-        /// paylaşılan materyale yazılsa <see cref="LineRenderer"/> de o dokuyla çizilirdi.
-        /// </summary>
+        /// <summary>Smoke material: must be a SEPARATE instance from the line's — it carries a
+        /// texture, and writing that into the shared material would texture the
+        /// <see cref="LineRenderer"/> too.</summary>
         private Material EnsureSmokeMaterial()
         {
             if (_smokeMaterial != null)
@@ -615,14 +474,10 @@ namespace VortexArena.Core.Combat
             return null;
         }
 
-        /// <summary>
-        /// Yumuşak radyal düşüşlü duman dokusu — çalışma anında üretilir.
-        /// <para>⚠️ Projede bir duman dokusu var (<c>_Shared/FX/M_MuzzleSmoke.mat</c>) ama o
-        /// <c>Resources/</c> altında DEĞİL, yani çalışma anında yüklenemez; serialize alan açmak
-        /// ise <see cref="ShotTracer"/>'ı sahneye konması gereken bir bileşene çevirirdi (bugün
-        /// kendini önyükleyen bir tekil ve öyle kalmalı — her yeni arenaya elle kurulum adımı
-        /// eklemeyi reddediyoruz). 32×32 RGBA ≈ 4 KB, bir kez üretilir.</para>
-        /// </summary>
+        /// <summary>Soft radial-falloff smoke texture, generated at runtime (32×32 RGBA ≈ 4 KB,
+        /// built once). ⚠️ The project's smoke texture is not under <c>Resources/</c>, and a
+        /// serialized field would turn <see cref="ShotTracer"/> into a component every arena must
+        /// place.</summary>
         private Texture2D EnsureSmokeTexture()
         {
             if (_smokeTexture != null)
@@ -647,7 +502,7 @@ namespace VortexArena.Core.Combat
                     float dx = (x + 0.5f - half) / half;
                     float dy = (y + 0.5f - half) / half;
 
-                    // Karesel düşüş: kenarda sert bir daire değil, yumuşak bir puf.
+                    // Squared falloff: a soft puff, not a hard-edged disc.
                     float falloff = Mathf.Clamp01(1f - Mathf.Sqrt(dx * dx + dy * dy));
                     byte alpha = (byte)(falloff * falloff * 255f);
 
@@ -656,16 +511,15 @@ namespace VortexArena.Core.Combat
             }
 
             texture.SetPixels32(pixels);
-            // makeNoLongerReadable: CPU kopyası atılır (doku bir daha okunmuyor).
+            // makeNoLongerReadable: drop the CPU copy (never read again).
             texture.Apply(false, true);
 
             _smokeTexture = texture;
             return _smokeTexture;
         }
 
-        // ---------------------------------------------------------------------- havuz
+        // ---------------------------------------------------------------------- pool
 
-        /// <summary>Round-robin: sıradaki (en eski) düğümü döndürür; henüz yoksa tembel üretir.</summary>
         private TracerNode TakeNode(Material material)
         {
             TracerNode node = _pool[_nextNode];
@@ -692,7 +546,7 @@ namespace VortexArena.Core.Combat
             line.numCornerVertices = 0;
             line.textureMode = LineTextureMode.Stretch;
             line.alignment = LineAlignment.View;
-            // Tracer bir ışık kaynağı değil, bir iz: gölge/ışık probu kapalı (Quest bütçesi).
+            // A tracer is a trail, not a light source: shadows/probes off (Quest budget).
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             line.receiveShadows = false;
             line.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
@@ -702,10 +556,8 @@ namespace VortexArena.Core.Combat
             return new TracerNode { Line = line };
         }
 
-        /// <summary>
-        /// Tüm tracer'ların PAYLAŞTIĞI materyal (renk LineRenderer'ın vertex rengiyle verilir —
-        /// eşya başına materyal örneği açmak SRP batch'ini bölerdi).
-        /// </summary>
+        /// <summary>The material SHARED by all tracers; color comes from LineRenderer vertex color,
+        /// since a per-item material instance would break the SRP batch.</summary>
         private Material EnsureMaterial()
         {
             if (_material != null)
@@ -738,8 +590,8 @@ namespace VortexArena.Core.Combat
         {
             if (_shared == this)
             {
-                // Statik alan yıkılmış bileşene bağlı kalmaz: bir sonraki Play isteği havuzu
-                // yeniden kurar (Play modundan çıkışta domain reload kapalıysa bu şart).
+                // Never leave the static field on a destroyed component: the next Play rebuilds
+                // the pool (required when domain reload is disabled).
                 _shared = null;
             }
 
@@ -749,8 +601,8 @@ namespace VortexArena.Core.Combat
                 _material = null;
             }
 
-            // Duman materyali ve dokusu da çalışma anında üretildi: ikisi de elle yok edilir,
-            // yoksa domain reload kapalıyken Play'den her çıkışta sızarlar.
+            // Smoke material and texture are runtime-generated too: destroy both by hand or they
+            // leak on every Play exit when domain reload is disabled.
             if (_smokeMaterial != null)
             {
                 Destroy(_smokeMaterial);

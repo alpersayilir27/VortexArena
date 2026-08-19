@@ -792,7 +792,7 @@ Eşleme tablosu Unity tarafındadır (`ItemDefinition.netItemId`, katalog `NetIt
 
 ⚠️ "Aynı id iki slotta" tek başına **çift elle tutmak demek DEĞİLDİR** (çift tabanca meşru bir durum) — ayrımı yalnız `FLAG_GRIP_LINKED` taşır.
 
-**Duruş telde gitmez.** Eşyanın ele göre duruşu her istemcinin **kendi APK'sındaki** eşya verisinden gelir: el başına yazılmış kavrama kaydından (`ItemGripPose` — **kumanda anchor'ının** eşyaya göre yerel KONUMU; ⚠️ **kayıtta DÖNÜŞ YOKTUR**, eşyayı hiçbir elin dönüşü çevirmez). Kayıt telde giden el pozuyla **aynı uzaydadır**, yani `ItemGripSolver` onu doğrudan okur (`ItemDefinition.PrimaryGripPosition`); ön kabza kaydı (`secondaryGrip`) hem ikinci elin GÖRSELİNİN yapışacağı yeri söyler hem de iki elli nişanın eksenini tanımlar. **İki uç aynı çözücüyü koşar**, dolayısıyla iki elle tutulan eşyada ikinci elin telden gelen **KONUMU** da çözüme girer (`FLAG_GRIP_LINKED` + o elin pozu; uzak uçta nişan ağırlığı sabit 1'dir, yumuşatma zaten telin interpolasyonundan gelir) — eşya ikinci ele doğru KAYMAZ, yalnız ekseni oraya döner ve o elin DÖNÜŞÜ hiçbir yoldan hesaba girmez. ⚠️ **Kavrama kaydı tel formatını DEĞİŞTİRMEZ:** iki uç aynı `WD_*`'ı okur ve arada çevrilecek bir şey yoktur — rig'i olmayan izleyici (admin) de eşyayı oyuncuyla birebir aynı çizer. Ön koşulu **kanonik kavramadır**: her eşyanın eline denk gelen noktası sabittir (serbest kavrama = keyfi ofset = uzak tarafta yanlış duruş). Aynı sebeple namlu yönü de telde gitmez — `muzzle` çocuğu prefabdadır.
+**Duruş telde gitmez.** Eşyanın ele göre duruşu her istemcinin **kendi APK'sındaki** eşya verisinden gelir: el başına yazılmış kavrama kaydından (`ItemGripPose` — **kumanda anchor'ının** eşyaya göre yerel KONUMU; ⚠️ **kaydın bu yarısında DÖNÜŞ YOKTUR**, eşyayı hiçbir elin dönüşü çevirmez. Kaydın el yarısı — el modelinin kumanda üstündeki yerleşimi ve parmak rigi — yalnız **yerel görseldir**, eşyanın duruşuna girmez). Kayıt telde giden el pozuyla **aynı uzaydadır**, yani `ItemGripSolver` onu doğrudan okur (`ItemDefinition.PrimaryGripPosition`); ön kabza kaydı (`secondaryGrip`) hem ikinci elin GÖRSELİNİN yapışacağı yeri söyler hem de iki elli nişanın eksenini tanımlar. **İki uç aynı çözücüyü koşar**, dolayısıyla iki elle tutulan eşyada ikinci elin telden gelen **KONUMU** da çözüme girer (`FLAG_GRIP_LINKED` + o elin pozu; uzak uçta nişan ağırlığı sabit 1'dir, yumuşatma zaten telin interpolasyonundan gelir) — eşya ikinci ele doğru KAYMAZ, yalnız ekseni oraya döner ve o elin DÖNÜŞÜ hiçbir yoldan hesaba girmez. ⚠️ **Kavrama kaydı tel formatını DEĞİŞTİRMEZ:** iki uç aynı `WD_*`'ı okur ve arada çevrilecek bir şey yoktur — rig'i olmayan izleyici (admin) de eşyayı oyuncuyla birebir aynı çizer. Ön koşulu **kanonik kavramadır**: her eşyanın eline denk gelen noktası sabittir (serbest kavrama = keyfi ofset = uzak tarafta yanlış duruş). Aynı sebeple namlu yönü de telde gitmez — `muzzle` çocuğu prefabdadır.
 
 ⚠️ **Uzak uçta eşyanın KONUMU çizilen bilekten okunur, telden gelen el pozundan değil** (dönüş yine telden gelir). Sebep iki poz kanalının **iki ayrı sensörden** doğmasıdır: `handL`/`handR` kumandanın pozudur, çizilen el ise iskelet blob'undaki **body tracking** bileğidir. İkisinin çakışması ancak modelin kol uzunluğu oyuncununkine eşitse mümkündür — ve bu proje gövde oranlarını **bilerek kalibre etmez** (§10.8: `Calibrate()` blob'un eklem sıkıştırmasını bozardı). Yani model prefab oranlarını taşır: kol uzandıkça (nişan alan oyuncu) modelin eli kumandaya yetişemez ve fark açılır, kol büküldükçe kapanır. Eşya ham el pozunda bırakılırsa aynı oyuncu bazı duruşlarda silahı elinde, bazılarında havada tutuyor görünür. Konumu çizilen bileğe bağlamak bu farkı **tanım gereği** sıfırlar ve takım gövdesinin ayrı kol uzunluğunu da kendiliğinden kapsar. ⚠️ **Dönüş çizilen bileğe TAŞINMAZ:** kavrama kumanda anchor'ı çerçevesinde çözülüyor, humanoid bileğin bind eksenine geçmek tüm silahların duruşunu bir anda geçersiz kılardı — ayrışan şey erişim, yönelim değil.
 
@@ -875,13 +875,13 @@ APK'sındadır (§6.6 — hangi eşya, hangi el, kavrama bağlı mı). İzlemede
 tutan bir elde gerçek parmak duruşunu zaten göstermiyor; onu telde taşımak, alıcının **daha iyi
 bildiği** bir şeyi bant genişliğiyle satın almaktı.
 
-Alıcı parmakları **kendi** sentezler: eşya tutan elde o slotun **parmak preset'i**
-(`HandGripPresets.Profile(definition.GripPreset(slot, rightHand))` — kavrama kaydının taşıdığı
-`Idle`/`Firing`/`Grip` seçimi), boş elde idle duruşu (`RemoteAvatar.idleHandPose`, boşsa
-`HandPoseProfile.Idle`). Böylece aynı el her ekranda aynı çizilir ve sol/sağ farkı kalmaz — duruşun
-kaynağı ölçüm değil **tanımdır**. ⚠️ Eşya başına **serbest** parmak verisi YOKTUR ve eklenmez:
-duruş bir preset seçimidir, parmak başına ayar telde karşılığı olmadığı gibi her silaha ikinci bir
-elle-ayar yüzeyi doğururdu.
+Alıcı parmakları **kendi** sentezler: eşya tutan elde o slot için **silaha özel riglenmiş duruş**
+(`ItemDefinition.GripFingerCurl(slot, rightHand)` — kavrama kaydındaki `fingerJoints`'ten
+ölçülür), boş elde idle duruşu (`RemoteAvatar.idleHandPose`, boşsa `HandPoseProfile.Idle`).
+Böylece aynı el her ekranda aynı çizilir ve sol/sağ farkı kalmaz — duruşun kaynağı ölçüm değil
+**tanımdır**. ⚠️ Uzak avatarın eli **humanoid** olduğu için ham eklem dönüşü DEĞİL, o duruştan
+ölçülen **beş kapanma oranı** uygulanır (`HandPoseLibrary.MeasureCurl`); ham rotasyonu humanoid
+kemiğe yazmak projenin bir kez öğrendiği tuzaktır. Oran **asset'te saklanmaz**, kayıttan türetilir.
 
 ⚠️ **Gönderen ile alıcının eklem listesi AYNI olmak ZORUNDADIR** (`NetworkCharacterRetargeter`'ın
 `_bodyIndicesToSend`/`_bodyIndicesToSync` alanları, iki prefabta birden). Listeler ayrışırsa blob

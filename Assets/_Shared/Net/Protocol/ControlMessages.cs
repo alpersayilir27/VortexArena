@@ -2,18 +2,18 @@ using System;
 
 namespace VortexArena.Protocol
 {
-    // Tüm WS kontrol DTO'ları (Docs/ArenaNet-Protokol.md §5) + UDP beacon DTO'su (§4).
-    // Kurallar: [Serializable], yalnız public alan, Dictionary/polimorfizm yok,
-    // alan adları protokol dokümanındaki camelCase ile birebir.
+    // All WS control DTOs (Docs/ArenaNet-Protokol.md §5) + the UDP beacon DTO (§4).
+    // Rules: [Serializable], public fields only, no Dictionary/polymorphism, field names match the
+    // protocol document's camelCase exactly.
 
-    /// Zarf: alıcı önce yalnız type'ı parse eder, sonra tam DTO'ya geçer.
+    /// Envelope: the receiver parses only `type` first, then the full DTO.
     [Serializable]
     public class MsgEnvelope
     {
         public string type;
     }
 
-    // ---- İstemci → Sunucu ----
+    // ---- Client → Server ----
 
     [Serializable]
     public class HelloMsg
@@ -35,13 +35,10 @@ namespace VortexArena.Protocol
         public string scene;
         public float battery;
 
-        /// <summary>Sol/sağ kumandanın durumu: <c>ArenaProtocol.CONTROLLER_*</c> (§5.1).
-        /// <c>0</c> = bildirilmedi (atanmamış <c>int</c> "sağlıklı" sayılmasın diye).
-        /// <para>⚠️ <b>Bu bir pil YÜZDESİ DEĞİL, durumdur ve yüzde olamaz</b> — kumanda şarjı
-        /// Quest'te OpenXR altında okunamıyor. <see cref="battery"/> <b>gözlüğün</b> pilidir.</para>
-        /// <para>⚠️ Bu iki alan telemetri sayılarının aksine roster yayını TETİKLER (kesikli durum),
-        /// bu yüzden <see cref="PlayerInfo"/>'da da taşınır — aşağıdaki "PlayerInfo'ya KONMAZ"
-        /// notu <see cref="fps"/> ve ağ telemetrisi içindir.</para></summary>
+        /// <summary>Left/right controller state (§5.1); <c>0</c> = not reported. ⚠️ A STATE, not a
+        /// battery percentage (unreadable on Quest under OpenXR); <see cref="battery"/> is the HEADSET's.
+        /// ⚠️ Unlike telemetry these DO trigger a roster broadcast, so they also live on
+        /// <see cref="PlayerInfo"/>.</summary>
         public int ctrlL;
 
         /// <inheritdoc cref="ctrlL"/>
@@ -49,43 +46,31 @@ namespace VortexArena.Protocol
 
         public float fps;
 
-        /// <summary>İstemcinin UYGULADIĞI son <see cref="LobbyStateMsg.version"/> (§5.1). Sunucu
-        /// geride kalmış istemciye — yalnız ona — tam bir lobby_state yollar; güncelse hiçbir şey
-        /// yapmaz. Yedek uzlaştırma ağıdır, birincil yol değil: kontrol kanalı TCP olduğu için
-        /// lobby_state kaybolmaz; bu alan istemcinin bir yayını uygulayamadığı pencereleri
-        /// (sahne geçişi, kopma anı) kapatır. 0 = hiç uygulanmadı → sunucu tam snapshot yollar.</summary>
+        /// <summary>Last <see cref="LobbyStateMsg.version"/> the client APPLIED (§5.1); 0 = never → full
+        /// snapshot. A backup net only: the control channel is TCP, so this covers windows where the
+        /// client could not apply a broadcast (scene change, drop).</summary>
         public int rosterVersion;
 
-        // ---- Ağ telemetrisi: İSTEMCİ ölçer, sunucu yalnız taşır ----
-        // Ölçüm istemcide çünkü ikisi de bedavaya oradan çıkıyor: RTT 0x06 echo'sundan (iki damga da
-        // istemcinin → saat senkronu gerekmez), downlink jitter/kaybı ise zaten gelen 20 Hz snapshot
-        // akışından (EK PAKET YOK). Raporlama da bedava: status hâlihazırda 5 sn'de bir gidiyor ve
-        // operatör göstergesi için bu fazlasıyla yeter.
-        //
-        // ⚠️ Bu üç alan PlayerInfo'ya (lobby_state roster'ına) KONMAZ. Sürekli değişen sayılar
-        // oldukları için PlayerRegistry.UpdateStatus'taki "görünen bir alan gerçekten değişti mi"
-        // kapısını her seferinde açarlar ve çözülmüş bir hatayı geri getirirler (her status bir tam
-        // roster yayını → saniyede onlarca roster JSON'u). Fps tam bu sebeple PlayerInfo'da
-        // taşınmıyor; izlenecek emsal odur. Adminlere ayrı, kaybı zararsız bir kanal gider: net_stats.
+        // ---- Net telemetry: the CLIENT measures (free there: RTT from the 0x06 echo, jitter/loss from
+        // the incoming snapshot stream), the server only carries.
+        // ⚠️ These three must NOT be added to PlayerInfo: they change constantly and would open
+        // PlayerRegistry.UpdateStatus's "did a visible field change" gate on every status → dozens of
+        // roster JSONs per second (fps is kept out for the same reason). Admins get net_stats.
 
-        /// <summary>Ölçülen gidiş-dönüş süresi (ms), <b>UDP state kanalı</b> üzerinden;
-        /// <b>-1 = bilinmiyor</b> (henüz yoklama dönmedi ya da istemci eski sürüm).
-        /// <para>0 değil -1: 0 ms gerçekten mümkün bir ölçüm gibi okunur, "bilinmiyor" ile
-        /// karışırdı.</para></summary>
+        /// <summary>Round-trip time (ms) over the UDP state channel; <b>-1 = unknown</b> (0 would read
+        /// as a real measurement).</summary>
         public int rttMs = -1;
 
-        /// <summary>Snapshot varış aralığının nominalden (50 ms) ortalama sapması (ms);
-        /// -1 = bilinmiyor.</summary>
+        /// <summary>Mean deviation of snapshot arrival spacing from nominal (ms); -1 = unknown.</summary>
         public float jitterMs = -1f;
 
-        /// <summary>Downlink snapshot kaybı yüzdesi (<c>serverTick</c> boşluğundan);
-        /// -1 = bilinmiyor.</summary>
+        /// <summary>Downlink snapshot loss percentage (from <c>serverTick</c> gaps); -1 = unknown.</summary>
         public float lossPct = -1f;
     }
 
-    /// Oyuncunun adı ve/veya forma numarası (§5.1). Boş string / 0 bırakılan alan MEVCUT değeri
-    /// korur (set_selection ile aynı konvansiyon) → "yalnız numarayı değiştir" tek mesajdır.
-    /// Yetki set_team ile aynı: oyuncu yalnız KENDİ playerId'si için, admin herkes için.
+    /// Player name and/or jersey number (§5.1). An empty string / 0 KEEPS the current value, so
+    /// "change only the number" is a single message. Authority matches set_team: a player may only
+    /// target their OWN playerId, an admin anyone's.
     [Serializable]
     public class SetIdentityMsg
     {
@@ -102,8 +87,8 @@ namespace VortexArena.Protocol
         public bool ready;
     }
 
-    // ShotFiredMsg v4'te KALDIRILDI → UDP 0x03/0x04 (§6.4/6.5); 10 atış/sn/oyuncu otoriter WS
-    // kanalını boğuyordu.
+    // ShotFiredMsg was REMOVED in v4 → UDP 0x03/0x04 (§6.4/6.5); 10 shots/s/player flooded the
+    // authoritative WS channel.
 
     [Serializable]
     public class HitReportMsg
@@ -116,21 +101,16 @@ namespace VortexArena.Protocol
         public float[] hitPos;
     }
 
-    /// Ölü oyuncunun canlanma talebi (§10.4): respawn.delaySeconds dolmuş VE oyuncu kendi
-    /// tabanındayken gönderilir; sunucu koşulları doğrulayıp canlandırır. Alan taşımaz.
+    /// A dead player's revive request (§10.4): sent once respawn.delaySeconds elapsed AND the player is
+    /// in their own base; the server verifies. Carries no fields.
     [Serializable]
     public class ReviveRequestMsg
     {
         public string type = MessageTypes.ReviveRequest;
     }
 
-    /// Başlığın KENDİ hizalama durumunu bildirmesi (§10.6). Yalnız player gönderir.
-    /// <para>
-    /// <c>source</c> ∈ "manual" (kumandada elle: A basılıyken B'ye çift basış) | "anchor" (kayıtlı OVRSpatialAnchor'dan geri
-    /// yükleme) | "cloud" (ileride: paylaşılan uzamsal anchor). Sunucu DOĞRULAMAZ, yalnız
-    /// kaydedip roster'da yayar — weaponId gibi serbest etiket, yeni kaynak sunucuda iş çıkarmaz.
-    /// Bu yüzden bilinçli olarak <b>string</b>, enum değil.
-    /// </para>
+    /// The headset reporting its OWN alignment state (§10.6). Players only. <c>source</c> ∈ "manual" |
+    /// "anchor" | "cloud": a free, unvalidated label like weaponId, hence a string and not an enum.
     [Serializable]
     public class SetCalibrationMsg
     {
@@ -138,53 +118,37 @@ namespace VortexArena.Protocol
         public bool calibrated;
         public string source = "";
 
-        /// <summary>Elle kalibrasyonda kumanda ucunun yakalama anındaki <b>tracking-yerel</b>
-        /// yüksekliği (metre, işaretli) — sistemin zemin tahmininin gerçek zeminden sapması.
-        /// Kayıtlı çapadan geri yüklemede <c>0</c> (ölçüm yok).
-        /// <para>Sunucu yorumlamaz: roster'a yazar ve
-        /// <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/> eşiğini aşarsa operatörü uyarır
-        /// (§10.6). ⚠️ <b>Bir kapı değildir</b> — sapma ne olursa olsun kalibrasyon kabul edilir.</para></summary>
+        /// <summary>Manual calibration only: how far the system's floor guess is from the real floor
+        /// (m, signed); <c>0</c> when restored from an anchor. The server warns past
+        /// <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/> (§10.6). ⚠️ Not a gate — calibration is
+        /// accepted whatever the offset.</summary>
         public float floorOffset;
 
-        /// <summary>Kayıtlı hizalama yeniden YÜKLENEMEDİYSE insan okuyabilir gerekçesi; boş =
-        /// sorun yok. Sözleşmesi <see cref="SetBodyScaleMsg.error"/> ile birebir aynıdır:
-        /// <b>doluysa <see cref="calibrated"/>/<see cref="source"/>/<see cref="floorOffset"/> YOK
-        /// SAYILIR ve sunucudaki kayıtlı kalibrasyon aynen durur</b> — gerekçe yalnız adminlere
-        /// duyurulur ve roster'a yazılır (<see cref="PlayerInfo.calibrationError"/>, §10.6).
-        /// <para>Bugünkü tek üreticisi operatörün <see cref="ReloadCalibrationMsg"/> komutudur:
-        /// denemenin düştüğünü söyleyen kanal budur.</para>
-        /// <para>⚠️ Doğrulanmayan serbest metindir (<see cref="source"/> ile aynı sözleşme): hata
-        /// kodu listesi YOKTUR — tek tüketicisi operatörün ekranıdır, yeni bir başarısızlık türü
-        /// sunucuda iş çıkarmamalıdır.</para></summary>
+        /// <summary>Why a saved alignment could NOT be reloaded; empty = fine. ⚠️ When set, the other
+        /// three fields are IGNORED and the stored calibration is untouched — the reason only reaches
+        /// admins and the roster (<see cref="PlayerInfo.calibrationError"/>). ⚠️ Free, unvalidated text:
+        /// no error code list, a new failure kind must not create server work.</summary>
         public string error = "";
     }
 
-    /// Başlığın KENDİ gövde ölçeğini bildirmesi (§10.8). Yalnız player gönderir; <c>playerId</c>
-    /// taşımaz, bağlantıdan çözülür (<see cref="SetCalibrationMsg"/> ile aynı sözleşme).
-    /// <para>
-    /// Ölçümü İSTEMCİ yapar (oyuncunun gözü ile karakterin göz hizasının oranı); sunucu
-    /// yorumlamaz, yalnız <c>[BODY_SCALE_MIN, BODY_SCALE_MAX]</c> aralığına kırpıp roster'da yayar.
-    /// </para>
+    /// The headset reporting its OWN body scale (§10.8). Players only; <c>playerId</c> comes from the
+    /// connection. The CLIENT measures; the server only clamps and broadcasts.
     [Serializable]
     public class SetBodyScaleMsg
     {
         public string type = MessageTypes.SetBodyScale;
         public float scale;
 
-        /// <summary>Ölçüm başarısızsa insan okuyabilir gerekçesi; boş = başarılı ölçüm.
-        /// <b>Doluysa <see cref="scale"/> YOK SAYILIR ve kayıtlı ölçek değişmez</b> — gerekçe yalnız
-        /// adminlere duyurulur ve roster'a yazılır (<see cref="PlayerInfo.scaleError"/>, §10.8).
-        /// <para>⚠️ Doğrulanmayan serbest metindir (<c>calibrationSource</c> ile aynı sözleşme):
-        /// hata kodu listesi YOKTUR — tek tüketicisi operatörün ekranıdır, yeni bir başarısızlık
-        /// türü sunucuda iş çıkarmamalıdır.</para></summary>
+        /// <summary>Why the measurement failed; empty = success. ⚠️ When set, <see cref="scale"/> is
+        /// IGNORED and the stored scale unchanged (§10.8). Free, unvalidated text; no error code
+        /// list.</summary>
         public string error = "";
     }
 
-    // ---- Yalnız admin → Sunucu ----
+    // ---- Admin → Server only ----
 
-    /// start_match (§5.2). roundSeconds/scoreLimit/countdownSeconds O MAÇA özeldir: 0 ya da
-    /// eksikse modun varsayılanı (IGameMode.DefaultRoundSeconds/DefaultScoreLimit) — geri sayımda
-    /// protokol varsayılanı (COUNTDOWN_SECONDS) — kullanılır.
+    /// start_match (§5.2). roundSeconds/scoreLimit/countdownSeconds apply to THAT match only: 0 or
+    /// missing falls back to the mode default (or the protocol default for the countdown).
     [Serializable]
     public class StartMatchMsg
     {
@@ -193,15 +157,13 @@ namespace VortexArena.Protocol
         public string sceneName;
         public int roundSeconds;
 
-        /// <summary>Skor/tur limiti: <c>&gt; 0</c> = o değer, <c>0</c> = modun varsayılanı,
-        /// <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = <b>sınırsız</b> (limit yok; tur
-        /// tabanlı modda tur tavanı da yok). ⚠️ Üç değerli olduğu için <c>≤ 0</c> ile okunmaz.</summary>
+        /// <summary>Score/round limit: <c>&gt; 0</c> = that value, <c>0</c> = mode default,
+        /// <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = unlimited. ⚠️ Three-valued, so never
+        /// test it with <c>≤ 0</c>.</summary>
         public int scoreLimit;
 
-        /// <summary>Geri sayımın uzunluğu (sn); sunucuda [COUNTDOWN_SECONDS_MIN,
-        /// COUNTDOWN_SECONDS_MAX] aralığına kırpılır. <c>0</c> = protokol varsayılanı.
-        /// <para>Maç boyunca HER geri sayımda kullanılır — tur tabanlı modlarda (<c>tournament</c>)
-        /// turlar arasındaki geri sayım da budur.</para></summary>
+        /// <summary>Countdown length (s), clamped server-side; <c>0</c> = protocol default. Used for
+        /// every countdown, including between rounds.</summary>
         public int countdownSeconds;
     }
 
@@ -211,16 +173,16 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.AbortMatch;
     }
 
-    /// <summary>Koşan maçı dondurur: <c>playing</c> → <c>paused</c>/<c>operator</c> (§5.2).
-    /// Yalnız <c>playing</c> iken iş yapar.</summary>
+    /// <summary>Freezes a running match: <c>playing</c> → <c>paused</c>/<c>operator</c> (§5.2). Only
+    /// acts while <c>playing</c>.</summary>
     [Serializable]
     public class PauseMatchMsg
     {
         public string type = MessageTypes.PauseMatch;
     }
 
-    /// <summary>Operatörün duraklattığı maçı sürdürür (§5.2). Yalnız
-    /// <c>phaseReason == "operator"</c> iken kabul edilir — her duraklamayı kendi sahibi kaldırır.</summary>
+    /// <summary>Resumes an operator-paused match (§5.2). Accepted only while
+    /// <c>phaseReason == "operator"</c> — every pause is lifted by its own owner.</summary>
     [Serializable]
     public class ResumeMatchMsg
     {
@@ -242,46 +204,29 @@ namespace VortexArena.Protocol
         public int playerId;
     }
 
-    /// Admin bir oyuncunun kalibrasyonunu SIFIRLAR (§10.6). Admin yalnız sıfırlayabilir,
-    /// "kalibre oldu" diye işaretleyemez — onu yalnız başlık bilir (SetCalibrationMsg).
-    /// <para>Admin → sunucu yönünde <c>playerId</c> dolu (<c>0</c> = TÜM oyuncular); sunucu →
-    /// istemci yönünde <c>playerId</c> taşınmaz (hedef zaten o bağlantıdır) ama
-    /// <see cref="keepSaved"/> <b>aynen iletilir</b> — operatörün seçtiği kip başlığa ulaşmalı.</para>
-    /// <para>⚠️ Sunucu komutu hedefe <b>koşulsuz</b> iletir: sıfırlanacak şeylerin hepsi roster'da
-    /// görünmez — yarım kalmış elle kalibrasyon (A alındı, B alınmadı) yalnız başlıkta yaşar ve
-    /// orada <c>calibrated</c> zaten <c>false</c>'tur (§10.6).</para>
-    /// <para>⚠️ Roster tarafı iki kipte de AYNIDIR (<c>calibrated:false</c>) — kip yalnız başlığın
-    /// cihazındaki kaydı ilgilendirir, sunucu için fark yoktur.</para>
+    /// An admin RESETS a player's calibration (§10.6); admins may only reset, never mark someone
+    /// calibrated. Admin → server carries <c>playerId</c> (<c>0</c> = ALL); server → client forwards only
+    /// <see cref="keepSaved"/>.
+    /// <para>⚠️ Forwarded unconditionally: a half-finished manual calibration lives only on the headset
+    /// and leaves no trace in the roster. ⚠️ The roster side is identical in both modes.</para>
     [Serializable]
     public class ClearCalibrationMsg
     {
         public string type = MessageTypes.ClearCalibration;
         public int playerId;
 
-        /// <summary>
-        /// <b>Yumuşak sıfırlama</b> (<c>true</c>): hizalama geçersiz kılınır (roster <c>false</c>,
-        /// elle kalibrasyon kapısı açılır, yarım sekans silinir, rig'in hizalaması düşer) ama
-        /// cihazdaki <c>OVRSpatialAnchor</c> ve UUID kaydı <b>KORUNUR</b> — ardından gelen
-        /// <c>reload_calibration</c> çalışabilsin.
-        /// <para><b>Sert sıfırlama</b> (<c>false</c>): yukarıdakilerin hepsi + cihazdaki çapa
-        /// silinir ve UUID kaydı kalıcı olarak gider.</para>
-        /// <para>⚠️ <b>Varsayılan SERT'tir</b> (alan yoksa <c>false</c> okunur) ve bu bilinçlidir:
-        /// alanı tanımayan eski bir başlık bugünkü davranışı sürdürür, sürpriz yapmaz.</para>
-        /// </summary>
+        /// <summary><b>Soft</b> (<c>true</c>): alignment invalidated, the device anchor + UUID KEPT so a
+        /// following <c>reload_calibration</c> works. <b>Hard</b> (<c>false</c>): anchor deleted too.
+        /// ⚠️ The default is HARD (a missing field reads <c>false</c>) so an old headset keeps today's
+        /// behaviour.</summary>
         public bool keepSaved;
     }
 
-    /// Kayıtlı çapadan hizalamanın yeniden yüklenmesini BAŞLATIR (§10.6). Admin → sunucu yönünde
-    /// <c>playerId</c> dolu (<c>0</c> = TÜM oyuncular), sunucu → istemci yönünde alansız gider —
-    /// <see cref="IdentifyMsg"/> ile aynı çift yönlü desen.
-    /// <para>Sunucu hiçbir şey hesaplamaz, yalnız iletir; sonucu başlık <c>set_calibration</c> ile
-    /// döner (başarıda <c>calibrated:true, source:"anchor"</c>, başarısızlıkta dolu
-    /// <see cref="SetCalibrationMsg.error"/>) ve sunucu onu <see cref="CalibrationResultMsg"/> ile
-    /// adminlere yayar.</para>
-    /// <para>⚠️ <b><see cref="MeasureBodyScaleMsg"/>'in aksine kalibresiz hedef ATLANMAZ:</b>
-    /// komutun var olma sebebi tam da hizalaması olmayan/bozulmuş oyuncudur.</para>
-    /// <para>⚠️ Admin bununla <c>calibrated</c>'i <c>true</c> YAPMAZ — yalnız denemeyi başlatır,
-    /// işareti yine başlık koyar (§10.6 asimetrik yazar tablosu).</para>
+    /// STARTS a reload of alignment from the saved anchor (§10.6). Admin → server carries
+    /// <c>playerId</c> (<c>0</c> = ALL), server → client goes fieldless; the headset answers with
+    /// <c>set_calibration</c>, relayed as <see cref="CalibrationResultMsg"/>.
+    /// <para>⚠️ Unlike <see cref="MeasureBodyScaleMsg"/> an uncalibrated target is NOT skipped — that
+    /// player is the point. ⚠️ It never sets <c>calibrated</c>; the headset writes the flag.</para>
     [Serializable]
     public class ReloadCalibrationMsg
     {
@@ -289,11 +234,9 @@ namespace VortexArena.Protocol
         public int playerId;
     }
 
-    /// Gövde ölçümünü başlatır (§10.8). Admin → sunucu yönünde <c>playerId</c> dolu
-    /// (<c>0</c> = TÜM oyuncular), sunucu → istemci yönünde alansız gider — <see cref="IdentifyMsg"/>
-    /// ile birebir aynı çift yönlü desen.
-    /// <para>Sunucu hiçbir şey hesaplamaz, yalnız iletir; ⚠️ <b>kalibresiz oyuncuya iletmez</b>
-    /// (ölçü arena zeminine göredir).</para>
+    /// Starts a body measurement (§10.8). Admin → server carries <c>playerId</c> (<c>0</c> = ALL),
+    /// server → client goes fieldless. The server only forwards; ⚠️ it does NOT forward to an
+    /// uncalibrated player (the measurement is relative to the arena floor).
     [Serializable]
     public class MeasureBodyScaleMsg
     {
@@ -301,17 +244,11 @@ namespace VortexArena.Protocol
         public int playerId;
     }
 
-    /// Operatör ölü bir oyuncuyu elle canlandırır (§10.4). <c>playerId</c> <c>0</c> = o an ölü olan
-    /// TÜM oyuncular — <see cref="ClearCalibrationMsg"/> ile aynı toplu-hedef deseni.
-    /// <para>Komut <c>revive_request</c>'in yasaklarının yalnız bir kısmını taşır: modun canlanma
-    /// şartı (<c>reviveAnchor:"none"</c>, §10.5) ve canlanma gecikmesi <b>GEÇİLİR</b> — düğmenin
-    /// varlık sebebi şartı sağlayamayan oyuncuyu kurtarmaktır ve bekletmek operatörün işi değildir.
-    /// ⚠️ Turnuvada tur sonucunu değiştirir; bu operatörün bilinçli kararıdır.</para>
-    /// <para>Kalibrasyon (§10.6) ve engelin içinde olma (§10.9) kapıları ise <b>UYGULANIR</b>:
-    /// kalibresiz oyuncu ateş edemez ve vurulamaz (canlandırmak onu yalnız tabloda canlı gösterir),
-    /// engelin içinde canlanan oyuncu saniyede 30 HP kaybedip anında yeniden ölür (düğme bir ölüm
-    /// döngüsü üretirdi). Ret istemciye bildirilmez — sunucu konsoluna gerekçesiyle bir satır yazar,
-    /// operatör sonucu roster'da görür.</para>
+    /// The operator manually revives a dead player (§10.4); <c>playerId</c> <c>0</c> = ALL dead players.
+    /// <para>The mode's revive condition (§10.5) and the respawn delay are BYPASSED — the button exists
+    /// to rescue a player who cannot satisfy them. ⚠️ In a tournament this changes the round result.</para>
+    /// <para>⚠️ The calibration (§10.6) and inside-obstacle (§10.9) gates ARE enforced (otherwise the
+    /// button produces a death loop); rejection is logged server-side, not sent to the client.</para>
     [Serializable]
     public class RevivePlayerMsg
     {
@@ -319,7 +256,7 @@ namespace VortexArena.Protocol
         public int playerId;
     }
 
-    /// Admin → sunucu yönünde playerId dolu; sunucu → istemci yönünde alansız gider.
+    /// Admin → server carries playerId; server → client goes fieldless.
     [Serializable]
     public class IdentifyMsg
     {
@@ -327,9 +264,8 @@ namespace VortexArena.Protocol
         public int playerId;
     }
 
-    /// Bir sonraki maçın ORTAK mod/harita/süre/limit seçimi (§5.2). Maçı başlatmaz; sunucudaki
-    /// seçimi günceller ve sunucu onu admin_state ile tüm adminlere yayar.
-    /// Boş string veya 0 bırakılan alan mevcut değeri korur.
+    /// The SHARED mode/map/duration/limit selection for the next match (§5.2). Does not start a match;
+    /// broadcast to all admins via admin_state. Empty string or 0 keeps the current value.
     [Serializable]
     public class SetSelectionMsg
     {
@@ -338,28 +274,19 @@ namespace VortexArena.Protocol
         public string sceneName;
         public int roundSeconds;
 
-        /// <summary>Skor/tur limiti seçimi: <c>&gt; 0</c> = o değer, <c>0</c> = mevcut değeri koru,
-        /// <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = <b>sınırsız</b> seçildi.
-        /// <para>⚠️ "Sınırsız" bir seçimdir, dokunulmamışlık değil — bu yüzden sunucudaki kapı
-        /// <c>&gt; 0</c> değil <c>!= 0</c> diye sorar.</para></summary>
+        /// <summary>Score/round limit: <c>&gt; 0</c> = that value, <c>0</c> = keep current,
+        /// <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = unlimited was selected. ⚠️ "Unlimited"
+        /// is a choice, not an absence of one — hence the server gate asks <c>!= 0</c>.</summary>
         public int scoreLimit;
 
-        /// <summary>Geri sayım uzunluğu (sn); <c>0</c> = mevcut değeri koru (diğer alanlarla
-        /// aynı sözleşme).</summary>
+        /// <summary>Countdown length (s); <c>0</c> = keep current.</summary>
         public int countdownSeconds;
     }
 
-    /// <summary>
-    /// Dost ateşi anahtarı (§5.2) — <b>sunucu oturumu ayarı</b>, maç parametresi değil.
-    /// <para>
-    /// ⚠️ <b>Faz kapısı yoktur:</b> koşan maçta da geçerlidir ve etkisi anlıktır (<c>set_team</c> ile
-    /// aynı gerekçe — sahadaki durumu operatör maçı iptal etmeden düzeltebilmeli). Sunucu açılışta
-    /// <c>false</c> başlar; değer maç bitiminde/harita değişiminde sıfırlanmaz, yalnız operatör
-    /// değiştirir.
-    /// </para>
-    /// <para>Neden <c>set_selection</c> alanı değil: o mesaj "boş/0 = değişme" sözleşmesiyle çalışır
-    /// ve bir <c>bool</c> "dokunulmadı"yı ifade edemez.</para>
-    /// </summary>
+    /// <summary>Friendly-fire switch (§5.2) — a <b>server session setting</b>, not a match parameter.
+    /// ⚠️ No phase gate: it applies to a running match immediately (the operator must be able to fix the
+    /// floor without aborting), starts <c>false</c> and is reset by nothing but the operator. Not a
+    /// <c>set_selection</c> field because a <c>bool</c> cannot express "untouched".</summary>
     [Serializable]
     public class SetFriendlyFireMsg
     {
@@ -367,17 +294,10 @@ namespace VortexArena.Protocol
         public bool enabled;
     }
 
-    /// <summary>
-    /// Başlıkların <b>AÇILIŞTA</b> nasıl hizalanacağı (§5.2/§10.6) — dost ateşiyle aynı sınıf:
-    /// <b>anlık komut</b>, <c>set_selection</c>'a binmez, seçim kilidine girmez, koşan maçta da
-    /// değişir.
-    /// <para>Değer <c>ArenaProtocol.CALIB_MODE_*</c>; sunucu açılış varsayılanı
-    /// <see cref="ArenaProtocol.CALIB_MODE_TWO_ANCHOR"/>.</para>
-    /// <para>⚠️ Bilinmeyen/boş değer <b>REDDEDİLİR</b> (kural değerlerinin "varsayılana düş"
-    /// sözleşmesi burada geçmez): mod bir kural şekli değil operatör kararıdır.</para>
-    /// <para>⚠️ Modun kapıladığı tek şey açılıştaki diskten çapa geri yüklemesidir; HARİTA
-    /// DEĞİŞİMİNDEKİ geri yükleme moddan bağımsız her zaman koşar (§10.6).</para>
-    /// </summary>
+    /// <summary>How headsets align AT STARTUP (§5.2/§10.6) — like friendly fire an immediate command,
+    /// outside <c>set_selection</c> and the selection lock. Value is <c>ArenaProtocol.CALIB_MODE_*</c>.
+    /// ⚠️ Unknown/empty is REJECTED (an operator decision, not a rule shape). ⚠️ It gates only the startup
+    /// restore; the restore on MAP CHANGE always runs.</summary>
     [Serializable]
     public class SetCalibrationModeMsg
     {
@@ -385,79 +305,70 @@ namespace VortexArena.Protocol
         public string mode = "";
     }
 
-    // ---- Sunucu → İstemci ----
+    // ---- Server → Client ----
 
-    /// <summary>
-    /// Modun ŞEKLİ (§10.5) — SUNUCU-OTORİTER. İstemci modun ne olduğunu tahmin etmesin diye
-    /// telden gelir: kural buradan okunursa istemcide "if (modeId == …)" zinciri hiç doğmaz.
-    /// <para>Değerler bilerek string: <b>bilinmeyen/boş değer varsayılana (takımlı TDM) düşer</b>,
-    /// bu yüzden yeni bir kural değeri eklemek PROTOCOL_VERSION'ı artırmaz.</para>
-    /// </summary>
+    /// <summary>The SHAPE of a mode (§10.5) — SERVER-AUTHORITATIVE; reading rules from the wire is what
+    /// keeps an "if (modeId == …)" chain from being born client-side. Values are strings on purpose:
+    /// unknown/empty falls back to the default (team TDM), so a new value does not bump the version.</summary>
     [Serializable]
     public class ModeRulesInfo
     {
-        /// <summary>"two" (kırmızı/mavi) | "none" (takımsız).</summary>
+        /// <summary>"two" (red/blue) | "none" (teamless).</summary>
         public string teamMode = "two";
 
         /// <summary>"team" (match_state.scoreRed/scoreBlue) | "player" (PlayerInfo.score).</summary>
         public string scoring = "team";
 
-        /// <summary>true = takım arkadaşı vurulabilir (§10.3/4).</summary>
+        /// <summary>true = teammates can be hit (§10.3/4).</summary>
         public bool friendlyFire;
 
-        /// <summary>"base" (kendi BaseZone'una gir) | "standstill" (sabit dur), §10.4.</summary>
+        /// <summary>"base" (enter your own BaseZone) | "standstill" (stand still), §10.4.</summary>
         public string reviveAnchor = "base";
 
-        /// <summary>"weaponcanvas" (sahnede duran silah) | "random" (mod dağıtır) — tümüyle istemci
-        /// sunumu. ⚠️ Eski adı <c>"rack"</c>'ti; okuyan taraf "random" değilse varsayılana düştüğü
-        /// için iki yazım da doğru davranışı verir (§10.5).</summary>
+        /// <summary>"weaponcanvas" (weapon placed in the scene) | "random" (mode grants) — purely client
+        /// presentation. ⚠️ The old name was <c>"rack"</c>; anything but "random" falls back to the
+        /// default, so both spellings behave correctly (§10.5).</summary>
         public string weaponSource = "weaponcanvas";
 
-        /// <summary>respawn.delaySeconds; ArenaProtocol.RESPAWN_DELAY varsayılanı.</summary>
+        /// <summary>respawn.delaySeconds; defaults to ArenaProtocol.RESPAWN_DELAY.</summary>
         public float respawnDelay = ArenaProtocol.RESPAWN_DELAY;
 
-        /// <summary>
-        /// Faz <c>playing</c> değilken silah ateşlenebilir mi (§10.5). <c>true</c> = lobi gibi
-        /// serbest atış alanı: namlu alevi/ses relay edilir ama <b>hasar yine yoktur</b>
-        /// (<c>hit_report</c> kapısı her hâlükârda <c>playing</c>'dir, §10.3).
-        /// <para>Bu alan sayesinde istemcide <c>if (modeId == "lobby")</c> zinciri doğmaz.</para>
-        /// </summary>
+        /// <summary>May weapons fire while the phase is not <c>playing</c> (§10.5)? <c>true</c> = a free
+        /// firing range like the lobby: flash/sound relayed, ⚠️ still <b>no damage</b> (the
+        /// <c>hit_report</c> gate is always <c>playing</c>, §10.3).</summary>
         public bool fireWhilePaused;
     }
 
-    /// <summary>
-    /// Maçın durumu (§10.1). <b>Dört alan, dört ayrı sahip:</b> <c>modeId</c> ne oynandığı,
-    /// <c>phase</c> çekirdeğin genel durumu, <c>phaseReason</c> duraklamanın gerekçesi,
-    /// <c>modeState</c> modun kendi ara durumu.
-    /// </summary>
+    /// <summary>Match state (§10.1). <b>Four fields, four owners:</b> <c>modeId</c> what is played,
+    /// <c>phase</c> the core's state, <c>phaseReason</c> why it is paused, <c>modeState</c> the mode's
+    /// own intermediate state.</summary>
     [Serializable]
     public class MatchInfo
     {
-        /// <summary>ArenaProtocol.PHASE_* — hasarın işlendiği TEK faz <c>playing</c>'dir.</summary>
+        /// <summary>ArenaProtocol.PHASE_* — <c>playing</c> is the ONLY phase that processes damage.</summary>
         public string phase;
 
-        /// <summary>ArenaProtocol.PAUSE_REASON_* ; yalnız <c>phase == paused</c> iken dolu.</summary>
+        /// <summary>ArenaProtocol.PAUSE_REASON_* ; set only while <c>phase == paused</c>.</summary>
         public string phaseReason;
 
         public string modeId;
 
-        /// <summary>Modun kendi ara durumu (serbest string). <b>Çekirdek yorumlamaz</b>, yalnız
-        /// HUD okur; asla bir kural/hasar kapısı değildir (§10.1).</summary>
+        /// <summary>The mode's own intermediate state (free string). <b>The core never interprets
+        /// it</b>, only the HUD reads it; never a rule or damage gate (§10.1).</summary>
         public string modeState;
 
         public string sceneName;
 
-        /// <summary>Açık sahnenin kaç saniyedir sahnelendiği (§5.3). Sahne değişince sıfırlanır,
-        /// maçın başlaması/bitmesi sıfırlamaz. Tek tüketicisi ortam sesinin ortak fazıdır:
-        /// geç katılan başlık müziği herkesin bulunduğu yerden açar. Alan gelmezse 0 → müzik
-        /// baştan başlar (eski sunucuya karşı zararsız).</summary>
+        /// <summary>How long the current scene has been staged (§5.3); resets on scene change only. Its
+        /// only consumer is scene ambience (a late joiner starts the music where everyone else is);
+        /// missing → 0 → music from the top.</summary>
         public float sceneElapsed;
 
         public float timeRemaining;
         public int scoreRed;
         public int scoreBlue;
 
-        /// <summary>Koşan maçın kural şekli (§10.5) — geç katılım aynı kurallarla bağlanır.</summary>
+        /// <summary>Rule shape of the running match (§10.5) — late joiners bind to the same rules.</summary>
         public ModeRulesInfo rules;
     }
 
@@ -469,10 +380,8 @@ namespace VortexArena.Protocol
         public int playerId;
         public uint udpToken;
 
-        /// <summary>Yürürlükteki kalibre modu (<c>ArenaProtocol.CALIB_MODE_*</c>, §10.6).
-        /// <para>⚠️ <b>Oyuncu bu değeri bağlantıda BİR KEZ çeker:</b> modun kapıladığı karar
-        /// (açılışta diskten çapa geri yüklenecek mi) <c>welcome</c> geldiğinde zaten verilmiştir —
-        /// bağlı oyuncuya canlı yayılım YOKTUR ve eklenmez, uygulanacağı bir an olmazdı.</para></summary>
+        /// <summary>Current calibration mode (§10.6). ⚠️ Pulled ONCE at connect: the decision it gates is
+        /// already made by then, so there is NO live push to connected players.</summary>
         public string calibrationMode = "";
 
         public MatchInfo match;
@@ -484,40 +393,33 @@ namespace VortexArena.Protocol
         public int playerId;
         public string name;
 
-        /// <summary>Forma numarası 1..99 (§2); 0 = atanmamış, admin'de daima 0. Ad benzersiz
-        /// DEĞİLDİR (20'lik havuz tekrar eder) — ayırt edici alan budur, arayüzde "7 · ertu".</summary>
+        /// <summary>Jersey number 1..99 (§2); 0 = unassigned, always 0 for admins. Names are NOT unique,
+        /// so this is the distinguishing field ("7 · ertu").</summary>
         public int number;
 
         public string role;
         public string team;
         public bool ready;
 
-        /// <summary>ArenaProtocol.CONNECTION_* (§2/§5.3): <c>connected</c> | <c>reconnecting</c> |
-        /// <c>left</c>. <b>Bilinmeyen/boş değer <c>connected</c> sayılır</b> — kural değerleriyle
-        /// aynı sözleşme (§10.5), dördüncü bir durum sürüm artırmasın diye.
-        /// <para>⚠️ Eski <c>online</c> (bool) alanının yerine geçer ve "çevrimdışı" diye bir durum
-        /// YOKTUR: kopan cihaz ya geri beklenir ya oyundan çıkarılır.</para></summary>
+        /// <summary>ArenaProtocol.CONNECTION_* (§2/§5.3); unknown/empty reads as <c>connected</c>, so a
+        /// fourth state does not bump the version. ⚠️ There is NO "offline" state — a dropped device is
+        /// either waited for or removed.</summary>
         public string connection = ArenaProtocol.CONNECTION_CONNECTED;
 
-        /// <summary>Cihazın oyundan çıkarılmasına kalan saniye; yalnız <c>reconnecting</c> iken
-        /// anlamlıdır (0 = yok). <b>Geri sayımdır, zaman damgası değildir</b> ve her
-        /// <c>lobby_state</c>'te yeniden hesaplanır — roster yayını olay tabanlı olduğu için
-        /// arayüz onu YERELDE de tüketmelidir, yoksa sayaç ancak başka bir değişiklikte ilerler.</summary>
+        /// <summary>Seconds until removal; meaningful only while <c>reconnecting</c> (0 = none). ⚠️ A
+        /// countdown, not a timestamp: roster broadcasts are event-driven, so the UI must also tick it
+        /// LOCALLY.</summary>
         public int reconnectSeconds;
 
-        /// <summary>Bu kayıt koşan maçın katılımcısı mı (§10.2). Maç sonu tablosunun kapsamı budur:
-        /// <c>left</c> bir satır yalnız bu bayrak yüzünden listede durur. Maç kapanınca hepsi
-        /// <c>false</c> olur ve <c>left</c> kayıtlar silinir.</summary>
+        /// <summary>Is this record a participant of the running match (§10.2)? It defines the scope of the
+        /// end-of-match table: a <c>left</c> row stays listed only because of this flag.</summary>
         public bool inMatch;
 
         public float battery;
 
-        /// <summary>Sol/sağ kumandanın durumu: <c>ArenaProtocol.CONTROLLER_*</c> (değer tablosu
-        /// §5.1). <c>0</c> = bildirilmedi; admin kaydında daima <c>0</c> kalır.
-        /// <para>⚠️ <b>Pil YÜZDESİ DEĞİL, durumdur ve yüzde olamaz</b> (OpenXR kumanda şarjını
-        /// okumuyor). <see cref="battery"/> <b>gözlüğün</b> pilidir.</para>
-        /// <para>Roster'da taşınmasının gerekçesi kalibrasyon alanlarınınkiyle aynıdır: kesikli bir
-        /// durumdur, değiştiği an roster'ın zaten tazelendiği andır.</para></summary>
+        /// <summary>Left/right controller state (§5.1); always <c>0</c> on admin records. ⚠️ A STATE, not
+        /// a battery percentage; <see cref="battery"/> is the HEADSET's. It rides the roster because it is
+        /// discrete state, like the calibration fields.</summary>
         public int ctrlL;
 
         /// <inheritdoc cref="ctrlL"/>
@@ -525,51 +427,40 @@ namespace VortexArena.Protocol
 
         public string scene;
 
-        // Maç sayaçları (§10.2) — SUNUCU-OTORİTER, admin gözlemci arayüzünün doğruluk kaynağı.
-        // Yalnız kill_event/health_update sayılsa admin yeniden bağlandığında tablo sıfırlanırdı.
-        // Lobby fazında: hp=PLAYER_MAX_HP, alive=true, sayaçlar 0. Oyuncu istemcisi yok sayar.
+        // Match counters (§10.2) — SERVER-AUTHORITATIVE source of truth for the admin UI; counting only
+        // kill_event/health_update would reset the table when an admin reconnects. Lobby phase:
+        // hp=PLAYER_MAX_HP, alive=true, counters 0; player clients ignore them.
         public int kills;
         public int deaths;
         public float hp;
         public bool alive;
 
-        /// <summary>BİREYSEL maç skoru (§10.2) — kills ile aynı şey DEĞİLDİR: yazarı IGameMode'dur
-        /// ve mod başına anlamı değişir (FFA puanı, Silah Yarışı'nda seviye…). rules.scoring ==
-        /// "player" olan modlarda anlamlıdır; takım skoru match_state'te kalır.</summary>
+        /// <summary>INDIVIDUAL match score (§10.2) — NOT kills: written by IGameMode, per-mode in meaning,
+        /// used where rules.scoring == "player". Team score stays in match_state.</summary>
         public int score;
 
-        // Kalibrasyon durumu (§10.6) — maç sayacı DEĞİL cihaz durumudur: yazarı MatchDirector
-        // değil PlayerRegistry'dir ve maç sıfırlamalarında korunur. Kalibresiz oyuncu ateş edemez,
-        // hasar yemez, canlanamaz; uzak avatarı parlar. Admin'de daima false/"" kalır.
+        // Calibration state (§10.6) — device state, NOT a match counter: written by PlayerRegistry and
+        // preserved across match resets. An uncalibrated player cannot fire, take damage or revive.
+        // Always false/"" for admins.
         public bool calibrated;
         public string calibrationSource;
 
-        /// <summary>Son <b>elle</b> kalibrasyonda bildirilen zemin sapması (metre, işaretli;
-        /// §5.1/§10.6); <c>0</c> = ölçüm yok ya da temiz. Mutlak değeri
-        /// <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/>'i aşan satır arayüzde ⚠ ile
-        /// gösterilir. <c>clear_calibration</c> sıfırlar.</summary>
+        /// <summary>Floor offset from the last MANUAL calibration (m, signed; §5.1/§10.6); <c>0</c> = none
+        /// or clean. Rows past <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/> are flagged in the UI;
+        /// <c>clear_calibration</c> resets it.</summary>
         public float floorOffset;
 
-        /// <summary>Son gövde ölçümü başarısızsa gerekçesi, boş = sorun yok (§10.8).
-        /// <para>⚠️ <b>Başarılı ölçüm alanı temizler</b> — aksi hâlde bir kez başarısız olan
-        /// oyuncunun satırında uyarı sonsuza kadar kalır ve operatör sorunun sürdüğünü sanardı.
-        /// <c>clear_calibration</c> da sıfırlar.</para></summary>
+        /// <summary>Why the last body measurement failed; empty = fine (§10.8). ⚠️ A successful measurement
+        /// CLEARS it, or one failure would leave a permanent warning on the row.</summary>
         public string scaleError = "";
 
-        /// <summary>Son <b>kayıtlı hizalamayı yeniden yükleme</b> denemesi başarısızsa gerekçesi,
-        /// boş = sorun yok (§10.6).
-        /// <para>⚠️ <b>Başarılı kalibrasyon alanı temizler</b> (<see cref="scaleError"/> ile aynı
-        /// gerekçe: bir kez başarısız olan oyuncunun satırında uyarı sonsuza kadar kalır ve
-        /// operatör sorunun sürdüğünü sanardı). <c>clear_calibration</c> da sıfırlar.</para></summary>
+        /// <summary>Why the last saved-alignment reload failed; empty = fine (§10.6). ⚠️ A successful
+        /// calibration CLEARS it (same reason as <see cref="scaleError"/>).</summary>
         public string calibrationError = "";
 
-        /// <summary>Uzak avatara uygulanacak üniform gövde ölçeği (§10.8). <b><c>0</c> =
-        /// ölçülmemiş → okuyan taraf <c>1</c> uygular</b> (kural değerleriyle aynı sözleşme:
-        /// alanı hiç göndermeyen bir uç sessizce doğru davranır).
-        /// <para>Kalibrasyon alanlarıyla aynı sınıftadır — cihaz durumudur, maç sayacı değil — ve
-        /// aynı sebeple burada taşınır: değiştiği an roster'ın zaten tazelendiği andır.
-        /// ⚠️ İskelet kanalına (<c>0x07</c>/<c>0x08</c>) GİRMEZ; orada her karede tekrar eden bir
-        /// sabit olurdu.</para></summary>
+        /// <summary>Uniform body scale for the remote avatar (§10.8); <c>0</c> = not measured → readers
+        /// apply <c>1</c>. ⚠️ It does NOT go on the skeleton channel, where it would be a constant
+        /// repeated every frame.</summary>
         public float bodyScale;
     }
 
@@ -578,11 +469,9 @@ namespace VortexArena.Protocol
     {
         public string type = MessageTypes.LobbyState;
 
-        /// <summary>Monoton artan roster sürümü (§5.3); sunucu ömrü boyunca artar, yeniden
-        /// başlarsa 0'dan. İstemci <c>version &lt;= uyguladığı son sürüm</c> olan mesajı ATAR ve
-        /// sürümü her welcome'da sıfırlar. Sunucuda yayın tek yayıncıdan gittiği için sıra zaten
-        /// korunur; bu guard ikinci emniyettir — sürümsüz ateşle-unut yayında eski bir anlık
-        /// görüntü yeniyi ezer ve roster bir sonraki değişikliğe kadar bayat kalırdı.</summary>
+        /// <summary>Monotonic roster version (§5.3), restarting at 0 per server lifetime. The client DROPS
+        /// any message with <c>version &lt;= last applied</c> and resets on every welcome — a second
+        /// safety net stopping a stale snapshot from overwriting a newer one.</summary>
         public int version;
 
         public PlayerInfo[] players;
@@ -596,18 +485,16 @@ namespace VortexArena.Protocol
         public string sceneName;
         public int roundSeconds;
 
-        /// <summary>Bu maçta YÜRÜRLÜKTEKİ skor/tur limiti (sunucu çözdü, artık "0 = varsayılan"
-        /// yoktur): <c>&gt; 0</c> = o değer, <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> =
-        /// sınırsız.</summary>
+        /// <summary>The EFFECTIVE score/round limit (already resolved, so "0 = default" no longer
+        /// applies): <c>&gt; 0</c> or <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>.</summary>
         public int scoreLimit;
 
         public string yourTeam;
 
-        /// <summary>Sahnenin kaç saniyedir sahnelendiği; yeni sahne sahnelenirken 0
-        /// (<see cref="MatchInfo.sceneElapsed"/> ile aynı alan).</summary>
+        /// <summary>How long the scene has been staged; 0 while a new one is being staged.</summary>
         public float sceneElapsed;
 
-        /// <summary>Bu maçın kural şekli (§10.5); istemci kendini BUNA göre kurar.</summary>
+        /// <summary>Rule shape of this match (§10.5); the client configures itself from THIS.</summary>
         public ModeRulesInfo rules;
     }
 
@@ -626,10 +513,10 @@ namespace VortexArena.Protocol
         /// <summary>ArenaProtocol.PHASE_* (§10.1).</summary>
         public string phase;
 
-        /// <summary>ArenaProtocol.PAUSE_REASON_* ; yalnız <c>phase == paused</c> iken dolu.</summary>
+        /// <summary>ArenaProtocol.PAUSE_REASON_* ; set only while <c>phase == paused</c>.</summary>
         public string phaseReason;
 
-        /// <summary>Modun kendi ara durumu; çekirdek yorumlamaz (§10.1).</summary>
+        /// <summary>The mode's own intermediate state; the core never interprets it (§10.1).</summary>
         public string modeState;
 
         public float timeRemaining;
@@ -637,13 +524,9 @@ namespace VortexArena.Protocol
         public int scoreBlue;
     }
 
-    /// <summary>
-    /// Can değişimi (§10.3). ⚠️ <b>Broadcast DEĞİL:</b> yalnız <c>playerId</c>'nin sahibine ve
-    /// adminlere gider. İki tüketicisi de dar — <c>PlayerCombatState</c> kendisine ait olmayan her
-    /// mesajı zaten düşürüyor, admin tablosu ise herkesin canını çiziyor. Herkese yayınlandığı
-    /// dönemde 10 oyunculu maçta her isabette 11 mesaj gidip 9'u çöpe atılıyordu ve bu, oyuncu
-    /// sayısıyla <b>kare</b> büyüyen tek WS kanalıydı (Docs/Sistem-Ozeti.md §3.12).
-    /// </summary>
+    /// <summary>Health change (§10.3). ⚠️ <b>NOT a broadcast</b> — only to <c>playerId</c>'s owner and to
+    /// admins; broadcasting made this the only WS channel growing with the SQUARE of the player count
+    /// (Docs/Sistem-Ozeti.md §3.12).</summary>
     [Serializable]
     public class HealthUpdateMsg
     {
@@ -651,10 +534,8 @@ namespace VortexArena.Protocol
         public int playerId;
         public float hp;
 
-        /// <summary>Vuran oyuncu; <c>0</c> = saldırı değil (canlanma).
-        /// <para><b>Bugün okuyan yok</b> — yönlü hasar göstergesi için ayrılmıştır ve mesaj artık
-        /// zaten yalnız kurbana gittiği için doğal yeri burasıdır. Kaldırılacaksa göstergenin de
-        /// hiç yapılmayacağına karar verilmiş olmalı.</para></summary>
+        /// <summary>The attacking player; <c>0</c> = not an attack (revive). Nothing reads it today —
+        /// reserved for a directional damage indicator.</summary>
         public int attackerId;
     }
 
@@ -675,9 +556,8 @@ namespace VortexArena.Protocol
         public float delaySeconds;
     }
 
-    /// Kazanan İKİ kanaldan biriyle ifade edilir (rules.scoring, §10.5): takım skorlu modlarda
-    /// winnerTeam ("red"|"blue"|""), bireysel skorlu modlarda winnerPlayerId (0 = yok/berabere).
-    /// Bir mod ikisini de doldurmaz; okuyan istemci dolu olana bakar.
+    /// The winner comes through ONE of two channels (rules.scoring, §10.5): winnerTeam in team-scored
+    /// modes, winnerPlayerId (0 = none/draw) otherwise. A mode never fills both.
     [Serializable]
     public class MatchEndMsg
     {
@@ -688,13 +568,9 @@ namespace VortexArena.Protocol
         public int scoreBlue;
     }
 
-    /// <summary>Lobiye dönüş (§10.7). Şekli <see cref="LoadMatchMsg"/> ile aynıdır: lobi de bir
-    /// sahne + bir profil taşır.
-    /// <para><c>sceneName</c> işletmenin lobi sahnesidir (<c>server.json → lobbyScene</c>);
-    /// <b>boş gelirse</b> istemci kendi kabuk <c>Lobby</c> sahnesine döner — eski sunucuyla ve
-    /// lobisi yapılandırılmamış kurulumla uyum bu sayede korunur.</para>
-    /// <para><c>modeId</c> lobide <c>"lobby"</c>dir: istemci silah loadout'unu bu anahtarla
-    /// çözer. Kayıtlı bir maç modu DEĞİLDİR (§10.5) — <c>start_match</c> ile başlatılamaz.</para></summary>
+    /// <summary>Return to lobby (§10.7); shaped like <see cref="LoadMatchMsg"/>. An empty
+    /// <c>sceneName</c> falls back to the client's own shell <c>Lobby</c> scene. <c>modeId</c> is
+    /// <c>"lobby"</c>, which is NOT a registered match mode (§10.5).</summary>
     [Serializable]
     public class ReturnToLobbyMsg
     {
@@ -702,11 +578,10 @@ namespace VortexArena.Protocol
         public string modeId;
         public string sceneName;
 
-        /// <summary>Sahnenin kaç saniyedir sahnelendiği; yeni sahne sahnelenirken 0
-        /// (<see cref="MatchInfo.sceneElapsed"/> ile aynı alan).</summary>
+        /// <summary>How long the scene has been staged; 0 while a new one is being staged.</summary>
         public float sceneElapsed;
 
-        /// <summary>Lobi profilinin kural şekli (§10.5); lobide bugünkü varsayılandır.</summary>
+        /// <summary>Rule shape of the lobby profile (§10.5).</summary>
         public ModeRulesInfo rules;
     }
 
@@ -723,10 +598,9 @@ namespace VortexArena.Protocol
         public string reason;
     }
 
-    /// Yalnız role=admin bağlantılara (§5.3): adminler arası ORTAK durumun tek doğruluk kaynağı.
-    /// modeId/sceneName ortak seçimdir (arayüz kendi yerelini değil bunu gösterir); notice son
-    /// admin eyleminin "<ad>: <eylem>" özetidir; adminCount çevrimiçi admin sayısıdır.
-    /// Görünüm tercihleri (kamera, halka, saydamlık…) BURAYA GİRMEZ — her admin'in kendi ekranı.
+    /// Admin connections only (§5.3): the single source of truth for state SHARED between admins —
+    /// selection, a "<name>: <action>" notice of the last admin action, online admin count.
+    /// ⚠️ Per-screen view preferences (camera, rings, transparency…) do NOT belong here.
     [Serializable]
     public class AdminStateMsg
     {
@@ -734,91 +608,71 @@ namespace VortexArena.Protocol
         public string modeId;
         public string sceneName;
 
-        /// <summary>Bir sonraki maçın ortak parametreleri; 0 = hiç seçilmedi (mod varsayılanı).</summary>
+        /// <summary>Shared parameters for the next match; 0 = never chosen (mode default).</summary>
         public int roundSeconds;
 
-        /// <summary>Ortak skor/tur limiti seçimi; <c>0</c> = hiç seçilmedi (mod varsayılanı),
-        /// <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = sınırsız seçildi.</summary>
+        /// <summary>Shared score/round limit; <c>0</c> = never chosen,
+        /// <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = unlimited.</summary>
         public int scoreLimit;
 
-        /// <summary>Geri sayım uzunluğu (sn); 0 = hiç seçilmedi (COUNTDOWN_SECONDS).</summary>
+        /// <summary>Countdown length (s); 0 = never chosen (COUNTDOWN_SECONDS).</summary>
         public int countdownSeconds;
 
-        /// <summary>Dost ateşi anahtarının O ANKİ değeri (§5.2). Seçim değil <b>yürürlükteki
-        /// durum</b>dur: koşan maçta da geçerlidir, bu yüzden diğer alanların "0 = seçilmedi"
-        /// sözleşmesine girmez.</summary>
+        /// <summary>CURRENT friendly-fire value (§5.2): effective state, not a selection, so it is outside
+        /// the "0 = not chosen" contract.</summary>
         public bool friendlyFire;
 
-        /// <summary>Kalibre modunun O ANKİ değeri (<c>ArenaProtocol.CALIB_MODE_*</c>, §5.2).
-        /// <see cref="friendlyFire"/> ile aynı sınıf: seçim değil <b>yürürlükteki durum</b>, bu
-        /// yüzden "0 = seçilmedi" sözleşmesine ve seçim kilidine girmez.
-        /// <para>Oyuncuya buradan GİTMEZ — o değeri <see cref="WelcomeMsg.calibrationMode"/> ile
-        /// bir kez alır.</para></summary>
+        /// <summary>CURRENT calibration mode (§5.2), like <see cref="friendlyFire"/>. ⚠️ Players do NOT
+        /// get it from here — they read it once from <see cref="WelcomeMsg.calibrationMode"/>.</summary>
         public string calibrationMode = "";
 
         public string notice;
         public int adminCount;
 
-        /// <summary>Bu oturumda açılan mekan (§11) — sunucu başlarken seçilir, çalışırken
-        /// değişmez. Mekan ayrımı yoksa (maps.json boş) boş gelir.</summary>
+        /// <summary>The venue opened for this session (§11) — fixed while running; empty when there is no
+        /// venue split.</summary>
         public string venueId;
 
-        /// <summary>Bu mekanda oynatılabilen sahne adları. <b>Admin harita seçicisi kendi yerel
-        /// kataloğunu BUNUNLA süzer</b>: katalog tüm projeyi tanır, oynatılabilir olan ise
-        /// sunucunun o an açtığı mekandır. Boş gelirse (mekan ayrımı yok) süzme yapılmaz.</summary>
+        /// <summary>Scene names playable in this venue. ⚠️ The admin map picker filters its local catalogue
+        /// with THIS — the catalogue knows the whole project. Empty = no filtering.</summary>
         public string[] venueScenes;
     }
 
-    /// <summary>
-    /// Seçilen modun SUNUMA ait tek alanı (§5.3) — <b>herkese</b> gider, adminlere değil.
-    /// <para>
-    /// ⚠️ <b>Kural mesajı DEĞİLDİR:</b> <see cref="ModeRulesInfo"/> gibi <c>ModeRuntime</c>'a
-    /// uygulanmaz. Aktif kuralların kaynağı <c>load_match</c>/<c>welcome</c>/<c>return_to_lobby</c>
-    /// olarak kalır; bu mesaj yalnız "henüz başlamamış maçın şekli"ni anlatır ve tek tüketicisi
-    /// <c>BaseZoneVisibility</c>'dir (taban şeritleri görünsün mü — §10.7).
-    /// </para>
-    /// <para>Eski sunucu bu mesajı hiç yollamaz; istemci o zaman aktif kuralın takım kipine düşer,
-    /// bu yüzden <c>PROTOCOL_VERSION</c> artmadı.</para>
-    /// </summary>
-    /// <summary>
-    /// Koşan maçın kural şekli DEĞİŞTİ (§5.3) — <b>herkese</b> yayınlanır.
-    /// <para>
-    /// Bugün tek tetikleyicisi dost ateşi anahtarıdır (<see cref="SetFriendlyFireMsg"/>): kurallar
-    /// normalde <c>welcome</c>/<c>load_match</c> ile geldiği için maç ORTASINDA değişen bir kuralı
-    /// taşıyacak kanal yoktu. Bu mesaj o farkı taşır; geç bağlanan istemci doğru değeri yine
-    /// <c>welcome.match.rules</c>'tan alır (sunucu <c>_rules</c>'ü güncel tutuyor).
-    /// </para>
-    /// <para>⚠️ <c>SelectionStateMsg</c>'in aksine bu <b>gerçek bir kural mesajıdır</b> ve
-    /// <c>ModeRuntime</c>'a uygulanır. Eski sunucu hiç yollamaz, eski istemci tanımadığı tipi yok
-    /// sayar → <c>PROTOCOL_VERSION</c> artmadı.</para>
-    /// </summary>
+    /// <summary>The rule shape of the running match CHANGED (§5.3) — broadcast to <b>everyone</b>. Its
+    /// only trigger today is the friendly-fire switch, since rules otherwise arrive with
+    /// <c>welcome</c>/<c>load_match</c>. ⚠️ Unlike <see cref="SelectionStateMsg"/> this IS a real rule
+    /// message and is applied to <c>ModeRuntime</c>.</summary>
     [Serializable]
     public class RulesUpdateMsg
     {
         public string type = MessageTypes.RulesUpdate;
 
-        /// <summary>O an geçerli tür (<c>match_state.modeId</c> ile aynı) — <c>ModeRuntime</c> kuralı
-        /// modla birlikte sakladığı için mesaj ikisini birden taşır.</summary>
+        /// <summary>The currently valid kind — <c>ModeRuntime</c> stores rules with the mode, so the
+        /// message carries both.</summary>
         public string modeId;
 
         public ModeRulesInfo rules;
     }
 
+    /// <summary>The only PRESENTATION field of the selected mode (§5.3) — goes to <b>everyone</b>.
+    /// ⚠️ <b>NOT a rule message:</b> never applied to <c>ModeRuntime</c>; active rules still come from
+    /// <c>load_match</c>/<c>welcome</c>/<c>return_to_lobby</c>. It only describes the shape of a match
+    /// that has not started, and its sole consumer is <c>BaseZoneVisibility</c> (§10.7).</summary>
     [Serializable]
     public class SelectionStateMsg
     {
         public string type = MessageTypes.SelectionState;
 
-        /// <summary>Ortak seçim (<c>admin_state.modeId</c> ile aynı değer; açılışta "lobby").
-        /// Maç türünü DEĞİŞTİRMEZ — o `start_match`'i bekler.</summary>
+        /// <summary>The shared selection ("lobby" at startup). ⚠️ Does NOT change the match kind — that
+        /// waits for `start_match`.</summary>
         public string modeId;
 
-        /// <summary>"two" | "none" — seçili modun takım kipi (§10.5). Tanınmayan modda "two".</summary>
+        /// <summary>"two" | "none" — team mode of the selected mode (§10.5); "two" if unknown.</summary>
         public string teamMode;
     }
 
-    /// <summary>Tek oyuncunun ağ telemetrisi (<see cref="NetStatsMsg"/> girdisi). Değerler
-    /// İSTEMCİDEN gelir (<see cref="StatusMsg"/>), sunucu yalnız taşır; -1 = bilinmiyor.</summary>
+    /// <summary>One player's net telemetry (an entry of <see cref="NetStatsMsg"/>). Values come from the
+    /// CLIENT (<see cref="StatusMsg"/>), the server only carries them; -1 = unknown.</summary>
     [Serializable]
     public class NetStatsEntry
     {
@@ -828,18 +682,12 @@ namespace VortexArena.Protocol
         public float lossPct = -1f;
     }
 
-    /// <summary>
-    /// Yalnız <c>role=admin</c> bağlantılara, 1 Hz: oyuncu başına ping/jitter/kayıp.
-    /// <para>⚠️ <b>Broadcast EDİLMEZ.</b> Herkese yayınlamak, oyuncu sayısıyla kare büyüyen bir
-    /// fan-out üretirdi — yani bu telemetrinin ölçmek için var olduğu sorunun aynısını. Hedef kuralı
-    /// <c>admin_state</c> ile aynıdır.</para>
-    /// <para>⚠️ <b>Roster'ın (<c>lobby_state</c>) alternatifi değil, bilinçli olarak ayrı bir
-    /// kanaldır:</b> roster'ın bir <c>version</c>'ı ve uzlaştırma protokolü var (§5.1); saniyede bir
-    /// değişen telemetriyi oraya koymak versiyonu sürekli çevirip uzlaştırmayı anlamsızlaştırırdı.
-    /// Bu mesajın kaybı ise zararsızdır (teşhis verisi, bir sonraki saniye yenisi gelir).</para>
-    /// <para><b>Bant/bayt alanı YOKTUR ve eklenmez</b> — hacim sayıları sunucu konsolunda kalır
-    /// (`[state]` satırı); operatörün eyleme çevirebileceği sayı ping'dir.</para>
-    /// </summary>
+    /// <summary>To <c>role=admin</c> connections only, at 1 Hz: ping/jitter/loss per player.
+    /// <para>⚠️ <b>NOT broadcast</b> — that would produce a fan-out growing with the square of the player
+    /// count, exactly the problem this telemetry measures. ⚠️ Deliberately outside the roster: per-second
+    /// telemetry would spin the roster <c>version</c> and break reconciliation (§5.1); losing this
+    /// message is harmless. ⚠️ <b>No bandwidth/byte field and none will be added</b> — the number an
+    /// operator can act on is ping.</para></summary>
     [Serializable]
     public class NetStatsMsg
     {
@@ -847,20 +695,12 @@ namespace VortexArena.Protocol
         public NetStatsEntry[] players;
     }
 
-    /// <summary>
-    /// Tek bir fiziksel ihlalin <b>başlangıcı ya da bitişi</b> (§5.3/§10.9). Yalnız
-    /// <c>role=admin</c> bağlantılara gider — <see cref="HealthUpdateMsg"/>'ın dar yayın
-    /// gerekçesiyle aynı sınıf: tüketicisi tek bir ekrandır, herkese yayınlamak oyuncu sayısıyla
-    /// büyüyen bir fan-out üretirdi.
-    /// <para><b>Kaynağı SUNUCUDUR</b>, admin istemcisinin kenar türetmesi değil: iki operatör aynı
-    /// listeyi görür, süre tek saatle ölçülür ve maç sonu istatistiği aynı defterden çıkar.</para>
-    /// <para>⚠️ <b>Kenar tetiklidir</b> — durum taşıyan snapshot bitlerinin (<c>FLAG_IN_OBSTACLE</c>
-    /// / <c>FLAG_OUT_OF_BOUNDS</c>) aksine her tikte tekrarlanmaz. Kaybolan bir mesaj yalnız
-    /// <b>log kaybıdır</b>: halka snapshot bitinden beslendiği için görsel bozulmaz. Ayrım
-    /// bilinçlidir — feed operatörün iş listesi, halka anlık durumdur.</para>
-    /// <para>⚠️ <see cref="ArenaProtocol.VIOLATION_MIN_SECONDS"/>'ten kısa temaslar hiç
-    /// bildirilmez.</para>
-    /// </summary>
+    /// <summary>The START or END of a single physical violation (§5.3/§10.9). To <c>role=admin</c>
+    /// connections only, like <see cref="HealthUpdateMsg"/>. <b>The SERVER is the source</b>, not edge
+    /// detection in the admin client: one list, one clock, one ledger.
+    /// <para>⚠️ <b>Edge-triggered</b>, not repeated every tick like the snapshot bits, so a lost message
+    /// is only a LOG loss (the ring feeds off the snapshot bit). ⚠️ Contacts shorter than
+    /// <see cref="ArenaProtocol.VIOLATION_MIN_SECONDS"/> are never reported.</para></summary>
     [Serializable]
     public class ViolationMsg
     {
@@ -870,35 +710,26 @@ namespace VortexArena.Protocol
         /// <summary><c>ArenaProtocol.VIOLATION_KIND_*</c>.</summary>
         public string kind;
 
-        /// <summary><c>true</c> = ihlal başladı, <c>false</c> = bitti.</summary>
+        /// <summary><c>true</c> = violation started, <c>false</c> = ended.</summary>
         public bool active;
 
-        /// <summary><c>active == false</c> iken o ihlalin süresi (sn); <c>active == true</c> iken
-        /// <c>0</c> — süre henüz bilinmiyor.</summary>
+        /// <summary>Duration (s) when <c>active == false</c>; <c>0</c> while it is <c>true</c>.</summary>
         public float seconds;
 
-        /// <summary>Oyuncunun bu maçtaki o TÜRDEN ihlal sayısı.</summary>
+        /// <summary>The player's count of violations OF THIS KIND in this match.</summary>
         public int count;
 
-        /// <summary>Aynı türden toplam süre (sn) — maç sonu istatistiği.</summary>
+        /// <summary>Total time of the same kind (s) — end-of-match statistic.</summary>
         public float totalSeconds;
     }
 
-    /// <summary>
-    /// Operatörün <see cref="ReloadCalibrationMsg"/> düğmesinin CEVABI (§5.3/§10.6). Yalnız
-    /// <c>role=admin</c> bağlantılara gider — <see cref="NetStatsMsg"/>/<see cref="ViolationMsg"/>
-    /// ile aynı sınıf: tüketicisi tek bir ekrandır.
-    /// <para>⚠️ <b>Bu bir OLAYDIR, durum değildir.</b> Durumu roster taşır
-    /// (<see cref="PlayerInfo.calibrated"/> / <see cref="PlayerInfo.calibrationError"/>); bu mesaj
-    /// yalnız "az önce basılan düğme ne oldu" sorusunu cevaplar.</para>
-    /// <para>⚠️ <b>Sunucu bekleyen istek defteri TUTMAZ:</b> başlıktan gelen her
-    /// <c>set_calibration{calibrated:true}</c> ve her <c>set_calibration{error}</c> bir sonuç satırı
-    /// üretir; hangi satırın hangi düğmeye ait olduğunu ADMIN ARAYÜZÜ bilir (bekleyen satırı yoksa
-    /// yok sayar). Defter tutmak sunucuya, tek tüketicisi bir ekran olan bir zaman aşımı
-    /// sorumluluğu yüklerdi.</para>
-    /// <para>Sonucun <c>lobby_state</c> ile taşınmama gerekçesi: zaten kalibreli bir oyuncuda
-    /// BAŞARILI yeniden yükleme roster'da hiçbir alanı değiştirmez (yayın guard'ı, §5.3) — düğme
-    /// sonsuza kadar "yükleniyor" kalırdı.</para>
+    /// <summary>The ANSWER to the operator's <see cref="ReloadCalibrationMsg"/> button (§5.3/§10.6). To
+    /// <c>role=admin</c> connections only.
+    /// <para>⚠️ <b>An EVENT, not state</b> — state lives in the roster; this only answers "what happened
+    /// to the button I just pressed". ⚠️ <b>The server keeps NO pending-request ledger:</b> every
+    /// <c>set_calibration</c> produces a result line and the ADMIN UI matches it to a button.</para>
+    /// <para>It does not ride <c>lobby_state</c> because a successful reload on an already-calibrated
+    /// player changes no roster field (broadcast guard, §5.3) — the button would hang on "loading".</para>
     /// </summary>
     [Serializable]
     public class CalibrationResultMsg
@@ -906,15 +737,14 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.CalibrationResult;
         public int playerId;
 
-        /// <summary><c>true</c> = başlık kayıtlı çapadan hizalamayı geri yükledi.</summary>
+        /// <summary><c>true</c> = the headset restored alignment from the saved anchor.</summary>
         public bool ok;
 
-        /// <summary><c>ok == false</c> iken insan okuyabilir gerekçe; doğrulanmayan serbest metin
-        /// (<see cref="SetCalibrationMsg.error"/> ile aynı değer).</summary>
+        /// <summary>Human-readable reason when <c>ok == false</c>; free, unvalidated text.</summary>
         public string error = "";
     }
 
-    // ---- UDP beacon (§4; WS mesajı değildir, alıcı app alanını doğrular) ----
+    // ---- UDP beacon (§4; not a WS message, the receiver validates the app field) ----
 
     [Serializable]
     public class BeaconMsg

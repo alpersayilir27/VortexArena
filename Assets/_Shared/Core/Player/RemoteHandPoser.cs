@@ -6,7 +6,7 @@ namespace VortexArena.Core.Player
     /// <summary>
     /// Uzak avatarın elini <b>elindeki eşyaya oturtur</b>: parmakları eşyanın duruşundan sürer
     /// (§6.9 — parmaklar telde gitmez; boşta <c>Idle</c>, eşya tutarken slotun preset'i, ikisi
-    /// arasında <see cref="HandGripPresets.TransitionSeconds"/>'lik yumuşak geçiş) ve kolu, bileği
+    /// arasında <see cref="HandPoseLibrary.TransitionSeconds"/>'lik yumuşak geçiş) ve kolu, bileği
     /// eşyanın kavrama noktasına götürecek biçimde çözer (<see cref="TwoBoneIk"/>).
     /// <para>
     /// <b>Kolun neden sürülmesi gerekiyor:</b> eşya, ana elin <b>kumanda anchor'ı</b> pozundan
@@ -50,7 +50,7 @@ namespace VortexArena.Core.Player
         /// <summary>
         /// Bir elin parmak duruşu geçişi — yerel elin (<c>HandGripPoser</c>) uzak aynası: hedef
         /// duruş değişince o anki gösterilen duruştan yenisine
-        /// <see cref="HandGripPresets.TransitionSeconds"/> boyunca gidilir. Uzak avatarın parmakları
+        /// <see cref="HandPoseLibrary.TransitionSeconds"/> boyunca gidilir. Uzak avatarın parmakları
         /// da böylece silah alınınca kapanır, bırakınca açılır — anında zıplamaz ve yerel elle aynı
         /// hızda hareket eder.
         /// </summary>
@@ -86,10 +86,10 @@ namespace VortexArena.Core.Player
 
                 if (_progress < 1f)
                 {
-                    _progress = HandGripPresets.TransitionSeconds > 0f
-                        ? Mathf.Min(1f, _progress + deltaTime / HandGripPresets.TransitionSeconds)
+                    _progress = HandPoseLibrary.TransitionSeconds > 0f
+                        ? Mathf.Min(1f, _progress + deltaTime / HandPoseLibrary.TransitionSeconds)
                         : 1f;
-                    _shown = HandPoseProfile.Lerp(_from, _target, HandGripPresets.Ease(_progress));
+                    _shown = HandPoseProfile.Lerp(_from, _target, HandPoseLibrary.Ease(_progress));
                 }
                 else
                 {
