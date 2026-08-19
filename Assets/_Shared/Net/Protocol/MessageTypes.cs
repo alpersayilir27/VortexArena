@@ -25,7 +25,9 @@ namespace VortexArena.Protocol
         public const string Identify = "identify"; // sunucu → istemci yönü de aynı type
         public const string ReturnToLobby = "return_to_lobby"; // sunucu → istemci yönü de aynı type
         public const string SetSelection = "set_selection"; // ortak mod/harita seçimi (maçı başlatmaz)
-        public const string ClearCalibration = "clear_calibration"; // kalibrasyonu sıfırla; playerId 0 = herkes (§10.6)
+        // Hizalamayı geçersiz kılar; keepSaved=false (varsayılan) cihazdaki çapayı da siler.
+        // playerId 0 = herkes (§10.6). Sunucu → istemci yönü de aynı type.
+        public const string ClearCalibration = "clear_calibration";
         // Kayıtlı çapadan hizalamayı yeniden yükletir; playerId 0 = herkes (§10.6).
         // Sunucu → istemci yönü de aynı type.
         public const string ReloadCalibration = "reload_calibration";
