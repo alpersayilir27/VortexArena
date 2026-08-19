@@ -38,6 +38,13 @@ namespace VortexArena.App.Admin
         private const float MinHeight = 0.2f;
 
         /// <summary>
+        /// POV kamerasının baş pozundan ileri kaydırma miktarı (m): kafaya takılı aksesuarlar
+        /// (şapka, gözlük) kadrajın içinde kalmasın. Büyütürken dikkat — fazlası kamerayı duvarın
+        /// içine sokar.
+        /// </summary>
+        private const float PovForwardOffset = 0.1f;
+
+        /// <summary>
         /// Kuş bakışı kamera yüksekliğinin VARSAYILANI (m) — ortografikte yalnız kırpma için
         /// anlamlı. Mekanın boyut dosyasında <c>topViewHeight</c> yazıyorsa o kazanır: yüksek
         /// tavanlı bir mekanda 20 m çatının altında kalabilir.
@@ -123,13 +130,14 @@ namespace VortexArena.App.Admin
         /// <summary>
         /// Gözlemcinin kulağını kamerasıyla aynı yere bakar hâle getirir
         /// (<see cref="RemoteShotFx.SpectatorAudioFocus"/>).
-        /// <para><b>Yalnız POV'da</b> odak vardır: izlenen oyuncunun silahı duyulur, sahadaki diğer
-        /// oyuncuların atışları susar — hepsi birden çalınca operatör hangi sesin izlediği oyuncuya
-        /// ait olduğunu ayırt edemez.</para>
-        /// <para>⚠️ <b>Kuş bakışı ve serbest kipte filtre YOKTUR</b> (odak <c>null</c>): o kiplerde
-        /// operatör sahanın tamamına bakıyor ve atış sesi "nerede çatışma var" sorusunun cevabıdır
-        /// — susturmak kuş bakışını sağırlaştırırdı. Aynı sebeple POV'da <b>oyuncu seçilmemişse</b>
-        /// (kamera son konumunda donuktur) filtre yine kurulmaz: susturacak bir odak yok.</para>
+        /// <para><b>Yalnız POV'da</b> odak vardır: izlenen oyuncunun silahı tam sesle, sahadaki
+        /// diğer oyuncuların atışları kısık çalar — hepsi eşit sesle çalınca operatör hangi sesin
+        /// izlediği oyuncuya ait olduğunu ayırt edemez. ⚠️ Kısılır, SUSTURULMAZ: POV'daki operatör
+        /// arenanın öbür ucundaki çatışmayı duymaya devam etmeli.</para>
+        /// <para>⚠️ <b>Kuş bakışı ve serbest kipte odak YOKTUR</b> (<c>null</c>): o kiplerde
+        /// operatör sahanın tamamına bakıyor, kimseyi öne çıkarmanın anlamı yok. Aynı sebeple
+        /// POV'da <b>oyuncu seçilmemişse</b> (kamera son konumunda donuktur) odak kurulmaz:
+        /// öne çıkarılacak kimse yok.</para>
         /// <para>⚠️ Soru her karede sorulur, <c>AdminSession.Changed</c>'e abone olunarak DEĞİL:
         /// odağı besleyen iki değer de (kip + seçili oyuncu) koşan maçta değişiyor ve kaçırılan
         /// tek bir olay operatöre kalıcı olarak YANLIŞ oyuncunun silahını duyurur. Aynı gerekçe
@@ -157,7 +165,10 @@ namespace VortexArena.App.Admin
             }
 
             Pose world = ArenaSpace.ArenaToWorld(head);
-            transform.SetPositionAndRotation(world.position, world.rotation);
+            // Kamera baş pozunun biraz ÖNÜNDE durur: aksesuar (şapka, gözlük) kafa kemiğine
+            // takılı olduğu için tam baş noktasında kadrajı kapatıyor.
+            Vector3 position = world.position + world.rotation * Vector3.forward * PovForwardOffset;
+            transform.SetPositionAndRotation(position, world.rotation);
         }
 
         // --------------------------------------------------------------- serbest

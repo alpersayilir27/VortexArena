@@ -28,7 +28,8 @@ namespace VortexArena.Core.Combat
     /// havuzda tembel üretilir (<c>WeaponCatalog.RemoteShotFxPrefab</c> varsa o, yoksa sade
     /// AudioSource fallback'i); tracer havuzu <see cref="ShotTracer"/>'da. Admin gözlemci de bu
     /// olayları alır ve <b>GÖRSEL</b> sunumun tamamını aynı şekilde görür — alev, tracer ve geri
-    /// tepmede rol ayrımı YOKTUR. Tek ayrım SESTEDİR (<see cref="SpectatorAudioFocus"/>).
+    /// tepmede rol ayrımı YOKTUR. Tek ayrım ses SEVİYESİNDEDİR: gözlemci POV'da izlemediği
+    /// oyuncuların atışını kısık duyar (<see cref="SpectatorAudioFocus"/>).
     /// </para>
     /// </summary>
     public class RemoteShotFx : MonoBehaviour
@@ -38,6 +39,15 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Bu mesafeden (metre) uzak atışlarda ses çalınmaz, yalnız flaş kalır.</summary>
         private const float MaxAudibleDistanceMeters = 40f;
+
+        /// <summary>
+        /// Gözlemci odağı dışındaki oyuncuların atış sesi bu çarpanla kısılır
+        /// (<see cref="SpectatorAudioFocus"/>). ⚠️ <b>Sıfır DEĞİL:</b> odak dışını tümden
+        /// susturmak POV'u sağırlaştırır — operatör arenanın öbür ucundaki çatışmayı duyamaz ve
+        /// "orada bir şey oluyor" bilgisini ancak kip değiştirerek geri alır. Kısılmış ses o
+        /// bilgiyi bırakır, izlenen oyuncuyu yine de baskın kılar.
+        /// </summary>
+        private const float UnfocusedVolumeScale = 0.3f;
 
         /// <summary>Fallback AudioSource'un sönümlenme mesafesi.</summary>
         private const float FallbackMaxDistanceMeters = 60f;
@@ -68,21 +78,25 @@ namespace VortexArena.Core.Combat
         public static RemoteShotFx Instance { get; private set; }
 
         /// <summary>
-        /// Gözlemcinin ses odağı: uzak atış sesi <b>hangi</b> oyuncu için çalınacak.
+        /// Gözlemcinin ses odağı: uzak atış sesinde <b>hangi</b> oyuncu öne çıkacak.
         /// <list type="bullet">
-        /// <item><c>null</c> — <b>filtre yok</b>: her oyuncunun atışı mesafeye göre duyulur.
-        /// Oyuncu istemcisinin, gözlemcinin POV DIŞINDAKİ kiplerinin ve hiç yazılmamış hâlin
-        /// durumu budur — yani varsayılan davranış değişmez.</item>
-        /// <item><c>n</c> — yalnız o <c>playerId</c>'nin atışı duyulur, diğerleri susar.</item>
+        /// <item><c>null</c> — <b>odak yok</b>: her oyuncunun atışı mesafeye göre tam sesle
+        /// duyulur. Oyuncu istemcisinin, gözlemcinin POV DIŞINDAKİ kiplerinin ve hiç yazılmamış
+        /// hâlin durumu budur — yani varsayılan davranış değişmez.</item>
+        /// <item><c>n</c> — o <c>playerId</c> tam sesle, <b>diğerleri kısık</b>
+        /// (<see cref="UnfocusedVolumeScale"/>) duyulur.</item>
         /// </list>
+        /// <para>⚠️ Odak SUSTURMAZ, KISAR: hiçbir atış tümden düşürülmez. Susturmak POV'daki
+        /// operatörü sahanın geri kalanına sağır ederdi; kısmak izlenen oyuncuyu baskın kılarken
+        /// "arenanın öbür ucunda çatışma var" bilgisini bırakır.</para>
         /// <para>⚠️ Core, App'i göremez (asmdef grafiği aşağı akar): değeri <b>App yazar</b> —
         /// <c>AdminSpectatorCamera</c>, operatörün o karedeki kipine/seçimine göre. Tek yazan
-        /// orasıdır; ikinci bir yazan "kim sustu" sorusunu cevapsız bırakırdı.</para>
+        /// orasıdır; ikinci bir yazan "kim kısıldı" sorusunu cevapsız bırakırdı.</para>
         /// <para>Gerekçe: gözlemcinin kulağı kamerasıyla aynı yere bakar. POV'da izlenen oyuncunun
-        /// silahı duyulur (operatör onun gördüğünü görüyor, duyduğunu duyar) ve sahadaki DİĞER
-        /// oyuncuların atışları susar — hepsi birden çalınca operatör hangi sesin izlediği oyuncuya
-        /// ait olduğunu ayırt edemez. ⚠️ Kural yalnız POV içindir: kuş bakışında/serbest kipte
-        /// atış sesi "nerede çatışma var" sorusunun cevabıdır, orada filtre KURULMAZ.</para>
+        /// silahı öne çıkar (operatör onun gördüğünü görüyor, duyduğunu duyar) — hepsi eşit sesle
+        /// çalınca hangi sesin izlenen oyuncuya ait olduğu ayırt edilemez. ⚠️ Odak yalnız POV
+        /// içindir: kuş bakışında/serbest kipte atış sesi "nerede çatışma var" sorusunun
+        /// cevabıdır, orada hiçbir oyuncu kısılmaz.</para>
         /// </summary>
         public static int? SpectatorAudioFocus { get; set; }
 
@@ -754,21 +768,12 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// def yoksa (silah olmayan/katalog dışı eşya), gözlemci odağı dışındaysa ya da dinleyici
-        /// yok/uzaksa yalnız flaş kalır.
+        /// def yoksa (silah olmayan/katalog dışı eşya) ya da dinleyici yok/uzaksa yalnız flaş
+        /// kalır; gözlemci odağı dışındaki oyuncu susmaz, kısılır.
         /// </summary>
         private static void PlayShotSound(FxNode node, WeaponDefinition def, Vector3 worldPos, int playerId)
         {
             if (def == null || node.Source == null || def.FireClips == null || def.FireClips.Length == 0)
-            {
-                return;
-            }
-
-            // Gözlemci odağı (App yazar): odak varsa yalnız odaktaki oyuncunun atışı duyulur.
-            // ⚠️ Kapı SESE aittir — alev/parçacık ve tracer (çağıranda) her oyuncu için
-            // çizilmeye devam eder: operatör sahada kimin ateş ettiğini GÖRMEK zorundadır.
-            int? focus = SpectatorAudioFocus;
-            if (focus.HasValue && focus.Value != playerId)
             {
                 return;
             }
@@ -791,8 +796,18 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // Gözlemci odağı (App yazar): odak dışındaki oyuncular SUSMAZ, kısılır — alev/parçacık
+            // ve tracer (çağıranda) zaten herkes için çizilir, operatör kimin ateş ettiğini GÖRMEK
+            // zorundadır; kısılmış ses de "orada çatışma var" bilgisini duyulur tutar.
+            int? focus = SpectatorAudioFocus;
+            float volume = def.FireVolume;
+            if (focus.HasValue && focus.Value != playerId)
+            {
+                volume *= UnfocusedVolumeScale;
+            }
+
             node.Source.pitch = def.FirePitchBase + Random.Range(-def.FirePitchJitter, def.FirePitchJitter);
-            node.Source.PlayOneShot(clip, def.FireVolume);
+            node.Source.PlayOneShot(clip, volume);
         }
 
         /// <summary>Round-robin: sıradaki (en eski) düğümü döndürür; henüz yoksa tembel üretir.</summary>
