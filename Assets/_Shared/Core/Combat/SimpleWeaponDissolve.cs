@@ -26,6 +26,13 @@ namespace VortexArena.Core.Combat
     /// sıklığı, çözülme ekseni…). Bileşen yalnız <c>_Dissolve</c>'u sürer ve albedoyu taşır;
     /// materyalin geri kalanına dokunmaz — aynı ayarın iki yerde durması sapma üretirdi.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>Silahın üstündeki dünya-uzayı panelleri (Canvas) çözülMEZ, SÖNÜMLENİR.</b> UI'ı
+    /// <c>CanvasRenderer</c> çizer: <see cref="Renderer"/>'dan türemez (yani aşağıdaki tarama onu
+    /// zaten hiç görmez), <see cref="MaterialPropertyBlock"/> kabul etmez ve çözülme materyali URP
+    /// Lit hedeflidir — TMP'nin SDF mesh'ine takılırsa yazı bozulur. Panel bu yüzden ayrı bir
+    /// kanaldan, <see cref="CanvasGroup"/> alfasıyla sürülür; zamanlama gövdeyle ORTAKtır.
+    /// </para>
     /// </summary>
     [RequireComponent(typeof(Weapon))]
     public class SimpleWeaponDissolve : MonoBehaviour
@@ -38,6 +45,12 @@ namespace VortexArena.Core.Combat
         private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
+
+        // Panelin belirmeye BAŞLADIĞI ilerleme oranı: geçişin ilk %35'inde görünmez, kalanında
+        // 0→1 sönümlenir. Gövde daha delik deşikken üstünde okunur bir HUD paneli durmasın diye.
+        // ⚠️ Serialize alan DEĞİL: `appearSeconds` gibi ikinci bir damgalama noktası açardı
+        // (WeaponKitBuilder her koşuda geri yazıyor) — panelin ayarı gövdenin süresine bağlıdır.
+        private const float UiFadeStart01 = 0.35f;
 
         // Materyal atanmamışsa uyarı OTURUM başına bir kez: eksikse her silahta eksiktir
         // (hepsi aynı prefab kitinden geliyor), örnek başına loglamak aynı satırı çoğaltırdı.
@@ -59,6 +72,12 @@ namespace VortexArena.Core.Combat
         private bool _swapped;
 
         private readonly List<Target> _targets = new List<Target>();
+
+        /// <summary>Silahın üstündeki dünya-uzayı panellerinin alfa kolu. Hedef olarak
+        /// <see cref="CanvasGroup"/> seçilmesinin sebebi HİYERARŞİK olması: TMP çalışma anında
+        /// alt-mesh doğurabiliyor (yedek font/sprite) ve grafik başına toplanan bir liste o
+        /// düğümleri kaçırıp tam opak bırakırdı.</summary>
+        private readonly List<CanvasGroup> _canvasGroups = new List<CanvasGroup>();
 
         /// <summary>Efektin dokunduğu tek bir Renderer ve onu eski hâline döndürmek için gereken
         /// her şey. Property block Renderer BAŞINA tutulur: albedo dokusu silahtan silaha değil,
@@ -131,6 +150,46 @@ namespace VortexArena.Core.Combat
                     Block = new MaterialPropertyBlock(),
                 });
             }
+
+            CollectCanvasGroups(frame);
+        }
+
+        /// <summary>
+        /// Silahın üstündeki panellerin (<c>AmmoCanvas</c>) alfa kolunu toplar; eksikse
+        /// <see cref="CanvasGroup"/>'u çalışma anında EKLER.
+        /// <para>
+        /// ⚠️ Bileşen prefaba elle konmaz ve <c>WeaponKitBuilder</c>'da bir adım açılmaz: yeni bir
+        /// silah eklendiğinde sessizce unutulacak bir insan adımı doğardı — panel o silahta tek
+        /// başına anında belirir ve kimse fark etmezdi. Ekleme burada, tek yerde yaşıyor.
+        /// </para>
+        /// <para><see cref="WeaponFrame"/>'in alt ağacı Renderer tarafındaki kuralla aynı sebeple
+        /// atlanır: çerçeve KAYNAK silaha aittir, klonda hiç yoktur.</para>
+        /// </summary>
+        private void CollectCanvasGroups(WeaponFrame frame)
+        {
+            Canvas[] canvases = GetComponentsInChildren<Canvas>(true);
+
+            for (int i = 0; i < canvases.Length; i++)
+            {
+                Canvas canvas = canvases[i];
+                if (canvas == null)
+                {
+                    continue;
+                }
+
+                if (frame != null && canvas.transform.IsChildOf(frame.transform))
+                {
+                    continue;
+                }
+
+                var group = canvas.GetComponent<CanvasGroup>();
+                if (group == null)
+                {
+                    group = canvas.gameObject.AddComponent<CanvasGroup>();
+                }
+
+                _canvasGroups.Add(group);
+            }
         }
 
         private void HandleHeldChanged(bool held)
@@ -172,6 +231,7 @@ namespace VortexArena.Core.Combat
                 // görünüyor, silahın belirmesi bir jest gibi durmalı.
                 float k = Mathf.SmoothStep(0f, 1f, elapsed / appearSeconds);
                 SetDissolve(1f - k);
+                SetUiAlpha(Mathf.InverseLerp(UiFadeStart01, 1f, k));
                 yield return null;
             }
 
@@ -207,6 +267,7 @@ namespace VortexArena.Core.Combat
                 target.Renderer.sharedMaterials = GetDissolveMaterials(target);
             }
 
+            SetUiAlpha(0f); // panel de ilk kare TAM görünmesin
             _swapped = true;
         }
 
@@ -230,6 +291,11 @@ namespace VortexArena.Core.Combat
                 target.Renderer.sharedMaterials = target.OriginalMaterials;
             }
 
+            // ⚠️ Alfa da geri konur: geçiş yarıda kesilirse (obje kapandı, silah bırakıldı) panel
+            // yarı şeffaf DONARDI ve bir dahaki çağrılışta öyle gelirdi — materyaldeki tuzağın
+            // birebir aynısı.
+            SetUiAlpha(1f);
+
             _swapped = false;
         }
 
@@ -245,6 +311,21 @@ namespace VortexArena.Core.Combat
 
                 target.Block.SetFloat(DissolveId, value);
                 target.Renderer.SetPropertyBlock(target.Block);
+            }
+        }
+
+        /// <summary>Panellerin görünürlüğünü sürer (0 = yok, 1 = tam).</summary>
+        private void SetUiAlpha(float value)
+        {
+            for (int i = 0; i < _canvasGroups.Count; i++)
+            {
+                CanvasGroup group = _canvasGroups[i];
+                if (group == null)
+                {
+                    continue;
+                }
+
+                group.alpha = value;
             }
         }
 
