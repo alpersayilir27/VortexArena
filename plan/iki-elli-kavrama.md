@@ -53,7 +53,8 @@ ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`).
 2. Dört el de yazılmalı: ana kabza sağ/sol, ön kabza sağ/sol. Eksik el öteki elin kaydına düşer ve
    o el silahı yanlış tutar; **Karşı Ele Aynala** yalnız başlangıçtır.
 3. Her elin parmak preset'ini Inspector'dan seç (ana kabza `Firing`, ön kabza `Grip`).
-4. **Kaydet** → dördü `WD_*.asset`'e iner.
+4. **Kaydet** → dördü `WD_*.asset`'e iner; silah kiti kendiliğinden eşitlenir (eller tezgâhtan
+   kalkarsa *Elleri Oluştur* kayıttan aynı yere getirir).
 
 Kapsam: `WeaponKitBuilder` tablosundaki **tüm** `WPN_*`'lar; hangilerinin eksik olduğunu
 silah kiti koşusunun sonundaki uyarı listeler.

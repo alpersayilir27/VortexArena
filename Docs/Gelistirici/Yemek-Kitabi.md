@@ -495,8 +495,11 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
    aynısıdır, hiçbir parmak kumandadan/el izlemesinden oynamaz; silahı alınca el `Idle`'dan bu
    duruşa yumuşakça kapanır, bırakınca geri açılır.
 6. İstersen **Karşı Ele Aynala** ile öteki eli başlat, sonra elle düzelt.
-7. **Kaydet** (pencereden ya da elin Inspector'ından) → yaşayan **her el** `WD_*.asset`'e yazılır
-   (Undo'lu). **Elleri Temizle** tezgâhı toplar.
+7. **Kaydet** (stüdyo penceresinden; elin Inspector'ında kaydet düğmesi yoktur) → yaşayan **her el**
+   `WD_*.asset`'e yazılır (Undo'lu) ve **silah kiti kendiliğinden eşitlenir** — `Configure All Build
+   Elements > Yalnız Senkronize Et`'e ayrıca gitmen gerekmez. Kit açık prefabı yeniden yazdığı için
+   tezgâhtaki eller kalkabilir: kayıt diskte olduğundan **Elleri Oluştur** onları aynı yere geri
+   getirir. **Elleri Temizle** tezgâhı elle toplar.
 
 - ⚠️ **Aynalama yalnız BAŞLANGIÇTIR**, son söz değil: kabza simetrik değildir (tetik, şarjör, kurma
   kolu tek taraftadır) ve kayıt el başınadır. Bir eli hiç yazmazsan oyun onu öteki elin kaydına

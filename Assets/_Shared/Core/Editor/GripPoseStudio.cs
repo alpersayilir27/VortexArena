@@ -423,7 +423,10 @@ namespace VortexArena.Core.Editor
             DrawGhostSourceSection();
 
             EditorGUILayout.HelpBox(
-                "Yazan tek düğme Kaydet'tir. Sürüklediğin kök KUMANDADIR — altındaki kumanda modeli " +
+                "Yazan tek düğme Kaydet'tir; kayıttan hemen sonra silah kitini de kendisi eşitler " +
+                "(Configure All Build Elements'a gitmene gerek yok). Kit prefabı yeniden yazdığı " +
+                "için tezgâhtaki eller kalkabilir — kayıt diskte, Elleri Oluştur onları aynı yere " +
+                "geri getirir. Sürüklediğin kök KUMANDADIR — altındaki kumanda modeli " +
                 "oyunda izlenen kumandanın ta kendisidir. Silah oyunda HER ZAMAN kumandayla hizalıdır: " +
                 "kökü yalnız TAŞI (döndürmek bir şey değiştirmez, kök silahla hizalı tutulur), kumandayı " +
                 "kabzada gerçekte durduğu yere koy. Ön kabzada el silaha yapışır, silah ikinci ele göre " +
@@ -1068,35 +1071,16 @@ namespace VortexArena.Core.Editor
 
         // ----------------------------------------------------------------------- saving
 
-        /// <summary>Entry point for the "Kaydet (tüm eller)" button in the hand's Inspector, so the
-        /// user can save without going to the window.</summary>
-        internal static bool SaveAll()
-        {
-            PrefabStage stage = CurrentStage();
-            Transform weaponRoot = StageWeaponRoot(stage);
-            if (weaponRoot == null)
-            {
-                Debug.LogWarning($"{LOG} Kaydetmek için prefab kipi açık olmalı.");
-                return false;
-            }
-
-            WeaponDefinition definition = ResolveDefinition(weaponRoot.gameObject);
-            if (definition == null)
-            {
-                Debug.LogWarning($"{LOG} Prefabın Weapon bileşeninde tanım yok — kaydedilecek asset " +
-                                 "bulunamadı.");
-                return false;
-            }
-
-            return SaveHands(weaponRoot, definition, FindHands(stage.scene));
-        }
-
         /// <summary>Turns the bench placement into persistent data: for every live hand, the
         /// controller root's item-local pose + preset → <c>WD_*.asset</c>.
         /// <para>⚠️ Nothing is written into the prefab contents and the prefab is not saved: the
         /// record lives only in the definition, and the hands are separate stage-scene roots anyway.</para>
         /// <para>⚠️ Never writes in Play mode: the record goes to disk via <c>AssetDatabase</c> and a
-        /// value written during Play becomes ambiguous at the next domain reload.</para></summary>
+        /// value written during Play becomes ambiguous at the next domain reload.</para>
+        /// <para>A successful write also runs the weapon kit (<see cref="RunWeaponKit"/>): the record
+        /// is not a product on its own — the socket indicator, the WPN prefabs and the catalog derive
+        /// from it, and leaving that to a second tool made "I saved but nothing changed in game" a
+        /// silent step.</para></summary>
         private static bool SaveHands(Transform weaponRoot, WeaponDefinition definition,
             List<GripHandAuthoring> hands)
         {
@@ -1135,7 +1119,40 @@ namespace VortexArena.Core.Editor
 
             Debug.Log($"{LOG} '{weaponRoot.name}' kavraması yazıldı: {written} el → " +
                       $"{definition.name}.asset", definition);
+
+            // ⚠️ delayCall: kit WPN prefabını diske yeniden yazar, açık prefab kipi de içeriğini
+            // yeniden yükler. Bu OnGUI'nin ORTASINDA olursa pencere yok edilmiş bir weaponRoot'u
+            // çizmeye devam eder (MissingReferenceException) — kit, kare bittikten sonra koşar.
+            EditorApplication.delayCall += RunWeaponKit;
             return true;
+        }
+
+        /// <summary>Weapon kit sync run right after a save, so the user does not have to open
+        /// <c>Configure All Build Elements</c> and press "Yalnız Senkronize Et" by hand: the record
+        /// only becomes visible in game through the kit (<c>VA_GripSocket</c>, the WPN prefabs, the
+        /// catalog).
+        /// <para>⚠️ The exception is swallowed and only logged (same reason as
+        /// <c>BuildElementsConfigurator.SyncWeaponKit</c>): a slip in the kit must not make an
+        /// already-written record look like a failed save.</para>
+        /// <para>⚠️ The bench empties: the kit rewrites the open <c>WPN_*</c> prefab, the prefab
+        /// stage reloads its contents and the <c>DontSave</c> hand roots die with it. This is not a
+        /// loss — the record is on disk and <i>Elleri Oluştur</i> brings the hands back to the very
+        /// same place (the window says so in its notice).</para>
+        /// <para>⚠️ No dialog and no progress bar here: a modal blocks Unity's main thread and times
+        /// out under CLI. The kit writes its own summary line to the console.</para></summary>
+        private static void RunWeaponKit()
+        {
+            try
+            {
+                WeaponKitBuilder.BuildAll();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"{LOG} Kavrama kaydı yazıldı ama silah kiti eşitlemesi hata verdi — " +
+                               "kayıt diskte, kit eşitlenmedi (Tools > VortexArena > Build > " +
+                               "Configure All Build Elements > Yalnız Senkronize Et ile tekrar " +
+                               "dene): " + e);
+            }
         }
 
         private static WeaponDefinition ResolveDefinition(GameObject root)
