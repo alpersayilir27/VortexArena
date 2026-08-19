@@ -232,19 +232,25 @@ namespace VortexArena.Core.Combat
         /// <c>random</c> AND a match is set up (FFA). The free playground is excluded.</summary>
         private static bool ModeDistributesWeapons => IsRandomGrant && !IsFreePlayground;
 
-        /// <summary>May the player hold a weapon right now: must be ALIVE and CALIBRATED.
-        /// <para>Death: no "I am still playing" feel. Uncalibrated: the player cannot fire anyway
-        /// (§10.6, <c>PlayerCombatState.CanFire</c>), and holding a gun whose trigger does nothing
-        /// would suggest the gun is broken.</para>
+        /// <summary>May the player hold a weapon right now: must be CALIBRATED.
+        /// <para>⚠️ DEATH IS NOT A GATE HERE and is not added back. A dead player keeps the weapon
+        /// in hand and may take one from a frame: in a round-based mode death parks the player in
+        /// the ghost state for the whole regroup + countdown (no revive), so taking the gun away
+        /// would mean minutes of empty hands and a second walk to the rack every round.</para>
+        /// <para><b>Damage stays impossible and is not re-checked here.</b> The trigger is closed
+        /// by <c>PlayerCombatState.CanFire</c> (ALIVE + phase/<c>fireWhilePaused</c>), and even if
+        /// a round left the muzzle the server drops <c>hit_report</c> outside <c>playing</c>
+        /// (§10.3) — holding is a PRESENTATION state, the damage gate is elsewhere.</para>
+        /// <para>Uncalibrated stays closed: such a player can fire in NO phase (§10.6,
+        /// <c>PlayerCombatState.CanFire</c>) and cannot revive either, so the gun would never come
+        /// alive in their hands.</para>
         /// <para>⚠️ BOTH delivery paths go through this single gate (random grant and frame clone)
         /// — closing one and leaving the other open would break the rule per mode. The third path,
         /// frame SELECTION, is closed separately in <see cref="WeaponFrame.Filter"/>.</para>
         /// <para>Calibration is POLLED per frame rather than subscribed: this loop already runs
         /// every frame, so the weapon leaves the hand on the frame the state
         /// breaks.</para></summary>
-        private static bool CanHoldWeapon =>
-            (PlayerCombatState.Instance == null || PlayerCombatState.Instance.IsAlive) &&
-            CalibrationState.IsCalibrated;
+        private static bool CanHoldWeapon => CalibrationState.IsCalibrated;
 
         private void HandleRulesChanged() => ApplyRules();
 
@@ -904,9 +910,10 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>A revived player returns with a FULL magazine.
-        /// <para>⚠️ <c>Weapon.HandleAliveChanged</c> CANNOT do this: it requires <c>IsHeld</c>, but
-        /// at revive time the clone is stowed (taken away on death), so the weapon would never
-        /// refill and the player would return with the previous life's half magazine.</para></summary>
+        /// <para>⚠️ <c>Weapon.HandleAliveChanged</c> is NOT enough: it requires <c>IsHeld</c>, and a
+        /// clone that was stowed while dead (grip released, rig unresolved) is DISABLED — it has
+        /// unsubscribed and would never refill, so the player would return with the previous life's
+        /// half magazine. This path reaches the clone whatever state it is in.</para></summary>
         private void HandleAliveChanged(bool alive)
         {
             if (alive)
