@@ -34,7 +34,7 @@ ve rig'in veri akıtmadığı ilk karelerde ön kabza kilidi aynı kadar kayar.
 `Tools > VortexArena > Build > Configure All Build Elements` (Hepsini Yapılandır / Yalnız Senkronize
 Et — silah kiti her eşitlemede koşar) — 13 `WPN_*` kökündeki eksik script kaydını ve
 `_interactorFilters` girişlerini temizler (kalırsa ISDK `Start`'ta assert atar, silah kavranamaz),
-`VA_GripIndicator.prefab` + `M_GripIndicator.mat`'ı üretir ve kataloğa bağlar. Sonuçta değişen
+`VA_GripSocket.prefab` + `M_GripSocket.mat`'ı üretir ve kataloğa bağlar. Sonuçta değişen
 prefab/asset'ler commit'e girer.
 
 ---
@@ -67,8 +67,8 @@ silah kiti koşusunun sonundaki uyarı listeler.
       taşımaz). Ana elin bileği kumandayla serbestçe dönüyor, kilitlenmiyor.
 - [ ] Stüdyoda **oluştur → hiçbir şeye dokunma → Kaydet** kayıtlı değeri değiştirmiyor (kimlik
       testi).
-- [ ] Boş elin kumandası ön kabzaya yaklaşınca soket küresi (`VA_GripIndicator`, 20 cm çap, açık mavi
-      %70 saydam) beliriyor; kumanda kürenin içine girince biraz dolgunlaşıyor ve o anda grip ikinci
+- [ ] Boş elin kumandası ön kabzaya yaklaşınca soket küresi (`VA_GripSocket`, 20 cm çap, açık mavi
+      yarı saydam) beliriyor; kumanda kürenin içine girince biraz dolgunlaşıyor ve o anda grip ikinci
       eli bağlıyor (kürenin dışında bağlamıyor); ikinci el bağlanınca küre kayboluyor. Ana kabzada
       soket YOK.
 - [ ] Grip'e basınca silahın yönü ikinci ele döner; bırakınca ~0.08 sn'de yumuşak geri gelir.
