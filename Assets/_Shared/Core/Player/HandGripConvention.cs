@@ -14,11 +14,13 @@ namespace VortexArena.Core.Player
     /// ⚠️ <b>Kapsamı dardır: gövde BURADAN GEÇMEZ.</b> Kol/bilek zinciri Movement SDK'nın
     /// retargeting'inden geliyor ve SDK kendi eşlemesini kendi yapıyor. Eşyanın eldeki duruşu da
     /// buradan geçmez: kavrama kaydı ANCHOR uzayındadır (<c>ItemGripPose</c>), silahın dünya pozu
-    /// deltasız çözülür. Buradaki <see cref="LeftAnchorToWrist"/>/<see cref="RightAnchorToWrist"/>
-    /// yalnız GÖRSEL elin köprüsüdür (<see cref="VortexArena.Core.Combat.ItemGripAuthority"/>):
-    /// stüdyodaki hayalet elin kumanda köküne göre yeri ve ön kabza kilidinin rig'siz fallback'i.
-    /// Buraya gövdeyle ilgili bir tüketici geri eklenirse, retargeting ile ikinci bir eşleme kaynağı
-    /// üretilmiş olur.
+    /// deltasız çözülür. Yerel sentetik elin bileğinin kumandaya göre yeri de buradan geçmez
+    /// (<c>HandPoseLibrary.AnchorToWrist</c>). Buraya gövdeyle ilgili bir tüketici geri eklenirse,
+    /// retargeting ile ikinci bir eşleme kaynağı üretilmiş olur.
+    /// </para>
+    /// <para>
+    /// <b>Bugünkü tek tüketicisi UZAK avatardır</b> (<see cref="HandFingerRig"/> →
+    /// <see cref="Correction"/>): ağdan gelen el rotasyonunu humanoid bileğe köprüler.
     /// </para>
     /// <para>
     /// <b>Türetme:</b> iki iskeletin de aynı anatomik yöne bakması istenir, yani
@@ -39,8 +41,11 @@ namespace VortexArena.Core.Player
         /// Parmaklar kumandanın ilerisine ve hafif aşağı bakar; avuç içe (gövde orta hattına) ve
         /// hafif yukarı bakar.
         /// <para>
-        /// ⚠️ Bu değerler <b>ERGONOMİK TAHMİNDİR, ölçülmüş değildir</b> — bilek hâlâ eğrik
-        /// duruyorsa düzeltilecek yer BURASIDIR (başka hiçbir yerde el eksenine dokunulmaz).
+        /// ⚠️ Bu değerler <b>ERGONOMİK TAHMİNDİR, ölçülmüş değildir</b> — <b>UZAK</b> avatarın bileği
+        /// eğrik duruyorsa düzeltilecek yer BURASIDIR (başka hiçbir yerde el eksenine dokunulmaz).
+        /// ⚠️ <b>Yerel elin bileği buradan GEÇMEZ</b> ve buraya bağlanmaz: o kumandaya kilitlenir
+        /// (<c>HandPoseLibrary.AnchorToWrist</c>). Bir zamanlar stüdyodaki hayalet el bu tahminden
+        /// çiziliyordu ve parmak ekseni etrafında ~70° sapıyordu.
         /// <b>Nasıl bulunur:</b> <c>ThreePointBodyIK</c>'nın "Bilek eşlemesi (canlı ayar)" alanları
         /// admin (Windows) tarafında CANLI bir uzak avatar üzerinde çevrilir — admin uzak avatarları
         /// çizdiği için ayar APK turu gerektirmez. Oturan değer buraya işlenir ve alan sıfıra döner.
@@ -58,35 +63,11 @@ namespace VortexArena.Core.Player
         public static readonly Vector3 RightAnchorFingerDirection = new Vector3(0f, -0.42f, 0.91f);
         public static readonly Vector3 RightAnchorPalmNormal = new Vector3(-0.87f, 0.50f, 0f);
 
-        /// <summary>
-        /// Kumanda anchor'ından ISDK bileğine <b>ölçülmüş</b> delta (anchor uzayında, metre) —
-        /// canlı ölçüm yokken kullanılan sabit.
-        /// <para>
-        /// ⚠️ <b>KİMLİKLE başlar, yani "henüz ölçülmedi" demektir.</b> Değer tahmin edilmez,
-        /// başlıkta ölçülür: <c>HandGripPoser</c> deltayı kararlı ölçtüğü ilk anda el başına bir satır
-        /// loglar (editör konsolu ya da APK'da <c>adb logcat -s Unity</c>) ve o satır buraya
-        /// YAPIŞTIRILIR. Ölçülene kadar bilek anchor'la
-        /// aynı yerde varsayılır — silahın YÖNÜ bundan etkilenmez (kavrama kaydı anchor uzayındadır),
-        /// yalnız görsel el birkaç santim/derece kayar.
-        /// </para>
-        /// <para>
-        /// <b>Tüketicisi:</b> <see cref="VortexArena.Core.Combat.ItemGripAuthority.ResolveAnchorToWrist"/> —
-        /// stüdyodaki hayalet elin kumanda köküne göre çizildiği yer (editörde canlı ölçüm yoktur, bu
-        /// sabit tek kaynaktır: ölçülmemişse hayalet el kumandanın tam üstünde ve onunla aynı eksende
-        /// durur, gerçek elin duracağı yerde değil) ve rig'in henüz veri akıtmadığı ilk karelerde ön
-        /// kabza kilidi. Rig varken canlı ölçüm kazanır, bu sabit hiç okunmaz.
-        /// </para>
-        /// </summary>
-        public static readonly Pose LeftAnchorToWrist = Pose.identity;
-
-        /// <inheritdoc cref="LeftAnchorToWrist"/>
-        public static readonly Pose RightAnchorToWrist = Pose.identity;
-
-        /// <summary>El başına ölçülmüş anchor→bilek deltası (bkz. <see cref="LeftAnchorToWrist"/>).</summary>
-        public static Pose AnchorToWrist(bool rightHand)
-        {
-            return rightHand ? RightAnchorToWrist : LeftAnchorToWrist;
-        }
+        // ⚠️ Anchor→bilek deltası BURADA DEĞİL ve buraya geri eklenmez: o bir eşleme değil bir
+        // TANIMDIR (kumandaya kilitlenen bileğin yeri) ve tek sahibi
+        // VortexArena.Core.Combat.HandPoseLibrary.AnchorToWrist'tir. Burada durduğu sürece
+        // "başlıkta ölçülüp yapıştırılacak sabit" olarak kaldı ve hiç ölçülmediği için tezgâh ile
+        // oyun ayrık kaldı.
 
         /// <summary>Yön vektörünün "anlamlı" sayılması için gereken en küçük kare uzunluk.</summary>
         private const float MinDirectionSqrMagnitude = 1e-8f;

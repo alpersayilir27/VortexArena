@@ -49,16 +49,6 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
   görülen küre = kabul hacmi, ölçülen nokta boş elin KUMANDA ANCHOR'IDIR) ve Inspector'dan girilir —
   stüdyo ona dokunmaz.
 
-## 1b. `HandGripConvention.*AnchorToWrist` sabitini ölç ve yapıştır
-
-Sabit **yalnız görsel eli** ilgilendirir (kavrama kaydı anchor uzayındadır, silahın yönü ondan
-etkilenmez): kimlik kaldığı sürece stüdyodaki hayalet el kumandanın tam üstünde çizilir ve rig'in
-veri akıtmadığı ilk karelerde ön kabza kilidi o kadar kayar.
-
-1. Editörde **player** rolüyle Play, iki kumandayı da normal tut.
-2. `HandGripPoser` kararlı ölçümü el başına bir kez loglar (30 kare / 2 mm / 0.5°).
-3. İki satırı `HandGripConvention.LeftAnchorToWrist` / `RightAnchorToWrist`'e yapıştır.
-
 ## 2. Tracer + ön kabza göstergesi görünüm değerleri — playtest ayarı
 
 `ItemDefinition`'daki `tracerColor` / `tracerWidth` / `tracerLifetime` / `tracerEveryNthRound`
