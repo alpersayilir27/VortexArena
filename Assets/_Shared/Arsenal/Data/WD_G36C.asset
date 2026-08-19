@@ -19,23 +19,19 @@ MonoBehaviour:
   primaryGripRight:
     authored: 0
     position: {x: 0, y: 0, z: 0}
-    euler: {x: 0, y: 0, z: 0}
     preset: 0
   primaryGripLeft:
     authored: 0
     position: {x: 0, y: 0, z: 0}
-    euler: {x: 0, y: 0, z: 0}
     preset: 0
   secondaryGripRight:
-    authored: 0
-    position: {x: 0, y: -0.06, z: 0.32}
-    euler: {x: -0, y: 0, z: 0}
-    preset: 0
+    authored: 1
+    position: {x: 0, y: -0.0497, z: 0.3331}
+    preset: 2
   secondaryGripLeft:
-    authored: 0
-    position: {x: 0, y: -0.06, z: 0.32}
-    euler: {x: -0, y: 0, z: 0}
-    preset: 0
+    authored: 1
+    position: {x: 0, y: -0.0497, z: 0.3331}
+    preset: 2
   secondaryGripRadius: 0.1
   tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.8039216}
   tracerWidth: 0.005
