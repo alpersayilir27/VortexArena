@@ -9,15 +9,23 @@ namespace VortexArena.Core.Combat
     /// switched to the dissolve material, <c>_Dissolve</c> is driven 1→0, then the originals are
     /// restored. No effect on release — the weapon disappears instantly.
     /// <para>The gate is <see cref="Weapon.HeldChanged"/>, not the call sites: three paths put a
-    /// weapon in the hand (random grant, frame clone, direct ISDK grab) and hooking each separately
-    /// is a step silently forgotten when a fourth appears. <see cref="WeaponFrame"/> listens to the
-    /// same event for the same reason.</para>
+    /// weapon in the hand (<see cref="WeaponGranter"/>'s random grant, frame clone, direct ISDK
+    /// grab) and hooking each separately is a step silently forgotten when a fourth appears.
+    /// <see cref="WeaponFrame"/> listens to the same event for the same reason.</para>
     /// <para>⚠️ The weapon's look is preserved: the original albedo and color are carried into the
     /// dissolve material via <see cref="MaterialPropertyBlock"/>. Without that the weapon dissolves
-    /// as a flat-colored silhouette — the dissolve material is a SINGLE shared asset.</para>
+    /// as a flat-colored silhouette — the dissolve material is a SINGLE shared asset and does not
+    /// know which weapon it is attached to.</para>
     /// <para>⚠️ The effect's look is tuned in the material, not here (edge color/thickness, pattern
-    /// frequency, axis…). This component only drives <c>_Dissolve</c> and carries the albedo; the
-    /// same setting in two places would drift.</para>
+    /// frequency, dissolve axis…). This component only drives <c>_Dissolve</c> and carries the
+    /// albedo; it never touches the rest of the material — the same setting in two places would
+    /// drift.</para>
+    /// <para>⚠️ World-space panels (Canvas) on the weapon do NOT dissolve, they FADE. UI is drawn by
+    /// <c>CanvasRenderer</c>: it does not derive from <see cref="Renderer"/> (so the scan below never
+    /// sees it), it takes no <see cref="MaterialPropertyBlock"/>, and the dissolve material targets
+    /// URP Lit — forced onto TMP's SDF mesh it would garble the text. The panel is driven on a
+    /// separate channel, via <see cref="CanvasGroup"/> alpha; the timing is SHARED with the
+    /// body.</para>
     /// </summary>
     [RequireComponent(typeof(Weapon))]
     public class SimpleWeaponDissolve : MonoBehaviour
@@ -30,6 +38,13 @@ namespace VortexArena.Core.Combat
         private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
+
+        // Progress ratio at which the panel STARTS to appear: hidden for the first 35% of the
+        // transition, fading 0→1 over the rest, so no readable HUD panel sits on a body still full
+        // of holes.
+        // ⚠️ NOT a serialized field: like `appearSeconds` it would open a second stamping point
+        // (WeaponKitBuilder writes it back every run) — the panel's timing follows the body's.
+        private const float UiFadeStart01 = 0.35f;
 
         // Warned once PER SESSION: if the material is missing it is missing on every weapon (same
         // prefab kit), so per-instance logging would just multiply the same line.
@@ -51,6 +66,12 @@ namespace VortexArena.Core.Combat
         private bool _swapped;
 
         private readonly List<Target> _targets = new List<Target>();
+
+        /// <summary>Alpha handle for the world-space panels on the weapon. <see cref="CanvasGroup"/>
+        /// is the target because it is HIERARCHICAL: TMP can spawn sub-meshes at runtime (fallback
+        /// font/sprite) and a per-graphic list would miss those nodes and leave them fully
+        /// opaque.</summary>
+        private readonly List<CanvasGroup> _canvasGroups = new List<CanvasGroup>();
 
         /// <summary>One Renderer the effect touches plus what is needed to restore it. The property
         /// block is PER Renderer: albedo varies even between parts of one weapon (body vs scope
@@ -119,6 +140,46 @@ namespace VortexArena.Core.Combat
                     Block = new MaterialPropertyBlock(),
                 });
             }
+
+            CollectCanvasGroups(frame);
+        }
+
+        /// <summary>
+        /// Silahın üstündeki panellerin (<c>AmmoCanvas</c>) alfa kolunu toplar; eksikse
+        /// <see cref="CanvasGroup"/>'u çalışma anında EKLER.
+        /// <para>
+        /// ⚠️ Bileşen prefaba elle konmaz ve <c>WeaponKitBuilder</c>'da bir adım açılmaz: yeni bir
+        /// silah eklendiğinde sessizce unutulacak bir insan adımı doğardı — panel o silahta tek
+        /// başına anında belirir ve kimse fark etmezdi. Ekleme burada, tek yerde yaşıyor.
+        /// </para>
+        /// <para><see cref="WeaponFrame"/>'in alt ağacı Renderer tarafındaki kuralla aynı sebeple
+        /// atlanır: çerçeve KAYNAK silaha aittir, klonda hiç yoktur.</para>
+        /// </summary>
+        private void CollectCanvasGroups(WeaponFrame frame)
+        {
+            Canvas[] canvases = GetComponentsInChildren<Canvas>(true);
+
+            for (int i = 0; i < canvases.Length; i++)
+            {
+                Canvas canvas = canvases[i];
+                if (canvas == null)
+                {
+                    continue;
+                }
+
+                if (frame != null && canvas.transform.IsChildOf(frame.transform))
+                {
+                    continue;
+                }
+
+                var group = canvas.GetComponent<CanvasGroup>();
+                if (group == null)
+                {
+                    group = canvas.gameObject.AddComponent<CanvasGroup>();
+                }
+
+                _canvasGroups.Add(group);
+            }
         }
 
         private void HandleHeldChanged(bool held)
@@ -158,6 +219,7 @@ namespace VortexArena.Core.Combat
                 // SmoothStep, not linear: linear reads "machine-like" in VR.
                 float k = Mathf.SmoothStep(0f, 1f, elapsed / appearSeconds);
                 SetDissolve(1f - k);
+                SetUiAlpha(Mathf.InverseLerp(UiFadeStart01, 1f, k));
                 yield return null;
             }
 
@@ -193,6 +255,7 @@ namespace VortexArena.Core.Combat
                 target.Renderer.sharedMaterials = GetDissolveMaterials(target);
             }
 
+            SetUiAlpha(0f); // panel de ilk kare TAM görünmesin
             _swapped = true;
         }
 
@@ -216,6 +279,11 @@ namespace VortexArena.Core.Combat
                 target.Renderer.sharedMaterials = target.OriginalMaterials;
             }
 
+            // ⚠️ Alfa da geri konur: geçiş yarıda kesilirse (obje kapandı, silah bırakıldı) panel
+            // yarı şeffaf DONARDI ve bir dahaki çağrılışta öyle gelirdi — materyaldeki tuzağın
+            // birebir aynısı.
+            SetUiAlpha(1f);
+
             _swapped = false;
         }
 
@@ -231,6 +299,21 @@ namespace VortexArena.Core.Combat
 
                 target.Block.SetFloat(DissolveId, value);
                 target.Renderer.SetPropertyBlock(target.Block);
+            }
+        }
+
+        /// <summary>Panellerin görünürlüğünü sürer (0 = yok, 1 = tam).</summary>
+        private void SetUiAlpha(float value)
+        {
+            for (int i = 0; i < _canvasGroups.Count; i++)
+            {
+                CanvasGroup group = _canvasGroups[i];
+                if (group == null)
+                {
+                    continue;
+                }
+
+                group.alpha = value;
             }
         }
 

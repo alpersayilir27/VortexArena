@@ -37,8 +37,8 @@ namespace VortexArena.App
     /// <c>if (modeId == "…")</c> chain here; a new mode gets this screen for free.
     /// </para>
     /// <para>
-    /// Self-bootstrapping persistent singleton (<c>AmmoHud</c> pattern): NOT placed in scenes, else
-    /// every new arena would gain a manual setup step. Visuals live entirely in the prefab
+    /// Self-bootstrapping persistent singleton (<c>WeaponGranter</c> pattern): NOT placed in scenes,
+    /// else every new arena would gain a manual setup step. Visuals live entirely in the prefab
     /// (<c>Resources/UI/MatchResultOverlay</c>) — this class only writes data.
     /// </para>
     /// <para>
