@@ -137,6 +137,11 @@ namespace VortexArena.App.Admin
             // venue's speakers. ⚠️ Admin role only — Quest has a single audio path.
             AdminSession.ApplyAudioOutput();
 
+            // Seats the stored mix in the engine; otherwise everything plays unattenuated until the
+            // panel is opened once. ⚠️ Admin role only — nothing writes AudioMix on the VR client
+            // and its default is 1.
+            AdminSession.ApplyAudioMix();
+
             gameObject.AddComponent<AdminRoster>();
             // Shared mode/map selection so multiple operators see the same screen.
             gameObject.AddComponent<AdminSelection>();

@@ -7,6 +7,8 @@ namespace VortexArena.App.Admin
     /// <item><b>Match</b>: SHARED settings — server-side selection, visible on every admin.</item>
     /// <item><b>View</b>: LOCAL settings (<see cref="AdminSession"/>, <c>PlayerPrefs</c>).</item>
     /// <item><b>Connection</b>: connection state, reconnect/disconnect, quit.</item>
+    /// <item><b>Audio</b>: LOCAL mix (<see cref="AdminSession"/> → <c>AudioMix</c>) — affects this
+    /// operator's speakers only.</item>
     /// </list>
     /// ⚠️ Index into serialized arrays: append new tabs at the <b>END</b>, else the prefab
     /// bindings silently shift.
@@ -15,6 +17,7 @@ namespace VortexArena.App.Admin
     {
         Match = 0,
         View = 1,
-        Connection = 2
+        Connection = 2,
+        Audio = 3
     }
 }
