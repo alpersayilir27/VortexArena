@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: M_VortexGlassWall_Scroll
+  m_Name: M_VortexGlassWall_Scroll_2
   m_Shader: {fileID: 4800000, guid: adf398954d05a73418e0d4bc1cd7c914, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -41,6 +41,6 @@ Material:
     m_Colors:
     - _GlassColor: {r: 0.34999996, g: 0.72, b: 0.85, a: 0.22}
     - _LogoCenter: {r: 0.5, g: 0.5, b: 0, a: 0}
-    - _LogoRepeat: {r: 1, g: 1, b: 0, a: 0}
+    - _LogoRepeat: {r: 2, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

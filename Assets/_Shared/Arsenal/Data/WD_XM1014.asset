@@ -17,25 +17,161 @@ MonoBehaviour:
   prefab: {fileID: 8917929639311514391, guid: d0d29cfc9232bb043ba0aa817cb7aae8, type: 3}
   holdMode: 1
   primaryGripRight:
-    authored: 0
-    position: {x: 0, y: 0, z: 0}
-    euler: {x: 0, y: 0, z: 0}
-    preset: 0
+    authored: 1
+    position: {x: 0, y: -0.0237, z: 0.0192}
+    fingerJoints:
+    - joint: HandThumb1
+      rotation: {x: -0.3595746, y: -0.3047505, z: 0.5647473, w: 0.67741704}
+    - joint: HandThumb2
+      rotation: {x: 0.1239518, y: 0.051725946, z: -0.10196523, w: 0.98567927}
+    - joint: HandThumb3
+      rotation: {x: 0.26253313, y: -0.075417414, z: 0.087970085, w: 0.95794046}
+    - joint: HandIndex1
+      rotation: {x: 0.25792256, y: -0.057938125, z: 0.05149361, w: 0.96305114}
+    - joint: HandIndex2
+      rotation: {x: 0.0808614, y: 0.02988087, z: -0.018098868, w: 0.99611294}
+    - joint: HandIndex3
+      rotation: {x: 0.10870683, y: 0.04031242, z: -0.021584807, w: 0.9930216}
+    - joint: HandMiddle1
+      rotation: {x: 0.5851188, y: 0.03416143, z: -0.12780988, w: 0.8000836}
+    - joint: HandMiddle2
+      rotation: {x: 0.59468997, y: 0.04427918, z: -0.015614576, w: 0.80258304}
+    - joint: HandMiddle3
+      rotation: {x: 0.2724129, y: 0.0230818, z: -0.050242104, w: 0.96059054}
+    - joint: HandRing1
+      rotation: {x: 0.7030556, y: -0.003607429, z: -0.1725683, w: 0.6898696}
+    - joint: HandRing2
+      rotation: {x: 0.3738839, y: 0.070947565, z: -0.00511198, w: 0.92474383}
+    - joint: HandRing3
+      rotation: {x: 0.34032586, y: 0.039405238, z: -0.011643704, w: 0.9394094}
+    - joint: HandPinky0
+      rotation: {x: 0.27184016, y: 0.12437842, z: -0.2849296, w: 0.91074044}
+    - joint: HandPinky1
+      rotation: {x: 0.33202353, y: 0.1577826, z: 0.04937772, w: 0.92866945}
+    - joint: HandPinky2
+      rotation: {x: 0.6173016, y: 0.08895601, z: -0.05615206, w: 0.77966183}
+    - joint: HandPinky3
+      rotation: {x: 0.27398032, y: 0.058495022, z: 0.008621602, w: 0.95991606}
+    wristAuthored: 1
+    wristPosition: {x: 0.02089201, y: -0.019344896, z: -0.12142114}
+    wristRotation: {x: -0.115577295, y: 0.114732884, z: -0.64328814, w: 0.74810344}
   primaryGripLeft:
-    authored: 0
-    position: {x: 0, y: 0, z: 0}
-    euler: {x: 0, y: 0, z: 0}
-    preset: 0
+    authored: 1
+    position: {x: 0, y: -0.0237, z: 0.0192}
+    fingerJoints:
+    - joint: HandThumb1
+      rotation: {x: 0.14457846, y: -0.23107131, z: 0.5429339, w: -0.7943085}
+    - joint: HandThumb2
+      rotation: {x: 0.1239518, y: 0.051725946, z: -0.10196523, w: 0.98567927}
+    - joint: HandThumb3
+      rotation: {x: 0.26253313, y: -0.075417414, z: 0.087970085, w: 0.95794046}
+    - joint: HandIndex1
+      rotation: {x: 0.25792256, y: -0.057938125, z: 0.05149361, w: 0.96305114}
+    - joint: HandIndex2
+      rotation: {x: 0.0808614, y: 0.02988087, z: -0.018098868, w: 0.99611294}
+    - joint: HandIndex3
+      rotation: {x: 0.10870683, y: 0.04031242, z: -0.021584807, w: 0.9930216}
+    - joint: HandMiddle1
+      rotation: {x: 0.5646943, y: 0.108899996, z: -0.07052292, w: 0.8150385}
+    - joint: HandMiddle2
+      rotation: {x: 0.59468997, y: 0.04427918, z: -0.015614576, w: 0.80258304}
+    - joint: HandMiddle3
+      rotation: {x: 0.2724129, y: 0.0230818, z: -0.050242104, w: 0.96059054}
+    - joint: HandRing1
+      rotation: {x: 0.7199875, y: 0.09020109, z: -0.075399116, w: 0.68395674}
+    - joint: HandRing2
+      rotation: {x: 0.3738839, y: 0.070947565, z: -0.00511198, w: 0.92474383}
+    - joint: HandRing3
+      rotation: {x: 0.34032586, y: 0.039405238, z: -0.011643704, w: 0.9394094}
+    - joint: HandPinky0
+      rotation: {x: 0.305757, y: 0.008399799, z: -0.2266842, w: 0.9246926}
+    - joint: HandPinky1
+      rotation: {x: 0.33202353, y: 0.1577826, z: 0.04937772, w: 0.92866945}
+    - joint: HandPinky2
+      rotation: {x: 0.6173016, y: 0.08895601, z: -0.05615206, w: 0.77966183}
+    - joint: HandPinky3
+      rotation: {x: 0.27398032, y: 0.058495022, z: 0.008621602, w: 0.95991606}
+    wristAuthored: 1
+    wristPosition: {x: -0.02089201, y: -0.019344896, z: -0.12142114}
+    wristRotation: {x: -0.115577295, y: -0.114732884, z: 0.64328814, w: 0.74810344}
   secondaryGripRight:
-    authored: 0
-    position: {x: 0, y: 0, z: 0.3}
-    euler: {x: -0, y: 0, z: 0}
-    preset: 0
+    authored: 1
+    position: {x: 0, y: 0.012950007, z: 0.27800003}
+    fingerJoints:
+    - joint: HandThumb1
+      rotation: {x: 0.13296165, y: 0.5892122, z: -0.42555344, w: -0.67383575}
+    - joint: HandThumb2
+      rotation: {x: 0.23915075, y: -0.009875735, z: 0.09140408, w: 0.96662027}
+    - joint: HandThumb3
+      rotation: {x: 0.12736204, y: 0.086857505, z: -0.07669106, w: 0.98506504}
+    - joint: HandIndex1
+      rotation: {x: 0.43836597, y: 0.04695064, z: -0.061678074, w: 0.89544785}
+    - joint: HandIndex2
+      rotation: {x: 0.46282685, y: -0.020458989, z: 0.028316494, w: 0.8857601}
+    - joint: HandIndex3
+      rotation: {x: 0.082768336, y: -0.040860828, z: 0.020526491, w: 0.9955192}
+    - joint: HandMiddle1
+      rotation: {x: 0.5155493, y: -0.035505813, z: 0.014074845, w: 0.8560083}
+    - joint: HandMiddle2
+      rotation: {x: 0.34815574, y: -0.046873268, z: 0.002690886, w: 0.9362603}
+    - joint: HandMiddle3
+      rotation: {x: 0.06761988, y: -0.032983582, z: 0.044374313, w: 0.99617803}
+    - joint: HandRing1
+      rotation: {x: 0.40450075, y: -0.104830556, z: 0.08557323, w: 0.90447056}
+    - joint: HandRing2
+      rotation: {x: 0.45222571, y: -0.07024125, z: 0.011210467, w: 0.88906276}
+    - joint: HandRing3
+      rotation: {x: 0.18971811, y: -0.04177167, z: 0.0051585566, w: 0.9809361}
+    - joint: HandPinky0
+      rotation: {x: 0.20141704, y: 0.22977251, z: 0.17097712, w: 0.9366978}
+    - joint: HandPinky1
+      rotation: {x: 0.12363548, y: -0.14339495, z: -0.0822868, w: 0.9784585}
+    - joint: HandPinky2
+      rotation: {x: 0.43116194, y: -0.099109165, z: 0.035262663, w: 0.89612126}
+    - joint: HandPinky3
+      rotation: {x: 0.15274337, y: -0.056972366, z: -0.015813716, w: 0.9864956}
+    wristAuthored: 1
+    wristPosition: {x: 0.0803, y: -0.0428, z: -0.0151}
+    wristRotation: {x: 0.6087613, y: -0.0000003314874, z: -0.79335344, w: 0.000000438637}
   secondaryGripLeft:
-    authored: 0
-    position: {x: 0, y: 0, z: 0.3}
-    euler: {x: -0, y: 0, z: 0}
-    preset: 0
+    authored: 1
+    position: {x: 0, y: 0.012950007, z: 0.27800003}
+    fingerJoints:
+    - joint: HandThumb1
+      rotation: {x: 0.14135173, y: 0.43181875, z: -0.24338919, w: 0.8569212}
+    - joint: HandThumb2
+      rotation: {x: 0.23915075, y: -0.009875735, z: 0.09140408, w: 0.96662027}
+    - joint: HandThumb3
+      rotation: {x: 0.12736203, y: 0.086857505, z: -0.076691054, w: 0.98506504}
+    - joint: HandIndex1
+      rotation: {x: 0.43836597, y: 0.04695064, z: -0.061678074, w: 0.89544785}
+    - joint: HandIndex2
+      rotation: {x: 0.46282685, y: -0.020458989, z: 0.028316494, w: 0.8857601}
+    - joint: HandIndex3
+      rotation: {x: 0.082768336, y: -0.040860828, z: 0.020526491, w: 0.9955192}
+    - joint: HandMiddle1
+      rotation: {x: 0.5155493, y: -0.035505813, z: 0.014074845, w: 0.8560083}
+    - joint: HandMiddle2
+      rotation: {x: 0.34815574, y: -0.046873268, z: 0.002690886, w: 0.9362603}
+    - joint: HandMiddle3
+      rotation: {x: 0.06761988, y: -0.032983582, z: 0.044374313, w: 0.99617803}
+    - joint: HandRing1
+      rotation: {x: 0.40450075, y: -0.104830556, z: 0.08557323, w: 0.90447056}
+    - joint: HandRing2
+      rotation: {x: 0.45222571, y: -0.07024125, z: 0.011210467, w: 0.88906276}
+    - joint: HandRing3
+      rotation: {x: 0.18971811, y: -0.04177167, z: 0.0051585566, w: 0.9809361}
+    - joint: HandPinky0
+      rotation: {x: 0.08216116, y: -0.2226334, z: 0.2009153, w: 0.9504299}
+    - joint: HandPinky1
+      rotation: {x: 0.12363548, y: -0.14339495, z: -0.0822868, w: 0.9784585}
+    - joint: HandPinky2
+      rotation: {x: 0.43116194, y: -0.099109165, z: 0.035262663, w: 0.89612126}
+    - joint: HandPinky3
+      rotation: {x: 0.15274337, y: -0.056972366, z: -0.015813716, w: 0.9864956}
+    wristAuthored: 1
+    wristPosition: {x: -0.0803, y: -0.0428, z: -0.0151}
+    wristRotation: {x: 0.6087613, y: 0.0000003314874, z: 0.79335344, w: 0.000000438637}
   secondaryGripRadius: 0.1
   tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
   tracerWidth: 0.005
