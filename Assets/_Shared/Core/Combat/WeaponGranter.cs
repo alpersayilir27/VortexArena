@@ -109,6 +109,53 @@ namespace VortexArena.Core.Combat
         /// silently break the "mode hands out a random weapon" rule.</para></summary>
         private bool _appliedModeDistributes;
 
+        // ------------------------------------------------------------- hands / selection gate
+
+        /// <summary>Weapon in the LEFT hand right now, whatever put it there — frame clone, random
+        /// grant, or a scene weapon grabbed by hand; <c>null</c> = the hand is empty.</summary>
+        public static Weapon LeftHandWeapon => HeldWeaponIn(OVRInput.Controller.LTouch);
+
+        /// <summary>Weapon in the RIGHT hand right now — see <see cref="LeftHandWeapon"/>.</summary>
+        public static Weapon RightHandWeapon => HeldWeaponIn(OVRInput.Controller.RTouch);
+
+        /// <summary>May the player SELECT a weapon from a frame right now: only with BOTH hands
+        /// empty. Read by <see cref="WeaponFrame"/> (ISDK candidate gate + aim ray) and by
+        /// <see cref="SelectWeapon"/>.
+        /// <para>⚠️ This is an END-OF-FRAME SNAPSHOT (<see cref="LateUpdate"/>), never a live query,
+        /// and that is the whole reason it is a field. One grip press SELECTS at the frame and
+        /// SUMMONS the held clone on the SAME frame, and Unity does not order ISDK's select against
+        /// this component's <c>Update</c>. Queried live, the summon could fill the hand first and
+        /// close the gate on the very frame the player is selecting: the ray appears, the press does
+        /// nothing, and the player stays locked to their first weapon forever. Describing the
+        /// previous frame's end instead, a released grip reopens selection before the next press is
+        /// judged — swapping at the rack costs one grip release, which is the intended
+        /// cost.</para></summary>
+        public static bool CanSelectWeapon { get; private set; } = true;
+
+        /// <summary>The weapon a hand holds, scanned from <see cref="Weapon.Active"/> so EVERY
+        /// source counts — a stowed frame clone is inactive and drops out of that list by itself.
+        /// <para>⚠️ An unresolved main hand (Editor session, no controller) counts for BOTH hands: a
+        /// full hand we cannot name is still a full hand, and the gate built on this must not open
+        /// on it.</para></summary>
+        private static Weapon HeldWeaponIn(OVRInput.Controller hand)
+        {
+            for (int i = 0; i < Weapon.Active.Count; i++)
+            {
+                Weapon weapon = Weapon.Active[i];
+                if (weapon == null || !weapon.IsHeld)
+                {
+                    continue;
+                }
+
+                if (weapon.MainHand == hand || weapon.MainHand == OVRInput.Controller.None)
+                {
+                    return weapon;
+                }
+            }
+
+            return null;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -131,6 +178,9 @@ namespace VortexArena.Core.Combat
             }
 
             Instance = this;
+
+            // Static, so with domain reload disabled the field initializer does not run again.
+            CanSelectWeapon = true;
 
             // Persistent singleton: subscribe in Awake/OnDestroy so rule/scene events are not
             // missed while the object is disabled (PlayerCombatState pattern).
@@ -210,6 +260,19 @@ namespace VortexArena.Core.Combat
             // this hand gets no second weapon, it becomes the front-grip candidate (see TickHand).
             TickHand(OVRInput.Controller.LTouch, rig.leftHandAnchor, ref _grantedLeft, _grantedRight);
             TickHand(OVRInput.Controller.RTouch, rig.rightHandAnchor, ref _grantedRight, _grantedLeft);
+        }
+
+        /// <summary>Takes the <see cref="CanSelectWeapon"/> snapshot once both grant paths and every
+        /// grab have settled for this frame — see that property for why the gate may not be read
+        /// live.</summary>
+        private void LateUpdate()
+        {
+            if (Instance != this)
+            {
+                return;
+            }
+
+            CanSelectWeapon = LeftHandWeapon == null && RightHandWeapon == null;
         }
 
         // ------------------------------------------------------------------- rules
@@ -550,17 +613,17 @@ namespace VortexArena.Core.Combat
         /// kept, otherwise ammo would silently refill every time the player aimed at the frame. A
         /// different weapon destroys the old clone; the new one is born FULL on the next
         /// grip.</para>
-        /// <para>⚠️ There is NO gate restricting selection and none is added — "cannot select while
-        /// holding a two-handed weapon" does NOT belong here. The frame is a SELECTION trigger and
-        /// changing the selection spawns no second weapon: exactly ONE clone per player is kept
-        /// (<see cref="TickFrameSummon"/>) and the new definition replaces the old. Such a gate
-        /// would also block swapping at the rack, with a hard-to-diagnose symptom: the ray appears
-        /// but selection never happens, because grip summons the old clone and closes the gate on
-        /// that very frame, locking the player to their first weapon forever. The "no second weapon
-        /// at once" rule belongs in <see cref="TickHand"/>.</para></summary>
+        /// <para>⚠️ Selection needs BOTH hands EMPTY (<see cref="CanSelectWeapon"/>): with a weapon
+        /// already in hand the free hand may neither pick a new one nor draw a ray at a frame. The
+        /// gate is repeated here even though <see cref="WeaponFrame.Filter"/> already drops the
+        /// frame from ISDK's candidate list — this is the only public entry point, and a caller
+        /// that is not a frame would otherwise walk straight past the rule.</para>
+        /// <para>⚠️ The gate MUST stay a snapshot and must never be rewritten as a live "is a weapon
+        /// in hand" check — see <see cref="CanSelectWeapon"/> for the frame-ordering trap that
+        /// would otherwise lock the player to their first weapon forever.</para></summary>
         public static void SelectWeapon(WeaponDefinition definition)
         {
-            if (Instance == null || definition == null)
+            if (Instance == null || definition == null || !CanSelectWeapon)
             {
                 return;
             }

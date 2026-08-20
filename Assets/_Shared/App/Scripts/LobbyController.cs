@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using VortexArena.Core.Player;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -104,6 +105,10 @@ namespace VortexArena.App
             }
 
             _beaconSubscribed = false;
+
+            // The ray is asked for only while the panel is open — leaving the scene with the panel
+            // open would carry it into the arena.
+            ControllerModelHider.SetRayVisualsRequested(this, false);
         }
 
         private void Start()
@@ -197,6 +202,10 @@ namespace VortexArena.App
             {
                 ipPanel.SetActive(visible);
             }
+
+            // The numpad is pointed at with the ISDK ray; that ray is hidden by default
+            // (ControllerModelHider) — without asking for it the player aims blind.
+            ControllerModelHider.SetRayVisualsRequested(this, visible);
 
             if (visible)
             {

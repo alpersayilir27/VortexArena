@@ -1,4 +1,5 @@
 using UnityEngine;
+using VortexArena.Core.Audio;
 
 namespace VortexArena.Core.Combat
 {
@@ -10,6 +11,8 @@ namespace VortexArena.Core.Combat
     /// clip field and none is added. The old "if no definition" Inspector fallbacks were
     /// unreachable (<see cref="Weapon"/> LOCKS a weapon without a definition) yet a second "Fire
     /// Clips" list blurred which asset the sound came from.</para>
+    /// <para>The LEVEL still comes from the definition; <see cref="AudioMix.Weapons"/> is only a
+    /// local attenuation on top of it.</para>
     /// <para>Magazine sounds (<see cref="PlayMagOut"/> / <see cref="PlayMagIn"/>) are played on
     /// WeaponAnimator's timeline, not at reload start — this class keeps no timing.</para>
     /// </summary>
@@ -48,7 +51,7 @@ namespace VortexArena.Core.Combat
 
             source.pitch = definition.FirePitchBase +
                            Random.Range(-definition.FirePitchJitter, definition.FirePitchJitter);
-            source.PlayOneShot(clip, definition.FireVolume);
+            source.PlayOneShot(clip, definition.FireVolume * AudioMix.Weapons);
         }
 
         public void PlayMagOut()
@@ -78,7 +81,7 @@ namespace VortexArena.Core.Combat
                 return;
 
             source.pitch = 1f;
-            source.PlayOneShot(clip);
+            source.PlayOneShot(clip, AudioMix.Weapons);
         }
     }
 }

@@ -326,8 +326,9 @@ bekler ve sebebi konsola yazar.
 
 **`match.sceneElapsed`** = o an açık olan sahnenin **kaç saniyedir sahnelendiği** (saniye, sunucu
 saati). Sahne değiştiği anda sıfırlanır; maçın başlaması/bitmesi onu **sıfırlamaz** — ölçtüğü şey
-maç değil sahnedir. Tek tüketicisi ortam sesinin ortak fazıdır: geç katılan başlık müziği baştan
-değil, herkesin bulunduğu yerden açar (`SceneAmbience`, `Docs/Sistem-Ozeti.md` §4). Klip süresinden
+maç değil sahnedir. Tek tüketicisi ortam sesinin ortak fazıdır: geç katılan başlık sahnenin ses
+katmanlarını (ambiyans ve müzik, ikisi de aynı fazdan) baştan değil, herkesin bulunduğu yerden açar
+(`SceneAmbience`, `Docs/Sistem-Ozeti.md` §4). Klip süresinden
 uzun bir değer normaldir — istemci klip uzunluğuna göre modunu kendisi alır.
 ⚠️ Bir **kural/otorite** alanı değildir: kaybı ya da sıfır gelmesi yalnız müziğin baştan
 başlamasıdır, bu yüzden `PROTOCOL_VERSION` **artmaz** (alanı hiç göndermeyen eski sunucuya karşı
@@ -739,7 +740,7 @@ Toplam: 12 B
 
 **Yön neden gönderiliyor** (el pozundan türetilebilir gibi duruyor): 20 Hz interpole el pozundan türetilirse aynı tik'e düşen iki atış aynı yöne gider ve geri tepme kaybolur. Nişan, oyun açısından anlamlı bilgidir; 4 B'ye değer.
 
-**Geri tepmenin kendisi neden gönderilmiyor** (ve bir alan eklenmeyecek): silahın sarsılması deterministik bir eğridir ve girdisi zaten telde — olayın kendisi + `itemId`. Alıcı, eğriyi `WeaponDefinition`'dan (`kickDegrees`/`kickBackMeters`/`recoilRecoverSpeed`) çizdiği silahın `Model` pivotuna uygular (`RemoteAvatar.ApplyShotRecoil`), çift elli tutuşun çarpanını da snapshot'taki `FLAG_GRIP_LINKED`'den bilir. Yani atış başına ek bayt sıfırdır. Silahın kare-kare duruşunu akıtmak ise aynı görüntüyü **20 Hz × oyuncu** maliyetle satın almak olurdu.
+**Geri tepmenin kendisi neden gönderilmiyor** (ve bir alan eklenmeyecek): silahın sarsılması deterministik bir eğridir ve girdisi zaten telde — olayın kendisi + `itemId`. Alıcı, eğriyi `WeaponDefinition`'dan (`kickDegrees`/`kickBackMeters`/`recoilRecoverSpeed`) çizdiği silahın `Model` pivotuna uygular (`RemoteAvatar.ApplyShotRecoil`), kavrayış çarpanını da snapshot'taki `FLAG_GRIP_LINKED`'den bilir: bayrak **açıksa** çift elli referans tutuş, **kapalıysa** silahın kendi tek el cezası (`oneHandRecoilMultiplier` + `oneHandRecoveryPenalty`) — ikisi de tanımdan okunduğu için atıcının ekranıyla aynı eğri çizilir. Yani atış başına ek bayt sıfırdır. Silahın kare-kare duruşunu akıtmak ise aynı görüntüyü **20 Hz × oyuncu** maliyetle satın almak olurdu.
 
 **Saçmalı silahta olay yine TEK'tir** (ilk saçmanın yönü/mesafesiyle) ve saçma başına alan/olay eklenmez: aynı ateşi 9 kez duyurmak, olay kanalının paket başı sınırını tek tetikle doldurur. Alıcı yelpazeyi **kendisi üretir** — telden gelen ışın olduğu gibi çizilir, kalan saçmalar `WeaponDefinition.baseSpreadDegrees` konisinden dağıtılıp yerel ışınla ölçülür (`RemoteShotFx.BuildScatter`). Eksik olan veri kozmetiktir ve iki uç aynı arenayı yüklüyor; hasar zaten saçma başına ayrı `hit_report` ile atıcının istemcisinden gidiyor (§10.3). Yelpazenin atıcının ekranındakiyle birebir aynı olması **gerekmez**: saçmaların dağılımı atıcıda da rastgeledir, telin taşıdığı bilgi atışın kendisidir.
 

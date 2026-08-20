@@ -192,6 +192,9 @@ MonoBehaviour:
   kickDegrees: 1.6
   kickBackMeters: 0.02
   recoilRecoverSpeed: 10
+  oneHandSpreadMultiplier: 1.9
+  oneHandRecoilMultiplier: 1.9
+  oneHandRecoveryPenalty: 0.75
   hapticAmplitude: 0.8
   hapticDuration: 0.05
   magazineSize: 30

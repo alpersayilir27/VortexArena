@@ -4,13 +4,15 @@ using UnityEngine;
 using UnityEngine.UI;
 using VortexArena.Core;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Audio;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
 namespace VortexArena.App.Admin
 {
-    /// <summary>Operator preferences panel with three tabs (<see cref="AdminPreferencesTab"/>):
-    /// MAÇ (shared match settings), GÖRÜNÜM (this screen only) and BAĞLANTI (session). The tab
+    /// <summary>Operator preferences panel with four tabs (<see cref="AdminPreferencesTab"/>):
+    /// MAÇ (shared match settings), GÖRÜNÜM (this screen only), BAĞLANTI (session) and SES — this
+    /// screen's own speakers (<see cref="AdminSession"/> → <c>AudioMix</c>), never the player. The tab
     /// choice lives for the session but never goes to disk — it is task context, not a preference.
     /// The card is translucent with no scrim: the live scene stays visible and nothing pauses.
     /// <para>⚠️ Match buttons (BAŞLAT · DURAKLAT/DEVAM · İPTAL) live in the HUD strip
@@ -77,15 +79,15 @@ namespace VortexArena.App.Admin
 
         [Header("Sekmeler")]
 
-        [Tooltip("Sekme düğmeleri — sıra AdminPreferencesTab ile aynı: MAÇ, GÖRÜNÜM, BAĞLANTI.")]
-        [SerializeField] private Button[] _tabButtons = new Button[3];
+        [Tooltip("Sekme düğmeleri — sıra AdminPreferencesTab ile aynı: MAÇ, GÖRÜNÜM, BAĞLANTI, SES.")]
+        [SerializeField] private Button[] _tabButtons = new Button[4];
 
-        [Tooltip("Sekme etiketleri — _tabButtons ile aynı sırada.")]
-        [SerializeField] private TextMeshProUGUI[] _tabLabels = new TextMeshProUGUI[3];
+        [Tooltip("Sekme etiketleri — _tabButtons ile aynı sırada: MAÇ, GÖRÜNÜM, BAĞLANTI, SES.")]
+        [SerializeField] private TextMeshProUGUI[] _tabLabels = new TextMeshProUGUI[4];
 
-        [Tooltip("Sekme sayfaları (satırların kökleri) — aynı sırada; yalnız etkin sekmenin " +
-                 "sayfası açık kalır.")]
-        [SerializeField] private GameObject[] _tabPages = new GameObject[3];
+        [Tooltip("Sekme sayfaları (satırların kökleri) — aynı sırada: MAÇ, GÖRÜNÜM, BAĞLANTI, SES; " +
+                 "yalnız etkin sekmenin sayfası açık kalır.")]
+        [SerializeField] private GameObject[] _tabPages = new GameObject[4];
 
         [Header("Düğme zeminleri (görsel)")]
 
@@ -208,6 +210,27 @@ namespace VortexArena.App.Admin
         /// from Windows; the prefab list is a template and is cleared at runtime.</summary>
         [SerializeField] private TMP_Dropdown _audioDeviceDropdown;
 
+        [Header("SES bölümü (yalnız bu ekran)")]
+
+        // ⚠️ Rows are index-bound to AudioChannel: Ambiyans, Silah sesleri, Seslendirme, Müzik. An
+        // unbound element silently draws nothing, so every read below is null-safe (At<T>).
+
+        [Tooltip("Kanal seviyesi metinleri — sıra AudioChannel ile aynı: Ambiyans, Silah, " +
+                 "Seslendirme, Müzik.")]
+        [SerializeField] private TextMeshProUGUI[] _audioValues = new TextMeshProUGUI[AudioMix.ChannelCount];
+
+        [Tooltip("Seviyeyi azaltan düğmeler — _audioValues ile aynı sırada.")]
+        [SerializeField] private Button[] _audioPrev = new Button[AudioMix.ChannelCount];
+
+        [Tooltip("Seviyeyi artıran düğmeler — aynı sırada.")]
+        [SerializeField] private Button[] _audioNext = new Button[AudioMix.ChannelCount];
+
+        [Tooltip("Tek dokunuşta sessize alan / eski seviyeye döndüren düğmeler — aynı sırada.")]
+        [SerializeField] private Button[] _audioMuteButtons = new Button[AudioMix.ChannelCount];
+
+        [Tooltip("Sessize alma düğmelerinin etiketleri — aynı sırada.")]
+        [SerializeField] private TextMeshProUGUI[] _audioMuteLabels = new TextMeshProUGUI[AudioMix.ChannelCount];
+
         private readonly List<ModeDefinition> _modes = new List<ModeDefinition>();
         private readonly List<MapDefinition> _maps = new List<MapDefinition>();
         private int _modeIndex;
@@ -285,6 +308,7 @@ namespace VortexArena.App.Admin
             Wire(_roofPrev, PrevRoof);
             Wire(_roofNext, NextRoof);
             WireDropdown(_audioDeviceDropdown, SelectAudioDevice);
+            WireAudioRows();
 
             Wire(_reconnectButton, AdminCommands.Reconnect);
             Wire(_disconnectButton, AdminCommands.Disconnect);
@@ -321,6 +345,26 @@ namespace VortexArena.App.Admin
             }
 
             Apply();
+        }
+
+        /// <summary>Binds the audio rows to their channels. ⚠️ The channel comes from a local copy,
+        /// not the loop variable — a lambda captures the variable and every row would drive the last
+        /// channel (same trap as <see cref="WireTabs"/>).</summary>
+        private void WireAudioRows()
+        {
+            for (int i = 0; i < AudioMix.ChannelCount; i++)
+            {
+                var channel = (AudioChannel)i;
+                Wire(At(_audioPrev, i), () => AdminSession.StepAudioLevel(channel, -1));
+                Wire(At(_audioNext, i), () => AdminSession.StepAudioLevel(channel, 1));
+                Wire(At(_audioMuteButtons, i), () => AdminSession.ToggleAudioMute(channel));
+            }
+        }
+
+        /// <summary>Element of an index-bound array; null when the array is short or unbound.</summary>
+        private static T At<T>(T[] array, int index) where T : class
+        {
+            return array != null && index >= 0 && index < array.Length ? array[index] : null;
         }
 
         private static void Wire(Button button, UnityEngine.Events.UnityAction action)
@@ -1288,6 +1332,8 @@ namespace VortexArena.App.Admin
             _roofValue.text = AdminSession.Roof == AdminRoofMode.Visible ? "görünür"
                 : AdminSession.Roof == AdminRoofMode.HideInTopDown ? "kuş bakışında gizli" : "hep gizli";
 
+            ApplyAudioRows();
+
             SyncAudioDeviceDropdown();
 
             // Off Windows (and with no endpoints found) there is nothing to pick: a dropdown that
@@ -1387,6 +1433,41 @@ namespace VortexArena.App.Admin
             if (button != null && button.targetGraphic is Image image)
             {
                 PaintButtonBackground(image, active, UiKit.Accent);
+            }
+        }
+
+        /// <summary>Paints the audio rows: level percentage, muted state and the mute button. Values
+        /// come from <see cref="AdminSession"/>, so a change from anywhere keeps the row correct via
+        /// <c>Changed</c>.</summary>
+        private void ApplyAudioRows()
+        {
+            for (int i = 0; i < AudioMix.ChannelCount; i++)
+            {
+                var channel = (AudioChannel)i;
+                bool muted = AdminSession.AudioMuted(channel);
+                int percent = Mathf.RoundToInt(AdminSession.AudioLevel(channel) * 100f);
+
+                TextMeshProUGUI value = At(_audioValues, i);
+                if (value != null)
+                {
+                    // The stored level stays visible while muted: the stepper still moves it and the
+                    // operator must see what unmuting will restore.
+                    value.text = muted ? $"sessiz (%{percent})" : $"%{percent}";
+                    value.color = muted ? UiKit.Faint : UiKit.Title;
+                }
+
+                TextMeshProUGUI label = At(_audioMuteLabels, i);
+                if (label != null)
+                {
+                    label.text = muted ? "SESİ AÇ" : "SESSİZ";
+                    label.color = muted ? UiKit.OnAccent : UiKit.Muted;
+                }
+
+                Button mute = At(_audioMuteButtons, i);
+                if (mute != null && mute.targetGraphic is Image image)
+                {
+                    PaintButtonBackground(image, muted, UiKit.Accent);
+                }
             }
         }
 

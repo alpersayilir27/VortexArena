@@ -80,6 +80,46 @@ veri üretir, ama duvarlar çizilmeye devam etmeli.
 
 ---
 
+## Aydınlatma
+
+Sahnenin gölgesi tek bir yerden gelir: **`Directional Light` → Shadow Type**. Kapalı bırakılmış bir
+sahne hata vermez, yalnızca **tamamen düz** görünür — arena sanatı ne kadar iyi olursa olsun.
+
+- **Zorunlu:** sahnede bir `Directional Light` bulunur ve `Shadow Type` = **Soft**. Bake yapılmayan
+  bir arenada görünen tek gölge kaynağı budur.
+- Işığın modu bake'e katılacaksa **Mixed** olur. `Realtime` ışık bake'e hiç girmez; `Baked` ışık da
+  dinamik objeye (oyuncu avatarı, silah) hiç değmez — ikisini karıştırma.
+- ⚠️ **Sahnenin aydınlatması İKİ dosyaya bağlıdır ve ikisi de sahnenin kendi klasöründe olmalıdır:**
+  `<SahneAdı>.lighting` (bake **ayarları**) ve `<SahneAdı>/LightingData.asset` (bake **çıktısı**).
+  Var olan bir sahne kopyalanarak yeni sahne açıldığında ikisi de kaynak sahneyi göstermeye devam
+  eder — özellikle `ThirdPartyPackages/` altındaki demo sahnelerini. Sonuç sessizdir: paket
+  güncellenince ya da kaynak sahne yeniden bake edilince buradaki gölgeler değişir.
+  ⚠️ Ayar dosyası daha da sinsidir: sahne dosyasına gömülü değerler ile `.lighting`'teki değerler
+  **farklı olabilir** ve bake'i `.lighting` kazanır — Lighting penceresinde gördüğün çözünürlükle
+  bake'in kullandığı çözünürlük tutmayabilir. Kopyalanan sahnede önce `.lighting` kendi klasörüne
+  alınır, sonra bir kez kendi başına bake edilir.
+- ⚠️ **Bake edilmiş sahnede `LightProbeGroup` yoksa** dinamik objeler baked ışıkların hiçbirini
+  almaz; yalnız ambient + Mixed directional ile aydınlanır ve ortamdan kopuk görünürler.
+
+**Gölge kalitesi sahnede değil, quality level'ın URP asset'inde ayarlanır** — iki seviye vardır:
+oyuncu/Quest `Mobile_RPAsset`, admin/Windows ve editör `PC_RPAsset`. Shadow distance arenayı ancak
+örtecek kadar tutulur: mesafe büyüdükçe aynı shadow map daha geniş alana yayılır ve gölge kenarı
+merdivenlenir. Editörde iyi görünen bir sahne cihazda kaba görünüyorsa ilk bakılacak yer burasıdır.
+
+⚠️ **Post-processing yalnız admin kamerasında açıktır** (`AdminSpectator` kamerayı kurarken
+`renderPostProcessing`'i kendisi açar). Profil `Assets/Settings/SampleSceneProfile.asset`, iki RP
+asset'inde de default volume profile olarak bağlıdır — yani sahneye Volume koymaya gerek yoktur.
+VR tarafında bilerek kapalıdır: maliyeti Quest'in GPU bütçesine biner. Sahneye **legacy Post
+Processing Stack v2** bileşeni (`PostProcessVolume` / `PostProcessLayer`) konmaz; URP onları hiç
+çalıştırmaz, sessizce ölü ağırlık olurlar.
+
+⚠️ **`ArenaRoof` gizliyken çatı gölge atmaya DEVAM eder** (`ShadowsOnly`) — bu kasıtlıdır, "gölgeyi
+de kapatalım" diye değiştirilmez. Çatının kapattığı güneş statik geometride zaten lightmap'e
+pişmiştir; gölge kapatılırsa dinamik objeler (oyuncu, silah) birden güneş alır ve zemin karanlık
+kalır — kuş bakışında en çok göze batan tutarsızlık budur.
+
+---
+
 ## Sahneyi kataloğa bağlamak
 
 Sahne dosyası tek başına yetmez — üç kayıt daha gerekir:

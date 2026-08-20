@@ -141,6 +141,7 @@ namespace VortexArena.Core.Editor
         // WD_*.asset Inspector is WRITTEN BACK on the next run.
         private const float StomachMultiplier = 1.25f;
         private const float LegMultiplier = 0.75f;
+        // Shared recoil defaults — a row may override either (KickBack / RecoverSpeed columns).
         private const float KickBackMeters = 0.02f;
         private const float RecoilRecoverSpeed = 10f;
         private const float PitchJitter = 0.05f;
@@ -211,6 +212,18 @@ namespace VortexArena.Core.Editor
             public float MaxBloom;
             public float BloomRecovery;
             public float Kick;
+
+            /// Push-back per shot (metres). <b>0 = shared default</b> (<see cref="KickBackMeters"/>).
+            /// Filled where recoil identity is WEIGHT rather than rate — shotguns.
+            public float KickBack;
+
+            /// Recoil recovery speed. <b>0 = shared default</b> (<see cref="RecoilRecoverSpeed"/>).
+            /// ⚠️ This, not <see cref="Kick"/>, is what makes a slow weapon FEEL heavy: at the shared
+            /// 10 °/s a shotgun's kick is gone in ~0.15 s, so the shot reads as a flick however large
+            /// the angle. Lowering it lets the muzzle settle visibly across the gap between shots.
+            /// ⚠️ Keep it fast enough to settle WITHIN that gap (60/rpm seconds), or sustained fire
+            /// climbs toward the ceiling instead of returning to aim.
+            public float RecoverSpeed;
 
             /// Fire sound pitch. ⚠️ Deviating from 1.00 exists ONLY to mask a borrowed clip (e.g.
             /// thickening an AK sample for a shotgun): once the weapon gets its own audio file this
@@ -419,7 +432,8 @@ namespace VortexArena.Core.Editor
                 Damage = 10, Headshot = 2f, Rpm = 171, Magazine = 7, Reload = 4.50f, Pellets = 6,
                 SpareMags = 4, ReserveMode = "PoolRounds",
                 Range = 26f, BaseSpread = 10.0f, BloomPerShot = 0.60f,
-                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 3.2f, PitchBase = 1.00f, Volume = 1.0f,
+                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 7.0f, KickBack = 0.06f, RecoverSpeed = 8.0f,
+                PitchBase = 1.00f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.72f, 0.30f), FlashColorMax = new Color(1f, 0.32f, 0.06f),
                 FlashSizeMin = 0.075f, FlashSizeMax = 0.130f, FlashLifetime = 0.10f, FlashConeAngle = 46f,
                 SmokeSizeMin = 0.075f, SmokeSizeMax = 0.125f, SmokeLifetime = 1.7f, SmokeAlpha = 0.42f,
@@ -438,10 +452,10 @@ namespace VortexArena.Core.Editor
             // are base damage + cone angle. ⚠️ `Range` is NOT that knob (see its own field note): a
             // sharp distance wall cannot stand in for a continuous curve.
             //
-            // ⚠️ THE ANGLE IN THIS TABLE IS ONE-HANDED: a two-handed hold multiplies it by
-            // `twoHandSpreadMultiplier` (0.45), so 12° here is a 5.4° cone in the field. Shotguns are
-            // two-handed by definition, so the REAL value on shotgun rows is always about half —
-            // reading the cone angle straight off the table makes the weapon look twice as tight.
+            // ⚠️ THE ANGLE IN THIS TABLE IS RAW: the field value is always this times a grip factor.
+            // Two-handed (the reference) it is `twoHandSpreadMultiplier` (0.45), so 12° here is a 5.4°
+            // cone; one-handed the asset's `oneHandSpreadMultiplier` stacks on that. Reading the angle
+            // straight off the table makes the weapon look about twice as tight as it plays.
             new WeaponSpec
             {
                 Name = "NOVA", PackPrefab = "ShotGun_B", WeaponId = "nova", DisplayName = "Nova",
@@ -449,7 +463,8 @@ namespace VortexArena.Core.Editor
                 Damage = 13, Headshot = 2f, Rpm = 68, Magazine = 8, Reload = 5.00f, Pellets = 9,
                 SpareMags = 4, ReserveMode = "PoolRounds",
                 Range = 25f, BaseSpread = 12.0f, BloomPerShot = 0.60f,
-                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 4.0f, PitchBase = 1.00f, Volume = 1.0f,
+                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 9.0f, KickBack = 0.07f, RecoverSpeed = 7.0f,
+                PitchBase = 1.00f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.68f, 0.26f), FlashColorMax = new Color(1f, 0.28f, 0.05f),
                 FlashSizeMin = 0.085f, FlashSizeMax = 0.150f, FlashLifetime = 0.115f, FlashConeAngle = 50f,
                 SmokeSizeMin = 0.085f, SmokeSizeMax = 0.140f, SmokeLifetime = 1.9f, SmokeAlpha = 0.46f,
@@ -639,8 +654,14 @@ namespace VortexArena.Core.Editor
             SetNumber(so, "maxBloomDegrees", spec.MaxBloom, ctx);
             SetNumber(so, "bloomRecoveryPerSecond", spec.BloomRecovery, ctx);
             SetNumber(so, "kickDegrees", spec.Kick, ctx);
-            SetNumber(so, "kickBackMeters", KickBackMeters, ctx);
-            SetNumber(so, "recoilRecoverSpeed", RecoilRecoverSpeed, ctx);
+            SetNumber(so, "kickBackMeters", spec.KickBack > 0f ? spec.KickBack : KickBackMeters, ctx);
+            SetNumber(so, "recoilRecoverSpeed",
+                spec.RecoverSpeed > 0f ? spec.RecoverSpeed : RecoilRecoverSpeed, ctx);
+            // ⚠️ oneHandSpreadMultiplier / oneHandRecoilMultiplier / oneHandRecoveryPenalty are
+            // deliberately NOT written and not added to this table: how a weapon behaves in one hand
+            // is found by holding it in the headset, and the WD asset is its only home. A line here
+            // would overwrite that hand-found value on every run — same rule as the haptic fields.
+            // The cost: a new weapon is born with the class defaults (see WeaponDefinition).
             SetNumber(so, "magazineSize", spec.Magazine, ctx);
             SetNumber(so, "spareMagazines", spec.SpareMags > 0 ? spec.SpareMags : DefaultSpareMagazines, ctx);
             SetEnumByName(so, "reserveMode",

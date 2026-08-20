@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using VortexArena.Core.Audio;
 
 namespace VortexArena.App.Admin
 {
@@ -71,9 +72,17 @@ namespace VortexArena.App.Admin
         private const string KeyFullScreen = Prefix + "FullScreen";
         private const string KeyAudioDevice = Prefix + "AudioDevice";
 
+        // ⚠️ Key suffix is the channel NAME, not its numeric index: appending/reordering
+        // AudioChannel would otherwise move a stored preference onto another channel.
+        private const string KeyAudioLevel = Prefix + "AudioLevel.";
+        private const string KeyAudioMuted = Prefix + "AudioMuted.";
+
         /// <summary>Free mode base speed bounds (m/s) — the preference slider spans this range.</summary>
         public const float FreeSpeedMin = 1f;
         public const float FreeSpeedMax = 12f;
+
+        /// <summary>Level stepper increment — 10 steps span the full range.</summary>
+        public const float AudioLevelStep = 0.1f;
 
         /// <summary>Raised on any selection/preference change (main thread).</summary>
         public static event Action Changed;
@@ -89,6 +98,8 @@ namespace VortexArena.App.Admin
         private static AdminRoofMode _roof = AdminRoofMode.HideInTopDown;
         private static bool _fullScreen = true;
         private static string _audioDevice = "";
+        private static readonly float[] _audioLevels = new float[AudioMix.ChannelCount];
+        private static readonly bool[] _audioMuted = new bool[AudioMix.ChannelCount];
         private static bool _loaded;
 
         /// <summary>
@@ -356,6 +367,119 @@ namespace VortexArena.App.Admin
             AudioSettings.Reset(AudioSettings.GetConfiguration());
         }
 
+        // ------------------------------------------------------------------ audio mix
+
+        // ⚠️ A PER-SCREEN preference: the mix does NOT go into AdminSelection (i.e. admin_state) and
+        // never reaches the players — same reasoning as the violation sound and the output device:
+        // what one operator turns down must stay audible for the other and must never touch a
+        // player's headset.
+        // ⚠️ ONE writer only: AdminSession → AudioMix. A second writer would silently split the
+        // stored preference from what is heard.
+
+        /// <summary>Stored level of the channel (0..1) — unchanged by muting.</summary>
+        public static float AudioLevel(AudioChannel channel)
+        {
+            Load();
+            int i = (int)channel;
+            return InRange(i) ? _audioLevels[i] : 1f;
+        }
+
+        /// <summary>
+        /// Is the channel muted. ⚠️ Muting does NOT change the level: it is an independent flag, so
+        /// unmuting restores the old level exactly and no "previous level" needs storing.
+        /// </summary>
+        public static bool AudioMuted(AudioChannel channel)
+        {
+            Load();
+            int i = (int)channel;
+            return InRange(i) && _audioMuted[i];
+        }
+
+        /// <summary>What actually reaches the engine: 0 while muted, the stored level otherwise.</summary>
+        public static float EffectiveAudioLevel(AudioChannel channel)
+        {
+            return AudioMuted(channel) ? 0f : AudioLevel(channel);
+        }
+
+        public static void SetAudioLevel(AudioChannel channel, float level)
+        {
+            Load();
+            int i = (int)channel;
+            if (!InRange(i))
+            {
+                return;
+            }
+
+            float clamped = Mathf.Clamp01(level);
+            if (Mathf.Approximately(_audioLevels[i], clamped))
+            {
+                return;
+            }
+
+            _audioLevels[i] = clamped;
+            PlayerPrefs.SetFloat(KeyAudioLevel + channel, clamped);
+            ApplyAudioMix();
+            Raise();
+        }
+
+        /// <summary>
+        /// Moves the level one step (<paramref name="direction"/> = ±1). ⚠️ Stepping while muted
+        /// does NOT unmute — the stored level moves and the output stays silent; the panel shows
+        /// "sessiz (%70)" so the operator sees it.
+        /// </summary>
+        public static void StepAudioLevel(AudioChannel channel, int direction)
+        {
+            Load();
+            int i = (int)channel;
+            if (!InRange(i) || direction == 0)
+            {
+                return;
+            }
+
+            // Snapped to the step grid so float drift never turns 70% into 69.9999%.
+            float snapped = Mathf.Round(_audioLevels[i] / AudioLevelStep) * AudioLevelStep;
+            SetAudioLevel(channel, snapped + direction * AudioLevelStep);
+        }
+
+        public static void SetAudioMuted(AudioChannel channel, bool muted)
+        {
+            Load();
+            int i = (int)channel;
+            if (!InRange(i) || _audioMuted[i] == muted)
+            {
+                return;
+            }
+
+            _audioMuted[i] = muted;
+            PlayerPrefs.SetInt(KeyAudioMuted + channel, muted ? 1 : 0);
+            ApplyAudioMix();
+            Raise();
+        }
+
+        public static void ToggleAudioMute(AudioChannel channel)
+        {
+            SetAudioMuted(channel, !AudioMuted(channel));
+        }
+
+        /// <summary>
+        /// Writes the stored mix into the engine. The setters already call it; also called once
+        /// <b>when admin activates</b> (same pattern as <see cref="ApplyScreenMode"/>).
+        /// </summary>
+        public static void ApplyAudioMix()
+        {
+            Load();
+            for (int i = 0; i < AudioMix.ChannelCount; i++)
+            {
+                var channel = (AudioChannel)i;
+                AudioMix.Set(channel, EffectiveAudioLevel(channel));
+            }
+        }
+
+        private static bool InRange(int channelIndex)
+        {
+            return channelIndex >= 0 && channelIndex < AudioMix.ChannelCount;
+        }
+
         /// <summary>
         /// Alpha for the roof (1 = normal, 0 = not drawn, shadow stays), derived from the
         /// preference and the current camera mode; consumed by <c>ArenaRoof.ApplyAll</c>.
@@ -430,6 +554,14 @@ namespace VortexArena.App.Admin
             // ⚠️ Default is the window's CURRENT state, not a constant: with no stored choice the
             // preference must not override the build's startup mode (Player Settings).
             _fullScreen = PlayerPrefs.GetInt(KeyFullScreen, Screen.fullScreen ? 1 : 0) != 0;
+
+            // Default: full level, not muted.
+            for (int i = 0; i < AudioMix.ChannelCount; i++)
+            {
+                var channel = (AudioChannel)i;
+                _audioLevels[i] = Mathf.Clamp01(PlayerPrefs.GetFloat(KeyAudioLevel + channel, 1f));
+                _audioMuted[i] = PlayerPrefs.GetInt(KeyAudioMuted + channel, 0) != 0;
+            }
         }
 
         private static void Raise()
