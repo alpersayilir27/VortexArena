@@ -1508,14 +1508,22 @@ edilir), yani varsayılan davranış keyword'e bağlanırsa koddan ya da araçta
 sessizce kapalı kalır.
 Logosu **yatayda kayan** bir yazım daha durur (`VortexArena/GlassWallLogoScroll`,
 `_Shared/Shaders/GlassWallLogoScroll.shader`, materyali `_Shared/Materials/M_VortexGlassWall_Scroll.mat`):
-sabit HLSL yazımının birebir aynısıdır, tek farkı `_ScrollSpeed` alanıdır — birimi **saniyede logo
+sabit HLSL yazımının aynısıdır, iki alan fazladır. `_ScrollSpeed` birimi **saniyede logo
 genişliğidir** (artı = sola, eksi = sağa, 0 = sabit), böylece `_LogoSize` değiştirilince kayma hissi
 bozulmaz. ⚠️ Kayma duvarın KENDİSİNDE periyodiktir: döşeme kipinde `frac`, merkez kipinde duvar
 genişliği kadarlık bir katlama ile sol kenardan çıkan logo sağ kenardan geri girer — bunun görünür
 yan etkisi, merkez kipinde taşacak kadar büyütülmüş bir logonun karşı kenarda da görünmesidir.
+`_LogoRepeat` (X, Y) geniş panelde tek logonun seyrek kalmasının çaresidir: **merkez kipinde** duvar
+o kadar eşit dilime bölünür ve logo **boyu değişmeden** her dilimde bir kez çizilir (dilim arası
+boşluğu `box` maskesi keser), **döşeme kipinde** ise döşeme sıklığı çarpanıdır, yani logo aynı oranda
+küçülür. 1 = bugünkü tek logo. ⚠️ ÇİFT sayıda kopya yarım dilim kaydırılır, yoksa bir kopya tam
+katlama dikişine oturup iki kenarda yarım yarım çizilirdi; ⚠️ döşeme kipinde X ile Y'yi farklı
+vermek logoyu esnetir (döşemede dilimler bitişiktir). Y'de tekrar yalnız 1'den büyükken devreye
+girer — tek kopya üstten/alttan sarmamalıdır.
 ⚠️ Hız alanı mevcut yazımlara EKLENMEZ, ayrı shader olarak durur: sabit logo isteyen duvarlarda
-tek bir alan her materyalde sessizce bir animasyon riski taşırdı. Property adları üç yazımda da
-aynı olduğu için bir materyalin shader'ını çevirmek ayarları korur.
+tek bir alan her materyalde sessizce bir animasyon riski taşırdı. Ortak property adları üç yazımda
+da aynıdır, bir materyalin shader'ını çevirmek o ayarları korur — `_ScrollSpeed` ve `_LogoRepeat`
+yalnız kayan yazımda vardır.
 ⚠️ **Açık bir Shader Graph penceresi varken `.shadergraph` dosyası dışarıdan düzenlenmez:** pencere
 kapanırken kendi (bayat) hâlini diske yazmayı teklif eder ve kabul edilirse dosyadaki iş kaybolur.
 Dosya ayrıca tek bir JSON DEĞİL, arka arkaya dizilmiş JSON objeleridir ve **aralarındaki boş satır
