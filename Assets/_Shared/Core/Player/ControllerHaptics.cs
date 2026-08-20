@@ -5,64 +5,67 @@ using UnityEngine;
 namespace VortexArena.Core.Player
 {
     /// <summary>
-    /// Kumanda titreşiminin <b>hakemi</b>: birden çok kaynak kendi titreşimini bildirir, en yüksek
-    /// genliği isteyen kazanır ve <b>tek</b> uygulama yapılır.
+    /// The <b>arbiter</b> of controller vibration: several sources report their own vibration, the one
+    /// asking for the highest amplitude wins and a <b>single</b> application is made.
     /// <para>
-    /// <b>Neden var:</b> titreşim motoru tektir ama onu isteyen birden fazla sistem vardır (engel
-    /// ihlali · arena sınırının dışına çıkma) ve ikisi aynı anda doğru olabilir — muhafaza,
-    /// sahnedeki <c>ArenaObstacle</c>'ları da "alan dışı" sayıyor. İkisi de
-    /// <see cref="OVRInput.SetControllerVibration"/>'ı doğrudan çağırsaydı biri sustuğu anda
-    /// ötekinin titreşimini kapatırdı; belirtisi "duvarda dururken titreşim kesik kesik geliyor"
-    /// olur ve sebebi iki ayrı bileşene dağılmış olurdu. <see cref="ScreenFade"/> aynı sorunu aynı
-    /// biçimde çözüyor — bu sınıf onun titreşim ikizidir.
+    /// <b>Why it exists:</b> the vibration motor is single but there are multiple systems asking for it
+    /// (obstacle violation · leaving the arena boundary) and both can be true at once — the guard also
+    /// counts the scene's <c>ArenaObstacle</c>s as "out of area". If both called
+    /// <see cref="OVRInput.SetControllerVibration"/> directly, the moment one went silent it would
+    /// switch off the other's vibration; the symptom would be "the vibration keeps cutting out while
+    /// standing at the wall" and its cause would be spread across two separate components.
+    /// <see cref="ScreenFade"/> solves the same problem the same way — this class is its vibration twin.
     /// </para>
     /// <para>
-    /// <b>Kalp atışı sözleşmesi:</b> kaynak titreşimini <b>her karede</b> bildirir; bildirmeyi
-    /// bırakan kaynak <see cref="EntryTimeoutSeconds"/> sonra kendiliğinden düşer. "Kapat" demeyi
-    /// unutmak mümkün değildir — kapatmayı unutan bir kaynak kumandayı sonsuza kadar titretirdi.
+    /// <b>Heartbeat contract:</b> a source reports its vibration <b>every frame</b>; a source that stops
+    /// reporting drops out by itself after <see cref="EntryTimeoutSeconds"/>. Forgetting to say "off" is
+    /// impossible — a source that forgot to switch off would vibrate the controller forever.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Hakem yalnız <see cref="Report"/> içinde yeniden hesaplar</b>, kendi döngüsü YOKTUR
-    /// (bir GameObject önyüklemek için sebep değil). Yani en az bir kaynağın her karede
-    /// bildiriyor olması gerekir ve bu garanti edilmiştir: <see cref="ObstacleViolationProbe"/>
-    /// kendini önyükleyen kalıcı bir tekildir ve koşulsuz bildirir. Susan bir hakem son yazdığı
-    /// titreşimi açık bırakırdı.
+    /// ⚠️ <b>The arbiter only recomputes inside <see cref="Report"/></b>, it has NO loop of its own
+    /// (not a reason to bootstrap a GameObject). That means at least one source must be reporting every
+    /// frame, and that is guaranteed: <see cref="ObstacleViolationProbe"/> is a self-bootstrapping
+    /// persistent singleton and reports unconditionally. An arbiter that went silent would leave the
+    /// last vibration it wrote switched on.
     /// </para>
     /// <para>
-    /// <b>Tek atımlık kalıplar da kaynaktır</b> (<see cref="PulseBoth"/>): kalıbı motora doğrudan
-    /// yazan bir yol YOKTUR — hakemin arkasından yazılan titreşim, hakem bir sonraki kararını
-    /// verene kadar açık kalır ya da hiç duyulmaz.
+    /// <b>One-shot patterns are sources too</b> (<see cref="PulseBoth"/>): there is NO path that writes
+    /// a pattern straight to the motor — a vibration written behind the arbiter's back either stays on
+    /// until the arbiter makes its next decision, or is never felt at all.
     /// </para>
     /// </summary>
     public static class ControllerHaptics
     {
-        /// <summary>Bildirim yaşı bunu aşarsa kaynak susmuş sayılır (sn).</summary>
+        /// <summary>If a report gets older than this, the source counts as gone silent (s).</summary>
         private const float EntryTimeoutSeconds = 0.25f;
 
-        /// <summary>Nabzın frekansı (Hz). ⚠️ Sürekli titreşim uyarı olmaktan çıkar, bu yüzden
-        /// nabızdır; kaynaklar aynı sayıyı kullanır ki üst üste binince faz kaymasın.</summary>
+        /// <summary>Frequency of the pulse (Hz). ⚠️ Continuous vibration stops being a warning, which is
+        /// why it pulses; the sources use the same number so their phases do not drift apart when they
+        /// overlap.</summary>
         private const float PulseHz = 2f;
 
-        /// <summary>Nabzın genliği (0..1).</summary>
+        /// <summary>Amplitude of the pulse (0..1).</summary>
         private const float PulseAmplitude = 0.5f;
 
-        /// <summary>Titreşimin frekans parametresi — cihaz ayarı, kaynağın kararı değil.</summary>
+        /// <summary>The vibration's frequency parameter — a device setting, not the source's decision.</summary>
         private const float VibrationFrequency = 0.6f;
 
-        /// <summary>Onay darbesinin genliği. Nabızdan YÜKSEKTİR: nabız bir uyarı, darbe bir onaydır
-        /// ve ikisi aynı anda doğru olabilir (engelin dibindeki taban şeridi) — hakem en yükseği
-        /// seçtiği için onay uyarının altında kaybolmaz.</summary>
+        /// <summary>Amplitude of the confirmation burst. HIGHER than the pulse: the pulse is a warning,
+        /// the burst is a confirmation and both can be true at once (a base strip right next to an
+        /// obstacle) — since the arbiter picks the highest, the confirmation is not lost underneath the
+        /// warning.</summary>
         private const float BurstAmplitude = 0.8f;
 
         private const float BurstOnSeconds = 0.12f;
         private const float BurstGapSeconds = 0.08f;
 
-        /// <summary>Tüm darbeler tek kaynaktır: iç içe binen iki darbe "aynı anda iki titreşim"
-        /// değil, ikincisinin birincisini yenilemesidir.</summary>
+        /// <summary>All bursts are a single source: two overlapping bursts are not "two vibrations at
+        /// once", the second one renews the first.</summary>
         private const string BurstSourceId = "burst";
 
-        /// <summary>Koşan darbenin kuşağı — yeni darbe eskisini iptal eder (eski coroutine kendi
-        /// bitişinde <see cref="Report"/>'a 0 yazıp yenisini susturmasın).</summary>
+        /// <summary>Generation of the running burst — a new burst cancels the old one (so the old
+        /// coroutine does not write 0 to <see cref="Report"/> at its own end and silence the new
+        /// one).</summary>
         private static int _burstGeneration;
 
         private struct Entry
@@ -71,19 +74,20 @@ namespace VortexArena.Core.Player
             public float Time;
         }
 
-        // Kaynak sayısı tek haneli; sözlük kurulum kolaylığı için (kaynaklar birbirini tanımıyor).
+        // The number of sources is single-digit; the dictionary is for setup convenience (the sources do
+        // not know about each other).
         private static readonly Dictionary<string, Entry> Sources = new Dictionary<string, Entry>();
 
-        /// <summary>En son uygulanan genlik — aynı değeri tekrar tekrar yazmamak için.</summary>
+        /// <summary>The last applied amplitude — so the same value is not written over and over.</summary>
         private static float _applied;
 
         /// <summary>
-        /// <b>Nabız</b> bildirimi: <paramref name="active"/> true iken kaynak
-        /// <see cref="PulseHz"/> frekansında titreşim ister. Faz <see cref="Time.unscaledTime"/>'dan
-        /// türediği için tüm kaynaklarda aynıdır.
+        /// <b>Pulse</b> report: while <paramref name="active"/> is true the source asks for vibration at
+        /// <see cref="PulseHz"/>. Since the phase is derived from <see cref="Time.unscaledTime"/> it is
+        /// the same across all sources.
         /// </summary>
-        /// <param name="sourceId">Kaynağın sabit kimliği (ör. "obstacle", "boundary").</param>
-        /// <param name="active">Kaynak şu an titreşim istiyor mu.</param>
+        /// <param name="sourceId">The source's fixed id (e.g. "obstacle", "boundary").</param>
+        /// <param name="active">Whether the source wants vibration right now.</param>
         public static void ReportPulse(string sourceId, bool active)
         {
             bool on = active && Mathf.Repeat(Time.unscaledTime * PulseHz, 1f) < 0.5f;
@@ -91,19 +95,21 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// <b>Tek atımlık onay darbesi</b>: iki kumandaya <paramref name="pulses"/> kısa darbe
-        /// ("doğru yerdesin" gibi bir OLAY bildirimi — nabız gibi süren bir durum değil).
+        /// <b>One-shot confirmation burst</b>: <paramref name="pulses"/> short pulses on both
+        /// controllers (an EVENT notification like "you are in the right place" — not an ongoing state
+        /// like the pulse).
         /// <para>
-        /// ⚠️ <b>Motoru doğrudan sürmez</b>, her karede <see cref="Report"/>'a yazan sıradan bir
-        /// kaynaktır: hakem "aynı genliği zaten yazdım" diye tekrar yazmayı atladığı için motoru
-        /// arkasından süren bir darbe ya sessizce yutulur ya da hakem sustuğunda kumandayı açık
-        /// bırakırdı. OVRInput'un süre parametresi olmadığı için kalıp bir coroutine ister; statik
-        /// sınıfın kendi GameObject'i olmadığından onu <paramref name="host"/> üstünde koşturur —
-        /// host yok/kapalıysa sessizce hiçbir şey yapmaz (titreşim geri bildirimdir, kritik değil).
+        /// ⚠️ <b>It does not drive the motor directly</b>, it is an ordinary source writing to
+        /// <see cref="Report"/> every frame: because the arbiter skips rewriting when it has "already
+        /// written the same amplitude", a burst driving the motor behind its back would either be
+        /// silently swallowed or leave the controller switched on when the arbiter goes quiet. Since
+        /// OVRInput has no duration parameter the pattern needs a coroutine; as a static class has no
+        /// GameObject of its own it runs it on <paramref name="host"/> — if the host is missing/disabled
+        /// it silently does nothing (vibration is feedback, not critical).
         /// </para>
         /// </summary>
-        /// <param name="host">Coroutine'i koşturacak, sahnede yaşayan bileşen.</param>
-        /// <param name="pulses">Darbe sayısı.</param>
+        /// <param name="host">A component living in the scene that will run the coroutine.</param>
+        /// <param name="pulses">Number of pulses.</param>
         public static void PulseBoth(MonoBehaviour host, int pulses = 3)
         {
             if (host == null || !host.isActiveAndEnabled || pulses <= 0)
@@ -118,7 +124,7 @@ namespace VortexArena.Core.Player
         private static IEnumerator BurstRoutine(int pulses, int generation)
         {
             const float period = BurstOnSeconds + BurstGapSeconds;
-            float total = pulses * period - BurstGapSeconds; // son darbeden sonra boşluk yok
+            float total = pulses * period - BurstGapSeconds; // no gap after the last pulse
             float start = UnityEngine.Time.unscaledTime;
 
             while (generation == _burstGeneration)
@@ -140,11 +146,11 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Bir kaynağın o karedeki titreşim isteği. <paramref name="amplitude"/> <c>0</c> ise kaynak
-        /// titreşim istemiyor demektir (bildirmemekle aynı sonuç, ama açık).
+        /// A source's vibration request for that frame. If <paramref name="amplitude"/> is <c>0</c> the
+        /// source does not want vibration (same outcome as not reporting, but explicit).
         /// </summary>
-        /// <param name="sourceId">Kaynağın sabit kimliği.</param>
-        /// <param name="amplitude">0..1 titreşim genliği.</param>
+        /// <param name="sourceId">The source's fixed id.</param>
+        /// <param name="amplitude">Vibration amplitude, 0..1.</param>
         public static void Report(string sourceId, float amplitude)
         {
             if (string.IsNullOrEmpty(sourceId))
@@ -155,8 +161,8 @@ namespace VortexArena.Core.Player
             Sources[sourceId] = new Entry
             {
                 Amplitude = Mathf.Clamp01(amplitude),
-                // ⚠️ unscaledTime: titreşim bir SUNUM katmanıdır ve Time.timeScale ile oynanırsa da
-                // tazeliğini korumalıdır (ScreenFade'deki gerekçenin aynısı).
+                // ⚠️ unscaledTime: vibration is a PRESENTATION layer and must keep its freshness even
+                // if Time.timeScale is played with (the same rationale as in ScreenFade).
                 Time = UnityEngine.Time.unscaledTime
             };
 
@@ -164,9 +170,10 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Kazanan genlik: <b>en yüksek</b> genliği isteyen taze kaynak. Karışım (toplama/çarpma)
-        /// bilinçli olarak YOK — iki kaynağın genliği toplanınca sonuç ikisinden de sert olur ve
-        /// "neden bu kadar titriyor" sorusunun cevabı hiçbir kaynakta bulunmaz.
+        /// The winning amplitude: the fresh source asking for the <b>highest</b> amplitude. Mixing
+        /// (adding/multiplying) is deliberately ABSENT — summing two sources' amplitudes gives a result
+        /// harsher than either of them, and the answer to "why is it vibrating this hard" would not be
+        /// found in any single source.
         /// </summary>
         private static float Resolve()
         {
@@ -178,7 +185,7 @@ namespace VortexArena.Core.Player
                 Entry entry = kv.Value;
                 if (now - entry.Time > EntryTimeoutSeconds)
                 {
-                    continue; // susmuş kaynak
+                    continue; // a source that went silent
                 }
 
                 if (entry.Amplitude > amplitude)

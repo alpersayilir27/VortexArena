@@ -1,18 +1,15 @@
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Tercihler panelinin sekmeleri — <see cref="AdminPreferencesPanel"/>'deki dizilerin
-    /// (düğme/etiket/sayfa) indeksi.
+    /// Preferences panel tabs — index into <see cref="AdminPreferencesPanel"/>'s
+    /// button/label/page arrays.
     /// <list type="bullet">
-    /// <item><b>Match</b> (MAÇ): ORTAK ayarlar — sunucudaki seçime ve anlık komutlara dokunur,
-    /// değişiklik tüm adminlerde görünür.</item>
-    /// <item><b>View</b> (GÖRÜNÜM): YEREL ayarlar — yalnız bu ekranı ilgilendirir
-    /// (<see cref="AdminSession"/>, <c>PlayerPrefs</c>).</item>
-    /// <item><b>Connection</b> (BAĞLANTI): oturumun kendisi — bağlantı durumu, yeniden bağlan/kes
-    /// ve oyundan çık.</item>
+    /// <item><b>Match</b>: SHARED settings — server-side selection, visible on every admin.</item>
+    /// <item><b>View</b>: LOCAL settings (<see cref="AdminSession"/>, <c>PlayerPrefs</c>).</item>
+    /// <item><b>Connection</b>: connection state, reconnect/disconnect, quit.</item>
     /// </list>
-    /// ⚠️ Serialize edilen dizilerin indeksidir: yeni sekme <b>SONA</b> eklenir, aksi hâlde
-    /// prefabtaki bağlar sessizce kayar.
+    /// ⚠️ Index into serialized arrays: append new tabs at the <b>END</b>, else the prefab
+    /// bindings silently shift.
     /// </summary>
     public enum AdminPreferencesTab
     {

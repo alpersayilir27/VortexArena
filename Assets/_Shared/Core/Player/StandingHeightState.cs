@@ -5,48 +5,43 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>
-    /// Oyuncunun <b>ayakta göz yüksekliği</b> (m, zeminden) — gövdeye göre ölçülen jestlerin
-    /// paydası. Canlı göz yüksekliğinden farkı budur: bu sayı oyuncu eğilince, çömelince ya da
-    /// aşağı bakınca <b>değişmez</b>.
-    /// <para>
-    /// ⚠️ <b>Neden ayrı bir ölçü:</b> canlı göz yüksekliğini payda yapan bir eşik, ona ulaşmak için
-    /// yapılan hareketin kendisiyle birlikte iner. Oyuncu eğildiğinde kafa 40–55 cm düşer, eşik de
-    /// onunla düşer ve sarkan kol eşiğin altında kalır — jest oyuncu hiçbir şey yapmadan tetiklenir.
-    /// Payda sabitlenince aynı jest her duruşta aynı hareketi ister.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Ölçü ÖĞRENİLİR, sorulmaz:</b> tavan anında yükselir, aşağı <see cref="DecayMetersPerSecond"/>
-    /// hızıyla çok yavaş sızar. Asimetri bilinçlidir — fazla yüksek bir tahmin jesti yalnız
-    /// zorlaştırır (oyuncu elini biraz daha indirir), fazla düşük bir tahmin ise onu kendiliğinden
-    /// tetikler. Sızıntı gözlüğü daha kısa biri devraldığında ölçünün yakınsaması içindir.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Cihazda SAKLANMAZ</b> (<see cref="BodyScaleState"/>'in aksine): işletme gözlüğü elden
-    /// ele geçer, saklanan bir boy bir sonraki oyuncuya yanlış paydayla başlar. Aynı sebeple ölçü
-    /// her <c>hello</c>'da sıfırlanır; oyuncu gözlüğü takıp doğrulduğu ilk karede yeniden oturur.
-    /// </para>
-    /// <para>
-    /// Sahnede DURMAZ: kalıcı tekil olarak kendini önyükler (<see cref="BodyScaleState"/> deseni) —
-    /// her arenaya elle bir kurulum adımı eklememek için. Rig yoksa (admin gözlemci) hiçbir şey
-    /// yapmaz ve <see cref="TryGet"/> <c>false</c> döner: eli/kafası olmayan oturumda "bu oyuncunun
-    /// boyu ne" sorusunun doğru cevabı yoktur, uydurmak yerine susar.
-    /// </para>
-    /// </summary>
+    /// <summary>The player's <b>standing eye height</b> (m from the floor) — the denominator of
+    /// body-relative gestures. Unlike live eye height, this number does <b>not</b> change when the player
+    /// bends, crouches or looks down.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Why a separate measure:</b> a threshold using live eye height sinks together with the very
+    /// motion made to reach it. Bending drops the head 40–55 cm, the threshold drops with it and a hanging
+    /// arm ends up below it — the gesture fires without the player doing anything. With a fixed
+    /// denominator the same gesture demands the same motion in every posture.
+    /// <para>⚠️ <b>The measure is LEARNED, not asked for:</b> the ceiling rises instantly and leaks
+    /// downward very slowly at <see cref="DecayMetersPerSecond"/>. The asymmetry is deliberate — an
+    /// overestimate only makes the gesture harder (the player lowers their hand a bit more), an
+    /// underestimate fires it by itself. The leak exists so the measure converges when a shorter person
+    /// takes over the headset.</para>
+    /// <para>⚠️ <b>Not stored on the device</b> (unlike <see cref="BodyScaleState"/>): a venue headset
+    /// passes from hand to hand and a stored height would start the next player with the wrong
+    /// denominator. For the same reason it resets on every <c>hello</c>; it re-settles on the first frame
+    /// the player stands upright.</para>
+    /// <para>It does NOT live in the scene: a self-bootstrapping persistent singleton (the
+    /// <see cref="BodyScaleState"/> pattern) so no manual setup step is added per arena. With no rig
+    /// (admin observer) it does nothing and <see cref="TryGet"/> returns <c>false</c>: in a session with
+    /// no head there is no right answer to "how tall is this player", so it stays silent instead of
+    /// inventing one.</para>
+    /// </remarks>
     public class StandingHeightState : MonoBehaviour
     {
-        /// <summary>Altındaki örnek ölçüye HİÇ girmez: oyuncu yerde/çömelmiş ya da rig henüz
-        /// oturmamıştır (rig'in ilk kareleri sıfıra yakın gelir).</summary>
+        /// <summary>Samples below this never enter the measure: the player is on the floor/crouching or
+        /// the rig has not settled (the rig's first frames come in near zero).</summary>
         private const float MinSampleMeters = 0.8f;
 
-        /// <summary>Tahminin aşağı sızma hızı (m/sn) — 3 cm/dk. Yalnız gözlüğü devralan daha kısa
-        /// oyuncuya yakınsamak için vardır; bir oyuncunun çömelip kalktığı sürede kayda değer bir
-        /// şey kaybettirmeyecek kadar yavaştır.</summary>
+        /// <summary>Downward leak rate of the estimate (m/s) — 3 cm/min. It exists only to converge on a
+        /// shorter player taking over the headset; slow enough to lose nothing worth mentioning while a
+        /// player crouches and stands back up.</summary>
         private const float DecayMetersPerSecond = 0.0005f;
 
         public static StandingHeightState Instance { get; private set; }
 
-        /// <summary>Öğrenilmiş ayakta göz yüksekliği (m); <c>0</c> = henüz ölçülemedi.</summary>
+        /// <summary>Learned standing eye height (m); <c>0</c> = not measurable yet.</summary>
         private float _estimate;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -72,8 +67,8 @@ namespace VortexArena.Core.Player
 
             Instance = this;
 
-            // Kalıcı tekiliz: obje devre dışı bırakılsa bile olay kaçmasın diye
-            // OnEnable/OnDisable yerine Awake/OnDestroy'da abone oluruz (BodyScaleState deseni).
+            // We are a persistent singleton: we subscribe in Awake/OnDestroy instead of
+            // OnEnable/OnDisable so no event is missed if the object is disabled (BodyScaleState pattern).
             NetEvents.OnConnected += HandleConnected;
         }
 
@@ -88,8 +83,8 @@ namespace VortexArena.Core.Player
             Instance = null;
         }
 
-        /// <summary>Yeni oturum = muhtemelen yeni oyuncu: ölçü sıfırlanır, ilk dik karede yeniden
-        /// öğrenilir (kalibrasyon ve gövde ölçeğiyle aynı gerekçe).</summary>
+        /// <summary>New session = probably a new player: the measure resets and is relearned on the first
+        /// upright frame (same rationale as calibration and body scale).</summary>
         private void HandleConnected(WelcomeMsg msg)
         {
             _estimate = 0f;
@@ -108,15 +103,13 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            // Tek satırda iki yön: örnek tahminden yüksekse tavan ANINDA yükselir, değilse
-            // tahmin örneğe doğru yavaşça sızar ama onun altına inmez.
+            // Both directions in one line: a higher sample raises the ceiling INSTANTLY, otherwise the
+            // estimate leaks slowly toward the sample without dropping below it.
             _estimate = Mathf.Max(sample, _estimate - DecayMetersPerSecond * Time.deltaTime);
         }
 
-        /// <summary>
-        /// Ayakta göz yüksekliği (m, zeminden). Henüz hiç geçerli örnek alınmadıysa (rig yok,
-        /// oyuncu yerde) <c>false</c> — çağıran jest o karede HİÇ tanınmaz.
-        /// </summary>
+        /// <summary>Standing eye height (m from the floor). <c>false</c> if no valid sample was ever taken
+        /// (no rig, player on the floor) — the calling gesture is then NOT recognised that frame.</summary>
         public static bool TryGet(out float standingEyeHeight)
         {
             standingEyeHeight = Instance != null ? Instance._estimate : 0f;

@@ -3,51 +3,55 @@ using System;
 namespace VortexArena.Core
 {
     /// <summary>
-    /// <b>Henüz başlamamış</b> maçın seçili modu (§5.3 <c>selection_state</c>) — yalnız SUNUM için.
+    /// The selected mode of a <b>not yet started</b> match (§5.3 <c>selection_state</c>) —
+    /// PRESENTATION only.
     /// <para>
-    /// ⚠️ <see cref="ModeRuntime"/> ile karıştırılmaz: orası <b>koşan</b> maçın kurallarıdır ve
-    /// otoritesi <c>load_match.rules</c>'tur. Burası "admin panelinde ne seçili" bilgisidir; hiçbir
-    /// kuralı, HUD'u ya da loadout'u değiştirmez — maç türü ancak <c>start_match</c> ile değişir.
+    /// ⚠️ Not to be confused with <see cref="ModeRuntime"/>: that one holds the rules of the
+    /// <b>running</b> match and its authority is <c>load_match.rules</c>. This one is the "what is
+    /// selected in the admin panel" information; it changes no rule, HUD or loadout — the match type
+    /// only changes via <c>start_match</c>.
     /// </para>
     /// <para>
-    /// <b>Neden var:</b> lobide beklerken (ve admin bir arenayı sahnelediğinde) taban şeritlerinin
-    /// görünüp görünmeyeceği seçili moda bağlı — takımlı modda (TDM/turnuva) şeritler gerekli,
-    /// takımsızda (FFA) yanıltıcı. Aktif kural o sırada lobi profili olduğu için bu bilgi başka
-    /// hiçbir yerden okunamıyor. Tek tüketicisi <c>Arena.BaseZoneVisibility</c>'dir.
+    /// <b>Why it exists:</b> while waiting in the lobby (and when admin stages an arena) whether the
+    /// base strips are visible depends on the selected mode — in a team mode (TDM/tournament) the
+    /// strips are needed, in a teamless one (FFA) they are misleading. Since the active rule at that
+    /// moment is the lobby profile, this information cannot be read from anywhere else. Its only
+    /// consumer is <c>Arena.BaseZoneVisibility</c>.
     /// </para>
     /// <para>
-    /// ⚠️ Buraya <b>tüketicisi olmayan alan eklenmez</b>: seçimin geri kalanı (harita, süre, limit)
-    /// operatöre aittir ve <c>admin_state</c> ile yalnız adminlere gider.
+    /// ⚠️ <b>No field without a consumer is added here</b>: the rest of the selection (map, duration,
+    /// limit) belongs to the operator and goes only to admins via <c>admin_state</c>.
     /// </para>
     /// </summary>
     public static class ModeSelection
     {
-        /// <summary>Sunucu seçimi hiç bildirdi mi. <c>false</c> = eski sunucu (ya da bağlantı yok):
-        /// tüketici aktif kurala düşer, çünkü "bilinmiyor" ile "takımsız" aynı şey değildir.</summary>
+        /// <summary>Whether the server ever reported a selection. <c>false</c> = old server (or no
+        /// connection): the consumer falls back to the active rule, because "unknown" and "teamless"
+        /// are not the same thing.</summary>
         public static bool HasValue { get; private set; }
 
-        /// <summary>Seçili mod kimliği (açılışta <c>"lobby"</c>). Yalnız teşhis/loglama içindir —
-        /// davranış <see cref="IsTeamless"/>'tan okunur (istemcide <c>if (modeId == …)</c> zinciri
-        /// yazılmaz, §10.5).</summary>
+        /// <summary>Selected mode id (<c>"lobby"</c> at startup). For diagnostics/logging only —
+        /// behaviour is read from <see cref="IsTeamless"/> (no <c>if (modeId == …)</c> chain is
+        /// written on the client, §10.5).</summary>
         public static string ModeId { get; private set; } = "";
 
-        /// <summary>Seçili mod takımsız mı (<c>teamMode:"none"</c>).</summary>
+        /// <summary>Whether the selected mode is teamless (<c>teamMode:"none"</c>).</summary>
         public static bool IsTeamless { get; private set; }
 
-        /// <summary>Seçim gerçekten değiştiğinde tetiklenir (aynı değerin tekrarında SESSİZ —
-        /// mesaj her bağlantıda ve her seçim komutunda gelebilir).</summary>
+        /// <summary>Raised when the selection actually changes (SILENT on a repeat of the same value —
+        /// the message can arrive on every connection and on every selection command).</summary>
         public static event Action Changed;
 
-        /// <summary>Telden gelen seçimi uygular. <paramref name="teamMode"/> §10.5 sözlüğüdür;
-        /// <c>"none"</c> dışındaki her değer (boş dahil) takımlı sayılır — bilinmeyen değerin
-        /// varsayılana düşmesi kuralı.</summary>
+        /// <summary>Applies the selection coming from the wire. <paramref name="teamMode"/> is the
+        /// §10.5 vocabulary; every value other than <c>"none"</c> (including empty) counts as
+        /// team-based — the rule that an unknown value falls back to the default.</summary>
         public static void Apply(string modeId, string teamMode)
         {
             Set(true, modeId ?? "", string.Equals(teamMode, "none", StringComparison.OrdinalIgnoreCase));
         }
 
-        /// <summary>Bağlantı koptu / oturum bitti: "bilinmiyor"a döner ki tüketici yine aktif
-        /// kurala düşsün.</summary>
+        /// <summary>Connection lost / session ended: returns to "unknown" so the consumer falls back
+        /// to the active rule again.</summary>
         public static void Reset()
         {
             Set(false, "", false);

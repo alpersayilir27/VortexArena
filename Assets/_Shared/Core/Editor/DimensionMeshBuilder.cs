@@ -9,95 +9,80 @@ using VortexArena.Core.Arena;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Arena &gt; JSON'dan DimensionMesh Üret</c> — bir mekanın boyut
-    /// dosyasını (<see cref="ArenaDimensions"/>) sahnedeki <b>ölçü maketine</b> çevirir:
-    /// <c>&lt;Mekan&gt;_DimensionMesh</c> kökü altında tek bir <c>Plane</c> çokgeni, her kolon için
-    /// bir prizma ve iki kalibrasyon işaretçisi (<c>anchor_a</c> / <c>anchor_b</c>).
-    /// <para>
-    /// <b>Maket oynanan geometri DEĞİLDİR ama build'e GİRER:</b> ürettiği <c>anchor_a</c> /
-    /// <c>anchor_b</c> küpleri sahnenin kalibrasyon işaretçilerinin ta kendisidir ve çalışma
-    /// anında <see cref="ArenaCalibrator"/> onları arar. Oyunda çizilen yalnız işaretçilerdir;
-    /// taban ve kolon görselini <see cref="ArenaDimensionMesh"/> <c>Awake</c>'te kapatır. Arena
-    /// sanatı maketin üstüne kurulur; duvar ÜRETİLMEZ (arenanın duvarları environment'a aittir).
-    /// </para>
-    /// <para>
-    /// <b>Maket sahnedeki <see cref="ArenaBoundary"/>'nin ALTINA kurulur</b> — yerel konum/dönüş
-    /// sıfır, ölçek 1. Böylece arenayı hazır bir environment'ın üstüne oturtmak <b>tek objeyi</b>
-    /// taşımak/döndürmek olur (muhafaza örneği); maket ve altındaki kalibrasyon işaretçileri onu
-    /// kendiliğinden izler, ikisi zaten çakışık olmak zorundadır (muhafazanın ölçüsü de aynı
-    /// dosyadan gelir). Sahnede muhafaza yoksa maket sahne köküne, dünya orijininde ve dönüşsüz
-    /// kurulur.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Maketin ölçeği değiştirilmez</b> ve döndürülmüş bir kökün altında ölçü <b>dünya
-    /// eksenli kutuda okunmaz</b>: 12×12 bir taban, 48,72° dönmüş bir kökün altında seçim
-    /// kutusunda <c>12 × (cos θ + sin θ)</c> = 16,93 görünür ve araç ölçeği bozuyor sanılır.
-    /// Ölçünün doğru okunduğu yer daima boyut dosyasıdır; geri okuma da maketin KENDİ kökünü
-    /// referans aldığı için taşınmış/döndürülmüş maket doğru çevrilir.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Idempotent:</b> sahnede aynı mekanın maketi varsa silinip yeniden üretilir; ikinci
-    /// bir kopya birikmez. Maket dışındaki hiçbir objeye dokunulmaz.
-    /// </para>
-    /// <para>
-    /// ⚠️ <c>EditorUtility.DisplayDialog</c> YOK: modal dialog Unity ana thread'ini kilitliyor ve
-    /// CLI'dan çalıştırınca komut timeout veriyor. Sonuç <c>Debug.Log</c> ile bildirilir.
-    /// </para>
-    /// </summary>
+    /// <summary>Turns a venue's dimensions file (<see cref="ArenaDimensions"/>) into the scene's
+    /// dimension mesh: one <c>Plane</c> polygon, a prism per column and two calibration anchors
+    /// (<c>anchor_a</c> / <c>anchor_b</c>) under the <c>&lt;Venue&gt;_DimensionMesh</c> root.</summary>
+    /// <remarks>
+    /// The mesh is not played geometry but it DOES ship: the <c>anchor_a</c>/<c>anchor_b</c> cubes
+    /// are the scene's calibration anchors and <see cref="ArenaCalibrator"/> looks for them at
+    /// runtime. Only the anchors are drawn in game; <see cref="ArenaDimensionMesh"/> hides the plane
+    /// and columns in <c>Awake</c>. Arena art is built on top of the mesh; no wall is generated
+    /// (arena walls belong to the environment).
+    /// <para>The mesh is built UNDER the scene's <see cref="ArenaBoundary"/> at local zero, scale 1,
+    /// so fitting the arena into an existing environment means moving/rotating ONE object (the
+    /// boundary instance) with the mesh and its anchors following. The two must coincide anyway
+    /// (the boundary reads the same file). Without a boundary the mesh goes to the scene root at the
+    /// world origin, unrotated.</para>
+    /// <para>⚠️ The mesh's scale is never changed, and under a rotated root the size is NOT read
+    /// from the world-axis selection box: a 12×12 plane under a root rotated 48.72° measures
+    /// <c>12 × (cos θ + sin θ)</c> = 16.93 in that box and the tool looks like it broke the scale.
+    /// The dimensions file is where the size is read; reading back references the mesh's OWN root,
+    /// so a moved/rotated mesh still converts correctly.</para>
+    /// <para>⚠️ Idempotent: an existing mesh of the same venue is deleted and regenerated, no second
+    /// copy accumulates. Nothing outside the mesh is touched.</para>
+    /// <para>⚠️ No <c>EditorUtility.DisplayDialog</c>: a modal dialog locks Unity's main thread and
+    /// times out CLI invocations. The result is reported with <c>Debug.Log</c>.</para>
+    /// </remarks>
     public class DimensionMeshBuilder : EditorWindow
     {
         private const string VenuesRoot = "Assets/Arenas/Venues";
         private const string SharedMaterialPath = "Assets/Materials/M_Mekan.mat";
 
-        // Kalibrasyon işaretçileri takım malzemeleriyle boyanır: A kırmızı, B mavi. Yeni asset
-        // üretmemek için mevcutlar kullanıldı — iki noktanın hangisi olduğunun BİR BAKIŞTA
-        // ayrılması sıranın (A→B) kendisinden önemli, operatör yanan işaretçiden doğrular.
+        // Anchors are painted with the team materials (A red, B blue) to avoid new assets: telling
+        // the two points apart AT A GLANCE matters more than the A→B order itself, the operator
+        // confirms from the lit marker.
         private const string MarkAMaterialPath = "Assets/Materials/M_TeamRed.mat";
         private const string MarkBMaterialPath = "Assets/Materials/M_TeamBlue.mat";
 
-        /// <summary>Kalibrasyon işaretçisi küpünün kenar uzunluğu (metre).</summary>
+        /// <summary>Edge length of the calibration anchor cube (m).</summary>
         private const float MarkSize = 0.12f;
 
         [SerializeField] private TextAsset dimensionsJson;
 
-        /// <summary>Üretim sonucu — çağıran (pencere / başka araç) raporlamak için kullanır.</summary>
+        /// <summary>Build result, used by the caller (window / another tool) to report.</summary>
         public sealed class Result
         {
-            /// <summary>Üretilen maketin kökü; başarısızlıkta null.</summary>
+            /// <summary>Root of the generated mesh; null on failure.</summary>
             public GameObject Root;
 
-            /// <summary>Mekan adı (yoldan türetildi).</summary>
+            /// <summary>Venue name (derived from the path).</summary>
             public string VenueName;
 
-            /// <summary>Üretilen kolon sayısı.</summary>
+            /// <summary>Generated column count.</summary>
             public int ColumnCount;
 
-            /// <summary>Taban halkasının köşe sayısı.</summary>
+            /// <summary>Vertex count of the plane ring.</summary>
             public int PlanePointCount;
 
-            /// <summary>
-            /// Üretilen tabanın XZ ölçüsü (metre) = dosyadaki halkanın sınırlayıcı kutusu. Maket
-            /// kendi kökünde dönüşsüz olduğu için maketin YEREL uzayında ölçülen değer de budur
-            /// (kök döndürülmüşse dünya eksenli seçim kutusu daha büyük okunur — bkz. sınıf
-            /// başlığı).
-            /// </summary>
+            /// <summary>XZ size of the generated plane (m) = bounding box of the file's ring, which
+            /// is also its size in the mesh's LOCAL space (the mesh is unrotated in its own root; a
+            /// rotated root reads larger in the world-axis box — see class summary).</summary>
             public Vector2 PlaneLocalSize;
 
-            /// <summary>Kalibrasyon işaretçileri üretildi mi (dosyada nokta varsa).</summary>
+            /// <summary>Whether calibration anchors were generated (file had the points).</summary>
             public bool HasCalibration;
 
-            /// <summary>Üretim gerçekleşti mi.</summary>
+            /// <summary>Whether the build happened.</summary>
             public bool Success;
 
-            /// <summary>Başarısızsa sebebi.</summary>
+            /// <summary>Reason on failure.</summary>
             public string Error;
 
-            /// <summary>Kurtarılmış ama dikkat isteyen durumlar.</summary>
+            /// <summary>Recovered situations that still need attention.</summary>
             public readonly List<string> Warnings = new List<string>();
         }
 
-        // --------------------------------------------------------------- pencere
+        // --------------------------------------------------------------- window
 
         [MenuItem("Tools/VortexArena/Arena/JSON'dan DimensionMesh Üret", false, 2)]
         private static void Open()
@@ -168,12 +153,10 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        // ---------------------------------------------------------------- üretim
+        // ---------------------------------------------------------------- build
 
-        /// <summary>
-        /// Boyut dosyasından maketi üretir. Exception FIRLATMAZ — hata durumunda
-        /// <see cref="Result.Success"/> <c>false</c> döner.
-        /// </summary>
+        /// <summary>Builds the mesh from the dimensions file. Throws NO exception — failures come
+        /// back as <see cref="Result.Success"/> <c>false</c>.</summary>
         public static Result Build(TextAsset json)
         {
             var result = new Result();
@@ -211,10 +194,10 @@ namespace VortexArena.Core.Editor
             int undoGroup = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName("VortexArena Boyut Maketi");
 
-            // ------------------------------------------------------------- kök
-            // Maket muhafazanın ALTINA, yerel sıfırda kurulur (gerekçe sınıf başlığında): arenanın
-            // yerleşimini taşıyan TEK obje VA_ArenaBoundary örneği olsun, maket ve kalibrasyon
-            // işaretçileri onu izlesin. Muhafaza yoksa yedek yol sahne köküdür.
+            // ------------------------------------------------------------- root
+            // Built UNDER the boundary at local zero (reason in the class summary): the boundary
+            // instance is the ONE object carrying the arena's placement, mesh and anchors follow it.
+            // Without a boundary the fallback is the scene root.
             DestroyExisting(result.VenueName);
 
             Transform anchorParent = FindBoundaryParent();
@@ -234,9 +217,9 @@ namespace VortexArena.Core.Editor
                     "arenayı tek objeyi taşıyarak yerleştirebilirsin.");
             }
 
-            // Maket build'e girmek ZORUNDA (kalibrasyon işaretçileri onun altında). Tag açıkça
-            // sıfırlanır: eski bir sahnede 'EditorOnly' etiketli bir kök yeniden kullanılırsa
-            // maket build'den sessizce düşer ve arena sahada hiç hizalanmaz.
+            // The mesh MUST ship (the anchors live under it). The tag is reset explicitly: reusing
+            // an 'EditorOnly' tagged root from an old scene would silently drop the mesh from the
+            // build and leave the arena unalignable on site.
             root.tag = "Untagged";
 
             var marker = Undo.AddComponent<ArenaDimensionMesh>(root);
@@ -245,9 +228,9 @@ namespace VortexArena.Core.Editor
 
             result.Root = root;
 
-            // ----------------------------------------------------------- taban
-            // Taban pivotu köke eşittir: halka koordinatları planın kendi uzayında ve taban maket
-            // içinde tek parça, kaydırılacak bir şey yok.
+            // ----------------------------------------------------------- plane
+            // The plane pivot equals the root: ring coordinates are already in the plan's own space
+            // and the plane is a single piece, nothing to offset.
             GameObject plane = CreatePolygon(
                 ArenaDimensionMesh.PlaneName,
                 plan.plane,
@@ -259,8 +242,8 @@ namespace VortexArena.Core.Editor
 
             if (plane == null)
             {
-                // Yarım maket bırakılmaz: tabansız bir kök geri okumada "taban bulunamadı" diye
-                // patlar ve sahnede işe yaramaz bir iskelet olarak durur.
+                // No half-built mesh is left behind: a root without a plane fails on read back and
+                // just sits in the scene as a useless skeleton.
                 Undo.DestroyObjectImmediate(root);
                 result.Root = null;
                 result.Error = "Taban çokgeni üretilemedi (ProBuilder üçgenlemesi düştü) — " +
@@ -277,7 +260,7 @@ namespace VortexArena.Core.Editor
             Rect planeBounds = Polygon2D.Bounds(plan.plane);
             result.PlaneLocalSize = new Vector2(planeBounds.width, planeBounds.height);
 
-            // --------------------------------------------------------- kolonlar
+            // --------------------------------------------------------- columns
             ArenaDimensions.Column[] columns = plan.columns;
             if (columns != null && columns.Length > 0)
             {
@@ -295,7 +278,7 @@ namespace VortexArena.Core.Editor
                         result.Warnings.Add($"'{columnName}' halkası kendi kendini kesiyor — köşe sırasını gözden geçir.");
                     }
 
-                    // Pivot ağırlık merkezinde: kolonu Move tool ile sürüklemek doğal olsun diye.
+                    // Pivot at the centroid so dragging a column with the Move tool feels natural.
                     Vector2 pivot = Polygon2D.Centroid(column.points);
                     GameObject prism = CreatePolygon(
                         columnName,
@@ -308,7 +291,7 @@ namespace VortexArena.Core.Editor
 
                     if (prism == null)
                     {
-                        // Taban zorunlu, kolon değil: biri düşse bile maketin geri kalanı işe yarar.
+                        // The plane is mandatory, a column is not: the rest stays usable.
                         result.Warnings.Add($"'{columnName}' üretilemedi — atlandı.");
                         continue;
                     }
@@ -320,10 +303,10 @@ namespace VortexArena.Core.Editor
                 }
             }
 
-            // --------------------------------------------- kalibrasyon işaretçileri
-            // Zemin bandının yeri de bir ölçüdür: maketten okunup dosyaya geri yazılabilsin diye
-            // geometri olarak kurulur. Nokta yazılmamış bir dosyada hiçbir şey üretilmez —
-            // uydurulmuş bir çift, sahadaki bandın oraya çekildiğini söylerdi.
+            // --------------------------------------------- calibration anchors
+            // The floor marks are a measurement too, built as geometry so they can be read back into
+            // the file. A file without points generates nothing — a made up pair would claim the
+            // tape on site was laid there.
             if (plan.HasCalibration)
             {
                 CreateMark(ArenaCalibrator.AnchorAName, DimensionAnchor.AnchorKind.A,
@@ -348,26 +331,20 @@ namespace VortexArena.Core.Editor
             return result;
         }
 
-        /// <summary>
-        /// Bir halkadan ProBuilder çokgeni üretir ve <paramref name="parent"/> altına koyar.
-        /// <para>
-        /// <paramref name="pivot"/> halka koordinatlarından çıkarılır ve objenin yerel konumu
-        /// olarak yazılır — böylece objeyi sürüklemek çokgeni bütün olarak taşır.
-        /// </para>
-        /// <para>
-        /// ⚠️ <paramref name="extrude"/> verildiğinde ProBuilder'ın hangi yöne uzattığı halkanın
-        /// sarım yönüne bağlıdır. Sonuç bu yüzden ölçülür ve obje, <b>alt yüzü ebeveynin y=0
-        /// düzleminde</b> duracak şekilde kaydırılır: geri okuma "en alttaki yatay yüz" kuralıyla
-        /// çalışıyor, prizmanın havada ya da zeminin altında durması maketi okunmaz kılardı.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>ProBuilder'ın sonucu KONTROL EDİLİR.</b> Üçgenleme düştüğünde
-        /// <c>CreateShapeFromPolygon</c> exception atmaz, geriye <b>boş bir mesh</b> bırakır:
-        /// sahnede adı doğru ama geometrisi olmayan bir obje kalır ve eksiklik ancak günler sonra
-        /// fark edilir. Düşen çokgen bu yüzden silinir ve <c>null</c> dönülür.
-        /// </para>
-        /// </summary>
-        /// <returns>Üretilen obje; üçgenleme düştüyse <c>null</c>.</returns>
+        /// <summary>Creates a ProBuilder polygon from a ring under <paramref name="parent"/>.</summary>
+        /// <remarks>
+        /// <paramref name="pivot"/> is subtracted from the ring coordinates and written as the
+        /// object's local position, so dragging the object moves the polygon as a whole.
+        /// <para>⚠️ With <paramref name="extrude"/>, the direction ProBuilder extrudes depends on the
+        /// ring's winding, so the result is measured and the object is offset to sit with its BOTTOM
+        /// face on the parent's y=0 plane: read back uses the "lowest horizontal face" rule, and a
+        /// prism floating or sunk below the floor would make the mesh unreadable.</para>
+        /// <para>⚠️ ProBuilder's result IS checked: on a failed triangulation
+        /// <c>CreateShapeFromPolygon</c> throws nothing and leaves an EMPTY mesh — an object with the
+        /// right name and no geometry, noticed only days later. A failed polygon is therefore
+        /// deleted and <c>null</c> returned.</para>
+        /// </remarks>
+        /// <returns>The created object; <c>null</c> when triangulation failed.</returns>
         private static GameObject CreatePolygon(
             string name,
             Vector2[] ring,
@@ -414,20 +391,16 @@ namespace VortexArena.Core.Editor
             return mesh.gameObject;
         }
 
-        /// <summary>
-        /// Bir kalibrasyon noktası işaretçisi üretir: plan noktasında duran küçük bir küp.
-        /// <para>
-        /// ⚠️ Küpün MERKEZİ noktanın üstündedir (tabanı değil): geri okuma objenin transformunu
-        /// aynen okuyor, yani Inspector'daki konum dosyadaki nokta ile birebir aynı görünmeli.
-        /// Yarısı tabanın altında kalması bilinçlidir — nokta zemindedir.
-        /// </para>
-        /// <para>
-        /// ⚠️ Bu sözleşme <b>çalışma anında da geçerlidir</b>: üretilen küp aynı zamanda sahnenin
-        /// kalibrasyon işaretçisidir ve <c>ArenaCalibrator.PlaceMarkerAtFloor</c> onu doğrudan
-        /// zemin noktasına oturtur. Tek sözleşme (transform konumu = zemin noktası) iki tarafta da
-        /// aynı; ikiye ayrılırsa maketteki küp ile hizalanan işaretçi asla üst üste gelmez.
-        /// </para>
-        /// </summary>
+        /// <summary>Creates one calibration anchor: a small cube standing at the plan point.</summary>
+        /// <remarks>
+        /// ⚠️ The cube's CENTRE sits on the point, not its base: read back takes the transform as-is,
+        /// so the Inspector position must equal the file's point. Half of it below the plane is
+        /// deliberate — the point is on the floor.
+        /// <para>⚠️ The same contract holds at runtime: this cube IS the scene's calibration anchor
+        /// and <c>ArenaCalibrator.PlaceMarkerAtFloor</c> places it directly on the floor point. One
+        /// contract (transform position = floor point) on both sides; split in two, the mesh cube
+        /// and the aligned anchor would never coincide.</para>
+        /// </remarks>
         private static void CreateMark(
             string name,
             DimensionAnchor.AnchorKind kind,
@@ -440,8 +413,8 @@ namespace VortexArena.Core.Editor
             mark.name = name;
             Undo.RegisterCreatedObjectUndo(mark, "Kalibrasyon İşaretçisi");
 
-            // Collider maketin işi değil: free-roam'da fiziksel çarpışma zaten yok — geriye
-            // yalnız ray-cast'leri (silah nişanı dahil) yakalayan bir kutu kalırdı.
+            // Colliders are not the mesh's job: free-roam has no physical collision anyway, so only
+            // a box catching raycasts (weapon aim included) would remain.
             var collider = mark.GetComponent<Collider>();
             if (collider != null)
             {
@@ -465,15 +438,11 @@ namespace VortexArena.Core.Editor
             EditorUtility.SetDirty(anchor);
         }
 
-        /// <summary>
-        /// Maketin bağlanacağı muhafaza transformu; sahnede <see cref="ArenaBoundary"/> yoksa
-        /// <c>null</c> (maket sahne köküne kurulur).
-        /// <para>
-        /// ⚠️ Muhafaza her arena sahnesinde ZORUNLU ve TEKTİR; ikinci bir tanesi zaten iki farklı
-        /// ölçü demektir. Yine de burada birinciye düşülür ve iş yapılır: maketi üretmeyi
-        /// reddetmek, kurulumun ortasındaki bir sahneyi tümden çıkmaza sokardı.
-        /// </para>
-        /// </summary>
+        /// <summary>Boundary transform to parent the mesh to; <c>null</c> without an
+        /// <see cref="ArenaBoundary"/> (mesh goes to the scene root).</summary>
+        /// <remarks>⚠️ The boundary is mandatory and unique per arena scene; a second one already
+        /// means two different measurements. Even so this falls back to the first and proceeds:
+        /// refusing to build would dead-end a scene halfway through setup.</remarks>
         private static Transform FindBoundaryParent()
         {
             ArenaBoundary boundary =
@@ -481,14 +450,10 @@ namespace VortexArena.Core.Editor
             return boundary != null ? boundary.transform : null;
         }
 
-        /// <summary>
-        /// Aynı mekanın önceden üretilmiş maketini siler (idempotentlik).
-        /// <para>
-        /// Eşleşme yalnız MEKAN ADINADIR, konuma bakılmaz: maket elle taşınıp döndürülmüş olabilir
-        /// ve konuma bakan bir eşleşme onu bulamayıp sahnede ikinci bir kopya bırakırdı.
-        /// Başka bir mekanın maketine dokunulmaz.
-        /// </para>
-        /// </summary>
+        /// <summary>Deletes a previously generated mesh of the same venue (idempotency).</summary>
+        /// <remarks>Matched by VENUE NAME only, never by position: the mesh may have been moved or
+        /// rotated by hand, and a position based match would miss it and leave a second copy.
+        /// Another venue's mesh is never touched.</remarks>
         private static void DestroyExisting(string venueName)
         {
             ArenaDimensionMesh[] existing =
@@ -509,17 +474,13 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        // -------------------------------------------------------------- yardımcı
+        // -------------------------------------------------------------- helpers
 
-        /// <summary>
-        /// Boyut dosyasının yolundan mekan adını türetir:
-        /// <c>Assets/Arenas/Venues/&lt;Mekan&gt;/…</c> → <c>&lt;Mekan&gt;</c>.
-        /// <para>
-        /// ⚠️ <b>Mekan yoldan gelir, dosyanın içinden değil</b> — <c>MapDefinition</c>'daki mekan
-        /// kuralının aynısı: ikinci, unutulabilir bir doğruluk kaynağı açmamak için. Dosya
-        /// <c>Venues/</c> altında değilse dosya adının ilk parçasına düşülür.
-        /// </para>
-        /// </summary>
+        /// <summary>Derives the venue name from the dimensions file path:
+        /// <c>Assets/Arenas/Venues/&lt;Venue&gt;/…</c> → <c>&lt;Venue&gt;</c>.</summary>
+        /// <remarks>⚠️ The venue comes from the path, not from inside the file — same rule as
+        /// <c>MapDefinition</c>, to avoid a second, forgettable source of truth. Outside
+        /// <c>Venues/</c> it falls back to the first part of the file name.</remarks>
         public static string ResolveVenueName(string assetPath)
         {
             if (string.IsNullOrEmpty(assetPath))
@@ -543,10 +504,9 @@ namespace VortexArena.Core.Editor
             return suffix > 0 ? fileName.Substring(0, suffix) : fileName;
         }
 
-        /// <summary>
-        /// Ortak mekan materyali: varsa <c>Assets/Materials/M_Mekan.mat</c>, yoksa URP/Lit ile
-        /// üretilip oraya yazılır. Proje URP değilse null döner (çağıran hata bildirir).
-        /// </summary>
+        /// <summary>Shared venue material: <c>Assets/Materials/M_Mekan.mat</c> when it exists,
+        /// otherwise created from URP/Lit and written there. Null when the project is not URP (the
+        /// caller reports the error).</summary>
         public static Material ResolveMaterial()
         {
             var existing = AssetDatabase.LoadAssetAtPath<Material>(SharedMaterialPath);

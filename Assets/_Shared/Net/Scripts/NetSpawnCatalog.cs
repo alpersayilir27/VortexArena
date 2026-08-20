@@ -5,24 +5,23 @@ using UnityEngine;
 namespace VortexArena.Net
 {
     /// <summary>
-    /// id → prefab kayıtları (asset: <c>_Shared/Data/NetSpawnCatalog.asset</c>).
+    /// id → prefab records (asset: <c>_Shared/Data/NetSpawnCatalog.asset</c>).
     /// <para>
-    /// REZERV ALTYAPI: ileride SUNUCU-KOMUTLU spawn (pickup, kapı, paylaşılan FX) bu
-    /// katalogdan çözülecek — sunucu yalnız string id gönderir, prefab seçimi istemcide
-    /// kalır (protokolde varlık referansı taşınmaz). v1'de yalnız RemoteAvatar + FX
-    /// kayıtları tutulur.
+    /// RESERVED GROUNDWORK: future SERVER-COMMANDED spawns (pickup, door, shared FX) resolve here — the
+    /// server sends a string id only, the prefab choice stays on the client (the protocol carries no
+    /// asset references). v1 keeps only the RemoteAvatar + FX records.
     /// </para>
-    /// Tüm sorgular null/boş girişlere dayanıklıdır (eksik asset referansı arayüzü kırmasın).
+    /// All queries tolerate null/empty entries (a missing asset reference must not break the UI).
     /// </summary>
     [CreateAssetMenu(fileName = "NetSpawnCatalog", menuName = "VortexArena/Net Spawn Catalog")]
     public class NetSpawnCatalog : ScriptableObject
     {
         [SerializeField] private NetSpawnEntry[] entries = Array.Empty<NetSpawnEntry>();
 
-        /// <summary>Katalogdaki spawn kayıtları (salt okunur).</summary>
+        /// <summary>The spawn records in the catalogue (read-only).</summary>
         public IReadOnlyList<NetSpawnEntry> Entries => entries ?? Array.Empty<NetSpawnEntry>();
 
-        /// <summary>id ile prefab bulur (büyük/küçük harf duyarsız); yoksa null.</summary>
+        /// <summary>Finds a prefab by id (case-insensitive); null when there is none.</summary>
         public GameObject Find(string id)
         {
             if (string.IsNullOrEmpty(id) || entries == null)

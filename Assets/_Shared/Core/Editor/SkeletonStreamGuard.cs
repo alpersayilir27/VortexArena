@@ -4,54 +4,42 @@ using UnityEngine;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// İskelet akışının (§6.9 <c>0x07</c>) <b>eklem listesi denetimi</b>: gönderen ile alıcının
-    /// gönderdiği/beklediği eklem kümesi aynı mı.
-    /// <para>
-    /// <b>Neden bir denetim gerekiyor:</b> blob SDK'nın native serileştirmesidir ve <b>opaktır</b> —
-    /// listeler ayrışırsa hiçbir yerde hata çıkmaz, yalnız uzak gövdeler bozuk çizilir. Yani bu,
-    /// sürüm uyumsuzluğunun sessiz biçimidir ve tek koruması bugüne kadar dokümandaki bir cümleydi.
-    /// Kural makineye devredilmezse iki prefabtan birinin Inspector'ında yapılan masum bir düzenleme
-    /// sahada "herkesin gövdesi garip" olarak geri döner.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Bu sınıf HİÇBİR ŞEY YAZMAZ</b> (<see cref="BuildReadiness"/> sözleşmesi). Ayrışmayı
-    /// düzeltmek insan adımıdır: hangi listenin doğru olduğu bir tercih değil bir KARAR — parmakları
-    /// kesen liste §6.9'un kendisidir, aracın "birini diğerine kopyalarım" demesi yanlış olanı
-    /// yaymak olabilirdi.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Liste RUNTIME'da hesaplanmaz ve hesaplanmamalı</b>: bu bir hesap değil, iki prefabta
-    /// serialize edilmiş bir VERİdir — çalışma anında ad/hiyerarşi tarayıp yeniden üretmek, listeyi
-    /// yazan ikinci bir taraf açar ve tam da bu denetimin engellediği ayrışmayı üretir.
-    /// </para>
-    /// <para>
-    /// ⚠️ Alanlar SDK'nın <b>private</b> alanları olduğu için <see cref="SerializedObject"/> ile
-    /// okunur; bileşen de tipiyle değil ADIYLA bulunur. Sebep bilinçli: bu denetim uğruna
-    /// <c>VortexArena.Core.Editor</c>'a Movement SDK derleme referansı eklemek, editör derlemesini
-    /// bir denetim için pakete bağlamak olurdu. Alan/bileşen adı sapıp bulunamazsa satır ✗ olur ve
-    /// gerekçesini yazar — sessizce "temiz" demez.
-    /// </para>
-    /// </summary>
+    /// <summary>Joint list check for the skeleton stream (§6.9 <c>0x07</c>): sender and receiver
+    /// must agree on the joint set.</summary>
+    /// <remarks>
+    /// The blob is the SDK's opaque native serialization: if the lists drift no error appears
+    /// anywhere, remote bodies are simply drawn wrong. An innocent Inspector edit on either prefab
+    /// comes back from the field as "everyone's body looks strange".
+    /// <para>⚠️ This class WRITES NOTHING (<see cref="BuildReadiness"/> contract). Fixing a drift is
+    /// a human step: which list is correct is a decision, not a preference — the finger-trimming
+    /// list is §6.9 itself, and "copy one onto the other" could spread the wrong one.</para>
+    /// <para>⚠️ The list is not computed at RUNTIME and must not be: it is DATA serialized in two
+    /// prefabs, not a calculation. Rebuilding it by scanning names/hierarchy would open a second
+    /// author for the list and produce exactly the drift this check prevents.</para>
+    /// <para>⚠️ The fields are SDK <b>private</b> fields, so they are read via
+    /// <see cref="SerializedObject"/> and the component is found by NAME, not by type: referencing
+    /// the Movement SDK assembly from <c>VortexArena.Core.Editor</c> just for this check would tie
+    /// the editor assembly to the package. If a field/component name drifts the row reports ✗ with
+    /// its reason instead of silently claiming "clean".</para>
+    /// </remarks>
     internal static class SkeletonStreamGuard
     {
-        /// <summary>Gönderen gövde (yalnız ağ kaynağı, hiç çizilmez).</summary>
+        /// <summary>Sender body (network source only, never drawn).</summary>
         private const string LocalBodyPrefabPath =
             "Assets/_Shared/Avatars/Resources/LocalBodyAvatar.prefab";
 
-        /// <summary>Alıcı gövde (uzak oyuncular + admin gözlemcisi).</summary>
+        /// <summary>Receiver body (remote players + admin spectator).</summary>
         private const string RemoteAvatarPrefabPath = "Assets/_Shared/App/Prefabs/RemoteAvatar.prefab";
 
         private const string RetargeterTypeName = "NetworkCharacterRetargeter";
         private const string SyncFieldName = "_bodyIndicesToSync";
         private const string SendFieldName = "_bodyIndicesToSend";
 
-        /// <summary>
-        /// İki prefabın DÖRT listesi de (her prefabta <c>sync</c> + <c>send</c>) birebir aynı mı.
-        /// <para>⚠️ <b>Boş liste de ✗'tir:</b> SDK boş diziyi çalışma anında "tüm eklemler" diye
-        /// doldurur, yani boş bırakılan prefab parmakları da göndermeye başlar — §6.9'un kestiği 40
-        /// eklem sessizce geri gelir ve blob tavanına (<c>SKELETON_MAX_BLOB_BYTES</c>) yaklaşır.</para>
+        /// <summary>Whether all FOUR lists (<c>sync</c> + <c>send</c> per prefab) are identical.
         /// </summary>
+        /// <remarks>⚠️ An empty list is ✗ too: the SDK fills an empty array with "all joints" at
+        /// runtime, so the emptied prefab starts sending fingers — the 40 joints §6.9 trims come
+        /// back silently and approach the blob ceiling (<c>SKELETON_MAX_BLOB_BYTES</c>).</remarks>
         internal static bool AreJointListsMatched(out string detail)
         {
             if (!TryReadLists(LocalBodyPrefabPath, out int[] localSync, out int[] localSend, out detail) ||
@@ -93,7 +81,7 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>Bir prefabın retargeter'ından iki listeyi okur; okunamazsa gerekçesini yazar.</summary>
+        /// <summary>Reads both lists from a prefab's retargeter; reports why on failure.</summary>
         private static bool TryReadLists(string prefabPath, out int[] sync, out int[] send, out string detail)
         {
             sync = Array.Empty<int>();
@@ -126,8 +114,8 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>⚠️ Ağaç PASİF çocukları da kapsayarak taranır: retargeter, gövdesi kapalı bir
-        /// düğümün altında durabilir.</summary>
+        /// <summary>⚠️ Scans INACTIVE children too: the retargeter may sit under a disabled
+        /// node.</summary>
         private static Component FindByTypeName(GameObject prefab, string typeName)
         {
             Component[] components = prefab.GetComponentsInChildren<Component>(true);
@@ -161,8 +149,8 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>⚠️ SIRA da karşılaştırılır, yalnız içerik değil: blob eklemleri listedeki sırayla
-        /// taşıyor.</summary>
+        /// <summary>⚠️ ORDER is compared too, not just content: the blob carries joints in list
+        /// order.</summary>
         private static bool Same(int[] a, int[] b)
         {
             if (a.Length != b.Length)

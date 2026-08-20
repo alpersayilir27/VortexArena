@@ -9,25 +9,25 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Editor
 {
     /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Development &gt; Dev</c> — geliştirici kontrol paneli: rol, sunucu hedefi,
-    /// Play başlangıcı ve <b>sunucusuz sandbox</b> kipi.
+    /// <c>Tools &gt; VortexArena &gt; Development &gt; Dev</c> — developer control panel: role, server
+    /// target, Play entry point and the <b>serverless sandbox</b> mode.
     ///
-    /// <para><b>Sunucuya hiç dokunmaz</b> — ne başlatır, ne durdurur, ne derler: sunucu her zaman
-    /// elle çalıştırılır.</para>
+    /// <para><b>Never touches the server</b> — does not start, stop or build it: the server is
+    /// always run by hand.</para>
     ///
-    /// <para><b>Hiçbir şey commit'lenmez:</b> tüm seçim <see cref="DevSession"/> üzerinden
-    /// <c>EditorPrefs</c>'e yazılır (kişisel), hedef listesi ise repo'daki
-    /// <c>dev-targets.json</c>'dan OKUNUR (paylaşılan) — <see cref="DevTargets"/>. Bu pencerede
-    /// yapılan hiçbir değişiklik sahne/asset kirletmez.</para>
+    /// <para><b>Nothing is committed:</b> every selection goes to <c>EditorPrefs</c> via
+    /// <see cref="DevSession"/> (personal), while the target list is READ from the repo's
+    /// <c>dev-targets.json</c> (shared) — <see cref="DevTargets"/>. No change made here dirties a
+    /// scene or asset.</para>
     ///
-    /// <para><b>Modal dialog YOK:</b> bu projede <c>EditorUtility.DisplayDialog</c> Unity ana
-    /// thread'ini kilitleyip Unity CLI doğrulamasını ("Main thread operation timed out") bozuyor.
-    /// Geri bildirim yalnız konsol logu + pencere içi <c>HelpBox</c> ile verilir.</para>
+    /// <para><b>NO modal dialogs:</b> <c>EditorUtility.DisplayDialog</c> locks Unity's main thread
+    /// here and breaks Unity CLI verification ("Main thread operation timed out"). Feedback is
+    /// console logs + in-window <c>HelpBox</c> only.</para>
     /// </summary>
     public class DevWindow : EditorWindow
     {
-        /// <summary>"Özel" seçildiğinde <see cref="DevSession.TargetName"/>'e yazılan ASCII sentinel.
-        /// Kayıtlı hiçbir hedefe uymadığı için pencere yeniden açıldığında da "Özel"de kalır.</summary>
+        /// <summary>ASCII sentinel written to <see cref="DevSession.TargetName"/> for the custom
+        /// option. Matching no saved target, it keeps the popup on custom across reopens.</summary>
         private const string CustomTargetName = "Ozel";
 
         private const string CustomTargetLabel = "Özel…";
@@ -37,13 +37,13 @@ namespace VortexArena.App.Editor
 
         [SerializeField] private Vector2 scroll;
 
-        // Önbellekler — her OnGUI'de dosya okuması yapmamak için OnEnable/"Tazele"de kurulur.
+        // Caches — built in OnEnable/refresh to avoid a file read on every OnGUI.
         [NonSerialized] private DevTarget[] targetList = Array.Empty<DevTarget>();
         [NonSerialized] private string[] targetLabels = Array.Empty<string>();
 
-        /// <summary>Sandbox mod seçicisinin kaynağı: <c>GameCatalog</c>'daki modId'ler. Lobi
-        /// profili de listelenir (admin seçicisinin aksine) — lobi silahlarını denemek için meşru bir
-        /// sandbox seçimidir.</summary>
+        /// <summary>Source of the sandbox mode picker: modIds from <c>GameCatalog</c>. The lobby
+        /// profile is listed too (unlike the admin picker) — a legitimate sandbox choice for trying
+        /// lobby weapons.</summary>
         [NonSerialized] private string[] modeIds = Array.Empty<string>();
 
         [MenuItem("Tools/VortexArena/Development/Dev", false, 80)]
@@ -61,7 +61,7 @@ namespace VortexArena.App.Editor
             BootstrapSelection();
         }
 
-        // ------------------------------------------------------------------ önbellek
+        // --------------------------------------------------------------------- cache
 
         private void RefreshCaches()
         {
@@ -80,9 +80,9 @@ namespace VortexArena.App.Editor
             RefreshModeCache();
         }
 
-        /// <summary>Katalogdaki modId'leri okur. Katalog <c>Resources</c> altındadır ve editörde
-        /// de aynı yoldan yüklenir — ikinci bir arama yolu (AssetDatabase) açmıyoruz ki çalışma
-        /// anıyla aynı listeyi görelim.</summary>
+        /// <summary>Reads modIds from the catalog. The catalog lives under <c>Resources</c> and is
+        /// loaded the same way in the editor — no second lookup path (AssetDatabase), so we see the
+        /// exact runtime list.</summary>
         private void RefreshModeCache()
         {
             var catalog = Resources.Load<GameCatalog>("GameCatalog");
@@ -106,14 +106,14 @@ namespace VortexArena.App.Editor
         }
 
         /// <summary>
-        /// İlk açılışta (hiç hedef seçilmemişken) <c>dev-targets.json</c>'daki varsayılanları
-        /// uygular. Sonraki açılışlarda kişisel seçim korunur — "Özel" bile
-        /// (<see cref="CustomTargetName"/> sentinel'i sayesinde) sıfırlanmaz.
+        /// Applies <c>dev-targets.json</c> defaults on first open (no target selected yet). Later
+        /// opens keep the personal selection — even the custom one, thanks to the
+        /// <see cref="CustomTargetName"/> sentinel.
         /// </summary>
         private void BootstrapSelection()
         {
-            // Sandbox modu hiç seçilmemişse katalogdaki ilk mod: seçicinin boş açılması, ilk
-            // Play'de "mod seçilmedi" uyarısı demek olurdu.
+            // No sandbox mode picked yet → first catalog mode: an empty picker would mean a
+            // "no mode selected" warning on the first Play.
             if (string.IsNullOrEmpty(DevSession.SandboxModeId) && modeIds.Length > 0)
             {
                 DevSession.SandboxModeId = modeIds[0];
@@ -135,7 +135,7 @@ namespace VortexArena.App.Editor
             }
         }
 
-        // -------------------------------------------------------------------- çizim
+        // --------------------------------------------------------------------- draw
 
         private void OnGUI()
         {
@@ -170,14 +170,13 @@ namespace VortexArena.App.Editor
         }
 
         /// <summary>
-        /// Engel ihlali ölçümünün canlı okuması (yalnız Play kipinde).
-        /// <para><b>Neden var:</b> ceza sunucudan gelen bir <c>health_update</c> olarak görünüyor —
-        /// "neden hasar alıyorum" sorusunun cevabı oyuncuda değil, ÖLÇÜMDE. Hangi kuralın
-        /// tetiklediği ve hangi engelin cevap verdiği görünmedikçe yalancı pozitif ile gerçek ihlal
-        /// birbirinden ayırt edilemez.</para>
-        /// <para>⚠️ Salt okunurdur ve hiçbir şeyi değiştirmez; ölçümün kendisi
-        /// <c>ObstacleViolationProbe</c>'dadır (kendini önyükleyen tekil, bu pencereye bağlı
-        /// değildir).</para>
+        /// Live read-out of the obstacle violation probe (Play mode only).
+        /// <para><b>Why:</b> the penalty surfaces as a server <c>health_update</c> — the answer to
+        /// "why am I taking damage" is in the PROBE, not the player. Without seeing which rule fired
+        /// and which obstacle answered, a false positive is indistinguishable from a real violation.
+        /// </para>
+        /// <para>⚠️ Read-only; the measurement itself lives in <c>ObstacleViolationProbe</c>
+        /// (self-bootstrapping singleton, independent of this window).</para>
         /// </summary>
         private void DrawObstacleDiagnostics()
         {
@@ -211,7 +210,7 @@ namespace VortexArena.App.Editor
                 "Son 'içeride' diyen engel: " + (string.IsNullOrEmpty(collider) ? "—" : collider),
                 EditorStyles.miniLabel);
 
-            // Ölçüm 20 Hz; pencere olay tabanlı çizildiği için elle tazelenir.
+            // Probe runs at 20 Hz; the window is event-driven so repaint manually.
             Repaint();
         }
 
@@ -219,7 +218,7 @@ namespace VortexArena.App.Editor
         {
             EditorGUILayout.Space();
 
-            // ---- rol
+            // ---- role
             EditorGUI.BeginChangeCheck();
             int roleIndex = RadioRow("Rol", RoleLabels,
                 DevSession.Role == AppSession.RolePlayer ? 0 : 1, "kısayol: Ctrl+Alt+R");
@@ -228,7 +227,7 @@ namespace VortexArena.App.Editor
                 DevSession.Role = roleIndex == 0 ? AppSession.RolePlayer : AppSession.RoleAdmin;
             }
 
-            // ---- sunucusuz sandbox
+            // ---- serverless sandbox
             EditorGUI.BeginChangeCheck();
             bool sandbox = EditorGUILayout.ToggleLeft(
                 new GUIContent("Sunucusuz sandbox",
@@ -239,8 +238,8 @@ namespace VortexArena.App.Editor
                 DevSession.Sandbox = sandbox;
                 if (sandbox)
                 {
-                    // Sandbox yalnız oynanan bir sahneden Play'de anlamlı: Boot'tan koşulursa
-                    // akışı kabuk sahnesi sürer ve LobbyController bağlanmayı dener.
+                    // Sandbox only makes sense when playing from a content scene: started from Boot
+                    // the shell scene drives the flow and LobbyController tries to connect.
                     DevSession.StartFromBoot = false;
                 }
             }
@@ -250,13 +249,13 @@ namespace VortexArena.App.Editor
                 DrawSandbox();
             }
 
-            // ---- hedef (sandbox'ta bağlanılmadığı için anlamsız)
+            // ---- target (meaningless in sandbox: nothing connects)
             using (new EditorGUI.DisabledScope(DevSession.Sandbox))
             {
                 DrawTarget();
             }
 
-            // ---- Play başlangıcı
+            // ---- Play entry point
             EditorGUI.BeginChangeCheck();
             int startIndex = RadioRow("Başlangıç", StartLabels, DevSession.StartFromBoot ? 0 : 1, null);
             if (EditorGUI.EndChangeCheck())
@@ -275,8 +274,8 @@ namespace VortexArena.App.Editor
         }
 
         /// <summary>
-        /// Sandbox ayarları — tek seçim: <b>mod</b> (silah loadout'unun okunduğu anahtar).
-        /// Silah kaynağı seçilemez; sandbox her zaman loadout'u sırayla ele verir.
+        /// Sandbox settings — a single choice: <b>mode</b> (the key the weapon loadout is read from).
+        /// Weapon source is not selectable; sandbox always hands out the loadout in order.
         /// </summary>
         private void DrawSandbox()
         {
@@ -319,7 +318,7 @@ namespace VortexArena.App.Editor
             EditorGUILayout.Space();
         }
 
-        /// <summary>Sunucu hedefi seçimi (adlandırılmış hedef ya da "Özel" IP/Port).</summary>
+        /// <summary>Server target selection (a named target, or custom IP/Port).</summary>
         private void DrawTarget()
         {
             int customIndex = targetList.Length;
@@ -371,12 +370,12 @@ namespace VortexArena.App.Editor
             }
         }
 
-        // ---------------------------------------------------------------- yardımcı
+        // ------------------------------------------------------------------ helpers
 
         /// <summary>
-        /// Etiket + yatay radyo düğmesi satırı. Seçili olmayan bir düğmeye basıldığında yeni
-        /// indeks döner (aynı karede iki toggle'ın da true dönmesi tuzağına karşı
-        /// <c>index != i</c> koşulu şart).
+        /// Label + horizontal radio button row. Returns the new index when an unselected button is
+        /// pressed (the <c>index != i</c> guard is required against two toggles both returning true
+        /// in the same frame).
         /// </summary>
         private static int RadioRow(string label, string[] options, int index, string suffix)
         {
@@ -407,7 +406,7 @@ namespace VortexArena.App.Editor
             return result;
         }
 
-        /// <summary>Kayıtlı hedef adına karşılık gelen popup indeksi; uymuyorsa "Özel" indeksi.</summary>
+        /// <summary>Popup index for the saved target name; the custom index when nothing matches.</summary>
         private int CurrentTargetIndex()
         {
             string name = DevSession.TargetName;
@@ -429,7 +428,7 @@ namespace VortexArena.App.Editor
         {
             if (index < 0 || index >= targetList.Length)
             {
-                // "Özel": IP/Port kullanıcıya bırakılır, mevcut değerler korunur.
+                // Custom: IP/Port left to the user, current values preserved.
                 DevSession.TargetName = CustomTargetName;
                 return;
             }

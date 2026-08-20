@@ -5,17 +5,17 @@ using Xunit;
 namespace VortexArena.Launcher.Tests;
 
 /// <summary>
-/// Argüman sözleşmesi + doğrulama testleri.
+/// Argument contract + validation tests.
 /// <para>
-/// ⚠️ Buradaki argüman adları <b>iki ayrı kod tabanıyla</b> birebir eşleşmek zorundadır:
+/// ⚠️ These argument names must match <b>two separate code bases</b> exactly:
 /// <c>--server-ip</c>/<c>--server-port</c> → Unity <c>AppBoot.ArgServerIp</c>/<c>ArgServerPort</c>,
-/// <c>--venue</c> → sunucudaki <c>Program.SelectVenue</c>. Bu testler kırılıyorsa ya launcher ya da
-/// karşı taraf tek başına değiştirilmiştir.
+/// <c>--venue</c> → the server's <c>Program.SelectVenue</c>. A failure here means the launcher or
+/// the other side was changed alone.
 /// </para>
 /// </summary>
 public class LauncherConfigTests
 {
-    /// <summary>Testlerde "var olan dosya" gereken yerlerde kullanılır.</summary>
+    /// <summary>Used wherever a test needs an "existing file".</summary>
     private static string ExistingFile => Environment.ProcessPath!;
 
     [Fact]
@@ -64,8 +64,8 @@ public class LauncherConfigTests
     [Fact]
     public void ServerArguments_MekanBosaBosDoner()
     {
-        // Boş mekanla başlatma zaten ValidateServer'da engelleniyor; burada sessizce
-        // yanlış bir argüman üretilmediği doğrulanıyor.
+        // Starting with an empty venue is already blocked in ValidateServer; this asserts no
+        // silently wrong argument is produced.
         Assert.Empty(new LauncherConfig { Venue = "   " }.ServerArguments);
     }
 
@@ -133,7 +133,7 @@ public class LauncherConfigTests
         Assert.Null(problem);
     }
 
-    // ─────────────────────────────────────────────────────── sunucu doğrulaması
+    // ────────────────────────────────────────────────────── server validation
 
     [Fact]
     public void ValidateServer_ExeSecilmediyseSebepDoner()
@@ -145,7 +145,8 @@ public class LauncherConfigTests
     [Fact]
     public void ValidateServer_MekanSecilmedenBaslatmaYok()
     {
-        // Asıl korunan kural: mekansız başlatılırsa sunucu alfabetik ilk mekanı sessizce açar.
+        // The rule being guarded: started without a venue, the server silently opens the
+        // alphabetically first one.
         var problem = new LauncherConfig { ServerExePath = ExistingFile }
             .ValidateServer(["Outdoor12x12", "VortexAntep"]);
 
@@ -177,7 +178,7 @@ public class LauncherConfigTests
         Assert.Null(problem);
     }
 
-    // ──────────────────────────────────────────────────────────────── kalıcılık
+    // ─────────────────────────────────────────────────────────────── persistence
 
     [Fact]
     public void KaydetVeYukle_TumAlanlariKorur()

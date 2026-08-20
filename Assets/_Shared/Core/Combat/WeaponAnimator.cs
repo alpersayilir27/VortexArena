@@ -4,24 +4,22 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Kod-güdümlü silah parça animasyonu: atışta bolt geri tepmesi, reload'da
-    /// şarjör çıkar/tak hareketi. Animator BİLİNÇLİ olarak kullanılmaz — animasyon
-    /// klip yolları silah modeline göre değişir, sürelerin silahın reload süresine
-    /// normalize edilmesi gerekir ve Quest'te Animator bileşen maliyeti böylece
-    /// sıfır kalır; iki transformu f(t) ile sürmek yeterlidir.
-    /// <para>
-    /// Parçalar ada göre bulunur (şarjör "_Mag", bolt "_Bolt"); bulunamazsa bileşen
-    /// sessizce çalışmaya devam eder — pack dışı modellerde kırılmaz.
-    /// Silah bırakılsa da Update çalışır: reload'u Weapon kendisi tamamlar, burada
-    /// yalnız f(t) çizilir.
-    /// </para>
+    /// Code-driven weapon part animation: bolt kick on fire, magazine out/in on reload. An Animator
+    /// is DELIBERATELY not used — clip paths differ per model, durations must be normalized to the
+    /// weapon's reload time, and this keeps the Animator cost on Quest at zero; driving two
+    /// transforms with f(t) is enough.
+    /// <para>Parts are found by name ("_Mag", "_Bolt"); when absent the component keeps running
+    /// silently, so models outside the pack do not break. Update runs even when the weapon is
+    /// released — Weapon completes the reload, here only f(t) is drawn.</para>
     /// </summary>
     public class WeaponAnimator : MonoBehaviour
     {
-        /// <summary>ANİMASYON ilerlemesinde şarjörün kaybolduğu faz sonu (tek klipli silahta).</summary>
+        /// <summary>End of the phase in which the magazine disappears, in ANIMATION progress
+        /// (on a single-clip weapon).</summary>
         private const float MagOutPhaseEnd = 0.35f;
 
-        /// <summary>ANİMASYON ilerlemesinde şarjörün geri gelmeye başladığı faz başı (tek klipli).</summary>
+        /// <summary>Start of the phase in which the magazine comes back, in ANIMATION progress
+        /// (single clip).</summary>
         private const float MagInPhaseStart = 0.7f;
 
         [SerializeField] private Weapon weapon;
@@ -49,7 +47,7 @@ namespace VortexArena.Core.Combat
         private Vector3 _boltRestPosition;
         private Quaternion _boltRestRotation;
 
-        /// <summary>Atışta 1'e çekilir, atış temposuna bağlı sürede 0'a iner.</summary>
+        /// <summary>Pulled to 1 on fire, decays to 0 over a duration tied to the fire rate.</summary>
         private float _boltKick;
 
         private bool _reloading;
@@ -58,29 +56,32 @@ namespace VortexArena.Core.Combat
         private bool _magPulled;
         private bool _magInserted;
 
-        /// <summary>Bu reload'da çalınacak dolum sesi adedi (1 = tek klip, pompalıda kapasite).</summary>
+        /// <summary>Number of loading sounds to play in this reload (1 = single clip, the capacity
+        /// on a shell-loaded weapon).</summary>
         private int _shellTotal;
 
-        /// <summary>Bu reload'da şimdiye kadar çalınan dolum sesi adedi.</summary>
+        /// <summary>Number of loading sounds played so far in this reload.</summary>
         private int _shellsPlayed;
 
-        /// <summary>Dolum sesleri arası saniye; 0 = tekrar yok.</summary>
+        /// <summary>Seconds between loading sounds; 0 = no repetition.</summary>
         private float _shellInterval;
 
-        /// <summary>Şarjör animasyonunun süresi (saniye) — reload süresinden KISA olabilir.</summary>
+        /// <summary>Duration of the magazine animation (seconds) — may be SHORTER than the reload
+        /// duration.</summary>
         private float _animDuration;
 
-        /// <summary>Animasyon başından itibaren şarjörün tamamen indiği an (saniye).</summary>
+        /// <summary>Moment, from the animation start, at which the magazine is fully down
+        /// (seconds).</summary>
         private float _magOutEnd;
 
-        /// <summary>Animasyon başından itibaren şarjörün geri gelmeye başladığı an (saniye).</summary>
+        /// <summary>Moment, from the animation start, at which the magazine starts coming back
+        /// (seconds).</summary>
         private float _magInStart;
 
         private void Start()
         {
-            // Parça araması Start'a bırakıldı: weapon.ModelPivot'un Weapon tarafında
-            // kurulmuş olması garanti olsun (OnEnable abonelikleri bundan etkilenmez,
-            // işleyiciler parça yokken de null-güvenli).
+            // Deferred to Start so weapon.ModelPivot is guaranteed set up on the Weapon side.
+            // OnEnable subscriptions are unaffected; the handlers are null-safe without parts.
             Transform root = modelRoot;
             if (root == null && weapon != null)
             {
@@ -132,7 +133,7 @@ namespace VortexArena.Core.Combat
             TickReload();
         }
 
-        // ------------------------------------------------------------ bolt tepmesi
+        // ------------------------------------------------------------ bolt kick
 
         private void HandleFired()
         {
@@ -146,20 +147,20 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Geri dönüş süresi atış temposuna bağlanır: hızlı silahta bolt da hızlı döner.
+            // The return duration is tied to the fire rate: on a fast weapon the bolt returns fast too.
             float duration = Mathf.Max(0.03f, weapon != null && weapon.Definition != null
                 ? weapon.Definition.SecondsPerShot * 0.5f
                 : 0.06f);
 
             _boltKick = Mathf.Max(0f, _boltKick - Time.deltaTime / duration);
 
-            // Bolt modelin kendi -Z ekseninde kayar; ofset dinlenme rotasyonuyla
-            // parent uzayına taşınır (Vector3.back yeterli).
+            // The bolt slides along the model's own -Z axis; the offset is carried into parent
+            // space by the rest rotation (Vector3.back is enough).
             float offset = boltBackMeters * Mathf.SmoothStep(0f, 1f, _boltKick);
             _bolt.localPosition = _boltRestPosition + _boltRestRotation * (Vector3.back * offset);
         }
 
-        // --------------------------------------------------------- şarjör hareketi
+        // --------------------------------------------------------- magazine movement
 
         private void HandleReloadStarted(float duration)
         {
@@ -169,16 +170,16 @@ namespace VortexArena.Core.Combat
             _magPulled = false;
             _magInserted = false;
 
-            // Önceki reload yarıda kalmışsa şarjör gizli kalmış olabilir — çekiş
-            // fazı her zaman görünür şarjörle başlar.
+            // If a previous reload was interrupted the magazine may have stayed hidden — the pull
+            // phase always starts with a visible magazine.
             if (_mag != null)
             {
                 _mag.gameObject.SetActive(true);
             }
 
-            // Fişek fişek dolan silahta (WeaponDefinition.PerShellReloadAudio) aynı klip reload
-            // süresine yayılarak kapasite kadar kez çalar; aralık süreden TÜRETİLİR, klip
-            // uzunluğundan değil — reload süresi değişince ses kendiliğinden uyar.
+            // Shell-by-shell weapons (WeaponDefinition.PerShellReloadAudio) play the same clip
+            // capacity-many times across the reload; the interval is DERIVED from the reload
+            // duration, not the clip length, so the audio adapts when that duration changes.
             WeaponDefinition definition = weapon != null ? weapon.Definition : null;
             ResolveReloadTimeline(definition);
             _shellTotal = 1;
@@ -190,7 +191,8 @@ namespace VortexArena.Core.Combat
                 _shellInterval = _reloadDuration / _shellTotal;
             }
 
-            // t=0'da çalınır: tek-klip modunda (MagInClip yok) bu klip tüm reload sesini taşır.
+            // Played at t=0: in single-clip mode (no MagInClip) this clip carries the entire reload
+            // sound.
             if (weaponAudio != null)
             {
                 weaponAudio.PlayMagOut();
@@ -209,11 +211,11 @@ namespace VortexArena.Core.Combat
             float elapsed = Time.time - _reloadStartTime;
             TickShellAudio(elapsed);
 
-            // Zaman çizgisi SANİYE cinsindendir: animasyon reload'dan kısa olabilir ve bitince
-            // şarjör dinlenme pozunda bekler (aşağıdaki son satır 1'e sabitlenir).
+            // The timeline is in SECONDS: the animation may be shorter than the reload and once it
+            // ends the magazine waits in its rest pose (the last line below is pinned to 1).
             if (elapsed < _magOutEnd)
             {
-                // Şarjör aşağı + öne eğilerek kayar (doğrusal).
+                // The magazine slides down while tilting forward (linear).
                 ApplyMagOffset(elapsed / Mathf.Max(0.0001f, _magOutEnd));
                 return;
             }
@@ -247,17 +249,17 @@ namespace VortexArena.Core.Combat
                 }
             }
 
-            // Aşağıdaki pozdan dinlenme pozuna ters interpolasyon (SmoothStep).
+            // Reverse interpolation from the down pose back to the rest pose (SmoothStep).
             float t = Mathf.SmoothStep(0f, 1f,
                 Mathf.Clamp01((elapsed - _magInStart) / Mathf.Max(0.0001f, _animDuration - _magInStart)));
             ApplyMagOffset(1f - t);
         }
 
         /// <summary>
-        /// Şarjör animasyonunun süresini ve faz sınırlarını (saniye) belirler.
-        /// Sıra: <see cref="manualReloadDuration"/> → şarjör klipleri → reload süresi. Sonuç her
-        /// hâlde reload süresine kırpılır (animasyon oyun kuralından uzun süremez); kısa kalması
-        /// beklenen durumdur, kalan sürede şarjör dinlenme pozunda bekler.
+        /// Magazine animation duration and phase boundaries (seconds). Order:
+        /// <see cref="manualReloadDuration"/> → magazine clips → reload duration. Always clamped to
+        /// the reload duration (the animation cannot outlast the game rule); ending shorter is
+        /// expected — the magazine then waits in its rest pose.
         /// </summary>
         private void ResolveReloadTimeline(WeaponDefinition definition)
         {
@@ -274,8 +276,8 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Fişek fişek dolan silahta klip TEK fişeğin sesidir (bkz. PerShellReloadAudio) —
-            // animasyonun ölçüsü o klip değil, reload'un tamamıdır.
+            // On a shell-by-shell loading weapon the clip is the sound of a SINGLE shell (see
+            // PerShellReloadAudio) — the animation's measure is not that clip but the whole reload.
             if (outLength <= 0f || (definition != null && definition.PerShellReloadAudio))
             {
                 SetTimelineFromDefaults(_reloadDuration);
@@ -284,7 +286,8 @@ namespace VortexArena.Core.Combat
 
             if (inLength > 0f)
             {
-                // İki klipli silah: şarjör magOut klibi boyunca iner, magIn klibi boyunca döner.
+                // Two-clip weapon: the magazine goes down over the magOut clip and returns over the
+                // magIn clip.
                 _animDuration = Mathf.Max(0.05f, Mathf.Min(outLength + inLength, _reloadDuration));
                 float scale = _animDuration / (outLength + inLength);
                 _magOutEnd = outLength * scale;
@@ -292,11 +295,13 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Tek klipli silah: klip tüm reload sesini taşır, animasyon ona oturur.
+            // Single-clip weapon: the clip carries the entire reload sound and the animation is
+            // fitted to it.
             SetTimelineFromDefaults(Mathf.Min(outLength, _reloadDuration));
         }
 
-        /// <summary>Verilen süreyi varsayılan faz oranlarıyla (0.35 / 0.7) zaman çizgisine yayar.</summary>
+        /// <summary>Spreads the given duration over the timeline with the default phase ratios
+        /// (0.35 / 0.7).</summary>
         private void SetTimelineFromDefaults(float duration)
         {
             _animDuration = Mathf.Max(0.05f, duration);
@@ -305,8 +310,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Fişek fişek dolum sesi: kalan sesleri eşit aralıkla çalar. Kare atlansa da adet
-        /// korunur (while ile birikmiş aralıklar kapatılır); ilk ses reload başında çalındı.
+        /// Shell-by-shell loading sound at equal intervals. The count survives skipped frames (the
+        /// while loop catches up); the first sound played at reload start.
         /// </summary>
         private void TickShellAudio(float elapsed)
         {
@@ -334,13 +339,14 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Dinlenme pozuna anında oturt (Update'in kaldığı yerden bağımsız).
+            // Snap to the rest pose immediately (independent of where Update left off).
             _mag.gameObject.SetActive(true);
             _mag.localPosition = _magRestPosition;
             _mag.localRotation = _magRestRotation;
         }
 
-        /// <summary>Şarjörü dinlenme pozundan çıkış pozuna taşır: 0=dinlenme, 1=tam çıkmış.</summary>
+        /// <summary>Moves the magazine from the rest pose to the ejected pose: 0=rest, 1=fully
+        /// out.</summary>
         private void ApplyMagOffset(float amount)
         {
             if (_mag == null)
@@ -353,8 +359,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Kökün TÜM torunlarında ada göre parça arar: önce token ile BİTEN ilk
-        /// transform, yoksa token İÇEREN ilk (ör. "AR_A_Mag_2", "AR_D_Bolt_Part").
+        /// Searches for a part by name across ALL descendants of the root: first the first
+        /// transform ENDING with the token, otherwise the first one CONTAINING it (e.g.
+        /// "AR_A_Mag_2", "AR_D_Bolt_Part").
         /// </summary>
         private static Transform FindPart(Transform root, string token)
         {

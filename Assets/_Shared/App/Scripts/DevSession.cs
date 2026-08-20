@@ -12,67 +12,61 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// YALNIZ EDITOR — geliştirici seçiminin runtime tarafı. `Tools &gt; VortexArena &gt; Development &gt; Dev`
-    /// penceresinin `EditorPrefs`'e yazdığı rol/adres seçimini Play başlarken uygular.
+    /// EDITOR ONLY — the runtime side of the developer selection: applies the role/address that the
+    /// `Tools &gt; VortexArena &gt; Development &gt; Dev` window wrote to `EditorPrefs` when Play starts.
     ///
-    /// <para><b>İki katmanlı config'in "seçim" katmanı burasıdır.</b> Hedeflerin adlandırılmış
-    /// listesi repo'da commit'lidir (`dev-targets.json` → `DevTargets`), ama o listeden HANGİ
-    /// hedefin seçili olduğu kişiseldir ve `EditorPrefs`'te durur. Sebep: anlık IP seçimi
-    /// commit'lenirse ekip sürekli birbirinin ayarını ezer ve `git status` hep kirli kalır
-    /// (klasik "checked-in user settings" tuzağı). Bu yüzden rol/hedef değiştirmek HİÇBİR
-    /// dosyayı kirletmez ve bu ayarlar `AppBoot`'a [SerializeField] olarak KOYULMAZ — koyulursa
-    /// her rol değişimi Boot.unity'yi kirletir.</para>
+    /// <para><b>The "selection" layer of the two-layer config.</b> The named target list is
+    /// committed (`dev-targets.json` → `DevTargets`), but WHICH target is selected is personal and
+    /// lives in `EditorPrefs`: a committed IP choice means the team overwrites each other's settings
+    /// and `git status` stays dirty. ⚠️ For the same reason these settings are NOT [SerializeField]s
+    /// on `AppBoot` — that would dirty Boot.unity on every role change.</para>
     ///
-    /// <para><b>İki iş yapar:</b></para>
+    /// <para><b>Two jobs:</b></para>
     /// <list type="number">
-    /// <item>`BeforeSceneLoad`: rol + sunucu adresini <see cref="AppSession"/>'a yazar
-    ///   (`RoleResolved = true` → <see cref="AppBoot"/> ve kabuk controller'ları kendi
-    ///   varsayılanlarını yazmaz).</item>
-    /// <item>`AfterSceneLoad`: doğrudan bir ARENA sahnesinden Play'e basıldıysa sunucuya
-    ///   **bağlanır** — başka hiçbir şey yapmaz. Maç verisi (mod, takım, faz, süre) yalnız
-    ///   sunucudan gelir. <b>Sandbox kipinde bağlanmaz</b>, bunun yerine kuralları yerelde
-    ///   uygular (aşağı).</item>
+    /// <item>`BeforeSceneLoad`: writes role + server address into <see cref="AppSession"/>
+    ///   (`RoleResolved = true`, so <see cref="AppBoot"/> and the shell controllers keep their
+    ///   hands off).</item>
+    /// <item>`AfterSceneLoad`: when Play started directly from an ARENA scene, **connects** to the
+    ///   server and nothing more — match data (mode, team, phase, time) comes only from the server.
+    ///   <b>Sandbox mode does not connect</b> and applies rules locally instead.</item>
     /// </list>
     ///
-    /// <para><b>Bağlanmayı neden burası yapıyor:</b> `Connect(...)` çağrısı normalde kabuk
-    /// sahnesinin controller'ından gelir (`LobbyController` — her rolde) —
-    /// ama arena sahnelerinde o controller YOKTUR. Doğrudan bir arena sahnesinden Play'e
-    /// basıldığında kimse bağlanmazdı: can/skor/faz güncellemesi gelmez, `CanFire` sunucu `Live`
-    /// demediği için hiç açılmaz ve maç akışı denenemezdi.</para>
+    /// <para><b>Why connecting happens here:</b> `Connect(...)` normally comes from the shell
+    /// scene's controller (`LobbyController`), which arena scenes do not have — so playing straight
+    /// from an arena would leave nobody connecting: no health/score/phase, and `CanFire` never opens
+    /// because the server never says `Live`.</para>
     ///
-    /// <para><b>Takım/mod/faz bilgisinin TEK kaynağı sunucudur.</b> Bağlanınca `welcome.match`
-    /// geç-katılım senkronu devreye girer (`SceneRouter.HandleConnected`) ve takımı sunucu atar.
-    /// Sunucuda maç koşmuyorsa istemci maç verisi ALMAZ — bu beklenen davranıştır; bir admin
-    /// maçı başlatmalıdır. Bu sınıf sunucudan gelmiş gibi mesaj üretmez.</para>
+    /// <para><b>Team/mode/phase come only from the server.</b> On connect, the `welcome.match`
+    /// late-join sync runs (`SceneRouter.HandleConnected`) and the server assigns the team. With no
+    /// match running the client receives no match data — expected; an admin must start one. ⚠️ This
+    /// class never fabricates server messages.</para>
     ///
-    /// <para><b>Sandbox kipi (sunucusuz):</b> silah duruşu/namlu/ses gibi YEREL şeyleri denemek
-    /// için sunucu + admin + kalibrasyon üçlüsünü atlar. Sunucuya <b>hiç bağlanılmaz</b> —
-    /// kalibrasyon kapısı zaten "hiç bağlanılmadıysa açık"tır (`CalibrationState.IsCalibrated`)
-    /// ve `ArenaCombat` kanal yokken sessiz no-op'tur, yani silahlar olduğu gibi çalışır. Kapalı
-    /// kalan iki kapıyı tek çağrı açar: <see cref="ModeRuntime.Apply"/> ile `fireWhilePaused`
-    /// (faz `playing` olmadan tetik) ve `modeId` (loadout'un okunduğu yer — onsuz elde silah belirmez).
-    /// <b>Sunucudan gelmiş gibi mesaj üretilmez</b>, yalnız istemci kural durumu yazılır.</para>
+    /// <para><b>Sandbox mode (server-less):</b> skips server + admin + calibration for testing LOCAL
+    /// things (weapon pose, muzzle, audio). Nothing connects — the calibration gate is open while
+    /// never connected (`CalibrationState.IsCalibrated`) and `ArenaCombat` is a silent no-op without
+    /// a channel. One <see cref="ModeRuntime.Apply"/> call opens the two remaining gates:
+    /// `fireWhilePaused` (trigger without phase `playing`) and `modeId` (where the loadout is read
+    /// from — without it no weapon appears).</para>
     ///
-    /// <para>⚠️ Sandbox <b>maç kuralı testi DEĞİLDİR</b>: takım/skor/canlanma alanları
-    /// <see cref="ModeRulesInfo"/> varsayılanlarında (TDM) kalır — modun kendi kuralları
-    /// sunucudan gelir ve sapmada sunucu kazanır (§10.5). Burada anlamlı olan tek şey
-    /// `modeId`'dir — silah loadout'u ondan okunur.</para>
+    /// <para>⚠️ Sandbox is <b>NOT a match-rule test</b>: team/score/respawn fields stay at
+    /// <see cref="ModeRulesInfo"/> defaults (TDM) — a mode's real rules come from the server and the
+    /// server wins on divergence (§10.5). Only `modeId` matters here.</para>
     ///
-    /// <para><b>Silahlar SIRAYLA gelir</b> (<c>WeaponGranter.SequentialGrant</c>): grip'e her
-    /// basışta loadout'un bir sonrakisi. Testin kendisi "hepsini tek tek gözden geçirmek"
-    /// olduğu için rastgelelik burada bir engeldi; üretimdeki rastgele dağıtım DEĞİŞMEZ.</para>
+    /// <para><b>Weapons are granted SEQUENTIALLY</b> (<c>WeaponGranter.SequentialGrant</c>): the
+    /// next loadout entry per grip press, because the test is "go through all of them". ⚠️ The
+    /// production random grant is unchanged.</para>
     ///
-    /// <para><b>Kapatmak:</b> dev penceresindeki "Dev enjeksiyonu" onayı kapatılırsa bu sınıf
-    /// hiçbir şey yapmaz ve üretim yolu birebir koşar (beacon keşfini editörde denemek için).
-    /// Adres alanı boş bırakılırsa da adres YAZILMAZ, keşif zinciri devralır.</para>
+    /// <para><b>Turning it off:</b> with the window's "Dev enjeksiyonu" toggle off this class does
+    /// nothing and the production path runs verbatim (for trying beacon discovery). An empty address
+    /// field also writes no address and hands over to the discovery chain.</para>
     ///
-    /// Dosyanın tamamı <c>#if UNITY_EDITOR</c> içindedir → hiçbir build'e girmez.
+    /// The whole file is inside <c>#if UNITY_EDITOR</c> → it never enters a build.
     /// </summary>
     public class DevSession : MonoBehaviour
     {
-        // ------------------------------------------------------- EditorPrefs anahtarları
-        // Tek yerde durur; dev penceresi (VortexArena.App.Editor) da bu sabitleri kullanır
-        // ki anahtar adları iki tarafta dağılmasın.
+        // ------------------------------------------------------------ EditorPrefs keys
+        // Kept in one place; the dev window (VortexArena.App.Editor) uses the same constants so the
+        // key names do not diverge across the two sides.
 
         private const string Prefix = "VortexArena.Dev.";
 
@@ -86,18 +80,18 @@ namespace VortexArena.App
         public const string KeySandboxModeId = Prefix + "SandboxModeId";
 
         /// <summary>
-        /// Sandbox'ın silah kaynağı — <c>ModeRulesInfo.weaponSource</c> tel değeri.
+        /// Sandbox's weapon source — the <c>ModeRulesInfo.weaponSource</c> wire value.
         /// <para>
-        /// Sabittir ve seçilemez: <b>çerçeve yolu sandbox'ta kullanılmaz</b>. Çerçeve, silahın
-        /// sahnede durup uzaktan seçilmesidir — oysa burada amaç silahı hemen ele almak ve
-        /// loadout'un tamamını sırayla gözden geçirmektir (<c>WeaponGranter.SequentialGrant</c>).
+        /// Fixed and not selectable: ⚠️ <b>the frame path is not used in sandbox</b>. Frames mean
+        /// picking a weapon off a stand from a distance, while the point here is to get a weapon in
+        /// hand immediately and walk the whole loadout (<c>WeaponGranter.SequentialGrant</c>).
         /// </para>
         /// </summary>
         private const string WeaponSourceGrant = "random";
 
-        // ------------------------------------------------------------------- seçim
+        // --------------------------------------------------------------- selection
 
-        /// <summary>Dev enjeksiyonu açık mı? Kapalıyken üretim yolu birebir koşar.</summary>
+        /// <summary>Is dev injection on? While off, the production path runs verbatim.</summary>
         public static bool Enabled
         {
             get => EditorPrefs.GetBool(KeyEnabled, true);
@@ -113,14 +107,14 @@ namespace VortexArena.App
             set => EditorPrefs.SetString(KeyRole, value);
         }
 
-        /// <summary>Dev penceresinde seçili hedefin adı (yalnız UI durumu).</summary>
+        /// <summary>Name of the target selected in the dev window (UI state only).</summary>
         public static string TargetName
         {
             get => EditorPrefs.GetString(KeyTargetName, "");
             set => EditorPrefs.SetString(KeyTargetName, value);
         }
 
-        /// <summary>Sunucu IP'si. <b>Boş = adres yazma</b>, keşif zinciri devralsın.</summary>
+        /// <summary>Server IP. <b>Empty = write no address</b>, let the discovery chain take over.</summary>
         public static string Ip
         {
             get => EditorPrefs.GetString(KeyIp, "127.0.0.1");
@@ -133,7 +127,7 @@ namespace VortexArena.App
             set => EditorPrefs.SetInt(KeyPort, value);
         }
 
-        /// <summary>true = Play her zaman Boot'tan koşar; false = açık sahneden koşar.</summary>
+        /// <summary>true = Play always runs from Boot; false = from the open scene.</summary>
         public static bool StartFromBoot
         {
             get => EditorPrefs.GetBool(KeyStartFromBoot, true);
@@ -141,9 +135,9 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Sunucusuz sandbox kipi: bağlanma yok, kurallar yerelde uygulanır. Yalnız <b>açık
-        /// sahneden</b> Play'de anlamlıdır — Boot'tan koşulursa akışı kabuk sahnesi sürer ve
-        /// <c>LobbyController</c> bağlanmayı dener.
+        /// Server-less sandbox mode: no connection, rules applied locally. ⚠️ Only meaningful when
+        /// playing <b>from the open scene</b> — from Boot the shell scene drives the flow and
+        /// <c>LobbyController</c> tries to connect.
         /// </summary>
         public static bool Sandbox
         {
@@ -151,15 +145,15 @@ namespace VortexArena.App
             set => EditorPrefs.SetBool(KeySandbox, value);
         }
 
-        /// <summary>Sandbox'ta uygulanacak modId — <b>loadout bu anahtardan bulunur</b>
-        /// (<c>GameCatalog.FindMode</c>); boşsa silah gelmez.</summary>
+        /// <summary>modId applied in sandbox — <b>the loadout is found through it</b>
+        /// (<c>GameCatalog.FindMode</c>); empty means no weapons.</summary>
         public static string SandboxModeId
         {
             get => EditorPrefs.GetString(KeySandboxModeId, "");
             set => EditorPrefs.SetString(KeySandboxModeId, value ?? "");
         }
 
-        /// <summary>Seçimin tek satırlık özeti (pencere başlığı + konsol satırı için).</summary>
+        /// <summary>One-line summary of the selection (window header + console line).</summary>
         public static string Summary
         {
             get
@@ -176,10 +170,10 @@ namespace VortexArena.App
             }
         }
 
-        /// <summary>Adres verildi mi? Boş IP = keşif zinciri kullanılsın demek.</summary>
+        /// <summary>Was an address given? An empty IP means "use the discovery chain".</summary>
         public static bool HasAddress => !string.IsNullOrWhiteSpace(Ip) && Port > 0;
 
-        // -------------------------------------------------------------- 1) rol + adres
+        // ------------------------------------------------------- 1) role + address
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void ApplySelection()
@@ -193,10 +187,10 @@ namespace VortexArena.App
             AppSession.RoleResolved = true;
 
 #if VORTEX_MPPM
-            // Multiplayer Play Mode: EditorPrefs Windows'ta MAKİNE çapında paylaşılır, yani
-            // sanal oyuncu süreci de ana editörün rol seçimini okur — iki pencere aynı rol olur.
-            // Bu yüzden sürece MPPM penceresinden verilen "player"/"admin" TAG'i seçimi ezer;
-            // tag'siz süreç (ana editör) EditorPrefs seçimiyle kalır.
+            // Multiplayer Play Mode: EditorPrefs is MACHINE-wide on Windows, so the virtual player
+            // process reads the main editor's role and both windows end up in the same role. Hence
+            // the "player"/"admin" MPPM TAG overrides the selection; an untagged process (the main
+            // editor) keeps the EditorPrefs choice.
             string tagRole = RoleFromMppmTags();
             if (tagRole != null && tagRole != AppSession.Role)
             {
@@ -206,13 +200,13 @@ namespace VortexArena.App
             }
 #endif
 
-            // Rol admin ise XR'ı bırak — HMD aynı PC'deki player sürecine kalsın.
+            // Admin role: release XR so the HMD stays with the player process on the same PC.
             AdminXrRelease.Apply();
 
-            // Sandbox = sunucusuz. Adresi SİLİYORUZ ki kabuk controller'ları ya da keşif zinciri
-            // kazara bağlanmasın: tek bir başarılı bağlantı `_hasEverConnected`'i kalıcı olarak
-            // açar ve kalibrasyon kapısı (CalibrationState.IsCalibrated) kapanır — yani sandbox'ın
-            // sağladığı "kalibresiz ateş" kolaylığı sessizce kaybolurdu.
+            // Sandbox = server-less. ⚠️ The address is CLEARED so no shell controller or discovery
+            // chain connects by accident: one successful connection latches `_hasEverConnected` and
+            // closes the calibration gate (CalibrationState.IsCalibrated), silently losing
+            // sandbox's "fire without calibration".
             if (Sandbox)
             {
                 AppSession.ServerIp = "";
@@ -237,7 +231,7 @@ namespace VortexArena.App
                       "Değiştirmek için: Tools > VortexArena > Development > Dev (rol: Ctrl+Alt+R).");
         }
 
-        // -------------------------------------- 2) arena sahnesinden Play: sunucuya bağlan
+        // ----------------------------- 2) Play from an arena scene: connect to the server
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void ScheduleArenaSceneSetup()
@@ -249,7 +243,7 @@ namespace VortexArena.App
 
             if (StartFromBoot)
             {
-                // Boot'tan koşuyorsak akışı Boot + kabuk controller'ları sürer.
+                // From Boot, the flow is driven by Boot + the shell controllers.
                 if (Sandbox)
                 {
                     Debug.LogWarning(
@@ -262,9 +256,9 @@ namespace VortexArena.App
 
             if (IsShellScene(SceneManager.GetActiveScene().name))
             {
-                // Lobby kendi bağlanmasını yapar (her rolde), Boot yönlendirir. Sandbox'ta bu
-                // sahnelerin ikisi de anlamsızdır: sandbox oynanan bir sahneden Play'e basmak
-                // içindir (mekan lobisi de bir arena kutusudur, bu kontrole takılmaz).
+                // Lobby connects itself (in every role) and Boot routes. Both are meaningless in
+                // sandbox, which is about playing from a playable scene (a venue lobby is an arena
+                // box and does not hit this check).
                 if (Sandbox)
                 {
                     Debug.LogWarning(
@@ -275,15 +269,15 @@ namespace VortexArena.App
                 return;
             }
 
-            // Bir kare beklemek ZORUNLU: `ArenaClient` ve `SceneRouter` da AfterSceneLoad ile
-            // doğuyor ve üç AfterSceneLoad kancasının sırası TANIMSIZ. Sahne Start()'ları da
-            // bitsin diye işi bir MonoBehaviour'a bırakıyoruz.
+            // ⚠️ Waiting one frame is MANDATORY: `ArenaClient` and `SceneRouter` also spawn in
+            // AfterSceneLoad and the order of the three hooks is UNDEFINED. A MonoBehaviour also
+            // lets the scene's Start()s finish.
             var go = new GameObject("[DevArenaSceneSetup]");
             DontDestroyOnLoad(go);
             go.AddComponent<DevSession>();
         }
 
-        /// <summary>Sahne bir kabuk sahnesi mi (kendi bağlanma/yönlendirme akışı var mı)?</summary>
+        /// <summary>Is this a shell scene (one with its own connect/routing flow)?</summary>
         private static bool IsShellScene(string sceneName)
         {
             return sceneName == AppSession.SceneBoot ||
@@ -292,7 +286,7 @@ namespace VortexArena.App
 
         private IEnumerator Start()
         {
-            yield return null; // tüm tekiller ve sahne aboneleri (OnEnable/Start) hazır olsun
+            yield return null; // let all singletons and scene subscribers (OnEnable/Start) settle
 
             if (Sandbox)
             {
@@ -307,12 +301,12 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Sunucusuz sandbox: kural durumunu YERELDE yazar, hiçbir yere bağlanmaz.
+        /// Server-less sandbox: writes the rule state LOCALLY and connects to nothing.
         /// <para>
-        /// Bir kare beklemek burada da şart: <c>WeaponGranter</c> kendini <c>AfterSceneLoad</c>
-        /// ile önyüklüyor ve o sırada <c>modeId</c> henüz boş (loadout okunamaz). Bir kare sonra
-        /// <see cref="ModeRuntime.Apply"/> <c>Changed</c>'i tetikleyince kural ikinci kez —
-        /// bu sefer mod bilinerek — uygulanır.
+        /// ⚠️ The one-frame wait matters here too: <c>WeaponGranter</c> bootstraps in
+        /// <c>AfterSceneLoad</c> while <c>modeId</c> is still empty (no loadout). A frame later
+        /// <see cref="ModeRuntime.Apply"/> fires <c>Changed</c> and the rules are applied a second
+        /// time, now with the mode known.
         /// </para>
         /// </summary>
         private void ApplySandboxRules()
@@ -327,19 +321,20 @@ namespace VortexArena.App
                 return;
             }
 
-            // Yalnız iki alan yazılır; gerisi ModeRulesInfo varsayılanlarında (TDM) kalır —
-            // sandbox bir maç kuralı testi değildir (sınıf dokümanı).
+            // Only two fields; the rest stay at ModeRulesInfo defaults (TDM) — sandbox is not a
+            // match-rule test (see the class doc).
             var rules = new ModeRulesInfo
             {
                 weaponSource = WeaponSourceGrant,
 
-                // Faz sunucusuz 'paused' kalır; tetiği açan tek kapı budur (§10.5).
-                // Hasar yine yoktur — hit_report kapısı her hâlükârda 'playing'dir (§10.3).
+                // Without a server the phase stays 'paused'; this is the only gate that opens the
+                // trigger (§10.5). There is still no damage — hit_report always requires 'playing'
+                // (§10.3).
                 fireWhilePaused = true
             };
 
-            // Rastgele yerine sırayla: bütün silahları tek tek görmek testin ta kendisi.
-            // Bayrak yalnız editörde var ve yalnız burada yazılır — üretimde grant rastgele kalır.
+            // Sequential instead of random: seeing every weapon one by one is the test itself. The
+            // flag exists only in the editor and is written only here — production stays random.
             WeaponGranter.SequentialGrant = true;
 
             ModeRuntime.Apply(modeId, rules);
@@ -351,9 +346,9 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Arena sahnesinde bağlanmayı üstlenir (kabuk controller'ları burada yok — sınıf
-        /// dokümanındaki gerekçe). Adres yoksa bağlanmaz; sebebi loglar, çünkü arena
-        /// sahnesinde adres girecek bir arayüz de yoktur.
+        /// Takes over connecting in an arena scene (no shell controller here — see the class doc).
+        /// Without an address it does not connect but logs why: an arena scene has no UI for
+        /// entering one.
         /// </summary>
         private void ConnectFromArenaScene()
         {
@@ -365,7 +360,7 @@ namespace VortexArena.App
 
             if (ArenaClient.Instance.State != ArenaConnectionState.Disconnected)
             {
-                return; // Play sahne değiştirdiyse bağlantı zaten kurulmuş olabilir.
+                return; // a scene change during Play may have connected already
             }
 
             if (!HasAddress)
@@ -377,7 +372,7 @@ namespace VortexArena.App
                 return;
             }
 
-            // EditorPrefs'teki Role değil AppSession.Role: MPPM tag'i onu ezmiş olabilir.
+            // AppSession.Role, not the EditorPrefs Role: an MPPM tag may have overridden it.
             string role = AppSession.Role;
             Debug.Log($"[DevSession] Arena sahnesinden bağlanılıyor: {Ip}:{Port} ({role}).");
             ArenaClient.Instance.Connect(Ip.Trim(), Port, role);
@@ -385,8 +380,8 @@ namespace VortexArena.App
 
 #if VORTEX_MPPM
         /// <summary>
-        /// MPPM tag'lerinden rol: "player" ya da "admin" tag'i taşıyan süreç o rolü alır
-        /// (büyük/küçük harf duyarsız). Tag yoksa null — EditorPrefs seçimi geçerli kalır.
+        /// Role from the MPPM tags: a process tagged "player" or "admin" takes that role
+        /// (case-insensitive). null without a tag — the EditorPrefs choice stays.
         /// </summary>
         private static string RoleFromMppmTags()
         {

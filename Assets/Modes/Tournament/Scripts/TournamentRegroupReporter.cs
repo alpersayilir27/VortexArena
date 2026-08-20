@@ -7,71 +7,52 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Modes.Tournament
 {
-    /// <summary>
-    /// Turlar arası <b>toplanma bildirimi</b>: oyuncu kendi taban bölgesine girdiğinde sunucuya
-    /// <c>set_ready{true}</c>, çıktığında <c>set_ready{false}</c> yollar. Sunucu herkesi hazır
-    /// görünce yeni turun geri sayımını başlatır (§10.1 "tur tabanlı modlar").
-    ///
-    /// <para>
-    /// <b>Bildirim geri sayım boyunca da sürer.</b> Kural "tabanda BEKLE"dir, "tabana uğra" değil:
-    /// geri sayım sırasında tabanından çıkan tek oyuncu turu erteler (sunucu geri sayımı iptal
-    /// edip toplanmaya döner). Bu yüzden bileşen <c>paused/mode</c> ile birlikte, ondan gelen
-    /// <c>paused/countdown</c>'da da çalışır — maçın İLK geri sayımında ise çalışmaz.
-    /// </para>
-    ///
-    /// <para>
-    /// <b>Tur içinde ölen oyuncu da yönlendirilir</b> (canlanma yok — <c>reviveAnchor:none</c>):
-    /// faz <c>playing</c> + yerel oyuncu ölüyken yönerge "Öldün — X tabanına dön" yazar. Ölünün
-    /// tek işi tabana yürümektir ve erken yönlendirme toplanmayı kısaltır. Bu akışta
-    /// <c>set_ready</c> GÖNDERİLMEZ — bayrağın toplanmadaki anlamı (§10.1) tur içinde kirlenmez;
-    /// sunucu toplanmaya girerken bayrakları zaten sıfırlıyor, erken gönderim boşa yayın olurdu.
-    /// </para>
-    ///
-    /// <para>
-    /// <b>Tabana giriş elden de onaylanır:</b> kendi bölgesine GİRİŞ kenarında iki kumandaya üç
-    /// kısa darbe (<see cref="ControllerHaptics"/>) — göz o an yönergede olmasa da "doğru
-    /// yerdesin" bilgisi ulaşır. Ölçüt fail-open'lı "hazır sayıldı" değil GERÇEK bölge girişidir:
-    /// taban hiç bulunamadığında titreşim yalan olurdu.
-    /// </para>
-    ///
-    /// <para>
-    /// <b>Yeni bir protokol mesajı YOKTUR:</b> <c>ready</c> bayrağı yükleme kapısında zaten
-    /// "hazırım" demek. Yan faydası, operatörün admin roster'ında kimin tabanına döndüğünü
-    /// doğrudan görmesidir.
-    /// </para>
-    /// <para>
-    /// <b>Neden HUD sınıfında değil:</b> <see cref="Core.UI.ModeHudBase"/> bir SUNUM bileşenidir —
-    /// girdi toplamaz, sunucuya bir şey bildirmez. Ayrı bileşen aynı prefabın kökünde durduğu için
-    /// yine de <b>sahne kurulumu gerektirmez</b> ve HUD ile aynı ömre sahiptir: HUD yalnız
-    /// <c>role=player</c> için örneklendiğinden admin gözlemci hiç <c>set_ready</c> göndermez ve
-    /// toplanma kapısını bozmaz.
-    /// </para>
-    /// <para>
-    /// "Tabanda mıyım" kararı istemcinindir — sunucu hakemlik değil defter tutar (§10.3 felsefesi,
-    /// <c>reviveAnchor</c> ile aynı sözleşme). Sunucunun emniyeti kendi zaman aşımıdır.
-    /// </para>
-    /// </summary>
+    /// <summary>Between-rounds regroup reporting: sends <c>set_ready{true}</c> on entering the own
+    /// base zone and <c>set_ready{false}</c> on leaving; the server starts the new round's countdown
+    /// once everyone is ready (§10.1 "round based modes").</summary>
+    /// <remarks>
+    /// <para>Reporting continues through the countdown too: the rule is "WAIT in the base", not "drop
+    /// by" — one player leaving delays the round (the server cancels and returns to regroup). So this
+    /// runs in <c>paused/mode</c> and the <c>paused/countdown</c> that follows it, but not in the
+    /// match's FIRST countdown.</para>
+    /// <para>A player who dies mid-round is guided too (no revive — <c>reviveAnchor:none</c>): the
+    /// prompt sends them to the base early, which shortens the regroup. ⚠️ <c>set_ready</c> is NOT
+    /// sent on that path — the flag's regroup meaning (§10.1) must not be polluted mid-round, and the
+    /// server resets the flags on entering the regroup anyway.</para>
+    /// <para>Base entry is also confirmed by hand: three pulses on both controllers
+    /// (<see cref="ControllerHaptics"/>) on the ENTRY edge, so the eye need not be on the prompt.
+    /// The criterion is the REAL zone entry, not the fail-open "counted as ready" — with no base
+    /// found the vibration would be a lie.</para>
+    /// <para>No new protocol message: the <c>ready</c> flag already means "I am ready" at the loading
+    /// gate, and the operator sees who returned in the admin roster.</para>
+    /// <para>Not in the HUD class because <see cref="Core.UI.ModeHudBase"/> is presentation only. On
+    /// the same prefab root it still needs no scene setup and shares the HUD's lifetime: the HUD is
+    /// instantiated only for <c>role=player</c>, so an admin never sends <c>set_ready</c>.</para>
+    /// <para>"Am I in the base" is the client's decision — the server keeps the ledger rather than
+    /// refereeing (§10.3, same contract as <c>reviveAnchor</c>); its safety net is its own
+    /// timeout.</para>
+    /// </remarks>
     public class TournamentRegroupReporter : MonoBehaviour
     {
-        // DTO'yu her karede yeniden ayırmamak için tek örnek.
+        // Single instance so the DTO is not reallocated every frame.
         private readonly SetReadyMsg _msg = new SetReadyMsg();
 
-        /// <summary>Toplanma raporlaması açık mı (yalnız <c>paused/mode</c> ve ondan gelen geri
-        /// sayım) — <c>set_ready</c> yalnız bu bayrak açıkken gönderilir.</summary>
+        /// <summary>Regroup reporting active (only <c>paused/mode</c> and its countdown);
+        /// <c>set_ready</c> is sent only while set.</summary>
         private bool _active;
 
         private bool _reported;
 
-        /// <summary>Yönergeyi şu an biz mi yazıyoruz (toplanma YA DA tur içi ölüm kılavuzu) —
-        /// <see cref="Leave"/> yalnız kendi yazdığını temizlesin.</summary>
+        /// <summary>Are we writing the prompt (regroup OR in-round death guidance), so
+        /// <see cref="Leave"/> clears only its own text.</summary>
         private bool _guiding;
 
-        /// <summary>Bir önceki karede kendi tabanının İÇİNDE miydi — giriş kenarında titreşim.</summary>
+        /// <summary>Was inside the own base last frame — for the entry-edge vibration.</summary>
         private bool _wasInsideBase;
 
         private void OnDisable()
         {
-            // Sahne/HUD gidiyor: yönergeyi bırakma, kalıcı tekilde asılı kalır.
+            // Scene/HUD going away: drop the prompt, else it stays stuck on the persistent singleton.
             Leave();
         }
 
@@ -85,33 +66,33 @@ namespace VortexArena.Modes.Tournament
 
             bool paused = combat.Phase == ArenaProtocol.PHASE_PAUSED;
 
-            // Çekirdek mod duraklamasını yalnız mod koyar (§10.1) — koşan tek mod da biziz.
+            // Only the mode sets the core mode pause (§10.1) — and we are the only mode running.
             bool modePause = paused && combat.PhaseReason == ArenaProtocol.PAUSE_REASON_MODE;
             bool countdown = paused && combat.PhaseReason == ArenaProtocol.PAUSE_REASON_COUNTDOWN;
 
-            // Tur içi ölüm: sunucu turu bitirene kadar oyuncu ölü bekler (canlanma yok) —
-            // yönlendirme o beklemede de yazılır (sınıf dokümanı).
+            // Death within a round: no revive, the player waits dead until the server ends the round —
+            // guided during that wait too (see the class doc).
             bool deadInRound = combat.Phase == ArenaProtocol.PHASE_PLAYING && !combat.IsAlive;
 
             if (modePause)
             {
                 if (!_active)
                 {
-                    // Sunucu toplanmaya girerken TÜM ready bayraklarını temizliyor (§10.1) — yerel
-                    // başlangıç durumu onunla aynı olmalı ki ilk "tabandayım" bir KENAR olsun.
+                    // The server clears ALL ready flags on entering the regroup (§10.1) — the local
+                    // start state must match, so the first "I am in the base" is an EDGE.
                     _active = true;
                     _reported = false;
                 }
             }
             else if (countdown && _active)
             {
-                // ⚠️ Geri sayımda YALNIZ zaten toplanmadan geliyorsak sürdürürüz. Maçın İLK geri
-                // sayımı da `paused/countdown`tur ama ondan önce toplanma olmadığı için _active
-                // false'tur ve aşağıdaki dallara düşer — orada kimseyi tabana çağırmıyoruz.
+                // ⚠️ Continue in a countdown ONLY if we came from a regroup. The match's FIRST
+                // countdown is `paused/countdown` too, but has no regroup before it, so _active is
+                // false and it falls to the branches below — nobody is called to a base there.
             }
             else if (deadInRound)
             {
-                _active = false; // yönerge var, set_ready yok (sınıf dokümanı)
+                _active = false; // prompt yes, set_ready no (see the class doc)
             }
             else
             {
@@ -121,17 +102,17 @@ namespace VortexArena.Modes.Tournament
 
             _guiding = true;
 
-            // Taban takibi ÖLÜ olmasak da gerekiyor: toplanmada herkes tabanına döner.
+            // Base tracking is needed even when alive: in the regroup everyone returns to their base.
             combat.RequestBaseTracking();
 
-            // Sahnede açık taban bölgesi yoksa (kurulum eksik) oyuncuyu kilitleme — hazır say.
+            // No open base zone in the scene (incomplete setup): count as ready rather than lock the
+            // player out.
             bool inBase = combat.IsInsideOwnBase || !combat.HasOpenBaseZone;
 
-            // ⚠️ Yönerge takımı ADIYLA söyler ("MAVİ tabanına dön"). Oyuncunun kendi takımını
-            // öğrenebileceği başka hiçbir yer YOKTUR: kendi gövdesini görmez, HUD skor satırı iki
-            // takımı da yazar ve iki şerit arenanın zıt uçlarındadır — takımı yazmayan bir yönerge
-            // oyuncuyu en YAKIN şeride yürütür, orası rakibin tabanıysa kapı hiç açılmaz ve bu
-            // sunucuda "toplanma bekleniyor" diye görünür (hatasız, sebepsiz).
+            // ⚠️ The prompt must name the team: the player has no other way to learn it (no own body,
+            // the score line shows both teams, the strips are at opposite ends). Without the name they
+            // walk to the NEAREST strip; if that is the opponent's base the gate never opens and the
+            // server just shows "waiting for regroup" — no error, no reason.
             string baseName = BaseLabel(combat.Team);
             if (_active)
             {
@@ -146,7 +127,7 @@ namespace VortexArena.Modes.Tournament
                     : $"Öldün — {baseName} dön, yeni tur orada başlayacak");
             }
 
-            // Tabana GİRİŞ kenarı: iki kumandaya üç darbe (sınıf dokümanı — ölçüt GERÇEK giriş).
+            // Base ENTRY edge: three pulses on both controllers (criterion is the REAL entry).
             bool insideBase = combat.IsInsideOwnBase;
             if (insideBase && !_wasInsideBase)
             {
@@ -156,12 +137,11 @@ namespace VortexArena.Modes.Tournament
 
             if (!_active)
             {
-                return; // tur içi ölüm kılavuzu: raporlanacak bir şey yok
+                return; // in-round death guidance: nothing to report
             }
 
-            // ⚠️ Yalnız KENARDA gönderilir, periyodik tekrar YOK: her set_ready sunucuda bir TAM
-            // lobby_state yayını tetikliyor (oyuncu sayısıyla çarpan fan-out). Kanal WS/TCP
-            // olduğu için tekrara gerek de yok — kaybolmaz.
+            // ⚠️ Sent only on the EDGE, never periodically: each set_ready triggers a FULL lobby_state
+            // broadcast (fan-out × player count). The WS/TCP channel does not lose it, so no repeat.
             if (inBase == _reported)
             {
                 return;
@@ -171,16 +151,15 @@ namespace VortexArena.Modes.Tournament
             _msg.ready = inBase;
             ArenaClient.Instance?.Send(_msg);
 
-            // Kapının TAM durumu tek satırda: takım + iki bayrak + gönderilen değer. Kenarda
-            // bastığı için tur başına birkaç satır. Bunsuz "toplanma bekleniyor" arızasının üç
-            // ayrı sebebi (yanlış şerit · taban hiç bulunamadı · bayrak sunucuya ulaşmadı)
-            // gözlükte birbirinden ayırt edilemiyor — üçü de aynı görünüyor.
+            // The gate's full state on one line (edge only, so a few lines per round). Without it the
+            // three causes of a "waiting for regroup" fault — wrong strip · base not found · flag
+            // never reached the server — look identical on the headset.
             Debug.Log($"[Regroup] takım={combat.Team} kendiTabanında={combat.IsInsideOwnBase} " +
                       $"açıkTabanVar={combat.HasOpenBaseZone} → set_ready({inBase})");
         }
 
-        /// <summary>Oyuncunun gideceği tabanın adı ("KIRMIZI tabanına"). Takım atanmamışsa
-        /// (<see cref="Team.Neutral"/>) renk yazılmaz — her taban ona açıktır
+        /// <summary>Name of the base to head for ("KIRMIZI tabanına"); no color for
+        /// <see cref="Team.Neutral"/>, since every base is open to them
         /// (<c>PlayerCombatState.EvaluateZones</c>).</summary>
         private static string BaseLabel(Team team)
         {
@@ -192,7 +171,7 @@ namespace VortexArena.Modes.Tournament
             }
         }
 
-        /// <summary>Akıştan çıkış: yönergeyi temizler, bir sonraki girişe temiz başlanır.</summary>
+        /// <summary>Leaves the flow: clears the prompt so the next entry starts clean.</summary>
         private void Leave()
         {
             _active = false;

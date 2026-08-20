@@ -4,24 +4,25 @@ using UnityEngine;
 namespace VortexArena.Core.Arena
 {
     /// <summary>
-    /// Sahneye ELLE konan bir engel (kolon, kasa, direk, sütun) — muhafaza hesabına girsin diye
-    /// işaretlenmiş dikdörtgen. Konum ve dönüş objenin kendi transformundan gelir; bileşene
-    /// yalnız zemindeki ölçüsü (<see cref="Size"/>) yazılır.
+    /// An obstacle placed BY HAND in the scene (column, crate, post, pillar) — a rectangle marked
+    /// so that it enters the boundary computation. Position and rotation come from the object's own
+    /// transform; only its footprint size (<see cref="Size"/>) is written on the component.
     /// <para>
-    /// <b>Neden ayrı bir bileşen:</b> <see cref="ArenaDimensions"/>'daki kolonlar arena
-    /// PLANININ parçasıdır (editör aracı geometriyi onlardan üretir). Plana girmeyen, sahneye
-    /// serpiştirilen dekor için ise tek doğruluk kaynağı objenin kendisidir — bu bileşen o objeyi
-    /// <see cref="ArenaBoundary"/>'ye "buraya yürüme" diye tanıtır.
+    /// <b>Why a separate component:</b> the columns in <see cref="ArenaDimensions"/> are part of the
+    /// arena PLAN (the editor tool generates the geometry from them). For decor that is not in the
+    /// plan and is scattered around the scene, the only source of truth is the object itself — this
+    /// component introduces that object to <see cref="ArenaBoundary"/> as "do not walk here".
     /// </para>
     /// <para>
-    /// ⚠️ <b>Collider EKLEMEZ, fizik YAPMAZ.</b> Free-roam'da oyuncu fiziksel olarak yürüdüğü için
-    /// onu durduran şey gerçek dünyadaki nesnedir, çarpışma değil; bu bileşenin tek işi muhafazanın
-    /// (duvar alfası + karartma + uyarı) oyuncuyu engele yaklaşırken uyarmasıdır. Görsel/fiziksel
-    /// gövde ayrı objelerdir ve bu bileşen onlara dokunmaz.
+    /// ⚠️ <b>It ADDS NO collider and does NO physics.</b> Since the player physically walks in
+    /// free-roam, what stops them is the real-world object, not a collision; the only job of this
+    /// component is to make the boundary (wall alpha + fade + warning) warn the player as they
+    /// approach the obstacle. The visual/physical body are separate objects and this component does
+    /// not touch them.
     /// </para>
     /// <para>
-    /// Kayıt <see cref="OnEnable"/>/<see cref="OnDisable"/> ile yapılır; sahne değişiminde statik
-    /// liste kendiliğinden boşalır (sızıntı yok).
+    /// Registration happens in <see cref="OnEnable"/>/<see cref="OnDisable"/>; the static list
+    /// empties itself on scene change (no leak).
     /// </para>
     /// </summary>
     public class ArenaObstacle : MonoBehaviour
@@ -32,12 +33,12 @@ namespace VortexArena.Core.Arena
                  "muhafaza 2B çalışır.")]
         [SerializeField] private Vector2 size = new Vector2(1f, 1f);
 
-        /// <summary>Play kipinde aktif olan tüm engeller (salt okunur).
-        /// <para>⚠️ Kayıt <c>OnEnable</c>'da dolar, yani <b>yalnız Play kipinde</b> geçerlidir —
-        /// editör aracı yazarken sahneyi <c>FindObjectsByType</c> ile tara.</para></summary>
+        /// <summary>All obstacles active in Play mode (read only).
+        /// <para>⚠️ The registry fills in <c>OnEnable</c>, so it is only valid <b>in Play mode</b> —
+        /// when writing an editor tool, scan the scene with <c>FindObjectsByType</c>.</para></summary>
         public static IReadOnlyList<ArenaObstacle> All => Registry;
 
-        /// <summary>Zemindeki ölçü (X = genişlik, Z = derinlik; metre).</summary>
+        /// <summary>Footprint size (X = width, Z = depth; meters).</summary>
         public Vector2 Size => size;
 
         private void OnEnable()
@@ -54,21 +55,22 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Engelin dikdörtgenini <paramref name="arenaLocal"/> transformunun YEREL XZ uzayında
-        /// verir (<see cref="ArenaBoundary"/> hesabı orada yapılır).
+        /// Returns the obstacle's rectangle in the LOCAL XZ space of the
+        /// <paramref name="arenaLocal"/> transform (that is where the
+        /// <see cref="ArenaBoundary"/> computation happens).
         /// <para>
-        /// Dönüşüm burada toplanır çünkü iki transform arasındaki ilişkiyi bilmek gerekir:
-        /// merkez nokta dönüşümüyle, <paramref name="yaw"/> ise iki objenin Y dönüşü farkından
-        /// gelir. Çağıran yalnız sonucu tüketir.
+        /// The conversion is gathered here because it needs to know the relation between the two
+        /// transforms: the center comes from a point transform and <paramref name="yaw"/> from the
+        /// difference of the two objects' Y rotations. The caller only consumes the result.
         /// </para>
-        /// ⚠️ Ölçek yok sayılır: engel ölçüsü <see cref="Size"/>'dan gelir, transform scale'inden
-        /// değil — aynı prefabın farklı ölçekli kopyaları sessizce farklı muhafaza üretmesin diye
-        /// tek doğruluk kaynağı alandır.
+        /// ⚠️ Scale is ignored: the obstacle size comes from <see cref="Size"/>, not from the
+        /// transform scale — the field is the single source of truth so that differently scaled
+        /// copies of the same prefab do not silently produce different boundaries.
         /// </summary>
-        /// <param name="arenaLocal">Hesabın yapıldığı uzayın transformu (muhafaza objesi).</param>
-        /// <param name="center">Engel merkezi (yerel XZ, metre).</param>
-        /// <param name="size">Engel ölçüsü (X = genişlik, Y = derinlik; metre).</param>
-        /// <param name="yaw">Engelin yerel uzaydaki Y dönüşü (derece).</param>
+        /// <param name="arenaLocal">Transform of the space the computation runs in (the boundary object).</param>
+        /// <param name="center">Obstacle center (local XZ, meters).</param>
+        /// <param name="size">Obstacle size (X = width, Y = depth; meters).</param>
+        /// <param name="yaw">The obstacle's Y rotation in local space (degrees).</param>
         public void GetLocalRect(Transform arenaLocal, out Vector2 center, out Vector2 size, out float yaw)
         {
             size = this.size;
@@ -83,21 +85,23 @@ namespace VortexArena.Core.Arena
             Vector3 local = arenaLocal.InverseTransformPoint(transform.position);
             center = new Vector2(local.x, local.z);
 
-            // Yön farkı: engelin ileri vektörünü yerel uzaya taşıyıp XZ düzleminde açısını al.
-            // Euler farkı almak gimbal'a takılır (engel eğik durabilir), yön vektörü takılmaz.
+            // Direction difference: move the obstacle's forward vector into local space and take its
+            // angle in the XZ plane. Taking an Euler difference gets stuck on gimbal (the obstacle
+            // may be tilted), a direction vector does not.
             Vector3 forward = arenaLocal.InverseTransformDirection(transform.forward);
             yaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
         }
 
         // ------------------------------------------------------------------ gizmo
 
-        /// <summary>Editörde yerleştirmeyi kolaylaştırır: zemindeki dikdörtgen + hafif hacim.</summary>
+        /// <summary>Makes placement easier in the editor: the footprint rectangle + a light volume.</summary>
         private void OnDrawGizmos()
         {
             Gizmos.color = new Color(0.95f, 0.55f, 0.15f, 0.9f);
 
-            // Ölçek bilinçli olarak 1: kutu Size'ı temsil eder, transform scale'ini değil
-            // (GetLocalRect de scale'i yok sayıyor — gizmo ile hesap aynı şeyi göstersin).
+            // The scale is deliberately 1: the box represents Size, not the transform scale
+            // (GetLocalRect ignores scale too — the gizmo and the computation must show the same
+            // thing).
             Gizmos.matrix = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
             Gizmos.DrawWireCube(Vector3.zero, new Vector3(size.x, 0.02f, size.y));
             Gizmos.DrawWireCube(new Vector3(0f, 1f, 0f), new Vector3(size.x, 2f, size.y));

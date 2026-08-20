@@ -6,48 +6,46 @@ using VortexArena.Protocol;
 namespace VortexArena.Net
 {
     /// <summary>
-    /// Uzak oyuncu iskelet kayıtçısı tekili (§6.10): <see cref="UdpStateChannel"/>'ın ağ thread'inde
-    /// aldığı <c>0x08</c> girdilerini oyuncu başına saklar, ana thread'den okutur.
-    /// <see cref="RemotePlayerRegistry"/> ile aynı desen — ArenaClient AddComponent ile kurar,
-    /// sahne/oyun bilgisi içermez.
+    /// The remote player skeleton registry singleton (§6.10): stores the <c>0x08</c> entries
+    /// <see cref="UdpStateChannel"/> receives on the network thread per player and lets the main thread
+    /// read them. The same pattern as <see cref="RemotePlayerRegistry"/> — ArenaClient installs it with
+    /// AddComponent, and it holds no scene/game knowledge.
     /// <para>
-    /// <b>İki alanın ömrü BİLEREK farklıdır:</b>
+    /// <b>The two fields have DELIBERATELY different lifetimes:</b>
     /// </para>
     /// <list type="bullet">
-    /// <item><b>Blob TÜKETİLİR</b> (<see cref="TryTakeBlob"/>): SDK'nın <c>ReceiveData</c>'sı gelen
-    /// her kareyi kendi kuyruğuna alıyor; aynı blob'u ikinci kez vermek aynı kareyi iki kez
-    /// oynatmak olurdu.</item>
-    /// <item><b>Kök KALICIDIR</b> (<see cref="TryGetInterpolatedRoot"/>): karakterin kökü
-    /// <b>her karede</b> yazılmak zorunda (SDK <c>ApplyBodyPose</c> ile onu sürekli eziyor), oysa
-    /// yeni blob yalnız <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>'de geliyor.</item>
+    /// <item><b>The blob is CONSUMED</b> (<see cref="TryTakeBlob"/>): the SDK's <c>ReceiveData</c>
+    /// queues every frame it is given, so handing out the same blob twice would play it twice.</item>
+    /// <item><b>The root PERSISTS</b> (<see cref="TryGetInterpolatedRoot"/>): it must be written
+    /// <b>every frame</b> (the SDK keeps overwriting it in <c>ApplyBodyPose</c>) while a new blob only
+    /// arrives at <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>.</item>
     /// </list>
     /// <para>
-    /// ⚠️ <b>Kök İNTERPOLE EDİLİR</b> ve bu isteğe bağlı bir güzelleştirme değildir: gövde
-    /// 12 Hz'de, eller <see cref="ArenaProtocol.POSE_RATE_HZ"/>'de akıyor. Kök ham yazılsaydı
-    /// gövde 12 Hz'lik basamaklarla, eller akıcı hareket ederdi — aynı avatarda iki farklı
-    /// akıcılık, kopmuş gibi görünür. Tampon <see cref="ArenaProtocol.INTERP_DELAY_MS"/> ile
-    /// poz kanalınınkiyle <b>aynı</b>dır; farklı olsaydı gövde ile eller arasında sabit bir
-    /// zaman kayması kalırdı.
+    /// ⚠️ <b>The root IS INTERPOLATED</b>, not as a beautification: the body streams at 12 Hz and the
+    /// hands at <see cref="ArenaProtocol.POSE_RATE_HZ"/>, so a raw root would step at 12 Hz next to
+    /// smooth hands — two smoothnesses on one avatar looks detached. The buffer is <b>the same</b> as
+    /// the pose channel's (<see cref="ArenaProtocol.INTERP_DELAY_MS"/>); a different one would leave a
+    /// constant body-vs-hands time shift.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Blob yuvası tek kareliktir (son gelen kazanır).</b> Bu, SDK tarafında <b>delta
-    /// sıkıştırmanın KAPALI</b> olmasına dayanır (§6.9): her kare bağımsız bir keyframe olduğu
-    /// için düşen kare yalnız o kareyi kaybettirir. Delta açılırsa bu yuva kuyruğa çevrilmek
-    /// zorundadır — atlanan bir baseline sonraki tüm kareleri çözümsüz bırakır.
+    /// ⚠️ <b>The blob slot holds one frame (last one wins)</b>, which rests on delta compression being
+    /// <b>OFF</b> in the SDK (§6.9): every frame is an independent keyframe, so a dropped frame costs
+    /// only itself. Turning delta on forces this slot to become a queue — a skipped baseline leaves
+    /// every following frame undecodable.
     /// </para>
     /// </summary>
     public class RemoteSkeletonRegistry : MonoBehaviour
     {
         /// <summary>
-        /// Oyuncu başına saklanan kök örneği sayısı. <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>'de
-        /// ~1.3 sn geçmiş — interpolasyon tamponunun (100 ms) kat kat üstünde, jitter/kayıp
-        /// yutulabilsin diye.
+        /// Root samples kept per player — ~1.3 s of history at
+        /// <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>, many times the 100 ms interp buffer so
+        /// jitter/loss can be absorbed.
         /// </summary>
         private const int RING_SIZE = 16;
 
         public static RemoteSkeletonRegistry Instance { get; private set; }
 
-        /// <summary>Tek kök örneği (recvMs = <c>Environment.TickCount</c>).</summary>
+        /// <summary>A single root sample (recvMs = <c>Environment.TickCount</c>).</summary>
         private struct RootSample
         {
             public int recvMs;
@@ -56,7 +54,7 @@ namespace VortexArena.Net
 
         private class SkeletonEntryState
         {
-            /// <summary>Henüz tüketilmemiş blob; <c>null</c> = yeni kare yok.</summary>
+            /// <summary>A blob not consumed yet; <c>null</c> = no new frame.</summary>
             public byte[] pendingBlob;
             public int pendingLength;
 
@@ -65,7 +63,7 @@ namespace VortexArena.Net
             public int nextIndex;
         }
 
-        // Ingest (ağ thread'i) ile okuma (ana thread) bu kilit altında buluşur.
+        // Ingest (network thread) and reading (main thread) meet under this lock.
         private readonly object _gate = new object();
         private readonly Dictionary<int, SkeletonEntryState> _entries = new Dictionary<int, SkeletonEntryState>();
 
@@ -108,9 +106,9 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// AĞ THREAD'İ: <c>0x08</c> batch'inin tek girdisini alır.
-        /// <para>⚠️ Kendi <paramref name="localPlayerId"/>'miz atlanır — kendi gövdemizi sensörden
-        /// çiziyoruz (§6.10: sunucu gönderene de yolluyor, süzgeç burada).</para>
+        /// NETWORK THREAD: takes a single entry of the <c>0x08</c> batch.
+        /// <para>⚠️ Our own <paramref name="localPlayerId"/> is skipped — we draw our own body from the
+        /// sensors (§6.10: the server sends to the sender too, the filter is here).</para>
         /// </summary>
         public void IngestFromNetThread(in SkeletonEntry entry, int recvTickMs, int localPlayerId)
         {
@@ -127,7 +125,7 @@ namespace VortexArena.Net
                     _entries.Add(entry.playerId, state);
                 }
 
-                // Son gelen kazanır (bkz. sınıf özeti — delta KAPALI olduğu için güvenli).
+                // Last one wins (see the class summary — safe because delta is OFF).
                 state.pendingBlob = entry.blob;
                 state.pendingLength = entry.blobLength;
 
@@ -141,7 +139,8 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// ANA THREAD: bekleyen blob'u verir ve yuvayı <b>boşaltır</b>. Yeni kare yoksa false.
+        /// MAIN THREAD: hands out the pending blob and <b>empties</b> the slot. False when there is no
+        /// new frame.
         /// </summary>
         public bool TryTakeBlob(int playerId, out byte[] blob, out int length)
         {
@@ -163,11 +162,11 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// ANA THREAD: karakter kökünün <see cref="ArenaProtocol.INTERP_DELAY_MS"/> gecikmeli,
-        /// interpole edilmiş <b>arena uzayı</b> pozu. Saran çift yoksa en yakın uca kilitlenir;
-        /// hiç örnek yoksa false.
-        /// <para>Poz kanalının <c>GetInterpolatedPose</c>'u ile aynı örnekleme zamanını kullanır —
-        /// gövde ile eller arasında zaman kayması kalmasın diye.</para>
+        /// MAIN THREAD: the character root's interpolated <b>arena space</b> pose, delayed by
+        /// <see cref="ArenaProtocol.INTERP_DELAY_MS"/>; clamps to the nearest end with no bracketing
+        /// pair, false with no sample at all.
+        /// <para>Uses the same sampling time as the pose channel's <c>GetInterpolatedPose</c>, so no
+        /// body-vs-hands time shift is left.</para>
         /// </summary>
         public bool TryGetInterpolatedRoot(int playerId, out Pose root)
         {
@@ -193,7 +192,7 @@ namespace VortexArena.Net
                     start += RING_SIZE;
                 }
 
-                // Halka kronolojik sıralı: örnekleme zamanını saran çifti bul.
+                // The ring is in chronological order: find the pair bracketing the sampling time.
                 for (int i = 0; i < state.count; i++)
                 {
                     RootSample sample = state.ring[(start + i) % RING_SIZE];
@@ -239,8 +238,8 @@ namespace VortexArena.Net
             return true;
         }
 
-        /// <summary>Avatar yok edilirken/başka oyuncuya devredilirken çağrılır: bayat kök ve blob
-        /// yeni sahibe miras kalmasın.</summary>
+        /// <summary>Called when an avatar is destroyed / handed over to another player: so the stale
+        /// root and blob are not inherited by the new owner.</summary>
         public void Forget(int playerId)
         {
             lock (_gate)

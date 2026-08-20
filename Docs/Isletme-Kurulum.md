@@ -3,7 +3,7 @@
 Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçümünden kabul testine kadar sırayla uygulayacağı adımları içerir.
 
 > Kısaltmalar: **Sunucu PC** = arenayı yöneten Windows bilgisayar · **Başlık** = Meta Quest 3 / 3S gözlük · **Admin** = Windows masaüstü uygulaması (yönetim + izleme) · **Player** = başlıktaki VR uygulaması.
-> Teknik referanslar: `Server/README.md` (sunucu), `Docs/ArenaNet-Protokol.md` (portlar/sabitler), `CLAUDE.md` (proje mimarisi).
+> Teknik referanslar: `Server/README.md` (sunucu), `Docs/ArenaNet-Protokol.md` (portlar/sabitler), `Docs/Sistem-Ozeti.md` (proje mimarisi).
 > Kurulum bittikten sonra **işletme personelinin günlük kullanacağı** kılavuz: `Docs/Kullanim-Kilavuzu.md` (teknik olmayan dille açılış sırası, gizli IP paneli, kalibrasyon, dashboard, sorun giderme).
 
 ---
@@ -256,7 +256,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   - Aynı anda birden fazla cihaz bağlıysa diğerlerini çıkar.
 - [ ] **Tüm başlıklarda aynı APK sürümü** olmalı — sahne listesi farklı olan bir başlık maçın başlamasını engeller (bkz. Bölüm 8).
 - [ ] Cihaz kimlikleri: başlık ilk bağlandığında sunucu ona havuzdan rastgele bir **ad** ve 1'den itibaren ilk boş **forma numarasını** (1..99) atar, `Server/config/devices.json`'a (`deviceId → {name, number}`) yazar. Ad tekrar edebilir, **numara tüm kayıtlı cihazlar arasında benzersizdir**.
-  - [ ] Admin panelindeki **"Bu cihazı tanıt" (identify)** komutuyla hangi kimliğin hangi fiziksel başlık olduğunu bul, başlığa **numarasını** fiziken etiketle.
+  - [ ] Hangi kimliğin hangi fiziksel başlık olduğunu **başlıkları teker teker bağlayarak** eşle: bir başlığı bağla, roster'da beliren **ad + numarayı** o başlığa fiziken etiketle, sonra sıradakine geç. Eşleme kalıcıdır — ad/numara cihaza `devices.json`'da bağlıdır, ertesi gün de aynı gelir.
   - [ ] Ad değiştirmek: admin **İstatistik** panelinde o oyuncunun satırındaki **İSİM** düğmesiyle, sunucuyu durdurmadan yapılır. Forma numarasını sunucu atar; elle değiştiren bir arayüz yoktur. (Elle `devices.json` düzenlemek gerekmez; gerekirse **sunucu kapalıyken** düzenle — UTF-8, **BOM'suz** — ve yeniden başlat.)
 - [ ] **Guardian/alan kurulumu YAPILMAZ.** Her başlıkta geliştirici ayarlarından fiziksel alan özellikleri kapatılır; oyuncu tüm alanda serbest dolaşır. Oyun içi güvenlik `ArenaBoundary` ile sağlanır (kenara yaklaşınca ekran hafifçe kararmaya başlar, dışarı çıkınca tümden kararır + uyarı) — **guardian uyarısı olmadığı için tek fiziksel güvenlik ağı budur**, kalibrasyonun doğruluğu bu yüzden bir konfor değil güvenlik meselesidir. ⚠️ Bunun ikinci yarısı **environment sanatının gerçek duvarlarıdır**: oyuncu duvarı gözüyle gördüğü için sanat duvarı fiziksel sınırla çakışmalıdır.
   - Bunun iki sonucu var ve ikisi de yazılımda karşılanmıştır: (1) sistemin zemin seviyesi güvenilmez → kalibrasyon zemini kumandadan ölçer (§3), (2) tracking origin kayması kalibrasyonu bozardı → sahneler **Stage** tracking origin kullanır (sistem recenter'ı kapalı) ve yine de bir kayma olursa `ArenaCalibrator` kayıtlı anchor'dan kendini yeniden hizalar.

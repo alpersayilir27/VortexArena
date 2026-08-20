@@ -7,50 +7,36 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Kavrama Pozu Stüdyosu'nun sahneye koyduğu <b>tek elin</b> kimliği ve ayar yüzeyi: hangi
-    /// kavrama noktasına ait olduğu, hangi el olduğu ve hayalet elin puppet'ı.
-    /// <para>
-    /// ⚠️ <b>Bu bileşen bilerek RUNTIME asmdef'indedir</b> (<c>VortexArena.Core</c>) ve dosyanın
-    /// tamamı <c>#if UNITY_EDITOR</c> sarmalındadır. Editör asmdef'ine konamaz: Unity, editör
-    /// derlemesinde tanımlı bir <see cref="MonoBehaviour"/>'ı bir GameObject'e eklemeyi reddeder
-    /// ("it is an editor script") ve <c>AddComponent</c> sessizce <c>null</c> döner — stüdyo el
-    /// kurarken tam o satırda patlar. Build güvenliği iki yerden gelir: sarmal sayesinde tip
-    /// oyunun derlemesine hiç girmez, objeler de <see cref="HideFlags.DontSave"/> olduğu için
-    /// sahneye/prefaba yazılmaz (yani "missing script" bırakacak bir örnek oluşmaz).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Parmaklar ELİN KEMİKLERİNDE yaşar, bu bileşende DEĞİL.</b> Riglenen duruş hayalet elin
-    /// eklem <see cref="Transform"/>'larının kendisidir; kullanıcı onları Scene View'da çevirir,
-    /// Kaydet onları oradan okur (<c>GripPoseStudio</c>). Bileşene ikinci bir "duruş" alanı
-    /// EKLENMEZ: iki kopya, tezgâhta görülen el ile kaydedilen elin sessizce ayrışması demektir —
-    /// oysa bu aracın bütün işi ikisinin aynı olması. Aynı sebeple duruşu bu bileşenden
-    /// <b>kaydeden</b> bir düğme de yoktur: yazan tek düğme stüdyo penceresindedir.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Metakarpallar riglenmez</b> (<see cref="HandPoseLibrary.IsDrivable"/>): OpenXR dalında
-    /// sentetik el, proksimal eklemlerin dönüşünü bilek uzayında beklediği için metakarpı çevirmek
-    /// tezgâhta doğru, oyunda kaymış bir el üretirdi. Gerekçenin tamamı
-    /// <see cref="HandPoseLibrary"/>'de.
-    /// </para>
-    /// <para>
-    /// ⚠️ Bu objenin <b>transformu KUMANDA (anchor) çerçevesidir</b> — <c>OVRCameraRig</c> el
-    /// anchor'ının silah üstündeki yeri; kayda giren şey bu kökün KONUMUDUR (<see cref="ItemGripPose"/>:
-    /// anchor kaydının dönüşü yok, silah oyunda her zaman kumandayla hizalıdır — kök de silahla hizalı
-    /// tutulur, yalnız taşınır). ISDK hayalet eli ve kumanda modeli bu kökün ÇOCUKLARIDIR
-    /// (<see cref="Puppet"/>).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Hayalet elin kendi yerel pozu da kayda girer</b> (<c>ItemGripPose.Wrist</c>): elin
-    /// kumandanın üstünde nerede ve hangi AÇIDA duracağı silah ve el başına yazılır — kimi kabza
-    /// yandan, kimi alttan tutuluyor. Kumanda modeli bunun dışındadır ve kilitlidir (kimlik pozunda
-    /// durur, hizanın referansıdır). Eli çevirmek silahın duruşunu ETKİLEMEZ: silahın yerini kök,
-    /// elin yerini el söyler.
-    /// </para>
+    /// Identity and tuning surface of the single hand the Grip Pose Studio places in the scene:
+    /// which grip point, which handedness, and the ghost hand's puppet.
+    /// <para>⚠️ Deliberately in the RUNTIME asmdef (<c>VortexArena.Core</c>) with the whole file
+    /// under <c>#if UNITY_EDITOR</c>. In an editor asmdef Unity refuses to add the
+    /// <see cref="MonoBehaviour"/> to a GameObject ("it is an editor script") and
+    /// <c>AddComponent</c> silently returns <c>null</c>. Build safety: the wrapper keeps the type
+    /// out of the build, and <see cref="HideFlags.DontSave"/> keeps instances out of
+    /// scenes/prefabs (no "missing script" left behind).</para>
+    /// <para>⚠️ Fingers live IN THE HAND'S BONES, not here: the rigged pose IS the ghost hand's
+    /// joint <see cref="Transform"/>s, rotated in the Scene View and read from there by Save
+    /// (<c>GripPoseStudio</c>). A second "pose" field would let workbench and saved hand diverge —
+    /// the very thing this tool exists to prevent. Same reason there is no save button here.</para>
+    /// <para>⚠️ Metacarpals are not rigged (<see cref="HandPoseLibrary.IsDrivable"/>): the OpenXR
+    /// synthetic hand expects proximal rotations in wrist space, so rotating the metacarpal is
+    /// right on the workbench and displaced in game. Full rationale in
+    /// <see cref="HandPoseLibrary"/>.</para>
+    /// <para>⚠️ This transform IS the CONTROLLER (anchor) frame; what enters the record is its
+    /// POSITION only (<see cref="ItemGripPose"/> carries no anchor rotation — the root is kept
+    /// weapon-aligned and only moved). The ISDK ghost hand and controller model are its CHILDREN
+    /// (<see cref="Puppet"/>).</para>
+    /// <para>⚠️ The ghost hand's own local pose enters the record too (<c>ItemGripPose.Wrist</c>):
+    /// where and at which ANGLE the hand sits, per weapon and per hand. The controller model is
+    /// outside this and locked (identity pose = alignment reference). Rotating the hand does NOT
+    /// affect the weapon's pose.</para>
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class GripHandAuthoring : MonoBehaviour
     {
-        /// <summary>Kök gizmosunun kumanda ileri okunun uzunluğu (m) — silah ölçeğinde okunur olsun.</summary>
+        /// <summary>Length of the root gizmo's controller-forward arrow (m) — so it stays readable
+        /// at weapon scale.</summary>
         private const float GizmoForwardLength = 0.08f;
         private const float GizmoSideLength = 0.03f;
         private const float GizmoOriginRadius = 0.008f;
@@ -58,16 +44,15 @@ namespace VortexArena.Core.Combat
         [SerializeField] private GripSocketKind _kind;
         [SerializeField] private bool _rightHand = true;
 
-        // ⚠️ [SerializeField] ve bilerek öyle: obje DontSave olduğu için diske hiç yazılmaz ama
-        // DOMAIN RELOAD'ı (script derlemesi) yaşar. Serialize edilmeseydi her derlemeden sonra
-        // puppet referansı kaybolur ve parmak eklemleri artık bulunamazdı.
+        // ⚠️ [SerializeField] on purpose: DontSave keeps it off disk, but it must survive DOMAIN
+        // RELOAD — otherwise the puppet reference is lost after every compile and the finger joints
+        // can no longer be found.
         [SerializeField] private HandPuppet _puppet;
 
-        // ⚠️ Hayalet elin köke (kumandaya) göre pozu BURADA SAKLANMAZ: o poz hayalet elin KENDİ
-        // transformunda yaşar (kullanıcı onu Scene View'da taşıyıp çeviriyor) ve Kaydet oradan
-        // okunuyor — parmaklarla birebir aynı gerekçe. Buraya bir kopyası konsaydı tezgâhta görülen
-        // el ile kaydedilen el sessizce ayrışırdı. El ilk kurulduğunda nereye oturacağını kayıt
-        // (ItemGripPose.Wrist), kayıt yoksa ItemGripAuthority.ResolveAnchorToWrist söyler.
+        // ⚠️ The ghost hand's pose relative to the root is NOT stored here: it lives in the ghost
+        // hand's OWN transform and Save reads it from there (same rationale as the fingers) — a
+        // copy would let workbench and saved hand diverge. Initial placement comes from
+        // ItemGripPose.Wrist, or ItemGripAuthority.ResolveAnchorToWrist when unauthored.
 
         public GripSocketKind Kind => _kind;
         public bool RightHand => _rightHand;
@@ -75,8 +60,8 @@ namespace VortexArena.Core.Combat
         public HandPuppet Puppet => _puppet;
 
         /// <summary>
-        /// Eli tanıtır. Stüdyo el kurarken bir kez çağırır; parmak duruşunu ayrıca
-        /// <see cref="ApplyPose"/> yazar.
+        /// Introduces the hand; called once by the studio during setup. The finger pose is written
+        /// separately by <see cref="ApplyPose"/>.
         /// </summary>
         public void Resolve(HandPuppet puppet, GripSocketKind kind, bool rightHand)
         {
@@ -86,13 +71,12 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Kayıtlı bir parmak duruşunu hayalet elin kemiklerine yazar (kayıt boşsa boş elin duruşu).
-        /// Stüdyo eli KURARKEN çağırır — el tezgâha son kaydedildiği duruşta gelsin.
-        /// <para>⚠️ Kurulmuş bir elde yeniden çağrılmaz: kullanıcının o an çevirdiği kemikleri
-        /// diskteki duruşa geri atmak, "riglemeye çalışıyorum ama parmaklar sıfırlanıyor" olurdu.</para>
-        /// <para>⚠️ Puppet yoksa SESSİZ geçer: el kurulumunun ortasında bileşen puppet çözülmeden
-        /// önce de buraya düşebiliyor ve orada hata basmak, gerçek bir sorunu olmayan her el
-        /// kurulumunda konsola satır atardı.</para>
+        /// Writes a recorded finger pose onto the ghost hand's bones (idle pose when the record is
+        /// empty). Called during SETUP so the hand arrives in its last saved pose.
+        /// <para>⚠️ Never called again on a set-up hand: snapping the bones the user is rotating
+        /// back to disk would be "the fingers keep resetting while I rig".</para>
+        /// <para>⚠️ Silent no-op without a puppet — this is also hit mid-setup before the puppet is
+        /// resolved, so an error here would fire on every healthy hand setup.</para>
         /// </summary>
         public void ApplyPose(HandJointRotation[] joints)
         {
@@ -105,8 +89,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bu elin <b>riglenebilir</b> parmak eklemleri (metakarpallar hariç — gerekçe sınıf
-        /// uyarısında). Stüdyo bunları hem seçime açar hem kayda alır; puppet yoksa boş dizi.
+        /// This hand's riggable finger joints (metacarpals excluded — see class warning). The
+        /// studio offers these for selection and records them; empty without a puppet.
         /// </summary>
         public List<HandJointMap> DrivableJoints()
         {
@@ -128,9 +112,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Kumanda kökünün gizmosu: mavi ok = kumandanın ilerisi (= namlu yönü; kök silahla hizalı
-        /// tutulur), yeşil = yukarı, kırmızı = sağ, ortada küçük küre. Kökün kendisinde renderer
-        /// yoktur — bu gizmo olmasa kullanıcı neyi sürüklediğini göremezdi.
+        /// Controller root gizmo: blue = controller forward (= muzzle direction, root is
+        /// weapon-aligned), green = up, red = right, small sphere at the origin. The root has no
+        /// renderer — without this the user cannot see what they are dragging.
         /// </summary>
         private void OnDrawGizmos()
         {

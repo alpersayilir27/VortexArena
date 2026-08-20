@@ -8,39 +8,37 @@ using VortexArena.Net;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Oyuncu başına dünya-uzayı işaretçisi: <b>ayaklarının etrafında halka</b> ve
-    /// <b>altında ad etiketi</b> (kullanıcının kuş bakışı isteği).
+    /// World-space marker per player: a <b>ring around their feet</b> and a <b>name label below
+    /// it</b>.
     /// <para>
-    /// <c>RemoteAvatar</c>'a DOKUNMAZ — oyuncu tarafı görselleri admin için değişmemeli. Kendi
-    /// nesnelerini <see cref="AdminSpectator"/>'ın kalıcı kökü altında tutar, böylece sahne
-    /// değişimlerinde yeniden kurulmaları gerekmez (konum her karede arena uzayından türetilir).
+    /// ⚠️ Does NOT touch <c>RemoteAvatar</c> — player-side visuals must not change for the admin.
+    /// Its objects live under <see cref="AdminSpectator"/>'s persistent root, so scene changes need
+    /// no rebuild (positions come from arena space each frame).
     /// </para>
     /// <para>
-    /// <b>Halka zeminde durur:</b> oyuncunun BAŞ pozunun x/z'si alınıp arena uzayında y=0.02'ye
-    /// indirilir, sonra dünyaya çevrilir — böylece oyuncu eğildiğinde halka yerinde kalır.
-    /// <b>Ad etiketi</b> kameraya döner ve ekran uzayında halkanın ALTINA gelmesi için kameranın
-    /// yukarı vektörünün tersine kaydırılır: kuş bakışında da serbest kipte de "dairenin altında"
-    /// okunur.
+    /// <b>Ring:</b> the head pose's x/z lowered to y=0.02 in arena space, so it stays put when the
+    /// player bends over. <b>Label:</b> faces the camera and is offset along -up, so it reads under
+    /// the circle in both top-down and free mode.
     /// </para>
     /// </summary>
     public class AdminPlayerMarkers : MonoBehaviour
     {
-        /// <summary>Halka çapı (m) — omuz genişliğinden biraz geniş.</summary>
+        /// <summary>Ring diameter (m) — a bit wider than shoulder width.</summary>
         private const float RingDiameter = 0.9f;
 
-        /// <summary>Halka canvas'ı piksel boyu; dünya ölçeği bununla çapı verir.</summary>
+        /// <summary>Ring canvas pixel size; with the world scale it yields the diameter.</summary>
         private const float RingPixels = 300f;
 
-        /// <summary>Ad etiketinin halkadan ekran-uzayı uzaklığı (m).</summary>
+        /// <summary>Label's screen-space distance from the ring (m).</summary>
         private const float LabelOffset = 0.62f;
 
-        /// <summary>Zeminden yükseklik (m) — zemine gömülmesin (z-fighting).</summary>
+        /// <summary>Lift above the floor (m) — avoids z-fighting.</summary>
         private const float FloorLift = 0.02f;
 
-        /// <summary>Seçili oyuncunun halkası bu kadar büyür.</summary>
+        /// <summary>Growth factor of the selected player's ring.</summary>
         private const float SelectedScale = 1.18f;
 
-        /// <summary>Ölü işaretçinin renk çarpanı (RemoteAvatar ile aynı).</summary>
+        /// <summary>Color multiplier for a dead marker (the same as RemoteAvatar).</summary>
         private const float DeadColorScale = 0.35f;
 
         private class Marker
@@ -55,8 +53,8 @@ namespace VortexArena.App.Admin
 
         private readonly Dictionary<int, Marker> _markers = new Dictionary<int, Marker>();
 
-        /// <summary>İşaretçi prefabı (<c>Resources</c>'tan bir kez yüklenir). Bu bileşen sahneye
-        /// değil koddan eklendiği için <c>[SerializeField]</c> ile bağlanamaz.</summary>
+        /// <summary>Marker prefab, loaded once from <c>Resources</c> — this component is added from
+        /// code, so <c>[SerializeField]</c> wiring is impossible.</summary>
         private AdminPlayerMarker _markerPrefab;
 
         private bool _prefabMissingLogged;
@@ -68,7 +66,7 @@ namespace VortexArena.App.Admin
             RemotePlayerRegistry registry = RemotePlayerRegistry.Instance;
             if (registry == null)
             {
-                // ArenaClient bootstrap'ı bizden önce koşar — pratikte olmaz.
+                // ArenaClient's bootstrap runs before us — this does not happen in practice.
                 Debug.LogWarning("[AdminPlayerMarkers] RemotePlayerRegistry yok; işaretçiler devre dışı.");
                 enabled = false;
                 return;
@@ -148,7 +146,7 @@ namespace VortexArena.App.Admin
                     marker.root.SetActive(true);
                 }
 
-                // Ayak izi: baş pozunun x/z'si, arena zemininin hemen üstü.
+                // Footprint: the head pose's x/z, just above the arena floor.
                 var floorArena = new Pose(
                     new Vector3(head.position.x, FloorLift, head.position.z), Quaternion.identity);
                 Vector3 floorWorld = ArenaSpace.ArenaToWorld(floorArena).position;
@@ -157,29 +155,28 @@ namespace VortexArena.App.Admin
                 AdminPlayerView view = roster != null ? roster.Find(kv.Key) : null;
                 bool alive = view != null ? view.alive : registry.IsAlive(kv.Key);
 
-                // Ölü oyuncuda ihlal çizilmez: ceza zaten durmuştur (sunucu `Alive` kapısı, §10.9)
-                // ve ölü bir oyuncunun kafası nerede olursa olsun operatörün yapacağı bir şey yok.
+                // No violation for a dead player: the penalty already stopped (server `Alive` gate,
+                // §10.9) and there is nothing for the operator to act on.
                 AdminViolationKind violation = alive
                     ? AdminViolations.Of(kv.Key)
                     : AdminViolationKind.None;
 
-                // ⚠️ İhlal rengi SEÇİM VURGUSUNU EZER ve bu kural geri alınmaz: seçim bir tercih,
-                // ihlal bir uyarıdır — üstelik seçim zaten üç ayrı yerde anlatılıyor (büyüyen
-                // halka, kalın sprite, alt şeritteki ad), oysa ihlalin tek görünür kanalı budur.
+                // ⚠️ The violation color OVERRIDES the selection highlight and stays that way: a
+                // selection is a preference already shown three ways (grown ring, thick sprite,
+                // bottom bar name), while this is the violation's only visible channel.
                 Color color = violation != AdminViolationKind.None
                     ? AdminViolations.Blink(violation)
                     : ResolveColor(view, selected, alive);
 
-                // Halka: zeminde yatar (x=90). Daire olduğu için yaw önemsiz.
+                // The ring lies flat on the floor (x=90). Since it is a circle, yaw is irrelevant.
                 marker.ring.SetPositionAndRotation(floorWorld, Quaternion.Euler(90f, 0f, 0f));
                 marker.ring.localScale = Vector3.one *
                     (RingDiameter / RingPixels * (selected ? SelectedScale : 1f));
 
                 if (marker.ringImage != null)
                 {
-                    // ⚠️ Renk YALNIZ Image.color ile sürülür: halka bir uGUI Image, yani
-                    // CanvasRenderer üzerinden çizilir ve MaterialPropertyBlock/shader parametresi
-                    // orada HİÇ uygulanmaz — o yol denenmez.
+                    // ⚠️ Color goes ONLY through Image.color: the ring draws via CanvasRenderer,
+                    // where MaterialPropertyBlock/shader parameters are never applied.
                     marker.ringImage.color = color;
                 }
 
@@ -203,7 +200,7 @@ namespace VortexArena.App.Admin
                     continue;
                 }
 
-                // Ekran uzayında halkanın ALTI: kameranın yukarı vektörünün tersi.
+                // BELOW the ring in screen space: the negative of the camera's up vector.
                 Transform cameraTransform = camera.transform;
                 Vector3 labelPosition = floorWorld - cameraTransform.up * LabelOffset;
                 Vector3 toCamera = labelPosition - cameraTransform.position;
@@ -221,7 +218,7 @@ namespace VortexArena.App.Admin
             }
         }
 
-        // ---------------------------------------------------------------- kurulum
+        // ------------------------------------------------------------------- setup
 
         private void Spawn(int playerId)
         {
@@ -275,12 +272,12 @@ namespace VortexArena.App.Admin
             }
         }
 
-        // ---------------------------------------------------------------- görünüm
+        // ---------------------------------------------------------------- visuals
 
         /// <summary>
-        /// Ad etiketi rengi: <b>daima takım rengi</b> (ölüde karartılmış). Seçim vurgusu HALKANIN
-        /// işidir — halka zaten büyüyor ve sprite değiştiriyor; ismi de vurguya boyamak, operatörün
-        /// bir bakışta "bu hangi takım" sorusunu cevaplamasını her seferinde bir oyuncuda bozardı.
+        /// Label color: <b>always the team color</b> (dimmed when dead). ⚠️ The selection highlight
+        /// is the RING's job — recoloring the name would break the at-a-glance "which team" answer
+        /// for exactly one player every time.
         /// </summary>
         private static Color ResolveLabelColor(AdminPlayerView view, bool alive)
         {
@@ -300,10 +297,10 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Ad etiketi. İhlal türü etiketin SONUNA yazıyla eklenir: renk ve frekans iki durumu
-        /// birbirinden ayırır ama ezber ister — "DUVAR" / "ALAN DIŞI" ezber gerektirmez.
-        /// <para>Etiketin görünürlüğü çağıranın <c>labelsVisible</c> kapısına tabidir; ad
-        /// etiketleri kapalıyken ihlali halkanın rengi taşır.</para>
+        /// The name label, with the violation kind appended as text: color and frequency separate
+        /// the states but require memorization, "DUVAR" / "ALAN DIŞI" do not.
+        /// <para>Subject to the caller's <c>labelsVisible</c> gate; with labels off, the ring color
+        /// carries the violation.</para>
         /// </summary>
         private static string BuildLabel(int playerId, AdminPlayerView view, bool alive,
             AdminViolationKind violation)

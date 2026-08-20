@@ -3,8 +3,8 @@
 Kod, protokol ve doküman **yazıldı**. Sistemin anlatımı dokümanlarda:
 `Docs/ArenaNet-Protokol.md` §10.9 (kural + otorite + iki aşamalı ceza) · `Docs/Sistem-Ozeti.md` §4
 (`ObstacleViolationProbe` · `ObstacleWarningOverlay` · `DamageVignette` · `ObstacleVolumes` ·
-`ScreenFade` · `HmdOverlayBuilder`) ve §7 tuzaklar · `CLAUDE.md` (layer sözleşmesi + araç satırı +
-`IsMuzzleBlocked` kapısı).
+`ScreenFade` · `HmdOverlayBuilder`) ve §7 tuzaklar · `Docs/Gelistirici/Yapma-Listesi.md`
+(layer sözleşmesi + `IsMuzzleBlocked` kapısı).
 
 ⚠️ **Protokol v11** — tel formatı **değişmedi**, ama istemci davranışı değişti: karışık sürümde eski
 APK engelin içinden ateş edebilir ve kafası içerideyken görmeye devam eder. Yeni APK gerekir.

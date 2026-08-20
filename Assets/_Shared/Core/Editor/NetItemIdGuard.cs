@@ -6,53 +6,39 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// Net eşya kataloğu bekçisi — tüm <see cref="ItemDefinition"/> asset'lerinin
-    /// <c>netItemId</c>'lerinin atanmış ve TEKİL olduğunu doğrular (§6.6), sonra
-    /// <c>Resources/NetItemCatalog.asset</c>'i projede BULUNAN eşyalardan yeniden yazar.
-    /// <para>
-    /// <b>Ayrı bir menü öğesi YOKTUR:</b> <c>Tools &gt; VortexArena &gt; Build &gt; Configure All Build
-    /// Elements</c> her eşitlemede (<c>BuildElementsConfigurator.SyncAll</c>) bunu koşar ve
-    /// "Hazırlık" bölümü durumunu gösterir. Eşya eklemek/kimlik değiştirmek = o pencerede
-    /// senkronize etmek; unutulacak ikinci bir düğme yok.
-    /// </para>
-    /// <para>
-    /// <b>Katalog neden silah tablosundan değil projeden türetiliyor:</b> <c>WeaponKitBuilder</c>
-    /// yalnız tüfekleri bilir. Bomba (<c>ThrowableDefinition</c>) ya da başka bir eşya tipi
-    /// eklendiğinde katalog o tabloya bağlı olsaydı sessizce eksik kalırdı — uzak oyuncularda
-    /// bomba hiç çizilmezdi. <c>FindAssets("t:ItemDefinition")</c> tüm alt tipleri kapsar, yani
-    /// yeni bir eşya TÜRÜ eklemek bu araca dokunmayı gerektirmez.
-    /// </para>
-    /// <para>
-    /// ⚠️ Doğrulama DÜŞERSE katalog yazılmaz: çakışan kimliklerden kurulmuş bir katalog
-    /// "çalışıyor gibi" görünüp yanlış eşya çizerdi — açık başarısızlık yeğdir.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Asıl korumayı taban sınıf değil bu bekçi sağlar.</b> Çakışan ya da atanmamış bir kimlik
-    /// derlemede patlamaz, bir istisna atmaz, Inspector'da kırmızı görünmez — sahada "oyuncunun
-    /// elinde yanlış eşya çizildi" (ya da hiç çizilmedi) olarak, hem de yalnız uzak istemcilerde
-    /// görünür: atıcının kendi ekranında her şey doğrudur. Bu yüzden her eşitlemede koşar ve
-    /// sonucu rapora yazar.
-    /// </para>
-    /// <para>
-    /// Kimlik telde giden bir bayt olduğu için katalog dizi indeksi kullanılmaz (dizi sırası
-    /// değişince tüm eşyalar kayardı) — dolayısıyla tekilliği kimse otomatik garanti etmiyor.
-    /// </para>
-    /// </summary>
+    /// <summary>Verifies that every <see cref="ItemDefinition"/> has an assigned and UNIQUE
+    /// <c>netItemId</c> (§6.6), then rewrites <c>Resources/NetItemCatalog.asset</c> from the items
+    /// FOUND in the project.</summary>
+    /// <remarks>
+    /// No separate menu item: <c>Configure All Build Elements</c> runs this on every sync
+    /// (<c>BuildElementsConfigurator.SyncAll</c>) and the "Hazırlık" section shows its state.
+    /// <para>The catalog is derived from the project, not from the weapon table:
+    /// <c>WeaponKitBuilder</c> only knows rifles, so a throwable (or any other item type) would be
+    /// missing silently and never drawn on remote players. <c>FindAssets("t:ItemDefinition")</c>
+    /// covers all subtypes, so a new item TYPE needs no change here.</para>
+    /// <para>⚠️ On failed validation the catalog is not written: a catalog built from conflicting
+    /// ids would look like it works while drawing the wrong item — loud failure is better.</para>
+    /// <para>⚠️ This guard, not the base class, is the real protection: a conflicting or unassigned
+    /// id breaks no compile, throws nothing, shows no red Inspector — it surfaces in the field as
+    /// "wrong (or no) item in the player's hand", and only on remote clients: the owner's own
+    /// screen is correct.</para>
+    /// <para>The id is a byte on the wire, so the catalog array index is deliberately not used
+    /// (reordering would shift every item) — which also means nothing guarantees uniqueness
+    /// automatically.</para>
+    /// </remarks>
     internal static class NetItemIdGuard
     {
         private const string CatalogPath = "Assets/_Shared/Data/Resources/NetItemCatalog.asset";
 
-        /// <summary>
-        /// Kataloğu doğrulayıp yeniden yazar; tek satırlık özet döner (eşitleme raporuna girer).
-        /// <para>⚠️ Dialog AÇILMAZ: pencereden tetiklenen bir dialog CLI/otomasyon çağrısında ana
-        /// thread'i kilitler (aynı gerekçe <c>ServerConfigExporter.Export(false)</c> için de
-        /// geçerlidir); ayrıntı konsola yazılır.</para>
-        /// </summary>
+        /// <summary>Validates and rewrites the catalog; returns a one line summary for the sync
+        /// report.</summary>
+        /// <remarks>⚠️ Opens no dialog: a dialog would lock the main thread on CLI/automation calls
+        /// (same reason as <c>ServerConfigExporter.Export(false)</c>); details go to the
+        /// console.</remarks>
         internal static string Rebuild()
         {
-            // Alt sınıflar (WeaponDefinition, ileride ThrowableDefinition) da t:ItemDefinition
-            // süzgecine düşer — filtreyi türetilmiş tiplerle çoğaltmaya gerek yok.
+            // Subclasses (WeaponDefinition, later ThrowableDefinition) also match
+            // t:ItemDefinition — no need to repeat the filter per derived type.
             string[] guids = AssetDatabase.FindAssets("t:ItemDefinition");
 
             var byId = new Dictionary<byte, string>();
@@ -138,16 +124,12 @@ namespace VortexArena.Core.Editor
                    "netItemId (ayrıntı konsolda).";
         }
 
-        /// <summary>
-        /// Katalog projedeki eşyalarla uyumlu mu — <b>HİÇBİR ŞEY YAZMAZ</b> (build hazırlık
-        /// panelinin okuduğu denetim). Ölçüt üçtür: her <see cref="ItemDefinition"/>'ın kimliği
-        /// atanmış, kimlikler tekil ve katalogdaki kayıt sayısı taranan eşya sayısıyla eşit.
-        /// <para>
-        /// ⚠️ Sayı karşılaştırması kaba ama <b>sessiz kalmayan</b> ölçüttür: yeni bir eşya eklenip
-        /// araç çalıştırılmadığında katalog eksik kalır ve belirtisi yalnız "uzak oyuncuda eşya
-        /// çizilmiyor" olur.
-        /// </para>
-        /// </summary>
+        /// <summary>Whether the catalog matches the project's items — <b>WRITES NOTHING</b> (read by
+        /// the build readiness panel). Three criteria: every id assigned, ids unique, catalog entry
+        /// count equal to the scanned item count.</summary>
+        /// <remarks>⚠️ The count comparison is coarse but never stays silent: adding an item without
+        /// running the tool leaves the catalog short, and the only symptom is "item not drawn on
+        /// remote players".</remarks>
         internal static bool IsCatalogUpToDate(out string detail)
         {
             string[] guids = AssetDatabase.FindAssets("t:ItemDefinition");
@@ -222,18 +204,16 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>
-        /// Doğrulanmış kimlik→yol eşlemesini <c>NetItemCatalog.asset</c>'e yazar. Sıralama
-        /// <c>netItemId</c>'ye göredir: katalog diff'i kimlik ekleyip çıkarmaktan başka bir sebeple
-        /// oynamasın (asset dosyası commit'lidir).
-        /// </summary>
+        /// <summary>Writes the validated id→path map into <c>NetItemCatalog.asset</c>.</summary>
+        /// <remarks>Sorted by <c>netItemId</c> so the committed asset only diffs when ids are added
+        /// or removed.</remarks>
         private static string RebuildCatalog(Dictionary<byte, string> byId)
         {
             var catalog = AssetDatabase.LoadAssetAtPath<NetItemCatalog>(CatalogPath);
             if (catalog == null)
             {
-                // Yolda başka tipte bir asset varsa üstüne YAZMA — CreateAsset GUID'i öldürür ve
-                // ona referans veren her şey kopar (WeaponKitBuilder'daki aynı emniyet).
+                // Never overwrite an asset of another type at this path: CreateAsset kills its GUID
+                // and every reference to it breaks (same safeguard as in WeaponKitBuilder).
                 if (!string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(CatalogPath)))
                 {
                     return $"⚠️ '{CatalogPath}' yolunda NetItemCatalog olmayan bir asset var — dokunulmadı.";

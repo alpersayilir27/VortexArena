@@ -7,13 +7,13 @@ using UnityEngine;
 
 namespace VortexArena.App.Admin
 {
-    /// <summary>Bir Windows ses çıkış ucunun kimliği ve operatöre gösterilen adı.</summary>
+    /// <summary>Id and operator-facing name of a Windows audio output endpoint.</summary>
     public readonly struct AudioOutputDevice
     {
-        /// <summary>MMDevice uç kimliği (<c>"{0.0.0.00000000}.{guid}"</c> biçimi).</summary>
+        /// <summary>MMDevice endpoint id (<c>"{0.0.0.00000000}.{guid}"</c> form).</summary>
         public readonly string Id;
 
-        /// <summary>Panelde görünen ad (<c>PKEY_Device_FriendlyName</c>).</summary>
+        /// <summary>Name shown in the panel (<c>PKEY_Device_FriendlyName</c>).</summary>
         public readonly string Name;
 
         public AudioOutputDevice(string id, string name)
@@ -22,27 +22,22 @@ namespace VortexArena.App.Admin
             Name = name ?? string.Empty;
         }
 
-        /// <summary>Kimliği dolu mu — boş kayıt "cihaz yok" demektir.</summary>
+        /// <summary>Is the id set — an empty record means "no device".</summary>
         public bool IsValid => !string.IsNullOrEmpty(Id);
     }
 
     /// <summary>
-    /// Windows'un ses <b>çıkış</b> (render) uçlarını listeler ve varsayılan cihazı değiştirir.
-    /// Admin gözlemcisinin tercih panelinden kullanılır: operatör duyuruların hangi hoparlörden
-    /// çalacağını Windows ayarlarına gitmeden seçebilsin.
-    /// <para>
-    /// ⚠️ Sınıf <b>tüm platformlarda derlenir</b> ama iş yalnız Windows'ta yapılır (bu asmdef
-    /// Quest oyuncusuna da giriyor): Windows dışında <see cref="Supported"/> false'tur, liste boş
-    /// döner ve <see cref="SetDefault"/> false verir. Çağıran taraf platform kontrolü yazmasın.
-    /// </para>
-    /// <para>
-    /// ⚠️ Hiçbir COM hatası dışarı sızmaz — ses cihazı seçimi bir konfor özelliğidir, gözlemciyi
-    /// çökertmemeli. Hata bir uyarı satırı olarak konsola düşer ve güvenli değer döner.
-    /// </para>
+    /// Lists Windows audio <b>output</b> (render) endpoints and switches the default device, from
+    /// the admin spectator's preferences panel.
+    /// <para>⚠️ <b>Compiles on every platform</b> but only works on Windows (this asmdef also ships
+    /// to the Quest player): elsewhere <see cref="Supported"/> is false, the list comes back empty
+    /// and <see cref="SetDefault"/> returns false — callers need no platform check.</para>
+    /// <para>⚠️ No COM error escapes: device selection is a comfort feature and must not crash the
+    /// spectator. Failures log a warning and return a safe value.</para>
     /// </summary>
     public static class WindowsAudioDevices
     {
-        /// <summary>Bu platformda cihaz listeleme/seçme mümkün mü (yalnız Windows).</summary>
+        /// <summary>Can devices be listed/selected on this platform (Windows only).</summary>
         public static bool Supported
         {
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
@@ -54,15 +49,15 @@ namespace VortexArena.App.Admin
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
 
-        // ---- MMDevice API sabitleri -------------------------------------------------------
+        // ---- MMDevice API constants -------------------------------------------------------
 
-        private const int EDataFlowRender = 0;   // eRender  — çıkış uçları
+        private const int EDataFlowRender = 0;   // eRender — output endpoints
         private const int ERoleConsole = 0;      // eConsole
         private const int ERoleMultimedia = 1;   // eMultimedia
         private const int DeviceStateActive = 0x1;
         private const int StgmRead = 0;
 
-        /// <summary>VT_LPWSTR — cihaz adının geldiği PROPVARIANT türü.</summary>
+        /// <summary>VT_LPWSTR — PROPVARIANT type carrying the device name.</summary>
         private const ushort VtLpwstr = 31;
 
         private static readonly Guid ClsidMMDeviceEnumerator =
@@ -71,7 +66,7 @@ namespace VortexArena.App.Admin
         private static readonly Guid ClsidPolicyConfigClient =
             new Guid("870af99c-171d-4f9e-af0d-e63df40c2bc9");
 
-        /// <summary>PKEY_Device_FriendlyName — uç adının okunacağı özellik anahtarı.</summary>
+        /// <summary>PKEY_Device_FriendlyName — property key holding the endpoint name.</summary>
         private static readonly PropertyKey PkeyDeviceFriendlyName = new PropertyKey(
             new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), 14);
 
@@ -92,18 +87,15 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// PROPVARIANT. Veri birleşimi 8. bayttan başlar (öncesi <c>vt</c> + üç ayrılmış
-        /// <c>ushort</c>) ve string değer bir <c>LPWSTR</c> işaretçisidir.
-        /// <para>
-        /// ⚠️ <b>Yapının BOYUTU native karşılığıyla birebir olmak zorundadır</b> — bu yüzden
-        /// kullanılmayan <see cref="unionTail"/> alanı da durur ve SİLİNMEZ. <c>GetValue</c>
-        /// çıktıyı bizim ayırdığımız belleğe yazar: yapı küçük kalırsa (birleşimin yalnız ilk
-        /// işaretçisi bildirilirse) çağrı komşu belleği ezer ve <b>editörü/oyunu anında
-        /// çökertir</b>. Birleşimin en büyük üyesi bir sayaç + işaretçi çiftidir, yani x64'te
-        /// toplam 24, x86'da 16 bayt; ardışık yerleşim ikisini de kendiliğinden tutturur.
-        /// </para>
-        /// <para>Okuduktan sonra <see cref="PropVariantClear"/> çağrılmazsa işaretçinin belleği
-        /// sızar.</para>
+        /// PROPVARIANT. The union starts at byte 8 (after <c>vt</c> + three reserved
+        /// <c>ushort</c>s); a string value is an <c>LPWSTR</c> pointer.
+        /// <para>⚠️ <b>The struct SIZE must match the native one exactly</b>, which is why the
+        /// unused <see cref="unionTail"/> field stays and is never deleted: <c>GetValue</c> writes
+        /// into memory we allocate, so a too-small struct makes the call overwrite neighbouring
+        /// memory and <b>crash the editor/game instantly</b>. The largest union member is a
+        /// count + pointer pair — 24 bytes on x64, 16 on x86; sequential layout fits both.</para>
+        /// <para>⚠️ Without <see cref="PropVariantClear"/> after reading, the pointer's memory
+        /// leaks.</para>
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         private struct PropVariant
@@ -113,10 +105,10 @@ namespace VortexArena.App.Admin
             public ushort wReserved2;
             public ushort wReserved3;
 
-            /// <summary>Birleşimin ilk sözcüğü — VT_LPWSTR'de metnin işaretçisi.</summary>
+            /// <summary>First word of the union — the string pointer under VT_LPWSTR.</summary>
             public IntPtr pointerValue;
 
-            /// <summary>Birleşimin kalanı. Okunmaz; yalnız yapının boyutunu doğru tutar.</summary>
+            /// <summary>Rest of the union. Never read; only keeps the struct size correct.</summary>
             public IntPtr unionTail;
         }
 
@@ -194,13 +186,11 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Windows'un belgelenmemiş varsayılan-cihaz arayüzü (ses ayarlarındaki "Varsayılan yap"
-        /// düğmesinin arkası).
-        /// <para>
-        /// ⚠️ <b>Aşağıdaki on yer tutucu metot SİLİNMEZ.</b> COM çağrısı ada göre değil vtable
-        /// sırasına göre yapılır: <c>SetDefaultEndpoint</c> bu arayüzün 11. metodudur (indeks 10).
-        /// Yer tutucular kaldırılırsa çağrı bambaşka bir metoda gider ve süreç çöker.
-        /// </para>
+        /// Windows' undocumented default-device interface (what the "Set as default" button in the
+        /// sound settings uses).
+        /// <para>⚠️ <b>The ten placeholder methods below are never deleted.</b> COM dispatches by
+        /// vtable order, not by name: <c>SetDefaultEndpoint</c> is method 11 (index 10). Remove the
+        /// placeholders and the call lands on a different method and crashes the process.</para>
         /// </summary>
         [ComImport]
         [Guid("f8679f50-850a-41cf-9c72-430f290290c8")]
@@ -225,12 +215,9 @@ namespace VortexArena.App.Admin
 #endif
 
         /// <summary>
-        /// Etkin ses çıkış uçlarını <paramref name="into"/> listesine yazar; liste önce temizlenir.
-        /// <para>
-        /// ⚠️ Her çağrıda yeni bir numaralandırıcı kurulur, <b>statik önbellek tutulmaz</b>:
-        /// cihazlar takılıp çıkarılıyor ve bayat bir liste operatöre var olmayan bir hoparlörü
-        /// seçtirir.
-        /// </para>
+        /// Writes the active output endpoints into <paramref name="into"/> (cleared first).
+        /// <para>⚠️ A fresh enumerator per call, <b>no static cache</b>: devices come and go, and a
+        /// stale list would let the operator pick a speaker that is not there.</para>
         /// </summary>
         public static void Collect(List<AudioOutputDevice> into)
         {
@@ -280,7 +267,7 @@ namespace VortexArena.App.Admin
                         }
 
                         string name = ReadFriendlyName(device);
-                        // Adı çözülemeyen uç listeden düşmez: kimliğiyle de olsa seçilebilmeli.
+                        // An endpoint with no resolvable name stays listed under its id.
                         into.Add(new AudioOutputDevice(id, string.IsNullOrEmpty(name) ? id : name));
                     }
                     finally
@@ -302,10 +289,8 @@ namespace VortexArena.App.Admin
 #endif
         }
 
-        /// <summary>
-        /// Şu anki varsayılan çıkış ucunun kimliği; hiç ses cihazı yoksa (<c>E_NOTFOUND</c>) ya da
-        /// hata olursa <c>""</c>.
-        /// </summary>
+        /// <summary>Id of the current default output endpoint; <c>""</c> when there is no device
+        /// (<c>E_NOTFOUND</c>) or on error.</summary>
         public static string GetDefaultId()
         {
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
@@ -319,7 +304,7 @@ namespace VortexArena.App.Admin
                     return string.Empty;
                 }
 
-                // Cihaz hiç yoksa E_NOTFOUND döner — bu bir arıza değil, sessizce boş kimliktir.
+                // No device at all returns E_NOTFOUND — not a fault, just an empty id.
                 if (enumerator.GetDefaultAudioEndpoint(EDataFlowRender, ERoleConsole, out device) != 0
                     || device == null)
                 {
@@ -344,13 +329,10 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Verilen ucu Windows'un varsayılan çıkış cihazı yapar; başarıysa true.
-        /// <para>
-        /// ⚠️ Yalnız <c>eConsole</c> ve <c>eMultimedia</c> rolleri yazılır; <c>eCommunications</c>
-        /// <b>bilerek atlanır</b>. Windows'ta "Varsayılan Cihaz" ile "Varsayılan İletişim Cihazı"
-        /// ayrı ayarlardır — ikincisini de ezmek operatörün mikrofon/VoIP kurulumunu sessizce
-        /// başka bir cihaza taşırdı.
-        /// </para>
+        /// Makes the given endpoint the Windows default output; true on success.
+        /// <para>⚠️ Only the <c>eConsole</c> and <c>eMultimedia</c> roles are written;
+        /// <c>eCommunications</c> is <b>deliberately skipped</b> — it is a separate Windows setting
+        /// and overwriting it would silently move the operator's mic/VoIP setup to another device.</para>
         /// </summary>
         public static bool SetDefault(string deviceId)
         {
@@ -393,10 +375,8 @@ namespace VortexArena.App.Admin
 #endif
         }
 
-        /// <summary>
-        /// Kimliği verilen ucun görünen adı; cihaz yoksa/kapalıysa <c>""</c>. Kayıtlı bir seçimin
-        /// hâlâ geçerli olup olmadığını sınamanın en ucuz yolu budur.
-        /// </summary>
+        /// <summary>Friendly name of the endpoint with the given id; <c>""</c> when it is missing
+        /// or disabled — the cheapest check whether a stored choice is still valid.</summary>
         public static string NameOf(string deviceId)
         {
             if (string.IsNullOrEmpty(deviceId))
@@ -450,7 +430,7 @@ namespace VortexArena.App.Admin
             return Activator.CreateInstance(type) as IMMDeviceEnumerator;
         }
 
-        /// <summary>Uç kimliğini okur; COM'un ayırdığı tamponu çağıran serbest bırakmak zorundadır.</summary>
+        /// <summary>Reads the endpoint id; ⚠️ the caller must free the buffer COM allocated.</summary>
         private static string ReadId(IMMDevice device)
         {
             IntPtr ptr = IntPtr.Zero;
@@ -490,8 +470,8 @@ namespace VortexArena.App.Admin
 
                 try
                 {
-                    // ⚠️ Tür ÖNCE sınanır: birleşimin ilk sözcüğü VT_LPWSTR dışında bir türde
-                    // işaretçi değil ham sayı taşır ve onu metin diye çözmek süreci çökertir.
+                    // ⚠️ Check the type FIRST: outside VT_LPWSTR the union's first word is a raw
+                    // number, not a pointer, and decoding it as text crashes the process.
                     return value.vt != VtLpwstr || value.pointerValue == IntPtr.Zero
                         ? string.Empty
                         : Marshal.PtrToStringUni(value.pointerValue) ?? string.Empty;
@@ -520,7 +500,7 @@ namespace VortexArena.App.Admin
             }
             catch (Exception)
             {
-                // Bırakma hatası çağıranı ilgilendirmez; nesne zaten kullanılmayacak.
+                // A release failure is none of the caller's business; the object is done with.
             }
         }
 

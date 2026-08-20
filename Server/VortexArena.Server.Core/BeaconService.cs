@@ -7,12 +7,12 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>Keşif beacon'ını BEACON_INTERVAL'de bir, kullanılabilir her IPv4 arayüzünden hem
-/// 255.255.255.255'e hem arayüzün subnet-broadcast adresine yollar (§4; cosmos UdpBeaconService deseni).
-/// Beacon yalnız otomatik doldurma kolaylığıdır — elle girilen IP her zaman önceliklidir.</summary>
+/// <summary>Sends the discovery beacon every BEACON_INTERVAL from every usable IPv4 interface, to both
+/// 255.255.255.255 and the interface's subnet broadcast (§4; cosmos UdpBeaconService pattern).</summary>
+/// <remarks>Only an auto-fill convenience — a manually entered IP always wins.</remarks>
 public sealed class BeaconService
 {
-    private readonly string _serverId = Guid.NewGuid().ToString(); // uygulama ömrü boyunca sabit
+    private readonly string _serverId = Guid.NewGuid().ToString(); // fixed for the application's lifetime
     private readonly int _beaconPort;
     private readonly int _controlPort;
     private readonly int _statePort;
@@ -47,7 +47,7 @@ public sealed class BeaconService
     {
         while (!token.IsCancellationRequested)
         {
-            // Her turda yeniden numaralandırılır: Wi-Fi/adaptör değişiklikleri kendiliğinden yakalanır.
+            // Re-enumerated on every round: Wi-Fi/adapter changes are picked up automatically.
             foreach (var (local, subnetBroadcast) in GetIPv4Interfaces())
             {
                 try
@@ -62,14 +62,14 @@ public sealed class BeaconService
                         serverId = _serverId
                     };
                     var bytes = Encoding.UTF8.GetBytes(JsonUtil.Serialize(beacon));
-                    // Arayüz adresine bağlanır ki global broadcast bu arayüzden çıksın.
+                    // Bound to the interface address so the global broadcast leaves through it.
                     using var udp = new UdpClient(new IPEndPoint(local, 0)) { EnableBroadcast = true };
                     await udp.SendAsync(bytes, bytes.Length, new IPEndPoint(IPAddress.Broadcast, _beaconPort));
                     await udp.SendAsync(bytes, bytes.Length, new IPEndPoint(subnetBroadcast, _beaconPort));
                 }
                 catch (Exception ex)
                 {
-                    // Tek arayüzün hatası döngüyü öldürmemeli.
+                    // A failure on a single interface must not kill the loop.
                     Console.WriteLine($"[BeaconService] {local} üzerinden gönderim başarısız: {ex.Message}");
                 }
             }
@@ -114,7 +114,7 @@ public sealed class BeaconService
             }
             catch
             {
-                // Arayüz numaralandırma sırasında kaybolduysa atla.
+                // Skip if the interface disappeared while enumerating.
             }
         }
         return result;

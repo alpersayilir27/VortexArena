@@ -7,31 +7,26 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// HUD'ın alt ortasındaki <b>maç kontrol şeridi</b>: üç ikon düğme (▶ BAŞLAT ·
-    /// ⏸/▶ DURAKLAT-DEVAM · ■ İPTAL) ve son komutun durum satırı.
+    /// The <b>match control bar</b> at the bottom center of the HUD: three icon buttons
+    /// (▶ START · ⏸/▶ PAUSE-RESUME · ■ ABORT) plus the last command's status line.
     ///
-    /// <para><b>Görünüm prefabtan gelir</b> (<c>AdminHud.prefab</c> → <c>MatchBar</c>); bu sınıf
-    /// yalnız davranıştır: düğmeleri bağlar, faz değiştikçe boyar ve pasifleştirir.</para>
+    /// <para><b>Visuals come from the prefab</b> (<c>AdminHud.prefab</c> → <c>MatchBar</c>); this
+    /// class only wires, colors and disables the buttons by phase.</para>
     ///
-    /// <para><b>Neden ayrı bir bileşen:</b> düğmeler HUD'ın <b>kalıcı</b> katmanında durur (panel
-    /// kapalıyken de basılabilmeleri gerekir), ama <b>seçim durumu tercihler panelinde yaşar</b> —
-    /// mod/harita/süre/limit/geri sayım ve "lobi açık mı" oradadır. Tek doğruluk kaynağı odur; bu
-    /// şerit başlatmayı <see cref="AdminPreferencesPanel.StartSelectedMatch"/> ile ona sorar,
-    /// kendi seçim alanını TUTMAZ (ikinci bir kaynak sessizce sapardı).</para>
+    /// <para><b>Why separate:</b> the buttons live in the HUD's <b>persistent</b> layer (clickable
+    /// while the panel is closed) but the selection state lives in the preferences panel. ⚠️ This
+    /// bar starts via <see cref="AdminPreferencesPanel.StartSelectedMatch"/> and keeps NO selection
+    /// field of its own — a second source would silently drift.</para>
     ///
-    /// <para>⚠️ Düğmelerin pasifleşmesi yalnız bir <b>arayüz kapısıdır</b>: operatörü boşuna
-    /// tıklatmamak içindir. Otorite sunucudadır ve aynı kurallar orada da uygulanır — bu yüzden
-    /// veri henüz yokken (<see cref="AdminRoster"/> null) düğmeler AÇIK bırakılır, son sözü sunucu
-    /// söyler.</para>
+    /// <para>⚠️ Disabling is only a UI gate against pointless clicks; authority is on the server, so
+    /// while data is missing (<see cref="AdminRoster"/> null) the buttons stay ENABLED.</para>
     ///
-    /// <para>Tazeleme olay güdümlüdür; ek olarak <see cref="RefreshInterval"/> ile bir emniyet tiki
-    /// koşar: panelin lobi bayrağı sahne komutundan sonra güncellendiği için tek bir olay karesi
-    /// yanlış boyanmış bir düğme bırakabilir.</para>
+    /// <para>Refresh is event driven plus a <see cref="RefreshInterval"/> safety tick: the panel's
+    /// lobby flag updates after the scene command, so one event frame can mis-color a button.</para>
     /// </summary>
     public class AdminMatchControls : MonoBehaviour
     {
-        /// <summary>Faz/seçim değişimini kaçırmamak için emniyet tazeleme aralığı (sn) —
-        /// <see cref="AdminHud"/> ile aynı ritim.</summary>
+        /// <summary>Safety refresh interval (s) — same rhythm as <see cref="AdminHud"/>.</summary>
         private const float RefreshInterval = 0.25f;
 
         [Header("Seçim kaynağı")]
@@ -64,8 +59,8 @@ namespace VortexArena.App.Admin
         {
             if (preferences == null)
             {
-                // ⚠️ Unity'nin sahte-null'u yüzünden `??=` KULLANILMAZ: yıkılmış bir bileşen
-                // referansı `??=` için "dolu" görünür ve arama hiç yapılmazdı.
+                // ⚠️ No `??=`: Unity's fake-null makes a destroyed reference look non-null, so the
+                // lookup would never run.
                 preferences = transform.root.GetComponentInChildren<AdminPreferencesPanel>(true);
             }
 
@@ -73,10 +68,10 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Prefabtaki düğmelere davranışı bağlar. <b>Prefabta kalıcı (persistent) onClick kaydı
-        /// YOKTUR</b> (<see cref="AdminHud"/>'daki bağlama ile aynı gerekçe): komutlar koşulludur
-        /// (lobi açıkken BAŞLAT reddeder, duraklat/devam faza göre farklı komut gönderir) ve
-        /// inspector'dan bağlanan bir kayıt o koşulları atlardı.
+        /// Wires behaviour onto the prefab's buttons. ⚠️ <b>No persistent onClick in the prefab</b>
+        /// (as in <see cref="AdminHud"/>): the commands are conditional (START refuses while the
+        /// lobby is open, pause/resume differs by phase) and an inspector-wired call would skip
+        /// those conditions.
         /// </summary>
         private void WireButtons()
         {
@@ -164,10 +159,10 @@ namespace VortexArena.App.Admin
             _dirty = true;
         }
 
-        // ------------------------------------------------------------------ eylemler
+        // ------------------------------------------------------------------- actions
 
-        /// <summary>Maçı panelde seçili ayarlarla başlatır. Panel yoksa komut GÖNDERİLMEZ: mod ve
-        /// harita orada seçiliyor, buradan uydurulacak bir varsayılan yok.</summary>
+        /// <summary>Starts the match with the panel's settings. Without the panel nothing is sent —
+        /// mode and map live there and there is no default to invent.</summary>
         private void StartMatch()
         {
             if (preferences == null)
@@ -180,10 +175,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Faz <c>playing</c> ise duraklatır, operatörün duraklattığı maçta ise sürdürür.
-        /// <para>Karar YEREL bir bayrağa değil sunucudan gelen faza bakar: çoklu admin var
-        /// (CLAUDE.md) ve duraklatmayı başkası da yapmış olabilir. Yerel bayrak tutulsaydı iki
-        /// ekran birbirine ters düşerdi.</para>
+        /// Pauses while <c>playing</c>, resumes an operator-paused match.
+        /// <para>⚠️ Decided from the server's phase, not a local flag: with multiple admins somebody
+        /// else may have paused, and a local flag would make the two screens contradict.</para>
         /// </summary>
         private static void TogglePause()
         {
@@ -197,7 +191,7 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Maç koşuyor mu (§10.1: tek cevap <c>phase == playing</c>).</summary>
+        /// <summary>Is the match running (§10.1: only <c>phase == playing</c>).</summary>
         private static bool IsMatchLive
         {
             get
@@ -207,8 +201,8 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Maç OPERATÖR tarafından duraklatılmış mı. Modun/geri sayımın duraklaması
-        /// buraya girmez — sunucu onları <c>resume_match</c> ile kaldırtmaz (§5.2).</summary>
+        /// <summary>Was the match paused by the OPERATOR. ⚠️ Mode/countdown pauses do not count —
+        /// the server does not lift those with <c>resume_match</c> (§5.2).</summary>
         private static bool IsOperatorPaused
         {
             get
@@ -220,16 +214,15 @@ namespace VortexArena.App.Admin
             }
         }
 
-        // ------------------------------------------------------------------ tazeleme
+        // ------------------------------------------------------------------ refresh
 
-        /// <summary>Üç düğmeyi ve durum satırını yürürlükteki faza göre boyar. ⚠️ Tüm alanlar
-        /// null-güvenli okunur: prefabta bağlanmayan öge sessizce çizilmez, şeridin geri kalanı
-        /// çalışmaya devam eder.</summary>
+        /// <summary>Colors the three buttons and the status line by phase. ⚠️ All fields are read
+        /// null-safely so an unwired element does not take the rest of the bar down.</summary>
         private void Refresh()
         {
             AdminRoster roster = AdminRoster.Instance;
 
-            // BAŞLAT: panel yoksa kapı açık bırakılır (sunucu zaten reddeder).
+            // START: without the panel the gate is left open (the server rejects it anyway).
             bool canStart = preferences == null || preferences.CanStartMatch;
             if (startButton != null)
             {
@@ -241,7 +234,7 @@ namespace VortexArena.App.Admin
                 startIcon.color = canStart ? UiKit.Good : UiKit.Faint;
             }
 
-            // DURAKLAT/DEVAM: tek düğme, ikonu ve komutu fazdan gelir.
+            // PAUSE/RESUME: a single button, its icon and its command come from the phase.
             bool paused = IsOperatorPaused;
             bool live = IsMatchLive;
             if (pauseButton != null)
@@ -260,8 +253,8 @@ namespace VortexArena.App.Admin
                 pauseIcon.color = paused ? UiKit.Good : live ? UiKit.Title : UiKit.Faint;
             }
 
-            // İPTAL her fazdan lobiye döndürür (<c>abort_match</c>, §10.1) — yani maç kuruluyken
-            // ya da bitmişken anlamlıdır. Zaten lobide bekleniyorsa iptal edilecek bir şey yok.
+            // ABORT returns to the lobby from any phase (abort_match, §10.1); nothing to abort when
+            // already waiting in the lobby.
             bool inLobby = roster != null &&
                            roster.Phase == ArenaProtocol.PHASE_PAUSED &&
                            (string.IsNullOrEmpty(roster.PhaseReason) ||

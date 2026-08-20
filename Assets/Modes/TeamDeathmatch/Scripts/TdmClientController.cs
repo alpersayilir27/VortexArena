@@ -3,16 +3,11 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Modes.Tdm
 {
-    /// <summary>
-    /// TDM HUD prefabının kökündeki SUNUM bileşeni. Faz/süre, geri sayım, can, ölüm ekranı,
-    /// kill-feed ve kendi sayaçların ortak tabandan (<see cref="ModeHudBase"/>) gelir; bu sınıf
-    /// yalnız TDM'e ait olanı ekler: <b>takım skoru satırı ve takım kazananı</b>.
-    /// <para>
-    /// Prefab bağları (<c>[SerializeField]</c>) tabana taşındı ama alan ADLARI değişmedi —
-    /// Unity alanları düz adla serialize ettiği için <c>TdmHud.prefab</c>'ın referansları aynen
-    /// korunur.
-    /// </para>
-    /// </summary>
+    /// <summary>PRESENTATION component at the root of the TDM HUD prefab; adds only what is TDM's:
+    /// team score line and winning team.</summary>
+    /// <remarks>Everything else comes from <see cref="ModeHudBase"/>. The prefab bindings
+    /// (<c>[SerializeField]</c>) moved to the base but kept their NAMES — Unity serializes fields by
+    /// plain name, so <c>TdmHud.prefab</c>'s references still resolve.</remarks>
     public class TdmClientController : ModeHudBase
     {
         protected override string ScoreLine(MatchStateMsg msg)

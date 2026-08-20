@@ -1,32 +1,28 @@
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Silahın <b>nasıl</b> verildiği — <see cref="Weapon.GrantTo"/>'nun ikinci argümanı.
-    /// <para>
-    /// <b>Neden ayrı bir tip:</b> eskiden tek bir bayrak (<c>Weapon.IsGranted</c>) üç ayrı şeyi
-    /// birden anlatıyordu — "silah elde SABİT duruyor (ISDK kavraması işletilmez)", "reload
-    /// KAPALI" ve "tek el / rezerv yok". Üçü FFA'nın rastgele silahında birlikte doğruydu, ama
-    /// çerçeveden seçilen silah yalnız ilkini ister: onun reload'u açıktır, rezervi vardır ve
-    /// ikinci el ön kabzayı tutabilir. Tek bayrakla devam edilseydi bu üç kural birbirine
-    /// kilitli kalır, ikinci yol ancak <c>if (modeId == …)</c> zinciriyle yazılabilirdi.
-    /// </para>
-    /// <para>
-    /// ⚠️ Bu enum <b>serialize EDİLMEZ</b> (yalnız çalışma anı durumu; hiçbir SO/sahne alanı bunu
-    /// tutmaz), o yüzden "serialize edilen enum'a yeni değer SONA eklenir" kuralı burada bağlayıcı
-    /// değildir — sıra okunabilirlik için seçilmiştir.
-    /// </para>
+    /// HOW the weapon was granted — second argument of <see cref="Weapon.GrantTo"/>.
+    /// <para>Why a separate type: one flag (<c>Weapon.IsGranted</c>) used to mean three things at
+    /// once — "fixed in the hand (ISDK grab not run)", "reload CLOSED" and "single hand / no
+    /// reserve". A frame-selected weapon wants only the first (its reload is open, it has a reserve
+    /// and the second hand can hold the foregrip), so one flag would lock the three rules together
+    /// and force an <c>if (modeId == …)</c> chain.</para>
+    /// <para>⚠️ NOT serialized (runtime state only), so the "append at the END" rule is not binding
+    /// here; the order is for readability.</para>
     /// </summary>
     public enum WeaponGrantKind
     {
-        /// <summary>Verilmedi: silah sahnededir ya da ISDK kavramasıyla tutulur.</summary>
+        /// <summary>Not granted: the weapon is in the scene or is held via the ISDK grab.</summary>
         None,
 
-        /// <summary>FFA'nın rastgele silahı (§10.5 <c>weaponSource:"random"</c>): grip bırakılınca
-        /// YOK OLUR, tekrar basınca yenisi gelir. Reload kapalı, rezerv yok, her zaman tek elli.</summary>
+        /// <summary>FFA's random weapon (§10.5 <c>weaponSource:"random"</c>): releasing grip
+        /// DESTROYS it, pressing again yields a new one. Reload closed, no reserve, always
+        /// one-handed.</summary>
         Disposable,
 
-        /// <summary>Çerçeveden seçilen silah: grip bırakılınca yalnız GİZLENİR, aynı örnek aynı
-        /// mermiyle geri gelir. Reload açık, rezerv var, ikinci el ön kabzayı tutabilir.</summary>
+        /// <summary>Weapon selected from a frame: releasing grip only HIDES it, the same instance
+        /// returns with the same ammo. Reload open, reserve present, the second hand can hold the
+        /// foregrip.</summary>
         Persistent
     }
 }

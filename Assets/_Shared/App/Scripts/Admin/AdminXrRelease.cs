@@ -4,16 +4,13 @@ using UnityEngine.XR.Management;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Admin rolünde XR'ı bırakır. Standalone'da XR açılışta otomatik başlar (editörde Quest
-    /// Link ile player oynayabilmek için gerekli) ve başlayan OpenXR oturumu boştaki HMD'yi
-    /// kapar — admin'in gözlemci kamerası gözlüğe çizilir. Rol admin çözüldüğü anda loader
-    /// durdurulup deinitialize edilir: oturum serbest kalır, aynı PC'de koşan player süreci
-    /// (editör ya da APK öncesi Link testi) HMD'yi alabilir.
+    /// Releases XR in the admin role. On standalone XR auto-starts (needed for playing as a player
+    /// over Quest Link) and grabs the idle HMD, drawing the admin's spectator camera into the
+    /// headset. Stopping + deinitializing the loader frees the session for a player process on the
+    /// same PC.
     ///
-    /// <para><b>Çağıranlar:</b> <c>AppBoot.Start</c> (build + Boot'tan Play) ve
-    /// <c>DevSession.ApplySelection</c> (editörde açık sahneden Play). İki yol da rol
-    /// çözüldükten hemen sonra çağırır; loader yoksa (init hiç olmamış ya da zaten bırakılmış)
-    /// sessiz no-op olduğu için çift çağrı zararsızdır.</para>
+    /// <para><b>Callers:</b> <c>AppBoot.Start</c> and <c>DevSession.ApplySelection</c>, right after
+    /// the role resolves. A no-op without a loader, so a double call is harmless.</para>
     /// </summary>
     public static class AdminXrRelease
     {
@@ -21,7 +18,7 @@ namespace VortexArena.App.Admin
         {
             if (Application.platform == RuntimePlatform.Android)
             {
-                return; // Android her zaman player — XR'a dokunulmaz.
+                return; // Android is always a player — XR is left alone.
             }
 
             if (!AppSession.RoleResolved || AppSession.Role != AppSession.RoleAdmin)

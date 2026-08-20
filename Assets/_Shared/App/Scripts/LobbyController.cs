@@ -7,49 +7,47 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Kabuk <c>Lobby</c> sahnesinin denetleyicisi. <b>Tek işi bağlantıdır:</b> durum metni ve
-    /// **gizli** IP paneli (numpad ile elle adres girme).
+    /// Controller of the shell <c>Lobby</c> scene. <b>Its only job is connecting:</b> status text
+    /// and the **hidden** IP panel (manual address entry via numpad).
     ///
     /// <para>
-    /// <b>Bu sahne bir oyun alanı DEĞİL, bir bekleme odasıdır.</b> Oyuncu burada yalnız sunucuya
-    /// bağlanmayı bekler; bağlanır bağlanmaz sunucunun <b>açık sahnesine</b> geçer
-    /// (<c>SceneRouter</c>, §10.7) ve gerçek lobi orasıdır. Bu yüzden burada roster, "hazır"
-    /// düğmesi ve takım seçimi <b>YOKTUR</b>: takımı yalnız admin atar (§5.2) ve <c>set_ready</c>
-    /// bir yükleme kapısıdır, <c>SceneRouter</c> gönderir. Buraya oyun arayüzü eklenirse iki
-    /// lobi doğar ve sahada hangisinin geçerli olduğu belirsizleşir.
+    /// <b>This scene is a waiting room, NOT a play area.</b> The player only waits to connect here;
+    /// on connect they move to the server's <b>open scene</b> (<c>SceneRouter</c>, §10.7) which is
+    /// the real lobby. Hence NO roster, ready button or team picker here: teams are assigned only by
+    /// admin (§5.2) and <c>set_ready</c> is a loading gate sent by <c>SceneRouter</c>. Adding game
+    /// UI here would create two lobbies with no clear authority on site.
     /// </para>
     /// <para>
-    /// <b>Normal akış oyuncuya hiçbir şey sormaz:</b> adres öncelik zinciriyle
-    /// (komut satırı <c>--server-ip</c> &gt; PlayerPrefs &gt; beacon &gt;
-    /// StreamingAssets/arena.json) bulunur ve <b>otomatik bağlanılır</b>. IP paneli
-    /// başlangıçta KAPALIDIR. Zincirin başındaki komut satırı adresini
-    /// <see cref="AppBoot"/> yazar (editörde <c>Tools &gt; VortexArena &gt; Development &gt; Dev</c>
-    /// penceresinin seçtiği hedef de bu yoldan gelir) — açıkça verilen adres kazanır.
+    /// <b>The normal flow asks the player nothing:</b> the address is resolved by a priority chain
+    /// (command line <c>--server-ip</c> &gt; PlayerPrefs &gt; beacon &gt;
+    /// StreamingAssets/arena.json) and connected <b>automatically</b>. The IP panel starts CLOSED.
+    /// The command-line address at the head of the chain is written by <see cref="AppBoot"/> (in the
+    /// editor the <c>Tools &gt; VortexArena &gt; Development &gt; Dev</c> target arrives this way) —
+    /// an explicit address wins.
     /// </para>
     /// <para>
-    /// <b>Kurtarma yolu:</b> beacon'ı kesen/izole eden ağlarda sunucu bulunamazsa
-    /// sağ kumandada <b>joystick 1 saniye basılı tutularak</b> IP paneli açılır ve adres
-    /// elle girilir (girilen adres <c>PlayerPrefs</c>'e kalıcı yazılır, beacon'ı ezer).
-    /// Aynı jest paneli tekrar kapatır; tetiklendiğinde kumanda titrer. Kalibrasyon
-    /// jestiyle (A basılıyken B'ye çift basış) çakışmaz — ortak tuş yoktur.
+    /// <b>Recovery path:</b> on networks that block/isolate the beacon, <b>holding the right
+    /// controller's joystick for 1 second</b> opens the IP panel for manual entry (the entered
+    /// address is persisted to <c>PlayerPrefs</c> and overrides the beacon). The same gesture closes
+    /// it; the controller vibrates when it fires. No conflict with the calibration gesture (double
+    /// B while holding A) — no shared button.
     /// </para>
-    /// Tüm sahne bağları [SerializeField] ve null olabilir; buton onClick'leri public
-    /// metotlara bağlanır.
+    /// All scene links are [SerializeField] and may be null; button onClicks bind to public methods.
     /// </summary>
     public class LobbyController : MonoBehaviour
     {
         private const int MaxIpTextLength = 21; // "255.255.255.255:65535"
 
-        /// <summary>Joystick bu süre kesintisiz basılı tutulursa IP paneli aç/kapat tetiklenir.</summary>
+        /// <summary>Holding the joystick this long uninterrupted toggles the IP panel.</summary>
         private const float IpPanelHoldDuration = 1f;
 
-        /// <summary>Bu süre boyunca hiç adres bulunamazsa kurtarma ipucu gösterilir.</summary>
+        /// <summary>Recovery hint appears if no address is found within this long.</summary>
         private const float DiscoveryHintDelay = 8f;
 
         /// <summary>
-        /// IP paneli canvas düzleminden bu kadar (m) saparsa hata basılır — bkz.
-        /// <see cref="WarnIfPanelOffCanvasPlane"/>. Sapma sıfır olmalıdır; tolerans yalnız
-        /// kayan nokta yuvarlamasını yutar.
+        /// IP panel deviating this far (m) from the canvas plane logs an error — see
+        /// <see cref="WarnIfPanelOffCanvasPlane"/>. Deviation must be zero; the tolerance only
+        /// absorbs float rounding.
         /// </summary>
         private const float PanelPlaneTolerance = 0.01f;
 
@@ -65,12 +63,12 @@ namespace VortexArena.App
         [SerializeField] private Button disconnectButton;
 
         private string _ipBuffer = "";
-        private bool _manualEntry; // elle giriş (veya kayıtlı IP) beacon'ı ezer
+        private bool _manualEntry; // manual entry (or saved IP) overrides the beacon
         private bool _beaconSubscribed;
 
         private bool _ipPanelVisible;
         private float _joystickHoldTimer;
-        private bool _joystickHoldFired; // basılı tutmaya devam ederken ikinci kez tetiklenmesin
+        private bool _joystickHoldFired; // no second trigger while still held
         private float _discoveryTimer;
         private bool _autoConnectDone;
         private bool _hintShown;
@@ -80,7 +78,7 @@ namespace VortexArena.App
         {
             if (!AppSession.RoleResolved)
             {
-                // Lobby sahnesi Boot'suz oynatıldı (Editor testi) — bu sahne player kabuğudur.
+                // Lobby played without Boot (editor test) — this scene is the player shell.
                 AppSession.Role = AppSession.RolePlayer;
                 AppSession.RoleResolved = true;
             }
@@ -110,15 +108,15 @@ namespace VortexArena.App
 
         private void Start()
         {
-            // Kalıcı singleton'lar sahne objelerinden sonra önyüklenebilir — burada tekrar dene.
+            // Persistent singletons may bootstrap after scene objects — retry here.
             TrySubscribeBeacon();
 
-            SetIpPanelVisible(false); // oyuncuya adres sorulmaz; kurtarma joystick basılı tutarak açılır
+            SetIpPanelVisible(false); // players are never asked for an address; recovery is the hold gesture
 
             if (AppSession.HasServerEndpoint)
             {
-                // Komut satırından (veya dev penceresinden) açıkça verilmiş adres: zincirin
-                // en üstü. _manualEntry ile işaretlenir ki beacon bunu EZMESİN.
+                // Address given explicitly on the command line (or dev window): head of the chain.
+                // Flagged as _manualEntry so the beacon does NOT override it.
                 _ipBuffer = FormatEndpoint(AppSession.ServerIp, AppSession.ServerPort);
                 _manualEntry = true;
             }
@@ -134,7 +132,7 @@ namespace VortexArena.App
             }
 
             RefreshIpText();
-            TryAutoConnect(); // adres varsa hemen bağlan; yoksa beacon'ı bekle
+            TryAutoConnect(); // connect right away if an address exists, else wait for a beacon
             RefreshStatus();
         }
 
@@ -142,13 +140,13 @@ namespace VortexArena.App
         {
             DetectIpPanelCombo();
 
-            // `ArenaClient`/`ServerDiscovery` kalıcı tekilleri AfterSceneLoad'da doğar ve
-            // Start()'ta henüz var olmayabilir. Kayıtlı adres (PlayerPrefs) varken hiç beacon
-            // gelmezse tek deneme kaçardı — hazır olan ilk karede yakalıyoruz.
+            // `ArenaClient`/`ServerDiscovery` singletons spawn on AfterSceneLoad and may not exist
+            // in Start(). With a saved address (PlayerPrefs) and no beacon at all, the single
+            // attempt would be missed — catch it on the first frame they are ready.
             TryAutoConnect();
             TrySubscribeBeacon();
 
-            // Adres hâlâ yoksa bir süre sonra kurtarma yolunu yaz (beacon dinlemeye devam).
+            // Still no address → surface the recovery path (beacon listening continues).
             if (_autoConnectDone || _hintShown || _ipPanelVisible)
             {
                 return;
@@ -163,8 +161,8 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Sağ kumandada joystick 1 sn basılı → IP panelini aç/kapat (gizli kurtarma yolu).
-        /// Basış kesilirse sayaç sıfırlanır; tetikleme başına tek titreşim verilir.
+        /// Right controller joystick held 1 s → toggle the IP panel (hidden recovery path).
+        /// Releasing resets the timer; one vibration per trigger.
         /// </summary>
         private void DetectIpPanelCombo()
         {
@@ -177,7 +175,7 @@ namespace VortexArena.App
 
             if (_joystickHoldFired)
             {
-                return; // hâlâ basılı — bırakılmadan ikinci kez tetiklenmez
+                return; // still held — no re-trigger before release
             }
 
             _joystickHoldTimer += Time.unscaledDeltaTime;
@@ -202,7 +200,7 @@ namespace VortexArena.App
 
             if (visible)
             {
-                _hintShown = true; // panel açıkken ipucu metnini tekrar yazma
+                _hintShown = true; // don't rewrite the hint while the panel is open
                 WarnIfPanelOffCanvasPlane();
                 RefreshIpText();
                 RefreshStatus();
@@ -210,21 +208,20 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Panel canvas düzleminin ÜSTÜNDE mi diye bakar; değilse bir kez hata basar.
+        /// Checks the panel sits ON the canvas plane; logs once if not.
         /// <para>
-        /// ⚠️ <b>Neden ayrı bir denetim:</b> world-space canvas'ta düzlemden sapmış bir çocuk
-        /// <b>çizilmeye devam eder ama tıklanamaz</b> — ne ISDK ışını ne fare ulaşır. Sebebi
-        /// grafik raycast'inin canvas düzleminde kurulan bir kameradan yapılmasıdır: düzlemin
-        /// önünde/arkasında kalan öge kameranın arkasına düşer ve
-        /// <c>RectangleContainsScreenPoint</c> false döner. Konsolda tek satır olmadan bu
-        /// "buton çalışmıyor" diye görünür ve saatler yer.
+        /// ⚠️ <b>Why a dedicated check:</b> on a world-space canvas a child off the plane <b>keeps
+        /// rendering but becomes unclickable</b> — neither the ISDK ray nor the mouse reaches it.
+        /// Graphic raycasting uses a camera built on the canvas plane, so anything in front of or
+        /// behind it falls behind that camera and <c>RectangleContainsScreenPoint</c> returns false.
+        /// Without this console line it looks like "the button is broken" and costs hours.
         /// </para>
         /// <para>
-        /// Kolayca olur: canvas ölçeği 0.0012 olduğu için sahne görünümünde panelin z'sini
-        /// yanlışlıkla 1 m kaydırmak yerel uzayda ~830 birimlik bir sapmadır.
+        /// Easy to hit: with canvas scale 0.0012, nudging the panel's z by 1 m in the scene view is
+        /// a ~830 unit deviation in local space.
         /// </para>
-        /// Denetim <b>yalnız okur</b> — konumu düzeltmez: düzeltseydi sahnedeki değerle koddaki
-        /// değer iki ayrı doğruluk kaynağı olurdu.
+        /// The check <b>only reads</b> — it does not fix the position, which would make the scene
+        /// value and the code value two sources of truth.
         /// </summary>
         private void WarnIfPanelOffCanvasPlane()
         {
@@ -254,9 +251,9 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Bilinen adrese bir kez otomatik bağlanır. Tekrar çağrılması zararsızdır:
-        /// bağlantı koparsa yeniden denemeyi <c>ArenaClient</c>'ın backoff döngüsü yapar,
-        /// bu yüzden beacon her geldiğinde Connect çağırıp döngüyü baştan kurmayız.
+        /// Auto-connects once to a known address. Harmless to call repeatedly: retries after a drop
+        /// are handled by <c>ArenaClient</c>'s backoff loop, so we don't restart that loop by
+        /// calling Connect on every beacon.
         /// </summary>
         private void TryAutoConnect()
         {
@@ -265,9 +262,9 @@ namespace VortexArena.App
                 return;
             }
 
-            // Adres henüz yoksa öncelik zincirini tekrar dene: `ServerDiscovery` tekili
-            // Start()'ta null olabilir ve o durumda arena.json fallback'i kaçardı
-            // (PlayerPrefs statik okunduğu için hiç kaçmaz).
+            // No address yet → retry the priority chain: the `ServerDiscovery` singleton can be
+            // null in Start(), which would miss the arena.json fallback (PlayerPrefs is read
+            // statically and never missed).
             if (string.IsNullOrEmpty(_ipBuffer) && ServerDiscovery.Instance != null &&
                 ServerDiscovery.Instance.TryGetPreferredEndpoint(out string chainIp, out int chainPort))
             {
@@ -295,9 +292,9 @@ namespace VortexArena.App
             _beaconSubscribed = true;
         }
 
-        // ------------------------------------------------------ UI buton metotları
+        // -------------------------------------------------------- UI button methods
 
-        /// <summary>Numpad girişi: "0".."9", "." (buton parametresi olarak verilir).</summary>
+        /// <summary>Numpad input: "0".."9", "." (passed as the button parameter).</summary>
         public void AppendChar(string c)
         {
             if (string.IsNullOrEmpty(c) || c.Length != 1 || "0123456789.:".IndexOf(c[0]) < 0)
@@ -351,7 +348,7 @@ namespace VortexArena.App
                 return;
             }
 
-            _autoConnectDone = true; // elle bağlandık; beacon artık devralmasın
+            _autoConnectDone = true; // connected manually; the beacon must not take over
             ArenaClient.Instance.Connect(ip, port, AppSession.Role);
         }
 
@@ -363,7 +360,7 @@ namespace VortexArena.App
             }
         }
 
-        // -------------------------------------------------------- olay işleyiciler
+        // ---------------------------------------------------------- event handlers
 
         private void HandleConnectionStateChanged(ArenaConnectionState state)
         {
@@ -383,7 +380,7 @@ namespace VortexArena.App
 
         private void HandleBeacon(BeaconMsg beacon, string ip)
         {
-            // Elle girilmiş/kayıtlı adres varken beacon alanı EZMEZ.
+            // A manual/saved address is never overwritten by a beacon.
             if (_manualEntry && !string.IsNullOrEmpty(_ipBuffer))
             {
                 return;
@@ -392,10 +389,10 @@ namespace VortexArena.App
             int port = beacon != null && beacon.controlPort > 0 ? beacon.controlPort : ArenaProtocol.CONTROL_PORT;
             _ipBuffer = FormatEndpoint(ip, port);
             RefreshIpText();
-            TryAutoConnect(); // beacon'la bulunan sunucuya kendiliğinden bağlan
+            TryAutoConnect(); // connect by itself to the beacon-discovered server
         }
 
-        // ---------------------------------------------------------------- çizim
+        // ------------------------------------------------------------------ render
 
         private void RefreshIpText()
         {
@@ -404,12 +401,12 @@ namespace VortexArena.App
                 ipText.text = _ipBuffer;
             }
 
-            // ⚠️ "Bağlan" bağlantı DURUMUNA değil YAZILAN ADRESE bakar. Bu panel tam da istemci
-            // eski/yanlış adrese boşuna deneyip dururken açılır ve `ArenaClient` o sırada
-            // saniyelerce `Connecting`de kalır (WS zaman aşımı) — duruma bağlansaydı düğme tam
-            // gerektiği anda gri olurdu. `Connect` koşan döngüyü zaten iptal edip yenisini kurar,
-            // yani deneme ortasında basmak güvenlidir. Yan fayda: adres tamamlanır tamamlanmaz
-            // düğme yanar, eksik yazımda sönük kalır.
+            // ⚠️ The connect button follows the TYPED ADDRESS, not the connection STATE. This panel
+            // is opened exactly while the client keeps retrying a stale/wrong address, and
+            // `ArenaClient` sits in `Connecting` for seconds (WS timeout) — a state-driven button
+            // would be greyed out precisely when needed. `Connect` cancels the running loop and
+            // starts a new one, so pressing mid-attempt is safe. Side benefit: the button lights up
+            // as soon as the address is complete and stays dim while it is partial.
             if (connectButton != null)
             {
                 connectButton.interactable = ServerDiscovery.TryParseEndpoint(_ipBuffer, out _, out _);
@@ -437,7 +434,7 @@ namespace VortexArena.App
                     break;
             }
 
-            // `connectButton` burada DEĞİL `RefreshIpText`'te sürülür (gerekçe orada).
+            // `connectButton` is driven in `RefreshIpText`, NOT here (rationale there).
 
             if (disconnectButton != null)
             {
@@ -455,7 +452,7 @@ namespace VortexArena.App
 
         private static string FormatEndpoint(string ip, int port)
         {
-            // Varsayılan portta yalnız IP göster (numpad'de ':' tuşu zorunlu olmasın).
+            // Show only the IP on the default port (so ':' isn't a required numpad key).
             return port == ArenaProtocol.CONTROL_PORT ? ip : $"{ip}:{port}";
         }
     }

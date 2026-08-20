@@ -2,57 +2,49 @@ using UnityEngine;
 
 namespace VortexArena.Core.Arena
 {
-    /// <summary>
-    /// Ölçü maketindeki bir kalibrasyon noktası işaretçisi: bu obje zemin bandının <b>A</b>'sı mı
-    /// yoksa <b>B</b>'si mi. <c>DimensionMesh'i JSON'a Çevir</c> maketi bu bileşene bakarak
-    /// noktaları boyut dosyasının <c>calibration</c> alanına geri yazar.
+    /// <summary>Marks a calibration point on the dimension mesh: is this object the floor tape's
+    /// <b>A</b> or <b>B</b>. <c>DimensionMesh'i JSON'a Çevir</c> reads this component to write the
+    /// points back into the dimensions file's <c>calibration</c> field.</summary>
+    /// <remarks>
+    /// ⚠️ No coordinate is stored on the component — the point IS the transform. Storing both would
+    /// create a second source that silently drifts from the dragged position (same rationale as
+    /// <see cref="DimensionPolygon"/>).
     /// <para>
-    /// ⚠️ <b>Bileşende koordinat TUTULMAZ</b> — nokta objenin transformudur. İkisini birden
-    /// saklamak, sahnede sürüklenen konumdan sessizce sapan ikinci bir kaynak üretirdi
-    /// (<see cref="DimensionPolygon"/> ile aynı gerekçe).
+    /// ⚠️ This marker IS the runtime marker — there is no second marker family.
+    /// <see cref="ArenaCalibrator"/> finds its target through this component and its
+    /// <see cref="Kind"/>, with a name-based fallback for old scenes without a mesh
+    /// (<see cref="ArenaCalibrator.AnchorAName"/> / <see cref="ArenaCalibrator.AnchorBName"/>).
+    /// That is why the mesh enters the build and is not tagged <c>EditorOnly</c>; only the
+    /// floor/column visual is hidden at runtime.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Bu işaretçi çalışma anındaki işaretçinin ta kendisidir</b> — ikinci bir işaretçi
-    /// ailesi YOKTUR. <see cref="ArenaCalibrator"/> hizalayacağı objeyi önce bu bileşene ve
-    /// <see cref="Kind"/>'ına bakarak bulur; maketi olmayan eski sahneler için sonda
-    /// <b>ada</b> bakan bir yol kalır (<see cref="ArenaCalibrator.AnchorAName"/> /
-    /// <see cref="ArenaCalibrator.AnchorBName"/>). Maket bu yüzden build'e girer ve
-    /// <c>EditorOnly</c> etiketlenmez; oynanan geometri olmadığı için yalnız zemin/kolon
-    /// görseli çalışma anında gizlenir.
+    /// ⚠️ Position contract: the transform IS THE FLOOR POINT (the cube's center sits on the point,
+    /// half of it below the floor). Read-back takes the transform raw, so raising the marker to put
+    /// its mesh base on the floor would split the written point from the visible one.
     /// </para>
-    /// <para>
-    /// ⚠️ <b>Konum sözleşmesi: objenin transformu ZEMİN NOKTASIDIR</b> (küpün merkezi noktada
-    /// durur, yarısı zeminin altında kalır). Geri okuma transformu ham okuduğu için sözleşmenin
-    /// tek olması şart — işaretçiyi mesh tabanı zemine gelecek şekilde kaldırmak, dosyaya
-    /// yazılan nokta ile sahnede görünen noktayı birbirinden ayırırdı.
-    /// </para>
-    /// </summary>
+    /// </remarks>
     [DisallowMultipleComponent]
     public class DimensionAnchor : MonoBehaviour
     {
-        /// <summary>
-        /// Noktanın kalibrasyon sırasındaki yeri.
-        /// <para>
-        /// ⚠️ Serialize edilen enum: yeni değer <b>SONA</b> eklenir — Unity sayısal indeks saklar,
-        /// başa/ortaya ekleme sahnelerdeki değerleri kaydırır.
-        /// </para>
-        /// </summary>
+        /// <summary>The point's place in the calibration order.
+        /// <para>⚠️ Serialized enum: new values are appended at the END — Unity stores the numeric
+        /// index, so inserting shifts the values in existing scenes.</para></summary>
         public enum AnchorKind
         {
-            /// <summary>İlk yakalanan nokta.</summary>
+            /// <summary>The first captured point.</summary>
             A,
 
-            /// <summary>İkinci yakalanan nokta; A→B doğrultusu arenanın yönünü verir.</summary>
+            /// <summary>The second captured point; the A→B direction gives the arena's orientation.</summary>
             B
         }
 
         [Tooltip("Bu işaretçi kalibrasyonun A noktası mı yoksa B noktası mı.")]
         [SerializeField] private AnchorKind kind = AnchorKind.A;
 
-        /// <summary>Noktanın kalibrasyon sırasındaki yeri.</summary>
+        /// <summary>The point's place in the calibration order.</summary>
         public AnchorKind Kind => kind;
 
-        /// <summary>Üretim aracı tarafından doldurulur — çalışma anında kimse yazmaz.</summary>
+        /// <summary>Filled in by the generation tool — nobody writes at runtime.</summary>
         public void SetKind(AnchorKind value)
         {
             kind = value;

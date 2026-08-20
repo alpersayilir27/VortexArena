@@ -9,62 +9,57 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// İstatistikler paneli (skor bandının ortasındaki chip ya da <c>I</c> tuşu açar).
-    /// Kart yarı saydamdır, arkasına scrim koyulmaz — canlı sahne izlenmeye devam eder.
-    ///
-    /// <para><b>Neden satır tabanlı:</b> panel yalnız okunan bir tablo değil, operatörün oturup
-    /// <i>kayıt işi</i> yaptığı ekrandır (ad düzeltme, gövde ölçümü, kalibrasyon yeniden yükleme).
-    /// Metin kolonlarında bir oyuncuya dokunmanın yolu yoktu ve TMP varsayılan fontu eşit genişlikli
-    /// olmadığı için hizalama da kolon başına ayrı TMP gerektiriyordu. Her oyuncu artık kendi
-    /// satırıdır (<see cref="AdminStatsRow"/>): hizalama yerleşimden gelir, eylem satırın üstündedir
-    /// ve liste ScrollRect ile kaydırılır — <b>kap YOKTUR</b>, herkes çizilir.</para>
-    ///
-    /// <para><b>Uydurma metrik yok:</b> yalnız protokolde gerçekten taşınan veriler gösterilir
-    /// (K/D/skor sunucudan — §5.3 <c>lobby_state</c>; batarya/kumanda <c>status</c>'tan; <b>ping</b>
-    /// istemcinin ölçüp bildirdiği RTT — §6.7 <c>net_stats</c>). <b>Hasar ve isabet oranı protokolde
-    /// YOK, bu yüzden panelde de yok.</b> Jitter ve paket kaybı ölçülüyor ama gösterilmiyor:
-    /// operatörün eyleme çevirebileceği tek sayı ping'dir.</para>
-    ///
-    /// <para>⚠️ <b>HP, SAHNE ve İHLAL satırda bilinçli olarak YOKTUR</b> — gerekçesi
-    /// <see cref="AdminStatsRow"/> sınıf dokümanındadır; "eksik" sanıp geri koyma.</para>
-    ///
-    /// <para><b>Alt bardaki ÜÇ kalibrasyon düğmesi ayrı işlerdir:</b> <c>TÜMÜNÜ KALİBRE ET</c>
-    /// hizalamayı gözlükteki kayıttan <i>yeniden yükler</i> (oyuncuyu oyuna geri sokmayı dener) ·
-    /// <c>TÜM HİZALAMALARI SIFIRLA</c> herkesi savaş dışı bırakır ama cihazdaki kaydı KORUR,
-    /// yani ardından KALİBRE ET çalışır · <c>CİHAZ KAYITLARINI SİL</c> kaydı da yok eder, yani
-    /// ardından <b>KALİBRE ET ARTIK ÇALIŞMAZ</b> ve oyuncular elle A/B sekansı almak zorunda kalır.
-    /// Yan yana durdukları için ayrımı <b>görünüm ve sürtünme</b> taşır: iki yıkıcı düğme kırmızı
-    /// yazılır ve her biri kendi iki adımlı onayını ister, yeniden yüklemede onay yoktur (geri
-    /// alınabilir). Oyuncu başına geçersiz kılma yan paneldeki oyuncu kartındadır
-    /// (<see cref="AdminPlayerRow"/>, KAL) ve orada yalnız yumuşak kip vardır.</para>
-    ///
-    /// <para><b>Görünüm prefabtan gelir</b> (<c>_Shared/App/Resources/UI/AdminStatsPanel.prefab</c>);
-    /// bu sınıf yalnız veri yazar ve satırları <see cref="UiKit.Block"/> ile yerleştirir.</para>
+    /// Stats panel (opened by the chip between the scores or the <c>I</c> key). The card is
+    /// translucent with no scrim behind it — the live scene stays watchable.
+    /// <para><b>Why row based:</b> the panel is not a read-only table but the screen where the
+    /// operator does <i>record keeping</i> (fixing names, body measurement, calibration reload).
+    /// Each player is a row (<see cref="AdminStatsRow"/>): alignment comes from layout, actions sit
+    /// on the row and the list scrolls — <b>no cap</b>, everyone is drawn.</para>
+    /// <para><b>No invented metrics:</b> only data actually on the wire (K/D/score from §5.3
+    /// <c>lobby_state</c>; battery/controllers from <c>status</c>; ping = client-measured RTT,
+    /// §6.7 <c>net_stats</c>). ⚠️ <b>Damage and accuracy are not in the protocol, so not here
+    /// either.</b> Jitter and packet loss are measured but not shown: ping is the only number the
+    /// operator can act on.</para>
+    /// <para>⚠️ <b>HP, scene and violations are deliberately absent from the row</b> — reasoning in
+    /// the <see cref="AdminStatsRow"/> class doc; do not "restore" them.</para>
+    /// <para><b>The THREE calibration buttons on the bottom bar are different jobs:</b>
+    /// <c>TÜMÜNÜ KALİBRE ET</c> <i>reloads</i> alignment from the headset record (tries to put the
+    /// player back in) · <c>TÜM HİZALAMALARI SIFIRLA</c> benches everyone but KEEPS the device
+    /// record, so reload still works afterwards · <c>CİHAZ KAYITLARINI SİL</c> destroys the record
+    /// too, so <b>reload no longer works</b> and players must redo the A/B sequence by hand.
+    /// Standing side by side, the distinction is carried by <b>look and friction</b>: both
+    /// destructive buttons are red and each asks for its own two-step confirm; the reload has none
+    /// (it is undoable). Per-player invalidation lives on the side panel card
+    /// (<see cref="AdminPlayerRow"/>, KAL) and is soft-only there.</para>
+    /// <para><b>Look comes from the prefab</b>
+    /// (<c>_Shared/App/Resources/UI/AdminStatsPanel.prefab</c>); this class only writes data and
+    /// places rows with <see cref="UiKit.Block"/>.</para>
     /// </summary>
     public class AdminStatsPanel : MonoBehaviour
     {
         private const float RefreshInterval = 0.5f;
 
-        /// <summary>Uyarı penceresinin kendiliğinden kapanma süresi (sn). Operatör kapatmayı
-        /// unutursa pencere listenin üstünde kalıcı olarak durmasın.</summary>
+        /// <summary>Auto-close time of the popup (s), so a forgotten one does not sit on the list
+        /// forever.</summary>
         private const float PopupSeconds = 6f;
 
-        /// <summary>Toplu sıfırlamanın onay penceresi (sn): ilk basıştan sonra bu kadar süre içinde
-        /// ikinci basış gelmezse düğme dinlenme haline döner.</summary>
+        /// <summary>Confirm window of the bulk reset (s); without a second press the button goes
+        /// back to idle.</summary>
         private const float ClearAllConfirmSeconds = 3f;
 
-        /// <summary>Alt bardaki düğmelerin ortak dinlenme zemini — sıfırlama düğmesi yalnız onay
-        /// bekliyorken bunun yerine <see cref="UiKit.Bad"/> ile dolar.</summary>
+        /// <summary>Shared idle fill of the bottom bar buttons; a reset button switches to
+        /// <see cref="UiKit.Bad"/> only while awaiting confirmation.</summary>
         private static readonly Color ClearAllIdleFill = UiKit.Hex(0x334557, 0xF2);
 
-        /// <summary>FFA sıralaması için tampon — her tazelemede yeni liste ayırmamak adına.</summary>
+        /// <summary>FFA sort buffer (avoids a list allocation per refresh).</summary>
         private readonly List<AdminPlayerView> _sorted = new List<AdminPlayerView>();
 
-        /// <summary>Satır havuzu: örnekler yok edilmez, fazlası gizlenir (<see cref="AdminHud"/>
-        /// ile aynı desen) — her tazelemede Instantiate/Destroy yapmak GC ve düzen sıçraması üretir.</summary>
+        /// <summary>Row pool: instances are hidden, never destroyed (same pattern as
+        /// <see cref="AdminHud"/>) — Instantiate/Destroy per refresh causes GC and layout jitter.</summary>
         private readonly List<AdminStatsRow> _rows = new List<AdminStatsRow>();
 
-        // ⚠️ Alanlar [SerializeField] — görünüm PREFABTAN gelir. Bu sınıf yalnız veri yazar.
+        // ⚠️ All fields are [SerializeField] — the look comes from the PREFAB, this class only
+        // writes data.
 
         [Tooltip("Açılıp kapanan kart — panel kapalıyken bu obje devre dışı bırakılır.")]
         [SerializeField] private GameObject _root;
@@ -99,24 +94,24 @@ namespace VortexArena.App.Admin
         private float _nextRefresh;
         private bool _dirty = true;
 
-        /// <summary>Görünür (bağlı) satır sayısı — <see cref="Tick"/> ve toplu eylemler yalnız
-        /// bunlarla ilgilenir.</summary>
+        /// <summary>Visible (bound) row count — <see cref="Tick"/> and bulk actions only touch
+        /// these.</summary>
         private int _visibleRows;
 
-        /// <summary>Satır yüksekliği prefabtan okunur (yedeği <see cref="AdminStatsRow.Height"/>);
-        /// sanatçı satırı büyütürse liste yerleşimi uyar.</summary>
+        /// <summary>Row height read from the prefab (fallback <see cref="AdminStatsRow.Height"/>),
+        /// so resizing the row reflows the list.</summary>
         private float _rowHeight = -1f;
 
-        /// <summary>Uyarı penceresinin kapanma anı (<c>Time.unscaledTime</c>); &lt; 0 = kapalı.</summary>
+        /// <summary>When the popup closes (<c>Time.unscaledTime</c>); &lt; 0 = closed.</summary>
         private float _popupUntil = -1f;
 
-        /// <summary>Toplu sıfırlamanın ilk basış anı (<c>Time.unscaledTime</c>); &lt; 0 = onay
-        /// beklenmiyor.</summary>
+        /// <summary>First press of the bulk reset (<c>Time.unscaledTime</c>); &lt; 0 = not
+        /// awaiting confirmation.</summary>
         private float _clearAllArmedAt = -1f;
 
-        /// <summary>Cihaz kaydı silmenin ilk basış anı (<c>Time.unscaledTime</c>); &lt; 0 = onay
-        /// beklenmiyor. <see cref="_clearAllArmedAt"/>'ten BAĞIMSIZDIR: iki düğmenin onayı ayrı
-        /// kurulur, biri kurulu diye diğeri tek tıklamayla yıkıcı hale gelmez.</summary>
+        /// <summary>First press of the device-record purge (<c>Time.unscaledTime</c>); &lt; 0 = not
+        /// awaiting confirmation. ⚠️ INDEPENDENT of <see cref="_clearAllArmedAt"/>: arming one must
+        /// not make the other destructive on a single click.</summary>
         private float _purgeAllArmedAt = -1f;
 
         private float RowHeight
@@ -138,7 +133,7 @@ namespace VortexArena.App.Admin
 
         private void Start()
         {
-            // Prefabta kalıcı onClick kaydı YOKTUR (bkz. AdminPreferencesPanel.WireButtons).
+            // ⚠️ No persistent onClick entries in the prefab (see AdminPreferencesPanel.WireButtons).
             Wire(_closeButton, AdminSession.ClosePanel);
             Wire(_calibrateAllButton, ReloadAllCalibrations);
             Wire(_measureAllButton, () => AdminCommands.MeasureBodyScale(0));
@@ -148,7 +143,7 @@ namespace VortexArena.App.Admin
 
             if (_root != null)
             {
-                _root.SetActive(false); // görünürlüğü Apply() belirler
+                _root.SetActive(false); // Apply() decides visibility
             }
 
             HidePopup();
@@ -202,8 +197,8 @@ namespace VortexArena.App.Admin
                 Apply();
             }
 
-            // Onay pencereleri ve kalibrasyon zaman aşımı KARE başına ilerler: tazeleme aralığına
-            // bırakılsalardı sayaç yarım saniyelik adımlarla seğirirdi.
+            // Confirm windows and the calibration timeout advance PER FRAME: on the refresh
+            // interval the countdown would twitch in half-second steps.
             for (int i = 0; i < _visibleRows && i < _rows.Count; i++)
             {
                 _rows[i].Tick();
@@ -232,7 +227,7 @@ namespace VortexArena.App.Admin
             _dirty = true;
         }
 
-        // ------------------------------------------------------------------ tazeleme
+        // ------------------------------------------------------------------ refresh
 
         private void Apply()
         {
@@ -246,24 +241,23 @@ namespace VortexArena.App.Admin
             {
                 _root.SetActive(open);
 
-                // Panel her açılışta listenin BAŞINDAN başlar: kaydırma konumu oturumlar arası
-                // taşınırsa operatör paneli açtığında boş bir alt boşluğa bakıyor olabilir
-                // (aradaki oyuncular çıkmış, liste kısalmıştır).
+                // Always opens at the TOP of the list: a carried-over scroll position could land
+                // the operator in empty space after the list shrank.
                 if (open && _scroll != null)
                 {
                     _scroll.verticalNormalizedPosition = 1f;
                 }
             }
 
-            // Kapalı panelde yarım kalmış onay penceresi taşınmaz: operatör paneli kapatıp
-            // açtığında düğme "EMİN?" halinde beklerse tek tıklama herkesin kalibrasyonunu siler.
+            // ⚠️ A half-armed confirm never survives closing: reopening onto an "EMİN?" button
+            // would wipe everyone's calibration on a single click.
             if (!open)
             {
                 _clearAllArmedAt = -1f;
                 _purgeAllArmedAt = -1f;
             }
 
-            // Roster'dan ÖNCE: yıkıcı düğmeler oyuncu listesi gelmemişken de doğru görünmeli.
+            // BEFORE the roster: the destructive buttons must look right even with no player list.
             ApplyClearAllButton();
             ApplyPurgeAllButton();
 
@@ -279,9 +273,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Liste sırası: takımlı modda roster sırası (playerId) korunur — operatör oyuncuyu hep
-        /// aynı satırda arar. FFA'da tek sıralama ölçütü skordur, bu yüzden liste skora göre
-        /// AZALAN dizilir (eşitlikte playerId ile kararlı kalır).
+        /// List order: team modes keep the roster order (playerId) so a player is always on the
+        /// same row; in FFA the only meaningful order is score, descending (stable on ties by
+        /// playerId).
         /// </summary>
         private IReadOnlyList<AdminPlayerView> OrderedPlayers(AdminRoster roster)
         {
@@ -310,8 +304,8 @@ namespace VortexArena.App.Admin
         {
             if (roster.IsFfa)
             {
-                // Takım yok → tek anlamlı başlık lider. Skor hiç yazılmadıysa (maç başlamadı)
-                // uydurma yapmayız, "herkes tek" der geçeriz.
+                // No teams → the leader is the only meaningful headline; with no score yet nothing
+                // is invented.
                 IReadOnlyList<AdminPlayerView> ranked = OrderedPlayers(roster);
                 _headline.text = ranked.Count > 0 && ranked[0].score > 0
                     ? $"LİDER: {ranked[0].name} {ranked[0].score}"
@@ -332,13 +326,12 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Satır havuzunu listeye uydurur ve yerleştirir.
-        /// <para>⚠️ Bağlantı durumuna göre SÜZME YOKTUR ve eklenmez (§10.2): oyundan çıkarılmış
-        /// (<c>left</c>) satır maç sonu tablosunda görünmeli — sunucu onu tam da bunun için maç
-        /// bitene kadar roster'da tutuyor.</para>
-        /// <para>⚠️ Satır SAYISI da kapanmaz: yan paneldeki kolonların aksine burada kırpma yoktur,
-        /// content yüksekliği sürülür ve fazlasını ScrollRect kaydırır. Kırpılan bir istatistik
-        /// tablosu operatörün aradığı oyuncuyu gizlerdi.</para>
+        /// Fits the row pool to the list and places the rows.
+        /// <para>⚠️ No filtering by connection state, ever (§10.2): a <c>left</c> row must appear in
+        /// the end-of-match table — the server keeps it in the roster exactly for that.</para>
+        /// <para>⚠️ No row COUNT cap either: unlike the side columns nothing is clipped here, the
+        /// content height is driven and the ScrollRect scrolls the rest. A clipped stats table
+        /// would hide the player the operator is looking for.</para>
         /// </summary>
         private void RefreshRows(IReadOnlyList<AdminPlayerView> players)
         {
@@ -379,8 +372,8 @@ namespace VortexArena.App.Admin
                 _rows[i].Bind(players[i], players[i].playerId == AdminSession.SelectedPlayerId);
             }
 
-            // Content yüksekliği koddan sürülür: ContentSizeFitter/Layout Group KULLANILMIYOR
-            // (UiKit yerleşim kuralı) — kaydırma çubuğunun aralığı yalnız buradan gelir.
+            // Content height is driven from code: no ContentSizeFitter/Layout Group (UiKit layout
+            // rule) — the scrollbar range comes from here alone.
             _rowContainer.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
                 count > 0 ? count * (height + _rowGap) : 0f);
         }
@@ -398,11 +391,11 @@ namespace VortexArena.App.Admin
             _sb.Clear();
             _sb.AppendLine($"Faz: {roster.Phase} · kalan {FormatTime(roster.TimeRemaining)} · " +
                            $"mod {mode} · harita {map}" +
-                           // Süre/limit o maça özel olabildiği için (§5.2) operatör seçtiği
-                           // değerin gerçekten uygulandığını buradan doğrular.
+                           // Duration/limit can be per match (§5.2), so this is where the operator
+                           // verifies the chosen value was really applied.
                            (roster.RoundSeconds > 0 ? $" · raund {AdminCommands.FormatDuration(roster.RoundSeconds)}" : "") +
-                           // Limit üç değerlidir (§5.2): sınırsız maçta da yazılır — operatör
-                           // "limit satırı yok" ile "limit sınırsız"ı ayırt edebilmeli.
+                           // The limit is three-valued (§5.2) and is written for unlimited too:
+                           // "no limit line" and "limit is unlimited" must be distinguishable.
                            (roster.ScoreLimit != 0
                                ? $" · skor limiti {AdminCommands.FormatScoreLimit(roster.ScoreLimit)}"
                                : ""));
@@ -432,15 +425,15 @@ namespace VortexArena.App.Admin
             return $"{total / 60:00}:{total % 60:00}";
         }
 
-        // ------------------------------------------------------------- toplu eylem
+        // ------------------------------------------------------------- bulk actions
 
         /// <summary>
-        /// Herkesin kalibrasyonunu gözlükteki kayıttan yeniden yükletir.
-        /// <para>⚠️ <b>Sıra önemli:</b> önce satırlar yükleme kipine alınır, SONRA komut gider.
-        /// Ters sırada, sonucu ışık hızıyla dönen bir başlığın yanıtı satır daha kipe girmeden
-        /// gelirdi ve sonuç görünmeden yutulurdu.</para>
-        /// <para>Onay penceresi YOKTUR: yeniden yükleme kimseyi savaş dışı bırakmaz, tutmazsa
-        /// oyuncu eskisi gibi kalır — geri alınabilir bir denemedir (sıfırlamanın tersine).</para>
+        /// Reloads everyone's calibration from the headset record.
+        /// <para>⚠️ <b>Order matters:</b> rows go into loading state FIRST, the command second. The
+        /// other way round, a headset answering instantly would reply before the row is in loading
+        /// state and the result would be swallowed unseen.</para>
+        /// <para>No confirm window: reloading benches nobody and leaves the player as before if it
+        /// fails — an undoable attempt, unlike a reset.</para>
         /// </summary>
         private void ReloadAllCalibrations()
         {
@@ -453,14 +446,12 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Herkesin hizalamasını geçersiz kılar (YUMUŞAK kip) — <b>iki adımlı</b>,
-        /// <see cref="AdminPlayerRow"/>'un yıkıcı düğmeleriyle aynı sözleşme: ilk basış onay
-        /// penceresini açar, pencere açıkken gelen ikinci basış komutu gönderir.
-        /// <para>Sürtünmenin gerekçesi komşusuyla karşıtlığıdır: yanındaki yeniden yükleme geri
-        /// alınabilir bir denemedir, bu ise tek tıklamayla sahadaki herkesi savaş dışı bırakır
-        /// (§10.6).</para>
-        /// <para>Gözlükteki KAYIT korunur (<c>keepSaved: true</c>), bu yüzden ardından
-        /// <c>TÜMÜNÜ KALİBRE ET</c> herkesi tek tıkla geri sokar — günlük eylem budur.</para>
+        /// Invalidates everyone's alignment (SOFT mode) — <b>two-step</b>, same contract as the
+        /// destructive buttons of <see cref="AdminPlayerRow"/>.
+        /// <para>The friction exists because of the neighbouring button: reload is an undoable
+        /// attempt, this one benches everyone on the floor in a single click (§10.6).</para>
+        /// <para>The headset RECORD is kept (<c>keepSaved: true</c>), so <c>TÜMÜNÜ KALİBRE ET</c>
+        /// afterwards puts everyone back in one click — that is the daily action.</para>
         /// </summary>
         private void ArmClearAllCalibration()
         {
@@ -477,11 +468,11 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Gözlüklerdeki KAYITLI çapayı da siler (SERT kip) — <see cref="ArmClearAllCalibration"/>
-        /// ile aynı iki adımlı sözleşme, ama <b>ayrı</b> bir onay penceresi kullanır.
-        /// <para>⚠️ Ardından <c>TÜMÜNÜ KALİBRE ET</c> artık çalışmaz (okuyacağı kayıt kalmaz) ve
-        /// oyuncular elle A/B sekansı almak zorunda kalır — bu bir mekan bakımıdır, zemin bantları
-        /// taşındığında yapılır.</para>
+        /// Wipes the SAVED anchors on the headsets too (HARD mode) — same two-step contract as
+        /// <see cref="ArmClearAllCalibration"/>, but with its <b>own</b> confirm window.
+        /// <para>⚠️ Afterwards <c>TÜMÜNÜ KALİBRE ET</c> no longer works (nothing left to read) and
+        /// players must redo the A/B sequence by hand — venue maintenance, done when the floor
+        /// markers move.</para>
         /// </summary>
         private void ArmPurgeAllCalibration()
         {
@@ -497,17 +488,17 @@ namespace VortexArena.App.Admin
             _dirty = true;
         }
 
-        /// <summary>Geçersiz kılma düğmesinin etiketini ve zeminini onay durumuna göre boyar:
-        /// dinlenmede kırmızı yazı + alt barın ortak zemini, onay beklerken tam ters (kırmızı zemin)
-        /// — operatör ikinci basışın ne yapacağını düğmeye bakarak görür.</summary>
+        /// <summary>Paints the invalidate button by confirm state: idle = red text on the shared
+        /// fill, armed = inverted (red fill) — the operator reads what the second press will do off
+        /// the button.</summary>
         private void ApplyClearAllButton()
         {
             ApplyDestructiveButton(_clearAllButton, _clearAllLabel, _clearAllArmedAt >= 0f,
                 "EMİN? HİZALAMALARI SIFIRLA", "TÜM HİZALAMALARI SIFIRLA");
         }
 
-        /// <summary>Cihaz kaydı silme düğmesi — <see cref="ApplyClearAllButton"/> ile aynı görünüm
-        /// sözleşmesi, yalnız metni ve kendi onay durumu farklı.</summary>
+        /// <summary>Device-record purge button — same look contract as
+        /// <see cref="ApplyClearAllButton"/>, only the text and its own confirm state differ.</summary>
         private void ApplyPurgeAllButton()
         {
             ApplyDestructiveButton(_purgeAllButton, _purgeAllLabel, _purgeAllArmedAt >= 0f,
@@ -529,15 +520,15 @@ namespace VortexArena.App.Admin
             }
         }
 
-        // ------------------------------------------------------------- geri çağrı
+        // ------------------------------------------------------------- callbacks
 
         private void HandleRowSelected(int playerId)
         {
             AdminSession.SelectedPlayerId = playerId;
         }
 
-        /// <summary>Sonucu <b>yalnız ilgili satıra</b> verir: mesaj bir olaydır, listeyi yeniden
-        /// çizmeye gerek yok.</summary>
+        /// <summary>Hands the result to <b>that row only</b>: the message is an event, no relayout
+        /// needed.</summary>
         private void HandleCalibrationResult(CalibrationResultMsg msg)
         {
             if (msg == null)
@@ -556,10 +547,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Başarısız bir kalibrasyon yüklemesinin gerekçesini gösterir (dar düğme yalnız "HATA"
-        /// taşıyabiliyor).
-        /// <para>⚠️ Arkasına scrim KOYULMAZ ve panel kilitlenmez — bu paneldeki genel kural:
-        /// canlı sahne izlenmeye devam eder ve operatör pencere açıkken de çalışabilir.</para>
+        /// Shows why a calibration reload failed (the narrow button can only carry "HATA").
+        /// <para>⚠️ No scrim behind it and the panel is not locked — the panel's general rule: the
+        /// live scene stays watchable and the operator can keep working.</para>
         /// </summary>
         private void ShowPopup(int playerId, string error)
         {

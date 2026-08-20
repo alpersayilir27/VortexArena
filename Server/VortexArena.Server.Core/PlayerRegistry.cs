@@ -8,39 +8,39 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>deviceId → PlayerState kaydı: playerId tahsisi (1..PLAYER_ID_MAX), devices.json ad
-/// kalıcılığı (ad havuzdan rastgele + 1..99 forma numarası, ikisi de otomatik), takım dengeleme
-/// ve bağlantı süpürmesi (HEARTBEAT_TIMEOUT → RECONNECT_GRACE).
-/// (Cosmos DeviceRegistry + DeviceNameStore desenlerinin birleşimi.)
+/// <summary>deviceId → PlayerState registry: playerId allocation (1..PLAYER_ID_MAX), devices.json
+/// name persistence (random pool name + 1..99 jersey number, both automatic), team balancing and
+/// connection sweeping (HEARTBEAT_TIMEOUT → RECONNECT_GRACE).
 /// <para>
-/// <b>Rol başına kalıcılık farkı (§2):</b> oyuncu kaydı kalıcıdır (deviceId sabit, kopunca
-/// Reconnecting olur ve geri beklenir, adı devices.json'a yazılır). Admin kaydı OTURUMLUKtur —
-/// deviceId'si her oturumda benzersizdir, kopunca kayıt tümüyle silinir ve adı diske yazılmaz;
-/// aksi hâlde admin'i her açıp kapatma roster'a hayalet satır ve tükenen playerId bırakırdı.
-/// ⚠️ Admin bu yüzden Reconnecting durumuna HİÇ girmez: geri gelen admin yeni bir kimlikle gelir,
-/// "yeniden bağlanıyor" satırı yalan olurdu.
+/// <b>Persistence differs per role (§2):</b> a player record is persistent (stable deviceId, becomes
+/// Reconnecting on drop and is waited for, name written to devices.json). An admin record is
+/// PER-SESSION — its deviceId is unique each session, the record is deleted entirely on drop and the
+/// name never hits disk; otherwise every admin restart would leave a ghost roster row and burn a
+/// playerId. ⚠️ Hence an admin NEVER enters Reconnecting: a returning admin arrives with a new
+/// identity, so a "reconnecting" row would be a lie.
 /// </para>
 /// <para>
-/// <b>Kaydın ömrü (§2/§8):</b> soket düşer → <c>Reconnecting</c> → RECONNECT_GRACE dolar →
-/// maç katılımcısıysa <c>Left</c> (kayıt maç sonuna kadar durur, §10.2), değilse kayıt SİLİNİR ve
-/// playerId havuza döner. Ayrı bir playerId rezervasyon defteri gerekmez: <c>Left</c> kayıt
-/// <c>_players</c>'ta durduğu sürece <see cref="NextFreePlayerIdLocked"/> onu zaten atlar.
+/// <b>Record lifetime (§2/§8):</b> socket drops → <c>Reconnecting</c> → RECONNECT_GRACE expires →
+/// <c>Left</c> if a match participant (record stays until match end, §10.2), otherwise the record is
+/// DELETED and the playerId returns to the pool. No separate playerId reservation ledger is needed:
+/// while a <c>Left</c> record sits in <c>_players</c>, <see cref="NextFreePlayerIdLocked"/> already
+/// skips it.
 /// </para></summary>
 public sealed class PlayerRegistry : IDisposable
 {
     private static readonly JsonSerializerOptions DevicesJsonOptions = new()
     {
         WriteIndented = true,
-        // DeviceRecord PROPERTY taşır (alan değil) → camelCase policy ile {"name":…,"number":…}.
+        // DeviceRecord exposes PROPERTIES (not fields) → camelCase policy gives {"name":…,"number":…}.
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping // Türkçe karakterler dosyada okunur kalsın
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping // keep non-ASCII readable in the file
     };
     private static readonly UTF8Encoding Utf8NoBom = new(false);
 
-    /// <summary>Oyuncu adı havuzu (§2) — ilk bağlantıda buradan RASTGELE seçilir. Adlar benzersiz
-    /// değildir: havuz tükenince tekrar eder, ayırt edici alan numaradır. Admin bu havuzu
-    /// KULLANMAZ (adı PC adından gelir ve diske yazılmaz).</summary>
+    /// <summary>Player name pool (§2) — picked RANDOMLY on first connection. Names are not unique:
+    /// they repeat once the pool is exhausted, the distinguishing field is the number. Admins do NOT
+    /// use this pool (their name comes from the PC name and is never persisted).</summary>
     private static readonly string[] NamePool =
     {
         "umut", "alper", "ertu", "yunus", "resul", "enver", "enes", "nisa", "ceren", "tuğba",
@@ -52,14 +52,13 @@ public sealed class PlayerRegistry : IDisposable
     private readonly Timer _connectionTimer;
     private readonly string _devicesPath;
 
-    /// <summary>devices.json'ın bellekteki kopyası (deviceId → ad + numara). Numara sahipliğinin
-    /// TEK doğruluk kaynağıdır: hiç bağlanmamış bir cihazın da burada satırı vardır, bu yüzden
-    /// çakışma sorgusu <c>_players</c>'a değil buraya bakar.</summary>
+    /// <summary>In-memory copy of devices.json (deviceId → name + number). THE truth source for
+    /// number ownership: a device that never connected still has a row here, so conflict lookups go
+    /// against this map, not <c>_players</c>.</summary>
     private Dictionary<string, DeviceRecord> _devices = new();
 
-    /// <summary>İşçi thread'lerden tetiklenir. TryRegisterHello İÇİN raise edilmez —
-    /// LobbyService welcome'ı yolladıktan sonra Announce çağırır (welcome her zaman
-    /// lobby_state'ten önce gitsin diye).</summary>
+    /// <summary>Raised from worker threads. NOT raised for TryRegisterHello — LobbyService calls
+    /// Announce after sending welcome, so welcome always precedes lobby_state.</summary>
     public event Action<PlayerState, PlayerChangeKind>? Changed;
 
     public PlayerRegistry(string devicesJsonPath)
@@ -88,7 +87,7 @@ public sealed class PlayerRegistry : IDisposable
         return false;
     }
 
-    /// <summary>Bağlı admin sayısı (admin_state.adminCount).</summary>
+    /// <summary>Connected admin count (admin_state.adminCount).</summary>
     public int ConnectedAdminCount()
     {
         var count = 0;
@@ -97,8 +96,8 @@ public sealed class PlayerRegistry : IDisposable
         return count;
     }
 
-    /// <summary>Bağlı TÜM soketler — rol ayırmadan (selection_state yayını için anlık kopya).
-    /// Admin'e özel olanlar için <see cref="ConnectedAdminConnections"/>.</summary>
+    /// <summary>ALL connected sockets regardless of role (snapshot copy for selection_state).
+    /// For admin-only targets see <see cref="ConnectedAdminConnections"/>.</summary>
     public List<ClientConnection> ConnectedConnections()
     {
         var result = new List<ClientConnection>();
@@ -111,7 +110,7 @@ public sealed class PlayerRegistry : IDisposable
         return result;
     }
 
-    /// <summary>Bağlı adminlerin soketleri (admin_state yayını için anlık kopya).</summary>
+    /// <summary>Sockets of connected admins (snapshot copy for admin_state broadcast).</summary>
     public List<ClientConnection> ConnectedAdminConnections()
     {
         var result = new List<ClientConnection>();
@@ -124,13 +123,13 @@ public sealed class PlayerRegistry : IDisposable
         return result;
     }
 
-    /// <summary>false = playerId havuzu tükendi (1..PLAYER_ID_MAX). Bu bir ürün kotası değil,
-    /// u8 tel formatının tavanıdır. Aynı deviceId yeniden bağlanırsa eski soket kapatılır,
-    /// playerId korunur (Docs/ArenaNet-Protokol.md §2).
-    /// <para>⚠️ Mevcut kayıt HANGİ durumdan dönerse dönsün (<c>Reconnecting</c> ya da
-    /// <c>Left</c>) Connected'a çekilir ve <b>ad/numara/takım/kills/deaths/score/MatchParticipant
-    /// KORUNUR</b>: "kaldığı yerden devam" ve "eski satırına oturur" kuralı (§2) budur —
-    /// sıfırlanırsa maç ortasında dönen oyuncu ikinci bir kimlik gibi görünür.</para></summary>
+    /// <summary>false = playerId pool exhausted (1..PLAYER_ID_MAX). Not a product quota, it is the
+    /// u8 wire format ceiling. If the same deviceId reconnects, the old socket is closed and the
+    /// playerId is kept (Docs/ArenaNet-Protokol.md §2).
+    /// <para>⚠️ Whatever state an existing record returns from (<c>Reconnecting</c> or <c>Left</c>)
+    /// it is pulled to Connected and <b>name/number/team/kills/deaths/score/MatchParticipant are
+    /// PRESERVED</b>: that is the "resume where you left off, in your old row" rule (§2) — resetting
+    /// would make a mid-match returner look like a second identity.</para></summary>
     public bool TryRegisterHello(HelloMsg hello, ClientConnection connection, out PlayerState state, out PlayerChangeKind kind)
     {
         ClientConnection? stale = null;
@@ -161,40 +160,39 @@ public sealed class PlayerRegistry : IDisposable
             ResolveIdentityLocked(state, hello.deviceName);
             state.Team = state.Role == "player"
                 ? (string.IsNullOrEmpty(state.Team) ? SmallerTeamLocked() : state.Team)
-                : ""; // admin oynamaz
+                : ""; // admins do not play
             state.Scene = hello.currentScene ?? "";
             state.Scenes = hello.scenes != null ? new List<string>(hello.scenes) : new List<string>();
             state.Ready = false;
-            // §10.6: sunucu yeniden bağlanan başlığın hizalamasını bilemez (uygulama yeniden
-            // başlamış olabilir). Başlık kayıtlı anchor'dan geri yükleyince yeniden bildirir.
+            // §10.6: the server cannot know a reconnecting headset's alignment (the app may have
+            // restarted). The headset re-reports once it restores from the saved anchor.
             state.Calibrated = false;
             state.CalibrationSource = "";
-            // Hizalamaya ait teşhis alanları da onunla gider: sapma o hizalamanın, ölçüm hatası da
-            // o oturumun bilgisiydi — taşınırsa operatör çözülmüş bir sorunu görmeye devam eder.
+            // Diagnostic fields belong to that alignment and go with it: the offset described that
+            // alignment and the error that session — carrying them over shows a solved problem.
             state.FloorOffset = 0f;
             state.ScaleError = "";
             state.CalibrationError = "";
-            // §10.8: ölçü hizalamaya bağlı olduğu için o da bilinmiyor sayılır. Başlık kendi
-            // kaydından ölçeği hemen yeniden bildirir (set_body_scale), yani operatör yeniden
-            // ölçmek zorunda kalmaz.
+            // §10.8: body scale depends on the alignment, so it counts as unknown too. The headset
+            // re-reports it from its own record (set_body_scale), so no re-measuring is needed.
             state.BodyScale = 0f;
             state.Connection = PlayerConnection.Connected;
             state.DisconnectedAt = default;
             state.LastSeen = DateTime.UtcNow;
             state.Socket = connection;
-            // Her welcome yeni udpToken taşır; bayat UDP endpoint geçersizleşir
-            // (istemci 0x00 UdpHello ile yeniden kaydolur).
+            // Every welcome carries a new udpToken; a stale UDP endpoint becomes invalid (the client
+            // re-registers with 0x00 UdpHello).
             state.UdpToken = NextUdpToken();
             state.UdpEndpoint = null;
-            // Bayat poz yeni oturuma taşınmasın; snapshot okuyucusu HasPose'a PoseGate altında
-            // baktığı için sıfırlama da aynı kilit altında (PoseGate içinden asla _gate alınmaz).
+            // Do not carry a stale pose into the new session; the snapshot reader checks HasPose
+            // under PoseGate, so the reset takes the same lock (never take _gate from inside PoseGate).
             lock (state.PoseGate)
             {
                 state.HasPose = false;
                 state.LastSeq = 0;
-                // §10.9: bayat ihlal bayrağı da yeni oturuma taşınmaz. Tazelik kapısı (LastPoseAt)
-                // bunu zaten kapatıyor; alan yine de temizlenir ki "yeniden bağlandı ama hâlâ
-                // duvarda görünüyor" gibi bir ara durum hiç doğmasın.
+                // §10.9: stale violation flags are not carried over either. The freshness gate
+                // (LastPoseAt) already covers this; the fields are cleared anyway so a "reconnected
+                // but still shown inside the wall" intermediate state can never appear.
                 state.InObstacle = false;
                 state.OutOfBounds = false;
             }
@@ -204,14 +202,14 @@ public sealed class PlayerRegistry : IDisposable
         return true;
     }
 
-    /// <summary>TryRegisterHello'nun ertelenmiş bildirimi — LobbyService welcome'dan SONRA çağırır.</summary>
+    /// <summary>Deferred notification for TryRegisterHello — LobbyService calls it AFTER welcome.</summary>
     public void Announce(PlayerState state, PlayerChangeKind kind) => Changed?.Invoke(state, kind);
 
-    /// <summary>status kalp atışı (§5.1). ⚠️ <b>Koşulsuz Changed raise ETMEZ</b> — yalnız roster'da
-    /// GÖRÜNEN bir alan (scene/battery/ctrlL/ctrlR/connection) gerçekten değiştiyse yayın tetikler.
-    /// Koşulsuz yayın her status'u bir tam roster JSON'una çevirirdi: 18 istemci × 5 sn'de bir ×
-    /// 18 alıcı ≈ saniyede 65 yayın, hiçbir şey değişmese bile. <c>Fps</c> PlayerInfo'da
-    /// taşınmadığı için yayın tetiklemez.</summary>
+    /// <summary>status heartbeat (§5.1). ⚠️ <b>Does NOT raise Changed unconditionally</b> — only a
+    /// field VISIBLE in the roster (scene/battery/ctrlL/ctrlR/connection) triggers a broadcast.
+    /// Unconditional broadcasting would turn every status into a full roster JSON: 18 clients × once
+    /// per 5 s × 18 receivers ≈ 65 broadcasts a second with nothing changing. <c>Fps</c> is not
+    /// carried in PlayerInfo, so it triggers nothing.</summary>
     public void UpdateStatus(string deviceId, StatusMsg status)
     {
         if (!_players.TryGetValue(deviceId, out var state)) return;
@@ -219,9 +217,9 @@ public sealed class PlayerRegistry : IDisposable
         lock (_gate)
         {
             var scene = status.scene ?? state.Scene;
-            // Kumanda durumu Scene/Battery ile aynı taraftadır: KESİKLİ bir cihaz durumudur (üç
-            // değerden biri), her status'ta oynayan bir sayı değil — yani yayını nadiren tetikler
-            // ama düştüğü an operatörün ekranında görünmesi gerekir.
+            // Controller state belongs with Scene/Battery: a DISCRETE device state (one of three
+            // values), not a number that moves every status — it rarely triggers a broadcast but
+            // must show on the operator's screen the moment it drops.
             changed = !state.IsConnected || state.Scene != scene || state.Battery != status.battery
                       || state.CtrlL != status.ctrlL || state.CtrlR != status.ctrlR;
             state.Scene = scene;
@@ -229,9 +227,9 @@ public sealed class PlayerRegistry : IDisposable
             state.CtrlL = status.ctrlL;
             state.CtrlR = status.ctrlR;
             state.Fps = status.fps;
-            // ⚠️ Ağ telemetrisi `changed`'e GİRMEZ — Fps ile birebir aynı gerekçe (§6.7): sürekli
-            // değişen sayılar oldukları için her status'u bir tam roster yayınına çevirirlerdi.
-            // Adminlere ayrı kanaldan gider (net_stats), roster'a hiç girmez.
+            // ⚠️ Network telemetry does NOT enter `changed` — same reason as Fps (§6.7): constantly
+            // moving numbers would turn every status into a full roster broadcast. They reach admins
+            // on a separate channel (net_stats) and never enter the roster.
             state.RttMs = status.rttMs;
             state.JitterMs = status.jitterMs;
             state.LossPct = status.lossPct;
@@ -242,17 +240,19 @@ public sealed class PlayerRegistry : IDisposable
         if (changed) Changed?.Invoke(state, PlayerChangeKind.Updated);
     }
 
-    /// <summary>set_identity (§5.1): ad ve/veya forma numarası. <b>Boş ad ve <c>0</c> numara mevcut
-    /// değeri korur</b> (set_selection konvansiyonu) — "yalnız numarayı değiştir" tek çağrıdır.
+    /// <summary>set_identity (§5.1): name and/or jersey number. <b>An empty name and number
+    /// <c>0</c> keep the current value</b> (set_selection convention) — "change only the number" is
+    /// a single call.
     /// <para>
-    /// Numara benzersizliği burada zorlanır ve <b>bağlantısız sahibi AYNI ANDA taşınır</b>: sahibi
-    /// bağlıysa reddedilir (operatör onu roster'da görüp kendisi çözebilir), bağlantısızsa o
-    /// cihaz 1'den itibaren ilk boş numaraya yazılır. Taşımayı sonraki bağlantıya ertelemek
-    /// devices.json'ı o süre boyunca çift numaralı bırakırdı; bağlantısıza karşı da reddetmek ise
-    /// operatörü kilitlerdi (numarayı tutan cihaz roster'da görünmez, serbest bırakılamaz).
+    /// Number uniqueness is enforced here and a <b>disconnected holder is moved in the same
+    /// step</b>: if the holder is connected the request is rejected (the operator can see and
+    /// resolve it in the roster), if it is disconnected that device is moved to the first free
+    /// number from 1. Deferring the move to the holder's next connection would leave devices.json
+    /// with a duplicate meanwhile; rejecting against a disconnected holder would deadlock the
+    /// operator (the holding device is not visible in the roster and cannot be freed).
     /// </para>
-    /// <para>false = değişiklik olmadı ya da reddedildi; <paramref name="error"/> doluysa reddedildi
-    /// ve metin operatöre <c>admin_state.notice</c> ile gösterilir.</para></summary>
+    /// <para>false = nothing changed or the request was rejected; a non-empty <paramref name="error"/>
+    /// means rejected and the text is shown to the operator via <c>admin_state.notice</c>.</para></summary>
     public bool SetIdentity(int playerId, string? name, int number, out string error)
     {
         error = "";
@@ -265,7 +265,7 @@ public sealed class PlayerRegistry : IDisposable
         var wantedName = name?.Trim();
         var setName = !string.IsNullOrEmpty(wantedName);
         var setNumber = number != 0;
-        if (!setName && !setNumber) return false; // her iki alan da "koru" — sessizce çık
+        if (!setName && !setNumber) return false; // both fields say "keep" — exit silently
 
         if (setNumber)
         {
@@ -294,8 +294,8 @@ public sealed class PlayerRegistry : IDisposable
                         error = $"{number} numara {owner.Name}'da";
                         return false;
                     }
-                    // Bağlantısız sahip: numarayı state almadan ÖNCE taşı ki ilk boş hesabı
-                    // (devices.json hâlâ eski sahibi gösterirken) `number`'ı seçemesin.
+                    // Disconnected holder: move it BEFORE state takes the number, so the first-free
+                    // lookup (with devices.json still showing the old holder) cannot pick `number`.
                     var moved = NextFreeNumberLocked();
                     if (_devices.TryGetValue(holder, out var record)) record.Number = moved;
                     if (_players.TryGetValue(holder, out var absent)) absent.Number = moved;
@@ -310,7 +310,7 @@ public sealed class PlayerRegistry : IDisposable
                 changed = true;
             }
 
-            // Admin deviceId'si oturumluk (§2) — diske yazmak devices.json'ı çöple doldururdu.
+            // Admin deviceId is per-session (§2) — persisting it would fill devices.json with junk.
             if (changed && state.Role != "admin")
             {
                 _devices[state.DeviceId] = new DeviceRecord { Name = state.Name, Number = state.Number };
@@ -322,11 +322,11 @@ public sealed class PlayerRegistry : IDisposable
         return changed;
     }
 
-    /// <summary>Hazır bayrağını yazar. <b>Değişmediyse yayın yapmaz</b> (<see cref="SetIdentity"/>
-    /// deseni): her <c>Changed</c> bir TAM <c>lobby_state</c> yayını demek, yani oyuncu sayısıyla
-    /// çarpan bir fan-out. Bayrağın iki kullanıcısı da aynı değeri tekrar tekrar gönderebiliyor —
-    /// yükleme kapısında istemcinin <c>set_ready</c>'si, tur toplanmasında oyuncunun taban
-    /// bildirimi (§10.1).</summary>
+    /// <summary>Writes the ready flag. <b>No broadcast if unchanged</b> (<see cref="SetIdentity"/>
+    /// pattern): each <c>Changed</c> is a FULL <c>lobby_state</c> broadcast, i.e. a fan-out scaling
+    /// with player count. Both users of this flag can resend the same value repeatedly — the
+    /// client's <c>set_ready</c> at the load gate and the player's base report at round gather
+    /// (§10.1).</summary>
     public void SetReady(string deviceId, bool ready)
     {
         if (!_players.TryGetValue(deviceId, out var state)) return;
@@ -349,46 +349,46 @@ public sealed class PlayerRegistry : IDisposable
         return true;
     }
 
-    /// <summary>Kalibrasyon durumunu yazar (§10.6). Changed → lobby_state yayını; ayrı bir
-    /// calibration mesajı YOKTUR, durum roster ile taşınır (§5.3).
-    /// <para>Admin kalibre olmaz: <c>role != "player"</c> sessizce reddedilir, aksi hâlde admin
-    /// arayüzünde kendisi "kalibresiz" diye sayılırdı.</para></summary>
+    /// <summary>Writes calibration state (§10.6). Changed → lobby_state broadcast; there is NO
+    /// separate calibration message, the state travels with the roster (§5.3).
+    /// <para>Admins do not calibrate: <c>role != "player"</c> is rejected silently, otherwise the
+    /// admin would count itself as "uncalibrated" in its own UI.</para></summary>
     public bool SetCalibration(int playerId, bool calibrated, string? source, float floorOffset = 0f)
     {
         if (!TryGetByPlayerId(playerId, out var state)) return false;
         if (state.Role != "player") return false;
 
         var nextSource = calibrated ? source ?? "" : "";
-        // Sapma hizalamaya aittir (§10.6): hizalama düşünce o da düşer.
+        // The offset belongs to the alignment (§10.6): it falls when the alignment falls.
         var nextOffset = calibrated ? floorOffset : 0f;
         lock (_gate)
         {
-            // Değişmediyse yayın YAPMA. Harita değişiminde her başlık kayıtlı anchor'dan geri
-            // yükleyip aynı değeri yeniden bildirir; guard olmasa N oyuncu × N alıcı = N² gereksiz
-            // lobby_state giderdi (16 oyuncuda 256 mesaj).
-            // ⚠️ Sapma da karşılaştırmaya girer: aynı kaynakla yeniden kalibre olan oyuncunun yeni
-            // sapması yoksa roster'da eski değer kalırdı.
-            // ⚠️ Hata temizliği de değişim sayılır (SetBodyScale'in errorCleared deseni): kayıtlı
-            // hizalamayı yeniden yükleyip aynı değeri bildiren oyuncuda tek gerçek delta bu alandır
-            // ve guard'a girmezse operatörün satırında düzelmiş bir uyarı asılı kalırdı.
+            // No broadcast if nothing changed. On a map change every headset restores from its saved
+            // anchor and re-reports the same value; without this guard that is N players × N
+            // receivers = N² useless lobby_state messages (256 at 16 players).
+            // ⚠️ The offset is part of the comparison: a player recalibrating with the same source
+            // would otherwise keep the old offset in the roster.
+            // ⚠️ Clearing the error counts as a change too (SetBodyScale's errorCleared pattern): for
+            // a player who reloads a saved alignment and reports the same value this field is the
+            // only real delta, and leaving it out would keep a resolved warning stuck on the row.
             var errorCleared = calibrated && state.CalibrationError.Length > 0;
             if (state.Calibrated == calibrated && state.CalibrationSource == nextSource
                 && Math.Abs(state.FloorOffset - nextOffset) < 0.0001f && !errorCleared) return false;
             state.Calibrated = calibrated;
             state.CalibrationSource = nextSource;
             state.FloorOffset = nextOffset;
-            // Gerekçe hizalamaya aittir: başarılı bildirim onu geçersiz kılar, düşen hizalamada da
-            // taşınmaz.
+            // The reason belongs to the alignment: a successful report invalidates it, and a dropped
+            // alignment does not carry it either.
             state.CalibrationError = "";
 
-            // §10.8: hizalama düşünce gövde ölçüsü de düşer — ölçü arena zeminine göre alınmıştı.
-            // ⚠️ Kapı burasıdır, clear_calibration DEĞİL: başlığın kendi set_calibration{false}'u
-            // da aynı sonucu doğurur ve tek yolu kapatmak kuralı işlevsiz bırakırdı.
+            // §10.8: body scale falls with the alignment — it was measured against the arena floor.
+            // ⚠️ THIS is the gate, not clear_calibration: the headset's own set_calibration{false}
+            // has the same effect, and covering only one path would make the rule useless.
             if (!calibrated)
             {
                 state.BodyScale = 0f;
-                // Ölçüm hatası da o hizalamanın bilgisiydi; bırakılırsa sıfırlanmış bir satır
-                // hâlâ eski gerekçeyi gösterirdi.
+                // The measurement error was information about that alignment too; left behind, a
+                // reset row would still show the old reason.
                 state.ScaleError = "";
             }
         }
@@ -397,16 +397,17 @@ public sealed class PlayerRegistry : IDisposable
     }
 
     /// <summary>
-    /// Gövde ölçeğini yazar (§10.8). Sunucu sayıyı ÜRETMEZ, yalnız
-    /// <c>[BODY_SCALE_MIN, BODY_SCALE_MAX]</c> aralığına kırpar: ölçümü istemci yapıyor ama sonuç
-    /// herkesin ekranına gidiyor.
-    /// <para>Kalibrasyon kapısı bilinçli olarak YOKTUR: yeniden bağlanan başlık kalibrasyonunu ve
-    /// ölçeğini aynı anda bildiriyor ve iki mesajın sırasına bağlı bir kapı, ölçeği bazen sessizce
-    /// düşürürdü. Hizalama gerçekten geçersizse ölçeği <see cref="SetCalibration"/> zaten siler.</para>
-    /// <para>Değişmediyse yayın yapılmaz — <see cref="SetCalibration"/> ile aynı gerekçe.</para>
-    /// <para>⚠️ <b>Başarılı ölçüm <see cref="PlayerState.ScaleError"/>'ı da temizler</b> ve bunu
-    /// AYNI yayında yapar: iki ayrı çağrıya bölünseydi tek bir ölçüm iki tam roster yayını
-    /// üretirdi (§10.8).</para>
+    /// Writes body scale (§10.8). The server does NOT produce the number, it only clamps it to
+    /// <c>[BODY_SCALE_MIN, BODY_SCALE_MAX]</c>: the client measures, but the result reaches
+    /// everyone's screen.
+    /// <para>There is deliberately NO calibration gate: a reconnecting headset reports calibration
+    /// and scale at the same time, and a gate depending on their order would sometimes drop the
+    /// scale silently. If the alignment is really invalid, <see cref="SetCalibration"/> already
+    /// clears the scale.</para>
+    /// <para>No broadcast if unchanged — same reason as <see cref="SetCalibration"/>.</para>
+    /// <para>⚠️ <b>A successful measurement also clears <see cref="PlayerState.ScaleError"/></b>, in
+    /// the SAME broadcast: split into two calls, one measurement would produce two full roster
+    /// broadcasts (§10.8).</para>
     /// </summary>
     public bool SetBodyScale(int playerId, float scale)
     {
@@ -426,10 +427,11 @@ public sealed class PlayerRegistry : IDisposable
         return true;
     }
 
-    /// <summary>Başarısız gövde ölçümünün gerekçesini yazar (§10.8). <b>Ölçeğe DOKUNMAZ</b> —
-    /// başarısız ölçüm kayıtlı değeri geçersiz kılmaz, yalnız operatöre neden olmadığını söyler.
-    /// <para>Boş gerekçe alanı temizler; değişmediyse yayın yapılmaz
-    /// (<see cref="SetCalibration"/> ile aynı gerekçe).</para></summary>
+    /// <summary>Writes the reason for a failed body measurement (§10.8). <b>Does NOT touch the
+    /// scale</b> — a failed measurement does not invalidate the stored value, it only tells the
+    /// operator why it did not happen.
+    /// <para>An empty reason clears the field; no broadcast if unchanged (same reason as
+    /// <see cref="SetCalibration"/>).</para></summary>
     public bool SetScaleError(int playerId, string? error)
     {
         if (!TryGetByPlayerId(playerId, out var state)) return false;
@@ -445,10 +447,11 @@ public sealed class PlayerRegistry : IDisposable
         return true;
     }
 
-    /// <summary>Başarısız <c>reload_calibration</c> denemesinin gerekçesini yazar (§10.6).
-    /// <b>Kalibrasyona DOKUNMAZ</b> — düşen bir deneme kayıtlı hizalamayı geçersiz kılmaz, yalnız
-    /// operatöre neden olmadığını söyler (<see cref="SetScaleError"/> ile birebir aynı sözleşme).
-    /// <para>Boş gerekçe alanı temizler; değişmediyse yayın yapılmaz.</para></summary>
+    /// <summary>Writes the reason for a failed <c>reload_calibration</c> attempt (§10.6).
+    /// <b>Does NOT touch calibration</b> — a failed attempt does not invalidate the stored
+    /// alignment, it only tells the operator why it did not happen (exactly the
+    /// <see cref="SetScaleError"/> contract).
+    /// <para>An empty reason clears the field; no broadcast if unchanged.</para></summary>
     public bool SetCalibrationError(int playerId, string? error)
     {
         if (!TryGetByPlayerId(playerId, out var state)) return false;
@@ -464,14 +467,14 @@ public sealed class PlayerRegistry : IDisposable
         return true;
     }
 
-    // ⚠️ Toplu sıfırlama (clear_calibration playerId:0) burada DEĞİL LobbyService'tedir ve buraya
-    // geri taşınmaz: sıfırlamanın asıl işi bayrağı düşürmek değil komutu her başlığa İLETMEKtir
-    // (§10.6) ve registry soket görmez. "Zaten kalibresiz olanı atla" kısayolu da tam burada
-    // doğuyordu — yarım kalmış elle kalibrasyondaki oyuncunun bayrağı zaten `false`'tur, yani
-    // atlanan tek grup komuta en çok ihtiyacı olan gruptu.
+    // ⚠️ Bulk reset (clear_calibration playerId:0) lives in LobbyService, NOT here, and is not moved
+    // back: the real work of a reset is FORWARDING the command to every headset (§10.6), not
+    // lowering a flag, and the registry sees no sockets. The "skip the already-uncalibrated"
+    // shortcut was born exactly here — a player mid-way through manual calibration already has the
+    // flag `false`, so the only skipped group was the one that needed the command most.
 
-    /// <summary>0x00 UdpHello doğrulaması: playerId↔udpToken eşleşirse endpoint kaydedilir (§6.1).
-    /// Pozlar yalnız kayıtlı endpoint'ten kabul edilir (StateHost 0x01 alımı).</summary>
+    /// <summary>0x00 UdpHello validation: on a playerId↔udpToken match the endpoint is registered
+    /// (§6.1). Poses are accepted only from a registered endpoint (StateHost 0x01 intake).</summary>
     public bool TryRegisterUdpEndpoint(byte playerId, uint udpToken, IPEndPoint endpoint)
     {
         if (!TryGetByPlayerId(playerId, out var state)) return false;
@@ -483,10 +486,10 @@ public sealed class PlayerRegistry : IDisposable
         return true;
     }
 
-    /// <summary>Bir bağlantının recv döngüsü kapanınca çağrılır. Cihaz daha yeni bir bağlantıya
-    /// geçtiyse no-op (yeniden bağlanma yarışına karşı).
-    /// <para>Oyuncu <c>Reconnecting</c>'e düşer ve RECONNECT_GRACE boyunca geri beklenir;
-    /// admin <see cref="RetireLocked"/> ile tümden silinir (§2).</para></summary>
+    /// <summary>Called when a connection's recv loop closes. No-op if the device already moved to a
+    /// newer connection (guards the reconnect race).
+    /// <para>A player drops to <c>Reconnecting</c> and is awaited for RECONNECT_GRACE; an admin is
+    /// deleted entirely via <see cref="RetireLocked"/> (§2).</para></summary>
     public void NotifyDisconnected(ClientConnection connection)
     {
         PlayerState? affected = null;
@@ -511,9 +514,9 @@ public sealed class PlayerRegistry : IDisposable
             Changed?.Invoke(affected, removed ? PlayerChangeKind.Removed : PlayerChangeKind.Reconnecting);
     }
 
-    /// <summary>Koşan maçın defterine yazar/siler (§10.2). Yalnız değiştiyse yayın yapar —
-    /// <c>inMatch</c> roster'da GÖRÜNEN bir alan, koşulsuz yayın her çağrıyı bir tam
-    /// lobby_state'e çevirirdi.</summary>
+    /// <summary>Adds/removes an entry in the running match's ledger (§10.2). Broadcasts only on
+    /// change — <c>inMatch</c> is VISIBLE in the roster, so unconditional broadcasting would turn
+    /// every call into a full lobby_state.</summary>
     public void SetMatchParticipant(int playerId, bool value)
     {
         if (!TryGetByPlayerId(playerId, out var state)) return;
@@ -525,14 +528,14 @@ public sealed class PlayerRegistry : IDisposable
         Changed?.Invoke(state, PlayerChangeKind.Updated);
     }
 
-    /// <summary>Maç kurulurken o an BAĞLI olan her oyuncuyu katılımcı işaretler (§10.2);
-    /// dönüş = etkilenen kayıt sayısı.
-    /// <para>⚠️ Değişiklik başına değil, <b>tek bir</b> <c>Updated</c> yayınlanır: oyuncu başına
-    /// yayın N tam roster JSON'u demek olurdu ve hepsi aynı anlık görüntüyü taşırdı.</para></summary>
+    /// <summary>Marks every CONNECTED player as a participant when a match is set up (§10.2);
+    /// returns the number of affected records.
+    /// <para>⚠️ <b>One</b> <c>Updated</c> is raised, not one per change: a per-player broadcast would
+    /// be N full roster JSONs all carrying the same snapshot.</para></summary>
     public int MarkConnectedPlayersAsParticipants() => SetParticipantsForAll(true);
 
-    /// <summary>Maç kapanınca defteri temizler (§10.2); dönüş = etkilenen kayıt sayısı.
-    /// Toplu yayın kuralı <see cref="MarkConnectedPlayersAsParticipants"/> ile aynıdır.</summary>
+    /// <summary>Clears the ledger when a match closes (§10.2); returns the number of affected
+    /// records. Same single-broadcast rule as <see cref="MarkConnectedPlayersAsParticipants"/>.</summary>
     public int ClearMatchParticipants() => SetParticipantsForAll(false);
 
     private int SetParticipantsForAll(bool value)
@@ -544,7 +547,7 @@ public sealed class PlayerRegistry : IDisposable
             foreach (var state in _players.Values)
             {
                 if (state.Role != "player" || state.MatchParticipant == value) continue;
-                // İşaretlerken yalnız BAĞLI olanlar deftere girer (§10.2); temizlerken herkes.
+                // Only CONNECTED players enter the ledger when marking (§10.2); everyone on clear.
                 if (value && !state.IsConnected) continue;
                 state.MatchParticipant = value;
                 last = state;
@@ -555,12 +558,12 @@ public sealed class PlayerRegistry : IDisposable
         return affected;
     }
 
-    /// <summary>Maç kapanışında <c>Left</c> kayıtları siler (playerId'leri havuza döner);
-    /// dönüş = silinen kayıt sayısı.
-    /// <para>⚠️ Çağrı anı bağlayıcıdır (§10.2): defter <c>finished</c> fazının TAMAMI boyunca
-    /// durur ve ancak <b>lobiye dönerken</b>, <c>return_to_lobby</c> yayınından SONRA kapanır.
-    /// <c>match_end</c>'de silmek maç sonu tablosunu tam da okunduğu anda boşaltırdı — ayrılmış
-    /// oyuncuların orada görünmesi bu özelliğin var olma sebebi.</para></summary>
+    /// <summary>Deletes <c>Left</c> records at match close (their playerIds return to the pool);
+    /// returns the number of deleted records.
+    /// <para>⚠️ The call timing is binding (§10.2): the ledger stands through the WHOLE
+    /// <c>finished</c> phase and closes only <b>on the way back to the lobby</b>, AFTER the
+    /// <c>return_to_lobby</c> broadcast. Deleting at <c>match_end</c> would empty the end-of-match
+    /// table exactly while it is being read — showing departed players there is why this exists.</para></summary>
     public int PurgeLeftParticipants()
     {
         var purged = new List<PlayerState>();
@@ -573,22 +576,22 @@ public sealed class PlayerRegistry : IDisposable
                 purged.Add(state);
             }
         }
-        // Kilit dışında: her Changed bir lobby_state yayını tetikliyor (kilit altında gönderim yok).
+        // Outside the lock: each Changed triggers a lobby_state broadcast (never send under a lock).
         foreach (var state in purged) Changed?.Invoke(state, PlayerChangeKind.Removed);
         return purged.Count;
     }
 
     /// <summary>
-    /// Atma (§5.4): kaydı roster'dan <b>tümüyle siler</b>, varsa bağlantısını çağırana verir
-    /// (kapatmak onun işi). Kopmadan farkı budur — kopan cihaz <c>reconnecting</c> olarak listede
-    /// <b>durur</b> (aynı gözlük geri geldiğinde playerId'sini ve adını korusun diye), atılan
-    /// cihaz listeden kalkar. Aksi hâlde atma bağlantısız bir kayıtta hiçbir şey yapmaz ve
-    /// operatör "AT"a bastıkça duran bir satır görürdü.
-    /// <para>⚠️ Atma <b>katılımcılıktan da düşürür</b> (§10.2): kayıt tümüyle silindiği için
-    /// <c>MatchParticipant</c> bayrağı onunla birlikte gider — ayrıca temizlemek gerekmez.
-    /// Operatör bilinçli attıysa satır maç sonu tablosunda da yer almaz.</para>
-    /// <para>⚠️ <c>devices.json</c>'a DOKUNMAZ: atma bir yasak değildir, cihaz yeniden
-    /// bağlanırsa adını ve forma numarasını korur (playerId havuza döner, yenisi verilir).</para>
+    /// Kick (§5.4): <b>deletes the record entirely</b> from the roster and hands its connection (if
+    /// any) to the caller, whose job is to close it. That is the difference from a drop — a dropped
+    /// device <b>stays</b> in the list as <c>reconnecting</c> (so the same headset keeps its playerId
+    /// and name), a kicked device leaves it. Otherwise kicking would do nothing for a disconnected
+    /// record and the operator would keep pressing "KICK" on a row that stays.
+    /// <para>⚠️ Kicking <b>also removes participation</b> (§10.2): the record is gone, so the
+    /// <c>MatchParticipant</c> flag goes with it — no extra clearing needed. A deliberately kicked
+    /// player is not listed in the end-of-match table either.</para>
+    /// <para>⚠️ Does NOT touch <c>devices.json</c>: a kick is not a ban, the device keeps its name
+    /// and jersey number on reconnect (the playerId returns to the pool and a new one is given).</para>
     /// </summary>
     public bool RemoveByPlayerId(int playerId, out PlayerState state, out ClientConnection? connection)
     {
@@ -613,15 +616,15 @@ public sealed class PlayerRegistry : IDisposable
     }
 
     /// <summary>
-    /// Bağlantı süpürmesi (§8) — <b>iki aşamalı</b>:
-    /// (a) <c>Connected</c> ama HEARTBEAT_TIMEOUT boyunca status gelmedi → soket ölü sayılır,
-    /// koparılır ve cihaz <c>Reconnecting</c>'e düşer;
-    /// (b) <c>Reconnecting</c> RECONNECT_GRACE boyunca sürdü → oyuncu oyundan çıkarılır: maç
-    /// katılımcısıysa <c>Left</c> (kayıt maç sonuna kadar durur, §10.2), değilse kayıt silinir ve
-    /// playerId havuza döner.
-    /// <para>Admin her iki aşamada da tümden silinir (§2 — <see cref="RetireLocked"/>).</para>
-    /// <para>⚠️ Kilit altında ne gönderim ne olay var: iş listesi toplanır, <c>Abort</c> ve
-    /// <c>Changed</c> kilit dışında koşar.</para>
+    /// Connection sweep (§8) — <b>two stages</b>:
+    /// (a) <c>Connected</c> but no status for HEARTBEAT_TIMEOUT → the socket is considered dead, it
+    /// is aborted and the device drops to <c>Reconnecting</c>;
+    /// (b) <c>Reconnecting</c> lasted RECONNECT_GRACE → the player leaves the game: <c>Left</c> if a
+    /// match participant (record stays until match end, §10.2), otherwise the record is deleted and
+    /// the playerId returns to the pool.
+    /// <para>An admin is deleted entirely in both stages (§2 — <see cref="RetireLocked"/>).</para>
+    /// <para>⚠️ No send and no event under the lock: the work list is collected first, <c>Abort</c>
+    /// and <c>Changed</c> run outside it.</para>
     /// </summary>
     private void CheckConnections()
     {
@@ -652,7 +655,7 @@ public sealed class PlayerRegistry : IDisposable
 
                 if (state.MatchParticipant)
                 {
-                    // Kayıt DURUR: adı ve sayaçları maç sonu tablosunda görünmeli (§10.2).
+                    // The record STAYS: its name and counters must show in the end-of-match table (§10.2).
                     state.Connection = PlayerConnection.Left;
                     pending.Add((state, null, PlayerChangeKind.Left));
                     continue;
@@ -670,11 +673,11 @@ public sealed class PlayerRegistry : IDisposable
     }
 
     /// <summary>
-    /// Bağlantısı düşmüş kaydı emekliye ayırır. <b>Admin kaydı tümüyle silinir</b> (deviceId'si
-    /// zaten oturumluk — §2: geri gelen admin yeni bir kimlikle gelir, eski satır roster'da
-    /// hayalet olarak kalırdı ve playerId'si havuza dönmezdi). Oyuncu kaydı DURUR: deviceId'si
-    /// kalıcıdır, aynı gözlük geri geldiğinde playerId'sini ve adını korumalıdır.
-    /// <para>true = silindi. Çağıran <c>_gate</c> kilidini tutuyor olmalıdır.</para>
+    /// Retires a dropped record. <b>An admin record is deleted entirely</b> (its deviceId is
+    /// per-session — §2: a returning admin arrives with a new identity, so the old row would linger
+    /// as a ghost and its playerId would never return to the pool). A player record STAYS: its
+    /// deviceId is persistent and the same headset must keep its playerId and name.
+    /// <para>true = deleted. The caller must hold the <c>_gate</c> lock.</para>
     /// </summary>
     private bool RetireLocked(PlayerState state)
     {
@@ -685,7 +688,7 @@ public sealed class PlayerRegistry : IDisposable
 
     public void Dispose() => _connectionTimer.Dispose();
 
-    // ---- playerId / takım / token tahsisi ----
+    // ---- playerId / team / token allocation ----
 
     private int NextFreePlayerIdLocked()
     {
@@ -693,10 +696,10 @@ public sealed class PlayerRegistry : IDisposable
         foreach (var state in _players.Values) used.Add(state.PlayerId);
         for (var id = 1; id <= ArenaProtocol.PLAYER_ID_MAX; id++)
             if (!used.Contains(id)) return id;
-        return 0; // u8 havuzu tükendi (ürün kotası değil, tel formatı tavanı)
+        return 0; // u8 pool exhausted (wire format ceiling, not a product quota)
     }
 
-    /// <summary>Yeni oyuncuyu az kişili takıma koyar (eşitlikte red); admin set_team ile değiştirir.</summary>
+    /// <summary>Puts a new player on the smaller team (red on a tie); admin overrides via set_team.</summary>
     private string SmallerTeamLocked()
     {
         int red = 0, blue = 0;
@@ -721,11 +724,11 @@ public sealed class PlayerRegistry : IDisposable
         return token;
     }
 
-    // ---- devices.json kimlik kalıcılığı (ad + numara; UTF-8 BOM'suz) ----
+    // ---- devices.json identity persistence (name + number; UTF-8 without BOM) ----
 
-    /// <summary>devices.json'ı okur. <b>İki biçimi de kabul eder:</b> v1 <c>deviceId → "ad"</c>
-    /// (numara 0 sayılır, ilk bağlantıda atanır) ve v2 <c>deviceId → {name, number}</c>.
-    /// Yalnız yapıcıdan çağrılır (tek thread).</summary>
+    /// <summary>Reads devices.json. <b>Accepts both shapes:</b> v1 <c>deviceId → "name"</c> (number
+    /// treated as 0, assigned on first connection) and v2 <c>deviceId → {name, number}</c>.
+    /// Called only from the constructor (single thread).</summary>
     private void LoadDevices()
     {
         _devices = new();
@@ -740,10 +743,10 @@ public sealed class PlayerRegistry : IDisposable
             {
                 switch (entry.Value.ValueKind)
                 {
-                    case JsonValueKind.String: // v1 — yalnız ad, numara sonra atanır
+                    case JsonValueKind.String: // v1 — name only, number assigned later
                         _devices[entry.Name] = new DeviceRecord { Name = entry.Value.GetString() ?? "" };
                         break;
-                    case JsonValueKind.Object: // v2 — ad + numara
+                    case JsonValueKind.Object: // v2 — name + number
                         _devices[entry.Name] = new DeviceRecord
                         {
                             Name = entry.Value.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String
@@ -765,9 +768,9 @@ public sealed class PlayerRegistry : IDisposable
         }
     }
 
-    /// <summary>Yüklemede aynı numarayı taşıyan kayıtları ayıklar: ilk gelen numarayı korur,
-    /// sonrakiler ilk boş numaraya taşınır. Gerekçesi elle düzenlenmiş dosyadır — "iki cihaz aynı
-    /// numarayı taşımaz" değişmez kuralı dosyaya değil bu sınıfa aittir, o yüzden girişte zorlanır.</summary>
+    /// <summary>Resolves duplicate numbers at load: the first record keeps the number, later ones
+    /// move to the first free one. The reason is hand-edited files — the "two devices never share a
+    /// number" invariant belongs to this class, not to the file, so it is enforced on entry.</summary>
     private void ResolveDuplicateNumbersLocked()
     {
         var seen = new HashSet<int>();
@@ -788,13 +791,13 @@ public sealed class PlayerRegistry : IDisposable
     }
 
     /// <summary>
-    /// <b>Oyuncu:</b> devices.json'da kaydı varsa ad+numara oradan gelir (kalıcı kimlik); yoksa ad
-    /// havuzdan RASTGELE, numara 1'den itibaren ilk boş olarak atanıp dosyaya yazılır. v1'den
-    /// yükseltilen (numarasız) kayda ilk görüşte numara verilir.
+    /// <b>Player:</b> with a devices.json record, name+number come from there (persistent identity);
+    /// otherwise the name is picked RANDOMLY from the pool, the number is the first free one from 1,
+    /// and both are persisted. A record upgraded from v1 (no number) gets one on first sight.
     /// <para>
-    /// <b>Admin:</b> ad `hello.deviceName` (PC adı; boşsa "Admin"), numara YOK (0) — admin oynamaz.
-    /// Diske YAZILMAZ: admin deviceId'si oturumluk olduğu için her açılış çöp bir satır eklerdi.
-    /// Aynı ad başka bir bağlı admin'de kullanılıyorsa sonuna " (2)", " (3)"… eklenir.
+    /// <b>Admin:</b> name from `hello.deviceName` (PC name; "Admin" if empty), NO number (0) —
+    /// admins do not play. NOT persisted: the admin deviceId is per-session, so every launch would
+    /// add a junk row. If another connected admin uses the same name, " (2)", " (3)"… is appended.
     /// </para>
     /// </summary>
     private void ResolveIdentityLocked(PlayerState state, string? fallbackDeviceName)
@@ -812,7 +815,7 @@ public sealed class PlayerRegistry : IDisposable
             state.Number = record.Number;
             if (state.Number != 0) return;
 
-            state.Number = NextFreeNumberLocked(); // v1'den yükseltilen kayıt
+            state.Number = NextFreeNumberLocked(); // record upgraded from v1
             record.Number = state.Number;
             SaveDevicesLocked();
             return;
@@ -824,9 +827,9 @@ public sealed class PlayerRegistry : IDisposable
         SaveDevicesLocked();
     }
 
-    /// <summary>Havuzdan RASTGELE ad (§2): önce hiçbir kayıtlı cihazın kullanmadığı adlar arasından,
-    /// hepsi kullanımdaysa havuzun tamamından. <b>Adlar benzersiz değildir</b> — ayırt edici alan
-    /// numaradır, bu yüzden havuzun tükenmesi hata değil normal işleyiştir.</summary>
+    /// <summary>RANDOM name from the pool (§2): first among names no registered device uses, and if
+    /// all are taken, from the whole pool. <b>Names are not unique</b> — the number is the
+    /// distinguishing field, so an exhausted pool is normal operation, not an error.</summary>
     private string PickPoolNameLocked()
     {
         var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -842,9 +845,9 @@ public sealed class PlayerRegistry : IDisposable
             : NamePool[Random.Shared.Next(NamePool.Length)];
     }
 
-    /// <summary>1'den itibaren hiçbir KAYITLI cihazın kullanmadığı ilk numara (§2). Sıralıdır,
-    /// rastgele değil: işletmede küçük ve akılda kalır sayılar kullanılsın. <c>0</c> = havuz dolu
-    /// (100+ kayıtlı cihaz) — cihaz numarasız kalır, operatör elle numaralar.</summary>
+    /// <summary>First number from 1 that no REGISTERED device uses (§2). Sequential, not random, so
+    /// the venue works with small memorable numbers. <c>0</c> = pool full (100+ registered devices) —
+    /// the device stays numberless and the operator assigns one manually.</summary>
     private int NextFreeNumberLocked()
     {
         var used = new HashSet<int>();
@@ -859,9 +862,9 @@ public sealed class PlayerRegistry : IDisposable
         return 0;
     }
 
-    /// <summary>Verilen numarayı tutan cihazın deviceId'si (kendisi hariç), yoksa null.
-    /// Sorgu <c>_players</c>'a DEĞİL <c>_devices</c>'a yapılır: numarayı hiç bağlanmamış (bellekte
-    /// PlayerState'i olmayan) bir cihaz da tutuyor olabilir.</summary>
+    /// <summary>deviceId holding the given number (excluding itself), or null. The lookup goes
+    /// against <c>_devices</c>, NOT <c>_players</c>: the number may be held by a device that never
+    /// connected (no in-memory PlayerState).</summary>
     private string? FindNumberHolderLocked(int number, string exceptDeviceId)
     {
         foreach (var entry in _devices)
@@ -869,7 +872,7 @@ public sealed class PlayerRegistry : IDisposable
         return null;
     }
 
-    /// <summary>Başka bir admin kaydının kullanmadığı ilk ad ("Ofis-PC", "Ofis-PC (2)", …).</summary>
+    /// <summary>First name no other record uses ("Ofis-PC", "Ofis-PC (2)", …).</summary>
     private string UniqueAdminNameLocked(string deviceId, string? fallbackDeviceName)
     {
         var baseName = string.IsNullOrWhiteSpace(fallbackDeviceName) ? "Admin" : fallbackDeviceName!.Trim();
@@ -877,7 +880,7 @@ public sealed class PlayerRegistry : IDisposable
         var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var state in _players.Values)
         {
-            // Kendi kaydımız (yeniden bağlanma) adı serbest bırakır; oyuncu adları da çakışmasın.
+            // Our own record (reconnect) frees its name; player names must not clash either.
             if (state.DeviceId == deviceId) continue;
             if (!string.IsNullOrEmpty(state.Name)) taken.Add(state.Name);
         }

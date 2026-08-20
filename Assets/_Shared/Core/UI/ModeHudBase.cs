@@ -10,20 +10,20 @@ using VortexArena.Protocol;
 namespace VortexArena.Core.UI
 {
     /// <summary>
-    /// Mod HUD'larının <b>takım-agnostik</b> ortak tabanı: faz/süre, geri sayım, can, ölüm ekranı
-    /// ve durum metni, kill-feed, kendi öldürme/ölüm sayacın ve maç sonu satırı.
-    /// Sunum bileşenidir — kural/otorite YOK, hiçbir şey hesaplamaz.
+    /// The <b>team-agnostic</b> common base of the mode HUDs: phase/time, countdown, health, death
+    /// overlay and status text, kill feed, your own kill/death counter and the match end line.
+    /// It is a presentation component — NO rules/authority, it computes nothing.
     ///
-    /// <para><b>Takım ile ilgili hiçbir şey burada DEĞİLDİR</b> (bazı modlarda takım yoktur):
-    /// skor satırı, takım rengi ve takım kolonu alt sınıfın işidir
+    /// <para><b>Nothing team-related lives here</b> (some modes have no teams): the score line, the
+    /// team color and the team column are the subclass's job
     /// (<see cref="ScoreLine"/> / <see cref="WinnerLine"/>).</para>
     ///
-    /// <para><b>Neden Core'da:</b> modlar birbirini referanslamaz (CLAUDE.md). Ortak HUD kodu bir
-    /// modun içinde dursaydı ikinci mod ona bakamaz, kill-feed/can/geri sayımı baştan yazardı.
-    /// Core'u zaten her mod asmdef'i referanslıyor.</para>
+    /// <para><b>Why in Core:</b> modes do not reference each other (CLAUDE.md). If the shared HUD code
+    /// lived inside one mode, a second mode could not look at it and would rewrite the
+    /// kill feed/health/countdown from scratch. Every mode asmdef already references Core.</para>
     ///
-    /// <para>Tüm UI bağları null olabilir (prefab kablolaması eksik olabilir); atanmamış alan
-    /// sessizce çizilmez.</para>
+    /// <para>All UI bindings may be null (the prefab wiring may be incomplete); an unassigned field is
+    /// silently not drawn.</para>
     /// </summary>
     public abstract class ModeHudBase : MonoBehaviour
     {
@@ -48,7 +48,7 @@ namespace VortexArena.Core.UI
         [Tooltip("Opsiyonel: kendi öldürme/ölüm sayacın (lobby_state'ten). Atanmazsa çizilmez.")]
         [SerializeField] protected TMP_Text selfStatsText;
 
-        /// <summary>Kill-feed satırı + düşme zamanı (unscaled).</summary>
+        /// <summary>A kill feed line + its expiry time (unscaled).</summary>
         private struct KillFeedLine
         {
             public string text;
@@ -61,9 +61,10 @@ namespace VortexArena.Core.UI
 
         private PlayerCombatState _combat;
 
-        /// <summary>HUD'ın kendi canvas'ı — maç sonu ekranı açıkken YALNIZ bu bileşen kapatılır.
-        /// ⚠️ Obje <b>devre dışı bırakılmaz</b>: kapanan obje <c>OnDisable</c>'da ağ olaylarından
-        /// çıkar ve kendini geri açacak mesajı (<c>load_match</c>) bir daha duymazdı.</summary>
+        /// <summary>The HUD's own canvas — while the match result overlay is open ONLY this component
+        /// is disabled. ⚠️ The object itself is <b>not deactivated</b>: a deactivated object would
+        /// unsubscribe from the network events in <c>OnDisable</c> and would never hear the message
+        /// that would turn it back on (<c>load_match</c>).</summary>
         private Canvas _canvas;
 
         private string _combatStatus = "";
@@ -71,24 +72,24 @@ namespace VortexArena.Core.UI
         private bool _countdownActive;
         private bool _killFeedDirty;
 
-        // -------------------------------------------------------- alt sınıf sözleşmesi
+        // ------------------------------------------------------------ subclass contract
 
-        /// <summary>Skor satırı — ör. "KIRMIZI 5 — 3 MAVİ" ya da "SEN 7 · LİDER 9".
-        /// <b>Takım kavramı burada değil, alt sınıfta yaşar.</b></summary>
+        /// <summary>The score line — e.g. "KIRMIZI 5 — 3 MAVİ" or "SEN 7 · LİDER 9".
+        /// <b>The notion of a team lives in the subclass, not here.</b></summary>
         protected abstract string ScoreLine(MatchStateMsg msg);
 
-        /// <summary>Maç sonu başlığı — ör. "MAVİ KAZANDI" ya da "AHMET KAZANDI".</summary>
+        /// <summary>The match end headline — e.g. "MAVİ KAZANDI" or "AHMET KAZANDI".</summary>
         protected abstract string WinnerLine(MatchEndMsg msg);
 
-        /// <summary>Maç sonundaki skor satırı; <c>null</c> dönerse skor alanı son
-        /// <c>match_state</c>'ten kalan değerde bırakılır.</summary>
+        /// <summary>The score line at match end; if it returns <c>null</c> the score field is left at
+        /// the value left over from the last <c>match_state</c>.</summary>
         protected virtual string EndScoreLine(MatchEndMsg msg) => null;
 
-        /// <summary>Roster tazelendi — bireysel skorlu modların lider tablosu buradan beslenir
-        /// (<c>PlayerInfo.score</c>, §10.2). Taban yalnız adları çözer.</summary>
+        /// <summary>The roster was refreshed — the leaderboard of modes with individual scoring is fed
+        /// from here (<c>PlayerInfo.score</c>, §10.2). The base only resolves the names.</summary>
         protected virtual void OnLobbyStateApplied(LobbyStateMsg msg) { }
 
-        // ---------------------------------------------------------- Unity yaşam döngüsü
+        // ------------------------------------------------------------- Unity lifecycle
 
         protected virtual void OnEnable()
         {
@@ -117,9 +118,9 @@ namespace VortexArena.Core.UI
             UnbindCombat();
         }
 
-        /// <summary>Maç sonu ekranı açıldı/kapandı: oyun içi HUD çizimden çıkar ya da geri gelir
-        /// (<see cref="GameplayHudGate"/>). Metin yazmaya devam eder — ekran kapanınca HUD zaten
-        /// güncel değerlerle geri gelsin.</summary>
+        /// <summary>The match result overlay opened/closed: the in-game HUD leaves the drawing or
+        /// comes back (<see cref="GameplayHudGate"/>). It keeps writing its texts — so that when the
+        /// overlay closes the HUD comes back already carrying up-to-date values.</summary>
         private void ApplyHudGate(bool hidden)
         {
             if (_canvas == null)
@@ -135,7 +136,7 @@ namespace VortexArena.Core.UI
 
         protected virtual void Start()
         {
-            // Kalıcı singleton (PlayerCombatState) sahne objelerinden sonra önyüklenebilir.
+            // The persistent singleton (PlayerCombatState) may bootstrap after the scene objects.
             TryBindCombat();
             RedrawKillFeed();
             RefreshStatusText();
@@ -143,7 +144,7 @@ namespace VortexArena.Core.UI
 
         protected virtual void Update()
         {
-            // Abone olana dek dene; abone olduktan sonra bir daha uğraşma.
+            // Keep trying until subscribed; once subscribed, never bother again.
             if (_combat == null)
             {
                 TryBindCombat();
@@ -157,7 +158,7 @@ namespace VortexArena.Core.UI
             }
         }
 
-        // -------------------------------------------------------- ağ olay işleyiciler
+        // --------------------------------------------------------- network event handlers
 
         private void HandleLobbyState(LobbyStateMsg msg)
         {
@@ -231,8 +232,9 @@ namespace VortexArena.Core.UI
             }
 
             string victim = NameOf(msg.victimId);
-            // Kill feed metni yalnız TMP fontunda BULUNAN karakterleri kullanır: LiberationSans SDF
-            // (+ fallback) ok/kuru kafa gibi sembolleri içermez, eksik glif ekranda □ olarak çizilir.
+            // The kill feed text only uses characters that EXIST in the TMP font: LiberationSans SDF
+            // (+ fallback) does not contain symbols like arrows or skulls, and a missing glyph is
+            // drawn on screen as □.
             string line;
             if (msg.killerId > 0 && msg.killerId != msg.victimId)
             {
@@ -240,9 +242,9 @@ namespace VortexArena.Core.UI
             }
             else if (string.Equals(msg.weaponId, ArenaProtocol.WEAPON_ID_OBSTACLE))
             {
-                // §10.9 çevresel ölüm: killerId 0 olduğu için üstteki dal tutmaz. Ayrı satır
-                // olmasının sebebi operatör/oyuncu ayrımıdır — "öldü" duvarda eriyen bir oyuncuyu
-                // sunucu hatasından ayırt etmiyordu.
+                // §10.9 environmental death: since killerId is 0 the branch above does not match.
+                // It is a separate line for the sake of the operator/player distinction — "öldü" did
+                // not tell a player melting inside a wall apart from a server error.
                 line = $"{victim} engelde kaldı";
             }
             else
@@ -306,9 +308,9 @@ namespace VortexArena.Core.UI
             }
         }
 
-        // --------------------------------------------------- yerel can/durum bağlama
+        // ------------------------------------------ local health/status binding
 
-        /// <summary>PlayerCombatState kalıcı singleton'ına bir kez abone olur (null olabilir).</summary>
+        /// <summary>Subscribes once to the persistent PlayerCombatState singleton (may be null).</summary>
         private void TryBindCombat()
         {
             if (_combat != null)
@@ -327,7 +329,7 @@ namespace VortexArena.Core.UI
             _combat.AliveChanged += HandleAliveChanged;
             _combat.StatusChanged += HandleStatusChanged;
 
-            // Abone olmadan önceki durumu bir kez uygula.
+            // Apply the state from before the subscription once.
             HandleHpChanged(_combat.Hp);
             HandleAliveChanged(_combat.IsAlive);
             HandleStatusChanged(_combat.StatusText);
@@ -373,15 +375,16 @@ namespace VortexArena.Core.UI
             RefreshStatusText();
         }
 
-        // ---------------------------------------------------------------- çizim
+        // ---------------------------------------------------------------- drawing
 
-        /// <summary>Geri sayım aktifken büyük sayı, değilse savaş durum metni gösterilir.</summary>
+        /// <summary>While the countdown is active the big number is shown, otherwise the combat status
+        /// text.</summary>
         private void RefreshStatusText()
         {
             SetText(statusText, _countdownActive ? _countdownLabel : _combatStatus);
         }
 
-        /// <summary>Kendi öldürme/ölüm sayacın — sunucu-otoriter (§10.2), yerelde sayılmaz.</summary>
+        /// <summary>Your own kill/death counter — server-authoritative (§10.2), not counted locally.</summary>
         private void RefreshSelfStats(LobbyStateMsg msg)
         {
             if (selfStatsText == null)
@@ -393,7 +396,7 @@ namespace VortexArena.Core.UI
             SetText(selfStatsText, self == null ? "" : $"{self.kills} öldürme · {self.deaths} ölüm");
         }
 
-        /// <summary>Roster'daki kendi satırımız; kimlik yoksa/bulunamazsa null.</summary>
+        /// <summary>Our own row in the roster; null if there is no id or it cannot be found.</summary>
         protected PlayerInfo FindSelf(LobbyStateMsg msg)
         {
             int playerId = PlayerCombatState.Instance != null ? PlayerCombatState.Instance.PlayerId : 0;
@@ -447,9 +450,9 @@ namespace VortexArena.Core.UI
             killFeedText.text = _sb.ToString();
         }
 
-        // ---------------------------------------------------------------- yardımcı
+        // ---------------------------------------------------------------- helpers
 
-        /// <summary>playerId → ad (<c>lobby_state</c>'ten); bilinmiyorsa "Oyuncu N".</summary>
+        /// <summary>playerId → name (from <c>lobby_state</c>); "Oyuncu N" if unknown.</summary>
         protected string NameOf(int playerId)
         {
             return _names.TryGetValue(playerId, out string name) && !string.IsNullOrEmpty(name)
@@ -466,15 +469,16 @@ namespace VortexArena.Core.UI
         }
 
         /// <summary>
-        /// Durumu (§10.1) ekran metnine çevirir. <b>Faz tek başına yetmez:</b> telde tek bir
-        /// <c>paused</c> görünen durum lobi de olabilir, yükleme/geri sayım/duraklatma da —
-        /// gerekçe (<c>phaseReason</c>) bunları ayırır. Modun kendi ara durumu
-        /// (<c>modeState</c>, ör. turnuva toplanması) gerekçe <c>mode</c> iken devreye girer;
-        /// tabanın onu yorumlaması beklenmez, alt sınıf <see cref="ModeStateLabel"/> ile yazar.
+        /// Converts the state (§10.1) into on-screen text. <b>The phase alone is not enough:</b> a
+        /// state that appears as a single <c>paused</c> on the wire may be the lobby, but also
+        /// loading/countdown/pause — the reason (<c>phaseReason</c>) tells them apart. The mode's own
+        /// intermediate state (<c>modeState</c>, e.g. the tournament gathering) kicks in while the
+        /// reason is <c>mode</c>; the base is not expected to interpret it, the subclass writes it via
+        /// <see cref="ModeStateLabel"/>.
         /// <para>
-        /// <c>virtual</c>: tur tabanlı bir mod koşan maça "MAÇ" yerine "TUR 3" yazmak isteyebilir.
-        /// Alt sınıf yalnız ilgilendiği dalı ezer, gerisini <c>base</c>'e bırakır — faz/gerekçe
-        /// sözlüğü tek yerde kalsın.
+        /// <c>virtual</c>: a round-based mode may want to write "TUR 3" instead of "MAÇ" for a running
+        /// match. The subclass overrides only the branch it cares about and leaves the rest to
+        /// <c>base</c> — so the phase/reason vocabulary stays in one place.
         /// </para>
         /// </summary>
         protected virtual string PhaseLabel(string phase, string phaseReason, string modeState)
@@ -494,9 +498,10 @@ namespace VortexArena.Core.UI
         }
 
         /// <summary>
-        /// Mod duraklatma istediğinde (<c>phaseReason == "mode"</c>) gösterilecek metin. Taban
-        /// <c>modeState</c>'i YORUMLAMAZ — anlamı yalnız modun kendisi bilir (turnuvada
-        /// "herkes tabana dönsün" gibi). Alt sınıf yazmazsa nötr bir metin gösterilir.
+        /// The text to show when the mode requests a pause (<c>phaseReason == "mode"</c>). The base
+        /// does NOT interpret <c>modeState</c> — only the mode itself knows its meaning (like
+        /// "everyone return to base" in a tournament). If the subclass writes nothing, a neutral text
+        /// is shown.
         /// </summary>
         protected virtual string ModeStateLabel(string modeState) => "BEKLEME";
 

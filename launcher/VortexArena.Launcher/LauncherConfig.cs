@@ -8,23 +8,22 @@ using System.Text.Json.Serialization;
 namespace VortexArena.Launcher;
 
 /// <summary>
-/// Launcher'ın kalıcı ayarları + başlatma argümanlarını üreten tek yer.
+/// Launcher's persisted settings + the single place that builds launch arguments.
 /// <para>
-/// Ayarlar kullanıcı profilinde saklanır (<see cref="SettingsPath"/>), launcher klasörünün
-/// yanında DEĞİL: klasör yeniden dağıtıldığında (deploy-launcher.bat çıktıyı silip yeniden
-/// kopyalar) operatörün girdiği IP/yol kaybolmasın.
+/// Settings live in the user profile (<see cref="SettingsPath"/>), NOT next to the launcher folder:
+/// a redeploy (deploy-launcher.bat wipes and re-copies the output) must not lose the operator's
+/// IP/paths.
 /// </para>
 /// <para>
-/// ⚠️ <b>Argüman adları sözleşmedir.</b> <see cref="ArgServerIp"/>/<see cref="ArgServerPort"/>
-/// Unity tarafındaki <c>AppBoot.ArgServerIp</c>/<c>ArgServerPort</c> ile, <see cref="ArgVenue"/>
-/// ise sunucudaki <c>Program.SelectVenue</c>'nun okuduğu <c>--venue</c> ile birebir aynı olmalıdır.
-/// İkisi de testte doğrulanır (<c>LauncherConfigTests</c>) — birini değiştirirsen İKİ tarafı
-/// birlikte değiştir.
+/// ⚠️ <b>Argument names are a contract.</b> <see cref="ArgServerIp"/>/<see cref="ArgServerPort"/>
+/// must match Unity's <c>AppBoot.ArgServerIp</c>/<c>ArgServerPort</c> exactly, and
+/// <see cref="ArgVenue"/> the <c>--venue</c> read by the server's <c>Program.SelectVenue</c>. Both
+/// are covered by tests (<c>LauncherConfigTests</c>) — change one and you change BOTH sides.
 /// </para>
 /// </summary>
 public sealed class LauncherConfig
 {
-    /// <summary>Protokolün WS kontrol portu (ArenaProtocol.CONTROL_PORT).</summary>
+    /// <summary>Protocol WS control port (ArenaProtocol.CONTROL_PORT).</summary>
     public const int DefaultPort = 47821;
 
     /// <summary>Unity <c>AppBoot.ArgServerIp</c>.</summary>
@@ -33,7 +32,7 @@ public sealed class LauncherConfig
     /// <summary>Unity <c>AppBoot.ArgServerPort</c>.</summary>
     public const string ArgServerPort = "--server-port";
 
-    /// <summary>Sunucunun mekan argümanı (<c>Program.SelectVenue</c>).</summary>
+    /// <summary>Server's venue argument (<c>Program.SelectVenue</c>).</summary>
     public const string ArgVenue = "--venue";
 
     [JsonPropertyName("adminExePath")]
@@ -45,16 +44,16 @@ public sealed class LauncherConfig
     [JsonPropertyName("serverPort")]
     public int ServerPort { get; set; } = DefaultPort;
 
-    /// <summary>Sunucu exe'si (<c>deploy\server\VortexArena.Server.App.exe</c>); boş = sunucu
-    /// bu launcher'dan başlatılmayacak, elle çalıştırılacak.</summary>
+    /// <summary>Server exe (<c>deploy\server\VortexArena.Server.App.exe</c>); empty = the server is
+    /// not started from this launcher and is run by hand.</summary>
     [JsonPropertyName("serverExePath")]
     public string ServerExePath { get; set; } = "";
 
-    /// <summary>Bu oturumda açılacak mekan — sunucuya <c>--venue</c> ile geçer.</summary>
+    /// <summary>Venue to open this session — passed to the server as <c>--venue</c>.</summary>
     [JsonPropertyName("venue")]
     public string Venue { get; set; } = "";
 
-    // ------------------------------------------------------------------ kalıcılık
+    // ----------------------------------------------------------------- persistence
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -68,8 +67,8 @@ public sealed class LauncherConfig
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "VortexArena", "launcher", "settings.json");
 
-    /// <summary>Ayarları okur. Dosya yoksa/bozuksa varsayılanlarla döner — launcher açılmalı,
-    /// operatör ayarı yeniden girebilsin.</summary>
+    /// <summary>Reads settings. Missing/corrupt file returns defaults — the launcher must open so
+    /// the operator can re-enter them.</summary>
     public static LauncherConfig Load() => Load(SettingsPath);
 
     public static LauncherConfig Load(string path)
@@ -95,19 +94,19 @@ public sealed class LauncherConfig
         File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));
     }
 
-    // ------------------------------------------------------------------ doğrulama
+    // ------------------------------------------------------------------ validation
 
     public bool AdminExeExists => AdminExePath.Length > 0 && File.Exists(AdminExePath);
 
     public bool ServerExeExists => ServerExePath.Length > 0 && File.Exists(ServerExePath);
 
     /// <summary>
-    /// Adres tam yazılmış mı.
+    /// Is the address fully written.
     /// <para>
-    /// ⚠️ <b>Tek başına <see cref="IPAddress.TryParse(string, out IPAddress)"/> yetmez:</b> .NET
-    /// eksik dörtlüleri eski uyumluluk için kabul eder ve <c>"192.168.1"</c> adresini sessizce
-    /// <c>192.168.0.1</c> yapar. Operatör bunu fark etmeden yanlış makineye bağlanmaya çalışır ve
-    /// ekranda yalnız "sunucuya bağlanılamıyor" görür. Bu yüzden IPv4'te dört parça şart koşulur.
+    /// ⚠️ <b><see cref="IPAddress.TryParse(string, out IPAddress)"/> alone is not enough:</b> .NET
+    /// accepts short forms for legacy compatibility and silently turns <c>"192.168.1"</c> into
+    /// <c>192.168.0.1</c>. The operator then dials the wrong machine and only sees "cannot connect".
+    /// Hence four parts are required for IPv4.
     /// </para>
     /// </summary>
     public static bool IsValidIp(string value)
@@ -122,7 +121,7 @@ public sealed class LauncherConfig
 
     public static bool IsValidPort(int value) => value > 0 && value <= 65535;
 
-    /// <summary>Yönetim oyununa geçilecek argümanlar — <c>AppBoot</c> bunları okur.</summary>
+    /// <summary>Arguments passed to the admin game — read by <c>AppBoot</c>.</summary>
     public IReadOnlyList<string> GameArguments =>
     [
         ArgServerIp, ServerIp.Trim(),
@@ -130,9 +129,9 @@ public sealed class LauncherConfig
     ];
 
     /// <summary>
-    /// Sunucuya geçilecek argümanlar. <b>Mekan her zaman açıkça geçer</b> — launcher mekansız
-    /// sunucu başlatmaz (<see cref="ValidateServer"/>), çünkü mekansız açılışta sunucu alfabetik
-    /// ilk mekanı sessizce seçer.
+    /// Arguments passed to the server. <b>The venue is always explicit</b> — the launcher never
+    /// starts a venue-less server (<see cref="ValidateServer"/>), because without one the server
+    /// silently picks the alphabetically first venue.
     /// </summary>
     public IReadOnlyList<string> ServerArguments
     {
@@ -143,7 +142,7 @@ public sealed class LauncherConfig
         }
     }
 
-    /// <summary>Yönetim oyunu başlatılabilir mi; engel varsa operatöre gösterilecek sebep.</summary>
+    /// <summary>Can the admin game start; otherwise the reason to show the operator.</summary>
     public string? Validate()
     {
         if (AdminExePath.Trim().Length == 0)
@@ -162,14 +161,15 @@ public sealed class LauncherConfig
     }
 
     /// <summary>
-    /// Sunucu başlatılabilir mi; engel varsa sebep.
+    /// Can the server start; otherwise the reason.
     /// <para>
-    /// <b>Mekan zorunludur</b> ve bu bilinçlidir: mekansız açılışta sunucunun konsolu
-    /// etkileşimli değilse (betik/servis/launcher) alfabetik ilk mekan sessizce açılır ve
-    /// operatör yanlış işletmenin arenalarını yönetir. Launcher bu yolu hiç bırakmaz.
+    /// <b>The venue is mandatory</b> by design: started without one and without an interactive
+    /// console (script/service/launcher), the server silently opens the alphabetically first venue
+    /// and the operator manages the wrong business's arenas. The launcher never leaves that path
+    /// open.
     /// </para>
     /// </summary>
-    /// <param name="knownVenues"><c>maps.json</c>'dan okunan mekanlar; okunamadıysa boş.</param>
+    /// <param name="knownVenues">Venues read from <c>maps.json</c>; empty when unreadable.</param>
     public string? ValidateServer(IReadOnlyList<string> knownVenues)
     {
         if (ServerExePath.Trim().Length == 0)

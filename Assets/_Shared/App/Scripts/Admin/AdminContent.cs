@@ -7,23 +7,23 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Admin arayüzünün içerik kataloğuna (mod/harita) erişimi.
+    /// The admin UI's access to the content catalog (modes/maps).
     /// <para>
-    /// Admin arayüzü tamamen prosedürel olduğu için <c>[SerializeField]</c> ile katalog
-    /// bağlanamaz; asset <c>Assets/_Shared/Data/Resources/GameCatalog.asset</c> altında durur ve
-    /// bir kez <see cref="Resources.Load{T}(string)"/> ile yüklenir. Klasör değişirse mod/harita
-    /// seçicisi boş kalır (uyarı basılır) — maç başlatma o zaman yalnız sunucu konsolundan yapılır.
+    /// The fully procedural admin UI cannot wire the catalog with <c>[SerializeField]</c>, so
+    /// <c>Assets/_Shared/Data/Resources/GameCatalog.asset</c> is loaded once via
+    /// <see cref="Resources.Load{T}(string)"/>. ⚠️ Moving that asset leaves the mode/map picker
+    /// empty (with a warning) and matches can only be started from the server console.
     /// </para>
     /// </summary>
     public static class AdminContent
     {
-        /// <summary>Resources altındaki katalog adı (uzantısız).</summary>
+        /// <summary>The catalog's name under Resources (without extension).</summary>
         public const string CatalogResourceName = "GameCatalog";
 
         private static GameCatalog _catalog;
         private static bool _loadAttempted;
 
-        /// <summary>İçerik kataloğu; bulunamazsa null (bir kez uyarı basılır).</summary>
+        /// <summary>The content catalog; null when not found (a warning is printed once).</summary>
         public static GameCatalog Catalog
         {
             get
@@ -47,10 +47,10 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Katalogdaki <b>başlatılabilir</b> modlar: modId'si dolu ve lobi profili
-        /// olmayanlar. Lobi profili (§10.7) katalogda olmak zorundadır — istemci silah loadout'unu
-        /// oradan çözüyor — ama sunucuda <c>IGameMode</c> karşılığı yoktur, yani seçiciye konsaydı
-        /// operatöre her seferinde sessizce reddedilen bir düğme gösterilirdi.</summary>
+        /// <summary>The <b>startable</b> catalog modes: non-empty modId, not the lobby profile. The
+        /// lobby profile (§10.7) must exist in the catalog (the client resolves its loadout from it)
+        /// but has no server-side <c>IGameMode</c>, so in the picker it would be a button that is
+        /// silently rejected every time.</summary>
         public static void CollectModes(List<ModeDefinition> buffer)
         {
             if (buffer == null)
@@ -75,11 +75,11 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Verilen modun <b>bu mekanda</b> oynanabildiği haritalar (sahne adı dolu olanlar).
-        /// <para>İki süzgeç arka arkaya çalışır: (1) mod uyumu — katalogdan, (2) mekan —
-        /// <see cref="AdminSelection.IsInVenue"/> ile sunucunun açılışta seçtiği mekandan (§11).
-        /// Katalog tüm projeyi tanır; hangi arenaların oynatılabildiğine sunucu karar verir, bu
-        /// yüzden mekan süzgeci yerelde üretilmez — sunucu <c>admin_state</c> ile bildirir.</para>
+        /// Maps on which the given mode can be played <b>in this venue</b> (scene name non-empty).
+        /// <para>Two filters: mode compatibility from the catalog, then the venue via
+        /// <see cref="AdminSelection.IsInVenue"/> (§11). The catalog knows the whole project, but
+        /// the server decides which arenas are playable, so the venue filter is never produced
+        /// locally — it arrives with <c>admin_state</c>.</para>
         /// </summary>
         public static void CollectMaps(string modeId, List<MapDefinition> buffer)
         {
@@ -111,19 +111,17 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Bu mekanın <b>lobi</b> haritası — <c>supportedModeIds == ["lobby"]</c> olan tek harita
-        /// (§10.7). Yoksa null.
+        /// This venue's <b>lobby</b> map — the single map with <c>supportedModeIds == ["lobby"]</c>
+        /// (§10.7), or null.
         /// <para>
-        /// Sunucudaki <c>MapTable.ResolveLobbyScene</c> ile aynı ölçütü kullanır; birden çok aday
-        /// varsa alfabetik ilki döner, yani iki taraf da aynı sahneyi seçer. Mekan süzgeci burada
-        /// da geçerlidir (<see cref="AdminSelection.IsInVenue"/>) — katalogda her işletmenin kendi
-        /// lobisi var, süzgeç gelmeden önce (ilk <c>admin_state</c>'e kadar) hepsi aday görünür ve
-        /// liste süzgeç geldiğinde yeniden kurulur.
+        /// Same criterion as the server's <c>MapTable.ResolveLobbyScene</c>, alphabetically first
+        /// among candidates, so both sides pick the same scene. The venue filter applies here too;
+        /// until the first <c>admin_state</c> every business' lobby looks like a candidate and the
+        /// list is rebuilt when the filter arrives.
         /// </para>
         /// <para>
-        /// ⚠️ Lobi <see cref="CollectMaps"/> sonucuna GİRMEZ: orada "seçili modun oynanabildiği
-        /// arenalar" durur, lobide maç oynanmaz. Admin panelindeki lobi satırı bir harita seçimi
-        /// değil <c>return_to_lobby</c> komutudur.
+        /// ⚠️ The lobby is NOT in <see cref="CollectMaps"/>: no match is played there, and the
+        /// lobby row in the panel is the <c>return_to_lobby</c> command, not a map selection.
         /// </para>
         /// </summary>
         public static MapDefinition ResolveLobbyMap()
@@ -154,12 +152,12 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Bu sahne bir <b>lobi</b> sahnesi mi (katalogdan sorulur).
+        /// Is this scene a <b>lobby</b> scene (asked from the catalog).
         /// <para>
-        /// ⚠️ Ölçüt <see cref="ResolveLobbyMap"/>'in seçtiği sahneyle KARŞILAŞTIRMA değildir:
-        /// o mekan süzgecine bağlıdır ve süzgeç gelmeden önce (ilk <c>admin_state</c>'e kadar)
-        /// başka bir işletmenin lobisini gösterebilir. Burada katalogdaki tanıma bakılır, yani
-        /// cevap bağlantı durumundan bağımsız olarak doğrudur.
+        /// ⚠️ Deliberately NOT a comparison with <see cref="ResolveLobbyMap"/>'s scene: that depends
+        /// on the venue filter and may point at another business' lobby before the first
+        /// <c>admin_state</c>. Reading the catalog definition keeps the answer correct regardless of
+        /// the connection state.
         /// </para>
         /// </summary>
         public static bool IsLobbyScene(string sceneName)
@@ -168,10 +166,9 @@ namespace VortexArena.App.Admin
             return map != null && IsLobbyMap(map);
         }
 
-        /// <summary>Harita lobi haritası mı: desteklediği TEK mod <c>lobby</c> ise. Listenin boş
-        /// olması "kısıtsız" demektir (<see cref="MapDefinition.SupportsMode"/>), yani lobi
-        /// değildir — arena sanılıp maç açılabilsin diye değil, tam tersi: kısıtsız harita her
-        /// modda oynanır, lobi ise hiçbirinde.</summary>
+        /// <summary>Lobby map = the ONLY supported mode is <c>lobby</c>. ⚠️ An empty list means
+        /// "unrestricted" (<see cref="MapDefinition.SupportsMode"/>), which is the opposite of a
+        /// lobby: unrestricted maps play in every mode, a lobby in none.</summary>
         public static bool IsLobbyMap(MapDefinition map)
         {
             if (map == null)
@@ -185,7 +182,7 @@ namespace VortexArena.App.Admin
                        System.StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>Modun görünen adı; katalogda yoksa modId'nin kendisi.</summary>
+        /// <summary>The mode's display name, or the modId when it is not in the catalog.</summary>
         public static string ModeDisplayName(string modeId)
         {
             if (string.IsNullOrEmpty(modeId))

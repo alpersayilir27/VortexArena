@@ -1,8 +1,8 @@
 namespace VortexArena.Core
 {
     /// <summary>
-    /// Skorun hangi kanaldan taşındığı (§10.5 <c>scoring</c>).
-    /// <para>⚠ <see cref="ModeDefinition"/> tarafından SERIALIZE edilir — yeni değer SONA eklenir.</para>
+    /// Which channel carries the score (§10.5 <c>scoring</c>).
+    /// <para>⚠ SERIALIZED by <see cref="ModeDefinition"/> — new values are appended at the END.</para>
     /// </summary>
     public enum ModeScoreKind
     {

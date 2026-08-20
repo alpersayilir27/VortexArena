@@ -3,36 +3,29 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// <b>İsabet göstergesinin (<see cref="HitMarker"/>) görünüm ayarları</b> — boy, saydamlık,
-    /// ömür, kontur, materyal ve (istenirse) görünümün tamamının yerini alan bir prefab.
-    ///
-    /// <para><b>Nerede yaşar:</b> <c>Assets/_Shared/Data/Resources/HitMarkerStyle.asset</c>.
-    /// <see cref="WeaponCatalog"/> ile aynı gerekçe: <see cref="HitMarker"/> kendini önyükleyen bir
-    /// tekildir, sahnede/prefabda referansı yoktur — ayarı ancak <c>Resources.Load</c> ile
-    /// bulabilir. ⚠️ <c>Resources/</c> altından çıkarılırsa ya da adı değişirse gösterge
-    /// <b>çalışmayı sürdürür</b> ama koddaki varsayılanlara düşer, yani yaptığın ayarlar
-    /// sessizce yok sayılır.</para>
-    ///
-    /// <para><b>Asset zorunlu değildir:</b> yoksa aşağıdaki alan başlangıç değerleri kullanılır
-    /// (<see cref="ScriptableObject.CreateInstance{T}"/> ile bellekte bir örnek açılır). Yani
-    /// varsayılanların TEK doğruluk kaynağı bu dosyadaki başlangıç değerleridir — asset onların
-    /// bir kopyasıdır, ikinci bir tablo değil.</para>
-    ///
-    /// <para><b>Play kipinde canlı ayarlanır:</b> sayılar, renkler ve eğriler her karede buradan
-    /// okunur → Inspector'da oynattığın değer anında ekrana yansır. ⚠️ <see cref="MarkerPrefab"/>
-    /// ve <see cref="LineMaterial"/> havuz düğümü kurulurken bağlandığı için onların değişimi
-    /// bir sonraki isabette (prefab için: havuz o düğümü yeniden kurduğunda) geçerli olur.</para>
+    /// Look settings of the hit marker (<see cref="HitMarker"/>) — size, transparency, lifetime,
+    /// outline, material and optionally a prefab replacing the whole look.
+    /// <para>Lives at <c>Assets/_Shared/Data/Resources/HitMarkerStyle.asset</c>. Same rationale as
+    /// <see cref="WeaponCatalog"/>: <see cref="HitMarker"/> self-bootstraps with no scene/prefab
+    /// reference, so <c>Resources.Load</c> is the only way in. ⚠️ Moved out or renamed, the marker
+    /// KEEPS WORKING but falls back to the code defaults — your settings are silently ignored.</para>
+    /// <para>The asset is optional: without it the field initial values below are used (in-memory
+    /// instance). So the defaults' SINGLE source of truth is this file; the asset is a copy of
+    /// them, not a second table.</para>
+    /// <para>Tunable live in Play mode — numbers, colors and curves are read every frame. ⚠️
+    /// <see cref="MarkerPrefab"/> and <see cref="LineMaterial"/> bind while a pool node is built,
+    /// so they take effect on the next hit (prefab: when the pool rebuilds that node).</para>
     /// </summary>
     [CreateAssetMenu(fileName = "HitMarkerStyle", menuName = "VortexArena/Hit Marker Style")]
     public class HitMarkerStyle : ScriptableObject
     {
-        /// <summary>Resources.Load anahtarı (asset dosya adıyla birebir).</summary>
+        /// <summary>Resources.Load key (identical to the asset file name).</summary>
         private const string ResourcePath = "HitMarkerStyle";
 
         private static HitMarkerStyle _cached;
         private static bool _loadAttempted;
 
-        // ------------------------------------------------------------------ görünüm
+        // ------------------------------------------------------------------ look
 
         [Header("Görünüm")]
         [Tooltip("İşaretin rengi. ALFA = saydamlık (0 görünmez, 1 tam opak).\n\n" +
@@ -63,7 +56,7 @@ namespace VortexArena.Core.Combat
                  "derinlik testinde yüzeyle didişip parça parça kaybolur.")]
         [SerializeField] private float surfaceLiftMeters = 0.02f;
 
-        // ------------------------------------------------------------------ zaman eğrileri
+        // ------------------------------------------------------------------ time curves
 
         [Header("Zaman eğrileri  (yatay eksen: ömrün 0 → 1'i)")]
         [Tooltip("Saydamlık çarpanı. Rengin alfası bununla ÇARPILIR — yani rengi %50 saydam " +
@@ -76,7 +69,7 @@ namespace VortexArena.Core.Combat
                  "ateşte üst üste binen isabetler böylece ayrı ayrı okunur.")]
         [SerializeField] private AnimationCurve sizeOverLife = DefaultSizeCurve();
 
-        // ------------------------------------------------------------------ kontur
+        // ------------------------------------------------------------------ outline
 
         [Header("Kontur  (X'in dışına çizilen ikinci, kalın X)")]
         [Tooltip("Kontur rengi. ⚠️ ALFA 0 → kontur hiç çizilmez.\n\n" +
@@ -87,7 +80,7 @@ namespace VortexArena.Core.Combat
                  "1 ve altı → kontur ana çizginin altında kalır, yani görünmez.")]
         [SerializeField] private float outlineThicknessScale = 2.2f;
 
-        // ------------------------------------------------------------------ serbest görünüm
+        // ------------------------------------------------------------------ custom look
 
         [Header("Serbest görünüm")]
         [Tooltip("Çizgi materyali. Boşsa çalışma anında Sprites/Default üretilir.\n\n" +
@@ -109,38 +102,38 @@ namespace VortexArena.Core.Combat
                  "bakıldığında çizgiye iner).")]
         [SerializeField] private bool faceCamera = true;
 
-        // ------------------------------------------------------------------ okuma
+        // ------------------------------------------------------------------ reading
 
-        /// <summary>İşaretin rengi; alfası saydamlıktır.</summary>
+        /// <summary>Marker color; its alpha is the transparency.</summary>
         public Color Color => color;
 
-        /// <summary>Kontur rengi; alfası 0 ise kontur çizilmez.</summary>
+        /// <summary>Outline color; the outline is not drawn when its alpha is 0.</summary>
         public Color OutlineColor => outlineColor;
 
-        /// <summary>Kontur çizilecek mi (renk görünür + kalınlık ana çizgiyi aşıyor mu).</summary>
+        /// <summary>Whether the outline is drawn (color visible + thickness exceeds the main line).</summary>
         public bool HasOutline => outlineColor.a > 0.001f && outlineThicknessScale > 1f;
 
-        /// <summary>Kontur kalınlığının ana çizgiye oranı.</summary>
+        /// <summary>Ratio of the outline thickness to the main line.</summary>
         public float OutlineThicknessScale => Mathf.Max(1f, outlineThicknessScale);
 
-        /// <summary>Ömür (sn) — sıfıra bölünmeyi engellemek için tabanı vardır.</summary>
+        /// <summary>Lifetime (s) — it has a floor to prevent division by zero.</summary>
         public float LifetimeSeconds => Mathf.Max(0.02f, lifetimeSeconds);
 
-        /// <summary>Yüzeyden göze doğru kaldırma (m).</summary>
+        /// <summary>Lift from the surface toward the eye (m).</summary>
         public float SurfaceLiftMeters => Mathf.Max(0f, surfaceLiftMeters);
 
-        /// <summary>Çizgi materyali (null olabilir → çalışma anında üretilir).</summary>
+        /// <summary>Line material (may be null → generated at runtime).</summary>
         public Material LineMaterial => lineMaterial;
 
-        /// <summary>Görünümün tamamının yerini alan prefab (null olabilir → prosedürel X).</summary>
+        /// <summary>Prefab that replaces the whole look (may be null → procedural X).</summary>
         public GameObject MarkerPrefab => markerPrefab;
 
-        /// <summary>İşaret kameraya döndürülsün mü.</summary>
+        /// <summary>Whether the marker is turned toward the camera.</summary>
         public bool FaceCamera => faceCamera;
 
         /// <summary>
-        /// Verilen mesafedeki boy (m): açısal boy, alt/üst sınıra kırpılı. Sınırlar ters
-        /// girilmişse (min &gt; max) sıra düzeltilir — yoksa <c>Clamp</c> sessizce min'i döndürür.
+        /// Size at the given distance (m): angular size, clamped. Inverted bounds (min &gt; max)
+        /// are reordered — otherwise <c>Clamp</c> silently returns min.
         /// </summary>
         public float SizeAt(float distanceMeters)
         {
@@ -149,29 +142,29 @@ namespace VortexArena.Core.Combat
             return Mathf.Clamp(distanceMeters * Mathf.Max(0f, sizeAtOneMeter), min, max);
         }
 
-        /// <summary>Boydan türeyen çizgi kalınlığı (m).</summary>
+        /// <summary>Line thickness derived from the size (m).</summary>
         public float ThicknessFor(float sizeMeters) =>
             Mathf.Max(0.0005f, sizeMeters * Mathf.Max(0f, thicknessOfSize));
 
         /// <summary>
-        /// Ömrün <paramref name="t"/> (0→1) anındaki saydamlık çarpanı.
-        /// ⚠️ Eğri boşsa (asset elle yazılmış ve alan eksik) koddaki varsayılan eğri kullanılır —
-        /// boş bir <see cref="AnimationCurve"/> her yerde 0 döndürür, yani işaret hiç görünmezdi.
+        /// Transparency multiplier at lifetime <paramref name="t"/> (0→1).
+        /// ⚠️ An empty curve (hand-written asset missing the field) falls back to the code default:
+        /// an empty <see cref="AnimationCurve"/> returns 0 everywhere, hiding the marker entirely.
         /// </summary>
         public float AlphaAt(float t) => Evaluate(alphaOverLife, t, DefaultAlpha(t));
 
-        /// <summary>Ömrün <paramref name="t"/> (0→1) anındaki boy çarpanı (aynı boş-eğri emniyeti).</summary>
+        /// <summary>Size multiplier at moment <paramref name="t"/> (0→1) of the lifetime (same
+        /// empty-curve safety net).</summary>
         public float SizeScaleAt(float t) => Evaluate(sizeOverLife, t, DefaultSizeScale(t));
 
         private static float Evaluate(AnimationCurve curve, float t, float fallback) =>
             curve != null && curve.length > 0 ? curve.Evaluate(t) : fallback;
 
-        // ------------------------------------------------------------------ varsayılanlar
+        // ------------------------------------------------------------------ defaults
 
-        // ⚠️ Eğrilerin varsayılanı İKİ yerde yaşıyor: bir eğri nesnesi olarak (Inspector'da
-        // görünen hâli) ve bir formül olarak (eğri boşaltılırsa devreye giren yedek). İkisi
-        // birbirinin kopyası değil, aynı şeklin iki temsili — formül tarafı asset bozulduğunda
-        // göstergenin tümden kaybolmasını engelliyor.
+        // ⚠️ The curve defaults live in TWO places: a curve object (shown in the Inspector) and a
+        // formula (fallback when the curve is emptied) — two representations of the same shape, not
+        // copies. The formula keeps the marker from vanishing when the asset is broken.
 
         private static AnimationCurve DefaultAlphaCurve() =>
             new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(0.45f, 1f), new Keyframe(1f, 0f));
@@ -179,7 +172,7 @@ namespace VortexArena.Core.Combat
         private static AnimationCurve DefaultSizeCurve() =>
             new AnimationCurve(new Keyframe(0f, 0.5f), new Keyframe(0.18f, 1f), new Keyframe(1f, 1.12f));
 
-        /// <summary>Kısa bir tam parlaklık payı, sonra <c>1 − u²</c> ile hızlanan sönme.</summary>
+        /// <summary>A short full-brightness hold, then a fade accelerating with <c>1 − u²</c>.</summary>
         private static float DefaultAlpha(float t)
         {
             const float hold = 0.45f;
@@ -192,7 +185,7 @@ namespace VortexArena.Core.Combat
             return 1f - u * u;
         }
 
-        /// <summary>Küçükten açılma, ardından ömrün sonuna kadar hafif genişleme.</summary>
+        /// <summary>Pops open from small, then widens slightly until the end of the lifetime.</summary>
         private static float DefaultSizeScale(float t)
         {
             const float pop = 0.18f;
@@ -201,12 +194,11 @@ namespace VortexArena.Core.Combat
                 : Mathf.Lerp(1f, 1.12f, (t - pop) / (1f - pop));
         }
 
-        // ------------------------------------------------------------------ yükleme
+        // ------------------------------------------------------------------ loading
 
         /// <summary>
-        /// Ayarı Resources'tan yükler; sonuç tek sefer önbelleklenir. Asset yoksa <c>null</c> döner
-        /// ve <b>uyarı basılmaz</b> — asset isteğe bağlıdır, gösterge onsuz da çalışır (çağıran
-        /// koddaki varsayılanlara düşer).
+        /// Loads the settings from Resources, cached once. Returns <c>null</c> with NO warning when
+        /// the asset is absent — it is optional and the caller falls back to the code defaults.
         /// </summary>
         public static HitMarkerStyle Load()
         {

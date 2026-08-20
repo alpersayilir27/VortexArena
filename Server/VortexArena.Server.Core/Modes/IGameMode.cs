@@ -1,60 +1,57 @@
 #nullable enable
 namespace VortexArena.Server.Core.Modes;
 
-/// <summary>Her oyun modu bu arayüzü uygular ve MatchDirector'a takılır.
-/// ModeId, start_match.modeId ve Unity tarafındaki mod kutusu anahtarıyla birebir eşleşir
-/// (ör. "tdm"); yeni mod eklerken Docs/ArenaNet-Protokol.md'ye modId işlenir (CLAUDE.md reçetesi).
-///
-/// <para>Tüm kancalar MatchDirector'ın kilidi DIŞINDA çağrılır; mod, director'ın public API'sini
-/// (ScoreRed/ScoreBlue/AddScore/AddPlayerScore/TimeRemaining/ConnectedPlayers…) serbestçe
-/// kullanabilir — o API kendi kilidini alır. Kancalar İÇİNDE bloklayan iş yapılmaz (maç tik'i 10 Hz).</para>
-///
-/// <para><b>Yeni kanca eklerken VARSAYILAN GÖVDE kullan</b> (default interface method): böylece
-/// mevcut modların hiçbiri değişmez, yalnız ilgilenen mod override eder. Tersi — her modun boş
-/// uygulamak zorunda kaldığı ölü kanca — her yeni moda ödenen bir vergidir. Aynı sebeple
-/// <b>tüketicisi olmayan kanca EKLENMEZ</b>: sonradan eklemek bu kural sayesinde ücretsizdir.</para></summary>
+/// <summary>Implemented by every game mode and plugged into the MatchDirector.</summary>
+/// <remarks>ModeId matches start_match.modeId and the Unity mode box key exactly (e.g. "tdm"); a new
+/// modId is recorded in Docs/ArenaNet-Protokol.md.
+/// <para>All hooks are called OUTSIDE the MatchDirector's lock, so the director's public API
+/// (ScoreRed/AddScore/TimeRemaining/ConnectedPlayers…) is free to use — it takes its own lock. Do no
+/// blocking work inside a hook (the match tick is 10 Hz).</para>
+/// <para>⚠️ New hooks get a DEFAULT BODY so existing modes stay untouched; a dead hook every mode must
+/// implement empty is a tax on every new mode. For the same reason a hook with no consumer is not
+/// added — adding it later is free.</para></remarks>
 public interface IGameMode
 {
-    /// <summary>start_match.modeId ile eşleşen anahtar.</summary>
+    /// <summary>Key matching start_match.modeId.</summary>
     string ModeId { get; }
 
-    /// <summary>Modun ŞEKLİ (§10.5): takım kipi, skor kanalı, dost ateşi, canlanma, silah kaynağı.
-    /// MatchDirector hem kendini buna göre kurar hem de load_match.rules ile istemciye yollar.
-    /// Bugünkü TDM davranışı için <see cref="ModeRules.TeamDefault"/> döndürmek yeterlidir.</summary>
+    /// <summary>The mode's SHAPE (§10.5): team mode, score channel, friendly fire, revive, weapon
+    /// source.</summary>
+    /// <remarks>The MatchDirector configures itself from it and sends it via load_match.rules;
+    /// <see cref="ModeRules.TeamDefault"/> gives today's TDM behaviour.</remarks>
     ModeRules Rules { get; }
 
-    /// <summary>load_match.roundSeconds için varsayılan tur süresi. <b>Kilit değil varsayılan:</b>
-    /// admin start_match.roundSeconds ile o maça özel bir değer verebilir (§5.2).</summary>
+    /// <summary>Default round length for load_match.roundSeconds — a default, not a lock: the admin
+    /// can override it per match (§5.2).</summary>
     int DefaultRoundSeconds { get; }
 
-    /// <summary>load_match.scoreLimit için varsayılan skor limiti (aynı şekilde ezilebilir).</summary>
+    /// <summary>Default score limit for load_match.scoreLimit (overridable the same way).</summary>
     int DefaultScoreLimit { get; }
 
-    /// <summary>Maç boyunca BİR KEZ, ilk kez Live'a geçerken çağrılır.
-    /// <para>⚠️ Tur tabanlı modda (<c>tournament</c>) sonraki turların Live girişleri bunu
-    /// TEKRAR TETİKLEMEZ — "maç başladı" ile "tur başladı" ayrı olaylardır
-    /// (bkz. <see cref="OnRoundStart"/>).</para></summary>
+    /// <summary>Called ONCE per match, on the first transition to Live.</summary>
+    /// <remarks>⚠️ In a round based mode (<c>tournament</c>) later Live entries do NOT retrigger it —
+    /// "match started" and "round started" are separate events (see <see cref="OnRoundStart"/>).</remarks>
     void OnMatchStart(MatchDirector director);
 
-    /// <summary>Faz Live'a HER girişte çağrılır — maçın ilk turu dahil, <see cref="OnMatchStart"/>
-    /// hemen ardından. Hasarın açıldığı andır.
-    /// <para>Tur kavramı olmayan modlar bunu hiç yazmaz (maçta bir kez çağrılır, yok sayılır).</para></summary>
+    /// <summary>Called on EVERY entry into Live, including the first round right after
+    /// <see cref="OnMatchStart"/>; the moment damage is enabled.</summary>
+    /// <remarks>Modes with no round concept ignore it.</remarks>
     void OnRoundStart(MatchDirector director) { }
 
-    /// <summary>true dönerse MatchDirector fazı End'e taşır (süre doldu / skor limiti).
-    /// Kazanan <see cref="MatchOutcome"/> ile ifade edilir: takım skorlu modlarda WinnerTeam,
-    /// bireysel skorlu modlarda WinnerPlayerId (bkz. <see cref="ModeRules.Scoring"/>).</summary>
+    /// <summary>true moves the phase to End (time up / score limit); the winner comes back in
+    /// <see cref="MatchOutcome"/> per the mode's score channel
+    /// (<see cref="ModeRules.Scoring"/>).</summary>
     bool IsMatchOver(MatchDirector director, out MatchOutcome outcome);
 
-    /// <summary>Doğrulanmış bir öldürme sonrası skor kuralları. Skoru YALNIZ director'ın skor
-    /// defterinden yaz (AddScore / AddPlayerScore).</summary>
+    /// <summary>Scoring after a validated kill; write ONLY through the director's ledger (AddScore /
+    /// AddPlayerScore).</summary>
     void OnKill(MatchDirector director, int killerId, int victimId, string weaponId) { }
 
-    /// <summary>Maç tik'inde (10 Hz) yalnız Live fazında çağrılır; süreyi MatchDirector işletir.
-    /// Zamana bağlı kuralı olmayan mod bunu hiç yazmaz.</summary>
+    /// <summary>Called on the 10 Hz match tick, Live phase only; the MatchDirector runs the
+    /// clock.</summary>
     void OnTick(MatchDirector director, float deltaSeconds) { }
 
-    /// <summary>Doğrulanmış her hasar sonrası (öldürme olsun olmasın) çağrılır — hasar bazlı
-    /// puanlama/istatistik için. İlgilenmeyen mod hiç yazmaz.</summary>
+    /// <summary>Called after every validated hit, kill or not — for damage based
+    /// scoring/statistics.</summary>
     void OnHitApplied(MatchDirector director, int attackerId, int targetId, float damage, bool killed) { }
 }
