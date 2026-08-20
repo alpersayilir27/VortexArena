@@ -424,7 +424,14 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
    (*Create → VortexArena → Weapon Definition*): `weaponId`, hasar, atış hızı, menzil, saçılım,
    şarjör, haptik (`hapticAmplitude` 0-1 + `hapticDuration` sn — atış başına kumanda titreşimi;
    ikisinden biri 0 ise o silahta haptik yoktur), `prefab`.
-3. `Tools > VortexArena > Build > Configure All Build Elements` → **Hepsini Çalıştır**.
+3. **Tek el cezası** (*Tek El Cezası* başlığı): `oneHandSpreadMultiplier` ·
+   `oneHandRecoilMultiplier` · `oneHandRecoveryPenalty`. Ölçü **iki elli tutuşa göredir** (1 = ceza
+   yok), yani silahın ne kadar ağır/uzun olduğu buraya yazılır: hafif bir SMG 1.5 civarı, uzun bir
+   tüfek ya da pompalı 2.0. Bu üç alan **yalnız burada** yaşar: eşitleme aracı onlara dokunmaz, yani
+   Inspector'da bulduğun değer kalıcıdır. ⚠️ Saçılım ve geri tepme alanlarına yazdığın sayı **ham**dır — sahadaki
+   değer her zaman onun kavrayış çarpanıyla çarpımıdır (bkz. Sistem Özeti, Tuzaklar: "Saçmalının
+   mesafe kimliğini saçılım taşır").
+4. `Tools > VortexArena > Build > Configure All Build Elements` → **Hepsini Çalıştır**.
 
 `weaponId` yalnızca **kill feed etiketidir** — sunucu doğrulamaz, istediğini yazabilirsin.
 

@@ -1881,9 +1881,10 @@ namespace VortexArena.Core.Player
         /// the local <c>Weapon</c> curve, without a byte on the wire.
         /// <para>⚠️ The driver lives here, not in a component on the instance:
         /// <see cref="SterilizeVisual"/> strips ALL MonoBehaviours wholesale, so such a component would
-        /// vanish on the next build. The two-handed multiplier is
+        /// vanish on the next build. The reference-grip multiplier is
         /// <see cref="Weapon.DefaultTwoHandRecoilMultiplier"/>, since only <c>FLAG_GRIP_LINKED</c> reaches
-        /// us.</para></summary>
+        /// us — that same bit is also what tells us the shooter was ONE-handed, so the weapon's
+        /// one-hand penalty is applied here exactly as on the shooter's own screen.</para></summary>
         public void ApplyShotRecoil(bool rightHand, WeaponDefinition definition)
         {
             if (definition == null)
@@ -1909,11 +1910,16 @@ namespace VortexArena.Core.Player
                 return; // no item drawn in that hand, or the prefab has no Model child
             }
 
-            float scale = _shownGripLinked ? Weapon.DefaultTwoHandRecoilMultiplier : 1f;
+            // Two-handed is the reference grip; one-handed the weapon's own stability penalty stacks
+            // on it (the shooter's Weapon.GripRecoilScale, with the prefab field standing in as the
+            // DEFAULT constant).
+            float scale = Weapon.DefaultTwoHandRecoilMultiplier *
+                          (_shownGripLinked ? 1f : definition.OneHandRecoilMultiplier);
 
             recoil.Kick = Mathf.Min(recoil.Kick + definition.KickDegrees * scale, definition.KickDegrees * 4f);
             recoil.KickBack = Mathf.Min(recoil.KickBack + definition.KickBackMeters * scale, definition.KickBackMeters * 3f);
-            recoil.RecoverSpeed = definition.RecoilRecoverSpeed;
+            recoil.RecoverSpeed = definition.RecoilRecoverSpeed *
+                                  (_shownGripLinked ? 1f : definition.OneHandRecoveryPenalty);
             recoil.Settling = true;
         }
 

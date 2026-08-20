@@ -51,7 +51,7 @@ namespace VortexArena.Core.Audio
         private const float AnnouncementGapSeconds = 0.1f;
 
         /// <summary>A single queued announcement: clip, volume and expiry.
-        /// <para>The volume is computed on enqueue (with the <see cref="MasterVolume"/> of that
+        /// <para>The volume is computed on enqueue (with the <see cref="AudioMix.Voiceover"/> of that
         /// moment): the announcement belongs to the event's moment, not to a knob the operator turns
         /// while it waits.</para></summary>
         private readonly struct PendingAnnouncement
@@ -71,7 +71,6 @@ namespace VortexArena.Core.Audio
         public static GameAudio Instance { get; private set; }
 
         private AudioSource _source;
-        private float _masterVolume = 1f;
 
         /// <summary>Queued announcements (FIFO). Order = arrival order, which is correct: the server
         /// already sends events causally ordered (<c>kill_event</c> first, then the
@@ -104,13 +103,6 @@ namespace VortexArena.Core.Audio
         /// <para>⚠️ The roster is republished in full on every change (team changes included), so
         /// this copy cannot go stale.</para></summary>
         private LobbyStateMsg _roster;
-
-        /// <summary>Shared multiplier for all announcement sounds (0..1).</summary>
-        public float MasterVolume
-        {
-            get => _masterVolume;
-            set => _masterVolume = Mathf.Clamp01(value);
-        }
 
         /// <summary>Plays the sound. A no-op when the singleton does not exist yet or the clip is
         /// unassigned — the caller needs no guard.</summary>
@@ -209,7 +201,7 @@ namespace VortexArena.Core.Audio
                 return;
             }
 
-            float volume = Mathf.Clamp01(bank.Volume * _masterVolume * Mathf.Max(0f, volumeScale));
+            float volume = Mathf.Clamp01(bank.Volume * ChannelScale(id) * Mathf.Max(0f, volumeScale));
 
             if (IsInstant(id))
             {
@@ -218,6 +210,16 @@ namespace VortexArena.Core.Audio
             }
 
             Announce(clip, volume);
+        }
+
+        /// <summary>Local mix level for the sound.</summary>
+        /// <remarks>⚠️ <see cref="GameSoundId.AdminViolation"/> is EXEMPT from the voiceover channel:
+        /// a physical violation cue is the operator's safety warning and already has its own switch
+        /// (<c>AdminSession.ViolationSound</c>) — "I turned the game voiceover down" must not silence
+        /// it.</remarks>
+        private static float ChannelScale(GameSoundId id)
+        {
+            return id == GameSoundId.AdminViolation ? 1f : AudioMix.Voiceover;
         }
 
         /// <summary>Is this an instant cue whose meaning is its timing, rather than a spoken line?
@@ -586,7 +588,7 @@ namespace VortexArena.Core.Audio
         private bool PlayRule(ModeAudioRegistry.Rule rule)
         {
             AudioClip clip = rule != null ? rule.PickClip() : null;
-            return clip != null && Announce(clip, Mathf.Clamp01(rule.Volume * _masterVolume));
+            return clip != null && Announce(clip, Mathf.Clamp01(rule.Volume * AudioMix.Voiceover));
         }
 
         private void HandleMatchEnd(MatchEndMsg msg)

@@ -284,6 +284,17 @@ kalibrasyonu bozulmuştur. **Maçı durdurmana gerek yok:**
 > oyuncunun elle yeniden kalibre olmasını beklemek zorunda değilsin: **TÜMÜNÜ KALİBRE ET**'e
 > basarak onu kayıttan geri kurmayı deneyebilirsin.
 
+**Tek bir gözlüğün KAYDI bozuksa — İSTATİSTİK panelindeki KAYIT SİL.** Oyuncu KAL'dan sonra
+yeniden kalibre oluyor ama aynı oyuncu tekrar tekrar kayıyorsa sorun hizalamada değil, o gözlükte
+**kayıtlı olan** çapadadır. İstatistik panelini aç (`I`), o oyuncunun satırının solundaki kırmızı
+**KAYIT SİL** düğmesine bas → **EMİN? SİL** yazar → **3 saniye içinde** ikinci kez bas.
+
+- Yalnız **o gözlüğün** kaydı silinir; salondaki kimse etkilenmez, maç durmaz.
+- Ardından o oyuncuda **KALİBRE** iş görmez ("kayıtlı kalibrasyon yok" der): tek yol oyuncunun
+  gözlükte **elle A/B** almasıdır (§4).
+- Basmadan önce §4.4'teki gözlük temizliğini de düşün — kayıt doğru ama gözlüğün kendi alan verisi
+  bozuksa yeni kalibrasyon da aynı yere kayar.
+
 **Herkese birden uygulanan düğmeler İSTATİSTİK panelindedir** (`I`), listenin altındaki şeritte:
 
 | Düğme | Ne yapar | Ne zaman basılır |
@@ -301,7 +312,8 @@ içinde** ikinci kez basarsan komut gider; basmazsan düğme kendiliğinden eski
 Tek bir oyuncu kaymışsa doğru yer o oyuncunun satırındaki **KAL** düğmesidir (yukarıdaki adımlar);
 herkesi hizaya sokmayı deniyorsan önce **TÜMÜNÜ KALİBRE ET**'i dene — o kimseyi oyun dışı bırakmaz.
 ⚠️ **CİHAZ KAYITLARINI SİL en son çaredir:** ardından salondaki her oyuncunun gözlükte tek tek
-A/B kalibrasyonu alması gerekir, yani bir seans molası demektir.
+A/B kalibrasyonu alması gerekir, yani bir seans molası demektir. Sorun **tek bir gözlükteyse** bu
+düğmeye hiç dokunma — o satırın kendi **KAYIT SİL**'i aynı işi yalnız o oyuncuya yapar.
 
 > **Neden tik'i elle geri açamıyorsun:** hizalamanın gerçekten düzeldiğini yalnız gözlüğün
 > kendisi bilir. Sen "tamam" diyebilseydin, aslında hâlâ kaymış bir oyuncu ateş etmeye ve
@@ -352,7 +364,8 @@ seçersin:** TERCİHLER > **KALİBRASYON** bölümündeki üç düğme.
 - Ayar **sunucuda** durur: tüm yönetim ekranları aynı değeri gösterir, birinden değiştirmen yeter.
 - ⚠️ **ESKİ KALİBRE seçiliyken:** hizalamayı geçersiz kıldığın bir gözlükte uygulama kapatılıp
   yeniden açılırsa kayıt geri yüklenir ve oyuncu yine eski hizalamasıyla gelir. Kaydın kendisinin
-  yanlış olduğundan eminsen **CİHAZ KAYITLARINI SİL**'i kullan (§4.1).
+  yanlış olduğundan eminsen kaydı sil (§4.1): tek gözlükse o satırın **KAYIT SİL**'i, salonun
+  tamamıysa alt şeritteki **CİHAZ KAYITLARINI SİL**.
 - ⚠️ **Değişiklik o an bağlı gözlüklere işlemez.** Her gözlük ayarı **bağlandığı anda** bir kez
   okur. Yeni modu bir gözlüğe uygulatmak istiyorsan o gözlükte uygulamayı kapatıp yeniden aç.
   Pratik sonuç: modu **seans başlamadan**, gözlükler bağlanmadan önce seç.
@@ -426,7 +439,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Kamera: POV** (oyuncu kartındaki **POV** düğmesi; seçili oyuncu için `1` ya da `F`) | O oyuncunun **kendi gözünden** izlersin — karttaki POV'a basmak hem oyuncuyu seçer hem gözünden bakmaya geçer. Sağ üstte ayrı bir POV düğmesi yoktur; hangi oyuncuya baktığın düğmelerin altında **POV · ad** olarak yazar | "Bu oyuncu ne görüyor / neden takıldı?" |
 | **Kamera: Serbest** (sağ üstteki **SERBEST** düğmesi ya da `2`) | Arenada özgürce dolaşırsın: **W A S D** yürü, **Q/E** in-çık, **sağ fare tuşunu basılı tutup** bakış çevir, **Shift** hızlı | Bir köşeye yakından bakmak |
 | **İstatistik** | Skorun ortasındaki kutuya bas (veya `I`) | Oyuncu başına öldürme/ölüm/can/batarya **ve PING** tablosu |
-| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **üç sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı, ses çıkışı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
+| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **dört sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı, ses çıkışı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık), **SES** (dört ses türünün seviyesi — yalnız senin ekranın) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
 | **Tam ekran / Pencereli** | `F11`, ya da Tercihler panelinin başlığında **X**'in yanındaki düğme | Yönetim penceresini tüm ekrana yay veya küçült. Seçimin bu bilgisayarda **hatırlanır**: uygulama bir dahaki açılışta aynı kiple gelir |
 | **Oyundan çık** | Tercihler → **BAĞLANTI** sekmesindeki **OYUNDAN ÇIK** | Yönetim uygulamasını kapatır. Güvenlik için **iki kez** basmak gerekir (ilk basışta düğme "EMİN? ÇIK" olur). Sunucuyu ve maçı **kapatmaz** — o ayrı bir penceredir |
 
@@ -443,9 +456,28 @@ değildir: aynı gözlük oyunu tekrar açarsa adıyla ve numarasıyla geri geli
 **Panel açıkken oyun durmaz:** Tercihler/İstatistik panelleri yarı saydamdır, arkada sahneyi
 görmeye devam edersin. `Esc` ile kapatırsın.
 
+**Sesleri ayrı ayrı kısmak** (Tercihler → **SES** sekmesi)
+
+Dört ses türünün seviyesi birbirinden bağımsızdır:
+
+| Satır | Ne kısılır |
+|---|---|
+| **Ambiyans** | Arenanın ortam sesi (rüzgâr, salonun uğultusu) |
+| **Silah sesleri** | Oyuncuların ateş sesleri |
+| **Seslendirme** | Anonslar ("maç başladı", geri sayım, sonuç) |
+| **Müzik** | Haritanın müziği |
+
+- Her satırda **`◀` / `▶`** ile seviyeyi adım adım değiştirirsin; yanında yüzde yazar.
+- **SESSİZ** düğmesi o türü tek dokunuşta susturur; tekrar basınca **eski seviyeye** döner —
+  seviyeyi ayrıca geri ayarlaman gerekmez. Sessizken satırda `sessiz (%70)` gibi yazar: geri
+  açtığında hangi seviyeye döneceğini önceden görürsün.
+- ⚠️ **Bu ayar yalnız bu bilgisayarın hoparlörünü etkiler.** Oyuncuların kulaklığına ve diğer
+  operatörün ekranına dokunmaz — herkes kendi ekranından kısar. Seçimin bu bilgisayarda hatırlanır.
+
 **Sesi başka bir hoparlörden verme**
 
-Yönetim bilgisayarına birden çok ses cihazı bağlıysa (masa hoparlörü, salonun ses sistemi,
+Bu ayrı bir ayardır: **hangi hoparlörden** çalacağını seçer, **ne kadar** yüksek çalacağını değil
+(o SES sekmesindedir). Yönetim bilgisayarına birden çok ses cihazı bağlıysa (masa hoparlörü, salonun ses sistemi,
 kulaklık) sesin hangisinden çıkacağını kendin seçebilirsin:
 
 - [ ] **Tercihler** (`P`) → **GÖRÜNÜM** sekmesi → **Ses çıkışı** satırına bas, liste açılır.
@@ -616,7 +648,8 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
 - **İhlal başlayınca kısa bir uyarı sesi çalar** — ekrana bakmıyorken de haberin olsun diye.
   Sesi kapatmak istersen **Tercihler** (`P`) → **GÖRÜNÜM** sekmesinde **İhlal sesi** satırı vardır.
   Bu satır **yalnız senin ekranına aittir**: sen kapatınca diğer operatörün sesi susmaz, o da
-  kendi ekranından kapatır.
+  kendi ekranından kapatır. ⚠️ **SES sekmesindeki "Seslendirme" bu uyarıyı susturmaz** — anonsları
+  tamamen kıssan bile ihlal sesi çalar; onun tek anahtarı GÖRÜNÜM sekmesindeki bu satırdır.
 - **Ses kalabalıkta sirene dönmez:** aynı anda kaç kişi kural dışına çıkarsa çıksın en fazla
   birkaç saniyede bir çalar. Yani duyduğun her ses "en az bir kişi" demektir, "tam bir kişi"
   demek değildir — kimin olduğunu ihlal listesinden ve halkalardan görürsün. Sesin bitişi ayrıca

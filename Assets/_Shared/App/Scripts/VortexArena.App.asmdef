@@ -10,7 +10,8 @@
         "Unity.TextMeshPro",
         "UnityEngine.UI",
         "Unity.XR.Management",
-        "Unity.Multiplayer.Playmode"
+        "Unity.Multiplayer.Playmode",
+        "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
