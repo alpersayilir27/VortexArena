@@ -56,7 +56,7 @@ Material:
     m_Ints: []
     m_Floats:
     - _LogoCut: 0.06
-    - _LogoSize: 0.75
+    - _LogoSize: 0.5
     - _LogoStrength: 1
     - _QueueControl: 0
     - _QueueOffset: 0
