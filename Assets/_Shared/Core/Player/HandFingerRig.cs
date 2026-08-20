@@ -3,48 +3,42 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>
-    /// Bir elin parmak zincirlerini <b>bind pozunda bir kez</b> çözüp, sonra
-    /// <see cref="HandPoseProfile"/>'daki kapanma oranlarını o iskeletin KENDİ eksenlerinde
-    /// uygulayan sürücü.
-    /// <para>
-    /// ⚠️ <b>Bükülme ekseni SABİT YAZILMAZ, ölçülür</b> — <c>HandGripConvention</c> ile aynı
-    /// gerekçe: model değiştiğinde (başka bir Mixamo karakteri, başka bir rig) burada tek satır
-    /// değişmesin. Eksen = avuç normali × kemik yönü, ikisi de bind pozunda okunur.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Avuç normalinin EL FARKI buradan gelmez</b>: <see cref="HandGripConvention"/> zaten
-    /// sol/sağ çapraz çarpım sırasını tanımlıyor ve o kuralın projedeki tek uygulaması orasıdır.
-    /// Burada yalnız onun döndürdüğü bazdan avuç normali okunur — sıra kuralı kopyalanmaz.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Kurulum bind pozunda yapılmalıdır</b> (retargeter kemiklere yazmadan önce, yani
-    /// <c>Awake</c>): duruşu bozulmuş bir iskelette ölçülen eksen o karenin kıvrımını içerir ve
-    /// parmaklar kalıcı olarak yanlış yöne bükülür.
-    /// </para>
-    /// </summary>
+    /// <summary>Resolves a hand's finger chains <b>once in bind pose</b>, then applies
+    /// <see cref="HandPoseProfile"/> curl ratios on that skeleton's OWN axes.</summary>
+    /// <remarks>
+    /// ⚠️ The bend axis is MEASURED, not hard-coded (same rationale as <c>HandGripConvention</c>): a
+    /// different model must not require a line change here. Axis = bone direction × palm normal, both
+    /// read in bind pose, with its sign settled by a self-check.
+    /// <para>⚠️ The left/right handedness of the palm normal does NOT come from here —
+    /// <see cref="HandGripConvention"/> is the single implementation of the cross-product order; only
+    /// the palm normal is read out of the basis it returns.</para>
+    /// <para>⚠️ Setup MUST happen in bind pose (in <c>Awake</c>, before the retargeter writes bones): an
+    /// axis measured on a posed skeleton bakes in that frame's curl and the fingers bend wrong
+    /// forever.</para>
+    /// </remarks>
     public class HandFingerRig
     {
-        /// <summary>Parmak başına sürülen eklem sayısı (uç kemiği döndürülmez).</summary>
+        /// <summary>Driven joints per finger (the tip bone is not rotated).</summary>
         private const int JointsPerFinger = 3;
 
         private const int FingerCount = 5;
 
-        /// <summary>Kemik adlarındaki parmak ekleri — sıra <see cref="HandPoseProfile.Get"/> ile aynı.</summary>
+        /// <summary>Small probe angle used for the bend-axis sign self-check (degrees).</summary>
+        private const float SignProbeDegrees = 10f;
+
+        /// <summary>Finger suffixes in bone names — same order as <see cref="HandPoseProfile.Get"/>.</summary>
         private static readonly string[] FingerNames = { "Thumb", "Index", "Middle", "Ring", "Pinky" };
 
-        /// <summary>Bilek kemiklerinin adları (Mixamo humanoid). ⚠️ Parmak kemikleri bu adın
-        /// ÜSTÜNE ek alır (<c>…LeftHandIndex1</c>), yani arama tam eşleşme olmak zorundadır —
-        /// "başlıyorsa" araması bileği ilk parmakla karıştırırdı.</summary>
+        /// <summary>Wrist bone name (Mixamo humanoid). ⚠️ Finger bones append to this name
+        /// (<c>…LeftHandIndex1</c>), so the lookup must be an exact match — a "starts with" search would
+        /// confuse the wrist with the first finger.</summary>
         public const string LeftWristBoneName = "mixamorig:LeftHand";
 
         /// <inheritdoc cref="LeftWristBoneName"/>
         public const string RightWristBoneName = "mixamorig:RightHand";
 
-        /// <summary>
-        /// Tam kapanmada eklem başına derece. Başparmak ayrı: anatomik olarak daha az kıvrılır ve
-        /// kabzayı sarmak yerine üstüne yatar.
-        /// </summary>
+        /// <summary>Degrees per joint at full curl. The thumb differs: anatomically it curls less and
+        /// lies on top of the grip rather than wrapping it.</summary>
         private static readonly float[] FingerMaxAngles = { 50f, 60f, 40f };
         private static readonly float[] ThumbMaxAngles = { 25f, 35f, 30f };
 
@@ -52,24 +46,19 @@ namespace VortexArena.Core.Player
         private readonly Quaternion[] _bindLocalRotations = new Quaternion[FingerCount * JointsPerFinger];
         private readonly Vector3[] _bendAxes = new Vector3[FingerCount * JointsPerFinger];
 
-        /// <summary>Bu elin bilek kemiği.</summary>
+        /// <summary>This hand's wrist bone.</summary>
         public Transform Wrist { get; private set; }
 
-        /// <summary>
-        /// İzleme/kavrama uzayındaki bir el pozunu bu iskeletin bileğine çeviren düzeltme:
-        /// <c>wrist.rotation = palmPose.rotation * WristCorrection</c>.
-        /// <para>⚠️ Burada <b>saklanır</b>, yeniden ölçülmez: kaynağı
-        /// <see cref="HandGripConvention.TryMeasureBoneBasis"/> ve o ölçüm <b>bind pozunda</b>
-        /// yapılmak zorunda (aşağıdaki kurulum uyarısı). İkinci bir yerde tekrar ölçmek, o yerin
-        /// bind pozunda koştuğu garantisini de tekrar vermeyi gerektirirdi — ve o garanti er geç
-        /// verilmeden kopyalanırdı.</para>
-        /// </summary>
+        /// <summary>Correction turning a tracking/grip-space hand pose into this skeleton's wrist:
+        /// <c>wrist.rotation = palmPose.rotation * WristCorrection</c>.</summary>
+        /// <remarks>⚠️ <b>Stored</b>, never re-measured: it comes from
+        /// <see cref="HandGripConvention.TryMeasureBoneBasis"/>, which must run in bind pose. Measuring
+        /// again elsewhere would require re-proving that guarantee at the new site — and it would sooner
+        /// or later be copied without it.</remarks>
         public Quaternion WristCorrection { get; private set; } = Quaternion.identity;
 
-        /// <summary>
-        /// Gövde kökünden bileği adıyla bulup <see cref="TryBuild"/>'e verir — kemik adı bilgisi
-        /// bu sınıfın dışına sızmasın diye.
-        /// </summary>
+        /// <summary>Finds the wrist by name under the body root and hands it to <see cref="TryBuild"/>,
+        /// so bone-name knowledge does not leak out of this class.</summary>
         public static HandFingerRig TryBuildFromBody(Transform bodyRoot, bool rightHand)
         {
             if (bodyRoot == null)
@@ -90,13 +79,11 @@ namespace VortexArena.Core.Player
             return null;
         }
 
-        /// <summary>
-        /// Bileğin altındaki parmak zincirlerini çözer ve bükülme eksenlerini ölçer.
-        /// <para>En az bir eklem çözülemezse <c>null</c> döner — yarım kurulmuş bir el, sessizce
-        /// bazı parmakları oynatıp bazılarını dondurmaktan iyidir.</para>
-        /// </summary>
-        /// <param name="wrist">Bilek kemiği (<c>mixamorig:LeftHand</c> gibi).</param>
-        /// <param name="rightHand">Sağ el mi (avuç normalinin işareti için).</param>
+        /// <summary>Resolves the finger chains under the wrist and measures their bend axes.</summary>
+        /// <remarks>Returns <c>null</c> if even one joint cannot be resolved — better than a half-built
+        /// hand that silently animates some fingers and freezes others.</remarks>
+        /// <param name="wrist">Wrist bone (e.g. <c>mixamorig:LeftHand</c>).</param>
+        /// <param name="rightHand">Right hand? (sign of the palm normal).</param>
         public static HandFingerRig TryBuild(Transform wrist, bool rightHand)
         {
             if (wrist == null)
@@ -116,7 +103,7 @@ namespace VortexArena.Core.Player
                 }
             }
 
-            // Avuç normali: orta parmak ve başparmak KÖK eklemlerinden ölçülür (bind pozunda).
+            // Palm normal: measured from the middle and thumb ROOT joints (in bind pose).
             if (!HandGripConvention.TryMeasureBoneBasis(
                     wrist, chains[2][0], chains[0][0], rightHand, out Quaternion boneBasis))
             {
@@ -148,20 +135,32 @@ namespace VortexArena.Core.Player
                         return null;
                     }
 
-                    // ⚠️ Sıra Cross(avuç normali, kemik yönü)'dür ve TERSİ DEĞİLDİR: bu eksen
-                    // etrafında pozitif dönüş parmak ucunu avuç normalinin TERSİNE, yani avucun
-                    // İÇİNE taşır. Ters yazılırsa parmaklar el sırtına doğru kırılır.
-                    Vector3 axisWorld = Vector3.Cross(palmNormalWorld, boneDirection.normalized);
+                    boneDirection = boneDirection.normalized;
+
+                    Vector3 axisWorld = Vector3.Cross(boneDirection, palmNormalWorld);
                     if (axisWorld.sqrMagnitude < 1e-8f)
                     {
                         return null;
                     }
 
+                    axisWorld = axisWorld.normalized;
+
+                    // ⚠️ The sign is fixed by SELF-CHECK, never by cross-product order — the same rule
+                    // as HandPoseLibrary's hinge table and for the same reason: a positive rotation
+                    // must carry the fingertip INTO the palm, and an order taken on trust bends every
+                    // finger toward the BACK of the hand. That failure raises no error and reads on
+                    // site as "the remote player's hand opens inside out".
+                    Vector3 probed = Quaternion.AngleAxis(SignProbeDegrees, axisWorld) * boneDirection;
+                    if (Vector3.Dot(probed - boneDirection, palmNormalWorld) <= 0f)
+                    {
+                        axisWorld = -axisWorld;
+                    }
+
                     rig._bones[slot] = bone;
                     rig._bindLocalRotations[slot] = bone.localRotation;
 
-                    // Eksen EBEVEYN çerçevesinde saklanır: menteşe ekseni eklemde sabittir ve
-                    // ebeveyn döndükçe onunla birlikte döner — tam olarak bir parmak eklemi gibi.
+                    // Stored in PARENT space: a hinge axis is fixed in the joint and turns with the
+                    // parent — exactly like a real finger joint.
                     rig._bendAxes[slot] = bone.parent.InverseTransformDirection(axisWorld).normalized;
                 }
             }
@@ -169,7 +168,7 @@ namespace VortexArena.Core.Player
             return rig;
         }
 
-        /// <summary>Duruşu uygular. Kare başına çağrılır; ölçüm yapılmaz, yalnız yazılır.</summary>
+        /// <summary>Applies the pose. Called per frame; writes only, never measures.</summary>
         public void Apply(in HandPoseProfile profile)
         {
             for (int finger = 0; finger < FingerCount; finger++)
@@ -183,7 +182,7 @@ namespace VortexArena.Core.Player
                     Transform bone = _bones[slot];
                     if (bone == null)
                     {
-                        continue; // sahne değişiminde yıkılmış olabilir
+                        continue; // may have been destroyed on a scene change
                     }
 
                     bone.localRotation =
@@ -193,15 +192,12 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>
-        /// <c>&lt;bilek&gt;/…Thumb1/…Thumb2/…Thumb3/…Thumb4</c> zincirini çözer.
-        /// <para>Dört kemik istenir: son kemik döndürülmez ama <b>yön ölçmek için</b> gerekir —
-        /// bir eklemin bükülme ekseni ancak kendisinden sonraki noktayla tanımlıdır.</para>
-        /// <para>⚠️ Ad araması iki seviye <c>Find</c> ile DEĞİL, tam ad eşleşmesiyle alt ağaçtan
-        /// yapılır: Mixamo parmak kemikleri bileğin doğrudan çocuğu olsa da ara düğüm ekleyen
-        /// modeller var ve o durumda sessizce poz uygulanmaması, teşhis edilmesi en zor sonuçtur.
-        /// </para>
-        /// </summary>
+        /// <summary>Resolves the <c>&lt;wrist&gt;/…Thumb1/…Thumb2/…Thumb3/…Thumb4</c> chain.</summary>
+        /// <remarks>Four bones are required: the last one is not rotated but is needed to MEASURE
+        /// direction — a joint's bend axis is only defined by the point after it.
+        /// <para>⚠️ The lookup searches the whole subtree by exact name, NOT via two levels of
+        /// <c>Find</c>: some models insert intermediate nodes, and silently applying no pose is the
+        /// hardest failure to diagnose.</para></remarks>
         private static Transform[] ResolveChain(Transform wrist, string fingerName)
         {
             string prefix = wrist.name + fingerName;
