@@ -6,40 +6,39 @@ using UnityEngine.Events;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
-// Fabrika metotları ögelerin adını taşıyor (UiKit.Image / UiKit.Button). Aynı dosyada tip olarak
-// da geçtikleri için takma ad şart: `Image x = Image(...)` C#'ta CS0119 verir (basit ad araması
-// üye grubunu tipten ÖNCE bulur). Takma adlar yalnız derleme zamanı — dışa açık imza değişmez.
+// Factory methods share element names (UiKit.Image / UiKit.Button). Aliases are required because
+// `Image x = Image(...)` gives CS0119 (simple name lookup finds the member group BEFORE the type).
+// Compile-time only — public signatures unchanged.
 using UiImage = UnityEngine.UI.Image;
 using UiButton = UnityEngine.UI.Button;
 
 namespace VortexArena.App
 {
     /// <summary>
-    /// Prosedürel arayüz kiti: palet + yuvarlatılmış sprite önbelleği + öge fabrikaları.
+    /// Procedural UI kit: palette + rounded sprite cache + element factories.
     /// <para>
-    /// <b>Neden prosedürel:</b> bu projedeki masaüstü/VR overlay'leri (bağlantı hata ekranı,
-    /// admin gözlemci HUD'ı) HER sahnede kendini önyüklüyor — prefab'a bağlanırlarsa her yeni
-    /// arena sahnesine elle bileşen/prefab eklemek gerekir ve bir gün unutulur. Kod tek kaynak
-    /// olduğu için yeni arena eklerken hiçbir ek adım doğmaz.
+    /// <b>Why procedural:</b> desktop/VR overlays here (connection error screen, admin spectator
+    /// HUD) bootstrap themselves in EVERY scene — prefab-bound ones would need a manual step per
+    /// new arena scene and would eventually be forgotten.
     /// </para>
     /// <para>
-    /// <b>Yerleşim kuralı:</b> Layout Group + ContentSizeFitter KULLANILMAZ. Her öge
-    /// <see cref="Block"/>/<see cref="Corner"/>/<see cref="Stretch"/> ile sabit anchor'a oturur:
-    /// öngörülebilir, yeniden hesap yok, farklı çözünürlükte kayma yok (ölçek CanvasScaler'da).
+    /// <b>Layout rule:</b> no Layout Group / ContentSizeFitter. Every element sits on fixed anchors
+    /// via <see cref="Block"/>/<see cref="Corner"/>/<see cref="Stretch"/>: predictable, no reflow,
+    /// no drift across resolutions (scaling lives in CanvasScaler).
     /// </para>
     /// <para>
-    /// <b>Font ATANMAZ:</b> TMP Settings'teki varsayılan font kullanılır (Türkçe glifler orada).
-    /// TMP fontunda garantisi olmayan sembol (⚠, →, •) yazılmaz — eksik glif □ çizilir.
+    /// <b>Font is NOT assigned:</b> TMP Settings default is used (Turkish glyphs live there).
+    /// Symbols not guaranteed by that font (⚠, →, •) are never written — missing glyph renders □.
     /// </para>
     /// </summary>
     public static class UiKit
     {
-        // ------------------------------------------------------------------ palet
+        // ---------------------------------------------------------------- palette
 
         public static readonly Color Scrim = Hex(0x12151C, 0xDD);
         public static readonly Color Card = Hex(0x1B2029, 0xFF);
 
-        /// <summary>Sahne üstü panel/kart: arkadaki canlı görüntü GÖRÜNÜR kalsın (alfa ≈ 0.88).</summary>
+        /// <summary>In-scene panel/card: live view behind stays VISIBLE (alpha ≈ 0.88).</summary>
         public static readonly Color CardTranslucent = Hex(0x1B2029, 0xE0);
 
         public static readonly Color Border = Hex(0x2E3542, 0xFF);
@@ -51,16 +50,16 @@ namespace VortexArena.App
         public static readonly Color Good = Hex(0x39D98A, 0xFF);
         public static readonly Color Bad = Hex(0xE5484D, 0xFF);
 
-        /// <summary>Takım renkleri <see cref="Core.Player.RemoteAvatar"/> ile BİREBİR aynı olmalı —
-        /// aynı oyuncu HUD'da ve sahnede farklı renkte görünürse operatör yanılır.</summary>
+        /// <summary>Team colors must match <see cref="Core.Player.RemoteAvatar"/> EXACTLY — a player
+        /// shown in different colors on HUD vs scene misleads the operator.</summary>
         public static readonly Color TeamRed = new Color(0.85f, 0.20f, 0.20f);
         public static readonly Color TeamBlue = new Color(0.20f, 0.40f, 0.90f);
         public static readonly Color TeamNeutral = new Color(0.6f, 0.6f, 0.6f);
 
-        /// <summary>Panel/kart varsayılan köşe yarıçapı (px).</summary>
+        /// <summary>Default panel/card corner radius (px).</summary>
         public const float PanelRadius = 12f;
 
-        /// <summary>Kart kenar kalınlığı (px) — kenar rengi zemin, içine dolgu kaçar.</summary>
+        /// <summary>Card border width (px) — border color is the backdrop, fill is inset into it.</summary>
         public const float BorderWidth = 2f;
 
         public static Color Hex(int rgb, int alpha)
@@ -69,13 +68,13 @@ namespace VortexArena.App
                 (byte)(rgb & 0xFF), (byte)alpha);
         }
 
-        /// <summary>Takım anahtarını ("red"/"blue"/diğer) renge çevirir.</summary>
+        /// <summary>Maps a team key ("red"/"blue"/other) to a color.</summary>
         public static Color TeamColor(string team)
         {
             return team == "red" ? TeamRed : team == "blue" ? TeamBlue : TeamNeutral;
         }
 
-        /// <summary>Rengi karartır (ölü oyuncu görünümü; alfa korunur).</summary>
+        /// <summary>Dims a color (dead player look; alpha preserved).</summary>
         public static Color Dim(Color color, float scale)
         {
             return new Color(color.r * scale, color.g * scale, color.b * scale, color.a);
@@ -87,14 +86,14 @@ namespace VortexArena.App
             return color;
         }
 
-        // ------------------------------------------------------------- canvas/kök
+        // ------------------------------------------------------------ canvas/root
 
         /// <summary>
-        /// Ekran-uzayı overlay canvas'ı kurar (1920x1080 referans, <c>Expand</c> eşleme:
-        /// arayüz 16:9 için tasarlanır — <c>AdminHud.prefab</c>'ın canvas'ıyla aynı kural — ve
-        /// başka bir oranda kırpılmak yerine kenarda boşluk bırakır).
-        /// <paramref name="sortingOrder"/> ekranlar arası öncelik: admin HUD 4000,
-        /// bağlantı hata ekranı 5000 (hata her zaman üstte kalmalı).
+        /// Screen-space overlay canvas (1920x1080 reference, <c>Expand</c> match: UI is designed for
+        /// 16:9 — same rule as <c>AdminHud.prefab</c>'s canvas — and letterboxes instead of cropping
+        /// on other aspects).
+        /// <paramref name="sortingOrder"/> is cross-screen priority: admin HUD 4000,
+        /// connection error screen 5000 (errors must always stay on top).
         /// </summary>
         public static Canvas ScreenCanvas(GameObject root, int sortingOrder)
         {
@@ -111,7 +110,7 @@ namespace VortexArena.App
             return canvas;
         }
 
-        /// <summary>RectTransform'lu boş düğüm (gruplama/konumlandırma için).</summary>
+        /// <summary>Empty node with a RectTransform (grouping/positioning).</summary>
         public static RectTransform Node(Transform parent, string name)
         {
             var go = new GameObject(name);
@@ -119,7 +118,7 @@ namespace VortexArena.App
             return go.AddComponent<RectTransform>();
         }
 
-        // ---------------------------------------------------------------- ögeler
+        // --------------------------------------------------------------- elements
 
         public static UiImage Image(Transform parent, string name, Sprite sprite, Color color)
         {
@@ -128,12 +127,12 @@ namespace VortexArena.App
 
             var image = go.AddComponent<UiImage>();
             image.color = color;
-            image.raycastTarget = false; // tıklanabilir ögeler bunu kendisi açar
+            image.raycastTarget = false; // clickable elements turn this on themselves
 
             if (sprite != null)
             {
                 image.sprite = sprite;
-                image.type = UiImage.Type.Sliced; // 9-slice: köşeler ölçeklenmez
+                image.type = UiImage.Type.Sliced; // 9-slice: corners do not scale
             }
 
             return image;
@@ -151,15 +150,15 @@ namespace VortexArena.App
             tmp.fontStyle = style;
             tmp.alignment = alignment;
             tmp.raycastTarget = false;
-            tmp.richText = false; // dışarıdan gelen ad "<b>" içerirse biçim bozulmasın
+            tmp.richText = false; // external names containing "<b>" must not alter formatting
             tmp.text = "";
 
             return tmp;
         }
 
         /// <summary>
-        /// Kenarlı yuvarlatılmış kart: kenar rengindeki zemin + içine kaçmış dolgu.
-        /// Döndürdüğü <see cref="Image"/> DOLGUdur — çocuklar ona eklenir.
+        /// Rounded card with border: border-colored backdrop + inset fill.
+        /// Returned <see cref="Image"/> is the FILL — children are parented to it.
         /// </summary>
         public static UiImage Panel(Transform parent, string name, Color fill, Color border,
             float radius = PanelRadius)
@@ -170,15 +169,15 @@ namespace VortexArena.App
             return inner;
         }
 
-        /// <summary>Kenarsız düz zemin (ayırıcı, şerit, bar zemini).</summary>
+        /// <summary>Borderless flat surface (separator, strip, bar backdrop).</summary>
         public static UiImage Solid(Transform parent, string name, Color color, bool rounded = false)
         {
             return Image(parent, name, rounded ? RoundedSprite(4f) : null, color);
         }
 
         /// <summary>
-        /// Düğme: yuvarlatılmış zemin + ortalanmış etiket. `background.color` taban renktir,
-        /// Button.colors yalnız tint uygular (normal = beyaz).
+        /// Button: rounded backdrop + centered label. `background.color` is the base color,
+        /// Button.colors only tints (normal = white).
         /// </summary>
         public static UiButton Button(Transform parent, string name, string label, float fontSize,
             Color background, Color foreground, UnityAction onClick, out TextMeshProUGUI labelText)
@@ -190,14 +189,14 @@ namespace VortexArena.App
                 TextAlignmentOptions.Center);
             Stretch(labelText.rectTransform, 2f);
             labelText.text = label;
-            // NoWrap + Ellipsis: uzun etiket düğmeyi bozmaz. (`enableWordWrapping` obsolete.)
+            // NoWrap + Ellipsis: long labels do not break the button. (`enableWordWrapping` obsolete.)
             labelText.textWrappingMode = TextWrappingModes.NoWrap;
             labelText.overflowMode = TextOverflowModes.Ellipsis;
-            // Emniyet ağı: sığmayan etiket kırpılmak (KIRMIZ…) yerine ÖNCE küçülür. Yalnız aşağı
-            // ölçekler (max = istenen punto), yani sığan etiket hiç etkilenmez ve tasarım bozulmaz.
-            // Neden var: düğme genişlikleri sabit anchor'la veriliyor (Layout Group yok) ve etiket
-            // uzunluğu dile/duruma göre değişiyor — "kaç px sığar" hesabını her çağrı yerinde elle
-            // yapmak hataya açık. Sınır %70: altına inince okunaksızlaşır, orada ellipsis yeğdir.
+            // Safety net: an oversized label shrinks BEFORE being clipped. Scales down only
+            // (max = requested size), so fitting labels are untouched. Needed because button widths
+            // come from fixed anchors (no Layout Group) and label length varies — hand-computing
+            // "how many px fit" per call site is error-prone. Floor at 70%: below that it becomes
+            // unreadable and ellipsis is preferable.
             labelText.enableAutoSizing = true;
             labelText.fontSizeMax = fontSize;
             labelText.fontSizeMin = Mathf.Max(8f, fontSize * 0.7f);
@@ -223,15 +222,15 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Tek satırlık metin girişi: koyu yuvarlatılmış zemin + <see cref="TMP_InputField"/>.
+        /// Single-line text field: dark rounded backdrop + <see cref="TMP_InputField"/>.
         /// <para>
-        /// ⚠️ <b>Kitin TEK klavye alanıdır ve yalnız MASAÜSTÜ (admin) arayüzünde kullanılır.</b>
-        /// VR tarafında sistem klavyesi gerekir; oradaki metin girişi ayrı bir çözümdür.
+        /// ⚠️ <b>The kit's ONLY keyboard field, DESKTOP (admin) UI only.</b> VR needs the system
+        /// keyboard; text input there is a separate solution.
         /// </para>
         /// <para>
-        /// Bileşen <b>obje pasifken</b> eklenir: <c>TMP_InputField.OnEnable</c> etkinleşme anında
-        /// <c>textComponent</c>/<c>textViewport</c> arar, aktif bir objeye eklenirse yarım kurulmuş
-        /// hâlde uyanır ve caret'i bozuk kalır. Sıra: pasifleştir → ekle → kur → etkinleştir.
+        /// Component is added while the object is <b>inactive</b>: <c>TMP_InputField.OnEnable</c>
+        /// looks for <c>textComponent</c>/<c>textViewport</c> on activation — added to an active
+        /// object it wakes half-wired with a broken caret. Order: deactivate → add → wire → activate.
         /// </para>
         /// </summary>
         public static TMP_InputField Input(Transform parent, string name, string placeholder,
@@ -277,8 +276,8 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Yatay dolum barı (HP/ilerleme): zemin + soldan büyüyen dolgu.
-        /// Dolgunun genişliği <c>fill.rectTransform.anchorMax.x</c> ile 0..1 arası ayarlanır.
+        /// Horizontal fill bar (HP/progress): backdrop + fill growing from the left.
+        /// Fill width is set 0..1 via <c>fill.rectTransform.anchorMax.x</c>.
         /// </summary>
         public static UiImage Bar(Transform parent, string name, Color background, Color fill)
         {
@@ -295,7 +294,7 @@ namespace VortexArena.App
             return front;
         }
 
-        /// <summary>Bar dolgusunu 0..1 aralığında ayarlar.</summary>
+        /// <summary>Sets bar fill in the 0..1 range.</summary>
         public static void SetBarFill(UiImage fill, float normalized)
         {
             if (fill == null)
@@ -307,9 +306,9 @@ namespace VortexArena.App
             rect.anchorMax = new Vector2(Mathf.Clamp01(normalized), 1f);
         }
 
-        // -------------------------------------------------------------- yerleşim
+        // ---------------------------------------------------------------- layout
 
-        /// <summary>Ebeveyni tamamen kaplar (isteğe bağlı iç boşlukla).</summary>
+        /// <summary>Fills the parent completely (optional padding).</summary>
         public static void Stretch(RectTransform rect, float padding = 0f)
         {
             rect.anchorMin = Vector2.zero;
@@ -319,7 +318,7 @@ namespace VortexArena.App
             rect.offsetMax = new Vector2(-padding, -padding);
         }
 
-        /// <summary>Üstten ölçülen, yatayda gerilmiş blok (satır yerleşiminin temeli).</summary>
+        /// <summary>Top-anchored, horizontally stretched block (basis of row layout).</summary>
         public static void Block(RectTransform rect, float left, float top, float right, float height)
         {
             rect.anchorMin = new Vector2(0f, 1f);
@@ -330,9 +329,9 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Bir köşeye/kenara sabitlenmiş kutu. <paramref name="anchor"/> aynı zamanda pivot olur,
-        /// <paramref name="offset"/> o köşeden içeri doğru (işaret ekseni anchor'a göre) kaydırır.
-        /// Ör. sağ-alt için anchor (1,0), offset (-24, 24).
+        /// Box pinned to a corner/edge. <paramref name="anchor"/> doubles as pivot,
+        /// <paramref name="offset"/> shifts inward from that corner (sign relative to the anchor).
+        /// E.g. bottom-right: anchor (1,0), offset (-24, 24).
         /// </summary>
         public static void Corner(RectTransform rect, Vector2 anchor, Vector2 offset, Vector2 size)
         {
@@ -343,7 +342,7 @@ namespace VortexArena.App
             rect.sizeDelta = size;
         }
 
-        /// <summary>Ebeveyn içinde ortalanmış sabit boyutlu kutu.</summary>
+        /// <summary>Fixed-size box centered in the parent.</summary>
         public static void Center(RectTransform rect, Vector2 size, Vector2 offset = default)
         {
             Corner(rect, new Vector2(0.5f, 0.5f), offset, size);
@@ -354,20 +353,19 @@ namespace VortexArena.App
         private static EventSystem _ownEventSystem;
 
         /// <summary>
-        /// Tıklanabilir masaüstü arayüzü için EventSystem garantisi.
+        /// Guarantees an EventSystem for clickable desktop UI.
         /// <para>
-        /// ⚠ <b>Tuzak:</b> arena sahnelerinde EventSystem HİÇ YOK (yalnız Lobby'de var) — admin
-        /// gözlemci arena sahnesine girdiğinde HUD düğmeleri sessizce ölürdü. Bu yüzden kalıcı
-        /// (DontDestroyOnLoad) bir tane kurulur.
+        /// ⚠ <b>Trap:</b> arena scenes have NO EventSystem (only Lobby does) — HUD buttons would
+        /// silently die once the admin spectator entered an arena scene. Hence a persistent
+        /// (DontDestroyOnLoad) one.
         /// </para>
         /// <para>
-        /// ⚠ İkinci tuzak: iki EventSystem aynı anda etkinse Unity "There are 2 event systems"
-        /// uyarısı basar ve girdi ikisi arasında bölünür. Bu yüzden <see cref="TakeOverEventSystem"/>
-        /// sahnedekileri kapatır.
+        /// ⚠ Second trap: two active EventSystems make Unity log "There are 2 event systems" and
+        /// split input, so <see cref="TakeOverEventSystem"/> disables the scene-owned ones.
         /// </para>
-        /// Proje "Input System Package (New)" ile derlendiği için modül
-        /// <see cref="InputSystemUIInputModule"/>'dür; eski <c>StandaloneInputModule</c> runtime'da
-        /// <c>UnityEngine.Input</c>'a dokunup patlar.
+        /// Project builds with "Input System Package (New)", so the module is
+        /// <see cref="InputSystemUIInputModule"/>; legacy <c>StandaloneInputModule</c> touches
+        /// <c>UnityEngine.Input</c> at runtime and throws.
         /// </summary>
         public static EventSystem EnsureEventSystem()
         {
@@ -376,22 +374,22 @@ namespace VortexArena.App
                 return _ownEventSystem;
             }
 
-            // EventSystem.current sahne objesi henüz OnEnable görmediyse null olabilir — aramayla teyit.
+            // EventSystem.current can be null before the scene object's OnEnable — confirm by search.
             EventSystem existing = EventSystem.current != null
                 ? EventSystem.current
                 : Object.FindFirstObjectByType<EventSystem>();
             if (existing != null && existing.isActiveAndEnabled)
             {
-                return existing; // sahnenin kendi EventSystem'i iş görüyor
+                return existing; // scene's own EventSystem is doing the job
             }
 
             return CreateOwnEventSystem();
         }
 
         /// <summary>
-        /// Kalıcı EventSystem'i tek yetkili yapar: sahneye ait olanları kapatır.
-        /// Yalnız admin gözlemci çağırır — Lobby'deki EventSystem VR işaretçisi için oradadır ve
-        /// masaüstü admin'de gereksizdir.
+        /// Makes the persistent EventSystem the sole authority by disabling scene-owned ones.
+        /// Called only by the admin spectator — Lobby's EventSystem exists for the VR pointer and
+        /// is useless on desktop admin.
         /// </summary>
         public static void TakeOverEventSystem()
         {
@@ -421,15 +419,15 @@ namespace VortexArena.App
             return _ownEventSystem;
         }
 
-        // ------------------------------------------- prosedürel yuvarlak köşe
+        // ---------------------------------------------- procedural rounded corner
 
-        // Yarıçap başına tek sprite (px cinsinden anahtar); doku 64x64 sabit.
+        // One sprite per radius (key in px); texture fixed at 64x64.
         private static readonly Dictionary<int, Sprite> RoundedCache = new Dictionary<int, Sprite>();
 
         /// <summary>
-        /// 64x64 beyaz, yuvarlatılmış köşeli, kenarları anti-aliased alfa maskesi.
-        /// 9-slice `border` ile üretilir → <c>Image.Type.Sliced</c> her boyutta köşeyi bozmadan
-        /// çizer. Renk <c>Image.color</c> ile verilir; sprite yarıçap başına önbelleklenir.
+        /// 64x64 white rounded-rect alpha mask with anti-aliased edges. Built with a 9-slice
+        /// `border` → <c>Image.Type.Sliced</c> keeps corners intact at any size. Color comes from
+        /// <c>Image.color</c>; sprites are cached per radius.
         /// </summary>
         public static Sprite RoundedSprite(float radius = PanelRadius)
         {
@@ -455,14 +453,14 @@ namespace VortexArena.App
             {
                 for (int x = 0; x < size; x++)
                 {
-                    // Yuvarlatılmış dikdörtgen işaretli mesafe alanı (içi negatif).
+                    // Rounded-rect signed distance field (negative inside).
                     float qx = Mathf.Abs(x + 0.5f - half) - (half - r);
                     float qy = Mathf.Abs(y + 0.5f - half) - (half - r);
                     float outside = Mathf.Sqrt(Mathf.Max(qx, 0f) * Mathf.Max(qx, 0f) +
                                                Mathf.Max(qy, 0f) * Mathf.Max(qy, 0f));
                     float distance = Mathf.Min(Mathf.Max(qx, qy), 0f) + outside - r;
 
-                    // 1 px'lik yumuşak kenar (anti-aliasing).
+                    // 1 px soft edge (anti-aliasing).
                     byte alpha = (byte)Mathf.RoundToInt(Mathf.Clamp01(0.5f - distance) * 255f);
                     pixels[y * size + x] = new Color32(255, 255, 255, alpha);
                 }
@@ -470,9 +468,9 @@ namespace VortexArena.App
 
             texture.SetPixels32(pixels);
             texture.Apply(false, false);
-            texture.hideFlags = HideFlags.DontSave; // runtime üretimi — asset'e yazılmaz
+            texture.hideFlags = HideFlags.DontSave; // runtime-generated — never written as an asset
 
-            // 9-slice kenarı yarıçaptan 2 px büyük: köşe eğrisi dilime tam sığsın.
+            // 9-slice border is 2 px larger than the radius so the corner curve fits the slice.
             float b = Mathf.Min(half - 1f, r + 2f);
             Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size),
                 new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect,
@@ -484,16 +482,16 @@ namespace VortexArena.App
             return sprite;
         }
 
-        // Kalınlık başına tek halka sprite'ı (yüzde cinsinden anahtar).
+        // One ring sprite per thickness (key in percent).
         private static readonly Dictionary<int, Sprite> RingCache = new Dictionary<int, Sprite>();
 
         /// <summary>
-        /// İçi boş daire (annulus) alfa maskesi — admin gözlemcinin oyuncu halkaları.
-        /// <paramref name="thickness"/> yarıçapa oranla çizgi kalınlığıdır (0.05..0.5).
+        /// Annulus alpha mask — admin spectator's player rings.
+        /// <paramref name="thickness"/> is stroke width relative to radius (0.05..0.5).
         /// <para>
-        /// Mesh + <c>Shader.Find</c> yerine UI sprite kullanılır: build'de kullanılmayan shader
-        /// STRIP edilebilir ve <c>Shader.Find("Universal Render Pipeline/Unlit")</c> null dönerdi.
-        /// UI/TMP shader'ları her zaman build'de olduğu için world-space canvas güvenli yoldur.
+        /// UI sprite instead of mesh + <c>Shader.Find</c>: unused shaders can be STRIPPED from the
+        /// build and <c>Shader.Find("Universal Render Pipeline/Unlit")</c> would return null.
+        /// UI/TMP shaders are always in the build, so a world-space canvas is the safe path.
         /// </para>
         /// </summary>
         public static Sprite RingSprite(float thickness = 0.16f)
@@ -526,7 +524,7 @@ namespace VortexArena.App
                     float dy = y + 0.5f - half;
                     float distance = Mathf.Sqrt(dx * dx + dy * dy);
 
-                    // İki kenarda da 1 px yumuşak geçiş (anti-aliasing).
+                    // 1 px soft transition on both edges (anti-aliasing).
                     float a = Mathf.Clamp01(outer + 0.5f - distance) *
                               Mathf.Clamp01(distance - inner + 0.5f);
                     pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(a * 255f));
@@ -537,7 +535,7 @@ namespace VortexArena.App
             texture.Apply(false, false);
             texture.hideFlags = HideFlags.DontSave;
 
-            // Halka ÖLÇEKLENİR (9-slice değil): border 0 → Image.Type.Simple ile kullanılır.
+            // Ring SCALES (not 9-sliced): border 0 → used with Image.Type.Simple.
             Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size),
                 new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
             sprite.name = $"VortexRingSprite{key}";
@@ -548,15 +546,15 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Dünya-uzayı canvas kökü (admin halkaları/ad etiketleri). Rendering için kamera
-        /// atamaya gerek yoktur; raycast yapılmadığı için <c>GraphicRaycaster</c> de eklenmez.
+        /// World-space canvas root (admin rings/name tags). No camera assignment needed for
+        /// rendering; no <c>GraphicRaycaster</c> either since nothing raycasts against it.
         /// </summary>
         public static Canvas WorldCanvas(Transform parent, string name, Vector2 size, float scale)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
 
-            // RectTransform ÖNCE (Transform'u yükseltir): Canvas'ın ona ihtiyacı var.
+            // RectTransform FIRST (upgrades the Transform): Canvas depends on it.
             var rect = go.AddComponent<RectTransform>();
             rect.sizeDelta = size;
             rect.localScale = Vector3.one * scale;

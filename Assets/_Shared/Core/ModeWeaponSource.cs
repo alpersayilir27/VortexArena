@@ -1,31 +1,32 @@
 namespace VortexArena.Core
 {
     /// <summary>
-    /// Silahın nereden geldiği (§10.5 <c>weaponSource</c>).
+    /// Where the weapon comes from (§10.5 <c>weaponSource</c>).
     /// <para>
-    /// <b>Tümüyle istemci sunumudur</b> — sunucuda karşılığı yoktur (§10.3: sunucuda silah tablosu
-    /// tutulmaz, hasarı istemci hesaplar). Bu kural yalnız "silahı sahneden mi alsın, mod mu
-    /// dağıtsın" sorusunu cevaplar.
+    /// <b>Entirely client presentation</b> — it has no server counterpart (§10.3: the server keeps no
+    /// weapon table, the client computes the damage). This rule only answers the question "should the
+    /// weapon be picked up from the scene, or handed out by the mode".
     /// </para>
-    /// <para>⚠ <see cref="ModeDefinition"/> tarafından SERIALIZE edilir — yeni değer SONA eklenir.</para>
+    /// <para>⚠ SERIALIZED by <see cref="ModeDefinition"/> — new values are appended at the END.</para>
     /// </summary>
     public enum ModeWeaponSource
     {
         /// <summary>
-        /// Sahnede duran silah: oyuncu onu çerçevesinden seçer (<c>WeaponFrame</c>), klonu eline
-        /// gelir ve aynı mermiyle geri döner. Silah <b>tükenmez</b> — çerçevesinde kalır ve
-        /// sınırsız kez alınır.
+        /// A weapon standing in the scene: the player picks it from its frame (<c>WeaponFrame</c>),
+        /// a clone lands in their hand and returns with the same ammo. The weapon is <b>not
+        /// consumed</b> — it stays in its frame and can be taken an unlimited number of times.
         /// <para>
-        /// Silahı sahneye koyan bir bileşen YOKTUR ve yazılmaz: yerleşim <b>arena kararıdır</b>,
-        /// harita tasarlanırken elle konur (<c>BaseZone</c> gibi bir prefab örneği olarak).
-        /// Dolayısıyla bu kaynakta sahnede hangi silahın duracağını <see cref="ModeDefinition"/>
-        /// değil arena belirler — <c>loadout</c> yalnız <see cref="RandomGrant"/> için anlamlıdır.
+        /// There is NO component that places the weapon into the scene and none will be written:
+        /// placement is an <b>arena decision</b>, done by hand while designing the map (as a prefab
+        /// instance, like <c>BaseZone</c>). Therefore with this source it is the arena, not
+        /// <see cref="ModeDefinition"/>, that decides which weapon stands in the scene —
+        /// <c>loadout</c> is only meaningful for <see cref="RandomGrant"/>.
         /// </para>
-        /// <para>Tel formatındaki adı <c>"weaponcanvas"</c>'tır (§10.5).</para>
+        /// <para>Its name in the wire format is <c>"weaponcanvas"</c> (§10.5).</para>
         /// </summary>
         WeaponCanvas,
 
-        /// <summary>Modun dağıttığı rastgele silah.</summary>
+        /// <summary>A random weapon handed out by the mode.</summary>
         RandomGrant
     }
 }

@@ -5,24 +5,23 @@ using VortexArena.Net;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>
-    /// Free-roam çarpışma önleme: yerel oyuncunun HMD'sine yaklaşan GERÇEK bedenleri
-    /// uyarır. 12x12 m arenada 10 oyuncu ~11.8 m²/oyuncu düşer; bu yoğunlukta iki
-    /// oyuncunun aynı anda 1 m'den yakın olması sıradan bir durumdur ve HMD'nin dar
-    /// alt/yan görüş alanı bunu göstermez. Uyarı iki kanaldan verilir:
+    /// <summary>Free-roam collision avoidance: warns about REAL bodies approaching the local player's
+    /// HMD.</summary>
+    /// <remarks>
+    /// A 12x12 m arena with 10 players gives ~11.8 m²/player; at that density two players being within
+    /// 1 m is routine, and the HMD's narrow lower/side field of view does not show it. The warning has two
+    /// channels:
     /// <list type="bullet">
-    /// <item>Görsel: uzak oyuncunun konumunda, DUVAR ARKASINDAN da görünen halka
+    /// <item>Visual: a halo at the remote player's position, visible THROUGH WALLS
     /// (<c>VortexArena/ProximityHalo</c>, ZTest Always).</item>
-    /// <item>Haptik: tehlikenin geldiği TARAFTAKİ kumanda titrer (OVRInput).</item>
+    /// <item>Haptic: the controller on the SIDE the danger comes from vibrates (OVRInput).</item>
     /// </list>
-    /// <para>
-    /// ÖNEMLİ: ölü oyuncular ELENMEZ. Respawn bu projede konum değil DURUM değişimidir
-    /// (protokol §respawn) — ölü oyuncunun fiziksel bedeni sahada durmaya devam eder,
-    /// dolayısıyla çarpışma riski canlıyken olduğu gibidir.
-    /// </para>
-    /// Pozlar arena uzayında gelir; <see cref="ArenaSpace"/> ile dünyaya çevrilir.
-    /// Sahnede tek örnek yeterlidir (PoseSync objesine eklenebilir).
-    /// </summary>
+    /// <para>⚠️ Dead players are NOT filtered out. Respawn here is a STATE change, not a position change
+    /// (protocol §respawn) — a dead player's physical body stays on the floor, so the collision risk is
+    /// the same as while alive.</para>
+    /// <para>Poses arrive in arena space and are converted to world via <see cref="ArenaSpace"/>. One
+    /// instance per scene suffices (can be added to the PoseSync object).</para>
+    /// </remarks>
     public class ProximityWarning : MonoBehaviour
     {
         [Header("References")]
@@ -57,7 +56,7 @@ namespace VortexArena.Core.Player
 
         private const float CameraRetryIntervalSeconds = 1f;
 
-        /// <summary>Haptik tam güce ulaştığı mesafe (kritik mesafenin altında).</summary>
+        /// <summary>Distance at which haptics reaches full power (below the critical distance).</summary>
         private const float HapticPeakDistance = 0.35f;
 
         private readonly List<int> _activeIds = new List<int>();
@@ -70,10 +69,10 @@ namespace VortexArena.Core.Player
         private bool _vibratingLeft;
         private bool _vibratingRight;
 
-        /// <summary>En yakın uzak oyuncunun yatay mesafesi; kimse yoksa +sonsuz.</summary>
+        /// <summary>Horizontal distance to the nearest remote player; +infinity if there is none.</summary>
         public float NearestDistance { get; private set; } = float.PositiveInfinity;
 
-        /// <summary>Kritik mesafenin içinde en az bir oyuncu var mı.</summary>
+        /// <summary>Is at least one player within the critical distance.</summary>
         public bool IsCritical => NearestDistance <= criticalDistance;
 
         private void Awake()
@@ -119,8 +118,8 @@ namespace VortexArena.Core.Player
             }
         }
 
-        // RemoteAvatar LateUpdate'te pozlarını uyguluyor; uyarı aynı karede
-        // güncel kalsın diye biz de LateUpdate'te (ondan sonra) okuyoruz.
+        // RemoteAvatar applies its poses in LateUpdate; we read in LateUpdate (after it) so the warning
+        // stays current in the same frame.
         private void LateUpdate()
         {
             ResolveHead();
@@ -142,7 +141,7 @@ namespace VortexArena.Core.Player
             {
                 int playerId = _activeIds[i];
 
-                // NOT: IsAlive kontrolü YOK — ölü oyuncunun bedeni sahada duruyor.
+                // NOTE: no IsAlive check — a dead player's body is still on the floor.
                 if (!registry.GetInterpolatedPose(playerId, out Pose headPose, out _, out _))
                 {
                     SetHaloVisible(playerId, false);
@@ -152,7 +151,7 @@ namespace VortexArena.Core.Player
                 Vector3 otherPosition = ArenaSpace.ArenaToWorld(headPose).position;
 
                 Vector3 offset = otherPosition - headPosition;
-                offset.y = 0f;                       // boy farkı çarpışmayı etkilemez
+                offset.y = 0f;                       // height difference does not affect collision
                 float distance = offset.magnitude;
 
                 if (distance < nearest)
@@ -176,7 +175,7 @@ namespace VortexArena.Core.Player
             UpdateHaptics(nearest, nearestDirection);
         }
 
-        /// <summary>warnDistance'ta 0, criticalDistance ve altında 1.</summary>
+        /// <summary>0 at warnDistance, 1 at criticalDistance and below.</summary>
         private float Intensity(float distance)
         {
             if (warnDistance <= criticalDistance)
@@ -203,7 +202,7 @@ namespace VortexArena.Core.Player
             Transform t = halo.transform;
             t.position = new Vector3(otherPosition.x, otherPosition.y + haloHeightOffset, otherPosition.z);
 
-            // Yerel oyuncuya dön (billboard); halka her açıdan tam daire görünsün.
+            // Face the local player (billboard) so the halo reads as a full circle from any angle.
             Vector3 toViewer = headPosition - t.position;
             if (toViewer.sqrMagnitude > 1e-6f)
             {
@@ -234,8 +233,8 @@ namespace VortexArena.Core.Player
             quad.transform.SetParent(transform, false);
             quad.hideFlags = HideFlags.DontSave;
 
-            // Primitive collider'ı MUTLAKA gider: aksi halde uyarı halkası
-            // silah raycast'ini (Weapon.cs, maskesiz Physics.Raycast) emer.
+            // The primitive's collider MUST go: otherwise the warning halo eats the weapon raycast
+            // (Weapon.cs, unmasked Physics.Raycast).
             Collider collider = quad.GetComponent<Collider>();
             if (collider != null)
             {
@@ -261,7 +260,7 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Ayrılan oyuncuların halkalarını sahneden düşürür.</summary>
+        /// <summary>Removes the halos of players who left.</summary>
         private void PruneHalos()
         {
             _staleIds.Clear();
@@ -301,10 +300,8 @@ namespace VortexArena.Core.Player
             StopVibration(OVRInput.Controller.RTouch, ref _vibratingRight);
         }
 
-        /// <summary>
-        /// Tehlikenin geldiği taraftaki kumandayı titretir; oyuncu bakmadan da
-        /// hangi yöne kaçacağını bilir.
-        /// </summary>
+        /// <summary>Vibrates the controller on the side the danger comes from, so the player knows which
+        /// way to move without looking.</summary>
         private void UpdateHaptics(float nearest, Vector3 direction)
         {
             if (!hapticsEnabled || nearest > criticalDistance || direction.sqrMagnitude < 1e-6f)

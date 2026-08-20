@@ -5,20 +5,21 @@ using VortexArena.Protocol;
 namespace VortexArena.Core
 {
     /// <summary>
-    /// <see cref="ModeRuntime"/>'ın tek besleme noktası: <c>load_match</c> / <c>welcome</c>
-    /// dinler, lobiye dönüşte ve bağlantı kopunca varsayılana çeker.
+    /// The single feed point of <see cref="ModeRuntime"/>: it listens to <c>load_match</c> /
+    /// <c>welcome</c> and snaps back to the defaults on return-to-lobby and on disconnect.
     /// <para>
-    /// Sahnede DURMAZ: <c>load_match</c> sahne yüklenmeden ÖNCE gelir, bu yüzden
-    /// <c>PlayerCombatState</c>/<c>ArenaClient</c> deseniyle kendini önyükler
+    /// It does NOT live in the scene: <c>load_match</c> arrives BEFORE the scene is loaded, so it
+    /// bootstraps itself with the <c>PlayerCombatState</c>/<c>ArenaClient</c> pattern
     /// (<c>AfterSceneLoad</c> + <c>DontDestroyOnLoad</c>).
     /// </para>
     /// <para>
-    /// Kuralları okuyan bileşenler aynı kancayla doğuyor ve üç <c>AfterSceneLoad</c> çağrısının
-    /// sırası TANIMSIZ — ama bu bir yarış değil: kural mesajı ancak bir ağ bağlantısı kurulduktan
-    /// sonra gelebilir, o da en erken sahne <c>Start()</c>'larında olur.
+    /// The components that read the rules are born from the same hook and the order of the three
+    /// <c>AfterSceneLoad</c> calls is UNDEFINED — but this is not a race: a rule message can only
+    /// arrive after a network connection has been established, and that happens at the earliest in
+    /// the scene's <c>Start()</c> calls.
     /// </para>
-    /// <para>Rol ayrımı yoktur: admin de aynı kuralları alır (takım kipi arayüzün tek/çift kolon
-    /// kararını besler).</para>
+    /// <para>There is no role split: admin receives the same rules too (team mode feeds the UI's
+    /// single/double column decision).</para>
     /// </summary>
     public class ModeRuntimePump : MonoBehaviour
     {
@@ -47,8 +48,8 @@ namespace VortexArena.Core
 
             _instance = this;
 
-            // Kalıcı tekiliz: obje devre dışı bırakılsa bile kural mesajı kaçmasın diye
-            // OnEnable/OnDisable yerine Awake/OnDestroy'da abone olunur.
+            // We are a persistent singleton: subscription happens in Awake/OnDestroy instead of
+            // OnEnable/OnDisable so that no rule message is missed even if the object is disabled.
             NetEvents.OnLoadMatch += HandleLoadMatch;
             NetEvents.OnConnected += HandleConnected;
             NetEvents.OnReturnToLobby += HandleReturnToLobby;
@@ -56,7 +57,7 @@ namespace VortexArena.Core
             NetEvents.OnSelectionState += HandleSelectionState;
             NetEvents.OnRulesUpdate += HandleRulesUpdate;
 
-            // Domain reload kapalıyken statikler önceki oturumdan sarkabilir.
+            // With domain reload disabled, statics can linger from the previous session.
             ModeRuntime.Reset();
             ModeSelection.Reset();
         }
@@ -78,8 +79,9 @@ namespace VortexArena.Core
             _instance = null;
         }
 
-        /// <summary>Maç kuruluyor: kurallar bu mesajdan gelir. <c>rules</c> boşsa (kuralları
-        /// taşımayan bir sunucu) katalog devralır — <see cref="ModeRuntime.ApplyFromCatalog"/>.</summary>
+        /// <summary>A match is being set up: the rules come from this message. If <c>rules</c> is
+        /// empty (a server that does not carry rules) the catalog takes over —
+        /// <see cref="ModeRuntime.ApplyFromCatalog"/>.</summary>
         private static void HandleLoadMatch(LoadMatchMsg msg)
         {
             if (msg == null)
@@ -90,7 +92,7 @@ namespace VortexArena.Core
             ModeRuntime.Apply(msg.modeId, msg.rules);
         }
 
-        /// <summary>Geç katılım: koşan maçın kuralları <c>welcome.match</c>'ten gelir.</summary>
+        /// <summary>Late join: the running match's rules come from <c>welcome.match</c>.</summary>
         private static void HandleConnected(WelcomeMsg msg)
         {
             if (msg?.match == null)
@@ -98,15 +100,16 @@ namespace VortexArena.Core
                 return;
             }
 
-            // Lobide bekleyen sunucuda mod boştur; o durumda varsayılan zaten doğru cevaptır.
+            // On a server idling in the lobby the mode is empty; in that case the default is already
+            // the correct answer.
             ModeRuntime.Apply(msg.match.modeId, msg.match.rules);
         }
 
-        /// <summary>Lobiye dönüş: kurallar SIFIRLANMAZ, lobi profili uygulanır (§10.7).
-        /// <para>Lobi de içerik taşır — silah loadout'u <c>ModeRuntime.ModeId</c> ile
-        /// katalogdan çözülüyor. Mesaj boş <c>modeId</c> taşıyorsa (lobi yapılandırılmamış ya da
-        /// eski sunucu) <see cref="ModeRuntime.Apply"/> zaten varsayılana düşer, yani eski
-        /// davranışın aynısı olur.</para></summary>
+        /// <summary>Return to lobby: the rules are NOT reset, the lobby profile is applied (§10.7).
+        /// <para>The lobby carries content too — its weapon loadout is resolved from the catalog via
+        /// <c>ModeRuntime.ModeId</c>. If the message carries an empty <c>modeId</c> (lobby not
+        /// configured, or an old server) <see cref="ModeRuntime.Apply"/> already falls back to the
+        /// default, i.e. it becomes identical to the old behaviour.</para></summary>
         private static void HandleReturnToLobby(ReturnToLobbyMsg msg)
         {
             if (msg == null)
@@ -119,13 +122,14 @@ namespace VortexArena.Core
         }
 
         /// <summary>
-        /// Seçim bildirimi (§5.3 <c>selection_state</c>) — <b>kural DEĞİL sunum</b>: bilerek
-        /// <see cref="ModeRuntime"/>'a değil <see cref="ModeSelection"/>'a yazılır.
+        /// Selection notification (§5.3 <c>selection_state</c>) — <b>presentation, NOT a rule</b>:
+        /// it is deliberately written to <see cref="ModeSelection"/> and not to <see cref="ModeRuntime"/>.
         /// <para>
-        /// ⚠️ Buradan <c>ModeRuntime.Apply</c> çağrılMAZ: seçim koşan maçı değiştirmez ve
-        /// çağrılsaydı lobide bekleyen oyuncunun HUD'u ile loadout'u maç başlamadan seçili moda
-        /// atlardı (sunucunun sahneleme sırasında <c>modeId</c>'yi bilerek <c>"lobby"</c> tuttuğu
-        /// kararın istemci tarafındaki karşılığı, §10.7).
+        /// ⚠️ <c>ModeRuntime.Apply</c> is NOT called from here: the selection does not change the
+        /// running match, and if it were called the HUD and loadout of a player waiting in the lobby
+        /// would jump to the selected mode before the match starts (the client-side counterpart of the
+        /// decision where the server deliberately keeps <c>modeId</c> as <c>"lobby"</c> during
+        /// staging, §10.7).
         /// </para>
         /// </summary>
         private static void HandleSelectionState(SelectionStateMsg msg)
@@ -139,12 +143,13 @@ namespace VortexArena.Core
         }
 
         /// <summary>
-        /// Kural şekli maç ORTASINDA değişti (§5.3 <c>rules_update</c>) — bugün tek sebebi
-        /// operatörün dost ateşi anahtarıdır (§5.2).
+        /// The rule shape changed MID-match (§5.3 <c>rules_update</c>) — today its only cause is the
+        /// operator's friendly-fire switch (§5.2).
         /// <para>
-        /// ⚠️ <c>HandleSelectionState</c>'in aksine bu <b>uygulanır</b>: seçim gelecekteki bir maçı
-        /// anlatır, bu ise koşan maçın kuralını. Otorite yine sunucudadır — istemci yalnız aynasını
-        /// tazeler; hasar kararını zaten sunucu veriyor (§10.3).
+        /// ⚠️ Unlike <c>HandleSelectionState</c> this one <b>is applied</b>: a selection describes a
+        /// future match, whereas this is the rule of the running match. Authority is still on the
+        /// server — the client only refreshes its mirror; the damage decision is already the server's
+        /// (§10.3).
         /// </para>
         /// </summary>
         private static void HandleRulesUpdate(RulesUpdateMsg msg)

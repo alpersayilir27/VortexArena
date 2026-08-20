@@ -3,44 +3,44 @@ using System.Text.Json;
 
 namespace VortexArena.Launcher;
 
-/// <summary>Mekan listesindeki tek satır: ad + kaç harita + lobisi var mı.</summary>
-/// <param name="Name">Mekan adı — sunucuya <c>--venue</c> ile geçen değer.</param>
-/// <param name="MapCount">Bu mekana ait harita sayısı.</param>
-/// <param name="HasLobby">Mekanda <c>modes == ["lobby"]</c> olan bir harita var mı. Yoksa sunucu
-/// açık sahne çözemez ve §11 fail-fast ile 2 çıkış koduyla kapanır.</param>
+/// <summary>One row of the venue list: name + map count + whether it has a lobby.</summary>
+/// <param name="Name">Venue name — the value passed to the server as <c>--venue</c>.</param>
+/// <param name="MapCount">Number of maps in this venue.</param>
+/// <param name="HasLobby">Does the venue have a map with <c>modes == ["lobby"]</c>. Without one the
+/// server cannot resolve an open scene and fails fast with exit code 2 (§11).</param>
 public sealed record VenueInfo(string Name, int MapCount, bool HasLobby)
 {
-    /// <summary>Listede adın altında görünen satır. Lobisi olmayan mekan kırmızı gösterilir —
-    /// o mekanla başlatılan sunucu hiç açılmaz.</summary>
+    /// <summary>Sub-line shown under the name. A lobby-less venue is shown in red — a server started
+    /// with it never comes up.</summary>
     public string Summary => HasLobby
         ? $"{MapCount} harita · lobi var"
         : $"{MapCount} harita · LOBİ YOK — sunucu açılmaz";
 }
 
 /// <summary>
-/// Sunucunun <c>config\maps.json</c> dosyasından mekan listesini çıkarır — launcher'ın mekan
-/// seçicisini besleyen kaynak budur.
+/// Extracts the venue list from the server's <c>config\maps.json</c> — the source feeding the
+/// launcher's venue picker.
 /// <para>
-/// ⚠️ <b>İkinci bir katalog tutulmaz.</b> Liste, sunucunun kendi okuduğu dosyadan gelir; launcher
-/// içinde mekan adı sabitlenmez. Böylece Unity'de <c>Export Server Config</c> çalıştırılıp yeni bir
-/// işletme eklendiğinde launcher'da yapılacak iş yoktur.
+/// ⚠️ <b>No second catalog is kept.</b> The list comes from the file the server itself reads; no
+/// venue name is hard-coded in the launcher. Adding a business via <c>Export Server Config</c> in
+/// Unity therefore requires no launcher work.
 /// </para>
 /// <para>
-/// Dosya, sunucu exe'sinin yanından başlayıp yukarı doğru aranır (sunucunun kendi davranışının
-/// aynısı): dağıtımda <c>deploy\server\config\maps.json</c>, geliştirmede
-/// <c>Server\config\maps.json</c> bulunur.
+/// The file is searched from next to the server exe upwards (same behaviour as the server):
+/// <c>deploy\server\config\maps.json</c> when deployed, <c>Server\config\maps.json</c> in
+/// development.
 /// </para>
 /// </summary>
 public sealed class VenueCatalog
 {
-    /// <summary><c>venue</c> alanı boş bırakılmış eski export'lar için — sunucudaki
-    /// <c>MapTable.DefaultVenue</c> ile aynı olmalı.</summary>
+    /// <summary>For older exports leaving <c>venue</c> empty — must match the server's
+    /// <c>MapTable.DefaultVenue</c>.</summary>
     public const string DefaultVenue = "Standard";
 
-    /// <summary><c>ArenaProtocol.LOBBY_MODE_ID</c> ile aynı olmalı.</summary>
+    /// <summary>Must match <c>ArenaProtocol.LOBBY_MODE_ID</c>.</summary>
     public const string LobbyModeId = "lobby";
 
-    /// <summary>Aranan dosyanın exe'den yukarı kaç seviye takip edileceği.</summary>
+    /// <summary>How many levels above the exe the search walks up.</summary>
     private const int SearchDepth = 6;
 
     public static VenueCatalog Empty { get; } = new([], null, null);
@@ -52,18 +52,18 @@ public sealed class VenueCatalog
         Problem = problem;
     }
 
-    /// <summary>Bulunan mekanlar (ada göre sıralı). Okunamadıysa boş.</summary>
+    /// <summary>Discovered venues (sorted by name). Empty when unreadable.</summary>
     public IReadOnlyList<VenueInfo> Venues { get; }
 
-    /// <summary>Okunan <c>maps.json</c>'un tam yolu; bulunamadıysa null.</summary>
+    /// <summary>Full path of the <c>maps.json</c> read; null when not found.</summary>
     public string? SourcePath { get; }
 
-    /// <summary>Okunamama sebebi (operatöre gösterilir); sorun yoksa null.</summary>
+    /// <summary>Why it could not be read (shown to the operator); null when fine.</summary>
     public string? Problem { get; }
 
     public IReadOnlyList<string> Names => Venues.Select(v => v.Name).ToArray();
 
-    /// <summary>Sunucu exe yolundan yola çıkarak mekan listesini çıkarır.</summary>
+    /// <summary>Builds the venue list starting from the server exe path.</summary>
     public static VenueCatalog ForServerExe(string serverExePath)
     {
         if (string.IsNullOrWhiteSpace(serverExePath))
@@ -87,7 +87,7 @@ public sealed class VenueCatalog
         }
     }
 
-    /// <summary>Exe'nin yanından başlayıp yukarı doğru <c>config\maps.json</c> arar.</summary>
+    /// <summary>Searches for <c>config\maps.json</c> from next to the exe upwards.</summary>
     public static string? FindMapsJson(string serverExePath)
     {
         string? dir;
@@ -110,7 +110,7 @@ public sealed class VenueCatalog
         return null;
     }
 
-    /// <summary>maps.json içeriğini ayrıştırır. Biçim: <c>{ "maps": [ { sceneName, venue, modes } ] }</c>.</summary>
+    /// <summary>Parses maps.json. Shape: <c>{ "maps": [ { sceneName, venue, modes } ] }</c>.</summary>
     public static VenueCatalog FromJson(string json, string? sourcePath)
     {
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -162,8 +162,8 @@ public sealed class VenueCatalog
         return new VenueCatalog(venues, sourcePath, null);
     }
 
-    /// <summary>Sunucudaki kuralın aynısı: lobi = <c>modes</c> tam olarak <c>["lobby"]</c>.
-    /// Sahne adına BAKILMAZ.</summary>
+    /// <summary>Same rule as the server: lobby = <c>modes</c> is exactly <c>["lobby"]</c>. The scene
+    /// name is NOT considered.</summary>
     private static bool IsLobby(JsonElement entry)
     {
         if (!entry.TryGetProperty("modes", out var modes) || modes.ValueKind != JsonValueKind.Array)

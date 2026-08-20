@@ -4,132 +4,126 @@ using VortexArena.Server.Core.Modes;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>
-/// Maçın genel durumu (§10.1). <b>Tel formatıyla birebir aynıdır</b> — üç değer, fazlası yok.
-/// <para>⚠️ Bu enum'un TEK yetkisi hasar kapısıdır: <c>hit_report</c> yalnız <see cref="Playing"/>
-/// fazında işlenir. "Ateş edebilir miyim", "silahım nereden gelir", "hangi HUD" sorularının cevabı
-/// buradan DEĞİL moddan gelir (<see cref="Modes.ModeRules"/>). Yeni bir mod ara durum isterse bu
-/// enum büyümez — <see cref="PauseReason.Mode"/> + <c>modeState</c> kullanılır.</para>
-/// </summary>
+/// <summary>Overall match state (§10.1) — identical to the wire format, three values, no more.</summary>
+/// <remarks>⚠️ Its ONLY authority is the damage gate: <c>hit_report</c> is processed only in
+/// <see cref="Playing"/>. "Can I fire", "where does my weapon come from", "which HUD" are answered by
+/// the MODE (<see cref="Modes.ModeRules"/>), not here. A mode needing an intermediate state does not
+/// grow this enum — it uses <see cref="PauseReason.Mode"/> + <c>modeState</c>.</remarks>
 public enum Phase
 {
-    /// <summary>Maç koşmuyor: lobi, yükleme, geri sayım, duraklatma. Hasar KAPALI.</summary>
+    /// <summary>Match not running: lobby, loading, countdown, pause. Damage OFF.</summary>
     Paused,
 
-    /// <summary>Maç koşuyor. Hasarın işlendiği TEK faz.</summary>
+    /// <summary>Match running. The ONLY phase where damage is processed.</summary>
     Playing,
 
-    /// <summary>Maç bitti, skorlar kesin. Hasar KAPALI.</summary>
+    /// <summary>Match over, scores final. Damage OFF.</summary>
     Finished
 }
 
-/// <summary>
-/// <see cref="Phase.Paused"/>'un gerekçesi (§10.1 <c>phaseReason</c>). Çekirdeğin iç durumu da
-/// budur: tik döngüsü hangi işi yapacağını (yükleme kapısı mı, geri sayım mı) buradan bilir.
-/// <para>Neden ayrı bir alan: turnuva "herkes tabana dönsün" derken (<see cref="Mode"/>) operatör
-/// de duraklatırsa (<see cref="Operator"/>) ikisi karışmamalı — mod kendi durumunu
-/// <c>modeState</c>'te korur, çekirdek gerekçeyi burada tutar.</para>
-/// </summary>
+/// <summary>Reason for <see cref="Phase.Paused"/> (§10.1 <c>phaseReason</c>), and the core's own
+/// sub-state: the tick loop decides its work (loading gate vs countdown) from here.</summary>
+/// <remarks>Separate field so a mode pause (<see cref="Mode"/>, e.g. "everyone back to base") and an
+/// operator pause (<see cref="Operator"/>) cannot be confused — the mode keeps its own state in
+/// <c>modeState</c>, the core keeps the reason here.</remarks>
 public enum PauseReason
 {
-    /// <summary>Duraklı değil (<see cref="Phase.Playing"/> / <see cref="Phase.Finished"/>).</summary>
+    /// <summary>Not paused (<see cref="Phase.Playing"/> / <see cref="Phase.Finished"/>).</summary>
     None,
 
-    /// <summary>Lobi türü açık, maç kurulmadı.</summary>
+    /// <summary>Lobby staged, no match set up.</summary>
     Lobby,
 
-    /// <summary>Sahne yükleme kapısı: oyuncuların set_ready'si bekleniyor.</summary>
+    /// <summary>Scene loading gate: waiting for players' set_ready.</summary>
     Loading,
 
-    /// <summary>Geri sayım.</summary>
+    /// <summary>Countdown.</summary>
     Countdown,
 
-    /// <summary>Operatör koşan maçı duraklattı.</summary>
+    /// <summary>Operator paused the running match.</summary>
     Operator,
 
-    /// <summary>Mod duraklatma istedi; gerekçesi <c>modeState</c>'tedir.</summary>
+    /// <summary>Mode requested the pause; its reason lives in <c>modeState</c>.</summary>
     Mode
 }
 
-/// <summary>Lobi sahnelemesinin sonucu (§10.7) — operatöre gösterilecek duyuru bundan üretilir.</summary>
+/// <summary>Result of lobby staging (§10.7) — the operator's announcement is built from it.</summary>
 public enum StageOutcome
 {
-    /// <summary>Sahne değişti; tüm istemcilere <c>return_to_lobby</c> yollandı.</summary>
+    /// <summary>Scene changed; <c>return_to_lobby</c> sent to all clients.</summary>
     Staged,
 
-    /// <summary>Zaten o sahnedeydik ya da istenen sahne boştu — kimse yeniden yüklemedi.</summary>
+    /// <summary>Already on that scene or the requested scene was empty — nobody reloaded.</summary>
     Unchanged,
 
-    /// <summary>Yapılmadı; sebebi <see cref="StageSceneResult.Reason"/>'da.</summary>
+    /// <summary>Not done; reason in <see cref="StageSceneResult.Reason"/>.</summary>
     Rejected
 }
 
-/// <summary>Sahneleme sonucu + reddedildiyse insan okuyabilir sebebi (admin duyurusuna girer).</summary>
+/// <summary>Staging result + human-readable reason when rejected (goes into the admin announcement).</summary>
 public readonly record struct StageSceneResult(StageOutcome Outcome, string Reason = "");
 
-/// <summary>Sunucu-otoriter maç akışı (§10): faz makinesi, kişisel load_match, countdown,
-/// match_state yayını, vuruş doğrulama hattı, skor ve free-roam canlanma. İstemci sunum+girdidir;
-/// hasar uygulamaz, skor tutmaz, faz değiştirmez.
-///
-/// <para><b>Kilit sözleşmesi:</b> tüm maç durumu (faz, skor, süre + PlayerState'in maç alanları)
-/// <c>_gate</c> altında okunur/yazılır. Kilit altındayken ASLA await edilmez ve mesaj
-/// GÖNDERİLMEZ: mesajlar kilit altında kurulup <c>outbox</c>'a yazılır, kilit bırakıldıktan sonra
-/// yollanır. Aynı sebeple <c>IGameMode</c> kancaları ve event tetikleyen registry metodları
-/// (SetTeam/SetReady) kilit DIŞINDA çağrılır — modların kullandığı public API (ScoreRed,
-/// AddScore, ConnectedPlayers…) kendi kilidini alır, yeniden giriş olmaz.
-/// PlayerRegistry.Snapshot()/TryGetByPlayerId registry kilidini ALMAZ (ConcurrentDictionary),
-/// bu yüzden _gate altından çağrılmaları güvenlidir.</para></summary>
+/// <summary>Server-authoritative match flow (§10): phase machine, per-player load_match, countdown,
+/// match_state broadcast, hit validation, scoring and free-roam revive. The client is
+/// presentation+input; it applies no damage, keeps no score, changes no phase.</summary>
+/// <remarks><b>Lock contract:</b> all match state (phase, score, time + PlayerState's match fields) is
+/// read/written under <c>_gate</c>. NEVER await and NEVER send under the lock: messages are built under
+/// it into <c>outbox</c> and sent after release. Same reason, <c>IGameMode</c> hooks and event-raising
+/// registry methods (SetTeam/SetReady) are called OUTSIDE the lock — the public API modes use (ScoreRed,
+/// AddScore, ConnectedPlayers…) takes its own lock, so no re-entry.
+/// PlayerRegistry.Snapshot()/TryGetByPlayerId do NOT take the registry lock (ConcurrentDictionary), so
+/// calling them under _gate is safe.</remarks>
 public sealed class MatchDirector
 {
-    /// <summary>Maç tick'i 10 Hz: countdown/süre/engel cezası çözünürlüğü için yeterli,
-    /// snapshot döngüsünden (20 Hz) bağımsız.</summary>
+    /// <summary>Match tick at 10 Hz: enough resolution for countdown/time/obstacle penalty, and
+    /// independent of the 20 Hz snapshot loop.</summary>
     private const int TickIntervalMs = 100;
 
-    /// <summary>Kilit altında kurulup kilit dışında yollanan tek gönderim.</summary>
+    /// <summary>One send, built under the lock and dispatched outside it.</summary>
     private readonly record struct Outgoing(ClientConnection Connection, string Json, string Who);
 
     private readonly object _gate = new();
     private readonly PlayerRegistry _registry;
 
-    /// <summary>Harita kataloğu (config/maps.json — Unity export'u). BOŞ olabilir: o zaman
-    /// harita doğrulaması ve spawn slot sınırı devre dışıdır (§10.1).</summary>
+    /// <summary>Map catalog (config/maps.json — Unity export). May be EMPTY: then map validation and
+    /// the spawn slot limit are disabled (§10.1).</summary>
     private readonly MapTable _maps;
 
     private readonly Dictionary<string, IGameMode> _modes = new(StringComparer.Ordinal);
 
-    /// <summary>Kilit altında toplanan "ready bayrağını sıfırla" işleri; registry.SetReady event
-    /// tetiklediği için (lobby_state yayını) kilit DIŞINDA uygulanır.</summary>
+    /// <summary>"Clear ready flag" work collected under the lock; applied OUTSIDE it because
+    /// registry.SetReady raises an event (lobby_state broadcast).</summary>
     private readonly List<string> _readyClearQueue = new();
 
-    /// <summary>Mod kancalarının (senkron, kilit dışı) ürettiği gönderimler. Kancalar
-    /// <c>await</c> edemez — <see cref="IGameMode.OnTick"/> <c>void</c>'dir — ve doğrudan
-    /// göndermeleri de yasak (kilit sözleşmesi + sıra bozulması). Bu yüzden mesajlar kilit
-    /// altında buraya yazılır, tik döngüsü kanca dönüşünde <see cref="FlushPendingAsync"/> ile
-    /// yollar: tek gönderici, korunan sıra, kilit altında hiç gönderim yok.</summary>
+    /// <summary>Sends produced by mode hooks (synchronous, outside the lock). Hooks cannot
+    /// <c>await</c> (<see cref="IGameMode.OnTick"/> is <c>void</c>) and must not send directly (lock
+    /// contract + ordering). So messages land here and the tick loop dispatches them via
+    /// <see cref="FlushPendingAsync"/> after each hook group: one sender, preserved order, no send
+    /// under the lock.</summary>
     private readonly List<Outgoing> _pendingOutbox = new();
 
-    /// <summary>Bu maç en az bir oyuncuyla mı başladı? Loading'de "oyuncu kalmadı" durumunun
-    /// nasıl yorumlanacağını belirler (§10.1): oyuncusuz başlatılan maç admin harita
-    /// önizlemesidir ve kendiliğinden lobiye DÖNMEZ.</summary>
+    /// <summary>Did this match start with at least one player? Decides how "no players left" is read
+    /// in Loading (§10.1): a match started with none is an admin map preview and does NOT return to
+    /// the lobby on its own.</summary>
     private bool _startedWithPlayers;
 
-    /// <summary>Kilit altında işaretlenen "roster tazelensin" isteği. hp/alive/kills/deaths
-    /// lobby_state ile taşınıyor (§5.3) ve admin istatistik tablosunun sağlama noktası bu.
-    /// registry.Announce olay tetiklediği için kilit DIŞINDA (FlushRosterRefresh) uygulanır;
-    /// Announce imzası bir PlayerState istediği için bayrak yerine son değişen oyuncu tutulur.</summary>
+    /// <summary>"Refresh the roster" request flagged under the lock. hp/alive/kills/deaths travel in
+    /// lobby_state (§5.3) and are the admin statistics table's source. Applied OUTSIDE the lock
+    /// (FlushRosterRefresh) since registry.Announce raises an event; the last changed player is kept
+    /// instead of a bool because Announce's signature wants a PlayerState.</summary>
     private PlayerState? _rosterRefreshFor;
 
-    /// <summary>Kilit altında işaretlenen "maç defteri kapansın" isteği (§10.2): <c>left</c>
-    /// kayıtların silinmesi + <c>inMatch</c> bayraklarının temizlenmesi. Registry olay
-    /// tetiklediği için kilit DIŞINDA (<see cref="FlushParticipantCleanup"/>) uygulanır.</summary>
+    /// <summary>"Close the match ledger" request flagged under the lock (§10.2): dropping <c>left</c>
+    /// records + clearing <c>inMatch</c> flags. Applied OUTSIDE the lock
+    /// (<see cref="FlushParticipantCleanup"/>) since the registry raises events.</summary>
     private bool _participantCleanupPending;
 
-    /// <summary>Vuruş reddi logu için atıcı başına kısıtlama aralığı: ölü hedefe ateş sürerken
-    /// (gerçek oyuncuda da olur) konsol boğulmasın.</summary>
+    /// <summary>Per-shooter throttle interval for hit rejection logs: keeps the console from drowning
+    /// while someone keeps firing at a dead target (real players do this).</summary>
     private const double RejectLogIntervalSeconds = 2.0;
 
-    // Log durumu — MAÇ durumu DEĞİL, bu yüzden PlayerState'te değil burada ve kendi küçük kilidi
-    // altında tutulur. _rejectLogGate ASLA _gate almaz (yalnız _gate → _rejectLogGate yönü var).
+    // Log state — NOT match state, hence kept here (not in PlayerState) under its own small lock.
+    // _rejectLogGate NEVER takes _gate (only the _gate → _rejectLogGate direction exists).
     private readonly object _rejectLogGate = new();
     private readonly Dictionary<int, DateTime> _lastRejectLogAt = new();
     private readonly Dictionary<int, int> _suppressedRejects = new();
@@ -137,17 +131,16 @@ public sealed class MatchDirector
     private Phase _phase = Phase.Paused;
     private PauseReason _pauseReason = PauseReason.Lobby;
 
-    /// <summary>Modun kendi ara durumu (§10.1 <c>modeState</c>). <b>Çekirdek bunu YORUMLAMAZ</b> —
-    /// yalnız taşır; okuyanı istemcideki HUD'dur. Duraklatma boyunca korunur ki mod kaldığı yerden
-    /// sürebilsin.</summary>
+    /// <summary>The mode's own sub-state (§10.1 <c>modeState</c>). The core does NOT interpret it, only
+    /// carries it; the client HUD reads it. Preserved across pauses so the mode can resume.</summary>
     private string _modeState = "";
 
     private string _modeId = "";
     private string _sceneName = "";
 
-    /// <summary>Açık sahnenin sahnelendiği an (§5.3 <c>sceneElapsed</c>). <b>Yalnız sahne
-    /// DEĞİŞİNCE tazelenir</b> — maçın başlaması/bitmesi ona dokunmaz, çünkü ölçtüğü şey maç değil
-    /// sahnedir: istemcideki ortam sesi harita değişmedikçe kesilmemeli.</summary>
+    /// <summary>When the current scene was staged (§5.3 <c>sceneElapsed</c>). Refreshed ONLY when the
+    /// scene CHANGES — match start/end do not touch it, since it measures the scene, not the match:
+    /// client ambience must not restart while the map stays the same.</summary>
     private DateTime _sceneStagedUtc = DateTime.UtcNow;
 
     private float _timeRemaining;
@@ -156,96 +149,90 @@ public sealed class MatchDirector
     private int _roundSeconds;
     private int _scoreLimit;
 
-    /// <summary>Bu maçtaki her geri sayımın uzunluğu (§5.2 <c>start_match.countdownSeconds</c>);
-    /// admin vermezse <see cref="ArenaProtocol.COUNTDOWN_SECONDS"/>. Tur tabanlı modlarda turlar
-    /// arasındaki geri sayım da budur.</summary>
+    /// <summary>Length of every countdown in this match (§5.2 <c>start_match.countdownSeconds</c>);
+    /// <see cref="ArenaProtocol.COUNTDOWN_SECONDS"/> when the admin gives none. Round-based modes use it
+    /// between rounds too.</summary>
     private int _countdownSeconds = ArenaProtocol.COUNTDOWN_SECONDS;
 
     private IGameMode? _mode;
 
-    /// <summary>Koşan maçın kural şekli (§10.5). Maç yokken TDM varsayılanıdır — bu sayede
-    /// lobide de anlamlı bir cevap vardır ve her okuyucunun null kontrolü yapması gerekmez.
-    /// <para>⚠️ TEK yazarı <see cref="ApplyRulesLocked"/>'dır: dost ateşi anahtarı modun kuralını
-    /// ezdiği için her atama o kapıdan geçmek zorunda.</para></summary>
+    /// <summary>Rule shape of the running match (§10.5); the TDM default when there is no match, so the
+    /// lobby also has a meaningful answer and no reader needs a null check.</summary>
+    /// <remarks>⚠️ Its ONLY writer is <see cref="ApplyRulesLocked"/>: the friendly-fire switch overrides
+    /// the mode's rule, so every assignment must pass through that gate.</remarks>
     private ModeRules _rules = ModeRules.TeamDefault;
 
-    /// <summary>
-    /// Dost ateşi anahtarı (§5.2) — <b>sunucu oturumu ayarı</b>, mod kuralı değil.
-    /// <para>
-    /// Açılışta <c>false</c>; yalnız <see cref="SetFriendlyFireAsync"/> değiştirir. Maç başlangıcı,
-    /// harita sahneleme ve lobiye dönüş bu değeri <b>sıfırlamaz</b> — operatörün ayarı sunucu
-    /// yeniden başlayana kadar yaşar (süre/limit seçimiyle aynı sözleşme).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Modlar bu alanı bildirmez.</b> <see cref="ModeRules.FriendlyFire"/> yalnız telde "o an
-    /// geçerli değer"i taşır; iki yerden yazılsaydı "hangisi doğru" sorusunun iki cevabı olurdu.
-    /// </para>
-    /// </summary>
+    /// <summary>Friendly-fire switch (§5.2) — a SERVER SESSION setting, not a mode rule.</summary>
+    /// <remarks><c>false</c> at startup; only <see cref="SetFriendlyFireAsync"/> changes it. Match start,
+    /// map staging and returning to the lobby do NOT reset it — the operator's setting lives until the
+    /// server restarts (same contract as the time/limit selection).
+    /// <para>⚠️ Modes do NOT declare this field. <see cref="ModeRules.FriendlyFire"/> only carries the
+    /// currently effective value on the wire; two writers would give "which one is right" two
+    /// answers.</para></remarks>
     private bool _friendlyFire;
 
-    /// <summary>Atış olayı relay kapısının (§6.5) kilitsiz okunabilir yayını — faz
-    /// <see cref="Phase.Playing"/> VEYA <c>rules.fireWhilePaused</c>. TEK yazarı
-    /// <see cref="RefreshShotRelayLocked"/>'dır.</summary>
+    /// <summary>Lock-free publication of the shot event relay gate (§6.5) — phase
+    /// <see cref="Phase.Playing"/> OR <c>rules.fireWhilePaused</c>. Its ONLY writer is
+    /// <see cref="RefreshShotRelayLocked"/>.</summary>
     private volatile bool _shotRelayOpen;
 
     private DateTime _phaseEnteredAt = DateTime.UtcNow;
 
-    /// <summary>1 Hz işler (countdown geri sayımı + Live'da match_state) için sonraki eşik.</summary>
+    /// <summary>Next deadline for 1 Hz work (countdown ticks + match_state while Live).</summary>
     private DateTime _nextSecondAt = DateTime.UtcNow;
 
-    /// <summary>Engel hasarının <c>health_update</c> kadansı (ms) — tik kadansı DEĞİL (§10.9,
-    /// gerekçe <see cref="TickObstacleLocked"/>'ta). 4 Hz: 12 HP/sn'de üç HP'lik adımlar.</summary>
+    /// <summary><c>health_update</c> cadence for obstacle damage (ms) — NOT the tick cadence (§10.9,
+    /// rationale in <see cref="TickObstacleLocked"/>). 4 Hz: three-HP steps at 12 HP/s.</summary>
     private const int ObstacleHealthIntervalMs = 250;
 
-    /// <summary>Engel hasarında bir sonraki can bildirimi eşiği. Oyuncu başına DEĞİL, tik
-    /// döngüsüne aittir: aynı anda erimekte olan herkes aynı kadansta bildirilir.</summary>
+    /// <summary>Next health announcement deadline for obstacle damage. Belongs to the tick loop, NOT to
+    /// a player: everyone draining at once is announced on the same cadence.</summary>
     private DateTime _nextObstacleHealthAt = DateTime.UtcNow;
 
     private int _countdownRemaining;
 
-    /// <summary>Live'a girildi; IGameMode.OnMatchStart kilit dışında çağrılacak.</summary>
+    /// <summary>Entered Live; IGameMode.OnMatchStart to be called outside the lock.</summary>
     private bool _matchStartPending;
 
-    /// <summary>Live'a girildi; IGameMode.OnRoundStart kilit dışında çağrılacak. <b>Her</b> Live
-    /// girişinde set edilir — <see cref="_matchStartPending"/>'den farkı budur.</summary>
+    /// <summary>Entered Live; IGameMode.OnRoundStart to be called outside the lock. Set on EVERY Live
+    /// entry — that is the difference from <see cref="_matchStartPending"/>.</summary>
     private bool _roundStartPending;
 
-    /// <summary>Bu maç en az bir kez Live'a girdi mi. <c>OnMatchStart</c>'ın maç başına bir kez
-    /// çağrılmasını sağlar: tur tabanlı modda Live'a her turda yeniden girilir ve "maç başladı"
-    /// her turda tekrar duyurulsaydı mod maç durumunu her turda sıfırlardı.</summary>
+    /// <summary>Has this match entered Live at least once. Keeps <c>OnMatchStart</c> to once per match:
+    /// a round-based mode re-enters Live every round, and announcing "match started" each time would make
+    /// the mode reset its match state every round.</summary>
     private bool _matchStarted;
 
     private CancellationTokenSource? _cts;
     private Task? _loop;
 
-    /// <summary>Bu işletmenin lobi sahnesi (§10.7, <c>server.json → lobbyScene</c>).
-    /// <para>⚠️ <b>Boş olamaz:</b> sunucu açılışta bunu çözemezse hiç açılmaz (§11 fail-fast,
-    /// <c>Program.cs</c>). Sunucunun açık sahnesi istemcinin TEK yönlendirme kaynağıdır.</para>
-    /// <para>⚠️ Lobi bir MAÇ DEĞİLDİR, bir <b>tür</b>dür — bu alan <c>_sceneName</c>/<c>_modeId</c>'yi
-    /// maç dışında doldurur. Hasar kapısı (§10.3) fazdan okumaya devam eder.</para></summary>
+    /// <summary>This venue's lobby scene (§10.7, <c>server.json → lobbyScene</c>).</summary>
+    /// <remarks>⚠️ Cannot be empty: if the server cannot resolve it at startup it does not start at all
+    /// (§11 fail-fast, <c>Program.cs</c>). The server's staged scene is the client's ONLY routing source.
+    /// <para>⚠️ The lobby is not a MATCH but a KIND — this field fills <c>_sceneName</c>/<c>_modeId</c>
+    /// outside a match. The damage gate (§10.3) still reads the phase.</para></remarks>
     private readonly string _lobbyScene;
 
     public MatchDirector(PlayerRegistry registry, MapTable maps, string lobbyScene = "")
     {
         _registry = registry;
         _maps = maps;
-        // Boş bırakılırsa mekanın kendi lobi haritası devralır (§11) — her kurulumda elle
-        // yazılması gereken bir alan olmasın; config yalnız istisna için doldurulur.
+        // Left empty, the venue's own lobby map takes over (§11) — so this is not a field every install
+        // must fill in by hand; config only covers the exception.
         _lobbyScene = string.IsNullOrWhiteSpace(lobbyScene) ? maps.ResolveLobbyScene() : lobbyScene.Trim();
         RegisterModes();
-        // Durum zaten Paused/Lobby ile başlıyor; lobi profilini de başlangıçta yaz ki ilk welcome
-        // (henüz hiç EnterLobbyLocked çalışmadan) doğru sahneyi/modId'yi/kuralı taşısın.
+        // State already starts as Paused/Lobby; write the lobby profile up front so the first welcome
+        // (before any EnterLobbyLocked ran) carries the right scene/modId/rules.
         _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
         SetSceneLocked(_lobbyScene);
         ApplyRulesLocked(ModeRules.LobbyProfile);
         RefreshShotRelayLocked();
     }
 
-    /// <summary>
-    /// Açık sahneyi yazan <b>tek</b> kapı: sahne gerçekten değiştiyse sahneleme damgasını
-    /// (<see cref="_sceneStagedUtc"/>) tazeler. Aynı sahne yeniden yazılırsa damga KORUNUR —
-    /// aynı haritada ikinci bir maç başlatmak istemcideki ortam sesini baştan başlatmamalı.
-    /// </summary>
+    /// <summary>The ONLY writer of the staged scene: refreshes the staging stamp
+    /// (<see cref="_sceneStagedUtc"/>) only on a real change.</summary>
+    /// <remarks>Rewriting the same scene PRESERVES the stamp — a second match on the same map must not
+    /// restart the client's ambience.</remarks>
     private void SetSceneLocked(string sceneName)
     {
         if (string.Equals(_sceneName, sceneName, StringComparison.Ordinal)) return;
@@ -254,49 +241,42 @@ public sealed class MatchDirector
         _sceneStagedUtc = DateTime.UtcNow;
     }
 
-    /// <summary>Açık sahnenin kaç saniyedir sahnelendiği (§5.3 <c>sceneElapsed</c>).</summary>
+    /// <summary>Seconds since the current scene was staged (§5.3 <c>sceneElapsed</c>).</summary>
     private float SceneElapsedLocked =>
         (float)Math.Max(0d, (DateTime.UtcNow - _sceneStagedUtc).TotalSeconds);
 
-    /// <summary>
-    /// Kural şeklini yazan TEK kapı: modun/lobinin kuralına operatörün dost ateşi anahtarını
-    /// damgalar (§10.5).
-    /// <para>
-    /// ⚠️ İşlevsel olarak yük taşıyan tek çağrı <c>start_match</c>'inkidir — hasar yalnız
-    /// <see cref="Phase.Playing"/>'de işlenir ve oraya ancak oradan gelinir. Lobi profilini yazan
-    /// çağrıların da buradan geçmesi <c>welcome.match.rules</c> yalan söylemesin diyedir: anahtar
-    /// açıkken lobide bağlanan istemciye <c>friendlyFire:false</c> gitseydi, ileride bu alanı okuyan
-    /// ilk istemci özelliği sessizce yanlış çizerdi.
-    /// </para>
-    /// </summary>
+    /// <summary>The ONLY writer of the rule shape: stamps the operator's friendly-fire switch onto the
+    /// mode's/lobby's rules (§10.5).</summary>
+    /// <remarks>⚠️ Functionally only the <c>start_match</c> call carries weight — damage is processed
+    /// only in <see cref="Phase.Playing"/>, reachable only from there. Lobby-profile calls go through
+    /// here so <c>welcome.match.rules</c> does not lie: with the switch on, sending
+    /// <c>friendlyFire:false</c> to a client connecting in the lobby would make the first client that
+    /// reads the field draw the feature wrong.</remarks>
     private void ApplyRulesLocked(ModeRules baseRules) =>
         _rules = baseRules with { FriendlyFire = _friendlyFire };
 
-    /// <summary>
-    /// Atış olayı (<c>0x03</c>/<c>0x04</c>, §6.4/6.5) relay edilir mi: faz <c>playing</c> <b>VEYA</b>
-    /// <c>rules.fireWhilePaused</c>. Atıcının kendi koşulları (online + player + alive + calibrated)
-    /// buna girmez, onları <see cref="StateHost"/> oyuncu başına okur.
-    /// <para>⚠️ <b>Neden bir bayrak, neden kilitli bir okuma değil</b> (§10.3): bu kapı <b>UDP recv
-    /// thread'inde</b> okunur ve o thread <c>_gate</c>'e GİREMEZ — girerse 20 Hz poz alım yolunu
-    /// maç kilidinin arkasında bekletir. <see cref="PlayerState.Alive"/>'ın mevcut kilitsiz okuma
-    /// deseninin aynısı: faz/kural değişiminde bayrak volatile yayınlanır, olay yolu yalnız onu
-    /// okur. Bir tik gecikme <b>sunum</b> için önemsizdir (hasar kapısı bu değil, o WS'te ve
-    /// kilitlidir).</para>
-    /// </summary>
+    /// <summary>Whether shot events (<c>0x03</c>/<c>0x04</c>, §6.4/6.5) are relayed: phase
+    /// <c>playing</c> OR <c>rules.fireWhilePaused</c>. The shooter's own conditions (online + player +
+    /// alive + calibrated) are not part of it; <see cref="StateHost"/> reads those per player.</summary>
+    /// <remarks>⚠️ Why a flag and not a locked read (§10.3): this gate is read on the UDP recv thread,
+    /// and that thread MUST NOT enter <c>_gate</c> — doing so would stall the 20 Hz pose intake behind
+    /// the match lock. Same lock-free pattern as <see cref="PlayerState.Alive"/>: the flag is published
+    /// volatile on phase/rule changes and the event path only reads it. One tick of lag is irrelevant for
+    /// PRESENTATION (this is not the damage gate; that one is on WS and locked).</remarks>
     public bool ShotRelayOpen => _shotRelayOpen;
 
-    /// <summary>Sunucunun yapılandırılmış lobi sahnesi — açılış logu ve doğrulaması için.</summary>
+    /// <summary>The server's configured lobby scene — for the startup log and validation.</summary>
     public string LobbyScene => _lobbyScene;
 
-    /// <summary>Bu oturumda oynatılan mekan (§11); mekan ayrımı yoksa boş.</summary>
+    /// <summary>Venue played in this session (§11); empty when there is no venue split.</summary>
     public string VenueId => _maps.Venue;
 
-    /// <summary>Bu mekanın harita adları — <c>admin_state</c> ile adminlere gider ki harita
-    /// seçicileri yalnız oynatılabilir arenaları göstersin.</summary>
+    /// <summary>This venue's map names — sent to admins in <c>admin_state</c> so their map pickers show
+    /// only playable arenas.</summary>
     public IReadOnlyList<string> VenueScenes => _maps.SceneNames;
 
-    /// <summary>Sunucunun tanıdığı modların TEK kayıt yeri — yeni mod buraya bir satır eklenir
-    /// (CLAUDE.md "Yeni mod" reçetesi). Kayıtlı olmayan modId'li start_match reddedilir.</summary>
+    /// <summary>The ONLY registration point for modes the server knows — a new mode adds one line here
+    /// (CLAUDE.md "Yeni mod" recipe). start_match with an unregistered modId is rejected.</summary>
     private void RegisterModes()
     {
         Register(new TdmMode());
@@ -306,17 +286,15 @@ public sealed class MatchDirector
 
     private void Register(IGameMode mode) => _modes[mode.ModeId] = mode;
 
-    /// <summary>Kayıtlı mod kimlikleri (açılış özeti / red mesajları için).</summary>
+    /// <summary>Registered mode ids (for the startup summary / rejection messages).</summary>
     public IReadOnlyCollection<string> ModeIds => _modes.Keys;
 
-    /// <summary>
-    /// Bir modun takım kipi — <c>selection_state.teamMode</c>'un kaynağı (§5.3). Kayıtlı olmayan
-    /// <paramref name="modeId"/> (lobi dahil, o bir <see cref="IGameMode"/> değildir) lobi
-    /// profiline düşer.
-    /// <para>⚠️ <b>Kural taşımaz</b>: bu kapıdan yalnız SUNUM için gereken tek alan geçer. Modun
-    /// tamamını yayınlamak, henüz başlamamış maçın kurallarını istemcide "aktif" gibi okunabilir
-    /// yapardı (§10.5 otoritesi <c>load_match.rules</c>'tur).</para>
-    /// </summary>
+    /// <summary>A mode's team mode — the source of <c>selection_state.teamMode</c> (§5.3). An
+    /// unregistered <paramref name="modeId"/> (including the lobby, which is not an
+    /// <see cref="IGameMode"/>) falls back to the lobby profile.</summary>
+    /// <remarks>⚠️ Carries NO rules: only the single field needed for PRESENTATION passes here.
+    /// Publishing the whole mode would make a not-yet-started match's rules readable as "active" on the
+    /// client (§10.5 authority is <c>load_match.rules</c>).</remarks>
     public TeamMode TeamModeOf(string modeId)
     {
         if (!string.IsNullOrEmpty(modeId) && _modes.TryGetValue(modeId, out var mode))
@@ -330,38 +308,32 @@ public sealed class MatchDirector
         get { lock (_gate) return _phase; }
     }
 
-    /// <summary>Mod/harita seçimi ve sahneleme (§10.7) şu anda serbest mi? İzin verilen tam iki
-    /// durum var: <see cref="Phase.Finished"/> ve <see cref="Phase.Paused"/> +
-    /// <see cref="PauseReason.Lobby"/>.
-    /// <para>
-    /// Ölçüt "maç koşuyor mu" DEĞİL <b>"maç kurulmuş mu"</b>: harita seçmek herkese giden bir sahne
-    /// komutudur (§10.7), kurulmakta olan ya da donmuş bir maçın altından sahne çekilemez. Bu yüzden
-    /// <c>loading</c>/<c>countdown</c> (maç kuruluyor) ve <c>operator</c>/<c>mode</c> (maç donmuş)
-    /// duraklamaları da KAPALIDIR — <b>donmuş maç da kurulmuş maçtır</b>, operatör devam
-    /// ettirdiğinde altındaki sahne değişmiş olmamalı. Yalnız faza bakan bir kapı bu dört durumu
-    /// açık bırakırdı: ara durum <see cref="Phase"/>'de değil <see cref="PauseReason"/>'da yaşıyor.
-    /// </para>
-    /// <para>
-    /// <see cref="Phase.Finished"/> bilerek AÇIK: maç bitmiştir, operatör bir sonrakini
-    /// seçebilmelidir (lobiye dönmeyi beklemeden).
-    /// </para></summary>
+    /// <summary>Is mode/map selection and staging (§10.7) currently allowed? Exactly two states qualify:
+    /// <see cref="Phase.Finished"/>, and <see cref="Phase.Paused"/> + <see cref="PauseReason.Lobby"/>.</summary>
+    /// <remarks>The criterion is NOT "is a match running" but "is a match SET UP": picking a map is a
+    /// scene command sent to everyone (§10.7), and the scene cannot be pulled out from under a match that
+    /// is being set up or is frozen. Hence <c>loading</c>/<c>countdown</c> (setting up) and
+    /// <c>operator</c>/<c>mode</c> (frozen) are CLOSED too — a frozen match is still a set-up match, and
+    /// its scene must not have changed when the operator resumes. A phase-only gate would leave these
+    /// four open: the intermediate state lives in <see cref="PauseReason"/>, not <see cref="Phase"/>.
+    /// <para><see cref="Phase.Finished"/> is deliberately OPEN: the match is over, the operator must be
+    /// able to pick the next one without waiting for the lobby return.</para></remarks>
     public bool CanChangeSelection
     {
         get { lock (_gate) return CanChangeSelectionLocked; }
     }
 
-    /// <summary>Kilit İÇİNDEN kullanılan biçim — kilit sözleşmesi gereği kilit altındayken public
-    /// property çağrılmaz (<see cref="_gate"/> yeniden girilebilir olsa da tek desen korunur).</summary>
+    /// <summary>In-lock form — the lock contract forbids calling public properties under the lock
+    /// (<see cref="_gate"/> is reentrant, but the single pattern is kept).</summary>
     private bool CanChangeSelectionLocked =>
         _phase == Phase.Finished || (_phase == Phase.Paused && _pauseReason == PauseReason.Lobby);
 
-    /// <summary>Sahneleme reddinin operatöre gösterilecek gerekçesi. Durumu İÇERİR: "maç sürüyor"
-    /// diyen sabit bir metin, duraklatılmış bir maçta yalan söylerdi ve operatör neyin engellediğini
-    /// göremezdi.</summary>
+    /// <summary>Staging rejection reason shown to the operator. INCLUDES the state: a fixed "match in
+    /// progress" text would lie about a paused match and hide what is blocking.</summary>
     private string RejectReasonLocked() =>
         $"maç kurulu ({Describe(_phase, _pauseReason)}) — önce İPTAL edin";
 
-    // ---- IGameMode'ların kullandığı public API (hepsi kilit güvenli, kilit DIŞINDAN çağrılır) ----
+    // ---- Public API used by IGameModes (all lock-safe, called from OUTSIDE the lock) ----
 
     public int ScoreRed
     {
@@ -383,39 +355,39 @@ public sealed class MatchDirector
         get { lock (_gate) return _roundSeconds; }
     }
 
-    /// <summary>Koşan maçın skor/tur limiti. <c>&gt; 0</c> = limit; <c>&lt;= 0</c> = <b>limit
-    /// YOK</b> (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> operatör seçimi, <c>0</c> maç
-    /// yokken sıfırlanmış hâl).
-    /// <para>⚠️ Modlar bunu her zaman <c>limit &gt; 0</c> kapısıyla okur — sınırsız maçta hiçbir
-    /// limit dalı çalışmasın diye. Kapıyı atlayan bir kıyas (<c>score &gt;= limit</c>) sınırsız
-    /// maçı ilk puanda bitirirdi.</para></summary>
+    /// <summary>Score/round limit of the running match. <c>&gt; 0</c> = limit; <c>&lt;= 0</c> = NO limit
+    /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> is the operator's pick, <c>0</c> is the reset
+    /// state with no match).</summary>
+    /// <remarks>⚠️ Modes always read it behind a <c>limit &gt; 0</c> gate so no limit branch runs in an
+    /// unlimited match. A comparison skipping the gate (<c>score &gt;= limit</c>) would end an unlimited
+    /// match on the first point.</remarks>
     public int ScoreLimit
     {
         get { lock (_gate) return _scoreLimit; }
     }
 
-    /// <summary>Limitin konsol/duyuru metni: <c>sınırsız</c> · <c>mod limiti</c> · sayı. Operatörün
-    /// gördüğü tek yazım burada durur ki sunucu penceresi ile admin paneli aynı şeyi demesin
-    /// diye ikinci bir yazıma düşülmesin.</summary>
+    /// <summary>Console/announcement text of the limit: <c>sınırsız</c> · <c>mod limiti</c> · a number.
+    /// The single wording the operator sees lives here so the server window and the admin panel do not
+    /// drift into two phrasings.</summary>
     public static string DescribeScoreLimit(int scoreLimit) =>
         scoreLimit > 0 ? scoreLimit.ToString()
         : scoreLimit < 0 ? "sınırsız"
         : "mod limiti";
 
 
-    /// <summary>Koşan maçın kural şekli (§10.5); maç yokken TDM varsayılanı.</summary>
+    /// <summary>Rule shape of the running match (§10.5); the TDM default when there is no match.</summary>
     public ModeRules Rules
     {
         get { lock (_gate) return _rules; }
     }
 
-    // ---- Skor defteri (§10.2) ----
-    // Modlar skoru YALNIZ buradan yazar/okur; iki kanal var ve hangisinin kullanılacağını
-    // ModeRules.Scoring söyler: takım skoru (match_state) veya bireysel skor (lobby_state).
-    // Tek bölümde toplanmalarının sebebi ileride ayrı bir Scoreboard sınıfına çıkarmanın
-    // mekanik bir taşıma olması — faz makinesi bu yüzden büyütülmedi.
+    // ---- Score ledger (§10.2) ----
+    // Modes read/write score ONLY through here; two channels exist and ModeRules.Scoring picks which:
+    // team score (match_state) or individual score (lobby_state). They sit in one section so extracting
+    // a separate Scoreboard class later is a mechanical move — that is why the phase machine was not
+    // grown instead.
 
-    /// <summary>Takım skoruna ekleme (kill/objektif kuralları modlardan gelir).</summary>
+    /// <summary>Adds to the team score (kill/objective rules come from the modes).</summary>
     public void AddScore(string team, int amount)
     {
         lock (_gate)
@@ -425,10 +397,10 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>Bireysel skora ekleme (§10.2 <c>score</c>). Yalnız "roster tazelensin" bayrağını
-    /// koyar, yayını KENDİ yapmaz: bu metod mod kancasından (kilit dışı) çağrılıyor ve yayın
-    /// registry olayı tetikliyor. Bayrak bir sonraki tik'te (≤100 ms) boşaltılır — skorun
-    /// lobby_state'e ulaşması için ayrı bir mesaj tipi ya da yayın döngüsü gerekmez.</summary>
+    /// <summary>Adds to the individual score (§10.2 <c>score</c>). Only raises the "refresh roster" flag,
+    /// never broadcasts itself: this is called from a mode hook (outside the lock) and broadcasting raises
+    /// a registry event. The flag is drained on the next tick (≤100 ms) — no extra message type or
+    /// broadcast loop is needed to get the score into lobby_state.</summary>
     public void AddPlayerScore(int playerId, int amount)
     {
         if (playerId <= 0 || amount == 0) return;
@@ -441,7 +413,7 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>Bir oyuncunun bireysel skoru; oyuncu yoksa 0.</summary>
+    /// <summary>A player's individual score; 0 when the player is unknown.</summary>
     public int ScoreOf(int playerId)
     {
         lock (_gate)
@@ -450,9 +422,9 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>Bireysel skorun lideri. <b>Eşitlikte false döner</b> (tek kazanan yok) — çağıran
-    /// mod bunu "berabere" olarak yorumlar; sessizce ilk oyuncuyu seçmek yanlış kazanan ilan
-    /// ederdi. Hiç bağlı oyuncu yoksa da false.</summary>
+    /// <summary>Leader of the individual score. Returns false on a TIE (no single winner) — the calling
+    /// mode reads that as a draw; silently picking the first player would declare a wrong winner. Also
+    /// false when no player is connected.</summary>
     public bool TryGetLeader(out int playerId, out int score)
     {
         playerId = 0;
@@ -482,23 +454,21 @@ public sealed class MatchDirector
         return false;
     }
 
-    /// <summary>BAĞLI oyuncuların (role=player) anlık kopyası — mod bunu kilit dışında gezer;
-    /// PlayerState alanlarının okunması sırasında değişebilir (int/string okuması atomik).
-    /// <para>Bağlantısı kopmuş (<c>reconnecting</c>) ve oyundan çıkarılmış (<c>left</c>) kayıtlar
-    /// listede YOKTUR (§2) — mod onları hiç görmez.</para></summary>
+    /// <summary>Snapshot of CONNECTED players (role=player) — modes iterate it outside the lock;
+    /// PlayerState fields may change during the read (int/string reads are atomic).</summary>
+    /// <remarks>Dropped (<c>reconnecting</c>) and removed (<c>left</c>) records are NOT in the list
+    /// (§2) — modes never see them.</remarks>
     public IEnumerable<PlayerState> ConnectedPlayers()
     {
         lock (_gate) return ConnectedPlayersLocked();
     }
 
-    /// <summary>
-    /// Geç katılan oyuncuyu maç defterine yazar (§10.2) — <c>hello</c> yolundan, welcome
-    /// gönderildikten sonra çağrılır.
-    /// <para>⚠️ <b>Yalnız KURULMUŞ bir maç varken</b> iş yapar: lobide (faz <c>paused</c> + lobi
-    /// profili) katılımcı diye bir şey yoktur ve <c>finished</c>'da defter zaten kapanmıştır —
-    /// oraya yazmak maç sonu tablosuna maçı hiç oynamamış bir satır eklerdi.</para>
-    /// <para>Admin hiç yazılmaz: oynamaz, istatistiği yoktur.</para>
-    /// </summary>
+    /// <summary>Writes a late-joining player into the match ledger (§10.2) — called on the <c>hello</c>
+    /// path, after welcome is sent.</summary>
+    /// <remarks>⚠️ Does work only while a match is SET UP: in the lobby (phase <c>paused</c> + lobby
+    /// profile) there is no such thing as a participant, and in <c>finished</c> the ledger is already
+    /// closed — writing there would add a row to the end-of-match table for someone who never played.
+    /// <para>Admins are never written: they do not play and have no statistics.</para></remarks>
     public void MarkParticipantIfMatchRunning(PlayerState player)
     {
         if (player.Role != "player") return;
@@ -507,13 +477,13 @@ public sealed class MatchDirector
         if (running) _registry.SetMatchParticipant(player.PlayerId, true);
     }
 
-    /// <summary>welcome.match anlık görüntüsü — geç katılım senkronu bunu kullanır (§5.3).</summary>
+    /// <summary>welcome.match snapshot — used by the late-join sync (§5.3).</summary>
     public MatchInfo CurrentMatchInfo()
     {
         lock (_gate) return BuildMatchInfoLocked();
     }
 
-    // ---- Tick döngüsü ----
+    // ---- Tick loop ----
 
     public void Start()
     {
@@ -551,7 +521,7 @@ public sealed class MatchDirector
             }
             catch (Exception ex)
             {
-                // Tek bir tik hatası maç döngüsünü öldürmesin.
+                // One bad tick must not kill the match loop.
                 Console.WriteLine($"[match] tick hatası: {ex.Message}");
             }
         }
@@ -566,30 +536,30 @@ public sealed class MatchDirector
 
         lock (_gate)
         {
-            // Dağıtım (faz, gerekçe) ikilisinden yapılır: telde tek bir `paused` görünen durum
-            // çekirdekte üç ayrı iş olabiliyor (yükleme kapısı, geri sayım, öylece bekleme).
+            // Dispatch on the (phase, reason) pair: a single `paused` on the wire can be three different
+            // jobs in the core (loading gate, countdown, plain waiting).
             switch (_phase)
             {
                 case Phase.Paused when _pauseReason == PauseReason.Loading:
                     TickLoadingLocked(outbox, now);
                     break;
-                // ⚠️ Geri sayımda da mod tik ALIR. Sayacı çekirdek işletir ama tur tabanlı modda
-                // geri sayım GERİ ALINABİLİR bir karardır (toplananlardan biri tabanından çıkarsa
-                // iptal edilir, bkz. TryCancelCountdownForMode) — bunu yoklayabilmesi için tike
-                // ihtiyacı var. Sayaç bu tikte dolarsa faz zaten Playing olur ve mod aynı tikte
-                // OnRoundStart + OnTick alır; sıra bozulmaz.
+                // ⚠️ The mode DOES tick during the countdown. The core runs the counter, but in a
+                // round-based mode the countdown is a REVERSIBLE decision (cancelled if one of the
+                // gathered players leaves their base, see TryCancelCountdownForMode) — it needs ticks to
+                // poll that. If the counter hits zero on this tick the phase becomes Playing and the mode
+                // gets OnRoundStart + OnTick in the same tick; ordering holds.
                 case Phase.Paused when _pauseReason == PauseReason.Countdown:
                     TickCountdownLocked(outbox, now);
                     modeToTick = _mode;
                     break;
-                // ⚠️ Duraklamayı MOD koydu (§10.1) → kaldırma yetkisi de onundur, yani tik'i
-                // alması gerekir; tik almayan mod toplanma kapısını hiç yoklayamaz. Süre
-                // İŞLEMEZ (TickLiveLocked çağrılmıyor) ve hasar kapalıdır (faz paused).
-                // Operatör duraklatmasında (Operator) mod tik ALMAZ: donmuş maç donmuş kalır.
+                // ⚠️ The MODE set this pause (§10.1) → it also owns lifting it, so it must tick; a mode
+                // without ticks could never poll its gathering gate. Time does NOT advance
+                // (TickLiveLocked is not called) and damage is off (phase paused). On an operator pause
+                // the mode does NOT tick: a frozen match stays frozen.
                 case Phase.Paused when _pauseReason == PauseReason.Mode:
                     modeToTick = _mode;
                     break;
-                // Lobby/Operator: beklenecek bir şey yok, sayaç işlemez.
+                // Lobby/Operator: nothing to wait for, no counter runs.
                 case Phase.Playing:
                     modeToTick = TickLiveLocked(outbox, now, deltaSeconds);
                     break;
@@ -598,9 +568,9 @@ public sealed class MatchDirector
                     break;
             }
 
-            // ⚠️ İhlal defteri switch'in DIŞINDA, yani her fazda koşar (gerekçe
-            // TickViolationFeedLocked'ta): ceza yalnız `playing`'de işler ama operatör lobide ve
-            // geri sayımda arenadan çıkan oyuncuyu da görmelidir.
+            // ⚠️ The violation ledger sits OUTSIDE the switch, i.e. runs in every phase (rationale in
+            // TickViolationFeedLocked): the penalty applies only in `playing`, but the operator must also
+            // see a player leaving the arena in the lobby and during the countdown.
             TickViolationFeedLocked(outbox, now);
 
             modeToStart = _matchStartPending ? _mode : null;
@@ -612,10 +582,10 @@ public sealed class MatchDirector
         await FlushAsync(outbox);
         FlushReadyClear();
         FlushRosterRefresh();
-        FlushParticipantCleanup(); // lobiye dönüldüyse defteri kapat (§10.2 — mesajlardan SONRA)
+        FlushParticipantCleanup(); // close the ledger if we returned to the lobby (§10.2 — AFTER messages)
 
-        // Mod kancaları kilit DIŞINDA (yukarıdaki kilit sözleşmesi). Kancaların ürettiği
-        // gönderimler _pendingOutbox'a birikir ve her kanca grubunun ardından yollanır.
+        // Mode hooks run OUTSIDE the lock (lock contract above). Sends they produce collect in
+        // _pendingOutbox and are dispatched after each hook group.
         modeToStart?.OnMatchStart(this);
         modeToRoundStart?.OnRoundStart(this);
 
@@ -628,23 +598,23 @@ public sealed class MatchDirector
         modeToTick.OnTick(this, deltaSeconds);
         await FlushPendingAsync();
 
-        // IsMatchOver mod duraklamasında da sorulur (mod turu bitirip maçı orada kapatabilir);
-        // EnterEndAsync yalnız Playing'den geçirir, yani faz makinesi bozulmaz.
+        // IsMatchOver is asked during a mode pause too (a mode may end the round and close the match
+        // there); EnterEndAsync only proceeds from Playing, so the phase machine stays intact.
         if (modeToTick.IsMatchOver(this, out var outcome))
             await EnterEndAsync(outcome);
     }
 
-    /// <summary>Tüm BAĞLI oyuncular "sahne yüklendi" (set_ready) dediğinde veya
-    /// LOADING_TIMEOUT dolduğunda Countdown'a geçilir. Bağlantısı kopmuş oyuncu beklenmez.</summary>
+    /// <summary>Moves to Countdown once all CONNECTED players report "scene loaded" (set_ready) or
+    /// LOADING_TIMEOUT expires. Dropped players are not waited for.</summary>
     private void TickLoadingLocked(List<Outgoing> outbox, DateTime now)
     {
         var players = ConnectedPlayersLocked();
         if (players.Count == 0)
         {
-            // Ayrım önemli (§10.1): oyuncularla BAŞLAMIŞ maçta son oyuncu da düştüyse maçı
-            // bırakıp lobiye dönmek doğru. Oyuncusuz BAŞLATILMIŞ maç (admin harita önizlemesi)
-            // ise beklenecek kimse olmadığı için doğrudan Countdown'a geçer; çıkış operatörün
-            // abort_match/return_to_lobby komutudur.
+            // The distinction matters (§10.1): a match that STARTED with players and lost its last one
+            // should be abandoned for the lobby. A match STARTED without players (admin map preview) has
+            // nobody to wait for and goes straight to Countdown; its exit is the operator's
+            // abort_match/return_to_lobby.
             if (_startedWithPlayers)
             {
                 Console.WriteLine("[match] loading: bağlı oyuncu kalmadı — lobiye dönülüyor.");
@@ -684,8 +654,8 @@ public sealed class MatchDirector
         EnterLiveLocked(outbox, now);
     }
 
-    /// <summary>Süreyi işletir, 1 Hz match_state yayınlar.
-    /// Dönüş: OnTick/IsMatchOver için kilit dışında kullanılacak mod (yoksa null).</summary>
+    /// <summary>Advances the clock and broadcasts match_state at 1 Hz. Returns the mode to use outside
+    /// the lock for OnTick/IsMatchOver (null when there is none).</summary>
     private IGameMode? TickLiveLocked(List<Outgoing> outbox, DateTime now, float deltaSeconds)
     {
         _timeRemaining = MathF.Max(0f, _timeRemaining - deltaSeconds);
@@ -700,39 +670,37 @@ public sealed class MatchDirector
         return _mode;
     }
 
-    /// <summary>
-    /// §10.9: iç engelin İÇİNDE olduğunu bildiren oyuncuların canını eritir
-    /// (<see cref="ArenaProtocol.OBSTACLE_DAMAGE_PER_SECOND"/> · saniye).
-    /// <para><b>Otorite bölünmesi <c>hit_report</c>'un aynısıdır:</b> ölçümü istemci yapar (kafası
-    /// engelin içinde mi), <b>sonucu sunucu yazar</b>. Sunucu ihlali DOĞRULAYAMAZ — arena
-    /// geometrisi burada yoktur ve getirilmez (ikinci doğruluk kaynağı olurdu). Yapabildiği ve
-    /// yaptığı şey <b>sonucu sınırlamaktır</b>: süreyi kendi saatiyle ölçer, bayat bayrağı düşürür,
-    /// faz/canlılık/kalibrasyon kapılarını kendisi uygular.</para>
-    /// <para>⚠️ <b>Kalibrasyon kapısı zorunlu</b> (§10.6): hizalaması kaymış başlıkta sanal engel
-    /// gerçeğinden sapar ve tespit yalancı pozitif üretir — oyuncu durduk yere ölürdü.</para>
-    /// <para>⚠️ <b>Ölünce bayrak SIFIRLANMAZ ve sıfırlanmamalı:</b> oyuncu hâlâ engelin içindedir
-    /// ve istemci bunu 20 Hz bildirmeye devam eder. Bayrağı canlanmada temizlemek oyuncuya engelin
-    /// içinde kalıcı bir sığınak açardı.</para>
-    /// <para><b>Ceza iki aşamalıdır</b> (§10.9): önce <see cref="ArenaProtocol.OBSTACLE_GRACE_SECONDS"/>
-    /// tolerans (can hiç azalmaz), sonra <see cref="ArenaProtocol.OBSTACLE_DRAIN_SECONDS"/> içinde
-    /// tam candan ölüme giden erime. Toleransın saati <b>sunucunundur</b>
-    /// (<see cref="PlayerState.ObstacleSince"/>) — istemciden gelen bir süre cezayı ona teslim
-    /// ederdi.</para>
-    /// </summary>
+    /// <summary>§10.9: drains health of players reporting they are INSIDE an interior obstacle
+    /// (<see cref="ArenaProtocol.OBSTACLE_DAMAGE_PER_SECOND"/> · seconds).</summary>
+    /// <remarks>Authority split is the same as <c>hit_report</c>: the client MEASURES (is my head inside
+    /// the obstacle), the server WRITES the result. The server cannot VALIDATE the violation — arena
+    /// geometry is not here and is not brought in (it would be a second source of truth). What it does is
+    /// BOUND the result: it times the penalty on its own clock, drops stale flags, and applies the
+    /// phase/alive/calibration gates itself.
+    /// <para>⚠️ The calibration gate is mandatory (§10.6): on a misaligned headset the virtual obstacle
+    /// drifts from the real one and detection turns false-positive — the player would die for nothing.</para>
+    /// <para>⚠️ The flag is NOT reset on death and must not be: the player is still inside the obstacle
+    /// and the client keeps reporting it at 20 Hz. Clearing it on revive would give the player a
+    /// permanent shelter inside the obstacle.</para>
+    /// <para>The penalty has two stages (§10.9): first
+    /// <see cref="ArenaProtocol.OBSTACLE_GRACE_SECONDS"/> of grace (no health loss at all), then a drain
+    /// from full health to death within <see cref="ArenaProtocol.OBSTACLE_DRAIN_SECONDS"/>. The grace
+    /// clock is the SERVER's (<see cref="PlayerState.ObstacleSince"/>) — a duration from the client would
+    /// hand it the penalty.</para></remarks>
     private void TickObstacleLocked(List<Outgoing> outbox, DateTime now, float deltaSeconds)
     {
         var damage = ArenaProtocol.OBSTACLE_DAMAGE_PER_SECOND * deltaSeconds;
         if (damage <= 0f) return;
 
-        // Can bildirimi tik kadansında DEĞİL, bu aralıkta gider (gerekçe aşağıda).
+        // Health announcements go out on this interval, NOT the tick cadence (rationale below).
         var announce = now >= _nextObstacleHealthAt;
         if (announce) _nextObstacleHealthAt = now.AddMilliseconds(ObstacleHealthIntervalMs);
 
         foreach (var player in ConnectedPlayersLocked())
         {
-            // ⚠️ TEK kapı: cezanın koşullarından herhangi biri düştüğü anda tolerans saati de
-            // sıfırlanır. Ayrı ayrı `continue` edilseydi ölüp canlanan oyuncu toleransı çoktan
-            // dolmuş halde bulur ve canlanır canlanmaz erimeye başlardı.
+            // ⚠️ ONE gate: the grace clock resets the moment any penalty condition drops. With separate
+            // `continue`s, a player who died and revived would find the grace already spent and start
+            // draining the instant they respawn.
             if (!IsObstacleFlagLiveLocked(player, now) || !player.Alive || !player.Calibrated)
             {
                 player.ObstacleSince = null;
@@ -742,20 +710,21 @@ public sealed class MatchDirector
             player.ObstacleSince ??= now;
             if ((now - player.ObstacleSince.Value).TotalSeconds < ArenaProtocol.OBSTACLE_GRACE_SECONDS)
             {
-                // Tolerans: can azalmıyor, bildirim de gitmiyor. Oyuncu bu sürede kör (istemci
-                // ekranı karartıyor) ama cezasız — engelden çıkacak zamanı var.
+                // Grace: no health loss, no announcement. The player is blind meanwhile (the client
+                // darkens the screen) but unpunished — enough time to step out of the obstacle.
                 continue;
             }
 
             player.Hp = MathF.Max(0f, player.Hp - damage);
 
-            // ⚠️ Bildirim KISILIR ve bu bir mikro-optimizasyon değil: bu hasar OLAY tabanlı değil
-            // SÜREKLİ. Her tikte yayınlansaydı tek bir engel ölümü (≈8 sn × tickHz) yüzlerce WS
-            // mesajı üretirdi ve her biri kurbana + HER ADMİNE giderdi. HUD zaten yuvarlanmış tam
-            // sayı çiziyor, bu kadansla kaybedilen bilgi yok. Ölüm paketi ASLA kısılmaz.
+            // ⚠️ Announcements are THROTTLED, and this is not a micro-optimisation: this damage is
+            // CONTINUOUS, not event-based. Broadcast every tick, a single obstacle death (≈8 s × tickHz)
+            // would produce hundreds of WS messages, each going to the victim + EVERY ADMIN. The HUD
+            // draws a rounded integer anyway, so this cadence loses no information. The death packet is
+            // NEVER throttled.
             if (announce || player.Hp <= 0f)
             {
-                // attackerId = 0: çevresel hasar, saldırı değil (§10.9).
+                // attackerId = 0: environmental damage, not an attack (§10.9).
                 QueueHealthUpdateLocked(outbox, player, JsonUtil.Serialize(new HealthUpdateMsg
                 {
                     playerId = player.PlayerId,
@@ -766,58 +735,52 @@ public sealed class MatchDirector
 
             if (player.Hp > 0f) continue;
 
-            // ⚠️ Ölümün TEK yazarı. killer = null → killerId 0 ve IGameMode.OnKill çağrılmaz:
-            // öldüren yok, yani skor da yok (takımdaş öldürmedeki kuralın aynısı, §10.2 — olay
-            // gerçekleşir, ödülü olmaz).
+            // ⚠️ The ONLY writer of death. killer = null → killerId 0 and IGameMode.OnKill is not called:
+            // no killer means no score (same rule as a teamkill, §10.2 — the event happens, the reward
+            // does not).
             KillPlayerLocked(outbox, player, null, ArenaProtocol.WEAPON_ID_OBSTACLE, now);
             Console.WriteLine($"[match] engel ölümü: {player.Name}");
         }
     }
 
-    /// <summary>
-    /// Oyuncunun bildirdiği durum bitleri hâlâ TAZE mi (§10.9).
-    /// <para>Bayat bayrak = susmuş/donmuş istemci. Bitler durum taşıdığı için son paket sonsuza
-    /// kadar "engeldeyim"/"alan dışındayım" demeye devam ederdi. Ceza, canlanma kapısı <b>ve</b>
-    /// ihlal defteri aynı tazelik sorusunu sorar, bu yüzden soru <b>tek yerde</b> durur.</para>
-    /// </summary>
+    /// <summary>Are the player's reported state bits still FRESH (§10.9).</summary>
+    /// <remarks>A stale flag means a silent/frozen client. The bits carry state, so the last packet would
+    /// keep saying "I am in an obstacle"/"I am out of bounds" forever. The penalty, the revive gate AND
+    /// the violation ledger all ask the same freshness question, so it lives in ONE place.</remarks>
     private static bool IsPoseFreshLocked(PlayerState player, DateTime now) =>
         (now - player.LastPoseAt).TotalMilliseconds < ArenaProtocol.OBSTACLE_FLAG_STALE_MS;
 
-    /// <summary>Oyuncu ŞU AN engelin içinde mi: bayrak set <b>ve</b> taze (§10.9).</summary>
+    /// <summary>Is the player inside an obstacle RIGHT NOW: flag set AND fresh (§10.9).</summary>
     private static bool IsObstacleFlagLiveLocked(PlayerState player, DateTime now) =>
         player.InObstacle && IsPoseFreshLocked(player, now);
 
-    /// <summary>
-    /// Canlanma engelin içinde olduğu için ertelenmeli mi (§10.9). Canlanmanın İKİ yolu var —
-    /// oyuncunun <c>revive_request</c>'i ve operatörün <c>revive_player</c> komutu — ve bu kapı
-    /// <b>ikisinde de</b> uygulanır: bir yasak, o durumu değiştiren tüm yolları kapatmadıkça yoktur.
-    /// <para>⚠️ <b>Erteleme SÜRESİZ DEĞİLDİR</b>
-    /// (<see cref="ArenaProtocol.OBSTACLE_REVIVE_BLOCK_SECONDS"/>): kapı istemcinin bildirdiği bir
-    /// bayrağa bakıyor ve yanlış konuşan bir istemci oyuncuyu kalıcı ölü bırakabilirdi. Tavan
-    /// dolunca canlandırılır — engelden çıkmadıysa ceza zaten anında yeniden başlar.</para>
-    /// </summary>
+    /// <summary>Should the revive be deferred because the player is inside an obstacle (§10.9). There are
+    /// TWO revive paths — the player's <c>revive_request</c> and the operator's <c>revive_player</c> — and
+    /// this gate applies to BOTH: a ban does not exist until every path changing that state is closed.</summary>
+    /// <remarks>⚠️ The deferral is NOT unbounded
+    /// (<see cref="ArenaProtocol.OBSTACLE_REVIVE_BLOCK_SECONDS"/>): the gate reads a client-reported flag,
+    /// and a lying client could leave the player permanently dead. At the cap the player is revived — if
+    /// they did not leave the obstacle the penalty simply restarts.</remarks>
     private static bool IsObstacleReviveBlockedLocked(PlayerState player, DateTime now) =>
         IsObstacleFlagLiveLocked(player, now) &&
         (now - player.DiedAt).TotalSeconds < ArenaProtocol.OBSTACLE_REVIVE_BLOCK_SECONDS;
 
-    /// <summary>
-    /// İhlal defterini işletir ve kenarlarını adminlere yayar (§10.9): iki tür de (engel ·
-    /// alan dışı) <b>aynı kod yolundan</b> geçer — tür başına <c>if</c> zinciri yazılmaz, tek
-    /// fark "canlı mı" sorusunu besleyen bayraktır.
-    /// <para>⚠️ <b>Defter FAZDAN BAĞIMSIZDIR</b> ve bu yüzden <c>TickLiveLocked</c>'ın içinde
-    /// DEĞİL, tik döngüsünün faz koşulundan bağımsız bölümünde durur: operatör lobide ve geri
-    /// sayımda arenadan çıkan oyuncuyu da görmelidir. Ceza (<see cref="TickObstacleLocked"/>)
-    /// yalnız <c>playing</c>'de işler — <b>defter ceza değildir</b>.</para>
-    /// <para>⚠️ <b>Defter ceza kapılarına da bağlı DEĞİLDİR:</b> <c>Alive</c>/<c>Calibrated</c>
-    /// burada sorulmaz. Cezanın o koşulları var çünkü ceza can eritir; defter yalnız kayıt tutar
-    /// ve kalibresiz bir oyuncunun alan dışına çıkması operatörün tam da görmesi gereken şeydir.</para>
-    /// </summary>
+    /// <summary>Runs the violation ledger and pushes its edges to admins (§10.9): both kinds (obstacle ·
+    /// out of bounds) go through the SAME code path — no per-kind <c>if</c> chain, the only difference is
+    /// the flag feeding the "is it live" question.</summary>
+    /// <remarks>⚠️ The ledger is PHASE-INDEPENDENT, hence it sits outside <c>TickLiveLocked</c>, in the
+    /// phase-independent part of the tick loop: the operator must also see a player leaving the arena in
+    /// the lobby and during the countdown. The penalty (<see cref="TickObstacleLocked"/>) runs only in
+    /// <c>playing</c> — the ledger is not a penalty.
+    /// <para>⚠️ It is not tied to the penalty gates either: <c>Alive</c>/<c>Calibrated</c> are not asked
+    /// here. The penalty has those conditions because it drains health; the ledger only records, and an
+    /// uncalibrated player going out of bounds is exactly what the operator needs to see.</para></remarks>
     private void TickViolationFeedLocked(List<Outgoing> outbox, DateTime now)
     {
-        // ⚠️ Erken çıkış TAM DEĞİL: admin bağlı değilken mesaj serileştirilmez (kimse bakmıyorsa
-        // boşa paket üretilmez — net_stats döngüsündeki gerekçenin aynısı), ama kenar durumu
-        // YİNE DE ilerler. İlerlemeseydi sonradan bağlanan admin yarım kalmış bir ihlali sonsuza
-        // kadar açık bulur ve defterdeki süre o boşluğu yutardı.
+        // ⚠️ The early exit is PARTIAL: with no admin connected no message is serialised (no packets for
+        // nobody — same rationale as the net_stats loop), but the edge state STILL advances. Otherwise an
+        // admin connecting later would find a half-finished violation open forever, and the ledger's
+        // duration would swallow that gap.
         var anyAdmin = HasConnectedAdminLocked();
 
         foreach (var player in _registry.Snapshot())
@@ -826,14 +789,14 @@ public sealed class MatchDirector
 
             if (!player.IsConnected)
             {
-                // Kopan/çıkarılan oyuncunun açık ihlali SESSİZCE kapanır: bitiş satırı operatöre
-                // bir şey anlatmaz ve süreye bağlantının kopuk geçtiği boşluk yazılırdı.
+                // A dropped/removed player's open violation closes SILENTLY: an end line tells the
+                // operator nothing, and the disconnected gap would be written into the duration.
                 CloseViolationLocked(player.ObstacleTally);
                 CloseViolationLocked(player.OutOfBoundsTally);
                 continue;
             }
 
-            // Tazelik iki tür için de aynı soru; bir kez sorulur (bkz. IsPoseFreshLocked).
+            // Freshness is the same question for both kinds; asked once (see IsPoseFreshLocked).
             var fresh = IsPoseFreshLocked(player, now);
             TickViolationKindLocked(outbox, player, player.ObstacleTally, player.InObstacle && fresh,
                 ArenaProtocol.VIOLATION_KIND_OBSTACLE, now, anyAdmin);
@@ -842,15 +805,13 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>
-    /// Tek bir oyuncunun tek bir ihlal TÜRÜNÜN kenar mantığı (§10.9). <paramref name="live"/> o
-    /// türün "şu an ihlalde mi" cevabıdır — çağıran taraf hangi bayrağa baktığını bilir, bu metot
-    /// bilmez.
-    /// <para>⚠️ <see cref="ArenaProtocol.VIOLATION_MIN_SECONDS"/>'in altında kalan temas deftere
-    /// <b>hiç girmez</b>: ne mesaj çıkar ne <c>Count</c> artar. Sınır çizgisinde salınan oyuncu
-    /// aksi hâlde saniyede üç satır üretir ve feed'i okunamaz hâle getirirdi. Eşik yalnız feed
-    /// içindir — halkayı snapshot biti sürüyor ve o ilk kareden itibaren yanar.</para>
-    /// </summary>
+    /// <summary>Edge logic for ONE violation kind of ONE player (§10.9). <paramref name="live"/> is that
+    /// kind's "is it violating now" answer — the caller knows which flag it watched, this method does
+    /// not.</summary>
+    /// <remarks>⚠️ Contact below <see cref="ArenaProtocol.VIOLATION_MIN_SECONDS"/> never enters the
+    /// ledger: no message, no <c>Count</c> increment. A player oscillating on the boundary line would
+    /// otherwise produce three lines per second and make the feed unreadable. The threshold is for the
+    /// feed only — the ring is driven by the snapshot bit and lights up from the first frame.</remarks>
     private void TickViolationKindLocked(List<Outgoing> outbox, PlayerState player, ViolationTally tally,
         bool live, string kind, DateTime now, bool anyAdmin)
     {
@@ -869,7 +830,7 @@ public sealed class MatchDirector
                     playerId = player.PlayerId,
                     kind = kind,
                     active = true,
-                    // Süre henüz bilinmiyor; başlangıç satırı yalnız "başladı" der (§5.3).
+                    // Duration unknown yet; the start line only says "started" (§5.3).
                     seconds = 0f,
                     count = tally.Count,
                     totalSeconds = tally.TotalSeconds
@@ -901,43 +862,41 @@ public sealed class MatchDirector
         CloseViolationLocked(tally);
     }
 
-    /// <summary>Açık ihlali mesajsız kapatır. Sayaçlara DOKUNMAZ: defterin biriktirdiği
-    /// sayı/süre maç boyunca yaşar, kapanan yalnız o anki ihlaldir.</summary>
+    /// <summary>Closes an open violation without a message. Does NOT touch the counters: the ledger's
+    /// accumulated count/duration lives for the whole match, only the current violation closes.</summary>
     private static void CloseViolationLocked(ViolationTally tally)
     {
         tally.Since = null;
         tally.Announced = false;
     }
 
-    /// <summary>
-    /// <b>Ölümün TEK yazarı</b> (§10.2/§10.9): <c>Alive = false</c> başka hiçbir yerde yazılmaz.
-    /// <para><b>Neden tek kapı:</b> ölüm iki yoldan geliyor — vuruş (<c>hit_report</c>) ve çevresel
-    /// hasar (engel). İkisi de <c>Alive</c>'ı, <c>DiedAt</c>'i, sayaçları, <c>kill_event</c>'i ve
-    /// <c>respawn</c>'ı kendi içinde yazsaydı, birine eklenen her yeni adım (bir bayrağı
-    /// temizlemek, bir kancayı çağırmak, bir mesajı yollamak) diğerinde <b>sessizce eksik
-    /// kalırdı</b>. "Ölmek" tek cümledir ve tek yerde yazılır.</para>
-    /// <para><paramref name="killer"/> <c>null</c> ise ölüm çevreseldir: <c>killerId</c> 0 gider ve
-    /// kimsenin <c>kills</c>'i artmaz. ⚠️ <b>Skoru bu metot YAZMAZ</b> — <c>IGameMode.OnKill</c>
-    /// kilit dışında, <b>çağrı yerinde</b> tetiklenir (§10.2: takımdaş öldürme ve çevresel ölüm
-    /// aynı sebeple skor yazmaz).</para>
-    /// </summary>
+    /// <summary>The ONLY writer of death (§10.2/§10.9): <c>Alive = false</c> is written nowhere
+    /// else.</summary>
+    /// <remarks>Why one gate: death arrives on two paths — a hit (<c>hit_report</c>) and environmental
+    /// damage (obstacle). If both wrote <c>Alive</c>, <c>DiedAt</c>, the counters, <c>kill_event</c> and
+    /// <c>respawn</c> themselves, every new step added to one (clearing a flag, calling a hook, sending a
+    /// message) would go SILENTLY MISSING in the other. "Dying" is one sentence, written in one place.
+    /// <para>With <paramref name="killer"/> <c>null</c> the death is environmental: <c>killerId</c> 0 and
+    /// nobody's <c>kills</c> increases. ⚠️ This method does NOT write score — <c>IGameMode.OnKill</c> is
+    /// raised at the CALL SITE, outside the lock (§10.2: teamkills and environmental deaths score nothing
+    /// for the same reason).</para></remarks>
     private void KillPlayerLocked(List<Outgoing> outbox, PlayerState victim, PlayerState? killer,
         string weaponId, DateTime now)
     {
         victim.Alive = false;
         victim.DiedAt = now;
-        // Ölen oyuncunun korunuyor görünmesi anlamsızdır: snapshot bit6 telde kalırsa istemci
-        // kalkanı hayaletin üstüne çizerdi (§10.4).
+        // A dead player showing as protected makes no sense: if snapshot bit6 stayed on the wire the
+        // client would draw the shield on a ghost (§10.4).
         victim.SpawnProtectedUntil = DateTime.MinValue;
         victim.Deaths++;
         if (killer != null) killer.Kills++;
-        _rosterRefreshFor = victim; // deaths + alive değişti → lobby_state tazelenir (§5.3)
+        _rosterRefreshFor = victim; // deaths + alive changed → refresh lobby_state (§5.3)
 
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(new KillEventMsg
         {
             killerId = killer?.PlayerId ?? 0,
             victimId = victim.PlayerId,
-            weaponId = weaponId ?? "" // doğrulanmayan serbest etiket (kill feed / istatistik)
+            weaponId = weaponId ?? "" // unvalidated free label (kill feed / statistics)
         }));
 
         var victimConnection = victim.Socket;
@@ -956,17 +915,18 @@ public sealed class MatchDirector
         EnterLobbyLocked(outbox, now);
     }
 
-    // ---- Admin komutları ----
+    // ---- Admin commands ----
 
-    /// <summary>start_match doğrulaması + kişisel load_match yayını (§10.1). Doğrulama geçmezse
-    /// faz DEĞİŞMEZ, konsola sebep yazılır.
-    /// <para><paramref name="roundSeconds"/>/<paramref name="scoreLimit"/>/
-    /// <paramref name="countdownSeconds"/> O MAÇA özeldir: <c>0</c> ise modun (geri sayımda
-    /// protokolün) varsayılanı kullanılır (§5.2). Operatör raundu kısaltıp uzatabilsin diye
-    /// <see cref="IGameMode"/> üzerindeki sayılar kilit değil varsayılandır.</para>
-    /// <para><paramref name="scoreLimit"/> ayrıca <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>
-    /// olabilir: <b>sınırsız</b> maç — hiçbir limit dalı çalışmaz, bitişi süre ya da operatörün
-    /// <c>abort_match</c>'i belirler (tur tabanlı modda tur tavanı da kalkar).</para></summary>
+    /// <summary>start_match validation + per-player load_match broadcast (§10.1). On failed validation
+    /// the phase does NOT change and the reason is logged.</summary>
+    /// <remarks><paramref name="roundSeconds"/>/<paramref name="scoreLimit"/>/
+    /// <paramref name="countdownSeconds"/> are per-match: <c>0</c> falls back to the mode's (for the
+    /// countdown, the protocol's) default (§5.2). The numbers on <see cref="IGameMode"/> are defaults,
+    /// not locks, so the operator can shorten or extend the round.
+    /// <para><paramref name="scoreLimit"/> may also be
+    /// <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>: an UNLIMITED match — no limit branch runs, the
+    /// end is decided by the clock or the operator's <c>abort_match</c> (in round-based modes the round
+    /// cap lifts too).</para></remarks>
     public async Task StartMatchAsync(string? modeId, string? sceneName, int roundSeconds = 0,
         int scoreLimit = 0, int countdownSeconds = 0)
     {
@@ -984,8 +944,8 @@ public sealed class MatchDirector
             return;
         }
 
-        // Harita tablosu (config/maps.json — Unity export'u) doluysa sahne + mod uyumu doğrulanır.
-        // Tablo boşsa (dosya yok) bu adım tümüyle atlanır.
+        // With a non-empty map table (config/maps.json — Unity export) scene + mode compatibility is
+        // validated. An empty table (no file) skips this step entirely.
         if (!_maps.IsEmpty)
         {
             if (!_maps.TryGet(sceneName, out var known))
@@ -1012,42 +972,43 @@ public sealed class MatchDirector
             return;
         }
 
-        // Oyuncusuz başlatmaya İZİN VERİLİR: admin gözlemci haritayı boş arenada açabilsin (§10.1).
+        // Starting with no players is ALLOWED: the admin observer may open the map in an empty arena
+        // (§10.1).
         if (players.Count == 0)
             Console.WriteLine("[match] uyarı: hiç oyuncu yok — maç yalnız admin gözlemci için başlatılıyor (harita önizleme).");
         else if (players.Count == 1)
             Console.WriteLine("[match] uyarı: tek oyuncuyla maç başlatılıyor (yalnız test amaçlı).");
 
-        // Takım kurulumu modun şeklinden gelir (§10.5). registry.SetTeam event tetiklediği için
-        // ikisi de kilit DIŞINDA çağrılır. Dengeleme yalnız 2+ oyuncuda anlamlıdır.
+        // Team setup comes from the mode's shape (§10.5). Both are called OUTSIDE the lock since
+        // registry.SetTeam raises events. Balancing only makes sense with 2+ players.
         var rules = mode.Rules;
         if (rules.Teams == TeamMode.None)
             ClearTeams(players);
         else if (players.Count > 1)
             BalanceTeams(players);
 
-        // Lobi ready bayrakları Loading'e GİRMEDEN sıfırlanır: Loading'de aynı bayrak "sahne
-        // yüklendi" anlamına geliyor, bayat true kalsaydı countdown anında başlardı (§10.1).
+        // Lobby ready flags are cleared BEFORE entering Loading: there the same flag means "scene
+        // loaded", and a stale true would start the countdown instantly (§10.1).
         foreach (var player in players.Where(p => p.Ready).ToList())
             _registry.SetReady(player.DeviceId, false);
 
-        // Maç katılımcısı defteri (§10.2): o an bağlı her oyuncu deftere yazılır. Registry olay
-        // tetiklediği için kilit DIŞINDA — SetTeam/SetReady ile aynı sözleşme.
+        // Match participant ledger (§10.2): every currently connected player is written in. OUTSIDE the
+        // lock since the registry raises events — same contract as SetTeam/SetReady.
         _registry.MarkConnectedPlayersAsParticipants();
 
         var outbox = new List<Outgoing>();
         var teamless = rules.Teams == TeamMode.None;
-        // Admin verdiyse o maça özel değer, vermediyse modun varsayılanı (§5.2).
+        // Per-match value if the admin gave one, otherwise the mode's default (§5.2).
         var appliedRound = roundSeconds > 0 ? roundSeconds : mode.DefaultRoundSeconds;
-        // Limit ÜÇ değerlidir (§5.2): dolu değer o maça özeldir, 0 modun varsayılanına düşer,
-        // SCORE_LIMIT_UNLIMITED ise "limit yok" demektir ve varsayılanı TETİKLEMEZ. Sentinel telde
-        // olduğu gibi taşınır (0'a çevrilmez): load_match/admin_state onu geri yayıyor ve
-        // operatörün panelinde "mod varsayılanı" ile "sınırsız" ayırt edilebilir kalmalı.
+        // The limit is THREE-valued (§5.2): a positive value is per-match, 0 falls back to the mode's
+        // default, and SCORE_LIMIT_UNLIMITED means "no limit" and does NOT trigger the default. The
+        // sentinel travels as-is (not turned into 0): load_match/admin_state echo it back, and "mode
+        // default" must stay distinguishable from "unlimited" on the operator's panel.
         var appliedLimit = scoreLimit > 0 ? scoreLimit
             : scoreLimit < 0 ? ArenaProtocol.SCORE_LIMIT_UNLIMITED
             : mode.DefaultScoreLimit;
-        // Geri sayım aralığı bir arayüz listesi değil, sunucunun kısıtıdır (§5.2): 0 = varsayılan,
-        // dolu değer kırpılır. Kırpma burada yapılır ki tek yazar olsun.
+        // The countdown range is a server constraint, not a UI list (§5.2): 0 = default, a given value is
+        // clamped. Clamped here so there is a single writer.
         var appliedCountdown = countdownSeconds > 0
             ? Math.Clamp(countdownSeconds, ArenaProtocol.COUNTDOWN_SECONDS_MIN, ArenaProtocol.COUNTDOWN_SECONDS_MAX)
             : ArenaProtocol.COUNTDOWN_SECONDS;
@@ -1082,8 +1043,8 @@ public sealed class MatchDirector
 
                 var connection = player.Socket;
                 if (connection == null) continue;
-                // load_match kişiselleştirilir: her oyuncuya kendi takımı (§10.1). Konum/slot
-                // taşınmaz — oyuncu fiziksel olarak nerede duruyorsa orada kalır (§10.4).
+                // load_match is personalised: each player gets their own team (§10.1). No position/slot
+                // travels — the player stays wherever they physically stand (§10.4).
                 var load = new LoadMatchMsg
                 {
                     modeId = _modeId,
@@ -1097,10 +1058,10 @@ public sealed class MatchDirector
                 outbox.Add(new Outgoing(connection, JsonUtil.Serialize(load), player.Name));
             }
 
-            // Adminler de aynı sahneyi yükler (gözlemci görünümü, §2): takım anlamsız olduğu için
-            // boş gider ve admin karşılığında set_ready GÖNDERMEZ — Loading kapısı yalnız
-            // role=player bağlantılarını sayar (ConnectedPlayersLocked). Kurallar admin'e de gider:
-            // takım kipi admin arayüzünün tek/çift kolon kararını besler.
+            // Admins load the same scene (observer view, §2): team is meaningless so it goes empty, and
+            // admins send no set_ready — the Loading gate counts only role=player connections
+            // (ConnectedPlayersLocked). Rules go to admins too: team mode drives the admin UI's
+            // one-column/two-column decision.
             var adminLoad = JsonUtil.Serialize(new LoadMatchMsg
             {
                 modeId = _modeId,
@@ -1123,12 +1084,12 @@ public sealed class MatchDirector
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         }
 
-        // Takım dağılımı BalanceTeams/ClearTeams sonrasındaki GERÇEK durumdan sayılır
-        // (players listesi PlayerState referansları tutuyor, SetTeam onları yerinde günceller).
+        // Team split is counted from the REAL state after BalanceTeams/ClearTeams (the players list holds
+        // PlayerState references and SetTeam updates them in place).
         var blueCount = players.Count(p => p.Team == "blue");
         var teamInfo = teamless ? "takımsız" : $"kırmızı {players.Count - blueCount} / mavi {blueCount}";
-        // Dost ateşi satıra bilerek yazılır: anahtar oturum boyunca yaşadığı ve maç ortasında da
-        // değişebildiği için, hangi maçın hangi kuralla oynandığı sonradan yalnız buradan okunur.
+        // Friendly fire is logged on purpose: the switch lives for the whole session and can change
+        // mid-match, so this line is the only later record of which match ran under which rule.
         Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}', " +
                           $"{appliedRound} sn / limit {DescribeScoreLimit(appliedLimit)} / " +
                           $"geri sayım {appliedCountdown} sn, " +
@@ -1137,17 +1098,12 @@ public sealed class MatchDirector
         await FlushAsync(outbox);
     }
 
-    /// <summary>
-    /// <c>pause_match</c> (§5.2) — koşan maçı dondurur: <see cref="Phase.Playing"/> →
-    /// <see cref="Phase.Paused"/> + <see cref="PauseReason.Operator"/>.
-    /// <para>
-    /// Süre kendiliğinden durur: sayaç yalnız <see cref="TickLiveLocked"/> içinde azalıyor ve o da
-    /// yalnız <see cref="Phase.Playing"/>'de çağrılıyor. Skorlar, canlar ve
-    /// <c>modeState</c> ELLENMEZ — duraklatmak maçtan çıkmak değildir (çıkış
-    /// <c>abort_match</c>).
-    /// </para>
-    /// <para>Koşmayan maç duraklatılmaz; <c>false</c> döner ve durum değişmez.</para>
-    /// </summary>
+    /// <summary><c>pause_match</c> (§5.2) — freezes the running match: <see cref="Phase.Playing"/> →
+    /// <see cref="Phase.Paused"/> + <see cref="PauseReason.Operator"/>.</summary>
+    /// <remarks>The clock stops by itself: it only decrements inside <see cref="TickLiveLocked"/>, which
+    /// runs only in <see cref="Phase.Playing"/>. Scores, health and <c>modeState</c> are untouched —
+    /// pausing is not leaving the match (that is <c>abort_match</c>).
+    /// <para>A match that is not running is not paused; returns <c>false</c> with no state change.</para></remarks>
     public async Task<bool> PauseMatchAsync()
     {
         var outbox = new List<Outgoing>();
@@ -1166,19 +1122,13 @@ public sealed class MatchDirector
         return true;
     }
 
-    /// <summary>
-    /// <c>resume_match</c> (§5.2) — operatörün duraklattığı maçı sürdürür.
-    /// <para>
-    /// ⚠️ <b>Yalnız <see cref="PauseReason.Operator"/> kaldırılır.</b> Her duraklamayı kendi sahibi
-    /// kaldırır: <see cref="PauseReason.Mode"/>'u kaldırmak modun ara durumunu bozar,
-    /// <see cref="PauseReason.Loading"/>/<see cref="PauseReason.Countdown"/> zaten kendi
-    /// koşullarıyla biter, <see cref="PauseReason.Lobby"/>'de sürdürülecek maç yoktur.
-    /// </para>
-    /// <para>
-    /// <see cref="EnterLiveLocked"/> KULLANILMAZ: o maçı baştan kurar (süreyi tam raunda çeker,
-    /// canları doldurur). Sürdürme kaldığı yerden devam etmektir.
-    /// </para>
-    /// </summary>
+    /// <summary><c>resume_match</c> (§5.2) — resumes the match the operator paused.</summary>
+    /// <remarks>⚠️ Only <see cref="PauseReason.Operator"/> is lifted. Every pause is lifted by its owner:
+    /// lifting <see cref="PauseReason.Mode"/> would break the mode's sub-state,
+    /// <see cref="PauseReason.Loading"/>/<see cref="PauseReason.Countdown"/> end on their own conditions,
+    /// and in <see cref="PauseReason.Lobby"/> there is no match to resume.
+    /// <para><see cref="EnterLiveLocked"/> is NOT used: it sets the match up from scratch (full round
+    /// time, full health). Resuming means continuing where it stopped.</para></remarks>
     public async Task<bool> ResumeMatchAsync()
     {
         var outbox = new List<Outgoing>();
@@ -1194,8 +1144,8 @@ public sealed class MatchDirector
 
             var now = DateTime.UtcNow;
             SetPhaseLocked(Phase.Playing, now);
-            // 1 Hz match_state ritmi duraklamada kaydığı için yeniden çıpalanır; süre ve skorlar
-            // olduğu gibi kalır.
+            // The 1 Hz match_state rhythm drifted during the pause, so it is re-anchored; time and scores
+            // stay as they were.
             _nextSecondAt = now.AddSeconds(1);
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         }
@@ -1203,25 +1153,23 @@ public sealed class MatchDirector
         return true;
     }
 
-    // ---- Mod komutları (§10.1 "tur tabanlı modlar") ----
+    // ---- Mode commands (§10.1 "round-based modes") ----
     //
-    // Üçü de IGameMode kancalarından çağrılır: kilit DIŞINDAN ve SENKRON (OnTick void'dir, mod
-    // await edemez). Mesajlar kilit altında kurulup _pendingOutbox'a yazılır, tik döngüsü kanca
-    // dönüşünde yollar.
+    // All three are called from IGameMode hooks: OUTSIDE the lock and SYNCHRONOUSLY (OnTick is void, a
+    // mode cannot await). Messages are built under the lock into _pendingOutbox and dispatched by the
+    // tick loop when the hook returns.
     //
-    // ⚠️ Çekirdek TUR diye bir şey BİLMEZ. Burada "tur" geçen tek şey adlardır; anlamı modun
-    // içindedir. Bu üçü olmasaydı mod ya kendi mesajını yollamak (ikinci gönderici) ya da fazı
-    // doğrudan yazmak (ikinci otorite) zorunda kalırdı.
+    // ⚠️ The core knows NOTHING about rounds. "Round" here is only in the names; the meaning lives in the
+    // mode. Without these three a mode would have to either send its own messages (a second sender) or
+    // write the phase directly (a second authority).
 
-    /// <summary>
-    /// Mod duraklaması ister (§10.1): <see cref="Phase.Playing"/> → <see cref="Phase.Paused"/> +
-    /// <see cref="PauseReason.Mode"/>, gerekçe <paramref name="modeState"/>'e yazılır.
-    /// <para>Süre <b>0'lanır</b>: tur bitti, donmuş bir sayaç göstermek HUD'da yalan olurdu.
-    /// Skorlar ve canlar ELLENMEZ. Tüm <c>ready</c> bayrakları temizlenir — toplanma kapısı o
-    /// bayrağı kullanıyor (§10.1) ve bayat bir <c>true</c> kapıyı anında açardı.</para>
-    /// <para><see cref="Phase.Playing"/> değilse hiçbir şey yapmaz ve <c>false</c> döner (araya
-    /// abort/operatör duraklatması girmiş olabilir).</para>
-    /// </summary>
+    /// <summary>Requests a mode pause (§10.1): <see cref="Phase.Playing"/> → <see cref="Phase.Paused"/> +
+    /// <see cref="PauseReason.Mode"/>, with the reason written into <paramref name="modeState"/>.</summary>
+    /// <remarks>Time is ZEROED: the round is over, and showing a frozen counter would be a lie on the
+    /// HUD. Scores and health are untouched. All <c>ready</c> flags are cleared — the gathering gate uses
+    /// that flag (§10.1) and a stale <c>true</c> would open it instantly.
+    /// <para>Does nothing and returns <c>false</c> outside <see cref="Phase.Playing"/> (an
+    /// abort/operator pause may have slipped in).</para></remarks>
     public bool TryPauseForMode(string? modeState)
     {
         lock (_gate)
@@ -1238,9 +1186,9 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>Modun ara durumunu (§10.1 <c>modeState</c>) günceller ve <b>yalnız değiştiyse</b>
-    /// <c>match_state</c> yayınlar. Değişmediğinde susması bilinçli: bu metod 10 Hz'lik bir
-    /// kancadan çağrılıyor, koşulsuz yayın saniyede 10 broadcast üretirdi.</summary>
+    /// <summary>Updates the mode's sub-state (§10.1 <c>modeState</c>) and broadcasts <c>match_state</c>
+    /// ONLY on a real change. Staying silent otherwise is deliberate: this is called from a 10 Hz hook, so
+    /// an unconditional broadcast would produce 10 broadcasts per second.</summary>
     public void SetModeState(string? modeState)
     {
         lock (_gate)
@@ -1253,19 +1201,17 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>
-    /// Mod duraklamasını bitirip yeni bir tur açar: <see cref="Phase.Paused"/>/
-    /// <see cref="PauseReason.Mode"/> → geri sayım (<see cref="_countdownSeconds"/>) → oradan
-    /// çekirdeğin normal yolundan <see cref="Phase.Playing"/>.
-    /// <para>Canları/ölüleri BURASI toparlamaz — <see cref="EnterLiveLocked"/> zaten herkesi tam
-    /// cana çekiyor ve ölülere <c>health_update</c> yolluyor. İki yerde yapmak ikinci bir
-    /// canlandırma yolu açardı.</para>
-    /// <para>⚠️ <b><c>ready</c> bayrakları TEMİZLENMEZ.</b> Toplanma kapısında o bayrak "şu anda
-    /// tabanımdayım" demektir ve geri sayım boyunca canlı kalması gerekir — modun geri sayımı
-    /// iptal edip (<see cref="TryCancelCountdownForMode"/>) toplanmaya dönebilmesinin tek dayanağı
-    /// odur. Temizleyen yer <see cref="TryPauseForMode"/>'dur (toplanmanın BAŞINDA, bir kez).</para>
-    /// <para>Yalnız mod duraklamasından çalışır; başka durumda <c>false</c> döner.</para>
-    /// </summary>
+    /// <summary>Ends the mode pause and opens a new round: <see cref="Phase.Paused"/>/
+    /// <see cref="PauseReason.Mode"/> → countdown (<see cref="_countdownSeconds"/>) → on through the
+    /// core's normal path to <see cref="Phase.Playing"/>.</summary>
+    /// <remarks>Health/dead players are NOT fixed up here — <see cref="EnterLiveLocked"/> already pulls
+    /// everyone to full health and sends <c>health_update</c> to the dead. Doing it in two places would
+    /// open a second revive path.
+    /// <para>⚠️ <c>ready</c> flags are NOT cleared. At the gathering gate that flag means "I am in my base
+    /// right now" and must stay alive through the countdown — it is the only basis for the mode to cancel
+    /// the countdown (<see cref="TryCancelCountdownForMode"/>) and return to gathering. Clearing happens
+    /// in <see cref="TryPauseForMode"/> (once, at the START of gathering).</para>
+    /// <para>Works only from a mode pause; returns <c>false</c> otherwise.</para></remarks>
     public bool TryStartRound()
     {
         lock (_gate)
@@ -1278,16 +1224,14 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>
-    /// Modun açtığı geri sayımı <b>geri alır</b>: <see cref="PauseReason.Countdown"/> →
-    /// <see cref="PauseReason.Mode"/>. Tur tabanlı modda toplanma şartı geri sayım sırasında
-    /// bozulabilir (oyuncu tabanından çıkar) — o zaman tur başlamaz, toplanmaya dönülür.
-    /// <para>Ayrı bir "geri sayım iptal" mesajı YOKTUR ve gerekmez: istemci geri sayımı
-    /// <c>phaseReason != countdown</c> görünce zaten siliyor, yani yayınlanan <c>match_state</c>
-    /// tek başına yeter.</para>
-    /// <para>Yalnız geri sayımdan çalışır; sayaç o tikte dolup faz Playing'e geçtiyse <c>false</c>
-    /// döner — tur başlamıştır, geri alınmaz.</para>
-    /// </summary>
+    /// <summary>Reverses the countdown the mode opened: <see cref="PauseReason.Countdown"/> →
+    /// <see cref="PauseReason.Mode"/>. In a round-based mode the gathering condition can break during the
+    /// countdown (a player leaves their base) — then the round does not start and gathering resumes.</summary>
+    /// <remarks>There is no separate "countdown cancelled" message and none is needed: the client already
+    /// clears the countdown when it sees <c>phaseReason != countdown</c>, so the broadcast
+    /// <c>match_state</c> suffices.
+    /// <para>Works only from the countdown; returns <c>false</c> if the counter hit zero on that tick and
+    /// the phase went Playing — the round has started and is not reversed.</para></remarks>
     public bool TryCancelCountdownForMode(string? modeState)
     {
         lock (_gate)
@@ -1302,18 +1246,14 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>
-    /// <c>set_friendly_fire</c> (§5.2) — dost ateşi anahtarı. <b>Faz kapısı yoktur:</b> koşan maçta
-    /// da geçerlidir ve etkisi bir sonraki <c>hit_report</c>'ta görülür (hasar kapısı zaten
-    /// <c>_rules.FriendlyFire</c> okuyor, §10.3).
-    /// <para>
-    /// Değişimi tüm istemcilere <c>rules_update</c> ile duyurur: kurallar normalde
-    /// <c>welcome</c>/<c>load_match</c> ile geldiği için maç ORTASINDA değişen bir kuralı taşıyacak
-    /// başka kanal yok. Geç bağlanan yine <c>welcome.match.rules</c>'tan doğru değeri alır.
-    /// </para>
-    /// <para>Değer değişmediyse iş yapılmaz ve <c>false</c> döner (yayın da yok) — panel iyimser
-    /// davranıp aynı değeri tekrar yollayabilir.</para>
-    /// </summary>
+    /// <summary><c>set_friendly_fire</c> (§5.2) — the friendly-fire switch. There is NO phase gate: it
+    /// applies during a running match too, effective from the next <c>hit_report</c> (the damage gate
+    /// already reads <c>_rules.FriendlyFire</c>, §10.3).</summary>
+    /// <remarks>Announces the change to all clients via <c>rules_update</c>: rules normally arrive with
+    /// <c>welcome</c>/<c>load_match</c>, so there is no other channel for a rule changing MID-match. Late
+    /// joiners still get the right value from <c>welcome.match.rules</c>.
+    /// <para>No work and <c>false</c> when the value is unchanged (no broadcast either) — the panel may
+    /// optimistically resend the same value.</para></remarks>
     public async Task<bool> SetFriendlyFireAsync(bool enabled)
     {
         var outbox = new List<Outgoing>();
@@ -1322,7 +1262,7 @@ public sealed class MatchDirector
             if (_friendlyFire == enabled) return false;
 
             _friendlyFire = enabled;
-            ApplyRulesLocked(_rules); // mevcut şekli koru, yalnız anahtarı yeniden damgala
+            ApplyRulesLocked(_rules); // keep the current shape, only re-stamp the switch
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(new RulesUpdateMsg
             {
                 modeId = _modeId,
@@ -1337,16 +1277,16 @@ public sealed class MatchDirector
         return true;
     }
 
-    /// <summary>Dost ateşi anahtarının o anki değeri (§5.2) — <c>admin_state</c> bunu yayar.</summary>
+    /// <summary>Current value of the friendly-fire switch (§5.2) — broadcast by <c>admin_state</c>.</summary>
     public bool FriendlyFire
     {
         get { lock (_gate) return _friendlyFire; }
     }
 
-    /// <summary>abort_match — her fazdan Lobby'ye (§10.1).</summary>
+    /// <summary>abort_match — to Lobby from any phase (§10.1).</summary>
     public Task AbortMatchAsync() => BackToLobbyAsync("abort_match");
 
-    /// <summary>return_to_lobby — abort ile aynı iş (§10.1).</summary>
+    /// <summary>return_to_lobby — same work as abort (§10.1).</summary>
     public Task ReturnToLobbyAsync() => BackToLobbyAsync("return_to_lobby");
 
     private async Task BackToLobbyAsync(string reason)
@@ -1360,40 +1300,32 @@ public sealed class MatchDirector
         await FlushAsync(outbox);
         FlushReadyClear();
         FlushRosterRefresh();
-        FlushParticipantCleanup(); // §10.2: return_to_lobby / abort_match sonrası defter kapanır
+        FlushParticipantCleanup(); // §10.2: the ledger closes after return_to_lobby / abort_match
     }
 
-    /// <summary>
-    /// <b>Lobi sahnelemesi (§10.7):</b> operatörün seçtiği haritayı lobideyken TÜM istemcilere
-    /// yükletir — admin panelinde harita değiştirmek oyuncuların da o arenaya geçmesi demektir.
-    /// <para>
-    /// Bu bir MAÇ DEĞİLDİR: faz <see cref="Phase.Paused"/>'da kalır, hasar kapısı (§10.3) kapalı
-    /// kalır, kimse <c>set_ready</c> göndermez ve süre/skor işlemez. Taşıyıcı mesaj
-    /// <c>return_to_lobby</c>'dir (lobi profili + yeni sahne) — istemci tarafında "lobideyiz,
-    /// şu sahneyi yükle" zaten o mesajın anlamı, ikinci bir mesaj tipi eklemek gerekmez.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Yalnız maç KURULMAMIŞKEN iş yapar</b> (<see cref="CanChangeSelection"/>): lobi
-    /// bekleyişinde ve <c>finished</c>'da. Kurulmuş bir maçın — koşan, kurulmakta olan ya da
-    /// donmuş — altından sahne çekmek maçı bozardı; harita değişimi diye bir şey yoktur, yeni
-    /// harita <c>abort_match</c> sonrası <c>start_match</c> ile gelir.
-    /// </para>
-    /// <para>
-    /// Doğrulama <c>start_match</c> ile aynıdır (§10.1): sahne harita tablosunda olmalı (tablo
-    /// boşsa bu adım atlanır) ve TÜM bağlı oyuncuların build listesinde bulunmalı — yoksa bir
-    /// kısmı lobide kalır, operatör de bunu ekranında göremezdi.
-    /// </para>
-    /// </summary>
+    /// <summary>Lobby staging (§10.7): makes ALL clients load the map the operator picked while in the
+    /// lobby — changing the map on the admin panel means the players move to that arena too.</summary>
+    /// <remarks>This is NOT a match: the phase stays <see cref="Phase.Paused"/>, the damage gate (§10.3)
+    /// stays closed, nobody sends <c>set_ready</c>, and no time/score runs. The carrier message is
+    /// <c>return_to_lobby</c> (lobby profile + new scene) — "we are in the lobby, load this scene" is
+    /// already that message's meaning on the client, so no second message type is needed.
+    /// <para>⚠️ Works only while NO match is set up (<see cref="CanChangeSelection"/>): during the lobby
+    /// wait and in <c>finished</c>. Pulling the scene out from under a set-up match — running, being set
+    /// up or frozen — would break it; there is no such thing as a map change, a new map comes via
+    /// <c>start_match</c> after <c>abort_match</c>.</para>
+    /// <para>Validation matches <c>start_match</c> (§10.1): the scene must be in the map table (skipped
+    /// when the table is empty) and in EVERY connected player's build list — otherwise some would stay in
+    /// the lobby and the operator could not see it on screen.</para></remarks>
     public async Task<StageSceneResult> StageSceneAsync(string? sceneName)
     {
         var target = (sceneName ?? "").Trim();
         if (target.Length == 0) return new StageSceneResult(StageOutcome.Unchanged);
 
-        // Erken çıkış: doğrulama (registry taraması) boşuna yapılmasın.
+        // Early exit so the validation (registry scan) is not done for nothing.
         lock (_gate)
         {
-            // Kapı "maç kurulmuş mu" sorusudur (§10.7): `finished` ve lobi bekleyişi serbest,
-            // yükleme/geri sayım/duraklatma dahil geri kalan her şey kapalı.
+            // The gate asks "is a match set up" (§10.7): `finished` and the lobby wait are open,
+            // everything else — loading/countdown/pause — is closed.
             if (!CanChangeSelectionLocked)
                 return new StageSceneResult(StageOutcome.Rejected, RejectReasonLocked());
             if (_sceneName == target) return new StageSceneResult(StageOutcome.Unchanged);
@@ -1418,23 +1350,23 @@ public sealed class MatchDirector
         var outbox = new List<Outgoing>();
         lock (_gate)
         {
-            // Kilit yeniden alındı (doğrulama kilit DIŞINDA yapıldı, kilit sözleşmesi gereği):
-            // arada start_match girmiş olabilir, kapı burada bir daha kontrol edilir.
+            // Lock retaken (validation ran OUTSIDE it per the lock contract): a start_match may have
+            // slipped in meanwhile, so the gate is re-checked here.
             if (!CanChangeSelectionLocked)
                 return new StageSceneResult(StageOutcome.Rejected, RejectReasonLocked());
             if (_sceneName == target) return new StageSceneResult(StageOutcome.Unchanged);
 
             SetSceneLocked(target);
-            // TÜR lobi olarak kalır: sahne bir arena olsa da henüz maç yoktur (§10.7). Buraya
-            // seçili maç modunu yazmak maç HUD'unu ve maç loadout'unu maç başlamadan açardı.
-            // Tür ancak start_match ile değişir. Kural şekli de lobi profilinde kalır (serbest
-            // atış); hasarı zaten faz kapatıyor.
+            // The KIND stays lobby: even if the scene is an arena there is no match yet (§10.7). Writing
+            // the selected match mode here would open the match HUD and match loadout before the match
+            // starts. The kind changes only via start_match. Rules also stay on the lobby profile (free
+            // fire); damage is closed by the phase anyway.
             _modeId = ArenaProtocol.LOBBY_MODE_ID;
             ApplyRulesLocked(ModeRules.LobbyProfile);
             RefreshShotRelayLocked();
 
-            // Sahneleme koşan maçı değil bekleyişi değiştirir: eğer `finished` iken sahnelendiyse
-            // artık lobi bekleyişindeyiz.
+            // Staging changes the wait, not a running match: if it happened from `finished`, we are now
+            // in the lobby wait.
             SetPhaseLocked(Phase.Paused, PauseReason.Lobby, DateTime.UtcNow);
 
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(new ReturnToLobbyMsg
@@ -1451,22 +1383,21 @@ public sealed class MatchDirector
         return new StageSceneResult(StageOutcome.Staged);
     }
 
-    // ---- Savaş hattı (§10.3) ----
+    // ---- Combat path (§10.3) ----
 
-    // Atış olayı (0x03/0x04) burada işlenmez: v4'te UDP'ye taşındı ve relay'i StateHost yapar
-    // (§6.4/6.5). Buradaki tek payı ShotRelayOpen bayrağıdır — 10 atış/sn/oyuncu otoriter WS
-    // kanalını boğuyordu; hasar (hit_report) bilinçli olarak WS'te KALDI (§10.3).
+    // Shot events (0x03/0x04) are not handled here: they moved to UDP and StateHost does the relay
+    // (§6.4/6.5). The only share here is the ShotRelayOpen flag — 10 shots/s/player was drowning the
+    // authoritative WS channel; damage (hit_report) deliberately STAYED on WS (§10.3).
 
-    /// <summary>hit_report hattı (§10.3, sırayla): faz → atıcı → hedef → doğma koruması → takım →
-    /// hasar sayısı.
-    /// Herhangi biri düşerse tek satır log + sessiz ret (istemciye yanıt yok).
-    /// <para>Bunlar HİLE denetimi değil, durum tutarlılığı kontrolleridir — ürün gözetimli özel
-    /// alanda çalıştığı için hile koruması bilinçli olarak yoktur (§10.3). Hasarı istemci hesaplar
-    /// ve sunucu aynen uygular; silah tablosu, weaponId beyaz listesi ve atış hızı denetimi
-    /// YOKTUR ve eklenmez (meşru saçma/patlama/yaylım vuruşlarını sessizce düşürürler).</para></summary>
+    /// <summary>hit_report path (§10.3, in order): phase → shooter → target → spawn protection → team →
+    /// damage number. Any failure means one log line + silent rejection (no reply to the client).</summary>
+    /// <remarks>These are state-consistency checks, NOT anti-cheat — the product runs in a supervised
+    /// private space, so cheat protection is deliberately absent (§10.3). The client computes damage and
+    /// the server applies it as-is; there is no weapon table, no weaponId whitelist and no fire-rate check
+    /// (they would silently drop legitimate pellet/explosion/burst hits).</remarks>
     public async Task HandleHitReportAsync(PlayerState shooter, HitReportMsg msg)
     {
-        // Registry araması kilitsiz (ConcurrentDictionary) — kilit almadan önce hallediyoruz.
+        // Registry lookup is lock-free (ConcurrentDictionary) — done before taking the lock.
         if (!_registry.TryGetByPlayerId(msg.targetPlayerId, out var target))
         {
             RejectHit(shooter, msg.targetPlayerId, $"hedef {msg.targetPlayerId} bulunamadı");
@@ -1482,8 +1413,8 @@ public sealed class MatchDirector
 
         lock (_gate)
         {
-            // ⚠️ HASARIN TEK KAPISI (§10.1/§10.3). Lobi, yükleme, geri sayım, duraklatma ve maç
-            // sonu — hepsi `playing` değildir, hiçbirinde hasar işlenmez.
+            // ⚠️ THE single damage gate (§10.1/§10.3). Lobby, loading, countdown, pause and match end are
+            // all not `playing`, so none of them process damage.
             if (_phase != Phase.Playing)
             {
                 RejectHit(shooter, msg.targetPlayerId, $"faz {PhaseWire(_phase)}");
@@ -1494,8 +1425,8 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, "atıcı ölü/oyuncu değil");
                 return;
             }
-            // §10.6: kalibresiz oyuncu ateş edemez. Hizalaması bozuk olduğu için nişan aldığı yer
-            // ile gerçekte gösterdiği yer farklıdır — vuruşu saymak haksız ölüm üretirdi.
+            // §10.6: an uncalibrated player cannot fire. With a broken alignment, where they aim and where
+            // they actually point differ — counting the hit would produce unfair deaths.
             if (!shooter.Calibrated)
             {
                 RejectHit(shooter, msg.targetPlayerId, "atıcı kalibresiz");
@@ -1511,16 +1442,17 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, "hedef ölü/bağlantısız");
                 return;
             }
-            // §10.6: kalibresiz oyuncu hasar YEMEZ. Avatarı fiziksel konumundan kaymış durumda
-            // olduğu için ona nişan almak da vurmak da anlamlı değildir.
+            // §10.6: an uncalibrated player takes NO damage. Their avatar is offset from their physical
+            // position, so neither aiming at nor hitting them is meaningful.
             if (!target.Calibrated)
             {
                 RejectHit(shooter, msg.targetPlayerId, "hedef kalibresiz");
                 return;
             }
-            // §10.4: doğma koruması — canlanan oyuncu SpawnProtectionSeconds boyunca hasar almaz.
-            // ⚠️ Kapı SUNUCUDA: istemci korumayı yalnız çizer (snapshot bit6), atış kararını buna
-            // dayandırmaz — atıcının ekranında kalkan bir kare geç sönse bile vuruş burada düşer.
+            // §10.4: spawn protection — a revived player takes no damage for SpawnProtectionSeconds.
+            // ⚠️ The gate is on the SERVER: the client only draws the protection (snapshot bit6) and does
+            // not base its fire decision on it — even if the shield fades a frame late on the shooter's
+            // screen, the hit is dropped here.
             if (DateTime.UtcNow < target.SpawnProtectedUntil)
             {
                 RejectHit(shooter, msg.targetPlayerId, "hedef doğma koruması altında");
@@ -1532,10 +1464,10 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, "dost ateşi yok");
                 return;
             }
-            // Hasarı İSTEMCİ hesaplar (mesafeye göre düşen patlama, yay çekiş gücü, kafa vuruşu…)
-            // ve sunucu aynen uygular. Tek kontrol sayının kullanılabilir olması: NaN/∞ canı kalıcı
-            // bozar (NaN'a düşen hp bir daha 0'ın altına inemez → oyuncu ölümsüz kalır), negatif
-            // hasar da can doldurur. Bu bir hile denetimi değil, sayı denetimidir.
+            // The CLIENT computes damage (distance falloff, bow draw strength, headshot…) and the server
+            // applies it as-is. The only check is that the number is usable: NaN/∞ corrupts health
+            // permanently (hp turned NaN can never drop below 0 → an immortal player) and negative damage
+            // heals. This is a number check, not an anti-cheat check.
             if (!float.IsFinite(msg.damage) || msg.damage <= 0f)
             {
                 RejectHit(shooter, msg.targetPlayerId, $"geçersiz hasar {msg.damage}");
@@ -1546,7 +1478,7 @@ public sealed class MatchDirector
             weaponId = msg.weaponId ?? "";
             appliedDamage = msg.damage;
             target.Hp = MathF.Max(0f, target.Hp - appliedDamage);
-            // Hedefli gönderim (§10.3): kurban + adminler. Diğer oyuncular bu mesajı zaten atıyordu.
+            // Targeted send (§10.3): victim + admins. Other players were discarding this message anyway.
             QueueHealthUpdateLocked(outbox, target, JsonUtil.Serialize(new HealthUpdateMsg
             {
                 playerId = target.PlayerId,
@@ -1557,7 +1489,7 @@ public sealed class MatchDirector
             if (target.Hp <= 0f)
             {
                 killed = true;
-                // ⚠️ Ölümün TEK yazarı (§10.2): sayaçlar, kill_event ve respawn oradadır.
+                // ⚠️ The ONLY writer of death (§10.2): counters, kill_event and respawn live there.
                 KillPlayerLocked(outbox, target, shooter, weaponId, now);
             }
 
@@ -1565,66 +1497,65 @@ public sealed class MatchDirector
         }
 
         await FlushAsync(outbox);
-        FlushRosterRefresh(); // ölüm olduysa K/D + alive'ı roster'a yansıtır (düz hasarda no-op)
+        FlushRosterRefresh(); // on a death, pushes K/D + alive to the roster (no-op for plain damage)
 
-        // Kabul edilen hasar konsola YAZILMAZ (saniyede onlarca satır olur) — yalnız öldürme + ret.
+        // Accepted damage is NOT logged (dozens of lines per second) — only kills + rejections.
         mode?.OnHitApplied(this, shooter.PlayerId, target.PlayerId, appliedDamage, killed);
         if (!killed) return;
 
-        // ⚠️ TAKIMDAŞ ÖLDÜRME SKOR YAZMAZ (§10.2): dost ateşi açıkken kendi takımını eksilten bir
-        // vuruşun aynı takıma puan kazandırması saçmadır. Kapı modun İÇİNE değil çağrı yerine konur
-        // — skorun tek yazarı IGameMode olduğu için kural burada tek noktada durur ve her yeni mod
-        // ona kendiliğinden uyar. `kills`/`deaths` sayaçları ve kill feed satırı işlemeye devam
-        // eder: olay gerçekleşti, yalnız ödülü yok. Ceza (−1) bilinçli olarak YOK.
+        // ⚠️ A TEAMKILL SCORES NOTHING (§10.2): with friendly fire on, a hit that thins your own team must
+        // not award that team points. The gate sits at the CALL SITE, not inside the mode — IGameMode is
+        // the only score writer, so the rule stays in one place and every new mode obeys it for free.
+        // `kills`/`deaths` counters and the kill feed line still run: the event happened, only the reward
+        // is gone. A penalty (−1) is deliberately absent.
         if (!teamKill) mode?.OnKill(this, shooter.PlayerId, target.PlayerId, weaponId);
         Console.WriteLine($"[match] öldürme{(teamKill ? " (TAKIMDAŞ — skor yazılmadı)" : "")}: " +
                           $"{shooter.Name} → {target.Name} ({weaponId}) — skor kırmızı {ScoreRed} : mavi {ScoreBlue}");
-        // Maç sonu kontrolü tick döngüsünde (≤100 ms) yapılır; burada faz değiştirmiyoruz.
+        // The match-end check runs in the tick loop (≤100 ms); no phase change here.
     }
 
-    /// <summary>revive_request (§10.4): faz Live + oyuncu ölü + gecikme dolmuş ise canlandırır.
-    /// Koşul tutmazsa SESSİZ yok sayılır — istemci canlanana dek ~1 sn'de bir tekrarlar, loglasak
-    /// konsolu doldururdu.
-    /// <para><b><see cref="ReviveAnchor"/> burada DOĞRULANMAZ</b> (§10.4 notu): "tabanda mı / sabit
-    /// mi durdu" kararı istemcinindir — sunucu hakemlik değil defter tutar (§10.3 felsefesi).</para>
-    /// <para>Bu <b>oyuncunun</b> yoludur ve tüm yasakları (kalibrasyon §10.6,
-    /// <c>reviveAnchor:"none"</c> §10.5, gecikme, engel §10.9) taşır. İkinci yol operatörün
-    /// komutudur (<see cref="HandleAdminReviveAsync"/>): o, mod kuralını ve gecikmeyi <b>bilerek</b>
-    /// geçer, ama kalibrasyon ve engel yasakları <b>orada da</b> durur — bir yasak, o durumu
-    /// değiştiren tüm yolları kapatmadıkça yoktur. Yeni bir canlandırma yolu açan, o iki kapıyı
-    /// beraberinde taşımak zorundadır.</para></summary>
+    /// <summary>revive_request (§10.4): revives when phase is Live + the player is dead + the delay has
+    /// elapsed. Failing conditions are ignored SILENTLY — the client retries about once a second until
+    /// revived, and logging that would flood the console.</summary>
+    /// <remarks><see cref="ReviveAnchor"/> is NOT validated here (§10.4 note): "am I in my base / did I
+    /// hold still" is the client's call — the server keeps books, it does not referee (§10.3 philosophy).
+    /// <para>This is the PLAYER's path and carries all its bans (calibration §10.6,
+    /// <c>reviveAnchor:"none"</c> §10.5, delay, obstacle §10.9). The second path is the operator's command
+    /// (<see cref="HandleAdminReviveAsync"/>): it deliberately bypasses the mode rule and the delay, but
+    /// the calibration and obstacle bans hold THERE TOO — a ban does not exist until every path changing
+    /// that state is closed. Any new revive path must carry those two gates along.</para></remarks>
     public async Task HandleReviveRequestAsync(PlayerState player)
     {
         var outbox = new List<Outgoing>();
         lock (_gate)
         {
             if (_phase != Phase.Playing || player.Role != "player" || player.Alive) return;
-            // §10.5: reviveAnchor "none" → tur içinde canlanma yok. İstemci zaten göndermez;
-            // burada da kapatmak "eski istemci gönderirse canlanır mı" sorusunu kapatır.
+            // §10.5: reviveAnchor "none" → no revive within the round. The client does not send it
+            // anyway; closing it here also answers "what if an old client does".
             if (_rules.Revive == ReviveAnchor.None) return;
-            if (!player.Calibrated) return; // §10.6: kalibresiz oyuncu canlanamaz
+            if (!player.Calibrated) return; // §10.6: an uncalibrated player cannot revive
             var now = DateTime.UtcNow;
             if ((now - player.DiedAt).TotalSeconds < _rules.RespawnDelay) return;
-            // §10.9: engelin İÇİNDE canlanma yok — oyuncu önce çıkacak. İstemci zaten istek
-            // göndermiyor; burada da kapatmak kuralı istemciye emanet etmemek içindir.
+            // §10.9: no revive INSIDE an obstacle — the player must step out first. The client does not
+            // send the request anyway; closing it here keeps the rule off the client's trust.
             if (IsObstacleReviveBlockedLocked(player, now)) return;
             RevivePlayerLocked(outbox, player);
             Console.WriteLine($"[match] canlandı: {player.Name}");
         }
         await FlushAsync(outbox);
-        FlushRosterRefresh(); // hp/alive değişti → admin tablosu için roster tazelenir (§5.3)
+        FlushRosterRefresh(); // hp/alive changed → refresh the roster for the admin table (§5.3)
     }
 
-    /// <summary><c>revive_player</c> (§5.2/§10.4): operatör ölü oyuncuyu ELLE canlandırır.
-    /// <paramref name="msg"/>.<c>playerId</c> <c>0</c> = o an ölü olan tüm oyuncular.
-    /// <para>Şartı sağlayamayan oyuncu (donmuş istemci, tabanına yürüyemeyen oyuncu) maçın sonuna
-    /// kadar ölü kalırdı; bu komut operatörün elindeki tek kurtarma aracıdır. Bu yüzden
-    /// <b>bilinçli olarak iki şey KONTROL EDİLMEZ</b> — eksik değildir, eklenmez:</para>
-    /// <para>1. <c>_rules.Revive == ReviveAnchor.None</c> (turnuva): düğmenin varlık sebebi her modda
-    /// çalışmasıdır. ⚠️ Turnuvada tur bir takımın tamamı ölünce bittiği için komut tur sonucunu
-    /// değiştirir; operatör bunu bilerek basar.</para>
-    /// <para>2. <c>_rules.RespawnDelay</c>: operatör beklemez, komut anında uygulanır.</para>
-    /// <para>Uygulanan kapılar ve gerekçeleri <see cref="TryAdminReviveLocked"/> içinde.</para></summary>
+    /// <summary><c>revive_player</c> (§5.2/§10.4): the operator revives a dead player MANUALLY.
+    /// <paramref name="msg"/>.<c>playerId</c> <c>0</c> = every currently dead player.</summary>
+    /// <remarks>A player who cannot meet the conditions (frozen client, unable to walk to their base)
+    /// would stay dead until the match ends; this command is the operator's only rescue tool. Hence two
+    /// things are deliberately NOT checked — they are not missing and are not added:
+    /// <para>1. <c>_rules.Revive == ReviveAnchor.None</c> (tournament): the button exists precisely to
+    /// work in every mode. ⚠️ In a tournament the round ends when a whole team is dead, so the command
+    /// changes the round result; the operator presses it knowingly.</para>
+    /// <para>2. <c>_rules.RespawnDelay</c>: the operator does not wait, the command applies instantly.</para>
+    /// <para>The gates that DO apply, with rationale, are in <see cref="TryAdminReviveLocked"/>.</para></remarks>
     public async Task HandleAdminReviveAsync(RevivePlayerMsg msg)
     {
         var outbox = new List<Outgoing>();
@@ -1632,7 +1563,7 @@ public sealed class MatchDirector
         {
             if (_phase != Phase.Playing)
             {
-                // Başka fazda "ölü oyuncu" kavramı yok: playing'e girişte zaten herkes canlanıyor.
+                // Outside playing there is no such thing as a dead player: entering playing revives all.
                 Console.WriteLine($"[match] operatör canlandırma reddedildi: faz {Describe(_phase, _pauseReason)}.");
                 return;
             }
@@ -1655,22 +1586,22 @@ public sealed class MatchDirector
             }
         }
         await FlushAsync(outbox);
-        FlushRosterRefresh(); // hp/alive değişti → admin tablosu için roster tazelenir (§5.3)
+        FlushRosterRefresh(); // hp/alive changed → refresh the roster for the admin table (§5.3)
     }
 
-    /// <summary>Operatör komutunun tek oyuncuya uygulanışı; kabul edildiyse <c>true</c>.
-    /// <para>Kalibrasyon (§10.6) ve engel (§10.9) kapıları burada da durur ve gerekçesi
-    /// FİZİKSELDİR: kalibresiz oyuncu ateş edemez ve vurulamaz — canlandırmak onu savaşa döndürmez,
-    /// yalnız tabloda "canlı" gösterir; engelin içinde canlanan oyuncu ise saniyede 30 HP kaybedip
-    /// anında yeniden ölür, yani düğme bir ölüm döngüsü üretirdi.</para>
-    /// <para><paramref name="bulk"/> yalnız LOG davranışını değiştirir: toplu komutta hedef zaten
-    /// "ölü OYUNCULAR"dır, yani canlı olan ve oyuncu olmayan (admin) satırlar bir ret değil eleme
-    /// sayılır ve sessizce atlanır — her bağlı admin için satır basmak operatörün tek tanı kanalı
-    /// olan konsolu şişirirdi. Gerçek retler (kalibresiz, engelin içinde) toplu kipte de yazılır.</para>
-    /// <para>⚠️ Canlandırmayı <see cref="RevivePlayerLocked"/> yapar,
-    /// <c>ResetMatchStateLocked</c> DEĞİL: ikincisi sunucudaki alanları yazar ama istemciye hiçbir
-    /// şey göndermez → oyuncu ölüm ekranında donar. Skor ve <c>deaths</c> sayaçlarına da
-    /// dokunulmaz; canlandırma bir maç defteri düzeltmesi değildir.</para></summary>
+    /// <summary>Applies the operator command to one player; <c>true</c> when accepted.</summary>
+    /// <remarks>The calibration (§10.6) and obstacle (§10.9) gates hold here too, for PHYSICAL reasons: an
+    /// uncalibrated player can neither fire nor be hit — reviving them does not return them to the fight,
+    /// it only shows "alive" in the table; a player revived inside an obstacle loses 30 HP per second and
+    /// dies again immediately, so the button would produce a death loop.
+    /// <para><paramref name="bulk"/> only changes LOG behaviour: in bulk the target is "dead PLAYERS", so
+    /// alive and non-player (admin) rows are a filter, not a rejection, and are skipped silently —
+    /// printing a line per connected admin would bloat the console, the operator's only diagnostic
+    /// channel. Real rejections (uncalibrated, inside an obstacle) are logged in bulk mode too.</para>
+    /// <para>⚠️ The revive is done by <see cref="RevivePlayerLocked"/>, NOT
+    /// <c>ResetMatchStateLocked</c>: the latter writes the server fields but sends the client nothing →
+    /// the player freezes on the death screen. Score and <c>deaths</c> counters are untouched; a revive is
+    /// not a match-ledger correction.</para></remarks>
     private bool TryAdminReviveLocked(List<Outgoing> outbox, PlayerState player, DateTime now, bool bulk)
     {
         if (player.Role != "player")
@@ -1702,18 +1633,18 @@ public sealed class MatchDirector
         return true;
     }
 
-    // ---- Faz geçişleri (hepsi _gate altında çağrılır) ----
+    // ---- Phase transitions (all called under _gate) ----
 
     private void SetPhaseLocked(Phase next, DateTime now)
     {
         SetPhaseLocked(next, PauseReason.None, now);
     }
 
-    /// <summary>Faz + gerekçeyi birlikte yazar. İkisi tek yerden değişir ki telde tutarsız bir
-    /// ikili (ör. <c>playing</c> + <c>loading</c>) hiç doğmasın.</summary>
+    /// <summary>Writes phase + reason together. Both change in one place so an inconsistent pair (e.g.
+    /// <c>playing</c> + <c>loading</c>) can never appear on the wire.</summary>
     private void SetPhaseLocked(Phase next, PauseReason reason, DateTime now)
     {
-        // Gerekçe yalnız Paused'da anlamlıdır; diğer fazlarda zorla temizlenir.
+        // The reason is meaningful only in Paused; other phases force-clear it.
         if (next != Phase.Paused) reason = PauseReason.None;
 
         if (_phase != next || _pauseReason != reason)
@@ -1729,24 +1660,24 @@ public sealed class MatchDirector
         RefreshShotRelayLocked();
     }
 
-    /// <summary>Faz + gerekçenin insan/log okunur tek parça hâli (<c>paused/loading</c> gibi).
-    /// Red gerekçelerinde de kullanılır: operatörün durum satırında "neden reddedildi" sorusunun
-    /// cevabı çoğu zaman fazın kendisidir.</summary>
+    /// <summary>Single human/log readable form of phase + reason (like <c>paused/loading</c>). Also used
+    /// in rejection reasons: on the operator's status line the answer to "why was it rejected" is usually
+    /// the phase itself.</summary>
     private static string Describe(Phase phase, PauseReason reason) =>
         phase == Phase.Paused && reason != PauseReason.None
             ? $"{PhaseWire(phase)}/{ReasonWire(reason)}"
             : PhaseWire(phase);
 
-    /// <summary>Atış relay kapısını (<see cref="ShotRelayOpen"/>) faz + kuraldan yeniden hesaplar.
-    /// <b>TEK yazar burasıdır</b> ve faz ya da <c>_rules</c> değişen HER yerde çağrılır
-    /// (<see cref="SetPhaseLocked"/> + her <c>_rules</c> ataması). Dağınık atama yapılmaması
-    /// bilinçli: kapı iki ayrı durumdan türüyor, iki yazar olsa biri güncellenmeden kalır ve
-    /// sahada "lobide kimsenin namlu alevi görünmüyor" gibi sessiz bir sapma olarak çıkardı.</summary>
+    /// <summary>Recomputes the shot relay gate (<see cref="ShotRelayOpen"/>) from phase + rules. This is
+    /// the ONLY writer and is called EVERYWHERE the phase or <c>_rules</c> changes
+    /// (<see cref="SetPhaseLocked"/> + every <c>_rules</c> assignment). Scattered assignments are avoided
+    /// on purpose: the gate derives from two separate states, and with two writers one would go stale and
+    /// surface as a silent field bug ("nobody's muzzle flash shows in the lobby").</summary>
     private void RefreshShotRelayLocked() =>
         _shotRelayOpen = _phase == Phase.Playing || _rules.FireWhilePaused;
 
-    /// <summary>Faz → tel değeri (§10.1). Enum adı ile tel değeri BİLEREK ayrı tutulur: tel
-    /// küçük harf sözleşmesini izler, C# adı C# sözleşmesini.</summary>
+    /// <summary>Phase → wire value (§10.1). Enum name and wire value are kept separate on purpose: the
+    /// wire follows the lowercase convention, the C# name follows C#'s.</summary>
     private static string PhaseWire(Phase phase) => phase switch
     {
         Phase.Playing => ArenaProtocol.PHASE_PLAYING,
@@ -1754,7 +1685,7 @@ public sealed class MatchDirector
         _ => ArenaProtocol.PHASE_PAUSED
     };
 
-    /// <summary>Duraklama gerekçesi → tel değeri; <see cref="PauseReason.None"/> boş string.</summary>
+    /// <summary>Pause reason → wire value; <see cref="PauseReason.None"/> is an empty string.</summary>
     private static string ReasonWire(PauseReason reason) => reason switch
     {
         PauseReason.Lobby => ArenaProtocol.PAUSE_REASON_LOBBY,
@@ -1765,8 +1696,8 @@ public sealed class MatchDirector
         _ => ""
     };
 
-    /// <summary>Geri sayıma girer. Uzunluk maçın <see cref="_countdownSeconds"/>'ıdır (§5.2) —
-    /// maçın ilk turu ile sonraki turları arasında fark yoktur.</summary>
+    /// <summary>Enters the countdown. Its length is the match's <see cref="_countdownSeconds"/> (§5.2) —
+    /// the first round and later rounds are treated the same.</summary>
     private void EnterCountdownLocked(List<Outgoing> outbox, DateTime now)
     {
         SetPhaseLocked(Phase.Paused, PauseReason.Countdown, now);
@@ -1782,37 +1713,37 @@ public sealed class MatchDirector
         _timeRemaining = _roundSeconds;
         _nextSecondAt = now.AddSeconds(1);
 
-        // §10.2: playing'e girerken herkes tam can + canlı.
-        // ⚠️ Ölü oyuncu RevivePlayerLocked ile canlandırılır, ResetMatchStateLocked ile DEĞİL:
-        // ikincisi sunucudaki alanları yazar ama İSTEMCİYE HİÇBİR ŞEY GÖNDERMEZ. Tek turlu
-        // modlarda zararsızdı (istemci load_match'te kendini sıfırlıyor), ama tur tabanlı modda
-        // turlar arası load_match yoktur → mesaj gitmezse tur içinde ölmüş oyuncu istemcide
-        // ölüm ekranında DONAR ve bir daha ateş edemez.
+        // §10.2: entering playing means full health + alive for everyone.
+        // ⚠️ Dead players are revived with RevivePlayerLocked, NOT ResetMatchStateLocked: the latter
+        // writes the server fields but SENDS THE CLIENT NOTHING. Harmless in single-round modes (the
+        // client resets itself on load_match), but round-based modes have no load_match between rounds →
+        // without the message a player who died mid-round FREEZES on the death screen and can never fire
+        // again.
         foreach (var player in ConnectedPlayersLocked())
         {
-            // ⚠️ Engel toleransı da sıfırlanır (§10.9): saati yalnız `playing` tikinde işliyor,
-            // yani duraklamada geçen süre onu sessizce doldururdu ve oyuncu maç devam eder etmez
-            // ilk tikte can kaybetmeye başlardı — üç saniyesini duraklamada harcamış olurdu.
+            // ⚠️ The obstacle grace is reset too (§10.9): its clock only advances on `playing` ticks, so
+            // time spent paused would silently consume it and the player would start losing health on the
+            // first tick after the resume — having burned their three seconds during the pause.
             player.ObstacleSince = null;
 
             if (player.Alive)
             {
-                // ResetMatchStateLocked doğma korumasını da MinValue'ya çeker — aşağıdaki
-                // ölü dalıyla birlikte, `playing`'e giren HERKES korumasız başlar.
+                // ResetMatchStateLocked also pulls spawn protection to MinValue — together with the dead
+                // branch below, EVERYONE entering `playing` starts unprotected.
                 ResetMatchStateLocked(player, keepScore: true);
                 continue;
             }
 
-            // ⚠️ Maçın/turun BAŞLAMASI doğma koruması VERMEZ (§10.4) ve bu bilinçlidir: koruma
-            // ölüp dönen oyuncuyu doğduğu karede vurulmaktan korumak içindir, oysa maç başında
-            // herkes aynı anda ve geri sayımla başlıyor — koruma orada yalnız maçın ilk
-            // saniyelerini hasarsız kılardı. Kapı canlı ve ölü dalda AYNI: biri korumalı diğeri
-            // korumasız başlasa aynı maçta iki farklı kural olurdu.
+            // ⚠️ Starting a match/round grants NO spawn protection (§10.4), deliberately: protection
+            // exists to keep a respawning player from being shot on their first frame, whereas at match
+            // start everyone begins together after a countdown — there it would only make the match's
+            // first seconds damage-free. The gate is the SAME in the alive and dead branches: one
+            // protected and one not would mean two rules in one match.
             RevivePlayerLocked(outbox, player, spawnProtect: false); // hp = MAX, alive = 1, health_update
             player.DiedAt = DateTime.MinValue;
         }
 
-        // OnMatchStart maç başına BİR KEZ, OnRoundStart her Live girişinde (§ IGameMode).
+        // OnMatchStart ONCE per match, OnRoundStart on every Live entry (§ IGameMode).
         _roundStartPending = _mode != null;
         _matchStartPending = _mode != null && !_matchStarted;
         if (_mode != null) _matchStarted = true;
@@ -1835,7 +1766,7 @@ public sealed class MatchDirector
         }));
     }
 
-    /// <summary>Konsol satırı için kazananın okunabilir hâli (takım adı / oyuncu adı / berabere).</summary>
+    /// <summary>Readable winner for the console line (team name / player name / draw).</summary>
     private string DescribeOutcomeLocked(MatchOutcome outcome)
     {
         if (!string.IsNullOrEmpty(outcome.WinnerTeam)) return outcome.WinnerTeam;
@@ -1850,12 +1781,12 @@ public sealed class MatchDirector
         SetPhaseLocked(Phase.Paused, PauseReason.Lobby, now);
         _mode = null;
         _modeState = "";
-        // Lobi TÜRÜ (§10.7): kural şekli varsayılandan yalnız serbest atışla ayrılır. Hasarı yine
-        // faz kapatır (hit_report yalnız playing) — bu bayrak sadece namlu alevinin görünmesini
-        // sağlar. modId de dolar, çünkü istemci silah loadout'unu/HUD'unu bu anahtarla çözüyor.
+        // The lobby KIND (§10.7): its rule shape differs from the default only by free fire. Damage is
+        // still closed by the phase (hit_report only in playing) — this flag merely makes the muzzle flash
+        // visible. modId is filled too, since the client resolves weapon loadout/HUD by that key.
         ApplyRulesLocked(ModeRules.LobbyProfile);
-        // ⚠️ SetPhaseLocked yukarıda çağrıldı, yani kapı burada _rules'ün ESKİ hâliyle hesaplanmış
-        // durumda — kuralı değiştiren her yerin kendi tazelemesini yapması bu yüzden şart.
+        // ⚠️ SetPhaseLocked ran above, so the gate was computed with the OLD _rules — which is exactly why
+        // every place that changes the rules must refresh it itself.
         RefreshShotRelayLocked();
         _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
         SetSceneLocked(_lobbyScene);
@@ -1887,14 +1818,14 @@ public sealed class MatchDirector
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(returnMsg));
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
 
-        // ⚠️ Maç defteri BURADA kapanmaz, yalnız işaretlenir (§10.2): temizlik bu `return_to_lobby`
-        // yayınından SONRA, kilit dışında koşar (registry olay tetikliyor). Defterin `finished`
-        // fazının TAMAMI boyunca durması bilinçlidir — ayrılmış oyuncular maç sonu tablosunda
-        // görünmeli; `match_end`'de silmek tabloyu tam da okunduğu anda boşaltırdı.
+        // ⚠️ The match ledger does NOT close here, it is only flagged (§10.2): the cleanup runs AFTER this
+        // `return_to_lobby` broadcast, outside the lock (the registry raises events). Keeping the ledger
+        // through the WHOLE `finished` phase is deliberate — players who left must appear in the
+        // end-of-match table; clearing it on `match_end` would empty the table exactly as it is read.
         _participantCleanupPending = true;
     }
 
-    /// <summary>Tick dışından (mod IsMatchOver) çağrılır; araya abort girmişse no-op.</summary>
+    /// <summary>Called from outside the tick (mode IsMatchOver); a no-op if an abort slipped in.</summary>
     private async Task EnterEndAsync(MatchOutcome outcome)
     {
         var outbox = new List<Outgoing>();
@@ -1907,56 +1838,57 @@ public sealed class MatchDirector
         FlushRosterRefresh();
     }
 
-    // ---- Yardımcılar ----
+    // ---- Helpers ----
 
     private void ResetMatchStateLocked(PlayerState player, bool keepScore = false)
     {
         player.Hp = ArenaProtocol.PLAYER_MAX_HP;
         player.Alive = true;
         player.DiedAt = DateTime.MinValue;
-        // Bayat damga bırakılmaz (§10.4): bu metot maç kurma ve lobiye dönüş yollarından da
-        // geliniyor, yani koruması dolmamış bir oyuncu kalkanını lobiye taşırdı. Koruma yalnız
-        // ÖLÜP canlanan oyuncuya verilir (StampSpawnProtectionLocked) ve bu yolların hiçbiri
-        // öyle bir canlanma değildir — yani burada temizlenen damga geri konmaz.
+        // No stale stamp is left (§10.4): this method is also reached from match setup and the lobby
+        // return, so a player with unexpired protection would carry their shield into the lobby.
+        // Protection is granted only to a player revived after DYING (StampSpawnProtectionLocked) and none
+        // of these paths is such a revive — the stamp cleared here is not put back.
         player.SpawnProtectedUntil = DateTime.MinValue;
         _rosterRefreshFor = player;
         if (keepScore) return;
         player.Kills = 0;
         player.Deaths = 0;
         player.Score = 0;
-        // İhlal defteri maç defteridir: kills/deaths ile aynı yerde sıfırlanır, yani tur başında
-        // (keepScore) KORUNUR — operatörün gördüğü sayı maç boyuncadır, tur boyunca değil.
+        // The violation ledger is a match ledger: reset alongside kills/deaths, hence PRESERVED at round
+        // start (keepScore) — the number the operator sees spans the match, not the round.
         player.ObstacleTally.Reset();
         player.OutOfBoundsTally.Reset();
     }
 
-    /// <summary>Dost ateşi kararının TEK yeri. <b>Boş takım asla takım arkadaşı sayılmaz:</b>
-    /// takımsız modda herkesin takımı <c>""</c> olduğu için düz <c>a.Team == b.Team</c>
-    /// karşılaştırması "" == "" ile TÜM vuruşları reddederdi (§10.3/4).</summary>
+    /// <summary>The ONLY place the friendly-fire decision is made. An empty team is never a teammate: in
+    /// teamless modes everyone's team is <c>""</c>, so a plain <c>a.Team == b.Team</c> would reject ALL
+    /// hits via "" == "" (§10.3/4).</summary>
     private static bool AreTeammates(PlayerState a, PlayerState b) =>
         !string.IsNullOrEmpty(a.Team) && a.Team == b.Team;
 
-    /// <summary>Doğma korumasının TEK yazıcısı (§10.4); yalnız <see cref="RevivePlayerLocked"/>
-    /// çağırır, yani koruma bir ÖLÜMÜN karşılığıdır — maç/tur başlangıcı koruma vermez.
-    /// <para>⚠️ Kural koruma öngörmüyorsa (ya da <paramref name="protect"/> <c>false</c> ise) damga
-    /// <see cref="DateTime.MinValue"/>'ya ÇEKİLİR, dokunulmadan bırakılmaz: mod ortasında koruması
-    /// olan bir maçtan olmayanına geçildiğinde bayat damga oyuncuyu sebepsiz dokunulmaz
-    /// yapardı.</para></summary>
+    /// <summary>The ONLY writer of spawn protection (§10.4); called only by
+    /// <see cref="RevivePlayerLocked"/>, so protection is the answer to a DEATH — match/round start grants
+    /// none.</summary>
+    /// <remarks>⚠️ When the rules grant no protection (or <paramref name="protect"/> is <c>false</c>) the
+    /// stamp is PULLED to <see cref="DateTime.MinValue"/>, not left alone: switching from a match with
+    /// protection to one without would leave a stale stamp making the player untouchable for no
+    /// reason.</remarks>
     private void StampSpawnProtectionLocked(PlayerState player, bool protect = true) =>
         player.SpawnProtectedUntil = protect && _rules.SpawnProtectionSeconds > 0f
             ? DateTime.UtcNow.AddSeconds(_rules.SpawnProtectionSeconds)
             : DateTime.MinValue;
 
-    /// <summary><paramref name="spawnProtect"/> yalnız maç/tur başlangıcında <c>false</c> geçilir
-    /// (§10.4): orada canlanma bir ÖLÜMÜN karşılığı değil, maçın kurulmasıdır.</summary>
+    /// <summary><paramref name="spawnProtect"/> is passed <c>false</c> only at match/round start (§10.4):
+    /// there the revive answers no DEATH, it is the match being set up.</summary>
     private void RevivePlayerLocked(List<Outgoing> outbox, PlayerState player, bool spawnProtect = true)
     {
         player.Hp = ArenaProtocol.PLAYER_MAX_HP;
         player.Alive = true;
         StampSpawnProtectionLocked(player, spawnProtect);
         _rosterRefreshFor = player;
-        // attackerId=0: canlanma bir saldırı sonucu değildir (§10.4/3).
-        // Hedefli gönderim (§10.3): canlanan oyuncu + adminler.
+        // attackerId=0: a revive is not the result of an attack (§10.4/3).
+        // Targeted send (§10.3): the revived player + admins.
         QueueHealthUpdateLocked(outbox, player, JsonUtil.Serialize(new HealthUpdateMsg
         {
             playerId = player.PlayerId,
@@ -1965,9 +1897,8 @@ public sealed class MatchDirector
         }));
     }
 
-    /// <summary>Boş takım kalmasın diye kalabalık taraftan yarısını karşıya taşır; takımsız
-    /// oyuncuyu az kişili tarafa koyar (§10.1). registry.SetTeam event tetiklediği için bu metod
-    /// YALNIZ kilit dışından çağrılır.</summary>
+    /// <summary>Moves half of the crowded side over so no team stays empty, and puts teamless players on
+    /// the smaller side (§10.1). Called ONLY outside the lock, since registry.SetTeam raises events.</summary>
     private void BalanceTeams(List<PlayerState> players)
     {
         var red = players.Where(p => p.Team == "red").ToList();
@@ -1994,9 +1925,9 @@ public sealed class MatchDirector
         Console.WriteLine($"[match] takım dengeleme: {moveCount} oyuncu '{emptyTeam}' takımına taşındı.");
     }
 
-    /// <summary>Takımsız mod (§10.5 <c>teamMode:"none"</c>): lobide atanmış takımlar temizlenir,
-    /// kimse kırmızı/maviye bölünmez. <see cref="BalanceTeams"/> gibi registry.SetTeam event
-    /// tetiklediği için YALNIZ kilit dışından çağrılır.</summary>
+    /// <summary>Teamless mode (§10.5 <c>teamMode:"none"</c>): clears teams assigned in the lobby, nobody
+    /// is split into red/blue. Like <see cref="BalanceTeams"/>, called ONLY outside the lock since
+    /// registry.SetTeam raises events.</summary>
     private void ClearTeams(List<PlayerState> players)
     {
         var cleared = 0;
@@ -2011,9 +1942,9 @@ public sealed class MatchDirector
             Console.WriteLine($"[match] takımsız mod: {cleared} oyuncunun takımı temizlendi.");
     }
 
-    /// <summary>Maç kapılarının tek oyuncu listesi: yalnız BAĞLI (§2 <c>connected</c>) oyuncular.
-    /// <c>reconnecting</c>/<c>left</c> kayıtlar burada görünmez — yükleme kapısı onları beklemez,
-    /// vurulamaz, canlanmaz, kazanan hesabına girmez.</summary>
+    /// <summary>The single player list used by the match gates: only CONNECTED (§2 <c>connected</c>)
+    /// players. <c>reconnecting</c>/<c>left</c> records do not appear — the loading gate does not wait for
+    /// them, they cannot be hit or revived, and they do not count towards the winner.</summary>
     private List<PlayerState> ConnectedPlayersLocked() =>
         _registry.Snapshot().Where(p => p.IsConnected && p.Role == "player").OrderBy(p => p.PlayerId).ToList();
 
@@ -2041,10 +1972,10 @@ public sealed class MatchDirector
         scoreBlue = _scoreBlue
     };
 
-    /// <summary>Bağlı tüm soketlere (admin dahil) kuyruklar.
-    /// <para>"Şu oyuncuyu atla" parametresi <b>kaldırıldı</b>: tek kullanıcısı atış relay'iydi ve o
-    /// v4'te UDP'ye taşındı. Yeni kanalda süzme YOK — atan kendi olayını geri alır ve kendisi yok
-    /// sayar (§6.5). WS mesajlarının hepsi tanımı gereği herkese gider.</para></summary>
+    /// <summary>Queues to every connected socket (admins included).</summary>
+    /// <remarks>There is no "skip this player" parameter: its only user was the shot relay, which moved to
+    /// UDP. That channel does no filtering — the shooter gets its own event back and ignores it (§6.5). WS
+    /// messages go to everyone by definition.</remarks>
     private void QueueBroadcastLocked(List<Outgoing> outbox, string json)
     {
         foreach (var player in _registry.Snapshot())
@@ -2056,18 +1987,16 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>
-    /// <c>health_update</c>'i YALNIZ <b>ilgili oyuncuya + adminlere</b> kuyruklar (§10.3).
-    /// <para><b>Neden broadcast değil:</b> mesajın iki tüketicisi var ve ikisi de dar —
-    /// <c>PlayerCombatState</c> kendi <c>playerId</c>'si dışındaki her mesajı <b>zaten atıyor</b>,
-    /// admin tablosu ise herkesin canını çiziyor. Yani 10 oyunculu bir maçta her isabette 11 TCP
-    /// mesajı gidip <b>9'u çöpe</b> atılıyordu. Fan-out'u kesmek davranışı hiç değiştirmez;
-    /// yalnızca kimsenin okumadığı paketleri üretmeyi bırakır.</para>
-    /// <para>⚠️ Bu, "WS mesajlarının hepsi tanımı gereği herkese gider" varsayımının <b>istisnası</b>
-    /// ve bilinçlidir: isabet başına üretildiği için tek fan-out'u oyuncu sayısıyla <b>kare</b>
-    /// büyüyen mesaj budur. Yeni bir "olay başına herkese haber ver" mesajı eklerken sorulacak soru
-    /// "kaç bayt" değil <b>"kaç datagram"</b>dır (Docs/Sistem-Ozeti.md §3.12).</para>
-    /// </summary>
+    /// <summary>Queues <c>health_update</c> ONLY to the subject player + admins (§10.3).</summary>
+    /// <remarks>Why not a broadcast: the message has two consumers and both are narrow —
+    /// <c>PlayerCombatState</c> already discards every message outside its own <c>playerId</c>, and the
+    /// admin table draws everyone's health. In a 10-player match each hit sent 11 TCP messages of which 9
+    /// were thrown away. Cutting the fan-out changes no behaviour; it just stops producing packets nobody
+    /// reads.
+    /// <para>⚠️ This is the deliberate EXCEPTION to "WS messages go to everyone by definition": produced
+    /// per hit, it is the one message whose fan-out grows with the SQUARE of the player count. When adding
+    /// a new "tell everyone per event" message the question is not "how many bytes" but "how many
+    /// datagrams" (Docs/Sistem-Ozeti.md §3.12).</para></remarks>
     private void QueueHealthUpdateLocked(List<Outgoing> outbox, PlayerState subject, string json)
     {
         foreach (var player in _registry.Snapshot())
@@ -2080,11 +2009,9 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>
-    /// Yalnız <b>bağlı adminlere</b> kuyruklar (§5.3). <see cref="QueueHealthUpdateLocked"/> ile
-    /// aynı sınıftan bir dar yayındır: mesajın tek tüketicisi operatör ekranıdır, oyunculara
-    /// göndermek kimsenin okumadığı paketleri oyuncu sayısıyla çarpmak olurdu.
-    /// </summary>
+    /// <summary>Queues only to connected admins (§5.3). Same class of narrow broadcast as
+    /// <see cref="QueueHealthUpdateLocked"/>: the sole consumer is the operator screen, and sending it to
+    /// players would multiply unread packets by the player count.</summary>
     private void QueueAdminBroadcastLocked(List<Outgoing> outbox, string json)
     {
         foreach (var player in _registry.Snapshot())
@@ -2096,8 +2023,8 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>Bağlı bir admin var mı — <b>serileştirmeden ÖNCE</b> sorulur: kimse bakmıyorken
-    /// JSON üretmek boşa iştir (bkz. <see cref="TickViolationFeedLocked"/>).</summary>
+    /// <summary>Is any admin connected — asked BEFORE serialising: producing JSON nobody looks at is
+    /// wasted work (see <see cref="TickViolationFeedLocked"/>).</summary>
     private bool HasConnectedAdminLocked() =>
         _registry.Snapshot().Any(p => p.IsConnected && p.Role == "admin" && p.Socket != null);
 
@@ -2106,9 +2033,9 @@ public sealed class MatchDirector
         if (player.Ready) _readyClearQueue.Add(player.DeviceId);
     }
 
-    /// <summary>Kilit dışında: registry.SetReady → Changed → lobby_state yayını.</summary>
-    /// <summary>Kilit dışında: registry.Announce → Changed → lobby_state yayını. `Updated` türü
-    /// konsola satır BASMAZ (Program.cs), yalnız roster'ı tazeler.</summary>
+    /// <summary>Outside the lock: registry.SetReady → Changed → lobby_state broadcast.</summary>
+    /// <summary>Outside the lock: registry.Announce → Changed → lobby_state broadcast. The `Updated` kind
+    /// logs NO console line (Program.cs), it only refreshes the roster.</summary>
     private void FlushRosterRefresh()
     {
         PlayerState? player;
@@ -2121,14 +2048,12 @@ public sealed class MatchDirector
         if (player != null) _registry.Announce(player, PlayerChangeKind.Updated);
     }
 
-    /// <summary>
-    /// Maç defterini kapatır (§10.2): <c>left</c> kayıtlar silinir (playerId'leri havuza döner),
-    /// kalan <c>inMatch</c> bayrakları temizlenir.
-    /// <para>⚠️ <b>Sıra bağlayıcıdır:</b> yalnız lobiye dönerken ve <c>match_end</c> + son
-    /// <c>lobby_state</c> gönderildikten SONRA koşar — istemcideki maç sonu tablosu roster'dan
-    /// çiziliyor, erken temizlik onu satır kaybettirirdi. Registry olay tetiklediği için de kilit
-    /// dışında olmak zorunda.</para>
-    /// </summary>
+    /// <summary>Closes the match ledger (§10.2): <c>left</c> records are dropped (their playerIds return
+    /// to the pool) and remaining <c>inMatch</c> flags are cleared.</summary>
+    /// <remarks>⚠️ The ordering is binding: runs only on the lobby return and AFTER <c>match_end</c> + the
+    /// final <c>lobby_state</c> — the client's end-of-match table is drawn from the roster, so early
+    /// cleanup would cost it rows. It must also be outside the lock since the registry raises
+    /// events.</remarks>
     private void FlushParticipantCleanup()
     {
         lock (_gate)
@@ -2143,9 +2068,9 @@ public sealed class MatchDirector
             Console.WriteLine($"[match] maç defteri kapandı: ayrılmış {purged} kayıt silindi (playerId'leri havuza döndü).");
     }
 
-    /// <summary>Mod kancalarının kilit altında biriktirdiği gönderimleri yollar (bkz.
-    /// <see cref="_pendingOutbox"/>). Tik döngüsünden çağrılır — tek gönderici olduğu için sıra
-    /// korunur.</summary>
+    /// <summary>Dispatches the sends mode hooks collected under the lock (see
+    /// <see cref="_pendingOutbox"/>). Called from the tick loop — a single sender, so order is
+    /// preserved.</summary>
     private async Task FlushPendingAsync()
     {
         List<Outgoing> pending;
@@ -2188,11 +2113,10 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>Reddedilen hit_report: sebep AYNEN korunur ama atıcı başına en fazla
-    /// RejectLogIntervalSeconds'da bir satır yazılır (ölü hedefe ateş sürerken konsol boğulmasın).
-    /// Bastırılan satırlar yutulmaz: sayıları bir sonraki yazılan satırın sonuna
-    /// "(+N bastırıldı)" olarak eklenir. Faz/öldürme/maç sonu/canlanma satırları bu
-    /// kısıtlamaya GİRMEZ (nadirdirler).</summary>
+    /// <summary>Rejected hit_report: the reason is kept verbatim, but at most one line per shooter every
+    /// RejectLogIntervalSeconds (so the console does not drown while someone keeps firing at a dead
+    /// target). Suppressed lines are not swallowed: their count is appended to the next printed line.
+    /// Phase/kill/match-end/revive lines are NOT throttled (they are rare).</summary>
     private void RejectHit(PlayerState shooter, int targetPlayerId, string reason)
     {
         int suppressed;

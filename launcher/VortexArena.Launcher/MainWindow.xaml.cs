@@ -10,16 +10,16 @@ using Microsoft.Win32;
 namespace VortexArena.Launcher;
 
 /// <summary>
-/// Tek ekranlık operatör konsolu: <b>1 · Sunucu</b> (exe + mekan) → <b>2 · Bağlantı</b> (IP/port)
-/// → <b>3 · Yönetim oyunu</b> (admin exe + başlat).
+/// Single-screen operator console: <b>1 · Server</b> (exe + venue) → <b>2 · Connection</b> (IP/port)
+/// → <b>3 · Admin game</b> (admin exe + start).
 /// <para>
-/// Sunucu <c>--venue &lt;mekan&gt;</c> ile başlatılır; mekan seçilmeden başlatma yoktur. Sebep:
-/// mekansız açılışta sunucunun konsolu etkileşimli değilse alfabetik ilk mekan sessizce açılır
-/// (bkz. <c>Program.SelectVenue</c>) ve operatör yanlış işletmenin arenalarını yönetir.
+/// The server is started with <c>--venue &lt;name&gt;</c> and never without a venue: with no venue
+/// and a non-interactive console the server silently opens the alphabetically first venue (see
+/// <c>Program.SelectVenue</c>) and the operator manages the wrong business's arenas.
 /// </para>
 /// <para>
-/// Yönetim oyunu <c>--server-ip</c>/<c>--server-port</c> ile başlatılır; <c>AppBoot</c> bunları
-/// okur. Launcher başlattığı süreçlerle ağ üzerinden konuşmaz — protokole hiç girmez.
+/// The admin game is started with <c>--server-ip</c>/<c>--server-port</c>, read by <c>AppBoot</c>.
+/// The launcher never talks to the processes it starts — it stays out of the protocol.
 /// </para>
 /// </summary>
 public partial class MainWindow : Window
@@ -29,8 +29,8 @@ public partial class MainWindow : Window
     private LauncherConfig _config = new();
     private VenueCatalog _catalog = VenueCatalog.Empty;
 
-    /// <summary>Alanları koddan doldururken <c>TextChanged</c>/<c>SelectionChanged</c>
-    /// geri yazmasın diye.</summary>
+    /// <summary>Stops <c>TextChanged</c>/<c>SelectionChanged</c> from writing back while fields are
+    /// being filled from code.</summary>
     private bool _loading;
 
     private Process? _gameProcess;
@@ -42,7 +42,7 @@ public partial class MainWindow : Window
         LoadConfig();
     }
 
-    // ─────────────────────────────────────────────────────────────── yükleme
+    // ─────────────────────────────────────────────────────────────── loading
 
     private void LoadConfig()
     {
@@ -94,11 +94,11 @@ public partial class MainWindow : Window
         }
     }
 
-    // ───────────────────────────────────────────────────────────────── mekan
+    // ───────────────────────────────────────────────────────────────── venue
 
     /// <summary>
-    /// Mekan listesini sunucunun kendi <c>config\maps.json</c>'undan tazeler. Liste okunamazsa
-    /// elle yazma kutusuna düşülür — launcher içinde ikinci bir mekan kataloğu tutulmaz.
+    /// Refreshes the venue list from the server's own <c>config\maps.json</c>. Falls back to a
+    /// manual text box when unreadable — no second venue catalog is kept in the launcher.
     /// </summary>
     private void RefreshVenues()
     {
@@ -115,7 +115,7 @@ public partial class MainWindow : Window
             var match = _catalog.Venues.FirstOrDefault(
                 v => string.Equals(v.Name, current, StringComparison.OrdinalIgnoreCase));
 
-            // Tek mekan varsa seçim zaten belirlidir — operatörü tıklatmaya zorlamayız.
+            // With a single venue the choice is already determined — don't force a click.
             if (match == null && current.Length == 0 && _catalog.Venues.Count == 1)
             {
                 match = _catalog.Venues[0];
@@ -164,7 +164,7 @@ public partial class MainWindow : Window
         _config.Venue = VenueManualBox.Text;
     }
 
-    // ───────────────────────────────────────────────────────────── bağlantı
+    // ──────────────────────────────────────────────────────────── connection
 
     private void IpBox_TextChanged(object sender, TextChangedEventArgs e)
     {
@@ -185,7 +185,7 @@ public partial class MainWindow : Window
         e.Handled = !DigitsOnly.IsMatch(e.Text);
     }
 
-    // ─────────────────────────────────────────────────────────── dosya seçme
+    // ────────────────────────────────────────────────────────── file picking
 
     private void BrowseServerButton_Click(object sender, RoutedEventArgs e)
     {
@@ -229,7 +229,7 @@ public partial class MainWindow : Window
         }
         catch (Exception)
         {
-            // Bozuk yol: varsayılan klasörle açılsın, seçim engellenmesin.
+            // Broken path: open at the default folder rather than blocking the pick.
         }
 
         return dialog.ShowDialog() == true ? dialog.FileName : null;
@@ -257,7 +257,7 @@ public partial class MainWindow : Window
         }
     }
 
-    // ────────────────────────────────────────────────────── sunucuyu başlat
+    // ─────────────────────────────────────────────────────────── start server
 
     private void StartServerButton_Click(object sender, RoutedEventArgs e)
     {
@@ -287,9 +287,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Sunucu bir konsol uygulamasıdır ve KENDİ penceresinde açılmalıdır: operatör durum
-        // satırlarını görsün, Ctrl+C ile temiz kapatabilsin. Bu yüzden çıktı YÖNLENDİRİLMEZ —
-        // okunmayan bir boru çocuk süreci kilitler.
+        // The server is a console app and must open in its OWN window so the operator can read
+        // status lines and close it cleanly with Ctrl+C. Output is therefore NOT redirected — an
+        // unread pipe deadlocks the child process.
         var info = new ProcessStartInfo
         {
             FileName = _config.ServerExePath,
@@ -330,7 +330,7 @@ public partial class MainWindow : Window
         _serverProcess = null;
         ServerRunState.Text = "";
 
-        // 2 = §11 fail-fast: açık sahne çözülemedi (lobi haritası yok / maps.json eksik).
+        // 2 = §11 fail-fast: open scene unresolved (no lobby map / missing maps.json).
         SetStatus(code switch
         {
             0 => "Sunucu kapandı.",
@@ -340,7 +340,7 @@ public partial class MainWindow : Window
         }, isError: code != 0);
     }
 
-    // ─────────────────────────────────────────────────────── oyunu başlat
+    // ───────────────────────────────────────────────────────────── start game
 
     private void StartGameButton_Click(object sender, RoutedEventArgs e)
     {
@@ -359,8 +359,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Unity GUI uygulamasıdır ve kendi log dosyasına yazar: çıktı yönlendirilmez
-        // (okunmayan boru çocuk süreci kilitler).
+        // Unity is a GUI app writing its own log file: output is not redirected (an unread pipe
+        // deadlocks the child process).
         var info = new ProcessStartInfo
         {
             FileName = _config.AdminExePath,
@@ -428,14 +428,14 @@ public partial class MainWindow : Window
         StartGameLabel.Text = running ? $"Çalışıyor (PID {pid})" : "Yönetimi Başlat";
     }
 
-    // ────────────────────────────────────────────────────────────── durum
+    // ────────────────────────────────────────────────────────────────── status
 
     private void SetStatus(string message, bool isError = false)
     {
         StatusBanner.Visibility = Visibility.Visible;
         StatusBanner.Background = (System.Windows.Media.Brush)FindResource(
             isError ? "ErrorContainerBrush" : "SurfaceHighBrush");
-        StatusIcon.Text = isError ? "\uE7BA" : "\uE946"; // Segoe: uyari / bilgi
+        StatusIcon.Text = isError ? "\uE7BA" : "\uE946"; // Segoe: warning / info
         StatusIcon.Foreground = (System.Windows.Media.Brush)FindResource(
             isError ? "ErrorBrush" : "OnSurfaceVariantBrush");
         StatusText.Foreground = (System.Windows.Media.Brush)FindResource(

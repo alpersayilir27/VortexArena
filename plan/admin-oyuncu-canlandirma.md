@@ -8,8 +8,8 @@ geçildiği, hangisinin uygulandığı — `Docs/ArenaNet-Protokol.md` §5.2 ve 
 - [ ] **Toplu canlandırma düğmesi** admin HUD'ında (`AdminCommands.RevivePlayer(0)` — "tüm ölüleri
       canlandır"). Komut ve sunucu tarafı hazır, eksik olan yalnız düğme: `AdminHud.prefab` +
       `AdminHud.cs`. Satır düğmesiyle aynı komutu kullanır, ek protokol yüzeyi yoktur.
-- [ ] Satır düğmesinin dar kartta okunabilirliği: eylem şeridi yedi sütuna bölündüğü için slot
-      ~54 px. `KİMLİK` etiketi sığmazsa kısaltılır (prefabta tek alan).
+- [ ] Satır düğmesinin dar kartta okunabilirliği: eylem şeridi altı sütuna bölündüğü için slot
+      dar kalıyor; sığmayan etiket kısaltılır (prefabta tek alan).
 
 ## Doğrulama listesi
 

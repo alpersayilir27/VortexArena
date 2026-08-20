@@ -10,51 +10,40 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Server &gt; Export Server Config</c> — projedeki
-    /// <see cref="MapDefinition"/> ScriptableObject'lerinden sunucunun okuduğu
-    /// <c>Server/config/maps.json</c> dosyasını üretir.
-    /// <para>
-    /// <b>SİLAH EXPORT'U YOKTUR</b> (Docs/ArenaNet-Protokol.md §10.3): sunucu silah tablosu
-    /// tutmaz, hasarı istemci hesaplayıp <c>hit_report.damage</c> ile bildirir ve sunucu aynen
-    /// uygular. <see cref="WeaponDefinition"/> SO'ları yalnız istemcide yaşar; silah ekleyip
-    /// değiştirdikten sonra export çalıştırmak GEREKMEZ. Bu araç yalnız harita kataloğu içindir
-    /// (sunucu <c>start_match</c>'te <c>sceneName</c>'in var olduğunu ve modu desteklediğini
-    /// buradan doğrular — başka bir şey okumaz).
-    /// </para>
-    /// <para>
-    /// <b>Determinizm (git diff'i temiz kalsın):</b> haritalar <c>sceneName</c> ve mod listeleri
-    /// Ordinal alfabetik sıralanır; satır sonu LF, kodlama UTF-8 BOM'suz, dosya sonunda tek
-    /// <c>\n</c>. Aynı içerik → aynı bayt.
-    /// </para>
-    /// <para>
-    /// <b>Güvenlik freni:</b> hiç SO bulunamazsa dosya YAZILMAZ (mevcut sunucu yapılandırması
-    /// boş bir tabloyla ezilmesin) — bunun yerine uyarı döner.
-    /// </para>
-    /// </summary>
+    /// <summary>Generates <c>Server/config/maps.json</c> from the project's
+    /// <see cref="MapDefinition"/> ScriptableObjects.</summary>
+    /// <remarks>
+    /// <b>There is NO weapon export</b> (Docs/ArenaNet-Protokol.md §10.3): the server keeps no
+    /// weapon table, the client computes damage and reports it via <c>hit_report.damage</c>.
+    /// <see cref="WeaponDefinition"/> assets live on the client only, so adding or tuning a weapon
+    /// needs no export. This tool is the map catalog alone — the server reads nothing else, it only
+    /// validates in <c>start_match</c> that <c>sceneName</c> exists and supports the mode.
+    /// <para><b>Determinism (keep the git diff clean):</b> maps and mode lists are sorted Ordinal,
+    /// line ending LF, UTF-8 without BOM, single trailing <c>\n</c>. Same content → same
+    /// bytes.</para>
+    /// <para><b>Safety brake:</b> when no asset is found the file is NOT written (so an existing
+    /// server config is not overwritten with an empty table); a warning is returned instead.</para>
+    /// </remarks>
     public static class ServerConfigExporter
     {
         private const string MapsFileName = "maps.json";
 
-        /// <summary>Sunucunun okuduğu config klasörü (repo kökü altında <c>Server/config</c>).</summary>
+        /// <summary>Config folder the server reads (<c>Server/config</c> under the repo root).</summary>
         private static string ConfigDirectory =>
             Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Server", "config"));
 
-        /// <summary>Menü girişi — dialoglu (elle) export.</summary>
+        /// <summary>Menu entry: manual export with a dialog.</summary>
         [MenuItem("Tools/VortexArena/Server/Export Server Config", false, 60)]
         private static void ExportMenu()
         {
             Export(true);
         }
 
-        /// <summary>
-        /// maps.json üretir ve sonucu döner.
-        /// <paramref name="showDialog"/> <c>false</c> iken HİÇBİR dialog açılmaz
-        /// (MCP / batch otomasyonundan başlıksız çağrılabilir); özet her hâlükârda
-        /// <see cref="Debug.Log"/> ile konsola yazılır.
-        /// </summary>
-        /// <param name="showDialog">Bitişte özet dialogu gösterilsin mi.</param>
-        /// <returns>Yazılan yol, satır sayısı ve doğrulama uyarıları.</returns>
+        /// <summary>Writes maps.json and returns the result.</summary>
+        /// <remarks>With <paramref name="showDialog"/> <c>false</c> no dialog is opened at all, so
+        /// MCP / batch automation can call it headless; the summary always goes to the console.</remarks>
+        /// <param name="showDialog">Show the summary dialog when done.</param>
+        /// <returns>Written path, row count and validation warnings.</returns>
         public static ServerConfigExportResult Export(bool showDialog)
         {
             var result = new ServerConfigExportResult();
@@ -95,22 +84,16 @@ namespace VortexArena.Core.Editor
             return result;
         }
 
-        // -------------------------------------------------------------- denetim
+        // -------------------------------------------------------------- check
 
-        /// <summary>
-        /// Diskteki <c>maps.json</c> projedeki haritalarla aynı mı — <b>HİÇBİR ŞEY YAZMAZ</b>
-        /// (build hazırlık panelinin okuduğu denetim).
-        /// <para>
-        /// ⚠️ Karşılaştırma <b>ayrıştırma değil, üretilecek içeriğin kendisidir</b>: export zaten
-        /// deterministik (sıralı, LF, BOM'suz) yazıyor, yani "aynı bayt mı" sorusu tam olarak
-        /// "export bu dosyayı değiştirir mi" sorusudur. Elle yazılmış bir JSON okuyucu ikinci
-        /// (ve sapabilen) bir biçim yorumu olurdu.
-        /// </para>
-        /// <para>
-        /// Uyarılar da hazırlık sorunudur (ör. Build Settings'te olmayan sahne): dosya güncel olsa
-        /// bile uyarı varsa satır TEMİZ sayılmaz.
-        /// </para>
-        /// </summary>
+        /// <summary>Whether the <c>maps.json</c> on disk matches the project — <b>WRITES
+        /// NOTHING</b> (read by the build readiness panel).</summary>
+        /// <remarks>⚠️ The comparison is against the content that would be generated, not a parse:
+        /// the export is deterministic (sorted, LF, no BOM), so "same bytes?" is exactly "would the
+        /// export change this file?". A hand written JSON reader would be a second, driftable
+        /// interpretation of the format.
+        /// <para>Warnings are readiness problems too (e.g. a scene missing from Build Settings): a
+        /// file that is up to date but has warnings does not count as clean.</para></remarks>
         internal static bool IsMapsJsonUpToDate(out string detail)
         {
             string path = Path.Combine(ConfigDirectory, MapsFileName);
@@ -146,9 +129,10 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        // -------------------------------------------------------------- toplama
+        // -------------------------------------------------------------- collect
 
-        /// <summary>Tüm projedeki harita tanımlarını toplar, doğrular ve sceneName'e göre sıralar.</summary>
+        /// <summary>Collects, validates and sorts (by sceneName) every map definition in the
+        /// project.</summary>
         private static List<MapDefinition> CollectMaps(ServerConfigExportResult result)
         {
             var loaded = new List<MapDefinition>();
@@ -191,19 +175,19 @@ namespace VortexArena.Core.Editor
                     continue;
                 }
 
-                // ⚠️ Eleme, YİNELEME kontrolünden ÖNCE gelir: elenen harita `seen`'e adını
-                // yazmamalı. Yazsaydı, şablonla aynı sahne adını taşıyan GERÇEK bir harita
-                // "yinelenen" diye sessizce düşerdi (sıralama şablonu öne alıyor).
+                // ⚠️ Filtering comes BEFORE the duplicate check: a filtered map must not claim its
+                // name in `seen`, otherwise a REAL map sharing a template's scene name would be
+                // dropped as "duplicate" (sorting puts the template first).
 
-                // Şablon = oynanmaz içerik: sessizce atlanır (uyarı gürültü olurdu, orada olması normal).
+                // Template = unplayable content: skipped silently (a warning would be noise).
                 if (path.StartsWith(TemplateRoot, StringComparison.Ordinal))
                 {
                     continue;
                 }
 
-                // Mekan dışında kalan harita EXPORT EDİLMEZ. Sebep: sunucu açılışta operatöre
-                // mekan listesi sorar ve o liste bu dosyadan gelir — mekansız bir harita orada
-                // gerçekte var olmayan bir işletme satırı açardı. Yeri klasördür, alan değil.
+                // A map outside a venue is NOT exported: the server asks the operator for a venue at
+                // startup and that list comes from this file, so a venueless map would create a row
+                // for a business that does not exist. The venue is the folder, not a field.
                 if (!path.StartsWith(VenuesRoot, StringComparison.Ordinal))
                 {
                     result.Warnings.Add(
@@ -234,30 +218,20 @@ namespace VortexArena.Core.Editor
             return accepted;
         }
 
-        /// <summary>
-        /// Oynanacak arenaların kökü — mekan adı bu yolun bir alt seviyesinden okunur:
-        /// <c>Assets/Arenas/Venues/&lt;İşletme&gt;/Scenes/&lt;Sahne&gt;/Data/&lt;Sahne&gt;.asset</c>.
-        /// </summary>
+        /// <summary>Root of playable arenas; the venue name is the next path segment:
+        /// <c>Assets/Arenas/Venues/&lt;Venue&gt;/Scenes/&lt;Scene&gt;/Data/&lt;Scene&gt;.asset</c>.</summary>
         public const string VenuesRoot = "Assets/Arenas/Venues/";
 
-        /// <summary>
-        /// Referans şablonların kökü (<c>Assets/Arenas/Template/Scenes/&lt;Sahne&gt;/…</c>) —
-        /// buradaki haritalar export EDİLMEZ.
-        /// </summary>
+        /// <summary>Root of reference templates
+        /// (<c>Assets/Arenas/Template/Scenes/&lt;Scene&gt;/…</c>) — never exported.</summary>
         public const string TemplateRoot = "Assets/Arenas/Template/";
 
-        /// <summary>
-        /// Haritanın MEKANI — asset yolundan türetilir, ayrı bir alan yoktur.
-        /// <para>
-        /// <c>Assets/Arenas/Venues/&lt;İşletme&gt;/…</c> → <c>&lt;İşletme&gt;</c>. Klasör yerleşimi
-        /// zaten mekanı anlatıyor (CLAUDE.md: "işletme klasörü kutuların kabıdır"); ikinci bir alan
-        /// eklemek onu unutulabilir hâle getirirdi — bir haritayı yanlış mekana yazmanın tek yolu
-        /// onu yanlış klasöre koymaktır, o da gözle görülür.
-        /// </para>
-        /// <para>
-        /// Mekan dışındaki haritalar buraya HİÇ GELMEZ: <see cref="CollectMaps"/> onları eler.
-        /// </para>
-        /// </summary>
+        /// <summary>The map's VENUE, derived from the asset path; there is no separate field.</summary>
+        /// <remarks><c>Assets/Arenas/Venues/&lt;Venue&gt;/…</c> → <c>&lt;Venue&gt;</c>. The folder
+        /// layout already states the venue; a second field could be forgotten, whereas the only way
+        /// to file a map under the wrong venue is to put it in the wrong folder, which is visible.
+        /// <para>Maps outside a venue never reach here — <see cref="CollectMaps"/> filters
+        /// them.</para></remarks>
         private static string VenueOf(MapDefinition map)
         {
             string path = AssetDatabase.GetAssetPath(map);
@@ -266,7 +240,7 @@ namespace VortexArena.Core.Editor
             return slash > 0 ? rest.Substring(0, slash) : rest;
         }
 
-        /// <summary>Build Settings'teki sahne adları → enabled bayrağı (ad çakışırsa açık olan kazanır).</summary>
+        /// <summary>Build Settings scene names → enabled flag (on a name clash, enabled wins).</summary>
         private static Dictionary<string, bool> CollectBuildSettingsScenes()
         {
             var scenes = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
@@ -295,15 +269,12 @@ namespace VortexArena.Core.Editor
 
         // ----------------------------------------------------------------- json
 
-        /// <summary>
-        /// <c>{ "maps": [ { "sceneName": "Arena12x12", "venue": "Outdoor12x12", "modes": ["tdm"] } ] }</c>
-        /// — sunucunun <c>start_match</c> doğrulaması ve <b>mekan seçimi</b> için.
-        /// <para>
-        /// <b>Arena ÖLÇÜSÜ yazılmaz.</b> Sunucu metre bilmez (pozlar istemci-otoriter, arena
-        /// uzayında gelir); ayrıca her işletmenin alanı farklı ve çoğu kare/dikdörtgen bile
-        /// değil, yani tek bir ölçü çifti o arenayı tarif etmez.
-        /// </para>
-        /// </summary>
+        /// <summary><c>{ "maps": [ { "sceneName": "&lt;Scene&gt;", "venue": "&lt;Venue&gt;",
+        /// "modes": ["&lt;modId&gt;"] } ] }</c> — for the server's <c>start_match</c> validation and
+        /// venue selection.</summary>
+        /// <remarks>Arena DIMENSIONS are not written: the server knows no metres (poses are
+        /// client authoritative and arrive in arena space), and every venue's floor differs and is
+        /// rarely even rectangular, so one pair of numbers would not describe it.</remarks>
         private static string BuildMapsJson(List<MapDefinition> maps)
         {
             var sb = new StringBuilder();
@@ -333,7 +304,7 @@ namespace VortexArena.Core.Editor
             return sb.ToString();
         }
 
-        /// <summary>modId dizisini Ordinal sıralı JSON dizisine çevirir (boş = <c>[]</c>).</summary>
+        /// <summary>modId array → Ordinal sorted JSON array (empty = <c>[]</c>).</summary>
         private static string BuildModesArray(string[] modeIds)
         {
             if (modeIds == null || modeIds.Length == 0)
@@ -371,7 +342,7 @@ namespace VortexArena.Core.Editor
             return sb.Append(']').ToString();
         }
 
-        /// <summary>Minimal JSON string kaçışı (protokol anahtarları ASCII olsa da güvenli taraf).</summary>
+        /// <summary>Minimal JSON string escaping (protocol keys are ASCII, but stay safe).</summary>
         private static string EscapeJson(string value)
         {
             if (string.IsNullOrEmpty(value))
@@ -419,7 +390,8 @@ namespace VortexArena.Core.Editor
 
         // ----------------------------------------------------------------- I/O
 
-        /// <summary>UTF-8 (BOM'suz), LF satır sonlu yazım — içerik zaten <c>\n</c> ile kurulur.</summary>
+        /// <summary>UTF-8 without BOM, LF line endings — the content is already built with
+        /// <c>\n</c>.</summary>
         private static void WriteFile(string path, string content)
         {
             string directory = Path.GetDirectoryName(path);
@@ -431,7 +403,7 @@ namespace VortexArena.Core.Editor
             File.WriteAllText(path, content, new UTF8Encoding(false));
         }
 
-        /// <summary>Dialog metni: özet + (varsa) uyarı listesi.</summary>
+        /// <summary>Dialog text: summary + warning list when present.</summary>
         private static string BuildDialogText(ServerConfigExportResult result)
         {
             var sb = new StringBuilder();

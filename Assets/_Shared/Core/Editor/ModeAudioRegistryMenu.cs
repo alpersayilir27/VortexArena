@@ -4,16 +4,11 @@ using VortexArena.Core.Audio;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// Menü kısayolu: <c>Tools &gt; VortexArena &gt; Audio &gt; Mod Sesleri</c>. Kaydın hiçbir
-    /// sahneden referansı olmadığı için Project penceresinde aranması gerekirdi; bu menü onu bulur,
-    /// seçer ve işaretler — <b>düzenleme yeri Inspector'dır</b> (ikinci bir düzenleme yüzeyi
-    /// açılmaması bilinçli: aynı kuralı iki yerde tarif etmek ikisinin sessizce sapması demektir).
-    /// <para>
-    /// Asset yoksa aynı yolda oluşturulur. Klasör üretilmez: <c>Resources</c> klasörü repoda
-    /// duruyor, yoksa asıl sorun kaybolmuş bir klasördür ve sessizce yenisini açmak onu gizler.
-    /// </para>
-    /// </summary>
+    /// <summary>Selects and pings <c>ModeAudioRegistry</c>, which no scene references.</summary>
+    /// <remarks>Editing happens in the Inspector; a second editing surface is deliberately not
+    /// opened (describing one rule in two places lets them drift apart silently).
+    /// Creates the asset if missing but never the folder: a missing <c>Resources</c> folder is the
+    /// real problem and silently recreating it would hide that.</remarks>
     internal static class ModeAudioRegistryMenu
     {
         private const string MENU_PATH = "Tools/VortexArena/Audio/Mod Sesleri";

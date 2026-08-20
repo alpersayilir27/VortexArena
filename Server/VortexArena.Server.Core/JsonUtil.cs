@@ -5,20 +5,21 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>System.Text.Json yardımcıları. DTO'lar public ALAN kullandığı için IncludeFields ŞART
-/// (Docs/ArenaNet-Protokol.md §7); alan adları wire formatındaki camelCase ile birebir aynıdır.</summary>
+/// <summary>System.Text.Json helpers. Since the DTOs use public FIELDS, IncludeFields is MANDATORY
+/// (Docs/ArenaNet-Protokol.md §7); field names match the camelCase of the wire format exactly.</summary>
 public static class JsonUtil
 {
     public static readonly JsonSerializerOptions Options = new()
     {
         IncludeFields = true,
         PropertyNameCaseInsensitive = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping // "tuğba" telde/dosyada okunur kalsın
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping // so "tuğba" stays readable on the wire/in the file
     };
 
     public static string Serialize<T>(T message) => JsonSerializer.Serialize(message, Options);
 
-    /// <summary>Bozuk JSON'da null döner; bilinmeyen tipleri loglayıp yok saymak çağıranın işidir.</summary>
+    /// <summary>Returns null on malformed JSON; logging and ignoring unknown types is the caller's
+    /// job.</summary>
     public static T? Deserialize<T>(string json) where T : class
     {
         try
@@ -31,6 +32,6 @@ public static class JsonUtil
         }
     }
 
-    /// <summary>Zarf kuralı (§5): alıcı önce yalnız type alanını parse eder.</summary>
+    /// <summary>Envelope rule (§5): the receiver first parses only the type field.</summary>
     public static string? GetMessageType(string json) => Deserialize<MsgEnvelope>(json)?.type;
 }

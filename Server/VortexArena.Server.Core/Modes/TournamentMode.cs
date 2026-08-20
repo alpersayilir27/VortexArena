@@ -1,45 +1,36 @@
 #nullable enable
 namespace VortexArena.Server.Core.Modes;
 
-/// <summary>
-/// Turnuva: <b>tur tabanlı takım elemesi</b> ("Search &amp; Destroy"ın bombasız hâli). Tur içinde
-/// canlanma YOKTUR; bir takımın tüm bağlı oyuncuları ölünce tur biter ve kazanan takıma
-/// <b>+1 tur</b> yazılır. Maç, bir takım <see cref="MatchDirector.ScoreLimit"/> tura ulaşınca biter.
-///
-/// <para><b>Kurallar TDM varsayılanından TEK noktada ayrılır</b> (§10.5):
-/// <see cref="ReviveAnchor.None"/>. Tur kavramı bir kural alanı DEĞİLDİR ve
-/// <see cref="ModeRules"/>'a girmez — turlar bu sınıfın iç durumudur, çekirdek onları bilmez
-/// (§10.1 "tur tabanlı modlar"). Telde görünen tek izleri <c>modeState</c> ve tur başındaki
-/// <c>health_update</c>'lerdir.</para>
-///
-/// <para><b>Skorun anlamı bu modda değişir:</b> <c>scoreRed</c>/<c>scoreBlue</c> öldürme değil
-/// <b>kazanılan tur</b> sayar; <c>roundSeconds</c> ise <b>turun</b> süresidir, maçın değil.</para>
-/// </summary>
+/// <summary>Round based team elimination (a bombless "Search &amp; Destroy"): no revive within a
+/// round, a team wiped out ends the round and gives the winner +1 round; the match ends at
+/// <see cref="MatchDirector.ScoreLimit"/> rounds.</summary>
+/// <remarks>Differs from the TDM default at a SINGLE point (§10.5): <see cref="ReviveAnchor.None"/>.
+/// <para>⚠️ The round concept is not a rule field and never enters <see cref="ModeRules"/> — rounds are
+/// this class's internal state, unknown to the core (§10.1). Their only wire traces are
+/// <c>modeState</c> and the <c>health_update</c>s at round start.</para>
+/// <para>Score means something else here: <c>scoreRed</c>/<c>scoreBlue</c> count rounds won, and
+/// <c>roundSeconds</c> is the ROUND's length, not the match's.</para></remarks>
 public sealed class TournamentMode : IGameMode
 {
-    /// <summary>
-    /// Toplanma uzarsa konsola bu aralıkla "kim eksik" satırı düşer.
-    /// <para>⚠️ <b>Bir zaman aşımı DEĞİLDİR</b> — turu başlatmaz, yalnız teşhis basar: toplanmanın
-    /// tek çıkışı herkesin tabanına girmesi ya da operatörün oyuncuyu atması/maçı iptal etmesidir
-    /// (§10.1). Sunucu penceresi operatörün kimin takıldığını görebildiği tek yer.</para>
-    /// </summary>
+    /// <summary>Interval of the "who is missing" console line while the regroup drags on.</summary>
+    /// <remarks>⚠️ NOT a timeout — it never starts the round, only prints diagnostics. The regroup ends
+    /// only when everyone is in their base, or the operator kicks / aborts (§10.1); the server window
+    /// is the operator's only view of who is stuck.</remarks>
     private const double RegroupReportIntervalSeconds = 30.0;
 
-    /// <summary>
-    /// Turlar arası akışın nerede olduğu. ⚠️ Çekirdeğin duraklama gerekçesinin KOPYASI değildir:
-    /// mod, faz <c>Playing</c> değilken üç ayrı durumda tik alabiliyor (maçın ilk geri sayımı,
-    /// kendi toplanmamız, kendi geri sayımımız) ve üçünde yapılacak iş farklı. Çekirdekten
-    /// <c>PauseReason</c> okumak yerine kendi kararımızı hatırlıyoruz — duraklamayı koyan biziz.
-    /// </summary>
+    /// <summary>Where the between-rounds flow currently is.</summary>
+    /// <remarks>⚠️ Not a copy of the core's pause reason: while the phase is not <c>Playing</c> the mode
+    /// can be ticked in three situations (the match's first countdown, our regroup, our countdown) with
+    /// different work in each. We set the pause, so we remember our own decision.</remarks>
     private enum RoundStage
     {
-        /// <summary>Turlar arası akış çalışmıyor: maçın ilk geri sayımı ya da tur içi.</summary>
+        /// <summary>Flow not running: the match's first countdown, or mid-round.</summary>
         None,
 
-        /// <summary>Kendi koyduğumuz duraklama — herkesin tabanına dönmesi bekleniyor.</summary>
+        /// <summary>Our own pause — waiting for everyone to return to their base.</summary>
         Regroup,
 
-        /// <summary>Toplanma bitti, tur geri sayımı işliyor (henüz geri alınabilir).</summary>
+        /// <summary>Regroup over, round countdown running (still cancellable).</summary>
         Countdown
     }
 
@@ -47,46 +38,44 @@ public sealed class TournamentMode : IGameMode
 
     private int _round;
 
-    /// <summary>Tur şu an savaşta mı — eleme taraması yalnız o zaman koşar. Geri sayım sırasında
-    /// <c>false</c>'tur ki henüz başlamamış bir tur "herkes ölü" diye bitmesin.</summary>
+    /// <summary>Is the round in combat — the elimination scan runs only then; <c>false</c> during the
+    /// countdown so an unstarted round cannot end on "everyone is dead".</summary>
     private bool _roundLive;
 
     private bool _matchOver;
     private MatchOutcome _outcome = MatchOutcome.Draw;
 
-    /// <summary>Bir sonraki "toplanma bekleniyor" konsol satırının zamanı (teşhis, bkz.
+    /// <summary>Time of the next "waiting for regroup" console line (see
     /// <see cref="RegroupReportIntervalSeconds"/>).</summary>
     private DateTime _nextRegroupReportAt;
 
     public string ModeId => "tournament";
 
-    /// <summary>
-    /// <c>Revive = None</c>: tur içinde canlanma yoktur (§10.4). <c>RespawnDelay = 0</c> bunun
-    /// tamamlayıcısıdır — canlanma hiç olmayacağına göre istemciye "canlanmaya 5 sn" diye
-    /// gerçekleşmeyecek bir geri sayım göstertmenin anlamı yok.
-    /// <para>Geri kalan her alan bilinçli olarak varsayılandır: iki takım, takım skoru, dost ateşi
-    /// kapalı, sahnede duran silah (turnuvada şarjör/yedek şarjör muhasebesi işlesin diye —
-    /// <c>RandomGrant</c>'te reload kapalıdır).</para>
-    /// </summary>
+    /// <summary>The tournament rule shape.</summary>
+    /// <remarks><c>Revive = None</c>: no revive within a round (§10.4). <c>RespawnDelay = 0</c> is its
+    /// complement — a client countdown to a revive that never happens would be a lie.
+    /// <para>Everything else is deliberately the default: two teams, team score, friendly fire off,
+    /// weapon standing in the scene (so magazine/reserve accounting works — reload is disabled under
+    /// <c>RandomGrant</c>).</para></remarks>
     public ModeRules Rules => new()
     {
         Revive = ReviveAnchor.None,
         RespawnDelay = 0f
     };
 
-    /// <summary>⚠️ <b>TURUN</b> süresi (saniye), maçın değil.</summary>
+    /// <summary>⚠️ The length (seconds) of the <b>ROUND</b>, not of the match.</summary>
     public int DefaultRoundSeconds => 120;
 
-    /// <summary>Maçı kazanmak için gereken TUR sayısı → best-of-7.
-    /// <para>Operatör bunu ezebilir (§5.2) ve <b>sınırsız</b> da seçebilir
-    /// (<c>ArenaProtocol.SCORE_LIMIT_UNLIMITED</c>): o maçta galibiyet limiti de tur tavanı da
-    /// işlemez, turlar <c>abort_match</c>'e kadar sürer.</para></summary>
+    /// <summary>ROUNDS needed to win the match → best-of-7.</summary>
+    /// <remarks>The operator can override it (§5.2) or choose unlimited
+    /// (<c>ArenaProtocol.SCORE_LIMIT_UNLIMITED</c>): then neither win limit nor round cap applies and
+    /// rounds continue until <c>abort_match</c>.</remarks>
     public int DefaultScoreLimit => 4;
 
     public void OnMatchStart(MatchDirector director)
     {
-        // Mod örneği sunucu ömrü boyunca tektir ve maçlar arasında yeniden kullanılır → durum
-        // BURADA sıfırlanır. (OnMatchStart maç başına bir kez çağrılır; turlar onu tetiklemez.)
+        // The mode instance is reused across matches for the server's lifetime → reset state HERE.
+        // (OnMatchStart runs once per match; rounds do not trigger it.)
         _round = 1;
         _roundLive = false;
         _matchOver = false;
@@ -109,9 +98,8 @@ public sealed class TournamentMode : IGameMode
                           $"(kırmızı {director.ScoreRed} : mavi {director.ScoreBlue}).");
     }
 
-    // ⚠️ OnKill YAZILMAZ ve gerekmez: turnuvada puanı öldürme değil TUR kazandırır, bireysel
-    // K/D'yi ise sunucu zaten sayıyor (§10.2). Eleme kontrolü de burada değil OnTick'tedir —
-    // gerekçesi EvaluateRound'da.
+    // ⚠️ OnKill is deliberately unimplemented: points come from ROUNDS, not kills, and the server
+    // already counts individual K/D (§10.2). Elimination is checked in OnTick — see EvaluateRound.
 
     public void OnTick(MatchDirector director, float deltaSeconds)
     {
@@ -123,8 +111,8 @@ public sealed class TournamentMode : IGameMode
             return;
         }
 
-        // Faz Playing değil. Çekirdek moda burada üç ayrı durumda tik verebiliyor ve üçünde
-        // yapılacak iş farklı — ayrımı kendi aşamamızdan yapıyoruz (bkz. RoundStage).
+        // Not Playing: three situations reach here with different work — told apart by our own stage
+        // (see RoundStage).
         switch (_stage)
         {
             case RoundStage.Regroup:
@@ -133,45 +121,39 @@ public sealed class TournamentMode : IGameMode
             case RoundStage.Countdown:
                 TickCountdownWatch(director);
                 break;
-            // RoundStage.None: buraya düşen tek durum maçın İLK geri sayımıdır (yükleme kapısından
-            // geliyor, toplanmadan değil). Turlar arası akış henüz başlamadı; burada toplanma
-            // yoklamak ilk tur başlamadan HUD'a "TOPLANMA" yazdırırdı.
+            // RoundStage.None: only the match's FIRST countdown (from the loading gate, not a
+            // regroup). Polling the regroup here would print "TOPLANMA" on the HUD before round one.
         }
     }
 
-    /// <summary>⚠️ <b><c>TimeRemaining &lt;= 0</c> burada maçı BİTİRMEZ</b> (TDM/FFA'dan ayrıldığı
-    /// yer): bu modda <c>timeRemaining</c> <b>turun</b> sayacıdır. Süre dolunca tur biter, maç
-    /// değil. Maç kararı yalnız <see cref="EndRound"/>'da verilir ve bu metod onu taşır.</summary>
+    /// <summary>⚠️ <c>TimeRemaining &lt;= 0</c> does NOT end the match here (unlike TDM/FFA):
+    /// <c>timeRemaining</c> is the ROUND's clock, so it ends the round. The match decision is made only
+    /// in <see cref="EndRound"/>; this method just carries it.</summary>
     public bool IsMatchOver(MatchDirector director, out MatchOutcome outcome)
     {
         outcome = _outcome;
         return _matchOver;
     }
 
-    // ---------------------------------------------------------------- tur akışı
+    // ---------------------------------------------------------------- round flow
 
-    /// <summary>
-    /// Turun bitip bitmediğini ölçer (10 Hz).
-    /// <para>
-    /// ⚠️ <b>Neden <see cref="OnKill"/> değil de tik:</b> bir takım yalnız öldürmeyle boşalmaz,
-    /// <b>bağlantı kopmasıyla</b> da boşalır — ve o yolda <c>OnKill</c> hiç çağrılmaz. İki ayrı
-    /// tetikleyici iki ayrı kod yolu (ve kaçınılmaz olarak biri unutulmuş bir kural) demekti;
-    /// tek tarama tek doğruluk kaynağıdır. Maliyeti ihmal edilebilir (≤ birkaç düzine oyuncu).
-    /// </para>
-    /// </summary>
+    /// <summary>Measures whether the round is over (10 Hz).</summary>
+    /// <remarks>⚠️ Tick and not <see cref="OnKill"/>, because a team is also emptied by disconnects,
+    /// where <c>OnKill</c> never fires. Two triggers would mean two code paths and a rule forgotten in
+    /// one; a single scan is one source of truth, and its cost is negligible.</remarks>
     private void EvaluateRound(MatchDirector director)
     {
         int redOnline = 0, blueOnline = 0;
         int redAlive = 0, blueAlive = 0;
-        // "Savaşabilir" = canlı VE kalibreli. Kalibresiz oyuncu ne ateş eder ne hasar yer (§10.6),
-        // yani sahada yok sayılır.
+        // "Fit to fight" = alive AND calibrated: an uncalibrated player neither fires nor takes damage
+        // (§10.6), so they do not count as being on the field.
         int redFit = 0, blueFit = 0;
 
         foreach (var player in director.ConnectedPlayers())
         {
             var isRed = player.Team == "red";
             var isBlue = player.Team == "blue";
-            if (!isRed && !isBlue) continue; // takımı atanmamış geç katılan — tura dahil değil
+            if (!isRed && !isBlue) continue; // a late joiner with no team assigned — not part of the round
 
             if (isRed) redOnline++; else blueOnline++;
             if (!player.Alive) continue;
@@ -180,13 +162,13 @@ public sealed class TournamentMode : IGameMode
             if (isRed) redFit++; else blueFit++;
         }
 
-        // Tek taraflı maç (admin harita önizlemesi ya da bir takımın tamamen düşmesi): tur
-        // ilerlemez, yoksa sunucu boş bir arenada saniyede bir tur dağıtırdı. Çıkış operatörün
-        // abort_match'idir — §10.1'deki "oyuncusuz maç" kararının aynısı.
+        // One-sided match (admin map preview or a team fully dropped): do not advance, else the server
+        // would hand out a round per second in an empty arena. Way out is abort_match — same decision
+        // as "a match with no players" (§10.1).
         if (redOnline == 0 || blueOnline == 0) return;
 
-        // ELEME: kalibrasyona BAKILMAZ — kalibresiz oyuncu ölü değildir, takımını ayakta tutar.
-        // Sonucu doğru: o tur süreye gider ve aşağıdaki kıyas onu zaten dışarıda bırakır.
+        // ELIMINATION ignores calibration: an uncalibrated player is not dead and keeps their team
+        // standing. That round simply goes to time, where the comparison below leaves them out.
         if (redAlive == 0 && blueAlive == 0)
         {
             EndRound(director, "", "karşılıklı eleme");
@@ -205,12 +187,13 @@ public sealed class TournamentMode : IGameMode
 
         if (director.TimeRemaining > 0f) return;
 
-        // Süre doldu: çok kişi ayakta kalan kazanır, eşitlikte kimseye puan yok.
+        // Time up: more players standing wins; on a tie nobody scores.
         var winner = redFit > blueFit ? "red" : blueFit > redFit ? "blue" : "";
         EndRound(director, winner, $"süre doldu ({redFit} - {blueFit} savaşabilir ayakta)");
     }
 
-    /// <summary>Turu kapatır: puanı yazar, maç bitti mi diye bakar, bitmediyse toplanmaya geçer.</summary>
+    /// <summary>Closes the round: writes the point, checks for match end, otherwise moves to the
+    /// regroup.</summary>
     private void EndRound(MatchDirector director, string winnerTeam, string reason)
     {
         _roundLive = false;
@@ -220,9 +203,9 @@ public sealed class TournamentMode : IGameMode
                           $"{(winnerTeam.Length > 0 ? winnerTeam + " +1" : "puan yok")} " +
                           $"(kırmızı {director.ScoreRed} : mavi {director.ScoreBlue}).");
 
-        // Sınırsız maç (operatör seçimi, §5.2): ne galibiyet limiti ne tur tavanı işler — turlar
-        // operatör maçı iptal edene kadar birbirini izler. Kapı TEK yerdedir çünkü iki kural da
-        // aynı sayıdan türüyor; birini açık bırakmak "sınırsız" maçı sessizce bitirirdi.
+        // Unlimited match (operator's choice, §5.2): neither win limit nor round cap applies until
+        // abort_match. ⚠️ One gate for both, since both derive from the same number — leaving either
+        // open would silently end an "unlimited" match.
         var limit = director.ScoreLimit;
         if (limit > 0)
         {
@@ -237,8 +220,8 @@ public sealed class TournamentMode : IGameMode
                 return;
             }
 
-            // Tur tavanı: berabere biten turlar yüzünden kimse limite ulaşamayabilir — LİMİTLİ maç
-            // sonsuza kadar sürmesin. Tavanda yüksek skor kazanır, eşitse berabere.
+            // Round cap: drawn rounds can keep anyone from reaching the limit, and a LIMITED match must
+            // not run forever. At the cap the higher score wins, equal is a draw.
             if (_round >= MaxRounds(limit))
             {
                 var red = director.ScoreRed;
@@ -252,12 +235,11 @@ public sealed class TournamentMode : IGameMode
 
         _round++;
 
-        // Toplanma: herkes fiziksel olarak kendi tabanına yürüyecek (free-roam — kimse
-        // ışınlanmaz, §10.4).
+        // Regroup: everyone physically walks to their own base (free-roam — nobody is teleported, §10.4).
         if (!director.TryPauseForMode("regroup:0/0"))
         {
-            // Araya abort_match/operatör duraklatması girmiş olabilir. Faz artık Playing
-            // değilse tur akışı zaten bizim elimizde değildir; sessiz kalmak yerine yazıyoruz.
+            // abort_match / an operator pause may have come in between: the round flow is out of our
+            // hands, so log it rather than fail silently.
             Console.WriteLine("[tournament] toplanmaya geçilemedi (faz değişmiş) — tur akışı durdu.");
             return;
         }
@@ -266,27 +248,23 @@ public sealed class TournamentMode : IGameMode
         ScheduleRegroupReport();
     }
 
-    /// <summary>
-    /// Turlar arası toplanma (faz <c>paused</c>/<c>mode</c>): herkes kendi taban bölgesine girip
-    /// <c>set_ready{true}</c> yollayınca yeni tur geri sayımı başlar.
-    /// <para><b>Kapı yeni bir protokol mesajı kullanmaz</b> — <c>ready</c> bayrağı yükleme
-    /// kapısında zaten "hazırım" demek (§10.1). "Tabanda mıyım" kararı istemcinindir; sunucu
-    /// hakemlik değil defter tutar (§10.3 felsefesi, <c>reviveAnchor</c> ile aynı sözleşme).</para>
-    /// <para>
-    /// ⚠️ <b>Zorunlu başlatma YOKTUR ve eklenmez:</b> eksik oyuncuyla açılan tur, tam kadro
-    /// beklemenin varlık sebebini çiğniyordu (elenmiş sayılan oyuncu sahada, hazır olmayan oyuncu
-    /// tur ortasında). Takılan bir başlık maçı süresiz bekletebilir — çıkışı operatörün
-    /// <c>kick</c>'i ya da <c>abort_match</c>'idir. Atılan oyuncu <see cref="CountInBase"/>'in
-    /// toplamından da düştüğü için tur, kalanlar hazırsa o tik başlar.
-    /// </para>
-    /// </summary>
+    /// <summary>The between-rounds regroup (phase <c>paused</c>/<c>mode</c>): the new round's countdown
+    /// starts once everyone is in their own base zone and has sent <c>set_ready{true}</c>.</summary>
+    /// <remarks>No new protocol message — the <c>ready</c> flag already means "I am ready" at the
+    /// loading gate (§10.1). "Am I in the base" is the client's decision; the server keeps the ledger
+    /// rather than refereeing (§10.3, same contract as <c>reviveAnchor</c>).
+    /// <para>⚠️ There is NO forced start: opening a round with players missing defeats the point of
+    /// waiting for the full roster (someone counted as eliminated is on the field). A stuck headset can
+    /// hold the match indefinitely — the way out is the operator's <c>kick</c> or <c>abort_match</c>; a
+    /// kicked player also leaves <see cref="CountInBase"/>'s total, so the round starts on that
+    /// tick.</para></remarks>
     private void TickRegroup(MatchDirector director)
     {
         var (ready, total) = CountInBase(director);
 
-        director.SetModeState($"regroup:{ready}/{total}"); // yalnız DEĞİŞTİYSE yayınlar
+        director.SetModeState($"regroup:{ready}/{total}"); // broadcasts only if it CHANGED
 
-        if (total == 0) return; // kimse kalmadı — operatörün abort_match'ini bekle
+        if (total == 0) return; // nobody left — wait for the operator's abort_match
 
         if (ready < total)
         {
@@ -300,8 +278,8 @@ public sealed class TournamentMode : IGameMode
         Console.WriteLine($"[tournament] tur {_round} geri sayımı başlıyor (herkes tabanında).");
     }
 
-    /// <summary>Toplanma uzarsa periyodik teşhis satırı: kim eksik. Operatörün sunucu penceresinden
-    /// göreceği tek bilgi budur; roster'daki HAZIR/bekliyor ile aynı kaynaktan gelir.</summary>
+    /// <summary>Periodic diagnostic line naming who is missing — the operator's only view from the
+    /// server window, sourced from the same flag as the roster's ready state.</summary>
     private void ReportRegroupWaiting(MatchDirector director, int ready, int total)
     {
         var now = DateTime.UtcNow;
@@ -316,24 +294,23 @@ public sealed class TournamentMode : IGameMode
                           $"tabanına dönmeyenler: {missing}");
     }
 
-    /// <summary>Teşhis satırının ilk zamanını kurar (toplanmaya her girişte).</summary>
+    /// <summary>Schedules the first diagnostic line (on every entry into the regroup).</summary>
     private void ScheduleRegroupReport() =>
         _nextRegroupReportAt = DateTime.UtcNow.AddSeconds(RegroupReportIntervalSeconds);
 
-    /// <summary>
-    /// Geri sayım gözcüsü: toplanma şartı geri sayım BOYUNCA da geçerlidir. Tabanından çıkan tek
-    /// oyuncu turu erteler — geri sayım iptal edilir ve toplanmaya dönülür (sayaç sıfırdan başlar).
-    /// <para>Şart "girişte bir kez" ölçülseydi oyuncu tabana bir saniye değip çıkabilir, tur onu
-    /// sahanın ortasında yakalardı; kural "tabanda BEKLE"dir, "tabana uğra" değil.</para>
-    /// <para>⚠️ İptalin <b>istisnası yoktur</b>: geri sayım her zaman toplanma şartıyla açıldığı
-    /// için (zorunlu başlatma kaldırıldı) her koşulda geri alınabilir.</para>
-    /// </summary>
+    /// <summary>Countdown watchdog: the regroup condition holds throughout the countdown, so one player
+    /// leaving their base cancels it and returns to the regroup (counter restarts).</summary>
+    /// <remarks>Measured "once on entry", a player could touch the base for a second and leave, and the
+    /// round would catch them mid-field; the rule is "WAIT in the base", not "drop by".
+    /// <para>⚠️ The cancellation has no exception: the countdown is always opened by the regroup
+    /// condition (no forced start), so it is always undoable.</para></remarks>
     private void TickCountdownWatch(MatchDirector director)
     {
         var (ready, total) = CountInBase(director);
         if (total == 0 || ready >= total) return;
 
-        // Sayaç bu tikte dolduysa tur çoktan başlamıştır → false döner ve geri almayız.
+        // Counter ran out on this tick → the round already started, so it returns false and we undo
+        // nothing.
         if (!director.TryCancelCountdownForMode($"regroup:{ready}/{total}")) return;
 
         _stage = RoundStage.Regroup;
@@ -343,9 +320,9 @@ public sealed class TournamentMode : IGameMode
                           "toplanmaya dönüldü.");
     }
 
-    /// <summary>Kaç oyuncu tabanında (<c>ready</c>) ve toplam kaç oyuncu bağlı.
-    /// <para><c>ready</c> bayrağının bu moddaki anlamı "şu anda kendi tabanımdayım"dır ve
-    /// istemci onu <b>her iki yönde</b> günceller (§10.1) — kapı da gözcü de aynı sayacı okur.</para></summary>
+    /// <summary>How many players are in their base (<c>ready</c>) out of the connected total.</summary>
+    /// <remarks>Here <c>ready</c> means "I am in my own base right now" and the client updates it in
+    /// both directions (§10.1) — gate and watchdog read the same counter.</remarks>
     private static (int ready, int total) CountInBase(MatchDirector director)
     {
         var total = 0;
@@ -366,9 +343,10 @@ public sealed class TournamentMode : IGameMode
         Console.WriteLine($"[tournament] maç kararı ({reason}) — {_round}. turda bitti.");
     }
 
-    /// <summary>Best-of tavanı: <c>2 × limit − 1</c> tur. Limit yoksa (sınırsız maç) tavan da
-    /// yoktur — maçı operatör bitirir. ⚠️ Yalnız <b>metin üretmek</b> için limitsiz de çağrılabilir;
-    /// karar kapısı <see cref="EndRound"/>'da <c>limit &gt; 0</c> ile zaten kapalıdır.</summary>
+    /// <summary>Best-of cap: <c>2 × limit − 1</c> rounds; no limit (unlimited match) = no cap, the
+    /// operator ends it.</summary>
+    /// <remarks>⚠️ May also be called limitless just to produce text — the decision gate in
+    /// <see cref="EndRound"/> is already closed by <c>limit &gt; 0</c>.</remarks>
     private static int MaxRounds(int scoreLimit) =>
         scoreLimit > 0 ? 2 * scoreLimit - 1 : int.MaxValue;
 }

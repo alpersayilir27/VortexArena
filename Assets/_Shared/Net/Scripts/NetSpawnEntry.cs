@@ -4,8 +4,9 @@ using UnityEngine;
 namespace VortexArena.Net
 {
     /// <summary>
-    /// Spawn kataloğunun tek satırı: ağda taşınan <c>id</c> string'i ile yerelde üretilecek
-    /// prefab eşlemesi. Serialize edilen ikincil tip olduğu için kendi dosyasındadır.
+    /// A single row of the spawn catalogue: the mapping between the <c>id</c> string carried on the
+    /// wire and the prefab to instantiate locally. It lives in its own file because it is a serialized
+    /// secondary type.
     /// </summary>
     [Serializable]
     public sealed class NetSpawnEntry
@@ -14,10 +15,10 @@ namespace VortexArena.Net
         [SerializeField] private string id = "";
         [SerializeField] private GameObject prefab;
 
-        /// <summary>Ağda taşınan spawn kimliği.</summary>
+        /// <summary>The spawn id carried on the wire.</summary>
         public string Id => id;
 
-        /// <summary>Bu kimlikle üretilecek prefab.</summary>
+        /// <summary>The prefab to instantiate for this id.</summary>
         public GameObject Prefab => prefab;
     }
 }

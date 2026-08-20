@@ -2,7 +2,7 @@
 
 Kod (protokol v9, sunucu, istemci ölçümü, uzak avatar, admin arayüzü), prefab kurulumu ve
 dokümanların tamamı yazıldı. Kalıcı bilgi `Docs/ArenaNet-Protokol.md` (§5.1/§5.2/§5.3, **§10.8**),
-`Docs/Sistem-Ozeti.md` (§3.3, §4 `BodyScaleState`, §7), `CLAUDE.md`,
+`Docs/Sistem-Ozeti.md` (§3.3, §4 `BodyScaleState`, §7), `Docs/Gelistirici/Yapma-Listesi.md`,
 `Docs/Isletme-Kurulum.md` ve `Docs/Kullanim-Kilavuzu.md` (§4.2) altındadır.
 
 ---

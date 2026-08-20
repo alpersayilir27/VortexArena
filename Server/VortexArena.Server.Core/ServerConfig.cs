@@ -4,25 +4,24 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>config/server.json karşılığı. Public alan — JsonUtil (IncludeFields) ile okunur;
-/// varsayılanlar ArenaProtocol sabitlerinden gelir.</summary>
+/// <summary>The counterpart of config/server.json. Public fields — read through JsonUtil
+/// (IncludeFields); the defaults come from the ArenaProtocol constants.</summary>
 public sealed class ServerConfig
 {
     public int controlPort = ArenaProtocol.CONTROL_PORT;
     public int beaconPort = ArenaProtocol.UDP_BEACON_PORT;
     public int statePort = ArenaProtocol.STATE_PORT;
     public string venueName = "Dev";
-    public int tickHz = ArenaProtocol.SNAPSHOT_RATE_HZ; // MatchDirector/StateHost tick'i
+    public int tickHz = ArenaProtocol.SNAPSHOT_RATE_HZ; // the MatchDirector/StateHost tick
 
-    /// <summary>Açılışta seçilecek mekan (§11). <b>Boş = her açılışta konsolda sorulur.</b>
-    /// Doluysa soru atlanır — otomasyon/kiosk kurulumu için. <c>--venue &lt;ad&gt;</c> komut satırı
-    /// argümanı bunu da ezer.</summary>
+    /// <summary>Venue to select at startup (§11); empty = asked on the console every startup, filled
+    /// = question skipped (automation/kiosk). <c>--venue &lt;name&gt;</c> overrides even this.</summary>
     public string venue = "";
 
-    /// <summary>Bu işletmenin lobi sahnesi (§10.7). <b>Boş = seçilen mekanın lobi haritası</b>
-    /// otomatik bulunur (o mekanda <c>modes:["lobby"]</c> olan harita). Yalnız mekanda birden çok
-    /// lobi varsa ya da bilerek başkası oynatılacaksa doldurulur; sahne adı <c>maps.json</c>'daki
-    /// bir <c>sceneName</c> ile eşleşmelidir.</summary>
+    /// <summary>This venue's lobby scene (§10.7); empty = auto-resolved (the venue's map with
+    /// <c>modes:["lobby"]</c>).</summary>
+    /// <remarks>Fill in only for a venue with several lobbies or to play another one deliberately;
+    /// the name must match a <c>sceneName</c> in <c>maps.json</c>.</remarks>
     public string lobbyScene = "";
 
     private static readonly JsonSerializerOptions WriteOptions = new()
@@ -31,7 +30,7 @@ public sealed class ServerConfig
         WriteIndented = true
     };
 
-    /// <summary>Dosya yoksa varsayılanlarla oluşturur; bozuksa varsayılanlarla devam eder.</summary>
+    /// <summary>Creates the file with defaults if missing; continues with defaults if malformed.</summary>
     public static ServerConfig Load(string path)
     {
         try

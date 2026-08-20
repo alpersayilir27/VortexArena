@@ -11,36 +11,39 @@ namespace VortexArena.Core.Arena
     /// plus shows a warning and pulses the controllers.
     /// Attach to an object positioned inside the arena, aligned with the arena's rotation.
     /// <para>
-    /// <b>Alanın dışı, engelin içiyle AYNI sunumdur</b> (<c>ObstacleViolationProbe</c>): tam
-    /// karartma + nabız titreşimi + karartmanın üstünde uyarı yazısı. İkisi de tek bir kuralın iki
-    /// yüzü — <i>görüş oynanabilir alanın dışındaysa ekran kapanır</i> — ve ikisi de aynı iki
-    /// hakemden geçer (<see cref="ScreenFade"/>, <see cref="ControllerHaptics"/>).
-    /// ⚠️ Fark <b>cezadadır, sunumda değil</b>: alan dışı CAN GÖTÜRMEZ (§10.9), engel götürür.
+    /// <b>Being outside the area has the SAME presentation as being inside an obstacle</b>
+    /// (<c>ObstacleViolationProbe</c>): full fade + pulsing haptics + a warning text on top of the
+    /// fade. Both are two faces of a single rule — <i>if the view is outside the playable area the
+    /// screen closes</i> — and both go through the same two arbiters
+    /// (<see cref="ScreenFade"/>, <see cref="ControllerHaptics"/>).
+    /// ⚠️ The difference is <b>in the penalty, not the presentation</b>: being out of bounds does
+    /// NOT COST HEALTH (§10.9), an obstacle does.
     /// </para>
     /// <para>
-    /// <b>Arena ölçüsünün TEK kaynağı <see cref="dimensionsJson"/>'dur</b> (boyut dosyası,
-    /// <see cref="ArenaDimensions"/> olarak çözülür). Alan dikdörtgen bile olsa dört köşeli bir
-    /// <c>plane</c> halkası olarak yazılır — "dikdörtgense şu hızlı yol" ayrımı YOKTUR, aynı
-    /// ölçünün iki ayrı ifadesi birbirinden sapıyordu. Sahnedeki <see cref="ArenaObstacle"/>'lar
-    /// plana ek olarak hesaba girer.
+    /// <b>The ONLY source of the arena size is <see cref="dimensionsJson"/></b> (the dimensions
+    /// file, resolved into <see cref="ArenaDimensions"/>). Even when the area is rectangular it is
+    /// written as a four-corner <c>plane</c> ring — there is NO "fast path if rectangular"
+    /// distinction, two separate expressions of the same measurement kept drifting apart. The
+    /// <see cref="ArenaObstacle"/>s in the scene are taken into account in addition to the plan.
     /// </para>
     /// <para>
-    /// ⚠️ Boyut dosyası yoksa/okunamıyorsa muhafaza <b>kendini kapatır</b> — gerekçe
-    /// <see cref="ResolvePlan"/>'de.
+    /// ⚠️ If the dimensions file is missing/unreadable the boundary <b>shuts itself down</b> —
+    /// rationale in <see cref="ResolvePlan"/>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Yarı saydam muhafaza duvarı KALDIRILDI ve geri eklenmez.</b> Eskiden kenara
-    /// yaklaşıldıkça belirginleşen bir duvar geometrisi vardı; arenanın gerçek duvarları
-    /// environment sanatından geldiği için görevi göz zaten yapıyor. Mekanizma sanat duvarına
-    /// TAŞINAMAZ da: alfa yazımı yalnız Transparent malzemede iş görür (gerçek duvarlar opak) ve
-    /// Renderer'ı alfa düşünce kapatırdı — oyuncu uzaktayken duvar tümden kaybolurdu. Yaklaşma
-    /// uyarısı bu yüzden karartma quad'ına taşındı (<see cref="warnFadeAlpha"/>): HMD'ye bağlı
-    /// olduğu için arena geometrisinden tümden bağımsızdır.
+    /// ⚠️ <b>The semi-transparent boundary wall was REMOVED and is not brought back.</b> There used
+    /// to be a wall geometry that became more visible as the player approached the edge; since the
+    /// arena's real walls come from the environment art, the eye already does that job. The
+    /// mechanism also CANNOT BE MOVED onto the art wall: writing alpha only works on a Transparent
+    /// material (real walls are opaque) and it disabled the Renderer once alpha dropped — the wall
+    /// would vanish entirely while the player was far away. That is why the approach warning was
+    /// moved onto the fade quad (<see cref="warnFadeAlpha"/>): being attached to the HMD makes it
+    /// completely independent of arena geometry.
     /// </para>
     /// <para>
-    /// ⚠️ Bu bileşen <b>arena uzayının origin'i DEĞİLDİR</b>: ağ koordinatlarının sıfırı
-    /// <b>dünya orijinidir</b> (<see cref="ArenaSpace"/> — arena uzayı dünya uzayıyla çakışıktır).
-    /// Muhafaza objesini büyütmek ya da kaydırmak oyuncuların ağ konumunu etkilemez.
+    /// ⚠️ This component is <b>NOT the origin of arena space</b>: the zero of network coordinates is
+    /// the <b>world origin</b> (<see cref="ArenaSpace"/> — arena space coincides with world space).
+    /// Scaling or moving the boundary object does not affect players' network positions.
     /// </para>
     /// </summary>
     public class ArenaBoundary : MonoBehaviour
@@ -70,41 +73,45 @@ namespace VortexArena.Core.Arena
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private MaterialPropertyBlock propertyBlock;
 
-        /// <summary>Bu bileşenin <see cref="ScreenFade"/>'deki kaynak kimliği.</summary>
+        /// <summary>This component's source id in <see cref="ScreenFade"/>.</summary>
         private const string FadeSourceId = "boundary";
 
-        /// <summary>Bu bileşenin <see cref="ControllerHaptics"/>'teki kaynak kimliği.</summary>
+        /// <summary>This component's source id in <see cref="ControllerHaptics"/>.</summary>
         private const string HapticSourceId = "boundary";
 
         /// <summary>
-        /// Sınır aşıldığında çizilen karartma. ⚠️ <b>Ayarlanabilir DEĞİLDİR</b> — ne bir tavan alanı
-        /// (0.96 gibi) ne de dışarıda ikinci bir mesafe rampası geri eklenir: alanın dışı, engelin
-        /// içiyle aynı sorudur. Orada görülecek meşru bir şey yoktur ve yüzde birkaçlık bir
-        /// saydamlık bile perdenin öbür yüzünü <b>okunabilir</b> bırakır — arenanın dışından içeri
-        /// bakmak tam olarak istismarın kendisidir. Değer engel karartmasıyla birebir aynıdır
-        /// (<c>ObstacleViolationProbe</c>), çünkü ikisi tek bir kural: <i>görüş oyun alanının
-        /// dışındaysa ekran kapanır.</i>
+        /// The fade drawn once the boundary is crossed. ⚠️ <b>It is NOT tunable</b> — neither a
+        /// ceiling field (like 0.96) nor a second distance ramp outside is added back: being
+        /// outside the area is the same question as being inside an obstacle. There is nothing
+        /// legitimate to see out there and even a few percent of transparency leaves the other side
+        /// of the curtain <b>readable</b> — looking into the arena from outside is exactly the
+        /// exploit itself. The value is identical to the obstacle fade
+        /// (<c>ObstacleViolationProbe</c>), because the two are a single rule: <i>if the view is
+        /// outside the play area the screen closes.</i>
         /// </summary>
         private const float OutsideFadeAlpha = 1f;
 
         /// <summary>
-        /// Sahnedeki muhafaza — <b>ilk etkinleşen örnek</b>. Sahnede tek muhafaza vardır
-        /// (<c>VA_ArenaBoundary</c> prefab örneği), bu yüzden "hangisi" sorusu doğmaz.
-        /// <para>Tüketicileri alan-dışı durumunu okuyanlardır (poz bildirimi, ateş kapısı);
-        /// muhafazasız/plansız sahnede <c>null</c> ya da kilitli <c>false</c> döner — ölçüyü
-        /// bilmeden "dışarıda" demek yanlış bilgi olurdu.</para>
+        /// The boundary in the scene — <b>the first instance that becomes enabled</b>. There is a
+        /// single boundary in a scene (the <c>VA_ArenaBoundary</c> prefab instance), so the "which
+        /// one" question never arises.
+        /// <para>Its consumers are the readers of the out-of-bounds state (pose reporting, fire
+        /// gate); in a scene with no boundary/plan it returns <c>null</c> or a locked
+        /// <c>false</c> — saying "outside" without knowing the measurements would be wrong
+        /// information.</para>
         /// </summary>
         public static ArenaBoundary Active { get; private set; }
 
         /// <summary>True while the HMD is outside the allowed area.
-        /// <para>⚠️ Gözlemci kipinde (<see cref="SetSpectatorMode"/>) ve plansız muhafazada
-        /// <c>false</c>'a KİLİTLİDİR — admin'in HMD'si yoktur, ölçüsü bilinmeyen arenada da
-        /// "dışarıda" demek uydurma olurdu.</para></summary>
+        /// <para>⚠️ In spectator mode (<see cref="SetSpectatorMode"/>) and in a boundary without a
+        /// plan it is LOCKED to <c>false</c> — the admin has no HMD, and in an arena whose
+        /// measurements are unknown saying "outside" would be made up.</para></summary>
         public bool IsOutOfBounds { get; private set; }
 
         /// <summary>
-        /// Arena yarı ölçüleri (metre, X/Z) — admin kuş bakışı kadrajı bunu okur. Plandaki taban
-        /// halkasının sınırlayıcı kutusundan gelir; plan yoksa <see cref="Vector2.zero"/>.
+        /// Arena half extents (meters, X/Z) — the admin top-down framing reads this. It comes from
+        /// the bounding box of the plan's floor ring; <see cref="Vector2.zero"/> when there is no
+        /// plan.
         /// </summary>
         public Vector2 HalfExtents
         {
@@ -122,11 +129,12 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Arena alanının YEREL uzaydaki merkezi (XZ, metre) = taban halkasının sınırlayıcı
-        /// kutusunun merkezi. Plan yoksa <see cref="Vector2.zero"/>.
+        /// The center of the arena area in LOCAL space (XZ, meters) = the center of the floor
+        /// ring's bounding box. <see cref="Vector2.zero"/> when there is no plan.
         /// <para>
-        /// ⚠️ Kadrajlarken <see cref="HalfExtents"/> tek başına yetmez: ölçü genellikle bir köşeden
-        /// alınır (plan sıfırı o köşedir), yani kutu bu transformun tam merkezinde DEĞİLDİR.
+        /// ⚠️ <see cref="HalfExtents"/> alone is not enough when framing: measurements are usually
+        /// taken from a corner (the plan's zero is that corner), so the box is NOT exactly at the
+        /// center of this transform.
         /// </para>
         /// </summary>
         public Vector2 LocalCenter
@@ -139,12 +147,13 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Admin kuş bakışı kamerasının zeminden yüksekliği (metre), boyut dosyasından. 0 =
-        /// dosyada yazmıyor, kamera kendi varsayılanını kullanır.
+        /// Height of the admin top-down camera above the floor (meters), from the dimensions file.
+        /// 0 = not written in the file, the camera uses its own default.
         /// <para>
-        /// ⚠️ Boyut dosyasını çözen TEK yer bu bileşendir: kamera JSON'u kendisi açmaz, aksi
-        /// hâlde aynı dosya iki kere ayrıştırılır ve ikisi sessizce sapabilirdi
-        /// (<see cref="TryGetCalibrationMarks"/> ile aynı gerekçe).
+        /// ⚠️ This component is the ONLY place that resolves the dimensions file: the camera does
+        /// not open the JSON itself, otherwise the same file would be parsed twice and the two
+        /// could silently drift apart (same rationale as
+        /// <see cref="TryGetCalibrationMarks"/>).
         /// </para>
         /// </summary>
         public float TopDownHeight
@@ -157,13 +166,13 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Mekanın iki kalibrasyon noktasını DÜNYA uzayında verir (zemin seviyesinde, bu
-        /// transformun düzleminde). Dosyada nokta yoksa ya da ikisi birbirine çok yakınsa
-        /// <c>false</c> döner.
+        /// Returns the venue's two calibration points in WORLD space (at floor level, on this
+        /// transform's plane). Returns <c>false</c> when the file has no points or the two are too
+        /// close to each other.
         /// <para>
-        /// ⚠️ Planı okuyan tek yer bu bileşendir; <c>ArenaCalibrator</c> boyut dosyasını kendi
-        /// ayrıştırmaz, işaretçilerini buradan konumlandırır. Aksi hâlde aynı JSON iki kere
-        /// çözülür ve ikisi birbirinden sapabilirdi.
+        /// ⚠️ This component is the only place that reads the plan; <c>ArenaCalibrator</c> does not
+        /// parse the dimensions file itself, it positions its anchors from here. Otherwise the same
+        /// JSON would be resolved twice and the two could drift apart.
         /// </para>
         /// </summary>
         public bool TryGetCalibrationMarks(out Vector3 worldA, out Vector3 worldB)
@@ -182,20 +191,20 @@ namespace VortexArena.Core.Arena
             return true;
         }
 
-        // Gözlemci (admin) kipi: görsel muhafaza susar.
+        // Spectator (admin) mode: the visual boundary goes silent.
         private bool spectatorMode;
 
-        // Plan önbelleği: JSON ayrıştırma ve halka dizileri kare başına yeniden kurulmasın
-        // (Update her karede, gizmo her repaint'te çalışıyor — tahsis GC baskısı demek).
-        private ArenaDimensions activePlan;      // çözülmüş plan (null = muhafaza devre dışı)
-        private Vector2[] cachedPlane;           // activePlan.plane (hızlı erişim)
-        private Vector2[][] cachedColumns;       // muhafazaya giren kolon halkaları
-        private TextAsset cachedJsonSource;      // plan hangi TextAsset'ten çözüldü
-        // ⚠️ Bir kez çözüldü mü: eksik/geçersiz bir JSON'da activePlan null kalır, bu bayrak olmasa
-        // kare başına yeniden ayrıştırılır ve hata log'u sel olurdu.
+        // Plan cache: so JSON parsing and the ring arrays are not rebuilt per frame
+        // (Update runs every frame, the gizmo on every repaint — allocation means GC pressure).
+        private ArenaDimensions activePlan;      // resolved plan (null = boundary disabled)
+        private Vector2[] cachedPlane;           // activePlan.plane (fast access)
+        private Vector2[][] cachedColumns;       // column rings that enter the boundary test
+        private TextAsset cachedJsonSource;      // which TextAsset the plan was resolved from
+        // ⚠️ Whether it was resolved once: with a missing/invalid JSON activePlan stays null, and
+        // without this flag it would be re-parsed per frame and flood the error log.
         private bool planResolved;
 
-        /// <summary>Muhafaza hesabına giren, döndürülmüş bir engel dikdörtgeni (yerel XZ).</summary>
+        /// <summary>A rotated obstacle rectangle (local XZ) that enters the boundary test.</summary>
         private struct ObstacleRect
         {
             public Vector2 Center;
@@ -206,8 +215,9 @@ namespace VortexArena.Core.Arena
 
         private void Awake()
         {
-            // İlk örnek sahiplenir: ikinci bir muhafaza sahneye kaçarsa sessizce devralıp
-            // ölçüyü değiştirmesin (sahne kurulumu hatası, davranış kayması değil).
+            // The first instance takes ownership: if a second boundary slips into the scene it must
+            // not silently take over and change the measurements (that is a scene setup error, not
+            // a behaviour shift).
             Active ??= this;
 
             propertyBlock = new MaterialPropertyBlock();
@@ -227,32 +237,32 @@ namespace VortexArena.Core.Arena
 
         private void OnEnable()
         {
-            // Alanlar çalışma anında (ya da devre dışıyken) değiştirilmiş olabilir: her etkinleşmede
-            // sıfırdan çözülür, yoksa bayat bir plan taşınırdı.
+            // The fields may have been changed at runtime (or while disabled): resolve from scratch
+            // on every enable, otherwise a stale plan would be carried over.
             planResolved = false;
             ResolvePlan();
         }
 
         /// <summary>
-        /// Gözlemci (admin) kipi. Görsel muhafazayı susturur: karartma quad'ı ve alan-dışı uyarısı
-        /// kapanır, <see cref="IsOutOfBounds"/> false'a kilitlenir.
+        /// Spectator (admin) mode. Silences the visual boundary: the fade quad and the
+        /// out-of-bounds warning are turned off, <see cref="IsOutOfBounds"/> is locked to false.
         /// <para>
-        /// Gerekçe: admin masaüstündedir, HMD'si yoktur; kafası (kapatılmış rig'in
-        /// CenterEyeAnchor'ı) sabit durduğu için muhafaza mantığı anlamsız veri üretir. Bileşen
-        /// kapatılmak yerine susturulur ki <see cref="HalfExtents"/> / <see cref="LocalCenter"/>
-        /// (kuş bakışı kadrajı) okunmaya devam edebilsin.
+        /// Rationale: the admin is on a desktop and has no HMD; since their head (the disabled
+        /// rig's CenterEyeAnchor) stays put, the boundary logic produces meaningless data. The
+        /// component is silenced instead of disabled so that <see cref="HalfExtents"/> /
+        /// <see cref="LocalCenter"/> (top-down framing) can still be read.
         /// </para>
         /// </summary>
         public void SetSpectatorMode(bool on)
         {
             spectatorMode = on;
             if (!on)
-                return; // bir sonraki Update gerçek duruma göre yeniden çizer
+                return; // the next Update redraws according to the real state
 
             propertyBlock ??= new MaterialPropertyBlock();
             IsOutOfBounds = false;
-            // Gözlemcide hakeme HİÇ danışılmaz ve quad koşulsuz kapatılır: admin'in HMD'si yok,
-            // hiçbir karartma kaynağı onun ekranında anlamlı değil.
+            // In spectator mode the arbiter is NEVER consulted and the quad is unconditionally
+            // closed: the admin has no HMD, no fade source is meaningful on their screen.
             if (fadeRenderer != null)
                 SetFade(fadeRenderer, 0f, Color.black);
             if (warningText != null && warningText.gameObject.activeSelf)
@@ -263,20 +273,22 @@ namespace VortexArena.Core.Arena
         {
             if (spectatorMode)
             {
-                // ⚠️ Titreşim de bildirilmez ve bu doğru olandır: hakemin kalp atışı sözleşmesi
-                // gereği susan kaynak kendiliğinden düşer (admin'in kumandası zaten yok).
-                return; // muhafaza susuyor
+                // ⚠️ Haptics are not reported either and that is the right thing: per the arbiter's
+                // heartbeat contract a source that goes silent drops out on its own (the admin has
+                // no controllers anyway).
+                return; // the boundary stays silent
             }
 
             EnsurePlan();
             if (activePlan == null)
             {
-                // Plansız = muhafaza devre dışı (gerekçe ResolvePlan'de). Alan-dışı durumu ve
-                // karartma sıfırlanır, uyarı yazısı kapanır — ölçüyü bilmeden "kenara ne kadar
-                // yakınız" sorusunun cevabı yok, ekranı rastgele karartmak yanlış bilgi verirdi.
+                // No plan = boundary disabled (rationale in ResolvePlan). The out-of-bounds state
+                // and the fade are reset and the warning text is hidden — without the measurements
+                // there is no answer to "how close are we to the edge", and fading the screen at
+                // random would give wrong information.
                 IsOutOfBounds = false;
-                // ⚠️ Kendi alfası 0 ama çizim yine YAPILIR: quad'ın öbür kaynağı (engel ihlali)
-                // muhafazanın kurulum hatasından etkilenmemeli.
+                // ⚠️ Its own alpha is 0 but the draw still HAPPENS: the quad's other source
+                // (obstacle violation) must not be affected by the boundary's setup error.
                 DrawFade(0f);
                 ReportHaptics(false);
                 if (warningText != null && warningText.gameObject.activeSelf)
@@ -302,34 +314,37 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Alan dışındayken kumandaların nabız titreşimi — <b>karartmayla aynı kapıdan</b>: kararan
-        /// ekran tek başına "ne oldu" sorusunu doğuruyor, nabız ona "alanın dışındasın, geri dön"
-        /// cevabını veriyor.
+        /// Pulsing controller haptics while out of bounds — <b>through the same gate as the
+        /// fade</b>: a darkening screen on its own raises the question "what happened", the pulse
+        /// answers it with "you are outside the area, come back".
         /// <para>
-        /// ⚠️ Kapı <b>yaklaşma rampası değil, sınırın kendisidir</b>: rampa bir uyarıdır ve
-        /// oyuncunun alan içinde kalmasına izin verir; titreşim ise ihlalin karşılığıdır. Aynı
-        /// ayrım karartmada da var (rampa ≠ tam karartma).
+        /// ⚠️ The gate is <b>the boundary itself, not the approach ramp</b>: the ramp is a warning
+        /// and lets the player stay inside the area; the vibration is the response to a violation.
+        /// The same distinction exists in the fade (ramp ≠ full fade).
         /// </para>
         /// <para>
-        /// ⚠️ <b>Motor doğrudan sürülmez</b> (<see cref="OVRInput.SetControllerVibration"/>
-        /// çağrılmaz): aynı titreşimi engel ihlali de istiyor ve ikisi aynı anda doğru olabiliyor —
-        /// muhafaza sahnedeki <see cref="ArenaObstacle"/>'ları da alan dışı sayar. Hakem
-        /// (<see cref="ControllerHaptics"/>) <see cref="ScreenFade"/> ile birebir aynı sözleşmeyi
-        /// uygular; nabzın frekansı ve genliği orada durur, burada tekrarlanmaz.
+        /// ⚠️ <b>The motor is not driven directly</b> (<see cref="OVRInput.SetControllerVibration"/>
+        /// is not called): obstacle violation asks for the same vibration and both can be true at
+        /// the same time — the boundary also counts the scene's <see cref="ArenaObstacle"/>s as out
+        /// of bounds. The arbiter (<see cref="ControllerHaptics"/>) applies exactly the same
+        /// contract as <see cref="ScreenFade"/>; the pulse's frequency and amplitude live there and
+        /// are not repeated here.
         /// </para>
         /// </summary>
         private void ReportHaptics(bool outside) =>
             ControllerHaptics.ReportPulse(HapticSourceId, outside);
 
         /// <summary>
-        /// Muhafazanın karartma isteğini <see cref="ScreenFade"/>'e bildirir ve <b>kazananı</b>
-        /// çizer.
+        /// Reports the boundary's fade request to <see cref="ScreenFade"/> and draws the
+        /// <b>winner</b>.
         /// <para>
-        /// ⚠️ <b>Quad'a doğrudan yazılmaz ve yazılmamalı:</b> aynı renderer'ı isteyen ikinci bir
-        /// sistem var (engel ihlali karartması, <c>ObstacleViolationProbe</c>). İkisi de kendi değerini
-        /// yazsaydı kare başına birbirini ezerlerdi — belirtisi "sınıra yaklaşırken engele girince
-        /// ekran titriyor" olurdu ve sebebi iki ayrı bileşene dağılırdı. Renderer'ın SAHİBİ yine bu
-        /// sınıftır (quad onun serialize alanı); hakem yalnız hangi değerin çizileceğini söyler.
+        /// ⚠️ <b>The quad is not — and must not be — written directly:</b> there is a second system
+        /// that wants the same renderer (the obstacle violation fade,
+        /// <c>ObstacleViolationProbe</c>). If both wrote their own value they would overwrite each
+        /// other per frame — the symptom would be "the screen flickers when I enter an obstacle
+        /// while approaching the boundary" and its cause would be spread over two components. This
+        /// class is still the OWNER of the renderer (the quad is its serialized field); the arbiter
+        /// only says which value gets drawn.
         /// </para>
         /// </summary>
         private void DrawFade(float ownAlpha)
@@ -346,21 +361,22 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Karartma alfası: <b>içeride</b> yaklaşma rampası, <b>dışarıda</b> kademesiz tam
-        /// karartma.
+        /// Fade alpha: <b>inside</b> the approach ramp, <b>outside</b> an ungraded full fade.
         /// <para>
-        /// Yaklaşma rampası (<see cref="warnDistance"/> → <see cref="warnFadeAlpha"/>) kaldırılan
-        /// yarı saydam duvarın yerini alan tek uyarı kanalıdır: oyuncu sınırı geçmeden önce
-        /// uyarılmalı, aksi hâlde gerçek duvara çarptıktan sonra haberi olurdu.
+        /// The approach ramp (<see cref="warnDistance"/> → <see cref="warnFadeAlpha"/>) is the only
+        /// warning channel that replaces the removed semi-transparent wall: the player must be
+        /// warned before crossing the boundary, otherwise they would find out only after hitting
+        /// the real wall.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Sınırda geçiş bilinçli olarak SÜREKSİZDİR:</b> sınır aşıldığı an alfa
-        /// <see cref="OutsideFadeAlpha"/>'ya sıçrar, dışarıda ikinci bir rampa YOKTUR.
-        /// Gerekçe engel karartmasının aynısı — dış rampa birkaç kare boyunca yarı saydam bir perde
-        /// çizer, yani alanın dışına çıkan oyuncu içeriyi <b>okuyabilir</b> kalır ve arenanın
-        /// dışından içeri bakmak tam olarak istismarın kendisidir. Bedeli, sınır çizgisine tam
-        /// oturan bir kafanın izleme titremesiyle 0.35 ile 1.0 arasında gidip gelmesidir; karşılığı
-        /// dışarıdan görüşün tümden kapanmasıdır.
+        /// ⚠️ <b>The transition at the boundary is deliberately DISCONTINUOUS:</b> the moment the
+        /// boundary is crossed the alpha jumps to <see cref="OutsideFadeAlpha"/>, there is NO
+        /// second ramp outside. The rationale is the same as the obstacle fade — an outside ramp
+        /// draws a semi-transparent curtain for a few frames, meaning the player who steps out of
+        /// the area stays able to <b>read</b> the inside, and looking into the arena from outside
+        /// is exactly the exploit itself. The cost is that a head sitting exactly on the boundary
+        /// line oscillates between 0.35 and 1.0 with tracking jitter; the payoff is that the view
+        /// from outside is closed entirely.
         /// </para>
         /// </summary>
         private float FadeAlphaFor(float edgeDistance)
@@ -374,15 +390,16 @@ namespace VortexArena.Core.Arena
             return warn * warnFadeAlpha;
         }
 
-        // -------------------------------------------------------------- mesafe hesabı
+        // ------------------------------------------------------------ distance computation
 
         /// <summary>
-        /// Verilen YEREL XZ noktasının "en yakın tehlikeye" işaretli uzaklığı: <b>artı</b> = güvenli
-        /// alanın içinde ve o kadar metre payı var, <b>eksi</b> = dışarıda (ya da bir engelin
-        /// içinde) ve o kadar metre içeri girmiş. Karartma ve uyarı bu tek sayıdan türer.
+        /// The signed distance of the given LOCAL XZ point to "the nearest danger": <b>positive</b>
+        /// = inside the safe area with that many meters of margin, <b>negative</b> = outside (or
+        /// inside an obstacle) by that many meters. The fade and the warning derive from this
+        /// single number.
         /// <para>
-        /// ⚠️ Yalnız plan varken çağrılır — çağıran (<c>Update</c>) plansız durumu zaten erken
-        /// çıkışla eliyor.
+        /// ⚠️ Only called when a plan exists — the caller (<c>Update</c>) already filters out the
+        /// plan-less case with an early return.
         /// </para>
         /// </summary>
         private float EdgeDistance(Vector2 point)
@@ -397,9 +414,9 @@ namespace VortexArena.Core.Arena
                 }
             }
 
-            // Sahnedeki engeller her karede yeniden okunur: taşınabilir objelerdir, önbelleklenirse
-            // sessizce eski yerlerinde uyarı üretirler. Liste indeksle gezilir (foreach bir
-            // arayüz numaralandırıcısı kutulardı).
+            // Scene obstacles are re-read every frame: they are movable objects, and if cached they
+            // would silently produce warnings at their old positions. The list is walked by index
+            // (foreach would box an interface enumerator).
             IReadOnlyList<ArenaObstacle> obstacles = ArenaObstacle.All;
             for (int i = 0; i < obstacles.Count; i++)
             {
@@ -417,19 +434,21 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Noktanın döndürülmüş bir engel dikdörtgenine işaretli uzaklığı: dışarıdaysa + (kutuya
-        /// olan mesafe), içerideyse − (en yakın yüzeye olan derinlik). Sınır hesabıyla aynı işaret
-        /// sözleşmesini kullanır, böylece ikisi tek bir <c>Mathf.Min</c> ile birleşebilir.
+        /// The signed distance of the point to a rotated obstacle rectangle: + when outside (the
+        /// distance to the box), − when inside (the depth to the nearest face). It uses the same
+        /// sign contract as the boundary computation, so the two can be combined with a single
+        /// <c>Mathf.Min</c>.
         /// <para>
-        /// ⚠️ Yalnız <see cref="ArenaObstacle"/> için kalmıştır — plandaki kolonlar artık çokgendir
-        /// ve <see cref="Polygon2D.ObstacleDistance"/> ile ölçülür. Sahneye elle konan dekorun
-        /// gösterimi ise dikdörtgen kaldı: taşınabilir bir objenin ölçüsünü tek bir alandan
-        /// (<c>Size</c>) okumak, ona ayrıca bir köşe listesi yazdırmaktan basit.
+        /// ⚠️ It only remains for <see cref="ArenaObstacle"/> — the plan's columns are polygons now
+        /// and are measured with <see cref="Polygon2D.ObstacleDistance"/>. The representation of
+        /// decor placed by hand in the scene stayed rectangular: reading a movable object's size
+        /// from a single field (<c>Size</c>) is simpler than making someone author a corner list
+        /// for it as well.
         /// </para>
         /// </summary>
         private static float DistanceToRect(Vector2 point, in ObstacleRect rect)
         {
-            // Noktayı dikdörtgenin kendi eksenine taşı (yaw kadar ters döndür).
+            // Move the point into the rectangle's own axes (rotate back by yaw).
             Vector2 delta = point - rect.Center;
             Vector2 localPoint = new Vector2(
                 delta.x * rect.CosYaw - delta.y * rect.SinYaw,
@@ -445,13 +464,13 @@ namespace VortexArena.Core.Arena
                 return Mathf.Sqrt(outsideX * outsideX + outsideY * outsideY);
             }
 
-            // İçerideyiz: en yakın yüzeye olan mesafe (negatif).
+            // We are inside: the distance to the nearest face (negative).
             return Mathf.Max(dx, dy);
         }
 
         private static ObstacleRect MakeRect(Vector2 center, Vector2 size, float yaw)
         {
-            // Ters dönüş açısı saklanır (nokta dikdörtgenin eksenine taşınacak).
+            // The inverse rotation angle is stored (the point will be moved into the rectangle's axes).
             float radians = -yaw * Mathf.Deg2Rad;
             return new ObstacleRect
             {
@@ -463,11 +482,12 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Önbelleği yalnız <b>kaynak referansı değiştiyse</b> (ya da hiç çözülmediyse) tazeler.
+        /// Refreshes the cache only if <b>the source reference changed</b> (or it was never
+        /// resolved).
         /// <para>
-        /// ⚠️ Ayrıştırma/hata burada değil <see cref="ResolvePlan"/> içinde: bu metot her karede
-        /// (Update) ve her repaint'te (gizmo) çağrılıyor, koşul olmasa JSON kare başına
-        /// ayrıştırılırdı.
+        /// ⚠️ Parsing/error handling is not here but inside <see cref="ResolvePlan"/>: this method
+        /// is called every frame (Update) and on every repaint (gizmo), and without the condition
+        /// the JSON would be parsed per frame.
         /// </para>
         /// </summary>
         private void EnsurePlan()
@@ -479,14 +499,16 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Planı tek kaynaktan — <see cref="dimensionsJson"/> — çözer. Kolon halkaları burada bir
-        /// kez toplanır: kaynak çalışma anında değişmez, ama <c>Update</c> her karede koşar.
+        /// Resolves the plan from a single source — <see cref="dimensionsJson"/>. The column rings
+        /// are collected once here: the source does not change at runtime, but <c>Update</c> runs
+        /// every frame.
         /// <para>
-        /// ⚠️ Dosya bağlanmamışsa ya da ayrıştırılamıyorsa <b>açık başarısızlık</b> seçilir:
-        /// konsola bir kez hata basılır ve muhafaza tümden susar. Gerekçe: ölçüsü bilinmeyen bir
-        /// arenada zaten doğru bir muhafaza üretilemez; kapalı başarısızlık (ör. her karede ekranı
-        /// karartmak) işletmede oyunu tümden oynanamaz kılardı. Bu bir KURULUM hatasıdır ve
-        /// editörde/QA'da yakalanır — sahadaki oturumu düşürmemesi gerekir.
+        /// ⚠️ If the file is not assigned or cannot be parsed, <b>loud failure</b> is chosen: an
+        /// error is logged once and the boundary goes completely silent. Rationale: a correct
+        /// boundary cannot be produced for an arena whose measurements are unknown anyway; a silent
+        /// failure (e.g. fading the screen every frame) would make the game entirely unplayable at
+        /// the venue. This is a SETUP error and is caught in the editor/QA — it must not take down
+        /// the session in the field.
         /// </para>
         /// </summary>
         private void ResolvePlan()
@@ -518,7 +540,7 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            // Parse geçersiz halkalı kolonları zaten ayıkladı; burada yalnız halkalar toplanır.
+            // Parsing already filtered out columns with invalid rings; only the rings are collected here.
             cachedColumns = new Vector2[columns.Length][];
             for (int i = 0; i < columns.Length; i++)
             {
@@ -529,16 +551,18 @@ namespace VortexArena.Core.Arena
         // ------------------------------------------------------------------ gizmo
 
         /// <summary>
-        /// Seçiliyken planı çizer: taban halkası + kolon prizmaları (yerel uzayda hesaplanıp
-        /// dünyaya taşınır). Yamuk bir arenayı elle ayarlarken bu çizim şarttır — plan sayı
-        /// listesidir, sahnede karşılığını görmeden köşe taşımak körlemedir.
+        /// Draws the plan while selected: the floor ring + column prisms (computed in local space
+        /// and moved to world). This drawing is essential when tuning a skewed arena by hand — the
+        /// plan is a list of numbers, and moving a corner without seeing its counterpart in the
+        /// scene is blind work.
         /// <para>
-        /// ⚠️ Plan yoksa HİÇBİR ŞEY çizilmez: uydurulmuş bir kutu, muhafazanın aslında devre dışı
-        /// olduğunu gizlerdi. Sebebi konsoldaki hata satırıdır.
+        /// ⚠️ When there is no plan, NOTHING is drawn: a made-up box would hide the fact that the
+        /// boundary is actually disabled. Its cause is the error line in the console.
         /// </para>
         /// <para>
-        /// ⚠️ Sınırın ÜST kenarı artık çizilmez: duvar yüksekliği alanı kaldırıldı (duvar üretimi
-        /// de duvar göstergesi de yok), okuyanı olmayan bir ölçü bayatlardı.
+        /// ⚠️ The TOP edge of the boundary is no longer drawn: the wall height field was removed
+        /// (there is neither wall generation nor a wall indicator), and a measurement with no
+        /// reader would go stale.
         /// </para>
         /// </summary>
         private void OnDrawGizmosSelected()
@@ -557,9 +581,9 @@ namespace VortexArena.Core.Arena
                 Gizmos.DrawLine(LocalToWorld(ring[j]), LocalToWorld(ring[i]));
             }
 
-            // Kalibrasyon noktaları: zemin bandının nereye çekileceğini sahnede göstermenin tek
-            // yolu bu — işaretçi objeleri sahnede KAPALI durur (yalnız kalibrasyon sırasında
-            // açılırlar), yani gizmo olmadan yerleri gözle denetlenemez.
+            // Calibration points: this is the only way to show in the scene where the floor tape
+            // goes — the marker objects stay DISABLED in the scene (they are only enabled during
+            // calibration), so without the gizmo their positions cannot be inspected by eye.
             if (activePlan.HasCalibration)
             {
                 Vector3 markA = LocalToWorld(activePlan.calibration.a);
@@ -567,7 +591,7 @@ namespace VortexArena.Core.Arena
                 Gizmos.color = new Color(0.35f, 1f, 0.45f, 0.9f);
                 Gizmos.DrawLine(markA, markB);
                 Gizmos.DrawWireSphere(markA, 0.12f);
-                Gizmos.DrawWireSphere(markB, 0.2f); // B daha büyük: A→B yönü gizmodan okunabilsin
+                Gizmos.DrawWireSphere(markB, 0.2f); // B is bigger so the A→B direction is readable from the gizmo
             }
 
             ArenaDimensions.Column[] columns = activePlan.columns;
@@ -601,7 +625,7 @@ namespace VortexArena.Core.Arena
             return transform.TransformPoint(new Vector3(localPoint.x, height, localPoint.y));
         }
 
-        /// <summary>Materyalin kendi taban rengi (RGB) — muhafazanın karartma tonu budur.</summary>
+        /// <summary>The material's own base color (RGB) — this is the boundary's fade tint.</summary>
         private static Color BaseColorOf(Renderer target)
         {
             return target.sharedMaterial != null && target.sharedMaterial.HasProperty(BaseColorId)
@@ -610,9 +634,10 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Karartma quad'ını çizen TEK metot: RGB kazanan kaynaktan, alfa ondan gelir.
-        /// <para>Renk de kaynaktan gelir çünkü kaynaklar farklı şeyler söylüyor: muhafaza nötr
-        /// karartır, engel ihlali <b>kırmızı</b> karartır.</para>
+        /// The ONLY method that draws the fade quad: both the RGB and the alpha come from the
+        /// winning source.
+        /// <para>The color also comes from the source because the sources say different things: the
+        /// boundary fades neutrally, an obstacle violation fades <b>red</b>.</para>
         /// </summary>
         private void SetFade(Renderer target, float alpha, Color rgb)
         {

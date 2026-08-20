@@ -6,23 +6,17 @@ using VortexArena.Core.Arena;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// Açık sahnedeki <c>Obstacle</c> layer'ını denetler: engel ihlali sisteminin çalışması için
-    /// gereken tek kurulum kuralı <b>collider'ın konveks olmasıdır</b> ve bu kural gözle
-    /// denetlenemez.
-    /// <para>
-    /// <b>Neden bir araç gerekiyor:</b> non-convex bir <c>MeshCollider</c> bu layer'a girdiğinde
-    /// <c>Collider.ClosestPoint</c> girdi noktasını aynen döndürür → nokta-içeride testi her zaman
-    /// "içeride" der → <b>o sahnedeki herkes anında ölmeye başlar</b>. Çalışma anında
-    /// <c>ObstacleVolumes</c> böyle bir collider'ı eleyip hata basıyor, ama o satır ancak biri
-    /// Play'e girip konsola bakınca görülür. Bu araç aynı soruyu <b>sahne kaydedilmeden önce</b>
-    /// sorar.
-    /// </para>
-    /// <para>
-    /// ⚠️ Araç hiçbir şeyi DÜZELTMEZ, yalnız raporlar. Bir collider'ı otomatik convex işaretlemek
-    /// ya da layer'ını değiştirmek, sanatçının bilerek yaptığı bir seçimi sessizce ezmek olurdu.
-    /// </para>
-    /// </summary>
+    /// <summary>Audits the <c>Obstacle</c> layer in the open scenes: the one setup rule the obstacle
+    /// violation system needs is a CONVEX collider, and that cannot be checked by eye.</summary>
+    /// <remarks>
+    /// A non-convex <c>MeshCollider</c> on this layer makes <c>Collider.ClosestPoint</c> return the
+    /// input point unchanged → the point-inside test always says "inside" → everyone in that scene
+    /// starts dying instantly. At runtime <c>ObstacleVolumes</c> discards such a collider and logs
+    /// an error, but that line is only seen by someone entering Play and reading the console; this
+    /// tool asks the same question before the scene is saved.
+    /// <para>⚠️ The tool FIXES nothing, it only reports. Auto-marking a collider convex or changing
+    /// its layer would silently override a deliberate artist choice.</para>
+    /// </remarks>
     public static class ObstacleLayerAuditor
     {
         private const string MenuPath = "Tools/VortexArena/Arena/Engel Hacimlerini Denetle";
@@ -62,9 +56,8 @@ namespace VortexArena.Core.Editor
                     var collider = go.GetComponent<Collider>();
                     if (collider == null)
                     {
-                        // Layer'ı damgalanmış ama collider'ı olmayan obje: çoğu zaman layer'ın
-                        // çocuklara da uygulandığı (görsel mesh'ler) durumdur — zararsız ama
-                        // yazımcının niyetini bilmek için raporlanır.
+                        // Layer stamped but no collider: usually the layer applied to children
+                        // (visual meshes) — harmless, reported only to surface the intent.
                         colliderless.Add(go);
                         continue;
                     }
@@ -94,38 +87,38 @@ namespace VortexArena.Core.Editor
             Report(nonConvex, triggers, colliderless, swollen, healthy);
         }
 
-        // ---------------------------------------------------------------- şişkinlik
+        // ---------------------------------------------------------------- swelling
 
-        /// <summary>Şişkinlik testinde en fazla kaç üçgen örneklenir (büyük mesh'te eşit aralıkla).</summary>
+        /// <summary>Max sampled triangles in the swelling test (evenly spaced on large meshes).</summary>
         private const int MaxSwellSamples = 200;
 
-        /// <summary>Yüzeyin iki yanına taşıma mesafesi (m). Collider yüzeyle çakışıyorsa bir yan
-        /// içeride, öteki dışarıda olur; ikisi de içerideyse collider oradan şişkindir.</summary>
+        /// <summary>Probe offset to each side of the surface (m). If the collider coincides with the
+        /// surface one side is inside and the other outside; both inside means it swells there.</summary>
         private const float SwellProbeMeters = 0.02f;
 
-        /// <summary>Şişkin saymak için gereken en az örnek oranı ve sayısı (tekil sayısal gürültü
-        /// rapor üretmesin).</summary>
+        /// <summary>Minimum sample ratio and count to call it swollen, so isolated numeric noise
+        /// does not produce a report.</summary>
         private const float SwellRatioThreshold = 0.02f;
         private const int SwellMinHits = 3;
 
-        /// <summary>
-        /// Collider, <b>kendi kaynak mesh'inin yüzeyinden</b> şişkin mi. Kalan geometrik tuzak
-        /// budur: konveks işaretlenmiş <b>içbükey</b> bir mesh'te hull çukuru doldurur, collider
-        /// görünenden büyür ve oyuncu <b>boşlukta</b> ceza alır — gözle denetlenemez, çünkü çizilen
-        /// mesh doğrudur.
-        /// <para>Ölçüt çalışma anındaki testin <b>aynısıdır</b> (<c>ClosestPoint</c> ile
-        /// nokta-içeride, <c>ObstacleVolumes</c>): üçgen ağırlık merkezleri normal boyunca dışarı
-        /// taşınır ve "hâlâ içeride mi" diye sorulur. İkinci bir doğruluk kaynağı doğmasın diye
-        /// hacim/hull karşılaştırması gibi ayrı bir matematik kullanılmaz.</para>
-        /// <para>⚠️ <b>Yalnız <see cref="MeshCollider"/> denetlenir</b> ve kaynak, MeshFilter değil
-        /// <b>collider'ın kendi mesh'idir</b>. Sebep: yalnız MeshCollider "ben bu yüzeyim" iddiası
-        /// taşır. Box/Capsule zaten bilinçli bir <b>kabalaştırmadır</b> (dokümanın önerdiği çözüm
-        /// yolu) — onu şişkin diye raporlamak, aracın kendi tavsiyesini hata saymasıdır.</para>
-        /// <para>Mesh okunamıyorsa (Read/Write kapalı import) ya da collider/obje kapalıysa test
-        /// yapılmaz — <c>false</c> döner: denetlenememiş bir obje "sorunlu" diye raporlanmaz.
-        /// ⚠️ Kapalı collider'da <c>ClosestPoint</c> girdi noktasını aynen döndürür, yani bu kapı
-        /// olmadan her kapalı obje "şişkin" okunurdu.</para>
-        /// </summary>
+        /// <summary>Whether the collider swells beyond the surface of its own source mesh.</summary>
+        /// <remarks>
+        /// The remaining geometric trap: on a concave mesh marked convex the hull fills the cavity,
+        /// the collider grows past the visible surface and the player is punished in mid-air —
+        /// invisible to the eye, because the drawn mesh is correct.
+        /// <para>The criterion is the same as the runtime test (point-inside via
+        /// <c>ClosestPoint</c>, <c>ObstacleVolumes</c>): triangle centroids are pushed out along the
+        /// normal and asked "still inside?". Separate math such as a volume/hull comparison would be
+        /// a second source of truth.</para>
+        /// <para>⚠️ Only <see cref="MeshCollider"/> is checked, and against the collider's own mesh,
+        /// not a MeshFilter: only a MeshCollider claims "I am this surface". Box/Capsule is a
+        /// deliberate coarsening (the recommended fix), so reporting it as swollen would make the
+        /// tool flag its own advice.</para>
+        /// <para>Unreadable mesh (Read/Write off) or a disabled collider/object skips the test and
+        /// returns <c>false</c>: an object that could not be checked is not reported as broken.
+        /// ⚠️ On a disabled collider <c>ClosestPoint</c> returns the input point unchanged, so
+        /// without this gate every disabled object would read as swollen.</para>
+        /// </remarks>
         private static bool IsSwollen(GameObject go, Collider collider)
         {
             if (collider is not MeshCollider meshCollider || !collider.enabled ||
@@ -163,17 +156,17 @@ namespace VortexArena.Core.Editor
                 Vector3 normal = Vector3.Cross(b - a, c - a);
                 if (normal.sqrMagnitude <= 1e-12f)
                 {
-                    continue; // dejenere üçgen
+                    continue; // degenerate triangle
                 }
 
                 Vector3 worldCentroid = tr.TransformPoint((a + b + c) / 3f);
                 Vector3 offset = tr.TransformDirection(normal).normalized * SwellProbeMeters;
 
-                // ⚠️ Yüzeyin İKİ yanı da sınanır ve ölçüt "ikisi de içeride"dir. Tek yana bakmak
-                // üçgen sarım yönüne (winding) güvenmek olurdu: yön ters okunursa tüm noktalar
-                // gövdenin içine düşer ve araç HER objeyi şişkin raporlardı. İki yanı da içeride
-                // olan bir yüzey ise sarımdan bağımsız olarak collider'ın İÇİNE gömülmüştür —
-                // aranan durum tam olarak budur (hull çukuru doldurmuş).
+                // ⚠️ BOTH sides are probed and the criterion is "both inside". Testing one side
+                // would trust triangle winding: read the wrong way every point falls inside the
+                // body and every object would be reported swollen. A surface inside on both sides
+                // is buried IN the collider regardless of winding — exactly the case sought (hull
+                // filled the cavity).
                 sampled++;
                 if (IsInside(collider, worldCentroid + offset) &&
                     IsInside(collider, worldCentroid - offset))
@@ -185,8 +178,8 @@ namespace VortexArena.Core.Editor
             return sampled > 0 && inside >= SwellMinHits && inside >= sampled * SwellRatioThreshold;
         }
 
-        /// <summary>Konveks collider'da içerideki bir nokta için <c>ClosestPoint</c> noktanın
-        /// KENDİSİDİR (çalışma anındaki <c>ObstacleVolumes</c> testinin aynısı).</summary>
+        /// <summary>On a convex collider <c>ClosestPoint</c> of an inside point is the point ITSELF
+        /// (same test as runtime <c>ObstacleVolumes</c>).</summary>
         private static bool IsInside(Collider collider, Vector3 point) =>
             (collider.ClosestPoint(point) - point).sqrMagnitude <= 1e-8f;
 
@@ -238,7 +231,7 @@ namespace VortexArena.Core.Editor
                 text.AppendLine("Sorun bulunmadı.");
             }
 
-            // Konsola da yazılır: dialog kapanınca liste kaybolmasın, objeye tıklanabilsin.
+            // Also logged: the list must survive the dialog and stay clickable to the object.
             for (int i = 0; i < nonConvex.Count; i++)
             {
                 Debug.LogError($"[Engel denetimi] '{Path(nonConvex[i])}' konveks değil — " +
@@ -287,7 +280,7 @@ namespace VortexArena.Core.Editor
             return path;
         }
 
-        /// <summary>Açık olan TÜM sahnelerin kökleri (additive yüklü sahneler de denetlenir).</summary>
+        /// <summary>Roots of ALL open scenes (additively loaded ones included).</summary>
         private static IEnumerable<GameObject> EditorSceneRoots()
         {
             int count = UnityEngine.SceneManagement.SceneManager.sceneCount;

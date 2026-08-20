@@ -4,19 +4,19 @@ using System.Windows.Threading;
 namespace VortexArena.Launcher;
 
 /// <summary>
-/// VortexArena operatör launcher'ı (Windows masaüstü, WPF).
+/// VortexArena operator launcher (Windows desktop, WPF).
 /// <para>
-/// İki iş yapar: <b>sunucuyu doğru mekanla</b> (<c>--venue</c>) ve <b>yönetim oyununu doğru
-/// adresle</b> (<c>--server-ip</c>/<c>--server-port</c>) başlatmak. Protokole hiç girmez —
-/// başlattığı süreçlerle ağ üzerinden konuşmaz.
+/// Two jobs: starting <b>the server with the right venue</b> (<c>--venue</c>) and <b>the admin game
+/// with the right address</b> (<c>--server-ip</c>/<c>--server-port</c>). Never touches the protocol —
+/// it does not talk to the processes it starts.
 /// </para>
 /// </summary>
 public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
-        // İşletmede kimse Visual Studio'ya bakmıyor: yakalanmamış bir hata sessiz kapanma yerine
-        // okunabilir bir kutu göstersin, launcher ayakta kalsın.
+        // Nobody on site is watching Visual Studio: an unhandled error must show a readable box
+        // instead of closing silently, and the launcher must stay up.
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         base.OnStartup(e);
     }

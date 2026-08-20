@@ -5,42 +5,34 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Silah ele geldiğinde <b>çözülerek belirme</b> geçişi oynatır: silahın modeli geçici olarak
-    /// çözülme materyaline çevrilir, <c>_Dissolve</c> 1→0 sürülür, sonra özgün materyaller geri
-    /// konur. Bırakışta efekt yoktur — silah eskisi gibi anında gider.
-    /// <para>
-    /// <b>Kapı <see cref="Weapon.HeldChanged"/>'dir</b>, çağrı noktaları değil: silahı ele alan üç
-    /// ayrı yol var (<see cref="WeaponGranter"/>'ın rastgele verdiği silah, çerçeveden çağrılan
-    /// kalıcı klon, ISDK ile doğrudan kavrama) ve her birine ayrı ayrı efekt eklemek, yeni bir yol
-    /// açıldığında sessizce unutulacak bir adım demekti. <see cref="WeaponFrame"/> aynı olayı aynı
-    /// sebeple dinliyor.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Silahın kendi görünümü korunur:</b> geçiş boyunca özgün materyalin albedo dokusu ve
-    /// rengi <see cref="MaterialPropertyBlock"/> ile çözülme materyaline taşınır. Taşınmasaydı
-    /// silah çözülürken düz renkli bir siluete dönerdi — çözülme materyali TEK bir asset ve hangi
-    /// silaha takıldığını bilmiyor.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Efektin görünümü materyalde ayarlanır, burada değil</b> (kenar rengi/kalınlığı, desen
-    /// sıklığı, çözülme ekseni…). Bileşen yalnız <c>_Dissolve</c>'u sürer ve albedoyu taşır;
-    /// materyalin geri kalanına dokunmaz — aynı ayarın iki yerde durması sapma üretirdi.
-    /// </para>
+    /// Plays a dissolve-in transition when the weapon arrives in the hand: the model is temporarily
+    /// switched to the dissolve material, <c>_Dissolve</c> is driven 1→0, then the originals are
+    /// restored. No effect on release — the weapon disappears instantly.
+    /// <para>The gate is <see cref="Weapon.HeldChanged"/>, not the call sites: three paths put a
+    /// weapon in the hand (random grant, frame clone, direct ISDK grab) and hooking each separately
+    /// is a step silently forgotten when a fourth appears. <see cref="WeaponFrame"/> listens to the
+    /// same event for the same reason.</para>
+    /// <para>⚠️ The weapon's look is preserved: the original albedo and color are carried into the
+    /// dissolve material via <see cref="MaterialPropertyBlock"/>. Without that the weapon dissolves
+    /// as a flat-colored silhouette — the dissolve material is a SINGLE shared asset.</para>
+    /// <para>⚠️ The effect's look is tuned in the material, not here (edge color/thickness, pattern
+    /// frequency, axis…). This component only drives <c>_Dissolve</c> and carries the albedo; the
+    /// same setting in two places would drift.</para>
     /// </summary>
     [RequireComponent(typeof(Weapon))]
     public class SimpleWeaponDissolve : MonoBehaviour
     {
         private static readonly int DissolveId = Shader.PropertyToID("_Dissolve");
 
-        // Albedo iki isimden okunur: URP/Lit `_BaseMap` yazar, eski Standard/mobil shader'lar
-        // `_MainTex`. Silah paketinin materyali ikisini de taşıyor; hangisi doluysa o kullanılır.
+        // Albedo read from two names: URP/Lit writes `_BaseMap`, older Standard/mobile shaders
+        // `_MainTex`. The pack's material carries both; whichever is filled wins.
         private static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");
         private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
 
-        // Materyal atanmamışsa uyarı OTURUM başına bir kez: eksikse her silahta eksiktir
-        // (hepsi aynı prefab kitinden geliyor), örnek başına loglamak aynı satırı çoğaltırdı.
+        // Warned once PER SESSION: if the material is missing it is missing on every weapon (same
+        // prefab kit), so per-instance logging would just multiply the same line.
         private static bool _warnedNoMaterial;
 
         [Header("Materyal")]
@@ -60,9 +52,9 @@ namespace VortexArena.Core.Combat
 
         private readonly List<Target> _targets = new List<Target>();
 
-        /// <summary>Efektin dokunduğu tek bir Renderer ve onu eski hâline döndürmek için gereken
-        /// her şey. Property block Renderer BAŞINA tutulur: albedo dokusu silahtan silaha değil,
-        /// aynı silahın parçaları arasında bile değişiyor (gövde ile dürbün camı ayrı materyal).</summary>
+        /// <summary>One Renderer the effect touches plus what is needed to restore it. The property
+        /// block is PER Renderer: albedo varies even between parts of one weapon (body vs scope
+        /// glass are separate materials).</summary>
         private sealed class Target
         {
             public Renderer Renderer;
@@ -87,23 +79,19 @@ namespace VortexArena.Core.Combat
             _weapon.HeldChanged -= HandleHeldChanged;
             _routine = null;
 
-            // ⚠️ Obje kapanınca coroutine ÖLÜR (çerçeve klonu bırakılınca gizleniyor). Materyali
-            // geri koymazsak silah bir dahaki çağrılışında YARI ÇÖZÜLMÜŞ hâlde belirir; ayrıca
-            // property block'lu renderer SRP Batcher'a giremediği için maliyeti de sürerdi.
+            // ⚠️ The coroutine DIES when the object is disabled (frame clone hidden on release).
+            // Without restoring, the weapon returns HALF DISSOLVED next summon; and a renderer with
+            // a property block cannot enter the SRP Batcher, so the cost would persist too.
             Restore();
         }
 
         /// <summary>
-        /// Efektin uygulanacağı Renderer'ları bir kez toplar.
-        /// <para>
-        /// Yalnız <b>katı gövde</b> alınır: namlu alevi/duman (<see cref="ParticleSystemRenderer"/>)
-        /// ve nişan ışını (<see cref="LineRenderer"/>) kendi materyalleriyle çizilir — çözülme
-        /// materyaline çevrilirlerse efekt sırasında kaybolur ya da bozuk çizilirler.
-        /// </para>
-        /// <para>
-        /// <see cref="WeaponFrame"/>'in alt ağacı da atlanır: çerçeve sahnede duran KAYNAK silaha
-        /// aittir ve silah tutulduğunda zaten kapanıyor (klonda ise hiç yok).
-        /// </para>
+        /// Collects the Renderers the effect applies to, once.
+        /// <para>Only the solid body: muzzle flash/smoke (<see cref="ParticleSystemRenderer"/>) and
+        /// the aim ray (<see cref="LineRenderer"/>) use their own materials and would disappear or
+        /// render broken under the dissolve material.</para>
+        /// <para>The <see cref="WeaponFrame"/> subtree is skipped too — it belongs to the SOURCE
+        /// weapon in the scene and is already disabled while held (absent on the clone).</para>
         /// </summary>
         private void CollectTargets()
         {
@@ -126,7 +114,7 @@ namespace VortexArena.Core.Combat
                 _targets.Add(new Target
                 {
                     Renderer = renderer,
-                    // sharedMaterials her çağrıda YENİ dizi döndürür — sakladığımız kopya güvenli.
+                    // sharedMaterials returns a NEW array on every call — the copy we keep is safe.
                     OriginalMaterials = renderer.sharedMaterials,
                     Block = new MaterialPropertyBlock(),
                 });
@@ -143,8 +131,7 @@ namespace VortexArena.Core.Combat
 
             if (!held)
             {
-                // Elden çıktı: silah anında gider, geçiş yok. Yine de özgün materyaline dönsün —
-                // bir sonraki çağrılışa temiz girsin.
+                // Left the hand: instant, no transition. Still restore so the next summon is clean.
                 Restore();
                 return;
             }
@@ -158,7 +145,7 @@ namespace VortexArena.Core.Combat
             _routine = StartCoroutine(Appear());
         }
 
-        /// <summary>Silahı yoktan var eder: <c>_Dissolve</c> 1 → 0.</summary>
+        /// <summary>Materializes the weapon: <c>_Dissolve</c> 1 → 0.</summary>
         private IEnumerator Appear()
         {
             Swap();
@@ -168,8 +155,7 @@ namespace VortexArena.Core.Combat
             {
                 elapsed += Time.deltaTime;
 
-                // SmoothStep: yavaş başlayıp yavaş biten geçiş. Lineer sürüş VR'da "makine gibi"
-                // görünüyor, silahın belirmesi bir jest gibi durmalı.
+                // SmoothStep, not linear: linear reads "machine-like" in VR.
                 float k = Mathf.SmoothStep(0f, 1f, elapsed / appearSeconds);
                 SetDissolve(1f - k);
                 yield return null;
@@ -180,8 +166,8 @@ namespace VortexArena.Core.Combat
             _routine = null;
         }
 
-        /// <summary>Modeli çözülme materyaline çevirir ve her Renderer'ın property block'unu
-        /// KENDİ özgün görünümüyle doldurur (albedo + renk).</summary>
+        /// <summary>Switches the model to the dissolve material, filling each Renderer's property
+        /// block with its OWN original look (albedo + color).</summary>
         private void Swap()
         {
             if (_swapped)
@@ -201,7 +187,7 @@ namespace VortexArena.Core.Combat
 
                 target.Block.Clear();
                 WriteAppearance(target.Block, source);
-                target.Block.SetFloat(DissolveId, 1f); // ilk kare TAM görünmesin
+                target.Block.SetFloat(DissolveId, 1f); // so the first frame is not fully visible
                 target.Renderer.SetPropertyBlock(target.Block);
 
                 target.Renderer.sharedMaterials = GetDissolveMaterials(target);
@@ -210,7 +196,7 @@ namespace VortexArena.Core.Combat
             _swapped = true;
         }
 
-        /// <summary>Özgün materyalleri geri koyar ve property block'u temizler.</summary>
+        /// <summary>Restores the original materials and clears the property block.</summary>
         private void Restore()
         {
             if (!_swapped)
@@ -249,14 +235,11 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Renderer'ın slot sayısı kadar çözülme materyali taşıyan diziyi döndürür (ilk çağrıda
-        /// kurulur, sonra yeniden kullanılır — her tutuşta çöp üretmesin).
-        /// <para>
-        /// ⚠️ Bu dizi <c>.sharedMaterials</c>'a yazılır, <c>.materials</c>'a DEĞİL:
-        /// <c>.materials</c> her Renderer için materyal KOPYASI üretir ve o kopyalar hiç toplanmaz
-        /// (sızıntı). Çözülme materyali tek asset olarak paylaşılır; silaha özgü olan her şey
-        /// property block'ta yaşıyor.
-        /// </para>
+        /// Dissolve material array sized to the Renderer's slot count; built once, reused (no
+        /// garbage per grab).
+        /// <para>⚠️ Written to <c>.sharedMaterials</c>, NOT <c>.materials</c>: the latter creates a
+        /// material COPY per Renderer that is never collected (leak). The dissolve material is
+        /// shared as a single asset; everything weapon-specific lives in the property block.</para>
         /// </summary>
         private Material[] GetDissolveMaterials(Target target)
         {
@@ -274,9 +257,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Özgün materyalin görünümünü çözülme materyaline taşır.
-        /// <para>Doku bulunamazsa hiç yazılmaz (block'a <c>null</c> texture yazmak istisna atar) —
-        /// o parça düz renk çözülür, efekt yine çalışır.</para>
+        /// Carries the original material's look into the dissolve material.
+        /// <para>A missing texture is not written at all (a <c>null</c> texture in the block throws)
+        /// — that part dissolves flat-colored, the effect still works.</para>
         /// </summary>
         private static void WriteAppearance(MaterialPropertyBlock block, Material source)
         {
@@ -305,9 +288,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Materyal atanmamışsa bir kez uyarır. <b>Neden loglanıyor:</b> efekt sessizce hiç
-        /// oynamaz ve silah eskisi gibi anında belirir — yani bileşen takılı göründüğü hâlde
-        /// hiçbir şey yapmaz, teşhisi pahalı bir durum.
+        /// Warns once when no material is assigned. Logged because the failure is silent: the
+        /// weapon just appears instantly, so the component looks attached but does nothing.
         /// </summary>
         private static void WarnNoMaterial()
         {

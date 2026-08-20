@@ -5,18 +5,17 @@ using UnityEngine.UI;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Admin gözlemcinin oyuncu başına çizdiği <b>zemin halkası + ad etiketi</b> —
+    /// <b>Ground ring + name label</b> drawn per player by the admin spectator —
     /// <b>prefab</b> (<c>_Shared/App/Resources/UI/AdminPlayerMarker.prefab</c>).
     /// <para>
-    /// Dünya-uzayı canvas'larıdır: halka zemine yatar, etiket her karede kameraya döner.
-    /// Konumlandırma ve renklendirme <see cref="AdminPlayerMarkers"/>'ta kalır (oyuncu pozuna
-    /// bağlı); bu bileşen yalnız <b>görünümün</b> tutamağıdır — halka kalınlığı, etiket puntosu,
-    /// boyutlar prefabta düzenlenir.
+    /// World-space canvases. Positioning/coloring stay in <see cref="AdminPlayerMarkers"/> (pose
+    /// dependent); this component is only the handle for the <b>visuals</b>, which are edited in
+    /// the prefab.
     /// </para>
     /// </summary>
     public class AdminPlayerMarker : MonoBehaviour
     {
-        /// <summary>Prefabın <c>Resources</c> içindeki yolu (uzantısız).</summary>
+        /// <summary>The prefab's path inside <c>Resources</c> (without extension).</summary>
         public const string ResourcePath = "UI/AdminPlayerMarker";
 
         [Tooltip("Zemine yatan halka canvas'ı — konumu her karede koddan sürülür.")]
@@ -44,8 +43,8 @@ namespace VortexArena.App.Admin
         public TextMeshProUGUI LabelText => labelText;
 
         /// <summary>
-        /// Seçim görselini uygular. ⚠️ Halka sprite'ı çalışırken ÜRETİLMEZ — iki varyant da
-        /// prefabtan gelir; üretilseydi sanatçının seçtiği görsel seçim anında ezilirdi.
+        /// Applies the selection visual. ⚠️ Ring sprites are NOT generated at runtime — both
+        /// variants come from the prefab, else the artist's visual is overwritten on selection.
         /// </summary>
         public void SetSelected(bool selected)
         {

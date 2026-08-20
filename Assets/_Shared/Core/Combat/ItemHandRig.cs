@@ -3,53 +3,42 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Silah prefabındaki <b>el modellerinin</b> yerinin ve adının TEK tanımı — kavramanın
-    /// <b>elle yazılan</b> tek kaynağı bu düğümlerdir.
-    /// <para>
-    /// Yerleşim iki seviyedir: <c>&lt;silah kökü&gt;/Hands/Hand_&lt;Kind&gt;</c>. Ad tek yerde
-    /// durur çünkü üretici (editör aracı) ile tüketici kendi string'ini taşısaydı bir harflik
-    /// sapma hata üretmez, yalnız düğüm sessizce <b>bulunamaz</b> olurdu.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Yalnız SAĞ el yazılır.</b> Sol el bake sırasında aynalanarak üretilir
-    /// (<c>HandPose.CopyFrom(…, mirrorHandedness: true)</c>) — ayna matematiği elle yazılmaz.
-    /// İki eli ayrı ayrı yazmak, aynı kavramanın iki kez tarif edilmesi olurdu ve ikisi zamanla
-    /// kaçınılmaz olarak birbirinden saparadı.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Bu düğümler OYUNDA HİÇ ÇİZİLMEZ.</b> Bake bittiğinde kapatılırlar ve kapalı kalırlar:
-    /// silah sahnede de duruyor (raf/masa, <c>WeaponFrame</c>, <c>VA_WeaponCanvas</c>) ve uzak
-    /// avatarın elinde de — açık kalan bir el modeli arenada havada el olarak görünürdü. Oyuncunun
-    /// gördüğü el rig'in kendi elidir; bu düğümler yalnız <b>ne yazılacağını</b> tarif eder.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Runtime bu sınıfı OKUMAZ ve okumamalı.</b> Çalışma anında kullanılan veri bake
-    /// çıktısıdır (<c>ItemDefinition</c> kavrama alanları + <c>GripPoses/Pose_*</c>). Runtime'ı
-    /// buradan okutmak, gizlenmiş bir modeli canlı tutmayı gerektirir ve bake'i anlamsız kılardı.
-    /// Buradaki tek runtime kullanımı bir <b>emniyettir</b>: bake unutulmuşsa düğümü kapatmak.
-    /// </para>
+    /// The SINGLE definition of where the <b>hand models</b> live in a weapon prefab and what they
+    /// are named — these nodes are the only hand-authored source of the grip.
+    /// <para>Layout: <c>&lt;weapon root&gt;/Hands/Hand_&lt;Kind&gt;</c>. The name lives in one place
+    /// because a one-letter divergence between producer (editor tool) and consumer raises no error
+    /// — the node is silently NOT FOUND.</para>
+    /// <para>⚠️ Only the RIGHT hand is authored; the left is mirrored at bake
+    /// (<c>HandPose.CopyFrom(…, mirrorHandedness: true)</c>). Authoring both would describe the
+    /// same grip twice and the two would drift apart.</para>
+    /// <para>⚠️ NEVER DRAWN IN GAME: disabled when the bake finishes and left disabled. The weapon
+    /// also stands in the scene and in remote avatars' hands, so an enabled hand model would appear
+    /// floating in the arena. The hand the player sees is the rig's own.</para>
+    /// <para>⚠️ Runtime does NOT read this class: runtime data is the bake output
+    /// (<c>ItemDefinition</c> grip fields + <c>GripPoses/Pose_*</c>). Reading from here would
+    /// require keeping a hidden model alive and make the bake pointless. The only runtime use is
+    /// the safety net below.</para>
     /// </summary>
     public static class ItemHandRig
     {
-        /// <summary>El modellerini toplayan düğümün adı (silah kökünün DOĞRUDAN çocuğu).</summary>
+        /// <summary>Name of the node collecting the hand models (a DIRECT child of the weapon root).</summary>
         public const string RootNodeName = "Hands";
 
-        /// <summary>Yazılan elin tarafı — sol taraf bake'te aynalanır.</summary>
+        /// <summary>Handedness of the authored hand — the left side is mirrored at bake.</summary>
         public const bool AuthoredHandIsRight = true;
 
-        /// <summary>Bir kavrama noktasının el düğümü adı: <c>Hand_Primary</c>, <c>Hand_Secondary</c>.</summary>
+        /// <summary>Hand node name of a grip point: <c>Hand_Primary</c>, <c>Hand_Secondary</c>.</summary>
         public static string NodeName(GripSocketKind kind)
         {
             return $"Hand_{kind}";
         }
 
         /// <summary>
-        /// Silahın altındaki el düğümünü bulur; yoksa <c>null</c>.
-        /// <para>⚠️ Ağaç TARANMAZ (<c>GetComponentsInChildren</c> değil): arama tam iki seviye
-        /// <see cref="Transform.Find"/> ile iner — ağacı taramak, silahın başka bir yerine
-        /// düşmüş aynı adlı bir düğümü de "doğru" sayardı.
-        /// <c>Transform.Find</c> pasif çocukları da bulur, yani gizlenmiş el düğümü de bulunur
-        /// (bake'ten sonra düğüm kapalıdır ve yeniden düzenlenebilmelidir).</para>
+        /// Finds the hand node under the weapon; <c>null</c> when missing.
+        /// <para>⚠️ The tree is NOT scanned: the lookup descends exactly two levels with
+        /// <see cref="Transform.Find"/> — a scan would also accept a same-named node that ended up
+        /// elsewhere in the weapon. <c>Find</c> also returns inactive children, so the hidden
+        /// post-bake node stays re-editable.</para>
         /// </summary>
         public static Transform Find(Transform itemRoot, GripSocketKind kind)
         {
@@ -63,10 +52,10 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// El düğümlerini kapatır — <b>emniyet</b>. Bake zaten kapatıyor; bu, bake'i unutulmuş ya da
-        /// düzenleme için açık bırakılmış bir prefabın arenada havada el göstermesini engeller.
+        /// Disables the hand nodes — a safety net. The bake already does this; it guards a prefab
+        /// whose bake was forgotten (or left enabled for editing) from floating a hand in the arena.
         /// </summary>
-        /// <returns>Kapatılan düğüm sayısı (sıfır = zaten kapalıydı ya da hiç yok).</returns>
+        /// <returns>Nodes disabled (zero = already disabled or absent).</returns>
         public static int HideAll(Transform itemRoot)
         {
             int hidden = 0;

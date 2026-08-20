@@ -6,38 +6,29 @@ using VortexArena.Core.Audio;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// <see cref="ModeAudioRegistry"/>'nin Inspector yüzü: kural satırlarını modId/sahne adı
-    /// yazdırmak yerine <b>katalogdan</b> seçtirir ve satır başına sessiz kalacak kuralları
-    /// uyarıyla işaretler.
-    /// <para>
-    /// ⚠️ Varsayılan çizim KULLANILMAZ: bu kaydın iki alanı (mod, harita) serbest string'dir ve
-    /// elle yazılan bir harf hatası derlemeyi kırmaz — kural yalnızca hiç eşleşmez. Katalog
-    /// açılır listesi o hatayı imkânsız kılar; katalog bulunamazsa alanlar yine düz metin olarak
-    /// çizilir (kaydı düzenlemek editörsüz de mümkün kalsın).
-    /// </para>
-    /// <para>
-    /// Katalog burada da <c>Resources.Load</c> ile alınır — çalışma anındaki yolun aynısı, ikinci
-    /// bir referans (ve onunla birlikte ikinci bir doğruluk kaynağı) açılmaz.
-    /// </para>
-    /// <para>
-    /// Ses önizleme düğmesi YOKTUR ve eklenmez: editörde klip çalmanın tek yolu
-    /// <c>UnityEditor.AudioUtil</c> refleksiyonudur, o da internal olduğu için sürüm atlayınca
-    /// sessizce kırılır.
-    /// </para>
-    /// </summary>
+    /// <summary>Inspector for <see cref="ModeAudioRegistry"/>: picks mode/map from the catalog
+    /// instead of typed ids and flags rules that would stay silent.</summary>
+    /// <remarks>
+    /// ⚠️ No default drawing: mode and map are free strings, so a typo compiles fine and the rule
+    /// merely never matches. The catalog popup makes that impossible; without a catalog the fields
+    /// fall back to plain text so the asset stays editable.
+    /// <para>The catalog is loaded via <c>Resources.Load</c>, the same path as at runtime — no
+    /// second reference and no second source of truth.</para>
+    /// <para>No audio preview button: the only way to play a clip in the editor is reflection into
+    /// internal <c>UnityEditor.AudioUtil</c>, which breaks silently on a version bump.</para>
+    /// </remarks>
     [CustomEditor(typeof(ModeAudioRegistry))]
     internal sealed class ModeAudioRegistryEditor : UnityEditor.Editor
     {
         private const string CATALOG_RESOURCE = "GameCatalog";
 
-        /// <summary>Boş seçim = "kısıt yok"; her iki listenin de 0. sırasında durur.</summary>
+        /// <summary>Empty selection = "no restriction"; index 0 of both lists.</summary>
         private const string ANY_MODE_LABEL = "(her mod)";
         private const string ANY_MAP_LABEL = "(her harita)";
 
         private GameCatalog _catalog;
 
-        // Değerler (0. eleman daima boş string) ve onlara karşılık gelen açılır liste etiketleri.
+        // Values (element 0 always the empty string) and their popup labels.
         private string[] _modeIds;
         private string[] _modeLabels;
         private string[] _mapIds;
@@ -101,7 +92,7 @@ namespace VortexArena.Core.Editor
             serializedObject.ApplyModifiedProperties();
         }
 
-        /// <summary>Tek bir kural kutusunu çizer; kullanıcı Sil'e bastıysa <c>true</c> döner.</summary>
+        /// <summary>Draws one rule box; <c>true</c> when the delete button was pressed.</summary>
         private bool DrawRule(int index)
         {
             SerializedProperty rule = _rules.GetArrayElementAtIndex(index);
@@ -133,8 +124,8 @@ namespace VortexArena.Core.Editor
 
             EditorGUILayout.PropertyField(trigger, new GUIContent("Tetikleyici"));
 
-            // RoundStart'ta "bitmesine kaç saniye kaldı" diye bir soru yok: eşik yalnız uyarı
-            // tetikleyicilerinde okunuyor, orada çizmek yanlış bir ayar izlenimi verirdi.
+            // The threshold is read only by warning triggers; drawing it on RoundStart would
+            // suggest a setting that does nothing.
             if (trigger.enumValueIndex != (int)ModeAudioEvent.RoundStart)
             {
                 EditorGUILayout.PropertyField(warningSeconds, new GUIContent("Eşik (sn)"));
@@ -151,11 +142,10 @@ namespace VortexArena.Core.Editor
             return remove;
         }
 
-        /// <summary>
-        /// Katalogdan seçtiren açılır liste; katalog yoksa düz metin alanı. Kayıtta duran değer
-        /// listede yoksa (eski/bozuk kayıt) seçeneklere geçici olarak eklenir — aksi hâlde popup
-        /// onu sessizce ilk seçeneğe düşürür ve kullanıcı ne kaybettiğini göremez.
-        /// </summary>
+        /// <summary>Catalog popup, or a plain text field without a catalog.</summary>
+        /// <remarks>A stored value missing from the list (stale/broken rule) is appended as a
+        /// temporary option; otherwise the popup would silently snap it to the first option and
+        /// hide what was lost.</remarks>
         private static void DrawIdField(string label, SerializedProperty property,
             string[] values, string[] labels, string unknownWarning)
         {
@@ -172,7 +162,7 @@ namespace VortexArena.Core.Editor
             string[] shown = labels;
             if (unknown)
             {
-                // Bilinmeyen değer listenin SONUNA eklenir: mevcut indekslerin anlamı kaymasın.
+                // Unknown value goes to the END so existing indices keep their meaning.
                 shown = new string[labels.Length + 1];
                 labels.CopyTo(shown, 0);
                 shown[labels.Length] = current;
@@ -191,7 +181,7 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>Satır-içi denetimler: sessiz kural, oynanmayan mod/harita eşleşmesi, ölü kopya.</summary>
+        /// <summary>Inline checks: silent rule, unplayable mode/map pair, dead duplicate.</summary>
         private void DrawRuleDiagnostics(int index, SerializedProperty modeId,
             SerializedProperty sceneName, SerializedProperty trigger, SerializedProperty clips)
         {
@@ -225,10 +215,9 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>
-        /// Yeni satırın alanları TEK TEK kurulur: <c>InsertArrayElementAtIndex</c> bir öncekinin
-        /// değerlerini kopyalar, kurulmazsa yeni kural eski klipleri taşıyarak sessizce yanlış doğar.
-        /// </summary>
+        /// <summary>Initializes every field of the new row.</summary>
+        /// <remarks><c>InsertArrayElementAtIndex</c> copies the previous element, so without this
+        /// the new rule would silently be born carrying the old clips.</remarks>
         private void AddRule()
         {
             int index = _rules.arraySize;
@@ -302,7 +291,7 @@ namespace VortexArena.Core.Editor
             {
                 for (int i = 0; i < modes.Length; i++)
                 {
-                    // Lobi profilli modlar da listelenir: lobide de duyuru sesi kurulabiliyor.
+                    // Lobby-profile modes are listed too: the lobby can have announcements.
                     ModeDefinition mode = modes[i];
                     if (mode == null || string.IsNullOrEmpty(mode.ModeId))
                     {
@@ -347,7 +336,7 @@ namespace VortexArena.Core.Editor
         {
             if (string.IsNullOrEmpty(value))
             {
-                return 0; // boş = "kısıt yok", listenin başı
+                return 0; // empty = "no restriction", head of the list
             }
 
             for (int i = 0; i < values.Length; i++)

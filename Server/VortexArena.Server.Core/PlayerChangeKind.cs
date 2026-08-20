@@ -1,29 +1,29 @@
 #nullable enable
 namespace VortexArena.Server.Core;
 
-/// <summary>PlayerRegistry.Changed olayının nedeni.</summary>
+/// <summary>The reason behind the PlayerRegistry.Changed event.</summary>
 public enum PlayerChangeKind
 {
-    /// <summary>İlk kez bağlandı (yeni playerId tahsis edildi).</summary>
+    /// <summary>First connection (a new playerId was allocated).</summary>
     Added,
 
-    /// <summary>Bilinen deviceId yeniden bağlandı (eski soket kapatıldı, playerId korunur).</summary>
+    /// <summary>A known deviceId reconnected (old socket closed, playerId preserved).</summary>
     Reconnected,
 
-    /// <summary>Roster verisi değişti (status, ad, ready, takım).</summary>
+    /// <summary>Roster data changed (status, name, ready, team).</summary>
     Updated,
 
-    /// <summary>Bağlantı koptu veya HEARTBEAT_TIMEOUT boyunca status gelmedi: cihaz
-    /// RECONNECT_GRACE boyunca geri bekleniyor (§2).</summary>
+    /// <summary>Connection dropped or no status for HEARTBEAT_TIMEOUT: the device is awaited back for
+    /// RECONNECT_GRACE (§2).</summary>
     Reconnecting,
 
-    /// <summary>Kayıt tümüyle silindi: admin kopunca (oturumluk kimlik, hayalet satır bırakmaz —
-    /// Docs/ArenaNet-Protokol.md §2), atılan oyuncu (§5.4) ve RECONNECT_GRACE'i dolan ama maç
-    /// katılımcısı OLMAYAN oyuncu.</summary>
+    /// <summary>Record removed entirely: admin disconnect (session-scoped identity, leaves no ghost
+    /// row — Docs/ArenaNet-Protokol.md §2), a kicked player (§5.4), or an expired RECONNECT_GRACE on a
+    /// NON-participant.</summary>
     Removed,
 
-    /// <summary>RECONNECT_GRACE doldu ve kayıt maç katılımcısı olduğu için silinmedi: oyuncu
-    /// oyundan çıkarıldı, adı ve sayaçları maç bitene kadar tabloda durur (§10.2).
-    /// <para>⚠️ Yeni değer enum'un SONUNA eklenir.</para></summary>
+    /// <summary>RECONNECT_GRACE expired on a match participant: dropped from the game, but name and
+    /// counters stay in the table until the match ends (§10.2).
+    /// <para>⚠️ New values go to the END of the enum.</para></summary>
     Left
 }

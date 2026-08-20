@@ -1,12 +1,14 @@
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Bir eşyanın kaç elle tutulduğu (<see cref="ItemDefinition.HoldMode"/>).
-    /// Uzak çizimin "boş eli kabzaya yapıştırayım mı" kararının statik yarısıdır; dinamik yarısı
-    /// telden gelen <c>FLAG_GRIP_LINKED</c> bitidir (Docs/ArenaNet-Protokol.md §6.6).
+    /// How many hands an item is held with (<see cref="ItemDefinition.HoldMode"/>).
+    /// It is the static half of the remote rendering's "should I stick the free hand onto the
+    /// grip" decision; the dynamic half is the <c>FLAG_GRIP_LINKED</c> bit coming over the wire
+    /// (Docs/ArenaNet-Protokol.md §6.6).
     /// <para>
-    /// ⚠️ <b>Serialize edilen enum</b> — Unity sayısal indeks saklar. Yeni değer yalnız SONA
-    /// eklenir; başa/ortaya ekleme mevcut <c>WD_*.asset</c>'lerdeki değerleri sessizce kaydırır.
+    /// ⚠️ <b>Serialized enum</b> — Unity stores a numeric index. A new value is only appended at
+    /// the END; inserting at the start/middle silently shifts the values in existing
+    /// <c>WD_*.asset</c> files.
     /// </para>
     /// </summary>
     public enum ItemHoldMode

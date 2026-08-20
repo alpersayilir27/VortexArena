@@ -10,45 +10,30 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Admin gözlemcinin sahne üstü yönetim arayüzü — <b>kalıcı</b> ekran-uzayı canvas'ı.
-    /// Lobby ↔ arena geçişlerinde yeniden kurulmaz; operatör için arayüz kesintisizdir.
-    ///
-    /// <para><b>Görünüm prefabtan gelir:</b>
-    /// <c>Assets/_Shared/App/Resources/UI/AdminHud.prefab</c>. Bu sınıf yalnız <b>davranış</b>tır
-    /// (veri bağlama + tazeleme); yerleşim, renk, punto ve hangi öge nerede duracağı prefabta
-    /// düzenlenir. <see cref="AdminSpectator"/> prefabı <c>Resources.Load</c> ile yükleyip
-    /// örnekler — sahneye KONMAZ, böylece yeni arena eklerken hiçbir kurulum adımı doğmaz.</para>
-    ///
-    /// <para><b>Yerleşim</b> (prefabın taşıdığı tasarım):
-    /// <list type="bullet">
-    /// <item>En tepe orta: takım skorları; <b>skorların ortasındaki chip istatistikler düğmesi</b>
-    /// (aynı zamanda faz + kalan süre göstergesi).</item>
-    /// <item>Sol üst: tercihler düğmesi. Sağ üst: kamera kipi düğmeleri (SERBEST · KUŞ BAKIŞI) +
-    /// seçili oyuncu; solunda mod · harita + bağlantı durumu.</item>
-    /// <item>Yan paneller: takım oyuncuları — takımlıda sol kırmızı / sağ mavi, <b>FFA'da tek
-    /// kolon</b> (karar veriden gelir: hiçbir çevrimiçi oyuncunun takımı yoksa FFA).</item>
-    /// <item>Alt orta: maç kontrolleri (<see cref="AdminMatchControls"/>: başlat/duraklat/iptal +
-    /// durum satırı). Alt sağ: ölüm akışı.</item>
-    /// </list></para>
-    ///
-    /// <para><b>sortingOrder = 4000:</b> bağlantı hata ekranı 5000'de kalır ve gerektiğinde HUD'ın
-    /// üstünü kaplar — bağlantı yoksa gösterilecek canlı veri de yoktur. (Prefabın Canvas
-    /// bileşeninde durur; değiştirilirse iki ekranın sırası bozulur.)</para>
-    ///
-    /// <para>Tazeleme olay güdümlüdür (<see cref="AdminRoster.Changed"/>,
-    /// <see cref="AdminSession.Changed"/>); yalnız zamana bağlı alanlar (süre, ölüm geri sayımı,
-    /// snapshot yaşı) <see cref="RefreshInterval"/> ile ~4 Hz tazelenir.</para>
+    /// The admin spectator's on-screen management UI — a <b>persistent</b> screen-space canvas that
+    /// survives lobby ↔ arena transitions, so the operator never loses the interface.
+    /// <para><b>Look comes from the prefab</b>
+    /// (<c>Assets/_Shared/App/Resources/UI/AdminHud.prefab</c>); this class is behaviour only (data
+    /// binding + refresh). <see cref="AdminSpectator"/> loads and instantiates it via
+    /// <c>Resources.Load</c> — it is never placed in a scene, so adding an arena needs no setup
+    /// step.</para>
+    /// <para><b>sortingOrder = 4000</b> (on the prefab's Canvas): the connection error screen stays
+    /// at 5000 and may cover the HUD — without a connection there is no live data to show. Changing
+    /// it breaks the order of the two screens.</para>
+    /// <para>Refresh is event driven (<see cref="AdminRoster.Changed"/>,
+    /// <see cref="AdminSession.Changed"/>); only time-dependent fields (clock, respawn countdown,
+    /// snapshot age) tick at <see cref="RefreshInterval"/> (~4 Hz).</para>
     /// </summary>
     public class AdminHud : MonoBehaviour
     {
-        /// <summary>Prefabın <c>Resources</c> içindeki yolu (uzantısız).</summary>
+        /// <summary>Prefab path inside <c>Resources</c> (no extension).</summary>
         public const string ResourcePath = "UI/AdminHud";
 
-        /// <summary>Zamana bağlı alanların tazeleme aralığı (sn).</summary>
+        /// <summary>Refresh interval of time-dependent fields (s).</summary>
         private const float RefreshInterval = 0.25f;
 
-        /// <summary>Skorların ortasındaki chip'in SABİT etiketi. Chip bir düğmedir; üstünde ne
-        /// yaptığı yazar, maçın fazı değil.</summary>
+        /// <summary>FIXED label of the chip between the scores. The chip is a button, so it says
+        /// what it does — not the match phase.</summary>
         private const string ChipLabelText = "İSTATİSTİK";
 
         [Header("Oyuncu satırı")]
@@ -110,7 +95,7 @@ namespace VortexArena.App.Admin
         private readonly List<AdminPlayerRow> _redRows = new List<AdminPlayerRow>();
         private readonly List<AdminPlayerRow> _blueRows = new List<AdminPlayerRow>();
 
-        /// <summary>FFA lider tablosu sıralama tamponu (her tazelemede liste ayırmamak için).</summary>
+        /// <summary>Sort buffer for the FFA leaderboard (avoids a list allocation per refresh).</summary>
         private readonly List<AdminPlayerView> _ranked = new List<AdminPlayerView>();
 
         private float _nextRefresh;
@@ -119,8 +104,8 @@ namespace VortexArena.App.Admin
         private float _rowHeight = -1f;
 
         /// <summary>
-        /// Satır yüksekliği prefabtan okunur — sanatçı satırı büyütürse kolon yerleşimi uyar.
-        /// Prefab yoksa/ölçüsü anlamsızsa sabit yedeğe düşer.
+        /// Row height read from the prefab so resizing the row reflows the column; falls back to
+        /// the constant when the prefab is missing or its size is meaningless.
         /// </summary>
         private float RowHeight
         {
@@ -141,17 +126,17 @@ namespace VortexArena.App.Admin
 
         private void Awake()
         {
-            // ⚠ Arena sahnelerinde EventSystem HİÇ YOK (yalnız Lobby'de var) — garanti altına al,
-            // yoksa HUD düğmeleri sessizce ölür.
+            // ⚠ Arena scenes have NO EventSystem (only the lobby does) — guarantee one here, or the
+            // HUD buttons die silently.
             UiKit.EnsureEventSystem();
 
             WireButtons();
         }
 
         /// <summary>
-        /// Prefabtaki düğmelere geri çağrıları bağlar. <b>Prefabta kalıcı (persistent) onClick
-        /// kaydı YOKTUR:</b> hedef statik değil (seçili oyuncu/panel durumu değişiyor) ve
-        /// inspector'dan bağlanan bir kayıt kod tarafındaki koşulları atlardı.
+        /// Wires callbacks to the prefab's buttons. ⚠️ <b>No persistent <c>onClick</c> entries in
+        /// the prefab:</b> the target is not static (selected player/panel state change) and an
+        /// inspector-bound entry would skip the conditions applied here.
         /// </summary>
         private void WireButtons()
         {
@@ -184,7 +169,7 @@ namespace VortexArena.App.Admin
         private void OnEnable()
         {
             AdminSession.Changed += MarkDirty;
-            AdminSelection.Changed += MarkDirty; // başka bir admin'in eylemi/seçimi
+            AdminSelection.Changed += MarkDirty; // another admin's action/selection
             NetEvents.OnConnectionStateChanged += HandleConnectionState;
 
             if (AdminRoster.Instance != null)
@@ -271,11 +256,9 @@ namespace VortexArena.App.Admin
 
             if (chipText != null)
             {
-                // ⚠️ Chip bir DÜĞMEDİR ve üstünde ne yaptığı yazar — faz adı DEĞİL.
-                // Faz metni ("LOBİ", kazanan…) buradan kaldırıldı: operatör hangi haritanın açık
-                // olduğunu zaten sahneden görüyor ve düğmenin etiketi değişken olduğunda
-                // "istatistikler nerede" sorusu her fazda yeniden soruluyordu. Kaybolmaması gereken
-                // tek şey SÜRE/GERİ SAYIMdır; o da sağ üst maç satırına taşındı (RefreshMatchInfo).
+                // ⚠️ The chip is a BUTTON and says what it does — never the phase name. A varying
+                // label made "where are the stats" a per-phase question. The one thing that must
+                // not disappear, the clock/countdown, lives on the match line (RefreshMatchInfo).
                 chipText.text = ChipLabelText;
             }
 
@@ -284,10 +267,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Maç satırının sonuna eklenen ZAMAN bilgisi — geri sayım, kalan süre ya da kazanan.
-        /// <para>Faz ADI bilinçli olarak yazılmaz (lobide boş döner): operatör hangi haritanın açık
-        /// olduğunu sahneden görüyor, "LOBİ" yazısı yalnız yer kaplıyordu. Yazılan tek şey
-        /// <b>kendiliğinden bilinemeyecek</b> olandır — kaç saniye kaldığı.</para>
+        /// TIME suffix of the match line — countdown, remaining time or winner.
+        /// <para>The phase NAME is deliberately omitted (empty in the lobby): the operator sees the
+        /// map from the scene. Only what cannot be known by looking is written.</para>
         /// </summary>
         private static string StatusSuffix(AdminRoster roster)
         {
@@ -306,8 +288,8 @@ namespace VortexArena.App.Admin
                 return $"{FormatTime(roster.TimeRemaining)} · LIVE";
             }
 
-            // Duraklatma bir OPERATÖR kararıdır ve maçın koştuğunu sanmak pahalıdır → yazılır.
-            // Lobi ve yükleme yazılmaz: ikisi de sahneden zaten görülüyor.
+            // A pause is an OPERATOR decision and believing the match runs is costly → written.
+            // Lobby and loading are not: both are visible from the scene.
             return PhaseLabel(roster.Phase, roster.PhaseReason) is { Length: > 0 } label &&
                    roster.Phase == ArenaProtocol.PHASE_PAUSED &&
                    roster.PhaseReason != ArenaProtocol.PAUSE_REASON_LOBBY
@@ -322,8 +304,8 @@ namespace VortexArena.App.Admin
                 return;
             }
 
-            // Lobi bekleyişinde admin bir arenayı yerel olarak ÖNİZLİYOR olabilir → sunucunun
-            // bildirdiği sahne yerine gerçekten baktığımız sahneyi yaz.
+            // While waiting in the lobby the admin may be PREVIEWING an arena locally → write the
+            // scene actually being looked at, not the one the server reports.
             string activeScene = SceneManager.GetActiveScene().name;
             bool previewing = roster.PhaseReason == ArenaProtocol.PAUSE_REASON_LOBBY &&
                               activeScene != roster.SceneName &&
@@ -334,8 +316,8 @@ namespace VortexArena.App.Admin
             string mode = string.IsNullOrEmpty(roster.ModeId) ? "-" : AdminContent.ModeDisplayName(roster.ModeId);
             string line = ffa ? $"{mode} · {map} · herkes tek" : $"{mode} · {map}";
 
-            // Süre/geri sayım chip'ten buraya taşındı (bkz. StatusSuffix): chip artık sabit bir
-            // düğme etiketi taşıyor ve zaman bilgisinin kaybolmaması gerekiyor.
+            // Clock/countdown lives here, not on the chip (see StatusSuffix): the chip carries a
+            // fixed button label and the time must not disappear.
             string status = StatusSuffix(roster);
             matchInfoText.text = status.Length > 0 ? $"{line} · {status}" : line;
         }
@@ -364,7 +346,7 @@ namespace VortexArena.App.Admin
             {
                 if (connectionDot != null)
                 {
-                    // Snapshot 1 sn'den eski ise poz akışı duruyor demektir (oyuncu yok ya da ağ sorunu).
+                    // A snapshot older than 1 s means the pose stream stopped (no players or network trouble).
                     connectionDot.color = age >= 0f && age <= 1f ? UiKit.Good : UiKit.Accent;
                 }
 
@@ -379,9 +361,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// FFA lider tablosu: skora göre azalan ilk 3 (<c>ad · skor</c>). Takım skoru olmayan
-        /// modda üst bandın tek anlamlı içeriği budur. Kimse puan almadıysa boş döner — sıfırlar
-        /// dizisi bilgi taşımaz, yalnız yer kaplar.
+        /// FFA leaderboard: top 3 by score (<c>name · score</c>) — the only meaningful top-band
+        /// content in a mode without team scores. Empty while nobody scored: a row of zeroes
+        /// carries no information.
         /// </summary>
         private string LeaderboardLine(AdminRoster roster)
         {
@@ -423,8 +405,8 @@ namespace VortexArena.App.Admin
             return byScore != 0 ? byScore : a.playerId.CompareTo(b.playerId);
         }
 
-        /// <summary>Maç sonu başlığı: takım skorlu modda kazanan takım, bireysel skorlu modda
-        /// kazanan oyuncu (§5.3 <c>match_end</c> iki kanalı).</summary>
+        /// <summary>Match end headline: winning team in team-scored modes, winning player in
+        /// individually scored ones (the two <c>match_end</c> channels, §5.3).</summary>
         private static string WinnerLabel(AdminRoster roster)
         {
             if (roster.WinnerTeam == "red") return "KIRMIZI KAZANDI";
@@ -434,8 +416,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Çoklu operatör satırı: kaç admin bağlı + son admin eylemi (§5.3 <c>admin_state</c>).
-        /// Tek admin varken ve duyuru yokken boş kalır — normal kullanımda hiç görünmez.
+        /// Multi-operator line: connected admin count + last admin action (§5.3
+        /// <c>admin_state</c>). Empty with a single admin and no notice, so it never shows in
+        /// normal use.
         /// </summary>
         private void RefreshAdminNotice(bool connected)
         {
@@ -495,9 +478,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Kolon başlığına "· N KALİBRESİZ" ekler (§10.6) — operatör tercihler panelini açmadan,
-        /// hangi kolona bakması gerektiğini görsün. Kimse kalibresiz değilse hiçbir şey eklenmez:
-        /// sürekli duran bir "0 kalibresiz" yazısı gürültüdür.
+        /// Appends "· N KALİBRESİZ" to the column header (§10.6) so the operator sees which column
+        /// needs attention without opening the preferences panel. Nothing is appended at zero — a
+        /// permanent "0 uncalibrated" is noise.
         /// </summary>
         private static string CalibrationSuffix(IReadOnlyList<AdminPlayerView> players)
         {
@@ -566,9 +549,9 @@ namespace VortexArena.App.Admin
                 headerHeight + 6f + count * (height + rowGap), 4f, 24f);
         }
 
-        /// <summary>Kamera kipi düğmelerini ve seçili oyuncu satırını boyar. ⚠️ Dizide POV yuvası
-        /// (0) boştur — o kipe yalnız oyuncu kartından ve klavyeden girilir; döngü null-güvenli
-        /// olduğu için boş yuva sessizce atlanır.</summary>
+        /// <summary>Colours the camera mode buttons and the selected player line. ⚠️ Slot 0 (POV) is
+        /// empty — that mode is entered only from a player card or the keyboard; the loop is
+        /// null-safe, so the empty slot is skipped.</summary>
         private void RefreshCameraBar(AdminRoster roster)
         {
             var active = (int)AdminSession.CameraMode;
@@ -603,8 +586,8 @@ namespace VortexArena.App.Admin
             bool hasPose = RemotePlayerRegistry.Instance != null &&
                            RemotePlayerRegistry.Instance.GetInterpolatedPose(selectedId, out _, out _, out _);
 
-            // POV kipi ada ÖN EK olarak yazılır: şeritte POV düğmesi olmadığı için operatörün o
-            // kipte olduğunu okuyabileceği tek yer burasıdır.
+            // POV is written as a PREFIX to the name: with no POV button on the bar, this is the
+            // only place the operator can read that the mode is active.
             if (AdminSession.CameraMode != AdminCameraMode.Pov)
             {
                 selectedText.text = name;
@@ -638,11 +621,11 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// İhlal akışı (§10.9). ⚠️ Kill feed'in İÇİNE yazılmaz ve alanı onunla paylaşmaz: ikisi
-        /// farklı sorulara cevap veriyor (maçta ne oldu / operatörün şimdi ne yapması gerekiyor)
-        /// ve tek bir listede ikisi de okunmaz olur.
-        /// <para>Alan prefabta bağlanmamış olabilir — o durumda akış sessizce çizilmez, HUD'ın
-        /// geri kalanı çalışmaya devam eder (panellerdeki eksik bağ deseninin aynısı).</para>
+        /// Violation feed (§10.9). ⚠️ Never written INTO the kill feed and never shares its field:
+        /// they answer different questions (what happened in the match / what the operator must do
+        /// now) and merged into one list neither stays readable.
+        /// <para>The field may be unbound in the prefab — then the feed silently draws nothing and
+        /// the rest of the HUD keeps working (same pattern as the panels).</para>
         /// </summary>
         private void RefreshViolationFeed(AdminRoster roster)
         {
@@ -675,7 +658,7 @@ namespace VortexArena.App.Admin
             }
         }
 
-        // ------------------------------------------------------------- geri çağrı
+        // ------------------------------------------------------------- callbacks
 
         private void HandleRowSelected(int playerId)
         {
@@ -688,10 +671,11 @@ namespace VortexArena.App.Admin
             AdminSession.CameraMode = AdminCameraMode.Pov;
         }
 
-        // ------------------------------------------------------------- biçimleme
+        // ------------------------------------------------------------- formatting
 
-        /// <summary>Durumu operatör metnine çevirir (§10.1). Faz tek başına yetmez: telde tek bir
-        /// <c>paused</c> lobi de olabilir, yükleme/geri sayım/duraklatma da — gerekçe ayırır.</summary>
+        /// <summary>Turns the state into operator text (§10.1). The phase alone is not enough: one
+        /// <c>paused</c> on the wire may be lobby, loading, countdown or an operator pause — the
+        /// reason separates them.</summary>
         private static string PhaseLabel(string phase, string phaseReason)
         {
             if (phase == ArenaProtocol.PHASE_PLAYING) return "LIVE";

@@ -7,13 +7,12 @@ using UnityEngine.SceneManagement;
 namespace VortexArena.Net.Editor
 {
     /// <summary>
-    /// Hiyerarşi sağ-tık menüsü: <c>GameObject &gt; VortexArena &gt; Network Parent</c>.
-    /// Seçili TÜM sahne objelerine <see cref="NetIdentity"/> ekler ve sahne bazında benzersiz
-    /// sceneId (o sahnedeki max + 1) atar. Tüm değişiklikler TEK adımda geri alınabilir
-    /// (Undo grubu), dokunulan sahneler dirty işaretlenir.
+    /// Hierarchy right-click menu: <c>GameObject &gt; VortexArena &gt; Network Parent</c>.
+    /// Adds <see cref="NetIdentity"/> to ALL selected scene objects with a per-scene unique sceneId
+    /// (that scene's max + 1), undoable in ONE step, marking touched scenes dirty.
     /// <para>
-    /// Prefab ASSET'leri atlanır: sceneId sahneye özgüdür, projedeki prefab'a bake edilirse
-    /// her örnek aynı id ile gelir. Zaten kimliği olan (sceneId ≠ 0) obje de es geçilir.
+    /// Prefab ASSETS are skipped: sceneId is scene-specific and baked into a project prefab every
+    /// instance would share it. Objects that already have an id (sceneId ≠ 0) are skipped too.
     /// </para>
     /// </summary>
     internal static class NetworkParentMenu
@@ -23,8 +22,8 @@ namespace VortexArena.Net.Editor
         [MenuItem(MENU_PATH, false, 30)]
         private static void AddNetworkParent(MenuCommand command)
         {
-            // Hiyerarşi bağlam menüsünde Unity bu komutu SEÇİLEN HER OBJE için bir kez çağırır;
-            // seçimin tamamını burada işlediğimiz için yalnız ilk çağrıyı geçiriyoruz.
+            // In the hierarchy context menu Unity calls this command once for EVERY SELECTED OBJECT;
+            // since we process the whole selection here, only the first call is let through.
             GameObject[] selection = Selection.gameObjects;
             if (command.context != null && selection.Length > 1 && command.context != selection[0])
             {
@@ -34,8 +33,8 @@ namespace VortexArena.Net.Editor
             int undoGroup = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName("VortexArena Network Parent");
 
-            // Sahne başına tek tarama: liste bileşen REFERANSI tuttuğu için atanan her yeni id
-            // bir sonraki NextFreeId hesabına anında yansır (sayaç sahne bazında ilerler).
+            // One scan per scene: the list holds component REFERENCES, so each new id is visible to the
+            // next NextFreeId immediately (the counter advances per scene).
             var perScene = new Dictionary<Scene, List<NetIdentity>>();
             int added = 0;
             int assigned = 0;
@@ -67,7 +66,7 @@ namespace VortexArena.Net.Editor
                 else if (identity.SceneId != 0u)
                 {
                     skipped++;
-                    continue; // zaten bake'li — id'ye dokunma
+                    continue; // already baked — do not touch the id
                 }
 
                 Undo.RecordObject(identity, "Assign Scene Id");
@@ -102,8 +101,8 @@ namespace VortexArena.Net.Editor
         }
 
         /// <summary>
-        /// Obje SAHNE objesi mi: proje penceresindeki prefab/asset'ler (persistent) elenir,
-        /// geçerli bir sahneye ait olması aranır.
+        /// Is this a SCENE object: project-window prefabs/assets (persistent) are filtered out and it
+        /// must belong to a valid scene.
         /// </summary>
         private static bool IsSceneObject(GameObject go)
         {

@@ -1,18 +1,16 @@
 #nullable enable
 namespace VortexArena.Server.Core.Modes;
 
-/// <summary>Team Deathmatch: her doğrulanmış öldürme, ÖLDÜRENİN takımına +1 puan yazar.
-/// Maç, bir takım skor limitine ulaşınca ya da süre bitince biter; süre bitiminde yüksek skor
-/// kazanır, eşitlikte berabere (<see cref="MatchOutcome.Draw"/>).
-/// <para>Kurallar varsayılandan yalnız doğma korumasıyla ayrılır
-/// (<see cref="ModeRules.TeamDefault"/>): iki takım, takım skoru, dost ateşi kapalı, kendi
-/// tabanında canlanma, sahnede duran silah.</para></summary>
+/// <summary>Team Deathmatch: every validated kill gives the killer's team +1; ends on the score limit
+/// or on time (higher score wins, a tie is <see cref="MatchOutcome.Draw"/>).</summary>
+/// <remarks>Differs from <see cref="ModeRules.TeamDefault"/> only by spawn protection: two teams, team
+/// score, friendly fire off, revive at the own base, weapon standing in the scene.</remarks>
 public sealed class TdmMode : IGameMode
 {
     public string ModeId => "tdm";
 
-    /// <summary>⚠️ Doğma koruması TDM'de zorunludur (§10.4): canlanma kendi tabanında olduğu için
-    /// tabanı gözleyen bir rakip canlanan oyuncuyu doğduğu karede vurabilirdi.</summary>
+    /// <summary>⚠️ Spawn protection is mandatory in TDM (§10.4): revive happens at the own base, so an
+    /// opponent watching it could shoot the player on the spawn frame.</summary>
     public ModeRules Rules => ModeRules.TeamDefault with { SpawnProtectionSeconds = 5f };
 
     public int DefaultRoundSeconds => 300;
@@ -31,7 +29,7 @@ public sealed class TdmMode : IGameMode
             team = player.Team;
             break;
         }
-        // Öldüren ayrılmış/takımsızsa puan yazılmaz (skor sahibi kalmadı).
+        // Killer left or has no team: no point (there is no score owner).
         if (team != "red" && team != "blue") return;
         director.AddScore(team, 1);
     }

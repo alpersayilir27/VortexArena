@@ -5,58 +5,41 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Arena
 {
-    /// <summary>
-    /// Taban bölgelerinin (<see cref="BaseZone"/>) görünür/etkin olup olmadığına karar veren
-    /// <b>TEK</b> yer: kırmızı/mavi şeritler yalnız <b>takımlı</b> modda anlamlıdır.
-    /// <list type="bullet">
-    /// <item><b>Takımlı</b> (TDM, turnuva): şeritler durur — biri canlanma kapısı
-    /// (<see cref="ModeReviveAnchor.OwnBase"/>), diğeri tur arası toplanma kapısıdır.</item>
-    /// <item><b>Takımsız</b> (FFA): gizlenir — orada canlanma şartı sabit durmaktır, renkli bir
-    /// şerit oyuncuya olmayan bir kural anlatırdı.</item>
-    /// </list>
+    /// <summary>The ONLY place deciding whether <see cref="BaseZone"/>s are visible/enabled: the
+    /// red/blue strips only mean something in a <b>team</b> mode.</summary>
+    /// <remarks>
+    /// Team-less (FFA): hidden — reviving there means standing still, so a colored strip would teach
+    /// a rule that does not exist.
     /// <para>
-    /// <b>Kapı hangi moddur:</b> öncelik <see cref="ModeSelection"/> (§5.3
-    /// <c>selection_state</c>) — yani <b>seçili</b> mod. Sebep lobidir: admin bir arenayı
-    /// sahnelediğinde herkes o arenaya geçer ama aktif kural hâlâ lobi profilidir (§10.7), yani
-    /// koşan kurala bakan bir kapı "hangi maç kurulacak" sorusunu hiç göremezdi. Sunucu seçimi
-    /// bildirmemişse (eski sunucu / bağlantı yok) <see cref="ModeRuntime"/>'ın takım kipine düşülür.
+    /// The gate is <see cref="ModeSelection"/> (§5.3 <c>selection_state</c>), i.e. the SELECTED
+    /// mode, not the running one: staging an arena moves everyone while the lobby rules still run
+    /// (§10.7). Falls back to <see cref="ModeRuntime"/> when the server reports no selection.
     /// </para>
     /// <para>
-    /// <b>Duvar arkasından görünürlük (x-ray):</b> şerit görünür olduğunda ve yerel oyuncu
-    /// <b>ÖLÜYKEN</b>, oyuncunun <b>KENDİ</b> takımının şeridine ikinci bir materyal slotu eklenir
-    /// (<c>M_BaseZoneXRay</c>, <c>VortexArena/BaseZoneXRay</c> shader'ı). O materyal
-    /// <c>ZTest Greater</c> ile çizildiği için yalnız şeridin ÖNÜNDE başka geometri olan
-    /// piksellerde görünür: arena dekorla dolsa bile ölen oyuncu canlanmak için nereye yürüyeceğini
-    /// görür. Aynı mesh'in ikinci çizimi olduğu için ne yeni GameObject ne URP renderer feature ne
-    /// de yeni katman gerekir.
-    /// <list type="bullet">
-    /// <item><b>Hayattaki oyuncuda hiç eklenmez</b> — canlanma noktasını duvar arkasından görmeye
-    /// hayattayken ihtiyaç yok; <see cref="PlayerCombatState.LocalAliveChanged"/> tetikler.</item>
-    /// <item><b>Rakip taban asla çizilmez</b> — slot hiç eklenmez.</item>
-    /// <item>Takım <see cref="Team.Neutral"/> ise (takım atanmadı, admin gözlemci) hiç eklenmez.</item>
-    /// <item>Takım rengi <b>şeridin kendi materyalinden</b> okunur — ikinci bir renk tanımı doğmasın.</item>
-    /// </list>
+    /// X-ray: while the local player is DEAD, a second material slot (<c>M_BaseZoneXRay</c>,
+    /// <c>ZTest Greater</c>) is added to their OWN team's strip so the revive point is visible
+    /// through decor. Never for a living player, never for the enemy base, never for
+    /// <see cref="Team.Neutral"/>. Team color is read from the strip's own material — no second
+    /// color definition.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Silah kaynağıyla ilgisi YOKTUR.</b> Bu iş eskiden <c>WeaponGranter</c>'ın süpürmesine
-    /// binmişti ve kapısı <c>weaponSource</c>'tu; FFA'da ikisi birlikte değiştiği için doğru
-    /// görünüyordu. Lobinin silahı rastgeleye alınınca lobide de tabanlar kayboldu — kapı ayrıldı.
+    /// ⚠️ Unrelated to the weapon source: this used to ride on <c>WeaponGranter</c>'s
+    /// <c>weaponSource</c> gate, which silently hid the bases once the lobby weapon became random.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Yalnız KENDİ kapattığını geri açar.</b> Aynı bileşenleri <c>AdminSpectator</c> de
-    /// kapatıyor (gözlemcinin ekranında taban takibi anlamsız); koşulsuz açan bir geri alma onun
-    /// kararını sessizce bozardı. Aynı sebeple x-ray de yalnız KENDİ eklediği slotları söker.
+    /// ⚠️ Only restores what it disabled ITSELF (x-ray likewise) — <c>AdminSpectator</c> disables
+    /// the same components, and an unconditional restore would undo its decision.
     /// </para>
     /// <para>
-    /// <b>Neden kendini önyükleyen tekil</b> (<c>WeaponGranter</c>/<c>PlayerCombatState</c>
-    /// deseni): sahneye bileşen konsaydı her yeni arenaya elle bir kurulum adımı doğardı.
+    /// Self-bootstrapping singleton (<c>WeaponGranter</c> pattern): a scene component would add a
+    /// manual setup step to every new arena.
     /// </para>
-    /// </summary>
+    /// </remarks>
     public class BaseZoneVisibility : MonoBehaviour
     {
-        /// <summary>X-ray materyalinin <c>Resources</c> yolu. ⚠️ Materyal <c>Resources/</c> altında
-        /// durmalı: hiçbir sahneden referans verilmediği için shader aksi hâlde build'den strip
-        /// edilir ve Quest'te şerit pembe çizilir.</summary>
+        /// <summary><c>Resources</c> path of the x-ray material. ⚠️ Must stay under
+        /// <c>Resources/</c>: no scene references it, so otherwise the shader is stripped from the
+        /// build and the strip draws pink on Quest.</summary>
         private const string XRayMaterialResource = "M_BaseZoneXRay";
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -64,20 +47,20 @@ namespace VortexArena.Core.Arena
 
         private static BaseZoneVisibility _instance;
 
-        /// <summary>Bu bileşenin KAPATTIĞI bölgeler — başkasının kapattığı karışmasın diye ayrı
-        /// tutulur. Sahne değişince referanslar ölür (Unity null'ı) ve liste yeniden kurulur.</summary>
+        /// <summary>Zones disabled BY THIS component — kept apart so another owner's decision is not
+        /// undone. Refs die with the scene and the list is rebuilt.</summary>
         private readonly List<BaseZone> _disabledZones = new List<BaseZone>();
 
-        /// <summary>Bu bileşenin GİZLEDİĞİ görsel şerit objeleri.</summary>
+        /// <summary>Strip visual objects hidden BY THIS component.</summary>
         private readonly List<GameObject> _hiddenObjects = new List<GameObject>();
 
-        /// <summary>X-ray slotu EKLENEN renderer'lar ve onlara verilen materyal örnekleri.
-        /// İkisi de yalnız bu bileşene aittir; sökerken kimin ne koyduğu buradan bilinir.</summary>
+        /// <summary>Renderers this component added an x-ray slot to, and the material instances it
+        /// gave them — the record of who put what, used when removing.</summary>
         private readonly List<Renderer> _xrayRenderers = new List<Renderer>();
 
         private readonly List<Material> _xrayMaterials = new List<Material>();
 
-        /// <summary>Materyal dizisi okuma/yazma kuyruğu — kare başına çöp üretmemek için.</summary>
+        /// <summary>Scratch buffer for material array read/write — avoids per-frame garbage.</summary>
         private readonly List<Material> _materialScratch = new List<Material>();
 
         private Material _xrayShared;
@@ -106,8 +89,8 @@ namespace VortexArena.Core.Arena
 
             _instance = this;
 
-            // Kalıcı tekiliz: obje devre dışı bırakılsa bile olaylar kaçmasın diye Awake/OnDestroy
-            // (PlayerCombatState deseni).
+            // Persistent singleton: Awake/OnDestroy rather than OnEnable/OnDisable so events are not
+            // missed if the object is deactivated (PlayerCombatState pattern).
             SceneManager.sceneLoaded += HandleSceneLoaded;
             ModeSelection.Changed += Apply;
             ModeRuntime.Changed += Apply;
@@ -136,32 +119,31 @@ namespace VortexArena.Core.Arena
 
         private void HandleLocalTeamChanged(Team team)
         {
-            // Takım değişimi yalnız x-ray'i ilgilendiriyor ama Apply zaten idempotent: ayrı bir
-            // dar yol açmak ikinci bir uygulama noktası olurdu.
+            // Only the x-ray cares, but Apply is idempotent — a narrow path would be a second
+            // application point.
             Apply();
         }
 
         private void HandleLocalAliveChanged(bool alive)
         {
-            // Ölüm/canlanma da yalnız x-ray'i ilgilendiriyor — HandleLocalTeamChanged ile aynı
-            // gerekçeyle Apply()'a yönlendirilir, ayrı bir dar yol açılmaz.
+            // Same rationale as HandleLocalTeamChanged: routed through Apply(), no narrow path.
             Apply();
         }
 
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            // Yeni sahne = yeni bölgeler; eskiler sahneyle birlikte gitti. Listeler ölü
-            // referanslarla dolmasın diye BOŞALTILIR — geri alma da anlamını yitirdi.
+            // New scene = new zones; the old ones died with the scene, so the restore lists are
+            // cleared instead of holding dead refs.
             _disabledZones.Clear();
             _hiddenObjects.Clear();
             Apply();
         }
 
-        /// <summary>Kararın tek uygulama noktası. Bölgeler sahnede aranır: bu bileşen sahne
-        /// yüklenmeden de doğabilir ve <c>ModeSelection</c> sahneden bağımsız değişir.</summary>
+        /// <summary>Single application point. Zones are searched in the scene: this component can be
+        /// born before a scene loads and <c>ModeSelection</c> changes independently of it.</summary>
         private void Apply()
         {
-            // Her koşulda önce sökülür: mod da takım da değişmiş olabilir ve slot yığılmamalı.
+            // Always removed first: mode or team may have changed and slots must not pile up.
             ClearXRay();
 
             if (ShouldShow())
@@ -174,8 +156,8 @@ namespace VortexArena.Core.Arena
             Hide();
         }
 
-        /// <summary>Seçili mod varsa o, yoksa koşan kural. "Bilinmiyor" ile "takımsız" ayrı
-        /// durumlardır — eski sunucuda bugünkü davranış korunsun diye kural devralır.</summary>
+        /// <summary>Selected mode if any, otherwise the running rules. "Unknown" and "team-less" are
+        /// different states — the rules take over so an old server keeps today's behaviour.</summary>
         private static bool ShouldShow()
         {
             return ModeSelection.HasValue ? !ModeSelection.IsTeamless : !ModeRuntime.IsTeamless;
@@ -192,10 +174,10 @@ namespace VortexArena.Core.Arena
                     continue;
                 }
 
-                // ⚠️ Bölgenin GameObject'i KAPATILMAZ, bileşeni kapatılır: bileşeni kapatmak
-                // PlayerCombatState tarafından "açık taban yok" diye okunur, GameObject'i kapatmak
-                // ise altındaki HER ŞEYİ (görsel şerit dahil) kapatır ve Restore'da neyi geri
-                // açacağımızı bulanıklaştırır — şeridi ayrıca HideStrip yönetiyor.
+                // ⚠️ The component is disabled, NOT the GameObject: PlayerCombatState reads a
+                // disabled component as "no open base", while deactivating the object would take
+                // EVERYTHING under it down and blur what Restore should bring back (the strip is
+                // HideStrip's job).
                 if (zone.enabled)
                 {
                     zone.enabled = false;
@@ -206,7 +188,7 @@ namespace VortexArena.Core.Arena
             }
         }
 
-        /// <summary>Taban bölgesinin görsel şeridi: Renderer'lı doğrudan çocuklar.</summary>
+        /// <summary>The zone's strip visual: direct children carrying a Renderer.</summary>
         private void HideStrip(BaseZone zone)
         {
             Transform root = zone.transform;
@@ -223,14 +205,14 @@ namespace VortexArena.Core.Arena
             }
         }
 
-        /// <summary>Bu doğrudan çocuk "görsel şerit" mi. <see cref="HideStrip"/> ile x-ray aynı
-        /// kümeye bakmalı — ayrı iki seçim kuralı sessizce sapardı.</summary>
+        /// <summary>Is this direct child a "strip visual". <see cref="HideStrip"/> and the x-ray must
+        /// look at the same set — two selection rules would silently drift.</summary>
         private static bool IsStripChild(Transform child)
         {
             return child.GetComponentInChildren<Renderer>(true) != null;
         }
 
-        /// <summary>Yalnız bu bileşenin kapattıklarını geri açar; ölü referanslar atlanır.</summary>
+        /// <summary>Re-enables only what this component disabled; dead refs are skipped.</summary>
         private void Restore()
         {
             for (int i = 0; i < _hiddenObjects.Count; i++)
@@ -255,15 +237,12 @@ namespace VortexArena.Core.Arena
 
         // ------------------------------------------------------------------------- x-ray
 
-        /// <summary>Yerel oyuncunun takımına ait şeritlere duvar-arkası çizim slotunu ekler.
-        /// Yalnız oyuncu <b>ÖLÜYKEN</b> anlamlıdır — hayattaki oyuncunun canlanma noktasını duvar
-        /// arkasından görmeye ihtiyacı yok.</summary>
+        /// <summary>Adds the through-wall draw slot to the local player's own team strips; only
+        /// meaningful while they are DEAD.</summary>
         private void ApplyXRay()
         {
-            // ⚠️ Instance null olabilir: bu bileşen de kendini önyükleyen bir kalıcı tekil ve
-            // bootstrap sırası PlayerCombatState'ten önce gelebilir. O durumda alive sayılır —
-            // PlayerCombatState'in kendi başlangıç değeriyle aynı (IsAlive = true) — ve Instance
-            // doğup canlılık netleşince LocalAliveChanged tetiklenip Apply() yeniden değerlendirir.
+            // ⚠️ Instance may be null — bootstrap order can put this before PlayerCombatState. Treat
+            // as alive (its own initial value); LocalAliveChanged re-runs Apply() once it exists.
             if (PlayerCombatState.Instance == null || PlayerCombatState.Instance.IsAlive)
             {
                 return;
@@ -272,7 +251,7 @@ namespace VortexArena.Core.Arena
             Team local = ArenaCombat.LocalTeam;
             if (local == Team.Neutral)
             {
-                // Takım yok (henüz atanmadı / admin gözlemci): kimin şeridi olduğu belli değil.
+                // No team yet (unassigned / admin spectator): whose strip it is cannot be told.
                 return;
             }
 
@@ -309,13 +288,9 @@ namespace VortexArena.Core.Arena
             }
         }
 
-        /// <summary>
-        /// Renderer'a ikinci bir materyal ekler: aynı mesh bir kez daha, ters derinlik testiyle.
-        /// <para>
-        /// ⚠️ <c>renderer.materials</c> <b>getter'ı kullanılmaz</b> — mevcut takım materyalini de
-        /// klonlar ve paylaşılan materyalle bağını koparırdı.
-        /// </para>
-        /// </summary>
+        /// <summary>Adds a second material to the renderer: the same mesh again with inverted depth
+        /// test. ⚠️ The <c>renderer.materials</c> getter is NOT used — it would clone the existing
+        /// team material and cut its link to the shared one.</summary>
         private void AddXRaySlot(Renderer renderer, Material shared)
         {
             if (renderer == null)
@@ -325,7 +300,7 @@ namespace VortexArena.Core.Arena
 
             renderer.GetSharedMaterials(_materialScratch);
 
-            // Elle konmuş ya da artakalmış bir slot varsa ikincisini ekleme (idempotent).
+            // Skip if a hand-placed or leftover slot is already there (idempotent).
             for (int i = 0; i < _materialScratch.Count; i++)
             {
                 Material existing = _materialScratch[i];
@@ -345,8 +320,9 @@ namespace VortexArena.Core.Arena
             _xrayMaterials.Add(ghost);
         }
 
-        /// <summary>Takım rengi TEK kaynakta kalsın diye şeridin kendi materyalinden okunur
-        /// (<c>M_TeamRed</c>/<c>M_TeamBlue</c>); x-ray materyali renk taşımaz.</summary>
+        /// <summary>Team color is read from the strip's own material
+        /// (<c>M_TeamRed</c>/<c>M_TeamBlue</c>) to keep one source; the x-ray material carries
+        /// none.</summary>
         private static void CopyTeamColor(Material source, Material ghost)
         {
             if (source == null)
@@ -364,8 +340,8 @@ namespace VortexArena.Core.Arena
             }
         }
 
-        /// <summary>Yalnız bu bileşenin eklediği slotları söker ve ürettiği materyalleri yok eder.
-        /// Ölü renderer'lar (sahne değişti) atlanır — materyaller yine de temizlenir.</summary>
+        /// <summary>Removes only the slots this component added and destroys the materials it made.
+        /// Dead renderers (scene changed) are skipped; materials are still cleaned up.</summary>
         private void ClearXRay()
         {
             for (int i = 0; i < _xrayRenderers.Count; i++)
@@ -401,8 +377,8 @@ namespace VortexArena.Core.Arena
             return material != null && _xrayMaterials.Contains(material);
         }
 
-        /// <summary>Paylaşılan x-ray materyali; bulunamazsa <b>bir kez</b> hata basar ve bir daha
-        /// denenmez (her sahne yüklemesinde aynı hatayı tekrarlamasın).</summary>
+        /// <summary>The shared x-ray material; if missing, logs once and never retries (otherwise the
+        /// same error repeats on every scene load).</summary>
         private Material ResolveXRayMaterial()
         {
             if (_xrayShared != null)

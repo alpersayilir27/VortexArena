@@ -5,26 +5,21 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Telde giden <c>netItemId</c> → <see cref="ItemDefinition"/> eşlemesi (§6.6).
-    /// Uzak çizimin tek arama tablosudur: snapshot'tan gelen bayt burada bir prefaba ve kavrama
-    /// pozuna çözülür.
-    /// <para>
-    /// <b>Resources'ta yaşamak ZORUNDADIR</b> (<c>Assets/_Shared/Data/Resources/NetItemCatalog.asset</c>):
-    /// <c>RemoteAvatar</c> sahne/prefab referansı taşımaz, <c>Resources.Load</c> ile okur — asset
-    /// <c>Resources/</c> altından çıkarılırsa uzak oyuncuların elinde hiçbir şey çizilmez (sessiz
-    /// başarısızlık). <c>WeaponCatalog</c> ile aynı gerekçe.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Dizi sırası kimlik DEĞİLDİR.</b> Kimlik her tanımın kendi <c>netItemId</c> alanıdır;
-    /// buradaki sıralama serbesttir ve değişmesi hiçbir şeyi kaydırmaz. Tekilliği
-    /// <c>Configure All Build Elements</c> eşitlemesinde koşan net eşya kataloğu bekçisi korur.
-    /// </para>
-    /// Tüm sorgular null/boş girişe dayanıklıdır (eksik asset referansı akışı kırmasın).
+    /// Wire <c>netItemId</c> → <see cref="ItemDefinition"/> mapping (§6.6): the ONLY lookup table
+    /// of remote rendering, resolving a snapshot byte into a prefab and a grip pose.
+    /// <para>MUST live under Resources
+    /// (<c>Assets/_Shared/Data/Resources/NetItemCatalog.asset</c>): <c>RemoteAvatar</c> carries no
+    /// scene/prefab reference and uses <c>Resources.Load</c> — moved out, nothing is drawn in
+    /// remote hands (silent failure). Same rationale as <c>WeaponCatalog</c>.</para>
+    /// <para>⚠️ Array order is NOT identity — that is each definition's own <c>netItemId</c>.
+    /// Reordering shifts nothing; uniqueness is protected by the guard in the
+    /// <c>Configure All Build Elements</c> sync.</para>
+    /// All queries tolerate null/empty input so a missing asset reference does not break the flow.
     /// </summary>
     [CreateAssetMenu(fileName = "NetItemCatalog", menuName = "VortexArena/Net Item Catalog")]
     public class NetItemCatalog : ScriptableObject
     {
-        /// <summary>Resources.Load anahtarı (asset dosya adıyla birebir).</summary>
+        /// <summary>Resources.Load key (identical to the asset file name).</summary>
         private const string ResourcePath = "NetItemCatalog";
 
         private static NetItemCatalog _cached;
@@ -34,17 +29,17 @@ namespace VortexArena.Core.Combat
                  "her tanımın kendi netItemId alanıdır.")]
         [SerializeField] private ItemDefinition[] items = Array.Empty<ItemDefinition>();
 
-        /// <summary>Katalogdaki eşya tanımları.</summary>
+        /// <summary>Item definitions in the catalog.</summary>
         public ItemDefinition[] Items => items;
 
-        // Her karede aranıyor (uzak oyuncu × el başına bir sorgu), bu yüzden ilk çağrıda sözlük
-        // kurulur. Katalog çalışma anında değişmez — asset yeniden yüklenirse ScriptableObject
-        // örneği de yenidir, önbellek onunla birlikte gider.
+        // Looked up every frame (one query per remote player × hand), so the dictionary is built
+        // on first call. The catalog never changes at runtime — a reloaded asset is a new
+        // ScriptableObject instance, so the cache goes with it.
         private Dictionary<byte, ItemDefinition> _byNetId;
 
         /// <summary>
-        /// <c>netItemId</c> ile eşya tanımı bulur. <c>0</c> (el boş rezervi) ve bilinmeyen kimlik
-        /// için null döner — çağıran "eşya çizme" olarak yorumlar.
+        /// Finds an item definition by <c>netItemId</c>. Null for <c>0</c> (empty-hand reservation)
+        /// and for unknown ids — the caller reads that as "draw no item".
         /// </summary>
         public ItemDefinition FindByNetItemId(byte netItemId)
         {
@@ -77,15 +72,15 @@ namespace VortexArena.Core.Combat
                     continue;
                 }
 
-                // Çakışmada ilk giren kazanır ve burada SESSİZ kalınır: çalışma anında yapılacak
-                // bir şey yok, doğru yer editör bekçisidir (NetItemIdGuard).
+                // On a clash the first entry wins and we stay SILENT here: there is nothing to do
+                // at runtime, the right place is the editor guard (NetItemIdGuard).
                 _byNetId[def.NetItemId] = def;
             }
         }
 
         /// <summary>
-        /// Kataloğu Resources'tan yükler; sonuç tek sefer önbelleklenir.
-        /// Bulunamazsa TEK uyarı loglar ve null döner — çağıranlar null'a dayanıklı olmalı.
+        /// Loads the catalog from Resources; the result is cached once.
+        /// If not found it logs a SINGLE warning and returns null — callers must tolerate null.
         /// </summary>
         public static NetItemCatalog Load()
         {

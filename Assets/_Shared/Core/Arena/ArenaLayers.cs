@@ -3,29 +3,31 @@ using UnityEngine;
 namespace VortexArena.Core.Arena
 {
     /// <summary>
-    /// Arena geometrisinin layer sözleşmesi — <b>layer adının tek yazıldığı yer</b>.
+    /// The layer contract of the arena geometry — <b>the single place the layer name is written</b>.
     /// <para>
-    /// <b>Neden bir sınıf:</b> layer adı bir dizedir ve <see cref="LayerMask.NameToLayer"/> tanımsız
-    /// adda <c>-1</c> döner (maske <c>0</c> olur, sorgu sessizce hiçbir şey bulmaz). Ad üç ayrı
-    /// dosyada yazılsaydı yanlış yazımın belirtisi "sistem hiç çalışmıyor" olurdu ve hiçbir yerde
-    /// hata görünmezdi. Burada bir kez çözülür ve bulunamazsa <b>bir kez</b> açıkça bağırır.
+    /// <b>Why a class:</b> a layer name is a string and <see cref="LayerMask.NameToLayer"/> returns
+    /// <c>-1</c> for an undefined name (the mask becomes <c>0</c> and the query silently finds
+    /// nothing). If the name were written in three separate files, the symptom of a typo would be
+    /// "the system does not work at all" and no error would show up anywhere. Here it is resolved
+    /// once and, if not found, shouts explicitly <b>once</b>.
     /// </para>
     /// </summary>
     public static class ArenaLayers
     {
         /// <summary>
-        /// <b>İç engel</b> layer'ı: sütun, kasa, sandık, blok. Sözleşmesi tek cümledir —
-        /// <b>"bunun içinde olmak ihlaldir"</b> (Docs/ArenaNet-Protokol.md §10.9).
+        /// The <b>inner obstacle</b> layer: pillar, crate, chest, block. Its contract is a single
+        /// sentence — <b>"being inside this is a violation"</b> (Docs/ArenaNet-Protokol.md §10.9).
         /// <para>
-        /// ⚠️ <b>Arenanın DIŞ duvarları, zemini ve tavanı bu layer'a KONMAZ.</b> Dış sınırı
-        /// <see cref="ArenaBoundary"/> yönetir (karartma + uyarı, hasar yok). Gerekçe kalibrasyondur:
-        /// dış duvar oyuncunun her an dibinde olduğu için kayan bir hizalamada sürekli yalancı ihlal
-        /// üretir ve oyuncu durduk yere ölür.
+        /// ⚠️ <b>The arena's OUTER walls, floor and ceiling are NOT put on this layer.</b> The outer
+        /// boundary is managed by <see cref="ArenaBoundary"/> (fade + warning, no damage). The
+        /// rationale is calibration: since the outer wall is right next to the player at all times,
+        /// a drifting alignment would constantly produce false violations and the player would die
+        /// for no reason.
         /// </para>
         /// <para>
-        /// ⚠️ Bu layer'daki collider <b>KONVEKS olmak zorundadır</b> (Box/Sphere/Capsule ya da
-        /// <c>MeshCollider</c> + <c>Convex</c>) — gerekçe
-        /// <see cref="VortexArena.Core.Arena.ObstacleVolumes"/>'de.
+        /// ⚠️ A collider on this layer <b>must be CONVEX</b> (Box/Sphere/Capsule or
+        /// <c>MeshCollider</c> + <c>Convex</c>) — rationale in
+        /// <see cref="VortexArena.Core.Arena.ObstacleVolumes"/>.
         /// </para>
         /// </summary>
         public const string ObstacleName = "Obstacle";
@@ -34,8 +36,8 @@ namespace VortexArena.Core.Arena
         private static bool obstacleResolved;
 
         /// <summary>
-        /// <see cref="ObstacleName"/> layer'ının maskesi; layer tanımlı değilse <c>0</c> (hiçbir
-        /// sorgu eşleşmez → sistem sessizce değil, <b>bir hata satırıyla</b> devre dışı kalır).
+        /// The mask of the <see cref="ObstacleName"/> layer; <c>0</c> when the layer is not defined
+        /// (no query matches → the system is disabled <b>with an error line</b>, not silently).
         /// </summary>
         public static int ObstacleMask
         {
@@ -51,8 +53,9 @@ namespace VortexArena.Core.Arena
                 int layer = LayerMask.NameToLayer(ObstacleName);
                 if (layer < 0)
                 {
-                    // ⚠️ Uyarı değil HATA: bu olmadan engel ihlali sistemi tümden çalışmaz ve
-                    // belirtisi "hiçbir şey olmuyor"dur — teşhis edilemez bir sessizlik.
+                    // ⚠️ An ERROR, not a warning: without this the obstacle violation system does
+                    // not work at all and the symptom is "nothing happens" — an undiagnosable
+                    // silence.
                     Debug.LogError(
                         $"[ArenaLayers] '{ObstacleName}' layer'ı projede tanımlı değil — engel ihlali " +
                         "tespiti DEVRE DIŞI. Project Settings > Tags and Layers altında bu adla bir " +

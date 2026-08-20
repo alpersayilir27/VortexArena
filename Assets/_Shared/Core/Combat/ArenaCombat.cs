@@ -8,119 +8,117 @@ using VortexArena.Protocol;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// <b>Oyun kodunun ağa açılan tek kapısı.</b> Kendi silahını, okunu, baltanı, bombanı ya da
-    /// tuzağını yazarken protokol DTO'suna, arena uzayı dönüşümüne ve sıra numarasına hiç dokunma —
-    /// buradaki metotları çağır.
+    /// <b>The only gate from game code to the network.</b> Never touch protocol DTOs, arena-space
+    /// conversion or sequence numbers when writing a weapon/arrow/axe/bomb/trap — call these methods.
     ///
-    /// <para><b>Neden bu sınıf var:</b> bir vuruşu doğru bildirmek dört ayrı şeyi bilmeyi gerektirir
-    /// (poz arena uzayına çevrilmeli, YÖN bir nokta değildir, hedef bir <see cref="RemoteHitBox"/>
-    /// olmalı, hasarı istemci belirler). Bunlar <see cref="Weapon"/> içinde gömülü kalsaydı ikinci
-    /// bir hasar kaynağı yazan herkes aynı dört şeyi yeniden keşfetmek zorunda kalırdı — ve biri
-    /// yanlış keşfedince vuruş sessizce kaybolurdu.</para>
+    /// <para><b>Why this class:</b> reporting a hit correctly needs four separate facts (pose must be
+    /// converted to arena space, DIRECTION is not a point, the target must be a
+    /// <see cref="RemoteHitBox"/>, the client decides damage). Buried inside <see cref="Weapon"/>,
+    /// every new damage source would rediscover them — and one wrong rediscovery loses hits
+    /// silently.</para>
     ///
-    /// <para><b>Otorite sende değil:</b> bu metotlar hasarı UYGULAMAZ, yalnız sunucuya BİLDİRİR.
-    /// Can, ölüm, skor ve maç fazı sunucudan <c>health_update</c>/<c>kill_event</c> ile geri gelir
-    /// (Docs/ArenaNet-Protokol.md §10.3). Canı yerelde düşürme — iki taraf sapar.</para>
+    /// <para><b>You are not the authority:</b> these methods do not APPLY damage, only REPORT it.
+    /// Health, death, score and phase come back from the server via <c>health_update</c>/
+    /// <c>kill_event</c> (Docs/ArenaNet-Protokol.md §10.3). Never reduce health locally — the two
+    /// sides would diverge.</para>
     ///
-    /// <para><b>İki bildirimin İKİ AYRI kanalı vardır ve bu bilinçlidir:</b>
-    /// <see cref="ReportShot"/>/<see cref="ReportThrow"/> birer <i>sunum</i> olayıdır (namlu alevi,
-    /// ses, tracer) → UDP olay kanalı, güvenilirlik aranmaz, kaybolursa yalnız bir efekt eksilir
-    /// (§6.4). <see cref="ReportHit"/> ise <i>otoriter durumu</i> değiştirir (can, ölüm, skor) →
-    /// WS'te <c>hit_report</c> olarak kalır. 600 RPM'de atış olayları otoriter kanalı boğuyordu;
-    /// ayırmak o kanalı atış gürültüsünden tümüyle kurtarır.</para>
+    /// <para><b>The two reports use TWO SEPARATE channels on purpose:</b>
+    /// <see cref="ReportShot"/>/<see cref="ReportThrow"/> are <i>presentation</i> events (muzzle
+    /// flash, sound, tracer) → UDP event channel, no reliability needed, a loss costs one effect
+    /// (§6.4). <see cref="ReportHit"/> changes <i>authoritative state</i> (health, death, score) →
+    /// stays on WS as <c>hit_report</c>. At 600 RPM shot events were drowning the authoritative
+    /// channel; splitting frees it from shot noise entirely.</para>
     ///
-    /// <para><b>Hepsi bağlantı yokken sessizce no-op'tur.</b> Sunucusuz editör oturumunda oyun
-    /// kodun aynen çalışır; hiçbir çağrının etrafına <c>if (bağlıysa)</c> yazman gerekmez.</para>
+    /// <para><b>All of these are silent no-ops without a connection.</b> Game code runs unchanged in
+    /// a serverless editor session; no <c>if (connected)</c> around any call.</para>
     ///
-    /// <para><b>Tek sunum işi burada durur: isabet göstergesi</b> (<see cref="HitMarker"/>) —
-    /// bildirilen her vuruşun değdiği noktada vuran oyuncuya bir X çizilir. Kapının içinde
-    /// olmasının sebebi kapının kendisiyle aynı: yeni bir hasar kaynağı (ok, balta, bomba) onu
-    /// bedavaya alsın, "vurdum mu" sorusunun cevabı hasar kaynağına göre değişmesin. Kendi
-    /// göstergeni yazma.</para>
+    /// <para><b>One presentation job lives here: the hit marker</b> (<see cref="HitMarker"/>) — an X
+    /// drawn for the shooter at every reported hit point. Same rationale as the gate itself: a new
+    /// damage source gets it for free and "did I hit" never answers differently per damage source.
+    /// Do not write your own marker.</para>
     /// </summary>
     public static class ArenaCombat
     {
-        // Her vuruşta yeni DTO ayırmamak için tek örnek yeniden kullanılır: ArenaClient.Send
-        // JSON'a ÇAĞRI İÇİNDE çevirir (JsonUtility.ToJson senkron), dolayısıyla gönderim
-        // bittiğinde nesne serbesttir. Dizi alanları da bir kez ayrılır.
-        // (Atış olayının DTO'su burada yok: UDP kanalı kendi ön-ayrılmış tamponunu kullanır.)
+        // Single reused instance instead of a DTO per hit: ArenaClient.Send converts to JSON INSIDE
+        // the call (JsonUtility.ToJson is synchronous), so the object is free once send returns.
+        // Array fields are allocated once too.
+        // (No shot-event DTO here: the UDP channel uses its own pre-allocated buffer.)
         private static readonly HitReportMsg Hit = new HitReportMsg { hitPos = new float[3] };
         private static int _seq;
 
-        /// <summary><see cref="ReportAreaHit"/>'in çakışma tamponu — her patlamada yeni dizi
-        /// ayırmamak için.</summary>
+        /// <summary>Overlap buffer for <see cref="ReportAreaHit"/> — avoids a new array per blast.</summary>
         private static readonly Collider[] OverlapBuffer = new Collider[64];
         private static readonly HashSet<int> AreaHitOnce = new HashSet<int>();
 
-        // ------------------------------------------------------------------ durum
+        // ------------------------------------------------------------------ state
 
-        /// <summary>Yerel oyuncunun sunucu kimliği; bağlanmadıysa <c>0</c>.</summary>
+        /// <summary>Local player's server id; <c>0</c> when not connected.</summary>
         public static int LocalPlayerId =>
             PlayerCombatState.Instance != null ? PlayerCombatState.Instance.PlayerId : 0;
 
-        /// <summary>Sunucuya bağlı mıyız (mesajlar gerçekten gidiyor mu).</summary>
+        /// <summary>Are we connected (do messages actually go out).</summary>
         public static bool IsConnected => ArenaClient.Instance != null && ArenaClient.Instance.IsConnected;
 
-        /// <summary>Yerel oyuncu hayatta mı (sunucu-otoriter, <c>health_update</c>'ten).</summary>
+        /// <summary>Is the local player alive (server-authoritative, from <c>health_update</c>).</summary>
         public static bool IsAlive => PlayerCombatState.Instance == null || PlayerCombatState.Instance.IsAlive;
 
-        /// <summary>Yerel oyuncunun canı (0..<see cref="ArenaProtocol.PLAYER_MAX_HP"/>).</summary>
+        /// <summary>Local player health (0..<see cref="ArenaProtocol.PLAYER_MAX_HP"/>).</summary>
         public static float LocalHp =>
             PlayerCombatState.Instance != null ? PlayerCombatState.Instance.Hp : ArenaProtocol.PLAYER_MAX_HP;
 
-        /// <summary>Yerel oyuncunun takımı; takımsız modda <see cref="Team.Neutral"/>.</summary>
+        /// <summary>Local player's team; <see cref="Team.Neutral"/> in teamless modes.</summary>
         public static Team LocalTeam =>
             PlayerCombatState.Instance != null ? PlayerCombatState.Instance.Team : Team.Neutral;
 
         /// <summary>
-        /// <b>Tetiğe basılabilir mi.</b> Hayatta + faz Lobby/Live + (bir kez bağlanıldıysa) bağlantı
-        /// açık + oyuncu arenanın İÇİNDE (<see cref="IsOutsideArena"/>). Her ateş eden şey bunu
-        /// kontrol ETMELİDİR: ölüyken ya da geri sayımda atılan atış sunucuda zaten reddedilir, ama
-        /// yerelde ses/efekt oynatmak oyuncuya yalan söyler.
-        /// <para>İki kapı iki ayrı soruyu sorar: ilki <b>sunucu-otoriter durumdur</b> (can, faz),
-        /// ikincisi tümüyle <b>yerel bir fizik kuralıdır</b> — protokolde karşılığı yoktur.</para>
+        /// <b>May the trigger be pulled.</b> Alive + phase Lobby/Live + (once connected) connection
+        /// open + player INSIDE the arena (<see cref="IsOutsideArena"/>). Everything that fires MUST
+        /// check this: a shot fired while dead or during countdown is rejected server-side anyway,
+        /// but playing local sound/FX lies to the player.
+        /// <para>Two gates, two questions: the first is <b>server-authoritative state</b> (health,
+        /// phase), the second is a purely <b>local physical rule</b> with no protocol counterpart.</para>
         /// </summary>
         public static bool CanFire =>
             (PlayerCombatState.Instance == null || PlayerCombatState.Instance.CanFire) && !IsOutsideArena;
 
-        /// <summary>Yerel oyuncu muhafazanın güvenli alanının DIŞINDA mı — ateş kapısı.
-        /// <para>Silahı engele sokma yolu zaten kapalı olduğu için (§10.9) alanın dışına çıkıp içeri
-        /// ateş etmek geriye kalan tek fiziksel hile yoludur. Kapı tamamen YERELDİR: protokolde
-        /// karşılığı yoktur, sunucu bunu doğrulamaz.</para>
-        /// <para>⚠️ Muhafaza yoksa ya da plansızsa kapı AÇIK kalır (fail-open): ölçüyü bilmeden
-        /// oyuncunun tetiğini kilitlemek, boyut dosyası bağlanmamış bir sahnede kimsenin ateş
-        /// edememesi demek olurdu.</para></summary>
+        /// <summary>Is the local player OUTSIDE the boundary's safe area — a fire gate.
+        /// <para>Poking the weapon into an obstacle is already closed (§10.9), so stepping outside and
+        /// shooting in is the remaining physical exploit. Fully LOCAL: no protocol counterpart, the
+        /// server does not verify it.</para>
+        /// <para>⚠️ Without a boundary (or without a plan) the gate stays OPEN (fail-open): locking
+        /// the trigger without knowing the dimensions would mean nobody can fire in a scene whose
+        /// dimensions file is unassigned.</para></summary>
         public static bool IsOutsideArena =>
             ArenaBoundary.Active != null && ArenaBoundary.Active.IsOutOfBounds;
 
-        // ------------------------------------------------------------------- atış ışını
+        // ------------------------------------------------------------------- shot trace
 
         /// <summary>
-        /// Namlunun <b>gerisinden</b> yoklanan mesafe (m): namlu gövdesi bir engelin içinden
-        /// geçiyor mu. Bir tüfek namlusu kadardır — daha uzunu köşeye yaslanmış meşru bir atışı
-        /// engellemeye başlar, daha kısası ince bir siperi ıskalar.
+        /// Probe distance BEHIND the muzzle (m): is the barrel body passing through an obstacle. About
+        /// one rifle barrel — longer starts blocking legitimate shots taken against a corner, shorter
+        /// misses a thin cover.
         /// </summary>
         private const float BarrelProbeMeters = 0.30f;
 
-        /// <summary>Yutulan atışın iz uzunluğu (m): mermi namludan çıkar çıkmaz ölür.</summary>
+        /// <summary>Tracer length of a swallowed shot (m): the round dies at the muzzle.</summary>
         private const float BlockedTracerMeters = 0.05f;
 
         /// <summary>
-        /// Bir atışın ışın sonucu: nereye kadar gitti, bir şeye çarptı mı, engel tarafından
-        /// <b>yutuldu</b> mu.
+        /// Ray result of a shot: how far it went, whether it hit something, whether an obstacle
+        /// <b>swallowed</b> it.
         /// </summary>
         public readonly struct ShotTrace
         {
-            /// <summary>Mermiyi bir iç engel yuttu — <b>hiçbir hedefe hasar yazılmaz</b>.</summary>
+            /// <summary>An obstacle swallowed the round — <b>no damage is written to any target</b>.</summary>
             public readonly bool Blocked;
 
-            /// <summary>Işın bir collider'a çarptı (yalnız <see cref="Blocked"/> değilken anlamlı).</summary>
+            /// <summary>The ray hit a collider (only meaningful when not <see cref="Blocked"/>).</summary>
             public readonly bool HasHit;
 
-            /// <summary>Çarpma kaydı; <see cref="HasHit"/> false ise anlamsızdır.</summary>
+            /// <summary>Hit record; meaningless when <see cref="HasHit"/> is false.</summary>
             public readonly RaycastHit Hit;
 
-            /// <summary>Işının GERÇEKTE gittiği mesafe — iz ve <see cref="ReportShot"/> bunu kullanır.</summary>
+            /// <summary>Distance the ray ACTUALLY travelled — tracer and <see cref="ReportShot"/> use it.</summary>
             public readonly float Distance;
 
             private ShotTrace(bool blocked, bool hasHit, RaycastHit hit, float distance)
@@ -142,30 +140,30 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// <b>Bir hitscan atışının ışını — ateş eden her şey bunu kullanır.</b> Kendi
-        /// <c>Physics.Raycast</c>'ini yazma: engel kuralı burada durur ve yarın eklenen ok/balta/
-        /// mermi onu bedavaya alır.
+        /// <b>The ray of a hitscan shot — everything that fires uses this.</b> Do not write your own
+        /// <c>Physics.Raycast</c>: the obstacle rule lives here and any future arrow/axe/round gets it
+        /// for free.
         ///
-        /// <para><b>Neden düz bir raycast yetmiyor:</b> Unity'de <b>ışının orijini bir collider'ın
-        /// içindeyse o collider hiç vurulmaz</b>. Namlusunu sandığın içine sokan oyuncunun mermisi
-        /// bu yüzden sandığı delip geçer ve arkasındaki oyuncuyu vurur — namlunun ucunu ince bir
-        /// duvarın öbür yüzüne geçirmek de aynı kapıdır (orijin artık duvarın ötesindedir). İki
-        /// durumu da yalnızca <b>orijini ayrıca sınamak</b> yakalar.</para>
+        /// <para><b>Why a plain raycast is not enough:</b> in Unity <b>a collider is never hit when
+        /// the ray origin is inside it</b>. A player poking the muzzle into a crate would shoot
+        /// through it and hit the player behind — pushing the muzzle tip past the far face of a thin
+        /// wall is the same door (the origin is now beyond the wall). Only <b>testing the origin
+        /// separately</b> catches both.</para>
         ///
-        /// <para>Engel yuttuğunda iz namluda biter ve <c>hit_report</c> hiç gönderilmez.
-        /// ⚠️ <b>Tetikli silahlar buraya normalde HİÇ GELMEZ:</b> onların kapısı
-        /// <see cref="IsMuzzleBlocked"/>'tır ve tetiği tümden öldürür (cephane gitmez, ses/alev
-        /// oynamaz). Buradaki dal, tetiği olmayan ya da kapıyı bilmeyen bir hasar kaynağı için
-        /// <b>ikinci savunma hattıdır</b>.</para>
+        /// <para>When an obstacle swallows the shot the tracer ends at the muzzle and no
+        /// <c>hit_report</c> is sent. ⚠️ <b>Triggered weapons normally never reach here:</b> their
+        /// gate is <see cref="IsMuzzleBlocked"/> and it kills the trigger outright (no ammo spent, no
+        /// sound/flash). This branch is a <b>second line of defence</b> for a damage source that has
+        /// no trigger or does not know the gate.</para>
         ///
-        /// <para>⚠️ Ana ışın <b>maskesiz</b> kalır (uzak isabet kutuları Default layer'ındadır) ama
-        /// <b>trigger'ları elemek zorundadır</b>: proje ayarı <c>Queries Hit Triggers</c> açık ve
-        /// sahnedeki silahların ISDK kavrama hacimleri trigger — elenmezse tezgâhın önünden atılan
-        /// mermi kavrama hacmine çarpıp durur.</para>
+        /// <para>⚠️ The main ray stays <b>maskless</b> (remote hit boxes are on Default) but MUST
+        /// discard triggers: <c>Queries Hit Triggers</c> is on in project settings and the ISDK grab
+        /// volumes of scene weapons are triggers — otherwise a round fired past the bench stops in a
+        /// grab volume.</para>
         /// </summary>
-        /// <param name="muzzleWorld">Namlu ucunun dünya konumu.</param>
-        /// <param name="direction">Merminin yönü, <b>birim uzunlukta</b> (mesafeler buna dayanır).</param>
-        /// <param name="range">Silahın menzili (m).</param>
+        /// <param name="muzzleWorld">World position of the muzzle tip.</param>
+        /// <param name="direction">Round direction, <b>unit length</b> (distances rely on it).</param>
+        /// <param name="range">Weapon range (m).</param>
         public static ShotTrace TraceShot(Vector3 muzzleWorld, Vector3 direction, float range)
         {
             if (IsMuzzleBlocked(muzzleWorld, direction))
@@ -180,25 +178,24 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// <b>Namlu bir iç engel tarafından tıkanmış mı</b> — duvar arkasından ateş etmeyi engelleyen
-        /// tek test.
+        /// <b>Is the muzzle blocked by an obstacle</b> — the single test preventing shooting from
+        /// behind a wall.
         ///
-        /// <para>İki soru sorar: <b>(1)</b> namlu ucu bir engelin içinde mi, <b>(2)</b> namlu gövdesi
-        /// (<see cref="BarrelProbeMeters"/> geri) bir engelin içinden geçiyor mu. İkincisi ince siper
-        /// içindir: ucunu öbür yüze geçiren oyuncunun namlu ucu artık boşluktadır, yani birinci test
-        /// onu kaçırır.</para>
+        /// <para>Two questions: <b>(1)</b> is the muzzle tip inside an obstacle, <b>(2)</b> does the
+        /// barrel body (<see cref="BarrelProbeMeters"/> back) pass through one. The second covers thin
+        /// cover: with the tip pushed past the far face it sits in open air, so the first test misses
+        /// it.</para>
         ///
-        /// <para>⚠️ Geri yoklama <b>yalnız <c>Obstacle</c> maskesine</b> bakar: maskesiz bir ışın
-        /// oyuncunun kendi eline/silahına takılır ve meşru atışları sessizce yutardı.</para>
+        /// <para>⚠️ The backward probe looks at the <c>Obstacle</c> mask ONLY: a maskless ray would
+        /// catch the player's own hand/weapon and silently swallow legitimate shots.</para>
         ///
-        /// <para><b>İki tüketicisi vardır ve testin tek yerde durması şarttır:</b> tetik kapısı
-        /// (<c>Weapon</c> — tıkalıyken tetik hiç işlemez, cephane gitmez) ve
-        /// <see cref="TraceShot"/> (tetiği olmayan hasar kaynakları için ikinci savunma hattı).
-        /// İkisi ayrı yazılsaydı biri sapar ve belirti "bazı silahlar duvardan ateş edebiliyor"
-        /// olurdu.</para>
+        /// <para><b>Two consumers, and the test must live in one place:</b> the trigger gate
+        /// (<c>Weapon</c> — blocked means the trigger does nothing, no ammo spent) and
+        /// <see cref="TraceShot"/> (second line of defence for trigger-less damage sources). Written
+        /// twice, one would drift and the symptom would be "some weapons can shoot through walls".</para>
         /// </summary>
-        /// <param name="muzzleWorld">Namlu ucunun dünya konumu.</param>
-        /// <param name="direction">Merminin yönü, <b>birim uzunlukta</b>.</param>
+        /// <param name="muzzleWorld">World position of the muzzle tip.</param>
+        /// <param name="direction">Round direction, <b>unit length</b>.</param>
         public static bool IsMuzzleBlocked(Vector3 muzzleWorld, Vector3 direction)
         {
             if (ObstacleVolumes.ContainsPoint(muzzleWorld))
@@ -213,30 +210,30 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// <b>Tetik kapısı: silahın HERHANGİ bir parçası bir iç engele değiyor mu</b> (§10.9).
-        /// Tetikli her silah ateşlemeden önce bunu sormalıdır.
+        /// <b>Trigger gate: is ANY part of the weapon touching an obstacle</b> (§10.9). Every
+        /// triggered weapon must ask this before firing.
         ///
-        /// <para><b>Neden namlu testi yetmiyor:</b> namlu bir NOKTA, silah ise bir HACİMDİR. Oyuncu
-        /// tüfeği tuğlanın arkasına iyice geçirip yalnız namlu ucunu boşlukta bırakabiliyor —
-        /// gövdesini hiç göstermeden ateş ediyor ve nokta testi bunu göremiyor. Buradaki kutu testi
-        /// silahın çizilen gövdesini olduğu gibi sorar.</para>
+        /// <para><b>Why the muzzle test is not enough:</b> the muzzle is a POINT, the weapon is a
+        /// VOLUME. A player can push the rifle behind a brick leaving only the muzzle tip in open air
+        /// — firing without showing the body, invisible to a point test. The box test here asks about
+        /// the drawn body as it is.</para>
         ///
-        /// <para>Kutu <b>yönlendirilmiştir</b> (silahın kendi rotasyonu): eksen hizalı bir kutu,
-        /// çapraz tutulan bir tüfekte gövdenin iki katı hacim kaplar ve siperin yanında duran meşru
-        /// atışları da keserdi.</para>
+        /// <para>The box is <b>oriented</b> (the weapon's own rotation): an axis-aligned box would
+        /// cover twice the volume for a diagonally held rifle and would also cut legitimate shots
+        /// taken beside cover.</para>
         ///
-        /// <para>⚠️ <paramref name="bodyRoot"/> <b>silahın geometri kökü olmalıdır</b> (model), silah
-        /// prefabının kökü DEĞİL: kökün altında kavrama çerçevesi gibi silaha ait olmayan görseller
-        /// duruyor ve onları kutuya katmak silahı olduğundan çok daha büyük gösterirdi.</para>
+        /// <para>⚠️ <paramref name="bodyRoot"/> must be the weapon's <b>geometry root</b> (model), NOT
+        /// the weapon prefab root: visuals that are not part of the weapon (grip frame) hang under the
+        /// root and including them would make the weapon look far bigger.</para>
         /// </summary>
-        /// <param name="bodyRoot">Silah geometrisinin kökü; <c>null</c> ise kutu testi atlanır.</param>
-        /// <param name="localBounds">Silah gövdesinin <paramref name="bodyRoot"/> uzayındaki sınırları.</param>
-        /// <param name="muzzleWorld">Namlu ucunun dünya konumu.</param>
-        /// <param name="direction">Merminin yönü, <b>birim uzunlukta</b>.</param>
+        /// <param name="bodyRoot">Weapon geometry root; <c>null</c> skips the box test.</param>
+        /// <param name="localBounds">Weapon body bounds in <paramref name="bodyRoot"/> space.</param>
+        /// <param name="muzzleWorld">World position of the muzzle tip.</param>
+        /// <param name="direction">Round direction, <b>unit length</b>.</param>
         public static bool IsWeaponBlocked(Transform bodyRoot, in Bounds localBounds,
             Vector3 muzzleWorld, Vector3 direction)
         {
-            // Namlu kapısı önce: tek nokta + kısa ışın, kutu sorgusundan ucuz.
+            // Muzzle gate first: one point + a short ray, cheaper than the box query.
             if (IsMuzzleBlocked(muzzleWorld, direction))
             {
                 return true;
@@ -257,14 +254,14 @@ namespace VortexArena.Core.Combat
                 halfExtents, bodyRoot.rotation);
         }
 
-        // ------------------------------------------------------------- hedef çözme
+        // ------------------------------------------------------------- target resolution
 
         /// <summary>
-        /// Bir çarpışmanın arkasında AĞ OYUNCUSU var mı. Raycast'in vurduğu collider'ı ver;
-        /// <c>true</c> dönerse <paramref name="playerId"/> o oyuncunun kimliğidir ve hasarı
-        /// <see cref="ReportHit"/> ile BİLDİRMELİSİN. <c>false</c> dönerse hedef ağ oyuncusu
-        /// değildir (dekor, duvar) ve <b>hasar diye bir şey yoktur</b>: istemcide can
-        /// tutan bir yol yok, o hedef hasar almaz. Kırılabilir objeler ileride ağsal olacak.
+        /// Is there a NETWORK PLAYER behind a collision. Pass the collider the raycast hit; on
+        /// <c>true</c> <paramref name="playerId"/> is that player and you MUST report damage with
+        /// <see cref="ReportHit"/>. On <c>false</c> the target is not a network player (prop, wall)
+        /// and <b>there is no such thing as damage</b>: nothing on the client holds health, so that
+        /// target takes none. Breakables become networked later.
         /// </summary>
         public static bool TryGetTargetPlayerId(Collider collider, out int playerId)
         {
@@ -274,7 +271,7 @@ namespace VortexArena.Core.Combat
                 return false;
             }
 
-            // Isabet kutusu gövdenin herhangi bir çocuğunda olabilir — yukarı doğru aranır.
+            // The hit box may sit on any child of the body — search upward.
             RemoteHitBox hitBox = collider.GetComponentInParent<RemoteHitBox>();
             if (hitBox == null || hitBox.PlayerId <= 0)
             {
@@ -285,9 +282,9 @@ namespace VortexArena.Core.Combat
             return true;
         }
 
-        /// <summary>Kafa vuruşu mu (çarpan collider bir <see cref="RemoteHitBox.IsHead"/> kutusu mu).
-        /// Kafa çarpanını UYGULAMAK senin işin: hasarı çarpıp <see cref="ReportHit"/>'e ver —
-        /// sunucu gönderdiğin sayıyı aynen uygular (§10.3).</summary>
+        /// <summary>Is this a headshot (is the collider a <see cref="RemoteHitBox.IsHead"/> box).
+        /// APPLYING the head multiplier is your job: multiply the damage and pass it to
+        /// <see cref="ReportHit"/> — the server applies the number you send verbatim (§10.3).</summary>
         public static bool IsHeadshot(Collider collider)
         {
             if (collider == null)
@@ -299,10 +296,10 @@ namespace VortexArena.Core.Combat
             return hitBox != null && hitBox.IsHead;
         }
 
-        /// <summary>Çarpan collider'ın vuruş bölgesi; ağ oyuncusu değilse <c>HitZone.Body</c>
-        /// (çarpan 1×). Bölge çarpanını UYGULAMAK senin işin: hasarı
-        /// <c>WeaponDefinition.GetZoneMultiplier</c> ile çarpıp <see cref="ReportHit"/>'e ver —
-        /// sunucu gönderdiğin sayıyı aynen uygular (§10.3).</summary>
+        /// <summary>Hit zone of the collider; <c>HitZone.Body</c> (1× multiplier) if not a network
+        /// player. APPLYING the zone multiplier is your job: multiply via
+        /// <c>WeaponDefinition.GetZoneMultiplier</c> and pass it to <see cref="ReportHit"/> — the
+        /// server applies the number you send verbatim (§10.3).</summary>
         public static HitZone GetHitZone(Collider collider)
         {
             if (collider == null)
@@ -314,51 +311,53 @@ namespace VortexArena.Core.Combat
             return hitBox != null ? hitBox.Zone : HitZone.Body;
         }
 
-        // ---------------------------------------------------------------- bildirim
+        // ---------------------------------------------------------------- reporting
 
         /// <summary>
-        /// <b>§6.4: bir atış yapıldı</b> — uzak namlu alevi/sesi/tracer'ı için. Sunucu bunu
-        /// DOĞRULAMAZ, yalnız relay eder ve <b>hasarla hiçbir ilgisi yoktur</b> (o ayrı bir
-        /// bildirimdir: <see cref="ReportHit"/>). İkisini birden çağırmak normaldir — bir atış
-        /// hem olur hem isabet eder.
+        /// <b>§6.4: a shot was fired</b> — for the remote muzzle flash/sound/tracer. The server does
+        /// NOT validate it, only relays it, and it has <b>nothing to do with damage</b> (that is a
+        /// separate report: <see cref="ReportHit"/>). Calling both is normal — a shot both happens and
+        /// hits.
         /// <para>
-        /// <b>Namlu KONUMU gönderilmez</b> (ve gönderilmemeli): tracer alıcının ÇİZDİĞİ silahın
-        /// namlusundan çıkmalı. Mutlak bir orijin, alıcı silahı interpole edilmiş el pozundan
-        /// çizdiği için çizilen namludan kaymış bir tracer verirdi — tutarlılık &gt; sadakat (§6.4).
+        /// <b>The muzzle POSITION is not sent</b> (and must not be): the tracer has to leave the
+        /// muzzle of the weapon the RECEIVER draws. An absolute origin would produce a tracer offset
+        /// from the drawn muzzle, since the receiver draws the weapon from an interpolated hand pose —
+        /// consistency &gt; fidelity (§6.4).
         /// </para>
         /// </summary>
-        /// <param name="worldDirection">Merminin gittiği dünya yönü (normalize edilmesi gerekmez).</param>
-        /// <param name="distanceMeters">Işının GERÇEKTE gittiği mesafe: isabet varsa
-        /// <c>hit.distance</c>, yoksa silahın menzili. Tracer'ın uzunluğu bundan gelir.</param>
-        /// <param name="netItemId">Ateş eden eşyanın <c>netItemId</c>'si (§6.6); <c>0</c> =
-        /// çözülemedi (uzak taraf sunum profilini bulamaz, olayı yine de duyar).</param>
-        /// <param name="rightHand">Olay sağ elden mi çıktı (telde tek bit — "bilinmiyor" yok).</param>
+        /// <param name="worldDirection">World direction of the round (need not be normalized).</param>
+        /// <param name="distanceMeters">Distance the ray ACTUALLY travelled: <c>hit.distance</c> on a
+        /// hit, otherwise the weapon range. Tracer length comes from this.</param>
+        /// <param name="netItemId"><c>netItemId</c> of the firing item (§6.6); <c>0</c> = unresolved
+        /// (the remote side cannot find the presentation profile but still hears the event).</param>
+        /// <param name="rightHand">Did the event come from the right hand (one bit on the wire — no
+        /// "unknown").</param>
         public static void ReportShot(Vector3 worldDirection, float distanceMeters, byte netItemId, bool rightHand)
         {
             SendFireEvent(FireEventEntry.KIND_SHOT, worldDirection, distanceMeters, netItemId, rightHand);
         }
 
         /// <summary>
-        /// <b>§6.4: bir eşya atıldı</b> (bomba). Alıcılar aynı balistiği <b>YEREL simüle eder</b> —
-        /// yerçekimi tek kuvvet olduğu için deterministiktir, akış (poz akışı) GEREKMEZ. Bu yüzden
-        /// telde yalnız yön + başlangıç hızı gider; sapma kozmetiktir ve patlamayla kendini bitirir.
-        /// <para>Patlamanın hasarı bu metotla DEĞİL, mevcut yoldan bildirilir:
-        /// <see cref="ReportAreaHit"/> (hedef başına bir <c>hit_report</c>).</para>
+        /// <b>§6.4: an item was thrown</b> (bomb). Receivers simulate the same ballistics <b>locally</b>
+        /// — deterministic since gravity is the only force, so no pose streaming is needed. Only
+        /// direction + initial speed go on the wire; drift is cosmetic and ends with the blast.
+        /// <para>Blast damage is NOT reported through this method but the existing way:
+        /// <see cref="ReportAreaHit"/> (one <c>hit_report</c> per target).</para>
         /// </summary>
-        /// <param name="worldDirection">Atış yönü, dünya uzayı (normalize edilmesi gerekmez).</param>
-        /// <param name="speedMetersPerSecond">Başlangıç hızı (m/sn).</param>
-        /// <param name="netItemId">Atılan eşyanın <c>netItemId</c>'si (§6.6).</param>
-        /// <param name="rightHand">Hangi elden atıldı.</param>
+        /// <param name="worldDirection">Throw direction, world space (need not be normalized).</param>
+        /// <param name="speedMetersPerSecond">Initial speed (m/s).</param>
+        /// <param name="netItemId"><c>netItemId</c> of the thrown item (§6.6).</param>
+        /// <param name="rightHand">Which hand it was thrown from.</param>
         public static void ReportThrow(Vector3 worldDirection, float speedMetersPerSecond, byte netItemId, bool rightHand)
         {
             SendFireEvent(FireEventEntry.KIND_THROW, worldDirection, speedMetersPerSecond, netItemId, rightHand);
         }
 
         /// <summary>
-        /// İki olay türünün ortak gönderim yolu. Kanal/kayıt yoksa <b>sessiz no-op</b> (sınıfın
-        /// sözleşmesi): sunucusuz editör oturumunda silahlar aynen çalışır.
-        /// <para>Yön dönüşümü <see cref="ArenaSpace.WorldToArenaDirection"/>'a bırakılır — Net
-        /// katmanı arena uzayını bilmez, çevrim çağıranın (yani bu kapının) işidir.</para>
+        /// Shared send path of both event kinds. <b>Silent no-op</b> without a channel (the class
+        /// contract): weapons work unchanged in a serverless editor session.
+        /// <para>Direction conversion is left to <see cref="ArenaSpace.WorldToArenaDirection"/> — the
+        /// Net layer does not know arena space, converting is the caller's (this gate's) job.</para>
         /// </summary>
         private static void SendFireEvent(byte kind, Vector3 worldDirection, float magnitudeMeters,
             byte netItemId, bool rightHand)
@@ -374,27 +373,27 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// <b>Bir ağ oyuncusuna hasar verdim</b> — sunucu doğrular ve <c>health_update</c> yayınlar.
+        /// <b>I damaged a network player</b> — the server validates and broadcasts <c>health_update</c>.
         /// <para>
-        /// <b>Hasarı SEN belirlersin</b> (§10.3): sunucuda silah tablosu yoktur, gönderdiğin sayı
-        /// aynen uygulanır. Mesafeye göre düşen patlama, yay çekiş gücü, kafa çarpanı — hepsi
-        /// burada hesaplanıp tek sayı olarak verilir. Sunucu yalnız durumu doğrular (faz Live mı,
-        /// atıcı ve hedef canlı mı, dost ateşi açık mı) ve sayının kullanılabilir olduğuna bakar
-        /// (NaN/∞/negatif reddedilir).
+        /// <b>YOU decide the damage</b> (§10.3): there is no weapon table on the server, the number you
+        /// send is applied verbatim. Distance falloff, bow draw strength, head multiplier — all
+        /// computed here and passed as one number. The server only validates state (is the phase Live,
+        /// are shooter and target alive, is friendly fire on) and that the number is usable (NaN/∞/
+        /// negative rejected).
         /// </para>
-        /// <para>Canı YERELDE DÜŞÜRME: hedefin canı sunucudan geri gelir. Bu bir tercih değil,
-        /// mutlak kuraldır — istemcide can tutan hiçbir bileşen yoktur.</para>
-        /// <para><b>İsabet göstergesini bu metot çizer</b> (<see cref="HitMarker"/>): vuruş
-        /// noktasında yalnız VURANIN gördüğü bir X. Ayrıca bir şey çağırma. ⚠️ Gösterge
-        /// <i>bildirimin yapıldığını</i> söyler, hasarın uygulandığını değil — sunucu vuruşu
-        /// reddedebilir (dost ateşi kapalı, faz <c>playing</c> değil, hedef zaten ölü; §10.3).
-        /// Otoriter sonucu beklemek göstergeyi gidiş-dönüş kadar geciktirir ve
-        /// <c>health_update</c> vuruşun NEREYE değdiğini taşımaz.</para>
+        /// <para>Never reduce health LOCALLY: the target's health comes back from the server. Not a
+        /// preference but an absolute rule — no client component holds health.</para>
+        /// <para><b>This method draws the hit marker</b> (<see cref="HitMarker"/>): an X at the hit
+        /// point, visible only to the shooter. Do not call anything else. ⚠️ The marker says <i>a
+        /// report was made</i>, not that damage was applied — the server may reject the hit (friendly
+        /// fire off, phase not <c>playing</c>, target already dead; §10.3). Waiting for the
+        /// authoritative result would delay the marker by a round trip and <c>health_update</c> does
+        /// not carry WHERE the hit landed.</para>
         /// </summary>
-        /// <param name="targetPlayerId"><see cref="TryGetTargetPlayerId"/>'den gelen kimlik.</param>
-        /// <param name="worldHitPoint">İsabet noktasının dünya konumu (efekt/istatistik için).</param>
-        /// <param name="damage">Uygulanacak hasar — <b>pozitif ve sonlu olmalı</b>.</param>
-        /// <param name="weaponId">Kill feed etiketi; boş bırakılabilir (yalnız etiket kaybolur).</param>
+        /// <param name="targetPlayerId">Id from <see cref="TryGetTargetPlayerId"/>.</param>
+        /// <param name="worldHitPoint">World position of the hit (for FX/stats).</param>
+        /// <param name="damage">Damage to apply — <b>must be positive and finite</b>.</param>
+        /// <param name="weaponId">Kill feed label; may be empty (only the label is lost).</param>
         public static void ReportHit(int targetPlayerId, Vector3 worldHitPoint, float damage, string weaponId)
         {
             if (targetPlayerId <= 0)
@@ -422,20 +421,18 @@ namespace VortexArena.Core.Combat
             Write(Hit.hitPos, ArenaSpace.WorldToArena(worldHitPoint));
             client.Send(Hit);
 
-            // İsabet göstergesi — bilinçli olarak gönderimden SONRA: bildirilmemiş bir vuruş için
-            // X çizmek oyuncuya yalan söylerdi (CanFire'ın gerekçesiyle aynı). Yalnız vuranın
-            // ekranında koşar (bu metot yalnız hasarı veren istemcide çağrılır) ve telde karşılığı
-            // yoktur.
+            // Hit marker — deliberately AFTER the send: drawing an X for an unreported hit would lie
+            // to the player (same rationale as CanFire). Runs only on the shooter's screen (this
+            // method is called only on the client dealing damage) and has no wire counterpart.
             HitMarker.Shared.Play(worldHitPoint);
         }
 
         /// <summary>
-        /// Hitscan silahlar için kısayol: raycast sonucundaki hedef bir ağ oyuncusuysa vuruşu
-        /// bildirir ve <c>true</c> döner.
+        /// Shortcut for hitscan weapons: reports the hit and returns <c>true</c> when the raycast
+        /// target is a network player.
         /// <para>
-        /// <c>false</c> dönerse hedef ağ oyuncusu DEĞİLDİR ve <b>hasar uygulanmaz</b> (istemcide
-        /// can yok). Dönüş değeri yalnız bir SUNUM kararı içindir — gövde efekti mi, duvar efekti
-        /// mi oynatayım:
+        /// <c>false</c> means the target is NOT a network player and <b>no damage is applied</b> (no
+        /// client-side health). The return value is only a PRESENTATION decision — body FX or wall FX:
         /// <code>
         /// if (Physics.Raycast(muzzle.position, dir, out var hit, range))
         /// {
@@ -457,18 +454,18 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// <b>Alan etkisi</b> (bomba, el bombası, şok dalgası): yarıçap içindeki HER ağ oyuncusuna
-        /// AYRI bir vuruş bildirir — protokolde "alan hasarı" diye bir mesaj yoktur (§10.3), alan
-        /// etkisi n tane <c>hit_report</c> demektir.
+        /// <b>Area effect</b> (bomb, grenade, shockwave): reports a SEPARATE hit for EVERY network
+        /// player in radius — there is no "area damage" message in the protocol (§10.3), an area
+        /// effect means n <c>hit_report</c>s.
         /// <para>
-        /// Hasar merkeze uzaklıkla doğrusal düşer: merkezde <paramref name="damage"/>, kenarda
-        /// <paramref name="damage"/> × <paramref name="edgeScale"/>. Her oyuncuya en fazla BİR
-        /// vuruş gider (bir gövdede birden çok isabet kutusu var).
+        /// Damage falls off linearly with distance: <paramref name="damage"/> at the centre,
+        /// <paramref name="damage"/> × <paramref name="edgeScale"/> at the edge. At most ONE hit per
+        /// player (a body has several hit boxes).
         /// </para>
-        /// <para>⚠️ Duvar arkası kontrolü YAPILMAZ. Görüş hattı istiyorsan
-        /// <see cref="TryGetTargetPlayerId"/> + kendi <c>Physics.Linecast</c>'inle kur.</para>
+        /// <para>⚠️ No line-of-sight check. If you want one, combine
+        /// <see cref="TryGetTargetPlayerId"/> with your own <c>Physics.Linecast</c>.</para>
         /// </summary>
-        /// <returns>Vuruş bildirilen oyuncu sayısı.</returns>
+        /// <returns>Number of players a hit was reported for.</returns>
         public static int ReportAreaHit(Vector3 worldCenter, float radius, float damage, string weaponId,
             float edgeScale = 0.25f, int layerMask = ~0)
         {
@@ -510,7 +507,7 @@ namespace VortexArena.Core.Combat
             return reported;
         }
 
-        // ---------------------------------------------------------------- yardımcı
+        // ---------------------------------------------------------------- helpers
 
         private static void Write(float[] target, in Vector3 value)
         {

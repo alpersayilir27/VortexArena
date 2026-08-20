@@ -4,33 +4,25 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// <see cref="GripHandAuthoring"/>'in Inspector yüzü: elin kimliği ve üç düğme (parmakları
-    /// sıfırla / aynala / eli kaldır).
-    /// <para>
-    /// ⚠️ <b>Kaydet düğmesi burada YOKTUR ve geri eklenmez:</b> yazan tek düğme stüdyo
-    /// penceresindedir (<see cref="GripPoseStudio"/>). İkinci bir kaydet düğmesi aynı işi iki
-    /// yerden koştururdu; kayıt artık silah kitini de tetiklediği için (prefab kipi içeriği yeniden
-    /// yüklenir) hangi düğmenin neyi koşturduğu belirsizleşirdi.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Parmak eklemi seçicisi de burada DEĞİL stüdyo penceresindedir.</b> Sebep basit:
-    /// bir eklem seçildiği anda Inspector artık bu bileşeni değil o eklemin
-    /// <see cref="Transform"/>'unu gösterir — seçici burada olsaydı ilk tıklamada kendi kendini
-    /// kapatır ve ikinci eklemi seçmenin yolu kalmazdı. Pencere seçimden bağımsız açık kalır.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Parmak slider'ı / sayısal eklem alanı YOKTUR ve eklenmez.</b> Duruş elin kemiklerinde
-    /// yaşıyor ve Scene View'da çevrilerek rigleniyor; aynı duruşu ikinci kez sayı olarak yazmak
-    /// "hangisi geçerli" sorusunu doğururdu. Kayda giren şey her zaman kemiklerin o anki hâlidir.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Undo kaydı TUTULMAZ.</b> Bu objeler <see cref="HideFlags.DontSave"/>'dir ve pencere,
-    /// stage ya da Play geçişinde yok edilirler; onlara yazılan bir Undo adımı sahne geçmişine ölü
-    /// bir kayıt bırakır ve kullanıcı Ctrl+Z'lediğinde "missing" bir objeyi geri almaya çalışır.
-    /// Kaybolacak tek şey ayarlanmamış bir el duruşudur; kalıcı olan her şey Kaydet'ten geçer.
-    /// </para>
-    /// </summary>
+    /// <summary>Inspector for <see cref="GripHandAuthoring"/>: hand identity and three buttons
+    /// (reset fingers / mirror / remove hand).</summary>
+    /// <remarks>
+    /// ⚠️ There is no save button here and none is added back: the only writing button lives in the
+    /// studio window (<see cref="GripPoseStudio"/>). A second one would run the same job from two
+    /// places, and since saving also syncs the weapon kit (reloading prefab stage contents) it would
+    /// blur which button does what.
+    /// <para>⚠️ The finger joint picker is in the studio window too: selecting a joint makes the
+    /// Inspector show that joint's <see cref="Transform"/> instead of this component, so a picker
+    /// here would close itself on the first click. The window stays open regardless of
+    /// selection.</para>
+    /// <para>⚠️ No finger slider or numeric joint field, ever: the pose lives in the hand's bones and
+    /// is rigged by rotating them in the Scene View; writing the same pose again as numbers would
+    /// raise "which one wins". What gets saved is always the bones' current state.</para>
+    /// <para>⚠️ No Undo is recorded: these objects are <see cref="HideFlags.DontSave"/> and die on a
+    /// window, stage or Play transition, so an Undo step would leave a dead entry that tries to
+    /// restore a "missing" object. The only thing lost is an unsaved hand pose; everything permanent
+    /// goes through Save.</para>
+    /// </remarks>
     [CustomEditor(typeof(GripHandAuthoring))]
     internal sealed class GripHandAuthoringEditor : UnityEditor.Editor
     {
@@ -55,7 +47,7 @@ namespace VortexArena.Core.Editor
 
             if (GUILayout.Button("Parmakları Sıfırla (boş el duruşu)", GUILayout.Height(22f)))
             {
-                // null = kayıt yok → boş elin duruşu (HandPoseLibrary.IdleJointRotations).
+                // null = no record → idle hand pose (HandPoseLibrary.IdleJointRotations).
                 hand.ApplyPose(null);
                 SceneView.RepaintAll();
             }
@@ -72,8 +64,8 @@ namespace VortexArena.Core.Editor
                 {
                     DestroyImmediate(hand.gameObject);
                     SceneView.RepaintAll();
-                    // ⚠️ Obje yok edildi: bu karede Inspector çizimine devam etmek yok edilmiş
-                    // hedefe erişmektir (MissingReferenceException).
+                    // ⚠️ Object destroyed: drawing further this frame would touch a destroyed target
+                    // (MissingReferenceException).
                     return;
                 }
             }

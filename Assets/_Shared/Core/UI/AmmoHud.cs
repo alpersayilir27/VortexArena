@@ -7,15 +7,15 @@ using VortexArena.Core.Combat;
 namespace VortexArena.Core.UI
 {
     /// <summary>
-    /// CS tarzı cephane göstergesi: tutulan silah(lar)ın adı + şarjördeki mermi +
-    /// yedek şarjör çubukları, görüş alanının SAĞ ALTINA düşen küçük bir metinde.
-    /// Panel <see cref="HudFollow"/> ile taşınır (Meta kılavuzu gereği kafaya sert
-    /// kilitli DEĞİL, tembel takipli); metin child'ı +X ofsetiyle sağa kaydırılır.
+    /// CS-style ammo indicator: the name of the held weapon(s) + rounds in the magazine +
+    /// spare magazine bars, in a small text that sits at the BOTTOM RIGHT of the field of view.
+    /// The panel is carried by <see cref="HudFollow"/> (per the Meta guideline it is NOT hard-locked
+    /// to the head, it lazily follows); the text child is shifted right with a +X offset.
     /// <para>
-    /// Kendini önyükler (sahne kurulumu gerektirmez, RemoteShotFx kalıbı) ve YALNIZ
-    /// olaylarla yenilenir: <see cref="Weapon.ActiveChanged"/> abonelik listesini,
-    /// silah başına Ammo/Reload olayları metni tazeler — frame başına iş yapmaz.
-    /// Hiç silah tutulmuyorsa metin gizlidir.
+    /// It bootstraps itself (needs no scene setup, the RemoteShotFx pattern) and refreshes ONLY on
+    /// events: <see cref="Weapon.ActiveChanged"/> refreshes the subscription list, and the per-weapon
+    /// Ammo/Reload events refresh the text — it does no per-frame work.
+    /// If no weapon is held the text is hidden.
     /// </para>
     /// </summary>
     public class AmmoHud : MonoBehaviour
@@ -23,23 +23,23 @@ namespace VortexArena.Core.UI
         private const float LowAmmoThreshold = 5f;
         private static readonly Color NormalColor = Color.white;
 
-        /// <summary>Düşük mermi/reload vurgusu (WeaponAmmoDisplay'in eski kırmızısı).</summary>
+        /// <summary>Low-ammo/reload highlight (WeaponAmmoDisplay's former red).</summary>
         private static readonly Color LowAmmoColor = new Color(1f, 0.32f, 0.26f);
 
-        /// <summary>Prefabın <c>Resources</c> içindeki yolu (uzantısız).</summary>
+        /// <summary>The prefab's path inside <c>Resources</c> (without extension).</summary>
         public const string ResourcePath = "UI/AmmoHud";
 
         private static AmmoHud _instance;
 
-        // ⚠️ Görünüm PREFABTAN gelir (`_Shared/App/Resources/UI/AmmoHud.prefab`): punto, konum,
-        // hizalama orada düzenlenir. Bu sınıf yalnız metni yazar ve rengi sürer.
+        // ⚠️ The look comes FROM THE PREFAB (`_Shared/App/Resources/UI/AmmoHud.prefab`): font size,
+        // position and alignment are edited there. This class only writes the text and drives the color.
         [Tooltip("Cephane metni — konumu/puntosu prefabta ayarlanır.")]
         [SerializeField] private TMP_Text _label;
         private readonly List<Weapon> _subscribed = new List<Weapon>();
         private readonly StringBuilder _builder = new StringBuilder(96);
 
         /// <summary>
-        /// Her sahne yüklemesinde bir kez: HUD yoksa yaratır (DDOL — sahneler arası yaşar).
+        /// Once per scene load: creates the HUD if it does not exist (DDOL — it lives across scenes).
         /// </summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -75,7 +75,7 @@ namespace VortexArena.Core.UI
 
             if (_label != null)
             {
-                _label.gameObject.SetActive(false); // silah tutulmuyorken gizli
+                _label.gameObject.SetActive(false); // hidden while no weapon is held
             }
         }
 
@@ -93,16 +93,16 @@ namespace VortexArena.Core.UI
             UnsubscribeAll();
         }
 
-        /// <summary>Maç sonu ekranı açıldı/kapandı (<see cref="GameplayHudGate"/>): cephane
-        /// göstergesi de oyun içi HUD'dır, ekranı ona bırakır.</summary>
+        /// <summary>The match result overlay opened/closed (<see cref="GameplayHudGate"/>): the ammo
+        /// indicator is an in-game HUD too, so it yields the screen to it.</summary>
         private void HandleHudGate(bool hidden)
         {
             Refresh();
         }
 
-        // ------------------------------------------------------------ abonelikler
+        // ----------------------------------------------------------- subscriptions
 
-        /// <summary>Silah listesi/tutulma durumu değişti: abonelikleri ve metni tazele.</summary>
+        /// <summary>The weapon list/held state changed: refresh the subscriptions and the text.</summary>
         private void HandleActiveChanged()
         {
             UnsubscribeAll();
@@ -140,7 +140,7 @@ namespace VortexArena.Core.UI
             Refresh();
         }
 
-        // ------------------------------------------------------------------ metin
+        // ------------------------------------------------------------------- text
 
         private void Refresh()
         {

@@ -3,56 +3,43 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>
-    /// Uzak avatarın elini <b>elindeki eşyaya oturtur</b>: parmakları eşyanın duruşundan sürer
-    /// (§6.9 — parmaklar telde gitmez; boşta <c>Idle</c>, eşya tutarken slotun preset'i, ikisi
-    /// arasında <see cref="HandPoseLibrary.TransitionSeconds"/>'lik yumuşak geçiş) ve kolu, bileği
-    /// eşyanın kavrama noktasına götürecek biçimde çözer (<see cref="TwoBoneIk"/>).
-    /// <para>
-    /// <b>Kolun neden sürülmesi gerekiyor:</b> eşya, ana elin <b>kumanda anchor'ı</b> pozundan
-    /// çiziliyor (<c>RemoteAvatar.ApplyItemPoses</c>); uzakta çizilen el ise retarget edilmiş
-    /// <b>anatomik bilek</b>. İki nokta aynı yer değil (aradaki fark <see cref="HandGripPivot"/>'un
-    /// henüz ölçülmemiş avuç ofseti + retarget hatasıdır) ve arada onları birleştiren hiçbir şey
-    /// yoktu — belirti "herkesin silahı elinin biraz ilerisinde duruyor" oluyordu. Yerelde aynı
-    /// boşluk görünmüyor çünkü <c>HandGripPoser</c> sentetik bileği kavrama pozuna <b>sert
-    /// kilitliyor</b>; burası onun uzak aynasıdır.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Bileğin KONUMU yazılmaz, kol döndürülür.</b> Bileği doğrudan taşımak kemik uzunluğunu
-    /// değiştirir ve <see cref="SkeletonPoseMirror"/> kırmızı takım gövdesine yalnız
-    /// <c>localRotation</c> kopyaladığı için ikinci gövde takip edemezdi (gerekçenin tamamı
-    /// <see cref="TwoBoneIk"/>'te).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Ölçek (§10.8) burada ayrıca ele alınMAZ ve alınmamalı:</b> hedef eşyanın dünya
-    /// pozudur, kol ise ölçeklenmiş iskeletin kendi kemikleriyle çözülür — yani boy çarpanı ne
-    /// olursa olsun el eşyanın üstüne gelir. İkinci bir ölçek terimi eklemek düzeltmeyi iki kez
-    /// uygulamak olurdu.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Execution order 100 ile 30100 ARASINDA olmak zorunda.</b> Alt sınır SDK'dır
-    /// (<c>NetworkCharacterHandler</c>, 100): iskeleti o yazıyor, ondan önce yazılan parmak/kol aynı
-    /// karede eziliyordu. Üst sınır <see cref="SkeletonPoseMirror"/>'dır (30100): kırmızı takım
-    /// gövdesi karakterin <c>localRotation</c>'larını kopyalıyor, yani ondan ÖNCE yazmak ikinci
-    /// gövdeyi bedavaya doğru yapar — ayrı bir el/kol kurulumu gerekmez. Aynısı hayalet gövde için
-    /// de geçerlidir.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Sahneye/prefaba KONMAZ</b>, <see cref="RemoteAvatar"/> onu <c>Awake</c>'te
-    /// ekler. Sebep kurulum kolaylığı değil <b>zamanlama</b>: parmak eksenleri ve bilek düzeltmesi
-    /// bind pozunda ölçülmek zorunda (<see cref="HandFingerRig"/>) ve prefaba konmuş bir bileşenin
-    /// kendi <c>Awake</c>'inin iskelet sürülmeden önce koştuğu garanti değil.
-    /// </para>
-    /// </summary>
+    /// <summary>Seats a remote avatar's hand <b>onto the item it holds</b>: drives the fingers from the
+    /// item's pose (§6.9 — fingers do not travel on the wire; <c>Idle</c> when empty, the slot's preset
+    /// while holding, with a <see cref="HandPoseLibrary.TransitionSeconds"/> blend between) and solves the
+    /// arm so the wrist reaches the item's grip point (<see cref="TwoBoneIk"/>).</summary>
+    /// <remarks>
+    /// <b>Why the arm must be driven:</b> the item is drawn from the main hand's <b>controller anchor</b>
+    /// pose (<c>RemoteAvatar.ApplyItemPoses</c>), while the remotely drawn hand is the retargeted
+    /// <b>anatomical wrist</b>. Those two points differ (by <see cref="HandGripPivot"/>'s as-yet unmeasured
+    /// palm offset plus retarget error) and nothing joined them — the symptom was "everyone's weapon sits
+    /// slightly ahead of their hand". The same gap is invisible locally because <c>HandGripPoser</c> hard-
+    /// locks the synthetic wrist to the grip pose; this is its remote mirror.
+    /// <para>⚠️ <b>The wrist's POSITION is not written, the arm is rotated.</b> Moving the wrist directly
+    /// changes bone length, and since <see cref="SkeletonPoseMirror"/> copies only <c>localRotation</c> to
+    /// the red team body, the second body could not follow (full rationale in
+    /// <see cref="TwoBoneIk"/>).</para>
+    /// <para>⚠️ <b>Scale (§10.8) is NOT handled separately here and must not be:</b> the target is the
+    /// item's world pose and the arm is solved with the scaled skeleton's own bones — so whatever the
+    /// height factor, the hand lands on the item. A second scale term would apply the correction
+    /// twice.</para>
+    /// <para>⚠️ <b>Execution order must be BETWEEN 100 and 30100.</b> The lower bound is the SDK
+    /// (<c>NetworkCharacterHandler</c>, 100), which writes the skeleton: fingers/arm written before it get
+    /// overwritten in the same frame. The upper bound is <see cref="SkeletonPoseMirror"/> (30100): the red
+    /// team body copies the character's <c>localRotation</c>s, so writing BEFORE it makes the second body
+    /// correct for free — no separate hand/arm setup. The same holds for the ghost body.</para>
+    /// <para>⚠️ <b>Not placed in a scene/prefab</b>: <see cref="RemoteAvatar"/> adds it in <c>Awake</c>.
+    /// The reason is TIMING, not convenience: finger axes and the wrist correction must be measured in
+    /// bind pose (<see cref="HandFingerRig"/>), and a prefab-placed component's own <c>Awake</c> is not
+    /// guaranteed to run before the skeleton is driven.</para>
+    /// </remarks>
     [DefaultExecutionOrder(30050)]
     public class RemoteHandPoser : MonoBehaviour
     {
         /// <summary>
-        /// Bir elin parmak duruşu geçişi — yerel elin (<c>HandGripPoser</c>) uzak aynası: hedef
-        /// duruş değişince o anki gösterilen duruştan yenisine
-        /// <see cref="HandPoseLibrary.TransitionSeconds"/> boyunca gidilir. Uzak avatarın parmakları
-        /// da böylece silah alınınca kapanır, bırakınca açılır — anında zıplamaz ve yerel elle aynı
-        /// hızda hareket eder.
+        /// Finger pose transition for one hand — remote mirror of the local hand
+        /// (<c>HandGripPoser</c>): when the target pose changes, it travels from the currently shown
+        /// pose over <see cref="HandPoseLibrary.TransitionSeconds"/>. Remote fingers therefore close
+        /// on pickup and open on release at the same speed as the local hand, without snapping.
         /// </summary>
         private struct PoseBlend
         {
@@ -62,13 +49,13 @@ namespace VortexArena.Core.Player
             private float _progress;
             private bool _started;
 
-            /// <summary>Hedefi verir, bir karelik ilerlemeyi uygular ve bu karede çizilecek duruşu döner.</summary>
+            /// <summary>Takes the target, advances one frame and returns the pose to draw.</summary>
             public HandPoseProfile Step(in HandPoseProfile target, float deltaTime)
             {
                 if (!_started)
                 {
-                    // İlk kare: geçiş yok, doğrudan hedefte başla (avatar doğduğunda parmaklar
-                    // boştan kapanıyormuş gibi görünmesin).
+                    // First frame: no blend, start at the target (fingers must not look like they
+                    // close from empty when the avatar spawns).
                     _started = true;
                     _from = target;
                     _target = target;
@@ -109,8 +96,8 @@ namespace VortexArena.Core.Player
         private PoseBlend _rightBlend;
 
         /// <summary>
-        /// Karakterin parmak zincirlerini bind pozunda çözer. Çözülemezse bileşen kendini kapatır:
-        /// yarım sürülen bir el, hiç sürülmeyenden daha kötü teşhis edilir.
+        /// Resolves the character's finger chains in bind pose. On failure the component disables
+        /// itself: a half-driven hand is harder to diagnose than an undriven one.
         /// </summary>
         internal void Bind(RemoteAvatar avatar, Transform bodyRoot)
         {
@@ -129,9 +116,9 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            // ⚠️ Kol zinciri bilekten YUKARI çıkılarak bulunur, adla aranmaz: bilek zaten adıyla
-            // çözüldü ve humanoid'de onun iki üstü daima ön kol + üst koldur. İkinci bir ad sabiti
-            // açmak, karakter değiştiğinde güncellenmeyi unutulacak ikinci bir yer olurdu.
+            // ⚠️ The arm chain is found by walking UP from the wrist, not by name: the wrist is
+            // already resolved by name and in a humanoid its two parents are always forearm + upper
+            // arm. A second name constant would be a second place to forget on a model change.
             _leftArm = TwoBoneIk.TryBuild(_left.Wrist);
             _rightArm = TwoBoneIk.TryBuild(_right.Wrist);
 
@@ -145,14 +132,14 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// ⚠️ Kapı <see cref="_avatar"/> ile sınırlı DEĞİL, parmak zincirlerini de kapsar:
-        /// <see cref="Bind"/> zinciri çözemediğinde kendini <c>enabled = false</c> ile kapatıyor,
-        /// ama bu bileşen <see cref="RemoteAvatar"/>'ın <c>Awake</c>'inde <c>AddComponent</c> ile
-        /// ekleniyor ve o anda yazılan <c>enabled</c> her zaman tutmuyor. Tutmadığında burası
-        /// kare başına <c>NullReferenceException</c> basar (saniyede ~90 satır) ve istisna
-        /// <see cref="ApplyGrip"/>'ten ÖNCE atıldığı için uzak eller silaha da hiç oturmaz —
-        /// yani "kapandı" sanılan bileşen sessizce değil, gürültüyle ve iki işi birden bozarak
-        /// koşar. Alanların kendisi kontrol edilince kapanmanın tutup tutmaması önemsizleşir.
+        /// ⚠️ The guard covers the finger chains too, not just <see cref="_avatar"/>:
+        /// <see cref="Bind"/> sets <c>enabled = false</c> when a chain fails, but this component is
+        /// added via <c>AddComponent</c> in <see cref="RemoteAvatar"/>'s <c>Awake</c> and that write
+        /// does not always stick. When it doesn't, this method throws a
+        /// <c>NullReferenceException</c> per frame (~90 lines/s) BEFORE reaching
+        /// <see cref="ApplyGrip"/>, so remote hands never seat on the weapon either — the
+        /// "disabled" component runs loudly and breaks two things at once. Checking the fields makes
+        /// the disable outcome irrelevant.
         /// </summary>
         private void LateUpdate()
         {
@@ -170,25 +157,25 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Bir eli eşyanın kavrama noktasına oturtur: kol IK ile hedefe uzanır, sonra bileğin
-        /// yönü kavramadan yazılır.
+        /// Seats one hand on the item's grip point: the arm reaches the target via IK, then the
+        /// wrist orientation is written from the grip.
         /// <para>
-        /// ⚠️ <b>Hedef, kaydın BİLEK pozudur</b> (<c>RemoteAvatar.TryResolveGripWrist</c>), kumanda
-        /// anchor'ının kendisi değil: elin o kabzanın üstünde nasıl durduğu (yandan mı alttan mı)
-        /// kaydın el yarısında yazılı ve <b>yerel el de tam olarak onu okuyor</b>
-        /// (<c>HandGripPoser</c>). Anchor'ı doğrudan hedeflemek, aynı silahı gözlükte bir türlü
-        /// gözlemci ekranında başka türlü tutmak demekti — bilek ön kola dönük kalınca da belirti
-        /// "uzak oyuncunun eli yok" oluyordu. <see cref="HandFingerRig.WristCorrection"/> ondan
-        /// SONRA gelir ve ayrı bir iş yapar: kavrama uzayındaki bileği humanoid kemiğe çevirir.
+        /// ⚠️ <b>The target is the record's WRIST pose</b> (<c>RemoteAvatar.TryResolveGripWrist</c>),
+        /// not the controller anchor itself: how the hand sits on that grip (from the side, from
+        /// below) is written in the record's hand half and <b>the local hand reads exactly that</b>
+        /// (<c>HandGripPoser</c>). Targeting the anchor directly would hold the same weapon one way
+        /// in the headset and another on the spectator screen — and with the wrist turned into the
+        /// forearm the symptom reads as "the remote player has no hand".
+        /// <see cref="HandFingerRig.WristCorrection"/> comes AFTER and does a different job:
+        /// converting the grip-space wrist into the humanoid bone.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Sıra önemlidir</b> — önce kol, sonra bilek. IK üst kolu döndürdüğü için bileğin
-        /// dünya rotasyonu da değişiyor; bileği önce yazmak onu bir sonraki satırda ezerdi.
+        /// ⚠️ <b>Order matters</b> — arm first, wrist second. IK rotates the upper arm and thus the
+        /// wrist's world rotation; writing the wrist first would be overwritten on the next line.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Elde eşya yoksa kola HİÇ DOKUNULMAZ</b> (hedef yok demek "sıfıra git" demek
-        /// değildir): boştaki kol retargeting'in bulduğu yerde kalır, yalnız parmakları idle
-        /// duruşundadır.
+        /// ⚠️ <b>With no item in hand the arm is NOT touched</b> (no target does not mean "go to
+        /// zero"): an empty arm stays where retargeting put it, only its fingers are idle.
         /// </para>
         /// </summary>
         private void ApplyGrip(HandFingerRig rig, TwoBoneIk arm, bool rightHand)

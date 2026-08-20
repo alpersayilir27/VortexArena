@@ -22,7 +22,7 @@ kopan oyuncular hiç fark edilmez.
 
 **Süre dolması**
 - [ ] `RECONNECT_GRACE` (45 sn) dolar → admin satırı `ayrıldı`ya döner ve **maç bitene kadar
-      tabloda kalır**; satırdaki TAKIM / AT / KİMLİK düğmeleri kapalı.
+      tabloda kalır**; satırdaki TAKIM / AT düğmeleri kapalı.
 - [ ] Gözlük ekranı "OYUNDAN ÇIKARILDINIZ — yeniden bağlanılıyor" der ama **denemeye devam eder**;
       ağ dönünce elle hiçbir şey yapmadan katılır.
 - [ ] Ayrılmış oyuncu maç bitmeden geri döner → **eski satırına oturur**, istatistikleri yerinde.

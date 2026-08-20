@@ -3,29 +3,28 @@ using System;
 namespace VortexArena.Protocol
 {
     /// <summary>
-    /// Birim vektör ↔ 2×i16 sıkıştırma (klasik oktahedral eşleme, 4 B).
-    /// <para><b>Neden 3×f32 değil:</b> atış olayı (§6.4) tel üzerinde 12 B'de tutuluyor; ham yön
-    /// tek başına 12 B alırdı. Oktahedral eşleme aynı bilgiyi <b>4 B</b>'ye indirir ve hata bütçesi
-    /// ~0.01° kalır — 60 m mesafede 1 cm'den iyi sapma, yani nişanın gözle görülür bir kaybı yok.
-    /// Yön <b>birim vektördür</b>: uzunluk taşımaz (mesafe/hız ayrı alan, <c>magnitude</c>).</para>
-    /// <para>Saf C#: <see cref="System.Math"/> kullanılır (bu klasörde UnityEngine YASAK).</para>
+    /// Unit vector ↔ 2×i16 compression (classic octahedral mapping, 4 B).
+    /// <para><b>Why not 3×f32:</b> the shot event (§6.4) is 12 B on the wire and the raw direction
+    /// alone would eat all of it. Octahedral mapping fits the same information in <b>4 B</b> at
+    /// ~0.01° error — under 1 cm deviation at 60 m, no visible loss of aim. A <b>unit vector</b>:
+    /// length lives in the separate <c>magnitude</c> field.</para>
+    /// <para>Pure C#: <see cref="System.Math"/> (UnityEngine is FORBIDDEN in this folder).</para>
     /// </summary>
     public static class OctahedralDirection
     {
-        /// <summary>i16 tam ölçek; ±1 aralığı buna eşlenir.</summary>
+        /// <summary>i16 full scale; the ±1 range maps onto it.</summary>
         private const float SCALE = 32767f;
 
         /// <summary>
-        /// Kat işlemlerinde kullanılan işaret. ⚠️ <see cref="Math.Sign(float)"/> KULLANILMAZ:
-        /// 0'da 0 döner ve kat çarpımını sıfırlar → eksen üstündeki yönler (ör. (0,0,-1)) bozulur.
-        /// 0 bilinçli olarak <b>pozitif</b> sayılır; kodlama ve kod çözme aynı sözleşmeyi paylaştığı
-        /// için round-trip birebir kapanır.
+        /// Sign used in the fold. ⚠️ NOT <see cref="Math.Sign(float)"/>: it returns 0 at 0 and zeroes
+        /// the fold product → axis directions (e.g. (0,0,-1)) break. 0 counts as <b>positive</b>;
+        /// encode and decode share the convention, so the round-trip closes exactly.
         /// </summary>
         private static float SignOrPositive(float v) => v >= 0f ? 1f : -1f;
 
         /// <summary>
-        /// Birim vektörü 2×i16'ya sıkıştırır. Girdi birim olmak zorunda değildir (burada birimlenir);
-        /// sıfır vektörde (0,0,1) varsayılanına düşülür — telde "yön yok" diye bir değer yoktur.
+        /// Compresses a unit vector into 2×i16. The input need not be normalised (done here); a zero
+        /// vector falls back to (0,0,1) — the wire has no "no direction" value.
         /// </summary>
         public static void Encode(float x, float y, float z, out short ox, out short oy)
         {
@@ -39,7 +38,7 @@ namespace VortexArena.Protocol
                 x = (float)(x / len); y = (float)(y / len); z = (float)(z / len);
             }
 
-            // L1 normalize: oktahedronun yüzeyine izdüşüm.
+            // L1 normalize: projection onto the surface of the octahedron.
             float l1 = Math.Abs(x) + Math.Abs(y) + Math.Abs(z);
             float px = x / l1;
             float py = y / l1;
@@ -47,7 +46,7 @@ namespace VortexArena.Protocol
 
             if (pz < 0f)
             {
-                // Alt yarıküreyi üst yarıkürenin dışına katla (kare düzleme yayılır).
+                // Fold the lower hemisphere outside the upper one (it spreads over the square plane).
                 float fx = (1f - Math.Abs(py)) * SignOrPositive(px);
                 float fy = (1f - Math.Abs(px)) * SignOrPositive(py);
                 px = fx; py = fy;
@@ -57,7 +56,7 @@ namespace VortexArena.Protocol
             oy = Quantize(py);
         }
 
-        /// <summary>2×i16'yı birim vektöre açar (<see cref="Encode"/>'un tersi).</summary>
+        /// <summary>Expands 2×i16 back into a unit vector (the inverse of <see cref="Encode"/>).</summary>
         public static void Decode(short ox, short oy, out float x, out float y, out float z)
         {
             float px = ox / SCALE;
@@ -69,7 +68,7 @@ namespace VortexArena.Protocol
 
             if (ez < 0f)
             {
-                // Katı geri al — ex/ey'yi ezmeden ÖNCE ikisini de orijinalinden hesapla.
+                // Undo the fold — compute both from the originals BEFORE overwriting ex/ey.
                 float fx = (1f - Math.Abs(py)) * SignOrPositive(px);
                 float fy = (1f - Math.Abs(px)) * SignOrPositive(py);
                 ex = fx; ey = fy;

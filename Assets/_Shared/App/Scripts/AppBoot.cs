@@ -7,26 +7,23 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Boot sahnesi (index 0): rolü ve sunucu adresini belirler, **her rolde `Lobby`** sahnesine
-    /// geçer. Android → player; masaüstü/Editor → `--role player|admin` > VORTEX_ROLE ortam
-    /// değişkeni > varsayılan admin.
+    /// Boot scene (index 0): resolves role + server address, then loads `Lobby` **in every role**.
+    /// Android → player; desktop/Editor → `--role player|admin` > VORTEX_ROLE env var > admin.
     ///
     /// <para>
-    /// Admin'in ayrı bir kabuk/dashboard sahnesi YOKTUR. Admin de
-    /// oyuncularla aynı sahnede durur ve sunucunun `load_match`/`return_to_lobby`'siyle onları
-    /// takip eder (<c>SceneRouter</c>); sahne üstü yönetim arayüzünü <c>AdminHud</c> çizer.
+    /// The admin has NO separate shell/dashboard scene: it stands in the players' scene and follows
+    /// `load_match`/`return_to_lobby` (<c>SceneRouter</c>), with <c>AdminHud</c> on top.
     /// </para>
     ///
-    /// Adres: masaüstü admin build'i **operatör launcher'ı tarafından** başlatılır ve adres
-    /// komut satırından gelir (`--server-ip 192.168.1.10 [--server-port 47821]`). Bu yüzden
-    /// oyun içinde IP soran bir ekran YOKTUR. Komut satırı adresi rolden bağımsız
-    /// okunur: verilmişse VR oyuncusunda da keşif zincirinin ÜSTÜNDE yer alır
-    /// (bkz. LobbyController) — açıkça verilen adres her zaman kazanır.
+    /// Address: the desktop admin build is started **by the operator launcher** with
+    /// `--server-ip 192.168.1.10 [--server-port 47821]`, so there is NO in-game IP screen. The
+    /// command line address is read regardless of role and, when given, outranks the VR player's
+    /// discovery chain (see LobbyController).
     ///
-    /// Editörde rol/adres seçimi Inspector'dan DEĞİL `Tools > VortexArena > Development > Dev`
-    /// penceresinden yapılır (`DevSession` bu değerleri Boot koşmadan önce yazar; burada
-    /// yalnız "zaten çözülmüşse dokunma" kuralı vardır). Sebep: [SerializeField] override
-    /// her değişiklikte Boot.unity'yi kirletiyordu ve ekipte birbirinin ayarını eziyordu.
+    /// In the editor the role/address come from `Tools > VortexArena > Development > Dev`, NOT the
+    /// Inspector (`DevSession` writes them before Boot; here the only rule is "leave an already
+    /// resolved role alone"). ⚠️ A [SerializeField] override dirtied Boot.unity on every change and
+    /// team members overwrote each other's settings.
     /// </summary>
     public class AppBoot : MonoBehaviour
     {
@@ -36,7 +33,7 @@ namespace VortexArena.App
 
         private void Start()
         {
-            // DevSession (yalnız editör) rolü/adresi Boot'tan önce yazmış olabilir — ezme.
+            // DevSession (editor only) may have written the role/address before Boot — do not overwrite.
             if (!AppSession.RoleResolved)
             {
                 AppSession.Role = ResolveRole();
@@ -44,11 +41,11 @@ namespace VortexArena.App
                 ResolveServerEndpoint();
             }
 
-            // Admin masaüstünde XR'ı tutmasın: Standalone'da XR açılışta otomatik başlıyor
-            // (Link'le player için gerekli) ve boştaki HMD'yi kapıyor.
+            // The admin must not hold XR: on Standalone it auto-starts (needed for Link) and grabs
+            // the idle HMD.
             AdminXrRelease.Apply();
 
-            // Rol ne olursa olsun tek kabuk: Lobby. Admin gözlemci oradan sunucuyu takip eder.
+            // One shell for every role: Lobby. The admin spectator follows the server from there.
             string sceneName = AppSession.SceneLobby;
 
             string endpoint = AppSession.HasServerEndpoint
@@ -81,9 +78,9 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Komut satırı adresini AppSession'a yazar. Rolden BAĞIMSIZ: admin bunu tek adres
-        /// kaynağı olarak kullanır, player rolünde ise keşif zincirinin en üstüne oturur
-        /// (verilmemişse zincir bugünkü gibi PlayerPrefs > beacon > arena.json ile sürer).
+        /// Writes the command line address into AppSession, INDEPENDENT of the role: the admin's
+        /// only address source, and the top of the player's discovery chain (which otherwise stays
+        /// PlayerPrefs > beacon > arena.json).
         /// </summary>
         private void ResolveServerEndpoint()
         {
@@ -110,7 +107,7 @@ namespace VortexArena.App
                 : ArenaProtocol.CONTROL_PORT;
         }
 
-        /// <summary>`--ad deger` çiftini komut satırından okur; yoksa null.</summary>
+        /// <summary>Reads a `--name value` pair from the command line; null when absent.</summary>
         private static string FindArgValue(string argName)
         {
             string[] args = Environment.GetCommandLineArgs();

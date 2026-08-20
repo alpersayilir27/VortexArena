@@ -4,35 +4,37 @@ using UnityEngine.Events;
 namespace VortexArena.Core.Arena
 {
     /// <summary>
-    /// <b>Taban bölgesi</b>: arenanın bir kenarındaki şerit (kırmızı/mavi). Ölen oyuncu
-    /// buraya fiziken yürüyünce canlanır — <see cref="ModeReviveAnchor.OwnBase"/> kipinde
-    /// <c>PlayerCombatState</c> bu bölgeye girişi <c>revive_request</c>'in şartı olarak okur
-    /// (Docs/ArenaNet-Protokol.md §10.4).
+    /// <b>Base zone</b>: the strip along one edge of the arena (red/blue). A dead player revives by
+    /// physically walking here — in <see cref="ModeReviveAnchor.OwnBase"/> mode
+    /// <c>PlayerCombatState</c> reads entry into this zone as the precondition for
+    /// <c>revive_request</c> (Docs/ArenaNet-Protokol.md §10.4).
     /// <para>
-    /// <b>Algılama alanı ÇİZİLEN ŞERİTTİR</b>: bölgenin altındaki Renderer'ların kapladığı
-    /// dikdörtgen, bölgenin YEREL uzayında ölçülür ve sınır odur. Elle girilen bir ölçü alanı
-    /// YOKTUR ve eklenmez — bölgeyi büyütmek/döndürmek/taşımak = şeridi büyütmek/döndürmek/
-    /// taşımak. Sayı alanı olsaydı görselle sessizce sapardı: oyuncu kırmızıya basmış görünürken
-    /// canlanamaz (ya da şeridin yanında dururken canlanır) olurdu ve hata hiçbir yerde görünmezdi.
+    /// <b>The detection area IS THE DRAWN STRIP</b>: the rectangle covered by the Renderers under
+    /// the zone is measured in the zone's LOCAL space and that is the boundary. There is NO
+    /// hand-entered size field and none is added — scaling/rotating/moving the zone = scaling/
+    /// rotating/moving the strip. If there were a numeric field it would silently drift from the
+    /// visual: the player would appear to stand on the red strip yet fail to revive (or revive while
+    /// standing next to it) and the error would show up nowhere.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Yükseklik yok sayılır</b> (yalnız XZ): oyuncunun HMD'si şeridin metrelerce üstündedir,
-    /// şeridin kendi kalınlığıyla karşılaştırılamaz. Ölçü <b>bir kez</b>, <see cref="Awake"/>'te
-    /// alınır — şerit sahnede statiktir; kapalı (gizlenmiş) Renderer'lar da sayılır, çünkü
-    /// <see cref="BaseZoneVisibility"/> takımsız modda şeridi kapatır.
+    /// ⚠️ <b>Height is ignored</b> (XZ only): the player's HMD is meters above the strip and cannot
+    /// be compared with the strip's own thickness. The measurement is taken <b>once</b>, in
+    /// <see cref="Awake"/> — the strip is static in the scene; disabled (hidden) Renderers count
+    /// too, because <see cref="BaseZoneVisibility"/> hides the strip in team-less modes.
     /// </para>
     /// <para>
-    /// HMD konumunu bölgenin YEREL uzayında izler (fizik yok, <see cref="ArenaBoundary"/> ile
-    /// aynı desen) ve oyuncu girip çıkınca olay yayınlar; oyunun büyümesiyle silah tazeleme /
-    /// iyileşme gibi davranışlar bu olaylara takılabilir.
+    /// It tracks the HMD position in the zone's LOCAL space (no physics, the same pattern as
+    /// <see cref="ArenaBoundary"/>) and raises events when the player enters and leaves; as the game
+    /// grows, behaviours like weapon refill / healing can hook onto those events.
     /// </para>
     /// <para>
-    /// <see cref="team"/> = bu bölgeyi kimin kullanabildiği. <see cref="Team.Neutral"/> işaretli
-    /// bir bölgeyi HERKES kullanır; takımsız modda (§10.5) oyuncu tüm bölgeleri kullanır. Aynı
-    /// takıma ait birden çok bölge konabilir — herhangi birine girmek yeter.
+    /// <see cref="team"/> = who can use this zone. A zone marked <see cref="Team.Neutral"/> is used
+    /// by EVERYONE; in a team-less mode (§10.5) the player uses all zones. Several zones belonging
+    /// to the same team can be placed — entering any one of them is enough.
     /// </para>
     /// <para>
-    /// ⚠️ Bölge bir konum değişimi TETİKLEMEZ: oyuncu fiziksel olarak yürür, ışınlanmaz.
+    /// ⚠️ The zone does NOT TRIGGER a position change: the player walks physically, they are not
+    /// teleported.
     /// </para>
     /// </summary>
     public class BaseZone : MonoBehaviour
@@ -47,14 +49,15 @@ namespace VortexArena.Core.Arena
         public UnityEvent onPlayerEntered;
         public UnityEvent onPlayerExited;
 
-        /// <summary>Bu bölgeyi kimin kullanabildiği; <see cref="Team.Neutral"/> = herkes.</summary>
+        /// <summary>Who can use this zone; <see cref="Team.Neutral"/> = everyone.</summary>
         public Team Team => team;
 
-        /// <summary>Yerel oyuncunun HMD'si bölgenin içinde mi (bileşen kapalıyken DONAR).</summary>
+        /// <summary>Is the local player's HMD inside the zone (FROZEN while the component is disabled).</summary>
         public bool IsPlayerInside { get; private set; }
 
-        /// <summary>Şeritten ölçülen dikdörtgenin köşeleri, bölgenin YEREL uzayında (x, z).
-        /// Şerit bölgenin pivotuna göre kaymış olabilir — bu yüzden merkez varsayılmaz.</summary>
+        /// <summary>Corners of the rectangle measured from the strip, in the zone's LOCAL space
+        /// (x, z). The strip may be offset from the zone's pivot — which is why no center is
+        /// assumed.</summary>
         private Vector2 _areaMin;
         private Vector2 _areaMax;
 
@@ -65,9 +68,10 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            // Açık başarısızlık: ölçüsüz bölge sessizce "hiç girilemeyen" bir bölge olurdu ve
-            // oyuncu şeridin üstünde dururken canlanamazdı. Bileşen kapatılınca PlayerCombatState
-            // bunu "açık taban yok" diye okur ve kendi fail-open'ı devreye girer (§10.4).
+            // Loud failure: a zone without measurements would silently become a zone that can never
+            // be entered, and the player would fail to revive while standing on the strip. Once the
+            // component is disabled, PlayerCombatState reads this as "no open base" and its own
+            // fail-open kicks in (§10.4).
             Debug.LogError(
                 $"BaseZone ({name}): altında Renderer yok — algılama alanı ÇİZİLEN ŞERİTTEN " +
                 "türer, ölçü alınamadı. Bölge kapatıldı; şerit mesh'ini bölgenin altına koy.", this);
@@ -94,12 +98,13 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Şeridin kapladığı dikdörtgeni bölgenin yerel XZ'sinde ölçer.
+        /// Measures the rectangle covered by the strip in the zone's local XZ.
         /// <para>
-        /// ⚠️ <c>Renderer.bounds</c> (dünya eksenli AABB) KULLANILMAZ: döndürülmüş bir şeritte
-        /// kutu şişer ve bölge şeridin dışına taşar. Ölçü, her Renderer'ın <b>kendi</b> yerel
-        /// kutusunun sekiz köşesini dünyaya, oradan bölgenin yerel uzayına taşıyarak alınır —
-        /// döndürülmüş şerit de, bölgeye göre eğik duran şerit de doğru çıkar.
+        /// ⚠️ <c>Renderer.bounds</c> (a world-axis AABB) is NOT USED: on a rotated strip the box
+        /// inflates and the zone spills outside the strip. The measurement is taken by moving the
+        /// eight corners of each Renderer's <b>own</b> local box into world space and from there
+        /// into the zone's local space — a rotated strip, and a strip skewed relative to the zone,
+        /// both come out correct.
         /// </para>
         /// </summary>
         private bool TryMeasureStrip(out Vector2 min, out Vector2 max)
@@ -107,8 +112,8 @@ namespace VortexArena.Core.Arena
             min = Vector2.zero;
             max = Vector2.zero;
 
-            // Kapalı olanlar dahil: takımsız modda şeridi BaseZoneVisibility kapatıyor ve bu
-            // bileşen sahne yüklenirken ondan sonra da uyanabilir.
+            // Disabled ones included: in a team-less mode BaseZoneVisibility hides the strip, and
+            // this component may wake up after it during scene load.
             Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
             bool measured = false;
 
@@ -153,19 +158,20 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// HMD transformu; bulunana kadar HER KAREDE yeniden denenir.
+        /// The HMD transform; retried EVERY FRAME until found.
         /// <para>
-        /// ⚠️ <b>Tek seferlik çözme (eski hâli: <c>Awake</c>) yetmez ve sessizce ölür:</b>
-        /// <see cref="Camera.main"/> yalnız <b>etkin</b> ve <c>MainCamera</c> etiketli bir kamera
-        /// kayda girdikten sonra dolu döner; rig'in <c>CenterEyeAnchor</c> kamerası bu bileşenin
-        /// <c>Awake</c>'inden SONRA kaydolursa alan kalıcı olarak <c>null</c> kalır. O hâlde
-        /// <see cref="IsPlayerInside"/> ömür boyu <c>false</c>'ta donar ama
-        /// <c>PlayerCombatState.HasOpenBaseZone</c> <b>true</b> kalır (bileşen açık) — yani
-        /// "bölge yok" fail-open'ı da devreye girmez: oyuncu şeridin tam üstünde dururken hem
-        /// canlanamaz hem tur toplanmasında hazır sayılmaz.
+        /// ⚠️ <b>Resolving once (previously in <c>Awake</c>) is not enough and dies silently:</b>
+        /// <see cref="Camera.main"/> only returns something once an <b>enabled</b> camera tagged
+        /// <c>MainCamera</c> has registered; if the rig's <c>CenterEyeAnchor</c> camera registers
+        /// AFTER this component's <c>Awake</c>, the field stays <c>null</c> permanently. In that
+        /// case <see cref="IsPlayerInside"/> is frozen at <c>false</c> for its whole lifetime while
+        /// <c>PlayerCombatState.HasOpenBaseZone</c> stays <b>true</b> (the component is enabled) —
+        /// so the "no zone" fail-open does not kick in either: the player standing right on the
+        /// strip can neither revive nor be counted as ready during round gathering.
         /// </para>
-        /// <para>Aynı desen <c>PlayerCombatState.ResolveHead</c>'de de kullanılıyor. Alan Inspector'da
-        /// doluysa hiç aranmaz — <c>ArenaBoundary</c>'de olduğu gibi elle bağlanabilir.</para>
+        /// <para>The same pattern is used in <c>PlayerCombatState.ResolveHead</c>. If the field is
+        /// filled in the Inspector nothing is searched — it can be wired by hand, as in
+        /// <c>ArenaBoundary</c>.</para>
         /// </summary>
         private bool ResolveHead()
         {
@@ -181,8 +187,9 @@ namespace VortexArena.Core.Arena
         }
 
 #if UNITY_EDITOR
-        /// <summary>Seçiliyken algılama dikdörtgenini çizer — ölçü artık görselden geldiği için
-        /// tek denetim yolu gözle bakmaktır. Play beklemeden tazedir: her çizimde yeniden ölçülür.
+        /// <summary>Draws the detection rectangle while selected — since the measurement now comes
+        /// from the visual, the only way to inspect it is by eye. It is fresh without waiting for
+        /// Play: it is re-measured on every draw.
         /// </summary>
         private void OnDrawGizmosSelected()
         {

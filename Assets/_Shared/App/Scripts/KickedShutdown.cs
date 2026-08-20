@@ -6,30 +6,28 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// `kicked` geldiğinde OYUNCU uygulamasını kapatır (§5.4). Atılan başlığın açık kalması
-    /// operatör için yalan bir durumdu: admin panelinden oyuncu düşer ama başlık sahnede
-    /// durmayı sürdürür, kulaklığı elle kapatmak gerekirdi. Atmak = "bu cihaz oturumdan
-    /// çıksın" demek olduğu için karşılığı uygulamanın kapanmasıdır.
+    /// Quits the PLAYER application on `kicked` (§5.4). A kicked headset that stays up lies to the
+    /// operator: the player leaves the admin panel but keeps standing in the scene. Kicking means
+    /// "this device leaves the session", so the app quits.
     ///
-    /// **Admin kapanmaz:** operatör penceresi sahadaki tek yönetim aracıdır; bir `kicked`
-    /// (ör. `playerId` havuzu dolduğunda gelen ret) operatörü aletsiz bırakmamalı. Admin
-    /// yalnız bağlantısız duruma düşer, `ConnectionOverlay` durumu yazar.
+    /// **The admin does not quit:** the operator window is the only on-site management tool; a
+    /// `kicked` (e.g. a full `playerId` pool) must not leave the operator without tools. It only
+    /// goes disconnected, shown by `ConnectionOverlay`.
     ///
-    /// `ArenaClient` `kicked`'i alır almaz bağlantıyı zaten kapatır ve yeniden bağlanmayı
-    /// durdurur; buradaki kısa gecikme kapanış el sıkışmasının ve log'un tamamlanması içindir,
-    /// oyuncuya bir şey okutmak için değil.
+    /// `ArenaClient` already closes the connection on `kicked`; the short delay lets the closing
+    /// handshake and the log finish — it is not reading time for the player.
     /// </summary>
     public class KickedShutdown : MonoBehaviour
     {
-        /// <summary>Kapanmadan önceki pay (sn, unscaled). Soketin kapanışını ve log'u toparlar.</summary>
+        /// <summary>Grace before quitting (s, unscaled) — lets the socket close and the log flush.</summary>
         private const float QuitDelaySeconds = 1.5f;
 
         private static KickedShutdown _instance;
 
         private bool _quitting;
 
-        /// <summary>Tekili kurar. ⚠️ <b>Koşulsuzdur</b> — "bu oturumda gerekli mi" kararı
-        /// <see cref="AppSingletons"/>'a aittir (gerekçe orada).</summary>
+        /// <summary>Installs the singleton. ⚠️ <b>Unconditional</b> — the "is it needed in this
+        /// session" decision belongs to <see cref="AppSingletons"/> (rationale is there).</summary>
         internal static void Install()
         {
             if (_instance != null)
@@ -92,7 +90,7 @@ namespace VortexArena.App
         private static void Quit()
         {
 #if UNITY_EDITOR
-            // Editörde Application.Quit() no-op'tur; oynatmayı durdurmak aynı anlama gelir.
+            // Application.Quit() is a no-op in the editor; stopping play mode means the same thing.
             UnityEditor.EditorApplication.isPlaying = false;
 #else
             Application.Quit();

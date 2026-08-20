@@ -3,51 +3,49 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>
-    /// Uzak oyuncu avatarının vurulabilir parçası (kafa / gövde / karın / bacak collider'ı).
-    /// <para>
-    /// Weapon raycast'i bu bileşene değerse hedef bir AĞ OYUNCUSUDUR:
-    /// hasar YEREL uygulanmaz, sunucuya <c>hit_report</c> gönderilir ve
-    /// <c>health_update</c> beklenir (Docs/ArenaNet-Protokol.md §10.3).
-    /// </para>
-    /// Bölge çarpanı istemcide <see cref="VortexArena.Core.Combat.Weapon"/> tarafından uygulanır
-    /// (hasar istemci-otoriter, <c>hit_report.damage</c>; §10.3) — <see cref="Zone"/> o çarpanın
-    /// kaynağıdır, sayısı <c>WeaponDefinition.GetZoneMultiplier</c>'dan gelir.
-    /// </summary>
+    /// <summary>A hittable part of a remote player avatar (head / body / stomach / leg collider).</summary>
+    /// <remarks>
+    /// If a Weapon raycast hits this component the target is a NETWORK PLAYER: damage is not applied
+    /// locally, a <c>hit_report</c> is sent to the server and a <c>health_update</c> is awaited
+    /// (Docs/ArenaNet-Protokol.md §10.3).
+    /// <para>The zone multiplier is applied client-side by <see cref="VortexArena.Core.Combat.Weapon"/>
+    /// (damage is client-authoritative, <c>hit_report.damage</c>; §10.3) — <see cref="Zone"/> is that
+    /// multiplier's source and its number comes from <c>WeaponDefinition.GetZoneMultiplier</c>.</para>
+    /// </remarks>
     public class RemoteHitBox : MonoBehaviour
     {
-        /// <summary>Kafa — çarpanı en yüksek bölge olduğu için en dikkat çeken renk.</summary>
+        /// <summary>Head — the most striking colour, being the highest-multiplier zone.</summary>
         private static readonly Color HeadColor = new Color(1f, 0.25f, 0.2f, 0.9f);
 
-        /// <summary>Karın/leğen.</summary>
+        /// <summary>Stomach/pelvis.</summary>
         private static readonly Color StomachColor = new Color(1f, 0.6f, 0.1f, 0.9f);
 
-        /// <summary>Bacaklar.</summary>
+        /// <summary>Legs.</summary>
         private static readonly Color LegColor = new Color(1f, 0.95f, 0.25f, 0.9f);
 
-        /// <summary>Göğüs ve kollar (referans hasar).</summary>
+        /// <summary>Chest and arms (reference damage).</summary>
         private static readonly Color BodyColor = new Color(0.35f, 1f, 0.45f, 0.9f);
 
         [Tooltip("Boş bırakılırsa üst hiyerarşiden otomatik bulunur.")]
         [SerializeField] private RemoteAvatar avatar;
 
-        // ⚠️ Kutular ELLE bakılır (üreten bir araç yoktur): kemiğe yeni bir kutu asan kişi bu
-        // bileşeni eklemek ve bölgesini SEÇMEK zorundadır. Varsayılan Body'dir, yani unutulan bir
-        // kafa kutusu sessizce 4× yerine 1× hasar verir — sahada "kafadan vurdum ama ölmedi" diye
-        // okunur ve teşhisi pahalıdır.
+        // ⚠️ Boxes are maintained BY HAND (no generator tool): whoever hangs a new box on a bone must add
+        // this component and PICK its zone. The default is Body, so a forgotten head box silently deals
+        // 1× instead of 4× — in the field that reads as "I hit the head but they did not die" and is
+        // expensive to diagnose.
         [Tooltip("Vuruş bölgesi — hasar çarpanının kaynağı (kafa 4×, karın 1.25×, bacak 0.75×).")]
         [SerializeField] private HitZone zone = HitZone.Body;
 
-        /// <summary>Bu hitbox'ın ait olduğu avatar.</summary>
+        /// <summary>The avatar this hitbox belongs to.</summary>
         public RemoteAvatar Avatar => avatar;
 
-        /// <summary>Avatarın oyuncu id'si; avatar yoksa 0 (geçersiz hedef).</summary>
+        /// <summary>The avatar's player id; 0 if there is no avatar (invalid target).</summary>
         public int PlayerId => avatar != null ? avatar.PlayerId : 0;
 
-        /// <summary>Vuruş bölgesi; çarpanı UYGULAMAK çağıranın işidir (hasar istemci-otoriter).</summary>
+        /// <summary>Hit zone; APPLYING the multiplier is the caller's job (damage is client-authoritative).</summary>
         public HitZone Zone => zone;
 
-        /// <summary>Kafa bölgesi mi — <see cref="Zone"/> üzerinden türer.</summary>
+        /// <summary>Is this the head zone — derived from <see cref="Zone"/>.</summary>
         public bool IsHead => zone == HitZone.Head;
 
         private void Reset()
@@ -73,25 +71,23 @@ namespace VortexArena.Core.Player
 
         // ------------------------------------------------------------------ gizmo
 
-        /// <summary>
-        /// Kutunun gerçek (collider'dan okunan) tel kafesi. ⚠️ <c>OnDrawGizmosSelected</c> DEĞİL:
-        /// kutu ayarlanırken çoğu zaman seçili olan başka bir şey oluyor (kemik, karakter kökü) ve
-        /// kutunun nerede olduğu o anda da görünmeli.
-        /// </summary>
+        /// <summary>Real wireframe of the box (read from the collider). ⚠️ NOT
+        /// <c>OnDrawGizmosSelected</c>: while adjusting a box the selection is usually something else
+        /// (a bone, the character root) and the box's location must be visible then too.</summary>
         private void OnDrawGizmos()
         {
             var collider = GetComponent<Collider>();
             if (collider == null)
             {
-                // Kutu henüz kurulmamış olabilir; sessiz kal — gizmo bir uyarı kanalı değil.
+                // The box may not be set up yet; stay silent — a gizmo is not a warning channel.
                 return;
             }
 
-            // ⚠️ Burada Gizmos.matrix KULLANILIR ve bu, kavrama gizmo'larındaki "matris kullanma"
-            // kuralının TERSİDİR — ikisi de kendi yerinde doğru: kavrama ofsetleri hiçbir zaman
-            // ölçeklenmiyor (metre cinsinden okunmalı), oysa collider ölçüleri transform ölçeğiyle
-            // GERÇEKTEN ölçekleniyor (kemik kökü oyuncunun boyuyla ölçekleniyor). Matrissiz çizilen
-            // tel kafes gerçek collider'ı yanlış gösterir ve elle ayar yaparken yanlış yere bakılır.
+            // ⚠️ Gizmos.matrix IS used here, the OPPOSITE of the "do not use the matrix" rule in the grip
+            // gizmos — both are right in their own place: grip offsets are never scaled (they must read in
+            // metres), whereas collider dimensions REALLY do scale with the transform (the bone root
+            // scales with the player's height). A wireframe drawn without the matrix would misrepresent
+            // the real collider and send manual tuning to the wrong place.
             Matrix4x4 previous = Gizmos.matrix;
             Color previousColor = Gizmos.color;
 
@@ -122,11 +118,9 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>
-        /// Unity'de hazır tel kapsül gizmo'su YOKTUR: iki uç küresi + onları birleştiren dört
-        /// çizgiyle kuruluyor. Uçlar merkezden <c>height/2 - radius</c> kadar uzakta (kapsülün
-        /// yüksekliği uç kürelerini de kapsar), eksen collider'ın <c>direction</c> alanından.
-        /// </summary>
+        /// <summary>Unity has NO built-in wire capsule gizmo: built from two end spheres + four connecting
+        /// lines. The ends sit <c>height/2 - radius</c> from the centre (capsule height includes the end
+        /// spheres); the axis comes from the collider's <c>direction</c> field.</summary>
         private static void DrawWireCapsule(CapsuleCollider capsule)
         {
             float radius = capsule.radius;
@@ -134,8 +128,8 @@ namespace VortexArena.Core.Player
             Vector3 perpA = AxisVector((capsule.direction + 1) % 3);
             Vector3 perpB = AxisVector((capsule.direction + 2) % 3);
 
-            // Yükseklik yarıçapın iki katının altındaysa kapsül zaten bir küredir — mesafe negatife
-            // düşmesin diye kırpılıyor, yoksa uç küreler ters tarafa geçer.
+            // If the height is below twice the radius the capsule is already a sphere — clamped so the
+            // distance cannot go negative, which would put the end spheres on the wrong sides.
             float half = Mathf.Max(0f, capsule.height * 0.5f - radius);
             Vector3 top = capsule.center + axis * half;
             Vector3 bottom = capsule.center - axis * half;
@@ -149,7 +143,7 @@ namespace VortexArena.Core.Player
             Gizmos.DrawLine(top - perpB * radius, bottom - perpB * radius);
         }
 
-        /// <summary>CapsuleCollider.direction sözleşmesi: 0=X, 1=Y, 2=Z.</summary>
+        /// <summary>The CapsuleCollider.direction contract: 0=X, 1=Y, 2=Z.</summary>
         private static Vector3 AxisVector(int direction)
         {
             switch (direction)

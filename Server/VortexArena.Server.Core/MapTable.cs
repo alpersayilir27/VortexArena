@@ -3,62 +3,59 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>config/maps.json'daki tek harita girdisi. Public ALAN — JsonUtil (IncludeFields)
-/// ile okunur; adlar Unity'deki MapDefinition SO alanlarıyla birebir aynıdır (export bu adlarla
-/// yazar: Tools &gt; VortexArena &gt; Server &gt; Export Server Config).
-///
-/// <para><b>Arena ÖLÇÜSÜ burada YOKTUR</b> ve eklenmemelidir: sunucu metre bilmez (pozlar
-/// istemci-otoriter, arena uzayında gelir) ve her işletmenin alanı farklı — çoğu kare/dikdörtgen
-/// bile olmadığı için tek bir ölçü çifti arenayı tarif etmez. Ölçü yalnız istemcide yaşar:
-/// sahnedeki <c>ArenaBoundary</c>'ye bağlı boyut dosyasında (JSON, <c>ArenaDimensions</c>).</para></summary>
+/// <summary>A single map entry in config/maps.json.</summary>
+/// <remarks>Public FIELDS — read via JsonUtil (IncludeFields); names match the Unity MapDefinition SO
+/// exactly (written by Tools &gt; VortexArena &gt; Server &gt; Export Server Config).
+/// <para>⚠️ Arena DIMENSIONS are NOT here and must not be added: the server knows no metres (poses are
+/// client-authoritative, in arena space) and every venue differs — most are not even rectangular, so
+/// one pair of numbers cannot describe an arena. Dimensions live only on the client, in the JSON bound
+/// to the scene's <c>ArenaBoundary</c> (<c>ArenaDimensions</c>).</para></remarks>
 public sealed class MapEntry
 {
     public string sceneName = "";
 
-    /// <summary>Haritanın MEKANI (§11). Export bunu asset yolundan türetir:
-    /// <c>Assets/Arenas/Venues/&lt;İşletme&gt;/…</c> → o işletme. Mekan klasörü dışındaki
-    /// haritalar (şablonlar) export'a HİÇ girmez. Boş gelirse (eski export)
-    /// <see cref="MapTable.DefaultVenue"/> sayılır.</summary>
+    /// <summary>The map's VENUE (§11), derived by the export from the asset path
+    /// (<c>Assets/Arenas/Venues/&lt;Venue&gt;/…</c>).</summary>
+    /// <remarks>Maps outside a venue folder (templates) never enter the export. Empty (old export) is
+    /// treated as <see cref="MapTable.DefaultVenue"/>.</remarks>
     public string venue = "";
 
-    /// <summary>Bu haritanın desteklediği modId'ler; BOŞ = kısıt yok (MapDefinition.SupportsMode
-    /// ile aynı semantik — yeni haritada unutulan alan modu gizlemesin).</summary>
+    /// <summary>modIds supported by this map; EMPTY = no restriction.</summary>
+    /// <remarks>Same semantics as MapDefinition.SupportsMode — a field forgotten on a new map must not
+    /// hide the mode.</remarks>
     public string[] modes = Array.Empty<string>();
 }
 
-/// <summary>maps.json kökü: <c>{ "maps": [ ... ] }</c>.</summary>
+/// <summary>The root of maps.json: <c>{ "maps": [ ... ] }</c>.</summary>
 public sealed class MapTableFile
 {
     public MapEntry[] maps = Array.Empty<MapEntry>();
 }
 
-/// <summary>Harita kataloğu (§10.1 start_match doğrulaması). İçerik
-/// projesinden gelir: Unity <c>Tools &gt; VortexArena &gt; Server &gt; Export Server Config</c> menüsü
-/// MapDefinition SO'larından üretir — dosya ELLE DÜZENLENMEZ (export ezer).
-///
-/// <para>Dosya yoksa varsayılan ÜRETİLMEZ ve dosya YAZILMAZ — sunucunun uyduracağı bir harita
-/// listesi yoktur. Boş tablo = harita doğrulaması kapalı.
-/// Yükleme sonrası salt-okunurdur → kilit gerekmez.</para>
-///
-/// <para>Sunucunun okuduğu TEK içerik tablosu budur; silah tablosu (weapons.json) YOKTUR
-/// (§10.3) — hasarı istemci bildirir.</para></summary>
+/// <summary>The map catalog (§10.1 start_match validation), generated from the MapDefinition SOs by
+/// Unity's <c>Tools &gt; VortexArena &gt; Server &gt; Export Server Config</c>.</summary>
+/// <remarks>⚠️ Never edited by hand — the export overwrites it. If the file is missing, no default is
+/// generated and nothing is written (the server may not invent maps); an empty table = validation
+/// off. Read-only after load → no lock needed. This is the ONLY content table the server reads; there
+/// is no weapons.json (§10.3) — damage is reported by the client.</remarks>
 public sealed class MapTable
 {
-    /// <summary>Mekanı boş gelen girdinin (eski export) sayıldığı mekan.</summary>
+    /// <summary>The venue an entry with an empty venue (an old export) is assigned to.</summary>
     public const string DefaultVenue = "Standard";
 
     private readonly Dictionary<string, MapEntry> _byScene = new(StringComparer.Ordinal);
 
-    /// <summary>Tabloya alınan sahne adları (açılış özeti / red mesajları için).</summary>
+    /// <summary>Scene names taken into the table (for the startup summary / rejection messages).</summary>
     public IReadOnlyList<string> SceneNames { get; }
 
-    /// <summary>Tablodaki mekanlar (alfabetik, tekrarsız). Açılışta operatöre bu liste sorulur.</summary>
+    /// <summary>Venues in the table (alphabetical, deduplicated); offered to the operator at
+    /// startup.</summary>
     public IReadOnlyList<string> Venues { get; }
 
-    /// <summary>Bu tablonun mekanı; tüm mekanları içeren TAM tabloda boştur.</summary>
+    /// <summary>The venue of this table; empty in the FULL table that contains all venues.</summary>
     public string Venue { get; }
 
-    /// <summary>true = harita doğrulaması yapılmaz (maps.json yok/boş/bozuk).</summary>
+    /// <summary>true = no map validation is performed (maps.json is missing/empty/malformed).</summary>
     public bool IsEmpty => _byScene.Count == 0;
 
     private MapTable(IEnumerable<MapEntry> entries, string venue = "")
@@ -84,9 +81,9 @@ public sealed class MapTable
         Venues = venues;
     }
 
-    /// <summary>Yalnız verilen mekanın haritalarını içeren yeni tablo. Sunucu bunu
-    /// <see cref="MatchDirector"/>'a verir → <c>start_match</c> başka mekanın haritasını
-    /// otomatik reddeder (ayrı bir kontrol yazmaya gerek kalmaz).</summary>
+    /// <summary>A new table holding only the given venue's maps.</summary>
+    /// <remarks>The server hands this to <see cref="MatchDirector"/> → <c>start_match</c> rejects
+    /// another venue's map automatically, with no extra check.</remarks>
     public MapTable ForVenue(string venue)
     {
         var subset = new List<MapEntry>();
@@ -98,9 +95,9 @@ public sealed class MapTable
         return new MapTable(subset, venue);
     }
 
-    /// <summary>Bu tablodaki tek lobi haritası (modes == ["lobby"], §10.7); yoksa boş string.
-    /// Birden çoksa alfabetik ilki döner ve uyarı basılır — export deterministik sıralı olduğu
-    /// için seçim de deterministiktir.</summary>
+    /// <summary>The single lobby map of this table (modes == ["lobby"], §10.7); "" if none.</summary>
+    /// <remarks>With more than one, the alphabetically first is returned with a warning — the export
+    /// is deterministically ordered, so the choice is deterministic too.</remarks>
     public string ResolveLobbyScene()
     {
         var found = new List<string>();
@@ -123,8 +120,9 @@ public sealed class MapTable
         return found[0];
     }
 
-    /// <summary>Dosya yoksa/bozuksa BOŞ tablo döner (doğrulama atlanır) — sunucu asla
-    /// varsayılan harita uydurmaz, çünkü harita listesi Unity içerik projesinden gelir.</summary>
+    /// <summary>Returns an EMPTY table if the file is missing/malformed (validation skipped).</summary>
+    /// <remarks>The server never invents a default map — the list comes from the Unity content
+    /// project.</remarks>
     public static MapTable Load(string path)
     {
         try
@@ -148,7 +146,8 @@ public sealed class MapTable
         }
     }
 
-    /// <summary>false = sahne tabloda yok → tablo doluysa start_match reddedilir (§10.1).</summary>
+    /// <summary>false = scene not in the table → start_match is rejected if the table is non-empty
+    /// (§10.1).</summary>
     public bool TryGet(string? sceneName, out MapEntry entry)
     {
         if (!string.IsNullOrEmpty(sceneName) && _byScene.TryGetValue(sceneName, out var found))
@@ -160,8 +159,9 @@ public sealed class MapTable
         return false;
     }
 
-    /// <summary>Harita bu modu destekliyor mu. <c>modes</c> boşsa kısıt YOKTUR; dolu ise
-    /// OrdinalIgnoreCase eşleşme aranır (Unity MapDefinition.SupportsMode ile aynı semantik).</summary>
+    /// <summary>Whether the map supports this mode; empty <c>modes</c> = no restriction.</summary>
+    /// <remarks>Otherwise an OrdinalIgnoreCase match — same semantics as Unity's
+    /// MapDefinition.SupportsMode.</remarks>
     public static bool SupportsMode(MapEntry entry, string modeId)
     {
         if (string.IsNullOrEmpty(modeId)) return false;

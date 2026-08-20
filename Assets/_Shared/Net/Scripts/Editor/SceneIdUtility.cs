@@ -6,24 +6,24 @@ using UnityEngine.SceneManagement;
 namespace VortexArena.Net.Editor
 {
     /// <summary>
-    /// sceneId bake yardımcıları: sahne içi <see cref="NetIdentity"/> toplama, boş id bulma,
-    /// id yazma ve 0/çakışma onarımı. Hem <c>NetworkParentMenu</c> hem <c>SceneIdGuard</c>
-    /// aynı mantığı buradan kullanır (tek doğruluk kaynağı).
+    /// sceneId bake helpers: collecting <see cref="NetIdentity"/> in a scene, finding a free id, writing
+    /// it and repairing 0/collisions. <c>NetworkParentMenu</c> and <c>SceneIdGuard</c> share this logic
+    /// (single source of truth).
     /// <para>
-    /// Alan <c>private</c> olduğu için yazma HER ZAMAN <see cref="SerializedObject"/> üzerinden
-    /// yapılır: runtime tarafında editor-only bir setter tutmayız (Net katmanı temiz kalır,
-    /// prefab override ve Undo kaydı da kendiliğinden doğru işler).
+    /// The field being <c>private</c>, writing ALWAYS goes through <see cref="SerializedObject"/>: no
+    /// editor-only setter on the runtime side (the Net layer stays clean, and prefab overrides and Undo
+    /// recording work by themselves).
     /// </para>
     /// </summary>
     internal static class SceneIdUtility
     {
-        /// <summary>Serialize edilen alanın adı — <see cref="NetIdentity"/> içindekiyle birebir aynı olmalı.</summary>
+        /// <summary>The name of the serialized field — must match the one in <see cref="NetIdentity"/> exactly.</summary>
         private const string SCENE_ID_PROPERTY = "sceneId";
 
         /// <summary>
-        /// Sahnedeki tüm NetIdentity'leri toplar (PASİF objeler dahil). Sıra deterministiktir:
-        /// kök obje sırası → <c>GetComponentsInChildren</c> hiyerarşi sırası. Onarımın iki
-        /// çalıştırmada aynı sonucu vermesi bu sıraya dayanır.
+        /// Collects every NetIdentity in the scene (INACTIVE included). Deterministic order: root object
+        /// order → <c>GetComponentsInChildren</c> hierarchy order — the repair being reproducible across
+        /// runs rests on it.
         /// </summary>
         internal static List<NetIdentity> CollectInScene(Scene scene)
         {
@@ -42,15 +42,16 @@ namespace VortexArena.Net.Editor
             return result;
         }
 
-        /// <summary>Sahnedeki en büyük sceneId + 1 (sahne boşsa 1; 0 "atanmamış" için rezerve).</summary>
+        /// <summary>The scene's largest sceneId + 1 (1 when the scene is empty; 0 is reserved for
+        /// "unassigned").</summary>
         internal static uint NextFreeId(Scene scene)
         {
             return NextFreeId(CollectInScene(scene));
         }
 
         /// <summary>
-        /// Hazır toplanmış liste üzerinden max + 1. Döngü içinde sahneyi tekrar tekrar
-        /// taramamak için liste alan aşırı yükleme.
+        /// max + 1 over an already collected list. A list-taking overload so a loop does not rescan the
+        /// scene over and over.
         /// </summary>
         internal static uint NextFreeId(IReadOnlyList<NetIdentity> identities)
         {
@@ -73,9 +74,9 @@ namespace VortexArena.Net.Editor
         }
 
         /// <summary>
-        /// sceneId'yi SerializedObject ile yazar ve objeyi dirty işaretler. Değer zaten
-        /// istenen değerse hiçbir şey yapmaz (gereksiz sahne diff'i üretmemek için).
-        /// Yazma gerçekten yapıldıysa true döner.
+        /// Writes sceneId through a SerializedObject and marks the object dirty. Does nothing when the
+        /// value is already the requested one (so as not to produce a needless scene diff). Returns
+        /// true only when a write actually happened.
         /// </summary>
         internal static bool AssignId(NetIdentity identity, uint value)
         {
@@ -101,10 +102,10 @@ namespace VortexArena.Net.Editor
         }
 
         /// <summary>
-        /// Sahnedeki 0 kalan ve ÇAKIŞAN sceneId'leri onarır: bir id'yi İLK SAHİPLENEN korur,
-        /// sonrakilere sıradaki boş id verilir. Tarama hiyerarşi sırasıyla yapıldığından sonuç
-        /// deterministiktir. Onarım yapıldıysa true döner; <paramref name="fixedCount"/>
-        /// değiştirilen bileşen sayısıdır.
+        /// Repairs sceneIds that stayed 0 or COLLIDE in the scene: the FIRST CLAIMANT of an id keeps
+        /// it, the later ones get the next free id. Since the scan follows hierarchy order the result
+        /// is deterministic. Returns true when a repair happened; <paramref name="fixedCount"/> is the
+        /// number of changed components.
         /// </summary>
         internal static bool RepairScene(Scene scene, out int fixedCount)
         {
@@ -127,7 +128,7 @@ namespace VortexArena.Net.Editor
                     continue;
                 }
 
-                // 0 = hiç atanmamış; used.Add false = bu id'yi önceki bir obje sahiplenmiş.
+                // 0 = never assigned; used.Add false = an earlier object already claimed this id.
                 if (identity.SceneId != 0u && used.Add(identity.SceneId))
                 {
                     continue;

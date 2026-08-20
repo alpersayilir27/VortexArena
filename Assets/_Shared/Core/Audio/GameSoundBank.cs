@@ -3,21 +3,16 @@ using UnityEngine;
 
 namespace VortexArena.Core.Audio
 {
-    /// <summary>
-    /// Tüm haritalarda ortak olan oyun seslerinin (duyuru/geri bildirim) tek kaynağı.
-    /// Harita başına değişen ortam sesi burada DEĞİL <see cref="Arena.MapDefinition"/>'dadır.
-    /// <para>
-    /// ⚠️ Asset'in yeri <c>Assets/_Shared/Data/Resources/GameSoundBank.asset</c> — hiçbir
-    /// sahneden referansı yoktur, <see cref="Load"/> onu <c>Resources.Load</c> ile alır
-    /// (<c>GameCatalog</c> ile aynı gerekçe). Klasörden çıkarılırsa ya da adı değişirse tüm
-    /// duyuru sesleri sessizce susar.
-    /// </para>
-    /// <para>Boş bırakılan klip sessizce atlanır: her sesin dolu olması gerekmez.</para>
-    /// </summary>
+    /// <summary>Single source for the game sounds (announcement/feedback) shared by all maps. The
+    /// per-map ambience is NOT here but in <see cref="Arena.MapDefinition"/>.
+    /// <para>⚠️ The asset lives at <c>Assets/_Shared/Data/Resources/GameSoundBank.asset</c> — no
+    /// scene references it, <see cref="Load"/> takes it via <c>Resources.Load</c> (same rationale as
+    /// <c>GameCatalog</c>). Moving or renaming it silences every announcement.</para>
+    /// <para>An empty clip is skipped silently: not every sound has to be filled.</para></summary>
     [CreateAssetMenu(fileName = "GameSoundBank", menuName = "VortexArena/Game Sound Bank")]
     public class GameSoundBank : ScriptableObject
     {
-        /// <summary>Resources altındaki asset adı.</summary>
+        /// <summary>Asset name under Resources.</summary>
         public const string ResourceName = "GameSoundBank";
 
         [Header("Öldürme / ölüm")]
@@ -56,19 +51,15 @@ namespace VortexArena.Core.Audio
         private static GameSoundBank _cached;
         private static bool _loaded;
 
-        /// <summary>
-        /// Ölüm sesinden en son çalan klip — ardışık tekrarı elemek için. <b>Serialize EDİLMEZ</b>:
-        /// varyasyon oturumun içinde anlamlıdır, diske yazılacak bir ayar değil.
-        /// </summary>
+        /// <summary>Last death clip played — used to reject immediate repeats. NOT serialized:
+        /// variation matters within a session, it is not a setting to write to disk.</summary>
         [NonSerialized] private AudioClip _lastLocalDeath;
 
-        /// <summary>Ortak ses seviyesi (0..1).</summary>
+        /// <summary>Shared volume (0..1).</summary>
         public float Volume => volume;
 
-        /// <summary>
-        /// Kaynak asset'i <c>Resources</c>'tan yükler (tek sefer, sonuç önbelleklenir).
-        /// Asset yoksa null döner ve tüm duyuru sesleri sessizce atlanır.
-        /// </summary>
+        /// <summary>Loads the asset from <c>Resources</c> once and caches it. Returns null when the
+        /// asset is missing, and every announcement is then skipped silently.</summary>
         public static GameSoundBank Load()
         {
             if (_loaded)
@@ -81,11 +72,9 @@ namespace VortexArena.Core.Audio
             return _cached;
         }
 
-        /// <summary>
-        /// İstenen sesin klibi; atanmamışsa null.
-        /// <para>⚠️ <see cref="GameSoundId.LocalDeath"/> her çağrıda <b>rastgele</b> bir klip
-        /// döndürür — çağıran sonucu önbelleklemez.</para>
-        /// </summary>
+        /// <summary>Clip for the requested sound; null when unassigned.
+        /// <para>⚠️ <see cref="GameSoundId.LocalDeath"/> returns a RANDOM clip on every call — the
+        /// caller must not cache the result.</para></summary>
         public AudioClip Clip(GameSoundId id)
         {
             switch (id)
@@ -104,14 +93,11 @@ namespace VortexArena.Core.Audio
             }
         }
 
-        /// <summary>
-        /// Ölüm kliplerinden rastgele biri; hepsi boşsa null.
-        /// <para>⚠️ <b>Bir önceki seçim elenir</b> (liste iki ya da daha fazla dolu klip taşıyorsa):
-        /// saf rastgelede aynı klip peş peşe gelebiliyor ve ölüm başına tek duyuru çalan bir
-        /// sistemde bu "hep aynı ses" olarak duyuluyor. İki klipte sonuç sırayla çalmaktır —
-        /// varyasyonun görünürlüğü rastgeleliğin saflığından önemli
-        /// (<see cref="ModeAudioRegistry.Rule.PickClip"/> ile aynı kural).</para>
-        /// </summary>
+        /// <summary>A random death clip; null when all are empty.
+        /// <para>⚠️ The previous pick is excluded when two or more clips are filled: pure randomness
+        /// repeats the same clip back to back, which in a one-announcement-per-death system is heard
+        /// as "always the same sound". With two clips this alternates — visible variation beats pure
+        /// randomness (same rule as <see cref="ModeAudioRegistry.Rule.PickClip"/>).</para></summary>
         private AudioClip PickLocalDeath()
         {
             if (localDeathClips == null)
@@ -119,8 +105,8 @@ namespace VortexArena.Core.Audio
                 return null;
             }
 
-            // Eleme sonucu liste boşalırsa (tek dolu klip var) eleme yapılmaz — o banka her
-            // ölümde aynı sesi çalar, doğrusu da bu.
+            // If exclusion empties the pool (only one filled clip) it is dropped — that bank plays
+            // the same sound on every death, which is correct.
             AudioClip[] pool = Collect(localDeathClips, _lastLocalDeath);
             if (pool.Length == 0)
             {
@@ -136,7 +122,7 @@ namespace VortexArena.Core.Audio
             return _lastLocalDeath;
         }
 
-        /// <summary>Dolu klipleri toplar; <paramref name="exclude"/> varsa onu atlar.</summary>
+        /// <summary>Collects the filled clips, skipping <paramref name="exclude"/> if given.</summary>
         private static AudioClip[] Collect(AudioClip[] clips, AudioClip exclude)
         {
             int count = 0;

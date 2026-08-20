@@ -5,35 +5,27 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Modes.Tournament
 {
-    /// <summary>
-    /// Turnuva HUD prefabının kökündeki SUNUM bileşeni. Faz/süre, geri sayım, can, ölüm ekranı,
-    /// kill-feed ve kendi sayaçların ortak tabandan (<see cref="ModeHudBase"/>) gelir; bu sınıf
-    /// yalnız turnuvaya ait olanı ekler: <b>tur numarası, tur skoru, ayakta kalan sayısı ve
-    /// toplanma etiketi</b>.
-    /// <para>
-    /// ⚠️ <b>Skorun anlamı bu modda farklıdır:</b> <c>scoreRed</c>/<c>scoreBlue</c> öldürme değil
-    /// <b>kazanılan tur</b> sayar (§10.5). Aynı sayı, farklı etiket — bu yüzden skor satırı TDM'den
-    /// kopyalanmaz.
-    /// </para>
-    /// <para>
-    /// Ayakta kalan sayısı <c>match_state</c>'te YOKTUR; <c>lobby_state</c>'teki
-    /// <c>PlayerInfo.alive</c> + <c>team</c>'den türetilir (§10.2) ve roster her ölümde zaten
-    /// tazelendiği için ayrı bir mesaja gerek kalmaz.
-    /// </para>
-    /// </summary>
+    /// <summary>PRESENTATION component at the root of the Tournament HUD prefab; adds only what is
+    /// the tournament's: round number, round score, alive count, regroup label.</summary>
+    /// <remarks>Everything else comes from <see cref="ModeHudBase"/>.
+    /// <para>⚠️ Score means something else here: <c>scoreRed</c>/<c>scoreBlue</c> count rounds won,
+    /// not kills (§10.5) — same number, different label, so the score line is not copied from
+    /// TDM.</para>
+    /// <para>The alive count is not in <c>match_state</c>; it is derived from
+    /// <c>PlayerInfo.alive</c> + <c>team</c> in <c>lobby_state</c> (§10.2), which is already refreshed
+    /// on every death.</para></remarks>
     public class TournamentClientController : ModeHudBase
     {
-        /// <summary>Son <c>lobby_state</c>'ten türetilen "3v2"; skor satırının kuyruğuna eklenir.</summary>
+        /// <summary>"3v2" from the last <c>lobby_state</c>; appended to the score line.</summary>
         private string _aliveLine = "";
 
-        // Son bilinen tur skoru — roster ölümde tazelendiğinde satırı match_state'i beklemeden
-        // yeniden çizebilmek için (match_state 1 Hz; "3v2" bir saniye geç gelirse ölüm anını kaçırır).
+        // Last known round score, so a roster refresh on death can redraw the line without waiting for
+        // the 1 Hz match_state (a "3v2" arriving a second late misses the death).
         private int _scoreRed;
         private int _scoreBlue;
 
-        /// <summary>Ayakta kalan satırı tabanda YOKTUR (skor sunumu alt sınıfın işi), bu yüzden
-        /// lobiye dönüşte onu temizlemek de burada: taban kendi alanlarını siler, bizimkini bilemez
-        /// (FFA'daki sıralama satırıyla aynı desen).</summary>
+        /// <summary>The alive line is not in the base, so clearing it on return to lobby lives here
+        /// too (same pattern as FFA's standings line).</summary>
         protected override void OnEnable()
         {
             base.OnEnable();
@@ -62,7 +54,7 @@ namespace VortexArena.Modes.Tournament
 
         protected override string EndScoreLine(MatchEndMsg msg)
         {
-            // Maç bitti: ayakta kalan sayısının anlamı kalmadı, yalnız tur skoru.
+            // Match over: the alive count no longer means anything, only the round score.
             return TeamScore(msg.scoreRed, msg.scoreBlue);
         }
 
@@ -76,10 +68,9 @@ namespace VortexArena.Modes.Tournament
             return msg.winnerTeam == "blue" ? "MAVİ KAZANDI" : "BERABERE";
         }
 
-        /// <summary>
-        /// Koşan maçta "MAÇ" yerine "TUR n" yazar (tur numarası <c>modeState</c>'ten, §10.1).
-        /// Diğer tüm fazlar tabana bırakılır — faz/gerekçe sözlüğü orada tek yerde durur.
-        /// </summary>
+        /// <summary>Writes "TUR n" instead of "MAÇ" in a running match (round number from
+        /// <c>modeState</c>, §10.1); other phases are left to the base, keeping the phase/reason
+        /// vocabulary in one place.</summary>
         protected override string PhaseLabel(string phase, string phaseReason, string modeState)
         {
             if (phase == ArenaProtocol.PHASE_PLAYING)
@@ -91,24 +82,22 @@ namespace VortexArena.Modes.Tournament
             return base.PhaseLabel(phase, phaseReason, modeState);
         }
 
-        /// <summary>
-        /// Mod duraklaması (<c>phaseReason == "mode"</c>) = turlar arası toplanma.
-        /// <c>modeState</c> biçimi <c>regroup:&lt;hazır&gt;/&lt;toplam&gt;</c> (§10.1).
-        /// </summary>
+        /// <summary>Mode pause (<c>phaseReason == "mode"</c>) = between-rounds regroup;
+        /// <c>modeState</c> is <c>regroup:&lt;ready&gt;/&lt;total&gt;</c> (§10.1).</summary>
         protected override string ModeStateLabel(string modeState)
         {
             string counts = ValueAfter(modeState, "regroup:");
             return counts.Length > 0 ? $"TOPLANMA {counts}" : "TOPLANMA";
         }
 
-        /// <summary>Roster tazelendi: ayakta kalan sayısı burada yaşıyor (§10.2).</summary>
+        /// <summary>Roster refreshed: the alive count lives here (§10.2).</summary>
         protected override void OnLobbyStateApplied(LobbyStateMsg msg)
         {
             _aliveLine = BuildAliveLine(msg);
             SetText(scoreText, BuildScoreLine());
         }
 
-        // ---------------------------------------------------------------- iç işler
+        // ---------------------------------------------------------------- internals
 
         private string BuildScoreLine()
         {
@@ -121,7 +110,7 @@ namespace VortexArena.Modes.Tournament
             return $"KIRMIZI {scoreRed} — {scoreBlue} MAVİ";
         }
 
-        /// <summary>"3v2" — kırmızı/mavi ayakta kalan. Hiç oyuncu yoksa boş.</summary>
+        /// <summary>"3v2" — red/blue players still alive. Empty if there is no player at all.</summary>
         private static string BuildAliveLine(LobbyStateMsg msg)
         {
             if (msg?.players == null)
@@ -167,16 +156,16 @@ namespace VortexArena.Modes.Tournament
             return any ? $"{red}v{blue}" : "";
         }
 
-        /// <summary><c>round:4</c> → 4; biçim tutmazsa 0 (etiket "MAÇ"a düşer).</summary>
+        /// <summary><c>round:4</c> → 4; 0 on a format mismatch (label falls back to "MAÇ").</summary>
         private static int ParseRound(string modeState)
         {
             string value = ValueAfter(modeState, "round:");
             return int.TryParse(value, out int round) ? round : 0;
         }
 
-        /// <summary>"<paramref name="prefix"/>…" biçimindeki modeState'in kuyruğu; eşleşmezse boş.
-        /// <para>Sözlük modun kendisine aittir (§10.1): çekirdek bu stringleri hiç ayrıştırmaz,
-        /// yazan da okuyan da turnuvadır.</para></summary>
+        /// <summary>Tail of a modeState shaped "<paramref name="prefix"/>…"; empty on mismatch.</summary>
+        /// <remarks>The vocabulary belongs to the mode (§10.1): the core never parses these strings,
+        /// the tournament both writes and reads them.</remarks>
         private static string ValueAfter(string modeState, string prefix)
         {
             if (string.IsNullOrEmpty(modeState) ||

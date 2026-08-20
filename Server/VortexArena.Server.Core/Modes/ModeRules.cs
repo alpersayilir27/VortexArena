@@ -3,14 +3,14 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core.Modes;
 
-/// <summary>Takım kipi (§10.5 <c>teamMode</c>): takımsız | kırmızı-mavi.</summary>
+/// <summary>Team mode (§10.5 <c>teamMode</c>): teamless | red-blue.</summary>
 public enum TeamMode
 {
     None,
     TwoTeams
 }
 
-/// <summary>Skor kime yazılır (§10.5 <c>scoring</c>).</summary>
+/// <summary>Who the score is written to (§10.5 <c>scoring</c>).</summary>
 public enum ScoreKind
 {
     /// <summary>match_state.scoreRed / scoreBlue.</summary>
@@ -20,108 +20,93 @@ public enum ScoreKind
     Player
 }
 
-/// <summary>Canlanma şartı (§10.4/2, §10.5 <c>reviveAnchor</c>).</summary>
+/// <summary>Revive condition (§10.4/2, §10.5 <c>reviveAnchor</c>).</summary>
 public enum ReviveAnchor
 {
-    /// <summary>Oyuncu kendi BaseZone'una fiziken girer (TDM).</summary>
+    /// <summary>The player physically enters their own BaseZone (TDM).</summary>
     OwnBase,
 
-    /// <summary>Oyuncu REVIVE_HOLD_SECONDS boyunca REVIVE_HOLD_RADIUS içinde sabit durur.</summary>
+    /// <summary>The player stands still within REVIVE_HOLD_RADIUS for REVIVE_HOLD_SECONDS.</summary>
     StandStill,
 
-    /// <summary>
-    /// Canlanma YOKTUR (tur tabanlı eleme, <c>tournament</c>). Canlanmanın tek yolu
-    /// <c>revive_request</c>'tir ve bu kipte reddedilir — ölü oyuncuyu yalnız modun başlattığı
-    /// yeni tur canlandırır (§10.4).
-    /// </summary>
+    /// <summary>NO revive (round based elimination, <c>tournament</c>): <c>revive_request</c> is
+    /// rejected, only the mode's new round revives the dead (§10.4).</summary>
     None
 }
 
-/// <summary>Silah nereden gelir (§10.5 <c>weaponSource</c>) — TÜMÜYLE istemci sunumu;
-/// sunucuda karşılığı yoktur (§10.3: sunucuda silah tablosu yok).</summary>
+/// <summary>Where the weapon comes from (§10.5 <c>weaponSource</c>) — entirely client presentation,
+/// with no server counterpart (§10.3: no weapon table on the server).</summary>
 public enum WeaponSource
 {
-    /// <summary>Sahnede duran silah — oyuncu onu çerçevesinden alır, silah tükenmez. Yerleşim
-    /// arena kararıdır (elle konur); tel değeri <c>"weaponcanvas"</c>.</summary>
+    /// <summary>A weapon standing in the scene, taken from its frame and never used up; placement is
+    /// an arena decision. Wire value <c>"weaponcanvas"</c>.</summary>
     WeaponCanvas,
 
-    /// <summary>Modun dağıttığı rastgele silah.</summary>
+    /// <summary>A random weapon granted by the mode.</summary>
     RandomGrant
 }
 
-/// <summary>
-/// Modun ŞEKLİ (Docs/ArenaNet-Protokol.md §10.5) — sunucu-otoriter. Her <see cref="IGameMode"/>
-/// bunu döner; <see cref="MatchDirector"/> hem kendi davranışını buna göre kurar hem de
-/// <c>load_match.rules</c> / <c>welcome.match.rules</c> ile istemciye yollar.
-///
-/// <para><b>Varsayılan = bugünkü TDM.</b> Bir mod hiçbir alan yazmazsa bugünkü davranışı alır;
-/// yeni mod yalnız FARKLI olduğu alanları belirtir. Bu yüzden bir kural eklemek mevcut modların
-/// hiçbirini değiştirmez.</para>
-///
-/// <para><c>record</c> + <c>init</c> bilinçli: bir kural şekli oluşturulduktan sonra DEĞİŞMEZ.
-/// Maç ortasında değişebilen tek alan <see cref="FriendlyFire"/>'dır ve o da yerinde yazılarak
-/// değil, <c>with</c> ile YENİ bir kayıt üretilerek değişir (<c>MatchDirector.ApplyRulesLocked</c>)
-/// — tüketiciler yine değişmez bir değer okur.</para>
-/// </summary>
+/// <summary>The mode's SHAPE (Docs/ArenaNet-Protokol.md §10.5) — server-authoritative, returned by
+/// every <see cref="IGameMode"/>.</summary>
+/// <remarks><see cref="MatchDirector"/> configures itself from it and sends it via
+/// <c>load_match.rules</c> / <c>welcome.match.rules</c>.
+/// <para>The default = today's TDM: a mode specifies only the fields where it DIFFERS, so adding a
+/// rule changes none of the existing modes.</para>
+/// <para><c>record</c> + <c>init</c> is deliberate: a rule shape is immutable once created. Only
+/// <see cref="FriendlyFire"/> changes mid-match, and via <c>with</c> into a NEW record
+/// (<c>MatchDirector.ApplyRulesLocked</c>), so consumers still read an immutable value.</para></remarks>
 public sealed record ModeRules
 {
     public TeamMode Teams { get; init; } = TeamMode.TwoTeams;
 
     public ScoreKind Scoring { get; init; } = ScoreKind.Team;
 
-    /// <summary>false = aynı takım vuramaz (§10.3/4). Boş takım asla takım arkadaşı sayılmaz.
-    /// <para>⚠️ <b>Modlar bu alanı YAZMAZ</b> (§5.2): değeri operatörün <c>set_friendly_fire</c>
-    /// anahtarı belirler ve <c>MatchDirector.ApplyRulesLocked</c> her kural şekline damgalar. Burada
-    /// durmasının sebebi telde taşınması — <c>ModeRulesInfo.friendlyFire</c> "o an geçerli değer"dir.
-    /// Bir mod kendi değerini yazarsa anahtar sessizce ezilir.</para></summary>
+    /// <summary>false = teammates cannot hit each other (§10.3/4); an empty team is never a
+    /// teammate.</summary>
+    /// <remarks>⚠️ Modes do NOT write this (§5.2) — the operator's <c>set_friendly_fire</c> switch
+    /// decides it and <c>MatchDirector.ApplyRulesLocked</c> stamps every rule shape. It sits here only
+    /// because it is carried on the wire (<c>ModeRulesInfo.friendlyFire</c> = the value in effect); a
+    /// mode writing its own value silently overwrites the switch.</remarks>
     public bool FriendlyFire { get; init; }
 
     public ReviveAnchor Revive { get; init; } = ReviveAnchor.OwnBase;
 
     public WeaponSource Weapons { get; init; } = WeaponSource.WeaponCanvas;
 
-    /// <summary>respawn.delaySeconds + revive_request gecikme eşiği.</summary>
+    /// <summary>respawn.delaySeconds + the revive_request delay threshold.</summary>
     public float RespawnDelay { get; init; } = ArenaProtocol.RESPAWN_DELAY;
 
-    /// <summary>
-    /// Faz <c>playing</c> değilken silah ateşlenebilir mi (§10.5). <c>true</c> = serbest atış alanı:
-    /// atış olayı (UDP <c>0x03</c>/<c>0x04</c>, §6.4/6.5) relay edilir ama <b>hasar yine yoktur</b> —
-    /// <c>hit_report</c> kapısı her hâlükârda <c>playing</c>'dir (§10.3). Lobi türünün tek farkı budur.
-    /// </summary>
+    /// <summary>Can the weapon fire while the phase is not <c>playing</c> (§10.5)?</summary>
+    /// <remarks><c>true</c> = free firing range: the shot event (UDP <c>0x03</c>/<c>0x04</c>,
+    /// §6.4/6.5) is relayed but there is still NO damage — the <c>hit_report</c> gate is always
+    /// <c>playing</c> (§10.3). This is the lobby profile's only difference.</remarks>
     public bool FireWhilePaused { get; init; }
 
-    /// <summary>
-    /// Canlanan oyuncunun hasar almadığı süre (sn); <c>0</c> = koruma yok (§10.4). Varsayılan
-    /// <c>0</c> olduğu için bu alanı yazmayan hiçbir modun davranışı değişmez.
-    /// <para>⚠️ <b>Telde GİTMEZ</b> (<see cref="ToInfo"/>'ya girmez): istemcinin süreyle yapacağı
-    /// bir iş yok — korumayı snapshot bit6'dan
-    /// (<see cref="SnapshotEntry.FLAG_SPAWN_PROTECTED"/>) okur ve yalnız çizer. Sayıyı da yollamak
-    /// ikinci bir doğruluk kaynağı olurdu.</para>
-    /// </summary>
+    /// <summary>Seconds a revived player takes no damage; <c>0</c> = no protection (§10.4) and the
+    /// default, so modes that ignore it are unaffected.</summary>
+    /// <remarks>⚠️ Not on the wire (absent from <see cref="ToInfo"/>): the client has no use for the
+    /// duration — it reads the protection from snapshot bit6
+    /// (<see cref="SnapshotEntry.FLAG_SPAWN_PROTECTED"/>) and only draws it. Sending the number too
+    /// would be a second source of truth.</remarks>
     public float SpawnProtectionSeconds { get; init; }
 
-    /// <summary>Bugünkü TDM davranışı — yeni mod bir alanı belirtmezse buraya düşer.</summary>
+    /// <summary>Today's TDM behaviour — the fallback for any field a mode does not specify.</summary>
     public static readonly ModeRules TeamDefault = new();
 
-    /// <summary>
-    /// Lobi türünün kural şekli (§10.7): serbest atış + silahı mod dağıtır. Lobi bir
-    /// <see cref="IGameMode"/> DEĞİLDİR — bu kural yalnız istemciye "burada ateş edebilirsin, ama
-    /// hasar yok" demek için telde taşınır.
-    /// <para>
-    /// <c>Weapons</c> bilinçli olarak <see cref="WeaponSource.RandomGrant"/>: lobide oyuncu
-    /// grip'e basınca eline rastgele silah gelir, iki lobi sahnesinde silah yerleştirme işi
-    /// doğmaz. Varsayılan (<c>WeaponCanvas</c>) bırakılsaydı her lobiye elle silah konması
-    /// gerekirdi.
-    /// </para>
-    /// </summary>
+    /// <summary>The lobby profile's rule shape (§10.7): free firing + mode-granted weapon.</summary>
+    /// <remarks>The lobby is NOT an <see cref="IGameMode"/> — this rule goes on the wire only to tell
+    /// the client "you can shoot here, but there is no damage".
+    /// <para><c>Weapons</c> is deliberately <see cref="WeaponSource.RandomGrant"/>: grip gives a random
+    /// weapon, so no lobby needs hand-placed weapons as the default (<c>WeaponCanvas</c>) would
+    /// require.</para></remarks>
     public static readonly ModeRules LobbyProfile = new()
     {
         FireWhilePaused = true,
         Weapons = WeaponSource.RandomGrant
     };
 
-    /// <summary>Tel formatına çevirir (§10.5). Enum → string: bilinmeyen değer okuyan tarafta
-    /// varsayılana düştüğü için sürüm uyumu sayısal enum'dan güvenlidir.</summary>
+    /// <summary>Converts to the wire format (§10.5); enum → string, because an unknown value falls
+    /// back to the default on the reading side — safer across versions than a numeric enum.</summary>
     public ModeRulesInfo ToInfo() => new()
     {
         teamMode = Teams == TeamMode.None ? "none" : "two",
