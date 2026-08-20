@@ -3,32 +3,31 @@ using UnityEngine;
 namespace VortexArena.Core.Player
 {
     /// <summary>
-    /// İki kemikli (üst kol → ön kol → el) analitik IK — <b>yalnız ROTASYON yazar</b>.
+    /// Analytic two-bone IK (upper arm → forearm → hand) — <b>writes ROTATION only</b>.
     /// <para>
-    /// ⚠️ <b>Konum yazmamak bir kısıt değil, var olma sebebi.</b> Bileği doğrudan hedefe taşımak
-    /// kolun kemik uzunluğunu değiştirir (<c>localPosition</c>) ve iki şeyi birden bozardı:
-    /// (1) skinli mesh'te bilek gerilir, (2) <see cref="SkeletonPoseMirror"/> kırmızı takım
-    /// gövdesine yalnız <c>localRotation</c> kopyaladığı için ikinci gövde ilk gövdeyi TAKİP ETMEZ —
-    /// aynı oyuncu iki takımda iki ayrı duruşta çizilirdi. Rotasyonla çözülen bir hedef ise
-    /// kendiliğinden aynalanır.
+    /// ⚠️ <b>Not writing position is the reason this exists, not a limitation.</b> Moving the wrist
+    /// straight to the target changes bone length (<c>localPosition</c>) and breaks two things:
+    /// (1) the skinned mesh stretches at the wrist, (2) <see cref="SkeletonPoseMirror"/> copies only
+    /// <c>localRotation</c> to the red team body, so the second body would NOT follow the first —
+    /// the same player drawn in two different poses. A rotation-only solve mirrors for free.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Dirseğin bükülme yönü KORUNUR, dayatılmaz</b> (pole target yok): düzlem normali
-    /// kolun <b>o karedeki</b> duruşundan okunuyor. Sabit bir pole hedefi, retargeting'in bulduğu
-    /// doğal dirsek yönünü ezerdi ve düzeltme birkaç santimlik olduğu için kazancı da olmazdı.
+    /// ⚠️ <b>Elbow bend direction is PRESERVED, not imposed</b> (no pole target): the plane normal
+    /// is read from the arm's pose <b>that frame</b>. A fixed pole would override the natural elbow
+    /// direction found by retargeting, for a correction only a few centimeters wide.
     /// </para>
     /// <para>
-    /// Yöntem kosinüs teoremidir: iki iç açı hedef uzaklığa göre yeniden hesaplanır, sonra üst kol
-    /// hedefe nişanlanır. Ulaşılamayan hedefte uzaklık kola <b>kırpılır</b> (kol düz uzanır) —
-    /// açık ve sürekli bir davranış, kopma yok.
+    /// Method is the law of cosines: both interior angles are recomputed for the target distance,
+    /// then the upper arm is aimed at the target. Unreachable targets are <b>clamped</b> to arm
+    /// length (arm extends straight) — explicit and continuous, no snapping.
     /// </para>
     /// </summary>
     public sealed class TwoBoneIk
     {
-        /// <summary>Bir kemiğin "var" sayılması için gereken en küçük uzunluk (m).</summary>
+        /// <summary>Minimum length for a bone to count as present (m).</summary>
         private const float MinBoneLength = 0.02f;
 
-        /// <summary>Tam düz / tam katlanmış tekilliklerinden kaçmak için pay (m).</summary>
+        /// <summary>Margin avoiding fully-straight / fully-folded singularities (m).</summary>
         private const float ReachEpsilon = 0.001f;
 
         private const float MinSqr = 1e-10f;
@@ -49,17 +48,18 @@ namespace VortexArena.Core.Player
             _lowerLength = lowerLength;
         }
 
-        /// <summary>Zincirin ucu (bilek kemiği).</summary>
+        /// <summary>End of the chain (wrist bone).</summary>
         public Transform End => _end;
 
         /// <summary>
-        /// Uçtan iki ebeveyn yukarı çıkarak zinciri kurar ve kemik uzunluklarını <b>bind pozunda
-        /// bir kez</b> ölçer.
-        /// <para>⚠️ Uzunluk her karede yeniden ölçülMEZ: IK'nın kendisi kemik uzunluğunu koruduğu
-        /// için ölçüm sabit kalmalı; canlı ölçüm, bir kareki hatayı bir sonrakine taşıyıp yavaşça
-        /// sürüklenirdi.</para>
-        /// <para>Zincir çözülemezse (ebeveyn yok, kemik çok kısa) <c>null</c> döner — çağıran o eli
-        /// hiç sürmez. Yarım kurulmuş bir kol, hiç sürülmeyenden daha kötü teşhis edilir.</para>
+        /// Builds the chain by walking two parents up from the end and measures bone lengths
+        /// <b>once, in bind pose</b>.
+        /// <para>⚠️ Lengths are NOT re-measured per frame: since the IK preserves bone length the
+        /// measurement must stay fixed; a live measurement would carry one frame's error into the
+        /// next and slowly drift.</para>
+        /// <para>Returns <c>null</c> when the chain cannot be resolved (missing parent, bone too
+        /// short) — the caller then drives that hand not at all. A half-built arm is harder to
+        /// diagnose than an undriven one.</para>
         /// </summary>
         public static TwoBoneIk TryBuild(Transform end)
         {
@@ -83,9 +83,9 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Ucu <paramref name="target"/> noktasına götürür (üst kol + ön kol rotasyonları).
-        /// <para>⚠️ Uç kemiğin KENDİ rotasyonuna dokunmaz: onu çağıran yazar (bilek yönü kavramadan
-        /// gelir, koldan değil).</para>
+        /// Brings the end to <paramref name="target"/> (upper arm + forearm rotations).
+        /// <para>⚠️ Does not touch the end bone's OWN rotation: the caller writes it (wrist
+        /// orientation comes from the grip, not the arm).</para>
         /// </summary>
         public void Solve(Vector3 target)
         {
@@ -114,22 +114,22 @@ namespace VortexArena.Core.Player
                 Mathf.Abs(l1 - l2) + ReachEpsilon,
                 l1 + l2 - ReachEpsilon);
 
-            // Bugünkü iç açılar…
+            // Current interior angles…
             float acAb0 = Mathf.Acos(Mathf.Clamp(Vector3.Dot(ac.normalized, ab.normalized), -1f, 1f));
             float baBc0 = Mathf.Acos(Mathf.Clamp(
                 Vector3.Dot((a - b).normalized, (c - b).normalized), -1f, 1f));
 
-            // …ve hedef uzaklığın gerektirdiği açılar (kosinüs teoremi).
+            // …and the angles required by the target distance (law of cosines).
             float acAb1 = Mathf.Acos(Mathf.Clamp((l2 * l2 - l1 * l1 - lat * lat) / (-2f * l1 * lat), -1f, 1f));
             float baBc1 = Mathf.Acos(Mathf.Clamp((lat * lat - l1 * l1 - l2 * l2) / (-2f * l1 * l2), -1f, 1f));
 
-            // ⚠️ Düzlem normali İKİ dönüşte de AYNI ve dönüşlerden ÖNCE okunur: dirseğin bugünkü
-            // bükülme yönü budur ve iki açı düzeltmesi aynı düzlemde kalmak zorunda.
+            // ⚠️ The plane normal is the SAME for both rotations and read BEFORE them: it is the
+            // elbow's current bend direction, and both angle corrections must stay in that plane.
             Vector3 axis = Vector3.Cross(ac, ab);
             if (axis.sqrMagnitude < MinSqr)
             {
-                // Kol tam düz: dirsek düzlemi tanımsız. Hedef yönüyle bir düzlem kurulur;
-                // o da dejenereyse dokunulmaz (kol zaten hedefe bakıyordur).
+                // Arm fully straight: elbow plane undefined. Build one from the target direction;
+                // if that is degenerate too, leave it (the arm already points at the target).
                 axis = Vector3.Cross(at, ab);
                 if (axis.sqrMagnitude < MinSqr)
                 {
@@ -139,12 +139,12 @@ namespace VortexArena.Core.Player
 
             axis = axis.normalized;
 
-            // ⚠️ Dünya rotasyonuna SOLDAN çarpım: kemiği kendi orijini etrafında `axis` ekseninde
-            // döndürür. Ebeveynin dönüşü çocuğu da taşıdığı için sıra üst koldan aşağı olmalı.
+            // ⚠️ LEFT-multiply into world rotation: rotates the bone about `axis` around its own
+            // origin. Parent rotation carries the child, so the order must go from upper arm down.
             _upper.rotation = Quaternion.AngleAxis((acAb1 - acAb0) * Mathf.Rad2Deg, axis) * _upper.rotation;
             _lower.rotation = Quaternion.AngleAxis((baBc1 - baBc0) * Mathf.Rad2Deg, axis) * _lower.rotation;
 
-            // Uzunluk oturdu; kalan iş kolu hedefe nişanlamak.
+            // Length is settled; what remains is aiming the arm at the target.
             Vector3 aimFrom = _end.position - a;
             if (aimFrom.sqrMagnitude < MinSqr)
             {

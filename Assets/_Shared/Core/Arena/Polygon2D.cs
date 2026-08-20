@@ -2,54 +2,42 @@ using UnityEngine;
 
 namespace VortexArena.Core.Arena
 {
-    /// <summary>
-    /// 2B çokgen matematiği — <b>sıralı köşe halkası</b> (<c>ring</c>) üstünde içerik testi,
-    /// mesafe, sınırlayıcı kutu ve doğrulama. Saf hesap: sahne, asset ya da bileşen bilmez.
-    /// <para>
-    /// Hem çalışma anında (<see cref="ArenaBoundary"/> muhafaza mesafesi) hem editörde (maket
-    /// üretimi/geri okuması) kullanılır. Arena ölçüsünün tek temsili
-    /// <see cref="ArenaDimensions"/>'daki halkalar olduğu için, o halkalara sorulan her geometrik
-    /// sorunun cevabı burada toplanır.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Halka KAPALIDIR:</b> son köşe ilk köşeye kendiliğinden bağlanır — dizide ilk noktayı
-    /// sona tekrarlama. Sarım yönü (saat yönü / tersi) hiçbir metotta önemsenmez.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Çokgen BİRLEŞİMİ (union) bilinçli olarak YOKTUR ve eklenmez.</b> Ne taban ne kolon
-    /// parçalardan birleştirilir; ikisi de tek halkadır. İçbükeylik bunun için engel değil (L
-    /// şekli, yamuk, girintili duvar tek halkayla ifade edilir ve buradaki testler içbükeyde de
-    /// doğrudur). Birleşimin satacağı tek şey "alanı üst üste binen dikdörtgenler olarak yaz"
-    /// rahatlığıydı; bedeli düzlemsel düzenleme + dış yüz yürüyüşü kadar kenar-durumu yoğun bir
-    /// kod ve onun <see cref="ArenaBoundary"/> yüzünden sahne açılışında da koşması olurdu.
-    /// </para>
-    /// <para>
-    /// ⚠️ Metotlar <b>tahsis yapmaz</b> (<see cref="Bounds"/> dahil): muhafaza her karede
-    /// çağırıyor, geçici dizi/liste GC baskısı demek.
-    /// </para>
-    /// </summary>
+    /// <summary>2D polygon math over an <b>ordered corner ring</b>: containment, distance, bounds and
+    /// validation. Pure computation — knows nothing of scenes, assets or components.</summary>
+    /// <remarks>
+    /// Used both at runtime (<see cref="ArenaBoundary"/> distances) and in the editor (dimension mesh
+    /// generation/read-back). Since the rings in <see cref="ArenaDimensions"/> are the only
+    /// representation of the arena measurements, every geometric question about them is answered
+    /// here.
+    /// <para>⚠️ The ring is CLOSED: the last corner connects to the first automatically — do not
+    /// repeat the first point. Winding order is irrelevant in every method.</para>
+    /// <para>⚠️ Polygon UNION is deliberately absent and is not added. Neither floor nor column is
+    /// assembled from pieces; both are a single ring. Concavity is no obstacle to that (an L shape,
+    /// a trapezoid, an indented wall are one ring, and the tests here are correct on concave rings).
+    /// Union would only buy the convenience of "write the area as overlapping rectangles", at the
+    /// cost of edge-case-heavy planar-arrangement code that <see cref="ArenaBoundary"/> would run on
+    /// scene load.</para>
+    /// <para>⚠️ Methods allocate nothing (<see cref="Bounds"/> included): the boundary calls them
+    /// every frame and a temporary array means GC pressure.</para>
+    /// </remarks>
     public static class Polygon2D
     {
-        /// <summary>Geçerli bir çokgen için gereken en az köşe sayısı.</summary>
+        /// <summary>Minimum number of corners required for a valid polygon.</summary>
         public const int MinPoints = 3;
 
-        /// <summary>Halka kullanılabilir mi (null değil ve en az bir üçgen).</summary>
+        /// <summary>Is the ring usable (non-null and at least a triangle).</summary>
         public static bool IsValid(Vector2[] ring)
         {
             return ring != null && ring.Length >= MinPoints;
         }
 
-        // ------------------------------------------------------------------ içerik
+        // ------------------------------------------------------------- containment
 
-        /// <summary>
-        /// Nokta halkanın içinde mi (ray casting: noktadan +X yönüne giden ışın kaç kenarı
-        /// kesiyor — tek sayı = içeride). İçbükey çokgende de doğrudur.
-        /// <para>
-        /// Sınırın tam üstündeki bir nokta için sonuç tanımsızdır (kayan noktaya bağlı) —
-        /// muhafaza kararları <see cref="SignedDistance"/> üstünden verildiği için bu sorun
-        /// değil: orada sınır 0'dır ve iki tarafa da eşit uzaklıktadır.
-        /// </para>
-        /// </summary>
+        /// <summary>Is the point inside the ring (ray casting along +X, odd crossings = inside).
+        /// Correct on concave polygons too.
+        /// <para>For a point exactly on the boundary the result is undefined (floating point) —
+        /// harmless, since boundary decisions go through <see cref="SignedDistance"/>, where the edge
+        /// is 0 and equidistant from both sides.</para></summary>
         public static bool Contains(Vector2[] ring, Vector2 point)
         {
             if (!IsValid(ring))
@@ -73,16 +61,12 @@ namespace VortexArena.Core.Arena
             return inside;
         }
 
-        // ------------------------------------------------------------------ mesafe
+        // ---------------------------------------------------------------- distance
 
-        /// <summary>
-        /// Noktanın en yakın KENAR PARÇASINA uzaklığı (işaretsiz, her zaman ≥ 0).
-        /// <para>
-        /// Kenar doğrularına değil <b>parçalarına</b> bakılır — köşe yakınında da doğru sonuç
-        /// verir. Halka geçersizse <see cref="float.MaxValue"/> döner (çağıran
-        /// <c>Mathf.Min</c> zincirinde kullanıyorsa etkisiz kalsın diye).
-        /// </para>
-        /// </summary>
+        /// <summary>Distance to the nearest EDGE SEGMENT (unsigned, always ≥ 0). Segments, not
+        /// infinite lines, so results near corners are correct. Returns
+        /// <see cref="float.MaxValue"/> for an invalid ring, so it stays neutral in a
+        /// <c>Mathf.Min</c> chain.</summary>
         public static float DistanceToRing(Vector2[] ring, Vector2 point)
         {
             if (!IsValid(ring))
@@ -103,11 +87,9 @@ namespace VortexArena.Core.Arena
             return minDistance;
         }
 
-        /// <summary>
-        /// <b>Muhafaza sözleşmesi (alan):</b> içerideyse <b>+</b> (kenara o kadar metre pay var),
-        /// dışarıdaysa <b>−</b> (o kadar metre dışarı çıkılmış). Büyüklük her iki durumda da en
-        /// yakın kenar parçasına olan mesafedir.
-        /// </summary>
+        /// <summary>Boundary contract (area): <b>+</b> inside (that much margin to the edge),
+        /// <b>−</b> outside. The magnitude is the distance to the nearest edge segment either
+        /// way.</summary>
         public static float SignedDistance(Vector2[] ring, Vector2 point)
         {
             if (!IsValid(ring))
@@ -119,16 +101,11 @@ namespace VortexArena.Core.Arena
             return Contains(ring, point) ? distance : -distance;
         }
 
-        /// <summary>
-        /// <b>Muhafaza sözleşmesi (engel):</b> <see cref="SignedDistance"/>'ın işaretçe tersi —
-        /// engelin dışındaysa <b>+</b> (engele o kadar metre var), içindeyse <b>−</b> (o kadar
-        /// metre içine girilmiş).
-        /// <para>
-        /// İki ayrı sözleşmenin sebebi, muhafazanın ikisini tek bir <c>Mathf.Min</c> ile
-        /// birleştirmesidir: her ikisinde de "artı = güvenli pay" demek. Alan için güvenli olan
-        /// içerisi, engel için dışarısıdır.
-        /// </para>
-        /// </summary>
+        /// <summary>Boundary contract (obstacle): the sign inverse of <see cref="SignedDistance"/> —
+        /// <b>+</b> outside the obstacle, <b>−</b> inside.
+        /// <para>Two contracts exist so the boundary can merge them with a single <c>Mathf.Min</c>:
+        /// in both, "positive = safe margin". Safe means inside for the area and outside for an
+        /// obstacle.</para></summary>
         public static float ObstacleDistance(Vector2[] ring, Vector2 point)
         {
             if (!IsValid(ring))
@@ -140,29 +117,25 @@ namespace VortexArena.Core.Arena
             return Contains(ring, point) ? -distance : distance;
         }
 
-        /// <summary>Noktanın <c>a</c>–<c>b</c> doğru parçasına uzaklığı.</summary>
+        /// <summary>Distance from the point to the <c>a</c>–<c>b</c> segment.</summary>
         public static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
         {
             Vector2 ab = b - a;
             float lengthSq = ab.sqrMagnitude;
             if (lengthSq < 1e-8f)
             {
-                return Vector2.Distance(point, a); // dejenere kenar (üst üste iki köşe)
+                return Vector2.Distance(point, a); // degenerate edge (two coincident corners)
             }
 
             float t = Mathf.Clamp01(Vector2.Dot(point - a, ab) / lengthSq);
             return Vector2.Distance(point, a + ab * t);
         }
 
-        // ------------------------------------------------------------------ ölçü
+        // ------------------------------------------------------------ measurements
 
-        /// <summary>
-        /// Halkanın XZ sınırlayıcı kutusu. Halka geçersizse sıfır kutu döner.
-        /// <para>
-        /// ⚠️ Kadrajlarken kutunun <b>merkezi</b> de gerekir: ölçü genellikle bir köşeden alınır,
-        /// yani kutu transformun tam merkezinde DEĞİLDİR.
-        /// </para>
-        /// </summary>
+        /// <summary>XZ bounding box of the ring; a zero box for an invalid ring.
+        /// <para>⚠️ Framing also needs the box CENTER: measurements are usually taken from a corner,
+        /// so the box is NOT centered on the transform.</para></summary>
         public static Rect Bounds(Vector2[] ring)
         {
             if (!IsValid(ring))
@@ -184,7 +157,7 @@ namespace VortexArena.Core.Arena
             return Rect.MinMaxRect(minX, minY, maxX, maxY);
         }
 
-        /// <summary>İşaretli alan (sarım yönüne göre + / −). Mutlak değeri gerçek alandır.</summary>
+        /// <summary>Signed area (+ / − by winding). Its absolute value is the real area.</summary>
         public static float SignedArea(Vector2[] ring)
         {
             if (!IsValid(ring))
@@ -201,14 +174,10 @@ namespace VortexArena.Core.Arena
             return sum * 0.5f;
         }
 
-        /// <summary>
-        /// Halkanın ağırlık merkezi — maket üretiminde kolon prizmasının <b>pivotu</b> olur
-        /// (kolonu Move tool ile sürüklemek doğal olsun diye).
-        /// <para>
-        /// Alan sıfıra yakınsa (dejenere halka) köşelerin aritmetik ortalamasına düşer: ağırlık
-        /// merkezi formülü orada sıfıra bölerdi.
-        /// </para>
-        /// </summary>
+        /// <summary>Centroid of the ring — becomes the column prism's pivot during mesh generation,
+        /// so dragging a column with the Move tool feels natural.
+        /// <para>Falls back to the arithmetic mean of the corners when the area is near zero
+        /// (degenerate ring), where the centroid formula would divide by zero.</para></summary>
         public static Vector2 Centroid(Vector2[] ring)
         {
             if (!IsValid(ring))
@@ -240,21 +209,14 @@ namespace VortexArena.Core.Arena
             return new Vector2(cx * scale, cy * scale);
         }
 
-        // -------------------------------------------------------------- doğrulama
+        // -------------------------------------------------------------- validation
 
-        /// <summary>
-        /// Halka kendi kendini kesiyor mu — <b>yalnız doğrulama içindir</b>, muhafaza bunu
-        /// çağırmaz.
-        /// <para>
-        /// Köşeleri yanlış sırada yazılmış bir alan (kelebek/kum saati şekli) sessizce yanlış bir
-        /// bölge tanımlar: <see cref="Contains"/> ona da bir cevap üretir, ama cevap ölçülen odayı
-        /// temsil etmez. Üretim araçları bunu yakalayıp uyarır.
-        /// </para>
-        /// <para>
-        /// O(n²) — köşe sayısı bir odanın köşeleri kadar (onlar mertebesinde) olduğu için editörde
-        /// sorun değil.
-        /// </para>
-        /// </summary>
+        /// <summary>Does the ring self-intersect — VALIDATION ONLY, the boundary never calls it.
+        /// <para>An area whose corners are written in the wrong order (hourglass shape) silently
+        /// defines a wrong region: <see cref="Contains"/> still answers, but the answer does not
+        /// represent the measured room. Generation tools catch and warn about it.</para>
+        /// <para>O(n²) — fine in the editor, since corner counts are on the order of a room's
+        /// corners.</para></summary>
         public static bool IsSelfIntersecting(Vector2[] ring)
         {
             if (!IsValid(ring))
@@ -270,8 +232,9 @@ namespace VortexArena.Core.Arena
 
                 for (int j = i + 1; j < count; j++)
                 {
-                    // Komşu kenarlar ortak köşede zaten "kesişir" — atlanır. (i, j) = (0, n-1)
-                    // çifti de komşudur: halka kapalı olduğu için son kenar ilkine bağlanıyor.
+                    // Adjacent edges already "intersect" at their shared corner — skipped. The
+                    // (0, n-1) pair is adjacent too: the ring is closed, so the last edge joins the
+                    // first.
                     if (j == i + 1 || (i == 0 && j == count - 1))
                     {
                         continue;
@@ -287,7 +250,7 @@ namespace VortexArena.Core.Arena
             return false;
         }
 
-        /// <summary>İki doğru parçası kesişiyor mu (uç noktalar dahil, yön işaretleriyle).</summary>
+        /// <summary>Do two segments intersect (endpoints included, via orientation signs).</summary>
         private static bool SegmentsIntersect(Vector2 p1, Vector2 p2, Vector2 q1, Vector2 q2)
         {
             float d1 = Cross(q1, q2, p1);
@@ -301,7 +264,7 @@ namespace VortexArena.Core.Arena
                 return true;
             }
 
-            // Doğrusal (collinear) durumlar: bir uç noktanın ötekinin üstünde olması.
+            // Collinear cases: one endpoint lying on the other segment.
             if (Mathf.Approximately(d1, 0f) && OnSegment(q1, q2, p1)) return true;
             if (Mathf.Approximately(d2, 0f) && OnSegment(q1, q2, p2)) return true;
             if (Mathf.Approximately(d3, 0f) && OnSegment(p1, p2, q1)) return true;
@@ -310,13 +273,14 @@ namespace VortexArena.Core.Arena
             return false;
         }
 
-        /// <summary><c>a</c>→<c>b</c> ile <c>a</c>→<c>p</c> çapraz çarpımı (işaret = dönüş yönü).</summary>
+        /// <summary>Cross product of <c>a</c>→<c>b</c> and <c>a</c>→<c>p</c> (sign = turn direction).</summary>
         private static float Cross(Vector2 a, Vector2 b, Vector2 p)
         {
             return ((b.x - a.x) * (p.y - a.y)) - ((b.y - a.y) * (p.x - a.x));
         }
 
-        /// <summary><c>p</c> doğrusal olduğu bilinen <c>a</c>–<c>b</c> parçasının sınırları içinde mi.</summary>
+        /// <summary>Is <c>p</c>, known to be collinear, within the bounds of the <c>a</c>–<c>b</c>
+        /// segment.</summary>
         private static bool OnSegment(Vector2 a, Vector2 b, Vector2 p)
         {
             return p.x >= Mathf.Min(a.x, b.x) && p.x <= Mathf.Max(a.x, b.x) &&

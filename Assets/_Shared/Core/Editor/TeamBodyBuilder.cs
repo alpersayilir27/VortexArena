@@ -4,55 +4,42 @@ using VortexArena.Core.Player;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Avatars &gt; Takım Gövdesini Kur</c> —
-    /// <c>RemoteAvatar.prefab</c>'a KIRMIZI takımın ayrı gövdesini kurar: model örneği +
-    /// <see cref="SkeletonPoseMirror"/> bağları + <c>RemoteAvatar.redBodyRoot</c>. İdempotenttir,
-    /// tekrar çalıştırmak güvenlidir.
-    /// <para>
-    /// ⚠️ <b>Bu kurulum elle YAML'a yazılamaz:</b> gövde, modelin (FBX) prefab ÖRNEĞİdir ve
-    /// örneğin gövdesi model içindeki fileID'lere atıf yapar — o kimlikler ancak import sonrası
-    /// bellidir. Aracın varlık sebebi budur; "prefabı elle düzenleyeyim" yolu sessizce bozuk
-    /// referans üretir.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Takım gövdesi karakterin ALTINA değil KARDEŞİNE kurulur.</b> Retarget çıktısı dünya
-    /// uzayındadır ve dolu bir ebeveyn dönüşümü ikinci kez uygulanır (aynı kural
-    /// <c>ArenaNetCharacterBehaviour</c>'da). Kardeş olduğu için görünürlük kararını
-    /// <see cref="RemoteAvatar"/> ayrıca bu köke de taşır.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Mesh takası DEĞİL, poz köprüsü:</b> iki modelin iskelet ADLARI aynı olsa da ORANLARI
-    /// farklı — aynı iskelete ikinci bir mesh bağlamak deforme bir gövde üretirdi. Köprü yalnız
-    /// kemik DÖNÜŞLERİNİ kopyaladığı için hedef kendi oranlarında çizilir.
-    /// </para>
-    /// <para>
-    /// Modeli değiştirmek = <see cref="TeamModelPath"/> sabitini değiştirip aracı tekrar
-    /// çalıştırmak. Tek koşul modelin iskelet KEMİK ADLARININ karakterinkiyle eşleşmesidir (aynı
-    /// Mixamo rig'i); humanoid Avatar gerekmez — <see cref="SkeletonPoseMirror"/> kas uzayına hiç
-    /// girmez.
-    /// </para>
-    /// </summary>
+    /// <summary>Builds the RED team's separate body into <c>RemoteAvatar.prefab</c>: model instance
+    /// + <see cref="SkeletonPoseMirror"/> wiring + <c>RemoteAvatar.redBodyRoot</c>. Idempotent.</summary>
+    /// <remarks>
+    /// ⚠️ This setup cannot be hand written in YAML: the body is a prefab INSTANCE of the FBX and
+    /// its overrides refer to fileIDs inside the model, which only exist after import. That is the
+    /// tool's reason to exist; editing the prefab by hand silently produces broken references.
+    /// <para>⚠️ The team body is a SIBLING of the character, not a child: retarget output is in
+    /// world space and a non-identity parent transform would be applied twice (same rule as in
+    /// <c>ArenaNetCharacterBehaviour</c>). Being a sibling, <see cref="RemoteAvatar"/> also carries
+    /// the visibility decision to this root.</para>
+    /// <para>⚠️ A pose bridge, NOT a mesh swap: the two skeletons share bone NAMES but not
+    /// PROPORTIONS, so binding a second mesh to the same skeleton would deform it. The bridge copies
+    /// bone ROTATIONS only, so the target is drawn in its own proportions.</para>
+    /// <para>Changing the model = change the <see cref="TeamModelPath"/> constant and run again. The
+    /// only requirement is matching BONE NAMES with the character (same Mixamo rig); no humanoid
+    /// Avatar is needed — <see cref="SkeletonPoseMirror"/> never enters muscle space.</para>
+    /// </remarks>
     internal static class TeamBodyBuilder
     {
         private const string MenuPath = "Tools/VortexArena/Avatars/Takım Gövdesini Kur";
 
         private const string RemoteAvatarPath = "Assets/_Shared/App/Prefabs/RemoteAvatar.prefab";
 
-        /// <summary>Kırmızı takımın gövde modeli.</summary>
+        /// <summary>Red team's body model.</summary>
         private const string TeamModelPath = "Assets/_Shared/Avatars/T-Avatars/Ch18_nonPBR.fbx";
 
-        /// <summary>
-        /// Kaynak pozu okunacak karakter modelinin FBX'i — kalçanın BIND pozu buradan okunur.
-        /// <para>⚠️ Bu yol karakterin KENDİ modelidir; değişirse takım gövdesi yanlış bind
-        /// referansıyla sürülür (gövde dikeyde kayar, hata basılmaz).</para>
-        /// </summary>
+        /// <summary>FBX of the character the pose is read from — the hips BIND pose comes from
+        /// here.</summary>
+        /// <remarks>⚠️ This is the character's OWN model; if it changes, the team body is driven
+        /// with the wrong bind reference (body drifts vertically, no error logged).</remarks>
         private const string CharacterModelPath = "Assets/ThirdPartyPackages/MixamoCharacters/Ch15_nonPBR.fbx";
 
         private const string TeamRootName = "RedTeamBody";
         private const string TeamBodyName = "Ch18_nonPBR";
 
-        /// <summary>İki modelin de paylaştığı kalça kemiğinin adı (iskeletin kökü).</summary>
+        /// <summary>Hips bone name shared by both models (root of the skeleton).</summary>
         private const string HipsBoneName = "mixamorig:Hips";
 
         [MenuItem(MenuPath, false, 61)]
@@ -66,9 +53,8 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            // ⚠️ Bind pozu FBX ASSET'inden okunur, prefabdan DEĞİL: prefabdaki iskelet bind
-            // pozunda olmak zorunda değil (son uygulanan poz üstünde donmuş olabilir), FBX
-            // asset'i ise her zaman bind pozundadır.
+            // ⚠️ The bind pose is read from the FBX ASSET, not the prefab: a prefab skeleton may be
+            // frozen on the last applied pose, while the FBX asset is always in bind pose.
             if (!TryReadHipsBind(CharacterModelPath, out Vector3 sourceHipsBind) ||
                 !TryReadHipsBind(TeamModelPath, out Vector3 targetHipsBind))
             {
@@ -101,11 +87,9 @@ namespace VortexArena.Core.Editor
                       $"{TeamRootName}/{TeamBodyName} ({System.IO.Path.GetFileName(TeamModelPath)}).");
         }
 
-        /// <summary>
-        /// Bir FBX asset'indeki kalça kemiğinin bind <c>localPosition</c>'ı. Bulunamazsa HATA
-        /// basılır ve kurulum durur: yarım kurulmuş bir köprü (kalçasız) gövdeyi sessizce yanlış
-        /// yükseklikte çizerdi.
-        /// </summary>
+        /// <summary>Bind <c>localPosition</c> of the hips bone in an FBX asset.</summary>
+        /// <remarks>Missing hips logs an ERROR and stops the setup: a half built bridge would
+        /// silently draw the body at the wrong height.</remarks>
         private static bool TryReadHipsBind(string modelPath, out Vector3 bind)
         {
             bind = Vector3.zero;
@@ -153,9 +137,8 @@ namespace VortexArena.Core.Editor
                 return false;
             }
 
-            // Karakter, RemoteAvatar'ın KENDİ alanından okunur — hem tek doğruluk kaynağı olduğu
-            // için hem de tipi adıyla anmamak için: bileşen Movement SDK arayüzü uyguluyor ve
-            // adını yazmak bu editör asmdef'ine SDK referansı ekletirdi.
+            // The character is read from RemoteAvatar's own field: it is the single source of truth,
+            // and naming the type would pull an SDK reference into this editor asmdef.
             var serialized = new SerializedObject(remoteAvatar);
             SerializedProperty characterProperty = serialized.FindProperty("character");
             var characterComponent = characterProperty != null
@@ -189,8 +172,8 @@ namespace VortexArena.Core.Editor
                 return false;
             }
 
-            // ⚠️ RemoteAvatar.redBodyRoot KAPSAYICIYA bağlanır, modele değil: bileşen renderer'ları
-            // ve sürücüyü bu kökün ALTINDAN topluyor, sürücü de kapsayıcının üstünde.
+            // ⚠️ redBodyRoot points at the CONTAINER, not the model: the component collects
+            // renderers and the driver from under this root, and the driver sits on the container.
             serialized.FindProperty("redBodyRoot").objectReferenceValue = teamRoot.gameObject;
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
@@ -218,8 +201,8 @@ namespace VortexArena.Core.Editor
                 return existing;
             }
 
-            // ⚠️ Model PREFAB ÖRNEĞİ olarak konur (unpack edilmez): modelde yapılan tek bir
-            // düzeltme kopya konsaydı prefabda donardı.
+            // ⚠️ The model goes in as a PREFAB INSTANCE (never unpacked): as a copy, any fix made to
+            // the model would stay frozen in the prefab.
             var instance = PrefabUtility.InstantiatePrefab(model, teamRoot) as GameObject;
             if (instance == null)
             {
@@ -232,11 +215,9 @@ namespace VortexArena.Core.Editor
             instance.transform.localRotation = Quaternion.identity;
             instance.transform.localScale = Vector3.one;
 
-            // Animator KAPATILIR (sökülmez): köprü kemikleri doğrudan yazıyor, yani Animator'a
-            // ihtiyaç yok ve kapalıyken her kare çalışan Animator
-            // güncellemesi de ödenmez. ⚠️ Sökmek yerine kapatmanın sebebi prefab örneği olması:
-            // bileşen sökmek "removed component" override'ı üretir ve model güncellenince
-            // sessizce çakışır.
+            // The Animator is DISABLED, not removed: the bridge writes bones directly, so it is
+            // unneeded and its per frame update is not paid. ⚠️ Removing it would create a "removed
+            // component" override on the prefab instance and clash silently on a model update.
             var animator = instance.GetComponent<Animator>();
             if (animator != null)
             {
@@ -246,11 +227,9 @@ namespace VortexArena.Core.Editor
             return instance.transform;
         }
 
-        /// <summary>
-        /// Takım gövdesinin renderer'larını çizime hazırlar. Materyallere DOKUNULMAZ — gövde
-        /// kendi modelinin materyalleriyle çizilir (hayalet durumunda materyal takasını
-        /// <see cref="RemoteAvatar"/> yapar).
-        /// </summary>
+        /// <summary>Prepares the team body's renderers for drawing.</summary>
+        /// <remarks>Materials are left alone — the body draws with its own model's materials; the
+        /// ghost state material swap is <see cref="RemoteAvatar"/>'s job.</remarks>
         private static bool PrepareRenderers(Transform teamBody)
         {
             Renderer[] renderers = teamBody.GetComponentsInChildren<Renderer>(true);
@@ -258,9 +237,9 @@ namespace VortexArena.Core.Editor
             {
                 if (renderers[i] is SkinnedMeshRenderer smr)
                 {
-                    // Kök her kare kaynağın üstüne taşındığı için sınırlar bayatlar (karakterde ve
-                    // hayalet gövdesinde de aynı anahtar açık) — kapalıyken gövde bazı açılarda
-                    // kadraj dışı sayılıp hiç çizilmez.
+                    // The root is moved onto the source every frame, so bounds go stale (same flag
+                    // is on for the character and the ghost body); off, the body is culled as
+                    // offscreen at some angles and never drawn.
                     smr.updateWhenOffscreen = true;
                 }
             }
@@ -268,11 +247,10 @@ namespace VortexArena.Core.Editor
             return renderers.Length > 0;
         }
 
-        /// <summary>
-        /// Kemik aynasını (<see cref="SkeletonPoseMirror"/>) kurar ve alanlarını bağlar.
-        /// Kalça bulunamazsa HATA basıp kurulumu DURDURUR: yarım kurulmuş bir köprü sahada
-        /// teşhis edilmesi en pahalı şeydir (gövde çizilir ama yanlış yerde durur).
-        /// </summary>
+        /// <summary>Creates the bone mirror (<see cref="SkeletonPoseMirror"/>) and wires its
+        /// fields.</summary>
+        /// <remarks>Missing hips logs an ERROR and STOPS the setup: a half built bridge is the most
+        /// expensive thing to diagnose on site (the body draws, but in the wrong place).</remarks>
         private static bool WireDriver(Transform teamRoot, Transform characterRoot,
                                        Transform teamBody, Vector3 sourceHipsBind,
                                        Vector3 targetHipsBind)
@@ -294,9 +272,9 @@ namespace VortexArena.Core.Editor
                 driver = teamRoot.gameObject.AddComponent<SkeletonPoseMirror>();
             }
 
-            // Hedefin iskelet kolonu kaynağınkinden farklıysa gövde kendi boyunda çizilir; oranı
-            // kalça yüksekliği taşır. ⚠️ Bölen geçersizse (0 / negatif) 1 yazılır: uydurma bir
-            // çarpan gövdeyi sessizce yanlış ölçekte çizerdi.
+            // Hips height carries the proportion between the two skeletons. ⚠️ An invalid divisor
+            // (0 / negative) writes 1: a made up factor would silently draw the body at the wrong
+            // scale.
             float heightCalibration = 1f;
             if (targetHipsBind.y > 0f && sourceHipsBind.y > 0f)
             {
@@ -312,8 +290,8 @@ namespace VortexArena.Core.Editor
             var serialized = new SerializedObject(driver);
             serialized.FindProperty("sourceRoot").objectReferenceValue = characterRoot;
 
-            // Sürücünün hedefi MODEL KÖKÜdür (kapsayıcı değil): kemikler o kökün altında ve her
-            // kare kaynağın dünya pozuna oturtulan da bu köktür.
+            // The driver's target is the MODEL ROOT, not the container: the bones live under it and
+            // it is what gets placed on the source's world pose every frame.
             serialized.FindProperty("targetRoot").objectReferenceValue = teamBody;
             serialized.FindProperty("sourceHips").objectReferenceValue = sourceHips;
             serialized.FindProperty("targetHips").objectReferenceValue = targetHips;
@@ -322,17 +300,15 @@ namespace VortexArena.Core.Editor
             serialized.FindProperty("heightCalibration").floatValue = heightCalibration;
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
-            // Operatör aracın gerçekten iş yaptığını tek satırda görsün: eşleşme sayısı sıfıra
-            // yakınsa iki model aynı iskeleti paylaşmıyor demektir.
+            // One line proof the tool did something: a match count near zero means the two models do
+            // not share the same skeleton.
             Debug.Log($"[TeamBody] Kemik aynası kuruldu: {CountMatchingBones(characterRoot, teamBody)} " +
                       $"kemik eşleşti, heightCalibration = {heightCalibration:F4}.");
             return true;
         }
 
-        /// <summary>
-        /// İki ağaçta ADI eşleşen kemik sayısı — <see cref="SkeletonPoseMirror"/>'ın çalışma anında
-        /// uyguladığı kuralın aynısı (kökler hariç).
-        /// </summary>
+        /// <summary>Bones matching by NAME across the two trees — same rule
+        /// <see cref="SkeletonPoseMirror"/> applies at runtime (roots excluded).</summary>
         private static int CountMatchingBones(Transform sourceRoot, Transform targetRoot)
         {
             Transform[] targetBones = targetRoot.GetComponentsInChildren<Transform>(true);

@@ -6,41 +6,35 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Core.Arena
 {
-    /// <summary>
-    /// Yerel oyuncunun kalibrasyon durumu — sunucu ile başlık arasındaki iki yönlü köprü (§10.6).
+    /// <summary>Local calibration state — the two-way bridge between server and headset (§10.6).</summary>
+    /// <remarks>
+    /// The server is authoritative: "am I calibrated" is answered by <c>lobby_state</c>, NOT by the
+    /// scene <see cref="ArenaCalibrator"/>'s own counter — the operator can clear while the headset
+    /// still believes it is aligned.
     /// <para>
-    /// <b>Otorite sunucudadır.</b> "Kalibreli miyim" sorusunun cevabı <c>lobby_state</c>'ten gelir,
-    /// sahnedeki <see cref="ArenaCalibrator"/>'ün kendi sayacından DEĞİL: operatör admin ekranından
-    /// kalibrasyonu sıfırlayabilir ve o an başlık hâlâ kendini hizalı sanıyor olabilir.
+    /// Two directions: (1) <see cref="ArenaCalibrator.Calibrated"/> → <c>set_calibration</c>;
+    /// (2) <c>clear_calibration</c> → <see cref="ArenaCalibrator.ApplyOperatorClear"/>. The command's
+    /// <c>keepSaved</c> splits soft mode (device anchor KEPT, so a following
+    /// <c>reload_calibration</c> has something to load) from hard mode. In soft mode what stops the
+    /// alignment coming back silently is the auto-restore gate in <c>ArenaCalibrator</c>, not
+    /// erasure. The command is unconditional — it also drops a half-finished sequence (§5.3).
     /// </para>
     /// <para>
-    /// İki yön: (1) <see cref="ArenaCalibrator.Calibrated"/> → <c>set_calibration</c> ile sunucuya
-    /// "hizalandım" denir; (2) operatör sıfırlayınca <c>clear_calibration</c> komutu gelir ve
-    /// <see cref="ArenaCalibrator.ApplyOperatorClear"/> çağrılır — hizalama fiilen bozuktur.
-    /// Komutun <c>keepSaved</c> alanı iki kipi ayırır: yumuşak kip cihazdaki çapayı KORUR (operatör
-    /// hemen ardından <c>reload_calibration</c> ile geri yükleyebilsin), sert kip onu da siler.
-    /// Yumuşak kipte hizalamanın sessizce geri gelmemesini <c>ArenaCalibrator</c>'daki otomatik geri
-    /// yükleme kapısı sağlar, silme değil.
-    /// Komut <b>koşulsuzdur</b>: operatör hangi aşamadaki oyuncuya basarsa bassın, başlık yarım
-    /// kalmış sekans dahil her şeyi siler (§5.3).
+    /// ⚠️ That command is the ONLY clear gate. <c>calibrated:false</c> in the roster is NOT a clear
+    /// signal: the server resets that field on every <c>hello</c> (§10.6), so it is published once
+    /// on every reconnect — clearing on it would make a briefly disconnected headset lose its saved
+    /// anchor. Here the roster is only a MIRROR (<see cref="ApplyServerState"/>).
     /// </para>
     /// <para>
-    /// ⚠️ <b>Silmenin TEK kapısı o komuttur.</b> Roster'daki <c>calibrated:false</c> bir sıfırlama
-    /// SİNYALİ DEĞİLDİR ve öyle okunmaz: sunucu her <c>hello</c>'da o alanı sıfırlıyor (§10.6), yani
-    /// değer her yeniden bağlanışta — sıradan bir ağ dalgalanmasında bile — bir kez <c>false</c>
-    /// yayınlanıyor. Ona bakıp hizalama silinseydi kopup dönen başlık <b>kayıtlı anchor'ını
-    /// kaybederdi</b>. Roster bu sınıfta yalnız <b>ayna</b>dır (<see cref="ApplyServerState"/>).
+    /// ⚠️ With no connection ever made the gate is OPEN (<see cref="IsCalibrated"/> and
+    /// <see cref="ManualAllowed"/> both true) so weapons and manual calibration keep working in
+    /// server-less editor tests — same rationale as <c>PlayerCombatState.CanFire</c>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Hiç bağlanılmamışsa kapı AÇIKTIR</b> (<see cref="IsCalibrated"/> = true,
-    /// <see cref="ManualAllowed"/> = true): sunucusuz editör testinde silah ve elle kalibrasyon
-    /// çalışmaya devam etsin. <c>PlayerCombatState.CanFire</c>'daki "_hasEverConnected" ile aynı gerekçe.
+    /// Not placed in the scene: self-bootstrapping persistent singleton
+    /// (<see cref="PlayerCombatState"/> pattern), so no arena gains a manual setup step.
     /// </para>
-    /// <para>
-    /// Sahnede DURMAZ: kalıcı tekil olarak kendini önyükler (<see cref="PlayerCombatState"/>
-    /// deseni) — her arenaya elle bir kurulum adımı eklememek için.
-    /// </para>
-    /// </summary>
+    /// </remarks>
     public class CalibrationState : MonoBehaviour
     {
         public static CalibrationState Instance { get; private set; }
@@ -50,49 +44,38 @@ namespace VortexArena.Core.Arena
         private static bool _localCalibrated;
         private static string _source = "";
 
-        /// <summary>
-        /// Sunucunun bildiği hizalama durumu. Kalibresizken oyuncu ateş EDEMEZ, hasar YEMEZ ve
-        /// canlanamaz (§10.6 — üçünün de otoritesi sunucuda, bu yalnız istemci aynası).
-        /// Hiç bağlanılmadıysa true (sunucusuz test akışı bozulmasın).
-        /// </summary>
+        /// <summary>Alignment state as the server knows it; uncalibrated players cannot fire, take
+        /// damage or revive (§10.6 — all three server-authoritative, this is only the mirror). True
+        /// when never connected, so server-less tests keep working.</summary>
         public static bool IsCalibrated => !_hasEverConnected || _serverCalibrated;
 
-        /// <summary>
-        /// Kumandada ELLE kalibrasyon (A basılıyken B'ye çift basış) açık mı. Kalibreli durumdayken kapalıdır: oyuncu
-        /// kendi hizalamasını kazara bozamasın, kapıyı yalnız operatör açsın (§10.6).
-        /// </summary>
+        /// <summary>Is the MANUAL controller gesture (hold A, double-tap B) open. Closed while
+        /// calibrated so the player cannot break their own alignment by accident — only the operator
+        /// reopens it (§10.6).</summary>
         public static bool ManualAllowed => !_hasEverConnected || !_serverCalibrated;
 
-        /// <summary>Son bildirilen kaynak ("manual" | "anchor" | "cloud" | "").</summary>
+        /// <summary>Last reported source ("manual" | "anchor" | "cloud" | "").</summary>
         public static string Source => _source;
 
-        /// <summary>
-        /// Sunucunun yürürlükteki kalibre modu (<c>ArenaProtocol.CALIB_MODE_*</c>, §10.6); boş =
-        /// hiç <c>welcome</c> alınmadı.
-        /// <para>⚠️ Bağlantı kopunca SIFIRLANMAZ (son bilinen değer kalır): mod bir oturum
-        /// durumu değil operatör kararıdır, kopan ağ onu unutturmaz. Yeni <c>welcome</c> üzerine
-        /// yazar.</para>
-        /// </summary>
+        /// <summary>The server's calibration mode (<c>ArenaProtocol.CALIB_MODE_*</c>, §10.6); empty =
+        /// no <c>welcome</c> received.
+        /// <para>⚠️ NOT reset on disconnect: the mode is an operator decision, not session state. A
+        /// new <c>welcome</c> overwrites it.</para></summary>
         public static string Mode { get; private set; } = "";
 
-        /// <summary>
-        /// Başlık AÇILIŞTA diskteki <c>OVRSpatialAnchor</c> UUID'sinden hizalamayı geri
-        /// yükleyebilir mi (§10.6).
-        /// <para>
-        /// Boş mod = hiç <c>welcome</c> alınmamış (sunucusuz sandbox) → geliştirme kolaylığı için
-        /// geri yükleme serbest; <c>saved_anchor</c> zaten bunu ister.
-        /// <c>two_anchor</c>'da yalnız <b>DİSK</b> geri yüklemesi kapanır: oturum-içi (bellekteki
-        /// çapa) geri yükleme moddan BAĞIMSIZDIR — harita değişimi onunla taşınır ve o kapı
-        /// kapanırsa her arena geçişinde oyuncu yeniden kalibre etmek zorunda kalırdı.
-        /// </para>
-        /// </summary>
+        /// <summary>May the headset restore the alignment from the on-disk
+        /// <c>OVRSpatialAnchor</c> UUID AT LAUNCH (§10.6).
+        /// <para>Empty mode = no <c>welcome</c> yet (server-less sandbox) → allowed for convenience.
+        /// <c>two_anchor</c> closes only the DISK restore; the in-session (in-memory anchor) restore
+        /// is mode-INDEPENDENT — map changes ride on it, and closing that gate would force a
+        /// recalibration on every arena switch.</para></summary>
         public static bool DiskRestoreAllowed =>
             string.IsNullOrEmpty(Mode) || Mode == ArenaProtocol.CALIB_MODE_SAVED_ANCHOR;
 
-        /// <summary>Durum değiştiğinde (ana thread).</summary>
+        /// <summary>Raised on state change (main thread).</summary>
         public static event Action Changed;
 
-        // Her bildirimde yeni DTO ayırmamak için tek örnek.
+        // Single instance so no DTO is allocated per report.
         private readonly SetCalibrationMsg _reportMsg = new SetCalibrationMsg();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -118,8 +101,8 @@ namespace VortexArena.Core.Arena
 
             Instance = this;
 
-            // Kalıcı tekiliz: obje devre dışı bırakılsa bile olaylar kaçmasın diye
-            // OnEnable/OnDisable yerine Awake/OnDestroy'da abone oluruz.
+            // Persistent singleton: subscribe in Awake/OnDestroy rather than OnEnable/OnDisable so
+            // events are not missed if the object is deactivated.
             ArenaCalibrator.Calibrated += HandleLocalCalibrated;
             NetEvents.OnConnected += HandleConnected;
             NetEvents.OnLobbyState += HandleLobbyState;
@@ -143,9 +126,9 @@ namespace VortexArena.Core.Arena
             Instance = null;
         }
 
-        // ------------------------------------------------------------- başlık → sunucu
+        // ------------------------------------------------------------- headset → server
 
-        /// <summary>Başlık hizalandı (elle ya da kayıtlı anchor) → sunucuya bildir.</summary>
+        /// <summary>Headset aligned (manually or from a saved anchor) → report to the server.</summary>
         private void HandleLocalCalibrated(string source)
         {
             _localCalibrated = true;
@@ -158,33 +141,34 @@ namespace VortexArena.Core.Arena
             ArenaClient client = ArenaClient.Instance;
             if (client == null || !client.IsConnected)
             {
-                return; // sunucusuz oturum: bildirilecek kimse yok
+                return; // server-less session: nobody to report to
             }
 
             _reportMsg.calibrated = calibrated;
             _reportMsg.source = source ?? "";
-            // ⚠️ DTO tek örnektir: bayat bir gerekçe bir sonraki BAŞARILI bildirimi kirletirdi
-            // (sunucu error doluysa hizalamayı yok sayıyor, §10.6) — BodyScaleState.Report'taki
-            // aynı tuzak.
+            // ⚠️ The DTO is a single instance: a stale reason would poison the next SUCCESSFUL report
+            // (a non-empty error makes the server ignore the alignment, §10.6) — same trap as in
+            // BodyScaleState.Report.
             _reportMsg.error = "";
-            // Zemin sapması yalnız ÖLÇÜLDÜĞÜNDE anlamlıdır (§10.6): kalibrasyonun düştüğü yolda
-            // ölçüm yoktur ve son ölçümü tekrar göndermek operatöre bayat bir uyarı gösterirdi.
+            // Floor offset only means something when MEASURED (§10.6); resending the last one would
+            // show the operator a stale warning.
             _reportMsg.floorOffset = calibrated ? ArenaCalibrator.LastFloorOffsetMeters : 0f;
             client.Send(_reportMsg);
         }
 
-        // ------------------------------------------------------------- sunucu → başlık
+        // ------------------------------------------------------------- server → headset
 
         private void HandleConnected(WelcomeMsg msg)
         {
             _hasEverConnected = true;
 
-            // Mod bağlantıda BİR KEZ gelir (§10.6): kapıladığı karar — açılışta diskten çapa geri
-            // yüklenecek mi — tam da bu anda veriliyor, sonradan yayılsa uygulanacağı bir an olmazdı.
+            // The mode arrives ONCE on connect (§10.6): the decision it gates — restore the anchor
+            // from disk at launch? — is taken exactly now, so a later broadcast would have no moment
+            // to be applied.
             Mode = msg != null ? msg.calibrationMode ?? "" : "";
 
-            // Sunucu hello'da kalibrasyonu sıfırlar (§10.6) — yerelde hizalama duruyorsa
-            // (ör. bağlantı koptu, anchor'dan geri yüklenmişti) onu yeniden bildir.
+            // The server resets calibration on hello (§10.6) — if a local alignment still stands
+            // (e.g. reconnect after a drop), report it again.
             _serverCalibrated = false;
             if (_localCalibrated)
             {
@@ -194,31 +178,21 @@ namespace VortexArena.Core.Arena
             Raise();
         }
 
-        /// <summary>
-        /// Operatör kalibrasyonu sıfırladı (§10.6). <b>Koşulsuzdur:</b> yerelde hizalama olup
-        /// olmadığına bakılmaz, çünkü silinecek şeyin bir kısmı hizalama DEĞİLDİR — yarım kalmış
-        /// elle kalibrasyon (A alındı, B bekleniyor) tam da <see cref="_localCalibrated"/> hâlâ
-        /// <c>false</c>'ken vardır. Kapıyı ona bağlamak, komutu var olma sebebi olan durumda
-        /// işlevsiz bırakırdı.
-        /// <para>
-        /// <see cref="_serverCalibrated"/> de burada düşürülür: sunucunun bir sonraki
-        /// <c>lobby_state</c>'i onu zaten <c>false</c> taşıyacak, ama elle kalibrasyon kapısının
-        /// (<see cref="ManualAllowed"/>) o yayını beklemesi için bir sebep yok — oyuncu sekansa
-        /// hemen başlayabilmeli.
-        /// </para>
-        /// <para>⚠️ Rig TAŞINMAZ — free-roam kuralı: oyuncu fiziksel olarak neredeyse orada kalır,
-        /// yalnız hizalama geçersiz sayılır.</para>
-        /// <para>
-        /// <paramref name="keepSaved"/> = <c>true</c> ise cihazdaki çapa ve UUID kaydı KORUNUR:
-        /// operatörün "sıfırla → yeniden yükle" akışında ikinci komutun okuyacağı veriyi birincisi
-        /// yok etmemelidir. <c>false</c> (varsayılan) sert kiptir, cihaz kaydı da gider.
-        /// </para>
-        /// <para>
-        /// ⚠️ Kalibratör sahnede ARANMAZ: iş <see cref="ArenaCalibrator.ApplyOperatorClear"/>'a
-        /// verilir — sahnede kalibratör olmasa bile sert sıfırlamanın cihaz kaydını silmesi ve
-        /// otomatik geri yüklemenin kapanması gerekir.
-        /// </para>
-        /// </summary>
+        /// <summary>Operator cleared the calibration (§10.6).</summary>
+        /// <remarks>
+        /// Unconditional: part of what is dropped is NOT an alignment — a half-finished manual
+        /// sequence (A captured, B pending) exists precisely while
+        /// <see cref="_localCalibrated"/> is still <c>false</c>, so gating on it would disable the
+        /// command in the case it exists for.
+        /// <para><see cref="_serverCalibrated"/> is dropped here too: the next <c>lobby_state</c>
+        /// would carry <c>false</c> anyway, but the manual gate must not wait for that broadcast.</para>
+        /// <para>⚠️ The rig is NOT moved — free-roam rule: only the alignment is invalidated.</para>
+        /// <para><paramref name="keepSaved"/> = <c>true</c> keeps the device anchor and UUID so a
+        /// following <c>reload_calibration</c> has data; <c>false</c> is hard mode.</para>
+        /// <para>⚠️ The calibrator is NOT searched in the scene — the work goes to
+        /// <see cref="ArenaCalibrator.ApplyOperatorClear"/>, since a hard clear must erase the device
+        /// record and close auto-restore even with no calibrator present.</para>
+        /// </remarks>
         private void HandleClearCalibration(bool keepSaved)
         {
             _localCalibrated = false;
@@ -235,25 +209,21 @@ namespace VortexArena.Core.Arena
             Raise();
         }
 
-        /// <summary>
-        /// Operatör kayıtlı çapadan hizalamayı yeniden yükletti (§10.6). Sıfırlamanın zıddı
-        /// DEĞİLDİR: burada hiçbir şey silinmez, kalibratöre yalnız <b>yeniden deneme</b> yaptırılır
-        /// ve "hizalandım" işaretini yine başlık koyar.
-        /// </summary>
+        /// <summary>Operator asked to reload the alignment from the saved anchor (§10.6). NOT the
+        /// inverse of a clear: nothing is erased, the calibrator merely retries and the headset still
+        /// raises the "aligned" flag itself.</summary>
         private void HandleReloadCalibration()
         {
             ArenaCalibrator.RequestReload(HandleReloadResult);
         }
 
-        /// <summary>
-        /// Yeniden yükleme denemesinin sonucu (boş gerekçe = başarılı).
-        /// <para>⚠️ <b>Başarıda hiçbir şey gönderilmez:</b> başarılı yükleme zaten
-        /// <see cref="ArenaCalibrator.Calibrated"/> olayından geçip <see cref="Report"/> ile
-        /// bildiriliyor — buradan ikinci bir bildirim çift sonuç satırı üretirdi (§5.3).</para>
-        /// <para>Başarısızlıkta gerekçe <c>set_calibration.error</c> ile gider ve
-        /// <see cref="_localCalibrated"/>/<see cref="_source"/> <b>olduğu gibi</b> taşınır: durum
-        /// değişmedi, deneme düştü. <c>floorOffset</c> <c>0</c>'dır — ölçüm yok.</para>
-        /// </summary>
+        /// <summary>Result of a reload attempt (empty reason = success).
+        /// <para>⚠️ Nothing is sent on success: it already went through
+        /// <see cref="ArenaCalibrator.Calibrated"/> → <see cref="Report"/>, and a second report would
+        /// produce a duplicate result line (§5.3).</para>
+        /// <para>On failure the reason goes as <c>set_calibration.error</c> while
+        /// <see cref="_localCalibrated"/>/<see cref="_source"/> are carried unchanged (the state did
+        /// not change, the attempt failed); <c>floorOffset</c> is 0 — nothing measured.</para></summary>
         private void HandleReloadResult(string error)
         {
             if (string.IsNullOrEmpty(error))
@@ -264,7 +234,7 @@ namespace VortexArena.Core.Arena
             ArenaClient client = ArenaClient.Instance;
             if (client == null || !client.IsConnected)
             {
-                return; // sunucusuz oturum: bildirilecek kimse yok
+                return; // server-less session: nobody to report to
             }
 
             Debug.LogWarning($"[CalibrationState] Kayıtlı hizalama yeniden yüklenemedi — {error}.", this);
@@ -276,16 +246,12 @@ namespace VortexArena.Core.Arena
             client.Send(_reportMsg);
         }
 
-        /// <summary>
-        /// Roster'daki kendi satırımız kalibrasyon durumunun TEK doğruluk kaynağıdır (§5.3).
-        /// <para>
-        /// ⚠️ <b>Bağlantı koptuğunda durum SIFIRLANMAZ</b> (bu yüzden bir <c>OnDisconnected</c>
-        /// işleyicisi yoktur): sıfırlansaydı ağ kesildiği anda oyuncuya "Kalibrasyon gerekli"
-        /// yazardık — asıl sorun ağ iken onu boşuna kalibrasyona gönderirdik. Yeniden bağlanınca
-        /// sunucu <c>hello</c>'da zaten sıfırlıyor (§10.6) ve <see cref="HandleConnected"/>
-        /// yerel durumu yeniden bildiriyor.
-        /// </para>
-        /// </summary>
+        /// <summary>Our own row in the roster is the single source of truth for calibration state
+        /// (§5.3).
+        /// <para>⚠️ State is NOT reset on disconnect (hence no <c>OnDisconnected</c> handler):
+        /// resetting would tell the player "calibration required" the moment the network drops and
+        /// send them recalibrating for nothing. On reconnect the server resets it on <c>hello</c>
+        /// (§10.6) and <see cref="HandleConnected"/> re-reports the local state.</para></summary>
         private void HandleLobbyState(LobbyStateMsg msg)
         {
             int selfId = PlayerCombatState.Instance != null ? PlayerCombatState.Instance.PlayerId : 0;
@@ -307,26 +273,23 @@ namespace VortexArena.Core.Arena
             }
         }
 
-        /// <summary>
-        /// Roster'daki değeri yerel aynaya yazar — <b>yalnız bayrak</b>.
+        /// <summary>Writes the roster value into the local mirror — FLAG ONLY.</summary>
+        /// <remarks>
+        /// ⚠️ No alignment is erased here (<see cref="ArenaCalibrator.ApplyOperatorClear"/> is not
+        /// called, <see cref="_localCalibrated"/> is not dropped). <c>calibrated:false</c> in the
+        /// roster does not mean "the operator cleared": the server resets the field on every
+        /// <c>hello</c> (§10.6), so it is published once per reconnect and races
+        /// <see cref="HandleConnected"/>'s re-report on the same socket.
         /// <para>
-        /// ⚠️ <b>Buradan hizalama SİLİNMEZ</b> (<see cref="ArenaCalibrator.ApplyOperatorClear"/> çağrılmaz,
-        /// <see cref="_localCalibrated"/> düşürülmez). Roster'ın <c>calibrated:false</c> taşıması
-        /// "operatör sıfırladı" demek değildir: sunucu her <c>hello</c>'da alanı sıfırladığı için
-        /// (§10.6) o değer <b>her yeniden bağlanışta</b> bir kez yayınlanıyor ve
-        /// <see cref="HandleConnected"/>'in yeniden bildirimi ile aynı sokette yarışıyor.
+        /// The cost of erasing here would be silent and delayed: the rig is not moved, so the session
+        /// looks fine, but the saved <c>OVRSpatialAnchor</c> is gone — the next <c>load_match</c> has
+        /// nothing to restore and the player is drawn meters off for everyone. Worse, the re-report
+        /// marks the server "calibrated", closing <see cref="ManualAllowed"/> so the player cannot
+        /// fix it themselves.
         /// </para>
-        /// <para>
-        /// Silmeyi buraya bağlamanın bedeli sessizdir ve gecikmelidir: rig o an TAŞINMADIĞI için
-        /// oturum düzgün görünür, ama kayıtlı <c>OVRSpatialAnchor</c> gitmiştir — sonraki
-        /// <c>load_match</c>'te geri yüklenecek hizalama kalmaz ve oyuncu <b>herkese metrelerce
-        /// kaymış</b> çizilir. Üstelik yeniden bildirim sunucuyu "kalibreli" yaptığı için
-        /// <see cref="ManualAllowed"/> de kapanır: oyuncu kendi başına düzeltemez.
-        /// </para>
-        /// <para>Sıfırlamanın tek kapısı <c>clear_calibration</c>'dır
-        /// (<see cref="HandleClearCalibration"/>): operatörün niyeti orada açıkça geliyor, burada
-        /// yalnız bir alanın anlık değeri var.</para>
-        /// </summary>
+        /// <para>The only clear gate is <c>clear_calibration</c>
+        /// (<see cref="HandleClearCalibration"/>), where the operator's intent is explicit.</para>
+        /// </remarks>
         private void ApplyServerState(bool calibrated, string source)
         {
             if (_serverCalibrated == calibrated)

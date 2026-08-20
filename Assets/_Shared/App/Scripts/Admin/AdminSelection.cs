@@ -7,97 +7,90 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Adminler arası <b>ortak</b> durumun istemci tarafı aynası (§5.3 <c>admin_state</c>):
-    /// bir sonraki maçın mod/harita seçimi, son admin eyleminin duyurusu ve çevrimiçi admin sayısı.
+    /// Client-side mirror of the state <b>shared</b> between admins (§5.3 <c>admin_state</c>):
+    /// next match's mode/map selection, the last admin action's notice and the online admin count.
     /// <para>
-    /// <b>Otorite sunucudadır.</b> Arayüzdeki mod/harita seçicileri yerel bir değişkeni değil
-    /// <c>set_selection</c> ile sunucudaki seçimi değiştirir; sunucu onu tüm adminlere geri yayar
-    /// ve buradan okunur. Bu yüzden iki operatör aynı ekranı görür — biri haritayı değiştirdiğinde
-    /// diğerinin paneli (kapalı olsa bile) yeni değere döner ve yerel önizlemesi o arenayı açar.
+    /// <b>Authority is on the server.</b> The pickers change the server-side selection via
+    /// <c>set_selection</c>, which is broadcast back to every admin — that is why two operators see
+    /// the same screen.
     /// </para>
     /// <para>
-    /// ⚠ <b>Görünüm tercihleri buraya GİRMEZ.</b> Kamera kipi, seçili oyuncu, halkalar, ad
-    /// etiketleri, kamera hızı ve çatı saydamlığı her operatörün kendi
-    /// ekranına aittir; onlar <see cref="AdminSession"/>'da yerel <c>PlayerPrefs</c> olarak kalır.
-    /// İki operatörün kameralarını birbirine bağlamak yönetimi kolaylaştırmaz, imkânsızlaştırır.
+    /// ⚠ <b>View preferences do NOT belong here</b> (camera mode/speed, selected player, rings, name
+    /// labels, roof transparency): they are per-screen and stay in <see cref="AdminSession"/>
+    /// (<c>PlayerPrefs</c>). Tying two operators' cameras together makes management impossible.
     /// </para>
     /// <para>
-    /// Durum ve olay <b>statiktir</b> (<see cref="AdminSession"/> deseni): dinleyiciler bileşenin
-    /// ne zaman kurulduğunu bilmek zorunda kalmasın. Bileşenin kendisi yalnız ağ olayı pompasıdır
-    /// ve <see cref="AdminSpectator"/> tarafından <c>AddComponent</c> ile kurulur.
+    /// State and event are <b>static</b> (the <see cref="AdminSession"/> pattern) so listeners need
+    /// not know when the component was installed; the component is only a network event pump,
+    /// installed by <see cref="AdminSpectator"/>.
     /// </para>
     /// </summary>
     public class AdminSelection : MonoBehaviour
     {
-        /// <summary>Ortak seçim, duyuru veya admin sayısı değiştiğinde (ana thread).</summary>
+        /// <summary>Shared selection, notice or admin count changed (main thread).</summary>
         public static event Action Changed;
 
-        /// <summary>Ortak seçim: mod kimliği (sunucudan gelir, hiç seçilmediyse boş).</summary>
+        /// <summary>Shared selection: mode id from the server (empty = never selected).</summary>
         public static string ModeId { get; private set; } = "";
 
-        /// <summary>Ortak seçim: harita sahne adı (sunucudan gelir, hiç seçilmediyse boş).</summary>
+        /// <summary>Shared selection: map scene name from the server (empty = never selected).</summary>
         public static string SceneName { get; private set; } = "";
 
-        /// <summary>Ortak seçim: bir sonraki maçın raund süresi (sn); <c>0</c> = seçilmedi,
-        /// modun varsayılanı kullanılacak (§5.2).</summary>
+        /// <summary>Shared selection: next match's round length (s); <c>0</c> = the mode's default (§5.2).</summary>
         public static int RoundSeconds { get; private set; }
 
-        /// <summary>Ortak seçim: bir sonraki maçın skor/tur limiti; <c>0</c> = modun varsayılanı,
-        /// <c>ArenaProtocol.SCORE_LIMIT_UNLIMITED</c> = <b>sınırsız</b> (§5.2). ⚠️ Üç değerli
-        /// olduğu için okuyan taraf <c>&gt; 0</c> değil <c>!= 0</c> diye sorar.</summary>
+        /// <summary>Shared selection: next match's score/round limit; <c>0</c> = the mode's default,
+        /// <c>ArenaProtocol.SCORE_LIMIT_UNLIMITED</c> = <b>unlimited</b> (§5.2). ⚠️ Three-valued —
+        /// readers ask <c>!= 0</c>, not <c>&gt; 0</c>.</summary>
         public static int ScoreLimit { get; private set; }
 
-        /// <summary>Ortak seçim: geri sayımın uzunluğu (sn); <c>0</c> = protokol varsayılanı
-        /// (<c>COUNTDOWN_SECONDS</c>). Tur tabanlı modlarda turlar arasındaki geri sayım da
-        /// budur (§5.2).</summary>
+        /// <summary>Shared selection: countdown length (s); <c>0</c> = protocol default
+        /// (<c>COUNTDOWN_SECONDS</c>). Also the between-rounds countdown in round-based modes (§5.2).</summary>
         public static int CountdownSeconds { get; private set; }
 
         /// <summary>
-        /// Dost ateşi anahtarının YÜRÜRLÜKTEKİ değeri (§5.2) — diğerleri gibi bir "seçim" değildir:
-        /// koşan maçta da geçerlidir ve etkisi anlıktır.
-        /// <para>Bu yüzden seçim kilidine (<c>AdminRoster.CanChangeSelection</c>) girmez: maç
-        /// kuruluyken de değiştirilebilir.</para>
+        /// Friendly fire's EFFECTIVE value (§5.2) — not a "selection": it applies to the running
+        /// match immediately, so it is exempt from the selection lock
+        /// (<c>AdminRoster.CanChangeSelection</c>).
         /// </summary>
         public static bool FriendlyFire { get; private set; }
 
         /// <summary>
-        /// Kalibre modunun YÜRÜRLÜKTEKİ değeri (<c>ArenaProtocol.CALIB_MODE_*</c>, §5.2) —
-        /// <see cref="FriendlyFire"/> ile aynı sınıf: seçim değil anlık durum, seçim kilidine
-        /// girmez. Boş = henüz <c>admin_state</c> gelmedi (arayüz sunucu varsayılanını gösterir).
+        /// Calibration mode's EFFECTIVE value (<c>ArenaProtocol.CALIB_MODE_*</c>, §5.2) — like
+        /// <see cref="FriendlyFire"/>, a live state exempt from the selection lock. Empty = no
+        /// <c>admin_state</c> yet.
         /// </summary>
         public static string CalibrationMode { get; private set; } = "";
 
-        /// <summary>Sunucunun bildirdiği çevrimiçi admin sayısı (kendimiz dahil).</summary>
+        /// <summary>Online admin count reported by the server (including ourselves).</summary>
         public static int AdminCount { get; private set; }
 
-        /// <summary>Son admin eyleminin duyurusu ("&lt;ad&gt;: &lt;eylem&gt;"); boş olabilir.</summary>
+        /// <summary>Last admin action's notice ("&lt;name&gt;: &lt;action&gt;"); may be empty.</summary>
         public static string LastNotice { get; private set; } = "";
 
-        /// <summary>Sunucunun bu oturumda açtığı mekan (§11); mekan ayrımı yoksa boş.</summary>
+        /// <summary>Venue opened by the server this session (§11); empty when there is no venue split.</summary>
         public static string VenueId { get; private set; } = "";
 
         /// <summary>
-        /// Bu mekanda oynatılabilen sahne adları — harita seçicisinin süzgeci.
-        /// <para><b>Boş = süzme yok</b> (mekan ayrımı olmayan sunucu ya da henüz admin_state
-        /// gelmedi). Katalog tüm projeyi tanır; hangi arenaların oynatılabildiğine sunucu karar
-        /// verir, bu yüzden liste yerelde üretilmez.</para>
+        /// Scene names playable in this venue — the map picker's filter.
+        /// <para>⚠️ <b>Empty = no filtering</b> (no venue split, or no admin_state yet). The server
+        /// decides which arenas are playable, so the list is never produced locally.</para>
         /// </summary>
         public static IReadOnlyList<string> VenueScenes => _venueScenes;
 
         /// <summary>
-        /// Mekan süzgecinin sürümü — <see cref="VenueScenes"/> her değiştiğinde artar.
+        /// Venue filter version — bumped whenever <see cref="VenueScenes"/> changes.
         /// <para>
-        /// Harita seçicisi listesini bu sayıya bakarak yeniden süzer. Gerekli, çünkü liste
-        /// <b>bağlantıdan önce</b> kuruluyor (panel <c>Initialize</c>) ve o an süzgeç henüz boştur:
-        /// ilk <c>admin_state</c> gelene kadar tüm projenin arenaları geçerli görünür. "Seçim
-        /// değişti mi" sorusu bunu yakalamaz — mekan bilgisi seçimden bağımsız gelir.
+        /// The map picker re-filters by watching this. Needed because the list is built <b>before
+        /// the connection</b> (panel <c>Initialize</c>) when the filter is still empty, and "did the
+        /// selection change" does not catch it — venue info arrives independently of the selection.
         /// </para>
         /// </summary>
         public static int VenueVersion { get; private set; }
 
         private static string[] _venueScenes = Array.Empty<string>();
 
-        /// <summary>Sahne bu mekanda oynatılabilir mi. Liste boşsa herkes geçer.</summary>
+        /// <summary>Is the scene playable in this venue; an empty list passes everything.</summary>
         public static bool IsInVenue(string sceneName)
         {
             if (_venueScenes.Length == 0 || string.IsNullOrEmpty(sceneName))
@@ -165,9 +158,8 @@ namespace VortexArena.App.Admin
             VenueId = venueId;
             _venueScenes = venueScenes;
 
-            // Duyuru komutu GÖNDEREN admin'de de görünür: "kim ne yaptı" tek satırda toplansın
-            // (AdminCommands.Status ile aynı yer — yerel "gönderildi" metnini sunucunun doğruladığı
-            // metin ezer, doğru sıralama budur).
+            // Shown on the sending admin too, so "who did what" stays in one line (same place as
+            // AdminCommands.Status: the server-confirmed text overwrites the local "sent" text).
             if (!string.IsNullOrEmpty(msg.notice))
             {
                 LastNotice = msg.notice;
@@ -183,10 +175,10 @@ namespace VortexArena.App.Admin
 
         private static void HandleDisconnected()
         {
-            // Bağlantı yokken ortak durum bilinmiyor; seçim değerlerini uydurmayız (son bilinen
-            // kalır, panel yine de "bağlı değil" yazar), yalnız sayaç/duyuru temizlenir.
-            // Mekan süzgeci de KORUNUR: bağlantı koptu diye seçiciyi tüm projeye açmak, operatöre
-            // başka mekanların arenalarını gösterip yeniden bağlanınca geri almak olurdu.
+            // Selection values are not invented while disconnected (the last known ones stay, the
+            // panel says "not connected"); only counter/notice are cleared. ⚠️ The venue filter is
+            // KEPT too — otherwise a dropped connection would show other venues' arenas and take
+            // them back on reconnect.
             AdminCount = 0;
             LastNotice = "";
             Changed?.Invoke();

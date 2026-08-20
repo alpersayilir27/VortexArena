@@ -4,21 +4,20 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Elde tutulabilen her şeyin (silah, bomba) ortak tabanı.
+    /// Common base of everything holdable (weapon, bomb).
     /// <para>
-    /// <b>Bu taban bilinçli olarak DARDIR: içine yalnız ağın ve uzak çizimin ihtiyacı girer</b>
-    /// (<c>netItemId</c>, prefab, kaç elle tutulduğu, kavrama pozları). Hasar/şarjör/menzil/fitil
-    /// gibi <i>davranış</i> alanları buraya GİRMEZ — onlar türetilmiş sınıfta yaşar
-    /// (<see cref="WeaponDefinition"/>). Gerekçe: <c>RemoteAvatar</c> uzak oyuncunun elindeki
-    /// eşyayı, o eşyanın ne YAPTIĞINI bilmeden çizer. Bu, Net katmanının "oyun bilgisi içermez"
-    /// ilkesinin sunumdaki karşılığıdır; taban genişlerse uzak çizim yolu farkında olmadan oyun
-    /// kurallarına bağımlı hale gelir.
+    /// <b>Deliberately NARROW: only what the network and remote drawing need</b> (<c>netItemId</c>,
+    /// prefab, hold mode, grip poses). <i>Behaviour</i> fields — damage/magazine/range/fuse — do NOT
+    /// belong here; they live in the derived class (<see cref="WeaponDefinition"/>). Rationale:
+    /// <c>RemoteAvatar</c> draws the item in a remote player's hand without knowing what it DOES.
+    /// This is the presentation counterpart of the Net layer's "contains no game knowledge" rule; a
+    /// wider base would make the remote drawing path depend on game rules unnoticed.
     /// </para>
     /// <para>
-    /// <b>Duruş telde gitmez</b> (Docs/ArenaNet-Protokol.md §6.6): eşyanın ele göre konumu buradaki
-    /// kavrama alanlarından, yani her istemcinin APK'sından gelir; dönüşü her zaman ana kumandanın
-    /// dönüşüdür (<see cref="ItemGripSolver"/>). Ön koşulu kanonik kavramadır — serbest kavrama
-    /// (keyfi ofset) uzak tarafta yanlış duruş demektir.
+    /// <b>Pose does not go on the wire</b> (Docs/ArenaNet-Protokol.md §6.6): the item's placement
+    /// relative to the hand comes from the grip fields here, i.e. from each client's APK; its
+    /// rotation is always the main controller's (<see cref="ItemGripSolver"/>). The precondition is a
+    /// canonical grip — free grip (arbitrary offset) means a wrong pose on the remote side.
     /// </para>
     /// </summary>
     public abstract class ItemDefinition : ScriptableObject
@@ -26,10 +25,10 @@ namespace VortexArena.Core.Combat
         [Header("Kimlik")]
         [SerializeField] private string displayName = "";
 
-        // ⚠️ [Range(1,255)] KOYULMAZ. Unity'nin Range drawer'ı IntSlider ile çizerken 0'ı sessizce
-        // min'e (1) clamp'ler VE asset'i dirty yapar — Inspector'da açılan her tanım netItemId=1
-        // olurdu, yani tüm silahlar birbiriyle çakışırdı. Sınır denetimi HasNetItemId'de ve asıl
-        // koruma editör bekçisindedir (her Configure All Build Elements eşitlemesinde koşar).
+        // ⚠️ NEVER add [Range(1,255)]. Unity's Range drawer draws an IntSlider that silently clamps 0
+        // to min (1) AND dirties the asset — every definition opened in the Inspector would become
+        // netItemId=1, i.e. all weapons would collide. Bounds are checked in HasNetItemId and the real
+        // protection is the editor guard (runs on every Configure All Build Elements sync).
         [Tooltip("Ağ kimliği (1-255; 0 = atanmamış). Snapshot'ta bu bayt gider; katalog dizi " +
                  "indeksi DEĞİLDİR — elle, kararlı verilir. Çakışmayı bekçi yakalar.")]
         [SerializeField] private int netItemId = 0;
@@ -41,18 +40,19 @@ namespace VortexArena.Core.Combat
         [Tooltip("OneHand (tabanca/bomba) / TwoHand (tüfek).")]
         [SerializeField] private ItemHoldMode holdMode = ItemHoldMode.OneHand;
 
-        // ⚠️ DÖRT KAYIT DA AYNI UZAYDADIR: her biri elin KUMANDA ANCHOR'ININ EŞYAYA göre yerel
-        // KONUMUDUR (eşya → anchor; ItemGripPose — anchor kaydının dönüşü yoktur, silah her zaman
-        // kumandayla hizalıdır). Tek yönde yazıldıkları için ikinci bir uzay tarif etmek yalnız
-        // işaret hatası üretirdi. Anchor = telde giden el pozu = çözücünün bildiği poz, yani hiçbir
-        // okuyucu delta ölçmek zorunda değildir.
-        // ⚠️ Kaydın İKİNCİ yarısı elin GÖRSELİDİR (bilek yerleşimi + parmak rigi) ve eşyanın pozuna
-        // hiç karışmaz: el silaha göre yan/alttan durabilirken silah kumandayla hizalı kalır.
-        // ⚠️ Kayıt EL BAŞINADIR: kabza simetrik olmadığı için iki elin kumandası eşyanın farklı
-        // yerlerine düşer — tek kayıt tutup aynalamak sol eli silahın içine sokardı.
-        // ⚠️ Kayıtlar stüdyoda yazılır (editör), gözlükle yakalanmaz.
-        // Buradaki YARIÇAPLAR duruşun parçası DEĞİL, KAPI ölçüsüdür: kavramanın nerede kabul
-        // edildiğini söylerler, eşyanın elde nasıl duracağını değil.
+        // ⚠️ ALL FOUR RECORDS ARE IN THE SAME SPACE: each is the hand's CONTROLLER ANCHOR position
+        // local to the ITEM (item → anchor; ItemGripPose — the anchor record has no rotation, the
+        // weapon is always aligned with the controller). Written in one direction only; describing a
+        // second space would only produce sign errors. Anchor = the hand pose on the wire = the pose
+        // the solver knows, so no reader has to measure a delta.
+        // ⚠️ The record's SECOND half is the hand's VISUAL (wrist placement + finger rig) and never
+        // affects the item's pose: the hand may sit sideways/below while the weapon stays aligned with
+        // the controller.
+        // ⚠️ The record is PER HAND: grips are not symmetric, so the two controllers land on different
+        // places of the item — one record mirrored would push the left hand inside the weapon.
+        // ⚠️ Records are authored in the studio (editor), not captured with the headset.
+        // The RADII here are not part of the pose but a GATE size: they say where a grip is accepted,
+        // not how the item sits in the hand.
         [Header("Kavrama (kanonik)")]
         [Tooltip("SAĞ elin kumanda anchor'ının ana kabzadaki pozu (eşyaya göre yerel) + riglenmiş parmak duruşu.")]
         [SerializeField] private ItemGripPose primaryGripRight;
@@ -66,35 +66,36 @@ namespace VortexArena.Core.Combat
         [Tooltip("SOL elin kumanda anchor'ının ön kabzadaki pozu — yalnız TwoHand'de anlamlı.")]
         [SerializeField] private ItemGripPose secondaryGripLeft;
 
-        // ⚠️ [Range] KOYULMAZ — dosyanın başındaki netItemId uyarısındaki tuzağın aynısı: Range
-        // drawer'ı değeri kendi varsayılan sınırlarına sessizce clamp'ler VE asset'i dirty yapar,
-        // yani Inspector'da açılan her tanım farkında olmadan başka bir yarıçapla commit'lenir.
-        // Alt sınır property'de uygulanıyor.
-        // ⚠️ ANA kabza için yarıçap YOKTUR: silah ana ele verilerek/çağrılarak geliyor, oyuncunun
-        // elini ana kabzaya götürmesi diye bir adım yok — okuyanı olmayan ölçü bayatlar.
+        // ⚠️ NO [Range] — the same trap as the netItemId warning above: the Range drawer silently
+        // clamps to its own defaults AND dirties the asset, so every definition opened in the
+        // Inspector gets committed with a different radius. The lower bound is applied in the property.
+        // ⚠️ There is NO radius for the PRIMARY grip: the weapon arrives in the main hand by being
+        // granted/summoned, the player never has to move a hand onto it — a measure with no reader
+        // goes stale.
         [Tooltip("Ön kabza SOKETİNİN yarıçapı (m): boş elin kumanda anchor'ı bu kürenin içindeyken grip'e " +
                  "basılınca ikinci el ön kabzaya bağlanır; oyuncunun gördüğü küre de tam bu yarıçapla " +
                  "çizilir (0.10 = 20 cm çap). Yalnız TwoHand'de anlamlı. Silah başına ayarlanır.")]
         [SerializeField] private float secondaryGripRadius = 0.10f;
 
-        // ⚠️ Parmak duruşu için AYRI bir alan YOKTUR ve açılmaz: duruş kavrama kaydının PARÇASIDIR
-        // (ItemGripPose.fingerJoints), yani slot başına yaşar. Ayrı bir alan olsaydı "bu elin pozu"
-        // ile "bu elin parmakları" iki ayrı yerde durur ve biri güncellenip öteki unutulurdu — oysa
-        // ön kabzayı saran el ile tetiği tutan el tanım gereği farklı duruştadır.
+        // ⚠️ No SEPARATE field for the finger pose, and none is added: the pose is PART of the grip
+        // record (ItemGripPose.fingerJoints), i.e. it lives per slot. A separate field would keep "this
+        // hand's pose" and "this hand's fingers" in two places, one updated and the other forgotten —
+        // whereas the hand wrapping the foregrip and the hand on the trigger are different by
+        // definition.
 
-        // ⚠️ Slot başına ÖNBELLEK ([kind, el] = 4 giriş): riglenmiş duruşun ISDK eklem dizisine
-        // çevrilmesi de humanoid el için kapanma oranına indirgenmesi de tahsis eder ve iki yol da
-        // KARE BAŞINA okunuyor (HandGripPoser / RemoteHandPoser). Serialize EDİLMEZ: türetilmiş
-        // veridir, asset'te ikinci bir kopyası olsaydı rig değişip önbellek unutulduğunda oyunda
-        // eski duruş çizilirdi. Editörde yazma kapıları önbelleği düşürür (InvalidateGripCache).
+        // ⚠️ Cache per slot ([kind, hand] = 4 entries): both converting the rigged pose into an ISDK
+        // joint array and reducing it to curl ratios for the humanoid hand allocate, and both paths are
+        // read PER FRAME (HandGripPoser / RemoteHandPoser). NOT serialized: derived data — a second
+        // copy in the asset would draw the old pose in game once the rig changed and the cache was
+        // forgotten. Editor write gates drop the cache (InvalidateGripCache).
         [NonSerialized] private Quaternion[][] _gripJointCache;
         [NonSerialized] private HandPoseProfile[] _gripCurlCache;
         [NonSerialized] private bool[] _gripCurlResolved;
 
-        // Tracer görünümü tabanda durur çünkü tabanın ölçütü "ağın + UZAK ÇİZİMİN ihtiyacı"dır
-        // ve tracer tam olarak uzak çizim verisidir: uzak atışı çizen taraf (RemoteShotFx) olayın
-        // itemId'sinden başka hiçbir şey bilmez — hasarı, şarjörü, menzili bilmeden mermi izini
-        // çizmek zorundadır. Davranış alanı DEĞİL, sunum parametresi.
+        // Tracer appearance lives in the base because the base's criterion is "what the network AND
+        // REMOTE DRAWING need", and a tracer is exactly remote drawing data: the side drawing a remote
+        // shot (RemoteShotFx) knows nothing but the event's itemId — it must draw the trail without
+        // knowing damage, magazine or range. A presentation parameter, NOT a behaviour field.
         [Header("Tracer (uzak sunum)")]
         [Tooltip("Mermi izinin rengi (alfa dahil).")]
         [SerializeField] private Color tracerColor = new Color(1f, 0.85f, 0.4f, 0.9f);
@@ -102,54 +103,55 @@ namespace VortexArena.Core.Combat
         [Tooltip("Mermi izinin kalınlığı (metre).")]
         [SerializeField] private float tracerWidth = 0.02f;
 
-        // ⚠️ Bu süre "iz ne kadar TAM PARLAK durur" değil, "doğuşundan tümden kaybolmasına kadar
-        // geçen süre"dir: çizgi ömrü boyunca sönerek gider (ShotTracer.FadeAlphaAt). Ayrı bir
-        // "sönme süresi" alanı bilerek YOK — iki sayı olsaydı hangisinin diğerini kestiği
-        // (sönme ömürden uzunsa iz yarıda kesilir) sessiz bir tuzak olurdu.
+        // ⚠️ This duration is not "how long the trail stays FULLY bright" but "from birth to complete
+        // disappearance": the line fades over its lifetime (ShotTracer.FadeAlphaAt). A separate "fade
+        // duration" field is deliberately absent — with two numbers, which one cuts the other (a fade
+        // longer than the lifetime truncates the trail) would be a silent trap.
         [Tooltip("Mermi izinin doğuşundan tümden sönmesine kadar geçen süre (saniye). " +
                  "İz bu süre boyunca sönerek kaybolur, sonunda pat diye kapanmaz.")]
         [SerializeField] private float tracerLifetime = 0.1f;
 
-        // ⚠️ HER MERMİYE TRACER ÇİZİLMEZ. İki katlı gerekçe:
-        // (a) Gerçek silahlarda da öyle değildir — her mermide çizmek lazer ışını gibi durur ve
-        //     atıcının konumunu gereğinden fazla ifşa eder.
-        // (b) Bütçe: tam ateşte 16 oyuncu ~160 atış/sn üretir, üçte biri ~53/sn. Asıl maliyet
-        //     BAYT değil GC/draw call — telde zaten olay başına 9 B gidiyor, pahalı olan çizim.
+        // ⚠️ NOT every round gets a tracer. Two reasons:
+        // (a) Real weapons work that way too — drawing every round looks like a laser beam and exposes
+        //     the shooter's position more than it should.
+        // (b) Budget: at full auto 16 players produce ~160 shots/s, a third of that ~53/s. The real
+        //     cost is GC/draw calls, not BYTES — the wire already carries 9 B per event.
         [Tooltip("Kaçta bir mermiye tracer çizilir. 1 = her mermi, 0/negatif = tracer kapalı.")]
         [SerializeField] private int tracerEveryNthRound = 3;
 
-        /// <summary>Arayüzde gösterilen ad.</summary>
+        /// <summary>Name shown in the UI.</summary>
         public string DisplayName => displayName;
 
         /// <summary>
-        /// Telde giden eşya kimliği (§6.6). <c>0</c> "el boş" için REZERVEDİR, yani atanmamış
-        /// bir tanım geçersizdir — <see cref="HasNetItemId"/> ile kontrol edilir.
+        /// Item id on the wire (§6.6). <c>0</c> is RESERVED for "empty hand", so an unassigned
+        /// definition is invalid — checked via <see cref="HasNetItemId"/>.
         /// </summary>
         public byte NetItemId => (byte)netItemId;
 
         /// <summary>
-        /// Kimlik atanmış mı. ⚠️ Asıl korumayı bu property DEĞİL editör bekçisi sağlar
-        /// (<c>Configure All Build Elements</c> eşitlemesinin net eşya kataloğu koşusu): çakışan/eksik id derlemede
-        /// patlamaz, sahada "elinde yanlış eşya çizildi" olarak görünür.
+        /// Is an id assigned. ⚠️ The real protection is not this property but the editor guard (the net
+        /// item catalog pass of the <c>Configure All Build Elements</c> sync): a colliding/missing id
+        /// does not break compilation, it shows up in the field as "the wrong item was drawn in their
+        /// hand".
         /// </summary>
         public bool HasNetItemId => netItemId >= 1 && netItemId <= 255;
 
-        /// <summary>Eşya prefabı (atanmamış olabilir).</summary>
+        /// <summary>Item prefab (may be unassigned).</summary>
         public GameObject Prefab => prefab;
 
-        /// <summary>Kaç elle tutulduğu.</summary>
+        /// <summary>How many hands it is held with.</summary>
         public ItemHoldMode HoldMode => holdMode;
 
-        /// <summary>Çift elli mi (kısayol).</summary>
+        /// <summary>Is it two-handed (shortcut).</summary>
         public bool IsTwoHanded => holdMode == ItemHoldMode.TwoHand;
 
         /// <summary>
-        /// İstenen kavrama noktasının, istenen elin <b>yazılmış</b> kaydı.
-        /// <para>⚠️ İstenen el yazılmamışsa <b>ÖTEKİ elin kaydına düşülür</b> (ikisi de yoksa
-        /// <c>default</c>): tek eli yazılmış bir silah, öteki elde silahı orijine yapıştırmak
-        /// yerine yaklaşık ama makul bir duruşta tutulsun. ⚠️ Düşme yalnız <b>okuma</b> içindir —
-        /// "yazılmış mı" sorusunun cevabı <see cref="HasGrip"/>'tir ve o DÜŞMEZ, yoksa eksik el
-        /// hiçbir raporda görünmezdi.</para>
+        /// The <b>authored</b> record of the requested grip point for the requested hand.
+        /// <para>⚠️ When the requested hand is unauthored it <b>falls back to the OTHER hand's record</b>
+        /// (<c>default</c> if neither exists): a weapon authored for one hand should be held in an
+        /// approximate but sane pose in the other, rather than snapped to the origin. ⚠️ The fallback is
+        /// for <b>reading</b> only — "is it authored" is answered by <see cref="HasGrip"/> and that does
+        /// NOT fall back, otherwise a missing hand would never appear in any report.</para>
         /// </summary>
         public ItemGripPose GetGrip(GripSocketKind kind, bool rightHand)
         {
@@ -170,8 +172,8 @@ namespace VortexArena.Core.Combat
             return other.IsAuthored ? other : default;
         }
 
-        /// <summary>Bu kavrama noktası <b>bu el için</b> yazılmış mı (öteki ele DÜŞMEZ —
-        /// gerekçe <see cref="GetGrip"/>'te).</summary>
+        /// <summary>Is this grip point authored <b>for this hand</b> (no fallback to the other hand —
+        /// rationale in <see cref="GetGrip"/>).</summary>
         public bool HasGrip(GripSocketKind kind, bool rightHand)
         {
             if (kind == GripSocketKind.Secondary)
@@ -183,13 +185,13 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bu slotun riglenmiş parmak duruşu, <b>yerel sentetik elin</b> (ISDK) beklediği eklem
-        /// dizisi olarak — <c>SyntheticHand.OverrideAllJoints</c> biçiminde. Parmakları riglenmemiş
-        /// bir slot boş elin dizisine düşer.
-        /// <para>Duruş kaydın PARÇASIDIR: ana kabzayı tutan el tetikte, ön kabzayı saran el
-        /// kapalıdır — ikisi tek bir "eşyanın duruşu" alanına sığmaz.</para>
-        /// <para>⚠️ Dönen dizi <b>ÖNBELLEKLİ ve PAYLAŞIMLIDIR</b> (kare başına okunuyor): çağıran
-        /// onu DEĞİŞTİRMEZ, yalnız okur.</para>
+        /// This slot's rigged finger pose as the joint array the <b>local synthetic hand</b> (ISDK)
+        /// expects — <c>SyntheticHand.OverrideAllJoints</c> form. A slot with unrigged fingers falls
+        /// back to the idle array.
+        /// <para>The pose is PART of the record: the hand on the primary grip is on the trigger, the one
+        /// wrapping the foregrip is closed — the two do not fit into a single "item pose" field.</para>
+        /// <para>⚠️ The returned array is <b>CACHED and SHARED</b> (read per frame): the caller does NOT
+        /// modify it, only reads.</para>
         /// </summary>
         public Quaternion[] GripJointRotations(GripSocketKind kind, bool rightHand)
         {
@@ -212,12 +214,11 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Aynı slotun <b>uzak avatarın humanoid (Mixamo) eli</b> için karşılığı: parmak başına
-        /// kapanma oranı, riglenmiş duruştan ÖLÇÜLEREK
-        /// (<see cref="HandPoseLibrary.MeasureCurl"/>).
-        /// <para>⚠️ Ham eklem dönüşleri humanoid kemiğe yazılamaz (iki iskeletin eksenleri aynı
-        /// değil — projenin bir kez öğrendiği kural); köprü bu orandır. Oran <b>asset'te
-        /// saklanmaz</b>: türetilmiş veri ikinci bir doğruluk kaynağı olurdu.</para>
+        /// The same slot for the <b>remote avatar's humanoid (Mixamo) hand</b>: curl ratio per finger,
+        /// MEASURED from the rigged pose (<see cref="HandPoseLibrary.MeasureCurl"/>).
+        /// <para>⚠️ Raw joint rotations cannot be written onto a humanoid bone (the two skeletons' axes
+        /// differ — the project's learned rule); this ratio is the bridge. The ratio is <b>not stored in
+        /// the asset</b>: derived data would be a second source of truth.</para>
         /// </summary>
         public HandPoseProfile GripFingerCurl(GripSocketKind kind, bool rightHand)
         {
@@ -240,16 +241,16 @@ namespace VortexArena.Core.Combat
             return profile;
         }
 
-        /// <summary>Önbellek yeri: [kavrama noktası, el] → <c>0..3</c>.</summary>
+        /// <summary>Cache slot: [grip point, hand] → <c>0..3</c>.</summary>
         private static int GripSlot(GripSocketKind kind, bool rightHand)
         {
             return (kind == GripSocketKind.Secondary ? 2 : 0) + (rightHand ? 1 : 0);
         }
 
         /// <summary>
-        /// Türetilmiş parmak önbelleklerini düşürür — kayıt her değiştiğinde çağrılır.
-        /// <para>⚠️ Dört slotun tamamı düşer: bir elin kaydı silinince öteki el ONA düşebiliyor
-        /// (<see cref="GetGrip"/>), yani tek slotu tazelemek komşusunu bayat bırakırdı.</para>
+        /// Drops the derived finger caches — called whenever a record changes.
+        /// <para>⚠️ All four slots drop: clearing one hand's record can make the other hand fall back to
+        /// it (<see cref="GetGrip"/>), so refreshing a single slot would leave its neighbour stale.</para>
         /// </summary>
         private void InvalidateGripCache()
         {
@@ -259,12 +260,12 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// <b>EŞYANIN</b> ana el anchor'ına göre yerel konumu (metre): <c>itemPos =
-        /// palm.pos + palm.rot * bu değer</c>; dönüş her zaman anchor'ın kendisidir
+        /// The <b>ITEM's</b> local position relative to the main hand anchor (metres): <c>itemPos =
+        /// palm.pos + palm.rot * this</c>; rotation is always the anchor's own
         /// (<see cref="ItemGripSolver"/>).
-        /// <para>Türetme: kayıt anchor'ın eşyaya göre konumudur, aranan da onun tersidir (eksi işaret —
-        /// eşya kumandayla hizalı olduğu için başka dönüşüm yok). Yazılmamış kayıtta sıfır: eşya
-        /// kumandanın tam üstünde durur.</para>
+        /// <para>Derivation: the record is the anchor's position relative to the item, and this is its
+        /// inverse (just a sign — the item is aligned with the controller, so no other transform). Zero
+        /// for an unauthored record: the item sits right on the controller.</para>
         /// </summary>
         public Vector3 PrimaryGripPosition(bool rightHand)
         {
@@ -272,11 +273,11 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Ana kavrama noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — eşyanın dünya pozunu
-        /// çözen taraf (<see cref="ItemGripSolver"/>) bunu okur.
-        /// <para>⚠️ <b>Ayrı bir alan DEĞİL, kaydın kendisidir:</b> kayıt zaten "kumanda eşyanın
-        /// neresinde" sorusunu cevaplıyor. İkinci bir serialize alan açılırsa aynı nokta iki yerde
-        /// yaşar ve biri güncellenip diğeri unutulur.</para>
+        /// The primary grip point's local position <b>relative to the ITEM</b> (metres) — read by the
+        /// side resolving the item's world pose (<see cref="ItemGripSolver"/>).
+        /// <para>⚠️ <b>Not a separate field but the record itself:</b> the record already answers "where
+        /// on the item the controller is". A second serialized field would keep the same point in two
+        /// places, one updated and the other forgotten.</para>
         /// </summary>
         public Vector3 PrimaryGripPointOnItem(bool rightHand)
         {
@@ -284,26 +285,28 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Ön kabza kaydı <b>en az bir el için yazılmış</b> mı (yalnız <see cref="IsTwoHanded"/> iken
-        /// anlamlı; tek elli eşyada daima <c>false</c>). Ön kabzayı okuyan HER yol
-        /// (<c>Weapon</c> soketi ve kapısı, <c>HandGripPoser</c>, <c>RemoteAvatar</c>) önce buna bakar.
-        /// <para>⚠️ <b>Yazılmamış ön kabza EŞYANIN KÖKÜDÜR:</b> <see cref="GetGrip"/> iki el de yoksa
-        /// <c>default</c> (sıfır poz) döner, yani <see cref="SecondaryGripPosition"/> kökü verir. O nokta
-        /// çoğu silahta ana elin bileğinin dibinde durur — kapı burada açık kalsaydı soket küresi ana
-        /// elin üstünde belirir, ikinci el "kabzada" tutamaz ve hata olarak değil "gösterge yanlış
-        /// yerde çıkıyor" olarak görünürdü. Bu yüzden yazılmamış ön kabza <b>yoktur</b>: soket
-        /// çizilmez, ikinci el bağlanmaz ve <c>Weapon</c> bunu bir kez uyarır.
-        /// Kaydı yazan tek yer stüdyodur (<c>Kavrama Pozu Stüdyosu</c>).</para>
+        /// Is the foregrip record authored <b>for at least one hand</b> (meaningful only when
+        /// <see cref="IsTwoHanded"/>; always <c>false</c> for one-handed items). EVERY path reading the
+        /// foregrip (<c>Weapon</c>'s socket and gate, <c>HandGripPoser</c>, <c>RemoteAvatar</c>) checks
+        /// this first.
+        /// <para>⚠️ <b>An unauthored foregrip IS THE ITEM ROOT:</b> <see cref="GetGrip"/> returns
+        /// <c>default</c> (zero pose) when neither hand exists, so <see cref="SecondaryGripPosition"/>
+        /// gives the root. On most weapons that point sits right at the main hand's wrist — with the gate
+        /// open the socket sphere would appear over the main hand, the second hand could not hold "the
+        /// grip", and it would show up not as an error but as "the indicator is in the wrong place".
+        /// Hence an unauthored foregrip <b>does not exist</b>: no socket is drawn, no second hand binds,
+        /// and <c>Weapon</c> warns once. The only place records are authored is the studio
+        /// (<c>Kavrama Pozu Stüdyosu</c>).</para>
         /// </summary>
         public bool HasSecondaryGrip =>
             IsTwoHanded && (secondaryGripRight.IsAuthored || secondaryGripLeft.IsAuthored);
 
         /// <summary>
-        /// Ön kabza noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — yalnız
-        /// <see cref="HasSecondaryGrip"/> iken anlamlı (yazılmamışsa sıfır = eşyanın kökü döner;
-        /// çağıran önce o kapıya bakar). İkinci elin dünya hedefi
-        /// <c>item.position + item.rotation * bu değer</c> ile bulunur (⚠️ <c>TransformPoint</c>
-        /// DEĞİL: ölçü metredir, eşyanın görsel ölçeğiyle büyümez).
+        /// The foregrip point's local position <b>relative to the ITEM</b> (metres) — meaningful only
+        /// when <see cref="HasSecondaryGrip"/> (unauthored returns zero = the item root; the caller
+        /// checks that gate first). The second hand's world target is
+        /// <c>item.position + item.rotation * this</c> (⚠️ NOT <c>TransformPoint</c>: the measure is in
+        /// metres and must not grow with the item's visual scale).
         /// </summary>
         public Vector3 SecondaryGripPosition(bool rightHand)
         {
@@ -312,18 +315,17 @@ namespace VortexArena.Core.Combat
 
 #if UNITY_EDITOR
         /// <summary>
-        /// Kavramayı ilgili alana yazar — <b>stüdyonun tek yazma kapısı</b> (alanlar private kalsın
-        /// diye vardır; ikinci bir yazıcı, dört alanın hangisinin hangi el olduğunu ikinci kez
-        /// tarif etmek olurdu).
-        /// <para>⚠️ <c>EditorUtility.SetDirty</c>/<c>SaveAssets</c> ÇAĞRILMAZ: çağıran genelde
-        /// birden çok alanı arka arkaya yazıyor ve kaydı tek Undo/tek dirty adımında toplamak
-        /// istiyor.</para>
+        /// Writes the grip into the matching field — <b>the studio's only write gate</b> (exists to keep
+        /// the fields private; a second writer would mean describing which of the four fields is which
+        /// hand a second time).
+        /// <para>⚠️ Does NOT call <c>EditorUtility.SetDirty</c>/<c>SaveAssets</c>: the caller usually
+        /// writes several fields in a row and wants one Undo/dirty step.</para>
         /// </summary>
-        /// <param name="anchorInItem">Kumanda anchor'ının EŞYAYA göre yerel konumu (metre, ölçeksiz).</param>
-        /// <param name="wristInAnchor">El modelinin kumanda anchor'ına göre yerel pozu (metre,
-        /// ölçeksiz) — elin silaha göre yan/alttan durmasını bu taşır.</param>
-        /// <param name="fingerJoints">O slotta riglenmiş parmak eklemleri (boş olabilir — el o zaman
-        /// boşta duruşunda kalır).</param>
+        /// <param name="anchorInItem">Controller anchor's local position relative to the ITEM (metres, unscaled).</param>
+        /// <param name="wristInAnchor">Hand model's local pose relative to the controller anchor (metres,
+        /// unscaled) — carries the hand sitting sideways/below relative to the weapon.</param>
+        /// <param name="fingerJoints">Finger joints rigged for that slot (may be empty — the hand then
+        /// stays in its idle pose).</param>
         public void EditorSetGrip(GripSocketKind kind, bool rightHand, in Vector3 anchorInItem,
             in Pose wristInAnchor, HandJointRotation[] fingerJoints)
         {
@@ -355,12 +357,12 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bir kavrama kaydını <b>yazılmamış</b> hale döndürür (<c>authored = false</c>) —
-        /// <see cref="EditorSetGrip"/> ile aynı kapının silme yönü.
-        /// <para>⚠️ Alanı sıfır poza çekmek YETMEZ: sıfır poz geçerli bir kavramadır
-        /// (<see cref="ItemGripPose"/>), yani "hepsi sıfır = yazılmamış" kestirmesi burada
-        /// sessizce yanlış olurdu — bayrağın kendisi düşürülür ki okuma yolu öteki elin kaydına
-        /// düşebilsin ve araçlar eksik kavramayı raporlayabilsin.</para>
+        /// Returns a grip record to <b>unauthored</b> (<c>authored = false</c>) — the delete direction of
+        /// the same gate as <see cref="EditorSetGrip"/>.
+        /// <para>⚠️ Zeroing the pose is NOT enough: a zero pose is a valid grip
+        /// (<see cref="ItemGripPose"/>), so the "all zero = unauthored" shortcut would be silently wrong
+        /// here — the flag itself is cleared so the read path can fall back to the other hand's record
+        /// and tools can report the missing grip.</para>
         /// </summary>
         public void EditorClearGrip(GripSocketKind kind, bool rightHand)
         {
@@ -392,11 +394,11 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Inspector'dan (ya da bir Undo/Revert'ten) gelen her değişiklikte türetilmiş parmak
-        /// önbelleklerini düşürür.
-        /// <para>⚠️ Yazma kapıları önbelleği zaten düşürüyor; bu kapı onların ATLANDIĞI yolları
-        /// kapatır (Undo, prefab revert, asset'i elle düzenleme). Kavrama alanları Inspector'da
-        /// görünür olduğu için "yalnız stüdyo yazar" bir sözleşme değil, bir alışkanlıktır.</para>
+        /// Drops the derived finger caches on every change coming from the Inspector (or an
+        /// Undo/Revert).
+        /// <para>⚠️ The write gates already drop the cache; this gate closes the paths that BYPASS them
+        /// (Undo, prefab revert, hand-editing the asset). Since grip fields are visible in the Inspector,
+        /// "only the studio writes" is a habit, not a contract.</para>
         /// </summary>
         private void OnValidate()
         {
@@ -405,31 +407,32 @@ namespace VortexArena.Core.Combat
 #endif
 
         /// <summary>
-        /// Ön kabza soketinin yarıçapı (metre): boş elin kumanda ANCHOR'I bu kürenin içindeyken grip basışı
-        /// ikinci eli ön kabzaya bağlar (<c>Weapon.IsHandOnSecondaryGrip</c>) ve oyuncunun gördüğü
-        /// soket küresi tam bu yarıçapla çizilir (görsel = kabul hacmi) — yalnız
-        /// <see cref="IsTwoHanded"/> iken anlamlı.
-        /// <para>⚠️ <b>Alt sınır 1 cm'dir ve öyle kalmalı:</b> sıfır (ya da eksi) yarıçap ön kabzayı
-        /// matematiksel olarak kavranamaz yapar — sahada bu bir hata olarak DEĞİL "ikinci el
-        /// tutmuyor" olarak görünür, yani teşhisi pahalı. Ayarlanmamış/sıfırlanmış bir asset bu
-        /// sayede yine çalışır kalır.</para>
+        /// Foregrip socket radius (metres): while an empty hand's controller ANCHOR is inside this
+        /// sphere, a grip press binds the second hand to the foregrip
+        /// (<c>Weapon.IsHandOnSecondaryGrip</c>) and the socket sphere the player sees is drawn with
+        /// exactly this radius (visual = acceptance volume) — meaningful only when
+        /// <see cref="IsTwoHanded"/>.
+        /// <para>⚠️ <b>The 1 cm floor must stay:</b> a zero (or negative) radius makes the foregrip
+        /// mathematically ungrabbable — in the field that shows up NOT as an error but as "the second
+        /// hand does not hold", which is expensive to diagnose. An unset/zeroed asset keeps working
+        /// thanks to it.</para>
         /// </summary>
         public float SecondaryGripRadius => Mathf.Max(0.01f, secondaryGripRadius);
 
-        /// <summary>Uzak atışta çizilen mermi izinin rengi.</summary>
+        /// <summary>Colour of the tracer drawn for a remote shot.</summary>
         public Color TracerColor => tracerColor;
 
-        /// <summary>Mermi izinin kalınlığı (metre).</summary>
+        /// <summary>Tracer width (metres).</summary>
         public float TracerWidth => tracerWidth;
 
-        /// <summary>Mermi izinin ömrü (saniye).</summary>
+        /// <summary>Tracer lifetime (seconds).</summary>
         public float TracerLifetime => tracerLifetime;
 
         /// <summary>
-        /// Kaçta bir mermiye tracer çizilir (<c>1</c> = her mermi, <c>0</c>/negatif = kapalı).
-        /// <para>⚠️ Bu bir <b>playtest ayarıdır</b> ve burada, SO'da yaşar: doğru sayı sahada
-        /// gözle bulunur. Her mermide çizmek lazer ışını gibi durur, konumu fazla ifşa eder ve
-        /// yoğun ateşte çizim/GC bütçesini yer (asıl maliyet bayt değil draw call).</para>
+        /// Draw a tracer every Nth round (<c>1</c> = every round, <c>0</c>/negative = off).
+        /// <para>⚠️ A <b>playtest setting</b>, and it lives here in the SO: the right number is found by
+        /// eye in the field. Drawing every round looks like a laser beam, exposes position too much and
+        /// eats the draw/GC budget under heavy fire (the real cost is draw calls, not bytes).</para>
         /// </summary>
         public int TracerEveryNthRound => tracerEveryNthRound;
     }

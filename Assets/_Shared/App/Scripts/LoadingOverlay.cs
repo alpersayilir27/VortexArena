@@ -6,48 +6,45 @@ using VortexArena.Core.UI;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Sahne geçişi sırasında görünen yükleme ekranı. <see cref="SceneRouter"/> asenkron
-    /// yüklemeyi başlatırken açar, sahne tamamen ayağa kalkınca kapatır; ilerleme
-    /// <c>AsyncOperation.progress</c>'ten gelir.
+    /// Loading screen for scene transitions: <see cref="SceneRouter"/> opens it with the async load
+    /// and closes it once the scene is up; progress comes from <c>AsyncOperation.progress</c>.
     ///
-    /// **Görünüm prefabtan gelir, SAHNEDEN değil:** iki varyant vardır —
-    /// `Resources/UI/LoadingOverlayScreen` (masaüstü) ve `…World` (VR); hangisinin
-    /// yükleneceğine <see cref="Install"/> karar verir. <see cref="ConnectionOverlay"/> ile
-    /// birebir aynı desen: prefab sahneye KONMAZ (konsaydı yeni arena eklerken unutulacak bir
-    /// adım olurdu), prefabı `Resources.Load` ile alır ve `DontDestroyOnLoad` tekil olarak yaşar;
-    /// **hangi oturumda doğacağına `AppSingletons` karar verir**.
-    /// Bu sınıf yalnız **veri yazar ve görünürlüğü sürer**; yerleşim/renk/punto prefabta.
+    /// **Visuals come from a prefab, NOT the scene:** `Resources/UI/LoadingOverlayScreen` (desktop)
+    /// or `…World` (VR), chosen by <see cref="Install"/>. Same pattern as
+    /// <see cref="ConnectionOverlay"/>: ⚠️ never placed in a scene (that would be a step to forget
+    /// per arena), loaded via `Resources.Load` as a `DontDestroyOnLoad` singleton, and
+    /// **`AppSingletons` decides when it spawns**. This class only writes data and drives
+    /// visibility.
     ///
-    /// **Neden açılışta önyüklenir, ilk gösterimde değil:** prefabı tam geçiş anında
-    /// `Resources.Load` etmek yüklemenin en kötü karesinde bir takılma üretirdi — bedeli
-    /// açılışta bir kez ödenir.
+    /// **Preloaded at startup**, not on first show: `Resources.Load` during the transition would
+    /// hitch in the worst frame of the load.
     ///
-    /// **VR güvenlik kuralı** (`ConnectionOverlay` ile aynı gerekçe — oyuncu fiziksel alanda
-    /// 1:1 yürüyor): world-space varyantta tam ekran scrim YOKTUR, yalnız yarı saydam kart
-    /// çizilir. Görüşü karartmak free-roam'da tehlikelidir.
+    /// ⚠️ **VR safety rule** (as in `ConnectionOverlay` — the player walks 1:1 physically): the
+    /// world-space variant has NO full-screen scrim, only a semi-transparent card. Darkening the
+    /// view is dangerous in free-roam.
     /// </summary>
     public class LoadingOverlay : MonoBehaviour
     {
-        // --------------------------------------------------------------- ayarlar
+        // --------------------------------------------------------------- settings
 
-        /// <summary>Bar dolumunun saniyede kat ettiği oran — sıçramasın, aksın.</summary>
+        /// <summary>Bar fill per second — it should flow, not jump.</summary>
         private const float FillSpeed = 2.5f;
 
-        /// <summary>Nabız periyodu (sn) — accent şerit alfası 0.55 ↔ 1.0.</summary>
+        /// <summary>Pulse period (s) — accent strip alpha 0.55 ↔ 1.0.</summary>
         private const float PulsePeriod = 1.2f;
 
-        // --------------------------------------------------------------- durum
+        // ------------------------------------------------------------------- state
 
         private static LoadingOverlay _instance;
 
-        /// <summary>Prefabın <c>Resources</c> yolları (uzantısız) — VR world-space / masaüstü
-        /// screen-space iki ayrı prefabtır.</summary>
+        /// <summary><c>Resources</c> paths (no extension) — VR world-space and desktop screen-space
+        /// are two separate prefabs.</summary>
         public const string WorldResourcePath = "UI/LoadingOverlayWorld";
 
         public const string ScreenResourcePath = "UI/LoadingOverlayScreen";
 
-        // ⚠️ Alanlar [SerializeField] — görünüm PREFABTAN gelir. Başlık ve ipucu metinleri de
-        // prefabta sabittir (kod onlara dokunmaz), bu yüzden burada alanları yoktur.
+        // ⚠️ [SerializeField] fields: the visuals come FROM THE PREFAB. Title and hint texts are
+        // fixed there too (never touched by code), hence no fields for them.
 
         [Tooltip("Bu prefab VR (world-space) varyantı mı? Screen-space varyantta KAPALI olmalı.")]
         [SerializeField] private bool _worldSpace;
@@ -67,28 +64,28 @@ namespace VortexArena.App
         [Tooltip("İlerleme barının DOLGUSU (UiKit.Bar deseni: anchorMax.x ile sürülür).")]
         [SerializeField] private Image _progressFill;
 
-        /// <summary><see cref="Show"/> ile açıldı mı (niyet). Fiilen çizilip çizilmediği
-        /// <see cref="_visible"/>'dır — VR'da kart kamera bulunana kadar çizilmez.</summary>
+        /// <summary>Opened via <see cref="Show"/> (intent); actual drawing is <see cref="_visible"/>
+        /// — in VR the card waits for a camera.</summary>
         private bool _shown;
 
         private bool _visible;
 
-        /// <summary>World-space kipte kartın önünde durduğu kamera; değişince kart yeniden oturur.</summary>
+        /// <summary>World-space mode: the camera the card stands in front of; a change re-seats it.</summary>
         private Camera _followedCamera;
 
-        /// <summary>Hedef ilerleme (0..1) — <see cref="SetProgress"/> yazar.</summary>
+        /// <summary>Target progress (0..1) — written by <see cref="SetProgress"/>.</summary>
         private float _target;
 
-        /// <summary>Ekranda çizili ilerleme; hedefe yumuşayarak yaklaşır.</summary>
+        /// <summary>Drawn progress; approaches the target smoothly.</summary>
         private float _displayed;
 
-        /// <summary>Ekranda yazılı yüzde — değişmedikçe TMP'ye dokunulmaz (çöp üretmesin).</summary>
+        /// <summary>Percentage on screen — TMP is only touched when it changes (no garbage).</summary>
         private int _shownPercent = -1;
 
-        // ------------------------------------------------------------ önyükleme
+        // --------------------------------------------------------------- bootstrap
 
-        /// <summary>Tekili kurar. ⚠️ <b>Koşulsuzdur</b> — "bu oturumda gerekli mi" kararı
-        /// <see cref="AppSingletons"/>'a aittir (gerekçe orada).</summary>
+        /// <summary>Installs the singleton. ⚠️ <b>Unconditional</b> — the "is it needed in this
+        /// session" decision belongs to <see cref="AppSingletons"/> (rationale is there).</summary>
         internal static void Install()
         {
             if (_instance != null)
@@ -96,7 +93,7 @@ namespace VortexArena.App
                 return;
             }
 
-            // Quest'te (ya da XR aygıtı etkinken) world-space kart, masaüstünde screen-space.
+            // World-space card on Quest / active XR device, screen-space on desktop.
             bool worldSpace = UnityEngine.XR.XRSettings.isDeviceActive ||
                               Application.platform == RuntimePlatform.Android;
             string path = worldSpace ? WorldResourcePath : ScreenResourcePath;
@@ -125,23 +122,23 @@ namespace VortexArena.App
 
             _instance = this;
 
-            // `_visible = true` bilerek: ApplyVisible aynı değeri yeniden yazmayı atlar, oysa
-            // prefab yanlışlıkla açık canvas'la kaydedilmişse burada kapatılması gerekir.
+            // `_visible = true` on purpose: ApplyVisible skips same-value writes, and a prefab saved
+            // with an enabled canvas must still be turned off here.
             _visible = true;
             ApplyVisible(false);
         }
 
-        // ------------------------------------------------------------ dış yüzey
+        // ------------------------------------------------------------ public surface
 
         /// <summary>
-        /// Yükleme ekranını açar ve ilerlemeyi sıfırlar. Prefab bulunamadıysa sessizce hiçbir
-        /// şey yapmaz — yükleme ekranı olmaması sahne geçişini ENGELLEMEZ.
+        /// Opens the loading screen and resets progress. A missing prefab is a silent no-op — the
+        /// absence of a loading screen must NOT block the scene transition.
         /// </summary>
         public static void Show(string sceneName)
         {
-            // Erken çağrılırsa (ilk sahne yüklemesinden önce, yani AppSingletons koşmadan) yine de
-            // doğsun. ⚠️ Bu, oturum kapısını DELMEZ: yükleme ekranını isteyen tek şey sahne
-            // yönlendirmesidir ve o tekil kurulmadığı oturumda burayı çağıran da olmaz.
+            // Spawn even when called before AppSingletons ran. ⚠️ This does not pierce the session
+            // gate: only scene routing asks for the loading screen, and without that singleton
+            // nobody calls here.
             Install();
             if (_instance == null)
             {
@@ -151,7 +148,7 @@ namespace VortexArena.App
             _instance.ShowInstance(sceneName);
         }
 
-        /// <summary>İlerleme (0..1). Bar ve yüzde göstergesi bunu izler.</summary>
+        /// <summary>Progress (0..1); bar and percentage follow it.</summary>
         public static void SetProgress(float normalized)
         {
             if (_instance == null)
@@ -173,10 +170,10 @@ namespace VortexArena.App
             _instance.ApplyVisible(false);
         }
 
-        /// <summary>Ekran şu an görünür mü (teşhis/koruma amaçlı).</summary>
+        /// <summary>Is the screen visible (diagnostics/guards).</summary>
         public static bool IsVisible => _instance != null && _instance._visible;
 
-        // ------------------------------------------------------------- döngü
+        // -------------------------------------------------------------------- loop
 
         private void ShowInstance(string sceneName)
         {
@@ -190,7 +187,7 @@ namespace VortexArena.App
                 _sceneText.text = sceneName ?? "";
             }
 
-            // Kart, bulunan kameranın önüne yeniden otursun (aşağıdaki TrackCamera snap eder).
+            // Re-seat in front of whichever camera is found (TrackCamera snaps it).
             _followedCamera = null;
 
             ApplyProgress();
@@ -211,8 +208,8 @@ namespace VortexArena.App
                 return;
             }
 
-            // Yükleme kareleri düzensizdir; bar ani sıçramasın diye hedefe yumuşayarak gider.
-            // Geri gitmek (yeni yükleme) anında olur, ileri gitmek akar.
+            // Loading frames are irregular, so the bar eases forward; going backwards (a new load)
+            // is instant.
             _displayed = _target < _displayed
                 ? _target
                 : Mathf.MoveTowards(_displayed, _target, Time.unscaledDeltaTime * FillSpeed);
@@ -222,21 +219,19 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Görünürlüğü her karede yeniden karara bağlar. Masaüstünde karar <see cref="_shown"/>'dur;
-        /// **VR'da ek bir koşul vardır: kamera.**
+        /// Re-decides visibility every frame: <see cref="_shown"/> on desktop, **plus the camera in
+        /// VR**.
         /// <para>
-        /// ⚠️ World-space kart <see cref="HudFollow"/> ile <c>Camera.main</c>'in önüne yerleşir.
-        /// Kamera yokken çizilirse kart dünya orijininde asılı kalır — oyuncu onu HİÇ görmez
-        /// (arenanın ortasında, ayaklarının dibinde ya da geometrinin içinde durur). Sahne geçişi
-        /// tam da kameranın yok olup yeniden doğduğu andır, yani bu istisna değil KURALDIR: eski
-        /// sahnenin kamerası aktivasyonda ölür, yenisi bir sonraki karede gelir.
+        /// ⚠️ The world-space card follows <c>Camera.main</c> via <see cref="HudFollow"/>; drawn
+        /// without a camera it hangs at the world origin where the player never sees it. A scene
+        /// transition is exactly when the camera dies and respawns, so this is the rule, not an
+        /// exception.
         /// </para>
         /// <para>
-        /// Bu yüzden kart kamera bulunana kadar çizilmez ve kamera <b>değiştiğinde</b>
-        /// <see cref="HudFollow"/> yeniden başlatılır — aksi hâlde panel eski kameranın
-        /// konumundan yenisine doğru yumuşayarak SÜZÜLÜR ve geçişin yarısı boyunca yanlış yerde
-        /// durur. (`ConnectionOverlay` aynı kapıdan geçer; farkı, orada kameranın kaybolması
-        /// nadir bir durumken burada her geçişte yaşanmasıdır.)
+        /// Hence: no drawing until a camera exists, and <see cref="HudFollow"/> is restarted <b>on a
+        /// camera change</b> — otherwise the panel glides from the old camera's position and sits in
+        /// the wrong place for half the transition. (`ConnectionOverlay` uses the same gate, but
+        /// there a lost camera is rare.)
         /// </para>
         /// </summary>
         private void Refresh()
@@ -244,7 +239,7 @@ namespace VortexArena.App
             ApplyVisible(_shown && (!_worldSpace || TrackCamera()));
         }
 
-        /// <summary>Kamerayı izler; yeni bir kamera bulununca kartı derhal önüne oturtur.</summary>
+        /// <summary>Tracks the camera and snaps the card in front of a newly found one.</summary>
         private bool TrackCamera()
         {
             Camera camera = Camera.main;
@@ -258,8 +253,8 @@ namespace VortexArena.App
             {
                 _followedCamera = camera;
 
-                // OnEnable → HudFollow._initialized sıfırlanır → panel süzülmeden yerine oturur.
-                // (HudFollow LateUpdate'te çalışır; bu kare çizilmeden önce yerleşmiş olur.)
+                // OnEnable resets HudFollow._initialized → snap instead of glide. (HudFollow runs in
+                // LateUpdate, so it is seated before this frame draws.)
                 if (_hudFollow != null)
                 {
                     _hudFollow.enabled = false;
@@ -282,7 +277,7 @@ namespace VortexArena.App
             }
         }
 
-        /// <summary>Tek animasyon: "iş sürüyor" hissi veren yumuşak nabız.</summary>
+        /// <summary>The only animation: a soft "work in progress" pulse.</summary>
         private void Pulse()
         {
             if (_accentStrip == null)
@@ -300,15 +295,15 @@ namespace VortexArena.App
         {
             if (_group == null || _canvas == null || _visible == visible)
             {
-                return; // her karede aynı değeri yazıp canvas'ı kirletmeyelim
+                return; // same value every frame would dirty the canvas
             }
 
             _visible = visible;
-            _canvas.enabled = visible; // gizliyken hiç çizim maliyeti olmasın
+            _canvas.enabled = visible; // no draw cost at all while hidden
             _group.alpha = visible ? 1f : 0f;
 
-            // Yükleme ekranı hiçbir şeyi tıklanabilir kılmaz; masaüstünde arkadaki admin
-            // arayüzüne kazara basılmasın diye yalnız raycast'i keser.
+            // Nothing here is clickable; on desktop it only blocks raycasts so the admin UI behind
+            // it is not hit by accident.
             _group.blocksRaycasts = visible && !_worldSpace;
             _group.interactable = false;
         }

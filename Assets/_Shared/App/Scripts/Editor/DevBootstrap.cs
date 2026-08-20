@@ -7,31 +7,28 @@ using UnityEngine;
 namespace VortexArena.App.Editor
 {
     /// <summary>
-    /// Dev araç setinin editör kancaları: Play'e basıldığında doğru sahneden başlatır ve rol
-    /// değiştirmek için <c>Ctrl+Alt+R</c> kısayolunu kurar.
+    /// Editor hooks of the dev toolset: Play starts from the right scene, <c>Ctrl+Alt+R</c>
+    /// switches the role.
     ///
-    /// <para><b>Play başlangıç sahnesi:</b> "Boot'tan başla" seçiliyken
-    /// <see cref="EditorSceneManager.playModeStartScene"/> Boot sahnesine ayarlanır — böylece
-    /// hangi sahne açık olursa olsun Play gerçek akıştan (Boot → rol yönlendirmesi) başlar.
-    /// Sahne asset'i <b>Build Settings'ten</b> aranır (dosya adı <c>Boot</c>); sabit yol gömmüyoruz
-    /// ki sahne taşındığında araç kırılmasın.</para>
+    /// <para><b>Play start scene:</b> with "start from Boot" selected,
+    /// <see cref="EditorSceneManager.playModeStartScene"/> points at Boot so Play always follows the
+    /// real flow (Boot → role routing). The asset is looked up <b>from Build Settings</b> by file
+    /// name (<c>Boot</c>) rather than a hardcoded path, so moving the scene does not break it.</para>
     ///
-    /// <para><b>Hiçbir süreç öldürülmez — sunucuya HİÇ dokunulmaz.</b> Sunucu üretimde de ayrı
-    /// bir makinede sürekli açık durur ve bu projede <b>tamamen elle</b> yönetilir: editör
-    /// sunucuyu ne başlatır ne durdurur, editör kapanırken de öldürmez. Aksi hâlde elle
-    /// başlatılmış bir sunucu beklenmedik anda ölürdü.</para>
+    /// <para><b>No process is killed — the server is NEVER touched.</b> It is managed entirely by
+    /// hand; the editor must not kill a manually started server at an unexpected moment.</para>
     /// </summary>
     [InitializeOnLoad]
     public static class DevBootstrap
     {
         static DevBootstrap()
         {
-            // Domain reload sonrası çift abonelik olmasın diye önce çıkarıp sonra ekliyoruz.
+            // Remove before add: a domain reload would otherwise double-subscribe.
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
         }
 
-        // ------------------------------------------------------------- play kancaları
+        // ---------------------------------------------------------------- play hooks
 
         private static void OnPlayModeStateChanged(PlayModeStateChange change)
         {
@@ -42,8 +39,8 @@ namespace VortexArena.App.Editor
         }
 
         /// <summary>
-        /// Seçime göre <see cref="EditorSceneManager.playModeStartScene"/> ayarlar: Boot'tan
-        /// başlanacaksa Boot sahne asset'i, aksi hâlde <c>null</c> (açık sahneden başla).
+        /// Sets <see cref="EditorSceneManager.playModeStartScene"/>: the Boot asset, or <c>null</c>
+        /// to start from the open scene.
         /// </summary>
         private static void ApplyPlayModeStartScene()
         {
@@ -68,8 +65,8 @@ namespace VortexArena.App.Editor
         }
 
         /// <summary>
-        /// Build Settings girdileri içinde dosya adı <c>Boot</c> olanı bulur (açık girdi
-        /// önceliklidir). Sabit yol gömülmez — sahne taşınırsa araç kırılmasın.
+        /// Finds the Build Settings entry named <c>Boot</c> (an enabled entry wins). No hardcoded
+        /// path, so moving the scene does not break the tool.
         /// </summary>
         private static SceneAsset FindBootSceneAsset()
         {
@@ -101,11 +98,11 @@ namespace VortexArena.App.Editor
             return fallbackPath != null ? AssetDatabase.LoadAssetAtPath<SceneAsset>(fallbackPath) : null;
         }
 
-        // ----------------------------------------------------------------- kısayol
+        // ---------------------------------------------------------------- shortcut
 
         /// <summary>
-        /// <c>Ctrl+Alt+R</c> — rolü player ↔ admin arasında çevirir. Kısayol kimliği ASCII
-        /// tutulur (Shortcut Manager kimlikleri kullanıcı ayarlarına yazılır).
+        /// <c>Ctrl+Alt+R</c> — toggles player ↔ admin. ⚠️ The shortcut id stays ASCII: Shortcut
+        /// Manager ids are written into the user settings.
         /// </summary>
         [Shortcut("VortexArena/Dev: Rol Degistir", null, KeyCode.R,
             ShortcutModifiers.Action | ShortcutModifiers.Alt)]
@@ -117,15 +114,14 @@ namespace VortexArena.App.Editor
 
             string message = $"Rol: {DevSession.Role}";
 
-            // Görünür geri bildirim: sahne görünümünde bildirim + konsol satırı (kısayola
-            // basıldığı konsoldan da anlaşılsın).
+            // Visible feedback: scene view notification + console line.
             SceneView.lastActiveSceneView?.ShowNotification(new GUIContent(message));
             Debug.Log($"[DevBootstrap] {message} (Ctrl+Alt+R). Seçim: {DevSession.Summary}");
 
             RepaintOpenDevWindows();
         }
 
-        /// <summary>Açık dev pencerelerini tazeler; pencere kapalıysa hiçbir şey yapmaz.</summary>
+        /// <summary>Refreshes the open dev windows; does nothing when no window is open.</summary>
         private static void RepaintOpenDevWindows()
         {
             DevWindow[] windows = Resources.FindObjectsOfTypeAll<DevWindow>();

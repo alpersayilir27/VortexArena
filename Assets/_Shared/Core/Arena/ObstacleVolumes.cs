@@ -3,39 +3,34 @@ using UnityEngine;
 
 namespace VortexArena.Core.Arena
 {
-    /// <summary>
-    /// "Bu nokta bir <b>iç engelin</b> içinde mi" sorusunun <b>tek</b> cevabı
-    /// (<see cref="ArenaLayers.ObstacleName"/> layer'ı, Docs/ArenaNet-Protokol.md §10.9).
-    ///
-    /// <para><b>Neden ayrı bir sınıf:</b> aynı soruyu üç sistem soruyor —
-    /// <c>ObstacleViolationProbe</c> (kafa/el engelin içinde mi → ceza + ateş kapısı),
-    /// <c>ArenaCombat.IsMuzzleBlocked</c> (namlu) ve <c>ArenaCombat.IsWeaponBlocked</c> (silahın
-    /// gövdesi, <see cref="OverlapsBox"/>). Layer maskesi, konvekslik süzgeci, hata satırı ve
-    /// "ClosestPoint içeride noktanın kendisini döner" bilgisi çağıran başına kopyalansaydı biri
-    /// kaçınılmaz olarak sapardı; belirti de "engel bazen çalışmıyor" olurdu.</para>
-    ///
-    /// <para>⚠️ <b>Engel collider'ı KONVEKS olmak zorundadır</b> (Box/Sphere/Capsule ya da
-    /// <c>MeshCollider</c> + <c>Convex</c>). Sebep hayati: <see cref="Collider.ClosestPoint"/>
-    /// non-convex bir <c>MeshCollider</c>'da <b>girdi noktasını AYNEN döndürür</b> → her nokta
-    /// "içeride" okunur → o sahnedeki <b>herkes anında ölmeye başlar</b>. Böyle bir collider burada
-    /// kalıcı olarak <b>yok sayılır</b> (açık başarısızlık: bir hata satırı + hiç ceza yok) ve
-    /// editör tarafında ayrıca taranır (<c>Engel Hacimlerini Denetle</c>).</para>
-    ///
-    /// <para><b>İki kullanım biçimi vardır ve tamponları AYRIDIR:</b>
-    /// <see cref="Sample"/> + <see cref="Contains(Vector3,int)"/> bir kez sorgulayıp <b>çok nokta</b>
-    /// test etmek içindir (gövde ölçümü: tek physics sorgusu, 20+ nokta) ve önbelleği
-    /// <b>son <see cref="Sample"/> çağıranındır</b>; <see cref="ContainsPoint"/> tek atışlıktır ve o
-    /// önbelleğe hiç dokunmaz — atış yolu gövde ölçümünün turunu bozamaz.</para>
-    /// </summary>
+    /// <summary>The single answer to "is this point inside an <b>inner obstacle</b>"
+    /// (the <see cref="ArenaLayers.ObstacleName"/> layer, Docs/ArenaNet-Protokol.md §10.9).</summary>
+    /// <remarks>
+    /// Three systems ask the same question — <c>ObstacleViolationProbe</c> (head/hand → penalty +
+    /// fire gate), <c>ArenaCombat.IsMuzzleBlocked</c> and <c>ArenaCombat.IsWeaponBlocked</c>
+    /// (<see cref="OverlapsBox"/>). Copying the layer mask, the convexity filter and the
+    /// "ClosestPoint returns the point itself when inside" fact per caller would make one of them
+    /// drift, with "obstacles sometimes do not work" as the symptom.
+    /// <para>⚠️ An obstacle collider must be CONVEX (Box/Sphere/Capsule or <c>MeshCollider</c> +
+    /// <c>Convex</c>): on a non-convex <c>MeshCollider</c> <see cref="Collider.ClosestPoint"/>
+    /// returns the input point unchanged → every point reads "inside" → everyone in the scene starts
+    /// dying instantly. Such a collider is permanently ignored here (loud failure: one error line, no
+    /// penalty) and also scanned for in the editor (<c>Engel Hacimlerini Denetle</c>).</para>
+    /// <para>Two usage shapes with SEPARATE buffers: <see cref="Sample"/> +
+    /// <see cref="Contains(Vector3,int)"/> queries once and tests MANY points (body measurement: one
+    /// physics query, 20+ points), its cache belonging to the last <see cref="Sample"/> caller;
+    /// <see cref="ContainsPoint"/> is one-shot and never touches that cache, so the shot path cannot
+    /// spoil a body-measurement pass.</para>
+    /// </remarks>
     public static class ObstacleVolumes
     {
-        /// <summary>Aday engel tavanı. Aşılırsa fazlası yok sayılır — bir oyuncunun etrafında aynı
-        /// anda sekizden çok engel olması sahne kurulumu hatasıdır.</summary>
+        /// <summary>Candidate cap; the excess is ignored — more than eight obstacles around one
+        /// player at once is a scene setup error.</summary>
         public const int MaxCandidates = 8;
 
-        /// <summary>Tek nokta sorgusunun yarıçapı (m). Sıfır yarıçaplı küre bazı sürücülerde hiç
-        /// çakışma bildirmiyor; kesin kararı zaten <see cref="Collider.ClosestPoint"/> veriyor,
-        /// bu yarıçap yalnız aday toplamak için.</summary>
+        /// <summary>Radius of the single-point query (m). A zero-radius sphere reports no overlap on
+        /// some drivers; the decisive answer comes from <see cref="Collider.ClosestPoint"/> anyway,
+        /// this radius only gathers candidates.</summary>
         private const float PointQueryRadius = 0.01f;
 
         private static readonly Collider[] Candidates = new Collider[MaxCandidates];
@@ -44,26 +39,22 @@ namespace VortexArena.Core.Arena
         private static readonly Collider[] BoxCandidates = new Collider[MaxCandidates];
         private static readonly Collider[] ClearanceCandidates = new Collider[MaxCandidates];
 
-        /// <summary>Konveks olmadığı için elenen collider'lar — uyarı bir kez basılsın diye.</summary>
+        /// <summary>Colliders rejected for not being convex — so the warning is logged once.</summary>
         private static readonly HashSet<int> Rejected = new HashSet<int>();
 
-        /// <summary>
-        /// "İçeride" diyen son collider — yalnız <b>teşhis</b> içindir (hangi engel tetikledi).
-        /// Kural yazarken buna bakma: cevap <see cref="Contains(Vector3,int)"/>'in dönüşüdür.
-        /// </summary>
+        /// <summary>The last collider that said "inside" — DIAGNOSTICS only. Do not write rules
+        /// against it: the answer is the return of <see cref="Contains(Vector3,int)"/>.</summary>
         public static Collider LastHit { get; private set; }
 
-        /// <summary>
-        /// Verilen küre içindeki engel adaylarını toplar ve sınırlayıcı kutularını <b>tur başına bir
-        /// kez</b> okur (<see cref="Collider.bounds"/> her erişimde native'e iner). Dönüş, sonraki
-        /// <see cref="Contains(Vector3,int)"/> çağrılarına verilecek aday sayısıdır.
-        /// </summary>
+        /// <summary>Collects obstacle candidates inside the given sphere and reads their bounds once
+        /// per pass (<see cref="Collider.bounds"/> goes native on every access). Returns the
+        /// candidate count to pass to <see cref="Contains(Vector3,int)"/>.</summary>
         public static int Sample(Vector3 center, float radius)
         {
             int mask = ArenaLayers.ObstacleMask;
             if (mask == 0)
             {
-                return 0; // layer tanımsız — ArenaLayers zaten bir kez bağırdı
+                return 0; // layer undefined — ArenaLayers already shouted once
             }
 
             int count = Physics.OverlapSphereNonAlloc(center, radius, Candidates, mask,
@@ -90,18 +81,16 @@ namespace VortexArena.Core.Arena
             return kept;
         }
 
-        /// <summary>
-        /// Nokta, <see cref="Sample"/>'ın topladığı adaylardan <b>herhangi birinin</b> içinde mi
-        /// (birlik semantiği): iki kutunun ek yerinde duran kafa aksi hâlde "hiçbirinin tam içinde
-        /// değil" diye kaçardı.
-        /// </summary>
+        /// <summary>Is the point inside ANY of the candidates <see cref="Sample"/> gathered (union
+        /// semantics): otherwise a head at the seam of two boxes would escape as "not fully inside
+        /// either".</summary>
         public static bool Contains(Vector3 point, int count)
         {
             for (int i = 0; i < count; i++)
             {
                 if (!CandidateBounds[i].Contains(point))
                 {
-                    continue; // ucuz AABB elemesi — noktaların çoğu buradan döner
+                    continue; // cheap AABB reject — most points return here
                 }
 
                 Collider collider = Candidates[i];
@@ -117,10 +106,8 @@ namespace VortexArena.Core.Arena
             return false;
         }
 
-        /// <summary>
-        /// Tek nokta için sorgu + test (kendi tamponu). Atış yolu bunu kullanır: atış başına bir
-        /// physics sorgusu, 600 RPM'de saniyede on sorgu.
-        /// </summary>
+        /// <summary>Query + test for a single point (own buffer). Used by the shot path: one physics
+        /// query per shot, ten per second at 600 RPM.</summary>
         public static bool ContainsPoint(Vector3 point)
         {
             int mask = ArenaLayers.ObstacleMask;
@@ -151,33 +138,27 @@ namespace VortexArena.Core.Arena
             return false;
         }
 
-        /// <summary>
-        /// Noktanın en yakın engel <b>YÜZEYİNE</b> uzaklığı (m), <paramref name="maxDistance"/> ile
-        /// tavanlanmış: o yarıçapta hiç engel yoksa <paramref name="maxDistance"/> döner, nokta bir
-        /// engelin <b>içindeyse</b> <c>0</c>.
-        ///
-        /// <para><b>Neden ayrı bir soru:</b> <see cref="Contains(Vector3,int)"/> "içeride mi" der ve
-        /// bu, <b>görüşün</b> kapatılması için geç bir cevaptır — kameranın kırpma düzlemi göz
-        /// noktasının birkaç santim ÖNÜNDEDİR, yani geometri göz henüz dışarıdayken kırpılmaya
-        /// başlar ve katı cismin içi okunur. Kırpmadan önce karar verebilmenin tek yolu yüzeye olan
-        /// gerçek uzaklıktır (tüketicisi <c>ObstacleViolationProbe</c>'un karartma kapısı).</para>
-        ///
-        /// <para>⚠️ Ölçüm <b>yalnız dışarıdan</b> anlamlıdır: <see cref="Collider.ClosestPoint"/>
-        /// içerideki bir nokta için noktanın kendisini döner, yani içeride sonuç kaçınılmaz olarak
-        /// <c>0</c>'dır. Bu bir kayıp değil, aranan cevaptır — içerisi zaten en yakın hâldir.</para>
-        ///
-        /// <para>⚠️ <see cref="LastHit"/>'e <b>yazmaz</b>: o alan "içeride diyen son collider"
-        /// teşhisidir ve her karede koşan bir yakınlık ölçümü onu sürekli ezerdi.</para>
-        ///
-        /// <para>Kendi tamponu vardır: <see cref="Sample"/>'ın önbelleğine dokunmaz (gövde ölçümünün
-        /// turu bozulamaz — sınıf özetindeki "tamponlar AYRIDIR" sözleşmesi).</para>
-        /// </summary>
+        /// <summary>Distance from the point to the nearest obstacle SURFACE (m), capped at
+        /// <paramref name="maxDistance"/>; <c>0</c> when the point is inside an obstacle.</summary>
+        /// <remarks>
+        /// Why a separate question: <see cref="Contains(Vector3,int)"/> answers "inside", which is
+        /// too late for closing the VIEW — the camera's near plane sits a few centimeters in FRONT
+        /// of the eye, so geometry starts clipping while the eye is still outside and the inside of
+        /// the solid becomes readable. Deciding before clipping needs the real surface distance
+        /// (consumer: <c>ObstacleViolationProbe</c>'s fade gate).
+        /// <para>⚠️ Only meaningful from outside: <see cref="Collider.ClosestPoint"/> returns the
+        /// point itself when inside, so the result inside is inevitably 0 — which is the wanted
+        /// answer, inside is already the closest state.</para>
+        /// <para>⚠️ Does NOT write <see cref="LastHit"/>: that field is the "last collider that said
+        /// inside" diagnostic, and a per-frame proximity measurement would keep overwriting it.</para>
+        /// <para>Has its own buffer — never touches <see cref="Sample"/>'s cache.</para>
+        /// </remarks>
         public static float DistanceToSurface(Vector3 point, float maxDistance)
         {
             int mask = ArenaLayers.ObstacleMask;
             if (mask == 0)
             {
-                return maxDistance; // layer tanımsız — ArenaLayers zaten bir kez bağırdı
+                return maxDistance; // layer undefined — ArenaLayers already shouted once
             }
 
             int count = Physics.OverlapSphereNonAlloc(point, maxDistance, ClearanceCandidates, mask,
@@ -202,7 +183,7 @@ namespace VortexArena.Core.Arena
                     nearest = distance;
                     if (nearest <= 0f)
                     {
-                        break; // içerideyiz — daha yakını yok
+                        break; // inside — nothing can be closer
                     }
                 }
             }
@@ -210,20 +191,18 @@ namespace VortexArena.Core.Arena
             return nearest;
         }
 
-        /// <summary>
-        /// Yönlendirilmiş bir <b>kutu</b> herhangi bir engelle kesişiyor mu. Tek tüketicisi silahın
-        /// gövde testidir: "namlu içeride mi" sorusu tek noktadır, "silahın herhangi bir parçası
-        /// değiyor mu" ise bir <b>hacim</b> sorusudur ve nokta örneklemesiyle cevaplanamaz (dipçikle
-        /// duvara değen silah hiçbir örnek noktasını içeride bulmayabilir).
-        /// <para>⚠️ Buradaki testin <see cref="Contains(Vector3,int)"/>'ten farkı, <b>konveks olmayan
-        /// collider'ları da doğru yanıtlamasıdır</b>: kutu-mesh kesişimi <c>ClosestPoint</c>'e
-        /// dayanmaz, yani o API'nin "her nokta içeride" yalanı buraya bulaşmaz. Bu yüzden konvekslik
-        /// süzgeci uygulanmaz — kural olarak layer konveks olmalıdır, ama olmayan bir collider
-        /// burada <b>sessizce yanlış cevap vermek yerine</b> doğru cevap verir.</para>
-        /// </summary>
-        /// <param name="center">Kutunun DÜNYA merkezi.</param>
-        /// <param name="halfExtents">Kutunun yarı ölçüleri (dünya birimi).</param>
-        /// <param name="rotation">Kutunun dünya rotasyonu.</param>
+        /// <summary>Does an oriented BOX intersect any obstacle. Its only consumer is the weapon body
+        /// test: "is the muzzle inside" is a point question, "does any part of the weapon touch" is a
+        /// VOLUME question that point sampling cannot answer (a weapon touching a wall with its stock
+        /// may have no sample point inside).
+        /// <para>⚠️ Unlike <see cref="Contains(Vector3,int)"/> this also answers correctly for
+        /// non-convex colliders: box-mesh intersection does not rely on <c>ClosestPoint</c>, so that
+        /// API's "every point is inside" lie does not reach here. Hence no convexity filter — the
+        /// layer must be convex as a rule, but a collider that is not gets a correct answer here
+        /// instead of a silently wrong one.</para></summary>
+        /// <param name="center">WORLD center of the box.</param>
+        /// <param name="halfExtents">Half extents of the box (world units).</param>
+        /// <param name="rotation">World rotation of the box.</param>
         public static bool OverlapsBox(Vector3 center, Vector3 halfExtents, Quaternion rotation)
         {
             int mask = ArenaLayers.ObstacleMask;
@@ -249,21 +228,16 @@ namespace VortexArena.Core.Arena
             return false;
         }
 
-        /// <summary>
-        /// Konveks collider'da <b>içerideki</b> bir nokta için <see cref="Collider.ClosestPoint"/>
-        /// noktanın KENDİSİNİ döner. ⚠️ Tersi ölçülemez: içeriden yüzey mesafesi bu API ile
-        /// alınamaz, o yüzden "merkez yüzeye şu kadar uzak" gibi bir derinlik hesabı yazılamaz —
-        /// derinlik ancak <b>birden çok nokta</b> örnekleyerek yaklaşıklanır (kafa küresi böyle
-        /// çalışıyor).
-        /// </summary>
+        /// <summary>On a convex collider <see cref="Collider.ClosestPoint"/> returns the point ITSELF
+        /// when it is inside. ⚠️ The inverse is not measurable: surface distance from inside cannot be
+        /// obtained through this API, so no depth computation can be written — depth is only
+        /// approximated by sampling MULTIPLE points (as the head sphere does).</summary>
         private static bool IsPointInside(Collider collider, Vector3 point) =>
             (collider.ClosestPoint(point) - point).sqrMagnitude <= 1e-8f;
 
-        /// <summary>
-        /// ⚠️ <b>Non-convex <see cref="MeshCollider"/> KULLANILAMAZ</b> (gerekçe sınıf özetinde).
-        /// Böyle bir collider kalıcı olarak yok sayılır ve bir kez rapor edilir — açık
-        /// başarısızlık, sessiz katliam değil.
-        /// </summary>
+        /// <summary>⚠️ A non-convex <see cref="MeshCollider"/> is UNUSABLE (rationale in the class
+        /// summary). Such a collider is permanently ignored and reported once — loud failure rather
+        /// than a silent massacre.</summary>
         private static bool IsUsable(Collider collider)
         {
             if (collider is not MeshCollider mesh || mesh.convex)

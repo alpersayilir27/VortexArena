@@ -2,72 +2,62 @@ using UnityEngine;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>
-    /// "Kumanda anchor'ı verildiğinde oyuncunun AVUCU nerede duruyor" sorusunun TEK cevabı.
-    /// <para>
-    /// <b>Neden gerekli:</b> kavramanın referansı bugüne kadar <c>OVRCameraRig.leftHandAnchor</c> /
-    /// <c>rightHandAnchor</c> idi, oysa oyuncunun gördüğü şey kumanda değil <b>sentetik eldir</b> —
-    /// anchor ile avuç arasındaki birkaç santimlik fark, silahı elin içinden geçmiş ya da havada
-    /// duruyor gösteriyor. Bu sınıf o farkı tek yerde tanımlar; anchor'a doğrudan bakan her tüketici
-    /// (<see cref="VortexArena.Core.Combat.Weapon"/>, <c>WeaponGranter</c>,
-    /// <c>WeaponFrame</c>, <see cref="RemoteAvatar"/>) buradan geçer.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Uzak taraf da buradan geçmek ZORUNDA</b>: telde giden el pozu anchor pozudur (§6.6),
-    /// ofset iki uçta da aynı yerden uygulanmazsa aynı silah iki ekranda iki ayrı duruşta çizilir.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b><see cref="HandGripConvention"/> ile karıştırma:</b> o "anchor uzayında el hangi YÖNE
-    /// bakıyor" sorusunu (humanoid bileğe köprü) cevaplıyor, burası "anchor'a göre avuç NEREDE"
-    /// sorusunu. İkisi ayrı sabitlerdir ve ayrı kalmalıdır — birleştirilirse uzak gövdenin bileği
-    /// ile silahın duruşu tek sayıya bağlanır, biri ayarlanınca öteki bozulur.
-    /// </para>
-    /// </summary>
+    /// <summary>The SINGLE answer to "given the controller anchor, where is the player's PALM".</summary>
+    /// <remarks>
+    /// <b>Why needed:</b> grabbing used to reference <c>OVRCameraRig.leftHandAnchor</c> /
+    /// <c>rightHandAnchor</c>, but what the player sees is the <b>synthetic hand</b>, not the controller —
+    /// the few centimetres between anchor and palm make the weapon look like it passes through the hand
+    /// or floats. This class defines that delta in one place; every consumer that looks at the anchor
+    /// (<see cref="VortexArena.Core.Combat.Weapon"/>, <c>WeaponGranter</c>, <c>WeaponFrame</c>,
+    /// <see cref="RemoteAvatar"/>) goes through here.
+    /// <para>⚠️ <b>The remote side MUST go through here too</b>: the hand pose on the wire is the anchor
+    /// pose (§6.6), and if the offset is not applied from the same place at both ends the same weapon is
+    /// drawn in two different poses on two screens.</para>
+    /// <para>⚠️ <b>Do not confuse with <see cref="HandGripConvention"/>:</b> that answers "which
+    /// DIRECTION does the hand face in anchor space" (bridge to the humanoid wrist), this one "WHERE is
+    /// the palm relative to the anchor". Separate constants that must stay separate — merged, the remote
+    /// body's wrist and the weapon's pose would hang on one number and tuning one would break the
+    /// other.</para>
+    /// </remarks>
     public static class HandGripPivot
     {
-        /// <summary>
-        /// Kumanda anchor'ından SOL avuca ofset — anchor uzayında, METRE. <b>SIFIRDIR:</b> avuç,
-        /// kumanda anchor'ının ta kendisi sayılır.
-        /// <para>
-        /// ⚠️ <b>Buraya tahmin edilmiş bir sayı YAZILMAZ.</b> Burada duran değer ölçülmemiş bir
-        /// ergonomi tahminiydi ve iki zarar veriyordu: (1) silahın yerini kumandanın gerçek
-        /// pozundan koparıyor, yani "silah tam elimde durmuyor" şikâyetine ikinci, gizli bir terim
-        /// ekliyordu; (2) altı silahın kavrama verisi zaten bu ofsetin ÜSTÜNE ayarlandığı için iki
-        /// ayrı düğme aynı şeyi ayarlıyordu ve hangisinin bozuk olduğu ayırt edilemiyordu.
-        /// Silahın elde nerede durduğu tek yerden gelir: <c>WD_*.asset</c>'e stüdyoda yazılmış
-        /// kavrama kaydı (<see cref="VortexArena.Core.Combat.ItemGripPose"/>).
-        /// </para>
-        /// <para>
-        /// Gerçekten ölçülmüş bir bilek ofseti gerekirse (<see cref="HandGripCalibrationProbe"/>
-        /// başlıkta çalıştırılıp okunur) yeri yine burasıdır — sınıf tam bu yüzden duruyor.
-        /// Kimlik dönüşümün arkasında bir kapı bırakmak <c>ArenaSpace</c> ile aynı desendir.
-        /// </para>
-        /// </summary>
+        /// <summary>Offset from the controller anchor to the LEFT palm — anchor space, METRES.
+        /// <b>ZERO:</b> the palm is taken to be the controller anchor itself.</summary>
+        /// <remarks>
+        /// ⚠️ <b>Do not write an estimated number here.</b> The value that used to sit here was an
+        /// unmeasured ergonomic guess and did two kinds of damage: (1) it detached the weapon's position
+        /// from the controller's real pose, adding a second hidden term to "the weapon does not sit right
+        /// in my hand"; (2) every weapon's grip data was already tuned ON TOP of this offset, so two
+        /// separate knobs adjusted the same thing and neither could be identified as the broken one.
+        /// Where the weapon sits in the hand comes from one place: the grip record written in the studio
+        /// into <c>WD_*.asset</c> (<see cref="VortexArena.Core.Combat.ItemGripPose"/>).
+        /// <para>If a genuinely measured wrist offset is ever needed (run
+        /// <see cref="HandGripCalibrationProbe"/> on device), this is still its place — that is exactly
+        /// why the class exists. Leaving a door behind an identity transform is the same pattern as
+        /// <c>ArenaSpace</c>.</para>
+        /// </remarks>
         public static readonly Vector3 LeftPalmOffset = Vector3.zero;
 
-        /// <summary>Kumanda anchor'ından SAĞ avuca ofset — gerekçe
-        /// <see cref="LeftPalmOffset"/>'te.</summary>
+        /// <summary>Offset from the controller anchor to the RIGHT palm — rationale in
+        /// <see cref="LeftPalmOffset"/>.</summary>
         public static readonly Vector3 RightPalmOffset = Vector3.zero;
 
-        /// <summary>El başına avuç ofseti (anchor uzayı, metre).</summary>
+        /// <summary>Per-hand palm offset (anchor space, metres).</summary>
         public static Vector3 PalmOffset(bool rightHand)
         {
             return rightHand ? RightPalmOffset : LeftPalmOffset;
         }
 
-        /// <summary>
-        /// Anchor pozundan avuç pozunu türetir.
-        /// <para>
-        /// ⚠️ <b>Rotasyon BİLEREK anchor'ın kendisidir</b> ve
-        /// <see cref="HandGripConvention.AnchorBasis"/> buraya karıştırılmaz: o baz uzak gövdenin
-        /// bileğini humanoid eksene köprülemek için var. İkisi tek sabite bağlanırsa bileği
-        /// düzeltmek silahın duruşunu bozar (ve tersi). Ayrıca stüdyoda yazılan kavrama kayıtları
-        /// anchor uzayındadır (<c>ItemGripPose</c>) — dönüşü değiştirmek her silahın kavramasını bir
-        /// anda geçersiz kılardı.
-        /// </para>
-        /// <para>⚠️ <c>Transform.TransformPoint</c> DEĞİL elle bileşim: ofset METRE cinsindendir,
-        /// rig'in ölçeği 1 olmasa bile büyütülmemeli (projede tekrarlanan kural).</para>
-        /// </summary>
+        /// <summary>Derives the palm pose from the anchor pose.</summary>
+        /// <remarks>
+        /// ⚠️ <b>The rotation is DELIBERATELY the anchor's own</b> and
+        /// <see cref="HandGripConvention.AnchorBasis"/> is not mixed in: that basis exists to bridge the
+        /// remote body's wrist to humanoid axes. Hanging both on one constant means fixing the wrist
+        /// breaks the weapon pose (and vice versa). Studio grip records are also in anchor space
+        /// (<c>ItemGripPose</c>) — changing the rotation would invalidate every weapon's grip at once.
+        /// <para>⚠️ Manual composition, NOT <c>Transform.TransformPoint</c>: the offset is in METRES and
+        /// must not be scaled even if the rig's scale is not 1 (a recurring rule in this project).</para>
+        /// </remarks>
         public static Pose Resolve(in Pose anchor, bool rightHand)
         {
             return new Pose(
@@ -75,21 +65,18 @@ namespace VortexArena.Core.Player
                 anchor.rotation);
         }
 
-        /// <summary>
-        /// <see cref="Resolve(in Pose, bool)"/>'un <see cref="Transform"/> kolaylığı.
-        /// <para>⚠️ <c>null</c> denetimi YOKTUR ve eklenmez: tüm çağıranlar anchor'ı zaten
-        /// "rig var mı" sorusuyla çözüyor (<c>WeaponGranter.ResolveHandAnchor</c>) ve burada
-        /// sessizce <c>default</c> dönmek silahı dünya orijinine yapıştırırdı.</para>
-        /// </summary>
+        /// <summary><see cref="Transform"/> convenience for <see cref="Resolve(in Pose, bool)"/>.</summary>
+        /// <remarks>⚠️ There is NO <c>null</c> check and none is added: every caller already resolves the
+        /// anchor via "is there a rig" (<c>WeaponGranter.ResolveHandAnchor</c>), and silently returning
+        /// <c>default</c> here would glue the weapon to the world origin.</remarks>
         public static Pose Resolve(Transform anchor, bool rightHand)
         {
             return Resolve(new Pose(anchor.position, anchor.rotation), rightHand);
         }
 
-        /// <summary>
-        /// Kontrolcü sağ el mi. <c>None</c> (çözülemeyen el) SAĞ sayılır —
-        /// <c>Weapon.IsMainHandRight</c> ile AYNI kural: telde "bilinmeyen el" diye bir değer yok.
-        /// </summary>
+        /// <summary>Is this controller the right hand? <c>None</c> (unresolved hand) counts as RIGHT —
+        /// the SAME rule as <c>Weapon.IsMainHandRight</c>: there is no "unknown hand" value on the
+        /// wire.</summary>
         public static bool IsRight(OVRInput.Controller hand)
         {
             return hand != OVRInput.Controller.LTouch;

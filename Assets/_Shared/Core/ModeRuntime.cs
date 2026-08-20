@@ -5,68 +5,69 @@ using VortexArena.Protocol;
 namespace VortexArena.Core
 {
     /// <summary>
-    /// Aktif maçın kurallarının (Docs/ArenaNet-Protokol.md §10.5) <b>tek okuma noktası</b>.
+    /// The <b>single read point</b> for the active match's rules (Docs/ArenaNet-Protokol.md §10.5).
     /// <para>
-    /// <b>Otorite sunucudadır:</b> değerler <c>load_match.rules</c> / <c>welcome.match.rules</c>
-    /// ile gelir. İstemcide <c>if (modeId == "…")</c> zinciri YOKTUR — yeni mod eklemek istemci
-    /// kodunu değiştirmez.
+    /// <b>Authority lives on the server:</b> the values arrive via <c>load_match.rules</c> /
+    /// <c>welcome.match.rules</c>. There is NO <c>if (modeId == "…")</c> chain on the client — adding
+    /// a new mode does not change client code.
     /// </para>
     /// <para>
-    /// <b>Neden tek nokta:</b> canlanma (<c>PlayerCombatState</c>), skor satırı (<c>ModeHudBase</c>),
-    /// silah kaynağı ve admin takım kipi (<c>AdminRoster</c>) aynı bilgiyi ister. Dördü ayrı ayrı
-    /// <c>load_match</c> dinlerse dördü ayrı ayrı bayatlar; tek okuma + tek besleme noktası bunu
-    /// yapısal olarak imkânsız kılar.
+    /// <b>Why a single point:</b> revive (<c>PlayerCombatState</c>), the score row (<c>ModeHudBase</c>),
+    /// the weapon source and the admin team mode (<c>AdminRoster</c>) all want the same information.
+    /// If all four listened to <c>load_match</c> separately, all four would go stale separately; one
+    /// read point + one feed point makes that structurally impossible.
     /// </para>
     /// <para>
-    /// Durum ve olay <b>statiktir</b> (<c>AdminSelection</c> deseni): dinleyiciler beslemenin ne
-    /// zaman kurulduğunu bilmek zorunda kalmasın. Besleme <see cref="ModeRuntimePump"/> tarafından
-    /// yapılır ve o kendini önyükler.
+    /// State and event are <b>static</b> (the <c>AdminSelection</c> pattern) so listeners do not have
+    /// to know when the feed was set up. The feed is driven by <see cref="ModeRuntimePump"/>, which
+    /// bootstraps itself.
     /// </para>
     /// </summary>
     public static class ModeRuntime
     {
-        /// <summary>Admin arayüzünün de okuduğu katalog kaynak adı (uzantısız).</summary>
+        /// <summary>Catalog resource name (without extension), the same one the admin UI reads.</summary>
         private const string CatalogResourceName = "GameCatalog";
 
-        /// <summary>Kurallar değiştiğinde (ana thread).</summary>
+        /// <summary>Raised when the rules change (main thread).</summary>
         public static event Action Changed;
 
-        /// <summary>Kuralların hangi moda ait olduğu; hiç maç yüklenmediyse boş.</summary>
+        /// <summary>Which mode the rules belong to; empty if no match has ever been loaded.</summary>
         public static string ModeId { get; private set; } = "";
 
         public static ModeTeamMode Teams { get; private set; } = ModeTeamMode.TwoTeams;
 
         public static ModeScoreKind Scoring { get; private set; } = ModeScoreKind.Team;
 
-        /// <summary>true = takım arkadaşı vurulabilir. Karar sunucudadır; istemci yalnız gösterir.</summary>
+        /// <summary>true = teammates can be hit. The decision lives on the server; the client only displays it.</summary>
         public static bool FriendlyFire { get; private set; }
 
         public static ModeReviveAnchor Revive { get; private set; } = ModeReviveAnchor.OwnBase;
 
         public static ModeWeaponSource Weapons { get; private set; } = ModeWeaponSource.WeaponCanvas;
 
-        /// <summary>Ölüm → en erken canlanma süresi; sunucunun <c>respawn.delaySeconds</c>'ı ile
-        /// aynı değerdir (ikisi de modun kuralından beslendiği için çakışmazlar).
-        /// <para><b><c>0</c> geçerli bir değerdir</b> (anında canlanma) — varsayılana çekilmez.
-        /// Alan telde hiç gelmezse DTO'nun kendi başlangıcı (<c>RESPAWN_DELAY</c>) geçerlidir,
-        /// yani "yazılmadı" ile "sıfır yazıldı" birbirine karışmaz.</para></summary>
+        /// <summary>Death → earliest revive time; the same value as the server's
+        /// <c>respawn.delaySeconds</c> (they cannot diverge because both are fed from the mode's rule).
+        /// <para><b><c>0</c> is a valid value</b> (instant revive) — it is not snapped back to the
+        /// default. If the field never arrives on the wire, the DTO's own initializer
+        /// (<c>RESPAWN_DELAY</c>) applies, so "not written" and "written as zero" do not get confused.</para></summary>
         public static float RespawnDelay { get; private set; } = ArenaProtocol.RESPAWN_DELAY;
 
         /// <summary>
-        /// Faz <c>playing</c> değilken silah ateşlenebilir mi (§10.5 <c>fireWhilePaused</c>).
-        /// Lobi türünde <c>true</c>: hedef atışı yapılır, namlu alevi herkese relay edilir — ama
-        /// <b>hasar yine yoktur</b>, onu sunucu fazdan kapatır (§10.3).
-        /// <para>⚠️ Bu alan sayesinde istemcide <c>if (modeId == "lobby")</c> zinciri doğmaz;
-        /// "burada ateş edilir mi" sorusunun tek cevabı buradadır.</para>
+        /// Whether the weapon can be fired while the phase is not <c>playing</c>
+        /// (§10.5 <c>fireWhilePaused</c>). <c>true</c> in the lobby type: target practice happens and
+        /// the muzzle flash is relayed to everyone — but there is <b>still no damage</b>, the server
+        /// shuts that off based on the phase (§10.3).
+        /// <para>⚠️ Thanks to this field no <c>if (modeId == "lobby")</c> chain is born on the client;
+        /// this is the single answer to "can we fire here".</para>
         /// </summary>
         public static bool FireWhilePaused { get; private set; }
 
-        /// <summary>Takımsız mod kısayolu — çağıranların enum karşılaştırmasını tekrarlamaması için.</summary>
+        /// <summary>Teamless-mode shortcut — so callers do not repeat the enum comparison.</summary>
         public static bool IsTeamless => Teams == ModeTeamMode.None;
 
         /// <summary>
-        /// Sunucudan gelen kural şeklini uygular. <paramref name="info"/> <c>null</c> ise
-        /// (kuralları taşımayan bir sunucu) katalog devralır — bkz. <see cref="ApplyFromCatalog"/>.
+        /// Applies the rule shape coming from the server. If <paramref name="info"/> is <c>null</c>
+        /// (a server that does not carry rules), the catalog takes over — see <see cref="ApplyFromCatalog"/>.
         /// </summary>
         public static void Apply(string modeId, ModeRulesInfo info)
         {
@@ -87,12 +88,14 @@ namespace VortexArena.Core
         }
 
         /// <summary>
-        /// Kurallar telde gelmediğinde (kuralları taşımayan bir sunucu) <see cref="ModeDefinition"/>
-        /// önizleme değerlerini uygular; mod katalogda yoksa varsayılana döner.
+        /// When the rules do not arrive on the wire (a server that does not carry rules), applies the
+        /// <see cref="ModeDefinition"/> preview values; falls back to the defaults if the mode is not
+        /// in the catalog.
         /// <para>
-        /// ⚠ <b>Sapmada SUNUCU kazanır.</b> <see cref="ModeDefinition"/>'daki kural alanları yalnız
-        /// arayüz/önizleme içindir — gerçek bir <c>load_match</c> geldiği anda bu değerler ezilir.
-        /// (<c>roundSeconds</c>/<c>scoreLimit</c> için bugün de geçerli olan sözleşmenin aynısı.)
+        /// ⚠ <b>On divergence the SERVER wins.</b> The rule fields in <see cref="ModeDefinition"/> are
+        /// for the UI/preview only — the moment a real <c>load_match</c> arrives these values are
+        /// overwritten. (The very same contract that already applies to
+        /// <c>roundSeconds</c>/<c>scoreLimit</c>.)
         /// </para>
         /// </summary>
         public static void ApplyFromCatalog(string modeId)
@@ -104,28 +107,29 @@ namespace VortexArena.Core
                 return;
             }
 
-            // Serbest atış ayrı bir SO alanı DEĞİL, lobi profilinin türevidir: iki alanı da elle
-            // işaretlemek "lobi ama ateş kapalı" gibi anlamsız bir kombinasyonu mümkün kılardı.
-            // Otorite yine sunucuda (rules.fireWhilePaused); burası yalnız kuralsız telin yedeği.
+            // Free firing is NOT a separate SO field, it is derived from the lobby profile: ticking
+            // both fields by hand would make a meaningless combination like "lobby but firing off"
+            // possible. Authority is still on the server (rules.fireWhilePaused); this is only the
+            // fallback for a wire without rules.
             Set(modeId, mode.TeamMode, mode.Scoring, mode.FriendlyFire,
                 mode.Revive, mode.Weapons, mode.RespawnDelay, mode.IsLobbyProfile);
         }
 
-        /// <summary>Varsayılana (takımlı TDM) döner — açık sahneye dönüşte ve bağlantı kopunca.</summary>
+        /// <summary>Returns to the default (team-based TDM) — on returning to the open scene and on disconnect.</summary>
         public static void Reset(string modeId = "")
         {
             Set(modeId, ModeTeamMode.TwoTeams, ModeScoreKind.Team, false,
                 ModeReviveAnchor.OwnBase, ModeWeaponSource.WeaponCanvas, ArenaProtocol.RESPAWN_DELAY, false);
         }
 
-        // ---------------------------------------------------------------- iç işler
+        // ---------------------------------------------------------------- internals
 
         private static void Set(string modeId, ModeTeamMode teams, ModeScoreKind scoring,
             bool friendlyFire, ModeReviveAnchor revive, ModeWeaponSource weapons, float respawnDelay,
             bool fireWhilePaused)
         {
             string id = modeId ?? "";
-            // 0 korunur (anında canlanma); yalnız anlamsız negatif kırpılır.
+            // 0 is preserved (instant revive); only a meaningless negative is clamped.
             float delay = Mathf.Max(0f, respawnDelay);
 
             bool changed = id != ModeId || teams != Teams || scoring != Scoring ||
@@ -155,15 +159,15 @@ namespace VortexArena.Core
                 return null;
             }
 
-            // Katalog admin arayüzüyle aynı yerden okunur (Assets/_Shared/Data/Resources/).
-            // Bulunamazsa sessizce varsayılana düşülür: bu yol yalnız kurallar telde
-            // gelmediğinde koşar, sahada kurallar her zaman sunucudan gelir.
+            // The catalog is read from the same place as the admin UI (Assets/_Shared/Data/Resources/).
+            // If it is not found we silently fall back to the defaults: this path only runs when the
+            // rules did not arrive on the wire; in the field the rules always come from the server.
             var catalog = Resources.Load<GameCatalog>(CatalogResourceName);
             return catalog != null ? catalog.FindMode(modeId) : null;
         }
 
-        // Ayrıştırma kuralı (§10.5): BİLİNMEYEN/BOŞ DEĞER VARSAYILANA DÜŞER. Bu sayede yeni bir
-        // kural değeri eklemek eski istemciyi kırmaz ve PROTOCOL_VERSION artmaz.
+        // Parsing rule (§10.5): AN UNKNOWN/EMPTY VALUE FALLS BACK TO THE DEFAULT. Thanks to this,
+        // adding a new rule value does not break an old client and PROTOCOL_VERSION does not bump.
 
         private static ModeTeamMode ParseTeams(string value)
         {

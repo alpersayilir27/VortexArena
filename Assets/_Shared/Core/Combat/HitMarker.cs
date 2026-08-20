@@ -3,62 +3,54 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// <b>İsabet göstergesi:</b> vuruşun değdiği noktada kısa süre yanıp sönerek kaybolan bir X.
-    /// Oyuncunun "vurdum" geri bildirimidir — can sunucudan gelene kadar (§10.3) ekranda hiçbir
-    /// şey değişmediği için tetiği çeken oyuncu isabetini başka türlü göremez.
-    ///
-    /// <para><b>YALNIZ vuran oyuncu görür ve bu bir süzme DEĞİL, yapısaldır:</b> tek çağıranı
-    /// <see cref="ArenaCombat.ReportHit"/>'tir ve o metot yalnız hasarı VEREN istemcide koşar.
-    /// Protokolde karşılığı YOKTUR ve eklenmez — telde bir "isabet göstergesi" mesajı olsaydı
-    /// vurulan oyuncu da kendi gövdesinde X görürdü.</para>
-    ///
-    /// <para><b>Görünüm koddan DEĞİL editörden ayarlanır:</b> boy, saydamlık, ömür, eğriler,
-    /// kontur, materyal ve dilersen görünümün tamamının yerini alan bir prefab
-    /// <see cref="HitMarkerStyle"/> asset'indedir
-    /// (<c>Assets/_Shared/Data/Resources/HitMarkerStyle.asset</c>). Asset yoksa koddaki
-    /// varsayılanlarla çalışır. ⚠️ Buradaki sabitler <b>ayar değildir</b>: havuzun büyüklüğü ve
-    /// shader arama zinciri gibi, editörde ayarlanmasının anlamı olmayan yapısal değerlerdir.</para>
-    ///
-    /// <para><b>Sahnede hiçbir kurulum adımı yoktur</b> (<see cref="ShotTracer"/> /
-    /// <see cref="WeaponGranter"/> kalıbı): ilk isabette kendini önyükler,
-    /// <c>DontDestroyOnLoad</c> olur ve harita değişiminde havuzu korur. Sahneye bileşen koymak
-    /// her yeni arenaya elle bir adım eklerdi — ayarın <c>Resources</c>'ta yaşamasının sebebi de
-    /// budur (bağlanacak bir referans alanı yok).</para>
-    ///
-    /// <para><b>Neden prosedürel X iki <see cref="LineRenderer"/> ile çiziliyor</b> (doku + quad
-    /// değil): çizgi geometrisi her mesafede keskindir, doku üretmeyi/yüklemeyi gerektirmez ve tam
-    /// olarak <see cref="ShotTracer"/>'ın kanıtlanmış yolunu kullanır — paylaşılan materyal +
-    /// vertex rengi (materyal örneği açılmadığı için SRP batch'i bölünmez). İki çizgi ayrı olmak
-    /// zorunda: bir X tek bir polyline ile birleştirici bir kenar çizmeden ifade edilemez.
-    /// Kendi görselini isteyen zaten prefab yolunu kullanır.</para>
-    ///
-    /// <para>⚠️ <b>İşaret dünyada SABİT bir noktada durur, hedefe yapışmaz.</b> Vuruşun nerede
-    /// olduğunu gösterir; hedefin çocuğu yapılsaydı ölüp yok olan ya da ışınlanan bir avatarla
-    /// birlikte kaçardı. Ömür bu yüzden kısadır — hedef bu sürede kayda değer uzaklaşamaz.</para>
-    ///
-    /// <para>⚠️ <b>Duvar arkasından görünmez:</b> derinlik testi açıktır. İşaret hep ışının
-    /// GERÇEKTEN değdiği noktada durur, yani hitscan vuruşta tanım gereği görünür; siperin
-    /// arkasına düşen bir alan-etkisi vuruşunda görünmemesi doğrudur.</para>
+    /// Hit marker: an X that flashes briefly at the point of impact. The player's "I hit" feedback —
+    /// nothing else changes on screen until health arrives from the server (§10.3).
+    /// <para>ONLY the shooter sees it, structurally rather than by filtering: its single caller is
+    /// <see cref="ArenaCombat.ReportHit"/>, which runs only on the client DEALING the damage. No
+    /// protocol counterpart and none is added — a "hit marker" wire message would draw an X on the
+    /// victim's own body too.</para>
+    /// <para>The look is tuned in the editor, not in code: size, transparency, lifetime, curves,
+    /// outline, material and optionally a prefab replacing the whole look live in the
+    /// <see cref="HitMarkerStyle"/> asset
+    /// (<c>Assets/_Shared/Data/Resources/HitMarkerStyle.asset</c>); without it the code defaults
+    /// apply. ⚠️ The constants here are NOT settings — pool size and shader search chain are
+    /// structural values with no meaning in the Inspector.</para>
+    /// <para>No scene setup step (<see cref="ShotTracer"/> / <see cref="WeaponGranter"/> pattern):
+    /// self-bootstraps on the first hit, goes <c>DontDestroyOnLoad</c> and keeps its pool across map
+    /// changes. A scene component would add a manual step to every new arena — which is also why the
+    /// settings live in <c>Resources</c> (there is no reference field to bind).</para>
+    /// <para>Why the procedural X uses two <see cref="LineRenderer"/>s (not texture + quad): line
+    /// geometry is crisp at every distance, needs no texture authoring/loading, and reuses
+    /// <see cref="ShotTracer"/>'s proven path — shared material + vertex color, so no material
+    /// instance splits the SRP batch. Two lines are required: an X cannot be a single polyline
+    /// without drawing a connecting edge. Custom visuals use the prefab path.</para>
+    /// <para>⚠️ The marker stays at a FIXED world point, it does not stick to the target: it shows
+    /// where the hit landed, and parenting it would drag it along with an avatar that dies or
+    /// teleports. Hence the short lifetime — the target cannot move meaningfully within it.</para>
+    /// <para>⚠️ Not visible through walls (depth test on). It always sits where the ray REALLY
+    /// landed, so a hitscan hit shows it by definition; an area-effect hit behind cover correctly
+    /// stays hidden.</para>
     /// </summary>
     public class HitMarker : MonoBehaviour
     {
-        /// <summary>Aynı anda canlı kalabilecek işaret sayısı.</summary>
-        // 600 RPM'de 10 isabet/sn × 0.3 sn ömür ≈ 3 eşzamanlı; alan etkisi (tek patlamada n hedef)
-        // için pay bırakıldı. Havuz dolarsa en eski işaret kesilir — yeni isabeti göstermemek,
-        // bir kare fazla duran X'ten kötüdür.
+        /// <summary>Markers that can be alive at once.</summary>
+        // At 600 RPM: 10 hits/s × 0.3 s lifetime ≈ 3 concurrent; headroom left for area effects
+        // (n targets per blast). When full the oldest is cut — hiding a new hit is worse than an X
+        // lingering one frame.
         private const int PoolSize = 12;
 
-        /// <summary><c>Camera.main</c> bulunamadığında yeniden deneme aralığı (her karede aranmaz).</summary>
+        /// <summary>Retry interval when <c>Camera.main</c> is missing (not searched every frame).</summary>
         private const float CameraRetrySeconds = 1f;
 
         /// <summary>
-        /// Materyalin shader arama zinciri (ilk bulunan kullanılır) — <see cref="ShotTracer"/> ile
-        /// AYNI ve aynı sebeple: "Sprites/Default" Graphics Settings'in <i>Always Included Shaders</i>
-        /// listesindedir, yani build'de kesin paketlenir (yalnız <c>Shader.Find</c> ile bulunan ve
-        /// hiçbir materyalde referanslanmayan shader STRIPLENİR ve işaret sahada sessizce çizilmez).
-        /// Vertex rengini de çarptığı için <c>LineRenderer.startColor</c> ile sönme işler.
-        /// <para>⚠️ Bu zincir yalnız <b>yedektir</b>: kendi materyalini
-        /// <see cref="HitMarkerStyle.LineMaterial"/>'a bağlarsan o kullanılır.</para>
+        /// Shader search chain for the material (first hit wins) — the SAME as
+        /// <see cref="ShotTracer"/>'s, for the same reason: "Sprites/Default" is in Graphics
+        /// Settings' <i>Always Included Shaders</i>, so it survives the build (a shader found only
+        /// via <c>Shader.Find</c> and referenced by no material is STRIPPED, and the marker silently
+        /// never draws on device). It also multiplies vertex color, so
+        /// <c>LineRenderer.startColor</c> fading works.
+        /// <para>⚠️ Only a FALLBACK: a material bound to
+        /// <see cref="HitMarkerStyle.LineMaterial"/> wins.</para>
         /// </summary>
         private static readonly string[] ShaderCandidates =
         {
@@ -67,41 +59,42 @@ namespace VortexArena.Core.Combat
             "Unlit/Color",
         };
 
-        /// <summary>Kontur çizgilerinin sıralama sırası — ana çizginin ARKASINDA kalsınlar.</summary>
-        // Aynı materyal + aynı kuyruk: hangisinin önce çizileceğini yalnız sortingOrder belirler.
-        // Derinlikle çözmeye çalışmak (konturu 1 mm geriye itmek) hem z-fighting'e açık, hem de
-        // işaret yüzeye yakın olduğu için konturu yüzeyin içine gömerdi.
+        /// <summary>Sorting order of the outline lines — they must stay BEHIND the main line.</summary>
+        // Same material + same queue: only sortingOrder decides draw order. Solving it with depth
+        // (pushing the outline back 1 mm) invites z-fighting and, since the marker sits close to the
+        // surface, would bury the outline inside it.
         private const int OutlineSortingOrder = -1;
 
-        /// <summary>Havuz düğümü: bir işaretin sahnedeki bütün parçaları + o an nerede durduğu.</summary>
-        // ⚠️ Düğüm İKİ görünümden birini taşır (prosedürel X ya da prefab örneği) ve hangisi
-        // olduğunu KURULURKEN öğrenir: ayarda prefab değişirse düğüm yeniden kurulur (TakeNode).
+        /// <summary>Pool node: all scene parts of one marker + where it currently sits.</summary>
+        // ⚠️ A node carries ONE of two looks (procedural X or prefab instance) and learns which at
+        // CONSTRUCTION: if the prefab setting changes the node is rebuilt (TakeNode).
         private sealed class MarkerNode
         {
-            /// <summary>Düğümün kökü — prefab yolunda prefab örneğinin kendisidir.</summary>
+            /// <summary>Node root — on the prefab path this is the prefab instance itself.</summary>
             public Transform Root;
 
-            /// <summary>Prosedürel yol: X'in iki kolu ve (varsa) konturun iki kolu.</summary>
+            /// <summary>Procedural path: the X's two arms and (if any) the outline's two arms.</summary>
             public LineRenderer ArmA;
             public LineRenderer ArmB;
             public LineRenderer OutlineA;
             public LineRenderer OutlineB;
 
-            /// <summary>Prefab yolu: örneğin parçacık sistemleri (her isabette baştan oynatılır).</summary>
+            /// <summary>Prefab path: the instance's particle systems (restarted on every hit).</summary>
             public ParticleSystem[] Particles;
 
-            /// <summary>Prefabın kendi ölçeği — boy çarpanı bununla çarpılır, ezilmez.</summary>
+            /// <summary>The prefab's own scale — the size multiplier scales it, never overwrites it.</summary>
             public Vector3 PrefabScale;
 
-            /// <summary>Bu düğüm prefab yoluyla mı kuruldu (ayar değişimini yakalamak için).</summary>
+            /// <summary>Was this node built on the prefab path (to catch a settings change).</summary>
             public bool UsesPrefab;
 
             public bool Active;
 
-            /// <summary>İsabetin dünya noktası — işaret her karede buradan yeniden kurulur.</summary>
+            /// <summary>World point of the hit — the marker is rebuilt from it every frame.</summary>
             public Vector3 Anchor;
 
-            /// <summary>Doğuş anı (<c>Time.unscaledTime</c>): maç duraklatılsa da işaret takılı kalmasın.</summary>
+            /// <summary>Birth time (<c>Time.unscaledTime</c>) so a paused match does not freeze the
+            /// marker on screen.</summary>
             public float StartAt;
         }
 
@@ -120,9 +113,9 @@ namespace VortexArena.Core.Combat
         private static HitMarker _shared;
 
         /// <summary>
-        /// Tüm isabet göstergelerinin kullandığı TEK havuz; ilk istendiğinde kendini kurar ve
-        /// <c>DontDestroyOnLoad</c> olur. Sahneye konmaz, kimse referans bağlamaz — çağıran yalnız
-        /// <c>HitMarker.Shared.Play(nokta)</c> der.
+        /// The ONE pool every hit marker uses; self-bootstraps on first use and goes
+        /// <c>DontDestroyOnLoad</c>. Never placed in a scene, never referenced — callers only say
+        /// <c>HitMarker.Shared.Play(point)</c>.
         /// </summary>
         public static HitMarker Shared
         {
@@ -140,9 +133,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Görünüm ayarı: <c>Resources</c>'taki asset, yoksa koddaki varsayılanlarla dolu bellek
-        /// içi bir örnek. ⚠️ Örnek <b>bir kez</b> açılır ve <see cref="OnDestroy"/> onu yok eder —
-        /// her isabette <c>CreateInstance</c> çağırmak asset olmayan projede sızıntı olurdu.
+        /// Look settings: the asset in <c>Resources</c>, else an in-memory instance holding the code
+        /// defaults. ⚠️ Created ONCE and destroyed in <see cref="OnDestroy"/> — calling
+        /// <c>CreateInstance</c> per hit would leak in a project without the asset.
         /// </summary>
         private HitMarkerStyle Style
         {
@@ -165,15 +158,15 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Verilen dünya noktasında bir isabet işareti başlatır.
-        /// <para>⚠️ Bunu <b>doğrudan çağırma</b>: tek çağıranı <see cref="ArenaCombat.ReportHit"/>'tir
-        /// ve öyle kalmalı. İkinci bir çağıran, vuruşu bildirmeden işaret gösterebilir (oyuncuya
-        /// yalan) ya da bildirdiği hâlde göstermeyi unutabilir — yani "vurdum mu" sorusunun cevabı
-        /// hasar kaynağına göre değişirdi.</para>
-        /// <para>Çizim ilk <c>LateUpdate</c>'te yapılır (aynı kare): burada yalnız havuz düğümü
-        /// ayrılır — kamera o an henüz karenin nihai yerinde değildir.</para>
+        /// Starts a hit marker at the given world point.
+        /// <para>⚠️ Do NOT call directly: the single caller is <see cref="ArenaCombat.ReportHit"/>
+        /// and must stay so. A second caller could show a marker without reporting the hit (lying to
+        /// the player) or report it and forget to show one — the answer to "did I hit" would vary by
+        /// damage source.</para>
+        /// <para>Drawing happens in the first <c>LateUpdate</c> (same frame); here only a pool node
+        /// is reserved, since the camera is not yet at its final pose for this frame.</para>
         /// </summary>
-        /// <returns>İşaret gerçekten kuyruğa alındı mı (düğüm kurulamazsa <c>false</c>).</returns>
+        /// <returns>Whether the marker was actually queued (<c>false</c> if no node could be built).</returns>
         public bool Play(Vector3 worldPoint)
         {
             MarkerNode node = TakeNode();
@@ -186,8 +179,8 @@ namespace VortexArena.Core.Combat
             node.StartAt = Time.unscaledTime;
             node.Active = true;
 
-            // Prefab yolunda parçacıklar baştan oynatılır: havuzdan gelen bir örnek önceki
-            // isabetin parçacıklarını taşıyor olabilir.
+            // On the prefab path particles are restarted: a pooled instance may still carry the
+            // previous hit's particles.
             if (node.UsesPrefab)
             {
                 node.Root.gameObject.SetActive(true);
@@ -198,11 +191,11 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Canlı işaretleri her karede yeniden kurar: göze döndürür, mesafeye göre ölçekler,
-        /// söndürür; ömrü dolanı gizler (havuz düğümü yok EDİLMEZ).
-        /// <para><c>LateUpdate</c>: rig ve kafa <c>Update</c>'te hareket ediyor, daha erken koşan
-        /// bir yönelim bir kare gerideki bakış açısına göre kurulur ve hızlı baş hareketinde X
-        /// eğik görünür.</para>
+        /// Rebuilds live markers each frame: turns them to the eye, scales by distance, fades them,
+        /// and hides expired ones (pool nodes are never destroyed).
+        /// <para><c>LateUpdate</c> because the rig and head move in <c>Update</c>: an earlier pass
+        /// would orient to last frame's viewpoint and the X would look skewed on fast head
+        /// movement.</para>
         /// </summary>
         private void LateUpdate()
         {
@@ -227,8 +220,8 @@ namespace VortexArena.Core.Combat
 
                 float t = (now - node.StartAt) / lifetime;
 
-                // Kamera yoksa (sahne değişimi, admin rig'i kapalı) işaret gizlenir: son bilinen
-                // yönelimde donmuş bir X bırakmak, hiç göstermemekten kötüdür.
+                // With no camera (scene change, admin rig disabled) the marker is hidden: leaving an
+                // X frozen at its last orientation is worse than showing nothing.
                 if (t >= 1f || eye == null)
                 {
                     Hide(node);
@@ -240,12 +233,12 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bir işaretin o karedeki hâli: göze dik bir düzlemde, mesafeyle ölçeklenmiş, sönen X.
-        /// <para>Kolların yönü <b>kameranın kendi sağ/yukarı eksenlerinden</b> gelir (noktadan göze
-        /// bakan bir dönüş değil): ekrana paralel bir düzlem, işaretin görüş alanının kenarında
-        /// bile aynı X olarak okunmasını sağlar ve stereo iki gözde tutarlıdır. <b>Kaldırma</b> ise
-        /// göze doğrudur — yüzeyden kaçmanın doğru yönü kameranın bakış ekseni değil, o noktadan
-        /// göze giden vektördür.</para>
+        /// One frame of a marker: a fading X on a plane facing the eye, scaled by distance.
+        /// <para>Arm directions come from the CAMERA's own right/up axes (not a look-at rotation
+        /// from the point): a screen-parallel plane keeps the X readable even at the edge of the
+        /// field of view and is consistent across both stereo eyes. The LIFT, however, is toward the
+        /// eye — the correct direction to escape a surface is the vector from the point to the eye,
+        /// not the camera's view axis.</para>
         /// </summary>
         private void Draw(MarkerNode node, HitMarkerStyle style, Camera eye, float t)
         {
@@ -253,7 +246,7 @@ namespace VortexArena.Core.Combat
             Vector3 toEye = eyeTransform.position - node.Anchor;
             float distance = toEye.magnitude;
 
-            // Göz tam isabet noktasındaysa yön tanımsızdır (namlusunu kendine dayamış oyuncu).
+            // Eye exactly at the hit point → direction undefined (muzzle pressed against oneself).
             if (distance < 1e-3f)
             {
                 Hide(node);
@@ -269,16 +262,16 @@ namespace VortexArena.Core.Combat
                 node.Root.localScale = node.PrefabScale * size;
                 if (style.FaceCamera)
                 {
-                    // Kameranın dönüşünün aynısı = ekrana paralel. Unity'nin varsayılan Quad'ı bu
-                    // hâlde kameraya bakar (görünen yüzü -Z'dir).
+                    // Same rotation as the camera = screen-parallel. Unity's default Quad faces the
+                    // camera in this state (its visible face is -Z).
                     node.Root.rotation = eyeTransform.rotation;
                 }
 
                 return;
             }
 
-            // Yarı boy: kollar merkezden ±(sağ ± yukarı) × yarıboy uzanır, yani X'in sınırlayıcı
-            // karesinin kenarı tam `size` olur.
+            // Half size: arms reach ±(right ± up) × half from the centre, so the X's bounding square
+            // has edge exactly `size`.
             float half = size * 0.5f;
             Vector3 diagonalA = (eyeTransform.right + eyeTransform.up) * half;
             Vector3 diagonalB = (eyeTransform.right - eyeTransform.up) * half;
@@ -297,8 +290,8 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Kontur ayarda kapatılmış olabilir: düğüm zaten kuruldu, yalnız gizlenir (havuz
-            // düğümünü yeniden kurmak için sebep değil — ayar Play kipinde açılıp kapanabiliyor).
+            // The outline may be off in the settings: the node is already built, so it is only
+            // hidden — no reason to rebuild it, the setting can be toggled in Play mode.
             if (!style.HasOutline)
             {
                 node.OutlineA.enabled = false;
@@ -314,8 +307,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bir kolu yazar. Materyal <b>yalnız değiştiyse</b> atanır: ayardaki materyali Play
-        /// kipinde değiştirmek anında etki etsin, ama her karede gereksiz atama olmasın.
+        /// Writes one arm. The material is assigned only WHEN IT CHANGED: swapping it in Play mode
+        /// takes effect immediately without a pointless assignment every frame.
         /// </summary>
         private static void Apply(LineRenderer line, Material material, in Vector3 from, in Vector3 to,
             in Color color, float width)
@@ -382,13 +375,12 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        // ---------------------------------------------------------------------- havuz
+        // ---------------------------------------------------------------------- pool
 
         /// <summary>
-        /// Round-robin: sıradaki (en eski) düğümü döndürür; henüz yoksa tembel üretir.
-        /// <para>Düğüm <b>yanlış görünümle</b> kurulmuşsa (ayardaki prefab sonradan bağlandı ya da
-        /// kaldırıldı) yıkılıp yeniden kurulur — yoksa prefabı bağlamak Play'i yeniden başlatmayı
-        /// gerektirirdi.</para>
+        /// Round-robin: returns the next (oldest) node, creating it lazily.
+        /// <para>A node built with the WRONG look (the settings prefab was bound or removed later)
+        /// is destroyed and rebuilt — otherwise binding a prefab would require restarting Play.</para>
         /// </summary>
         private MarkerNode TakeNode()
         {
@@ -438,9 +430,9 @@ namespace VortexArena.Core.Combat
 
             Material material = EnsureMaterial(style);
 
-            // ⚠️ Kontur düğümleri ayarda kapalı olsa bile üretilir: ayar Play kipinde açıldığında
-            // havuzun yarısı konturlu, yarısı kontursuz olmasın (üretim tek seferlik ve bedeli
-            // kapalı iken yalnız iki devre dışı bileşendir).
+            // ⚠️ Outline nodes are created even when the setting is off, so enabling it in Play mode
+            // does not leave half the pool with outlines and half without (creation is one-off and
+            // costs only two disabled components while off).
             return new MarkerNode
             {
                 Root = root.transform,
@@ -465,10 +457,11 @@ namespace VortexArena.Core.Combat
             line.numCornerVertices = 0;
             line.textureMode = LineTextureMode.Stretch;
             line.sortingOrder = sortingOrder;
-            // View: şerit her kameraya kendi düzleminde çevrilir — kollar kenardan bakıldığında
-            // incelip kaybolmaz (konumları zaten göze dik kuruluyor, bu onun ikinci emniyeti).
+            // View: the strip turns to each camera in its own plane, so arms do not thin out and
+            // vanish when seen edge-on (positions are already built facing the eye; this is the
+            // second safety net).
             line.alignment = LineAlignment.View;
-            // İşaret bir ışık kaynağı değil, bir gösterge: gölge/ışık probu kapalı (Quest bütçesi).
+            // The marker is an indicator, not a light source: shadows/probes off (Quest budget).
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             line.receiveShadows = false;
             line.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
@@ -479,9 +472,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Çizgi materyali: önce ayardaki (kendi parlama/glow materyalin), yoksa tüm işaretlerin
-        /// PAYLAŞTIĞI çalışma anı materyali. Renk vertex renginden geldiği için işaret başına
-        /// materyal örneği açılmaz (açılsaydı SRP batch'i bölünürdü).
+        /// Line material: the one from the settings (your own glow material) first, else the runtime
+        /// material SHARED by all markers. Color comes from vertex color, so no per-marker material
+        /// instance is created (which would split the SRP batch).
         /// </summary>
         private Material EnsureMaterial(HitMarkerStyle style)
         {
@@ -518,8 +511,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bakış kamerası (<c>Camera.main</c>); bulunamazsa saniyede bir yeniden denenir — her
-        /// karede <c>Camera.main</c> aramak etiket taraması demektir.
+        /// The viewing camera (<c>Camera.main</c>); retried once a second when missing — searching
+        /// <c>Camera.main</c> every frame means a tag scan.
         /// </summary>
         private Camera ResolveEye()
         {
@@ -543,22 +536,22 @@ namespace VortexArena.Core.Combat
         {
             if (_shared == this)
             {
-                // Statik alan yıkılmış bileşene bağlı kalmaz: bir sonraki Play isteği havuzu
-                // yeniden kurar (Play modundan çıkışta domain reload kapalıysa bu şart).
+                // Never leave the static field on a destroyed component: the next Play request
+                // rebuilds the pool (required when domain reload is disabled).
                 _shared = null;
             }
 
             if (_runtimeMaterial != null)
             {
-                // Çalışma anında üretildi: elle yok edilir, yoksa domain reload kapalıyken
-                // Play'den her çıkışta sızar. (Ayardaki materyal bir ASSET'tir, ona dokunulmaz.)
+                // Runtime-generated: destroyed by hand, else it leaks on every Play exit when domain
+                // reload is disabled. (The settings material is an ASSET and is left alone.)
                 Destroy(_runtimeMaterial);
                 _runtimeMaterial = null;
             }
 
             if (_styleIsFallback && _style != null)
             {
-                // Asset bulunamadığı için bellekte açılan örnek — o da bir Unity nesnesi.
+                // In-memory instance created because the asset was missing — also a Unity object.
                 Destroy(_style);
             }
 

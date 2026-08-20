@@ -7,64 +7,61 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Sunucu sahne komutlarını (load_match / return_to_lobby + welcome geç katılım
-    /// senkronu) sahne yüklemeye çevirir; Net katmanı sahne yüklemediği için köprü
-    /// budur. UnityEngine.SceneManagement.SceneManager'ı gölgelememek için adı
-    /// SceneRouter'dır. Kalıcı singleton — kendini önyükler.
-    /// Ayrıca §10.1 Loading adımını kapatır: maç sahnesi yüklenince sunucuya
-    /// set_ready{true} ("sahne yüklendi") gönderir.
+    /// Turns server scene commands (load_match / return_to_lobby + the welcome late-join sync) into
+    /// scene loads — the bridge Net does not provide. Named SceneRouter so it does not shadow
+    /// UnityEngine.SceneManagement.SceneManager. Self-bootstrapping persistent singleton.
+    /// Also closes the §10.1 Loading step: sends set_ready{true} once the match scene is loaded.
     /// <para>
-    /// <b>Rolden bağımsızdır:</b> admin de aynı sahneyi yükler — "her zaman sunucudaki
-    /// aktif sahne" kuralı gözlemci görünümünün temelidir (§2). Rol yalnız <b>tek</b> yerde
-    /// ayrışır: <see cref="ReportSceneLoaded"/> içindeki <c>set_ready</c> yalnız player'dan
-    /// gider. Admin "hazır" görünürse operatör yanılır, ayrıca Loading kapısı zaten yalnız
-    /// <c>role=player</c> bağlantılarını sayar (sunucu <c>OnlinePlayersLocked</c>).
+    /// <b>Role independent:</b> the admin loads the same scene — "always the server's active scene"
+    /// is the basis of the spectator view (§2). The role matters in exactly ONE place:
+    /// <c>set_ready</c> in <see cref="ReportSceneLoaded"/> is player-only. An admin appearing
+    /// "ready" would mislead the operator, and the Loading gate only counts <c>role=player</c>
+    /// connections anyway (<c>OnlinePlayersLocked</c>).
     /// </para>
     /// <para>
-    /// <b>Yükleme asenkrondur</b> (<c>LoadSceneAsync</c>): geçiş boyunca oyun döngüsü akmaya
-    /// devam eder, bu sayede <see cref="LoadingOverlay"/> çizilebilir ve ilerleme gösterilebilir.
-    /// Asenkron yükleme <b>iptal edilemez</b> — yükleme sürerken gelen yeni bir hedef
-    /// (ör. maç ortasında <c>load_match</c>) sıraya alınır ve mevcut yükleme bitince yüklenir.
+    /// <b>Loading is asynchronous</b> (<c>LoadSceneAsync</c>) so the game loop keeps running and
+    /// <see cref="LoadingOverlay"/> can draw progress. ⚠️ An async load <b>cannot be cancelled</b>:
+    /// a new target arriving mid-load is queued and applied when the current load finishes.
     /// </para>
     /// </summary>
     public class SceneRouter : MonoBehaviour
     {
         public static SceneRouter Instance { get; private set; }
 
-        /// <summary>Sunucunun en son istediği maç sahnesi (load_match / welcome.match); lobide boş.</summary>
+        /// <summary>Last match scene requested by the server (load_match / welcome.match); empty in
+        /// the lobby.</summary>
         public string LastMatchScene { get; private set; } = "";
 
-        /// <summary>Sunucunun en son istediği mod (HUD seçimi için ModeHudSpawner okur).</summary>
+        /// <summary>Last mode requested by the server (read by ModeHudSpawner).</summary>
         public string LastModeId { get; private set; } = "";
 
-        /// <summary>Sunucunun bildirdiği lobi sahnesi (§10.7, <c>server.json → lobbyScene</c>).
-        /// Boşsa kabuk <c>Lobby</c> sahnesi kullanılır — sunucuya bağlanmadan önce zaten tek
-        /// bildiğimiz sahne odur.</summary>
+        /// <summary>Lobby scene reported by the server (§10.7, <c>server.json → lobbyScene</c>).
+        /// Empty falls back to the shell <c>Lobby</c> scene — the only scene known before
+        /// connecting.</summary>
         public string LobbyScene { get; private set; } = "";
 
         /// <summary>
-        /// Sunucunun <b>açık sahnesi</b> (§10.7): maç koşuyorsa arena, koşmuyorsa lobi ya da
-        /// operatörün sahnelediği arena. Sunucu ayaktayken boş olmaz — açılış değeri işletmenin
-        /// lobi haritasıdır. Bağlanmadan önce boştur (henüz hiçbir şey bilinmiyor).
-        /// <para>Admin arayüzü "şu an ne açık" sorusunu buradan cevaplar: kendi harita imleci
-        /// bir sonraki maçın adayıdır, açık sahne ise sunucunun söylediği gerçektir.</para>
+        /// The server's <b>open scene</b> (§10.7): the arena during a match, otherwise the lobby or
+        /// a staged arena. Never empty while the server is up; empty before connecting.
+        /// <para>The admin UI answers "what is open now" from here: its own map cursor is only the
+        /// next match's candidate, while the open scene is what the server says.</para>
         /// </summary>
         public string OpenScene => LastMatchScene.Length > 0 ? LastMatchScene : LobbyScene;
 
-        /// <summary>Aynı maç sahnesi için set_ready bir kez gönderilir.</summary>
+        /// <summary>set_ready is sent once per match scene.</summary>
         private string _readyReportedScene = "";
 
-        /// <summary>Şu an asenkron yüklenen sahne; yükleme yokken boş.</summary>
+        /// <summary>Scene currently loading asynchronously; empty when idle.</summary>
         private string _loadingScene = "";
 
-        /// <summary>Yükleme sürerken istenen bir sonraki sahne (async yükleme iptal edilemez).</summary>
+        /// <summary>Next scene requested mid-load (an async load cannot be cancelled).</summary>
         private string _queuedScene = "";
 
-        /// <summary>Geçiş öncesindeki arka plan yükleme önceliği — bitince geri konur.</summary>
+        /// <summary>Background loading priority before the transition — restored afterwards.</summary>
         private ThreadPriority _previousLoadingPriority = ThreadPriority.BelowNormal;
 
-        /// <summary>Tekili kurar. ⚠️ <b>Koşulsuzdur</b> — "bu oturumda gerekli mi" kararı
-        /// <see cref="AppSingletons"/>'a aittir (gerekçe orada).</summary>
+        /// <summary>Installs the singleton. ⚠️ <b>Unconditional</b> — the "is it needed in this
+        /// session" decision belongs to <see cref="AppSingletons"/> (rationale is there).</summary>
         internal static void Install()
         {
             if (Instance != null)
@@ -105,9 +102,9 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Bağlanınca sunucunun <b>açık sahnesine</b> gidilir — istemcinin tek yönlendirme
-        /// kaynağı budur (§5.3). Maç koşuyorsa o arenadır (geç katılım), koşmuyorsa işletmenin
-        /// lobisi ya da operatörün sahnelediği arena. Admin için de geçerli.
+        /// On connect, go to the server's <b>open scene</b> — the client's only routing source
+        /// (§5.3): the running match's arena (late join), or the lobby / a staged arena. Applies to
+        /// the admin too.
         /// </summary>
         private void HandleConnected(WelcomeMsg msg)
         {
@@ -116,10 +113,9 @@ namespace VortexArena.App
                 return;
             }
 
-            // Maç dışında da sahne gelir (§10.7): sunucunun AÇIK SAHNESİ — işletmenin lobisi ya da
-            // operatörün sahnelediği arena. Bu bir maç DEĞİLDİR — RememberMatch çağrılmaz, yani
-            // set_ready gönderilmez ve ModeHudSpawner maç HUD'u aramaz.
-            // Ayrım fazdan değil TÜRDEN gelir (§10.1): lobi türü açıkken maç kurulmamıştır.
+            // A scene also arrives outside a match (§10.7) — the server's OPEN SCENE. ⚠️ That is not
+            // a match: RememberMatch is skipped, so no set_ready is sent and ModeHudSpawner does not
+            // look for a match HUD. The distinction comes from the TYPE, not the phase (§10.1).
             if (msg.match.modeId == ArenaProtocol.LOBBY_MODE_ID)
             {
                 LobbyScene = msg.match.sceneName ?? "";
@@ -148,9 +144,9 @@ namespace VortexArena.App
             LoadChecked(msg.sceneName);
         }
 
-        /// <summary>Lobiye dönüş (§10.7): hedef sahne sunucudan gelir, sabit değildir.
-        /// <c>LastMatchScene</c> temizlenir — lobi bir maç sahnesi olmadığı için <c>set_ready</c>
-        /// gönderilmemelidir.</summary>
+        /// <summary>Return to lobby (§10.7): the target scene comes from the server, it is not
+        /// fixed. <c>LastMatchScene</c> is cleared — the lobby is not a match scene, so no
+        /// <c>set_ready</c> may be sent.</summary>
         private void HandleReturnToLobby(ReturnToLobbyMsg msg)
         {
             LastMatchScene = "";
@@ -162,16 +158,14 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// **Admin harita önizlemesi:** seçili arenayı YEREL olarak yükler (sunucuya hiçbir şey
-        /// gönderilmez). Operatör tercihler panelinde haritayı değiştirdiğinde, maç başlamamışsa
-        /// o arenayı hemen görebilsin diye vardır.
+        /// **Admin map preview:** loads the selected arena LOCALLY (nothing is sent to the server),
+        /// so the operator can see the map they picked before a match starts.
         /// <para>
-        /// Kasıtlı olarak <see cref="LastMatchScene"/>/<see cref="LastModeId"/>'ye DOKUNMAZ:
-        /// onlar sunucunun söylediği gerçektir. Böylece sunucu maçı başlattığında
-        /// <c>load_match</c> normal yolundan gelir ve önizleme durumu hiçbir şeyi bozmaz
-        /// (aynı sahnedeyse yükleme atlanır).
+        /// ⚠️ Deliberately does NOT touch <see cref="LastMatchScene"/>/<see cref="LastModeId"/> —
+        /// those are the server's truth, so a later <c>load_match</c> takes its normal path and the
+        /// preview state breaks nothing.
         /// </para>
-        /// Yalnız admin rolünde iş yapar — oyuncu istemcisinde sahne yükleme kararı SUNUCUNUNDUR.
+        /// Admin role only — on the player client the scene decision belongs to the SERVER.
         /// </summary>
         public void LoadPreview(string sceneName)
         {
@@ -189,7 +183,7 @@ namespace VortexArena.App
             LoadChecked(sceneName);
         }
 
-        /// <summary>Sunucudan gelen maç hedefini saklar (ModeHudSpawner + loading bildirimi okur).</summary>
+        /// <summary>Stores the server's match target (read by ModeHudSpawner + the ready report).</summary>
         private void RememberMatch(string modeId, string sceneName)
         {
             LastMatchScene = sceneName ?? "";
@@ -198,10 +192,9 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Lobi sahnesini yükler. Sunucunun bildirdiği sahne yoksa ya da bu build'in sahne
-        /// listesinde değilse <b>kabuk <c>Lobby</c> sahnesine düşer</b>: oyuncunun lobisiz
-        /// kalması, yanlış yapılandırılmış bir lobiden daha kötüdür (bağlantı/kurtarma arayüzü
-        /// orada). Düşüş sessiz değildir — sebep konsola yazılır.
+        /// Loads the lobby scene, falling back to the shell <c>Lobby</c> when the server's scene is
+        /// missing from this build's scene list: leaving the player without a lobby is worse than a
+        /// misconfigured one (the connection/recovery UI lives there). The fallback is logged.
         /// </summary>
         private void LoadLobbyChecked()
         {
@@ -229,9 +222,8 @@ namespace VortexArena.App
 
             if (_loadingScene.Length > 0)
             {
-                // Yükleme sürerken yeni hedef geldi. `LoadSceneAsync` iptal EDİLEMEZ (aktivasyonu
-                // geciktirmek yüklenen sahneyi belleğe yüklemiş olmayı değiştirmez), bu yüzden
-                // hedef sıraya alınır ve mevcut yükleme biter bitmez ona geçilir.
+                // New target mid-load. ⚠️ `LoadSceneAsync` CANNOT be cancelled (delaying activation
+                // does not undo the load), so the target is queued for when this load finishes.
                 _queuedScene = _loadingScene == sceneName ? "" : sceneName;
 
                 if (_queuedScene.Length > 0)
@@ -245,7 +237,7 @@ namespace VortexArena.App
 
             if (SceneManager.GetActiveScene().name == sceneName)
             {
-                // Zaten bu sahnedeyiz: sceneLoaded tetiklenmeyecek → hazır bildirimini elden ver.
+                // Already in this scene: sceneLoaded will not fire → report readiness by hand.
                 ReportSceneLoaded(sceneName);
                 return;
             }
@@ -254,28 +246,25 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Asenkron sahne yükleme + yükleme ekranı. Ekran yükleme BAŞLAMADAN açılır (aksi hâlde
-        /// oyuncu donmuş bir kare görür), ilerleme <c>AsyncOperation.progress</c>'ten sürülür ve
-        /// sahne tamamen ayağa kalkınca kapanır.
+        /// Async scene load + loading screen. The screen opens BEFORE the load starts (otherwise the
+        /// player sees a frozen frame), progress is driven from <c>AsyncOperation.progress</c> and
+        /// it closes once the scene is up.
         /// <para>
-        /// <c>allowSceneActivation</c> varsayılan (açık) bırakılır: kapatmak "yüklendi ama
-        /// gösterilmedi" diye ikinci bir durum üretirdi ve <c>set_ready</c> kapısı (§10.1) zaten
-        /// sahnenin gerçekten yüklenmiş olmasını bekliyor. Bu kipte <c>progress</c> 0..0.9
-        /// aralığında ilerler, aktivasyonda 1'e sıçrar — bar bu yüzden 0.9'a bölünerek normalize
-        /// edilir.
+        /// <c>allowSceneActivation</c> stays default (on): turning it off would create a second
+        /// "loaded but not shown" state, and the <c>set_ready</c> gate (§10.1) already waits for a
+        /// real load. ⚠️ In this mode <c>progress</c> runs 0..0.9 and jumps to 1 on activation, so
+        /// the bar is normalized by 0.9.
         /// </para>
         /// <para>
-        /// <c>set_ready</c> akışı DEĞİŞMEZ: <c>sceneLoaded</c> aktivasyon sırasında (bu döngü
-        /// hâlâ sürerken) tetiklenir ve <see cref="ReportSceneLoaded"/> her zamanki gibi oradan
-        /// çağrılır — bildirim bu rutine taşınmaz, tek kapı olarak kalır.
+        /// The <c>set_ready</c> flow is UNCHANGED: <c>sceneLoaded</c> fires during activation and
+        /// still calls <see cref="ReportSceneLoaded"/>, which stays the single gate.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Asenkron yükleme varsayılan ayarla senkrondan YAVAŞTIR</b> ve bunun tek sebebi
-        /// <see cref="Application.backgroundLoadingPriority"/>'dir: Unity kare hızını korumak için
-        /// yükleme entegrasyonuna kare başına yalnızca küçük bir dilim ayırır (proje varsayılanı
-        /// genelde <c>BelowNormal</c>), oysa <c>LoadScene</c> her şeyi tek karede bitirir. Geçiş
-        /// boyunca öncelik <c>High</c>'a çekilip sonra ESKİ DEĞERİNE geri konur — sabit bir değere
-        /// değil, çünkü ayarı başka bir yer değiştirmiş olabilir.
+        /// ⚠️ <b>Async loading is SLOWER than sync with default settings</b>, purely because of
+        /// <see cref="Application.backgroundLoadingPriority"/>: Unity gives integration only a small
+        /// slice per frame (project default is usually <c>BelowNormal</c>) while <c>LoadScene</c>
+        /// finishes in one frame. The priority is raised to <c>High</c> for the transition and
+        /// restored to its PREVIOUS value — not a constant, since something else may have set it.
         /// </para>
         /// </summary>
         private IEnumerator LoadRoutine(string sceneName)
@@ -285,15 +274,15 @@ namespace VortexArena.App
 
             LoadingOverlay.Show(sceneName);
 
-            // Geçiş boyunca yükleme entegrasyonuna kare başına daha çok zaman ver: yükleme
-            // ekranının bedeli "geçiş uzadı" olmamalı. Eski değer FinishLoad'da geri konur.
+            // More time per frame for load integration during the transition; the loading screen
+            // must not cost extra seconds. Restored in FinishLoad.
             _previousLoadingPriority = Application.backgroundLoadingPriority;
             Application.backgroundLoadingPriority = ThreadPriority.High;
 
             AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName);
             if (operation == null)
             {
-                // Build listesi kontrolünden geçti ama yükleme başlamadı (ör. sahne bozuk).
+                // Passed the build list check but the load never started (e.g. a corrupt scene).
                 Debug.LogError($"[SceneRouter] '{sceneName}' için asenkron yükleme başlatılamadı.");
                 FinishLoad();
                 yield break;
@@ -309,7 +298,7 @@ namespace VortexArena.App
             FinishLoad();
         }
 
-        /// <summary>Yükleme bitti: önceliği geri ver, ekranı kapat, sıradaki hedef varsa ona geç.</summary>
+        /// <summary>Load finished: restore the priority, close the screen, apply any queued target.</summary>
         private void FinishLoad()
         {
             Application.backgroundLoadingPriority = _previousLoadingPriority;
@@ -326,15 +315,15 @@ namespace VortexArena.App
             }
         }
 
-        // ------------------------------------------------- §10.1 Loading bildirimi
+        // ---------------------------------------------------- §10.1 Loading report
 
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             ReportSceneLoaded(scene.name);
 
-            // Emniyet ağı: yükleme ekranı SceneRouter'ın rutini tarafından kapatılır. Sahne
-            // buradan geçip de bizde bir yükleme sürmüyorsa (başka bir yol sahne değiştirmiş
-            // ya da rutin düşmüş) ekranın asılı kalmasına izin verilmez.
+            // Safety net: the routine normally closes the screen. If a scene arrives while no load
+            // of ours is running (another path changed the scene, or the routine died), the screen
+            // must not stay stuck.
             if (_loadingScene.Length == 0)
             {
                 LoadingOverlay.Hide();
@@ -342,8 +331,8 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Yüklenen sahne, sunucunun istediği maç sahnesiyse "sahne yüklendi" anlamında
-        /// set_ready{true} gönderir (§10.1 Loading). Lobi sahnesi ve admin rolü es geçilir.
+        /// Sends set_ready{true} ("scene loaded", §10.1) when the loaded scene is the match scene
+        /// the server asked for. The lobby scene and the admin role are skipped.
         /// </summary>
         private void ReportSceneLoaded(string sceneName)
         {
@@ -359,7 +348,7 @@ namespace VortexArena.App
 
             if (_readyReportedScene == sceneName)
             {
-                return; // aynı maç sahnesi için bir kez
+                return; // once per match scene
             }
 
             ArenaClient client = ArenaClient.Instance;

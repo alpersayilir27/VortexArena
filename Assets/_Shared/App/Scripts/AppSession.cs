@@ -1,13 +1,12 @@
 namespace VortexArena.App
 {
     /// <summary>
-    /// Uygulama geneli oturum bilgisi: AppBoot rolü ve sunucu adresini yazar, controller'lar okur.
-    /// Sahne bir kabuk controller'ıyla doğrudan oynatılırsa (Editor testi) rol
-    /// çözülmemiş olabilir — controller'lar Awake'te kendi varsayılanını yazar.
+    /// App-wide session info: AppBoot writes role + server address, controllers read it.
+    /// Playing a scene directly with a shell controller (Editor test) may leave the role
+    /// unresolved — controllers write their own default in Awake.
     /// <para>
-    /// **Tek kabuk sahnesi `Lobby`'dir**: admin de oyuncularla aynı sahnede durur ve sunucunun
-    /// `load_match`/`return_to_lobby`'siyle onları takip eder (gözlemci görünümü). Admin'e ait
-    /// ayrı bir dashboard sahnesi YOKTUR.
+    /// **The only shell scene is `Lobby`**: the admin stands in the same scene as the players and
+    /// follows them via `load_match`/`return_to_lobby`. NO separate admin dashboard scene exists.
     /// </para>
     /// </summary>
     public static class AppSession
@@ -21,13 +20,13 @@ namespace VortexArena.App
         public static string Role = RolePlayer;
         public static bool RoleResolved;
 
-        /// <summary>Launcher'ın `--server-ip` ile geçtiği adres. Boşsa adres bilinmiyor.</summary>
+        /// <summary>The address the launcher passes via `--server-ip`. Empty means the address is unknown.</summary>
         public static string ServerIp = "";
 
-        /// <summary>`--server-port` verilmezse ArenaProtocol.CONTROL_PORT ile doldurulur.</summary>
+        /// <summary>Filled with ArenaProtocol.CONTROL_PORT when `--server-port` is not given.</summary>
         public static int ServerPort;
 
-        /// <summary>Admin, kullanıcıya hiç adres sormadan bağlanabilir mi?</summary>
+        /// <summary>Can the admin connect without asking the user for an address at all?</summary>
         public static bool HasServerEndpoint =>
             !string.IsNullOrEmpty(ServerIp) && ServerPort > 0;
     }

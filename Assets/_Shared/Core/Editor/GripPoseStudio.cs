@@ -689,7 +689,7 @@ namespace VortexArena.Core.Editor
                     if (GUILayout.Button(new GUIContent("Parmakları Sıfırla",
                             "Parmakları boş elin duruşuna döndürür.")))
                     {
-                        // null = kayıt yok → boş elin duruşu.
+                        // null = no record → idle hand pose.
                         hand.ApplyPose(null);
                         SceneView.RepaintAll();
                     }
@@ -698,7 +698,7 @@ namespace VortexArena.Core.Editor
                             "El modelini kumandanın üstündeki paylaşılan varsayılan yerine " +
                             "döndürür (silahın duruşuna dokunmaz).")))
                     {
-                        // default kayıt = "yerleşim yazılmamış" → paylaşılan tanım.
+                        // default record = "no seat authored" → shared definition.
                         ApplyGhostOffset(hand, default);
                         SceneView.RepaintAll();
                     }
@@ -770,10 +770,10 @@ namespace VortexArena.Core.Editor
             return null;
         }
 
-        // ⚠️ Kaydedilecek değerlerin canlı DÖKÜMÜ bilerek YOKTUR ve geri eklenmez: tezgâhın cevabı
-        // gözle okunur (el kabzayı sarıyor mu), sayı değil — pencereye basılan bir konum/açı listesi
-        // yer kaplıyor ve kimsenin kullanmadığı ikinci bir tarif üretiyordu. Kaydın kendisi zaten
-        // WD_*.asset'in Inspector'ında görülebilir.
+        // ⚠️ No live dump of the values to be saved, deliberately, and none is added back: the
+        // bench's answer is read by eye (does the hand wrap the grip), not as numbers — a
+        // position/angle list took space and was a second description nobody used. The record itself
+        // is visible in WD_*.asset's Inspector.
 
         // ----------------------------------------------------------------- stage / hands
 
@@ -1382,9 +1382,9 @@ namespace VortexArena.Core.Editor
             Debug.Log($"{LOG} '{weaponRoot.name}' kavraması yazıldı: {written} el → " +
                       $"{definition.name}.asset", definition);
 
-            // ⚠️ delayCall: kit WPN prefabını diske yeniden yazar, açık prefab kipi de içeriğini
-            // yeniden yükler. Bu OnGUI'nin ORTASINDA olursa pencere yok edilmiş bir weaponRoot'u
-            // çizmeye devam eder (MissingReferenceException) — kit, kare bittikten sonra koşar.
+            // ⚠️ delayCall: the kit rewrites the WPN prefab on disk and the open prefab stage
+            // reloads its contents. In the MIDDLE of OnGUI the window would keep drawing a destroyed
+            // weaponRoot (MissingReferenceException) — the kit runs after the frame ends.
             EditorApplication.delayCall += RunWeaponKit;
             return true;
         }
@@ -1512,10 +1512,10 @@ namespace VortexArena.Core.Editor
             return false;
         }
 
-        // ⚠️ Hangi dalın sağlayıcısının yüklendiğini gösteren satır pencereden KALDIRILDI ve geri
-        // eklenmez: her koşuda okunan ama hiçbir karar değiştirmeyen bir bilgiydi. Yanlış dal
-        // sessiz de kalmıyor — sağlayıcı iki dalda da bulunamazsa TryGetGhostProvider konsola
-        // uyarı basar, iskeleti tutmayan el de zaten gözle görülür.
+        // ⚠️ No window line showing which branch's provider loaded, and none is added back: it was
+        // read every run and changed no decision. A wrong branch is not silent either —
+        // TryGetGhostProvider warns when neither branch resolves, and a hand that does not match the
+        // skeleton is visible anyway.
 
         // ------------------------------------------------------------------- part search
 

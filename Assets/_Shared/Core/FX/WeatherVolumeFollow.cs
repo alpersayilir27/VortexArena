@@ -3,18 +3,18 @@ using UnityEngine;
 namespace VortexArena.Core.FX
 {
     /// <summary>
-    /// Bir ambiyans (hava durumu) parçacık hacmini yerel kameranın üzerinde tutar.
+    /// Keeps an ambience (weather) particle volume above the local camera.
     /// <para>
-    /// Neden gerekli: yakın alan katmanının işi oyuncunun GÖZÜNÜN ÖNÜNDEN parçacık
-    /// geçirmektir. 12x12 m'lik arena hacmine bunu yapacak yoğunlukta parçacık koymak
-    /// binlerce parçacık ister; bunun yerine küçük bir hacim kafayla taşınır. Böylece
-    /// ~80 parçacık, binlercesinin verdiği derinlik hissini verir.
+    /// Why it is needed: the job of the near-field layer is to pass particles RIGHT IN FRONT OF THE
+    /// PLAYER'S EYES. Filling a 12x12 m arena volume at that density would take thousands of
+    /// particles; instead a small volume is carried along with the head. That way ~80 particles give
+    /// the depth impression of thousands.
     /// </para>
-    /// ⚠️ Bağlı parçacık sistemleri <b>Simulation Space = World</b> olmalıdır; aksi halde
-    /// parçacıklar hacimle sürüklenir ve kar kafaya "yapışır". <see cref="Start"/> bunu
-    /// denetler ve sapmada uyarır.
+    /// ⚠️ The attached particle systems must be <b>Simulation Space = World</b>; otherwise the
+    /// particles are dragged along with the volume and the snow "sticks" to the head.
+    /// <see cref="Start"/> checks this and warns on deviation.
     /// <para>
-    /// ⚠️ FREE-ROAM: yalnız BU obje taşınır. Rig'e/oyuncuya asla dokunulmaz.
+    /// ⚠️ FREE-ROAM: only THIS object is moved. The rig/player is never touched.
     /// </para>
     /// </summary>
     [DisallowMultipleComponent]
@@ -31,7 +31,7 @@ namespace VortexArena.Core.FX
 
         private float retrySeconds;
 
-        /// <summary>Takip hedefini koddan bağlar (prefab'da sahne referansı tutulamadığı için).</summary>
+        /// <summary>Binds the follow target from code (a prefab cannot hold a scene reference).</summary>
         public void SetTarget(Transform head)
         {
             target = head;
@@ -56,7 +56,8 @@ namespace VortexArena.Core.FX
         {
             if (target == null)
             {
-                // Rig sahne yüklenirken hazır olmayabilir: her karede aramak yerine saniyede bir dene.
+                // The rig may not be ready while the scene loads: retry once a second instead of
+                // searching every frame.
                 retrySeconds -= Time.deltaTime;
                 if (retrySeconds > 0f)
                 {
@@ -73,7 +74,8 @@ namespace VortexArena.Core.FX
                 target = camera.transform;
             }
 
-            // Yalnız konum: hacim kafayla DÖNMEZ, yoksa emisyon kutusu bakışla savrulur.
+            // Position only: the volume does NOT rotate with the head, otherwise the emission box
+            // would swing around with the gaze.
             transform.position = target.position + offset;
         }
     }

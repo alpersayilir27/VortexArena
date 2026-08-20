@@ -6,16 +6,16 @@ using VortexArena.Core.Arena;
 namespace VortexArena.Core
 {
     /// <summary>
-    /// Tüm mod + harita tanımlarının kataloğu.
-    /// Admin tercihler panelindeki mod/harita seçicisi ve mod HUD eşlemesi bunu okur.
-    /// ⚠ Asset'in yeri `Assets/_Shared/Data/Resources/GameCatalog.asset` — prosedürel admin
-    /// arayüzünün `[SerializeField]`'i olmadığı için `Resources.Load<GameCatalog>("GameCatalog")`
-    /// ile yükleniyor. Klasörden çıkarılırsa admin mod/harita seçicisi boş kalır.
+    /// Catalog of all mode + map definitions.
+    /// The mode/map picker in the admin preferences panel and the mode HUD mapping read this.
+    /// ⚠ The asset lives at `Assets/_Shared/Data/Resources/GameCatalog.asset` — since the procedural
+    /// admin UI has no `[SerializeField]`, it is loaded via `Resources.Load<GameCatalog>("GameCatalog")`.
+    /// If it is moved out of that folder the admin mode/map picker stays empty.
     /// <para>
-    /// SUNUCUYA KATALOG GEREKMEZ: admin yalnız <c>start_match{modeId, sceneName}</c> gönderir;
-    /// sunucu modId'yi kendi IGameMode kayıtlarıyla eşler, bilinmeyeni reddedip loglar.
+    /// THE SERVER DOES NOT NEED THE CATALOG: admin only sends <c>start_match{modeId, sceneName}</c>;
+    /// the server matches modId against its own IGameMode registrations, rejecting and logging unknown ones.
     /// </para>
-    /// Tüm sorgular null/boş girişlere dayanıklıdır (eksik asset referansı arayüzü kırmasın).
+    /// All queries are resilient to null/empty input (a missing asset reference must not break the UI).
     /// </summary>
     [CreateAssetMenu(fileName = "GameCatalog", menuName = "VortexArena/Game Catalog")]
     public class GameCatalog : ScriptableObject
@@ -23,13 +23,13 @@ namespace VortexArena.Core
         [SerializeField] private ModeDefinition[] modes = Array.Empty<ModeDefinition>();
         [SerializeField] private MapDefinition[] maps = Array.Empty<MapDefinition>();
 
-        /// <summary>Katalogdaki mod tanımları.</summary>
+        /// <summary>Mode definitions in the catalog.</summary>
         public ModeDefinition[] Modes => modes;
 
-        /// <summary>Katalogdaki harita tanımları.</summary>
+        /// <summary>Map definitions in the catalog.</summary>
         public MapDefinition[] Maps => maps;
 
-        /// <summary>modId ile mod tanımı bulur; yoksa null.</summary>
+        /// <summary>Finds a mode definition by modId; null if not found.</summary>
         public ModeDefinition FindMode(string modeId)
         {
             if (string.IsNullOrEmpty(modeId) || modes == null)
@@ -49,7 +49,7 @@ namespace VortexArena.Core
             return null;
         }
 
-        /// <summary>Sahne adı ile harita tanımı bulur; yoksa null.</summary>
+        /// <summary>Finds a map definition by scene name; null if not found.</summary>
         public MapDefinition FindMap(string sceneName)
         {
             if (string.IsNullOrEmpty(sceneName) || maps == null)
@@ -70,9 +70,9 @@ namespace VortexArena.Core
         }
 
         /// <summary>
-        /// Verilen modda oynanabilir haritalar: modun kendi listesi doluysa o liste,
-        /// boşsa katalogdaki tüm haritalar taranır; her aday ayrıca
-        /// <see cref="MapDefinition.SupportsMode"/> süzgecinden geçer.
+        /// Maps playable in the given mode: the mode's own list if it is non-empty, otherwise
+        /// every map in the catalog is scanned; each candidate additionally passes through the
+        /// <see cref="MapDefinition.SupportsMode"/> filter.
         /// </summary>
         public List<MapDefinition> MapsForMode(string modeId)
         {

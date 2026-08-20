@@ -228,13 +228,62 @@ OVRCameraRig rig = FindFirstObjectByType<OVRCameraRig>();
 Transform kafa = rig != null ? rig.centerEyeAnchor : null;
 ```
 
+### ⚠️ Layer 11 (`Breakable`) ve 12 (`PlayerHitbox`) boş DEĞİL, REZERVE
+
+İkisi de adı konmuş sonraki işlere aittir. "Boş görünüyor" diye başka bir amaç için kullanırsan o
+iş geldiğinde sahnelerdeki katman numaraları sessizce yanlış şeyi işaretler — katman numarası
+sahnelerde sayı olarak saklanır, yeniden adlandırmak eski sahneleri düzeltmez.
+
 ### ⛔ `.meta` dosyası kopyalayarak asmdef/asset üretme
 
 GUID çakışır ve Unity referansları rastgele koparır. JSON'u kopyala, `.meta`'yı Unity üretsin.
 
+### ⛔ İçi boş klasör açma (ne araçla ne elle)
+
+Git klasör değil dosya izler: boş klasör commit'e girmez, klonda **yoktur** ve geride yalnız
+ona ait yetim bir `.meta` kalır — "bende var, sende yok" biçiminde ortaya çıkar. Klasör, içine
+ilk dosya girdiğinde açılır.
+
 ### ⛔ `_Shared` köküne asmdef'siz script koyma
 
 `Assembly-CSharp`'a düşer, hiçbir asmdef göremez.
+
+---
+
+## Kod ve assembly düzeni
+
+### ⛔ Namespace'i asmdef adından ayırma, tipi global namespace'te bırakma
+
+Kural: asmdef adı `VortexArena.<Katman>`, namespace **birebir aynı**, asmdef'in `rootNamespace`'i
+dolu. Global namespace'te tip bırakmak iki asmdef aynı adı üretince çözülmesi zor bir çakışma
+doğurur; ayrıştığında ise "aynı ada iki farklı tip" hatası kodun bir katman yukarısında patlar.
+Serialize edilen ikincil tipler kendi dosyasında durur (`Team.cs` gibi) — Unity dosya adına göre
+script çözümlediği için bir dosyaya sıkıştırılmış enum/`[Serializable]` sınıf yeniden
+adlandırmalarda referansı sessizce koparır.
+
+### ⛔ Core'a URP referansı ekleme
+
+`Unity.RenderPipelines.Universal.Runtime` `VortexArena.Core`'un bağımlılık listesinde YOKTUR ve
+geri eklenmez: oyun kodunun render pipeline'ına bağlanması Core'u pipeline değişimine ve
+platform-özel derlemeye bağlar. Editor asmdef'leri `includePlatforms:["Editor"]` ile sınırlıdır
+ve yalnız kendi runtime'ını referanslar — `Core.Editor`'ün ProBuilder bağımlılığı bu yüzden
+runtime'a **bulaşmaz**.
+
+### ⚠️ "`_Shared` mi, kutu mu" sorusunun tek testi
+
+*"İkinci bir mod ya da arena bunu aynen kullanır mı?"* — evet ise `_Shared`, hayır ise kendi
+kutusu (`Modes/<Mod>/`, arena kutusu). Emin olmadan `_Shared`'a koymak ortak katmanı tek bir
+modun varsayımlarıyla kirletir; kutuya koymak ise ikinci kullanıcı çıkınca kopyalamayı davet eder.
+
+---
+
+## Silah ve kavrama
+
+### ⚠️ `PitchBase`'i 1.00'dan kaydırma
+
+Perde kaydırması sesi "farklı silah" yapmaz, yalnız **ödünç alınmış klibi maskeler**: silahın
+kendi klibi bağlanmadığı sürece kulak tanıdık sesi tanımaya devam eder. Doğrusu klibi
+`WD_*.asset`'in Inspector'ına sürüklemektir — silah seslerinin tek doğruluk kaynağı orasıdır.
 
 ---
 
@@ -246,17 +295,23 @@ Unity enum'ları **sayısal indeksle** saklar. `Team`'e başa bir değer eklemek
 `BaseZone`/`Weapon` takımlarını kaydırır. Yeni değer **her zaman sona** eklenir —
 `Team.Neutral` bu yüzden sonda (`BaseZone`'da "herkese açık" anlamına da gelir).
 
-Aynısı `ModeTeamMode` / `ModeScoreKind` / `ModeReviveAnchor` / `ModeWeaponSource` için de geçerli.
+Aynısı `HitZone` (`Body` sıfırda kalır) / `ModeTeamMode` / `ModeScoreKind` / `ModeReviveAnchor` /
+`ModeWeaponSource` / `ModeAudioEvent` için de geçerli.
 
 ### ⛔ `Server/config/maps.json`'ı elle düzenleme
 
 `Export Server Config` üretir ve bir sonraki export elini ezer. Tek doğruluk kaynağı
 `MapDefinition` SO'larıdır.
 
-### ⚠️ `GameCatalog.asset`'i `Resources/` dışına taşıma
+### ⚠️ `Resources/` altındaki asset'i taşıma, adını değiştirme
 
-`Resources.Load<GameCatalog>("GameCatalog")` ile okunuyor. Taşırsan admin mod/harita seçicisi ve
-rastgele silah havuzu sessizce boşalır.
+Bu asset'lerin **hiçbirinin sahneden referansı yoktur** — hepsi koddan ada göre çözülür
+(`Resources.Load<GameCatalog>("GameCatalog")` gibi). Taşınan ya da yeniden adlandırılan asset
+"eksik referans" hatası vermez: ona bağlı olan şey sessizce hiç çalışmaz/çizilmez. Kapsam:
+`Data/Resources/` altındaki katalog ve ses bankası asset'leri (`GameCatalog`, `WeaponCatalog`,
+`GameSoundBank`, `ModeAudioRegistry`), `Materials/Resources/M_BaseZoneXRay.mat`,
+`Avatars/Resources/LocalBodyAvatar.prefab` ve `App/Resources/UI/` altındaki arayüz prefablarının
+tamamı.
 
 ---
 
@@ -284,6 +339,18 @@ Her karede değil. Akıcı geri sayım istiyorsan son değeri kendin azalt.
 
 Meta Project Setup Tool önerse bile. Çektiği `voice` paketi Android namespace çakışmasıyla build'i
 kırar. Bireysel paketler kullanılır: core + interaction + interaction.ovr @203.0.0, audio @85.0.0.
+
+### ⛔ `.unitypackage` arşivini `Assets/` altına kopyalama
+
+Paket Unity'nin içe aktarma penceresinden alınır; arşivin kendisi projeye girmez. Aynı yayıncının
+iki pack'i **aynı GUID'leri paylaştığı** için ikincisi birincinin klasörüne açılır — yani klasör
+adı artık içeriğini anlatmaz. Yeni bir pack aramadan önce **mevcut pack klasörüne bak**.
+
+### ⛔ `Assets/ThirdPartyPackages/` altındaki klasörleri editör AÇIKKEN taşıma
+
+Windows dosya kilidi yüzünden taşıma yarıda kalır ve geride yetim `.meta`'larla yarım bir ağaç
+bırakır. Taşıma editör kapalıyken `git mv` ile yapılır; tek kod ayağı `WeaponKitBuilder.PackRoot`
+sabitidir (tek satır) — o güncellenmezse silah kiti kaynaklarını bulamaz ama hata da vermez.
 
 ### ⚠️ `Shader.Find` build'de `null` dönebilir
 

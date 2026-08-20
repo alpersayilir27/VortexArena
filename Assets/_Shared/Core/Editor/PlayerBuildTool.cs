@@ -7,69 +7,55 @@ using UnityEngine;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// Batch-mode build girişleri — <c>scripts/deploy-admin-game.bat</c> ve
-    /// <c>scripts/deploy-player-apk.bat</c> buradan çağırır:
+    /// <summary>Batch-mode build entry points, called by <c>scripts/deploy-admin-game.bat</c> and
+    /// <c>scripts/deploy-player-apk.bat</c>.</summary>
+    /// <remarks>
     /// <code>
-    /// Unity.exe -batchmode -quit -projectPath &lt;proje&gt; -buildTarget Win64 \
+    /// Unity.exe -batchmode -quit -projectPath &lt;project&gt; -buildTarget Win64 \
     ///   -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin \
     ///   -buildOutput &lt;deploy\admin&gt;
     ///
-    /// Unity.exe -batchmode -quit -projectPath &lt;proje&gt; -buildTarget Android \
+    /// Unity.exe -batchmode -quit -projectPath &lt;project&gt; -buildTarget Android \
     ///   -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildQuestPlayer \
     ///   -buildOutput &lt;deploy\player&gt;
     /// </code>
-    /// <para>
-    /// <b>Hedef platform aktif platformdan TÜRETİLMEZ:</b> her iki giriş de hedefini sabit
-    /// tutar (<c>StandaloneWindows64</c> / <c>Android</c>) ve çağıran <c>.bat</c> Unity'yi
-    /// aynı hedefle <b>başlatır</b> (<c>-buildTarget</c>). Bayrak açılışta verilir, çünkü
-    /// platformu bu metodun içinden çevirmek domain reload tetikler ve çalışan
-    /// <c>-executeMethod</c> yarıda kalır. Projede hangi platform açık kalmış olursa olsun
-    /// betikler kendi çıktısını üretir.
-    /// </para>
-    /// <para>
-    /// <b>İki rol, iki platform, TEK sahne listesi:</b> Windows build'i admin (yönetim),
-    /// Android build'i Quest oyuncusudur. İkisi de Build Settings'teki etkin sahneleri
-    /// aynen kullanır — Boot index 0 olmalıdır ve arena sahneleri listede olmalıdır, çünkü
-    /// <c>start_match</c> sahneyi TÜM oyuncuların <c>hello.scenes</c> listesinde arar
-    /// (CLAUDE.md). Sahne listesi platforma göre AYRIŞTIRILMAZ: ayrışsaydı bir arenayı
-    /// admin bilir oyuncu bilmez olurdu ve maç sessizce reddedilirdi.
-    /// </para>
-    /// <para>
-    /// <b>Rol ve adres build'e gömülmez:</b> masaüstü build'i çalışma anında admin rolüne
-    /// düşer ve sunucu adresini launcher'ın geçtiği <c>--server-ip</c> argümanından okur
-    /// (<c>AppBoot</c>). Bu yüzden admin ve ileride başka masaüstü rolleri için ayrı build
-    /// gerekmez.
-    /// </para>
-    /// <para>
-    /// Batch-mode Unity, editör aynı projeyi açıkken **proje kilidine takılır**; .bat bunu
-    /// önceden kontrol eder.
-    /// </para>
-    /// </summary>
+    /// <para><b>The target is NOT derived from the active platform:</b> both entry points pin it
+    /// (<c>StandaloneWindows64</c> / <c>Android</c>) and the calling <c>.bat</c> launches Unity
+    /// with the same <c>-buildTarget</c>. The flag goes on the command line because switching
+    /// platform from inside this method triggers a domain reload and aborts the running
+    /// <c>-executeMethod</c>.</para>
+    /// <para><b>Two roles, two platforms, ONE scene list:</b> the Windows build is admin, the
+    /// Android build is the Quest player; both use the enabled Build Settings scenes as-is (Boot
+    /// at index 0, arenas listed) because <c>start_match</c> looks the scene up in EVERY player's
+    /// <c>hello.scenes</c>. Splitting the list per platform would let admin know an arena the
+    /// players do not, and the match would be rejected silently.</para>
+    /// <para><b>Role and address are not baked in:</b> the desktop build falls to the admin role at
+    /// runtime and reads the server address from the launcher's <c>--server-ip</c> argument
+    /// (<c>AppBoot</c>), so extra desktop roles need no extra build.</para>
+    /// <para>Batch-mode Unity hits the project lock while the editor has the project open; the
+    /// .bat checks that up front.</para>
+    /// </remarks>
     public static class PlayerBuildTool
     {
         private const string ArgBuildOutput = "-buildOutput";
         private const string ExeName = "VortexArena.exe";
 
-        /// <summary>APK adı — <c>install_game.bat</c> tam olarak bu adı arar, değiştirme.</summary>
+        /// <summary>APK name; <c>install_game.bat</c> looks for exactly this — do not change.</summary>
         private const string ApkName = "game.apk";
 
-        /// <summary>Windows 64-bit admin/yönetim build'i. Hata durumunda exit code 1 döner.</summary>
+        /// <summary>Windows 64-bit admin build; exit code 1 on failure.</summary>
         public static void BuildWindowsAdmin()
         {
             Run("admin", ExeName, BuildTarget.StandaloneWindows64, BuildTargetGroup.Standalone);
         }
 
-        /// <summary>
-        /// Meta Quest 3/3S oyuncu build'i (Android, <c>game.apk</c>). Hata durumunda exit code 1.
-        /// <para>
-        /// Baştaki kontrol hedefi SEÇMEZ — hedef zaten sabittir; yalnız <c>-buildTarget Android</c>
-        /// bayrağının <b>uygulanmadığı</b> hâli yakalar. Tek gerçek sebebi Android Build Support
-        /// modülünün kurulu olmamasıdır: o hâlde Unity platformu çeviremez, sessizce Windows'ta
-        /// devam eder ve <c>game.apk</c> adında bir <c>.exe</c> üretirdi. Windows tarafında böyle
-        /// bir sessiz düşüş yok (masaüstü desteği her kurulumda var), o yüzden orada kontrol de yok.
-        /// </para>
-        /// </summary>
+        /// <summary>Meta Quest 3/3S player build (Android, <c>game.apk</c>); exit code 1 on
+        /// failure.</summary>
+        /// <remarks>The leading check does not SELECT the target (it is pinned); it catches
+        /// <c>-buildTarget Android</c> not taking effect, whose only real cause is a missing
+        /// Android Build Support module — Unity would then stay on Windows and emit an <c>.exe</c>
+        /// named <c>game.apk</c>. Desktop support exists in every install, so Windows needs no such
+        /// check.</remarks>
         public static void BuildQuestPlayer()
         {
             if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
@@ -83,9 +69,9 @@ namespace VortexArena.Core.Editor
             Run("player", ApkName, BuildTarget.Android, BuildTargetGroup.Android);
         }
 
-        // ------------------------------------------------------------------ ortak
+        // ------------------------------------------------------------------ shared
 
-        /// <summary>İki build girişinin de gövdesi — tek fark hedef platform ve çıktı adı.</summary>
+        /// <summary>Body of both entry points; only target and artifact name differ.</summary>
         private static void Run(string defaultFolder, string artifactName,
             BuildTarget target, BuildTargetGroup group)
         {
@@ -137,15 +123,11 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>
-        /// Build Settings'teki etkin sahneler; sıra korunur (index 0 = Boot).
-        /// <para>
-        /// ⚠️ <b>Diskte olmayan sahne burada yakalanır.</b> Silinmiş bir arenanın satırı
-        /// Build Settings'te kalabiliyor (klasör dosya sisteminden silinince Unity satırı
-        /// temizlemez); o hâlde <c>BuildPipeline</c> yığın izli, sebebi görünmeyen bir hatayla
-        /// düşerdi. Erken ve adıyla söylemek 20 dakikalık bir build'i baştan kurtarır.
-        /// </para>
-        /// </summary>
+        /// <summary>Enabled Build Settings scenes, order preserved (index 0 = Boot).</summary>
+        /// <remarks>⚠️ Catches scenes missing from disk: Unity keeps the row when a deleted arena's
+        /// folder disappears from the file system, and <c>BuildPipeline</c> would then fail with a
+        /// stack trace that hides the cause. Failing early and by name saves a 20 minute build.
+        /// </remarks>
         private static bool TryGetEnabledScenes(out string[] scenes)
         {
             scenes = EditorBuildSettings.scenes
@@ -171,7 +153,8 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>`-buildOutput &lt;yol&gt;`; verilmezse &lt;proje&gt;/Builds/&lt;defaultFolder&gt;.</summary>
+        /// <summary><c>-buildOutput &lt;path&gt;</c>; defaults to
+        /// &lt;project&gt;/Builds/&lt;defaultFolder&gt;.</summary>
         private static string ResolveOutputDir(string defaultFolder)
         {
             string[] args = Environment.GetCommandLineArgs();

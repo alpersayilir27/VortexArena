@@ -7,28 +7,26 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>UDP durum kanalı (statePort). 0x00 UdpHello kaydı — playerId↔udpToken doğrulanır,
-/// endpoint kaydedilir, aynı 6 bayt ack olarak geri yollanır (§6.1). 0x01 PoseUpdate alımı —
-/// yalnız kayıtlı endpoint'ten, u16 sarmalamalı seq kontrolüyle (§6.2). 0x02 Snapshot yayını —
-/// 20 Hz, pozlu oyuncular tek pakette UDP kayıtlı herkese (admin dahil) yollanır (§6.3).
-/// 0x03 FireEvent alımı + 0x04 EventBatch yayını — atış/atma olayları doğrulanmadan relay edilir
-/// (§6.4/6.5).
-/// <para><b>Thread sözleşmesi:</b> alım (recv) ve yayın (20 Hz timer) AYRI thread'lerdedir. Recv
-/// thread'i <see cref="MatchDirector"/>'ın maç kilidine ASLA girmez (§10.3) — kapıyı
-/// <see cref="MatchDirector.ShotRelayOpen"/> volatile bayrağından, oyuncu durumunu
-/// <see cref="PlayerState.Alive"/>/<c>Calibrated</c>'dan kilitsiz okur. İki thread arasında
-/// paylaşılan tek mutable yapı <see cref="_events"/> kuyruğudur.</para></summary>
+/// <summary>UDP state channel (statePort): 0x00 UdpHello registration (§6.1), 0x01 PoseUpdate
+/// intake (§6.2), 0x02 Snapshot broadcast at 20 Hz (§6.3), 0x03 FireEvent intake + 0x04 EventBatch
+/// relay (§6.4/6.5).
+/// <para><b>Thread contract:</b> recv and broadcast (20 Hz timer) run on SEPARATE threads. The recv
+/// thread NEVER takes <see cref="MatchDirector"/>'s match lock (§10.3) — it reads the gate from the
+/// <see cref="MatchDirector.ShotRelayOpen"/> volatile flag and player state from
+/// <see cref="PlayerState.Alive"/>/<c>Calibrated</c> lock-free. The only mutable structure shared
+/// between the two threads is the <see cref="_events"/> queue.</para></summary>
 public sealed class StateHost
 {
     private readonly PlayerRegistry _registry;
     private readonly int _port;
 
-    /// <summary>Atış olayı relay kapısı için (§6.5) — yalnız <c>ShotRelayOpen</c> okunur.</summary>
+    /// <summary>Fire event relay gate (§6.5) — only <c>ShotRelayOpen</c> is read.</summary>
     private readonly MatchDirector _matchDirector;
 
-    /// <summary>Relay'i geçen olaylar: recv thread'i yazar, 20 Hz yayın thread'i okur.
-    /// <para>Kilit yerine <see cref="ConcurrentQueue{T}"/>: recv yolu 20 Hz poz akışıyla aynı
-    /// thread'de koşuyor ve bir kilidin arkasında beklemesi o akışı da bekletirdi.</para></summary>
+    /// <summary>Events that passed the relay gate: written by recv thread, read by the 20 Hz
+    /// broadcast thread.
+    /// <para><see cref="ConcurrentQueue{T}"/> instead of a lock: the recv path shares its thread
+    /// with the 20 Hz pose intake, so blocking on a lock would stall that stream too.</para></summary>
     private readonly ConcurrentQueue<FireEventEntry> _events = new();
 
     private UdpClient? _udp;
@@ -36,64 +34,65 @@ public sealed class StateHost
     private Task? _loop;
     private Task? _snapshotLoop;
 
-    // ---- Telemetri sabitleri ----
+    // ---- Telemetry constants ----
 
-    /// <summary>Nominal tik aralığı (ms) — tik kaymasının referansı.</summary>
+    /// <summary>Nominal tick interval (ms) — reference for tick drift.</summary>
     private const double NominalTickMs = 1000.0 / ArenaProtocol.SNAPSHOT_RATE_HZ;
 
-    /// <summary>Bu eşikleri aşan oyuncu için saniyelik özete EK bir <c>[net]</c> satırı basılır.
-    /// Her oyuncu için her saniye satır basmak (10 oyuncu = 10 satır/sn) konsolu okunamaz hâle
-    /// getirirdi; sorunlu olanı görünür kılmak yeter.</summary>
+    /// <summary>Players over these thresholds get an extra <c>[net]</c> line in the per-second
+    /// summary. A line per player per second (10 players = 10 lines/s) would make the console
+    /// unreadable; surfacing only the problematic one is enough.</summary>
     private const double JitterWarnMs = 25.0;
     private const double LossWarnPct = 2.0;
 
-    /// <summary>Olay <c>seq</c> boşluğunun kayıp sayılabileceği üst sınır. Olay kanalında sıra
-    /// garantisi YOKTUR (§6.4), yani sırası bozuk gelen bir paket <c>(ushort)</c> farkını ~65535
-    /// yapar; tavan olmadan sayaç bunu "65 bin kayıp" diye raporlar. Bir saniyede bir oyuncunun
-    /// üretebileceği olay sayısının çok üstünde, 65535'in ise çok altında olacak kadar seçildi.</summary>
+    /// <summary>Upper bound for treating an event <c>seq</c> gap as loss. The event channel has NO
+    /// ordering guarantee (§6.4): an out-of-order packet makes the <c>(ushort)</c> delta ~65535 and
+    /// an uncapped counter would report "65k lost". Chosen far above one player's per-second event
+    /// rate and far below 65535.</summary>
     private const int EventGapMax = 512;
 
     /// <summary>
-    /// İskelet blob'u bu kadar süre tazelenmezse yayından düşürülür (§6.10 "girdi yoksa paket yok").
-    /// <para><b>Yerel sabit, protokol sabiti DEĞİL:</b> istemcinin bu sayıyı bilmesine gerek yok —
-    /// gövdesi olmayan bir avatar zaten son karesinde donuyor ve avatarın kendi yaşam süresi
-    /// snapshot'tan geliyor (§6.3). Protokole eklenirse iki tarafın uyması gereken bir sözleşme
-    /// olurdu, oysa bu yalnız sunucunun bayat veri yayınlamama kararıdır.</para>
-    /// <para>Süre, <see cref="ArenaProtocol.SKELETON_RATE_HZ"/> aralığının birkaç katıdır: normal
-    /// paket kaybı gövdeyi düşürmesin, gerçekten susmuş bir gönderen ise yayında kalmasın.</para>
+    /// Skeleton blob is dropped from the broadcast if not refreshed within this window
+    /// (§6.10 "no input, no packet").
+    /// <para><b>Local constant, NOT a protocol constant:</b> the client needs no knowledge of it —
+    /// a body-less avatar simply freezes on its last frame and avatar lifetime comes from the
+    /// snapshot (§6.3). In the protocol it would become a two-sided contract; here it is only the
+    /// server's decision not to broadcast stale data.</para>
+    /// <para>Several times the <see cref="ArenaProtocol.SKELETON_RATE_HZ"/> interval: normal packet
+    /// loss must not drop the body, but a truly silent sender must not stay on air.</para>
     /// </summary>
     private const double SkeletonStaleMs = 500.0;
 
-    // ---- Telemetri sayaçları ----
-    // ÇIKIŞ sayaçlarına yalnız yayın thread'i dokunur (yazan da okuyan da o) → kilit gerekmez.
-    // GİRİŞ sayaçlarını recv thread'i yazar, yayın thread'i saniyede bir okuyup sıfırlar →
-    // Interlocked şart. Oyuncu başına sayaçlar PlayerState'te (poz için PoseGate altında).
+    // ---- Telemetry counters ----
+    // TX counters: only the broadcast thread writes and reads them → no lock needed.
+    // RX counters: written by the recv thread, read+reset once a second by the broadcast thread →
+    // Interlocked required. Per-player counters live in PlayerState (pose ones under PoseGate).
 
     private long _txSnapshotPackets, _txSnapshotBytes;
     private long _txEventPackets, _txEventBytes;
     private long _txSkeletonPackets, _txSkeletonBytes;
     private long _rxPackets, _rxBytes;
 
-    /// <summary>Snapshot sayacının içindeki, olayları da taşıyan (<c>0x05</c>) datagram adedi —
-    /// §6.8 birleştirmesinin ne kadar tuttuğunu görmek için. Ayrı bir kanal DEĞİL, alt kümedir.</summary>
+    /// <summary>Datagrams inside the snapshot counter that also carry events (<c>0x05</c>) — shows
+    /// how often §6.8 combining applies. NOT a separate channel, a subset.</summary>
     private long _txCombinedPackets;
 
-    /// <summary>RECV thread'inden gönderilen yanıtlar: <c>0x00</c> ack'i ve <c>0x06</c> echo'su.
-    /// <b>Yayın sayaçlarından ayrı durmalarının tek sebebi thread'idir</b> — yayın thread'i kendi
-    /// sayaçlarını kilitsiz artırabilir, bunlar başka thread'den yazıldığı için Interlocked ister.</summary>
+    /// <summary>Replies sent from the RECV thread: <c>0x00</c> ack and <c>0x06</c> echo.
+    /// <b>Kept apart from the broadcast counters purely because of the thread</b> — those can be
+    /// incremented lock-free, these are written from another thread and need Interlocked.</summary>
     private long _txAckPackets, _txAckBytes;
 
-    /// <summary>Alındı ama İŞLENMEDİ: kayıtsız/yabancı endpoint, kısa paket, eski <c>seq</c>,
-    /// bilinmeyen tip. "Geldi ama işlenmedi" ile "hiç gelmedi" sahada bambaşka iki teşhistir.</summary>
+    /// <summary>Received but NOT processed: unregistered/foreign endpoint, short packet, stale
+    /// <c>seq</c>, unknown type. "Arrived but dropped" and "never arrived" are two very different
+    /// diagnoses in the field.</summary>
     private long _rxRejected;
 
-    /// <summary>Başarılı UDP kayıt bildirimi (konsol satırı için).</summary>
+    /// <summary>Successful UDP registration (for the console line).</summary>
     public event Action<byte, IPEndPoint>? UdpRegistered;
 
-    /// <param name="matchDirector">Atış relay kapısının kaynağı (§6.5). <b>Neden constructor:</b>
-    /// <c>Program.cs</c>'te director StateHost'tan ÖNCE kuruluyor, yani döngüsel bağımlılık yok —
-    /// sonradan set edilen bir property "kurulumu unutunca olaylar sessizce düşer" tuzağını
-    /// üretirdi, zorunlu parametre unutulamaz.</param>
+    /// <param name="matchDirector">Source of the shot relay gate (§6.5). <b>Why a ctor param:</b>
+    /// the director is built BEFORE StateHost in <c>Program.cs</c>, so there is no cycle — a
+    /// settable property would create the "forget the wiring, events silently vanish" trap.</param>
     public StateHost(PlayerRegistry registry, int port, MatchDirector matchDirector)
     {
         _registry = registry;
@@ -135,15 +134,15 @@ public sealed class StateHost
             catch (ObjectDisposedException) { break; }
             catch (SocketException)
             {
-                // Windows'ta ulaşılamayan hedefe gönderim sonrası recv 10054 fırlatabilir — döngü ölmesin.
+                // On Windows recv can throw 10054 after sending to an unreachable target — keep the loop alive.
                 continue;
             }
 
             var data = result.Buffer;
             if (data.Length == 0) continue;
 
-            // Giriş hacmi: tip ayrımı yapılmadan sayılır (kanal başına ayrıştırmanın teşhis değeri
-            // yok — yukarı yönde zaten neredeyse tamamı 0x01'dir).
+            // RX volume counted without type split: per-channel breakdown has no diagnostic value
+            // (upstream is almost entirely 0x01).
             Interlocked.Increment(ref _rxPackets);
             Interlocked.Add(ref _rxBytes, data.Length);
 
@@ -170,7 +169,7 @@ public sealed class StateHost
                     HandleSkeletonUpdate(data, result.RemoteEndPoint);
                     break;
                 default:
-                    // Bilinmeyen paket tipi — yok sayılır (ileri sürüm uyumluluğu).
+                    // Unknown packet type — ignored (forward version compatibility).
                     Interlocked.Increment(ref _rxRejected);
                     break;
             }
@@ -183,7 +182,7 @@ public sealed class StateHost
         using (var ms = new MemoryStream(data, 0, data.Length, writable: false))
         using (var reader = new BinaryReader(ms))
         {
-            reader.ReadByte(); // tip baytı dispatcher'da tüketildi sayılır
+            reader.ReadByte(); // type byte already consumed by the dispatcher
             hello = UdpHello.Read(reader);
         }
 
@@ -195,7 +194,7 @@ public sealed class StateHost
 
         try
         {
-            // Ack = aynı 6 baytın geri yollanması; istemci ack gelene dek 1 sn arayla tekrarlar.
+            // Ack = the same 6 bytes echoed back; client retries every 1 s until it arrives.
             await udp.SendAsync(data.AsMemory(0, UdpHello.SIZE), remote, token);
             Interlocked.Increment(ref _txAckPackets);
             Interlocked.Add(ref _txAckBytes, UdpHello.SIZE);
@@ -208,15 +207,15 @@ public sealed class StateHost
         UdpRegistered?.Invoke(hello.playerId, remote);
     }
 
-    /// <summary>0x06 RttProbe: gelen 6 baytı <b>aynen</b> geri yollar (§6.7). Sunucu tarafında durum
-    /// YOKTUR ve damga OKUNMAZ — yorumlayan taraf istemcidir (saat senkronu bu yüzden gerekmiyor).
-    /// <para>Doğrulama poz/olay yolundaki kuralın aynısı: yalnız <c>0x00</c> ile kaydedilmiş
-    /// endpoint'ten. Ret sessizdir — 1 Hz × oyuncu hızında log bile gereksiz gürültüdür.</para>
-    /// <para>⚠️ Bu yol <b>recv thread'inde</b> koşar; <see cref="MatchDirector"/> kilidine girmez ve
-    /// hiçbir oyuncu alanına yazmaz (ölçümün tamamı istemcide).</para></summary>
+    /// <summary>0x06 RttProbe: echoes the 6 bytes back <b>verbatim</b> (§6.7). No server-side state
+    /// and the stamp is NOT read — the client interprets it (hence no clock sync needed).
+    /// <para>Same validation as the pose/event path: only from a <c>0x00</c>-registered endpoint.
+    /// Rejection is silent — at 1 Hz × players even one log line is noise.</para>
+    /// <para>⚠️ Runs on the <b>recv thread</b>: never takes the <see cref="MatchDirector"/> lock and
+    /// writes no player field (measurement lives entirely on the client).</para></summary>
     private async Task HandleRttProbeAsync(UdpClient udp, byte[] data, IPEndPoint remote, CancellationToken token)
     {
-        // playerId doğrudan okunur: damgayı çözmeye gerek yok, tek ihtiyaç endpoint eşleşmesi.
+        // playerId read directly: no need to decode the stamp, only the endpoint match matters.
         var playerId = data[1];
         if (!_registry.TryGetByPlayerId(playerId, out var state)
             || state.UdpEndpoint == null || !state.UdpEndpoint.Equals(remote))
@@ -234,20 +233,20 @@ public sealed class StateHost
         catch (OperationCanceledException) { }
         catch (Exception)
         {
-            // Ulaşılamayan hedef (10054 vb.) — echo kaybı zararsız, bir sonraki yoklama gelir.
+            // Unreachable target (10054 etc.) — a lost echo is harmless, the next probe follows.
         }
     }
 
-    /// <summary>0x01 PoseUpdate alımı: yalnız 0x00 ile kaydedilmiş endpoint'ten kabul edilir,
-    /// eski/yinelenen seq atılır, kabul edilen poz PoseGate altında saklanır.
-    /// 20 Hz akış olduğu için konsola satır basılmaz; ret de sessizdir.</summary>
+    /// <summary>0x01 PoseUpdate intake: accepted only from a 0x00-registered endpoint, stale or
+    /// duplicate seq dropped, accepted pose stored under PoseGate. No console output at 20 Hz;
+    /// rejection is silent too.</summary>
     private void HandlePoseUpdate(byte[] data, IPEndPoint remote)
     {
         PoseUpdate pose;
         using (var ms = new MemoryStream(data, 0, data.Length, writable: false))
         using (var reader = new BinaryReader(ms))
         {
-            reader.ReadByte(); // tip baytı dispatcher'da tüketildi sayılır
+            reader.ReadByte(); // type byte already consumed by the dispatcher
             pose = PoseUpdate.Read(reader);
         }
 
@@ -257,7 +256,7 @@ public sealed class StateHost
             return;
         }
 
-        // Kayıtsız/yabancı kaynaktan poz kabul edilmez (spoof koruması, §6.1).
+        // No pose from an unregistered/foreign source (spoof protection, §6.1).
         if (state.UdpEndpoint == null || !state.UdpEndpoint.Equals(remote))
         {
             Interlocked.Increment(ref _rxRejected);
@@ -268,28 +267,28 @@ public sealed class StateHost
 
         lock (state.PoseGate)
         {
-            // u16 sarmalamalı sıra kontrolü: (short) farkı 65535→0 geçişini doğru sıralar.
+            // u16 wrap-safe ordering: the (short) delta orders the 65535→0 transition correctly.
             if (state.HasPose && (short)(pose.seq - state.LastSeq) <= 0)
             {
                 Interlocked.Increment(ref _rxRejected);
                 return;
             }
 
-            // ---- Uplink telemetrisi (§6.2 "seq boşluğu = kayıp") ----
-            // ⚠️ Yalnız SAYAR. §6.4'ün yasağı burada da geçerli: sıra zorlaması eklenmez, ölçüm
-            // kararı hiçbir paketi düşürmez.
+            // ---- Uplink telemetry (§6.2 "seq gap = loss") ----
+            // ⚠️ COUNTS only. §6.4's ban applies here too: no ordering enforcement, measurement
+            // never drops a packet.
             if (state.HasPose)
             {
-                // Boşluk = atlanmış seq sayısı. 1 = boşluk yok (beklenen ardıl).
+                // Gap = skipped seq count. 1 = no gap (expected successor).
                 int gap = (ushort)(pose.seq - state.LastSeq);
                 if (gap > 1) state.PoseLost += gap - 1;
 
                 if (state.LastPoseStamp != 0)
                 {
                     double intervalMs = StampToMs(stamp - state.LastPoseStamp);
-                    // Kayıp paket varış aralığını katları kadar uzatır; jitter'ı kaybın üstüne
-                    // yazmamak için beklenen aralık boşlukla ölçeklenir (2 paket kaybı 100 ms'lik
-                    // bir aralığı "50 ms jitter" diye raporlamasın).
+                    // Loss stretches the arrival interval by whole multiples; the expected interval
+                    // is scaled by the gap so loss is not reported as jitter (2 lost packets must
+                    // not turn a 100 ms interval into "50 ms jitter").
                     double expectedMs = NominalTickMs * Math.Max(1, gap);
                     long deviationMicros = (long)(Math.Abs(intervalMs - expectedMs) * 1000.0);
                     state.PoseJitterSumMicros += deviationMicros;
@@ -307,24 +306,25 @@ public sealed class StateHost
             state.HasPose = true;
             state.LastPoseAt = DateTime.UtcNow;
 
-            // §10.9: engel ihlali bayrağı burada AYRI bir alana çıkarılır (LastPose'da da duruyor)
-            // çünkü okuyucusu MatchDirector'dır ve o PoseGate'i ALMAZ — 88 B'lik bir struct'ı
-            // kilitsiz okumak tearing demektir, tek bool okumak değildir.
+            // §10.9: the obstacle-violation flag is mirrored into a SEPARATE field (it also lives in
+            // LastPose) because its reader is MatchDirector, which does NOT take PoseGate — reading
+            // an 88 B struct lock-free means tearing, reading a single bool does not.
             state.InObstacle = (pose.gripFlags & SnapshotEntry.FLAG_IN_OBSTACLE) != 0;
-            // Alan-dışı aynı gerekçeyle ayrı alana çıkarılır. ⚠️ Bu bit CEZA ÜRETMEZ (§10.9);
-            // yalnız admin görünürlüğünü ve ihlal defterini besler.
+            // Out-of-bounds mirrored for the same reason. ⚠️ This bit PRODUCES NO PENALTY (§10.9);
+            // it only feeds admin visibility and the violation log.
             state.OutOfBounds = (pose.gripFlags & SnapshotEntry.FLAG_OUT_OF_BOUNDS) != 0;
         }
     }
 
     /// <summary>
-    /// 0x07 SkeletonUpdate alımı (§6.9): kapı <c>0x01</c> ile birebir aynıdır (yalnız <c>0x00</c> ile
-    /// kaydedilmiş endpoint, u16 sarmalamalı eskilik kontrolü, sessiz ret).
-    /// <para>⚠️ <b>Blob AÇILMAZ.</b> Sunucu onu bir bayt dizisi olarak saklar ve batch'e kopyalar;
-    /// içeriğini yorumlamak sunucuya ikinci bir iskelet doğruluk kaynağı eklemek olurdu (§10.3
-    /// felsefesi — hasarı bile istemci hesaplıyor).</para>
-    /// <para>⚠️ Eskilik sayacı poz kanalınınkinden <b>ayrıdır</b> (<c>LastSkeletonSeq</c>): iki kanal
-    /// farklı kadanslarda akıyor, ortak sayaç birinin paketini diğerinin adına eskitirdi.</para>
+    /// 0x07 SkeletonUpdate intake (§6.9): identical gate to <c>0x01</c> (only a <c>0x00</c>-registered
+    /// endpoint, u16 wrap-safe staleness check, silent rejection).
+    /// <para>⚠️ <b>The blob is NOT parsed.</b> The server stores it as raw bytes and copies it into
+    /// the batch; interpreting it would add a second skeleton truth source to the server (§10.3 —
+    /// even damage is computed client-side).</para>
+    /// <para>⚠️ The staleness counter is <b>separate</b> from the pose channel's
+    /// (<c>LastSkeletonSeq</c>): the two channels run at different cadences and a shared counter
+    /// would age one channel's packet on behalf of the other.</para>
     /// </summary>
     private void HandleSkeletonUpdate(byte[] data, IPEndPoint remote)
     {
@@ -332,11 +332,11 @@ public sealed class StateHost
         using (var ms = new MemoryStream(data, 0, data.Length, writable: false))
         using (var reader = new BinaryReader(ms))
         {
-            reader.ReadByte(); // tip baytı dispatcher'da tüketildi sayılır
+            reader.ReadByte(); // type byte already consumed by the dispatcher
             msg = SkeletonUpdate.Read(reader);
         }
 
-        // Boş blob = bozuk/kırpılmış datagram (Read sınırı aşan uzunlukta boş döner).
+        // Empty blob = corrupt/truncated datagram (Read returns empty past the length limit).
         if (msg.blobLength == 0)
         {
             Interlocked.Increment(ref _rxRejected);
@@ -363,8 +363,8 @@ public sealed class StateHost
                 return;
             }
 
-            // ⚠️ Referans DEĞİŞTİRİLİR, dizi yerinde yazılmaz: yayın thread'i referansı kilit altında
-            // alıp kilit DIŞINDA serileştiriyor (kilit süresini uzatmamak için).
+            // ⚠️ The reference is REPLACED, the array is never written in place: the broadcast thread
+            // grabs the reference under the lock and serializes OUTSIDE it (to keep the lock short).
             state.LastSkeleton = msg.blob;
             state.LastSkeletonRoot = msg.root;
             state.LastSkeletonSeq = msg.seq;
@@ -373,19 +373,19 @@ public sealed class StateHost
         }
     }
 
-    /// <summary>0x03 FireEvent alımı (§6.4): yalnız 0x00 ile kaydedilmiş endpoint'ten kabul edilir,
-    /// birebir kopya bastırılır, relay kapısını geçen olay <see cref="_events"/> kuyruğuna girer ve
-    /// bir sonraki 20 Hz tik'te 0x04 batch'i olarak yayınlanır.
-    /// <para><b>İçerik DOĞRULANMAZ</b> (§10.3 felsefesi): yön, mesafe ve <c>itemId</c> serbesttir —
-    /// sunucuda silah tablosu yoktur. Doğrulanan tek şey <b>kimin</b> attığıdır.</para>
-    /// <para>Ret sessizdir: 10 atış/sn/oyuncu hızında tek satır log bile konsolu boğar.</para></summary>
+    /// <summary>0x03 FireEvent intake (§6.4): accepted only from a 0x00-registered endpoint, exact
+    /// duplicates suppressed; events passing the relay gate enter <see cref="_events"/> and go out
+    /// as a 0x04 batch on the next 20 Hz tick.
+    /// <para><b>Content is NOT validated</b> (§10.3): direction, distance and <c>itemId</c> are free
+    /// — the server has no weapon table. The only validated thing is <b>who</b> fired.</para>
+    /// <para>Rejection is silent: at 10 shots/s/player even one log line floods the console.</para></summary>
     private void HandleFireEvent(byte[] data, IPEndPoint remote)
     {
         FireEvent msg;
         using (var ms = new MemoryStream(data, 0, data.Length, writable: false))
         using (var reader = new BinaryReader(ms))
         {
-            reader.ReadByte(); // tip baytı dispatcher'da tüketildi sayılır
+            reader.ReadByte(); // type byte already consumed by the dispatcher
             msg = FireEvent.Read(reader);
         }
 
@@ -395,30 +395,30 @@ public sealed class StateHost
             return;
         }
 
-        // Kayıtsız/yabancı kaynaktan olay kabul edilmez — poz yolundaki kuralın aynısı (§6.1).
+        // No event from an unregistered/foreign source — same rule as the pose path (§6.1).
         if (state.UdpEndpoint == null || !state.UdpEndpoint.Equals(remote))
         {
             Interlocked.Increment(ref _rxRejected);
             return;
         }
 
-        // Kopya bastırma (§6.4): UDP paket ÇOĞALTABİLİR ve birebir tekrar çift tracer + çift ses
-        // olarak görünür. Alanlara yalnız bu thread dokunduğu için kilit gerekmez.
-        // ⚠️ SIRA ZORLAMASI YAPILMAZ: yukarıdaki poz filtresini — (short)(seq - LastSeq) <= 0 —
-        // buraya KOPYALAMA. Poz bir DURUMdur (son gelen kazanır, eskisi değersiz), olay bir
-        // OLGUdur: sırası bozuk gelen atış gerçekten olmuş bir atıştır ve atmak sessizce bir
-        // tracer ile bir sesi silmektir. Yalnız BİREBİR tekrar düşer.
+        // Duplicate suppression (§6.4): UDP CAN duplicate a packet and an exact repeat shows up as a
+        // double tracer + double sound. Only this thread touches these fields, so no lock.
+        // ⚠️ NO ORDERING ENFORCEMENT: do NOT copy the pose filter — (short)(seq - LastSeq) <= 0 —
+        // here. A pose is a STATE (latest wins, older is worthless), an event is a FACT: an
+        // out-of-order shot really happened, and dropping it silently erases a tracer and a sound.
+        // Only EXACT repeats are dropped.
         if (state.HasEventSeq && msg.seq == state.LastEventSeq)
         {
             Interlocked.Increment(ref _rxRejected);
             return;
         }
 
-        // ---- Olay kanalı telemetrisi (§6.4 "seq boşluğu = kayıp") ----
-        // ⚠️ Kayıp sayımı SIRA ZORLAMASI DEĞİLDİR: aşağıdaki hiçbir dal paketi düşürmez.
-        // ⚠️ Sıra garantisi olmadığı için boşluk hesabına tavan konur: sırası bozuk gelen bir olayda
-        // (ushort) farkı ~65535 çıkar ve tavansız bir sayaç bunu "65 bin kayıp" diye raporlar.
-        // Tavanı aşan fark "sırasız geldi" demektir, kayıp değil — sayılmaz.
+        // ---- Event channel telemetry (§6.4 "seq gap = loss") ----
+        // ⚠️ Loss counting is NOT ordering enforcement: no branch below drops a packet.
+        // ⚠️ The gap is capped because there is no ordering guarantee: an out-of-order event makes
+        // the (ushort) delta ~65535 and an uncapped counter reports "65k lost". A delta above the
+        // cap means "arrived out of order", not loss — it is not counted.
         if (state.HasEventSeq)
         {
             int gap = (ushort)(msg.seq - state.LastEventSeq);
@@ -430,36 +430,36 @@ public sealed class StateHost
         state.LastEventSeq = msg.seq;
         state.HasEventSeq = true;
 
-        // Relay kapısı (§6.5) — hepsi KİLİTSİZ okunur; bu yol MatchDirector'ın _gate'ine giremez
-        // (§10.3: girerse 20 Hz poz alımını maç kilidinin arkasında bekletir). Kalibresizin atışı
-        // relay EDİLMEZ (§10.6): ateş edemediği hâlde başkalarının ekranında namlu alevi çakması
-        // yanıltıcı olurdu.
+        // Relay gate (§6.5) — all read LOCK-FREE; this path must not enter MatchDirector's _gate
+        // (§10.3: it would stall the 20 Hz pose intake behind the match lock). An uncalibrated
+        // player's shot is NOT relayed (§10.6): a muzzle flash on others' screens for someone who
+        // cannot fire would be misleading.
         if (!state.IsConnected || state.Role != "player" || !state.Alive || !state.Calibrated) return;
         if (!_matchDirector.ShotRelayOpen) return;
 
         var entry = msg.entry;
-        // playerId'yi SUNUCU yazar: endpoint doğrulaması kimliği zaten bağladı, telden gelen baytı
-        // olduğu gibi taşımak başkasının adına olay yayınlamaya açık kapı bırakırdı.
+        // The SERVER writes playerId: endpoint validation already bound the identity, and forwarding
+        // the wire byte as-is would allow publishing events on someone else's behalf.
         entry.playerId = (byte)state.PlayerId;
         _events.Enqueue(entry);
     }
 
-    /// <summary>20 Hz snapshot yayını: pozlu ve BAĞLI oyuncular pakete yazılır, UDP kayıtlı
-    /// ve bağlı HERKESE (admin dahil — birden çok admin varsa her biri ayrı hedef) aynı
-    /// buffer yollanır. Girdi yokken hedef varsa count=0 snapshot gider (istemci uzak avatar
-    /// kalmadığını böyle anlar); ikisi de yoksa (ve olay kuyruğu da boşsa) gönderilmez ve
-    /// serverTick artmaz.
+    /// <summary>20 Hz snapshot broadcast: posed and CONNECTED players go into the packet, the same
+    /// buffer goes to EVERY UDP-registered, connected peer (admins included — each admin is its own
+    /// target). With targets but no entries a count=0 snapshot is sent (that is how the client
+    /// learns no remote avatars remain); with neither (and an empty event queue) nothing is sent and
+    /// serverTick does not advance.
     /// <para>
-    /// <b>Olay batch'i (§6.5):</b> aynı tik'te, snapshot'tan sonra, aynı hedeflere ve aynı
-    /// <c>serverTick</c> ile ayrı bir 0x04 datagramı gider — <b>yalnız olay varsa</b>.
+    /// <b>Event batch (§6.5):</b> same tick, after the snapshot, same targets and same
+    /// <c>serverTick</c>, as a separate 0x04 datagram — <b>only if events exist</b>.
     /// </para>
     /// <para>
-    /// <b>MTU parçalama (§6.3):</b> girdi sayısı <see cref="ArenaProtocol.SNAPSHOT_MAX_ENTRIES_PER_PACKET"/>'i
-    /// aşarsa aynı tik birden çok datagrama bölünür (hepsi aynı serverTick'i taşır, hepsi aynı
-    /// hedeflere gider). İstemcide birleştirme YOKTUR ve gerekmez: her paket taşıdığı girdileri
-    /// bağımsız uygular, oyuncu düşürme kararı zaman aşımıdır. Bu yüzden tel formatı değişmedi.
+    /// <b>MTU fragmentation (§6.3):</b> beyond <see cref="ArenaProtocol.SNAPSHOT_MAX_ENTRIES_PER_PACKET"/>
+    /// the tick splits into several datagrams (all carrying the same serverTick, all to the same
+    /// targets). The client does NO reassembly and needs none: each packet applies its own entries
+    /// and player dropping is a timeout decision — hence the wire format is unchanged.
     /// </para>
-    /// Saniyede bir konsola özet basılır.</summary>
+    /// A summary is printed once a second.</summary>
     private async Task SnapshotLoopAsync(UdpClient udp, CancellationToken token)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1.0 / ArenaProtocol.SNAPSHOT_RATE_HZ));
@@ -468,23 +468,23 @@ public sealed class StateHost
         var entries = new List<SnapshotEntry>(ArenaProtocol.SNAPSHOT_MAX_ENTRIES_PER_PACKET);
         var targets = new List<IPEndPoint>();
         var packets = new List<byte[]>(1);
-        // Olay tamponu döngü dışında: tik başına yeniden ayırmamak için (20 Hz × oturum boyu).
+        // Event buffer lives outside the loop to avoid a per-tick allocation (20 Hz × session).
         var eventBuffer = new List<FireEventEntry>(ArenaProtocol.EVENT_MAX_ENTRIES_PER_PACKET);
         var eventsThisSecond = 0;
 
-        // ---- İskelet kanalı (§6.10) ----
-        // Snapshot döngüsünün İÇİNDE ama AYRI kadansta koşar: ayrı bir timer/thread açmak yalnız
-        // serverTick'i iki sahibe bölerdi (batch onu taşıyor). Kadans tam sayı bölücüyle kurulur:
-        // her tik'te SKELETON_RATE_HZ eklenir, SNAPSHOT_RATE_HZ'ye ulaşınca ateşlenip düşülür —
-        // 20 tikte tam 12 kez, kayan noktalı birikim ve sürüklenme olmadan.
+        // ---- Skeleton channel (§6.10) ----
+        // Runs INSIDE the snapshot loop but at a SEPARATE cadence: a second timer/thread would only
+        // split ownership of serverTick (the batch carries it). Integer accumulator cadence: add
+        // SKELETON_RATE_HZ each tick, fire and subtract when it reaches SNAPSHOT_RATE_HZ — exactly
+        // 12 times per 20 ticks, without float accumulation or drift.
         var skeletonEntries = new List<SkeletonEntry>(ArenaProtocol.SKELETON_MAX_ENTRIES_PER_PACKET);
         var skeletonPackets = new List<byte[]>(1);
         var skeletonAccumulator = 0;
 
-        // ---- Tik kayması ölçümü ----
-        // ⚠️ Monotonik saat şart: PeriodicTimer gecikmeyi TELAFİ ETMEZ (bir tik'te gönderimler
-        // yavaşlarsa sonraki tik kayar ve bu istemcide jitter olur), ama DateTime.UtcNow'un
-        // Windows'taki ~15,6 ms çözünürlüğü 50 ms'lik aralığın sapmasını ölçmeye yetmez.
+        // ---- Tick drift measurement ----
+        // ⚠️ Monotonic clock required: PeriodicTimer does NOT compensate for delay (a slow send tick
+        // pushes the next one and that shows up as client jitter), and DateTime.UtcNow's ~15.6 ms
+        // Windows resolution cannot measure the drift of a 50 ms interval.
         long lastTickStamp = 0;
         double tickDriftSumMs = 0, tickDriftMaxMs = 0, sendMaxMs = 0;
         var tickDriftSamples = 0;
@@ -516,8 +516,8 @@ public sealed class StateHost
             targets.Clear();
             skeletonEntries.Clear();
             var onlinePlayers = 0;
-            // ⚠️ Duvar saati tik başına BİR kez okunur, oyuncu başına değil: aynı snapshot'taki
-            // girdilerin farklı anlara göre yargılanması için sebep yok ve UtcNow ucuz değil.
+            // ⚠️ Wall clock read ONCE per tick, not per player: no reason to judge entries of the
+            // same snapshot against different instants, and UtcNow is not cheap.
             var nowUtc = DateTime.UtcNow;
             foreach (var state in _registry.Snapshot())
             {
@@ -525,27 +525,26 @@ public sealed class StateHost
                 if (state.UdpEndpoint != null) targets.Add(state.UdpEndpoint);
                 if (state.Role != "player") continue;
                 onlinePlayers++;
-                // flags bit0 = alive (§10.2): MatchDirector kilidi altında yazılır, burada kilitsiz
-                // okunur (bool okuması atomik; bir tik gecikme snapshot için önemsiz).
+                // flags bit0 = alive (§10.2): written under the MatchDirector lock, read lock-free
+                // here (bool reads are atomic; one tick of lag is irrelevant for a snapshot).
                 var alive = state.Alive;
-                // flags bit6 = doğma koruması (§10.4): MatchDirector kilidi altında yazılır, burada
-                // kilitsiz okunur (bir tik gecikme snapshot için önemsiz). ⚠️ `alive` ile AND'lenir:
-                // ölü oyuncunun korumalı görünmesi anlamsız ve kalkanı hayaletin üstüne çizerdi.
+                // flags bit6 = spawn protection (§10.4): same lock-free read. ⚠️ AND'ed with `alive`:
+                // a protected dead player is meaningless and would draw the shield on a ghost.
                 var spawnProtected = alive && nowUtc < state.SpawnProtectedUntil;
                 lock (state.PoseGate)
                 {
-                    // İskelet girdisi (§6.10): poz ile AYNI kilit, AYRI kadans. Poz kapısından ÖNCE
-                    // toplanır — aşağıdaki `continue` pozsuz oyuncuyu atlıyor ve iki kanalın
-                    // birbirini düşürmesi için bir sebep yok.
-                    // ⚠️ Bayat blob yayınlanmaz: susmuş bir gönderenin gövdesini sonsuza kadar
-                    // tazelemek, donmuş bir avatarı bant harcayarak canlı göstermek olurdu.
+                    // Skeleton entry (§6.10): SAME lock as the pose, SEPARATE cadence. Collected
+                    // BEFORE the pose gate — the `continue` below skips pose-less players and there
+                    // is no reason for one channel to drop the other.
+                    // ⚠️ Stale blobs are not broadcast: keeping a silent sender's body alive forever
+                    // would spend bandwidth presenting a frozen avatar as live.
                     if (skeletonDue && state.HasSkeleton && state.LastSkeleton != null
                         && StampToMs(tickStamp - state.LastSkeletonStamp) <= SkeletonStaleMs)
                     {
                         skeletonEntries.Add(new SkeletonEntry
                         {
                             playerId = (byte)state.PlayerId,
-                            // Kök arena uzayında taşınır; blob'un kendi kökü kullanılmaz (§6.9).
+                            // Root travels in arena space; the blob's own root is unused (§6.9).
                             root = state.LastSkeletonRoot,
                             blob = state.LastSkeleton,
                             blobLength = state.LastSkeleton.Length
@@ -557,14 +556,15 @@ public sealed class StateHost
                     entries.Add(new SnapshotEntry
                     {
                         playerId = (byte)state.PlayerId,
-                        // Eşya baytları istemci-otoriter sunum bilgisidir: doğrulanmaz, kopyalanır
-                        // (§6.2/6.3) — sunucuda eşya tablosu YOKTUR.
+                        // Item bytes are client-authoritative presentation data: copied, not
+                        // validated (§6.2/6.3) — the server has NO item table.
                         itemL = pose.itemL,
                         itemR = pose.itemR,
-                        // ⚠️ flags TEK BAYT ama İKİ YAZARLI: bit0 ve bit6 sunucunun (otoriter alive
-                        // + doğma koruması), bit1-5 ve bit7 istemcinin. GRIP_FLAG_MASK ŞART — maskesiz
-                        // kopyalanırsa istemci bit0'ı set ederek kendini canlı ilan eder (ölü
-                        // oyuncu kendini diriltir); aynı gerekçeyle bit6 de maskenin dışındadır.
+                        // ⚠️ flags is ONE byte with TWO writers: bit0 and bit6 are the server's
+                        // (authoritative alive + spawn protection), bit1-5 and bit7 the client's.
+                        // GRIP_FLAG_MASK is MANDATORY — copied unmasked, a client could set bit0 and
+                        // declare itself alive (a dead player self-revives); bit6 is outside the
+                        // mask for the same reason.
                         flags = (byte)((alive ? SnapshotEntry.FLAG_ALIVE : 0)
                                        | (spawnProtected ? SnapshotEntry.FLAG_SPAWN_PROTECTED : 0)
                                        | (pose.gripFlags & SnapshotEntry.GRIP_FLAG_MASK)),
@@ -575,24 +575,24 @@ public sealed class StateHost
                 }
             }
 
-            // Boş döngü — gönderme, tik ilerletme. ⚠️ Kuyrukta olay varsa DEVAM edilir: olayın tel
-            // kimliği serverTick'tir (§6.5) ve tik ilerlemeden beklemek aynı tik'e ikinci bir batch
-            // yazmaya götürür (istemci onu birebir tekrar sanıp düşürürdü). Bu durumda hedef zaten
-            // yoktur (kimse UDP kaydı yapmamış) — olaylar aşağıda çekilip düşer; çizecek kimse
-            // olmadığı için kuyrukta biriktirmek yalnız bayat bir atış borcu üretirdi.
+            // Idle tick — no send, no tick advance. ⚠️ Continue if the queue has events: an event's
+            // wire identity is serverTick (§6.5), and waiting without advancing would put a second
+            // batch on the same tick (the client would drop it as an exact repeat). There are no
+            // targets in this case anyway — the events are drained below and dropped; with nobody to
+            // draw them, queueing would only build up stale shot debt.
             if (entries.Count == 0 && targets.Count == 0 && _events.IsEmpty) continue;
 
             serverTick++;
 
-            // ⚠️ Olaylar snapshot'tan ÖNCE çekilir: birleştirme kararı (§6.8) olay sayısını bilmeyi
-            // gerektiriyor. Gönderim sırası değişmedi — snapshot hâlâ önce gider.
+            // ⚠️ Events are drained BEFORE the snapshot: the combine decision (§6.8) needs the event
+            // count. Send order is unchanged — the snapshot still goes first.
             var eventCount = DrainEvents(eventBuffer);
 
-            // §6.8 birleştirme kapısı. Üç koşulun HEPSİ gerekli:
-            //   1) olay var — yoksa birleştirilecek bir şey yok, düz 0x02 gider,
-            //   2) snapshot tek parçaya sığıyor — parçalanmışsa olay bloğu hangi parçaya girse
-            //      "tik başına en fazla bir olay datagramı" değişmezi kırılır (§6.5),
-            //   3) toplam boyut COMBINED_MAX_BYTES altında.
+            // §6.8 combine gate. ALL three conditions required:
+            //   1) events exist — otherwise nothing to combine, a plain 0x02 goes out,
+            //   2) the snapshot fits one fragment — if fragmented, whichever fragment carried the
+            //      event block would break the "at most one event datagram per tick" invariant (§6.5),
+            //   3) total size under COMBINED_MAX_BYTES.
             var combinedBytes = SnapshotWithEvents.HEADER_SIZE
                                 + entries.Count * SnapshotEntry.SIZE
                                 + eventCount * FireEventEntry.SIZE;
@@ -610,8 +610,8 @@ public sealed class StateHost
                 BuildPackets(entries, serverTick, packets);
             }
 
-            // Gönderim döngüsünün süresi ayrı ölçülür: tik kaymasının sebebi bu sıralı await zinciri
-            // mi, yoksa thread zamanlaması mı — sahada bu ikisi ayrılabilsin.
+            // Send loop timed separately so the field can tell whether tick drift comes from this
+            // sequential await chain or from thread scheduling.
             var sendStart = Stopwatch.GetTimestamp();
 
             foreach (var packet in packets)
@@ -621,8 +621,8 @@ public sealed class StateHost
                     try
                     {
                         await udp.SendAsync(packet, target, token);
-                        // ⚠️ Sayaç GERÇEK gönderim başına artar (packets×targets diye hesaplanmaz):
-                        // catch'e düşen gönderim gitmemiştir ve onu saymak telemetriyi yalancı yapar.
+                        // ⚠️ Counted per ACTUAL send (not computed as packets×targets): a send that
+                        // fell into catch never left, and counting it would make telemetry lie.
                         _txSnapshotPackets++;
                         _txSnapshotBytes += packet.Length;
                         if (combine) _txCombinedPackets++;
@@ -630,19 +630,19 @@ public sealed class StateHost
                     catch (OperationCanceledException) { return; }
                     catch (Exception)
                     {
-                        // Windows'ta ulaşılamayan hedef 10054 vb. fırlatabilir — yayın döngüsü ölmesin.
+                        // On Windows an unreachable target can throw 10054 etc. — keep the loop alive.
                     }
                 }
             }
 
-            // 0x04 EventBatch — snapshot'tan SONRA, AYNI tik ve AYNI hedeflerle (§6.5).
-            // ⚠️ YALNIZ birleştirilemediğinde: aynı tik için hem 0x05 hem 0x04 çıkarsa istemci
-            // ikincisini birebir tekrar sanıp düşürür (kimlik serverTick, §6.5).
+            // 0x04 EventBatch — AFTER the snapshot, SAME tick and SAME targets (§6.5).
+            // ⚠️ ONLY when not combined: if both 0x05 and 0x04 leave for the same tick, the client
+            // drops the second as an exact repeat (identity is serverTick, §6.5).
             if (!combine && eventCount > 0)
             {
-                // Atan SÜZÜLMEZ: kendi olayını geri alır ve kendisi yok sayar (snapshot'ta kendi
-                // pozunu yok saymasıyla birebir aynı desen). Hedef başına ayrı batch üretmek tik
-                // başına N serileştirme demek olurdu; kazancı oyuncu başına ~90 B/sn.
+                // The shooter is NOT filtered out: it gets its own event back and ignores it (same
+                // pattern as ignoring its own pose in the snapshot). A per-target batch would mean N
+                // serializations per tick to save ~90 B/s per player.
                 var eventPacket = BuildEventPacket(eventBuffer, serverTick);
                 foreach (var target in targets)
                 {
@@ -655,20 +655,20 @@ public sealed class StateHost
                     catch (OperationCanceledException) { return; }
                     catch (Exception)
                     {
-                        // Snapshot yayınıyla aynı gerekçe — döngü ölmesin.
+                        // Same reason as the snapshot broadcast — keep the loop alive.
                     }
                 }
                 eventsThisSecond += eventCount;
             }
-            // Olay yoksa PAKET YOK (§6.5): bu kanal lobide/geri sayımda/sessiz anlarda tümüyle
-            // susar. Snapshot'ın count=0 yayınından farklı — orada istemcinin bayat avatarı
-            // temizlemesi gerekiyor, burada temizlenecek durum yok (olaylar anlıktır).
+            // No events, NO PACKET (§6.5): this channel goes fully silent in the lobby, countdown and
+            // quiet moments. Unlike the snapshot's count=0 broadcast — there the client must clear
+            // stale avatars, here there is no state to clear (events are instantaneous).
 
-            // 0x08 SkeletonBatch (§6.10) — snapshot/olaydan SONRA, aynı serverTick ve aynı hedeflere,
-            // ama yalnız kendi kadansında. Girdi yoksa paket yok.
-            // ⚠️ Gönderen SÜZÜLMEZ: kendi girdisini geri alır ve kendisi yok sayar (kendi gövdesini
-            // sensörden çiziyor). Hedefe özel batch üretmek tik başına N serileştirme demek olurdu —
-            // §6.5 olay batch'i de aynı gerekçeyle atanı süzmüyor.
+            // 0x08 SkeletonBatch (§6.10) — AFTER snapshot/events, same serverTick and same targets,
+            // but only on its own cadence. No entries, no packet.
+            // ⚠️ The sender is NOT filtered out: it gets its own entry back and ignores it (it draws
+            // its own body from sensors). A per-target batch would mean N serializations per tick —
+            // the §6.5 event batch skips filtering for the same reason.
             if (skeletonEntries.Count > 0 && targets.Count > 0)
             {
                 BuildSkeletonPackets(skeletonEntries, serverTick, skeletonPackets);
@@ -685,7 +685,7 @@ public sealed class StateHost
                         catch (OperationCanceledException) { return; }
                         catch (Exception)
                         {
-                            // Snapshot yayınıyla aynı gerekçe — döngü ölmesin.
+                            // Same reason as the snapshot broadcast — keep the loop alive.
                         }
                     }
                 }
@@ -718,19 +718,18 @@ public sealed class StateHost
     private static double StampToMs(long stampDelta) => stampDelta * 1000.0 / Stopwatch.Frequency;
 
     /// <summary>
-    /// Saniyelik telemetri özeti (Faz 1).
-    /// <para><b>Neden iki ayrı boyut yazılıyor:</b> <c>B/tik</c> tek bir datagramın boyutu,
-    /// <c>kB/s</c> ise gerçek hacim (hedef sayısıyla çarpılmış). Eski satır yalnız ilkini basıp
-    /// "snapshot 886 B" diyordu ve saniyelik hacim sanılıyordu — 10 oyuncuda aradaki fark 220 kattır.
-    /// İkisi de gerekli, bu yüzden ikisi de <b>etiketli</b> duruyor.</para>
-    /// <para>Oyuncu başına satır yalnız eşik aşılınca basılır (<see cref="JitterWarnMs"/> /
-    /// <see cref="LossWarnPct"/>): 10 oyuncu × saniye = okunamaz bir konsol.</para>
+    /// Per-second telemetry summary.
+    /// <para><b>Why two size figures:</b> <c>B/tick</c> is one datagram's size, <c>kB/s</c> is the
+    /// real volume (multiplied by target count). At 10 players they differ by 220×, so both are
+    /// printed and both are <b>labelled</b> — an unlabelled per-tick size gets read as throughput.</para>
+    /// <para>Per-player lines only above the thresholds (<see cref="JitterWarnMs"/> /
+    /// <see cref="LossWarnPct"/>): 10 players × per second = an unreadable console.</para>
     /// </summary>
     private void PrintSummary(int onlinePlayers, int posedPlayers, int targetCount, int perTickBytes,
         int fragments, int eventsThisSecond, double tickDriftAvgMs, double tickDriftMaxMs, double sendMaxMs)
     {
-        // Yayın çıkışına yalnız bu thread dokunur → düz okuma+sıfırlama yeter. Ack/echo çıkışı ise
-        // recv thread'inden yazılıyor, o yüzden atomik okunur.
+        // Only this thread touches the broadcast TX counters → plain read+reset. Ack/echo TX is
+        // written from the recv thread, hence the atomic read.
         var txPackets = _txSnapshotPackets + _txEventPackets + _txSkeletonPackets
                         + Interlocked.Exchange(ref _txAckPackets, 0);
         var txBytes = _txSnapshotBytes + _txEventBytes + _txSkeletonBytes
@@ -742,7 +741,7 @@ public sealed class StateHost
         _txSkeletonPackets = 0; _txSkeletonBytes = 0;
         _txCombinedPackets = 0;
 
-        // Giriş sayaçlarını recv thread'i yazıyor → oku-ve-sıfırla atomik olmalı.
+        // RX counters are written by the recv thread → read-and-reset must be atomic.
         var rxPackets = Interlocked.Exchange(ref _rxPackets, 0);
         var rxBytes = Interlocked.Exchange(ref _rxBytes, 0);
         var rxRejected = Interlocked.Exchange(ref _rxRejected, 0);
@@ -805,12 +804,12 @@ public sealed class StateHost
             $" | kayıp poz %{posePct:0.0} olay %{eventPct:0.0}");
     }
 
-    /// <summary>Kuyruktan bu tik'in batch'ine girecek olayları çeker.
-    /// <para>⚠️ Sınırı (<see cref="ArenaProtocol.EVENT_MAX_ENTRIES_PER_PACKET"/>) aşan olay
-    /// <b>ATILMAZ, kuyrukta kalır ve sonraki tik'e kayar</b>: "tik başına en fazla BİR batch"
-    /// değişmezi istemcinin kopya korumasının dayanağıdır (batch kimliği <c>serverTick</c>, §6.5).
-    /// Aynı tik için ikinci bir datagram üretilirse istemci onu birebir tekrar sanıp düşürür —
-    /// yani taşmayı "ikinci paket" ile çözmek olayları gerçekten kaybettirir.</para></summary>
+    /// <summary>Drains the events that go into this tick's batch.
+    /// <para>⚠️ Events over the limit (<see cref="ArenaProtocol.EVENT_MAX_ENTRIES_PER_PACKET"/>) are
+    /// <b>NOT dropped; they stay queued and slide to the next tick</b>: the "at most ONE batch per
+    /// tick" invariant is what the client's duplicate protection rests on (batch identity is
+    /// <c>serverTick</c>, §6.5). A second datagram for the same tick would be discarded as an exact
+    /// repeat — solving the overflow with "one more packet" really loses events.</para></summary>
     private int DrainEvents(List<FireEventEntry> output)
     {
         output.Clear();
@@ -822,8 +821,8 @@ public sealed class StateHost
         return output.Count;
     }
 
-    /// <summary>Tek 0x05 datagramı: snapshot + olaylar birlikte (§6.8). Çağıran, birleştirme
-    /// kapısının üç koşulunu zaten doğruladı.</summary>
+    /// <summary>Single 0x05 datagram: snapshot + events together (§6.8). The caller has already
+    /// validated the three combine-gate conditions.</summary>
     private static byte[] BuildCombinedPacket(List<SnapshotEntry> entries,
         List<FireEventEntry> events, uint serverTick)
     {
@@ -842,16 +841,17 @@ public sealed class StateHost
     }
 
     /// <summary>
-    /// İskelet girdilerini datagramlara böler (§6.10). Snapshot parçalamasından (<see cref="BuildPackets"/>)
-    /// tek farkı, girdilerin <b>değişken uzunluklu</b> olmasıdır: bölme kararı girdi sayısına DEĞİL
-    /// <b>bayt bütçesine</b> bakar (<see cref="ArenaProtocol.COMBINED_MAX_BYTES"/>), girdi tavanı ise
-    /// yalnız <c>count</c> alanının <c>u8</c> olmasının sınırıdır.
-    /// <para>⚠️ Snapshot'tan bir fark daha: <b>girdi yoksa boş paket üretilmez</b>. Boş snapshot bir
-    /// bildirimdir (istemci bayat avatarı onunla temizler); boş iskelet batch'inin karşılığı yoktur —
-    /// avatarın yaşam süresi snapshot'tan gelir (§6.3), gövde yalnız son karesinde donar.</para>
-    /// <para>⚠️ Tek bir girdi bütçeyi tek başına aşarsa yine <b>kendi paketinde</b> gönderilir:
-    /// gönderim tarafı <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/>'ı zaten uyguluyor, yani bu
-    /// durum ancak sınır büyütülürse oluşur ve sessizce girdi düşürmek gövdeyi kalıcı kaybettirirdi.</para>
+    /// Splits skeleton entries into datagrams (§6.10). The only difference from snapshot
+    /// fragmentation (<see cref="BuildPackets"/>) is that entries are <b>variable length</b>: the
+    /// split follows a <b>byte budget</b> (<see cref="ArenaProtocol.COMBINED_MAX_BYTES"/>), not an
+    /// entry count; the entry cap only exists because <c>count</c> is a <c>u8</c>.
+    /// <para>⚠️ One more difference: <b>no empty packet when there are no entries</b>. An empty
+    /// snapshot is a notification (the client clears stale avatars with it); an empty skeleton batch
+    /// has no counterpart — avatar lifetime comes from the snapshot (§6.3), the body just freezes on
+    /// its last frame.</para>
+    /// <para>⚠️ A single entry exceeding the budget is still sent in <b>its own packet</b>: the send
+    /// side already enforces <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/>, so this only arises
+    /// if the limit grows — and silently dropping the entry would lose the body permanently.</para>
     /// </summary>
     private static void BuildSkeletonPackets(List<SkeletonEntry> entries, uint serverTick, List<byte[]> output)
     {
@@ -867,8 +867,8 @@ public sealed class StateHost
                    && count < ArenaProtocol.SKELETON_MAX_ENTRIES_PER_PACKET)
             {
                 var size = entries[offset + count].Size;
-                // İlk girdi koşulsuz alınır: aksi hâlde bütçeyi aşan tek bir blob sonsuz döngü
-                // (hiç girdi almayan paket) üretirdi.
+                // The first entry is taken unconditionally: otherwise an oversized blob would spin
+                // forever (a packet that never takes an entry).
                 if (count > 0 && bytes + size > ArenaProtocol.COMBINED_MAX_BYTES) break;
                 bytes += size;
                 count++;
@@ -886,7 +886,7 @@ public sealed class StateHost
         }
     }
 
-    /// <summary>Tek 0x04 datagramı: 6 + count×9 B (§6.5).</summary>
+    /// <summary>Single 0x04 datagram: 6 + count×9 B (§6.5).</summary>
     private static byte[] BuildEventPacket(List<FireEventEntry> events, uint serverTick)
     {
         var batch = new EventBatch { serverTick = serverTick, events = events.ToArray() };
@@ -897,9 +897,9 @@ public sealed class StateHost
     }
 
     /// <summary>
-    /// Girdileri MTU'ya sığan datagramlara böler (§6.3). Girdi yoksa tek bir count=0 paketi
-    /// üretir — istemciler bayat avatarı bununla da temizleyebilsin. Tüm parçalar aynı
-    /// <paramref name="serverTick"/>'i taşır.
+    /// Splits entries into MTU-sized datagrams (§6.3). With no entries it emits a single count=0
+    /// packet so clients can still clear stale avatars. All fragments carry the same
+    /// <paramref name="serverTick"/>.
     /// </summary>
     private static void BuildPackets(List<SnapshotEntry> entries, uint serverTick, List<byte[]> output)
     {

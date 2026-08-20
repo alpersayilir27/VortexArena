@@ -8,52 +8,47 @@ using VortexArena.Core.Player;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Admin gözlemcinin kökü: sahneyi devralır, kamerayı/HUD'ı/işaretçileri sahiplenir ve
-    /// klavye kısayollarını işler. Rol <c>admin</c> DEĞİLSE kendini yok eder — VR build'de
-    /// hiçbir maliyeti yoktur.
+    /// Root of the admin spectator: adopts the scene, owns the camera/HUD/markers and handles
+    /// keyboard shortcuts. Destroys itself outside the <c>admin</c> role — zero cost in the VR build.
     ///
-    /// <para><b>Neden kendini önyükler:</b> admin artık Lobby ve TÜM arena sahnelerinde geziniyor.
-    /// Sahneye elle konan bir bileşen, yeni arena eklerken unutulacak bir adım olurdu
-    /// (arena sahneleri kendine yeten kutulardır). Bu yüzden `ConnectionOverlay` deseni:
-    /// `DontDestroyOnLoad` tekil, kurulumu `AppSingletons`'tan gelir.</para>
+    /// <para><b>Why it bootstraps itself:</b> the admin roams the Lobby and ALL arena scenes, so a
+    /// hand-placed component would be a setup step to forget per arena. Hence the
+    /// `ConnectionOverlay` pattern: a `DontDestroyOnLoad` singleton installed by `AppSingletons`.</para>
     ///
-    /// <para><b>Rol ne zaman biliniyor:</b> `AppBoot.Start()` bu kancadan SONRA koşar, yani
-    /// önyüklemede rol henüz çözülmemiş olabilir. Bu yüzden karar <see cref="Update"/> içinde
-    /// tembel verilir: rol çözülene kadar bekler, admin ise etkinleşir, player ise ölür.</para>
+    /// <para><b>Role timing:</b> `AppBoot.Start()` runs AFTER this hook, so the decision is made
+    /// lazily in <see cref="Update"/>: wait for the role, then activate (admin) or die (player).</para>
     ///
-    /// <para><b>Sahne devralma (her <c>sceneLoaded</c>):</b>
+    /// <para><b>Scene adoption (every <c>sceneLoaded</c>):</b>
     /// <list type="bullet">
-    /// <item>BB Camera Rig kökü KAPATILIR — üç kamerası da `MainCamera` etiketli olduğu için
-    /// `Camera.main` belirsiz kalır ve `RemoteAvatar` ad etiketlerini yanlış kameraya döndürür.
-    /// Standalone'da XR açılışta başlar (editörde Link ile player için) ama admin rolü onu
-    /// <see cref="AdminXrRelease"/> ile bırakır, yani rig işlevsizdir.</item>
-    /// <item><see cref="ArenaCalibrator"/> ve <see cref="BaseZone"/> bileşenleri kapatılır —
-    /// OVRSpatialAnchor/HMD mantığı masaüstünde anlamsız veri ve log üretir.</item>
-    /// <item><see cref="ArenaBoundary"/> <b>KAPATILMAZ</b>, `SetSpectatorMode(true)` ile susturulur:
-    /// admin'in HMD'si olmadığı için muhafaza mantığı anlamsızdır, ama kuş bakışı kadrajı onun
-    /// <c>HalfExtents</c>/<c>LocalCenter</c> değerlerini okumaya devam ediyor (kapatılan bileşen
-    /// planı çözmeyi de bırakırdı).</item>
-    /// <item>World-space canvas'lar kapatılır (Lobby'nin VR paneli masaüstü ekranında havada
-    /// durmasın; aynı bilgi HUD roster'ında var).</item>
-    /// <item>EventSystem devralınır (arena sahnelerinde HİÇ yok, Lobby'de bir tane var).</item>
+    /// <item>The BB Camera Rig root is DISABLED — all three of its cameras are tagged `MainCamera`,
+    /// leaving `Camera.main` ambiguous so `RemoteAvatar` labels face the wrong camera. The rig is
+    /// dead weight anyway since the admin releases XR (<see cref="AdminXrRelease"/>).</item>
+    /// <item><see cref="ArenaCalibrator"/> and <see cref="BaseZone"/> are disabled — OVRSpatialAnchor
+    /// /HMD logic produces meaningless data and logs on the desktop.</item>
+    /// <item><see cref="ArenaBoundary"/> is <b>NOT disabled</b> but silenced via
+    /// `SetSpectatorMode(true)`: the top-down framing still reads its
+    /// <c>HalfExtents</c>/<c>LocalCenter</c>, which a disabled component would stop resolving.</item>
+    /// <item>World-space canvases are disabled (the Lobby VR panel must not float on the desktop
+    /// screen; the same info is in the HUD roster).</item>
+    /// <item>The EventSystem is taken over (arena scenes have none, the Lobby has one).</item>
     /// </list></para>
     /// </summary>
     public class AdminSpectator : MonoBehaviour
     {
         public static AdminSpectator Instance { get; private set; }
 
-        /// <summary>Gözlemci kamerası (etkinleşmeden önce null).</summary>
+        /// <summary>Spectator camera (null before activation).</summary>
         public Camera Camera { get; private set; }
 
-        /// <summary>Aktif sahnenin arena sınırı; Lobby gibi sınırsız sahnelerde null.</summary>
+        /// <summary>Active scene's arena boundary; null in unbounded scenes like the Lobby.</summary>
         public ArenaBoundary Boundary { get; private set; }
 
         private AdminSpectatorCamera _cameraDriver;
         private bool _active;
 
-        /// <summary>Tekili kurar. ⚠️ Oturum kararı (<b>hangi rolde gerekli</b>)
-        /// <see cref="AppSingletons"/>'a aittir; buradaki tek kapı bu sınıfın kendi VARLIK
-        /// koşuludur.</summary>
+        /// <summary>Installs the singleton. ⚠️ The session decision (<b>which role needs it</b>)
+        /// belongs to <see cref="AppSingletons"/>; the only gate here is this class' own
+        /// existence condition.</summary>
         internal static void Install()
         {
             if (Instance != null)
@@ -61,7 +56,7 @@ namespace VortexArena.App.Admin
                 return;
             }
 
-            // Quest build'inde admin rolü hiç oluşmaz — tekili kurmaya bile gerek yok.
+            // The admin role never occurs in the Quest build.
             if (Application.platform == RuntimePlatform.Android)
             {
                 return;
@@ -112,43 +107,42 @@ namespace VortexArena.App.Admin
             ReadShortcuts();
         }
 
-        // ------------------------------------------------------------ etkinleşme
+        // ------------------------------------------------------------- activation
 
         private void TryActivate()
         {
             if (!AppSession.RoleResolved)
             {
-                return; // AppBoot henüz rolü yazmadı
+                return; // AppBoot has not written the role yet
             }
 
             if (AppSession.Role != AppSession.RoleAdmin)
             {
-                Destroy(gameObject); // oyuncu istemcisi: gözlemciye hiç ihtiyaç yok
+                Destroy(gameObject); // player client: no spectator needed at all
                 return;
             }
 
             _active = true;
 
-            // Rakip ad etiketlerini gizleyen kural bir OYUN kuralıdır (RemoteAvatar): operatör
-            // sahada kimin nerede olduğunu görmek zorunda, o yüzden gözlemci muaf.
+            // Hiding enemy name labels is a GAME rule (RemoteAvatar); the operator must see who is
+            // where, so the spectator is exempt.
             RemoteAvatar.SpectatorMode = true;
 
-            // Pencere kipi operatörün son seçimine oturur (F11 / tercihler paneli). Rol admin
-            // OLMADAN yapılmaz: oyuncu istemcisi Quest'te koşar, orada pencere diye bir şey yok.
+            // Window mode restores the operator's last choice (F11 / preferences). ⚠️ Admin role
+            // only: the player client runs on Quest, where there are no windows.
             AdminSession.ApplyScreenMode();
 
-            // Ses çıkışı da operatörün son seçimine oturur. Aynı gerekçe: uygulama, işletmenin
-            // hoparlörü yerine sistemin o günkü varsayılanıyla açılmasın. Rol admin OLMADAN
-            // yapılmaz — oyuncu istemcisinde Quest'in tek bir ses yolu vardır.
+            // Same for audio output, so the app does not open on the system default instead of the
+            // venue's speakers. ⚠️ Admin role only — Quest has a single audio path.
             AdminSession.ApplyAudioOutput();
 
             gameObject.AddComponent<AdminRoster>();
-            // Adminler arası ortak seçim (mod/harita) — birden çok operatör aynı ekranı görsün.
+            // Shared mode/map selection so multiple operators see the same screen.
             gameObject.AddComponent<AdminSelection>();
 
             var cameraGo = new GameObject("[AdminSpectatorCamera]");
             cameraGo.transform.SetParent(transform, false);
-            cameraGo.tag = "MainCamera"; // Camera.main = bizim kamera (RemoteAvatar etiketleri)
+            cameraGo.tag = "MainCamera"; // Camera.main = our camera (RemoteAvatar labels)
 
             Camera = cameraGo.AddComponent<Camera>();
             Camera.clearFlags = CameraClearFlags.Skybox;
@@ -156,7 +150,7 @@ namespace VortexArena.App.Admin
             Camera.nearClipPlane = 0.05f;
             Camera.farClipPlane = 300f;
 
-            // Rig kapatıldığı için sahnede dinleyici kalmaz ("no audio listener" uyarısı).
+            // The disabled rig leaves no listener in the scene ("no audio listener" warning).
             cameraGo.AddComponent<AudioListener>();
 
             _cameraDriver = cameraGo.AddComponent<AdminSpectatorCamera>();
@@ -168,12 +162,11 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Yönetim arayüzünü prefabtan örnekler (<c>Resources/UI/AdminHud</c>).
+        /// Instantiates the management UI from <c>Resources/UI/AdminHud</c>.
         /// <para>
-        /// ⚠️ Prefab SAHNEYE KONMAZ, buradan yüklenir: sahneye konsaydı her yeni arena sahnesine
-        /// elle bir kurulum adımı doğardı ve bir gün unutulurdu. Aynı sebeple gözlemcinin
-        /// altına örneklenir — gözlemci kalıcıdır (DontDestroyOnLoad), arayüz de öyle olur ve
-        /// lobi ↔ arena geçişlerinde yeniden kurulmaz.
+        /// ⚠️ The prefab is NEVER placed in a scene: that would be a manual setup step per arena,
+        /// forgotten one day. It is parented to the spectator so it inherits DontDestroyOnLoad and
+        /// survives lobby ↔ arena transitions.
         /// </para>
         /// </summary>
         private void SpawnHud()
@@ -199,19 +192,19 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Sahneyi gözlemci için hazırlar (idempotent: aynı sahnede tekrar çağrılabilir).</summary>
+        /// <summary>Prepares the scene for the spectator (idempotent).</summary>
         private void AdoptScene(Scene scene)
         {
             UiKit.TakeOverEventSystem();
 
-            // 1) BB Camera Rig kökü (OVRCameraRig + OVRManager + kumanda modelleri).
+            // 1) BB Camera Rig root (OVRCameraRig + OVRManager + controller models).
             OVRCameraRig rig = FindFirstObjectByType<OVRCameraRig>(FindObjectsInactive.Include);
             if (rig != null && rig.gameObject.activeSelf)
             {
                 rig.gameObject.SetActive(false);
             }
 
-            // 2) HMD/kumanda mantığı taşıyan bileşenler.
+            // 2) Components carrying HMD/controller logic.
             ArenaCalibrator calibrator = FindFirstObjectByType<ArenaCalibrator>(FindObjectsInactive.Include);
             if (calibrator != null)
             {
@@ -227,15 +220,15 @@ namespace VortexArena.App.Admin
                 }
             }
 
-            // 3) Arena sınırı: KAPATILMAZ, susturulur — kuş bakışı kadrajı onun HalfExtents /
-            //    LocalCenter değerlerini okumaya devam ediyor.
+            // 3) Arena boundary: silenced, NOT disabled — the top-down framing still reads its
+            //    HalfExtents / LocalCenter.
             Boundary = FindFirstObjectByType<ArenaBoundary>();
             if (Boundary != null)
             {
                 Boundary.SetSpectatorMode(true);
             }
 
-            // 4) VR için tasarlanmış world-space panelleri (Lobby paneli, mod HUD'ları).
+            // 4) World-space panels designed for VR (Lobby panel, mode HUDs).
             Canvas[] canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
             for (int i = 0; i < canvases.Length; i++)
             {
@@ -247,9 +240,9 @@ namespace VortexArena.App.Admin
                 }
             }
 
-            // 5) Çatı: kuş bakışında tepeden içerisi görülsün (tercihe göre; §çatı ArenaRoof).
-            //    ArenaRoof.OnEnable son alfayı kendine uyguladığı için burada yalnız tazeleriz —
-            //    tercih sahne yüklenmeden değişmişse de doğru değere oturur.
+            // 5) Roof: see inside from above in top-down (per preference, ArenaRoof).
+            //    ArenaRoof.OnEnable applies the last alpha itself, so this is only a refresh for
+            //    preferences changed before the scene loaded.
             RefreshRoof();
 
             if (_cameraDriver != null)
@@ -259,21 +252,21 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Çatı görünürlüğünü o anki tercih + kamera kipine göre uygular. Çağıranlar: sahne
-        /// devralma, kamera kipi değişimi (<see cref="AdminSpectatorCamera"/>) ve tercih paneli.
-        /// Sahnede çatı yoksa hiçbir şey yapmaz (arenaların çoğu açık tavanlıdır).
+        /// Applies roof visibility from the current preference + camera mode. Callers: scene
+        /// adoption, camera mode change (<see cref="AdminSpectatorCamera"/>), preferences panel.
+        /// A no-op when the scene has no roof.
         /// </summary>
         public static void RefreshRoof()
         {
             ArenaRoof.ApplyAll(AdminSession.RoofAlphaNow());
         }
 
-        // ------------------------------------------------------------- kısayollar
+        // -------------------------------------------------------------- shortcuts
 
         /// <summary>
-        /// Genel kısayollar: 1/2/3 kamera kipi · Tab sonraki oyuncu · F seçiliye POV ·
-        /// P tercihler · I istatistikler · F11 tam ekran/pencereli · Esc açık paneli kapat.
-        /// Kamera içi girdi (WASD/QE/fare/tekerlek) <see cref="AdminSpectatorCamera"/>'da.
+        /// Global shortcuts: 1/2/3 camera mode · Tab next player · F POV on selection ·
+        /// P preferences · I stats · F11 fullscreen/windowed · Esc close panel.
+        /// Camera-local input (WASD/QE/mouse/wheel) lives in <see cref="AdminSpectatorCamera"/>.
         /// </summary>
         private void ReadShortcuts()
         {
@@ -317,8 +310,8 @@ namespace VortexArena.App.Admin
                 AdminSession.TogglePanel(AdminPanelKind.Stats);
             }
 
-            // Pencere kipi: alışılmış kısayol. Kip değişimini AdminSession uygular ve yayar —
-            // burada Screen'e dokunulmaz, yoksa tercih ile pencerenin hâli ayrışır.
+            // ⚠️ AdminSession applies and broadcasts the mode change; Screen is not touched here,
+            // else the preference and the actual window state diverge.
             if (keyboard.f11Key.wasPressedThisFrame)
             {
                 AdminSession.ToggleScreenMode();

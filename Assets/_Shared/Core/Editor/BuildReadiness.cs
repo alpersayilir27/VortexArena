@@ -3,25 +3,19 @@ using System.Collections.Generic;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// Build almadan önce çalıştırılmış olması gereken editör araçlarının durumunu TEK listede
-    /// toplar (<see cref="BuildElementsConfigurator"/> penceresinin "Hazırlık" bölümü).
-    /// <para>
-    /// ⚠️ <b>Denetimler HİÇBİR ŞEY YAZMAZ.</b> Yazan tek şey pencerenin "Hepsini Çalıştır"
-    /// düğmesidir ve buradaki satırların hepsini koşar; HMD katmanları bunun tek istisnasıdır —
-    /// yalnız BAYATKEN kurulur, çünkü paylaşılan rig prefabını her koşuda yeniden serialize etmek
-    /// merge gürültüsü olurdu. Düğmesiz satırlar yalnız durum gösterir: orada kalan ✗ aracın
-    /// düzeltemeyeceği insan adımıdır (kavrama, ateş sesi, netItemId).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Denetimin mantığı burada DEĞİL, aracın kendi dosyasındadır</b> (sabitleri kim
-    /// tanımlıyorsa "güncel mi" sorusunu da o cevaplar). Bu sınıf yalnız toplar — buraya taşınan
-    /// bir eşik değeri, aracın içindekinden sessizce sapardı.
-    /// </para>
-    /// </summary>
+    /// <summary>Collects the state of every editor tool that must have run before a build into one
+    /// list (the "Hazırlık" section of the <see cref="BuildElementsConfigurator"/> window).</summary>
+    /// <remarks>
+    /// ⚠️ <b>The checks WRITE NOTHING.</b> Only the window's "Hepsini Çalıştır" button writes, and it
+    /// runs all rows; HMD overlays are the one exception, installed only when stale because
+    /// reserializing the shared rig prefab every run would be merge noise. Buttonless rows only
+    /// report: a ✗ left there is a human step the tool cannot fix (grip, fire audio, netItemId).
+    /// <para>⚠️ Check logic lives in each tool's own file, not here — whoever defines the constants
+    /// also answers "is it up to date". A threshold moved here would drift from the tool.</para>
+    /// </remarks>
     internal static class BuildReadiness
     {
-        /// <summary>Tek bir hazırlık satırı: durum + insan diliyle gerekçe + (varsa) tetik.</summary>
+        /// <summary>One readiness row: state + human readable reason + optional trigger.</summary>
         internal readonly struct ReadinessRow
         {
             internal ReadinessRow(string title, bool ok, string detail, string actionLabel, Action action, string tooltip)
@@ -34,45 +28,41 @@ namespace VortexArena.Core.Editor
                 Tooltip = tooltip;
             }
 
-            /// <summary>Satır başlığı (hangi araç).</summary>
+            /// <summary>Row title (which tool).</summary>
             internal string Title { get; }
 
-            /// <summary>Denetim temiz mi.</summary>
+            /// <summary>Whether the check is clean.</summary>
             internal bool Ok { get; }
 
-            /// <summary>İlk uyuşmazlık ya da güncelse kısa özet.</summary>
+            /// <summary>First mismatch, or a short summary when up to date.</summary>
             internal string Detail { get; }
 
-            /// <summary>Buton yazısı; <c>null</c> = butonsuz satır.</summary>
+            /// <summary>Button label; <c>null</c> = no button.</summary>
             internal string ActionLabel { get; }
 
-            /// <summary>Butonun çalıştıracağı araç (yazan taraf).</summary>
+            /// <summary>Tool the button runs (the writing side).</summary>
             internal Action Action { get; }
 
-            /// <summary>
-            /// Satırın üstüne gelince okunan açıklama: ne kapsıyor, <b>NE ZAMAN</b> gerekiyor,
-            /// atlanırsa ne kırılıyor. ⚠️ Bu metin satırın TEK öğretici yüzeyidir — "✗ gördüm, ne
-            /// yapmalıyım" sorusunun cevabı buraya yazılır, HelpBox'a değil.
+            /// <summary>Hover text: what it covers, WHEN it is needed, what breaks if skipped.
             /// </summary>
+            /// <remarks>⚠️ The row's only teaching surface — the answer to "I see ✗, now what" goes
+            /// here, not into a HelpBox.</remarks>
             internal string Tooltip { get; }
         }
 
-        /// <summary>
-        /// Tüm hazırlık satırlarını üretir. ⚠️ <b>Her denetim kendi istisnasını yutar</b>: pencere
-        /// tek bir aracın sözleşme kayması yüzünden hiç çizilmez hâle gelirse, asıl işi (arena
-        /// senkronu) de yapılamaz olurdu — hata satırın kendisinde görünür.
-        /// <para>
-        /// ⚠️ <b>Satır sırası = KOŞUM sırasıdır</b>, önem sırası değil: "Hepsini Çalıştır"ın hangi
-        /// adımda ne yaptığı listeden okunabilsin diye. Sıra değişecekse aracın kendi akışıyla
-        /// birlikte değişir.
-        /// </para>
-        /// </summary>
+        /// <summary>Builds every readiness row.</summary>
+        /// <remarks>⚠️ Each check swallows its own exception: one tool's contract drift must not
+        /// stop the window from drawing (the real work, arena sync, would go with it) — the error
+        /// shows up in its own row.
+        /// <para>⚠️ Row order = RUN order, not importance, so the list reads as what "Hepsini
+        /// Çalıştır" does at each step; it changes together with the tool's own flow.</para>
+        /// </remarks>
         internal static List<ReadinessRow> Collect()
         {
             var rows = new List<ReadinessRow>
             {
-                // Düğmesiz satırlar: hepsini "Hepsini Çalıştır" koşuyor. Ayrı bir düğme, aracın
-                // düzeltemeyeceği insan adımlarında (kavrama, ateş sesi, netItemId) yalan söylerdi.
+                // Buttonless rows: "Hepsini Çalıştır" runs them all. A per-row button would lie on
+                // human steps the tool cannot fix (grip, fire audio, netItemId).
                 Check(
                     "Arena kayıtları",
                     BuildElementsConfigurator.IsArenaRegistryUpToDate,
@@ -150,7 +140,7 @@ namespace VortexArena.Core.Editor
             return rows;
         }
 
-        /// <summary>Denetimi koşar; istisna atarsa satır "✗" olur ve mesaj detaya düşer.</summary>
+        /// <summary>Runs a check; on exception the row becomes ✗ with the message as detail.</summary>
         private delegate bool ReadinessCheck(out string detail);
 
         private static ReadinessRow Check(

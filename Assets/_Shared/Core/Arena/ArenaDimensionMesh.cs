@@ -3,47 +3,52 @@ using UnityEngine;
 namespace VortexArena.Core.Arena
 {
     /// <summary>
-    /// Bir mekanın <b>ölçü maketinin</b> kökündeki işaretçi: bu dalın altındaki <c>Plane</c> ve
-    /// <c>Columns</c> geometrisi, <see cref="SourceJson"/>'daki boyut dosyasından üretilmiştir.
+    /// The marker at the root of a venue's <b>dimension mesh</b>: the <c>Plane</c> and
+    /// <c>Columns</c> geometry under this branch was generated from the dimensions file in
+    /// <see cref="SourceJson"/>.
     /// <para>
-    /// <b>Ne işe yarar:</b> maket, işletmenin fiziksel alanını sahnede görünür kılar — arena
-    /// sanatı bunun üstüne kurulur. Ölçü yanlış alınmışsa köşeler ProBuilder ile yerinde
-    /// düzeltilir ve <c>Tools &gt; VortexArena &gt; Arena &gt; DimensionMesh'i JSON'a Çevir</c> maketi geri
-    /// okuyup <see cref="SourceJson"/>'un ÜSTÜNE yazar. Bu bileşen o aracın "neyi çevireceğim"
-    /// sorusunun cevabıdır.
+    /// <b>What it is for:</b> the dimension mesh makes the venue's physical area visible in the
+    /// scene — the arena art is built on top of it. If the measurement was taken wrong, the corners
+    /// are fixed in place with ProBuilder and
+    /// <c>Tools &gt; VortexArena &gt; Arena &gt; DimensionMesh'i JSON'a Çevir</c> reads the mesh back
+    /// and OVERWRITES <see cref="SourceJson"/>. This component is the answer to that tool's
+    /// question "what am I supposed to convert".
     /// </para>
     /// <para>
-    /// ⚠️ <b>Maket oynanan geometri DEĞİLDİR ama build'e GİRER:</b> kalibrasyon işaretçileri
-    /// (<c>anchor_a</c> / <c>anchor_b</c>) maketin altındadır ve <see cref="ArenaCalibrator"/>
-    /// onları çalışma anında arar — build'den düşen bir maket, hizalanamayan bir arena demektir.
-    /// Görünmemesini sağlayan şey etiket değil davranıştır: <see cref="Awake"/> yalnız ölçü
-    /// görselini (<see cref="PlaneName"/> + <see cref="ColumnsGroupName"/>) kapatır. Oyuncunun
-    /// gördüğü zemin/duvar environment sanatından gelir.
+    /// ⚠️ <b>The dimension mesh is NOT played geometry but it DOES go into the build:</b> the
+    /// calibration anchors (<c>anchor_a</c> / <c>anchor_b</c>) sit under the mesh and
+    /// <see cref="ArenaCalibrator"/> looks for them at runtime — a mesh dropped from the build
+    /// means an arena that cannot be aligned. What keeps it invisible is behaviour, not a tag:
+    /// <see cref="Awake"/> only disables the measurement visual (<see cref="PlaneName"/> +
+    /// <see cref="ColumnsGroupName"/>). The floor/walls the player sees come from the environment
+    /// art.
     /// </para>
     /// <para>
-    /// ⚠️ Gerçek bir build'de o görsel dal <b>hiç girmez</b>: <c>DimensionMeshBuildStripper</c>
-    /// onu build'e giden geçici sahne kopyasından siler, çünkü <c>Plane</c>/kolonlar
-    /// <c>ProBuilderMesh</c> taşır ve o da <c>Unity.ProBuilder</c>'ı runtime'a sokardı. Yani
-    /// <see cref="Awake"/>'teki gizleme <b>editör Play kipi</b> içindir — iki mekanizma aynı
-    /// sonucu iki ayrı bağlamda verir, biri diğerinin yedeği değildir.
+    /// ⚠️ In a real build that visual branch <b>never enters at all</b>:
+    /// <c>DimensionMeshBuildStripper</c> deletes it from the temporary scene copy that goes into
+    /// the build, because the <c>Plane</c>/columns carry a <c>ProBuilderMesh</c> and that would
+    /// pull <c>Unity.ProBuilder</c> into the runtime. So the hiding in <see cref="Awake"/> is for
+    /// <b>editor Play mode</b> — the two mechanisms give the same result in two different
+    /// contexts, neither is a fallback for the other.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Maket sahneden BAĞIMSIZDIR</b> — üretim aracı onu sahne köküne, dünya orijininde ve
-    /// dönüşsüz kurar ki dosyadaki ölçü sahnede birebir okunabilsin. İstenirse elle taşınır ve
-    /// döndürülür: ölçü çıkarımı bu <b>kökün</b> yerel uzayına göre yapıldığı için taşınmış bir
-    /// maket de doğru çevrilir. Yalnız <b>ölçeğini değiştirme</b> — plan metre cinsindendir.
+    /// ⚠️ <b>The dimension mesh is INDEPENDENT of the scene</b> — the generation tool creates it at
+    /// the scene root, at the world origin and without rotation, so the measurement in the file can
+    /// be read one-to-one in the scene. It may be moved and rotated by hand if desired: since the
+    /// measurement extraction is done relative to the local space of this <b>root</b>, a moved mesh
+    /// is still converted correctly. Just <b>do not change its scale</b> — the plan is in meters.
     /// </para>
     /// </summary>
     [DisallowMultipleComponent]
     public class ArenaDimensionMesh : MonoBehaviour
     {
-        /// <summary>Kök obje adının soneki: <c>&lt;Mekan&gt;_DimensionMesh</c>.</summary>
+        /// <summary>Suffix of the root object name: <c>&lt;Venue&gt;_DimensionMesh</c>.</summary>
         public const string RootSuffix = "_DimensionMesh";
 
-        /// <summary>Taban çokgeni objesinin adı.</summary>
+        /// <summary>Name of the floor polygon object.</summary>
         public const string PlaneName = "Plane";
 
-        /// <summary>Kolonların toplandığı grup objesinin adı.</summary>
+        /// <summary>Name of the group object the columns are collected under.</summary>
         public const string ColumnsGroupName = "Columns";
 
         [Tooltip("Mekan (işletme) klasör adı — kök obje adı ve raporlar bunu kullanır.")]
@@ -55,32 +60,34 @@ namespace VortexArena.Core.Arena
         [Tooltip("Kolonun kendi 'height' değeri 0 ise kullanılan yükseklik (metre).")]
         [SerializeField] private float defaultColumnHeight = 3f;
 
-        /// <summary>Mekan (işletme) klasör adı.</summary>
+        /// <summary>Venue (business) folder name.</summary>
         public string VenueName => venueName;
 
-        /// <summary>Maketin kaynağı ve geri yazma hedefi olan boyut dosyası.</summary>
+        /// <summary>The dimensions file that is the mesh's source and write-back target.</summary>
         public TextAsset SourceJson => sourceJson;
 
         /// <summary>
-        /// Geri yazarken korunan taşıyıcı alan (bkz. <see cref="Configure"/>).
+        /// Carrier field preserved during write-back (see <see cref="Configure"/>).
         /// </summary>
         public float DefaultColumnHeight => defaultColumnHeight;
 
         /// <summary>
-        /// Maketin ÖLÇÜ GÖRSELİNİ oyunda gizler: taban ve kolon prizmaları oyuncunun görmesi
-        /// gereken geometri değil, editördeki bir referanstır.
+        /// Hides the mesh's MEASUREMENT VISUAL in game: the floor and column prisms are not
+        /// geometry the player is meant to see, they are an editor reference.
         /// <para>
-        /// ⚠️ Kalibrasyon işaretçilerine (<c>anchor_a</c> / <c>anchor_b</c>) DOKUNULMAZ: onların
-        /// görünürlüğünü <see cref="ArenaCalibrator"/> yönetir (yakalama sırasında yakar, hizalama
-        /// onaylanınca gizler). Burada kapatmak o geri bildirimi sessizce öldürürdü.
+        /// ⚠️ The calibration anchors (<c>anchor_a</c> / <c>anchor_b</c>) are NOT TOUCHED:
+        /// <see cref="ArenaCalibrator"/> manages their visibility (lights them during capture,
+        /// hides them once the alignment is confirmed). Disabling them here would silently kill
+        /// that feedback.
         /// </para>
         /// <para>
-        /// ⚠️ Kapatılan şey <see cref="Renderer.enabled"/>'dır, obje DEĞİL: maketin dalı kapanırsa
-        /// kalibratör işaretçileri bulamaz ve boyut dosyasındaki noktalara oturtamaz.
+        /// ⚠️ What gets disabled is <see cref="Renderer.enabled"/>, NOT the object: if the mesh's
+        /// branch is deactivated the calibrator cannot find the anchors and cannot place them on
+        /// the points from the dimensions file.
         /// </para>
         /// <para>
-        /// Editörde görünür kalması gerekir (maket bir kurulum aracıdır), bu yüzden
-        /// <c>[ExecuteAlways]</c> YOKTUR — <c>Awake</c> yalnız Play/çalışma anında koşar.
+        /// It must stay visible in the editor (the mesh is a setup tool), which is why there is NO
+        /// <c>[ExecuteAlways]</c> — <c>Awake</c> only runs in Play/at runtime.
         /// </para>
         /// </summary>
         private void Awake()
@@ -103,13 +110,13 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Üretim aracı tarafından doldurulur. <b>Yalnız editör araçları çağırır</b>, çalışma
-        /// anında kimse yazmaz.
+        /// Filled in by the generation tool. <b>Only editor tools call it</b>, nobody writes at
+        /// runtime.
         /// <para>
-        /// ⚠️ <paramref name="defaultColumnHeight"/> burada <b>gidiş-dönüş taşıyıcısı</b> olarak
-        /// bekletilir, ikinci bir doğruluk kaynağı değil: geometriye dönüşmediği için maketten
-        /// okunamaz, saklanmasaydı her geri yazmada kaybolur ve dosyadaki değer sessizce
-        /// varsayılana dönerdi.
+        /// ⚠️ <paramref name="defaultColumnHeight"/> is held here as a <b>round-trip carrier</b>,
+        /// not as a second source of truth: since it does not become geometry it cannot be read
+        /// back from the mesh, and if it were not stored it would be lost on every write-back and
+        /// the value in the file would silently fall back to the default.
         /// </para>
         /// </summary>
         public void Configure(string venue, TextAsset json, float defaultColumnHeight)
@@ -119,7 +126,7 @@ namespace VortexArena.Core.Arena
             this.defaultColumnHeight = defaultColumnHeight;
         }
 
-        /// <summary>Bir mekan adı için beklenen kök obje adı.</summary>
+        /// <summary>The expected root object name for a given venue name.</summary>
         public static string RootNameFor(string venue)
         {
             return (string.IsNullOrWhiteSpace(venue) ? "Arena" : venue.Trim()) + RootSuffix;

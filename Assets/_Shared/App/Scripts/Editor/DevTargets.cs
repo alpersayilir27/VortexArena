@@ -7,34 +7,33 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Editor
 {
     /// <summary>
-    /// Adlandırılmış sunucu hedefi — <c>dev-targets.json</c> içindeki bir girdi.
+    /// A named server target — one entry in <c>dev-targets.json</c>.
     /// <para>
-    /// <b>Boş <see cref="ip"/> = adres YOK</b> demektir; <see cref="DevSession.HasAddress"/>
-    /// false döner ve istemci üretimdeki keşif zincirini (PlayerPrefs &gt; beacon &gt;
-    /// StreamingAssets/arena.json) kullanır. "Kesif (beacon)" hedefi bilinçli olarak böyledir:
-    /// beacon keşfini editörde denemenin yolu bu.
+    /// ⚠️ An <b>empty <see cref="ip"/> means NO address</b>: <see cref="DevSession.HasAddress"/> is
+    /// false and the client falls back to the production discovery chain (PlayerPrefs &gt; beacon
+    /// &gt; StreamingAssets/arena.json). "Kesif (beacon)" is deliberately such an entry.
     /// </para>
     /// </summary>
     [Serializable]
     public class DevTarget
     {
-        /// <summary>Hedefin adı — popup'ta görünen ve <see cref="DevSession.TargetName"/>'e yazılan anahtar.</summary>
+        /// <summary>Target name — popup label and the key written to <see cref="DevSession.TargetName"/>.</summary>
         public string name;
 
-        /// <summary>Sunucu IP'si. <b>Boş bırakılırsa keşif zinciri devralır</b> (adres yazılmaz).</summary>
+        /// <summary>Server IP. <b>Empty hands over to the discovery chain</b> (no address written).</summary>
         public string ip;
 
-        /// <summary>WS kontrol portu; JSON'da 0/eksikse <see cref="ArenaProtocol.CONTROL_PORT"/>'a düzeltilir.</summary>
+        /// <summary>WS control port; 0/missing is corrected to <see cref="ArenaProtocol.CONTROL_PORT"/>.</summary>
         public int port;
 
-        /// <summary>Bu hedef somut bir adres mi (yoksa keşif kipi mi)?</summary>
+        /// <summary>Concrete address, or discovery mode?</summary>
         public bool HasAddress => !string.IsNullOrWhiteSpace(ip) && port > 0;
 
-        /// <summary>Popup etiketi: <c>Local (127.0.0.1:47821)</c> / <c>Kesif (beacon) (keşif)</c>.</summary>
+        /// <summary>Popup label: <c>Local (127.0.0.1:47821)</c> / <c>Kesif (beacon) (keşif)</c>.</summary>
         public string Label => HasAddress ? $"{name} ({ip}:{port})" : $"{name} (keşif)";
     }
 
-    /// <summary>JSON kök şeması — <see cref="JsonUtility"/> için düz alanlar.</summary>
+    /// <summary>JSON root schema — flat fields for <see cref="JsonUtility"/>.</summary>
     [Serializable]
     internal class DevTargetsFile
     {
@@ -44,29 +43,25 @@ namespace VortexArena.App.Editor
     }
 
     /// <summary>
-    /// Repo kökündeki <c>dev-targets.json</c> okuyucusu — dev penceresindeki hedef listesinin
-    /// kaynağı.
+    /// Reader for <c>dev-targets.json</c> in the repo root — source of the dev window's target list.
     ///
-    /// <para><b>Neden iki katmanlı config?</b> Hedeflerin adlandırılmış listesi (bu dosya)
-    /// repo'da COMMIT'lidir: ekip "Local", "Kesif (beacon)", işletme PC'leri gibi adresleri bir
-    /// kez yazar, herkes aynı listeyi görür. Buna karşılık o listeden HANGİ hedefin seçili
-    /// olduğu KİŞİSELDİR ve <c>EditorPrefs</c>'te durur (<see cref="DevSession"/>). Seçim de
-    /// commit'lenirse klasik "checked-in user settings" tuzağına düşeriz: herkes birbirinin
-    /// IP'sini ezer, <c>git status</c> hep kirli kalır ve her rol/IP denemesi sahte bir diff
-    /// üretir. Bu ayrım sayesinde <b>rol/hedef değiştirmek hiçbir dosyayı kirletmez</b>.</para>
+    /// <para><b>Why two layers:</b> the named target list (this file) is COMMITTED so the team
+    /// shares it, but WHICH target is selected is personal and lives in <c>EditorPrefs</c>
+    /// (<see cref="DevSession"/>). Committing the selection would be the classic "checked-in user
+    /// settings" trap: everyone overwrites everyone's IP and <c>git status</c> stays dirty. With
+    /// this split, <b>changing role/target dirties no file</b>.</para>
     ///
-    /// <para><b>Boş <c>ip</c> = keşif zinciri.</b> JSON'a yorum konamadığı için buraya yazılıyor:
-    /// <c>"Kesif (beacon)"</c> girdisinin ip'si bilinçli olarak boştur → adres YAZILMAZ, istemci
-    /// üretimdeki keşif zincirini (PlayerPrefs &gt; beacon &gt; StreamingAssets/arena.json)
-    /// kullanır.</para>
+    /// <para>⚠️ <b>Empty <c>ip</c> = discovery chain</b> (noted here because JSON has no comments):
+    /// <c>"Kesif (beacon)"</c> is deliberately address-less, so the client uses
+    /// PlayerPrefs &gt; beacon &gt; StreamingAssets/arena.json.</para>
     ///
-    /// <para><b>Dosya yoksa/bozuksa kırılmaz:</b> bellekte <c>Local</c> + <c>Kesif (beacon)</c>
-    /// varsayılanı üretilir ve bir kez uyarı loglanır. Repo'ya ASLA yazılmaz — dev aracı, ekip
-    /// dosyasını sessizce oluşturup commit kirletmemeli.</para>
+    /// <para>Missing/corrupt file: in-memory <c>Local</c> + <c>Kesif (beacon)</c> defaults plus one
+    /// warning. ⚠️ NEVER written to the repo — a dev tool must not silently create the team's file
+    /// and dirty commits.</para>
     /// </summary>
     public static class DevTargets
     {
-        /// <summary>Katalog dosyasının adı (repo kökünde).</summary>
+        /// <summary>Catalog file name (in the repo root).</summary>
         public const string FileName = "dev-targets.json";
 
         private static List<DevTarget> targets;
@@ -74,10 +69,10 @@ namespace VortexArena.App.Editor
         private static string defaultRole = AppSession.RoleAdmin;
         private static bool fileFound;
 
-        /// <summary>Katalog dosyasının tam yolu (repo kökü + <see cref="FileName"/>).</summary>
+        /// <summary>Catalog file full path (repo root + <see cref="FileName"/>).</summary>
         public static string FilePath => Path.Combine(RepoRoot, FileName);
 
-        /// <summary>Son yüklemede dosya gerçekten bulundu ve okunabildi mi?</summary>
+        /// <summary>Was the file found and readable on the last load?</summary>
         public static bool FileFound
         {
             get
@@ -87,7 +82,7 @@ namespace VortexArena.App.Editor
             }
         }
 
-        /// <summary>Adlandırılmış hedefler (en az bir eleman; dosya yoksa gömülü varsayılanlar).</summary>
+        /// <summary>Named targets (never empty; built-in defaults when there is no file).</summary>
         public static IReadOnlyList<DevTarget> Targets
         {
             get
@@ -97,7 +92,7 @@ namespace VortexArena.App.Editor
             }
         }
 
-        /// <summary>JSON'daki <c>defaultTarget</c> — listede yoksa ilk hedefin adına düşer.</summary>
+        /// <summary>JSON <c>defaultTarget</c>, or the first target's name when it is not listed.</summary>
         public static string DefaultTargetName
         {
             get
@@ -107,7 +102,7 @@ namespace VortexArena.App.Editor
             }
         }
 
-        /// <summary>JSON'daki <c>defaultRole</c> — "player" | "admin" (geçersizse "admin").</summary>
+        /// <summary>JSON <c>defaultRole</c> — "player" | "admin" ("admin" when invalid).</summary>
         public static string DefaultRole
         {
             get
@@ -117,7 +112,7 @@ namespace VortexArena.App.Editor
             }
         }
 
-        /// <summary>Ada göre hedef bulur (Ordinal, birebir). Bulamazsa false + null.</summary>
+        /// <summary>Finds a target by name (Ordinal, exact); false + null when not found.</summary>
         public static bool TryFind(string name, out DevTarget target)
         {
             target = null;
@@ -140,16 +135,16 @@ namespace VortexArena.App.Editor
             return false;
         }
 
-        /// <summary>Önbelleği atar ve dosyayı diskten tekrar okur (pencerede "Tazele").</summary>
+        /// <summary>Drops the cache and re-reads the file (the window's "Tazele").</summary>
         public static void Reload()
         {
             targets = null;
             EnsureLoaded();
         }
 
-        // ------------------------------------------------------------------ yükleme
+        // ------------------------------------------------------------------ loading
 
-        /// <summary>Repo kökü = <c>Assets</c>'in üst klasörü (Application.dataPath'in parent'ı).</summary>
+        /// <summary>Repo root = the parent of <c>Assets</c> (Application.dataPath's parent).</summary>
         private static string RepoRoot
         {
             get
@@ -233,7 +228,7 @@ namespace VortexArena.App.Editor
 
             if (targets.Count == 0)
             {
-                // Gömülü varsayılan: dosyaya YAZMIYORUZ, yalnız bellekte tutuyoruz.
+                // Built-in default: kept in memory only, never written to the file.
                 targets.Add(new DevTarget { name = "Local", ip = "127.0.0.1", port = ArenaProtocol.CONTROL_PORT });
                 targets.Add(new DevTarget { name = "Kesif (beacon)", ip = "", port = ArenaProtocol.CONTROL_PORT });
 
@@ -249,7 +244,7 @@ namespace VortexArena.App.Editor
             defaultRole = ResolveDefaultRole(parsed);
         }
 
-        /// <summary>Adı olmayan girdiyi atar; ip'yi kırpar, port &lt;= 0 ise kontrol portuna düzeltir.</summary>
+        /// <summary>Drops nameless entries; trims the ip and corrects port &lt;= 0 to the control port.</summary>
         private static DevTarget Normalize(DevTarget source)
         {
             if (source == null || string.IsNullOrWhiteSpace(source.name))

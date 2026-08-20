@@ -1,44 +1,30 @@
 namespace VortexArena.Core.Audio
 {
-    /// <summary>
-    /// Moda/haritaya göre değişen duyuru seslerinin tetikleyicisi. Hangi tetikleyicide hangi
-    /// klibin çalacağını <see cref="ModeAudioRegistry"/> tutar, çalan tek yer
-    /// <see cref="GameAudio"/>'dur.
-    /// <para>
-    /// ⚠️ Bu enum serialize edilir (kayıttaki kural satırları ona göre yazılır): <b>yeni değer
-    /// SONA eklenir</b>, araya/başa ekleme mevcut asset'teki eşlemeyi kaydırır.
-    /// </para>
-    /// </summary>
+    /// <summary>Triggers for announcement sounds that vary by mode/map. Which clip plays for which
+    /// trigger lives in <see cref="ModeAudioRegistry"/>; <see cref="GameAudio"/> is the only player.
+    /// <para>⚠️ Serialized enum: new values are appended at the END — inserting shifts the mapping in
+    /// the existing asset.</para></summary>
     public enum ModeAudioEvent
     {
-        /// <summary>
-        /// Faz <c>playing</c>'e geçti. Tek turlu modlarda (tdm, ffa) maç başlangıcı, tur tabanlı
-        /// modda (turnuva) <b>her tur</b> başlangıcı — ikisi de aynı geçiştir.
-        /// </summary>
+        /// <summary>Phase moved to <c>playing</c>: match start in single-round modes (tdm, ffa) and
+        /// EVERY round start in round-based ones (tournament) — the same transition.</summary>
         RoundStart = 0,
 
-        /// <summary>
-        /// Turun bitmesine <see cref="ModeAudioRegistry.Rule.WarningSeconds"/> kaldı.
-        /// <para>Tur tabanlı modda kalan süre turun süresidir; kaydda bu tetikleyiciye kural
-        /// yazmak modu "tur tabanlı" ilan etmenin yoludur — <c>modeState</c> çekirdekte
-        /// yorumlanmaz.</para>
-        /// </summary>
+        /// <summary><see cref="ModeAudioRegistry.Rule.WarningSeconds"/> left until the round ends.
+        /// <para>Writing a rule for this trigger is how a mode is declared "round-based" — the core
+        /// does not interpret <c>modeState</c>.</para></summary>
         RoundEndWarning = 1,
 
-        /// <summary>
-        /// Maçın bitmesine <see cref="ModeAudioRegistry.Rule.WarningSeconds"/> kaldı.
-        /// <see cref="RoundEndWarning"/> için eşleşen kural yoksa devralır.
-        /// </summary>
+        /// <summary><see cref="ModeAudioRegistry.Rule.WarningSeconds"/> left until the match ends.
+        /// Takes over when no rule matches <see cref="RoundEndWarning"/>.</summary>
         MatchEndWarning = 2,
 
-        /// <summary>
-        /// Tur bitti ve <b>arkasından yenisi geliyor</b>: mod duraklatma istedi (faz
-        /// <c>playing</c> → <c>paused</c>, <c>phaseReason == "mode"</c>). Tur tabanlı modda
-        /// (turnuva) turlar arası toplanmanın başlangıcıdır.
-        /// <para>⚠️ <b>Maçı bitiren tur bu tetikleyiciyi ÇALDIRMAZ</b>: orada faz doğrudan
-        /// <c>finished</c>'a gider ve duyuruyu maç sonucu (<see cref="GameSoundId"/>) devralır —
-        /// "mevzilerinize dönün" denecek bir sonraki tur yok.</para>
-        /// </summary>
+        /// <summary>A round ended AND another follows: the mode asked to pause (phase
+        /// <c>playing</c> → <c>paused</c>, <c>phaseReason == "mode"</c>). Start of the between-rounds
+        /// gathering in round-based modes.
+        /// <para>⚠️ The round that ENDS THE MATCH does not fire this trigger: there the phase goes
+        /// straight to <c>finished</c> and the match result (<see cref="GameSoundId"/>) takes over
+        /// the announcement — there is no next round to return to positions for.</para></summary>
         RoundEnd = 3
     }
 }

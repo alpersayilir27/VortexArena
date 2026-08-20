@@ -3,19 +3,21 @@ using UnityEngine;
 namespace VortexArena.Core.FX
 {
     /// <summary>
-    /// Kar/toz katmanlarına zamanla değişen rüzgar bindirir.
+    /// Overlays a wind that varies over time onto the snow/dust layers.
     /// <para>
-    /// Neden gerekli: sabit hızda tek yöne esen kar "yapıştırılmış" görünür — gerçek fırtına
-    /// nefes alır. Perlin gürültüsüyle üç şey birlikte salınır: rüzgarın ŞİDDETİ, YÖNÜ (yaw)
-    /// ve türbülans miktarı. Tek bir gürültü kanalından beslendikleri için sertleşen rüzgarla
-    /// artan savrulma aynı anda olur; bu, efekti tek başına en çok canlandıran şeydir.
+    /// Why it is needed: snow blowing in one direction at a constant speed looks "pasted on" — a real
+    /// storm breathes. Three things oscillate together via Perlin noise: the wind's STRENGTH, its
+    /// DIRECTION (yaw) and the amount of turbulence. Because they are fed from a single noise channel,
+    /// the increased scattering happens at the same time as the wind picks up; that single detail is
+    /// what brings the effect to life the most.
     /// </para>
-    /// Kök objeye takılır; altındaki TÜM parçacık sistemlerini sürer. Her sistemin
-    /// <c>Velocity over Lifetime</c> XZ değerleri <see cref="Awake"/>'te temel alınır, sonra
-    /// her karede bu temel döndürülüp ölçeklenir — yani katmanların birbirine göre hız farkı korunur.
+    /// Attached to the root object; it drives ALL particle systems beneath it. Each system's
+    /// <c>Velocity over Lifetime</c> XZ values are taken as the baseline in <see cref="Awake"/>, then
+    /// that baseline is rotated and scaled every frame — so the relative speed difference between the
+    /// layers is preserved.
     /// <para>
-    /// ⚠️ Katmanların göreli rüzgarını değiştirmek istiyorsan sistemlerin kendi
-    /// Velocity over Lifetime değerlerini düzenle; buradaki alanlar yalnız salınımı ayarlar.
+    /// ⚠️ If you want to change the layers' relative wind, edit the systems' own Velocity over
+    /// Lifetime values; the fields here only tune the oscillation.
     /// </para>
     /// </summary>
     [DisallowMultipleComponent]
@@ -73,7 +75,7 @@ namespace VortexArena.Core.FX
             }
 
             float time = Time.time;
-            // Tek gürültü kanalı şiddeti, ikinci bağımsız kanal yönü sürer.
+            // One noise channel drives the strength, a second independent channel drives the direction.
             float gust = Mathf.PerlinNoise(time * gustFrequency, 0.37f);
             float swing = Mathf.PerlinNoise(time * gustFrequency * 0.63f, 8.11f);
 
@@ -90,7 +92,8 @@ namespace VortexArena.Core.FX
                     continue;
                 }
 
-                // Temel yönü döndür + ölçekle; min/max aralığının genişliği oranla korunur.
+                // Rotate + scale the baseline direction; the width of the min/max range is preserved
+                // proportionally.
                 float xMid = (baseXLo[i] + baseXHi[i]) * 0.5f;
                 float zMid = (baseZLo[i] + baseZHi[i]) * 0.5f;
                 float xSpread = (baseXHi[i] - baseXLo[i]) * 0.5f * speedMultiplier;

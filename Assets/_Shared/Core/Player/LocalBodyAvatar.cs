@@ -4,78 +4,53 @@ using VortexArena.Net;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>
-    /// Yerel oyuncunun gövdesi — <b>yalnız ağ kaynağı</b>: hiç çizilmez, başkalarının gördüğü
-    /// gövdeyi üretir.
-    /// <para>
-    /// ⚠️ <b>Oyuncu kendi gövdesinden HİÇBİR ŞEY görmez</b> — gövde de kol da el de çizilmez.
-    /// Oyuncunun gözlükte gördüğü eller rig'in <b>sentetik elleridir</b>
-    /// (<c>VA_CameraRig</c> → <c>OVRHandVisualLeft/Right</c>, ISDK <c>SyntheticHand</c>) ve bu
-    /// sınıfın onlarla hiçbir ilgisi yoktur.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Görünmezlik yalnız ÇİZİMDEDİR, telde tam gövde gider:</b> Renderer'lar kapatılır,
-    /// hiçbir kemiğe dokunulmaz — ağa giden iskelet kemiklerin canlı transformlarından okunuyor.
-    /// </para>
-    /// <para>
-    /// <b>Uzak avatarla AYNI FBX, AYNI retarget config, AYNI kod yolu</b> (prefablar ayrıdır:
-    /// <c>Avatars/Resources/LocalBodyAvatar.prefab</c> ve <c>App/Prefabs/RemoteAvatar.prefab</c>).
-    /// Tek fark
-    /// <see cref="ArenaNetCharacterBehaviour.HasInputAuthority"/>'dir: burada <c>true</c>, yani
-    /// gövde Meta Movement SDK'nın body tracking'inden çözülür ve sonucu ağa akar. Uzak tarafta
-    /// <c>false</c> olur ve aynı prefab gelen iskeleti uygular.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Obje neden var ve neden silinemez:</b> başkalarının gördüğü gövde tam olarak buradan
-    /// çıkıyor. Görünmez olması "gereksiz" demek değildir — bu obje yıkılırsa oyuncu ağa hiç
-    /// iskelet göndermez ve <b>diğer oyuncular onu göremez</b>. Artık yerelde tek bir pikseli bile
-    /// çizilmediği için bu refleks daha da tehlikelidir: silenin ekranında hiçbir şey değişmez,
-    /// bedeli yalnız <b>başkalarının</b> ekranında görülür.
-    /// </para>
-    /// <para>
-    /// <b>Neden kendini önyükleyen kalıcı tekil</b> (<c>WeaponGranter</c> deseni): sahneye elle
-    /// konsaydı her yeni arena bir kurulum adımı doğururdu.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Avatar SAHNE KÖKÜNDE durur, rig'in ALTINA KONMAZ.</b> SDK kök eklemi
-    /// <c>SetLocalPositionAndRotation</c> ile yazıyor; dolu bir ebeveyn dönüşümü ikinci kez
-    /// uygulanırdı (<c>Docs/Sistem-Ozeti.md</c> §7, "retarget avatarı hareket eden kökün altına
-    /// konmaz").
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Admin'de çizilmez ve bunun için rol kontrolü YAPILMAZ</b>: <c>AppSession</c>
-    /// <c>VortexArena.App</c> asmdef'indedir, bağımlılık yönü App → Core, yani Core onu göremez.
-    /// Kapı şudur: etkin bir <see cref="OVRCameraRig"/> bulunamazsa gövde kurulmaz — admin
-    /// gözlemcide <c>AdminSpectator</c> rig'i kapattığı için bu kapı kendiliğinden doğru davranır
-    /// (aynı gerekçe <c>WeaponGranter.ResolveRig</c>'de de geçerli).
-    /// </para>
-    /// <para>
-    /// ⚠️ Bu avatara <b>collider konmaz</b>: <c>Weapon</c>'daki atış raycast'i maskesizdir
-    /// (<c>Physics.Raycast(...)</c>, layer mask yok) — kendi gövden kendi atışını yerdi.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Gövde oranı burada KALİBRE EDİLMEZ</b> — <c>CharacterRetargeter.Calibrate()</c> hiç
-    /// çağrılmaz ve o yol geri gelmez: gönderenin gövde ORANLARINI değiştirmek, blob'un eklem
-    /// uzunluğu sıkıştırmasıyla (<c>SerializationCompressionType.High</c>) uyuşmaz ve uzak avatarı
-    /// bozuk duruşlara sokar. Oyuncular arası boy farkı bunun yerine tek bir üniform çarpanla
-    /// taşınır (<c>BodyScaleState</c> ölçer, <c>bodyScale</c> ile gider, §10.8) ve YALNIZ uzak
-    /// avatara uygulanır. Bu sınıfın oradaki tek işi <see cref="EyeAnchor"/>'ı sunmaktır.
-    /// </para>
-    /// </summary>
+    /// <summary>The local player's body — <b>network source only</b>: never drawn, produces the body
+    /// others see.</summary>
     /// <remarks>
-    /// ⚠️ <b>Execution order 100'den BÜYÜK olmak zorunda:</b> <c>Calibrate()</c> o karenin
-    /// UYGULANMIŞ pozunu ölçer, yani SDK'nın retarget döngüsünden ve iskeleti ağa serileştiren
-    /// <c>NetworkCharacterHandler</c>'dan (<c>[DefaultExecutionOrder(100)]</c>) sonra çağrılmalıdır.
+    /// ⚠️ <b>The player sees NOTHING of their own body</b> — no body, arm or hand is drawn. The hands
+    /// they see in the headset are the rig's <b>synthetic hands</b> (<c>VA_CameraRig</c> →
+    /// <c>OVRHandVisualLeft/Right</c>, ISDK <c>SyntheticHand</c>), unrelated to this class.
+    /// <para>⚠️ <b>Invisibility is only in RENDERING; the full body goes on the wire:</b> Renderers are
+    /// disabled and no bone is touched — the networked skeleton is read from the live bone transforms.</para>
+    /// <para><b>SAME FBX, retarget config and code path as the remote avatar</b> (separate prefabs:
+    /// <c>Avatars/Resources/LocalBodyAvatar.prefab</c> and <c>App/Prefabs/RemoteAvatar.prefab</c>). The
+    /// only difference is <see cref="ArenaNetCharacterBehaviour.HasInputAuthority"/>: <c>true</c> here,
+    /// so the body is solved from Movement SDK body tracking and streamed out.</para>
+    /// <para>⚠️ <b>Why the object exists and must not be deleted:</b> the body others see comes exactly
+    /// from here. Destroy it and the player sends no skeleton, so <b>nobody can see them</b>. Being
+    /// invisible locally makes the reflex to delete it more dangerous: nothing changes on the deleter's
+    /// screen, the cost is only visible on <b>other</b> screens.</para>
+    /// <para>A self-bootstrapping persistent singleton (the <c>WeaponGranter</c> pattern) so that every
+    /// new arena does not gain a manual setup step.</para>
+    /// <para>⚠️ <b>The avatar lives at the SCENE ROOT and is NOT parented under the rig.</b> The SDK
+    /// writes the root joint with <c>SetLocalPositionAndRotation</c>; a non-identity parent transform
+    /// would be applied twice (<c>Docs/Sistem-Ozeti.md</c> §7).</para>
+    /// <para>⚠️ <b>Not drawn on admin, and NO role check is used for that</b>: <c>AppSession</c> lives in
+    /// the <c>VortexArena.App</c> asmdef and the dependency runs App → Core, so Core cannot see it. The
+    /// gate is: no active <see cref="OVRCameraRig"/> → no body. On an admin observer
+    /// <c>AdminSpectator</c> disables the rig, so the gate behaves correctly by itself.</para>
+    /// <para>⚠️ <b>No collider on this avatar</b>: the shot raycast in <c>Weapon</c> is unmasked — your
+    /// own body would eat your own shot.</para>
+    /// <para>⚠️ <b>Body proportions are NOT calibrated here</b> — <c>CharacterRetargeter.Calibrate()</c>
+    /// is never called and that path does not come back: changing the sender's body PROPORTIONS conflicts
+    /// with the blob's joint-length compression (<c>SerializationCompressionType.High</c>) and puts the
+    /// remote avatar into broken poses. Height differences are carried by a single uniform factor
+    /// instead (<c>BodyScaleState</c> measures it, it travels as <c>bodyScale</c>, §10.8) and applied
+    /// ONLY to the remote avatar. This class's only role there is exposing <see cref="EyeAnchor"/>.</para>
+    /// <para>⚠️ <b>Execution order must be GREATER than 100:</b> the measurement reads that frame's
+    /// APPLIED pose, so it must run after the SDK's retarget loop and after
+    /// <c>NetworkCharacterHandler</c> (<c>[DefaultExecutionOrder(100)]</c>), which serialises the
+    /// skeleton onto the wire.</para>
     /// </remarks>
     [DefaultExecutionOrder(30000)]
     public class LocalBodyAvatar : MonoBehaviour
     {
-        /// <summary>Prefabın <c>Resources</c> altındaki adı (önyükleme bunu yükler).
-        /// ⚠️ Ad ve konum DEĞİŞMEZ — <c>Resources.Load</c> ile yükleniyor, taşınırsa oyuncu ağa
-        /// gövde göndermez ve kimse onu göremez.</summary>
+        /// <summary>The prefab's name under <c>Resources</c> (loaded at bootstrap).
+        /// ⚠️ Name and location MUST NOT change — it is loaded via <c>Resources.Load</c>; if moved, the
+        /// player sends no body and nobody can see them.</summary>
         private const string PrefabResourceName = "LocalBodyAvatar";
 
-        /// <summary>Rig/oturum bulunamadığında iki arama arasındaki en kısa süre (sn).</summary>
+        /// <summary>Minimum interval between rig/session searches when none is found (s).</summary>
         private const float RigSearchIntervalSeconds = 0.5f;
 
         public static LocalBodyAvatar Instance { get; private set; }
@@ -99,31 +74,26 @@ namespace VortexArena.Core.Player
 
         private bool _initialized;
 
-        /// <summary>"Sensör başlamadı" hatası bir kez basılır (Update 72/sn).</summary>
+        /// <summary>The "sensor did not start" error is printed once (Update runs 72/s).</summary>
         private bool _sourceProviderWarned;
 
-        /// <summary>
-        /// Sensörün başlaması için tanınan süre (sn). Anında bakılmaz: <c>OVRBody</c> izin
-        /// verilmemişse kendini kapatıp <c>PermissionGranted</c>'ı bekliyor ve izin diyalogu
-        /// cevaplanınca kendini geri açıyor — hemen hata basmak bu meşru yolu yalancı çıkarırdı.
-        /// </summary>
+        /// <summary>Grace period for the sensor to start (s). Not checked immediately: without permission
+        /// <c>OVRBody</c> disables itself waiting for <c>PermissionGranted</c> and re-enables once the
+        /// dialog is answered — erroring instantly would make that legitimate path look broken.</summary>
         private const float SourceProviderGraceSeconds = 5f;
 
         private float _sourceProviderGrace = SourceProviderGraceSeconds;
 
-        /// <summary>
-        /// Karakterin göz hizası (prefabta kafa kemiğinin altındaki işaretçi) — gövde ölçümünün
-        /// referansı (§10.8). Bağlı değilse <c>null</c>; ölçen taraf o hâlde ölçmez ve bağırır.
-        /// <para>⚠️ Ölçüm bunun DÜNYA konumunu okur ve o konumun ölçek-1 referansı olması
-        /// <see cref="ArenaNetCharacterBehaviour"/>'ın yerel karakteri hiç ölçeklememesine bağlıdır
-        /// — yoksa ikinci ölçüm çarpanı 1'e yaklaştırırdı.</para>
-        /// </summary>
+        /// <summary>The character's eye level (a marker under the head bone in the prefab) — the
+        /// reference of the body measurement (§10.8). <c>null</c> if unbound; the measuring side then
+        /// refuses to measure and complains.</summary>
+        /// <remarks>⚠️ The measurement reads its WORLD position, and that position being a scale-1
+        /// reference depends on <see cref="ArenaNetCharacterBehaviour"/> never scaling the local
+        /// character — otherwise a second measurement would drag the factor toward 1.</remarks>
         public Transform EyeAnchor => eyeAnchor;
 
-        /// <summary>
-        /// Gövde gerçekten çözülüyor mu (kurulmuş + retargeter geçerli). Ölçümün ön koşuludur:
-        /// pozu olmayan bir iskeletin göz hizası anlamsızdır.
-        /// </summary>
+        /// <summary>Is the body actually being solved (initialised + retargeter valid)? Precondition of
+        /// the measurement: the eye level of a skeleton with no pose is meaningless.</summary>
         public bool IsBodyPoseValid => _initialized && retargeter != null && retargeter.RetargeterValid;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -137,13 +107,13 @@ namespace VortexArena.Core.Player
             var prefab = Resources.Load<GameObject>(PrefabResourceName);
             if (prefab == null)
             {
-                // Yerel çizim zaten yok; kayıp olan UZAK görünürlüktür — bu yüzden uyarı da onu söyler.
+                // There is no local drawing anyway; what is lost is REMOTE visibility — hence the wording.
                 Debug.LogWarning($"[LocalBodyAvatar] 'Resources/{PrefabResourceName}' prefabı bulunamadı; " +
                                  "ağa gövde gitmeyecek, yani diğer oyuncular bu oyuncuyu göremeyecek.");
                 return;
             }
 
-            // ⚠️ Parent VERİLMEZ (gerekçe sınıf özetinde).
+            // ⚠️ No parent is given (rationale in the class summary).
             GameObject instance = Instantiate(prefab);
             instance.name = prefab.name;
             DontDestroyOnLoad(instance);
@@ -176,9 +146,9 @@ namespace VortexArena.Core.Player
 
             if (character == null || retargeter == null)
             {
-                // ⚠️ Uyarı değil HATA: bu durumda oyuncunun gövdesi ağa HİÇ gitmez, yani diğer
-                // oyuncular onu göremez — ve eksiklik sahada "ağ bozuk" diye okunur, oysa tek eksik
-                // prefab bağıdır. Sessiz kalmak teşhisi ağ katmanına yönlendirip saatler yakar.
+                // ⚠️ An ERROR, not a warning: the body never reaches the wire, so nobody can see this
+                // player — and in the field that reads as "the network is broken" when the only thing
+                // missing is a prefab binding. Staying silent sends diagnosis to the network layer.
                 Debug.LogError("[LocalBodyAvatar] ArenaNetCharacterBehaviour / NetworkCharacterRetargeter " +
                                "bulunamadı; ağa gövde gitmeyecek. Resources/LocalBodyAvatar.prefab " +
                                "içindeki Character objesine bu bileşenler kurulmalı.", this);
@@ -186,9 +156,9 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            // ⚠️ Kurulumdan ÖNCE tüm alt ağaç PASİF durur (renderer değil, tümden kapalı) ve bu tek
-            // meşru kapatmadır: kurulmamış bir retargeter her karede "Ownership is None" hatası
-            // basar. Admin'de rig hiç gelmediği için burada kapalı kalır — o da doğrusudur.
+            // ⚠️ BEFORE setup the whole subtree stays INACTIVE (fully off, not just renderers) — the one
+            // legitimate deactivation: an uninitialised retargeter logs "Ownership is None" every frame.
+            // On admin the rig never arrives, so it stays off here, which is also correct.
             if (visualRoot != null)
             {
                 visualRoot.SetActive(false);
@@ -214,12 +184,10 @@ namespace VortexArena.Core.Player
             TickSourceProviderCheck();
         }
 
-        /// <summary>
-        /// Gövdeyi ancak <b>her iki koşul</b> sağlanınca kurar: etkin bir rig (yani rol gerçekten
-        /// oyuncu) ve sunucudan alınmış bir <c>playerId</c>.
-        /// <para>⚠️ <c>playerId</c> beklenir çünkü gövdenin ağa akan blob'u onunla etiketleniyor
-        /// (§6.9); kimliksiz gönderilen bir kare sunucuda sahipsiz kalırdı.</para>
-        /// </summary>
+        /// <summary>Sets the body up only when <b>both</b> conditions hold: an active rig (i.e. the role
+        /// really is player) and a <c>playerId</c> received from the server.</summary>
+        /// <remarks>⚠️ <c>playerId</c> is awaited because the streamed body blob is tagged with it
+        /// (§6.9); a frame sent without an id would be ownerless on the server.</remarks>
         private void TryInitialize()
         {
             if (ResolveRig() == null)
@@ -235,11 +203,11 @@ namespace VortexArena.Core.Player
 
             _initialized = true;
 
-            // ⚠️ SIRA ÖNEMLİ — obje önce AKTİF edilir, sonra kurulur. Buraya kadar pasifti; pasif
-            // objede Awake hiç koşmaz ve kurulumun ihtiyaç duyduğu bileşenler çözülmemiş olur (SDK
-            // sahipliği None kalır → gövde ağa hiç gitmez). SetActive(true) eksik Awake'leri kendi
-            // çağrısı içinde senkron koşturur. ⚠️ Bu, objenin SON kez etkinleştirilmesidir — bir
-            // daha KAPATILMAZ (gerekçe HideAllRenderers'da).
+            // ⚠️ ORDER MATTERS — activate first, then initialise. It was inactive until now, and Awake
+            // never runs on an inactive object, so the components setup needs would be unresolved (SDK
+            // ownership stays None → no body on the wire). SetActive(true) runs the pending Awakes
+            // synchronously inside the call. ⚠️ This is the LAST activation — it is never disabled again
+            // (rationale in HideAllRenderers).
             if (visualRoot != null)
             {
                 visualRoot.SetActive(true);
@@ -251,28 +219,23 @@ namespace VortexArena.Core.Player
             _sourceProviderGrace = SourceProviderGraceSeconds;
         }
 
-        /// <summary>
-        /// Gövdeyi görsel olarak tümden susturur: <b>alt ağaçtaki her Renderer kapanır, istisna
-        /// yoktur.</b> Oyuncu kendi gövdesinden hiçbir şey görmez; gördüğü eller rig'in sentetik
-        /// elleridir ve bu sınıfın onlarla ilgisi yoktur.
-        /// <para>
-        /// ⚠️ <b>Obje KAPATILMAZ</b> (<c>SetActive(false)</c>) ve bu bir üslup tercihi değildir:
-        /// karakterin üstündeki sensör kaynağı bir <c>OVRBody</c>'dir ve objeyi kapatmak onun
-        /// <c>OnDisable</c>'ını çalıştırır — açık son örnek de kapanınca <c>StopBodyTracking</c>
-        /// çağrılır. Geri açıldığında <c>OnEnable</c> yeniden başlatmayı dener ve
-        /// <b>başaramazsa kendini KALICI olarak kapatır</b>, bir daha denemez. Kapatılan bir gövde
-        /// ağa da akmaz, yani oyuncu diğerlerinin ekranından kaybolurdu. Renderer kapatmak aynı
-        /// görsel sonucu verir ve hiçbir yaşam döngüsü olayını tetiklemez.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Kemik gizleme/ölçekleme ile YAPILMAZ ve o yol geri getirilmez:</b> ağa giden
-        /// iskelet kemiklerin canlı transformlarından okunuyor ve okuma <c>localScale</c>'i de
-        /// kapsıyor (<c>SkeletonJobs.GetPoseJob</c>) — sıfırlanan bir kemik uzak tarafta gövdeyi
-        /// çökertir. Renderer kapatmak transformlara hiç dokunmaz, yani telde tam gövde gider.
-        /// </para>
-        /// <para>Tek çağrı yeter: gövdeye sonradan renderer eklenmiyor. Prefabda da hepsi kapalı
-        /// gelir; buradaki geçiş yalnız garantidir.</para>
-        /// </summary>
+        /// <summary>Silences the body visually: <b>every Renderer in the subtree is disabled, no
+        /// exceptions.</b></summary>
+        /// <remarks>
+        /// ⚠️ <b>The object is NOT deactivated</b> (<c>SetActive(false)</c>), and this is not a style
+        /// choice: the sensor source on the character is an <c>OVRBody</c>, and deactivating the object
+        /// runs its <c>OnDisable</c> — when the last enabled instance goes, <c>StopBodyTracking</c> is
+        /// called. On re-enable <c>OnEnable</c> retries and <b>if it fails it disables itself
+        /// PERMANENTLY</b>. A deactivated body does not stream either, so the player would vanish from
+        /// everyone else's screen. Disabling renderers gives the same visual result and triggers no
+        /// lifecycle event.
+        /// <para>⚠️ <b>Not done by hiding/scaling bones, and that path does not come back:</b> the
+        /// networked skeleton is read from the live bone transforms including <c>localScale</c>
+        /// (<c>SkeletonJobs.GetPoseJob</c>) — a zeroed bone collapses the body on the remote side.
+        /// Disabling renderers touches no transform, so the full body still goes on the wire.</para>
+        /// <para>One call is enough: no renderer is added to the body later. They also ship disabled in
+        /// the prefab; this pass is only a guarantee.</para>
+        /// </remarks>
         private void HideAllRenderers()
         {
             if (visualRoot == null)
@@ -290,23 +253,22 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>
-        /// Kurulumdan sonra gerçekten <b>ağa akan bir gövde</b> oluştu mu — oluşmadıysa tek bir
-        /// eyleme dönük hata basar ve <b>T-poz yedeğini</b> devreye sokar
-        /// (<see cref="ArenaNetCharacterBehaviour.RequestTPoseFallback"/>): oyuncu diğer ekranlarda
-        /// görünmez kalmak yerine, konumunu izleyen donuk bir T-pozunda çizilir.
-        /// <para>⚠️ Ölçüt sensörün açık olması DEĞİL, retargeter'ın poz uygulamasıdır: ağa giden
-        /// iskeleti üreten kapı odur. Yalnız "sağlayıcı açık mı" diye bakılsaydı, açık kalıp
-        /// geçerli veri üretmeyen bir sensör <b>hiç uyarı basmadan</b> oyuncuyu T-poz yedeğine
-        /// düşürürdü.</para>
-        /// <para>⚠️ Arıza <b>yerelde HİÇBİR iz bırakmaz</b> ve bu yüzden bu satır yereldeki tek
-        /// sinyaldir: oyuncu ellerini rig'den gördüğü için ekranında her şey normal görünür —
-        /// arızanın görünür hâli (T-poz) yalnız başkalarının ekranındadır. Kendi başına fark
-        /// edilmesi imkânsız olan bir arıza için sebep tahmine bırakılmaz, açıkça yazılır.</para>
-        /// <para>Gerekçe: <c>OVRBody</c> başlatamadığında kendi uyarısını basıp susuyor ve o satır
-        /// bu soruya bağlanmıyor; bağı burada açıkça kuruyoruz. Süre tanınmasının sebebi
-        /// <see cref="SourceProviderGraceSeconds"/>'da.</para>
-        /// </summary>
+        /// <summary>Checks whether a body actually reaches the wire after setup; if not, logs one
+        /// actionable error and arms the <b>T-pose fallback</b>
+        /// (<see cref="ArenaNetCharacterBehaviour.RequestTPoseFallback"/>) so the player is drawn as a
+        /// frozen T-pose tracking their position instead of being invisible.</summary>
+        /// <remarks>
+        /// ⚠️ The criterion is the retargeter APPLYING a pose, not the sensor being enabled: that is the
+        /// gate producing the networked skeleton. Checking only "is the provider enabled" would let a
+        /// sensor that stays on but yields no valid data drop the player into the fallback <b>with no
+        /// warning at all</b>.
+        /// <para>⚠️ The fault leaves <b>NO local trace</b>, which is why this line is the only local
+        /// signal: the player's hands come from the rig so their screen looks normal — the visible form
+        /// of the fault (T-pose) exists only on other screens.</para>
+        /// <para><c>OVRBody</c> logs its own warning and goes quiet when it cannot start, and that line
+        /// does not connect to this question; the link is made explicitly here. Grace period rationale in
+        /// <see cref="SourceProviderGraceSeconds"/>.</para>
+        /// </remarks>
         private void TickSourceProviderCheck()
         {
             if (_sourceProviderWarned || retargeter.RetargeterValid)
@@ -322,12 +284,12 @@ namespace VortexArena.Core.Player
 
             _sourceProviderWarned = true;
 
-            // Oyuncu görünmez kalmasın: gövde bundan sonra T-poz yedeğiyle akar (kök HMD'yi
-            // izler). İlk gerçek poz uygulanırsa yedek kendiliğinden ve kalıcı olarak susar —
-            // hata yine basılır, yedek bir çözüm değil arızanın okunur hâlidir.
+            // Keep the player visible: the body now streams via the T-pose fallback (root follows the
+            // HMD). It goes permanently quiet by itself once a real pose is applied — the error is still
+            // logged; the fallback is not a fix, just a readable form of the fault.
             character.RequestTPoseFallback();
 
-            // İki farklı arıza aynı belirtiyi veriyor ama çözümleri ayrı — hangisi olduğu söylenir.
+            // Two different faults share one symptom but have different fixes — say which one it is.
             string cause = character.IsSourceProviderRunning
                 ? "Body tracking açık ama geçerli bir gövde pozu hiç üretmedi"
                 : "Body tracking hiç başlamadı (sebebi konsolda bunun üstündeki [OVRBody] satırı söyler)";
@@ -341,11 +303,11 @@ namespace VortexArena.Core.Player
                 "BODY_TRACKING izni verilmemiş. Düzelttikten sonra oyunu yeniden başlat.", this);
         }
 
-        /// <summary>Etkin rig'i bulur. Referans önbelleğe alınır ama null'a düşünce (sahne değişimi,
-        /// gözlemcinin kapattığı rig) yeniden aranır.
-        /// <para>⚠️ Arama <b>kısılır</b>: rig hiç yokken (admin gözlemci — <c>AdminSpectator</c> rig'i
-        /// kapatır) bu kapı kalıcı olarak boş döner ve kısılmasaydı her karede bir sahne geneli tip
-        /// araması yapılırdı. Rig insan zaman ölçeğinde gelir; saniyede birkaç deneme yeter.</para></summary>
+        /// <summary>Finds the active rig; cached, but re-searched when the reference goes null (scene
+        /// change, observer-disabled rig).</summary>
+        /// <remarks>⚠️ The search is <b>throttled</b>: with no rig at all (admin observer —
+        /// <c>AdminSpectator</c> disables it) this gate returns null forever, and unthrottled it would
+        /// run a scene-wide type search every frame. The rig arrives on a human time scale.</remarks>
         private OVRCameraRig ResolveRig()
         {
             if (_rig != null && _rig.isActiveAndEnabled)

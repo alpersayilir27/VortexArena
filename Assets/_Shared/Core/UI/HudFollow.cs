@@ -3,16 +3,17 @@ using UnityEngine;
 namespace VortexArena.Core.UI
 {
     /// <summary>
-    /// HUD panelini kafaya KİLİTLEMEDEN "tembel takip" ettirir: panel oyuncunun önünde,
-    /// göz hizasının biraz altında durur; kafa küçük açılarla dönerken YERİNDE kalır,
-    /// ölü bölge aşılınca yumuşak biçimde yeni yöne kayar.
+    /// Makes the HUD panel "lazily follow" the head WITHOUT locking to it: the panel stands in front
+    /// of the player, slightly below eye level; it stays PUT while the head turns by small angles and
+    /// smoothly drifts to the new direction once the dead zone is exceeded.
     ///
-    /// Neden: Meta tasarım kılavuzu head-locked HUD'ı açıkça önermez
+    /// Why: the Meta design guideline explicitly advises against a head-locked HUD
     /// ("Avoid locking HUD style content to the user's head movements. Anchor information
     /// and digital content to a space, or loosely follow the user using smoothing animation"
-    /// — developers.meta.com/horizon/design/mr-design-guideline). Free-roam PvP'de kafaya
-    /// yapışık panel hem yorucu hem de nişan alırken görüşü kapatır.
-    /// Mesafe ~1 m + hafif aşağı ofset de aynı kılavuzun obje yerleşimi önerisidir.
+    /// — developers.meta.com/horizon/design/mr-design-guideline). In free-roam PvP a panel glued to
+    /// the head is both tiring and blocks the view while aiming.
+    /// The ~1 m distance + slight downward offset is also the object placement recommendation of the
+    /// same guideline.
     /// </summary>
     public class HudFollow : MonoBehaviour
     {
@@ -38,7 +39,7 @@ namespace VortexArena.Core.UI
 
         private void OnEnable()
         {
-            _initialized = false; // sahneye/ölüm ekranına ilk girişte panel doğrudan yerine otursun
+            _initialized = false; // on first entry to the scene/death screen the panel snaps straight into place
         }
 
         private void LateUpdate()
@@ -63,7 +64,7 @@ namespace VortexArena.Core.UI
                 return;
             }
 
-            // Ölü bölge: kafa yeterince dönmedikçe panelin hedef yönü değişmez.
+            // Dead zone: the panel's target direction does not change until the head turns enough.
             if (Mathf.Abs(Mathf.DeltaAngle(_targetYaw, headYaw)) > yawDeadZoneDegrees)
             {
                 _targetYaw = headYaw;
@@ -72,7 +73,7 @@ namespace VortexArena.Core.UI
             _currentYaw = Mathf.SmoothDampAngle(_currentYaw, _targetYaw, ref _yawVelocity, yawSmoothTime);
             transform.position = Vector3.SmoothDamp(transform.position, TargetPosition(reference, _currentYaw),
                 ref _positionVelocity, positionSmoothTime);
-            // Panel kullanıcıya bakar; eğim yok (yalnız yaw) — okunurluk için billboard davranışı.
+            // The panel faces the user; no tilt (yaw only) — billboard behaviour for legibility.
             transform.rotation = Quaternion.Euler(0f, _currentYaw, 0f);
         }
 

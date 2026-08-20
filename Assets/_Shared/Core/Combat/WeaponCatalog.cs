@@ -4,17 +4,17 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Tüm silah tanımlarının kataloğu + uzak atış FX prefabı + ön kabza göstergesi prefabı.
-    /// GameCatalog gibi Resources'ta yaşamak ZORUNDADIR
-    /// (`Assets/_Shared/Data/Resources/WeaponCatalog.asset`): tüketiciler sahne/prefab
-    /// referansı taşımadan <c>Resources.Load</c> ile okur. Admin/oyuncu ayrımı yoktur —
-    /// iki rol de aynı kataloğu kullanır (admin gözlemcide de uzak atışlar oynatılır).
-    /// Tüm sorgular null/boş girişe dayanıklıdır (eksik asset referansı akışı kırmasın).
+    /// Catalog of all weapon definitions + remote shot FX prefab + foregrip indicator prefab.
+    /// Like GameCatalog it MUST live under Resources
+    /// (`Assets/_Shared/Data/Resources/WeaponCatalog.asset`): consumers read it via
+    /// <c>Resources.Load</c>, carrying no scene/prefab reference. No admin/player split — remote
+    /// shots play on the admin spectator too. All queries tolerate null/empty input so a missing
+    /// asset reference does not break the flow.
     /// </summary>
     [CreateAssetMenu(fileName = "WeaponCatalog", menuName = "VortexArena/Weapon Catalog")]
     public class WeaponCatalog : ScriptableObject
     {
-        /// <summary>Resources.Load anahtarı (asset dosya adıyla birebir).</summary>
+        /// <summary>Resources.Load key (identical to the asset file name).</summary>
         private const string ResourcePath = "WeaponCatalog";
 
         private static WeaponCatalog _cached;
@@ -29,22 +29,22 @@ namespace VortexArena.Core.Combat
                  "Silah kiti koşusu (Configure All Build Elements) varsayılan küreyi üretip yalnız alan BOŞSA bağlar.")]
         [SerializeField] private GameObject secondaryGripIndicatorPrefab;
 
-        /// <summary>Katalogdaki silah tanımları.</summary>
+        /// <summary>Weapon definitions in the catalog.</summary>
         public WeaponDefinition[] Definitions => definitions;
 
-        /// <summary>Uzak atış FX prefabı (null olabilir).</summary>
+        /// <summary>Remote shot FX prefab (may be null).</summary>
         public GameObject RemoteShotFxPrefab => remoteShotFxPrefab;
 
         /// <summary>
-        /// Ön kabza soketinin prefabı (null olabilir → soket çizilmez). Sanat buradadır;
-        /// yerini/ölçeğini/alfasını <c>Weapon</c> sürer: ilk Renderer'ın materyaline
-        /// (<c>_BaseColor</c>/<c>_Color</c>), Renderer yoksa <c>LineRenderer</c>'ın çizgi rengine yazılır.
-        /// <para>⚠️ <b>1 m çap sözleşmesi:</b> prefab birim ölçüde tasarlanır, <c>Weapon</c> onu
-        /// <c>2 × secondaryGripRadius</c>'a ölçekler — böylece çizilen küre kabul hacminin kendisidir.</para>
+        /// Foregrip socket prefab (null → socket not drawn). Art lives here; position/scale/alpha
+        /// are driven by <c>Weapon</c> into the first Renderer's material
+        /// (<c>_BaseColor</c>/<c>_Color</c>), or the <c>LineRenderer</c> color when there is none.
+        /// <para>⚠️ 1 m diameter contract: authored at unit size, scaled to
+        /// <c>2 × secondaryGripRadius</c> — the drawn sphere IS the acceptance volume.</para>
         /// </summary>
         public GameObject SecondaryGripIndicatorPrefab => secondaryGripIndicatorPrefab;
 
-        /// <summary>weaponId ile tanım bulur (büyük/küçük harf duyarsız); yoksa/boşsa null.</summary>
+        /// <summary>Finds a definition by weaponId (case-insensitive); null when missing/empty.</summary>
         public WeaponDefinition FindByWeaponId(string id)
         {
             if (string.IsNullOrEmpty(id) || definitions == null)
@@ -65,8 +65,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Kataloğu Resources'tan yükler; sonuç tek sefer önbelleklenir.
-        /// Bulunamazsa TEK uyarı loglar ve null döner — çağıranlar null'a dayanıklı olmalı.
+        /// Loads the catalog from Resources; the result is cached once.
+        /// If not found it logs a SINGLE warning and returns null — callers must tolerate null.
         /// </summary>
         public static WeaponCatalog Load()
         {

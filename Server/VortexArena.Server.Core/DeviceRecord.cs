@@ -1,24 +1,20 @@
 #nullable enable
 namespace VortexArena.Server.Core;
 
-/// <summary><c>devices.json</c>'daki tek bir cihaz satırı: <c>deviceId → { name, number }</c> (§2).
-/// <para>
-/// <b>Alan değil property</b>: bu tip protokol DTO'su değildir, sunucunun kendi config dosyasıdır
-/// ve <c>System.Text.Json</c>'a <c>IncludeFields</c> olmadan (camelCase policy ile) yazılır.
-/// </para>
-/// <para>
-/// <b>Numara benzersizliği burada yaşar:</b> "iki cihaz aynı numarayı taşımaz" değişmez kuralı
-/// çevrimiçi oyuncular arasında değil, bu dosyadaki TÜM kayıtlar arasında geçerlidir — bir gözlük
-/// numarasını yıllar boyunca korusun diye. Sahiplik sorgusu hep bu haritadan yapılır: hiç
-/// bağlanmamış (bellekte <c>PlayerState</c>'i olmayan) bir cihaz da numara tutuyor olabilir.
-/// </para></summary>
+/// <summary>A single device row in <c>devices.json</c>: <c>deviceId → { name, number }</c> (§2).</summary>
+/// <remarks>Properties, not fields: this is not a protocol DTO but the server's own config, written
+/// without <c>IncludeFields</c> (camelCase policy).
+/// <para>Number uniqueness lives here: "no two devices share a number" holds across ALL records in
+/// this file, not just online players, so a headset keeps its number for years. Ownership is always
+/// queried from this map — a device that never connected (no in-memory <c>PlayerState</c>) may still
+/// hold a number.</para></remarks>
 public sealed class DeviceRecord
 {
-    /// <summary>Ad havuzundan atanan ya da <c>set_identity</c> ile değiştirilen ad. Benzersiz
-    /// DEĞİLDİR (havuz 20 isimdir, 21. cihazdan sonra tekrar eder).</summary>
+    /// <summary>Name from the pool or set via <c>set_identity</c>; NOT unique (the pool holds 20
+    /// names).</summary>
     public string Name { get; set; } = "";
 
-    /// <summary>Forma numarası 1..99; <c>0</c> = atanmamış (v1 dosyasından yükseltilen kayıtlar ve
-    /// numara havuzu dolduğunda). Tek benzersiz olmayan değer budur.</summary>
+    /// <summary>Jersey number 1..99; <c>0</c> = unassigned (v1 upgrades, exhausted pool) and the only
+    /// non-unique value.</summary>
     public int Number { get; set; }
 }

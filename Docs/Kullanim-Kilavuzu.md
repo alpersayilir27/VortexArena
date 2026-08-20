@@ -152,9 +152,10 @@ Lobi       : <o mekanın lobi haritası>
 
 Bir gözlük ilk bağlandığında sunucu ona kalıcı bir **isim** (hazır listeden rastgele) ve kalıcı bir
 **forma numarası** (1'den başlayarak ilk boş sayı) verir. İsimler tekrar edebilir, **numara asla** —
-iki oyuncuyu ayırt eden şey numaradır. Hangi kimliğin hangi fiziksel gözlük olduğunu bulmak için
-yönetim ekranındaki **"Bu cihazı tanıt"** düğmesini kullan: o gözlüğün ekranında büyük bir uyarı
-belirir.
+iki oyuncuyu ayırt eden şey numaradır. Bu isim ve numara o gözlüğe **kalıcı olarak** bağlıdır:
+ertesi gün açtığında aynı isimle, aynı numarayla listeye düşer. Bu yüzden hangi ismin hangi gözlük
+olduğunu bir kez çözmen yeter — gözlükleri **teker teker** aç, listede beliren ismi ve numarayı o
+gözlüğün üstüne etiketle (kurulum sırasında yapılmış olması beklenir).
 
 İsmi değiştirmek istersen: **İstatistik** panelini aç (`I`), o oyuncunun satırındaki **İSİM**
 (kalem) düğmesine bas — ad okunur yazıdan yazı kutusuna döner. Yeni adı yaz ve **Enter**'a bas (ya da
@@ -413,7 +414,6 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 |---|---|---|
 | **Oyuncu listesi (roster)** | Bağlı oyuncular, takımları, çevrimiçi/çevrimdışı durumu | Maç öncesi herkesin bağlı olduğunu doğrulamak için |
 | **Kırmızı / Mavi** | Seçili oyuncunun takımını değiştirir | Takımları elle dengelemek için (boş bırakırsan sistem otomatik dengeler) |
-| **Bu cihazı tanıt** | O gözlüğün ekranında büyük bir işaret gösterir | "Bu listedeki isim hangi gözlük?" sorusuna cevap |
 | **Çıkar (kick)** | Oyuncuyu atar — **o gözlükteki oyun kapanır** | Yanlışlıkla bağlanan/oyunda olmaması gereken cihaz |
 | **Mod seçimi** | Oyun türü: **Takım Ölüm Maçı** (kırmızı-mavi), **Herkes Tek** (takım yok, herkes herkese karşı) veya **Turnuva** (turlar hâlinde takım elemesi). Satıra bas, liste aşağı açılır, seçeceğine tıkla | Her maç öncesi — aşağıdaki "Üç oyun modu" kutusuna bak |
 | **Harita seçimi** | Hangi arenada oynanacağı — mod seçimiyle aynı açılır liste. Listenin **ilk satırı "Lobi"dir**: seçersen herkes lobiye döner | Her maç öncesi — sadece seçili modla uyumlu haritalar listelenir |
@@ -432,8 +432,8 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 
 **Oyuncu seçmek:** yandaki listede bir oyuncuya tıkla — seçili oyuncunun çerçevesi turuncu olur,
 zemindeki halkası büyür. `Tab` ile sıradakine geçersin. Satırdaki küçük düğmeler: **POV** (o oyuncunun
-gözünden izle), **MAVİYE/KIRMIZIYA** (takımını değiştir), **KİMLİK** (o gözlüğün ekranında büyük
-işaret göster), **CAN** (ölü kalan oyuncuyu ayağa kaldır — aşağıdaki bölüm), **AT** (bağlantıdan çıkar — güvenlik için **iki kez** basmak gerekir, ilk basışta
+gözünden izle), **MAVİYE/KIRMIZIYA** (takımını değiştir), **CAN** (ölü kalan oyuncuyu ayağa
+kaldır — aşağıdaki bölüm), **AT** (bağlantıdan çıkar — güvenlik için **iki kez** basmak gerekir, ilk basışta
 düğme "EMİN?" olur). ⚠️ **AT o gözlükteki oyunu kapatır** ve **satırı listeden siler**: oyuncu
 birkaç saniye içinde Quest'in kendi menüsünde bulur kendini, geri dönmesi için oyunun elle yeniden
 açılması gerekir. Yani "AT" molaya çıkarmak için değil, o cihazı oturumdan çıkarmak içindir.

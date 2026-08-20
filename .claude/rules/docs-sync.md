@@ -9,19 +9,24 @@ tool'u, sunucu config'i) değişiklik **aynı commit'te** dokümana yazılır; s
 |---|---|
 | Protokol mesajı/alanı, sabit, port, doğrulama kuralı, maç fazı, yeni `modId`/`weaponId` | `Docs/ArenaNet-Protokol.md` — **TEK doğruluk kaynağı** |
 | Yeni bileşen/servis, ağ mantığı, akış, bileşen sorumluluğu, kod reçetesi, proje durumu | `Docs/Sistem-Ozeti.md` (§2 repo haritası, §3 ağ mantığı, §4 bileşen sözlüğü, §5 reçeteler, §8 durum) |
-| Klasör/asmdef mimarisi, içerik ekleme reçetesi, editor tool'u, XR/paket politikası | `CLAUDE.md` |
+| Klasör/asmdef mimarisi | `Docs/Sistem-Ozeti.md` §2 (isimlendirme standardı → [[kod-standartlari]]) |
+| İçerik ekleme reçetesi | `Docs/Gelistirici/Yemek-Kitabi.md` |
+| Editor tool'u davranışı | `Docs/Sistem-Ozeti.md` §4 |
+| Geliştirici yasağı ("şunu yapma"), XR/paket politikası | `Docs/Gelistirici/Yapma-Listesi.md` (gerekçesi uzunsa `Docs/Sistem-Ozeti.md` §7) |
+| Kod yazım standardı (yorum dili, isimlendirme, serialize kuralı) | [[kod-standartlari]] |
 | Sunucu çalıştırma, CLI argümanı, config dosyası/alanı | `Server/README.md` |
 | İşletme kurulumu: donanım, ağ/firewall, kalibrasyon, smoke test adımı | `Docs/Isletme-Kurulum.md` |
 | Planlanmış bir işin kapsamı veya bitmesi | `plan/<faz>.md` (biten dosya **silinir**) + `plan/README.md` |
-| Yeni kalıcı çalışma kuralı | `.claude/rules/` (yalnız üç dosya: [[unity-erisim]] · [[is-akisi]] · [[docs-sync]]) + `CLAUDE.md`'de tek satır işaret |
+| Yeni kalıcı çalışma kuralı | `.claude/rules/` (yalnız dört dosya: [[unity-erisim]] · [[is-akisi]] · [[docs-sync]] · [[kod-standartlari]]) + `CLAUDE.md`'de tek satır işaret |
 | Pahalıya öğrenilmiş tuzak | `Docs/Sistem-Ozeti.md` §7 |
 
 - **Sıra: doküman → kod.** Ağ davranışı değişecekse ÖNCE `ArenaNet-Protokol.md`, sonra iki taraf
   (Unity `_Shared/Net/Protocol` + `Server/`) ona uydurulur; kod-önce iki uçlu sapma başlatır.
-- ⚠️ **`CLAUDE.md` TALİMAT dosyasıdır, anlatım değil** — tablodaki kendi satırının dışına çıkma.
-  Test: cümlen *"şunu şöyle yap/yapma"* mı, *"sistem şöyle çalışıyor"* mu? İkincisinin yeri
-  `Docs/`'tur, CLAUDE.md'ye en fazla tek satırlık işaret girer: bu dosya **her oturumda bağlama
-  yükleniyor** ve `Docs/` ile çakışan anlatım ikinci bir doğruluk kaynağı üretir. Yeni üst düzey
+- ⚠️ **`CLAUDE.md` GİRİŞ KAPISIDIR, içerik dosyası değil** — içine ne anlatım ne domain kuralı
+  girer; yalnız "hangi soru → hangi doküman" işaretleri ve tek satırlık temel çalışma
+  talimatları durur. Test: cümlen *"şuna şuradan bak"* ya da tek satırlık *"şunu yap/yapma"*
+  değilse yeri yukarıdaki tablodur, CLAUDE.md değil: bu dosya **her oturumda bağlama yükleniyor**
+  ve `Docs/` ile çakışan her satır ikinci bir doğruluk kaynağı üretir. Yeni üst düzey
   klasör/betikte de aynı: yerleşim listesine ad + tek satır işaret (`updater/ —
   updater/README.md`), ne yaptığı/portları/kurulumu ilgili README'ye ya da `Docs/`'a.
 

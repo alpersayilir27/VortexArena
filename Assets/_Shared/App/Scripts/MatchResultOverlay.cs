@@ -13,57 +13,56 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Maç sonu ekranı: maç bittiğinde (<c>match_end</c>) oyun içi HUD'ları gizleyip önce
-    /// <b>sonuç kartını</b> (KAZANDIN / KAYBETTİN / BERABERE), ardından <b>skor tablosunu</b>
-    /// gösterir; operatör yeni maç başlatınca ya da lobiye dönülünce kendini kapatır ve HUD'ları
-    /// geri verir.
+    /// Match end screen: on <c>match_end</c> hides gameplay HUDs and shows the <b>result card</b>
+    /// (won / lost / draw) first, then the <b>scoreboard</b>; closes itself and restores the HUDs
+    /// when the operator starts a new match or returns to lobby.
     /// <para>
-    /// <b>Faz sözleşmesi (§10.1):</b> maç sonu ekranı kendiliğinden kapanmaz — <c>finished</c>
-    /// fazından çıkaran şey operatörün seçimidir (<c>load_match</c> / <c>return_to_lobby</c> /
-    /// başka bir <c>match_state</c>). Bu yüzden burada "birkaç saniye sonra kapan" diye bir sayaç
-    /// YOKTUR; tek sayaç sonuç kartından skor tablosuna geçiştir.
+    /// <b>Phase contract (§10.1):</b> this screen never closes on its own — leaving <c>finished</c>
+    /// is the operator's choice (<c>load_match</c> / <c>return_to_lobby</c> / another
+    /// <c>match_state</c>). Hence NO "close after a few seconds" timer here; the only timer is the
+    /// result card → scoreboard transition.
     /// </para>
     /// <para>
-    /// <b>Skor tablosu <c>AdminStatsPanel</c> ile KART KABUĞUNU paylaşır, yerleşimini DEĞİL.</b>
-    /// Buradaki tablo salt okunur kolonlardır; admin paneli ise oyuncu başına eylem düğmeleri taşıyan
-    /// satırlardan kuruludur (<c>AdminStatsRow</c>). Ayrım kitleden gelir: oyuncu maç bitince
-    /// <b>sonucu</b> okur, operatör ise canlı bir <b>iş listesi</b> yönetir — o listenin düğmeleri
-    /// oyuncunun ekranında ne anlam taşır ne de basılabilir olmalıdır.
-    /// Kolonlar tek tek TMP'dir ve satırlar <c>\n</c> ile birleştirilir: TMP varsayılan fontu eşit
-    /// genişlikli DEĞİL, tek metin bloğunda boşlukla hizalama kayardı.
+    /// <b>Shares the CARD SHELL with <c>AdminStatsPanel</c>, NOT its layout.</b> This table is
+    /// read-only columns; the admin panel is built from per-player action rows
+    /// (<c>AdminStatsRow</c>). The split comes from the audience: a player reads a <b>result</b>,
+    /// the operator manages a live <b>work list</b> whose buttons would be meaningless (and must be
+    /// unpressable) on a player's screen.
+    /// Columns are separate TMP objects joined by <c>\n</c>: TMP's default font is NOT monospaced,
+    /// so space-aligned columns in one text block would drift.
     /// </para>
     /// <para>
-    /// <b>Mod bilmez.</b> Kazananı <c>match_end</c>'in iki kanalı söyler (takım ya da oyuncu,
-    /// §5.3), tablo sırasını <see cref="ModeRuntime.IsTeamless"/> ayırır — burada
-    /// <c>if (modeId == "…")</c> zinciri YAZILMAZ, yeni mod bu ekranı bedavaya alır.
+    /// <b>Mode agnostic.</b> The winner arrives on <c>match_end</c>'s two channels (team or player,
+    /// §5.3) and table ordering is split by <see cref="ModeRuntime.IsTeamless"/> — no
+    /// <c>if (modeId == "…")</c> chain here; a new mode gets this screen for free.
     /// </para>
     /// <para>
-    /// Kendini önyükleyen kalıcı tekildir (<c>AmmoHud</c> deseni): sahneye KONMAZ, yoksa her yeni
-    /// arenaya elle bir kurulum adımı doğardı. Görünüm tümüyle prefabtadır
-    /// (<c>Resources/UI/MatchResultOverlay</c>) — bu sınıf yalnız veri yazar.
+    /// Self-bootstrapping persistent singleton (<c>AmmoHud</c> pattern): NOT placed in scenes, else
+    /// every new arena would gain a manual setup step. Visuals live entirely in the prefab
+    /// (<c>Resources/UI/MatchResultOverlay</c>) — this class only writes data.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Rol kapısı gösterim anındadır, önyüklemede değil:</b> <c>AppSession.Role</c> Boot
-    /// sahnesinde çözülür ve <c>AfterSceneLoad</c> önyüklemesiyle sıralaması garanti değildir.
-    /// Admin gözlemcide kazanan ve tablo zaten <c>AdminHud</c>'da çizilir, bu ekran ona hiç
-    /// açılmaz.
+    /// ⚠️ <b>Role gate is at display time, not bootstrap:</b> <c>AppSession.Role</c> resolves in the
+    /// Boot scene and its ordering against <c>AfterSceneLoad</c> bootstrap is not guaranteed. On the
+    /// admin spectator the winner and table are already drawn by <c>AdminHud</c>, so this screen
+    /// never opens there.
     /// </para>
     /// </summary>
     public class MatchResultOverlay : MonoBehaviour
     {
-        /// <summary>Prefabın <c>Resources</c> içindeki yolu (uzantısız).</summary>
+        /// <summary>Prefab path inside <c>Resources</c> (no extension).</summary>
         public const string ResourcePath = "UI/MatchResultOverlay";
 
-        /// <summary>Kolon sırası — soldan sağa; <see cref="CellText"/>'in <c>switch</c> sırasını ve
-        /// <see cref="boardColumns"/>'un beklenen uzunluğunu belgeler. Başlık metinleri ve
-        /// genişlikler PREFABTA yaşar (repo genelindeki arayüz sözleşmesi: kod yalnız veri yazar).
-        /// <para>⚠️ Buraya kolon eklemek YETMEZ: prefabta da bir TMP objesi açıp diziye bağlamak
-        /// gerekir, yoksa yeni kolon sessizce hiç çizilmez.</para>
-        /// <para>⚠️ <c>K</c> ve <c>D</c> başlıkları prefabta METİN DEĞİL İKONDUR (crosshair /
-        /// skull) — admin kartındaki gibi; ilgili <c>Header</c> objelerinin metni bilerek boştur.</para>
-        /// <para>⚠️ Operatöre ait teşhis alanları (batarya · kumanda · ping · durum) burada
-        /// YOKTUR ve eklenmez: maç sonunda oyuncuya canlı cihaz durumu gösterilmez, o bilgi
-        /// admin'in.</para></summary>
+        /// <summary>Column order, left to right — documents <see cref="CellText"/>'s <c>switch</c>
+        /// order and the expected length of <see cref="boardColumns"/>. Header texts and widths live
+        /// IN THE PREFAB (repo-wide UI contract: code only writes data).
+        /// <para>⚠️ Adding a column here is NOT enough: a TMP object must also be created in the
+        /// prefab and wired into the array, else the new column is silently never drawn.</para>
+        /// <para>⚠️ The K and D headers are ICONS, not text, in the prefab (crosshair / skull) —
+        /// like the admin card; those <c>Header</c> objects are intentionally blank.</para>
+        /// <para>⚠️ Operator diagnostics (battery · controller · ping · status) are NOT here and are
+        /// not added: players are never shown live device state at match end — that is admin
+        /// information.</para></summary>
         private static readonly string[] ColumnOrder = { "OYUNCU", "TAKIM", "SKOR", "K", "D", "K/D" };
 
         private enum Stage
@@ -108,8 +107,8 @@ namespace VortexArena.App
         private Stage _stage = Stage.Hidden;
         private float _scoreboardAt;
 
-        /// <summary>Tekili kurar. ⚠️ <b>Koşulsuzdur</b> — "bu oturumda gerekli mi" kararı
-        /// <see cref="AppSingletons"/>'a aittir (gerekçe orada).</summary>
+        /// <summary>Installs the singleton. ⚠️ <b>Unconditional</b> — "is it needed this session"
+        /// is <see cref="AppSingletons"/>'s call (rationale lives there).</summary>
         internal static void Install()
         {
             if (_instance != null)
@@ -141,7 +140,7 @@ namespace VortexArena.App
 
             _instance = this;
 
-            // Domain reload'suz Play girişinden kalan bayat bir "gizli" durumu taşımayalım.
+            // Don't carry a stale "hidden" state over from a Play entry without domain reload.
             HideAll();
         }
 
@@ -172,7 +171,7 @@ namespace VortexArena.App
                 return;
             }
 
-            // Ekran yok oluyorsa HUD'ları kapalı bırakma.
+            // Don't leave HUDs hidden if this screen is being destroyed.
             GameplayHudGate.SetHidden(false);
             _instance = null;
         }
@@ -187,7 +186,7 @@ namespace VortexArena.App
             ShowScoreboard();
         }
 
-        // -------------------------------------------------------- ağ olay işleyiciler
+        // -------------------------------------------------------- net event handlers
 
         private void HandleMatchEnd(MatchEndMsg msg)
         {
@@ -200,8 +199,8 @@ namespace VortexArena.App
             ShowResult(msg);
         }
 
-        /// <summary>Faz <c>finished</c>'ten çıktıysa ekran kapanır: yeni maç yüklendi, geri sayım
-        /// başladı, operatör duraklattı ya da lobiye dönüldü (§10.1).</summary>
+        /// <summary>Leaving the <c>finished</c> phase closes the screen: new match loaded, countdown
+        /// started, operator paused, or returned to lobby (§10.1).</summary>
         private void HandleMatchState(MatchStateMsg msg)
         {
             if (msg != null && msg.phase != ArenaProtocol.PHASE_FINISHED)
@@ -225,10 +224,10 @@ namespace VortexArena.App
             HideAll();
         }
 
-        /// <summary>Tablo roster'dan beslenir (§10.2): sayaçlar sunucu-otoriterdir ve maç sonu
-        /// katılımcıları (<c>left</c> olanlar dahil) <c>finished</c> fazı boyunca listede kalır.
-        /// ⚠️ Bağlantı durumuna göre SÜZME YOKTUR — admin tablosuyla aynı gerekçe: oyundan
-        /// çıkarılmış satır maç sonu tablosunda görünmeli.</summary>
+        /// <summary>Table is fed by the roster (§10.2): counters are server-authoritative and
+        /// participants (including <c>left</c> ones) stay listed for the whole <c>finished</c> phase.
+        /// ⚠️ NO filtering by connection state — same rationale as the admin table: a removed player
+        /// must still appear in the final table.</summary>
         private void HandleLobbyState(LobbyStateMsg msg)
         {
             _roster = msg?.players ?? Array.Empty<PlayerInfo>();
@@ -239,7 +238,7 @@ namespace VortexArena.App
             }
         }
 
-        // ------------------------------------------------------------------ gösterim
+        // ------------------------------------------------------------------ display
 
         private void ShowResult(MatchEndMsg msg)
         {
@@ -291,7 +290,7 @@ namespace VortexArena.App
             }
         }
 
-        // --------------------------------------------------------------- skor tablosu
+        // ----------------------------------------------------------------- scoreboard
 
         private void RefreshScoreboard()
         {
@@ -303,9 +302,9 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Tablo sırası <c>AdminStatsPanel</c> ile aynıdır: takımlı modda roster sırası
-        /// (<c>playerId</c>) korunur — oyuncu kendini hep aynı satırda arar; FFA'da tek sıralama
-        /// ölçütü skordur, tablo skora göre AZALAN dizilir (eşitlikte <c>playerId</c> ile kararlı).
+        /// Ordering matches <c>AdminStatsPanel</c>: in team modes roster order (<c>playerId</c>) is
+        /// kept so a player always finds themselves in the same row; in FFA score is the only
+        /// criterion, sorted DESCENDING (stable via <c>playerId</c> on ties).
         /// </summary>
         private void RankPlayers()
         {
@@ -364,11 +363,11 @@ namespace VortexArena.App
             }
         }
 
-        /// <summary>Hücre metinleri admin satırındaki karşılıklarıyla (<c>AdminStatsRow</c>) aynı
-        /// biçimi kullanır — aynı oyuncu iki tabloda farklı görünmemeli. ⚠️ Ortak bir yardımcıya
-        /// çıkarılmaz: bu sınıf <c>PlayerInfo</c> (tel DTO'su) okur, admin satırı ise
-        /// <c>AdminPlayerView</c> (istemci aynası); ortak imza ikisinden birini kendi doğal
-        /// kaynağından koparırdı.</summary>
+        /// <summary>Cell texts use the same format as their <c>AdminStatsRow</c> counterparts — the
+        /// same player must not look different across the two tables. ⚠️ Not extracted into a shared
+        /// helper: this class reads <c>PlayerInfo</c> (wire DTO) while the admin row reads
+        /// <c>AdminPlayerView</c> (client mirror); a shared signature would cut one of them off from
+        /// its natural source.</summary>
         private static string CellText(PlayerInfo info, int column)
         {
             switch (column)
@@ -381,13 +380,13 @@ namespace VortexArena.App
                 case 5: return info.deaths > 0
                     ? (info.kills / (float)info.deaths).ToString("0.00")
                     : info.kills.ToString("0.00");
-                // Prefabta ColumnOrder'dan FAZLA kolon bağlanmışsa boş kalsın.
+                // Columns wired in the prefab beyond ColumnOrder stay blank.
                 default: return "";
             }
         }
 
-        /// <summary>Kartın turuncu başlığı: kazanan + skor. Skor kısmı <c>AdminStatsPanel</c>'in
-        /// başlığıyla aynıdır (takımlı modda takım skoru, FFA'da lider).</summary>
+        /// <summary>Card's orange headline: winner + score. The score part matches
+        /// <c>AdminStatsPanel</c>'s headline (team score in team modes, leader in FFA).</summary>
         private void RefreshHeadline()
         {
             string winner = _lastEnd != null ? WinnerLine(_lastEnd) : "";
@@ -406,8 +405,8 @@ namespace VortexArena.App
         {
             if (ModeRuntime.IsTeamless)
             {
-                // Takım yok → tek anlamlı başlık lider. Skor hiç yazılmadıysa (maç başlamadı)
-                // uydurma yapmayız.
+                // No teams → the only meaningful headline is the leader. With no score yet
+                // (match never started) we invent nothing.
                 return _ranked.Count > 0 && _ranked[0].score > 0
                     ? $"LİDER: {_ranked[0].name} {_ranked[0].score}"
                     : "HERKES TEK";
@@ -440,8 +439,8 @@ namespace VortexArena.App
             boardTeamSummaryText.text = _sb.ToString();
         }
 
-        /// <summary>Kartın alt bandı. Admin kartında burada sunucu teşhisi vardır; oyuncunun
-        /// karşılığı maçın kimliği + kendi özetidir.</summary>
+        /// <summary>Card's bottom band. The admin card shows server diagnostics here; the player's
+        /// counterpart is the match identity + their own summary.</summary>
         private void RefreshMatchSummary()
         {
             if (boardMatchSummaryText == null)
@@ -463,7 +462,7 @@ namespace VortexArena.App
             boardMatchSummaryText.text = _sb.ToString();
         }
 
-        /// <summary><paramref name="team"/> <c>null</c> ise tüm oyuncular sayılır.</summary>
+        /// <summary>Counts all players when <paramref name="team"/> is <c>null</c>.</summary>
         private int AliveCount(string team)
         {
             int count = 0;
@@ -502,10 +501,11 @@ namespace VortexArena.App
             alive = AliveCount(team);
         }
 
-        // ------------------------------------------------------------------- metinler
+        // ----------------------------------------------------------------------- text
 
-        /// <summary>Yerel oyuncu kazandı mı. Kazanan iki kanaldan gelir (§5.3): takım skorlu modda
-        /// <c>winnerTeam</c>, bireysel skorlu modda <c>winnerPlayerId</c>; ikisi de boşsa berabere.</summary>
+        /// <summary>Did the local player win. The winner arrives on two channels (§5.3):
+        /// <c>winnerTeam</c> for team-scored modes, <c>winnerPlayerId</c> for player-scored ones;
+        /// both empty = draw.</summary>
         private static bool Won(MatchEndMsg msg, out bool draw)
         {
             if (msg.winnerTeam == "red" || msg.winnerTeam == "blue")
@@ -542,8 +542,8 @@ namespace VortexArena.App
             return msg.winnerPlayerId > 0 ? $"{NameOf(msg.winnerPlayerId)} KAZANDI" : "";
         }
 
-        /// <summary>Sonuç kartının skor satırı: takım skorlu modda takım skoru, bireysel skorlu
-        /// modda oyuncunun kendi skoru (<c>scoreRed</c>/<c>scoreBlue</c> o modlarda hep 0'dır,
+        /// <summary>Result card's score line: team score in team-scored modes, the player's own
+        /// score in player-scored ones (<c>scoreRed</c>/<c>scoreBlue</c> are always 0 there,
         /// §10.2).</summary>
         private string ScoreLine(MatchEndMsg msg)
         {
@@ -575,7 +575,7 @@ namespace VortexArena.App
             return null;
         }
 
-        /// <summary>playerId → ad (roster'dan); bilinmiyorsa "Oyuncu N".</summary>
+        /// <summary>playerId → name (from roster); falls back to a generic label.</summary>
         private string NameOf(int playerId)
         {
             for (int i = 0; i < _roster.Length; i++)

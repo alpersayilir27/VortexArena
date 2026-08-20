@@ -4,83 +4,70 @@ using VortexArena.Core.Player;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Bel-altı reload jesti: elde tutulan silah aşağı doğrultulup bel hizasının altına
-    /// indirilip kısa süre orada tutulunca <c>Weapon.TryStartReload</c> çağrılır. Reload'ın
-    /// gerçekten başlayıp başlamayacağı (dolu şarjör, yedek yok, ölü oyuncu...) tamamen
-    /// Weapon.TryStartReload'un kuralıdır — bu bileşen yalnız jesti TANIR.
-    /// <para>
-    /// ⚠️ <b>Ölçülen nokta ELDİR</b> (kumanda anchor'ı), silahın kökü DEĞİL: kök avuçtan
-    /// <c>gripPosition</c> kadar namlu boyunca ileridedir (silahtan silaha 0–34 cm) ve o ofset
-    /// silahın açısıyla dikey yönde süzülür — kökü ölçmek, aynı jesti bir silahta göbek
-    /// hizasında bir başkasında diz hizasında yakalamak demekti.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Hiçbir eşik metre cinsinden SABİT değildir</b>: ölçü elin <b>GÖZE göre düşüşüdür</b>
-    /// ve eşiği <b>ayakta göz yüksekliğinin</b> oranıdır (<see cref="WaistDropRatio"/>) — dik
-    /// duran oyuncuda tam olarak kemer hizası. Kısa oyuncu kolunu az, uzun oyuncu çok indirir ama
-    /// ikisi de "beline kadar" indirir. Kafadan sabit düşüş (<c>headY − 0.62</c>) bu yüzden terk
-    /// edildi.
-    /// </para>
-    /// <para>
-    /// ⚠️ Ölçünün iki parçası da bilinçlidir ve <b>karıştırılamaz</b>: referans nokta <b>CANLI</b>
-    /// gözdür (kafayla birlikte iner), ölçek ise <b>AYAKTA</b> boydur
-    /// (<see cref="StandingHeightState"/>, duruştan bağımsız). Zemine göre sabit bir çizgi
-    /// çizilseydi eğilen oyuncunun sarkan kolu çizginin altında kalır ve reload kendiliğinden
-    /// başlardı; ölçek canlı göz yüksekliği olsaydı eşik oyuncu eğildikçe onunla birlikte iner ve
-    /// aynı şey olurdu. Bu hâliyle eğilmek elin göze göre düşüşünü DEĞİŞTİRMEZ.
-    /// </para>
-    /// <para>
-    /// İkinci koşul <b>silahın aşağı doğrultulmasıdır</b> ve bu <b>KUMANDADAN</b> okunur
-    /// (<c>anchor.forward</c>): silah zaten kumanda doğrultusundadır, silahın kendi
-    /// transformuna bakmak aynı bilgiyi model başına sapan bir yoldan öğrenmek olurdu.
-    /// ⚠️ Ölçü dünya uzayındadır, yani <b>kafa dönüşünden bağımsızdır</b>: aşağı bakmak bu koşulu
-    /// ne kolaylaştırır ne zorlaştırır.
-    /// </para>
-    /// <para>
-    /// Silah kavrandıktan sonra el bir kez göğüs hizasına çıkmadan jest kurulmaz (armed) —
-    /// yerden/kılıftan almada yanlış tetikleme böyle önlenir.
-    /// </para>
-    /// <para>
-    /// Reload <b>gerçekten başladıysa</b> tek darbelik haptik onay verilir. ⚠️ Jest tanındığı için
-    /// değil, <c>TryStartReload</c> kabul ettiği için titrer: reddedilen jestin titremesi oyuncuya
-    /// "doldu" derdi ve o yanlış bilgi ancak tetiği çekince ortaya çıkardı.
-    /// </para>
-    /// <para>
-    /// Rig çözülemediğinde (admin gözlemci, editör oturumu, el tanınmadı) jest HİÇ tanınmaz:
-    /// eli olmayan oturumda "el nerede" sorusunun doğru cevabı yoktur, uydurmak yerine susar.
-    /// </para>
+    /// Below-the-waist reload gesture: pointing the held weapon down, lowering it below waist level
+    /// and holding briefly calls <c>Weapon.TryStartReload</c>. Whether the reload actually starts
+    /// (full magazine, no reserve, dead player…) is entirely TryStartReload's rule — this component
+    /// only RECOGNIZES the gesture.
+    /// <para>⚠️ The measured point is the HAND (controller anchor), NOT the weapon root: the root
+    /// sits <c>gripPosition</c> forward along the barrel (0–34 cm per weapon) and that offset
+    /// projects vertically with the weapon's angle — measuring the root would catch the same gesture
+    /// at belly level on one weapon and knee level on another.</para>
+    /// <para>⚠️ No threshold is a FIXED metre value: the measure is the hand's DROP BELOW THE EYE
+    /// and the threshold is a ratio of STANDING eye height (<see cref="WaistDropRatio"/>) — exactly
+    /// belt level on an upright player. Short and tall players lower their arm differently but both
+    /// lower it "to the waist". Hence the fixed drop from the head (<c>headY − 0.62</c>) was
+    /// dropped.</para>
+    /// <para>⚠️ Both halves of the measure are deliberate and must not be mixed: the reference point
+    /// is the LIVE eye (descends with the head), the scale is STANDING height
+    /// (<see cref="StandingHeightState"/>, posture-independent). A floor-fixed line would put a
+    /// crouching player's hanging arm below it and self-trigger the reload; scaling by live eye
+    /// height would sink the threshold with the player and do the same. As written, crouching does
+    /// NOT change the hand's drop below the eye.</para>
+    /// <para>The second condition is the weapon pointing down, read from the CONTROLLER
+    /// (<c>anchor.forward</c>): the weapon is already controller-aligned, so reading its own
+    /// transform would learn the same thing through a per-model divergent path. ⚠️ The measure is in
+    /// world space, i.e. independent of head rotation — looking down neither helps nor hinders.</para>
+    /// <para>After a grab the gesture is not armed until the hand rises to chest level once —
+    /// preventing false triggers when picking up from the ground/holster.</para>
+    /// <para>A single haptic pulse confirms only when the reload ACTUALLY started. ⚠️ It buzzes
+    /// because <c>TryStartReload</c> accepted, not because the gesture was recognized: buzzing on a
+    /// rejected gesture would tell the player "reloaded" and the lie would surface only at the
+    /// trigger.</para>
+    /// <para>With no resolvable rig (admin spectator, editor session, unrecognized hand) the gesture
+    /// is NEVER recognized: there is no correct answer to "where is the hand" in a hand-less
+    /// session, so it stays silent instead of guessing.</para>
     /// </summary>
     public class WeaponReloadGesture : MonoBehaviour
     {
         /// <summary>
-        /// Bel çizgisi: elin GÖZÜN bu kadar altına inmesi gerekir — ayakta göz yüksekliğinin oranı
-        /// olarak. Dik duran oyuncuda "zemin ile gözün %62'si"nin tam karşılığıdır (1 − 0.62):
-        /// antropometride kemer ≈ boyun %60'ı, göz ≈ %93'ü → kemer/göz ≈ 0.64. Daha küçük bir
-        /// düşüş kemeri değil göbeği gösterir ve jest kendiliğinden tetiklenmeye başlar.
+        /// Waist line: how far below the EYE the hand must drop, as a ratio of standing eye height.
+        /// On an upright player this is exactly 62% of the floor-to-eye span (1 − 0.62):
+        /// anthropometrically belt ≈ 60% of height, eye ≈ 93% → belt/eye ≈ 0.64. A smaller drop
+        /// marks the belly, not the belt, and the gesture starts self-triggering.
         /// </summary>
         private const float WaistDropRatio = 0.38f;
 
         /// <summary>
-        /// Jestin yeniden kurulması için elin bel çizgisinin bu kadar ÜSTÜNE çıkması gerekir
-        /// (aynı ölçek). ⚠️ Bağımsız bir oran DEĞİL, <see cref="WaistDropRatio"/>'dan türetilir:
-        /// iki eşik ayrı ayrı yazılsaydı bel yükseltilirken kurulma bandı unutulur ve band ters
-        /// dönebilirdi.
+        /// How far ABOVE the waist line the hand must rise to re-arm (same scale). ⚠️ Not an
+        /// independent ratio — derived from <see cref="WaistDropRatio"/>: two separate thresholds
+        /// would let the re-arm band be forgotten when the waist is raised, and the band could
+        /// invert.
         /// </summary>
         private const float RearmMargin = 0.10f;
 
-        /// <summary>Kumandanın ileri ekseni yatayın en az bu kadar altına bakmalı: sin(25°).
-        /// Elini kemerine indiren oyuncunun bileği nötrken namlu ~20–30° aşağıdadır; daha dik bir
-        /// eşik jesti bileği kırmaya bağlar.</summary>
+        /// <summary>How far below horizontal the controller's forward axis must point: sin(25°).
+        /// With the hand at the belt and a neutral wrist the muzzle sits ~20–30° down; a steeper
+        /// threshold would tie the gesture to bending the wrist.</summary>
         private const float MinDownSin = 0.423f;
 
-        /// <summary>Jestin sürmesi gereken süre (saniye).</summary>
+        /// <summary>How long the gesture must hold (seconds).</summary>
         private const float DwellSeconds = 0.15f;
 
         /// <summary>
-        /// Koşul bozulduğunda sayaç <b>sıfırlanmaz, sızar</b> — bu, sızıntının süreye oranıdır.
-        /// ⚠️ Sıfırlamak eşiğin kenarındaki tek karelik izleme gürültüsünü jesti öldürecek kadar
-        /// büyütür; sızıntıyla o gürültü yutulur, duruştan gerçekten çıkan oyuncunun sayacı ise
-        /// <c>DwellSeconds / DwellDecayRate</c> saniyede temizlenir.
+        /// When the condition breaks the counter LEAKS instead of resetting; this is the leak rate
+        /// relative to the dwell. ⚠️ Resetting would let one frame of tracking noise at the
+        /// threshold kill the gesture; leaking absorbs it, while a player who really leaves the pose
+        /// is cleared in <c>DwellSeconds / DwellDecayRate</c> seconds.
         /// </summary>
         private const float DwellDecayRate = 2f;
 
@@ -97,7 +84,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Elin KENDİSİ: silahın kökü değil, silahı tutan kumandanın anchor'ı.
+            // The HAND itself: the holding controller's anchor, not the weapon root.
             Transform anchor = WeaponGranter.ResolveHandAnchor(weapon.MainHand);
             if (anchor == null ||
                 !WeaponGranter.TryResolveEyeAndFloor(out float eyeY, out float _) ||
@@ -107,12 +94,13 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Elin GÖZE göre düşüşü: referans nokta kafayla birlikte iner, ölçeği ise ayakta boydur.
+            // Hand drop below the EYE: the reference descends with the head, the scale is standing
+            // height.
             float drop = eyeY - anchor.position.y;
 
             if (!_armed)
             {
-                // Jest ancak el bir kez göğüs hizasına çıktıktan sonra kurulur.
+                // Armed only after the hand rises to chest level once.
                 if (drop < standingEye * (WaistDropRatio - RearmMargin))
                 {
                     _armed = true;
@@ -129,9 +117,9 @@ namespace VortexArena.Core.Combat
                 _dwell += Time.deltaTime;
                 if (_dwell >= DwellSeconds)
                 {
-                    // Dönüş değeri YALNIZ haptik onay içindir: Weapon reddedebilir (dolu şarjör,
-                    // yedek yok, ölü oyuncu) ve reddedilen jestin titremesi "oldu" der. Jest her
-                    // hâlde sıfırlanır, oyuncu tekrar dener.
+                    // Return value is ONLY for the haptic confirm: Weapon may reject (full mag, no
+                    // reserve, dead player) and buzzing on rejection would say "done". The gesture
+                    // resets either way; the player retries.
                     if (weapon.TryStartReload())
                     {
                         ControllerHaptics.PulseBoth(this, 1);
@@ -143,7 +131,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // ⚠️ Sıfırlama DEĞİL sızıntı (gerekçe DwellDecayRate).
+            // ⚠️ Leak, NOT reset (rationale in DwellDecayRate).
             _dwell = Mathf.Max(0f, _dwell - Time.deltaTime * DwellDecayRate);
         }
 

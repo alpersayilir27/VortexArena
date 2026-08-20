@@ -6,17 +6,14 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Arena sahnesinde duran köprü: aktif modun HUD prefabını (GameCatalog →
-    /// ModeDefinition.HudPrefab) örnekler. App katmanı mod assembly'lerini
-    /// REFERANSLAMAZ — prefab burada yalnız GameObject olarak taşınır, mod
-    /// bileşeninin tipine dokunulmaz. Yalnız player rolünde çalışır.
+    /// Instantiates the active mode's HUD prefab (GameCatalog → ModeDefinition.HudPrefab) in the
+    /// arena scene. ⚠️ App does NOT reference the mode assemblies — the prefab is carried as a plain
+    /// GameObject. Player role only.
     /// <para>
-    /// ⚠️ <b>HUD modId'ye bağlıdır, sahne ömrüne değil:</b> mod değişimi sahne değişimi olmadan
-    /// gelebilir — aynı haritada yeni maç, ya da sahnelenmiş arenada başlayan maç (sahne zaten
-    /// yüklü, SceneRouter yeniden yüklemez). <c>load_match</c> farklı bir mod getirirse mevcut HUD
-    /// yok edilip yenisi örneklenir; eski modun HUD'ı kalsaydı yeni modun bileşenleri (ör.
-    /// turnuvanın toplanma raporlayıcısı) hiç doğmaz ve maç akışı sessizce kilitlenirdi
-    /// (Docs/Sistem-Ozeti.md §7 "mod değişimi sahne değişimi değildir").
+    /// ⚠️ <b>The HUD is bound to the modId, not to the scene lifetime:</b> a mode can change without
+    /// a scene change (new match on the same map, or a match starting in an already staged arena).
+    /// Keeping the old mode's HUD would leave the new mode's components unspawned and lock the
+    /// match flow silently (Docs/Sistem-Ozeti.md §7 "a mode change is not a scene change").
     /// </para>
     /// </summary>
     public class ModeHudSpawner : MonoBehaviour
@@ -29,8 +26,7 @@ namespace VortexArena.App
 
         private GameObject _hudInstance;
 
-        /// <summary>Örneklenen HUD'ın modId'si — mod değişimini sahne değişiminden bağımsız
-        /// yakalamak için.</summary>
+        /// <summary>modId of the spawned HUD — catches a mode change without a scene change.</summary>
         private string _spawnedModeId = "";
 
         private void OnEnable()
@@ -47,13 +43,12 @@ namespace VortexArena.App
 
         private void Start()
         {
-            // Normal akışta load_match sahne yüklenmeden ÖNCE gelir; son modId
-            // SceneRouter'da saklanır.
+            // load_match normally arrives BEFORE the scene loads; SceneRouter keeps the last modId.
             string modeId = SceneRouter.Instance != null ? SceneRouter.Instance.LastModeId : "";
             SpawnHud(modeId);
         }
 
-        // -------------------------------------------------------- olay işleyiciler
+        // ------------------------------------------------------------ event handlers
 
         private void HandleLoadMatch(LoadMatchMsg msg)
         {
@@ -63,7 +58,7 @@ namespace VortexArena.App
             }
         }
 
-        /// <summary>Geç katılım: welcome içindeki maç bilgisinden modu al.</summary>
+        /// <summary>Late join: take the mode from the match info inside welcome.</summary>
         private void HandleConnected(WelcomeMsg msg)
         {
             if (msg != null && msg.match != null)
@@ -72,13 +67,13 @@ namespace VortexArena.App
             }
         }
 
-        // ---------------------------------------------------------------- kurulum
+        // ------------------------------------------------------------------- setup
 
         private void SpawnHud(string modeId)
         {
             if (AppSession.Role != AppSession.RolePlayer)
             {
-                return; // admin gözlemci: mod HUD'ı oyuncuya aittir, AdminHud ayrı çizilir
+                return; // admin spectator: the mode HUD belongs to the player, AdminHud is drawn separately
             }
 
             if (catalog == null)
@@ -97,10 +92,10 @@ namespace VortexArena.App
             {
                 if (mode.ModeId == _spawnedModeId)
                 {
-                    return; // aynı mod — HUD zaten doğru
+                    return; // same mode — the HUD is already correct
                 }
 
-                // Mod değişti ama sahne değişmedi (sınıf dokümanındaki uyarı): eski HUD gider.
+                // Mode changed without a scene change (see class doc): drop the old HUD.
                 Destroy(_hudInstance);
                 _hudInstance = null;
                 _spawnedModeId = "";
@@ -118,18 +113,17 @@ namespace VortexArena.App
             _hudInstance.name = prefab.name;
             _spawnedModeId = mode.ModeId;
 
-            // Yerel poz/rotasyon prefabtan gelir (VR'da kamera altında sabit konum).
+            // Local pose comes from the prefab (a fixed spot under the camera in VR).
             _hudInstance.transform.localPosition = prefab.transform.localPosition;
             _hudInstance.transform.localRotation = prefab.transform.localRotation;
         }
 
         /// <summary>
-        /// modId'yi katalogdan çözer; bulunamazsa <c>null</c> (HUD örneklenmez).
+        /// Resolves the modId from the catalog; <c>null</c> means no HUD is spawned.
         /// <para>
-        /// ⚠️ Boş modId bağlı bir oturumda "ortada maç yok" demektir (sahnelenmiş arena lobi
-        /// profiliyle koşar, §10.7) ve HUD'suzluk doğru durumdur. Katalogdaki İLK moda düşüş
-        /// yalnız SUNUCUSUZ editör sandbox'ına aittir — bağlıyken yanlış modun HUD'ını örneklemek
-        /// HUD'suzluktan kötüdür: hatasız görünür, yanlış davranır (o modun bileşenleri eksik).
+        /// ⚠️ In a connected session an empty modId means "no match" (§10.7) and no HUD is correct.
+        /// The fallback to the catalog's FIRST mode belongs only to the SERVER-LESS editor sandbox:
+        /// while connected, the wrong mode's HUD looks error-free but behaves wrongly.
         /// </para>
         /// </summary>
         private ModeDefinition ResolveMode(string modeId)
@@ -150,7 +144,7 @@ namespace VortexArena.App
             bool sandbox = Application.isEditor && (client == null || !client.IsConnected);
             if (!sandbox)
             {
-                return null; // maç yok — HUD'suzluk doğru durum (yukarıdaki gerekçe)
+                return null; // no match — no HUD is correct (rationale above)
             }
 
             ModeDefinition[] modes = catalog.Modes;

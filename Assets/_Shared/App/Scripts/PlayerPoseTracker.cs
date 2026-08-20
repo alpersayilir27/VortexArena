@@ -8,35 +8,29 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Yerel oyuncunun poz kaynağı (Lobby + arena sahnelerine konur): BB rig
-    /// anchor'larını bulur ve kendini UdpStateChannel'a IPoseSource olarak kaydeder.
-    /// Dünya→arena dönüşümü BURADA yapılır (ArenaSpace); Net katmanı yalnız hazır
-    /// arena-uzayı pozları alır. Admin rolü poz göndermez.
+    /// The local player's pose source (Lobby + arena scenes): finds the BB rig anchors and registers
+    /// as an IPoseSource with UdpStateChannel. The world→arena transform happens HERE (ArenaSpace);
+    /// Net only receives arena-space poses. The admin role does not send poses.
     /// <para>
-    /// <b>Kalibrasyon kapısı YOKTUR:</b> kayıt anchor'lar bulunur bulunmaz yapılır,
-    /// hizalama beklenmez. Kalibrasyondan önceki pozlar arena ile ÖRTÜŞMEZ (rig henüz
-    /// hizalanmadığı için ofsetlidir) ama gönderilir — oyuncunun bağlı ve hareket
-    /// hâlinde olduğu ağdan görülebilsin diye. Kalibrasyon bitince rig hizalanır ve
-    /// aynı kaynak kendiliğinden doğru uzayda poz vermeye başlar; yeniden kaydolmak
-    /// gerekmez.
+    /// <b>No calibration gate:</b> registration happens as soon as the anchors are found. Poses sent
+    /// before calibration are offset, but they show the player as connected and moving; once the rig
+    /// is aligned the same source lands in the correct space without re-registering.
     /// </para>
     /// <para>
-    /// <b>Poz + eşya bildiriminin TEK kapısı burasıdır</b> (§6.2: <c>itemL</c>/<c>itemR</c>/
-    /// <c>gripFlags</c> pozla aynı pakette gider). ⚠️ Bu sınıf eşya durumunu <b>ÜRETMEZ</b> —
-    /// <see cref="HeldItems"/>'tan okur; üreten taraf <c>Weapon</c>/<c>WeaponGranter</c>'dır.
-    /// Buraya "elde ne var" keşfi (silah listesi tarama, grab olayına abonelik) eklenirse aynı
-    /// bilginin ikinci bir kaynağı doğar.
+    /// <b>The SINGLE gate for pose + item reporting</b> (§6.2: <c>itemL</c>/<c>itemR</c>/
+    /// <c>gripFlags</c> ride the pose packet). ⚠️ Item state is <b>read</b> from
+    /// <see cref="HeldItems"/>, never produced here — adding "what is in the hand" discovery would
+    /// create a second source of the same information.
     /// </para>
     /// </summary>
     public class PlayerPoseTracker : MonoBehaviour, IPoseSource
     {
         /// <summary>
-        /// Hiç geçerli örnek alınamamışsa kullanılan DİNLENME ofseti (sağ el, kafaya göreli metre;
-        /// sol elin X'i terslenir). Oturum boyunca kumandası hiç çalışmamış bir oyuncu için de bir
-        /// el pozu üretmek zorundayız — paket sabit uzunluklu, "eli olmayan oyuncu" diye bir tel
-        /// durumu yok.
-        /// <para>⚠️ Sıfır poz KULLANILMAZ: sorunun kendisi odur (el rig orijinine, oyuncunun
-        /// ayağının dibine düşer). Kaba bir bel hizası duruşu yanlış ama <b>okunabilir</b>.</para>
+        /// REST offset used when no valid sample was ever taken (right hand, metres relative to the
+        /// head; left mirrors X). The packet is fixed length — there is no "player without hands"
+        /// wire state — so some hand pose must exist even if the controller never worked.
+        /// <para>⚠️ A zero pose is NOT used: it drops the hand onto the rig origin at the player's
+        /// feet. A rough waist-height stance is wrong but <b>readable</b>.</para>
         /// </summary>
         private static readonly Vector3 RestOffsetRight = new Vector3(0.20f, -0.45f, 0.25f);
 
@@ -45,17 +39,16 @@ namespace VortexArena.App
         private Transform _handR;
 
         /// <summary>
-        /// Son GEÇERLİ el pozu, <b>kafaya göreli</b> (0 = sol, 1 = sağ). Kumanda düştüğünde bu poz
-        /// o karenin kafa dünya pozuyla yeniden kurulur.
-        /// <para>⚠️ <b>Arena uzayında dondurmak seçenek DEĞİL:</b> free-roam'da oyuncu yürümeye
-        /// devam eder ve dondurulmuş el gövdeden kopup odanın ortasında asılı kalırdı. Kafaya
-        /// göreli tutulan el, oyuncu hareket ettikçe onunla birlikte taşınır.</para>
+        /// Last VALID hand pose, <b>relative to the head</b> (0 = left, 1 = right); rebuilt with the
+        /// current frame's head pose while the controller is out.
+        /// <para>⚠️ <b>Freezing in arena space is NOT an option:</b> the player keeps walking in
+        /// free-roam and the hand would detach and hang in the middle of the room.</para>
         /// </summary>
         private readonly Pose[] _handRelative = new Pose[2];
         private readonly bool[] _hasHandRelative = new bool[2];
 
-        // Kumanda durumu yalnız DEĞİŞTİĞİNDE loglanır: her karede basmak konsolu boğar ve
-        // gerçek olay (pil bitişi) görünmez olur.
+        // Logged only on CHANGE: per-frame printing drowns the console and hides the real event
+        // (a dying battery).
         private int _loggedStateL = ArenaProtocol.CONTROLLER_UNKNOWN;
         private int _loggedStateR = ArenaProtocol.CONTROLLER_UNKNOWN;
 
@@ -63,7 +56,7 @@ namespace VortexArena.App
         {
             if (AppSession.Role != AppSession.RolePlayer)
             {
-                enabled = false; // admin poz göndermez
+                enabled = false; // the admin does not send poses
                 return;
             }
 
@@ -79,8 +72,8 @@ namespace VortexArena.App
             _handL = rig.leftHandAnchor;
             _handR = rig.rightHandAnchor;
 
-            // Kalibrasyon beklenmez: kaynak burada kaydolur, hizalama sonradan gelince
-            // aynı kaynağın verdiği pozlar kendiliğinden doğru uzaya oturur.
+            // Calibration is not awaited: once the alignment arrives, the same source lands in the
+            // correct space by itself.
             ArenaClient.Instance?.UdpChannel?.SetPoseSource(this);
         }
 
@@ -91,17 +84,17 @@ namespace VortexArena.App
 
         private void Update()
         {
-            // Kare başına tek örnek (idempotent): el geçerliliğini bu karede okuyan herkes —
-            // poz, eşya bayrakları, iskelet kökü emniyeti — aynı cevabı görsün.
+            // One sample per frame (idempotent) so pose, item flags and the skeleton root guard all
+            // see the same hand validity.
             ControllerTracking.Tick();
 
             ReportControllerState();
         }
 
         /// <summary>
-        /// Anchor'ların dünya pozlarını ArenaSpace ile arena uzayına çevirip verir.
-        /// <para>⚠️ Sıra korunur: eller ÖNCE dünya uzayında kurulur (canlı ya da tutulan), arenaya
-        /// çevrim en sonda yapılır — tutma hesabı kafanın dünya pozuna dayanıyor.</para>
+        /// Converts the anchors' world poses into arena space via ArenaSpace.
+        /// <para>⚠️ Order matters: hands are built in world space FIRST, converted last — the hold
+        /// computation relies on the head's world pose.</para>
         /// </summary>
         public bool TryGetArenaPoses(out Pose head, out Pose handL, out Pose handR)
         {
@@ -123,11 +116,11 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Bir elin DÜNYA pozunu verir: kaynak geçerliyse canlı anchor (ve poz kafaya göreli
-        /// saklanır), değilse saklanan kafa-göreli poz bu karenin kafasıyla yeniden kurulur.
-        /// <para>⚠️ Anchor'ı koşulsuz okumak bu sınıfın <b>yapamayacağı</b> şeydir: rig el
-        /// anchor'ını kaynak yokken de yazar ve yazdığı değer rig orijinidir
-        /// (<see cref="ControllerTracking"/> sınıf notu).</para>
+        /// A hand's WORLD pose: the live anchor when valid (stored head-relative), otherwise the
+        /// stored head-relative pose rebuilt with this frame's head.
+        /// <para>⚠️ The anchor must NOT be read unconditionally: the rig writes it even without a
+        /// source, and the value it writes is the rig origin (see
+        /// <see cref="ControllerTracking"/>).</para>
         /// </summary>
         private Pose ResolveHandWorld(int index, Transform anchor, Vector3 headPos, Quaternion headRot)
         {
@@ -150,15 +143,16 @@ namespace VortexArena.App
             return new Pose(headPos + headRot * relative.position, headRot * relative.rotation);
         }
 
-        /// <summary>Sağ el ofsetini gerekiyorsa sol ele aynalar (X terslenir).</summary>
+        /// <summary>Mirrors the right hand offset to the left hand (X negated).</summary>
         private static Vector3 MirrorForHand(int index, Vector3 rightOffset)
         {
             return index == 1 ? rightOffset : new Vector3(-rightOffset.x, rightOffset.y, rightOffset.z);
         }
 
         /// <summary>
-        /// Kumanda durumunu Net katmanına iter (§5.1). ⚠️ Ölçümü App yapar: <c>VortexArena.Net</c>
-        /// Oculus.VR'ı referanslamaz, veri aşağı doğru itilir (<c>battery</c>/<c>rttMs</c> deseni).
+        /// Pushes the controller state to Net (§5.1). ⚠️ App measures it because
+        /// <c>VortexArena.Net</c> does not reference Oculus.VR (the <c>battery</c>/<c>rttMs</c>
+        /// pattern).
         /// </summary>
         private void ReportControllerState()
         {
@@ -197,17 +191,17 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// §6.2: o an elde tutulan eşya baytları — yalnız <see cref="HeldItems"/>'ın son
-        /// bildirilen durumunu telin beklediği biçime çevirir.
+        /// §6.2: held item bytes — converts <see cref="HeldItems"/>'s last reported state to the
+        /// wire format.
         /// </summary>
         public void GetHeldItems(out byte itemL, out byte itemR, out byte gripFlags)
         {
             itemL = HeldItems.Left;
             itemR = HeldItems.Right;
 
-            // ⚠️ bit0 (FLAG_ALIVE) BURADA ASLA yazılmaz: o bitin yazarı yalnız sunucudur, istemci
-            // kendini canlı ilan edemez (§6.2/§6.3). Sunucu gelen baytı maskeyle süzüyor ama
-            // doğrusu hiç yazmamaktır — maske ileride gevşerse bu satır kuralı taşımaya devam eder.
+            // ⚠️ bit0 (FLAG_ALIVE) is NEVER written here: only the server writes it, a client cannot
+            // declare itself alive (§6.2/§6.3). The server masks it out, but never writing it keeps
+            // the rule alive if the mask is ever loosened.
             gripFlags = 0;
             if (HeldItems.GripLinked)
             {
@@ -219,9 +213,9 @@ namespace VortexArena.App
                 gripFlags |= SnapshotEntry.FLAG_PRIMARY_RIGHT;
             }
 
-            // Bayat el: poz ÖLÇÜM değil tahmindir (son geçerli poz kafaya göreli taşınıyor).
-            // Alıcı bunu bilmezse bayat eli nişan/temas teşhisinde ölçüm sanardı — kapı
-            // TryGetArenaPoses'takiyle aynı, ikisi de aynı karenin ControllerTracking örneğini okur.
+            // Stale hand: the pose is an estimate, not a measurement. Without this flag the receiver
+            // would trust it in aim/contact diagnosis. Same gate as TryGetArenaPoses (same frame's
+            // ControllerTracking sample).
             if (!ControllerTracking.IsValid(false))
             {
                 gripFlags |= SnapshotEntry.FLAG_HAND_L_STALE;
@@ -232,16 +226,16 @@ namespace VortexArena.App
                 gripFlags |= SnapshotEntry.FLAG_HAND_R_STALE;
             }
 
-            // §10.9: kafa bir iç engelin içinde. ⚠️ Bu bir ÖLÇÜM bildirimidir, ceza değil —
-            // canı sunucu kendi tikinde eritir. Ölçen taraf (ObstacleViolationProbe) Core'da kendini
-            // önyükleyen bir tekildir; burada yalnız okunur, HeldItems ile aynı seam deseni.
+            // §10.9: head inside an interior obstacle. ⚠️ A MEASUREMENT report, not a penalty — the
+            // server drains health in its own tick. ObstacleViolationProbe (Core singleton) is only
+            // read here, same seam pattern as HeldItems.
             if (ObstacleViolationProbe.IsViolating)
             {
                 gripFlags |= SnapshotEntry.FLAG_IN_OBSTACLE;
             }
 
-            // §10.9: kafa muhafazanın güvenli alanının dışında. ⚠️ Bu da bir ÖLÇÜM bildirimidir ve
-            // FLAG_IN_OBSTACLE'ın aksine CEZA ÜRETMEZ — yalnız admin görünürlüğü içindir.
+            // §10.9: head outside the boundary's safe area. ⚠️ Also a measurement and, unlike
+            // FLAG_IN_OBSTACLE, PRODUCES NO PENALTY — admin visibility only.
             ArenaBoundary boundary = ArenaBoundary.Active;
             if (boundary != null && boundary.IsOutOfBounds)
             {
