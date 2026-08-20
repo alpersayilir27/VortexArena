@@ -39,15 +39,15 @@ MonoBehaviour:
     - joint: HandMiddle3
       rotation: {x: 0.2724129, y: 0.0230818, z: -0.050242104, w: 0.96059054}
     - joint: HandRing1
-      rotation: {x: 0.5616334, y: 0.19021186, z: -0.07284375, w: 0.8019234}
+      rotation: {x: 0.56163347, y: 0.19021188, z: -0.07284376, w: 0.80192345}
     - joint: HandRing2
       rotation: {x: 0.53332394, y: 0.068887725, z: -0.017724918, w: 0.8429151}
     - joint: HandRing3
       rotation: {x: 0.34032586, y: 0.039405238, z: -0.011643704, w: 0.9394094}
     - joint: HandPinky0
-      rotation: {x: 0.116764486, y: 0.12045789, z: -0.1991617, w: 0.9655001}
+      rotation: {x: 0.11676449, y: 0.120457895, z: -0.19916171, w: 0.9655002}
     - joint: HandPinky1
-      rotation: {x: 0.44003984, y: 0.16253276, z: 0.030275805, w: 0.88262755}
+      rotation: {x: 0.44003987, y: 0.16253278, z: 0.030275807, w: 0.8826276}
     - joint: HandPinky2
       rotation: {x: 0.55031586, y: 0.09331809, z: -0.04855872, w: 0.8283032}
     - joint: HandPinky3
@@ -60,7 +60,7 @@ MonoBehaviour:
     position: {x: 0, y: -0.0199, z: 0.0052}
     fingerJoints:
     - joint: HandThumb1
-      rotation: {x: -0.3753261, y: -0.28556493, z: 0.554404, w: 0.68572533}
+      rotation: {x: 0.213192, y: -0.1661717, z: 0.19837055, w: -0.9421175}
     - joint: HandThumb2
       rotation: {x: 0.05713273, y: 0.058490954, z: -0.098241046, w: 0.99179804}
     - joint: HandThumb3
@@ -138,11 +138,11 @@ MonoBehaviour:
     position: {x: 0, y: -0.0579, z: 0.1018}
     fingerJoints:
     - joint: HandThumb1
-      rotation: {x: -0.03813521, y: 0.27866793, z: -0.9590563, w: 0.033181965}
+      rotation: {x: -0.34663776, y: 0.08605918, z: -0.8984097, w: 0.25553116}
     - joint: HandThumb2
       rotation: {x: 0.23915075, y: -0.009875735, z: 0.09140408, w: 0.96662027}
     - joint: HandThumb3
-      rotation: {x: 0.12736203, y: 0.086857505, z: -0.076691054, w: 0.98506504}
+      rotation: {x: 0.12736204, y: 0.086857505, z: -0.07669106, w: 0.98506504}
     - joint: HandIndex1
       rotation: {x: 0.46406642, y: 0.045148205, z: -0.06300946, w: 0.8824023}
     - joint: HandIndex2
@@ -156,13 +156,13 @@ MonoBehaviour:
     - joint: HandMiddle3
       rotation: {x: 0.563186, y: -0.005943122, z: 0.05496974, w: 0.8244784}
     - joint: HandRing1
-      rotation: {x: 0.34975132, y: -0.1097551, z: 0.07915857, w: 0.9270177}
+      rotation: {x: 0.7291554, y: -0.25259244, z: 0.14226772, w: 0.61991084}
     - joint: HandRing2
-      rotation: {x: 0.77542585, y: -0.059566587, z: 0.038875643, w: 0.6274195}
+      rotation: {x: 0.6248406, y: -0.06645244, z: 0.025368445, w: 0.77750546}
     - joint: HandRing3
       rotation: {x: 0.5018579, y: -0.03774967, z: 0.01861317, w: 0.8639255}
     - joint: HandPinky0
-      rotation: {x: 0.33183938, y: -0.22775482, z: 0.44718796, w: 0.7987699}
+      rotation: {x: 0.23857911, y: -0.352359, z: 0.36878672, w: 0.82638943}
     - joint: HandPinky1
       rotation: {x: 0.27344823, y: -0.12728766, z: -0.05162936, w: 0.9520286}
     - joint: HandPinky2

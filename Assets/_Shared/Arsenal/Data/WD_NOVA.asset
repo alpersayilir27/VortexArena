@@ -39,7 +39,7 @@ MonoBehaviour:
     - joint: HandMiddle3
       rotation: {x: 0.2724129, y: 0.0230818, z: -0.050242104, w: 0.96059054}
     - joint: HandRing1
-      rotation: {x: 0.7030557, y: -0.003607429, z: -0.17256832, w: 0.6898696}
+      rotation: {x: 0.7030556, y: -0.003607429, z: -0.1725683, w: 0.6898696}
     - joint: HandRing2
       rotation: {x: 0.3738839, y: 0.070947565, z: -0.00511198, w: 0.92474383}
     - joint: HandRing3
@@ -60,7 +60,7 @@ MonoBehaviour:
     position: {x: 0, y: -0.0114, z: 0}
     fingerJoints:
     - joint: HandThumb1
-      rotation: {x: 0.16003169, y: -0.33802515, z: 0.43383917, w: -0.8197026}
+      rotation: {x: 0.16003169, y: -0.33802518, z: 0.43383917, w: -0.8197027}
     - joint: HandThumb2
       rotation: {x: 0.1239518, y: 0.051725946, z: -0.10196523, w: 0.98567927}
     - joint: HandThumb3
@@ -99,11 +99,11 @@ MonoBehaviour:
     position: {x: 0, y: 0.008399999, z: 0.337}
     fingerJoints:
     - joint: HandThumb1
-      rotation: {x: 0.12913837, y: 0.38889882, z: -0.25008374, w: 0.8772338}
+      rotation: {x: -0.029701918, y: 0.5964888, z: -0.62590384, w: -0.5015609}
     - joint: HandThumb2
       rotation: {x: 0.23915075, y: -0.009875735, z: 0.09140408, w: 0.96662027}
     - joint: HandThumb3
-      rotation: {x: 0.12736203, y: 0.086857505, z: -0.076691054, w: 0.98506504}
+      rotation: {x: 0.12736204, y: 0.086857505, z: -0.07669106, w: 0.98506504}
     - joint: HandIndex1
       rotation: {x: 0.43836597, y: 0.04695064, z: -0.061678074, w: 0.89544785}
     - joint: HandIndex2
@@ -123,7 +123,7 @@ MonoBehaviour:
     - joint: HandRing3
       rotation: {x: 0.18971811, y: -0.04177167, z: 0.0051585566, w: 0.9809361}
     - joint: HandPinky0
-      rotation: {x: 0.08216116, y: -0.2226334, z: 0.2009153, w: 0.9504299}
+      rotation: {x: 0.17594327, y: 0.10110763, z: 0.20256163, w: 0.9580136}
     - joint: HandPinky1
       rotation: {x: 0.12363548, y: -0.14339495, z: -0.0822868, w: 0.9784585}
     - joint: HandPinky2
@@ -142,7 +142,7 @@ MonoBehaviour:
     - joint: HandThumb2
       rotation: {x: 0.23915075, y: -0.009875735, z: 0.09140408, w: 0.96662027}
     - joint: HandThumb3
-      rotation: {x: 0.12736201, y: 0.086857505, z: -0.07669105, w: 0.98506504}
+      rotation: {x: 0.12736203, y: 0.086857505, z: -0.076691054, w: 0.98506504}
     - joint: HandIndex1
       rotation: {x: 0.43836597, y: 0.04695064, z: -0.061678074, w: 0.89544785}
     - joint: HandIndex2
