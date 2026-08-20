@@ -12,7 +12,8 @@ namespace VortexArena.Core.Combat
     /// <summary>Holdable hitscan VR weapon: sits in the world (ISDK Grabbable + GrabInteractable)
     /// and fires only while held. The trigger is read from the MAIN hand's controller (resolved
     /// from the Grabbable pointer event; falling back to the Input System "Player/Attack" action in
-    /// the Editor). A two-handed hold scales spread and recoil down; recoil is applied to
+    /// the Editor). The TWO-HANDED hold is the balanced reference and a one-handed one pays the
+    /// weapon's own stability penalty (<see cref="GripSpreadScale"/>); recoil is applied to
     /// <see cref="ModelPivot"/>, so it does not race the canonical grip driving the root.
     /// <para>THE GRIP IS CANONICAL (§6.6): while held, the root is driven from the main hand anchor
     /// plus the studio-authored grip position
@@ -59,7 +60,7 @@ namespace VortexArena.Core.Combat
 
         private const float BlockedHapticSeconds = 0.06f;
 
-        /// <summary>DEFAULT two-handed recoil multiplier.
+        /// <summary>DEFAULT recoil multiplier of the TWO-HANDED reference grip.
         /// <para>The remote replica (<see cref="VortexArena.Core.Player.RemoteAvatar.ApplyShotRecoil"/>)
         /// reads this DEFAULT, not the prefab field: <see cref="twoHandRecoilMultiplier"/> is
         /// serialized per prefab and never travels on the wire. Editing it on a prefab changes only
@@ -82,9 +83,14 @@ namespace VortexArena.Core.Combat
         [SerializeField] private InputActionAsset inputActions;
 
         [Header("İki El Dengeleme")]
-        [Tooltip("İki elle tutarken saçılım çarpanı.")]
+        // ⚠️ These two are the REFERENCE grip scale and apply in BOTH grips — one-handed the
+        // weapon's own penalty (WeaponDefinition.OneHand*) multiplies them further. Raising one to
+        // 1 does not mean "no two-hand bonus", it widens the one-handed cone by the same factor.
+        [Tooltip("İki elle tutuşun saçılım çarpanı — TABAN kavrayış. Tek elde bunun üstüne " +
+                 "WeaponDefinition.oneHandSpreadMultiplier biner.")]
         [SerializeField] private float twoHandSpreadMultiplier = 0.45f;
-        [Tooltip("İki elle tutarken geri tepme çarpanı.")]
+        [Tooltip("İki elle tutuşun geri tepme çarpanı — TABAN kavrayış. Tek elde bunun üstüne " +
+                 "WeaponDefinition.oneHandRecoilMultiplier biner.")]
         [SerializeField] private float twoHandRecoilMultiplier = DefaultTwoHandRecoilMultiplier;
 
         // ⚠️ No haptic field here, and none is added back: amplitude/duration are the weapon's own
@@ -199,9 +205,35 @@ namespace VortexArena.Core.Combat
         /// dead while true. Measured only while the trigger is pressed; <c>false</c> when idle.</summary>
         public bool IsWeaponBlocked { get; private set; }
 
-        /// <summary>Current spread half-angle (base + bloom, degrees). Raw: the two-hand multiplier
-        /// is NOT included.</summary>
+        /// <summary>Current spread half-angle (base + bloom, degrees). RAW: no grip scale in it —
+        /// multiply by <see cref="GripSpreadScale"/> for the cone actually fired.</summary>
         public float CurrentSpreadDegrees => definition != null ? definition.BaseSpreadDegrees + currentBloom : 0f;
+
+        /// <summary>
+        /// Spread scale of the CURRENT grip. The two-handed hold is the balanced reference
+        /// (<see cref="twoHandSpreadMultiplier"/>); one-handed the weapon's own stability penalty
+        /// (<see cref="WeaponDefinition.OneHandSpreadMultiplier"/>) stacks on it, so a one-handed
+        /// cone is exactly that ratio wider than the same weapon held with two.
+        /// <para>A property, not a cached field: the grip changes the instant the second hand takes
+        /// or leaves the front grip, and a cached copy would need an invalidation hook on every
+        /// grab/release path (<see cref="SetSecondaryHand"/>, ISDK pointer events, granting).</para>
+        /// </summary>
+        public float GripSpreadScale => twoHandSpreadMultiplier *
+            (IsTwoHanded || definition == null ? 1f : definition.OneHandSpreadMultiplier);
+
+        /// <summary>Recoil scale of the CURRENT grip — same rule as <see cref="GripSpreadScale"/>,
+        /// driving both muzzle rise and push-back.</summary>
+        public float GripRecoilScale => twoHandRecoilMultiplier *
+            (IsTwoHanded || definition == null ? 1f : definition.OneHandRecoilMultiplier);
+
+        /// <summary>Recoil recovery speed of the CURRENT grip: one-handed the muzzle settles slower
+        /// (<see cref="WeaponDefinition.OneHandRecoveryPenalty"/>).
+        /// <para>⚠️ Bloom recovery is deliberately NOT penalised: the cone already opens wider
+        /// one-handed through <see cref="GripSpreadScale"/>, and slowing its decay too would charge
+        /// the same hold twice.</para></summary>
+        public float GripRecoverSpeed => definition == null
+            ? 0f
+            : definition.RecoilRecoverSpeed * (IsTwoHanded ? 1f : definition.OneHandRecoveryPenalty);
 
         public event Action Fired;
 
@@ -391,7 +423,7 @@ namespace VortexArena.Core.Combat
             currentBloom = Mathf.MoveTowards(currentBloom, 0f,
                 (definition != null ? definition.BloomRecoveryPerSecond : 0f) * Time.deltaTime);
 
-            float recoverSpeed = definition != null ? definition.RecoilRecoverSpeed : 0f;
+            float recoverSpeed = GripRecoverSpeed;
             currentKick = Mathf.MoveTowards(currentKick, 0f, recoverSpeed * Time.deltaTime);
             currentKickBack = Mathf.MoveTowards(currentKickBack, 0f, recoverSpeed * 0.02f * Time.deltaTime);
 
@@ -661,11 +693,11 @@ namespace VortexArena.Core.Combat
         {
             nextFireTime = Time.time + definition.SecondsPerShot;
 
-            bool stabilized = IsTwoHanded;
-            // Spread uses the PRE-shot bloom; bloom grows with the shot.
-            float spread = (definition.BaseSpreadDegrees + currentBloom) * (stabilized ? twoHandSpreadMultiplier : 1f);
+            // Spread uses the PRE-shot bloom; bloom grows with the shot. The grip scale is read HERE
+            // and never cached: releasing the front grip must widen the very next shot.
+            float spread = (definition.BaseSpreadDegrees + currentBloom) * GripSpreadScale;
             currentBloom = Mathf.Min(currentBloom + definition.BloomPerShotDegrees, definition.MaxBloomDegrees);
-            float recoilScale = stabilized ? twoHandRecoilMultiplier : 1f;
+            float recoilScale = GripRecoilScale;
 
             CurrentAmmo--;
             AmmoChanged?.Invoke();
