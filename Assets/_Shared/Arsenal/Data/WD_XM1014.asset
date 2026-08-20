@@ -61,9 +61,9 @@ MonoBehaviour:
   bloomPerShotDegrees: 0.6
   maxBloomDegrees: 1.5
   bloomRecoveryPerSecond: 2.5
-  kickDegrees: 5.5
-  kickBackMeters: 0.05
-  recoilRecoverSpeed: 6
+  kickDegrees: 7
+  kickBackMeters: 0.06
+  recoilRecoverSpeed: 8
   oneHandSpreadMultiplier: 2
   oneHandRecoilMultiplier: 2
   oneHandRecoveryPenalty: 0.75
