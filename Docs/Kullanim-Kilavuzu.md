@@ -284,6 +284,17 @@ kalibrasyonu bozulmuştur. **Maçı durdurmana gerek yok:**
 > oyuncunun elle yeniden kalibre olmasını beklemek zorunda değilsin: **TÜMÜNÜ KALİBRE ET**'e
 > basarak onu kayıttan geri kurmayı deneyebilirsin.
 
+**Tek bir gözlüğün KAYDI bozuksa — İSTATİSTİK panelindeki KAYIT SİL.** Oyuncu KAL'dan sonra
+yeniden kalibre oluyor ama aynı oyuncu tekrar tekrar kayıyorsa sorun hizalamada değil, o gözlükte
+**kayıtlı olan** çapadadır. İstatistik panelini aç (`I`), o oyuncunun satırının solundaki kırmızı
+**KAYIT SİL** düğmesine bas → **EMİN? SİL** yazar → **3 saniye içinde** ikinci kez bas.
+
+- Yalnız **o gözlüğün** kaydı silinir; salondaki kimse etkilenmez, maç durmaz.
+- Ardından o oyuncuda **KALİBRE** iş görmez ("kayıtlı kalibrasyon yok" der): tek yol oyuncunun
+  gözlükte **elle A/B** almasıdır (§4).
+- Basmadan önce §4.4'teki gözlük temizliğini de düşün — kayıt doğru ama gözlüğün kendi alan verisi
+  bozuksa yeni kalibrasyon da aynı yere kayar.
+
 **Herkese birden uygulanan düğmeler İSTATİSTİK panelindedir** (`I`), listenin altındaki şeritte:
 
 | Düğme | Ne yapar | Ne zaman basılır |
@@ -301,7 +312,8 @@ içinde** ikinci kez basarsan komut gider; basmazsan düğme kendiliğinden eski
 Tek bir oyuncu kaymışsa doğru yer o oyuncunun satırındaki **KAL** düğmesidir (yukarıdaki adımlar);
 herkesi hizaya sokmayı deniyorsan önce **TÜMÜNÜ KALİBRE ET**'i dene — o kimseyi oyun dışı bırakmaz.
 ⚠️ **CİHAZ KAYITLARINI SİL en son çaredir:** ardından salondaki her oyuncunun gözlükte tek tek
-A/B kalibrasyonu alması gerekir, yani bir seans molası demektir.
+A/B kalibrasyonu alması gerekir, yani bir seans molası demektir. Sorun **tek bir gözlükteyse** bu
+düğmeye hiç dokunma — o satırın kendi **KAYIT SİL**'i aynı işi yalnız o oyuncuya yapar.
 
 > **Neden tik'i elle geri açamıyorsun:** hizalamanın gerçekten düzeldiğini yalnız gözlüğün
 > kendisi bilir. Sen "tamam" diyebilseydin, aslında hâlâ kaymış bir oyuncu ateş etmeye ve
@@ -352,7 +364,8 @@ seçersin:** TERCİHLER > **KALİBRASYON** bölümündeki üç düğme.
 - Ayar **sunucuda** durur: tüm yönetim ekranları aynı değeri gösterir, birinden değiştirmen yeter.
 - ⚠️ **ESKİ KALİBRE seçiliyken:** hizalamayı geçersiz kıldığın bir gözlükte uygulama kapatılıp
   yeniden açılırsa kayıt geri yüklenir ve oyuncu yine eski hizalamasıyla gelir. Kaydın kendisinin
-  yanlış olduğundan eminsen **CİHAZ KAYITLARINI SİL**'i kullan (§4.1).
+  yanlış olduğundan eminsen kaydı sil (§4.1): tek gözlükse o satırın **KAYIT SİL**'i, salonun
+  tamamıysa alt şeritteki **CİHAZ KAYITLARINI SİL**.
 - ⚠️ **Değişiklik o an bağlı gözlüklere işlemez.** Her gözlük ayarı **bağlandığı anda** bir kez
   okur. Yeni modu bir gözlüğe uygulatmak istiyorsan o gözlükte uygulamayı kapatıp yeniden aç.
   Pratik sonuç: modu **seans başlamadan**, gözlükler bağlanmadan önce seç.
