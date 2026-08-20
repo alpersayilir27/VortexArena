@@ -36,9 +36,6 @@ namespace VortexArena.Protocol
         // How headsets align AT STARTUP; same class as set_friendly_fire: instant, does not enter the
         // selection lock (§5.2/§10.6).
         public const string SetCalibrationMode = "set_calibration_mode";
-        // The operator revives a dead player; playerId 0 = ALL currently dead players (§10.4).
-        public const string RevivePlayer = "revive_player";
-
         // Server → Client
         public const string Welcome = "welcome";
         public const string LobbyState = "lobby_state";

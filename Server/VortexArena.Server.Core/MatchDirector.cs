@@ -754,9 +754,9 @@ public sealed class MatchDirector
     private static bool IsObstacleFlagLiveLocked(PlayerState player, DateTime now) =>
         player.InObstacle && IsPoseFreshLocked(player, now);
 
-    /// <summary>Should the revive be deferred because the player is inside an obstacle (§10.9). There are
-    /// TWO revive paths — the player's <c>revive_request</c> and the operator's <c>revive_player</c> — and
-    /// this gate applies to BOTH: a ban does not exist until every path changing that state is closed.</summary>
+    /// <summary>Should the revive be deferred because the player is inside an obstacle (§10.9). Today
+    /// there is ONE revive path (<c>revive_request</c>); ⚠️ any second one must call this gate too — a ban
+    /// does not exist until every path changing that state is closed.</summary>
     /// <remarks>⚠️ The deferral is NOT unbounded
     /// (<see cref="ArenaProtocol.OBSTACLE_REVIVE_BLOCK_SECONDS"/>): the gate reads a client-reported flag,
     /// and a lying client could leave the player permanently dead. At the cap the player is revived — if
@@ -1519,11 +1519,10 @@ public sealed class MatchDirector
     /// revived, and logging that would flood the console.</summary>
     /// <remarks><see cref="ReviveAnchor"/> is NOT validated here (§10.4 note): "am I in my base / did I
     /// hold still" is the client's call — the server keeps books, it does not referee (§10.3 philosophy).
-    /// <para>This is the PLAYER's path and carries all its bans (calibration §10.6,
-    /// <c>reviveAnchor:"none"</c> §10.5, delay, obstacle §10.9). The second path is the operator's command
-    /// (<see cref="HandleAdminReviveAsync"/>): it deliberately bypasses the mode rule and the delay, but
-    /// the calibration and obstacle bans hold THERE TOO — a ban does not exist until every path changing
-    /// that state is closed. Any new revive path must carry those two gates along.</para></remarks>
+    /// <para>⚠️ This is the ONLY revive path and it carries all the bans (calibration §10.6,
+    /// <c>reviveAnchor:"none"</c> §10.5, delay, obstacle §10.9). There is deliberately no operator
+    /// override: a ban does not exist until every path changing that state is closed, so any second
+    /// revive path would have to carry those gates along.</para></remarks>
     public async Task HandleReviveRequestAsync(PlayerState player)
     {
         var outbox = new List<Outgoing>();
@@ -1544,93 +1543,6 @@ public sealed class MatchDirector
         }
         await FlushAsync(outbox);
         FlushRosterRefresh(); // hp/alive changed → refresh the roster for the admin table (§5.3)
-    }
-
-    /// <summary><c>revive_player</c> (§5.2/§10.4): the operator revives a dead player MANUALLY.
-    /// <paramref name="msg"/>.<c>playerId</c> <c>0</c> = every currently dead player.</summary>
-    /// <remarks>A player who cannot meet the conditions (frozen client, unable to walk to their base)
-    /// would stay dead until the match ends; this command is the operator's only rescue tool. Hence two
-    /// things are deliberately NOT checked — they are not missing and are not added:
-    /// <para>1. <c>_rules.Revive == ReviveAnchor.None</c> (tournament): the button exists precisely to
-    /// work in every mode. ⚠️ In a tournament the round ends when a whole team is dead, so the command
-    /// changes the round result; the operator presses it knowingly.</para>
-    /// <para>2. <c>_rules.RespawnDelay</c>: the operator does not wait, the command applies instantly.</para>
-    /// <para>The gates that DO apply, with rationale, are in <see cref="TryAdminReviveLocked"/>.</para></remarks>
-    public async Task HandleAdminReviveAsync(RevivePlayerMsg msg)
-    {
-        var outbox = new List<Outgoing>();
-        lock (_gate)
-        {
-            if (_phase != Phase.Playing)
-            {
-                // Outside playing there is no such thing as a dead player: entering playing revives all.
-                Console.WriteLine($"[match] operatör canlandırma reddedildi: faz {Describe(_phase, _pauseReason)}.");
-                return;
-            }
-
-            var now = DateTime.UtcNow;
-            if (msg.playerId == 0)
-            {
-                foreach (var player in ConnectedPlayersLocked())
-                {
-                    TryAdminReviveLocked(outbox, player, now, bulk: true);
-                }
-            }
-            else if (_registry.TryGetByPlayerId(msg.playerId, out var player))
-            {
-                TryAdminReviveLocked(outbox, player, now, bulk: false);
-            }
-            else
-            {
-                Console.WriteLine($"[match] operatör canlandırma reddedildi: oyuncu {msg.playerId} yok.");
-            }
-        }
-        await FlushAsync(outbox);
-        FlushRosterRefresh(); // hp/alive changed → refresh the roster for the admin table (§5.3)
-    }
-
-    /// <summary>Applies the operator command to one player; <c>true</c> when accepted.</summary>
-    /// <remarks>The calibration (§10.6) and obstacle (§10.9) gates hold here too, for PHYSICAL reasons: an
-    /// uncalibrated player can neither fire nor be hit — reviving them does not return them to the fight,
-    /// it only shows "alive" in the table; a player revived inside an obstacle loses 30 HP per second and
-    /// dies again immediately, so the button would produce a death loop.
-    /// <para><paramref name="bulk"/> only changes LOG behaviour: in bulk the target is "dead PLAYERS", so
-    /// alive and non-player (admin) rows are a filter, not a rejection, and are skipped silently —
-    /// printing a line per connected admin would bloat the console, the operator's only diagnostic
-    /// channel. Real rejections (uncalibrated, inside an obstacle) are logged in bulk mode too.</para>
-    /// <para>⚠️ The revive is done by <see cref="RevivePlayerLocked"/>, NOT
-    /// <c>ResetMatchStateLocked</c>: the latter writes the server fields but sends the client nothing →
-    /// the player freezes on the death screen. Score and <c>deaths</c> counters are untouched; a revive is
-    /// not a match-ledger correction.</para></remarks>
-    private bool TryAdminReviveLocked(List<Outgoing> outbox, PlayerState player, DateTime now, bool bulk)
-    {
-        if (player.Role != "player")
-        {
-            if (!bulk) Console.WriteLine($"[match] operatör canlandırma reddedildi: {player.Name} oyuncu değil.");
-            return false;
-        }
-
-        if (player.Alive)
-        {
-            if (!bulk) Console.WriteLine($"[match] operatör canlandırma reddedildi: {player.Name} zaten canlı.");
-            return false;
-        }
-
-        if (!player.Calibrated)
-        {
-            Console.WriteLine($"[match] operatör canlandırma reddedildi: {player.Name} kalibresiz.");
-            return false;
-        }
-
-        if (IsObstacleReviveBlockedLocked(player, now))
-        {
-            Console.WriteLine($"[match] operatör canlandırma reddedildi: {player.Name} engelin içinde.");
-            return false;
-        }
-
-        RevivePlayerLocked(outbox, player);
-        Console.WriteLine($"[match] operatör canlandırdı: {player.Name}");
-        return true;
     }
 
     // ---- Phase transitions (all called under _gate) ----

@@ -261,8 +261,6 @@ alanları roster ile taşınıyor ve admin istatistik tablosunun sağlama noktas
 | `hit_report reddedildi (Gözlük 03 → 5): dost ateşi yok` | §10.3 tutarlılık kontrollerinden biri düştü |
 | `öldürme: Gözlük 03 → Gözlük 05 (ak47) — skor kırmızı 4 : mavi 2` | doğrulanmış öldürme |
 | `canlandı: Gözlük 05` | `revive_request` kabul edildi |
-| `operatör canlandırdı: Gözlük 05` | admin `revive_player` komutu uygulandı (`playerId:0` ise ölü olan her oyuncu için bir satır) |
-| `revive_player reddedildi (Gözlük 05): kalibresiz` | operatör komutunun kapılarından biri düştü — gerekçe satırın sonundadır (`kalibresiz` · `engelin içinde` · `oyuncu zaten canlı` · faz `playing` değil). ⚠️ **İstemciye ret gitmez**, bu satır operatörün tek tanı kanalıdır |
 | `maç sonu — kazanan: blue (kırmızı 12 : mavi 30)` | `match_end` yayınlandı |
 
 Kabul edilen vuruşların hasar satırı **yazılmaz** (saniyede onlarca satır olurdu); yalnız
@@ -274,12 +272,10 @@ bir tekrarlar).
 **Free-roam respawn:** oyuncu ışınlanamaz → canlanma konum değil DURUM değişimidir. Ölünce
 kurbana `respawn{delaySeconds}` gider (`delaySeconds` = modun `Rules.RespawnDelay`'i);
 oyuncu süre dolduktan sonra **modun canlanma şartını** sağlayıp `revive_request` yollar; sunucu
-doğrulayıp `health_update{hp:100, attackerId:0}` yayınlar. ⚠️ **Canlandırmanın iki yolu vardır:**
-bu talep ve operatörün `revive_player` komutu (`MatchDirector.HandleAdminReviveAsync`, aynı
-`health_update` sonucunu yazar, skor/`deaths` sayaçlarına dokunmaz). Sunucunun zamanlayıcı tabanlı
-bir canlandırması yoktur; şartı sağlamayan oyuncuyu operatör kaldırmazsa süresiz ölü kalır.
-Operatör komutu modun canlanma şartını ve gecikmeyi bilerek geçer, **kalibrasyon ve engel
-yasaklarına ise tabidir** (§5.2/§10.4).
+doğrulayıp `health_update{hp:100, attackerId:0}` yayınlar. ⚠️ **Canlandırmanın TEK yolu bu taleptir:**
+sunucunun zamanlayıcı tabanlı bir canlandırması da, operatörün elle canlandırma komutu da yoktur —
+şartı sağlamayan oyuncu maçın sonuna kadar ölü kalır ve bu bilinçlidir. Talep kalibrasyon, engel,
+`reviveAnchor:"none"` ve gecikme yasaklarına tabidir (§10.4).
 ⚠️ Şartın kendisi (**tabanda mı / sabit mi durdu**) sunucuda **doğrulanmaz** — sunucu hakemlik
 değil defter tutar (§10.3 felsefesi); faz + ölü + gecikme kontrolüyle yetinir.
 

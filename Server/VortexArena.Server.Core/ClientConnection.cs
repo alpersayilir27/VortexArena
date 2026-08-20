@@ -204,15 +204,6 @@ public sealed class ClientConnection
                 if (msg != null) await _lobby.HandleReloadCalibrationAsync(this, msg);
                 return;
             }
-            // ⚠️ Goes to MatchDirector, NOT LobbyService: hp/alive is match state and the director owns
-            // it (§10.4).
-            case MessageTypes.RevivePlayer:
-            {
-                if (!RequireAdmin(type)) return;
-                var msg = JsonUtil.Deserialize<RevivePlayerMsg>(json);
-                if (msg != null) await _director.HandleAdminReviveAsync(msg);
-                return;
-            }
             case MessageTypes.MeasureBodyScale:
             {
                 if (!RequireAdmin(type)) return;

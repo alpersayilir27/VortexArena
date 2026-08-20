@@ -15,6 +15,13 @@ namespace VortexArena.App.Admin
     /// operator does <i>record keeping</i> (fixing names, body measurement, calibration reload).
     /// Each player is a row (<see cref="AdminStatsRow"/>): alignment comes from layout, actions sit
     /// on the row and the list scrolls — <b>no cap</b>, everyone is drawn.</para>
+    /// <para><b>Column count follows the mode</b> (<see cref="AdminRoster.IsFfa"/>): a team mode
+    /// splits the list in two — KIRMIZI left, MAVİ right, each with the full K/D/score/ping/device
+    /// set — while HERKES TEK collapses to one full-width column ranked by score. The split column
+    /// is half as wide, so it takes the <b>narrow row variant</b> (icon buttons, stacked lines);
+    /// the wide row does not fit there and would draw its halves on top of each other.</para>
+    /// <para>⚠️ <b>Team-less players stay visible</b> in a team mode — see
+    /// <see cref="BuildLeftColumn"/>; they are the whole roster during Lobby.</para>
     /// <para><b>No invented metrics:</b> only data actually on the wire (K/D/score from §5.3
     /// <c>lobby_state</c>; battery/controllers from <c>status</c>; ping = client-measured RTT,
     /// §6.7 <c>net_stats</c>). ⚠️ <b>Damage and accuracy are not in the protocol, so not here
@@ -22,15 +29,16 @@ namespace VortexArena.App.Admin
     /// operator can act on.</para>
     /// <para>⚠️ <b>HP, scene and violations are deliberately absent from the row</b> — reasoning in
     /// the <see cref="AdminStatsRow"/> class doc; do not "restore" them.</para>
-    /// <para><b>The THREE calibration buttons on the bottom bar are different jobs:</b>
-    /// <c>TÜMÜNÜ KALİBRE ET</c> <i>reloads</i> alignment from the headset record (tries to put the
-    /// player back in) · <c>TÜM HİZALAMALARI SIFIRLA</c> benches everyone but KEEPS the device
-    /// record, so reload still works afterwards · <c>CİHAZ KAYITLARINI SİL</c> destroys the record
-    /// too, so <b>reload no longer works</b> and players must redo the A/B sequence by hand.
-    /// Standing side by side, the distinction is carried by <b>look and friction</b>: both
-    /// destructive buttons are red and each asks for its own two-step confirm; the reload has none
-    /// (it is undoable). Per-player invalidation lives on the side panel card
-    /// (<see cref="AdminPlayerRow"/>, KAL) and is soft-only there.</para>
+    /// <para><b>The TWO calibration buttons on the bottom bar are opposite jobs:</b>
+    /// <c>TÜMÜNÜ KALİBRE ET</c> <i>reloads</i> alignment from the headset record (undoable, benches
+    /// nobody, no friction) · <c>HİZALAMALARI SIFIRLA</c> benches everyone. ⚠️ The reset is ONE
+    /// button carrying BOTH modes (<see cref="HoldButton"/>): a tap KEEPS the device record so
+    /// reload still works afterwards, a 1 s hold destroys it too — then <b>reload no longer
+    /// works</b> and players must redo the A/B sequence by hand. Severity comes from press
+    /// DURATION, never from picking the right neighbour. Its friction is threefold: the button is
+    /// small and red-lettered, the hard mode needs a full uninterrupted second, and the fill walks to
+    /// red for that whole time (sliding off aborts). The same one-button rule holds per player
+    /// (<see cref="AdminPlayerRow"/> KAL, <see cref="AdminStatsRow"/> SIFIRLA).</para>
     /// <para><b>Look comes from the prefab</b>
     /// (<c>_Shared/App/Resources/UI/AdminStatsPanel.prefab</c>); this class only writes data and
     /// places rows with <see cref="UiKit.Block"/>.</para>
@@ -43,20 +51,34 @@ namespace VortexArena.App.Admin
         /// forever.</summary>
         private const float PopupSeconds = 6f;
 
-        /// <summary>Confirm window of the bulk reset (s); without a second press the button goes
-        /// back to idle.</summary>
-        private const float ClearAllConfirmSeconds = 3f;
-
-        /// <summary>Shared idle fill of the bottom bar buttons; a reset button switches to
-        /// <see cref="UiKit.Bad"/> only while awaiting confirmation.</summary>
+        /// <summary>Shared idle fill of the bottom bar buttons; the reset button walks from here
+        /// to <see cref="UiKit.Bad"/> while its hard-reset hold runs.</summary>
         private static readonly Color ClearAllIdleFill = UiKit.Hex(0x334557, 0xF2);
 
         /// <summary>FFA sort buffer (avoids a list allocation per refresh).</summary>
         private readonly List<AdminPlayerView> _sorted = new List<AdminPlayerView>();
 
-        /// <summary>Row pool: instances are hidden, never destroyed (same pattern as
-        /// <see cref="AdminHud"/>) — Instantiate/Destroy per refresh causes GC and layout jitter.</summary>
-        private readonly List<AdminStatsRow> _rows = new List<AdminStatsRow>();
+        /// <summary>Row pools: instances are hidden, never destroyed (same pattern as
+        /// <see cref="AdminHud"/>) — Instantiate/Destroy per refresh causes GC and layout jitter.
+        /// <para>Three pools because two prefabs are in play: the wide row fills the single FFA
+        /// column, the narrow variant fills each team column. ⚠️ A pool is <b>never</b> reparented
+        /// between columns — a row carries a half-typed name and armed confirm windows, and moving
+        /// it would hand them to another player.</para></summary>
+        private readonly List<AdminStatsRow> _wideRows = new List<AdminStatsRow>();
+
+        /// <inheritdoc cref="_wideRows"/>
+        private readonly List<AdminStatsRow> _redRows = new List<AdminStatsRow>();
+
+        /// <inheritdoc cref="_wideRows"/>
+        private readonly List<AdminStatsRow> _blueRows = new List<AdminStatsRow>();
+
+        /// <summary>Rows bound in the last refresh, across every column. <see cref="Tick"/>, the
+        /// bulk actions and the calibration result walk THIS, not a pool: which pool is live
+        /// depends on the mode.</summary>
+        private readonly List<AdminStatsRow> _live = new List<AdminStatsRow>();
+
+        /// <summary>Left column buffer: red team + the team-less. See <see cref="BuildLeftColumn"/>.</summary>
+        private readonly List<AdminPlayerView> _leftColumn = new List<AdminPlayerView>();
 
         // ⚠️ All fields are [SerializeField] — the look comes from the PREFAB, this class only
         // writes data.
@@ -69,20 +91,41 @@ namespace VortexArena.App.Admin
         [SerializeField] private TextMeshProUGUI _matchSummary;
 
         [Header("Oyuncu listesi")]
+        [Tooltip("HERKES TEK kipinin tam genişlik satırı.")]
         [SerializeField] private AdminStatsRow _rowPrefab;
-        [Tooltip("ScrollRect'in content'i — satırlar buranın altına kurulur, yüksekliği koddan sürülür.")]
+        [Tooltip("Takımlı kipin dar sütun satırı (AdminStatsRow'un ikon düğmeli varyantı). " +
+                 "Boşsa panel tek sütuna düşer.")]
+        [SerializeField] private AdminStatsRow _narrowRowPrefab;
+        [Tooltip("ScrollRect'in content'i — sütunlar buranın altındadır, yüksekliği koddan sürülür.")]
         [SerializeField] private RectTransform _rowContainer;
+        [Tooltip("Sol sütun: takımlı kipte KIRMIZI, HERKES TEK kipinde tüm panel genişliği.")]
+        [SerializeField] private RectTransform _redColumn;
+        [Tooltip("Sağ sütun: yalnız takımlı kipte açılır (MAVİ).")]
+        [SerializeField] private RectTransform _blueColumn;
         [SerializeField] private ScrollRect _scroll;
         [SerializeField] private float _rowGap = 6f;
+        [Tooltip("İki sütun arasındaki boşluk (px) — sütun başlıklarına da aynısı uygulanır.")]
+        [SerializeField] private float _columnGap = 24f;
+
+        [Header("Sütun başlıkları")]
+        [Tooltip("HERKES TEK kipinin tek başlık şeridi (OYUNCU · K/D).")]
+        [SerializeField] private RectTransform _wideHeader;
+        [Tooltip("Takımlı kipin başlık çifti; iki çocuğu sütunlarla aynı genişliğe sürülür.")]
+        [SerializeField] private RectTransform _teamHeaders;
+        [SerializeField] private RectTransform _redHeader;
+        [SerializeField] private RectTransform _blueHeader;
+        [Tooltip("Sol sütunun adı — takımsız oyuncu varsa sayısını da yazar.")]
+        [SerializeField] private TextMeshProUGUI _redHeaderLabel;
+        [SerializeField] private TextMeshProUGUI _blueHeaderLabel;
 
         [Header("Toplu eylemler")]
         [SerializeField] private Button _calibrateAllButton;
         [SerializeField] private Button _measureAllButton;
+        [Tooltip("Herkesin kalibrasyonunu sıfırlar — TEK düğme: kısa basış o anki hizalamaları " +
+                 "düşürür, 1 sn basılı tutmak cihazlardaki KAYITLI çapaları da sildirir " +
+                 "(ardından TÜMÜNÜ KALİBRE ET çalışmaz).")]
         [SerializeField] private Button _clearAllButton;
         [SerializeField] private TextMeshProUGUI _clearAllLabel;
-        [Tooltip("SERT kip: cihazdaki kayıtlı çapayı da siler — ardından KALİBRE ET çalışmaz.")]
-        [SerializeField] private Button _purgeAllButton;
-        [SerializeField] private TextMeshProUGUI _purgeAllLabel;
 
         [Header("Uyarı penceresi")]
         [SerializeField] private GameObject _popupRoot;
@@ -94,41 +137,54 @@ namespace VortexArena.App.Admin
         private float _nextRefresh;
         private bool _dirty = true;
 
-        /// <summary>Visible (bound) row count — <see cref="Tick"/> and bulk actions only touch
-        /// these.</summary>
-        private int _visibleRows;
+        /// <summary>Row heights read from the prefabs (fallback <see cref="AdminStatsRow.Height"/>),
+        /// so resizing a row reflows its list.</summary>
+        private float _wideRowHeight = -1f;
 
-        /// <summary>Row height read from the prefab (fallback <see cref="AdminStatsRow.Height"/>),
-        /// so resizing the row reflows the list.</summary>
-        private float _rowHeight = -1f;
+        /// <inheritdoc cref="_wideRowHeight"/>
+        private float _narrowRowHeight = -1f;
 
         /// <summary>When the popup closes (<c>Time.unscaledTime</c>); &lt; 0 = closed.</summary>
         private float _popupUntil = -1f;
 
-        /// <summary>First press of the bulk reset (<c>Time.unscaledTime</c>); &lt; 0 = not
-        /// awaiting confirmation.</summary>
-        private float _clearAllArmedAt = -1f;
+        /// <summary>How long the bulk wipe confirmation stays up (s) — same as the stats row's
+        /// TAMAM/HATA hold, so a result reads the same on both screens.</summary>
+        private const float PurgedHoldSeconds = 2f;
 
-        /// <summary>First press of the device-record purge (<c>Time.unscaledTime</c>); &lt; 0 = not
-        /// awaiting confirmation. ⚠️ INDEPENDENT of <see cref="_clearAllArmedAt"/>: arming one must
-        /// not make the other destructive on a single click.</summary>
-        private float _purgeAllArmedAt = -1f;
+        /// <summary>Press-duration gate of the bulk reset; null when the button is unwired.</summary>
+        private HoldButton _clearAllHold;
 
-        private float RowHeight
+        /// <summary>When the device records were wiped (<c>Time.unscaledTime</c>); &lt; 0 = no
+        /// confirmation showing. ⚠️ <b>Required:</b> the hold has no other ending — without it the
+        /// button snaps back and a completed wipe reads like one aborted by sliding off.</summary>
+        private float _purgedAllAt = -1f;
+
+        /// <summary>Was the bulk reset painted in its "holding" look last frame — without it the
+        /// button would stay red after the press ends.</summary>
+        private bool _clearAllHoldPainted;
+
+        private float WideRowHeight => HeightOf(ref _wideRowHeight, _rowPrefab);
+
+        private float NarrowRowHeight => HeightOf(ref _narrowRowHeight, NarrowPrefab);
+
+        /// <summary>Narrow prefab with a fallback to the wide one: an unassigned field must split
+        /// the list into columns that are merely cramped, not empty.</summary>
+        private AdminStatsRow NarrowPrefab => _narrowRowPrefab != null ? _narrowRowPrefab : _rowPrefab;
+
+        /// <summary>Two columns need two teams to fill them; without the narrow prefab the row
+        /// would not fit half the width either, so the panel stays single column.</summary>
+        private bool SplitByTeam => _blueColumn != null && _narrowRowPrefab != null;
+
+        private static float HeightOf(ref float cache, AdminStatsRow prefab)
         {
-            get
+            if (cache > 1f)
             {
-                if (_rowHeight > 1f)
-                {
-                    return _rowHeight;
-                }
-
-                float fromPrefab = _rowPrefab != null
-                    ? ((RectTransform)_rowPrefab.transform).rect.height
-                    : 0f;
-                _rowHeight = fromPrefab > 1f ? fromPrefab : AdminStatsRow.Height;
-                return _rowHeight;
+                return cache;
             }
+
+            float fromPrefab = prefab != null ? ((RectTransform)prefab.transform).rect.height : 0f;
+            cache = fromPrefab > 1f ? fromPrefab : AdminStatsRow.Height;
+            return cache;
         }
 
         private void Start()
@@ -137,8 +193,9 @@ namespace VortexArena.App.Admin
             Wire(_closeButton, AdminSession.ClosePanel);
             Wire(_calibrateAllButton, ReloadAllCalibrations);
             Wire(_measureAllButton, () => AdminCommands.MeasureBodyScale(0));
-            Wire(_clearAllButton, ArmClearAllCalibration);
-            Wire(_purgeAllButton, ArmPurgeAllCalibration);
+            // ⚠️ NOT Wire(): onClick fires on pointer-up whatever the duration, so a completed
+            // hold would also send the soft reset — everyone would be reset twice.
+            _clearAllHold = HoldButton.Attach(_clearAllButton, ClearAllCalibration, PurgeAllCalibration);
             Wire(_popupCloseButton, HidePopup);
 
             if (_root != null)
@@ -199,9 +256,9 @@ namespace VortexArena.App.Admin
 
             // Confirm windows and the calibration timeout advance PER FRAME: on the refresh
             // interval the countdown would twitch in half-second steps.
-            for (int i = 0; i < _visibleRows && i < _rows.Count; i++)
+            for (int i = 0; i < _live.Count; i++)
             {
-                _rows[i].Tick();
+                _live[i].Tick();
             }
 
             if (_popupUntil >= 0f && Time.unscaledTime >= _popupUntil)
@@ -209,16 +266,25 @@ namespace VortexArena.App.Admin
                 HidePopup();
             }
 
-            if (_clearAllArmedAt >= 0f && Time.unscaledTime - _clearAllArmedAt > ClearAllConfirmSeconds)
+            // Repaints every frame WHILE HELD: the fill ramp is the progress bar and the panel's
+            // own refresh runs at 4 Hz, which would make it step.
+            if (_clearAllHold != null && (_clearAllHold.IsPressed || _clearAllHoldPainted))
             {
-                _clearAllArmedAt = -1f;
-                _dirty = true;
+                ApplyClearAllButton();
             }
 
-            if (_purgeAllArmedAt >= 0f && Time.unscaledTime - _purgeAllArmedAt > ClearAllConfirmSeconds)
+            if (_purgedAllAt >= 0f)
             {
-                _purgeAllArmedAt = -1f;
-                _dirty = true;
+                // ⚠️ The window starts when the FINGER LIFTS — see AdminPlayerRow.Tick for why.
+                if (_clearAllHold != null && _clearAllHold.IsPressed)
+                {
+                    _purgedAllAt = Time.unscaledTime;
+                }
+                else if (Time.unscaledTime - _purgedAllAt > PurgedHoldSeconds)
+                {
+                    _purgedAllAt = -1f;
+                    ApplyClearAllButton();
+                }
             }
         }
 
@@ -249,17 +315,16 @@ namespace VortexArena.App.Admin
                 }
             }
 
-            // ⚠️ A half-armed confirm never survives closing: reopening onto an "EMİN?" button
-            // would wipe everyone's calibration on a single click.
+            // ⚠️ A press in flight never survives closing: reopening mid-hold would let the wipe
+            // land on a panel the operator is no longer looking at.
             if (!open)
             {
-                _clearAllArmedAt = -1f;
-                _purgeAllArmedAt = -1f;
+                _clearAllHold?.Cancel();
+                _purgedAllAt = -1f;
             }
 
-            // BEFORE the roster: the destructive buttons must look right even with no player list.
+            // BEFORE the roster: the destructive button must look right even with no player list.
             ApplyClearAllButton();
-            ApplyPurgeAllButton();
 
             AdminRoster roster = AdminRoster.Instance;
             if (!open || roster == null)
@@ -267,9 +332,99 @@ namespace VortexArena.App.Admin
                 return;
             }
 
+            // ⚠️ Layout BEFORE the rows: the rows stretch to their column, so a column still at
+            // last frame's width would place this frame's rows over the wrong half.
+            bool split = SplitByTeam && !roster.IsFfa;
+            ApplyColumnLayout(split);
+
             RefreshSummary(roster);
-            RefreshRows(OrderedPlayers(roster));
+            RefreshRows(roster, split);
+            RefreshColumnHeaders(roster, split);
             RefreshMatchInfo(roster);
+        }
+
+        /// <summary>Names the two columns. Runs AFTER the rows: the team-less count comes from the
+        /// left column they were just placed in.</summary>
+        private void RefreshColumnHeaders(AdminRoster roster, bool split)
+        {
+            if (!split)
+            {
+                return;
+            }
+
+            if (_redHeaderLabel != null)
+            {
+                int loose = _leftColumn.Count - roster.Red.Count;
+                _redHeaderLabel.text = loose > 0 ? $"KIRMIZI · +{loose} TAKIMSIZ" : "KIRMIZI";
+                _redHeaderLabel.color = UiKit.TeamRed;
+            }
+
+            if (_blueHeaderLabel != null)
+            {
+                _blueHeaderLabel.text = "MAVİ";
+                _blueHeaderLabel.color = UiKit.TeamBlue;
+            }
+        }
+
+        /// <summary>
+        /// Splits the list into two columns (KIRMIZI left, MAVİ right) or collapses it back to one.
+        /// <para>The column extents are driven from here rather than authored, so the gutter is one
+        /// number (<see cref="_columnGap"/>) and the header pair can never drift away from the
+        /// columns it labels.</para>
+        /// </summary>
+        private void ApplyColumnLayout(bool split)
+        {
+            float gutter = Mathf.Max(0f, _columnGap) * 0.5f;
+
+            SetActive(_blueColumn, split);
+            SetActive(_teamHeaders, split);
+            SetActive(_wideHeader, !split);
+
+            if (split)
+            {
+                SpanHorizontal(_redColumn, 0f, 0.5f, 0f, gutter);
+                SpanHorizontal(_redHeader, 0f, 0.5f, 0f, gutter);
+                SpanHorizontal(_blueColumn, 0.5f, 1f, gutter, 0f);
+                SpanHorizontal(_blueHeader, 0.5f, 1f, gutter, 0f);
+                return;
+            }
+
+            SpanHorizontal(_redColumn, 0f, 1f, 0f, 0f);
+        }
+
+        private static void SetActive(Component target, bool active)
+        {
+            if (target != null && target.gameObject.activeSelf != active)
+            {
+                target.gameObject.SetActive(active);
+            }
+        }
+
+        /// <summary>Horizontal extent inside the parent; the vertical anchors are left alone so a
+        /// column keeps stretching over the scroll content and a header keeps its own band.</summary>
+        private static void SpanHorizontal(RectTransform rect, float anchorLeft, float anchorRight,
+            float padLeft, float padRight)
+        {
+            if (rect == null)
+            {
+                return;
+            }
+
+            Vector2 anchorMin = rect.anchorMin;
+            anchorMin.x = anchorLeft;
+            rect.anchorMin = anchorMin;
+
+            Vector2 anchorMax = rect.anchorMax;
+            anchorMax.x = anchorRight;
+            rect.anchorMax = anchorMax;
+
+            Vector2 offsetMin = rect.offsetMin;
+            offsetMin.x = padLeft;
+            rect.offsetMin = offsetMin;
+
+            Vector2 offsetMax = rect.offsetMax;
+            offsetMax.x = -padRight;
+            rect.offsetMax = offsetMax;
         }
 
         /// <summary>
@@ -326,56 +481,122 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Fits the row pool to the list and places the rows.
+        /// Fills the live column(s) and drives the scroll content height.
+        /// <para>The pools that belong to the other mode are emptied in the same pass — a row left
+        /// bound in a hidden column would keep ticking a confirm window nobody can see.</para>
         /// <para>⚠️ No filtering by connection state, ever (§10.2): a <c>left</c> row must appear in
         /// the end-of-match table — the server keeps it in the roster exactly for that.</para>
         /// <para>⚠️ No row COUNT cap either: unlike the side columns nothing is clipped here, the
         /// content height is driven and the ScrollRect scrolls the rest. A clipped stats table
         /// would hide the player the operator is looking for.</para>
         /// </summary>
-        private void RefreshRows(IReadOnlyList<AdminPlayerView> players)
+        private void RefreshRows(AdminRoster roster, bool split)
         {
-            if (_rowContainer == null)
+            if (_rowContainer == null || _redColumn == null)
             {
                 return;
             }
 
-            int count = players != null ? players.Count : 0;
+            _live.Clear();
 
-            while (_rows.Count < count)
+            float height;
+            int rows;
+
+            if (split)
             {
-                if (_rowPrefab == null)
-                {
-                    Debug.LogWarning("[AdminStatsPanel] _rowPrefab atanmadı; oyuncu satırları çizilemiyor.");
-                    break;
-                }
+                BuildLeftColumn(roster);
+                height = NarrowRowHeight;
 
-                AdminStatsRow row = Instantiate(_rowPrefab, _rowContainer);
-                row.Initialize(HandleRowSelected, ShowPopup);
-                _rows.Add(row);
+                // ⚠️ The taller column drives the height: sizing on one team would clip the other
+                // one's tail out of the scroll range.
+                rows = Mathf.Max(
+                    FillColumn(_redRows, NarrowPrefab, _redColumn, _leftColumn, height),
+                    FillColumn(_blueRows, NarrowPrefab, _blueColumn, roster.Blue, height));
+
+                FillColumn(_wideRows, _rowPrefab, _redColumn, null, WideRowHeight);
             }
-
-            count = Mathf.Min(count, _rows.Count);
-            _visibleRows = count;
-
-            float height = RowHeight;
-            for (int i = 0; i < _rows.Count; i++)
+            else
             {
-                if (i >= count)
-                {
-                    _rows[i].SetVisible(false);
-                    continue;
-                }
+                height = WideRowHeight;
+                rows = FillColumn(_wideRows, _rowPrefab, _redColumn, OrderedPlayers(roster), height);
 
-                _rows[i].SetVisible(true);
-                _rows[i].Place(i * (height + _rowGap), height);
-                _rows[i].Bind(players[i], players[i].playerId == AdminSession.SelectedPlayerId);
+                FillColumn(_redRows, NarrowPrefab, _redColumn, null, NarrowRowHeight);
+                FillColumn(_blueRows, NarrowPrefab, _blueColumn, null, NarrowRowHeight);
             }
 
             // Content height is driven from code: no ContentSizeFitter/Layout Group (UiKit layout
             // rule) — the scrollbar range comes from here alone.
             _rowContainer.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
-                count > 0 ? count * (height + _rowGap) : 0f);
+                rows > 0 ? rows * (height + _rowGap) : 0f);
+        }
+
+        /// <summary>
+        /// Grows a pool to the list, places and binds it, hides the rest; returns the bound count.
+        /// <para>⚠️ Every bound row is appended to <see cref="_live"/> — a row left out of it stops
+        /// ticking, so its armed confirm window would never expire.</para>
+        /// </summary>
+        private int FillColumn(List<AdminStatsRow> pool, AdminStatsRow prefab, RectTransform parent,
+            IReadOnlyList<AdminPlayerView> players, float height)
+        {
+            int count = players != null ? players.Count : 0;
+
+            while (pool.Count < count)
+            {
+                if (prefab == null)
+                {
+                    Debug.LogWarning("[AdminStatsPanel] Satır prefabı atanmadı; oyuncu satırları çizilemiyor.");
+                    break;
+                }
+
+                AdminStatsRow row = Instantiate(prefab, parent);
+                row.Initialize(HandleRowSelected, ShowPopup);
+                pool.Add(row);
+            }
+
+            count = Mathf.Min(count, pool.Count);
+
+            for (int i = 0; i < pool.Count; i++)
+            {
+                if (i >= count)
+                {
+                    pool[i].SetVisible(false);
+                    continue;
+                }
+
+                pool[i].SetVisible(true);
+                pool[i].Place(i * (height + _rowGap), height);
+                pool[i].Bind(players[i], players[i].playerId == AdminSession.SelectedPlayerId);
+                _live.Add(pool[i]);
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Left column of a team mode: red first, then the team-less.
+        /// <para>⚠️ The team-less are <b>not</b> dropped, unlike the HUD side columns: this is the
+        /// screen where calibration and naming happen, and in Lobby — before the server hands out
+        /// teams — every player is team-less, so filtering by team alone would leave the operator
+        /// with two empty columns exactly when the work has to be done. Their row keeps its neutral
+        /// stripe and the header counts them, so the column never claims they are red.</para>
+        /// </summary>
+        private void BuildLeftColumn(AdminRoster roster)
+        {
+            _leftColumn.Clear();
+
+            for (int i = 0; i < roster.Red.Count; i++)
+            {
+                _leftColumn.Add(roster.Red[i]);
+            }
+
+            for (int i = 0; i < roster.Players.Count; i++)
+            {
+                AdminPlayerView view = roster.Players[i];
+                if (view.team != "red" && view.team != "blue")
+                {
+                    _leftColumn.Add(view);
+                }
+            }
         }
 
         private void RefreshMatchInfo(AdminRoster roster)
@@ -437,86 +658,68 @@ namespace VortexArena.App.Admin
         /// </summary>
         private void ReloadAllCalibrations()
         {
-            for (int i = 0; i < _visibleRows && i < _rows.Count; i++)
+            for (int i = 0; i < _live.Count; i++)
             {
-                _rows[i].BeginCalibrationLoad();
+                _live[i].BeginCalibrationLoad();
             }
 
             AdminCommands.ReloadCalibration(0);
         }
 
         /// <summary>
-        /// Invalidates everyone's alignment (SOFT mode) — <b>two-step</b>, same contract as the
-        /// destructive buttons of <see cref="AdminPlayerRow"/>.
-        /// <para>The friction exists because of the neighbouring button: reload is an undoable
-        /// attempt, this one benches everyone on the floor in a single click (§10.6).</para>
-        /// <para>The headset RECORD is kept (<c>keepSaved: true</c>), so <c>TÜMÜNÜ KALİBRE ET</c>
-        /// afterwards puts everyone back in one click — that is the daily action.</para>
+        /// TAP: invalidates everyone's alignment and KEEPS the headsets' saved anchors
+        /// (<c>keepSaved: true</c>), so <c>TÜMÜNÜ KALİBRE ET</c> afterwards puts everyone back in
+        /// one click. That is the daily action, so it fires on the first press.
         /// </summary>
-        private void ArmClearAllCalibration()
+        private void ClearAllCalibration()
         {
-            if (_clearAllArmedAt < 0f)
-            {
-                _clearAllArmedAt = Time.unscaledTime;
-                _dirty = true;
-                return;
-            }
-
-            _clearAllArmedAt = -1f;
+            // A soft reset clears a standing confirmation: the newer, weaker command is what happened.
+            _purgedAllAt = -1f;
             AdminCommands.ClearCalibration(0, keepSaved: true);
-            _dirty = true;
+            ApplyClearAllButton();
         }
 
         /// <summary>
-        /// Wipes the SAVED anchors on the headsets too (HARD mode) — same two-step contract as
-        /// <see cref="ArmClearAllCalibration"/>, but with its <b>own</b> confirm window.
+        /// HOLD (1 s): wipes the SAVED anchors on the headsets too (hard mode).
         /// <para>⚠️ Afterwards <c>TÜMÜNÜ KALİBRE ET</c> no longer works (nothing left to read) and
-        /// players must redo the A/B sequence by hand — venue maintenance, done when the floor
-        /// markers move.</para>
+        /// every player must redo the A/B sequence by hand — venue maintenance, done when the floor
+        /// markers move. The hold IS the confirmation (<see cref="HoldButton"/>); no two-step
+        /// window sits on top of it.</para>
         /// </summary>
-        private void ArmPurgeAllCalibration()
+        private void PurgeAllCalibration()
         {
-            if (_purgeAllArmedAt < 0f)
-            {
-                _purgeAllArmedAt = Time.unscaledTime;
-                _dirty = true;
-                return;
-            }
-
-            _purgeAllArmedAt = -1f;
+            _purgedAllAt = Time.unscaledTime;
             AdminCommands.ClearCalibration(0, keepSaved: false);
-            _dirty = true;
+            ApplyClearAllButton();
         }
 
-        /// <summary>Paints the invalidate button by confirm state: idle = red text on the shared
-        /// fill, armed = inverted (red fill) — the operator reads what the second press will do off
-        /// the button.</summary>
+        /// <summary>Paints the bulk reset. Idle = red text on the shared fill (it still benches
+        /// everyone on the floor). While held the fill walks to solid red — that ramp IS the
+        /// progress bar, so the operator can read how much of the device wipe is left and slide off
+        /// the button to abort.</summary>
         private void ApplyClearAllButton()
         {
-            ApplyDestructiveButton(_clearAllButton, _clearAllLabel, _clearAllArmedAt >= 0f,
-                "EMİN? HİZALAMALARI SIFIRLA", "TÜM HİZALAMALARI SIFIRLA");
-        }
+            // ⚠️ The RESULT outranks the press: the wipe lands at the threshold, so from that
+            // moment the button says SİLİNDİ even though the finger is still down.
+            bool purged = _purgedAllAt >= 0f;
+            bool holding = !purged && _clearAllHold != null && _clearAllHold.IsPressed;
+            _clearAllHoldPainted = holding || purged;
 
-        /// <summary>Device-record purge button — same look contract as
-        /// <see cref="ApplyClearAllButton"/>, only the text and its own confirm state differ.</summary>
-        private void ApplyPurgeAllButton()
-        {
-            ApplyDestructiveButton(_purgeAllButton, _purgeAllLabel, _purgeAllArmedAt >= 0f,
-                "EMİN? KAYITLARI SİL", "CİHAZ KAYITLARINI SİL");
-        }
-
-        private static void ApplyDestructiveButton(Button button, TextMeshProUGUI label, bool armed,
-            string armedText, string idleText)
-        {
-            if (label != null)
+            if (_clearAllLabel != null)
             {
-                label.text = armed ? armedText : idleText;
-                label.color = armed ? UiKit.OnAccent : UiKit.Bad;
+                _clearAllLabel.text = holding ? "CİHAZ KAYITLARI SİLİNİYOR"
+                    : purged ? "CİHAZ KAYITLARI SİLİNDİ"
+                    : "HİZALAMALARI SIFIRLA";
+                // ⚠️ GREEN even though the command was destructive: it reports "the thing you asked
+                // for happened", the same grammar as the rows' TAMAM.
+                _clearAllLabel.color = holding ? UiKit.OnAccent : purged ? UiKit.Good : UiKit.Bad;
             }
 
-            if (button != null && button.targetGraphic is Image image)
+            if (_clearAllButton != null && _clearAllButton.targetGraphic is Image image)
             {
-                image.color = armed ? UiKit.Bad : ClearAllIdleFill;
+                image.color = holding
+                    ? Color.Lerp(ClearAllIdleFill, UiKit.Bad, _clearAllHold.HoldProgress)
+                    : ClearAllIdleFill;
             }
         }
 
@@ -536,11 +739,11 @@ namespace VortexArena.App.Admin
                 return;
             }
 
-            for (int i = 0; i < _visibleRows && i < _rows.Count; i++)
+            for (int i = 0; i < _live.Count; i++)
             {
-                if (_rows[i].PlayerId == msg.playerId)
+                if (_live[i].PlayerId == msg.playerId)
                 {
-                    _rows[i].ApplyCalibrationResult(msg.ok, msg.error);
+                    _live[i].ApplyCalibrationResult(msg.ok, msg.error);
                     return;
                 }
             }

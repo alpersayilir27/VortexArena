@@ -40,7 +40,7 @@ ekranından kalibrasyonu sıfırlayabilir ve o an başlık hâlâ kendini hizal�
 
 Aynı sebeple: bir oyuncu durumuna savaş kapısı eklerken **o durumu değiştiren tüm yolları ara**.
 Kalibrasyon yasağı canlandırmanın **iki yolunda birden** duruyor (oyuncunun `revive_request`'i ve
-operatörün `revive_player` komutu); üçüncü bir yol eklenip yasak orada tekrarlanmazsa kural sessizce
+yalnızca `revive_request`); ikinci bir yol eklenip yasak orada tekrarlanmazsa kural sessizce
 işlevsizleşir — hata da vermez.
 
 ### ⛔ Arena yerleşimini `ArenaBoundary`'den bağımsız kaydırma

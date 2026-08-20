@@ -244,18 +244,6 @@ namespace VortexArena.Protocol
         public int playerId;
     }
 
-    /// The operator manually revives a dead player (§10.4); <c>playerId</c> <c>0</c> = ALL dead players.
-    /// <para>The mode's revive condition (§10.5) and the respawn delay are BYPASSED — the button exists
-    /// to rescue a player who cannot satisfy them. ⚠️ In a tournament this changes the round result.</para>
-    /// <para>⚠️ The calibration (§10.6) and inside-obstacle (§10.9) gates ARE enforced (otherwise the
-    /// button produces a death loop); rejection is logged server-side, not sent to the client.</para>
-    [Serializable]
-    public class RevivePlayerMsg
-    {
-        public string type = MessageTypes.RevivePlayer;
-        public int playerId;
-    }
-
     /// The SHARED mode/map/duration/limit selection for the next match (§5.2). Does not start a match;
     /// broadcast to all admins via admin_state. Empty string or 0 keeps the current value.
     [Serializable]

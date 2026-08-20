@@ -70,13 +70,6 @@ namespace VortexArena.App.Admin
 
         [SerializeField] private Button _closeButton;
 
-        /// <summary>Fullscreen ↔ windowed toggle. ⚠️ Lives in the title bar next to KAPAT, not in
-        /// GÖRÜNÜM: window mode is window chrome, expected at the window corner (same job as
-        /// F11).</summary>
-        [SerializeField] private Button _screenModeButton;
-
-        [SerializeField] private TextMeshProUGUI _screenModeLabel;
-
         [Header("Sekmeler")]
 
         [Tooltip("Sekme düğmeleri — sıra AdminPreferencesTab ile aynı: MAÇ, GÖRÜNÜM, BAĞLANTI, SES.")]
@@ -278,7 +271,6 @@ namespace VortexArena.App.Admin
         private void WireButtons()
         {
             Wire(_closeButton, AdminSession.ClosePanel);
-            Wire(_screenModeButton, AdminSession.ToggleScreenMode);
             WireTabs();
 
             WireDropdown(_modeDropdown, SelectMode);
@@ -393,9 +385,8 @@ namespace VortexArena.App.Admin
         private void OnEnable()
         {
             AdminSession.Changed += MarkDirty;
-            // ⚠️ AdminCommands.StatusChanged is NOT subscribed: the status line lives in the HUD
-            // match strip and no field here depends on command status — subscribing would force a
-            // full refresh on every command.
+            // ⚠️ AdminCommands.StatusChanged is NOT subscribed: no field here depends on command
+            // status — subscribing would force a full refresh on every command.
             NetEvents.OnConnectionStateChanged += HandleConnectionState;
 
             // The shared selection may change from another admin. This component stays active while
@@ -1289,7 +1280,6 @@ namespace VortexArena.App.Admin
 
             ApplyTabs();
             ApplySelectionLock();
-            ApplyScreenModeButton();
             ApplyQuitButton();
 
             // 0 = UI knows no value → the server uses the mode default.
@@ -1355,27 +1345,6 @@ namespace VortexArena.App.Admin
                 ? $" — {AdminSelection.AdminCount} admin bağlı"
                 : "";
             _connectionText.text = $"{state} — {endpoint}{peers}";
-        }
-
-        /// <summary>Paints the window-mode button with the CURRENT mode: accented in fullscreen,
-        /// dim when windowed (same language as the calibration-mode buttons). The label states the
-        /// current mode, not what a click will do, and carries the F11 shortcut. The value comes
-        /// from <see cref="AdminSession"/>, so F11 keeps the button correct via
-        /// <c>Changed</c>.</summary>
-        private void ApplyScreenModeButton()
-        {
-            bool full = AdminSession.FullScreen;
-
-            if (_screenModeLabel != null)
-            {
-                _screenModeLabel.text = full ? "TAM EKRAN · F11" : "PENCERELİ · F11";
-                _screenModeLabel.color = full ? UiKit.OnAccent : UiKit.Muted;
-            }
-
-            if (_screenModeButton != null && _screenModeButton.targetGraphic is Image image)
-            {
-                PaintButtonBackground(image, full, UiKit.Accent);
-            }
         }
 
         /// <summary>Quit button: text and colour warn while the confirm window is open (same pattern
