@@ -19,8 +19,8 @@ Kalan iş **asset tarafında** ve başlıkta doğrulamada.
 
 ## 1c. Silah kitini bir kez koştur (prefab temizliği + gösterge)
 
-`Tools > VortexArena > Build > Configure All Build Elements` (Hepsini Yapılandır / Yalnız Senkronize
-Et — silah kiti her eşitlemede koşar) — 13 `WPN_*` kökündeki eksik script kaydını ve
+`Tools > VortexArena > Build > Configure All Build Elements` (**Hepsini Çalıştır** — silah kiti her
+koşuda çalışır) — 13 `WPN_*` kökündeki eksik script kaydını ve
 `_interactorFilters` girişlerini temizler (kalırsa ISDK `Start`'ta assert atar, silah kavranamaz),
 `VA_GripSocket.prefab` + `M_GripSocket.mat`'ı üretir ve kataloğa bağlar. Sonuçta değişen
 prefab/asset'ler commit'e girer.
@@ -86,6 +86,10 @@ silah kiti koşusunun sonundaki uyarı listeler.
 - [ ] **Parmaklar donanımdan OYNAMIYOR:** tetik/kabza basılınca ya da parmak kumandaya değince
       hiçbir parmak kıpırdamıyor; boş elde parmaklar boşta duruşunda, silahı alınca el o slot için
       riglenmiş duruşa yumuşakça kapanıyor (~0.15 s), bırakınca geri açılıyor.
+- [ ] **El duruşa SIÇRAMIYOR:** silahı alınca elin kumanda üstündeki yeri/açısı da parmaklarla
+      **aynı sürede** kayarak geçiyor (ikisi birlikte hareket ediyor); bırakınca aynı şekilde geri
+      dönüyor. Geçiş sırasında el kumandayı gecikmeden takip etmeye devam ediyor (karışım anchor
+      uzayında — el gerçek elin arkasından sürüklenmiyor).
 - [ ] **Tezgâh = gözlük:** stüdyoda yerleştirdiğin el ve riglediğin duruş başlıkta birebir aynı
       görünüyor (elin kumandaya göre yeri/açısı + kemik kemik parmaklar).
 - [ ] **Kopya Al doğru kaynağı gösteriyor:** menüde yalnız o kavrama noktasının o eli yazılmış
@@ -96,6 +100,10 @@ silah kiti koşusunun sonundaki uyarı listeler.
       ile oynayınca el eskisi gibi duruyor (paylaşılan varsayılana düşüyor, konsola uyarı gitmiyor).
 - [ ] Uzak avatarın parmakları o slotun duruşuna yakın çiziliyor (ön kabzayı saran el uzakta da
       sarılı) — uzakta ölçü kemik kemik değil parmak başına kapanma oranıdır.
+- [ ] **Uzak elin YERLEŞİMİ de kayıttan geliyor:** gözlemcinin (admin POV ya da ikinci ekran)
+      gördüğü el, silahın kabzasını gözlükteki elle aynı açıdan kavrıyor — el kabzanın yanında
+      düz durmuyor, ön kola/silaha gömülmüyor. Stüdyoda elin açısını değiştirip kaydedince uzak
+      elin açısı da değişiyor.
 - [ ] İkinci admin ekranında **uzak** oyuncunun silahının duruşu sapmıyor (iki uç aynı kaydı okuyup
       aynı formülle çiziyor).
 - [ ] **Raf değişimi:** elde tüfek varken başka bir çerçeveye nişan alıp grip'e basınca yeni silah

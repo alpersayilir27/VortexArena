@@ -12,10 +12,12 @@ namespace VortexArena.Core.Combat
     /// (admin gözlemci) silahı oyuncuyla birebir aynı çizer.
     /// </para>
     /// <para>
-    /// Delta yalnız <b>ELİN GÖRSELİ</b> için gerekir: sentetik elin bileği her karede buraya
-    /// kilitlenir (<c>HandGripPoser</c>) ve stüdyodaki hayalet el kökten aynı deltayla ötelenerek
-    /// çizilir (<c>GripPoseStudio</c>) — iki uç <b>aynı</b> sayıyı okuduğu için tezgâhta görülen el
-    /// ile oyunda görülen el kurgu gereği aynıdır.
+    /// Delta yalnız <b>ELİN GÖRSELİ</b> için gerekir ve onu okuyan ÜÇ taraf vardır: sentetik elin
+    /// bileği her karede buraya kilitlenir (<c>HandGripPoser</c>), stüdyodaki hayalet el kökten aynı
+    /// deltayla ötelenerek çizilir (<c>GripPoseStudio</c>) ve <b>uzak avatarın bileği de aynı
+    /// deltayla oturtulur</b> (<c>RemoteAvatar.TryResolveGripWrist</c>) — üç uç <b>aynı</b> sayıyı
+    /// okuduğu için tezgâhta görülen el, oyuncunun gördüğü el ve gözlemcinin gördüğü el kurgu gereği
+    /// aynıdır. ⚠️ Uzak ucun bunu atlaması "aynı silah iki ekranda iki türlü tutuluyor" demekti.
     /// </para>
     /// <para>
     /// ⚠️ <b>Delta ÖLÇÜLMEZ, TANIMLANIR</b> (<see cref="HandPoseLibrary.AnchorToWrist"/>) ve buraya
@@ -42,7 +44,8 @@ namespace VortexArena.Core.Combat
     /// </para>
     /// <para>
     /// ⚠️ <b>Protokolde karşılığı YOKTUR ve tel formatı değişmez</b> (§6.6): duruş telde gitmiyor,
-    /// iki uç da aynı tanımdan aynı kaydı okuyor; delta yalnız yerel elin görselini sürer.
+    /// her uç aynı tanımdan aynı kaydı okuyor. Telin taşıdığı şey bilek pozu + elde hangi eşya
+    /// olduğudur; elin nasıl durduğu buradan çizilir.
     /// </para>
     /// </summary>
     public static class ItemGripAuthority

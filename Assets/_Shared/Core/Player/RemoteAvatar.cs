@@ -1703,23 +1703,7 @@ namespace VortexArena.Core.Player
         /// (trigger), the foregrip hand takes <see cref="GripSocketKind.Secondary"/> (wrap).</para></summary>
         public HandPoseProfile ResolveHandPose(bool rightHand)
         {
-            ItemDefinition definition;
-            GripSocketKind kind;
-
-            if (_shownGripLinked)
-            {
-                definition = _shownPrimaryRight ? _itemDefR : _itemDefL;
-                kind = rightHand == _shownPrimaryRight
-                    ? GripSocketKind.Primary
-                    : GripSocketKind.Secondary;
-            }
-            else
-            {
-                definition = rightHand ? _itemDefR : _itemDefL;
-                kind = GripSocketKind.Primary;
-            }
-
-            if (definition != null)
+            if (TryResolveSlot(rightHand, out _, out ItemDefinition definition, out GripSocketKind kind))
             {
                 return definition.GripFingerCurl(kind, rightHand);
             }
@@ -1728,74 +1712,77 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// This hand's <b>palm</b> target: the grip point of the held item, or <c>false</c> when empty.
-        /// Read by <see cref="RemoteHandPoser"/>, which fits the remote wrist to the item.
-        /// <para>⚠️ <b>The item is the authority, the hand follows.</b> The item's place comes from the
-        /// primary hand's PHYSICAL pose and must stay that way (the shot ray leaves from it); the reverse
-        /// direction breaks left/right symmetry and drifts the weapon from where the player aims.</para>
-        /// <para>⚠️ Both grip records live in the SAME space (the controller anchor's local pose relative
-        /// to the item), so both targets are found forward as <c>item.position + item.rotation * point</c>
-        /// — a second space would only produce sign errors. Same composition as
-        /// <see cref="ApplySecondaryGripSnap"/> and <c>Weapon.SecondaryGripWorld</c>.</para>
-        /// <para>⚠️ The returned pose is in the ANCHOR frame, like the record (no conversion):
-        /// <see cref="RemoteHandPoser"/> measures its correction for anchor space. ⚠️ The point is read
-        /// <b>per hand</b> — the grip is not symmetric. ⚠️ Manual composition, NOT
-        /// <c>TransformPoint</c>: grip offsets are in METRES and must not scale with the item.</para>
+        /// This hand's current grip SLOT: which item it holds and at which grip point.
+        /// <para>⚠️ <b>Asked once, used by both halves of the hand</b> (fingers and seat): two separate
+        /// resolutions would eventually draw the same hand's fingers off one weapon and its wrist off
+        /// another. Under <c>GRIP_LINKED</c> both hands hold the PRIMARY hand's item — the wrapping hand
+        /// takes <see cref="GripSocketKind.Secondary"/>.</para>
+        /// <para>Returns <c>false</c> for an empty hand; <paramref name="item"/> may still be
+        /// <c>null</c> while the instance is being rebuilt, so a caller that needs the transform checks
+        /// it separately.</para>
         /// </summary>
-        public bool TryResolveGripPalm(bool rightHand, out Pose palm)
+        private bool TryResolveSlot(bool rightHand, out Transform item, out ItemDefinition definition,
+            out GripSocketKind kind)
         {
-            palm = default;
-
-            Transform item;
-            ItemDefinition definition;
-            bool isPrimaryHand;
-
             if (_shownGripLinked)
             {
                 item = _shownPrimaryRight ? _itemInstanceR : _itemInstanceL;
                 definition = _shownPrimaryRight ? _itemDefR : _itemDefL;
-                isPrimaryHand = rightHand == _shownPrimaryRight;
+                kind = rightHand == _shownPrimaryRight
+                    ? GripSocketKind.Primary
+                    : GripSocketKind.Secondary;
             }
             else
             {
                 item = rightHand ? _itemInstanceR : _itemInstanceL;
                 definition = rightHand ? _itemDefR : _itemDefL;
-                isPrimaryHand = true;
+                kind = GripSocketKind.Primary;
             }
 
-            if (item == null || definition == null)
+            return definition != null;
+        }
+
+        /// <summary>
+        /// This hand's <b>wrist</b> target while it holds an item, or <c>false</c> when empty. Read by
+        /// <see cref="RemoteHandPoser"/>, which reaches the arm to it and writes the wrist rotation.
+        /// <para>⚠️ <b>The item is the authority, the hand follows.</b> The item's place comes from the
+        /// primary hand's PHYSICAL pose and must stay that way (the shot ray leaves from it); the reverse
+        /// direction breaks left/right symmetry and drifts the weapon from where the player aims.</para>
+        /// <para>⚠️ <b>The record's HAND half is read here too, not just its anchor half</b>
+        /// (<c>ItemGripAuthority.ResolveAnchorToWrist</c>): the slot says where the hand sits ON the
+        /// controller — one grip is taken from the side, another from below. Skipping it seats every
+        /// remote hand at the bare controller anchor with a bare bind rotation, so the same weapon is
+        /// held one way in the headset and another on the observer's screen; a hand rotated into the
+        /// forearm reads on site as "the remote player has no hands".</para>
+        /// <para>⚠️ Same composition as the local wrist lock (<c>HandGripPoser.LockToItemGrip</c>) and it
+        /// must stay that way — the anchor is found forward as <c>item.position + item.rotation *
+        /// record</c>, then the hand delta is applied on top. ⚠️ Manual composition, NOT
+        /// <c>TransformPoint</c>: grip offsets are in METRES and must not scale with the item.</para>
+        /// <para>⚠️ An unwritten foregrip falls at the item's root, so the wrapping hand is NOT pulled
+        /// there — it stays at its wire pose (<see cref="ItemDefinition.HasSecondaryGrip"/>).</para>
+        /// </summary>
+        public bool TryResolveGripWrist(bool rightHand, out Pose wrist)
+        {
+            wrist = default;
+
+            if (!TryResolveSlot(rightHand, out Transform item, out ItemDefinition definition,
+                    out GripSocketKind kind) || item == null)
             {
                 return false;
             }
 
-            Quaternion itemRotation = item.rotation;
-
-            if (isPrimaryHand)
-            {
-                // ⚠️ The reverse direction MUST read the SAME record ApplyGrip solves the item from —
-                // another measure splits hand and weapon by centimetres ("the hand floats next to the
-                // weapon"). In this branch the primary hand IS rightHand. The record is anchor-space and
-                // carries no rotation (the weapon is always aligned with the controller).
-                palm = new Pose(
-                    item.position + itemRotation * definition.PrimaryGripPointOnItem(rightHand),
-                    itemRotation);
-                return true;
-            }
-
-            // Foregrip hand: the item ALREADY aims at the second hand (ItemGripSolver), so only that
-            // hand's anchor is brought onto the socket.
-            // ⚠️ The record is read from the ASKED hand (this branch is only entered while !isPrimaryHand).
-            // ⚠️ An unwritten foregrip falls at the item's root — the hand is not pulled there, it stays
-            // at its wire pose.
-            if (!definition.HasSecondaryGrip)
+            if (kind == GripSocketKind.Secondary && !definition.HasSecondaryGrip)
             {
                 return false;
             }
 
-            // Record and RemoteHandPoser are both in the ANCHOR frame: direct composition.
-            palm = new Pose(
-                item.position + itemRotation * definition.SecondaryGripPosition(rightHand),
-                itemRotation);
+            // The anchor half of the record carries NO rotation (the controller counts as aligned with
+            // the item), so the anchor's rotation is the item's own.
+            ItemGripPose grip = definition.GetGrip(kind, rightHand);
+            var anchor = new Pose(item.position + item.rotation * grip.position, item.rotation);
+
+            wrist = ItemGripAuthority.WristFromAnchor(
+                anchor, ItemGripAuthority.ResolveAnchorToWrist(grip, rightHand));
             return true;
         }
 

@@ -186,7 +186,7 @@ namespace VortexArena.Core.Combat
         /// an silahın içinden geçer.
         /// </para>
         /// </summary>
-        public const float TransitionSeconds = 0.15f;
+        public const float TransitionSeconds = 0.3f;
 
         /// <summary>
         /// Geçiş eğrisi: <c>0..1</c> ilerlemeyi yumuşatılmış (smoothstep) karışım oranına çevirir.
