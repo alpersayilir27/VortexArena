@@ -245,29 +245,6 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Revives a dead player; <paramref name="playerId"/> <b>0 = EVERYONE currently dead</b>
-        /// (§10.4). ⚠️ <c>0</c> is NOT filtered out — same bulk-target pattern as
-        /// <see cref="ClearCalibration"/>.
-        /// <para>Deliberately bypasses the mode's revive condition and respawn delay. An
-        /// uncalibrated player or one inside an obstacle is still not revived; the server logs the
-        /// reason — the UI says "sent", not "done".</para>
-        /// </summary>
-        public static void RevivePlayer(int playerId)
-        {
-            if (playerId < 0)
-            {
-                return;
-            }
-
-            if (Send(new RevivePlayerMsg { playerId = playerId }))
-            {
-                SetStatus(playerId == 0
-                    ? "Canlandırma gönderildi: tüm ölüler"
-                    : $"Canlandırma gönderildi: oyuncu {playerId}");
-            }
-        }
-
-        /// <summary>
         /// Clears a player's calibration; <paramref name="playerId"/> <b>0 = EVERYONE</b> (§10.6).
         /// A cleared player cannot fire, take damage or respawn and glows on other screens — ONLY
         /// the headset itself can re-enable alignment.
