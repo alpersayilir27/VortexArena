@@ -224,10 +224,11 @@ namespace VortexArena.Core.Combat
 
         private void Update()
         {
-            if (_weapon == null || _detached || !isRayVisible)
+            if (_weapon == null || _detached || !isRayVisible || !WeaponGranter.CanSelectWeapon)
             {
-                // The toggle may have been cleared at runtime (Editor tinkering): collect any
-                // live ray, otherwise it freezes on screen.
+                // Collect any live ray, otherwise it freezes on screen — the toggle may have been
+                // cleared at runtime (Editor tinkering), or a hand may have filled mid-hover, and a
+                // full hand must see no selection ray at all.
                 HideRay(_rayLeft);
                 HideRay(_rayRight);
                 return;
@@ -619,15 +620,8 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>ISDK gate: may this interactor select the weapon right now — a DISTANCE
-        /// question only (<see cref="maxGrabDistance"/>).
-        /// <para>⚠️ NEVER add a "block selection while a two-handed weapon is held" gate here. The
-        /// frame is a SELECTION trigger, and changing the selection spawns no second weapon:
-        /// <c>WeaponGranter</c> keeps exactly ONE clone per player and the new definition replaces
-        /// the old. Such a gate would also block swapping weapons at the rack, with a
-        /// hard-to-diagnose symptom: the ray appears but selection never happens, because pressing
-        /// grip calls the old clone into hand and closes the gate on that very frame. The "no
-        /// second weapon at once" rule belongs in <c>WeaponGranter.TickHand</c>.</para>
+        /// <summary>ISDK gate: may this interactor select the weapon right now — CALIBRATED, BOTH
+        /// hands empty, and within <see cref="maxGrabDistance"/>.
         /// <para>⚠️ FAIL-OPEN when the hand/anchor cannot be resolved: this is a FEEL gate, not a
         /// safety gate. An Editor session cannot resolve a controller, and failing closed would
         /// make the weapon unselectable in the Editor, i.e. untestable.</para></summary>
@@ -639,6 +633,18 @@ namespace VortexArena.Core.Combat
             // nothing. Delivery is also closed by WeaponGranter.CanHoldWeapon; this gate does not
             // replace it, it gives the player correct feedback.
             if (!CalibrationState.IsCalibrated)
+            {
+                return false;
+            }
+
+            // ⚠️ A weapon in EITHER hand closes the frame for BOTH: the free hand may not pick a
+            // second weapon. Dropping the frame from the candidate list is what makes it silent —
+            // no ray, no reticle, nothing to aim at — which is the point: the player must not see
+            // an offer they cannot take. Reads an end-of-frame SNAPSHOT; never rewrite it as a live
+            // "is a weapon in hand" query (see WeaponGranter.CanSelectWeapon: grip selects and
+            // summons on the same frame, and a live check would lock the player to their first
+            // weapon forever). Swapping at the rack costs one grip release.
+            if (!WeaponGranter.CanSelectWeapon)
             {
                 return false;
             }
