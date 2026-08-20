@@ -1374,11 +1374,19 @@ ayakta kalır çünkü ISDK'nın dünya arayüzü işaretleme yolu (`PointableCa
 bu bileşenin işi davranış kapatmak değil GÖRSEL susturmaktır. Arenada ışının işaret edeceği bir şey
 yok — silah çerçevesi kendi göstergesini çiziyor, kavrama grab ile oluyor — yani çizilen ışın
 oyuncunun ekranında yalnız gürültüdür. Düğüm bulunamazsa oturum başına bir **uyarı** basılır (ışın
-görünmeye devam eder). ⚠️ **Oyuncunun gördüğü el rig'in kendi sentetik
+görünmeye devam eder).
+⚠️ **Işının gizlenmesi KOŞULLUDUR — dünya arayüzü onunla işaret edilir:** `SetRayVisualsRequested(
+requester, true)` çağıran biri varken görseller geri AÇILIR (lobinin IP paneli böyle yapar; çizgi
+olmadan oyuncu tuş takımına körlemesine nişan alır). ⚠️ **Pointable bir dünya canvas'ı açan her yer
+bu isteği vermek zorundadır** — istek koymayan panel kullanılamaz. İstek **isteyen nesne başına**
+tutulur (sayaç değil: sahne isteği açıkken boşaltılırsa sayaç sapar, ışın arenaya taşınırdı) ve
+istek düşünce ışın yeniden gizlenir; panel kapanışında **ve** isteyenin `OnDisable`'ında bırakılır.
+Gösterme **tek seferlik geri almadır**, her kare zorlama değil — ISDK bu görselleri kendi de
+açıp kapatır, her kare açık tutmak onunla kavga ederdi. ⚠️ **Oyuncunun gördüğü el rig'in kendi sentetik
 elidir** (`OVRHandVisualLeft/Right` → `SyntheticHandData`); bu bileşenin işi onun ÜSTÜNE binen
 İKİNCİ görselleri susturmaktır, yoksa oyuncu iç içe geçmiş eller ve elinde duran bir kumanda
-modeli görürdü. Kumanda modelleri, mesafeli kavramanın hayalet el reticle'ları ve ışın görselleri
-**objesiyle kapatılır** (`SetActive(false)`); oyuncunun kendi el görsellerine (`drivenHandVisuals`, **tam ad**
+modeli görürdü. Kumanda modelleri, mesafeli kavramanın hayalet el reticle'ları ve (istek yokken)
+ışın görselleri **objesiyle kapatılır** (`SetActive(false)`); oyuncunun kendi el görsellerine (`drivenHandVisuals`, **tam ad**
 eşleşmesi) **hiç dokunulmaz** — ne objesine ne Renderer'ına. `LateUpdate`'te her kare yeniden
 çalışır — kontrolcü bırakılıp-tutulduğunda Meta gizlenenleri yeniden aktifleştiriyor.
 ⚠️ İsim deseniyle çalışan bir gizleme hedefi ıskalar (§7, "rig görselleri isimle değil bileşen
