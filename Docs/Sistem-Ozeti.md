@@ -438,7 +438,7 @@ kart KABUĞUNU paylaşır, yerleşimini değil** (§4): burası salt okunur kolo
 eylem düğmeli satırlardır — oyuncu sonucunu okur, operatör iş listesi yönetir. Fazdan çıkan ilk komut ekranı
 kapatır ve HUD geri gelir — yani operatörün başlattığı yeni maç oyuncuyu doğrudan oyun HUD'ıyla
 karşılar. ⚠️ Gizleme kararı **HUD'ların kendisinde değil** tek bir anahtardadır (`GameplayHudGate`,
-`Core/UI`): yazarı yalnız maç sonu ekranıdır, okuyanları `ModeHudBase` ve `AmmoHud`. HUD'lar "faz
+`Core/UI`): yazarı yalnız maç sonu ekranıdır, okuyanı `ModeHudBase`'tir. HUD'lar "faz
 `finished` mı" diye kendileri baksaydı, ekran herhangi bir sebeple çizilmediğinde (prefab yok, rol
 admin) oyuncu maç sonunda hiçbir şey görmezdi. ⚠️ HUD gizlenirken objesi KAPATILMAZ, yalnız
 `Canvas` bileşeni kapanır — kapanan obje ağ olaylarından çıkar ve kendini geri açacak `load_match`'i
@@ -1235,12 +1235,12 @@ noktasından kalibreye göre (`Casing_762x39`/`Casing_556x45`) bir kovan fırlat
 `CasingPool`'dan gelir, bileşen yalnız "nereden, ne kadar kuvvetle" sorusunu cevaplar;
 `MuzzleFlash` altındaki "Smoke" sub-emitter'ı da dahil tüm bu kit `WeaponKitBuilder` tarafından
 üretilir/güncellenir) +
-`AmmoHud` (`Core/UI` — kendini önyükler ve görünümünü **`Resources/UI/AmmoHud` prefabından**
-alır; tutulan silah(lar)ın adı/mermisi/yedek şarjörleri görüş alanının sağ altına düşen
-`HudFollow`'lu tembel-takip panelinde; silah tutulmuyorken gizli, yalnız
-`Weapon.Active`/`ActiveChanged` + silah olaylarıyla yenilenir — mermi göstergesi silahın
-ÜSTÜNE koyulmaz; punto/konum prefabta düzenlenir; maç sonu ekranı açıkken `GameplayHudGate`
-ile gizlenir) + `ArenaCombat` / `WeaponGranter` (aşağıdaki
+`WeaponAmmoPanel` (`Core/UI` — cephane göstergesi silahın **ÜSTÜNDE**, kendi dünya-uzayı
+canvas'ında: şarjördeki mermi + yedek şarjör sayısı. Bileşen canvas prefabının kökünde
+durur, `WPN_*` kökünde değil — canvas tek prefab olarak bütün silahlara iç içe girdiği için
+metin bağları bir kez orada kurulur; silahını `GetComponentInParent` ile bulur. Yalnız silah
+olaylarıyla yenilenir; ayraç/ikon/punto/konum/renk prefabta durur) + `ArenaCombat` /
+`WeaponGranter` (aşağıdaki
 tabloda), `PlayerCombatState`
 (yerel oyuncunun takım/can/ateş yetkisi/canlanma akışı), `RemoteAvatar` + `RemoteHitBox`
 (uzak oyuncu gövdesi ve isabet kutusu; `RemoteAvatar` ayrıca çizdiği silahın **geri tepmesini**

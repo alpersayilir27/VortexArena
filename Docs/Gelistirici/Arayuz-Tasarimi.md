@@ -27,7 +27,6 @@ Tüm arayüz prefabları **tek klasörde**: `Assets/_Shared/App/Resources/UI/`
 | **`ConnectionOverlayWorld.prefab`** | Bağlantı hata ekranı — VR (world-space kart, düğmesiz) | `ConnectionOverlay` |
 | **`LoadingOverlayScreen.prefab`** | Sahne geçişi yükleme ekranı — masaüstü (scrim + kart + ilerleme barı) | `LoadingOverlay` |
 | **`LoadingOverlayWorld.prefab`** | Sahne geçişi yükleme ekranı — VR (world-space kart, **scrim YOK**) | `LoadingOverlay` |
-| **`AmmoHud.prefab`** | VR'da sağ altta cephane göstergesi | `AmmoHud` |
 | **`IdentifyDisplay.prefab`** | `identify` komutunda göz hizasında beliren "SEN BUSUN" kartı | `IdentifyOverlay` |
 | **`MatchResultOverlay.prefab`** | Maç sonu ekranı: sonuç kartı (KAZANDIN/KAYBETTİN/BERABERE) + genel skor tablosu. İkisi aynı prefabta iki paneldir ve **ikisi de `AdminStatsPanel`'in kart kabuğunu** kullanır (`StatsPanel` → `Fill`) | `MatchResultOverlay` |
 
@@ -37,6 +36,12 @@ Oyuncu HUD'ları ayrı yerdedir (mod kutularında):
 |---|---|
 | `Assets/Modes/TeamDeathmatch/UI/TdmHud.prefab` | TDM oyuncu HUD'ı |
 | `Assets/Modes/FreeForAll/UI/FfaHud.prefab` | FFA oyuncu HUD'ı |
+
+Cephane göstergesi bu ikisinin de dışındadır: **silahın kendi üstünde** durur
+(`Assets/_Shared/Arsenal/Prefabs/AmmoCanvas.prefab` — dünya uzayı, `WeaponAmmoPanel` sürer) ve
+bütün `WPN_*` prefablarına iç içe geçmiş örnek olarak girer. Puntosu/ayracı/ikonu/rengi orada
+düzenlenir, **tek yerde** — silah başına kopyası yoktur. ⚠️ Görüş alanına düşen ayrı bir cephane
+paneli yoktur ve geri eklenmez: aynı sayının iki yerde çizilmesi demek olurdu.
 
 Ortak görseller: `Assets/_Shared/App/UI/Sprites/` — yuvarlak köşe (`RoundedRect_4/8/12/20`,
 9-slice kenarları ayarlı), halka (`Ring_16`), pahlı tema kiti ve ikonlar:

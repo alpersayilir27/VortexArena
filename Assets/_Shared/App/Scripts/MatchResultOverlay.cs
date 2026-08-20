@@ -38,7 +38,7 @@ namespace VortexArena.App
     /// <c>if (modeId == "…")</c> zinciri YAZILMAZ, yeni mod bu ekranı bedavaya alır.
     /// </para>
     /// <para>
-    /// Kendini önyükleyen kalıcı tekildir (<c>AmmoHud</c> deseni): sahneye KONMAZ, yoksa her yeni
+    /// Kendini önyükleyen kalıcı tekildir (<c>WeaponGranter</c> deseni): sahneye KONMAZ, yoksa her yeni
     /// arenaya elle bir kurulum adımı doğardı. Görünüm tümüyle prefabtadır
     /// (<c>Resources/UI/MatchResultOverlay</c>) — bu sınıf yalnız veri yazar.
     /// </para>
