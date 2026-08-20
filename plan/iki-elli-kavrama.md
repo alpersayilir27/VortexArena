@@ -100,6 +100,10 @@ silah kiti koşusunun sonundaki uyarı listeler.
       ile oynayınca el eskisi gibi duruyor (paylaşılan varsayılana düşüyor, konsola uyarı gitmiyor).
 - [ ] Uzak avatarın parmakları o slotun duruşuna yakın çiziliyor (ön kabzayı saran el uzakta da
       sarılı) — uzakta ölçü kemik kemik değil parmak başına kapanma oranıdır.
+- [ ] **Uzak elin YERLEŞİMİ de kayıttan geliyor:** gözlemcinin (admin POV ya da ikinci ekran)
+      gördüğü el, silahın kabzasını gözlükteki elle aynı açıdan kavrıyor — el kabzanın yanında
+      düz durmuyor, ön kola/silaha gömülmüyor. Stüdyoda elin açısını değiştirip kaydedince uzak
+      elin açısı da değişiyor.
 - [ ] İkinci admin ekranında **uzak** oyuncunun silahının duruşu sapmıyor (iki uç aynı kaydı okuyup
       aynı formülle çiziyor).
 - [ ] **Raf değişimi:** elde tüfek varken başka bir çerçeveye nişan alıp grip'e basınca yeni silah
