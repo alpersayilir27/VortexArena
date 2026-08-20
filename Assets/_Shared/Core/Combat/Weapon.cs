@@ -217,7 +217,7 @@ namespace VortexArena.Core.Combat
         public event Action<bool> HeldChanged;
 
         /// <summary>Active weapons in the scene, for listeners with no direct reference (e.g.
-        /// AmmoHud). Updated in OnEnable/OnDisable; the order is meaningless.</summary>
+        /// HandGripPoser). Updated in OnEnable/OnDisable; the order is meaningless.</summary>
         public static readonly List<Weapon> Active = new List<Weapon>();
 
         public static event Action ActiveChanged;
