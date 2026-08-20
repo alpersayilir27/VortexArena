@@ -10,8 +10,8 @@ namespace VortexArena.App.Admin
 {
     /// <summary>
     /// Single player row in the stats panel: team stripe, name + <c>#id</c>, K/D/KD cells, one
-    /// detail line (score · battery · controllers · ping · state) and actions (rename · AT · ÖLÇ ·
-    /// KALİBRE).
+    /// detail line (score · battery · controllers · ping · state) and actions (KAYIT SİL · rename ·
+    /// AT · ÖLÇ · KALİBRE).
     /// <para>
     /// <b>Why a sibling of <see cref="AdminPlayerRow"/> but a separate class:</b> the side card is
     /// narrow and belongs to scene control (POV/team/revive); this row is wide, table-like
@@ -29,9 +29,18 @@ namespace VortexArena.App.Admin
     /// same for every headset so per-row repetition was only noise.
     /// </para>
     /// <para>
-    /// ⚠️ <b>No calibration RESET here:</b> the KALİBRE button <i>reloads</i> from the anchor saved
-    /// on the headset. Reset (takes the player out of the fight) is the side panel's KAL button;
-    /// putting two opposite actions side by side misleads the operator.
+    /// ⚠️ <b>KALİBRE and KAYIT SİL are OPPOSITE actions on the same row:</b> KALİBRE <i>reloads</i>
+    /// alignment from the anchor saved on the headset, KAYIT SİL <i>destroys</i> that anchor
+    /// (<c>keepSaved:false</c>) — afterwards reloading fails and the player must redo the A/B
+    /// sequence by hand. What separates them is <b>look and friction</b> (red label + its own
+    /// two-step confirm), never the label alone: a label is read after the click. Same contract as
+    /// the panel's bulk bar (<see cref="AdminStatsPanel"/>), and they sit at opposite ends of the
+    /// button strip so a mis-aimed click cannot land on the other.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>SOFT invalidation is NOT here</b> (alignment dropped, device record kept): that is the
+    /// side panel's KAL button (<see cref="AdminPlayerRow"/>). Per player, this row carries only
+    /// the hard mode — the one a headset with a bad record needs without benching the whole venue.
     /// </para>
     /// </summary>
     public class AdminStatsRow : MonoBehaviour
@@ -41,7 +50,8 @@ namespace VortexArena.App.Admin
         /// reflows the list.</summary>
         public const float Height = 74f;
 
-        /// <summary>Confirm window (s) for "AT" — same as <see cref="AdminPlayerRow"/>.</summary>
+        /// <summary>Confirm window (s) of the two-step buttons (AT · KAYIT SİL) — same as
+        /// <see cref="AdminPlayerRow"/>.</summary>
         private const float ConfirmSeconds = 3f;
 
         /// <summary>How long the result label ("TAMAM"/"HATA") stays up (s). Permanent would show
@@ -64,6 +74,12 @@ namespace VortexArena.App.Admin
         // glyph draws □ (same rule as AdminPlayerRow and UiKit). Colour + "!" carry the state.
         private const string LabelConfirm = "EMİN?";
         private const string LabelKick = "AT";
+        private const string LabelPurge = "KAYIT SİL";
+
+        /// <summary>⚠️ NOT the plain <see cref="LabelConfirm"/>: AT and KAYIT SİL can be armed at
+        /// the same time, and two neighbouring buttons reading "EMİN?" tell the operator nothing
+        /// about which one the second click fires.</summary>
+        private const string LabelPurgeConfirm = "EMİN? SİL";
         private const string LabelMeasure = "ÖLÇ";
         private const string LabelMeasureFailed = "ÖLÇÜLEMEDİ";
         private const string LabelCalibrate = "KALİBRE";
@@ -84,6 +100,10 @@ namespace VortexArena.App.Admin
 
         /// <inheritdoc cref="ReconnectingAlpha"/>
         private const float LeftAlpha = 0.45f;
+
+        /// <summary>Idle fill shared by the two-step buttons; armed they invert to
+        /// <see cref="UiKit.Bad"/>.</summary>
+        private static readonly Color ConfirmIdleFill = UiKit.Hex(0x2A303B, 0xFF);
 
         /// <summary>KALİBRE button state — drives its label and interactability.</summary>
         private enum LoadState
@@ -118,6 +138,10 @@ namespace VortexArena.App.Admin
         [Tooltip("Oyuncuyu maçtan atar — iki adımlı onay.")]
         [SerializeField] private Button kickButton;
         [SerializeField] private TextMeshProUGUI kickLabel;
+        [Tooltip("SERT kip: o gözlükteki KAYITLI çapayı da siler — ardından KALİBRE iş görmez, " +
+                 "oyuncu elle A/B almak zorunda kalır. İki adımlı onay.")]
+        [SerializeField] private Button purgeButton;
+        [SerializeField] private TextMeshProUGUI purgeLabel;
         [Tooltip("Gövde ölçüsünü aldırır (§10.8). Etiketi aynı zamanda GÖSTERGEDİR.")]
         [SerializeField] private Button measureButton;
         [SerializeField] private TextMeshProUGUI measureLabel;
@@ -141,6 +165,11 @@ namespace VortexArena.App.Admin
         private bool _hasLeft;
         private float _floorOffset;
         private float _kickArmedAt = -1f;
+
+        /// <summary>First press of KAYIT SİL (<c>Time.unscaledTime</c>); &lt; 0 = not awaiting
+        /// confirmation. ⚠️ INDEPENDENT of <see cref="_kickArmedAt"/>: arming one must not make the
+        /// other destructive on a single click.</summary>
+        private float _purgeArmedAt = -1f;
 
         /// <summary>Name edit mode. While on, <see cref="Bind"/> leaves the name alone — hence a
         /// field rather than a local.</summary>
@@ -174,6 +203,7 @@ namespace VortexArena.App.Admin
             Wire(nameApplyButton, ApplyNameEdit);
             Wire(nameCancelButton, CancelNameEdit);
             Wire(kickButton, PressKick);
+            Wire(purgeButton, PressPurge);
             // ⚠️ One step (no confirm): measuring is undoable — a stray press is fixed by measuring
             // again (same reason as AdminPlayerRow).
             Wire(measureButton, () => AdminCommands.MeasureBodyScale(_playerId));
@@ -188,6 +218,7 @@ namespace VortexArena.App.Admin
 
             SetNameEditActive(false);
             RefreshKickButton();
+            RefreshPurgeButton();
             RefreshCalibrateButton();
         }
 
@@ -234,6 +265,7 @@ namespace VortexArena.App.Admin
             {
                 SetNameEditActive(false);
                 _kickArmedAt = -1f;
+                _purgeArmedAt = -1f;
                 SetLoadState(LoadState.Idle);
             }
 
@@ -314,9 +346,13 @@ namespace VortexArena.App.Admin
             // match stats. A dead button would feel like "sent but nothing happened".
             SetInteractable(kickButton, !view.HasLeft);
             SetInteractable(renameButton, !view.HasLeft);
+            // ⚠️ Purging needs the headset ONLINE: the server only forwards the command to a live
+            // connection, so on a left row it would look sent and delete nothing.
+            SetInteractable(purgeButton, !view.HasLeft);
 
             RefreshMeasureButton(view);
             RefreshKickButton();
+            RefreshPurgeButton();
             RefreshCalibrateButton();
         }
 
@@ -328,6 +364,12 @@ namespace VortexArena.App.Admin
             {
                 _kickArmedAt = -1f;
                 RefreshKickButton();
+            }
+
+            if (_purgeArmedAt >= 0f && Time.unscaledTime - _purgeArmedAt > ConfirmSeconds)
+            {
+                _purgeArmedAt = -1f;
+                RefreshPurgeButton();
             }
 
             if (_loadState == LoadState.Loading &&
@@ -358,6 +400,14 @@ namespace VortexArena.App.Admin
                 // ⚠️ Never leave edit mode on a hidden row: after a relayout the same row lands on
                 // another player and the typed name would go to them.
                 SetNameEditActive(false);
+
+                // ⚠️ Half-armed confirms die with the row too: a hidden row gets no Tick (the panel
+                // only ticks visible ones), so an armed window would survive the hide and fire the
+                // destructive command on the FIRST click after the row comes back.
+                _kickArmedAt = -1f;
+                _purgeArmedAt = -1f;
+                RefreshKickButton();
+                RefreshPurgeButton();
             }
 
             gameObject.SetActive(visible);
@@ -504,6 +554,30 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
+        /// Deletes the anchor SAVED on that player's headset (§5.2 <c>clear_calibration</c>, HARD
+        /// mode) — the per-player twin of the panel's CİHAZ KAYITLARINI SİL.
+        /// <para><b>Two-step</b>, and this is the row's most destructive command: it benches the
+        /// player AND destroys what KALİBRE would read, so recovery is the manual A/B sequence in
+        /// the headset. Its window is its own (<see cref="_purgeArmedAt"/>).</para>
+        /// <para>⚠️ <b>Soft invalidation is NOT offered here</b> — that is the side panel's KAL
+        /// button. A row carrying both would make the operator choose a mode under time pressure,
+        /// where the wrong pick costs a session break.</para>
+        /// </summary>
+        private void PressPurge()
+        {
+            if (_purgeArmedAt < 0f)
+            {
+                _purgeArmedAt = Time.unscaledTime;
+                RefreshPurgeButton();
+                return;
+            }
+
+            _purgeArmedAt = -1f;
+            AdminCommands.ClearCalibration(_playerId, keepSaved: false);
+            RefreshPurgeButton();
+        }
+
+        /// <summary>
         /// Reloads calibration from the anchor SAVED on the headset (§5.3).
         /// <para>One step: it cannot take the player out of the fight, worst case nothing happens —
         /// the two-step lock is for irreversible commands like reset.</para>
@@ -550,17 +624,37 @@ namespace VortexArena.App.Admin
 
         private void RefreshKickButton()
         {
-            bool armed = _kickArmedAt >= 0f;
+            ApplyConfirmButton(kickButton, kickLabel, _kickArmedAt >= 0f,
+                LabelConfirm, LabelKick, UiKit.Muted);
+        }
 
-            if (kickLabel != null)
+        /// <summary>KAYIT SİL is <b>red while idle</b> (the panel's contract for a destructive
+        /// button): AT only turns red once armed, this one announces itself before the first
+        /// click — it destroys the device record, not just the round.</summary>
+        private void RefreshPurgeButton()
+        {
+            // Faint on a left row: a red label on a disabled button keeps pulling the operator's
+            // eye to a command that cannot fire (same grade as ÖLÇ).
+            bool usable = purgeButton == null || purgeButton.interactable;
+            ApplyConfirmButton(purgeButton, purgeLabel, _purgeArmedAt >= 0f,
+                LabelPurgeConfirm, LabelPurge, usable ? UiKit.Bad : UiKit.Faint);
+        }
+
+        /// <summary>Two-step button look, shared by AT and KAYIT SİL: idle keeps the row fill with
+        /// its own label colour, armed inverts (red fill) — the operator reads what the second
+        /// press will do off the button itself.</summary>
+        private static void ApplyConfirmButton(Button button, TextMeshProUGUI label, bool armed,
+            string armedText, string idleText, Color idleColor)
+        {
+            if (label != null)
             {
-                kickLabel.text = armed ? LabelConfirm : LabelKick;
-                kickLabel.color = armed ? UiKit.OnAccent : UiKit.Muted;
+                label.text = armed ? armedText : idleText;
+                label.color = armed ? UiKit.OnAccent : idleColor;
             }
 
-            if (kickButton != null && kickButton.targetGraphic is Image image)
+            if (button != null && button.targetGraphic is Image image)
             {
-                image.color = armed ? UiKit.Bad : UiKit.Hex(0x2A303B, 0xFF);
+                image.color = armed ? UiKit.Bad : ConfirmIdleFill;
             }
         }
 
