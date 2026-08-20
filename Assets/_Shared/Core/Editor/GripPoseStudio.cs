@@ -1416,7 +1416,7 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>Weapon kit sync run right after a save, so the user does not have to open
-        /// <c>Configure All Build Elements</c> and press "Yalnız Senkronize Et" by hand: the record
+        /// <c>Configure All Build Elements</c> and press "Hepsini Çalıştır" by hand: the record
         /// only becomes visible in game through the kit (<c>VA_GripSocket</c>, the WPN prefabs, the
         /// catalog).
         /// <para>⚠️ The exception is swallowed and only logged (same reason as
@@ -1438,7 +1438,7 @@ namespace VortexArena.Core.Editor
             {
                 Debug.LogError($"{LOG} Kavrama kaydı yazıldı ama silah kiti eşitlemesi hata verdi — " +
                                "kayıt diskte, kit eşitlenmedi (Tools > VortexArena > Build > " +
-                               "Configure All Build Elements > Yalnız Senkronize Et ile tekrar " +
+                               "Configure All Build Elements > Hepsini Çalıştır ile tekrar " +
                                "dene): " + e);
             }
         }

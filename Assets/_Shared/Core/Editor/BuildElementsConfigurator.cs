@@ -6,6 +6,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Editor
 {
@@ -14,8 +15,9 @@ namespace VortexArena.Core.Editor
     /// ağacını <b>tek doğruluk kaynağı</b> sayıp kayıt yerlerini ona EŞİTLER: Build Settings,
     /// <c>GameCatalog.maps</c>, dolu <c>ModeDefinition.maps</c> listeleri ve
     /// <c>Server/config/maps.json</c>. Aynı eşitleme <b>silah kitini</b> (WD asset'leri, WPN
-    /// prefab bağları, FX/gösterge prefabları, <c>WeaponCatalog</c>) ve <b>net eşya kataloğunu</b> da
-    /// koşar (<see cref="SyncWeaponKit"/>) — build'e giren, tablodan türeyen her şey tek düğmede.
+    /// prefab bağları, FX/gösterge prefabları, <c>WeaponCatalog</c>), o katalogtan türeyen
+    /// <b>rastgele silah havuzlarını</b> (<see cref="SyncModeLoadouts"/>) ve <b>net eşya kataloğunu</b>
+    /// da koşar — build'e giren, tablodan türeyen her şey tek düğmede.
     /// <para>
     /// <b>Neden eşitleme, ekleme değil:</b> yalnız ekleyen bir araç silinen arenanın satırını
     /// Build Settings'te ve katalog listelerinde "Missing" olarak bırakır; APK build'i
@@ -284,17 +286,23 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Build öncesi bakılan hazırlık satırları.
+        /// Build öncesi bakılan hazırlık satırları — koşum sırasına göre.
         /// <para>
-        /// ⚠️ Buradaki denetimler <b>yazmaz</b>, yalnız okur. Düğmesi olan satırlar (rig prefabına
-        /// yazan HMD katmanları gibi) tetiği kullanıcıya bırakır; silah kiti ve net eşya kataloğu ise
-        /// zaten her eşitlemede koşuyor (<see cref="SyncWeaponKit"/>) — onların satırı yalnız durum
-        /// gösterir, kalan ✗ insan adımıdır (kavrama/ses/kimlik).
+        /// ⚠️ Buradaki denetimler <b>yazmaz</b>, yalnız okur. Yazan tek şey "Hepsini Çalıştır"dır ve
+        /// satırların hepsini koşar (HMD katmanları yalnız bayatken — paylaşımlı rig prefabını her
+        /// koşuda yeniden serialize etmek merge gürültüsü olurdu). Düğmesiz satırlar durum gösterir;
+        /// kalan ✗ aracın DÜZELTEMEYECEĞİ insan adımıdır (kavrama, ateş sesi, netItemId).
         /// </para>
         /// </summary>
         private void DrawReadiness()
         {
-            EditorGUILayout.LabelField("Hazırlık", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                new GUIContent(
+                    "Hazırlık",
+                    "Her satır bir kayıt yerinin güncel olup olmadığını SALT OKUR. Hepsini Çalıştır " +
+                    "bunların hepsini koşar; kalan ✗ insan adımıdır. Ne zaman gerektiğini öğrenmek " +
+                    "için satırın üstüne gel."),
+                EditorStyles.boldLabel);
 
             if (readiness == null || readiness.Count == 0)
             {
@@ -314,9 +322,17 @@ namespace VortexArena.Core.Editor
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField(row.Ok ? "✓" : "✗", GUILayout.Width(16f));
-                    EditorGUILayout.LabelField(row.Title, EditorStyles.boldLabel, GUILayout.Width(210f));
-                    EditorGUILayout.LabelField(row.Detail, EditorStyles.miniLabel);
+                    // ⚠️ Tooltip satırın HER parçasına verilir: fare nereye gelirse gelsin "bu ne
+                    // zaman gerekir" okunabilsin diye — ayrıca görünür bir "?" işareti tooltip'in
+                    // varlığını duyurur (yoksa kimse üstüne gelmeyi denemez).
+                    EditorGUILayout.LabelField(
+                        new GUIContent(row.Ok ? "✓" : "✗", row.Tooltip), GUILayout.Width(16f));
+                    EditorGUILayout.LabelField(
+                        new GUIContent(row.Title, row.Tooltip), EditorStyles.boldLabel, GUILayout.Width(210f));
+                    EditorGUILayout.LabelField(
+                        new GUIContent("?", row.Tooltip), EditorStyles.miniLabel, GUILayout.Width(12f));
+                    EditorGUILayout.LabelField(
+                        new GUIContent(row.Detail, row.Tooltip), EditorStyles.miniLabel);
 
                     if (!string.IsNullOrEmpty(row.ActionLabel) && row.Action != null &&
                         GUILayout.Button(row.ActionLabel, GUILayout.Width(90f)))
@@ -336,33 +352,82 @@ namespace VortexArena.Core.Editor
             RunAndLog(new List<string> { "hazırlık: " + pending.Title + " çalıştırıldı" });
         }
 
+        /// <summary>
+        /// ⚠️ <b>TEK düğme.</b> İki ayrı düğme ("hepsini yapılandır" + "yalnız senkronize et") hangi
+        /// durumda hangisine basılacağını kullanıcıya sorduruyordu ve aktif sahne kutu değilken
+        /// birincisi devre dışı kalıp eşitlemeyi de sessizce erteliyordu — burada tek düğme her
+        /// zaman etkindir, sahne kutu değilse yalnız MapDefinition adımı atlanır.
+        /// </summary>
         private void DrawButtons()
         {
+            if (GUILayout.Button(
+                    new GUIContent(
+                        "Hepsini Çalıştır",
+                        "Build almadan önce basılacak tek düğme. Aktif sahne bir arena kutusuysa önce " +
+                        "onu kaydedip MapDefinition'ını yazar, sonra HER durumda tüm kayıt yerlerini " +
+                        "eşitler (yukarıdaki satırlar). Sahne açık olmasa da çalışır — silinmiş " +
+                        "arenanın Build Settings/katalog kalıntısını temizlemenin yolu budur."),
+                    GUILayout.Height(32f)))
+            {
+                RunEverything();
+            }
+
+            EditorGUILayout.HelpBox(
+                "Build öncesi tek adım: yukarıdaki satırların hepsini bu düğme koşar. Aktif sahne bir " +
+                "arena kutusu değilse MapDefinition adımı atlanır, eşitleme yine tam koşar. Kalan ✗ " +
+                "satırlar aracın düzeltemeyeceği insan adımlarıdır — satırın üstüne gel, ne zaman " +
+                "gerektiği yazıyor.",
+                MessageType.Info);
+        }
+
+        /// <summary>
+        /// Hazırlık satırlarının tamamını sırayla koşar.
+        /// <para>
+        /// ⚠️ <see cref="ConfigureActiveScene"/> sonunda <see cref="SyncAll"/>'ı zaten çağırıyor —
+        /// kutu sahnede İKİNCİ kez çağrılmaz (aynı işi iki kez yapıp raporu ikizlerdi).
+        /// </para>
+        /// <para>
+        /// ⚠️ HMD katmanları yalnız BAYATKEN kurulur: paylaşılan rig prefabına her koşuda yazmak,
+        /// hiçbir şey değişmese bile her seferinde bir prefab diff'i üretirdi.
+        /// </para>
+        /// </summary>
+        private void RunEverything()
+        {
+            var report = new List<string>();
+
             Scene scene = SceneManager.GetActiveScene();
             bool activeSceneIsBox =
                 TryParseBoxScene(scene.path, out _, out _, out string boxName, out string sceneName) &&
                 string.Equals(boxName, sceneName, StringComparison.Ordinal);
 
-            using (new EditorGUI.DisabledScope(!activeSceneIsBox))
+            if (activeSceneIsBox)
             {
-                if (GUILayout.Button("Hepsini Yapılandır", GUILayout.Height(28f)))
+                report.AddRange(ConfigureActiveScene(displayName, selectedModeIds.ToArray()));
+            }
+            else
+            {
+                report.Add("aktif sahne bir arena kutusu değil — MapDefinition'a dokunulmadı, " +
+                           "yalnız eşitleme koşuldu.");
+                SyncAll(report);
+            }
+
+            // ⚠️ İstisna yutulur (SyncWeaponKit ile aynı kalıp): rig prefabındaki bir sözleşme
+            // kayması arena eşitlemesinin raporunu yutmasın.
+            try
+            {
+                if (!HmdOverlayBuilder.IsRigUpToDate(out string hmdDetail))
                 {
-                    RunAndLog(ConfigureActiveScene(displayName, selectedModeIds.ToArray()));
+                    HmdOverlayBuilder.BuildOverlays();
+                    report.Add("HMD katmanları kuruldu (bayattı: " + hmdDetail + ")");
                 }
             }
-
-            if (GUILayout.Button("Yalnız Senkronize Et", GUILayout.Height(22f)))
+            catch (Exception e)
             {
-                var report = new List<string>();
-                SyncAll(report);
-                RunAndLog(report);
+                report.Add("HMD katmanları HATA: " + e.Message);
+                Debug.LogException(e);
             }
 
-            EditorGUILayout.HelpBox(
-                "\"Yalnız Senkronize Et\" aktif sahneye DOKUNMAZ ve sahne açık olmasa da çalışır — " +
-                "silinen bir arenanın Build Settings / katalog kalıntısını temizlemenin yolu budur. " +
-                "İki düğme de silah kitini (WD/WPN/katalog/gösterge) ve net eşya kataloğunu birlikte koşar.",
-                MessageType.Info);
+            RunAndLog(report);
         }
 
         private void RunAndLog(List<string> report)
@@ -564,7 +629,7 @@ namespace VortexArena.Core.Editor
             if (box.Map == null)
             {
                 box.Issues.Add(new ScanIssue(false,
-                    $"'{box.MapPath}' YOK — sahneyi aç ve 'Hepsini Yapılandır' ile modlarını seç."));
+                    $"'{box.MapPath}' YOK — sahneyi aç ve 'Hepsini Çalıştır' ile modlarını seç."));
                 return box;
             }
 
@@ -617,7 +682,8 @@ namespace VortexArena.Core.Editor
 
         /// <summary>
         /// Klasör ağacını Build Settings, <c>GameCatalog.maps</c> ve dolu
-        /// <c>ModeDefinition.maps</c> listeleriyle eşitler; ne yapıldığını satır satır
+        /// <c>ModeDefinition.maps</c> listeleriyle eşitler; ardından silah kitini ve ondan türeyen
+        /// <c>ModeDefinition.loadout</c> havuzlarını koşar. Ne yapıldığını satır satır
         /// <paramref name="report"/>'a yazar. Exception FIRLATMAZ.
         /// </summary>
         public static void SyncAll(List<string> report)
@@ -647,7 +713,7 @@ namespace VortexArena.Core.Editor
                 }
             }
 
-            FixSceneNames(current, report);
+            FixSceneNames(current, report, false);
 
             var maps = new List<MapDefinition>();
             for (int i = 0; i < current.ValidBoxes.Count; i++)
@@ -658,18 +724,26 @@ namespace VortexArena.Core.Editor
                 }
             }
 
-            SyncBuildSettings(current, report);
+            SyncBuildSettings(current, report, false);
 
             GameCatalog catalog = ResolveCatalog(report);
             if (catalog != null)
             {
-                SyncCatalogMaps(catalog, maps, report);
-                SyncModeMaps(catalog, maps, report);
+                SyncCatalogMaps(catalog, maps, report, false);
+                SyncModeMaps(catalog, maps, report, false);
             }
 
             AssetDatabase.SaveAssets();
 
             SyncWeaponKit(report);
+
+            // ⚠️ Kitten SONRA: havuzun kaynağı WeaponCatalog ve onu az önce SyncWeaponKit yazdı.
+            // Önce koşsaydı yeni bir silah havuza ancak İKİNCİ eşitlemede girerdi.
+            if (catalog != null)
+            {
+                SyncModeLoadouts(catalog, report, false);
+                AssetDatabase.SaveAssets();
+            }
 
             ServerConfigExportResult export = ServerConfigExporter.Export(false);
             report.Add("export: " + (export != null ? export.Summary : "sonuç alınamadı"));
@@ -731,9 +805,18 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>Dosya sistemi otoritedir: sahne adı ile ayrışan <c>sceneName</c> alanları geri yazılır.</summary>
-        private static void FixSceneNames(ScanResult current, List<string> report)
+        /// <summary>
+        /// Dosya sistemi otoritedir: sahne adı ile ayrışan <c>sceneName</c> alanları geri yazılır.
+        /// <para>
+        /// ⚠️ <paramref name="dryRun"/> = yazma YOK, rapor AYNEN. Hazırlık satırı ile eşitleme aynı
+        /// gövdeyi paylaşsın diye: denetim ikinci kez yazılsaydı sessizce eşitlemeden sapardı.
+        /// Dönen sayı = rapora düşen DEĞİŞİKLİK satırı adedi (salt uyarı sayılmaz).
+        /// </para>
+        /// </summary>
+        private static int FixSceneNames(ScanResult current, List<string> report, bool dryRun)
         {
+            int changes = 0;
+
             for (int i = 0; i < current.ValidBoxes.Count; i++)
             {
                 BoxRecord box = current.ValidBoxes[i];
@@ -742,12 +825,19 @@ namespace VortexArena.Core.Editor
                     continue;
                 }
 
-                var mapObject = new SerializedObject(box.Map);
-                mapObject.FindProperty("sceneName").stringValue = box.SceneName;
-                mapObject.ApplyModifiedPropertiesWithoutUndo();
-                EditorUtility.SetDirty(box.Map);
+                if (!dryRun)
+                {
+                    var mapObject = new SerializedObject(box.Map);
+                    mapObject.FindProperty("sceneName").stringValue = box.SceneName;
+                    mapObject.ApplyModifiedPropertiesWithoutUndo();
+                    EditorUtility.SetDirty(box.Map);
+                }
+
                 report.Add($"düzeltildi: {box.MapPath}.sceneName = {box.SceneName}");
+                changes++;
             }
+
+            return changes;
         }
 
         /// <summary>
@@ -761,9 +851,14 @@ namespace VortexArena.Core.Editor
         /// ⚠️ Şablon sahneleri listeye ASLA girmez: girseydi sunucu açılışında var olmayan bir
         /// mekan satırı açardı.
         /// </para>
+        /// <para>
+        /// ⚠️ <paramref name="dryRun"/>'da <c>EditorBuildSettings.scenes</c> ATANMAZ ama sayım
+        /// yapılır — hazırlık satırı ile eşitleme tek gövdeden okusun diye.
+        /// </para>
         /// </summary>
-        private static void SyncBuildSettings(ScanResult current, List<string> report)
+        private static int SyncBuildSettings(ScanResult current, List<string> report, bool dryRun)
         {
+            int changes = 0;
             var targets = new Dictionary<string, BoxRecord>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < current.ValidBoxes.Count; i++)
             {
@@ -785,6 +880,7 @@ namespace VortexArena.Core.Editor
                 if (entry == null || string.IsNullOrEmpty(entry.path))
                 {
                     report.Add("kaldırıldı (Build Settings): boş satır");
+                    changes++;
                     continue;
                 }
 
@@ -796,6 +892,7 @@ namespace VortexArena.Core.Editor
                     if (!onDisk)
                     {
                         report.Add($"kaldırıldı (Build Settings): {path} — diskte yok");
+                        changes++;
                         continue;
                     }
 
@@ -806,24 +903,28 @@ namespace VortexArena.Core.Editor
                 if (path.StartsWith(TemplateRoot, StringComparison.Ordinal))
                 {
                     report.Add($"kaldırıldı (Build Settings): {path} — şablon");
+                    changes++;
                     continue;
                 }
 
                 if (!onDisk)
                 {
                     report.Add($"kaldırıldı (Build Settings): {path} — diskte yok");
+                    changes++;
                     continue;
                 }
 
                 if (!targets.ContainsKey(path))
                 {
                     report.Add($"kaldırıldı (Build Settings): {path} — mekan ağacında değil");
+                    changes++;
                     continue;
                 }
 
                 if (!placed.Add(path))
                 {
                     report.Add($"kaldırıldı (Build Settings): {path} — yinelenen satır");
+                    changes++;
                     continue;
                 }
 
@@ -844,22 +945,31 @@ namespace VortexArena.Core.Editor
             {
                 arena.Add(new EditorBuildSettingsScene(added[i], true));
                 report.Add($"eklendi (Build Settings): {added[i]}");
+                changes++;
             }
 
             var final = new List<EditorBuildSettingsScene>(outside.Count + arena.Count);
             final.AddRange(outside);
             final.AddRange(arena);
-            EditorBuildSettings.scenes = final.ToArray();
+            if (!dryRun)
+            {
+                EditorBuildSettings.scenes = final.ToArray();
+            }
+
             report.Add($"Build Settings: {final.Count} sahne ({outside.Count} arena dışı + {arena.Count} arena)");
+            return changes;
         }
 
         /// <summary>
         /// <c>GameCatalog.maps</c> = taranan haritaların tamamı. Mevcut sıra korunur, yeniler sona
         /// eklenir; null ve taramada olmayan (silinmiş/taşınmış) referanslar SİLİNİR — kalan
         /// "Missing" satır admin harita seçicisinde boş bir kayıt olarak çizilirdi.
+        /// <para>⚠️ <paramref name="dryRun"/>'da hiçbir şey yazılmaz; dönen sayı kaldırılan + eklenen
+        /// referans adedidir (yazılacak dizi mevcut diziden farklıysa bu sayaç zaten yakalar).</para>
         /// </summary>
-        private static void SyncCatalogMaps(GameCatalog catalog, List<MapDefinition> maps, List<string> report)
+        private static int SyncCatalogMaps(GameCatalog catalog, List<MapDefinition> maps, List<string> report, bool dryRun)
         {
+            int changes = 0;
             var known = new HashSet<MapDefinition>(maps);
             var ordered = new List<MapDefinition>();
 
@@ -872,18 +982,21 @@ namespace VortexArena.Core.Editor
                 if (map == null)
                 {
                     report.Add("kaldırıldı (GameCatalog.maps): boş/Missing referans");
+                    changes++;
                     continue;
                 }
 
                 if (!known.Contains(map))
                 {
                     report.Add($"kaldırıldı (GameCatalog.maps): {AssetDatabase.GetAssetPath(map)} — mekan ağacında değil");
+                    changes++;
                     continue;
                 }
 
                 if (ordered.Contains(map))
                 {
                     report.Add($"kaldırıldı (GameCatalog.maps): {map.SceneName} — yinelenen kayıt");
+                    changes++;
                     continue;
                 }
 
@@ -896,12 +1009,18 @@ namespace VortexArena.Core.Editor
                 {
                     ordered.Add(maps[i]);
                     report.Add($"eklendi (GameCatalog.maps): {maps[i].SceneName}");
+                    changes++;
                 }
             }
 
-            WriteArray(prop, ordered);
-            catalogObject.ApplyModifiedPropertiesWithoutUndo();
-            EditorUtility.SetDirty(catalog);
+            if (!dryRun)
+            {
+                WriteArray(prop, ordered);
+                catalogObject.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(catalog);
+            }
+
+            return changes;
         }
 
         /// <summary>
@@ -917,13 +1036,16 @@ namespace VortexArena.Core.Editor
         /// Null elemanlar her hâlükârda temizlenir: "Missing" bir eleman ne kısıt ne harita,
         /// yalnız admin seçicisinde boş bir satırdır.
         /// </para>
+        /// <para>⚠️ <paramref name="dryRun"/>'da hiçbir liste yazılmaz; dönen sayı rapora düşen
+        /// değişiklik satırı adedidir (destekleyen harita bulunamayınca yazılan UYARI sayılmaz).</para>
         /// </summary>
-        private static void SyncModeMaps(GameCatalog catalog, List<MapDefinition> maps, List<string> report)
+        private static int SyncModeMaps(GameCatalog catalog, List<MapDefinition> maps, List<string> report, bool dryRun)
         {
+            int changes = 0;
             ModeDefinition[] modes = catalog.Modes;
             if (modes == null)
             {
-                return;
+                return changes;
             }
 
             for (int m = 0; m < modes.Length; m++)
@@ -946,6 +1068,7 @@ namespace VortexArena.Core.Editor
                     {
                         report.Add($"kaldırıldı ({mode.ModeId}.maps): boş/Missing referans");
                         changed = true;
+                        changes++;
                         continue;
                     }
 
@@ -953,6 +1076,7 @@ namespace VortexArena.Core.Editor
                     {
                         report.Add($"kaldırıldı ({mode.ModeId}.maps): {map.SceneName} — yinelenen kayıt");
                         changed = true;
+                        changes++;
                         continue;
                     }
 
@@ -963,7 +1087,7 @@ namespace VortexArena.Core.Editor
                 {
                     // Liste zaten boş(aldı) = kısıtsız; hedef kümeyi buraya yazmak modu
                     // istemeden kısıtlamak olurdu.
-                    if (changed)
+                    if (changed && !dryRun)
                     {
                         WriteArray(prop, kept);
                         modeObject.ApplyModifiedPropertiesWithoutUndo();
@@ -987,7 +1111,7 @@ namespace VortexArena.Core.Editor
                     report.Add($"UYARI: '{mode.ModeId}' modunu destekleyen HİÇ harita yok — {mode.ModeId}.maps " +
                                "olduğu gibi bırakıldı. Boşaltılsaydı liste 'kısıtsız' anlamına gelir ve mod " +
                                "sessizce tüm haritaları kabul ederdi; haritaların supportedModeIds alanını kontrol et.");
-                    if (changed)
+                    if (changed && !dryRun)
                     {
                         WriteArray(prop, kept);
                         modeObject.ApplyModifiedPropertiesWithoutUndo();
@@ -1009,6 +1133,7 @@ namespace VortexArena.Core.Editor
                     {
                         report.Add($"kaldırıldı ({mode.ModeId}.maps): {kept[i].SceneName} — modu desteklemiyor");
                         changed = true;
+                        changes++;
                     }
                 }
 
@@ -1019,10 +1144,11 @@ namespace VortexArena.Core.Editor
                         final.Add(target[i]);
                         report.Add($"eklendi ({mode.ModeId}.maps): {target[i].SceneName}");
                         changed = true;
+                        changes++;
                     }
                 }
 
-                if (!changed)
+                if (!changed || dryRun)
                 {
                     continue;
                 }
@@ -1031,6 +1157,311 @@ namespace VortexArena.Core.Editor
                 modeObject.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(mode);
             }
+
+            return changes;
+        }
+
+        /// <summary>
+        /// Rastgele silah dağıtan modların (<see cref="ModeWeaponSource.RandomGrant"/>)
+        /// <c>loadout</c> listesini <c>WeaponCatalog</c>'a eşitler: eksik silah eklenir, null /
+        /// yinelenen / katalogda olmayan referans silinir, mevcut sıra korunur.
+        /// <para>
+        /// ⚠️ <b>Boş liste burada DOLDURULUR</b> — <c>maps</c>'in tersine (orada boş = "kısıtsız").
+        /// <c>WeaponGranter.PickFromLoadout</c>'ta boş havuzun karşılığı "kısıtsız" değil
+        /// <b>hiç silah yok</b>tur: mod oynanamaz hâle gelir. Bu yüzden iki alanın kuralı da farklı
+        /// olmak ZORUNDA.
+        /// </para>
+        /// <para>
+        /// ⚠️ Yalnız <c>RandomGrant</c> modlarına dokunulur. <see cref="ModeWeaponSource.WeaponCanvas"/>
+        /// modlarında sahnede hangi silahın duracağını <b>arena</b> belirler ve <c>loadout</c> hiç
+        /// okunmaz; oraya yazmak okunmayan bir listeyi şişirirdi.
+        /// </para>
+        /// <para>
+        /// <b>Neden eşitleme, elle liste değil:</b> arsenal büyüdükçe elle yazılmış bir havuz
+        /// kaçınılmaz olarak bayatlar ve <b>tek belirtisi</b> "bazı silahlar hiç gelmiyor"dur —
+        /// ne konsola bir şey düşer ne build kırılır. Havuzun tek doğruluk kaynağı katalogtur;
+        /// mod başına silah kısıtlaması diye bir şey YOKTUR (istenirse önce onu taşıyacak bir alan
+        /// tasarlanır, elle kırpılmış liste o alanın yerine geçmez — bu koşu onu geri yazar).
+        /// </para>
+        /// <para>⚠️ <paramref name="dryRun"/>'da havuz yazılmaz; <c>loadout: … (değişmedi)</c> durum
+        /// satırı yine yazılır ve DEĞİŞİKLİK sayılmaz — hazırlık satırının detayı odur.</para>
+        /// </summary>
+        private static int SyncModeLoadouts(GameCatalog catalog, List<string> report, bool dryRun)
+        {
+            int changes = 0;
+            ModeDefinition[] modes = catalog.Modes;
+            if (modes == null)
+            {
+                return changes;
+            }
+
+            var weaponCatalog = AssetDatabase.LoadAssetAtPath<WeaponCatalog>(WeaponKitBuilder.CatalogPath);
+            if (weaponCatalog == null)
+            {
+                report.Add("UYARI: '" + WeaponKitBuilder.CatalogPath + "' okunamadı — mod loadout'ları " +
+                           "eşitlenmedi (rastgele silah veren modlar eski havuzda kalır).");
+                return changes;
+            }
+
+            var pool = new List<WeaponDefinition>();
+            WeaponDefinition[] definitions = weaponCatalog.Definitions;
+            for (int i = 0; definitions != null && i < definitions.Length; i++)
+            {
+                if (definitions[i] != null && !pool.Contains(definitions[i]))
+                {
+                    pool.Add(definitions[i]);
+                }
+            }
+
+            if (pool.Count == 0)
+            {
+                report.Add("UYARI: WeaponCatalog boş — mod loadout'ları eşitlenmedi. Dolu bir listeyi " +
+                           "boşaltmak rastgele silah veren modu oynanamaz hâle getirirdi.");
+                return changes;
+            }
+
+            var poolSet = new HashSet<WeaponDefinition>(pool);
+
+            for (int m = 0; m < modes.Length; m++)
+            {
+                ModeDefinition mode = modes[m];
+                if (mode == null || mode.Weapons != ModeWeaponSource.RandomGrant)
+                {
+                    continue;
+                }
+
+                var modeObject = new SerializedObject(mode);
+                SerializedProperty prop = modeObject.FindProperty("loadout");
+                if (prop == null || !prop.isArray)
+                {
+                    report.Add($"UYARI: '{mode.ModeId}' modunda 'loadout' alanı yok (sözleşme kayması?).");
+                    continue;
+                }
+
+                var final = new List<WeaponDefinition>();
+                bool changed = false;
+
+                for (int i = 0; i < prop.arraySize; i++)
+                {
+                    var weapon = prop.GetArrayElementAtIndex(i).objectReferenceValue as WeaponDefinition;
+                    if (weapon == null)
+                    {
+                        report.Add($"kaldırıldı ({mode.ModeId}.loadout): boş/Missing referans");
+                        changed = true;
+                        changes++;
+                        continue;
+                    }
+
+                    if (final.Contains(weapon))
+                    {
+                        report.Add($"kaldırıldı ({mode.ModeId}.loadout): {weapon.name} — yinelenen kayıt");
+                        changed = true;
+                        changes++;
+                        continue;
+                    }
+
+                    if (!poolSet.Contains(weapon))
+                    {
+                        report.Add($"kaldırıldı ({mode.ModeId}.loadout): {weapon.name} — WeaponCatalog'da yok");
+                        changed = true;
+                        changes++;
+                        continue;
+                    }
+
+                    final.Add(weapon);
+                }
+
+                for (int i = 0; i < pool.Count; i++)
+                {
+                    if (!final.Contains(pool[i]))
+                    {
+                        final.Add(pool[i]);
+                        report.Add($"eklendi ({mode.ModeId}.loadout): {pool[i].name}");
+                        changed = true;
+                        changes++;
+                    }
+                }
+
+                if (changed && !dryRun)
+                {
+                    WriteArray(prop, final);
+                    modeObject.ApplyModifiedPropertiesWithoutUndo();
+                    EditorUtility.SetDirty(mode);
+                }
+
+                // Prefabsız tanım listede DURUR ama havuza girmez (WeaponGranter onu eler).
+                // Silinseydi prefab bağlanınca sessizce geri gelirdi; asıl eksik prefab bağıdır.
+                int usable = 0;
+                for (int i = 0; i < final.Count; i++)
+                {
+                    if (final[i].Prefab != null)
+                    {
+                        usable++;
+                    }
+                    else
+                    {
+                        report.Add($"UYARI ({mode.ModeId}.loadout): {final[i].name} prefabsız — " +
+                                   "havuzda sayılmaz.");
+                    }
+                }
+
+                report.Add($"loadout: {mode.ModeId} = {usable}/{pool.Count} silah" +
+                           (changed ? " (güncellendi)" : " (değişmedi)"));
+            }
+
+            return changes;
+        }
+
+        // ------------------------------------------------------ hazırlık denetimi
+
+        /// <summary>
+        /// Build Settings + <c>GameCatalog.maps</c> + modların harita listeleri güncel mi.
+        /// <para>
+        /// ⚠️ <b>SALT OKUR.</b> Yazan taraf <see cref="SyncAll"/>'dır ve ikisi AYNI gövdeyi
+        /// (<c>dryRun</c>) kullanır — denetim mantığı burada ikinci kez YAZILMAZ, yazılsaydı
+        /// eşitlemenin gerçekte ne yaptığından sessizce sapardı.
+        /// </para>
+        /// <para>⚠️ İstisna YUTULMAZ — <c>BuildReadiness.Check</c> zaten yutuyor.</para>
+        /// </summary>
+        internal static bool IsArenaRegistryUpToDate(out string detail)
+        {
+            ScanResult current = Scan();
+            var probe = new List<string>();
+
+            int changes = FixSceneNames(current, probe, true);
+            changes += SyncBuildSettings(current, probe, true);
+
+            GameCatalog catalog = ResolveCatalog(null);
+            if (catalog == null)
+            {
+                detail = "GameCatalog çözülemedi.";
+                return false;
+            }
+
+            var maps = new List<MapDefinition>();
+            for (int i = 0; i < current.ValidBoxes.Count; i++)
+            {
+                if (current.ValidBoxes[i].Map != null)
+                {
+                    maps.Add(current.ValidBoxes[i].Map);
+                }
+            }
+
+            changes += SyncCatalogMaps(catalog, maps, probe, true);
+            changes += SyncModeMaps(catalog, maps, probe, true);
+
+            // Tarama HATASI da ✗ sayılır: yerleşimi bozuk bir kutu eşitlemeye hiç girmiyor, yani
+            // "fark yok" demek "her şey yolunda" anlamına gelmezdi.
+            string firstError = FirstScanError(current);
+            if (changes == 0 && firstError == null)
+            {
+                detail = "Build Settings + GameCatalog + mod harita listeleri güncel.";
+                return true;
+            }
+
+            detail = changes == 0
+                ? firstError
+                : DifferenceSummary(probe, changes);
+            return false;
+        }
+
+        /// <summary>
+        /// Rastgele silah veren modların <c>loadout</c> havuzu <c>WeaponCatalog</c> ile aynı mı.
+        /// <para>
+        /// ⚠️ <b>SALT OKUR.</b> Yazan taraf <see cref="SyncAll"/>'dır ve ikisi AYNI gövdeyi
+        /// (<c>dryRun</c>) kullanır — denetim mantığı burada ikinci kez YAZILMAZ.
+        /// </para>
+        /// <para>⚠️ İstisna YUTULMAZ — <c>BuildReadiness.Check</c> zaten yutuyor.</para>
+        /// </summary>
+        internal static bool AreModeLoadoutsUpToDate(out string detail)
+        {
+            GameCatalog catalog = ResolveCatalog(null);
+            if (catalog == null)
+            {
+                detail = "GameCatalog çözülemedi.";
+                return false;
+            }
+
+            var probe = new List<string>();
+            int changes = SyncModeLoadouts(catalog, probe, true);
+
+            if (changes != 0)
+            {
+                detail = DifferenceSummary(probe, changes);
+                return false;
+            }
+
+            var status = new List<string>();
+            for (int i = 0; i < probe.Count; i++)
+            {
+                if (probe[i].StartsWith("loadout:", StringComparison.Ordinal))
+                {
+                    status.Add(probe[i]);
+                }
+            }
+
+            detail = status.Count > 0 ? string.Join(" · ", status) : "rastgele silah veren mod yok.";
+            return true;
+        }
+
+        /// <summary>
+        /// Dry-run raporundan ilk iki DEĞİŞİKLİK satırını çıkarır. ⚠️ Yalnız değişiklik önekleri
+        /// seçilir: uyarı ve durum satırları (<c>UYARI:</c>, <c>Build Settings: N sahne</c>,
+        /// <c>loadout: …</c>) sayaca girmediği için detayda da yanıltıcı olurdu.
+        /// </summary>
+        private static string DifferenceSummary(List<string> probe, int changes)
+        {
+            var picked = new List<string>(2);
+            for (int i = 0; i < probe.Count && picked.Count < 2; i++)
+            {
+                string line = probe[i];
+                if (line.StartsWith("kaldırıldı", StringComparison.Ordinal) ||
+                    line.StartsWith("eklendi", StringComparison.Ordinal) ||
+                    line.StartsWith("düzeltildi", StringComparison.Ordinal))
+                {
+                    picked.Add(line);
+                }
+            }
+
+            return string.Join(" · ", picked) + $" (toplam {changes} fark)";
+        }
+
+        /// <summary>Taramanın ilk HATA bulgusu; hata yoksa <c>null</c>.</summary>
+        private static string FirstScanError(ScanResult current)
+        {
+            for (int i = 0; i < current.Issues.Count; i++)
+            {
+                if (current.Issues[i].IsError)
+                {
+                    return current.Issues[i].Text;
+                }
+            }
+
+            for (int v = 0; v < current.Venues.Count; v++)
+            {
+                VenueRecord venue = current.Venues[v];
+                for (int i = 0; i < venue.Issues.Count; i++)
+                {
+                    if (venue.Issues[i].IsError)
+                    {
+                        return venue.Issues[i].Text;
+                    }
+                }
+
+                for (int b = 0; b < venue.Boxes.Count; b++)
+                {
+                    BoxRecord box = venue.Boxes[b];
+                    for (int i = 0; i < box.Issues.Count; i++)
+                    {
+                        if (box.Issues[i].IsError)
+                        {
+                            return box.Issues[i].Text;
+                        }
+                    }
+                }
+            }
+
+            return null;
         }
 
         // -------------------------------------------------------- aktif sahne

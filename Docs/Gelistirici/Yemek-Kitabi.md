@@ -424,9 +424,15 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
    (*Create → VortexArena → Weapon Definition*): `weaponId`, hasar, atış hızı, menzil, saçılım,
    şarjör, haptik (`hapticAmplitude` 0-1 + `hapticDuration` sn — atış başına kumanda titreşimi;
    ikisinden biri 0 ise o silahta haptik yoktur), `prefab`.
-3. Modun kullanmasını istiyorsan `ModeDefinition.loadout` listesine ekle.
+3. `Tools > VortexArena > Build > Configure All Build Elements` → **Hepsini Çalıştır**.
 
 `weaponId` yalnızca **kill feed etiketidir** — sunucu doğrulamaz, istediğini yazabilirsin.
+
+> ⚠️ **`ModeDefinition.loadout` ELLE DÜZENLENMEZ** — eşitleme onu `WeaponCatalog`'a göre geri
+> yazar. Rastgele silah veren modların havuzu **arsenalin tamamıdır**; mod başına silah kısıtı
+> diye bir şey yoktur ve elle kırpılan liste bir sonraki koşuda dolar. Kısıt gerçekten
+> gerekirse önce onu taşıyacak alan tasarlanır. `weaponSource:"weaponcanvas"` modlarında
+> `loadout` zaten hiç okunmaz — sahnede hangi silahın duracağını arena belirler.
 
 > Silahın elde **nerede** durduğunu `WD_*`'taki kavrama kayıtları belirler (§11.0); dördü de el
 > başınadır (`primaryGripRight/Left`, `secondaryGripRight/Left`) ve her biri üç şey taşır:
@@ -456,8 +462,8 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 > Aynı şey diğer alanlar için geçerli DEĞİLDİR: hasar/rpm/menzil/saçılım her koşuda tablodan ezilir.
 
 > Sahnedeki silahın **çerçevesi** için elle iş yoktur: silah kiti koşusu
-> (`Tools > VortexArena > Build > Configure All Build Elements` — Hepsini Yapılandır / Yalnız
-> Senkronize Et, silah kiti her eşitlemede koşar) her `WPN_*` köküne
+> (`Tools > VortexArena > Build > Configure All Build Elements` — **Hepsini Çalıştır**; silah kiti
+> her koşuda çalışır) her `WPN_*` köküne
 > `VA_WeaponFrame` örneğini kendisi koyar. Çerçevenin arenada görünüp görünmemesi ayrı bir konudur
 > → bir sonraki reçete.
 
@@ -512,10 +518,12 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
    duruşuna döndürür. Riglenmemiş el boşta duruşunda kalır — hazır bir "sıkma/kabza" preset'i
    YOKTUR. Oyunda gördüğün el tezgâhtaki elin aynısıdır, hiçbir parmak kumandadan/el izlemesinden
    oynamaz; silahı alınca el boşta duruşundan bu duruşa yumuşakça kapanır, bırakınca geri açılır.
+   Elin **yerleşimi** de (5. adımda yazdığın açı/konum) aynı sürede kayarak gelir — silaha bir anda
+   geçmez. Geçişin süresi tek bir yerdedir: `HandPoseLibrary.TransitionSeconds`.
 7. İstersen **Karşı Ele Aynala** ile öteki eli başlat, sonra elle düzelt.
 8. **Kaydet** (stüdyo penceresinden; elin Inspector'ında kaydet düğmesi yoktur) → yaşayan **her el**
    `WD_*.asset`'e yazılır (Undo'lu) ve **silah kiti kendiliğinden eşitlenir** — `Configure All Build
-   Elements > Yalnız Senkronize Et`'e ayrıca gitmen gerekmez. Kit açık prefabı yeniden yazdığı için
+   Elements`'e ayrıca gitmen gerekmez. Kit açık prefabı yeniden yazdığı için
    tezgâhtaki eller kalkabilir: kayıt diskte olduğundan **Elleri Oluştur** onları aynı yere geri
    getirir. **Elleri Temizle** tezgâhı elle toplar.
 
@@ -780,7 +788,7 @@ bile değil — orantılı ölçekleme elle düzeltilecek bir yalancı-doğru ü
 (`Data/<SahneAdı>.asset`). Sahne adı zaten katalog anahtarı olduğu için klasöre bakan anahtarı
 görür; araç bu üçünü karşılaştırır ve uyuşmayan kutuyu uyarı olarak bildirir.
 
-**6. adım** (**Hepsini Yapılandır**, sahne açıkken) `MapDefinition`'ı yazar, sonra kayıtları
+**6. adım** (**Hepsini Çalıştır**, sahne açıkken) `MapDefinition`'ı yazar, sonra kayıtları
 `Venues/*/Scenes/*/` ağacına göre **eşitler**: `GameCatalog.maps`, haritayı destekleyen her modun
 **dolu** `maps` listesi, Build Settings ve `maps.json`. Ağaçta karşılığı olmayan satırlar
 (silinmiş/taşınmış arena, `Missing` referans) **silinir**; kutuda eksik olan şey (sahne yok, birden
@@ -794,8 +802,8 @@ kalibrasyon işaretçileri onunla birlikte silinir).
 olduğu için üretilen boş bir tanım lobiyi sessizce her modda oynanır kılardı. Sahneyi aç, modları
 araç penceresinden seç.
 
-⚠️ **Arena sildiysen/taşıdıysan aynı pencereden `Yalnız Senkronize Et`** — sahne açık olmadan da
-koşar ve kalıntı kayıtları temizler; kayıtlar elle düzenlenmez.
+⚠️ **Arena sildiysen/taşıdıysan aynı pencereden `Hepsini Çalıştır`** — sahne açık olmadan da koşar
+(o durumda `MapDefinition` adımı atlanır) ve kalıntı kayıtları temizler; kayıtlar elle düzenlenmez.
 
 > Arena ölçüsü **sunucuya gitmez** (maps.json'a yalnız `sceneName` + `modes` yazılır); arenanın
 > tek ölçü kaynağı **boyut dosyasıdır**. Export'u ise ölçü için değil,

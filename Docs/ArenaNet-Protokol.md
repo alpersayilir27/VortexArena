@@ -885,7 +885,10 @@ kemiğe yazmak projenin bir kez öğrendiği tuzaktır. Oran **asset'te saklanma
 
 ⚠️ **Gönderen ile alıcının eklem listesi AYNI olmak ZORUNDADIR** (`NetworkCharacterRetargeter`'ın
 `_bodyIndicesToSend`/`_bodyIndicesToSync` alanları, iki prefabta birden). Listeler ayrışırsa blob
-yanlış çözülür ve gövde tümden bozulur — bu, sürüm uyumsuzluğunun sessiz biçimidir.
+yanlış çözülür ve gövde tümden bozulur — bu, sürüm uyumsuzluğunun sessiz biçimidir. Denetimi
+`Configure All Build Elements` penceresinin **Hazırlık** bölümü yapar ("İskelet eklem listesi");
+ayrışma orada ✗ olarak görünür ve **insan adımıdır** — liste iki prefabın Inspector'ında düzeltilir,
+çalışma anında hesaplanmaz (hesaplayan bir yol, listeyi yazan ikinci bir taraf açar).
 
 ⚠️ **`root` neden ayrı bir alan** (blob'un kendi kökü varken): SDK kök eklemi
 `JointType.NoWorldSpace` ile yazıyor, yani **gönderenin dünya pozu** — alıcının arenasıyla ilgisi
@@ -1214,7 +1217,7 @@ yolu yalnız onu ve `Alive`/`Calibrated`'ı okur. Bir tik gecikme sunum için ö
 
 Fiziksel oyuncu ışınlanamaz → **respawn = konum değil durum değişimi**:
 
-1. Ölünce sunucu `respawn{playerId, delaySeconds}` gönderir (`delaySeconds` = `rules.respawnDelay`, §10.5); istemci ölüm ekranı gösterir, silah ateşlemez, avatar **hayalete döner** (yarı saydam; renk oyuncunun kendi takımı, takımsız modda nötr).
+1. Ölünce sunucu `respawn{playerId, delaySeconds}` gönderir (`delaySeconds` = `rules.respawnDelay`, §10.5); istemci ölüm ekranı gösterir, **silah elde kalır ama ateşlemez**, avatar **hayalete döner** (yarı saydam; renk oyuncunun kendi takımı, takımsız modda nötr) ve hayaletin **elindeki eşya çizilmez** — yani silahı yalnız sahibi görür. Ölüm silahı elden almaz (ölü oyuncu tezgâhtan yenisini de seçebilir): hasarı kapatan şey fazdır, tutma değil. Kalibresizlik bunun İSTİSNASIDIR — orada silah gerçekten alınır (§10.6).
 2. `delaySeconds` dolduktan **ve modun canlanma şartı sağlandıktan** sonra istemci `revive_request` gönderir (canlanana dek ~1 sn'de bir tekrarlar). Şart `rules.reviveAnchor` ile seçilir:
    - **`"base"`** (varsayılan, TDM): oyuncu bir **taban bölgesine** (`BaseZone` — arenadaki kırmızı/mavi şerit) fiziken girer. Ölüm ekranı "Tabanına dön ve canlan" der.
    - **`"standstill"`**: oyuncu ölüm anındaki HMD konumunu çapa alır ve `REVIVE_HOLD_RADIUS` içinde `REVIVE_HOLD_SECONDS` boyunca kesintisiz sabit durur; çapadan çıkınca sayaç ve çapa sıfırlanır. Taban bölgesi olmayan modlar (FFA) bunu kullanır. ⚠️ **İç engelin içinde geçen süre sayılmaz** (§10.9): sayaç orada ilerlemez, çapa her karede tazelenir ve süre engelden **çıkıldıktan sonra** sıfırdan başlar — şart "kıpırdama" değil, *meşru bir yerde* kıpırdamamaktır; sayılsaydı engel bir sığınağa dönerdi (içeride bekle, çıkar çıkmaz canlan).
