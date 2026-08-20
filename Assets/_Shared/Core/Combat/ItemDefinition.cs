@@ -272,8 +272,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Ana kavrama noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — uzak elin anchor hedefi
-        /// (<c>RemoteAvatar.TryResolveGripPalm</c>) bunu okur.
+        /// Ana kavrama noktasının <b>EŞYAYA göre</b> yerel konumu (metre) — eşyanın dünya pozunu
+        /// çözen taraf (<see cref="ItemGripSolver"/>) bunu okur.
         /// <para>⚠️ <b>Ayrı bir alan DEĞİL, kaydın kendisidir:</b> kayıt zaten "kumanda eşyanın
         /// neresinde" sorusunu cevaplıyor. İkinci bir serialize alan açılırsa aynı nokta iki yerde
         /// yaşar ve biri güncellenip diğeri unutulur.</para>

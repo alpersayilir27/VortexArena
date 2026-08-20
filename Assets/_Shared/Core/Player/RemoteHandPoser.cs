@@ -173,6 +173,15 @@ namespace VortexArena.Core.Player
         /// Bir eli eşyanın kavrama noktasına oturtur: kol IK ile hedefe uzanır, sonra bileğin
         /// yönü kavramadan yazılır.
         /// <para>
+        /// ⚠️ <b>Hedef, kaydın BİLEK pozudur</b> (<c>RemoteAvatar.TryResolveGripWrist</c>), kumanda
+        /// anchor'ının kendisi değil: elin o kabzanın üstünde nasıl durduğu (yandan mı alttan mı)
+        /// kaydın el yarısında yazılı ve <b>yerel el de tam olarak onu okuyor</b>
+        /// (<c>HandGripPoser</c>). Anchor'ı doğrudan hedeflemek, aynı silahı gözlükte bir türlü
+        /// gözlemci ekranında başka türlü tutmak demekti — bilek ön kola dönük kalınca da belirti
+        /// "uzak oyuncunun eli yok" oluyordu. <see cref="HandFingerRig.WristCorrection"/> ondan
+        /// SONRA gelir ve ayrı bir iş yapar: kavrama uzayındaki bileği humanoid kemiğe çevirir.
+        /// </para>
+        /// <para>
         /// ⚠️ <b>Sıra önemlidir</b> — önce kol, sonra bilek. IK üst kolu döndürdüğü için bileğin
         /// dünya rotasyonu da değişiyor; bileği önce yazmak onu bir sonraki satırda ezerdi.
         /// </para>
@@ -184,13 +193,13 @@ namespace VortexArena.Core.Player
         /// </summary>
         private void ApplyGrip(HandFingerRig rig, TwoBoneIk arm, bool rightHand)
         {
-            if (rig == null || rig.Wrist == null || !_avatar.TryResolveGripPalm(rightHand, out Pose palm))
+            if (rig == null || rig.Wrist == null || !_avatar.TryResolveGripWrist(rightHand, out Pose wrist))
             {
                 return;
             }
 
-            arm?.Solve(palm.position);
-            rig.Wrist.rotation = palm.rotation * rig.WristCorrection;
+            arm?.Solve(wrist.position);
+            rig.Wrist.rotation = wrist.rotation * rig.WristCorrection;
         }
     }
 }
