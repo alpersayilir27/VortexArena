@@ -1,46 +1,45 @@
 namespace VortexArena.Protocol
 {
-    /// WS kontrol mesajı "type" string sabitleri (Docs/ArenaNet-Protokol.md §5).
+    /// WS control message "type" string constants (Docs/ArenaNet-Protokol.md §5).
     public static class MessageTypes
     {
-        // İstemci → Sunucu
+        // Client → Server
         public const string Hello = "hello";
         public const string Status = "status";
-        public const string SetIdentity = "set_identity"; // ad + forma numarası; oyuncu kendini, admin herkesi (§5.1)
+        public const string SetIdentity = "set_identity"; // name + jersey number; a player sets their own, an admin anyone's (§5.1)
         public const string SetReady = "set_ready";
-        // shot_fired v4'te KALDIRILDI → UDP 0x03/0x04 (§6.4/6.5); 10 atış/sn/oyuncu otoriter WS
-        // kanalını boğuyordu.
+        // shot_fired was REMOVED in v4 → UDP 0x03/0x04 (§6.4/6.5); 10 shots/s/player was drowning the
+        // authoritative WS channel.
         public const string HitReport = "hit_report";
-        public const string ReviveRequest = "revive_request"; // free-roam canlanma talebi (§10.4)
-        public const string SetCalibration = "set_calibration"; // başlık kendi hizalamasını bildirir (§10.6)
-        public const string SetBodyScale = "set_body_scale"; // başlık kendi gövde ölçeğini bildirir (§10.8)
+        public const string ReviveRequest = "revive_request"; // free-roam revive request (§10.4)
+        public const string SetCalibration = "set_calibration"; // the headset reports its own alignment (§10.6)
+        public const string SetBodyScale = "set_body_scale"; // the headset reports its own body scale (§10.8)
 
-        // Yalnız admin → Sunucu
+        // Admin only → Server
         public const string StartMatch = "start_match";
         public const string AbortMatch = "abort_match";
-        public const string PauseMatch = "pause_match"; // koşan maçı dondurur (§5.2)
-        public const string ResumeMatch = "resume_match"; // yalnız operatör duraklatmasını kaldırır
+        public const string PauseMatch = "pause_match"; // freezes a running match (§5.2)
+        public const string ResumeMatch = "resume_match"; // lifts the operator pause only
         public const string SetTeam = "set_team";
         public const string Kick = "kick";
-        public const string Identify = "identify"; // sunucu → istemci yönü de aynı type
-        public const string ReturnToLobby = "return_to_lobby"; // sunucu → istemci yönü de aynı type
-        public const string SetSelection = "set_selection"; // ortak mod/harita seçimi (maçı başlatmaz)
-        // Hizalamayı geçersiz kılar; keepSaved=false (varsayılan) cihazdaki çapayı da siler.
-        // playerId 0 = herkes (§10.6). Sunucu → istemci yönü de aynı type.
+        public const string ReturnToLobby = "return_to_lobby"; // the server → client direction uses the same type
+        public const string SetSelection = "set_selection"; // shared mode/map selection (does not start a match)
+        // Invalidates the alignment; keepSaved=false (default) also deletes the anchor on the device.
+        // playerId 0 = everyone (§10.6). The server → client direction uses the same type.
         public const string ClearCalibration = "clear_calibration";
-        // Kayıtlı çapadan hizalamayı yeniden yükletir; playerId 0 = herkes (§10.6).
-        // Sunucu → istemci yönü de aynı type.
+        // Makes the alignment reload from the saved anchor; playerId 0 = everyone (§10.6).
+        // The server → client direction uses the same type.
         public const string ReloadCalibration = "reload_calibration";
-        // Gövde ölçümünü başlatır; playerId 0 = herkes (§10.8). Sunucu → istemci yönü de aynı type.
+        // Starts the body measurement; playerId 0 = everyone (§10.8). The server → client direction uses the same type.
         public const string MeasureBodyScale = "measure_body_scale";
-        public const string SetFriendlyFire = "set_friendly_fire"; // dost ateşi anahtarı; faz kapısı YOK, anlık (§5.2)
-        // Başlıkların AÇILIŞTA nasıl hizalanacağı; set_friendly_fire ile aynı sınıf: anlık, seçim
-        // kilidine girmez (§5.2/§10.6).
+        public const string SetFriendlyFire = "set_friendly_fire"; // friendly fire switch; NO phase gate, takes effect instantly (§5.2)
+        // How headsets align AT STARTUP; same class as set_friendly_fire: instant, does not enter the
+        // selection lock (§5.2/§10.6).
         public const string SetCalibrationMode = "set_calibration_mode";
-        // Ölü oyuncuyu operatör canlandırır; playerId 0 = o an ölü olan TÜM oyuncular (§10.4).
+        // The operator revives a dead player; playerId 0 = ALL currently dead players (§10.4).
         public const string RevivePlayer = "revive_player";
 
-        // Sunucu → İstemci
+        // Server → Client
         public const string Welcome = "welcome";
         public const string LobbyState = "lobby_state";
         public const string LoadMatch = "load_match";
@@ -50,14 +49,14 @@ namespace VortexArena.Protocol
         public const string KillEvent = "kill_event";
         public const string Respawn = "respawn";
         public const string MatchEnd = "match_end";
-        public const string Ping = "ping"; // "bana status yolla" tetiği — GECİKME ÖLÇMEZ (UDP 0x06 ölçer)
+        public const string Ping = "ping"; // "send me a status" trigger — MEASURES NO LATENCY (UDP 0x06 does)
         public const string Kicked = "kicked";
-        public const string AdminState = "admin_state"; // yalnız adminlere: ortak seçim + duyuru
-        public const string SelectionState = "selection_state"; // HERKESE: seçili modun takım kipi (§5.3)
-        public const string RulesUpdate = "rules_update"; // HERKESE: koşan maçın kural şekli değişti (§5.3)
-        public const string NetStats = "net_stats"; // yalnız adminlere: oyuncu başına ping/jitter/kayıp
-        public const string Violation = "violation"; // yalnız adminlere: ihlal defterinin kenar bildirimi (§5.3)
-        // Yalnız adminlere: reload_calibration düğmesinin cevabı — olay, durum değil (§5.3).
+        public const string AdminState = "admin_state"; // admins only: shared selection + announcement
+        public const string SelectionState = "selection_state"; // TO EVERYONE: team mode of the selected mode (§5.3)
+        public const string RulesUpdate = "rules_update"; // TO EVERYONE: the rule shape of the running match changed (§5.3)
+        public const string NetStats = "net_stats"; // admins only: per-player ping/jitter/loss
+        public const string Violation = "violation"; // admins only: edge notification of the violation log (§5.3)
+        // Admins only: the answer to the reload_calibration button — an event, not a state (§5.3).
         public const string CalibrationResult = "calibration_result";
     }
 }

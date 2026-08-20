@@ -4,9 +4,9 @@ using VortexArena.Protocol;
 namespace VortexArena.Net
 {
     /// <summary>
-    /// Statik olay merkezi: ArenaClient sunucu mesajlarını buradan yayınlar
-    /// (hepsi ANA thread'de tetiklenir), App/Core dinler. Net katmanı sahne
-    /// yüklemez ve oyun bilgisi içermez — olayları kim nasıl işler bilmez.
+    /// The static event hub: ArenaClient publishes server messages from here (all raised on the MAIN
+    /// thread) and App/Core listen. The Net layer loads no scenes and holds no game knowledge — it does
+    /// not know who processes the events or how.
     /// </summary>
     public static class NetEvents
     {
@@ -21,73 +21,72 @@ namespace VortexArena.Net
         public static event Action<KillEventMsg> OnKillEvent;
         public static event Action<RespawnMsg> OnRespawn;
         public static event Action<MatchEndMsg> OnMatchEnd;
-        /// <summary>Lobiye dönüş (§10.7). Mesaj lobi sahnesini + profilini taşır; ilgilenmeyen
-        /// dinleyici parametreyi yok sayar.</summary>
+        /// <summary>Return to lobby (§10.7). The message carries the lobby scene + profile; a listener
+        /// that does not care ignores the parameter.</summary>
         public static event Action<ReturnToLobbyMsg> OnReturnToLobby;
-        public static event Action<IdentifyMsg> OnIdentify;
         public static event Action<KickedMsg> OnKicked;
 
-        /// <summary>Operatör bu başlığın gövde ölçüsünü aldırdı (§10.8) — yalnız player'a gelir.
-        /// <c>BodyScaleState</c> dinler, ölçer ve <c>set_body_scale</c> ile döner.
-        /// <para>Mesajın sunucu → istemci yönünde alanı yoktur, bu yüzden olay da parametresizdir:
-        /// hedef zaten bu bağlantıdır (<c>identify</c> ile aynı desen).</para></summary>
+        /// <summary>The operator had this headset's body measured (§10.8) — players only.
+        /// <c>BodyScaleState</c> listens, measures and answers with <c>set_body_scale</c>.
+        /// <para>Fieldless server → client, so the event is parameterless too: the target is this
+        /// connection.</para></summary>
         public static event Action OnMeasureBodyScale;
 
-        /// <summary>Operatör bu başlığın kalibrasyonunu sıfırladı (§10.6) — yalnız player'a gelir.
-        /// <c>CalibrationState</c> dinler ve <c>ArenaCalibrator</c>'ı geçersiz kılar.
-        /// <para>Argüman <c>keepSaved</c>'dir: <c>true</c> = yalnız hizalama geçersiz kılınır,
-        /// cihazdaki çapa ve UUID KORUNUR (ardından gelen <c>reload_calibration</c> çalışabilsin);
-        /// <c>false</c> = cihaz kaydı da silinir. Hedef zaten bu bağlantı olduğu için mesajın
-        /// <c>playerId</c>'si iletilmez, ama kip iletilir — bu yüzden olay parametresiz DEĞİLDİR.</para>
-        /// <para>⚠️ <b>Roster'daki <c>calibrated</c> alanının yerine geçmez, onu tamamlar:</b> alan
-        /// durumu taşır, bu olay komutu. Yarım kalmış elle kalibrasyonda alan zaten <c>false</c>
-        /// olduğu için sıfırlama yalnız bu olaydan duyulur (§5.3).</para></summary>
+        /// <summary>The operator reset this headset's calibration (§10.6) — players only.
+        /// <c>CalibrationState</c> listens and invalidates <c>ArenaCalibrator</c>.
+        /// <para>The argument is <c>keepSaved</c>: <c>true</c> = alignment invalidated but the device
+        /// anchor + UUID KEPT (so a following <c>reload_calibration</c> works), <c>false</c> = deleted
+        /// too. <c>playerId</c> is not forwarded (the target is this connection) but the mode is —
+        /// hence the parameter.</para>
+        /// <para>⚠️ <b>Completes the roster's <c>calibrated</c> field, does not replace it:</b> the
+        /// field is state, this is the command. In a half-finished manual calibration the field is
+        /// already <c>false</c>, so the reset is heard only here (§5.3).</para></summary>
         public static event Action<bool> OnClearCalibration;
 
-        /// <summary>Operatör bu başlığa kayıtlı çapadan hizalamayı yeniden yükletti (§10.6) —
-        /// yalnız player'a gelir. <c>CalibrationState</c> dinler, <c>ArenaCalibrator</c>'a yükletir
-        /// ve sonucu <c>set_calibration</c> ile döner.
-        /// <para>Mesajın sunucu → istemci yönünde alanı yoktur, bu yüzden olay da parametresizdir:
-        /// hedef zaten bu bağlantıdır (<c>identify</c> ile aynı desen).</para>
-        /// <para>⚠️ <c>OnClearCalibration</c>'ın zıddı DEĞİLDİR: o hizalamayı siler, bu onu geri
-        /// getirmeyi <b>dener</b> — "hizalandım" işaretini yine başlık koyar.</para></summary>
+        /// <summary>The operator had this headset reload alignment from the saved anchor (§10.6) —
+        /// players only. <c>CalibrationState</c> listens, makes <c>ArenaCalibrator</c> load it and
+        /// answers with <c>set_calibration</c>.
+        /// <para>Fieldless server → client, so the event is parameterless (the target is this
+        /// connection).</para>
+        /// <para>⚠️ NOT the opposite of <c>OnClearCalibration</c>: that deletes the alignment, this
+        /// <b>tries</b> to restore it — the headset still sets the "aligned" mark.</para></summary>
         public static event Action OnReloadCalibration;
 
-        /// <summary>Yalnız admin bağlantılarına gelir (§5.3): bir oyuncunun kayıtlı hizalamayı
-        /// yeniden yükleme denemesi sonuçlandı. <b>Olaydır, durum değildir</b> — durumu roster
-        /// taşır; bu yalnız operatörün bastığı düğmenin cevabıdır.
-        /// <para>Sunucu bekleyen istek defteri tutmaz: hangi sonucun hangi düğmeye ait olduğunu
-        /// dinleyen arayüz bilir (bekleyen satırı yoksa yok sayar).</para></summary>
+        /// <summary>Admin connections only (§5.3): a player's saved-alignment reload attempt finished.
+        /// <b>An event, not state</b> — state lives in the roster; this only answers the button the
+        /// operator pressed.
+        /// <para>The server keeps no pending-request ledger: the listening UI matches result to button
+        /// (and ignores one with no pending row).</para></summary>
         public static event Action<CalibrationResultMsg> OnCalibrationResult;
 
-        /// <summary>Uzak bir oyuncunun atış/atma olayı (UDP 0x04 EventBatch, §6.5) — v4'te WS
-        /// <c>shot_fired</c>'ın yerini aldı. <c>ArenaClient</c> DEĞİL <c>UdpStateChannel</c>
-        /// yayınlar, ama diğerleri gibi ANA thread'de. Kendi olaylarımız kanalda süzülür.</summary>
+        /// <summary>A remote player's shot/throw event (UDP 0x04 EventBatch, §6.5) — it replaced the WS
+        /// <c>shot_fired</c> in v4. Published by <c>UdpStateChannel</c>, NOT <c>ArenaClient</c>, but on
+        /// the MAIN thread like the others. Our own events are filtered out in the channel.</summary>
         public static event Action<RemoteFireEvent> OnRemoteFireEvent;
 
-        /// <summary>Yalnız admin bağlantılarına gelir (§5.3): adminler arası ortak mod/harita
-        /// seçimi + son eylem duyurusu. App katmanında <c>AdminSelection</c> dinler.</summary>
+        /// <summary>Admin connections only (§5.3): the shared mode/map selection between admins + the
+        /// last-action notice. In the App layer <c>AdminSelection</c> listens.</summary>
         public static event Action<AdminStateMsg> OnAdminState;
 
-        /// <summary>HERKESE gelir (§5.3): koşan maçın kural şekli DEĞİŞTİ. <b>Gerçek bir kural
-        /// mesajıdır</b> ve <c>ModeRuntime</c>'a uygulanır (<c>ModeRuntimePump</c> dinler).
-        /// Bugün tek tetikleyicisi operatörün dost ateşi anahtarıdır (§5.2).</summary>
+        /// <summary>Goes TO EVERYONE (§5.3): the rule shape of the running match CHANGED. <b>It is a
+        /// real rule message</b> and is applied to <c>ModeRuntime</c> (<c>ModeRuntimePump</c> listens).
+        /// Its only trigger today is the operator's friendly-fire switch (§5.2).</summary>
         public static event Action<RulesUpdateMsg> OnRulesUpdate;
 
-        /// <summary>HERKESE gelir (§5.3): seçili modun takım kipi. <b>Kural değildir</b> —
-        /// <c>ModeRuntime</c>'a uygulanmaz; tek tüketicisi taban şeritlerinin görünürlüğüdür.
-        /// Core katmanında <c>ModeRuntimePump</c> dinleyip <c>ModeSelection</c>'a yazar.</summary>
+        /// <summary>Goes TO EVERYONE (§5.3): the team mode of the selected mode. <b>Not a rule</b> —
+        /// never applied to <c>ModeRuntime</c>; its only consumer is base strip visibility. Core's
+        /// <c>ModeRuntimePump</c> listens and writes to <c>ModeSelection</c>.</summary>
         public static event Action<SelectionStateMsg> OnSelectionState;
 
-        /// <summary>Yalnız admin bağlantılarına gelir (§6.7), 1 Hz: oyuncu başına ping/jitter/kayıp.
-        /// Değerleri İSTEMCİLER ölçer, sunucu taşır. App katmanında <c>AdminRoster</c> dinler.
-        /// <para>Kaybı zararsızdır — bir sonraki saniye yenisi gelir, uzlaştırma yoktur.</para></summary>
+        /// <summary>Admin connections only (§6.7), 1 Hz: per-player ping/jitter/loss, measured by the
+        /// CLIENTS and only carried by the server. App's <c>AdminRoster</c> listens.
+        /// <para>Losing one is harmless — a new one arrives next second, no reconciliation.</para></summary>
         public static event Action<NetStatsMsg> OnNetStats;
 
-        /// <summary>Yalnız admin bağlantılarına gelir (§5.3): bir oyuncunun fiziksel ihlali başladı
-        /// ya da bitti (engel / alan dışı). Defteri sunucu tutar, bu yalnız kenar bildirimidir.
-        /// <para>Kaybı zararsızdır — ihlalin görsel karşılığı (kuş bakışı halkası) snapshot
-        /// bitlerinden besleniyor, kaybolan mesaj yalnız bir feed satırı eksiltir.</para></summary>
+        /// <summary>Admin connections only (§5.3): a player's physical violation started or ended
+        /// (obstacle / out of bounds). The server keeps the ledger; this is only the edge notification.
+        /// <para>Losing one is harmless — the visual counterpart (the top-down ring) feeds off the
+        /// snapshot bits, so a lost message costs one feed row.</para></summary>
         public static event Action<ViolationMsg> OnViolation;
 
         internal static void RaiseConnected(WelcomeMsg msg) { OnConnected?.Invoke(msg); }
@@ -102,10 +101,10 @@ namespace VortexArena.Net
         internal static void RaiseRespawn(RespawnMsg msg) { OnRespawn?.Invoke(msg); }
         internal static void RaiseMatchEnd(MatchEndMsg msg) { OnMatchEnd?.Invoke(msg); }
         internal static void RaiseReturnToLobby(ReturnToLobbyMsg msg) { OnReturnToLobby?.Invoke(msg); }
-        // `in` ile geçilir: 10 olay/sn'de 40+ baytlık struct'ı kopyalamamak için (yayın sırasında
-        // değiştirilmiyor). Delegate'e verilirken zaten bir kopya çıkar; buradaki kazanç çağrı yolu.
+        // Passed with `in` so a 40+ byte struct is not copied at 10 events/s (it is not modified while
+        // publishing). A copy is made anyway when handing it to the delegate; the gain here is the call
+        // path.
         internal static void RaiseRemoteFireEvent(in RemoteFireEvent evt) { OnRemoteFireEvent?.Invoke(evt); }
-        internal static void RaiseIdentify(IdentifyMsg msg) { OnIdentify?.Invoke(msg); }
         internal static void RaiseKicked(KickedMsg msg) { OnKicked?.Invoke(msg); }
         internal static void RaiseMeasureBodyScale() { OnMeasureBodyScale?.Invoke(); }
         internal static void RaiseClearCalibration(bool keepSaved) { OnClearCalibration?.Invoke(keepSaved); }

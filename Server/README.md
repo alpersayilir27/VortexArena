@@ -333,7 +333,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
    `AddPlayerScore(playerId, n)` (bireysel); okuma `ScoreRed`/`ScoreBlue`/`ScoreOf`/`TryGetLeader`.
 5. `MatchDirector.RegisterModes()` içine `Register(new <Ad>Mode())` satırını ekle.
 6. `../Docs/ArenaNet-Protokol.md`'ye modId işle → Unity tarafında `Assets/Modes/<Ad>/` kutusunu aç
-   (CLAUDE.md reçetesi).
+   (reçete: `../Docs/Gelistirici/Yemek-Kitabi.md`).
 
 `OnTick`/`OnHitApplied`/`OnKill` **varsayılan gövdelidir** — ilgilenmeyen mod hiç yazmaz. Yeni bir
 kanca eklerken de varsayılan gövde kullan (mevcut modların hiçbiri değişmesin) ve **tüketicisi
@@ -342,7 +342,7 @@ olmayan kancayı hiç ekleme**.
 ## Sunucu bugün ne yapıyor
 
 - **Keşif + kontrol:** UDP beacon yayını, WS kontrol kanalı, lobi (roster / ready / takım /
-  kick / identify), cihaz adı kalıcılığı.
+  kick), cihaz adı kalıcılığı.
 - **Poz kanalı:** `0x01 PoseUpdate` alımı (kayıtlı endpoint + u16 seq sarmalama kontrolü) +
   `0x02 Snapshot` yayını (20 Hz; oyuncu sayısı sınırsız, datagram başına en fazla
   `SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16` girdi ≈ 1382 B, fazlası aynı tik içinde ek datagramlara

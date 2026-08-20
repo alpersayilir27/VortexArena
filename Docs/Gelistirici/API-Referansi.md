@@ -85,7 +85,6 @@ Statik olmalarının sebebi: dinleyicinin bağlantının ne zaman kurulduğunu b
 | ✅ `OnMatchEnd` | `MatchEndMsg` | Maç bitti; kazanan takım **veya** oyuncu |
 | ✅ `OnReturnToLobby` | `ReturnToLobbyMsg` | Herkes lobiye dönüyor. Mesaj lobi sahnesini + profilini taşır (§10.7); ilgilenmiyorsan parametreyi yok say |
 | ✅ `OnShotFired` | `ShotFiredMsg` | **Başkası** ateş etti (atana gönderilmez). Pozlar arena uzayında |
-| ✅ `OnIdentify` | `IdentifyMsg` | Admin "bu cihazı tanıt" dedi |
 | ✅ `OnKicked` | `KickedMsg` | Bağlantıdan atıldık |
 | ⛔ `OnRulesUpdate` | `RulesUpdateMsg` | Koşan maçın kural şekli değişti (bugün: operatör dost ateşini çevirdi). **Sen dinleme** — `ModeRuntimePump` uygular, sen `ModeRuntime`'dan okursun |
 | ⛔ `OnAdminState` | `AdminStateMsg` | Yalnız admin arayüzü içindir |

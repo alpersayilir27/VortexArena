@@ -6,7 +6,8 @@ namespace VortexArena.Protocol
         /// <summary>
         /// Wire version. A mismatch does NOT reject the connection (warning only), so every bump needs
         /// a full APK round on all headsets. Per-version notes: Docs/ArenaNet-Protokol.md §1.
-        /// <para>v15 <c>clear_calibration.keepSaved</c> (§5.2/§10.6) · v14 out-of-bounds bit + admin
+        /// <para>v16 <c>identify</c> REMOVED (both directions) · v15 <c>clear_calibration.keepSaved</c>
+        /// (§5.2/§10.6) · v14 out-of-bounds bit + admin
         /// <c>violation</c> (§5.3/§6.3) · v13 calibration mode + diagnostics (§5.2/§10.6/§10.8) ·
         /// v12-v9 obstacle bit, controller state, server→client <c>clear_calibration</c>, body scale —
         /// all additive.</para>
@@ -20,7 +21,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 15;
+        public const int PROTOCOL_VERSION = 16;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----

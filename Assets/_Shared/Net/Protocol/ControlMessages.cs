@@ -256,14 +256,6 @@ namespace VortexArena.Protocol
         public int playerId;
     }
 
-    /// Admin → server carries playerId; server → client goes fieldless.
-    [Serializable]
-    public class IdentifyMsg
-    {
-        public string type = MessageTypes.Identify;
-        public int playerId;
-    }
-
     /// The SHARED mode/map/duration/limit selection for the next match (§5.2). Does not start a match;
     /// broadcast to all admins via admin_state. Empty string or 0 keeps the current value.
     [Serializable]

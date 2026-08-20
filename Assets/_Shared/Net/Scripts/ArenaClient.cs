@@ -12,7 +12,7 @@ using EngineScenes = UnityEngine.SceneManagement.SceneManager;
 
 namespace VortexArena.Net
 {
-    /// <summary>Bağlantı durumu (NetEvents.OnConnectionStateChanged ile yayınlanır).</summary>
+    /// <summary>Connection state (published through NetEvents.OnConnectionStateChanged).</summary>
     public enum ArenaConnectionState
     {
         Disconnected,
@@ -21,13 +21,13 @@ namespace VortexArena.Net
     }
 
     /// <summary>
-    /// Kalıcı WS kontrol istemcisi tekili: Connect(ip, port, role) ile bağlanır,
-    /// hello gönderir, welcome bekler, 5 sn'de bir status kalp atışı atar; kopuşta
-    /// 1→2→5 sn backoff ile aynı adrese sonsuz yeniden dener (Disconnect çağrılmadıysa).
+    /// Persistent WS control client singleton: Connect(ip, port, role) connects, sends hello, awaits
+    /// welcome and heartbeats a status every 5 s; on a drop it retries the same address forever with a
+    /// 1→2→5 s backoff (unless Disconnect was called).
     ///
-    /// Ağ işleri arka plan Task'larında koşar; Unity API'si gereken her iş
-    /// ConcurrentQueue üzerinden ana thread'e (Update) taşınır. Sunucu mesajları
-    /// NetEvents üzerinden yayınlanır — bu sınıf SAHNE YÜKLEMEZ, oyun bilgisi içermez.
+    /// Network work runs on background Tasks; anything needing the Unity API is moved to the main
+    /// thread (Update) through a ConcurrentQueue. Server messages are published through NetEvents —
+    /// this class LOADS NO SCENES and holds no game knowledge.
     /// </summary>
     public class ArenaClient : MonoBehaviour
     {
@@ -37,33 +37,31 @@ namespace VortexArena.Net
 
         public ArenaConnectionState State { get; private set; } = ArenaConnectionState.Disconnected;
 
-        /// <summary>welcome'da atanan 1..PLAYER_ID_MAX kimliği (0 = henüz yok).</summary>
+        /// <summary>The 1..PLAYER_ID_MAX id assigned in welcome (0 = none yet).</summary>
         public int PlayerId { get; private set; }
         public uint UdpToken { get; private set; }
         public string ServerIp { get; private set; }
         public int ServerPort { get; private set; }
 
-        /// <summary>Aynı kalıcı objede yaşayan UDP poz kanalı.</summary>
+        /// <summary>The UDP pose channel living on the same persistent object.</summary>
         public UdpStateChannel UdpChannel { get; private set; }
 
-        /// <summary>Uzak oyuncu poz kayıtçısı: snapshot'ları biriktirir, interpolasyonlu okutur.</summary>
+        /// <summary>Remote player pose registry: rings snapshots, read back interpolated.</summary>
         public RemotePlayerRegistry Remotes { get; private set; }
 
-        /// <summary>Uzak oyuncu iskelet kayıtçısı (§6.10): <c>0x08</c> girdilerini biriktirir.
-        /// ⚠️ <see cref="Remotes"/>'tan AYRI: iki kanalın kadansı ve girdi ömrü farklıdır
-        /// (blob tüketilir, kök interpole edilir).</summary>
+        /// <summary>Remote player skeleton registry (§6.10): rings <c>0x08</c> entries.
+        /// ⚠️ SEPARATE from <see cref="Remotes"/>: the two channels differ in cadence and entry
+        /// lifetime (the blob is consumed, the root interpolated).</summary>
         public RemoteSkeletonRegistry RemoteSkeletons { get; private set; }
 
-        /// <summary>Soket açık mı — her thread'den güvenli.</summary>
+        /// <summary>Is the socket open — safe from any thread.</summary>
         public bool IsConnected => IsSocketOpen;
 
-        /// <summary>
-        /// Son başarılı bağlantıdan beri kaçıncı bağlanma denemesindeyiz (bağlanınca 0).
-        /// Bağlantı hata ekranı (ConnectionOverlay) bunu gösterir.
-        /// </summary>
+        /// <summary>Which connect attempt we are on since the last success (0 once connected); shown by
+        /// the connection error screen (ConnectionOverlay).</summary>
         public int ConnectAttempts => _connectAttempts;
 
-        /// <summary>Son bağlanma hatasının mesajı (bağlanınca temizlenir); boş olabilir.</summary>
+        /// <summary>Message of the last connect error (cleared on connect); may be empty.</summary>
         public string LastError => _lastError;
 
         private readonly ConcurrentQueue<Action> _mainThreadActions = new ConcurrentQueue<Action>();
@@ -73,29 +71,28 @@ namespace VortexArena.Net
         private volatile ClientWebSocket _socket;
         private volatile string _role = "player";
         private volatile string _currentSceneName = "";
-        private volatile bool _userDisconnect = true; // Connect çağrılana dek reconnect yok
+        private volatile bool _userDisconnect = true; // no reconnect until Connect is called
         private bool _shutdown;
 
-        // Yalnız bağlantı döngüsü thread'i yazar, ana thread okur (int/string atomik atama).
+        // Written only by the connection loop thread, read by the main thread (atomic int/string assign).
         private volatile int _connectAttempts;
         private volatile string _lastError = "";
 
-        // hello için ana thread'de önbelleğe alınan cihaz bilgileri
-        // (ağ thread'i Unity API'sine dokunamaz).
+        // Device info cached on the main thread for hello (the net thread cannot touch the Unity API).
         private string _hardwareId;
         private string _adminSessionId;
         private string _deviceName;
         private string _appVersion;
         private string[] _buildScenes;
 
-        // Kumanda durumu (§5.1): ÖLÇÜMÜ App yapar, bu katman yalnız taşır — `battery`/`rttMs` ile
-        // aynı desen. Burada ölçülemez: VortexArena.Net Oculus.VR'ı referanslamaz ve
-        // referanslamayacak (asmdef grafiği hep aşağı bakar).
-        // Bildirilmeyen istemci ve admin CONTROLLER_UNKNOWN'da kalır.
+        // Controller state (§5.1): App MEASURES, this layer only carries — same pattern as
+        // `battery`/`rttMs`. It cannot be measured here: VortexArena.Net does not and will not
+        // reference Oculus.VR (the asmdef graph always points down).
+        // A client that does not report, and every admin, stays at CONTROLLER_UNKNOWN.
         private int _ctrlL = ArenaProtocol.CONTROLLER_UNKNOWN;
         private int _ctrlR = ArenaProtocol.CONTROLLER_UNKNOWN;
 
-        // fps ölçümü: Update'te birikir, StatusLoop her aralıkta okuyup sıfırlar.
+        // fps measurement: accumulated in Update, read and reset by StatusLoop each interval.
         private int _frameCount;
         private float _fpsElapsed;
         private float _lastFps;
@@ -128,8 +125,8 @@ namespace VortexArena.Net
             RemoteSkeletons = gameObject.AddComponent<RemoteSkeletonRegistry>();
 
             _hardwareId = SystemInfo.deviceUniqueIdentifier;
-            // Aynı PC'de iki admin penceresi açılabilsin diye admin kimliği OTURUMLUK olur (§2);
-            // GUID Awake'te bir kez üretilir, yeniden bağlanmalarda aynı kalır (aynı kaydı bulsun).
+            // The admin id is PER SESSION so two admin windows can run on one PC (§2); the GUID is
+            // generated once in Awake and survives reconnects (so it finds the same record).
             _adminSessionId = Guid.NewGuid().ToString("N");
             _deviceName = SystemInfo.deviceName;
             _appVersion = Application.version;
@@ -195,9 +192,9 @@ namespace VortexArena.Net
             Shutdown();
         }
 
-        // ------------------------------------------------------------- genel API
+        // ------------------------------------------------------------- public API
 
-        /// <summary>Verilen adrese bağlanır; önceki bağlantı/döngü varsa kapatır.</summary>
+        /// <summary>Connects to the given address; closes a previous connection/loop if there is one.</summary>
         public void Connect(string ip, int port, string role)
         {
             if (string.IsNullOrWhiteSpace(ip) || port <= 0)
@@ -223,7 +220,7 @@ namespace VortexArena.Net
                 TaskContinuationOptions.OnlyOnFaulted);
         }
 
-        /// <summary>Bağlantıyı kapatır ve otomatik yeniden denemeyi durdurur.</summary>
+        /// <summary>Closes the connection and stops automatic retrying.</summary>
         public void Disconnect()
         {
             _userDisconnect = true;
@@ -232,10 +229,10 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// Sol/sağ kumandanın durumunu bildirir (<c>ArenaProtocol.CONTROLLER_*</c>); bir sonraki
-        /// <c>status</c> ile gider. Ölçümü yapan taraf <c>PlayerPoseTracker</c>'dır — bu katman
-        /// yalnız taşır (<c>battery</c>/<c>rttMs</c> ile aynı desen), çünkü <c>VortexArena.Net</c>
-        /// Oculus.VR'ı referanslamaz. Ek paket üretmez: alan zaten 5 sn'de bir giden mesajda.
+        /// Reports left/right controller state (<c>ArenaProtocol.CONTROLLER_*</c>); goes out with the
+        /// next <c>status</c>. <c>PlayerPoseTracker</c> measures, this layer only carries (same pattern
+        /// as <c>battery</c>/<c>rttMs</c>) because <c>VortexArena.Net</c> does not reference Oculus.VR.
+        /// No extra packets: the field rides a message already sent every 5 s.
         /// </summary>
         public void ReportControllerState(int ctrlL, int ctrlR)
         {
@@ -243,7 +240,7 @@ namespace VortexArena.Net
             _ctrlR = ctrlR;
         }
 
-        /// <summary>Protokol DTO'sunu JSON'a çevirip gönderir (soket kapalıysa no-op).</summary>
+        /// <summary>Serialises a protocol DTO to JSON and sends it (no-op when the socket is closed).</summary>
         public void Send<T>(T msg) where T : class
         {
             if (msg == null)
@@ -255,8 +252,8 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// Fire-and-forget text gönderimi: soket açık değilse no-op, hata loglanıp
-        /// yutulur (reconnect döngüsü zaten kurtarır). Her thread'den çağrılabilir.
+        /// Fire-and-forget text send: a no-op when the socket is closed, errors are logged and swallowed
+        /// (the reconnect loop recovers anyway). Callable from any thread.
         /// </summary>
         public void TrySendText(string json)
         {
@@ -274,7 +271,7 @@ namespace VortexArena.Net
             _ = SendGuardedAsync(json);
         }
 
-        // ------------------------------------------------------- bağlantı döngüsü
+        // ------------------------------------------------------- connection loop
 
         private void StopConnectionLoop()
         {
@@ -284,7 +281,7 @@ namespace VortexArena.Net
             }
             catch (Exception)
             {
-                // CTS zaten dispose olduysa yut.
+                // Swallow it when the CTS is already disposed.
             }
 
             _cts = null;
@@ -299,7 +296,7 @@ namespace VortexArena.Net
                 }
                 catch (Exception)
                 {
-                    // Soket zaten kapalıysa yut.
+                    // Swallow it when the socket is already closed.
                 }
             }
         }
@@ -353,7 +350,7 @@ namespace VortexArena.Net
 
                 SetState(ArenaConnectionState.Disconnected);
 
-                // 1 → 2 → 5 sn (tavan son eleman), sonsuz.
+                // 1 → 2 → 5 s (last element is the ceiling), forever.
                 float[] steps = ArenaProtocol.RECONNECT_BACKOFF;
                 float delay = steps[Math.Min(backoffIndex, steps.Length - 1)];
                 if (backoffIndex < steps.Length - 1)
@@ -385,8 +382,8 @@ namespace VortexArena.Net
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        // Sunucu atma kapanışını sebep alanıyla imzalar (§5.4): `kicked` JSON'u
-                        // kapanışa yetişemediyse bile bu kopuş "yeniden bağlan" değil "atıldın"dır.
+                        // The server signs a kick close with the reason field (§5.4): even if the
+                        // `kicked` JSON lost the race, this drop means "kicked", not "reconnect".
                         if (socket.CloseStatusDescription == ArenaProtocol.KICK_CLOSE_REASON)
                         {
                             Debug.Log("[ArenaClient] Sunucu bağlantıyı ATMA sebebiyle kapattı.");
@@ -403,13 +400,13 @@ namespace VortexArena.Net
                         }
                         catch (Exception)
                         {
-                            // Kapanış el sıkışması başarısız olabilir; reconnect zaten devreye girer.
+                            // The close handshake may fail; the reconnect path handles it.
                         }
 
                         return;
                     }
 
-                    // Mesaj birden çok segment hâlinde gelebilir — EndOfMessage'a dek biriktir.
+                    // A message may arrive in several segments — accumulate until EndOfMessage.
                     message.Write(buffer, 0, result.Count);
                     if (!result.EndOfMessage)
                     {
@@ -421,16 +418,16 @@ namespace VortexArena.Net
                         string json = Encoding.UTF8.GetString(message.GetBuffer(), 0, (int)message.Length);
                         HandleTextMessage(json);
                     }
-                    // Binary WS mesajı beklenmez (v1) → yok say.
+                    // No binary WS message is expected (v1) → ignore.
 
                     message.SetLength(0);
                 }
             }
         }
 
-        // ------------------------------------------------------- mesaj işleyiciler
+        // ------------------------------------------------------- message handlers
 
-        /// <summary>Ağ thread'inde koşar; olaylar kuyruk üzerinden ana thread'de yayınlanır.</summary>
+        /// <summary>Runs on the network thread; events are published on the main thread via the queue.</summary>
         private void HandleTextMessage(string json)
         {
             MsgEnvelope envelope;
@@ -461,9 +458,9 @@ namespace VortexArena.Net
                     case MessageTypes.LobbyState:
                     {
                         LobbyStateMsg msg = JsonUtility.FromJson<LobbyStateMsg>(json);
-                        // §5.3: eski anlık görüntü yeniyi EZEMEZ. Sunucuda yayın tek yayıncıdan
-                        // gitse de bu ikinci emniyettir; bayat roster'ın belirtisi "atılan oyuncu
-                        // hâlâ listede online görünüyor" olurdu.
+                        // §5.3: an old snapshot must NOT overwrite a newer one. A second safety net even
+                        // though the server broadcasts from one publisher; the symptom of a stale roster
+                        // would be "a kicked player still listed as online".
                         if (msg == null || msg.version <= _lastRosterVersion)
                         {
                             break;
@@ -530,33 +527,25 @@ namespace VortexArena.Net
                         break;
                     }
 
-                    // v4: `shot_fired` KALDIRILDI — atış/atma artık UDP 0x03/0x04 (§6.4/6.5),
-                    // UdpStateChannel yayınlıyor. WS'te bu tip hiç gelmez.
-
-                    case MessageTypes.Identify:
-                    {
-                        IdentifyMsg msg = JsonUtility.FromJson<IdentifyMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseIdentify(msg));
-                        break;
-                    }
+                    // v4: `shot_fired` was REMOVED — shots/throws ride UDP 0x03/0x04 (§6.4/6.5) and are
+                    // published by UdpStateChannel. This type never arrives on WS.
 
                     case MessageTypes.MeasureBodyScale:
                     {
-                        // Sunucu yalnız player'a yollar (§10.8); admin'de dinleyen yoktur.
-                        // Ölçüm rig/karakter okuduğu için Unity API'si ister → ana thread.
+                        // Sent to players only (§10.8); no listener on admin. The measurement reads the
+                        // rig/character, so it needs the Unity API → main thread.
                         _mainThreadActions.Enqueue(NetEvents.RaiseMeasureBodyScale);
                         break;
                     }
 
                     case MessageTypes.ClearCalibration:
                     {
-                        // Operatör kalibrasyonu sıfırladı (§10.6). Sunucu yalnız player'a yollar;
-                        // `playerId` taşınmaz (hedef zaten bu bağlantı) ama `keepSaved` taşınır:
-                        // yumuşak kipte cihazdaki çapa korunur, sert kipte silinir. Alan yoksa
-                        // `false` okunur = sert. ⚠️ Roster'daki `calibrated` alanına BAKILMAZ —
-                        // yarım kalmış bir kalibrasyonda o alan zaten `false`'tur, yani sıfırlamanın
-                        // orada görünür bir deltası yoktur (§5.3). Sahne/anchor dokunduğu için
-                        // ana thread.
+                        // The operator reset calibration (§10.6). Players only; no `playerId` (the target
+                        // is this connection) but `keepSaved` does ride: soft keeps the device anchor,
+                        // hard deletes it; a missing field reads `false` = hard. ⚠️ The roster's
+                        // `calibrated` field is NOT consulted — in a half-finished calibration it is
+                        // already `false`, so the reset has no visible delta there (§5.3). Touches
+                        // scene/anchor → main thread.
                         ClearCalibrationMsg msg = JsonUtility.FromJson<ClearCalibrationMsg>(json);
                         bool keepSaved = msg != null && msg.keepSaved;
                         _mainThreadActions.Enqueue(() => NetEvents.RaiseClearCalibration(keepSaved));
@@ -565,17 +554,17 @@ namespace VortexArena.Net
 
                     case MessageTypes.ReloadCalibration:
                     {
-                        // Operatör kayıtlı çapadan hizalamayı yeniden yükletti (§10.6). Sunucu
-                        // yalnız player'a yollar, alansız: hedef zaten bu bağlantı. Kalibresiz
-                        // hedef ATLANMAZ — komut tam da onun için var. Anchor/rig dokunduğu için
-                        // ana thread.
+                        // The operator asked for an alignment reload from the saved anchor (§10.6).
+                        // Players only, fieldless: the target is this connection. An uncalibrated target
+                        // is NOT skipped — that is exactly who the command is for. Touches anchor/rig →
+                        // main thread.
                         _mainThreadActions.Enqueue(NetEvents.RaiseReloadCalibration);
                         break;
                     }
 
                     case MessageTypes.CalibrationResult:
                     {
-                        // Sunucu yalnız admin bağlantılarına yollar; player'a gelirse dinleyen yoktur.
+                        // Admin connections only; on a player there is no listener.
                         CalibrationResultMsg msg = JsonUtility.FromJson<CalibrationResultMsg>(json);
                         _mainThreadActions.Enqueue(() => NetEvents.RaiseCalibrationResult(msg));
                         break;
@@ -583,7 +572,7 @@ namespace VortexArena.Net
 
                     case MessageTypes.AdminState:
                     {
-                        // Sunucu yalnız admin bağlantılarına yollar; player'a gelirse zaten dinleyen yok.
+                        // Admin connections only; on a player there is no listener.
                         AdminStateMsg msg = JsonUtility.FromJson<AdminStateMsg>(json);
                         _mainThreadActions.Enqueue(() => NetEvents.RaiseAdminState(msg));
                         break;
@@ -591,8 +580,8 @@ namespace VortexArena.Net
 
                     case MessageTypes.RulesUpdate:
                     {
-                        // Herkese gelir (§5.3). SelectionState'in aksine GERÇEK kuraldır: koşan
-                        // maçın şekli değişti (bugün tek sebebi dost ateşi anahtarı) → ModeRuntime.
+                        // Goes to everyone (§5.3). Unlike SelectionState this IS a real rule: the running
+                        // match's shape changed (today only the friendly-fire switch) → ModeRuntime.
                         RulesUpdateMsg msg = JsonUtility.FromJson<RulesUpdateMsg>(json);
                         _mainThreadActions.Enqueue(() => NetEvents.RaiseRulesUpdate(msg));
                         break;
@@ -600,23 +589,23 @@ namespace VortexArena.Net
 
                     case MessageTypes.SelectionState:
                     {
-                        // Herkese gelir (§5.3). Kural DEĞİL sunum bilgisidir — ModeRuntime'a
-                        // uygulanmaz; ModeSelection'a yazılır (taban şeritleri).
+                        // Goes to everyone (§5.3). Presentation info, NOT a rule — never applied to
+                        // ModeRuntime; written to ModeSelection (base strips).
                         SelectionStateMsg msg = JsonUtility.FromJson<SelectionStateMsg>(json);
                         _mainThreadActions.Enqueue(() => NetEvents.RaiseSelectionState(msg));
                         break;
                     }
 
                     case MessageTypes.Ping:
-                        // ⚠️ Bu bir GECİKME ÖLÇÜMÜ DEĞİL: sunucunun "bana bir status yolla" tetiği.
-                        // Gecikme UDP 0x06 ile ölçülür (§6.7) — TCP üzerinden ölçmek retransmit'i
-                        // sonuca karıştırır. status Unity API'si ister → ana thread.
+                        // ⚠️ NOT a latency measurement: it is the server's "send me a status" trigger.
+                        // Latency is measured with UDP 0x06 (§6.7) — over TCP retransmits would
+                        // contaminate it. status needs the Unity API → main thread.
                         _mainThreadActions.Enqueue(() => TrySendText(BuildStatusJson()));
                         break;
 
                     case MessageTypes.NetStats:
                     {
-                        // Sunucu yalnız admin bağlantılarına yollar; player'a gelirse dinleyen yoktur.
+                        // Admin connections only; on a player there is no listener.
                         NetStatsMsg msg = JsonUtility.FromJson<NetStatsMsg>(json);
                         _mainThreadActions.Enqueue(() => NetEvents.RaiseNetStats(msg));
                         break;
@@ -624,7 +613,7 @@ namespace VortexArena.Net
 
                     case MessageTypes.Violation:
                     {
-                        // Sunucu yalnız admin bağlantılarına yollar; player'a gelirse dinleyen yoktur.
+                        // Admin connections only; on a player there is no listener.
                         ViolationMsg msg = JsonUtility.FromJson<ViolationMsg>(json);
                         _mainThreadActions.Enqueue(() => NetEvents.RaiseViolation(msg));
                         break;
@@ -635,7 +624,7 @@ namespace VortexArena.Net
                         break;
 
                     default:
-                        // Bilinmeyen tip → logla ve yok say (ileri sürüm uyumluluğu).
+                        // Unknown type → log and ignore (forward version compatibility).
                         Debug.Log($"[ArenaClient] Bilinmeyen mesaj tipi '{envelope.type}' yok sayıldı.");
                         break;
                 }
@@ -647,10 +636,10 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// Atılma (§5.4). Ağ thread'inde koşar: yeniden bağlanmayı **hemen** kapatır, çünkü
-        /// `_userDisconnect` yalnız ana thread'de (kuyruktaki `Disconnect`) kalksaydı bu arada
-        /// kopan soket backoff turunu başlatabilir ve atılan oyuncu geri bağlanabilirdi.
-        /// Olay + soket kapatma ana thread'e bırakılır (Unity API'si + abone kodu).
+        /// Kick (§5.4). Runs on the network thread and disables reconnect **immediately**: if
+        /// `_userDisconnect` were only set on the main thread (the queued `Disconnect`), the socket
+        /// dropping meanwhile could start a backoff round and let the kicked player back in.
+        /// The event + socket close are left to the main thread (Unity API + subscriber code).
         /// </summary>
         private void HandleKicked(KickedMsg msg)
         {
@@ -659,7 +648,7 @@ namespace VortexArena.Net
             _mainThreadActions.Enqueue(() =>
             {
                 NetEvents.RaiseKicked(msg);
-                // Protokol: istemci bağlantıyı kapatır; oto-reconnect yapılmaz.
+                // Protocol: the client closes the connection; no auto-reconnect.
                 Disconnect();
             });
         }
@@ -673,13 +662,13 @@ namespace VortexArena.Net
 
             if (msg.protocolVersion != ArenaProtocol.PROTOCOL_VERSION)
             {
-                // Protokol gereği uyumsuzluk bağlantıyı KESMEZ, yalnız loglanır.
+                // By protocol a mismatch does NOT drop the connection, it is only logged.
                 Debug.LogWarning($"[ArenaClient] Protokol sürümü uyuşmuyor (sunucu {msg.protocolVersion}, istemci {ArenaProtocol.PROTOCOL_VERSION}); bağlantı sürdürülüyor.");
             }
 
-            // Yeni oturum = yeni sürüm ekseni. AĞ THREAD'İNDE sıfırlanır (kuyruğa alınmaz):
-            // bu welcome'ı izleyen lobby_state de ağ thread'inde işlenir, kuyruk beklenirse
-            // ilk roster "eski sürüm" sanılıp atılırdı.
+            // New session = new version axis. Reset ON THE NETWORK THREAD (not queued): the lobby_state
+            // following this welcome is handled on the network thread too, and waiting for the queue
+            // would make the first roster look like an "old version" and get dropped.
             _lastRosterVersion = 0;
 
             _mainThreadActions.Enqueue(() =>
@@ -687,7 +676,7 @@ namespace VortexArena.Net
                 PlayerId = msg.playerId;
                 UdpToken = msg.udpToken;
 
-                // §8: welcome sonrası UDP kaydı (0x00, ack'e dek tekrar).
+                // §8: UDP registration after welcome (0x00, retried until acked).
                 if (UdpChannel != null && msg.playerId > 0)
                 {
                     UdpChannel.StartRegistration(ServerIp, ArenaProtocol.STATE_PORT, (byte)msg.playerId, msg.udpToken);
@@ -695,16 +684,16 @@ namespace VortexArena.Net
 
                 NetEvents.RaiseConnected(msg);
 
-                // Batarya/sahne bilgisi ilk kalp atışını beklemeden sunucuya gitsin.
+                // Send battery/scene info without waiting for the first heartbeat.
                 TrySendText(BuildStatusJson());
             });
         }
 
-        // --------------------------------------------------------- durum & status
+        // --------------------------------------------------------- state &amp; status
 
-        /// <summary>UYGULANAN son <c>lobby_state.version</c> (§5.3). Ağ thread'i yazar (guard),
-        /// ana thread okur (status) → volatile. Her welcome'da 0'a döner: sunucu yeniden başlarsa
-        /// sürüm de 0'dan başlar ve sıfırlamasak istemci tüm roster'ları eski sanıp atardı.</summary>
+        /// <summary>The last APPLIED <c>lobby_state.version</c> (§5.3); net thread writes (guard), main
+        /// thread reads (status) → volatile. Reset to 0 on every welcome: a restarted server counts
+        /// versions from 0 again and without the reset the client would drop every roster as old.</summary>
         private volatile int _lastRosterVersion;
 
         private IEnumerator StatusLoop()
@@ -728,7 +717,7 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>Ağ thread'inden çağrılır; yalnız önbellek + JsonUtility (thread-safe) kullanır.</summary>
+        /// <summary>Called from the network thread; uses only the cache + JsonUtility (thread-safe).</summary>
         private string BuildHelloJson()
         {
             var hello = new HelloMsg
@@ -745,23 +734,23 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// Rol başına <c>deviceId</c> semantiği (Docs/ArenaNet-Protokol.md §2):
+        /// Per-role <c>deviceId</c> semantics (Docs/ArenaNet-Protokol.md §2):
         /// <list type="bullet">
-        /// <item><b>player:</b> düz donanım kimliği — KALICI. Sunucu adı <c>devices.json</c>'da
-        /// buna bağlar, gözlük yeniden bağlandığında playerId'sini ve adını korur.</item>
-        /// <item><b>admin:</b> <c>&lt;donanım&gt;:admin:&lt;oturum GUID'i&gt;</c> — OTURUMLUK.
-        /// Aynı fiziksel PC'de iki admin penceresi açılabilsin diye: ortak kimlikle ikisi aynı
-        /// sunucu kaydını paylaşır ve her <c>hello</c> diğerinin soketini kapatırdı (sonsuz kick
-        /// döngüsü). GUID süreç ömrü boyunca sabittir — yeniden bağlanma aynı kaydı bulur.</item>
+        /// <item><b>player:</b> the plain hardware id — PERSISTENT. The server binds the name to it in
+        /// <c>devices.json</c>, so a reconnecting headset keeps its playerId and name.</item>
+        /// <item><b>admin:</b> <c>&lt;hardware&gt;:admin:&lt;session GUID&gt;</c> — PER SESSION, so two
+        /// admin windows can run on one physical PC: with a shared id both would share the same server
+        /// record and every <c>hello</c> would close the other's socket (an endless kick loop). The GUID
+        /// is fixed for the process lifetime, so a reconnect finds the same record.</item>
         /// </list>
-        /// Rol bağlantı başına verildiği için burada okunur, Awake'te değil.
+        /// Read here rather than in Awake because the role is given per connection.
         /// </summary>
         private string ResolveDeviceId()
         {
             return _role == "admin" ? $"{_hardwareId}:admin:{_adminSessionId}" : _hardwareId;
         }
 
-        /// <summary>YALNIZ ana thread'de çağrılır (SystemInfo/sahne API'si).</summary>
+        /// <summary>MAIN THREAD ONLY (SystemInfo / scene API).</summary>
         private string BuildStatusJson()
         {
             var status = new StatusMsg
@@ -771,13 +760,13 @@ namespace VortexArena.Net
                 ctrlL = _ctrlL,
                 ctrlR = _ctrlR,
                 fps = _lastFps,
-                // §5.1 uzlaştırma: geride kaldıysak sunucu YALNIZ bize tam roster yollar.
+                // §5.1 reconciliation: if we fell behind, the server sends the full roster to US only.
                 rosterVersion = _lastRosterVersion
             };
 
-            // §6.7: ağ telemetrisini İSTEMCİ ölçer, status ile bildirir (ek kanal açılmaz — bu mesaj
-            // zaten 5 sn'de bir gidiyor ve operatör göstergesi için o ritim fazlasıyla yeter).
-            // Kanal henüz kurulmadıysa alanlar -1 (bilinmiyor) kalır.
+            // §6.7: the CLIENT measures net telemetry and reports it with status (no extra channel —
+            // this message already goes every 5 s, plenty for an operator readout). Before the channel
+            // exists the fields stay -1 (unknown).
             if (UdpChannel != null)
             {
                 UdpChannel.SampleTelemetry(out int rttMs, out float jitterMs, out float lossPct);
@@ -798,7 +787,7 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>Herhangi bir thread'den güvenli; olaylar ana thread'de, yalnız değişimde tetiklenir.</summary>
+        /// <summary>Safe from any thread; events fire on the main thread and only on a change.</summary>
         private void SetState(ArenaConnectionState newState)
         {
             _mainThreadActions.Enqueue(() =>
@@ -830,7 +819,7 @@ namespace VortexArena.Net
             _currentSceneName = current.name;
         }
 
-        // -------------------------------------------------------------- gönderim
+        // -------------------------------------------------------------- sending
 
         private async Task SendGuardedAsync(string json)
         {
@@ -844,7 +833,7 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>Tüm gönderimler tek SemaphoreSlim'den geçer (WebSocket'te eşzamanlı Send yasak).</summary>
+        /// <summary>Every send goes through one SemaphoreSlim (concurrent Send is forbidden on a WebSocket).</summary>
         private async Task SendTextAsync(string json, CancellationToken ct)
         {
             byte[] payload = Encoding.UTF8.GetBytes(json);
@@ -865,7 +854,7 @@ namespace VortexArena.Net
             }
         }
 
-        // --------------------------------------------------------------- kapanış
+        // -------------------------------------------------------------- shutdown
 
         private void Shutdown()
         {
