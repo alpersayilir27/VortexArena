@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using VortexArena.Core.Arena;
@@ -149,6 +150,11 @@ namespace VortexArena.App.Admin
             Camera.fieldOfView = 70f;
             Camera.nearClipPlane = 0.05f;
             Camera.farClipPlane = 300f;
+
+            // Post-processing: admin only. URP defaults it to off on a camera built at runtime, so
+            // the project's default volume profile (tonemapping/bloom/vignette) would never render.
+            // ⚠️ Deliberately NOT enabled on the VR rig — the cost lands on the Quest GPU budget.
+            Camera.GetUniversalAdditionalCameraData().renderPostProcessing = true;
 
             // The disabled rig leaves no listener in the scene ("no audio listener" warning).
             cameraGo.AddComponent<AudioListener>();
