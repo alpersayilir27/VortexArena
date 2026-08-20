@@ -115,6 +115,18 @@ namespace VortexArena.Core.Editor
                     "uzak oyuncunun elinde çizilmez."),
 
                 Check(
+                    "İskelet eklem listesi (iki gövde prefabı)",
+                    SkeletonStreamGuard.AreJointListsMatched,
+                    null,
+                    null,
+                    "0x07 iskelet akışının eklem kümesi: LocalBodyAvatar (gönderen) ile RemoteAvatar " +
+                    "(alıcı) aynı listeyi taşımalı ve parmaklar listede OLMAMALI (§6.9). NE ZAMAN: " +
+                    "gövde prefablarından birinin NetworkCharacterRetargeter'ı düzenlenince ya da " +
+                    "karakter modeli değişince. ✗ ise insan adımıdır: blob opak olduğu için ayrışma " +
+                    "hiçbir yerde hata vermez, yalnız uzak gövdeler bozuk çizilir. Liste RUNTIME'da " +
+                    "hesaplanmaz — iki prefabın Inspector'ında düzeltilir."),
+
+                Check(
                     "Sunucu harita tablosu (maps.json)",
                     ServerConfigExporter.IsMapsJsonUpToDate,
                     "Export",

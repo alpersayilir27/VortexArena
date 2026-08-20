@@ -885,7 +885,10 @@ kemiğe yazmak projenin bir kez öğrendiği tuzaktır. Oran **asset'te saklanma
 
 ⚠️ **Gönderen ile alıcının eklem listesi AYNI olmak ZORUNDADIR** (`NetworkCharacterRetargeter`'ın
 `_bodyIndicesToSend`/`_bodyIndicesToSync` alanları, iki prefabta birden). Listeler ayrışırsa blob
-yanlış çözülür ve gövde tümden bozulur — bu, sürüm uyumsuzluğunun sessiz biçimidir.
+yanlış çözülür ve gövde tümden bozulur — bu, sürüm uyumsuzluğunun sessiz biçimidir. Denetimi
+`Configure All Build Elements` penceresinin **Hazırlık** bölümü yapar ("İskelet eklem listesi");
+ayrışma orada ✗ olarak görünür ve **insan adımıdır** — liste iki prefabın Inspector'ında düzeltilir,
+çalışma anında hesaplanmaz (hesaplayan bir yol, listeyi yazan ikinci bir taraf açar).
 
 ⚠️ **`root` neden ayrı bir alan** (blob'un kendi kökü varken): SDK kök eklemi
 `JointType.NoWorldSpace` ile yazıyor, yani **gönderenin dünya pozu** — alıcının arenasıyla ilgisi
