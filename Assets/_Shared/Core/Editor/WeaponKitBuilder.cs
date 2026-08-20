@@ -252,8 +252,7 @@ namespace VortexArena.Core.Editor
                 NetItemId = 1, HoldMode = "TwoHand",
                 Damage = 33, Rpm = 666, Magazine = 30, Reload = 2.19f,
                 Range = 40f, BaseSpread = 0.50f, BloomPerShot = 0.26f,
-                MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 2.0f, PitchBase = 1.00f, Volume = 1.0f,
-                FlashColorMin = new Color(1f, 0.92f, 0.72f), FlashColorMax = new Color(1f, 0.65f, 0.32f),
+                MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 2.0f, PitchBase = 1.00f, Volume = 1.0f,                FlashColorMin = new Color(1f, 0.92f, 0.72f), FlashColorMax = new Color(1f, 0.65f, 0.32f),
                 FlashSizeMin = 0.035f, FlashSizeMax = 0.065f, FlashLifetime = 0.06f, FlashConeAngle = 24f,
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.25f,
                 CasingFamily = "556x45",
@@ -266,8 +265,7 @@ namespace VortexArena.Core.Editor
                 NetItemId = 2, HoldMode = "TwoHand",
                 Damage = 36, Rpm = 600, Magazine = 30, Reload = 2.43f,
                 Range = 45f, BaseSpread = 0.60f, BloomPerShot = 0.32f,
-                MaxBloom = 2.6f, BloomRecovery = 4.0f, Kick = 2.6f, PitchBase = 1.00f, Volume = 1.0f,
-                FlashColorMin = new Color(1f, 0.55f, 0.15f), FlashColorMax = new Color(1f, 0.22f, 0.05f),
+                MaxBloom = 2.6f, BloomRecovery = 4.0f, Kick = 2.6f, PitchBase = 1.00f, Volume = 1.0f,                FlashColorMin = new Color(1f, 0.55f, 0.15f), FlashColorMax = new Color(1f, 0.22f, 0.05f),
                 FlashSizeMin = 0.05f, FlashSizeMax = 0.09f, FlashLifetime = 0.09f, FlashConeAngle = 34f,
                 SmokeSizeMin = 0.05f, SmokeSizeMax = 0.09f, SmokeLifetime = 1.4f, SmokeAlpha = 0.35f,
                 CasingFamily = "762x39",
@@ -281,8 +279,7 @@ namespace VortexArena.Core.Editor
                 NetItemId = 3, HoldMode = "TwoHand",
                 Damage = 32, Rpm = 625, Magazine = 30, Reload = 2.06f,
                 Range = 38f, BaseSpread = 0.45f, BloomPerShot = 0.20f,
-                MaxBloom = 1.8f, BloomRecovery = 5.0f, Kick = 1.6f, PitchBase = 1.00f, Volume = 1.0f,
-                FlashColorMin = new Color(1f, 0.85f, 0.55f), FlashColorMax = new Color(1f, 0.55f, 0.22f),
+                MaxBloom = 1.8f, BloomRecovery = 5.0f, Kick = 1.6f, PitchBase = 1.00f, Volume = 1.0f,                FlashColorMin = new Color(1f, 0.85f, 0.55f), FlashColorMax = new Color(1f, 0.55f, 0.22f),
                 FlashSizeMin = 0.038f, FlashSizeMax = 0.068f, FlashLifetime = 0.065f, FlashConeAngle = 26f,
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.28f,
                 CasingFamily = "556x45",
@@ -295,8 +292,7 @@ namespace VortexArena.Core.Editor
                 NetItemId = 4, HoldMode = "TwoHand",
                 Damage = 29, Rpm = 750, Magazine = 30, Reload = 2.43f,
                 Range = 28f, BaseSpread = 0.70f, BloomPerShot = 0.30f,
-                MaxBloom = 2.6f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.00f, Volume = 0.95f,
-                FlashColorMin = new Color(1f, 0.80f, 0.45f), FlashColorMax = new Color(1f, 0.45f, 0.15f),
+                MaxBloom = 2.6f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.00f, Volume = 0.95f,                FlashColorMin = new Color(1f, 0.80f, 0.45f), FlashColorMax = new Color(1f, 0.45f, 0.15f),
                 FlashSizeMin = 0.042f, FlashSizeMax = 0.075f, FlashLifetime = 0.07f, FlashConeAngle = 28f,
                 SmokeSizeMin = 0.04f, SmokeSizeMax = 0.07f, SmokeLifetime = 1.1f, SmokeAlpha = 0.30f,
                 CasingFamily = "556x45",
@@ -310,8 +306,7 @@ namespace VortexArena.Core.Editor
                 NetItemId = 5, HoldMode = "TwoHand",
                 Damage = 30, Rpm = 666, Magazine = 25, Reload = 2.38f,
                 Range = 32f, BaseSpread = 0.65f, BloomPerShot = 0.28f,
-                MaxBloom = 2.4f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.03f, Volume = 1.0f,
-                FlashColorMin = new Color(1f, 0.88f, 0.58f), FlashColorMax = new Color(1f, 0.52f, 0.18f),
+                MaxBloom = 2.4f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.03f, Volume = 1.0f,                FlashColorMin = new Color(1f, 0.88f, 0.58f), FlashColorMax = new Color(1f, 0.52f, 0.18f),
                 FlashSizeMin = 0.03f, FlashSizeMax = 0.055f, FlashLifetime = 0.06f, FlashConeAngle = 20f,
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.28f,
                 CasingFamily = "556x45",
@@ -325,8 +320,7 @@ namespace VortexArena.Core.Editor
                 NetItemId = 6, HoldMode = "TwoHand",
                 Damage = 31, Rpm = 700, Magazine = 30, Reload = 2.19f,
                 Range = 50f, BaseSpread = 0.35f, BloomPerShot = 0.34f,
-                MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.3f, PitchBase = 0.93f, Volume = 1.0f,
-                FlashColorMin = new Color(1f, 0.90f, 0.74f), FlashColorMax = new Color(0.95f, 0.60f, 0.28f),
+                MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.3f, PitchBase = 0.93f, Volume = 1.0f,                FlashColorMin = new Color(1f, 0.90f, 0.74f), FlashColorMax = new Color(0.95f, 0.60f, 0.28f),
                 FlashSizeMin = 0.032f, FlashSizeMax = 0.058f, FlashLifetime = 0.062f, FlashConeAngle = 19f,
                 SmokeSizeMin = 0.032f, SmokeSizeMax = 0.055f, SmokeLifetime = 0.95f, SmokeAlpha = 0.26f,
                 CasingFamily = "556x45",
@@ -341,8 +335,7 @@ namespace VortexArena.Core.Editor
                 NetItemId = 7, HoldMode = "TwoHand",
                 Damage = 28, Rpm = 666, Magazine = 30, Reload = 2.19f,
                 Range = 46f, BaseSpread = 0.42f, BloomPerShot = 0.22f,
-                MaxBloom = 2.0f, BloomRecovery = 4.8f, Kick = 1.7f, PitchBase = 0.98f, Volume = 1.0f,
-                FlashColorMin = new Color(1f, 0.87f, 0.60f), FlashColorMax = new Color(1f, 0.58f, 0.24f),
+                MaxBloom = 2.0f, BloomRecovery = 4.8f, Kick = 1.7f, PitchBase = 0.98f, Volume = 1.0f,                FlashColorMin = new Color(1f, 0.87f, 0.60f), FlashColorMax = new Color(1f, 0.58f, 0.24f),
                 FlashSizeMin = 0.033f, FlashSizeMax = 0.060f, FlashLifetime = 0.062f, FlashConeAngle = 22f,
                 SmokeSizeMin = 0.034f, SmokeSizeMax = 0.058f, SmokeLifetime = 1.0f, SmokeAlpha = 0.27f,
                 CasingFamily = "556x45",
@@ -356,8 +349,7 @@ namespace VortexArena.Core.Editor
                 NetItemId = 8, HoldMode = "TwoHand",
                 Damage = 30, Rpm = 666, Magazine = 35, Reload = 2.25f, SpareMags = 2,
                 Range = 44f, BaseSpread = 0.62f, BloomPerShot = 0.34f,
-                MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.5f, PitchBase = 1.02f, Volume = 1.0f,
-                FlashColorMin = new Color(1f, 0.78f, 0.42f), FlashColorMax = new Color(1f, 0.42f, 0.12f),
+                MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.5f, PitchBase = 1.02f, Volume = 1.0f,                FlashColorMin = new Color(1f, 0.78f, 0.42f), FlashColorMax = new Color(1f, 0.42f, 0.12f),
                 FlashSizeMin = 0.045f, FlashSizeMax = 0.082f, FlashLifetime = 0.075f, FlashConeAngle = 30f,
                 SmokeSizeMin = 0.042f, SmokeSizeMax = 0.072f, SmokeLifetime = 1.2f, SmokeAlpha = 0.32f,
                 CasingFamily = "556x45",
@@ -370,8 +362,7 @@ namespace VortexArena.Core.Editor
                 NetItemId = 9, HoldMode = "TwoHand",
                 Damage = 26, Rpm = 857, Magazine = 50, Reload = 2.80f, SpareMags = 2,
                 Range = 24f, BaseSpread = 0.85f, BloomPerShot = 0.24f,
-                MaxBloom = 2.6f, BloomRecovery = 5.5f, Kick = 1.2f, PitchBase = 1.00f, Volume = 0.92f,
-                FlashColorMin = new Color(1f, 0.90f, 0.68f), FlashColorMax = new Color(1f, 0.62f, 0.28f),
+                MaxBloom = 2.6f, BloomRecovery = 5.5f, Kick = 1.2f, PitchBase = 1.00f, Volume = 0.92f,                FlashColorMin = new Color(1f, 0.90f, 0.68f), FlashColorMax = new Color(1f, 0.62f, 0.28f),
                 FlashSizeMin = 0.026f, FlashSizeMax = 0.048f, FlashLifetime = 0.05f, FlashConeAngle = 26f,
                 SmokeSizeMin = 0.028f, SmokeSizeMax = 0.048f, SmokeLifetime = 0.85f, SmokeAlpha = 0.22f,
                 CasingFamily = "9x19",
@@ -384,8 +375,7 @@ namespace VortexArena.Core.Editor
                 NetItemId = 10, HoldMode = "TwoHand",
                 Damage = 26, Rpm = 857, Magazine = 30, Reload = 2.14f, SpareMags = 4,
                 Range = 18f, BaseSpread = 0.90f, BloomPerShot = 0.26f,
-                MaxBloom = 2.8f, BloomRecovery = 5.8f, Kick = 1.1f, PitchBase = 1.00f, Volume = 0.90f,
-                FlashColorMin = new Color(1f, 0.92f, 0.72f), FlashColorMax = new Color(1f, 0.66f, 0.32f),
+                MaxBloom = 2.8f, BloomRecovery = 5.8f, Kick = 1.1f, PitchBase = 1.00f, Volume = 0.90f,                FlashColorMin = new Color(1f, 0.92f, 0.72f), FlashColorMax = new Color(1f, 0.66f, 0.32f),
                 FlashSizeMin = 0.024f, FlashSizeMax = 0.044f, FlashLifetime = 0.048f, FlashConeAngle = 28f,
                 SmokeSizeMin = 0.026f, SmokeSizeMax = 0.045f, SmokeLifetime = 0.8f, SmokeAlpha = 0.20f,
                 CasingFamily = "9x19",
@@ -399,8 +389,7 @@ namespace VortexArena.Core.Editor
                 NetItemId = 11, HoldMode = "TwoHand",
                 Damage = 35, Rpm = 666, Magazine = 25, Reload = 2.14f, SpareMags = 4,
                 Range = 22f, BaseSpread = 0.75f, BloomPerShot = 0.30f,
-                MaxBloom = 2.6f, BloomRecovery = 4.6f, Kick = 1.9f, PitchBase = 1.00f, Volume = 0.96f,
-                FlashColorMin = new Color(1f, 0.72f, 0.34f), FlashColorMax = new Color(1f, 0.38f, 0.10f),
+                MaxBloom = 2.6f, BloomRecovery = 4.6f, Kick = 1.9f, PitchBase = 1.00f, Volume = 0.96f,                FlashColorMin = new Color(1f, 0.72f, 0.34f), FlashColorMax = new Color(1f, 0.38f, 0.10f),
                 FlashSizeMin = 0.032f, FlashSizeMax = 0.058f, FlashLifetime = 0.058f, FlashConeAngle = 30f,
                 SmokeSizeMin = 0.032f, SmokeSizeMax = 0.055f, SmokeLifetime = 1.0f, SmokeAlpha = 0.26f,
                 CasingFamily = "9x19",
@@ -419,8 +408,7 @@ namespace VortexArena.Core.Editor
                 Damage = 10, Headshot = 2f, Rpm = 171, Magazine = 7, Reload = 4.50f, Pellets = 6,
                 SpareMags = 4, ReserveMode = "PoolRounds",
                 Range = 26f, BaseSpread = 10.0f, BloomPerShot = 0.60f,
-                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 3.2f, PitchBase = 1.00f, Volume = 1.0f,
-                FlashColorMin = new Color(1f, 0.72f, 0.30f), FlashColorMax = new Color(1f, 0.32f, 0.06f),
+                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 3.2f, PitchBase = 1.00f, Volume = 1.0f,                FlashColorMin = new Color(1f, 0.72f, 0.30f), FlashColorMax = new Color(1f, 0.32f, 0.06f),
                 FlashSizeMin = 0.075f, FlashSizeMax = 0.130f, FlashLifetime = 0.10f, FlashConeAngle = 46f,
                 SmokeSizeMin = 0.075f, SmokeSizeMax = 0.125f, SmokeLifetime = 1.7f, SmokeAlpha = 0.42f,
                 CasingFamily = "12gauge",
@@ -438,10 +426,10 @@ namespace VortexArena.Core.Editor
             // are base damage + cone angle. ⚠️ `Range` is NOT that knob (see its own field note): a
             // sharp distance wall cannot stand in for a continuous curve.
             //
-            // ⚠️ THE ANGLE IN THIS TABLE IS ONE-HANDED: a two-handed hold multiplies it by
-            // `twoHandSpreadMultiplier` (0.45), so 12° here is a 5.4° cone in the field. Shotguns are
-            // two-handed by definition, so the REAL value on shotgun rows is always about half —
-            // reading the cone angle straight off the table makes the weapon look twice as tight.
+            // ⚠️ THE ANGLE IN THIS TABLE IS RAW: the field value is always this times a grip factor.
+            // Two-handed (the reference) it is `twoHandSpreadMultiplier` (0.45), so 12° here is a 5.4°
+            // cone; one-handed the asset's `oneHandSpreadMultiplier` stacks on that. Reading the angle
+            // straight off the table makes the weapon look about twice as tight as it plays.
             new WeaponSpec
             {
                 Name = "NOVA", PackPrefab = "ShotGun_B", WeaponId = "nova", DisplayName = "Nova",
@@ -449,8 +437,7 @@ namespace VortexArena.Core.Editor
                 Damage = 13, Headshot = 2f, Rpm = 68, Magazine = 8, Reload = 5.00f, Pellets = 9,
                 SpareMags = 4, ReserveMode = "PoolRounds",
                 Range = 25f, BaseSpread = 12.0f, BloomPerShot = 0.60f,
-                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 4.0f, PitchBase = 1.00f, Volume = 1.0f,
-                FlashColorMin = new Color(1f, 0.68f, 0.26f), FlashColorMax = new Color(1f, 0.28f, 0.05f),
+                MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 4.0f, PitchBase = 1.00f, Volume = 1.0f,                FlashColorMin = new Color(1f, 0.68f, 0.26f), FlashColorMax = new Color(1f, 0.28f, 0.05f),
                 FlashSizeMin = 0.085f, FlashSizeMax = 0.150f, FlashLifetime = 0.115f, FlashConeAngle = 50f,
                 SmokeSizeMin = 0.085f, SmokeSizeMax = 0.140f, SmokeLifetime = 1.9f, SmokeAlpha = 0.46f,
                 CasingFamily = "12gauge",
@@ -641,6 +628,11 @@ namespace VortexArena.Core.Editor
             SetNumber(so, "kickDegrees", spec.Kick, ctx);
             SetNumber(so, "kickBackMeters", KickBackMeters, ctx);
             SetNumber(so, "recoilRecoverSpeed", RecoilRecoverSpeed, ctx);
+            // ⚠️ oneHandSpreadMultiplier / oneHandRecoilMultiplier / oneHandRecoveryPenalty are
+            // deliberately NOT written and not added to this table: how a weapon behaves in one hand
+            // is found by holding it in the headset, and the WD asset is its only home. A line here
+            // would overwrite that hand-found value on every run — same rule as the haptic fields.
+            // The cost: a new weapon is born with the class defaults (see WeaponDefinition).
             SetNumber(so, "magazineSize", spec.Magazine, ctx);
             SetNumber(so, "spareMagazines", spec.SpareMags > 0 ? spec.SpareMags : DefaultSpareMagazines, ctx);
             SetEnumByName(so, "reserveMode",

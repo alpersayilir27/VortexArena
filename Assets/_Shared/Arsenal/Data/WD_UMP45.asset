@@ -19,23 +19,31 @@ MonoBehaviour:
   primaryGripRight:
     authored: 0
     position: {x: 0, y: 0, z: 0}
-    euler: {x: 0, y: 0, z: 0}
-    preset: 0
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
   primaryGripLeft:
     authored: 0
     position: {x: 0, y: 0, z: 0}
-    euler: {x: 0, y: 0, z: 0}
-    preset: 0
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
   secondaryGripRight:
     authored: 0
     position: {x: 0, y: -0.035, z: 0.27}
-    euler: {x: -0, y: 0, z: 0}
-    preset: 0
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
   secondaryGripLeft:
     authored: 0
     position: {x: 0, y: -0.035, z: 0.27}
-    euler: {x: -0, y: 0, z: 0}
-    preset: 0
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
   secondaryGripRadius: 0.1
   tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
   tracerWidth: 0.005
@@ -56,6 +64,9 @@ MonoBehaviour:
   kickDegrees: 1.9
   kickBackMeters: 0.02
   recoilRecoverSpeed: 10
+  oneHandSpreadMultiplier: 1.6
+  oneHandRecoilMultiplier: 1.7
+  oneHandRecoveryPenalty: 0.75
   hapticAmplitude: 0.8
   hapticDuration: 0.05
   magazineSize: 25

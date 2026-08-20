@@ -46,7 +46,9 @@ namespace VortexArena.Core.Combat
         [SerializeField] private int pelletCount = 1;
 
         [Header("Saçılım (bloom)")]
-        [Tooltip("Taban saçılım yarı açısı (derece, tek elle).")]
+        [Tooltip("HAM taban saçılım yarı açısı (derece) — sahadaki koni DEĞİL: kavrayış çarpanıyla " +
+                 "ölçeklenir (iki elde Weapon.twoHandSpreadMultiplier, tek elde ayrıca " +
+                 "oneHandSpreadMultiplier).")]
         [SerializeField] private float baseSpreadDegrees = 1f;
         [Tooltip("Her atışın saçılıma eklediği büyüme (derece).")]
         [SerializeField] private float bloomPerShotDegrees = 0.25f;
@@ -56,12 +58,24 @@ namespace VortexArena.Core.Combat
         [SerializeField] private float bloomRecoveryPerSecond = 4f;
 
         [Header("Geri Tepme")]
-        [Tooltip("Atış başına namlu kalkışı (derece, tek elle).")]
+        [Tooltip("HAM atış başına namlu kalkışı (derece) — kavrayış çarpanıyla ölçeklenir (iki elde " +
+                 "Weapon.twoHandRecoilMultiplier, tek elde ayrıca oneHandRecoilMultiplier).")]
         [SerializeField] private float kickDegrees = 2f;
-        [Tooltip("Atış başına geri itilme (metre, tek elle).")]
+        [Tooltip("HAM atış başına geri itilme (metre) — kickDegrees ile aynı kavrayış çarpanını yer.")]
         [SerializeField] private float kickBackMeters = 0.02f;
-        [Tooltip("Geri tepme toparlanma hızı.")]
+        [Tooltip("Geri tepme toparlanma hızı (iki el). Tek elde oneHandRecoveryPenalty ile yavaşlar.")]
         [SerializeField] private float recoilRecoverSpeed = 10f;
+
+        [Header("Tek El Cezası")]
+        [Min(1f)]
+        [Tooltip("Tek elle tutarken saçılım çarpanı. 1 = iki elle aynı, 1.5 = %50 daha geniş koni.")]
+        [SerializeField] private float oneHandSpreadMultiplier = 1.5f;
+        [Min(1f)]
+        [Tooltip("Tek elle tutarken geri tepme çarpanı. 1 = iki elle aynı, 2 = iki katı kalkış.")]
+        [SerializeField] private float oneHandRecoilMultiplier = 1.5f;
+        [Range(0.1f, 1f)]
+        [Tooltip("Tek elle toparlanma hızı çarpanı. 0.75 = %25 daha yavaş toparlanma.")]
+        [SerializeField] private float oneHandRecoveryPenalty = 0.75f;
 
         [Header("Haptik")]
         [Range(0f, 1f)]
@@ -142,7 +156,11 @@ namespace VortexArena.Core.Combat
         /// </summary>
         public int PelletCount => Mathf.Max(1, pelletCount);
 
-        /// <summary>Base spread half-angle (degrees, one-handed).</summary>
+        /// <summary>RAW base spread half-angle (degrees) — the grip scale is NOT in it.
+        /// <para>The cone in the field is always this times a grip factor
+        /// (<see cref="Weapon.GripSpreadScale"/>): two-handed is the balanced reference, one-handed
+        /// stacks <see cref="OneHandSpreadMultiplier"/> on top. Reading this number as "the cone the
+        /// player sees" makes every weapon look tighter than it is.</para></summary>
         public float BaseSpreadDegrees => baseSpreadDegrees;
 
         /// <summary>Bloom growth per shot (degrees).</summary>
@@ -154,14 +172,34 @@ namespace VortexArena.Core.Combat
         /// <summary>Bloom recovery rate (degrees/s).</summary>
         public float BloomRecoveryPerSecond => bloomRecoveryPerSecond;
 
-        /// <summary>Muzzle rise per shot (degrees, one-handed).</summary>
+        /// <summary>RAW muzzle rise per shot (degrees) — scaled by the grip
+        /// (<see cref="Weapon.GripRecoilScale"/>), like <see cref="BaseSpreadDegrees"/>.</summary>
         public float KickDegrees => kickDegrees;
 
-        /// <summary>Push-back per shot (metres, one-handed).</summary>
+        /// <summary>RAW push-back per shot (metres) — eats the same grip scale as
+        /// <see cref="KickDegrees"/>.</summary>
         public float KickBackMeters => kickBackMeters;
 
-        /// <summary>Recoil recovery speed.</summary>
+        /// <summary>Recoil recovery speed for the TWO-HANDED reference grip; one-handed it is
+        /// multiplied by <see cref="OneHandRecoveryPenalty"/>.</summary>
         public float RecoilRecoverSpeed => recoilRecoverSpeed;
+
+        /// <summary>
+        /// STABILITY PENALTY of a one-handed hold — spread. Two-handed is the 1.0 baseline, so this
+        /// is a ratio against it: 1.5 = a 50% wider cone one-handed.
+        /// <para>⚠️ Clamped to <c>&gt;= 1</c>: a one-handed hold must never be BETTER than a
+        /// two-handed one. The penalty is per weapon on purpose — an SMG is far easier to hold in one
+        /// hand than a rifle, and one shared number could only be right for one of them.</para>
+        /// </summary>
+        public float OneHandSpreadMultiplier => Mathf.Max(1f, oneHandSpreadMultiplier);
+
+        /// <summary>STABILITY PENALTY of a one-handed hold — recoil (kick + push-back), as a ratio
+        /// against the two-handed 1.0 baseline. Clamped to <c>&gt;= 1</c>.</summary>
+        public float OneHandRecoilMultiplier => Mathf.Max(1f, oneHandRecoilMultiplier);
+
+        /// <summary>Recovery multiplier of a one-handed hold: <c>&lt; 1</c> = the muzzle settles
+        /// slower (0.75 = 25% slower). Clamped to <c>0.1 - 1</c>.</summary>
+        public float OneHandRecoveryPenalty => Mathf.Clamp(oneHandRecoveryPenalty, 0.1f, 1f);
 
         /// <summary>
         /// Controller vibration strength per shot (0-1). <c>0</c> = haptics off.
