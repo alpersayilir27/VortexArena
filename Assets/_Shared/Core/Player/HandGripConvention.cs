@@ -1,103 +1,106 @@
 using UnityEngine;
+using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>
-    /// "İzleme uzayındaki bir el pozu humanoid el kemiğine nasıl çevrilir" sorusunun TEK cevabı.
-    /// <para>
-    /// <b>Neden ayrı bir sınıf:</b> ağdan gelen el rotasyonu <c>OVRCameraRig.leftHandAnchor</c> /
-    /// <c>rightHandAnchor</c> uzayındadır (kumandanın pozu), kemik ise karakterin bind eksenindedir.
-    /// İki uzayın "parmaklar nereye bakar / avuç nereye bakar" tanımı farklıdır; aradaki köprü
-    /// yazılmazsa bilek ters çizilir (ölçüldü: sol 115.4°, sağ 128.1° sapma).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Kapsamı dardır: gövde BURADAN GEÇMEZ.</b> Kol/bilek zinciri Movement SDK'nın
-    /// retargeting'inden geliyor ve SDK kendi eşlemesini kendi yapıyor. Eşyanın eldeki duruşu da
-    /// buradan geçmez: kavrama kaydı ANCHOR uzayındadır (<c>ItemGripPose</c>), silahın dünya pozu
-    /// deltasız çözülür. Yerel sentetik elin bileğinin kumandaya göre yeri de buradan geçmez
-    /// (<c>HandPoseLibrary.AnchorToWrist</c>). Buraya gövdeyle ilgili bir tüketici geri eklenirse,
-    /// retargeting ile ikinci bir eşleme kaynağı üretilmiş olur.
-    /// </para>
-    /// <para>
-    /// <b>Bugünkü tek tüketicisi UZAK avatardır</b> (<see cref="HandFingerRig"/> →
-    /// <see cref="Correction"/>): ağdan gelen el rotasyonunu humanoid bileğe köprüler.
-    /// </para>
-    /// <para>
-    /// <b>Türetme:</b> iki iskeletin de aynı anatomik yöne bakması istenir, yani
+    /// <summary>The SINGLE answer to "how is a tracking-space hand pose converted to a humanoid hand
+    /// bone".</summary>
+    /// <remarks>
+    /// <b>Why a separate class:</b> the networked hand rotation is in <c>OVRCameraRig.leftHandAnchor</c> /
+    /// <c>rightHandAnchor</c> space (the controller's pose), while the bone is in the character's bind
+    /// axes. The two spaces define "where do the fingers/palm face" differently; without this bridge the
+    /// wrist is drawn inverted (measured: 115.4° left, 128.1° right).
+    /// <para>⚠️ <b>Narrow scope: the body does NOT go through here.</b> The arm/wrist chain comes from
+    /// Movement SDK retargeting, which does its own mapping. Nor does an item's pose in the hand: grip
+    /// records are in ANCHOR space (<c>ItemGripPose</c>). Nor the local synthetic wrist relative to the
+    /// controller (<c>HandPoseLibrary.AnchorToWrist</c>). Adding a body-related consumer back here would
+    /// create a second mapping source alongside retargeting.</para>
+    /// <para>Today's only consumer is the REMOTE avatar (<see cref="HandFingerRig"/> →
+    /// <see cref="Correction"/>).</para>
+    /// <para><b>Derivation:</b> both skeletons must face the same anatomical direction, so
     /// <c>hand.rotation * boneBasis == anchorRotation * anchorBasis</c> →
-    /// <c>hand.rotation = anchorRotation * (anchorBasis * Inverse(boneBasis))</c>. Parantez içi
-    /// <see cref="Correction"/>'dır ve karakter başına BİR KEZ, bind pozunda hesaplanır.
-    /// </para>
-    /// <para>
-    /// ⚠️ Kemik tarafı SABİT YAZILMAZ, <see cref="TryMeasureBoneBasis"/> ile çalışma anında
-    /// ölçülür: karakter değiştiğinde (Mixamo'dan başka bir rig'e geçilse bile) burada tek satır
-    /// değişmesin diye. Sabit olan yalnız izleme tarafıdır — o donanımdan gelir, modelden değil.
-    /// </para>
-    /// </summary>
+    /// <c>hand.rotation = anchorRotation * (anchorBasis * Inverse(boneBasis))</c>. The parenthesised
+    /// part is <see cref="Correction"/>, computed ONCE per character in bind pose.</para>
+    /// <para>⚠️ <b>BOTH sides are MEASURED at runtime</b> via <see cref="TryMeasureBoneBasis"/>, never
+    /// hard-coded: the bone side from the character's bind pose, the anchor side from the synthetic
+    /// hand's own skeleton (<see cref="AnchorBasis"/>). So neither a new character nor an SDK skeleton
+    /// change needs a line here — and since the correction is a ratio of the two, the shared
+    /// construction cancels out of it.</para>
+    /// </remarks>
     public static class HandGripConvention
     {
-        /// <summary>
-        /// Kumanda anchor'ı uzayında elin anatomisi — <b>TEK AYAR NOKTASI</b>.
-        /// Parmaklar kumandanın ilerisine ve hafif aşağı bakar; avuç içe (gövde orta hattına) ve
-        /// hafif yukarı bakar.
-        /// <para>
-        /// ⚠️ Bu değerler <b>ERGONOMİK TAHMİNDİR, ölçülmüş değildir</b> — <b>UZAK</b> avatarın bileği
-        /// eğrik duruyorsa düzeltilecek yer BURASIDIR (başka hiçbir yerde el eksenine dokunulmaz).
-        /// ⚠️ <b>Yerel elin bileği buradan GEÇMEZ</b> ve buraya bağlanmaz: o kumandaya kilitlenir
-        /// (<c>HandPoseLibrary.AnchorToWrist</c>). Bir zamanlar stüdyodaki hayalet el bu tahminden
-        /// çiziliyordu ve parmak ekseni etrafında ~70° sapıyordu.
-        /// <b>Nasıl bulunur:</b> <c>ThreePointBodyIK</c>'nın "Bilek eşlemesi (canlı ayar)" alanları
-        /// admin (Windows) tarafında CANLI bir uzak avatar üzerinde çevrilir — admin uzak avatarları
-        /// çizdiği için ayar APK turu gerektirmez. Oturan değer buraya işlenir ve alan sıfıra döner.
-        /// <b>Ölçerek</b> bulmak bu projede mümkün değil: kumandadan sürülen sentetik el
-        /// (<c>OVRInput.Controller.LHand/RHand</c> ya da <c>b_*_wrist</c>) ya multimodal
-        /// gerektiriyor ya da <c>ControllerModelHider</c> tarafından kapatılmış durumda.
-        /// </para>
-        /// <para>
-        /// İki vektörün birbirine dik olması gerekmez: <see cref="Quaternion.LookRotation"/> ikinci
-        /// vektörü birinciye göre diklerştirir.
-        /// </para>
-        /// </summary>
-        public static readonly Vector3 LeftAnchorFingerDirection = new Vector3(0f, -0.42f, 0.91f);
-        public static readonly Vector3 LeftAnchorPalmNormal = new Vector3(0.87f, 0.50f, 0f);
-        public static readonly Vector3 RightAnchorFingerDirection = new Vector3(0f, -0.42f, 0.91f);
-        public static readonly Vector3 RightAnchorPalmNormal = new Vector3(-0.87f, 0.50f, 0f);
+        /// <summary>Hand anatomy in controller anchor space — <b>LAST RESORT ONLY</b>, for a skeleton
+        /// that cannot be read. Fingers point forward from the controller; the palm faces down and
+        /// slightly outward.</summary>
+        /// <remarks>
+        /// ⚠️ <b>Not a tuning point and not an estimate:</b> these are a snapshot of the same
+        /// measurement <see cref="AnchorBasis"/> takes from the synthetic hand's own skeleton. Editing
+        /// them by eye splits the hand the player holds from the hand the observer sees — the two ends
+        /// stop reading one description.
+        /// <para>⚠️ <b>The local hand's wrist does NOT go through here</b> and must not be wired to it:
+        /// it is locked to the controller (<c>HandPoseLibrary.AnchorToWrist</c>).</para>
+        /// <para>The two vectors need not be perpendicular:
+        /// <see cref="Quaternion.LookRotation"/> orthogonalises the second against the first.</para>
+        /// </remarks>
+        public static readonly Vector3 LeftAnchorFingerDirection = new Vector3(0.018f, -0.027f, 0.999f);
+        public static readonly Vector3 LeftAnchorPalmNormal = new Vector3(-0.456f, -0.890f, -0.015f);
+        public static readonly Vector3 RightAnchorFingerDirection = new Vector3(-0.018f, -0.027f, 0.999f);
+        public static readonly Vector3 RightAnchorPalmNormal = new Vector3(0.456f, -0.890f, -0.015f);
 
-        // ⚠️ Anchor→bilek deltası BURADA DEĞİL ve buraya geri eklenmez: o bir eşleme değil bir
-        // TANIMDIR (kumandaya kilitlenen bileğin yeri) ve tek sahibi
-        // VortexArena.Core.Combat.HandPoseLibrary.AnchorToWrist'tir. Burada durduğu sürece
-        // "başlıkta ölçülüp yapıştırılacak sabit" olarak kaldı ve hiç ölçülmediği için tezgâh ile
-        // oyun ayrık kaldı.
+        // ⚠️ The anchor→wrist delta is NOT here and is not added back: it is a DEFINITION (where the
+        // wrist locks onto the controller), not a mapping, and its sole owner is
+        // VortexArena.Core.Combat.HandPoseLibrary.AnchorToWrist. While it lived here it stayed a
+        // "constant to be measured on device and pasted in", was never measured, and left the studio and
+        // the game out of sync.
 
-        /// <summary>Yön vektörünün "anlamlı" sayılması için gereken en küçük kare uzunluk.</summary>
+        /// <summary>Minimum squared length for a direction vector to count as meaningful.</summary>
         private const float MinDirectionSqrMagnitude = 1e-8f;
 
-        /// <summary>Parmak/başparmak yönü paralelleşirse avuç normali üretilemez (cross ≈ 0).</summary>
+        /// <summary>If finger/thumb directions become parallel no palm normal exists (cross ≈ 0).</summary>
         private const float MinCrossSqrMagnitude = 1e-6f;
 
-        /// <summary>Kumanda anchor'ı uzayındaki anatomik baz.</summary>
+        /// <summary>Anatomical basis in controller anchor space.</summary>
+        /// <remarks>
+        /// ⚠️ <b>MEASURED from the synthetic hand's own skeleton</b>
+        /// (<see cref="HandPoseLibrary.TryMeasureWristAnatomy"/>), never estimated: the wrist's rotation
+        /// on the anchor is DEFINED as identity (<c>HandPoseLibrary.AnchorToWrist</c>), so "how the hand
+        /// faces relative to the controller" is already answered by the hand the player is holding.
+        /// Guessing it a second time produces a hand that faces the right way and is drawn rolled about
+        /// the finger axis — the term nothing else pins down, and the one the studio's ghost hand was
+        /// caught on before.
+        /// <para>⚠️ <b>Both sides of <see cref="Correction"/> go through
+        /// <see cref="TryMeasureBoneBasis"/></b> and must keep doing so: the correction is a ratio of
+        /// two bases, so a shared convention cancels out of it exactly — two constructions leave their
+        /// difference in the drawn wrist.</para>
+        /// <para>Falls back to the last-resort constants when the SDK skeleton is unreadable.</para>
+        /// </remarks>
         public static Quaternion AnchorBasis(bool rightHand)
         {
+            if (HandPoseLibrary.TryMeasureWristAnatomy(rightHand, out Vector3 fingerDirection,
+                    out Vector3 thumbDirection) &&
+                TryMeasureBoneBasis(fingerDirection, thumbDirection, rightHand, out Quaternion measured))
+            {
+                return measured;
+            }
+
             return rightHand
                 ? Quaternion.LookRotation(RightAnchorFingerDirection, RightAnchorPalmNormal)
                 : Quaternion.LookRotation(LeftAnchorFingerDirection, LeftAnchorPalmNormal);
         }
 
-        /// <summary>
-        /// Bir iskeletin el anatomisini KENDİ bind pozundan ölçer (el-YEREL uzayda): parmak yönü
-        /// el→orta parmak, başparmak yönü el→başparmak, avuç normali ikisinin çapraz çarpımı.
-        /// <para>
-        /// ⚠️ Çapraz çarpımın sırası ELE GÖRE değişir (aynada simetrik iki iskelet, aynı sıra ters
-        /// normal verirdi); kuralın tek yazıldığı yer aşağıdaki <see cref="Vector3"/> aşırı
-        /// yüklemesidir ve bu sürüm ona delege eder — başka yere kopyalanmaz.
-        /// </para>
-        /// <para>
-        /// ⚠️ <b>Bind pozunda çağrılmalıdır</b> (çözücü kemiklere yazmadan ÖNCE): poz bozulduktan
-        /// sonra ölçülen baz o karenin duruşunu içerir ve düzeltme kalıcı olarak yanlış çıkar.
-        /// </para>
-        /// <para>Parmak kemikleri humanoid'de İSTEĞE BAĞLIDIR; yoksa ya da yönler dejenereyse
-        /// <c>false</c> döner — çağıran düzeltmeyi kimlik bırakıp uyarı basar (açık başarısızlık).</para>
-        /// </summary>
+        /// <summary>Measures a skeleton's hand anatomy from its OWN bind pose (in hand-LOCAL space):
+        /// finger direction = hand→middle, thumb direction = hand→thumb, palm normal = their cross
+        /// product.</summary>
+        /// <remarks>
+        /// ⚠️ The cross-product order depends on HANDEDNESS (mirrored skeletons would give an inverted
+        /// normal for the same order); the rule is written only in the <see cref="Vector3"/> overload
+        /// below, which this version delegates to — never copied elsewhere.
+        /// <para>⚠️ <b>Must be called in bind pose</b> (BEFORE the solver writes bones): a basis measured
+        /// on a posed skeleton bakes in that frame's pose and the correction is permanently wrong.</para>
+        /// <para>Finger bones are OPTIONAL in humanoid; if missing or the directions are degenerate it
+        /// returns <c>false</c> — the caller leaves the correction at identity and warns (explicit
+        /// failure).</para>
+        /// </remarks>
         public static bool TryMeasureBoneBasis(
             Transform hand,
             Transform middleProximal,
@@ -119,18 +122,14 @@ namespace VortexArena.Core.Player
                 out basis);
         }
 
-        /// <summary>
-        /// Aynı ölçüm, yönler <b>hazır</b> verildiğinde (el-YEREL uzayda): kemik <see cref="Transform"/>'u
-        /// olmayan iskeletler de (ISDK'nın veri iskeleti, <c>HandPoseLibrary</c>) bu kapıdan geçsin
-        /// diye ayrılmıştır.
-        /// <para>
-        /// ⚠️ Çapraz çarpımın <b>sıra kuralı yalnız BURADA</b> yazılıdır (SOL'da
-        /// <c>Cross(thumb, finger)</c>, SAĞ'da <c>Cross(finger, thumb)</c>) ve
+        /// <summary>Same measurement with the directions supplied <b>ready-made</b> (hand-LOCAL space), so
+        /// skeletons without bone <see cref="Transform"/>s (ISDK's data skeleton,
+        /// <c>HandPoseLibrary</c>) can use this gate too.</summary>
+        /// <remarks>⚠️ The cross-product <b>order rule lives ONLY HERE</b> (LEFT: <c>Cross(thumb,
+        /// finger)</c>, RIGHT: <c>Cross(finger, thumb)</c>) and the
         /// <see cref="TryMeasureBoneBasis(Transform, Transform, Transform, bool, out Quaternion)"/>
-        /// buna delege eder: iki kopya olsaydı biri düzeltilip öteki unutulur ve bir elin avuç
-        /// normali sessizce ters kalırdı.
-        /// </para>
-        /// </summary>
+        /// overload delegates to it: with two copies one would get fixed and the other forgotten,
+        /// leaving one hand's palm normal silently inverted.</remarks>
         public static bool TryMeasureBoneBasis(
             Vector3 fingerDirectionLocal,
             Vector3 thumbDirectionLocal,
@@ -161,32 +160,14 @@ namespace VortexArena.Core.Player
             return true;
         }
 
-        /// <summary>
-        /// İzleme uzayındaki rotasyonun SAĞINA çarpılacak düzeltme:
-        /// <c>hand.rotation = anchorRotation * Correction(...)</c>.
-        /// </summary>
+        /// <summary>Correction to multiply on the RIGHT of a tracking-space rotation:
+        /// <c>hand.rotation = anchorRotation * Correction(...)</c>.</summary>
+        /// <remarks>⚠️ <b>No manual adjustment term, and none comes back:</b> both bases are measured
+        /// now, so a hand-turned offset here would not correct an unknown — it would bend the drawn
+        /// wrist away from the measurement and hide whichever side actually broke.</remarks>
         public static Quaternion Correction(bool rightHand, Quaternion boneBasisLocal)
         {
-            return Correction(rightHand, boneBasisLocal, Vector3.zero);
-        }
-
-        /// <summary>
-        /// Aynı düzeltme, elin <b>anatomik çerçevesinde</b> bir ince ayarla.
-        /// <para>
-        /// Ayar neden bu çerçevede uygulanıyor: <see cref="AnchorBasis"/> bir
-        /// <see cref="Quaternion.LookRotation"/> olduğu için yerel <c>+Z</c> = parmak yönü,
-        /// <c>+Y</c> = avuç normalidir. Yani <c>Euler(0, 0, z)</c> <b>parmak ekseni etrafında
-        /// roll</b> demektir — anchor anatomisinin analitik olarak en belirsiz terimi tam olarak
-        /// budur (bilek doğru yöne bakıp ters yüz durabiliyor) ve tek bir sayıyla aranabilsin diye
-        /// ayrı bir eksene düşürülmüştür. <c>X</c> bileği yukarı/aşağı kırar, <c>Y</c> içe/dışa çevirir.
-        /// </para>
-        /// <para>⚠️ Ayar <b>geçicidir</b>: doğru değer bulununca
-        /// <see cref="LeftAnchorFingerDirection"/> ailesine işlenip alan sıfıra döner. İki yerde
-        /// birden duran bir sabit er geç birbirinden sapar.</para>
-        /// </summary>
-        public static Quaternion Correction(bool rightHand, Quaternion boneBasisLocal, Vector3 tuningEuler)
-        {
-            return AnchorBasis(rightHand) * Quaternion.Euler(tuningEuler) * Quaternion.Inverse(boneBasisLocal);
+            return AnchorBasis(rightHand) * Quaternion.Inverse(boneBasisLocal);
         }
     }
 }
