@@ -16,6 +16,13 @@ namespace VortexArena.Core.Player
     /// near/distance grab — so a drawn ray is nothing but noise on the player's screen.
     /// </para>
     /// <para>
+    /// ⚠️ <b>Hiding the ray is CONDITIONAL — a world UI is pointed at with it.</b> While a requester
+    /// asks for it (<see cref="SetRayVisualsRequested"/>; today the lobby's IP panel) the visuals are
+    /// turned back ON: without the drawn line the player aims at the numpad blind. Anything that opens
+    /// a pointable canvas must therefore file a request — an unconditional hide silently makes that
+    /// panel unusable.
+    /// </para>
+    /// <para>
     /// ⚠️ <b>The hand the player sees does NOT come from here and is NOT touched here:</b> that hand is
     /// ISDK's synthetic hand (<c>OVRHandVisualLeft</c>/<c>OVRHandVisualRight</c> →
     /// <c>SyntheticHandData</c>) and is driven by its own <c>HandVisual</c>. This component's only job
@@ -86,7 +93,7 @@ namespace VortexArena.Core.Player
         private const string RayInteractorTypeName = "RayInteractor";
 
         /// <summary>
-        /// The visual container under the ray interactor — this is the only thing that gets disabled.
+        /// The visual container under the ray interactor — this is the only thing that gets toggled.
         /// <para>⚠️ The interactor ITSELF is not disabled (see the class documentation): ripping out the
         /// behaviour just to remove visual noise would be a loss whose cause could not be found later,
         /// when pointing at a world UI becomes necessary.</para>
@@ -119,16 +126,79 @@ namespace VortexArena.Core.Player
         /// <summary>Visual roots whose object gets fully disabled (controller models + ghost hands).</summary>
         private readonly List<GameObject> targets = new List<GameObject>(16);
 
+        /// <summary>
+        /// The ray interactors' <c>Visuals</c> nodes — kept apart from <see cref="targets"/> because
+        /// they are not hidden unconditionally: they follow the request state and get turned back ON.
+        /// </summary>
+        private readonly List<GameObject> rayVisuals = new List<GameObject>(4);
+
+        /// <summary>
+        /// Who wants the pointer ray drawn right now (world UI pointing); empty = ray hidden.
+        /// <para>⚠️ Requesters are held as objects, NOT as a counter: a counter drifts when a scene is
+        /// unloaded with the request still open and the ray would stay drawn in the arena forever. A
+        /// destroyed requester drops out here by itself.</para>
+        /// </summary>
+        private static readonly List<Object> rayVisualRequesters = new List<Object>(2);
+
         /// <summary>Already logged ones: hiding is REPEATED every frame but the log is printed once.</summary>
         private readonly HashSet<GameObject> logged = new HashSet<GameObject>();
 
         private float rescanTimer = float.NegativeInfinity;
+
+        /// <summary>Were the ray visuals last hidden by THIS component — what the one-shot show undoes.</summary>
+        private bool rayVisualsHiddenHere;
 
         /// <summary>The "player's hand not found" error, once per session.</summary>
         private static bool erroredNoDrivenHandVisual;
 
         /// <summary>The "ray's visual node not found" warning, once per session.</summary>
         private static bool warnedNoRayVisuals;
+
+        /// <summary>
+        /// Requests the pointer ray's visuals for one requester (idempotent — the same requester is
+        /// registered once). It applies to every rig in the scene, no reference is needed.
+        /// <para>⚠️ <b>Whoever opens a pointable world UI must call this</b> (lobby IP panel): the ray
+        /// is hidden by default and without the drawn line the player cannot see what they are aiming
+        /// at. Requests are per-requester, so closing one panel does not take the ray away from another
+        /// panel that is still open.</para>
+        /// <para>The request must be dropped when the panel closes AND when the requester is disabled —
+        /// otherwise the ray follows the player into the arena.</para>
+        /// </summary>
+        public static void SetRayVisualsRequested(Object requester, bool requested)
+        {
+            if (requester == null)
+            {
+                return;
+            }
+
+            for (int i = rayVisualRequesters.Count - 1; i >= 0; i--)
+            {
+                Object existing = rayVisualRequesters[i];
+                if (existing == null || existing == requester)
+                {
+                    rayVisualRequesters.RemoveAt(i);
+                }
+            }
+
+            if (requested)
+            {
+                rayVisualRequesters.Add(requester);
+            }
+        }
+
+        /// <summary>Does anyone want the ray drawn — destroyed requesters are pruned and do not count.</summary>
+        private static bool RayVisualsWanted()
+        {
+            for (int i = rayVisualRequesters.Count - 1; i >= 0; i--)
+            {
+                if (rayVisualRequesters[i] == null)
+                {
+                    rayVisualRequesters.RemoveAt(i);
+                }
+            }
+
+            return rayVisualRequesters.Count > 0;
+        }
 
         private void LateUpdate()
         {
@@ -151,6 +221,8 @@ namespace VortexArena.Core.Player
 
                 rigRoot = go.transform;
                 targets.Clear();
+                rayVisuals.Clear();
+                rayVisualsHiddenHere = false;
                 rescanTimer = float.NegativeInfinity; // new rig: scan immediately
             }
 
@@ -185,9 +257,45 @@ namespace VortexArena.Core.Player
                     Debug.Log($"[ControllerModelHider] Gizlendi: '{target.name}' ({parentName} altında).", this);
                 }
             }
+
+            ApplyRayVisuals(RayVisualsWanted());
         }
 
-        /// <summary>Re-finds the visuals to hide under the rig (both types in a single pass).
+        /// <summary>
+        /// Applies the request state to the ray visuals: while nobody asks for the ray they are hidden
+        /// every frame (Meta re-enables them on controller put-down/pick-up), and when someone does ask
+        /// the hide is undone <b>once</b>.
+        /// <para>⚠️ Showing is a ONE-SHOT undo, not a per-frame force: ISDK turns these visuals on and
+        /// off itself (hover/no-target states) and forcing them active every frame would fight it —
+        /// the player would see a line hanging in the air where ISDK meant to draw none.</para>
+        /// </summary>
+        private void ApplyRayVisuals(bool visible)
+        {
+            if (visible && !rayVisualsHiddenHere)
+            {
+                return; // nothing was hidden here — the state belongs to ISDK
+            }
+
+            rayVisualsHiddenHere = !visible;
+
+            for (int i = rayVisuals.Count - 1; i >= 0; i--)
+            {
+                GameObject visual = rayVisuals[i];
+                if (visual == null)
+                {
+                    rayVisuals.RemoveAt(i);
+                    continue;
+                }
+
+                if (visual.activeSelf != visible)
+                {
+                    visual.SetActive(visible);
+                }
+            }
+        }
+
+        /// <summary>Re-finds the rig's visuals (all three types in a single pass); ray visuals land on
+        /// their own list because their state is conditional.
         /// <para>The hand visuals the player sees are NEVER added to the list — neither their object
         /// nor their Renderer is touched.</para></summary>
         private void Rescan()
@@ -215,11 +323,10 @@ namespace VortexArena.Core.Player
                     continue;
                 }
 
-                GameObject target = mb.gameObject;
-
                 if (isRayInteractor)
                 {
-                    // What gets disabled is NOT the interactor but the visual container under it.
+                    // What gets toggled is NOT the interactor but the visual container under it — and
+                    // it goes on its own list: its state follows the request, not an unconditional hide.
                     raysSeen++;
                     Transform visuals = mb.transform.Find(RayVisualsNodeName);
                     if (visuals == null)
@@ -228,9 +335,17 @@ namespace VortexArena.Core.Player
                     }
 
                     rayVisualsFound++;
-                    target = visuals.gameObject;
+                    if (!rayVisuals.Contains(visuals.gameObject))
+                    {
+                        rayVisuals.Add(visuals.gameObject);
+                    }
+
+                    continue;
                 }
-                else if (isHandVisual)
+
+                GameObject target = mb.gameObject;
+
+                if (isHandVisual)
                 {
                     handVisualsSeen++;
                     if (IsPlayerHand(target.name))
