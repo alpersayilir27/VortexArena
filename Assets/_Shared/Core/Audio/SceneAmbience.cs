@@ -7,22 +7,27 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Core.Audio
 {
-    /// <summary>The map's ambience (ambience + game music): starts as soon as the scene loads, loops
-    /// and never stops until the map changes — match start, match end and returning to the lobby do
-    /// not touch it. The clip comes from the scene's
-    /// <see cref="MapDefinition.AmbienceClip"/>.</summary>
+    /// <summary>The map's two looping layers (ambience + music): they start as soon as the scene
+    /// loads, loop and never stop until the map changes — match start, match end and returning to
+    /// the lobby do not touch them. The clips come from the scene's
+    /// <see cref="MapDefinition.AmbienceClip"/> and <see cref="MapDefinition.MusicClip"/>.</summary>
     /// <remarks>
     /// Self-bootstrapping persistent singleton; NO component is placed in the scene
     /// (<c>WeaponGranter</c> pattern): a manual setup step per arena would silently leave a scene
     /// music-less when forgotten. Adding ambience to a new arena is just dragging a clip into its
     /// <see cref="MapDefinition"/>.
+    /// <para>Music plays ON TOP OF ambience, not instead of it: two independent layers with their
+    /// own sources, and each is attenuated from its own <see cref="AudioMix"/> channel
+    /// (<see cref="AudioChannel.Ambience"/> · <see cref="AudioChannel.Music"/>) — a map may keep
+    /// its ambience while the music is turned all the way down.</para>
     /// <para>
-    /// <b>Shared phase — the music is at the same position on every headset.</b> The server sends how
-    /// long the scene has been staged (<c>sceneElapsed</c>, Docs/ArenaNet-Protokol.md §5.3) with every
-    /// scene message (<c>welcome.match</c> · <c>load_match</c> · <c>return_to_lobby</c>). The client
-    /// turns it into a local time epoch and opens the clip at <c>elapsed mod clipLength</c>: everyone
-    /// hears the same spot, a late joiner joins mid-clip, and a scene older than the clip has wrapped
-    /// by itself. With no server (editor sandbox) there is no epoch and the clip starts at 0.
+    /// <b>Shared phase — both layers are at the same position on every headset.</b> The server sends
+    /// how long the scene has been staged (<c>sceneElapsed</c>, Docs/ArenaNet-Protokol.md §5.3) with
+    /// every scene message (<c>welcome.match</c> · <c>load_match</c> · <c>return_to_lobby</c>). The
+    /// client turns it into a local time epoch and opens each clip at <c>elapsed mod clipLength</c>:
+    /// everyone hears the same spot, a late joiner joins mid-clip, and a scene older than the clip
+    /// has wrapped by itself. With no server (editor sandbox) there is no epoch and the clips start
+    /// at 0. The epoch is SHARED by both layers — a second one would be a second source of truth.
     /// </para>
     /// <para>
     /// The epoch is anchored to WHEN THE MESSAGE ARRIVED, not to scene load: load time varies per
@@ -54,10 +59,18 @@ namespace VortexArena.Core.Audio
 
         public static SceneAmbience Instance { get; private set; }
 
-        private AudioSource _active;
-        private AudioSource _fading;
-        private float _clipVolume;
-        private float _masterVolume = 1f;
+        /// <summary>One looping layer: the crossfade pair, its clip level and its mix channel.</summary>
+        private sealed class Layer
+        {
+            public AudioSource Active;
+            public AudioSource Fading;
+            public float ClipVolume;
+            public float NextDriftCheck;
+            public AudioChannel Channel;
+        }
+
+        private readonly Layer _ambience = new Layer { Channel = AudioChannel.Ambience };
+        private readonly Layer _music = new Layer { Channel = AudioChannel.Music };
 
         private GameCatalog _catalog;
         private bool _catalogLoaded;
@@ -68,19 +81,12 @@ namespace VortexArena.Core.Audio
         /// <summary>LOCAL equivalent of the moment the scene was staged: <c>realtime - sceneElapsed</c>.</summary>
         private float _epochRealtime;
         private bool _hasEpoch;
-        private float _nextDriftCheck;
 
-        /// <summary>Shared multiplier for all ambience (0..1) — the ducking/mute gate. It changes
-        /// neither clip selection nor the shared phase; at 0 the clip keeps playing and comes back at
-        /// the same position as the other headsets.</summary>
-        public float MasterVolume
-        {
-            get => _masterVolume;
-            set => _masterVolume = Mathf.Clamp01(value);
-        }
+        /// <summary>The ambience clip currently playing; null when silent.</summary>
+        public AudioClip CurrentClip => _ambience.Active != null ? _ambience.Active.clip : null;
 
-        /// <summary>The clip currently playing; null when silent.</summary>
-        public AudioClip CurrentClip => _active != null ? _active.clip : null;
+        /// <summary>The music clip currently playing; null when silent.</summary>
+        public AudioClip CurrentMusicClip => _music.Active != null ? _music.Active.clip : null;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -105,8 +111,10 @@ namespace VortexArena.Core.Audio
 
             Instance = this;
 
-            _active = CreateSource();
-            _fading = CreateSource();
+            _ambience.Active = CreateSource();
+            _ambience.Fading = CreateSource();
+            _music.Active = CreateSource();
+            _music.Fading = CreateSource();
 
             // Persistent singleton: subscribe in Awake/OnDestroy so events are not missed if the
             // object is deactivated (PlayerCombatState pattern).
@@ -138,25 +146,31 @@ namespace VortexArena.Core.Audio
         /// <summary>Audio device or configuration changed (speaker plugged/unplugged, operator picked
         /// another output). Unity rebuilds the audio engine and STOPS every playing
         /// <c>AudioSource</c>.
-        /// <para>⚠️ Ambience does not come back on its own and the silence goes unnoticed: the drift
+        /// <para>⚠️ The layers do not come back on their own and the silence goes unnoticed: the drift
         /// check returns early on "not playing" (<see cref="CorrectDrift"/>) and a new clip is only
-        /// picked on map change — the sound would stay muted for the whole match. Since the clip is
+        /// picked on map change — the sound would stay muted for the whole match. Since the clips are
         /// still assigned, playback is resumed here and re-seated on the shared phase (like a late
         /// joiner: it skips in, it does not restart).</para></summary>
         private void HandleAudioConfigurationChanged(bool deviceWasChanged)
         {
-            if (_active == null || _active.clip == null)
+            ResumeLayer(_ambience);
+            ResumeLayer(_music);
+        }
+
+        private void ResumeLayer(Layer layer)
+        {
+            if (layer.Active == null || layer.Active.clip == null)
             {
                 return;
             }
 
-            if (!_active.isPlaying)
+            if (!layer.Active.isPlaying)
             {
-                _active.Play();
+                layer.Active.Play();
             }
 
-            SeekToEpoch(_active);
-            _nextDriftCheck = Time.realtimeSinceStartup + DriftCheckSeconds;
+            SeekToEpoch(layer.Active);
+            layer.NextDriftCheck = Time.realtimeSinceStartup + DriftCheckSeconds;
         }
 
         private void Update()
@@ -164,62 +178,84 @@ namespace VortexArena.Core.Audio
             // ⚠️ unscaledDeltaTime so the crossfade does not freeze if timeScale is touched (death
             // screen, pause).
             float step = Time.unscaledDeltaTime / CrossfadeSeconds;
-            float target = _active != null && _active.clip != null ? _clipVolume * _masterVolume : 0f;
 
-            if (_active != null)
+            UpdateLayer(_ambience, step);
+            UpdateLayer(_music, step);
+
+            CorrectDrift(_ambience);
+            CorrectDrift(_music);
+        }
+
+        private static void UpdateLayer(Layer layer, float step)
+        {
+            float target = layer.Active != null && layer.Active.clip != null
+                ? layer.ClipVolume * AudioMix.Of(layer.Channel)
+                : 0f;
+
+            if (layer.Active != null)
             {
-                _active.volume = Mathf.MoveTowards(_active.volume, target, step);
+                layer.Active.volume = Mathf.MoveTowards(layer.Active.volume, target, step);
             }
 
-            if (_fading != null)
+            if (layer.Fading != null)
             {
-                _fading.volume = Mathf.MoveTowards(_fading.volume, 0f, step);
-                if (_fading.volume <= 0f && _fading.isPlaying)
+                layer.Fading.volume = Mathf.MoveTowards(layer.Fading.volume, 0f, step);
+                if (layer.Fading.volume <= 0f && layer.Fading.isPlaying)
                 {
-                    _fading.Stop();
-                    _fading.clip = null;
+                    layer.Fading.Stop();
+                    layer.Fading.clip = null;
                 }
             }
-
-            CorrectDrift();
         }
 
         /// <summary>Changes the ambience by hand (null clip = silence). Normally not needed: the clip
         /// is picked from the map definition on scene load.</summary>
         public void Play(AudioClip clip, float volume)
         {
-            _clipVolume = Mathf.Clamp01(volume);
+            Play(_ambience, clip, volume);
+        }
 
-            if (_active != null && _active.clip == clip)
+        /// <summary>Changes the music layer by hand (null clip = no music). Plays ON TOP OF ambience,
+        /// it does not replace it.</summary>
+        public void PlayMusic(AudioClip clip, float volume)
+        {
+            Play(_music, clip, volume);
+        }
+
+        private void Play(Layer layer, AudioClip clip, float volume)
+        {
+            layer.ClipVolume = Mathf.Clamp01(volume);
+
+            if (layer.Active != null && layer.Active.clip == clip)
             {
                 // ⚠️ Same clip → do not restart and do not touch its phase. As long as the map does
                 // not change the music is uninterrupted; match start/end come through here.
-                if (clip != null && !_active.isPlaying)
+                if (clip != null && !layer.Active.isPlaying)
                 {
-                    _active.Play();
-                    SeekToEpoch(_active);
+                    layer.Active.Play();
+                    SeekToEpoch(layer.Active);
                 }
 
                 return;
             }
 
             // Swap roles: the new clip rises from zero on the free source, the old one fades in Update.
-            AudioSource previous = _active;
-            _active = _fading;
-            _fading = previous;
+            AudioSource previous = layer.Active;
+            layer.Active = layer.Fading;
+            layer.Fading = previous;
 
-            _active.volume = 0f;
-            _active.clip = clip;
+            layer.Active.volume = 0f;
+            layer.Active.clip = clip;
 
             if (clip != null)
             {
-                _active.Play();
-                SeekToEpoch(_active);
-                _nextDriftCheck = Time.realtimeSinceStartup + DriftCheckSeconds;
+                layer.Active.Play();
+                SeekToEpoch(layer.Active);
+                layer.NextDriftCheck = Time.realtimeSinceStartup + DriftCheckSeconds;
             }
             else
             {
-                _active.Stop();
+                layer.Active.Stop();
             }
         }
 
@@ -280,7 +316,8 @@ namespace VortexArena.Core.Audio
             // next check.
             if (string.Equals(SceneManager.GetActiveScene().name, sceneName, StringComparison.Ordinal))
             {
-                _nextDriftCheck = 0f;
+                _ambience.NextDriftCheck = 0f;
+                _music.NextDriftCheck = 0f;
             }
         }
 
@@ -321,24 +358,25 @@ namespace VortexArena.Core.Audio
         /// corrects only past the threshold. Two headsets in the same room play through open
         /// speakers, so a few hundred ms of drift is heard as an echo; smaller gaps are
         /// inaudible.</summary>
-        private void CorrectDrift()
+        private void CorrectDrift(Layer layer)
         {
-            if (!_hasEpoch || _active == null || _active.clip == null || !_active.isPlaying ||
-                Time.realtimeSinceStartup < _nextDriftCheck)
+            AudioSource active = layer.Active;
+            if (!_hasEpoch || active == null || active.clip == null || !active.isPlaying ||
+                Time.realtimeSinceStartup < layer.NextDriftCheck)
             {
                 return;
             }
 
-            _nextDriftCheck = Time.realtimeSinceStartup + DriftCheckSeconds;
+            layer.NextDriftCheck = Time.realtimeSinceStartup + DriftCheckSeconds;
 
-            float length = _active.clip.length;
+            float length = active.clip.length;
             if (length <= 0f)
             {
                 return;
             }
 
-            float expected = EpochOffset(_active.clip);
-            float diff = Mathf.Abs(expected - _active.time);
+            float expected = EpochOffset(active.clip);
+            float diff = Mathf.Abs(expected - active.time);
 
             // Ring distance: the end of the clip is adjacent to its start.
             if (diff > length * 0.5f)
@@ -348,7 +386,7 @@ namespace VortexArena.Core.Audio
 
             if (diff > MaxDriftSeconds)
             {
-                _active.time = expected;
+                active.time = expected;
             }
         }
 
@@ -376,6 +414,7 @@ namespace VortexArena.Core.Audio
 
             MapDefinition map = FindMap(sceneName);
             Play(map != null ? map.AmbienceClip : null, map != null ? map.AmbienceVolume : 0f);
+            PlayMusic(map != null ? map.MusicClip : null, map != null ? map.MusicVolume : 0f);
         }
 
         /// <summary>Resolves the scene's map definition from the catalog. The catalog is loaded from

@@ -326,8 +326,9 @@ bekler ve sebebi konsola yazar.
 
 **`match.sceneElapsed`** = o an açık olan sahnenin **kaç saniyedir sahnelendiği** (saniye, sunucu
 saati). Sahne değiştiği anda sıfırlanır; maçın başlaması/bitmesi onu **sıfırlamaz** — ölçtüğü şey
-maç değil sahnedir. Tek tüketicisi ortam sesinin ortak fazıdır: geç katılan başlık müziği baştan
-değil, herkesin bulunduğu yerden açar (`SceneAmbience`, `Docs/Sistem-Ozeti.md` §4). Klip süresinden
+maç değil sahnedir. Tek tüketicisi ortam sesinin ortak fazıdır: geç katılan başlık sahnenin ses
+katmanlarını (ambiyans ve müzik, ikisi de aynı fazdan) baştan değil, herkesin bulunduğu yerden açar
+(`SceneAmbience`, `Docs/Sistem-Ozeti.md` §4). Klip süresinden
 uzun bir değer normaldir — istemci klip uzunluğuna göre modunu kendisi alır.
 ⚠️ Bir **kural/otorite** alanı değildir: kaybı ya da sıfır gelmesi yalnız müziğin baştan
 başlamasıdır, bu yüzden `PROTOCOL_VERSION` **artmaz** (alanı hiç göndermeyen eski sunucuya karşı

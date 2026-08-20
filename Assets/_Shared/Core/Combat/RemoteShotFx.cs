@@ -3,6 +3,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Audio;
 using VortexArena.Core.Player;
 using VortexArena.Net;
 using VortexArena.Protocol;
@@ -710,6 +711,13 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // Operator's local weapon level, independent of the spectator focus below.
+            float channel = AudioMix.Weapons;
+            if (channel <= 0f)
+            {
+                return; // muted: flash and tracer are still drawn
+            }
+
             // Spectator focus (written by App): players outside it are attenuated, never muted —
             // flash and tracer are drawn for everyone anyway, and attenuated audio keeps the
             // "there is a fight over there" information audible.
@@ -719,6 +727,8 @@ namespace VortexArena.Core.Combat
             {
                 volume *= UnfocusedVolumeScale;
             }
+
+            volume *= channel;
 
             node.Source.pitch = def.FirePitchBase + Random.Range(-def.FirePitchJitter, def.FirePitchJitter);
             node.Source.PlayOneShot(clip, volume);

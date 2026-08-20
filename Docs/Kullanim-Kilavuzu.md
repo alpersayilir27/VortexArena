@@ -439,7 +439,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Kamera: POV** (oyuncu kartındaki **POV** düğmesi; seçili oyuncu için `1` ya da `F`) | O oyuncunun **kendi gözünden** izlersin — karttaki POV'a basmak hem oyuncuyu seçer hem gözünden bakmaya geçer. Sağ üstte ayrı bir POV düğmesi yoktur; hangi oyuncuya baktığın düğmelerin altında **POV · ad** olarak yazar | "Bu oyuncu ne görüyor / neden takıldı?" |
 | **Kamera: Serbest** (sağ üstteki **SERBEST** düğmesi ya da `2`) | Arenada özgürce dolaşırsın: **W A S D** yürü, **Q/E** in-çık, **sağ fare tuşunu basılı tutup** bakış çevir, **Shift** hızlı | Bir köşeye yakından bakmak |
 | **İstatistik** | Skorun ortasındaki kutuya bas (veya `I`) | Oyuncu başına öldürme/ölüm/can/batarya **ve PING** tablosu |
-| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **üç sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı, ses çıkışı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
+| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **dört sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı, ses çıkışı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık), **SES** (dört ses türünün seviyesi — yalnız senin ekranın) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
 | **Tam ekran / Pencereli** | `F11`, ya da Tercihler panelinin başlığında **X**'in yanındaki düğme | Yönetim penceresini tüm ekrana yay veya küçült. Seçimin bu bilgisayarda **hatırlanır**: uygulama bir dahaki açılışta aynı kiple gelir |
 | **Oyundan çık** | Tercihler → **BAĞLANTI** sekmesindeki **OYUNDAN ÇIK** | Yönetim uygulamasını kapatır. Güvenlik için **iki kez** basmak gerekir (ilk basışta düğme "EMİN? ÇIK" olur). Sunucuyu ve maçı **kapatmaz** — o ayrı bir penceredir |
 
@@ -456,9 +456,28 @@ değildir: aynı gözlük oyunu tekrar açarsa adıyla ve numarasıyla geri geli
 **Panel açıkken oyun durmaz:** Tercihler/İstatistik panelleri yarı saydamdır, arkada sahneyi
 görmeye devam edersin. `Esc` ile kapatırsın.
 
+**Sesleri ayrı ayrı kısmak** (Tercihler → **SES** sekmesi)
+
+Dört ses türünün seviyesi birbirinden bağımsızdır:
+
+| Satır | Ne kısılır |
+|---|---|
+| **Ambiyans** | Arenanın ortam sesi (rüzgâr, salonun uğultusu) |
+| **Silah sesleri** | Oyuncuların ateş sesleri |
+| **Seslendirme** | Anonslar ("maç başladı", geri sayım, sonuç) |
+| **Müzik** | Haritanın müziği |
+
+- Her satırda **`◀` / `▶`** ile seviyeyi adım adım değiştirirsin; yanında yüzde yazar.
+- **SESSİZ** düğmesi o türü tek dokunuşta susturur; tekrar basınca **eski seviyeye** döner —
+  seviyeyi ayrıca geri ayarlaman gerekmez. Sessizken satırda `sessiz (%70)` gibi yazar: geri
+  açtığında hangi seviyeye döneceğini önceden görürsün.
+- ⚠️ **Bu ayar yalnız bu bilgisayarın hoparlörünü etkiler.** Oyuncuların kulaklığına ve diğer
+  operatörün ekranına dokunmaz — herkes kendi ekranından kısar. Seçimin bu bilgisayarda hatırlanır.
+
 **Sesi başka bir hoparlörden verme**
 
-Yönetim bilgisayarına birden çok ses cihazı bağlıysa (masa hoparlörü, salonun ses sistemi,
+Bu ayrı bir ayardır: **hangi hoparlörden** çalacağını seçer, **ne kadar** yüksek çalacağını değil
+(o SES sekmesindedir). Yönetim bilgisayarına birden çok ses cihazı bağlıysa (masa hoparlörü, salonun ses sistemi,
 kulaklık) sesin hangisinden çıkacağını kendin seçebilirsin:
 
 - [ ] **Tercihler** (`P`) → **GÖRÜNÜM** sekmesi → **Ses çıkışı** satırına bas, liste açılır.
@@ -629,7 +648,8 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
 - **İhlal başlayınca kısa bir uyarı sesi çalar** — ekrana bakmıyorken de haberin olsun diye.
   Sesi kapatmak istersen **Tercihler** (`P`) → **GÖRÜNÜM** sekmesinde **İhlal sesi** satırı vardır.
   Bu satır **yalnız senin ekranına aittir**: sen kapatınca diğer operatörün sesi susmaz, o da
-  kendi ekranından kapatır.
+  kendi ekranından kapatır. ⚠️ **SES sekmesindeki "Seslendirme" bu uyarıyı susturmaz** — anonsları
+  tamamen kıssan bile ihlal sesi çalar; onun tek anahtarı GÖRÜNÜM sekmesindeki bu satırdır.
 - **Ses kalabalıkta sirene dönmez:** aynı anda kaç kişi kural dışına çıkarsa çıksın en fazla
   birkaç saniyede bir çalar. Yani duyduğun her ses "en az bir kişi" demektir, "tam bir kişi"
   demek değildir — kimin olduğunu ihlal listesinden ve halkalardan görürsün. Sesin bitişi ayrıca
