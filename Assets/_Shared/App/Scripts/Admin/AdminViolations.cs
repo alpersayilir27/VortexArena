@@ -5,60 +5,57 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Operatörün ekranında bir ihlalin görünen türü (§10.9).
+    /// The visible kind of a violation on the operator's screen (§10.9).
     /// <para>
-    /// ⚠️ Bu enum <b>serialize EDİLMEZ</b> — hiçbir sahnede/asset'te saklanmıyor, yalnız çalışma
-    /// anında halka ve satır rengine çevriliyor. Bu yüzden "yeni değer sona eklenir" kuralı
-    /// buraya işlemez; <c>None = 0</c> ise okunurluk içindir (varsayılan = ihlal yok).
+    /// ⚠️ <b>NOT serialized</b> (never stored in a scene/asset, only turned into a color at
+    /// runtime), so the "append new values at the end" rule does not apply; <c>None = 0</c> is for
+    /// readability.
     /// </para>
     /// </summary>
     public enum AdminViolationKind
     {
         None = 0,
 
-        /// <summary>Kafa muhafazanın güvenli alanının dışında — <b>ceza üretmez</b>.</summary>
+        /// <summary>The head is outside the boundary's safe area — <b>produces no penalty</b>.</summary>
         OutOfBounds,
 
-        /// <summary>Kafa bir iç engelin içinde — can eriten tek ihlal türü.</summary>
+        /// <summary>The head is inside an interior obstacle — the only violation kind that drains health.</summary>
         Obstacle
     }
 
     /// <summary>
-    /// İhlalin <b>görünümünün tek doğruluk kaynağı</b>: hangi durumun hangi renkte, hangi ritimde
-    /// ve hangi yazıyla anlatıldığı yalnız burada tanımlıdır.
+    /// <b>Single source of truth for how a violation looks</b> (color, rhythm, text).
     /// <para>
-    /// ⚠️ Aynı kuralı iki yerde yazmamak içindir: kuş bakışı halkası
-    /// (<see cref="AdminPlayerMarkers"/>) ve yan paneldeki oyuncu satırı
-    /// (<see cref="AdminPlayerRow"/>) aynı ihlali gösteriyor — renk/frekans ikisinde ayrı
-    /// yazılsaydı biri değiştiğinde aynı oyuncu iki yerde farklı ciddiyette görünürdü.
+    /// ⚠️ The ring (<see cref="AdminPlayerMarkers"/>) and the side panel row
+    /// (<see cref="AdminPlayerRow"/>) show the same violation; with the rule written twice, the
+    /// same player would look differently severe in two places.
     /// </para>
     /// </summary>
     public static class AdminViolations
     {
-        /// <summary>Engel ihlalinde yanıp sönme frekansı (Hz) — can eriyor, ritim hızlı.</summary>
+        /// <summary>Obstacle blink frequency (Hz) — fast, health is draining.</summary>
         private const float ObstacleBlinkHz = 3f;
 
-        /// <summary>Alan dışında yanıp sönme frekansı (Hz). Bilinçli olarak daha yavaş: ciddiyet
-        /// farkını renk tek başına taşımaz, ritim de taşır.</summary>
+        /// <summary>Out-of-bounds blink frequency (Hz) — deliberately slower, so the rhythm carries
+        /// the severity difference too, not just the color.</summary>
         private const float OutOfBoundsBlinkHz = 1.5f;
 
-        /// <summary>Yanıp sönmenin "kısık" yarısındaki renk çarpanı — halka kaybolmasın, kararsın.
-        /// Tamamen söndürmek operatörün "kaç kişi ihlalde" sorusunu iki kareden birinde
-        /// cevapsız bırakırdı.</summary>
+        /// <summary>Color multiplier for the blink's dim half — the ring darkens, never disappears:
+        /// full-off would leave "how many are in violation" uncountable half the time.</summary>
         private const float BlinkDim = 0.3f;
 
         private const string LabelObstacle = "DUVAR";
         private const string LabelOutOfBounds = "ALAN DIŞI";
 
         /// <summary>
-        /// Oyuncunun ŞU ANKİ ihlal durumu — kaynak son snapshot'ın bayraklarıdır
-        /// (<see cref="RemotePlayerRegistry"/>), yani durum bayatlayınca kendiliğinden söner.
+        /// The player's current violation state, from the last snapshot's flags
+        /// (<see cref="RemotePlayerRegistry"/>), so it clears itself when the state goes stale.
         /// <para>
-        /// ⚠️ <b>Öncelik engeldedir:</b> ikisi birden mümkündür (alanın dışındaki bir kolonun içi)
-        /// ve gösterilecek olan can eritenidir — operatörün müdahale sırası ciddiyete göredir.
+        /// ⚠️ <b>Obstacle wins:</b> both can be true at once and the health-draining one is shown —
+        /// the operator's order of intervention follows severity.
         /// </para>
-        /// <para>Kayıt defteri (registry) yoksa <see cref="AdminViolationKind.None"/>: bilinmeyen
-        /// bir durumu ihlal saymak operatöre var olmayan bir olay gösterirdi.</para>
+        /// <para>Without a registry, <see cref="AdminViolationKind.None"/> — an unknown state must
+        /// not be shown as an event that never happened.</para>
         /// </summary>
         public static AdminViolationKind Of(int playerId)
         {
@@ -79,14 +76,12 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// İhlalin o andaki yanıp sönen rengi. <see cref="AdminViolationKind.None"/> için
-        /// <see cref="UiKit.Border"/> döner — çağıran zaten kendi normal rengini kullanmalıdır,
-        /// bu yalnız yanlışlıkla çağrının görünür bir hata üretmemesi içindir.
+        /// The violation's current blink color; <see cref="UiKit.Border"/> for
+        /// <see cref="AdminViolationKind.None"/> so an accidental call is not a visible error.
         /// <para>
-        /// ⚠️ <b>Faz oyuncu başına KAYDIRILMAZ</b> (<c>Time.unscaledTime</c> tek girdidir): tüm
-        /// işaretçiler senkron yanıp söner, böylece operatör "kaç kişi ihlalde" sorusunu tek
-        /// bakışta sayabilir. Faz kaydırılsaydı ekranda sürekli bir kısmı yanan bir halka
-        /// kalabalığı olur ve sayım imkânsızlaşırdı.
+        /// ⚠️ <b>The phase is NOT offset per player</b> (<c>Time.unscaledTime</c> only): synchronous
+        /// blinking lets the operator count violations at a glance, which an offset phase would
+        /// make impossible.
         /// </para>
         /// </summary>
         public static Color Blink(AdminViolationKind kind)
@@ -96,7 +91,7 @@ namespace VortexArena.App.Admin
                 case AdminViolationKind.Obstacle:
                     return Pulse(UiKit.Bad, ObstacleBlinkHz);
                 case AdminViolationKind.OutOfBounds:
-                    // Repo tonunda "uyarı ama hata değil" Accent'tir (düşük pil, zemin sapması).
+                    // "Warning but not an error" is Accent here (low battery, floor drift).
                     return Pulse(UiKit.Accent, OutOfBoundsBlinkHz);
                 default:
                     return UiKit.Border;
@@ -104,9 +99,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// İhlalin kısa etiketi; ihlal yoksa boş dize.
-        /// <para>⚠️ <b>Düz metin</b> — TMP varsayılan fontunda garantisi olmayan sembol
-        /// kullanılmaz (eksik glif □ çizilir); kill feed'in "-&gt;" kararıyla aynı kural.</para>
+        /// The violation's short label; empty when there is none.
+        /// <para>⚠️ <b>Plain text only</b> — symbols not guaranteed by TMP's default font draw as □;
+        /// same rule as the kill feed's "-&gt;".</para>
         /// </summary>
         public static string Label(AdminViolationKind kind)
         {
@@ -119,11 +114,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Protokolden gelen <c>ArenaProtocol.VIOLATION_KIND_*</c> dizesinin etiketi (ihlal akışı
-        /// satırları bunu kullanır).
-        /// <para>⚠️ <b>Tanınmayan tür HAM gösterilir</b>, düşürülmez: telde string taşınıyor ve
-        /// sunucu bir gün yeni bir tür ekleyebilir — satırı yutmak operatörden gerçekten olmuş bir
-        /// olayı gizlerdi.</para>
+        /// Label for a protocol <c>ArenaProtocol.VIOLATION_KIND_*</c> string (used by the feed rows).
+        /// <para>⚠️ <b>An unrecognized kind is shown RAW</b>, not dropped: the server may add kinds,
+        /// and swallowing the row would hide a real event from the operator.</para>
         /// </summary>
         public static string Label(string kind)
         {
@@ -142,8 +135,7 @@ namespace VortexArena.App.Admin
                 : kind;
         }
 
-        /// <summary>Bir periyodun yarısı açık, yarısı kısık — <c>hz</c> için saniyede iki katı
-        /// yarı periyot.</summary>
+        /// <summary>Half a period lit, half dimmed — <c>hz</c> gives twice as many half periods per second.</summary>
         private static Color Pulse(Color color, float hz)
         {
             bool on = Mathf.Repeat(Time.unscaledTime * hz, 1f) < 0.5f;

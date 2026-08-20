@@ -3,70 +3,71 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>Lobi semantiği: hello→welcome yanıtı, roster her değiştiğinde herkese lobby_state
-/// TAM anlık görüntüsü, set_identity/set_ready/set_team/kick/identify işleme (§5).
+/// <summary>Lobby semantics: hello→welcome, a FULL lobby_state snapshot to everyone on every roster
+/// change, and handling of set_identity/set_ready/set_team/kick (§5).
 /// <para>
-/// Roster yayını <b>tek bir yayıncı döngüden</b> gider (<c>MarkRosterDirty</c>) ve her yayın
-/// <c>lobby_state.version</c>'ı artırır; <c>status.rosterVersion</c> geride kalan istemciye yalnız
-/// ona tam snapshot yollatır (§5.1/5.3).
+/// Roster broadcasts leave through <b>a single publisher loop</b> (<c>MarkRosterDirty</c>) and each
+/// one bumps <c>lobby_state.version</c>; a lagging <c>status.rosterVersion</c> gets a full snapshot
+/// sent to that client only (§5.1/5.3).
 /// </para>
 /// <para>
-/// Ayrıca <b>adminler arası ortak durumun</b> sahibidir (§5.3 <c>admin_state</c>): bir sonraki
-/// maçın mod/harita seçimi burada yaşar — admin arayüzündeki seçiciler yerel bir değişkeni değil
-/// bunu değiştirir (<c>set_selection</c>), sunucu da değişikliği TÜM adminlere geri yayar.
-/// Böylece iki operatör aynı ekranı görür. Görünüm tercihleri (kamera, halka, saydamlık) buraya
-/// GİRMEZ — onlar her admin'in kendi makinesinde kalır.
+/// Also owns the <b>state shared between admins</b> (§5.3 <c>admin_state</c>): the next match's
+/// mode/map selection lives here — the admin UI pickers mutate this, not a local variable
+/// (<c>set_selection</c>), and the server echoes the change to ALL admins so two operators see the
+/// same screen. View preferences (camera, rings, transparency) do NOT belong here — they stay on
+/// each admin's own machine.
 /// </para></summary>
 public sealed class LobbyService
 {
     private readonly PlayerRegistry _registry;
     private readonly MatchDirector _director;
 
-    /// <summary>Ortak seçimi koruyan kilit; WS işleyicileri farklı thread'lerden gelebilir.</summary>
+    /// <summary>Guards the shared selection; WS handlers can arrive on different threads.</summary>
     private readonly object _selectionGate = new();
 
-    /// <summary>Ortak seçim (§5.3). ⚠️ <b>Hiçbir zaman boş olmaz:</b> kurucuda mekanın lobi
-    /// haritasıyla tohumlanır (açık sahnenin açılış değeri, §10.7) ve <see cref="ApplySelection"/>
-    /// boş alanı yok saydığı için bir daha boşalamaz. Tohumlanmasaydı ilk <c>admin_state</c>
-    /// "hiç harita seçilmemiş" derdi ve panel mekan süzgecini uygulayacak veriyi de geç alırdı.</summary>
+    /// <summary>Shared selection (§5.3). ⚠️ <b>Never empty:</b> seeded in the constructor with the
+    /// venue's lobby map (the open scene's initial value, §10.7), and it can never empty again
+    /// because <see cref="ApplySelection"/> ignores empty fields. Without the seed the first
+    /// <c>admin_state</c> would say "no map selected" and the panel would get the data for its venue
+    /// filter late.</summary>
     private string _selectedModeId;
     private string _selectedSceneName;
 
-    // ---- Roster yayıncısı (§5.3) ----
-    // TEK yayıncı garantisi: aynı anda birden fazla lobby_state üretimi YOKTUR. Eski hâlde
-    // OnRegistryChanged doğrudan `_ = BroadcastLobbyStateAsync()` çağırıyordu; arka arkaya iki
-    // değişiklik iki eşzamanlı task açıyor, her biri kendi Snapshot()'ını farklı anda alıp
-    // ClientConnection'ın gönderim semaforu için yarışıyordu. Semafor çerçevelerin iç içe
-    // geçmemesini garanti eder ama YENİ olanın kazanmasını etmez → eski roster sonra yazılabilir
-    // ve "atılan oyuncu hâlâ listede online" olarak kalır.
+    // ---- Roster publisher (§5.3) ----
+    // SINGLE publisher guarantee: no two lobby_state productions run at once. Calling
+    // BroadcastLobbyStateAsync directly from OnRegistryChanged would open one task per change; each
+    // takes its own Snapshot() at a different instant and races for ClientConnection's send
+    // semaphore. The semaphore keeps frames from interleaving but does NOT make the NEWER one win →
+    // an older roster can be written last and "a kicked player stays online in the list".
     private readonly object _broadcastGate = new();
     private bool _rosterDirty;
     private bool _broadcasting;
     private int _rosterVersion;
 
-    /// <summary>Bir sonraki maçın ortak parametreleri (§5.2); <c>0</c> = seçilmedi, modun
-    /// varsayılanı kullanılacak. Mod/harita ile AYNI kanaldan gider: parametreler yerel kalsaydı
-    /// bir operatörün 5 dk sandığı maç diğerinin seçtiği 30 dk ile başlardı.</summary>
+    /// <summary>Shared parameters of the next match (§5.2); <c>0</c> = unset, the mode default is
+    /// used. Travels on the SAME channel as mode/map: kept local, a match one operator believed was
+    /// 5 min would start with the 30 min the other picked.</summary>
     private int _selectedRoundSeconds;
 
-    /// <summary>Ortak skor/tur limiti seçimi: <c>0</c> = seçilmedi (modun varsayılanı),
-    /// <c>&gt; 0</c> = o değer, <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = sınırsız.</summary>
+    /// <summary>Shared score/round limit: <c>0</c> = unset (mode default), <c>&gt; 0</c> = that
+    /// value, <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/> = unlimited.</summary>
     private int _selectedScoreLimit;
 
-    /// <summary>Ortak geri sayım seçimi (§5.2); 0 = hiç seçilmedi → COUNTDOWN_SECONDS.</summary>
+    /// <summary>Shared countdown selection (§5.2); 0 = unset → COUNTDOWN_SECONDS.</summary>
     private int _selectedCountdownSeconds;
 
-    /// <summary>Kalibre modu (§5.2/§10.6) — <b>seçim değil yürürlükteki durum</b>: dost ateşiyle
-    /// aynı sınıfta, seçim kilidine girmez ve koşan maçta da değişir. Yalnız <c>_selectionGate</c>
-    /// altında okunup yazılır (diğer ortak alanlarla aynı kilit).</summary>
+    /// <summary>Calibration mode (§5.2/§10.6) — <b>effective state, not a selection</b>: same class
+    /// as friendly fire, it bypasses the selection lock and can change during a running match. Read
+    /// and written only under <c>_selectionGate</c> (same lock as the other shared fields).</summary>
     private string _calibrationMode = ArenaProtocol.CALIB_MODE_TWO_ANCHOR;
 
     public LobbyService(PlayerRegistry registry, MatchDirector director)
     {
         _registry = registry;
         _director = director;
-        // Açılış seçimi = açık sahnenin açılış değeri (§10.7): mekanın lobi haritası. Sunucu
-        // lobiyi çözemezse zaten hiç açılmıyor (§11 fail-fast), yani pratikte boş kalmaz.
+        // Initial selection = the open scene's initial value (§10.7): the venue's lobby map. If the
+        // server cannot resolve the lobby it does not start at all (§11 fail-fast), so this is never
+        // empty in practice.
         _selectedSceneName = director.LobbyScene;
         _selectedModeId = director.LobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
         _registry.Changed += OnRegistryChanged;
@@ -76,7 +77,7 @@ public sealed class LobbyService
     {
         MarkRosterDirty();
 
-        // Admin geldi/gitti → adminCount değişti, kalan adminler tazelensin.
+        // Admin arrived/left → adminCount changed, refresh the remaining admins.
         if (state.Role == "admin" && kind != PlayerChangeKind.Updated)
         {
             var verb = kind switch
@@ -89,8 +90,8 @@ public sealed class LobbyService
         }
     }
 
-    /// <summary>hello → kayıt + welcome (mevcut maç durumu ile; geç katılım senkronu §5.3).
-    /// welcome gönderildikten SONRA Announce ile lobby_state yayını tetiklenir.</summary>
+    /// <summary>hello → registration + welcome (carrying current match state; late-join sync §5.3).
+    /// The lobby_state broadcast is triggered via Announce AFTER welcome is sent.</summary>
     public async Task HandleHelloAsync(ClientConnection connection, HelloMsg hello)
     {
         if (hello.protocolVersion != ArenaProtocol.PROTOCOL_VERSION)
@@ -100,8 +101,8 @@ public sealed class LobbyService
         {
             Console.WriteLine($"[Lobby] playerId havuzu tükendi ({ArenaProtocol.PLAYER_ID_MAX}) — {hello.deviceName} reddedildi.");
             await SendSafeAsync(connection, JsonUtil.Serialize(new KickedMsg { reason = "Sunucu dolu" }), "(dolu)");
-            // Ret de bir atmadır (§5.4): abortif kapanış `kicked`'i düşürüp istemciyi sonsuz
-            // yeniden bağlanma döngüsüne sokardı.
+            // A rejection is a kick too (§5.4): an abortive close would drop `kicked` and put the
+            // client into an endless reconnect loop.
             _ = connection.CloseAfterKickAsync();
             return;
         }
@@ -112,36 +113,37 @@ public sealed class LobbyService
             protocolVersion = ArenaProtocol.PROTOCOL_VERSION,
             playerId = state.PlayerId,
             udpToken = state.UdpToken,
-            // §10.6: oyuncu modu BURADA bir kez alır — kapıladığı karar (açılışta diskten çapa geri
-            // yüklenecek mi) welcome geldiğinde zaten veriliyor, canlı yayılımın uygulanacağı bir
-            // an yok.
+            // §10.6: the player gets the mode ONCE, here — the decision it gates (restore the anchor
+            // from disk at startup?) is already made when welcome arrives, so there is no moment
+            // where a live propagation could apply.
             calibrationMode = CurrentCalibrationMode(),
             match = _director.CurrentMatchInfo()
         };
         await SendSafeAsync(connection, JsonUtil.Serialize(welcome), state.Name);
 
-        // Geç katılan admin ortak seçimi welcome'dan hemen sonra alır (§5.3): paneli açtığında
-        // diğer operatörün seçtiği mod/harita yazıyor olmalı, kendi varsayılanı değil.
+        // A late-joining admin gets the shared selection right after welcome (§5.3): its panel must
+        // show the mode/map the other operator picked, not its own default.
         if (state.Role == "admin")
             await SendSafeAsync(connection, BuildAdminStateJson(""), state.Name);
 
-        // Seçili modun takım kipi ROL AYIRMADAN gider (§5.3): oyuncu lobide taban şeritlerini
-        // buna göre çizer ve bağlandığı anda doğru görmelidir — yayını beklerse bir sonraki
-        // seçim değişikliğine kadar yanlış kalırdı.
+        // The selected mode's team mode goes out REGARDLESS OF ROLE (§5.3): players draw the base
+        // strips in the lobby from it and must see it correctly on connect — waiting for a broadcast
+        // would leave it wrong until the next selection change.
         await SendSafeAsync(connection, BuildSelectionStateJson(), state.Name);
 
-        // Geç katılım maç defterine de yazılır (§10.2) — Announce'tan ÖNCE: aksi hâlde ilk
-        // lobby_state satırı `inMatch:false` gider ve arayüz maç sonu kapsamını bir yayın boyunca
-        // eksik çizer. Koşan maç yoksa hiçbir şey yapmaz.
+        // A late join also enters the match ledger (§10.2) — BEFORE Announce: otherwise the first
+        // lobby_state row goes out as `inMatch:false` and the UI draws the end-of-match scope short
+        // for one broadcast. No-op when no match is running.
         _director.MarkParticipantIfMatchRunning(state);
 
-        _registry.Announce(state, kind); // konsol satırı + lobby_state yayını
+        _registry.Announce(state, kind); // console line + lobby_state broadcast
     }
 
-    /// <summary>status kalp atışı (§5.1): cihaz durumunu günceller ve <b>roster uzlaştırması</b>
-    /// yapar — istemcinin <c>rosterVersion</c>'ı geride kalmışsa YALNIZ ona tam bir lobby_state
-    /// gider. Yedek ağdır, birincil yol değil: kontrol kanalı TCP olduğu için yayın "kaybolmaz";
-    /// bu yol istemcinin bir yayını uygulayamadığı pencereleri (sahne geçişi, kopma anı) kapatır.</summary>
+    /// <summary>status heartbeat (§5.1): updates device state and performs <b>roster
+    /// reconciliation</b> — if the client's <c>rosterVersion</c> lags, a full lobby_state goes to
+    /// THAT client only. A safety net, not the primary path: the control channel is TCP so
+    /// broadcasts do not "get lost"; this closes the windows where a client could not apply one
+    /// (scene transition, moment of disconnect).</summary>
     public async Task HandleStatusAsync(ClientConnection connection, StatusMsg msg)
     {
         var state = connection.State;
@@ -153,9 +155,9 @@ public sealed class LobbyService
         await SendSafeAsync(connection, BuildLobbyStateJson(), state.Name);
     }
 
-    /// <summary>set_identity (§5.1): ad ve/veya forma numarası. Yetki denetimi ClientConnection'da
-    /// (oyuncu yalnız kendini, admin herkesi). Reddedilen numara operatöre admin_state.notice ile
-    /// bildirilir — sessizce yutmak "verdim sandığı" numarayı görünmez kılardı.</summary>
+    /// <summary>set_identity (§5.1): name and/or jersey number. Authorization is in ClientConnection
+    /// (a player only itself, an admin anyone). A rejected number is reported to the operator via
+    /// admin_state.notice — swallowing it silently would hide a number they believe they set.</summary>
     public void HandleSetIdentity(ClientConnection connection, SetIdentityMsg msg)
     {
         if (connection.State == null) return;
@@ -172,7 +174,7 @@ public sealed class LobbyService
             return;
         }
 
-        if (string.IsNullOrEmpty(error)) return; // değişiklik yok — sessiz
+        if (string.IsNullOrEmpty(error)) return; // nothing changed — stay silent
         Console.WriteLine($"[Lobby] set_identity reddedildi (playerId {playerId}): {error}.");
         if (connection.IsAdmin) _ = BroadcastAdminStateAsync(Notice(connection, $"kimlik reddedildi — {error}"));
     }
@@ -207,10 +209,10 @@ public sealed class LobbyService
 
     public async Task HandleKickAsync(ClientConnection connection, KickMsg msg)
     {
-        // Atma kaydı roster'dan SİLER (§5.4) — bağlantısı kopmuş bir kayıtta da iş yapmasının tek
-        // yolu budur; yalnız soketi kapatmak, bağlantısı zaten olmayan satırı listede bırakırdı.
-        // Katılımcı bayrağı ayrıca temizlenmez: kayıt tümüyle gittiği için onunla birlikte gider,
-        // yani atılan oyuncu maç sonu tablosunda da yer almaz (§10.2).
+        // A kick DELETES the record from the roster (§5.4) — the only way it can also act on a
+        // disconnected record; just closing the socket would leave a connection-less row in the list.
+        // The participant flag is not cleared separately: the record is gone entirely, so a kicked
+        // player is absent from the end-of-match table too (§10.2).
         if (!_registry.RemoveByPlayerId(msg.playerId, out var target, out var targetConnection))
         {
             Console.WriteLine($"[Lobby] kick: playerId {msg.playerId} bulunamadı.");
@@ -221,35 +223,23 @@ public sealed class LobbyService
         await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} atıldı"));
         if (targetConnection == null) return;
         await SendSafeAsync(targetConnection, JsonUtil.Serialize(new KickedMsg { reason = "" }), target.Name);
-        // ⚠️ Abort DEĞİL: RST istemcinin daha okumadığı `kicked` çerçevesini düşürebilir ve o
-        // zaman atılan başlık kopuşu sıradan bir kesinti sanıp geri bağlanırdı (§5.4).
-        // Beklemiyoruz: pay bu (admin) bağlantının alma döngüsünü meşgul etmemeli.
-        _ = targetConnection.CloseAfterKickAsync(); // recv döngüsü kapanınca Offline + lobby_state yayını gelir
+        // ⚠️ NOT Abort: an RST can drop the `kicked` frame before the client reads it, and then the
+        // kicked headset would treat the drop as an ordinary outage and reconnect (§5.4).
+        // Not awaited: this must not tie up the (admin) connection's receive loop.
+        _ = targetConnection.CloseAfterKickAsync(); // recv loop close → Offline + lobby_state broadcast
     }
 
-    public async Task HandleIdentifyAsync(ClientConnection connection, IdentifyMsg msg)
-    {
-        if (!_registry.TryGetByPlayerId(msg.playerId, out var target) || target.Socket == null)
-        {
-            Console.WriteLine($"[Lobby] identify: playerId {msg.playerId} bulunamadı/bağlantısı yok.");
-            return;
-        }
-        // Sunucu→istemci yönünde istemci kendi kimlik overlay'ini gösterir (§5.3).
-        await SendSafeAsync(target.Socket, JsonUtil.Serialize(new IdentifyMsg { playerId = target.PlayerId }), target.Name);
-        await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kimlik gösterdi"));
-    }
+    // ---- Calibration state (§10.6) ----
 
-    // ---- Kalibrasyon durumu (§10.6) ----
-
-    /// <summary>set_calibration: başlık KENDİ hizalamasını bildirir (§5.1). Yalnız kendi kaydını
-    /// yazabilir — playerId taşımaz, bağlantıdan çözülür.
-    /// <para>Bildirilen zemin sapması eşiği aşarsa operatör uyarılır (§10.6). ⚠️ Uyarı roster
-    /// değişimine BAĞLANMAZ: aynı sapmayla yeniden kalibre olan oyuncunun kaydı değişmez ama
-    /// operatörün her elle kalibrasyonda sonucu duyması gerekir.</para>
-    /// <para>⚠️ <c>error</c> doluysa kayıtlı hizalama yeniden YÜKLENEMEDİ: <c>calibrated</c>/
-    /// <c>source</c>/<c>floorOffset</c> YOK SAYILIR, kayıtlı kalibrasyon olduğu gibi durur ve
-    /// gerekçe roster'a yazılıp operatöre duyurulur (§10.6, <c>set_body_scale.error</c> ile birebir
-    /// aynı sözleşme).</para></summary>
+    /// <summary>set_calibration: the headset reports its OWN alignment (§5.1). It can only write its
+    /// own record — no playerId on the wire, it is resolved from the connection.
+    /// <para>If the reported floor offset exceeds the threshold, the operator is warned (§10.6).
+    /// ⚠️ The warning is NOT tied to a roster change: recalibrating with the same offset leaves the
+    /// record untouched, yet the operator must hear the result of every manual calibration.</para>
+    /// <para>⚠️ A non-empty <c>error</c> means the saved alignment could NOT be reloaded:
+    /// <c>calibrated</c>/<c>source</c>/<c>floorOffset</c> are IGNORED, the stored calibration stands,
+    /// and the reason is written to the roster and announced to the operator (§10.6, exactly the
+    /// <c>set_body_scale.error</c> contract).</para></summary>
     public void HandleSetCalibration(ClientConnection connection, SetCalibrationMsg msg)
     {
         var state = connection.State;
@@ -261,7 +251,7 @@ public sealed class LobbyService
             _registry.SetCalibrationError(state.PlayerId, error);
             Console.WriteLine($"[Lobby] set_calibration: {state.Name} yeniden yüklenemedi — {error}.");
             _ = BroadcastCalibrationResultAsync(state.PlayerId, false, error);
-            // Notice() ile sarılmaz: eylemin sahibi admin değil oyuncunun başlığıdır.
+            // Not wrapped in Notice(): the actor is the player's headset, not an admin.
             _ = BroadcastAdminStateAsync($"⚠ Kalibrasyon {state.Name}: {error}");
             return;
         }
@@ -272,56 +262,56 @@ public sealed class LobbyService
             Console.WriteLine($"[Lobby] set_calibration: {state.Name} {what}.");
         }
 
-        // ⚠️ SetCalibration dönüşüne BAĞLANMAZ: zaten kalibreli bir oyuncuda dönüş `false` gelir
-        // (roster'da değişen bir şey yok) ve operatörün düğmesinin cevabı tam da o durumda gerekir —
-        // aksi hâlde başarılı bir yeniden yükleme sonsuza kadar "yükleniyor" görünürdü (§5.3).
+        // ⚠️ NOT tied to SetCalibration's return: for an already-calibrated player it returns `false`
+        // (nothing changed in the roster) and that is exactly when the operator's button needs an
+        // answer — otherwise a successful reload would show "loading" forever (§5.3).
         if (msg.calibrated) _ = BroadcastCalibrationResultAsync(state.PlayerId, true, "");
 
         if (!msg.calibrated || Math.Abs(msg.floorOffset) <= ArenaProtocol.CALIB_FLOOR_WARN_METERS) return;
         Console.WriteLine($"[Lobby] zemin sapması: {state.Name} {msg.floorOffset:F2} m " +
                           $"(eşik {ArenaProtocol.CALIB_FLOOR_WARN_METERS:F2} m) — alan verisi temizliği önerilir.");
-        // ⚠️ Notice() ile sarılmaz: o yardımcı "<admin adı>: <eylem>" kurar, burada eylemin sahibi
-        // komut gönderen admin değil oyuncunun başlığıdır.
+        // ⚠️ Not wrapped in Notice(): that helper builds "<admin name>: <action>", but here the actor
+        // is the player's headset, not the admin who sent a command.
         _ = BroadcastAdminStateAsync(
             $"⚠ {state.Name}: zemin sapması {msg.floorOffset:F2} m — gözlükte alan verisi temizliği önerilir");
     }
 
     /// <summary>
-    /// clear_calibration: admin bir oyuncunun (playerId 0 = HERKES) kalibrasyonunu sıfırlar (§5.2).
-    /// Admin yalnız SIFIRLAYABİLİR — "kalibre oldu" işaretini yalnız başlık koyar (§10.6), çünkü
-    /// hizalamanın oturduğunu yalnız o bilir.
+    /// clear_calibration: an admin resets a player's calibration (playerId 0 = EVERYONE) (§5.2).
+    /// The admin can only RESET — the "calibrated" mark is set by the headset alone (§10.6), because
+    /// only it knows the alignment landed.
     /// <para>
-    /// İki iş birden yapılır: (1) roster'daki <c>calibrated</c> düşürülür, (2) hedef başlığa
-    /// <c>clear_calibration</c> iletilir. İkincisi olmadan sıfırlama eksik kalır — hizalamayı,
-    /// kayıtlı anchor'ı ve yarım kalmış elle kalibrasyon sekansını silen taraf başlığın kendisidir.
+    /// Two things happen: (1) <c>calibrated</c> is lowered in the roster, (2) <c>clear_calibration</c>
+    /// is forwarded to the target headset. Without the second the reset is incomplete — the headset
+    /// is what erases the alignment, the saved anchor and a half-finished manual sequence.
     /// </para>
     /// <para>
-    /// İletilen payload <c>playerId</c> TAŞIMAZ (hedef zaten o bağlantıdır) ama <c>keepSaved</c>
-    /// taşır: operatörün seçtiği kip başlığa ulaşmalıdır — <c>true</c> yalnız hizalamayı geçersiz
-    /// kılar (cihazdaki çapa kalır, ardından gelen <c>reload_calibration</c> çalışır), <c>false</c>
-    /// cihaz kaydını da sildirir.
+    /// The forwarded payload carries NO <c>playerId</c> (the target is that connection) but does
+    /// carry <c>keepSaved</c>: the operator's chosen mode must reach the headset — <c>true</c> only
+    /// invalidates the alignment (the device anchor stays, so a following <c>reload_calibration</c>
+    /// works), <c>false</c> deletes the device record too.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Roster tarafı iki kipte de AYNIDIR</b> (<see cref="PlayerRegistry.SetCalibration"/> ile
-    /// <c>calibrated:false</c>): kip yalnız başlığın cihazındaki kaydı ilgilendirir, sunucu için
-    /// fark yoktur.
+    /// ⚠️ <b>The roster side is IDENTICAL in both modes</b> (<see cref="PlayerRegistry.SetCalibration"/>
+    /// with <c>calibrated:false</c>): the mode only concerns the record on the headset's device.
     /// </para>
     /// <para>
-    /// ⚠️ <b>İletim oyuncunun durumuna BAĞLANMAZ.</b> <see cref="PlayerRegistry.SetCalibration"/>
-    /// dönüşü bir kapı değildir: <c>false</c> yalnız "roster'da değişen bir şey olmadı" demektir
-    /// (gereksiz <c>lobby_state</c> yayınını önleyen guard, §5.3). Sıfırlanacak şeylerin bir kısmı
-    /// roster'da hiç görünmez — <b>yarım kalmış elle kalibrasyon</b> (A alındı, B alınmadı) tam da
-    /// <c>calibrated</c> hâlâ <c>false</c>'ken vardır. Dönüşe bakıp erken çıkmak, komutu var olma
-    /// sebebi olan durumda işlevsiz bırakırdı (§10.6).
+    /// ⚠️ <b>Forwarding is NOT tied to the player's state.</b>
+    /// <see cref="PlayerRegistry.SetCalibration"/>'s return value is not a gate: <c>false</c> only
+    /// means "nothing changed in the roster" (the guard against a useless <c>lobby_state</c>
+    /// broadcast, §5.3). Some of what must be reset never shows in the roster — a <b>half-finished
+    /// manual calibration</b> (A taken, B not) exists precisely while <c>calibrated</c> is still
+    /// <c>false</c>. Returning early on that value would disable the command in the very case it
+    /// exists for (§10.6).
     /// </para>
     /// </summary>
     public async Task HandleClearCalibrationAsync(ClientConnection connection, ClearCalibrationMsg msg)
     {
-        // Sunucu → istemci yönünde `playerId` taşınmaz (hedef zaten o bağlantıdır), `keepSaved`
-        // taşınır: kipi seçen operatördür, başlık onu tele bakarak öğrenir.
+        // Server → client carries no `playerId` (the target is that connection) but does carry
+        // `keepSaved`: the operator picks the mode and the headset learns it from the wire.
         var payload = JsonUtil.Serialize(new ClearCalibrationMsg { keepSaved = msg.keepSaved });
-        // İki kip konsolda ve admin duyurusunda ayırt edilir: operatör hangi düğmeye bastığını
-        // sonuç satırından da görebilmeli.
+        // The two modes are distinguished in the console and the admin notice: the operator must be
+        // able to tell which button was pressed from the result line too.
         var kindAll = msg.keepSaved
             ? "hizalamalar geçersiz kılındı (cihaz kayıtları duruyor)"
             : "hizalamalar sıfırlandı, cihaz kayıtları da silindi";
@@ -335,8 +325,8 @@ public sealed class LobbyService
             foreach (var state in _registry.Snapshot())
             {
                 if (state.Role != "player") continue;
-                // Kalibresiz olan ATLANMAZ: bayrağı zaten `false` olan oyuncu yarım kalmış bir
-                // sekansın ortasında olabilir ve toplu sıfırlamanın ona da ulaşması gerekir.
+                // Uncalibrated players are NOT skipped: a player whose flag is already `false` may be
+                // mid-sequence, and the bulk reset must reach them too.
                 _registry.SetCalibration(state.PlayerId, false, null);
                 if (state.Socket == null) continue;
                 await SendSafeAsync(state.Socket, payload, state.Name);
@@ -372,19 +362,19 @@ public sealed class LobbyService
     }
 
     /// <summary>
-    /// reload_calibration: admin bir oyuncunun (playerId 0 = HERKES) başlığına gözlükte KAYITLI
-    /// çapadan hizalamayı yeniden yükletir (§5.2). Sunucu hiçbir şey hesaplamaz — hedefe alansız bir
-    /// reload_calibration iletir, denemeyi başlık yapıp <c>set_calibration</c> ile döner
-    /// (identify/measure_body_scale ile aynı çift yönlü desen).
-    /// <para>⚠️ <b>Admin bununla "kalibre oldu" DEMİŞ OLMAZ</b> (§10.6 asimetrik yazar tablosu):
-    /// yalnız denemeyi başlatır, işareti yine başlık koyar.</para>
-    /// <para>⚠️ <b>Kalibresiz hedef ATLANMAZ</b> — measure_body_scale'deki kalibrasyon kapısının
-    /// buradaki karşılığı YOKTUR ve konmaz: komutun var olma sebebi tam da hizalaması olmayan ya da
-    /// bozulmuş oyuncudur, kapı onu var olduğu tek durumda işlevsiz bırakırdı.</para>
+    /// reload_calibration: an admin makes a player's headset (playerId 0 = EVERYONE) reload its
+    /// alignment from the anchor SAVED on the device (§5.2). The server computes nothing — it
+    /// forwards a field-less reload_calibration, the headset attempts it and replies with
+    /// <c>set_calibration</c> (same round-trip pattern as measure_body_scale).
+    /// <para>⚠️ <b>The admin does NOT thereby declare "calibrated"</b> (§10.6 asymmetric writer
+    /// table): it only starts the attempt, the mark is still set by the headset.</para>
+    /// <para>⚠️ <b>Uncalibrated targets are NOT skipped</b> — measure_body_scale's calibration gate
+    /// has NO counterpart here and must not gain one: the command exists precisely for players whose
+    /// alignment is missing or broken, so a gate would disable it in its only use case.</para>
     /// </summary>
     public async Task HandleReloadCalibrationAsync(ClientConnection connection, ReloadCalibrationMsg msg)
     {
-        // Sunucu → istemci yönünde alan taşınmaz: hedef zaten o bağlantıdır.
+        // No fields in the server → client direction: the target is that connection.
         var payload = JsonUtil.Serialize(new ReloadCalibrationMsg());
 
         if (msg.playerId == 0)
@@ -418,15 +408,16 @@ public sealed class LobbyService
         await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} kalibrasyonu yeniden yükleniyor"));
     }
 
-    /// <summary>Yeniden yükleme denemesinin sonucunu YALNIZ bağlı adminlere yollar (§5.3).
-    /// <para>Bir OLAYDIR, durum değil: durumu roster taşır. Sunucu bekleyen istek defteri tutmaz —
-    /// başlıktan gelen her başarı/hata bildirimi bir satır üretir, eşlemeyi admin arayüzü yapar.</para></summary>
+    /// <summary>Sends the result of a reload attempt to connected admins ONLY (§5.3).
+    /// <para>An EVENT, not state: state travels with the roster. The server keeps no pending-request
+    /// ledger — every success/failure report from a headset produces one line and the admin UI does
+    /// the matching.</para></summary>
     public async Task BroadcastCalibrationResultAsync(int playerId, bool ok, string error)
     {
         try
         {
             var admins = _registry.ConnectedAdminConnections();
-            // Kimse bakmıyorsa serileştirme bile yapılmaz: tek tüketicisi operatör ekranıdır.
+            // Nobody watching, no serialization: the operator screen is the only consumer.
             if (admins.Count == 0) return;
             var json = JsonUtil.Serialize(new CalibrationResultMsg
             {
@@ -443,14 +434,17 @@ public sealed class LobbyService
         }
     }
 
-    // ---- Gövde ölçeği (§10.8) ----
+    // ---- Body scale (§10.8) ----
 
-    /// <summary>set_body_scale: başlık KENDİ gövde ölçeğini bildirir (§5.1). Yalnız kendi kaydını
-    /// yazabilir — playerId taşımaz, bağlantıdan çözülür (set_calibration ile aynı sözleşme).
-    /// <para>Sunucu sayıyı yorumlamaz; kırpma <see cref="PlayerRegistry.SetBodyScale"/>'dedir.</para>
-    /// <para>⚠️ <c>error</c> doluysa ölçüm başarısızdır: <c>scale</c> YOK SAYILIR, kayıtlı ölçek
-    /// olduğu gibi durur ve gerekçe roster'a yazılıp operatöre duyurulur (§10.8). Sessizce yutmak
-    /// operatörü "bastım, bir şey olmadı" durumunda bırakırdı.</para></summary>
+    /// <summary>set_body_scale: the headset reports its OWN body scale (§5.1). It can only write its
+    /// own record — no playerId on the wire, it is resolved from the connection (same contract as
+    /// set_calibration).
+    /// <para>The server does not interpret the number; clamping lives in
+    /// <see cref="PlayerRegistry.SetBodyScale"/>.</para>
+    /// <para>⚠️ A non-empty <c>error</c> means the measurement failed: <c>scale</c> is IGNORED, the
+    /// stored scale stands, and the reason is written to the roster and announced to the operator
+    /// (§10.8). Swallowing it silently would leave the operator with "I pressed it, nothing
+    /// happened".</para></summary>
     public void HandleSetBodyScale(ClientConnection connection, SetBodyScaleMsg msg)
     {
         var state = connection.State;
@@ -461,7 +455,7 @@ public sealed class LobbyService
         {
             _registry.SetScaleError(state.PlayerId, error);
             Console.WriteLine($"[Lobby] set_body_scale: {state.Name} ölçülemedi — {error}.");
-            // Notice() ile sarılmaz: eylemin sahibi admin değil oyuncunun başlığıdır.
+            // Not wrapped in Notice(): the actor is the player's headset, not an admin.
             _ = BroadcastAdminStateAsync($"⚠ Ölçüm {state.Name}: {error}");
             return;
         }
@@ -471,16 +465,18 @@ public sealed class LobbyService
     }
 
     /// <summary>
-    /// measure_body_scale: admin bir oyuncunun (playerId 0 = HERKES) gövde ölçüsünü ALDIRIR (§5.2).
-    /// Sunucu hiçbir şey hesaplamaz — hedefe alansız bir measure_body_scale iletir, ölçümü başlık
-    /// yapıp <c>set_body_scale</c> ile döner (identify ile aynı çift yönlü desen).
-    /// <para>⚠️ <b>Kalibresiz hedefe iletilmez:</b> ölçü arena zeminine göredir ve kalibresiz
-    /// başlıkta zemin bilinmez — komut gitseydi başlık sessizce yanlış bir ölçek yazardı. Atlanan
-    /// hedefler operatöre duyurulur; sessizce yutmak "bastım ama olmadı" demektir.</para>
+    /// measure_body_scale: an admin has a player's body measured (playerId 0 = EVERYONE) (§5.2).
+    /// The server computes nothing — it forwards a field-less measure_body_scale, the headset
+    /// measures and replies with <c>set_body_scale</c> (same round-trip pattern as
+    /// reload_calibration).
+    /// <para>⚠️ <b>Not forwarded to an uncalibrated target:</b> the measurement is relative to the
+    /// arena floor and an uncalibrated headset does not know the floor — the command would silently
+    /// write a wrong scale. Skipped targets are announced to the operator; swallowing that means "I
+    /// pressed it but nothing happened".</para>
     /// </summary>
     public async Task HandleMeasureBodyScaleAsync(ClientConnection connection, MeasureBodyScaleMsg msg)
     {
-        // Sunucu → istemci yönünde alan taşınmaz: hedef zaten o bağlantıdır.
+        // No fields in the server → client direction: the target is that connection.
         var payload = JsonUtil.Serialize(new MeasureBodyScaleMsg());
 
         if (msg.playerId == 0)
@@ -525,31 +521,33 @@ public sealed class LobbyService
         await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} ölçülüyor"));
     }
 
-    // ---- Ortak seçim (§5.2 set_selection / §5.3 admin_state) ----
+    // ---- Shared selection (§5.2 set_selection / §5.3 admin_state) ----
 
-    /// <summary>Bir sonraki maçın ortak mod/harita seçimi. Maçı BAŞLATMAZ; boş alan mevcut
-    /// değerini korur. Değişiklik tüm adminlere yayılır — çoklu operatör aynı ekranı görsün.
+    /// <summary>Shared mode/map selection for the next match. Does NOT start a match; an empty field
+    /// keeps its current value. The change is broadcast to all admins so multiple operators see the
+    /// same screen.
     /// <para>
-    /// <b>Harita seçmek aynı zamanda SAHNELEMEktir (§10.7):</b> lobideyken seçilen arena
-    /// <see cref="MatchDirector.StageSceneAsync"/> ile TÜM istemcilere anında yüklenir. Operatör
-    /// haritayı yalnız kendi ekranında değil oyuncuların başlıklarında da değiştirir.
+    /// <b>Picking a map is also STAGING it (§10.7):</b> an arena selected while in the lobby is
+    /// loaded on ALL clients immediately via <see cref="MatchDirector.StageSceneAsync"/>. The
+    /// operator changes the map on the players' headsets, not just on their own screen.
     /// </para>
     /// <para>
-    /// ⚠️ Bu yüzden <b>mod/harita yalnız maç KURULMAMIŞKEN değiştirilebilir</b>
-    /// (<see cref="MatchDirector.CanChangeSelection"/>): lobi bekleyişinde ve <c>finished</c>'da —
-    /// maç bittiğinde operatör bir sonrakini seçebilmelidir. Kurulmuş maç (koşan, yüklenen, geri
-    /// sayan ya da duraklatılmış) kapalıdır: sahne komutu herkese gittiği için maçın altından
-    /// sahne çekmek onu bozardı. Reddedilen alanlar düşürülür, komutun geri kalanı (süre/limit)
-    /// işlenmeye devam eder — onlar bir sonraki maçın parametreleridir, sahne yüklemezler.
+    /// ⚠️ Hence <b>mode/map can only change while NO match is set up</b>
+    /// (<see cref="MatchDirector.CanChangeSelection"/>): during lobby waiting and in <c>finished</c>
+    /// — after a match the operator must be able to pick the next one. A set-up match (running,
+    /// loading, counting down or paused) is closed: the scene command goes to everyone, so pulling
+    /// the scene out from under a match would break it. Rejected fields are dropped and the rest of
+    /// the command (duration/limit) is still processed — those are next-match parameters and load no
+    /// scene.
     /// </para></summary>
     public async Task HandleSetSelectionAsync(ClientConnection connection, SetSelectionMsg msg)
     {
         var requestedModeId = msg.modeId ?? "";
         var requestedSceneName = msg.sceneName ?? "";
 
-        // Faz kapısı (§10.7): kurulmuş maç engeller — koşan, yüklenen, geri sayan ya da
-        // duraklatılmış. `finished` ve lobi bekleyişi serbesttir. Otorite sunucudadır — arayüz
-        // seçicileri aynı kuralla zaten pasiftir, burası bayat/yarışan bir panelin komutunu keser.
+        // Phase gate (§10.7): a set-up match blocks — running, loading, counting down or paused.
+        // `finished` and lobby waiting are open. Authority is server-side: the UI pickers are already
+        // disabled by the same rule, this cuts off a stale/racing panel's command.
         var rejection = "";
         if (!_director.CanChangeSelection && (requestedModeId.Length > 0 || requestedSceneName.Length > 0))
         {
@@ -565,16 +563,17 @@ public sealed class LobbyService
         var changed = ApplySelection(requestedModeId, requestedSceneName,
             msg.roundSeconds, msg.scoreLimit, msg.countdownSeconds);
 
-        // Taban şeritleri seçili modun takım kipine bağlı (§10.7) — MOD değiştiyse herkese
-        // bildirilir. Harita/süre/limit değişimi bu yayını üretmez.
+        // Base strips depend on the selected mode's team mode (§10.7) — announced to everyone when
+        // the MODE changes. Map/duration/limit changes do not produce this broadcast.
         bool modeChanged;
         lock (_selectionGate) modeChanged = _selectedModeId != previousModeId;
         if (modeChanged) await BroadcastSelectionStateAsync();
 
-        // Reddedildiyse DEĞİŞMESE de yayın yapılır: komutu gönderen panel imlecini iyimser olarak
-        // ilerletmiş olabilir, sunucunun değeri onu geri çeksin (tek doğruluk kaynağı, §5.3).
-        // Harita alanı doluysa da çıkılmaz: seçim aynı kalmış olsa bile o sahne AÇIK olmayabilir
-        // (maç bitip lobiye dönüldüğünde seçim hâlâ arenayı gösterir) — sahneleme denenmelidir.
+        // On rejection a broadcast goes out even when nothing changed: the sending panel may have
+        // advanced its control optimistically and the server's value must pull it back (single truth
+        // source, §5.3). A non-empty map field also prevents an early exit: even with an unchanged
+        // selection that scene may not be OPEN (after returning to the lobby the selection still
+        // shows the arena) — staging must be attempted.
         if (!changed && requestedSceneName.Length == 0 && rejection.Length == 0) return;
 
         string modeId, sceneName;
@@ -587,12 +586,13 @@ public sealed class LobbyService
             scoreLimit = _selectedScoreLimit;
         }
 
-        // Sahneleme (§10.7): harita alanı DOLU geldiyse herkes o arenayı yükler. Ölçüt "seçim
-        // değişti mi" değil "istendi mi": maç bitip lobiye dönüldükten sonra seçim hâlâ o arenayı
-        // gösterdiği için, aynı arenayı tekrar seçen operatör aksi hâlde hiçbir şey olmadığını
-        // görürdü. İstenen sahne zaten açıksa StageSceneAsync Unchanged döner (idempotent).
-        // ⚠️ Bu yüzden panel harita alanını YALNIZ imleci oynattığında doldurur (§5.2) — süre/limit
-        // dokunuşunda dolduran bir istemci herkesi arenaya taşırdı.
+        // Staging (§10.7): a NON-EMPTY map field makes everyone load that arena. The criterion is
+        // "was it requested", not "did the selection change": after returning to the lobby the
+        // selection still points at that arena, so an operator re-picking it would otherwise see
+        // nothing happen. If the requested scene is already open, StageSceneAsync returns Unchanged
+        // (idempotent).
+        // ⚠️ Hence the panel fills the map field ONLY when its picker moves (§5.2) — a client that
+        // filled it on a duration/limit touch would drag everyone into the arena.
         var stageNote = "";
         if (requestedSceneName.Length > 0)
         {
@@ -617,13 +617,13 @@ public sealed class LobbyService
         await BroadcastAdminStateAsync(Notice(connection, action));
     }
 
-    /// <summary>true = seçim gerçekten değişti. Boş/null string ve <c>0</c> sayı mevcut değeri
-    /// korur (§5.2) — arayüz yalnız değiştirdiği alanı doldurabilsin.
-    /// <para>⚠️ Bu koruma aynı zamanda "seçim asla boşalmaz" garantisidir: kurucudaki lobi
-    /// tohumundan sonra hiçbir komut mod/haritayı boşa çekemez.</para>
-    /// <para>⚠️ <paramref name="scoreLimit"/> bu sözleşmenin İSTİSNASIDIR: <c>0</c> yine
-    /// "dokunulmadı" ama negatif değer bir SEÇİMDİR (sınırsız, §5.2), bu yüzden kapısı
-    /// pozitiflik değil sıfırdan farklılıktır.</para></summary>
+    /// <summary>true = the selection really changed. An empty/null string and a <c>0</c> number keep
+    /// the current value (§5.2) so the UI can fill only the field it changed.
+    /// <para>⚠️ This is also the "the selection never empties" guarantee: after the constructor's
+    /// lobby seed no command can blank the mode/map.</para>
+    /// <para>⚠️ <paramref name="scoreLimit"/> is the EXCEPTION to that contract: <c>0</c> still means
+    /// "untouched", but a negative value IS a choice (unlimited, §5.2), so its gate is non-zero
+    /// rather than positive.</para></summary>
     private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit,
         int countdownSeconds)
     {
@@ -645,9 +645,9 @@ public sealed class LobbyService
                 _selectedRoundSeconds = roundSeconds;
                 changed = true;
             }
-            // ⚠️ Limitte kapı "> 0" DEĞİL "!= 0": SCORE_LIMIT_UNLIMITED (sınırsız) da bir seçimdir
-            // ve negatif olduğu için pozitiflik kapısında sessizce düşerdi. Normalize her negatifi
-            // tek yazıma indirir, yoksa "-2" gelen bir istemci seçimi değiştirmiş sayılırdı.
+            // ⚠️ The limit gate is "!= 0", NOT "> 0": SCORE_LIMIT_UNLIMITED is a choice too and would
+            // silently fall through a positive-only gate because it is negative. Normalize collapses
+            // every negative to one spelling, otherwise a client sending "-2" would count as a change.
             var normalizedLimit = ArenaProtocol.NormalizeScoreLimit(scoreLimit);
             if (normalizedLimit != 0 && _selectedScoreLimit != normalizedLimit)
             {
@@ -663,10 +663,10 @@ public sealed class LobbyService
         }
     }
 
-    // ---- Maç komutları (yalnız admin; doğrulama + yayınlar MatchDirector'da, §10.1). ----
+    // ---- Match commands (admin only; validation + broadcasts live in MatchDirector, §10.1) ----
 
-    /// <summary>start_match ortak seçimi de günceller: maç başladığında tüm admin panelleri
-    /// aynı mod/haritayı göstersin (komutu kim gönderdiyse gönderdi).</summary>
+    /// <summary>start_match also updates the shared selection so every admin panel shows the same
+    /// mode/map once the match starts, whoever sent the command.</summary>
     public async Task HandleStartMatchAsync(ClientConnection connection, StartMatchMsg msg)
     {
         string previousModeId;
@@ -695,15 +695,15 @@ public sealed class LobbyService
         await _director.ReturnToLobbyAsync();
     }
 
-    /// <summary>pause_match (§5.2). Duyuru YALNIZ gerçekten duraklatıldıysa yayılır — reddedilen
-    /// komut diğer operatörlerin ekranına "duraklattı" yazmamalı.</summary>
+    /// <summary>pause_match (§5.2). The notice is broadcast ONLY on an actual pause — a rejected
+    /// command must not print "paused" on the other operators' screens.</summary>
     public async Task HandlePauseMatchAsync(ClientConnection connection)
     {
         if (await _director.PauseMatchAsync())
             await BroadcastAdminStateAsync(Notice(connection, "maç duraklatıldı"));
     }
 
-    /// <summary>resume_match (§5.2) — yalnız operatörün duraklattığı maçı sürdürür.</summary>
+    /// <summary>resume_match (§5.2) — resumes only a match the operator paused.</summary>
     public async Task HandleResumeMatchAsync(ClientConnection connection)
     {
         if (await _director.ResumeMatchAsync())
@@ -711,10 +711,11 @@ public sealed class LobbyService
     }
 
     /// <summary>
-    /// <c>set_friendly_fire</c> (§5.2) — dost ateşi anahtarı, <b>faz kapısı yok</b>: koşan maçta da
-    /// geçerli ve etkisi anlık.
-    /// <para>Değer değişmediyse sunucu iş yapmaz; yine de <c>admin_state</c> yayınlanır ki iyimser
-    /// davranmış bir panel sunucunun değerine çekilsin (§5.3 tek doğruluk kaynağı).</para>
+    /// <c>set_friendly_fire</c> (§5.2) — the friendly fire switch, <b>no phase gate</b>: valid during
+    /// a running match and effective immediately.
+    /// <para>If the value did not change the server does nothing; <c>admin_state</c> is still
+    /// broadcast so an optimistic panel is pulled back to the server's value (§5.3 single truth
+    /// source).</para>
     /// </summary>
     public async Task HandleSetFriendlyFireAsync(ClientConnection connection, SetFriendlyFireMsg msg)
     {
@@ -726,14 +727,14 @@ public sealed class LobbyService
     }
 
     /// <summary>
-    /// <c>set_calibration_mode</c> (§5.2/§10.6) — başlıkların AÇILIŞTA nasıl hizalanacağı.
-    /// <c>set_friendly_fire</c> ile aynı sınıf: faz kapısı ve seçim kilidi yoktur.
-    /// <para>⚠️ Bilinmeyen/boş değer ve <c>anchor_cloud</c> <b>reddedilir</b> — durum değişmez.
-    /// Kural değerlerinin "bilinmeyeni varsayılana çevir" sözleşmesi burada geçmez: mod bir
-    /// operatör kararıdır, sessizce varsayılana dönmek bastığı düğmenin uygulandığını
-    /// gösterirdi.</para>
-    /// <para>Değer değişmediyse duyuru yayılmaz; <c>admin_state</c> yine gider ki iyimser davranmış
-    /// bir panel sunucunun değerine çekilsin (§5.3 tek doğruluk kaynağı).</para>
+    /// <c>set_calibration_mode</c> (§5.2/§10.6) — how headsets align AT STARTUP. Same class as
+    /// <c>set_friendly_fire</c>: no phase gate and no selection lock.
+    /// <para>⚠️ Unknown/empty values and <c>anchor_cloud</c> are <b>rejected</b> — the state does not
+    /// change. The rule values' "coerce unknown to default" contract does not apply here: the mode is
+    /// an operator decision, and silently falling back to the default would suggest the pressed
+    /// button was applied.</para>
+    /// <para>No notice if the value did not change; <c>admin_state</c> still goes out so an
+    /// optimistic panel is pulled back to the server's value (§5.3 single truth source).</para>
     /// </summary>
     public async Task HandleSetCalibrationModeAsync(ClientConnection connection, SetCalibrationModeMsg msg)
     {
@@ -761,34 +762,34 @@ public sealed class LobbyService
             : "");
     }
 
-    /// <summary>Operatöre gösterilen kalibre modu etiketi (duyuru satırı).</summary>
+    /// <summary>Calibration mode label shown to the operator (notice line).</summary>
     private static string CalibrationModeLabel(string mode) => mode switch
     {
         ArenaProtocol.CALIB_MODE_SAVED_ANCHOR => "Eski Kalibre",
         _ => "2 Çapa"
     };
 
-    /// <summary>Yürürlükteki kalibre modu (§10.6) — welcome kuruluşu bunu kilit altında okur.</summary>
+    /// <summary>Effective calibration mode (§10.6) — welcome construction reads it under the lock.</summary>
     private string CurrentCalibrationMode()
     {
         lock (_selectionGate) return _calibrationMode;
     }
 
-    /// <summary>Duyuru satırı: "<admin adı>: <eylem>" — tüm adminlerin durum satırında görünür.</summary>
+    /// <summary>Notice line: "<admin name>: <action>" — shown in every admin's status line.</summary>
     private static string Notice(ClientConnection connection, string action) =>
         $"{connection.State?.Name ?? "Admin"}: {action}";
 
     /// <summary>
-    /// Seçili modun takım kipini <b>HERKESE</b> yollar (§5.3 <c>selection_state</c>).
+    /// Sends the selected mode's team mode to <b>EVERYONE</b> (§5.3 <c>selection_state</c>).
     /// <para>
-    /// ⚠️ <c>admin_state</c>'e binmemesinin sebebi hedef kitledir: o mesaj roster/duyuru/telemetri
-    /// taşır ve yalnız adminlere gider. Oyuncunun ihtiyacı tek bir sunum alanı — taban şeritleri
-    /// görünsün mü (§10.7).
+    /// ⚠️ It does not ride on <c>admin_state</c> because of the audience: that message carries
+    /// roster/notice/telemetry and goes to admins only. The player needs a single presentation field
+    /// — whether base strips are visible (§10.7).
     /// </para>
     /// <para>
-    /// ⚠️ Çağrı yerleri dar tutulur: <c>welcome</c> sonrası ve <b>seçili MOD değiştiğinde</b>.
-    /// Harita/süre/limit dokunuşunda yayınlansaydı, operatör imleci oynattıkça her oyuncuya
-    /// gereksiz mesaj giderdi.
+    /// ⚠️ Call sites are kept narrow: after <c>welcome</c> and <b>when the selected MODE changes</b>.
+    /// Broadcasting on a map/duration/limit touch would send a useless message to every player each
+    /// time the operator moves a picker.
     /// </para>
     /// </summary>
     public async Task BroadcastSelectionStateAsync()
@@ -822,7 +823,7 @@ public sealed class LobbyService
         });
     }
 
-    /// <summary>Ortak durumu YALNIZ bağlı adminlere yollar (§5.3).</summary>
+    /// <summary>Sends the shared state to connected admins ONLY (§5.3).</summary>
     public async Task BroadcastAdminStateAsync(string notice)
     {
         try
@@ -839,10 +840,10 @@ public sealed class LobbyService
         }
     }
 
-    // ---- net_stats yayıncısı (§6.7): yalnız adminlere, 1 Hz ----
-    // ⚠️ Ayrı bir döngü olmasının sebebi ritmi: admin_state OLAY tabanlıdır (seçim/komut değişince),
-    // telemetri ise periyodiktir. admin_state'e bindirilse ya telemetri seyrek kalırdı ya da her
-    // saniye bir "duyuru" yayını üretilirdi.
+    // ---- net_stats publisher (§6.7): admins only, 1 Hz ----
+    // ⚠️ It is a separate loop because of the rhythm: admin_state is EVENT driven (selection/command
+    // changes), telemetry is periodic. Riding on admin_state would either make telemetry sparse or
+    // produce a "notice" broadcast every second.
 
     private CancellationTokenSource? _netStatsCts;
     private Task? _netStatsLoop;
@@ -861,14 +862,14 @@ public sealed class LobbyService
         _netStatsLoop = null;
     }
 
-    /// <summary>Oyuncu başına ping/jitter/kayıp — İSTEMCİNİN ölçüp <c>status</c> ile bildirdiği
-    /// değerler (§6.7); sunucu yalnız taşır.
-    /// <para>⚠️ <b>Broadcast değil:</b> hedef yalnız bağlı adminler. Herkese yayınlamak oyuncu
-    /// sayısıyla kare büyüyen bir fan-out üretirdi — yani bu telemetrinin ölçmek için var olduğu
-    /// sorunun aynısını.</para>
-    /// <para>Kaybı zararsızdır: bir sonraki saniye yenisi gelir, uzlaştırma gerekmez. Roster'a
-    /// (<c>lobby_state</c>) bu yüzden hiç girmiyor — orada bir <c>version</c> ve uzlaştırma
-    /// protokolü var, saniyede bir çevrilirse anlamsızlaşır.</para></summary>
+    /// <summary>Per-player ping/jitter/loss — values the CLIENT measures and reports via
+    /// <c>status</c> (§6.7); the server only relays them.
+    /// <para>⚠️ <b>Not a broadcast:</b> connected admins only. Sending to everyone would create a
+    /// fan-out growing with the square of the player count — exactly the problem this telemetry
+    /// exists to measure.</para>
+    /// <para>Losing one is harmless: the next second brings a fresh set, no reconciliation needed.
+    /// That is why it never enters the roster (<c>lobby_state</c>) — that has a <c>version</c> and a
+    /// reconciliation protocol, which becomes meaningless if it turns over every second.</para></summary>
     private async Task NetStatsLoopAsync(CancellationToken token)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
@@ -885,8 +886,8 @@ public sealed class LobbyService
             try
             {
                 var admins = _registry.ConnectedAdminConnections();
-                // Kimse bakmıyorsa serileştirme bile yapılmaz: telemetrinin tek tüketicisi operatör
-                // ekranıdır ve boşa üretmek boşa pakettir.
+                // Nobody watching, no serialization: the operator screen is telemetry's only
+                // consumer and producing it for nobody is a wasted packet.
                 if (admins.Count == 0) continue;
 
                 entries.Clear();
@@ -926,25 +927,26 @@ public sealed class LobbyService
                 roundSeconds = _selectedRoundSeconds,
                 scoreLimit = _selectedScoreLimit,
                 countdownSeconds = _selectedCountdownSeconds,
-                // Seçim DEĞİL, yürürlükteki durum (§5.2): anahtar koşan maçta da geçerli olduğu için
-                // seçim kilidine (CanChangeSelection) girmez ve buradan olduğu gibi yayılır.
+                // NOT a selection, the effective state (§5.2): the switch is valid during a running
+                // match, so it bypasses the selection lock (CanChangeSelection) and is sent as-is.
                 friendlyFire = _director.FriendlyFire,
-                // Dost ateşiyle aynı sınıf (§10.6): seçim değil yürürlükteki durum, seçim kilidine
-                // girmez. Oyuncuya buradan gitmez — o değeri welcome'da bir kez alır.
+                // Same class as friendly fire (§10.6): effective state, not a selection, bypassing
+                // the selection lock. Players do not get it here — they receive it once in welcome.
                 calibrationMode = _calibrationMode,
                 notice = notice,
                 adminCount = _registry.ConnectedAdminCount(),
-                // Mekan bu oturum boyunca sabittir (açılışta seçilir), ama admin_state ile
-                // taşınır: geç bağlanan admin de ilk mesajda hangi arenaları görebileceğini öğrenir.
+                // The venue is fixed for the session (chosen at startup) but travels with
+                // admin_state: a late-joining admin learns which arenas it can see in its first message.
                 venueId = _director.VenueId,
                 venueScenes = _director.VenueScenes.ToArray()
             });
         }
     }
 
-    /// <summary>Roster'ı kirli işaretler; yayıncı koşmuyorsa başlatır (§5.3).
-    /// <para>Bu aynı zamanda <b>birleştiricidir</b>: bir yayın uçarken gelen N değişiklik tek bir
-    /// ek yayına çöker — 16 oyuncu aynı anda bağlanınca 16 tam roster yayını değil 2 tane olur.</para></summary>
+    /// <summary>Marks the roster dirty and starts the publisher if it is not running (§5.3).
+    /// <para>Also a <b>coalescer</b>: N changes arriving while a broadcast is in flight collapse into
+    /// one extra broadcast — 16 players connecting at once produce 2 full roster broadcasts, not
+    /// 16.</para></summary>
     private void MarkRosterDirty()
     {
         lock (_broadcastGate)
@@ -956,8 +958,8 @@ public sealed class LobbyService
         _ = RunRosterBroadcastLoopAsync();
     }
 
-    /// <summary>Kirli oldukça yayınlar, temizlenince durur. <b>Aynı anda tek örnek koşar</b> —
-    /// lobby_state sürümünün monotonluğu ve sıra garantisi buradan gelir.</summary>
+    /// <summary>Broadcasts while dirty, stops when clean. <b>Only one instance runs at a time</b> —
+    /// that is where lobby_state's version monotonicity and ordering guarantee come from.</summary>
     private async Task RunRosterBroadcastLoopAsync()
     {
         try
@@ -978,16 +980,17 @@ public sealed class LobbyService
         }
         catch (Exception ex)
         {
-            // Buraya düşmek beklenmez (yayın kendi içinde yutuyor) ama düşerse bayrağı bırak:
-            // aksi hâlde _broadcasting takılı kalır ve roster bir daha HİÇ yayınlanmaz.
+            // Reaching here is not expected (the broadcast swallows its own errors), but if it
+            // happens, release the flag: otherwise _broadcasting sticks and the roster is NEVER
+            // broadcast again.
             lock (_broadcastGate) _broadcasting = false;
             Console.WriteLine($"[Lobby] roster yayıncısı durdu: {ex.Message}");
         }
     }
 
-    /// <summary>Roster'ın TAM anlık görüntüsünü tüm bağlı soketlere yollar (§5.3 lobby_state)
-    /// ve sürümü artırır. ⚠️ <b>Yalnız yayıncı döngüden çağrılır</b> — doğrudan çağırmak eşzamanlı
-    /// yayın demektir ve sıra garantisini bozar.</summary>
+    /// <summary>Sends a FULL roster snapshot to every connected socket (§5.3 lobby_state) and bumps
+    /// the version. ⚠️ <b>Called only from the publisher loop</b> — a direct call means concurrent
+    /// broadcasts and breaks the ordering guarantee.</summary>
     private async Task BroadcastLobbyStateAsync()
     {
         try
@@ -1012,8 +1015,8 @@ public sealed class LobbyService
         }
     }
 
-    /// <summary>Tek bir bağlantıya yollanacak roster (uzlaştırma yolu). ⚠️ Sürümü <b>artırmaz</b>:
-    /// geride kalan istemciye mevcut sürümü göndeririz, yeni bir sürüm üretmeyiz.</summary>
+    /// <summary>Roster for a single connection (reconciliation path). ⚠️ Does <b>not</b> bump the
+    /// version: a lagging client gets the current version, not a newly minted one.</summary>
     private string BuildLobbyStateJson() => JsonUtil.Serialize(new LobbyStateMsg
     {
         version = Volatile.Read(ref _rosterVersion),

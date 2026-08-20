@@ -4,40 +4,40 @@ using VortexArena.Server.Core;
 
 namespace VortexArena.Server.App;
 
-/// <summary>Konsol sunucusu: config yükle → host'ları başlat → durum satırları bas →
-/// Ctrl+C ile temiz kapan. UI YOK — yönetim UI'ı Unity admin build'idir.</summary>
+/// <summary>Console server: load config → start hosts → print status → close cleanly on Ctrl+C.</summary>
+/// <remarks>No UI — the management UI is the Unity admin build.</remarks>
 internal static class Program
 {
-    /// <summary>Çıkış kodu: <c>0</c> temiz kapanış, <c>2</c> açılış doğrulaması başarısız
-    /// (§11 fail-fast) — betikler/launcher bunu ayırt edebilsin.</summary>
+    /// <summary>Exit code: <c>0</c> clean shutdown, <c>2</c> startup validation failed (§11 fail-fast)
+    /// so scripts/launcher can tell them apart.</summary>
     private static async Task<int> Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
 
         var configDir = ResolveConfigDir();
         var config = ServerConfig.Load(Path.Combine(configDir, "server.json"));
-        // Silah tablosu YOK (§10.3): hasarı istemci hesaplar, sunucu aynen uygular.
-        // maps.json Unity'den export edilir (Tools > VortexArena > Server > Export Server Config);
-        // yoksa tablo boş kalır ve start_match harita doğrulaması atlanır.
+        // No weapon table (§10.3): the client computes damage, the server applies it as-is.
+        // maps.json is exported from Unity (Tools > VortexArena > Server > Export Server Config);
+        // without it the table stays empty and start_match skips map validation.
         var allMaps = MapTable.Load(Path.Combine(configDir, "maps.json"));
 
-        // Mekan seçimi (§11): bu oturumda YALNIZ seçilen mekanın haritaları oynatılabilir ve
-        // adminlere yalnız onlar görünür. Tablo boşsa seçilecek bir şey yoktur.
+        // Venue selection (§11): only the chosen venue's maps are playable and visible to admins this
+        // session. An empty table leaves nothing to choose.
         var maps = SelectVenue(allMaps, ArgValue(args, "--venue") ?? config.venue);
 
         using var registry = new PlayerRegistry(Path.Combine(configDir, "devices.json"));
         var director = new MatchDirector(registry, maps, config.lobbyScene);
 
-        // ⚠️ Fail-fast (§11): sunucunun AÇIK SAHNESİ istemcinin tek yönlendirme kaynağıdır
-        // (welcome.match.sceneName). Çözülemiyorsa zaten bir yapılandırma hatası vardır ve oyuncu
-        // doğru oynayamaz — sessizce boş sahneyle açılmak hatayı sahaya taşır.
+        // ⚠️ Fail-fast (§11): the server's open scene is the client's only routing source
+        // (welcome.match.sceneName). If it cannot be resolved the configuration is already broken, and
+        // opening silently with an empty scene would carry that error into the field.
         if (!ValidateLobbyScene(director.LobbyScene, maps, config.lobbyScene)) return 2;
         var lobby = new LobbyService(registry, director);
         var control = new ControlHost(registry, lobby, director, config.controlPort);
         var beacon = new BeaconService(config.beaconPort, config.controlPort, config.statePort);
-        // director ZORUNLU: StateHost 0x03 atış olayının relay kapısını (faz + rules.fireWhilePaused)
-        // MatchDirector.ShotRelayOpen üzerinden KİLİTSİZ okur (§6.5/§10.3). Sonradan set edilen bir
-        // property olsaydı kurulumu unutmak olayları sessizce düşürürdü.
+        // director is mandatory: StateHost reads the 0x03 shot relay gate (phase +
+        // rules.fireWhilePaused) lock-free via MatchDirector.ShotRelayOpen (§6.5/§10.3). As a settable
+        // property, forgetting to wire it would silently drop the events.
         var stateHost = new StateHost(registry, config.statePort, director);
 
         Console.WriteLine("VortexArena Sunucusu");
@@ -68,15 +68,15 @@ internal static class Program
                                       $"({ArenaProtocol.RECONNECT_GRACE:0} sn) — bağlı: {connected}");
                     break;
                 case PlayerChangeKind.Left:
-                    // Kayıt SİLİNMEDİ: maç katılımcısı olduğu için satırı maç sonuna kadar durur (§10.2).
+                    // Record NOT removed: as a match participant its row stays until the match ends (§10.2).
                     Console.WriteLine($"[-] {player.Name} oyundan çıkarıldı (maç istatistiği korunuyor) — bağlı: {connected}");
                     break;
                 case PlayerChangeKind.Removed:
-                    // Admin (oturumluk kimlik, §2), atılan oyuncu (§5.4) ve süresi dolan
-                    // maç-dışı oyuncu: kaydı tümüyle silinir.
+                    // Admin (session-scoped identity, §2), kicked player (§5.4) and an expired
+                    // non-participant: the record is removed entirely.
                     Console.WriteLine($"[-] {player.Name} ayrıldı, kaydı silindi (playerId {player.PlayerId} havuza döndü) — bağlı: {connected}");
                     break;
-                // Updated (status/ready/takım) konsola basılmaz — 5 sn'lik status'larla gürültü olur.
+                // Updated (status/ready/team) is not printed — the 5 s statuses would be noise.
             }
         };
         stateHost.UdpRegistered += (playerId, endpoint) =>
@@ -85,14 +85,14 @@ internal static class Program
         await control.StartAsync();
         beacon.Start();
         stateHost.Start();
-        director.Start(); // maç tick döngüsü (faz makinesi, 10 Hz)
-        lobby.Start(); // net_stats yayını (yalnız adminlere, 1 Hz)
+        director.Start(); // match tick loop (phase machine, 10 Hz)
+        lobby.Start(); // net_stats broadcast (admins only, 1 Hz)
         Console.WriteLine("Sunucu hazır. Çıkmak için Ctrl+C.");
 
         var quit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Console.CancelKeyPress += (_, e) =>
         {
-            e.Cancel = true; // süreci Windows değil, biz kapatalım
+            e.Cancel = true; // we close the process, not Windows
             quit.TrySetResult();
         };
         await quit.Task;
@@ -107,7 +107,7 @@ internal static class Program
         return 0;
     }
 
-    /// <summary><c>--anahtar deger</c> biçimindeki argümanı okur; yoksa null.</summary>
+    /// <summary>Reads a <c>--key value</c> argument; null if absent.</summary>
     private static string? ArgValue(string[] args, string key)
     {
         for (int i = 0; i < args.Length - 1; i++)
@@ -115,14 +115,12 @@ internal static class Program
         return null;
     }
 
-    /// <summary>
-    /// Bu oturumda hangi mekanın oynatılacağını belirler ve harita tablosunu ona daraltır (§11).
-    /// <para>Sıra: <c>--venue</c> / <c>server.json → venue</c> → tek mekan varsa o → konsolda sor.
-    /// <b>Soru yalnız konsol etkileşimliyse sorulur</b>: girdi yönlendirilmişse (servis, betik,
-    /// launcher) sunucu bloklanmaz, ilk mekanla açılır ve bunu loglar.</para>
-    /// <para>Yazılan ad tanınmazsa yine sorulur — sessizce başka bir mekanı açmak, operatörün
-    /// yanlış arenaları görmesi demek olurdu.</para>
-    /// </summary>
+    /// <summary>Picks this session's venue and narrows the map table to it (§11).</summary>
+    /// <remarks>Order: <c>--venue</c> / <c>server.json → venue</c> → the only venue → ask on the
+    /// console. The question is asked only on an interactive console: with redirected input (service,
+    /// script, launcher) the server does not block but opens with the first venue and logs it.
+    /// <para>An unrecognised name still leads to the question — opening another venue silently would
+    /// show the operator the wrong arenas.</para></remarks>
     private static MapTable SelectVenue(MapTable all, string? preferred)
     {
         if (all.IsEmpty || all.Venues.Count == 0)
@@ -171,7 +169,7 @@ internal static class Program
             string? line = Console.ReadLine();
             if (line == null)
             {
-                // Girdi akışı kapandı (Ctrl+Z / boru sonu): bloklamadan ilkiyle devam et.
+                // Input stream closed (Ctrl+Z / end of pipe): continue with the first one, do not block.
                 Console.WriteLine($"[Venue] Girdi yok — '{all.Venues[0]}' seçildi.");
                 return all.ForVenue(all.Venues[0]);
             }
@@ -182,7 +180,7 @@ internal static class Program
             if (int.TryParse(line, out int index) && index >= 1 && index <= all.Venues.Count)
                 return all.ForVenue(all.Venues[index - 1]);
 
-            // Numara yerine adı da yazılabilsin — operatör listeye bakıyor zaten.
+            // Accept the name instead of the number — the operator is looking at the list anyway.
             foreach (var v in all.Venues)
                 if (string.Equals(v, line, StringComparison.OrdinalIgnoreCase)) return all.ForVenue(v);
 
@@ -190,7 +188,7 @@ internal static class Program
         }
     }
 
-    /// <summary>Açılış logundaki "Lobi" satırı (§10.7).</summary>
+    /// <summary>The "Lobi" line of the startup log (§10.7).</summary>
     private static string DescribeLobby(string lobbyScene, MapTable maps)
     {
         if (maps.IsEmpty)
@@ -198,15 +196,13 @@ internal static class Program
         return lobbyScene;
     }
 
-    /// <summary>
-    /// Açık sahne garantisi (§11 fail-fast). Sunucunun açık sahnesi istemcinin TEK yönlendirme
-    /// kaynağıdır (<c>welcome.match.sceneName</c>) — çözülemiyorsa sunucu hiç açılmamalıdır,
-    /// yoksa oyuncular hiçbir sahneye gidemeden kabuk lobide bekler ve hata sahada fark edilir.
-    /// <para><b>İstisna:</b> <c>maps.json</c> hiç yoksa harita tablosu boştur ve doğrulamanın
-    /// tamamı zaten kapalıdır (§11) — o yapılandırmada sunucuyu kilitlemek geliştirme akışını
-    /// kırardı, yalnız uyarılır.</para>
-    /// <para>false dönerse çağıran süreç <c>2</c> ile kapanır.</para>
-    /// </summary>
+    /// <summary>Guarantees the open scene (§11 fail-fast); false makes the process exit with
+    /// <c>2</c>.</summary>
+    /// <remarks>The open scene is the client's ONLY routing source (<c>welcome.match.sceneName</c>) —
+    /// if it cannot be resolved the server must not open at all, else players wait in a shell lobby and
+    /// the error is only noticed in the field.
+    /// <para>Exception: with no <c>maps.json</c> the table is empty and all validation is already off
+    /// (§11) — blocking the server there would break the development flow, so it only warns.</para></remarks>
     private static bool ValidateLobbyScene(string resolved, MapTable maps, string? configured)
     {
         if (maps.IsEmpty)
@@ -244,9 +240,10 @@ internal static class Program
         return true;
     }
 
-    /// <summary>`dotnet run` bin/Debug/... içinden çalışır; gerçek dosyalar Server/config/ altındadır.
-    /// Exe yanından başlayıp 6 seviye yukarı config/server.json arar; bulunamazsa exe yanında
-    /// config/ oluşturur (ServerConfig.Load varsayılanları oraya yazar). Cosmos ConfigLocator deseni.</summary>
+    /// <summary>Finds config/server.json by walking up to 6 levels from the exe, else creates config/
+    /// next to the exe (cosmos ConfigLocator pattern).</summary>
+    /// <remarks>Needed because `dotnet run` runs from bin/Debug/… while the real files live under
+    /// Server/config/. ServerConfig.Load writes the defaults into the fallback.</remarks>
     private static string ResolveConfigDir()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

@@ -1,20 +1,21 @@
 #nullable enable
 namespace VortexArena.Server.Core;
 
-/// <summary>Bir kaydın bağlantı durumu (§2). Telde <c>PlayerInfo.connection</c> stringi olarak
-/// taşınır; "çevrimdışı" diye bir değer YOKTUR — kopan cihaz ya geri beklenir ya çıkarılır.
-/// <para>⚠️ Unity tarafında serialize EDİLMEZ (tel formatı string), ama yeni değer yine de
-/// <b>SONA</b> eklenir: sayısal indeksle karşılaştırma/loglama yapan her yer sessizce kayar.</para></summary>
+/// <summary>Connection state of a record (§2), carried on the wire as the
+/// <c>PlayerInfo.connection</c> string.</summary>
+/// <remarks>There is NO "offline" value — a dropped device is either awaited back or removed.
+/// ⚠️ Not serialized on the Unity side (the wire format is a string), but new values still go at the
+/// END: anything comparing or logging by numeric index would silently shift.</remarks>
 public enum PlayerConnection
 {
-    /// <summary>Soket canlı; tüm maç kapıları açık.</summary>
+    /// <summary>Socket alive; all match gates open.</summary>
     Connected,
 
-    /// <summary>Soket düştü (kopma ya da HEARTBEAT_TIMEOUT); cihaz RECONNECT_GRACE boyunca geri
-    /// bekleniyor. Kayıt durur ama maç kapılarına girmez.</summary>
+    /// <summary>Socket dropped (disconnect or HEARTBEAT_TIMEOUT); awaited back for RECONNECT_GRACE.
+    /// The record stays but does not pass the match gates.</summary>
     Reconnecting,
 
-    /// <summary>Süre doldu, oyuncu oyundan çıkarıldı. Bu duruma yalnız <b>maç katılımcısı</b>
-    /// kayıtlar girer (§10.2) — katılımcı olmayan kayıt bunun yerine tümden silinir.</summary>
+    /// <summary>Grace expired, player dropped from the game. Only match participants reach this state
+    /// (§10.2) — others are removed entirely.</summary>
     Left
 }

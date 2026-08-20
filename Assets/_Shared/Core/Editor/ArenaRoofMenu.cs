@@ -4,20 +4,12 @@ using VortexArena.Core.Arena;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// Hiyerarşi sağ-tık menüsü: <c>GameObject &gt; VortexArena &gt; Arena Roof</c>.
-    /// Seçili objelere <see cref="ArenaRoof"/> ekler ve altındaki tüm Renderer'lara
-    /// <see cref="ArenaRoof.LayerName"/> katmanını damgalar — admin kuş bakışında gizlenecek
-    /// geometri sahne görünümündeki Layers süzgecinden tek bakışta ayırt edilsin.
-    /// <para>
-    /// Katman yalnız görünürlük/ayıklama içindir: gizleme davranışı bileşenin Renderer
-    /// listesinden gelir, damga unutulsa da çalışır (bkz. <see cref="ArenaRoof"/>).
-    /// </para>
-    /// <para>
-    /// Prefab ASSET'lerine dokunulmaz (sahne objesi bekler). Zaten bileşeni olan obje atlanır
-    /// ama katmanı yine tazelenir — sonradan mesh eklenmiş çatılar için pratik.
-    /// </para>
-    /// </summary>
+    /// <summary>Hierarchy context menu: adds <see cref="ArenaRoof"/> to the selection and stamps
+    /// <see cref="ArenaRoof.LayerName"/> on every Renderer below it.</summary>
+    /// <remarks>The layer is only for visibility/filtering in the Scene view; hiding is driven by
+    /// the component's Renderer list and works even without the stamp. Prefab assets are skipped
+    /// (scene objects only); objects that already have the component keep it but get the layer
+    /// refreshed, which helps roofs that gained meshes later.</remarks>
     internal static class ArenaRoofMenu
     {
         private const string MENU_PATH = "GameObject/VortexArena/Arena Roof";
@@ -25,8 +17,8 @@ namespace VortexArena.Core.Editor
         [MenuItem(MENU_PATH, false, 31)]
         private static void AddArenaRoof(MenuCommand command)
         {
-            // Hiyerarşi bağlam menüsünde Unity bu komutu SEÇİLEN HER OBJE için bir kez çağırır;
-            // seçimin tamamını burada işlediğimiz için yalnız ilk çağrıyı geçiriyoruz.
+            // Unity invokes the context menu command once PER SELECTED OBJECT; we handle the whole
+            // selection here, so only the first invocation is let through.
             GameObject[] selection = Selection.gameObjects;
             if (command.context != null && selection.Length > 1 && command.context != selection[0])
             {
@@ -46,7 +38,7 @@ namespace VortexArena.Core.Editor
                 if (go == null || !go.scene.IsValid())
                 {
                     skipped++;
-                    continue; // prefab asset'i: sahne bileşeni değil
+                    continue; // prefab asset, not a scene object
                 }
 
                 ArenaRoof roof = go.GetComponent<ArenaRoof>();
@@ -56,7 +48,7 @@ namespace VortexArena.Core.Editor
                     added++;
                 }
 
-                roof.StampLayer(); // kendi içinde Undo kaydı tutar
+                roof.StampLayer(); // records its own Undo
                 stamped++;
             }
 

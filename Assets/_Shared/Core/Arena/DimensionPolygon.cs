@@ -2,46 +2,40 @@ using UnityEngine;
 
 namespace VortexArena.Core.Arena
 {
-    /// <summary>
-    /// Ölçü maketindeki bir çokgenin türünü söyleyen işaretçi: bu obje tabanın kendisi mi, yoksa
-    /// bir kolon mu. <c>DimensionMesh'i JSON'a Çevir</c> maketi bu bileşene bakarak gezer.
+    /// <summary>Marks what a polygon on the dimension mesh is: the floor itself or a column.
+    /// <c>DimensionMesh'i JSON'a Çevir</c> walks the mesh by this component.</summary>
+    /// <remarks>
+    /// ⚠️ No points, name or height are stored on the component. The single source for the points is
+    /// the mesh itself (otherwise ProBuilder edits would be silently ignored), the name is the
+    /// <c>GameObject</c>'s name and the height is the mesh's Y range — copying any of them here
+    /// would create a second source that drifts from what is edited in the scene.
     /// <para>
-    /// ⚠️ <b>Bileşende nokta, ad ya da yükseklik TUTULMAZ.</b> Noktaların tek doğruluk kaynağı
-    /// mesh'in kendisidir (yoksa ProBuilder ile yapılan düzenleme sessizce göz ardı edilirdi), ad
-    /// zaten <c>GameObject</c>'in adıdır, yükseklik ise mesh'in Y aralığıdır. Üçünü de bileşene
-    /// kopyalamak, sahnede düzenlenen değerden sessizce sapan ikinci bir kaynak üretirdi.
+    /// ⚠️ A component is used instead of checking the parent name (<c>Columns</c>) because the
+    /// hierarchy can be rearranged by hand while the component travels with the object.
     /// </para>
-    /// <para>
-    /// ⚠️ Ebeveyn adına (<c>Columns</c>) bakmak yerine bileşen kullanılmasının sebebi: hiyerarşi
-    /// elle yeniden düzenlenebilir, bileşen objeyle birlikte taşınır.
-    /// </para>
-    /// </summary>
+    /// </remarks>
     [DisallowMultipleComponent]
     public class DimensionPolygon : MonoBehaviour
     {
-        /// <summary>
-        /// Çokgenin maketteki rolü.
-        /// <para>
-        /// ⚠️ Serialize edilen enum: yeni değer <b>SONA</b> eklenir — Unity sayısal indeks saklar,
-        /// başa/ortaya ekleme sahnelerdeki değerleri kaydırır.
-        /// </para>
-        /// </summary>
+        /// <summary>The polygon's role on the dimension mesh.
+        /// <para>⚠️ Serialized enum: new values are appended at the END — Unity stores the numeric
+        /// index, so inserting shifts the values in existing scenes.</para></summary>
         public enum PolygonKind
         {
-            /// <summary>Tabanın kendisi (maket başına tek).</summary>
+            /// <summary>The floor itself (one per mesh).</summary>
             Plane,
 
-            /// <summary>Alan içindeki bir kolon/engel (prizma).</summary>
+            /// <summary>A column/obstacle inside the area (a prism).</summary>
             Column
         }
 
         [Tooltip("Bu çokgen tabanı mı yoksa bir kolonu mu temsil ediyor.")]
         [SerializeField] private PolygonKind kind = PolygonKind.Plane;
 
-        /// <summary>Çokgenin maketteki rolü.</summary>
+        /// <summary>The polygon's role on the dimension mesh.</summary>
         public PolygonKind Kind => kind;
 
-        /// <summary>Üretim aracı tarafından doldurulur — çalışma anında kimse yazmaz.</summary>
+        /// <summary>Filled in by the generation tool — nobody writes at runtime.</summary>
         public void SetKind(PolygonKind value)
         {
             kind = value;

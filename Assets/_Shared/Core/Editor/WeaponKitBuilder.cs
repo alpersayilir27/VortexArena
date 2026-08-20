@@ -47,9 +47,9 @@ namespace VortexArena.Core.Editor
         private const string SmokeMaterialPath = FxDir + "/M_MuzzleSmoke.mat";
         private const string CatalogDir = "Assets/_Shared/Data/Resources";
 
-        /// <summary>Silah kataloğunun yeri — <c>internal</c>, çünkü eşitlemenin sonraki adımı
-        /// (<c>BuildElementsConfigurator.SyncModeLoadouts</c>) kataloğu bu koşunun ÇIKTISI olarak
-        /// okur; yol orada tekrar yazılsaydı ikinci bir doğruluk kaynağı olurdu.</summary>
+        /// <summary>Path of the weapon catalog — <c>internal</c> because the next sync step
+        /// (<c>BuildElementsConfigurator.SyncModeLoadouts</c>) reads the catalog as this run's
+        /// OUTPUT; repeating the path there would be a second source of truth.</summary>
         internal const string CatalogPath = CatalogDir + "/WeaponCatalog.asset";
 
         /// <summary>Weapon frame prefab — placed under every WPN as an INSTANCE

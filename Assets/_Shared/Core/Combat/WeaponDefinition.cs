@@ -3,28 +3,23 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Silah tanımı (ScriptableObject): kimlik + tüm denge/his/ses değerleri.
-    /// <para>
-    /// <b>Ağın ve uzak çizimin gördüğü kısım tabandadır</b> (<see cref="ItemDefinition"/>):
-    /// <c>netItemId</c>, prefab, <c>holdMode</c> ve kavrama pozları — eski
-    /// <c>grantedHoldPosition/Euler</c> alanları oraya <c>primaryGrip*</c> olarak terfi etti
-    /// (Docs/ArenaNet-Protokol.md §6.6). Burada kalan her şey <i>davranıştır</i> ve bilinçli
-    /// olarak tabana çıkarılmaz.
-    /// </para>
-    /// <para>
-    /// <b>Denge sayılarının TEK doğruluk kaynağı burasıdır ve hasar İSTEMCİ-otoriterdir</b>
-    /// (Docs/ArenaNet-Protokol.md §10.3): sunucuda silah tablosu yoktur; istemci hasarı burada
-    /// hesaplar — bölge çarpanı istemcide <c>RemoteHitBox.Zone</c>'a göre seçilir
-    /// (<see cref="GetZoneMultiplier"/>) — ve <c>hit_report.damage</c> ile bildirir, sunucu aynen uygular. Bu yüzden
-    /// değer değişikliği sunucuya export GEREKTİRMEZ — ama istemci build'i ister.
-    /// </para>
-    /// <para>
-    /// <see cref="WeaponId"/> yalnız bir ETİKETTİR ("ak47" / "m4"): shot_fired ve hit_report
-    /// mesajlarında taşınır, kill feed ve istatistikte görünür. Sunucu doğrulamaz, dolayısıyla
-    /// yeni bir silah eklemek için sunucu tarafında hiçbir tanıtım yapılmaz.
-    /// </para>
-    /// <see cref="Weapon"/> bu tanımı ZORUNLU referans olarak taşır; ses klip/pitch/volume
-    /// değerlerini <see cref="WeaponAudio"/> da (Configure sonrası) buradan okur.
+    /// Weapon definition (ScriptableObject): identity + all balance/feel/audio values.
+    /// <para>What the network and remote rendering see lives in the base
+    /// (<see cref="ItemDefinition"/>): <c>netItemId</c>, prefab, <c>holdMode</c> and grip poses (the
+    /// old <c>grantedHoldPosition/Euler</c> were promoted there as <c>primaryGrip*</c>,
+    /// Docs/ArenaNet-Protokol.md §6.6). Everything remaining here is BEHAVIOUR and is deliberately
+    /// not promoted.</para>
+    /// <para>SINGLE source of truth for balance numbers, and damage is CLIENT-authoritative
+    /// (Docs/ArenaNet-Protokol.md §10.3): the server has no weapon table. The client computes damage
+    /// here — the zone multiplier picked from <c>RemoteHitBox.Zone</c>
+    /// (<see cref="GetZoneMultiplier"/>) — and reports it in <c>hit_report.damage</c>, which the
+    /// server applies as-is. So changing a value needs NO server export, but does need a client
+    /// build.</para>
+    /// <para><see cref="WeaponId"/> is only a LABEL ("ak47" / "m4"): carried in shot_fired and
+    /// hit_report, shown in the kill feed and stats. The server never validates it, so adding a
+    /// weapon requires no server-side registration.</para>
+    /// <see cref="Weapon"/> carries this definition as a MANDATORY reference;
+    /// <see cref="WeaponAudio"/> reads clip/pitch/volume from it after Configure.
     /// </summary>
     [CreateAssetMenu(fileName = "Weapon", menuName = "VortexArena/Weapon Definition")]
     public class WeaponDefinition : ItemDefinition
@@ -107,22 +102,23 @@ namespace VortexArena.Core.Combat
         [Range(0f, 1f)]
         [SerializeField] private float fireVolume = 1f;
 
-        /// <summary>Kill feed / istatistik etiketi ("ak47" / "m4") — sunucu doğrulamaz.</summary>
+        /// <summary>Kill feed / stats label ("ak47" / "m4") — never validated by the server.</summary>
         public string WeaponId => weaponId;
 
-        /// <summary>Gövde vuruşu başına hasar.</summary>
+        /// <summary>Damage per body hit.</summary>
         public float Damage => damage;
 
-        /// <summary>Kafa vuruşunda hasar çarpanı.</summary>
+        /// <summary>Damage multiplier on a head hit.</summary>
         public float HeadshotMultiplier => headshotMultiplier;
 
-        /// <summary>Karın/leğen vuruşunda hasar çarpanı.</summary>
+        /// <summary>Damage multiplier on a stomach/pelvis hit.</summary>
         public float StomachMultiplier => stomachMultiplier;
 
-        /// <summary>Bacak vuruşunda hasar çarpanı (kollar gövde sayılır, çarpanı 1'dir).</summary>
+        /// <summary>Damage multiplier on a leg hit (arms count as body, multiplier 1).</summary>
         public float LegMultiplier => legMultiplier;
 
-        /// <summary>Bölgenin hasar çarpanı — çarpanı UYGULAMAK çağıranın işi (hasar istemci-otoriter).</summary>
+        /// <summary>The zone's damage multiplier — APPLYING it is the caller's job (damage is
+        /// client-authoritative).</summary>
         public float GetZoneMultiplier(HitZone zone) => zone switch
         {
             HitZone.Head => headshotMultiplier,
@@ -131,102 +127,102 @@ namespace VortexArena.Core.Combat
             _ => 1f,
         };
 
-        /// <summary>Dakikadaki atış sayısı.</summary>
+        /// <summary>Rounds per minute.</summary>
         public float FireRateRpm => fireRateRpm;
 
-        /// <summary>Hitscan menzili (metre).</summary>
+        /// <summary>Hitscan range (metres).</summary>
         public float Range => range;
 
         /// <summary>
-        /// Tek tetik çekişinde atılan ışın sayısı (saçmalıda &gt;1). ⚠️ <b>Hasar SAÇMA BAŞINADIR</b>,
-        /// toplam değil: <see cref="Damage"/> × isabet eden saçma sayısı kadar hasar iner. Mesafeyle
-        /// düşen bir hasar eğrisi YOKTUR ve eklenmez — pompalının menzil kimliğini
-        /// <see cref="BaseSpreadDegrees"/> taşır (uzakta koni büyür, saçmaların çoğu ıskalar).
-        /// İkinci bir mesafe eğrisi eklemek aynı davranışı iki yerden ayarlanır yapardı.
+        /// Rays fired per trigger pull (&gt;1 on shotguns). ⚠️ Damage is PER PELLET, not total:
+        /// <see cref="Damage"/> × pellets that hit. There is NO distance falloff curve and none is
+        /// added — a shotgun's range identity is carried by <see cref="BaseSpreadDegrees"/> (the
+        /// cone widens and most pellets miss). A second distance curve would make the same
+        /// behaviour tunable from two places.
         /// </summary>
         public int PelletCount => Mathf.Max(1, pelletCount);
 
-        /// <summary>Taban saçılım yarı açısı (derece, tek elle).</summary>
+        /// <summary>Base spread half-angle (degrees, one-handed).</summary>
         public float BaseSpreadDegrees => baseSpreadDegrees;
 
-        /// <summary>Atış başına bloom büyümesi (derece).</summary>
+        /// <summary>Bloom growth per shot (degrees).</summary>
         public float BloomPerShotDegrees => bloomPerShotDegrees;
 
-        /// <summary>Bloom üst sınırı (derece; tabana eklenen kısım).</summary>
+        /// <summary>Bloom cap (degrees; the part added to the base).</summary>
         public float MaxBloomDegrees => maxBloomDegrees;
 
-        /// <summary>Bloom toparlanma hızı (derece/sn).</summary>
+        /// <summary>Bloom recovery rate (degrees/s).</summary>
         public float BloomRecoveryPerSecond => bloomRecoveryPerSecond;
 
-        /// <summary>Atış başına namlu kalkışı (derece, tek elle).</summary>
+        /// <summary>Muzzle rise per shot (degrees, one-handed).</summary>
         public float KickDegrees => kickDegrees;
 
-        /// <summary>Atış başına geri itilme (metre, tek elle).</summary>
+        /// <summary>Push-back per shot (metres, one-handed).</summary>
         public float KickBackMeters => kickBackMeters;
 
-        /// <summary>Geri tepme toparlanma hızı.</summary>
+        /// <summary>Recoil recovery speed.</summary>
         public float RecoilRecoverSpeed => recoilRecoverSpeed;
 
         /// <summary>
-        /// Atış başına kumanda titreşiminin şiddeti (0-1). <c>0</c> = haptik kapalı.
-        /// <para>⚠️ Haptik <b>silahın kendi verisidir</b> ve tek yeri burasıdır: darbe
-        /// <see cref="Weapon"/> prefabından değil bu tanımdan okunur, yani aynı silahın sahne
-        /// örneği ile verilen (<c>weaponSource:"random"</c>) klonu aynı hissi verir.</para>
+        /// Controller vibration strength per shot (0-1). <c>0</c> = haptics off.
+        /// <para>⚠️ Haptics are the WEAPON's own data and live only here: the pulse is read from
+        /// this definition, not the <see cref="Weapon"/> prefab, so a scene instance and a granted
+        /// (<c>weaponSource:"random"</c>) clone of the same weapon feel identical.</para>
         /// </summary>
         public float HapticAmplitude => hapticAmplitude;
 
-        /// <summary>Atış başına titreşimin süresi (saniye). <c>0</c> = haptik kapalı.</summary>
+        /// <summary>Vibration duration per shot (seconds). <c>0</c> = haptics off.</summary>
         public float HapticDuration => hapticDuration;
 
-        /// <summary>Şarjör kapasitesi.</summary>
+        /// <summary>Magazine capacity.</summary>
         public int MagazineSize => magazineSize;
 
-        /// <summary>Başlangıçtaki yedek şarjör sayısı.</summary>
+        /// <summary>Starting spare magazine count.</summary>
         public int SpareMagazines => spareMagazines;
 
-        /// <summary>Rezerv muhasebesi kuralı (bkz. <see cref="WeaponReserveMode"/>).</summary>
+        /// <summary>Reserve accounting rule (see <see cref="WeaponReserveMode"/>).</summary>
         public WeaponReserveMode ReserveMode => reserveMode;
 
-        /// <summary>Şarjör değiştirme süresi (saniye).</summary>
+        /// <summary>Magazine change duration (seconds).</summary>
         public float ReloadTime => reloadTime;
 
-        /// <summary>Ateş klipleri (atış başına rastgele seçim).</summary>
+        /// <summary>Fire clips (one picked at random per shot).</summary>
         public AudioClip[] FireClips => fireClips;
 
-        /// <summary>Şarjör çıkarma sesi.</summary>
+        /// <summary>Magazine-out sound.</summary>
         public AudioClip MagOutClip => magOutClip;
 
-        /// <summary>Şarjör takma sesi.</summary>
+        /// <summary>Magazine-in sound.</summary>
         public AudioClip MagInClip => magInClip;
 
         /// <summary>
-        /// Açıkken <see cref="MagOutClip"/> reload süresine yayılarak <see cref="MagazineSize"/>
-        /// kez çalınır (fişek fişek dolum). Klip tek fişeğin sesi olmalıdır.
+        /// When on, <see cref="MagOutClip"/> plays <see cref="MagazineSize"/> times spread over the
+        /// reload (shell-by-shell loading). The clip must be a single shell's sound.
         /// </summary>
         public bool PerShellReloadAudio => perShellReloadAudio;
 
-        /// <summary>Boş tetik sesi.</summary>
+        /// <summary>Dry fire sound.</summary>
         public AudioClip DryFireClip => dryFireClip;
 
-        /// <summary>Silahı eline alma sesi.</summary>
+        /// <summary>Weapon pickup sound.</summary>
         public AudioClip PickupClip => pickupClip;
 
-        /// <summary>Ateş sesi taban pitch'i.</summary>
+        /// <summary>Base pitch of the fire sound.</summary>
         public float FirePitchBase => firePitchBase;
 
-        /// <summary>Atış başına rastgele pitch sapması.</summary>
+        /// <summary>Random pitch jitter per shot.</summary>
         public float FirePitchJitter => firePitchJitter;
 
-        /// <summary>Ateş sesi seviyesi (0-1).</summary>
+        /// <summary>Fire sound level (0-1).</summary>
         public float FireVolume => fireVolume;
 
-        // ⚠️ Duruş için burada ALAN YOKTUR ve açılmaz: tek adı ItemDefinition'daki kavrama kaydıdır
-        // (GetGrip / PrimaryGripPosition(bool) / GripJointRotations) ve tek olmak ZORUNDA — "verilen silahın
-        // duruşu" ile "uzak tarafta çizilen duruş" aynı ölçüdür, ikinci bir ad kaçınılmaz olarak
-        // birinin güncellenip diğerinin unutulmasıyla sonuçlanır. Sahne silahı ile verilen silah da
-        // tek kuraldan geçer (Weapon.ApplyCanonicalGrip).
+        // ⚠️ There is NO pose field here and none is opened: the single name is the grip record in
+        // ItemDefinition (GetGrip / PrimaryGripPosition(bool) / GripJointRotations) and it MUST stay
+        // single — "the granted weapon's pose" and "the pose drawn remotely" are the same measure,
+        // and a second name inevitably means one gets updated and the other forgotten. Scene and
+        // granted weapons also go through one rule (Weapon.ApplyCanonicalGrip).
 
-        /// <summary>İki atış arası en kısa süre (saniye).</summary>
+        /// <summary>Minimum time between two shots (seconds).</summary>
         public float SecondsPerShot => 60f / Mathf.Max(1f, fireRateRpm);
     }
 }

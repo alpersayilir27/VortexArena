@@ -4,9 +4,9 @@ using Xunit;
 namespace VortexArena.Launcher.Tests;
 
 /// <summary>
-/// <c>maps.json</c> ayrıştırma testleri. Ayrıştırma sunucudaki <c>MapTable</c> ile aynı iki kuralı
-/// uygular: lobi = <c>modes</c> tam olarak <c>["lobby"]</c> (sahne adına BAKILMAZ), boş
-/// <c>venue</c> = <c>Standard</c>.
+/// <c>maps.json</c> parsing tests. Parsing applies the same two rules as the server's
+/// <c>MapTable</c>: lobby = <c>modes</c> is exactly <c>["lobby"]</c> (scene name is NOT considered),
+/// empty <c>venue</c> = <c>Standard</c>.
 /// </summary>
 public class VenueCatalogTests
 {
@@ -63,8 +63,8 @@ public class VenueCatalogTests
     [Fact]
     public void SahneAdiLobiyleBaslasaBileModlarBelirler()
     {
-        // "Lobby..." adı taşıyan ama modu lobi olmayan harita lobi SAYILMAZ — sunucudaki kuralın
-        // aynısı (MapTable.ResolveLobbyScene sahne adına bakmaz).
+        // A map named "Lobby..." whose modes are not lobby-only does NOT count as a lobby — same
+        // rule as the server (MapTable.ResolveLobbyScene ignores the scene name).
         const string json = """
         { "maps": [ { "sceneName": "LobbyGorunumlu", "venue": "X", "modes": ["lobby", "tdm"] } ] }
         """;

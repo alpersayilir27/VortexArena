@@ -1,7 +1,7 @@
 # Mekan boyut maketi — kalan iş
 
 Kod, boyut dosyaları, prefablar, sahneler ve dokümanlar bitti. Kalan tek şey **doğrulamadır**;
-kalıcı bilgi `CLAUDE.md` · `Docs/Sistem-Ozeti.md` (§4 bileşen sözlüğü, §7 tuzaklar) ·
+kalıcı bilgi `Docs/Sistem-Ozeti.md` (§4 bileşen sözlüğü, §7 tuzaklar) ·
 `Docs/Gelistirici/{Yemek-Kitabi,Sahne-Kurulumu,API-Referansi,Yapma-Listesi}.md` ·
 `Docs/Isletme-Kurulum.md` içine işlendi.
 

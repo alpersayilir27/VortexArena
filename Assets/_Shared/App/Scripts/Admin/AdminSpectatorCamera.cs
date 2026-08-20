@@ -8,67 +8,65 @@ using VortexArena.Net;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Gözlemci kamerasının üç kipi. <see cref="AdminSession.CameraMode"/> hangi kipin sürdüğünü
-    /// söyler; kip başına girdi ve konumlandırma burada.
+    /// The spectator camera's three modes (<see cref="AdminSession.CameraMode"/> selects one);
+    /// per-mode input and placement live here.
     /// <list type="bullet">
-    /// <item><b>POV:</b> seçili oyuncunun BAŞ pozu (arena uzayı → dünya). Poz gelmiyorsa son
-    /// konumda kalır (kamerayı origin'e zıplatmak operatörü şaşırtır).</item>
-    /// <item><b>Serbest:</b> WASD düzlemde, Q/E alçal/yüksel, <b>sağ tuş basılı</b> fareyle bakış,
-    /// Shift ×3, tekerlek taban hızı. İmleç KİLİTLENMEZ — operatörün tek ekranı var ve HUD
-    /// düğmelerine erişmesi gerekir.</item>
-    /// <item><b>Kuş bakışı:</b> ortografik, arena merkezinin üstünde, arena yaw'ına hizalı.
-    /// Kadrajın TEK kaynağı sahnedeki <see cref="ArenaBoundary"/>'dir (varsayılan ölçü YOKTUR);
-    /// tekerlek zoom. Kameranın yüksekliği de oradan (boyut dosyasının <c>topViewHeight</c>'ı)
-    /// gelir, yazılmamışsa <see cref="DefaultTopDownHeight"/>. Sahnede <see cref="ArenaRoof"/> varsa bu kipe girerken çatı gizlenir
-    /// (tercih <c>AdminSession.Roof</c>), çıkarken geri gelir.</item>
+    /// <item><b>POV:</b> the selected player's HEAD pose (arena → world). Without a pose it holds
+    /// its last position — snapping to the origin would disorient the operator.</item>
+    /// <item><b>Free:</b> WASD, Q/E up/down, look with the <b>right button held</b>, Shift ×3,
+    /// wheel sets base speed. ⚠️ The cursor is NOT locked — the operator has one screen and needs
+    /// the HUD buttons.</item>
+    /// <item><b>Top-down:</b> orthographic, above the arena center, aligned to arena yaw; wheel
+    /// zooms. ⚠️ The framing's ONLY source is the scene's <see cref="ArenaBoundary"/> (no default
+    /// size), as is the height (the dimension file's <c>topViewHeight</c>, else
+    /// <see cref="DefaultTopDownHeight"/>). An <see cref="ArenaRoof"/> is hidden on entering this
+    /// mode (preference <c>AdminSession.Roof</c>) and restored on leaving.</item>
     /// </list>
-    /// <para>Poz okuması <c>LateUpdate</c>'te yapılır: <c>RemoteAvatar</c> de aynı karede aynı
-    /// kayıtçıdan okuyor, kamera bir kare geriden gitmesin.</para>
+    /// <para>Poses are read in <c>LateUpdate</c>, like <c>RemoteAvatar</c>, so the camera does not
+    /// lag one frame behind.</para>
     /// </summary>
     [RequireComponent(typeof(Camera))]
     public class AdminSpectatorCamera : MonoBehaviour
     {
-        /// <summary>Fare hassasiyeti (derece / piksel).</summary>
+        /// <summary>Mouse sensitivity (degrees / pixel).</summary>
         private const float LookSensitivity = 0.12f;
 
-        /// <summary>Shift ile hız çarpanı.</summary>
+        /// <summary>Speed multiplier while Shift is held.</summary>
         private const float BoostMultiplier = 3f;
 
-        /// <summary>Serbest kipte zeminin altına inilmesin.</summary>
+        /// <summary>Free mode must not go below the floor.</summary>
         private const float MinHeight = 0.2f;
 
         /// <summary>
-        /// POV kamerasının baş pozundan ileri kaydırma miktarı (m): kafaya takılı aksesuarlar
-        /// (şapka, gözlük) kadrajın içinde kalmasın. Büyütürken dikkat — fazlası kamerayı duvarın
-        /// içine sokar.
+        /// POV camera's forward offset from the head pose (m), keeping head-mounted accessories
+        /// (hat, glasses) out of frame. ⚠️ Raising it too far pushes the camera into walls.
         /// </summary>
         private const float PovForwardOffset = 0.1f;
 
         /// <summary>
-        /// Kuş bakışı kamera yüksekliğinin VARSAYILANI (m) — ortografikte yalnız kırpma için
-        /// anlamlı. Mekanın boyut dosyasında <c>topViewHeight</c> yazıyorsa o kazanır: yüksek
-        /// tavanlı bir mekanda 20 m çatının altında kalabilir.
+        /// DEFAULT top-down camera height (m) — only affects clipping in orthographic. The venue's
+        /// <c>topViewHeight</c> wins when set: 20 m can sit below the roof in a tall venue.
         /// </summary>
         private const float DefaultTopDownHeight = 20f;
 
-        /// <summary>Kuş bakışı kadraj payı (arena kenarı ekrana yapışmasın).</summary>
+        /// <summary>Top-down framing margin, so the arena edge does not touch the screen.</summary>
         private const float TopDownMargin = 1.08f;
 
-        /// <summary>Kuş bakışı zoom sınırları (1 = tam arena).</summary>
+        /// <summary>Top-down zoom limits (1 = the whole arena).</summary>
         private const float ZoomMin = 0.4f;
         private const float ZoomMax = 1.6f;
 
         private Camera _camera;
         private AdminCameraMode _appliedMode = (AdminCameraMode)(-1);
 
-        /// <summary>Bu sahne için "ArenaBoundary yok" uyarısı verildi mi (kare başına bağırmasın).</summary>
+        /// <summary>Was the "no ArenaBoundary" warning already logged for this scene.</summary>
         private bool _warnedMissingBoundary;
 
-        // Serbest kip durumu.
+        // Free mode state.
         private float _yaw;
         private float _pitch;
 
-        // Kuş bakışı durumu.
+        // Top-down state.
         private float _zoom = 1f;
 
         private void Awake()
@@ -76,7 +74,7 @@ namespace VortexArena.App.Admin
             _camera = GetComponent<Camera>();
         }
 
-        /// <summary>Yeni sahne devralındı: kipi baştan uygula (arena sınırı değişti).</summary>
+        /// <summary>New scene adopted: re-apply the mode (the arena boundary changed).</summary>
         public void OnSceneAdopted()
         {
             _appliedMode = (AdminCameraMode)(-1);
@@ -108,42 +106,38 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Kipe girişte bir kez: projeksiyon, çatı görünürlüğü ve başlangıç açıları.</summary>
+        /// <summary>Once per mode entry: projection, roof visibility and initial angles.</summary>
         private void EnterMode(AdminCameraMode mode)
         {
             _camera.orthographic = mode == AdminCameraMode.TopDown;
 
-            // Kuş bakışına girerken çatı kalkar, çıkarken geri gelir (tercih: AdminSession.Roof).
+            // Roof hides on entering top-down and returns on leaving (preference: AdminSession.Roof).
             AdminSpectator.RefreshRoof();
 
             if (mode == AdminCameraMode.Free)
             {
-                // Serbest kipe hangi açıyla girdiysek oradan devam (ani sıçrama olmasın).
+                // Continue from the entry angle so free mode does not jump.
                 Vector3 euler = transform.eulerAngles;
                 _yaw = euler.y;
                 _pitch = NormalizePitch(euler.x);
             }
         }
 
-        // ------------------------------------------------------------------- ses odağı
+        // ---------------------------------------------------------------- audio focus
 
         /// <summary>
-        /// Gözlemcinin kulağını kamerasıyla aynı yere bakar hâle getirir
+        /// Points the spectator's ear where the camera looks
         /// (<see cref="RemoteShotFx.SpectatorAudioFocus"/>).
-        /// <para><b>Yalnız POV'da</b> odak vardır: izlenen oyuncunun silahı tam sesle, sahadaki
-        /// diğer oyuncuların atışları kısık çalar — hepsi eşit sesle çalınca operatör hangi sesin
-        /// izlediği oyuncuya ait olduğunu ayırt edemez. ⚠️ Kısılır, SUSTURULMAZ: POV'daki operatör
-        /// arenanın öbür ucundaki çatışmayı duymaya devam etmeli.</para>
-        /// <para>⚠️ <b>Kuş bakışı ve serbest kipte odak YOKTUR</b> (<c>null</c>): o kiplerde
-        /// operatör sahanın tamamına bakıyor, kimseyi öne çıkarmanın anlamı yok. Aynı sebeple
-        /// POV'da <b>oyuncu seçilmemişse</b> (kamera son konumunda donuktur) odak kurulmaz:
-        /// öne çıkarılacak kimse yok.</para>
-        /// <para>⚠️ Soru her karede sorulur, <c>AdminSession.Changed</c>'e abone olunarak DEĞİL:
-        /// odağı besleyen iki değer de (kip + seçili oyuncu) koşan maçta değişiyor ve kaçırılan
-        /// tek bir olay operatöre kalıcı olarak YANLIŞ oyuncunun silahını duyurur. Aynı gerekçe
-        /// <c>RemoteAvatar</c> ad etiketlerinde de geçerli.</para>
-        /// <para>⚠️ Yazan TEK yer burasıdır. Gözlemci kamerası yalnız admin rolünde kurulur, yani
-        /// oyuncu istemcisinde odak hiç yazılmaz (null = filtre yok) ve orada her atış duyulur.</para>
+        /// <para>Focus exists <b>only in POV</b>: the watched player's weapon at full volume, the
+        /// rest quieter — at equal volume the operator cannot tell which shot is the watched
+        /// player's. ⚠️ Quieted, NOT muted: a firefight across the arena must still be audible.</para>
+        /// <para>⚠️ <b>No focus in top-down/free</b> (<c>null</c>) — the operator watches the whole
+        /// field. Same for POV with no player selected: there is nobody to foreground.</para>
+        /// <para>⚠️ Asked every frame, NOT via <c>AdminSession.Changed</c>: both inputs (mode +
+        /// selection) change during a live match and one missed event would permanently play the
+        /// WRONG player's weapon. Same rationale as <c>RemoteAvatar</c> name labels.</para>
+        /// <para>⚠️ The only writer. The spectator camera exists only in the admin role, so the
+        /// player client never writes focus (null = no filter) and hears every shot.</para>
         /// </summary>
         private static void ApplyAudioFocus(AdminCameraMode mode)
         {
@@ -161,17 +155,17 @@ namespace VortexArena.App.Admin
             if (playerId == 0 || registry == null ||
                 !registry.GetInterpolatedPose(playerId, out Pose head, out _, out _))
             {
-                return; // poz yok: son konumda kal (HUD "poz yok" yazar)
+                return; // no pose: hold the last position (the HUD says "poz yok")
             }
 
             Pose world = ArenaSpace.ArenaToWorld(head);
-            // Kamera baş pozunun biraz ÖNÜNDE durur: aksesuar (şapka, gözlük) kafa kemiğine
-            // takılı olduğu için tam baş noktasında kadrajı kapatıyor.
+            // Slightly in FRONT of the head pose: accessories are parented to the head bone and
+            // would fill the frame at the exact head point.
             Vector3 position = world.position + world.rotation * Vector3.forward * PovForwardOffset;
             transform.SetPositionAndRotation(position, world.rotation);
         }
 
-        // --------------------------------------------------------------- serbest
+        // ------------------------------------------------------------------- free
 
         private void DriveFree()
         {
@@ -180,7 +174,7 @@ namespace VortexArena.App.Admin
 
             if (mouse != null)
             {
-                // Bakış YALNIZ sağ tuş basılıyken; imleç serbest kalır (HUD tıklanabilir).
+                // Look ONLY while the right button is held; the cursor stays free for the HUD.
                 if (mouse.rightButton.isPressed)
                 {
                     Vector2 delta = mouse.delta.ReadValue();
@@ -191,7 +185,7 @@ namespace VortexArena.App.Admin
                 float scroll = mouse.scroll.ReadValue().y;
                 if (!Mathf.Approximately(scroll, 0f))
                 {
-                    // Tekerlek: taban hızını kademeli değiştirir (tercihe yazılır, kalıcı).
+                    // Wheel steps the base speed (persisted as a preference).
                     AdminSession.FreeSpeed += Mathf.Sign(scroll) * 0.5f;
                 }
             }
@@ -226,7 +220,7 @@ namespace VortexArena.App.Admin
             transform.position = position;
         }
 
-        // ----------------------------------------------------------- kuş bakışı
+        // --------------------------------------------------------------- top-down
 
         private void DriveTopDown()
         {
@@ -242,8 +236,8 @@ namespace VortexArena.App.Admin
 
             if (!TryResolveArena(out Vector3 center, out float yaw, out Vector2 halfExtents, out float height))
             {
-                // Kadraj ölçüsü UYDURULMAZ: kamera dünya origin'inin üstünde aşağı bakar ve
-                // ortografik ölçü olduğu gibi kalır (operatör tekerlekle ayarlar).
+                // ⚠️ No invented framing size: look down from above the world origin and leave the
+                // orthographic size as is (the operator adjusts with the wheel).
                 WarnMissingBoundary();
                 transform.SetPositionAndRotation(
                     Vector3.up * DefaultTopDownHeight,
@@ -262,14 +256,12 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Arena merkezi/yönü/yarı ölçüsü ve kamera yüksekliği — TEK kaynağı sahnedeki
-        /// <see cref="ArenaBoundary"/>'dir. <b>Varsayılan ölçü YOKTUR:</b> uydurulan bir arena
-        /// boyutu doğru sandığın yanlış bir kadraj üretir; her arena sahnesinde bu bileşen
-        /// zorunludur.
+        /// Arena center/yaw/half extents and camera height — the ONLY source is the scene's
+        /// <see cref="ArenaBoundary"/>. ⚠️ <b>No default size:</b> an invented arena size produces a
+        /// wrong framing that looks right; the component is mandatory in every arena scene.
         /// <para>
-        /// Yükseklik istisnadır ve varsayılanı vardır (<see cref="DefaultTopDownHeight"/>):
-        /// kadrajı etkilemediği için "yazılmamış" olması bir kurulum hatası değil, tercih
-        /// yokluğudur.
+        /// Height is the exception (<see cref="DefaultTopDownHeight"/>): it does not affect the
+        /// framing, so leaving it unset is a missing preference, not a setup error.
         /// </para>
         /// </summary>
         private bool TryResolveArena(
@@ -293,10 +285,9 @@ namespace VortexArena.App.Admin
 
             Transform origin = boundary.transform;
 
-            // ⚠️ Merkez transformun KONUMU DEĞİL, sınırın yerel merkezidir: çokgen planlı
-            // (yamuk/kırık duvarlı) arenalarda sınırlayıcı kutunun ortası transformun üstüne
-            // düşmez — konumu merkez saymak kadrajı arenanın dışına kaydırır. Dikdörtgen
-            // arenalarda LocalCenter sıfırdır, yani davranış değişmez.
+            // ⚠️ The center is the boundary's LOCAL center, NOT the transform position: in polygonal
+            // arenas the bounding box center does not sit on the transform, and using the position
+            // shifts the framing outside the arena. LocalCenter is zero for rectangles.
             Vector2 localCenter = boundary.LocalCenter;
             center = origin.TransformPoint(new Vector3(localCenter.x, 0f, localCenter.y));
             yaw = origin.eulerAngles.y;
@@ -308,9 +299,8 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Arena sahnesinde <see cref="ArenaBoundary"/> eksikse sahne başına BİR KEZ uyarır —
-        /// kurulum hatası sessizce "biraz kayık kadraj" olarak gizlenmesin. Lobide arena
-        /// olmaması beklenen durumdur, orada susulur.
+        /// Warns ONCE per scene about a missing <see cref="ArenaBoundary"/>, so a setup error does
+        /// not hide as "slightly off framing". Silent in the lobby, where no arena is expected.
         /// </summary>
         private void WarnMissingBoundary()
         {
@@ -333,7 +323,7 @@ namespace VortexArena.App.Admin
 
         private static float NormalizePitch(float pitch)
         {
-            // eulerAngles 0..360 verir; -89..89 aralığına indir.
+            // eulerAngles gives 0..360; bring it into -89..89.
             return pitch > 180f ? pitch - 360f : pitch;
         }
     }

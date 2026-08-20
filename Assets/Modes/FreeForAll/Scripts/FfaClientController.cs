@@ -9,37 +9,32 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Modes.Ffa
 {
-    /// <summary>
-    /// Herkes Tek (FFA) HUD prefabının kökündeki SUNUM bileşeni. Faz/süre, geri sayım, can, ölüm
-    /// ekranı, kill-feed ve kendi sayaçların ortak tabandan (<see cref="ModeHudBase"/>) gelir; bu
-    /// sınıf yalnız FFA'ya ait olanı ekler: <b>bireysel skor satırı, kazanan oyuncu ve ilk üç
-    /// sıralama</b>.
-    /// <para>
-    /// Takım rengi/kolonu YOKTUR — bu modda takım kavramı hiç çizilmez (§10.5
-    /// <c>teamMode:"none"</c>). Skor <c>match_state</c>'ten değil <c>lobby_state</c>'ten okunur:
-    /// bireysel skor <c>PlayerInfo.score</c> alanında taşınır (§10.2), <c>scoreRed/scoreBlue</c>
-    /// bu modda hep 0'dır.
-    /// </para>
-    /// </summary>
+    /// <summary>PRESENTATION component at the root of the FFA HUD prefab; adds only what is FFA's:
+    /// individual score line, winning player, top three standings.</summary>
+    /// <remarks>Phase/time, countdown, health, death screen, kill feed and own counters come from
+    /// <see cref="ModeHudBase"/>. No team color/column — teams are never drawn here (§10.5
+    /// <c>teamMode:"none"</c>). Score is read from <c>lobby_state</c>, not <c>match_state</c>: it is
+    /// carried in <c>PlayerInfo.score</c> (§10.2), and <c>scoreRed/scoreBlue</c> are always 0 in this
+    /// mode.</remarks>
     public class FfaClientController : ModeHudBase
     {
-        /// <summary>Sıralamada gösterilecek en fazla satır.</summary>
+        /// <summary>Maximum number of lines to show in the standings.</summary>
         private const int StandingsLines = 3;
 
         [Header("FFA — sıralama")]
         [Tooltip("İlk üç sıralama alanı (ad · skor). Atanmazsa çizilmez.")]
         [SerializeField] private TMP_Text standingsText;
 
-        /// <summary>Son <c>lobby_state</c>'ten türetilen skor satırı; <c>match_state</c> 1 Hz
-        /// geldiğinde yeniden hesaplamamak için saklanır.</summary>
+        /// <summary>Score line from the last <c>lobby_state</c>; cached so 1 Hz <c>match_state</c>
+        /// does not recompute it.</summary>
         private string _scoreLine = "";
 
-        /// <summary>Sıralama tamponları — saniyede birkaç kez çizildiği için yeniden ayrılmaz.</summary>
+        /// <summary>Standings buffers — reused, drawn several times per second.</summary>
         private readonly List<PlayerInfo> _ranked = new List<PlayerInfo>();
         private readonly StringBuilder _sb = new StringBuilder();
 
-        /// <summary>Sıralama alanı tabanda YOKTUR (takım/skor sunumu alt sınıfın işidir), bu yüzden
-        /// lobiye dönüşte onu temizlemek de burada: taban kendi alanlarını siler, bizimkini bilemez.</summary>
+        /// <summary>The standings field is not in the base, so clearing it on return to lobby lives
+        /// here too — the base clears its own fields and cannot know ours.</summary>
         protected override void OnEnable()
         {
             base.OnEnable();
@@ -71,7 +66,7 @@ namespace VortexArena.Modes.Ffa
 
         protected override string WinnerLine(MatchEndMsg msg)
         {
-            // Kazanan bireysel skorlu modlarda winnerPlayerId ile gelir (§5.3); 0 = berabere.
+            // In modes with individual scores the winner arrives via winnerPlayerId (§5.3); 0 = draw.
             if (msg.winnerPlayerId <= 0)
             {
                 return "BERABERE";
@@ -83,8 +78,8 @@ namespace VortexArena.Modes.Ffa
                 : $"{NameOf(msg.winnerPlayerId)} KAZANDI";
         }
 
-        /// <summary>Roster tazelendi: bireysel skorlar burada yaşıyor (§10.2), skor satırı ve
-        /// sıralama buradan beslenir.</summary>
+        /// <summary>Roster refreshed: individual scores live here (§10.2), feeding score line and
+        /// standings.</summary>
         protected override void OnLobbyStateApplied(LobbyStateMsg msg)
         {
             RankPlayers(msg);
@@ -93,14 +88,14 @@ namespace VortexArena.Modes.Ffa
             SetText(standingsText, BuildStandings());
         }
 
-        // ---------------------------------------------------------------- iç işler
+        // ---------------------------------------------------------------- internals
 
-        /// <summary>Yerel oyuncunun kimliği; bağlanmadıysa 0.</summary>
+        /// <summary>Local player's id; 0 if not connected.</summary>
         private static int SelfPlayerId =>
             PlayerCombatState.Instance != null ? PlayerCombatState.Instance.PlayerId : 0;
 
-        /// <summary>Yalnız oyuncuları (admin gözlemciler roster'da <c>role</c> ile ayrılır) skora
-        /// göre azalan sıralar; eşit skorda düşük playerId önce gelir (deterministik).</summary>
+        /// <summary>Sorts players only (admins are filtered by <c>role</c>) by descending score;
+        /// ties break on lower playerId (deterministic).</summary>
         private void RankPlayers(LobbyStateMsg msg)
         {
             _ranked.Clear();
@@ -127,7 +122,7 @@ namespace VortexArena.Modes.Ffa
             return byScore != 0 ? byScore : a.playerId.CompareTo(b.playerId);
         }
 
-        /// <summary>"SEN 7 · LİDER 9 (ertu)" — lider kendimizsek ikinci parça yazılmaz.</summary>
+        /// <summary>"SEN 7 · LİDER 9 (ertu)" — the second part is dropped if we are the leader.</summary>
         private string BuildScoreLine()
         {
             if (_ranked.Count == 0)
@@ -152,7 +147,7 @@ namespace VortexArena.Modes.Ffa
                 break;
             }
 
-            // Gözlemci (admin) ya da henüz kimliği olmayan istemci: yalnız lideri göster.
+            // Admin spectator or a client without an id yet: show only the leader.
             if (!selfFound)
             {
                 return $"LİDER {leader.score} ({NameOf(leader.playerId)})";
@@ -163,7 +158,7 @@ namespace VortexArena.Modes.Ffa
                 : $"SEN {selfScore} · LİDER {leader.score} ({NameOf(leader.playerId)})";
         }
 
-        /// <summary>İlk üç: "1. Ad 9" (azalan). Kimse yoksa boş.</summary>
+        /// <summary>Top three: "1. Name 9" (descending). Empty if there is nobody.</summary>
         private string BuildStandings()
         {
             if (standingsText == null || _ranked.Count == 0)

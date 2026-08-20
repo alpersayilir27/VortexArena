@@ -4,19 +4,14 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Hiçbir şey yapmayan ISDK <see cref="ITransformer"/>'ı: kavranan nesneyi <b>yerinde
-    /// dondurur</b>. <see cref="WeaponFrame"/>'in durduğu kaynak silahta kullanılır.
-    /// <para>
-    /// ⚠️ <b>"Transformer koymamak" hareketsizlik DEĞİL, SERBEST hareket demektir:</b>
-    /// <c>Grabbable.Start</c> tek ve çift el transformer'larının İKİSİ de boşsa kendisi bir
-    /// <c>GrabFreeTransformer</c> üretip bağlar ("Create missing defaults"). Yani alanları boş
-    /// bırakmak, çerçevedeki silahı en serbest hâline sokardı.
-    /// </para>
-    /// <para>
-    /// <b>Neden "her karede pozu geri yaz" değil:</b> o yaklaşım ISDK'nın transformer'ıyla kare
-    /// kare yarışır — hangisinin sonra yazdığı Unity'nin çağrı sırasına kalır ve silah titrer.
-    /// Kaynağı hiç kıpırdatmamanın tek kesin yolu, kıpırdatacak kodu devreden çıkarmaktır.
-    /// </para>
+    /// A do-nothing ISDK <see cref="ITransformer"/>: freezes the grabbed object in place. Used on
+    /// the source weapon the <see cref="WeaponFrame"/> sits on.
+    /// <para>⚠️ Omitting the transformer means FREE movement, not immobility: with BOTH the single-
+    /// and two-hand lists empty, <c>Grabbable.Start</c> attaches a <c>GrabFreeTransformer</c> itself
+    /// ("Create missing defaults").</para>
+    /// <para>Not "rewrite the pose every frame": that races ISDK's transformer — who writes last is
+    /// up to Unity's call order and the weapon jitters. The only certain fix is disabling the code
+    /// that would move it.</para>
     /// </summary>
     public class FrozenGrabTransformer : MonoBehaviour, ITransformer
     {

@@ -9,62 +9,59 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// İstatistik panelindeki tek oyuncu satırı: takım şeridi, ad + <c>#id</c>, K/D/KD hücreleri,
-    /// tek satırlık ayrıntı (skor · pil · kumanda · ping · durum) ve eylem düğmeleri
-    /// (kalem · AT · ÖLÇ · KALİBRE).
+    /// Single player row in the stats panel: team stripe, name + <c>#id</c>, K/D/KD cells, one
+    /// detail line (score · battery · controllers · ping · state) and actions (rename · AT · ÖLÇ ·
+    /// KALİBRE).
     /// <para>
-    /// <b>Neden <see cref="AdminPlayerRow"/>'un kardeşi ama AYRI bir sınıf:</b> yan panel kartı dar
-    /// ve POV/takım/kimlik/can düğmeleriyle sahne kontrolüne ait; bu satır geniş, tablo hücreli ve
-    /// operatörün oturup <i>kayıt işi</i> yaptığı ekrana ait (ad düzenleme, ölçüm, kalibrasyon
-    /// yeniden yükleme). İkisini tek sınıfa sıkıştırmak her <c>Bind</c>'da "hangi ekrandayım"
-    /// dallanması demektir ve bir ekrana yapılan her düzeltme diğerini sessizce bozar.
+    /// <b>Why a sibling of <see cref="AdminPlayerRow"/> but a separate class:</b> the side card is
+    /// narrow and belongs to scene control (POV/team/revive); this row is wide, table-like
+    /// and belongs to the operator's <i>record keeping</i> screen. Merging them means a "which
+    /// screen am I on" branch in every <c>Bind</c>, where a fix for one screen silently breaks the
+    /// other.
     /// </para>
     /// <para>
-    /// <b>Görünüm prefabtan gelir</b> (<c>Assets/_Shared/App/Resources/UI/</c>). Bu sınıf yalnız
-    /// <b>davranış</b>tır: yerleşim/punto/statik renkler prefabta, durum renkleri koddan. Prefabta
-    /// bağlanmayan alan sessizce çizilmez.
+    /// <b>Look comes from the prefab</b> (<c>Assets/_Shared/App/Resources/UI/</c>); this class is
+    /// behaviour only. Unbound prefab fields silently draw nothing.
     /// </para>
     /// <para>
-    /// ⚠️ <b>HP, SAHNE ve İHLAL bu satırda YOKTUR ve eklenmez</b> — eksiklik değil karardır: HP yan
-    /// paneldeki oyuncu kartında (bar ile) duruyor, ihlal akışı HUD'ın kendi şeridinde ve satır
-    /// kenarlığında canlı çiziliyor, sahne adı ise tüm başlıklarda aynı olduğu için satır başına
-    /// tekrarlandığında yalnız gürültü üretiyordu.
+    /// ⚠️ <b>HP, scene and violations are absent by DESIGN</b> — HP lives on the side panel card as
+    /// a bar, violations blink live on the HUD strip and card border, and the scene name is the
+    /// same for every headset so per-row repetition was only noise.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Kalibrasyon SIFIRLAMA bu satırda YOKTUR:</b> buradaki KALİBRE düğmesi gözlükte KAYITLI
-    /// çapa verisinden <i>yeniden yükleme</i>dir. Sıfırlama (savaş dışı bırakır) yan paneldeki KAL
-    /// düğmesindedir; iki zıt işi yan yana koymak operatörü yanıltır.
+    /// ⚠️ <b>No calibration RESET here:</b> the KALİBRE button <i>reloads</i> from the anchor saved
+    /// on the headset. Reset (takes the player out of the fight) is the side panel's KAL button;
+    /// putting two opposite actions side by side misleads the operator.
     /// </para>
     /// </summary>
     public class AdminStatsRow : MonoBehaviour
     {
-        /// <summary>Satır yüksekliğinin <b>yedek</b> değeri (px). Gerçek yükseklik prefabın
-        /// <see cref="RectTransform"/>'undan okunur (<see cref="AdminStatsPanel"/>) — sanatçı
-        /// satırı büyütürse liste yerleşimi kendiliğinden uyar.</summary>
+        /// <summary>Row height <b>fallback</b> (px); real height is read from the prefab's
+        /// <see cref="RectTransform"/> (<see cref="AdminStatsPanel"/>) so resizing it in the prefab
+        /// reflows the list.</summary>
         public const float Height = 74f;
 
-        /// <summary>"AT" düğmesinin onay penceresi (sn) — <see cref="AdminPlayerRow"/> ile aynı.</summary>
+        /// <summary>Confirm window (s) for "AT" — same as <see cref="AdminPlayerRow"/>.</summary>
         private const float ConfirmSeconds = 3f;
 
-        /// <summary>Sonuç etiketinin ("TAMAM"/"HATA") ekranda kaldığı süre (sn). Kalıcı olsaydı
-        /// satır bir sonraki denemeye kadar eski sonucu gösterirdi.</summary>
+        /// <summary>How long the result label ("TAMAM"/"HATA") stays up (s). Permanent would show
+        /// a stale result until the next attempt.</summary>
         private const float ResultHoldSeconds = 2f;
 
         /// <summary>
-        /// Yeniden yükleme yanıtının beklendiği en uzun süre (sn).
-        /// <para>⚠️ <b>Zorunludur:</b> başlık kapanmış ya da donmuşsa <c>calibration_result</c> HİÇ
-        /// gelmez ve düğme sonsuza kadar "YÜKLENİYOR" olarak asılı kalırdı — operatör hem sonucu
-        /// öğrenemez hem tekrar deneyemez.</para>
-        /// <para>⚠️ <b>Başlığın deneme penceresinden BELİRGİN olarak uzun tutulur</b>
-        /// (<c>ArenaCalibrator.RestoreAttempts</c> × <c>RestoreRetryDelayMs</c> ≈ 10 sn, artı her
-        /// denemenin kendi yükleme/localize beklemesi): kısa kalırsa düğme "yanıt gelmedi" der,
-        /// gerçek sonuç saniyeler sonra gelir ve operatör başarılı bir yüklemeyi başarısız
-        /// sanar. Orada pencere uzarsa burası da uzar.</para>
+        /// Longest wait for a reload reply (s).
+        /// <para>⚠️ <b>Required:</b> if the headset is closed or frozen <c>calibration_result</c>
+        /// never arrives and the button would hang on "YÜKLENİYOR" forever — no result, no retry.</para>
+        /// <para>⚠️ Kept clearly LONGER than the headset's own retry window
+        /// (<c>ArenaCalibrator.RestoreAttempts</c> × <c>RestoreRetryDelayMs</c> ≈ 10 s, plus each
+        /// attempt's load/localize wait): too short and the button says "no reply" seconds before
+        /// the real result, making the operator read a success as a failure. If that window grows,
+        /// this one grows too.</para>
         /// </summary>
         private const float LoadTimeoutSeconds = 25f;
 
-        // ⚠️ Etiketlerde sembol/emoji YOK: TMP varsayılan fontunda garantisi yok, eksik glif □
-        // çizilir (AdminPlayerRow ve UiKit'te aynı kural). Durum renkle + ünlem işaretiyle anlatılır.
+        // ⚠️ No symbols/emoji in labels: TMP's default font does not guarantee them and a missing
+        // glyph draws □ (same rule as AdminPlayerRow and UiKit). Colour + "!" carry the state.
         private const string LabelConfirm = "EMİN?";
         private const string LabelKick = "AT";
         private const string LabelMeasure = "ÖLÇ";
@@ -75,20 +72,20 @@ namespace VortexArena.App.Admin
         private const string LabelCalibrateOk = "TAMAM";
         private const string LabelCalibrateFailed = "HATA";
 
-        /// <summary>Yanıt hiç gelmediğinde operatöre gösterilen gerekçe — boş bir hata metni
-        /// "HATA" deyip sebebi söylememek olurdu.</summary>
+        /// <summary>Reason shown when no reply ever arrives — a bare "HATA" without a cause would
+        /// leave the operator guessing.</summary>
         private const string TimeoutReason = "başlıktan yanıt gelmedi";
 
         private const float DeadColorScale = 0.5f;
 
-        /// <summary>Satır sönüklüğü (<see cref="AdminPlayerRow"/> ile aynı kademe): geri beklenen
-        /// cihaz ile oyundan çıkarılmış cihaz aynı görünmemeli.</summary>
+        /// <summary>Row dimming (same grades as <see cref="AdminPlayerRow"/>): a device expected
+        /// back must not look like one removed from the game.</summary>
         private const float ReconnectingAlpha = 0.7f;
 
         /// <inheritdoc cref="ReconnectingAlpha"/>
         private const float LeftAlpha = 0.45f;
 
-        /// <summary>KALİBRE düğmesinin durumu — etiketi ve etkinliğini bu belirler.</summary>
+        /// <summary>KALİBRE button state — drives its label and interactability.</summary>
         private enum LoadState
         {
             Idle,
@@ -145,14 +142,14 @@ namespace VortexArena.App.Admin
         private float _floorOffset;
         private float _kickArmedAt = -1f;
 
-        /// <summary>Ad düzenleme kipi. Açıkken <see cref="Bind"/> ada DOKUNMAZ (bkz. sınıf içi
-        /// gerekçe) — bu yüzden kip bir alan olarak taşınır.</summary>
+        /// <summary>Name edit mode. While on, <see cref="Bind"/> leaves the name alone — hence a
+        /// field rather than a local.</summary>
         private bool _editing;
 
         private LoadState _loadState = LoadState.Idle;
 
-        /// <summary>Yükleme/sonuç durumuna girildiği an (<c>Time.unscaledTime</c>);
-        /// zaman aşımı ve sonuç bekletmesi bunun üstünden ölçülür.</summary>
+        /// <summary>When the load/result state was entered (<c>Time.unscaledTime</c>); timeout and
+        /// result hold are measured from it.</summary>
         private float _loadStateAt = -1f;
 
         public int PlayerId => _playerId;
@@ -160,12 +157,11 @@ namespace VortexArena.App.Admin
         private RectTransform Rect => _rect != null ? _rect : _rect = (RectTransform)transform;
 
         /// <summary>
-        /// Düğme geri çağrılarını bağlar. Prefabta <c>onClick</c> kaydı YOKTUR ve olmamalıdır:
-        /// hedef oyuncu her <see cref="Bind"/> ile değişiyor, kalıcı (persistent) bir kayıt yanlış
-        /// oyuncuya komut gönderirdi.
+        /// Wires button callbacks. ⚠️ No <c>onClick</c> entries in the prefab: the target player
+        /// changes on every <see cref="Bind"/>, so a persistent entry would command the wrong one.
         /// </summary>
-        /// <param name="onSelect">Satır seçildi (panel seçili oyuncuyu günceller).</param>
-        /// <param name="onPopup">Kalibrasyon yüklemesi başarısız — gerekçeyi panel gösterir.</param>
+        /// <param name="onSelect">Row selected (panel updates the selected player).</param>
+        /// <param name="onPopup">Calibration reload failed — the panel shows the reason.</param>
         public void Initialize(Action<int> onSelect, Action<int, string> onPopup)
         {
             _onSelect = onSelect;
@@ -178,14 +174,14 @@ namespace VortexArena.App.Admin
             Wire(nameApplyButton, ApplyNameEdit);
             Wire(nameCancelButton, CancelNameEdit);
             Wire(kickButton, PressKick);
-            // ⚠️ Tek adımlı (onay penceresi YOK): ölçüm geri alınabilir bir eylemdir — yanlışlıkla
-            // basılırsa yeniden ölçülür (AdminPlayerRow ile aynı gerekçe).
+            // ⚠️ One step (no confirm): measuring is undoable — a stray press is fixed by measuring
+            // again (same reason as AdminPlayerRow).
             Wire(measureButton, () => AdminCommands.MeasureBodyScale(_playerId));
             Wire(calibrateButton, PressCalibrate);
 
             if (nameInput != null)
             {
-                // Enter = onayla: operatör ada dokunurken elini fareye götürmek zorunda kalmasın.
+                // Enter = apply: the operator should not have to reach for the mouse mid-edit.
                 nameInput.onSubmit.RemoveAllListeners();
                 nameInput.onSubmit.AddListener(_ => ApplyNameEdit());
             }
@@ -196,14 +192,13 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Ayrıntı hücresinin zengin metin kapısı.
-        /// <para>⚠️ <b>Bayrak prefabta değil BURADA açılır:</b> <c>&lt;color=…&gt;</c> etiketlerini
-        /// <see cref="AdminPlayerRow.FormatBattery"/>/<see cref="AdminPlayerRow.FormatControllers"/>
-        /// üretiyor, yani bayrak bir görünüm tercihi değil üretilen metnin sözleşmesidir. Prefabta
-        /// kapalı kaldığında hücre <c>%73 K:&lt;color=#…&gt;~</c> gibi ham etiket çizer ve bu sessiz
-        /// bir bozulmadır.</para>
-        /// <para>⚠️ <b>Yalnız bu hücre için.</b> <see cref="nameText"/> zengin metne KAPALI kalır:
-        /// ad dışarıdan gelir ve <c>&lt;b&gt;</c> içeren bir ad satırın biçimini bozardı.</para>
+        /// Rich text gate of the detail cell.
+        /// <para>⚠️ <b>Enabled HERE, not in the prefab:</b> <c>&lt;color=…&gt;</c> tags come from
+        /// <see cref="AdminPlayerRow.FormatBattery"/>/<see cref="AdminPlayerRow.FormatControllers"/>,
+        /// so the flag is a contract of the generated text, not a look preference — off in the
+        /// prefab the cell draws raw tags, a silent breakage.</para>
+        /// <para>⚠️ <b>Only this cell.</b> <see cref="nameText"/> stays rich-text OFF: names come
+        /// from outside and a <c>&lt;b&gt;</c> in one would break the row.</para>
         /// </summary>
         private void EnableDetailRichText()
         {
@@ -224,7 +219,7 @@ namespace VortexArena.App.Admin
             button.onClick.AddListener(action);
         }
 
-        /// <summary>Satırı verilen oyuncuya bağlar (her tazelemede çağrılır).</summary>
+        /// <summary>Binds the row to a player (called on every refresh).</summary>
         public void Bind(AdminPlayerView view, bool selected)
         {
             if (view == null)
@@ -232,9 +227,9 @@ namespace VortexArena.App.Admin
                 return;
             }
 
-            // ⚠️ Satır başka bir oyuncuya bağlanıyorsa açık kipler KAPATILIR: düzenleme kipi
-            // kalsaydı bir oyuncuya yazılan ad diğerine gönderilirdi, bekleyen yükleme kalsaydı
-            // önceki oyuncunun sonucu bu satırda görünürdü.
+            // ⚠️ Open modes are CLOSED when the row rebinds to another player: a kept edit mode
+            // would send one player's typed name to another, and a pending load would show the
+            // previous player's result here.
             if (_playerId != view.playerId)
             {
                 SetNameEditActive(false);
@@ -253,30 +248,30 @@ namespace VortexArena.App.Admin
                 stripe.color = view.alive ? team : UiKit.Dim(team, DeadColorScale);
             }
 
-            // Kalibresiz satır seçili olmasa da kırmızı kenarlıkla ayrışır (§10.6).
-            // ⚠️ İhlal yanıp sönmesi bu satırda YOK: ihlalin canlı kanalı HUD kartıdır ve iki
-            // ekranda birden yanıp sönen bir kenarlık operatörün gözünü hiçbir yere odaklamaz.
+            // Uncalibrated rows stand out in red even when unselected (§10.6).
+            // ⚠️ No violation blink here: the live channel is the HUD card, and a border blinking
+            // on two screens at once focuses the operator's eye nowhere.
             if (border != null)
             {
                 border.color = selected ? UiKit.Accent
                     : view.NeedsCalibration ? UiKit.Bad : UiKit.Border;
             }
 
-            // Sönüklük kademeli: bağlı 1.0, geri beklenen 0.7, ayrılmış 0.45 — "geri gelebilir" ile
-            // "gitti" operatör için farklı iki karardır.
+            // Graded dimming: connected 1.0, expected back 0.7, left 0.45 — "may return" and "gone"
+            // are two different operator decisions.
             float alpha = view.IsConnected ? 1f : view.IsReconnecting ? ReconnectingAlpha : LeftAlpha;
 
             if (nameText != null && !_editing)
             {
-                // ⚠️ Düzenleme kipindeyken ada DOKUNULMAZ: roster saniyede birkaç kez tazeleniyor ve
-                // operatörün yazdığı metnin üstüne yazmak onu sessizce kaybettirir.
-                // Ad TAKIM RENGİNDE yazılır — aynı oyuncu sahnede, kill feed'de ve burada aynı
-                // renkte görünsün; takımsız oyuncuda renk bilgi taşımaz, başlık rengi kalır.
+                // ⚠️ Never touch the name while editing: the roster refreshes several times a
+                // second and would silently overwrite what the operator typed.
+                // Name in TEAM COLOUR so the same player looks the same in the scene, the kill feed
+                // and here; teamless carries no colour information, title colour stays.
                 Color nameColor = IsTeamPlayer(view.team) ? team : UiKit.Title;
                 nameText.color = UiKit.WithAlpha(
                     view.alive ? nameColor : UiKit.Dim(nameColor, DeadColorScale), alpha);
-                // Numara adın ÖNÜNE (avatar plakasıyla aynı biçim): adlar benzersiz değil,
-                // operatörün ayırt ettiği şey numaradır. 0 = atanmamış → yalnız ad.
+                // Number BEFORE the name (same format as the avatar plate): names are not unique,
+                // the number is what separates them. 0 = unassigned → name only.
                 nameText.text = view.number > 0 ? $"{view.number} · {view.name}" : view.name;
             }
 
@@ -299,8 +294,8 @@ namespace VortexArena.App.Admin
 
             if (kdText != null)
             {
-                // Ölümsüz oyuncuda oran tanımsız olurdu; öldürme sayısını aynı biçimde yazmak
-                // "sıfıra bölme" yerine okunabilir bir değer verir (tablo dönemindeki davranış).
+                // The ratio is undefined without deaths; printing the kill count in the same format
+                // gives a readable value instead of a division by zero.
                 kdText.text = view.deaths > 0
                     ? (view.kills / (float)view.deaths).ToString("0.00")
                     : view.kills.ToString("0.00");
@@ -309,14 +304,14 @@ namespace VortexArena.App.Admin
 
             if (detailText != null)
             {
-                // ⚠️ Satırın TABAN rengi burada, token renkleri zengin metinle: tek TMP'nin tek
-                // `.color`'ı var, oysa pil ve kumanda kendi durumlarına göre ayrı ayrı renklenmeli.
+                // ⚠️ BASE colour here, token colours via rich text: a TMP has one `.color`, but
+                // battery and controllers must colour independently.
                 detailText.text = BuildDetailLine(view);
                 detailText.color = view.IsConnected ? UiKit.Muted : UiKit.Faint;
             }
 
-            // Ayrılmış satırda komutun hedefi yok (§10.2): oyuncu oyundan çıkarıldı, satır yalnız
-            // maç istatistiği için duruyor. Tepkisiz bir düğme "gönderdim ama olmadı" hissi üretir.
+            // A left row has no command target (§10.2): the player is out, the row only carries
+            // match stats. A dead button would feel like "sent but nothing happened".
             SetInteractable(kickButton, !view.HasLeft);
             SetInteractable(renameButton, !view.HasLeft);
 
@@ -325,8 +320,8 @@ namespace VortexArena.App.Admin
             RefreshCalibrateButton();
         }
 
-        /// <summary>Onay penceresi, yükleme zaman aşımı ve sonuç bekletmesi (panel her karede
-        /// çağırır).</summary>
+        /// <summary>Expires the confirm window, load timeout and result hold (panel calls every
+        /// frame).</summary>
         public void Tick()
         {
             if (_kickArmedAt >= 0f && Time.unscaledTime - _kickArmedAt > ConfirmSeconds)
@@ -338,8 +333,8 @@ namespace VortexArena.App.Admin
             if (_loadState == LoadState.Loading &&
                 Time.unscaledTime - _loadStateAt > LoadTimeoutSeconds)
             {
-                // Yanıt hiç gelmedi: başarısızlık gibi ele alınır — sessizce boşa düşürmek
-                // operatöre "komut gitti ve tuttu" izlenimi verirdi.
+                // No reply at all is treated as a failure: dropping it silently would read as
+                // "the command went through".
                 ApplyCalibrationResult(false, TimeoutReason);
                 return;
             }
@@ -360,24 +355,24 @@ namespace VortexArena.App.Admin
 
             if (!visible)
             {
-                // ⚠️ Gizlenen satırda düzenleme kipi bırakılmaz: liste yeniden dizildiğinde aynı
-                // satır başka bir oyuncuya düşer ve yazılan ad ona gider.
+                // ⚠️ Never leave edit mode on a hidden row: after a relayout the same row lands on
+                // another player and the typed name would go to them.
                 SetNameEditActive(false);
             }
 
             gameObject.SetActive(visible);
         }
 
-        /// <summary>Satırı listenin içinde verilen üst ofsete yerleştirir.</summary>
+        /// <summary>Places the row at the given top offset inside the list.</summary>
         public void Place(float top, float height)
         {
             UiKit.Block(Rect, 0f, top, 0f, height);
         }
 
         /// <summary>
-        /// Düğmeyi "yükleniyor" kipine alır. <b>Toplu eylem</b> (TÜMÜNÜ KALİBRE ET) bunu komutu
-        /// göndermeden ÖNCE çağırır: komut önce gidip sonucu hemen dönerse satır henüz yükleme
-        /// kipine girmemiş olurdu ve sonuç görünmeden yutulurdu.
+        /// Puts the button into "loading". The <b>bulk action</b> (TÜMÜNÜ KALİBRE ET) calls this
+        /// BEFORE sending: if the command returned its result immediately, the row would not be in
+        /// loading state yet and the result would be swallowed unseen.
         /// </summary>
         public void BeginCalibrationLoad()
         {
@@ -385,9 +380,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Yeniden yükleme denemesinin sonucu (§5.3 <c>calibration_result</c> ya da zaman aşımı).
-        /// <para>Başarıda popup YOKTUR — düğmenin "TAMAM" durumu yeterli; başarısızlıkta gerekçe
-        /// panele verilir, çünkü dar düğme "HATA"dan fazlasını taşıyamaz.</para>
+        /// Result of a reload attempt (§5.3 <c>calibration_result</c> or timeout).
+        /// <para>No popup on success — the "TAMAM" state is enough; on failure the reason goes to
+        /// the panel, since a narrow button cannot carry more than "HATA".</para>
         /// </summary>
         public void ApplyCalibrationResult(bool ok, string error)
         {
@@ -400,13 +395,12 @@ namespace VortexArena.App.Admin
             }
         }
 
-        // ---------------------------------------------------------------- iç işler
+        // ---------------------------------------------------------------- internals
 
         /// <summary>
-        /// Esc = düzenlemeden çık.
-        /// <para>⚠️ Okuma <b>Input System</b> ile: proje Input System-only, eski
-        /// <c>Input.GetKeyDown</c> çalışma anında istisna atar. Klavye yoksa
-        /// (<c>Keyboard.current == null</c>) sessizce geçilir.</para>
+        /// Esc leaves edit mode.
+        /// <para>⚠️ Read through <b>Input System</b>: the project is Input System-only and the old
+        /// <c>Input.GetKeyDown</c> throws at runtime. No keyboard → skipped silently.</para>
         /// </summary>
         private void Update()
         {
@@ -436,8 +430,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Ad düzenleme kipini açar: okunur ad gizlenir, giriş alanı oyuncunun mevcut adıyla
-        /// dolar ve odağı alır. Kip açıkken roster tazelemesi ada dokunmaz (bkz. <see cref="Bind"/>).
+        /// Opens name edit mode: the read-only name hides, the input field fills with the current
+        /// name and takes focus. While open, roster refreshes leave the name alone (see
+        /// <see cref="Bind"/>).
         /// </summary>
         private void BeginNameEdit()
         {
@@ -458,8 +453,8 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Yeni adı gönderir. Numara <c>0</c> geçilir = "numarayı DEĞİŞTİRME" (§5.1):
-        /// forma numarasını sunucu atar ve onu elle değiştiren bir arayüz YOKTUR.</summary>
+        /// <summary>Sends the new name. Number <c>0</c> means "do NOT change the number" (§5.1):
+        /// the server assigns shirt numbers and no UI overrides them.</summary>
         private void ApplyNameEdit()
         {
             if (!_editing)
@@ -472,8 +467,8 @@ namespace VortexArena.App.Admin
             AdminCommands.SetIdentity(_playerId, typed, 0);
         }
 
-        /// <summary>Düzenlemeyi iptal eder — hiçbir şey gönderilmez, satır bir sonraki
-        /// <see cref="Bind"/> ile sunucunun bildiği ada döner.</summary>
+        /// <summary>Cancels the edit — nothing is sent, the next <see cref="Bind"/> restores the
+        /// name the server knows.</summary>
         private void CancelNameEdit()
         {
             SetNameEditActive(false);
@@ -509,15 +504,15 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Kalibrasyonu gözlükteki KAYITLI çapa verisinden yeniden yükletir (§5.3).
-        /// <para>Tek adımlıdır: oyuncuyu savaş dışı bırakmaz, en kötü ihtimalle hiçbir şey olmaz —
-        /// iki adımlı kilit sıfırlama gibi geri alınamaz komutlar içindir.</para>
+        /// Reloads calibration from the anchor SAVED on the headset (§5.3).
+        /// <para>One step: it cannot take the player out of the fight, worst case nothing happens —
+        /// the two-step lock is for irreversible commands like reset.</para>
         /// </summary>
         private void PressCalibrate()
         {
             if (_loadState == LoadState.Loading)
             {
-                return; // çift gönderim: düğme zaten pasif, bu ikinci savunma hattı
+                return; // double send: the button is already disabled, this is the second line
             }
 
             BeginCalibrationLoad();
@@ -532,10 +527,10 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// ÖLÇ düğmesi hem KOMUT hem GÖSTERGEDİR (§10.8): ölçülmemişse "ÖLÇ", ölçülmüşse çarpanın
-        /// kendisi yazar. Kalibresiz oyuncuda pasiftir — sunucu o komutu zaten kesiyor.
-        /// <para>⚠️ Son ölçüm başarısızsa (<c>scaleError</c> dolu) etiket çarpan yerine
-        /// başarısızlığı yazar ve düğme ETKİN kalır: yapılacak iş tam da yeniden ölçmektir.</para>
+        /// ÖLÇ is both COMMAND and INDICATOR (§10.8): "ÖLÇ" when unmeasured, the scale itself when
+        /// measured. Disabled while uncalibrated — the server rejects it anyway.
+        /// <para>⚠️ On failure (<c>scaleError</c> set) the label says so and the button stays
+        /// ENABLED: re-measuring is exactly the job.</para>
         /// </summary>
         private void RefreshMeasureButton(AdminPlayerView view)
         {
@@ -570,9 +565,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// KALİBRE düğmesi boşta GÖSTERGEDİR: kalibreliyse yeşil, zemin sapması eşiği aşıyorsa
-        /// uyarı rengi (§10.6 — hizalama geçerli ama gözlüğün alan verisi bayat), kalibresizse
-        /// kırmızı ve ünlemli. Yüklerken pasiftir; sonuç kısa süre gösterilip boş duruma dönülür.
+        /// While idle the KALİBRE button is an INDICATOR: green when calibrated, warning colour
+        /// over the floor drift threshold (§10.6 — alignment valid, headset space data stale), red
+        /// with "!" when uncalibrated. Disabled while loading; the result shows briefly, then idle.
         /// </summary>
         private void RefreshCalibrateButton()
         {
@@ -604,42 +599,41 @@ namespace VortexArena.App.Admin
                               Mathf.Abs(_floorOffset) > ArenaProtocol.CALIB_FLOOR_WARN_METERS;
 
             calibrateLabel.text = _calibrated ? LabelCalibrate : LabelCalibrateUncalibrated;
-            // Sapma uyarısı Accent, kalibresizlik Bad: sapmalı oyuncu oynayabilir, kalibresiz
-            // oynayamaz — iki durum renkten ayrışmalı (AdminPlayerRow ile aynı ton).
+            // Drift = Accent, uncalibrated = Bad: a drifting player can play, an uncalibrated one
+            // cannot (same tone as AdminPlayerRow).
             calibrateLabel.color = !_calibrated ? UiKit.Bad
                 : floorDrift ? UiKit.Accent : UiKit.Good;
         }
 
         /// <summary>
-        /// Ayrıntı hücresi: SKOR · pil · kumanda · ping · durum.
-        /// <para>Pil eşikleri/renkleri ve kumanda simgeleri <see cref="AdminPlayerRow"/>'dan gelir —
-        /// aynı gözlük iki ekranda farklı renkte görünmemeli.</para>
+        /// Detail cell: score · battery · controllers · ping · state.
+        /// <para>Battery thresholds/colours and controller glyphs come from
+        /// <see cref="AdminPlayerRow"/> — the same headset must not differ between screens.</para>
         /// </summary>
         private static string BuildDetailLine(AdminPlayerView view)
         {
             string battery = AdminPlayerRow.FormatBattery(view);
             string controllers = AdminPlayerRow.FormatControllers(view);
-            // §6.7: -1 = ölçüm yok. "0 ms ping" gibi okunmasın diye "-".
+            // §6.7: -1 = no measurement. "-" so it does not read as "0 ms ping".
             string ping = view.rttMs < 0 ? "-" : $"{view.rttMs} ms";
             string state = StateText(view);
 
-            // Kumanda tokeni hiç bilgi taşımıyorsa (iki el de "bildirilmedi") satır onunla şişmez.
+            // Drop the controller token when it carries nothing (both hands unreported).
             string line = string.IsNullOrEmpty(controllers)
                 ? $"SKOR {view.score} · {battery} · {ping} · {state}"
                 : $"SKOR {view.score} · {battery} · {controllers} · {ping} · {state}";
 
-            // ⚠️ Son yeniden yükleme denemesinin gerekçesi satırda KALICI durur (§10.6): uyarı
-            // penceresi birkaç saniye sonra kendini kapatıyor ve kapandığında hiçbir iz kalmasaydı
-            // operatör "bir şey oldu ama neydi" sorusuyla baş başa kalırdı. Alanı SUNUCU tutuyor,
-            // yani sonradan bağlanan ikinci operatör de aynı gerekçeyi görür; başarılı bir
-            // kalibrasyon onu temizlediği için satır kendi kendini toparlar.
+            // ⚠️ The last reload failure reason STAYS on the row (§10.6): the popup closes itself
+            // after a few seconds and without a trace the operator is left with "something
+            // happened, but what". The field is held by the SERVER, so a later-joining operator
+            // sees the same reason; a successful calibration clears it, so the row heals itself.
             return string.IsNullOrEmpty(view.calibrationError)
                 ? line
                 : $"{line} · <color=#{ColorUtility.ToHtmlStringRGB(UiKit.Bad)}>{view.calibrationError}</color>";
         }
 
-        /// <summary>⚠️ "çevrimdışı" diye bir durum YOKTUR (§2) — satır ya geri bekleniyor
-        /// (sayaçla) ya oyundan çıkarılmıştır.</summary>
+        /// <summary>⚠️ There is no "offline" state (§2) — a row is either expected back (with a
+        /// countdown) or out of the game.</summary>
         private static string StateText(AdminPlayerView view)
         {
             if (view.IsReconnecting)

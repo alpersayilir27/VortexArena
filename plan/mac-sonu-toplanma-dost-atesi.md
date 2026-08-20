@@ -4,7 +4,7 @@
 işlendi: `Docs/ArenaNet-Protokol.md` (§1 sabit, §5.2 `set_friendly_fire`, §5.3 `rules_update` +
 `admin_state.friendlyFire`, §10.1 `finished` + tur tabanlı modlar, §10.2 takımdaş öldürme,
 §10.5 `friendlyFire`) · `Docs/Sistem-Ozeti.md` (§3.6, §3.8.2, §3.9, §4, §7) ·
-`Docs/Kullanim-Kilavuzu.md` (turnuva bölümü + dost ateşi) · `CLAUDE.md`.
+`Docs/Kullanim-Kilavuzu.md` (turnuva bölümü + dost ateşi) · `Docs/Gelistirici/Yapma-Listesi.md`.
 
 Bu dosya yalnız **elde kalan doğrulamayı** tutuyor; hepsi geçince silinir.
 

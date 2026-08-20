@@ -16,10 +16,10 @@ using UnityEngine.Networking;
 namespace VortexArena.Net
 {
     /// <summary>
-    /// Sunucu keşfi tekili: UDP 47820'de beacon dinler (Android'de MulticastLock ile),
-    /// geçerli beacon'ı ana thread'de OnBeacon olayıyla yayınlar ve öncelik zinciri
-    /// yardımcıları sunar: PlayerPrefs (elle girilen IP) > beacon > arena.json.
-    /// Beacon yalnız otomatik doldurma kolaylığıdır — bağlanma kararını App verir.
+    /// The server discovery singleton: listens for beacons on UDP 47820 (with a MulticastLock on
+    /// Android), publishes a valid beacon on the main thread through the OnBeacon event and offers the
+    /// priority-chain helpers: PlayerPrefs (manually entered IP) > beacon > arena.json.
+    /// The beacon is only an auto-fill convenience — the decision to connect is App's.
     /// </summary>
     public class ServerDiscovery : MonoBehaviour
     {
@@ -30,7 +30,7 @@ namespace VortexArena.Net
 
         public static ServerDiscovery Instance { get; private set; }
 
-        /// <summary>Ana thread'de tetiklenir: (beacon, çözümlenmiş sunucu IP'si).</summary>
+        /// <summary>Raised on the main thread: (beacon, resolved server IP).</summary>
         public event Action<BeaconMsg, string> OnBeacon;
 
         public BeaconMsg LastBeacon { get; private set; }
@@ -117,9 +117,9 @@ namespace VortexArena.Net
             Shutdown();
         }
 
-        // -------------------------------------------------- öncelik zinciri yardımcıları
+        // -------------------------------------------------- priority chain helpers
 
-        /// <summary>Elle girilen adresi kalıcı yazar (beacon'ı her zaman ezer).</summary>
+        /// <summary>Persists the manually entered address (it always overrides the beacon).</summary>
         public static void SaveManualEndpoint(string ip, int port)
         {
             PlayerPrefs.SetString(PrefKeyServerIp, ip);
@@ -127,7 +127,7 @@ namespace VortexArena.Net
             PlayerPrefs.Save();
         }
 
-        /// <summary>PlayerPrefs'teki elle girilmiş adresi okur; yoksa false.</summary>
+        /// <summary>Reads the manually entered address from PlayerPrefs; false when there is none.</summary>
         public static bool TryGetSavedEndpoint(out string ip, out int port)
         {
             ip = PlayerPrefs.GetString(PrefKeyServerIp, "");
@@ -145,7 +145,7 @@ namespace VortexArena.Net
             return true;
         }
 
-        /// <summary>Öncelik zinciri: PlayerPrefs > son beacon > arena.json. Hiçbiri yoksa false.</summary>
+        /// <summary>Priority chain: PlayerPrefs > last beacon > arena.json. False when there is none.</summary>
         public bool TryGetPreferredEndpoint(out string ip, out int port)
         {
             if (TryGetSavedEndpoint(out ip, out port))
@@ -174,7 +174,7 @@ namespace VortexArena.Net
             return false;
         }
 
-        /// <summary>"ip" ya da "ip:port" metnini çözer; port yoksa CONTROL_PORT kullanılır.</summary>
+        /// <summary>Parses an "ip" or "ip:port" text; CONTROL_PORT is used when there is no port.</summary>
         public static bool TryParseEndpoint(string text, out string ip, out int port)
         {
             ip = "";
@@ -209,7 +209,7 @@ namespace VortexArena.Net
             string json = null;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-            // Android'de StreamingAssets APK (jar) içindedir; File API çalışmaz.
+            // On Android StreamingAssets lives inside the APK (a jar); the File API does not work.
             using (UnityWebRequest request = UnityWebRequest.Get(path))
             {
                 yield return request.SendWebRequest();
@@ -235,7 +235,7 @@ namespace VortexArena.Net
                 Debug.LogWarning($"[ServerDiscovery] {ConfigFileName} okunamadı: {e.Message}; statik adres yok.");
             }
 
-            yield return null; // Editor/masaüstü derlemesinde de metodun iterator kalması için
+            yield return null; // so the method stays an iterator in the Editor/desktop build too
 #endif
 
             StaticConfig = ParseConfig(json);
@@ -260,7 +260,7 @@ namespace VortexArena.Net
             }
         }
 
-        // -------------------------------------------------------- beacon dinleme
+        // -------------------------------------------------------- beacon listening
 
         private async Task ListenLoopAsync(CancellationToken ct)
         {
@@ -273,11 +273,11 @@ namespace VortexArena.Net
                     try
                     {
                         udp = new UdpClient();
-                        // Editor + build aynı makinede aynı portu dinleyebilsin.
+                        // So the Editor + a build on the same machine can listen on the same port.
                         udp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                         udp.Client.Bind(new IPEndPoint(IPAddress.Any, ArenaProtocol.UDP_BEACON_PORT));
 
-                        // İptalde soket kapatılır → bekleyen ReceiveAsync hata ile düşer.
+                        // On cancellation the socket is closed → a pending ReceiveAsync fails out.
                         using (ct.Register(() => { try { udp.Close(); } catch (Exception) { } }))
                         {
                             while (!ct.IsCancellationRequested)
@@ -316,7 +316,7 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>Ağ thread'inde koşar; geçerli beacon ana thread kuyruğuna atılır.</summary>
+        /// <summary>Runs on the network thread; a valid beacon is queued to the main thread.</summary>
         private void HandleDatagram(UdpReceiveResult datagram)
         {
             string json = Encoding.UTF8.GetString(datagram.Buffer);
@@ -332,7 +332,7 @@ namespace VortexArena.Net
             }
             catch (Exception)
             {
-                return; // beacon olmayan/deforme datagram — yok say
+                return; // a non-beacon/malformed datagram — ignore it
             }
 
             if (beacon == null || beacon.app != ArenaProtocol.APP_ID)
@@ -349,7 +349,7 @@ namespace VortexArena.Net
             string ip = beacon.ip;
             if (!IPAddress.TryParse(ip, out IPAddress _))
             {
-                ip = datagram.RemoteEndPoint.Address.ToString(); // JSON'daki ip bozuksa gönderenin adresi
+                ip = datagram.RemoteEndPoint.Address.ToString(); // the sender's address when the ip in the JSON is broken
             }
 
             string resolvedIp = ip;
@@ -364,17 +364,17 @@ namespace VortexArena.Net
         // --------------------------------------------------------- MulticastLock
 
         /// <summary>
-        /// Android'de Wi-Fi broadcast/multicast paketlerinin uygulamaya ulaşabilmesi
-        /// için WifiManager MulticastLock alınır (kilit olmadan bazı cihazlar
-        /// broadcast'i düşürür). Diğer platformlarda no-op (null döner).
+        /// On Android a WifiManager MulticastLock is taken so Wi-Fi broadcast/multicast packets can
+        /// reach the app (without the lock some devices drop broadcasts). A no-op on other platforms
+        /// (returns null).
         /// </summary>
         private static object AcquireMulticastLock()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             try
             {
-                // Arka plan thread'inden JNI kullanımı için thread JVM'e bağlanmalı
-                // (zaten bağlıysa no-op).
+                // To use JNI from a background thread the thread must be attached to the JVM
+                // (a no-op when it already is).
                 AndroidJNI.AttachCurrentThread();
 
                 using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
@@ -408,7 +408,7 @@ namespace VortexArena.Net
 
             try
             {
-                // Continuation farklı bir thread'de koşabilir — JVM'e yeniden bağlan.
+                // The continuation may run on a different thread — reattach to the JVM.
                 AndroidJNI.AttachCurrentThread();
                 javaLock.Call("release");
             }
@@ -421,7 +421,7 @@ namespace VortexArena.Net
                 javaLock.Dispose();
             }
 #endif
-            // Diğer platformlarda no-op.
+            // A no-op on other platforms.
         }
 
         private void Shutdown()
@@ -439,7 +439,7 @@ namespace VortexArena.Net
             }
             catch (Exception)
             {
-                // CTS zaten dispose olduysa yut — uygulama kapanıyor.
+                // Swallow it when the CTS is already disposed — the application is shutting down.
             }
         }
     }

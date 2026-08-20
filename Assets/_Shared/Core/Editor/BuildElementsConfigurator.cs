@@ -10,59 +10,47 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Build &gt; Configure All Build Elements</c> — arena klasör
-    /// ağacını <b>tek doğruluk kaynağı</b> sayıp kayıt yerlerini ona EŞİTLER: Build Settings,
-    /// <c>GameCatalog.maps</c>, dolu <c>ModeDefinition.maps</c> listeleri ve
-    /// <c>Server/config/maps.json</c>. Aynı eşitleme <b>silah kitini</b> (WD asset'leri, WPN
-    /// prefab bağları, FX/gösterge prefabları, <c>WeaponCatalog</c>), o katalogtan türeyen
-    /// <b>rastgele silah havuzlarını</b> (<see cref="SyncModeLoadouts"/>) ve <b>net eşya kataloğunu</b>
-    /// da koşar — build'e giren, tablodan türeyen her şey tek düğmede.
-    /// <para>
-    /// <b>Neden eşitleme, ekleme değil:</b> yalnız ekleyen bir araç silinen arenanın satırını
-    /// Build Settings'te ve katalog listelerinde "Missing" olarak bırakır; APK build'i
-    /// "diskte olmayan sahne var" diye iptal olur ve sebebi hiçbir yerde yazmaz. Fazlalık
-    /// silinir, eksiklik rapora yazılır.
-    /// </para>
-    /// <para>
-    /// <b>Beklenen yerleşim</b> (kutu klasörünün adı = sahne adı = MapDefinition adı):
-    /// <c>Assets/Arenas/Venues/&lt;Mekan&gt;/Scenes/&lt;Sahne&gt;/&lt;Sahne&gt;.unity</c> +
-    /// <c>…/&lt;Sahne&gt;/Data/&lt;Sahne&gt;.asset</c>. Üç adın da aynı olması, sahneyi bulan
-    /// kodun MapDefinition'ı da bulabilmesini garanti eder — ikinci bir serbest ad (eski
-    /// "Arena Id") kaçınılmaz olarak sahne adından sapıyordu.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Katalog seçtirilmez</b>, projeden çözülür: çalışma anında
-    /// <c>Resources.Load&lt;GameCatalog&gt;("GameCatalog")</c> ile bulunuyor, yani doğru olan tek
-    /// bir asset var. Birden fazla katalog bir PROJE HATASIDIR — kayıt yapılmaz.
-    /// </para>
-    /// <para>
-    /// ⚠️ <c>EditorUtility.DisplayDialog</c> YOK (CLI timeout tuzağı): export de dialogsuz
-    /// varyantıyla çağrılır, sonuç <c>Debug.Log</c> ve pencere raporuyla bildirilir.
-    /// </para>
-    /// </summary>
+    /// <summary>Treats the arena folder tree as the single source of truth and SYNCS every registry
+    /// to it: Build Settings, <c>GameCatalog.maps</c>, non-empty <c>ModeDefinition.maps</c> lists and
+    /// <c>Server/config/maps.json</c>. The same sync also runs the weapon kit (WD assets, WPN prefab
+    /// wiring, FX/indicator prefabs, <c>WeaponCatalog</c>), the random weapon pools derived from that
+    /// catalog (<see cref="SyncModeLoadouts"/>) and the net item catalog — everything table-derived
+    /// that ships, under one button.</summary>
+    /// <remarks>
+    /// <b>Why sync, not append:</b> an append-only tool leaves a deleted arena's row as "Missing" in
+    /// Build Settings and the catalog lists; the APK build then aborts with "scene missing from
+    /// disk" and states the cause nowhere. Extra entries are removed, missing ones are reported.
+    /// <para><b>Expected layout</b> (box folder name = scene name = MapDefinition name):
+    /// <c>Assets/Arenas/Venues/&lt;Venue&gt;/Scenes/&lt;Scene&gt;/&lt;Scene&gt;.unity</c> +
+    /// <c>…/&lt;Scene&gt;/Data/&lt;Scene&gt;.asset</c>. All three names being equal guarantees that
+    /// code finding the scene also finds its MapDefinition — a second free-form name inevitably
+    /// drifted from the scene name.</para>
+    /// <para>⚠️ The catalog is not picked by hand, it is resolved from the project: at runtime it is
+    /// found via <c>Resources.Load&lt;GameCatalog&gt;("GameCatalog")</c>, so exactly one asset is
+    /// correct. More than one catalog is a PROJECT ERROR — nothing is written.</para>
+    /// <para>⚠️ No <c>EditorUtility.DisplayDialog</c> (CLI timeout trap): the export is called in its
+    /// dialogless variant too, results go to <c>Debug.Log</c> and the window report.</para>
+    /// </remarks>
     public class BuildElementsConfigurator : EditorWindow
     {
-        /// <summary>Oynanan arenaların kökü — mekan klasörleri bunun bir altındadır.</summary>
+        /// <summary>Root of playable arenas — venue folders sit one level below.</summary>
         private const string VenuesRoot = "Assets/Arenas/Venues";
 
-        /// <summary>Referans şablonların kökü — buradaki sahneler ASLA Build Settings'e girmez.</summary>
+        /// <summary>Root of reference templates — these scenes NEVER enter Build Settings.</summary>
         private const string TemplateRoot = "Assets/Arenas/Template/";
 
-        /// <summary>Arena ağacının tamamı: bu önekli Build Settings satırları taramaya tabidir.</summary>
+        /// <summary>Whole arena tree: Build Settings rows with this prefix are scanned.</summary>
         private const string ArenasRoot = "Assets/Arenas/";
 
-        /// <summary>Kutuların toplandığı ara klasörün adı (<c>&lt;Mekan&gt;/Scenes</c>).</summary>
+        /// <summary>Name of the folder collecting the boxes (<c>&lt;Venue&gt;/Scenes</c>).</summary>
         private const string ScenesFolderName = "Scenes";
 
-        /// <summary>Mekan kökünde durmasına izin verilen klasörler; başkası yanlış yere konmuş demektir.</summary>
+        /// <summary>Folders allowed at a venue root; anything else is misplaced.</summary>
         private static readonly string[] AllowedVenueFolders = { "Art", "Data", "Prefabs", ScenesFolderName };
 
-        /// <summary>
-        /// Boundary/maket hiza denetimlerinin payı (konum m · ölçek bileşeni). Sıfır tolerans
-        /// değil: elle yerleşimde milimetrik kayma olağan ve her açılışta uyarı basmak raporun
-        /// tamamını okunmaz kılar.
-        /// </summary>
+        /// <summary>Slack for the boundary/mesh alignment checks (position m · scale component). Not
+        /// zero tolerance: millimetre drift is normal in hand placement and warning on every open
+        /// would make the whole report unreadable.</summary>
         private const float AlignmentTolerance = 0.01f;
 
         [SerializeField] private string displayName = string.Empty;
@@ -89,28 +77,25 @@ namespace VortexArena.Core.Editor
             Refresh();
         }
 
-        /// <summary>Mod listesini ve mekan taramasını tazeler; hiçbir asset'e YAZMAZ.</summary>
+        /// <summary>Refreshes the mode list and the venue scan; WRITES to no asset.</summary>
         private void Refresh()
         {
             availableModeIds = CollectModeIds(ResolveCatalog(null));
             scan = Scan();
 
-            // ⚠️ Hazırlık denetimleri BURADA toplanır, OnGUI'de değil: OnGUI kare başına birkaç kez
-            // koşar ve denetimler prefab/asset okuyor. Pencere her odaklandığında Refresh çağrıldığı
-            // için liste yeterince taze kalır.
+            // ⚠️ Readiness checks are collected HERE, not in OnGUI: OnGUI runs several times per
+            // frame and the checks read prefabs/assets. Refresh runs on every window focus, which
+            // keeps the list fresh enough.
             readiness = BuildReadiness.Collect();
 
             SyncActiveSceneFields();
             Repaint();
         }
 
-        /// <summary>
-        /// Aktif sahne değiştiyse form alanlarını o sahnenin MapDefinition'ından doldurur.
-        /// <para>
-        /// ⚠️ Sahne aynıyken doldurma YAPILMAZ: pencere her odaklandığında yeniden okunsaydı,
-        /// kullanıcının henüz kaydetmediği mod seçimi sessizce geri alınırdı.
-        /// </para>
-        /// </summary>
+        /// <summary>Fills the form fields from the active scene's MapDefinition when the scene
+        /// changed.</summary>
+        /// <remarks>⚠️ Never refills for the same scene: rereading on every window focus would
+        /// silently revert a mode selection the user has not saved yet.</remarks>
         private void SyncActiveSceneFields()
         {
             string scenePath = SceneManager.GetActiveScene().path ?? string.Empty;
@@ -285,15 +270,11 @@ namespace VortexArena.Core.Editor
                 MessageType.Info);
         }
 
-        /// <summary>
-        /// Build öncesi bakılan hazırlık satırları — koşum sırasına göre.
-        /// <para>
-        /// ⚠️ Buradaki denetimler <b>yazmaz</b>, yalnız okur. Yazan tek şey "Hepsini Çalıştır"dır ve
-        /// satırların hepsini koşar (HMD katmanları yalnız bayatken — paylaşımlı rig prefabını her
-        /// koşuda yeniden serialize etmek merge gürültüsü olurdu). Düğmesiz satırlar durum gösterir;
-        /// kalan ✗ aracın DÜZELTEMEYECEĞİ insan adımıdır (kavrama, ateş sesi, netItemId).
-        /// </para>
-        /// </summary>
+        /// <summary>Readiness rows checked before a build, in run order.</summary>
+        /// <remarks>⚠️ These checks only read. The only writer is "Hepsini Çalıştır" and it runs all
+        /// rows (HMD overlays only when stale — reserializing the shared rig prefab every run would
+        /// be merge noise). Buttonless rows just report state; a remaining ✗ is a human step the tool
+        /// cannot fix (grip, fire audio, netItemId).</remarks>
         private void DrawReadiness()
         {
             EditorGUILayout.LabelField(
@@ -309,9 +290,9 @@ namespace VortexArena.Core.Editor
                 return;
             }
 
-            // ⚠️ Eylem döngü BİTTİKTEN sonra koşar: araç sonunda Refresh() çağrılıyor ve liste
-            // yenisiyle değişiyor — döngünün ortasında çalıştırılırsa aynı karede çizilen satır
-            // sayısı değişir ve GUILayout layout/repaint uyuşmazlığı verir.
+            // ⚠️ The action runs AFTER the loop: the tool calls Refresh() at the end and replaces
+            // the list — run mid-loop, the number of controls drawn changes within the frame and
+            // GUILayout reports a layout/repaint mismatch.
             BuildReadiness.ReadinessRow pending = default;
             bool hasPending = false;
 
@@ -322,9 +303,9 @@ namespace VortexArena.Core.Editor
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    // ⚠️ Tooltip satırın HER parçasına verilir: fare nereye gelirse gelsin "bu ne
-                    // zaman gerekir" okunabilsin diye — ayrıca görünür bir "?" işareti tooltip'in
-                    // varlığını duyurur (yoksa kimse üstüne gelmeyi denemez).
+                    // ⚠️ The tooltip goes on EVERY part of the row so "when do I need this" is
+                    // readable wherever the mouse lands; the visible "?" announces that a tooltip
+                    // exists at all.
                     EditorGUILayout.LabelField(
                         new GUIContent(row.Ok ? "✓" : "✗", row.Tooltip), GUILayout.Width(16f));
                     EditorGUILayout.LabelField(
@@ -352,12 +333,10 @@ namespace VortexArena.Core.Editor
             RunAndLog(new List<string> { "hazırlık: " + pending.Title + " çalıştırıldı" });
         }
 
-        /// <summary>
-        /// ⚠️ <b>TEK düğme.</b> İki ayrı düğme ("hepsini yapılandır" + "yalnız senkronize et") hangi
-        /// durumda hangisine basılacağını kullanıcıya sorduruyordu ve aktif sahne kutu değilken
-        /// birincisi devre dışı kalıp eşitlemeyi de sessizce erteliyordu — burada tek düğme her
-        /// zaman etkindir, sahne kutu değilse yalnız MapDefinition adımı atlanır.
-        /// </summary>
+        /// <summary>⚠️ ONE button. Two buttons ("configure all" + "sync only") made the user decide
+        /// which one applies, and with a non-box active scene the first was disabled and silently
+        /// postponed the sync too. This single button is always enabled; without a box scene only
+        /// the MapDefinition step is skipped.</summary>
         private void DrawButtons()
         {
             if (GUILayout.Button(
@@ -380,17 +359,12 @@ namespace VortexArena.Core.Editor
                 MessageType.Info);
         }
 
-        /// <summary>
-        /// Hazırlık satırlarının tamamını sırayla koşar.
-        /// <para>
-        /// ⚠️ <see cref="ConfigureActiveScene"/> sonunda <see cref="SyncAll"/>'ı zaten çağırıyor —
-        /// kutu sahnede İKİNCİ kez çağrılmaz (aynı işi iki kez yapıp raporu ikizlerdi).
-        /// </para>
-        /// <para>
-        /// ⚠️ HMD katmanları yalnız BAYATKEN kurulur: paylaşılan rig prefabına her koşuda yazmak,
-        /// hiçbir şey değişmese bile her seferinde bir prefab diff'i üretirdi.
-        /// </para>
-        /// </summary>
+        /// <summary>Runs every readiness row in order.</summary>
+        /// <remarks>⚠️ <see cref="ConfigureActiveScene"/> already calls <see cref="SyncAll"/> at its
+        /// end, so it is not called a SECOND time in a box scene (it would redo the work and
+        /// duplicate the report).
+        /// <para>⚠️ HMD overlays are installed only when STALE: writing to the shared rig prefab on
+        /// every run would produce a prefab diff even when nothing changed.</para></remarks>
         private void RunEverything()
         {
             var report = new List<string>();
@@ -411,8 +385,8 @@ namespace VortexArena.Core.Editor
                 SyncAll(report);
             }
 
-            // ⚠️ İstisna yutulur (SyncWeaponKit ile aynı kalıp): rig prefabındaki bir sözleşme
-            // kayması arena eşitlemesinin raporunu yutmasın.
+            // ⚠️ Exception swallowed (same pattern as SyncWeaponKit): a contract drift in the rig
+            // prefab must not swallow the arena sync's report.
             try
             {
                 if (!HmdOverlayBuilder.IsRigUpToDate(out string hmdDetail))
@@ -456,9 +430,10 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        // ---------------------------------------------------------------- tarama
+        // ---------------------------------------------------------------- scan
 
-        /// <summary>Bir tarama bulgusu — hata da uyarı da işi DURDURMAZ, hepsi rapora düşer.</summary>
+        /// <summary>A scan finding — neither errors nor warnings stop the work, all are
+        /// reported.</summary>
         private sealed class ScanIssue
         {
             public ScanIssue(bool isError, string text)
@@ -472,7 +447,8 @@ namespace VortexArena.Core.Editor
             public string Text { get; }
         }
 
-        /// <summary>Bir kutu klasörü (<c>&lt;Mekan&gt;/Scenes/&lt;Sahne&gt;</c>) hakkında bilinen her şey.</summary>
+        /// <summary>Everything known about one box folder
+        /// (<c>&lt;Venue&gt;/Scenes/&lt;Scene&gt;</c>).</summary>
         private sealed class BoxRecord
         {
             public string Venue;
@@ -483,10 +459,10 @@ namespace VortexArena.Core.Editor
             public string MapPath = string.Empty;
             public MapDefinition Map;
 
-            /// <summary>Sahne adı ile MapDefinition'ın <c>sceneName</c> alanı ayrışmış mı.</summary>
+            /// <summary>Whether the scene name and MapDefinition's <c>sceneName</c> drifted.</summary>
             public bool SceneNameMismatch;
 
-            /// <summary>Yerleşim doğru — bu kutu Build Settings/katalog eşitlemesine GİRER.</summary>
+            /// <summary>Layout is correct — this box ENTERS the Build Settings/catalog sync.</summary>
             public bool Valid;
 
             public readonly List<ScanIssue> Issues = new List<ScanIssue>();
@@ -505,19 +481,16 @@ namespace VortexArena.Core.Editor
             public readonly List<VenueRecord> Venues = new List<VenueRecord>();
             public readonly List<ScanIssue> Issues = new List<ScanIssue>();
 
-            /// <summary>Build Settings'te duran sahne yolları (yerleşim tablosunu çizmek için).</summary>
+            /// <summary>Scene paths present in Build Settings (for drawing the layout table).</summary>
             public readonly HashSet<string> BuildScenePaths =
                 new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            /// <summary>Eşitlemeye girecek kutular — tarama sırası korunur.</summary>
+            /// <summary>Boxes entering the sync — scan order preserved.</summary>
             public readonly List<BoxRecord> ValidBoxes = new List<BoxRecord>();
         }
 
-        /// <summary>
-        /// Mekan ağacını okur ve bulgu listesi üretir. <b>Salt okunur</b>: pencere her
-        /// odaklandığında koştuğu için hiçbir asset'e yazmaz — düzeltmeleri
-        /// <see cref="SyncAll"/> yapar.
-        /// </summary>
+        /// <summary>Reads the venue tree and produces the findings. READ ONLY — it runs on every
+        /// window focus, so it writes to no asset; <see cref="SyncAll"/> does the fixing.</summary>
         private static ScanResult Scan()
         {
             var result = new ScanResult();
@@ -593,8 +566,8 @@ namespace VortexArena.Core.Editor
         {
             var box = new BoxRecord { Venue = venueName, BoxPath = boxPath, BoxName = LeafName(boxPath) };
 
-            // ⚠️ Yalnız kutunun DOĞRUDAN altına bakılır: lightmap klasörü sahneyle aynı adı
-            // taşıyor ve alt ağaç taranırsa oradaki dosyalar sahne sanılır.
+            // ⚠️ Only the box's DIRECT children: the lightmap folder shares the scene's name and a
+            // recursive scan would mistake its files for scenes.
             List<string> scenePaths = DirectSceneFiles(boxPath);
 
             if (scenePaths.Count == 0)
@@ -633,8 +606,8 @@ namespace VortexArena.Core.Editor
                 return box;
             }
 
-            // ⚠️ MapDefinition KENDİLİĞİNDEN ÜRETİLMEZ: boş `supportedModeIds` "kısıtsız" demek,
-            // yani üretilen bir lobi haritası sessizce tüm modlarda oynanabilir hâle gelirdi.
+            // ⚠️ A MapDefinition is never auto-created: an empty `supportedModeIds` means
+            // "unrestricted", so a generated lobby map would silently be playable in every mode.
 
             if (!string.Equals(box.Map.SceneName, box.SceneName, StringComparison.Ordinal))
             {
@@ -647,7 +620,7 @@ namespace VortexArena.Core.Editor
             return box;
         }
 
-        /// <summary>Mekan ağacında olup beklenen kutu yerinde durmayan MapDefinition'lar.</summary>
+        /// <summary>MapDefinitions inside the venue tree that are not in their expected box.</summary>
         private static void ScanStrayMaps(ScanResult result)
         {
             string[] guids = AssetDatabase.FindAssets("t:" + nameof(MapDefinition));
@@ -661,7 +634,7 @@ namespace VortexArena.Core.Editor
 
                 string[] parts = path.Split('/');
 
-                // Assets/Arenas/Venues/<Mekan>/Scenes/<Sahne>/Data/<Sahne>.asset
+                // Assets/Arenas/Venues/<Venue>/Scenes/<Scene>/Data/<Scene>.asset
                 bool wellPlaced =
                     parts.Length == 8 &&
                     string.Equals(parts[4], ScenesFolderName, StringComparison.Ordinal) &&
@@ -678,14 +651,12 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        // ------------------------------------------------------------- eşitleme
+        // ------------------------------------------------------------- sync
 
-        /// <summary>
-        /// Klasör ağacını Build Settings, <c>GameCatalog.maps</c> ve dolu
-        /// <c>ModeDefinition.maps</c> listeleriyle eşitler; ardından silah kitini ve ondan türeyen
-        /// <c>ModeDefinition.loadout</c> havuzlarını koşar. Ne yapıldığını satır satır
-        /// <paramref name="report"/>'a yazar. Exception FIRLATMAZ.
-        /// </summary>
+        /// <summary>Syncs the folder tree into Build Settings, <c>GameCatalog.maps</c> and non-empty
+        /// <c>ModeDefinition.maps</c> lists, then runs the weapon kit and the
+        /// <c>ModeDefinition.loadout</c> pools derived from it. Writes what it did line by line into
+        /// <paramref name="report"/>. Throws NO exception.</summary>
         public static void SyncAll(List<string> report)
         {
             ScanResult current = Scan();
@@ -737,8 +708,8 @@ namespace VortexArena.Core.Editor
 
             SyncWeaponKit(report);
 
-            // ⚠️ Kitten SONRA: havuzun kaynağı WeaponCatalog ve onu az önce SyncWeaponKit yazdı.
-            // Önce koşsaydı yeni bir silah havuza ancak İKİNCİ eşitlemede girerdi.
+            // ⚠️ AFTER the kit: the pool's source is WeaponCatalog, which SyncWeaponKit just wrote.
+            // Run first, a new weapon would only reach the pool on the SECOND sync.
             if (catalog != null)
             {
                 SyncModeLoadouts(catalog, report, false);
@@ -755,8 +726,8 @@ namespace VortexArena.Core.Editor
                 }
             }
 
-            // Sağlık kontrolleri AKTİF SAHNEYE bakar; sahne bir kutuda değilse ölçtükleri şey
-            // (muhafaza, ölçü maketi) o sahne için anlamsızdır.
+            // Health checks look at the ACTIVE SCENE; outside a box what they measure (boundary,
+            // dimension mesh) is meaningless for that scene.
             string activePath = SceneManager.GetActiveScene().path;
             if (TryParseBoxScene(activePath, out _, out _, out string boxName, out string sceneName) &&
                 string.Equals(boxName, sceneName, StringComparison.Ordinal))
@@ -765,23 +736,20 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>
-        /// Silah kiti + net eşya kataloğu — <b>her eşitlemede</b> koşar, ayrı düğmesi/menüsü yoktur.
-        /// <para>
-        /// <b>Neden burada:</b> "build öğeleri" yalnız arenalar değil; WPN prefabları, WD asset'leri,
-        /// silah/eşya katalogları ve ön kabza göstergesi de build'e giren, tablodan türeyen
-        /// içeriktir. Ayrı bir menü öğesi "çalıştırmayı unutulan araç" demekti — sonucu sahada
-        /// "silah kavranmıyor / eşya çizilmiyor" olarak çıkan sessiz bir eksik. Tek eşitleme
-        /// düğmesi hepsini kapsar.
-        /// </para>
-        /// <para>
-        /// ⚠️ Kit koşusu idempotenttir: değişmeyen asset aynı içerikle yazılır, diff üretmez.
-        /// İnsan adımı isteyen eksikler (kavraması yazılmamış / ateş sesi atanmamış silah, atanmamış
-        /// <c>netItemId</c>) burada DÜZELMEZ — rapora ve "Hazırlık" satırlarına düşer.
-        /// </para>
-        /// <para>⚠️ İstisna yutulur: silah kitindeki bir sözleşme kayması arena eşitlemesini
-        /// durdurmasın — hata rapora satır olarak girer.</para>
-        /// </summary>
+        /// <summary>Weapon kit + net item catalog — runs on EVERY sync, with no separate
+        /// button/menu.</summary>
+        /// <remarks>
+        /// <b>Why here:</b> "build elements" are not only arenas; WPN prefabs, WD assets, the
+        /// weapon/item catalogs and the front-grip indicator are table-derived content that ships
+        /// too. A separate menu item meant "a tool someone forgets to run", surfacing in the field as
+        /// "the weapon cannot be grabbed / the item is not drawn".
+        /// <para>⚠️ The kit run is idempotent: an unchanged asset is written with the same content and
+        /// produces no diff. Gaps needing a human step (unauthored grip, unassigned fire audio,
+        /// unassigned <c>netItemId</c>) are NOT fixed here — they go to the report and the readiness
+        /// rows.</para>
+        /// <para>⚠️ Exception swallowed: a contract drift in the weapon kit must not stop the arena
+        /// sync — the error enters the report as a line.</para>
+        /// </remarks>
         private static void SyncWeaponKit(List<string> report)
         {
             try
@@ -805,14 +773,12 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>
-        /// Dosya sistemi otoritedir: sahne adı ile ayrışan <c>sceneName</c> alanları geri yazılır.
-        /// <para>
-        /// ⚠️ <paramref name="dryRun"/> = yazma YOK, rapor AYNEN. Hazırlık satırı ile eşitleme aynı
-        /// gövdeyi paylaşsın diye: denetim ikinci kez yazılsaydı sessizce eşitlemeden sapardı.
-        /// Dönen sayı = rapora düşen DEĞİŞİKLİK satırı adedi (salt uyarı sayılmaz).
-        /// </para>
-        /// </summary>
+        /// <summary>The file system is authoritative: <c>sceneName</c> fields that drifted from the
+        /// scene name are written back.</summary>
+        /// <remarks>⚠️ <paramref name="dryRun"/> = no writing, identical report, so the readiness row
+        /// and the sync share one body; a second implementation of the check would silently drift
+        /// from the sync. The return value counts CHANGE lines in the report (warnings do not
+        /// count).</remarks>
         private static int FixSceneNames(ScanResult current, List<string> report, bool dryRun)
         {
             int changes = 0;
@@ -841,20 +807,14 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>
-        /// Build Settings listesini yeniden kurar.
-        /// <para>
-        /// ⚠️ <b>Sıra korunur, yeniden sıralama YAPILMAZ:</b> <c>Boot.unity</c> index 0'da
-        /// durmak zorunda (uygulama onu açıyor). Arena dışı satırlar mevcut sıralarıyla başa,
-        /// arena satırları arkaya yazılır; yeni arenalar sona Ordinal alfabetik eklenir.
-        /// </para>
-        /// <para>
-        /// ⚠️ Şablon sahneleri listeye ASLA girmez: girseydi sunucu açılışında var olmayan bir
-        /// mekan satırı açardı.
-        /// </para>
-        /// <para>
-        /// ⚠️ <paramref name="dryRun"/>'da <c>EditorBuildSettings.scenes</c> ATANMAZ ama sayım
-        /// yapılır — hazırlık satırı ile eşitleme tek gövdeden okusun diye.
-        /// </para>
+        /// Rebuilds the Build Settings list.
+        /// <para>⚠️ Order is preserved, never re-sorted: <c>Boot.unity</c> must stay at index 0 (the
+        /// app opens it). Non-arena rows keep their order at the front, arena rows follow, and new
+        /// arenas are appended Ordinal alphabetically.</para>
+        /// <para>⚠️ Template scenes NEVER enter the list: they would open a row for a venue that does
+        /// not exist at server startup.</para>
+        /// <para>⚠️ In <paramref name="dryRun"/> <c>EditorBuildSettings.scenes</c> is not assigned but
+        /// the counting still happens, so the readiness row and the sync read from one body.</para>
         /// </summary>
         private static int SyncBuildSettings(ScanResult current, List<string> report, bool dryRun)
         {
@@ -960,13 +920,12 @@ namespace VortexArena.Core.Editor
             return changes;
         }
 
-        /// <summary>
-        /// <c>GameCatalog.maps</c> = taranan haritaların tamamı. Mevcut sıra korunur, yeniler sona
-        /// eklenir; null ve taramada olmayan (silinmiş/taşınmış) referanslar SİLİNİR — kalan
-        /// "Missing" satır admin harita seçicisinde boş bir kayıt olarak çizilirdi.
-        /// <para>⚠️ <paramref name="dryRun"/>'da hiçbir şey yazılmaz; dönen sayı kaldırılan + eklenen
-        /// referans adedidir (yazılacak dizi mevcut diziden farklıysa bu sayaç zaten yakalar).</para>
-        /// </summary>
+        /// <summary><c>GameCatalog.maps</c> = every scanned map. Existing order is kept and new ones
+        /// are appended; null and no-longer-scanned (deleted/moved) references are REMOVED — a
+        /// leftover "Missing" row would draw as an empty entry in the admin map picker.</summary>
+        /// <remarks>⚠️ Nothing is written in <paramref name="dryRun"/>; the return value counts
+        /// removed + added references (which already covers "the array to write differs from the
+        /// current one").</remarks>
         private static int SyncCatalogMaps(GameCatalog catalog, List<MapDefinition> maps, List<string> report, bool dryRun)
         {
             int changes = 0;
@@ -1023,22 +982,18 @@ namespace VortexArena.Core.Editor
             return changes;
         }
 
-        /// <summary>
-        /// Her modun <b>DOLU</b> <c>maps</c> listesini o modu destekleyen haritalarla eşitler.
-        /// <para>
-        /// ⚠️ <b>Boş liste "kısıtsız" demektir</b> (GameCatalog.MapsForMode boş listeyi görünce
-        /// katalogdaki tüm haritalara düşer). Bu yüzden iki kural bağlayıcıdır: boş liste
-        /// dokunulmadan bırakılır ve dolu bir liste ASLA boşaltılmaz — hedef küme boşsa mod
-        /// sessizce tüm haritaları kabul eder hâle gelirdi. O durumda liste olduğu gibi kalır,
-        /// rapora uyarı düşer.
-        /// </para>
-        /// <para>
-        /// Null elemanlar her hâlükârda temizlenir: "Missing" bir eleman ne kısıt ne harita,
-        /// yalnız admin seçicisinde boş bir satırdır.
-        /// </para>
-        /// <para>⚠️ <paramref name="dryRun"/>'da hiçbir liste yazılmaz; dönen sayı rapora düşen
-        /// değişiklik satırı adedidir (destekleyen harita bulunamayınca yazılan UYARI sayılmaz).</para>
-        /// </summary>
+        /// <summary>Syncs each mode's NON-EMPTY <c>maps</c> list with the maps supporting that
+        /// mode.</summary>
+        /// <remarks>
+        /// ⚠️ An empty list means "unrestricted" (GameCatalog.MapsForMode falls back to every map in
+        /// the catalog), so two rules bind: an empty list is left untouched and a non-empty list is
+        /// NEVER emptied — with an empty target set the mode would silently accept all maps. In that
+        /// case the list stays as-is and a warning is reported.
+        /// <para>Null elements are cleaned regardless: a "Missing" entry is neither a restriction nor
+        /// a map, only an empty row in the admin picker.</para>
+        /// <para>⚠️ No list is written in <paramref name="dryRun"/>; the return value counts change
+        /// lines in the report (the WARNING for "no supporting map" does not count).</para>
+        /// </remarks>
         private static int SyncModeMaps(GameCatalog catalog, List<MapDefinition> maps, List<string> report, bool dryRun)
         {
             int changes = 0;
@@ -1085,8 +1040,8 @@ namespace VortexArena.Core.Editor
 
                 if (kept.Count == 0)
                 {
-                    // Liste zaten boş(aldı) = kısıtsız; hedef kümeyi buraya yazmak modu
-                    // istemeden kısıtlamak olurdu.
+                    // The list is (now) empty = unrestricted; writing the target set here would
+                    // restrict the mode unintentionally.
                     if (changed && !dryRun)
                     {
                         WriteArray(prop, kept);
@@ -1161,31 +1116,26 @@ namespace VortexArena.Core.Editor
             return changes;
         }
 
-        /// <summary>
-        /// Rastgele silah dağıtan modların (<see cref="ModeWeaponSource.RandomGrant"/>)
-        /// <c>loadout</c> listesini <c>WeaponCatalog</c>'a eşitler: eksik silah eklenir, null /
-        /// yinelenen / katalogda olmayan referans silinir, mevcut sıra korunur.
-        /// <para>
-        /// ⚠️ <b>Boş liste burada DOLDURULUR</b> — <c>maps</c>'in tersine (orada boş = "kısıtsız").
-        /// <c>WeaponGranter.PickFromLoadout</c>'ta boş havuzun karşılığı "kısıtsız" değil
-        /// <b>hiç silah yok</b>tur: mod oynanamaz hâle gelir. Bu yüzden iki alanın kuralı da farklı
-        /// olmak ZORUNDA.
-        /// </para>
-        /// <para>
-        /// ⚠️ Yalnız <c>RandomGrant</c> modlarına dokunulur. <see cref="ModeWeaponSource.WeaponCanvas"/>
-        /// modlarında sahnede hangi silahın duracağını <b>arena</b> belirler ve <c>loadout</c> hiç
-        /// okunmaz; oraya yazmak okunmayan bir listeyi şişirirdi.
-        /// </para>
-        /// <para>
-        /// <b>Neden eşitleme, elle liste değil:</b> arsenal büyüdükçe elle yazılmış bir havuz
-        /// kaçınılmaz olarak bayatlar ve <b>tek belirtisi</b> "bazı silahlar hiç gelmiyor"dur —
-        /// ne konsola bir şey düşer ne build kırılır. Havuzun tek doğruluk kaynağı katalogtur;
-        /// mod başına silah kısıtlaması diye bir şey YOKTUR (istenirse önce onu taşıyacak bir alan
-        /// tasarlanır, elle kırpılmış liste o alanın yerine geçmez — bu koşu onu geri yazar).
-        /// </para>
-        /// <para>⚠️ <paramref name="dryRun"/>'da havuz yazılmaz; <c>loadout: … (değişmedi)</c> durum
-        /// satırı yine yazılır ve DEĞİŞİKLİK sayılmaz — hazırlık satırının detayı odur.</para>
-        /// </summary>
+        /// <summary>Syncs the <c>loadout</c> list of random-granting modes
+        /// (<see cref="ModeWeaponSource.RandomGrant"/>) with <c>WeaponCatalog</c>: missing weapons
+        /// added, null / duplicate / uncatalogued references removed, existing order kept.</summary>
+        /// <remarks>
+        /// ⚠️ An empty list IS filled here — the opposite of <c>maps</c> (where empty = unrestricted).
+        /// In <c>WeaponGranter.PickFromLoadout</c> an empty pool means NO weapon at all, not
+        /// "unrestricted": the mode becomes unplayable. The two fields must therefore differ.
+        /// <para>⚠️ Only <c>RandomGrant</c> modes are touched. In
+        /// <see cref="ModeWeaponSource.WeaponCanvas"/> modes the ARENA decides which weapon stands
+        /// in the scene and <c>loadout</c> is never read; writing there would inflate an unread
+        /// list.</para>
+        /// <para><b>Why sync, not a hand written list:</b> as the arsenal grows a hand written pool
+        /// inevitably goes stale, and its only symptom is "some weapons never show up" — nothing is
+        /// logged and no build breaks. The catalog is the pool's single source of truth; there is no
+        /// per-mode weapon restriction (if one is wanted, a field to carry it is designed first — a
+        /// hand trimmed list does not stand in for it, this run writes it back).</para>
+        /// <para>⚠️ No pool is written in <paramref name="dryRun"/>; the <c>loadout: … (değişmedi)</c>
+        /// status line is still reported and does not count as a CHANGE — it is the readiness row's
+        /// detail.</para>
+        /// </remarks>
         private static int SyncModeLoadouts(GameCatalog catalog, List<string> report, bool dryRun)
         {
             int changes = 0;
@@ -1289,8 +1239,9 @@ namespace VortexArena.Core.Editor
                     EditorUtility.SetDirty(mode);
                 }
 
-                // Prefabsız tanım listede DURUR ama havuza girmez (WeaponGranter onu eler).
-                // Silinseydi prefab bağlanınca sessizce geri gelirdi; asıl eksik prefab bağıdır.
+                // A definition without a prefab STAYS in the list but never enters the pool
+                // (WeaponGranter filters it). Removing it would silently bring it back once the
+                // prefab is wired; the real gap is the prefab link.
                 int usable = 0;
                 for (int i = 0; i < final.Count; i++)
                 {
@@ -1312,17 +1263,15 @@ namespace VortexArena.Core.Editor
             return changes;
         }
 
-        // ------------------------------------------------------ hazırlık denetimi
+        // ------------------------------------------------------ readiness checks
 
-        /// <summary>
-        /// Build Settings + <c>GameCatalog.maps</c> + modların harita listeleri güncel mi.
-        /// <para>
-        /// ⚠️ <b>SALT OKUR.</b> Yazan taraf <see cref="SyncAll"/>'dır ve ikisi AYNI gövdeyi
-        /// (<c>dryRun</c>) kullanır — denetim mantığı burada ikinci kez YAZILMAZ, yazılsaydı
-        /// eşitlemenin gerçekte ne yaptığından sessizce sapardı.
-        /// </para>
-        /// <para>⚠️ İstisna YUTULMAZ — <c>BuildReadiness.Check</c> zaten yutuyor.</para>
-        /// </summary>
+        /// <summary>Whether Build Settings + <c>GameCatalog.maps</c> + the modes' map lists are up to
+        /// date.</summary>
+        /// <remarks>⚠️ READ ONLY. The writer is <see cref="SyncAll"/> and both share the SAME body
+        /// (<c>dryRun</c>) — the check logic is never reimplemented here, it would silently drift
+        /// from what the sync actually does.
+        /// <para>⚠️ Exceptions are NOT swallowed — <c>BuildReadiness.Check</c> already does.</para>
+        /// </remarks>
         internal static bool IsArenaRegistryUpToDate(out string detail)
         {
             ScanResult current = Scan();
@@ -1350,8 +1299,8 @@ namespace VortexArena.Core.Editor
             changes += SyncCatalogMaps(catalog, maps, probe, true);
             changes += SyncModeMaps(catalog, maps, probe, true);
 
-            // Tarama HATASI da ✗ sayılır: yerleşimi bozuk bir kutu eşitlemeye hiç girmiyor, yani
-            // "fark yok" demek "her şey yolunda" anlamına gelmezdi.
+            // A scan ERROR counts as ✗ too: a misplaced box never enters the sync, so "no
+            // difference" would not mean "everything is fine".
             string firstError = FirstScanError(current);
             if (changes == 0 && firstError == null)
             {
@@ -1365,14 +1314,12 @@ namespace VortexArena.Core.Editor
             return false;
         }
 
-        /// <summary>
-        /// Rastgele silah veren modların <c>loadout</c> havuzu <c>WeaponCatalog</c> ile aynı mı.
-        /// <para>
-        /// ⚠️ <b>SALT OKUR.</b> Yazan taraf <see cref="SyncAll"/>'dır ve ikisi AYNI gövdeyi
-        /// (<c>dryRun</c>) kullanır — denetim mantığı burada ikinci kez YAZILMAZ.
-        /// </para>
-        /// <para>⚠️ İstisna YUTULMAZ — <c>BuildReadiness.Check</c> zaten yutuyor.</para>
-        /// </summary>
+        /// <summary>Whether the <c>loadout</c> pools of random-granting modes match
+        /// <c>WeaponCatalog</c>.</summary>
+        /// <remarks>⚠️ READ ONLY. The writer is <see cref="SyncAll"/> and both share the SAME body
+        /// (<c>dryRun</c>); the check logic is never reimplemented here.
+        /// <para>⚠️ Exceptions are NOT swallowed — <c>BuildReadiness.Check</c> already does.</para>
+        /// </remarks>
         internal static bool AreModeLoadoutsUpToDate(out string detail)
         {
             GameCatalog catalog = ResolveCatalog(null);
@@ -1404,11 +1351,9 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>
-        /// Dry-run raporundan ilk iki DEĞİŞİKLİK satırını çıkarır. ⚠️ Yalnız değişiklik önekleri
-        /// seçilir: uyarı ve durum satırları (<c>UYARI:</c>, <c>Build Settings: N sahne</c>,
-        /// <c>loadout: …</c>) sayaca girmediği için detayda da yanıltıcı olurdu.
-        /// </summary>
+        /// <summary>Picks the first two CHANGE lines from the dry-run report.</summary>
+        /// <remarks>⚠️ Only change prefixes are taken: warning and status lines do not enter the
+        /// counter, so showing them in the detail would mislead.</remarks>
         private static string DifferenceSummary(List<string> probe, int changes)
         {
             var picked = new List<string>(2);
@@ -1426,7 +1371,7 @@ namespace VortexArena.Core.Editor
             return string.Join(" · ", picked) + $" (toplam {changes} fark)";
         }
 
-        /// <summary>Taramanın ilk HATA bulgusu; hata yoksa <c>null</c>.</summary>
+        /// <summary>First ERROR finding of the scan; <c>null</c> when there is none.</summary>
         private static string FirstScanError(ScanResult current)
         {
             for (int i = 0; i < current.Issues.Count; i++)
@@ -1464,16 +1409,12 @@ namespace VortexArena.Core.Editor
             return null;
         }
 
-        // -------------------------------------------------------- aktif sahne
+        // -------------------------------------------------------- active scene
 
-        /// <summary>
-        /// Aktif sahnenin MapDefinition'ını yazar/günceller, ardından tüm kayıt yerlerini
-        /// eşitler. Exception FIRLATMAZ — ne yapıldığı satır satır dönülür.
-        /// <para>
-        /// ⚠️ Asset adı kullanıcıdan ALINMAZ, sahne adından türetilir: ikinci bir serbest ad
-        /// (eski "Arena Id") sahne adından sapabilen bir doğruluk kaynağıydı.
-        /// </para>
-        /// </summary>
+        /// <summary>Writes/updates the active scene's MapDefinition, then syncs every registry.
+        /// Throws NO exception — what it did is returned line by line.</summary>
+        /// <remarks>⚠️ The asset name is not taken from the user, it is derived from the scene name:
+        /// a second free-form name was a source of truth that could drift from it.</remarks>
         public static List<string> ConfigureActiveScene(string displayName, string[] supportedModeIds)
         {
             var report = new List<string>();
@@ -1495,8 +1436,8 @@ namespace VortexArena.Core.Editor
                 return report;
             }
 
-            // Sahne diske yazılmadan MapDefinition yazmak, sahnedeki son değişiklikleri
-            // yansıtmayan bir kayıt üretirdi.
+            // Writing the MapDefinition before the scene hits disk would produce a record that does
+            // not reflect the scene's latest changes.
             EditorSceneManager.SaveScene(scene);
 
             string dataFolder = boxPath + "/Data";
@@ -1531,10 +1472,8 @@ namespace VortexArena.Core.Editor
             return report;
         }
 
-        /// <summary>
-        /// Sahneyi yayına hazır saymadan önce bakılan noktalar. Hiçbiri işi durdurmaz — hepsi
-        /// rapora satır düşer, çünkü bunlar kurulumun ELDE kalan kısmıdır.
-        /// </summary>
+        /// <summary>Points checked before treating a scene as ready. None stops the work — all are
+        /// reported, because they are the manual part of the setup.</summary>
         private static void RunHealthChecks(List<string> report)
         {
             var boundary = UnityEngine.Object.FindFirstObjectByType<ArenaBoundary>(FindObjectsInactive.Include);
@@ -1551,12 +1490,11 @@ namespace VortexArena.Core.Editor
                     report.Add("SAĞLIK: ArenaBoundary.dimensionsJson BOŞ — muhafaza kendini kapatır.");
                 }
 
-                // ⚠️ Boundary'nin KONUMU/DÖNÜŞÜ denetlenmez: varsayılan yerleşim dünya orijinidir
-                // ama hazır bir environment'ın içinde bölge oynatmak için boundary bilinçli olarak
-                // taşınır/döndürülür — mesafe, niyeti ayırt edemeyen bir sinyaldir. ÖLÇEK ise her
-                // durumda hatadır: boyut dosyası metre cinsindendir ve TransformPoint ölçeği de
-                // uygular — 1'den sapan ölçek muhafazayı, işaretçileri ve kadrajı sessizce yanlış
-                // ölçüde kurar.
+                // ⚠️ The boundary's POSITION/ROTATION is not checked: the default is the world
+                // origin, but playing a zone inside an existing environment means moving/rotating it
+                // deliberately — distance cannot tell intent apart. SCALE is an error in every case:
+                // the dimensions file is in metres and TransformPoint applies scale too, so anything
+                // off 1 silently builds the boundary, anchors and framing at the wrong size.
                 Vector3 scale = boundary.transform.lossyScale;
                 if (Mathf.Abs(scale.x - 1f) > AlignmentTolerance ||
                     Mathf.Abs(scale.y - 1f) > AlignmentTolerance ||
@@ -1574,10 +1512,10 @@ namespace VortexArena.Core.Editor
             {
                 ArenaDimensionMesh maquette = maquettes[i];
 
-                // ⚠️ Kural TERSİNE döner: maket build'e GİRMELİDİR, çünkü kalibrasyon işaretçileri
-                // (anchor_a/anchor_b) onun altındadır ve çalışma anında gerekir. 'EditorOnly'
-                // etiketi kökü tüm çocuklarıyla birlikte build'den siler — arena sahada sessizce
-                // hizalanamaz hâle gelir. Görsel dalı zaten DimensionMeshBuildStripper ayıklıyor.
+                // ⚠️ The rule is INVERTED here: the mesh MUST ship, because the calibration anchors
+                // (anchor_a/anchor_b) sit under it and are needed at runtime. An 'EditorOnly' tag
+                // strips the root with all its children — the arena silently becomes unalignable on
+                // site. The visual branch is already removed by DimensionMeshBuildStripper.
                 if (maquette.CompareTag("EditorOnly"))
                 {
                     report.Add($"SAĞLIK: '{maquette.name}' maketi 'EditorOnly' ETİKETLİ — build'e " +
@@ -1585,11 +1523,10 @@ namespace VortexArena.Core.Editor
                                "Etiketi 'Untagged' yap.");
                 }
 
-                // Maket, boundary varsa onun ALTINDA ve yerel-kimlikte durmalı ("JSON'dan
-                // DimensionMesh Üret" böyle kurar): ayrışırlarsa gözle görülen ölçü ile
-                // muhafazanın/işaretçilerin gerçekte kurulduğu yer sessizce farklılaşır.
-                // Boundary'siz (eski) sahnede maketin yeri serbesttir — geri okuma maketin
-                // kendi kökünü referans alır.
+                // With a boundary present the mesh must sit UNDER it at local identity (that is how
+                // "JSON'dan DimensionMesh Üret" builds it): if they drift, the visible size and the
+                // place the boundary/anchors are actually built silently differ. Without a boundary
+                // the mesh may sit anywhere — read back references the mesh's own root.
                 if (boundary != null &&
                     (maquette.transform.parent != boundary.transform ||
                      maquette.transform.localPosition.magnitude > AlignmentTolerance ||
@@ -1602,18 +1539,17 @@ namespace VortexArena.Core.Editor
                 }
             }
 
-            // ⚠️ Burada "Wall_* kalıntısı" diye bir kontrol YOKTUR ve eklenmez: arenanın gerçek
-            // duvarları da environment sanatında bu adı taşıyor (IceWorld). Ada bakan bir uyarı
-            // her açılışta yanlış alarm verir ve sağlık raporunun tamamı okunmaz olur.
+            // ⚠️ There is no "leftover Wall_*" check here and none is added: the arena's real walls
+            // carry that name in the environment art too. A name based warning would false-alarm on
+            // every open and make the whole health report unreadable.
         }
 
-        // -------------------------------------------------------------- yardımcı
+        // -------------------------------------------------------------- helpers
 
-        /// <summary>
-        /// Projedeki TEK <c>GameCatalog</c> asset'ini bulur; bulunamazsa ya da birden fazlaysa
-        /// null döner. Birden fazla katalog bir proje hatasıdır: çalışma anında
-        /// <c>Resources.Load</c> hangisini döndüreceğini garanti etmez.
-        /// </summary>
+        /// <summary>Finds the project's ONE <c>GameCatalog</c> asset; null when missing or
+        /// duplicated.</summary>
+        /// <remarks>More than one catalog is a project error: <c>Resources.Load</c> gives no
+        /// guarantee which one it returns at runtime.</remarks>
         private static GameCatalog ResolveCatalog(List<string> report)
         {
             string[] guids = AssetDatabase.FindAssets("t:" + nameof(GameCatalog));
@@ -1682,11 +1618,11 @@ namespace VortexArena.Core.Editor
             return AssetDatabase.LoadAssetAtPath<MapDefinition>($"{boxPath}/Data/{sceneName}.asset");
         }
 
-        /// <summary>
-        /// <c>Assets/Arenas/Venues/&lt;Mekan&gt;/Scenes/&lt;Kutu&gt;/&lt;Sahne&gt;.unity</c> yolunu
-        /// parçalarına ayırır. Kutu adı ile sahne adının EŞİT olması ayrıca çağıran tarafından
-        /// kontrol edilir (eşit değilse yerleşim bozuktur ama yol yine de ayrıştırılabilir).
-        /// </summary>
+        /// <summary>Splits
+        /// <c>Assets/Arenas/Venues/&lt;Venue&gt;/Scenes/&lt;Box&gt;/&lt;Scene&gt;.unity</c> into its
+        /// parts.</summary>
+        /// <remarks>Box name == scene name is checked separately by the caller (a mismatch means a
+        /// broken layout, but the path still parses).</remarks>
         private static bool TryParseBoxScene(
             string scenePath, out string venue, out string boxPath, out string boxName, out string sceneName)
         {
@@ -1719,7 +1655,7 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>Kutunun DOĞRUDAN altındaki sahne dosyaları (alt klasörlere inilmez).</summary>
+        /// <summary>Scene files DIRECTLY under the box (subfolders are not walked).</summary>
         private static List<string> DirectSceneFiles(string folderPath)
         {
             var result = new List<string>();
@@ -1739,7 +1675,7 @@ namespace VortexArena.Core.Editor
             return result;
         }
 
-        /// <summary>Referans listesini serialize edilmiş diziye yazar (boyut + elemanlar).</summary>
+        /// <summary>Writes a reference list into a serialized array (size + elements).</summary>
         private static void WriteArray<T>(SerializedProperty arrayProp, List<T> values)
             where T : UnityEngine.Object
         {

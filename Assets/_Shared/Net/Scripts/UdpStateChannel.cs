@@ -11,26 +11,24 @@ using VortexArena.Protocol;
 namespace VortexArena.Net
 {
     /// <summary>
-    /// UDP 47822 poz kanalı: welcome'daki udpToken ile 0x00 UdpHello kaydı yapar
-    /// — sunucu aynı 6 baytı geri yollayana (ack) dek 1 sn arayla tekrarlar. Kayıt
-    /// sonrası IPoseSource'tan aldığı arena-uzayı pozlarını 20 Hz PoseUpdate (0x01)
-    /// olarak gönderir; gelen Snapshot'ları (0x02) RemotePlayerRegistry'ye iletir.
-    /// Atış/atma olaylarını (0x03) HEMEN yollar ve gelen olay batch'lerini (0x04)
-    /// NetEvents.OnRemoteFireEvent olarak yayınlar (§6.4/6.5).
-    /// ArenaClient tarafından yönetilir.
+    /// UDP 47822 pose channel: registers with a 0x00 UdpHello carrying welcome's udpToken, retried every
+    /// 1 s until the server echoes the same 6 bytes (ack). Once registered it sends the arena-space
+    /// poses from IPoseSource as 20 Hz PoseUpdate (0x01) and forwards incoming Snapshots (0x02) to
+    /// RemotePlayerRegistry. Shot/throw events (0x03) go out IMMEDIATELY and incoming event batches
+    /// (0x04) are published as NetEvents.OnRemoteFireEvent (§6.4/6.5). Managed by ArenaClient.
     /// </summary>
     public class UdpStateChannel : MonoBehaviour
     {
-        // §6.1: ack gelene dek 1 sn arayla tekrar (ArenaProtocol'de ayrı sabiti yok).
+        // §6.1: retry every 1 s until acked (no dedicated constant in ArenaProtocol).
         private const float HelloRetryIntervalSeconds = 1f;
 
-        // 20 Hz gönderim aralığı (sabit katlama: her iki işlenen de const).
+        // 20 Hz send interval (constant-folded: both operands are const).
         private const float PoseSendInterval = 1f / ArenaProtocol.POSE_RATE_HZ;
 
-        /// <summary>Sunucu UDP endpoint'imizi kaydetti mi (ack alındı mı).</summary>
+        /// <summary>Has the server registered our UDP endpoint (ack received)?</summary>
         public bool Registered { get; private set; }
 
-        /// <summary>Ana thread'de, kayıt tamamlanınca bir kez tetiklenir.</summary>
+        /// <summary>Raised once on the main thread when registration completes.</summary>
         public event Action OnRegistered;
 
         private readonly ConcurrentQueue<Action> _mainThreadActions = new ConcurrentQueue<Action>();
@@ -42,7 +40,7 @@ namespace VortexArena.Net
         private uint _udpToken;
         private volatile bool _acked;
 
-        // ---- 20 Hz poz gönderimi (yalnız ana thread dokunur) ----
+        // ---- 20 Hz pose sending (main thread only) ----
         private IPoseSource _poseSource;
         private ushort _seq;
         private float _sendAccumulator;
@@ -51,26 +49,25 @@ namespace VortexArena.Net
         private BinaryWriter _sendWriter;
         private bool _sendWarned;
 
-        // ---- 0x03 olay gönderimi (yalnız ana thread dokunur) ----
-        // ⚠️ Poz tamponundan AYRI: olay HEMEN gider, yani poz yazımının ortasına düşebilir;
-        // paylaşılan stream'de ikisi birbirinin pozisyonunu ezerdi. Ayrıca 10 olay/sn'de
-        // her seferinde tampon ayırmak boşuna GC olurdu.
+        // ---- 0x03 event sending (main thread only) ----
+        // ⚠️ SEPARATE from the pose buffer: an event goes out IMMEDIATELY and can land mid pose write;
+        // on a shared stream the two would clobber each other's position. Allocating per event at
+        // 10 events/s would also be pointless GC.
         private byte[] _eventBuffer;
         private MemoryStream _eventStream;
         private BinaryWriter _eventWriter;
         private bool _eventSendWarned;
 
-        // ⚠️ Poz _seq'inden AYRI sayaç: POZ seq'i sıra zorlaması yapar (durum — son gelen
-        // kazanır), OLAY seq'i yalnız kopya bastırır (§6.4). Tek sayaca indirgenirse poz
-        // kaybı olay numaralarında boşluk açar ve sunucunun kayıp ölçümü yalan söyler.
+        // ⚠️ SEPARATE counter from the pose _seq: pose seq enforces order (state — last one wins),
+        // event seq only suppresses duplicates (§6.4). Merged into one, pose loss would gap the event
+        // numbers and the server's loss measurement would lie.
         private ushort _eventSeq;
 
-        // ---- 0x07 iskelet gönderimi (yalnız ana thread dokunur) ----
-        // ⚠️ Poz/olay tamponlarından AYRI ve çok daha büyük (blob değişken uzunluklu, §6.9).
-        // ⚠️ Bu kanal PULL değil PUSH'tur — poz kanalının aksine kadansı UdpStateChannel değil
-        // Movement SDK belirler (kendi keyframe/aralık mantığı var) ve kaynak hazır olduğunda
-        // SendSkeleton'ı çağırır. Kanalın kendi hızını dayatması, SDK'nın ürettiği bir kareyi
-        // keyfi olarak düşürmek olurdu.
+        // ---- 0x07 skeleton sending (main thread only) ----
+        // ⚠️ SEPARATE from the pose/event buffers and much larger (variable-length blob, §6.9).
+        // ⚠️ This channel is PUSH, not PULL — the cadence comes from the Movement SDK (its own
+        // keyframe/interval logic), which calls SendSkeleton when a frame is ready. Imposing our own
+        // rate would arbitrarily drop frames the SDK produced.
         private byte[] _skeletonBuffer;
         private MemoryStream _skeletonStream;
         private BinaryWriter _skeletonWriter;
@@ -79,41 +76,41 @@ namespace VortexArena.Net
         private bool _skeletonSizeWarned;
         private float _lastSkeletonSendTime = float.NegativeInfinity;
 
-        /// <summary>Bozuk datagram uyarısı bir kez basılır — bozuk bir gönderen saniyede
-        /// onlarca paket yollayabilir ve konsolu doldurmak tanıyı kolaylaştırmaz.
-        /// ⚠️ Yeniden bağlanmada SIFIRLANMAZ: ilk örnek zaten sebebi söyledi.</summary>
+        /// <summary>The corrupt-datagram warning is logged once — a broken sender can emit dozens of
+        /// packets a second and flooding the console does not help diagnosis. ⚠️ NOT reset on
+        /// reconnect: the first instance already stated the reason.</summary>
         private bool _datagramErrorWarned;
 
         /// <summary>
-        /// İskelet gönderiminin alt sınır aralığı — <b>emniyet supabı</b>, kadans kaynağı değil.
-        /// <para>Kadansı SDK bileşeni belirliyor (prefabda ayarlanır); yanlış ayarlanmış bir prefab
-        /// kare hızında paket üretip §3.12 paket bütçesini tek başına yakabilir. Sınır
-        /// <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>'den biraz gevşektir: tam eşit olsaydı
-        /// zamanlayıcı jitter'ı meşru kareleri de düşürürdü.</para>
+        /// Minimum skeleton send interval — a <b>safety valve</b>, not the cadence source.
+        /// <para>The SDK component sets the cadence (configured on the prefab); a misconfigured prefab
+        /// could emit a packet per frame and burn the §3.12 packet budget alone. Slightly looser than
+        /// <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>: exactly equal, timer jitter would drop
+        /// legitimate frames.</para>
         /// </summary>
         private const float SkeletonMinSendInterval = 0.9f / ArenaProtocol.SKELETON_RATE_HZ;
 
-        // ---- 0x04 batch alımı (ağ thread'i) ----
-        // Son işlenen tik'lerin halkası: batch'in kimliği serverTick ve tik başına en fazla
-        // bir batch üretilir (§6.5). Halka yalnız BİREBİR TEKRARI düşürür.
+        // ---- 0x04 batch receive (network thread) ----
+        // Ring of the last processed ticks: a batch is identified by serverTick and at most one batch
+        // is produced per tick (§6.5). The ring drops EXACT REPEATS only.
         private readonly uint[] _seenTicks = new uint[ArenaProtocol.EVENT_TICK_HISTORY];
         private readonly bool[] _seenTicksValid = new bool[ArenaProtocol.EVENT_TICK_HISTORY];
         private int _seenTicksNext;
 
-        // ---- Ağ telemetrisi (§6.7) — ölçümün TAMAMI istemcide ----
-        // ⚠️ Yüksek çözünürlüklü monotonik saat şart: Environment.TickCount'un çözünürlüğü ~10-16 ms
-        // ve LAN'da beklenen RTT 5-15 ms — onunla ölçmek gürültüden başka bir şey vermez.
-        // (System.Diagnostics tam nitelikli çağrılıyor: `using` eklemek Debug'ı UnityEngine.Debug ile
-        // çakıştırır ve dosyadaki her Debug.Log satırı derlenmez olur.)
+        // ---- Net telemetry (§6.7) — measured ENTIRELY on the client ----
+        // ⚠️ A high-resolution monotonic clock is required: Environment.TickCount resolves to ~10-16 ms
+        // while the expected LAN RTT is 5-15 ms — measuring with it yields only noise.
+        // (System.Diagnostics is fully qualified: a `using` would collide Debug with UnityEngine.Debug
+        // and break every Debug.Log line in this file.)
         private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
 
-        // §6.7: RTT yoklaması 1 Hz. ⚠️ ARTIRILMAZ — her yoklama 2 datagram (gidiş + echo) ve bu
-        // ürünün darboğazı bant değil paket sayısıdır. Jitter zaten snapshot varışlarından 20 Hz
-        // çözünürlükle ve sıfır ek paketle ölçülüyor; bu paket yalnız operatörün okuduğu sayı içindir.
+        // §6.7: RTT probe at 1 Hz. ⚠️ NEVER RAISED — each probe costs 2 datagrams (out + echo) and this
+        // product's bottleneck is packet count, not bandwidth. Jitter already comes from snapshot
+        // arrivals at 20 Hz with zero extra packets; this packet only feeds the operator's ping number.
         private const float RttProbeIntervalSeconds = 1f;
 
-        /// <summary>Telemetri alanlarının kilidi: ağ thread'i yazar, ana thread (status kurulumu)
-        /// okur. 20 Hz yazma / 0.2 Hz okuma olduğu için çekişme yok sayılır.</summary>
+        /// <summary>Lock for the telemetry fields: net thread writes, main thread (status assembly)
+        /// reads. Contention is negligible at 20 Hz writes / 0.2 Hz reads.</summary>
         private readonly object _telemetryGate = new object();
 
         private float _probeAccumulator;
@@ -121,9 +118,9 @@ namespace VortexArena.Net
         private MemoryStream _probeStream;
         private BinaryWriter _probeWriter;
 
-        /// <summary>Bekleyen yoklamanın telde giden nonce'ı ve yerel yüksek çözünürlüklü damgası.
-        /// Aynı anda yalnız BİR yoklama açıktır (1 Hz gönderim, RTT ≪ 1 sn) — bu yüzden halka
-        /// gerekmiyor; nonce yalnız bayat bir echo'yu ayıklamak için.</summary>
+        /// <summary>The pending probe's on-wire nonce and its local high-resolution stamp. Only ONE
+        /// probe is in flight at a time (1 Hz sends, RTT ≪ 1 s) so no ring is needed; the nonce only
+        /// filters out a stale echo.</summary>
         private uint _probeNonce;
         private long _probeSentTicks;
         private bool _probePending;
@@ -131,7 +128,7 @@ namespace VortexArena.Net
         private int _rttMs = -1;
         private float _jitterMs = -1f;
 
-        /// <summary>Downlink snapshot varış damgası (yüksek çözünürlük) ve son görülen serverTick.</summary>
+        /// <summary>Downlink snapshot arrival stamp (high resolution) and the last serverTick seen.</summary>
         private long _lastSnapshotTicks;
         private uint _lastServerTick;
         private bool _hasServerTick;
@@ -141,8 +138,8 @@ namespace VortexArena.Net
 
         private void Awake()
         {
-            // Önceden ayrılmış gönderim tamponu: buffer sabit kalır, stream her
-            // gönderimde pozisyon sıfırlanarak yeniden kullanılır (karede GC yok).
+            // Preallocated send buffers: the buffer stays, the stream is reused by resetting Position
+            // per send (no per-frame GC).
             _sendBuffer = new byte[PoseUpdate.SIZE];
             _sendStream = new MemoryStream(_sendBuffer, 0, _sendBuffer.Length, true);
             _sendWriter = new BinaryWriter(_sendStream);
@@ -155,19 +152,19 @@ namespace VortexArena.Net
             _probeStream = new MemoryStream(_probeBuffer, 0, _probeBuffer.Length, true);
             _probeWriter = new BinaryWriter(_probeStream);
 
-            // Blob değişken uzunluklu ama tavanı sabit — tampon en büyük meşru pakete göre bir kez
-            // ayrılır, gönderim başına yalnız gerçek uzunluk kadarı yollanır.
+            // The blob is variable length but its ceiling is fixed — allocate once for the largest
+            // legitimate packet and send only the real length each time.
             _skeletonBuffer = new byte[SkeletonUpdate.HEADER_SIZE + ArenaProtocol.SKELETON_MAX_BLOB_BYTES];
             _skeletonStream = new MemoryStream(_skeletonBuffer, 0, _skeletonBuffer.Length, true);
             _skeletonWriter = new BinaryWriter(_skeletonStream);
         }
 
         /// <summary>
-        /// ANA THREAD: ölçülen telemetriyi okur ve pencere sayaçlarını sıfırlar (§6.7).
-        /// <c>ArenaClient</c> <c>status</c> kurarken çağırır.
-        /// <para>RTT ve jitter <b>süreklidir</b> (EWMA — sıfırlanmaz), kayıp ise pencere başına
-        /// hesaplanır: yüzdenin anlamlı olması için paydası "son ölçüm penceresi" olmalı, yoksa
-        /// oturum başındaki tek bir kayıp saatler boyunca yüzdeyi kirletir.</para>
+        /// MAIN THREAD: reads measured telemetry and resets the window counters (§6.7); called by
+        /// <c>ArenaClient</c> while assembling <c>status</c>.
+        /// <para>RTT and jitter are <b>continuous</b> (EWMA, never reset), loss is per window: the
+        /// denominator must be "the last measurement window", otherwise one loss at session start
+        /// pollutes the percentage for hours.</para>
         /// </summary>
         public void SampleTelemetry(out int rttMs, out float jitterMs, out float lossPct)
         {
@@ -185,16 +182,16 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// Poz kaynağını atar (App'teki PlayerPoseTracker Start'ta çağırır; kalibrasyon beklenmez).
-        /// Kaynak Stop()'ta SİLİNMEZ: reconnect sonrası kayıt tamamlanınca gönderim
-        /// kendiliğinden sürer.
+        /// Sets the pose source (App's PlayerPoseTracker calls it in Start; calibration is not awaited).
+        /// The source is NOT cleared by Stop(): after a reconnect sending resumes by itself once
+        /// registration completes.
         /// </summary>
         public void SetPoseSource(IPoseSource source)
         {
             _poseSource = source;
         }
 
-        /// <summary>Yalnız kayıtlı kaynak verilenle aynıysa temizler (sahne yıkımı güvenliği).</summary>
+        /// <summary>Clears only if the registered source is the given one (scene teardown safety).</summary>
         public void ClearPoseSource(IPoseSource source)
         {
             if (ReferenceEquals(_poseSource, source))
@@ -203,7 +200,7 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>Kayıt sürecini (yeniden) başlatır; önceki oturum varsa kapatır.</summary>
+        /// <summary>(Re)starts registration; closes a previous session if there is one.</summary>
         public void StartRegistration(string serverIp, int statePort, byte playerId, uint udpToken)
         {
             Stop();
@@ -221,17 +218,16 @@ namespace VortexArena.Net
             _acked = false;
             Registered = false;
             _sendAccumulator = 0f;
-            _sendWarned = false; // yeni oturumda gönderim uyarısı yeniden loglanabilir
+            _sendWarned = false; // a new session may log the send warning again
             _eventSendWarned = false;
             _skeletonSendWarned = false;
             _lastSkeletonSendTime = float.NegativeInfinity;
-            // ⚠️ _skeletonSizeWarned SIFIRLANMAZ: boyut aşımı ağ değil YAPILANDIRMA hatasıdır
-            // (prefabdaki sıkıştırma/eklem listesi) ve yeniden bağlanmakla düzelmez — her oturumda
-            // tekrar bastırmak konsolu doldurur, mesaj bir kez okunsun yeter.
+            // ⚠️ _skeletonSizeWarned is NOT reset: an oversized blob is a CONFIGURATION error (prefab
+            // compression/joint list), not a network one, and reconnecting does not fix it.
 
-            // Yeni oturum = yeni sunucu tik ekseni ve yeni ağ yolu → telemetri sıfırlanır.
-            // ⚠️ _lastServerTick taşınırsa (sunucu yeniden başladıysa tik sıfırdan sayar) ilk
-            // snapshot'lar "geriye gitti" görünür ve kayıp yüzdesi yalan söyler.
+            // New session = new server tick axis and new network path → telemetry is reset.
+            // ⚠️ Carrying _lastServerTick over would make the first snapshots look like they "went
+            // backwards" after a server restart and the loss percentage would lie.
             lock (_telemetryGate)
             {
                 _rttMs = -1;
@@ -246,15 +242,14 @@ namespace VortexArena.Net
 
             _probeAccumulator = 0f;
 
-            // Yeni oturum = yeni sunucu tik ekseni: eski halka bu oturumun tik'lerini yanlışlıkla
-            // "görülmüş" sayabilir (sunucu yeniden başladıysa tik sıfırdan sayar) → ilk batch'ler
-            // sessizce düşerdi.
+            // Same reason for the seen-tick ring: after a server restart the old ring could mark this
+            // session's ticks as already "seen" and the first batches would drop silently.
             Array.Clear(_seenTicksValid, 0, _seenTicksValid.Length);
             _seenTicksNext = 0;
 
             try
             {
-                _udp = new UdpClient(0); // ephemeral porta hemen bağlan (alım için gerekli)
+                _udp = new UdpClient(0); // bind an ephemeral port right away (required to receive)
             }
             catch (Exception e)
             {
@@ -271,7 +266,7 @@ namespace VortexArena.Net
             _ = Task.Run(() => SendHelloLoopAsync(udp, token));
         }
 
-        /// <summary>Kanalı kapatır; ArenaClient kopuşta çağırır (yeni welcome'da yeniden kurulur).</summary>
+        /// <summary>Closes the channel; ArenaClient calls it on disconnect (rebuilt on the next welcome).</summary>
         public void Stop()
         {
             try
@@ -280,7 +275,7 @@ namespace VortexArena.Net
             }
             catch (Exception)
             {
-                // CTS zaten dispose olduysa yut.
+                // Swallow it when the CTS is already disposed.
             }
 
             _cts = null;
@@ -293,7 +288,7 @@ namespace VortexArena.Net
                 }
                 catch (Exception)
                 {
-                    // Soket zaten kapalıysa yut.
+                    // Swallow it when the socket is already closed.
                 }
 
                 _udp = null;
@@ -321,11 +316,10 @@ namespace VortexArena.Net
             SendRttProbeIfDue();
         }
 
-        /// <summary>ANA THREAD: 1 Hz RTT yoklaması (§6.7). Kayıt yoksa hiç gönderilmez.
-        /// <para>Cevapsız kalan yoklama <b>zaman aşımına uğratılmaz</b>: RTT son BAŞARILI ölçümü
-        /// göstermeye devam eder. Sebebi, kaybın kendi göstergesi olması — <c>lossPct</c> zaten
-        /// düşerken ping'i "-" yapmak operatöre iki kez aynı şeyi söylerdi ve panelde satırın
-        /// titremesine yol açardı.</para></summary>
+        /// <summary>MAIN THREAD: 1 Hz RTT probe (§6.7); nothing is sent before registration.
+        /// <para>An unanswered probe is <b>not timed out</b>: RTT keeps showing the last SUCCESSFUL
+        /// measurement, because loss has its own indicator — blanking the ping while <c>lossPct</c> is
+        /// already falling would tell the operator the same thing twice and flicker the row.</para></summary>
         private void SendRttProbeIfDue()
         {
             if (!Registered || _udp == null)
@@ -343,8 +337,8 @@ namespace VortexArena.Net
             _probeAccumulator = 0f;
 
             long sentTicks = _clock.ElapsedTicks;
-            // Nonce = gönderim anının ms değeri; bayat bir echo'yu ayıklamaya yeter (aynı anda tek
-            // yoklama açık). Sunucu bu değeri OKUMAZ, aynen geri yazar.
+            // Nonce = the send moment in ms; enough to filter a stale echo (only one probe in flight).
+            // The server does NOT read it, it echoes it verbatim.
             uint nonce = unchecked((uint)_clock.ElapsedMilliseconds);
 
             lock (_telemetryGate)
@@ -365,24 +359,24 @@ namespace VortexArena.Net
             }
             catch (Exception)
             {
-                // Yoklama kaybı zararsız: bir sonraki saniye yenisi gider. Poz/olay yolundaki gibi
-                // uyarı bile basılmaz — telemetri için log gürültüsü üretmeye değmez.
+                // A lost probe is harmless: another goes out next second. Not even a warning — telemetry
+                // is not worth log noise.
             }
         }
 
         /// <summary>
-        /// ANA THREAD: retarget edilmiş iskelet blob'unu + karakter kökünün <b>arena uzayı</b> pozunu
-        /// <c>0x07</c> olarak yollar (§6.9). Kayıt yoksa sessizce düşer.
-        /// <para><b>PUSH kapısı:</b> kadansı bu sınıf değil Movement SDK belirler — çağıran, SDK bir
-        /// kare ürettiğinde buraya verir. <see cref="SkeletonMinSendInterval"/> yalnız kaçak bir
-        /// kadansa karşı emniyettir.</para>
-        /// <para>⚠️ <paramref name="arenaRoot"/> <b>zorunludur ve blob'un içindeki kök yerine
-        /// geçer</b>: SDK kök eklemi gönderenin dünya uzayında yazıyor, alıcının arenasıyla ilgisi
-        /// yok (§6.9). Dönüşümü çağıran yapar — Net katmanı <c>ArenaSpace</c>'i görmez, poz kanalında
-        /// olduğu gibi (bkz. <see cref="IPoseSource"/>).</para>
-        /// <para>⚠️ <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/>'ı aşan blob
-        /// <b>GÖNDERİLMEZ</b>: bu kanalda parçalama yoktur ve sığmayan paketi yollamak IP
-        /// parçalanmasına güvenmek olurdu (tek parçanın kaybı tüm kareyi çöpe atar).</para>
+        /// MAIN THREAD: sends the retargeted skeleton blob + the character root's <b>arena space</b>
+        /// pose as <c>0x07</c> (§6.9); a silent no-op before registration.
+        /// <para><b>PUSH gate:</b> the cadence comes from the Movement SDK, not this class — the caller
+        /// hands over a frame when the SDK produces one. <see cref="SkeletonMinSendInterval"/> is only a
+        /// safety net against a runaway cadence.</para>
+        /// <para>⚠️ <paramref name="arenaRoot"/> is <b>mandatory and replaces the root inside the
+        /// blob</b>: the SDK writes the root joint in the sender's world space, unrelated to the
+        /// receiver's arena (§6.9). The caller does the transform — the Net layer does not see
+        /// <c>ArenaSpace</c>, same as on the pose channel (see <see cref="IPoseSource"/>).</para>
+        /// <para>⚠️ A blob over <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/> is <b>NOT SENT</b>:
+        /// there is no fragmentation on this channel, and sending it would mean trusting IP
+        /// fragmentation (losing one fragment throws away the whole frame).</para>
         /// </summary>
         public void SendSkeleton(byte[] blob, int length, Pose arenaRoot)
         {
@@ -432,7 +426,7 @@ namespace VortexArena.Net
             }
             catch (Exception e)
             {
-                // Poz yolundaki gerekçenin aynısı: yut + spam'siz tek uyarı.
+                // Same reasoning as the pose path: swallow + one spam-free warning.
                 if (!_skeletonSendWarned)
                 {
                     _skeletonSendWarned = true;
@@ -441,7 +435,7 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>ANA THREAD: kayıt tamamsa ve poz kaynağı hazırsa 20 Hz PoseUpdate yollar.</summary>
+        /// <summary>MAIN THREAD: sends a 20 Hz PoseUpdate once registered and the pose source is ready.</summary>
         private void SendPoseIfDue()
         {
             if (!Registered || _poseSource == null || _udp == null)
@@ -456,16 +450,16 @@ namespace VortexArena.Net
                 return;
             }
 
-            // Çoklu aşımda (frame hitch) tek paket yeter — birikimi modulo ile kırp.
+            // One packet is enough after a frame hitch — clamp the accumulator with a modulo.
             _sendAccumulator %= PoseSendInterval;
 
             if (!_poseSource.TryGetArenaPoses(out Pose head, out Pose handL, out Pose handR))
             {
-                return; // izleme henüz hazır değil (ör. HMD uykuda)
+                return; // tracking not ready yet (e.g. HMD asleep)
             }
 
-            // §6.2: eşya baytları pozla AYNI pakette gider (aynı otorite — istemci-otoriter
-            // sunum bilgisi). Kaynak bunları kendi çözer; Net katmanı eşya tablosunu bilmez.
+            // §6.2: item bytes ride the SAME packet as the pose (same authority — client-authoritative
+            // presentation info). The source resolves them; the Net layer knows no item table.
             _poseSource.GetHeldItems(out byte itemL, out byte itemR, out byte gripFlags);
 
             var update = new PoseUpdate
@@ -490,7 +484,7 @@ namespace VortexArena.Net
             }
             catch (Exception e)
             {
-                // Yut + spam'siz tek uyarı (yeni kayıtta sıfırlanır); UDP zaten kayıplı.
+                // Swallow + one spam-free warning (reset on re-registration); UDP is lossy anyway.
                 if (!_sendWarned)
                 {
                     _sendWarned = true;
@@ -500,20 +494,21 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// §6.4: atış/atma olayı yollar. <b>HEMEN gider</b> (poz tik'i beklenmez — bekletmek yerel
-        /// tetik ile relay arasına 0–50 ms koyar, karşılığı yoktur). Kayıt yoksa sessiz no-op.
+        /// §6.4: sends a shot/throw event. <b>Goes out IMMEDIATELY</b> (no pose tick wait — waiting would
+        /// add 0–50 ms between the local trigger and the relay for nothing). A silent no-op before
+        /// registration.
         /// </summary>
         /// <param name="kind"><c>FireEventEntry.KIND_SHOT</c> / <c>KIND_THROW</c>.</param>
-        /// <param name="rightHand">Olay sağ elden mi çıktı.</param>
-        /// <param name="itemId">Eşyanın <c>netItemId</c>'si (§6.6); 0 = çözülemedi.</param>
-        /// <param name="arenaDirection">Nişan yönü, <b>ARENA uzayında</b> — dünya→arena çevirimi
-        /// ÇAĞIRANIN işidir (Net katmanı dönüşümü bilmez). Birim olmak zorunda değil.</param>
-        /// <param name="magnitudeMeters">Türe göre: atışta mesafe (m), atmada başlangıç hızı (m/sn).</param>
+        /// <param name="rightHand">Did the event come from the right hand.</param>
+        /// <param name="itemId">The item's <c>netItemId</c> (§6.6); 0 = unresolved.</param>
+        /// <param name="arenaDirection">Aim direction in <b>ARENA space</b> — the world→arena conversion
+        /// is the CALLER's job (the Net layer does not know the transform). Need not be normalised.</param>
+        /// <param name="magnitudeMeters">Per kind: shot distance (m) or throw initial speed (m/s).</param>
         public void SendFireEvent(byte kind, bool rightHand, byte itemId, Vector3 arenaDirection, float magnitudeMeters)
         {
             if (!Registered || _udp == null)
             {
-                return; // henüz kayıtlı değiliz: olayın gideceği bir endpoint yok
+                return; // not registered yet: no endpoint to send the event to
             }
 
             OctahedralDirection.Encode(
@@ -541,7 +536,7 @@ namespace VortexArena.Net
             }
             catch (Exception e)
             {
-                // Poz yolundaki gibi: yut + spam'siz tek uyarı (yeni kayıtta sıfırlanır).
+                // As on the pose path: swallow + one spam-free warning (reset on re-registration).
                 if (!_eventSendWarned)
                 {
                     _eventSendWarned = true;
@@ -551,15 +546,15 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// Metre → cm, u16'ya <b>clamp</b>. Taşma sarmalanmaz: 700 m'lik bir mesafe 4400 cm olarak
-        /// görünürse tracer arkaya doğru kısacık çizilir; tavana kilitlemek en kötü halde biraz
-        /// kısa bir tracer verir. Negatif değer (hatalı çağrı) 0'a düşer.
+        /// Metres → cm, <b>clamped</b> to u16. No wraparound: a 700 m distance showing as 4400 cm would
+        /// draw a stubby backwards tracer, whereas clamping costs at worst a slightly short one.
+        /// A negative value (a faulty call) falls to 0.
         /// </summary>
         private static ushort ToMagnitudeCm(float meters)
         {
             if (!(meters > 0f))
             {
-                return 0; // NaN de buraya düşer (karşılaştırma false)
+                return 0; // NaN lands here too (the comparison is false)
             }
 
             double cm = Math.Round(meters * 100.0);
@@ -584,7 +579,7 @@ namespace VortexArena.Net
             Stop();
         }
 
-        // ------------------------------------------------------------- döngüler
+        // ------------------------------------------------------------- loops
 
         private async Task SendHelloLoopAsync(UdpClient udp, CancellationToken ct)
         {
@@ -607,11 +602,11 @@ namespace VortexArena.Net
             }
             catch (OperationCanceledException)
             {
-                // Stop() çağrıldı.
+                // Stop() was called.
             }
             catch (ObjectDisposedException)
             {
-                // Soket kapatıldı.
+                // The socket was closed.
             }
             catch (Exception e)
             {
@@ -630,12 +625,11 @@ namespace VortexArena.Net
                 {
                     UdpReceiveResult datagram = await udp.ReceiveAsync();
 
-                    // ⚠️ Datagram başına yalıtım: bozuk/kırpılmış tek bir paket çözümlenirken
-                    // atarsa (BinaryReader akış sonunda EndOfStreamException atar) bu try
-                    // OLMASAYDI istisna while'ı saran dış catch'e düşer ve ALIM DÖNGÜSÜ TÜMDEN
-                    // ÖLÜRDÜ — istemci o andan sonra hiç snapshot/iskelet almaz, sessizce donar.
-                    // Tek paketi düşürmek doğru davranıştır: durum kanalıdır, bir sonraki tik
-                    // eksiği zaten kapatır.
+                    // ⚠️ Per-datagram isolation: without this try, a corrupt/truncated packet throwing
+                    // during parse (BinaryReader throws EndOfStreamException at stream end) would fall
+                    // into the outer catch and KILL THE WHOLE RECEIVE LOOP — the client would silently
+                    // freeze, receiving no snapshot/skeleton again. Dropping one packet is correct: this
+                    // is a state channel and the next tick fills the gap.
                     try
                     {
                         HandleDatagram(datagram.Buffer);
@@ -654,11 +648,11 @@ namespace VortexArena.Net
             }
             catch (ObjectDisposedException)
             {
-                // Stop() soketi kapattı — normal çıkış.
+                // Stop() closed the socket — a normal exit.
             }
             catch (SocketException)
             {
-                // Kapanışta beklenen; reconnect yeni kanal kurar.
+                // Expected on shutdown; a reconnect builds a new channel.
             }
             catch (Exception e)
             {
@@ -670,10 +664,10 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// Batch tik'i son <see cref="ArenaProtocol.EVENT_TICK_HISTORY"/> tik içinde işlendi mi
-        /// (§6.5 kopya bastırma). Halka yalnız alım thread'inden okunup yazılır — kilit yok;
-        /// tek yazarı olan diğer nokta <see cref="StartRegistration"/> ve orası alım döngüsü
-        /// iptal edildikten SONRA temizler.
+        /// Was this batch tick processed within the last <see cref="ArenaProtocol.EVENT_TICK_HISTORY"/>
+        /// ticks (§6.5 duplicate suppression)? The ring is read/written from the receive thread only, so
+        /// no lock; the other writer, <see cref="StartRegistration"/>, clears it AFTER the receive loop
+        /// is cancelled.
         /// </summary>
         private bool WasTickSeen(uint serverTick)
         {
@@ -692,13 +686,12 @@ namespace VortexArena.Net
             => (float)(tickDelta * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
 
         /// <summary>
-        /// AĞ THREAD'İ: downlink jitter'ı ve snapshot kaybını gelen akıştan ölçer (§6.7) — <b>ek
-        /// paket yoktur</b>, ölçüm zaten alınan 20 Hz snapshot'ın yan ürünüdür.
-        /// <para>⚠️ <b>Aynı tik'in parçaları sayılmaz</b> (§6.3 MTU parçalama): 16'dan fazla girdide
-        /// bir tik birden çok datagramla gelir ve her parçayı ayrı "varış" saymak jitter'ı 0'a,
-        /// kaybı yanlış paydaya çekerdi.</para>
-        /// <para>⚠️ <b>Geriye giden tik yok sayılır:</b> UDP sırayı bozabilir ve "eski tik" bir kayıp
-        /// değildir. Kayıp yalnız İLERİ boşluktan sayılır.</para>
+        /// NETWORK THREAD: measures downlink jitter and snapshot loss from the incoming stream (§6.7) —
+        /// <b>no extra packets</b>, it is a by-product of the 20 Hz snapshot already received.
+        /// <para>⚠️ <b>Parts of the same tick do not count</b> (§6.3 MTU split): counting each part as a
+        /// separate "arrival" would pull jitter to 0 and loss onto the wrong denominator.</para>
+        /// <para>⚠️ <b>A backwards tick is ignored:</b> UDP may reorder and an "old tick" is not a loss.
+        /// Loss is counted from FORWARD gaps only.</para>
         /// </summary>
         private void TrackDownlink(uint serverTick)
         {
@@ -708,7 +701,7 @@ namespace VortexArena.Net
             {
                 if (_hasServerTick)
                 {
-                    // Aynı tik = parçalanmış snapshot'ın ikinci datagramı → ölçüme girmez.
+                    // Same tick = the second datagram of a split snapshot → not measured.
                     if (serverTick == _lastServerTick)
                     {
                         return;
@@ -717,7 +710,7 @@ namespace VortexArena.Net
                     long advance = (long)serverTick - _lastServerTick;
                     if (advance < 0)
                     {
-                        return; // sırası bozuk geldi; kayıp değil
+                        return; // arrived out of order; not a loss
                     }
 
                     if (advance > 1)
@@ -728,8 +721,8 @@ namespace VortexArena.Net
                     if (_lastSnapshotTicks != 0)
                     {
                         float intervalMs = TicksToMs(nowTicks - _lastSnapshotTicks);
-                        // Kayıp, aralığı katları kadar uzatır; beklenen aralık boşlukla ölçeklenmezse
-                        // kayıp jitter olarak ikinci kez raporlanır.
+                        // Loss stretches the interval by whole multiples; without scaling the expected
+                        // interval by the gap, loss would be reported a second time as jitter.
                         float expectedMs = 1000f / ArenaProtocol.SNAPSHOT_RATE_HZ * advance;
                         float deviation = Mathf.Abs(intervalMs - expectedMs);
                         _jitterMs = _jitterMs < 0f ? deviation : _jitterMs * 0.9f + deviation * 0.1f;
@@ -743,7 +736,7 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>Tik'i halkaya yazar (en eskisinin üstüne — sabit bellek, GC yok).</summary>
+        /// <summary>Writes the tick into the ring, over the oldest one (fixed memory, no GC).</summary>
         private void MarkTickSeen(uint serverTick)
         {
             _seenTicks[_seenTicksNext] = serverTick;
@@ -752,17 +745,17 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// AĞ THREAD'İ: bir tik'in atış/atma olaylarını uygular. <c>0x04</c> ve <c>0x05</c>'in
-        /// <b>ortak</b> yoludur (§6.5/6.8) — ikisi de aynı tik halkasını kullanmak ZORUNDA, ayrı
-        /// halka açılırsa aynı tik iki kez oynar (çift tracer + çift ses).
+        /// NETWORK THREAD: applies a tick's shot/throw events. The <b>shared</b> path of <c>0x04</c> and
+        /// <c>0x05</c> (§6.5/6.8) — both MUST use the same tick ring; a separate one would play the same
+        /// tick twice (double tracer + double sound).
         /// </summary>
         private void DispatchFireEvents(uint serverTick, FireEventEntry[] events)
         {
-            // §6.5: kopya koruması seq DEĞİL TİK'tir — aynı serverTick'i ikinci kez görürsek tüm
-            // bloğu düşürürüz (UDP paket çoğaltabilir → çift tracer).
-            // ⚠️ SIRA ZORLAMASI YOK: "tick < lastTick → at" YAZILMAZ. O kural POZ kuralıdır (durum:
-            // son gelen kazanır); olaya kopyalamak en kolay yapılan hatadır. Eski tik'li ama
-            // GÖRÜLMEMİŞ blok OYNATILIR — ~50 ms gecikmiş tracer, kaybolmuş tracer'dan iyidir.
+            // §6.5: duplicate protection is the TICK, not seq — a second sighting of the same
+            // serverTick drops the whole block (UDP may duplicate → double tracer).
+            // ⚠️ NO ORDER ENFORCEMENT: never write "tick < lastTick → drop". That is a POSE rule
+            // (state: last one wins) and copying it here is the easiest mistake to make. An old but
+            // UNSEEN block IS PLAYED — a tracer ~50 ms late beats a lost one.
             if (WasTickSeen(serverTick))
             {
                 return;
@@ -779,8 +772,8 @@ namespace VortexArena.Net
             {
                 FireEventEntry e = events[i];
 
-                // §6.5: atan kendi olayını da geri alır ve KENDİSİ yok sayar (sunucu hedef başına
-                // ayrı blok üretmez) — snapshot'ta kendi pozunu yok saymasıyla birebir aynı desen.
+                // §6.5: the shooter gets its own event back and ignores it here (the server builds no
+                // per-target block) — the same pattern as ignoring its own pose in the snapshot.
                 if (e.playerId == _playerId)
                 {
                     continue;
@@ -796,17 +789,17 @@ namespace VortexArena.Net
                     rightHand = e.IsRightHand,
                     itemId = e.itemId,
                     arenaDirection = new Vector3(dx, dy, dz),
-                    magnitude = e.magnitude / 100f, // telde cm (§6.4)
+                    magnitude = e.magnitude / 100f, // cm on the wire (§6.4)
                     serverTick = serverTick
                 };
 
-                // AĞ THREAD'İNDEYİZ: yayın ana thread'e taşınır (dinleyiciler sahne/Unity API'sine
-                // dokunuyor).
+                // WE ARE ON THE NETWORK THREAD: publishing moves to the main thread (listeners touch the
+                // scene / Unity API).
                 _mainThreadActions.Enqueue(() => NetEvents.RaiseRemoteFireEvent(evt));
             }
         }
 
-        /// <summary>Ağ thread'inde koşar; olay kuyruk üzerinden ana thread'e taşınır.</summary>
+        /// <summary>Runs on the network thread; events move to the main thread through the queue.</summary>
         private void HandleDatagram(byte[] buffer)
         {
             if (buffer == null || buffer.Length < 1)
@@ -842,16 +835,16 @@ namespace VortexArena.Net
 
                     case UdpPacketType.Snapshot:
                     {
-                        // 1(tip) + 1(playerCount) + 4(serverTick) + n×88 — kısa paketi yok say.
+                        // 1(type) + 1(playerCount) + 4(serverTick) + n×88 — ignore a short packet.
                         if (buffer.Length < 6 || buffer.Length < 6 + buffer[1] * SnapshotEntry.SIZE)
                         {
                             return;
                         }
 
                         Snapshot snap = Snapshot.Read(reader);
-                        // §6.7: downlink jitter ve kaybı BU akıştan ölçülür — ek paket yok.
+                        // §6.7: downlink jitter and loss are measured from THIS stream — no extra packets.
                         TrackDownlink(snap.serverTick);
-                        // AĞ THREAD'İ: registry kilit altında alır, olayları ana thread'de yayınlar.
+                        // NETWORK THREAD: the registry ingests under a lock and publishes on the main thread.
                         RemotePlayerRegistry.Instance?.IngestFromNetThread(snap, Environment.TickCount, _playerId);
                         break;
                     }
@@ -868,7 +861,7 @@ namespace VortexArena.Net
 
                         lock (_telemetryGate)
                         {
-                            // Bayat/yabancı echo'yu ayıkla: yalnız bekleyen yoklamanın nonce'ı sayılır.
+                            // Filter a stale/foreign echo: only the pending probe's nonce counts.
                             if (!_probePending || echo.clientStamp != _probeNonce)
                             {
                                 return;
@@ -877,8 +870,8 @@ namespace VortexArena.Net
                             _probePending = false;
 
                             float rtt = TicksToMs(nowTicks - _probeSentTicks);
-                            // EWMA: tek bir gecikmiş echo göstergeyi zıplatmasın. İlk ölçüm doğrudan
-                            // yazılır, yoksa -1'den yavaşça tırmanan yanlış bir değer görünürdü.
+                            // EWMA so one late echo does not jump the readout. The first measurement is
+                            // written directly, otherwise it would crawl up from -1 showing a wrong value.
                             _rttMs = _rttMs < 0
                                 ? Mathf.RoundToInt(rtt)
                                 : Mathf.RoundToInt(_rttMs * 0.7f + rtt * 0.3f);
@@ -889,7 +882,7 @@ namespace VortexArena.Net
 
                     case UdpPacketType.EventBatch:
                     {
-                        // 1(tip) + 1(count) + 4(serverTick) + n×9 — kısa paketi yok say.
+                        // 1(type) + 1(count) + 4(serverTick) + n×9 — ignore a short packet.
                         if (buffer.Length < 6 || buffer.Length < 6 + buffer[1] * FireEventEntry.SIZE)
                         {
                             return;
@@ -902,7 +895,7 @@ namespace VortexArena.Net
 
                     case UdpPacketType.SnapshotWithEvents:
                     {
-                        // 1(tip) + 1(playerCount) + 1(eventCount) + 4(serverTick) + n×88 + m×9
+                        // 1(type) + 1(playerCount) + 1(eventCount) + 4(serverTick) + n×88 + m×9
                         if (buffer.Length < SnapshotWithEvents.HEADER_SIZE
                             || buffer.Length < SnapshotWithEvents.HEADER_SIZE
                                                + buffer[1] * SnapshotEntry.SIZE
@@ -913,27 +906,27 @@ namespace VortexArena.Net
 
                         SnapshotWithEvents combined = SnapshotWithEvents.Read(reader);
 
-                        // ⚠️ Downlink ölçümü 0x05'i de SAYMALI (§6.7): saymazsa birleştirme devreye
-                        // girdiği anda kayıp %100 görünür.
+                        // ⚠️ Downlink measurement MUST count 0x05 too (§6.7): otherwise loss reads 100%
+                        // the moment combining kicks in.
                         TrackDownlink(combined.serverTick);
 
-                        // Snapshot bloğu: 0x02 ile birebir aynı işlem. Tik tekrarında (UDP paket
-                        // çoğaltabilir) durumu yeniden uygulamak zararsızdır — son gelen kazanır.
+                        // Snapshot block: identical handling to 0x02. Reapplying state on a repeated
+                        // tick (UDP may duplicate) is harmless — last one wins.
                         RemotePlayerRegistry.Instance?.IngestFromNetThread(
                             new Snapshot { serverTick = combined.serverTick, players = combined.players },
                             Environment.TickCount, _playerId);
 
-                        // Olay bloğu: 0x04 ile AYNI koddan ve AYNI tik halkasından geçer (§6.8).
+                        // Event block: goes through the SAME code and the SAME tick ring as 0x04 (§6.8).
                         DispatchFireEvents(combined.serverTick, combined.events);
                         break;
                     }
 
                     case UdpPacketType.SkeletonBatch:
                     {
-                        // 1(tip) + 1(count) + 4(serverTick) + değişken girdiler. Girdiler değişken
-                        // uzunluklu olduğu için başlıktan öteye kesin bir alt sınır hesaplanamaz;
-                        // en az bir girdinin sabit kısmı aranır, gerisini Read'in sınır denetimi
-                        // yakalar (kırpılmış blob boş döner ve girdi düşer).
+                        // 1(type) + 1(count) + 4(serverTick) + variable entries. Because the entries are
+                        // variable length no exact lower bound past the header exists; require at least
+                        // one entry's fixed part and let Read's bounds check handle the rest (a
+                        // truncated blob comes back empty and the entry drops).
                         if (buffer.Length < SkeletonBatch.HEADER_SIZE
                             || (buffer[1] > 0 && buffer.Length < SkeletonBatch.HEADER_SIZE + SkeletonEntry.HEADER_SIZE))
                         {
@@ -942,9 +935,9 @@ namespace VortexArena.Net
 
                         SkeletonBatch batch = SkeletonBatch.Read(reader);
 
-                        // ⚠️ Downlink telemetrisine SAYILMAZ (§6.7): jitter/kayıp 20 Hz snapshot
-                        // akışından ölçülüyor ve bu kanal farklı kadansta akıyor — aynı sayaca
-                        // katmak varış aralığını bozar, ölçüm yalan söyler.
+                        // ⚠️ NOT counted into downlink telemetry (§6.7): jitter/loss come from the 20 Hz
+                        // snapshot stream and this channel runs at a different cadence — mixing them
+                        // would corrupt the arrival interval and make the measurement lie.
                         RemoteSkeletonRegistry registry = RemoteSkeletonRegistry.Instance;
                         if (registry == null)
                         {
@@ -961,7 +954,7 @@ namespace VortexArena.Net
                     }
 
                     default:
-                        // Bilinmeyen paket tipi — yok say.
+                        // Unknown packet type — ignore.
                         break;
                 }
             }

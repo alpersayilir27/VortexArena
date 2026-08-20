@@ -7,59 +7,49 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Core.Audio
 {
-    /// <summary>
-    /// Haritanın ortam sesi (ambiyans + oyun müziği): sahne yüklenir yüklenmez başlar, loop'lar
-    /// ve <b>harita değişene kadar hiç durmaz</b> — maçın başlaması, bitmesi, lobiye dönülmesi
-    /// müziğe dokunmaz. Hangi klibin çalacağı sahnenin <see cref="MapDefinition"/>'ından okunur
-    /// (<see cref="MapDefinition.AmbienceClip"/>).
+    /// <summary>The map's ambience (ambience + game music): starts as soon as the scene loads, loops
+    /// and never stops until the map changes — match start, match end and returning to the lobby do
+    /// not touch it. The clip comes from the scene's
+    /// <see cref="MapDefinition.AmbienceClip"/>.</summary>
+    /// <remarks>
+    /// Self-bootstrapping persistent singleton; NO component is placed in the scene
+    /// (<c>WeaponGranter</c> pattern): a manual setup step per arena would silently leave a scene
+    /// music-less when forgotten. Adding ambience to a new arena is just dragging a clip into its
+    /// <see cref="MapDefinition"/>.
     /// <para>
-    /// <b>Kendini önyükleyen kalıcı tekildir; sahneye bileşen KONMAZ</b> (<c>WeaponGranter</c>
-    /// deseni): her yeni arenaya elle bir kurulum adımı eklemek, o adımı unutan sahneyi sessizce
-    /// müziksiz bırakırdı. Yeni arenanın ortam sesi zaten sahneyle birlikte üretilen
-    /// <see cref="MapDefinition"/> asset'ine bir klip sürüklemekle biter.
-    /// </para>
-    ///
-    /// <para><b>Ortak faz — tüm başlıklarda müzik aynı yerdedir.</b> Sunucu her sahne
-    /// bildiriminde (<c>welcome.match</c> · <c>load_match</c> · <c>return_to_lobby</c>) sahnenin
-    /// <b>kaç saniyedir sahnelendiğini</b> yollar (<c>sceneElapsed</c>, Docs/ArenaNet-Protokol.md
-    /// §5.3). İstemci bunu yerel bir zaman çıpasına çevirir ve klibi
-    /// <c>(geçen süre) mod (klip uzunluğu)</c> noktasından açar. Sonuçları:
-    /// <list type="bullet">
-    /// <item>Herkes aynı anda aynı yeri duyar — geç katılan başlık da <b>atlayarak</b> katılır.</item>
-    /// <item>Sahne klipten uzun süredir açıksa müzik kendiliğinden baştan sarmış olur; ayrı bir
-    /// hesap gerekmez.</item>
-    /// <item>Sunucu yoksa (editör sandbox'ı) çıpa da yoktur, klip 0'dan başlar.</item>
-    /// </list>
-    /// Çıpa <b>mesajın geldiği ana</b> bağlanır, sahnenin yüklendiği ana değil: sahne yükleme
-    /// süresi başlıktan başlığa değişir ve ona bağlansaydı yavaş yüklenen başlık geride kalırdı.
-    /// Kalan saat kayması (ses kartı ↔ sistem saati) <see cref="DriftCheckSeconds"/> aralıklarla
-    /// denetlenir ve yalnız <see cref="MaxDriftSeconds"/>'i aşarsa düzeltilir — her denetimde
-    /// düzeltmek duyulabilir bir sıçrama üretirdi.</para>
-    ///
-    /// <para>
-    /// Sahne geçişi çapraz geçiştir (crossfade). İki sahne <b>aynı</b> klibi paylaşıyorsa
-    /// (ör. iki mekanın lobisi) ses baştan başlamaz, kesintisiz çalmaya devam eder.
+    /// <b>Shared phase — the music is at the same position on every headset.</b> The server sends how
+    /// long the scene has been staged (<c>sceneElapsed</c>, Docs/ArenaNet-Protokol.md §5.3) with every
+    /// scene message (<c>welcome.match</c> · <c>load_match</c> · <c>return_to_lobby</c>). The client
+    /// turns it into a local time epoch and opens the clip at <c>elapsed mod clipLength</c>: everyone
+    /// hears the same spot, a late joiner joins mid-clip, and a scene older than the clip has wrapped
+    /// by itself. With no server (editor sandbox) there is no epoch and the clip starts at 0.
     /// </para>
     /// <para>
-    /// Ses <b>2D</b>'dir (<c>spatialBlend = 0</c>): ortam sesinin arenada bir yeri yoktur,
-    /// spatializer'a verilirse oyuncu kafasını çevirdikçe kaynak "dönüyormuş" gibi duyulur.
+    /// The epoch is anchored to WHEN THE MESSAGE ARRIVED, not to scene load: load time varies per
+    /// headset, so anchoring to it would leave slow loaders behind. The remaining clock drift (audio
+    /// card ↔ system clock) is checked every <see cref="DriftCheckSeconds"/> and corrected only past
+    /// <see cref="MaxDriftSeconds"/> — correcting on every check would produce an audible jump.
     /// </para>
-    /// </summary>
+    /// <para>Scene changes crossfade. When two scenes share the SAME clip (e.g. two venues' lobbies)
+    /// the sound does not restart and keeps playing.</para>
+    /// <para>The sound is 2D (<c>spatialBlend = 0</c>): ambience has no place in the arena, and
+    /// through the spatializer the source would seem to rotate as the player turns their head.</para>
+    /// </remarks>
     [DisallowMultipleComponent]
     public class SceneAmbience : MonoBehaviour
     {
-        /// <summary>Sahne geçişindeki çapraz geçiş süresi (sn).</summary>
+        /// <summary>Crossfade duration on scene change (s).</summary>
         private const float CrossfadeSeconds = 1.5f;
 
-        /// <summary>Ortam sesi sürekli çalar ve asla kısılmamalıdır → varsayılandan (128) güçlü
-        /// öncelik. Yine de 0 değil: atış sesleri ondan önce gelir.</summary>
+        /// <summary>Ambience plays continuously and must never be culled → stronger priority than the
+        /// default (128). Still not 0: shot sounds come before it.</summary>
         private const int SourcePriority = 64;
 
-        /// <summary>Ortak fazdan sapma denetimi aralığı (sn).</summary>
+        /// <summary>Interval of the shared-phase drift check (s).</summary>
         private const float DriftCheckSeconds = 15f;
 
-        /// <summary>Bu kadarını aşan sapma düzeltilir. Altındaki fark kimsenin duymayacağı
-        /// kadar küçüktür; her denetimde düzeltmek ise duyulabilir sıçrama üretir.</summary>
+        /// <summary>Drift beyond this is corrected. Below it nobody can hear the difference, while
+        /// correcting on every check would produce an audible jump.</summary>
         private const float MaxDriftSeconds = 0.35f;
 
         public static SceneAmbience Instance { get; private set; }
@@ -72,26 +62,24 @@ namespace VortexArena.Core.Audio
         private GameCatalog _catalog;
         private bool _catalogLoaded;
 
-        /// <summary>Çıpanın ait olduğu sahne — başka bir sahne yüklenirse çıpa geçersizdir.</summary>
+        /// <summary>Scene the epoch belongs to — loading another scene invalidates it.</summary>
         private string _epochScene = "";
 
-        /// <summary>Sahnenin sahnelendiği anın YEREL karşılığı: <c>realtime - sceneElapsed</c>.</summary>
+        /// <summary>LOCAL equivalent of the moment the scene was staged: <c>realtime - sceneElapsed</c>.</summary>
         private float _epochRealtime;
         private bool _hasEpoch;
         private float _nextDriftCheck;
 
-        /// <summary>
-        /// Tüm ortam sesinin ortak çarpanı (0..1) — kısma/susturma kapısı. Klip seçimini ve
-        /// ortak fazı değiştirmez; 0'a çekilse bile klip çalmaya devam eder, geri açıldığında
-        /// diğer başlıklarla aynı yerden duyulur.
-        /// </summary>
+        /// <summary>Shared multiplier for all ambience (0..1) — the ducking/mute gate. It changes
+        /// neither clip selection nor the shared phase; at 0 the clip keeps playing and comes back at
+        /// the same position as the other headsets.</summary>
         public float MasterVolume
         {
             get => _masterVolume;
             set => _masterVolume = Mathf.Clamp01(value);
         }
 
-        /// <summary>Şu an çalan klip; sessizse null.</summary>
+        /// <summary>The clip currently playing; null when silent.</summary>
         public AudioClip CurrentClip => _active != null ? _active.clip : null;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -120,8 +108,8 @@ namespace VortexArena.Core.Audio
             _active = CreateSource();
             _fading = CreateSource();
 
-            // Kalıcı tekiliz: obje devre dışı bırakılsa bile olay kaçmasın diye Awake/OnDestroy'da
-            // abone oluruz (PlayerCombatState deseni).
+            // Persistent singleton: subscribe in Awake/OnDestroy so events are not missed if the
+            // object is deactivated (PlayerCombatState pattern).
             SceneManager.sceneLoaded += HandleSceneLoaded;
             NetEvents.OnConnected += HandleConnected;
             NetEvents.OnLoadMatch += HandleLoadMatch;
@@ -147,18 +135,14 @@ namespace VortexArena.Core.Audio
             Instance = null;
         }
 
-        /// <summary>
-        /// Ses cihazı ya da yapılandırması değişti (hoparlör takıldı/çıkarıldı, operatör admin
-        /// panelinden başka bir çıkış seçti). Unity bu anda ses motorunu yeniden kurar ve
-        /// <b>çalan tüm <c>AudioSource</c>'ları durdurur.</b>
-        /// <para>
-        /// ⚠️ Ortam sesi kendiliğinden geri gelmez ve <b>bu sessizlik fark edilmez</b>: sapma
-        /// denetimi "çalmıyor" diye erken çıkar (<see cref="CorrectDrift"/>), yeni klip ise ancak
-        /// harita değişince seçilir — yani ses, maç boyunca susmuş kalırdı. Klip yerinde
-        /// olduğundan burada elle sürdürülür ve ortak faza geri oturtulur (geç katılan başlık
-        /// gibi: atlayarak devam eder, baştan başlamaz).
-        /// </para>
-        /// </summary>
+        /// <summary>Audio device or configuration changed (speaker plugged/unplugged, operator picked
+        /// another output). Unity rebuilds the audio engine and STOPS every playing
+        /// <c>AudioSource</c>.
+        /// <para>⚠️ Ambience does not come back on its own and the silence goes unnoticed: the drift
+        /// check returns early on "not playing" (<see cref="CorrectDrift"/>) and a new clip is only
+        /// picked on map change — the sound would stay muted for the whole match. Since the clip is
+        /// still assigned, playback is resumed here and re-seated on the shared phase (like a late
+        /// joiner: it skips in, it does not restart).</para></summary>
         private void HandleAudioConfigurationChanged(bool deviceWasChanged)
         {
             if (_active == null || _active.clip == null)
@@ -177,7 +161,8 @@ namespace VortexArena.Core.Audio
 
         private void Update()
         {
-            // ⚠️ unscaledDeltaTime: timeScale ile oynanırsa (ölüm ekranı, duraklatma) geçiş donmasın.
+            // ⚠️ unscaledDeltaTime so the crossfade does not freeze if timeScale is touched (death
+            // screen, pause).
             float step = Time.unscaledDeltaTime / CrossfadeSeconds;
             float target = _active != null && _active.clip != null ? _clipVolume * _masterVolume : 0f;
 
@@ -199,18 +184,16 @@ namespace VortexArena.Core.Audio
             CorrectDrift();
         }
 
-        /// <summary>
-        /// Ortam sesini elle değiştirir (klip null = sessizlik). Normalde çağırmaya gerek yoktur:
-        /// sahne yüklendiğinde harita tanımından kendisi seçer.
-        /// </summary>
+        /// <summary>Changes the ambience by hand (null clip = silence). Normally not needed: the clip
+        /// is picked from the map definition on scene load.</summary>
         public void Play(AudioClip clip, float volume)
         {
             _clipVolume = Mathf.Clamp01(volume);
 
             if (_active != null && _active.clip == clip)
             {
-                // ⚠️ Aynı klip → baştan başlatma ve fazına DOKUNMA. Harita değişmediği sürece
-                // müzik kesilmez; maç başlangıcı/bitişi buradan geçer.
+                // ⚠️ Same clip → do not restart and do not touch its phase. As long as the map does
+                // not change the music is uninterrupted; match start/end come through here.
                 if (clip != null && !_active.isPlaying)
                 {
                     _active.Play();
@@ -220,7 +203,7 @@ namespace VortexArena.Core.Audio
                 return;
             }
 
-            // Rolleri takasla: yeni klip boş kaynakta sıfırdan yükselir, eskisi Update'te söner.
+            // Swap roles: the new clip rises from zero on the free source, the old one fades in Update.
             AudioSource previous = _active;
             _active = _fading;
             _fading = previous;
@@ -252,7 +235,7 @@ namespace VortexArena.Core.Audio
             return source;
         }
 
-        // ------------------------------------------------------------------ ortak faz
+        // --------------------------------------------------------------- shared phase
 
         private void HandleConnected(WelcomeMsg msg)
         {
@@ -278,11 +261,9 @@ namespace VortexArena.Core.Audio
             }
         }
 
-        /// <summary>
-        /// Sunucunun bildirdiği "bu sahne şu kadar saniyedir açık" değerini yerel bir zaman
-        /// çıpasına çevirir. Çıpa mesajın GELDİĞİ ana bağlanır; sahne yükleme süresi başlıktan
-        /// başlığa değiştiği için sahne yüklendiği ana bağlanamaz.
-        /// </summary>
+        /// <summary>Turns the server's "this scene has been open for N seconds" into a local time
+        /// epoch. Anchored to WHEN THE MESSAGE ARRIVED — scene load time varies per headset, so it
+        /// cannot be anchored to scene load.</summary>
         private void SetEpoch(string sceneName, float elapsedSeconds)
         {
             if (string.IsNullOrEmpty(sceneName))
@@ -294,18 +275,17 @@ namespace VortexArena.Core.Audio
             _epochRealtime = Time.realtimeSinceStartup - Mathf.Max(0f, elapsedSeconds);
             _hasEpoch = true;
 
-            // Bildirilen sahne zaten açıksa (aynı haritada yeni maç, maç sonu lobiye dönüş) klip
-            // değişmez — yalnız referans tazelenir ve bir sonraki denetimde hizalama doğrulanır.
+            // If the announced scene is already open (new match on the same map, return to lobby) the
+            // clip does not change — only the reference is refreshed and alignment is verified on the
+            // next check.
             if (string.Equals(SceneManager.GetActiveScene().name, sceneName, StringComparison.Ordinal))
             {
                 _nextDriftCheck = 0f;
             }
         }
 
-        /// <summary>
-        /// Klibin ortak fazdaki yeri: sahnenin açık olduğu süre, klip uzunluğuna göre modlanır.
-        /// Çıpa yoksa (sunucusuz oturum) 0 döner.
-        /// </summary>
+        /// <summary>The clip's position in the shared phase: the scene's open time modulo the clip
+        /// length. Returns 0 with no epoch (server-less session).</summary>
         private float EpochOffset(AudioClip clip)
         {
             if (!_hasEpoch || clip == null)
@@ -325,7 +305,7 @@ namespace VortexArena.Core.Audio
                 return 0f;
             }
 
-            // ⚠️ Sona çok yakın bir değer Play() ile birlikte anında başa sarar → küçük pay bırak.
+            // ⚠️ A value too close to the end wraps immediately together with Play() → leave a margin.
             return Mathf.Clamp(Mathf.Repeat(elapsed, length), 0f, Mathf.Max(0f, length - 0.05f));
         }
 
@@ -337,11 +317,10 @@ namespace VortexArena.Core.Audio
             }
         }
 
-        /// <summary>
-        /// Ses saati ile ortak faz arasındaki kaymayı seyrek denetler ve yalnız eşiği aşarsa
-        /// düzeltir. Aynı odadaki iki başlık açık hoparlörle çaldığı için birkaç yüz ms'lik kayma
-        /// yankı gibi duyulur; küçük farklar ise duyulmaz.
-        /// </summary>
+        /// <summary>Checks the drift between the audio clock and the shared phase infrequently and
+        /// corrects only past the threshold. Two headsets in the same room play through open
+        /// speakers, so a few hundred ms of drift is heard as an echo; smaller gaps are
+        /// inaudible.</summary>
         private void CorrectDrift()
         {
             if (!_hasEpoch || _active == null || _active.clip == null || !_active.isPlaying ||
@@ -361,7 +340,7 @@ namespace VortexArena.Core.Audio
             float expected = EpochOffset(_active.clip);
             float diff = Mathf.Abs(expected - _active.time);
 
-            // Halka mesafesi: klibin sonu ile başı komşudur.
+            // Ring distance: the end of the clip is adjacent to its start.
             if (diff > length * 0.5f)
             {
                 diff = length - diff;
@@ -373,11 +352,11 @@ namespace VortexArena.Core.Audio
             }
         }
 
-        // ------------------------------------------------------------------ sahne
+        // ---------------------------------------------------------------------- scene
 
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            // Katkı (additive) sahnesi haritayı değiştirmez → ortam sesine de dokunmaz.
+            // An additive scene does not change the map → it must not touch the ambience.
             if (mode == LoadSceneMode.Additive)
             {
                 return;
@@ -388,8 +367,8 @@ namespace VortexArena.Core.Audio
 
         private void ApplyScene(string sceneName)
         {
-            // Çıpa başka bir sahneye aitse bu sahne için ortak faz bilinmiyor demektir
-            // (sunucusuz oturum ya da henüz bildirim gelmemiş) → klip 0'dan başlar.
+            // If the epoch belongs to another scene, the shared phase for this one is unknown
+            // (server-less session or the message has not arrived) → the clip starts at 0.
             if (!string.Equals(_epochScene, sceneName, StringComparison.Ordinal))
             {
                 _hasEpoch = false;
@@ -399,10 +378,9 @@ namespace VortexArena.Core.Audio
             Play(map != null ? map.AmbienceClip : null, map != null ? map.AmbienceVolume : 0f);
         }
 
-        /// <summary>
-        /// Sahnenin harita tanımını katalogdan çözer. Katalog <c>Resources</c>'tan bir kez
-        /// yüklenir; Boot gibi harita tanımı olmayan sahnelerde null döner (sessizlik).
-        /// </summary>
+        /// <summary>Resolves the scene's map definition from the catalog. The catalog is loaded from
+        /// <c>Resources</c> once; returns null (silence) for scenes without a map definition, such as
+        /// Boot.</summary>
         private MapDefinition FindMap(string sceneName)
         {
             if (!_catalogLoaded)

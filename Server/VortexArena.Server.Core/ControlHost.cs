@@ -7,8 +7,8 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>Kestrel yaşam döngüsü sahibi: http://0.0.0.0:&lt;controlPort&gt;/ws WebSocket ucu;
-/// bağlantı başına bir ClientConnection (cosmos ClassroomHost deseni).</summary>
+/// <summary>Owner of the Kestrel lifecycle: the http://0.0.0.0:&lt;controlPort&gt;/ws WebSocket
+/// endpoint; one ClientConnection per connection (the cosmos ClassroomHost pattern).</summary>
 public sealed class ControlHost
 {
     private readonly PlayerRegistry _registry;
@@ -17,11 +17,11 @@ public sealed class ControlHost
     private readonly int _port;
     private WebApplication? _app;
 
-    /// <summary>Kapanışta bağlantı döngülerini kesen imza (aşağıdaki <see cref="StopAsync"/> notu).</summary>
+    /// <summary>Cuts the connection loops on shutdown (see <see cref="StopAsync"/>).</summary>
     private readonly CancellationTokenSource _shutdown = new();
 
-    /// <summary>Bağlantılar kesildikten sonra Kestrel'in kendini toplaması için tanınan üst sınır;
-    /// dolarsa host beklemeyi bırakır (kapanış hiçbir koşulda asılı kalmaz).</summary>
+    /// <summary>Time granted to Kestrel to wind down after the connections are cut; on expiry the host
+    /// stops waiting, so shutdown never hangs.</summary>
     private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(2);
 
     public ControlHost(PlayerRegistry registry, LobbyService lobby, MatchDirector director, int port)
@@ -35,7 +35,7 @@ public sealed class ControlHost
     public async Task StartAsync()
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions());
-        builder.Logging.ClearProviders(); // konsol satırları bizim; Kestrel log gürültüsü istenmiyor
+        builder.Logging.ClearProviders(); // the console lines are ours; Kestrel's log noise is unwanted
         builder.WebHost.UseUrls($"http://0.0.0.0:{_port}");
 
         var app = builder.Build();
@@ -49,8 +49,8 @@ public sealed class ControlHost
             }
             using var socket = await context.WebSockets.AcceptWebSocketAsync();
             var connection = new ClientConnection(socket, _registry, _lobby, _director);
-            // RequestAborted TEK BAŞINA yetmez: sunucu kapanırken o imza ancak zarif kapanış
-            // süresi dolduğunda gelir, yani bağlantı döngüsü o ana kadar bekler ve kapanışı asar.
+            // RequestAborted alone is not enough: on shutdown it only fires after the graceful period
+            // expires, so the connection loop would wait that long and hang the shutdown.
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(
                 context.RequestAborted, _shutdown.Token);
             await connection.RunAsync(linked.Token);
@@ -60,18 +60,15 @@ public sealed class ControlHost
         await app.StartAsync();
     }
 
-    /// <summary>
-    /// ⚠️ Sıra bilinçlidir: <b>önce bağlantılar, sonra host.</b> Kestrel'in zarif kapanışı açık her
-    /// WebSocket'i "devam eden istek" sayar; hiçbiri kendiliğinden bitmediği için doğrudan
-    /// <c>StopAsync</c> çağırmak host'u kapanış zaman aşımı dolana kadar bekletir — operatör
-    /// Ctrl+C'ye bastıktan sonra konsol saniyelerce "Kapatılıyor..." satırında asılı kalır.
-    /// İmzayı önce biz atınca döngüler kendi kapanış yolundan çıkar (oyuncu kaydı da düzgün
-    /// düşer) ve host'un bekleyeceği bir şey kalmaz.
-    /// </summary>
+    /// <summary>Stops the host — ⚠️ connections first, host second.</summary>
+    /// <remarks>Kestrel's graceful shutdown counts every open WebSocket as an in-flight request, and
+    /// none finish on their own, so calling <c>StopAsync</c> first makes the console hang for seconds
+    /// after Ctrl+C. Raising the signal first lets the loops exit their own way (dropping the player
+    /// records properly), leaving the host nothing to wait for.</remarks>
     public async Task StopAsync()
     {
         if (_app == null) return;
-        // Tek bir bağlantının iptal geri çağrısı patlarsa kapanış devam etmeli.
+        // A throwing cancellation callback must not stop the shutdown.
         try { await _shutdown.CancelAsync(); }
         catch (Exception ex) { Console.WriteLine($"[control] bağlantı iptali: {ex.Message}"); }
         try
@@ -79,10 +76,10 @@ public sealed class ControlHost
             using var drain = new CancellationTokenSource(DrainTimeout);
             await _app.StopAsync(drain.Token);
         }
-        catch (OperationCanceledException) { /* süre doldu: bekleme kesilir, kapanış sürer */ }
+        catch (OperationCanceledException) { /* expired: the wait is cut, the shutdown continues */ }
         await _app.DisposeAsync();
         _app = null;
-        // _shutdown BİLEREK dispose edilmiyor: kabul edilmiş ama henüz linked kaynağını kurmamış
-        // bir istek kalmışsa Token'a erişimi ObjectDisposedException'a düşerdi. Süreç zaten kapanıyor.
+        // _shutdown is deliberately not disposed: a request accepted but not yet linked would hit
+        // ObjectDisposedException on Token. The process is exiting anyway.
     }
 }

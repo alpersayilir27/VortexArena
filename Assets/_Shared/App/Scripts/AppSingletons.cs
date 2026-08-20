@@ -3,43 +3,37 @@ using UnityEngine;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Oturum boyu yaşayan App tekillerinin <b>TEK kurulum noktası</b>: hangi tekilin doğacağına
-    /// burada, bir kez karar verilir.
+    /// <b>SINGLE install point</b> for the session-long App singletons.
     ///
     /// <para>
-    /// <b>Neden tek yerde:</b> bu tekiller sahneye KONMAZ, kendi kendilerine doğar
-    /// (<c>DontDestroyOnLoad</c>). Her biri kendi <c>RuntimeInitializeOnLoadMethod</c>'unu taşısaydı
-    /// "bu oturumda hangileri gerekli" sorusunun cevabı N ayrı dosyaya dağılırdı: yeni bir oturum
-    /// türü (test kipi, araç kipi, yeni bir rol) eklemek N dosyayı tek tek düzenlemek olur, biri
-    /// atlandığında da hata vermez — yalnız o tekil beklenmedik bir yerde belirirdi. Liste burada
-    /// durduğu sürece yeni bir oturum türü <b>tek satırlık</b> bir koşuldur.
+    /// <b>Why one place:</b> these singletons spawn themselves (<c>DontDestroyOnLoad</c>), not from
+    /// the scene. With per-class <c>RuntimeInitializeOnLoadMethod</c>s, "which ones does this
+    /// session need" would be scattered over N files and a missed one would fail silently. Here a
+    /// new session type is a <b>single-line</b> condition.
     /// </para>
     ///
     /// <para>
-    /// ⚠️ <b>Tekillerin kendi <c>Install</c>'ları koşulsuzdur</b> ve öyle kalmalı: "gerekli mi"
-    /// sorusunu tekilin kendisi cevaplarsa kapı yine dağılır. Tek istisna, tekilin kendi
-    /// <i>varlık</i> koşuludur (ör. <c>AdminSpectator</c> Android'de hiç doğmaz — bu bir oturum
-    /// kararı değil, o sınıfın platform gerçeği).
+    /// ⚠️ <b>The singletons' own <c>Install</c>s stay unconditional</b> — if they answer "am I
+    /// needed", the gate scatters again. Only a singleton's own <i>existence</i> condition is
+    /// exempt (e.g. <c>AdminSpectator</c> never spawns on Android: a platform fact, not a session
+    /// decision).
     /// </para>
     ///
     /// <para>
-    /// ⚠️ <b>Sıra ÖNEMSİZDİR ve öyle kalmalı:</b> tekiller birbirini <c>Install</c> anında
-    /// çağırmaz, olaylara abone olup beklerler. Biri diğerinden önce doğmak zorunda kalırsa o
-    /// bağımlılık burada gizli bir kurala dönüşür — bunun yerine geç bağlanma (olay/tembel arama)
-    /// kullanılır.
+    /// ⚠️ <b>Order is IRRELEVANT and must stay so:</b> singletons subscribe to events instead of
+    /// calling each other during <c>Install</c>; a spawn-order dependency would become a hidden
+    /// rule here.
     /// </para>
     ///
     /// <para>
-    /// <b>Kapsam:</b> yalnız <c>VortexArena.App</c> tekilleri. Core'un kendi tekilleri
-    /// (<c>HandGripPoser</c>, <c>WeaponGranter</c>, <c>ObstacleViolationProbe</c> …) buraya
-    /// GİRMEZ — Core, App'i referanslamaz ve oturum rolünü bilmez.
+    /// <b>Scope:</b> only <c>VortexArena.App</c> singletons — Core's own ones do NOT belong here
+    /// (Core does not reference App and does not know the role).
     /// </para>
     ///
     /// <para>
-    /// Bugün her oturum türü (player, admin) aynı listeyi kurar; kapı bu yüzden koşulsuzdur.
-    /// Sunucusuz bir oturum türü gelirse koşul <b>buraya</b>, tek satır olarak girer — tekillere
-    /// dağıtılmaz. Rol bu noktada KESİN bilinir: <c>DevSession</c>/<c>AppBoot</c> rolü
-    /// <c>BeforeSceneLoad</c>'da yazar.
+    /// Every session type installs the same list today, hence the unconditional gate; a future
+    /// server-less type adds its condition <b>here</b>, not in the singletons. The role is certain
+    /// at this point (<c>DevSession</c>/<c>AppBoot</c> write it in <c>BeforeSceneLoad</c>).
     /// </para>
     /// </summary>
     internal static class AppSingletons
@@ -51,15 +45,14 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Sunucuya bağlı bir oturumun tekilleri: bağlantı/yükleme/maç sonu kartları, kimlik
-        /// göstergesi, atılma kapanışı, sahne yönlendirmesi ve admin gözlemcisi.
+        /// Singletons of a server-connected session: connection/loading/match-result cards,
+        /// kick shutdown, scene routing, admin spectator.
         /// </summary>
         private static void InstallNetworkSingletons()
         {
             ConnectionOverlay.Install();
             LoadingOverlay.Install();
             MatchResultOverlay.Install();
-            IdentifyOverlay.Install();
             KickedShutdown.Install();
             SceneRouter.Install();
             Admin.AdminSpectator.Install();

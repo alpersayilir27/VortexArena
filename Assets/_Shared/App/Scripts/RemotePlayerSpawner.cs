@@ -7,10 +7,9 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Uzak oyuncu avatarlarını yönetir (Lobby/arena sahnelerine konur):
-    /// RemotePlayerRegistry'nin katılım/ayrılış olaylarına göre RemoteAvatar
-    /// prefab'ını yaratır/yok eder; lobby_state'ten ad ve takım bilgisini besler.
-    /// Avatar pozlarını RemoteAvatar'ın kendisi registry'den okur.
+    /// Manages remote player avatars (placed in Lobby/arena scenes): spawns/despawns the
+    /// RemoteAvatar prefab on RemotePlayerRegistry join/leave and feeds name/team from lobby_state.
+    /// RemoteAvatar reads the poses from the registry itself.
     /// </summary>
     public class RemotePlayerSpawner : MonoBehaviour
     {
@@ -30,7 +29,7 @@ namespace VortexArena.App
             RemotePlayerRegistry registry = RemotePlayerRegistry.Instance;
             if (registry == null)
             {
-                // ArenaClient bootstrap'ı sahneden önce koşar — pratikte olmaz.
+                // ArenaClient's bootstrap runs before the scene — this does not happen in practice.
                 Debug.LogWarning("[RemotePlayerSpawner] RemotePlayerRegistry yok; spawner devre dışı.");
                 enabled = false;
                 return;
@@ -41,7 +40,7 @@ namespace VortexArena.App
             NetEvents.OnLobbyState += HandleLobbyState;
             _subscribed = true;
 
-            // Sahne geç yüklendiyse zaten aktif olan uzak oyuncuları geriye dönük spawn et.
+            // Late scene load: spawn the already active remote players retroactively.
             registry.GetActivePlayerIds(_idScratch);
             for (int i = 0; i < _idScratch.Count; i++)
             {
@@ -75,7 +74,7 @@ namespace VortexArena.App
             _avatars.Clear();
         }
 
-        // -------------------------------------------------------- olay işleyiciler
+        // ------------------------------------------------------------ event handlers
 
         private void Spawn(int playerId)
         {
@@ -84,8 +83,7 @@ namespace VortexArena.App
                 return;
             }
 
-            // Çift emniyet: registry zaten kendi id'mizi atlar ama snapshot'ta
-            // görünürse bile kendimize avatar yaratma.
+            // Double safety: never create an avatar for ourselves, even if our id shows up in a snapshot.
             if (ArenaClient.Instance != null && ArenaClient.Instance.PlayerId == playerId)
             {
                 return;
@@ -133,9 +131,9 @@ namespace VortexArena.App
             }
         }
 
-        // ---------------------------------------------------------------- yardımcı
+        // ------------------------------------------------------------------ helper
 
-        /// <summary>Son lobby_state'ten ad/takım/kalibrasyon bilgisini uygular; bulunamazsa varsayılan.</summary>
+        /// <summary>Applies name/team/calibration from the last lobby_state, or the defaults.</summary>
         private void ApplyLobbyInfo(RemoteAvatar avatar)
         {
             if (avatar == null)
@@ -144,14 +142,14 @@ namespace VortexArena.App
             }
 
             string displayName = $"Oyuncu {avatar.PlayerId}";
-            // Roster henüz gelmemişken numara UYDURULMAZ (0 = etikette basılmaz): forma numarası
-            // ayırt edici alandır, yanlış bir sayı adı tekrarlı oyuncularda doğrudan karışıklık olur.
+            // Before the roster arrives the number is NOT invented (0 = not printed): it is the
+            // distinguishing field, so a wrong one confuses players with repeated names.
             int number = 0;
             string team = "";
-            // Roster'da bulunamayan oyuncu KALİBRELİ sayılır (§10.6): bilinmeyen durumu alarm gibi
-            // göstermek — henüz roster'ı gelmemiş yeni oyuncuyu parlatmak — gürültü üretir.
+            // A player missing from the roster counts as CALIBRATED (§10.6) — alarming on an unknown
+            // state would just highlight every newcomer as noise.
             bool calibrated = true;
-            // §10.8: 0 = ölçülmemiş → RemoteAvatar 1 uygular. Roster gelmeden ölçek uydurulmaz.
+            // §10.8: 0 = not measured → RemoteAvatar applies 1. No invented scale before the roster.
             float bodyScale = 0f;
 
             if (_lastLobbyState != null && _lastLobbyState.players != null)

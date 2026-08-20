@@ -3,14 +3,10 @@ using UnityEngine;
 
 namespace VortexArena.Core.Arena
 {
-    /// <summary>
-    /// Harita (arena) tanımı: sahne adı + hangi modlarda oynanabildiği.
-    /// <para>
-    /// <see cref="SceneName"/> Build Settings'teki sahne adıyla BİREBİR aynı olmalıdır —
-    /// admin <c>start_match{sceneName}</c> gönderir, sunucu bu string'i tüm istemcilerin
-    /// <c>hello.scenes</c> listesinde arar (Docs/ArenaNet-Protokol.md §10.1).
-    /// </para>
-    /// </summary>
+    /// <summary>Map (arena) definition: scene name + which modes it can be played in.
+    /// <para><see cref="SceneName"/> must match the Build Settings scene name EXACTLY — the admin
+    /// sends <c>start_match{sceneName}</c> and the server looks that string up in every client's
+    /// <c>hello.scenes</c> list (Docs/ArenaNet-Protokol.md §10.1).</para></summary>
     [CreateAssetMenu(fileName = "Map", menuName = "VortexArena/Map Definition")]
     public class MapDefinition : ScriptableObject
     {
@@ -30,28 +26,24 @@ namespace VortexArena.Core.Arena
         [Tooltip("Klibin çalma seviyesi. Silah sesleri bastırılmasın diye 0.15-0.25 arası tutulur.")]
         [SerializeField] private float ambienceVolume = 0.2f;
 
-        /// <summary>Build listesindeki sahne adı (katalog anahtarı).</summary>
+        /// <summary>Scene name in the build list (the catalog key).</summary>
         public string SceneName => sceneName;
 
-        /// <summary>Arayüzde gösterilen ad.</summary>
+        /// <summary>Name shown in the UI.</summary>
         public string DisplayName => displayName;
 
-        /// <summary>Desteklenen modId listesi (boş = kısıt yok).</summary>
+        /// <summary>Supported modId list (empty = no restriction).</summary>
         public string[] SupportedModeIds => supportedModeIds;
 
-        /// <summary>
-        /// Sahnenin ortam sesi (ambiyans + oyun müziği); atanmamışsa harita sessizdir.
-        /// Sahne yüklendiğinde <c>SceneAmbience</c> okur ve loop'lar — sahnede kurulum adımı YOKTUR.
-        /// </summary>
+        /// <summary>The scene's ambience clip (ambience + game music); silent when unassigned.
+        /// <c>SceneAmbience</c> reads and loops it on scene load — there is NO scene setup step.</summary>
         public AudioClip AmbienceClip => ambienceClip;
 
-        /// <summary>Ortam sesinin seviyesi (0..1).</summary>
+        /// <summary>Ambience level (0..1).</summary>
         public float AmbienceVolume => ambienceVolume;
 
-        /// <summary>
-        /// Verilen mod bu haritada oynanabilir mi. Liste boş/eksikse kısıt yok sayılır
-        /// (yeni harita eklerken unutulan alan modu gizlemesin).
-        /// </summary>
+        /// <summary>Can the given mode be played on this map. An empty/missing list counts as no
+        /// restriction, so a field forgotten on a new map does not hide the mode.</summary>
         public bool SupportsMode(string modeId)
         {
             if (string.IsNullOrEmpty(modeId))

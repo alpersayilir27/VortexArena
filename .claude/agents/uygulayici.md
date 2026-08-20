@@ -12,11 +12,13 @@ varsa uydurma — kısa bir not olarak döndür.
 
 ## Uyman gerekenler
 
-- Kök `CLAUDE.md` ve `.claude/rules/` bağlayıcıdır. Özellikle: asmdef/namespace düzeni, serialize
-  edilen enum'a değer SONA eklenir, `_Shared` köküne asmdef'siz script koyulmaz, protokol DTO'ları
-  saf C# kalır.
-- **Çevredeki kodun üslubuna uy:** yorum yoğunluğu, adlandırma, Türkçe açıklama dili. Bu depoda
-  yorumlar "ne yaptığını" değil **"neden böyle"**yi anlatır — bir tuzağı önlüyorsa onu yaz.
+- Kök `CLAUDE.md` (giriş kapısı) ve `.claude/rules/` bağlayıcıdır; yasakların tam listesi
+  `Docs/Gelistirici/Yapma-Listesi.md`'dedir — dokunduğun alanın maddelerini yazmadan önce oku.
+  Özellikle: asmdef/namespace düzeni, serialize edilen enum'a değer SONA eklenir, `_Shared`
+  köküne asmdef'siz script koyulmaz, protokol DTO'ları saf C# kalır.
+- **Yorumlar İNGİLİZCE ve KISA yazılır** (`.claude/rules/kod-standartlari.md`); UI/log
+  string'leri Türkçe kalır. Bu depoda yorum "ne yaptığını" değil **"neden böyle"**yi anlatır —
+  bir tuzağı önlüyorsa onu yaz, önlemiyorsa hiç yazma.
 - Aramada önce `mcp__auggie__codebase-retrieval`, sonucu Read/Grep ile teyit et (indeks bayat
   olabilir). Tam simge biliniyorsa doğrudan Grep.
 - **Doğrulama SENİN İŞİN DEĞİL.** Unity derlemesi/build'i ve `dotnet build` ana thread'de toplu

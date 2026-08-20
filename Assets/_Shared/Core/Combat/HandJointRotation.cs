@@ -4,23 +4,18 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Riglenmiş bir parmak ekleminin <b>tek</b> kaydı: hangi eklem + o eklemin YEREL dönüşü.
-    /// Bir kavrama kaydının (<see cref="ItemGripPose"/>) parmak duruşu bunlardan bir dizidir.
-    /// <para>
-    /// ⚠️ <b>Eklem ADIYLA saklanır, indeksle DEĞİL.</b> ISDK'nın eklem listesi
-    /// (<c>FingersMetadata.HAND_JOINT_IDS</c>) derleme dalına göre değişiyor: OpenXR dalı 19 eklem
-    /// ve metakarpal setiyle, OVR dalı 17 eklem ve başka bir setle geliyor. İndeks saklansaydı dal
-    /// değiştiğinde başparmağın dönüşü sessizce işaret parmağına yazılırdı — adın karşılığı yoksa
-    /// o satır atlanır, ötekiler doğru kalır. Ad, <c>HandJointId</c> enum değerinin adıdır
-    /// (<c>"HandIndex1"</c>) ve asset'in YAML'ında okunabilir durur.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Dönüş, ISDK'nın "izlenen" (tracked) uzayındadır</b> — <c>HandJointMap.RotationOffset</c>
-    /// UYGULANMADAN önceki hâli. Sebep: aynı dizi hem stüdyodaki hayalet ele
-    /// (<c>HandPuppet.SetJointRotations</c>, ofseti kendi ekler) hem oyundaki sentetik ele
-    /// (<c>SyntheticHand.OverrideAllJoints</c>) gidiyor; ofsetli hâli saklamak, iki uçtan birinde
-    /// ofsetin ikinci kez uygulanması demekti.
-    /// </para>
+    /// A single rigged finger joint record: which joint + its LOCAL rotation. A grip record's
+    /// finger pose (<see cref="ItemGripPose"/>) is an array of these.
+    /// <para>⚠️ Stored BY JOINT NAME, not by index: ISDK's joint list
+    /// (<c>FingersMetadata.HAND_JOINT_IDS</c>) differs per build branch (OpenXR 19 joints with
+    /// metacarpals, OVR 17 with another set), so an index would silently write the thumb's rotation
+    /// onto the index finger. An unmatched name only skips that line. The name is the
+    /// <c>HandJointId</c> enum value name (<c>"HandIndex1"</c>), readable in the asset YAML.</para>
+    /// <para>⚠️ The rotation is in ISDK's "tracked" space — BEFORE
+    /// <c>HandJointMap.RotationOffset</c>. The same array feeds the studio ghost hand
+    /// (<c>HandPuppet.SetJointRotations</c>, which adds the offset itself) and the in-game synthetic
+    /// hand (<c>SyntheticHand.OverrideAllJoints</c>); storing it offset-applied would double-apply
+    /// on one end.</para>
     /// </summary>
     [Serializable]
     public struct HandJointRotation
@@ -31,7 +26,7 @@ namespace VortexArena.Core.Combat
         [Tooltip("Eklemin YEREL dönüşü (ISDK izleme uzayı, RotationOffset uygulanmadan).")]
         public Quaternion rotation;
 
-        /// <summary>Adı ve dönüşü olan bir kayıt üretir.</summary>
+        /// <summary>Builds a record from a joint name and a rotation.</summary>
         public static HandJointRotation From(string jointName, in Quaternion localRotation)
         {
             return new HandJointRotation

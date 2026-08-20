@@ -1,42 +1,34 @@
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// YEREL oyuncunun o an elinde ne tuttuğunun tek buluşma noktası (§6.2 poz paketindeki
-    /// <c>itemL</c>/<c>itemR</c>/<c>gripFlags</c> baytlarının kaynağı).
-    /// <para>
-    /// <b>YAZAR:</b> <c>Weapon</c> / <c>WeaponGranter</c> (Core.Combat) — eşya ele girdiğinde ya da
-    /// bırakıldığında <see cref="Report"/> çağrılır.
-    /// <b>OKUYAN:</b> <c>PlayerPoseTracker</c> (App) — 20 Hz poz paketine bu üç baytı koyar.
-    /// </para>
-    /// <para>
-    /// <b>Bu seam neden var:</b> App katmanı "elde ne var" sorusunu cevaplamak için sahnedeki silah
-    /// listesini yeniden keşfetmek (GetComponentsInChildren / grab olaylarına abone olmak) zorunda
-    /// kalmasın. Bilgiyi zaten bilen taraf onu bir kez bildirir.
-    /// </para>
-    /// <para>
-    /// ⚠️ Bu sınıf <b>hiçbir şey göndermez</b> ve hiçbir kural uygulamaz — yalnız son bildirilen
-    /// durumu tutar. Ağa yazma tek kapıdan (<c>PlayerPoseTracker</c> poz döngüsü) olur; buraya
-    /// gönderme eklenirse eşya durumu poz ile aynı pakette gitmez ve iki ayrı doğruluk kaynağı doğar.
-    /// </para>
+    /// Single meeting point for what the LOCAL player holds — source of the
+    /// <c>itemL</c>/<c>itemR</c>/<c>gripFlags</c> bytes in the §6.2 pose packet.
+    /// <para>WRITER: <c>Weapon</c> / <c>WeaponGranter</c> (Core.Combat) via <see cref="Report"/>.
+    /// READER: <c>PlayerPoseTracker</c> (App), into the 20 Hz pose packet.</para>
+    /// <para>Why the seam: App must not rediscover the scene's weapons (GetComponentsInChildren /
+    /// grab events) to answer "what is in the hand" — the side that knows reports once.</para>
+    /// <para>⚠️ Sends nothing and enforces no rule; only holds the last reported state. A send here
+    /// would split item state from the pose packet and create a second source of truth.</para>
     /// </summary>
     public static class HeldItems
     {
-        /// <summary>Sol eldeki eşyanın <c>netItemId</c>'si; <c>0</c> = el boş.</summary>
+        /// <summary><c>netItemId</c> of the item in the left hand; <c>0</c> = empty hand.</summary>
         public static byte Left { get; private set; }
 
-        /// <summary>Sağ eldeki eşyanın <c>netItemId</c>'si; <c>0</c> = el boş.</summary>
+        /// <summary><c>netItemId</c> of the item in the right hand; <c>0</c> = empty hand.</summary>
         public static byte Right { get; private set; }
 
         /// <summary>
-        /// İki el AYNI eşyayı tutuyor (<c>FLAG_GRIP_LINKED</c>). ⚠️ "Aynı id iki slotta" tek başına
-        /// bunu ifade etmez — çift tabanca meşru bir durumdur (§6.6).
+        /// Both hands hold the SAME item (<c>FLAG_GRIP_LINKED</c>). ⚠️ "the same id in two slots"
+        /// alone does not express this — dual pistols are a legitimate state (§6.6).
         /// </summary>
         public static bool GripLinked { get; private set; }
 
-        /// <summary>Ana el sağ mı (<c>FLAG_PRIMARY_RIGHT</c>). Yalnız <see cref="GripLinked"/> iken anlamlı.</summary>
+        /// <summary>Is the main hand the right one (<c>FLAG_PRIMARY_RIGHT</c>). Only meaningful
+        /// while <see cref="GripLinked"/>.</summary>
         public static bool PrimaryRight { get; private set; }
 
-        /// <summary>Yerel elde tutma durumunu bildirir (yazan taraf: <c>Weapon</c>/<c>WeaponGranter</c>).</summary>
+        /// <summary>Reports the local hold state (writing side: <c>Weapon</c>/<c>WeaponGranter</c>).</summary>
         public static void Report(byte left, byte right, bool gripLinked, bool primaryRight)
         {
             Left = left;
@@ -46,8 +38,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Durumu sıfırlar (iki el boş). Sahne/harita geçişinde çağrılır: aksi hâlde eski sahnenin
-        /// silahı yeni sahnede "elde" bildirilmeye devam eder.
+        /// Resets the state (both hands empty). Called on a scene/map transition: otherwise the old
+        /// scene's weapon keeps being reported as "in hand" in the new scene.
         /// </summary>
         public static void Clear()
         {

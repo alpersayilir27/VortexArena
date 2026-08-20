@@ -3,19 +3,19 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Ateş anında kovan fırlatır: <see cref="Weapon.Fired"/> olayına abone olur ve kovanı
-    /// <see cref="CasingPool.Shared"/>'dan ister.
-    /// <para>⚠️ Havuz ve süre işleyişi bilerek BU BİLEŞENDE DEĞİL. Silah örneği her kavra/bırak
-    /// döngüsünde yok edildiği için havuzu burada tutmak, o an açık olan kovanların sahnede
-    /// kalıcılaşması demekti (gerekçenin tamamı <see cref="CasingPool"/> sınıf özetinde). Bu
-    /// bileşen yalnız <b>nereden, ne kadar kuvvetle</b> sorusunu cevaplar.</para>
+    /// Ejects a casing on fire: subscribes to <see cref="Weapon.Fired"/> and asks
+    /// <see cref="CasingPool.Shared"/> for the casing.
+    /// <para>⚠️ Pooling and lifetime are deliberately NOT here: the weapon instance is destroyed on
+    /// every grab/release cycle, so a pool here would strand the live casings in the scene (full
+    /// rationale in <see cref="CasingPool"/>). This component only answers "from where, with how
+    /// much force".</para>
     /// </summary>
     [RequireComponent(typeof(Weapon))]
     public class ShellEjector : MonoBehaviour
     {
-        // ⚠️ "casingPrefab" ve "ejectPoint" alan adları WeaponKitBuilder tarafından ADA GÖRE
-        // bağlanıyor (BindFields) — yeniden adlandırılırsa araç sessizce boş bağlar ve kovan
-        // hiç çıkmaz.
+        // ⚠️ The field names "casingPrefab" and "ejectPoint" are bound BY NAME by WeaponKitBuilder
+        // (BindFields) — renaming them makes the tool bind nothing silently and no casing is ever
+        // ejected.
         [Tooltip("Kovan prefabı (Rigidbody + Collider taşır).")]
         [SerializeField] private GameObject casingPrefab;
 

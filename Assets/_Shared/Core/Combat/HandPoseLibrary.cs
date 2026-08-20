@@ -7,80 +7,74 @@ using VortexArena.Core.Player;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Parmak duruşunun tek dağıtım kapısı: boş elin duruşu, silaha özel riglenmiş duruşun ISDK
-    /// eklem dizisine çevrilmesi, o duruşun humanoid el için kapanma oranına indirgenmesi ve
-    /// duruşlar arası geçişin süresi/eğrisi.
-    /// <para>
-    /// <b>İki tüketici, iki biçim.</b> Yerel sentetik el (ISDK) eklem eklem <b>ham dönüş</b> alır —
-    /// oyuncu kendi elini burnunun dibinde gördüğü için ince ayar oradadır ve stüdyoda riglenen ne
-    /// ise oyunda görülen odur. Uzak avatarın <b>Mixamo</b> eli ham dönüş ALAMAZ (iki iskeletin
-    /// kemik eksenleri aynı değil; projede bir kez öğrenilmiş kural: izleme/ağ uzayından gelen
-    /// rotasyon humanoid kemiğe doğrudan yazılmaz) — ona riglenmiş duruştan <b>ölçülen</b> beş
-    /// kapanma oranı gider (<see cref="MeasureCurl"/>, <see cref="HandPoseProfile"/>). Oran ikinci
-    /// bir doğruluk kaynağı değildir: asset'te saklanmaz, riglenmiş duruştan türetilir.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Parmaklar HİÇBİR ZAMAN donanımdan sürülmez</b> — ne kumandanın tetiğinden/kabzasından
-    /// ne el izlemesinden. Bir elin duruşu her karede ya boş elin duruşudur ya da tuttuğu eşyanın o
-    /// slot için riglenmiş duruşu; ikisi arası <see cref="TransitionSeconds"/> içinde yumuşatılır.
-    /// Serbest bırakılan bir parmak (<c>JointFreedom.Free</c>) diye bir kavram YOKTUR ve geri
-    /// gelmez: tek bir parmağı bile donanıma bırakmak, stüdyoda görülen el ile oyunda görülen elin
-    /// o parmakta ayrışması demektir.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Bind duruşu ve menteşe eksenleri SABİT YAZILMAZ, ISDK'nın kendi iskeletinden ÖLÇÜLÜR</b>
-    /// (<see cref="HandSkeleton.DefaultLeftSkeleton"/> / <c>DefaultRightSkeleton</c> — ISDK'nın
-    /// <c>HandPose</c> kurucusu da açık el için tam bu iskeletin dönüşlerini kullanıyor, baz odur).
-    /// SDK iskeleti değiştirdiğinde burada tek satır değişmesin diye; projede tekrarlanan
-    /// "sabit yazma, ölç" kuralı (<see cref="HandFingerRig"/> ile aynı gerekçe).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Avuç (volar) yönü de VERİDEN çıkarılır:</b> gevşek iskeletin parmakları zaten avuca
-    /// doğru hafif kıvrık, yani "avuç hangi tarafta" sorusunun cevabı iskeletin kendisinde duruyor.
-    /// Başparmak/avuç-normali sözleşmesine dayanmak (sol/sağ çapraz çarpım sırası) işaret hatasına
-    /// açıktır ve hatanın belirtisi "parmaklar el sırtına doğru kırılıyor" olurdu.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>METAKARPALLAR SÜRÜLMEZ ve kayda GİRMEZ</b> (<c>FingersMetadata.HAND_JOINT_CAN_MOVE</c>).
-    /// Yalnız "bilekle beraber hareket ederler, döndürülürse el yelpaze gibi açılır" diye değil:
-    /// OpenXR dalında <c>SyntheticHand.AmendMetacarpalRotation</c>, <c>Index1/Middle1/Ring1</c> için
-    /// verilen dönüşü <b>bilek uzayında</b> bekliyor ve metakarpın dönüşünü geri alıyor. Varsayılan
-    /// iskelette o üç metakarpın bind dönüşü KİMLİK olduğu için bugün "metakarpa yerel" ile "bileğe
-    /// göreli" aynı şeydir — metakarpı riglemeye açmak tam bu eşitliği bozar ve sonuç tezgâhta
-    /// doğru, oyunda kaymış bir el olurdu (tezgâh ile oyun arasındaki kimlik bu aracın bütün işi).
-    /// </para>
+    /// The single distribution gate for finger poses: the idle hand pose, converting a
+    /// weapon-specific rigged pose into an ISDK joint array, reducing that pose to curl ratios for
+    /// the humanoid hand, and the duration/curve of transitions between poses.
+    /// <para>Two consumers, two forms. The local synthetic hand (ISDK) receives RAW rotations per
+    /// joint — the player sees their own hand up close, so the fine detail belongs there and what
+    /// is rigged in the studio is what is seen in game. The remote avatar's Mixamo hand CANNOT take
+    /// raw rotations (the two skeletons' bone axes differ; the project's learned rule: a rotation
+    /// from tracking/network space is not written directly onto a humanoid bone) — it receives five
+    /// curl ratios MEASURED from the rigged pose (<see cref="MeasureCurl"/>,
+    /// <see cref="HandPoseProfile"/>). The ratio is not a second source of truth: it is never
+    /// stored, always derived.</para>
+    /// <para>⚠️ Fingers are NEVER driven by hardware — not by the controller trigger/grip, not by
+    /// hand tracking. Each frame a hand is either in the idle pose or in the held item's pose rigged
+    /// for that slot, smoothed over <see cref="TransitionSeconds"/>. There is no "free" joint
+    /// (<c>JointFreedom.Free</c>) and none comes back: leaving even one finger to hardware means the
+    /// studio hand and the in-game hand diverge on that finger.</para>
+    /// <para>⚠️ The bind pose and hinge axes are MEASURED from ISDK's own skeleton, never hardcoded
+    /// (<see cref="HandSkeleton.DefaultLeftSkeleton"/> / <c>DefaultRightSkeleton</c> — ISDK's
+    /// <c>HandPose</c> constructor uses exactly these rotations for the open hand, so that is the
+    /// baseline). So an SDK skeleton change needs no line changed here; the project's recurring
+    /// "measure, do not hardcode" rule (same rationale as <see cref="HandFingerRig"/>).</para>
+    /// <para>⚠️ The volar (palm) direction is derived FROM THE DATA too: a relaxed skeleton's
+    /// fingers already curl slightly toward the palm, so "which side is the palm" is answered by the
+    /// skeleton itself. Relying on a thumb/palm-normal convention (left/right cross product order)
+    /// invites a sign error whose symptom would be "the fingers bend toward the back of the
+    /// hand".</para>
+    /// <para>⚠️ METACARPALS are NOT driven and do NOT enter the record
+    /// (<c>FingersMetadata.HAND_JOINT_CAN_MOVE</c>). Not just because "they move with the wrist and
+    /// rotating them fans the hand out": on the OpenXR branch
+    /// <c>SyntheticHand.AmendMetacarpalRotation</c> expects the rotation given for
+    /// <c>Index1/Middle1/Ring1</c> in WRIST space and undoes the metacarpal's rotation. Since those
+    /// three metacarpals' bind rotation is IDENTITY in the default skeleton, "local to the
+    /// metacarpal" and "relative to the wrist" are the same today — opening metacarpals to rigging
+    /// breaks exactly that equality, giving a hand that is right on the workbench and displaced in
+    /// game (that identity is this tool's entire job).</para>
     /// </summary>
     public static class HandPoseLibrary
     {
-        /// <summary>Parmak sayısı (ISDK garantisi).</summary>
+        /// <summary>Finger count (guaranteed by ISDK).</summary>
         private const int FingerCount = 5;
 
         /// <summary>
-        /// Tam kapanmada sürülebilir eklem başına derece — <see cref="HandFingerRig"/>'deki tabloyla
-        /// AYNI sayılar. Başparmak ayrı: anatomik olarak daha az kıvrılır ve kabzayı sarmak yerine
-        /// üstüne yatar. Riglenmiş duruşun kapanma oranına indirgenmesi de (<see cref="MeasureCurl"/>)
-        /// bu tabloyu payda olarak kullanır — "tam kapalı" iki uçta aynı şeyi göstersin.
+        /// Degrees per drivable joint at full curl — the SAME numbers as the table in
+        /// <see cref="HandFingerRig"/>. The thumb differs: anatomically it curls less and lies on
+        /// top of the grip rather than wrapping it. Reducing a rigged pose to curl ratios
+        /// (<see cref="MeasureCurl"/>) uses this table as the denominator, so "fully closed" means
+        /// the same on both ends.
         /// </summary>
         private static readonly float[] FingerMaxAngles = { 50f, 60f, 40f };
         private static readonly float[] ThumbMaxAngles = { 25f, 35f, 30f };
 
-        /// <summary>Yön vektörünün "anlamlı" sayılması için gereken en küçük kare uzunluk.</summary>
+        /// <summary>Minimum squared length for a direction vector to count as meaningful.</summary>
         private const float MinDirectionSqr = 1e-8f;
 
         /// <summary>
-        /// Toplam sapma bunun altındaysa avuç yönü veriden çıkarılamaz (parmakları tam düz bir
-        /// iskelet) ve <see cref="HandGripConvention"/> bazına düşülür.
+        /// Below this total bend the volar direction cannot be derived from the data (a perfectly
+        /// straight-fingered skeleton) and the <see cref="HandGripConvention"/> basis is used.
         /// </summary>
         private const float MinVolarMagnitude = 1e-4f;
 
-        /// <summary>İşaret öz-denetiminde kullanılan küçük deneme açısı (derece).</summary>
+        /// <summary>Small probe angle used for the sign self-check (degrees).</summary>
         private const float SignProbeDegrees = 10f;
 
         /// <summary>
-        /// Bir sürülebilir eklemin ölçülmüş menteşesi: dizideki yeri, hangi parmağa ait olduğu,
-        /// EBEVEYN çerçevesindeki dönme ekseni, bind dönüşü ve tam kapanmadaki açısı.
-        /// <para>Tablo hem duruş ÜRETİMİNDE (oran → dönüş) hem duruş ÖLÇÜMÜNDE (dönüş → oran)
-        /// kullanılır; iki yön tek geometriden çıksın diye tek yerde durur.</para>
+        /// A drivable joint's measured hinge: its array slot, its finger, its rotation axis in the
+        /// PARENT frame, its bind rotation and its angle at full curl.
+        /// <para>The table is used both for pose GENERATION (ratio → rotation) and pose MEASUREMENT
+        /// (rotation → ratio); it lives in one place so both directions come from one geometry.</para>
         /// </summary>
         private struct Hinge
         {
@@ -91,35 +85,41 @@ namespace VortexArena.Core.Combat
             public float MaxAngle;
         }
 
-        /// <summary>Önbellekler el başına ([0] = sol, [1] = sağ); üretimleri iskelet çözümü +
-        /// eksen ölçümü içerdiği için ucuz değil ve kare başına okunuyorlar.</summary>
+        /// <summary>Caches per hand ([0] = left, [1] = right): building them involves skeleton
+        /// resolution + axis measurement, so they are not cheap, and they are read per frame.</summary>
         private static readonly Quaternion[][] BindCache = new Quaternion[2][];
         private static readonly Hinge[][] HingeCache = new Hinge[2][];
         private static readonly Quaternion[][] IdleCache = new Quaternion[2][];
         private static readonly Pose[] WristCache = new Pose[2];
         private static readonly bool[] WristResolved = new bool[2];
+        private static readonly Vector3[] FingerDirectionCache = new Vector3[2];
+        private static readonly Vector3[] ThumbDirectionCache = new Vector3[2];
+        private static readonly bool[] AnatomyResolved = new bool[2];
+        private static readonly bool[] AnatomyValid = new bool[2];
 
         /// <summary>
-        /// Kumanda anchor'ından elin BİLEĞİNE ofset (anchor uzayı, metre) — <b>ölçülen değil,
-        /// TANIMLANAN</b> bir değer: avuç merkezi kumandanın üstüne oturur, el kumandayla hizalıdır.
+        /// Offset from the controller anchor to the hand's WRIST (anchor space, metres) — a
+        /// <b>DEFINED</b> value, not a measured one: the palm centre sits on the controller and the
+        /// hand is aligned with it.
         /// <para>
-        /// <b>Neden tanım:</b> oyunda görülen el ISDK'nın sentetik elidir ve bileği, kilitlenmezse,
-        /// Meta'nın kumandadan sentezlediği "doğal" el pozundan gelir — yani bizim hiçbir yerde
-        /// bilmediğimiz bir ofset. Silah ise anchor'dan konumlanıyor (kavrama kaydı anchor
-        /// uzayındadır). İki ayrı referans, tezgâhta çizilen el ile oyunda görülen elin ayrışması
-        /// demekti ve aradaki farkı kapatmanın tek yolu o ofseti başlıkta ölçüp koda yapıştırmaktı.
-        /// Ofseti kendimiz tanımlayınca ölçülecek bir şey kalmıyor: <b>tezgâh ile oyun kurgu gereği
-        /// aynı</b> oluyor. Parmaklar zaten donanımdan sürülmüyor, el izleme kullanılmıyor — Meta'nın
-        /// el tarafına kalan son bağımlılık buydu.
+        /// <b>Why defined:</b> the hand seen in game is ISDK's synthetic hand, and unless locked its
+        /// wrist comes from Meta's controller-synthesized "natural" pose — an offset we know nowhere.
+        /// The weapon meanwhile is positioned from the anchor (grip records are in anchor space). Two
+        /// references meant the bench hand and the in-game hand diverging, and the only way to close
+        /// the gap would have been measuring that offset in the headset and pasting a constant.
+        /// Defining it ourselves leaves nothing to measure: <b>bench and game are identical by
+        /// construction</b>. Fingers are not hardware-driven and hand tracking is unused — this was
+        /// the last dependency on Meta's hand side.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Sayı SABİT YAZILMAZ, iskeletten hesaplanır</b> (avuç merkezi = bilek→orta parmak
-        /// proksimalinin yarısı, OpenXR tanımı): el modeli değiştiğinde burada tek satır değişmesin
-        /// diye — projede tekrarlanan "sabit yazma, ölç" kuralı.
+        /// ⚠️ <b>The number is NOT hardcoded, it is computed from the skeleton</b> (palm centre = half
+        /// of wrist→middle proximal, the OpenXR definition): so a new hand model needs no line changed
+        /// here — the project's recurring "measure, do not hardcode" rule.
         /// </para>
         /// <para>
-        /// ⚠️ <b>Dönüş KİMLİKTİR ve tahminle doldurulmaz.</b> Anatomik bir eğim eklemek ölçülmemiş
-        /// bir sabit uydurmaktır; bir kez denendi ve parmak ekseni etrafında ~70° saptı.
+        /// ⚠️ <b>The rotation is IDENTITY and is not filled in by guessing.</b> Adding an anatomical
+        /// tilt means inventing an unmeasured constant; tried once, it drifted ~70° about the finger
+        /// axis.
         /// </para>
         /// </summary>
         public static Pose AnchorToWrist(bool rightHand)
@@ -136,8 +136,62 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Avuç merkezini iskeletten ölçer ve bileği o kadar GERİ öteler (avuç kumandanın üstüne
-        /// gelsin). İskelet okunamazsa kimlik — bilek kumandanın tam üstünde varsayılır.
+        /// The synthetic hand's own anatomy in its WRIST frame: finger direction (wrist → middle
+        /// proximal) and thumb direction (wrist → the thumb's first joint).
+        /// <para>
+        /// ⚠️ <b>This is the CONTROLLER ANCHOR's anatomy as well — by construction, not by
+        /// coincidence:</b> <see cref="AnchorToWrist"/> DEFINES the wrist's rotation on the anchor as
+        /// identity, so "how the hand faces relative to the anchor" and "how this skeleton faces
+        /// relative to its own wrist" are one quantity. <c>HandGripConvention.AnchorBasis</c> reads it
+        /// from here instead of describing the same hand a second time.
+        /// </para>
+        /// <para>Returns <c>false</c> when the SDK skeleton is unreadable — the caller falls back to
+        /// its own last-resort definition.</para>
+        /// </summary>
+        public static bool TryMeasureWristAnatomy(bool rightHand, out Vector3 fingerDirection,
+            out Vector3 thumbDirection)
+        {
+            int hand = rightHand ? 1 : 0;
+
+            if (!AnatomyResolved[hand])
+            {
+                AnatomyResolved[hand] = true;
+                AnatomyValid[hand] = MeasureWristAnatomy(rightHand,
+                    out FingerDirectionCache[hand], out ThumbDirectionCache[hand]);
+            }
+
+            fingerDirection = FingerDirectionCache[hand];
+            thumbDirection = ThumbDirectionCache[hand];
+            return AnatomyValid[hand];
+        }
+
+        /// <summary>Reads the SDK skeleton once for <see cref="TryMeasureWristAnatomy"/>.</summary>
+        private static bool MeasureWristAnatomy(bool rightHand, out Vector3 fingerDirection,
+            out Vector3 thumbDirection)
+        {
+            fingerDirection = Vector3.zero;
+            thumbDirection = Vector3.zero;
+
+            HandSkeleton skeleton = rightHand
+                ? HandSkeleton.DefaultRightSkeleton
+                : HandSkeleton.DefaultLeftSkeleton;
+
+            HandSkeletonJoint[] joints = skeleton != null ? skeleton.joints : null;
+            if (joints == null)
+            {
+                return false;
+            }
+
+            ResolveHandSpace(joints, out Vector3[] handPos, out Quaternion[] handRot);
+
+            return TryMeasureAnatomyDirections(joints, handPos, handRot, out _,
+                out fingerDirection, out thumbDirection);
+        }
+
+        /// <summary>
+        /// Measures the palm centre from the skeleton and pushes the wrist BACK by that much (so the
+        /// palm lands on the controller). Identity when the skeleton is unreadable — the wrist is
+        /// assumed to sit right on the controller.
         /// </summary>
         private static Pose MeasurePalmCentre(bool rightHand)
         {
@@ -154,9 +208,9 @@ namespace VortexArena.Core.Combat
             int root = RootIndex(joints);
             HandJointId[] middle = ChainOf((int)HandFinger.Middle);
 
-            // ⚠️ Orta parmağın PROKSİMALİ istenir, metakarpı değil: zincir daima
-            // "… proksimal, orta boğum, uç boğum, uç" ile bittiği için yeri sondan dördüncüdür
-            // (metakarpı olan ve olmayan ISDK dallarında da doğru eleman gelsin).
+            // ⚠️ The middle finger's PROXIMAL is wanted, not its metacarpal: the chain always ends
+            // with "… proximal, intermediate, distal, tip", so it is the fourth from the end (correct
+            // on ISDK branches with and without metacarpals).
             if (root < 0 || middle == null || middle.Length < 4)
             {
                 return Pose.identity;
@@ -176,21 +230,21 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bir duruştan ötekine geçişin süresi (saniye) — boş elin kavrama duruşuna kapanması ve
-        /// bırakınca geri açılması bu kadar sürer.
+        /// Duration of a transition from one pose to another (seconds) — how long an empty hand takes
+        /// to close into a grip pose and to open again on release.
         /// <para>
-        /// ⚠️ <b>Tek sayı, iki uç:</b> yerel sentetik el (<see cref="HandGripPoser"/>) ve uzak
-        /// avatarın eli (<c>RemoteHandPoser</c>) aynı süreyi kullanır — aynı kavrama iki ekranda
-        /// farklı hızda kapanmasın. Süre kısa tutulur: silah zaten ele anında geliyor
-        /// (<c>Weapon.ApplyCanonicalGrip</c>), parmaklar ondan görünür biçimde geç kalırsa el bir
-        /// an silahın içinden geçer.
+        /// ⚠️ <b>One number, both ends:</b> the local synthetic hand (<see cref="HandGripPoser"/>) and
+        /// the remote avatar's hand (<c>RemoteHandPoser</c>) use the same duration, so the same grip
+        /// does not close at different speeds on two screens. Kept short: the weapon arrives in the
+        /// hand instantly (<c>Weapon.ApplyCanonicalGrip</c>), and fingers visibly lagging behind it
+        /// make the hand pass through the weapon for a moment.
         /// </para>
         /// </summary>
         public const float TransitionSeconds = 0.3f;
 
         /// <summary>
-        /// Geçiş eğrisi: <c>0..1</c> ilerlemeyi yumuşatılmış (smoothstep) karışım oranına çevirir.
-        /// İki uç da aynı eğriyi kullanır (<see cref="TransitionSeconds"/> ile aynı gerekçe).
+        /// Transition curve: converts <c>0..1</c> progress into a smoothstepped blend ratio. Both ends
+        /// use the same curve (same rationale as <see cref="TransitionSeconds"/>).
         /// </summary>
         public static float Ease(float progress)
         {
@@ -198,14 +252,14 @@ namespace VortexArena.Core.Combat
             return t * t * (3f - 2f * t);
         }
 
-        // ------------------------------------------------------------------ boş el
+        // ------------------------------------------------------------------ empty hand
 
         /// <summary>
-        /// <b>Boş elin</b> eklem dizisi — <see cref="FingersMetadata.HAND_JOINT_IDS"/> sırasında
-        /// (<c>SyntheticHand.OverrideAllJoints</c>'in beklediği biçim).
-        /// <para>Eşya bırakılınca el buna döner ve kavraması riglenmemiş bir slot da buraya düşer:
-        /// projede hiçbir el "tahta" kalmaz.</para>
-        /// <para>⚠️ Dönen dizi <b>ÖNBELLEKLİDİR ve paylaşılır</b>: çağıran onu DEĞİŞTİRMEZ.</para>
+        /// The <b>empty hand's</b> joint array — in <see cref="FingersMetadata.HAND_JOINT_IDS"/> order
+        /// (the form <c>SyntheticHand.OverrideAllJoints</c> expects).
+        /// <para>The hand returns to this on release, and a slot with an unrigged grip falls back here:
+        /// no hand in the project stays "flat".</para>
+        /// <para>⚠️ The returned array is <b>CACHED and shared</b>: the caller does NOT modify it.</para>
         /// </summary>
         public static Quaternion[] IdleJointRotations(bool rightHand)
         {
@@ -213,15 +267,15 @@ namespace VortexArena.Core.Combat
             return IdleCache[hand] ??= BuildProfile(HandPoseProfile.Idle, rightHand);
         }
 
-        // --------------------------------------------------------- riglenmiş duruş
+        // --------------------------------------------------------- rigged pose
 
         /// <summary>
-        /// Silaha özel riglenmiş duruşu ISDK eklem dizisine çevirir: taban her eklemin <b>bind</b>
-        /// dönüşüdür, üstüne kaydın adıyla eşleşen eklemler yazılır.
-        /// <para>⚠️ Dönen dizi <b>YENİ</b>dir (paylaşılan önbellek değil): çağıran onu kendi
-        /// tarafında önbelleklemelidir — kare başına çağrılacak bir yol değildir
-        /// (<see cref="ItemDefinition.GripJointRotations"/> bunu yapar).</para>
-        /// <para>Kayıt boşsa boş elin dizisinin <b>kopyası</b> döner.</para>
+        /// Converts a weapon-specific rigged pose into an ISDK joint array: the base is each joint's
+        /// <b>bind</b> rotation, overwritten by the joints matching the record's names.
+        /// <para>⚠️ The returned array is <b>NEW</b> (not the shared cache): the caller must cache it on
+        /// its side — this is not a per-frame path
+        /// (<see cref="ItemDefinition.GripJointRotations"/> does that).</para>
+        /// <para>An empty record returns a <b>copy</b> of the idle array.</para>
         /// </summary>
         public static Quaternion[] BuildJointRotations(HandJointRotation[] joints, bool rightHand)
         {
@@ -237,9 +291,9 @@ namespace VortexArena.Core.Combat
                 int slot = SlotOf(joints[i].joint);
                 if (slot < 0 || slot >= result.Length)
                 {
-                    // ⚠️ Sessiz atlama BİLİNÇLİ: ISDK dalı değişince tanınmayan eklem adı normaldir
-                    // (bkz. HandJointRotation) ve burası kare başına değil, önbellek ıskasında koşar
-                    // — log basmanın tek etkisi konsolu doldurmak olurdu.
+                    // ⚠️ Skipping silently is DELIBERATE: an unrecognized joint name is normal after an
+                    // ISDK branch change (see HandJointRotation) and this runs on a cache miss, not per
+                    // frame — logging would only fill the console.
                     continue;
                 }
 
@@ -250,14 +304,14 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Riglenmiş duruşun <b>humanoid el için</b> karşılığı: parmak başına kapanma oranı.
+        /// The rigged pose's counterpart <b>for the humanoid hand</b>: curl ratio per finger.
         /// <para>
-        /// Ölçü, üretimin tersidir: her sürülebilir eklemde bind'den authored'a olan dönüş, o eklemin
-        /// menteşe ekseni üzerine <b>işaretli</b> izdüşürülür; parmağın toplam sapması aynı parmağın
-        /// tam kapanma toplamına bölünür. İşaretli olması şart — geriye kırılmış bir parmak, mutlak
-        /// açı alınsaydı uzakta öne kapalı görünürdü.
+        /// Measurement is the inverse of generation: at each drivable joint the bind→authored rotation
+        /// is projected <b>signed</b> onto that joint's hinge axis; the finger's total deflection is
+        /// divided by the same finger's full-curl total. Signed is mandatory — with absolute angles a
+        /// finger bent backwards would look curled forwards on the remote side.
         /// </para>
-        /// <para>Kayıt boşsa boş elin oranları döner.</para>
+        /// <para>An empty record returns the idle ratios.</para>
         /// </summary>
         public static HandPoseProfile MeasureCurl(HandJointRotation[] joints, bool rightHand)
         {
@@ -284,7 +338,7 @@ namespace VortexArena.Core.Combat
                 (pose[hinge.Slot] * Quaternion.Inverse(hinge.Bind))
                     .ToAngleAxis(out float angle, out Vector3 axis);
 
-                // ToAngleAxis 0..360 döndürür; 180'in ötesi ters yöndeki küçük bir dönüştür.
+                // ToAngleAxis returns 0..360; beyond 180 is a small rotation the other way.
                 if (angle > 180f)
                 {
                     angle -= 360f;
@@ -310,8 +364,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bu eklem <b>riglenebilir</b> mi (metakarpallar hariç — gerekçe sınıf uyarısında).
-        /// Stüdyo hem seçime açtığı eklemleri hem kayda aldıklarını buradan süzer.
+        /// Is this joint <b>riggable</b> (metacarpals excluded — rationale in the class warning). The
+        /// studio filters both the selectable joints and the recorded ones through this.
         /// </summary>
         public static bool IsDrivable(HandJointId id)
         {
@@ -332,7 +386,7 @@ namespace VortexArena.Core.Combat
             return result;
         }
 
-        /// <summary>Eklem adının (<c>HandJointId</c>) dizideki yeri; tanınmıyorsa <c>-1</c>.</summary>
+        /// <summary>Array slot of a joint name (<c>HandJointId</c>); <c>-1</c> when unrecognized.</summary>
         private static int SlotOf(string jointName)
         {
             if (string.IsNullOrEmpty(jointName) ||
@@ -344,16 +398,16 @@ namespace VortexArena.Core.Combat
             return FingersMetadata.HandJointIdToIndex(id);
         }
 
-        // ------------------------------------------------------------------ ölçüm
+        // ------------------------------------------------------------------ measurement
 
-        /// <summary>Elin bind (açık iskelet) dönüşleri — paylaşılan önbellek, değiştirilmez.</summary>
+        /// <summary>The hand's bind (open skeleton) rotations — shared cache, never modified.</summary>
         private static Quaternion[] Bind(bool rightHand)
         {
             EnsureTables(rightHand);
             return BindCache[rightHand ? 1 : 0];
         }
 
-        /// <summary>Elin sürülebilir eklem menteşeleri — paylaşılan önbellek, değiştirilmez.</summary>
+        /// <summary>The hand's drivable joint hinges — shared cache, never modified.</summary>
         private static Hinge[] Hinges(bool rightHand)
         {
             EnsureTables(rightHand);
@@ -361,9 +415,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bir elin bind dizisini ve menteşe tablosunu ISDK'nın varsayılan iskeletinden ölçer:
-        /// iskelet el uzayında bileştirilir, avuç yönü veriden çıkarılır, her sürülebilir eklem için
-        /// kendi kemik yönüne dik bir menteşe ekseni kurulur.
+        /// Measures a hand's bind array and hinge table from ISDK's default skeleton: the skeleton is
+        /// composed into hand space, the palm direction is derived from the data, and each drivable
+        /// joint gets a hinge axis perpendicular to its own bone direction.
         /// </summary>
         private static void EnsureTables(bool rightHand)
         {
@@ -407,8 +461,8 @@ namespace VortexArena.Core.Combat
 
             if (!TryResolveVolar(joints, handPos, handRot, rightHand, out Vector3 volar))
             {
-                // Avuç yönü çıkarılamadı: bükülme yönü tanımsız, menteşe tablosu boş kalır ve
-                // üretilen tek duruş bind'in (açık elin) kendisidir.
+                // Palm direction unresolved: the bend direction is undefined, the hinge table stays
+                // empty and the only pose produced is the bind (open hand) itself.
                 HingeCache[hand] = Array.Empty<Hinge>();
                 return;
             }
@@ -426,7 +480,8 @@ namespace VortexArena.Core.Combat
                 float[] maxAngles = finger == (int)HandFinger.Thumb ? ThumbMaxAngles : FingerMaxAngles;
                 int drivable = 0;
 
-                // Son eleman UÇTUR: döndürülmez ama bir önceki eklemin kemik yönünü tanımlar.
+                // The last element is the TIP: never rotated, but it defines the previous joint's bone
+                // direction.
                 for (int j = 0; j < chain.Length - 1; j++)
                 {
                     int raw = (int)chain[j];
@@ -437,8 +492,8 @@ namespace VortexArena.Core.Combat
                         continue;
                     }
 
-                    // ⚠️ Metakarpallar SÜRÜLMEZ (gerekçe sınıf uyarısında). Sürülebilir eklem sayacı
-                    // da bu yüzden metakarpı ATLAR — açı tablosu proksimalden başlar.
+                    // ⚠️ Metacarpals are NOT driven (rationale in the class warning). The drivable-joint
+                    // counter therefore SKIPS them — the angle table starts at the proximal.
                     if (!FingersMetadata.HAND_JOINT_CAN_MOVE[slot])
                     {
                         continue;
@@ -461,10 +516,10 @@ namespace VortexArena.Core.Combat
 
                     axis = axis.normalized;
 
-                    // ⚠️ İşaret ÖZ-DENETİMLE sabitlenir, Unity'nin dönüş yönü sözleşmesi TAHMİN
-                    // EDİLMEZ: eksen etrafında küçük bir pozitif dönüş kemiği avuca doğru
-                    // götürmüyorsa eksen terstir. Tahmin edilseydi hatanın belirtisi "parmaklar el
-                    // sırtına doğru kırılıyor" olurdu ve tersini denemekten başka teşhisi olmazdı.
+                    // ⚠️ The sign is fixed by SELF-CHECK; Unity's rotation-direction convention is NOT
+                    // guessed: if a small positive rotation about the axis does not move the bone toward
+                    // the palm, the axis is inverted. Guessed, the symptom would be "fingers bend toward
+                    // the back of the hand" with no diagnosis but trying the opposite.
                     Vector3 probed = Quaternion.AngleAxis(SignProbeDegrees, axis) * bone;
                     if (Vector3.Dot(probed - bone, volar) <= 0f)
                     {
@@ -476,8 +531,8 @@ namespace VortexArena.Core.Combat
                         ? handRot[parent]
                         : Quaternion.identity;
 
-                    // Eksen EBEVEYN çerçevesine çevrilir: yerel dönüş ebeveyne göre yazılıyor ve
-                    // menteşe ekseni eklemde sabittir, ebeveyn döndükçe onunla döner.
+                    // The axis is converted into the PARENT frame: local rotation is written relative to
+                    // the parent, and the hinge axis is fixed in the joint, turning with the parent.
                     hinges.Add(new Hinge
                     {
                         Slot = slot,
@@ -494,7 +549,7 @@ namespace VortexArena.Core.Combat
             HingeCache[hand] = hinges.ToArray();
         }
 
-        /// <summary>Beş orandan eklem dizisi üretir (boş elin duruşu buradan çıkar).</summary>
+        /// <summary>Builds a joint array from five ratios (the idle pose comes from here).</summary>
         private static Quaternion[] BuildProfile(in HandPoseProfile profile, bool rightHand)
         {
             Quaternion[] result = Copy(Bind(rightHand));
@@ -517,8 +572,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// İskeletin her ekleminin EL uzayındaki pozunu üstten aşağı bileştirir (kök = kendi pozu,
-        /// varsayılan iskelette bilek kimliktedir).
+        /// Composes every skeleton joint's pose in HAND space top-down (root = its own pose; the wrist
+        /// is identity in the default skeleton).
         /// </summary>
         private static void ResolveHandSpace(HandSkeletonJoint[] joints,
             out Vector3[] positions, out Quaternion[] rotations)
@@ -533,7 +588,7 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>Bir eklemi (gerekiyorsa önce üstünü) el uzayına çözer.</summary>
+        /// <summary>Resolves a joint (its parent first if needed) into hand space.</summary>
         private static void Resolve(HandSkeletonJoint[] joints, Vector3[] positions,
             Quaternion[] rotations, bool[] resolved, int index)
         {
@@ -542,8 +597,8 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // Döngüye karşı: kendini çözmeden önce işaretlemek, bozuk bir ebeveyn zincirinde
-            // sonsuz özyinelemeyi engeller (kök gibi davranır).
+            // Cycle guard: marking before resolving prevents infinite recursion on a broken parent
+            // chain (it then behaves like a root).
             resolved[index] = true;
 
             Pose local = joints[index].pose;
@@ -562,18 +617,19 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Avuç (volar) yönü — parmakların KAPANDIĞI yön, el uzayında.
+        /// The volar (palm) direction — the way fingers CLOSE, in hand space.
         /// <para>
-        /// Ölçü: dört parmakta (işaret…serçe) proksimal kemiğin yönü <c>m</c>, bir sonraki boğumun
-        /// yönü <c>p</c>; <c>p</c>'nin <c>m</c>'ye dik bileşeni zaten avuca doğrudur (gevşek iskelet
-        /// hafif kıvrıktır). Dördünün toplamı yönü verir.
+        /// Measurement: for the four fingers (index…pinky) take the proximal bone direction <c>m</c> and
+        /// the next phalanx direction <c>p</c>; the component of <c>p</c> perpendicular to <c>m</c>
+        /// already points palmwards (a relaxed skeleton is slightly curled). Their sum gives the
+        /// direction.
         /// </para>
         /// <para>
-        /// Toplam dejenereyse (tam düz bir iskelet) <see cref="HandGripConvention"/>'ın anatomik
-        /// bazına düşülür ve <b>işareti yine veriden</b> seçilir: başparmak gevşekken avuca doğru
-        /// sarkar, yani onun boğum sapması hangi tarafa bakıyorsa avuç orasıdır. Baz tek başına
-        /// yeterli değil çünkü ondaki sol/sağ çapraz çarpım sırası tam da burada işaret hatasına
-        /// açık olan şey.
+        /// If the sum is degenerate (a perfectly straight skeleton) it falls back to
+        /// <see cref="HandGripConvention"/>'s anatomical basis, with the <b>sign still taken from the
+        /// data</b>: a relaxed thumb droops toward the palm, so whichever way its bend deflects is the
+        /// palm side. The basis alone is not enough because its left/right cross product order is
+        /// exactly what is sign-error prone here.
         /// </para>
         /// </summary>
         private static bool TryResolveVolar(HandSkeletonJoint[] joints, Vector3[] handPos,
@@ -600,8 +656,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bir parmak zincirinin "kıvrım sapması": ikinci kemiğin, birinci kemiğe DİK olan bileşeni.
-        /// Zincirin ilk üç eklemi gerekir (metakarp/proksimal + iki boğum).
+        /// A finger chain's "bend deflection": the component of the second bone PERPENDICULAR to the
+        /// first. Needs the chain's first three joints (metacarpal/proximal + two phalanges).
         /// </summary>
         private static bool TryMeasureBend(Vector3[] handPos, HandJointId[] chain, out Vector3 bend)
         {
@@ -635,47 +691,26 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Yedek avuç yönü: anatomik bazın <c>+Y</c> ekseni doğrultusu, işareti başparmağın kıvrım
-        /// sapmasından. Gerekçe <see cref="TryResolveVolar"/>'da.
+        /// Fallback palm direction: the anatomical basis' <c>+Y</c> axis, with the sign taken from the
+        /// thumb's bend deflection. Rationale in <see cref="TryResolveVolar"/>.
         /// </summary>
         private static bool TryVolarFromConvention(HandSkeletonJoint[] joints, Vector3[] handPos,
             Quaternion[] handRot, bool rightHand, out Vector3 volar)
         {
             volar = Vector3.zero;
 
-            int root = RootIndex(joints);
-            if (root < 0)
-            {
-                return false;
-            }
-
-            HandJointId[] middle = ChainOf((int)HandFinger.Middle);
-            HandJointId[] thumb = ChainOf((int)HandFinger.Thumb);
-            if (middle == null || middle.Length < 4 || thumb == null || thumb.Length < 1)
-            {
-                return false;
-            }
-
-            // ⚠️ Orta parmağın PROKSİMALİ istenir, metakarpı değil: zincir daima
-            // "… proksimal, orta boğum, uç boğum, uç" ile bittiği için yeri sondan dördüncüdür
-            // (metakarpı olan ve olmayan ISDK dallarında da doğru eleman gelsin).
-            int middleProximal = (int)middle[middle.Length - 4];
-            int thumbFirst = (int)thumb[0];
-            if (middleProximal < 0 || middleProximal >= handPos.Length ||
-                thumbFirst < 0 || thumbFirst >= handPos.Length)
-            {
-                return false;
-            }
-
-            // ⚠️ Yönler KÖKÜN çerçevesinde verilir (baz orada tanımlı) ve sonuç aşağıda el uzayına
-            // geri çevrilir: varsayılan iskelette bilek kimlikte olduğu için ikisi bugün aynı, ama
-            // ikisini karıştırmak iskelet bir gün döndürülmüş bir bilekle gelirse sessizce sapardı.
-            Quaternion toRootLocal = Quaternion.Inverse(handRot[root]);
-            Vector3 fingerDirection = toRootLocal * (handPos[middleProximal] - handPos[root]);
-            Vector3 thumbDirection = toRootLocal * (handPos[thumbFirst] - handPos[root]);
-
-            if (!HandGripConvention.TryMeasureBoneBasis(
+            // The result is converted back to hand space below — the directions themselves are in the
+            // root's frame, where the basis is defined.
+            if (!TryMeasureAnatomyDirections(joints, handPos, handRot, out int root,
+                    out Vector3 fingerDirection, out Vector3 thumbDirection) ||
+                !HandGripConvention.TryMeasureBoneBasis(
                     fingerDirection, thumbDirection, rightHand, out Quaternion basis))
+            {
+                return false;
+            }
+
+            HandJointId[] thumb = ChainOf((int)HandFinger.Thumb);
+            if (thumb == null)
             {
                 return false;
             }
@@ -699,14 +734,60 @@ namespace VortexArena.Core.Combat
             return true;
         }
 
-        /// <summary>Parmağın eklem zinciri (uç DAHİL) — sıra ISDK'nın kendi tablosundan gelir.</summary>
+        /// <summary>
+        /// The hand's finger and thumb directions in the ROOT's frame — the two vectors every
+        /// anatomical basis on this side is built from (<c>HandGripConvention.TryMeasureBoneBasis</c>).
+        /// <para>⚠️ <b>One reader, not two:</b> the volar fallback and the anchor basis ask the same
+        /// question of the same skeleton; measured separately they would answer it differently the day
+        /// the joint layout changes.</para>
+        /// <para>⚠️ The middle finger's PROXIMAL is wanted, not its metacarpal: the chain always ends
+        /// with "… proximal, intermediate, distal, tip", so it is the fourth from the end (correct on
+        /// ISDK branches with and without metacarpals).</para>
+        /// <para>⚠️ The ROOT's frame is not hand space: identical today since the wrist is identity in
+        /// the default skeleton, but conflating them would drift silently if the skeleton ever shipped
+        /// with a rotated wrist.</para>
+        /// </summary>
+        private static bool TryMeasureAnatomyDirections(HandSkeletonJoint[] joints, Vector3[] handPos,
+            Quaternion[] handRot, out int root, out Vector3 fingerDirection, out Vector3 thumbDirection)
+        {
+            fingerDirection = Vector3.zero;
+            thumbDirection = Vector3.zero;
+
+            root = RootIndex(joints);
+            if (root < 0 || root >= handPos.Length || root >= handRot.Length)
+            {
+                return false;
+            }
+
+            HandJointId[] middle = ChainOf((int)HandFinger.Middle);
+            HandJointId[] thumb = ChainOf((int)HandFinger.Thumb);
+            if (middle == null || middle.Length < 4 || thumb == null || thumb.Length < 1)
+            {
+                return false;
+            }
+
+            int middleProximal = (int)middle[middle.Length - 4];
+            int thumbFirst = (int)thumb[0];
+            if (middleProximal < 0 || middleProximal >= handPos.Length ||
+                thumbFirst < 0 || thumbFirst >= handPos.Length)
+            {
+                return false;
+            }
+
+            Quaternion toRootLocal = Quaternion.Inverse(handRot[root]);
+            fingerDirection = toRootLocal * (handPos[middleProximal] - handPos[root]);
+            thumbDirection = toRootLocal * (handPos[thumbFirst] - handPos[root]);
+            return true;
+        }
+
+        /// <summary>A finger's joint chain (tip INCLUDED) — order comes from ISDK's own table.</summary>
         private static HandJointId[] ChainOf(int finger)
         {
             var list = HandJointUtils.FingerToJointList;
             return finger >= 0 && finger < list.Count ? list[finger] : null;
         }
 
-        /// <summary>Üstü olmayan eklem (bilek kökü).</summary>
+        /// <summary>The parentless joint (wrist root).</summary>
         private static int RootIndex(HandSkeletonJoint[] joints)
         {
             for (int i = 0; i < joints.Length; i++)

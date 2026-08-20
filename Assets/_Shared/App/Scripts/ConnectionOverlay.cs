@@ -11,67 +11,65 @@ using VortexArena.Protocol;
 namespace VortexArena.App
 {
     /// <summary>
-    /// Sunucuya bağlanılamadığında **oyun ekranında** görünen tasarımlı hata ekranı.
-    /// Sunucuyu ASLA başlatmaz; yalnız durumu bildirir (adres, geçen süre, deneme sayısı,
-    /// son hata) ve masaüstünde elle "Yeniden Bağlan" sunar. Aynı bilgi hiyerarşisi hem
-    /// masaüstü admin build'inde (screen-space + scrim + buton) hem Quest'te (world-space
-    /// kart, lazy-follow, butonsuz) gösterilir.
+    /// Styled error screen shown **in game** when the server is unreachable. NEVER starts the
+    /// server; only reports state (address, elapsed time, attempt count, last error) and offers a
+    /// manual "reconnect" on desktop. Same information hierarchy on desktop admin (screen-space +
+    /// scrim + button) and on Quest (world-space card, lazy-follow, no button).
     ///
-    /// **Görünüm prefabtan gelir, SAHNEDEN değil:** iki varyant vardır —
-    /// `Resources/UI/ConnectionOverlayScreen` (masaüstü) ve `…World` (VR); hangisinin
-    /// yükleneceğine <see cref="Install"/> karar verir. Prefab sahneye KONMAZ: konsaydı
-    /// yeni arena eklerken unutulacak bir adım olurdu (arena sahneleri kendine yeten
-    /// kutulardır). Bu yüzden `ArenaClient` deseni korunur — prefabı `Resources.Load` ile alır ve
-    /// `DontDestroyOnLoad` tekil olarak yaşar; **hangi oturumda doğacağına `AppSingletons` karar
-    /// verir** (kalibrasyon gibi sunucusuz oturumlarda hiç doğmaz).
-    /// Bu sınıf yalnız **veri yazar ve görünürlüğü sürer**; yerleşim/renk/punto prefabta.
+    /// **Visuals come from the prefab, NOT the scene:** two variants —
+    /// `Resources/UI/ConnectionOverlayScreen` (desktop) and `…World` (VR); <see cref="Install"/>
+    /// picks one. The prefab is NOT placed in scenes: that would be a step forgotten on every new
+    /// arena (arena scenes are self-contained boxes). Hence the `ArenaClient` pattern —
+    /// `Resources.Load` + `DontDestroyOnLoad` singleton; **`AppSingletons` decides which sessions
+    /// spawn it** (never in serverless sessions such as calibration).
+    /// This class only **writes data and drives visibility**; layout/color/size live in the prefab.
     ///
-    /// **Neden grace süresi:** kopuş anlıksa (WS yeniden bağlanma backoff'u 1→2→5 sn) ekranın
-    /// yanıp sönmesi hem çirkin hem maç ortasında dikkat dağıtıcı. Bağlı olmayan durum
-    /// <see cref="GraceSeconds"/> kadar sürerse gösterilir; `Connected` olunca derhal kaybolur
-    /// ve sayaç sıfırlanır. Aynı mantık açılışı ve maç ortasındaki kopmayı birlikte kapsar.
+    /// **Why a grace period:** for momentary drops (WS reconnect backoff 1→2→5 s) a flashing
+    /// screen is both ugly and distracting mid-match. Shown after being disconnected for
+    /// <see cref="GraceSeconds"/>; hidden instantly on `Connected` with the counter reset. Same
+    /// logic covers both startup and mid-match drops.
     ///
-    /// **Oyuncuda iki hâl vardır (§8):** `RECONNECT_GRACE` dolana kadar "BAĞLANTI KOPTU —
-    /// çıkarılmana N sn" (istatistikler korunuyor), sonrasında "OYUNDAN ÇIKARILDINIZ". ⚠️ Değişen
-    /// yalnız SUNUMdur: `ArenaClient` her iki hâlde de denemeyi sürdürür (sonsuz backoff), ağ
-    /// dönünce başlık kendiliğinden katılır ve maç sürüyorsa eski satırına oturur. Süre istemcinin
-    /// kendi kopuş anından sayılır — bağlantı yokken sunucudan gelemez, sabit iki tarafta da aynı
-    /// olduğu için sapma birkaç saniyeyi geçmez. Adres hiç bilinmiyorsa (launcher'sız açılış) bu
-    /// ikisi yerine "SUNUCU BULUNAMADI" kalır: o bir bağlantı değil yapılandırma sorunudur.
+    /// **Two player-facing states (§8):** until `RECONNECT_GRACE` expires "disconnected — N s
+    /// until removal" (stats preserved), afterwards "removed from game". ⚠️ Only the PRESENTATION
+    /// changes: `ArenaClient` keeps retrying in both (infinite backoff), rejoins by itself when the
+    /// network returns and takes its old row if the match is still running. The countdown runs from
+    /// the client's own drop instant — it cannot arrive from the server while offline, and the
+    /// constant is identical on both sides so drift stays within seconds. With no known address
+    /// (launched without the launcher) "server not found" stays instead: that is a configuration
+    /// problem, not a connection one.
     ///
-    /// **VR güvenlik kuralı:** oyuncu fiziksel alanda 1:1 yürüyor. (a) Tam ekran scrim YOK —
-    /// yalnız yarı saydam kart çizilir, görüşü karartmak tehlikeli. (b) `ArenaBoundary`
-    /// alan-dışı bildirdiği sürece overlay kendini TAMAMEN gizler: alan-dışı karartması ve
-    /// uyarısı her zaman baskın kalmalı, bir bağlantı hatası ekranı oyuncunun duvara
-    /// yürümesine sebep OLAMAZ.
+    /// **VR safety rule:** the player walks 1:1 in physical space. (a) NO fullscreen scrim — only a
+    /// translucent card; dimming their view is dangerous. (b) While `ArenaBoundary` reports
+    /// out-of-bounds the overlay hides COMPLETELY: the out-of-bounds dim + warning must always
+    /// dominate — a connection error screen must never make a player walk into a wall.
     /// </summary>
     public class ConnectionOverlay : MonoBehaviour
     {
-        // --------------------------------------------------------------- ayarlar
+        // -------------------------------------------------------------- settings
 
-        /// <summary>Bağlantısız geçen bu süreden sonra ekran gösterilir (sn).</summary>
+        /// <summary>Screen appears after this long without a connection (s).</summary>
         private const float GraceSeconds = 3f;
 
-        /// <summary>Metin tazeleme aralığı (sn) — ~4 Hz, gereksiz TMP yeniden çizimi olmasın.</summary>
+        /// <summary>Text refresh interval (s) — ~4 Hz, avoids needless TMP redraws.</summary>
         private const float RefreshInterval = 0.25f;
 
-        /// <summary>Nabız periyodu (sn) — accent şerit + badge alfası 0.55 ↔ 1.0.</summary>
+        /// <summary>Pulse period (s) — accent strip + badge alpha 0.55 ↔ 1.0.</summary>
         private const float PulsePeriod = 1.2f;
 
-        /// <summary>`LastError` en fazla bu kadar karakter gösterilir.</summary>
+        /// <summary>`LastError` is shown up to this many characters.</summary>
         private const int MaxErrorChars = 120;
 
         private const float CardWidth = 900f;
         private const float CardHeightVr = 520f;
         private const float CardHeightDesktop = 600f;
 
-        /// <summary>World-space kip: 900 px → ~0.9 m.</summary>
+        /// <summary>World-space mode: 900 px → ~0.9 m.</summary>
         private const float WorldScale = 0.001f;
 
-        // Palet + prosedürel öge fabrikaları `UiKit`'te (admin HUD'ı ile aynı görsel dil).
+        // Palette + procedural element factories live in `UiKit` (same visual language as admin HUD).
         private static readonly Color ColorScrim = UiKit.Scrim;
         private static readonly Color ColorCard = UiKit.Card;
-        private static readonly Color ColorCardWorld = UiKit.CardTranslucent; // alfa ≈ 0.88 (VR)
+        private static readonly Color ColorCardWorld = UiKit.CardTranslucent; // alpha ≈ 0.88 (VR)
         private static readonly Color ColorBorder = UiKit.Border;
         private static readonly Color ColorAccent = UiKit.Accent;
         private static readonly Color ColorTitle = UiKit.Title;
@@ -79,22 +77,21 @@ namespace VortexArena.App
         private static readonly Color ColorFaint = UiKit.Faint;
         private static readonly Color ColorOnAccent = UiKit.OnAccent;
 
-        /// <summary>Kart köşe yarıçapı (px) — bu ekranın kendi ölçüsü, panel varsayılanından iri.</summary>
+        /// <summary>Card corner radius (px) — this screen's own value, larger than the panel default.</summary>
         private const float CardRadius = 20f;
 
-        // --------------------------------------------------------------- durum
+        // ----------------------------------------------------------------- state
 
         private static ConnectionOverlay _instance;
 
-        /// <summary>Prefabın <c>Resources</c> yolları (uzantısız) — VR world-space / masaüstü
-        /// screen-space iki ayrı prefabtır, hangisinin yükleneceğine <see cref="Install"/>
-        /// karar verir.</summary>
+        /// <summary>Prefab <c>Resources</c> paths (no extension) — VR world-space and desktop
+        /// screen-space are two separate prefabs; <see cref="Install"/> picks one.</summary>
         public const string WorldResourcePath = "UI/ConnectionOverlayWorld";
 
         public const string ScreenResourcePath = "UI/ConnectionOverlayScreen";
 
-        // ⚠️ Alanlar [SerializeField] — görünüm PREFABTAN gelir. Bu sınıf yalnız veri yazar
-        // ve görünürlüğü sürer; yerleşim/renk/punto prefabta düzenlenir.
+        // ⚠️ Fields are [SerializeField] — visuals come FROM THE PREFAB. This class only writes
+        // data and drives visibility; layout/color/size are edited in the prefab.
 
         [Tooltip("Bu prefab VR (world-space) varyantı mı? Screen-space varyantta KAPALI olmalı.")]
         [SerializeField] private bool _worldSpace;
@@ -118,18 +115,18 @@ namespace VortexArena.App
         [SerializeField] private Button _reconnectButton;
         [SerializeField] private TextMeshProUGUI _reconnectLabel;
 
-        /// <summary>Bağlantısız duruma girdiğimiz an (unscaled); bağlıyken -1.</summary>
+        /// <summary>Instant we became disconnected (unscaled); -1 while connected.</summary>
         private float _disconnectedSince = -1f;
 
         private float _nextRefresh;
         private bool _forceRefresh = true;
         private bool _visible;
 
-        /// <summary>`ArenaBoundary` önbelleği — her karede sahne taraması yapılmaz.</summary>
+        /// <summary>`ArenaBoundary` cache — avoids a scene scan every frame.</summary>
         private ArenaBoundary _boundary;
         private bool _boundarySearched;
 
-        // Ekranda yazılı olan değerler (değişmedikçe TMP'ye dokunulmaz → çöp üretilmez).
+        // Values currently on screen (TMP untouched unless changed → no garbage).
         private bool _shownKnown;
         private bool _shownExpelled;
         private string _shownIp = null;
@@ -138,10 +135,10 @@ namespace VortexArena.App
         private int _shownAttempts = -1;
         private string _shownError = null;
 
-        // ------------------------------------------------------------ önyükleme
+        // ------------------------------------------------------------- bootstrap
 
-        /// <summary>Tekili kurar. ⚠️ <b>Koşulsuzdur</b> — "bu oturumda gerekli mi" kararı
-        /// <see cref="AppSingletons"/>'a aittir (gerekçe orada).</summary>
+        /// <summary>Installs the singleton. ⚠️ <b>Unconditional</b> — "is it needed this session"
+        /// is <see cref="AppSingletons"/>'s call (rationale lives there).</summary>
         internal static void Install()
         {
             if (_instance != null)
@@ -149,7 +146,7 @@ namespace VortexArena.App
                 return;
             }
 
-            // Quest'te (ya da XR aygıtı etkinken) world-space kart, masaüstünde screen-space.
+            // World-space card on Quest (or any active XR device), screen-space on desktop.
             bool worldSpace = UnityEngine.XR.XRSettings.isDeviceActive ||
                               Application.platform == RuntimePlatform.Android;
             string path = worldSpace ? WorldResourcePath : ScreenResourcePath;
@@ -180,8 +177,8 @@ namespace VortexArena.App
 
             if (_reconnectButton != null)
             {
-                // Prefabta kalıcı onClick kaydı YOKTUR: düğme yalnız adres bilinirken
-                // etkindir (RefreshTexts) ve komut AdminCommands üzerinden gider.
+                // No persistent onClick in the prefab: the button is interactable only when the
+                // address is known (RefreshTexts) and the command goes through AdminCommands.
                 _reconnectButton.onClick.RemoveAllListeners();
                 _reconnectButton.onClick.AddListener(HandleReconnectPressed);
             }
@@ -199,7 +196,7 @@ namespace VortexArena.App
             SceneManager.activeSceneChanged -= HandleActiveSceneChanged;
         }
 
-        // ------------------------------------------------------------- döngü
+        // ------------------------------------------------------------------ loop
 
         private void Update()
         {
@@ -208,8 +205,8 @@ namespace VortexArena.App
                 return;
             }
 
-            // Olayı kaçırmış olabiliriz: bu tekil `ArenaClient`'tan ÖNCE doğabilir, ilk
-            // durum değişimi abonelikten önce yayınlanmış olabilir → durumu ayrıca yokla.
+            // The event may have been missed: this singleton can be born BEFORE `ArenaClient` and
+            // the first state change may fire before we subscribe → poll the state too.
             ArenaClient client = ArenaClient.Instance;
             TrackState(client != null ? client.State : ArenaConnectionState.Disconnected);
 
@@ -219,15 +216,15 @@ namespace VortexArena.App
                 return;
             }
 
-            // GÜVENLİK: alan-dışıyken `ArenaBoundary`'nin karartma + uyarısı baskın kalır.
+            // SAFETY: while out of bounds, `ArenaBoundary`'s dim + warning stays dominant.
             if (IsOutOfBounds())
             {
                 SetVisible(false);
                 return;
             }
 
-            // VR'da kart kameranın önüne HudFollow ile yerleşir; kamera henüz yoksa (Boot gibi
-            // erken/kamerasız sahneler) göstermeyi ertele — panel origin'de asılı kalmasın.
+            // In VR HudFollow places the card in front of the camera; with no camera yet (early
+            // camera-less scenes like Boot) defer showing — the panel must not hang at the origin.
             if (_group == null || (_worldSpace && Camera.main == null))
             {
                 return;
@@ -251,9 +248,9 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Sahne değişiminde: `ArenaBoundary` önbelleği düşer (overlay sahnelerden önce doğuyor,
-        /// her sahnede yeniden bulunmalı) ve `HudFollow` yeniden başlar (yeni sahnenin kamerası
-        /// bulunup panel doğrudan yerine otursun, eski konumdan kaymasın).
+        /// On scene change: drop the `ArenaBoundary` cache (the overlay outlives scenes and must
+        /// re-find it) and restart `HudFollow` so the panel snaps to the new scene's camera instead
+        /// of drifting from the old position.
         /// </summary>
         private void HandleActiveSceneChanged(Scene previous, Scene current)
         {
@@ -263,11 +260,11 @@ namespace VortexArena.App
             if (_hudFollow != null)
             {
                 _hudFollow.enabled = false;
-                _hudFollow.enabled = true; // OnEnable → _initialized sıfırlanır
+                _hudFollow.enabled = true; // OnEnable → resets _initialized
             }
         }
 
-        /// <summary>Bağlı değilken sayaç işler; `Connected` olunca sıfırlanır.</summary>
+        /// <summary>Counter runs while disconnected; resets on `Connected`.</summary>
         private void TrackState(ArenaConnectionState state)
         {
             if (state == ArenaConnectionState.Connected)
@@ -293,7 +290,7 @@ namespace VortexArena.App
             if (!_boundarySearched)
             {
                 _boundary = FindFirstObjectByType<ArenaBoundary>();
-                _boundarySearched = true; // sahne değişimine dek tekrar aranmaz
+                _boundarySearched = true; // no re-search until the next scene change
             }
 
             return _boundary != null && _boundary.IsOutOfBounds;
@@ -303,23 +300,23 @@ namespace VortexArena.App
         {
             if (_group == null || _canvas == null || _visible == visible)
             {
-                return; // her karede aynı değeri yazıp canvas'ı kirletmeyelim
+                return; // don't dirty the canvas by rewriting the same value every frame
             }
 
             _visible = visible;
-            _canvas.enabled = visible; // gizliyken hiç çizim maliyeti olmasın
+            _canvas.enabled = visible; // zero draw cost while hidden
             _group.alpha = visible ? 1f : 0f;
             _group.blocksRaycasts = visible && !_worldSpace;
             _group.interactable = visible && !_worldSpace;
 
             if (visible)
             {
-                _forceRefresh = true; // görünür olurken metinler taze olsun
+                _forceRefresh = true; // texts must be fresh when becoming visible
                 EnsureClickableOnDesktop();
             }
         }
 
-        /// <summary>Tek animasyon: "hâlâ deniyor" hissi veren yumuşak nabız.</summary>
+        /// <summary>Only animation: a soft pulse conveying "still retrying".</summary>
         private void Pulse()
         {
             float wave = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (Mathf.PI * 2f / PulsePeriod));
@@ -340,11 +337,11 @@ namespace VortexArena.App
             }
         }
 
-        // ------------------------------------------------------------- metinler
+        // ------------------------------------------------------------------ text
 
         /// <summary>
-        /// Adres kaynağı: önce fiilen denenen adres (`ArenaClient`), yoksa launcher'ın
-        /// geçtiği `AppSession` adresi. Hiçbiri yoksa "adres yok" durumu.
+        /// Address source: the one actually being dialed (`ArenaClient`) first, else the
+        /// launcher-provided `AppSession` address. Neither → "no address" state.
         /// </summary>
         private static bool ResolveEndpoint(out string ip, out int port)
         {
@@ -380,7 +377,7 @@ namespace VortexArena.App
             int graceLeft = Mathf.Max(0, Mathf.CeilToInt(ArenaProtocol.RECONNECT_GRACE - seconds));
             bool expelled = known && IsPlayerRole && graceLeft == 0;
 
-            // Başlık / adres / ipucu: yalnız adres durumu ya da çıkarılma eşiği değişince yazılır.
+            // Title / address / hint: rewritten only when address state or the removal threshold changes.
             if (_shownIp == null || _shownKnown != known || _shownPort != port ||
                 _shownExpelled != expelled ||
                 !string.Equals(_shownIp, ip, StringComparison.Ordinal))
@@ -396,10 +393,10 @@ namespace VortexArena.App
                 _hintText.text = BuildHint(known, expelled, graceLeft);
 
                 ApplyButtonState(known);
-                _shownAttempts = -1; // meta satırı da tazelensin (deneme sayacı görünürlüğü değişti)
+                _shownAttempts = -1; // refresh the meta line too (attempt counter visibility changed)
             }
 
-            // Meta: geçen süre (sn çözünürlüğü) + deneme sayacı (yalnız adres varken).
+            // Meta: elapsed time (second resolution) + attempt counter (only with a known address).
             if (_shownSeconds != seconds || _shownAttempts != attempts)
             {
                 _shownSeconds = seconds;
@@ -409,16 +406,16 @@ namespace VortexArena.App
                     ? $"{seconds} sn · {attempts}. deneme"
                     : $"{seconds} sn";
 
-                // Çıkarılmaya kalan süre saniyede bir değişiyor; başlık bloğu yalnız durum
-                // değişince koştuğu için geri sayımı BURADAN tazeleriz (ayrı bir sayaç alanı
-                // açmaya gerek yok — `_shownSeconds` zaten saniye çözünürlüğünde).
+                // Time left until removal changes every second, and the title block only runs on
+                // state change → refresh the countdown HERE (no extra counter field needed;
+                // `_shownSeconds` is already at second resolution).
                 if (known && IsPlayerRole && !expelled)
                 {
                     _hintText.text = BuildHint(true, false, graceLeft);
                 }
             }
 
-            // Son hata: küçük punto, soluk, en altta.
+            // Last error: small, faint, at the bottom.
             if (!string.Equals(_shownError, error, StringComparison.Ordinal))
             {
                 _shownError = error;
@@ -429,8 +426,8 @@ namespace VortexArena.App
                 }
                 else
                 {
-                    // "…" gibi tek karakterli semboller TMP varsayılan fontunda eksik olabilir
-                    // (eksik glif □ çizilir) → düz üç nokta.
+                    // Single-char symbols like "…" may be missing from TMP's default font
+                    // (missing glyph renders □) → plain three dots.
                     string clipped = error.Length > MaxErrorChars
                         ? error.Substring(0, MaxErrorChars) + "..."
                         : error;
@@ -440,12 +437,12 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Kayıt ömrünün sahibi OYUNCUDUR: admin kaydı kopar kopmaz silinir (§2), yani onun için
-        /// "çıkarılmana N sn" diye bir geri sayım yoktur ve bugünkü metinleri korunur.
+        /// Record lifetime belongs to PLAYERS: an admin record is dropped the moment it disconnects
+        /// (§2), so there is no "N s until removal" countdown for admins.
         /// </summary>
         private static bool IsPlayerRole => AppSession.Role != AppSession.RoleAdmin;
 
-        /// <summary>Adres bilinmiyorsa sorun bağlantı değil YAPILANDIRMAdır — o dal ayrı kalır.</summary>
+        /// <summary>Unknown address = a CONFIGURATION problem, not a connection one — separate branch.</summary>
         private static string BuildTitle(bool known, bool expelled)
         {
             if (!known)
@@ -462,16 +459,15 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// İki hâl (§8): <see cref="ArenaProtocol.RECONNECT_GRACE"/> dolmadan "geri bekleniyorsun",
-        /// dolduktan sonra "çıkarıldın". ⚠️ İkisinde de deneme SÜRÜYOR — süre sunucunun kaydı ne
-        /// zaman düşüreceğini söyler, başlığın ne zaman pes edeceğini değil.
-        /// <para>Sayaç istemcinin kendi kopuş anından sayılır — bağlantı yokken sunucudan gelemez.
-        /// ⚠️ İki saat her zaman aynı anda başlamaz: soket düzgün kapanırsa sunucu da o an
-        /// <c>reconnecting</c>'e geçer (sapma yok), ama Wi-Fi sessizce ölürse sunucu düşüşü ancak
-        /// <c>HEARTBEAT_TIMEOUT</c> sonunda fark eder ve istemcinin geri sayımı o kadar ERKEN
-        /// biter. Sapma bu yönde olduğu için zararsızdır: ekran "çıkarıldın" derken sunucu kaydı
-        /// hâlâ tutuyor olabilir, tersi olamaz — yani oyuncuya hiçbir zaman olduğundan fazla süre
-        /// vaat edilmez.</para>
+        /// Two states (§8): "we're waiting for you" before <see cref="ArenaProtocol.RECONNECT_GRACE"/>
+        /// expires, "you were removed" after. ⚠️ Retrying continues in both — the timer says when
+        /// the server drops the record, not when the headset gives up.
+        /// <para>Counted from the client's own drop instant (it cannot come from the server while
+        /// offline). ⚠️ The two clocks don't always start together: a clean socket close moves the
+        /// server to <c>reconnecting</c> at the same moment (no drift), but a silently dead Wi-Fi is
+        /// only noticed after <c>HEARTBEAT_TIMEOUT</c>, so the client's countdown ends EARLIER.
+        /// Harmless in that direction: the screen may say "removed" while the server still holds the
+        /// record, never the reverse — the player is never promised more time than they have.</para>
         /// </summary>
         private static string BuildHint(bool known, bool expelled, int graceLeft)
         {
@@ -501,7 +497,7 @@ namespace VortexArena.App
                 return;
             }
 
-            // Adres hiç yoksa basmak hiçbir şeyi değiştirmez → yalancı umut vermeyelim.
+            // With no address at all, pressing changes nothing → don't offer false hope.
             _reconnectButton.interactable = addressKnown;
 
             if (_reconnectLabel != null)
@@ -511,9 +507,9 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// Elle yeniden bağlanma. Bu buton olmadan geri dönüş yolu YOK: `ArenaClient.Disconnect()`
-        /// `_userDisconnect = true` yapıp otomatik yeniden deneme döngüsünü durdurur — tekrar
-        /// bağlanmanın tek yolu açıkça `Connect(...)` çağırmaktır.
+        /// Manual reconnect. Without this button there is NO way back: `ArenaClient.Disconnect()`
+        /// sets `_userDisconnect = true` and stops the auto-retry loop — the only way back is an
+        /// explicit `Connect(...)`.
         /// </summary>
         private void HandleReconnectPressed()
         {
@@ -527,27 +523,26 @@ namespace VortexArena.App
             _forceRefresh = true;
         }
 
-        // ------------------------------------------------------------ UI kurulumu
+        // -------------------------------------------------------------- UI setup
 
         /// <summary>
-        /// "Yeniden Bağlan" tıklanabilir olsun diye EventSystem garantisi (yalnız masaüstü).
-        /// Admin `Lobby`'de kalmaz, arena sahnelerine girer ve <b>arena sahnelerinde EventSystem
-        /// YOK</b> — garanti edilmezse buton orada sessizce ölür.
-        /// <see cref="UiKit.EnsureEventSystem"/> kalıcı bir tane kurar (Input System paketiyle
-        /// derlendiğimiz için modül `InputSystemUIInputModule`'dür; `StandaloneInputModule`
-        /// runtime'da `UnityEngine.Input`'a dokunup patlar).
+        /// EventSystem guarantee so the reconnect button stays clickable (desktop only). Admin
+        /// leaves `Lobby` for arena scenes and <b>arena scenes have NO EventSystem</b> — without
+        /// this the button silently dies there. <see cref="UiKit.EnsureEventSystem"/> installs a
+        /// persistent one (module is `InputSystemUIInputModule` since we build with the Input
+        /// System package; `StandaloneInputModule` touches `UnityEngine.Input` and throws).
         /// </summary>
         private void EnsureClickableOnDesktop()
         {
             if (_worldSpace)
             {
-                return; // VR kipinde buton yok
+                return; // no button in VR mode
             }
 
             UiKit.EnsureEventSystem();
         }
 
-        // Prosedürel öge fabrikaları, yerleşim yardımcıları ve yuvarlak köşe sprite'ı
-        // `UiKit`'e taşındı (admin gözlemci HUD'ı ile tek görsel dil, tek uygulama).
+        // Procedural element factories, layout helpers and the rounded-corner sprite live in
+        // `UiKit` (one visual language and one implementation shared with the admin HUD).
     }
 }

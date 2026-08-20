@@ -4,25 +4,19 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Bir elin parmak duruşunun <b>kaba</b> hâli — beş sayı, parmak başına kapanma miktarı
-    /// (<c>0</c> = açık, <c>1</c> = tam kapalı). <b>Uzak avatarın humanoid (Mixamo) eli</b> ve boş
-    /// el bununla sürülür.
-    /// <para>
-    /// ⚠️ <b>Neden humanoid ele quaternion değil de kapanma oranı gider:</b> silaha özel riglenen
-    /// duruş ISDK iskeletinin eklem dönüşleridir (<see cref="HandJointRotation"/>) ve iki iskeletin
-    /// kemik eksenleri aynı değildir. Ham rotasyon taşımak, projenin zaten bir kez öğrendiği tuzağın
-    /// parmak ölçeğinde tekrarı olurdu (<c>Docs/Sistem-Ozeti.md</c> §7, "izleme/ağ uzayından gelen
-    /// rotasyon humanoid kemiğe doğrudan yazılmaz"). Oran ise rig'e bağlı değildir: eksen çalışma
-    /// anında <b>o</b> iskeletin kendi bind pozundan ölçülür (Mixamo eli için
-    /// <c>HandFingerRig</c>), oran yalnız "ne kadar" der. Riglenmiş duruştan oranı çıkaran
-    /// tek yer <see cref="HandPoseLibrary.MeasureCurl"/>'dür ve sonucu <b>asset'te saklanmaz</b> —
-    /// ikinci bir doğruluk kaynağı doğmasın.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Telde GİTMEZ</b> (§6.9): parmakların nerede duracağı bir ölçüm değil bir kavrama
-    /// sorusudur ve cevabı her istemcinin APK'sında. Aynı silah bu yüzden her ekranda aynı tutulur
-    /// ve sol/sağ farkı oluşmaz — duruşun kaynağı ele değil <b>eşyaya</b> bağlı.
-    /// </para>
+    /// Coarse form of a hand's finger pose — five per-finger curl amounts (<c>0</c> = open,
+    /// <c>1</c> = fully closed). Drives the remote avatar's humanoid (Mixamo) hand and the idle hand.
+    /// <para>⚠️ Curl ratios, not quaternions, go to the humanoid hand: the rigged pose is ISDK
+    /// skeleton joint rotations (<see cref="HandJointRotation"/>) and the two skeletons' bone axes
+    /// differ — raw rotations would repeat, at finger scale, the trap in
+    /// <c>Docs/Sistem-Ozeti.md</c> §7 ("a rotation from tracking/network space is not written
+    /// directly onto a humanoid bone"). A ratio is rig-independent: the axis is measured at runtime
+    /// from that skeleton's own bind pose (<c>HandFingerRig</c>). Only
+    /// <see cref="HandPoseLibrary.MeasureCurl"/> derives it, and the result is NOT stored in the
+    /// asset — no second source of truth.</para>
+    /// <para>⚠️ Does NOT travel on the wire (§6.9): finger placement is a grip question, not a
+    /// measurement, and the answer is in every client's APK. Hence the same weapon is held
+    /// identically on every screen — the pose is bound to the ITEM, not the hand.</para>
     /// </summary>
     [Serializable]
     public struct HandPoseProfile
@@ -33,16 +27,13 @@ namespace VortexArena.Core.Combat
         [Range(0f, 1f)] public float ring;
         [Range(0f, 1f)] public float pinky;
 
-        // ⚠️ Burada YALNIZ boş elin duruşu durur. Kavrama duruşları buraya geri EKLENMEZ: silahın
-        // elde nasıl tutulacağı silah başına riglenir (ItemGripPose.fingerJoints) ve tek yazılı
-        // kaynağı WD_*.asset'tir. Ortak bir "sıkma/kabza" tablosu, riglenmiş silahla riglenmemiş
-        // silahın aynı görünmesi demekti — aracın çözdüğü sorunun ta kendisi.
+        // ⚠️ ONLY the idle hand's pose lives here. Grip poses are NOT added back: holds are rigged
+        // per weapon (ItemGripPose.fingerJoints), sole source WD_*.asset. A shared "squeeze/grip"
+        // table would make rigged and unrigged weapons look identical — the problem the tool solves.
 
-        /// <summary>
-        /// Boşta duran elin gevşek duruşu: parmaklar serçeye doğru artan biçimde hafif kıvrık
-        /// (anatomik dinlenme duruşu; tümü sıfır olsaydı el tahta gibi düz dururdu).
-        /// <para>Eşya bırakılınca el buna döner; kavraması riglenmemiş bir slot da buraya düşer.</para>
-        /// </summary>
+        /// <summary>Relaxed idle pose: fingers slightly curled, increasing toward the pinky
+        /// (anatomical rest; all zeros would stand the hand flat like a board).
+        /// <para>Returned to on release, and used by slots with no rigged grip.</para></summary>
         public static HandPoseProfile Idle => new HandPoseProfile
         {
             thumb = 0.15f,
@@ -53,14 +44,14 @@ namespace VortexArena.Core.Combat
         };
 
         /// <summary>
-        /// Hiç yazılmamış (tümü sıfır) mı. ⚠️ Bu kapı <b>gerekli</b>: alanı olmayan eski
-        /// <c>WD_*.asset</c>'ler deserialize edilince beş sıfır okunur ve o "tahta el" demektir.
-        /// Sıfırın "tam açık el" olarak meşru bir kullanımı yok, o yüzden yazılmamışla eş sayılır.
+        /// Unauthored (all zeros). ⚠️ Required gate: older <c>WD_*.asset</c> files without the
+        /// field deserialize into five zeros, i.e. a "board hand". Zero has no legitimate use as
+        /// "fully open", so it counts as unauthored.
         /// </summary>
         public bool IsEmpty =>
             thumb <= 0f && index <= 0f && middle <= 0f && ring <= 0f && pinky <= 0f;
 
-        /// <summary>Parmak sırasına göre kapanma oranı (0=başparmak … 4=serçe).</summary>
+        /// <summary>Curl ratio by finger order (0=thumb … 4=pinky).</summary>
         public float Get(int fingerIndex)
         {
             switch (fingerIndex)
@@ -74,10 +65,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// İki duruş arasında parmak parmak doğrusal karışım — duruş geçişinin (boş el ↔ kavrama)
-        /// uzak avatardaki adımı (<c>RemoteHandPoser</c>); süre ve eğri
-        /// <see cref="HandPoseLibrary.TransitionSeconds"/> / <see cref="HandPoseLibrary.Ease"/>'ten
-        /// gelir, burada yalnız karıştırılır.
+        /// Per-finger linear blend between two poses — the remote avatar's transition step (idle ↔
+        /// grip, <c>RemoteHandPoser</c>). Duration and curve come from
+        /// <see cref="HandPoseLibrary.TransitionSeconds"/> / <see cref="HandPoseLibrary.Ease"/>.
         /// </summary>
         public static HandPoseProfile Lerp(in HandPoseProfile a, in HandPoseProfile b, float t)
         {
@@ -92,7 +82,7 @@ namespace VortexArena.Core.Combat
             };
         }
 
-        /// <summary>Beş oran da eşit mi (geçiş hedefinin değişip değişmediğini anlamak için).</summary>
+        /// <summary>Are all five ratios equal (used to tell whether the transition target changed).</summary>
         public bool Approximately(in HandPoseProfile other)
         {
             return Mathf.Approximately(thumb, other.thumb) &&

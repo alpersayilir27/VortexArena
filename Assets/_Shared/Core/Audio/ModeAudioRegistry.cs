@@ -3,35 +3,23 @@ using UnityEngine;
 
 namespace VortexArena.Core.Audio
 {
-    /// <summary>
-    /// Moda ve haritaya göre değişen duyuru seslerinin tek kaynağı: "hangi modda, hangi haritada,
-    /// hangi anda ne çalsın" sorusunun cevabı. Tüm haritalarda ORTAK olan sesler burada DEĞİL
-    /// <see cref="GameSoundBank"/>'tedir.
-    /// <para>
-    /// ⚠️ Asset'in yeri <c>Assets/_Shared/Data/Resources/ModeAudioRegistry.asset</c> — hiçbir
-    /// sahneden referansı yoktur, <see cref="Load"/> onu <c>Resources.Load</c> ile alır
-    /// (<c>GameCatalog</c> ile aynı gerekçe). Klasörden çıkarılırsa ya da adı değişirse moda özel
-    /// tüm sesler sessizce susar.
-    /// </para>
-    /// <para>
-    /// <b>Kural eşleşmesi:</b> boş <c>modeId</c> = her mod, boş <c>sceneName</c> = her harita.
-    /// Eşleşen kurallar arasından <b>en spesifik olan</b> kazanır (mod eşleşmesi haritadan ağır
-    /// basar); aynı spesiflikte birden çok kural varsa listedeki İLK'i kullanılır. Böylece genel
-    /// bir satır ("her mod, her harita") tavan olarak durur ve tek bir haritaya özel satır onu
-    /// yalnız o haritada ezer.
-    /// </para>
-    /// <para>
-    /// <b>Klip listesi rastgele seçilir:</b> aynı tetikleyiciye birden çok klip yazmak varyasyon
-    /// üretmenin yoludur; tek klip yazmak da geçerlidir.
-    /// </para>
-    /// </summary>
+    /// <summary>Single source for announcement sounds that vary by mode and map. Sounds SHARED by all
+    /// maps are not here but in <see cref="GameSoundBank"/>.
+    /// <para>⚠️ The asset lives at <c>Assets/_Shared/Data/Resources/ModeAudioRegistry.asset</c> — no
+    /// scene references it, <see cref="Load"/> takes it via <c>Resources.Load</c> (same rationale as
+    /// <c>GameCatalog</c>). Moving or renaming it silences every mode-specific sound.</para>
+    /// <para>Rule matching: empty <c>modeId</c> = any mode, empty <c>sceneName</c> = any map. The
+    /// most specific match wins (mode outweighs map); on a tie the FIRST rule in the list is used. So
+    /// a general row stands as a fallback and a map-specific row overrides it on that map only.</para>
+    /// <para>Clip lists are picked at random: several clips per trigger is how variation is
+    /// authored, one clip is equally valid.</para></summary>
     [CreateAssetMenu(fileName = "ModeAudioRegistry", menuName = "VortexArena/Mode Audio Registry")]
     public class ModeAudioRegistry : ScriptableObject
     {
-        /// <summary>Resources altındaki asset adı.</summary>
+        /// <summary>Asset name under Resources.</summary>
         public const string ResourceName = "ModeAudioRegistry";
 
-        /// <summary>Tek bir "şu koşulda şu ses" satırı.</summary>
+        /// <summary>A single "this sound under these conditions" row.</summary>
         [Serializable]
         public class Rule
         {
@@ -55,35 +43,31 @@ namespace VortexArena.Core.Audio
             [Tooltip("Yalnız uyarı tetikleyicilerinde: süre bitmeden kaç saniye önce çalsın.")]
             [SerializeField] private float warningSeconds = 5f;
 
-            /// <summary>Kuralın bağlı olduğu modId; boş = her mod.</summary>
+            /// <summary>modId the rule is bound to; empty = any mode.</summary>
             public string ModeId => modeId;
 
-            /// <summary>Kuralın bağlı olduğu sahne adı; boş = her harita.</summary>
+            /// <summary>Scene name the rule is bound to; empty = any map.</summary>
             public string SceneName => sceneName;
 
-            /// <summary>Sesin çalacağı an.</summary>
+            /// <summary>When the sound plays.</summary>
             public ModeAudioEvent Trigger => trigger;
 
-            /// <summary>Uyarı tetikleyicilerinde eşik (saniye).</summary>
+            /// <summary>Threshold for warning triggers (seconds).</summary>
             public float WarningSeconds => warningSeconds;
 
-            /// <summary>Klibin çalma seviyesi (0..1).</summary>
+            /// <summary>Clip volume (0..1).</summary>
             public float Volume => volume;
 
-            /// <summary>
-            /// Bu kuralın en son çaldığı klip — ardışık tekrarı elemek için. <b>Serialize
-            /// EDİLMEZ</b>: varyasyon oturumun içinde anlamlıdır, diske yazılacak bir ayar değil.
-            /// </summary>
+            /// <summary>Last clip this rule played — used to reject immediate repeats. NOT
+            /// serialized: variation matters within a session, it is not a setting to write to
+            /// disk.</summary>
             [NonSerialized] private AudioClip _lastPicked;
 
-            /// <summary>
-            /// Listeden rastgele bir klip; hepsi boşsa null.
-            /// <para>⚠️ <b>Bir önceki seçim elenir</b> (liste iki ya da daha fazla dolu klip
-            /// taşıyorsa): saf rastgelede aynı klip peş peşe gelebiliyor ve tur başına tek duyuru
-            /// çalan bir sistemde bu "hep aynı ses" olarak duyuluyor. İki klipte sonuç sırayla
-            /// çalmaktır — kabul edilen bir sonuç, çünkü varyasyonun görünürlüğü rastgeleliğin
-            /// saflığından önemli.</para>
-            /// </summary>
+            /// <summary>A random clip from the list; null when all are empty.
+            /// <para>⚠️ The previous pick is excluded when two or more clips are filled: pure
+            /// randomness repeats the same clip back to back, heard as "always the same sound" in a
+            /// one-announcement-per-round system. With two clips this alternates — visible variation
+            /// beats pure randomness.</para></summary>
             public AudioClip PickClip()
             {
                 if (clips == null)
@@ -91,8 +75,9 @@ namespace VortexArena.Core.Audio
                     return null;
                 }
 
-                // Dolu klipler; bir öncekini eleyerek. Eleme sonucu liste boşalırsa (tek dolu
-                // klip var) eleme yapılmaz — o kural her turda aynı sesi çalar, doğrusu da bu.
+                // Filled clips, excluding the previous pick. If that empties the pool (only one
+                // filled clip) the exclusion is dropped — that rule plays the same sound every
+                // round, which is correct.
                 AudioClip[] pool = Collect(_lastPicked);
                 if (pool.Length == 0)
                 {
@@ -108,7 +93,7 @@ namespace VortexArena.Core.Audio
                 return _lastPicked;
             }
 
-            /// <summary>Dolu klipleri toplar; <paramref name="exclude"/> varsa onu atlar.</summary>
+            /// <summary>Collects the filled clips, skipping <paramref name="exclude"/> if given.</summary>
             private AudioClip[] Collect(AudioClip exclude)
             {
                 int count = 0;
@@ -133,9 +118,8 @@ namespace VortexArena.Core.Audio
                 return pool;
             }
 
-            /// <summary>
-            /// Kural verilen bağlama uyuyor mu. Boş alan "kısıt yok" demektir.
-            /// </summary>
+            /// <summary>Does the rule fit the given context. An empty field means "no
+            /// restriction".</summary>
             public bool Matches(ModeAudioEvent wanted, string activeModeId, string activeSceneName)
             {
                 return trigger == wanted &&
@@ -143,10 +127,8 @@ namespace VortexArena.Core.Audio
                        Fits(sceneName, activeSceneName);
             }
 
-            /// <summary>
-            /// Eşleşmenin darlığı: mod 2, harita 1 puan. Yüksek puan kazanır — mod eşleşmesinin
-            /// haritadan ağır basması bilinçli: aynı arena birden çok modda oynanıyor.
-            /// </summary>
+            /// <summary>Narrowness of the match: mode scores 2, map 1; the higher score wins. Mode
+            /// deliberately outweighs map — the same arena is played in several modes.</summary>
             public int Specificity()
             {
                 int score = 0;
@@ -176,10 +158,8 @@ namespace VortexArena.Core.Audio
         private static ModeAudioRegistry _cached;
         private static bool _loaded;
 
-        /// <summary>
-        /// Kaynak asset'i <c>Resources</c>'tan yükler (tek sefer, sonuç önbelleklenir).
-        /// Asset yoksa null döner ve moda özel tüm sesler sessizce atlanır.
-        /// </summary>
+        /// <summary>Loads the asset from <c>Resources</c> once and caches it. Returns null when the
+        /// asset is missing, and every mode-specific sound is then skipped silently.</summary>
         public static ModeAudioRegistry Load()
         {
             if (_loaded)
@@ -192,10 +172,8 @@ namespace VortexArena.Core.Audio
             return _cached;
         }
 
-        /// <summary>
-        /// Verilen bağlama uyan en spesifik kuralı bulur. Eşleşme yoksa <c>false</c> döner —
-        /// çağıranın kontrol yazması gerekmez, o an ses yok demektir.
-        /// </summary>
+        /// <summary>Finds the most specific rule fitting the given context. Returns <c>false</c> when
+        /// nothing matches — the caller needs no extra check, it simply means no sound.</summary>
         public bool TryResolve(ModeAudioEvent trigger, string modeId, string sceneName, out Rule rule)
         {
             rule = null;

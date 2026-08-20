@@ -6,29 +6,26 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Admin komutlarının tek çıkış kapısı (§5.2). Otorite SUNUCUDADIR: buradan yalnız istek
-    /// gider, kabul/ret kararını sunucu verir ve sebebini kendi konsoluna yazar — arayüz
-    /// "gönderildi" der, "oldu" demez.
-    /// <para>
-    /// <see cref="Status"/> son işlemin insan okuyabilir sonucudur; tercihler paneli onu gösterir.
-    /// </para>
+    /// Single outbound gate for admin commands (§5.2). Authority is on the SERVER: only requests
+    /// leave here, the server accepts or rejects and logs the reason — the UI says "sent", never
+    /// "done".
+    /// <para><see cref="Status"/> is the human-readable result of the last operation, shown by the
+    /// preferences panel.</para>
     /// </summary>
     public static class AdminCommands
     {
-        /// <summary>Son komutun/denemenin sonucu (arayüzde gösterilir).</summary>
+        /// <summary>Result of the last command/attempt (shown in the UI).</summary>
         public static string Status { get; private set; } = "";
 
-        /// <summary>Durum metni değiştiğinde.</summary>
+        /// <summary>Raised when the status text changes.</summary>
         public static event Action StatusChanged;
 
         /// <summary>
-        /// Maçı başlatır. <paramref name="roundSeconds"/>/<paramref name="scoreLimit"/> o maça
-        /// özeldir; <c>0</c> gönderilirse sunucu modun varsayılanını kullanır (§5.2) — yani
-        /// operatör bir şey seçmediyse davranış bugünküyle birebir aynıdır.
-        /// <para><paramref name="scoreLimit"/> ayrıca <b>sınırsız</b> olabilir
-        /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>): o maçta hiçbir skor/tur limiti
-        /// işlemez. ⚠️ Bu yüzden negatif değer <c>0</c>'a KIRPILMAZ — kırpılsa sınırsız seçimi
-        /// sessizce "mod varsayılanı"na dönerdi.</para>
+        /// Starts the match. <paramref name="roundSeconds"/>/<paramref name="scoreLimit"/> are per
+        /// match; <c>0</c> means the server uses the mode default (§5.2).
+        /// <para><paramref name="scoreLimit"/> may also be <b>unlimited</b>
+        /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>). ⚠️ Hence a negative value is NOT
+        /// clamped to <c>0</c> — clamping would silently turn "unlimited" into "mode default".</para>
         /// </summary>
         public static void StartMatch(string modeId, string sceneName, int roundSeconds = 0,
             int scoreLimit = 0, int countdownSeconds = 0)
@@ -59,15 +56,14 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Skor/tur limitini operatörün okuduğu biçime çevirir: <c>sınırsız</c> ·
-        /// <c>mod varsayılanı</c> · sayı. Üç durumun TEK yazımı burada durur — panel, istatistik
-        /// özeti ve durum satırı aynı kaynaktan okur.</summary>
+        /// <summary>Formats the score/round limit for the operator. The only place the three cases
+        /// are written — panel, stats summary and status line all read from here.</summary>
         public static string FormatScoreLimit(int scoreLimit) =>
             scoreLimit > 0 ? scoreLimit.ToString()
             : scoreLimit < 0 ? "sınırsız"
             : "mod varsayılanı";
 
-        /// <summary>Saniyeyi operatörün okuduğu biçime çevirir ("2.5 dk", "1 saat").</summary>
+        /// <summary>Formats seconds for the operator ("2.5 dk", "1 saat").</summary>
         public static string FormatDuration(int seconds)
         {
             if (seconds <= 0)
@@ -87,16 +83,15 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Bir sonraki maçın <b>ortak</b> mod/harita seçimi (§5.2 <c>set_selection</c>). Maçı
-        /// başlatmaz: sunucudaki seçimi değiştirir, sunucu da onu <c>admin_state</c> ile tüm
-        /// adminlere yayar. Bu yüzden arayüz seçimi yerel bir alana YAZMAZ — sunucudan geri
-        /// gelen değeri gösterir (tek doğruluk kaynağı, iki operatör sapmaz).
-        /// <para>Durum satırı burada yazılmaz; sunucunun yayınladığı duyuru zaten gelecek.</para>
-        /// <para>Süre/limit de bu kanaldan gider: parametreler yerel kalsaydı bir operatörün
-        /// 5 dk sandığı maç diğerinin seçtiği 30 dk ile başlardı. <c>0</c> = "bu alanı değiştirme".</para>
-        /// <para>⚠️ <paramref name="scoreLimit"/> bu sözleşmenin istisnasıdır: negatif değer
-        /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>) "dokunulmadı" değil <b>sınırsız
-        /// seçildi</b> demektir, bu yüzden ne kırpılır ne de boş komut sayılır.</para>
+        /// <b>Shared</b> mode/map selection for the next match (§5.2 <c>set_selection</c>). Does not
+        /// start it: the server holds the selection and broadcasts it via <c>admin_state</c>, so the
+        /// UI never writes it locally — single source of truth, two operators cannot diverge.
+        /// <para>No status line here; the server's own notice will arrive.</para>
+        /// <para>Duration/limit ride the same channel: kept local, one operator's "5 min" match
+        /// would start with the other's 30. <c>0</c> = "leave this field alone".</para>
+        /// <para>⚠️ <paramref name="scoreLimit"/> is the exception: a negative value
+        /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>) means <b>unlimited was chosen</b>,
+        /// not "untouched" — so it is neither clamped nor counted as an empty command.</para>
         /// </summary>
         public static void SetSelection(string modeId, string sceneName, int roundSeconds = 0,
             int scoreLimit = 0, int countdownSeconds = 0)
@@ -119,11 +114,12 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Dost ateşi anahtarı (§5.2 <c>set_friendly_fire</c>) — <b>seçim değil, anlık komuttur</b>:
-        /// koşan maçta da geçerlidir, bu yüzden <c>set_selection</c>'a binmez (o mesajın
-        /// "boş/0 = değiştirme" sözleşmesi bir <c>bool</c>'u ifade edemez) ve seçim kilidine takılmaz.
-        /// <para>Değer yerel bir alana YAZILMAZ: sunucu <c>admin_state</c> ile geri yayar, panel onu
-        /// gösterir (tek doğruluk kaynağı — iki operatör sapmaz).</para>
+        /// Friendly fire switch (§5.2 <c>set_friendly_fire</c>) — <b>a live command, not a
+        /// selection</b>: it applies to a running match, so it does not ride <c>set_selection</c>
+        /// (whose "empty/0 = leave alone" contract cannot express a <c>bool</c>) and is not blocked
+        /// by the selection lock.
+        /// <para>Never written locally: the server echoes it via <c>admin_state</c> — single source
+        /// of truth.</para>
         /// </summary>
         public static void SetFriendlyFire(bool enabled)
         {
@@ -131,13 +127,11 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Başlıkların AÇILIŞTA nasıl hizalanacağı (§5.2 <c>set_calibration_mode</c>) —
-        /// <see cref="SetFriendlyFire"/> ile aynı sınıf: <b>anlık komut</b>, <c>set_selection</c>'a
-        /// binmez ve seçim kilidine girmez.
-        /// <para>Değer yerel bir alana YAZILMAZ: sunucu <c>admin_state</c> ile geri yayar
-        /// (tek doğruluk kaynağı — iki operatör sapmaz).</para>
-        /// <para>⚠️ <c>anchor_cloud</c> buradan GÖNDERİLMEZ: rezerve bir değerdir, sunucu da
-        /// reddeder — arayüz o seçeneği pasif tutar.</para>
+        /// How headsets align AT STARTUP (§5.2 <c>set_calibration_mode</c>) — same class as
+        /// <see cref="SetFriendlyFire"/>: a live command, not a selection.
+        /// <para>Never written locally: the server echoes it via <c>admin_state</c>.</para>
+        /// <para>⚠️ <c>anchor_cloud</c> is never sent from here: it is reserved and the server
+        /// rejects it — the UI keeps that option disabled.</para>
         /// </summary>
         public static void SetCalibrationMode(string mode)
         {
@@ -147,7 +141,7 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Kalibre modunun operatöre gösterilen adı; bilinmeyen değer ham geçer.</summary>
+        /// <summary>Operator-facing name of the calibration mode; unknown values pass through raw.</summary>
         public static string CalibrationModeLabel(string mode)
         {
             return mode == ArenaProtocol.CALIB_MODE_TWO_ANCHOR ? "2 Çapa"
@@ -163,8 +157,8 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Koşan maçı dondurur (§5.2). Sunucu yalnız <c>playing</c> iken uygular;
-        /// başka fazda komut sessizce düşer, durum değişmez.</summary>
+        /// <summary>Freezes the running match (§5.2). The server only applies it in <c>playing</c>;
+        /// in any other phase the command is silently dropped.</summary>
         public static void PauseMatch()
         {
             if (Send(new PauseMatchMsg()))
@@ -173,8 +167,8 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Operatörün duraklattığı maçı sürdürür (§5.2). Modun ya da geri sayımın
-        /// duraklamasını KALDIRMAZ — sunucu onu reddeder.</summary>
+        /// <summary>Resumes an operator-paused match (§5.2). Does NOT lift a mode or countdown
+        /// pause — the server rejects that.</summary>
         public static void ResumeMatch()
         {
             if (Send(new ResumeMatchMsg()))
@@ -204,11 +198,11 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Oyuncunun adını ve/veya forma numarasını değiştirir (§5.1).
-        /// <para>Boş <paramref name="name"/> ve <c>0</c> <paramref name="number"/> ilgili alanı
-        /// DEĞİŞTİRMEZ (sunucu konvansiyonu) — "yalnız numarayı düzelt" tek çağrıdır. Numara
-        /// çevrimiçi biri tarafından kullanılıyorsa sunucu reddeder ve sebebi admin_state.notice
-        /// ile döner; burada iyimser bir yerel güncelleme YAPILMAZ (otorite sunucudadır).</para></summary>
+        /// <summary>Changes a player's name and/or shirt number (§5.1).
+        /// <para>Empty <paramref name="name"/> and <c>0</c> <paramref name="number"/> leave that
+        /// field alone (server convention), so "fix only the number" is one call. A number taken by
+        /// someone online is rejected with a reason in <c>admin_state.notice</c>; ⚠️ no optimistic
+        /// local update here — authority is on the server.</para></summary>
         public static void SetIdentity(int playerId, string name, int number)
         {
             if (playerId <= 0)
@@ -219,7 +213,7 @@ namespace VortexArena.App.Admin
             string trimmed = string.IsNullOrWhiteSpace(name) ? "" : name.Trim();
             if (trimmed.Length == 0 && number == 0)
             {
-                return; // her iki alan da "koru" — mesaj yollamaya değmez
+                return; // both fields say "keep" — not worth a message
             }
 
             if (number != 0 && (number < ArenaProtocol.PLAYER_NUMBER_MIN || number > ArenaProtocol.PLAYER_NUMBER_MAX))
@@ -250,26 +244,13 @@ namespace VortexArena.App.Admin
             }
         }
 
-        public static void Identify(int playerId)
-        {
-            if (playerId <= 0)
-            {
-                return;
-            }
-
-            if (Send(new IdentifyMsg { playerId = playerId }))
-            {
-                SetStatus($"Kimlik gösterimi gönderildi: oyuncu {playerId}");
-            }
-        }
-
         /// <summary>
-        /// Ölü bir oyuncuyu canlandırır; <paramref name="playerId"/> <b>0 = o an ölü olan HERKES</b>
-        /// (§10.4). ⚠️ <c>0</c> ELENMEZ — <see cref="ClearCalibration"/> ile aynı toplu-hedef
-        /// deseni; toplu canlandırma geçerli bir komuttur.
-        /// <para>Modun canlanma şartını (turnuvada "canlanma yok") ve canlanma gecikmesini bilerek
-        /// GEÇER. Kalibresiz ya da engelin içindeki oyuncuyu sunucu yine de canlandırmaz ve sebebi
-        /// kendi konsoluna yazar — arayüz "gönderildi" der, "oldu" demez.</para>
+        /// Revives a dead player; <paramref name="playerId"/> <b>0 = EVERYONE currently dead</b>
+        /// (§10.4). ⚠️ <c>0</c> is NOT filtered out — same bulk-target pattern as
+        /// <see cref="ClearCalibration"/>.
+        /// <para>Deliberately bypasses the mode's revive condition and respawn delay. An
+        /// uncalibrated player or one inside an obstacle is still not revived; the server logs the
+        /// reason — the UI says "sent", not "done".</para>
         /// </summary>
         public static void RevivePlayer(int playerId)
         {
@@ -287,21 +268,19 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Bir oyuncunun kalibrasyonunu sıfırlar; <paramref name="playerId"/> <b>0 = HERKES</b>
-        /// (§10.6). Sıfırlanan oyuncu ateş edemez, hasar yemez, canlanamaz ve diğer oyuncuların
-        /// ekranında avatarı parlar — hizalamayı geri açmayı YALNIZ başlığın kendisi yapabilir.
-        /// <para><paramref name="keepSaved"/> komutun iki kipini ayırır:
-        /// <b>true = yumuşak</b> — yalnız o anki hizalama geçersiz kılınır, gözlükteki KAYITLI çapa
-        /// yerinde kalır; <b>false = sert</b> — kayıtlı çapa ve UUID de kalıcı olarak silinir.</para>
-        /// <para>⚠️ <b><see cref="ReloadCalibration"/> ile TAMAMEN AYRI bir komuttur ve onun tersi
-        /// DEĞİLDİR:</b> sıfırlama oyuncuyu savaş dışı bırakır, yeniden yükleme ise gözlükteki
-        /// kayıttan hizalamayı geri kurmayı dener. İkisini karıştırmak sahada oynayan bir oyuncuyu
-        /// durduk yere oyun dışı bırakır.</para>
-        /// <para>⚠️ <b>SERT kip, <see cref="ReloadCalibration"/>'ın okuyacağı veriyi yok eder:</b>
-        /// kayıtlı çapa silindikten sonra "kalibre et" her başlıkta "cihazda kayıtlı kalibrasyon
-        /// yok" ile döner ve oyuncular elle A/B sekansı almak zorunda kalır. Bu yüzden <b>günlük
-        /// eylem YUMUŞAK kiptir</b>; sert kip yalnız zemin bantları taşındığında yapılan bir mekan
-        /// bakımıdır.</para>
+        /// Clears a player's calibration; <paramref name="playerId"/> <b>0 = EVERYONE</b> (§10.6).
+        /// A cleared player cannot fire, take damage or respawn and glows on other screens — ONLY
+        /// the headset itself can re-enable alignment.
+        /// <para><paramref name="keepSaved"/> picks the mode: <b>true = soft</b>, only the current
+        /// alignment is invalidated and the anchor SAVED on the headset stays; <b>false = hard</b>,
+        /// the saved anchor and UUID are wiped for good.</para>
+        /// <para>⚠️ <b>A completely separate command from <see cref="ReloadCalibration"/>, not its
+        /// inverse:</b> clearing takes the player out of the fight, reloading tries to restore
+        /// alignment from the headset's record. Mixing them benches a player for no reason.</para>
+        /// <para>⚠️ <b>HARD mode destroys what <see cref="ReloadCalibration"/> would read:</b>
+        /// afterwards every headset answers "no saved calibration" and players must redo the A/B
+        /// sequence by hand. So the <b>daily action is SOFT</b>; hard is venue maintenance, done
+        /// only when the floor markers move.</para>
         /// </summary>
         public static void ClearCalibration(int playerId, bool keepSaved)
         {
@@ -323,16 +302,15 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Bir oyuncunun kalibrasyonunu gözlükte KAYITLI çapa verisinden yeniden yükletir;
-        /// <paramref name="playerId"/> <b>0 = TÜM oyuncular</b>. Sunucu hesap yapmaz, komutu
-        /// başlığa iletir; hizalamayı başlık geri yükler ve sonucu <c>calibration_result</c> ile
-        /// bildirir.
-        /// <para>⚠️ <b><see cref="ClearCalibration"/> ile TAMAMEN AYRI bir komuttur ve onun tersi
-        /// DEĞİLDİR:</b> sıfırlama kalibrasyonu siler ve oyuncuyu savaş dışı bırakır; bu komut
-        /// silmez, gözlükteki kayıttan hizalamayı geri kurmayı dener. İkisini karıştırmak sahada
-        /// oynayan bir oyuncuyu durduk yere oyun dışı bırakır.</para>
-        /// <para>Yeniden yükleme <b>geri alınabilir bir denemedir</b>: tutmazsa oyuncu zaten eskisi
-        /// gibi kalır, bu yüzden onay penceresi yoktur.</para>
+        /// Reloads a player's calibration from the anchor SAVED on the headset;
+        /// <paramref name="playerId"/> <b>0 = ALL players</b>. The server computes nothing, it
+        /// forwards the command; the headset restores alignment and answers with
+        /// <c>calibration_result</c>.
+        /// <para>⚠️ <b>A completely separate command from <see cref="ClearCalibration"/>, not its
+        /// inverse:</b> clearing wipes calibration and benches the player; this one wipes nothing.
+        /// Mixing them benches a playing player for no reason.</para>
+        /// <para>Reloading is an <b>undoable attempt</b> — if it fails the player is left as before,
+        /// hence no confirm window.</para>
         /// </summary>
         public static void ReloadCalibration(int playerId)
         {
@@ -350,12 +328,12 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Bir oyuncunun gövde ölçüsünü ALDIRIR; <paramref name="playerId"/> <b>0 = HERKES</b>
-        /// (§10.8). Sunucu hesap yapmaz, komutu başlığa iletir; ölçümü başlık yapıp
-        /// <c>set_body_scale</c> ile döner ve sonuç roster'dan herkese yayılır.
-        /// <para>⚠️ Ölçüm anında oyuncu <b>ayakta ve dik</b> olmalıdır — doğru anı bilen operatördür,
-        /// bu yüzden tetikleyici bir düğmedir. Kalibresiz oyuncuya komut gönderilmez (sunucu keser),
-        /// sebebi duyuru satırında görünür.</para>
+        /// Triggers a body measurement; <paramref name="playerId"/> <b>0 = EVERYONE</b> (§10.8).
+        /// The server forwards only; the headset measures, answers <c>set_body_scale</c> and the
+        /// result spreads through the roster.
+        /// <para>⚠️ The player must be <b>standing upright</b> at that moment — only the operator
+        /// knows when, hence a manual button. Uncalibrated players are rejected by the server, with
+        /// the reason on the notice line.</para>
         /// </summary>
         public static void MeasureBodyScale(int playerId)
         {
@@ -372,7 +350,7 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Elle yeniden bağlanma (bağlantı kesildikten sonra tek geri dönüş yolu).</summary>
+        /// <summary>Manual reconnect — the only way back after a disconnect.</summary>
         public static void Reconnect()
         {
             ArenaClient client = ArenaClient.Instance;
@@ -402,8 +380,8 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Sunucuya gitmeyen, yalnız arayüzde gösterilecek bilgi (ör. yerel harita önizlemesi).
-        /// Komut kanalıyla aynı durum satırını kullanır ki operatör tek yere baksın.
+        /// Local-only notice (e.g. map preview) that never reaches the server. Shares the command
+        /// status line so the operator has one place to look.
         /// </summary>
         public static void Note(string text)
         {

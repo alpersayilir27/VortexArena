@@ -3,22 +3,15 @@ using UnityEngine;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Silah seslerini namludaki 3D AudioSource üzerinden çalar. Kaynak, proje
-    /// spatializer'ı (Meta XR Audio) ile konumlandırılır: atışlar hem atıcı hem
-    /// yakındaki oyuncular için arenada doğru yerden duyulur.
-    /// <para>
-    /// ⚠️ <b>Klip/pitch/volume'ün TEK kaynağı <see cref="WeaponDefinition"/>'dır</b>
-    /// (<c>WD_&lt;Ad&gt;.asset</c>, <see cref="Configure"/> ile bağlanır) — bu bileşende klip alanı
-    /// YOKTUR ve eklenmez. Eskiden "tanım atanmazsa" diye Inspector yedekleri vardı; onlar
-    /// ulaşılamaz koddu (<see cref="Weapon"/> tanımsız silahı hata basıp KİLİTLER, yani ateş hiç
-    /// edilmez ve buraya sıra gelmez) ama Inspector'da ikinci bir "Fire Clips" listesi göstererek
-    /// sesin hangi asset'ten geldiğini belirsizleştiriyordu. Ses değişikliği daima
-    /// <c>WD_&lt;Ad&gt;.asset</c>'te yapılır.
-    /// </para>
-    /// <para>
-    /// Şarjör sesleri (<see cref="PlayMagOut"/> / <see cref="PlayMagIn"/>) reload başlangıcında
-    /// DEĞİL, WeaponAnimator'ın zaman çizgisinde çalınır — bu sınıf zamanlama tutmaz, yalnız çalar.
-    /// </para>
+    /// Plays weapon sounds through the 3D AudioSource at the muzzle, spatialized by the project
+    /// spatializer (Meta XR Audio) so shots come from the right place for shooter and bystanders.
+    /// <para>⚠️ The SINGLE source of clip/pitch/volume is <see cref="WeaponDefinition"/>
+    /// (<c>WD_&lt;Name&gt;.asset</c>, bound via <see cref="Configure"/>) — this component has NO
+    /// clip field and none is added. The old "if no definition" Inspector fallbacks were
+    /// unreachable (<see cref="Weapon"/> LOCKS a weapon without a definition) yet a second "Fire
+    /// Clips" list blurred which asset the sound came from.</para>
+    /// <para>Magazine sounds (<see cref="PlayMagOut"/> / <see cref="PlayMagIn"/>) are played on
+    /// WeaponAnimator's timeline, not at reload start — this class keeps no timing.</para>
     /// </summary>
     public class WeaponAudio : MonoBehaviour
     {
@@ -28,9 +21,9 @@ namespace VortexArena.Core.Combat
         private WeaponDefinition definition;
 
         /// <summary>
-        /// Ses değerlerinin kaynağını bağlar (<see cref="Weapon"/> Awake'te çağırır).
-        /// null verilebilir ve o zaman bu bileşen TÜMÜYLE sessizdir — tanımsız silah zaten
-        /// <see cref="Weapon"/> tarafından kilitleniyor, yani bu durum bir arıza göstergesidir.
+        /// Binds the source of the audio values (called by <see cref="Weapon"/> in Awake).
+        /// null leaves this component COMPLETELY silent — a definition-less weapon is already
+        /// locked by <see cref="Weapon"/>, so that state is a fault indicator.
         /// </summary>
         public void Configure(WeaponDefinition definition)
         {
@@ -46,9 +39,9 @@ namespace VortexArena.Core.Combat
             if (clips == null || clips.Length == 0)
                 return;
 
-            // ⚠️ Seçilen eleman NULL olabilir: dizinin boyu doldurulmuş ama bir yuvası boş
-            // bırakılmış olabilir (Inspector'da sık). O atış sessiz geçer — dizi boyuna bakıp
-            // "klip var" saymak, yarısı boş bir listede atışların yarısını sessizleştirirdi.
+            // ⚠️ The picked element may be NULL (array sized but a slot left empty — common in the
+            // Inspector). That shot goes silent; inferring "there is a clip" from the array length
+            // would mute half the shots on a half-empty list.
             AudioClip clip = clips[Random.Range(0, clips.Length)];
             if (clip == null)
                 return;
@@ -78,7 +71,7 @@ namespace VortexArena.Core.Combat
             PlayClip(definition != null ? definition.PickupClip : null);
         }
 
-        /// <summary>Klip null ise sessiz no-op (her silahın her sesi olmak zorunda değil).</summary>
+        /// <summary>Silent no-op when the clip is null (not every weapon must have every sound).</summary>
         private void PlayClip(AudioClip clip)
         {
             if (source == null || clip == null)

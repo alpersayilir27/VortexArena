@@ -6,24 +6,22 @@ using UnityEngine.SceneManagement;
 namespace VortexArena.Net.Editor
 {
     /// <summary>
-    /// sceneId bekçisi: her sahne KAYDINDA 0 kalan ve ÇAKIŞAN
-    /// <see cref="NetIdentity.SceneId"/> değerlerini onarır — Mirror'ın sceneId bake
-    /// deseninin sade hali.
+    /// The sceneId guard: on every scene SAVE it repairs <see cref="NetIdentity.SceneId"/> values left
+    /// at 0 or COLLIDING — a plain version of Mirror's sceneId bake pattern.
     /// <para>
-    /// Asıl derdi SAHNE KOPYALAMA: elle "Save As" ya da bir sahnenin çoğaltılması
-    /// ile üretilen kopyada tüm id'ler kaynak sahneyle birebir aynı gelir. Bekçi kayıt anında
-    /// çakışmaları ayırdığı için kimse elle id yönetmez, kopyalanan arena kutudan çıkar çıkmaz
-    /// tutarlıdır.
+    /// It exists for SCENE COPYING: a "Save As" or duplicated scene comes out with ids identical to the
+    /// source's. Separating collisions at save time means nobody manages ids by hand and a copied arena
+    /// is consistent out of the box.
     /// </para>
-    /// Sahnede hiç NetIdentity yoksa (bugünkü sahnelerin çoğu) tamamen sessizdir.
+    /// Completely silent when the scene has no NetIdentity (most of today's scenes).
     /// </summary>
     [InitializeOnLoad]
     internal static class SceneIdGuard
     {
         static SceneIdGuard()
         {
-            // Statik ctor domain reload dışında da yeniden koşabildiği için önce söküyoruz:
-            // çift abonelik = çift onarım + çift log.
+            // The static ctor can run again outside a domain reload, so we unsubscribe first:
+            // a double subscription = double repair + double log.
             EditorSceneManager.sceneSaving -= HandleSceneSaving;
             EditorSceneManager.sceneSaving += HandleSceneSaving;
         }

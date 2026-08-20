@@ -4,97 +4,101 @@ using UnityEngine;
 namespace VortexArena.Core.Player
 {
     /// <summary>
-    /// Rig'in GÖRSEL temsillerini ayıklar: <b>oyuncu gözlükte yalnız rig'in sentetik ellerini
-    /// görür</b> — kumanda modeli çizilmez, mesafeli kavramanın hayalet elleri çizilmez, <b>işaret
-    /// ışını (ray) çizilmez</b>, gövde/kol hiç yoktur.
+    /// Prunes the rig's VISUAL representations: <b>in the headset the player sees only the rig's
+    /// synthetic hands</b> — no controller model is drawn, no ghost hands of distance grabbing are
+    /// drawn, <b>no pointer ray is drawn</b>, and there is no body/arm at all.
     /// <para>
-    /// ⚠️ <b>Işında kapatılan şey INTERACTOR değil onun <c>Visuals</c> düğümüdür.</b>
-    /// (<c>ControllerRayInteractor</c> ve <c>HandRayInteractor</c> altında.) Interactor'ın kendisi
-    /// ayakta kalır: ISDK'nın UI işaretleme yolu (<c>PointableCanvasModule</c>) ona bağlı ve bu
-    /// bileşenin işi davranış kapatmak değil GÖRSEL susturmaktır. Arena tarafında ışının çizecek bir
-    /// hedefi yok — silah çerçevesi kendi göstergesini çiziyor, kavrama yakın/mesafeli grab ile
-    /// oluyor — yani çizilen ışın oyuncunun ekranında yalnız gürültüdür.
+    /// ⚠️ <b>For the ray, what is disabled is NOT the INTERACTOR but its <c>Visuals</c> node.</b>
+    /// (Under <c>ControllerRayInteractor</c> and <c>HandRayInteractor</c>.) The interactor itself stays
+    /// alive: ISDK's UI pointing path (<c>PointableCanvasModule</c>) depends on it, and this
+    /// component's job is to silence VISUALS, not to disable behaviour. On the arena side the ray has
+    /// nothing to point at — the weapon frame draws its own indicator and grabbing happens through
+    /// near/distance grab — so a drawn ray is nothing but noise on the player's screen.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Oyuncunun gördüğü el buradan GELMEZ ve buraya DOKUNULMAZ:</b> o el ISDK'nın sentetik
-    /// elidir (<c>OVRHandVisualLeft</c>/<c>OVRHandVisualRight</c> → <c>SyntheticHandData</c>) ve
-    /// kendi <c>HandVisual</c>'ı tarafından sürülür. Bu bileşenin tek işi onun ÜSTÜNE binen ikinci
-    /// görselleri susturmaktır — hepsi birden çizilirse oyuncu iç içe geçmiş eller ve elinde
-    /// duran bir kumanda modeli görür.
+    /// ⚠️ <b>The hand the player sees does NOT come from here and is NOT touched here:</b> that hand is
+    /// ISDK's synthetic hand (<c>OVRHandVisualLeft</c>/<c>OVRHandVisualRight</c> →
+    /// <c>SyntheticHandData</c>) and is driven by its own <c>HandVisual</c>. This component's only job
+    /// is to silence the secondary visuals that overlay it — if they were all drawn at once the player
+    /// would see intersecting hands and a controller model sitting in their hand.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Sentetik elin görünmesi bu bileşene DEĞİL, tek bir rig ayarına bağlıdır:</b>
-    /// <c>OVRManager.controllerDrivenHandPosesType</c> (<c>VA_CameraRig</c> prefabında
-    /// <c>Natural</c>). <c>None</c> olursa kumanda tutulurken el verisi hiç üretilmez,
-    /// <c>HandVisual</c> mesh'ini kendi kapatır ve oyuncu HİÇBİR el görmez — bu bileşende hiçbir
-    /// şey değişmemiş olsa bile.
+    /// ⚠️ <b>Whether the synthetic hand is visible does NOT depend on this component but on a single
+    /// rig setting:</b> <c>OVRManager.controllerDrivenHandPosesType</c> (<c>Natural</c> in the
+    /// <c>VA_CameraRig</c> prefab). If it becomes <c>None</c>, no hand data is produced at all while a
+    /// controller is held, <c>HandVisual</c> disables its own mesh and the player sees NO hands — even
+    /// if nothing changed in this component.
     /// </para>
     /// <para>
-    /// ⚠️ <b>ADLAR NEREDEYSE AYNI — yalnız kelime SIRASI farklı.</b> Rig'de iki ayrı el ailesi var:
+    /// ⚠️ <b>THE NAMES ARE ALMOST IDENTICAL — only the word ORDER differs.</b> There are two separate
+    /// hand families in the rig:
     /// <list type="bullet">
-    /// <item><c>OVRHandVisualLeft</c> / <c>OVRHandVisualRight</c> — <b>oyuncunun gördüğü el</b>,
-    /// etkileşim rig'inin doğrudan çocuğu. Hiç dokunulmaz.</item>
-    /// <item><c>OVRLeftHandVisual</c> / <c>OVRRightHandVisual</c> — mesafeli kavrama hayaleti,
-    /// <c>…/DistanceHandGrabInteractor/Visuals/…Reticle/…Synthetic/</c> altında. Objesi
-    /// kapatılır.</item>
+    /// <item><c>OVRHandVisualLeft</c> / <c>OVRHandVisualRight</c> — <b>the hand the player sees</b>, a
+    /// direct child of the interaction rig. Never touched.</item>
+    /// <item><c>OVRLeftHandVisual</c> / <c>OVRRightHandVisual</c> — the distance-grab ghost, under
+    /// <c>…/DistanceHandGrabInteractor/Visuals/…Reticle/…Synthetic/</c>. Its object is
+    /// disabled.</item>
     /// </list>
-    /// İkisinin de bileşen tipi aynıdır (<c>HandVisual</c>), yani tip onları ayıramaz; ayıran tek
-    /// şey addır. Bu yüzden eşleşme <b>tam ad</b> iledir (içerir DEĞİL): "contains" iki aileyi de
-    /// yakalar, gerçek eller de kapatılır ve <b>oyuncu ellerini tümden kaybeder</b>. Ad listesi
-    /// hiçbir şeyle eşleşmezse <see cref="ErrorNoDrivenHandVisual"/> bunu açıkça bildirir.
+    /// Both have the same component type (<c>HandVisual</c>), so the type cannot tell them apart; the
+    /// only thing that can is the name. That is why matching uses the <b>full name</b> (NOT contains):
+    /// "contains" would catch both families, the real hands would be disabled too and <b>the player
+    /// would lose their hands entirely</b>. If the name list matches nothing,
+    /// <see cref="ErrorNoDrivenHandVisual"/> reports it explicitly.
     /// </para>
     /// <para>
-    /// <b>Neden isim deseni DEĞİL bileşen tipi (kapatılanlar için):</b> <c>questController_animrig</c>
-    /// gibi bir ad deseni 24 objeyle eşleşiyor ama <b>hiçbiri aktif değil</b> — o Quest 1 / Rift S
-    /// varyantı. Quest 3'te aktif olan varyant <c>MetaQuestTouchPlus_Left/Right</c> ve desene HİÇ
-    /// uymuyor. GameObject adı donanım varyantına göre değişir; <b>bileşen tipi değişmez</b>. Ad
-    /// yalnız "hangi el OYUNCUNUN" sorusunda kullanılır ve o soruyu tip cevaplayamaz (altı objenin
-    /// de bileşeni aynı).
+    /// <b>Why the component type and NOT a name pattern (for the ones being disabled):</b> a name
+    /// pattern like <c>questController_animrig</c> matches 24 objects but <b>none of them is
+    /// active</b> — that is the Quest 1 / Rift S variant. The variant active on Quest 3 is
+    /// <c>MetaQuestTouchPlus_Left/Right</c> and does not match the pattern AT ALL. The GameObject name
+    /// changes with the hardware variant; <b>the component type does not</b>. The name is used only for
+    /// the question "which hand is THE PLAYER'S", and the type cannot answer that (all six objects have
+    /// the same component).
     /// </para>
     /// <para>
-    /// ⚠️ <b>DOKUNULMAYANLAR</b> — kavrama/etkileşim bunlara bağlıdır, kapatılırsa oyun kırılır:
-    /// <c>SyntheticHand</c>, <c>OVRHand</c>, interactor'lar, <c>HandSphereMap</c>. Bu yüzden tarama
-    /// iki tiple SINIRLI tutulur, "eli andıran her şey" süpürülmez.
+    /// ⚠️ <b>THE UNTOUCHABLES</b> — grabbing/interaction depends on these, disabling them breaks the
+    /// game: <c>SyntheticHand</c>, <c>OVRHand</c>, the interactors, <c>HandSphereMap</c>. That is why
+    /// the scan is kept LIMITED to two types instead of sweeping up "anything that resembles a hand".
     /// </para>
     /// <para>
-    /// Her karede yeniden gizlenir: bu görseller kumanda bırakılıp tutulduğunda Meta tarafından
-    /// yeniden AKTİFLEŞTİRİLİYOR — tek seferlik gizleme kalıcı olmuyor.
+    /// Hiding is redone every frame: these visuals are RE-ACTIVATED by Meta when a controller is put
+    /// down and picked up again — a one-shot hide does not stick.
     /// </para>
     /// </summary>
     public class ControllerModelHider : MonoBehaviour
     {
         /// <summary>
-        /// Taranacak ikinci tip: ISDK'nın el görseli.
-        /// <para>⚠️ Tip <b>doğrudan yazılamaz</b> (<c>Oculus.Interaction.Input.HandVisual</c>):
-        /// yazmak Core asmdef'ine bir <c>Oculus.Interaction</c> referansı eklemeyi gerektirirdi.
-        /// Bunun yerine <see cref="MonoBehaviour"/> taranıp tip ADI karşılaştırılır — bu ad
-        /// GameObject adının aksine donanım varyantına göre değişmez.</para>
+        /// The second type to scan for: ISDK's hand visual.
+        /// <para>⚠️ The type <b>cannot be written directly</b> (<c>Oculus.Interaction.Input.HandVisual</c>):
+        /// writing it would require adding an <c>Oculus.Interaction</c> reference to the Core asmdef.
+        /// Instead <see cref="MonoBehaviour"/>s are scanned and the type NAME is compared — unlike the
+        /// GameObject name, that name does not change with the hardware variant.</para>
         /// </summary>
         private const string HandVisualTypeName = "HandVisual";
 
         /// <summary>
-        /// Taranacak üçüncü tip: ISDK'nın işaret ışını interactor'ı (hem kumanda hem el dalında
-        /// <b>aynı</b> tiptir — <c>ControllerRayInteractor</c> ve <c>HandRayInteractor</c> objeleri
-        /// ayrı ama bileşenleri aynı, yani tek tip ikisini de yakalar).
-        /// <para>⚠️ Tip yine ADIYLA aranır: doğrudan yazmak Core asmdef'ine
-        /// <c>Oculus.Interaction</c> referansı eklemek olurdu.</para>
+        /// The third type to scan for: ISDK's pointer ray interactor (it is the <b>same</b> type on both
+        /// the controller and the hand branch — the <c>ControllerRayInteractor</c> and
+        /// <c>HandRayInteractor</c> objects are separate but their components are identical, so a single
+        /// type catches both).
+        /// <para>⚠️ The type is again looked up BY NAME: writing it directly would mean adding an
+        /// <c>Oculus.Interaction</c> reference to the Core asmdef.</para>
         /// </summary>
         private const string RayInteractorTypeName = "RayInteractor";
 
         /// <summary>
-        /// Işın interactor'ının altındaki görsel kapsayıcı — kapatılan tek şey budur.
-        /// <para>⚠️ Interactor'ın KENDİSİ kapatılmaz (sınıf açıklaması): görsel gürültüyü almak için
-        /// davranışı söküp atmak, ileride bir dünya arayüzüne işaret etmek gerektiğinde sebebi
-        /// bulunamayacak bir kayıp olurdu.</para>
+        /// The visual container under the ray interactor — this is the only thing that gets disabled.
+        /// <para>⚠️ The interactor ITSELF is not disabled (see the class documentation): ripping out the
+        /// behaviour just to remove visual noise would be a loss whose cause could not be found later,
+        /// when pointing at a world UI becomes necessary.</para>
         /// </summary>
         private const string RayVisualsNodeName = "Visuals";
 
         /// <summary>
-        /// Tüm rig'i yeniden tarama aralığı (sn). ⚠️ <b>Her kare taranmaz:</b> rig yüzlerce bileşen
-        /// taşıyor ve tüm alt ağacı her karede gezmek Quest'te ölçülebilir bir maliyettir. Yeni bir
-        /// görsel ancak rig yeniden kurulunca ortaya çıkar (insan zaman ölçeğinde nadir); Meta'nın
-        /// bırak-tut'ta yaptığı şey ise yeni obje üretmek değil BİLİNEN objeyi geri açmaktır — o da
-        /// aşağıda her kare kapatılıyor.
+        /// Interval for rescanning the whole rig (s). ⚠️ <b>It is not scanned every frame:</b> the rig
+        /// carries hundreds of components and walking the entire subtree every frame is a measurable
+        /// cost on Quest. A new visual only appears when the rig is rebuilt (rare on a human time
+        /// scale); what Meta does on put-down/pick-up is not to create a new object but to re-enable a
+        /// KNOWN one — and that one is disabled every frame below.
         /// </summary>
         private const float RescanIntervalSeconds = 0.5f;
 
@@ -112,18 +116,18 @@ namespace VortexArena.Core.Player
         private Transform rigRoot;
         private readonly List<MonoBehaviour> scanBuffer = new List<MonoBehaviour>(256);
 
-        /// <summary>Objesi tümden kapatılacak görsel kökler (kumanda modelleri + hayalet eller).</summary>
+        /// <summary>Visual roots whose object gets fully disabled (controller models + ghost hands).</summary>
         private readonly List<GameObject> targets = new List<GameObject>(16);
 
-        /// <summary>Zaten loglanmışlar: gizleme her kare TEKRARLANIR ama log bir kez basılır.</summary>
+        /// <summary>Already logged ones: hiding is REPEATED every frame but the log is printed once.</summary>
         private readonly HashSet<GameObject> logged = new HashSet<GameObject>();
 
         private float rescanTimer = float.NegativeInfinity;
 
-        /// <summary>"Oyuncunun eli bulunamadı" hatası oturum başına bir kez.</summary>
+        /// <summary>The "player's hand not found" error, once per session.</summary>
         private static bool erroredNoDrivenHandVisual;
 
-        /// <summary>"Işının görsel düğümü bulunamadı" uyarısı oturum başına bir kez.</summary>
+        /// <summary>The "ray's visual node not found" warning, once per session.</summary>
         private static bool warnedNoRayVisuals;
 
         private void LateUpdate()
@@ -133,20 +137,21 @@ namespace VortexArena.Core.Player
                 GameObject go = string.IsNullOrEmpty(rigRootName) ? null : GameObject.Find(rigRootName);
                 if (go == null)
                 {
-                    // İsim tutmadı: rig prefabı yeniden adlandırılmış ya da sahnede başka bir adla
-                    // duruyor olabilir. Kimliği ADI değil BİLEŞENİ belirler — tipten ara.
+                    // The name did not match: the rig prefab may have been renamed or may sit in the
+                    // scene under a different name. Its identity is determined by its COMPONENT, not
+                    // its NAME — search by type.
                     OVRCameraRig rig = FindFirstObjectByType<OVRCameraRig>();
                     go = rig != null ? rig.gameObject : null;
                 }
 
                 if (go == null)
                 {
-                    return; // rig henüz sahnede değil — sonraki karede tekrar denenir
+                    return; // the rig is not in the scene yet — retried next frame
                 }
 
                 rigRoot = go.transform;
                 targets.Clear();
-                rescanTimer = float.NegativeInfinity; // yeni rig: hemen tara
+                rescanTimer = float.NegativeInfinity; // new rig: scan immediately
             }
 
             if (Time.unscaledTime - rescanTimer >= RescanIntervalSeconds)
@@ -155,9 +160,9 @@ namespace VortexArena.Core.Player
                 Rescan();
             }
 
-            // ⚠️ Gizleme her kare TEKRARLANIR: Meta bu görselleri kumanda bırakılıp tutulduğunda
-            // geri açıyor. "Bir kez gizlediysem bir daha bakmam" kısayolu tam da bu yüzden yanlıştır —
-            // görsel geri gelir ve sessizce görünür kalırdı.
+            // ⚠️ Hiding is REPEATED every frame: Meta re-enables these visuals when a controller is put
+            // down and picked up again. The "once hidden, never look again" shortcut is wrong for
+            // exactly this reason — the visual would come back and silently stay visible.
             for (int i = targets.Count - 1; i >= 0; i--)
             {
                 GameObject target = targets[i];
@@ -182,9 +187,9 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Rig altındaki gizlenecek görselleri yeniden bulur (tek geçişte iki tip birden).
-        /// <para>Oyuncunun gördüğü el görselleri listeye HİÇ alınmaz — ne objesine ne
-        /// Renderer'ına dokunulur.</para></summary>
+        /// <summary>Re-finds the visuals to hide under the rig (both types in a single pass).
+        /// <para>The hand visuals the player sees are NEVER added to the list — neither their object
+        /// nor their Renderer is touched.</para></summary>
         private void Rescan()
         {
             rigRoot.GetComponentsInChildren(true, scanBuffer);
@@ -214,7 +219,7 @@ namespace VortexArena.Core.Player
 
                 if (isRayInteractor)
                 {
-                    // Kapatılan interactor DEĞİL, altındaki görsel kapsayıcı.
+                    // What gets disabled is NOT the interactor but the visual container under it.
                     raysSeen++;
                     Transform visuals = mb.transform.Find(RayVisualsNodeName);
                     if (visuals == null)
@@ -231,7 +236,7 @@ namespace VortexArena.Core.Player
                     if (IsPlayerHand(target.name))
                     {
                         handVisualsDriven++;
-                        continue; // oyuncunun gördüğü el: hiç dokunulmaz
+                        continue; // the hand the player sees: never touched
                     }
                 }
 
@@ -252,8 +257,8 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Bu el görseli oyuncunun gördüğü el mi — <b>tam ad</b> eşleşmesi (gerekçe sınıf
-        /// açıklamasında: hayalet ellerin adı yalnız kelime sırasıyla ayrılıyor).</summary>
+        /// <summary>Is this hand visual the hand the player sees — a <b>full name</b> match (rationale in
+        /// the class documentation: the ghost hands' names differ only by word order).</summary>
         private bool IsPlayerHand(string objectName)
         {
             if (drivenHandVisuals == null)
@@ -273,11 +278,11 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Rig'de el görseli var ama hiçbiri listeyle eşleşmedi → <b>hepsi kapatıldı, oyuncu
-        /// ellerini tümden kaybetti.</b>
-        /// <para>⚠️ Uyarı değil HATA: oyuncunun ekranında çizilen tek el bunlar, yani belirtisi
-        /// "izleme bozuk / eller kayboldu" diye okunur — oysa tek eksik, Meta SDK'sının
-        /// değiştirdiği bir GameObject adıdır.</para>
+        /// There are hand visuals in the rig but none matched the list → <b>they were all disabled and
+        /// the player lost their hands entirely.</b>
+        /// <para>⚠️ An ERROR, not a warning: these are the only hands drawn on the player's screen, so
+        /// the symptom reads as "tracking is broken / the hands are gone" — whereas the only thing
+        /// missing is a GameObject name that the Meta SDK changed.</para>
         /// </summary>
         private void ErrorNoDrivenHandVisual()
         {
@@ -297,10 +302,10 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Rig'de ışın interactor'ı var ama hiçbirinin altında görsel kapsayıcı bulunamadı →
-        /// <b>ışın çizilmeye devam eder.</b>
-        /// <para>⚠️ Hata değil UYARI: oyun çalışır, yalnız oyuncu elinden çıkan bir çizgi görür.
-        /// Sebebi tek bir şey olabilir — ISDK düğümü yeniden adlandırmıştır; bakılacak yer
+        /// There are ray interactors in the rig but no visual container was found under any of them →
+        /// <b>the ray keeps being drawn.</b>
+        /// <para>⚠️ A WARNING, not an error: the game works, the player just sees a line coming out of
+        /// their hand. There can be only one cause — ISDK renamed the node; the place to look is
         /// <see cref="RayVisualsNodeName"/>.</para>
         /// </summary>
         private void WarnNoRayVisuals()

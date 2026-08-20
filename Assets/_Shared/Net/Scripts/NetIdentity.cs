@@ -4,17 +4,17 @@ using UnityEngine;
 namespace VortexArena.Net
 {
     /// <summary>
-    /// Sahne objesinin bake'li ağ kimliği (<c>sceneId</c>).
+    /// The baked network id of a scene object (<c>sceneId</c>).
     /// <para>
-    /// ⚠️ v1'de OYUNCU senkronu <c>playerId</c> ile gider (Snapshot/PoseData) — bu bileşen
-    /// oyuncuya/avatara TAKILMAZ. NetIdentity YALNIZ SAHNE OBJELERİ içindir: ileriki dinamik
-    /// obje senkronunun (kapı, pickup, kırılabilir kapak) altyapısıdır.
+    /// ⚠️ In v1 PLAYER sync rides <c>playerId</c> (Snapshot/PoseData), so this component is NOT ATTACHED
+    /// to a player/avatar. SCENE OBJECTS ONLY: groundwork for future dynamic object sync (door, pickup,
+    /// breakable cover).
     /// </para>
-    /// <see cref="SceneId"/> ELLE yazılmaz, sahne kaydında bake'lenir: atama
-    /// <c>GameObject &gt; VortexArena &gt; Network Parent</c> menüsüyle, 0 kalan ve çakışan
-    /// id'lerin onarımı kayıt sırasında <c>SceneIdGuard</c> ile yapılır (VortexArena.Net.Editor).
-    /// Kayıt <see cref="OnEnable"/>/<see cref="OnDisable"/> ile yapılır; sahne değişiminde
-    /// statik liste kendiliğinden boşalır (sızıntı yok).
+    /// <see cref="SceneId"/> is never written by hand: assigned through
+    /// <c>GameObject &gt; VortexArena &gt; Network Parent</c> and repaired on save by
+    /// <c>SceneIdGuard</c> when left at 0 or colliding. Registration via
+    /// <see cref="OnEnable"/>/<see cref="OnDisable"/>; the static list empties itself on a scene change
+    /// (no leak).
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class NetIdentity : MonoBehaviour
@@ -24,10 +24,10 @@ namespace VortexArena.Net
 
         private static readonly List<NetIdentity> Registry = new List<NetIdentity>();
 
-        /// <summary>Sahne içinde benzersiz, kayıtta bake'lenen ağ kimliği (0 = atanmamış).</summary>
+        /// <summary>Network id, unique within the scene and baked on save (0 = unassigned).</summary>
         public uint SceneId => sceneId;
 
-        /// <summary>Sahnede aktif olan tüm ağ kimlikleri (salt okunur).</summary>
+        /// <summary>All network identities active in the scene (read-only).</summary>
         public static IReadOnlyList<NetIdentity> All => Registry;
 
         private void OnEnable()
@@ -44,8 +44,8 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// sceneId ile kimlik bulur; eşleşme yoksa null. 0 sorgusu HER ZAMAN null döner —
-        /// bake edilmemiş obje ağ üzerinden adreslenemez.
+        /// Finds an identity by sceneId; null when there is no match. A query for 0 ALWAYS returns null
+        /// — an object that has not been baked cannot be addressed over the network.
         /// </summary>
         public static NetIdentity Find(uint sceneId)
         {

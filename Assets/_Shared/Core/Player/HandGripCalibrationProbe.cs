@@ -2,58 +2,54 @@ using UnityEngine;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>
-    /// Geliştirici aracı: anchor uzayındaki <b>tahmini</b> iki sabiti cihazda ölçer ve doğrudan
-    /// koda yapıştırılabilir biçimde loglar — <see cref="HandGripConvention"/>'ın el ANATOMİSİ
-    /// (parmak yönü + avuç normali) ve <see cref="HandGripPivot"/>'un avuç OFSETİ (bileğin anchor'a
-    /// göre konumu). İkisi aynı örneklemeden çıkar: ayrı ölçülselerdi biri elin bir duruşunu,
-    /// öteki başkasını yakalar ve sabitler birbiriyle tutarsız kalırdı.
-    /// <para>
-    /// <b>Kaynak neden BB rig'inin kendi eli:</b> oyuncu kumandayı tutarken kendi ellerini doğru
-    /// yerde görüyor — yani ISDK'nın kumandadan sürdüğü el iskeleti, aradığımız "anchor'a göre el
-    /// nerede duruyor" sorusunun CANLI ve doğru cevabıdır. Ölçüm o iskeletin bileğinden alınır
-    /// (<c>OVRHandVisualLeft/Right → OculusHand_* → b_*_wrist</c>).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Denenip elenen iki yol</b> (tekrar denenmesin): (1) <c>OVRInput.Controller.LHand/RHand</c>
-    /// kumanda tutulurken elin pozunu verir ama <b>multimodal</b> (eşzamanlı el+kumanda) ister —
-    /// projede kapalı, <c>GetControllerIsInHandState</c> hep "el yok" döner. (2) Mesafeli kavrama
-    /// önizlemesindeki kopyalar (<c>OVRLeftHandVisual</c>/<c>OVRRightHandVisual</c>)
-    /// <see cref="ControllerModelHider"/> tarafından kapatılır; onların kemikleri sürülmez.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>O iki ad yalnız kelime SIRASIYLA ayrılır ve karıştırmak sessizce bind pozu ölçtürür:</b>
-    /// ölçümün kaynağı <c>OVRHandVisual<i>Left</i></c>, elenen kopya ise <c>OVR<i>Left</i>HandVisual</c>.
-    /// Kaynağı açık tutan şey <see cref="ControllerModelHider"/>'ın "Driven Hand Visuals"
-    /// listesidir: o listedeki el görseline hiç dokunulmaz (oyuncunun gördüğü el odur), yani
-    /// iskeleti sürülmeye devam eder. Bu probe'un çalışması için gizleyiciyi kapatmak GEREKMEZ.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Ön koşul: <c>OVRManager.controllerDrivenHandPosesType</c> <c>None</c> OLMAMALI</b>
-    /// (<c>VA_CameraRig</c> prefabında <c>Natural</c>). <c>None</c> iken kumanda tutulurken el
-    /// verisi hiç üretilmez, iskelet bind pozunda kalır ve prob <b>hatasız ama yanlış</b> bir
-    /// sabit basar.
-    /// </para>
-    /// <para>
-    /// <b>Kullanımı:</b> <c>VA_CameraRig</c> prefabında durur, iki kumanda da normal tutulurken bir
-    /// kez log basıp kendini kapatır; çıkan satırlar <see cref="HandGripConvention"/> ve
-    /// <see cref="HandGripPivot"/> içindeki tahmini sabitlerin yerine yapıştırılır.
-    /// </para>
-    /// </summary>
+    /// <summary>Dev tool: measures the hand's two anchor-space terms on device — the hand ANATOMY
+    /// (finger direction + palm normal) and <see cref="HandGripPivot"/>'s palm OFFSET (wrist position
+    /// relative to the anchor).</summary>
+    /// <remarks>
+    /// Both come from the same sampling run: measured separately they would capture different hand
+    /// poses and the constants would be mutually inconsistent.
+    /// <para><b>Why the BB rig's own hand is the source:</b> the player sees their hands in the right
+    /// place while holding a controller, so ISDK's controller-driven hand skeleton is the LIVE, correct
+    /// answer to "where is the hand relative to the anchor". Measured at that skeleton's wrist
+    /// (<c>OVRHandVisualLeft/Right → OculusHand_* → b_*_wrist</c>).</para>
+    /// <para>⚠️ <b>Two dead ends, do not retry:</b> (1) <c>OVRInput.Controller.LHand/RHand</c> gives the
+    /// hand pose while holding a controller but needs <b>multimodal</b> (simultaneous hand+controller),
+    /// disabled in this project — <c>GetControllerIsInHandState</c> always returns "no hand".
+    /// (2) The distance-grab preview copies (<c>OVRLeftHandVisual</c>/<c>OVRRightHandVisual</c>) are
+    /// disabled by <see cref="ControllerModelHider"/>; their bones are not driven.</para>
+    /// <para>⚠️ <b>Those two names differ only by word ORDER and mixing them silently measures the bind
+    /// pose:</b> the source is <c>OVRHandVisual<i>Left</i></c>, the discarded copy is
+    /// <c>OVR<i>Left</i>HandVisual</c>. The source stays enabled because of
+    /// <see cref="ControllerModelHider"/>'s "Driven Hand Visuals" list. Disabling the hider is NOT
+    /// needed for this probe.</para>
+    /// <para>⚠️ <b>Precondition: <c>OVRManager.controllerDrivenHandPosesType</c> must NOT be
+    /// <c>None</c></b> (<c>Natural</c> in the <c>VA_CameraRig</c> prefab). At <c>None</c> no hand data
+    /// is produced while holding a controller, the skeleton stays in bind pose and the probe prints an
+    /// <b>error-free but wrong</b> constant.</para>
+    /// <para>⚠️ <b>The anatomy half is a CROSS-CHECK, not a paste target any more:</b>
+    /// <see cref="HandGripConvention.AnchorBasis"/> measures the same quantity at runtime from the
+    /// synthetic hand's own skeleton. Pasting a device reading over the last-resort constants there
+    /// would give the remote wrist a second, slightly different description of the hand the player is
+    /// already holding. What the reading is still good for: if it disagrees with the runtime basis by
+    /// more than the hand's own tremor, the skeleton being read is not the one being drawn.</para>
+    /// <para><b>Usage:</b> lives in the <c>VA_CameraRig</c> prefab; with both controllers held normally
+    /// it logs once and disables itself. The palm OFFSET lines are still pasted straight into
+    /// <see cref="HandGripPivot"/>.</para>
+    /// </remarks>
     public class HandGripCalibrationProbe : MonoBehaviour
     {
-        /// <summary>Ortalamaya girecek geçerli kare sayısı — el titremesi sönsün diye birden çok.</summary>
+        /// <summary>Valid frames to average — several, so hand tremor cancels out.</summary>
         private const int RequiredSamples = 30;
 
-        /// <summary>Bu süre boyunca hiç geçerli kare gelmezse ölçüm yapılamıyor demektir (sn).</summary>
+        /// <summary>No valid frame for this long means measurement is impossible (s).</summary>
         private const float NoDataTimeoutSeconds = 10f;
 
-        /// <summary>Kareler arası sapma bunu aşarsa ölçüm oturmamıştır (derece).</summary>
+        /// <summary>Frame-to-frame deviation above this means the measurement never settled (degrees).</summary>
         private const float UnstableAngleDegrees = 5f;
 
-        /// <summary>Aynı kontrolün KONUM karşılığı (m). Ayrı bir eşik gerekiyor çünkü avuç ofseti
-        /// birkaç santimlik bir ölçü: derece cinsinden kararlı görünen bir örnekleme, konumda
-        /// tümüyle kaymış olabilir.</summary>
+        /// <summary>POSITION counterpart of the same check (m). A separate threshold is needed because the
+        /// palm offset is a few centimetres: a run that looks stable in degrees may have drifted
+        /// completely in position.</summary>
         private const float UnstablePositionMeters = 0.01f;
 
         private OVRCameraRig _rig;
@@ -63,10 +59,10 @@ namespace VortexArena.Core.Player
         private int _sampleCount;
         private float _elapsed;
 
-        // Yön ortalaması: aradığımız şey zaten iki yön vektörü, quaternion ortalamasına gerek yok.
+        // Direction averaging: we only want two direction vectors, no quaternion averaging needed.
         private Vector3 _leftFingerSum, _leftPalmSum, _rightFingerSum, _rightPalmSum;
 
-        // Bileğin ANCHOR uzayındaki konum farkı — HandGripPivot.PalmOffset'in kaynağı.
+        // Wrist position delta in ANCHOR space — the source of HandGripPivot.PalmOffset.
         private Vector3 _leftOffsetSum, _rightOffsetSum;
 
         private Quaternion _leftFirst = Quaternion.identity, _rightFirst = Quaternion.identity;
@@ -122,7 +118,7 @@ namespace VortexArena.Core.Player
                     Vector3.Distance(_rightFirstOffset, rightOffset));
             }
 
-            // Baz bir LookRotation'dır: yerel +Z = parmak yönü, +Y = avuç normali.
+            // The basis is a LookRotation: local +Z = finger direction, +Y = palm normal.
             _leftFingerSum += leftBasis * Vector3.forward;
             _leftPalmSum += leftBasis * Vector3.up;
             _rightFingerSum += rightBasis * Vector3.forward;
@@ -139,7 +135,7 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Rig ve el kemikleri bir kez bulunur; sahne kurulumu geç tamamlanabilir.</summary>
+        /// <summary>Resolves rig and hand bones once; scene setup may complete late.</summary>
         private bool EnsureReferences()
         {
             if (_rig == null)
@@ -167,11 +163,10 @@ namespace VortexArena.Core.Player
                    _rightWrist != null && _rightMiddle != null && _rightThumb != null;
         }
 
-        /// <summary>
-        /// Bileği rig altında ADIYLA arar. ⚠️ Yalnız <b>etkin</b> olan kabul edilir: aynı adlı kemik
-        /// rig'de birden çok yerde var (mesafeli kavrama önizlemesi, hand-only etkileşimciler) ve
-        /// kapalı olanların kemikleri sürülmez — kapalı bir kopyayı ölçmek bind pozunu ölçmek olurdu.
-        /// </summary>
+        /// <summary>Finds the wrist under the rig BY NAME. ⚠️ Only an <b>active</b> one is accepted: the
+        /// same bone name exists in several places in the rig (distance-grab preview, hand-only
+        /// interactors) and disabled ones are not driven — measuring a disabled copy would measure the
+        /// bind pose.</summary>
         private void ResolveHand(
             string wristName, string middleName, string thumbName,
             ref Transform wrist, ref Transform middle, ref Transform thumb)
@@ -212,15 +207,14 @@ namespace VortexArena.Core.Player
             return null;
         }
 
-        /// <summary>
-        /// Elin ANCHOR uzayındaki iki ölçüsünü birden verir: anatomik BAZ
-        /// (<see cref="HandGripConvention"/>'ın beklediği) ve bileğin KONUM farkı
-        /// (<see cref="HandGripPivot.PalmOffset"/>'in beklediği).
-        /// <para>İkisi aynı karede ve aynı kaynaktan okunur: ayrı ayrı örneklenselerdi biri elin
-        /// bir duruşunu, öteki başka bir duruşunu yakalar ve iki sabit birbiriyle tutarsız çıkardı.</para>
-        /// <para>Anatomi ölçümü <see cref="HandGripConvention.TryMeasureBoneBasis"/>'e devredilir:
-        /// sol/sağ çapraz çarpım kuralının projede tek uygulaması orasıdır.</para>
-        /// </summary>
+        /// <summary>Returns both anchor-space measurements at once: the anatomical BASIS (cross-checked
+        /// against <see cref="HandGripConvention.AnchorBasis"/>) and the wrist POSITION delta (wanted by
+        /// <see cref="HandGripPivot.PalmOffset"/>).</summary>
+        /// <remarks>Read in the same frame from the same source; sampled separately they would capture
+        /// different hand poses and the two constants would be inconsistent.
+        /// <para>The anatomy measurement is delegated to
+        /// <see cref="HandGripConvention.TryMeasureBoneBasis"/>, the single implementation of the
+        /// left/right cross-product rule.</para></remarks>
         private bool TryReadAnchorSample(bool rightHand, out Quaternion anchorBasis, out Vector3 anchorOffset)
         {
             anchorBasis = Quaternion.identity;
@@ -239,8 +233,8 @@ namespace VortexArena.Core.Player
 
             anchorBasis = Quaternion.Inverse(anchor.rotation) * wrist.rotation * wristLocalBasis;
 
-            // ⚠️ InverseTransformPoint DEĞİL: ofset METREdir, rig'in ölçeği 1 olmasa bile
-            // küçültülmemeli (HandGripPivot da aynı kuralla uyguluyor).
+            // ⚠️ NOT InverseTransformPoint: the offset is in METRES and must not be shrunk even if the
+            // rig's scale is not 1 (HandGripPivot applies it under the same rule).
             anchorOffset = Quaternion.Inverse(anchor.rotation) * (wrist.position - anchor.position);
             return true;
         }
@@ -263,33 +257,32 @@ namespace VortexArena.Core.Player
                 $"[HandGripCalibrationProbe] Sol: fingerDir={Format(_leftFingerSum)} palmNormal={Format(_leftPalmSum)}\n" +
                 $"[HandGripCalibrationProbe] Sağ: fingerDir={Format(_rightFingerSum)} palmNormal={Format(_rightPalmSum)}\n" +
                 $"{stability} {_sampleCount} kare ortalandı. " +
-                "Bu değerleri HandGripConvention'daki tahmini anchor sabitlerinin yerine yaz.\n" +
+                "Bu iki satır KARŞILAŞTIRMA içindir, koda yazılmaz: anchor anatomisini " +
+                "HandGripConvention.AnchorBasis zaten çalışma anında ölçüyor.\n" +
                 $"[HandGripCalibrationProbe] public static readonly Vector3 LeftPalmOffset = {FormatPoint(_leftOffsetSum)};\n" +
                 $"[HandGripCalibrationProbe] public static readonly Vector3 RightPalmOffset = {FormatPoint(_rightOffsetSum)};\n" +
                 $"{offsetStability} Bu iki satırı HandGripPivot'taki tahmini ofsetlerin yerine yaz.", this);
         }
 
-        /// <summary>Yön toplamını normalize edip doğrudan koda yapıştırılabilir biçimde yazar.</summary>
+        /// <summary>Normalises the direction sum and formats it ready to paste into code.</summary>
         private static string Format(Vector3 sum)
         {
             Vector3 direction = sum.sqrMagnitude > 1e-8f ? sum.normalized : Vector3.zero;
             return FormatVector(direction);
         }
 
-        /// <summary>Konum toplamının ORTALAMASINI yazar. ⚠️ <see cref="Format"/> gibi normalize
-        /// EDİLMEZ: bu bir yön değil metre cinsinden bir ölçüdür, birim uzunluğa çekmek 3 cm'lik
-        /// avuç ofsetini 1 m'ye şişirirdi.</summary>
+        /// <summary>Formats the AVERAGE of the position sum. ⚠️ NOT normalised like
+        /// <see cref="Format"/>: this is a measure in metres, not a direction — normalising would
+        /// inflate a 3 cm palm offset to 1 m.</summary>
         private string FormatPoint(Vector3 sum)
         {
             return FormatVector(_sampleCount > 0 ? sum / _sampleCount : Vector3.zero);
         }
 
-        /// <summary>
-        /// Vektörü doğrudan koda yapıştırılabilir biçimde yazar.
-        /// <para>⚠️ Biçimlendirme <b>InvariantCulture</b> ile yapılır: Türkçe yerelde ondalık
-        /// ayırıcı virgül olur ve basılan satır derlenmeyen bir C# ifadesine dönüşürdü — oysa bu
-        /// logun tek işi kopyalanıp koda yapıştırılmaktır.</para>
-        /// </summary>
+        /// <summary>Formats a vector ready to paste into code.</summary>
+        /// <remarks>⚠️ Uses <b>InvariantCulture</b>: in a Turkish locale the decimal separator becomes a
+        /// comma and the printed line would turn into a C# expression that does not compile — while the
+        /// sole purpose of this log is to be copy-pasted into code.</remarks>
         private static string FormatVector(Vector3 value)
         {
             return string.Format(

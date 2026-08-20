@@ -1,28 +1,28 @@
 namespace VortexArena.Core
 {
     /// <summary>
-    /// Canlanma şartı (§10.4/2, §10.5 <c>reviveAnchor</c>).
+    /// Revive condition (§10.4/2, §10.5 <c>reviveAnchor</c>).
     /// <para>
-    /// ⚠ FREE-ROAM: ikisi de bir KONUM değişimi değildir — oyuncu fiziksel olarak yürür, hiçbir
-    /// şart rig'i taşımaz. Şart yalnız "ne zaman <c>revive_request</c> gönderilir"i belirler.
+    /// ⚠ FREE-ROAM: neither of them is a POSITION change — the player physically walks and no
+    /// condition moves the rig. The condition only determines "when is <c>revive_request</c> sent".
     /// </para>
-    /// <para>⚠ <see cref="ModeDefinition"/> tarafından SERIALIZE edilir — yeni değer SONA eklenir.</para>
+    /// <para>⚠ SERIALIZED by <see cref="ModeDefinition"/> — new values are appended at the END.</para>
     /// </summary>
     public enum ModeReviveAnchor
     {
-        /// <summary>Oyuncu kendi <see cref="Arena.BaseZone"/>'una fiziken girer (TDM).</summary>
+        /// <summary>The player physically enters their own <see cref="Arena.BaseZone"/> (TDM).</summary>
         OwnBase,
 
-        /// <summary>Oyuncu <c>REVIVE_HOLD_RADIUS</c> içinde <c>REVIVE_HOLD_SECONDS</c> boyunca
-        /// kesintisiz sabit durur (takım tabanı olmayan modlar).</summary>
+        /// <summary>The player stands still without interruption for <c>REVIVE_HOLD_SECONDS</c>
+        /// within <c>REVIVE_HOLD_RADIUS</c> (modes without team bases).</summary>
         StandStill,
 
         /// <summary>
-        /// Canlanma YOKTUR (tur tabanlı eleme — <c>tournament</c>). İstemci <c>revive_request</c>
-        /// hiç göndermez, sunucu gelirse reddeder; canlanmanın tek yolu o istek olduğu için ölü
-        /// oyuncuyu yalnız modun başlattığı yeni tur canlandırır.
-        /// <para>⚠ Enum'un SONUNA eklendi (serialize edilen enum kuralı) — araya eklemek tüm
-        /// <see cref="ModeDefinition"/> asset'lerindeki değerleri kaydırırdı.</para>
+        /// There is NO revive (round-based elimination — <c>tournament</c>). The client never sends
+        /// <c>revive_request</c> and the server rejects it if it arrives; since that request is the
+        /// only way to revive, a dead player is only brought back by a new round started by the mode.
+        /// <para>⚠ Appended at the END of the enum (serialized enum rule) — inserting it in the middle
+        /// would have shifted the values in every <see cref="ModeDefinition"/> asset.</para>
         /// </summary>
         None
     }

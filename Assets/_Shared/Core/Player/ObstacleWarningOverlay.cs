@@ -2,35 +2,32 @@ using UnityEngine;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>
-    /// Engelin içindeyken karartmanın üstünde beliren, nabız atan uyarı yazısı: oyuncu ekranın
-    /// neden karardığını ve ne yapması gerektiğini bilmeli.
-    ///
-    /// <para><b>Ölçüm yapmaz</b> — <see cref="ObstacleViolationProbe"/>'un statik durumunu okur.
-    /// Alfası probe'un karartmasına (<see cref="ObstacleViolationProbe.FadeAlpha"/>) bağlıdır:
-    /// yazı ekran kararırken gelir, kararmadan önce belirmez.</para>
-    ///
-    /// <para>Karartma quad'ından <b>daha yakında</b> durur (prefabda z ≈ 0.42 · quad 0.5), bu yüzden
-    /// saydam sıralamada onun üstüne çizilir — ayrı bir kuyruk/sorting ayarı gerekmez.
-    /// (<see cref="DamageVignette"/> aynı sorunu farklı çözer: o mesafeye değil <c>Overlay</c>
-    /// kuyruğuna güvenir, çünkü onun her şeyin üstünde olması şart.)</para>
-    ///
-    /// <para>Sahibi <c>VA_CameraRig</c> prefabıdır. Admin gözlemcide rig kökü kapatıldığı için hiç
-    /// çalışmaz.</para>
-    /// </summary>
+    /// <summary>Pulsing warning text shown over the blackout while inside an obstacle: the player must
+    /// know why the screen went dark and what to do.</summary>
+    /// <remarks>
+    /// <b>Measures nothing</b> — reads <see cref="ObstacleViolationProbe"/>'s static state. Its alpha
+    /// follows the probe's blackout (<see cref="ObstacleViolationProbe.FadeAlpha"/>), so the text arrives
+    /// with the darkening, never before it.
+    /// <para>It sits <b>nearer</b> than the blackout quad (z ≈ 0.42 vs quad 0.5 in the prefab), so
+    /// transparent sorting draws it on top — no separate queue/sorting setting needed.
+    /// (<see cref="DamageVignette"/> solves the same problem differently: it relies on the <c>Overlay</c>
+    /// queue rather than distance, because it must be above everything.)</para>
+    /// <para>Owned by the <c>VA_CameraRig</c> prefab. Never runs on an admin observer, whose rig root is
+    /// disabled.</para>
+    /// </remarks>
     [DefaultExecutionOrder(30200)]
     public class ObstacleWarningOverlay : MonoBehaviour
     {
         [Tooltip("Uyarı yazısı (bu objenin kendi TextMesh'i).")]
         [SerializeField] private TextMesh warningText;
 
-        /// <summary>Nabız frekansı (Hz) — okunabilir kalsın diye yavaş.</summary>
+        /// <summary>Pulse frequency (Hz) — slow, so the text stays readable.</summary>
         private const float PulseHz = 1.6f;
 
-        /// <summary>Nabzın alt ucu: yazı hiç kaybolmaz, yalnız soluklaşır.</summary>
+        /// <summary>Lower end of the pulse: the text never disappears, it only fades.</summary>
         private const float MinPulseAlpha = 0.55f;
 
-        /// <summary>Ölçek nefesinin genliği (oran).</summary>
+        /// <summary>Amplitude of the scale breathing (ratio).</summary>
         private const float ScaleBreathe = 0.04f;
 
         private Renderer _renderer;
@@ -60,10 +57,10 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            // ⚠️ Kapıda faz da canlılık da YOKTUR: yazı karartmanın AÇIKLAMASIDIR, karartma ise
-            // her durumda çalışıyor (gerekçe ObstacleViolationProbe.ReportPresentation). Ölüyken
-            // susturmak, kapkaranlık bir ekranı sebepsiz bırakırdı — üstelik engelin içinde
-            // canlanma yok (§10.9), yani oyuncunun okuması gereken tek yönerge tam da budur.
+            // ⚠️ The gate contains neither phase nor aliveness: the text EXPLAINS the blackout, and the
+            // blackout runs in every situation (rationale in ObstacleViolationProbe.ReportPresentation).
+            // Silencing it while dead would leave a pitch-black screen unexplained — and since there is no
+            // revive inside an obstacle (§10.9), this is exactly the instruction the player needs.
             bool show = ObstacleViolationProbe.IsViolating;
             if (!show)
             {
@@ -71,7 +68,7 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            // Karartmanın kendisi 0.2 sn'de geliyor; yazı onunla birlikte belirsin.
+            // The blackout itself arrives in 0.2 s; the text appears together with it.
             float fade = Mathf.Clamp01(ObstacleViolationProbe.FadeAlpha);
             float pulse = Mathf.Lerp(MinPulseAlpha, 1f,
                 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * PulseHz * 2f * Mathf.PI));

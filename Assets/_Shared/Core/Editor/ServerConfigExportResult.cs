@@ -3,28 +3,24 @@ using System.Collections.Generic;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// <see cref="ServerConfigExporter.Export"/> sonucu — menüden çağrıldığında dialog metnini,
-    /// otomasyondan (MCP / batch) çağrıldığında ise makine tarafından okunabilir raporu taşır.
-    /// <para>
-    /// Alanlar düz <c>public</c>'tir (property değil): hem Unity serileştiricisi hem de
-    /// reflection tabanlı otomasyon araçları alanları sorunsuz okur.
-    /// </para>
-    /// </summary>
+    /// <summary><see cref="ServerConfigExporter.Export"/> result: dialog text from the menu,
+    /// machine readable report from automation (MCP / batch).</summary>
+    /// <remarks>Plain public fields, not properties: Unity serialization and reflection based
+    /// automation both read fields without trouble.</remarks>
     [Serializable]
     public class ServerConfigExportResult
     {
-        /// <summary>Yazılan <c>Server/config/maps.json</c> dosyasının mutlak yolu.</summary>
+        /// <summary>Absolute path of the written <c>Server/config/maps.json</c>.</summary>
         public string MapsPath;
 
-        /// <summary>maps.json'a yazılan harita satırı sayısı (atlanan/yinelenen hariç).
-        /// <para>Silah alanı YOK: sunucu silah tablosu tutmaz (§10.3).</para></summary>
+        /// <summary>Map rows written to maps.json (skipped/duplicate excluded).</summary>
+        /// <remarks>No weapon field: the server keeps no weapon table.</remarks>
         public int MapCount;
 
-        /// <summary>Doğrulama uyarıları; boş liste = temiz export. Konsola da yazılır.</summary>
+        /// <summary>Validation warnings; empty list = clean export. Also logged.</summary>
         public List<string> Warnings = new List<string>();
 
-        /// <summary>Tek satırlık özet (Debug.Log / dialog başlığı için).</summary>
+        /// <summary>One line summary for Debug.Log / dialog title.</summary>
         public string Summary;
     }
 }

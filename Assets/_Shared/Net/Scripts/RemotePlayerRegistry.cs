@@ -6,51 +6,49 @@ using VortexArena.Protocol;
 namespace VortexArena.Net
 {
     /// <summary>
-    /// Uzak oyuncu poz kayıtçısı tekili: UdpStateChannel'ın ağ thread'inde aldığı
-    /// Snapshot'ları oyuncu başına örnek halkasında biriktirir, ana thread'den
-    /// INTERP_DELAY_MS gecikmeli interpolasyonla okutur. Katılan/ayrılan uzak
-    /// oyuncular ana thread'de OnRemoteJoined/OnRemoteLeft ile duyurulur. Snapshot'taki
-    /// eşya durumu (§6.6) da burada tutulur ama interpole EDİLMEZ (TryGetHeldItems).
-    /// ArenaClient tarafından AddComponent ile kurulur; sahne/oyun bilgisi içermez.
+    /// Remote player pose registry singleton: rings the Snapshots UdpStateChannel ingests on the network
+    /// thread per player, read back on the main thread with INTERP_DELAY_MS delayed interpolation.
+    /// Joins/leaves are announced through OnRemoteJoined/OnRemoteLeft. Snapshot item state (§6.6) lives
+    /// here too but is NOT interpolated (TryGetHeldItems). Installed by ArenaClient; no scene/game
+    /// knowledge.
     /// </summary>
     public class RemotePlayerRegistry : MonoBehaviour
     {
-        /// <summary>Bu süre boyunca snapshot'ta görünmeyen oyuncu ayrılmış sayılır (ms).</summary>
+        /// <summary>A player not seen in a snapshot for this long counts as left (ms).</summary>
         private const int LEFT_TIMEOUT_MS = 1500;
 
-        /// <summary>Yerel oyuncunun kendi durum bitlerinin bayatlama süresi (ms) — 20 Hz snapshot'ta
-        /// birkaç kayıp/parçalanmış pakete dayanacak kadar geniş, "koruma bitti"yi geciktirmeyecek
-        /// kadar dar.</summary>
+        /// <summary>Stale window for the local player's own state bits (ms) — wide enough for a few
+        /// lost/split 20 Hz packets, narrow enough not to delay "protection over".</summary>
         private const int LOCAL_FLAG_STALE_MS = 500;
 
-        /// <summary>Oyuncu başına saklanan örnek sayısı (20 Hz'de ~3.2 sn geçmiş).</summary>
+        /// <summary>Samples kept per player (~3.2 s of history at 20 Hz).</summary>
         private const int RING_SIZE = 64;
 
-        /// <summary>Tik→zaman eşlemesinde saklanan snapshot sayısı (20 Hz'de ~3.2 sn).</summary>
+        /// <summary>Snapshots kept in the tick→time mapping (~3.2 s at 20 Hz).</summary>
         private const int TICK_RING_SIZE = 64;
 
-        /// <summary>İki snapshot arası nominal süre (ms) — tik farkını zamana çevirmek için.</summary>
+        /// <summary>Nominal time between two snapshots (ms) — converts a tick delta to time.</summary>
         private const int MS_PER_SNAPSHOT = 1000 / ArenaProtocol.SNAPSHOT_RATE_HZ;
 
         /// <summary>
-        /// Ekstrapolasyonda kabul edilen en büyük "gelecek" tik farkı (2 sn'lik tik).
-        /// Bundan büyük fark sarmalama ya da sunucu yeniden başlatması işaretidir.
+        /// Largest "future" tick delta accepted in extrapolation (2 s of ticks). Anything bigger means
+        /// wraparound or a server restart.
         /// </summary>
         private const int MAX_FUTURE_TICKS = ArenaProtocol.SNAPSHOT_RATE_HZ * 2;
 
         public static RemotePlayerRegistry Instance { get; private set; }
 
-        /// <summary>Ana thread'de, uzak oyuncu ilk kez görüldüğünde tetiklenir.</summary>
+        /// <summary>Raised on the main thread when a remote player is seen for the first time.</summary>
         public event Action<int> OnRemoteJoined;
 
-        /// <summary>Ana thread'de, uzak oyuncu zaman aşımına uğrayınca/kopunca tetiklenir.</summary>
+        /// <summary>Raised on the main thread when a remote player times out / drops.</summary>
         public event Action<int> OnRemoteLeft;
 
         /// <summary>
-        /// Tek snapshot'ın tik→yerel zaman damgası (recvMs = Environment.TickCount).
-        /// <para>⚠️ Bu eşleme <b>GLOBAL'dir, oyuncu başına DEĞİL</b>: bir tik'te tek snapshot
-        /// yayınlanır ve içinde tüm oyuncular vardır. <see cref="RemoteEntry.ring"/>'e konsa
-        /// hiç pozu olmayan (ya da o tik'te görünmeyen) bir oyuncunun olayı zamanlanamazdı.</para>
+        /// A snapshot's tick→local timestamp (recvMs = Environment.TickCount).
+        /// <para>⚠️ <b>GLOBAL, not per player</b>: one snapshot per tick holds every player. On
+        /// <see cref="RemoteEntry.ring"/> an event from a player with no pose (or absent that tick)
+        /// could not be timed.</para>
         /// </summary>
         private struct TickStamp
         {
@@ -59,7 +57,7 @@ namespace VortexArena.Net
             public bool valid;
         }
 
-        /// <summary>Tek snapshot'lık poz örneği (recvMs = Environment.TickCount).</summary>
+        /// <summary>A single snapshot's pose sample (recvMs = Environment.TickCount).</summary>
         private struct PoseSample
         {
             public int recvMs;
@@ -67,7 +65,7 @@ namespace VortexArena.Net
             public byte flags;
         }
 
-        /// <summary>Uzak oyuncu girişi: sabit boyutlu örnek halkası + son görülme zamanı.</summary>
+        /// <summary>A remote player record: a fixed-size sample ring + the last time it was seen.</summary>
         private class RemoteEntry
         {
             public int playerId;
@@ -77,27 +75,26 @@ namespace VortexArena.Net
             public int lastRecvMs;
             public bool announced;
 
-            // ---- §6.6 eşya durumu: halkada DEĞİL, tek yuvada ----
-            // ⚠️ Bu bir DURUM'dur, poz gibi İNTERPOLE EDİLMEZ: ayrık/kategorik veri, iki eşya
-            // arasında "yarı yol" yoktur (tabanca ile tüfeğin ortası diye bir eşya yok). En son
-            // gelen snapshot'ın değeri geçerlidir; interp tamponu kadar erken uygulanması
-            // görünürde bir sorun değil (el değiştirme 100 ms'lik pencereden hızlı olamaz).
+            // ---- §6.6 item state: a single slot, NOT the ring ----
+            // ⚠️ STATE, so unlike a pose it is NOT INTERPOLATED: categorical data has no "half way"
+            // (no item sits between a pistol and a rifle). Latest snapshot wins; applying it one interp
+            // buffer early is invisible (a hand swap cannot beat the 100 ms window).
             public byte itemL;
             public byte itemR;
             public bool gripLinked;
             public bool primaryRight;
         }
 
-        // Ingest (ağ thread'i) ile örnekleme/Update (ana thread) bu kilit altında buluşur.
+        // Ingest (network thread) and sampling/Update (main thread) meet under this lock.
         private readonly object _gate = new object();
         private readonly Dictionary<int, RemoteEntry> _entries = new Dictionary<int, RemoteEntry>();
 
-        // Olay yayınları kilit DIŞINDA yapılır; scratch listeleri GC üretmemek için alan.
+        // Events are published OUTSIDE the lock; the scratch lists are fields so as not to produce GC.
         private readonly List<int> _joinedScratch = new List<int>();
         private readonly List<int> _leftScratch = new List<int>();
 
-        // Tik→zaman eşlemesi (TryGetPlaybackTimeMs). Poz halkalarıyla aynı _gate altında:
-        // yazan ağ thread'i (ingest), okuyan ana thread (sunum).
+        // Tick→time mapping (TryGetPlaybackTimeMs). Under the same _gate as the pose rings: the writer
+        // is the network thread (ingest), the reader the main thread (presentation).
         private readonly TickStamp[] _tickRing = new TickStamp[TICK_RING_SIZE];
         private int _tickRingNext;
         private bool _hasNewestTick;
@@ -106,13 +103,14 @@ namespace VortexArena.Net
 
         private int _lastSnapshotMs;
 
-        // Yerel oyuncunun kendi durum bitleri (§10.4). Ağ thread'i yazar, ana thread okur ve
-        // ⚠️ bilerek _gate DIŞINDADIR: tek bir bayrak için 20 Hz'de kilit almak, ana thread'i poz
-        // alım yolunun arkasında bekletirdi (PlayerState.Alive'ın sunucudaki deseninin aynısı).
+        // The local player's own state bits (§10.4); net thread writes, main thread reads.
+        // ⚠️ Deliberately OUTSIDE _gate: locking at 20 Hz for one flag would queue the main thread
+        // behind the pose ingest path (the server's PlayerState.Alive pattern).
         private volatile bool _localSpawnProtected;
         private volatile int _localFlagsRecvMs;
 
-        /// <summary>Son snapshot'ın alındığı Environment.TickCount değeri (tanılama).</summary>
+        /// <summary>The Environment.TickCount value at which the last snapshot arrived
+        /// (diagnostics).</summary>
         public int LastSnapshotMs
         {
             get
@@ -155,17 +153,16 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// AĞ THREAD'İNDEN çağrılır (UdpStateChannel.HandleDatagram): snapshot'taki
-        /// her uzak oyuncu için örneği halkaya ekler. Kendi playerId'miz atlanır.
-        /// Snapshot'ın tik damgası da burada kaydedilir (<see cref="TryGetPlaybackTimeMs"/>).
+        /// NETWORK THREAD (UdpStateChannel.HandleDatagram): rings a sample per remote player in the
+        /// snapshot, skipping our own playerId, and records the tick stamp
+        /// (<see cref="TryGetPlaybackTimeMs"/>).
         /// </summary>
         public void IngestFromNetThread(Snapshot snap, int recvTickMs, int localPlayerId)
         {
             lock (_gate)
             {
-                // ⚠️ Tik damgası, poz erken çıkışından ÖNCE yazılır: playerCount = 0 snapshot'ı
-                // meşru bir yayındır (istemciler bayat avatarı onunla temizler) ve o tik'in zaman
-                // damgası yine geçerlidir — o tik'te gelen bir atış olayı da zamanlanabilmeli.
+                // ⚠️ Tick stamp written BEFORE the pose early-out: a playerCount = 0 snapshot is a
+                // legitimate broadcast and a shot event on that tick must still be timeable.
                 RecordTickLocked(snap.serverTick, recvTickMs);
 
                 if (snap.players == null)
@@ -180,8 +177,8 @@ namespace VortexArena.Net
                     SnapshotEntry se = snap.players[i];
                     if (se.playerId == localPlayerId)
                     {
-                        // Poz yok sayılır (sunucu echo'su) ama DURUM biti okunur: oyuncunun kendi
-                        // doğma koruması yalnız burada geçiyor (§10.4).
+                        // Pose ignored (server echo), STATE bit read: own spawn protection arrives only
+                        // through here (§10.4).
                         _localSpawnProtected = (se.flags & SnapshotEntry.FLAG_SPAWN_PROTECTED) != 0;
                         _localFlagsRecvMs = recvTickMs;
                         continue;
@@ -200,7 +197,7 @@ namespace VortexArena.Net
                     slot.handR = se.handR;
                     slot.flags = se.flags;
 
-                    // Eşya durumu (§6.6): son gelen kazanır — halkaya girmez.
+                    // Item state (§6.6): last one wins — it does not enter the ring.
                     entry.itemL = se.itemL;
                     entry.itemR = se.itemR;
                     entry.gripLinked = (se.flags & SnapshotEntry.FLAG_GRIP_LINKED) != 0;
@@ -218,13 +215,13 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// Snapshot'ın tik damgasını halkaya yazar. Çağıran <c>_gate</c>'i TUTMALIDIR.
+        /// Writes the snapshot's tick stamp into the ring. The caller MUST HOLD <c>_gate</c>.
         /// </summary>
         private void RecordTickLocked(uint serverTick, int recvTickMs)
         {
-            // ⚠️ Parçalanmış snapshot (§6.3): bir tik MTU'yu aşarsa sunucu AYNI serverTick'i birden
-            // çok datagramla yollar. Aynı tik ikinci kez halkaya yazılmaz — geçerli olan İLK
-            // parçanın alım zamanıdır (sonraki parçalar oynatmayı gereksizce geciktirirdi).
+            // ⚠️ Split snapshot (§6.3): one tick over the MTU arrives as several datagrams with the
+            // SAME serverTick. Only the FIRST part's arrival time counts — later parts would
+            // needlessly delay playback.
             if (_hasNewestTick && _newestTick == serverTick)
             {
                 return;
@@ -237,9 +234,8 @@ namespace VortexArena.Net
 
             _tickRingNext = (_tickRingNext + 1) % TICK_RING_SIZE;
 
-            // "En yeni tik" geri çekilmez: UDP sıra garantisi olmadığı için gecikmiş bir datagram
-            // sonra gelebilir; ekstrapolasyonun dayanağı hep gerçekten en ileri tik olmalı.
-            // Karşılaştırma işaretli farkla yapılır → u32 sarmalamasında da doğru kalır.
+            // "Newest tick" never moves backwards: UDP is unordered, so extrapolation must rest on the
+            // genuinely furthest tick. Signed difference → correct across u32 wraparound too.
             if (!_hasNewestTick || (int)(serverTick - _newestTick) > 0)
             {
                 _hasNewestTick = true;
@@ -249,14 +245,12 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// ANA THREAD: verilen sunucu tik'inin <b>oynatılacağı yerel zaman</b> (Environment.TickCount
-        /// ekseni). Eşleme bilinmiyorsa false — çağıran o zaman olayı HEMEN oynatır.
-        /// <para>
-        /// Uzak pozlar bilerek <c>INTERP_DELAY_MS</c> geriden çizilir
-        /// (<see cref="GetInterpolatedPose"/>), yani <c>recvMs = R</c> olan örnek
-        /// <c>renderMs == R</c> olduğunda çizilir — duvar saatinde <c>R + INTERP_DELAY_MS</c>'te.
-        /// Bir olayın "eli doğru yerdeyken" oynaması için beklenecek an tam olarak budur.
-        /// </para>
+        /// MAIN THREAD: the local time (Environment.TickCount axis) at which a server tick will be
+        /// played; false when unknown → the caller plays the event IMMEDIATELY.
+        /// <para>Remote poses are drawn <c>INTERP_DELAY_MS</c> behind
+        /// (<see cref="GetInterpolatedPose"/>), so a sample with <c>recvMs = R</c> is drawn at
+        /// <c>R + INTERP_DELAY_MS</c> on the wall clock — exactly when an event should play "while the
+        /// hand is in the right place".</para>
         /// </summary>
         public bool TryGetPlaybackTimeMs(uint serverTick, out int playbackMs)
         {
@@ -266,7 +260,7 @@ namespace VortexArena.Net
             {
                 if (!_hasNewestTick)
                 {
-                    return false; // henüz hiç snapshot gelmedi
+                    return false; // no snapshot has arrived yet
                 }
 
                 for (int i = 0; i < TICK_RING_SIZE; i++)
@@ -279,15 +273,14 @@ namespace VortexArena.Net
                     }
                 }
 
-                // Halkada yok: ya İLERİDE (olay batch'i kendi snapshot'ından önce gelebilir — UDP
-                // sıra garantisi yok) ya da halkadan düşmüş kadar eski. u32 aritmetiği doğal sardığı
-                // için fark sarmalama-güvenli çıkar; geçmiş bir tik dev bir sayı verir ve tavana
-                // takılır.
+                // Not in the ring: either AHEAD (UDP is unordered, an event batch may beat its own
+                // snapshot) or too old. u32 arithmetic wraps naturally, so a past tick yields a huge
+                // number and hits the ceiling.
                 uint delta = serverTick - _newestTick;
                 if (delta > MAX_FUTURE_TICKS)
                 {
-                    // Ya çok eski (≥ ~3.2 sn, olay zaten gecikmiş) ya sarmalama/sunucu yeniden
-                    // başlatması. Saçma bir gelecek zaman üretmek yerine "bilmiyorum" denir.
+                    // Far too old (≥ ~3.2 s) or a wraparound/server restart — say "unknown" rather than
+                    // invent a future time.
                     return false;
                 }
 
@@ -297,26 +290,18 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// Sunucunun tik eksenine oturtulmuş <b>PAYLAŞILAN saat</b> (saniye). Hiç snapshot gelmediyse
-        /// false.
-        /// <para><b>Neden gerekiyor:</b> iskelet blob'unun içine gönderenin zaman damgası gömülüyor
-        /// ve alıcı taraf interpolasyonu o damgayla kendi render zamanını karşılaştırarak yapıyor
-        /// (§6.9). İki uç aynı epoch'u paylaşmazsa interpolasyon ya uca kilitlenir ya hiç çalışmaz —
-        /// gövde 12 Hz basamaklarla oynar. <c>Environment.TickCount</c> makineye özeldir, bu iş için
-        /// kullanılamaz.</para>
-        /// <para><b>Neden saat senkronu paketi gerekmiyor:</b> zaten 20 Hz akan snapshot'ın
-        /// <c>serverTick</c>'i tüm istemcilerde <b>aynı</b> sayıdır; tek yapılan onu saniyeye
-        /// çevirip son varıştan bu yana geçen süreyi eklemek. Uçlar arasındaki hata tek yönlü
-        /// gecikme farkı kadardır (LAN'da birkaç ms) — 12 Hz'lik bir akışın interpolasyonu için
-        /// fazlasıyla yeterli. ⚠️ Bu bir <b>mutlak</b> saat değildir ve §6.7'nin "saat senkronu
-        /// gerekmez" kuralını çiğnemez: RTT ölçümü hâlâ tek uçlu damgayla yapılıyor, burada üretilen
-        /// değer yalnız iki istemcinin ORTAK bir eksende buluşması içindir.</para>
-        /// <para>⚠️ Sunucu yeniden başlarsa tik sıfırdan sayar ve bu saat <b>geriye atlar</b>; SDK'nın
-        /// tamponu birkaç kare içinde yeni eksene oturur. Ayrı bir düzeltme eklenmedi: yeniden
-        /// başlatma zaten tüm istemcilerin yeniden bağlandığı bir olaydır.</para>
-        /// <para>⚠️ Değer <c>float</c>'tur ve sunucu ne kadar uzun koşarsa çözünürlüğü o kadar
-        /// kabalaşır (bir haftalık kesintisiz koşuda ~60 ms). Tavan, bir iskelet karesinin
-        /// süresidir (~83 ms) ve pratikte mekân sunucusu günlük yeniden başlatılır.</para>
+        /// A <b>SHARED clock</b> (seconds) on the server's tick axis; false before the first snapshot.
+        /// <para><b>Why:</b> the skeleton blob embeds the sender's timestamp and the receiver
+        /// interpolates against it (§6.9). Without a common epoch the body plays in 12 Hz steps;
+        /// <c>Environment.TickCount</c> is machine-specific.</para>
+        /// <para><b>Why no clock-sync packet:</b> <c>serverTick</c> is already the same number on every
+        /// client — converted to seconds plus time since the last arrival. Error = one-way latency
+        /// difference (a few ms on LAN). ⚠️ Not an <b>absolute</b> clock and no violation of §6.7: RTT
+        /// still uses a single-ended stamp, this only puts two clients on a COMMON axis.</para>
+        /// <para>⚠️ A server restart makes this clock <b>jump backwards</b>; the SDK buffer resettles in
+        /// a few frames. No correction added — a restart already reconnects everyone.</para>
+        /// <para>⚠️ <c>float</c> resolution coarsens with uptime (~60 ms after a week); the ceiling is
+        /// one skeleton frame (~83 ms) and venue servers restart daily.</para>
         /// </summary>
         public bool TryGetServerTimeSeconds(out float seconds)
         {
@@ -340,7 +325,7 @@ namespace VortexArena.Net
             _joinedScratch.Clear();
             _leftScratch.Clear();
 
-            // TickCount farkları int çıkarma ile — ~24.9 günlük sarmalamaya dayanıklı.
+            // TickCount differences via int subtraction — robust against the ~24.9 day wraparound.
             int now = Environment.TickCount;
 
             lock (_gate)
@@ -368,7 +353,7 @@ namespace VortexArena.Net
                 }
             }
 
-            // Olaylar kilit dışında: dinleyiciler registry'ye geri çağrı yapabilir.
+            // Events outside the lock: listeners may call back into the registry.
             for (int i = 0; i < _joinedScratch.Count; i++)
             {
                 OnRemoteJoined?.Invoke(_joinedScratch[i]);
@@ -381,9 +366,9 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// ANA THREAD: INTERP_DELAY_MS geriden örnekleyip iki örnek arasında
-        /// interpolasyonlu arena-uzayı pozları verir; saran çift yoksa en yakın
-        /// uca kilitler. Hiç örnek yoksa false.
+        /// MAIN THREAD: samples INTERP_DELAY_MS behind and returns arena-space poses interpolated
+        /// between two samples; with no bracketing pair it clamps to the nearest end. False when there
+        /// is no sample at all.
         /// </summary>
         public bool GetInterpolatedPose(int playerId, out Pose head, out Pose handL, out Pose handR)
         {
@@ -411,7 +396,7 @@ namespace VortexArena.Net
                     start += RING_SIZE;
                 }
 
-                // Halka kronolojik sıralı: örnekleme zamanını saran çifti bul.
+                // The ring is in chronological order: find the pair bracketing the sampling time.
                 for (int i = 0; i < entry.count; i++)
                 {
                     PoseSample sample = entry.ring[(start + i) % RING_SIZE];
@@ -441,7 +426,7 @@ namespace VortexArena.Net
 
             if (hasBefore || hasAfter)
             {
-                // Saran çift yok → en yakın uca kilitle (clamp).
+                // No bracketing pair → clamp to the nearest end.
                 PoseSample edge = hasBefore ? before : after;
                 head = ToPose(edge.head);
                 handL = ToPose(edge.handL);
@@ -453,8 +438,7 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// Oyuncunun son snapshot'taki canlılık bayrağı (SnapshotEntry.FLAG_ALIVE).
-        /// Kaydı/örneği olmayan id için true döner (bilinmiyorsa canlı say).
+        /// Alive flag from the last snapshot (SnapshotEntry.FLAG_ALIVE). Unknown id → true (assume alive).
         /// </summary>
         public bool IsAlive(int playerId)
         {
@@ -465,7 +449,7 @@ namespace VortexArena.Net
                     return true;
                 }
 
-                // Halkaya en son yazılan örnek: nextIndex bir sonraki BOŞ yuvayı gösterir.
+                // Newest sample: nextIndex points at the next EMPTY slot.
                 int last = entry.nextIndex - 1;
                 if (last < 0)
                 {
@@ -477,14 +461,11 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// §10.9: oyuncu son snapshot'ta bir <b>iç engelin içinde</b> miydi
-        /// (<see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/>). Tek tüketicisi admin gözlemcidir —
-        /// ihlal eden oyuncunun kuş bakışı halkası kırmızı yanıp söner.
-        /// <para>Kaydı/örneği olmayan id için <c>false</c> döner. ⚠️ Varsayılan
-        /// <see cref="IsAlive"/>'ın TERSİ yönde ("bilinmiyorsa ihlal yok"): bilinmeyen bir durumu
-        /// ihlal saymak, ağ boşluğunda operatöre var olmayan bir olay gösterirdi.</para>
-        /// <para>⚠️ Bayrak <b>durumdur</b>: her snapshot'ta yeniden geliyor, yani oyuncu engelden
-        /// çıkınca ek bir mesaj olmadan kendiliğinden söner.</para>
+        /// §10.9: was the player <b>inside an inner obstacle</b> in the last snapshot
+        /// (<see cref="SnapshotEntry.FLAG_IN_OBSTACLE"/>)? Only consumed by the admin spectator ring.
+        /// <para>Unknown id → <c>false</c>. ⚠️ OPPOSITE default to <see cref="IsAlive"/>: counting an
+        /// unknown state as a violation would show the operator a non-existent event during a net gap.</para>
+        /// <para>⚠️ State, not an event: resent in every snapshot, so it clears by itself on exit.</para>
         /// </summary>
         public bool IsInObstacle(int playerId)
         {
@@ -506,16 +487,12 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// §10.9: oyuncu son snapshot'ta muhafazanın güvenli alanının <b>dışında</b> mıydı
-        /// (<see cref="SnapshotEntry.FLAG_OUT_OF_BOUNDS"/>). Tek tüketicisi admin gözlemcidir —
-        /// ihlal eden oyuncunun kuş bakışı halkası yanıp söner.
-        /// <para>Kaydı/örneği olmayan id için <c>false</c> döner (<see cref="IsInObstacle"/> ile
-        /// aynı yön): bilinmeyen bir durumu ihlal saymak, ağ boşluğunda operatöre var olmayan bir
-        /// olay gösterirdi.</para>
-        /// <para>⚠️ Bayrak <b>durumdur</b>: her snapshot'ta yeniden geliyor, yani oyuncu alana geri
-        /// girince ek bir mesaj olmadan kendiliğinden söner.</para>
-        /// <para>⚠️ Bu bit <b>ceza taşımaz</b> — engel ihlalinin aksine can eritmez; okuyan taraf
-        /// onu yalnız operatöre gösterir.</para>
+        /// §10.9: was the player <b>outside</b> the boundary's safe area in the last snapshot
+        /// (<see cref="SnapshotEntry.FLAG_OUT_OF_BOUNDS"/>)? Only consumed by the admin spectator ring.
+        /// <para>Unknown id → <c>false</c> (same direction as <see cref="IsInObstacle"/>).</para>
+        /// <para>⚠️ State, not an event: resent in every snapshot, so it clears by itself on re-entry.</para>
+        /// <para>⚠️ <b>Carries no penalty</b> — unlike an obstacle violation it drains no health; the
+        /// reader only shows it to the operator.</para>
         /// </summary>
         public bool IsOutOfBounds(int playerId)
         {
@@ -537,16 +514,15 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// §10.4: oyuncu son snapshot'ta <b>doğma koruması</b> altında mıydı
-        /// (<see cref="SnapshotEntry.FLAG_SPAWN_PROTECTED"/>). Tüketicisi uzak avatarın kalkan
-        /// görünümüdür — atış kararı buna DAYANDIRILMAZ, hasar kapısı sunucudadır.
-        /// <para>⚠️ <b>Kendi id'miz buraya GİRMEZ</b> (yerel poz halkaya alınmıyor); oyuncunun kendi
-        /// koruması <see cref="IsLocalSpawnProtected"/>'dedir.</para>
-        /// <para>Kaydı/örneği olmayan id için <c>false</c> döner: bilinmeyen bir durumu koruma
-        /// saymak, olmayan bir kalkanı çizmek olurdu (<see cref="IsInObstacle"/> ile aynı yön,
-        /// <see cref="IsAlive"/>'ın TERSİ).</para>
-        /// <para>⚠️ Bayrak <b>durumdur, olay değil</b>: her snapshot'ta yeniden geliyor, yani
-        /// koruma bitince ek bir mesaj olmadan kendiliğinden söner — istemcide sayaç tutulmaz.</para>
+        /// §10.4: was the player under <b>spawn protection</b> in the last snapshot
+        /// (<see cref="SnapshotEntry.FLAG_SPAWN_PROTECTED"/>)? Consumed by the remote avatar's shield
+        /// visual — ⚠️ fire decisions are NOT based on it, the damage gate is on the server.
+        /// <para>⚠️ Our own id NEVER appears here (the local pose is not ringed); use
+        /// <see cref="IsLocalSpawnProtected"/>.</para>
+        /// <para>Unknown id → <c>false</c>: counting an unknown state as protection would draw a shield
+        /// that does not exist.</para>
+        /// <para>⚠️ State, not an event: resent in every snapshot, so it clears by itself — no client
+        /// side counter.</para>
         /// </summary>
         public bool IsSpawnProtected(int playerId)
         {
@@ -568,24 +544,22 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// §10.4: <b>yerel</b> oyuncu doğma koruması altında mı — kendi snapshot girdimizin bit'i.
-        /// <para>⚠️ Bunun ayrı bir kapı olmasının sebebi yapısaldır: kendi girdimizin POZU halkaya
-        /// alınmaz (sunucu echo'su yok sayılır), oysa DURUM bitleri yalnız snapshot'ta taşınıyor.
-        /// Ayrı bir kapı olmasaydı oyuncu kendi korumasını hiçbir yerden öğrenemezdi — kalkan
-        /// yalnız BAŞKALARININ gövdesine çiziliyor, kendi gövdesi hiç çizilmiyor.</para>
-        /// <para>⚠️ Bu bir izin DEĞİL bir göstergedir: istemci buna bakıp ateş/hasar kararı vermez.</para>
-        /// <para>Bayrak <b>bayatlarsa</b> (snapshot kesildi, kendi girdimiz gelmiyor) <c>false</c>'a
-        /// düşer — parçalanmış snapshot'ta (§6.3) kendi girdimiz o datagramda olmayabileceği için
-        /// "bu pakette yoktum" tek başına "koruma bitti" sayılmaz.</para>
+        /// §10.4: is the <b>local</b> player spawn protected — the bit of our own snapshot entry.
+        /// <para>⚠️ A separate gate for a structural reason: our own POSE is not ringed (the server echo
+        /// is ignored) while the STATE bits only ride the snapshot.</para>
+        /// <para>⚠️ An indicator, NOT a permission: no fire/damage decision is made from it.</para>
+        /// <para>Falls back to <c>false</c> when the flag goes <b>stale</b> — in a split snapshot (§6.3)
+        /// our entry may be absent from a datagram, so "not in this packet" alone is not "protection
+        /// over".</para>
         /// </summary>
         public bool IsLocalSpawnProtected =>
             _localSpawnProtected && Environment.TickCount - _localFlagsRecvMs <= LOCAL_FLAG_STALE_MS;
 
         /// <summary>
-        /// §6.6: oyuncunun <b>son bilinen</b> eşya durumu. Oyuncu yoksa false.
-        /// <para>⚠️ <c>gripLinked</c> olmadan "aynı id iki slotta" tek başına çift elle tutmak
-        /// demek DEĞİLDİR — çift tabanca meşru bir durumdur (§6.6 çözüm tablosu).
-        /// <c>primaryRight</c> yalnız <c>gripLinked</c> iken anlamlıdır.</para>
+        /// §6.6: the player's <b>last known</b> item state. False when the player is unknown.
+        /// <para>⚠️ Without <c>gripLinked</c>, "same id in both slots" does NOT mean a two-handed grip —
+        /// dual wielding is legitimate (§6.6). <c>primaryRight</c> only means something while
+        /// <c>gripLinked</c>.</para>
         /// </summary>
         public bool TryGetHeldItems(int playerId, out byte itemL, out byte itemR, out bool gripLinked, out bool primaryRight)
         {
@@ -608,7 +582,7 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>ANA THREAD: duyurulmuş (announced) uzak oyuncu id'lerini doldurur.</summary>
+        /// <summary>MAIN THREAD: fills the buffer with announced remote player ids.</summary>
         public void GetActivePlayerIds(List<int> buffer)
         {
             if (buffer == null)
@@ -630,12 +604,12 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>Kopuşta tüm girişleri temizler ve ayrılışları yayınlar (ana thread'deyiz).</summary>
+        /// <summary>On disconnect: clears every entry and publishes the leaves (we are on the main thread).</summary>
         private void HandleDisconnected()
         {
             _leftScratch.Clear();
 
-            // Kendi durum bitimiz de bayat: kopuk bağlantıda "korunuyorsun" yazmaya devam etmesin.
+            // Our own state bit is stale too — do not keep showing "protected" on a dead connection.
             _localSpawnProtected = false;
 
             lock (_gate)
@@ -650,8 +624,8 @@ namespace VortexArena.Net
 
                 _entries.Clear();
 
-                // Tik→zaman eşlemesi de düşer: yeni oturumda sunucunun tik ekseni sıfırdan
-                // başlayabilir, bayat damga yanlış bir oynatma zamanı üretirdi.
+                // Drop the tick→time mapping too: a new session may restart the tick axis at zero and a
+                // stale stamp would produce a wrong playback time.
                 Array.Clear(_tickRing, 0, _tickRing.Length);
                 _tickRingNext = 0;
                 _hasNewestTick = false;
@@ -665,11 +639,11 @@ namespace VortexArena.Net
             }
         }
 
-        // ------------------------------------------------------------- dönüşümler
+        // ------------------------------------------------------------- conversions
 
         private static Pose ToPose(in PoseData data)
         {
-            // PoseData zaten normalize quaternion taşır — yeniden normalize gerekmez.
+            // PoseData already carries a normalised quaternion — no renormalisation needed.
             return new Pose(
                 new Vector3(data.px, data.py, data.pz),
                 new Quaternion(data.qx, data.qy, data.qz, data.qw));

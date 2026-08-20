@@ -3,34 +3,36 @@ using System;
 namespace VortexArena.Core.UI
 {
     /// <summary>
-    /// Oyun içi HUD'ların (mod HUD'ı ve cephane göstergesi) <b>tek görünürlük anahtarı</b>.
-    /// Anahtar kapalıyken bu HUD'lar kendilerini çizmez; ekranı maç sonu ekranı devralmıştır.
+    /// The <b>single visibility switch</b> of the in-game HUDs (the mode HUD and the ammo indicator).
+    /// While the switch is off these HUDs do not draw themselves; the match result overlay has taken
+    /// over the screen.
     /// <para>
-    /// <b>Tek yazarı <c>MatchResultOverlay</c>'dir</b> (App). Başka hiçbir yerden set edilmez —
-    /// ikinci bir yazar, "kim kapattı, kim açacak" sorusunu belirsiz bırakır ve HUD bir gün
-    /// sessizce kapalı kalır.
+    /// <b>Its only writer is <c>MatchResultOverlay</c></b> (App). It is set from nowhere else — a
+    /// second writer would leave "who turned it off, who will turn it back on" ambiguous and one day
+    /// the HUD would silently stay off.
     /// </para>
     /// <para>
-    /// <b>Neden faz değil de anahtar:</b> HUD'lar "faz <c>finished</c> mı" diye kendileri
-    /// baksaydı, maç sonu ekranı herhangi bir sebeple çizilmediğinde (prefab bulunamadı, rol
-    /// admin) oyuncu maç sonunda HİÇBİR şey görmezdi. Anahtarı ekranın kendisi çevirdiği için
-    /// HUD yalnız gerçekten yerine bir şey konduğunda gizlenir.
+    /// <b>Why a switch and not the phase:</b> if the HUDs checked "is the phase <c>finished</c>"
+    /// themselves, then whenever the match result overlay was not drawn for any reason (prefab not
+    /// found, role is admin) the player would see NOTHING at the end of the match. Because the
+    /// overlay itself flips the switch, the HUD is only hidden when something is genuinely put in
+    /// its place.
     /// </para>
     /// <para>
-    /// Durum ve olay <b>statiktir</b> (<c>ModeRuntime</c> deseni): dinleyiciler yazarın ne zaman
-    /// doğduğunu bilmek zorunda kalmasın. Yazar uyanırken anahtarı açık duruma çeker, yani
-    /// domain reload'suz Play girişinden kalan bayat bir <c>true</c> taşınmaz.
+    /// State and event are <b>static</b> (the <c>ModeRuntime</c> pattern) so listeners do not have to
+    /// know when the writer is born. The writer sets the switch to the visible state while waking up,
+    /// so a stale <c>true</c> left over from a Play session without domain reload is not carried over.
     /// </para>
     /// </summary>
     public static class GameplayHudGate
     {
-        /// <summary>Oyun içi HUD'lar gizli mi.</summary>
+        /// <summary>Whether the in-game HUDs are hidden.</summary>
         public static bool Hidden { get; private set; }
 
-        /// <summary>Yalnız DEĞER değiştiğinde tetiklenir (ana thread).</summary>
+        /// <summary>Raised only when the VALUE changes (main thread).</summary>
         public static event Action<bool> HiddenChanged;
 
-        /// <summary>Anahtarı çevirir. Yazarı için bkz. sınıf dokümanı.</summary>
+        /// <summary>Flips the switch. For its writer see the class documentation.</summary>
         public static void SetHidden(bool hidden)
         {
             if (Hidden == hidden)

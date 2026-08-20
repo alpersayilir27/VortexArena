@@ -6,77 +6,75 @@ using Random = UnityEngine.Random;
 namespace VortexArena.Core.Combat
 {
     /// <summary>
-    /// Tüm silahların kovanlarını üreten TEK havuz; ilk istendiğinde kendini kurar ve
-    /// <c>DontDestroyOnLoad</c> olur. Sahneye konmaz, kimse referans bağlamaz — çağıran yalnız
-    /// <see cref="ShellEjector"/> üzerinden <c>CasingPool.Shared.Eject(…)</c> der
-    /// (<see cref="ShotTracer.Shared"/> ile birebir aynı desen).
-    /// <para>⚠️ <b>Havuz silahın üstünde DURAMAZ.</b> Kovan dünya uzayında, silahtan bağımsız
-    /// yaşar; ama süreyi işleten <c>Update</c> silahın bileşeninde olursa silah yok edildiği anda
-    /// o an açık olan kovan bir daha hiç kapanmaz ve sahnede kalıcılaşır. Silah örneği her
-    /// kavra/bırak döngüsünde yeniden yaratılıp yok edildiği için (<see cref="WeaponGranter"/>,
-    /// <see cref="WeaponFrame"/>) bu, maç boyunca biriken yüzlerce Rigidbody + Collider demekti.
-    /// Havuzun ömrü silahın ömründen UZUN olmak zorundadır — sınıfın var oluş sebebi budur ve
-    /// havuz bir daha silah bileşenine geri taşınmaz.</para>
+    /// The ONE pool producing every weapon's casings; self-bootstraps on first use and goes
+    /// <c>DontDestroyOnLoad</c>. Never placed in a scene, never referenced — callers only say
+    /// <c>CasingPool.Shared.Eject(…)</c> through <see cref="ShellEjector"/> (same pattern as
+    /// <see cref="ShotTracer.Shared"/>).
+    /// <para>⚠️ The pool CANNOT live on the weapon. Casings live in world space, independent of the
+    /// weapon; but if the <c>Update</c> driving their lifetime sat on a weapon component, every
+    /// casing live at destruction time would never be hidden again and would stay in the scene.
+    /// Since the weapon instance is recreated and destroyed on every grab/release cycle
+    /// (<see cref="WeaponGranter"/>, <see cref="WeaponFrame"/>) that meant hundreds of accumulated
+    /// Rigidbody + Collider pairs per match. The pool must OUTLIVE the weapon — that is why this
+    /// class exists, and it never moves back into a weapon component.</para>
     /// </summary>
     public class CasingPool : MonoBehaviour
     {
         /// <summary>
-        /// Kovan prefabı başına eşzamanlı kovan tavanı. Tavana vurulduğunda en eski kovan
-        /// erkenden geri alınır.
-        /// <para>⚠️ Havuz silah başına DEĞİL <b>prefab başına</b>: aynı kalibreyi taşıyan TÜM
-        /// silahlar (iki el + o kalibredeki her model) bu tek tavanı paylaşır.</para>
-        /// <para>⚠️ <b>Tavan, kalibreyi paylaşan silah sayısıyla birlikte büyütülmelidir</b> ve
-        /// hesabı şudur: tek silah <c>rpm/60 × <see cref="LifetimeSeconds"/></c> kadar kovanı aynı
-        /// anda havada tutar (666 rpm × 3 sn ≈ 33). Tavan bunun altına düşerse kovan ömrünü
-        /// tamamlamadan geri alınır ve belirti "kovan hiç çıkmıyor"a benzer: kovan doğar, birkaç
-        /// karede yeniden kullanılır, oyuncu yalnız bir titreme görür. Bu YANILTICIDIR — hata
-        /// basılmaz ve silahın kurulumu kusursuz görünür. Çift el + tek kalibrede birden çok model
-        /// oynandığı için tavan tek silahın ihtiyacının iki katına yakın tutulur.</para>
-        /// <para>Maliyet tembeldir: slot ancak gerçekten kullanıldığında instantiate edilir, yani
-        /// bu sayıyı büyütmek hiç ateş edilmeyen bir kalibreye hiçbir şey ödetmez.</para>
+        /// Simultaneous casing cap PER CASING PREFAB; at the cap the oldest casing is recycled early.
+        /// <para>⚠️ The pool is per PREFAB, not per weapon: all weapons sharing a calibre (both
+        /// hands + every model of that calibre) share this single cap.</para>
+        /// <para>⚠️ Grow the cap with the number of weapons sharing a calibre. One weapon keeps
+        /// <c>rpm/60 × <see cref="LifetimeSeconds"/></c> casings airborne (666 rpm × 3 s ≈ 33).
+        /// Below that, casings are recycled before their lifetime ends and the symptom LOOKS LIKE
+        /// "no casings at all": one is born, reused within a few frames, and the player sees only a
+        /// flicker. Misleading — no error is logged and the weapon setup looks perfect. With dual
+        /// wielding plus several models per calibre the cap is kept near twice one weapon's need.</para>
+        /// <para>Cost is lazy: a slot is instantiated only when actually used, so raising this
+        /// number costs nothing for a calibre that is never fired.</para>
         /// </summary>
         private const int PoolSizePerPrefab = 64;
 
-        /// <summary>Kovanın doğuşundan gizlenmesine kadar geçen süre (sn).</summary>
+        /// <summary>Time from a casing's birth to hiding it (s).</summary>
         private const float LifetimeSeconds = 3f;
 
         /// <summary>
-        /// Kovanın collider'ının KAPALI kaldığı süre (sn) — doğduğu andan itibaren.
-        /// <para>⚠️ <b>Bu gecikme şart.</b> Kovan, silahın kendi collider'ının İÇİNDE doğar: çıkış
-        /// noktası gövdenin bir noktasıdır ve gövde de kavranabilir olduğu için kutu collider
-        /// taşır. İki collider iç içe doğduğunda PhysX onları ayırmak için kovana depenetrasyon
-        /// hızı bindirir; bu hız fırlatma itkisinin (1–2 m/s) kat kat üstüne çıkabilir. Sonuç
-        /// belirtisi <b>"kovan hiç çıkmıyor"</b>dur: kovan doğar, göz kaydedemeden sahneden fırlar
-        /// (zeminin altına geçtiği de ölçüldü). Silahtan silaha değişmesi, çıkış noktasının kutu
-        /// içindeki derinliğine ve o karedeki temas çözümüne bağlı olmasındandır — yani aynı
-        /// kurulum bir silahta çalışır, ötekinde çalışmaz gibi görünür ve hata basılmaz.</para>
-        /// <para>Süre kovanın silahtan çıkması için yeter (2 m/s × 0.08 sn ≈ 16 cm) ve zemine
-        /// varmasından çok kısadır, yani kovan yine yere çarpıp yuvarlanır.</para>
+        /// How long the casing's colliders stay DISABLED after birth (s).
+        /// <para>⚠️ This delay is mandatory. The casing is born INSIDE the weapon's own collider:
+        /// the eject point is on the body, and the body carries a box collider because it is
+        /// grabbable. With two colliders overlapping at birth, PhysX applies depenetration velocity
+        /// to separate them, far above the eject impulse (1–2 m/s). The symptom is "no casings at
+        /// all": the casing is born and flies off before the eye catches it (measured going below
+        /// the floor). It varies per weapon because it depends on how deep the eject point sits in
+        /// the box and on that frame's contact resolution — so the same setup appears to work on
+        /// one weapon and not another, with no error logged.</para>
+        /// <para>The delay is enough to clear the weapon (2 m/s × 0.08 s ≈ 16 cm) and far shorter
+        /// than reaching the floor, so the casing still bounces and rolls.</para>
         /// </summary>
         private const float ColliderOffSeconds = 0.08f;
 
         /// <summary>
-        /// Kovanın depenetrasyon hızı tavanı (m/s). Üstteki gecikme ana savunma; bu ikinci hattır
-        /// (kovan yine de bir el/kol/duvar collider'ının içinde doğarsa fırlamasın). Unity'nin
-        /// varsayılanı 10 m/s'dir ve 1 cm'lik bir obje için bu "sahneden kaybol" demektir.
+        /// Casing depenetration velocity cap (m/s). The delay above is the main defence; this is
+        /// the second line (in case the casing is still born inside a hand/arm/wall collider).
+        /// Unity's default is 10 m/s, which for a 1 cm object means "vanish from the scene".
         /// </summary>
         private const float MaxDepenetrationSpeed = 1f;
 
-        /// <summary>Tek bir kovan prefabının round-robin havuzu.</summary>
+        /// <summary>Round-robin pool of a single casing prefab.</summary>
         private sealed class PrefabPool
         {
             public readonly Transform[] Items = new Transform[PoolSizePerPrefab];
             public readonly Rigidbody[] Bodies = new Rigidbody[PoolSizePerPrefab];
 
-            /// <summary>Slotun kovanının collider'ları (kapatıp açmak için; alt objelerde olabilir).</summary>
+            /// <summary>The slot casing's colliders (to toggle; may sit on children).</summary>
             public readonly Collider[][] Colliders = new Collider[PoolSizePerPrefab][];
 
-            /// <summary>Collider'ın geri açılacağı an (<c>Time.time</c>); 0 = beklenen bir açılma yok.</summary>
+            /// <summary>When the collider is re-enabled (<c>Time.time</c>); 0 = nothing pending.</summary>
             public readonly float[] EnableColliderAt = new float[PoolSizePerPrefab];
 
-            /// <summary>Slotun gizleneceği an (<c>Time.time</c>).</summary>
-            // ⚠️ Coroutine DEĞİL: havuz slotu erken yeniden kullanıldığında eski zamanlayıcı yeni
-            // kovanı erken söndürürdü. Slot yeniden kullanıldığında bu alan da yeniden yazılır.
+            /// <summary>When the slot is hidden (<c>Time.time</c>).</summary>
+            // ⚠️ NOT a coroutine: on early slot reuse the old timer would kill the new casing
+            // early. Reusing a slot rewrites this field.
             public readonly float[] ExpireAt = new float[PoolSizePerPrefab];
 
             public int NextIndex;
@@ -84,14 +82,14 @@ namespace VortexArena.Core.Combat
 
         private readonly Dictionary<GameObject, PrefabPool> _pools = new Dictionary<GameObject, PrefabPool>();
 
-        /// <summary>Update'in her karede sözlük yerine üzerinde gezdiği düz liste.</summary>
+        /// <summary>Flat list Update walks each frame instead of the dictionary.</summary>
         private readonly List<PrefabPool> _all = new List<PrefabPool>();
 
         private static CasingPool _shared;
 
         /// <summary>
-        /// Tüm kovanların kullandığı TEK havuz; ilk istendiğinde kendini kurar. Sahneye konmaz,
-        /// prefaba eklenmez — çağıran yalnız <c>CasingPool.Shared.Eject(…)</c> der.
+        /// The ONE pool every casing uses; self-bootstraps on first use. Never placed in a scene or
+        /// added to a prefab — callers only say <c>CasingPool.Shared.Eject(…)</c>.
         /// </summary>
         public static CasingPool Shared
         {
@@ -110,8 +108,8 @@ namespace VortexArena.Core.Combat
 
         private void Awake()
         {
-            // Havuz DDOL olduğu için kovanlar harita değişiminde kendiliğinden yok olmaz —
-            // yeni arenaya eski maçın kovanlarıyla girilmemesi için elle gizlenirler.
+            // The pool is DDOL, so casings do not die on a map change — they are hidden by hand so
+            // the new arena is not entered with the old match's casings.
             SceneManager.sceneLoaded += HandleSceneLoaded;
         }
 
@@ -121,12 +119,13 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Bir kovan fırlatır: havuzdan sıradaki slotu alır, <paramref name="ejectPoint"/>'e
-        /// konumlar ve rastgele itki/tork uygular.
+        /// Ejects a casing: takes the next pool slot, places it at <paramref name="ejectPoint"/> and
+        /// applies random impulse/torque.
         /// </summary>
-        /// <param name="casingPrefab">Kovan prefabı (Rigidbody taşır); havuz prefab başınadır.</param>
-        /// <param name="ejectPoint">Çıkış noktası — kovanın doğduğu yer VE itki yönünün kaynağı
-        /// (<c>right</c> = yana atma). Yeri/dönüşü silah prefabında elle ayarlanır.</param>
+        /// <param name="casingPrefab">Casing prefab (carries a Rigidbody); the pool is per prefab.</param>
+        /// <param name="ejectPoint">Eject point — where the casing is born AND the source of the
+        /// impulse direction (<c>right</c> = throw sideways). Its pose is set by hand in the weapon
+        /// prefab.</param>
         public void Eject(GameObject casingPrefab, Transform ejectPoint,
             float forceMin, float forceMax, float torque)
         {
@@ -147,11 +146,11 @@ namespace VortexArena.Core.Combat
 
             if (pool.Items[i] == null)
             {
-                // ⚠️ Kovan HAVUZUN ALTINA doğar (ebeveynsiz DEĞİL): ebeveynsiz doğsaydı aktif
-                // sahneye düşer ve harita değişiminde yok edilirdi — havuz elinde yok edilmiş
-                // referanslarla kalır, o slot bir daha hiç kullanılamazdı. Havuz kökü
-                // orijinde/kimlik dönüşümündedir, konumlar dünya uzayında yazıldığı için
-                // ebeveynlik kovanın fiziğine hiçbir şey katmaz.
+                // ⚠️ Born UNDER THE POOL, not parentless: a parentless casing lands in the active
+                // scene and is destroyed on a map change, leaving the pool with dead references and
+                // a slot that can never be used again. The pool root is at the origin with identity
+                // rotation and positions are written in world space, so parenting adds nothing to
+                // the casing's physics.
                 GameObject go = Instantiate(casingPrefab, transform);
                 pool.Items[i] = go.transform;
                 pool.Bodies[i] = go.GetComponent<Rigidbody>();
@@ -166,9 +165,9 @@ namespace VortexArena.Core.Combat
             Transform casing = pool.Items[i];
             Rigidbody body = pool.Bodies[i];
 
-            // ⚠️ Collider'lar KAPALI doğar (gerekçe: ColliderOffSeconds). Sıra önemli: kapatma
-            // SetActive'ten ÖNCE olmalı, yoksa kovan bir kare silahın içinde temas üretir ve
-            // depenetrasyon o tek karede işini yapar.
+            // ⚠️ Colliders are born DISABLED (rationale: ColliderOffSeconds). Order matters:
+            // disable BEFORE SetActive, or the casing produces one frame of contact inside the
+            // weapon and depenetration does its damage in that single frame.
             SetCollidersEnabled(pool.Colliders[i], false);
             pool.EnableColliderAt[i] = Time.time + ColliderOffSeconds;
 
@@ -202,7 +201,7 @@ namespace VortexArena.Core.Combat
                         continue;
                     }
 
-                    // Silahın içinden çıkmış: collider geri açılır (bkz. ColliderOffSeconds).
+                    // Clear of the weapon: re-enable the colliders (see ColliderOffSeconds).
                     if (pool.EnableColliderAt[i] > 0f && now >= pool.EnableColliderAt[i])
                     {
                         SetCollidersEnabled(pool.Colliders[i], true);

@@ -5,35 +5,28 @@ using VortexArena.Core.Player;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>
-    /// <c>Tools &gt; VortexArena &gt; Arena &gt; HMD Katmanlarını Kur</c> — <c>VA_CameraRig.prefab</c>
-    /// içindeki <c>CenterEyeAnchor</c>'a <b>iki uyarı yazısını</b> (engelin içi + alanın dışı) ve
-    /// hasar vinyetini kurar. İdempotenttir, tekrar çalıştırmak güvenlidir.
-    ///
-    /// <para><b>Neden rig prefabında:</b> altyapı prefabı tüm arenalarda örnek olarak duruyor, yani
-    /// buraya konan bir katman <b>her arenaya bedavaya</b> gider ve yeni arena bir kurulum adımı
-    /// daha doğurmaz. Aynı sebeple <b>kafaya kilitlidir</b>: yazı <c>CenterEyeAnchor</c>'ın çocuğu
-    /// olduğu için oyuncunun baktığı yerde, görüşün tam ortasında durur — takip/yumuşatma yapan bir
-    /// bileşene ihtiyaç yoktur (<c>HudFollow</c>'un tembel takibi HUD panelleri içindir; ihlal
-    /// uyarısı okunana kadar kaçmamalıdır).</para>
-    ///
-    /// <para><b>Neden araç, neden elle YAML değil:</b> vinyetin materyali <b>bu araç tarafından
-    /// üretiliyor</b> (shader import edilmeden GUID'i bilinemez) ve rig prefabı tüm arenaların
-    /// altyapısıdır — elle bozulan bir satır hepsini birden düşürür. ⚠️ Yazının <b>fontu da burada
-    /// bağlanır</b>: <c>AddComponent&lt;TextMesh&gt;</c> font atamaz ve fontsuz <c>TextMesh</c> hiç
-    /// mesh üretmez, yani uyarı sessizce hiç çizilmez.</para>
-    ///
-    /// <para><b>Çizim sırası prefabdaki MESAFEDEN gelir</b> (yazılar 0.42 · vinyet 0.44 · karartma
-    /// quad'ı 0.5) — sayıları değiştirirken sıra korunmalıdır. Vinyet ayrıca <c>Overlay</c>
-    /// kuyruğundadır, yani mesafeye ek olarak her şeyin üstünde çizilir; gerekçesi
-    /// <see cref="DamageVignette"/>'de.</para>
-    ///
-    /// <para>⚠️ <b>İki yazı aynı anda açık olabilir</b> (muhafaza sahnedeki <c>ArenaObstacle</c>'ları
-    /// da alan dışı sayar → <see cref="VortexArena.Core.Arena.ArenaBoundary"/>), bu yüzden
-    /// üst üste değil <b>dikey olarak istiflenirler</b>: engel uyarısı merkezin biraz üstünde,
-    /// alan-dışı uyarısı biraz altında. Ayrım <see cref="WarningStackOffsetY"/> kadardır — o
-    /// mesafede ~1.6°, yani ikisi de hâlâ "tam karşıda".</para>
-    /// </summary>
+    /// <summary>Installs the two warning texts (inside an obstacle + out of bounds) and the damage
+    /// vignette onto <c>CenterEyeAnchor</c> inside <c>VA_CameraRig.prefab</c>. Idempotent.</summary>
+    /// <remarks>
+    /// <b>Why in the rig prefab:</b> the infrastructure prefab is instanced in every arena, so an
+    /// overlay put here reaches all of them for free and adds no per-arena setup step. Same reason
+    /// it is head locked: as a child of <c>CenterEyeAnchor</c> the text sits dead centre of the view
+    /// with no follow/smoothing component (<c>HudFollow</c>'s lazy follow is for HUD panels; a
+    /// violation warning must not drift away before it is read).
+    /// <para><b>Why a tool and not hand written YAML:</b> the vignette material is generated here
+    /// (a shader's GUID is unknown before import) and the rig prefab is every arena's
+    /// infrastructure, so one broken line takes them all down. ⚠️ The font is bound here too:
+    /// <c>AddComponent&lt;TextMesh&gt;</c> assigns none and a fontless <c>TextMesh</c> generates no
+    /// mesh, so the warning would silently never draw.</para>
+    /// <para>Draw order comes from the DISTANCE in the prefab (texts 0.42 · vignette 0.44 · fade quad
+    /// 0.5) — keep that order when changing numbers. The vignette is additionally in the
+    /// <c>Overlay</c> queue; reason in <see cref="DamageVignette"/>.</para>
+    /// <para>⚠️ Both texts can be on at once (the boundary counts scene <c>ArenaObstacle</c>s as out
+    /// of bounds → <see cref="VortexArena.Core.Arena.ArenaBoundary"/>), so they are stacked
+    /// vertically instead of overlapping: obstacle warning slightly above centre, out-of-bounds
+    /// slightly below, separated by <see cref="WarningStackOffsetY"/> (~1.6° at that distance, so
+    /// both stay "straight ahead").</para>
+    /// </remarks>
     internal static class HmdOverlayBuilder
     {
         private const string MenuPath = "Tools/VortexArena/Arena/HMD Katmanlarını Kur";
@@ -47,62 +40,55 @@ namespace VortexArena.Core.Editor
         private const string BoundaryWarningObjectName = "BoundaryWarningText";
         private const string VignetteObjectName = "DamageVignette";
 
-        /// <summary>Uyarı yazılarının kameradan uzaklığı (m) — karartma quad'ından YAKIN olmalı.</summary>
+        /// <summary>Distance of the warning texts from the camera (m) — must be NEARER than the fade
+        /// quad.</summary>
         private const float WarningZ = 0.42f;
 
-        /// <summary>
-        /// İki uyarı yazısının merkeze göre dikey ayrımı (m, <see cref="WarningZ"/> mesafesinde).
-        /// İkisi de aynı anda açık olabildiği için üst üste binmemeleri gerekir; 1.2 cm bu mesafede
-        /// ~1.6°, yani ayrım okunurluğu kurtarır ama yazıyı görüşün ortasından çıkarmaz.
-        /// </summary>
+        /// <summary>Vertical offset of each warning from centre (m, at <see cref="WarningZ"/>).
+        /// Both can be on at once, so they must not overlap; 1.2 cm is ~1.6° at that distance —
+        /// enough to read them apart without leaving the centre of view.</summary>
         private const float WarningStackOffsetY = 0.012f;
 
-        /// <summary>
-        /// Yazının ölçek çarpanı. ⚠️ <b>Boyut buradan DEĞİL</b> <see cref="WarningCharacterSize"/>'dan
-        /// ayarlanır; bu sabit yalnız <c>TextMesh</c>'in piksel uzayını metreye indiren sözleşmedir
-        /// ve iki yazıda da aynıdır (<c>ObstacleWarningOverlay</c> nabız atarken bunu taban alır).
-        /// </summary>
+        /// <summary>Scale factor of the text. ⚠️ Size is tuned from
+        /// <see cref="WarningCharacterSize"/>, NOT here; this constant only maps <c>TextMesh</c>
+        /// pixel space to metres and is identical for both texts (<c>ObstacleWarningOverlay</c>
+        /// pulses around it).</summary>
         private const float WarningScale = 0.01f;
 
-        /// <summary>
-        /// Yazının büyüklüğü. Satır yüksekliği ≈ <c>FontSize × CharacterSize / 10 × Scale</c> =
-        /// 0.0072 m; <see cref="WarningZ"/> mesafesinde ~1°'lik satır demektir (öncesi ~0.5°'ydi,
-        /// yani okunabilirlik sınırının altında).
-        /// <para>⚠️ Büyütme <b>karakter boyundan</b> yapılır, <see cref="WarningFontSize"/>'dan
-        /// değil: atlas bu mesafede zaten ~6× fazla örneklenmiş (0.05 mm/texel ≈ Quest 3'ün ekran
-        /// pikselinin altıda biri), yani font boyunu büyütmek yalnız atlas belleği harcardı.</para>
-        /// </summary>
+        /// <summary>Visible size of the text: line height ≈
+        /// <c>FontSize × CharacterSize / 10 × Scale</c> = 0.0072 m, i.e. ~1° of line at
+        /// <see cref="WarningZ"/> (below ~0.5° it is under the readability limit).</summary>
+        /// <remarks>⚠️ Scale up via character size, not <see cref="WarningFontSize"/>: at this
+        /// distance the atlas is already ~6× oversampled (0.05 mm/texel ≈ a sixth of a Quest 3
+        /// screen pixel), so a bigger font size would only burn atlas memory.</remarks>
         private const float WarningCharacterSize = 0.1f;
 
-        /// <summary>Fontun rasterleştirme boyu (px) — görünen büyüklüğü değil, keskinliği belirler.</summary>
+        /// <summary>Font rasterization size (px) — drives sharpness, not visible size.</summary>
         private const int WarningFontSize = 72;
 
-        /// <summary>
-        /// ⚠️ ASCII: yerleşik (builtin) font kullanılıyor — Türkçe karakterler bu fontta
-        /// çizilmeyebilir. Aynı sözleşme alan-dışı uyarısı için de geçerlidir.
-        /// </summary>
+        /// <summary>⚠️ ASCII only: the builtin font is used and may not draw Turkish characters.
+        /// Same contract for the out-of-bounds warning.</summary>
         private const string WarningMessage = "DUVARIN ICINDESIN!\nOYUN ALANINA DON";
 
-        /// <summary>Alan-dışı uyarısı — sürücüsü sahnedeki <c>ArenaBoundary</c>'dir.</summary>
+        /// <summary>Out-of-bounds warning — driven by the scene's <c>ArenaBoundary</c>.</summary>
         private const string BoundaryWarningMessage = "OYUN ALANINA GERI DONUN!";
 
-        /// <summary>Engel uyarısının rengi (kehribar).</summary>
+        /// <summary>Obstacle warning colour (amber).</summary>
         private static readonly Color WarningColor = new Color(1f, 0.85f, 0.2f, 1f);
 
-        /// <summary>Alan-dışı uyarısının rengi (kırmızı) — iki ihlal bakışta ayrılsın.</summary>
+        /// <summary>Out-of-bounds warning colour (red) — the two violations read apart at a
+        /// glance.</summary>
         private static readonly Color BoundaryWarningColor = new Color(1f, 0.25f, 0.2f, 1f);
 
-        /// <summary>Vinyetin kameradan uzaklığı (m).</summary>
+        /// <summary>Distance of the vignette from the camera (m).</summary>
         private const float VignetteZ = 0.44f;
 
-        /// <summary>Vinyet quad'ının kenarı (m): 0.44 m'de ~130° kapsar, yani FOV'un tamamı.</summary>
+        /// <summary>Edge of the vignette quad (m): covers ~130° at 0.44 m, i.e. the whole FOV.</summary>
         private const float VignetteSize = 1.9f;
 
-        /// <summary>
-        /// Denetim toleransı. ⚠️ <c>Mathf.Approximately</c> DEĞİL: o, büyüklüğe göre ölçeklenen
-        /// bir epsilon kullanıyor ve burada karşılaştırılan sayılar (0.012 m, 0.01 ölçek) çok
-        /// küçük — elle santim mertebesinde kaydırılmış bir yazı "eşit" sayılırdı.
-        /// </summary>
+        /// <summary>Check tolerance. ⚠️ Not <c>Mathf.Approximately</c>: its epsilon scales with
+        /// magnitude and the numbers compared here (0.012 m, 0.01 scale) are tiny — a text nudged by
+        /// a centimetre would count as "equal".</summary>
         private const float CheckEpsilon = 1e-4f;
 
         [MenuItem(MenuPath, false, 40)]
@@ -153,18 +139,15 @@ namespace VortexArena.Core.Editor
                       $"{AnchorName}/{BoundaryWarningObjectName} + {AnchorName}/{VignetteObjectName}.");
         }
 
-        // ------------------------------------------------------------------ denetim
+        // ------------------------------------------------------------------ check
 
-        /// <summary>
-        /// Rig prefabındaki üç ekran katmanı bu araçtan çıkmış hâliyle duruyor mu — <b>HİÇBİR ŞEY
-        /// YAZMAZ</b> (build hazırlık panelinin okuduğu denetim; yazma tetiğini kullanıcı çeker).
-        /// <para>
-        /// ⚠️ Prefab <b>salt okunur</b> yüklenir (<see cref="AssetDatabase.LoadAssetAtPath"/>);
-        /// <c>LoadPrefabContents</c> KULLANILMAZ: pencere her odaklandığında koşan bir denetim için
-        /// pahalıdır ve rig'i sahneye açtığı için her seferinde OVR uyarıları basar.
-        /// </para>
-        /// </summary>
-        /// <param name="detail">İlk uyuşmazlık (ya da güncelse kısa özet).</param>
+        /// <summary>Whether the rig prefab's three overlays still match this tool's output —
+        /// <b>WRITES NOTHING</b> (read by the build readiness panel; the user pulls the write
+        /// trigger).</summary>
+        /// <remarks>⚠️ The prefab is loaded read-only (<see cref="AssetDatabase.LoadAssetAtPath"/>);
+        /// <c>LoadPrefabContents</c> is NOT used: it is expensive for a check that runs on every
+        /// window focus and it opens the rig into a scene, spamming OVR warnings each time.</remarks>
+        /// <param name="detail">First mismatch, or a short summary when up to date.</param>
         internal static bool IsRigUpToDate(out string detail)
         {
             var root = AssetDatabase.LoadAssetAtPath<GameObject>(RigPrefabPath);
@@ -224,11 +207,10 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>
-        /// Bir uyarı yazısının kurulumu <see cref="ConfigureWarningText"/>'in yazdığıyla aynı mı.
-        /// Fontsuz/ölçüsü kaymış yazı hata basmaz, yalnız okunmaz olur — bu yüzden ölçüler tek tek
-        /// karşılaştırılır.
-        /// </summary>
+        /// <summary>Whether a warning text still matches what <see cref="ConfigureWarningText"/>
+        /// writes.</summary>
+        /// <remarks>A fontless or resized text logs no error, it just becomes unreadable, so every
+        /// measure is compared one by one.</remarks>
         private static bool CheckWarningText(Transform anchor, string objectName, float localY, out string detail)
         {
             Transform go = anchor.Find(objectName);
@@ -297,13 +279,11 @@ namespace VortexArena.Core.Editor
             return Same(a.x, b.x) && Same(a.y, b.y) && Same(a.z, b.z);
         }
 
-        // ------------------------------------------------------------------ uyarı yazıları
+        // ------------------------------------------------------------------ warning texts
 
-        /// <summary>
-        /// Engelin içindeyken çıkan uyarı. Sürücüsü kendi bileşenidir
-        /// (<see cref="ObstacleWarningOverlay"/>), bu yüzden objesi <b>açık</b> bırakılır —
-        /// görünürlüğü Renderer'dan yönetiliyor.
-        /// </summary>
+        /// <summary>Warning shown while inside an obstacle. Driven by its own component
+        /// (<see cref="ObstacleWarningOverlay"/>), so the object is left ACTIVE — visibility is
+        /// handled through the Renderer.</summary>
         private static void ConfigureObstacleWarning(Transform anchor, Font font)
         {
             TextMesh text = ConfigureWarningText(anchor, WarningObjectName, WarningMessage,
@@ -319,12 +299,10 @@ namespace VortexArena.Core.Editor
             AssignReference(overlay, "warningText", text);
         }
 
-        /// <summary>
-        /// Alanın dışındayken çıkan uyarı. ⚠️ Burada <b>bileşen yoktur</b>: objeyi sahnedeki
-        /// <c>ArenaBoundary</c> açıp kapatıyor (<c>TemplateBasicsLoader</c> bağlıyor), bu yüzden
-        /// obje <b>kapalı</b> kurulur — açık bırakılırsa uyarı arenaya girer girmez bir kare
-        /// boyunca çakar.
-        /// </summary>
+        /// <summary>Warning shown while out of bounds. ⚠️ It carries NO component: the scene's
+        /// <c>ArenaBoundary</c> toggles the object (wired by <c>TemplateBasicsLoader</c>), so it is
+        /// created INACTIVE — left active it would flash for one frame on entering the
+        /// arena.</summary>
         private static void ConfigureBoundaryWarning(Transform anchor, Font font)
         {
             TextMesh text = ConfigureWarningText(anchor, BoundaryWarningObjectName,
@@ -333,12 +311,11 @@ namespace VortexArena.Core.Editor
             text.gameObject.SetActive(false);
         }
 
-        /// <summary>
-        /// İki uyarının ortak gövdesi: kafaya kilitli, görüşün ortasında duran, aynı boyda yazı.
-        /// <para>⚠️ <b>Font ve materyal açıkça bağlanır</b>: <c>AddComponent&lt;TextMesh&gt;</c> font
-        /// atamıyor ve fontsuz <c>TextMesh</c> hiç mesh üretmiyor — uyarı hata vermeden, sessizce
-        /// hiç çizilmemiş olurdu.</para>
-        /// </summary>
+        /// <summary>Shared body of both warnings: head locked text of the same size at the centre of
+        /// view.</summary>
+        /// <remarks>⚠️ Font and material are assigned explicitly:
+        /// <c>AddComponent&lt;TextMesh&gt;</c> assigns no font and a fontless <c>TextMesh</c>
+        /// generates no mesh — the warning would silently never draw.</remarks>
         private static TextMesh ConfigureWarningText(Transform anchor, string objectName,
             string message, Color color, float localY, Font font)
         {
@@ -349,9 +326,9 @@ namespace VortexArena.Core.Editor
                 go.transform.SetParent(anchor, false);
             }
 
-            // Yazı kafanın ÇOCUĞUDUR: konum/dönüş sıfırlanınca oyuncunun baktığı yerde, görüşün tam
-            // ortasında kalır. ⚠️ Her koşuda geri yazılır — elle kaydırılmış bir örnek, uyarıyı
-            // gözün kenarına iter ve bunu kimse fark etmez.
+            // The text is a CHILD of the head: zeroed position/rotation keeps it dead centre of the
+            // view. ⚠️ Rewritten on every run — a hand nudged instance would push the warning to the
+            // edge of vision and nobody would notice.
             go.transform.localPosition = new Vector3(0f, localY, WarningZ);
             go.transform.localRotation = Quaternion.identity;
             go.transform.localScale = Vector3.one * WarningScale;
@@ -380,7 +357,7 @@ namespace VortexArena.Core.Editor
             return text;
         }
 
-        // ------------------------------------------------------------------ hasar vinyeti
+        // ------------------------------------------------------------------ damage vignette
 
         private static void ConfigureVignette(Transform anchor, Material material)
         {
@@ -393,8 +370,8 @@ namespace VortexArena.Core.Editor
             }
             else
             {
-                // Yerleşik Quad mesh'i: elle mesh kurmak yerine primitive üretilir, collider'ı
-                // atılır (ekran katmanının fizikte hiçbir işi yok ve atış ışını maskesizdir).
+                // Builtin Quad mesh instead of building one by hand; its collider is removed (a
+                // screen overlay has no business in physics and the shot ray is unmasked).
                 go = GameObject.CreatePrimitive(PrimitiveType.Quad);
                 go.name = VignetteObjectName;
                 go.transform.SetParent(anchor, false);
@@ -418,7 +395,7 @@ namespace VortexArena.Core.Editor
             }
 
             renderer.sharedMaterial = material;
-            renderer.enabled = false; // alfa 0'da çizilmez; bileşen ilk karede zaten karar verir
+            renderer.enabled = false; // nothing to draw at alpha 0; the component decides on frame one
             StripLighting(renderer);
 
             DamageVignette vignette = go.GetComponent<DamageVignette>();
@@ -430,15 +407,14 @@ namespace VortexArena.Core.Editor
             AssignReference(vignette, "vignetteRenderer", renderer);
         }
 
-        // ------------------------------------------------------------------ yardımcılar
+        // ------------------------------------------------------------------ helpers
 
-        /// <summary>
-        /// Vinyet materyali. ⚠️ <b>Araç üretir</b>: shader import edilmeden GUID'i bilinemediği için
-        /// elle yazılmış bir <c>.mat</c> dosyası sessizce boş shader referansıyla açılırdı.
-        /// <para>Materyal bir <b>asset</b>tir ve prefabtan referanslanır — çalışma anında
-        /// <c>Shader.Find</c> ile üretilseydi shader build'den strip edilir ve vinyet Quest'te
-        /// pembe çizilirdi (<c>M_BaseZoneXRay</c> ile aynı tuzak).</para>
-        /// </summary>
+        /// <summary>Vignette material. ⚠️ Generated by the tool: a shader's GUID is unknown before
+        /// import, so a hand written <c>.mat</c> would open with a silently empty shader
+        /// reference.</summary>
+        /// <remarks>The material is an ASSET referenced from the prefab — created at runtime with
+        /// <c>Shader.Find</c> the shader would be stripped from the build and the vignette would
+        /// draw pink on Quest (same trap as <c>M_BaseZoneXRay</c>).</remarks>
         private static Material LoadOrCreateVignetteMaterial()
         {
             var existing = AssetDatabase.LoadAssetAtPath<Material>(VignetteMaterialPath);
@@ -461,11 +437,10 @@ namespace VortexArena.Core.Editor
             return material;
         }
 
-        /// <summary>
-        /// Yerleşik (builtin) font. ⚠️ Adı Unity sürümüyle değişti: 2022.2'den beri
-        /// <c>LegacyRuntime.ttf</c>, öncesinde <c>Arial.ttf</c>. Bulunamayan ad <b>null döner,
-        /// hata basmaz</b> — bu yüzden ikisi de denenir ve sonuç sessizce boş bırakılmaz.
-        /// </summary>
+        /// <summary>Builtin font. ⚠️ Its name changed with the Unity version:
+        /// <c>LegacyRuntime.ttf</c> since 2022.2, <c>Arial.ttf</c> before. A missing name returns
+        /// null without an error, so both are tried and the result is never left silently
+        /// empty.</summary>
         private static Font LoadBuiltinFont()
         {
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
@@ -480,7 +455,7 @@ namespace VortexArena.Core.Editor
             return font;
         }
 
-        /// <summary>Ekran katmanı ışıklandırmaya girmez: gölge yok, probe yok.</summary>
+        /// <summary>Screen overlays stay out of lighting: no shadows, no probes.</summary>
         private static void StripLighting(Renderer renderer)
         {
             renderer.shadowCastingMode = ShadowCastingMode.Off;
@@ -489,11 +464,10 @@ namespace VortexArena.Core.Editor
             renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
         }
 
-        /// <summary>
-        /// <c>[SerializeField] private</c> bir alanı bağlar. Alan gerçekten yoksa sessiz kalmaz:
-        /// bileşen <c>Awake</c>'te <c>GetComponent</c> ile kendini kurtarıyor ama bağın kopması bir
-        /// yeniden adlandırma hatasıdır ve görünmelidir.
-        /// </summary>
+        /// <summary>Wires a <c>[SerializeField] private</c> field.</summary>
+        /// <remarks>A missing field is not passed over silently: the component recovers via
+        /// <c>GetComponent</c> in <c>Awake</c>, but a broken link is a rename bug and must be
+        /// visible.</remarks>
         private static void AssignReference(Object target, string fieldName, Object value)
         {
             var serialized = new SerializedObject(target);
