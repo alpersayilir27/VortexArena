@@ -93,6 +93,20 @@ namespace VortexArena.Core.Player
         private const string RayInteractorTypeName = "RayInteractor";
 
         /// <summary>
+        /// Distance-grab interactors, whose <c>Visuals</c> node draws the tube + reticle the player aims
+        /// a weapon rack with. Two type names cover all four objects per hand
+        /// (<c>ControllerDistanceGrabInteractor</c>, <c>DistanceHandGrabInteractor</c> and
+        /// <c>DistanceControllerHandGrabInteractor</c> — the last two share one component type).
+        /// <para>⚠️ These are looked up so the visuals can be silenced <b>without touching the
+        /// interactor</b>. Disabling the interactor, or filtering the frame out of its candidate list,
+        /// makes ISDK swallow the grip press entirely (<c>WeaponGranter.CanSelectWeapon</c>) — the
+        /// visual is the only part that may be taken away.</para>
+        /// </summary>
+        private const string DistanceGrabInteractorTypeName = "DistanceGrabInteractor";
+
+        private const string DistanceHandGrabInteractorTypeName = "DistanceHandGrabInteractor";
+
+        /// <summary>
         /// The visual container under the ray interactor — this is the only thing that gets toggled.
         /// <para>⚠️ The interactor ITSELF is not disabled (see the class documentation): ripping out the
         /// behaviour just to remove visual noise would be a loss whose cause could not be found later,
@@ -140,6 +154,18 @@ namespace VortexArena.Core.Player
         /// </summary>
         private static readonly List<Object> rayVisualRequesters = new List<Object>(2);
 
+        /// <summary>
+        /// The distance-grab interactors' <c>Visuals</c> nodes (tube + reticle). Separate from
+        /// <see cref="rayVisuals"/>: that one answers "is a world UI being pointed at", this one
+        /// answers "may the player take what they are aiming at".
+        /// </summary>
+        private readonly List<GameObject> grabVisuals = new List<GameObject>(8);
+
+        /// <summary>Who wants the distance-grab visuals SILENCED right now; empty = ISDK draws them
+        /// normally. Held as objects for the same reason as <see cref="rayVisualRequesters"/> — a
+        /// destroyed requester drops out by itself instead of leaving the reticle hidden forever.</summary>
+        private static readonly List<Object> grabVisualSuppressors = new List<Object>(2);
+
         /// <summary>Already logged ones: hiding is REPEATED every frame but the log is printed once.</summary>
         private readonly HashSet<GameObject> logged = new HashSet<GameObject>();
 
@@ -147,6 +173,9 @@ namespace VortexArena.Core.Player
 
         /// <summary>Were the ray visuals last hidden by THIS component — what the one-shot show undoes.</summary>
         private bool rayVisualsHiddenHere;
+
+        /// <summary>Same for the distance-grab visuals.</summary>
+        private bool grabVisualsHiddenHere;
 
         /// <summary>The "player's hand not found" error, once per session.</summary>
         private static bool erroredNoDrivenHandVisual;
@@ -200,6 +229,55 @@ namespace VortexArena.Core.Player
             return rayVisualRequesters.Count > 0;
         }
 
+        /// <summary>
+        /// Silences the DISTANCE-GRAB visuals (tube + reticle) for one requester — idempotent, so it may
+        /// be called every frame. It applies to every rig in the scene, no reference is needed.
+        /// <para>⚠️ <b>This is the ONLY sanctioned way to take that aim feedback away.</b> The tempting
+        /// alternative — filtering the target out of the interactor's candidate list — also removes the
+        /// reticle, but it makes ISDK swallow the grip press: with an empty candidate list the interactor
+        /// still hovers on a queued press, enters Hover with a NULL interactable and dequeues the press
+        /// without selecting anything. The symptom is a press that does nothing and "works on the third
+        /// try" (<c>WeaponGranter.CanSelectWeapon</c>).</para>
+        /// <para>The request must be dropped when the reason ends AND when the requester is destroyed,
+        /// or the player keeps aiming at racks with no reticle.</para>
+        /// </summary>
+        public static void SetGrabVisualsSuppressed(Object requester, bool suppressed)
+        {
+            if (requester == null)
+            {
+                return;
+            }
+
+            for (int i = grabVisualSuppressors.Count - 1; i >= 0; i--)
+            {
+                Object existing = grabVisualSuppressors[i];
+                if (existing == null || existing == requester)
+                {
+                    grabVisualSuppressors.RemoveAt(i);
+                }
+            }
+
+            if (suppressed)
+            {
+                grabVisualSuppressors.Add(requester);
+            }
+        }
+
+        /// <summary>Does anyone want the grab visuals silenced — destroyed requesters are pruned and do
+        /// not count.</summary>
+        private static bool GrabVisualsSuppressed()
+        {
+            for (int i = grabVisualSuppressors.Count - 1; i >= 0; i--)
+            {
+                if (grabVisualSuppressors[i] == null)
+                {
+                    grabVisualSuppressors.RemoveAt(i);
+                }
+            }
+
+            return grabVisualSuppressors.Count > 0;
+        }
+
         private void LateUpdate()
         {
             if (rigRoot == null)
@@ -222,7 +300,9 @@ namespace VortexArena.Core.Player
                 rigRoot = go.transform;
                 targets.Clear();
                 rayVisuals.Clear();
+                grabVisuals.Clear();
                 rayVisualsHiddenHere = false;
+                grabVisualsHiddenHere = false;
                 rescanTimer = float.NegativeInfinity; // new rig: scan immediately
             }
 
@@ -259,6 +339,40 @@ namespace VortexArena.Core.Player
             }
 
             ApplyRayVisuals(RayVisualsWanted());
+
+            // ⚠️ AFTER the unconditional pass above: the distance-grab ghost hand lives under this same
+            // Visuals node and is force-hidden there every frame, so re-showing the node never brings it
+            // back.
+            ApplyGrabVisuals(!GrabVisualsSuppressed());
+        }
+
+        /// <summary>Applies the suppression state to the distance-grab visuals — same one-shot-show
+        /// discipline as <see cref="ApplyRayVisuals"/>: hidden every frame while suppressed (Meta
+        /// re-enables them on controller put-down/pick-up), undone ONCE when the suppression lifts, so
+        /// ISDK keeps owning its own hover/no-target states.</summary>
+        private void ApplyGrabVisuals(bool visible)
+        {
+            if (visible && !grabVisualsHiddenHere)
+            {
+                return; // nothing was hidden here — the state belongs to ISDK
+            }
+
+            grabVisualsHiddenHere = !visible;
+
+            for (int i = grabVisuals.Count - 1; i >= 0; i--)
+            {
+                GameObject visual = grabVisuals[i];
+                if (visual == null)
+                {
+                    grabVisuals.RemoveAt(i);
+                    continue;
+                }
+
+                if (visual.activeSelf != visible)
+                {
+                    visual.SetActive(visible);
+                }
+            }
         }
 
         /// <summary>
@@ -294,8 +408,8 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Re-finds the rig's visuals (all three types in a single pass); ray visuals land on
-        /// their own list because their state is conditional.
+        /// <summary>Re-finds the rig's visuals in a single pass; ray and distance-grab visuals land on
+        /// their own lists because their state is conditional.
         /// <para>The hand visuals the player sees are NEVER added to the list — neither their object
         /// nor their Renderer is touched.</para></summary>
         private void Rescan()
@@ -318,8 +432,26 @@ namespace VortexArena.Core.Player
                 string typeName = mb.GetType().Name;
                 bool isHandVisual = typeName == HandVisualTypeName;
                 bool isRayInteractor = typeName == RayInteractorTypeName;
-                if (!isHandVisual && !isRayInteractor && !(mb is OVRControllerHelper))
+                bool isDistanceGrabInteractor = typeName == DistanceGrabInteractorTypeName ||
+                                                typeName == DistanceHandGrabInteractorTypeName;
+                if (!isHandVisual && !isRayInteractor && !isDistanceGrabInteractor &&
+                    !(mb is OVRControllerHelper))
                 {
+                    continue;
+                }
+
+                if (isDistanceGrabInteractor)
+                {
+                    // Same rule as the ray: the interactor stays alive, only its visual container is
+                    // collected. ⚠️ Do NOT fall through — the ghost hand under this node is picked up
+                    // by its own HandVisual entry, and adding the interactor to `targets` would
+                    // disable distance grabbing outright.
+                    Transform grabNode = mb.transform.Find(RayVisualsNodeName);
+                    if (grabNode != null && !grabVisuals.Contains(grabNode.gameObject))
+                    {
+                        grabVisuals.Add(grabNode.gameObject);
+                    }
+
                     continue;
                 }
 

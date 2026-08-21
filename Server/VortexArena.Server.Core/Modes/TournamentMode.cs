@@ -7,7 +7,7 @@ namespace VortexArena.Server.Core.Modes;
 /// <remarks>Differs from the TDM default at a SINGLE point (§10.5): <see cref="ReviveAnchor.None"/>.
 /// <para>⚠️ The round concept is not a rule field and never enters <see cref="ModeRules"/> — rounds are
 /// this class's internal state, unknown to the core (§10.1). Their only wire traces are
-/// <c>modeState</c> and the <c>health_update</c>s at round start.</para>
+/// <c>modeState</c> and the <c>health_update</c>s the mode asks for when a round CLOSES.</para>
 /// <para>Score means something else here: <c>scoreRed</c>/<c>scoreBlue</c> count rounds won, and
 /// <c>roundSeconds</c> is the ROUND's length, not the match's.</para></remarks>
 public sealed class TournamentMode : IGameMode
@@ -243,6 +243,13 @@ public sealed class TournamentMode : IGameMode
             Console.WriteLine("[tournament] toplanmaya geçilemedi (faz değişmiş) — tur akışı durdu.");
             return;
         }
+
+        // Full health the MOMENT the round closes, not when the next one opens: the eliminated player
+        // walks to their base during the regroup, and leaving them on the death screen for that walk
+        // makes "the round is over" indistinguishable from "I am still dead". The return value needs no
+        // handling — the core refreshes the roster at the playing gate anyway, so a miss here only costs
+        // the early timing.
+        director.TryReviveRosterForMode();
 
         _stage = RoundStage.Regroup;
         ScheduleRegroupReport();

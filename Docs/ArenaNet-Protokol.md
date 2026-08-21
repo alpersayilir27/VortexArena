@@ -1082,10 +1082,19 @@ paused/loading → paused/countdown → playing                     ◄── TU
   bu duraklamayı kaldırmaz (§5.2). Duraklama boyunca **süre işlemez ve hasar yoktur** (faz `paused`).
 - Yeni tur, çekirdeğin **mevcut geri sayımına** girer (`phaseReason:"countdown"`,
   `countdownSeconds` uzunluğunda) ve oradan `playing`'e döner. Yeni bir faz/gerekçe **eklenmedi.**
-- Tur başında sunucu **her oyuncuya `health_update{hp:PLAYER_MAX_HP, attackerId:0}` gönderir** —
-  `playing`'e girerken canların dolması sunucu içi bir tazeleme değil, telde görünen bir olaydır.
-  ⚠️ Gönderilmezse tur içinde ölmüş oyuncu istemcide **ölüm ekranında kalır**: maç içi tur
-  geçişinde `load_match` yoktur, yani istemcinin kendini sıfırlayacağı ikinci bir yol da yoktur.
+- Tur **BİTER BİTMEZ** — toplanma duraklaması açılır açılmaz, geri sayım beklenmeden — sunucu
+  **her oyuncuya `health_update{hp:PLAYER_MAX_HP, attackerId:0}` gönderir**; ölüye de, yarası açık
+  hayatta kalana da. Canların dolması sunucu içi bir tazeleme değil, **telde görünen bir olaydır**.
+  ⚠️ Gönderilmezse tur içinde ölmüş oyuncu istemcide **ölüm ekranında kalır** ve hayatta kalan
+  **bir önceki turdan kalan canını görür**: maç içi tur geçişinde `load_match` yoktur, yani
+  istemcinin kendini sıfırlayacağı ikinci bir yol da yoktur.
+  ⚠️ **Tur bitişi, tur başlangıcı değil:** arada toplanma + geri sayım vardır ve oyuncu o süre
+  boyunca tabanına *yürür*. Tazeleme `playing` kapısına bırakılırsa oyuncu bu yürüyüşün tamamını
+  ölüm ekranında geçirir; "tur bitti" ile "hâlâ ölüyüm" ayırt edilemez. Erken tazeleme geri
+  alınamaz: hasar `playing` ister (§10.3) ve engel sayacı yalnız `playing` tiklerinde ilerler
+  (§10.9).
+  Yine de `playing` kapısı tazelemeyi **koşulsuz tekrarlar** — garanti modun istemesine bağlı
+  kalamaz; tekrarın bedeli aynı değeri taşıyan bir mesajdır.
 - Toplanma kapısı **`set_ready` bayrağını yeniden kullanır** (yükleme kapısının aynısı, §5.1):
   oyuncu kendi taban bölgesine girince `set_ready{true}`, çıkınca `set_ready{false}` yollar. Yeni
   bir mesaj tipi YOKTUR ve eklenmez — "hazırım" zaten bu bayrağın anlamıdır.
@@ -1204,11 +1213,11 @@ hiçbir modun bugünkü akışı bu alanla değişmez.
 
 - **Damga tek kapıdan vurulur:** canlanmanın tek yolu olan `RevivePlayerLocked`.
 - ⚠️ **Maç/tur BAŞLANGICI koruma vermez.** `playing`'e giren herkes — o an ölü olan da canlı olan
-  da — **korumasız** başlar (`EnterLiveLocked` damgayı `MinValue`'ya çeker, ölü dalı
-  `RevivePlayerLocked`'ı `spawnProtect:false` ile çağırır). Gerekçe: koruma ölüp dönen oyuncuyu
+  da — **korumasız** başlar (`EnterLiveLocked` tüm kadroyu `RevivePlayerLocked`'a `spawnProtect:false`
+  ile sokar, damga `MinValue`'ya çekilir). Gerekçe: koruma ölüp dönen oyuncuyu
   doğduğu karede vurulmaktan korumak içindir, oysa maç başında herkes aynı anda ve geri sayımla
-  başlıyor — orada koruma yalnız maçın ilk saniyelerini hasarsız kılardı. ⚠️ İki dal da aynı
-  davranır: biri korumalı diğeri korumasız başlasa aynı maçta iki farklı kural olurdu.
+  başlıyor — orada koruma yalnız maçın ilk saniyelerini hasarsız kılardı. ⚠️ Kadronun tamamı tek
+  kapıdan geçer: biri korumalı diğeri korumasız başlasa aynı maçta iki farklı kural olurdu.
 - **Ölümde silinir.** Ölü oyuncunun telde korumalı görünmesi anlamsızdır; snapshot biti bu yüzden
   `FLAG_ALIVE` ile birlikte okunur (kalkan hayaletin üstüne çizilmez).
 - ⚠️ **Süre TELDE GİTMEZ.** `rules` nesnesinde karşılığı yoktur (§10.5) ve istemci koruma durumunu
