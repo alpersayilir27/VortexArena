@@ -146,6 +146,10 @@ namespace VortexArena.App.Admin
             // Shared mode/map selection so multiple operators see the same screen.
             gameObject.AddComponent<AdminSelection>();
 
+            // Venue background music from a folder on this PC. ⚠️ Admin role only — it reads a
+            // Windows folder and plays on the operator's speakers; the headsets never hear it.
+            gameObject.AddComponent<AdminMusicPlayer>();
+
             var cameraGo = new GameObject("[AdminSpectatorCamera]");
             cameraGo.transform.SetParent(transform, false);
             cameraGo.tag = "MainCamera"; // Camera.main = our camera (RemoteAvatar labels)

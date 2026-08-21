@@ -212,6 +212,19 @@ sürüklemenin kalıcı etkisi yoktur, düzeltmeyi `DimensionMesh'i JSON'a Çevi
 
 ⚠️ Maketi sahneden silme: kalibrasyon işaretçileri onunla gider, sahne fiziksel alana hizalanamaz.
 
+### ⛔ TMP fallback fontunu listeden çıkarma
+
+Ana font `LiberationSans SDF` **statik atlaslıdır ve Türkçe `ı ş ğ İ` gliflerini İÇERMEZ** —
+`ö ü ç` vardır, o yüzden eksik ilk bakışta görünmez: metin patlamaz, yalnız o harfler **kutu (□)**
+çizilir ("taraf□ndan"). Boşluğu `Assets/_Shared/App/UI/Fonts/LiberationSans SDF - Fallback`
+(dinamik atlas) doldurur ve **iki yere birden** bağlıdır: ana fontun `Fallback Font Assets`
+tablosu + `TMP Settings > Fallback Font Assets` (ikincisi Meta SDK'nın Roboto'su gibi başka bir
+fontla yazılmış metni de kurtarır). Biri boşaltılırsa ya da tabloya **null bir satır** bırakılırsa
+oyun içindeki her Türkçe metin sessizce kutulanır.
+
+⚠️ Yeni bir font asset'i eklersen fallback'i ona da bağla; statik atlas ürettiğinde eksik glifi
+**derleme değil, gözlükteki metin** söyler.
+
 ### ⚠️ Arena sahnelerinde `EventSystem` yoktur
 
 Yalnız Lobby'de bir tane var. Sahnene UI düğmesi koyup "tıklanmıyor" diyorsan sebebi budur.

@@ -43,6 +43,10 @@ namespace VortexArena.Core.UI
         [SerializeField] protected TMP_Text healthText;
         [SerializeField] protected TMP_Text statusText;
         [SerializeField] protected GameObject deathOverlay;
+        [Tooltip("Opsiyonel: ölüm ekranındaki katil satırı. Atanmazsa çizilmez.")]
+        [SerializeField] protected TMP_Text deathKillerNameText;
+        [Tooltip("Opsiyonel: ölüm ekranındaki durum/canlanma satırı — statusText'in kopyası.")]
+        [SerializeField] protected TMP_Text deathStatusText;
         [Tooltip("Opsiyonel can barı (Image.type = Filled).")]
         [SerializeField] protected Image healthFill;
         [Tooltip("Opsiyonel: kendi öldürme/ölüm sayacın (lobby_state'ten). Atanmazsa çizilmez.")]
@@ -71,6 +75,11 @@ namespace VortexArena.Core.UI
         private string _countdownLabel = "";
         private bool _countdownActive;
         private bool _killFeedDirty;
+
+        // Who killed the local player, kept as an id (not a resolved name): a lobby_state arriving
+        // later can still turn it into a real name. Cleared only on revive/lobby.
+        private int _deathKillerId;
+        private string _deathWeaponId = "";
 
         // ------------------------------------------------------------ subclass contract
 
@@ -265,6 +274,17 @@ namespace VortexArena.Core.UI
             }
 
             _killFeedDirty = true;
+
+            // The death screen's killer line. ⚠️ Written here and NOT in HandleAliveChanged: death
+            // arrives on health_update (targeted) while this is a broadcast, so the two orders are
+            // not guaranteed. Whichever comes second fills in the line.
+            int self = LocalPlayerId;
+            if (self != 0 && msg.victimId == self)
+            {
+                _deathKillerId = msg.killerId;
+                _deathWeaponId = msg.weaponId ?? "";
+                RefreshDeathLine();
+            }
         }
 
         private void HandleMatchEnd(MatchEndMsg msg)
@@ -306,6 +326,8 @@ namespace VortexArena.Core.UI
             {
                 deathOverlay.SetActive(false);
             }
+
+            ClearDeathLine();
         }
 
         // ------------------------------------------ local health/status binding
@@ -367,6 +389,16 @@ namespace VortexArena.Core.UI
             {
                 deathOverlay.SetActive(!alive);
             }
+
+            if (alive)
+            {
+                ClearDeathLine();
+                return;
+            }
+
+            // ⚠️ The killer is NOT cleared here — kill_event may already have arrived (see
+            // HandleKillEvent). With no killer yet the line opens as a fallback and is rewritten.
+            RefreshDeathLine();
         }
 
         private void HandleStatusChanged(string status)
@@ -378,10 +410,46 @@ namespace VortexArena.Core.UI
         // ---------------------------------------------------------------- drawing
 
         /// <summary>While the countdown is active the big number is shown, otherwise the combat status
-        /// text.</summary>
+        /// text. The death screen carries its own copy: the overlay covers the HUD's own status line,
+        /// and the revive countdown lives in exactly that text.</summary>
         private void RefreshStatusText()
         {
-            SetText(statusText, _countdownActive ? _countdownLabel : _combatStatus);
+            string text = _countdownActive ? _countdownLabel : _combatStatus;
+            SetText(statusText, text);
+            SetText(deathStatusText, text);
+        }
+
+        /// <summary>The death screen's killer line. No killer (environmental death, self-kill, or a
+        /// kill_event that has not arrived yet) is not an error — it has its own text.</summary>
+        private void RefreshDeathLine()
+        {
+            if (deathKillerNameText == null)
+            {
+                return;
+            }
+
+            string line;
+            if (_deathKillerId > 0 && _deathKillerId != LocalPlayerId)
+            {
+                line = $"{NameOf(_deathKillerId)} tarafından öldürüldün!";
+            }
+            else if (string.Equals(_deathWeaponId, ArenaProtocol.WEAPON_ID_OBSTACLE))
+            {
+                line = "Engelde kaldın";
+            }
+            else
+            {
+                line = "Öldün";
+            }
+
+            SetText(deathKillerNameText, line);
+        }
+
+        private void ClearDeathLine()
+        {
+            _deathKillerId = 0;
+            _deathWeaponId = "";
+            SetText(deathKillerNameText, "");
         }
 
         /// <summary>Your own kill/death counter — server-authoritative (§10.2), not counted locally.</summary>
@@ -396,10 +464,14 @@ namespace VortexArena.Core.UI
             SetText(selfStatsText, self == null ? "" : $"{self.kills} öldürme · {self.deaths} ölüm");
         }
 
+        /// <summary>Our own player id; <c>0</c> until the connection is up.</summary>
+        protected static int LocalPlayerId =>
+            PlayerCombatState.Instance != null ? PlayerCombatState.Instance.PlayerId : 0;
+
         /// <summary>Our own row in the roster; null if there is no id or it cannot be found.</summary>
         protected PlayerInfo FindSelf(LobbyStateMsg msg)
         {
-            int playerId = PlayerCombatState.Instance != null ? PlayerCombatState.Instance.PlayerId : 0;
+            int playerId = LocalPlayerId;
             if (playerId == 0 || msg?.players == null)
             {
                 return null;

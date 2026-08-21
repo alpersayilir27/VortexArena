@@ -404,10 +404,21 @@ oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge k
 | ✅ `OnLobbyStateApplied(LobbyStateMsg)` | `virtual` | Bireysel skor tabloları için |
 | ✅ `NameOf(int playerId)` | yardımcı | `playerId` → ad |
 | ✅ `FindSelf(LobbyStateMsg)` | yardımcı | Kendi roster satırın |
+| ✅ `LocalPlayerId` | yardımcı | Kendi `playerId`'in; bağlantı yokken `0` |
 | ✅ `SetText(TMP_Text, string)` | yardımcı | Null-güvenli |
 
 Tabandan **hazır** gelenler: faz/süre, geri sayım, can + can barı, ölüm ekranı, durum metni,
 kill-feed, kendi öldürme/ölüm sayacın.
+
+> **Ölüm ekranı da moda ait DEĞİLDİR:** görseli `_Shared/App/Resources/UI/DeathHud.prefab`'da
+> durur, HUD prefabının altına iç içe konur ve taban açıp kapatır. Katil satırını
+> (`<ad> tarafından öldürüldün!` · `Engelde kaldın` · `Öldün`) ve canlanma sayacını taban yazar —
+> alt sınıfın yapacağı iş yoktur, prefab bağları yeterlidir.
+
+> **Can barı da moda ait DEĞİLDİR:** görseli `_Shared/App/Resources/UI/HealthHud.prefab`'da durur
+> ve o da HUD prefabının altına iç içe konur. Taban iki alanı sürer: `healthFill`
+> (`Backdrop/Fill`, `Image.type = Filled`) ve `healthText` (`Backdrop/Value`). Alt sınıfın işi
+> yoktur.
 
 > ⚠️ Takıma ait hiçbir şey tabanda değildir (bazı modlarda takım yoktur) — renk ve kolon alt sınıfın işi.
 

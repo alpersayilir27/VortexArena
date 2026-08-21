@@ -15639,20 +15639,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c530cc8392efcf149a48306ec118e8de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.WorldScaleTuner
-  magnification: 1.15
-  method: 1
-  liveTuning: 1
-  logDiagnostics: 1
-  _rig: {fileID: 0}
-  _headCamera: {fileID: 0}
-  _trackingSpaceBase: {x: 0, y: 0, z: 0}
-  _baseCaptured: 0
-  _rigScaleApplied: 0
-  _viewMatrixApplied: 0
-  _loggedMagnification: NaN
-  _nextDiagnosticTime: 0
-  _rawSeparation: 0
-  _appliedSeparation: 0
 --- !u!1 &1807544990
 GameObject:
   m_ObjectHideFlags: 0

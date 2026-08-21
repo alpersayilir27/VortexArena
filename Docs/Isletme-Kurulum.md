@@ -218,6 +218,14 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   - `scripts\deploy-player-apk.bat` → `deploy\player\` (**Unity editörü kapalı olmalı** + Android Build Support modülü; platform değişen koşu 20-40 dk sürer)
   - `scripts\deploy-launcher.bat` → `deploy\launcher\` (self-contained; tek ön koşul .NET 10 SDK)
   - Klasörlerin **tamamını** kopyala — exe'ler tek başına çalışmaz.
+- [ ] **Fon müziği klasörü** (isteğe bağlı): admin exe'sinin **yanına** `Muzik` adlı bir klasör aç
+  ve işletmenin çalmasını istediği parçaları (`.mp3` · `.wav` · `.ogg`) içine koy. Admin panelinde
+  *Tercihler → SES → Müzik çalar* bu klasörü okur; maç başlayınca listeden rastgele bir parça
+  kendiliğinden başlar. Klasör yoksa çalar operatörün masaüstündeki `ActionMusics` klasörüne bakar.
+  ⚠️ Müzik **yalnız admin PC'sinin hoparlöründen** çalar — başlıklara gitmez, bu yüzden salon
+  hoparlörleri admin PC'sine bağlı olmalıdır (hangi çıkıştan çalacağı *Tercihler → GÖRÜNÜM → Ses
+  çıkışı* satırından seçilir). ⚠️ Telifli müzik kullanımı işletmenin
+  sorumluluğundadır.
 - [ ] ⚠️ **İşletme PC'sinde Smart App Control (Akıllı Uygulama Denetimi) kapalı olmalı.** Ürettiğimiz
   exe'ler **imzasızdır**; SAC açık bir Windows 11 makinesinde sunucu/launcher/admin başlatılamaz ya
   da sessizce engellenir (`CodeIntegrity` olayı 3077). Bakmak için:
