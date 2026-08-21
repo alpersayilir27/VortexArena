@@ -1,4 +1,3 @@
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using VortexArena.Net;
@@ -8,7 +7,7 @@ namespace VortexArena.App.Admin
 {
     /// <summary>
     /// The <b>match control bar</b> at the bottom center of the HUD: three icon buttons
-    /// (▶ START · ⏸/▶ PAUSE-RESUME · ■ ABORT) plus the last command's status line.
+    /// (▶ START · ⏸/▶ PAUSE-RESUME · ■ ABORT).
     ///
     /// <para><b>Visuals come from the prefab</b> (<c>AdminHud.prefab</c> → <c>MatchBar</c>); this
     /// class only wires, colors and disables the buttons by phase.</para>
@@ -47,10 +46,6 @@ namespace VortexArena.App.Admin
                  "maçta playSprite gösterir.")]
         [SerializeField] private Sprite playSprite;
         [SerializeField] private Sprite pauseSprite;
-
-        [Header("Durum")]
-        [Tooltip("Son komutun insan okuyabilir sonucu (AdminCommands.Status).")]
-        [SerializeField] private TextMeshProUGUI statusText;
 
         private float _nextRefresh;
         private bool _dirty = true;
@@ -93,7 +88,6 @@ namespace VortexArena.App.Admin
 
         private void OnEnable()
         {
-            AdminCommands.StatusChanged += MarkDirty;
             NetEvents.OnConnectionStateChanged += HandleConnectionState;
             NetEvents.OnReturnToLobby += HandleOpenSceneChanged;
             NetEvents.OnLoadMatch += HandleOpenSceneChanged;
@@ -107,7 +101,6 @@ namespace VortexArena.App.Admin
 
         private void OnDisable()
         {
-            AdminCommands.StatusChanged -= MarkDirty;
             NetEvents.OnConnectionStateChanged -= HandleConnectionState;
             NetEvents.OnReturnToLobby -= HandleOpenSceneChanged;
             NetEvents.OnLoadMatch -= HandleOpenSceneChanged;
@@ -216,8 +209,8 @@ namespace VortexArena.App.Admin
 
         // ------------------------------------------------------------------ refresh
 
-        /// <summary>Colors the three buttons and the status line by phase. ⚠️ All fields are read
-        /// null-safely so an unwired element does not take the rest of the bar down.</summary>
+        /// <summary>Colors the three buttons by phase. ⚠️ All fields are read null-safely so an
+        /// unwired element does not take the rest of the bar down.</summary>
         private void Refresh()
         {
             AdminRoster roster = AdminRoster.Instance;
@@ -267,11 +260,6 @@ namespace VortexArena.App.Admin
             if (abortIcon != null)
             {
                 abortIcon.color = !inLobby ? UiKit.Bad : UiKit.Faint;
-            }
-
-            if (statusText != null)
-            {
-                statusText.text = AdminCommands.Status;
             }
         }
     }
