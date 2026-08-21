@@ -480,13 +480,14 @@ de odur (§3.8.2).
 | Çekirdek API | İş |
 |---|---|
 | `TryPauseForMode(modeState)` | `playing` → `paused`/`mode`; süre 0'lanır, `ready` bayrakları temizlenir |
+| `TryReviveRosterForMode()` | Kadronun tamamını **hemen** tam cana çeker + herkese `health_update` (tur kapanışı) |
 | `SetModeState(modeState)` | Ara durumu yazar, **yalnız değiştiyse** `match_state` yayınlar |
 | `TryStartRound()` | `paused`/`mode` → geri sayım → `playing` (çekirdeğin normal yolu) |
 | `TryCancelCountdownForMode(modeState)` | Geri sayımı geri alır: `paused`/`countdown` → `paused`/`mode` |
 
 Akış: tur `playing`'de koşar → mod turu bitirir (eleme ya da süre) → maç bitmediyse
-`paused`/`mode` + `modeState:"regroup:2/6"` → herkes kendi tabanına yürüyüp `set_ready{true}`
-yollar → geri sayım → yeni tur. **Geri sayım her koşulda geri alınabilir:** biri tabanından çıkıp
+`paused`/`mode` + `modeState:"regroup:2/6"` **+ kadronun tamamı anında tam cana çekilir** → herkes
+kendi tabanına (canlı olarak) yürüyüp `set_ready{true}` yollar → geri sayım → yeni tur. **Geri sayım her koşulda geri alınabilir:** biri tabanından çıkıp
 bayrağını düşürürse mod geri sayımı iptal eder ve toplanmaya döner; istisnası yoktur. Kural
 "tabanda **bekle**"dir, "tabana uğra" değil — şart girişte bir kez değil, tur açılana kadar
 **sürekli** ölçülür.
@@ -535,10 +536,20 @@ zaten sıfırlar. Kendi tabanına **GİRİŞ kenarında** iki kumandaya üç kı
 ölçüt fail-open'lı "hazır sayıldı" değil GERÇEK bölge girişidir (taban bulunamadığında titreşim
 yalan olurdu).
 
-⚠️ **Tur başında sunucu herkese `health_update` yollar** (`RevivePlayerLocked`). Sunucu içi
+⚠️ **Tur BİTER BİTMEZ sunucu herkese `health_update` yollar** — ölüye de, **yarası açık hayatta
+kalana da**; ayrım yapan bir dal YOKTUR, kadronun tamamı `RevivePlayerLocked`'tan geçer. Sunucu içi
 alanları sessizce sıfırlamak yetmez: maç içi tur geçişinde `load_match` yoktur, yani istemcinin
-kendini sıfırlayacağı ikinci bir yol da yoktur — mesaj gitmezse tur içinde ölmüş oyuncu ölüm
-ekranında donar.
+kendini sıfırlayacağı ikinci bir yol da yoktur. Mesaj gitmezse tur içinde ölmüş oyuncu ölüm
+ekranında donar; **hayatta kalan da bir önceki turdan kalan canını görmeye devam eder** — sunucu
+`PLAYER_MAX_HP` okurken istemci eski değeri çizer ve iki taraf sonraki isabete kadar ayrı konuşur.
+
+⚠️ **Tazeleme geri sayıma bırakılMAZ.** Tur bitişi ile yeni turun `playing`'i arasında toplanma +
+geri sayım vardır; oyuncu o süre boyunca tabanına *yürür*. Modun `TryReviveRosterForMode` ile tur
+kapanışında istediği tazeleme bu yürüyüşü canlı geçirtir — aksi hâlde "tur bitti" ile "hâlâ ölüyüm"
+ayırt edilemez. Erken tazeleme geri alınamaz: hasar `playing` ister, engel sayacı da yalnız
+`playing` tiklerinde ilerler. `EnterLiveLocked` yine de aynı tazelemeyi **koşulsuz tekrarlar**:
+garanti, modun istemeyi hatırlamasına bağlı kalamaz (tekrarın bedeli aynı değeri taşıyan bir
+mesajdır).
 
 ⚠️ **Mod kancaları `await` edemez** (`OnTick` `void`). Bu yüzden yukarıdaki üç API mesajı doğrudan
 göndermez: kilit altında bir bekleyen kutuya yazar, tik döngüsü kanca dönüşünde yollar. Tek
@@ -1897,7 +1908,7 @@ arena geometrisini üreten ve kavrama pozunu yazan araçlar:
 | `StateHost` | UDP kaydı, poz alımı, 20 Hz snapshot yayını (16 girdiden fazlası MTU'ya sığan parçalara bölünür; olay varsa ve sığıyorsa `0x05` ile tek datagramda birleşir), `0x06` RTT echo'su. **Telemetriyi burada üretir:** saniyelik `[state]` satırı — gerçek bayt-sn/paket-sn, tik kayması, uplink jitter + poz/olay kaybı; eşiği aşan oyuncu için ek `[net]` satırı |
 | `PlayerRegistry` | Oyuncu listesi, `playerId` tahsisi (1..255), `devices.json` ile kalıcı **kimlik** (ad + forma numarası), bağlantı durumu ve **maç katılımcısı defteri**. ⚠️ **"Çevrimdışı" diye bir durum YOKTUR** (§2): `Connected` → soket düştü ya da `HEARTBEAT_TIMEOUT` doldu → `Reconnecting` (kayıt durur, maç kapılarına girmez) → `RECONNECT_GRACE` da dolarsa oyuncu **çıkarılır**: koşan maçın katılımcısıysa `Left` olarak maç sonuna kadar durur, değilse kayıt silinir ve playerId havuza döner. **Maç defteri** (`MatchParticipant` → `inMatch`) istatistik satırını bağlantıdan bağımsız kılar: `left` bir kayıt yalnız bu bayrak yüzünden yaşar. ⚠️ Defter **lobiye dönerken** kapanır, `match_end`'de DEĞİL — erken temizlik maç sonu tablosunu tam da okunduğu anda boşaltırdı. ⚠️ `Left` kayıtlar `_players`'ta durduğu için playerId'leri `NextFreePlayerIdLocked` tarafından zaten atlanır; ayrı bir rezervasyon defteri gerekmez. ⚠️ Toplu bayrak yazımı (maç kurulumu/kapanışı) **tek bir** `Updated` yayınlar — kayıt başına yayın N tam roster JSON'u demek olurdu. ⚠️ Soket alanının adı `Socket`'tir; `Connection` **durumu** taşır (aynı isimde iki kavram olamazdı). **Kimlik:** ilk bağlantıda ad 20'lik havuzdan rastgele (kullanılmayanlar arasından), numara 1'den itibaren ilk boş (1..99); `set_identity` ikisini de değiştirir. Adlar tekrar edebilir, **numara tüm KAYITLI cihazlar arasında benzersizdir** — sahiplik sorgusu `_players`'a değil `_devices`'a bakar (hiç bağlanmamış cihaz da numara tutar). Çevrimiçi sahipten numara istenirse reddedilir; çevrimdışı sahip **aynı anda** yeniden numaralanır. **Rol başına kalıcılık farkı:** oyuncu kaydı yukarıdaki iki aşamadan geçer (deviceId kalıcı, geri dönen aynı satıra oturur — ad, numara, takım, `kills/deaths/score` korunur); **admin kaydı ilk adımda tümüyle SİLİNİR** ve `Reconnecting` durumuna hiç girmez (deviceId oturumluk — geri gelen admin yeni bir kimlikle gelir, o satır asla eşleşemezdi; ayrıca her açıp kapatma roster'da hayalet satır ve tükenen playerId bırakırdı) ve admin adı diske yazılmaz. Aynı PC'de iki admin varsa ad " (2)" ile ayrıştırılır. **Atma bunun istisnasıdır** (`RemoveByPlayerId`): kayıt anında silinir ve katılımcılıktan da düşer — kopma satırı bırakır (maç sonu tablosunda görünür), atma bırakmaz; `devices.json`'a dokunulmaz, yani atılan cihaz geri bağlanırsa adını/numarasını korur (§5.4) |
 | `LobbyService` | Roster yayını (`lobby_state`) — **tek yayıncı döngüden**, kirli bayrakla birleştirilerek, her yayında `version` artarak (Tuzaklar: "ateşle-unut yayın sıra garantisi vermez"); `status.rosterVersion` geride kalan istemciye yalnız ona tam snapshot yollatır. Ayrıca ready/takım/kick/`set_identity` + **adminler arası ortak durumun sahibi**: mod/harita seçimi burada yaşar, `set_selection` ile değişir, `admin_state` ile yalnız adminlere yayılır. Her admin komutu "kim ne yaptı" duyurusu üretir |
-| `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş hattı, can/skor, canlanma.** Mod kaydı tek yerde (`RegisterModes()` — yeni mod buraya bir satır). **Skor defteri:** `AddScore(team,…)` (takım) + `AddPlayerScore/ScoreOf/TryGetLeader` (bireysel); modlar skoru YALNIZ buradan yazar. **Mod komutları** (§3.8.2): `TryPauseForMode` / `SetModeState` / `TryStartRound` / `TryCancelCountdownForMode` — modun fazı doğrudan yazmasını (ikinci otorite) ve kendi mesajını yollamasını (ikinci gönderici) gereksiz kılar. **Dost ateşi anahtarının da sahibi burasıdır** (§3.9): açılışta kapalı, yalnız `set_friendly_fire` çevirir, yürürlükteki kural şekline `ApplyRulesLocked` damgalar. ⚠️ **Takımdaş öldürmede `OnKill` çağrılmaz** — skor yazılmaz, `kills`/`deaths` ve kill feed işler. **Canlandırmanın tek yolunun sahibi burasıdır** (§3.7): `HandleReviveRequestAsync` (oyuncunun talebi) → `RevivePlayerLocked`. ⚠️ **Operatörün elle canlandırması YOKTUR** — ikinci bir yol açılırsa §3.7'deki yasakların hepsi orada da tekrarlanmak zorundadır. **İhlal defteri de burada tutulur** (§10.9): oyuncu **ve tür** başına (`obstacle` / `out_of_bounds`) sayı + toplam süre, kenarlar `violation` mesajı olarak yalnız adminlere yayılır ve defter `return_to_lobby`'de skorla birlikte sıfırlanır. ⚠️ Kenarın başlangıcı `VIOLATION_MIN_SECONDS` dolana kadar **bekletilir** — sınırda salınan oyuncu akışı kullanılamaz hâle getirirdi; eşik yalnız akış/defter içindir, ceza ilk kareden itibaren işler. ⚠️ **Alan-dışı bayrağı can eritmez** — tazelik kapısı (`OBSTACLE_FLAG_STALE_MS`) yine her iki türe de uygulanır, yoksa susmuş bir istemci akışta sonsuza kadar açık bir ihlal bırakırdı. ⚠️ Canlandırma `ResetMatchStateLocked` ile YAPILMAZ: o sunucudaki alanları yazar ama istemciye hiçbir şey göndermez, oyuncu ölüm ekranında donar |
+| `MatchDirector` | **Faz makinesi (10 Hz tick), vuruş hattı, can/skor, canlanma.** Mod kaydı tek yerde (`RegisterModes()` — yeni mod buraya bir satır). **Skor defteri:** `AddScore(team,…)` (takım) + `AddPlayerScore/ScoreOf/TryGetLeader` (bireysel); modlar skoru YALNIZ buradan yazar. **Mod komutları** (§3.8.2): `TryPauseForMode` / `TryReviveRosterForMode` / `SetModeState` / `TryStartRound` / `TryCancelCountdownForMode` — modun fazı doğrudan yazmasını (ikinci otorite) ve kendi mesajını yollamasını (ikinci gönderici) gereksiz kılar. **Dost ateşi anahtarının da sahibi burasıdır** (§3.9): açılışta kapalı, yalnız `set_friendly_fire` çevirir, yürürlükteki kural şekline `ApplyRulesLocked` damgalar. ⚠️ **Takımdaş öldürmede `OnKill` çağrılmaz** — skor yazılmaz, `kills`/`deaths` ve kill feed işler. **Canlandırmanın tek yolunun sahibi burasıdır** (§3.7): `HandleReviveRequestAsync` (oyuncunun talebi) → `RevivePlayerLocked`. ⚠️ **Operatörün elle canlandırması YOKTUR** — ikinci bir yol açılırsa §3.7'deki yasakların hepsi orada da tekrarlanmak zorundadır. **İhlal defteri de burada tutulur** (§10.9): oyuncu **ve tür** başına (`obstacle` / `out_of_bounds`) sayı + toplam süre, kenarlar `violation` mesajı olarak yalnız adminlere yayılır ve defter `return_to_lobby`'de skorla birlikte sıfırlanır. ⚠️ Kenarın başlangıcı `VIOLATION_MIN_SECONDS` dolana kadar **bekletilir** — sınırda salınan oyuncu akışı kullanılamaz hâle getirirdi; eşik yalnız akış/defter içindir, ceza ilk kareden itibaren işler. ⚠️ **Alan-dışı bayrağı can eritmez** — tazelik kapısı (`OBSTACLE_FLAG_STALE_MS`) yine her iki türe de uygulanır, yoksa susmuş bir istemci akışta sonsuza kadar açık bir ihlal bırakırdı. ⚠️ Canlandırma `ResetMatchStateLocked` ile YAPILMAZ: o sunucudaki alanları yazar ama istemciye hiçbir şey göndermez, oyuncu ölüm ekranında donar |
 | `MapTable` | `maps.json` (Unity export'undan) — sunucunun okuduğu tek içerik tablosu. Girdi başına yalnız `sceneName` + `modes`; **arena ÖLÇÜSÜ yoktur** (sunucu metre kullanmaz, §7.30) |
 | `Modes/IGameMode` + `TdmMode` + `FfaMode` | Mod kuralları: skor, kazanma koşulu, tur süresi. Yeni kancalar **varsayılan gövdeyle** eklenir (default interface method) → mevcut modların hiçbiri değişmez; **tüketicisi olmayan kanca EKLENMEZ**. `FfaMode` yüzeyin ilk tüketicisidir: takımsız + bireysel skor + sabit durma canlanması, `MatchDirector`'a tek satır kayıt dışında hiçbir dokunuş yok. `OnRoundStart` ikinci örnektir: Live'a HER girişte çağrılır, tur kavramı olmayan modlar hiç yazmaz |
 | `Modes/TournamentMode` | **Tur tabanlı takım elemesi** (§3.8.2). Kural olarak TDM'den tek farkı `Revive = None`'dır; turun tamamı bu sınıfın iç durumudur (`_round`, `_roundLive`, `_matchOver`). Eleme `OnKill`'de değil **`OnTick` taramasında** ölçülür — takım bağlantı kopmasıyla da boşalır ve o yolda `OnKill` çağrılmaz; tek tarama tek doğruluk kaynağıdır. Süre dolunca **savaşabilir** (canlı **ve** kalibreli) sayısı fazla olan tur alır, eşitse kimseye puan yok. Toplanma kapısı `set_ready` bayrağını yeniden kullanır ve **zaman aşımı yoktur**: tur herkes tabanına girmeden başlamaz, geri sayım her koşulda iptal edilebilir, çıkış operatörün `kick`/`abort_match` komutudur. Bekleme uzarsa 30 sn'de bir konsola teşhis satırı basar (tur başlatmaz). ⚠️ `IsMatchOver`'da `TimeRemaining <= 0` dalı YOKTUR: bu modda o sayaç **turun**dur |
@@ -2769,12 +2780,16 @@ konsoluna tek satır sebep yazar.
     onlara bağlıdır, kapatılırsa silah hiç tutulamaz. ⚠️ Gizleme tek seferlik değil `LateUpdate`
     başınadır: Meta bırak-tut'ta bu objeleri yeniden aktifleştirir. Genel ders: SDK'nın **adı** bir
     sözleşme değildir, bileşen tipi öyledir.
-67. **Sunucudaki maç durumunu sessizce sıfırlamak, istemciyi ölüm ekranında DONDURUR.**
+67. **Sunucudaki maç durumunu sessizce sıfırlamak, istemciyi bir önceki turda BIRAKIR.**
     `ResetMatchStateLocked` `Hp`/`Alive` alanlarını yazar ama telde hiçbir şey üretmez. Tek turlu
-    modlarda zararsızdı: istemci zaten `load_match` geldiğinde kendini sıfırlıyor. Tur tabanlı modda
+    modlarda zararsızdır: istemci zaten `load_match` geldiğinde kendini sıfırlıyor. Tur tabanlı modda
     (§3.8.2) turlar arası `load_match` **yoktur** → mesaj gitmeyince ölü oyuncu `playing` fazına ölü
-    ekranıyla girer ve ateş edemez. Kural: **oyuncunun görebileceği bir durum değişimi telde de
-    görünmelidir** — canlandırma `RevivePlayerLocked` (`health_update`) ile yapılır.
+    ekranıyla girer ve ateş edemez, **hayatta kalan da bir önceki turdan kalan canıyla oynamaya
+    devam ettiğini sanır** (sunucu `PLAYER_MAX_HP`, istemci eski değer; sapma sonraki isabete kadar
+    sürer). ⚠️ İkincisi sessizdir — donmuş ölüm ekranı görülür, yanlış çizilen can barı
+    görülmez; bu yüzden **"canlı olan zaten iyidir" diye dal AÇILMAZ**, kadronun tamamı tek kapıdan
+    geçer. Kural: **oyuncunun görebileceği bir durum değişimi telde de görünmelidir** — tur başında
+    can tazelemesi `RevivePlayerLocked` (`health_update`) ile yapılır, alan yazarak değil.
 68. **Otoriter bir yasak yalnız istemci kapısında durmaz.** Canlanma yasaklarının üçü de
     (kalibrasyon, `reviveAnchor:"none"`, engelin içinde olmak) iki uçta birden uygulanır: istemci
     talebi hiç göndermez, sunucu gelirse **reddeder** (§3.7). İstemci tarafı sunumdur — ölüm ekranı

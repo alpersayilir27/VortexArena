@@ -620,8 +620,17 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>ISDK gate: may this interactor select the weapon right now — CALIBRATED, BOTH
-        /// hands empty, and within <see cref="maxGrabDistance"/>.
+        /// <summary>ISDK gate: may this interactor select the weapon right now — CALIBRATED and
+        /// within <see cref="maxGrabDistance"/>.
+        /// <para>⚠️ <b>Only conditions that are STABLE across a grip press belong here</b>, and
+        /// "does the player already hold a weapon" is NOT one of them — that rule lives in
+        /// <c>WeaponGranter.SelectWeapon</c> and must stay there. A filter that flips with the grip
+        /// empties the candidate list mid-press, and ISDK then hovers a NULL interactable and
+        /// DEQUEUES the press without selecting anything (<c>Interactor.ShouldHover</c> /
+        /// <c>Select</c>): the press vanishes, the old weapon arrives instead, and only a release
+        /// plus a fresh press has a chance. To keep the reticle off a full hand, suppress the
+        /// VISUALS (<c>ControllerModelHider.SetGrabVisualsSuppressed</c>) — never the
+        /// candidacy.</para>
         /// <para>⚠️ FAIL-OPEN when the hand/anchor cannot be resolved: this is a FEEL gate, not a
         /// safety gate. An Editor session cannot resolve a controller, and failing closed would
         /// make the weapon unselectable in the Editor, i.e. untestable.</para></summary>
@@ -629,22 +638,11 @@ namespace VortexArena.Core.Combat
         {
             // ⚠️ An uncalibrated player cannot take a weapon (§10.6), and the gate lives HERE
             // rather than on the selection path: a frame dropped from the candidate list draws no
-            // ray/reticle either. On the selection side the player would aim, press grip and see
-            // nothing. Delivery is also closed by WeaponGranter.CanHoldWeapon; this gate does not
-            // replace it, it gives the player correct feedback.
+            // ray/reticle either. Safe to filter on because calibration does not change under the
+            // player's thumb — unlike "is a weapon in hand" (see the summary). Delivery is also
+            // closed by WeaponGranter.CanHoldWeapon; this gate does not replace it, it gives the
+            // player correct feedback.
             if (!CalibrationState.IsCalibrated)
-            {
-                return false;
-            }
-
-            // ⚠️ A weapon in EITHER hand closes the frame for BOTH: the free hand may not pick a
-            // second weapon. Dropping the frame from the candidate list is what makes it silent —
-            // no ray, no reticle, nothing to aim at — which is the point: the player must not see
-            // an offer they cannot take. Reads an end-of-frame SNAPSHOT; never rewrite it as a live
-            // "is a weapon in hand" query (see WeaponGranter.CanSelectWeapon: grip selects and
-            // summons on the same frame, and a live check would lock the player to their first
-            // weapon forever). Swapping at the rack costs one grip release.
-            if (!WeaponGranter.CanSelectWeapon)
             {
                 return false;
             }
