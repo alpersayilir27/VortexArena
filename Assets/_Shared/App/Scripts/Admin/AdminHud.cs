@@ -2,10 +2,8 @@ using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using VortexArena.Net;
-using VortexArena.Protocol;
 
 namespace VortexArena.App.Admin
 {
@@ -21,8 +19,8 @@ namespace VortexArena.App.Admin
     /// at 5000 and may cover the HUD — without a connection there is no live data to show. Changing
     /// it breaks the order of the two screens.</para>
     /// <para>Refresh is event driven (<see cref="AdminRoster.Changed"/>,
-    /// <see cref="AdminSession.Changed"/>); only time-dependent fields (clock, respawn countdown,
-    /// snapshot age) tick at <see cref="RefreshInterval"/> (~4 Hz).</para>
+    /// <see cref="AdminSession.Changed"/>); only time-dependent fields (respawn countdown) tick at
+    /// <see cref="RefreshInterval"/> (~4 Hz).</para>
     /// </summary>
     public class AdminHud : MonoBehaviour
     {
@@ -56,11 +54,6 @@ namespace VortexArena.App.Admin
         [SerializeField] private TextMeshProUGUI leaderboardText;
         [Tooltip("Skorların ortasındaki chip: faz/süre yazar, tıklanınca istatistikleri açar.")]
         [SerializeField] private TextMeshProUGUI chipText;
-        [SerializeField] private TextMeshProUGUI matchInfoText;
-        [SerializeField] private TextMeshProUGUI connectionText;
-        [Tooltip("Başka bir adminin son eylemi (admin_state.notice).")]
-        [SerializeField] private TextMeshProUGUI adminNoticeText;
-        [SerializeField] private Image connectionDot;
 
         [Header("Kolonlar")]
         [Tooltip("Kırmızı takım kolonu; FFA'da tek kolon olarak kullanılır.")]
@@ -81,7 +74,6 @@ namespace VortexArena.App.Admin
         [Tooltip("Kamera kipi düğmelerinin ETİKETLERİ — modeButtons ile aynı sırada.")]
         [SerializeField] private TextMeshProUGUI[] modeLabels = new TextMeshProUGUI[3];
         [SerializeField] private Button[] modeButtonTargets = new Button[3];
-        [SerializeField] private TextMeshProUGUI selectedText;
         [SerializeField] private TextMeshProUGUI killFeedText;
 
         [Tooltip("İhlal akışı (§10.9) — kill feed'den AYRI bir metin alanı olmalıdır: " +
@@ -230,7 +222,7 @@ namespace VortexArena.App.Admin
 
             RefreshTopBar(roster);
             RefreshColumns(roster);
-            RefreshCameraBar(roster);
+            RefreshCameraBar();
             RefreshKillFeed(roster);
             RefreshViolationFeed(roster);
         }
@@ -257,107 +249,9 @@ namespace VortexArena.App.Admin
             if (chipText != null)
             {
                 // ⚠️ The chip is a BUTTON and says what it does — never the phase name. A varying
-                // label made "where are the stats" a per-phase question. The one thing that must
-                // not disappear, the clock/countdown, lives on the match line (RefreshMatchInfo).
+                // label made "where are the stats" a per-phase question.
                 chipText.text = ChipLabelText;
             }
-
-            RefreshMatchInfo(roster, ffa);
-            RefreshConnection(roster);
-        }
-
-        /// <summary>
-        /// TIME suffix of the match line — countdown, remaining time or winner.
-        /// <para>The phase NAME is deliberately omitted (empty in the lobby): the operator sees the
-        /// map from the scene. Only what cannot be known by looking is written.</para>
-        /// </summary>
-        private static string StatusSuffix(AdminRoster roster)
-        {
-            if (roster.PhaseReason == ArenaProtocol.PAUSE_REASON_COUNTDOWN && roster.CountdownSeconds > 0)
-            {
-                return $"BAŞLIYOR {roster.CountdownSeconds}";
-            }
-
-            if (roster.Phase == ArenaProtocol.PHASE_FINISHED)
-            {
-                return WinnerLabel(roster);
-            }
-
-            if (roster.Phase == ArenaProtocol.PHASE_PLAYING)
-            {
-                return $"{FormatTime(roster.TimeRemaining)} · LIVE";
-            }
-
-            // A pause is an OPERATOR decision and believing the match runs is costly → written.
-            // Lobby and loading are not: both are visible from the scene.
-            return PhaseLabel(roster.Phase, roster.PhaseReason) is { Length: > 0 } label &&
-                   roster.Phase == ArenaProtocol.PHASE_PAUSED &&
-                   roster.PhaseReason != ArenaProtocol.PAUSE_REASON_LOBBY
-                ? label
-                : "";
-        }
-
-        private void RefreshMatchInfo(AdminRoster roster, bool ffa)
-        {
-            if (matchInfoText == null)
-            {
-                return;
-            }
-
-            // While waiting in the lobby the admin may be PREVIEWING an arena locally → write the
-            // scene actually being looked at, not the one the server reports.
-            string activeScene = SceneManager.GetActiveScene().name;
-            bool previewing = roster.PhaseReason == ArenaProtocol.PAUSE_REASON_LOBBY &&
-                              activeScene != roster.SceneName &&
-                              activeScene != AppSession.SceneLobby;
-            string map = previewing
-                ? $"{activeScene} (önizleme)"
-                : string.IsNullOrEmpty(roster.SceneName) ? "-" : roster.SceneName;
-            string mode = string.IsNullOrEmpty(roster.ModeId) ? "-" : AdminContent.ModeDisplayName(roster.ModeId);
-            string line = ffa ? $"{mode} · {map} · herkes tek" : $"{mode} · {map}";
-
-            // Clock/countdown lives here, not on the chip (see StatusSuffix): the chip carries a
-            // fixed button label and the time must not disappear.
-            string status = StatusSuffix(roster);
-            matchInfoText.text = status.Length > 0 ? $"{line} · {status}" : line;
-        }
-
-        private void RefreshConnection(AdminRoster roster)
-        {
-            ArenaClient client = ArenaClient.Instance;
-            bool connected = client != null && client.IsConnected;
-            float age = roster.SnapshotAge;
-
-            if (!connected)
-            {
-                if (connectionDot != null)
-                {
-                    connectionDot.color = UiKit.Bad;
-                }
-
-                if (connectionText != null)
-                {
-                    connectionText.text = AppSession.HasServerEndpoint
-                        ? $"bağlı değil — {AppSession.ServerIp}:{AppSession.ServerPort}"
-                        : "bağlı değil (adres yok)";
-                }
-            }
-            else
-            {
-                if (connectionDot != null)
-                {
-                    // A snapshot older than 1 s means the pose stream stopped (no players or network trouble).
-                    connectionDot.color = age >= 0f && age <= 1f ? UiKit.Good : UiKit.Accent;
-                }
-
-                if (connectionText != null)
-                {
-                    connectionText.text = $"{client.ServerIp}:{client.ServerPort}" +
-                                          (age >= 0f ? $" · poz {age:0.0} sn" : " · poz yok");
-                }
-            }
-
-            RefreshAdminNotice(connected);
         }
 
         /// <summary>
@@ -403,41 +297,6 @@ namespace VortexArena.App.Admin
         {
             int byScore = b.score.CompareTo(a.score);
             return byScore != 0 ? byScore : a.playerId.CompareTo(b.playerId);
-        }
-
-        /// <summary>Match end headline: winning team in team-scored modes, winning player in
-        /// individually scored ones (the two <c>match_end</c> channels, §5.3).</summary>
-        private static string WinnerLabel(AdminRoster roster)
-        {
-            if (roster.WinnerTeam == "red") return "KIRMIZI KAZANDI";
-            if (roster.WinnerTeam == "blue") return "MAVİ KAZANDI";
-            if (roster.WinnerPlayerId > 0) return $"{roster.NameOf(roster.WinnerPlayerId)} KAZANDI";
-            return "BERABERE";
-        }
-
-        /// <summary>
-        /// Multi-operator line: connected admin count + last admin action (§5.3
-        /// <c>admin_state</c>). Empty with a single admin and no notice, so it never shows in
-        /// normal use.
-        /// </summary>
-        private void RefreshAdminNotice(bool connected)
-        {
-            if (adminNoticeText == null)
-            {
-                return;
-            }
-
-            if (!connected || (AdminSelection.AdminCount <= 1 && string.IsNullOrEmpty(AdminSelection.LastNotice)))
-            {
-                adminNoticeText.text = "";
-                return;
-            }
-
-            string peers = AdminSelection.AdminCount > 1 ? $"{AdminSelection.AdminCount} admin" : "";
-            string notice = AdminSelection.LastNotice;
-            adminNoticeText.text = string.IsNullOrEmpty(notice)
-                ? peers
-                : string.IsNullOrEmpty(peers) ? notice : $"{peers} · {notice}";
         }
 
         private void RefreshColumns(AdminRoster roster)
@@ -549,10 +408,10 @@ namespace VortexArena.App.Admin
                 headerHeight + 6f + count * (height + rowGap), 4f, 24f);
         }
 
-        /// <summary>Colours the camera mode buttons and the selected player line. ⚠️ Slot 0 (POV) is
-        /// empty — that mode is entered only from a player card or the keyboard; the loop is
-        /// null-safe, so the empty slot is skipped.</summary>
-        private void RefreshCameraBar(AdminRoster roster)
+        /// <summary>Colours the camera mode buttons. ⚠️ Slot 0 (POV) is empty — that mode is entered
+        /// only from a player card or the keyboard; the loop is null-safe, so the empty slot is
+        /// skipped.</summary>
+        private void RefreshCameraBar()
         {
             var active = (int)AdminSession.CameraMode;
             for (int i = 0; i < modeButtons.Length; i++)
@@ -567,34 +426,6 @@ namespace VortexArena.App.Admin
                     modeLabels[i].color = i == active ? UiKit.OnAccent : UiKit.Title;
                 }
             }
-
-            if (selectedText == null)
-            {
-                return;
-            }
-
-            int selectedId = AdminSession.SelectedPlayerId;
-            if (selectedId == 0)
-            {
-                selectedText.text = roster.Players.Count == 0 ? "oyuncu bekleniyor" : "oyuncu seçilmedi";
-                return;
-            }
-
-            AdminPlayerView view = roster.Find(selectedId);
-            string name = view != null ? view.name : $"Oyuncu {selectedId}";
-
-            bool hasPose = RemotePlayerRegistry.Instance != null &&
-                           RemotePlayerRegistry.Instance.GetInterpolatedPose(selectedId, out _, out _, out _);
-
-            // POV is written as a PREFIX to the name: with no POV button on the bar, this is the
-            // only place the operator can read that the mode is active.
-            if (AdminSession.CameraMode != AdminCameraMode.Pov)
-            {
-                selectedText.text = name;
-                return;
-            }
-
-            selectedText.text = hasPose ? $"POV · {name}" : $"POV · {name} — poz yok";
         }
 
         private void RefreshKillFeed(AdminRoster roster)
@@ -669,32 +500,6 @@ namespace VortexArena.App.Admin
         {
             AdminSession.SelectedPlayerId = playerId;
             AdminSession.CameraMode = AdminCameraMode.Pov;
-        }
-
-        // ------------------------------------------------------------- formatting
-
-        /// <summary>Turns the state into operator text (§10.1). The phase alone is not enough: one
-        /// <c>paused</c> on the wire may be lobby, loading, countdown or an operator pause — the
-        /// reason separates them.</summary>
-        private static string PhaseLabel(string phase, string phaseReason)
-        {
-            if (phase == ArenaProtocol.PHASE_PLAYING) return "LIVE";
-            if (phase == ArenaProtocol.PHASE_FINISHED) return "MAÇ BİTTİ";
-
-            switch (phaseReason)
-            {
-                case ArenaProtocol.PAUSE_REASON_LOADING: return "SAHNE YÜKLENİYOR";
-                case ArenaProtocol.PAUSE_REASON_COUNTDOWN: return "BAŞLIYOR";
-                case ArenaProtocol.PAUSE_REASON_OPERATOR: return "DURAKLATILDI";
-                case ArenaProtocol.PAUSE_REASON_MODE: return "MOD BEKLİYOR";
-                default: return "LOBİ";
-            }
-        }
-
-        private static string FormatTime(float seconds)
-        {
-            int total = Mathf.Max(0, Mathf.CeilToInt(seconds));
-            return $"{total / 60:00}:{total % 60:00}";
         }
     }
 }

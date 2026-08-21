@@ -9,16 +9,16 @@ namespace VortexArena.App.Admin
 {
     /// <summary>
     /// Single player row in the side panels: team stripe, name + <c>#id</c>, HP bar, stats and
-    /// action buttons (POV · KAL · ÖLÇ · TAKIM · CAN · AT).
+    /// action buttons (POV · KAL · ÖLÇ · TAKIM · AT).
     /// <para>
     /// <b>Look comes from the prefab</b> (<c>Assets/_Shared/App/Resources/UI/AdminPlayerRow.prefab</c>);
     /// this class is behaviour only. Unbound fields silently draw nothing — keep prefab wiring intact.
     /// </para>
-    /// <para>Kick and calibration reset are two-step (<see cref="ConfirmSeconds"/>): taking a player
-    /// out of the fight must not happen on one stray click.</para>
+    /// <para>Kick is two-step (<see cref="ConfirmSeconds"/>): taking a player out of the fight must
+    /// not happen on one stray click.</para>
     /// <para>KAL both SHOWS calibration state and clears it (§10.6) — one way only, since only the
-    /// headset knows when alignment really settled. CAN is the operator's manual revive (§10.4),
-    /// bypassing the mode's revive condition so a stuck player is not dead until match end.</para>
+    /// headset knows when alignment really settled. It is the row's ONLY reset: a tap voids the
+    /// current alignment, a hold also wipes the headset's saved anchor (<see cref="HoldButton"/>).</para>
     /// </summary>
     public class AdminPlayerRow : MonoBehaviour
     {
@@ -27,7 +27,8 @@ namespace VortexArena.App.Admin
         /// reflows the column.</summary>
         public const float Height = 116f;
 
-        /// <summary>Confirm window (s) for the "AT" and "KAL" buttons.</summary>
+        /// <summary>Confirm window (s) of the "AT" button. ⚠️ KAL does NOT use it — its friction
+        /// is the hold, see <see cref="HoldButton"/>.</summary>
         private const float ConfirmSeconds = 3f;
 
         // ⚠️ No ✓/✗ symbols in labels: TMP's default font does not guarantee them and a missing
@@ -40,16 +41,25 @@ namespace VortexArena.App.Admin
         /// space data stale. "?" not a symbol — "!" already means uncalibrated.</summary>
         private const string LabelFloorDrift = LabelCalibrated + " ?";
 
+        /// <summary>KAL while the hard-reset hold is running. ⚠️ Says what is being DESTROYED, not
+        /// "keep holding": the operator must be able to abort by reading the button.</summary>
+        private const string LabelPurging = "SİLİNİYOR";
+
+        /// <summary>Confirmation shown right after the device record is wiped. ⚠️ <b>Required:</b>
+        /// the hold has no other ending — without it the button snaps back to KAL and the operator
+        /// cannot tell a completed wipe from one they aborted by sliding off.</summary>
+        private const string LabelPurged = "SİLİNDİ";
+
+        /// <summary>How long <see cref="LabelPurged"/> stays up (s) — same as the stats row's
+        /// TAMAM/HATA hold, so a result reads the same on both screens.</summary>
+        private const float PurgedHoldSeconds = 2f;
+
         /// <summary>ÖLÇ button for a not-yet-measured player.</summary>
         private const string LabelMeasure = "ÖLÇ";
 
         /// <summary>Last measurement failed (§10.8): says so instead of a scale, so the operator
         /// does not read "pressed it and nothing happened".</summary>
         private const string LabelMeasureFailed = "ÖLÇÜLEMEDİ";
-
-        /// <summary>Revive button. ⚠️ Same rule as other labels: no symbols, and short — the row
-        /// is narrow.</summary>
-        private const string LabelRevive = "CAN";
 
         private const float DeadColorScale = 0.5f;
 
@@ -97,16 +107,14 @@ namespace VortexArena.App.Admin
 
         [Header("Eylem düğmeleri")]
         [SerializeField] private Button povButton;
+        [Tooltip("Kalibrasyonu sıfırlar — TEK düğme: kısa basış o anki hizalamayı düşürür, " +
+                 "1 sn basılı tutmak gözlükteki KAYITLI çapayı da sildirir (§10.6).")]
         [SerializeField] private Button calibButton;
         [SerializeField] private TextMeshProUGUI calibLabel;
         [Tooltip("Gövde ölçüsünü aldırır (§10.8). Etiketi aynı zamanda GÖSTERGEDİR: " +
                  "ölçülmemişse 'ÖLÇ', ölçülmüşse çarpan.")]
         [SerializeField] private Button measureButton;
         [SerializeField] private TextMeshProUGUI measureLabel;
-        [Tooltip("Ölü oyuncuyu canlandırır (§10.4). Yalnız ölü OYUNCU satırında etkindir.")]
-        [SerializeField] private Button reviveButton;
-        [Tooltip("Etiketin rengi durumu taşır (kullanılabilir/pasif), bu yüzden koddan sürülür.")]
-        [SerializeField] private TextMeshProUGUI reviveLabel;
         [SerializeField] private Button teamButton;
         [SerializeField] private TextMeshProUGUI teamLabel;
         [SerializeField] private Button kickButton;
@@ -119,8 +127,18 @@ namespace VortexArena.App.Admin
         private int _playerId;
         private string _team = "";
         private float _kickArmedAt = -1f;
-        private float _calibArmedAt = -1f;
         private bool _calibrated = true;
+
+        /// <summary>Press-duration gate of the KAL button; null when the button is unwired.</summary>
+        private HoldButton _calibHold;
+
+        /// <summary>Was the button painted in its "holding" look last frame. Without it the button
+        /// would stay red after the press ends: <see cref="Tick"/> repaints only while pressed.</summary>
+        private bool _calibHoldPainted;
+
+        /// <summary>When the device record was wiped (<c>Time.unscaledTime</c>); &lt; 0 = no
+        /// confirmation showing.</summary>
+        private float _calibPurgedAt = -1f;
 
         /// <summary>Bound player's floor drift (§10.6); cached like <see cref="_calibrated"/>
         /// because <see cref="Tick"/> redraws the KAL button outside <see cref="Bind"/>.</summary>
@@ -147,13 +165,12 @@ namespace VortexArena.App.Admin
 
             Wire(selectButton, () => _onSelect?.Invoke(_playerId));
             Wire(povButton, () => _onPov?.Invoke(_playerId));
-            Wire(calibButton, PressCalibration);
+            // ⚠️ NOT Wire(): the reset is a duration gate, and onClick would fire after a
+            // completed hold too — the player would be reset twice, once hard once soft.
+            _calibHold = HoldButton.Attach(calibButton, PressCalibrationClear, PressCalibrationPurge);
             // ⚠️ One step (no confirm): measuring is undoable — a stray press is fixed by measuring
             // again. It is not an "out of the fight" command like AT/KAL.
             Wire(measureButton, () => AdminCommands.MeasureBodyScale(_playerId));
-            // ⚠️ One step (no confirm): the two-step lock is for commands that take a player OUT of
-            // the fight. Revive is the opposite, and a stray press fixes itself on the next death.
-            Wire(reviveButton, () => AdminCommands.RevivePlayer(_playerId));
             Wire(teamButton, ToggleTeam);
             Wire(kickButton, PressKick);
         }
@@ -193,12 +210,19 @@ namespace VortexArena.App.Admin
                 return;
             }
 
+            // ⚠️ A pooled row rebinds to ANOTHER player: a leftover "SİLİNDİ" would credit the
+            // wipe to whoever lands here next.
+            if (_playerId != view.playerId)
+            {
+                _calibPurgedAt = -1f;
+                _calibHold?.Cancel();
+            }
+
             _playerId = view.playerId;
             _team = view.team;
             _calibrated = view.calibrated;
             _floorOffset = view.floorOffset;
             RefreshMeasureButton(view);
-            RefreshReviveButton(view);
 
             Color team = UiKit.TeamColor(view.team);
             if (stripe != null)
@@ -315,7 +339,8 @@ namespace VortexArena.App.Admin
                 : _baseBorderColor;
         }
 
-        /// <summary>Expires the confirm windows (HUD calls every frame).</summary>
+        /// <summary>Expires the kick confirm window and paints the reset hold (HUD calls every
+        /// frame — the hold fill would otherwise step at the roster's 4 Hz).</summary>
         public void Tick()
         {
             if (_kickArmedAt >= 0f && Time.unscaledTime - _kickArmedAt > ConfirmSeconds)
@@ -324,19 +349,44 @@ namespace VortexArena.App.Admin
                 RefreshKickButton();
             }
 
-            if (_calibArmedAt >= 0f && Time.unscaledTime - _calibArmedAt > ConfirmSeconds)
+            if (_calibHold != null && (_calibHold.IsPressed || _calibHoldPainted))
             {
-                _calibArmedAt = -1f;
                 RefreshCalibrationButton();
+            }
+
+            if (_calibPurgedAt >= 0f)
+            {
+                // ⚠️ The window starts when the FINGER LIFTS. The wipe fires at the threshold while
+                // the press is still on, so a window started there would expire under the operator's
+                // thumb and drop the button back to "SİLİNİYOR" — reading as if it had not landed.
+                if (_calibHold != null && _calibHold.IsPressed)
+                {
+                    _calibPurgedAt = Time.unscaledTime;
+                }
+                else if (Time.unscaledTime - _calibPurgedAt > PurgedHoldSeconds)
+                {
+                    _calibPurgedAt = -1f;
+                    RefreshCalibrationButton();
+                }
             }
         }
 
         public void SetVisible(bool visible)
         {
-            if (gameObject.activeSelf != visible)
+            if (gameObject.activeSelf == visible)
             {
-                gameObject.SetActive(visible);
+                return;
             }
+
+            // ⚠️ A hold in flight is dropped: hidden rows stop ticking, and the pooled row comes
+            // back bound to ANOTHER player — the press would land on them.
+            if (!visible)
+            {
+                _calibHold?.Cancel();
+                _calibPurgedAt = -1f;
+            }
+
+            gameObject.SetActive(visible);
         }
 
         /// <summary>Places the row at the given top offset inside the column.</summary>
@@ -370,11 +420,9 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Invalidates the player's alignment — two-step for the same reason as "AT".
-        /// <para>⚠️ Row level is <b>SOFT only</b> (<c>keepSaved: true</c>): the anchor saved on the
-        /// headset is kept, so "KALİBRE ET" puts the player back in one click. The hard mode (wipes
-        /// the device record) is venue maintenance and lives on the bulk button
-        /// (<see cref="AdminStatsPanel"/>).</para>
+        /// TAP: invalidates the current alignment and keeps the anchor SAVED on the headset
+        /// (<c>keepSaved: true</c>), so KALİBRE puts the player back in one click. This is the
+        /// everyday reset.
         /// <para>⚠️ <b>Sent even while the row looks uncalibrated</b>, and this gate stays open: a
         /// red row means TWO states — never calibrated, and stuck mid-sequence (A taken, B not).
         /// The wire cannot tell them apart (<c>calibrated</c> is false in both), so filtering
@@ -382,17 +430,26 @@ namespace VortexArena.App.Admin
         /// wipes half sequences too (§10.6).</para>
         /// <para>Direction stays one-way — only the headset can re-enable calibration.</para>
         /// </summary>
-        private void PressCalibration()
+        private void PressCalibrationClear()
         {
-            if (_calibArmedAt < 0f)
-            {
-                _calibArmedAt = Time.unscaledTime;
-                RefreshCalibrationButton();
-                return;
-            }
-
-            _calibArmedAt = -1f;
+            // A soft reset clears a standing "SİLİNDİ": the newer, weaker command is what happened.
+            _calibPurgedAt = -1f;
             AdminCommands.ClearCalibration(_playerId, keepSaved: true);
+            RefreshCalibrationButton();
+        }
+
+        /// <summary>
+        /// HOLD (1 s): the same reset plus the headset's SAVED anchor (<c>keepSaved: false</c>) — venue
+        /// maintenance, and the only way back is the manual A/B sequence in the headset.
+        /// <para>⚠️ The two modes share ONE button on purpose: they answer the same operator
+        /// question ("this player's alignment is wrong") and only differ in how far back they go.
+        /// Two neighbouring buttons made the operator pick a severity before knowing they needed
+        /// one, and the destructive one was a mis-click away.</para>
+        /// </summary>
+        private void PressCalibrationPurge()
+        {
+            _calibPurgedAt = Time.unscaledTime;
+            AdminCommands.ClearCalibration(_playerId, keepSaved: false);
             RefreshCalibrationButton();
         }
 
@@ -422,52 +479,45 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// CAN is enabled only when there is someone TO revive: role <c>player</c>, dead, not left.
-        /// <para>Disabled while uncalibrated for the same reason as
-        /// <see cref="RefreshMeasureButton"/> — the server rejects it (§10.6) and an enabled button
-        /// would feel like a sent-but-ignored command. The row says why elsewhere: red border plus
-        /// the KAL exclamation.</para>
-        /// <para>No obstacle gate (§10.9) here and none can be added: the roster does not carry the
-        /// violation flag. Only the server knows it, and logs its refusal with a reason.</para>
-        /// </summary>
-        private void RefreshReviveButton(AdminPlayerView view)
-        {
-            bool usable = view.IsPlayer && !view.alive && view.calibrated && !view.HasLeft;
-            SetInteractable(reviveButton, usable);
-
-            if (reviveLabel != null)
-            {
-                reviveLabel.text = LabelRevive;
-                reviveLabel.color = usable ? UiKit.Good : UiKit.Faint;
-            }
-        }
-
-        /// <summary>
         /// KAL button state. Calibrated but over the floor drift threshold is its own state
         /// (§10.6): alignment accepted, headset space data stale, field work pending — a green tick
         /// would hide it.
         /// </summary>
         private void RefreshCalibrationButton()
         {
-            bool armed = _calibArmedAt >= 0f;
+            // ⚠️ The RESULT outranks the press: the wipe lands at the threshold, so from that
+            // moment the button says SİLİNDİ even though the finger is still down.
+            bool purged = _calibPurgedAt >= 0f;
+            bool holding = !purged && _calibHold != null && _calibHold.IsPressed;
+            float progress = holding ? _calibHold.HoldProgress : 0f;
+            _calibHoldPainted = holding || purged;
+
             bool floorDrift = _calibrated &&
                               Mathf.Abs(_floorOffset) > ArenaProtocol.CALIB_FLOOR_WARN_METERS;
 
             if (calibLabel != null)
             {
-                calibLabel.text = armed ? LabelConfirm
+                calibLabel.text = holding ? LabelPurging
+                    : purged ? LabelPurged
                     : !_calibrated ? LabelUncalibrated
                     : floorDrift ? LabelFloorDrift : LabelCalibrated;
                 // Drift = Accent (the repo's "warning, not error" tone), uncalibrated = Bad: a
-                // drifting player can play, an uncalibrated one cannot.
-                calibLabel.color = armed ? UiKit.OnAccent
+                // drifting player can play, an uncalibrated one cannot. ⚠️ The wipe confirmation is
+                // GREEN even though the command was destructive: it reports "the thing you asked
+                // for happened", the same grammar as the stats row's TAMAM.
+                calibLabel.color = holding ? UiKit.OnAccent
+                    : purged ? UiKit.Good
                     : !_calibrated ? UiKit.Bad
                     : floorDrift ? UiKit.Accent : UiKit.Good;
             }
 
             if (calibButton != null && calibButton.targetGraphic is Image image)
             {
-                image.color = armed ? UiKit.Bad : UiKit.Hex(0x2A303B, 0xFF);
+                // The fill IS the progress bar: the background walks to red as the hold completes,
+                // so the operator sees how much of the wipe is left without a second element.
+                image.color = holding
+                    ? Color.Lerp(UiKit.Hex(0x2A303B, 0xFF), UiKit.Bad, progress)
+                    : UiKit.Hex(0x2A303B, 0xFF);
             }
         }
 

@@ -10,11 +10,11 @@ namespace VortexArena.App.Admin
 {
     /// <summary>
     /// Single player row in the stats panel: team stripe, name + <c>#id</c>, K/D/KD cells, one
-    /// detail line (score · battery · controllers · ping · state) and actions (KAYIT SİL · rename ·
+    /// detail line (score · battery · controllers · ping · state) and actions (SIFIRLA · rename ·
     /// AT · ÖLÇ · KALİBRE).
     /// <para>
     /// <b>Why a sibling of <see cref="AdminPlayerRow"/> but a separate class:</b> the side card is
-    /// narrow and belongs to scene control (POV/team/revive); this row is wide, table-like
+    /// narrow and belongs to scene control (POV/team/identity); this row is wide, table-like
     /// and belongs to the operator's <i>record keeping</i> screen. Merging them means a "which
     /// screen am I on" branch in every <c>Bind</c>, where a fix for one screen silently breaks the
     /// other.
@@ -24,23 +24,30 @@ namespace VortexArena.App.Admin
     /// behaviour only. Unbound prefab fields silently draw nothing.
     /// </para>
     /// <para>
+    /// <b>Two prefabs, one class:</b> <c>AdminStatsRow</c> is the full-width row, its variant
+    /// <c>AdminStatsRowNarrow</c> the one the split (team) columns use — same fields, stacked
+    /// layout and icon buttons (<see cref="iconButtons"/>). ⚠️ The <b>variant</b> is what keeps
+    /// them in sync: everything but the rects and the glyphs is inherited, so a change made here
+    /// reaches both. Do not fork it into a second prefab.
+    /// </para>
+    /// <para>
     /// ⚠️ <b>HP, scene and violations are absent by DESIGN</b> — HP lives on the side panel card as
     /// a bar, violations blink live on the HUD strip and card border, and the scene name is the
     /// same for every headset so per-row repetition was only noise.
     /// </para>
     /// <para>
-    /// ⚠️ <b>KALİBRE and KAYIT SİL are OPPOSITE actions on the same row:</b> KALİBRE <i>reloads</i>
-    /// alignment from the anchor saved on the headset, KAYIT SİL <i>destroys</i> that anchor
-    /// (<c>keepSaved:false</c>) — afterwards reloading fails and the player must redo the A/B
-    /// sequence by hand. What separates them is <b>look and friction</b> (red label + its own
-    /// two-step confirm), never the label alone: a label is read after the click. Same contract as
-    /// the panel's bulk bar (<see cref="AdminStatsPanel"/>), and they sit at opposite ends of the
-    /// button strip so a mis-aimed click cannot land on the other.
+    /// ⚠️ <b>SIFIRLA is ONE button carrying BOTH reset modes</b> (<see cref="HoldButton"/>): a tap
+    /// voids the current alignment and keeps the headset's saved anchor, a 1 s hold wipes that
+    /// anchor too — afterwards KALİBRE fails and the player must redo the A/B sequence by hand.
+    /// Severity comes from press DURATION, never from picking the right neighbour: two separate
+    /// buttons made the operator choose a severity before knowing they needed one, and put the
+    /// destructive one a mis-click away. Same contract as the panel's bulk bar
+    /// (<see cref="AdminStatsPanel"/>) and the side card's KAL (<see cref="AdminPlayerRow"/>).
     /// </para>
     /// <para>
-    /// ⚠️ <b>SOFT invalidation is NOT here</b> (alignment dropped, device record kept): that is the
-    /// side panel's KAL button (<see cref="AdminPlayerRow"/>). Per player, this row carries only
-    /// the hard mode — the one a headset with a bad record needs without benching the whole venue.
+    /// ⚠️ <b>KALİBRE is the OPPOSITE action and stays its own button:</b> it <i>reloads</i>
+    /// alignment from the saved anchor and destroys nothing. The two sit at opposite ends of the
+    /// button strip so a mis-aimed click cannot land on the other.
     /// </para>
     /// </summary>
     public class AdminStatsRow : MonoBehaviour
@@ -50,8 +57,8 @@ namespace VortexArena.App.Admin
         /// reflows the list.</summary>
         public const float Height = 74f;
 
-        /// <summary>Confirm window (s) of the two-step buttons (AT · KAYIT SİL) — same as
-        /// <see cref="AdminPlayerRow"/>.</summary>
+        /// <summary>Confirm window (s) of the AT button — same as <see cref="AdminPlayerRow"/>.
+        /// ⚠️ SIFIRLA does NOT use it: its friction is the hold (<see cref="HoldButton"/>).</summary>
         private const float ConfirmSeconds = 3f;
 
         /// <summary>How long the result label ("TAMAM"/"HATA") stays up (s). Permanent would show
@@ -74,12 +81,16 @@ namespace VortexArena.App.Admin
         // glyph draws □ (same rule as AdminPlayerRow and UiKit). Colour + "!" carry the state.
         private const string LabelConfirm = "EMİN?";
         private const string LabelKick = "AT";
-        private const string LabelPurge = "KAYIT SİL";
+        private const string LabelReset = "SIFIRLA";
 
-        /// <summary>⚠️ NOT the plain <see cref="LabelConfirm"/>: AT and KAYIT SİL can be armed at
-        /// the same time, and two neighbouring buttons reading "EMİN?" tell the operator nothing
-        /// about which one the second click fires.</summary>
-        private const string LabelPurgeConfirm = "EMİN? SİL";
+        /// <summary>SIFIRLA while the hard-reset hold is running. ⚠️ Names what is being DESTROYED,
+        /// not "keep holding": the operator must be able to abort by reading the button.</summary>
+        private const string LabelPurging = "SİLİNİYOR";
+
+        /// <summary>Confirmation shown right after the device record is wiped, in both label modes.
+        /// ⚠️ <b>Required:</b> the hold has no other ending — without it the button snaps back to
+        /// SIFIRLA and a completed wipe reads exactly like one aborted by sliding off.</summary>
+        private const string LabelPurged = "SİLİNDİ";
         private const string LabelMeasure = "ÖLÇ";
         private const string LabelMeasureFailed = "ÖLÇÜLEMEDİ";
         private const string LabelCalibrate = "KALİBRE";
@@ -87,6 +98,25 @@ namespace VortexArena.App.Admin
         private const string LabelCalibrateLoading = "YÜKLENİYOR";
         private const string LabelCalibrateOk = "TAMAM";
         private const string LabelCalibrateFailed = "HATA";
+
+        // ⚠️ Icon mode (<see cref="iconButtons"/>) labels: the glyph names the ACTION, so the word
+        // shrinks to a STATE badge and is EMPTY while idle. A word wide enough for the wide row
+        // does not fit an icon button — but dropping the state entirely would take the indicator
+        // half of ÖLÇ/KALİBRE with it.
+        private const string IconIdle = "";
+        private const string IconConfirm = "EMİN?";
+        private const string IconOk = "TAMAM";
+        private const string IconFailed = "HATA";
+
+        /// <summary>⚠️ Three dots, not "…": TMP's default font does not guarantee the ellipsis
+        /// glyph and a missing one draws □ (same rule as the labels above).</summary>
+        private const string IconLoading = "...";
+
+        /// <summary>Icon-mode badge while the hard-reset hold runs. Shorter than
+        /// <see cref="LabelPurging"/> — the icon button has no room for the word.</summary>
+        private const string IconPurging = "SİL";
+
+        private const string IconUncalibrated = "!";
 
         /// <summary>Reason shown when no reply ever arrives — a bare "HATA" without a cause would
         /// leave the operator guessing.</summary>
@@ -138,8 +168,9 @@ namespace VortexArena.App.Admin
         [Tooltip("Oyuncuyu maçtan atar — iki adımlı onay.")]
         [SerializeField] private Button kickButton;
         [SerializeField] private TextMeshProUGUI kickLabel;
-        [Tooltip("SERT kip: o gözlükteki KAYITLI çapayı da siler — ardından KALİBRE iş görmez, " +
-                 "oyuncu elle A/B almak zorunda kalır. İki adımlı onay.")]
+        [Tooltip("Kalibrasyonu sıfırlar — TEK düğme: kısa basış o anki hizalamayı düşürür, " +
+                 "1 sn basılı tutmak gözlükteki KAYITLI çapayı da sildirir (ardından KALİBRE iş " +
+                 "görmez, oyuncu elle A/B almak zorunda kalır).")]
         [SerializeField] private Button purgeButton;
         [SerializeField] private TextMeshProUGUI purgeLabel;
         [Tooltip("Gövde ölçüsünü aldırır (§10.8). Etiketi aynı zamanda GÖSTERGEDİR.")]
@@ -148,6 +179,18 @@ namespace VortexArena.App.Admin
         [Tooltip("Gözlükteki KAYITLI çapa verisinden kalibrasyonu yeniden yükletir (sıfırlamaz).")]
         [SerializeField] private Button calibrateButton;
         [SerializeField] private TextMeshProUGUI calibrateLabel;
+
+        [Header("İkon kipi (dar sütun varyantı)")]
+        [Tooltip("Düğmeler yazı yerine ikon taşıyor: etiket boş kalır, yalnız durum rozeti " +
+                 "yazar (EMİN? · TAMAM · HATA · ! · ×ölçek). Yalnız dar varyant prefabında açık.")]
+        [SerializeField] private bool iconButtons;
+        [Tooltip("Aşağıdaki ikonlar yalnız ikon kipinde bağlanır; rengi durumu taşır, " +
+                 "etiketin rengiyle birebir aynı.")]
+        [SerializeField] private Image renameIcon;
+        [SerializeField] private Image kickIcon;
+        [SerializeField] private Image purgeIcon;
+        [SerializeField] private Image measureIcon;
+        [SerializeField] private Image calibrateIcon;
 
         [Header("İstatistik hücreleri")]
         [SerializeField] private TextMeshProUGUI killsText;
@@ -166,10 +209,16 @@ namespace VortexArena.App.Admin
         private float _floorOffset;
         private float _kickArmedAt = -1f;
 
-        /// <summary>First press of KAYIT SİL (<c>Time.unscaledTime</c>); &lt; 0 = not awaiting
-        /// confirmation. ⚠️ INDEPENDENT of <see cref="_kickArmedAt"/>: arming one must not make the
-        /// other destructive on a single click.</summary>
-        private float _purgeArmedAt = -1f;
+        /// <summary>Press-duration gate of SIFIRLA; null when the button is unwired.</summary>
+        private HoldButton _resetHold;
+
+        /// <summary>Was SIFIRLA painted in its "holding" look last frame — without it the button
+        /// would stay red after the press ends (<see cref="Tick"/> repaints only while pressed).</summary>
+        private bool _resetHoldPainted;
+
+        /// <summary>When the device record was wiped (<c>Time.unscaledTime</c>); &lt; 0 = no
+        /// confirmation showing. Held for <see cref="ResultHoldSeconds"/>, like TAMAM/HATA.</summary>
+        private float _purgedAt = -1f;
 
         /// <summary>Name edit mode. While on, <see cref="Bind"/> leaves the name alone — hence a
         /// field rather than a local.</summary>
@@ -203,7 +252,9 @@ namespace VortexArena.App.Admin
             Wire(nameApplyButton, ApplyNameEdit);
             Wire(nameCancelButton, CancelNameEdit);
             Wire(kickButton, PressKick);
-            Wire(purgeButton, PressPurge);
+            // ⚠️ NOT Wire(): onClick fires on pointer-up whatever the duration, so a completed hold
+            // would also send the soft reset — the player would be reset twice.
+            _resetHold = HoldButton.Attach(purgeButton, PressReset, PressPurge);
             // ⚠️ One step (no confirm): measuring is undoable — a stray press is fixed by measuring
             // again (same reason as AdminPlayerRow).
             Wire(measureButton, () => AdminCommands.MeasureBodyScale(_playerId));
@@ -265,7 +316,8 @@ namespace VortexArena.App.Admin
             {
                 SetNameEditActive(false);
                 _kickArmedAt = -1f;
-                _purgeArmedAt = -1f;
+                _resetHold?.Cancel();
+                _purgedAt = -1f;
                 SetLoadState(LoadState.Idle);
             }
 
@@ -366,10 +418,23 @@ namespace VortexArena.App.Admin
                 RefreshKickButton();
             }
 
-            if (_purgeArmedAt >= 0f && Time.unscaledTime - _purgeArmedAt > ConfirmSeconds)
+            if (_resetHold != null && (_resetHold.IsPressed || _resetHoldPainted))
             {
-                _purgeArmedAt = -1f;
                 RefreshPurgeButton();
+            }
+
+            if (_purgedAt >= 0f)
+            {
+                // ⚠️ The window starts when the FINGER LIFTS — see AdminPlayerRow.Tick for why.
+                if (_resetHold != null && _resetHold.IsPressed)
+                {
+                    _purgedAt = Time.unscaledTime;
+                }
+                else if (Time.unscaledTime - _purgedAt > ResultHoldSeconds)
+                {
+                    _purgedAt = -1f;
+                    RefreshPurgeButton();
+                }
             }
 
             if (_loadState == LoadState.Loading &&
@@ -405,7 +470,8 @@ namespace VortexArena.App.Admin
                 // only ticks visible ones), so an armed window would survive the hide and fire the
                 // destructive command on the FIRST click after the row comes back.
                 _kickArmedAt = -1f;
-                _purgeArmedAt = -1f;
+                _resetHold?.Cancel();
+                _purgedAt = -1f;
                 RefreshKickButton();
                 RefreshPurgeButton();
             }
@@ -554,25 +620,29 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Deletes the anchor SAVED on that player's headset (§5.2 <c>clear_calibration</c>, HARD
-        /// mode) — the per-player twin of the panel's CİHAZ KAYITLARINI SİL.
-        /// <para><b>Two-step</b>, and this is the row's most destructive command: it benches the
-        /// player AND destroys what KALİBRE would read, so recovery is the manual A/B sequence in
-        /// the headset. Its window is its own (<see cref="_purgeArmedAt"/>).</para>
-        /// <para>⚠️ <b>Soft invalidation is NOT offered here</b> — that is the side panel's KAL
-        /// button. A row carrying both would make the operator choose a mode under time pressure,
-        /// where the wrong pick costs a session break.</para>
+        /// TAP: voids the player's current alignment and KEEPS the anchor saved on the headset
+        /// (§5.2 <c>clear_calibration</c>, soft mode) — KALİBRE puts them back in one click. This
+        /// is the everyday reset, so it fires on the first press: the press-duration grammar puts
+        /// the friction on the destructive variant, not on this one.
+        /// </summary>
+        private void PressReset()
+        {
+            // A soft reset clears a standing "SİLİNDİ": the newer, weaker command is what happened.
+            _purgedAt = -1f;
+            AdminCommands.ClearCalibration(_playerId, keepSaved: true);
+            RefreshPurgeButton();
+        }
+
+        /// <summary>
+        /// HOLD (1 s): the same reset plus the anchor SAVED on that headset (hard mode) — the row's
+        /// most destructive command, since it also destroys what KALİBRE would read and recovery
+        /// becomes the manual A/B sequence in the headset.
+        /// <para>The hold IS the confirmation; there is no two-step window on top of it
+        /// (<see cref="HoldButton"/>).</para>
         /// </summary>
         private void PressPurge()
         {
-            if (_purgeArmedAt < 0f)
-            {
-                _purgeArmedAt = Time.unscaledTime;
-                RefreshPurgeButton();
-                return;
-            }
-
-            _purgeArmedAt = -1f;
+            _purgedAt = Time.unscaledTime;
             AdminCommands.ClearCalibration(_playerId, keepSaved: false);
             RefreshPurgeButton();
         }
@@ -611,50 +681,93 @@ namespace VortexArena.App.Admin
             bool usable = view.IsPlayer && view.calibrated && !view.HasLeft;
             SetInteractable(measureButton, usable);
 
-            if (measureLabel != null)
-            {
-                bool failed = !string.IsNullOrEmpty(view.scaleError);
-                measureLabel.text = failed ? LabelMeasureFailed
-                    : view.bodyScale > 0f ? $"×{view.bodyScale:0.00}" : LabelMeasure;
-                measureLabel.color = !usable ? UiKit.Faint
-                    : failed ? UiKit.Bad
-                    : view.bodyScale > 0f ? UiKit.Good : UiKit.Muted;
-            }
+            bool failed = !string.IsNullOrEmpty(view.scaleError);
+            bool measured = view.bodyScale > 0f;
+            Color color = !usable ? UiKit.Faint
+                : failed ? UiKit.Bad
+                : measured ? UiKit.Good : UiKit.Muted;
+
+            // ⚠️ The measured scale survives icon mode: it is the INDICATOR half of the button,
+            // not a caption. Only the idle word ("ÖLÇ") gives way to the glyph.
+            string text = iconButtons
+                ? (failed ? IconFailed : measured ? $"×{view.bodyScale:0.00}" : IconIdle)
+                : (failed ? LabelMeasureFailed : measured ? $"×{view.bodyScale:0.00}" : LabelMeasure);
+
+            ApplyState(measureLabel, measureIcon, text, color);
         }
 
         private void RefreshKickButton()
         {
-            ApplyConfirmButton(kickButton, kickLabel, _kickArmedAt >= 0f,
+            ApplyConfirmButton(kickButton, kickLabel, kickIcon, _kickArmedAt >= 0f,
                 LabelConfirm, LabelKick, UiKit.Muted);
         }
 
-        /// <summary>KAYIT SİL is <b>red while idle</b> (the panel's contract for a destructive
-        /// button): AT only turns red once armed, this one announces itself before the first
-        /// click — it destroys the device record, not just the round.</summary>
+        /// <summary>SIFIRLA look. Idle is NEUTRAL (not red like the old device-wipe button): the
+        /// tap is the everyday reset. The fill walks to red as the hold completes — that ramp IS
+        /// the progress bar, so the operator sees how much of the wipe is left and can still slide
+        /// off the button.</summary>
         private void RefreshPurgeButton()
         {
-            // Faint on a left row: a red label on a disabled button keeps pulling the operator's
+            // ⚠️ The RESULT outranks the press: the wipe lands at the threshold, so from that
+            // moment the button says SİLİNDİ even though the finger is still down.
+            bool purged = _purgedAt >= 0f;
+            bool holding = !purged && _resetHold != null && _resetHold.IsPressed;
+            _resetHoldPainted = holding || purged;
+
+            // Faint on a left row: a live label on a disabled button keeps pulling the operator's
             // eye to a command that cannot fire (same grade as ÖLÇ).
             bool usable = purgeButton == null || purgeButton.interactable;
-            ApplyConfirmButton(purgeButton, purgeLabel, _purgeArmedAt >= 0f,
-                LabelPurgeConfirm, LabelPurge, usable ? UiKit.Bad : UiKit.Faint);
+            string text = holding ? (iconButtons ? IconPurging : LabelPurging)
+                : purged ? LabelPurged
+                : iconButtons ? IconIdle : LabelReset;
+
+            // ⚠️ The wipe confirmation is GREEN even though the command was destructive: it reports
+            // "the thing you asked for happened" — the same grammar as KALİBRE's TAMAM.
+            ApplyState(purgeLabel, purgeIcon, text,
+                holding ? UiKit.OnAccent : purged ? UiKit.Good : usable ? UiKit.Muted : UiKit.Faint);
+
+            if (purgeButton != null && purgeButton.targetGraphic is Image image)
+            {
+                // Back to the plain fill once wiped: the red ramp meant "still filling", and
+                // leaving it up would read as a press that never finished.
+                image.color = holding
+                    ? Color.Lerp(ConfirmIdleFill, UiKit.Bad, _resetHold.HoldProgress)
+                    : ConfirmIdleFill;
+            }
         }
 
-        /// <summary>Two-step button look, shared by AT and KAYIT SİL: idle keeps the row fill with
-        /// its own label colour, armed inverts (red fill) — the operator reads what the second
-        /// press will do off the button itself.</summary>
-        private static void ApplyConfirmButton(Button button, TextMeshProUGUI label, bool armed,
+        /// <summary>Two-step button look (AT): idle keeps the row fill with its own label colour,
+        /// armed inverts (red fill) — the operator reads what the second press will do off the
+        /// button itself. ⚠️ SIFIRLA does NOT go through here: its severity comes from press
+        /// duration, so it paints a progress ramp instead (<see cref="RefreshPurgeButton"/>).</summary>
+        private void ApplyConfirmButton(Button button, TextMeshProUGUI label, Image icon, bool armed,
             string armedText, string idleText, Color idleColor)
         {
-            if (label != null)
-            {
-                label.text = armed ? armedText : idleText;
-                label.color = armed ? UiKit.OnAccent : idleColor;
-            }
+            string text = iconButtons
+                ? (armed ? IconConfirm : IconIdle)
+                : (armed ? armedText : idleText);
+
+            ApplyState(label, icon, text, armed ? UiKit.OnAccent : idleColor);
 
             if (button != null && button.targetGraphic is Image image)
             {
                 image.color = armed ? UiKit.Bad : ConfirmIdleFill;
+            }
+        }
+
+        /// <summary>Writes a button's state to its label and glyph at once — the icon tint IS the
+        /// label colour, so the state reads the same whichever half is visible.</summary>
+        private static void ApplyState(TextMeshProUGUI label, Image icon, string text, Color color)
+        {
+            if (label != null)
+            {
+                label.text = text;
+                label.color = color;
+            }
+
+            if (icon != null)
+            {
+                icon.color = color;
             }
         }
 
@@ -668,35 +781,32 @@ namespace VortexArena.App.Admin
             bool loading = _loadState == LoadState.Loading;
             SetInteractable(calibrateButton, !loading && !_hasLeft);
 
-            if (calibrateLabel == null)
-            {
-                return;
-            }
-
             switch (_loadState)
             {
                 case LoadState.Loading:
-                    calibrateLabel.text = LabelCalibrateLoading;
-                    calibrateLabel.color = UiKit.Muted;
+                    ApplyState(calibrateLabel, calibrateIcon,
+                        iconButtons ? IconLoading : LabelCalibrateLoading, UiKit.Muted);
                     return;
                 case LoadState.Ok:
-                    calibrateLabel.text = LabelCalibrateOk;
-                    calibrateLabel.color = UiKit.Good;
+                    ApplyState(calibrateLabel, calibrateIcon,
+                        iconButtons ? IconOk : LabelCalibrateOk, UiKit.Good);
                     return;
                 case LoadState.Failed:
-                    calibrateLabel.text = LabelCalibrateFailed;
-                    calibrateLabel.color = UiKit.Bad;
+                    ApplyState(calibrateLabel, calibrateIcon,
+                        iconButtons ? IconFailed : LabelCalibrateFailed, UiKit.Bad);
                     return;
             }
 
             bool floorDrift = _calibrated &&
                               Mathf.Abs(_floorOffset) > ArenaProtocol.CALIB_FLOOR_WARN_METERS;
 
-            calibrateLabel.text = _calibrated ? LabelCalibrate : LabelCalibrateUncalibrated;
+            string text = _calibrated
+                ? (iconButtons ? IconIdle : LabelCalibrate)
+                : (iconButtons ? IconUncalibrated : LabelCalibrateUncalibrated);
             // Drift = Accent, uncalibrated = Bad: a drifting player can play, an uncalibrated one
             // cannot (same tone as AdminPlayerRow).
-            calibrateLabel.color = !_calibrated ? UiKit.Bad
-                : floorDrift ? UiKit.Accent : UiKit.Good;
+            ApplyState(calibrateLabel, calibrateIcon, text,
+                !_calibrated ? UiKit.Bad : floorDrift ? UiKit.Accent : UiKit.Good);
         }
 
         /// <summary>
