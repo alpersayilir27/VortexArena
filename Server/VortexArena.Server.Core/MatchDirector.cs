@@ -1186,6 +1186,31 @@ public sealed class MatchDirector
         }
     }
 
+    /// <summary>Round boundary: pulls the whole roster to full health AT ONCE, without waiting for the
+    /// next round's countdown (§10.1). Called by a round-based mode right after it opens the mode
+    /// pause.</summary>
+    /// <remarks>Why here and not only at the <c>playing</c> gate: between the two lie the regroup and the
+    /// countdown — minutes, in which the player walks to their base. Refreshing only at the gate would
+    /// leave them staring at the death screen (or at the previous round's health bar) for that whole walk,
+    /// with no way to tell "the round is over" from "I am still dead".
+    /// <para>⚠️ Health cannot change again before the round starts: damage needs phase <c>playing</c>
+    /// (§10.3) and the obstacle clock only advances on <c>playing</c> ticks (§10.9) — so the early refresh
+    /// cannot be undone while the mode holds the pause.</para>
+    /// <para>Works only from a mode pause and returns <c>false</c> otherwise (an <c>abort_match</c> may
+    /// have landed in between). Failure needs no handling: <see cref="EnterLiveLocked"/> refreshes the
+    /// roster unconditionally, so the guarantee holds either way — only its timing slips back to the end
+    /// of the countdown.</para></remarks>
+    public bool TryReviveRosterForMode()
+    {
+        lock (_gate)
+        {
+            if (_phase != Phase.Paused || _pauseReason != PauseReason.Mode) return false;
+
+            ReviveRosterLocked(_pendingOutbox);
+            return true;
+        }
+    }
+
     /// <summary>Updates the mode's sub-state (§10.1 <c>modeState</c>) and broadcasts <c>match_state</c>
     /// ONLY on a real change. Staying silent otherwise is deliberate: this is called from a 10 Hz hook, so
     /// an unconditional broadcast would produce 10 broadcasts per second.</summary>
@@ -1205,8 +1230,8 @@ public sealed class MatchDirector
     /// <see cref="PauseReason.Mode"/> → countdown (<see cref="_countdownSeconds"/>) → on through the
     /// core's normal path to <see cref="Phase.Playing"/>.</summary>
     /// <remarks>Health/dead players are NOT fixed up here — <see cref="EnterLiveLocked"/> already pulls
-    /// everyone to full health and sends <c>health_update</c> to the dead. Doing it in two places would
-    /// open a second revive path.
+    /// the whole roster to full health and sends each of them a <c>health_update</c>. Doing it in two
+    /// places would open a second revive path.
     /// <para>⚠️ <c>ready</c> flags are NOT cleared. At the gathering gate that flag means "I am in my base
     /// right now" and must stay alive through the countdown — it is the only basis for the mode to cancel
     /// the countdown (<see cref="TryCancelCountdownForMode"/>) and return to gathering. Clearing happens
@@ -1625,35 +1650,11 @@ public sealed class MatchDirector
         _timeRemaining = _roundSeconds;
         _nextSecondAt = now.AddSeconds(1);
 
-        // §10.2: entering playing means full health + alive for everyone.
-        // ⚠️ Dead players are revived with RevivePlayerLocked, NOT ResetMatchStateLocked: the latter
-        // writes the server fields but SENDS THE CLIENT NOTHING. Harmless in single-round modes (the
-        // client resets itself on load_match), but round-based modes have no load_match between rounds →
-        // without the message a player who died mid-round FREEZES on the death screen and can never fire
-        // again.
-        foreach (var player in ConnectedPlayersLocked())
-        {
-            // ⚠️ The obstacle grace is reset too (§10.9): its clock only advances on `playing` ticks, so
-            // time spent paused would silently consume it and the player would start losing health on the
-            // first tick after the resume — having burned their three seconds during the pause.
-            player.ObstacleSince = null;
-
-            if (player.Alive)
-            {
-                // ResetMatchStateLocked also pulls spawn protection to MinValue — together with the dead
-                // branch below, EVERYONE entering `playing` starts unprotected.
-                ResetMatchStateLocked(player, keepScore: true);
-                continue;
-            }
-
-            // ⚠️ Starting a match/round grants NO spawn protection (§10.4), deliberately: protection
-            // exists to keep a respawning player from being shot on their first frame, whereas at match
-            // start everyone begins together after a countdown — there it would only make the match's
-            // first seconds damage-free. The gate is the SAME in the alive and dead branches: one
-            // protected and one not would mean two rules in one match.
-            RevivePlayerLocked(outbox, player, spawnProtect: false); // hp = MAX, alive = 1, health_update
-            player.DiedAt = DateTime.MinValue;
-        }
+        // §10.2: entering playing means full health + alive for everyone. In a round-based mode the
+        // roster is usually ALREADY full here (the mode refreshed it when the round ended,
+        // TryReviveRosterForMode) — repeating it is deliberate and idempotent: this is the gate every
+        // match/round passes through, so the guarantee cannot depend on a mode remembering to ask.
+        ReviveRosterLocked(outbox);
 
         // OnMatchStart ONCE per match, OnRoundStart on every Live entry (§ IGameMode).
         _roundStartPending = _mode != null;
@@ -1752,7 +1753,41 @@ public sealed class MatchDirector
 
     // ---- Helpers ----
 
-    private void ResetMatchStateLocked(PlayerState player, bool keepScore = false)
+    /// <summary>Pulls the WHOLE roster to full health and tells each of them (<c>health_update</c>,
+    /// §10.1) — the single implementation behind both round-boundary triggers.</summary>
+    /// <remarks>⚠️ Everyone goes through <see cref="RevivePlayerLocked"/>, alive players too, never
+    /// <see cref="ResetMatchStateLocked"/>: the latter writes the server fields but SENDS THE CLIENT
+    /// NOTHING, and a round transition has no <c>load_match</c> for the client to reset itself on. Without
+    /// the message a player who died mid-round FREEZES on the death screen, and one who survived wounded
+    /// keeps the previous round's HP on their HUD while the server already reads MAX — the two drift apart
+    /// until the next hit. Skipping the alive ones is exactly that trap and is not an optimisation.
+    /// <para>Kills/deaths/score and the violation ledger are MATCH ledgers and survive the round: reviving
+    /// does not touch them.</para>
+    /// <para>Idempotent: calling it twice costs one duplicate <c>health_update</c> carrying the same
+    /// value, which is why the <c>playing</c> gate can repeat it unconditionally.</para></remarks>
+    private void ReviveRosterLocked(List<Outgoing> outbox)
+    {
+        foreach (var player in ConnectedPlayersLocked())
+        {
+            // ⚠️ The obstacle grace is reset too (§10.9): its clock only advances on `playing` ticks, so
+            // time spent paused would silently consume it and the player would start losing health on the
+            // first tick after the resume — having burned their three seconds during the pause.
+            player.ObstacleSince = null;
+
+            // ⚠️ Starting a match/round grants NO spawn protection (§10.4), deliberately: protection
+            // exists to keep a respawning player from being shot on their first frame, whereas at match
+            // start everyone begins together after a countdown — there it would only make the match's
+            // first seconds damage-free. One gate for the whole roster: protecting some and not others
+            // would mean two rules in one match.
+            RevivePlayerLocked(outbox, player, spawnProtect: false); // hp = MAX, alive = 1, health_update
+            player.DiedAt = DateTime.MinValue;
+        }
+    }
+
+    /// <summary>Wipes a player's match state for a MATCH boundary (match setup / lobby return).</summary>
+    /// <remarks>⚠️ NOT for a round boundary: it writes the server fields and sends the client nothing —
+    /// round start revives instead (see <see cref="EnterLiveLocked"/>).</remarks>
+    private void ResetMatchStateLocked(PlayerState player)
     {
         player.Hp = ArenaProtocol.PLAYER_MAX_HP;
         player.Alive = true;
@@ -1763,12 +1798,11 @@ public sealed class MatchDirector
         // of these paths is such a revive — the stamp cleared here is not put back.
         player.SpawnProtectedUntil = DateTime.MinValue;
         _rosterRefreshFor = player;
-        if (keepScore) return;
         player.Kills = 0;
         player.Deaths = 0;
         player.Score = 0;
-        // The violation ledger is a match ledger: reset alongside kills/deaths, hence PRESERVED at round
-        // start (keepScore) — the number the operator sees spans the match, not the round.
+        // The violation ledger is a match ledger: reset alongside kills/deaths — the number the operator
+        // sees spans the match, not the round.
         player.ObstacleTally.Reset();
         player.OutOfBoundsTally.Reset();
     }
