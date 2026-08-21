@@ -104,6 +104,15 @@ namespace VortexArena.Core.Audio
         /// this copy cannot go stale.</para></summary>
         private LobbyStateMsg _roster;
 
+        /// <summary>Is a spoken line occupying the announcement channel right now.</summary>
+        /// <remarks>Read by whoever plays UNDER the announcements (the operator's music bed) to duck
+        /// while a line is running. Measured from clip length like <see cref="_channelFreeAt"/>, so
+        /// an instant cue (the countdown beep) does not count as speech.
+        /// <para>⚠️ READ ONLY, and it stays that way: nothing outside may hold the channel. Who
+        /// speaks when is decided here and nowhere else.</para></remarks>
+        public static bool Announcing =>
+            Instance != null && Time.unscaledTime < Instance._channelFreeAt;
+
         /// <summary>Plays the sound. A no-op when the singleton does not exist yet or the clip is
         /// unassigned — the caller needs no guard.</summary>
         public static void Play(GameSoundId id, float volumeScale = 1f)

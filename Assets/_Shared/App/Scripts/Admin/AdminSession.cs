@@ -77,12 +77,24 @@ namespace VortexArena.App.Admin
         private const string KeyAudioLevel = Prefix + "AudioLevel.";
         private const string KeyAudioMuted = Prefix + "AudioMuted.";
 
+        // ⚠️ The music PLAYER's own level, NOT AudioChannel.Music: that channel attenuates the
+        // MAP's music loop (SceneAmbience), which every headset hears too. These two knobs sit in
+        // the same tab and must stay independent — turning the map's music down must not silence
+        // the operator's playlist, and muting the playlist must not touch the arena.
+        private const string KeyMusicPlayerLevel = Prefix + "MusicPlayerLevel";
+        private const string KeyMusicPlayerMuted = Prefix + "MusicPlayerMuted";
+
         /// <summary>Free mode base speed bounds (m/s) — the preference slider spans this range.</summary>
         public const float FreeSpeedMin = 1f;
         public const float FreeSpeedMax = 12f;
 
         /// <summary>Level stepper increment — 10 steps span the full range.</summary>
         public const float AudioLevelStep = 0.1f;
+
+        /// <summary>Music player level on an installation that never chose. Deliberately well under
+        /// full: it is a BED under the announcements, and an operator who first hears it at 100%
+        /// turns the whole app down instead of the music.</summary>
+        public const float MusicPlayerLevelDefault = 0.4f;
 
         /// <summary>Raised on any selection/preference change (main thread).</summary>
         public static event Action Changed;
@@ -100,6 +112,8 @@ namespace VortexArena.App.Admin
         private static string _audioDevice = "";
         private static readonly float[] _audioLevels = new float[AudioMix.ChannelCount];
         private static readonly bool[] _audioMuted = new bool[AudioMix.ChannelCount];
+        private static float _musicPlayerLevel = MusicPlayerLevelDefault;
+        private static bool _musicPlayerMuted;
         private static bool _loaded;
 
         /// <summary>
@@ -481,6 +495,77 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
+        /// Level of the operator's music player (0..1) — <see cref="AdminMusicPlayer"/>'s playlist,
+        /// NOT the map's music loop (that is <see cref="AudioChannel.Music"/>).
+        /// <para>⚠️ Nothing is "applied" from here: the player reads this every frame because the
+        /// announcement duck already needs a per-frame target. A second write path would leave "who
+        /// set the volume" with two answers.</para>
+        /// </summary>
+        public static float MusicPlayerLevel
+        {
+            get { Load(); return _musicPlayerLevel; }
+            set
+            {
+                Load();
+                float clamped = Mathf.Clamp01(value);
+                if (Mathf.Approximately(_musicPlayerLevel, clamped))
+                {
+                    return;
+                }
+
+                _musicPlayerLevel = clamped;
+                PlayerPrefs.SetFloat(KeyMusicPlayerLevel, clamped);
+                Raise();
+            }
+        }
+
+        /// <summary>Is the music player muted. ⚠️ Muting does NOT change the level (same contract as
+        /// <see cref="AudioMuted"/>): unmuting restores it exactly.</summary>
+        public static bool MusicPlayerMuted
+        {
+            get { Load(); return _musicPlayerMuted; }
+            set
+            {
+                Load();
+                if (_musicPlayerMuted == value)
+                {
+                    return;
+                }
+
+                _musicPlayerMuted = value;
+                PlayerPrefs.SetInt(KeyMusicPlayerMuted, value ? 1 : 0);
+                Raise();
+            }
+        }
+
+        /// <summary>What actually reaches the music source: 0 while muted, the stored level
+        /// otherwise. ⚠️ Muting does NOT pause the track — the playlist keeps running so unmuting
+        /// lands where the music would have been, not where it was left.</summary>
+        public static float EffectiveMusicPlayerLevel
+        {
+            get { return MusicPlayerMuted ? 0f : MusicPlayerLevel; }
+        }
+
+        /// <summary>Moves the music player level one step (<paramref name="direction"/> = ±1).</summary>
+        public static void StepMusicPlayerLevel(int direction)
+        {
+            Load();
+            if (direction == 0)
+            {
+                return;
+            }
+
+            // Snapped to the step grid so float drift never turns 40% into 39.9999%.
+            float snapped = Mathf.Round(_musicPlayerLevel / AudioLevelStep) * AudioLevelStep;
+            MusicPlayerLevel = snapped + direction * AudioLevelStep;
+        }
+
+        public static void ToggleMusicPlayerMute()
+        {
+            MusicPlayerMuted = !MusicPlayerMuted;
+        }
+
+        /// <summary>
         /// Alpha for the roof (1 = normal, 0 = not drawn, shadow stays), derived from the
         /// preference and the current camera mode; consumed by <c>ArenaRoof.ApplyAll</c>.
         /// </summary>
@@ -562,6 +647,10 @@ namespace VortexArena.App.Admin
                 _audioLevels[i] = Mathf.Clamp01(PlayerPrefs.GetFloat(KeyAudioLevel + channel, 1f));
                 _audioMuted[i] = PlayerPrefs.GetInt(KeyAudioMuted + channel, 0) != 0;
             }
+
+            _musicPlayerLevel = Mathf.Clamp01(
+                PlayerPrefs.GetFloat(KeyMusicPlayerLevel, MusicPlayerLevelDefault));
+            _musicPlayerMuted = PlayerPrefs.GetInt(KeyMusicPlayerMuted, 0) != 0;
         }
 
         private static void Raise()

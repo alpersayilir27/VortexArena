@@ -439,7 +439,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Kamera: POV** (oyuncu kartındaki **POV** düğmesi; seçili oyuncu için `1` ya da `F`) | O oyuncunun **kendi gözünden** izlersin — karttaki POV'a basmak hem oyuncuyu seçer hem gözünden bakmaya geçer. Sağ üstte ayrı bir POV düğmesi yoktur; hangi oyuncuya baktığın düğmelerin altında **POV · ad** olarak yazar | "Bu oyuncu ne görüyor / neden takıldı?" |
 | **Kamera: Serbest** (sağ üstteki **SERBEST** düğmesi ya da `2`) | Arenada özgürce dolaşırsın: **W A S D** yürü, **Q/E** in-çık, **sağ fare tuşunu basılı tutup** bakış çevir, **Shift** hızlı | Bir köşeye yakından bakmak |
 | **İstatistik** | Skorun ortasındaki kutuya bas (veya `I`) | Oyuncu başına öldürme/ölüm/can/batarya **ve PING** tablosu |
-| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **dört sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı, ses çıkışı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık), **SES** (dört ses türünün seviyesi — yalnız senin ekranın) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
+| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **dört sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı, ses çıkışı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık), **SES** (dört ses türünün seviyesi + salona fon müziği çalan **müzik çalar** — yalnız senin ekranın) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
 | **Tam ekran / Pencereli** | `F11`, ya da Tercihler panelinin başlığında **X**'in yanındaki düğme | Yönetim penceresini tüm ekrana yay veya küçült. Seçimin bu bilgisayarda **hatırlanır**: uygulama bir dahaki açılışta aynı kiple gelir |
 | **Oyundan çık** | Tercihler → **BAĞLANTI** sekmesindeki **OYUNDAN ÇIK** | Yönetim uygulamasını kapatır. Güvenlik için **iki kez** basmak gerekir (ilk basışta düğme "EMİN? ÇIK" olur). Sunucuyu ve maçı **kapatmaz** — o ayrı bir penceredir |
 
@@ -473,6 +473,31 @@ Dört ses türünün seviyesi birbirinden bağımsızdır:
   açtığında hangi seviyeye döneceğini önceden görürsün.
 - ⚠️ **Bu ayar yalnız bu bilgisayarın hoparlörünü etkiler.** Oyuncuların kulaklığına ve diğer
   operatörün ekranına dokunmaz — herkes kendi ekranından kısar. Seçimin bu bilgisayarda hatırlanır.
+
+**Salona fon müziği çalmak** (Tercihler → **SES** sekmesi, en altta **Müzik çalar**)
+
+Salonda sürekli çalacak fon müziğini buradan yönetirsin. Parçalar **yönetim bilgisayarındaki bir
+klasörden** okunur: admin uygulamasının yanındaki `Muzik` klasörü, o yoksa masaüstündeki
+`ActionMusics` klasörü. İçine `.mp3`, `.wav` ya da `.ogg` dosyaları atman yeterli — başka bir işlem
+yok. Panel her açıldığında klasör yeniden okunur, yani maç sürerken yeni parça ekleyebilirsin.
+
+- Düğmeler **maç şeridindekilerle aynı ikonlardır**: yeşil **çal** üçgeni başlatır, çalarken yerini
+  beyaz **duraklat** ikonuna bırakır; kırmızı **durdur** karesi tamamen keser. İkon her zaman
+  *bastığında ne olacağını* gösterir.
+- **`◀` / `▶`** önceki ve sonraki parçaya geçer. Liste **başa sarar** — son parçadan sonra ilkine
+  döner. Parça kendiliğinden bitince sıradaki başlar, yani müzik hiç susmaz.
+- Satırda çalan parçanın adı ve kaçıncı olduğu yazar. Klasörde parça yoksa düğmeler soluk kalır ve
+  satır **hangi klasöre bakıldığını** yazar — dosyaları oraya koyacaksın.
+- Alttaki satır müziğin **kendi sesidir** (SESSİZ + `◀`/`▶`). ⚠️ Bu, yukarıdaki **Müzik** satırıyla
+  aynı şey değildir: o satır *haritanın* müziğini kısar (oyuncular da duyar), bu satır senin
+  çaldığın fon müziğini. İkisi birbirini etkilemez.
+- **Maç başlayınca listeden rastgele bir parça kendiliğinden başlar** — hiçbir şey çalmıyorsa. Zaten
+  müzik çalıyorsa kesilmez, arkada devam eder.
+- Müzik **anonsların altında** çalar: "maç başladı", "rakip elendi" ya da kazanan takım anonsu
+  gelince müzik kendiliğinden bir tık alçalır, anons bitince geri yükselir. Ambiyansı, silah
+  seslerini ve ihlal uyarısını da bastırmaz — hepsi birlikte duyulur.
+- ⚠️ Müzik **yalnız bu bilgisayardan** çalar; oyuncuların kulaklığına gitmez. Salon hoparlörlerinin
+  bu bilgisayara bağlı olması gerekir (bir alttaki başlık).
 
 **Sesi başka bir hoparlörden verme**
 

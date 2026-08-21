@@ -702,6 +702,18 @@ public class BenimHudum : ModeHudBase
 Prefabı `Assets/Modes/<Mod>/UI/` altına koy, `ModeDefinition.hudPrefab`'a bağla. Sahneye elle
 koymana gerek yok — `ModeHudSpawner` maç başlayınca örnekler (yalnız player rolünde).
 
+**Ölüm ekranını yeniden çizme:** `_Shared/App/Resources/UI/DeathHud.prefab`'ı HUD prefabının
+altına **iç içe prefab** olarak koy (en son kardeş → en üstte çizilir), örneği **kapat**, sonra üç
+alanı bağla: `deathOverlay` → örneğin kökü, `deathKillerNameText` → `DeathPanel/KillerName`,
+`deathStatusText` → `DeathPanel/StatusText`. Metinleri taban yazar. ⚠️ Panel opaktır ve HUD'ın
+kendi `statusText`'ini örter — canlanma sayacını oyuncu **yalnız** `deathStatusText` bağlıysa
+görür.
+
+**Can barını da yeniden çizme:** `_Shared/App/Resources/UI/HealthHud.prefab`'ı aynı şekilde HUD
+prefabının altına **iç içe prefab** olarak koy, sonra iki alanı bağla: `healthFill` →
+`Backdrop/Fill`, `healthText` → `Backdrop/Value`. Bar kendi `HeadLockedHud`'uyla kafaya kilitlidir;
+HUD'da ayrıca bir can göstergesi **bulundurma** — aynı sayı iki yerde çizilirdi.
+
 > ⚠️ Taban sınıfın `OnEnable`/`OnDisable`/`Start`/`Update`'ini override edersen **`base.` çağır**,
 > yoksa kill-feed ve can bağlantısı ölür.
 

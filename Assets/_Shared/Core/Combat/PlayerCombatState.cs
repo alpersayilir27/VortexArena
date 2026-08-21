@@ -428,7 +428,7 @@ namespace VortexArena.Core.Combat
                     float remaining = _reviveAt - Time.time;
                     if (remaining > 0f)
                     {
-                        text = $"Öldün — canlanmaya {Mathf.CeilToInt(remaining)} sn";
+                        text = $"Öldün! Canlanmaya {Mathf.CeilToInt(remaining)} sn";
                     }
                     else if (ModeRuntime.Revive == ModeReviveAnchor.StandStill)
                     {

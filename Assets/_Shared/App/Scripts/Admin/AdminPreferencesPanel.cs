@@ -12,7 +12,8 @@ namespace VortexArena.App.Admin
 {
     /// <summary>Operator preferences panel with four tabs (<see cref="AdminPreferencesTab"/>):
     /// MAÇ (shared match settings), GÖRÜNÜM (this screen only), BAĞLANTI (session) and SES — this
-    /// screen's own speakers (<see cref="AdminSession"/> → <c>AudioMix</c>), never the player. The tab
+    /// screen's own speakers (<see cref="AdminSession"/> → <c>AudioMix</c>, plus the venue music
+    /// player <see cref="AdminMusicPlayer"/>), never the player. The tab
     /// choice lives for the session but never goes to disk — it is task context, not a preference.
     /// The card is translucent with no scrim: the live scene stays visible and nothing pauses.
     /// <para>⚠️ Match buttons (BAŞLAT · DURAKLAT/DEVAM · İPTAL) live in the HUD strip
@@ -231,6 +232,48 @@ namespace VortexArena.App.Admin
         [Tooltip("Sessize alma düğmelerinin etiketleri — aynı sırada.")]
         [SerializeField] private TextMeshProUGUI[] _audioMuteLabels = new TextMeshProUGUI[AudioMix.ChannelCount];
 
+        [Header("MÜZİK ÇALAR (yalnız bu ekran)")]
+
+        // Playlist from a folder on the admin PC (AdminMusicPlayer) — the venue's own background
+        // music. ⚠️ NOT the "Müzik" channel above: that one attenuates the MAP's music loop, which
+        // the headsets hear too. Two knobs in one tab, deliberately independent.
+
+        [Tooltip("Çalan parçanın adı ve sırası — koddan yazılır, prefabtaki metin yer tutucudur.")]
+        [SerializeField] private TextMeshProUGUI _musicTrackValue;
+
+        [Tooltip("Önceki parça.")]
+        [SerializeField] private Button _musicPrevTrack;
+
+        // ⚠️ Transport uses the SAME icons as the HUD match strip (`play` · `pause` · `stop`,
+        // AdminMatchControls) and the same colour convention: yeşil = başlat, beyaz = koşuyor,
+        // kırmızı = durdur, sönük = basılamaz. Two icon sets for the same three verbs would make
+        // the operator learn the app twice.
+        [Tooltip("Çal / duraklat — tek düğme, ikonunu kod değiştirir.")]
+        [SerializeField] private Button _musicPlayPauseButton;
+        [SerializeField] private Image _musicPlayPauseIcon;
+
+        [Tooltip("ÇAL ikonu (duraklamış/durmuş çalarda gösterilir).")]
+        [SerializeField] private Sprite _musicPlaySprite;
+
+        [Tooltip("DURAKLAT ikonu (çalarken gösterilir).")]
+        [SerializeField] private Sprite _musicPauseSprite;
+
+        [Tooltip("Tamamen durdurur; imleç bulunduğu parçada kalır.")]
+        [SerializeField] private Button _musicStopButton;
+        [SerializeField] private Image _musicStopIcon;
+
+        [Tooltip("Sonraki parça.")]
+        [SerializeField] private Button _musicNextTrack;
+
+        [Tooltip("Müzik çalar sesinin yüzdesi.")]
+        [SerializeField] private TextMeshProUGUI _musicLevelValue;
+        [SerializeField] private Button _musicLevelPrev;
+        [SerializeField] private Button _musicLevelNext;
+
+        [Tooltip("Müzik çaları sessize alan / geri açan düğme.")]
+        [SerializeField] private Button _musicMuteButton;
+        [SerializeField] private TextMeshProUGUI _musicMuteLabel;
+
         private readonly List<ModeDefinition> _modes = new List<ModeDefinition>();
         private readonly List<MapDefinition> _maps = new List<MapDefinition>();
         private int _modeIndex;
@@ -309,6 +352,7 @@ namespace VortexArena.App.Admin
             Wire(_roofNext, NextRoof);
             WireDropdown(_audioDeviceDropdown, SelectAudioDevice);
             WireAudioRows();
+            WireMusicRows();
 
             Wire(_reconnectButton, AdminCommands.Reconnect);
             Wire(_disconnectButton, AdminCommands.Disconnect);
@@ -362,6 +406,22 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>Element of an index-bound array; null when the array is short or unbound.</summary>
+        /// <summary>Binds the music player rows. The transport goes straight to
+        /// <see cref="AdminMusicPlayer"/> (null-safe statics: on a session with no player the
+        /// buttons simply do nothing), the level to <see cref="AdminSession"/>, which owns the
+        /// stored preference.</summary>
+        private void WireMusicRows()
+        {
+            Wire(_musicPrevTrack, AdminMusicPlayer.PrevTrack);
+            Wire(_musicPlayPauseButton, AdminMusicPlayer.TogglePlayPause);
+            Wire(_musicStopButton, AdminMusicPlayer.StopMusic);
+            Wire(_musicNextTrack, AdminMusicPlayer.NextTrack);
+
+            Wire(_musicLevelPrev, () => AdminSession.StepMusicPlayerLevel(-1));
+            Wire(_musicLevelNext, () => AdminSession.StepMusicPlayerLevel(1));
+            Wire(_musicMuteButton, AdminSession.ToggleMusicPlayerMute);
+        }
+
         private static T At<T>(T[] array, int index) where T : class
         {
             return array != null && index >= 0 && index < array.Length ? array[index] : null;
@@ -393,6 +453,11 @@ namespace VortexArena.App.Admin
         private void OnEnable()
         {
             AdminSession.Changed += MarkDirty;
+
+            // The music player advances on its own (track ends → next), so the row cannot be
+            // repainted from AdminSession alone.
+            AdminMusicPlayer.Changed += MarkDirty;
+
             // ⚠️ AdminCommands.StatusChanged is NOT subscribed: the status line lives in the HUD
             // match strip and no field here depends on command status — subscribing would force a
             // full refresh on every command.
@@ -423,6 +488,7 @@ namespace VortexArena.App.Admin
         private void OnDisable()
         {
             AdminSession.Changed -= MarkDirty;
+            AdminMusicPlayer.Changed -= MarkDirty;
             NetEvents.OnConnectionStateChanged -= HandleConnectionState;
             AdminSelection.Changed -= HandleSharedSelectionChanged;
             NetEvents.OnReturnToLobby -= HandleOpenSceneChanged;
@@ -1274,6 +1340,10 @@ namespace VortexArena.App.Admin
                 if (open)
                 {
                     RefreshAudioDeviceList();
+
+                    // Same reasoning for the playlist: the operator may have dropped a file into
+                    // the music folder since startup, and a stale list would hide it until restart.
+                    AdminMusicPlayer.Rescan();
                 }
             }
 
@@ -1333,6 +1403,7 @@ namespace VortexArena.App.Admin
                 : AdminSession.Roof == AdminRoofMode.HideInTopDown ? "kuş bakışında gizli" : "hep gizli";
 
             ApplyAudioRows();
+            ApplyMusicRows();
 
             SyncAudioDeviceDropdown();
 
@@ -1468,6 +1539,86 @@ namespace VortexArena.App.Admin
                 {
                     PaintButtonBackground(image, muted, UiKit.Accent);
                 }
+            }
+        }
+
+        /// <summary>Paints the music player rows: track line, transport labels and the level.
+        /// <para>The transport buttons go dead on an empty folder — a PLAY that does nothing looks
+        /// like a broken app, while the track line says WHY (and prints the folder being read, so
+        /// the operator knows where to drop the files).</para></summary>
+        private void ApplyMusicRows()
+        {
+            int count = AdminMusicPlayer.TrackCount;
+            bool hasTracks = count > 0;
+            AdminMusicState state = AdminMusicPlayer.State;
+            bool playing = state == AdminMusicState.Playing;
+
+            if (_musicTrackValue != null)
+            {
+                if (!hasTracks)
+                {
+                    _musicTrackValue.text = $"klasörde parça yok — {AdminMusicPlayer.Folder}";
+                    _musicTrackValue.color = UiKit.Faint;
+                }
+                else
+                {
+                    string track = $"{AdminMusicPlayer.TrackName} ({AdminMusicPlayer.TrackNumber}/{count})";
+                    _musicTrackValue.text =
+                        AdminMusicPlayer.Loading ? $"{track} — yükleniyor"
+                        : state == AdminMusicState.Playing ? track
+                        : state == AdminMusicState.Paused ? $"{track} — duraklatıldı"
+                        : $"{track} — durduruldu";
+                    _musicTrackValue.color = playing ? UiKit.Title : UiKit.Muted;
+                }
+            }
+
+            bool canStop = hasTracks && state != AdminMusicState.Stopped;
+
+            SetInteractable(_musicPrevTrack, hasTracks);
+            SetInteractable(_musicPlayPauseButton, hasTracks);
+            SetInteractable(_musicNextTrack, hasTracks);
+            // STOP stays pressable only while there is something to stop.
+            SetInteractable(_musicStopButton, canStop);
+
+            if (_musicPlayPauseIcon != null)
+            {
+                // ⚠️ The icon states the NEXT action, not the current one (match strip contract):
+                // while playing the button offers DURAKLAT, so it shows the pause glyph.
+                Sprite icon = playing ? _musicPauseSprite : _musicPlaySprite;
+                if (icon != null)
+                {
+                    _musicPlayPauseIcon.sprite = icon;
+                }
+
+                _musicPlayPauseIcon.color = !hasTracks ? UiKit.Faint : playing ? UiKit.Title : UiKit.Good;
+            }
+
+            if (_musicStopIcon != null)
+            {
+                // The button's tint only reaches its background; a disabled icon must fade itself.
+                _musicStopIcon.color = canStop ? UiKit.Bad : UiKit.Faint;
+            }
+
+            bool muted = AdminSession.MusicPlayerMuted;
+            int percent = Mathf.RoundToInt(AdminSession.MusicPlayerLevel * 100f);
+
+            if (_musicLevelValue != null)
+            {
+                // Same contract as the channel rows: the stored level stays visible while muted, so
+                // the operator sees what unmuting will restore.
+                _musicLevelValue.text = muted ? $"sessiz (%{percent})" : $"%{percent}";
+                _musicLevelValue.color = muted ? UiKit.Faint : UiKit.Title;
+            }
+
+            if (_musicMuteLabel != null)
+            {
+                _musicMuteLabel.text = muted ? "SESİ AÇ" : "SESSİZ";
+                _musicMuteLabel.color = muted ? UiKit.OnAccent : UiKit.Muted;
+            }
+
+            if (_musicMuteButton != null && _musicMuteButton.targetGraphic is Image musicMuteImage)
+            {
+                PaintButtonBackground(musicMuteImage, muted, UiKit.Accent);
             }
         }
 
