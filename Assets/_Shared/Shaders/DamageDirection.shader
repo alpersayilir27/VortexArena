@@ -1,24 +1,28 @@
-// HMD'ye asılı YÖN göstergesi: görüşün kenarında, quad'ın ÜST tarafına (UV +Y) yerleşmiş yumuşak
-// bir yay. Merkez tamamen temiz kalır. Tek tüketicisi DamageDirectionIndicator'dır; yayı ekranın
-// doğru kenarına taşıyan şey shader değil, quad'ın local Z ekseni etrafındaki dönüşüdür.
+// DIRECTION indicator hung on the HMD: a soft arc at the edge of the view, authored on the quad's TOP
+// side (UV +Y). The centre stays fully clear. Its only consumer is DamageDirectionIndicator; what
+// carries the arc to the correct screen edge is not the shader but the quad's rotation about local Z.
 //
-// ⚠️ "Queue" = "Overlay+1" BİLİNÇLİDİR: gösterge, hasar vinyetiyle (Overlay) BİREBİR AYNI local
-// derinlikte durur — farklı derinlik iki katmana farklı stereo ayrışması verir ve çift görüntü
-// olarak okunur. Bu yüzden katmanlama derinlikle değil KUYRUKLA yapılır; buradaki +1 vinyetin
-// üstünde çizilmeyi garanti eder. ZTest Always + ZWrite Off aynı sebeple ScreenVignette ile aynıdır:
-// bu katmanın varlık sebebi engel karartmasının ÜSTÜNE çizilmektir.
+// ⚠️ "Queue" = "Overlay+1" is DELIBERATE: the indicator sits at EXACTLY the same local depth as the
+// damage vignette (Overlay) — a different depth would give the two layers different stereo disparity
+// and read as double vision. So layering is done by QUEUE, not by depth, and the +1 here guarantees
+// drawing above the vignette. ZTest Always + ZWrite Off match ScreenVignette for the same reason: this
+// layer exists to draw ON TOP OF the obstacle blackout.
 //
-// ⚠️ Renk ve alfa KODDAN gelir (DamageDirectionIndicator → MaterialPropertyBlock); materyaldeki
-// değerler yalnız editör önizlemesidir.
+// ⚠️ THE QUAD'S UV IS NOT THE SCREEN — see the same warning in ScreenVignette.shader. The quad reaches
+// ±65° while a Quest eye shows about ±50°/±45°, so a radius above ~0.55 never produces a single visible
+// pixel. Read the numbers as angles: distance ≈ tan(angle) × 0.46, i.e. 0.22 ≈ 26°, 0.34 ≈ 36°.
+//
+// ⚠️ Colour and alpha come from CODE (DamageDirectionIndicator → MaterialPropertyBlock); the values on
+// the material are editor preview only.
 Shader "VortexArena/DamageDirection"
 {
     Properties
     {
         [MainColor] _BaseColor ("Renk + alfa (kod yazar)", Color) = (0.5569, 0.1216, 0.1216, 0.0)
-        _InnerRadius ("Yayın başladığı yarıçap", Range(0, 1)) = 0.62
-        _OuterRadius ("Tam alfa yarıçapı", Range(0, 1.5)) = 1.0
-        _ArcHalfAngle ("Yay yarı genişliği (derece)", Range(1, 90)) = 30
-        _ArcFeather ("Yay kenar yumuşaması (derece)", Range(1, 90)) = 28
+        _InnerRadius ("Yayın başladığı yarıçap", Range(0, 1)) = 0.22
+        _OuterRadius ("Tam alfa yarıçapı", Range(0, 1.5)) = 0.34
+        _ArcHalfAngle ("Yay yarı genişliği (derece)", Range(1, 90)) = 34
+        _ArcFeather ("Yay kenar yumuşaması (derece)", Range(1, 90)) = 30
     }
 
     SubShader
@@ -63,7 +67,7 @@ Shader "VortexArena/DamageDirection"
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            // SRP Batcher uyumu için TÜM property'ler bu blokta olmalı (ve hepsi float).
+            // SRP Batcher compatibility: ALL properties must live in this block (and all be float).
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
                 float _InnerRadius;
@@ -91,12 +95,12 @@ Shader "VortexArena/DamageDirection"
 
                 float2 offset = input.uv - 0.5;
 
-                // Radial: merkez temiz, kenara doğru dolar (ScreenVignette ile aynı ölçek).
+                // Radial: clear centre, filling toward the edge (same scale as ScreenVignette).
                 float distance = length(offset) * 2.0;
                 float radial = smoothstep(_InnerRadius, max(_OuterRadius, _InnerRadius + 1e-4), distance);
 
-                // Açısal koni, quad'ın ÜST yönünden (+Y) ölçülür. atan2 yerine kosinüs: hem ucuz hem
-                // tek değerli — açı sarmaladığı için atan2 ±180'de dikiş verirdi, kosinüs vermez.
+                // Angular cone measured from the quad's TOP (+Y). cos() instead of atan2: cheaper and
+                // single-valued — atan2 would seam at ±180 where the angle wraps, cos does not.
                 float2 direction = offset * rsqrt(max(dot(offset, offset), 1e-8));
                 float cosToTop = direction.y;
 
@@ -110,7 +114,7 @@ Shader "VortexArena/DamageDirection"
         }
     }
 
-    // Fallback YOK: pembe çizmek, sessizce opak bir dikdörtgen çizmekten iyidir — opak bir katman
-    // oyuncunun görüşünü tümden kapatırdı.
+    // NO fallback: drawing pink beats silently drawing an opaque rectangle — an opaque layer would
+    // block the player's view entirely.
     Fallback Off
 }
