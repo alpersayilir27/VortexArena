@@ -176,6 +176,8 @@ Panel normalde **gizlidir** (oyuncular karıştırmasın diye) ve şu jestle aç
 > - Parmağını **bir saniye boyunca kaldırma** — arada bırakırsan sayaç sıfırlanır.
 > - Süre dolduğunda kumanda **kısa bir titreşim** verir ve panel açılır.
 > - Aynı jest paneli **kapatır** da.
+> - Panel açılırken, önünde duran **"Sunucu bulunamadı" kartı kaybolur** — tuş takımını
+>   kapatmasın diye. Panel kapanınca kart geri gelir.
 
 Panel açılmıyorsa: basılı tutma süresi yetmemiştir → biraz daha uzun bekle. Yanlış kumandaya
 basıyor olabilirsin → **sağ** kumanda.
@@ -189,7 +191,9 @@ basıyor olabilirsin → **sağ** kumanda.
 - [ ] **Port yazmana gerek yok** — boş bırakırsan otomatik doğru port kullanılır.
       (Yine de yazmak istersen: `192.168.1.10:47821`)
 - [ ] Yanlış tuşa bastıysan **geri silme** tuşuyla düzelt, hepsini silmek için **Temizle**.
-- [ ] **Bağlan**'a bas. Durum satırı "Bağlanıyor…" → "Bağlı" olmalı.
+- [ ] **Bağlan**'a bas. Tuş takımı kendiliğinden kapanır ve durum satırı
+      "Bağlanılıyor…" → "Bağlı" olmalı. Bağlanamazsa birkaç saniye sonra hata kartı geri gelir;
+      adresi düzeltmek için jestle paneli yeniden aç.
 - [ ] "Geçersiz adres" yazıyorsa yazımı kontrol et (fazladan nokta, eksik rakam).
 
 > ✅ **Bir kez girmen yeterli:** girdiğin adres o gözlükte **kalıcı olarak saklanır**.
