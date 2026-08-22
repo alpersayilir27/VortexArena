@@ -572,9 +572,17 @@ Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt 
 Turnuva bir maçı **turlara** böler. Tur içinde canlanma yoktur: ölen oyuncu turun sonuna kadar
 izler. Bir takımın sahadaki **herkesi** ölünce tur biter ve diğer takım **+1 tur** alır. **Turun kendi
 süre sınırı yoktur** — alan küçük olduğu için tur zaten saniyeler içinde bitiyor; geri sayan tek
-sayaç **maçın** süresidir. **4 turu kazanan maçı kazanır** (bu yüzden en fazla 7 tur oynanır);
-maç süresi bir turun ortasında biterse o tur son turdur ve **ayakta kalan sayısı fazla olan** takım
-alır, sayı eşitse o tur kimseye puan yazmaz.
+sayaç **maçın** süresidir. **4 turu kazanan maçı kazanır** (bu yüzden en fazla 7 tur oynanır).
+
+⚠️ **Maç süresi bir turun ortasında biterse o tur yarıda kesilmez:** oynanmakta olan tur normal
+şekilde sonuna kadar oynanır, bitince maç biter ve o ana kadar çok tur almış takım kazanır (eşitse
+berabere). Üstteki saat `00:00`'ı gösterirken hâlâ oyun sürüyorsa sebebi budur — son tur devam
+ediyordur.
+
+⚠️ **Bağlantısı kopan oyuncu ölü sayılır.** Gözlüğü kapanan, ağdan düşen ya da oyundan çıkan oyuncu
+takımını ayakta tutmaz; bir takımın **tamamı** düşerse tur karşı takıma yazılır ve akış tıkanmaz.
+Aynı şey kalibrasyonunu kaybeden oyuncu için de geçerlidir: kalibresiz oyuncu ne vurabildiği ne de
+vurulabildiği için savaş dışıdır.
 
 **Turlar arası TOPLANMA — operatörün asıl işi burada:**
 
@@ -603,8 +611,8 @@ alır, sayı eşitse o tur kimseye puan yazmaz.
 >
 > **Sınırsız turnuva:** skor limitinde **[−]**'ye `1`'in de altına inersen değer **sınırsız**
 > olur. Tur tavanı yoktur, turlar birbirini izler (her turun arasında yine toplanma + geri sayım
-> vardır) ve maçı bitiren tek şey **süre** olur: saat bitince koşan tur normal yolla kapanır ve
-> **çok tur alan takım maçı kazanır**, eşitse berabere. Erken bitirmek istersen **■ BİTİR**'e bas
+> vardır) ve maçı bitiren tek şey **süre** olur: saat bitince oynanmakta olan tur sonuna kadar
+> oynanır, o tur bitince **çok tur alan takım maçı kazanır**, eşitse berabere. Erken bitirmek istersen **■ BİTİR**'e bas
 > — kazanan yine ilan edilir.
 > Sahada turu hakem yönetiyorsa kullanacağın ayar budur. Geri dönmek için aynı satırda **[+]**'ya bas (`1` tura döner) ya da modu değiştir
 > (mod değişimi limiti o modun varsayılanına çeker).

@@ -43,6 +43,11 @@ public sealed class TournamentMode : IGameMode
     /// countdown so an unstarted round cannot end on "everyone is dead".</summary>
     private bool _roundLive;
 
+    /// <summary>Has this round ever had BOTH teams on the field. Separates "a team left the fight"
+    /// (a round win for the survivors) from "there never was a fight" (admin map preview, empty
+    /// arena) — the same emptiness, two opposite answers.</summary>
+    private bool _roundContested;
+
     private bool _matchOver;
     private MatchOutcome _outcome = MatchOutcome.Draw;
 
@@ -51,8 +56,11 @@ public sealed class TournamentMode : IGameMode
     /// <remarks>⚠️ Only counted down in <c>playing</c> (the core's own clock does that) — the regroup and
     /// the countdown between rounds do NOT burn match time, or a slow return would eat the match.
     /// <para>The match ends on whichever fills first: this clock or the round limit. With
-    /// <c>scoreLimit</c> unlimited the clock is the only end condition left (besides
-    /// <c>end_match</c>).</para></remarks>
+    /// <c>scoreLimit</c> unlimited the clock is the only end condition left (besides <c>end_match</c>).
+    /// <para>⚠️ A clock that hits zero mid-round does NOT cut that round short — it only makes the
+    /// running round the LAST one. The match is decided when that round closes on its own, in
+    /// <see cref="EndRound"/>; a half-played round decided by a stopwatch would throw away the
+    /// firefight the players are in the middle of.</para></para></remarks>
     private float _matchRemaining;
 
     /// <summary>Time of the next "waiting for regroup" console line (see
@@ -103,13 +111,15 @@ public sealed class TournamentMode : IGameMode
         Console.WriteLine($"[tournament] maç başladı — MAÇ süresi {director.RoundSeconds} sn; " +
                           (limit > 0
                               ? $"{limit} tur galibiyet (en fazla {MaxRounds(limit)} tur) — " +
-                                "hangisi önce dolarsa maç orada biter."
-                              : "SINIRSIZ tur — süre dolunca çok tur alan kazanır."));
+                                "hangisi önce dolarsa maç orada biter. "
+                              : "SINIRSIZ tur — bitiren tek koşul süredir. ") +
+                          "Süre koşan turu KESMEZ: o tur bitince maç biter.");
     }
 
     public void OnRoundStart(MatchDirector director)
     {
         _roundLive = true;
+        _roundContested = false;
         _stage = RoundStage.None;
 
         // The core restarted its clock at roundSeconds; here that clock is the MATCH's, so the remaining
@@ -149,9 +159,9 @@ public sealed class TournamentMode : IGameMode
         }
     }
 
-    /// <summary>⚠️ <c>TimeRemaining &lt;= 0</c> is not answered here directly (unlike TDM/FFA): the clock
-    /// running out first closes the RUNNING round, and the match can only be decided after that. Every
-    /// decision is made in <see cref="EndRound"/>; this method just carries it.</summary>
+    /// <summary>⚠️ <c>TimeRemaining &lt;= 0</c> is never answered here (unlike TDM/FFA): the match clock
+    /// expiring does not touch the running round, which still ends by elimination. Every decision is
+    /// made in <see cref="EndRound"/>; this method only carries it.</summary>
     public bool IsMatchOver(MatchDirector director, out MatchOutcome outcome)
     {
         outcome = _outcome;
@@ -163,14 +173,16 @@ public sealed class TournamentMode : IGameMode
     /// <summary>Measures whether the round is over (10 Hz).</summary>
     /// <remarks>⚠️ Tick and not <see cref="OnKill"/>, because a team is also emptied by disconnects,
     /// where <c>OnKill</c> never fires. Two triggers would mean two code paths and a rule forgotten in
-    /// one; a single scan is one source of truth, and its cost is negligible.</remarks>
+    /// one; a single scan is one source of truth, and its cost is negligible.
+    /// <para>⚠️ ELIMINATION is the round's ONLY end — the clock belongs to the match and never cuts a
+    /// round short (see <see cref="_matchRemaining"/>). That makes "standing" mean <b>able to fight</b>:
+    /// whoever cannot (uncalibrated, §10.6) or is no longer there (dropped connection) counts as
+    /// eliminated. Otherwise one stuck headset holds the round — and with it the whole match — open with
+    /// no clock left to break it.</para></remarks>
     private void EvaluateRound(MatchDirector director)
     {
         int redOnline = 0, blueOnline = 0;
-        int redAlive = 0, blueAlive = 0;
-        // "Fit to fight" = alive AND calibrated: an uncalibrated player neither fires nor takes damage
-        // (§10.6), so they do not count as being on the field.
-        int redFit = 0, blueFit = 0;
+        int redStanding = 0, blueStanding = 0;
 
         foreach (var player in director.ConnectedPlayers())
         {
@@ -179,41 +191,55 @@ public sealed class TournamentMode : IGameMode
             if (!isRed && !isBlue) continue; // a late joiner with no team assigned — not part of the round
 
             if (isRed) redOnline++; else blueOnline++;
-            if (!player.Alive) continue;
-            if (isRed) redAlive++; else blueAlive++;
-            if (!player.Calibrated) continue;
-            if (isRed) redFit++; else blueFit++;
+            if (!player.Alive || !player.Calibrated) continue;
+            if (isRed) redStanding++; else blueStanding++;
         }
 
-        // One-sided match (admin map preview or a team fully dropped): do not advance, else the server
-        // would hand out a round per second in an empty arena. Way out is abort_match — same decision
-        // as "a match with no players" (§10.1).
-        if (redOnline == 0 || blueOnline == 0) return;
+        if (redOnline == 0 || blueOnline == 0)
+        {
+            // Emptiness has two opposite meanings and only this latch tells them apart. Never
+            // contested = there was no fight to win (admin map preview, a match nobody joined): no
+            // round is handed out, else the server would give one per second in an empty arena.
+            if (!_roundContested)
+            {
+                // ⚠️ …but the MATCH still ends when its clock does — same as TDM/FFA. Without this an
+                // empty or one-sided arena is the one place a tournament could still run forever, and
+                // no round will ever close to reach the gate in EndRound.
+                if (director.TimeRemaining <= 0f)
+                    DecideByRoundScore(director, "maç süresi doldu (sahada iki taraf yok)");
+                return;
+            }
 
-        // ELIMINATION ignores calibration: an uncalibrated player is not dead and keeps their team
-        // standing. That round simply goes to time, where the comparison below leaves them out.
-        if (redAlive == 0 && blueAlive == 0)
+            // It WAS a fight and a whole team walked out of it: leaving is dying. A headset that
+            // dropped is not coming back inside this round, and waiting for it freezes the match.
+            if (redOnline == 0 && blueOnline == 0)
+            {
+                EndRound(director, "", "iki takım da sahadan düştü");
+                return;
+            }
+
+            var survivor = redOnline > 0 ? "red" : "blue";
+            EndRound(director, survivor,
+                survivor == "red" ? "mavi takım sahadan düştü" : "kırmızı takım sahadan düştü");
+            return;
+        }
+
+        _roundContested = true;
+
+        if (redStanding == 0 && blueStanding == 0)
         {
             EndRound(director, "", "karşılıklı eleme");
             return;
         }
-        if (blueAlive == 0)
+        if (blueStanding == 0)
         {
             EndRound(director, "red", "mavi takım elendi");
             return;
         }
-        if (redAlive == 0)
+        if (redStanding == 0)
         {
             EndRound(director, "blue", "kırmızı takım elendi");
-            return;
         }
-
-        if (director.TimeRemaining > 0f) return;
-
-        // The MATCH clock ran out mid-round → this round is the last, and is closed normally (more
-        // players standing wins, a tie scores nothing); EndRound then decides the match.
-        var winner = redFit > blueFit ? "red" : blueFit > redFit ? "blue" : "";
-        EndRound(director, winner, $"maç süresi doldu ({redFit} - {blueFit} savaşabilir ayakta)");
     }
 
     /// <summary>Closes the round: writes the point, checks for match end, otherwise moves to the
@@ -251,24 +277,18 @@ public sealed class TournamentMode : IGameMode
             // not run forever. At the cap the higher score wins, equal is a draw.
             if (_round >= MaxRounds(limit))
             {
-                var red = director.ScoreRed;
-                var blue = director.ScoreBlue;
-                Decide(red > blue ? MatchOutcome.Team("red")
-                    : blue > red ? MatchOutcome.Team("blue")
-                    : MatchOutcome.Draw, "tur tavanı");
+                DecideByRoundScore(director, "tur tavanı");
                 return;
             }
         }
 
-        // The MATCH clock, checked AFTER the limit so a round that both reaches the limit and runs the
-        // clock out is reported as the win it is. With unlimited rounds this is the only gate left.
+        // The MATCH clock: a clock that expired mid-round only marked the round that has now closed as
+        // the last one, and THIS is where that mark is cashed in. Checked AFTER the limit so a round
+        // that both reaches the limit and runs the clock out is reported as the win it is; with
+        // unlimited rounds this is the only gate left.
         if (_matchRemaining <= 0f)
         {
-            var red = director.ScoreRed;
-            var blue = director.ScoreBlue;
-            Decide(red > blue ? MatchOutcome.Team("red")
-                : blue > red ? MatchOutcome.Team("blue")
-                : MatchOutcome.Draw, "maç süresi doldu");
+            DecideByRoundScore(director, "maç süresi doldu");
             return;
         }
 
@@ -394,6 +414,18 @@ public sealed class TournamentMode : IGameMode
         }
 
         return (ready, total);
+    }
+
+    /// <summary>Ends the match on ROUND score: more rounds wins, equal is a draw.</summary>
+    /// <remarks>The fallback shape for every ending that is not "a team reached the limit" — time up,
+    /// round cap, nobody on the field. One helper so those three cannot drift apart.</remarks>
+    private void DecideByRoundScore(MatchDirector director, string reason)
+    {
+        var red = director.ScoreRed;
+        var blue = director.ScoreBlue;
+        Decide(red > blue ? MatchOutcome.Team("red")
+            : blue > red ? MatchOutcome.Team("blue")
+            : MatchOutcome.Draw, reason);
     }
 
     private void Decide(MatchOutcome outcome, string reason)
