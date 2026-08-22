@@ -32,6 +32,15 @@ namespace VortexArena.Net
         /// connection.</para></summary>
         public static event Action OnMeasureBodyScale;
 
+        /// <summary>The operator asked this headset to restart body tracking (§6.11) — players only.
+        /// <c>LocalBodyAvatar</c> listens and runs the same repair its watchdog runs.
+        /// <para>Fieldless server → client, so the event is parameterless too: the target is this
+        /// connection.</para>
+        /// <para>⚠️ <b>Nothing is answered.</b> The command's outcome is whether the body streams, and
+        /// that already travels on <c>0x07</c> — a reply would only report that a function was
+        /// called.</para></summary>
+        public static event Action OnRestartBodyTracking;
+
         /// <summary>The operator reset this headset's calibration (§10.6) — players only.
         /// <c>CalibrationState</c> listens and invalidates <c>ArenaCalibrator</c>.
         /// <para>The argument is <c>keepSaved</c>: <c>true</c> = alignment invalidated but the device
@@ -107,6 +116,7 @@ namespace VortexArena.Net
         internal static void RaiseRemoteFireEvent(in RemoteFireEvent evt) { OnRemoteFireEvent?.Invoke(evt); }
         internal static void RaiseKicked(KickedMsg msg) { OnKicked?.Invoke(msg); }
         internal static void RaiseMeasureBodyScale() { OnMeasureBodyScale?.Invoke(); }
+        internal static void RaiseRestartBodyTracking() { OnRestartBodyTracking?.Invoke(); }
         internal static void RaiseClearCalibration(bool keepSaved) { OnClearCalibration?.Invoke(keepSaved); }
         internal static void RaiseReloadCalibration() { OnReloadCalibration?.Invoke(); }
         internal static void RaiseCalibrationResult(CalibrationResultMsg msg) { OnCalibrationResult?.Invoke(msg); }

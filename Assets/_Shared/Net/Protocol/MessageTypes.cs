@@ -34,6 +34,9 @@ namespace VortexArena.Protocol
         public const string ReloadCalibration = "reload_calibration";
         // Starts the body measurement; playerId 0 = everyone (§10.8). The server → client direction uses the same type.
         public const string MeasureBodyScale = "measure_body_scale";
+        // Restarts body tracking on the headset; playerId 0 = everyone (§6.11). The server → client
+        // direction uses the same type. There is no reply — the only meaningful answer is the stream itself.
+        public const string RestartBodyTracking = "restart_body_tracking";
         public const string SetFriendlyFire = "set_friendly_fire"; // friendly fire switch; NO phase gate, takes effect instantly (§5.2)
         // How headsets align AT STARTUP; same class as set_friendly_fire: instant, does not enter the
         // selection lock (§5.2/§10.6).

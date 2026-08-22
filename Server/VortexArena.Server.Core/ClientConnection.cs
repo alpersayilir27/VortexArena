@@ -211,6 +211,13 @@ public sealed class ClientConnection
                 if (msg != null) await _lobby.HandleMeasureBodyScaleAsync(this, msg);
                 return;
             }
+            case MessageTypes.RestartBodyTracking:
+            {
+                if (!RequireAdmin(type)) return;
+                var msg = JsonUtil.Deserialize<RestartBodyTrackingMsg>(json);
+                if (msg != null) await _lobby.HandleRestartBodyTrackingAsync(this, msg);
+                return;
+            }
             case MessageTypes.StartMatch:
             {
                 if (!RequireAdmin(type)) return;

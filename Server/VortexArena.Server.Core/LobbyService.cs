@@ -521,6 +521,50 @@ public sealed class LobbyService
         await BroadcastAdminStateAsync(Notice(connection, $"{target.Name} ölçülüyor"));
     }
 
+    /// <summary>Forwards the body-tracking restart (§6.11); the server computes nothing and keeps no
+    /// pending-request ledger.
+    /// <para>⚠️ <b>Uncalibrated targets are NOT skipped</b> — measure_body_scale's calibration gate has
+    /// no counterpart here and must not gain one: this repairs the headset's tracking service, which has
+    /// nothing to do with arena alignment.</para>
+    /// <para>⚠️ <b>No reply is awaited.</b> "Restarted" does not mean "the body is streaming"; the only
+    /// meaningful answer is the stream itself and it is already visible on <c>0x07</c>.</para>
+    /// </summary>
+    public async Task HandleRestartBodyTrackingAsync(ClientConnection connection, RestartBodyTrackingMsg msg)
+    {
+        // No fields in the server → client direction: the target is that connection.
+        var payload = JsonUtil.Serialize(new RestartBodyTrackingMsg());
+
+        if (msg.playerId == 0)
+        {
+            var sent = 0;
+            foreach (var state in _registry.Snapshot())
+            {
+                if (state.Role != "player" || state.Socket == null) continue;
+                await SendSafeAsync(state.Socket, payload, state.Name);
+                sent++;
+            }
+
+            Console.WriteLine($"[Lobby] restart_body_tracking: {sent} oyuncu — {connection.State?.Name}.");
+            await BroadcastAdminStateAsync(Notice(connection, $"{sent} gözlükte gövde izlemesi yeniden başlatılıyor"));
+            return;
+        }
+
+        if (!_registry.TryGetByPlayerId(msg.playerId, out var target) || target.Socket == null)
+        {
+            Console.WriteLine($"[Lobby] restart_body_tracking: playerId {msg.playerId} bulunamadı/bağlantısı yok.");
+            return;
+        }
+        if (target.Role != "player")
+        {
+            Console.WriteLine($"[Lobby] restart_body_tracking: {target.Name} admin — gövdesi yok, yok sayıldı.");
+            return;
+        }
+
+        await SendSafeAsync(target.Socket, payload, target.Name);
+        Console.WriteLine($"[Lobby] restart_body_tracking: {target.Name} (playerId {target.PlayerId}) — {connection.State?.Name}.");
+        await BroadcastAdminStateAsync(Notice(connection, $"{target.Name}: gövde izlemesi yeniden başlatılıyor"));
+    }
+
     // ---- Shared selection (§5.2 set_selection / §5.3 admin_state) ----
 
     /// <summary>Shared mode/map selection for the next match. Does NOT start a match; an empty field

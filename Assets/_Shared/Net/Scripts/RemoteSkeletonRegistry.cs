@@ -238,6 +238,28 @@ namespace VortexArena.Net
             return true;
         }
 
+        /// <summary>Age of the NEWEST root sample in ms; <c>-1</c> when the player has no sample at all.
+        /// <para>⚠️ This exists because samples deliberately never expire (class summary). Without an age
+        /// a reader cannot tell a LIVE stream from one that stopped minutes ago and left its last root
+        /// behind — and those two must be drawn differently: a dead stream means the sender's body
+        /// tracking is gone, so the body has to come from the pose channel instead (§6.11).</para>
+        /// <para>⚠️ Same clock as <c>recvMs</c> (<c>Environment.TickCount</c>), so the value is a
+        /// RECEIVE age, not a send age — it deliberately includes network silence, which is exactly the
+        /// fault being detected.</para></summary>
+        public int GetRootAgeMs(int playerId)
+        {
+            lock (_gate)
+            {
+                if (!_entries.TryGetValue(playerId, out SkeletonEntryState state) || state.count == 0)
+                {
+                    return -1;
+                }
+
+                int newest = (state.nextIndex - 1 + RING_SIZE) % RING_SIZE;
+                return Environment.TickCount - state.ring[newest].recvMs;
+            }
+        }
+
         /// <summary>Called when an avatar is destroyed / handed over to another player: so the stale
         /// root and blob are not inherited by the new owner.</summary>
         public void Forget(int playerId)
