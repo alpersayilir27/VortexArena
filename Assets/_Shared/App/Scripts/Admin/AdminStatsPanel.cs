@@ -127,6 +127,12 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _clearAllButton;
         [SerializeField] private TextMeshProUGUI _clearAllLabel;
 
+        [Tooltip("Tüm gözlüklerde gövde izlemesini yeniden başlatır (§6.11). Onay istemez: hiçbir " +
+                 "veri kaybolmaz, bedeli herkeste birkaç saniyelik gövde donmasıdır — TÜMÜNÜ ÖLÇ ile " +
+                 "aynı sınıf. Başlıklar bunu zaten kendiliğinden deniyor; bu düğme, otomatik " +
+                 "denemelerin aralığı büyüdükten sonra hemen denetmek içindir.")]
+        [SerializeField] private Button _restartBodyAllButton;
+
         [Header("Uyarı penceresi")]
         [SerializeField] private GameObject _popupRoot;
         [SerializeField] private TextMeshProUGUI _popupText;
@@ -193,6 +199,7 @@ namespace VortexArena.App.Admin
             Wire(_closeButton, AdminSession.ClosePanel);
             Wire(_calibrateAllButton, ReloadAllCalibrations);
             Wire(_measureAllButton, () => AdminCommands.MeasureBodyScale(0));
+            Wire(_restartBodyAllButton, () => AdminCommands.RestartBodyTracking(0));
             // ⚠️ NOT Wire(): onClick fires on pointer-up whatever the duration, so a completed
             // hold would also send the soft reset — everyone would be reset twice.
             _clearAllHold = HoldButton.Attach(_clearAllButton, ClearAllCalibration, PurgeAllCalibration);

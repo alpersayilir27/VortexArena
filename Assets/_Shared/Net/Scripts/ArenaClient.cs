@@ -538,6 +538,14 @@ namespace VortexArena.Net
                         break;
                     }
 
+                    case MessageTypes.RestartBodyTracking:
+                    {
+                        // Sent to players only (§6.11); no listener on admin. The repair toggles a
+                        // MonoBehaviour and calls OVRPlugin → main thread.
+                        _mainThreadActions.Enqueue(NetEvents.RaiseRestartBodyTracking);
+                        break;
+                    }
+
                     case MessageTypes.ClearCalibration:
                     {
                         // The operator reset calibration (§10.6). Players only; no `playerId` (the target

@@ -79,10 +79,24 @@ namespace VortexArena.Core.Player
 
         /// <summary>Grace period for the sensor to start (s). Not checked immediately: without permission
         /// <c>OVRBody</c> disables itself waiting for <c>PermissionGranted</c> and re-enables once the
-        /// dialog is answered — erroring instantly would make that legitimate path look broken.</summary>
+        /// dialog is answered — erroring instantly would make that legitimate path look broken.
+        /// <para>⚠️ It doubles as the watchdog's <b>debounce</b>, and that job is the stricter one:
+        /// <c>RetargeterValid</c> drops for a frame on scene load and whenever the source briefly loses
+        /// sight. Restarting body tracking on such a flicker would MAKE the fault it is meant to repair,
+        /// so only an unbroken outage this long counts as one.</para></summary>
         private const float SourceProviderGraceSeconds = 5f;
 
         private float _sourceProviderGrace = SourceProviderGraceSeconds;
+
+        /// <summary>Spacing between repair attempts (s), by attempt index. It GROWS because a headset
+        /// whose tracking service is genuinely down must not be restarted every few seconds for a whole
+        /// session; the first entries stay short so the common transient fault heals unnoticed.</summary>
+        private static readonly float[] RepairBackoffSeconds = { 3f, 10f, 30f, 60f };
+
+        /// <summary>Repair attempts in the CURRENT outage episode; reset when the body comes back.</summary>
+        private int _repairAttempts;
+
+        private float _nextRepairTime = float.NegativeInfinity;
 
         /// <summary>The character's eye level (a marker under the head bone in the prefab) — the
         /// reference of the body measurement (§10.8). <c>null</c> if unbound; the measuring side then
@@ -156,6 +170,10 @@ namespace VortexArena.Core.Player
                 return;
             }
 
+            // Subscribed only past the component checks: with nothing to repair the command is a no-op
+            // anyway, and an unreachable listener is one more thing to reason about.
+            NetEvents.OnRestartBodyTracking += RepairBodyTrackingNow;
+
             // ⚠️ BEFORE setup the whole subtree stays INACTIVE (fully off, not just renderers) — the one
             // legitimate deactivation: an uninitialised retargeter logs "Ownership is None" every frame.
             // On admin the rig never arrives, so it stays off here, which is also correct.
@@ -167,10 +185,13 @@ namespace VortexArena.Core.Player
 
         private void OnDestroy()
         {
-            if (Instance == this)
+            if (Instance != this)
             {
-                Instance = null;
+                return;
             }
+
+            NetEvents.OnRestartBodyTracking -= RepairBodyTrackingNow;
+            Instance = null;
         }
 
         private void Update()
@@ -181,7 +202,7 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            TickSourceProviderCheck();
+            TickBodyTrackingWatchdog();
         }
 
         /// <summary>Sets the body up only when <b>both</b> conditions hold: an active rig (i.e. the role
@@ -253,26 +274,30 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Checks whether a body actually reaches the wire after setup; if not, logs one
-        /// actionable error and arms the <b>T-pose fallback</b>
-        /// (<see cref="ArenaNetCharacterBehaviour.RequestTPoseFallback"/>) so the player is drawn as a
-        /// frozen T-pose tracking their position instead of being invisible.</summary>
+        /// <summary>Watches whether a body actually reaches the wire and <b>repairs</b> it when it does
+        /// not: arms the T-pose fallback once, then restarts body tracking on a growing backoff until it
+        /// comes back.</summary>
         /// <remarks>
         /// ⚠️ The criterion is the retargeter APPLYING a pose, not the sensor being enabled: that is the
         /// gate producing the networked skeleton. Checking only "is the provider enabled" would let a
         /// sensor that stays on but yields no valid data drop the player into the fallback <b>with no
         /// warning at all</b>.
-        /// <para>⚠️ The fault leaves <b>NO local trace</b>, which is why this line is the only local
-        /// signal: the player's hands come from the rig so their screen looks normal — the visible form
-        /// of the fault (T-pose) exists only on other screens.</para>
+        /// <para>⚠️ <b>Why repairing beats reporting:</b> the fault leaves NO local trace — the player's
+        /// hands come from the rig, so their screen looks normal and its visible form (a missing body)
+        /// exists only on OTHER screens. Nobody on site can be expected to notice, so noticing must not
+        /// be the trigger.</para>
+        /// <para>⚠️ <b>Not a one-shot.</b> The old check latched after the first report and left the rest
+        /// of the session unprotected — but tracking dies MID-session too, and that is the case the field
+        /// actually hits. Every latch here clears on recovery.</para>
         /// <para><c>OVRBody</c> logs its own warning and goes quiet when it cannot start, and that line
-        /// does not connect to this question; the link is made explicitly here. Grace period rationale in
+        /// does not connect to this question; the link is made explicitly here. Debounce rationale in
         /// <see cref="SourceProviderGraceSeconds"/>.</para>
         /// </remarks>
-        private void TickSourceProviderCheck()
+        private void TickBodyTrackingWatchdog()
         {
-            if (_sourceProviderWarned || retargeter.RetargeterValid)
+            if (retargeter.RetargeterValid)
             {
+                NoteBodyTrackingHealthy();
                 return;
             }
 
@@ -282,25 +307,94 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            _sourceProviderWarned = true;
+            if (!_sourceProviderWarned)
+            {
+                _sourceProviderWarned = true;
 
-            // Keep the player visible: the body now streams via the T-pose fallback (root follows the
-            // HMD). It goes permanently quiet by itself once a real pose is applied — the error is still
-            // logged; the fallback is not a fix, just a readable form of the fault.
-            character.RequestTPoseFallback();
+                // Keep the player visible while the repair runs: the body streams via the T-pose fallback
+                // (root follows the HMD). It goes quiet by itself once a real pose is applied.
+                character.RequestTPoseFallback();
+                LogBodyTrackingFault();
+            }
 
-            // Two different faults share one symptom but have different fixes — say which one it is.
+            if (Time.unscaledTime < _nextRepairTime)
+            {
+                return;
+            }
+
+            AttemptBodyTrackingRepair();
+        }
+
+        /// <summary>Body is streaming again: clears the episode.</summary>
+        /// <remarks>⚠️ The latches are CLEARED, not left standing. A later second outage must get the
+        /// same fast first attempt as the first one did; leaving them set would silently downgrade the
+        /// watchdog to the one-shot check it replaced.</remarks>
+        private void NoteBodyTrackingHealthy()
+        {
+            _sourceProviderGrace = SourceProviderGraceSeconds;
+
+            if (_repairAttempts == 0 && !_sourceProviderWarned)
+            {
+                return;
+            }
+
+            _repairAttempts = 0;
+            _sourceProviderWarned = false;
+            _nextRepairTime = float.NegativeInfinity;
+            Debug.Log("[LocalBodyAvatar] Gövde izlemesi düzeldi — gerçek iskelet yeniden akıyor.", this);
+        }
+
+        /// <summary>One repair attempt, then re-arms both the backoff and the debounce window.</summary>
+        /// <remarks>⚠️ The debounce is re-armed even on success: a restart needs a few seconds before its
+        /// result is readable, and judging it immediately would spend the whole backoff ladder inside one
+        /// second.</remarks>
+        private void AttemptBodyTrackingRepair()
+        {
+            int index = Mathf.Min(_repairAttempts, RepairBackoffSeconds.Length - 1);
+            _repairAttempts++;
+            _nextRepairTime = Time.unscaledTime + RepairBackoffSeconds[index];
+            _sourceProviderGrace = SourceProviderGraceSeconds;
+
+            bool started = character.RepairBodyTracking();
+
+            Debug.LogWarning(started
+                ? $"[LocalBodyAvatar] Gövde izlemesi yeniden başlatıldı ({_repairAttempts}. deneme) — " +
+                  "birkaç saniye içinde gerçek iskelete dönmezse deneme yinelenecek."
+                : $"[LocalBodyAvatar] Gövde izlemesi yeniden BAŞLATILAMADI ({_repairAttempts}. deneme) — " +
+                  "gözlüğün izleme servisi yanıt vermiyor. Oyuncu diğer ekranlarda görünmeye devam " +
+                  "ediyor, gövdesi poz güdümlü çiziliyor.", this);
+        }
+
+        /// <summary>The one actionable line for a body that never reached the wire. Two different faults
+        /// share this symptom and have different fixes — it says which one it is.</summary>
+        private void LogBodyTrackingFault()
+        {
             string cause = character.IsSourceProviderRunning
                 ? "Body tracking açık ama geçerli bir gövde pozu hiç üretmedi"
                 : "Body tracking hiç başlamadı (sebebi konsolda bunun üstündeki [OVRBody] satırı söyler)";
 
             Debug.LogError(
-                $"[LocalBodyAvatar] {cause} — gövde T-POZ YEDEĞİYLE gönderiliyor: diğer oyuncular " +
-                "bu oyuncuyu, konumunu izleyen DONUK bir T-pozunda görecek. ⚠️ Oyuncunun KENDİ " +
-                "ekranında hiçbir belirti olmaz (eller rig'den geliyor); bu satır tek uyarıdır. " +
-                "Sık görülen iki sebep: (1) editörden Link ile koşuluyor ve Meta Quest " +
-                "Link uygulamasında ilgili geliştirici çalışma zamanı özelliği kapalı, (2) cihazda " +
-                "BODY_TRACKING izni verilmemiş. Düzelttikten sonra oyunu yeniden başlat.", this);
+                $"[LocalBodyAvatar] {cause} — gövde izlemesi yeniden başlatılmaya çalışılacak. ⚠️ " +
+                "Oyuncunun KENDİ ekranında hiçbir belirti olmaz (eller rig'den geliyor); bu satır tek " +
+                "uyarıdır. Sık görülen iki sebep: (1) editörden Link ile koşuluyor ve Meta Quest Link " +
+                "uygulamasında ilgili geliştirici çalışma zamanı özelliği kapalı, (2) cihazda " +
+                "BODY_TRACKING izni verilmemiş.", this);
+        }
+
+        /// <summary>Operator-triggered repair: forces an attempt NOW and drops the backoff, so a headset
+        /// the watchdog has already backed off to 60 s answers the button at once (§6.11).</summary>
+        /// <remarks>⚠️ Safe to call on a healthy body: the restart costs a short tracking hiccup, which
+        /// is why only an operator may ask for it — the watchdog itself never acts without a proven
+        /// outage.</remarks>
+        public void RepairBodyTrackingNow()
+        {
+            if (!_initialized || character == null)
+            {
+                return;
+            }
+
+            _repairAttempts = 0;
+            AttemptBodyTrackingRepair();
         }
 
         /// <summary>Finds the active rig; cached, but re-searched when the reference goes null (scene

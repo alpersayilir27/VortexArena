@@ -337,6 +337,30 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>
+        /// Restarts body tracking on a headset; <paramref name="playerId"/> <b>0 = EVERYONE</b> (§6.11).
+        /// The server forwards only, and there is no reply — the outcome is whether the body streams.
+        /// <para>⚠️ <b>The headset already does this by itself</b> when it detects an outage; this is the
+        /// manual gate for after the automatic attempts have spaced out. It is NOT part of calibration:
+        /// a calibration that works must not pay a tracking hiccup for a repair it does not need.</para>
+        /// <para>⚠️ <b>Costs a short tracking interruption on every target</b>, which is why the bulk form
+        /// is confirmed in the UI: firing it mid-match hiccups every player, not just the broken one.</para>
+        /// </summary>
+        public static void RestartBodyTracking(int playerId)
+        {
+            if (playerId < 0)
+            {
+                return;
+            }
+
+            if (Send(new RestartBodyTrackingMsg { playerId = playerId }))
+            {
+                SetStatus(playerId == 0
+                    ? "Tüm gözlüklerde gövde izlemesi yeniden başlatılıyor."
+                    : $"Gövde izlemesi yeniden başlatılıyor: oyuncu {playerId}");
+            }
+        }
+
         /// <summary>Manual reconnect — the only way back after a disconnect.</summary>
         public static void Reconnect()
         {

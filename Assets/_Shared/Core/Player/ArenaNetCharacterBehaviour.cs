@@ -64,6 +64,25 @@ namespace VortexArena.Core.Player
         /// body would flicker between T-pose and broken pose.</summary>
         private const int RecoverStreakFrames = 12;
 
+        /// <summary>Top of the head above the HMD's eye anchor (m) — turns a measured eye height into the
+        /// stature <c>OVRBody</c>'s calibration hint wants. Approximate on purpose: the runtime treats it
+        /// as a hint, and a hint from the arena floor beats a solve from a stale floor.</summary>
+        private const float HeadTopAboveEyeMeters = 0.11f;
+
+        /// <summary>Stature range the calibration hint is accepted in (m). Outside it the hint is NOT
+        /// sent: a bad number is worse than none, because the runtime would trust it.</summary>
+        private const float MinHintHeightMeters = 1.2f;
+
+        /// <inheritdoc cref="MinHintHeightMeters"/>
+        private const float MaxHintHeightMeters = 2.2f;
+
+        /// <summary>The skeleton stream counts as DEAD after this long without a root (ms); past it the
+        /// remote body is drawn from the POSE channel instead (§6.11).
+        /// <para>⚠️ Must stay well above the skeleton period (≈83 ms at
+        /// <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>) plus the interp buffer: switching on ordinary
+        /// packet loss would hand the body back and forth between two drivers every few frames.</para></summary>
+        private const int SkeletonDeadAfterMs = 1000;
+
         /// <summary>This character's player. Set by <see cref="LocalBodyAvatar"/> locally and
         /// <see cref="RemoteAvatar"/> remotely.</summary>
         public int PlayerId { get; private set; }
@@ -83,6 +102,14 @@ namespace VortexArena.Core.Player
         /// start body tracking it disables itself and never retries — the body is then silently never
         /// drawn. Callers should read this right after setup and report it.</para></summary>
         public bool IsSourceProviderRunning => _sourceProvider != null && _sourceProvider.enabled;
+
+        /// <summary>Is this REMOTE body being drawn from the pose channel instead of the skeleton
+        /// (§6.11)? Owned by <see cref="ApplyArenaRoot"/>, read by <see cref="RemotePoseBody"/>, which
+        /// takes over the bones while it is true.
+        /// <para>⚠️ <c>false</c> also covers a live <b>T-pose fallback</b> stream: that is the sender's
+        /// own statement about itself and is not second-guessed here. Only a stream that produces
+        /// NOTHING hands the body over.</para></summary>
+        public bool IsPoseDriven { get; private set; }
 
         /// <inheritdoc cref="INetworkCharacterBehaviour.CharacterPrefab"/>
         /// <remarks>The SDK does not spawn the character (<c>Setup(instantiateCharacter: false)</c>);
@@ -304,6 +331,65 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
+        /// Restarts the sensor source and re-seeds body-tracking calibration (local body only). Returns
+        /// whether the source came back up.
+        /// <para>⚠️ <b>This is the retry <c>OVRBody</c> never performs itself.</b> A failed
+        /// <c>StartBodyTracking</c> leaves it <c>enabled = false</c> and nothing flips it back, so the
+        /// player streams no body for the rest of the session. Toggling <c>enabled</c> runs
+        /// <c>OnDisable</c> → <c>OnEnable</c>, i.e. a real <c>StopBodyTracking</c>/
+        /// <c>StartBodyTracking2</c> pair against the runtime — not merely a component reset.</para>
+        /// <para>⚠️ Order is deliberate: restart FIRST, then clear the stale calibration, then seed the
+        /// hint. Clearing before the restart would be adopted back by the dying session, and seeding
+        /// before the clear would be wiped by it.</para>
+        /// <para>⚠️ <b>Owner only.</b> On a remote body the provider must stay disabled — enabling it
+        /// there makes every avatar an active <c>OVRBody</c> reading the local sensor.</para>
+        /// </summary>
+        public bool RepairBodyTracking()
+        {
+            if (!HasInputAuthority || _sourceProvider == null)
+            {
+                return false;
+            }
+
+            _sourceProvider.enabled = false;
+            _sourceProvider.enabled = true;
+
+            // ⚠️ Can be false again on this very line: OVRBody turns itself off INSIDE OnEnable when the
+            // start fails. That is the answer to report, not a state to assert against.
+            if (!_sourceProvider.enabled)
+            {
+                return false;
+            }
+
+            OVRBody.ResetBodyTrackingCalibration();
+
+            if (TryGetHintHeightMeters(out float meters))
+            {
+                OVRBody.SuggestBodyTrackingCalibrationOverride(meters);
+            }
+
+            return true;
+        }
+
+        /// <summary>Player stature for the calibration hint, measured against the ARENA floor.
+        /// <para>⚠️ <b>Deliberately not <see cref="BodyScale"/>:</b> that is a RATIO of two eye heights
+        /// (§10.8) and carries no metres at all.</para>
+        /// <para>⚠️ Read in ARENA space on purpose. The headset's own floor is exactly what is
+        /// untrustworthy when this repair runs; the arena floor is pinned at y=0 by our own alignment,
+        /// which survives stale headset space data.</para></summary>
+        private bool TryGetHintHeightMeters(out float meters)
+        {
+            meters = 0f;
+            if (!TryGetHeadYawPose(out Pose head))
+            {
+                return false;
+            }
+
+            meters = ArenaSpace.WorldToArena(head.position).y + HeadTopAboveEyeMeters;
+            return meters >= MinHintHeightMeters && meters <= MaxHintHeightMeters;
+        }
+
+        /// <summary>
         /// Fallback cadence. TWO triggers, both emitting at the SDK's <c>IntervalToSendData</c>.
         /// <para><b>(a) Cold start</b> — requested and the SDK applied NO pose this session. ⚠️ The gate
         /// is <c>AppliedPose</c>, NOT <c>RetargeterValid</c>: <c>_isValid</c> flickers frame to frame
@@ -500,17 +586,18 @@ namespace VortexArena.Core.Player
         /// origin. See Docs/Sistem-Ozeti.md §7.</para></summary>
         private void ApplyArenaRoot()
         {
-            if (!TryGetRootWorld(out Pose world))
+            if (!TryGetEffectiveRoot(out Pose world, out bool fromSkeleton))
             {
-                // ⚠️ With no skeleton yet the body is hidden by ZERO SCALE — the SDK would do this in
-                // Setup if ApplyRootScale were on (it is off, reason above). Without the gate, a player
-                // whose skeleton never arrived is drawn frozen in the BIND POSE as soon as the pose
-                // channel makes the avatar visible.
+                // Neither channel has anything at all — hide by ZERO SCALE rather than draw the bind
+                // pose wherever the root happens to sit.
                 // ⚠️ RemoteAvatar.SetVisible owns visibility in general; this does not race it, it only
                 // uses the scale this class is the SOLE writer of.
+                IsPoseDriven = false;
                 _characterRoot.localScale = Vector3.zero;
                 return;
             }
+
+            IsPoseDriven = !fromSkeleton;
 
             _characterRoot.SetPositionAndRotation(world.position, world.rotation);
 
@@ -519,18 +606,54 @@ namespace VortexArena.Core.Player
             _characterRoot.localScale = Vector3.one * BodyScale;
         }
 
-        /// <summary>The character root's world pose THIS FRAME (converted from arena space). Computed
+        /// <summary>The root to draw this frame, and whether the SKELETON stream produced it. Computed
         /// from the source, not read from the transform: the writer runs in this class's
         /// <c>LateUpdate</c>, so an earlier reader would get a one-frame stale value; the same
-        /// <c>RenderTime</c> yields an identical result.</summary>
-        private bool TryGetRootWorld(out Pose world)
+        /// <c>RenderTime</c> yields an identical result.
+        /// <para>⚠️ <b>The skeleton root counts only while the stream is LIVE.</b> Registry samples never
+        /// expire, so without the age test a stream that died minutes ago would keep the body frozen at
+        /// its last root — and a stream that never started at all would leave the player INVISIBLE while
+        /// their name label and weapon kept drawing correctly.</para></summary>
+        private bool TryGetEffectiveRoot(out Pose world, out bool fromSkeleton)
         {
-            RemoteSkeletonRegistry registry = RemoteSkeletonRegistry.Instance;
-            if (registry == null || !registry.TryGetInterpolatedRoot(PlayerId, out Pose arenaRoot))
+            RemoteSkeletonRegistry skeletons = RemoteSkeletonRegistry.Instance;
+            int ageMs = skeletons != null ? skeletons.GetRootAgeMs(PlayerId) : -1;
+
+            if (ageMs >= 0 && ageMs <= SkeletonDeadAfterMs &&
+                skeletons.TryGetInterpolatedRoot(PlayerId, out Pose arenaRoot))
             {
-                world = default;
+                world = ArenaSpace.ArenaToWorld(arenaRoot);
+                fromSkeleton = true;
+                return true;
+            }
+
+            fromSkeleton = false;
+            return TryGetPoseDrivenRoot(out world);
+        }
+
+        /// <summary>Root derived from the remote player's HEAD — the channel that keeps flowing when the
+        /// skeleton one does not (it is already what draws their name label and weapon in the right
+        /// place, which is the proof that it survives this fault).
+        /// <para>⚠️ Same formula as the sender's T-pose path (floor projection, YAW only). The two must
+        /// agree, or the body would jump the moment a real stream returns.</para></summary>
+        private bool TryGetPoseDrivenRoot(out Pose world)
+        {
+            world = default;
+
+            RemotePlayerRegistry poses = RemotePlayerRegistry.Instance;
+            if (poses == null || !poses.GetInterpolatedPose(PlayerId, out Pose head, out _, out _))
+            {
                 return false;
             }
+
+            Vector3 forward = head.rotation * Vector3.forward;
+            forward.y = 0f;
+
+            var arenaRoot = new Pose(
+                new Vector3(head.position.x, 0f, head.position.z),
+                forward.sqrMagnitude > 1e-6f
+                    ? Quaternion.LookRotation(forward, Vector3.up)
+                    : Quaternion.identity);
 
             world = ArenaSpace.ArenaToWorld(arenaRoot);
             return true;
@@ -547,7 +670,7 @@ namespace VortexArena.Core.Player
         public Vector3 ScalePointAboutRoot(in Vector3 worldPoint)
         {
             float scale = BodyScale;
-            if (scale <= 0f || Mathf.Approximately(scale, 1f) || !TryGetRootWorld(out Pose root))
+            if (scale <= 0f || Mathf.Approximately(scale, 1f) || !TryGetEffectiveRoot(out Pose root, out _))
             {
                 return worldPoint;
             }

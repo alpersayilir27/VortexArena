@@ -253,6 +253,19 @@ namespace VortexArena.Protocol
         public int playerId;
     }
 
+    /// Restarts body tracking on the headset (§6.11). Admin → server carries <c>playerId</c>
+    /// (<c>0</c> = ALL), server → client goes fieldless. The server only forwards.
+    /// ⚠️ Unlike <see cref="MeasureBodyScaleMsg"/> an UNCALIBRATED target is NOT skipped: the repair has
+    /// nothing to do with arena alignment, and a calibration gate would disable the command exactly
+    /// where it is needed.
+    /// ⚠️ There is deliberately no reply message — see the type constant.
+    [Serializable]
+    public class RestartBodyTrackingMsg
+    {
+        public string type = MessageTypes.RestartBodyTracking;
+        public int playerId;
+    }
+
     /// The SHARED mode/map/duration/limit selection for the next match (§5.2). Does not start a match;
     /// broadcast to all admins via admin_state. Empty string or 0 keeps the current value.
     [Serializable]

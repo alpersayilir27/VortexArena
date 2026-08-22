@@ -384,6 +384,11 @@ namespace VortexArena.Core.Player
             if (character != null)
             {
                 gameObject.AddComponent<RemoteHandPoser>().Bind(this, character.transform);
+
+                // ⚠️ Same bind-pose window and the same reason: the head correction must be measured
+                // before the retargeter first writes. Order of the two AddComponent calls is irrelevant
+                // — DefaultExecutionOrder decides who writes last (RemoteHandPoser does, on purpose).
+                gameObject.AddComponent<RemotePoseBody>().Bind(character, character.transform);
             }
 
             _itemCatalog = NetItemCatalog.Load();
